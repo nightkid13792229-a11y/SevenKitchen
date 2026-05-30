@@ -54,6 +54,11 @@ describe('RecipeDesignerController', () => {
     listDrafts: jest.fn(),
     getDraft: jest.fn(),
     createDraft: jest.fn(),
+    listSeries: jest.fn(),
+    createSeries: jest.fn(),
+    renameSeries: jest.fn(),
+    deleteSeries: jest.fn(),
+    createSeriesStageDraft: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
@@ -146,6 +151,68 @@ describe('RecipeDesignerController', () => {
       'staff-1',
     );
     expect(service.deleteDraft).toHaveBeenCalledWith('design-1', 'staff-1');
+  });
+
+  it('delegates series workbench endpoints with CurrentUser ids', async () => {
+    service.listSeries.mockResolvedValue([{ id: 'series-1' }]);
+    service.createSeries.mockResolvedValue({ id: 'series-2' });
+    service.renameSeries.mockResolvedValue({ id: 'series-1', name: '新名字' });
+    service.deleteSeries.mockResolvedValue({ id: 'series-1', status: 'DELETED' });
+    service.createSeriesStageDraft.mockResolvedValue({ id: 'design-1' });
+
+    await expect(controller.listSeries(currentUser)).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: [{ id: 'series-1' }] }),
+    );
+    await expect(
+      controller.createSeries(
+        { name: '牛肉南瓜鲜食', scenario: 'ADULT_MER_110' },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.renameSeries('series-1', { name: '新名字' }, currentUser),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.deleteSeries(
+        'series-1',
+        {
+          confirmName: '新名字',
+          confirmUserVisibleRemoval: true,
+        },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.createSeriesStageDraft(
+        'series-1',
+        { scenario: 'ADULT_MER_95' },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+
+    expect(service.listSeries).toHaveBeenCalledWith('staff-1');
+    expect(service.createSeries).toHaveBeenCalledWith(
+      { name: '牛肉南瓜鲜食', scenario: 'ADULT_MER_110' },
+      'staff-1',
+    );
+    expect(service.renameSeries).toHaveBeenCalledWith(
+      'series-1',
+      { name: '新名字' },
+      'staff-1',
+    );
+    expect(service.deleteSeries).toHaveBeenCalledWith(
+      'series-1',
+      {
+        confirmName: '新名字',
+        confirmUserVisibleRemoval: true,
+      },
+      'staff-1',
+    );
+    expect(service.createSeriesStageDraft).toHaveBeenCalledWith(
+      'series-1',
+      { scenario: 'ADULT_MER_95' },
+      'staff-1',
+    );
   });
 
   it('delegates published recipe revision creation with CurrentUser ids', async () => {

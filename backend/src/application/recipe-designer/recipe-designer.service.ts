@@ -16,6 +16,7 @@ import {
   NutritionFoodStatus,
   Prisma,
   RecipeStatus,
+  RecipeSeriesStatus,
 } from '@prisma/client';
 import { nutritionDataToNutritionProfile } from '../nutrition-standard/nutrient-value-resolver';
 import {
@@ -45,8 +46,12 @@ import type {
   AddRecipeDesignItemDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
+  CreateRecipeSeriesDto,
+  CreateRecipeSeriesStageDraftDto,
+  DeleteRecipeSeriesDto,
   ListRecipeDesignerIngredientOptionsDto,
   PublishRecipeDesignDraftDto,
+  RenameRecipeSeriesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
@@ -65,6 +70,14 @@ import {
 } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
+import {
+  ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  SERIES_LIFE_STAGE_LABELS,
+  mapScenarioToSeriesLifeStage,
+  mapSeriesLifeStageToScenario,
+  type RecipeSeriesLifeStage,
+  type RecipeSeriesStageStatus,
+} from '../../domain/recipe/recipe-series';
 
 const DESIGN_RECIPE_INCLUDE = {
   items: {
@@ -219,6 +232,31 @@ type RevisionChangeState = 'NOT_REVISION' | 'UNCHANGED' | 'CHANGED';
 type DesignRecipeWorkbenchCard = DesignRecipeWithItems & {
   revisionChangeState: RevisionChangeState;
   versionHistory?: DesignRecipeWorkbenchCard[];
+};
+
+type RecipeSeriesWorkbenchRecord = {
+  id: string;
+  name: string;
+  status: string;
+  deletedAt?: Date | null;
+  updatedAt?: Date | string | null;
+  designs: Array<{
+    id: string;
+    seriesId?: string | null;
+    seriesLifeStage?: string | null;
+    status: string;
+    reviewStatus: string;
+    publishedRecipeId?: string | null;
+    publishedAt?: Date | null;
+    updatedAt?: Date | string | null;
+  }>;
+  recipes: Array<{
+    recipeId: string;
+    seriesLifeStage?: string | null;
+    status: string;
+    version?: number;
+    updatedAt?: Date | string | null;
+  }>;
 };
 
 type IngredientOptionRecord = {
@@ -1103,6 +1141,287 @@ export class RecipeDesignerService {
     })) as DesignRecipeWithItems[];
 
     return this.buildDesignRecipeWorkbenchCards(drafts);
+  }
+
+  async listSeries(userId: string) {
+    const series = (await this.prisma.recipeSeries.findMany({
+      where: {
+        status: RecipeSeriesStatus.ACTIVE,
+        deletedAt: null,
+      },
+      include: {
+        designs: {
+          orderBy: { updatedAt: 'desc' },
+        },
+        recipes: {
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })) as RecipeSeriesWorkbenchRecord[];
+
+    return series.map((record) => this.buildSeriesWorkbenchCard(record, userId));
+  }
+
+  async createSeries(dto: CreateRecipeSeriesDto, userId: string) {
+    const name = dto.name.trim();
+    if (!name) {
+      throw new BadRequestException('请填写系列名称');
+    }
+
+    const scenario = dto.scenario ?? 'ADULT_MER_110';
+    const lifeStage = mapScenarioToSeriesLifeStage(scenario);
+
+    return this.prisma.$transaction(async (tx) => {
+      const version = await this.allocateNextDesignRecipeVersion(tx, name);
+
+      const series = (await tx.recipeSeries.create({
+        data: {
+          name,
+          status: RecipeSeriesStatus.ACTIVE,
+          createdBy: userId,
+          designs: {
+            create: {
+              name,
+              version,
+              status: DesignRecipeStatus.DRAFT,
+              fediafDogScenario: scenario,
+              nutritionStandard: 'FEDIAF_2025',
+              targetHealthTags: [],
+              applicableLifeStages: [lifeStage],
+              createdBy: userId,
+              seriesLifeStage: lifeStage,
+            },
+          },
+        },
+        include: {
+          designs: {
+            orderBy: { updatedAt: 'desc' },
+          },
+          recipes: {
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+      })) as RecipeSeriesWorkbenchRecord;
+
+      return this.buildSeriesWorkbenchCard(series, userId);
+    });
+  }
+
+  async createSeriesStageDraft(
+    seriesId: string,
+    dto: CreateRecipeSeriesStageDraftDto,
+    userId: string,
+  ) {
+    const lifeStage = mapScenarioToSeriesLifeStage(dto.scenario);
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        designs: {
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    });
+
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt
+    ) {
+      throw new NotFoundException(`Recipe series ${seriesId} not found`);
+    }
+
+    const existingDraft = series.designs.find(
+      (design) =>
+        design.seriesLifeStage === lifeStage &&
+        !this.isPublishedDraft(design),
+    );
+    if (existingDraft) {
+      return existingDraft;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
+
+      return tx.designRecipe.create({
+        data: {
+          name: series.name,
+          version,
+          status: DesignRecipeStatus.DRAFT,
+          fediafDogScenario: dto.scenario,
+          nutritionStandard: 'FEDIAF_2025',
+          targetHealthTags: [],
+          applicableLifeStages: [lifeStage],
+          createdBy: userId,
+          seriesId,
+          seriesLifeStage: lifeStage,
+        },
+        include: DESIGN_RECIPE_INCLUDE,
+      });
+    });
+  }
+
+  async renameSeries(
+    seriesId: string,
+    dto: RenameRecipeSeriesDto,
+    _userId: string,
+  ) {
+    const name = dto.name.trim();
+    if (!name) {
+      throw new BadRequestException('请填写系列名称');
+    }
+
+    return this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data: { name },
+    });
+  }
+
+  async deleteSeries(
+    seriesId: string,
+    dto: DeleteRecipeSeriesDto,
+    userId: string,
+  ) {
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        designs: true,
+      },
+    });
+
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt
+    ) {
+      throw new NotFoundException(`Recipe series ${seriesId} not found`);
+    }
+    if (dto.confirmName !== series.name) {
+      throw new BadRequestException('系列名称确认不一致');
+    }
+    if (!dto.confirmUserVisibleRemoval) {
+      throw new BadRequestException('请确认下架用户可见食谱');
+    }
+    if (
+      series.designs.some(
+        (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
+      )
+    ) {
+      throw new BadRequestException('仍有待审核草稿，不能删除系列');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.designRecipe.deleteMany({
+        where: {
+          seriesId,
+          status: { not: DesignRecipeStatus.PUBLISHED },
+          publishedRecipeId: null,
+        },
+      });
+      await tx.recipe.updateMany({
+        where: {
+          seriesId,
+          status: RecipeStatus.PUBLIC,
+        },
+        data: {
+          status: RecipeStatus.DRAFT,
+        },
+      });
+
+      return tx.recipeSeries.update({
+        where: { id: seriesId },
+        data: {
+          status: RecipeSeriesStatus.DELETED,
+          deletedAt: new Date(),
+          deletedBy: userId,
+        },
+      });
+    });
+  }
+
+  private buildSeriesWorkbenchCard(
+    series: RecipeSeriesWorkbenchRecord,
+    _userId: string,
+  ) {
+    const stages = ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
+      const designs = series.designs.filter(
+        (design) => design.seriesLifeStage === lifeStage,
+      );
+      const recipes = series.recipes.filter(
+        (recipe) => recipe.seriesLifeStage === lifeStage,
+      );
+      const status = this.resolveSeriesStageStatus(designs, recipes);
+      const latestDesign = this.pickLatestByUpdatedAt(designs);
+      const latestPublicRecipe = this.pickLatestByUpdatedAt(
+        recipes.filter((recipe) => recipe.status === RecipeStatus.PUBLIC),
+      );
+      const latestRecord = this.pickLatestByUpdatedAt([
+        ...designs,
+        ...recipes,
+      ]);
+
+      return {
+        lifeStage,
+        label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+        scenario: mapSeriesLifeStageToScenario(lifeStage),
+        status,
+        draftId: latestDesign?.id ?? null,
+        recipeId: latestPublicRecipe?.recipeId ?? null,
+        updatedAt: latestRecord?.updatedAt ?? null,
+      };
+    });
+
+    return {
+      id: series.id,
+      name: series.name,
+      updatedAt: series.updatedAt,
+      publishedStageCount: stages.filter((stage) => stage.status === 'PUBLISHED')
+        .length,
+      stages,
+    };
+  }
+
+  private resolveSeriesStageStatus(
+    designs: RecipeSeriesWorkbenchRecord['designs'],
+    recipes: RecipeSeriesWorkbenchRecord['recipes'],
+  ): RecipeSeriesStageStatus {
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
+      return 'PUBLISHED';
+    }
+    if (
+      designs.some(
+        (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
+      )
+    ) {
+      return 'IN_REVIEW';
+    }
+    if (designs.some((design) => design.status === DesignRecipeStatus.NEEDS_REVIEW)) {
+      return 'NEEDS_CHANGES';
+    }
+    if (designs.some((design) => !this.isPublishedDraft(design))) {
+      return 'DRAFT';
+    }
+    return 'NOT_DESIGNED';
+  }
+
+  private pickLatestByUpdatedAt<T extends { updatedAt?: Date | string | null }>(
+    records: T[],
+  ): T | null {
+    return [...records].sort(
+      (left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left),
+    )[0] ?? null;
+  }
+
+  private async allocateNextDesignRecipeVersion(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    name: string,
+  ) {
+    const latestVersion = await tx.designRecipe.aggregate({
+      where: { name },
+      _max: { version: true },
+    });
+
+    return (latestVersion._max.version ?? 0) + 1;
   }
 
   async getDraft(id: string, userId: string) {

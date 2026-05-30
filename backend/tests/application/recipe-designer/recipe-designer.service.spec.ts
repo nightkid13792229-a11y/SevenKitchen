@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
@@ -3525,6 +3526,17 @@ describe('RecipeDesignerService', () => {
   });
 
   describe('recipe designer series workbench', () => {
+    function uniqueNameVersionCollision() {
+      return new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`name`,`version`)',
+        {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['name', 'version'] },
+        },
+      );
+    }
+
     it('returns one series card with five stage statuses', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
@@ -3534,6 +3546,21 @@ describe('RecipeDesignerService', () => {
           deletedAt: null,
           updatedAt: new Date('2026-05-31T14:32:00.000Z'),
           designs: [
+            draft({
+              id: 'early-puppy-design',
+              seriesId: 'series-1',
+              seriesLifeStage: 'PUPPY_UNDER_14_WEEKS',
+              status: 'DRAFT',
+              reviewStatus: 'REQUIRED',
+              updatedAt: new Date('2026-05-31T12:00:00.000Z'),
+            }),
+            draft({
+              id: 'late-puppy-design',
+              seriesId: 'series-1',
+              seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+              status: 'NEEDS_REVIEW',
+              updatedAt: new Date('2026-05-31T12:30:00.000Z'),
+            }),
             draft({
               id: 'adult-design',
               seriesId: 'series-1',
@@ -3572,11 +3599,11 @@ describe('RecipeDesignerService', () => {
           stages: [
             expect.objectContaining({
               lifeStage: 'PUPPY_UNDER_14_WEEKS',
-              status: 'NOT_DESIGNED',
+              status: 'IN_REVIEW',
             }),
             expect.objectContaining({
               lifeStage: 'PUPPY_14_WEEKS_PLUS',
-              status: 'NOT_DESIGNED',
+              status: 'NEEDS_CHANGES',
             }),
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -3667,6 +3694,119 @@ describe('RecipeDesignerService', () => {
           seriesId: 'series-1',
           seriesLifeStage: 'REPRODUCTION',
           applicableLifeStages: ['REPRODUCTION'],
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('retries series creation when the initial design version collides', async () => {
+      prisma.recipeSeries.create.mockResolvedValue({
+        id: 'series-1',
+        name: '牛肉南瓜鲜食',
+        status: 'ACTIVE',
+        deletedAt: null,
+        updatedAt: new Date('2026-05-31T14:32:00.000Z'),
+      });
+      prisma.designRecipe.aggregate
+        .mockResolvedValueOnce({ _max: { version: 2 } })
+        .mockResolvedValueOnce({ _max: { version: 3 } });
+      prisma.designRecipe.create
+        .mockRejectedValueOnce(uniqueNameVersionCollision())
+        .mockResolvedValueOnce(
+          draft({
+            id: 'adult-design',
+            name: '牛肉南瓜鲜食',
+            version: 4,
+            seriesId: 'series-1',
+            seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          }),
+        );
+
+      await expect(
+        service.createSeries(
+          { name: '牛肉南瓜鲜食', scenario: 'ADULT_MER_110' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'series-1',
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              draftId: 'adult-design',
+              status: 'DRAFT',
+            }),
+          ]),
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenNthCalledWith(1, {
+        data: expect.objectContaining({
+          name: '牛肉南瓜鲜食',
+          version: 3,
+          seriesId: 'series-1',
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipe.create).toHaveBeenNthCalledWith(2, {
+        data: expect.objectContaining({
+          name: '牛肉南瓜鲜食',
+          version: 4,
+          seriesId: 'series-1',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('retries stage draft creation when the allocated design version collides', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue({
+        id: 'series-1',
+        name: '牛肉南瓜鲜食',
+        status: 'ACTIVE',
+        designs: [],
+      });
+      prisma.designRecipe.aggregate
+        .mockResolvedValueOnce({ _max: { version: 2 } })
+        .mockResolvedValueOnce({ _max: { version: 3 } });
+      prisma.designRecipe.create
+        .mockRejectedValueOnce(uniqueNameVersionCollision())
+        .mockResolvedValueOnce(
+          draft({
+            id: 'reproduction-design',
+            name: '牛肉南瓜鲜食',
+            version: 4,
+            seriesId: 'series-1',
+            seriesLifeStage: 'REPRODUCTION',
+            fediafDogScenario: 'REPRODUCTION',
+          }),
+        );
+
+      await expect(
+        service.createSeriesStageDraft(
+          'series-1',
+          { scenario: 'REPRODUCTION' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'reproduction-design',
+          version: 4,
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenNthCalledWith(1, {
+        data: expect.objectContaining({
+          name: '牛肉南瓜鲜食',
+          version: 3,
+          seriesId: 'series-1',
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipe.create).toHaveBeenNthCalledWith(2, {
+        data: expect.objectContaining({
+          name: '牛肉南瓜鲜食',
+          version: 4,
+          seriesId: 'series-1',
         }),
         include: expect.any(Object),
       });

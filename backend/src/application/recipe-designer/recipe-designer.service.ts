@@ -118,6 +118,7 @@ const DESIGN_RECIPE_INCLUDE = {
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
+const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
 
 const PUBLISHED_RECIPE_LIFE_STAGES_BY_SCENARIO: Record<
   FediafDogScenarioCode,
@@ -1172,16 +1173,20 @@ export class RecipeDesignerService {
     const scenario = dto.scenario ?? 'ADULT_MER_110';
     const lifeStage = mapScenarioToSeriesLifeStage(scenario);
 
-    return this.prisma.$transaction(async (tx) => {
-      const version = await this.allocateNextDesignRecipeVersion(tx, name);
+    for (let attempt = 1; attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS; attempt++) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const series = await tx.recipeSeries.create({
+            data: {
+              name,
+              status: RecipeSeriesStatus.ACTIVE,
+              createdBy: userId,
+            },
+          });
 
-      const series = (await tx.recipeSeries.create({
-        data: {
-          name,
-          status: RecipeSeriesStatus.ACTIVE,
-          createdBy: userId,
-          designs: {
-            create: {
+          const version = await this.allocateNextDesignRecipeVersion(tx, name);
+          const design = await tx.designRecipe.create({
+            data: {
               name,
               version,
               status: DesignRecipeStatus.DRAFT,
@@ -1190,22 +1195,33 @@ export class RecipeDesignerService {
               targetHealthTags: [],
               applicableLifeStages: [lifeStage],
               createdBy: userId,
+              seriesId: series.id,
               seriesLifeStage: lifeStage,
             },
-          },
-        },
-        include: {
-          designs: {
-            orderBy: { updatedAt: 'desc' },
-          },
-          recipes: {
-            orderBy: { updatedAt: 'desc' },
-          },
-        },
-      })) as RecipeSeriesWorkbenchRecord;
+            include: DESIGN_RECIPE_INCLUDE,
+          });
 
-      return this.buildSeriesWorkbenchCard(series, userId);
-    });
+          return this.buildSeriesWorkbenchCard(
+            {
+              ...series,
+              designs: [design],
+              recipes: [],
+            } as RecipeSeriesWorkbenchRecord,
+            userId,
+          );
+        });
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isDesignRecipeNameVersionCollision(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('配方系列创建失败，请重试');
   }
 
   async createSeriesStageDraft(
@@ -1240,25 +1256,22 @@ export class RecipeDesignerService {
       return existingDraft;
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
-
-      return tx.designRecipe.create({
-        data: {
-          name: series.name,
-          version,
-          status: DesignRecipeStatus.DRAFT,
-          fediafDogScenario: dto.scenario,
-          nutritionStandard: 'FEDIAF_2025',
-          targetHealthTags: [],
-          applicableLifeStages: [lifeStage],
-          createdBy: userId,
-          seriesId,
-          seriesLifeStage: lifeStage,
-        },
-        include: DESIGN_RECIPE_INCLUDE,
-      });
-    });
+    return this.createDesignRecipeWithAllocatedVersion(
+      this.prisma,
+      series.name,
+      (version) => ({
+        name: series.name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: dto.scenario,
+        nutritionStandard: 'FEDIAF_2025',
+        targetHealthTags: [],
+        applicableLifeStages: [lifeStage],
+        createdBy: userId,
+        seriesId,
+        seriesLifeStage: lifeStage,
+      }),
+    );
   }
 
   async renameSeries(
@@ -1422,6 +1435,48 @@ export class RecipeDesignerService {
     });
 
     return (latestVersion._max.version ?? 0) + 1;
+  }
+
+  private async createDesignRecipeWithAllocatedVersion(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    name: string,
+    buildData: (version: number) => Prisma.DesignRecipeUncheckedCreateInput,
+  ) {
+    for (let attempt = 1; attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS; attempt++) {
+      const version = await this.allocateNextDesignRecipeVersion(tx, name);
+
+      try {
+        return await tx.designRecipe.create({
+          data: buildData(version),
+          include: DESIGN_RECIPE_INCLUDE,
+        });
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isDesignRecipeNameVersionCollision(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('配方版本创建失败，请重试');
+  }
+
+  private isDesignRecipeNameVersionCollision(error: unknown) {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002'
+    ) {
+      return false;
+    }
+
+    const target = error.meta?.target;
+    if (Array.isArray(target)) {
+      return target.includes('name') && target.includes('version');
+    }
+    return typeof target === 'string' && target.includes('name') && target.includes('version');
   }
 
   async getDraft(id: string, userId: string) {

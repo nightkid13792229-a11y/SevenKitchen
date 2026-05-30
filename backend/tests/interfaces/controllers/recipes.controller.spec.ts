@@ -355,6 +355,185 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.exclusive[0].id).toBe(businessRecipeId);
       expect(response.body.data.exclusive[0].id).not.toBe(internalRecipeId);
     });
+
+    it('returns one recommendation per recipe series and chooses the dog matched life stage', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440031';
+      const customerId = '550e8400-e29b-41d4-a716-446655440032';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '年糕',
+        birthday: new Date('2015-01-01T00:00:00.000Z'),
+        currentWeightKg: 6,
+        mealsPerDay: 2,
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+        cachedTargetFoodKcal: 320,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-adult',
+          recipeId: 'adult-recipe-id',
+          version: 1,
+          name: '牛肉南瓜鲜食 成犬',
+          status: 'PUBLIC',
+          seriesId: 'series-beef',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          energyDensityKcalPerKg: 1200,
+          targetHealthTags: [],
+          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+          favoriteCount: 100,
+          diyGenCount: 0,
+          items: [],
+        },
+        {
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          version: 1,
+          name: '牛肉南瓜鲜食 老年犬',
+          status: 'PUBLIC',
+          seriesId: 'series-beef',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          energyDensityKcalPerKg: 1100,
+          targetHealthTags: [],
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+          favoriteCount: 0,
+          diyGenCount: 0,
+          items: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const recommended = [
+        ...response.body.data.exclusive,
+        ...response.body.data.general,
+      ];
+      expect(recommended).toHaveLength(1);
+      expect(recommended[0].id).toBe('senior-recipe-id');
+      expect(recommended[0].seriesId).toBe('series-beef');
+    });
+
+    it('scores the matched series life stage as an exclusive recommendation', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440041';
+      const customerId = '550e8400-e29b-41d4-a716-446655440042';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '吐司',
+        birthday: new Date('2021-01-01T00:00:00.000Z'),
+        currentWeightKg: 5,
+        mealsPerDay: 2,
+        lifeStageOverride: 'NONE',
+        activityLevel: 'MODERATE',
+        cachedTargetFoodKcal: 300,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-adult',
+          recipeId: 'adult-recipe-id',
+          version: 1,
+          name: '鸡肉燕麦鲜食 成犬',
+          status: 'PUBLIC',
+          seriesId: 'series-chicken',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          energyDensityKcalPerKg: 1200,
+          targetHealthTags: [],
+          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+          favoriteCount: 0,
+          diyGenCount: 0,
+          items: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body.data.exclusive).toHaveLength(1);
+      expect(response.body.data.exclusive[0].id).toBe('adult-recipe-id');
+      expect(response.body.data.exclusive[0].matchReasons).toContain(
+        '生命阶段匹配',
+      );
+    });
+
+    it('loads complete public series candidates before choosing the matched recommendation stage', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440051';
+      const customerId = '550e8400-e29b-41d4-a716-446655440052';
+      const adultRecipe = {
+        id: 'row-adult',
+        recipeId: 'adult-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 成犬',
+        status: 'PUBLIC',
+        seriesId: 'series-beef',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        energyDensityKcalPerKg: 1200,
+        targetHealthTags: [],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        favoriteCount: 100,
+        diyGenCount: 0,
+        items: [],
+      };
+      const seniorRecipe = {
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 老年犬',
+        status: 'PUBLIC',
+        seriesId: 'series-beef',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        energyDensityKcalPerKg: 1100,
+        targetHealthTags: [],
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        favoriteCount: 0,
+        diyGenCount: 0,
+        items: [],
+      };
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '年糕',
+        birthday: new Date('2015-01-01T00:00:00.000Z'),
+        currentWeightKg: 6,
+        mealsPerDay: 2,
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+        cachedTargetFoodKcal: 320,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([adultRecipe])
+        .mockResolvedValueOnce([adultRecipe, seniorRecipe]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: {
+            status: 'PUBLIC',
+            seriesId: { in: ['series-beef'] },
+          },
+        }),
+      );
+      expect(response.body.data.exclusive[0].id).toBe('senior-recipe-id');
+    });
   });
 
   describe('GET /api/v1/recipes/:id', () => {
@@ -909,12 +1088,12 @@ describe('RecipesController (e2e)', () => {
                     image_url: 'https://cdn.example.com/e400-square.jpg',
                     purchase_link: {
                       platform: 'JD',
-                  url: 'https://jd.example/e400',
-                },
-                add_timing: 'BEFORE_MEAL',
-                active_nutrients: {
-                  维生素E: {
-                    value: 400,
+                      url: 'https://jd.example/e400',
+                    },
+                    add_timing: 'BEFORE_MEAL',
+                    active_nutrients: {
+                      维生素E: {
+                        value: 400,
                         unit: 'IU',
                       },
                     },
@@ -958,11 +1137,15 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.code).toBe(0);
       expect(response.body.data.items[0].ingredient.displayUnit).toBe('粒');
       expect(response.body.data.items[0].ingredient.diyEnabled).toBe(false);
-      expect(response.body.data.items[0].ingredient.addTimingLabel).toBe('随餐');
+      expect(response.body.data.items[0].ingredient.addTimingLabel).toBe(
+        '随餐',
+      );
       expect(response.body.data.items[0].ingredient.imageUrl).toBe(
         'https://cdn.example.com/e200-square.jpg',
       );
-      expect(response.body.data.items[0].ingredient.activeNutrients.维生素E).toEqual({
+      expect(
+        response.body.data.items[0].ingredient.activeNutrients.维生素E,
+      ).toEqual({
         value: 200,
         unit: 'IU',
       });

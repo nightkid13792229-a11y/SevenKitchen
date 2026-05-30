@@ -20,6 +20,47 @@ const LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE: Record<
   ADULT: 'HIGH_ACTIVITY_ADULT',
 };
 
+const LIFE_STAGE_NAME_PATTERNS = [
+  'LOW_ACTIVITY_ADULT_OR_SENIOR',
+  'PUPPY_UNDER_14_WEEKS',
+  'PUPPY_14_WEEKS_PLUS',
+  'HIGH_ACTIVITY_ADULT',
+  'REPRODUCTION',
+  'PREGNANCY',
+  'LACTATION',
+  'SENIOR',
+  'PUPPY',
+  'ADULT',
+  '小于\\s*14\\s*周幼犬',
+  '(?:大于等于|大于等於|>=|≥)\\s*14\\s*周幼犬',
+  '14\\s*周(?:以上|及以上|\\+)幼犬',
+  '普通或高运动量成犬',
+  '低(?:运动量|能量)?成犬(?:或|/|／)老年犬',
+  '低能量成年犬\\s*(?:/|／)\\s*老年犬',
+  '低运动量成犬',
+  '普通成年犬',
+  '高运动量成犬',
+  '低能量成年犬',
+  '普通成犬',
+  '繁殖期',
+  '妊娠期',
+  '哺乳期',
+  '老年犬',
+  '幼犬',
+  '成犬',
+];
+const LIFE_STAGE_NAME_PATTERN_SOURCE = LIFE_STAGE_NAME_PATTERNS.join('|');
+const BRACKETED_LIFE_STAGE_NAME_PATTERN = new RegExp(
+  `\\s*[（(\\[【]\\s*(?:${LIFE_STAGE_NAME_PATTERN_SOURCE})\\s*[）)\\]】]\\s*`,
+  'giu',
+);
+const TRAILING_LIFE_STAGE_NAME_PATTERN = new RegExp(
+  `(?:[\\s_—–|/／:：,，、·-]+)?(?:${LIFE_STAGE_NAME_PATTERN_SOURCE})\\s*$`,
+  'iu',
+);
+const SERIES_NAME_SEPARATOR_PATTERN =
+  /^[\s_—–|/／:：,，、·-]+|[\s_—–|/／:：,，、·-]+$/gu;
+
 type RecipeSeriesBackfillLogger = {
   info: (message: string) => void;
   error: (message: string) => void;
@@ -29,6 +70,7 @@ export type RecipeSeriesBackfillRecipe = {
   recipeId: string;
   name: string;
   version: number;
+  status?: string | null;
   seriesId?: string | null;
   applicableLifeStages?: unknown;
   nutritionDetailedData?: unknown;
@@ -60,6 +102,9 @@ type RecipeSeriesBackfillPrisma = {
   recipeSeries: {
     create: (args: unknown) => Promise<unknown>;
   };
+  designRecipe: {
+    updateMany: (args: unknown) => Promise<unknown>;
+  };
   $transaction: <T>(
     callback: (tx: RecipeSeriesBackfillPrisma) => Promise<T>,
   ) => Promise<T>;
@@ -68,9 +113,7 @@ type RecipeSeriesBackfillPrisma = {
 
 function normalizeStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean);
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
   }
 
   if (typeof value === 'string') {
@@ -87,15 +130,52 @@ function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
+function normalizeRecipeSeriesName(name: string): string {
+  let normalized = name.trim();
+  if (!normalized) return '';
+
+  normalized = normalized.replace(BRACKETED_LIFE_STAGE_NAME_PATTERN, ' ');
+
+  let previous: string;
+  do {
+    previous = normalized;
+    normalized = normalized
+      .replace(TRAILING_LIFE_STAGE_NAME_PATTERN, '')
+      .replace(SERIES_NAME_SEPARATOR_PATTERN, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } while (normalized && normalized !== previous);
+
+  return normalized;
+}
+
+function getRecipeSeriesGroupKey(recipe: RecipeSeriesBackfillRecipe): string {
+  return (
+    normalizeRecipeSeriesName(recipe.name) || recipe.recipeId
+  ).toLowerCase();
+}
+
+function getRecipeSeriesDisplayName(
+  recipe: RecipeSeriesBackfillRecipe,
+): string {
+  return (
+    normalizeRecipeSeriesName(recipe.name) || recipe.name || recipe.recipeId
+  );
+}
+
+function isPublicBackfillRecipe(recipe: RecipeSeriesBackfillRecipe): boolean {
+  return !recipe.status || recipe.status === 'PUBLIC';
+}
+
 export function inferSeriesLifeStageFromRecipe(
   recipe: Pick<
     RecipeSeriesBackfillRecipe,
     'applicableLifeStages' | 'nutritionDetailedData'
   >,
 ): RecipeSeriesLifeStage {
-  const normalizedStages = normalizeStringArray(recipe.applicableLifeStages).map(
-    (stage) => stage.toUpperCase(),
-  );
+  const normalizedStages = normalizeStringArray(
+    recipe.applicableLifeStages,
+  ).map((stage) => stage.toUpperCase());
   const stages = new Set(normalizedStages);
   const currentSeriesStage = ORDERED_RECIPE_SERIES_LIFE_STAGES.find((stage) =>
     stages.has(stage),
@@ -113,20 +193,23 @@ export function inferSeriesLifeStageFromRecipe(
 export function buildRecipeSeriesBackfillPlan(
   recipes: RecipeSeriesBackfillRecipe[],
 ): RecipeSeriesBackfillPlan {
-  const seriesByRecipeId = new Map<string, RecipeSeriesToCreate>();
-  const existingSeriesIdByRecipeId = new Map<string, string>();
+  const seriesByGroupKey = new Map<string, RecipeSeriesToCreate>();
+  const existingSeriesIdByGroupKey = new Map<string, string>();
   const recipeUpdates: RecipeSeriesRecipeUpdate[] = [];
+  const publicRecipes = recipes.filter(isPublicBackfillRecipe);
 
-  for (const recipe of recipes) {
-    if (recipe.seriesId && !existingSeriesIdByRecipeId.has(recipe.recipeId)) {
-      existingSeriesIdByRecipeId.set(recipe.recipeId, recipe.seriesId);
+  for (const recipe of publicRecipes) {
+    const groupKey = getRecipeSeriesGroupKey(recipe);
+    if (recipe.seriesId && !existingSeriesIdByGroupKey.has(groupKey)) {
+      existingSeriesIdByGroupKey.set(groupKey, recipe.seriesId);
     }
   }
 
-  for (const recipe of recipes) {
+  for (const recipe of publicRecipes) {
     if (recipe.seriesId) continue;
 
-    const existingSeriesId = existingSeriesIdByRecipeId.get(recipe.recipeId);
+    const groupKey = getRecipeSeriesGroupKey(recipe);
+    const existingSeriesId = existingSeriesIdByGroupKey.get(groupKey);
     if (existingSeriesId) {
       recipeUpdates.push({
         recipeId: recipe.recipeId,
@@ -137,14 +220,14 @@ export function buildRecipeSeriesBackfillPlan(
       continue;
     }
 
-    let series = seriesByRecipeId.get(recipe.recipeId);
+    let series = seriesByGroupKey.get(groupKey);
     if (!series) {
       series = {
         id: randomUUID(),
         recipeId: recipe.recipeId,
-        name: recipe.name,
+        name: getRecipeSeriesDisplayName(recipe),
       };
-      seriesByRecipeId.set(recipe.recipeId, series);
+      seriesByGroupKey.set(groupKey, series);
     }
 
     recipeUpdates.push({
@@ -156,7 +239,7 @@ export function buildRecipeSeriesBackfillPlan(
   }
 
   return {
-    seriesToCreate: Array.from(seriesByRecipeId.values()),
+    seriesToCreate: Array.from(seriesByGroupKey.values()),
     recipeUpdates,
   };
 }
@@ -192,6 +275,17 @@ async function applyRecipeSeriesBackfillPlan({
           seriesLifeStage: update.seriesLifeStage,
         },
       });
+      await tx.designRecipe.updateMany({
+        where: {
+          publishedRecipeId: update.recipeId,
+          publishedRecipeVersion: update.version,
+          seriesId: null,
+        },
+        data: {
+          seriesId: update.seriesId,
+          seriesLifeStage: update.seriesLifeStage,
+        },
+      });
     }
   });
 }
@@ -209,7 +303,7 @@ export async function runRecipeSeriesBackfill({
 }): Promise<RecipeSeriesBackfillPlan> {
   try {
     const recipesMissingSeries = await prisma.recipe.findMany({
-      where: { seriesId: null },
+      where: { status: 'PUBLIC', seriesId: null },
       select: { recipeId: true },
       orderBy: [{ recipeId: 'asc' }],
     });
@@ -219,11 +313,18 @@ export async function runRecipeSeriesBackfill({
     const recipes =
       recipeIds.length > 0
         ? await prisma.recipe.findMany({
-            where: { recipeId: { in: recipeIds } },
+            where: {
+              status: 'PUBLIC',
+              OR: [
+                { recipeId: { in: recipeIds } },
+                { seriesId: { not: null } },
+              ],
+            },
             select: {
               recipeId: true,
               name: true,
               version: true,
+              status: true,
               seriesId: true,
               applicableLifeStages: true,
               nutritionDetailedData: true,

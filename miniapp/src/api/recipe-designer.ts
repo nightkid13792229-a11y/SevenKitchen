@@ -32,6 +32,41 @@ export interface DesignRecipeDraftPayload {
   applicableLifeStages?: string[]
 }
 
+export type RecipeSeriesStageStatus =
+  | 'NOT_DESIGNED'
+  | 'DRAFT'
+  | 'IN_REVIEW'
+  | 'PUBLISHED'
+  | 'NEEDS_CHANGES'
+
+export interface RecipeDesignerSeriesStage {
+  lifeStage: string
+  label: string
+  scenario: FediafDogScenario
+  status: RecipeSeriesStageStatus
+  draftId?: string
+  recipeId?: string
+  updatedAt?: string
+}
+
+export interface RecipeDesignerSeriesCard {
+  id: string
+  name: string
+  updatedAt?: string
+  publishedStageCount: number
+  stages: RecipeDesignerSeriesStage[]
+}
+
+export interface CreateRecipeSeriesPayload {
+  name: string
+  scenario?: FediafDogScenario
+}
+
+export interface DeleteRecipeSeriesPayload {
+  confirmName: string
+  confirmUserVisibleRemoval: boolean
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
@@ -197,6 +232,15 @@ export interface IngredientOptionListResponse {
 
 export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
+  listSeries: () => request({ url: '/recipe-designer/series', method: 'GET' }),
+  createSeries: (data: CreateRecipeSeriesPayload) =>
+    request({ url: '/recipe-designer/series', method: 'POST', data }),
+  renameSeries: (seriesId: string, data: { name: string }) =>
+    request({ url: `/recipe-designer/series/${seriesId}`, method: 'PATCH', data }),
+  deleteSeries: (seriesId: string, data: DeleteRecipeSeriesPayload) =>
+    request({ url: `/recipe-designer/series/${seriesId}`, method: 'DELETE', data }),
+  createSeriesStageDraft: (seriesId: string, data: { scenario: FediafDogScenario }) =>
+    request({ url: `/recipe-designer/series/${seriesId}/stage-drafts`, method: 'POST', data }),
   listIngredientOptions: (data: IngredientOptionListQuery = {}) =>
     request({ url: '/recipe-designer/ingredient-options', method: 'GET', data }),
   listNutritionFoods: (data: NutritionFoodListQuery = {}) =>

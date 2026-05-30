@@ -8,16 +8,21 @@
   >
     <view v-if="isEditorReadOnly" class="readonly-banner">
       <view class="readonly-copy-block">
-        <text class="readonly-title">已发布食谱只读</text>
-        <text class="readonly-copy">发布后的设计稿作为正式食谱来源留痕，不能在这里直接改动原料。</text>
+        <text class="readonly-title">已发布版本只读</text>
+        <text class="readonly-copy">点击编辑后进入草稿，不影响当前上架版本。</text>
       </view>
       <button
         class="revision-draft-btn readonly-revision-btn"
         :disabled="creatingRevision"
         @tap.stop="createRevisionFromPublishedDraft"
       >
-        {{ creatingRevision ? '创建中' : '创建修订草稿' }}
+        {{ creatingRevision ? '进入中' : '编辑' }}
       </button>
+    </view>
+
+    <view v-if="draftSeriesLifeStage" class="series-context-block">
+      <text class="series-context-title">{{ draftName || '未命名食谱' }} · {{ draftSeriesStageLabel }}</text>
+      <text class="series-context-meta">{{ assessmentStandardContextLabel }}</text>
     </view>
 
     <view class="section">
@@ -572,6 +577,7 @@ import {
   type IngredientNutritionProfileOption,
   type IngredientOptionListResponse,
   type RecipeDesignerIngredientOption,
+  type RecipeDesignerSeriesStage,
 } from '../../api/recipe-designer'
 import {
   buildAssessmentCategories,
@@ -663,6 +669,9 @@ const draftName = ref('')
 const draftStatus = ref('')
 const draftPublishedRecipeId = ref('')
 const draftPublishedAt = ref('')
+const draftSeriesId = ref('')
+const draftSeriesLifeStage = ref('')
+const availableSeriesStages = ref<RecipeDesignerSeriesStage[]>([])
 const scenario = ref<FediafDogScenario>('ADULT_MER_110')
 const items = ref<DesignerItem[]>([])
 const assessment = ref<any>(null)
@@ -882,6 +891,15 @@ const assessmentStandardContextLabel = computed(() => {
   return `${standardName} · ${lifeStage}`
 })
 
+const draftSeriesStageLabel = computed(() => {
+  const matchedStage = availableSeriesStages.value.find(
+    (stage) =>
+      stage.lifeStage === draftSeriesLifeStage.value ||
+      stage.scenario === scenario.value,
+  )
+  return matchedStage?.label || getScenarioLabel(scenario.value)
+})
+
 const canConfirmAddIngredient = computed(() => {
   if (isEditorReadOnly.value) return false
   if (addingItem.value || !selectedIngredientOption.value || !selectedNutritionProfile.value) return false
@@ -950,6 +968,9 @@ async function loadDraft() {
       draftStatus.value = String(draft.status || '')
       draftPublishedRecipeId.value = String(draft.publishedRecipeId || '')
       draftPublishedAt.value = String(draft.publishedAt || '')
+      draftSeriesId.value = String(draft.seriesId || '')
+      draftSeriesLifeStage.value = String(draft.seriesLifeStage || '')
+      availableSeriesStages.value = Array.isArray(draft.seriesStages) ? draft.seriesStages : []
       scenario.value = getDraftScenario(draft)
       items.value = draft.items || []
     }
@@ -981,13 +1002,13 @@ async function createRevisionFromPublishedDraft() {
     const revision = res?.data ?? res
     const revisionId = revision?.id
     if (!revisionId) {
-      uni.showToast({ title: '创建修订草稿失败', icon: 'none' })
+      uni.showToast({ title: '进入编辑失败', icon: 'none' })
       return
     }
     uni.redirectTo({ url: `/pages/recipe-designer/editor?id=${revisionId}` })
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to create revision draft:', error)
-    uni.showToast({ title: '创建修订草稿失败', icon: 'none' })
+    uni.showToast({ title: '进入编辑失败', icon: 'none' })
   } finally {
     creatingRevision.value = false
   }
@@ -2136,6 +2157,33 @@ function formatAssessmentNumber(value: unknown) {
   color: #fff;
   font-size: 24rpx;
   line-height: 56rpx;
+}
+
+.series-context-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  margin-bottom: 20rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 10rpx;
+  background: #fff;
+}
+
+.series-context-title {
+  overflow: hidden;
+  color: #222;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-context-meta {
+  color: #667085;
+  font-size: 23rpx;
+  line-height: 1.4;
 }
 
 .section {

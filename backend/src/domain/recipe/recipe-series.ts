@@ -48,6 +48,8 @@ export const SCENARIO_TO_SERIES_LIFE_STAGE: Record<
   ADULT_MER_110: RecipeLifeStage.HIGH_ACTIVITY_ADULT,
 };
 
+const SENIOR_AGE_MONTHS = 84;
+
 export function mapScenarioToSeriesLifeStage(
   scenario: FediafDogScenarioForSeries,
 ): RecipeSeriesLifeStage {
@@ -92,6 +94,9 @@ export function mapDogProfileToSeriesLifeStage(dog: {
       ? RecipeLifeStage.PUPPY_UNDER_14_WEEKS
       : RecipeLifeStage.PUPPY_14_WEEKS_PLUS;
   }
+  if (isSeniorAge(dog.birthday, dog.now ?? new Date())) {
+    return RecipeLifeStage.LOW_ACTIVITY_ADULT_OR_SENIOR;
+  }
 
   return isLowActivity(dog.activityLevel)
     ? RecipeLifeStage.LOW_ACTIVITY_ADULT_OR_SENIOR
@@ -113,6 +118,22 @@ export function resolveDefaultSeriesLifeStage(
 
 function isLowActivity(activityLevel?: string | null): boolean {
   return activityLevel === 'RESTING' || activityLevel === 'LOW';
+}
+
+function isSeniorAge(birthday?: Date | string | null, now: Date = new Date()): boolean {
+  const ageMonths = getAgeMonths(birthday, now);
+  return ageMonths !== null && ageMonths >= SENIOR_AGE_MONTHS;
+}
+
+function getAgeMonths(
+  birthday?: Date | string | null,
+  now: Date = new Date(),
+): number | null {
+  if (!birthday) return null;
+  const birthDate = birthday instanceof Date ? birthday : new Date(birthday);
+  const birthTime = birthDate.getTime();
+  if (!Number.isFinite(birthTime)) return null;
+  return (now.getTime() - birthTime) / (1000 * 60 * 60 * 24 * 30.4375);
 }
 
 function getAgeWeeks(

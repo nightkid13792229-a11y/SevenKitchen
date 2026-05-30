@@ -64,6 +64,17 @@ describe('recipe series life-stage helpers', () => {
     ).toBe('HIGH_ACTIVITY_ADULT');
   });
 
+  it('infers senior dogs by age before adult activity rules', () => {
+    expect(
+      mapDogProfileToSeriesLifeStage({
+        birthday: new Date('2016-05-31T00:00:00.000Z'),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'NORMAL',
+        now: new Date('2026-05-31T00:00:00.000Z'),
+      }),
+    ).toBe('LOW_ACTIVITY_ADULT_OR_SENIOR');
+  });
+
   it('falls back to adult then first configured stage', () => {
     expect(resolveDefaultSeriesLifeStage(['REPRODUCTION', 'HIGH_ACTIVITY_ADULT'])).toBe(
       'HIGH_ACTIVITY_ADULT',

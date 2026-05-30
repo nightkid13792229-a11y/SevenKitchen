@@ -534,7 +534,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('@tap.stop="selectAssessmentCategory(category.key, true)"')
     expect(editorSource).toContain('function selectAssessmentCategory(key: AssessmentCategoryKey, expandDrawer = false)')
     expect(editorSource).toContain('if (expandDrawer && !assessmentListVisible.value)')
-    expect(editorSource).toContain('v-if="assessmentListVisible" class="assessment-list"')
+    expect(editorSource).toContain('<scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list"')
     expect(editorSource).toContain('ASSESSMENT_COLLAPSED_HEIGHT_RPX')
     expect(editorSource).toContain('assessmentCollapsedHeightPx.value = rpxToPx(ASSESSMENT_COLLAPSED_HEIGHT_RPX, windowWidth)')
     expect(editorSource).toContain('min-height: 136rpx')

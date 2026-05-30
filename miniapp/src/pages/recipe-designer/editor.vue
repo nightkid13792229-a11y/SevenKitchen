@@ -323,7 +323,7 @@
         </view>
       </view>
 
-      <view v-if="assessmentListVisible" class="assessment-list">
+      <scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list" :scroll-top="assessmentScrollTop" @scroll="onAssessmentListScroll">
         <view class="assessment-list-surface">
           <text class="assessment-category-title">
             {{ getAssessmentCategoryTitle(selectedAssessmentCategoryGroup.key) }}
@@ -430,7 +430,7 @@
             </view>
           </view>
         </view>
-      </view>
+      </scroll-view>
     </view>
 
     <view v-if="showBottomPublishBar" class="bottom-publish-bar" @tap.stop>
@@ -680,6 +680,8 @@ const assessmentDrawerMaxTopPx = ref(0)
 const assessmentPublishBarHeightPx = ref(rpxToPx(BOTTOM_PUBLISH_BAR_HEIGHT_RPX))
 const editorBottomGapPx = ref(rpxToPx(EDITOR_BOTTOM_GAP_RPX))
 const selectedAssessmentCategory = ref<AssessmentCategoryKey>('MACRO')
+const assessmentScrollTopByCategory = ref<Partial<Record<AssessmentCategoryKey, number>>>({})
+const assessmentScrollTop = ref(0)
 const detailModalVisible = ref(false)
 const detailModalTitle = ref('')
 const detailModalEntry = ref<AssessmentEntryLike | null>(null)
@@ -924,9 +926,15 @@ watch(
 
 watch(assessmentCategories, (categories) => {
   const activeGroup = categories.find((group) => group.key === selectedAssessmentCategory.value)
-  if (activeGroup && activeGroup.entries.length > 0) return
-  selectedAssessmentCategory.value =
+  if (activeGroup && activeGroup.entries.length > 0) {
+    void nextTick(() => restoreAssessmentScrollPosition(selectedAssessmentCategory.value))
+    return
+  }
+
+  const fallbackCategory =
     categories.find((group) => getAssessmentCategoryAttentionCount(group) > 0)?.key || 'MACRO'
+  selectedAssessmentCategory.value = fallbackCategory
+  void nextTick(() => restoreAssessmentScrollPosition(fallbackCategory))
 })
 
 watch(autoSaveStatusLabel, () => {
@@ -1078,6 +1086,8 @@ async function refreshAssessment() {
     items.value = mergeAssessedItems(items.value, assessedItems)
   }
   refreshDetailModalFromAssessment()
+  await nextTick()
+  restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
@@ -1502,11 +1512,42 @@ function applyPendingSupplementOptionFromStorage() {
   newItemWeightInput.value = ''
 }
 
+function normalizeAssessmentScrollTop(value: unknown) {
+  const scrollTop = Number(value)
+  return Number.isFinite(scrollTop) && scrollTop > 0 ? scrollTop : 0
+}
+
+function getAssessmentScrollTop(category: AssessmentCategoryKey) {
+  return normalizeAssessmentScrollTop(assessmentScrollTopByCategory.value[category])
+}
+
+function rememberAssessmentScrollPosition(category: AssessmentCategoryKey = selectedAssessmentCategory.value) {
+  assessmentScrollTopByCategory.value = {
+    ...assessmentScrollTopByCategory.value,
+    [category]: normalizeAssessmentScrollTop(assessmentScrollTop.value),
+  }
+}
+
+function restoreAssessmentScrollPosition(category: AssessmentCategoryKey = selectedAssessmentCategory.value) {
+  assessmentScrollTop.value = getAssessmentScrollTop(category)
+}
+
+function onAssessmentListScroll(event: any) {
+  const scrollTop = normalizeAssessmentScrollTop(event.detail?.scrollTop)
+  assessmentScrollTop.value = scrollTop
+  assessmentScrollTopByCategory.value = {
+    ...assessmentScrollTopByCategory.value,
+    [selectedAssessmentCategory.value]: scrollTop,
+  }
+}
+
 function selectAssessmentCategory(key: AssessmentCategoryKey, expandDrawer = false) {
+  rememberAssessmentScrollPosition()
   selectedAssessmentCategory.value = key
   if (expandDrawer && !assessmentListVisible.value) {
     setAssessmentExpanded(true)
   }
+  void nextTick(() => restoreAssessmentScrollPosition(key))
 }
 
 function getAssessmentEntryName(entry: AssessmentEntryLike) {

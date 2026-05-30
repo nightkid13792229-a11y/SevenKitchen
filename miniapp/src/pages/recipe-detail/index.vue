@@ -24,16 +24,26 @@
     <view class="info-section">
       <text class="recipe-name">{{ recipe.name }}</text>
 
-      <view class="tags-row">
-        <text class="section-label">适用于：</text>
+      <view
+        v-if="recipe.selectedLifeStage || recipe.availableLifeStageVersions?.length"
+        class="life-stage-version-card"
+        @tap="openLifeStageSelector"
+      >
+        <view class="life-stage-version-main">
+          <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
+          <text class="life-stage-version-copy">{{ lifeStageVersionCopy }}</text>
+        </view>
+        <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
+          切换
+        </text>
+      </view>
+
+      <view
+        v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
+        class="tags-row"
+      >
+        <text class="section-label">健康标签：</text>
         <view class="tags-container">
-          <text
-            v-for="stage in recipe.applicableLifeStages"
-            :key="stage"
-            class="tag life-stage-tag"
-          >
-            {{ getLifeStageLabel(stage) }}
-          </text>
           <text
             v-for="tag in recipe.targetHealthTags"
             :key="tag"
@@ -252,7 +262,7 @@
     </view>
 
     <!-- 用户评价板块 -->
-    <ReviewList ref="reviewListRef" :recipe-id="recipeId" />
+    <ReviewList ref="reviewListRef" :recipe-id="selectedRecipeIdForActions" />
 
     <!-- 写评价按钮 -->
     <view class="write-review-section">
@@ -264,7 +274,7 @@
     <!-- 评论表单弹窗 -->
     <ReviewForm
       v-model:visible="showReviewForm"
-      :recipe-id="recipeId"
+      :recipe-id="selectedRecipeIdForActions"
       @submitted="onReviewSubmitted"
     />
 
@@ -311,10 +321,41 @@
 
     <CustomerServiceFloatButton
       source-type="PRODUCT"
-      :product-id="recipeId"
+      :product-id="selectedRecipeIdForActions"
       :product-name="recipe.name"
       :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
     />
+
+    <view
+      v-if="lifeStageSelectorVisible"
+      class="life-stage-sheet-mask"
+      @tap="closeLifeStageSelector"
+    >
+      <view class="life-stage-sheet" @tap.stop>
+        <view class="life-stage-sheet-header">
+          <text class="life-stage-sheet-title">切换生命阶段版本</text>
+          <text class="life-stage-sheet-close" @tap="closeLifeStageSelector">×</text>
+        </view>
+        <view
+          v-for="version in recipe.availableLifeStageVersions"
+          :key="version.recipeId || version.lifeStage"
+          :class="['life-stage-version-option', { active: isLifeStageVersionSelected(version) }]"
+          @tap="selectLifeStageVersion(version)"
+        >
+          <view class="life-stage-version-option-main">
+            <text class="life-stage-version-option-title">
+              {{ version.label || getLifeStageLabel(version.lifeStage) }}
+            </text>
+            <text v-if="version.description" class="life-stage-version-option-copy">
+              {{ version.description }}
+            </text>
+          </view>
+          <text v-if="isLifeStageVersionSelected(version)" class="life-stage-version-selected">
+            当前
+          </text>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -349,13 +390,15 @@ export default {
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
 
     // 动态生成路径：非公开食谱附带shareToken
+    const encodedRecipeId = encodeURIComponent(currentRecipeId)
+    const encodedShareToken = encodeURIComponent(currentShareToken)
     let path = currentRecipeId
-      ? `/pages/recipe-detail/index?recipeId=${currentRecipeId}`
+      ? `/pages/recipe-detail/index?recipeId=${encodedRecipeId}`
       : '/pages/home/index'
 
     // 非公开食谱分享时附带shareToken
     if (currentRecipeId && currentRecipeStatus !== 'PUBLIC' && currentShareToken) {
-      path = `/pages/recipe-detail/index?recipeId=${currentRecipeId}&shareToken=${currentShareToken}`
+      path = `/pages/recipe-detail/index?recipeId=${encodedRecipeId}&shareToken=${encodedShareToken}`
     }
 
     const config = { title, imageUrl, path }
@@ -439,6 +482,12 @@ interface SetarNutrientSection {
 
 interface RecipeDetail {
   id: string
+  seriesId?: string
+  selectedRecipeId?: string
+  selectedLifeStage?: string
+  selectedLifeStageLabel?: string
+  lifeStageMatch?: RecipeLifeStageMatch
+  availableLifeStageVersions?: RecipeLifeStageVersion[]
   version: number
   name: string
   status: string
@@ -454,8 +503,33 @@ interface RecipeDetail {
   items: RecipeItem[]
 }
 
+interface RecipeLifeStageVersion {
+  recipeId?: string
+  lifeStage: string
+  label?: string
+  description?: string
+  status?: string
+  isSelected?: boolean
+  selected?: boolean
+}
+
+interface RecipeLifeStageMatch {
+  status?: string
+  matchType?: string
+  matched?: boolean
+  lifeStage?: string
+  lifeStageLabel?: string
+  message?: string
+}
+
 const recipe = ref<RecipeDetail>({
   id: '',
+  seriesId: undefined,
+  selectedRecipeId: undefined,
+  selectedLifeStage: undefined,
+  selectedLifeStageLabel: undefined,
+  lifeStageMatch: undefined,
+  availableLifeStageVersions: [],
   version: 1,
   name: '',
   status: '',
@@ -482,6 +556,8 @@ const dogRecipeCalc = ref<any | null>(null)
 const dogCalcLoading = ref(false)
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
+const selectedManualLifeStage = ref('')
+const lifeStageSelectorVisible = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 健康标签UUID到名称的映射（动态加载）
@@ -505,6 +581,43 @@ const hasStructuredNutritionReport = computed(() => {
 
 const selectedDog = computed(() => {
   return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
+})
+
+const selectedRecipeIdForActions = computed(() => {
+  return recipe.value.selectedRecipeId || recipe.value.id || recipeId.value
+})
+
+const selectedLifeStageLabel = computed(() => {
+  if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
+  if (recipe.value.lifeStageMatch?.lifeStageLabel) return recipe.value.lifeStageMatch.lifeStageLabel
+  const selectedStage = recipe.value.selectedLifeStage || recipe.value.lifeStageMatch?.lifeStage || ''
+  if (!selectedStage) return ''
+  const matchedVersion = recipe.value.availableLifeStageVersions?.find(
+    (version) => version.lifeStage === selectedStage,
+  )
+  return matchedVersion?.label || getLifeStageLabel(selectedStage)
+})
+
+const isCurrentLifeStageMatched = computed(() => {
+  const match = recipe.value.lifeStageMatch
+  return Boolean(
+    match?.matched === true ||
+      match?.status === 'MATCHED' ||
+      match?.matchType === 'MATCHED',
+  )
+})
+
+const lifeStageVersionTitle = computed(() => {
+  const label = selectedLifeStageLabel.value || '当前版本'
+  return `${isCurrentLifeStageMatched.value ? '已匹配' : '当前展示'}：${label}`
+})
+
+const lifeStageVersionCopy = computed(() => {
+  if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
+  if (selectedDog.value) {
+    return `根据${selectedDog.value.name}的档案自动展示该生命阶段版本。`
+  }
+  return '可切换查看该食谱已开放的生命阶段版本。'
 })
 
 const lifeStageWarning = computed(() => {
@@ -532,11 +645,6 @@ onMounted(async () => {
     updateCartStatus()
     loadDogsForDetail()
     loadRecipeDetail()
-    // 只有登录时才检查收藏状态，避免显示"请先登录"提示
-    const token = uni.getStorageSync('token')
-    if (token) {
-      checkFavoriteStatus()
-    }
   }
 })
 
@@ -552,6 +660,13 @@ function loadRecipeDetail() {
   if (shareToken.value) {
     data.shareToken = shareToken.value
   }
+  const activeDogId = selectedDogId.value || dogId.value
+  if (activeDogId) {
+    data.dogId = activeDogId
+  }
+  if (selectedManualLifeStage.value) {
+    data.lifeStage = selectedManualLifeStage.value
+  }
 
   request({
     url: `/recipes/${recipeId.value}`,
@@ -559,9 +674,15 @@ function loadRecipeDetail() {
     data,
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      recipe.value = res.data
+      recipe.value = {
+        ...res.data,
+        id: res.data.selectedRecipeId || res.data.id,
+        availableLifeStageVersions: res.data.availableLifeStageVersions || [],
+      }
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
-      void trackRecipeView(recipeId.value, shareToken.value).catch((error: any) => {
+      const actionRecipeId = selectedRecipeIdForActions.value
+      updateCartStatus()
+      void trackRecipeView(actionRecipeId, shareToken.value).catch((error: any) => {
         console.warn('[RecipeDetail] Failed to track recipe view:', error)
       })
 
@@ -569,13 +690,20 @@ function loadRecipeDetail() {
       updateShareInfo(
         res.data.name || '',
         normalizeImageUrl(res.data.coverImageUrl) || '',
-        res.data.id || '',
+        actionRecipeId,
         res.data.status,
+        shareToken.value,
       )
 
       // 非公开食谱：预生成分享令牌（仅登录员工可操作）
       if (res.data.status !== 'PUBLIC') {
         preGenerateShareToken()
+      }
+
+      // 只有登录时才检查收藏状态，避免显示"请先登录"提示
+      const token = uni.getStorageSync('token')
+      if (token) {
+        checkFavoriteStatus()
       }
 
       if (selectedDogId.value) {
@@ -595,14 +723,14 @@ function loadRecipeDetail() {
 
 async function preGenerateShareToken() {
   try {
-    const result = await createRecipeShareToken(recipeId.value)
+    const result = await createRecipeShareToken(selectedRecipeIdForActions.value)
     if (result?.token) {
       shareToken.value = result.token
       // 更新分享信息中的token（封面图URL需要经过normalizeImageUrl处理）
       updateShareInfo(
         recipe.value.name || '',
         normalizeImageUrl(recipe.value.coverImageUrl) || '',
-        recipe.value.id || '',
+        selectedRecipeIdForActions.value,
         recipe.value.status,
         result.token
       )
@@ -652,7 +780,7 @@ async function loadDogsForDetail() {
         if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
           selectedDogId.value = dogs.value[0].id
         }
-        calcSelectedDogForRecipe()
+        loadRecipeDetail()
       }
     }
   } catch (error) {
@@ -665,18 +793,19 @@ function selectDetailDog(id: string) {
   selectedDogId.value = id
   dogId.value = id
   uni.setStorageSync('dogId', id)
-  calcSelectedDogForRecipe()
+  selectedManualLifeStage.value = ''
+  loadRecipeDetail()
 }
 
 async function calcSelectedDogForRecipe() {
-  if (!selectedDogId.value || !recipeId.value || !recipe.value.id) return
+  if (!selectedDogId.value || !recipeId.value || !selectedRecipeIdForActions.value) return
 
   dogCalcLoading.value = true
   try {
     const res: any = await request({
       url: `/dogs/${selectedDogId.value}/calc-for-recipe`,
       method: 'POST',
-      data: { recipeId: recipeId.value },
+      data: { recipeId: selectedRecipeIdForActions.value },
       quiet: true,
       suppressErrorToast: true
     })
@@ -693,7 +822,7 @@ async function calcSelectedDogForRecipe() {
 
 async function checkFavoriteStatus() {
   try {
-    const result = await checkFavorite(recipeId.value)
+    const result = await checkFavorite(selectedRecipeIdForActions.value)
     isFavorite.value = result.isFavorite
   } catch (error: any) {
     console.error('[RecipeDetail] Failed to check favorite status:', error)
@@ -722,7 +851,7 @@ async function toggleFavorite() {
   try {
     if (isFavorite.value) {
       // 取消收藏
-      await removeFavorite(recipeId.value)
+      await removeFavorite(selectedRecipeIdForActions.value)
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       isFavorite.value = false
       uni.showToast({
@@ -731,7 +860,7 @@ async function toggleFavorite() {
       })
     } else {
       // 添加收藏
-      await addFavorite(recipeId.value)
+      await addFavorite(selectedRecipeIdForActions.value)
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       isFavorite.value = true
       uni.showToast({
@@ -774,7 +903,7 @@ function previewImage() {
 }
 
 function openNutritionReportPage() {
-  const query = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+  const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
   if (shareToken.value) {
     query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
   }
@@ -802,7 +931,7 @@ function generateDiySheet() {
 
   // 已登录，直接跳转到DIY配置页面
   uni.navigateTo({
-    url: `/pages/recipe-diy/index?recipeId=${recipeId.value}`
+    url: `/pages/recipe-diy/index?recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`
   })
 }
 
@@ -823,19 +952,25 @@ function goToOrder() {
     return
   }
 
+  const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
+  if (recipe.value.selectedLifeStage) {
+    query.push(`lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}`)
+  }
+
   // 已登录，跳转到订购配置页面
   uni.navigateTo({
-    url: `/pages/recipe-order/index?recipeId=${recipeId.value}`
+    url: `/pages/recipe-order/index?${query.join('&')}`
   })
 }
 
 function updateCartStatus() {
-  if (!recipeId.value) {
+  const actionRecipeId = selectedRecipeIdForActions.value
+  if (!actionRecipeId) {
     isInCart.value = false
     return
   }
 
-  isInCart.value = getCartItems().some((item) => item.recipeId === recipeId.value)
+  isInCart.value = getCartItems().some((item) => item.recipeId === actionRecipeId)
 }
 
 function goToCart() {
@@ -845,7 +980,8 @@ function goToCart() {
 }
 
 function handleCartTap() {
-  if (!recipeId.value || !recipe.value?.name) {
+  const actionRecipeId = selectedRecipeIdForActions.value
+  if (!actionRecipeId || !recipe.value?.name) {
     uni.showToast({
       title: '食谱信息未加载',
       icon: 'none',
@@ -863,7 +999,7 @@ function handleCartTap() {
           return
         }
 
-        removeCartItem(recipeId.value)
+        removeCartItem(actionRecipeId)
         isInCart.value = false
         uni.showToast({
           title: '已移出购物车',
@@ -875,7 +1011,7 @@ function handleCartTap() {
   }
 
   addCartItem({
-    recipeId: recipeId.value,
+    recipeId: actionRecipeId,
     name: recipe.value.name,
     coverImageUrl: normalizeImageUrl(recipe.value.coverImageUrl || ''),
     description: recipe.value.description || '',
@@ -887,6 +1023,31 @@ function handleCartTap() {
     title: '已加入购物车',
     icon: 'success',
   })
+}
+
+function openLifeStageSelector() {
+  if (!recipe.value.availableLifeStageVersions?.length) return
+  lifeStageSelectorVisible.value = true
+}
+
+function closeLifeStageSelector() {
+  lifeStageSelectorVisible.value = false
+}
+
+function isLifeStageVersionSelected(version: RecipeLifeStageVersion): boolean {
+  return Boolean(
+    version.isSelected ||
+      version.selected ||
+      (version.recipeId && version.recipeId === selectedRecipeIdForActions.value) ||
+      version.lifeStage === recipe.value.selectedLifeStage,
+  )
+}
+
+function selectLifeStageVersion(version: RecipeLifeStageVersion) {
+  if (!version.lifeStage) return
+  selectedManualLifeStage.value = version.lifeStage
+  lifeStageSelectorVisible.value = false
+  loadRecipeDetail()
 }
 
 function getLifeStageLabel(stage: string): string {
@@ -1008,7 +1169,7 @@ async function openReviewForm() {
   }
 
   try {
-    const result = await reviewApi.checkEligibility(recipeId.value)
+    const result = await reviewApi.checkEligibility(selectedRecipeIdForActions.value)
     if (!result.eligible) {
       uni.showToast({ title: '您需要购买或制作过该食谱才能评价', icon: 'none', duration: 2500 })
       return
@@ -1136,6 +1297,51 @@ function onReviewSubmitted() {
   flex-wrap: wrap;
   gap: 8rpx;
   justify-content: center;
+}
+
+.life-stage-version-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin: 18rpx 0;
+  padding: 22rpx;
+  border-radius: 12rpx;
+  background: #f4fbf5;
+  border: 1rpx solid #dcefe2;
+}
+
+.life-stage-version-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.life-stage-version-title,
+.life-stage-version-copy {
+  display: block;
+}
+
+.life-stage-version-title {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #264b2e;
+}
+
+.life-stage-version-copy {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #58705d;
+  line-height: 1.45;
+}
+
+.life-stage-version-action {
+  flex: 0 0 auto;
+  padding: 8rpx 16rpx;
+  border-radius: 6rpx;
+  color: #2f8f4e;
+  background-color: #fff;
+  font-size: 24rpx;
+  font-weight: 700;
 }
 
 .tag {
@@ -1586,6 +1792,90 @@ function onReviewSubmitted() {
   border-top: 1rpx solid #e5e5e5;
   box-shadow: 0 -8rpx 22rpx rgba(15, 23, 42, 0.06);
   box-sizing: border-box;
+}
+
+.life-stage-sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.life-stage-sheet {
+  width: 100%;
+  max-height: 70vh;
+  box-sizing: border-box;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
+  background: #fff;
+}
+
+.life-stage-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.life-stage-sheet-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.life-stage-sheet-close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 50%;
+  background: #f2f4f5;
+  color: #687078;
+  text-align: center;
+  font-size: 34rpx;
+}
+
+.life-stage-version-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #eef0f2;
+}
+
+.life-stage-version-option.active {
+  color: #2f8f4e;
+}
+
+.life-stage-version-option-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.life-stage-version-option-title,
+.life-stage-version-option-copy {
+  display: block;
+}
+
+.life-stage-version-option-title {
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.life-stage-version-option-copy {
+  margin-top: 6rpx;
+  color: #687078;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.life-stage-version-selected {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #2f8f4e;
 }
 
 .quick-actions {

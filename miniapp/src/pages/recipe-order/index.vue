@@ -14,13 +14,12 @@
 
       <view class="recipe-info-body">
         <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
-        <view class="recipe-tags">
-          <text
-            v-for="stage in recipe.applicableLifeStages"
-            :key="stage"
-            class="tag life-stage-tag"
-          >
-            {{ getLifeStageLabel(stage) }}
+        <view
+          v-if="selectedLifeStageLabel || (recipe.targetHealthTags && recipe.targetHealthTags.length > 0)"
+          class="recipe-tags"
+        >
+          <text v-if="selectedLifeStageLabel" class="tag life-stage-tag">
+            {{ selectedLifeStageLabel }}
           </text>
           <text
             v-for="tag in recipe.targetHealthTags"
@@ -506,6 +505,8 @@ interface Dog {
 interface Recipe {
   id: string
   name: string
+  selectedLifeStage?: string
+  selectedLifeStageLabel?: string
   description?: string
   coverImageUrl?: string
   energyDensityKcalPerKg: number
@@ -670,6 +671,7 @@ type PreparationMethod = 'CHOPPED' | 'DICED'
 type CookingMethod = 'RAW' | 'COOKED'
 
 const recipeId = ref('')
+const selectedLifeStage = ref('')
 const recipe = ref<Recipe>({
   id: '',
   name: '',
@@ -854,6 +856,12 @@ const recipeNutritionStandardLabel = computed(() =>
 const recipeFormulaSoftwareLabel = computed(() =>
   getInitials(recipe.value.designSource || 'SevenKitchen')
 )
+const selectedLifeStageLabel = computed(() => {
+  if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
+  const stage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
+  if (!stage) return ''
+  return getLifeStageLabel(stage)
+})
 const dogProfileSummaryText = computed(() => {
   if (!selectedDog.value) return ''
 
@@ -1037,6 +1045,7 @@ onMounted(async () => {
   loadProductExplanationMediaConfig()
 
   recipeId.value = currentPage.options?.recipeId || ''
+  selectedLifeStage.value = currentPage.options?.lifeStage || ''
 
   // 解析自动配置参数
   if (currentPage.options?.autoConfig === 'true') {
@@ -1158,12 +1167,20 @@ async function loadHealthTagMapping() {
 
 async function loadRecipeDetail() {
   try {
+    const data: Record<string, string> = {}
+    if (selectedLifeStage.value) {
+      data.lifeStage = selectedLifeStage.value
+    }
     const res = await request({
       url: `/recipes/${recipeId.value}`,
-      method: 'GET'
+      method: 'GET',
+      data,
     })
     if (res.code === 0 && res.data) {
       recipe.value = res.data
+      if (!selectedLifeStage.value && res.data.selectedLifeStage) {
+        selectedLifeStage.value = res.data.selectedLifeStage
+      }
     }
   } catch (error) {
     console.error('Load recipe error:', error)
@@ -1598,6 +1615,7 @@ function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
 function buildPricingPreviewItem() {
   return {
     recipeId: recipeId.value,
+    lifeStage: selectedLifeStage.value || undefined,
     quantityG: Math.round(totalGrams.value),
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
@@ -1769,6 +1787,7 @@ async function continueBuyNow() {
     snapshotId: pricingSnapshotId.value,
     dogId: selectedDog.value?.id || selectedDogId.value,
     recipeId: recipeId.value,
+    lifeStage: selectedLifeStage.value,
     dogName: selectedDog.value?.name || '',
     breedName: selectedDog.value?.breedName || '',
     weightKg: selectedDog.value?.currentWeightKg || 0,

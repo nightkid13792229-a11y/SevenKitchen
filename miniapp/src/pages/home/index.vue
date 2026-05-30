@@ -234,22 +234,13 @@
             </view>
           </view>
 
-          <!-- 生命阶段和健康标签合并 -->
+          <!-- 健康标签 -->
           <view
-            v-if="(recipe.applicableLifeStages && recipe.applicableLifeStages.length > 0) ||
-                   (recipe.targetHealthTags && recipe.targetHealthTags.length > 0)"
+            v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
             class="tags-row"
           >
-            <text class="tags-label">适用于：</text>
+            <text class="tags-label">健康标签：</text>
             <view class="tags">
-              <!-- 生命阶段标签 -->
-              <text
-                v-for="stage in recipe.applicableLifeStages"
-                :key="'stage-' + stage"
-                class="tag life-stage-tag"
-              >
-                {{ getLifeStageLabel(stage) }}
-              </text>
               <!-- 健康标签 -->
               <text
                 v-for="tag in recipe.targetHealthTags"

@@ -111,10 +111,19 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('产品说明');
   });
 
-  it('renders all recipe life-stage tags in Chinese on the order page', () => {
-    expect(templateSource).toContain('getLifeStageLabel(stage)');
+  it('renders the selected handoff life stage in Chinese on the order page', () => {
+    expect(templateSource).toContain('{{ selectedLifeStageLabel }}');
+    expect(templateSource).not.toContain('v-for="stage in recipe.applicableLifeStages"');
     expect(source).toContain('../../utils/life-stage-match');
     expect(source).toContain('getLifeStageLabel');
+  });
+
+  it('reads and carries the selected life stage from the detail page handoff', () => {
+    expect(source).toContain("const selectedLifeStage = ref('')");
+    expect(source).toContain("selectedLifeStage.value = currentPage.options?.lifeStage || ''");
+    expect(templateSource).toContain('v-if="selectedLifeStageLabel"');
+    expect(templateSource).toContain('{{ selectedLifeStageLabel }}');
+    expect(source).toContain('lifeStage: selectedLifeStage.value');
   });
 
   it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {

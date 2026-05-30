@@ -165,4 +165,26 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).toContain("'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬'")
     expect(source).toContain("'REPRODUCTION': '繁殖期'")
   })
+
+  it('uses backend selected life-stage version metadata instead of the old header tag loop', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(templateSource).not.toContain('v-for="stage in recipe.applicableLifeStages"')
+    expect(source).toContain('availableLifeStageVersions')
+    expect(source).toContain('lifeStageMatch')
+  })
+
+  it('orders the backend selected concrete recipe version', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('selectedRecipeIdForActions')
+    expect(source).toContain('recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}')
+  })
 })

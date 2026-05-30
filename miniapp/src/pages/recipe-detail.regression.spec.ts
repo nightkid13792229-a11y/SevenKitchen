@@ -205,4 +205,34 @@ describe('recipe detail nutrition report regressions', () => {
     expect(copySource.indexOf('!isCurrentLifeStageMatched.value'))
       .toBeLessThan(copySource.indexOf('selectedDog.value'))
   })
+
+  it('guards recipe detail response ordering before state writes and side effects', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const loadRecipeDetailSource = source.match(
+      /function loadRecipeDetail\(\) \{[\s\S]*?\n}\n\nasync function preGenerateShareToken/,
+    )?.[0] || ''
+
+    expect(source).toContain('let recipeDetailRequestSeq = 0')
+    expect(loadRecipeDetailSource).toContain('const currentRequestSeq = ++recipeDetailRequestSeq')
+    expect(loadRecipeDetailSource).toContain('if (currentRequestSeq !== recipeDetailRequestSeq) {')
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('recipe.value = {'))
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('trackRecipeView(actionRecipeId, shareToken.value)'))
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('updateShareInfo('))
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('preGenerateShareToken()'))
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('checkFavoriteStatus()'))
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('calcSelectedDogForRecipe()'))
+    expect(loadRecipeDetailSource).toContain('if (currentRequestSeq !== recipeDetailRequestSeq) return')
+    expect(loadRecipeDetailSource).toContain('if (currentRequestSeq === recipeDetailRequestSeq) {')
+    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq === recipeDetailRequestSeq) {'))
+      .toBeLessThan(loadRecipeDetailSource.indexOf('uni.hideLoading()'))
+  })
 })

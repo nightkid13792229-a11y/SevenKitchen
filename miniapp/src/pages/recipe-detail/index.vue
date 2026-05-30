@@ -559,6 +559,7 @@ const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const selectedManualLifeStage = ref('')
 const lifeStageSelectorVisible = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
+let recipeDetailRequestSeq = 0
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -668,6 +669,7 @@ onShow(() => {
 })
 
 function loadRecipeDetail() {
+  const currentRequestSeq = ++recipeDetailRequestSeq
   uni.showLoading({ title: '加载中...' })
 
   // 构建请求参数：非公开食谱通过URL传入的shareToken传递给后端
@@ -688,6 +690,10 @@ function loadRecipeDetail() {
     method: 'GET',
     data,
   }).then((res: any) => {
+    if (currentRequestSeq !== recipeDetailRequestSeq) {
+      return
+    }
+
     if (res.code === 0 && res.data) {
       recipe.value = {
         ...res.data,
@@ -726,13 +732,17 @@ function loadRecipeDetail() {
       }
     }
   }).catch((err: any) => {
+    if (currentRequestSeq !== recipeDetailRequestSeq) return
+
     console.error('Load recipe error:', err)
     uni.showToast({
       title: '加载失败',
       icon: 'none'
     })
   }).finally(() => {
-    uni.hideLoading()
+    if (currentRequestSeq === recipeDetailRequestSeq) {
+      uni.hideLoading()
+    }
   })
 }
 

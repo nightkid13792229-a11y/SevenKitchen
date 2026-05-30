@@ -69,7 +69,7 @@ npm test -- backfill-latest-recipes-to-designer.spec.ts --runInBand
 npm run build
 ```
 
-Observed: Prisma generation passed, then Nest build failed on unrelated ingredient-creation type errors in `src/application/ingredient-creation/ingredient-creation-agent.service.ts:526` and `src/application/ingredient-creation/ingredient-creation-completeness.ts:144`.
+Observed: Prisma generation passed, then Nest build failed on unrelated experimental feature type errors that were removed later.
 
 ### Task 3: Operator Notes
 

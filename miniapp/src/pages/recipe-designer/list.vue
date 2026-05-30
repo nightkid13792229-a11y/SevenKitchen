@@ -37,18 +37,11 @@
           </view>
           <view class="series-actions" @tap.stop>
             <button
-              class="series-action-btn"
-              :disabled="renamingSeriesId === seriesItem.id"
-              @tap.stop="renameSeries(seriesItem)"
+              class="series-more-btn"
+              :disabled="renamingSeriesId === seriesItem.id || deletingSeriesId === seriesItem.id"
+              @tap.stop="openSeriesActionSheet(seriesItem)"
             >
-              重命名
-            </button>
-            <button
-              class="series-delete-btn"
-              :disabled="deletingSeriesId === seriesItem.id"
-              @tap.stop="deleteSeries(seriesItem)"
-            >
-              删除
+              ⋯
             </button>
           </view>
         </view>
@@ -302,6 +295,23 @@ async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: Reci
   }
 }
 
+function openSeriesActionSheet(seriesItem: RecipeDesignerSeriesCard) {
+  if (renamingSeriesId.value === seriesItem.id || deletingSeriesId.value === seriesItem.id) return
+
+  uni.showActionSheet({
+    itemList: ['重命名', '删除'],
+    success: (result: any) => {
+      if (result.tapIndex === 0) {
+        renameSeries(seriesItem)
+        return
+      }
+      if (result.tapIndex === 1) {
+        deleteSeries(seriesItem)
+      }
+    },
+  })
+}
+
 function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
   if (renamingSeriesId.value) return
 
@@ -534,28 +544,20 @@ function formatDateTime(value?: string) {
 
 .series-actions {
   flex-shrink: 0;
-  gap: 12rpx;
 }
 
-.series-action-btn,
-.series-delete-btn {
+.series-more-btn {
   flex-shrink: 0;
-  height: 52rpx;
+  width: 56rpx;
+  height: 56rpx;
   margin: 0;
-  padding: 0 16rpx;
-  border-radius: 8rpx;
-  font-size: 22rpx;
-  line-height: 52rpx;
-}
-
-.series-action-btn {
+  padding: 0;
+  border-radius: 50%;
   background: #f0f6ff;
   color: #1677ff;
-}
-
-.series-delete-btn {
-  background: #fff1f0;
-  color: #cf1322;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 48rpx;
 }
 
 .stage-list {

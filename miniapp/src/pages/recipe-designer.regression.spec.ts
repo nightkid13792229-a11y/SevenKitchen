@@ -92,6 +92,10 @@ describe('recipe designer mobile entry', () => {
 
   it('lets users rename and safely delete recipe series from overflow actions only', () => {
     expect(listSource).toContain('series-actions')
+    expect(listSource).toContain('series-more-btn')
+    expect(listSource).toContain('openSeriesActionSheet(seriesItem)')
+    expect(listSource).toContain('uni.showActionSheet')
+    expect(listSource).toContain("itemList: ['重命名', '删除']")
     expect(listSource).toContain('重命名')
     expect(listSource).toContain('删除')
     expect(listSource).toContain('function renameSeries')
@@ -101,6 +105,9 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('confirmName')
     expect(listSource).toContain('confirmUserVisibleRemoval')
     expect(listSource).toContain('editable: true')
+    expect(listSource).not.toContain('@tap.stop="renameSeries(seriesItem)"')
+    expect(listSource).not.toContain('@tap.stop="deleteSeries(seriesItem)"')
+    expect(listSource).not.toContain('series-delete-btn')
     expect(listSource).not.toContain('recipeDesignerApi.deleteDraft')
     expect(listSource).not.toContain('recipeDesignerApi.updateDraft')
     expect(listSource).not.toContain('revision-draft-btn')

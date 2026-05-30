@@ -36,9 +36,18 @@ import type {
 import {
   RecipeSummaryDto,
   RecipeDetailDto,
+  RecipeLifeStageMatchDto,
+  RecipeLifeStageVersionDto,
 } from '../dto/recipes/recipe-response.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { RecipeStatus, NutritionStandard } from '../../domain/recipe/enums';
+import {
+  mapDogProfileToSeriesLifeStage,
+  ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  RecipeSeriesLifeStage,
+  resolveDefaultSeriesLifeStage,
+  SERIES_LIFE_STAGE_LABELS,
+} from '../../domain/recipe/recipe-series';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import {
   GenerateDiySheetDto,
@@ -68,6 +77,9 @@ function generateToken(length: number = 32): string {
   }
   return result;
 }
+
+const SERIES_FALLBACK_MESSAGE =
+  '当前狗狗档案没有完全匹配版本，已展示可用替代版本。';
 
 @ApiTags('Recipes')
 @Controller('api/v1/recipes')
@@ -476,6 +488,7 @@ export class RecipesController {
           energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
           coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
           coverTitle: recipe.coverTitle || undefined,
+          seriesId: recipe.seriesId || undefined,
           targetHealthTags: targetHealthTags,
           applicableLifeStages: applicableLifeStages,
           items: topIngredients,
@@ -624,38 +637,282 @@ export class RecipesController {
     };
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get recipe detail' })
-  @ApiParam({ name: 'id', description: 'Recipe ID' })
-  @ApiQuery({ name: 'shareToken', required: false, description: 'Share token for non-public recipes' })
-  @ApiResponse({
-    status: 200,
-    description: 'Recipe detail',
-    type: RecipeDetailDto,
-  })
-  @ApiResponse({ status: 404, description: 'Recipe not found' })
-  async getRecipe(
-    @Param('id') id: string,
-    @Query('shareToken') shareToken?: string,
-    @Req() req?: any,
-  ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
-    const recipe = await this.getAccessibleRecipe(id, shareToken, req);
-    if (!recipe) {
-      return ApiResponseDto.error(404, 'Recipe not found');
+  private getRequestUser(req?: any): RequestUser | null {
+    if (req?.user) {
+      return req.user as RequestUser;
     }
 
+    try {
+      const authHeader = req?.headers?.authorization;
+      if (authHeader && typeof authHeader === 'string') {
+        const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+        if (bearerMatch?.[1]) {
+          return this.jwtAuthService.validateToken(bearerMatch[1]);
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  private async loadPublicSeriesRecipes(id: string): Promise<any[]> {
+    const candidates = await this.prisma.recipe.findMany({
+      where: {
+        status: 'PUBLIC',
+        OR: [{ seriesId: id }, { recipeId: id }],
+      },
+      include: {
+        items: {
+          include: {
+            ingredient: true,
+            nutritionFood: true,
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+        healthTagAssignments: {
+          include: {
+            healthTag: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { version: 'desc' }],
+    });
+
+    const seriesId = candidates.find((recipe) => recipe.seriesId)?.seriesId;
+    if (!seriesId || seriesId === id) {
+      return candidates;
+    }
+
+    return this.prisma.recipe.findMany({
+      where: {
+        status: 'PUBLIC',
+        seriesId,
+      },
+      include: {
+        items: {
+          include: {
+            ingredient: true,
+            nutritionFood: true,
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+        healthTagAssignments: {
+          include: {
+            healthTag: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { version: 'desc' }],
+    });
+  }
+
+  private latestPublicVersionBySeriesStage(recipes: any[]): any[] {
+    const latestByStage = new Map<string, any>();
+    for (const recipe of recipes) {
+      const stage = recipe.seriesLifeStage;
+      if (!stage) {
+        continue;
+      }
+      const existing = latestByStage.get(stage);
+      if (!existing || recipe.version > existing.version) {
+        latestByStage.set(stage, recipe);
+      }
+    }
+
+    return Array.from(latestByStage.values()).sort((left, right) => {
+      const leftIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
+        left.seriesLifeStage,
+      );
+      const rightIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
+        right.seriesLifeStage,
+      );
+      return leftIndex - rightIndex;
+    });
+  }
+
+  private getSeriesLifeStageLabel(lifeStage?: string | null): string | undefined {
+    if (!lifeStage) {
+      return undefined;
+    }
+    return (
+      SERIES_LIFE_STAGE_LABELS[lifeStage as RecipeSeriesLifeStage] ?? lifeStage
+    );
+  }
+
+  private async resolveRequestedSeriesLifeStage(
+    manualLifeStage?: string,
+    dogId?: string,
+    req?: any,
+  ): Promise<string | undefined> {
+    if (manualLifeStage) {
+      return manualLifeStage;
+    }
+
+    if (!dogId) {
+      return undefined;
+    }
+
+    const user = this.getRequestUser(req);
+    const dog = await this.prisma.dog.findFirst({
+      where: {
+        id: dogId,
+        ...(user?.role === 'CUSTOMER' && user.customerId
+          ? { ownerId: user.customerId }
+          : {}),
+      },
+      select: {
+        id: true,
+        birthday: true,
+        lifeStageOverride: true,
+        activityLevel: true,
+      },
+    });
+
+    return dog ? mapDogProfileToSeriesLifeStage(dog) : undefined;
+  }
+
+  private async resolvePublicSeriesSelection(
+    id: string,
+    manualLifeStage?: string,
+    dogId?: string,
+    req?: any,
+  ): Promise<{
+    recipe: Recipe;
+    lifeStageMatch: RecipeLifeStageMatchDto;
+    availableLifeStageVersions: RecipeLifeStageVersionDto[];
+  } | null> {
+    const seriesRecipes = this.latestPublicVersionBySeriesStage(
+      await this.loadPublicSeriesRecipes(id),
+    );
+    if (seriesRecipes.length === 0) {
+      return null;
+    }
+
+    const requestedLifeStage = await this.resolveRequestedSeriesLifeStage(
+      manualLifeStage,
+      dogId,
+      req,
+    );
+    const configuredStages = seriesRecipes.map((recipe) => recipe.seriesLifeStage);
+    const exactMatch = requestedLifeStage
+      ? seriesRecipes.find((recipe) => recipe.seriesLifeStage === requestedLifeStage)
+      : null;
+    const fallbackLifeStage = resolveDefaultSeriesLifeStage(configuredStages);
+    const selectedRecipe =
+      exactMatch ??
+      seriesRecipes.find((recipe) => recipe.seriesLifeStage === fallbackLifeStage) ??
+      seriesRecipes[0];
+    const selectedLifeStage = selectedRecipe.seriesLifeStage;
+    const matchType: RecipeLifeStageMatchDto['matchType'] = exactMatch
+      ? 'MATCHED'
+      : requestedLifeStage && fallbackLifeStage === 'HIGH_ACTIVITY_ADULT'
+        ? 'FALLBACK_ADULT'
+        : requestedLifeStage
+          ? 'FALLBACK_FIRST'
+          : 'MATCHED';
+
+    const availableLifeStageVersions = seriesRecipes.map((recipe) => ({
+      lifeStage: recipe.seriesLifeStage,
+      label: this.getSeriesLifeStageLabel(recipe.seriesLifeStage) ?? recipe.seriesLifeStage,
+      recipeId: recipe.recipeId,
+      isCurrent: recipe.recipeId === selectedRecipe.recipeId,
+    }));
+
+    return {
+      recipe: this.mapPrismaRecipeToControllerRecipe(selectedRecipe),
+      lifeStageMatch: {
+        requestedLifeStage,
+        selectedLifeStage,
+        matchType,
+        ...(matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
+          ? { message: SERIES_FALLBACK_MESSAGE }
+          : {}),
+      },
+      availableLifeStageVersions,
+    };
+  }
+
+  private mapPrismaRecipeToControllerRecipe(recipe: any): Recipe {
+    return {
+      id: recipe.recipeId,
+      version: recipe.version,
+      name: recipe.name,
+      status: recipe.status,
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
+      productionLossRate: recipe.productionLossRate,
+      coverImageUrl: recipe.coverImageUrl,
+      coverTitle: recipe.coverTitle,
+      targetHealthTags:
+        recipe.healthTagAssignments?.map((assignment: any) => assignment.healthTagId) ??
+        recipe.targetHealthTags ??
+        [],
+      applicableLifeStages: recipe.applicableLifeStages ?? [],
+      items:
+        recipe.items?.map((item: any) => ({
+          ...item,
+          supplementAlternatives: item.supplementAlternatives?.map(
+            (alternative: any) => ({
+              ingredientId:
+                alternative.ingredientId ?? alternative.alternativeIngredientId,
+              ingredientName:
+                alternative.ingredientName ??
+                alternative.alternativeIngredient?.name,
+              ingredient:
+                alternative.ingredient ?? alternative.alternativeIngredient,
+            }),
+          ),
+        })) ?? [],
+      designSource: recipe.designSource,
+      nutritionStandard: recipe.nutritionStandard,
+      nutritionDetailedData: recipe.nutritionDetailedData,
+      description: recipe.description,
+      viewCount: recipe.viewCount ?? 0,
+      favoriteCount: recipe.favoriteCount ?? 0,
+      diyGenCount: recipe.diyGenCount ?? 0,
+      seriesId: recipe.seriesId,
+      seriesLifeStage: recipe.seriesLifeStage,
+    };
+  }
+
+  private async buildRecipeDetail(
+    recipe: Recipe,
+    seriesSelection?: {
+      lifeStageMatch: RecipeLifeStageMatchDto;
+      availableLifeStageVersions: RecipeLifeStageVersionDto[];
+    },
+  ): Promise<RecipeDetailDto> {
     const methodMap = await this.loadPreparationMethodNameMap(
       (recipe.items || []).map((item: any) => item.preparationMethod),
     );
 
-    // Return all ingredients with preparation method, sorted by sort_order
     const allIngredients = await Promise.all(
       (recipe.items || [])
         .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
         .map(async (item: any) => {
           const ingredientType = item.ingredient?.type;
 
-          // Only FOOD type has ratio, SUPPLEMENT has nutrient target
           const result: any = {
             id: item.id,
             ingredientId: item.ingredientId,
@@ -691,7 +948,6 @@ export class RecipesController {
               })) || undefined,
           };
 
-          // FOOD type: include ratio (for backward compatibility)
           if (ingredientType === 'FOOD') {
             result.ratio = item.ratioPercent != null ? item.ratioPercent : 0;
           }
@@ -700,12 +956,16 @@ export class RecipesController {
         }),
     );
 
-    // Map nutrition detailed data from DB format to API format
     const nutritionDetailedData = this.mapNutritionDetailedData(
       (recipe as any).nutritionDetailedData,
     );
 
-    const detail: RecipeDetailDto = {
+    const selectedLifeStage =
+      seriesSelection?.lifeStageMatch.selectedLifeStage ??
+      recipe.seriesLifeStage ??
+      undefined;
+
+    return {
       id: recipe.id,
       version: recipe.version,
       name: recipe.name,
@@ -715,6 +975,17 @@ export class RecipesController {
         'http://',
         'https://',
       ),
+      coverTitle: (recipe as any).coverTitle || undefined,
+      seriesId: recipe.seriesId || undefined,
+      selectedLifeStage,
+      selectedLifeStageLabel: this.getSeriesLifeStageLabel(selectedLifeStage),
+      selectedRecipeId: recipe.id,
+      lifeStageMatch: seriesSelection?.lifeStageMatch ?? {
+        selectedLifeStage,
+        matchType: 'LEGACY',
+      },
+      availableLifeStageVersions:
+        seriesSelection?.availableLifeStageVersions ?? undefined,
       productionLossRate: recipe.productionLossRate,
       nutritionStandard: (recipe.nutritionStandard ||
         NutritionStandard.FEDIAF_2021) as NutritionStandard,
@@ -725,8 +996,49 @@ export class RecipesController {
       items: allIngredients,
       description: (recipe as any).description,
     };
+  }
 
-    return ApiResponseDto.success(detail);
+  @Get(':id')
+  @ApiOperation({ summary: 'Get recipe detail' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  @ApiQuery({ name: 'shareToken', required: false, description: 'Share token for non-public recipes' })
+  @ApiQuery({ name: 'dogId', required: false, description: 'Dog ID for series life-stage selection' })
+  @ApiQuery({ name: 'lifeStage', required: false, description: 'Manual series life stage' })
+  @ApiResponse({
+    status: 200,
+    description: 'Recipe detail',
+    type: RecipeDetailDto,
+  })
+  @ApiResponse({ status: 404, description: 'Recipe not found' })
+  async getRecipe(
+    @Param('id') id: string,
+    @Query('shareToken') shareToken?: string,
+    @Query('dogId') dogId?: string,
+    @Query('lifeStage') lifeStage?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
+    const seriesSelection = await this.resolvePublicSeriesSelection(
+      id,
+      lifeStage,
+      dogId,
+      req,
+    );
+    if (seriesSelection) {
+      return ApiResponseDto.success(
+        await this.buildRecipeDetail(seriesSelection.recipe, {
+          lifeStageMatch: seriesSelection.lifeStageMatch,
+          availableLifeStageVersions:
+            seriesSelection.availableLifeStageVersions,
+        }),
+      );
+    }
+
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req);
+    if (!recipe) {
+      return ApiResponseDto.error(404, 'Recipe not found');
+    }
+
+    return ApiResponseDto.success(await this.buildRecipeDetail(recipe));
   }
 
   @Post(':id/view')

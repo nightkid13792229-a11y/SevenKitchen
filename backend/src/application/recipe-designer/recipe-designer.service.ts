@@ -1944,6 +1944,11 @@ export class RecipeDesignerService {
       draft.targetHealthTags,
     );
     const publishTarget = await this.resolvePublishTarget(draft);
+    const publishedSeriesLifeStage =
+      draft.seriesLifeStage ??
+      (draft.seriesId
+        ? mapScenarioToSeriesLifeStage(draft.fediafDogScenario)
+        : null);
 
     return this.prisma.$transaction(async (tx) => {
       const recipe = await tx.recipe.create({
@@ -1965,8 +1970,8 @@ export class RecipeDesignerService {
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
           ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
-          ...(draft.seriesLifeStage
-            ? { seriesLifeStage: draft.seriesLifeStage }
+          ...(publishedSeriesLifeStage
+            ? { seriesLifeStage: publishedSeriesLifeStage }
             : {}),
           ...(healthTagAssignments ? { healthTagAssignments } : {}),
           items: {
@@ -2189,26 +2194,53 @@ export class RecipeDesignerService {
   private async resolvePublishTarget(draft: DesignRecipeWithItems) {
     const baseRecipeId = draft.revisionBaseRecipeId?.trim();
 
-    if (!baseRecipeId) {
+    if (baseRecipeId) {
+      const latestRecipe = await this.prisma.recipe.findFirst({
+        where: { recipeId: baseRecipeId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+
+      if (!latestRecipe) {
+        throw new BadRequestException('原正式食谱不存在，无法发布修订版本');
+      }
+
       return {
-        recipeId: draft.id,
-        version: draft.version,
+        recipeId: baseRecipeId,
+        version: latestRecipe.version + 1,
       };
     }
 
-    const latestRecipe = await this.prisma.recipe.findFirst({
-      where: { recipeId: baseRecipeId },
-      orderBy: { version: 'desc' },
-      select: { version: true },
-    });
+    const seriesId = draft.seriesId?.trim();
+    if (seriesId) {
+      const seriesLifeStage =
+        draft.seriesLifeStage ??
+        mapScenarioToSeriesLifeStage(draft.fediafDogScenario);
+      const latestStageRecipe = await this.prisma.recipe.findFirst({
+        where: {
+          seriesId,
+          seriesLifeStage,
+        },
+        orderBy: { version: 'desc' },
+        select: { recipeId: true, version: true },
+      });
 
-    if (!latestRecipe) {
-      throw new BadRequestException('原正式食谱不存在，无法发布修订版本');
+      if (latestStageRecipe) {
+        return {
+          recipeId: latestStageRecipe.recipeId,
+          version: latestStageRecipe.version + 1,
+        };
+      }
+
+      return {
+        recipeId: draft.id,
+        version: 1,
+      };
     }
 
     return {
-      recipeId: baseRecipeId,
-      version: latestRecipe.version + 1,
+      recipeId: draft.id,
+      version: draft.version,
     };
   }
 

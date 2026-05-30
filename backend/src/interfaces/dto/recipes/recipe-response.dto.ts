@@ -10,6 +10,20 @@ import {
   LifeStage,
 } from '../../../domain';
 
+export interface RecipeLifeStageVersionDto {
+  lifeStage: string;
+  label: string;
+  recipeId: string;
+  isCurrent: boolean;
+}
+
+export interface RecipeLifeStageMatchDto {
+  requestedLifeStage?: string;
+  selectedLifeStage?: string;
+  matchType: 'MATCHED' | 'FALLBACK_ADULT' | 'FALLBACK_FIRST' | 'LEGACY';
+  message?: string;
+}
+
 export interface SupplementTargetResponseDto {
   fieldPath: string;
   label: string;
@@ -38,6 +52,9 @@ export class RecipeSummaryDto {
 
   @ApiPropertyOptional({ example: '皮毛友好【成年犬】' })
   coverTitle?: string;
+
+  @ApiPropertyOptional({ example: 'recipe-series-uuid' })
+  seriesId?: string;
 
   @ApiProperty({ type: [String], enum: RecipeHealthTag })
   targetHealthTags!: RecipeHealthTag[];
@@ -68,6 +85,21 @@ export class RecipeDetailDto extends RecipeSummaryDto {
 
   @ApiPropertyOptional()
   description?: string;
+
+  @ApiPropertyOptional({ example: 'HIGH_ACTIVITY_ADULT' })
+  selectedLifeStage?: string;
+
+  @ApiPropertyOptional({ example: '普通成年犬' })
+  selectedLifeStageLabel?: string;
+
+  @ApiPropertyOptional({ example: 'recipe-uuid' })
+  selectedRecipeId?: string;
+
+  @ApiPropertyOptional({ description: 'Life-stage selection result' })
+  lifeStageMatch?: RecipeLifeStageMatchDto;
+
+  @ApiPropertyOptional({ description: 'Published versions in the same series' })
+  availableLifeStageVersions?: RecipeLifeStageVersionDto[];
 
   @ApiProperty({ example: 1.07 })
   productionLossRate!: number;

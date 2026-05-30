@@ -2556,6 +2556,66 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('publishes a new life-stage draft in an existing series with its own formal recipe id', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'senior-design',
+        name: '牛肉南瓜鲜食',
+        version: 4,
+        isCompliant: true,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.findFirst.mockResolvedValue(null);
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-senior',
+      recipeId: 'senior-design',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-senior',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'senior-design',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'senior-design',
+        publishedRecipeVersion: 1,
+      }),
+    );
+
+    await service.publishDraft('senior-design', { name: '牛肉南瓜鲜食' }, 'staff-2');
+
+    expect(prisma.recipe.findFirst).toHaveBeenCalledWith({
+      where: {
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      },
+      orderBy: { version: 'desc' },
+      select: { recipeId: true, version: true },
+    });
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipeId: 'senior-design',
+        version: 1,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      }),
+    });
+    expect(prisma.designRecipe.update).toHaveBeenLastCalledWith({
+      where: { id: 'senior-design' },
+      data: expect.objectContaining({
+        publishedRecipeId: 'senior-design',
+        publishedRecipeVersion: 1,
+      }),
+      include: expect.any(Object),
+    });
+  });
+
   it.each([
     ['EARLY_GROWTH_REPRODUCTION', ['PUPPY_UNDER_14_WEEKS']],
     ['LATE_GROWTH', ['PUPPY_14_WEEKS_PLUS']],

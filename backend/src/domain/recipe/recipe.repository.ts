@@ -71,6 +71,8 @@ export interface Recipe {
   viewCount?: number;
   favoriteCount?: number;
   diyGenCount?: number;
+  seriesId?: string | null;
+  seriesLifeStage?: string | null;
 }
 
 export interface IngredientGroup {

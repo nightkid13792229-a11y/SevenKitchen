@@ -9,6 +9,16 @@ import {
 } from '../src/domain/recipe/recipe-series';
 
 const CREATED_BY = 'recipe-series-backfill';
+const LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE: Record<
+  string,
+  RecipeSeriesLifeStage
+> = {
+  PUPPY: 'PUPPY_14_WEEKS_PLUS',
+  SENIOR: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+  PREGNANCY: 'REPRODUCTION',
+  LACTATION: 'REPRODUCTION',
+  ADULT: 'HIGH_ACTIVITY_ADULT',
+};
 
 type RecipeSeriesBackfillLogger = {
   info: (message: string) => void;
@@ -83,21 +93,49 @@ export function inferSeriesLifeStageFromRecipe(
     'applicableLifeStages' | 'nutritionDetailedData'
   >,
 ): RecipeSeriesLifeStage {
-  const stages = new Set(normalizeStringArray(recipe.applicableLifeStages));
-  return (
-    ORDERED_RECIPE_SERIES_LIFE_STAGES.find((stage) => stages.has(stage)) ??
-    'HIGH_ACTIVITY_ADULT'
+  const normalizedStages = normalizeStringArray(recipe.applicableLifeStages).map(
+    (stage) => stage.toUpperCase(),
   );
+  const stages = new Set(normalizedStages);
+  const currentSeriesStage = ORDERED_RECIPE_SERIES_LIFE_STAGES.find((stage) =>
+    stages.has(stage),
+  );
+  if (currentSeriesStage) return currentSeriesStage;
+
+  for (const stage of normalizedStages) {
+    const legacySeriesStage = LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE[stage];
+    if (legacySeriesStage) return legacySeriesStage;
+  }
+
+  return 'HIGH_ACTIVITY_ADULT';
 }
 
 export function buildRecipeSeriesBackfillPlan(
   recipes: RecipeSeriesBackfillRecipe[],
 ): RecipeSeriesBackfillPlan {
   const seriesByRecipeId = new Map<string, RecipeSeriesToCreate>();
+  const existingSeriesIdByRecipeId = new Map<string, string>();
   const recipeUpdates: RecipeSeriesRecipeUpdate[] = [];
 
   for (const recipe of recipes) {
+    if (recipe.seriesId && !existingSeriesIdByRecipeId.has(recipe.recipeId)) {
+      existingSeriesIdByRecipeId.set(recipe.recipeId, recipe.seriesId);
+    }
+  }
+
+  for (const recipe of recipes) {
     if (recipe.seriesId) continue;
+
+    const existingSeriesId = existingSeriesIdByRecipeId.get(recipe.recipeId);
+    if (existingSeriesId) {
+      recipeUpdates.push({
+        recipeId: recipe.recipeId,
+        version: recipe.version,
+        seriesId: existingSeriesId,
+        seriesLifeStage: inferSeriesLifeStageFromRecipe(recipe),
+      });
+      continue;
+    }
 
     let series = seriesByRecipeId.get(recipe.recipeId);
     if (!series) {
@@ -170,18 +208,29 @@ export async function runRecipeSeriesBackfill({
   disconnect?: boolean;
 }): Promise<RecipeSeriesBackfillPlan> {
   try {
-    const recipes = await prisma.recipe.findMany({
+    const recipesMissingSeries = await prisma.recipe.findMany({
       where: { seriesId: null },
-      select: {
-        recipeId: true,
-        name: true,
-        version: true,
-        seriesId: true,
-        applicableLifeStages: true,
-        nutritionDetailedData: true,
-      },
-      orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
+      select: { recipeId: true },
+      orderBy: [{ recipeId: 'asc' }],
     });
+    const recipeIds = Array.from(
+      new Set(recipesMissingSeries.map((recipe) => recipe.recipeId)),
+    );
+    const recipes =
+      recipeIds.length > 0
+        ? await prisma.recipe.findMany({
+            where: { recipeId: { in: recipeIds } },
+            select: {
+              recipeId: true,
+              name: true,
+              version: true,
+              seriesId: true,
+              applicableLifeStages: true,
+              nutritionDetailedData: true,
+            },
+            orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
+          })
+        : [];
 
     const plan = buildRecipeSeriesBackfillPlan(recipes);
     logger.info(

@@ -431,6 +431,19 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('按需关注优先')
   })
 
+  it('restores the nutrition assessment category scroll position after ingredient edits', () => {
+    expect(editorSource).toContain('<scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list"')
+    expect(editorSource).toContain(':scroll-top="assessmentScrollTop"')
+    expect(editorSource).toContain('@scroll="onAssessmentListScroll"')
+    expect(editorSource).toContain('const assessmentScrollTopByCategory = ref<Partial<Record<AssessmentCategoryKey, number>>>({})')
+    expect(editorSource).toContain('const assessmentScrollTop = ref(0)')
+    expect(editorSource).toContain('function onAssessmentListScroll')
+    expect(editorSource).toContain('function restoreAssessmentScrollPosition')
+    expect(editorSource).toContain('rememberAssessmentScrollPosition()')
+    expect(editorSource).toContain('restoreAssessmentScrollPosition(selectedAssessmentCategory.value)')
+    expect(editorSource).not.toContain('<view v-if="assessmentListVisible" class="assessment-list">')
+  })
+
   it('renders supplemental macro metrics as overview rows instead of standard range rows', () => {
     const macroOverviewBlock = editorSource.match(
       /<view v-if="isMacroOverviewEntry\(entry\)"[\s\S]*?<view v-else>/,

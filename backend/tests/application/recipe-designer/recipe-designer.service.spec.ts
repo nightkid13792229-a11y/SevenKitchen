@@ -1750,6 +1750,8 @@ describe('RecipeDesignerService', () => {
         publishedRecipeId: 'recipe-series-1',
         publishedRecipeVersion: 2,
         publishedAt: sourcePublishedAt,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
         isCompliant: true,
         reviewStatus: 'NONE',
         reviewNote: 'approved',
@@ -1771,6 +1773,8 @@ describe('RecipeDesignerService', () => {
         publishedAt: null,
         revisionOfDesignRecipeId: 'design-published',
         revisionBaseRecipeId: 'recipe-series-1',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
         items: [sourceItem],
       }),
     );
@@ -1799,6 +1803,8 @@ describe('RecipeDesignerService', () => {
         createdBy: 'staff-1',
         revisionOfDesignRecipeId: 'design-published',
         revisionBaseRecipeId: 'recipe-series-1',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
         publishedAt: null,
         publishedRecipeId: null,
         publishedRecipeVersion: null,
@@ -1846,6 +1852,8 @@ describe('RecipeDesignerService', () => {
         status: 'DRAFT',
         revisionOfDesignRecipeId: 'design-backfilled',
         revisionBaseRecipeId: 'recipe-series-1',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
       }),
     );
 
@@ -2509,6 +2517,42 @@ describe('RecipeDesignerService', () => {
         publishedRecipeVersion: 3,
       }),
       include: expect.any(Object),
+    });
+  });
+
+  it('publishes series drafts with formal recipe series linkage', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'series-design',
+        name: '牛肉南瓜鲜食',
+        isCompliant: true,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'series-design',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ id: 'series-design', status: 'PUBLISHED' }),
+    );
+
+    await service.publishDraft('series-design', { name: '牛肉南瓜鲜食' }, 'staff-2');
+
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipeId: 'series-design',
+        name: '牛肉南瓜鲜食',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      }),
     });
   });
 
@@ -3537,6 +3581,16 @@ describe('RecipeDesignerService', () => {
       );
     }
 
+    function transactionConflict() {
+      return new Prisma.PrismaClientKnownRequestError(
+        'Transaction failed due to a write conflict or deadlock',
+        {
+          code: 'P2034',
+          clientVersion: 'test',
+        },
+      );
+    }
+
     it('returns one series card with five stage statuses', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
@@ -3627,18 +3681,19 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
-        designs: [
-          draft({
-            id: 'senior-design',
-            seriesId: 'series-1',
-            seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-            fediafDogScenario: 'ADULT_MER_95',
-            status: 'DRAFT',
-            publishedRecipeId: null,
-            publishedAt: null,
-          }),
-        ],
       });
+      prisma.designRecipe.findFirst.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          status: 'DRAFT',
+          publishedRecipeId: null,
+          publishedAt: null,
+          items: [item({ id: 'stage-item' })],
+        }),
+      );
 
       await expect(
         service.createSeriesStageDraft(
@@ -3646,8 +3701,23 @@ describe('RecipeDesignerService', () => {
           { scenario: 'ADULT_MER_95' },
           'staff-1',
         ),
-      ).resolves.toEqual(expect.objectContaining({ id: 'senior-design' }));
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-design',
+          items: [expect.objectContaining({ id: 'stage-item' })],
+        }),
+      );
 
+      expect(prisma.designRecipe.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          publishedRecipeId: null,
+          publishedAt: null,
+        }),
+        include: expect.any(Object),
+        orderBy: { updatedAt: 'desc' },
+      });
       expect(prisma.designRecipe.create).not.toHaveBeenCalled();
     });
 
@@ -3763,8 +3833,8 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
-        designs: [],
       });
+      prisma.designRecipe.findFirst.mockResolvedValue(null);
       prisma.designRecipe.aggregate
         .mockResolvedValueOnce({ _max: { version: 2 } })
         .mockResolvedValueOnce({ _max: { version: 3 } });
@@ -3810,6 +3880,45 @@ describe('RecipeDesignerService', () => {
         }),
         include: expect.any(Object),
       });
+    });
+
+    it('retries stage draft creation transaction conflicts and reuses the winner draft', async () => {
+      prisma.$transaction
+        .mockRejectedValueOnce(transactionConflict())
+        .mockImplementationOnce(async (callback: any) => callback(prisma));
+      prisma.recipeSeries.findUnique.mockResolvedValue({
+        id: 'series-1',
+        name: '牛肉南瓜鲜食',
+        status: 'ACTIVE',
+      });
+      prisma.designRecipe.findFirst.mockResolvedValue(
+        draft({
+          id: 'winner-design',
+          seriesId: 'series-1',
+          seriesLifeStage: 'REPRODUCTION',
+          fediafDogScenario: 'REPRODUCTION',
+          status: 'DRAFT',
+          publishedRecipeId: null,
+          publishedAt: null,
+          items: [item({ id: 'winner-item' })],
+        }),
+      );
+
+      await expect(
+        service.createSeriesStageDraft(
+          'series-1',
+          { scenario: 'REPRODUCTION' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'winner-design',
+          items: [expect.objectContaining({ id: 'winner-item' })],
+        }),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+      expect(prisma.designRecipe.create).not.toHaveBeenCalled();
     });
 
     it('requires exact confirmation before deleting a series', async () => {

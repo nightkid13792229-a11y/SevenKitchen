@@ -921,6 +921,7 @@ const normalizeRecipeLifeStagesForForm = (stages: string[] = []): LifeStage[] =>
 const router = useRouter();
 const route = useRoute();
 
+// Recipe form routes must receive a concrete recipe row id, never a series id.
 const recipeId = computed(() => route.params.id as string | undefined);
 const isEdit = computed(() => !!recipeId.value);
 const isReadOnly = computed(() => route.query.mode === 'view');

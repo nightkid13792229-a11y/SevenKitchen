@@ -17,6 +17,10 @@ import {
   NutritionStandard,
 } from '../../domain/recipe/enums';
 import {
+  ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  SERIES_LIFE_STAGE_LABELS,
+} from '../../domain/recipe/recipe-series';
+import {
   extractLegacyPreparationMethodIds,
   normalizePreparationMethodHistoryText,
   resolvePreparationMethodText,
@@ -24,6 +28,7 @@ import {
 import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
   IngredientPreparationMethodHistoryDto,
+  RecipeSeriesStageSummaryDto,
   RecipeSummaryResponseDto,
   RecipeVersionSummaryDto,
   RecipeDetailResponseDto,
@@ -403,6 +408,7 @@ export class RecipeService {
     const recipes = await this.prisma.recipe.findMany({
       where,
       include: {
+        series: true,
         healthTagAssignments: {
           include: {
             healthTag: true,
@@ -433,12 +439,18 @@ export class RecipeService {
     const groups = new Map<string, any[]>();
 
     for (const recipe of recipes) {
-      const key = recipe.recipeId || recipe.id;
+      const key = recipe.seriesId
+        ? `series:${recipe.seriesId}`
+        : `recipe:${recipe.recipeId || recipe.id}`;
       groups.set(key, [...(groups.get(key) ?? []), recipe]);
     }
 
     return [...groups.values()]
-      .map((group) => this.buildRecipeSeriesListRow(group))
+      .map((group) =>
+        group.some((recipe) => recipe.seriesId)
+          ? this.buildRecipeSeriesListRow(group)
+          : this.buildRecipeVersionListRow(group),
+      )
       .sort((left, right) => {
         const leftTime = new Date(left.createdAt).getTime();
         const rightTime = new Date(right.createdAt).getTime();
@@ -446,7 +458,7 @@ export class RecipeService {
       });
   }
 
-  private buildRecipeSeriesListRow(group: any[]): RecipeSummaryResponseDto {
+  private buildRecipeVersionListRow(group: any[]): RecipeSummaryResponseDto {
     const sortedByVersion = [...group].sort(
       (left, right) => (right.version ?? 0) - (left.version ?? 0),
     );
@@ -472,6 +484,108 @@ export class RecipeService {
         : undefined,
       versionHistory,
     };
+  }
+
+  private buildRecipeSeriesListRow(group: any[]): RecipeSummaryResponseDto {
+    const pendingDraft = this.findNewestRecipeByStatus(
+      group,
+      RecipeStatus.DRAFT,
+    );
+    const currentPublic = this.findNewestRecipeByStatus(
+      group,
+      RecipeStatus.PUBLIC,
+    );
+    const current =
+      pendingDraft ??
+      currentPublic ??
+      [...group].sort(
+        (left, right) =>
+          this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
+          this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+      )[0];
+    const summary = this.mapToSummaryDto(current);
+    const seriesName =
+      current.series?.name ??
+      group.find((recipe) => recipe.series?.name)?.series.name ??
+      current.name;
+
+    return {
+      ...summary,
+      seriesId: current.seriesId,
+      seriesName,
+      currentPublicVersion: currentPublic
+        ? this.mapToVersionSummaryDto(currentPublic)
+        : undefined,
+      pendingDraftVersion: pendingDraft
+        ? this.mapToVersionSummaryDto(pendingDraft)
+        : undefined,
+      versionHistory: [...group]
+        .sort(
+          (left, right) =>
+            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
+            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+        )
+        .map((recipe) => this.mapToVersionSummaryDto(recipe)),
+      seriesStages: this.buildRecipeSeriesStageSummaries(group),
+    };
+  }
+
+  private buildRecipeSeriesStageSummaries(
+    group: any[],
+  ): RecipeSeriesStageSummaryDto[] {
+    return ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
+      const stageRecipes = group.filter(
+        (recipe) =>
+          recipe.seriesLifeStage === lifeStage ||
+          ((recipe.applicableLifeStages as string[] | undefined) ?? []).includes(
+            lifeStage,
+          ),
+      );
+      const stageRecipe =
+        this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.DRAFT) ??
+        this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.PUBLIC) ??
+        [...stageRecipes].sort(
+          (left, right) =>
+            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
+            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+        )[0];
+
+      if (!stageRecipe) {
+        return {
+          lifeStage,
+          label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+          status: 'NOT_DESIGNED',
+        };
+      }
+
+      return {
+        lifeStage,
+        label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+        status: stageRecipe.status as RecipeSeriesStageSummaryDto['status'],
+        recipeId: stageRecipe.recipeId,
+        version: stageRecipe.version,
+        updatedAt: stageRecipe.updatedAt.toISOString(),
+      };
+    });
+  }
+
+  private findNewestRecipeByStatus(
+    recipes: any[],
+    status: RecipeStatus,
+  ): any | null {
+    return (
+      recipes
+        .filter((recipe) => recipe.status === status)
+        .sort(
+          (left, right) =>
+            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
+            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+        )[0] ?? null
+    );
+  }
+
+  private getRecipeTimestamp(value: Date | string): number {
+    return value instanceof Date ? value.getTime() : new Date(value).getTime();
   }
 
   /**
@@ -970,6 +1084,8 @@ export class RecipeService {
     return {
       id: recipe.id,
       recipeId: recipe.recipeId,
+      seriesId: recipe.seriesId || undefined,
+      seriesName: recipe.series?.name || undefined,
       name: recipe.name,
       version: recipe.version,
       status: recipe.status as RecipeStatus,

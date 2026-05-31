@@ -149,7 +149,7 @@
           <view>
             <text class="picker-title">添加原料</text>
             <text v-if="ingredientNutrientSearchTarget" class="picker-nutrient-context">
-              按{{ ingredientNutrientSearchTarget.label }}含量排序
+              食材按每100g{{ ingredientNutrientSearchTarget.label }}含量排序
             </text>
           </view>
           <button class="picker-close" @tap="closeIngredientPicker">×</button>
@@ -211,43 +211,24 @@
               <view class="food-option-mainline">
                 <view class="food-main">
                   <text class="food-name">{{ option.name }}</text>
-                  <text v-if="option.nutrientMatch" class="food-nutrient-match">
-                    {{ option.nutrientMatch.displayText }}
-                  </text>
-                </view>
-              </view>
-
-              <view
-                v-if="getSupplementOptionDetailRows(option).length > 0"
-                class="ingredient-option-detail-list"
-              >
-                <text
-                  v-for="detail in getSupplementOptionDetailRows(option)"
-                  :key="detail"
-                  class="ingredient-option-detail"
-                >
-                  {{ detail }}
-                </text>
-              </view>
-
-              <view
-                v-else-if="getFoodOptionProfileDisplayNames(option).length > 0"
-                class="food-profile-summary"
-              >
-                <text class="food-profile-summary-label">待选档案</text>
-                <view class="food-profile-tags">
                   <text
-                    v-for="profileName in getFoodOptionProfileDisplayNames(option)"
-                    :key="profileName"
-                    class="food-profile-tag"
+                    v-if="getIngredientOptionNutrientMatchText(option)"
+                    class="food-nutrient-match"
                   >
-                    {{ profileName }}
+                    {{ getIngredientOptionNutrientMatchText(option) }}
                   </text>
                 </view>
               </view>
 
+              <text
+                v-if="getSupplementOptionDetailText(option)"
+                class="ingredient-option-detail"
+              >
+                {{ getSupplementOptionDetailText(option) }}
+              </text>
+
               <view
-                v-if="selectedIngredientOption?.id === option.id && option.nutritionProfiles.length > 1"
+                v-if="shouldShowNutritionProfileOptions(option)"
                 class="profile-options"
               >
                 <view
@@ -258,9 +239,6 @@
                   @tap.stop="selectNutritionProfile(profile)"
                 >
                   <text class="profile-name">{{ profile.name }}</text>
-                  <text v-if="profile.nutrientMatch" class="profile-nutrient-match">
-                    {{ profile.nutrientMatch.displayText }}
-                  </text>
                   <text class="profile-meta">{{ getNutritionProfileMeta(profile) }}</text>
                 </view>
               </view>
@@ -282,7 +260,7 @@
             <text class="selected-label">已选原料</text>
             <text class="selected-name">{{ selectedIngredientOption?.name || '请选择' }}</text>
             <text class="selected-profile">
-              {{ selectedNutritionProfile?.name || '请选择数据来源' }}
+              {{ getSelectedNutritionProfileLabel() }}
             </text>
           </view>
           <view class="add-weight-row">
@@ -661,6 +639,7 @@ import {
   recipeDesignerApi,
   type FediafDogScenario,
   type IngredientNutritionProfileOption,
+  type IngredientOptionListQuery,
   type IngredientOptionListResponse,
   type RecipeDesignerIngredientOption,
 } from '../../api/recipe-designer'
@@ -714,20 +693,22 @@ import {
   type RecipeDesignerHistoryState,
 } from './editor-history'
 
+interface StandardIngredientSnapshot {
+  id?: string
+  name?: string
+  type?: string
+  unitDisplayLabel?: string | null
+  purchaseUnit?: string | null
+  properties?: Record<string, unknown> | null
+}
+
 interface DesignerItem {
   id: string
   name?: string
   ingredientId?: string
   ingredientName?: string
   ingredientType?: string
-  ingredient?: {
-    id?: string
-    name?: string
-    type?: string
-    unitDisplayLabel?: string | null
-    purchaseUnit?: string
-    properties?: Record<string, unknown> | null
-  }
+  ingredient?: StandardIngredientSnapshot
   nutritionFoodId?: string
   nutritionFoodName?: string
   nutritionProfileDisplayName?: string
@@ -735,6 +716,11 @@ interface DesignerItem {
     id?: string
     name?: string
     displayNameZh?: string | null
+    mappings?: Array<{
+      ingredientId?: string | null
+      isPrimary?: boolean
+      ingredient?: StandardIngredientSnapshot | null
+    }>
   }
   weightG?: number
   includeInAssessment?: boolean
@@ -847,6 +833,7 @@ const ingredientNutrientSearchTarget = ref<AssessmentNutrientSearchTarget | null
 const ingredientSearchKeyword = ref('')
 const ingredientOptions = ref<RecipeDesignerIngredientOption[]>([])
 const supplementIngredientOptions = ref<RecipeDesignerIngredientOption[]>([])
+const ingredientTypeHints = ref<Record<string, StandardIngredientSnapshot>>({})
 const ingredientLastLoadedSearchKeyword = ref('')
 const selectedIngredientOption = ref<RecipeDesignerIngredientOption | null>(null)
 const selectedNutritionProfile = ref<IngredientNutritionProfileOption | null>(null)
@@ -1125,7 +1112,9 @@ async function loadDraft() {
       draftPublishedRecipeId.value = String(draft.publishedRecipeId || '')
       draftPublishedAt.value = String(draft.publishedAt || '')
       scenario.value = getDraftScenario(draft)
+      ingredientTypeHints.value = {}
       items.value = draft.items || []
+      await hydrateIngredientTypeHintsForItems(items.value)
     }
     await refreshAssessment()
   } catch (error) {
@@ -1553,7 +1542,7 @@ async function loadIngredientOptions(reset: boolean) {
   ingredientLoading.value = true
   try {
     const nextPage = reset ? 1 : ingredientOptionPage.value + 1
-    const res: any = await recipeDesignerApi.listIngredientOptions({
+    const res: any = await fetchRecipeDesignerIngredientOptions({
       search: ingredientSearchKeyword.value.trim(),
       ...(ingredientNutrientSearchTarget.value
         ? {
@@ -1567,6 +1556,7 @@ async function loadIngredientOptions(reset: boolean) {
     })
     const data = (res?.data ?? res) as IngredientOptionListResponse
     const options = Array.isArray(data?.data) ? data.data : []
+    options.forEach((option) => setIngredientTypeHint(option))
     if (ingredientNutrientSearchTarget.value) {
       const responseSupplementOptions = Array.isArray(data?.supplementData)
         ? data.supplementData
@@ -1574,6 +1564,8 @@ async function loadIngredientOptions(reset: boolean) {
       const responseFoodOptions = Array.isArray(data?.foodData)
         ? data.foodData
         : options.filter((option) => !isSupplementOption(option))
+      responseSupplementOptions.forEach((option) => setIngredientTypeHint(option))
+      responseFoodOptions.forEach((option) => setIngredientTypeHint(option))
       if (reset || Array.isArray(data?.supplementData)) {
         supplementIngredientOptions.value = responseSupplementOptions
       }
@@ -1603,6 +1595,10 @@ async function loadIngredientOptions(reset: boolean) {
   }
 }
 
+function fetchRecipeDesignerIngredientOptions(query: IngredientOptionListQuery = {}) {
+  return recipeDesignerApi.listIngredientOptions(query)
+}
+
 function clearIngredientSearchDebounce() {
   if (!ingredientSearchDebounceTimer) return
   clearTimeout(ingredientSearchDebounceTimer)
@@ -1616,6 +1612,7 @@ function clearDetailContributionWeightDebounce() {
 }
 
 function selectIngredientOption(option: RecipeDesignerIngredientOption) {
+  setIngredientTypeHint(option)
   selectedIngredientOption.value = option
   selectedNutritionProfile.value = getDefaultNutritionProfile(option)
 }
@@ -1640,6 +1637,7 @@ async function confirmAddIngredient() {
   addingItem.value = true
   beginAutoSave()
   try {
+    setIngredientTypeHint(selectedIngredientOption.value)
     const res: any = await recipeDesignerApi.addItem(draftId.value, {
       ingredientId: selectedIngredientOption.value.id,
       nutritionFoodId: selectedNutritionProfile.value.nutritionFoodId,
@@ -2409,8 +2407,20 @@ function getDefaultNutritionProfile(option: RecipeDesignerIngredientOption) {
   )
 }
 
+function getNutritionProfileSourceLabel(profile?: IngredientNutritionProfileOption | null) {
+  return `数据来源：${profile?.dataSource || '未标注'}`
+}
+
 function getNutritionProfileMeta(profile: IngredientNutritionProfileOption) {
-  return `数据来源：${profile.dataSource || '未标注'}`
+  return getNutritionProfileSourceLabel(profile)
+}
+
+function getSelectedNutritionProfileLabel() {
+  if (!selectedNutritionProfile.value) return '请选择数据来源'
+  if (selectedIngredientOption.value && isSupplementOption(selectedIngredientOption.value)) {
+    return getNutritionProfileSourceLabel(selectedNutritionProfile.value)
+  }
+  return selectedNutritionProfile.value.name || '请选择数据来源'
 }
 
 function cleanIngredientOptionText(value?: string | null) {
@@ -2421,30 +2431,128 @@ function isSupplementOption(option: RecipeDesignerIngredientOption) {
   return String(option.type || '').trim().toUpperCase() === 'SUPPLEMENT'
 }
 
-function getSupplementOptionDetailRows(option: RecipeDesignerIngredientOption) {
-  if (!isSupplementOption(option)) return []
-  const rows: string[] = []
-  const brand = cleanIngredientOptionText(option.brand)
-  const productModel = cleanIngredientOptionText(option.productModel)
-  if (brand) {
-    rows.push(`品牌：${brand}`)
-  }
-  if (productModel) {
-    rows.push(`规格：${productModel}`)
-  }
-  return rows
+function replaceSupplementServingUnit(text: string, unitLabel: string) {
+  if (!unitLabel || !text.includes('/')) return text
+  return text.replace(/\/[^/]+$/, `/${unitLabel}`)
 }
 
-function getFoodOptionProfileDisplayNames(option: RecipeDesignerIngredientOption) {
-  if (isSupplementOption(option)) return []
-  const profileNames: string[] = []
-  for (const profile of option.nutritionProfiles || []) {
-    const name = cleanIngredientOptionText(profile.name)
-    if (name && !profileNames.includes(name)) {
-      profileNames.push(name)
+function getIngredientOptionNutrientMatchText(option: RecipeDesignerIngredientOption) {
+  const match = option.nutrientMatch
+  if (!match) return ''
+  if (isSupplementOption(option)) {
+    return replaceSupplementServingUnit(match.displayText, getIngredientOptionUnit(option))
+  }
+  return match.displayText
+}
+
+function shouldShowNutritionProfileOptions(option: RecipeDesignerIngredientOption) {
+  return (
+    selectedIngredientOption.value?.id === option.id &&
+    !isSupplementOption(option) &&
+    option.nutritionProfiles.length > 0
+  )
+}
+
+function getSupplementOptionDetailText(option: RecipeDesignerIngredientOption) {
+  if (!isSupplementOption(option)) return ''
+  const brand = cleanIngredientOptionText(option.brand)
+  const productModel = cleanIngredientOptionText(option.productModel)
+  return [brand, productModel].filter(Boolean).join(' · ')
+}
+
+function normalizeIngredientHintKey(value?: string | null) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function getIngredientIdHintKey(id?: string | null) {
+  const normalizedId = normalizeIngredientHintKey(id)
+  return normalizedId ? `id:${normalizedId}` : ''
+}
+
+function getIngredientNameHintKey(name?: string | null) {
+  const normalizedName = normalizeIngredientHintKey(name)
+  return normalizedName ? `name:${normalizedName}` : ''
+}
+
+function getItemIngredientSearchName(item: DesignerItem) {
+  return cleanIngredientOptionText(item.ingredientName || item.ingredient?.name || item.name)
+}
+
+function getItemIngredientHintKeys(item: DesignerItem) {
+  const keys = [
+    getIngredientIdHintKey(item.ingredientId),
+    getIngredientIdHintKey(item.ingredient?.id),
+    getIngredientNameHintKey(item.ingredientName),
+    getIngredientNameHintKey(item.ingredient?.name),
+    getIngredientNameHintKey(item.name),
+  ].filter(Boolean)
+  return Array.from(new Set(keys))
+}
+
+function setIngredientTypeHint(option: RecipeDesignerIngredientOption) {
+  if (!option?.id && !option?.name) return
+  const hint: StandardIngredientSnapshot = {
+    id: option.id,
+    name: option.name,
+    type: option.type,
+    unitDisplayLabel: option.unitDisplayLabel,
+    purchaseUnit: option.purchaseUnit,
+    properties: option.properties,
+  }
+  const keys = [
+    getIngredientIdHintKey(option.id),
+    getIngredientNameHintKey(option.name),
+  ].filter(Boolean)
+  ingredientTypeHints.value = keys.reduce(
+    (nextHints, key) => ({
+      ...nextHints,
+      [key]: hint,
+    }),
+    { ...ingredientTypeHints.value },
+  )
+}
+
+function getIngredientTypeHint(item: DesignerItem) {
+  for (const key of getItemIngredientHintKeys(item)) {
+    const hint = ingredientTypeHints.value[key]
+    if (hint) return hint
+  }
+  return null
+}
+
+function getIngredientOptionResponseOptions(res: any) {
+  const data = (res?.data ?? res) as IngredientOptionListResponse
+  return [
+    ...(Array.isArray(data?.data) ? data.data : []),
+    ...(Array.isArray(data?.supplementData) ? data.supplementData : []),
+    ...(Array.isArray(data?.foodData) ? data.foodData : []),
+  ]
+}
+
+async function hydrateIngredientTypeHintsForItems(draftItems: DesignerItem[]) {
+  const searchNames = Array.from(
+    new Set(
+      draftItems
+        .filter((item) => {
+          const standardIngredient = resolveMappedOrDirectStandardIngredient(item)
+          return !standardIngredient?.type && !getIngredientTypeHint(item)?.type
+        })
+        .map((item) => getItemIngredientSearchName(item))
+        .filter(Boolean),
+    ),
+  )
+
+  for (const searchName of searchNames) {
+    try {
+      const res: any = await fetchRecipeDesignerIngredientOptions({
+        search: searchName,
+        pageSize: ingredientOptionPageSize,
+      })
+      getIngredientOptionResponseOptions(res).forEach((option) => setIngredientTypeHint(option))
+    } catch (error) {
+      console.warn('[RecipeDesignerEditor] Failed to hydrate ingredient type hints:', error)
     }
   }
-  return profileNames
 }
 
 function readIngredientDisplayUnit(properties?: Record<string, unknown> | null) {
@@ -2471,20 +2579,69 @@ function getIngredientOptionUnit(option?: RecipeDesignerIngredientOption | null)
   return getRecipeDesignerWeightUnit(option?.type, option?.purchaseUnit, option?.unitDisplayLabel, option?.properties)
 }
 
+function resolveMappedOrDirectStandardIngredient(item: DesignerItem) {
+  const mappings = item.nutritionFood?.mappings || []
+  const mapping =
+    mappings.find((candidate) => candidate.ingredientId === item.ingredientId) ||
+    mappings.find((candidate) => candidate.isPrimary) ||
+    mappings[0]
+
+  const mappedIngredient = mapping?.ingredient
+  return mappedIngredient || item.ingredient || null
+}
+
+function resolveItemStandardIngredient(item: DesignerItem) {
+  const standardIngredient = resolveMappedOrDirectStandardIngredient(item)
+  const hintedIngredient = standardIngredient || getIngredientTypeHint(item)
+  const typeHint = getIngredientTypeHint(item)
+  if (standardIngredient && typeHint) {
+    return {
+      ...typeHint,
+      ...standardIngredient,
+      type: standardIngredient.type || typeHint.type,
+      unitDisplayLabel: standardIngredient.unitDisplayLabel || typeHint.unitDisplayLabel,
+      purchaseUnit: standardIngredient.purchaseUnit || typeHint.purchaseUnit,
+      properties: standardIngredient.properties || typeHint.properties,
+    }
+  }
+  return hintedIngredient
+}
+
 function getItemUnit(item: DesignerItem) {
-  return getRecipeDesignerWeightUnit(item.ingredient?.type || item.ingredientType, item.ingredient?.purchaseUnit, item.ingredient?.unitDisplayLabel, item.ingredient?.properties)
+  const standardIngredient = resolveItemStandardIngredient(item)
+  return getRecipeDesignerWeightUnit(
+    standardIngredient?.type || item.ingredientType,
+    standardIngredient?.purchaseUnit,
+    standardIngredient?.unitDisplayLabel,
+    standardIngredient?.properties,
+  )
 }
 
 function getNormalizedItemType(item: DesignerItem) {
-  return String(item.ingredient?.type || item.ingredientType || '').trim().toUpperCase()
+  const standardIngredient = resolveItemStandardIngredient(item)
+  return String(standardIngredient?.type || item.ingredientType || '').trim().toUpperCase()
 }
 
 function getItemTypeLabel(item: DesignerItem) {
-  return getNormalizedItemType(item) === 'SUPPLEMENT' ? '补剂' : '食材'
+  switch (getNormalizedItemType(item)) {
+    case 'SUPPLEMENT':
+      return '补剂'
+    case 'PACKAGING':
+      return '包材'
+    default:
+      return '食材'
+  }
 }
 
 function getItemTypeTagClass(item: DesignerItem) {
-  return getNormalizedItemType(item) === 'SUPPLEMENT' ? 'supplement' : 'food'
+  switch (getNormalizedItemType(item)) {
+    case 'SUPPLEMENT':
+      return 'supplement'
+    case 'PACKAGING':
+      return 'packaging'
+    default:
+      return 'food'
+  }
 }
 
 function shouldShowItemWeightRatio(item: DesignerItem) {
@@ -3027,6 +3184,11 @@ function formatAssessmentNumber(value: unknown) {
 .item-type-tag.supplement {
   background: #eff6ff;
   color: #2563eb;
+}
+
+.item-type-tag.packaging {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .item-main {
@@ -3613,11 +3775,6 @@ function formatAssessmentNumber(value: unknown) {
   width: 100%;
 }
 
-.food-option.selected .food-name,
-.food-option.selected .food-nutrient-match {
-  color: #1677ff;
-}
-
 .food-main {
   flex: 1;
   min-width: 0;
@@ -3631,14 +3788,21 @@ function formatAssessmentNumber(value: unknown) {
   line-height: 1.35;
 }
 
-.food-nutrient-match,
-.profile-nutrient-match {
+.food-nutrient-match {
   display: block;
   margin-top: 6rpx;
   color: #1677ff;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.supplement-option .food-nutrient-match {
+  color: #2563eb;
+}
+
+.food-source-option .food-nutrient-match {
+  color: #15803d;
 }
 
 .ingredient-option-detail-list {
@@ -3658,46 +3822,6 @@ function formatAssessmentNumber(value: unknown) {
   font-size: 22rpx;
   line-height: 1.45;
   word-break: break-word;
-}
-
-.food-profile-summary {
-  display: flex;
-  align-items: flex-start;
-  gap: 12rpx;
-  margin-top: 10rpx;
-}
-
-.food-profile-summary-label {
-  flex: 0 0 auto;
-  padding-top: 4rpx;
-  color: #777;
-  font-size: 21rpx;
-  font-weight: 700;
-}
-
-.food-profile-tags {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-
-.food-profile-tag {
-  max-width: 100%;
-  padding: 4rpx 10rpx;
-  border-radius: 8rpx;
-  background: #f3f6fa;
-  color: #555;
-  font-size: 21rpx;
-  line-height: 1.35;
-  word-break: break-word;
-  box-sizing: border-box;
-}
-
-.food-source-option .food-profile-tag {
-  background: #eef8ef;
-  color: #166534;
 }
 
 .profile-options {

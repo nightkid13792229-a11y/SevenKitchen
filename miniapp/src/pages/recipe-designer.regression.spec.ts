@@ -324,9 +324,36 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain(
       'getRecipeDesignerWeightUnit(option?.type, option?.purchaseUnit, option?.unitDisplayLabel, option?.properties)',
     )
-    expect(editorSource).toContain(
-      'getRecipeDesignerWeightUnit(item.ingredient?.type || item.ingredientType, item.ingredient?.purchaseUnit, item.ingredient?.unitDisplayLabel, item.ingredient?.properties)',
-    )
+    expect(editorSource).toContain('const standardIngredient = resolveItemStandardIngredient(item)')
+    expect(editorSource).toContain('standardIngredient?.purchaseUnit')
+    expect(editorSource).toContain('standardIngredient?.unitDisplayLabel')
+  })
+
+  it('reads ingredient type from nutrition profile mapped standard ingredients before falling back', () => {
+    expect(editorSource).toContain('function resolveItemStandardIngredient')
+    expect(editorSource).toContain('item.nutritionFood?.mappings')
+    expect(editorSource).toContain('candidate.ingredientId === item.ingredientId')
+    expect(editorSource).toContain('candidate.isPrimary')
+    expect(editorSource).toContain('return mappedIngredient || item.ingredient || null')
+    expect(editorSource).toContain('const standardIngredient = resolveItemStandardIngredient(item)')
+    expect(editorSource).toContain('standardIngredient?.type || item.ingredientType')
+    expect(editorSource).toContain("case 'SUPPLEMENT':")
+    expect(editorSource).toContain("case 'PACKAGING':")
+    expect(editorSource).toContain("return '包材'")
+  })
+
+  it('hydrates missing item type hints through a helper-safe ingredient option request', () => {
+    expect(editorSource).toContain('const ingredientTypeHints')
+    expect(editorSource).toContain('function fetchRecipeDesignerIngredientOptions')
+    expect(editorSource).toContain('return recipeDesignerApi.listIngredientOptions(query)')
+    expect(editorSource).toContain('function hydrateIngredientTypeHintsForItems')
+    expect(editorSource).toContain('await fetchRecipeDesignerIngredientOptions({')
+    expect(editorSource).toContain('search: searchName')
+    expect(editorSource).toContain('function getIngredientTypeHint')
+    expect(editorSource).toContain('standardIngredient || getIngredientTypeHint(item)')
+    expect(editorSource).toContain('setIngredientTypeHint(option)')
+    const directIngredientOptionCalls = editorSource.match(/recipeDesignerApi\.listIngredientOptions\(/g) || []
+    expect(directIngredientOptionCalls).toHaveLength(1)
   })
 
   it('keeps recipe naming out of the editor canvas and routes the footer directly to the nutrition report', () => {
@@ -618,14 +645,16 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('placeholder="克重"')
   })
 
-  it('shows identifying details directly in ingredient picker search results', () => {
-    expect(editorSource).toContain('getSupplementOptionDetailRows(option)')
-    expect(editorSource).toContain('品牌：')
-    expect(editorSource).toContain('规格：')
-    expect(editorSource).toContain('getFoodOptionProfileDisplayNames(option)')
-    expect(editorSource).toContain('待选档案')
-    expect(editorSource).not.toContain('档案中文名')
-    expect(editorSource).toContain('food-profile-tag')
+  it('keeps supplement details compact and food profiles collapsed until selected', () => {
+    expect(editorSource).toContain('getSupplementOptionDetailText(option)')
+    expect(editorSource).toContain("join(' · ')")
+    expect(editorSource).not.toContain('品牌：')
+    expect(editorSource).not.toContain('规格：')
+    expect(editorSource).toContain('shouldShowNutritionProfileOptions(option)')
+    expect(editorSource).toContain('!isSupplementOption(option)')
+    expect(editorSource).not.toContain('待选档案')
+    expect(editorSource).not.toContain('food-profile-summary')
+    expect(editorSource).not.toContain('food-profile-tag')
   })
 
   it('visually separates supplement recommendations from nutrient-rich foods', () => {
@@ -637,6 +666,32 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('food-source-option')
     expect(editorSource).toContain('.ingredient-option-section-supplement')
     expect(editorSource).toContain('.ingredient-option-section-food')
+  })
+
+  it('keeps nutrient ingredient search rows compact while using colored nutrient amounts and supplement display units', () => {
+    expect(editorSource).toContain('{{ option.name }}')
+    expect(editorSource).toContain('class="food-nutrient-match"')
+    expect(editorSource).toContain('{{ getIngredientOptionNutrientMatchText(option) }}')
+    expect(editorSource).not.toContain('{{ getIngredientOptionNameLine(option) }}')
+    expect(editorSource).not.toContain('{{ option.nutrientMatch.displayText }}')
+    expect(editorSource).toContain('function getIngredientOptionNutrientMatchText')
+    expect(editorSource).toContain('return replaceSupplementServingUnit(match.displayText, getIngredientOptionUnit(option))')
+    expect(editorSource).toContain('function replaceSupplementServingUnit')
+    expect(editorSource).toContain('text.replace(/\\/[^/]+$/, `/${unitLabel}`)')
+    expect(editorSource).toContain('function getSupplementOptionDetailText')
+    expect(editorSource).toContain("return [brand, productModel].filter(Boolean).join(' · ')")
+    expect(editorSource).toContain('{{ getSupplementOptionDetailText(option) }}')
+    expect(editorSource).toContain('{{ profile.name }}')
+    expect(editorSource).not.toContain('{{ getProfileOptionNameLine(profile, option) }}')
+    expect(editorSource).not.toContain('function getProfileNutrientMatchText')
+    expect(editorSource).toContain('function getSelectedNutritionProfileLabel')
+    expect(editorSource).toContain('return getNutritionProfileSourceLabel(selectedNutritionProfile.value)')
+    expect(editorSource).toContain('.food-source-option .food-nutrient-match')
+  })
+
+  it('labels nutrient ingredient search food sorting as per-100g', () => {
+    expect(editorSource).toContain('食材按每100g{{ ingredientNutrientSearchTarget.label }}含量排序')
+    expect(editorSource).not.toContain('按{{ ingredientNutrientSearchTarget.label }}含量排序')
   })
 
   it('offers an internal-only supplement creation flow without enabling food creation in the miniapp', () => {

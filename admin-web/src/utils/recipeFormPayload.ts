@@ -59,6 +59,7 @@ export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[]
   return (items || []).map((item) =>
     stripUndefined({
       ingredientId: item.ingredientId,
+      nutritionFoodId: item.nutritionFoodId || undefined,
       preparationMethod: item.preparationMethod,
       exampleWeight: item.exampleWeight,
       ratioPercent: item.ratioPercent,

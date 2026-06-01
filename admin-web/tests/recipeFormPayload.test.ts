@@ -88,6 +88,7 @@ test('buildRecipeSubmitData strips display-only item objects before saving', () 
   assert.deepEqual(submitData.items, [
     {
       ingredientId: 'food-1',
+      nutritionFoodId: 'nutrition-food-1',
       preparationMethod: '去壳、生重、打碎',
       exampleWeight: 15,
       ratioPercent: 5.01,

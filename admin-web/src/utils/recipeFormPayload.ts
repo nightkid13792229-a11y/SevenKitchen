@@ -56,8 +56,10 @@ function sanitizeSupplementTargets(targets?: SupplementTarget[]): SupplementTarg
 }
 
 export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[] {
-  return (items || []).map((item) =>
-    stripUndefined({
+  return (items || []).map((item) => {
+    const supplementTargets = sanitizeSupplementTargets(item.supplementTargets);
+
+    return stripUndefined({
       ingredientId: item.ingredientId,
       nutritionFoodId: item.nutritionFoodId || undefined,
       preparationMethod: item.preparationMethod,
@@ -65,12 +67,13 @@ export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[]
       ratioPercent: item.ratioPercent,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
-      supplementTargets: sanitizeSupplementTargets(item.supplementTargets),
+      supplementTargets:
+        supplementTargets.length > 0 ? supplementTargets : undefined,
       supplementAlternativeIngredientIds: uniqueStrings(
         item.supplementAlternativeIngredientIds || [],
       ),
-    }) as RecipeItem,
-  );
+    }) as RecipeItem;
+  });
 }
 
 export function buildRecipeSubmitData(

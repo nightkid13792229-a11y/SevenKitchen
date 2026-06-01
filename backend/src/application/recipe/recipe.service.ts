@@ -69,6 +69,20 @@ export class RecipeService {
     return [...new Set(ingredientIds.map((id) => id?.trim()).filter(Boolean))];
   }
 
+  private normalizeOptionalValueForComparison<T>(value: T | null | undefined) {
+    return value ?? null;
+  }
+
+  private normalizeSupplementTargets(targets?: unknown): any {
+    if (!Array.isArray(targets)) {
+      return targets && typeof targets === 'object'
+        ? (targets as Record<string, unknown>)
+        : null;
+    }
+
+    return targets.length > 0 ? targets : null;
+  }
+
   private resolveNutritionStateLabel(nutritionFood?: Record<string, any> | null) {
     return (
       nutritionFood?.preparationStateLabel ||
@@ -178,7 +192,7 @@ export class RecipeService {
       ratioPercent: item.ratioPercent,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
-      supplementTargets: item.supplementTargets ?? null,
+      supplementTargets: this.normalizeSupplementTargets(item.supplementTargets),
       sortOrder: index,
       ...(supplementAlternativeIngredientIds.length > 0 && {
         supplementAlternatives: {
@@ -328,24 +342,35 @@ export class RecipeService {
       }
 
       // Check if ratio percent changed (for FOOD ingredients)
-      if (existing.ratioPercent !== newItem.ratioPercent) {
+      if (
+        this.normalizeOptionalValueForComparison(existing.ratioPercent) !==
+        this.normalizeOptionalValueForComparison(newItem.ratioPercent)
+      ) {
         return true;
       }
 
       // Check if nutrient target value changed (for SUPPLEMENT ingredients)
-      if (existing.nutrientTargetValue !== newItem.nutrientTargetValue) {
+      if (
+        this.normalizeOptionalValueForComparison(existing.nutrientTargetValue) !==
+        this.normalizeOptionalValueForComparison(newItem.nutrientTargetValue)
+      ) {
         return true;
       }
 
       if (
-        JSON.stringify(existing.supplementTargets ?? null) !==
-        JSON.stringify(newItem.supplementTargets ?? null)
+        JSON.stringify(
+          this.normalizeSupplementTargets(existing.supplementTargets),
+        ) !==
+        JSON.stringify(this.normalizeSupplementTargets(newItem.supplementTargets))
       ) {
         return true;
       }
 
       // Check if preparation method changed
-      if (existing.preparationMethod !== newItem.preparationMethod) {
+      if (
+        this.normalizeOptionalValueForComparison(existing.preparationMethod) !==
+        this.normalizeOptionalValueForComparison(newItem.preparationMethod)
+      ) {
         return true;
       }
 

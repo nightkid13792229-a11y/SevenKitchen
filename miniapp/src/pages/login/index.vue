@@ -39,10 +39,6 @@
       <view class="guest-entry" @tap="skipLogin">
         <text class="guest-text">暂不登录，先逛逛</text>
       </view>
-
-      <view class="dev-api-info">
-        <text>当前API：{{ currentApiBaseUrl }}</text>
-      </view>
     </view>
   </view>
 </template>
@@ -51,16 +47,12 @@
 import { ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { request, setToken, markTokenReady } from "../../utils/api";
-import { getBaseUrl } from "../../utils/config";
 import { getCurrentMiniProgramAppId } from "../../utils/account";
 
 const loading = ref(false);
 const isAgreed = ref(false);
-const currentApiBaseUrl = ref("");
 
 onLoad(() => {
-  currentApiBaseUrl.value = getBaseUrl();
-
   // 检查是否已登录
   const token = uni.getStorageSync("token");
   if (token) {
@@ -110,8 +102,6 @@ const getLoginErrorMessage = (error: any) => {
 // 登录
 const handleWechatLogin = async () => {
   loading.value = true;
-  currentApiBaseUrl.value = getBaseUrl();
-  console.log("[Login] Current API base URL:", currentApiBaseUrl.value);
 
   try {
     // 1. 获取微信code（使用 Promise 包装以兼容微信小程序）
@@ -388,19 +378,5 @@ const handleWechatLogin = async () => {
   font-size: 28rpx;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: underline;
-}
-
-.dev-api-info {
-  margin-top: 18rpx;
-  padding: 12rpx 16rpx;
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 8rpx;
-  text-align: center;
-}
-
-.dev-api-info text {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 22rpx;
-  word-break: break-all;
 }
 </style>

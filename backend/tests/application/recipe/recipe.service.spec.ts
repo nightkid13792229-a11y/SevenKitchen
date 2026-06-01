@@ -10,9 +10,18 @@ describe('RecipeService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    recipeItem: {
+      deleteMany: jest.fn(),
+    },
+    nutritionFoodMapping: {
+      findMany: jest.fn(),
+    },
     recipeHealthTagAssignment: {
       createMany: jest.fn(),
       deleteMany: jest.fn(),
+    },
+    preparationMethod: {
+      findMany: jest.fn(),
     },
   };
 
@@ -24,6 +33,12 @@ describe('RecipeService', () => {
     mockPrismaService.recipeHealthTagAssignment.createMany.mockResolvedValue({
       count: 0,
     });
+    mockPrismaService.recipeHealthTagAssignment.deleteMany.mockResolvedValue({
+      count: 0,
+    });
+    mockPrismaService.recipeItem.deleteMany.mockResolvedValue({ count: 0 });
+    mockPrismaService.nutritionFoodMapping.findMany.mockResolvedValue([]);
+    mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
   });
 
   describe('getAllRecipes', () => {
@@ -309,6 +324,115 @@ describe('RecipeService', () => {
   });
 
   describe('updateRecipe', () => {
+    it('does not create a new version when food supplement targets normalize from null to empty', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 2,
+        name: '后台食谱',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1500,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2021',
+        nutritionDetailedData: null,
+        applicableLifeStages: [],
+        productionSteps: null,
+        items: [
+          {
+            id: 'recipe-item-1',
+            ingredientId: 'food-1',
+            nutritionFoodId: 'nutrition-food-1',
+            preparationMethod: null,
+            exampleWeight: 15,
+            ratioPercent: 5.01,
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            supplementTargets: null,
+            sortOrder: 0,
+            supplementAlternatives: [],
+          },
+        ],
+      };
+      const updatedRecipe = {
+        ...existingRecipe,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-05-22T10:00:00.000Z'),
+        updatedAt: new Date('2026-05-22T10:10:00.000Z'),
+        healthTagAssignments: [],
+        items: [
+          {
+            ...existingRecipe.items[0],
+            ingredient: {
+              id: 'food-1',
+              name: '生蚝',
+              type: 'FOOD',
+              properties: {},
+            },
+            nutritionFood: {
+              id: 'nutrition-food-1',
+              name: 'Oyster, raw',
+              nameEn: 'Oyster, raw',
+              preparationState: 'RAW',
+              preparationStateLabel: '生',
+            },
+            supplementAlternatives: [],
+          },
+        ],
+      };
+
+      mockPrismaService.recipe.findUnique
+        .mockResolvedValueOnce(existingRecipe)
+        .mockResolvedValueOnce(updatedRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue({
+        id: 'recipe-row-id',
+      });
+      mockPrismaService.nutritionFoodMapping.findMany.mockResolvedValue([
+        {
+          ingredientId: 'food-1',
+          nutritionFoodId: 'nutrition-food-1',
+          isPrimary: true,
+        },
+      ]);
+
+      await service.updateRecipe('recipe-row-id', {
+        name: '后台食谱',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1500,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        detailImages: [],
+        nutritionStandard: 'FEDIAF_2021',
+        applicableLifeStages: [],
+        items: [
+          {
+            ingredientId: 'food-1',
+            nutritionFoodId: 'nutrition-food-1',
+            exampleWeight: 15,
+            ratioPercent: 5.01,
+            supplementTargets: [],
+          },
+        ],
+      });
+
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            version: 2,
+          }),
+        }),
+      );
+    });
+
     it('preserves existing nutrition summary even when admin update payload includes nutrition data', async () => {
       const nutritionDetailedData = {
         protein_dm_pct: 58.2,

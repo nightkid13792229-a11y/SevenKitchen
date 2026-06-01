@@ -179,15 +179,12 @@ import { IngredientSuggestionsController } from './interfaces/controllers/ingred
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
 import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
 import { RecipeDesignerController } from './interfaces/controllers/recipe-designer.controller';
-import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
 import { IngredientReadinessService } from './application/nutrition-calculation/ingredient-readiness.service';
 import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
 import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
-import { IngredientCreationService } from './application/ingredient-creation/ingredient-creation.service';
-import { IngredientCreationAgentService } from './application/ingredient-creation/ingredient-creation-agent.service';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -313,7 +310,6 @@ validatePrismaConfig();
     NutritionCalculationController,
     NutritionStandardController,
     RecipeDesignerController,
-    IngredientCreationController,
     PlatformConfigController,
     PublicPlatformConfigController,
     CustomerServiceController,
@@ -707,8 +703,6 @@ validatePrismaConfig();
     NutritionUnitNormalizerService,
     NutritionStandardService,
     RecipeDesignerService,
-    IngredientCreationService,
-    IngredientCreationAgentService,
     {
       provide: FEDIAF_TARGET_PROVIDER,
       useClass: PrismaFediafTargetProvider,

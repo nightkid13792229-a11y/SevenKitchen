@@ -88,10 +88,10 @@ test('buildRecipeSubmitData strips display-only item objects before saving', () 
   assert.deepEqual(submitData.items, [
     {
       ingredientId: 'food-1',
+      nutritionFoodId: 'nutrition-food-1',
       preparationMethod: '去壳、生重、打碎',
       exampleWeight: 15,
       ratioPercent: 5.01,
-      supplementTargets: [],
       supplementAlternativeIngredientIds: [],
     },
     {
@@ -110,6 +110,7 @@ test('buildRecipeSubmitData strips display-only item objects before saving', () 
   ]);
   assert.equal('ingredient' in submitData.items![0], false);
   assert.equal('nutritionFood' in submitData.items![0], false);
+  assert.equal('supplementTargets' in submitData.items![0], false);
   assert.equal('supplementAlternatives' in submitData.items![1], false);
   assert.ok(Buffer.byteLength(JSON.stringify(submitData)) < 10_000);
 });

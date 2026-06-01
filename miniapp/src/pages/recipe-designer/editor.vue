@@ -21,10 +21,34 @@
     </view>
 
     <view class="section">
-      <view class="section-header">
+      <view class="section-header ingredient-action-header">
         <view class="section-heading">
           <text class="section-title">原料</text>
           <text class="section-total">{{ items.length }}种 · 总重量 {{ currentTotalWeightG.toFixed(0) }}g</text>
+        </view>
+        <view class="history-controls" @tap.stop>
+          <button
+            class="history-btn history-icon-btn"
+            :disabled="!canUndoRecipeDesignerHistory"
+            aria-label="撤回"
+            @tap.stop="undoRecipeDesignerHistory"
+          >
+            <view class="history-icon history-icon-undo" aria-hidden="true">
+              <view class="history-icon-arc"></view>
+              <view class="history-icon-arrow"></view>
+            </view>
+          </button>
+          <button
+            class="history-btn history-icon-btn"
+            :disabled="!canRedoRecipeDesignerHistory"
+            aria-label="前进"
+            @tap.stop="redoRecipeDesignerHistory"
+          >
+            <view class="history-icon history-icon-redo" aria-hidden="true">
+              <view class="history-icon-arc"></view>
+              <view class="history-icon-arrow"></view>
+            </view>
+          </button>
         </view>
         <button
           v-if="items.length > 1 && !isEditorReadOnly"
@@ -48,63 +72,68 @@
         <view
           v-for="(item, index) in items"
           :key="item.id"
-          class="item-row"
-          :class="{
-            'item-row-excluded': !isItemIncludedInAssessment(item),
-            'item-row-reordering': reorderMode,
-            dragging: draggingItemId === item.id,
-          }"
+          class="item-row-frame"
         >
-          <view v-if="reorderMode" class="item-drag-handle-shell">
-            <button
-              class="drag-handle"
-              hover-class="none"
-              @touchstart.stop.prevent="startItemDrag(item, index, $event)"
-              @touchmove.stop.prevent="onItemTouchMove"
-              @touchend.stop.prevent="finishItemDrag($event)"
-              @touchcancel.stop.prevent="cancelItemDrag($event)"
-            >
-              <view class="drag-handle-bar"></view>
-              <view class="drag-handle-bar"></view>
-              <view class="drag-handle-bar"></view>
-            </button>
-          </view>
-          <view class="item-leading">
-            <text class="item-type-tag" :class="getItemTypeTagClass(item)">
-              {{ getItemTypeLabel(item) }}
-            </text>
-          </view>
-          <view class="item-main">
-            <text class="item-name">{{ getItemName(item) }}</text>
-            <text class="item-meta">{{ getItemNutritionProfileName(item) }}</text>
-          </view>
-          <view class="weight-editor">
-            <input
-              class="weight-input"
-              type="digit"
-              :value="formatItemWeightInput(item.weightG)"
-              :disabled="isEditorReadOnly || reorderMode"
-              @input="onWeightInput(item, $event)"
-              @blur="updateWeight(item)"
-              @confirm="updateWeight(item)"
-            />
-            <text class="weight-unit">{{ getItemUnit(item) }}</text>
-          </view>
-          <view class="item-ratio-column">
-            <text v-if="shouldShowItemWeightRatio(item)" class="item-ratio">
-              {{ getItemWeightPercentLabel(item) }}
-            </text>
-          </view>
-          <view v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack" @tap.stop>
-            <view class="include-control">
-              <switch
-                class="include-switch"
-                :checked="isItemIncludedInAssessment(item)"
-                color="#1677ff"
-                @change="toggleItemAssessment(item, $event)"
-              />
+          <view v-if="showDragInsertionMarker(index)" class="drag-insertion-marker"></view>
+          <view
+            class="item-row"
+            :class="{
+              'item-row-excluded': !isItemIncludedInAssessment(item),
+              'item-row-reordering': reorderMode,
+              dragging: draggingItemId === item.id,
+            }"
+          >
+            <view v-if="reorderMode" class="item-drag-handle-shell">
+              <button
+                class="drag-handle"
+                hover-class="none"
+                @touchstart.stop.prevent="startItemDrag(item, index, $event)"
+                @touchmove.stop.prevent="onItemTouchMove"
+                @touchend.stop.prevent="finishItemDrag($event)"
+                @touchcancel.stop.prevent="cancelItemDrag($event)"
+              >
+                <view class="drag-handle-bar"></view>
+                <view class="drag-handle-bar"></view>
+                <view class="drag-handle-bar"></view>
+              </button>
             </view>
-            <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
+            <view class="item-leading">
+              <text class="item-type-tag" :class="getItemTypeTagClass(item)">
+                {{ getItemTypeLabel(item) }}
+              </text>
+            </view>
+            <view class="item-main">
+              <text class="item-name">{{ getItemName(item) }}</text>
+              <text class="item-meta">{{ getItemNutritionProfileName(item) }}</text>
+            </view>
+            <view class="weight-editor">
+              <input
+                class="weight-input"
+                type="digit"
+                :value="formatItemWeightInput(item.weightG)"
+                :disabled="isEditorReadOnly || reorderMode"
+                @input="onWeightInput(item, $event)"
+                @blur="updateWeight(item)"
+                @confirm="updateWeight(item)"
+              />
+              <text class="weight-unit">{{ getItemUnit(item) }}</text>
+            </view>
+            <view class="item-ratio-column">
+              <text v-if="shouldShowItemWeightRatio(item)" class="item-ratio">
+                {{ getItemWeightPercentLabel(item) }}
+              </text>
+            </view>
+            <view v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack" @tap.stop>
+              <view class="include-control">
+                <switch
+                  class="include-switch"
+                  :checked="isItemIncludedInAssessment(item)"
+                  color="#1677ff"
+                  @change="toggleItemAssessment(item, $event)"
+                />
+              </view>
+              <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
+            </view>
           </view>
         </view>
       </view>
@@ -275,11 +304,20 @@
         @touchend.stop="onAssessmentTouchEnd"
       >
         <view class="drawer-grip"></view>
-        <view class="drawer-handle">
-          <view class="drawer-title-row">
-            <text class="drawer-title">营养评估</text>
-            <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
-          </view>
+      </view>
+
+      <view class="drawer-handle">
+        <view class="drawer-title-row">
+          <text class="drawer-title">营养评估</text>
+          <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
+          <button
+            v-if="!isEditorReadOnly"
+            class="scenario-switch-btn"
+            :disabled="scenarioSwitching"
+            @tap.stop="openScenarioSwitchSheet"
+          >
+            切换
+          </button>
         </view>
       </view>
 
@@ -301,7 +339,7 @@
         </view>
       </view>
 
-      <view v-if="assessmentListVisible" class="assessment-list">
+      <scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list" :key="selectedAssessmentCategory" :scroll-top="assessmentScrollTop" @scroll="onAssessmentListScroll">
         <view class="assessment-list-surface">
           <text class="assessment-category-title">
             {{ getAssessmentCategoryTitle(selectedAssessmentCategoryGroup.key) }}
@@ -408,7 +446,7 @@
             </view>
           </view>
         </view>
-      </view>
+      </scroll-view>
     </view>
 
     <view v-if="showBottomPublishBar" class="bottom-publish-bar" @tap.stop>
@@ -419,6 +457,57 @@
       >
         查看营养报告
       </button>
+    </view>
+  </view>
+
+  <view
+    v-if="scenarioSwitchSheetVisible"
+    class="scenario-switch-mask"
+    @tap="closeScenarioSwitchSheet"
+  >
+    <view class="scenario-switch-panel" @tap.stop>
+      <view class="scenario-switch-header">
+        <text class="scenario-switch-title">切换生命阶段</text>
+        <text class="scenario-switch-close" @tap="closeScenarioSwitchSheet">关闭</text>
+      </view>
+      <text class="scenario-switch-note">
+        切换后会按新的生命阶段重新计算 FEDIAF 2025 营养评估。
+      </text>
+
+      <view class="scenario-option-list">
+        <view
+          v-for="option in scenarioOptions"
+          :key="option.value"
+          class="scenario-option"
+          :class="{ 'scenario-option-active': option.value === pendingScenario }"
+          @tap="selectScenarioOption(option.value)"
+        >
+          <view class="scenario-option-main">
+            <text class="scenario-option-title">{{ option.label }}</text>
+            <text v-if="option.value === pendingScenario" class="scenario-option-check">✓</text>
+          </view>
+          <text v-if="getScenarioDescription(option.value)" class="scenario-option-desc">
+            {{ getScenarioDescription(option.value) }}
+          </text>
+        </view>
+      </view>
+
+      <view class="scenario-switch-actions">
+        <button
+          class="plain-btn scenario-switch-cancel-btn"
+          :disabled="scenarioSwitching"
+          @tap="closeScenarioSwitchSheet"
+        >
+          取消
+        </button>
+        <button
+          class="primary-btn scenario-switch-confirm-btn"
+          :disabled="!canConfirmScenarioSwitch"
+          @tap="confirmScenarioSwitch"
+        >
+          {{ scenarioSwitching ? '切换中' : '确认切换' }}
+        </button>
+      </view>
     </view>
   </view>
 
@@ -545,6 +634,8 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import {
+  FEDIAF_DOG_SCENARIO_DESCRIPTIONS,
+  FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type FediafDogScenario,
   type IngredientNutritionProfileOption,
@@ -580,6 +671,36 @@ import {
   type AssessmentEntryLike,
   type AssessmentNutrientSearchTarget,
 } from './assessment'
+import {
+  buildHistoryItemAddPayload,
+  commitRedoRecipeDesignerHistory,
+  commitUndoRecipeDesignerHistory,
+  createAddItemHistoryEntry,
+  createRecipeDesignerHistoryState,
+  createRemoveItemHistoryEntry,
+  createReorderItemsHistoryEntry,
+  createUpdateItemHistoryEntry,
+  getRedoRecipeDesignerHistoryEntry,
+  getUndoRecipeDesignerHistoryEntry,
+  pushRecipeDesignerHistoryEntry,
+  recordHistoryItemIdReplacement,
+  resolveHistoryItemId,
+  resolveHistoryOrderIds,
+  snapshotRecipeDesignerItem,
+  type RecipeDesignerHistoryEntry,
+  type RecipeDesignerHistoryItemPatch,
+  type RecipeDesignerHistoryItemSnapshot,
+  type RecipeDesignerHistoryState,
+} from './editor-history'
+
+interface StandardIngredientSnapshot {
+  id?: string
+  name?: string
+  type?: string
+  unitDisplayLabel?: string | null
+  purchaseUnit?: string | null
+  properties?: Record<string, unknown> | null
+}
 
 interface StandardIngredientSnapshot {
   id?: string
@@ -593,6 +714,7 @@ interface StandardIngredientSnapshot {
 interface DesignerItem {
   id: string
   name?: string
+  ingredientId?: string
   ingredientName?: string
   ingredientType?: string
   ingredient?: StandardIngredientSnapshot
@@ -600,6 +722,7 @@ interface DesignerItem {
   nutritionFoodName?: string
   nutritionProfileDisplayName?: string
   nutritionFood?: {
+    id?: string
     name?: string
     displayNameZh?: string | null
     mappings?: Array<{
@@ -612,7 +735,21 @@ interface DesignerItem {
   includeInAssessment?: boolean
   ratioPercent?: number
   preparationMethod?: string
+  nutrientTargetKey?: string | null
+  nutrientTargetValue?: number | null
   sortOrder?: number
+}
+
+type HistoryActionDirection = 'undo' | 'redo'
+
+type RecipeDesignerEditorStateSnapshot = {
+  items: DesignerItem[]
+  assessment: any
+  detailModalEntry: AssessmentEntryLike | null
+  detailModalRows: AssessmentDetailRow[]
+  detailContributionRows: AssessmentContributionRow[]
+  detailContributionWeightDrafts: Record<string, string>
+  historyState: RecipeDesignerHistoryState
 }
 
 interface IngredientOptionSection {
@@ -626,6 +763,13 @@ const DEFAULT_WINDOW_WIDTH_PX = 375
 const ASSESSMENT_COLLAPSED_HEIGHT_RPX = 136
 const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108
 const EDITOR_BOTTOM_GAP_RPX = 24
+const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
+  { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.LATE_GROWTH, value: 'LATE_GROWTH' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_95, value: 'ADULT_MER_95' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_110, value: 'ADULT_MER_110' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.REPRODUCTION, value: 'REPRODUCTION' },
+]
 
 function rpxToPx(rpx: number, windowWidth = DEFAULT_WINDOW_WIDTH_PX) {
   return Math.ceil((rpx * windowWidth) / 750)
@@ -668,6 +812,9 @@ const assessmentDrawerMaxTopPx = ref(0)
 const assessmentPublishBarHeightPx = ref(rpxToPx(BOTTOM_PUBLISH_BAR_HEIGHT_RPX))
 const editorBottomGapPx = ref(rpxToPx(EDITOR_BOTTOM_GAP_RPX))
 const selectedAssessmentCategory = ref<AssessmentCategoryKey>('MACRO')
+const assessmentScrollTopByCategory = ref<Partial<Record<AssessmentCategoryKey, number>>>({})
+const assessmentScrollTop = ref(0)
+const assessmentCurrentScrollTop = ref(0)
 const detailModalVisible = ref(false)
 const detailModalTitle = ref('')
 const detailModalEntry = ref<AssessmentEntryLike | null>(null)
@@ -676,12 +823,20 @@ const detailContributionRows = ref<AssessmentContributionRow[]>([])
 const detailNutrientSearchTarget = ref<AssessmentNutrientSearchTarget | null>(null)
 const updatingDetailContributionItemId = ref('')
 const detailContributionWeightDrafts = ref<Record<string, string>>({})
+const historyState = ref(createRecipeDesignerHistoryState())
+const historyActionRunning = ref(false)
+const historyActionDirection = ref<HistoryActionDirection | ''>('')
+const itemWeightEditBaselines = ref<Record<string, number>>({})
+const scenarioSwitchSheetVisible = ref(false)
+const scenarioSwitching = ref(false)
+const pendingScenario = ref<FediafDogScenario>('ADULT_MER_110')
 const ingredientPickerVisible = ref(false)
 const ingredientLoading = ref(false)
 const addingItem = ref(false)
 const creatingRevision = ref(false)
 const reorderMode = ref(false)
 const draggingItemId = ref('')
+const dragTargetIndex = ref(-1)
 const dragPersisting = ref(false)
 const ingredientNutrientSearchTarget = ref<AssessmentNutrientSearchTarget | null>(null)
 const ingredientSearchKeyword = ref('')
@@ -863,6 +1018,26 @@ const detailModalRangeStatusClass = computed(() => {
 
 const detailContributionUpdating = computed(() => Boolean(updatingDetailContributionItemId.value))
 
+const historyControlsDisabled = computed(() => {
+  return isEditorReadOnly.value || loading.value || autoSaveStatus.value === 'saving' || historyActionRunning.value
+})
+
+const canUndoRecipeDesignerHistory = computed(() => {
+  return !historyControlsDisabled.value && Boolean(getUndoRecipeDesignerHistoryEntry(historyState.value))
+})
+
+const canRedoRecipeDesignerHistory = computed(() => {
+  return !historyControlsDisabled.value && Boolean(getRedoRecipeDesignerHistoryEntry(historyState.value))
+})
+
+const canConfirmScenarioSwitch = computed(() => {
+  return (
+    !isEditorReadOnly.value &&
+    !scenarioSwitching.value &&
+    pendingScenario.value !== scenario.value
+  )
+})
+
 const assessmentStandardContextLabel = computed(() => {
   const standardName = cleanAssessmentStandardName(
     assessment.value?.standardName || assessment.value?.nutritionStandardName || 'FEDIAF 2025',
@@ -913,9 +1088,15 @@ watch(
 
 watch(assessmentCategories, (categories) => {
   const activeGroup = categories.find((group) => group.key === selectedAssessmentCategory.value)
-  if (activeGroup && activeGroup.entries.length > 0) return
-  selectedAssessmentCategory.value =
+  if (activeGroup && activeGroup.entries.length > 0) {
+    void nextTick(() => restoreAssessmentScrollPosition(selectedAssessmentCategory.value))
+    return
+  }
+
+  const fallbackCategory =
     categories.find((group) => getAssessmentCategoryAttentionCount(group) > 0)?.key || 'MACRO'
+  selectedAssessmentCategory.value = fallbackCategory
+  void nextTick(() => restoreAssessmentScrollPosition(fallbackCategory))
 })
 
 watch(autoSaveStatusLabel, () => {
@@ -1069,18 +1250,31 @@ async function refreshAssessment() {
     items.value = mergeAssessedItems(items.value, assessedItems)
   }
   refreshDetailModalFromAssessment()
+  await nextTick()
+  restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
   if (isEditorReadOnly.value) return
+  if (itemWeightEditBaselines.value[item.id] === undefined) {
+    itemWeightEditBaselines.value = {
+      ...itemWeightEditBaselines.value,
+      [item.id]: Number(item.weightG || 0),
+    }
+  }
   item.weightG = Number(event.detail.value || 0)
 }
 
 async function updateWeight(item: DesignerItem) {
   if (!ensureDraftEditable()) return
+  const previousWeightG = itemWeightEditBaselines.value[item.id] ?? Number(item.weightG || 0)
   const weightG = Number(item.weightG || 0)
   if (weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
+    return
+  }
+  if (Math.abs(weightG - previousWeightG) < 0.0001) {
+    clearItemWeightEditBaseline(item.id)
     return
   }
 
@@ -1089,11 +1283,28 @@ async function updateWeight(item: DesignerItem) {
     await recipeDesignerApi.updateItem(item.id, { weightG })
     await refreshAssessment()
     finishAutoSave()
+    pushEditorHistory(
+      createUpdateItemHistoryEntry({
+        itemId: item.id,
+        itemName: getItemName(item),
+        before: { weightG: previousWeightG },
+        after: { weightG },
+      }),
+    )
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
+    item.weightG = previousWeightG
     failAutoSave()
     uni.showToast({ title: '更新用量失败', icon: 'none' })
+  } finally {
+    clearItemWeightEditBaseline(item.id)
   }
+}
+
+function clearItemWeightEditBaseline(itemId: string) {
+  const nextBaselines = { ...itemWeightEditBaselines.value }
+  delete nextBaselines[itemId]
+  itemWeightEditBaselines.value = nextBaselines
 }
 
 function isItemIncludedInAssessment(item: DesignerItem) {
@@ -1111,6 +1322,16 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
     await recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded })
     await refreshAssessment()
     finishAutoSave()
+    if (nextIncluded !== previousIncluded) {
+      pushEditorHistory(
+        createUpdateItemHistoryEntry({
+          itemId: item.id,
+          itemName: getItemName(item),
+          before: { includeInAssessment: previousIncluded },
+          after: { includeInAssessment: nextIncluded },
+        }),
+      )
+    }
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item assessment participation:', error)
     item.includeInAssessment = previousIncluded
@@ -1125,11 +1346,12 @@ function startItemDrag(item: DesignerItem, index: number, event: any) {
   stopItemDragEvent(event)
   if (draggingItemId.value === item.id) return
   draggingItemId.value = item.id
+  dragTargetIndex.value = index
   dragPreparedIndex = index
   dragStartY = getTouchClientY(event) || dragStartY
   dragOriginalOrderIds = items.value.map((candidate) => candidate.id)
   captureItemRowRects()
-  uni.vibrateShort?.({ type: 'light' })
+  pulseItemDragFeedback()
 }
 
 function onItemTouchMove(event: any) {
@@ -1139,7 +1361,9 @@ function onItemTouchMove(event: any) {
   if (currentIndex < 0) return
   const targetIndex = getDragTargetIndex(getTouchClientY(event), currentIndex)
   if (targetIndex === currentIndex) return
+  dragTargetIndex.value = targetIndex
   items.value = moveItem(items.value, currentIndex, targetIndex)
+  pulseItemDragFeedback()
   void nextTick(() => captureItemRowRects())
 }
 
@@ -1147,11 +1371,15 @@ async function finishItemDrag(event?: any) {
   if (!draggingItemId.value) return
   stopItemDragEvent(event)
   const orderChanged = items.value.some((item, index) => dragOriginalOrderIds[index] !== item.id)
+  const beforeOrderIds = [...dragOriginalOrderIds]
   clearItemDragState()
   if (!orderChanged) return
   const orderedItems = items.value.map((item, index) => ({ ...item, sortOrder: index }))
   items.value = orderedItems
-  await persistItemSortOrder(orderedItems)
+  const persisted = await persistItemSortOrder(orderedItems)
+  if (persisted) {
+    pushEditorHistory(createReorderItemsHistoryEntry(beforeOrderIds, orderedItems.map((item) => item.id)))
+  }
 }
 
 function cancelItemDrag(event?: any) {
@@ -1174,16 +1402,25 @@ function lockEditorScrollWhileItemDragging(event: any) {
   stopItemDragEvent(event)
 }
 
+function showDragInsertionMarker(index: number) {
+  return Boolean(reorderMode.value && draggingItemId.value && dragTargetIndex.value === index)
+}
+
+function pulseItemDragFeedback() {
+  uni.vibrateShort?.({ type: 'light' })
+}
+
 function clearItemDragState() {
   draggingItemId.value = ''
+  dragTargetIndex.value = -1
   dragPreparedIndex = -1
   dragOriginalOrderIds = []
   itemRowRects = []
 }
 
 async function persistItemSortOrder(orderedItems: DesignerItem[]) {
-  if (!ensureDraftEditable()) return
-  if (dragPersisting.value) return
+  if (!ensureDraftEditable()) return false
+  if (dragPersisting.value) return false
   dragPersisting.value = true
   beginAutoSave()
   try {
@@ -1191,11 +1428,13 @@ async function persistItemSortOrder(orderedItems: DesignerItem[]) {
       orderedItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })),
     )
     finishAutoSave()
+    return true
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to persist item order:', error)
     failAutoSave()
     uni.showToast({ title: '排序保存失败', icon: 'none' })
     await loadDraft()
+    return false
   } finally {
     dragPersisting.value = false
   }
@@ -1425,6 +1664,9 @@ async function confirmAddIngredient() {
     selectedNutritionProfile.value = null
     await refreshAssessment()
     finishAutoSave()
+    if (item?.id) {
+      pushEditorHistory(createAddItemHistoryEntry(snapshotRecipeDesignerItem(item)))
+    }
     uni.showToast({ title: '已加入食谱', icon: 'success' })
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to add ingredient:', error)
@@ -1437,6 +1679,7 @@ async function confirmAddIngredient() {
 
 function removeIngredient(item: DesignerItem) {
   if (!ensureDraftEditable()) return
+  const itemSnapshot = snapshotRecipeDesignerItem(item)
   uni.showModal({
     title: '删除原料',
     content: `确认从食谱中删除「${getItemName(item)}」吗？`,
@@ -1450,6 +1693,7 @@ function removeIngredient(item: DesignerItem) {
         items.value = items.value.filter((candidate) => candidate.id !== item.id)
         await refreshAssessment()
         finishAutoSave()
+        pushEditorHistory(createRemoveItemHistoryEntry(itemSnapshot))
         uni.showToast({ title: '已删除', icon: 'success' })
       } catch (error) {
         console.error('[RecipeDesignerEditor] Failed to remove item:', error)
@@ -1502,11 +1746,44 @@ function applyPendingSupplementOptionFromStorage() {
   newItemWeightInput.value = ''
 }
 
+function normalizeAssessmentScrollTop(value: unknown) {
+  const scrollTop = Number(value)
+  return Number.isFinite(scrollTop) && scrollTop > 0 ? scrollTop : 0
+}
+
+function getAssessmentScrollTop(category: AssessmentCategoryKey) {
+  return normalizeAssessmentScrollTop(assessmentScrollTopByCategory.value[category])
+}
+
+function rememberAssessmentScrollPosition(category: AssessmentCategoryKey = selectedAssessmentCategory.value) {
+  assessmentScrollTopByCategory.value = {
+    ...assessmentScrollTopByCategory.value,
+    [category]: normalizeAssessmentScrollTop(assessmentCurrentScrollTop.value),
+  }
+}
+
+function restoreAssessmentScrollPosition(category: AssessmentCategoryKey = selectedAssessmentCategory.value) {
+  const scrollTop = getAssessmentScrollTop(category)
+  assessmentCurrentScrollTop.value = scrollTop
+  assessmentScrollTop.value = scrollTop
+}
+
+function onAssessmentListScroll(event: any) {
+  const scrollTop = normalizeAssessmentScrollTop(event.detail?.scrollTop)
+  assessmentCurrentScrollTop.value = scrollTop
+  assessmentScrollTopByCategory.value = {
+    ...assessmentScrollTopByCategory.value,
+    [selectedAssessmentCategory.value]: scrollTop,
+  }
+}
+
 function selectAssessmentCategory(key: AssessmentCategoryKey, expandDrawer = false) {
+  rememberAssessmentScrollPosition()
   selectedAssessmentCategory.value = key
   if (expandDrawer && !assessmentListVisible.value) {
     setAssessmentExpanded(true)
   }
+  void nextTick(() => restoreAssessmentScrollPosition(key))
 }
 
 function getAssessmentEntryName(entry: AssessmentEntryLike) {
@@ -1690,7 +1967,7 @@ async function commitDetailContributionWeight(row: AssessmentContributionRow, ra
     clearDetailContributionWeightDraft(row.itemId)
     return
   }
-  await updateDetailContributionItemWeight(row.itemId, weightG)
+  await updateDetailContributionItemWeight(row.itemId, weightG, row.weightValue ?? undefined)
 }
 
 function clearDetailContributionWeightDraft(itemId: string) {
@@ -1699,9 +1976,11 @@ function clearDetailContributionWeightDraft(itemId: string) {
   detailContributionWeightDrafts.value = nextDrafts
 }
 
-async function updateDetailContributionItemWeight(itemId: string, weightG: number) {
+async function updateDetailContributionItemWeight(itemId: string, weightG: number, previousWeightG?: number) {
   if (!ensureDraftEditable()) return
   if (updatingDetailContributionItemId.value) return
+  const item = items.value.find((candidate) => candidate.id === itemId)
+  const beforeWeightG = previousWeightG ?? Number(item?.weightG || 0)
   updatingDetailContributionItemId.value = itemId
   beginAutoSave()
   try {
@@ -1709,6 +1988,16 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
     items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
     await refreshAssessment()
     finishAutoSave()
+    if (Math.abs(weightG - beforeWeightG) >= 0.0001) {
+      pushEditorHistory(
+        createUpdateItemHistoryEntry({
+          itemId,
+          itemName: item ? getItemName(item) : '原料',
+          before: { weightG: beforeWeightG },
+          after: { weightG },
+        }),
+      )
+    }
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update contribution weight:', error)
     failAutoSave()
@@ -1734,6 +2023,298 @@ function finishAutoSave() {
 function failAutoSave() {
   activeAutoSaveCount.value = 0
   autoSaveStatus.value = 'failed'
+}
+
+function pushEditorHistory(entry: RecipeDesignerHistoryEntry) {
+  historyState.value = pushRecipeDesignerHistoryEntry(historyState.value, entry)
+}
+
+async function undoRecipeDesignerHistory() {
+  const entry = getUndoRecipeDesignerHistoryEntry(historyState.value)
+  if (!entry || historyControlsDisabled.value) return
+
+  const succeeded = await executeHistoryEntry(entry, 'undo')
+  if (!succeeded) return
+  historyState.value = commitUndoRecipeDesignerHistory(historyState.value, entry)
+}
+
+async function redoRecipeDesignerHistory() {
+  const entry = getRedoRecipeDesignerHistoryEntry(historyState.value)
+  if (!entry || historyControlsDisabled.value) return
+
+  const succeeded = await executeHistoryEntry(entry, 'redo')
+  if (!succeeded) return
+  historyState.value = commitRedoRecipeDesignerHistory(historyState.value, entry)
+}
+
+async function executeHistoryEntry(entry: RecipeDesignerHistoryEntry, direction: HistoryActionDirection) {
+  if (historyActionRunning.value) return false
+  historyActionRunning.value = true
+  historyActionDirection.value = direction
+  const snapshot = snapshotRecipeDesignerEditorState()
+  try {
+    applyHistoryEntryOptimistically(entry, direction)
+    beginAutoSave()
+    if (entry.kind === 'update-item') {
+      await applyHistoryItemPatch(entry.itemId, direction === 'undo' ? entry.before : entry.after)
+    } else if (entry.kind === 'add-item') {
+      if (direction === 'undo') {
+        await removeHistoryItem(entry.item.id)
+      } else {
+        await restoreHistoryItem(entry.item)
+      }
+    } else if (entry.kind === 'remove-item') {
+      if (direction === 'undo') {
+        await restoreHistoryItem(entry.item)
+      } else {
+        await removeHistoryItem(entry.item.id)
+      }
+    } else if (entry.kind === 'reorder-items') {
+      await applyHistoryOrder(direction === 'undo' ? entry.beforeOrderIds : entry.afterOrderIds)
+    }
+    finishAutoSave()
+    return true
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to apply edit history:', error)
+    restoreRecipeDesignerEditorState(snapshot)
+    failAutoSave()
+    uni.showToast({ title: direction === 'undo' ? '撤回失败' : '前进失败', icon: 'none' })
+    return false
+  } finally {
+    historyActionRunning.value = false
+    historyActionDirection.value = ''
+  }
+}
+
+function snapshotRecipeDesignerEditorState(): RecipeDesignerEditorStateSnapshot {
+  return {
+    items: cloneDesignerItems(items.value),
+    assessment: assessment.value,
+    detailModalEntry: detailModalEntry.value,
+    detailModalRows: detailModalRows.value.map((row) => ({ ...row })),
+    detailContributionRows: detailContributionRows.value.map((row) => ({ ...row })),
+    detailContributionWeightDrafts: { ...detailContributionWeightDrafts.value },
+    historyState: {
+      undoStack: [...historyState.value.undoStack],
+      redoStack: [...historyState.value.redoStack],
+      itemIdMap: { ...historyState.value.itemIdMap },
+    },
+  }
+}
+
+function restoreRecipeDesignerEditorState(snapshot: RecipeDesignerEditorStateSnapshot) {
+  items.value = cloneDesignerItems(snapshot.items)
+  assessment.value = snapshot.assessment
+  detailModalEntry.value = snapshot.detailModalEntry
+  detailModalRows.value = snapshot.detailModalRows.map((row) => ({ ...row }))
+  detailContributionRows.value = snapshot.detailContributionRows.map((row) => ({ ...row }))
+  detailContributionWeightDrafts.value = { ...snapshot.detailContributionWeightDrafts }
+  historyState.value = snapshot.historyState
+}
+
+function applyHistoryEntryOptimistically(
+  entry: RecipeDesignerHistoryEntry,
+  direction: HistoryActionDirection,
+) {
+  if (entry.kind === 'update-item') {
+    applyOptimisticHistoryItemPatch(entry.itemId, direction === 'undo' ? entry.before : entry.after)
+  } else if (entry.kind === 'add-item') {
+    if (direction === 'undo') {
+      removeOptimisticHistoryItem(entry.item.id)
+    } else {
+      insertOptimisticHistoryItem(entry.item)
+    }
+  } else if (entry.kind === 'remove-item') {
+    if (direction === 'undo') {
+      insertOptimisticHistoryItem(entry.item)
+    } else {
+      removeOptimisticHistoryItem(entry.item.id)
+    }
+  } else if (entry.kind === 'reorder-items') {
+    applyOptimisticHistoryOrder(direction === 'undo' ? entry.beforeOrderIds : entry.afterOrderIds)
+  }
+}
+
+function applyOptimisticHistoryItemPatch(itemId: string, patch: RecipeDesignerHistoryItemPatch) {
+  const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
+  items.value = items.value.map((item) =>
+    item.id === resolvedItemId
+      ? {
+          ...item,
+          ...patch,
+        }
+      : item,
+  )
+
+  if (patch.weightG !== undefined) {
+    const weightG = Number(patch.weightG || 0)
+    detailContributionRows.value = detailContributionRows.value.map((row) =>
+      row.itemId === resolvedItemId
+        ? {
+            ...row,
+            weightValue: weightG,
+            weightLabel: `${formatAssessmentNumber(weightG)}${row.amountUnit || 'g'}`,
+          }
+        : row,
+    )
+    clearDetailContributionWeightDraft(resolvedItemId)
+  }
+}
+
+function insertOptimisticHistoryItem(itemSnapshot: RecipeDesignerHistoryItemSnapshot) {
+  const optimisticItem = buildOptimisticDesignerItem(itemSnapshot)
+  items.value = sortItemsBySortOrder([
+    ...items.value.filter((item) => item.id !== optimisticItem.id),
+    optimisticItem,
+  ])
+}
+
+function removeOptimisticHistoryItem(itemId: string) {
+  const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
+  items.value = items.value.filter((item) => item.id !== resolvedItemId)
+}
+
+function applyOptimisticHistoryOrder(orderIds: string[]) {
+  const resolvedOrderIds = resolveHistoryOrderIds(historyState.value, orderIds)
+  const itemById = new Map(items.value.map((item) => [item.id, item]))
+  const orderedItems = resolvedOrderIds
+    .map((itemId) => itemById.get(itemId))
+    .filter((item): item is DesignerItem => Boolean(item))
+  const orderedIdSet = new Set(orderedItems.map((item) => item.id))
+  const remainingItems = items.value.filter((item) => !orderedIdSet.has(item.id))
+  items.value = [...orderedItems, ...remainingItems].map((item, index) => ({ ...item, sortOrder: index }))
+}
+
+function buildOptimisticDesignerItem(itemSnapshot: RecipeDesignerHistoryItemSnapshot): DesignerItem {
+  const itemName = itemSnapshot.name || itemSnapshot.ingredientName || '原料'
+  return {
+    id: itemSnapshot.id,
+    name: itemName,
+    ingredientId: itemSnapshot.ingredientId,
+    ingredientName: itemSnapshot.ingredientName || itemName,
+    nutritionFoodId: itemSnapshot.nutritionFoodId,
+    nutritionFoodName: itemName,
+    weightG: itemSnapshot.weightG,
+    includeInAssessment: itemSnapshot.includeInAssessment !== false,
+    preparationMethod: itemSnapshot.preparationMethod ?? undefined,
+    nutrientTargetKey: itemSnapshot.nutrientTargetKey ?? null,
+    nutrientTargetValue: itemSnapshot.nutrientTargetValue ?? null,
+    sortOrder: itemSnapshot.sortOrder,
+  }
+}
+
+function cloneDesignerItems(list: DesignerItem[]) {
+  return list.map((item) => ({
+    ...item,
+    ingredient: item.ingredient ? { ...item.ingredient } : undefined,
+    nutritionFood: item.nutritionFood ? { ...item.nutritionFood } : undefined,
+  }))
+}
+
+async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistoryItemPatch) {
+  const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
+  const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
+  const updatedItem = res?.data ?? res
+  items.value = items.value.map((item) =>
+    item.id === resolvedItemId
+      ? {
+          ...item,
+          ...patch,
+          ...(updatedItem?.id ? updatedItem : {}),
+        }
+      : item,
+  )
+  await refreshAssessment()
+}
+
+async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipeDesignerItem>) {
+  const payload = buildHistoryItemAddPayload(itemSnapshot)
+  const res: any = await recipeDesignerApi.addItem(draftId.value, payload)
+  const restoredItem = res?.data ?? res
+  if (restoredItem?.id) {
+    historyState.value = recordHistoryItemIdReplacement(historyState.value, itemSnapshot.id, restoredItem.id)
+    items.value = sortItemsBySortOrder([
+      ...items.value.filter((item) => item.id !== restoredItem.id && item.id !== itemSnapshot.id),
+      restoredItem,
+    ])
+  }
+  await refreshAssessment()
+}
+
+async function removeHistoryItem(itemId: string) {
+  const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
+  await recipeDesignerApi.removeItem(resolvedItemId)
+  items.value = items.value.filter((item) => item.id !== resolvedItemId)
+  await refreshAssessment()
+}
+
+async function applyHistoryOrder(orderIds: string[]) {
+  const resolvedOrderIds = resolveHistoryOrderIds(historyState.value, orderIds)
+  const itemById = new Map(items.value.map((item) => [item.id, item]))
+  const orderedItems = resolvedOrderIds
+    .map((itemId) => itemById.get(itemId))
+    .filter((item): item is DesignerItem => Boolean(item))
+  const orderedIdSet = new Set(orderedItems.map((item) => item.id))
+  const remainingItems = items.value.filter((item) => !orderedIdSet.has(item.id))
+  const nextItems = [...orderedItems, ...remainingItems].map((item, index) => ({ ...item, sortOrder: index }))
+  items.value = nextItems
+  await Promise.all(nextItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })))
+}
+
+function sortItemsBySortOrder(list: DesignerItem[]) {
+  return [...list].sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0))
+}
+
+function openScenarioSwitchSheet() {
+  if (!ensureDraftEditable()) return
+  pendingScenario.value = scenario.value
+  scenarioSwitchSheetVisible.value = true
+}
+
+function closeScenarioSwitchSheet() {
+  if (scenarioSwitching.value) return
+  scenarioSwitchSheetVisible.value = false
+}
+
+function selectScenarioOption(value: FediafDogScenario) {
+  if (scenarioSwitching.value) return
+  pendingScenario.value = value
+}
+
+function getScenarioDescription(value: FediafDogScenario) {
+  return FEDIAF_DOG_SCENARIO_DESCRIPTIONS[value] || ''
+}
+
+async function confirmScenarioSwitch() {
+  if (!ensureDraftEditable()) return
+  if (pendingScenario.value === scenario.value) {
+    scenarioSwitchSheetVisible.value = false
+    return
+  }
+
+  const previousScenario = scenario.value
+  let scenarioPersisted = false
+  rememberAssessmentScrollPosition()
+  scenarioSwitching.value = true
+  beginAutoSave()
+  try {
+    await recipeDesignerApi.updateDraft(draftId.value, { scenario: pendingScenario.value })
+    scenarioPersisted = true
+    scenario.value = pendingScenario.value
+    await refreshAssessment()
+    finishAutoSave()
+    scenarioSwitchSheetVisible.value = false
+    uni.showToast({ title: '已切换生命阶段', icon: 'success' })
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to switch scenario:', error)
+    if (!scenarioPersisted) {
+      scenario.value = previousScenario
+    }
+    failAutoSave()
+    uni.showToast({ title: '切换生命阶段失败', icon: 'none' })
+  } finally {
+    scenarioSwitching.value = false
+  }
 }
 
 function goToNutritionReport() {
@@ -2318,6 +2899,19 @@ function formatAssessmentNumber(value: unknown) {
   gap: 16rpx;
 }
 
+.ingredient-action-header {
+  position: sticky;
+  top: 0;
+  z-index: 24;
+  margin: -28rpx -28rpx 20rpx;
+  padding: 24rpx 28rpx 18rpx;
+  border-bottom: 1rpx solid #eef0f3;
+  border-radius: 12rpx 12rpx 0 0;
+  background: #fff;
+  box-shadow: 0 6rpx 14rpx rgba(15, 23, 42, 0.04);
+  box-sizing: border-box;
+}
+
 .primary-btn,
 .secondary-btn,
 .plain-btn,
@@ -2382,6 +2976,72 @@ function formatAssessmentNumber(value: unknown) {
   font-size: 24rpx;
 }
 
+.history-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.history-btn {
+  width: 54rpx;
+  height: 54rpx;
+  margin: 0;
+  padding: 0;
+  border: 1rpx solid #d9e4ef;
+  border-radius: 8rpx;
+  background: #fff;
+  color: #1677ff;
+  font-size: 0;
+  line-height: 1;
+}
+
+.history-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-icon {
+  position: relative;
+  width: 30rpx;
+  height: 26rpx;
+  color: inherit;
+}
+
+.history-icon-redo {
+  transform: scaleX(-1);
+}
+
+.history-icon-arc {
+  position: absolute;
+  left: 7rpx;
+  top: 6rpx;
+  width: 17rpx;
+  height: 14rpx;
+  border: 4rpx solid currentColor;
+  border-left-color: transparent;
+  border-radius: 999rpx;
+  transform: rotate(-28deg);
+  box-sizing: border-box;
+}
+
+.history-icon-arrow {
+  position: absolute;
+  left: 2rpx;
+  top: 2rpx;
+  width: 0;
+  height: 0;
+  border-top: 7rpx solid transparent;
+  border-bottom: 7rpx solid transparent;
+  border-right: 10rpx solid currentColor;
+}
+
+.history-btn[disabled] {
+  color: #b8c2cc;
+  background: #f5f7fa;
+}
+
 .sort-mode-btn {
   flex: 0 0 auto;
   min-width: 104rpx;
@@ -2410,6 +3070,19 @@ function formatAssessmentNumber(value: unknown) {
   margin-top: 20rpx;
 }
 
+.item-row-frame {
+  display: flex;
+  flex-direction: column;
+}
+
+.drag-insertion-marker {
+  height: 6rpx;
+  margin: 0 8rpx 10rpx;
+  border-radius: 999rpx;
+  background: #1677ff;
+  box-shadow: 0 0 0 6rpx rgba(22, 119, 255, 0.12);
+}
+
 .ingredient-list-actions {
   margin-top: 22rpx;
 }
@@ -2427,20 +3100,27 @@ function formatAssessmentNumber(value: unknown) {
   position: relative;
   justify-content: space-between;
   gap: 14rpx;
-  padding: 20rpx 0;
-  border-top: 1rpx solid #f0f0f0;
-  transition: background-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
-}
-
-.item-row.dragging {
-  background: #eef6ff;
-  box-shadow: 0 8rpx 20rpx rgba(24, 144, 255, 0.14);
-  transform: scale(1.015);
-  z-index: 2;
+  padding: 20rpx 12rpx;
+  border: 1rpx solid transparent;
+  border-top-color: #f0f0f0;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
 }
 
 .item-row-reordering {
   gap: 10rpx;
+  background: #fbfdff;
+  border-color: #e5edf7;
+}
+
+.item-row.dragging {
+  border-color: #1677ff;
+  background: #eef6ff;
+  box-shadow: 0 12rpx 28rpx rgba(24, 144, 255, 0.22);
+  opacity: 0.96;
+  transform: scale(1.018);
+  z-index: 2;
 }
 
 .item-row-excluded {
@@ -3366,13 +4046,153 @@ function formatAssessmentNumber(value: unknown) {
 .standard-context {
   flex: 1;
   min-width: 0;
+  max-width: 390rpx;
+  margin-left: auto;
   display: block;
   overflow: hidden;
   color: #333;
   font-size: 22rpx;
   font-weight: 700;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.scenario-switch-btn {
+  flex: 0 0 auto;
+  width: 72rpx;
+  height: 42rpx;
+  margin: 0;
+  padding: 0;
+  border: 1rpx solid #b6d9ff;
+  border-radius: 8rpx;
+  background: #fff;
+  color: #1677ff;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 42rpx;
+}
+
+.scenario-switch-btn[disabled] {
+  color: #9fb6cf;
+  background: #f5f7fa;
+}
+
+.scenario-switch-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 95;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(17, 24, 39, 0.36);
+}
+
+.scenario-switch-panel {
+  width: 100%;
+  max-height: 78vh;
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 20rpx 20rpx 0 0;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.scenario-switch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.scenario-switch-title {
+  color: #222;
+  font-size: 32rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.scenario-switch-close {
+  flex: 0 0 auto;
+  color: #1677ff;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.scenario-switch-note {
+  display: block;
+  margin-top: 10rpx;
+  color: #667085;
+  font-size: 23rpx;
+  line-height: 1.45;
+}
+
+.scenario-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 22rpx;
+}
+
+.scenario-option {
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 12rpx;
+  background: #fbfcfe;
+  box-sizing: border-box;
+}
+
+.scenario-option-active {
+  border-color: #91caff;
+  background: #eef8ff;
+}
+
+.scenario-option-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.scenario-option-title {
+  flex: 1;
+  min-width: 0;
+  color: #222;
+  font-size: 27rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.scenario-option-check {
+  flex: 0 0 auto;
+  color: #1677ff;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.scenario-option-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #777;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
+.scenario-switch-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.scenario-switch-cancel-btn,
+.scenario-switch-confirm-btn {
+  flex: 1;
+  height: 72rpx;
+  margin: 0;
+  padding: 0;
+  line-height: 72rpx;
 }
 
 .entry-status {

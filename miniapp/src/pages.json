@@ -194,24 +194,6 @@
       }
     },
     {
-      "path": "pages/ingredient-creation/list",
-      "style": {
-        "navigationBarTitleText": "AI 新增食材"
-      }
-    },
-    {
-      "path": "pages/ingredient-creation/detail",
-      "style": {
-        "navigationBarTitleText": "新增食材任务"
-      }
-    },
-    {
-      "path": "pages/ingredient-creation/draft",
-      "style": {
-        "navigationBarTitleText": "食材草稿审核"
-      }
-    },
-    {
       "path": "pages/shared-photos/index",
       "style": {
         "navigationBarTitleText": "原料照片"

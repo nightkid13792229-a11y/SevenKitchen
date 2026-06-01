@@ -47,6 +47,45 @@
       </view>
 
       <view class="section">
+        <text class="section__title">营养评估</text>
+        <text class="section__desc">基于已选狗狗档案生成营养管理方案与食谱设计约束。</text>
+        <button
+          class="primary-button"
+          :disabled="!selectedDog || creatingAssessment"
+          @tap="startAssessment"
+        >
+          {{ creatingAssessment ? '评估生成中...' : '开始营养评估' }}
+        </button>
+        <text v-if="assessmentError" class="error-text">{{ assessmentError }}</text>
+      </view>
+
+      <view v-if="assessment" class="section">
+        <text class="section__title">营养评估结果</text>
+        <view class="result-grid">
+          <view class="result-item">
+            <text class="result-label">评估状态</text>
+            <text class="result-value">{{ formatStatus(assessment.status) }}</text>
+          </view>
+          <view class="result-item">
+            <text class="result-label">结果状态</text>
+            <text class="result-value">{{ formatStatus(assessment.resultStatus) }}</text>
+          </view>
+        </view>
+        <view class="result-block">
+          <text class="result-block__title">缺失信息</text>
+          <text class="result-block__content">{{ missingInfoText }}</text>
+        </view>
+        <view class="result-block">
+          <text class="result-block__title">营养管理方案</text>
+          <text class="result-block__content">{{ formatJsonValue(assessment.managementPlan) }}</text>
+        </view>
+        <view class="result-block">
+          <text class="result-block__title">设计约束</text>
+          <text class="result-block__content">{{ formatJsonValue(assessment.constraintSet) }}</text>
+        </view>
+      </view>
+
+      <view class="section">
         <text class="section__title">结果状态</text>
         <view class="status-list">
           <text>可审核发布</text>
@@ -61,6 +100,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { aiRecipeApi, type CreateAssessmentResult } from '../../api/ai-recipe'
 import { dogApi } from '../../api/dogs'
 
 type DogOption = {
@@ -75,6 +115,10 @@ const dogLoadError = ref('')
 const dogs = ref<DogOption[]>([])
 const selectedDogIndex = ref(-1)
 const selectedDog = computed(() => selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] : null)
+const creatingAssessment = ref(false)
+const assessmentError = ref('')
+const assessment = ref<CreateAssessmentResult | null>(null)
+const missingInfoText = computed(() => formatMissingInfo(assessment.value?.completeness))
 
 function parseStoredUser(storedUser: unknown) {
   if (typeof storedUser !== 'string') {
@@ -115,11 +159,15 @@ function redirectAfterDenied() {
 async function loadDogs() {
   loadingDogs.value = true
   dogLoadError.value = ''
+  assessment.value = null
+  assessmentError.value = ''
   try {
     const res = await dogApi.list()
     dogs.value = Array.isArray(res.data) ? res.data : []
+    selectedDogIndex.value = dogs.value.length > 0 ? 0 : -1
   } catch (error: any) {
     dogs.value = []
+    selectedDogIndex.value = -1
     dogLoadError.value = error?.message || '加载狗狗档案失败'
   } finally {
     loadingDogs.value = false
@@ -145,6 +193,85 @@ onMounted(initializePage)
 
 function onDogChange(event: any) {
   selectedDogIndex.value = Number(event.detail.value)
+  assessment.value = null
+  assessmentError.value = ''
+}
+
+async function startAssessment() {
+  if (!selectedDog.value) {
+    uni.showToast({ title: '请先选择狗狗', icon: 'none' })
+    return
+  }
+
+  creatingAssessment.value = true
+  assessmentError.value = ''
+  assessment.value = null
+
+  try {
+    const res = await aiRecipeApi.createAssessment({
+      dogId: selectedDog.value.id,
+      prompt: '请基于当前狗狗档案生成营养管理方案与食谱设计约束。',
+      confirmedInputs: {
+        selectedDogName: selectedDog.value.name,
+      },
+    })
+    assessment.value = res.data
+    uni.showToast({ title: '评估已生成', icon: 'success' })
+  } catch (error: any) {
+    assessmentError.value = error?.message || '营养评估创建失败'
+  } finally {
+    creatingAssessment.value = false
+  }
+}
+
+function formatStatus(status?: string | null) {
+  const statusMap: Record<string, string> = {
+    DRAFT: '草稿',
+    REVIEWABLE: '可审核发布',
+    NEEDS_MANUAL_REVIEW: '需人工审核',
+    NEEDS_REVIEW: '需人工审核',
+    LIMITED_DRAFT: '受限草稿',
+    BLOCKED: '无法完成',
+  }
+
+  return status ? statusMap[status] || status : '--'
+}
+
+function formatMissingInfo(completeness?: Record<string, unknown> | null) {
+  if (!completeness) {
+    return '暂无缺失信息'
+  }
+
+  const missingInfo = completeness.missingInfo ?? completeness.missingFields ?? completeness.missing
+  if (Array.isArray(missingInfo)) {
+    return missingInfo.length > 0 ? missingInfo.map(String).join('、') : '暂无缺失信息'
+  }
+
+  if (typeof missingInfo === 'string') {
+    return missingInfo || '暂无缺失信息'
+  }
+
+  if (missingInfo && typeof missingInfo === 'object') {
+    return formatJsonValue(missingInfo)
+  }
+
+  return '暂无缺失信息'
+}
+
+function formatJsonValue(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return '暂无'
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 </script>
 
@@ -213,6 +340,85 @@ function onDogChange(event: any) {
   gap: 16rpx;
   font-size: 28rpx;
   color: #333;
+}
+
+.primary-button {
+  margin: 24rpx 0 0;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 42rpx;
+  font-size: 30rpx;
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #4b8f8c 100%);
+
+  &[disabled] {
+    color: rgba(255, 255, 255, 0.8);
+    background: #b8bdc7;
+  }
+}
+
+.error-text {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 26rpx;
+  color: #d93026;
+  line-height: 1.5;
+}
+
+.result-grid {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.result-item {
+  flex: 1;
+  min-width: 0;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #f6f7f9;
+}
+
+.result-label,
+.result-value,
+.result-block__title,
+.result-block__content {
+  display: block;
+}
+
+.result-label {
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  color: #777;
+}
+
+.result-value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-block {
+  padding: 20rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 12rpx;
+  margin-top: 16rpx;
+  background-color: #fff;
+}
+
+.result-block__title {
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-block__content {
+  font-size: 24rpx;
+  color: #555;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .state {

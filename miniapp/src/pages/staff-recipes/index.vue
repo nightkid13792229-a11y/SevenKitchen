@@ -1,5 +1,14 @@
 <template>
   <view class="staff-recipes-page">
+    <view v-if="isAdmin" class="ai-design-entry" @tap="goToAiRecipeDesigner">
+      <view class="ai-design-entry__main">
+        <text class="ai-design-entry__eyebrow">AI Agent</text>
+        <text class="ai-design-entry__title">AI自动设计</text>
+        <text class="ai-design-entry__desc">从狗狗档案生成营养管理方案与食谱草稿</text>
+      </view>
+      <text class="ai-design-entry__arrow">›</text>
+    </view>
+
     <!-- 状态筛选 -->
     <view class="filter-bar">
       <view
@@ -65,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { request } from '../../utils/api'
 
 interface StaffRecipe {
@@ -82,6 +91,8 @@ interface StaffRecipe {
 const recipes = ref<StaffRecipe[]>([])
 const loading = ref(false)
 const currentStatus = ref('')
+const user = ref<{ role?: string } | null>(null)
+const isAdmin = computed(() => user.value?.role === 'ADMIN')
 
 const statusOptions = [
   { label: '全部', value: '' },
@@ -91,8 +102,30 @@ const statusOptions = [
 ]
 
 onMounted(() => {
+  loadUserFromStorage()
   loadRecipes()
 })
+
+function parseStoredUser(storedUser: unknown) {
+  if (typeof storedUser !== 'string') {
+    return storedUser as { role?: string } | null
+  }
+
+  if (!storedUser || storedUser === '{}') {
+    return null
+  }
+
+  try {
+    return JSON.parse(storedUser)
+  } catch {
+    return null
+  }
+}
+
+function loadUserFromStorage() {
+  const storedUser = parseStoredUser(uni.getStorageSync('user'))
+  user.value = storedUser || parseStoredUser(uni.getStorageSync('userInfo'))
+}
 
 async function loadRecipes() {
   loading.value = true
@@ -122,6 +155,10 @@ function goToDetail(recipeId: string) {
   uni.navigateTo({
     url: `/pages/recipe-detail/index?recipeId=${recipeId}`
   })
+}
+
+function goToAiRecipeDesigner() {
+  uni.navigateTo({ url: '/pages/ai-recipe-designer/index' })
 }
 
 function getStatusLabel(status: string): string {
@@ -158,6 +195,51 @@ function getLifeStageLabel(stage: string): string {
 .staff-recipes-page {
   min-height: 100vh;
   background-color: #f5f5f5;
+}
+
+.ai-design-entry {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  margin: 24rpx 32rpx 0;
+  padding: 28rpx 32rpx;
+  border-radius: 16rpx;
+  background-color: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.ai-design-entry__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.ai-design-entry__eyebrow {
+  font-size: 22rpx;
+  color: #667eea;
+}
+
+.ai-design-entry__title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.ai-design-entry__desc {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.ai-design-entry__arrow {
+  font-size: 48rpx;
+  color: #bbb;
+  font-weight: 300;
 }
 
 .filter-bar {

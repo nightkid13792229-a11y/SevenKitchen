@@ -6,10 +6,20 @@ export type CreateAssessmentPayload = {
   confirmedInputs?: Record<string, unknown>
 }
 
+export type AssessmentJsonRecord = Record<string, unknown>
+
 export type CreateAssessmentResult = {
+  id: string
   dogId: string
   createdBy: string
   status: string
+  resultStatus?: string | null
+  inputSummary?: AssessmentJsonRecord | null
+  completeness?: AssessmentJsonRecord | null
+  managementPlan?: AssessmentJsonRecord | null
+  constraintSet?: AssessmentJsonRecord | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type AiRecipeKnowledgeSource = {

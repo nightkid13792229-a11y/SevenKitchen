@@ -29,7 +29,6 @@ import {
 } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../domain/ingredient/types';
 import { readProfileValuePer100g } from '../../domain/recipe-designer/nutrition-profile-reader';
-import { calculateDogAtwaterEnergyPer100g } from '../../domain/recipe-designer/dog-atwater-energy';
 import {
   assessRecipeDraft,
   type DesignRecipeAssessmentResult,
@@ -285,7 +284,6 @@ type EditableDesignRecipeRecord = {
   publishedAt: Date | null;
 };
 
-const KCAL_TO_MJ = 0.004184;
 const MAX_SEARCH_EXPANSION_TERMS = 8;
 const NEGATED_SALT_SEARCH_PHRASES = [
   '不加盐',
@@ -3086,8 +3084,6 @@ export class RecipeDesignerService {
     return this.calculateNutritionFoodNutrientMatch(
       nutritionData,
       target,
-      ingredientType,
-      nutritionFoodCategory,
     );
   }
 
@@ -3124,8 +3120,6 @@ export class RecipeDesignerService {
   private calculateNutritionFoodNutrientMatch(
     nutritionData: unknown,
     target: IngredientNutrientSearchTarget,
-    ingredientType: IngredientType,
-    nutritionFoodCategory: NutritionFoodCategory,
   ): IngredientNutrientMatch | null {
     const profile = this.toNutritionProfile(nutritionData);
     const amountPer100g = this.getCombinedAmountPer100g(profile, target);
@@ -3134,32 +3128,18 @@ export class RecipeDesignerService {
       return null;
     }
 
-    const amount = this.convertAmountToExpressionBasis(
-      amountPer100g,
-      profile,
-      target.expressionBasis,
-      {
-        useDogAtwaterEnergy:
-          ingredientType !== IngredientType.SUPPLEMENT &&
-          nutritionFoodCategory !== NutritionFoodCategory.SUPPLEMENT,
-      },
-    );
-
-    if (amount === null || amount <= 0) {
-      return null;
-    }
-
-    const basisLabel = this.getNutrientMatchBasisLabel(target.expressionBasis);
+    const basis = 'PER_100_G';
+    const basisLabel = '/100g';
 
     return {
       nutrientKey: target.nutrientKey,
       label: target.label,
-      amount,
+      amount: amountPer100g,
       unit: target.unit,
-      basis: target.expressionBasis,
+      basis,
       basisLabel,
-      displayText: `${formatNutrientMatchAmount(amount)}${target.unit}${basisLabel}`,
-      score: amount,
+      displayText: `${formatNutrientMatchAmount(amountPer100g)}${target.unit}${basisLabel}`,
+      score: amountPer100g,
     };
   }
 
@@ -3203,58 +3183,6 @@ export class RecipeDesignerService {
     }
 
     return convertUnitValue(total, sourceUnit, target.unit);
-  }
-
-  private convertAmountToExpressionBasis(
-    amountPer100g: number,
-    profile: NutritionProfile | null,
-    expressionBasis: AssessmentExpressionBasis,
-    options: { useDogAtwaterEnergy?: boolean } = {},
-  ): number | null {
-    switch (expressionBasis) {
-      case 'PER_1000_KCAL_ME': {
-        const energyKcalPer100g =
-          this.getEnergyKcalPer100g(profile, options);
-        return energyKcalPer100g !== null && energyKcalPer100g > 0
-          ? finiteOrNull((amountPer100g / energyKcalPer100g) * 1000)
-          : null;
-      }
-      case 'PER_MJ_ME': {
-        const energyKcalPer100g =
-          this.getEnergyKcalPer100g(profile, options);
-        return energyKcalPer100g !== null && energyKcalPer100g > 0
-          ? finiteOrNull(amountPer100g / (energyKcalPer100g * KCAL_TO_MJ))
-          : null;
-      }
-      case 'PER_100G_DRY_MATTER': {
-        const moisture = readProfileValuePer100g(profile, 'macros.moisture');
-        if (moisture.missing || moisture.valuePer100g === null) {
-          return null;
-        }
-        const dryMatterG = 100 - moisture.valuePer100g;
-        return dryMatterG > 0
-          ? finiteOrNull((amountPer100g / dryMatterG) * 100)
-          : null;
-      }
-      case 'RATIO':
-        return null;
-      default:
-        return amountPer100g;
-    }
-  }
-
-  private getEnergyKcalPer100g(
-    profile: NutritionProfile | null,
-    options: { useDogAtwaterEnergy?: boolean },
-  ): number | null {
-    if (options.useDogAtwaterEnergy) {
-      return calculateDogAtwaterEnergyPer100g(profile).energyKcalPer100g;
-    }
-
-    const energy = readProfileValuePer100g(profile, 'macros.energyKcal');
-    return !energy.missing && energy.valuePer100g !== null
-      ? energy.valuePer100g
-      : null;
   }
 
   private getNutrientMatchBasisLabel(

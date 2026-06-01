@@ -1111,10 +1111,8 @@ onUnmounted(() => {
 async function loadDraft() {
   loading.value = true
   try {
-    const res: any = await recipeDesignerApi.listDrafts()
-    const data = res?.data ?? res
-    const drafts = Array.isArray(data) ? data : data?.items || data?.drafts || []
-    const draft = drafts.find((item: any) => item.id === draftId.value)
+    const res: any = await recipeDesignerApi.getDraft(draftId.value)
+    const draft = res?.data ?? res
     if (draft) {
       draftName.value = String(draft.name || '')
       draftStatus.value = String(draft.status || '')
@@ -1123,14 +1121,40 @@ async function loadDraft() {
       scenario.value = getDraftScenario(draft)
       ingredientTypeHints.value = {}
       items.value = draft.items || []
+      applyCachedAssessmentFromDraft(draft)
       await hydrateIngredientTypeHintsForItems(items.value)
     }
-    await refreshAssessment()
+    void refreshAssessment({ quiet: true })
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to load draft:', error)
     uni.showToast({ title: '加载食谱失败', icon: 'none' })
   } finally {
     loading.value = false
+  }
+}
+
+function applyCachedAssessmentFromDraft(draft: any) {
+  const groupedEntries = Array.isArray(draft?.complianceStatus) ? draft.complianceStatus : []
+  const nutrients =
+    draft?.calculatedNutrition && typeof draft.calculatedNutrition === 'object'
+      ? draft.calculatedNutrition
+      : {}
+  const summary =
+    draft?.assessmentSummary && typeof draft.assessmentSummary === 'object'
+      ? draft.assessmentSummary
+      : {}
+
+  if (groupedEntries.length === 0 && Object.keys(nutrients).length === 0) return
+
+  assessment.value = {
+    scenario: getDraftScenario(draft),
+    totalWeightG: Number(draft?.totalWeightG || 0),
+    energyDensityKcalPerKg: draft?.energyDensityKcalPerKg ?? null,
+    nutrients,
+    groupedEntries,
+    overallStatus: summary.overallStatus || draft?.status || '',
+    summary: summary.summary || '',
+    rawSummary: summary.rawSummary || '',
   }
 }
 
@@ -1241,17 +1265,24 @@ function setAssessmentDrawerTop(topPx: number, windowHeightOverride?: number) {
   )
 }
 
-async function refreshAssessment() {
-  const res: any = await recipeDesignerApi.assessDraft(draftId.value)
-  const data = res?.data ?? res
-  assessment.value = data
-  const assessedItems = data?.items || data?.draft?.items
-  if (Array.isArray(assessedItems)) {
-    items.value = mergeAssessedItems(items.value, assessedItems)
+async function refreshAssessment(options: { quiet?: boolean } = {}) {
+  try {
+    const res: any = await recipeDesignerApi.assessDraft(draftId.value)
+    const data = res?.data ?? res
+    assessment.value = data
+    const assessedItems = data?.items || data?.draft?.items
+    if (Array.isArray(assessedItems)) {
+      items.value = mergeAssessedItems(items.value, assessedItems)
+    }
+    refreshDetailModalFromAssessment()
+    await nextTick()
+    restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
+    if (!options.quiet) {
+      throw error
+    }
   }
-  refreshDetailModalFromAssessment()
-  await nextTick()
-  restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
 }
 
 function onWeightInput(item: DesignerItem, event: any) {

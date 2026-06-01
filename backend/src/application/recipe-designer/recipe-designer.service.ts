@@ -101,6 +101,46 @@ const DESIGN_RECIPE_INCLUDE = {
   },
 };
 
+const DESIGN_RECIPE_LIST_SELECT = {
+  id: true,
+  name: true,
+  version: true,
+  status: true,
+  fediafDogScenario: true,
+  nutritionStandard: true,
+  energyDensityKcalPerKg: true,
+  totalWeightG: true,
+  targetHealthTags: true,
+  applicableLifeStages: true,
+  notes: true,
+  createdBy: true,
+  publishedAt: true,
+  publishedRecipeId: true,
+  publishedRecipeVersion: true,
+  revisionOfDesignRecipeId: true,
+  revisionBaseRecipeId: true,
+  isCompliant: true,
+  reviewStatus: true,
+  reviewNote: true,
+  createdAt: true,
+  updatedAt: true,
+  items: {
+    select: {
+      id: true,
+      ingredientId: true,
+      nutritionFoodId: true,
+      weightG: true,
+      includeInAssessment: true,
+      ratioPercent: true,
+      preparationMethod: true,
+      nutrientTargetKey: true,
+      nutrientTargetValue: true,
+      sortOrder: true,
+    },
+    orderBy: { sortOrder: 'asc' as const },
+  },
+};
+
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
@@ -139,6 +179,7 @@ type DesignRecipeWithItems = {
   version: number;
   status: string;
   fediafDogScenario: FediafDogScenarioCode;
+  nutritionStandard?: string | null;
   energyDensityKcalPerKg: number | null;
   totalWeightG: number;
   targetHealthTags: string[];
@@ -219,6 +260,23 @@ type DesignRecipeWorkbenchCard = DesignRecipeWithItems & {
   revisionChangeState: RevisionChangeState;
   versionHistory?: DesignRecipeWorkbenchCard[];
 };
+
+type DesignRecipeWorkbenchCardSummary = Omit<
+  DesignRecipeWorkbenchCard,
+  | 'items'
+  | 'calculatedNutrition'
+  | 'complianceStatus'
+  | 'assessmentSummary'
+  | 'missingDataReport'
+  | 'versionHistory'
+> & {
+  versionHistory?: DesignRecipeWorkbenchCardSummary[];
+};
+
+type ClientDesignRecipeAssessmentResult = Omit<
+  DesignRecipeAssessmentResult,
+  'entries'
+>;
 
 type IngredientOptionRecord = {
   id: string;
@@ -1096,11 +1154,13 @@ export class RecipeDesignerService {
           },
         ],
       },
-      include: DESIGN_RECIPE_INCLUDE,
+      select: DESIGN_RECIPE_LIST_SELECT,
       orderBy: { updatedAt: 'desc' },
-    })) as DesignRecipeWithItems[];
+    })) as unknown as DesignRecipeWithItems[];
 
-    return this.buildDesignRecipeWorkbenchCards(drafts);
+    return this.buildDesignRecipeWorkbenchCards(drafts).map((draft) =>
+      this.toWorkbenchCardSummary(draft),
+    );
   }
 
   async getDraft(id: string, userId: string) {
@@ -1127,6 +1187,33 @@ export class RecipeDesignerService {
       .map((group) => this.buildCurrentDesignRecipeWorkbenchCard(group))
       .filter((draft): draft is DesignRecipeWorkbenchCard => Boolean(draft))
       .sort((left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left));
+  }
+
+  private toWorkbenchCardSummary(
+    draft: DesignRecipeWorkbenchCard,
+  ): DesignRecipeWorkbenchCardSummary {
+    const summary: Partial<DesignRecipeWorkbenchCard> = { ...draft };
+    const versionHistory = summary.versionHistory;
+    delete summary.items;
+    delete summary.calculatedNutrition;
+    delete summary.complianceStatus;
+    delete summary.assessmentSummary;
+    delete summary.missingDataReport;
+    delete summary.versionHistory;
+
+    return {
+      ...(summary as Omit<
+        DesignRecipeWorkbenchCardSummary,
+        'versionHistory'
+      >),
+      ...(versionHistory?.length
+        ? {
+            versionHistory: versionHistory.map((item) =>
+              this.toWorkbenchCardSummary(item),
+            ),
+          }
+        : {}),
+    };
   }
 
   private resolveDesignRecipeSeriesKey(draft: DesignRecipeWithItems) {
@@ -1473,12 +1560,12 @@ export class RecipeDesignerService {
     });
   }
 
-  async assessDraft(id: string): Promise<DesignRecipeAssessmentResult> {
+  async assessDraft(id: string): Promise<ClientDesignRecipeAssessmentResult> {
     const draft = await this.loadDraft(id);
     const result = await this.assessLoadedDraft(draft);
 
     if (this.isPublishedDraft(draft)) {
-      return result;
+      return this.toClientAssessmentResult(result);
     }
 
     await this.prisma.designRecipe.update({
@@ -1486,7 +1573,7 @@ export class RecipeDesignerService {
       data: this.buildAssessmentUpdateData(result),
     });
 
-    return result;
+    return this.toClientAssessmentResult(result);
   }
 
   async publishDraft(
@@ -2724,6 +2811,14 @@ export class RecipeDesignerService {
         ? DesignRecipeReviewStatus.NONE
         : DesignRecipeReviewStatus.REQUIRED,
     };
+  }
+
+  private toClientAssessmentResult(
+    result: DesignRecipeAssessmentResult,
+  ): ClientDesignRecipeAssessmentResult {
+    const clientResult: Partial<DesignRecipeAssessmentResult> = { ...result };
+    delete clientResult.entries;
+    return clientResult as ClientDesignRecipeAssessmentResult;
   }
 
   private resolveIngredientId(item: DesignRecipeItemWithFood): string {

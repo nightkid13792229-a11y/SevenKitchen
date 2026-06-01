@@ -197,6 +197,8 @@ export interface IngredientOptionListResponse {
 
 export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
+  getDraft: (draftId: string) =>
+    request({ url: `/recipe-designer/drafts/${draftId}`, method: 'GET' }),
   listIngredientOptions: (data: IngredientOptionListQuery = {}) =>
     request({ url: '/recipe-designer/ingredient-options', method: 'GET', data }),
   listNutritionFoods: (data: NutritionFoodListQuery = {}) =>

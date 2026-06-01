@@ -163,6 +163,12 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).not.toContain('onMounted(() => {')
   })
 
+  it('loads editor detail from the single draft endpoint instead of the full draft list', () => {
+    expect(apiSource).toContain('getDraft')
+    expect(editorSource).toContain('recipeDesignerApi.getDraft(draftId.value)')
+    expect(editorSource).not.toContain('recipeDesignerApi.listDrafts()')
+  })
+
   it('places reproduction as the last option in the new draft life stage picker', () => {
     const scenarioOptionsBlock = listSource.match(
       /const scenarioOptions:[\s\S]*?\n\]/,

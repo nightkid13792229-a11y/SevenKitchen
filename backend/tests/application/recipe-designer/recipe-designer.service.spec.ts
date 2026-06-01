@@ -1651,19 +1651,62 @@ describe('RecipeDesignerService', () => {
       expect.objectContaining({ id: 'new-draft' }),
     ]);
 
-    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { createdBy: 'staff-1' },
-          {
-            status: 'PUBLISHED',
-            publishedRecipeId: { not: null },
-          },
-        ],
-      },
-      include: expect.any(Object),
-      orderBy: { updatedAt: 'desc' },
-    });
+    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { createdBy: 'staff-1' },
+            {
+              status: 'PUBLISHED',
+              publishedRecipeId: { not: null },
+            },
+          ],
+        },
+        select: expect.any(Object),
+        orderBy: { updatedAt: 'desc' },
+      }),
+    );
+  });
+
+  it('returns lightweight workbench cards without item nutrition or cached assessment payloads', async () => {
+    prisma.designRecipe.findMany.mockResolvedValue([
+      draft({
+        id: 'heavy-design',
+        items: [item()],
+        calculatedNutrition: { large: 'nutrition-cache' },
+        complianceStatus: { large: 'assessment-cache' },
+        assessmentSummary: { overallStatus: 'NEEDS_REVIEW' },
+        missingDataReport: [{ nutrientKey: 'calcium' }],
+      }),
+    ]);
+
+    const result = await service.listDrafts('staff-1');
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'heavy-design',
+        name: '成犬鸡肉配方',
+        revisionChangeState: 'NOT_REVISION',
+      }),
+    ]);
+    expect(result[0]).not.toHaveProperty('items');
+    expect(result[0]).not.toHaveProperty('calculatedNutrition');
+    expect(result[0]).not.toHaveProperty('complianceStatus');
+    expect(result[0]).not.toHaveProperty('assessmentSummary');
+    expect(result[0]).not.toHaveProperty('missingDataReport');
+    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          id: true,
+          items: expect.objectContaining({
+            select: expect.objectContaining({
+              nutritionFoodId: true,
+              weightG: true,
+            }),
+          }),
+        }),
+      }),
+    );
   });
 
   it('lists backfilled published source drafts for any staff user', async () => {
@@ -2130,6 +2173,30 @@ describe('RecipeDesignerService', () => {
         status: 'COMPLIANT',
         reviewStatus: 'NONE',
         isCompliant: true,
+      }),
+    });
+  });
+
+  it('returns grouped assessment data without the duplicate flat entries payload', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(draft());
+
+    const assessment = await service.assessDraft('design-1');
+
+    expect(assessment.groupedEntries.length).toBeGreaterThan(0);
+    expect(assessment).not.toHaveProperty('entries');
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: expect.objectContaining({
+        complianceStatus: assessment.groupedEntries,
+        assessmentSummary: expect.objectContaining({
+          rawEntryCount: expect.any(Number),
+        }),
       }),
     });
   });

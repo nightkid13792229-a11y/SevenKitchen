@@ -155,6 +155,9 @@ export class WechatService {
    * Check if running in mock mode (no WeChat credentials)
    */
   private isMockMode(): boolean {
+    const forceMock = ['1', 'true', 'yes', 'on'].includes(
+      (process.env.WECHAT_FORCE_MOCK || '').trim().toLowerCase(),
+    );
     // Check if credentials are missing or are placeholder values
     const isPlaceholder =
       this.appConfigs.length === 0 ||
@@ -167,7 +170,7 @@ export class WechatService {
           config.appId === 'touristappid',
       );
     const isMissing = this.appConfigs.length === 0;
-    return isMissing || isPlaceholder;
+    return forceMock || isMissing || isPlaceholder;
   }
 
   private getAppConfig(appId?: string): WechatAppConfig {
@@ -208,13 +211,18 @@ export class WechatService {
       console.log('[WechatService] appId:', appId || this.appId);
       console.log('[WechatService] appSecret configured:', !!this.appSecret);
 
-      // Generate a consistent mock openid based on the code
-      const mockOpenid = `mock_openid_${code.substring(0, 8)}`;
+      const mockCodePrefix = code.substring(0, 8);
+      const mockOpenid =
+        process.env.WECHAT_MOCK_OPENID?.trim() ||
+        `mock_openid_${mockCodePrefix}`;
+      const mockUnionid =
+        process.env.WECHAT_MOCK_UNIONID?.trim() ||
+        `mock_unionid_${mockCodePrefix}`;
       console.log('[WechatService] Generated mock openid:', mockOpenid);
 
       const result = {
         openid: mockOpenid,
-        unionid: `mock_unionid_${code.substring(0, 8)}`,
+        unionid: mockUnionid,
         sessionKey: 'mock_session_key',
         appId: appId || this.appId || 'mock_appid',
       };

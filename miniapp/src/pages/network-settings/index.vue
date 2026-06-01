@@ -40,7 +40,7 @@
       <view class="help-text">
         <text>• 默认使用生产环境: https://api.sevenkitchen.cloud/api/v1</text>
         <text>• 开发环境默认使用: http://127.0.0.1:3011/api/v1</text>
-        <text>• 真机联调可切换为: http://192.168.31.43:3011/api/v1</text>
+        <text>• 真机联调可切换为: http://192.168.31.64:3011/api/v1</text>
         <text>• 修改后需要重启应用才能生效</text>
         <text>• 如果连接失败，请检查后端服务是否运行</text>
       </view>

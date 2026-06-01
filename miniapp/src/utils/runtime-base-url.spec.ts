@@ -8,7 +8,7 @@ import {
 describe('runtime-base-url', () => {
   it('uses the branch local backend on port 3011 for DevTools', () => {
     expect(DEVTOOLS_BASE_URL).toBe('http://127.0.0.1:3011/api/v1')
-    expect(LAN_DEBUG_BASE_URL).toBe('http://192.168.31.43:3011/api/v1')
+    expect(LAN_DEBUG_BASE_URL).toBe('http://192.168.31.64:3011/api/v1')
   })
 
   it('migrates legacy local dev overrides on port 3001 to the branch backend port', () => {
@@ -19,7 +19,7 @@ describe('runtime-base-url', () => {
       'http://127.0.0.1:3011/api/v1',
     )
     expect(migrateLegacyDevBaseUrl('http://192.168.31.43:3001/api/v1')).toBe(
-      'http://192.168.31.43:3011/api/v1',
+      'http://192.168.31.64:3011/api/v1',
     )
   })
 
@@ -31,7 +31,13 @@ describe('runtime-base-url', () => {
       'http://127.0.0.1:3011/api/v1',
     )
     expect(migrateLegacyDevBaseUrl('http://192.168.31.43:3004/api/v1')).toBe(
-      'http://192.168.31.43:3011/api/v1',
+      'http://192.168.31.64:3011/api/v1',
+    )
+  })
+
+  it('migrates the previous LAN debug host on the current backend port', () => {
+    expect(migrateLegacyDevBaseUrl('http://192.168.31.43:3011/api/v1')).toBe(
+      'http://192.168.31.64:3011/api/v1',
     )
   })
 

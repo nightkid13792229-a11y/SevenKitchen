@@ -95,8 +95,11 @@ npm run build:mp-weixin
 ### 3. 管理后台部署
 
 ```bash
-# 使用部署脚本
-./deploy-admin-web.sh
+# 推荐：远程拉取代码、远程构建并发布静态文件
+bash backend/scripts/remote_deploy_admin_web.sh
+
+# 如需部署指定分支
+DEPLOY_REF=codex/admin-web-remote-deploy-ingredient-fix bash backend/scripts/remote_deploy_admin_web.sh
 ```
 
 ---

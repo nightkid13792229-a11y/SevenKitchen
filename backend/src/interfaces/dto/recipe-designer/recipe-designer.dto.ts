@@ -29,6 +29,33 @@ export type RecipeDesignerScenario = (typeof RECIPE_DESIGNER_SCENARIOS)[number];
 export type AssessmentExpressionBasisDto =
   (typeof ASSESSMENT_EXPRESSION_BASES)[number];
 
+export class CreateRecipeSeriesDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsIn(RECIPE_DESIGNER_SCENARIOS)
+  scenario?: RecipeDesignerScenario;
+}
+
+export class RenameRecipeSeriesDto {
+  @IsString()
+  name!: string;
+}
+
+export class DeleteRecipeSeriesDto {
+  @IsString()
+  confirmName!: string;
+
+  @IsBoolean()
+  confirmUserVisibleRemoval!: boolean;
+}
+
+export class CreateRecipeSeriesStageDraftDto {
+  @IsIn(RECIPE_DESIGNER_SCENARIOS)
+  scenario!: RecipeDesignerScenario;
+}
+
 export const SUPPLEMENT_NUTRITION_BASIS_TYPES = [
   'PER_1_G',
   'PER_100_G',

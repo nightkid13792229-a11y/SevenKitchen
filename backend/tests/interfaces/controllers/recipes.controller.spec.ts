@@ -68,6 +68,9 @@ describe('RecipesController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    recipeShareToken: {
+      findFirst: jest.fn(),
+    },
     dog: {
       findFirst: jest.fn(),
     },
@@ -136,8 +139,10 @@ describe('RecipesController (e2e)', () => {
     jest.clearAllMocks();
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
+    mockPrismaService.recipe.findMany.mockResolvedValue([]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
     mockPrismaService.dog.findFirst.mockResolvedValue(null);
+    mockPrismaService.recipeShareToken.findFirst.mockResolvedValue(null);
     mockPrismaService.recipe.findFirst.mockImplementation(
       async (args?: { where?: { recipeId?: string } }) => {
         const recipeId = args?.where?.recipeId;
@@ -229,6 +234,70 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.data).toHaveLength(0);
       expect(response.body.data.total).toBe(0);
     });
+
+    it('returns one public list row for multiple life stages in the same series', async () => {
+      await recipeRepository.save({
+        id: 'adult-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 成犬',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      } as Recipe);
+      await recipeRepository.save({
+        id: 'senior-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 老年犬',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1100,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      } as Recipe);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes')
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.total).toBe(1);
+      expect(response.body.data.data).toHaveLength(1);
+      expect(response.body.data.data[0].seriesId).toBe('series-1');
+    });
+
+    it('uses the newest same-series public recipe as the list representative', async () => {
+      await recipeRepository.save({
+        id: 'adult-recipe-id',
+        version: 10,
+        name: '牛肉南瓜鲜食 成犬旧代表',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      } as Recipe & { createdAt: Date });
+      await recipeRepository.save({
+        id: 'senior-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 老年犬新代表',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1100,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        createdAt: new Date('2024-02-01T00:00:00.000Z'),
+      } as Recipe & { createdAt: Date });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes')
+        .expect(200);
+
+      expect(response.body.data.total).toBe(1);
+      expect(response.body.data.data[0].id).toBe('senior-recipe-id');
+    });
   });
 
   describe('GET /api/v1/recipes/recommendations/:dogId', () => {
@@ -286,9 +355,625 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.exclusive[0].id).toBe(businessRecipeId);
       expect(response.body.data.exclusive[0].id).not.toBe(internalRecipeId);
     });
+
+    it('returns one recommendation per recipe series and chooses the dog matched life stage', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440031';
+      const customerId = '550e8400-e29b-41d4-a716-446655440032';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '年糕',
+        birthday: new Date('2015-01-01T00:00:00.000Z'),
+        currentWeightKg: 6,
+        mealsPerDay: 2,
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+        cachedTargetFoodKcal: 320,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-adult',
+          recipeId: 'adult-recipe-id',
+          version: 1,
+          name: '牛肉南瓜鲜食 成犬',
+          status: 'PUBLIC',
+          seriesId: 'series-beef',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          energyDensityKcalPerKg: 1200,
+          targetHealthTags: [],
+          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+          favoriteCount: 100,
+          diyGenCount: 0,
+          items: [],
+        },
+        {
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          version: 1,
+          name: '牛肉南瓜鲜食 老年犬',
+          status: 'PUBLIC',
+          seriesId: 'series-beef',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          energyDensityKcalPerKg: 1100,
+          targetHealthTags: [],
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+          favoriteCount: 0,
+          diyGenCount: 0,
+          items: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const recommended = [
+        ...response.body.data.exclusive,
+        ...response.body.data.general,
+      ];
+      expect(recommended).toHaveLength(1);
+      expect(recommended[0].id).toBe('senior-recipe-id');
+      expect(recommended[0].seriesId).toBe('series-beef');
+    });
+
+    it('scores the matched series life stage as an exclusive recommendation', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440041';
+      const customerId = '550e8400-e29b-41d4-a716-446655440042';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '吐司',
+        birthday: new Date('2021-01-01T00:00:00.000Z'),
+        currentWeightKg: 5,
+        mealsPerDay: 2,
+        lifeStageOverride: 'NONE',
+        activityLevel: 'MODERATE',
+        cachedTargetFoodKcal: 300,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-adult',
+          recipeId: 'adult-recipe-id',
+          version: 1,
+          name: '鸡肉燕麦鲜食 成犬',
+          status: 'PUBLIC',
+          seriesId: 'series-chicken',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          energyDensityKcalPerKg: 1200,
+          targetHealthTags: [],
+          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+          favoriteCount: 0,
+          diyGenCount: 0,
+          items: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body.data.exclusive).toHaveLength(1);
+      expect(response.body.data.exclusive[0].id).toBe('adult-recipe-id');
+      expect(response.body.data.exclusive[0].matchReasons).toContain(
+        '生命阶段匹配',
+      );
+    });
+
+    it('loads complete public series candidates before choosing the matched recommendation stage', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440051';
+      const customerId = '550e8400-e29b-41d4-a716-446655440052';
+      const adultRecipe = {
+        id: 'row-adult',
+        recipeId: 'adult-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 成犬',
+        status: 'PUBLIC',
+        seriesId: 'series-beef',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        energyDensityKcalPerKg: 1200,
+        targetHealthTags: [],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        favoriteCount: 100,
+        diyGenCount: 0,
+        items: [],
+      };
+      const seniorRecipe = {
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 老年犬',
+        status: 'PUBLIC',
+        seriesId: 'series-beef',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        energyDensityKcalPerKg: 1100,
+        targetHealthTags: [],
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        favoriteCount: 0,
+        diyGenCount: 0,
+        items: [],
+      };
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '年糕',
+        birthday: new Date('2015-01-01T00:00:00.000Z'),
+        currentWeightKg: 6,
+        mealsPerDay: 2,
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+        cachedTargetFoodKcal: 320,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([adultRecipe])
+        .mockResolvedValueOnce([adultRecipe, seniorRecipe]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: {
+            status: 'PUBLIC',
+            seriesId: { in: ['series-beef'] },
+          },
+        }),
+      );
+      expect(response.body.data.exclusive[0].id).toBe('senior-recipe-id');
+    });
   });
 
   describe('GET /api/v1/recipes/:id', () => {
+    function publicSeriesRecipe(overrides: Record<string, unknown>) {
+      return {
+        id: 'row-adult',
+        recipeId: 'adult-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 成犬',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        nutritionStandard: 'FEDIAF_2025',
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        targetHealthTags: [],
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+        healthTagAssignments: [],
+        viewCount: 0,
+        favoriteCount: 0,
+        diyGenCount: 0,
+        ...overrides,
+      };
+    }
+
+    it('selects the dog-matched public life-stage version for a series detail request', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          name: '牛肉南瓜鲜食 老年犬',
+          energyDensityKcalPerKg: 1100,
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=dog-1')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).toHaveBeenCalledWith({
+        where: { id: 'dog-1', ownerId: 'customer-1' },
+        select: {
+          id: true,
+          birthday: true,
+          lifeStageOverride: true,
+          activityLevel: true,
+        },
+      });
+      expect(response.body.data.id).toBe('senior-recipe-id');
+      expect(response.body.data.seriesId).toBe('series-1');
+      expect(response.body.data.selectedRecipeId).toBe('senior-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe(
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      );
+      expect(response.body.data.lifeStageMatch.matchType).toBe('MATCHED');
+      expect(response.body.data.availableLifeStageVersions).toEqual([
+        expect.objectContaining({
+          lifeStage: 'HIGH_ACTIVITY_ADULT',
+          recipeId: 'adult-recipe-id',
+          isCurrent: false,
+        }),
+        expect.objectContaining({
+          lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          recipeId: 'senior-recipe-id',
+          isCurrent: true,
+        }),
+      ]);
+    });
+
+    it('returns an accessible private concrete recipe before public series selection', async () => {
+      const concreteRecipeId = 'private-recipe-id';
+      await recipeRepository.save({
+        id: concreteRecipeId,
+        version: 2,
+        name: '牛肉南瓜鲜食 私有新版',
+        status: 'DRAFT',
+        energyDensityKcalPerKg: 1300,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        items: [],
+      } as Recipe);
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({
+          recipeId: concreteRecipeId,
+          version: 1,
+          name: '牛肉南瓜鲜食 公开旧版',
+        }),
+        publicSeriesRecipe({
+          id: 'row-puppy',
+          recipeId: 'puppy-recipe-id',
+          name: '牛肉南瓜鲜食 幼犬',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${concreteRecipeId}`)
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(response.body.data.id).toBe(concreteRecipeId);
+      expect(response.body.data.name).toBe('牛肉南瓜鲜食 私有新版');
+      expect(response.body.data.status).toBe('DRAFT');
+      expect(response.body.data.lifeStageMatch.matchType).toBe('LEGACY');
+    });
+
+    it('allows share-token access to a private concrete recipe without public series override', async () => {
+      const concreteRecipeId = 'shared-private-recipe-id';
+      await recipeRepository.save({
+        id: concreteRecipeId,
+        version: 3,
+        name: '分享私有新版',
+        status: 'DRAFT',
+        energyDensityKcalPerKg: 1280,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+      } as Recipe);
+      mockPrismaService.recipeShareToken.findFirst.mockResolvedValue({
+        id: 'share-token-row',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({
+          recipeId: concreteRecipeId,
+          version: 1,
+          name: '分享公开旧版',
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${concreteRecipeId}?shareToken=valid-share-token`)
+        .expect(200);
+
+      expect(response.body.data.id).toBe(concreteRecipeId);
+      expect(response.body.data.name).toBe('分享私有新版');
+      expect(response.body.data.status).toBe('DRAFT');
+      expect(mockPrismaService.recipeShareToken.findFirst).toHaveBeenCalled();
+    });
+
+    it('uses manual lifeStage query before dog profile selection', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-puppy',
+          recipeId: 'puppy-recipe-id',
+          name: '牛肉南瓜鲜食 幼犬',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/adult-recipe-id?lifeStage=PUPPY_14_WEEKS_PLUS')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('puppy-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('PUPPY_14_WEEKS_PLUS');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
+    it('opens the requested public concrete recipe stage when no dog or manual stage is usable', async () => {
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([
+          publicSeriesRecipe({}),
+          seniorRecipe,
+          publicSeriesRecipe({
+            id: 'row-puppy',
+            recipeId: 'puppy-recipe-id',
+            name: '牛肉南瓜鲜食 幼犬',
+            seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+            applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+          }),
+        ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('senior-recipe-id');
+      expect(response.body.data.selectedRecipeId).toBe('senior-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe(
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      );
+      expect(response.body.data.lifeStageMatch).not.toHaveProperty(
+        'requestedLifeStage',
+      );
+    });
+
+    it('allows manual lifeStage query to switch away from a public concrete recipe id', async () => {
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([
+          publicSeriesRecipe({}),
+          seniorRecipe,
+          publicSeriesRecipe({
+            id: 'row-puppy',
+            recipeId: 'puppy-recipe-id',
+            name: '牛肉南瓜鲜食 幼犬',
+            seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+            applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+          }),
+        ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id?lifeStage=PUPPY_14_WEEKS_PLUS')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('puppy-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('PUPPY_14_WEEKS_PLUS');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
+    it('uses an owned dog life stage before a public concrete recipe id default', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'ADULT',
+        activityLevel: 'HIGH',
+      });
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([publicSeriesRecipe({}), seniorRecipe]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id?dogId=dog-1')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('HIGH_ACTIVITY_ADULT');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
+    it('does not use dog profile selection without an authenticated customer', async () => {
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'foreign-dog',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=foreign-dog')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).not.toHaveBeenCalled();
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          matchType: 'FALLBACK_ADULT',
+          message: '当前狗狗档案没有完全匹配版本，已展示可用替代版本。',
+        }),
+      );
+    });
+
+    it('does not let a foreign dog id influence customer series selection', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue(null);
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=foreign-dog')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).toHaveBeenCalledWith({
+        where: { id: 'foreign-dog', ownerId: 'customer-1' },
+        select: {
+          id: true,
+          birthday: true,
+          lifeStageOverride: true,
+          activityLevel: true,
+        },
+      });
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch.matchType).toBe(
+        'FALLBACK_ADULT',
+      );
+    });
+
+    it('marks default public series selection as a fallback when no dog or manual stage is usable', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          matchType: 'FALLBACK_ADULT',
+          message: '当前狗狗档案没有完全匹配版本，已展示可用替代版本。',
+        }),
+      );
+      expect(response.body.data.lifeStageMatch).not.toHaveProperty(
+        'requestedLifeStage',
+      );
+    });
+
+    it('falls back to adult or first configured public series stage when no exact match exists', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValueOnce([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-repro',
+          recipeId: 'repro-recipe-id',
+          seriesLifeStage: 'REPRODUCTION',
+          applicableLifeStages: ['REPRODUCTION'],
+        }),
+      ]);
+
+      const adultFallback = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?lifeStage=PUPPY_UNDER_14_WEEKS')
+        .expect(200);
+
+      expect(adultFallback.body.data.id).toBe('adult-recipe-id');
+      expect(adultFallback.body.data.lifeStageMatch.matchType).toBe(
+        'FALLBACK_ADULT',
+      );
+      expect(adultFallback.body.data.lifeStageMatch.message).toBe(
+        '当前狗狗档案没有完全匹配版本，已展示可用替代版本。',
+      );
+
+      mockPrismaService.recipe.findMany.mockResolvedValueOnce([
+        publicSeriesRecipe({
+          id: 'row-repro',
+          recipeId: 'repro-recipe-id',
+          seriesLifeStage: 'REPRODUCTION',
+          applicableLifeStages: ['REPRODUCTION'],
+        }),
+      ]);
+
+      const firstFallback = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?lifeStage=PUPPY_UNDER_14_WEEKS')
+        .expect(200);
+
+      expect(firstFallback.body.data.id).toBe('repro-recipe-id');
+      expect(firstFallback.body.data.lifeStageMatch.matchType).toBe(
+        'FALLBACK_FIRST',
+      );
+    });
+
     it('does not increment view count when loading recipe detail', async () => {
       const recipe: Recipe = {
         id: '550e8400-e29b-41d4-a716-446655440010',
@@ -403,12 +1088,12 @@ describe('RecipesController (e2e)', () => {
                     image_url: 'https://cdn.example.com/e400-square.jpg',
                     purchase_link: {
                       platform: 'JD',
-                  url: 'https://jd.example/e400',
-                },
-                add_timing: 'BEFORE_MEAL',
-                active_nutrients: {
-                  维生素E: {
-                    value: 400,
+                      url: 'https://jd.example/e400',
+                    },
+                    add_timing: 'BEFORE_MEAL',
+                    active_nutrients: {
+                      维生素E: {
+                        value: 400,
                         unit: 'IU',
                       },
                     },
@@ -452,11 +1137,15 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.code).toBe(0);
       expect(response.body.data.items[0].ingredient.displayUnit).toBe('粒');
       expect(response.body.data.items[0].ingredient.diyEnabled).toBe(false);
-      expect(response.body.data.items[0].ingredient.addTimingLabel).toBe('随餐');
+      expect(response.body.data.items[0].ingredient.addTimingLabel).toBe(
+        '随餐',
+      );
       expect(response.body.data.items[0].ingredient.imageUrl).toBe(
         'https://cdn.example.com/e200-square.jpg',
       );
-      expect(response.body.data.items[0].ingredient.activeNutrients.维生素E).toEqual({
+      expect(
+        response.body.data.items[0].ingredient.activeNutrients.维生素E,
+      ).toEqual({
         value: 200,
         unit: 'IU',
       });

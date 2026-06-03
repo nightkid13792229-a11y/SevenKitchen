@@ -18,7 +18,7 @@ import type {
  */
 export const recipeApi = {
   /**
-   * Get recipe list with filters and pagination
+   * Get recipe list with filters, pagination, and optional series stage summaries
    */
   list: (params: RecipeQuery) => {
     return request.get<RecipeListResponse>('/admin/recipes', { params });

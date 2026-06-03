@@ -50,8 +50,10 @@ export class InMemoryRecipeRepository implements RecipeRepository {
   async findPublicRecipes(_options?: FindRecipesOptions): Promise<Recipe[]> {
     // TODO: Implement filtering logic
     return Promise.resolve(
-      Array.from(this.recipes.values()).filter(
-        (r) => r.status === 'PUBLIC', // TODO: Use enum when Recipe interface is fully defined
+      this.groupPublicRecipes(
+        Array.from(this.recipes.values()).filter(
+          (r) => r.status === 'PUBLIC', // TODO: Use enum when Recipe interface is fully defined
+        ),
       ),
     );
   }
@@ -64,8 +66,8 @@ export class InMemoryRecipeRepository implements RecipeRepository {
     hasMore: boolean;
   }> {
     // TODO: Implement filtering logic
-    const allRecipes = Array.from(this.recipes.values()).filter(
-      (r) => r.status === 'PUBLIC',
+    const allRecipes = this.groupPublicRecipes(
+      Array.from(this.recipes.values()).filter((r) => r.status === 'PUBLIC'),
     );
 
     const page = _options?.page || 1;
@@ -93,5 +95,52 @@ export class InMemoryRecipeRepository implements RecipeRepository {
       ingredientGroups: [],
       total: this.recipes.size,
     });
+  }
+
+  private groupPublicRecipes(recipes: Recipe[]): Recipe[] {
+    const latestByGroup = new Map<string, Recipe>();
+    for (const recipe of recipes) {
+      const groupKey = recipe.seriesId || recipe.id;
+      const existing = latestByGroup.get(groupKey);
+      if (!existing || this.isNewerRepresentative(recipe, existing)) {
+        latestByGroup.set(groupKey, recipe);
+      }
+    }
+    return Array.from(latestByGroup.values());
+  }
+
+  private isNewerRepresentative(candidate: Recipe, existing: Recipe): boolean {
+    if (candidate.id === existing.id && candidate.version !== existing.version) {
+      return candidate.version > existing.version;
+    }
+
+    const candidateTime = this.getCreatedAtTime(candidate);
+    const existingTime = this.getCreatedAtTime(existing);
+    if (
+      candidateTime !== null &&
+      existingTime !== null &&
+      candidateTime !== existingTime
+    ) {
+      return candidateTime > existingTime;
+    }
+    if (candidateTime !== null && existingTime === null) {
+      return true;
+    }
+
+    return candidate.version > existing.version;
+  }
+
+  private getCreatedAtTime(recipe: Recipe): number | null {
+    const createdAt = (recipe as Recipe & { createdAt?: Date | string }).createdAt;
+    if (!createdAt) {
+      return null;
+    }
+
+    const time =
+      createdAt instanceof Date
+        ? createdAt.getTime()
+        : new Date(createdAt).getTime();
+
+    return Number.isNaN(time) ? null : time;
   }
 }

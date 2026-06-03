@@ -198,17 +198,18 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
-    // Group by recipeId and take latest version
-    const latestByRecipeId = new Map<string, RecipeWithItems>();
+    // Group by seriesId when present, otherwise recipeId, and take one representative.
+    const latestByRecipeGroup = new Map<string, RecipeWithItems>();
     for (const recipe of filteredRecipes) {
-      const existing = latestByRecipeId.get(recipe.recipeId);
-      if (!existing || recipe.version > existing.version) {
-        latestByRecipeId.set(recipe.recipeId, recipe);
+      const groupKey = recipe.seriesId || recipe.recipeId;
+      const existing = latestByRecipeGroup.get(groupKey);
+      if (!existing || this.isNewerPublicRepresentative(recipe, existing)) {
+        latestByRecipeGroup.set(groupKey, recipe);
       }
     }
 
     // Sort by createdAt descending AFTER grouping
-    return Array.from(latestByRecipeId.values())
+    return Array.from(latestByRecipeGroup.values())
       .sort((a, b) => {
         const aTime =
           a.createdAt instanceof Date
@@ -308,31 +309,26 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Filter out recipes that contain excluded ingredients
     if (options?.excludeIngredients && options.excludeIngredients.length > 0) {
       const excludeSet = new Set(options.excludeIngredients);
-      console.log(`[PrismaRecipeRepo] PAGINATED excludeIngredients:`, [...excludeSet]);
-      const beforeCount = filteredRecipes.length;
       filteredRecipes = filteredRecipes.filter((recipe) => {
         const hasExcluded = recipe.items?.some(
           (item) => item.ingredientId && excludeSet.has(item.ingredientId),
         );
-        if (hasExcluded) {
-          console.log(`[PrismaRecipeRepo] Excluding recipe "${recipe.name}" - items:`, recipe.items?.map(i => ({ ingId: i.ingredientId, name: i.ingredient?.name })));
-        }
         return !hasExcluded;
       });
-      console.log(`[PrismaRecipeRepo] After excludeIngredients filter: ${beforeCount} -> ${filteredRecipes.length}`);
     }
 
-    // Group by recipeId and take latest version
-    const latestByRecipeId = new Map<string, RecipeWithItems>();
+    // Group by seriesId when present, otherwise recipeId, and take one representative.
+    const latestByRecipeGroup = new Map<string, RecipeWithItems>();
     for (const recipe of filteredRecipes) {
-      const existing = latestByRecipeId.get(recipe.recipeId);
-      if (!existing || recipe.version > existing.version) {
-        latestByRecipeId.set(recipe.recipeId, recipe);
+      const groupKey = recipe.seriesId || recipe.recipeId;
+      const existing = latestByRecipeGroup.get(groupKey);
+      if (!existing || this.isNewerPublicRepresentative(recipe, existing)) {
+        latestByRecipeGroup.set(groupKey, recipe);
       }
     }
 
     // Sort by createdAt descending AFTER grouping to ensure correct order
-    const uniqueRecipes = Array.from(latestByRecipeId.values()).sort((a, b) => {
+    const uniqueRecipes = Array.from(latestByRecipeGroup.values()).sort((a, b) => {
       const aTime =
         a.createdAt instanceof Date
           ? a.createdAt.getTime()
@@ -545,6 +541,29 @@ export class PrismaRecipeRepository implements RecipeRepository {
     return labels[tag] || tag;
   }
 
+  private isNewerPublicRepresentative(
+    candidate: RecipeWithItems,
+    existing: RecipeWithItems,
+  ): boolean {
+    if (
+      candidate.recipeId === existing.recipeId &&
+      candidate.version !== existing.version
+    ) {
+      return candidate.version > existing.version;
+    }
+
+    const candidateTime =
+      candidate.createdAt instanceof Date
+        ? candidate.createdAt.getTime()
+        : new Date(candidate.createdAt).getTime();
+    const existingTime =
+      existing.createdAt instanceof Date
+        ? existing.createdAt.getTime()
+        : new Date(existing.createdAt).getTime();
+
+    return candidateTime > existingTime;
+  }
+
   async save(recipe: Recipe): Promise<Recipe> {
     const existing = await this.prisma.recipe.findUnique({
       where: {
@@ -684,6 +703,8 @@ export class PrismaRecipeRepository implements RecipeRepository {
       viewCount: record.viewCount ?? 0,
       favoriteCount: record.favoriteCount ?? 0,
       diyGenCount: record.diyGenCount ?? 0,
+      seriesId: record.seriesId,
+      seriesLifeStage: record.seriesLifeStage,
       items: record.items.map(
         (item): RecipeItem => ({
           id: item.id,

@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+const sourceExists = (path: string) => existsSync(resolve(process.cwd(), path))
 const readSource = (path: string) => {
   const absolutePath = resolve(process.cwd(), path)
   return existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : ''
 }
-
-const existsInProject = (path: string) => existsSync(resolve(process.cwd(), path))
 
 describe('removed ingredient creation miniapp surface', () => {
   const staffWorkbenchSource = readSource('src/pages/staff-workbench/index.vue')
@@ -28,10 +27,10 @@ describe('removed ingredient creation miniapp surface', () => {
   })
 
   it('keeps the miniapp source tree free of ingredient creation pages and API client', () => {
-    expect(existsInProject('src/api/ingredient-creation.ts')).toBe(false)
-    expect(existsInProject('src/api/ingredient-creation.spec.ts')).toBe(false)
-    expect(existsInProject('src/pages/ingredient-creation/list.vue')).toBe(false)
-    expect(existsInProject('src/pages/ingredient-creation/detail.vue')).toBe(false)
-    expect(existsInProject('src/pages/ingredient-creation/draft.vue')).toBe(false)
+    expect(sourceExists('src/pages/ingredient-creation/list.vue')).toBe(false)
+    expect(sourceExists('src/pages/ingredient-creation/detail.vue')).toBe(false)
+    expect(sourceExists('src/pages/ingredient-creation/draft.vue')).toBe(false)
+    expect(sourceExists('src/api/ingredient-creation.ts')).toBe(false)
+    expect(sourceExists('src/api/ingredient-creation.spec.ts')).toBe(false)
   })
 })

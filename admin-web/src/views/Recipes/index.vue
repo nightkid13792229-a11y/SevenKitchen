@@ -118,16 +118,33 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="生命阶段" width="150">
+        <el-table-column label="生命阶段" min-width="300">
           <template #default="{ row }">
-            <el-tag
-              v-for="stage in row.applicableLifeStages"
-              :key="stage"
-              size="small"
-              class="tag-item"
-            >
-              {{ getLifeStageLabel(stage) }}
-            </el-tag>
+            <div v-if="getConfiguredSeriesStages(row).length" class="series-stage-tags">
+              <el-tag
+                v-for="stage in getConfiguredSeriesStages(row)"
+                :key="stage.lifeStage"
+                :type="getSeriesStageStatusType(stage.status)"
+                size="small"
+                :class="[
+                  'series-stage-tag',
+                  { 'is-clickable': Boolean(stage.recipeVersionId) },
+                ]"
+                @click.stop="handleStageView(stage)"
+              >
+                {{ stage.label }}：{{ getSeriesStageStatusLabel(stage.status) }}
+              </el-tag>
+            </div>
+            <template v-else>
+              <el-tag
+                v-for="stage in row.applicableLifeStages"
+                :key="stage"
+                size="small"
+                class="tag-item"
+              >
+                {{ getLifeStageLabel(stage) }}
+              </el-tag>
+            </template>
           </template>
         </el-table-column>
 
@@ -172,6 +189,7 @@
               link
               type="primary"
               size="small"
+              :disabled="!getOperableRecipeId(row)"
               @click="handleView(row)"
             >
               查看
@@ -181,6 +199,7 @@
               link
               type="success"
               size="small"
+              :disabled="!getPublishTarget(row)"
               @click="handlePublish(row.pendingDraftVersion || row)"
             >
               发布
@@ -190,6 +209,7 @@
               link
               type="warning"
               size="small"
+              :disabled="!getOperableRecipeId(row)"
               @click="handleUnpublish(row)"
             >
               下架
@@ -198,6 +218,7 @@
               link
               type="info"
               size="small"
+              :disabled="!getOperableRecipeId(row)"
               @click="handleDuplicate(row)"
             >
               复制
@@ -206,6 +227,7 @@
               link
               type="danger"
               size="small"
+              :disabled="!getOperableRecipeId(row)"
               @click="handleDelete(row)"
             >
               删除
@@ -240,6 +262,8 @@ import {
   RecipeStatus,
   type RecipeSummary,
   type RecipeQuery,
+  type RecipeVersionSummary,
+  type RecipeSeriesStageSummary,
 } from '@/types/recipe';
 
 // Enum option type
@@ -286,6 +310,13 @@ const RecipeStatusTagTypes: Record<RecipeStatus, string> = {
   [RecipeStatus.PRIVATE_CUSTOM]: 'warning',
 };
 
+const SeriesStageStatusLabels: Record<string, string> = {
+  NOT_DESIGNED: '未设计',
+  DRAFT: '草稿',
+  PUBLIC: '已发布',
+  PRIVATE_CUSTOM: '私密定制',
+};
+
 // Helper functions to get labels from dynamic metadata
 const getLifeStageLabel = (value: string) => {
   const option = lifeStageOptions.value.find(opt => opt.value === value);
@@ -312,7 +343,35 @@ const getRecipeSeriesStatusType = (row: RecipeSummary) => {
 };
 
 const getRecipeSeriesDisplayName = (row: RecipeSummary) => {
-  return row.currentPublicVersion?.name || row.name;
+  return row.seriesName || row.name;
+};
+
+const getSeriesStageStatusLabel = (status: string) => {
+  return SeriesStageStatusLabels[status] || status;
+};
+
+const getSeriesStageStatusType = (status: string) => {
+  if (status === RecipeStatus.PUBLIC) return 'success';
+  if (status === RecipeStatus.DRAFT) return 'warning';
+  if (status === RecipeStatus.PRIVATE_CUSTOM) return 'danger';
+  return 'info';
+};
+
+const getConfiguredSeriesStages = (row: RecipeSummary) => {
+  return (row.seriesStages || []).filter((stage) => stage.recipeVersionId);
+};
+
+const getOperableRecipeId = (row: Pick<RecipeSummary, 'id' | 'seriesId'>) => {
+  if (!row.id || row.id === row.seriesId) return undefined;
+  return row.id;
+};
+
+const getPublishTarget = (
+  row: RecipeSummary,
+): RecipeVersionSummary | RecipeSummary | undefined => {
+  const target = row.pendingDraftVersion || row;
+  if (!target?.id || target.id === row.seriesId) return undefined;
+  return target;
 };
 
 // Methods
@@ -369,23 +428,44 @@ const handleCreate = () => {
 };
 
 const handleView = (row: RecipeSummary) => {
+  const id = getOperableRecipeId(row);
+  if (!id) return;
+
   router.push({
-    path: `/recipes/${row.id}`,
+    path: `/recipes/${id}`,
     query: { mode: 'view' }
   });
 };
 
+const handleStageView = (stage: RecipeSeriesStageSummary) => {
+  if (!stage.recipeVersionId) {
+    ElMessage.info('该生命阶段还没有配置食谱');
+    return;
+  }
+
+  router.push({
+    path: `/recipes/${stage.recipeVersionId}`,
+    query: { mode: 'view' },
+  });
+};
+
 const handleEdit = (row: RecipeSummary) => {
-  router.push(`/recipes/${row.id}/edit`);
+  const id = getOperableRecipeId(row);
+  if (!id) return;
+
+  router.push(`/recipes/${id}/edit`);
 };
 
 const handlePublish = async (row: RecipeSummary | NonNullable<RecipeSummary['pendingDraftVersion']>) => {
+  const id = row.id;
+  if (!id) return;
+
   try {
     await ElMessageBox.confirm('确认发布该食谱？', '提示', {
       type: 'warning',
     });
 
-    await recipeApi.publish(row.id);
+    await recipeApi.publish(id);
     ElMessage.success('发布成功');
     loadRecipes();
   } catch (error: any) {
@@ -396,12 +476,15 @@ const handlePublish = async (row: RecipeSummary | NonNullable<RecipeSummary['pen
 };
 
 const handleUnpublish = async (row: RecipeSummary) => {
+  const id = getOperableRecipeId(row);
+  if (!id) return;
+
   try {
     await ElMessageBox.confirm('确认下架该食谱？', '提示', {
       type: 'warning',
     });
 
-    await recipeApi.unpublish(row.id);
+    await recipeApi.unpublish(id);
     ElMessage.success('下架成功');
     loadRecipes();
   } catch (error: any) {
@@ -412,12 +495,15 @@ const handleUnpublish = async (row: RecipeSummary) => {
 };
 
 const handleDuplicate = async (row: RecipeSummary) => {
+  const id = getOperableRecipeId(row);
+  if (!id) return;
+
   try {
     await ElMessageBox.confirm('确认复制该食谱？', '提示', {
       type: 'info',
     });
 
-    await recipeApi.duplicate(row.id);
+    await recipeApi.duplicate(id);
     ElMessage.success('复制成功');
     loadRecipes();
   } catch (error: any) {
@@ -428,6 +514,9 @@ const handleDuplicate = async (row: RecipeSummary) => {
 };
 
 const handleDelete = async (row: RecipeSummary) => {
+  const id = getOperableRecipeId(row);
+  if (!id) return;
+
   try {
     await ElMessageBox.confirm('确认删除该草稿？删除后无法恢复！', '警告', {
       type: 'warning',
@@ -435,7 +524,7 @@ const handleDelete = async (row: RecipeSummary) => {
       cancelButtonText: '取消',
     });
 
-    await recipeApi.delete(row.id);
+    await recipeApi.delete(id);
     ElMessage.success('删除成功');
     loadRecipes();
   } catch (error: any) {
@@ -531,6 +620,24 @@ onMounted(() => {
 .tag-item {
   margin-right: 4px;
   margin-bottom: 4px;
+}
+
+.series-stage-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.series-stage-tag {
+  margin: 0;
+}
+
+.series-stage-tag.is-clickable {
+  cursor: pointer;
+}
+
+.series-stage-tag.is-clickable:hover {
+  filter: brightness(0.96);
 }
 
 .stats {

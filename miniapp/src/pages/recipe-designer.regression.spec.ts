@@ -63,74 +63,90 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/supplement-library')
   })
 
-  it('lets staff delete unpublished drafts from the draft list with confirmation', () => {
-    expect(listSource).toContain('deleteDraft')
-    expect(listSource).toContain('recipeDesignerApi.deleteDraft')
-    expect(listSource).toContain('canDeleteDraft')
-    expect(listSource).toContain('uni.showModal')
-    expect(listSource).toContain('@tap.stop')
-    expect(listSource).toContain('PUBLISHED')
+  it('loads recipe designer series cards instead of standalone draft cards', () => {
+    expect(apiSource).toContain('RecipeDesignerSeriesCard')
+    expect(apiSource).toContain('RecipeDesignerSeriesStage')
+    expect(apiSource).toContain('RecipeSeriesStageStatus')
+    expect(listSource).toContain('recipeDesignerApi.listSeries')
+    expect(listSource).toContain('series.value')
+    expect(listSource).toContain('series-card')
+    expect(listSource).toContain('publishedStageCount')
+    expect(listSource).toContain('seriesStageStatusLabels')
+    expect(listSource).toContain('NOT_DESIGNED')
+    expect(listSource).toContain('NEEDS_CHANGES')
+    expect(listSource).not.toContain('cover')
+    expect(listSource).not.toContain('系列设置')
+    expect(listSource).not.toContain('进入编辑')
+    expect(listSource).not.toContain('修订')
   })
 
-  it('lets users rename saved recipe drafts directly from the draft list card', () => {
-    expect(listSource).toContain('draft-title-row')
-    expect(listSource).toContain('rename-draft-btn')
-    expect(listSource).toContain('@tap.stop="renameDraft(draft)"')
-    expect(listSource).toContain('function renameDraft')
-    expect(listSource).toContain("title: '重命名食谱'")
+  it('opens or creates a series stage draft from a stage row', () => {
+    expect(listSource).toContain('openSeriesStage')
+    expect(listSource).toContain('@tap.stop="openSeriesStage(seriesItem, stage)"')
+    expect(listSource).toContain('stage.draftId')
+    expect(listSource).toContain('recipeDesignerApi.createSeriesStageDraft')
+    expect(listSource).toContain('{ scenario: stage.scenario }')
+    expect(listSource).toContain('/pages/recipe-designer/editor?id=')
+    expect(listSource).toContain("title: '进入阶段失败'")
+  })
+
+  it('lets users rename and safely delete recipe series from overflow actions only', () => {
+    expect(listSource).toContain('series-actions')
+    expect(listSource).toContain('series-more-btn')
+    expect(listSource).toContain('openSeriesActionSheet(seriesItem)')
+    expect(listSource).toContain('uni.showActionSheet')
+    expect(listSource).toContain("itemList: ['重命名', '删除']")
+    expect(listSource).toContain('重命名')
+    expect(listSource).toContain('删除')
+    expect(listSource).toContain('function renameSeries')
+    expect(listSource).toContain('recipeDesignerApi.renameSeries')
+    expect(listSource).toContain('function deleteSeries')
+    expect(listSource).toContain('recipeDesignerApi.deleteSeries')
+    expect(listSource).toContain('confirmName')
+    expect(listSource).toContain('confirmUserVisibleRemoval')
     expect(listSource).toContain('editable: true')
-    expect(listSource).toContain("placeholderText: '请输入食谱名称'")
-    expect(listSource).toContain('recipeDesignerApi.updateDraft')
-    expect(listSource).toContain('name: nextName')
-    expect(listSource).toContain('drafts.value = drafts.value.map')
+    expect(listSource).not.toContain('@tap.stop="renameSeries(seriesItem)"')
+    expect(listSource).not.toContain('@tap.stop="deleteSeries(seriesItem)"')
+    expect(listSource).not.toContain('series-delete-btn')
+    expect(listSource).not.toContain('recipeDesignerApi.deleteDraft')
+    expect(listSource).not.toContain('recipeDesignerApi.updateDraft')
+    expect(listSource).not.toContain('revision-draft-btn')
   })
 
-  it('keeps published recipe designer drafts read-only instead of exposing broken edit controls', () => {
-    expect(apiSource).toContain('createRevisionDraft')
-    expect(listSource).toContain('canEditDraft')
-    expect(listSource).toContain('v-if="canEditDraft(draft)"')
-    expect(listSource).toContain('revision-draft-btn')
-    expect(listSource).toContain('@tap.stop="reviseDraft(draft)"')
-    expect(listSource).toContain('function reviseDraft')
-    expect(listSource).toContain('recipeDesignerApi.createRevisionDraft')
-    expect(listSource).toContain('@tap="openDraft(draft)"')
+  it('creates a new series and navigates to the backend initial draft when available', () => {
+    expect(listSource).toContain('createSeries')
+    expect(listSource).toContain('recipeDesignerApi.createSeries')
+    expect(listSource).toContain('extractInitialDraftId')
+    expect(listSource).toContain("name: '未命名食谱'")
+    expect(listSource).not.toContain('recipeDesignerApi.createDraft')
+  })
+
+  it('keeps published recipe designer stages read-only instead of exposing broken edit controls', () => {
     expect(editorSource).toContain('isEditorReadOnly')
     expect(editorSource).toContain('readonly-banner')
     expect(editorSource).toContain('createRevisionFromPublishedDraft')
     expect(editorSource).toContain('@tap.stop="createRevisionFromPublishedDraft"')
+    expect(editorSource).toContain('已发布版本只读')
+    expect(editorSource).toContain('点击编辑后进入草稿，不影响当前上架版本。')
+    expect(editorSource).toContain("{{ creatingRevision ? '进入中' : '编辑' }}")
+    expect(editorSource).toContain("title: '进入编辑失败'")
     expect(editorSource).toContain(':disabled="isEditorReadOnly || reorderMode"')
     expect(editorSource).toContain('v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack"')
     expect(editorSource).toContain('v-if="!loading && !reorderMode && !isEditorReadOnly" class="ingredient-list-actions"')
     expect(editorSource).toContain('function ensureDraftEditable')
-    expect(editorSource).toContain("title: '已发布食谱不可直接编辑'")
     expect(editorSource).toContain("status === 'PUBLISHED'")
   })
 
-  it('treats revision drafts as the current workbench card instead of showing duplicate versions', () => {
-    expect(listSource).toContain('function isRevisionDraft')
-    expect(listSource).toContain('getDraftStatusLabel(draft)')
-    expect(listSource).toContain("return '修订中'")
-    expect(listSource).toContain("return '无改动'")
-    expect(listSource).toContain("revisionChangeState?: 'NOT_REVISION' | 'UNCHANGED' | 'CHANGED'")
-    expect(listSource).toContain("draft.revisionChangeState === 'UNCHANGED'")
-    expect(listSource).toContain("return `已发布 v${draft.publishedRecipeVersion}`")
-    expect(listSource).toContain('version-history-btn')
-    expect(listSource).toContain('historyDraft')
-    expect(listSource).toContain('function openVersionHistory')
-    expect(listSource).toContain('function openHistoryDraft')
-    expect(listSource).toContain('await loadDrafts()')
-    expect(listSource).not.toContain('drafts.value = drafts.value.filter((candidate) => candidate.id !== draft.id)')
-  })
-
-  it('keeps the rename button inline immediately after the draft name', () => {
-    const titleRowMarkup = listSource.match(/<view class="draft-title-row">[\s\S]*?<\/view>/)?.[0] || ''
-    const draftNameStyle = listSource.match(/\.draft-name \{[\s\S]*?\n\}/)?.[0] || ''
-
-    expect(titleRowMarkup).toMatch(
-      /<text class="draft-name">[\s\S]*?<\/text>\s*<button[\s\S]*?class="rename-draft-btn"/,
-    )
-    expect(draftNameStyle).toContain('flex: 0 1 auto')
-    expect(draftNameStyle).not.toContain('flex: 1;')
+  it('shows compact series and stage context in the editor when present', () => {
+    expect(editorSource).toContain('draftSeriesId')
+    expect(editorSource).toContain('draftSeriesLifeStage')
+    expect(editorSource).toContain('availableSeriesStages')
+    expect(editorSource).toContain('seriesId')
+    expect(editorSource).toContain('seriesLifeStage')
+    expect(editorSource).toContain('seriesStages')
+    expect(editorSource).toContain('series-context-block')
+    expect(editorSource).toContain('draftSeriesStageLabel')
+    expect(editorSource).toContain('assessmentStandardContextLabel')
   })
 
   it('starts unnamed draft creation from life stage selection before navigating to the editor', () => {
@@ -159,7 +175,7 @@ describe('recipe designer mobile entry', () => {
   it('refreshes the draft list when returning from the editor page', () => {
     expect(listSource).toContain("import { onShow } from '@dcloudio/uni-app'")
     expect(listSource).toContain('onShow(() => {')
-    expect(listSource).toContain('loadDrafts()')
+    expect(listSource).toContain('loadSeries()')
     expect(listSource).not.toContain('onMounted(() => {')
   })
 
@@ -414,8 +430,8 @@ describe('recipe designer editor guardrails', () => {
   })
 
   it('reads persisted backend draft fields without changing the write payload contract', () => {
-    expect(listSource).toContain('fediafDogScenario')
-    expect(listSource).toContain('energyDensityKcalPerKg')
+    expect(listSource).toContain('RecipeDesignerSeriesCard')
+    expect(listSource).toContain('RecipeDesignerSeriesStage')
     expect(editorSource).toContain('fediafDogScenario')
     expect(editorSource).toContain('getDraftScenario')
   })

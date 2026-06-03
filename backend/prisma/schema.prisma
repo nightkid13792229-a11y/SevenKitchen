@@ -324,7 +324,10 @@ model Recipe {
   designSource           String?                     @map("design_source")
   customOrderId          String?                     @map("custom_order_id")
   isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
+  seriesId               String?                     @map("series_id")
+  seriesLifeStage        String?                     @map("series_life_stage")
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
+  series                 RecipeSeries?               @relation(fields: [seriesId], references: [id])
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
   reviews                RecipeReview[]
@@ -335,7 +338,26 @@ model Recipe {
   @@index([status])
   @@index([createdAt])
   @@index([isCustomRecipe])
+  @@index([seriesId])
+  @@index([seriesId, seriesLifeStage, status])
   @@map("recipe")
+}
+
+model RecipeSeries {
+  id        String             @id @default(uuid()) @map("id")
+  name      String             @map("name") @db.VarChar(200)
+  status    RecipeSeriesStatus @default(ACTIVE) @map("status")
+  deletedAt DateTime?          @map("deleted_at")
+  deletedBy String?            @map("deleted_by")
+  createdBy String?            @map("created_by")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  recipes   Recipe[]
+  designs   DesignRecipe[]
+
+  @@index([status])
+  @@index([updatedAt])
+  @@map("recipe_series")
 }
 
 model RecipeItem {
@@ -1577,6 +1599,11 @@ enum RecipeStatus {
   PRIVATE_CUSTOM
 }
 
+enum RecipeSeriesStatus {
+  ACTIVE
+  DELETED
+}
+
 enum ProductionBatchStatus {
   PLANNED
   IN_PRODUCTION
@@ -2102,11 +2129,14 @@ model DesignRecipe {
   publishedRecipeVersion Int?                          @map("published_recipe_version")
   revisionOfDesignRecipeId String?                     @map("revision_of_design_recipe_id")
   revisionBaseRecipeId   String?                       @map("revision_base_recipe_id")
+  seriesId               String?                       @map("series_id")
+  seriesLifeStage        String?                       @map("series_life_stage")
   createdAt              DateTime                      @default(now()) @map("created_at")
   updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
   aiGenerationLog        DesignRecipeAIGenerationLog?
   publishSnapshots       DesignRecipePublishSnapshot[]
+  series                 RecipeSeries?                 @relation(fields: [seriesId], references: [id])
 
   @@unique([name, version])
   @@index([status])
@@ -2115,6 +2145,8 @@ model DesignRecipe {
   @@index([fediafDogScenario])
   @@index([revisionOfDesignRecipeId])
   @@index([revisionBaseRecipeId])
+  @@index([seriesId])
+  @@index([seriesId, seriesLifeStage])
   @@map("design_recipe")
 }
 

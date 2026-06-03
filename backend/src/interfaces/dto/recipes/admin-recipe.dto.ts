@@ -285,9 +285,23 @@ export interface RecipeVersionSummaryDto {
   updatedAt: string;
 }
 
+export interface RecipeSeriesStageSummaryDto {
+  lifeStage: string;
+  label: string;
+  status: 'NOT_DESIGNED' | 'DRAFT' | 'PUBLIC' | 'PRIVATE_CUSTOM';
+  recipeVersionId?: string;
+  recipeId?: string;
+  version?: number;
+  updatedAt?: string;
+}
+
 export interface RecipeSummaryResponseDto {
   id: string;
   recipeId?: string;
+  seriesId?: string;
+  seriesName?: string;
+  seriesLifeStage?: string;
+  seriesLifeStageLabel?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -306,6 +320,7 @@ export interface RecipeSummaryResponseDto {
   currentPublicVersion?: RecipeVersionSummaryDto;
   pendingDraftVersion?: RecipeVersionSummaryDto;
   versionHistory?: RecipeVersionSummaryDto[];
+  seriesStages?: RecipeSeriesStageSummaryDto[];
 }
 
 /**

@@ -163,9 +163,23 @@ export interface RecipeVersionSummary {
   updatedAt: string;
 }
 
+export interface RecipeSeriesStageSummary {
+  lifeStage: string;
+  label: string;
+  status: 'NOT_DESIGNED' | RecipeStatus;
+  recipeVersionId?: string;
+  recipeId?: string;
+  version?: number;
+  updatedAt?: string;
+}
+
 export interface RecipeSummary {
   id: string;
   recipeId?: string;
+  seriesId?: string;
+  seriesName?: string;
+  seriesLifeStage?: string;
+  seriesLifeStageLabel?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -184,6 +198,7 @@ export interface RecipeSummary {
   currentPublicVersion?: RecipeVersionSummary;
   pendingDraftVersion?: RecipeVersionSummary;
   versionHistory?: RecipeVersionSummary[];
+  seriesStages?: RecipeSeriesStageSummary[];
 }
 
 export interface RecipeDetail extends RecipeSummary {

@@ -115,6 +115,53 @@ describe('recipeDesignerApi', () => {
     })
   })
 
+  it('uses recipe designer series endpoint paths', () => {
+    const seriesId = 'series-1'
+    const createPayload = {
+      name: '金毛全阶段配方',
+      scenario: 'ADULT_MER_110',
+    } satisfies Parameters<typeof recipeDesignerApi.createSeries>[0]
+    const renamePayload = { name: '金毛五阶段配方' }
+    const deletePayload = {
+      confirmName: '金毛五阶段配方',
+      confirmUserVisibleRemoval: true,
+    } satisfies Parameters<typeof recipeDesignerApi.deleteSeries>[1]
+    const stagePayload = {
+      scenario: 'EARLY_GROWTH_REPRODUCTION',
+    } satisfies Parameters<typeof recipeDesignerApi.createSeriesStageDraft>[1]
+
+    recipeDesignerApi.listSeries()
+    recipeDesignerApi.createSeries(createPayload)
+    recipeDesignerApi.renameSeries(seriesId, renamePayload)
+    recipeDesignerApi.deleteSeries(seriesId, deletePayload)
+    recipeDesignerApi.createSeriesStageDraft(seriesId, stagePayload)
+
+    expect(mockedRequest).toHaveBeenNthCalledWith(1, {
+      url: '/recipe-designer/series',
+      method: 'GET',
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, {
+      url: '/recipe-designer/series',
+      method: 'POST',
+      data: createPayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(3, {
+      url: `/recipe-designer/series/${seriesId}`,
+      method: 'PATCH',
+      data: renamePayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(4, {
+      url: `/recipe-designer/series/${seriesId}`,
+      method: 'DELETE',
+      data: deletePayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(5, {
+      url: `/recipe-designer/series/${seriesId}/stage-drafts`,
+      method: 'POST',
+      data: stagePayload,
+    })
+  })
+
   it('exports the supported FEDIAF dog scenarios without legacy scenario aliases', () => {
     expect(Object.keys(FEDIAF_DOG_SCENARIO_LABELS)).toEqual([
       'EARLY_GROWTH_REPRODUCTION',

@@ -1,5 +1,9 @@
 import { RecipeService } from 'src/application/recipe/recipe.service';
 import { RecipeStatus } from 'src/domain/recipe/enums';
+import {
+  ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  SERIES_LIFE_STAGE_LABELS,
+} from 'src/domain/recipe/recipe-series';
 
 describe('RecipeService', () => {
   const mockPrismaService = {
@@ -28,7 +32,7 @@ describe('RecipeService', () => {
   let service: RecipeService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     service = new RecipeService(mockPrismaService as any);
     mockPrismaService.recipeHealthTagAssignment.createMany.mockResolvedValue({
       count: 0,
@@ -42,6 +46,278 @@ describe('RecipeService', () => {
   });
 
   describe('getAllRecipes', () => {
+    it('selects the latest same-status series representative and stage by recipe version, not updatedAt', async () => {
+      const baseRecipe = {
+        recipeId: 'adult-recipe-id',
+        name: '成犬配方',
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        seriesId: 'series-version-order',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: { id: 'series-version-order', name: '版本选择系列' },
+        createdAt: new Date('2026-05-27T08:58:00.000Z'),
+      };
+      const touchedOlderVersion = {
+        ...baseRecipe,
+        id: 'adult-public-v1-row',
+        version: 1,
+        updatedAt: new Date('2026-05-29T08:58:00.000Z'),
+      };
+      const latestVersion = {
+        ...baseRecipe,
+        id: 'adult-public-v2-row',
+        version: 2,
+        updatedAt: new Date('2026-05-28T08:58:00.000Z'),
+      };
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        touchedOlderVersion,
+        latestVersion,
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      const seriesRow = result.data[0];
+      expect(seriesRow).toEqual(
+        expect.objectContaining({
+          id: 'adult-public-v2-row',
+          version: 2,
+          currentPublicVersion: expect.objectContaining({
+            id: 'adult-public-v2-row',
+            version: 2,
+          }),
+        }),
+      );
+      expect(
+        seriesRow.seriesStages?.find(
+          (stage) => stage.lifeStage === 'HIGH_ACTIVITY_ADULT',
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          status: 'PUBLIC',
+          recipeId: 'adult-recipe-id',
+          version: 2,
+          updatedAt: '2026-05-28T08:58:00.000Z',
+        }),
+      );
+    });
+
+    it('uses filtered rows only to choose visible series and builds series summaries from complete series members', async () => {
+      const baseRecipe = {
+        version: 1,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        seriesId: 'series-filtered',
+        series: { id: 'series-filtered', name: '筛选完整系列' },
+        createdAt: new Date('2026-05-27T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-27T08:58:00.000Z'),
+      };
+      const puppyDraft = {
+        ...baseRecipe,
+        id: 'puppy-draft-row',
+        recipeId: 'puppy-recipe-id',
+        name: '幼犬草稿配方',
+        status: RecipeStatus.DRAFT,
+        applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+        updatedAt: new Date('2026-05-29T08:58:00.000Z'),
+      };
+      const adultPublic = {
+        ...baseRecipe,
+        id: 'adult-public-row',
+        recipeId: 'adult-recipe-id',
+        name: '成犬公开配方',
+        status: RecipeStatus.PUBLIC,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        updatedAt: new Date('2026-05-28T08:58:00.000Z'),
+      };
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([puppyDraft])
+        .mockResolvedValueOnce([puppyDraft, adultPublic]);
+
+      const result = await service.getAllRecipes({
+        status: RecipeStatus.DRAFT,
+        page: 1,
+        pageSize: 20,
+      });
+
+      expect(result.total).toBe(1);
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledTimes(2);
+      expect(mockPrismaService.recipe.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: {
+            seriesId: {
+              in: ['series-filtered'],
+            },
+          },
+        }),
+      );
+      const seriesRow = result.data[0];
+      expect(seriesRow.currentPublicVersion).toEqual(
+        expect.objectContaining({
+          id: 'adult-public-row',
+          version: 1,
+        }),
+      );
+      expect(
+        seriesRow.seriesStages?.find(
+          (stage) => stage.lifeStage === 'HIGH_ACTIVITY_ADULT',
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          status: 'PUBLIC',
+          recipeId: 'adult-recipe-id',
+          version: 1,
+        }),
+      );
+    });
+
+    it('groups admin recipes by series with five life-stage status summaries while preserving legacy recipe version rows', async () => {
+      const baseRecipe = {
+        version: 1,
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        createdAt: new Date('2026-05-27T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-27T08:58:00.000Z'),
+      };
+      const publicAdult = {
+        ...baseRecipe,
+        id: 'adult-public-row',
+        recipeId: 'adult-recipe-id',
+        name: '成犬配方',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: { id: 'series-1', name: '鸡肉全阶段系列' },
+      };
+      const puppyDraft = {
+        ...baseRecipe,
+        id: 'puppy-draft-row',
+        recipeId: 'puppy-recipe-id',
+        name: '幼犬配方',
+        status: RecipeStatus.DRAFT,
+        applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        seriesId: 'series-1',
+        seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+        series: { id: 'series-1', name: '鸡肉全阶段系列' },
+        createdAt: new Date('2026-05-28T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-28T09:00:00.000Z'),
+      };
+      const legacyPublic = {
+        ...baseRecipe,
+        id: 'legacy-public-row',
+        recipeId: 'legacy-recipe-id',
+        name: '经典配方',
+        seriesId: null,
+        seriesLifeStage: null,
+        series: null,
+        createdAt: new Date('2026-05-26T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-26T08:58:00.000Z'),
+      };
+      const legacyDraft = {
+        ...legacyPublic,
+        id: 'legacy-draft-row',
+        version: 2,
+        status: RecipeStatus.DRAFT,
+        createdAt: new Date('2026-05-29T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-29T08:58:00.000Z'),
+      };
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        legacyDraft,
+        puppyDraft,
+        publicAdult,
+        legacyPublic,
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      expect(result.total).toBe(2);
+      const seriesRow = result.data.find((row) => row.seriesId === 'series-1');
+      const legacyRow = result.data.find(
+        (row) => row.recipeId === 'legacy-recipe-id',
+      );
+
+      expect(seriesRow).toEqual(
+        expect.objectContaining({
+          id: 'puppy-draft-row',
+          recipeId: 'puppy-recipe-id',
+          seriesId: 'series-1',
+          seriesName: '鸡肉全阶段系列',
+          name: '幼犬配方',
+          status: RecipeStatus.DRAFT,
+        }),
+      );
+      expect(seriesRow?.seriesStages).toEqual(
+        ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
+          if (lifeStage === 'PUPPY_14_WEEKS_PLUS') {
+            return {
+              lifeStage,
+              label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+              status: 'DRAFT',
+              recipeVersionId: 'puppy-draft-row',
+              recipeId: 'puppy-recipe-id',
+              version: 1,
+              updatedAt: '2026-05-28T09:00:00.000Z',
+            };
+          }
+          if (lifeStage === 'HIGH_ACTIVITY_ADULT') {
+            return {
+              lifeStage,
+              label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+              status: 'PUBLIC',
+              recipeVersionId: 'adult-public-row',
+              recipeId: 'adult-recipe-id',
+              version: 1,
+              updatedAt: '2026-05-27T08:58:00.000Z',
+            };
+          }
+          return {
+            lifeStage,
+            label: SERIES_LIFE_STAGE_LABELS[lifeStage],
+            status: 'NOT_DESIGNED',
+          };
+        }),
+      );
+      expect(legacyRow).toEqual(
+        expect.objectContaining({
+          id: 'legacy-draft-row',
+          recipeId: 'legacy-recipe-id',
+          seriesId: undefined,
+          currentPublicVersion: expect.objectContaining({
+            id: 'legacy-public-row',
+            version: 1,
+          }),
+          pendingDraftVersion: expect.objectContaining({
+            id: 'legacy-draft-row',
+            version: 2,
+          }),
+        }),
+      );
+      expect(legacyRow?.seriesStages).toBeUndefined();
+    });
+
     it('groups recipe versions into one admin list row with current public and pending draft summaries', async () => {
       const publicVersion = {
         id: 'recipe-row-v1',
@@ -132,6 +408,93 @@ describe('RecipeService', () => {
           pendingDraftVersion: undefined,
         }),
       ]);
+    });
+  });
+
+  describe('getRecipeById', () => {
+    it('returns series context and switchable life-stage recipe versions for series recipes', async () => {
+      const baseRecipe = {
+        version: 1,
+        energyDensityKcalPerKg: 1373,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2021',
+        nutritionDetailedData: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        items: [],
+        seriesId: 'series-1',
+        series: { id: 'series-1', name: '鸡肉全阶段系列' },
+        createdAt: new Date('2026-05-27T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-27T08:58:00.000Z'),
+      };
+      const adultPublic = {
+        ...baseRecipe,
+        id: 'adult-public-row',
+        recipeId: 'adult-recipe-id',
+        name: '成犬配方',
+        status: RecipeStatus.PUBLIC,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      };
+      const puppyDraft = {
+        ...baseRecipe,
+        id: 'puppy-draft-row',
+        recipeId: 'puppy-recipe-id',
+        name: '幼犬配方',
+        status: RecipeStatus.DRAFT,
+        applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+        updatedAt: new Date('2026-05-28T09:00:00.000Z'),
+      };
+
+      mockPrismaService.recipe.findUnique.mockResolvedValue(adultPublic);
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        adultPublic,
+        puppyDraft,
+      ]);
+
+      const result = await service.getRecipeById('adult-public-row');
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { seriesId: 'series-1' },
+        }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: 'adult-public-row',
+          seriesId: 'series-1',
+          seriesName: '鸡肉全阶段系列',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          seriesLifeStageLabel: SERIES_LIFE_STAGE_LABELS.HIGH_ACTIVITY_ADULT,
+        }),
+      );
+      expect(result.seriesStages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lifeStage: 'HIGH_ACTIVITY_ADULT',
+            status: 'PUBLIC',
+            recipeVersionId: 'adult-public-row',
+            recipeId: 'adult-recipe-id',
+          }),
+          expect.objectContaining({
+            lifeStage: 'PUPPY_14_WEEKS_PLUS',
+            status: 'DRAFT',
+            recipeVersionId: 'puppy-draft-row',
+            recipeId: 'puppy-recipe-id',
+          }),
+        ]),
+      );
     });
   });
 

@@ -32,6 +32,7 @@ import { request } from '../../utils/api'
 
 interface Recipe {
   id: string
+  seriesId?: string
   name: string
   energyDensityKcalPerKg?: number
 }
@@ -166,5 +167,4 @@ function goToNetworkSettings() {
   font-size: 32rpx;
 }
 </style>
-
 

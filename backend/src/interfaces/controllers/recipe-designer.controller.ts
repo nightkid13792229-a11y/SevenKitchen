@@ -30,8 +30,12 @@ import {
   AddRecipeDesignItemDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
+  CreateRecipeSeriesDto,
+  CreateRecipeSeriesStageDraftDto,
+  DeleteRecipeSeriesDto,
   ListRecipeDesignerIngredientOptionsDto,
   PublishRecipeDesignDraftDto,
+  RenameRecipeSeriesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
@@ -151,6 +155,73 @@ export class RecipeDesignerController {
       imageUrl: upload.url,
       imageKey: upload.key,
     });
+  }
+
+  @Get('series')
+  @ApiOperation({ summary: 'List recipe design series workbench cards' })
+  async listSeries(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.listSeries(user.userId);
+    return ApiResponseDto.success(series);
+  }
+
+  @Post('series')
+  @ApiOperation({ summary: 'Create a recipe design series' })
+  async createSeries(
+    @Body() dto: CreateRecipeSeriesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.createSeries(
+      dto,
+      user.userId,
+    );
+    return ApiResponseDto.success(series);
+  }
+
+  @Patch('series/:seriesId')
+  @ApiOperation({ summary: 'Rename a recipe design series' })
+  async renameSeries(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: RenameRecipeSeriesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.renameSeries(
+      seriesId,
+      dto,
+      user.userId,
+    );
+    return ApiResponseDto.success(series);
+  }
+
+  @Delete('series/:seriesId')
+  @ApiOperation({ summary: 'Delete a recipe design series safely' })
+  async deleteSeries(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: DeleteRecipeSeriesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.deleteSeries(
+      seriesId,
+      dto,
+      user.userId,
+    );
+    return ApiResponseDto.success(series);
+  }
+
+  @Post('series/:seriesId/stage-drafts')
+  @ApiOperation({ summary: 'Create or reuse a recipe series stage draft' })
+  async createSeriesStageDraft(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: CreateRecipeSeriesStageDraftDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.createSeriesStageDraft(
+      seriesId,
+      dto,
+      user.userId,
+    );
+    return ApiResponseDto.success(draft);
   }
 
   @Get('drafts')

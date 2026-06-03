@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
 
 const DEFAULT_API_PROXY_TARGET = 'http://localhost:3011'
@@ -17,7 +19,17 @@ const apiProxyTarget = resolveApiProxyTarget(process.env.VITE_API_BASE_URL)
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    Components({
+      dts: false,
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: false
+        })
+      ]
+    })
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

@@ -6,6 +6,46 @@
       </template>
     </el-page-header>
 
+    <el-card
+      v-if="isSeriesRecipe"
+      class="series-context-card"
+      shadow="never"
+    >
+      <div class="series-context-main">
+        <div class="series-context-title">
+          <span class="series-context-label">食谱系列</span>
+          <strong>{{ currentRecipe?.seriesName || form.name }}</strong>
+        </div>
+        <div class="series-context-tags">
+          <el-tag type="primary">{{ currentSeriesStageLabel }}</el-tag>
+          <el-tag :type="getRecipeStatusTagType(currentRecipe?.status || form.status)">
+            {{ getRecipeStatusLabel(currentRecipe?.status || form.status) }}
+          </el-tag>
+        </div>
+      </div>
+      <el-select
+        :model-value="recipeId || ''"
+        placeholder="切换生命阶段"
+        class="series-stage-select"
+        @change="handleSeriesStageChange"
+      >
+        <el-option
+          v-for="stage in configuredSeriesStages"
+          :key="stage.lifeStage"
+          :label="`${stage.label}：${getSeriesStageStatusLabel(stage.status)}`"
+          :value="stage.recipeVersionId || ''"
+          :disabled="!stage.recipeVersionId"
+        >
+          <div class="series-stage-option">
+            <span>{{ stage.label }}</span>
+            <el-tag size="small" :type="getSeriesStageStatusTagType(stage.status)">
+              {{ getSeriesStageStatusLabel(stage.status) }}
+            </el-tag>
+          </div>
+        </el-option>
+      </el-select>
+    </el-card>
+
     <el-card v-loading="loading" class="form-card">
       <el-form
         ref="formRef"
@@ -442,7 +482,11 @@
           <h3 class="section-title">目标受众</h3>
 
           <el-form-item label="适用生命阶段">
-            <el-checkbox-group v-model="form.applicableLifeStages">
+            <div v-if="isSeriesRecipe" class="derived-life-stage">
+              <el-tag type="primary">{{ currentSeriesStageLabel }}</el-tag>
+              <span>由食谱系列当前阶段决定</span>
+            </div>
+            <el-checkbox-group v-else v-model="form.applicableLifeStages">
               <el-checkbox
                 v-for="option in lifeStageOptions"
                 :key="option.value"
@@ -877,6 +921,8 @@ import {
   LifeStage,
   type RecipeForm,
   type RecipeItem,
+  type RecipeDetail,
+  type RecipeSeriesStageSummary,
   type NutritionDetailedData,
   type IngredientPreparationMethodHistoryItem,
   type SupplementTarget,
@@ -930,6 +976,7 @@ const isReadOnly = computed(() => route.query.mode === 'view');
 const formRef = ref<FormInstance>();
 const loading = ref(false);
 const submitting = ref(false);
+const currentRecipe = ref<RecipeDetail | null>(null);
 
 const form = reactive<RecipeForm>({
   name: '',
@@ -1318,6 +1365,65 @@ watch(() => ingredientForm.exampleWeight, (newWeight) => {
 const lifeStageOptions = ref<EnumOption[]>([]);
 const healthTagOptions = ref<EnumOption[]>([]);
 
+const RecipeStatusLabels: Record<RecipeStatus, string> = {
+  [RecipeStatus.DRAFT]: '草稿',
+  [RecipeStatus.PUBLIC]: '已发布',
+  [RecipeStatus.PRIVATE_CUSTOM]: '私密定制',
+};
+
+const RecipeStatusTagTypes: Record<RecipeStatus, string> = {
+  [RecipeStatus.DRAFT]: 'info',
+  [RecipeStatus.PUBLIC]: 'success',
+  [RecipeStatus.PRIVATE_CUSTOM]: 'warning',
+};
+
+const SeriesStageStatusLabels: Record<string, string> = {
+  NOT_DESIGNED: '未设计',
+  DRAFT: '草稿',
+  PUBLIC: '已发布',
+  PRIVATE_CUSTOM: '私密定制',
+};
+
+const getLifeStageLabel = (value?: string) => {
+  if (!value) return '';
+  const option = lifeStageOptions.value.find((item) => item.value === value);
+  return option?.label || value;
+};
+
+const getRecipeStatusLabel = (status?: RecipeStatus) => {
+  return status ? RecipeStatusLabels[status] || status : '-';
+};
+
+const getRecipeStatusTagType = (status?: RecipeStatus) => {
+  return status ? RecipeStatusTagTypes[status] || 'info' : 'info';
+};
+
+const getSeriesStageStatusLabel = (status: string) => {
+  return SeriesStageStatusLabels[status] || status;
+};
+
+const getSeriesStageStatusTagType = (status: string) => {
+  if (status === RecipeStatus.PUBLIC) return 'success';
+  if (status === RecipeStatus.DRAFT) return 'warning';
+  if (status === RecipeStatus.PRIVATE_CUSTOM) return 'danger';
+  return 'info';
+};
+
+const isSeriesRecipe = computed(() => Boolean(currentRecipe.value?.seriesId));
+const configuredSeriesStages = computed<RecipeSeriesStageSummary[]>(() =>
+  currentRecipe.value?.seriesStages?.filter((stage) => stage.recipeVersionId) ||
+  [],
+);
+const currentSeriesStageLabel = computed(() => {
+  const detail = currentRecipe.value;
+  return (
+    detail?.seriesLifeStageLabel ||
+    getLifeStageLabel(detail?.seriesLifeStage) ||
+    getLifeStageLabel(detail?.applicableLifeStages?.[0]) ||
+    '未标记阶段'
+  );
+});
+
 // Design source management
 const designSources = ref<Array<{ id: string; name: string }>>([]);
 const designSourceDialogVisible = ref(false);
@@ -1354,6 +1460,7 @@ const loadRecipeDetail = async () => {
   try {
     // Response interceptor already extracts data, so response is the actual recipe data
     const detail = await recipeApi.getDetail(recipeId.value);
+    currentRecipe.value = detail;
 
     Object.assign(form, {
       name: detail.name,
@@ -1390,10 +1497,38 @@ const loadRecipeDetail = async () => {
       Object.assign(nutritionData, detail.nutritionDetailedData);
     }
   } catch (error: any) {
+    currentRecipe.value = null;
     ElMessage.error(error.message || '加载食谱详情失败');
   } finally {
     loading.value = false;
   }
+};
+
+const handleSeriesStageChange = async (targetRecipeVersionId: string) => {
+  if (!targetRecipeVersionId || targetRecipeVersionId === recipeId.value) {
+    return;
+  }
+
+  if (!isReadOnly.value) {
+    try {
+      await ElMessageBox.confirm(
+        '切换生命阶段会离开当前编辑页，未保存的修改不会保留。',
+        '切换生命阶段',
+        {
+          type: 'warning',
+          confirmButtonText: '确认切换',
+          cancelButtonText: '继续编辑',
+        },
+      );
+    } catch {
+      return;
+    }
+  }
+
+  router.push({
+    path: `/recipes/${targetRecipeVersionId}`,
+    query: isReadOnly.value ? { mode: 'view' } : {},
+  });
 };
 
 const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
@@ -2040,6 +2175,17 @@ const getNutritionStatusTagType = (status: string) => {
 };
 
 // Lifecycle
+watch(recipeId, async (nextRecipeId, previousRecipeId) => {
+  if (!nextRecipeId) {
+    currentRecipe.value = null;
+    return;
+  }
+
+  if (nextRecipeId !== previousRecipeId) {
+    await loadRecipeDetail();
+  }
+});
+
 onMounted(async () => {
   loadMetadata();
   loadAvailableIngredients();
@@ -2061,6 +2207,73 @@ onMounted(async () => {
 .form-card {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.series-context-card {
+  max-width: 1200px;
+  margin: 0 auto 16px;
+}
+
+.series-context-card :deep(.el-card__body) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.series-context-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.series-context-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.series-context-title strong {
+  color: #303133;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-context-label {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.series-context-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.series-stage-select {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+.series-stage-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.derived-life-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  font-size: 14px;
 }
 
 .form-section {

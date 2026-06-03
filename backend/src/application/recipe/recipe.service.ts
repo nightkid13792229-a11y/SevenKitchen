@@ -40,6 +40,7 @@ export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly recipeDetailInclude = {
+    series: true,
     items: {
       include: {
         ingredient: true,
@@ -616,6 +617,7 @@ export class RecipeService {
         lifeStage,
         label: SERIES_LIFE_STAGE_LABELS[lifeStage],
         status: stageRecipe.status as RecipeSeriesStageSummaryDto['status'],
+        recipeVersionId: stageRecipe.id,
         recipeId: stageRecipe.recipeId,
         version: stageRecipe.version,
         updatedAt: stageRecipe.updatedAt.toISOString(),
@@ -1150,6 +1152,12 @@ export class RecipeService {
       recipeId: recipe.recipeId,
       seriesId: recipe.seriesId || undefined,
       seriesName: recipe.series?.name || undefined,
+      seriesLifeStage: recipe.seriesLifeStage || undefined,
+      seriesLifeStageLabel: recipe.seriesLifeStage
+        ? SERIES_LIFE_STAGE_LABELS[
+            recipe.seriesLifeStage as keyof typeof SERIES_LIFE_STAGE_LABELS
+          ] || recipe.seriesLifeStage
+        : undefined,
       name: recipe.name,
       version: recipe.version,
       status: recipe.status as RecipeStatus,
@@ -1186,9 +1194,19 @@ export class RecipeService {
     const methodMap = await this.loadPreparationMethodNameMap(
       (recipe.items || []).map((item: any) => item.preparationMethod),
     );
+    const seriesRecipes = recipe.seriesId
+      ? await this.prisma.recipe.findMany({
+          where: { seriesId: recipe.seriesId },
+          include: this.recipeListInclude,
+          orderBy: { createdAt: 'desc' },
+        })
+      : undefined;
 
     return {
       ...this.mapToSummaryDto(recipe),
+      seriesStages: seriesRecipes
+        ? this.buildRecipeSeriesStageSummaries(seriesRecipes)
+        : undefined,
       detailImages: (recipe.detailImages as string[]) || undefined,
       videoUrl: recipe.videoUrl || undefined,
       description: recipe.description || undefined,

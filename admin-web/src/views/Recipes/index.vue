@@ -120,13 +120,17 @@
 
         <el-table-column label="生命阶段" min-width="300">
           <template #default="{ row }">
-            <div v-if="row.seriesStages?.length" class="series-stage-tags">
+            <div v-if="getConfiguredSeriesStages(row).length" class="series-stage-tags">
               <el-tag
-                v-for="stage in row.seriesStages"
+                v-for="stage in getConfiguredSeriesStages(row)"
                 :key="stage.lifeStage"
                 :type="getSeriesStageStatusType(stage.status)"
                 size="small"
-                class="series-stage-tag"
+                :class="[
+                  'series-stage-tag',
+                  { 'is-clickable': Boolean(stage.recipeVersionId) },
+                ]"
+                @click.stop="handleStageView(stage)"
               >
                 {{ stage.label }}：{{ getSeriesStageStatusLabel(stage.status) }}
               </el-tag>
@@ -259,6 +263,7 @@ import {
   type RecipeSummary,
   type RecipeQuery,
   type RecipeVersionSummary,
+  type RecipeSeriesStageSummary,
 } from '@/types/recipe';
 
 // Enum option type
@@ -352,6 +357,10 @@ const getSeriesStageStatusType = (status: string) => {
   return 'info';
 };
 
+const getConfiguredSeriesStages = (row: RecipeSummary) => {
+  return (row.seriesStages || []).filter((stage) => stage.recipeVersionId);
+};
+
 const getOperableRecipeId = (row: Pick<RecipeSummary, 'id' | 'seriesId'>) => {
   if (!row.id || row.id === row.seriesId) return undefined;
   return row.id;
@@ -425,6 +434,18 @@ const handleView = (row: RecipeSummary) => {
   router.push({
     path: `/recipes/${id}`,
     query: { mode: 'view' }
+  });
+};
+
+const handleStageView = (stage: RecipeSeriesStageSummary) => {
+  if (!stage.recipeVersionId) {
+    ElMessage.info('该生命阶段还没有配置食谱');
+    return;
+  }
+
+  router.push({
+    path: `/recipes/${stage.recipeVersionId}`,
+    query: { mode: 'view' },
   });
 };
 
@@ -609,6 +630,14 @@ onMounted(() => {
 
 .series-stage-tag {
   margin: 0;
+}
+
+.series-stage-tag.is-clickable {
+  cursor: pointer;
+}
+
+.series-stage-tag.is-clickable:hover {
+  filter: brightness(0.96);
 }
 
 .stats {

@@ -16,7 +16,7 @@
         <view class="role-badge">{{ roleText }}</view>
       </view>
 
-      <!-- 功能模块（采购、生产、订单、报销、库存、食谱、AI食材） -->
+      <!-- 功能模块（采购、生产、订单、报销、库存、食谱） -->
       <view class="modules">
         <!-- 采购管理 -->
         <view class="module" @tap="goToPurchasing">
@@ -132,17 +132,6 @@
           <text class="module-arrow">›</text>
         </view>
 
-        <!-- AI 新增食材 -->
-        <view class="module" @tap="goToIngredientCreation">
-          <view class="module-icon ingredient-creation">
-            <text class="module-icon-symbol">AI</text>
-          </view>
-          <view class="module-content">
-            <text class="module-title">AI 新增食材</text>
-            <text class="module-desc">提交新增食材需求并审核草稿</text>
-          </view>
-          <text class="module-arrow">›</text>
-        </view>
       </view>
 
       <!-- 快捷统计（UI框架，待对接API） -->
@@ -372,10 +361,6 @@ const goToStaffRecipes = () => {
 const goToRecipeDesigner = () => {
   uni.navigateTo({ url: '/pages/recipe-designer/list' });
 };
-
-const goToIngredientCreation = () => {
-  uni.navigateTo({ url: '/pages/ingredient-creation/list' });
-};
 </script>
 
 <style scoped lang="scss">
@@ -512,11 +497,6 @@ const goToIngredientCreation = () => {
   &.recipe-designer {
     background: linear-gradient(135deg, #e6f4ff 0%, #bae0ff 100%);
     color: #1677ff;
-  }
-
-  &.ingredient-creation {
-    background: linear-gradient(135deg, #f6ffed 0%, #b7eb8f 100%);
-    color: #389e0d;
   }
 }
 

@@ -167,6 +167,7 @@ export interface RecipeSeriesStageSummary {
   lifeStage: string;
   label: string;
   status: 'NOT_DESIGNED' | RecipeStatus;
+  recipeVersionId?: string;
   recipeId?: string;
   version?: number;
   updatedAt?: string;
@@ -177,6 +178,8 @@ export interface RecipeSummary {
   recipeId?: string;
   seriesId?: string;
   seriesName?: string;
+  seriesLifeStage?: string;
+  seriesLifeStageLabel?: string;
   name: string;
   version: number;
   status: RecipeStatus;

@@ -289,6 +289,7 @@ export interface RecipeSeriesStageSummaryDto {
   lifeStage: string;
   label: string;
   status: 'NOT_DESIGNED' | 'DRAFT' | 'PUBLIC' | 'PRIVATE_CUSTOM';
+  recipeVersionId?: string;
   recipeId?: string;
   version?: number;
   updatedAt?: string;
@@ -299,6 +300,8 @@ export interface RecipeSummaryResponseDto {
   recipeId?: string;
   seriesId?: string;
   seriesName?: string;
+  seriesLifeStage?: string;
+  seriesLifeStageLabel?: string;
   name: string;
   version: number;
   status: RecipeStatus;

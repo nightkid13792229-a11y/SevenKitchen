@@ -224,7 +224,7 @@
               <!-- Draggable Items -->
               <VueDraggable
                 v-model="form.items"
-                item-key="ingredientId"
+                :item-key="getRecipeIngredientRowKey"
                 handle=".drag-handle"
                 :animation="150"
                 ghost-class="sortable-ghost"
@@ -272,7 +272,7 @@
                         编辑
                       </el-button>
                       <el-divider direction="vertical" />
-                      <el-button type="danger" size="small" link @click="removeIngredient(index)">
+                      <el-button type="danger" size="small" link @click="removeIngredient(item, index)">
                         删除
                       </el-button>
                     </div>
@@ -1025,6 +1025,7 @@ const nutritionReportSections = computed(() => {
 const availableIngredients = ref<any[]>([]);
 const ingredientDialogVisible = ref(false);
 const editingIngredientIndex = ref(-1);
+const editingIngredientRowKey = ref('');
 const ingredientForm = reactive({
   ingredientId: '',
   nutritionFoodId: '',
@@ -1040,6 +1041,42 @@ const ingredientPreparationMethodHistory = ref<
   IngredientPreparationMethodHistoryItem[]
 >([]);
 const ingredientPreparationMethodHistoryLoading = ref(false);
+
+const recipeIngredientRowKeyPrefix = `recipe-item-${Date.now().toString(36)}-${Math.random()
+  .toString(36)
+  .slice(2)}`;
+let recipeIngredientRowKeyCounter = 0;
+
+const createRecipeIngredientClientKey = () =>
+  `${recipeIngredientRowKeyPrefix}-${recipeIngredientRowKeyCounter++}`;
+
+const ensureRecipeIngredientClientKey = (item: RecipeItem) => {
+  if (!item.clientKey) {
+    item.clientKey = createRecipeIngredientClientKey();
+  }
+
+  return item.clientKey;
+};
+
+const getRecipeIngredientRowKey = (item: RecipeItem) =>
+  item.id || ensureRecipeIngredientClientKey(item);
+
+const findRecipeIngredientIndexByKey = (rowKey: string) =>
+  (form.items || []).findIndex(
+    (item) => getRecipeIngredientRowKey(item) === rowKey,
+  );
+
+const findRecipeIngredientIndex = (row: RecipeItem, fallbackIndex: number) => {
+  const items = form.items || [];
+  const rowKey = getRecipeIngredientRowKey(row);
+  const fallbackItem = items[fallbackIndex];
+
+  if (fallbackItem && getRecipeIngredientRowKey(fallbackItem) === rowKey) {
+    return fallbackIndex;
+  }
+
+  return findRecipeIngredientIndexByKey(rowKey);
+};
 
 // Computed properties for nutrient target fields
 const selectedIngredient = computed(() => {
@@ -1304,16 +1341,15 @@ const calculatedRatioPercent = computed(() => {
     return null;
   }
 
-  // 获取所有FOOD类型的食材示例重量
-  const foodItems = (form.items || []).filter(
-    (item: any) => item.ingredientType === 'FOOD' && item.exampleWeight !== undefined && item.exampleWeight !== null
-  );
-
   // 计算总重量（包括当前正在编辑的食材）
   let totalWeight = 0;
-  foodItems.forEach((item: any) => {
+  (form.items || []).forEach((item: any, index) => {
+    if (item.ingredientType !== 'FOOD' || item.exampleWeight === undefined || item.exampleWeight === null) {
+      return;
+    }
+
     // 如果是正在编辑的食材，使用表单中的值
-    if (item.ingredientId === ingredientForm.ingredientId) {
+    if (index === editingIngredientIndex.value) {
       totalWeight += ingredientForm.exampleWeight || 0;
     } else {
       totalWeight += item.exampleWeight || 0;
@@ -1480,7 +1516,10 @@ const loadRecipeDetail = async () => {
       ),
       targetHealthTags: detail.targetHealthTags,
       status: detail.status,
-      items: detail.items || [],
+      items: (detail.items || []).map((item: RecipeItem) => ({
+        ...item,
+        clientKey: item.clientKey || createRecipeIngredientClientKey(),
+      })),
     });
 
     // 补齐旧记录的展示目标，避免编辑老食谱时看不到营养目标。
@@ -1926,6 +1965,7 @@ const showAddIngredientDialog = () => {
 };
 
 const resetIngredientForm = () => {
+  editingIngredientRowKey.value = '';
   ingredientForm.ingredientId = '';
   ingredientForm.nutritionFoodId = '';
   ingredientForm.preparationMethodText = '';
@@ -1992,11 +2032,20 @@ const saveIngredient = () => {
         )
       : [];
 
+  const targetEditIndex = editingIngredientRowKey.value
+    ? findRecipeIngredientIndexByKey(editingIngredientRowKey.value)
+    : editingIngredientIndex.value;
+  const existingItem = targetEditIndex >= 0 ? form.items?.[targetEditIndex] : undefined;
+
+  if (editingIngredientIndex.value >= 0 && !existingItem) {
+    ElMessage.error('未找到要更新的原料，请重新打开编辑');
+    return;
+  }
+
   // Create item object - 根据原料类型保存相应字段
   const item: RecipeItem = {
-    id: editingIngredientIndex.value >= 0
-      ? (form.items![editingIngredientIndex.value]?.id || '')
-      : '',
+    id: existingItem?.id || '',
+    clientKey: existingItem?.clientKey || createRecipeIngredientClientKey(),
     ingredientId: ingredientForm.ingredientId,
     ingredientName: ingredient.name,
     ingredientType: ingredient.type,
@@ -2056,9 +2105,9 @@ const saveIngredient = () => {
     form.items = [];
   }
 
-  if (editingIngredientIndex.value >= 0) {
+  if (targetEditIndex >= 0) {
     // Update existing
-    form.items[editingIngredientIndex.value] = item;
+    form.items[targetEditIndex] = item;
     // 重新计算所有FOOD类型的占比
     recalculateAllRatios();
     ElMessage.success('原料更新成功');
@@ -2092,28 +2141,43 @@ const recalculateAllRatios = () => {
 };
 
 const editIngredient = (row: RecipeItem, index: number) => {
-  editingIngredientIndex.value = index;
-  ingredientForm.ingredientId = row.ingredientId;
-  ingredientForm.nutritionFoodId = row.nutritionFoodId || '';
-  ingredientForm.preparationMethodText = row.preparationMethod || '';
-  ingredientForm.exampleWeight = row.exampleWeight;
-  ingredientForm.ratioPercent = row.ratioPercent;
-  ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
-  ingredientForm.nutrientTargetValue = row.nutrientTargetValue;
-  ingredientForm.supplementTargets = getSupplementTargets(row).length > 0
-    ? getSupplementTargets(row).map((target) => ({ ...target }))
-    : legacySupplementTargetsFromRow(row);
-  if (row.ingredientType === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
+  const targetIndex = findRecipeIngredientIndex(row, index);
+  if (targetIndex < 0 || !form.items?.[targetIndex]) {
+    ElMessage.error('未找到要编辑的原料');
+    return;
+  }
+
+  const targetRow = form.items[targetIndex];
+  editingIngredientIndex.value = targetIndex;
+  editingIngredientRowKey.value = getRecipeIngredientRowKey(targetRow);
+  ingredientForm.ingredientId = targetRow.ingredientId;
+  ingredientForm.nutritionFoodId = targetRow.nutritionFoodId || '';
+  ingredientForm.preparationMethodText = targetRow.preparationMethod || '';
+  ingredientForm.exampleWeight = targetRow.exampleWeight;
+  ingredientForm.ratioPercent = targetRow.ratioPercent;
+  ingredientForm.nutrientTargetKey = targetRow.nutrientTargetKey || '';
+  ingredientForm.nutrientTargetValue = targetRow.nutrientTargetValue;
+  ingredientForm.supplementTargets = getSupplementTargets(targetRow).length > 0
+    ? getSupplementTargets(targetRow).map((target) => ({ ...target }))
+    : legacySupplementTargetsFromRow(targetRow);
+  if (targetRow.ingredientType === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
     addSupplementTarget();
   }
   ingredientForm.supplementAlternativeIngredientIds = [
-    ...(row.supplementAlternativeIngredientIds || []),
+    ...(targetRow.supplementAlternativeIngredientIds || []),
   ];
   ingredientDialogVisible.value = true;
 };
 
-const removeIngredient = (index: number) => {
-  form.items!.splice(index, 1);
+const removeIngredient = (row: RecipeItem, index: number) => {
+  const targetIndex = findRecipeIngredientIndex(row, index);
+  if (targetIndex < 0) {
+    ElMessage.error('未找到要删除的原料');
+    return;
+  }
+
+  form.items!.splice(targetIndex, 1);
+  recalculateAllRatios();
   ElMessage.success('原料删除成功');
 };
 

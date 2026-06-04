@@ -326,6 +326,131 @@ export class PurchasingService {
     return unique.length > 0 ? unique : undefined;
   }
 
+  private getFiniteNumber(value: unknown, fallback = 0): number {
+    const numeric = Number(value ?? fallback);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  }
+
+  private sumPurchaseQuantities(params: {
+    existingValue?: number;
+    existingFallback?: number;
+    addedValue?: number;
+    addedFallback?: number;
+  }): number {
+    return this.roundNumber(
+      this.getFiniteNumber(params.existingValue, params.existingFallback ?? 0) +
+        this.getFiniteNumber(params.addedValue, params.addedFallback ?? 0),
+      3,
+    );
+  }
+
+  private createPurchaseItemFromRequirement(
+    purchaseListId: string,
+    requirement: PurchaseRequirement,
+  ): PurchaseItem {
+    return new PurchaseItem({
+      purchaseListId,
+      ingredientId: requirement.ingredientId,
+      procurementSkuId: requirement.procurementSkuId,
+      procurementSkuName: requirement.procurementSkuName,
+      suggestedProductId: requirement.suggestedProductId,
+      suggestedProductName: requirement.suggestedProductName,
+      ingredientName: requirement.ingredientName,
+      type: requirement.type,
+      quantityNeeded: requirement.quantityNeeded,
+      quantityUnit: requirement.quantityUnit,
+      estimatedCost: requirement.estimatedCost,
+      grossQuantityNeeded: requirement.grossQuantityNeeded,
+      stockDeductedQuantity: requirement.stockDeductedQuantity,
+      purchaseShortageQuantity: requirement.purchaseShortageQuantity,
+      onHandQuantity: requirement.onHandQuantity,
+      allocatedQuantity: requirement.allocatedQuantity,
+      availableQuantity: requirement.availableQuantity,
+      usesInventory: requirement.usesInventory,
+      purchaseChannel: requirement.purchaseChannel,
+      productModel: requirement.productModel,
+      displayUnit: requirement.displayUnit,
+    });
+  }
+
+  private mergePurchaseRequirementIntoItem(
+    purchaseListId: string,
+    existing: PurchaseItem,
+    requirement: PurchaseRequirement,
+  ): PurchaseItem {
+    const addedShortageQuantity = this.getFiniteNumber(
+      requirement.purchaseShortageQuantity,
+      requirement.quantityNeeded,
+    );
+    const clearNoPurchaseMarker = addedShortageQuantity > 0;
+
+    return new PurchaseItem({
+      id: existing.id,
+      purchaseListId: existing.purchaseListId || purchaseListId,
+      ingredientId: existing.ingredientId,
+      procurementSkuId:
+        existing.procurementSkuId ?? requirement.procurementSkuId,
+      procurementSkuName:
+        existing.procurementSkuName ?? requirement.procurementSkuName,
+      suggestedProductId:
+        existing.suggestedProductId ?? requirement.suggestedProductId,
+      suggestedProductName:
+        existing.suggestedProductName ?? requirement.suggestedProductName,
+      ingredientName: existing.ingredientName || requirement.ingredientName,
+      type: existing.type || requirement.type,
+      quantityNeeded: this.sumPurchaseQuantities({
+        existingValue: existing.quantityNeeded,
+        addedValue: requirement.quantityNeeded,
+      }),
+      quantityUnit: existing.quantityUnit || requirement.quantityUnit,
+      estimatedCost: this.roundNumber(
+        this.getFiniteNumber(existing.estimatedCost) +
+          this.getFiniteNumber(requirement.estimatedCost),
+        2,
+      ),
+      grossQuantityNeeded: this.sumPurchaseQuantities({
+        existingValue: existing.grossQuantityNeeded,
+        existingFallback: existing.quantityNeeded,
+        addedValue: requirement.grossQuantityNeeded,
+        addedFallback: requirement.quantityNeeded,
+      }),
+      stockDeductedQuantity: this.sumPurchaseQuantities({
+        existingValue: existing.stockDeductedQuantity,
+        addedValue: requirement.stockDeductedQuantity,
+      }),
+      purchaseShortageQuantity: this.sumPurchaseQuantities({
+        existingValue: existing.purchaseShortageQuantity,
+        existingFallback: existing.quantityNeeded,
+        addedValue: requirement.purchaseShortageQuantity,
+        addedFallback: requirement.quantityNeeded,
+      }),
+      onHandQuantity: requirement.onHandQuantity ?? existing.onHandQuantity,
+      allocatedQuantity:
+        requirement.allocatedQuantity ?? existing.allocatedQuantity,
+      availableQuantity:
+        requirement.availableQuantity ?? existing.availableQuantity,
+      usesInventory: existing.usesInventory || requirement.usesInventory,
+      noPurchaseNeeded: clearNoPurchaseMarker
+        ? false
+        : existing.noPurchaseNeeded,
+      noPurchaseReason: clearNoPurchaseMarker
+        ? null
+        : existing.noPurchaseReason,
+      noPurchaseMarkedAt: clearNoPurchaseMarker
+        ? null
+        : existing.noPurchaseMarkedAt,
+      noPurchaseMarkedById: clearNoPurchaseMarker
+        ? null
+        : existing.noPurchaseMarkedById,
+      purchaseChannel: existing.purchaseChannel || requirement.purchaseChannel,
+      productModel: existing.productModel || requirement.productModel,
+      displayUnit: existing.displayUnit || requirement.displayUnit,
+      notes: existing.notes,
+      ingredient: existing.ingredient,
+      createdAt: existing.createdAt,
+    });
+  }
+
   private normalizeComparableText(value?: string | null): string | undefined {
     if (!value) {
       return undefined;
@@ -764,10 +889,12 @@ export class PurchasingService {
         : new Map();
 
     const remainingAvailableQuantityGByIngredient = new Map(
-      Array.from(availabilityMap.entries()).map(([ingredientId, availability]) => [
-        ingredientId,
-        availability.availableQuantityG,
-      ]),
+      Array.from(availabilityMap.entries()).map(
+        ([ingredientId, availability]) => [
+          ingredientId,
+          availability.availableQuantityG,
+        ],
+      ),
     );
 
     return requirements.map((requirement) => {
@@ -830,8 +957,13 @@ export class PurchasingService {
 
       const existing = lineMap.get(requirement.ingredientId);
       if (existing) {
-        existing.quantityG = this.roundNumber(existing.quantityG + quantityG, 3);
-        if (existing.procurementSkuId !== (requirement.procurementSkuId ?? null)) {
+        existing.quantityG = this.roundNumber(
+          existing.quantityG + quantityG,
+          3,
+        );
+        if (
+          existing.procurementSkuId !== (requirement.procurementSkuId ?? null)
+        ) {
           existing.procurementSkuId = null;
         }
         continue;
@@ -1123,7 +1255,11 @@ export class PurchasingService {
       requirement.quantityUnit;
     const normalized = this.normalizeMeasurementUnit(rawUnit);
 
-    if (normalized === BaseUnit.G || normalized === 'KG' || normalized === 'JIN') {
+    if (
+      normalized === BaseUnit.G ||
+      normalized === 'KG' ||
+      normalized === 'JIN'
+    ) {
       return BaseUnit.G;
     }
     if (normalized === BaseUnit.ML || normalized === 'L') {
@@ -2294,9 +2430,8 @@ export class PurchasingService {
     const enrichedRequirements = requirements;
     // 日采清单保留所有订单原料，包括已被库存完全抵扣的项，方便人工审核兜底。
     const purchaseRequirements = enrichedRequirements;
-    const allocationLines = this.buildInventoryAllocationLines(
-      enrichedRequirements,
-    );
+    const allocationLines =
+      this.buildInventoryAllocationLines(enrichedRequirements);
 
     // 查询订单ID列表（使用制作日期查询）
     const { list: orders } =
@@ -2485,48 +2620,52 @@ export class PurchasingService {
     const purchaseRequirements = enrichedRequirements;
 
     // 4. 合并到现有采购清单
-    const existingItemMap = new Map(
-      purchaseList.items.map((item) => [item.ingredientId, item]),
-    );
+    const existingItemMap = new Map<
+      string,
+      { item: PurchaseItem; index: number }
+    >();
+    purchaseList.items.forEach((item, index) => {
+      const key = this.buildPurchaseRequirementKey(
+        item.ingredientId,
+        item.procurementSkuId,
+      );
+      if (!existingItemMap.has(key)) {
+        existingItemMap.set(key, { item, index });
+      }
+    });
 
     const newItems: PurchaseItem[] = [];
     const updatedItems: PurchaseItem[] = [];
 
     for (const requirement of purchaseRequirements) {
-      const ingredientId = requirement.ingredientId;
-      if (existingItemMap.has(ingredientId)) {
-        // 更新现有项
-        const existing = existingItemMap.get(ingredientId)!;
-        existing.quantityNeeded += requirement.quantityNeeded;
-        existing.estimatedCost =
-          Number(existing.estimatedCost) + requirement.estimatedCost;
-        updatedItems.push(existing);
+      const itemKey = this.buildPurchaseRequirementKey(
+        requirement.ingredientId,
+        requirement.procurementSkuId,
+      );
+      const existingEntry = existingItemMap.get(itemKey);
+      if (existingEntry) {
+        const mergedItem = this.mergePurchaseRequirementIntoItem(
+          purchaseListId,
+          existingEntry.item,
+          requirement,
+        );
+        purchaseList.items[existingEntry.index] = mergedItem;
+        existingItemMap.set(itemKey, {
+          item: mergedItem,
+          index: existingEntry.index,
+        });
+        updatedItems.push(mergedItem);
       } else {
         // 新增项
-        const newItem = new PurchaseItem({
+        const newItem = this.createPurchaseItemFromRequirement(
           purchaseListId,
-          ingredientId: requirement.ingredientId,
-          procurementSkuId: requirement.procurementSkuId,
-          procurementSkuName: requirement.procurementSkuName,
-          suggestedProductId: requirement.suggestedProductId,
-          suggestedProductName: requirement.suggestedProductName,
-          ingredientName: requirement.ingredientName,
-          type: requirement.type,
-          quantityNeeded: requirement.quantityNeeded,
-          quantityUnit: requirement.quantityUnit,
-          estimatedCost: requirement.estimatedCost,
-          grossQuantityNeeded: requirement.grossQuantityNeeded,
-          stockDeductedQuantity: requirement.stockDeductedQuantity,
-          purchaseShortageQuantity: requirement.purchaseShortageQuantity,
-          onHandQuantity: requirement.onHandQuantity,
-          allocatedQuantity: requirement.allocatedQuantity,
-          availableQuantity: requirement.availableQuantity,
-          usesInventory: requirement.usesInventory,
-          purchaseChannel: requirement.purchaseChannel,
-          productModel: requirement.productModel,
-          displayUnit: requirement.displayUnit,
-        });
+          requirement,
+        );
         purchaseList.items.push(newItem);
+        existingItemMap.set(itemKey, {
+          item: newItem,
+          index: purchaseList.items.length - 1,
+        });
         newItems.push(newItem);
       }
     }
@@ -2976,7 +3115,11 @@ export class PurchasingService {
 
     // 先添加重新计算的原料
     for (const req of enrichedRequirements) {
-      mergedItemsMap.set(req.ingredientId, {
+      const itemKey = this.buildPurchaseRequirementKey(
+        req.ingredientId,
+        req.procurementSkuId,
+      );
+      mergedItemsMap.set(itemKey, {
         ingredientId: req.ingredientId,
         procurementSkuId: req.procurementSkuId,
         procurementSkuName: req.procurementSkuName,
@@ -3002,17 +3145,21 @@ export class PurchasingService {
 
     // 再添加手动添加的原料（避免覆盖，但需要合并数量）
     for (const manualItem of manualItems) {
-      const existing = mergedItemsMap.get(manualItem.ingredientId);
+      const itemKey = this.buildPurchaseRequirementKey(
+        manualItem.ingredientId,
+        manualItem.procurementSkuId,
+      );
+      const existing = mergedItemsMap.get(itemKey);
       if (existing) {
         // 如果该原料既在订单中又手动添加了，累加数量
-        mergedItemsMap.set(manualItem.ingredientId, {
+        mergedItemsMap.set(itemKey, {
           ...existing,
           quantityNeeded: existing.quantityNeeded + manualItem.quantityNeeded,
           estimatedCost: existing.estimatedCost + manualItem.estimatedCost,
         });
       } else {
         // 仅手动添加的原料
-        mergedItemsMap.set(manualItem.ingredientId, manualItem);
+        mergedItemsMap.set(itemKey, manualItem);
       }
     }
 
@@ -3365,7 +3512,9 @@ export class PurchasingService {
 
     this.assertCanManagePurchaseListExecution(purchaseList, '标记无需采购');
 
-    const item = purchaseList.items.find((candidate) => candidate.id === itemId);
+    const item = purchaseList.items.find(
+      (candidate) => candidate.id === itemId,
+    );
     if (!item) {
       throw new BadRequestException(`未找到采购明细：${itemId}`);
     }
@@ -3404,7 +3553,9 @@ export class PurchasingService {
 
     this.assertCanManagePurchaseListExecution(purchaseList, '取消无需采购标记');
 
-    const item = purchaseList.items.find((candidate) => candidate.id === itemId);
+    const item = purchaseList.items.find(
+      (candidate) => candidate.id === itemId,
+    );
     if (!item) {
       throw new BadRequestException(`未找到采购明细：${itemId}`);
     }
@@ -3420,10 +3571,7 @@ export class PurchasingService {
     return saved;
   }
 
-  async reopenPurchaseList(
-    id: string,
-    userId?: string,
-  ): Promise<PurchaseList> {
+  async reopenPurchaseList(id: string, userId?: string): Promise<PurchaseList> {
     const purchaseList = await this.purchaseListRepository.findById(id);
 
     if (!purchaseList) {
@@ -3618,7 +3766,10 @@ export class PurchasingService {
       );
     }
 
-    if (dto.procurementSkuName !== undefined && dto.procurementSkuId === undefined) {
+    if (
+      dto.procurementSkuName !== undefined &&
+      dto.procurementSkuId === undefined
+    ) {
       throw new BadRequestException('请选择已配置的采购 SKU 后再记录采购');
     }
 
@@ -3628,7 +3779,8 @@ export class PurchasingService {
       purchaseRecord,
     );
     const selectedProcurementSku =
-      dto.procurementSkuId !== undefined && dto.procurementSkuId.trim().length > 0
+      dto.procurementSkuId !== undefined &&
+      dto.procurementSkuId.trim().length > 0
         ? await this.procurementSkuService.findById(dto.procurementSkuId)
         : undefined;
 

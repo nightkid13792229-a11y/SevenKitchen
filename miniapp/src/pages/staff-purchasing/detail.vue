@@ -19,11 +19,7 @@
           <text class="warning-title">检测到 {{ dateChanges.changedOrders.length }} 个订单的制作日期已变更</text>
         </view>
         <view class="warning-list">
-          <view
-            v-for="(order, index) in dateChanges.changedOrders"
-            :key="index"
-            class="warning-item"
-          >
+          <view v-for="(order, index) in dateChanges.changedOrders" :key="index" class="warning-item">
             <text class="order-info">{{ order.orderNumber }}: {{ order.originalDate }} → {{ order.currentDate }}</text>
             <text class="order-detail">{{ order.customerName }} · {{ order.dogName }}</text>
           </view>
@@ -61,47 +57,52 @@
         </view>
       </view>
 
-      <view
-        v-if="purchaseList.kind === 'ORDER_DEMAND' && purchaseList.status === 'PENDING' && (pendingAppendLoading || pendingAppendOrders.length > 0)"
-        class="section pending-append-card"
-      >
+      <view v-if="purchaseList.kind === 'ORDER_DEMAND' && purchaseList.status === 'PENDING' && (pendingAppendLoading || pendingAppendOrders.length > 0)" class="section pending-append-card">
         <view class="section-header">
           <text class="section-title pending-title">新增订单待合并</text>
-          <text v-if="pendingAppendOrders.length > 0" class="pending-count">
-            {{ pendingAppendOrders.length }} 单
-          </text>
+          <text v-if="pendingAppendOrders.length > 0" class="pending-count"> {{ pendingAppendOrders.length }} 单 </text>
         </view>
 
         <text v-if="pendingAppendLoading" class="pending-hint">正在检查同日新增订单...</text>
 
         <template v-else>
-          <text class="pending-hint">
-            该日期已有采购清单，但又来了同一天的已付款订单。合并后会自动补齐原料需求，并把这些订单一起纳入当前清单。
-          </text>
+          <text class="pending-hint"> 该日期已有采购清单，但又来了同一天的已付款订单。合并后会自动补齐原料需求，并把这些订单一起纳入当前清单。 </text>
 
           <view class="pending-summary">
             <text>新增订单 {{ pendingAppendOrders.length }} 个</text>
-            <text v-if="pendingAppendEstimatedCost > 0">
-              新增预估 ¥{{ pendingAppendEstimatedCost.toFixed(2) }}
-            </text>
+            <text v-if="pendingAppendEstimatedCost > 0"> 新增预估 ¥{{ pendingAppendEstimatedCost.toFixed(2) }} </text>
           </view>
 
           <view class="pending-order-list">
-            <view
-              v-for="order in pendingAppendOrders"
-              :key="order.orderId"
-              class="pending-order-item"
-            >
+            <view v-for="order in pendingAppendOrders" :key="order.orderId" class="pending-order-item">
               <text class="pending-order-id">{{ formatOrderId(order.orderId) }}</text>
               <text class="pending-order-date">{{ formatDate(order.targetProductionDate) }}</text>
             </view>
           </view>
 
-          <button
-            class="merge-orders-btn"
-            :loading="appendingOrders"
-            @tap="appendPendingOrders"
-          >
+          <view v-if="pendingAppendItems.length > 0" class="pending-append-item-list">
+            <text class="pending-append-subtitle">新增采购需求</text>
+            <view v-for="item in pendingAppendItems" :key="`${item.ingredientId}-${item.procurementSkuId || 'default'}`" class="pending-append-item">
+              <view class="pending-append-main">
+                <text class="pending-append-name">{{ getPurchaseItemTitle(item) }}</text>
+                <text v-if="item.resolvedPurchaseChannel || item.resolvedProductModel" class="pending-append-spec">
+                  {{ [item.resolvedPurchaseChannel, item.resolvedProductModel].filter(Boolean).join(' · ') }}
+                </text>
+                <text class="pending-append-audit">
+                  订单需求
+                  {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}
+                  · 库存抵扣
+                  {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}
+                </text>
+              </view>
+              <view class="pending-append-quantity">
+                <text class="pending-append-quantity-label">仍需采购</text>
+                <text class="pending-append-quantity-value"> {{ formatQuantity(item) }}{{ getDisplayUnit(item) }} </text>
+              </view>
+            </view>
+          </view>
+
+          <button class="merge-orders-btn" :loading="appendingOrders" @tap="appendPendingOrders">
             {{ appendingOrders ? '合并中...' : `一键合并新增订单（${pendingAppendOrders.length}）` }}
           </button>
         </template>
@@ -113,11 +114,7 @@
 
         <!-- 按类型分组显示原料 -->
         <view v-if="groupedItems.length > 0" class="grouped-items">
-          <view
-            v-for="group in groupedItems"
-            :key="group.type"
-            class="ingredient-group"
-          >
+          <view v-for="group in groupedItems" :key="group.type" class="ingredient-group">
             <!-- 类型标题 -->
             <view class="group-header">
               <text class="group-title">{{ getTypeLabel(group.type) }} ({{ group.items.length }})</text>
@@ -125,11 +122,7 @@
 
             <!-- 该类型的原料列表 -->
             <view class="items-list">
-              <view
-                v-for="(item, index) in group.items"
-                :key="index"
-                class="item-card"
-              >
+              <view v-for="(item, index) in group.items" :key="index" class="item-card">
                 <!-- 原料基本信息（始终显示） -->
                 <view class="item-basic">
                   <view class="item-info">
@@ -138,16 +131,9 @@
                       <text v-if="formatSkuReferencePrice(item)" class="sku-price">{{ formatSkuReferencePrice(item) }}</text>
                     </view>
                     <view v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== getPurchaseItemTitle(item)" class="item-sku-lines">
-                      <text
-                        class="item-sku secondary"
-                      >
-                        推荐参考：{{ item.resolvedSuggestedProductName }}
-                      </text>
+                      <text class="item-sku secondary"> 推荐参考：{{ item.resolvedSuggestedProductName }} </text>
                     </view>
-                    <view
-                      v-if="formatBrandLabel(item.resolvedBrand) || item.resolvedPurchaseChannel || item.resolvedProductModel"
-                      class="item-specs"
-                    >
+                    <view v-if="formatBrandLabel(item.resolvedBrand) || item.resolvedPurchaseChannel || item.resolvedProductModel" class="item-specs">
                       <text v-if="formatBrandLabel(item.resolvedBrand)" class="spec brand">{{ formatBrandLabel(item.resolvedBrand) }}</text>
                       <text v-if="item.resolvedPurchaseChannel" class="spec">{{ item.resolvedPurchaseChannel }}</text>
                       <text v-if="item.resolvedProductModel" class="spec">{{ item.resolvedProductModel }}</text>
@@ -168,31 +154,11 @@
 
                   <view class="item-actions">
                     <!-- 删除原料按钮：仅补货清单允许人工删除，日采清单由订单生成不允许删除 -->
-                    <button
-                      v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt"
-                      class="delete-item-btn"
-                      @tap="confirmDeleteItem(item)"
-                    >
-                      删除
-                    </button>
+                    <button v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt" class="delete-item-btn" @tap="confirmDeleteItem(item)">删除</button>
 
                     <!-- 开始采购后显示的添加按钮 -->
-                    <button
-                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
-                      class="continue-add-btn"
-                      @tap="handleContinueAdd(item)"
-                    >
-                      添加采购记录
-                    </button>
-                    <button
-                      v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
-                      class="no-purchase-btn"
-                      @tap="markItemNoPurchase(item)"
-                      :loading="noPurchaseMarkingItemId === item.id"
-                      :disabled="Boolean(noPurchaseMarkingItemId)"
-                    >
-                      无需采购
-                    </button>
+                    <button v-if="canManagePurchaseRecords && !item.noPurchaseNeeded" class="continue-add-btn" @tap="handleContinueAdd(item)">添加采购记录</button>
+                    <button v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)" class="no-purchase-btn" @tap="markItemNoPurchase(item)" :loading="noPurchaseMarkingItemId === item.id" :disabled="Boolean(noPurchaseMarkingItemId)">无需采购</button>
                   </view>
                 </view>
 
@@ -201,13 +167,7 @@
                     <text class="no-purchase-title">无需采购</text>
                     <text v-if="item.noPurchaseReason" class="no-purchase-reason">{{ item.noPurchaseReason }}</text>
                   </view>
-                  <button
-                    v-if="canManagePurchaseRecords"
-                    class="clear-no-purchase-btn"
-                    @tap="clearItemNoPurchase(item)"
-                  >
-                    取消标记
-                  </button>
+                  <button v-if="canManagePurchaseRecords" class="clear-no-purchase-btn" @tap="clearItemNoPurchase(item)">取消标记</button>
                 </view>
 
                 <!-- 已开始采购且有记录：显示采购记录列表 -->
@@ -216,11 +176,7 @@
 
                   <!-- 采购记录列表 -->
                   <view class="records-list">
-                    <view
-                      v-for="record in item.records"
-                      :key="record.id"
-                      class="record-item"
-                    >
+                    <view v-for="record in item.records" :key="record.id" class="record-item">
                       <view class="record-main">
                         <text v-if="record.resolvedProcurementSkuName" class="record-sku">
                           {{ record.resolvedProcurementSkuName }}
@@ -256,18 +212,13 @@
         <view v-else class="empty-items">
           <text class="empty-text">该采购清单暂无原料</text>
         </view>
-
       </view>
 
       <!-- 关联订单 -->
       <view v-if="purchaseList.sourceOrderIds && purchaseList.sourceOrderIds.length > 0" class="section">
         <text class="section-title">关联订单 ({{ purchaseList.sourceOrderIds.length }})</text>
         <view class="order-list">
-          <view
-            v-for="(orderId, index) in purchaseList.sourceOrderIds"
-            :key="index"
-            class="order-item"
-          >
+          <view v-for="(orderId, index) in purchaseList.sourceOrderIds" :key="index" class="order-item">
             <text class="order-id">{{ formatOrderId(orderId) }}</text>
             <button class="copy-btn" @tap="copyOrderId(orderId)">
               <text class="copy-btn-text">复制</text>
@@ -277,26 +228,13 @@
       </view>
 
       <!-- 底部操作栏 -->
-      <view
-        v-if="purchaseList.status === 'PENDING'"
-        class="bottom-actions"
-      >
+      <view v-if="purchaseList.status === 'PENDING'" class="bottom-actions">
         <!-- 未开始采购：显示开始采购按钮 -->
-        <button
-          v-if="!purchaseList.startedAt"
-          class="action-btn start"
-          @tap="startPurchase"
-        >
-          开始采购
-        </button>
+        <button v-if="!purchaseList.startedAt" class="action-btn start" @tap="startPurchase">开始采购</button>
 
         <!-- 已开始采购：显示确认完成按钮 -->
         <template v-else>
-          <button
-            class="action-btn complete"
-            @tap="completePurchase"
-            :loading="completing"
-          >
+          <button class="action-btn complete" @tap="completePurchase" :loading="completing">
             <text v-if="!completing">确认采购完成</text>
             <text v-else>提交中...</text>
           </button>
@@ -304,19 +242,9 @@
       </view>
 
       <!-- 已完成提示 -->
-      <view
-        v-if="purchaseList.status === 'COMPLETED'"
-        class="bottom-actions completed"
-      >
+      <view v-if="purchaseList.status === 'COMPLETED'" class="bottom-actions completed">
         <text class="completed-text">✓ 采购已完成</text>
-        <button
-          v-if="canReopenCompletedPurchase"
-          class="action-btn reopen"
-          @tap="reopenCompletedPurchase"
-          :loading="reopening"
-        >
-          撤回完成
-        </button>
+        <button v-if="canReopenCompletedPurchase" class="action-btn reopen" @tap="reopenCompletedPurchase" :loading="reopening">撤回完成</button>
       </view>
     </view>
 
@@ -364,13 +292,7 @@
               <text class="form-title-hint">选择本次实际买到的商品</text>
             </view>
             <view v-if="recordProcurementSkuOptions.length > 0" class="record-sku-list">
-              <view
-                v-for="sku in recordProcurementSkuOptions"
-                :key="sku.id || sku.name"
-                class="record-sku-option"
-                :class="{ active: recordForm.procurementSkuId === sku.id }"
-                @tap.stop="selectRecordSku(sku)"
-              >
+              <view v-for="sku in recordProcurementSkuOptions" :key="sku.id || sku.name" class="record-sku-option" :class="{ active: recordForm.procurementSkuId === sku.id }" @tap.stop="selectRecordSku(sku)">
                 <view class="record-sku-main">
                   <view class="record-sku-title-row">
                     <text class="record-sku-badge">{{ isRecommendedRecordSku(sku) ? '推荐' : '可替换' }}</text>
@@ -397,21 +319,11 @@
                 <text class="form-label">购买数量 *</text>
               </view>
               <view class="input-with-unit">
-                <input
-                  v-model="recordForm.actualPackageCount"
-                  type="digit"
-                  class="form-input unit-input"
-                  :placeholder="recordPurchaseQuantityPlaceholder"
-                  placeholder-class="input-placeholder"
-                />
+                <input v-model="recordForm.actualPackageCount" type="digit" class="form-input unit-input" :placeholder="recordPurchaseQuantityPlaceholder" placeholder-class="input-placeholder" />
                 <text v-if="recordPurchaseUnitLabel" class="input-unit-label">{{ recordPurchaseUnitLabel }}</text>
               </view>
               <view v-if="recordQuantityMetaRows.length > 0" class="record-entry-meta">
-                <view
-                  v-for="row in recordQuantityMetaRows"
-                  :key="row.label"
-                  class="record-entry-meta-row"
-                >
+                <view v-for="row in recordQuantityMetaRows" :key="row.label" class="record-entry-meta-row">
                   <text class="meta-label">{{ row.label }}</text>
                   <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
                 </view>
@@ -423,21 +335,11 @@
                 <text class="form-label">付款金额 *</text>
               </view>
               <view class="input-with-unit">
-                <input
-                  v-model="recordForm.actualCost"
-                  type="digit"
-                  class="form-input unit-input"
-                  placeholder="请输入金额，如：156.50"
-                  placeholder-class="input-placeholder"
-                />
+                <input v-model="recordForm.actualCost" type="digit" class="form-input unit-input" placeholder="请输入金额，如：156.50" placeholder-class="input-placeholder" />
                 <text class="input-unit-label">元</text>
               </view>
               <view v-if="recordPriceMetaRows.length > 0" class="record-entry-meta">
-                <view
-                  v-for="row in recordPriceMetaRows"
-                  :key="row.label"
-                  class="record-entry-meta-row"
-                >
+                <view v-for="row in recordPriceMetaRows" :key="row.label" class="record-entry-meta-row">
                   <text class="meta-label">{{ row.label }}</text>
                   <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
                 </view>
@@ -460,26 +362,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import {
-  getPurchaseListDetail,
-  completePurchase as completePurchaseApi,
-  reopenPurchaseList as reopenPurchaseListApi,
-  startPurchase as startPurchaseApi,
-  getPurchaseRecords,
-  deletePurchaseRecord as deletePurchaseRecordApi,
-  addPurchaseRecord,
-  updatePurchaseRecord as updatePurchaseRecordApi,
-  markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi,
-  clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi,
-  removeItemFromList,
-  checkOrderDateChanges,
-  getPurchaseChannels,
-  previewPurchaseList,
-  addOrdersToList,
-  resolveProcurementSkuProfile,
-  resolvePurchaseItemDisplay,
-  resolvePurchaseRecordDisplay,
-} from './api/purchasing';
+import { getPurchaseListDetail, completePurchase as completePurchaseApi, reopenPurchaseList as reopenPurchaseListApi, startPurchase as startPurchaseApi, getPurchaseRecords, deletePurchaseRecord as deletePurchaseRecordApi, addPurchaseRecord, updatePurchaseRecord as updatePurchaseRecordApi, markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi, clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi, removeItemFromList, checkOrderDateChanges, getPurchaseChannels, previewPurchaseList, addOrdersToList, resolveProcurementSkuProfile, resolvePurchaseItemDisplay, resolvePurchaseRecordDisplay } from './api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');
@@ -499,11 +382,10 @@ const pendingAppendOrders = ref<
     targetProductionDate: string;
   }>
 >([]);
+const pendingAppendItems = ref<any[]>([]);
 
 const detailTitle = computed(() => {
-  return purchaseList.value?.kind === 'STOCK_REPLENISHMENT'
-    ? '补货清单详情'
-    : '日采清单详情';
+  return purchaseList.value?.kind === 'STOCK_REPLENISHMENT' ? '补货清单详情' : '日采清单详情';
 });
 
 // 按类型分组的原料（计算属性）
@@ -517,7 +399,7 @@ const groupedItems = computed(() => {
 
   // 按类型分组
   const groups = new Map<string, any[]>();
-  items.value.forEach(item => {
+  items.value.forEach((item) => {
     const type = item.type || 'FOOD';
     if (!groups.has(type)) {
       groups.set(type, []);
@@ -527,8 +409,8 @@ const groupedItems = computed(() => {
 
   // 按定义的顺序返回分组
   return typeOrder
-    .filter(type => groups.has(type))
-    .map(type => ({
+    .filter((type) => groups.has(type))
+    .map((type) => ({
       type,
       items: groups.get(type)!,
     }));
@@ -537,9 +419,9 @@ const groupedItems = computed(() => {
 // 获取类型标签
 const getTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
-    'FOOD': '🥩 食材',
-    'SUPPLEMENT': '💊 补剂',
-    'PACKAGING': '📦 包装材料',
+    FOOD: '🥩 食材',
+    SUPPLEMENT: '💊 补剂',
+    PACKAGING: '📦 包装材料',
   };
   return labels[type] || type;
 };
@@ -566,27 +448,15 @@ const recordForm = ref({
 });
 
 const canManagePurchaseRecords = computed(() => {
-  return (
-    Boolean(purchaseList.value?.startedAt) &&
-    purchaseList.value?.status === 'PENDING' &&
-    !purchaseList.value?.reimbursementId
-  );
+  return Boolean(purchaseList.value?.startedAt) && purchaseList.value?.status === 'PENDING' && !purchaseList.value?.reimbursementId;
 });
 
 const canReopenCompletedPurchase = computed(() => {
-  return (
-    purchaseList.value?.status === 'COMPLETED' &&
-    !purchaseList.value?.reimbursementId
-  );
+  return purchaseList.value?.status === 'COMPLETED' && !purchaseList.value?.reimbursementId;
 });
 
 const getItemRequiredQuantity = (item: any) => {
-  return Number(
-    item?.resolvedPurchaseShortageQuantity ??
-      item?.purchaseShortageQuantity ??
-      item?.quantityNeeded ??
-      0,
-  );
+  return Number(item?.resolvedPurchaseShortageQuantity ?? item?.purchaseShortageQuantity ?? item?.quantityNeeded ?? 0);
 };
 
 const requiresItemHandling = (item: any) => {
@@ -595,19 +465,11 @@ const requiresItemHandling = (item: any) => {
 };
 
 const isItemHandled = (item: any) => {
-  return (
-    !requiresItemHandling(item) ||
-    item.noPurchaseNeeded === true ||
-    (item.records || []).length > 0
-  );
+  return !requiresItemHandling(item) || item.noPurchaseNeeded === true || (item.records || []).length > 0;
 };
 
 const shouldShowNoPurchaseButton = (item: any) => {
-  return (
-    requiresItemHandling(item) &&
-    !item.noPurchaseNeeded &&
-    (item.records || []).length === 0
-  );
+  return requiresItemHandling(item) && !item.noPurchaseNeeded && (item.records || []).length === 0;
 };
 
 const getUnhandledPurchaseItems = () => {
@@ -630,7 +492,10 @@ const normalizeChannelLabel = (channel?: string | null) => {
 };
 
 const formatCompactLabel = (parts: Array<string | null | undefined>) => {
-  return parts.map((part) => (part || '').trim()).filter(Boolean).join(' · ');
+  return parts
+    .map((part) => (part || '').trim())
+    .filter(Boolean)
+    .join(' · ');
 };
 
 const formatMeasurementUnit = (unit?: string | null) => {
@@ -677,13 +542,7 @@ const parsePurchaseUnitFromProductModel = (productModel?: string | null) => {
 };
 
 const getSkuPurchaseUnit = (sku: any, item: any): string => {
-  return (
-    formatMeasurementUnit(sku?.purchaseUnit) ||
-    parsePurchaseUnitFromProductModel(sku?.productModel) ||
-    formatMeasurementUnit(sku?.displayUnit) ||
-    formatMeasurementUnit(item?.ingredient?.purchaseUnit) ||
-    '件'
-  );
+  return formatMeasurementUnit(sku?.purchaseUnit) || parsePurchaseUnitFromProductModel(sku?.productModel) || formatMeasurementUnit(sku?.displayUnit) || formatMeasurementUnit(item?.ingredient?.purchaseUnit) || '件';
 };
 
 const recordPurchaseUnitLabel = computed(() => {
@@ -731,10 +590,7 @@ const latestRecordSummary = computed(() => {
     return '';
   }
 
-  const parts = [
-    '已预填上次采购习惯',
-    latestRecord.value.procurementSkuName || latestRecord.value.purchaseChannel,
-  ].filter(Boolean);
+  const parts = ['已预填上次采购习惯', latestRecord.value.procurementSkuName || latestRecord.value.purchaseChannel].filter(Boolean);
 
   if (latestRecord.value.productModel) {
     parts.push(latestRecord.value.productModel);
@@ -760,16 +616,11 @@ const recordProcurementSkuOptions = computed(() =>
 );
 
 const selectedRecordProcurementSku = computed(() => {
-  return (
-    recordProcurementSkuOptions.value.find((sku) => sku.id === recordForm.value.procurementSkuId) ||
-    null
-  );
+  return recordProcurementSkuOptions.value.find((sku) => sku.id === recordForm.value.procurementSkuId) || null;
 });
 
 const recordProcurementSkuIndex = computed(() => {
-  const index = recordProcurementSkuOptions.value.findIndex(
-    (sku) => sku.id === recordForm.value.procurementSkuId,
-  );
+  const index = recordProcurementSkuOptions.value.findIndex((sku) => sku.id === recordForm.value.procurementSkuId);
   return index >= 0 ? index : 0;
 });
 
@@ -785,14 +636,14 @@ const getReferencePriceParts = (sku: any) => {
   if (Number.isFinite(ratio) && ratio > 0) {
     if (baseUnit === 'G') {
       return {
-        price: price / ratio * 500,
+        price: (price / ratio) * 500,
         unit: '500g',
       };
     }
 
     if (baseUnit === 'ML') {
       return {
-        price: price / ratio * 500,
+        price: (price / ratio) * 500,
         unit: '500ml',
       };
     }
@@ -836,14 +687,22 @@ const getSkuPackageFacts = (sku: any, item: any) => {
   if (Number.isFinite(ratio) && ratio > 0) {
     if (baseUnit === 'G') {
       if (ratio >= 1000) {
-        return { size: formatDecimal(ratio / 1000, 3), unit: 'kg', purchaseUnit };
+        return {
+          size: formatDecimal(ratio / 1000, 3),
+          unit: 'kg',
+          purchaseUnit,
+        };
       }
       return { size: formatDecimal(ratio, 3), unit: 'g', purchaseUnit };
     }
 
     if (baseUnit === 'ML') {
       if (ratio >= 1000) {
-        return { size: formatDecimal(ratio / 1000, 3), unit: 'L', purchaseUnit };
+        return {
+          size: formatDecimal(ratio / 1000, 3),
+          unit: 'L',
+          purchaseUnit,
+        };
       }
       return { size: formatDecimal(ratio, 3), unit: 'ml', purchaseUnit };
     }
@@ -875,10 +734,7 @@ const applyRecordSkuDefaults = (sku: any) => {
   recordForm.value.purchaseUnit = facts.purchaseUnit || '件';
   recordForm.value.actualPackageSize = facts.size || '';
   recordForm.value.actualPackageUnit = facts.unit || '';
-  channelInputMode.value =
-    recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
-      ? 'preset'
-      : 'custom';
+  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
 };
 
 const selectRecordSku = (sku: any) => {
@@ -894,13 +750,7 @@ const getRecordBaseQuantity = () => {
   const packageSize = Number(recordForm.value.actualPackageSize);
   const packageUnit = recordForm.value.actualPackageUnit;
 
-  if (
-    !Number.isFinite(packageCount) ||
-    packageCount <= 0 ||
-    !Number.isFinite(packageSize) ||
-    packageSize <= 0 ||
-    !packageUnit
-  ) {
+  if (!Number.isFinite(packageCount) || packageCount <= 0 || !Number.isFinite(packageSize) || packageSize <= 0 || !packageUnit) {
     return 0;
   }
 
@@ -924,7 +774,7 @@ const convertToBaseQuantity = (amount: number, unit: string, item: any) => {
     if (normalized === 'L') return amount * 1000;
     if (normalized === 'ML') return amount;
     if (normalized === 'G' && density > 0) return amount / density;
-    if (normalized === 'KG' && density > 0) return amount * 1000 / density;
+    if (normalized === 'KG' && density > 0) return (amount * 1000) / density;
   }
 
   return amount;
@@ -948,11 +798,7 @@ const recordTotalQuantityText = computed(() => {
 
 const recordQuantityBalanceRow = computed(() => {
   const baseQuantity = getRecordBaseQuantity();
-  const shortageBaseQuantity = convertToBaseQuantity(
-    Number(selectedIngredient.value?.quantityNeeded || 0),
-    selectedIngredient.value?.quantityUnit || getDisplayUnit(selectedIngredient.value),
-    selectedIngredient.value,
-  );
+  const shortageBaseQuantity = convertToBaseQuantity(Number(selectedIngredient.value?.quantityNeeded || 0), selectedIngredient.value?.quantityUnit || getDisplayUnit(selectedIngredient.value), selectedIngredient.value);
 
   if (!Number.isFinite(baseQuantity) || baseQuantity <= 0 || !Number.isFinite(shortageBaseQuantity) || shortageBaseQuantity <= 0) {
     return null;
@@ -961,9 +807,17 @@ const recordQuantityBalanceRow = computed(() => {
   const diff = baseQuantity - shortageBaseQuantity;
   const unit = getBaseUnitLabel(selectedIngredient.value);
   if (diff >= 0) {
-    return { label: '余量', value: `${formatDecimal(diff, 3)}${unit}`, tone: 'good' };
+    return {
+      label: '余量',
+      value: `${formatDecimal(diff, 3)}${unit}`,
+      tone: 'good',
+    };
   }
-  return { label: '缺口', value: `${formatDecimal(Math.abs(diff), 3)}${unit}`, tone: 'bad' };
+  return {
+    label: '缺口',
+    value: `${formatDecimal(Math.abs(diff), 3)}${unit}`,
+    tone: 'bad',
+  };
 });
 
 const recordQuantityMetaRows = computed(() => {
@@ -987,7 +841,7 @@ const recordActualUnitPriceValue = computed(() => {
   }
 
   if (baseUnit === 'G' || baseUnit === 'ML') {
-    return cost / baseQuantity * 500;
+    return (cost / baseQuantity) * 500;
   }
 
   return cost / baseQuantity;
@@ -1021,11 +875,19 @@ const recordPriceDiffRow = computed(() => {
     return null;
   }
 
-  const diff = (actual - reference.price) / reference.price * 100;
+  const diff = ((actual - reference.price) / reference.price) * 100;
   if (diff >= 0) {
-    return { label: '价格提醒', value: `高于历史 ${Math.round(diff)}%`, tone: 'bad' };
+    return {
+      label: '价格提醒',
+      value: `高于历史 ${Math.round(diff)}%`,
+      tone: 'bad',
+    };
   }
-  return { label: '价格提醒', value: `低于历史 ${Math.round(Math.abs(diff))}%`, tone: 'good' };
+  return {
+    label: '价格提醒',
+    value: `低于历史 ${Math.round(Math.abs(diff))}%`,
+    tone: 'good',
+  };
 });
 
 const recordPriceMetaRows = computed(() => {
@@ -1034,7 +896,10 @@ const recordPriceMetaRows = computed(() => {
     rows.push({ label: '单价', value: recordActualUnitPriceText.value });
   }
   if (recordHistoricalUnitPriceText.value) {
-    rows.push({ label: '历史单价', value: recordHistoricalUnitPriceText.value });
+    rows.push({
+      label: '历史单价',
+      value: recordHistoricalUnitPriceText.value,
+    });
   }
   if (recordPriceDiffRow.value) {
     rows.push(recordPriceDiffRow.value);
@@ -1070,18 +935,9 @@ const formatRecordRawSummary = (record: any, item: any) => {
   const packageCount = Number(record.actualPackageCount || 0);
   const packageSize = Number(record.actualPackageSize || 0);
   const packageUnit = record.actualPackageUnit;
-  const countUnit =
-    parsePurchaseUnitFromProductModel(record.productModel) ||
-    getRecordSkuPurchaseUnit(record, item) ||
-    '件';
+  const countUnit = parsePurchaseUnitFromProductModel(record.productModel) || getRecordSkuPurchaseUnit(record, item) || '件';
 
-  if (
-    Number.isFinite(packageCount) &&
-    packageCount > 0 &&
-    Number.isFinite(packageSize) &&
-    packageSize > 0 &&
-    packageUnit
-  ) {
+  if (Number.isFinite(packageCount) && packageCount > 0 && Number.isFinite(packageSize) && packageSize > 0 && packageUnit) {
     return `${formatDecimal(packageCount)}${countUnit} x ${formatDecimal(packageSize)}${packageUnit}`;
   }
 
@@ -1107,9 +963,7 @@ const formatRecordNormalizedSummary = (record: any, item: any) => {
   }
 
   const baseSummary = `${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`;
-  const purchaseSummary = Number.isFinite(quantity) && quantity > 0
-    ? `${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item)}`
-    : '';
+  const purchaseSummary = Number.isFinite(quantity) && quantity > 0 ? `${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item)}` : '';
   const rawSummary = formatRecordRawSummary(record, item);
 
   if (!rawSummary && purchaseSummary === baseSummary) {
@@ -1141,22 +995,12 @@ const buildRecordChannelChoices = (item: any) => {
 };
 
 const findItemForRecord = (record: any) => {
-  return (
-    items.value.find((item) => item.id === record.purchaseItemId) ||
-    items.value.find((item) => item.ingredientId === record.ingredientId) ||
-    null
-  );
+  return items.value.find((item) => item.id === record.purchaseItemId) || items.value.find((item) => item.ingredientId === record.ingredientId) || null;
 };
 
 const getItemProcurementSkuLabel = (item: any) => {
   const profile = resolveProcurementSkuProfile(item);
-  return (
-    profile.procurementSkuName ||
-    formatCompactLabel([profile.purchaseChannel, profile.productModel]) ||
-    item?.purchaseChannel ||
-    item?.productModel ||
-    ''
-  );
+  return profile.procurementSkuName || formatCompactLabel([profile.purchaseChannel, profile.productModel]) || item?.purchaseChannel || item?.productModel || '';
 };
 
 const getItemSuggestedProductLabel = (item: any) => {
@@ -1175,21 +1019,13 @@ const getItemProductModel = (item: any) => {
 
 const getRecordSkuLabel = (record: any, item: any) => {
   const profile = resolveProcurementSkuProfile(item, record.procurementSkuId);
-  return (
-    record.procurementSkuName ||
-    profile.procurementSkuName ||
-    formatCompactLabel([profile.purchaseChannel, profile.productModel]) ||
-    record.purchaseChannel ||
-    '-'
-  );
+  return record.procurementSkuName || profile.procurementSkuName || formatCompactLabel([profile.purchaseChannel, profile.productModel]) || record.purchaseChannel || '-';
 };
 
 const getRecordSkuPurchaseUnit = (record: any, item: any) => {
   const profile = resolveProcurementSkuProfile(item, record.procurementSkuId);
   const sku = profile.procurementSkuChoices.find((choice: any) => {
-    return record.procurementSkuId
-      ? choice.id === record.procurementSkuId
-      : record.procurementSkuName && choice.name === record.procurementSkuName;
+    return record.procurementSkuId ? choice.id === record.procurementSkuId : record.procurementSkuName && choice.name === record.procurementSkuName;
   });
 
   return getSkuPurchaseUnit(sku || profile, item);
@@ -1260,12 +1096,9 @@ const toDateOnlyString = (value?: string) => {
 };
 
 const loadPendingAppendOrders = async () => {
-  if (
-    !purchaseList.value ||
-    purchaseList.value.kind !== 'ORDER_DEMAND' ||
-    purchaseList.value.status !== 'PENDING'
-  ) {
+  if (!purchaseList.value || purchaseList.value.kind !== 'ORDER_DEMAND' || purchaseList.value.status !== 'PENDING') {
     pendingAppendOrders.value = [];
+    pendingAppendItems.value = [];
     pendingAppendEstimatedCost.value = 0;
     return;
   }
@@ -1273,6 +1106,7 @@ const loadPendingAppendOrders = async () => {
   const targetDate = toDateOnlyString(purchaseList.value.targetDate);
   if (!targetDate) {
     pendingAppendOrders.value = [];
+    pendingAppendItems.value = [];
     pendingAppendEstimatedCost.value = 0;
     return;
   }
@@ -1283,22 +1117,21 @@ const loadPendingAppendOrders = async () => {
     const res: any = await previewPurchaseList({ startDate: targetDate });
     if (res.code !== 0) {
       pendingAppendOrders.value = [];
+      pendingAppendItems.value = [];
       pendingAppendEstimatedCost.value = 0;
       return;
     }
 
     const existingOrderIds = new Set<string>(purchaseList.value.sourceOrderIds || []);
-    const orders = Array.isArray(res.data?.affectedOrders)
-      ? res.data.affectedOrders.filter(
-          (order: any) => order?.orderId && !existingOrderIds.has(order.orderId),
-        )
-      : [];
+    const orders = Array.isArray(res.data?.affectedOrders) ? res.data.affectedOrders.filter((order: any) => order?.orderId && !existingOrderIds.has(order.orderId)) : [];
 
     pendingAppendOrders.value = orders;
+    pendingAppendItems.value = orders.length > 0 && Array.isArray(res.data?.items) ? res.data.items.map((item: any) => resolvePurchaseItemDisplay(item)) : [];
     pendingAppendEstimatedCost.value = Number(res.data?.totalEstimatedCost || 0);
   } catch (error) {
     console.error('加载待合并订单失败', error);
     pendingAppendOrders.value = [];
+    pendingAppendItems.value = [];
     pendingAppendEstimatedCost.value = 0;
   } finally {
     pendingAppendLoading.value = false;
@@ -1327,10 +1160,16 @@ const appendPendingOrders = async () => {
         });
 
         if (response.code === 0) {
-          uni.showToast({ title: '合并成功', icon: 'success' });
+          const newItemCount = Number(response.data?.newItems?.length || 0);
+          const updatedItemCount = Number(response.data?.updatedItems?.length || 0);
+          const summaryText = newItemCount + updatedItemCount > 0 ? `新增${newItemCount}种，更新${updatedItemCount}种` : '合并成功';
+          uni.showToast({ title: summaryText, icon: 'success' });
           await loadDetail();
         } else {
-          uni.showToast({ title: response.message || '合并失败', icon: 'none' });
+          uni.showToast({
+            title: response.message || '合并失败',
+            icon: 'none',
+          });
         }
       } catch (error: any) {
         console.error('合并新增订单失败', error);
@@ -1373,9 +1212,7 @@ const loadPurchaseRecords = async () => {
   try {
     const res: any = await getPurchaseRecords(purchaseListId.value);
     if (res.code === 0) {
-      const allRecords = (res.data || []).map((record: any) =>
-        resolvePurchaseRecordDisplay(record)
-      );
+      const allRecords = (res.data || []).map((record: any) => resolvePurchaseRecordDisplay(record));
 
       // 按原料ID分组
       const grouped = new Map<string, any[]>();
@@ -1388,7 +1225,7 @@ const loadPurchaseRecords = async () => {
       });
 
       // 将采购记录关联到对应的原料卡片
-      items.value.forEach(item => {
+      items.value.forEach((item) => {
         item.records = grouped.get(item.id) || grouped.get(item.ingredientId) || [];
       });
     }
@@ -1408,18 +1245,14 @@ const handleContinueAdd = (item: any) => {
   const latestProfile = resolveProcurementSkuProfile(item, latest?.procurementSkuId);
   const selectedSku =
     recordProcurementSkuOptions.value.find((sku) => {
-      return latest?.procurementSkuId
-        ? sku.id === latest.procurementSkuId
-        : sku.id === latestProfile.procurementSkuId || sku.name === latestProfile.procurementSkuName;
+      return latest?.procurementSkuId ? sku.id === latest.procurementSkuId : sku.id === latestProfile.procurementSkuId || sku.name === latestProfile.procurementSkuName;
     }) || recordProcurementSkuOptions.value[0];
 
   if (selectedSku) {
     applyRecordSkuDefaults(selectedSku);
   }
 
-  recordForm.value.actualPackageCount = latest?.actualPackageCount
-    ? formatDecimal(Number(latest.actualPackageCount || 0))
-    : '';
+  recordForm.value.actualPackageCount = latest?.actualPackageCount ? formatDecimal(Number(latest.actualPackageCount || 0)) : '';
 
   if (latest?.actualPackageSize) {
     recordForm.value.actualPackageSize = formatDecimal(Number(latest.actualPackageSize || 0));
@@ -1432,16 +1265,10 @@ const handleContinueAdd = (item: any) => {
   }
   if (latest?.productModel) {
     recordForm.value.productModel = latest.productModel;
-    recordForm.value.purchaseUnit =
-      parsePurchaseUnitFromProductModel(latest.productModel) ||
-      recordForm.value.purchaseUnit ||
-      '件';
+    recordForm.value.purchaseUnit = parsePurchaseUnitFromProductModel(latest.productModel) || recordForm.value.purchaseUnit || '件';
   }
 
-  channelInputMode.value =
-    recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
-      ? 'preset'
-      : 'custom';
+  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
 
   showRecordForm.value = true;
 };
@@ -1460,39 +1287,24 @@ const editRecord = (record: any) => {
   recordChannelChoices.value = buildRecordChannelChoices(item);
 
   const recordProfile = resolveProcurementSkuProfile(item, record.procurementSkuId);
-  const selectedSku = record.procurementSkuId
-    ? recordProcurementSkuOptions.value.find((sku) => sku.id === record.procurementSkuId)
-    : null;
+  const selectedSku = record.procurementSkuId ? recordProcurementSkuOptions.value.find((sku) => sku.id === record.procurementSkuId) : null;
 
   if (selectedSku) {
     applyRecordSkuDefaults(selectedSku);
   }
   recordForm.value.purchaseChannel = normalizeChannelLabel(record.purchaseChannel);
-  recordForm.value.actualPackageCount = record.actualPackageCount
-    ? formatDecimal(Number(record.actualPackageCount || 0))
-    : formatDecimal(Number(record.actualQuantity || 0));
-  recordForm.value.actualPackageSize = record.actualPackageSize
-    ? formatDecimal(Number(record.actualPackageSize || 0))
-    : getSuggestedPackageSize(item);
-  recordForm.value.actualPackageUnit =
-    record.actualPackageUnit || getSuggestedPackageUnit(item);
+  recordForm.value.actualPackageCount = record.actualPackageCount ? formatDecimal(Number(record.actualPackageCount || 0)) : formatDecimal(Number(record.actualQuantity || 0));
+  recordForm.value.actualPackageSize = record.actualPackageSize ? formatDecimal(Number(record.actualPackageSize || 0)) : getSuggestedPackageSize(item);
+  recordForm.value.actualPackageUnit = record.actualPackageUnit || getSuggestedPackageUnit(item);
   recordForm.value.actualCost = Number(record.actualCost || 0)
     .toFixed(2)
     .replace(/\.00$/, '')
     .replace(/(\.\d)0$/, '$1');
   recordForm.value.productModel = record.productModel || recordProfile.productModel || '';
-  recordForm.value.purchaseUnit =
-    parsePurchaseUnitFromProductModel(record.productModel) ||
-    parsePurchaseUnitFromProductModel(recordProfile.productModel) ||
-    recordForm.value.purchaseUnit ||
-    '件';
+  recordForm.value.purchaseUnit = parsePurchaseUnitFromProductModel(record.productModel) || parsePurchaseUnitFromProductModel(recordProfile.productModel) || recordForm.value.purchaseUnit || '件';
   recordForm.value.notes = record.notes || '';
 
-  channelInputMode.value =
-    recordForm.value.purchaseChannel &&
-    recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
-      ? 'preset'
-      : 'custom';
+  channelInputMode.value = recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel) ? 'preset' : 'custom';
 
   showRecordForm.value = true;
 };
@@ -1564,12 +1376,18 @@ const submitRecord = async () => {
   }
 
   if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-    uni.showToast({ title: '采购商品缺少采购渠道，请联系管理员补充', icon: 'none' });
+    uni.showToast({
+      title: '采购商品缺少采购渠道，请联系管理员补充',
+      icon: 'none',
+    });
     return;
   }
 
   if (!recordForm.value.purchaseUnit || recordForm.value.purchaseUnit.trim().length === 0) {
-    uni.showToast({ title: '采购商品缺少采购单位，请联系管理员补充', icon: 'none' });
+    uni.showToast({
+      title: '采购商品缺少采购单位，请联系管理员补充',
+      icon: 'none',
+    });
     return;
   }
 
@@ -1644,11 +1462,7 @@ const submitRecord = async () => {
     };
 
     const response: any = editingRecord.value
-      ? await updatePurchaseRecordApi(
-          purchaseListId.value,
-          editingRecord.value.id,
-          data,
-        )
+      ? await updatePurchaseRecordApi(purchaseListId.value, editingRecord.value.id, data)
       : await addPurchaseRecord(purchaseListId.value, {
           ...data,
           purchaseItemId: selectedIngredient.value.id,
@@ -1665,9 +1479,7 @@ const submitRecord = async () => {
 
       // 如果是清单内原料，保持展开状态
       if (selectedIngredient.value) {
-        const item = items.value.find(
-          i => i.ingredientId === selectedIngredient.value.ingredientId
-        );
+        const item = items.value.find((i) => i.ingredientId === selectedIngredient.value.ingredientId);
         if (item) {
           item.expanded = true;
         }
@@ -1693,17 +1505,17 @@ const deleteRecord = (recordId: string) => {
     success: async (res) => {
       if (res.confirm) {
         try {
-          const response: any = await deletePurchaseRecordApi(
-            purchaseListId.value,
-            recordId,
-          );
+          const response: any = await deletePurchaseRecordApi(purchaseListId.value, recordId);
 
           if (response.code === 0) {
             uni.showToast({ title: '删除成功', icon: 'success' });
             // 刷新采购记录
             await loadPurchaseRecords();
           } else {
-            uni.showToast({ title: response.message || '删除失败', icon: 'none' });
+            uni.showToast({
+              title: response.message || '删除失败',
+              icon: 'none',
+            });
           }
         } catch (error: any) {
           console.error('删除采购记录失败', error);
@@ -1722,11 +1534,7 @@ const markItemNoPurchase = async (item: any) => {
   noPurchaseMarkingItemId.value = item.id;
 
   try {
-    const response: any = await markPurchaseItemNoPurchaseApi(
-      purchaseListId.value,
-      item.id,
-      { reason: '现场确认无需采购' },
-    );
+    const response: any = await markPurchaseItemNoPurchaseApi(purchaseListId.value, item.id, { reason: '现场确认无需采购' });
 
     if (response.code === 0) {
       uni.showToast({ title: '已标记，可点取消标记撤销', icon: 'none' });
@@ -1752,16 +1560,16 @@ const clearItemNoPurchase = (item: any) => {
       }
 
       try {
-        const response: any = await clearPurchaseItemNoPurchaseApi(
-          purchaseListId.value,
-          item.id,
-        );
+        const response: any = await clearPurchaseItemNoPurchaseApi(purchaseListId.value, item.id);
 
         if (response.code === 0) {
           uni.showToast({ title: '已取消', icon: 'success' });
           await loadDetail();
         } else {
-          uni.showToast({ title: response.message || '取消失败', icon: 'none' });
+          uni.showToast({
+            title: response.message || '取消失败',
+            icon: 'none',
+          });
         }
       } catch (error: any) {
         console.error('取消无需采购标记失败', error);
@@ -1797,7 +1605,10 @@ const completePurchase = () => {
             // 刷新详情
             await loadDetail();
           } else {
-            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
+            uni.showToast({
+              title: response.message || '操作失败',
+              icon: 'none',
+            });
           }
         } catch (error: any) {
           console.error('确认采购完成失败', error);
@@ -1828,7 +1639,10 @@ const reopenCompletedPurchase = () => {
           uni.showToast({ title: '已撤回', icon: 'success' });
           await loadDetail();
         } else {
-          uni.showToast({ title: response.message || '撤回失败', icon: 'none' });
+          uni.showToast({
+            title: response.message || '撤回失败',
+            icon: 'none',
+          });
         }
       } catch (error: any) {
         console.error('撤回采购完成失败', error);
@@ -1855,7 +1669,10 @@ const startPurchase = () => {
             // 刷新详情
             await loadDetail();
           } else {
-            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
+            uni.showToast({
+              title: response.message || '操作失败',
+              icon: 'none',
+            });
           }
         } catch (error: any) {
           console.error('开始采购失败', error);
@@ -1869,10 +1686,10 @@ const startPurchase = () => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'DRAFT': '草稿',
-    'PENDING': '待采购',
-    'COMPLETED': '已完成',
-    'CANCELLED': '已取消',
+    DRAFT: '草稿',
+    PENDING: '待采购',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
   };
   return statusMap[status] || status;
 };
@@ -1880,10 +1697,10 @@ const getStatusText = (status: string) => {
 // 获取状态样式类
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
-    'DRAFT': 'draft',
-    'PENDING': 'pending',
-    'COMPLETED': 'completed',
-    'CANCELLED': 'cancelled',
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
   };
   return classMap[status] || '';
 };
@@ -1897,12 +1714,7 @@ const getListKindText = (kind?: string) => {
 };
 
 const getPurchaseItemTitle = (item: any) => {
-  return (
-    item?.resolvedProcurementSkuName ||
-    item?.resolvedSuggestedProductName ||
-    item?.ingredientName ||
-    '未知原料'
-  );
+  return item?.resolvedProcurementSkuName || item?.resolvedSuggestedProductName || item?.ingredientName || '未知原料';
 };
 
 const formatBrandLabel = (brand?: string | null) => {
@@ -1927,11 +1739,7 @@ const formatSkuReferencePrice = (item: any) => {
     return `参考单价 ¥${(unitPrice * 500).toFixed(2)}/500${unitLabel}`;
   }
 
-  const unitLabel =
-    item?.resolvedUnitDisplayLabel ||
-    item?.quantityUnit ||
-    item?.resolvedDisplayUnit ||
-    '个';
+  const unitLabel = item?.resolvedUnitDisplayLabel || item?.quantityUnit || item?.resolvedDisplayUnit || '个';
   return `参考单价 ¥${unitPrice.toFixed(2)}/${unitLabel}`;
 };
 
@@ -1951,16 +1759,16 @@ const copyOrderId = (orderId: string) => {
       uni.showToast({
         title: '订单ID已复制',
         icon: 'success',
-        duration: 2000
+        duration: 2000,
       });
     },
     fail: () => {
       uni.showToast({
         title: '复制失败',
         icon: 'none',
-        duration: 2000
+        duration: 2000,
       });
-    }
+    },
   });
 };
 
@@ -2120,7 +1928,10 @@ const confirmDeleteItem = (item: any) => {
             // 刷新详情
             await loadDetail();
           } else {
-            uni.showToast({ title: response.message || '删除失败', icon: 'none' });
+            uni.showToast({
+              title: response.message || '删除失败',
+              icon: 'none',
+            });
           }
         } catch (error: any) {
           console.error('删除原料失败', error);
@@ -2130,7 +1941,6 @@ const confirmDeleteItem = (item: any) => {
     },
   });
 };
-
 </script>
 
 <style scoped lang="scss">
@@ -2152,7 +1962,8 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-.loading-state, .error-state {
+.loading-state,
+.error-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2281,7 +2092,8 @@ const confirmDeleteItem = (item: any) => {
     }
   }
 
-  .complete-time, .creator {
+  .complete-time,
+  .creator {
     display: flex;
     justify-content: space-between;
     margin-bottom: 12rpx;
@@ -2373,6 +2185,72 @@ const confirmDeleteItem = (item: any) => {
   .pending-order-date {
     font-size: 24rpx;
     color: #999;
+  }
+
+  .pending-append-item-list {
+    margin-top: 20rpx;
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+  }
+
+  .pending-append-subtitle {
+    font-size: 24rpx;
+    font-weight: 700;
+    color: #8c5b00;
+  }
+
+  .pending-append-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18rpx;
+    padding: 18rpx 20rpx;
+    border-radius: 12rpx;
+    background-color: #fff;
+    border: 1rpx solid rgba(250, 173, 20, 0.18);
+  }
+
+  .pending-append-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+  }
+
+  .pending-append-name {
+    font-size: 26rpx;
+    font-weight: 700;
+    color: #333;
+    line-height: 1.35;
+  }
+
+  .pending-append-spec,
+  .pending-append-audit {
+    font-size: 22rpx;
+    color: #8c6d1f;
+    line-height: 1.45;
+  }
+
+  .pending-append-quantity {
+    flex-shrink: 0;
+    min-width: 150rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4rpx;
+  }
+
+  .pending-append-quantity-label {
+    font-size: 20rpx;
+    color: #ad6800;
+  }
+
+  .pending-append-quantity-value {
+    font-size: 28rpx;
+    color: #fa8c16;
+    font-weight: 800;
   }
 
   .merge-orders-btn {
@@ -3208,7 +3086,6 @@ const confirmDeleteItem = (item: any) => {
         color: #fff;
       }
     }
-
   }
 
   .record-sku-main {

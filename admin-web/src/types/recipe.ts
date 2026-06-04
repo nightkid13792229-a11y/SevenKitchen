@@ -116,6 +116,7 @@ export interface SupplementTarget {
 
 export interface RecipeItem {
   id: string;
+  clientKey?: string;
   ingredientId: string;
   ingredientName?: string;
   ingredientType?: string;

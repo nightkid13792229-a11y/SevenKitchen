@@ -7,11 +7,7 @@
     </view>
 
     <view class="date-section">
-      <picker
-        mode="date"
-        :value="selectedProductionDate"
-        @change="handleProductionDateChange"
-      >
+      <picker mode="date" :value="selectedProductionDate" @change="handleProductionDateChange">
         <view class="date-picker">
           <view>
             <text class="date-label">生产日期</text>
@@ -46,21 +42,15 @@
     <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
     <view v-if="canAutoSchedule" class="schedule-section">
       <button class="schedule-btn" @tap="autoScheduleToday">
-        <text>📋 开始自动排单</text>
+        <text>📋 {{ scheduleButtonText }}</text>
       </button>
-      <text class="schedule-hint">将为 {{ selectedProductionDate }} 的 {{ statistics.pendingScheduleOrders }} 笔待排单订单创建生产批次</text>
+      <text class="schedule-hint">{{ scheduleHintText }}</text>
       <text class="schedule-warning">⚠️ 点击前会检查所选日期的采购清单是否已完成</text>
     </view>
 
     <!-- Tab切换 -->
     <view class="tabs">
-      <view
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="tab-item"
-        :class="{ active: activeTab === tab.value }"
-        @tap="switchTab(tab.value)"
-      >
+      <view v-for="tab in tabs" :key="tab.value" class="tab-item" :class="{ active: activeTab === tab.value }" @tap="switchTab(tab.value)">
         <text>{{ tab.label }}</text>
         <text class="tab-count">{{ tab.count }}</text>
       </view>
@@ -107,11 +97,7 @@
           <!-- 操作按钮区 -->
           <view class="action-buttons">
             <!-- PENDING状态：显示开始制作按钮 -->
-            <button
-              v-if="task.status === 'PENDING'"
-              class="start-btn"
-              @tap.stop="handleStartTask(task)"
-            >
+            <button v-if="task.status === 'PENDING'" class="start-btn" @tap.stop="handleStartTask(task)">
               <text class="btn-icon">▶️</text>
               <text class="btn-text">开始制作</text>
             </button>
@@ -129,12 +115,7 @@
     <!-- 历史记录（可展开查看） -->
     <view v-if="historyBatches.length > 0" class="history-section">
       <view class="section-title">历史记录</view>
-      <view
-        v-for="batch in historyBatches"
-        :key="batch.id"
-        class="history-item"
-        @tap="toggleHistory(batch.id)"
-      >
+      <view v-for="batch in historyBatches" :key="batch.id" class="history-item" @tap="toggleHistory(batch.id)">
         <view class="history-header">
           <text class="history-date">{{ batch.date }}</text>
           <text class="history-count">{{ batch.count }}锅</text>
@@ -155,14 +136,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import {
-  getTodayStatistics,
-  autoSchedule,
-  getPackagingUnits,
-  completeProductionTask,
-  startProductionTask,
-  deleteProductionBatch,
-} from './api/production';
+import { getTodayStatistics, autoSchedule, getPackagingUnits, completeProductionTask, startProductionTask, deleteProductionBatch } from './api/production';
 import { formatDecimal } from './utils/format';
 
 const getTodayDateText = () => {
@@ -211,31 +185,49 @@ const taskStatusCounts = computed(() => {
 // Tab筛选
 const tabs = computed(() => [
   { label: '待制作', value: 'PENDING', count: taskStatusCounts.value.PENDING },
-  { label: '制作中', value: 'IN_PROGRESS', count: taskStatusCounts.value.IN_PROGRESS },
-  { label: '已完成', value: 'COMPLETED', count: taskStatusCounts.value.COMPLETED },
+  {
+    label: '制作中',
+    value: 'IN_PROGRESS',
+    count: taskStatusCounts.value.IN_PROGRESS,
+  },
+  {
+    label: '已完成',
+    value: 'COMPLETED',
+    count: taskStatusCounts.value.COMPLETED,
+  },
 ]);
 
 // 计算属性：当前标签的文本
 const currentTabLabel = computed(() => {
-  const tab = tabs.value.find(t => t.value === activeTab.value);
+  const tab = tabs.value.find((t) => t.value === activeTab.value);
   return tab ? tab.label : '';
 });
 
 // 计算属性：筛选后的任务列表
 const filteredTasks = computed(() => {
-  return allTasks.value.filter(task => task.status === activeTab.value);
+  return allTasks.value.filter((task) => task.status === activeTab.value);
 });
 
 const canAutoSchedule = computed(() => {
   return Number(statistics.value.pendingScheduleOrders || 0) > 0;
 });
 
+const hasExistingProductionTasks = computed(() => {
+  return Number(statistics.value.todayOrders || 0) > 0;
+});
+
+const scheduleButtonText = computed(() => {
+  return hasExistingProductionTasks.value ? '创建新增制作单' : '开始自动排单';
+});
+
+const scheduleHintText = computed(() => {
+  const pendingCount = Number(statistics.value.pendingScheduleOrders || 0);
+  const actionText = hasExistingProductionTasks.value ? '创建新增生产批次' : '创建生产批次';
+  return `将为 ${selectedProductionDate.value} 的 ${pendingCount} 笔待排单订单${actionText}`;
+});
+
 const isCarryoverTask = (task: any) => {
-  return (
-    task?.productionDate &&
-    task.productionDate !== selectedProductionDate.value &&
-    task.status !== 'COMPLETED'
-  );
+  return task?.productionDate && task.productionDate !== selectedProductionDate.value && task.status !== 'COMPLETED';
 };
 
 // 页面加载
@@ -281,14 +273,16 @@ const handleProductionDateChange = async (event: any) => {
 const autoScheduleToday = async () => {
   uni.showModal({
     title: '确认排单',
-    content: `系统将检查 ${selectedProductionDate.value} 的采购清单是否已完成，确认后开始自动排单`,
+    content: `系统将检查 ${selectedProductionDate.value} 的采购清单是否已完成，确认后${scheduleButtonText.value}`,
     success: async (res) => {
       if (!res.confirm) return;
 
       uni.showLoading({ title: '排单中...' });
 
       try {
-        const result = await autoSchedule({ startDate: selectedProductionDate.value });
+        const result = await autoSchedule({
+          startDate: selectedProductionDate.value,
+        });
 
         uni.hideLoading();
         uni.showToast({
@@ -329,8 +323,8 @@ const loadPackagingUnits = async () => {
     // 按日期分组历史记录（只包含已完成的任务）
     const historyMap = new Map<string, any[]>();
     units
-      .filter(unit => unit.status === 'COMPLETED')
-      .forEach(unit => {
+      .filter((unit) => unit.status === 'COMPLETED')
+      .forEach((unit) => {
         const date = unit.productionDate || unit.createdAt.split(' ')[0];
         if (!historyMap.has(date)) {
           historyMap.set(date, []);

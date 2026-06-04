@@ -2,42 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const indexSource = readFileSync(
-  resolve(__dirname, 'staff-production/index.vue'),
-  'utf8',
-);
-const productionApiSource = readFileSync(
-  resolve(__dirname, 'staff-production/api/production.ts'),
-  'utf8',
-);
-const detailSource = readFileSync(
-  resolve(__dirname, 'staff-production/detail.vue'),
-  'utf8',
-);
-const printTaskSource = readFileSync(
-  resolve(__dirname, 'staff-production/print-task.vue'),
-  'utf8',
-);
-const printLabelSource = readFileSync(
-  resolve(__dirname, 'staff-production/print-label.vue'),
-  'utf8',
-);
-const labelConfigSource = readFileSync(
-  resolve(__dirname, 'staff-production/utils/label-config.ts'),
-  'utf8',
-);
-const labelRendererSource = readFileSync(
-  resolve(__dirname, 'staff-production/utils/label-renderer.ts'),
-  'utf8',
-);
-const jcingPrinterSource = readFileSync(
-  resolve(__dirname, 'staff-production/utils/jcing-printer.ts'),
-  'utf8',
-);
-const sharedJcingPrinterSource = readFileSync(
-  resolve(__dirname, '../utils/jcing-printer.ts'),
-  'utf8',
-);
+const indexSource = readFileSync(resolve(__dirname, 'staff-production/index.vue'), 'utf8');
+const productionApiSource = readFileSync(resolve(__dirname, 'staff-production/api/production.ts'), 'utf8');
+const detailSource = readFileSync(resolve(__dirname, 'staff-production/detail.vue'), 'utf8');
+const printTaskSource = readFileSync(resolve(__dirname, 'staff-production/print-task.vue'), 'utf8');
+const printLabelSource = readFileSync(resolve(__dirname, 'staff-production/print-label.vue'), 'utf8');
+const labelConfigSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-config.ts'), 'utf8');
+const labelRendererSource = readFileSync(resolve(__dirname, 'staff-production/utils/label-renderer.ts'), 'utf8');
+const jcingPrinterSource = readFileSync(resolve(__dirname, 'staff-production/utils/jcing-printer.ts'), 'utf8');
+const sharedJcingPrinterSource = readFileSync(resolve(__dirname, '../utils/jcing-printer.ts'), 'utf8');
 
 describe('staff production scheduling guardrails', () => {
   it('shows auto-schedule based on unscheduled purchasing orders instead of existing batches', () => {
@@ -52,6 +25,14 @@ describe('staff production scheduling guardrails', () => {
     expect(indexSource).not.toContain('!hasTodayBatch');
     expect(indexSource).not.toContain('const hasTodayBatch');
     expect(indexSource).not.toContain('hasTodayBatch.value = hasToday');
+  });
+
+  it('labels follow-up scheduling as creating an added production task when batches already exist', () => {
+    expect(indexSource).toContain('scheduleButtonText');
+    expect(indexSource).toContain('statistics.value.todayOrders');
+    expect(indexSource).toContain('创建新增制作单');
+    expect(indexSource).toContain('开始自动排单');
+    expect(indexSource).toContain('{{ scheduleButtonText }}');
   });
 
   it('moves staff into the task detail immediately after starting production', () => {
@@ -135,7 +116,8 @@ describe('staff production scheduling guardrails', () => {
   it('makes production date filtering explicit and keeps carryover tasks visible', () => {
     expect(indexSource).toContain('mode="date"');
     expect(indexSource).toContain('handleProductionDateChange');
-    expect(indexSource).toContain('autoSchedule({ startDate: selectedProductionDate.value })');
+    expect(indexSource).toContain('autoSchedule({');
+    expect(indexSource).toContain('startDate: selectedProductionDate.value');
     expect(indexSource).toContain('isCarryoverTask(task)');
     expect(indexSource).toContain('逾期');
     expect(productionApiSource).toContain('includeUnfinishedCarryover?: boolean');
@@ -167,12 +149,8 @@ describe('staff production scheduling guardrails', () => {
     [jcingPrinterSource, sharedJcingPrinterSource].forEach((source) => {
       expect(source).toContain('const LABEL_PAPER_WIDTH_MM = 70');
       expect(source).toContain('const LABEL_PAPER_HEIGHT_MM = 100');
-      expect(source).toContain(
-        'JCAPI.startDrawLabel(canvasId, component, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0, null)',
-      );
-      expect(source).toContain(
-        'JCAPI.drawImage(tempFilePath, 0, 0, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0)',
-      );
+      expect(source).toContain('JCAPI.startDrawLabel(canvasId, component, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0, null)');
+      expect(source).toContain('JCAPI.drawImage(tempFilePath, 0, 0, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0)');
       expect(source).not.toContain('JCAPI.startDrawLabel(canvasId, component, 75, 100, 0, null)');
       expect(source).not.toContain('JCAPI.drawImage(tempFilePath, 0, 0, 75, 100, 0)');
     });

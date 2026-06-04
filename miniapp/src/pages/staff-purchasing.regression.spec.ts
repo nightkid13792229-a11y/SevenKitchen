@@ -107,9 +107,7 @@ describe('staff purchasing quantity display', () => {
 
       expect(getDisplayUnitBody).toContain("if (item.type === 'SUPPLEMENT')");
       expect(getDisplayUnitBody).toContain("return item.quantityUnit || item.displayUnit || 'g';");
-      expect(getDisplayUnitBody.indexOf("if (item.type === 'SUPPLEMENT')")).toBeLessThan(
-        getDisplayUnitBody.indexOf('if (item.resolvedDisplayUnit)'),
-      );
+      expect(getDisplayUnitBody.indexOf("if (item.type === 'SUPPLEMENT')")).toBeLessThan(getDisplayUnitBody.indexOf('if (item.resolvedDisplayUnit)'));
     });
   });
 
@@ -122,6 +120,19 @@ describe('staff purchasing quantity display', () => {
     expect(previewSource).toContain('formatResolvedQuantity(item.resolvedAvailableQuantity, item)');
     expect(previewSource).toContain('formatResolvedQuantity(item.resolvedStockDeductedQuantity, item)');
     expect(previewSource).toContain('formatResolvedQuantity(item.resolvedPurchaseShortageQuantity, item)');
+  });
+});
+
+describe('staff purchasing pending append flow', () => {
+  it('surfaces item-level demand for same-day orders before merging them', () => {
+    expect(detailSource).toContain('pendingAppendItems');
+    expect(detailSource).toContain('新增采购需求');
+    expect(detailSource).toContain('pending-append-item-list');
+    expect(detailSource).toContain('resolvePurchaseItemDisplay(item)');
+    expect(detailSource).toContain('pendingAppendItems.value =');
+    expect(detailSource).toContain('formatQuantity(item)');
+    expect(detailSource).toContain('response.data?.newItems?.length');
+    expect(detailSource).toContain('response.data?.updatedItems?.length');
   });
 });
 
@@ -139,7 +150,7 @@ describe('staff purchasing detail audit display', () => {
   it('shows procurement SKU as the primary item name without the purchase SKU prefix', () => {
     expect(detailSource).toContain('getPurchaseItemTitle(item)');
     expect(detailSource).not.toContain('采购SKU：{{ item.resolvedProcurementSkuName }}');
-    expect(detailSource).not.toContain("content: `确认删除原料\"${item.ingredientName}\"？`");
+    expect(detailSource).not.toContain('content: `确认删除原料"${item.ingredientName}"？`');
   });
 
   it('does not show purchase SKU prefixes on daily purchase review surfaces', () => {
@@ -176,9 +187,7 @@ describe('staff purchasing detail audit display', () => {
     expect(detailSource).toContain('参考单价 ¥');
     expect(detailSource).not.toContain('约¥');
     expect(detailSource).not.toContain('class="spec brand">品牌');
-    expect(detailSource.indexOf('class="sku-price"')).toBeLessThan(
-      detailSource.indexOf('class="item-specs"'),
-    );
+    expect(detailSource.indexOf('class="sku-price"')).toBeLessThan(detailSource.indexOf('class="item-specs"'));
   });
 });
 

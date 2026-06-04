@@ -16,13 +16,15 @@ describe('removed AI ingredient feature', () => {
     join('tests', 'application', featureSlug),
     join('tests', 'interfaces', 'controllers', `${featureSlug}.controller.spec.ts`),
     join('tests', 'prisma', `${featureSlug}-schema.spec.ts`),
+  ];
+  const retainedMigrationHistory = [
     join('prisma', 'migrations', `202605270003_add_${featureSnake}_agent`),
+    join('prisma', 'migrations', `202605300001_drop_${featureSnake}_agent`),
   ];
 
   const sourceRoots = [
     join(backendRoot, 'src'),
     join(backendRoot, 'prisma', 'schema.prisma'),
-    join(backendRoot, 'prisma', 'migrations'),
   ];
 
   function collectFiles(path: string): string[] {
@@ -37,13 +39,19 @@ describe('removed AI ingredient feature', () => {
     return readdirSync(path).flatMap((entry) => collectFiles(join(path, entry)));
   }
 
-  it('does not keep feature files or migrations in the backend tree', () => {
+  it('does not keep feature files in the backend tree', () => {
     for (const path of removedPaths) {
       expect(existsSync(join(backendRoot, path))).toBe(false);
     }
   });
 
-  it('does not keep API, schema, or migration references for the removed feature', () => {
+  it('keeps applied migration history for production deployments', () => {
+    for (const path of retainedMigrationHistory) {
+      expect(existsSync(join(backendRoot, path))).toBe(true);
+    }
+  });
+
+  it('does not keep API or schema references for the removed feature', () => {
     const forbiddenTokens = [
       featureSlug,
       featurePascal,

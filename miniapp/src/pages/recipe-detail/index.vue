@@ -42,7 +42,6 @@
         v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
         class="tags-row"
       >
-        <text class="section-label">健康标签：</text>
         <view class="tags-container">
           <text
             v-for="tag in recipe.targetHealthTags"

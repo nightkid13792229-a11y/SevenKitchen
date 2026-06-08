@@ -174,6 +174,18 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).not.toContain('>成品<')
   })
 
+  it('shows recipe health tags without the health tag section label', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('</template>'))
+
+    expect(templateSource).toContain('v-for="tag in recipe.targetHealthTags"')
+    expect(templateSource).toContain('class="tag health-tag"')
+    expect(templateSource).not.toContain('<text class="section-label">健康标签')
+  })
+
   it('does not render a customer service entry on recipe detail', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),

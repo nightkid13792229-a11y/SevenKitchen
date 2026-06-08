@@ -69,7 +69,7 @@
         </view>
         <view v-if="energyDensityRows.length > 0" class="energy-density-list">
           <view v-for="row in energyDensityRows" :key="row.label" class="energy-density-row">
-            <text class="energy-density-label">能量密度 · {{ row.label }}</text>
+            <text class="energy-density-label">能量密度</text>
             <text class="energy-density-value">{{ row.value }}</text>
           </view>
         </view>
@@ -87,15 +87,15 @@
               <text class="table-cell nutrient-name-cell">营养素</text>
               <text class="table-cell unit-cell">单位</text>
               <view class="table-cell report-number-cell stacked-head">
-                <text>下限</text>
+                <text>标准下限</text>
                 <text>/1,000kcal</text>
               </view>
               <view class="table-cell report-number-cell stacked-head">
-                <text>上限</text>
+                <text>标准上限</text>
                 <text>/1,000kcal</text>
               </view>
               <text class="table-cell report-number-cell">食谱含量</text>
-              <text class="table-cell report-number-cell">{{ section.dryMatterHeader || '干物质/100g' }}</text>
+              <text class="table-cell report-number-cell">{{ section.dryMatterHeader || '/100gDM' }}</text>
             </view>
             <view v-for="row in section.rows" :key="row.key || row.name" :class="['table-row', getRowStatusClass(row)]">
               <text class="table-cell nutrient-name-cell">{{ row.name }}</text>

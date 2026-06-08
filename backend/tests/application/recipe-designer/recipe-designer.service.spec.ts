@@ -2869,6 +2869,7 @@ describe('RecipeDesignerService', () => {
           nutrientSections: expect.objectContaining({
             minerals: expect.objectContaining({
               title: '微量元素',
+              dryMatterHeader: '/100gDM',
               rows: expect.arrayContaining([
                 expect.objectContaining({
                   key: 'calcium',
@@ -3041,7 +3042,7 @@ describe('RecipeDesignerService', () => {
             nutritionFood: {
               id: 'food-supplement-calcium',
               name: '碳酸钙粉营养档案',
-              displayNameZh: '碳酸钙粉',
+              displayNameZh: '碳酸钙粉 · NOW · 227g/瓶',
               mappings: [],
             },
             ingredient: {
@@ -3071,7 +3072,7 @@ describe('RecipeDesignerService', () => {
 
     expect(rows).toEqual([
       {
-        ingredientName: '碳酸钙粉（NOW · 227g/瓶）',
+        ingredientName: '碳酸钙粉 · NOW · 227g/瓶',
         amountLabel: '2平勺',
         weightPercentLabel: '-',
       },

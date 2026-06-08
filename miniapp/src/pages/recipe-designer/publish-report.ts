@@ -76,10 +76,10 @@ const NUTRIENT_SECTION_DEFINITIONS: Array<{
   title: string
   dryMatterHeader: string
 }> = [
-  { key: 'minerals', category: 'MINERAL', title: '微量元素', dryMatterHeader: '干物质/100g' },
-  { key: 'vitamins', category: 'VITAMIN', title: '维生素', dryMatterHeader: '干物质/100g' },
-  { key: 'aminoAcids', category: 'AMINO_ACID', title: '氨基酸', dryMatterHeader: '干物质/100g' },
-  { key: 'fattyAcids', category: 'FATTY_ACID', title: '脂肪酸', dryMatterHeader: '干物质/100g' },
+  { key: 'minerals', category: 'MINERAL', title: '微量元素', dryMatterHeader: '/100gDM' },
+  { key: 'vitamins', category: 'VITAMIN', title: '维生素', dryMatterHeader: '/100gDM' },
+  { key: 'aminoAcids', category: 'AMINO_ACID', title: '氨基酸', dryMatterHeader: '/100gDM' },
+  { key: 'fattyAcids', category: 'FATTY_ACID', title: '脂肪酸', dryMatterHeader: '/100gDM' },
 ]
 
 export function buildPublishNutritionReport(
@@ -195,6 +195,7 @@ function getIngredientReportName(draftItem: any, assessedItem: any, supplement: 
   if (!supplement) return baseName
 
   const detailLabel = getSupplementBrandSpecLabel(draftItem, assessedItem)
+  if (detailLabel && baseName.includes(detailLabel)) return baseName
   return detailLabel ? `${baseName}（${detailLabel}）` : baseName
 }
 

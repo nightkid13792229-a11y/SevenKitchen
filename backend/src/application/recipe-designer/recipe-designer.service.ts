@@ -2797,6 +2797,7 @@ export class RecipeDesignerService {
     if (!isSupplement) return baseName;
 
     const detailLabel = this.resolvePublishedSupplementBrandSpecLabel(item);
+    if (detailLabel && baseName.includes(detailLabel)) return baseName;
     return detailLabel ? `${baseName}（${detailLabel}）` : baseName;
   }
 
@@ -2912,7 +2913,7 @@ export class RecipeDesignerService {
         sections[definition.key] = {
           key: definition.key,
           title: definition.title,
-          dryMatterHeader: '干物质/100g',
+          dryMatterHeader: '/100gDM',
           rows: assessment.groupedEntries
             .filter(
               (entry) =>

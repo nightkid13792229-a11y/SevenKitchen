@@ -198,6 +198,11 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).not.toContain('recipeDesignerApi.listDrafts()')
   })
 
+  it('loads publish preview draft detail so supplement display units are available', () => {
+    expect(publishSource).toContain('recipeDesignerApi.getDraft(draftId.value)')
+    expect(publishSource).not.toContain('recipeDesignerApi.listDrafts()')
+  })
+
   it('places reproduction as the last option in the new draft life stage picker', () => {
     const scenarioOptionsBlock = listSource.match(
       /const scenarioOptions:[\s\S]*?\n\]/,
@@ -1462,7 +1467,7 @@ describe('recipe designer publish nutrition report', () => {
               brand: 'NOW',
               productModel: '227g/瓶',
             },
-            nutritionProfileDisplayName: '碳酸钙粉',
+            nutritionProfileDisplayName: '碳酸钙粉 · NOW · 227g/瓶',
           },
         ],
       },
@@ -1565,7 +1570,7 @@ describe('recipe designer publish nutrition report', () => {
 
     expect(report.ingredientRows).toEqual([
       { ingredientName: '鸡胸肉（熟）', amountLabel: '80g', weightPercentLabel: '80.0%' },
-      { ingredientName: '碳酸钙粉（NOW · 227g/瓶）', amountLabel: '2平勺', weightPercentLabel: '-' },
+      { ingredientName: '碳酸钙粉 · NOW · 227g/瓶', amountLabel: '2平勺', weightPercentLabel: '-' },
     ])
     expect(report.macroRows.find((row) => row.key === 'crudeProtein')).toMatchObject({
       name: '蛋白质',
@@ -1586,6 +1591,7 @@ describe('recipe designer publish nutrition report', () => {
       dryMatterLabel: '0.75',
       statusClass: 'status-deficient',
     })
+    expect(report.nutrientSections.minerals.dryMatterHeader).toBe('/100gDM')
     expect(report.nutrientSections.minerals.rows.find((row) => row.name === '钙磷比')).toMatchObject({
       unit: '比例',
       minLabel: '1:1',
@@ -1630,10 +1636,14 @@ describe('recipe designer publish nutrition report', () => {
     expect(publishSource).toContain('维生素')
     expect(publishSource).toContain('氨基酸')
     expect(publishSource).toContain('脂肪酸')
-    expect(publishSource).toContain('下限')
-    expect(publishSource).toContain('上限')
+    expect(publishSource).toContain('标准下限')
+    expect(publishSource).toContain('标准上限')
     expect(publishSource).toContain('/1,000kcal')
-    expect(publishSource).toContain('干物质/100g')
+    expect(publishSource).toContain('/100gDM')
+    expect(publishSource).not.toContain('能量密度 · {{ row.label }}')
+    expect(publishSource).not.toContain('每公斤配方')
+    expect(publishSource).not.toContain('每公斤干物质')
+    expect(publishSource).not.toContain('干物质/100g')
     expect(publishSource).toContain('buildPublishNutritionReport')
     expect(publishSource).toContain('@tap="handlePublishTap"')
     expect(publishSource).toContain('v-if="canPublishRecipe"')

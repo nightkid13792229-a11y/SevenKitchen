@@ -82,7 +82,7 @@
         </view>
         <view class="energy-density-list">
           <view v-for="row in report.energyDensityRows" :key="row.label" class="energy-density-row">
-            <text class="energy-density-label">能量密度 · {{ row.label }}</text>
+            <text class="energy-density-label">能量密度</text>
             <text class="energy-density-value">{{ row.value }}</text>
           </view>
         </view>
@@ -96,15 +96,15 @@
               <text class="table-cell nutrient-name-cell">营养素</text>
               <text class="table-cell unit-cell">单位</text>
               <view class="table-cell report-number-cell stacked-head">
-                <text>下限</text>
+                <text>标准下限</text>
                 <text>/1,000kcal</text>
               </view>
               <view class="table-cell report-number-cell stacked-head">
-                <text>上限</text>
+                <text>标准上限</text>
                 <text>/1,000kcal</text>
               </view>
               <text class="table-cell report-number-cell">食谱含量</text>
-              <text class="table-cell report-number-cell">{{ section.dryMatterHeader || '干物质/100g' }}</text>
+              <text class="table-cell report-number-cell">{{ section.dryMatterHeader || '/100gDM' }}</text>
             </view>
             <view v-if="section.rows.length === 0" class="table-row">
               <text class="table-cell empty-cell">暂无数据</text>
@@ -251,10 +251,8 @@ async function loadPublishReport() {
 
 async function loadDraft() {
   try {
-    const res: any = await recipeDesignerApi.listDrafts()
-    const data = res?.data ?? res
-    const drafts = Array.isArray(data) ? data : data?.items || data?.drafts || []
-    draft.value = drafts.find((item: any) => item.id === draftId.value) || null
+    const res: any = await recipeDesignerApi.getDraft(draftId.value)
+    draft.value = res?.data ?? res ?? null
   } catch (error) {
     console.error('[RecipeDesignerPublish] Failed to load draft:', error)
     uni.showToast({ title: '加载食谱失败', icon: 'none' })

@@ -12,6 +12,7 @@ import {
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type {
@@ -239,6 +240,32 @@ export interface StaffOrderAddressInput {
 export interface StaffOrderAddressResult {
   address: Address;
   order: Order;
+}
+
+export interface StaffOrderDog {
+  id: string;
+  name: string;
+  breedName: string | null;
+  currentWeightKg: number;
+  gender: string;
+  mealsPerDay: number;
+}
+
+export interface StaffOrderPackagePlanUpdateResult {
+  id: string;
+  orderId: string;
+  quantityG: number;
+  packageCount: number;
+  packageSpecG: number;
+  packagePlan: OrderPackagePlanItem[];
+  pricingEffect: {
+    amountUpdated: boolean;
+    previousAmountTotal: number;
+    recalculatedAmountTotal: number;
+    chargedAmountTotal: number;
+    suggestedRefundAmount: number;
+    absorbedIncreaseAmount: number;
+  };
 }
 
 interface ResolvedOrderItemPackageInput {
@@ -3054,6 +3081,235 @@ export class OrderService {
     };
   }
 
+  async listOrderCustomerDogs(orderId: string): Promise<StaffOrderDog[]> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    const dogs = await this.prisma.dog.findMany({
+      where: { ownerId: order.customerId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        breedId: true,
+        customBreedName: true,
+        currentWeightKg: true,
+        gender: true,
+        mealsPerDay: true,
+      },
+    });
+
+    const breedIds = Array.from(new Set(dogs.map((dog) => dog.breedId)));
+    const breeds = breedIds.length
+      ? await this.prisma.dogBreed.findMany({
+          where: { id: { in: breedIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const breedMap = new Map(breeds.map((breed) => [breed.id, breed.name]));
+
+    return dogs.map((dog) => ({
+      id: dog.id,
+      name: dog.name,
+      breedName: dog.customBreedName || breedMap.get(dog.breedId) || null,
+      currentWeightKg: dog.currentWeightKg,
+      gender: dog.gender,
+      mealsPerDay: dog.mealsPerDay,
+    }));
+  }
+
+  async switchOrderDog(orderId: string, dogId: string): Promise<Order> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    this.assertOrderAddressEditable(order);
+
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: { id: true, ownerId: true },
+    });
+    if (!dog) {
+      throw new NotFoundException(`Dog ${dogId} not found`);
+    }
+    if (dog.ownerId !== order.customerId) {
+      throw new BadRequestException(
+        'Dog does not belong to the order customer',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { dogId },
+      }),
+      this.prisma.orderItem.updateMany({
+        where: { orderId },
+        data: { dogId },
+      }),
+    ]);
+
+    const updatedOrder = await this.orderRepository.findById(orderId);
+    if (!updatedOrder) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+    return updatedOrder;
+  }
+
+  async updateOrderItemPackagePlan(
+    orderId: string,
+    orderItemId: string,
+    packagePlanInput: OrderPackagePlanItem[],
+  ): Promise<StaffOrderPackagePlanUpdateResult> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    this.assertOrderPackageEditable(order);
+
+    const orderItem = await this.prisma.orderItem.findUnique({
+      where: { id: orderItemId },
+      select: {
+        id: true,
+        orderId: true,
+        dogId: true,
+        recipeSnapshot: true,
+        quantityG: true,
+        dailyIntakeG: true,
+        ingredientSourcePlan: true,
+        preparationMethod: true,
+        cookingMethod: true,
+        customRequirements: true,
+        productionBatchId: true,
+      },
+    });
+    if (!orderItem) {
+      throw new NotFoundException(`Order item ${orderItemId} not found`);
+    }
+    if (orderItem.orderId !== orderId) {
+      throw new BadRequestException(
+        'Order item does not belong to the order',
+      );
+    }
+
+    const packagePlan = normalizePackagePlan(packagePlanInput);
+    const summary = summarizePackagePlan(packagePlan);
+    if (orderItem.productionBatchId) {
+      throw new BadRequestException(
+        'Cannot update package plan after production has been scheduled',
+      );
+    }
+
+    const recipeSnapshot = orderItem.recipeSnapshot as Partial<RecipeSnapshot> | null;
+    const recipeId =
+      recipeSnapshot && typeof recipeSnapshot.id === 'string'
+        ? recipeSnapshot.id
+        : '';
+    if (!recipeId) {
+      throw new BadRequestException(
+        'Order item recipe snapshot is missing recipe id',
+      );
+    }
+
+    const dogId = orderItem.dogId ?? order.dogId;
+    if (!dogId) {
+      throw new BadRequestException('Order item is missing dog id');
+    }
+
+    const recalculatedPricing = await this.previewPricing({
+      customerId: order.customerId,
+      dogId,
+      type: order.type,
+      ingredientSourcePlan:
+        (orderItem.ingredientSourcePlan as IngredientSourcePlanCode | null) ??
+        undefined,
+      pricingPurpose: 'ORDER',
+      targetProductionDate: order.targetProductionDate,
+      addressId: order.addressId,
+      items: [
+        {
+          recipeId,
+          quantityG: summary.totalQuantityG,
+          packageCount: summary.totalPackageCount,
+          packageSpecG: summary.primaryPackageSpecG,
+          packagePlan,
+          dailyIntakeG: orderItem.dailyIntakeG ?? undefined,
+          preparationMethod:
+            orderItem.preparationMethod as PreparationMethod | null,
+          cookingMethod: orderItem.cookingMethod as CookingMethod | null,
+          customRequirements: orderItem.customRequirements ?? null,
+        },
+      ],
+    });
+
+    const roundMoney = (amount: number): number =>
+      Math.round(Number(amount || 0) * 100) / 100;
+    const previousAmountTotal = roundMoney(
+      Number(order.amountTotal ?? order.totalAmount ?? 0),
+    );
+    const recalculatedAmountTotal = roundMoney(
+      recalculatedPricing.amountTotal,
+    );
+    const isPaid =
+      order.paymentStatus === 'SUCCESS' ||
+      Boolean(order.paidAt) ||
+      order.status === OrderStatus.PAID;
+    const pricingBreakdownSnapshot =
+      recalculatedPricing.pricingBreakdown == null
+        ? Prisma.JsonNull
+        : (recalculatedPricing.pricingBreakdown as unknown as Prisma.InputJsonValue);
+
+    const updatedOrderItem = await this.prisma.orderItem.update({
+      where: { id: orderItemId },
+      data: {
+        quantityG: summary.totalQuantityG,
+        packagePlan: packagePlan as unknown as Prisma.InputJsonValue,
+        packageCount: summary.totalPackageCount,
+        packageSpecG: summary.primaryPackageSpecG,
+      },
+      select: {
+        id: true,
+        orderId: true,
+        quantityG: true,
+        packageCount: true,
+        packageSpecG: true,
+      },
+    });
+
+    if (isPaid) {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          pricingBreakdownSnapshot,
+        },
+      });
+    } else {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          amountProduct: recalculatedPricing.amountProduct,
+          amountShipping: recalculatedPricing.amountShipping,
+          amountTotal: recalculatedPricing.amountTotal,
+          totalAmount: recalculatedPricing.amountTotal,
+          pricingBreakdownSnapshot,
+        },
+      });
+    }
+
+    return {
+      ...updatedOrderItem,
+      packagePlan,
+      pricingEffect: {
+        amountUpdated: !isPaid,
+        previousAmountTotal,
+        recalculatedAmountTotal,
+        chargedAmountTotal: isPaid
+          ? previousAmountTotal
+          : recalculatedAmountTotal,
+        suggestedRefundAmount:
+          isPaid && recalculatedAmountTotal < previousAmountTotal
+            ? roundMoney(previousAmountTotal - recalculatedAmountTotal)
+            : 0,
+        absorbedIncreaseAmount:
+          isPaid && recalculatedAmountTotal > previousAmountTotal
+            ? roundMoney(recalculatedAmountTotal - previousAmountTotal)
+            : 0,
+      },
+    };
+  }
+
   private async getOrderForStaffAddress(orderId: string): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -3070,6 +3326,21 @@ export class OrderService {
     ) {
       throw new BadRequestException(
         `Cannot update address for order in status: ${order.status}`,
+      );
+    }
+  }
+
+  private assertOrderPackageEditable(order: Order): void {
+    if (
+      order.status === OrderStatus.PURCHASING ||
+      order.status === OrderStatus.IN_PRODUCTION ||
+      order.status === OrderStatus.FREEZING ||
+      order.status === OrderStatus.SHIPPED ||
+      order.status === OrderStatus.COMPLETED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot update package plan for order in status: ${order.status}`,
       );
     }
   }

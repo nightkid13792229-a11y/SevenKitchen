@@ -99,6 +99,38 @@ export interface StaffOrderAddressInput {
   isDefault?: boolean;
 }
 
+export interface StaffOrderDog {
+  id: string;
+  name: string;
+  breedName?: string | null;
+  currentWeightKg?: number | null;
+  weightKg?: number | null;
+  gender?: string | null;
+  mealsPerDay?: number | null;
+}
+
+export interface OrderPackagePlanItem {
+  packageSpecG: number;
+  packageCount: number;
+}
+
+export interface StaffOrderPackagePlanUpdateResult {
+  id: string;
+  orderId: string;
+  quantityG: number;
+  packageCount: number;
+  packageSpecG: number;
+  packagePlan: OrderPackagePlanItem[];
+  pricingEffect: {
+    amountUpdated: boolean;
+    previousAmountTotal: number;
+    recalculatedAmountTotal: number;
+    chargedAmountTotal: number;
+    suggestedRefundAmount: number;
+    absorbedIncreaseAmount: number;
+  };
+}
+
 /**
  * 获取后台订单详情
  */
@@ -210,6 +242,33 @@ export function updateOrderCustomerAddress(
     url: `/admin/orders/${orderId}/addresses/${addressId}`,
     method: 'PUT',
     data,
+  });
+}
+
+export function listOrderCustomerDogs(orderId: string) {
+  return request<StaffOrderDog[]>({
+    url: `/admin/orders/${orderId}/dogs`,
+    method: 'GET',
+  });
+}
+
+export function switchOrderDog(orderId: string, dogId: string) {
+  return request({
+    url: `/admin/orders/${orderId}/dog`,
+    method: 'PUT',
+    data: { dogId },
+  });
+}
+
+export function updateOrderItemPackagePlan(
+  orderId: string,
+  itemId: string,
+  packagePlan: OrderPackagePlanItem[],
+) {
+  return request<StaffOrderPackagePlanUpdateResult>({
+    url: `/admin/orders/${orderId}/items/${itemId}/package-plan`,
+    method: 'PUT',
+    data: { packagePlan },
   });
 }
 

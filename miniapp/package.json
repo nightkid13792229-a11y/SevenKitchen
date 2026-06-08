@@ -5,7 +5,7 @@
   "main": "main.ts",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
-    "build:mp-weixin": "uni build -p mp-weixin && node scripts/fix-components-injection.js",
+    "build:mp-weixin": "uni build -p mp-weixin --minify esbuild && node scripts/fix-components-injection.js",
     "predev:mp-weixin": "node scripts/check-env.js",
     "preview": "bash scripts/mp-weixin-dev.sh",
     "rebuild": "bash scripts/ensure-compile.sh",

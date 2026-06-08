@@ -56,3 +56,53 @@ describe('staff order address reuse', () => {
     expect(detailSource).toContain('addressForm.isDefault');
   });
 });
+
+describe('staff order mobile operations', () => {
+  it('keeps shipment contact information usable on staff order detail', () => {
+    expect(detailSource).toContain('formatPhoneForStaffOrder');
+    expect(detailSource).toContain('copyFullAddress');
+    expect(detailSource).toContain('复制地址');
+    expect(detailSource).not.toContain("return phone.replace(/(\\d{3})\\d{4}(\\d{4})/, '$1****$2')");
+  });
+
+  it('supports shipping directly from staff order detail', () => {
+    expect(detailSource).toContain('showShippingModal');
+    expect(detailSource).toContain('confirmShipping');
+    expect(detailSource).toContain('/admin/orders/${order.value.id}/ship');
+    expect(detailSource).not.toContain('请在电脑端操作发货');
+  });
+
+  it('shows production usage, package plan, and ingredient totals on staff order detail', () => {
+    expect(detailSource).toContain('制作用量');
+    expect(detailSource).toContain('原料汇总');
+    expect(detailSource).toContain('ingredientUsageRows');
+    expect(detailSource).toContain('formatPackagePlan');
+    expect(detailSource).toContain('openPackagePanel');
+    expect(detailSource).toContain('savePackagePlan');
+    expect(detailSource).toContain('修改订单规格');
+    expect(detailSource).toContain('suggestedRefundAmount');
+    expect(detailSource).toContain('absorbedIncreaseAmount');
+    expect(detailSource).toContain('amountUpdated');
+    expect(detailSource).toContain('规格和价格已更新');
+    expect(detailSource).toContain("['INIT', 'PENDING_PAYMENT', 'PAID'].includes(order.value.status)");
+    expect(detailSource).not.toContain('分装合计需等于订单净重');
+    expect(detailSource).toContain('pricingBreakdownSnapshot');
+    expect(detailSource).toContain('FOOD');
+    expect(detailSource).toContain('SUPPLEMENT');
+    expect(ordersApiSource).toContain('updateOrderItemPackagePlan');
+  });
+
+  it('exposes mobile staff actions for price, refund, and dog profile handling', () => {
+    expect(detailSource).toContain('openAmountPanel');
+    expect(detailSource).toContain('saveAmountAdjustment');
+    expect(detailSource).toContain('openRefundPanel');
+    expect(detailSource).toContain('refundAmountDraft');
+    expect(detailSource).toContain('saveRefundAdjustment');
+    expect(detailSource).toContain('openDogSwitcher');
+    expect(detailSource).toContain('switchOrderDog');
+    expect(detailSource).toContain('adminRefundOrder');
+    expect(ordersApiSource).toContain('updateStaffCustomerServiceAmount');
+    expect(ordersApiSource).toContain('listOrderCustomerDogs');
+    expect(ordersApiSource).toContain('switchOrderDog');
+  });
+});

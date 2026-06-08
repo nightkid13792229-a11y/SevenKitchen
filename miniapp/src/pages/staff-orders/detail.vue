@@ -41,63 +41,119 @@
       </view>
 
       <!-- 客户信息 -->
-      <view class="section" v-if="order.customerName">
+      <view class="section" v-if="orderCustomerName || orderCustomerPhone">
         <view class="section-title">👤 客户信息</view>
         <view class="info-list">
           <view class="info-item">
             <text class="info-label">姓名</text>
-            <text class="info-value">{{ order.customerName }}</text>
+            <text class="info-value">{{ orderCustomerName || '未记录客户' }}</text>
           </view>
           <view class="info-item">
             <text class="info-label">手机</text>
-            <text class="info-value">{{ order.customerPhone }}</text>
+            <text class="info-value">{{ formatPhoneForStaffOrder(orderCustomerPhone) }}</text>
             <text class="action-link" @tap="copyPhone">复制</text>
           </view>
         </view>
       </view>
 
       <!-- 狗狗信息 -->
-      <view class="section" v-if="order.firstItem && order.firstItem.dog">
+      <view class="section" v-if="firstOrderItem && firstOrderItem.dog">
         <view class="section-title">🐕 狗狗信息</view>
         <view class="info-list">
           <view class="info-item">
             <text class="info-label">名称</text>
-            <text class="info-value">{{ order.firstItem.dog.name }}</text>
+            <text class="info-value">{{ firstOrderItem.dog.name }}</text>
           </view>
           <view class="info-item">
             <text class="info-label">品种</text>
-            <text class="info-value">{{ order.firstItem.dog.breedName || '未知' }}</text>
+            <text class="info-value">{{ firstOrderItem.dog.breedName || '未知' }}</text>
           </view>
           <view class="info-item">
             <text class="info-label">体重</text>
-            <text class="info-value">{{ order.firstItem.dog.weightKg }}kg</text>
+            <text class="info-value">{{ firstOrderItem.dog.weightKg || '--' }}kg</text>
           </view>
           <view class="info-item">
             <text class="info-label">每日餐数</text>
-            <text class="info-value">{{ order.firstItem.dog.mealsPerDay }}餐</text>
+            <text class="info-value">{{ firstOrderItem.dog.mealsPerDay || '--' }}餐</text>
           </view>
+        </view>
+        <view class="inline-actions">
+          <button class="address-action-btn secondary" @tap="editDogProfile">编辑狗狗档案</button>
+          <button class="address-action-btn secondary" @tap="openDogSwitcher">切换狗狗</button>
         </view>
       </view>
 
       <!-- 商品详情 -->
-      <view class="section" v-if="order.firstItem">
+      <view class="section" v-if="firstOrderItem">
         <view class="section-title">🍽️ 商品详情</view>
         <view class="product-card">
           <image
-            v-if="order.firstItem.recipeSnapshot && order.firstItem.recipeSnapshot.coverImageUrl"
+            v-if="firstOrderItem.recipeSnapshot && firstOrderItem.recipeSnapshot.coverImageUrl"
             class="product-cover"
-            :src="order.firstItem.recipeSnapshot.coverImageUrl"
+            :src="firstOrderItem.recipeSnapshot.coverImageUrl"
             mode="aspectFill"
           />
           <view class="product-info">
-            <text class="product-name">{{ order.firstItem.recipeSnapshot?.name || '自定义食谱' }}</text>
+            <text class="product-name">{{ firstOrderItem.recipeSnapshot?.name || '自定义食谱' }}</text>
             <view class="product-specs">
-              <text class="spec-item">包装规格: {{ order.firstItem.packageSpecG }}g/餐</text>
-              <text class="spec-item">数量: {{ order.firstItem.packageCount }}餐</text>
-              <text class="spec-item" v-if="order.firstItem.dailyIntakeG">
-                每日摄入: {{ order.firstItem.dailyIntakeG }}g
+              <text class="spec-item">分装明细: {{ formatPackagePlan(firstOrderItem) }}</text>
+              <text class="spec-item">总净重: {{ formatGrams(firstOrderItem.quantityG) }}</text>
+              <text class="spec-item" v-if="firstOrderItem.dailyIntakeG">
+                每日摄入: {{ formatGrams(firstOrderItem.dailyIntakeG) }}
               </text>
             </view>
+          </view>
+        </view>
+        <view class="inline-actions" v-if="canEditPackagePlan && firstOrderItem.id">
+          <button class="address-action-btn secondary" @tap="openPackagePanel(firstOrderItem)">修改订单规格</button>
+        </view>
+      </view>
+
+      <!-- 制作用量 -->
+      <view class="section" v-if="orderItems.length">
+        <view class="section-title">制作用量</view>
+        <view class="usage-summary">
+          <view class="usage-stat">
+            <text class="usage-label">总净重</text>
+            <text class="usage-value">{{ formatGrams(totalQuantityG) }}</text>
+          </view>
+          <view class="usage-stat">
+            <text class="usage-label">总袋数</text>
+            <text class="usage-value">{{ totalPackageCount }}袋</text>
+          </view>
+          <view class="usage-stat">
+            <text class="usage-label">食材</text>
+            <text class="usage-value">{{ foodUsageLabel }}</text>
+          </view>
+          <view class="usage-stat">
+            <text class="usage-label">补剂</text>
+            <text class="usage-value">{{ supplementUsageLabel }}</text>
+          </view>
+        </view>
+
+        <view class="usage-item" v-for="item in orderItems" :key="item.id || item.recipeSnapshot?.id">
+          <text class="usage-item-title">{{ item.recipeSnapshot?.name || '自定义食谱' }}</text>
+          <text class="usage-item-meta">
+            {{ item.dog?.name || '未绑定狗狗' }} · {{ formatGrams(item.quantityG) }} · {{ formatPackagePlan(item) }}
+          </text>
+          <text class="usage-item-meta" v-if="item.preparationMethod || item.cookingMethod || item.vacuumBagSpec">
+            {{ formatPreparation(item) }}
+          </text>
+          <button
+            v-if="canEditPackagePlan && item.id"
+            class="mini-inline-btn"
+            @tap="openPackagePanel(item)"
+          >
+            修改订单规格
+          </button>
+        </view>
+
+        <view class="ingredient-summary" v-if="ingredientUsageRows.length">
+          <text class="ingredient-title">原料汇总</text>
+          <view class="ingredient-row" v-for="row in ingredientUsageRows" :key="row.key">
+            <text class="ingredient-name">{{ row.name }}</text>
+            <text class="ingredient-type">{{ row.typeLabel }}</text>
+            <text class="ingredient-amount">{{ row.amountLabel }}</text>
           </view>
         </view>
       </view>
@@ -109,7 +165,7 @@
           <template v-if="order.address">
             <view class="address-header">
               <text class="recipient-name">{{ order.address.recipientName }}</text>
-              <text class="recipient-phone">{{ formatPhone(getOrderAddressPhone(order.address)) }}</text>
+              <text class="recipient-phone">{{ formatPhoneForStaffOrder(getOrderAddressPhone(order.address)) }}</text>
             </view>
             <text class="address-text"
               >{{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}</text
@@ -119,6 +175,7 @@
             <text class="address-empty-text">暂未录入收货地址</text>
           </view>
           <view v-if="canEditAddress" class="address-actions">
+            <button v-if="order.address" class="address-action-btn secondary" @tap="copyFullAddress">复制地址</button>
             <button class="address-action-btn secondary" @tap="openAddressSelect">
               {{ order.address ? '更换地址' : '选择已有地址' }}
             </button>
@@ -141,7 +198,7 @@
           </view>
           <view class="fee-item">
             <text class="fee-label">运费</text>
-            <text class="fee-value">¥0</text>
+            <text class="fee-value">¥{{ formatAmount(order.amountShipping) }}</text>
           </view>
           <view class="fee-item total">
             <text class="fee-label">总计</text>
@@ -155,7 +212,8 @@
         <button v-if="canConfirmPayment" class="action-btn primary" @tap="confirmPayment">确认收款</button>
         <button v-if="canStartProduction" class="action-btn orange" @tap="startProduction">开始制作</button>
         <button v-if="canShip" class="action-btn cyan" @tap="shipOrder">发货</button>
-        <button v-if="canAdminRefund" class="action-btn red" @tap="adminRefundOrder">管理员退款</button>
+        <button v-if="canAdjustAmount" class="action-btn orange" @tap="openAmountPanel">待支付改价</button>
+        <button v-if="canAdminRefund" class="action-btn red" @tap="adminRefundOrder">管理员退款/退差价</button>
       </view>
     </view>
 
@@ -186,7 +244,7 @@
           >
             <view class="address-header">
               <text class="recipient-name">{{ address.recipientName }}</text>
-              <text class="recipient-phone">{{ formatPhone(address.phone) }}</text>
+              <text class="recipient-phone">{{ formatPhoneForStaffOrder(address.phone) }}</text>
               <text v-if="address.isDefault" class="default-tag">默认</text>
             </view>
             <text class="address-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
@@ -233,6 +291,129 @@
         </button>
       </view>
     </view>
+
+    <view v-if="showShippingModal" class="modal-mask" @tap="closeShippingModal">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">填写发货信息</text>
+          <text class="modal-close" @tap="closeShippingModal">×</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">物流公司</text>
+          <picker
+            mode="selector"
+            :range="carriers"
+            range-key="name"
+            :value="selectedCarrierIndex"
+            @change="onCarrierChange"
+          >
+            <view class="form-picker">
+              <text>{{ carriers[selectedCarrierIndex].name }}</text>
+              <text class="picker-arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="form-label">物流单号</text>
+          <input v-model="trackingNumber" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
+        </view>
+        <button class="address-save-btn" :disabled="isShipping" @tap="confirmShipping">
+          {{ isShipping ? '发货中...' : '确认发货' }}
+        </button>
+      </view>
+    </view>
+
+    <view v-if="amountVisible" class="modal-mask" @tap="closeAmountPanel">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">待支付订单改价</text>
+          <text class="modal-close" @tap="closeAmountPanel">×</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">新的订单金额</text>
+          <input class="form-input" v-model="amountDraft" type="digit" placeholder="请输入新金额" />
+        </view>
+        <view class="form-item">
+          <text class="form-label">改价原因</text>
+          <textarea class="form-textarea" v-model="amountReason" placeholder="例如客服协商优惠、手工减免" />
+        </view>
+        <text class="address-lock-hint">仅待支付订单允许直接改价；已支付订单请走退款或退差价。</text>
+        <button class="address-save-btn" :disabled="savingAmount" @tap="saveAmountAdjustment">
+          {{ savingAmount ? '保存中...' : '确认改价' }}
+        </button>
+      </view>
+    </view>
+
+    <view v-if="packageVisible" class="modal-mask" @tap="closePackagePanel">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">修改订单规格</text>
+          <text class="modal-close" @tap="closePackagePanel">×</text>
+        </view>
+        <view class="package-total-row">
+          <text class="address-lock-hint">原净重：{{ formatGrams(packageTargetQuantityG) }}</text>
+          <text class="address-lock-hint">新规格合计：{{ formatGrams(packageDraftTotalG) }}</text>
+        </view>
+        <view class="package-row" v-for="(row, index) in packageRows" :key="index">
+          <input class="package-input" v-model="row.packageSpecG" type="number" placeholder="克重" />
+          <text class="package-separator">g ×</text>
+          <input class="package-input" v-model="row.packageCount" type="number" placeholder="袋数" />
+          <button class="package-remove-btn" :disabled="packageRows.length === 1" @tap="removePackageRow(index)">−</button>
+        </view>
+        <button class="address-action-btn secondary full" @tap="addPackageRow">新增分装规格</button>
+        <text class="address-lock-hint">分装合计会作为新的订单总克重；未支付订单价格会同步更新，已支付订单只支持退差价，不向客户补收。</text>
+        <button class="address-save-btn" :disabled="savingPackage" @tap="savePackagePlan">
+          {{ savingPackage ? '保存中...' : '保存规格' }}
+        </button>
+      </view>
+    </view>
+
+    <view v-if="refundVisible" class="modal-mask" @tap="closeRefundPanel">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">退款/退差价</text>
+          <text class="modal-close" @tap="closeRefundPanel">×</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">退款金额</text>
+          <input class="form-input" v-model="refundAmountDraft" type="digit" placeholder="请输入退款或差价金额" />
+        </view>
+        <view class="form-item">
+          <text class="form-label">退款原因</text>
+          <textarea class="form-textarea" v-model="refundReason" placeholder="例如退差价、退货退款、客服协商退款" />
+        </view>
+        <text class="address-lock-hint">确认后会调用微信原路退款；金额小于订单实付时即为退差价。</text>
+        <button class="address-save-btn" :disabled="savingRefund" @tap="saveRefundAdjustment">
+          {{ savingRefund ? '提交中...' : '确认退款' }}
+        </button>
+      </view>
+    </view>
+
+    <view v-if="dogSwitcherVisible" class="modal-mask" @tap="closeDogSwitcher">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">切换订单狗狗</text>
+          <text class="modal-close" @tap="closeDogSwitcher">×</text>
+        </view>
+        <view v-if="dogLoading" class="modal-loading">加载中...</view>
+        <view v-else-if="customerDogs.length === 0" class="modal-empty">该客户暂无狗狗档案</view>
+        <view v-else class="dog-option-list">
+          <view
+            v-for="dog in customerDogs"
+            :key="dog.id"
+            class="dog-option"
+            :class="{ active: dog.id === currentDogId }"
+            @tap="switchOrderDog(dog.id)"
+          >
+            <text class="dog-option-name">{{ dog.name }}</text>
+            <text class="dog-option-meta">
+              {{ dog.breedName || '未知品种' }} · {{ dog.currentWeightKg || dog.weightKg || '--' }}kg · {{ dog.mealsPerDay || '--' }}餐
+            </text>
+          </view>
+        </view>
+        <text class="address-lock-hint">切换后订单会绑定到新狗狗；如已支付，请同时确认规格和差价。</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -243,10 +424,16 @@ import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   confirmOfflinePayment,
   createOrderCustomerAddress,
+  listOrderCustomerDogs,
   listOrderCustomerAddresses,
   retryWechatRefund,
+  switchOrderDog as switchExistingOrderDog,
   updateOrderCustomerAddress,
+  updateOrderItemPackagePlan,
+  updateStaffCustomerServiceAmount,
+  type OrderPackagePlanItem,
   type StaffOrderAddress,
+  type StaffOrderDog,
 } from '../../api/orders'
 import { formatShortDateTime } from '../../utils/date'
 
@@ -273,29 +460,27 @@ interface OrderDetail {
   } | null
   totalAmount?: number
   amountTotal?: number
+  amountShipping?: number
   createdAt?: string
   paymentMethod?: string
   paymentStatus?: string | null
   paidAt?: string | null
   customerName?: string
   customerPhone?: string
+  customer?: {
+    nickname?: string | null
+    phone?: string | null
+  } | null
+  dogId?: string | null
   addressId?: string | null
-  firstItem?: {
-    dog?: {
-      name?: string
-      breedName?: string
-      weightKg?: number
-      mealsPerDay?: number
-    }
-    recipeSnapshot?: {
-      id: string
-      name: string
-      coverImageUrl?: string | null
-    }
-    packageCount: number
-    packageSpecG: number
-    dailyIntakeG?: number
-  }
+  firstItem?: OrderItemDetail
+  items?: OrderItemDetail[]
+  pricingBreakdownSnapshot?: {
+    ingredientDetails?: IngredientUsageDetail[]
+  } | null
+  trackingNumber?: string | null
+  carrierCode?: string | null
+  shippedAt?: string | null
   address?: {
     id?: string
     recipientName: string
@@ -312,16 +497,96 @@ interface OrderDetail {
   }
 }
 
+interface OrderItemDetail {
+  id?: string
+  dogId?: string | null
+  dog?: {
+    id?: string
+    name?: string
+    breedName?: string
+    weightKg?: number
+    currentWeightKg?: number
+    mealsPerDay?: number
+    gender?: string
+  }
+  recipeSnapshot?: {
+    id: string
+    name: string
+    version?: number
+    coverImageUrl?: string | null
+    items?: Array<{
+      ingredient_id?: string
+      name?: string
+      ingredient_type?: string
+    }>
+  }
+  quantityG?: number
+  packageCount: number
+  packageSpecG: number
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null
+  ingredientSourcePlan?: string | null
+  dailyIntakeG?: number
+  preparationMethod?: string | null
+  cookingMethod?: string | null
+  customRequirements?: string | null
+  vacuumBagSpec?: string | null
+}
+
+interface IngredientUsageDetail {
+  ingredientId?: string
+  name?: string
+  type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING' | string
+  amount?: number
+  netAmount?: number
+  purchaseAmount?: number
+  unit?: string
+  procurementSkuName?: string
+}
+
+interface PackagePlanDraftRow {
+  packageSpecG: string
+  packageCount: string
+}
+
 const order = ref<OrderDetail | null>(null)
 const loading = ref(false)
 const customerAddresses = ref<StaffOrderAddress[]>([])
+const customerDogs = ref<StaffOrderDog[]>([])
 const addressSelectVisible = ref(false)
 const addressFormVisible = ref(false)
+const dogSwitcherVisible = ref(false)
 const addressLoading = ref(false)
+const dogLoading = ref(false)
 const savingAddress = ref(false)
+const switchingDog = ref(false)
+const showShippingModal = ref(false)
+const selectedCarrierIndex = ref(0)
+const trackingNumber = ref('')
+const isShipping = ref(false)
+const amountVisible = ref(false)
+const amountDraft = ref('')
+const amountReason = ref('')
+const savingAmount = ref(false)
+const packageVisible = ref(false)
+const packageRows = ref<PackagePlanDraftRow[]>([])
+const packageEditingItemId = ref('')
+const packageTargetQuantityG = ref(0)
+const savingPackage = ref(false)
+const refundVisible = ref(false)
+const refundAmountDraft = ref('')
+const refundReason = ref('')
+const savingRefund = ref(false)
 const addressFormMode = ref<'create' | 'edit'>('create')
 const editingAddressId = ref('')
 const addressRegionValue = ref<string[]>([])
+const carriers = [
+  { name: '顺丰速运', code: 'SF' },
+  { name: '京东物流', code: 'JD' },
+  { name: '圆通速递', code: 'YTO' },
+  { name: '中通快递', code: 'ZTO' },
+  { name: '韵达速递', code: 'YD' },
+  { name: 'EMS', code: 'EMS' },
+]
 const addressForm = ref({
   recipientName: '',
   phone: '',
@@ -367,12 +632,83 @@ const canEditAddress = computed(() => {
   return !['SHIPPED', 'COMPLETED', 'CANCELLED'].includes(order.value.status)
 })
 
+const canEditPackagePlan = computed(() => {
+  if (!order.value) return false
+  return ['INIT', 'PENDING_PAYMENT', 'PAID'].includes(order.value.status)
+})
+
+const canAdjustAmount = computed(() => {
+  if (!order.value) return false
+  const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
+  return !paid && ['INIT', 'PENDING_PAYMENT'].includes(order.value.status)
+})
+
 const canAdminRefund = computed(() => {
   if (!order.value) return false
   const user = getStoredUser()
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
   const refunded = order.value.refundStatus?.success === true
   return user?.role === 'ADMIN' && paid && order.value.paymentMethod === 'WECHAT_PAY' && !refunded
+})
+
+const orderItems = computed<OrderItemDetail[]>(() => {
+  if (!order.value) return []
+  if (Array.isArray(order.value.items) && order.value.items.length > 0) {
+    return order.value.items
+  }
+  return order.value.firstItem ? [order.value.firstItem] : []
+})
+
+const firstOrderItem = computed(() => orderItems.value[0] || null)
+
+const orderCustomerName = computed(() => {
+  return order.value?.customerName || order.value?.customer?.nickname || order.value?.address?.recipientName || ''
+})
+
+const orderCustomerPhone = computed(() => {
+  return order.value?.customerPhone || order.value?.customer?.phone || (order.value?.address ? getOrderAddressPhone(order.value.address) : '')
+})
+
+const currentDogId = computed(() => firstOrderItem.value?.dog?.id || firstOrderItem.value?.dogId || order.value?.dogId || '')
+
+const totalQuantityG = computed(() => {
+  return orderItems.value.reduce((sum, item) => sum + toNumber(item.quantityG), 0)
+})
+
+const totalPackageCount = computed(() => {
+  return orderItems.value.reduce((sum, item) => {
+    const planTotal = Array.isArray(item.packagePlan)
+      ? item.packagePlan.reduce((planSum, row) => planSum + toNumber(row.packageCount), 0)
+      : 0
+    return sum + (planTotal || toNumber(item.packageCount))
+  }, 0)
+})
+
+const rawIngredientDetails = computed(() => {
+  return order.value?.pricingBreakdownSnapshot?.ingredientDetails || []
+})
+
+const ingredientUsageRows = computed(() => {
+  return rawIngredientDetails.value.map((detail, index) => {
+    const amount = getIngredientUsageAmount(detail)
+    const unit = detail.unit || 'g'
+    return {
+      key: `${detail.ingredientId || detail.name || 'ingredient'}-${index}`,
+      name: detail.procurementSkuName || detail.name || '未命名原料',
+      type: detail.type || '',
+      typeLabel: formatIngredientType(detail.type),
+      amount,
+      amountLabel: `${formatNumber(amount)}${unit}`,
+    }
+  })
+})
+
+const foodUsageLabel = computed(() => formatUsageTotalByType('FOOD'))
+const supplementUsageLabel = computed(() => formatUsageTotalByType('SUPPLEMENT'))
+const packageDraftTotalG = computed(() => {
+  return packageRows.value.reduce((sum, row) => {
+    return sum + readPositiveInteger(row.packageSpecG) * readPositiveInteger(row.packageCount)
+  }, 0)
 })
 
 function getStoredUser() {
@@ -417,8 +753,18 @@ async function loadOrderDetail() {
 
 // 格式化函数
 function formatAmount(amount?: number): string {
-  if (!amount) return '0.00'
-  return amount.toFixed(2)
+  const value = toNumber(amount)
+  return value.toFixed(2)
+}
+
+function toNumber(value: unknown): number {
+  const numberValue = typeof value === 'string' ? Number(value) : Number(value || 0)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+function readPositiveInteger(value: unknown): number {
+  const parsed = Math.floor(toNumber(value))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
 function shortOrderId(orderId: string): string {
@@ -436,17 +782,16 @@ function getOrderConfirmContent(currentOrder: OrderDetail): string {
 }
 
 function getOrderCustomerText(currentOrder: OrderDetail): string {
-  const name = currentOrder.customerName || currentOrder.address?.recipientName || '未记录客户'
-  const phone = currentOrder.customerPhone || currentOrder.address?.phone || currentOrder.address?.recipientPhone || ''
-  return phone ? `${name} ${formatPhone(phone)}` : name
+  const name = currentOrder.customerName || currentOrder.customer?.nickname || currentOrder.address?.recipientName || '未记录客户'
+  const phone = currentOrder.customerPhone || currentOrder.customer?.phone || currentOrder.address?.phone || currentOrder.address?.recipientPhone || ''
+  return phone ? `${name} ${formatPhoneForStaffOrder(phone)}` : name
 }
 
 function getOrderProductText(currentOrder: OrderDetail): string {
-  const recipeName = currentOrder.firstItem?.recipeSnapshot?.name || '未记录商品'
-  const dogName = currentOrder.firstItem?.dog?.name ? `（${currentOrder.firstItem.dog.name}）` : ''
-  const packageCount = currentOrder.firstItem?.packageCount
-  const packageSpec = currentOrder.firstItem?.packageSpecG
-  const spec = packageCount && packageSpec ? ` ${packageCount}餐/${packageSpec}g` : ''
+  const item = currentOrder.items?.[0] || currentOrder.firstItem
+  const recipeName = item?.recipeSnapshot?.name || '未记录商品'
+  const dogName = item?.dog?.name ? `（${item.dog.name}）` : ''
+  const spec = item ? ` ${formatPackagePlan(item)}` : ''
   return `${recipeName}${dogName}${spec}`
 }
 
@@ -455,9 +800,83 @@ function formatDateTime(dateStr?: string): string {
   return formatShortDateTime(dateStr)
 }
 
-function formatPhone(phone: string): string {
-  if (phone.length !== 11) return phone
-  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+function formatPhoneForStaffOrder(phone?: string): string {
+  return phone || '--'
+}
+
+function formatGrams(value?: number): string {
+  return `${formatNumber(toNumber(value))}g`
+}
+
+function formatNumber(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+function formatPackagePlan(item: OrderItemDetail): string {
+  if (Array.isArray(item.packagePlan) && item.packagePlan.length > 0) {
+    return item.packagePlan
+      .map((row) => `${formatNumber(toNumber(row.packageSpecG))}g×${toNumber(row.packageCount)}袋`)
+      .join('，')
+  }
+  return `${formatNumber(toNumber(item.packageSpecG))}g×${toNumber(item.packageCount)}袋`
+}
+
+function formatPreparation(item: OrderItemDetail): string {
+  return [
+    item.preparationMethod ? `制备: ${formatMethod(item.preparationMethod)}` : '',
+    item.cookingMethod ? `熟制: ${formatMethod(item.cookingMethod)}` : '',
+    item.vacuumBagSpec ? `真空袋: ${item.vacuumBagSpec}` : '',
+    item.ingredientSourcePlan ? `原料方案: ${formatIngredientSourcePlan(item.ingredientSourcePlan)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+function formatMethod(method: string): string {
+  const map: Record<string, string> = {
+    RAW: '生制',
+    COOKED: '熟制',
+    STEAMED: '蒸制',
+    BOILED: '水煮',
+    MIXED: '混合',
+  }
+  return map[method] || method
+}
+
+function formatIngredientSourcePlan(plan?: string | null): string {
+  const map: Record<string, string> = {
+    MARKET_PREMIUM: '优选原料',
+    STANDARD: '标准原料',
+    ORGANIC: '有机原料',
+  }
+  return plan ? map[plan] || plan : ''
+}
+
+function getIngredientUsageAmount(detail: IngredientUsageDetail): number {
+  return toNumber(detail.purchaseAmount ?? detail.netAmount ?? detail.amount)
+}
+
+function formatIngredientType(type?: string): string {
+  const map: Record<string, string> = {
+    FOOD: '食材',
+    SUPPLEMENT: '补剂',
+    PACKAGING: '包装',
+  }
+  return type ? map[type] || type : '原料'
+}
+
+function formatUsageTotalByType(type: 'FOOD' | 'SUPPLEMENT'): string {
+  const rows = rawIngredientDetails.value.filter((detail) => detail.type === type)
+  if (rows.length === 0) return '未记录'
+  const gramTotal = rows
+    .filter((detail) => !detail.unit || detail.unit === 'g')
+    .reduce((sum, detail) => sum + getIngredientUsageAmount(detail), 0)
+  const nonGramRows = rows.filter((detail) => detail.unit && detail.unit !== 'g')
+  const parts = []
+  if (gramTotal > 0) parts.push(formatGrams(gramTotal))
+  if (nonGramRows.length > 0) parts.push(`${nonGramRows.length}种非克重`)
+  return parts.join(' + ') || `${rows.length}种`
 }
 
 function formatRegionText(region?: { province?: string; city?: string; district?: string }): string {
@@ -532,12 +951,34 @@ function getPaymentMethod(method?: string): string {
 
 // 操作
 function copyPhone() {
-  if (!order.value || !order.value.customerPhone) return
+  if (!orderCustomerPhone.value) return
   uni.setClipboardData({
-    data: order.value.customerPhone,
+    data: orderCustomerPhone.value,
     success: () => {
       uni.showToast({
         title: '已复制',
+        icon: 'success',
+      })
+    },
+  })
+}
+
+function copyFullAddress() {
+  if (!order.value?.address) return
+  const address = order.value.address
+  const content = [
+    address.recipientName,
+    getOrderAddressPhone(address),
+    getOrderAddressRegionText(address),
+    getOrderAddressDetail(address),
+  ]
+    .filter(Boolean)
+    .join(' ')
+  uni.setClipboardData({
+    data: content,
+    success: () => {
+      uni.showToast({
+        title: '地址已复制',
         icon: 'success',
       })
     },
@@ -594,42 +1035,337 @@ async function startProduction() {
 }
 
 async function shipOrder() {
-  uni.showToast({
-    title: '请在电脑端操作发货',
-    icon: 'none',
-  })
+  if (!order.value) return
+  if (!order.value.address || !getOrderAddressPhone(order.value.address)) {
+    uni.showToast({
+      title: '请先补全收货地址和手机号',
+      icon: 'none',
+    })
+    return
+  }
+  selectedCarrierIndex.value = 0
+  trackingNumber.value = order.value.trackingNumber || ''
+  showShippingModal.value = true
 }
 
-async function adminRefundOrder() {
+function closeShippingModal() {
+  if (isShipping.value) return
+  showShippingModal.value = false
+}
+
+function onCarrierChange(event: any) {
+  selectedCarrierIndex.value = Number(event.detail.value || 0)
+}
+
+async function confirmShipping() {
+  if (!order.value || isShipping.value) return
+  const tracking = trackingNumber.value.trim()
+  if (tracking.length < 5) {
+    uni.showToast({
+      title: '请输入有效物流单号',
+      icon: 'none',
+    })
+    return
+  }
+  isShipping.value = true
+  try {
+    await request({
+      url: `/admin/orders/${order.value.id}/ship`,
+      method: 'POST',
+      data: {
+        carrierCode: carriers[selectedCarrierIndex.value].code,
+        trackingNumber: tracking,
+      },
+    })
+    uni.showToast({
+      title: '发货成功',
+      icon: 'success',
+    })
+    showShippingModal.value = false
+    await loadOrderDetail()
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '发货失败',
+      icon: 'none',
+    })
+  } finally {
+    isShipping.value = false
+  }
+}
+
+function openAmountPanel() {
+  if (!order.value || !canAdjustAmount.value) return
+  amountDraft.value = formatAmount(order.value.amountTotal || order.value.totalAmount)
+  amountReason.value = ''
+  amountVisible.value = true
+}
+
+function closeAmountPanel() {
+  if (savingAmount.value) return
+  amountVisible.value = false
+}
+
+async function saveAmountAdjustment() {
+  if (!order.value || savingAmount.value) return
+  const amount = Math.round(Number(amountDraft.value) * 100) / 100
+  if (!Number.isFinite(amount) || amount < 0) {
+    uni.showToast({
+      title: '请输入正确金额',
+      icon: 'none',
+    })
+    return
+  }
+  savingAmount.value = true
+  try {
+    await updateStaffCustomerServiceAmount(order.value.id, amount, amountReason.value || '手机工作台改价')
+    uni.showToast({
+      title: '改价已保存',
+      icon: 'success',
+    })
+    amountVisible.value = false
+    await loadOrderDetail()
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '改价失败',
+      icon: 'none',
+    })
+  } finally {
+    savingAmount.value = false
+  }
+}
+
+function getPackageRows(item: OrderItemDetail): OrderPackagePlanItem[] {
+  if (Array.isArray(item.packagePlan) && item.packagePlan.length > 0) {
+    return item.packagePlan.map((row) => ({
+      packageSpecG: readPositiveInteger(row.packageSpecG),
+      packageCount: readPositiveInteger(row.packageCount),
+    }))
+  }
+  return [
+    {
+      packageSpecG: readPositiveInteger(item.packageSpecG),
+      packageCount: readPositiveInteger(item.packageCount),
+    },
+  ]
+}
+
+function openPackagePanel(item: OrderItemDetail) {
+  if (!order.value || !canEditPackagePlan.value || !item.id) return
+  packageEditingItemId.value = item.id
+  packageTargetQuantityG.value = toNumber(item.quantityG)
+  packageRows.value = getPackageRows(item).map((row) => ({
+    packageSpecG: String(row.packageSpecG || ''),
+    packageCount: String(row.packageCount || ''),
+  }))
+  packageVisible.value = true
+}
+
+function closePackagePanel() {
+  if (savingPackage.value) return
+  packageVisible.value = false
+}
+
+function addPackageRow() {
+  packageRows.value.push({ packageSpecG: '', packageCount: '' })
+}
+
+function removePackageRow(index: number) {
+  if (packageRows.value.length <= 1) return
+  packageRows.value.splice(index, 1)
+}
+
+function normalizePackageDraftRows(): OrderPackagePlanItem[] | null {
+  const rows = packageRows.value.map((row) => ({
+    packageSpecG: readPositiveInteger(row.packageSpecG),
+    packageCount: readPositiveInteger(row.packageCount),
+  }))
+  if (rows.some((row) => row.packageSpecG <= 0 || row.packageCount <= 0)) {
+    uni.showToast({
+      title: '请填写正确的克重和袋数',
+      icon: 'none',
+    })
+    return null
+  }
+  if (Math.round(packageDraftTotalG.value) <= 0) {
+    uni.showToast({
+      title: '请填写新的分装规格',
+      icon: 'none',
+    })
+    return null
+  }
+  return rows
+}
+
+async function savePackagePlan() {
+  if (!order.value || !packageEditingItemId.value || savingPackage.value) return
+  const packagePlan = normalizePackageDraftRows()
+  if (!packagePlan) return
+  savingPackage.value = true
+  try {
+    const response = await updateOrderItemPackagePlan(order.value.id, packageEditingItemId.value, packagePlan)
+    const pricingEffect = response?.data?.pricingEffect || {}
+    packageVisible.value = false
+    await loadOrderDetail()
+    if (pricingEffect.suggestedRefundAmount > 0 && canAdminRefund.value) {
+      refundAmountDraft.value = formatAmount(pricingEffect.suggestedRefundAmount)
+      refundReason.value = '订单规格更正退差价'
+      refundVisible.value = true
+      uni.showToast({
+        title: '规格已更新，可退差价',
+        icon: 'none',
+      })
+    } else if (pricingEffect.amountUpdated) {
+      uni.showToast({
+        title: '规格和价格已更新',
+        icon: 'success',
+      })
+    } else if (pricingEffect.absorbedIncreaseAmount > 0) {
+      uni.showToast({
+        title: '规格已更新，差额由商家承担',
+        icon: 'none',
+      })
+    } else {
+      uni.showToast({
+        title: '规格已更新',
+        icon: 'success',
+      })
+    }
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '规格保存失败',
+      icon: 'none',
+    })
+  } finally {
+    savingPackage.value = false
+  }
+}
+
+function openRefundPanel() {
   if (!order.value || !canAdminRefund.value) return
-  const amount = Number(order.value.amountTotal || order.value.totalAmount || 0)
+  refundAmountDraft.value = formatAmount(order.value.amountTotal || order.value.totalAmount)
+  refundReason.value = ''
+  refundVisible.value = true
+}
+
+function closeRefundPanel() {
+  if (savingRefund.value) return
+  refundVisible.value = false
+}
+
+async function saveRefundAdjustment() {
+  if (!order.value || savingRefund.value || !canAdminRefund.value) return
+  const refundAmount = Math.round(Number(refundAmountDraft.value) * 100) / 100
+  const orderAmount = toNumber(order.value.amountTotal || order.value.totalAmount)
+  if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+    uni.showToast({
+      title: '请输入正确退款金额',
+      icon: 'none',
+    })
+    return
+  }
+  if (refundAmount > orderAmount) {
+    uni.showToast({
+      title: '退款金额不能超过订单金额',
+      icon: 'none',
+    })
+    return
+  }
+  const reason =
+    refundReason.value ||
+    (refundAmount < orderAmount ? '管理员手机工作台退差价' : '管理员手机工作台主动退款')
+
   uni.showModal({
-    title: '管理员退款',
+    title: refundAmount < orderAmount ? '确认退差价' : '确认退款',
     content: [
       '该操作不可撤销。',
       '确认后会直接调用微信原路退款。',
       `订单：${order.value.id.slice(-8)}`,
-      `金额：¥${formatAmount(amount)}`,
+      `金额：¥${formatAmount(refundAmount)}`,
     ].join('\n'),
     confirmText: '确认退款',
     confirmColor: '#d93026',
     success: async (res) => {
-      if (!res.confirm) return
+      if (!res.confirm || !order.value) return
+      savingRefund.value = true
       try {
-        await retryWechatRefund(order.value!.id, amount, '管理员手机工作台主动退款')
+        await retryWechatRefund(order.value.id, refundAmount, reason)
         uni.showToast({
           title: '退款已发起',
           icon: 'none',
         })
-        loadOrderDetail()
+        refundVisible.value = false
+        await loadOrderDetail()
       } catch (error: any) {
         uni.showToast({
           title: error?.message || '退款失败',
           icon: 'none',
         })
+      } finally {
+        savingRefund.value = false
       }
     },
   })
+}
+
+function editDogProfile() {
+  const dogId = currentDogId.value
+  if (!dogId) {
+    uni.showToast({
+      title: '狗狗档案不存在',
+      icon: 'none',
+    })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/dog-create/index?dogId=${encodeURIComponent(dogId)}`,
+  })
+}
+
+async function openDogSwitcher() {
+  if (!orderId.value) return
+  dogSwitcherVisible.value = true
+  dogLoading.value = true
+  try {
+    const response = await listOrderCustomerDogs(orderId.value)
+    customerDogs.value = Array.isArray(response.data) ? response.data : []
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '狗狗档案加载失败',
+      icon: 'none',
+    })
+  } finally {
+    dogLoading.value = false
+  }
+}
+
+function closeDogSwitcher() {
+  if (switchingDog.value) return
+  dogSwitcherVisible.value = false
+}
+
+async function switchOrderDog(dogId: string) {
+  if (!orderId.value || switchingDog.value || dogId === currentDogId.value) return
+  switchingDog.value = true
+  try {
+    await switchExistingOrderDog(orderId.value, dogId)
+    uni.showToast({
+      title: '狗狗已切换',
+      icon: 'success',
+    })
+    dogSwitcherVisible.value = false
+    await loadOrderDetail()
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || '切换失败',
+      icon: 'none',
+    })
+  } finally {
+    switchingDog.value = false
+  }
+}
+
+async function adminRefundOrder() {
+  openRefundPanel()
 }
 
 async function loadCustomerAddresses() {
@@ -899,6 +1635,13 @@ async function saveAddressForm() {
   color: #1890ff;
 }
 
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
 // 商品卡片
 .product-card {
   display: flex;
@@ -934,6 +1677,105 @@ async function saveAddressForm() {
 .spec-item {
   font-size: 26rpx;
   color: #666;
+}
+
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.usage-stat {
+  padding: 18rpx;
+  border-radius: 10rpx;
+  background-color: #f8fafc;
+}
+
+.usage-label,
+.usage-item-meta,
+.ingredient-type {
+  display: block;
+  font-size: 24rpx;
+  color: #667085;
+  line-height: 1.45;
+}
+
+.usage-value {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 28rpx;
+  color: #111827;
+  font-weight: 700;
+}
+
+.usage-item {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #edf0f2;
+}
+
+.mini-inline-btn {
+  width: 180rpx;
+  height: 58rpx;
+  margin: 16rpx 0 0;
+  border-radius: 8rpx;
+  border: 2rpx solid #d6e8ff;
+  background-color: #fff;
+  color: #1890ff;
+  font-size: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-inline-btn::after {
+  border: none;
+}
+
+.usage-item:last-child {
+  border-bottom: none;
+}
+
+.usage-item-title,
+.ingredient-title,
+.dog-option-name {
+  display: block;
+  font-size: 28rpx;
+  color: #111827;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.ingredient-summary {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #edf0f2;
+}
+
+.ingredient-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88rpx 150rpx;
+  gap: 12rpx;
+  align-items: center;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #f2f4f7;
+}
+
+.ingredient-row:last-child {
+  border-bottom: none;
+}
+
+.ingredient-name {
+  min-width: 0;
+  font-size: 25rpx;
+  color: #344054;
+  line-height: 1.45;
+}
+
+.ingredient-amount {
+  font-size: 25rpx;
+  color: #111827;
+  font-weight: 700;
+  text-align: right;
 }
 
 // 地址卡片
@@ -1090,6 +1932,80 @@ async function saveAddressForm() {
   padding: 24rpx;
   border-radius: 12rpx;
   border: 2rpx solid #f0f0f0;
+}
+
+.dog-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.dog-option {
+  padding: 22rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #eef2f6;
+  background-color: #fff;
+}
+
+.dog-option.active {
+  border-color: #1890ff;
+  background-color: #eef6ff;
+}
+
+.dog-option-meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #667085;
+}
+
+.package-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.package-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.package-input {
+  flex: 1;
+  min-width: 0;
+  height: 70rpx;
+  padding: 0 18rpx;
+  border: 2rpx solid #eee;
+  border-radius: 10rpx;
+  background-color: #fafafa;
+  font-size: 26rpx;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.package-separator {
+  font-size: 24rpx;
+  color: #667085;
+}
+
+.package-remove-btn {
+  width: 58rpx;
+  height: 58rpx;
+  padding: 0;
+  border-radius: 50%;
+  background-color: #fff1f0;
+  color: #d93026;
+  font-size: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.package-remove-btn::after {
+  border: none;
 }
 
 .form-item {

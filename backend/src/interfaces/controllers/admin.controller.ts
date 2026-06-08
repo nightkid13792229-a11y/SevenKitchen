@@ -1758,6 +1758,126 @@ export class AdminController {
   }
 
   /**
+   * GET /admin/orders/:orderId/dogs - List dogs owned by the order customer
+   */
+  @Get('orders/:orderId/dogs')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List dogs for the order customer' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async listOrderCustomerDogs(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const dogs = await this.orderService.listOrderCustomerDogs(orderId);
+      return ApiResponseDto.success(dogs);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/dog - Switch the current order to another customer dog
+   */
+  @Put('orders/:orderId/dog')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Switch order dog within the same customer account' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async switchOrderDog(
+    @Param('orderId') orderId: string,
+    @Body() body: { dogId: string },
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      if (!body?.dogId) {
+        return ApiResponseDto.error(400, 'dogId is required');
+      }
+      const order = await this.orderService.switchOrderDog(
+        orderId,
+        body.dogId,
+      );
+      return ApiResponseDto.success({
+        id: order.id,
+        dogId: order.dogId ?? body.dogId,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/items/:itemId/package-plan - Update order item package plan
+   */
+  @Put('orders/:orderId/items/:itemId/package-plan')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update order item package plan' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiParam({ name: 'itemId', description: 'Order item ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['packagePlan'],
+      properties: {
+        packagePlan: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['packageSpecG', 'packageCount'],
+            properties: {
+              packageSpecG: { type: 'number', example: 200 },
+              packageCount: { type: 'number', example: 5 },
+            },
+          },
+        },
+      },
+    },
+  })
+  async updateOrderItemPackagePlan(
+    @Param('orderId') orderId: string,
+    @Param('itemId') itemId: string,
+    @Body()
+    body: {
+      packagePlan: Array<{ packageSpecG: number; packageCount: number }>;
+    },
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      if (!Array.isArray(body?.packagePlan) || body.packagePlan.length === 0) {
+        return ApiResponseDto.error(400, 'packagePlan is required');
+      }
+      const orderItem = await this.orderService.updateOrderItemPackagePlan(
+        orderId,
+        itemId,
+        body.packagePlan,
+      );
+      return ApiResponseDto.success(orderItem);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * PUT /admin/orders/:orderId/admin-remark - Update admin remark
    */
   @Put('orders/:orderId/admin-remark')

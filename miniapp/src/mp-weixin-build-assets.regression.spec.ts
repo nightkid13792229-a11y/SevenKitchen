@@ -29,6 +29,12 @@ describe('mp-weixin build asset regressions', () => {
     expect(previewScript).toContain('node scripts/fix-components-injection.js')
   })
 
+  it('uses the stable esbuild minifier for mp-weixin production builds', () => {
+    const packageJson = JSON.parse(readSource('package.json'))
+
+    expect(packageJson.scripts['build:mp-weixin']).toContain('--minify esbuild')
+  })
+
   it('keeps staff feature pages in subpackages so the main package stays small', () => {
     const pagesConfig = JSON.parse(
       readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8'),

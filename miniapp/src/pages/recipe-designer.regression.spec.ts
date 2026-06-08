@@ -1261,15 +1261,30 @@ describe('recipe designer assessment categorization', () => {
     expect(editorSource).toContain('detail-modal-body')
     expect(editorSource).toContain('detail-modal-footer')
     expect(editorSource).toContain('detail-contribution-weight-input')
+    expect(editorSource).toContain('detail-contribution-weight-confirm-btn')
     expect(editorSource).toContain('detail-contribution-spinner')
     expect(editorSource).toContain('onDetailContributionWeightInput')
-    expect(editorSource).toContain('adjustDetailContributionWeight')
+    expect(editorSource).toContain('confirmDetailContributionWeight')
     expect(editorSource).not.toContain('applyDetailContributionMidpoint')
     expect(editorSource).not.toContain('调至中线')
     expect(editorSource).not.toContain('detail-contribution-midpoint-btn')
     expect(editorSource).toContain('updatingDetailContributionItemId')
     expect(editorSource).toContain('detailNutrientSearchTarget')
     expect(editorSource).toContain('寻找富含该营养素的原料')
+  })
+
+  it('requires explicit confirmation before applying contributor weight edits', () => {
+    expect(editorSource).toContain('confirmDetailContributionWeight')
+    expect(editorSource).toContain('detail-contribution-weight-confirm-btn')
+    expect(editorSource).toContain('@tap.stop="confirmDetailContributionWeight(row)"')
+
+    const contributionInputMatch = editorSource.match(
+      /<input[\s\S]*?class="detail-contribution-weight-input"[\s\S]*?\/>/,
+    )
+    expect(contributionInputMatch?.[0] || '').toContain('@input="onDetailContributionWeightInput(row, $event)"')
+    expect(contributionInputMatch?.[0] || '').not.toContain('@blur="adjustDetailContributionWeight(row, $event)"')
+    expect(contributionInputMatch?.[0] || '').not.toContain('@confirm="adjustDetailContributionWeight(row, $event)"')
+    expect(editorSource).not.toContain('detailContributionWeightDebounceTimer = setTimeout')
   })
 
   it('sorts nutrient contribution rows by contribution share and shows amount labels', () => {

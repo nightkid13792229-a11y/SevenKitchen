@@ -602,17 +602,22 @@
                     class="detail-contribution-weight-input"
                     type="digit"
                     :value="getDetailContributionWeightInputValue(row)"
-                    :disabled="updatingDetailContributionItemId === row.itemId"
+                    :disabled="isDetailContributionWeightUpdating(row)"
                     @input="onDetailContributionWeightInput(row, $event)"
-                    @blur="adjustDetailContributionWeight(row, $event)"
-                    @confirm="adjustDetailContributionWeight(row, $event)"
                   />
                   <view
-                    v-if="updatingDetailContributionItemId === row.itemId"
+                    v-if="isDetailContributionWeightUpdating(row)"
                     class="detail-contribution-spinner"
                   ></view>
                   <text class="detail-contribution-weight-unit">{{ row.amountUnit }}</text>
                 </view>
+                <button
+                  class="detail-contribution-weight-confirm-btn"
+                  :disabled="!canConfirmDetailContributionWeight(row)"
+                  @tap.stop="confirmDetailContributionWeight(row)"
+                >
+                  确认
+                </button>
               </view>
               <text class="detail-contribution-amount">{{ row.amountLabel }}</text>
               <text class="detail-contribution-percent">{{ row.percentLabel }}</text>
@@ -857,7 +862,6 @@ let ingredientSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let pendingIngredientOptionsReset = false
 let assessmentDragStartY = 0
 let assessmentDragStartTopPx = 0
-let detailContributionWeightDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let dragPreparedIndex = -1
 let dragStartY = 0
 let dragOriginalOrderIds: string[] = []
@@ -1107,7 +1111,6 @@ watch(autoSaveStatusLabel, () => {
 
 onUnmounted(() => {
   clearIngredientSearchDebounce()
-  clearDetailContributionWeightDebounce()
 })
 
 async function loadDraft() {
@@ -1648,12 +1651,6 @@ function clearIngredientSearchDebounce() {
   ingredientSearchDebounceTimer = null
 }
 
-function clearDetailContributionWeightDebounce() {
-  if (!detailContributionWeightDebounceTimer) return
-  clearTimeout(detailContributionWeightDebounceTimer)
-  detailContributionWeightDebounceTimer = null
-}
-
 function selectIngredientOption(option: RecipeDesignerIngredientOption) {
   setIngredientTypeHint(option)
   selectedIngredientOption.value = option
@@ -1968,25 +1965,36 @@ function getDetailContributionWeightInputValue(row: AssessmentContributionRow) {
   return detailContributionWeightDrafts.value[row.itemId] ?? formatDetailContributionWeight(row)
 }
 
+function hasDetailContributionWeightDraft(row: AssessmentContributionRow) {
+  return detailContributionWeightDrafts.value[row.itemId] !== undefined
+}
+
+function isDetailContributionWeightUpdating(row: AssessmentContributionRow) {
+  return updatingDetailContributionItemId.value === row.itemId
+}
+
+function canConfirmDetailContributionWeight(row: AssessmentContributionRow) {
+  return hasDetailContributionWeightDraft(row) && !isDetailContributionWeightUpdating(row)
+}
+
 function onDetailContributionWeightInput(row: AssessmentContributionRow, event: any) {
   const rawValue = String(event.detail?.value ?? '')
   detailContributionWeightDrafts.value = {
     ...detailContributionWeightDrafts.value,
     [row.itemId]: rawValue,
   }
-  clearDetailContributionWeightDebounce()
-  detailContributionWeightDebounceTimer = setTimeout(() => {
-    void commitDetailContributionWeight(row, rawValue)
-  }, 500)
 }
 
-async function adjustDetailContributionWeight(row: AssessmentContributionRow, event: any) {
-  clearDetailContributionWeightDebounce()
-  await commitDetailContributionWeight(row, String(event.detail?.value ?? ''))
+async function confirmDetailContributionWeight(row: AssessmentContributionRow) {
+  if (!hasDetailContributionWeightDraft(row)) return
+  await commitDetailContributionWeight(row, detailContributionWeightDrafts.value[row.itemId])
 }
 
 async function commitDetailContributionWeight(row: AssessmentContributionRow, rawValue: string) {
-  if (!rawValue.trim()) return
+  if (!rawValue.trim()) {
+    uni.showToast({ title: '请输入用量', icon: 'none' })
+    return
+  }
   const weightG = Number(rawValue)
   if (!Number.isFinite(weightG) || weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
@@ -2003,6 +2011,10 @@ function clearDetailContributionWeightDraft(itemId: string) {
   const nextDrafts = { ...detailContributionWeightDrafts.value }
   delete nextDrafts[itemId]
   detailContributionWeightDrafts.value = nextDrafts
+}
+
+function clearDetailContributionWeightDrafts() {
+  detailContributionWeightDrafts.value = {}
 }
 
 async function updateDetailContributionItemWeight(itemId: string, weightG: number, previousWeightG?: number) {
@@ -2386,6 +2398,7 @@ function closeAssessmentEntryDetail() {
   detailModalRows.value = []
   detailContributionRows.value = []
   detailNutrientSearchTarget.value = null
+  clearDetailContributionWeightDrafts()
 }
 
 function getAssessmentRangeStyle(entry: AssessmentEntryLike) {
@@ -4859,7 +4872,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .detail-contribution-weight {
-  flex: 0 0 142rpx;
+  flex: 0 0 184rpx;
   min-width: 0;
 }
 
@@ -4885,7 +4898,15 @@ function formatAssessmentNumber(value: unknown) {
   word-break: break-word;
 }
 
+.detail-contribution-row .detail-contribution-weight {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
 .detail-contribution-weight-editor {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   height: 52rpx;
@@ -4905,6 +4926,25 @@ function formatAssessmentNumber(value: unknown) {
   font-size: 23rpx;
   font-weight: 800;
   text-align: right;
+}
+
+.detail-contribution-weight-confirm-btn {
+  flex: 0 0 54rpx;
+  width: 54rpx;
+  height: 52rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 8rpx;
+  background: #1677ff;
+  color: #fff;
+  font-size: 19rpx;
+  font-weight: 800;
+  line-height: 52rpx;
+}
+
+.detail-contribution-weight-confirm-btn[disabled] {
+  background: #e5e7eb;
+  color: #98a2b3;
 }
 
 .detail-contribution-spinner {

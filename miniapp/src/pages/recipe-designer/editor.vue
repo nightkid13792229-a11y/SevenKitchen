@@ -6,20 +6,6 @@
     @tap="collapseAssessmentIfOpen"
     @touchmove="lockEditorScrollWhileItemDragging"
   >
-    <view v-if="isEditorReadOnly" class="readonly-banner">
-      <view class="readonly-copy-block">
-        <text class="readonly-title">已发布版本只读</text>
-        <text class="readonly-copy">点击编辑后进入草稿，不影响当前上架版本。</text>
-      </view>
-      <button
-        class="revision-draft-btn readonly-revision-btn"
-        :disabled="creatingRevision"
-        @tap.stop="createRevisionFromPublishedDraft"
-      >
-        {{ creatingRevision ? '进入中' : '编辑' }}
-      </button>
-    </view>
-
     <view v-if="draftSeriesLifeStage" class="series-context-block">
       <text class="series-context-title">{{ draftName || '未命名食谱' }} · {{ draftSeriesStageLabel }}</text>
       <text class="series-context-meta">{{ assessmentStandardContextLabel }}</text>
@@ -56,7 +42,7 @@
           </button>
         </view>
         <button
-          v-if="items.length > 1 && !isEditorReadOnly"
+          v-if="items.length > 1"
           class="link-btn sort-mode-btn"
           :class="{ active: reorderMode }"
           @tap.stop="toggleReorderMode"
@@ -65,7 +51,11 @@
         </button>
       </view>
 
-      <view v-if="loading" class="state-block">
+      <view v-if="redirectingToEditableDraft" class="state-block">
+        <text>正在进入可编辑版本...</text>
+      </view>
+
+      <view v-else-if="loading" class="state-block">
         <text>加载中...</text>
       </view>
 
@@ -116,7 +106,7 @@
                 class="weight-input"
                 type="digit"
                 :value="formatItemWeightInput(item.weightG)"
-                :disabled="isEditorReadOnly || reorderMode"
+                :disabled="reorderMode"
                 @input="onWeightInput(item, $event)"
                 @blur="updateWeight(item)"
                 @confirm="updateWeight(item)"
@@ -128,7 +118,7 @@
                 {{ getItemWeightPercentLabel(item) }}
               </text>
             </view>
-            <view v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack" @tap.stop>
+            <view v-if="!reorderMode" class="item-action-stack" @tap.stop>
               <view class="include-control">
                 <switch
                   class="include-switch"
@@ -143,39 +133,41 @@
         </view>
       </view>
 
-      <view v-if="!loading && !reorderMode && !isEditorReadOnly" class="ingredient-list-actions">
+      <view v-if="!loading && !redirectingToEditableDraft && !reorderMode" class="ingredient-list-actions">
         <button class="link-btn secondary-add-btn" @tap="openIngredientPicker()">添加原料</button>
       </view>
     </view>
 
     <view v-if="ingredientPickerVisible" class="ingredient-picker-mask" @tap="closeIngredientPicker">
       <view class="ingredient-picker-panel" @tap.stop>
-        <view class="picker-header">
-          <view>
-            <text class="picker-title">添加原料</text>
-            <text v-if="ingredientNutrientSearchTarget" class="picker-nutrient-context">
-              食材按每100g{{ ingredientNutrientSearchTarget.label }}含量排序
-            </text>
+        <view class="picker-fixed-top">
+          <view class="picker-header">
+            <view>
+              <text class="picker-title">添加原料</text>
+              <text v-if="ingredientNutrientSearchTarget" class="picker-nutrient-context">
+                食材按每100g{{ ingredientNutrientSearchTarget.label }}含量排序
+              </text>
+            </view>
+            <button class="picker-close" @tap="closeIngredientPicker">×</button>
           </view>
-          <button class="picker-close" @tap="closeIngredientPicker">×</button>
+
+          <view class="search-row">
+            <input
+              class="search-input"
+              v-model="ingredientSearchKeyword"
+              confirm-type="search"
+              placeholder="搜索原料名称"
+              @confirm="searchIngredientOptions"
+            />
+          </view>
+
+          <view v-if="showSupplementLibraryTip" class="supplement-library-tip">
+            <text class="supplement-library-copy">没有找到补剂？去补剂库新增</text>
+            <button class="link-btn supplement-library-btn" @tap="goToSupplementLibrary">补剂库</button>
+          </view>
         </view>
 
-        <view class="search-row">
-          <input
-            class="search-input"
-            v-model="ingredientSearchKeyword"
-            confirm-type="search"
-            placeholder="搜索原料名称"
-            @confirm="searchIngredientOptions"
-          />
-        </view>
-
-        <view v-if="showSupplementLibraryTip" class="supplement-library-tip">
-          <text class="supplement-library-copy">没有找到补剂？去补剂库新增</text>
-          <button class="link-btn supplement-library-btn" @tap="goToSupplementLibrary">补剂库</button>
-        </view>
-
-        <scroll-view scroll-y class="ingredient-list">
+        <scroll-view scroll-y class="ingredient-list picker-scroll-body">
           <view v-if="ingredientLoading && ingredientOptionSections.length === 0" class="picker-state">
             <text>加载原料中...</text>
             <text class="picker-state-note">仅显示已维护并验证营养档案的原料，可尝试缩短关键词或近义词</text>
@@ -260,7 +252,7 @@
           </button>
         </scroll-view>
 
-        <view class="picker-footer picker-footer-panel">
+        <view class="picker-footer picker-footer-panel picker-fixed-footer">
           <view class="selected-info">
             <text class="selected-label">已选原料</text>
             <text class="selected-name">{{ selectedIngredientOption?.name || '请选择' }}</text>
@@ -303,26 +295,27 @@
       @tap.stop
     >
       <view
-        class="drawer-drag-zone"
+        class="drawer-touch-zone"
         @touchstart.stop="onAssessmentTouchStart"
         @touchmove.stop.prevent="onAssessmentTouchMove"
         @touchend.stop="onAssessmentTouchEnd"
       >
-        <view class="drawer-grip"></view>
-      </view>
+        <view class="drawer-drag-zone">
+          <view class="drawer-grip"></view>
+        </view>
 
-      <view class="drawer-handle">
-        <view class="drawer-title-row">
-          <text class="drawer-title">营养评估</text>
-          <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
-          <button
-            v-if="!isEditorReadOnly"
-            class="scenario-switch-btn"
-            :disabled="scenarioSwitching"
-            @tap.stop="openScenarioSwitchSheet"
-          >
-            切换
-          </button>
+        <view class="drawer-handle">
+          <view class="drawer-title-row">
+            <text class="drawer-title">营养评估</text>
+            <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
+            <button
+              class="scenario-switch-btn"
+              :disabled="scenarioSwitching || redirectingToEditableDraft"
+              @tap.stop="openScenarioSwitchSheet"
+            >
+              切换
+            </button>
+          </view>
         </view>
       </view>
 
@@ -457,7 +450,7 @@
     <view v-if="showBottomPublishBar" class="bottom-publish-bar" @tap.stop>
       <button
         class="primary-btn bottom-publish-btn"
-        :disabled="loading || autoSaveStatus === 'saving'"
+        :disabled="loading || redirectingToEditableDraft || autoSaveStatus === 'saving'"
         @tap="goToNutritionReport"
       >
         查看营养报告
@@ -605,7 +598,7 @@
                     class="detail-contribution-weight-input"
                     type="digit"
                     :value="getDetailContributionWeightInputValue(row)"
-                    :disabled="isEditorReadOnly || updatingDetailContributionItemId === row.itemId"
+                    :disabled="updatingDetailContributionItemId === row.itemId"
                     @input="onDetailContributionWeightInput(row, $event)"
                     @blur="adjustDetailContributionWeight(row, $event)"
                     @confirm="adjustDetailContributionWeight(row, $event)"
@@ -623,7 +616,7 @@
           </view>
         </view>
       </scroll-view>
-      <view v-if="detailNutrientSearchTarget && !isEditorReadOnly" class="detail-modal-footer">
+      <view v-if="detailNutrientSearchTarget" class="detail-modal-footer">
         <button
           class="detail-nutrient-search-btn"
           @tap.stop="openIngredientPickerForDetailNutrient"
@@ -798,9 +791,6 @@ function getSafeAreaBottomPx(systemInfo: any) {
 
 const draftId = ref('')
 const draftName = ref('')
-const draftStatus = ref('')
-const draftPublishedRecipeId = ref('')
-const draftPublishedAt = ref('')
 const draftSeriesId = ref('')
 const draftSeriesLifeStage = ref('')
 const availableSeriesStages = ref<RecipeDesignerSeriesStage[]>([])
@@ -842,7 +832,7 @@ const pendingScenario = ref<FediafDogScenario>('ADULT_MER_110')
 const ingredientPickerVisible = ref(false)
 const ingredientLoading = ref(false)
 const addingItem = ref(false)
-const creatingRevision = ref(false)
+const redirectingToEditableDraft = ref(false)
 const reorderMode = ref(false)
 const draggingItemId = ref('')
 const dragTargetIndex = ref(-1)
@@ -884,14 +874,6 @@ const currentTotalWeightG = computed(() => {
     .reduce((sum, item) => sum + Number(item.weightG || 0), 0)
 })
 
-const isEditorReadOnly = computed(() =>
-  isPublishedDraftRecord({
-    status: draftStatus.value,
-    publishedRecipeId: draftPublishedRecipeId.value,
-    publishedAt: draftPublishedAt.value,
-  }),
-)
-
 const assessmentListVisible = computed(
   () => assessmentDrawerTopPx.value < assessmentDrawerMaxTopPx.value - 56,
 )
@@ -899,8 +881,8 @@ const assessmentListVisible = computed(
 const showBottomPublishBar = computed(() => !assessmentListVisible.value)
 
 const autoSaveStatusLabel = computed(() => {
+  if (redirectingToEditableDraft.value) return '进入可编辑版本中'
   if (loading.value) return '加载中'
-  if (isEditorReadOnly.value) return '已发布只读'
   if (autoSaveStatus.value === 'saving') return '自动保存中'
   if (autoSaveStatus.value === 'failed') return '自动保存失败'
   return '已自动保存'
@@ -1028,7 +1010,7 @@ const detailModalRangeStatusClass = computed(() => {
 const detailContributionUpdating = computed(() => Boolean(updatingDetailContributionItemId.value))
 
 const historyControlsDisabled = computed(() => {
-  return isEditorReadOnly.value || loading.value || autoSaveStatus.value === 'saving' || historyActionRunning.value
+  return redirectingToEditableDraft.value || loading.value || autoSaveStatus.value === 'saving' || historyActionRunning.value
 })
 
 const canUndoRecipeDesignerHistory = computed(() => {
@@ -1041,7 +1023,7 @@ const canRedoRecipeDesignerHistory = computed(() => {
 
 const canConfirmScenarioSwitch = computed(() => {
   return (
-    !isEditorReadOnly.value &&
+    !redirectingToEditableDraft.value &&
     !scenarioSwitching.value &&
     pendingScenario.value !== scenario.value
   )
@@ -1065,7 +1047,7 @@ const draftSeriesStageLabel = computed(() => {
 })
 
 const canConfirmAddIngredient = computed(() => {
-  if (isEditorReadOnly.value) return false
+  if (redirectingToEditableDraft.value) return false
   if (addingItem.value || !selectedIngredientOption.value || !selectedNutritionProfile.value) return false
   const weightG = Number(newItemWeightInput.value)
   return Number.isFinite(weightG) && weightG > 0
@@ -1132,10 +1114,11 @@ async function loadDraft() {
     const res: any = await recipeDesignerApi.getDraft(draftId.value)
     const draft = res?.data ?? res
     if (draft) {
+      if (await ensureEditableDraftAfterLoad(draft)) {
+        return
+      }
+
       draftName.value = String(draft.name || '')
-      draftStatus.value = String(draft.status || '')
-      draftPublishedRecipeId.value = String(draft.publishedRecipeId || '')
-      draftPublishedAt.value = String(draft.publishedAt || '')
       draftSeriesId.value = String(draft.seriesId || '')
       draftSeriesLifeStage.value = String(draft.seriesLifeStage || '')
       availableSeriesStages.value = Array.isArray(draft.seriesStages) ? draft.seriesStages : []
@@ -1183,31 +1166,35 @@ function isPublishedDraftRecord(draft: { status?: string; publishedRecipeId?: st
   return draft.status === 'PUBLISHED' || Boolean(draft.publishedRecipeId || draft.publishedAt)
 }
 
-function ensureDraftEditable() {
-  if (!isEditorReadOnly.value) return true
-  uni.showToast({ title: '已发布食谱不可直接编辑', icon: 'none' })
-  return false
-}
+async function ensureEditableDraftAfterLoad(draft: any) {
+  if (!isPublishedDraftRecord({
+    status: String(draft?.status || ''),
+    publishedRecipeId: draft?.publishedRecipeId,
+    publishedAt: draft?.publishedAt,
+  })) {
+    return false
+  }
+  if (!draftId.value || redirectingToEditableDraft.value) return true
 
-async function createRevisionFromPublishedDraft() {
-  if (!draftId.value || creatingRevision.value) return
-
-  creatingRevision.value = true
+  redirectingToEditableDraft.value = true
+  updateNavigationTitle()
+  uni.showToast({ title: '正在进入可编辑版本', icon: 'loading', duration: 800 })
   try {
     const res: any = await recipeDesignerApi.createRevisionDraft(draftId.value)
     const revision = res?.data ?? res
     const revisionId = revision?.id
     if (!revisionId) {
-      uni.showToast({ title: '进入编辑失败', icon: 'none' })
-      return
+      uni.showToast({ title: '进入可编辑版本失败', icon: 'none' })
+      setTimeout(() => uni.navigateBack(), 800)
+      return true
     }
     uni.redirectTo({ url: `/pages/recipe-designer/editor?id=${revisionId}` })
   } catch (error) {
-    console.error('[RecipeDesignerEditor] Failed to create revision draft:', error)
-    uni.showToast({ title: '进入编辑失败', icon: 'none' })
-  } finally {
-    creatingRevision.value = false
+    console.error('[RecipeDesignerEditor] Failed to enter editable revision draft:', error)
+    uni.showToast({ title: '进入可编辑版本失败', icon: 'none' })
+    setTimeout(() => uni.navigateBack(), 800)
   }
+  return true
 }
 
 function updateNavigationTitle() {
@@ -1307,7 +1294,6 @@ async function refreshAssessment(options: { quiet?: boolean } = {}) {
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
-  if (isEditorReadOnly.value) return
   if (itemWeightEditBaselines.value[item.id] === undefined) {
     itemWeightEditBaselines.value = {
       ...itemWeightEditBaselines.value,
@@ -1318,7 +1304,6 @@ function onWeightInput(item: DesignerItem, event: any) {
 }
 
 async function updateWeight(item: DesignerItem) {
-  if (!ensureDraftEditable()) return
   const previousWeightG = itemWeightEditBaselines.value[item.id] ?? Number(item.weightG || 0)
   const weightG = Number(item.weightG || 0)
   if (weightG < 0) {
@@ -1364,7 +1349,6 @@ function isItemIncludedInAssessment(item: DesignerItem) {
 }
 
 async function toggleItemAssessment(item: DesignerItem, event: any) {
-  if (!ensureDraftEditable()) return
   const nextIncluded = Boolean(event.detail?.value)
   const previousIncluded = isItemIncludedInAssessment(item)
   item.includeInAssessment = nextIncluded
@@ -1393,7 +1377,6 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
 }
 
 function startItemDrag(item: DesignerItem, index: number, event: any) {
-  if (isEditorReadOnly.value) return
   if (!reorderMode.value || items.value.length < 2 || dragPersisting.value) return
   stopItemDragEvent(event)
   if (draggingItemId.value === item.id) return
@@ -1439,7 +1422,6 @@ function cancelItemDrag(event?: any) {
 }
 
 async function toggleReorderMode() {
-  if (!ensureDraftEditable()) return
   if (dragPersisting.value) return
   if (reorderMode.value) {
     await finishItemDrag()
@@ -1471,7 +1453,6 @@ function clearItemDragState() {
 }
 
 async function persistItemSortOrder(orderedItems: DesignerItem[]) {
-  if (!ensureDraftEditable()) return false
   if (dragPersisting.value) return false
   dragPersisting.value = true
   beginAutoSave()
@@ -1557,7 +1538,6 @@ function getCurrentUserRole() {
 }
 
 async function openIngredientPicker(target: AssessmentNutrientSearchTarget | null = null) {
-  if (!ensureDraftEditable()) return
   const targetChanged =
     (ingredientNutrientSearchTarget.value?.nutrientKey || '') !== (target?.nutrientKey || '') ||
     (ingredientNutrientSearchTarget.value?.expressionBasis || '') !== (target?.expressionBasis || '')
@@ -1683,7 +1663,6 @@ function selectNutritionProfile(profile: IngredientNutritionProfileOption) {
 }
 
 async function confirmAddIngredient() {
-  if (!ensureDraftEditable()) return
   if (!selectedIngredientOption.value || !selectedNutritionProfile.value) {
     uni.showToast({ title: '请选择原料', icon: 'none' })
     return
@@ -1730,7 +1709,6 @@ async function confirmAddIngredient() {
 }
 
 function removeIngredient(item: DesignerItem) {
-  if (!ensureDraftEditable()) return
   const itemSnapshot = snapshotRecipeDesignerItem(item)
   uni.showModal({
     title: '删除原料',
@@ -1757,7 +1735,6 @@ function removeIngredient(item: DesignerItem) {
 }
 
 function goToSupplementLibrary() {
-  if (!ensureDraftEditable()) return
   const query = draftId.value
     ? `?returnTo=editor&draftId=${encodeURIComponent(draftId.value)}`
     : ''
@@ -1765,7 +1742,6 @@ function goToSupplementLibrary() {
 }
 
 function applyPendingSupplementOptionFromStorage() {
-  if (isEditorReadOnly.value) return
   const raw = uni.getStorageSync(PENDING_SUPPLEMENT_OPTION_STORAGE_KEY)
   if (!raw) return
 
@@ -2008,7 +1984,6 @@ async function adjustDetailContributionWeight(row: AssessmentContributionRow, ev
 }
 
 async function commitDetailContributionWeight(row: AssessmentContributionRow, rawValue: string) {
-  if (!ensureDraftEditable()) return
   if (!rawValue.trim()) return
   const weightG = Number(rawValue)
   if (!Number.isFinite(weightG) || weightG < 0) {
@@ -2029,7 +2004,6 @@ function clearDetailContributionWeightDraft(itemId: string) {
 }
 
 async function updateDetailContributionItemWeight(itemId: string, weightG: number, previousWeightG?: number) {
-  if (!ensureDraftEditable()) return
   if (updatingDetailContributionItemId.value) return
   const item = items.value.find((candidate) => candidate.id === itemId)
   const beforeWeightG = previousWeightG ?? Number(item?.weightG || 0)
@@ -2318,7 +2292,6 @@ function sortItemsBySortOrder(list: DesignerItem[]) {
 }
 
 function openScenarioSwitchSheet() {
-  if (!ensureDraftEditable()) return
   pendingScenario.value = scenario.value
   scenarioSwitchSheetVisible.value = true
 }
@@ -2338,7 +2311,6 @@ function getScenarioDescription(value: FediafDogScenario) {
 }
 
 async function confirmScenarioSwitch() {
-  if (!ensureDraftEditable()) return
   if (pendingScenario.value === scenario.value) {
     scenarioSwitchSheetVisible.value = false
     return
@@ -2884,52 +2856,6 @@ function formatAssessmentNumber(value: unknown) {
   touch-action: none;
 }
 
-.readonly-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-  padding: 20rpx 24rpx;
-  border: 1rpx solid #bfdbfe;
-  border-radius: 12rpx;
-  background: #eff6ff;
-}
-
-.readonly-copy-block {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.readonly-title {
-  color: #1d4ed8;
-  font-size: 28rpx;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.readonly-copy {
-  color: #475569;
-  font-size: 24rpx;
-  line-height: 1.45;
-}
-
-.readonly-revision-btn {
-  flex-shrink: 0;
-  height: 56rpx;
-  margin: 0;
-  padding: 0 20rpx;
-  border-radius: 8rpx;
-  background: #1677ff;
-  color: #fff;
-  font-size: 24rpx;
-  line-height: 56rpx;
-}
-
 .series-context-block {
   display: flex;
   flex-direction: column;
@@ -3380,11 +3306,19 @@ function formatAssessmentNumber(value: unknown) {
 
 .ingredient-picker-panel {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 86vh;
   max-height: 86vh;
   padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   border-radius: 24rpx 24rpx 0 0;
   background: #fff;
   box-sizing: border-box;
+}
+
+.picker-fixed-top,
+.picker-fixed-footer {
+  flex: 0 0 auto;
 }
 
 .picker-header,
@@ -3724,10 +3658,14 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .ingredient-list {
-  height: 540rpx;
   margin-top: 20rpx;
   border-top: 1rpx solid #f0f0f0;
   border-bottom: 1rpx solid #f0f0f0;
+}
+
+.picker-scroll-body {
+  flex: 1;
+  min-height: 0;
 }
 
 .picker-state {
@@ -4088,8 +4026,13 @@ function formatAssessmentNumber(value: unknown) {
   transition: none;
 }
 
+.drawer-touch-zone,
 .drawer-drag-zone {
   flex: 0 0 auto;
+}
+
+.drawer-touch-zone {
+  padding-bottom: 8rpx;
 }
 
 .drawer-grip {

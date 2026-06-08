@@ -128,6 +128,7 @@ describe('recipeDesignerApi', () => {
     } satisfies Parameters<typeof recipeDesignerApi.deleteSeries>[1]
     const stagePayload = {
       scenario: 'EARLY_GROWTH_REPRODUCTION',
+      sourceDraftId: 'published-adult-design',
     } satisfies Parameters<typeof recipeDesignerApi.createSeriesStageDraft>[1]
 
     recipeDesignerApi.listSeries()

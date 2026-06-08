@@ -276,9 +276,42 @@ async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: Reci
     return
   }
 
+  const templateStages = getPublishedTemplateStages(seriesItem, stage)
+  if (templateStages.length > 0) {
+    openStageTemplateSheet(seriesItem, stage, templateStages)
+    return
+  }
+
+  await createSeriesStageDraft(seriesItem, stage)
+}
+
+function openStageTemplateSheet(
+  seriesItem: RecipeDesignerSeriesCard,
+  stage: RecipeDesignerSeriesStage,
+  templateStages: RecipeDesignerSeriesStage[],
+) {
+  uni.showActionSheet({
+    title: '选择起始方式',
+    itemList: ['空白开始', ...templateStages.map((template) => `复制${getStageTemplateLabel(template)}`)],
+    success: (result: any) => {
+      const selectedTemplate = templateStages[result.tapIndex - 1]
+      void createSeriesStageDraft(seriesItem, stage, selectedTemplate)
+    },
+  })
+}
+
+async function createSeriesStageDraft(
+  seriesItem: RecipeDesignerSeriesCard,
+  stage: RecipeDesignerSeriesStage,
+  selectedTemplate?: RecipeDesignerSeriesStage,
+) {
+  const stageKey = `${seriesItem.id}:${stage.lifeStage}`
   openingStageKey.value = stageKey
   try {
-    const res: any = await recipeDesignerApi.createSeriesStageDraft(seriesItem.id, { scenario: stage.scenario })
+    const payload = selectedTemplate?.draftId
+      ? { scenario: stage.scenario, sourceDraftId: selectedTemplate.draftId }
+      : { scenario: stage.scenario }
+    const res: any = await recipeDesignerApi.createSeriesStageDraft(seriesItem.id, payload)
     const draft = res?.data ?? res
     const draftId = draft?.id || draft?.draftId || draft?.draft?.id
     if (!draftId) {
@@ -293,6 +326,22 @@ async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: Reci
   } finally {
     openingStageKey.value = ''
   }
+}
+
+function getPublishedTemplateStages(
+  seriesItem: RecipeDesignerSeriesCard,
+  targetStage: RecipeDesignerSeriesStage,
+) {
+  return getSeriesStages(seriesItem).filter(
+    (stage) =>
+      stage.lifeStage !== targetStage.lifeStage &&
+      stage.status === 'PUBLISHED' &&
+      Boolean(stage.draftId),
+  )
+}
+
+function getStageTemplateLabel(stage: RecipeDesignerSeriesStage) {
+  return stage.label || getScenarioLabel(stage.scenario)
 }
 
 function openSeriesActionSheet(seriesItem: RecipeDesignerSeriesCard) {

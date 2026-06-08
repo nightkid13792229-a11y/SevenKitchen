@@ -44,6 +44,18 @@ describe('RecipeDesignerController authorization', () => {
 
     expect(source).toMatch(/@Get\('drafts\/:id'\)/);
   });
+
+  it('accepts a source draft id when creating a stage draft from a published template', () => {
+    const dtoSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/dto/recipe-designer/recipe-designer.dto.ts',
+      ),
+      'utf8',
+    );
+
+    expect(dtoSource).toContain('sourceDraftId?: string');
+  });
 });
 
 describe('RecipeDesignerController', () => {

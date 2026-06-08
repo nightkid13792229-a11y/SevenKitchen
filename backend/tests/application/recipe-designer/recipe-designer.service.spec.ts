@@ -2194,6 +2194,32 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('keeps an untouched empty draft in draft state after automatic assessment', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'empty-stage-design',
+        items: [],
+        status: 'DRAFT',
+        reviewStatus: 'NONE',
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(draft());
+
+    const assessment = await service.assessDraft('empty-stage-design');
+
+    expect(assessment.totalWeightG).toBe(0);
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'empty-stage-design' },
+      data: expect.objectContaining({
+        totalWeightG: 0,
+        status: 'DRAFT',
+        reviewStatus: 'NONE',
+        isCompliant: false,
+      }),
+    });
+  });
+
   it('returns grouped assessment data without the duplicate flat entries payload', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -3984,6 +4010,94 @@ describe('RecipeDesignerService', () => {
           seriesId: 'series-1',
           seriesLifeStage: 'REPRODUCTION',
           applicableLifeStages: ['REPRODUCTION'],
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('copies item structure from a same-series published stage template when requested', async () => {
+      const sourceItem = item({
+        id: 'source-item-1',
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-1',
+        weightG: 128,
+        includeInAssessment: true,
+        ratioPercent: 64,
+        preparationMethod: 'STEAMED',
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: 500,
+        sortOrder: 2,
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue({
+        id: 'series-1',
+        name: '牛肉南瓜鲜食',
+        status: 'ACTIVE',
+      });
+      prisma.designRecipe.findFirst.mockResolvedValue(null);
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'published-adult-design',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          status: 'PUBLISHED',
+          publishedRecipeId: 'adult-recipe-id',
+          publishedAt: new Date('2026-05-31T10:00:00.000Z'),
+          items: [sourceItem],
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 2 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'reproduction-design',
+          name: '牛肉南瓜鲜食',
+          version: 3,
+          seriesId: 'series-1',
+          seriesLifeStage: 'REPRODUCTION',
+          fediafDogScenario: 'REPRODUCTION',
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.createSeriesStageDraft(
+          'series-1',
+          {
+            scenario: 'REPRODUCTION',
+            sourceDraftId: 'published-adult-design',
+          } as any,
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'reproduction-design',
+          items: [expect.objectContaining({ id: 'source-item-1' })],
+        }),
+      );
+
+      expect(prisma.designRecipe.findUnique).toHaveBeenCalledWith({
+        where: { id: 'published-adult-design' },
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          seriesId: 'series-1',
+          seriesLifeStage: 'REPRODUCTION',
+          status: 'DRAFT',
+          items: {
+            create: [
+              expect.objectContaining({
+                ingredientId: 'ingredient-1',
+                nutritionFoodId: 'food-1',
+                weightG: 128,
+                includeInAssessment: true,
+                ratioPercent: 64,
+                preparationMethod: 'STEAMED',
+                nutrientTargetKey: 'calcium',
+                nutrientTargetValue: 500,
+                sortOrder: 2,
+              }),
+            ],
+          },
         }),
         include: expect.any(Object),
       });

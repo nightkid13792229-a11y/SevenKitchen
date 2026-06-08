@@ -67,6 +67,11 @@ export interface DeleteRecipeSeriesPayload {
   confirmUserVisibleRemoval: boolean
 }
 
+export interface CreateRecipeSeriesStageDraftPayload {
+  scenario: FediafDogScenario
+  sourceDraftId?: string
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
@@ -241,7 +246,7 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/series/${seriesId}`, method: 'PATCH', data }),
   deleteSeries: (seriesId: string, data: DeleteRecipeSeriesPayload) =>
     request({ url: `/recipe-designer/series/${seriesId}`, method: 'DELETE', data }),
-  createSeriesStageDraft: (seriesId: string, data: { scenario: FediafDogScenario }) =>
+  createSeriesStageDraft: (seriesId: string, data: CreateRecipeSeriesStageDraftPayload) =>
     request({ url: `/recipe-designer/series/${seriesId}/stage-drafts`, method: 'POST', data }),
   listIngredientOptions: (data: IngredientOptionListQuery = {}) =>
     request({ url: '/recipe-designer/ingredient-options', method: 'GET', data }),

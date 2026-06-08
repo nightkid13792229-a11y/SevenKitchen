@@ -1339,6 +1339,13 @@ export class RecipeDesignerService {
             return existingDraft;
           }
 
+          const sourceTemplate = dto.sourceDraftId
+            ? await this.loadSeriesStageSourceTemplate(
+                tx,
+                seriesId,
+                dto.sourceDraftId,
+              )
+            : null;
           const version = await this.allocateNextDesignRecipeVersion(
             tx,
             series.name,
@@ -1356,6 +1363,23 @@ export class RecipeDesignerService {
               createdBy: userId,
               seriesId,
               seriesLifeStage: lifeStage,
+              ...(sourceTemplate
+                ? {
+                    items: {
+                      create: sourceTemplate.items.map((item) => ({
+                        ingredientId: item.ingredientId,
+                        nutritionFoodId: item.nutritionFoodId,
+                        weightG: item.weightG,
+                        includeInAssessment: item.includeInAssessment,
+                        ratioPercent: item.ratioPercent,
+                        preparationMethod: item.preparationMethod,
+                        nutrientTargetKey: item.nutrientTargetKey,
+                        nutrientTargetValue: item.nutrientTargetValue,
+                        sortOrder: item.sortOrder,
+                      })),
+                    },
+                  }
+                : {}),
             },
             include: DESIGN_RECIPE_INCLUDE,
           });
@@ -1374,6 +1398,32 @@ export class RecipeDesignerService {
     }
 
     throw new BadRequestException('阶段草稿创建失败，请重试');
+  }
+
+  private async loadSeriesStageSourceTemplate(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    seriesId: string,
+    sourceDraftId: string,
+  ): Promise<DesignRecipeWithItems> {
+    const source = (await tx.designRecipe.findUnique({
+      where: { id: sourceDraftId },
+      include: DESIGN_RECIPE_INCLUDE,
+    })) as unknown as DesignRecipeWithItems | null;
+
+    if (!source) {
+      throw new BadRequestException('模板阶段不存在');
+    }
+    if (source.seriesId !== seriesId) {
+      throw new BadRequestException('只能复制同一食谱系列内的已发布阶段');
+    }
+    if (!this.isPublishedDraft(source)) {
+      throw new BadRequestException('只能复制已发布阶段作为模板');
+    }
+    if (!source.items.length) {
+      throw new BadRequestException('模板阶段暂无原料，无法复制');
+    }
+
+    return source;
   }
 
   async renameSeries(
@@ -3258,6 +3308,7 @@ export class RecipeDesignerService {
         label: entry.label,
         fieldStatus: entry.status,
       }));
+    const hasAssessmentItems = result.items.length > 0;
     const isCompliant = result.overallStatus === 'COMPLIANT';
 
     return {
@@ -3273,10 +3324,12 @@ export class RecipeDesignerService {
       }),
       missingDataReport: this.toJsonValue(missingDataReport),
       isCompliant,
-      status: isCompliant
-        ? DesignRecipeStatus.COMPLIANT
-        : DesignRecipeStatus.NEEDS_REVIEW,
-      reviewStatus: isCompliant
+      status: !hasAssessmentItems
+        ? DesignRecipeStatus.DRAFT
+        : isCompliant
+          ? DesignRecipeStatus.COMPLIANT
+          : DesignRecipeStatus.NEEDS_REVIEW,
+      reviewStatus: !hasAssessmentItems || isCompliant
         ? DesignRecipeReviewStatus.NONE
         : DesignRecipeReviewStatus.REQUIRED,
     };

@@ -54,6 +54,10 @@ export class DeleteRecipeSeriesDto {
 export class CreateRecipeSeriesStageDraftDto {
   @IsIn(RECIPE_DESIGNER_SCENARIOS)
   scenario!: RecipeDesignerScenario;
+
+  @IsOptional()
+  @IsString()
+  sourceDraftId?: string;
 }
 
 export const SUPPLEMENT_NUTRITION_BASIS_TYPES = [

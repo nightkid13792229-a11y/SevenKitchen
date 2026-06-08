@@ -90,6 +90,14 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain("title: '进入阶段失败'")
   })
 
+  it('offers published stage ingredient structures as templates before creating a blank stage draft', () => {
+    expect(apiSource).toContain('sourceDraftId?: string')
+    expect(listSource).toContain('getPublishedTemplateStages')
+    expect(listSource).toContain('选择起始方式')
+    expect(listSource).toContain('空白开始')
+    expect(listSource).toContain('sourceDraftId: selectedTemplate.draftId')
+  })
+
   it('lets users rename and safely delete recipe series from overflow actions only', () => {
     expect(listSource).toContain('series-actions')
     expect(listSource).toContain('series-more-btn')
@@ -121,20 +129,25 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).not.toContain('recipeDesignerApi.createDraft')
   })
 
-  it('keeps published recipe designer stages read-only instead of exposing broken edit controls', () => {
-    expect(editorSource).toContain('isEditorReadOnly')
-    expect(editorSource).toContain('readonly-banner')
-    expect(editorSource).toContain('createRevisionFromPublishedDraft')
-    expect(editorSource).toContain('@tap.stop="createRevisionFromPublishedDraft"')
-    expect(editorSource).toContain('已发布版本只读')
-    expect(editorSource).toContain('点击编辑后进入草稿，不影响当前上架版本。')
-    expect(editorSource).toContain("{{ creatingRevision ? '进入中' : '编辑' }}")
-    expect(editorSource).toContain("title: '进入编辑失败'")
-    expect(editorSource).toContain(':disabled="isEditorReadOnly || reorderMode"')
-    expect(editorSource).toContain('v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack"')
-    expect(editorSource).toContain('v-if="!loading && !reorderMode && !isEditorReadOnly" class="ingredient-list-actions"')
-    expect(editorSource).toContain('function ensureDraftEditable')
+  it('automatically enters an editable revision draft for published recipe designer stages', () => {
+    expect(editorSource).toContain('ensureEditableDraftAfterLoad(draft)')
+    expect(editorSource).toContain('redirectingToEditableDraft')
+    expect(editorSource).toContain('recipeDesignerApi.createRevisionDraft(draftId.value)')
+    expect(editorSource).toContain('uni.redirectTo({ url: `/pages/recipe-designer/editor?id=${revisionId}` })')
+    expect(editorSource).toContain("title: '正在进入可编辑版本'")
+    expect(editorSource).toContain("title: '进入可编辑版本失败'")
     expect(editorSource).toContain("status === 'PUBLISHED'")
+    expect(editorSource).not.toContain('isEditorReadOnly')
+    expect(editorSource).not.toContain('readonly-banner')
+    expect(editorSource).not.toContain('createRevisionFromPublishedDraft')
+    expect(editorSource).not.toContain('@tap.stop="createRevisionFromPublishedDraft"')
+    expect(editorSource).not.toContain('已发布版本只读')
+    expect(editorSource).not.toContain('点击编辑后进入草稿，不影响当前上架版本。')
+    expect(editorSource).not.toContain('已发布只读')
+    expect(editorSource).not.toContain(':disabled="isEditorReadOnly || reorderMode"')
+    expect(editorSource).not.toContain('v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack"')
+    expect(editorSource).not.toContain('v-if="!loading && !reorderMode && !isEditorReadOnly" class="ingredient-list-actions"')
+    expect(editorSource).not.toContain('function ensureDraftEditable')
   })
 
   it('shows compact series and stage context in the editor when present', () => {
@@ -312,9 +325,9 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('@longpress.stop.prevent="startItemDrag(item, index, $event)"')
     expect(editorSource).toContain('@touchmove.stop.prevent="onItemTouchMove"')
     expect(editorSource).toContain('@touchend.stop.prevent="finishItemDrag($event)"')
-    expect(editorSource).toContain('v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack"')
-    expect(editorSource).toContain('v-if="!loading && !reorderMode && !isEditorReadOnly" class="ingredient-list-actions"')
-    expect(editorSource).toContain(':disabled="isEditorReadOnly || reorderMode"')
+    expect(editorSource).toContain('v-if="!reorderMode" class="item-action-stack"')
+    expect(editorSource).toContain('v-if="!loading && !redirectingToEditableDraft && !reorderMode" class="ingredient-list-actions"')
+    expect(editorSource).toContain(':disabled="reorderMode"')
     expect(editorSource).toContain('function toggleReorderMode')
     expect(editorSource).toContain('if (!reorderMode.value || items.value.length < 2 || dragPersisting.value) return')
     expect(editorSource).toContain('if (draggingItemId.value === item.id) return')
@@ -653,20 +666,21 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('FEDIAF_DOG_SCENARIO_LABELS')
     expect(editorSource).toContain('const scenarioOptions: Array<{ label: string; value: FediafDogScenario }>')
     expect(editorSource).toContain('scenario-switch-btn')
-    expect(editorSource).toContain('v-if="!isEditorReadOnly"')
+    expect(editorSource).not.toContain('v-if="!isEditorReadOnly"')
     expect(editorSource).toContain('@tap.stop="openScenarioSwitchSheet"')
     const standardContextStyle = editorSource.match(/\.standard-context\s*\{[\s\S]*?\n\}/)?.[0] || ''
     expect(standardContextStyle).toContain('text-align: right;')
     expect(standardContextStyle).toContain('max-width:')
-    expect(editorSource).toContain(`class="drawer-drag-zone"
+    expect(editorSource).toContain(`class="drawer-touch-zone"
         @touchstart.stop="onAssessmentTouchStart"
         @touchmove.stop.prevent="onAssessmentTouchMove"
         @touchend.stop="onAssessmentTouchEnd"
       >
-        <view class="drawer-grip"></view>
-      </view>
+        <view class="drawer-drag-zone">
+          <view class="drawer-grip"></view>
+        </view>
 
-      <view class="drawer-handle">`)
+        <view class="drawer-handle">`)
     expect(editorSource).toContain('scenario-switch-mask')
     expect(editorSource).toContain('scenario-switch-panel')
     expect(editorSource).toContain('切换生命阶段')
@@ -744,6 +758,13 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('Math.max(220, drawerPadding + publishPadding)')
   })
 
+  it('lets the full nutrition drawer header act as the drag target without adding a separate toggle button', () => {
+    expect(editorSource).toContain('class="drawer-touch-zone"')
+    expect(editorSource).toContain('@touchstart.stop="onAssessmentTouchStart"')
+    expect(editorSource).toContain('@touchmove.stop.prevent="onAssessmentTouchMove"')
+    expect(editorSource).not.toContain('class="assessment-toggle-btn"')
+  })
+
   it('replaces the ingredient placeholder with a mobile picker that can add and remove items', () => {
     expect(editorSource).not.toContain('原料选择稍后接入')
     expect(editorSource).toContain('ingredient-picker-panel')
@@ -769,6 +790,14 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('class="food-badge"')
     expect(editorSource).not.toContain('多档案')
     expect(editorSource).not.toContain('主档案')
+  })
+
+  it('keeps the add ingredient picker header and footer fixed while only the result list scrolls', () => {
+    expect(editorSource).toContain('picker-fixed-top')
+    expect(editorSource).toContain('picker-scroll-body')
+    expect(editorSource).toContain('picker-fixed-footer')
+    expect(editorSource).toMatch(/\.ingredient-picker-panel\s*\{[\s\S]*display: flex;[\s\S]*flex-direction: column;/)
+    expect(editorSource).toMatch(/\.picker-scroll-body\s*\{[\s\S]*flex: 1;[\s\S]*min-height: 0;/)
   })
 
   it('keeps the add ingredient picker focused on search, source, and required weight entry', () => {

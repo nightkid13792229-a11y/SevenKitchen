@@ -94,6 +94,8 @@ describe('checkout direct-buy storage contract', () => {
     })
 
     bottomPriceBlocks.forEach((block) => {
+      expect(block).toContain('margin-left: auto;')
+      expect(block).toContain('margin-right: 0;')
       expect(block).toContain('flex: 0 1 auto;')
       expect(block).toContain('align-items: flex-end;')
       expect(block).toContain('text-align: right;')

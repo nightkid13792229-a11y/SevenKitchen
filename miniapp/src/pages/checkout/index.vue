@@ -1928,6 +1928,8 @@ function goToAddAddress() {
 .bottom-price {
   min-width: 0;
   max-width: calc(100% - 470rpx);
+  margin-left: auto;
+  margin-right: 0;
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;

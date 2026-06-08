@@ -3,7 +3,7 @@
     {
       "path": "pages/home/index",
       "style": {
-        "navigationBarTitleText": "Seven的厨房",
+        "navigationBarTitleText": "赛文的食堂",
         "enablePullDownRefresh": true
       }
     },

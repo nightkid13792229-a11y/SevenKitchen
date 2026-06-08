@@ -3,6 +3,22 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('app startup regressions', () => {
+  it('uses the updated home navigation title', () => {
+    const pagesJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8'),
+    ) as {
+      pages: Array<{
+        path: string
+        style?: {
+          navigationBarTitleText?: string
+        }
+      }>
+    }
+    const homePage = pagesJson.pages.find((page) => page.path === 'pages/home/index')
+
+    expect(homePage?.style?.navigationBarTitleText).toBe('赛文的食堂')
+  })
+
   it('avoids verbose startup logging and caches runtime platform checks', () => {
     const appSource = readFileSync(
       resolve(process.cwd(), 'src/App.vue'),

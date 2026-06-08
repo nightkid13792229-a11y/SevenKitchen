@@ -143,11 +143,14 @@
       </view>
     </view>
 
-    <CustomerServiceFloatButton
-      source-type="GENERAL"
-      title="订单列表咨询"
-      path="/pages/orders-list/index"
-    />
+    <view class="customer-service-bottom-bar">
+      <CustomerServiceInlineButton
+        class="customer-service-bottom-action"
+        source-type="GENERAL"
+        title="订单列表咨询"
+        path="/pages/orders-list/index"
+      />
+    </view>
   </view>
 </template>
 
@@ -162,7 +165,7 @@ import {
 import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
-import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 // DEBUG flag for development logging
 const DEBUG = true;
@@ -690,6 +693,7 @@ function formatAddress(address?: { regionText?: string }): string {
 .container {
   padding: 20rpx;
   padding-top: 0;
+  padding-bottom: 136rpx;
 }
 
 /* 状态筛选Tab */
@@ -953,5 +957,21 @@ function formatAddress(address?: { regionText?: string }): string {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+}
+
+.customer-service-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+  box-sizing: border-box;
+}
+
+.customer-service-bottom-action {
+  width: 100%;
 }
 </style>

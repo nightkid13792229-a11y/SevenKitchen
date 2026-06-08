@@ -68,6 +68,13 @@
 
     <!-- 提交按钮 -->
     <view class="submit-section">
+      <CustomerServiceInlineButton
+        class="customer-service-bottom-action"
+        source-type="AFTERSALE"
+        :order-id="orderId"
+        :order-no="formatOrderId(orderId)"
+        title="售后申请咨询"
+      />
       <button
         class="btn-submit"
         :disabled="submitting"
@@ -77,13 +84,6 @@
         {{ submitting ? '提交中...' : '提交申请' }}
       </button>
     </view>
-
-    <CustomerServiceFloatButton
-      source-type="AFTERSALE"
-      :order-id="orderId"
-      :order-no="formatOrderId(orderId)"
-      title="售后申请咨询"
-    />
   </view>
 </template>
 
@@ -92,7 +92,7 @@ import { computed, ref, onMounted } from 'vue';
 import { getToken, request } from '../../utils/api';
 import { getBaseUrl } from '../../utils/config';
 import { ensurePhoneBound } from '../../utils/account';
-import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 const orderId = ref('');
 const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('COMPLAINT');
@@ -540,10 +540,15 @@ function getStatusText(status: string): string {
   background-color: #fff;
   padding: 20rpx 30rpx;
   box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
 }
 
 .btn-submit {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: 88rpx;
   line-height: 1;
   display: flex;
@@ -562,5 +567,9 @@ function getStatusText(status: string): string {
     background-color: #9ecfff;
     color: #fff;
   }
+}
+
+.customer-service-bottom-action {
+  flex: 0 0 auto;
 }
 </style>

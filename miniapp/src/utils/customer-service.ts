@@ -58,7 +58,7 @@ export const defaultCustomerServiceConfig: CustomerServiceConfig = {
   orderDetailAftersaleNote: null,
   orderDetailMerchantNote: null,
   floatingButtonEnabled: true,
-  floatingButtonText: '客服',
+  floatingButtonText: '问Seven爸',
   floatingButtonIconUrl: null,
   floatingButtonSize: 56,
   floatingButtonPosition: 'RIGHT_BOTTOM',

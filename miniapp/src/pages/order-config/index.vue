@@ -80,21 +80,29 @@
         <text>{{ pricingError }}</text>
       </view>
 
-      <button
-        class="btn"
-        @tap="createOrder"
-        :disabled="orderCreated || isDemo || addressLoading"
-      >
-        {{
-          addressLoading
-            ? '地址加载中...'
-            : orderCreated
-              ? '订单已创建'
-              : isDemo
-                ? 'Demo Mode: Order Creation Disabled'
-                : '提交订单并支付'
-        }}
-      </button>
+      <view class="bottom-bar">
+        <CustomerServiceInlineButton
+          class="customer-service-bottom-action"
+          source-type="PRODUCT"
+          :product-id="recipeId"
+          title="订单配置咨询"
+        />
+        <button
+          class="btn"
+          @tap="createOrder"
+          :disabled="orderCreated || isDemo || addressLoading"
+        >
+          {{
+            addressLoading
+              ? '地址加载中...'
+              : orderCreated
+                ? '订单已创建'
+                : isDemo
+                  ? 'Demo Mode: Order Creation Disabled'
+                  : '提交订单并支付'
+          }}
+        </button>
+      </view>
 
       <!-- Demo Mode Modal -->
       <view v-if="showDemoModal" class="modal-overlay" @tap="closeDemoModal">
@@ -129,12 +137,6 @@
         </view>
       </view>
     </view>
-
-    <CustomerServiceFloatButton
-      source-type="PRODUCT"
-      :product-id="recipeId"
-      title="订单配置咨询"
-    />
   </view>
 </template>
 
@@ -147,7 +149,7 @@ import {
 } from '../../api/orders';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
-import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 const recipeId = ref('');
 const dogId = ref('');
@@ -612,6 +614,7 @@ function backToRecipes() {
 <style scoped>
 .container {
   padding: 20rpx;
+  padding-bottom: 140rpx;
 }
 
 .order-form {
@@ -748,7 +751,9 @@ function backToRecipes() {
 }
 
 .btn {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: 88rpx;
   line-height: 88rpx;
   background-color: #07c160;
@@ -761,6 +766,24 @@ function backToRecipes() {
 .btn[disabled] {
   background-color: #ccc;
   color: #999;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+}
+
+.customer-service-bottom-action {
+  flex: 0 0 auto;
 }
 
 .result-section {

@@ -82,8 +82,8 @@ describe('recipe-order phase one UI contract', () => {
 
   it('presents the redesigned purchase decision sections in order', () => {
     const sectionOrder = [
-      '食谱信息',
-      'dogProfileSummaryText',
+      'recipe-life-stage-picker',
+      'dog-profile-context',
       '配置天数',
       '原料来源',
       '说明',
@@ -102,8 +102,10 @@ describe('recipe-order phase one UI contract', () => {
       ).toBeGreaterThan(positions[index - 1]);
     }
 
-    expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
-    expect(templateSource).toContain('去确认订单');
+    expect(pagesJsonSource).toContain('"navigationBarTitleText": "订购成品"');
+    expect(pagesJsonSource).not.toContain('"navigationBarTitleText": "成品配置页面"');
+    expect(templateSource).toContain('确认订单');
+    expect(templateSource).not.toContain('去确认订单');
     expect(templateSource).not.toContain('立即下单');
     expect(templateSource).not.toContain('保存采购及分装配置');
     expect(templateSource).not.toContain('订购天数');
@@ -111,8 +113,34 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('产品说明');
   });
 
-  it('renders the selected handoff life stage in Chinese on the order page', () => {
-    expect(templateSource).toContain('{{ selectedLifeStageLabel }}');
+  it('uses an inline life-stage dropdown instead of a native bottom picker or text label', () => {
+    expect(templateSource).not.toContain('<view class="section-label">食谱信息</view>');
+    expect(templateSource).toContain('recipe-life-stage-picker');
+    expect(templateSource).not.toContain('<picker');
+    expect(templateSource).not.toContain('mode="selector"');
+    expect(templateSource).not.toContain('range-key="label"');
+    expect(templateSource).not.toContain('@change="onLifeStageVersionPickerChange"');
+    expect(templateSource).toContain('@tap="toggleLifeStageDropdown"');
+    expect(templateSource).toContain('recipe-life-stage-dropdown');
+    expect(templateSource).toContain('v-if="lifeStageDropdownVisible"');
+    expect(templateSource).toContain('v-for="option in lifeStageVersionOptions"');
+    expect(templateSource).toContain('@tap.stop="selectLifeStageVersion(option)"');
+    expect(templateSource).toContain('recipe-life-stage-dropdown-mask');
+    expect(templateSource).toContain('@tap="closeLifeStageDropdown"');
+    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
+    expect(templateSource).not.toContain('<text v-if="selectedLifeStageLabel" class="tag life-stage-tag">');
+    expect(templateSource).not.toContain('<text class="section-label">食谱信息</text>');
+    expect(source).toContain('availableLifeStageVersions?: RecipeLifeStageVersion[]');
+    expect(source).toContain('const lifeStageVersionOptions = computed');
+    expect(source).toContain('const lifeStageDropdownVisible = ref(false)');
+    expect(source).toContain('function toggleLifeStageDropdown');
+    expect(source).toContain('function closeLifeStageDropdown');
+    expect(source).toContain('async function selectLifeStageVersion');
+    expect(source).toContain('await loadRecipeDetail()');
+  });
+
+  it('renders the selected handoff life stage in Chinese in the picker', () => {
+    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
     expect(templateSource).not.toContain('v-for="stage in recipe.applicableLifeStages"');
     expect(source).toContain('../../utils/life-stage-match');
     expect(source).toContain('getLifeStageLabel');
@@ -121,19 +149,24 @@ describe('recipe-order phase one UI contract', () => {
   it('reads and carries the selected life stage from the detail page handoff', () => {
     expect(source).toContain("const selectedLifeStage = ref('')");
     expect(source).toContain("selectedLifeStage.value = currentPage.options?.lifeStage || ''");
-    expect(templateSource).toContain('v-if="selectedLifeStageLabel"');
-    expect(templateSource).toContain('{{ selectedLifeStageLabel }}');
+    expect(templateSource).toContain("{{ selectedLifeStageLabel || '选择生命阶段' }}");
     expect(source).toContain('lifeStage: selectedLifeStage.value');
   });
 
   it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {
-    expect(templateSource).toContain('食谱信息');
+    expect(templateSource).not.toContain('食谱信息');
     expect(templateSource).toContain('营养标准');
     expect(templateSource).toContain('配方软件');
     expect(templateSource).toContain('能量密度');
-    expect(templateSource).toContain('dogProfileSummaryText');
+    expect(templateSource).toContain('dog-profile-context');
+    expect(templateSource).not.toContain('档案依据');
+    expect(templateSource).toContain('v-for="fact in dogProfileFacts"');
+    expect(templateSource).toContain('{{ fact.label }}');
+    expect(templateSource).toContain('{{ fact.value }}');
+    expect(source).toContain('const dogProfileFacts = computed');
+    expect(source).not.toContain('dogProfileSummaryText');
     expect(templateSource).toContain('主食能量');
-    expect(templateSource).toContain('本食谱参考饭量');
+    expect(templateSource).toContain('每日参考');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('自定义分装');
     expect(source).toContain('isCustomPackagePlan');
@@ -150,8 +183,23 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('v-if="packagePlanValidationMessage"');
     expect(templateSource).toContain('{{ packagePlanValidationMessage }}');
     expect(source).not.toContain('packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G))');
-    expect(source).toContain('v-if="dogs.length > 1"');
-    expect(source).toContain("].join(' ｜ ')");
+    expect(templateSource).toContain('order-dog-scroll');
+    expect(templateSource).toContain('order-dog-chip');
+    expect(templateSource).toContain("['order-dog-chip', { active: dog.id === selectedDogId }]");
+    expect(templateSource).toContain('@tap="selectDog(dog.id)"');
+    expect(templateSource).toContain('order-dog-avatar');
+    expect(templateSource).toContain('resolveDogAvatarSrc(dog.avatarUrl)');
+    expect(templateSource).toContain('order-dog-name');
+    expect(templateSource).toContain('{{ dog.name }}');
+    expect(templateSource).not.toContain('order-dog-meta');
+    expect(templateSource).not.toContain('getDogChipMetaText');
+    expect(templateSource).toContain('每餐约');
+    expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'");
+    expect(source).toContain('avatarUrl?: string');
+    expect(source).not.toContain('function getDogChipMetaText');
+    expect(source).not.toContain('dogPickerOptions');
+    expect(source).not.toContain('onDogPickerChange');
+    expect(source).not.toContain("].join(' ｜ ')");
     expect(source).toContain('.recipe-meta-card');
     expect(source).toContain('align-items: center;');
     expect(source).toContain('text-align: center;');
@@ -195,9 +243,14 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('方案会影响原料清单和订单价格');
     expect(templateSource).toContain('source-plan-card compact');
     expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
+    expect(templateSource).toContain('formatSourcePlanPrice(option.code)');
+    expect(templateSource).not.toContain('formatSourcePlanDescription(option.code)');
     expect(templateSource).not.toContain('ingredient-summary');
-    expect(templateSource).not.toContain('sourcePlanDescription');
+    expect(templateSource).toContain('source-plan-safety-copy');
+    expect(templateSource).toContain('{{ selectedSourcePlanDescription }}');
+    expect(templateSource).not.toContain('source-plan-desc');
     expect(templateSource).not.toContain('sourcePlanFallbackNote');
+    expect(source).toContain('const selectedSourcePlanDescription = computed');
     expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
     expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
     expect(source).not.toContain('ingredientSummaryMeta');
@@ -211,11 +264,21 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
     expect(templateSource).not.toContain('>已选</text>');
     expect(source).toContain('function formatSourcePlanShortName');
-    expect(source).toContain("ORGANIC: '溯源优选'");
-    expect(source).toContain("MARKET_PREMIUM: '精选日常'");
-    expect(source).toContain("WHOLESALE: '安心基础'");
+    expect(source).toContain("ORGANIC: '有机优先'");
+    expect(source).toContain("MARKET_PREMIUM: '商超优先'");
+    expect(source).toContain("WHOLESALE: '批发优先'");
+    expect(source).toContain('function formatSourcePlanDescription');
+    expect(source).toContain('flex-direction: row;');
+    expect(source).toContain('text-align: center;');
+    expect(source).not.toContain('align-self: flex-end;');
+    expect(source).toContain('优先采购有机食材，如果没有有机来源，再向下选择。');
+    expect(source).toContain('优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。');
+    expect(source).toContain('优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。');
+    expect(source).not.toContain("ORGANIC: '溯源优选'");
+    expect(source).not.toContain("MARKET_PREMIUM: '精选日常'");
+    expect(source).not.toContain("WHOLESALE: '安心基础'");
     expect(source).not.toContain("WHOLESALE: '性价比优先'");
-    expect(source).not.toContain('function getSourcePlanDescription');
+    expect(source).not.toContain('所有档位均满足或高于人类食品安全标准');
     expect(source).not.toContain('优先选择有机、草饲、散养、非转基因来源');
     expect(source).not.toContain('优先选择山姆、盒马、沃集鲜等商超来源');
     expect(source).not.toContain('人食级原料，优先选择生鲜批发来源');
@@ -376,15 +439,21 @@ describe('recipe-order phase one UI contract', () => {
 
   it('uses bag-based bottom pricing states instead of daily pricing', () => {
     expect(source).toContain('bottomPriceTitle');
-    expect(source).toContain('bottomPriceSubtitle');
+    expect(source).toContain('bottomPricePerPackageText');
     expect(source).toContain('¥${averagePricePerPackage.value.toFixed(2)}/袋');
-    expect(source).toContain('多规格共 ${totalPackages.value}袋');
+    expect(source).not.toContain('bottomPricePackageSummaryText');
+    expect(source).not.toContain('多规格共 ${totalPackages.value}袋');
+    expect(source).not.toContain('bottomPriceSubtitle');
+    expect(source).not.toContain('/袋 · ${packagePlanSummaryText.value}');
     expect(source).not.toContain('每日预估');
     expect(source).not.toContain('pricePerDayText');
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('去确认订单');
+    expect(templateSource).toContain('确认订单');
+    expect(templateSource).toContain('bottom-price-per-package');
+    expect(templateSource).not.toContain('bottom-price-package-summary');
+    expect(templateSource).not.toContain('去确认订单');
     expect(templateSource).not.toContain('立即下单');
     expect(templateSource).not.toContain('保存采购及分装配置');
 
@@ -400,7 +469,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(buyButtonBlocks.length).toBeGreaterThan(0);
 
     bottomBarBlocks.forEach((block) => {
-      expect(block).toContain('justify-content: flex-end;');
+      expect(block).toContain('justify-content: space-between;');
     });
 
     bottomPriceBlocks.forEach((block) => {
@@ -412,6 +481,8 @@ describe('recipe-order phase one UI contract', () => {
 
     buyButtonBlocks.forEach((block) => {
       expect(block).toContain('margin: 0;');
+      expect(block).toContain('height: 80rpx;');
+      expect(block).toContain('border-radius: 40rpx;');
     });
   });
 
@@ -426,6 +497,8 @@ describe('recipe-order phase one UI contract', () => {
       expect(block).toContain('display: flex;');
       expect(block).toContain('align-items: center;');
       expect(block).toContain('justify-content: center;');
+      expect(block).toContain('height: 80rpx;');
+      expect(block).toContain('border-radius: 40rpx;');
       expect(block).toContain('white-space: nowrap;');
       expect(block).toContain('line-height: 1;');
       expect(block).not.toContain('width: 336rpx;');

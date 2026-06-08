@@ -68,24 +68,29 @@ describe('checkout direct-buy storage contract', () => {
     expect(templateSource).toContain('bottom-price')
     expect(templateSource).toContain('bottom-total')
     expect(templateSource).toContain('bottom-estimate')
+    expect(templateSource).toContain('bottom-price-per-package')
+    expect(templateSource).not.toContain('bottom-price-package-summary')
     expect(templateSource).toContain('btn-submit-order')
     expect(templateSource).toContain('提交订单')
     expect(templateSource).not.toContain('bottom-bar-amount-label')
     expect(templateSource).not.toContain('预计可喂{{ orderConfig.estimatedFeedDays }}天')
 
     expect(source).toContain('bottomPriceTitle')
-    expect(source).toContain('bottomPriceSubtitle')
+    expect(source).toContain('bottomPricePerPackageText')
     expect(source).toContain('averagePricePerPackage')
-    expect(source).toContain('packagePlanSummaryText')
     expect(source).toContain('¥${averagePricePerPackage.value.toFixed(2)}/袋')
-    expect(source).toContain('多规格共 ${orderConfig.value.totalPackages}袋')
+    expect(source).not.toContain('bottomPricePackageSummaryText')
+    expect(source).not.toContain('packagePlanSummaryText')
+    expect(source).not.toContain('多规格共 ${orderConfig.value.totalPackages}袋')
+    expect(source).not.toContain('bottomPriceSubtitle')
+    expect(source).not.toContain('/袋 · ${packagePlanSummaryText.value}')
 
     expect(bottomBarBlocks.length).toBeGreaterThan(0)
     expect(bottomPriceBlocks.length).toBeGreaterThan(0)
     expect(submitButtonBlocks.length).toBeGreaterThan(0)
 
     bottomBarBlocks.forEach((block) => {
-      expect(block).toContain('justify-content: flex-end;')
+      expect(block).toContain('justify-content: space-between;')
     })
 
     bottomPriceBlocks.forEach((block) => {
@@ -98,6 +103,8 @@ describe('checkout direct-buy storage contract', () => {
     submitButtonBlocks.forEach((block) => {
       expect(block).toContain('width: 240rpx;')
       expect(block).toContain('margin: 0;')
+      expect(block).toContain('height: 80rpx;')
+      expect(block).toContain('border-radius: 40rpx;')
     })
   })
 })

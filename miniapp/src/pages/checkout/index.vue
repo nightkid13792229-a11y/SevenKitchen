@@ -241,9 +241,20 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
+      <CustomerServiceInlineButton
+        class="customer-service-bottom-action"
+        source-type="PRODUCT"
+        :product-id="orderConfig.recipeId"
+        :product-name="orderConfig.recipeName"
+        :image-url="orderConfig.recipeCoverImage"
+        title="确认订单咨询"
+        path="/pages/checkout/index"
+      />
       <view class="bottom-price">
         <text class="bottom-total">{{ bottomPriceTitle }}</text>
-        <text class="bottom-estimate">{{ bottomPriceSubtitle }}</text>
+        <view class="bottom-estimate">
+          <text class="bottom-price-per-package">{{ bottomPricePerPackageText }}</text>
+        </view>
       </view>
       <button
         class="btn-submit-order"
@@ -253,15 +264,6 @@
         提交订单
       </button>
     </view>
-
-    <CustomerServiceFloatButton
-      source-type="PRODUCT"
-      :product-id="orderConfig.recipeId"
-      :product-name="orderConfig.recipeName"
-      :image-url="orderConfig.recipeCoverImage"
-      title="确认订单咨询"
-      path="/pages/checkout/index"
-    />
 
     <!-- 地址选择器弹窗 -->
     <view
@@ -313,7 +315,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { request } from '../../utils/api';
 import { ensurePhoneBound } from '../../utils/account';
-import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -483,21 +485,11 @@ const isSinglePackageSpec = computed(
   () => orderConfig.value.packagePlan.length === 1,
 );
 
-const packagePlanSummaryText = computed(() => {
-  if (isSinglePackageSpec.value) {
-    const row = orderConfig.value.packagePlan[0];
-    if (!row) return '';
-    return `${row.packageSpecG}g × ${row.packageCount}袋`;
-  }
-
-  return `多规格共 ${orderConfig.value.totalPackages}袋`;
-});
-
 const bottomPriceTitle = computed(() => {
   return `¥${totalAmount.value.toFixed(2)}`;
 });
 
-const bottomPriceSubtitle = computed(() => {
+const bottomPricePerPackageText = computed(() => {
   if (
     orderConfig.value.totalPackages <= 0 ||
     orderConfig.value.packagePlan.length === 0
@@ -506,10 +498,10 @@ const bottomPriceSubtitle = computed(() => {
   }
 
   if (isSinglePackageSpec.value) {
-    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`;
+    return `¥${averagePricePerPackage.value.toFixed(2)}/袋`;
   }
 
-  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`;
+  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋`;
 });
 
 const canSubmitOrder = computed(() => {
@@ -1925,7 +1917,7 @@ function goToAddAddress() {
   right: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   background-color: rgba(255, 255, 255, 0.98);
@@ -1935,7 +1927,7 @@ function goToAddAddress() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 258rpx);
+  max-width: calc(100% - 470rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -1955,9 +1947,19 @@ function goToAddAddress() {
 
 .bottom-estimate {
   max-width: 100%;
-  display: block;
   font-size: 23rpx;
   color: #687078;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2rpx;
+  overflow: hidden;
+  text-align: right;
+}
+
+.bottom-price-per-package {
+  max-width: 100%;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1969,14 +1971,14 @@ function goToAddAddress() {
   width: 240rpx;
   flex-shrink: 0;
   margin: 0;
-  height: 84rpx;
+  height: 80rpx;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: #1890ff;
   color: #fff;
-  border-radius: 8rpx;
+  border-radius: 40rpx;
   font-size: 30rpx;
   font-weight: 700;
   border: none;
@@ -1985,6 +1987,10 @@ function goToAddAddress() {
 .btn-submit-order[disabled] {
   background-color: #d8dde3;
   color: #fff;
+}
+
+.customer-service-bottom-action {
+  flex: 0 0 auto;
 }
 
 .btn-amount {

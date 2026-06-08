@@ -1,7 +1,31 @@
 <template>
   <view class="recipe-order-page">
     <view class="recipe-info-section">
-      <view class="section-label">食谱信息</view>
+      <view
+        v-if="lifeStageVersionOptions.length > 0"
+        class="recipe-life-stage-picker"
+      >
+        <view class="recipe-life-stage-picker-inner" @tap="toggleLifeStageDropdown">
+          <text class="recipe-life-stage-picker-label">{{ selectedLifeStageLabel || '选择生命阶段' }}</text>
+          <text :class="['recipe-life-stage-picker-arrow', { open: lifeStageDropdownVisible }]">▼</text>
+        </view>
+        <view
+          v-if="lifeStageDropdownVisible"
+          class="recipe-life-stage-dropdown-mask"
+          @tap="closeLifeStageDropdown"
+        />
+        <view v-if="lifeStageDropdownVisible" class="recipe-life-stage-dropdown">
+          <view
+            v-for="option in lifeStageVersionOptions"
+            :key="option.lifeStage"
+            :class="['recipe-life-stage-dropdown-option', { active: option.lifeStage === selectedLifeStage }]"
+            @tap.stop="selectLifeStageVersion(option)"
+          >
+            <text class="recipe-life-stage-dropdown-label">{{ option.label }}</text>
+            <text v-if="option.lifeStage === selectedLifeStage" class="recipe-life-stage-dropdown-check">✓</text>
+          </view>
+        </view>
+      </view>
       <image
         v-if="recipe.coverImageUrl"
         :src="normalizeImageUrl(recipe.coverImageUrl)"
@@ -15,12 +39,9 @@
       <view class="recipe-info-body">
         <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
         <view
-          v-if="selectedLifeStageLabel || (recipe.targetHealthTags && recipe.targetHealthTags.length > 0)"
+          v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
           class="recipe-tags"
         >
-          <text v-if="selectedLifeStageLabel" class="tag life-stage-tag">
-            {{ selectedLifeStageLabel }}
-          </text>
           <text
             v-for="tag in recipe.targetHealthTags"
             :key="tag"
@@ -48,33 +69,38 @@
     </view>
 
     <view class="section dog-feeding-section">
-      <view v-if="!selectedDog" class="dog-empty-state">
-        <text class="dog-empty-title">请选择狗狗后查看饭量和价格</text>
+      <view v-if="dogs.length === 0" class="dog-empty-state">
+        <text class="dog-empty-title">请先创建狗狗档案</text>
         <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算建议用量。</text>
-        <picker
-          v-if="dogs.length > 0"
-          mode="selector"
-          :range="dogPickerOptions"
-          range-key="label"
-          @change="onDogPickerChange"
-        >
-          <view class="section-action-button dog-empty-action">选择狗狗</view>
-        </picker>
-        <button v-else class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建档案</button>
+        <button class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建档案</button>
       </view>
 
       <view v-else class="dog-feeding-content">
-        <view class="dog-profile-summary-row">
-          <text class="dog-profile-summary">{{ dogProfileSummaryText }}</text>
-          <picker
-            v-if="dogs.length > 1"
-            mode="selector"
-            :range="dogPickerOptions"
-            range-key="label"
-            @change="onDogPickerChange"
+        <scroll-view scroll-x class="order-dog-scroll">
+          <view
+            v-for="dog in dogs"
+            :key="dog.id"
+            :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
+            @tap="selectDog(dog.id)"
           >
-            <view class="section-action-button">切换狗狗</view>
-          </picker>
+            <image class="order-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
+            <view class="order-dog-copy">
+              <text class="order-dog-name">{{ dog.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+
+        <view v-if="selectedDog" class="dog-profile-context">
+          <view class="dog-profile-facts">
+            <view
+              v-for="fact in dogProfileFacts"
+              :key="fact.label"
+              class="dog-profile-fact"
+            >
+              <text class="dog-profile-fact-label">{{ fact.label }}</text>
+              <text class="dog-profile-fact-value">{{ fact.value }}</text>
+            </view>
+          </view>
         </view>
 
         <view v-if="!isLifeStageMatch && showWarning" class="warning-card inline-warning-card">
@@ -90,13 +116,17 @@
         </view>
 
         <view class="dog-feeding-grid">
+          <view class="dog-feeding-item daily-intake-item">
+            <text class="feeding-label">每日参考</text>
+            <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
+          </view>
+          <view class="dog-feeding-item">
+            <text class="feeding-label">每餐约</text>
+            <text class="feeding-value">{{ perMealIntakeText }}</text>
+          </view>
           <view class="dog-feeding-item">
             <text class="feeding-label">主食能量</text>
             <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
-          </view>
-          <view class="dog-feeding-item daily-intake-item">
-            <text class="feeding-label">本食谱参考饭量</text>
-            <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
           </view>
         </view>
       </view>
@@ -191,9 +221,7 @@
           <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
         </view>
       </view>
-      <text class="source-plan-safety-copy">
-        所有档位均满足或高于人类食品安全标准，差异主要在采购渠道、溯源完整度和批次稳定性；选择安心基础也不是降低安全标准。
-      </text>
+      <text class="source-plan-safety-copy">{{ selectedSourcePlanDescription }}</text>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
@@ -434,26 +462,28 @@
     </view>
 
     <view class="bottom-bar">
+      <CustomerServiceInlineButton
+        class="customer-service-bottom-action"
+        source-type="PRODUCT"
+        :product-id="recipeId"
+        :product-name="recipe.name"
+        :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
+        title="下单配置咨询"
+      />
       <view class="bottom-price">
         <text class="bottom-total">{{ bottomPriceTitle }}</text>
-        <text class="bottom-estimate">{{ bottomPriceSubtitle }}</text>
+        <view class="bottom-estimate">
+          <text class="bottom-price-per-package">{{ bottomPricePerPackageText }}</text>
+        </view>
       </view>
       <button
         class="btn-buy-now"
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        去确认订单
+        确认订单
       </button>
     </view>
-
-    <CustomerServiceFloatButton
-      source-type="PRODUCT"
-      :product-id="recipeId"
-      :product-name="recipe.name"
-      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
-      title="下单配置咨询"
-    />
   </view>
 </template>
 
@@ -461,6 +491,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -486,7 +517,7 @@ import {
   buildIngredientDisplayName,
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
-import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 
 interface Dog {
   id: string
@@ -500,6 +531,7 @@ interface Dog {
   gender?: string
   activityLevel?: string
   lifeStageOverride?: string
+  avatarUrl?: string
 }
 
 interface Recipe {
@@ -507,6 +539,8 @@ interface Recipe {
   name: string
   selectedLifeStage?: string
   selectedLifeStageLabel?: string
+  selectedRecipeId?: string
+  availableLifeStageVersions?: RecipeLifeStageVersion[]
   description?: string
   coverImageUrl?: string
   energyDensityKcalPerKg: number
@@ -514,6 +548,14 @@ interface Recipe {
   designSource?: string
   applicableLifeStages?: string[]
   targetHealthTags?: string[]
+}
+
+interface RecipeLifeStageVersion {
+  recipeId?: string
+  lifeStage: string
+  label?: string
+  isSelected?: boolean
+  selected?: boolean
 }
 
 interface Breed {
@@ -677,6 +719,7 @@ const recipe = ref<Recipe>({
   name: '',
   energyDensityKcalPerKg: 0
 })
+const lifeStageDropdownVisible = ref(false)
 
 const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
@@ -813,14 +856,6 @@ const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   dogName: selectedDog.value?.name,
 }))
 
-// 狗狗选择器的选项（用于 picker）
-const dogPickerOptions = computed(() => {
-  return dogs.value.map(dog => ({
-    id: dog.id,
-    label: `${dog.name} | ${dog.breedName || '-'} | ${dog.currentWeightKg}kg | ${dog.mealsPerDay}餐/天`
-  }))
-})
-
 const normalizedPackagePlan = computed(() =>
   packagePlan.value.map(row => normalizePackagePlanRow(row))
 )
@@ -846,6 +881,7 @@ const packagePlanValidationMessage = computed(() => (
   hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
 ))
 const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
+const selectedSourcePlanDescription = computed(() => formatSourcePlanDescription(selectedSourcePlan.value))
 const perMealG = computed(() => {
   if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
   return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
@@ -860,18 +896,28 @@ const selectedLifeStageLabel = computed(() => {
   if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
   const stage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
   if (!stage) return ''
-  return getLifeStageLabel(stage)
+  const matchedVersion = recipe.value.availableLifeStageVersions?.find(
+    version => version.lifeStage === stage,
+  )
+  return matchedVersion?.label || getLifeStageLabel(stage)
 })
-const dogProfileSummaryText = computed(() => {
-  if (!selectedDog.value) return ''
+const lifeStageVersionOptions = computed(() => {
+  const versions = recipe.value.availableLifeStageVersions || []
+  return versions.map(version => ({
+    recipeId: version.recipeId,
+    lifeStage: version.lifeStage,
+    label: version.label || getLifeStageLabel(version.lifeStage),
+  }))
+})
+const dogProfileFacts = computed(() => {
+  if (!selectedDog.value) return []
 
   return [
-    selectedDog.value.name,
-    calculateDogAgeText(selectedDog.value),
-    getDogGenderLabel(selectedDog.value.gender),
-    `${selectedDog.value.currentWeightKg}kg`,
-    `${selectedDog.value.mealsPerDay}餐/天`,
-  ].join(' ｜ ')
+    { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
+    { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
+    { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
+    { label: '餐次', value: `每日 ${selectedDog.value.mealsPerDay} 餐` },
+  ]
 })
 const dailyMainFoodEnergyText = computed(() => {
   const kcal = dogCalcResult.value?.finalFoodKcal
@@ -881,6 +927,10 @@ const dailyMainFoodEnergyText = computed(() => {
 const dailySuggestedIntakeText = computed(() => {
   if (!displayDailyIntakeG.value) return '计算中'
   return `${Math.round(displayDailyIntakeG.value)}g/天`
+})
+const perMealIntakeText = computed(() => {
+  if (!perMealG.value) return '计算中'
+  return `${Math.round(perMealG.value)}g`
 })
 const packagePlanInlineSummaryText = computed(() => {
   const specs = Array.from(new Set(
@@ -896,14 +946,6 @@ const averagePricePerPackage = computed(() => {
   return pricePreview.value.amountTotal / totalPackages.value
 })
 const isSinglePackageSpec = computed(() => normalizedPackagePlan.value.length === 1)
-const packagePlanSummaryText = computed(() => {
-  if (isSinglePackageSpec.value) {
-    const row = normalizedPackagePlan.value[0]
-    if (!row) return ''
-    return `${row.packageSpecG}g × ${row.packageCount}袋`
-  }
-  return `多规格共 ${totalPackages.value}袋`
-})
 const bottomPriceTitle = computed(() => {
   if (!selectedDogId.value) return '请选择狗狗'
   if (packagePlanValidationMessage.value) return '分装需调整'
@@ -913,7 +955,7 @@ const bottomPriceTitle = computed(() => {
   if (!pricePreview.value) return '--'
   return `¥${pricePreview.value.amountTotal.toFixed(2)}`
 })
-const bottomPriceSubtitle = computed(() => {
+const bottomPricePerPackageText = computed(() => {
   if (!selectedDogId.value) return '选择狗狗后查看饭量和价格'
   if (packagePlanValidationMessage.value) return packagePlanValidationMessage.value
   if (isPricePreviewLoading.value) return '价格生成后可下单'
@@ -921,9 +963,9 @@ const bottomPriceSubtitle = computed(() => {
   if (pricePreviewError.value) return '请稍后重试或切换分装/采购方案'
   if (!pricePreview.value || totalPackages.value <= 0) return '等待价格生成'
   if (isSinglePackageSpec.value) {
-    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+    return `¥${averagePricePerPackage.value.toFixed(2)}/袋`
   }
-  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋`
 })
 const dogSummaryText = computed(() => {
   if (!selectedDog.value) return '请选择狗狗后查看饭量和价格'
@@ -986,9 +1028,18 @@ function getIngredientTypeClass(type: string): string {
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '溯源优选',
-    MARKET_PREMIUM: '精选日常',
-    WHOLESALE: '安心基础',
+    ORGANIC: '有机优先',
+    MARKET_PREMIUM: '商超优先',
+    WHOLESALE: '批发优先',
+  }
+  return map[code]
+}
+
+function formatSourcePlanDescription(code: IngredientSourcePlanCode): string {
+  const map: Record<IngredientSourcePlanCode, string> = {
+    ORGANIC: '优先采购有机食材，如果没有有机来源，再向下选择。',
+    MARKET_PREMIUM: '优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。',
+    WHOLESALE: '优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。',
   }
   return map[code]
 }
@@ -1181,9 +1232,51 @@ async function loadRecipeDetail() {
       if (!selectedLifeStage.value && res.data.selectedLifeStage) {
         selectedLifeStage.value = res.data.selectedLifeStage
       }
+      if (res.data.selectedRecipeId || res.data.id) {
+        recipeId.value = res.data.selectedRecipeId || res.data.id
+      }
     }
   } catch (error) {
     console.error('Load recipe error:', error)
+  }
+}
+
+function toggleLifeStageDropdown() {
+  lifeStageDropdownVisible.value = !lifeStageDropdownVisible.value
+}
+
+function closeLifeStageDropdown() {
+  lifeStageDropdownVisible.value = false
+}
+
+async function selectLifeStageVersion(option: { recipeId?: string; lifeStage: string; label: string }) {
+  closeLifeStageDropdown()
+  if (!option?.lifeStage || option.lifeStage === selectedLifeStage.value) return
+
+  clearPricePreviewDebounce()
+  pricingPreviewRequestSeq += 1
+  sourcePlanPriceRequestSeq += 1
+  dogCalcRequestSeq += 1
+  selectedLifeStage.value = option.lifeStage
+  if (option.recipeId) {
+    recipeId.value = option.recipeId
+  }
+  pricePreviewError.value = ''
+  sourcePlanPrices.value = {
+    ORGANIC: null,
+    MARKET_PREMIUM: null,
+    WHOLESALE: null,
+  }
+  resetPricePreviewState()
+  displayDailyIntakeG.value = 0
+  dogCalcResult.value = null
+  packagePlan.value = []
+  packagePlanDogId.value = null
+
+  await loadRecipeDetail()
+  checkLifeStageMatch()
+  if (selectedDogId.value) {
+    loadDogCalcResult(selectedDogId.value)
   }
 }
 
@@ -1215,14 +1308,6 @@ async function loadDogs() {
     }
   } catch (error) {
     console.error('Load dogs error:', error)
-  }
-}
-
-function onDogPickerChange(e: any) {
-  const index = e.detail.value
-  const dog = dogs.value[index]
-  if (dog) {
-    selectDog(dog.id)
   }
 }
 
@@ -1359,6 +1444,8 @@ function dismissWarning() {
 // ========== 结束：生命阶段校验逻辑 ==========
 
 function selectDog(dogId: string) {
+  if (!dogId || dogId === selectedDogId.value) return
+
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
   sourcePlanPriceRequestSeq += 1
@@ -1879,11 +1966,6 @@ function goToCreateDog() {
   padding: 6rpx 16rpx;
   border-radius: 6rpx;
   font-size: 22rpx;
-}
-
-.recipe-tags .life-stage-tag {
-  background-color: #e3f2fd;
-  color: #1976d2;
 }
 
 .recipe-tags .health-tag {
@@ -2414,52 +2496,6 @@ function goToCreateDog() {
 
 .package-summary {
   margin-top: 20rpx;
-}
-
-.source-plan-options {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.source-plan-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx;
-  border: 2rpx solid #e8e8e8;
-  border-radius: 12rpx;
-  background-color: #fff;
-}
-
-.source-plan-option.active {
-  border-color: #1890ff;
-  background-color: #f0f9ff;
-}
-
-.source-plan-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.source-plan-name {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
-}
-
-.source-plan-desc {
-  font-size: 24rpx;
-  color: #666;
-  line-height: 1.4;
-}
-
-.source-plan-check {
-  font-size: 32rpx;
-  color: #1890ff;
-  font-weight: bold;
-  margin-left: 16rpx;
 }
 
 .product-intro-section {
@@ -3055,7 +3091,7 @@ function goToCreateDog() {
   right: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
@@ -3065,7 +3101,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 258rpx);
+  max-width: calc(100% - 470rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -3087,17 +3123,30 @@ function goToCreateDog() {
   font-size: 22rpx;
   color: #666;
   text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2rpx;
+}
+
+.bottom-price-per-package {
+  max-width: 100%;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .btn-buy-now {
   flex-shrink: 0;
   width: 240rpx;
   margin: 0;
-  height: 88rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 44rpx;
+  border-radius: 40rpx;
   box-sizing: border-box;
   padding: 0 18rpx;
   font-size: 26rpx;
@@ -3111,6 +3160,10 @@ function goToCreateDog() {
 .btn-buy-now[disabled] {
   background-color: #ccc;
   color: #999;
+}
+
+.customer-service-bottom-action {
+  flex: 0 0 auto;
 }
 
 /* Redesigned recipe order page */
@@ -3130,12 +3183,107 @@ function goToCreateDog() {
   margin-bottom: 20rpx;
 }
 
-.section-label {
+.recipe-life-stage-picker {
   display: block;
-  padding: 24rpx 28rpx 16rpx;
-  font-size: 28rpx;
+  position: relative;
+  padding: 20rpx 28rpx 14rpx;
+  z-index: 30;
+}
+
+.recipe-life-stage-picker-inner {
+  height: 64rpx;
+  padding: 0 22rpx;
+  border-radius: 8rpx;
+  background-color: #f6faf7;
+  border: 1rpx solid #dceee0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.recipe-life-stage-picker-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 26rpx;
   font-weight: 800;
+  color: #226d3a;
+}
+
+.recipe-life-stage-picker-arrow {
+  flex: 0 0 auto;
+  font-size: 20rpx;
+  color: #2f8f4e;
+  transition: transform 0.18s ease;
+}
+
+.recipe-life-stage-picker-arrow.open {
+  transform: rotate(180deg);
+}
+
+.recipe-life-stage-dropdown-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  background-color: transparent;
+}
+
+.recipe-life-stage-dropdown {
+  position: absolute;
+  left: 28rpx;
+  right: 28rpx;
+  top: 92rpx;
+  z-index: 31;
+  overflow: hidden;
+  border-radius: 8rpx;
+  border: 1rpx solid #dceee0;
+  background-color: #fff;
+  box-shadow: 0 12rpx 32rpx rgba(18, 24, 31, 0.14);
+}
+
+.recipe-life-stage-dropdown-option {
+  min-height: 72rpx;
+  padding: 0 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  border-bottom: 1rpx solid #edf0f2;
+}
+
+.recipe-life-stage-dropdown-option:last-child {
+  border-bottom: none;
+}
+
+.recipe-life-stage-dropdown-option.active {
+  background-color: #f0faf3;
+}
+
+.recipe-life-stage-dropdown-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 25rpx;
   color: #25282b;
+}
+
+.recipe-life-stage-dropdown-option.active .recipe-life-stage-dropdown-label,
+.recipe-life-stage-dropdown-check {
+  font-weight: 800;
+  color: #226d3a;
+}
+
+.recipe-life-stage-dropdown-check {
+  flex: 0 0 auto;
+  font-size: 24rpx;
 }
 
 .hero-image,
@@ -3192,11 +3340,6 @@ function goToCreateDog() {
   padding: 8rpx 14rpx;
   border-radius: 6rpx;
   font-size: 22rpx;
-}
-
-.recipe-tags .life-stage-tag {
-  background-color: #eef6ff;
-  color: #2566a8;
 }
 
 .recipe-tags .health-tag {
@@ -3404,24 +3547,102 @@ function goToCreateDog() {
   gap: 18rpx;
 }
 
-.dog-profile-summary-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18rpx;
+.order-dog-scroll {
+  width: 100%;
+  white-space: nowrap;
 }
 
-.dog-profile-summary {
+.order-dog-chip {
+  width: 214rpx;
+  min-height: 86rpx;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-right: 14rpx;
+  padding: 12rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #edf0f2;
+  background-color: #f8faf9;
+  color: #25282b;
+  vertical-align: middle;
+}
+
+.order-dog-chip.active {
+  border-color: #2f8f4e;
+  background-color: #f0faf3;
+}
+
+.order-dog-avatar {
+  flex: 0 0 auto;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  background-color: #e8efe9;
+}
+
+.order-dog-copy {
   flex: 1;
   min-width: 0;
-  font-size: 27rpx;
+  display: flex;
+  align-items: center;
+}
+
+.order-dog-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 25rpx;
+  font-weight: 800;
   color: #25282b;
-  line-height: 1.55;
+}
+
+.order-dog-chip.active .order-dog-name {
+  color: #226d3a;
+}
+
+.dog-profile-context {
+  padding: 14rpx 16rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+  border: 1rpx solid #edf0f2;
+}
+
+.dog-profile-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.dog-profile-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  max-width: 100%;
+  padding: 4rpx 10rpx;
+  border-radius: 6rpx;
+  background-color: #fff;
+  color: #25282b;
+  line-height: 1.35;
+}
+
+.dog-profile-fact-label {
+  font-size: 21rpx;
+  color: #7a838b;
+}
+
+.dog-profile-fact-value {
+  min-width: 0;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #25282b;
+  word-break: keep-all;
 }
 
 .dog-feeding-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12rpx;
 }
 
@@ -3434,7 +3655,7 @@ function goToCreateDog() {
   align-items: center;
   justify-content: center;
   gap: 8rpx;
-  padding: 18rpx;
+  padding: 16rpx 10rpx;
   background-color: #f8faf9;
   border-radius: 8rpx;
   text-align: center;
@@ -3511,8 +3732,7 @@ function goToCreateDog() {
   font-weight: 800;
 }
 
-.custom-tag,
-.source-plan-check {
+.custom-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3798,20 +4018,6 @@ function goToCreateDog() {
   line-height: 1.25;
 }
 
-.source-plan-desc {
-  font-size: 24rpx;
-  color: #687078;
-  line-height: 1.45;
-}
-
-.source-plan-side {
-  min-width: 150rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10rpx;
-}
-
 .source-plan-price {
   font-size: 28rpx;
   font-weight: 800;
@@ -3827,21 +4033,11 @@ function goToCreateDog() {
   display: block;
   margin-top: 16rpx;
   padding: 18rpx;
-  border-radius: 14rpx;
+  border-radius: 8rpx;
   background: #fff7ef;
   color: #7a5b43;
   font-size: 24rpx;
   line-height: 1.45;
-}
-
-.source-plan-check {
-  padding: 8rpx 12rpx;
-  color: #2f8f4e;
-  background-color: #e7f6eb;
-}
-
-.source-plan-card.compact .source-plan-check {
-  padding: 6rpx 10rpx;
 }
 
 .ingredient-summary {
@@ -4376,7 +4572,7 @@ function goToCreateDog() {
   z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   background-color: rgba(255, 255, 255, 0.98);
@@ -4385,7 +4581,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 258rpx);
+  max-width: calc(100% - 470rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -4409,17 +4605,30 @@ function goToCreateDog() {
   color: #687078;
   line-height: 1.3;
   text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2rpx;
+}
+
+.bottom-price-per-package {
+  max-width: 100%;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .btn-buy-now {
   width: 240rpx;
   flex-shrink: 0;
   margin: 0;
-  height: 84rpx;
+  height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8rpx;
+  border-radius: 40rpx;
   box-sizing: border-box;
   padding: 0 18rpx;
   background-color: #1890ff;

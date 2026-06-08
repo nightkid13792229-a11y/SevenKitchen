@@ -70,6 +70,19 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).not.toContain('<text class="report-title">营养报告</text>')
   })
 
+  it('does not render dog-specific feeding recalculation on recipe detail', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).not.toContain('按狗狗重算喂食量')
+    expect(source).not.toContain('切换宠物后，饭量和阶段提醒会自动更新')
+    expect(source).not.toContain('class="dog-fit-card"')
+    expect(source).not.toContain('dogRecipeCalc')
+    expect(source).not.toContain('calc-for-recipe')
+  })
+
   it('registers the standalone nutrition report page', () => {
     const pagesJson = readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8')
     const reportPage = readFileSync(
@@ -140,25 +153,36 @@ describe('recipe detail nutrition report regressions', () => {
     expect(snapshotModalSource).not.toContain('每kg添加')
   })
 
-  it('uses customer-facing bottom action button labels', () => {
+  it('uses customer-facing bottom action button labels without a cart shortcut', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
 
     expect(source).toContain('自己制作')
-    expect(source).toContain('现做成品')
-    expect(source).toContain('/static/icons/cart-orange.png')
-    expect(source).toContain('handleCartTap')
-    expect(source).toContain('isInCart')
-    expect(source).toContain('查看购物车')
-    expect(source).toContain('移出购物车')
-    expect(source).toContain('removeCartItem')
+    expect(source).toContain('订购成品')
+    expect(source).not.toContain('现做成品')
+    expect(source).not.toContain('/static/icons/cart-orange.png')
+    expect(source).not.toContain('handleCartTap')
+    expect(source).not.toContain('isInCart')
+    expect(source).not.toContain('查看购物车')
+    expect(source).not.toContain('移出购物车')
+    expect(source).not.toContain('removeCartItem')
     expect(source).not.toContain('cart-glyph')
     expect(source).not.toContain('自己做')
     expect(source).not.toContain('我要自己做')
     expect(source).not.toContain('>成品<')
-    expect(source).not.toContain('订购成品')
+  })
+
+  it('does not render a customer service entry on recipe detail', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).not.toContain('<CustomerServiceFloatButton')
+    expect(source).not.toContain("source-type=\"PRODUCT\"")
+    expect(source).not.toContain("import CustomerServiceFloatButton")
   })
 
   it('renders food nutrition state labels separately from preparation methods', () => {
@@ -248,8 +272,6 @@ describe('recipe detail nutrition report regressions', () => {
       .toBeLessThan(loadRecipeDetailSource.indexOf('preGenerateShareToken()'))
     expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
       .toBeLessThan(loadRecipeDetailSource.indexOf('checkFavoriteStatus()'))
-    expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq !== recipeDetailRequestSeq) {'))
-      .toBeLessThan(loadRecipeDetailSource.indexOf('calcSelectedDogForRecipe()'))
     expect(loadRecipeDetailSource).toContain('if (currentRequestSeq !== recipeDetailRequestSeq) return')
     expect(loadRecipeDetailSource).toContain('if (currentRequestSeq === recipeDetailRequestSeq) {')
     expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq === recipeDetailRequestSeq) {'))

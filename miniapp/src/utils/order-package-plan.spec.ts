@@ -3,6 +3,7 @@ import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
+  SOURCE_PLAN_OPTIONS,
   buildDefaultPackagePlan,
   estimateFeedDays,
   getPackagePlanTotal,
@@ -95,8 +96,28 @@ describe('order-package-plan miniapp helper', () => {
   })
 
   it('returns customer-facing source plan labels', () => {
-    expect(getSourcePlanLabel('ORGANIC')).toBe('溯源优选')
-    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('精选日常')
-    expect(getSourcePlanLabel('WHOLESALE')).toBe('安心基础')
+    expect(getSourcePlanLabel('ORGANIC')).toBe('有机优先')
+    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('商超优先')
+    expect(getSourcePlanLabel('WHOLESALE')).toBe('批发优先')
+  })
+
+  it('keeps source plan descriptions aligned with ordering copy', () => {
+    expect(SOURCE_PLAN_OPTIONS).toEqual([
+      {
+        code: 'ORGANIC',
+        label: '有机优先',
+        description: '优先采购有机食材，如果没有有机来源，再向下选择。',
+      },
+      {
+        code: 'MARKET_PREMIUM',
+        label: '商超优先',
+        description: '优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。',
+      },
+      {
+        code: 'WHOLESALE',
+        label: '批发优先',
+        description: '优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。',
+      },
+    ])
   })
 })

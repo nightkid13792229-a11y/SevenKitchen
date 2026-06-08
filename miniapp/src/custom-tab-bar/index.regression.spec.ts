@@ -40,6 +40,28 @@ describe('custom tab bar runtime regressions', () => {
     expect(source).toContain('(isStaff && selected === 2) || (!isStaff && selected === 1)')
   })
 
+  it('does not place customer service in the global tab bar', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/custom-tab-bar/index.wxml'),
+      'utf-8',
+    )
+
+    expect(source).not.toContain('customer-service-tab')
+    expect(source).not.toContain('bindtap="openCustomerService"')
+    expect(source).not.toContain('问Seven爸')
+  })
+
+  it('keeps customer service workflow out of the global tab bar script', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/custom-tab-bar/index.js'),
+      'utf-8',
+    )
+
+    expect(source).not.toContain("require('../utils/customer-service.js')")
+    expect(source).not.toContain('openCustomerServiceChat')
+    expect(source).not.toContain('openCustomerService()')
+  })
+
   it('keeps the staff tab configured with icons in the native tabBar list', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages.json'),

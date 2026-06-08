@@ -645,6 +645,28 @@ describe('recipe designer editor guardrails', () => {
     expect(stickyHeaderStyle).toContain('background: #fff;')
   })
 
+  it('moves the ingredient action bar to the top while the ingredient picker is open', () => {
+    expect(editorSource).toContain("'ingredient-picker-active': ingredientPickerVisible")
+
+    const activeContextStyle =
+      editorSource.match(/\.recipe-designer-editor-page\.ingredient-picker-active \.series-context-block\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(activeContextStyle).toContain('display: none;')
+
+    const activeHeaderStyle =
+      editorSource.match(/\.recipe-designer-editor-page\.ingredient-picker-active \.ingredient-action-header\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(activeHeaderStyle).toContain('top: 0;')
+    expect(activeHeaderStyle).toContain('z-index: 32;')
+
+    const activeMaskStyle =
+      editorSource.match(/\.recipe-designer-editor-page\.ingredient-picker-active \.ingredient-picker-mask\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(activeMaskStyle).toContain('top: 104rpx;')
+
+    const activePanelStyle =
+      editorSource.match(/\.recipe-designer-editor-page\.ingredient-picker-active \.ingredient-picker-panel\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(activePanelStyle).toContain('height: calc(100vh - 104rpx);')
+    expect(activePanelStyle).toContain('max-height: calc(100vh - 104rpx);')
+  })
+
   it('shows clear visual feedback while dragging recipe ingredients in reorder mode', () => {
     expect(editorSource).toContain('dragTargetIndex')
     expect(editorSource).toContain('showDragInsertionMarker(index)')

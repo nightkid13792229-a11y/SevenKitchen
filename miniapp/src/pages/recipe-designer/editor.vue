@@ -1,7 +1,11 @@
 <template>
   <view
     class="recipe-designer-editor-page"
-    :class="{ 'reorder-mode': reorderMode, 'item-dragging-active': !!draggingItemId }"
+    :class="{
+      'reorder-mode': reorderMode,
+      'item-dragging-active': !!draggingItemId,
+      'ingredient-picker-active': ingredientPickerVisible,
+    }"
     :style="editorPageStyle"
     @tap="collapseAssessmentIfOpen"
     @touchmove="lockEditorScrollWhileItemDragging"
@@ -2856,6 +2860,10 @@ function formatAssessmentNumber(value: unknown) {
   touch-action: none;
 }
 
+.recipe-designer-editor-page.ingredient-picker-active {
+  padding-top: 0;
+}
+
 .series-context-block {
   display: flex;
   flex-direction: column;
@@ -2915,6 +2923,32 @@ function formatAssessmentNumber(value: unknown) {
   background: #fff;
   box-shadow: 0 6rpx 14rpx rgba(15, 23, 42, 0.04);
   box-sizing: border-box;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .series-context-block {
+  display: none;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .section {
+  border-radius: 0 0 12rpx 12rpx;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .ingredient-action-header {
+  top: 0;
+  z-index: 32;
+  border-radius: 0;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .ingredient-picker-mask {
+  top: 104rpx;
+  z-index: 22;
+  align-items: stretch;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .ingredient-picker-panel {
+  height: calc(100vh - 104rpx);
+  max-height: calc(100vh - 104rpx);
+  border-radius: 0;
 }
 
 .primary-btn,

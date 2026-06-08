@@ -399,9 +399,16 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('查看营养报告')
     expect(editorSource).toContain('goToNutritionReport')
     expect(editorSource).toContain('autoSaveStatusLabel')
-    expect(editorSource).toContain('自动保存')
+    const autoSaveStatusLabelBlock =
+      editorSource.match(/const autoSaveStatusLabel[\s\S]*?\n}\)/)?.[0] || ''
+    expect(autoSaveStatusLabelBlock).toContain("'已保存'")
+    expect(autoSaveStatusLabelBlock).toContain("'保存中'")
+    expect(autoSaveStatusLabelBlock).toContain("'保存失败'")
     expect(editorSource).toContain('watch(autoSaveStatusLabel, () => {')
     expect(editorSource).toContain('title: `食谱编辑 · ${autoSaveStatusLabel.value}`')
+    expect(autoSaveStatusLabelBlock).not.toContain("'已自动保存'")
+    expect(autoSaveStatusLabelBlock).not.toContain("'自动保存中'")
+    expect(autoSaveStatusLabelBlock).not.toContain("'自动保存失败'")
     expect(editorSource).toContain('/pages/recipe-designer/publish?id=')
     expect(editorSource).not.toContain('class="auto-save-status"')
     expect(editorSource).not.toContain('metadata-name-row')
@@ -773,11 +780,14 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108')
     expect(editorSource).toContain('assessmentPublishBarHeightPx')
     expect(editorSource).toContain('getSafeAreaBottomPx')
+    expect(editorSource).toContain('const bottomInsetCandidates = [explicitInset, derivedInset]')
+    expect(editorSource).toContain('return Math.max(0, ...bottomInsetCandidates)')
     expect(editorSource).toContain(
       'windowHeight - assessmentCollapsedHeightPx.value - collapsedAssessmentDrawerBottomInsetPx.value',
     )
     expect(editorSource).not.toContain('windowHeight - assessmentCollapsedHeightPx.value - 88')
     expect(editorSource).not.toContain('Math.max(220, drawerPadding + publishPadding)')
+    expect(editorSource).toContain('z-index: 18;')
   })
 
   it('lets the full nutrition drawer header act as the drag target without adding a separate toggle button', () => {

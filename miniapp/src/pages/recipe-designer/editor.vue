@@ -780,17 +780,15 @@ function rpxToPx(rpx: number, windowWidth = DEFAULT_WINDOW_WIDTH_PX) {
 
 function getSafeAreaBottomPx(systemInfo: any) {
   const explicitInset = Number(systemInfo?.safeAreaInsets?.bottom)
-  if (Number.isFinite(explicitInset)) {
-    return Math.max(0, explicitInset)
-  }
-
   const screenHeight = Number(systemInfo?.screenHeight || systemInfo?.windowHeight)
   const safeAreaBottom = Number(systemInfo?.safeArea?.bottom)
-  if (Number.isFinite(screenHeight) && Number.isFinite(safeAreaBottom)) {
-    return Math.max(0, screenHeight - safeAreaBottom)
-  }
+  const derivedInset =
+    Number.isFinite(screenHeight) && Number.isFinite(safeAreaBottom)
+      ? screenHeight - safeAreaBottom
+      : NaN
+  const bottomInsetCandidates = [explicitInset, derivedInset].filter((value) => Number.isFinite(value))
 
-  return 0
+  return Math.max(0, ...bottomInsetCandidates)
 }
 
 const draftId = ref('')
@@ -887,9 +885,9 @@ const showBottomPublishBar = computed(() => !assessmentListVisible.value)
 const autoSaveStatusLabel = computed(() => {
   if (redirectingToEditableDraft.value) return '进入可编辑版本中'
   if (loading.value) return '加载中'
-  if (autoSaveStatus.value === 'saving') return '自动保存中'
-  if (autoSaveStatus.value === 'failed') return '自动保存失败'
-  return '已自动保存'
+  if (autoSaveStatus.value === 'saving') return '保存中'
+  if (autoSaveStatus.value === 'failed') return '保存失败'
+  return '已保存'
 })
 
 const collapsedAssessmentDrawerBottomInsetPx = computed(() => assessmentPublishBarHeightPx.value)
@@ -4323,7 +4321,7 @@ function formatAssessmentNumber(value: unknown) {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9;
+  z-index: 18;
   padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);

@@ -179,7 +179,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('if (packagePlanValidationMessage.value) return');
     expect(source).toContain('Math.max(MIN_PACKAGE_SPEC_G');
     expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}");
-    expect(templateSource).toContain(':class="{ active: selectedCycleDays === days, disabled: isCustomPackagePlan }"');
+    expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
     expect(templateSource).toContain('v-if="packagePlanValidationMessage"');
     expect(templateSource).toContain('{{ packagePlanValidationMessage }}');
     expect(source).not.toContain('packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G))');
@@ -203,7 +203,8 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('.recipe-meta-card');
     expect(source).toContain('align-items: center;');
     expect(source).toContain('text-align: center;');
-    expect(source).toContain('添加规格');
+    expect(templateSource).toContain('>添加多个分装规格</button>');
+    expect(templateSource).not.toContain('>添加规格</button>');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
     expect(source).toContain('getInitials');
     expect(source).toContain('calculateDogAgeText');
@@ -235,6 +236,18 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('总袋数');
     expect(templateSource).not.toContain('预计可喂');
     expect(templateSource).not.toContain('订单总量由分装明细自动汇总');
+  });
+
+  it('clears default cycle selection while editing a custom package plan', () => {
+    expect(source).toContain('const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)');
+    expect(source).toContain('const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)');
+    expect(source).toContain('selectedCycleDays.value = null');
+    expect(source).toContain('selectedCycleDays.value = lastSelectedCycleDays.value');
+    expect(source).toContain('const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(');
+    expect(source).toContain('selectedCycleDays.value || isCustomPackagePlan.value');
+    expect(source).toContain('&& hasSelectedCycleOrCustomPackagePlan.value');
+    expect(source).toContain('cycleDays: selectedCycleDays.value || undefined');
+    expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
   });
 
   it('merges source plan selection and ingredient list into one compact section', () => {

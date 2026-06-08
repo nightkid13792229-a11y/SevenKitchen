@@ -142,7 +142,7 @@
           v-for="days in ORDER_CYCLE_OPTIONS"
           :key="days"
           class="cycle-option"
-          :class="{ active: selectedCycleDays === days, disabled: isCustomPackagePlan }"
+          :class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"
           @tap="selectCycle(days)"
         >
           <text class="cycle-text">{{ days }}天</text>
@@ -198,7 +198,7 @@
             删除
           </button>
         </view>
-        <button class="btn-add-row" @tap="addPackagePlanRow">添加规格</button>
+        <button class="btn-add-row" @tap="addPackagePlanRow">添加多个分装规格</button>
       </view>
     </view>
 
@@ -724,7 +724,8 @@ const lifeStageDropdownVisible = ref(false)
 const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
 const selectedDogId = ref('')
-const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
+const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
+const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
 const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')
 const packagePlan = ref<PackagePlanItem[]>([])
 const packagePlanDogId = ref<string | null>(null)
@@ -880,6 +881,9 @@ const hasInvalidPackageSpec = computed(() =>
 const packagePlanValidationMessage = computed(() => (
   hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
 ))
+const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(
+  selectedCycleDays.value || isCustomPackagePlan.value,
+))
 const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
 const selectedSourcePlanDescription = computed(() => formatSourcePlanDescription(selectedSourcePlan.value))
 const perMealG = computed(() => {
@@ -981,7 +985,7 @@ const feedingHintText = computed(() => {
 const canBuyNow = computed(() => {
   return Boolean(
     selectedDogId.value
-    && selectedCycleDays.value
+    && hasSelectedCycleOrCustomPackagePlan.value
     && isPackagePlanReadyForDog.value
     && minimumOrderMet.value
     && pricePreview.value !== null
@@ -1068,14 +1072,20 @@ function togglePackageEditor() {
     return
   }
 
+  lastSelectedCycleDays.value = selectedCycleDays.value || lastSelectedCycleDays.value
+  selectedCycleDays.value = null
   isCustomPackagePlan.value = true
   showPackageEditor.value = true
+  invalidatePackagePlanPricingPreview()
+  loadPricePreview()
+  loadSourcePlanPricePreviews()
 }
 
 function cancelCustomPackagePlan() {
   clearPricePreviewDebounce()
   isCustomPackagePlan.value = false
   showPackageEditor.value = false
+  selectedCycleDays.value = lastSelectedCycleDays.value
   rebuildPackagePlan()
   pricePreviewError.value = ''
   loadPricePreview()
@@ -1452,6 +1462,7 @@ function selectDog(dogId: string) {
   selectedDogId.value = dogId
   isCustomPackagePlan.value = false
   showPackageEditor.value = false
+  selectedCycleDays.value = selectedCycleDays.value || lastSelectedCycleDays.value
   packagePlan.value = []
   displayDailyIntakeG.value = 0
   dogCalcResult.value = null
@@ -1559,6 +1570,7 @@ function applyAutoConfig() {
     const cycleDays = Math.round(params.packageCount / mealsPerDay)
     if ((ORDER_CYCLE_OPTIONS as readonly number[]).includes(cycleDays)) {
       selectedCycleDays.value = cycleDays
+      lastSelectedCycleDays.value = cycleDays
       console.log('[AutoConfig] 已设置订购周期:', cycleDays, '天')
     }
   }
@@ -1682,6 +1694,7 @@ function selectCycle(days: number) {
   }
 
   selectedCycleDays.value = days
+  lastSelectedCycleDays.value = days
   showPackageEditor.value = false
   rebuildPackagePlan()
   pricePreviewError.value = ''
@@ -1707,7 +1720,7 @@ function buildPricingPreviewItem() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: normalizedPackagePlan.value,
-    cycleDays: selectedCycleDays.value,
+    cycleDays: selectedCycleDays.value || undefined,
     dailyIntakeG: displayDailyIntakeG.value,
     preparationMethod: preparationMethod.value || undefined,
     cookingMethod: cookingMethod.value || undefined,

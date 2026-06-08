@@ -1841,7 +1841,11 @@ export class RecipeDesignerService {
     dto: UpdateRecipeDesignDraftDto,
     userId: string,
   ) {
-    await this.assertDraftEditableByUser(id, userId);
+    const currentDraft = await this.assertDraftEditableByUser(id, userId);
+    const selectedSeriesLifeStage =
+      dto.scenario !== undefined && currentDraft?.seriesId
+        ? mapScenarioToSeriesLifeStage(dto.scenario)
+        : null;
 
     return this.prisma.designRecipe.update({
       where: { id },
@@ -1855,6 +1859,12 @@ export class RecipeDesignerService {
           : {}),
         ...(dto.applicableLifeStages !== undefined
           ? { applicableLifeStages: dto.applicableLifeStages }
+          : {}),
+        ...(selectedSeriesLifeStage
+          ? {
+              seriesLifeStage: selectedSeriesLifeStage,
+              applicableLifeStages: [selectedSeriesLifeStage],
+            }
           : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
       },
@@ -2113,11 +2123,7 @@ export class RecipeDesignerService {
       draft.targetHealthTags,
     );
     const publishTarget = await this.resolvePublishTarget(draft);
-    const publishedSeriesLifeStage =
-      draft.seriesLifeStage ??
-      (draft.seriesId
-        ? mapScenarioToSeriesLifeStage(draft.fediafDogScenario)
-        : null);
+    const publishedSeriesLifeStage = this.resolveDraftSeriesLifeStage(draft);
 
     return this.prisma.$transaction(async (tx) => {
       const recipe = await tx.recipe.create({
@@ -2414,6 +2420,11 @@ export class RecipeDesignerService {
   }
 
   private resolvePublishedLifeStages(draft: DesignRecipeWithItems) {
+    const seriesLifeStage = this.resolveDraftSeriesLifeStage(draft);
+    if (seriesLifeStage) {
+      return [seriesLifeStage];
+    }
+
     const normalizedLifeStages = this.normalizePublishedRecipeLifeStages(
       draft.applicableLifeStages,
     );
@@ -2422,6 +2433,22 @@ export class RecipeDesignerService {
     }
 
     return PUBLISHED_RECIPE_LIFE_STAGES_BY_SCENARIO[draft.fediafDogScenario];
+  }
+
+  private resolveDraftSeriesLifeStage(
+    draft: Pick<
+      DesignRecipeWithItems,
+      'seriesId' | 'seriesLifeStage' | 'fediafDogScenario'
+    >,
+  ) {
+    if (!draft.seriesId) {
+      return null;
+    }
+
+    return (
+      draft.seriesLifeStage ??
+      mapScenarioToSeriesLifeStage(draft.fediafDogScenario)
+    );
   }
 
   private normalizePublishedRecipeLifeStages(stages: string[]) {
@@ -3170,10 +3197,13 @@ export class RecipeDesignerService {
         status: true,
         publishedRecipeId: true,
         publishedAt: true,
+        seriesId: true,
+        seriesLifeStage: true,
       },
     });
 
     this.assertEditableDraft(draft, id, userId);
+    return draft;
   }
 
   private async assertItemEditableByUser(itemId: string, userId: string) {

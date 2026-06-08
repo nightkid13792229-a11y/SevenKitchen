@@ -187,6 +187,74 @@ describe('RecipeService', () => {
       );
     });
 
+    it('uses explicit series life stage instead of applicable stages when summarizing series draft statuses', async () => {
+      const baseRecipe = {
+        recipeId: 'adult-recipe-id',
+        name: '燕麦鳕鱼猪肉',
+        energyDensityKcalPerKg: 1221,
+        coverImageUrl: null,
+        coverTitle: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        seriesId: 'series-oat-cod-pork',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: { id: 'series-oat-cod-pork', name: '燕麦鳕鱼猪肉' },
+        createdAt: new Date('2026-06-08T16:22:00.000Z'),
+        updatedAt: new Date('2026-06-08T16:22:00.000Z'),
+      };
+      const publicAdult = {
+        ...baseRecipe,
+        id: 'adult-public-v5-row',
+        version: 5,
+        status: RecipeStatus.PUBLIC,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+      };
+      const draftAdult = {
+        ...baseRecipe,
+        id: 'adult-draft-v6-row',
+        name: '燕麦鳕鱼猪肉 修订',
+        version: 6,
+        status: RecipeStatus.DRAFT,
+        applicableLifeStages: [
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          'HIGH_ACTIVITY_ADULT',
+        ],
+        createdAt: new Date('2026-06-08T16:33:03.925Z'),
+        updatedAt: new Date('2026-06-08T16:33:03.925Z'),
+      };
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        draftAdult,
+        publicAdult,
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      const seriesRow = result.data[0];
+      expect(
+        seriesRow.seriesStages?.find(
+          (stage) => stage.lifeStage === 'HIGH_ACTIVITY_ADULT',
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          status: 'DRAFT',
+          recipeVersionId: 'adult-draft-v6-row',
+          version: 6,
+        }),
+      );
+      expect(
+        seriesRow.seriesStages?.find(
+          (stage) => stage.lifeStage === 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          status: 'NOT_DESIGNED',
+        }),
+      );
+    });
+
     it('groups admin recipes by series with five life-stage status summaries while preserving legacy recipe version rows', async () => {
       const baseRecipe = {
         version: 1,
@@ -495,6 +563,64 @@ describe('RecipeService', () => {
           }),
         ]),
       );
+    });
+  });
+
+  describe('publishRecipe', () => {
+    it('narrows existing series drafts to their explicit series life stage when publishing from admin', async () => {
+      const draftRecipe = {
+        id: 'adult-draft-v6-row',
+        recipeId: 'adult-recipe-id',
+        name: '燕麦鳕鱼猪肉 修订',
+        version: 6,
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1221,
+        productionLossRate: 1.05,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: [
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          'HIGH_ACTIVITY_ADULT',
+        ],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        items: [],
+        seriesId: 'series-oat-cod-pork',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: { id: 'series-oat-cod-pork', name: '燕麦鳕鱼猪肉' },
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: 'Setar',
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        productionSteps: null,
+        createdAt: new Date('2026-06-08T16:33:03.925Z'),
+        updatedAt: new Date('2026-06-08T16:33:03.925Z'),
+      };
+      const updatedRecipe = {
+        ...draftRecipe,
+        status: RecipeStatus.PUBLIC,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(draftRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+
+      await service.publishRecipe('adult-draft-v6-row');
+
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith({
+        where: { id: 'adult-draft-v6-row' },
+        data: {
+          status: RecipeStatus.PUBLIC,
+          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        },
+        include: expect.any(Object),
+      });
     });
   });
 

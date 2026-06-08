@@ -80,8 +80,8 @@ describe('RecipeDesignerService', () => {
 
     service = moduleRef.get(RecipeDesignerService);
     jest.resetAllMocks();
-    searchGovernance.expandQuery.mockImplementation(async (_domain, rawQuery) =>
-      rawQuery ? [rawQuery] : [],
+    searchGovernance.expandQuery.mockImplementation(
+      async (_domain, rawQuery) => (rawQuery ? [rawQuery] : []),
     );
     searchGovernance.recordSearchEvent.mockResolvedValue({ id: 'query-log-1' });
     prisma.designRecipe.aggregate.mockResolvedValue({
@@ -627,7 +627,9 @@ describe('RecipeDesignerService', () => {
   });
 
   it('falls back to the original ingredient search when search governance fails', async () => {
-    searchGovernance.expandQuery.mockRejectedValue(new Error('alias unavailable'));
+    searchGovernance.expandQuery.mockRejectedValue(
+      new Error('alias unavailable'),
+    );
     prisma.ingredient.count.mockResolvedValue(0);
     prisma.ingredient.findMany.mockResolvedValue([]);
 
@@ -667,8 +669,9 @@ describe('RecipeDesignerService', () => {
     });
 
     const where = prisma.ingredient.findMany.mock.calls[0][0].where;
-    const searchedNames = where.OR.filter((condition: any) => condition.name)
-      .map((condition: any) => condition.name.contains);
+    const searchedNames = where.OR.filter(
+      (condition: any) => condition.name,
+    ).map((condition: any) => condition.name.contains);
     expect(searchedNames).toEqual([
       '鸡胸肉',
       'alias-1',
@@ -1425,12 +1428,52 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipe.update).not.toHaveBeenCalled();
   });
 
+  it('keeps a series draft assigned to the selected life stage when switching scenarios', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'series-design',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        fediafDogScenario: 'ADULT_MER_110',
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+      }),
+    );
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'series-design',
+        fediafDogScenario: 'ADULT_MER_95',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      }),
+    );
+
+    await service.updateDraft(
+      'series-design',
+      { scenario: 'ADULT_MER_95' },
+      'staff-1',
+    );
+
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'series-design' },
+      data: expect.objectContaining({
+        fediafDogScenario: 'ADULT_MER_95',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      }),
+      include: expect.any(Object),
+    });
+  });
+
   it('loads a draft detail for the current staff user', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
     );
 
-    await expect((service as any).getDraft('design-1', 'staff-1')).resolves.toEqual(
+    await expect(
+      (service as any).getDraft('design-1', 'staff-1'),
+    ).resolves.toEqual(
       expect.objectContaining({ id: 'design-1', createdBy: 'staff-1' }),
     );
 
@@ -2272,7 +2315,9 @@ describe('RecipeDesignerService', () => {
                 aminoAcids: {},
                 customItems: [],
               },
-              mappings: [{ ingredientId: 'ingredient-disabled', isPrimary: true }],
+              mappings: [
+                { ingredientId: 'ingredient-disabled', isPrimary: true },
+              ],
             },
           }),
         ],
@@ -2569,7 +2614,11 @@ describe('RecipeDesignerService', () => {
       id: 'snapshot-1',
     });
 
-    await service.publishDraft('design-1', { name: '三文鱼成犬维护' }, 'staff-2');
+    await service.publishDraft(
+      'design-1',
+      { name: '三文鱼成犬维护' },
+      'staff-2',
+    );
 
     expect(prisma.recipe.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -2683,7 +2732,11 @@ describe('RecipeDesignerService', () => {
       draft({ id: 'series-design', status: 'PUBLISHED' }),
     );
 
-    await service.publishDraft('series-design', { name: '牛肉南瓜鲜食' }, 'staff-2');
+    await service.publishDraft(
+      'series-design',
+      { name: '牛肉南瓜鲜食' },
+      'staff-2',
+    );
 
     expect(prisma.recipe.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -2691,6 +2744,47 @@ describe('RecipeDesignerService', () => {
         name: '牛肉南瓜鲜食',
         seriesId: 'series-1',
         seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      }),
+    });
+  });
+
+  it('publishes series drafts only for the edited series life stage when legacy applicable stages remain', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'adult-series-design',
+        name: '燕麦鳕鱼猪肉 修订',
+        isCompliant: true,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        fediafDogScenario: 'ADULT_MER_110',
+        applicableLifeStages: ['ADULT', 'SENIOR'],
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-adult-v6',
+      recipeId: 'adult-stage-recipe',
+      version: 6,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-adult-v6',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ id: 'adult-series-design', status: 'PUBLISHED' }),
+    );
+
+    await service.publishDraft(
+      'adult-series-design',
+      { name: '燕麦鳕鱼猪肉' },
+      'staff-2',
+    );
+
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
       }),
     });
   });
@@ -2727,7 +2821,11 @@ describe('RecipeDesignerService', () => {
       }),
     );
 
-    await service.publishDraft('senior-design', { name: '牛肉南瓜鲜食' }, 'staff-2');
+    await service.publishDraft(
+      'senior-design',
+      { name: '牛肉南瓜鲜食' },
+      'staff-2',
+    );
 
     expect(prisma.recipe.findFirst).toHaveBeenCalledWith({
       where: {
@@ -2785,7 +2883,11 @@ describe('RecipeDesignerService', () => {
         id: 'snapshot-1',
       });
 
-      await service.publishDraft('design-1', { name: '阶段映射食谱' }, 'staff-2');
+      await service.publishDraft(
+        'design-1',
+        { name: '阶段映射食谱' },
+        'staff-2',
+      );
 
       expect(prisma.recipe.create.mock.calls[0][0].data).toEqual(
         expect.objectContaining({
@@ -2818,7 +2920,11 @@ describe('RecipeDesignerService', () => {
       id: 'snapshot-1',
     });
 
-    await service.publishDraft('design-1', { name: '三文鱼繁殖期配方' }, 'staff-2');
+    await service.publishDraft(
+      'design-1',
+      { name: '三文鱼繁殖期配方' },
+      'staff-2',
+    );
 
     const createData = prisma.recipe.create.mock.calls[0][0].data;
     expect(createData.status).toBe('DRAFT');
@@ -3156,7 +3262,11 @@ describe('RecipeDesignerService', () => {
       id: 'snapshot-1',
     });
 
-    await service.publishDraft('design-1', { name: '钙磷比兜底食谱' }, 'staff-2');
+    await service.publishDraft(
+      'design-1',
+      { name: '钙磷比兜底食谱' },
+      'staff-2',
+    );
 
     expect(
       prisma.recipe.create.mock.calls[0][0].data.nutritionDetailedData
@@ -3770,7 +3880,11 @@ describe('RecipeDesignerService', () => {
       id: 'snapshot-1',
     });
 
-    await service.publishDraft('design-1', { name: '加载一致性测试食谱' }, 'staff-2');
+    await service.publishDraft(
+      'design-1',
+      { name: '加载一致性测试食谱' },
+      'staff-2',
+    );
 
     expect(prisma.designRecipe.findUnique).toHaveBeenCalledTimes(1);
     expect(prisma.recipe.create).toHaveBeenCalledWith({
@@ -3807,7 +3921,11 @@ describe('RecipeDesignerService', () => {
     prisma.designRecipe.update.mockResolvedValue(draft());
 
     await expect(
-      service.publishDraft('design-1', { name: '未映射原料测试食谱' }, 'staff-2'),
+      service.publishDraft(
+        'design-1',
+        { name: '未映射原料测试食谱' },
+        'staff-2',
+      ),
     ).rejects.toThrow(
       new BadRequestException(
         '营养原料 未知营养原料 未映射采购原料，无法发布正式食谱',

@@ -98,7 +98,9 @@ export class RecipeService {
     return targets.length > 0 ? targets : null;
   }
 
-  private resolveNutritionStateLabel(nutritionFood?: Record<string, any> | null) {
+  private resolveNutritionStateLabel(
+    nutritionFood?: Record<string, any> | null,
+  ) {
     return (
       nutritionFood?.preparationStateLabel ||
       nutritionFood?.preparationState ||
@@ -135,7 +137,8 @@ export class RecipeService {
       return items;
     }
 
-    const nutritionFoodMappingClient = (this.prisma as any).nutritionFoodMapping;
+    const nutritionFoodMappingClient = (this.prisma as any)
+      .nutritionFoodMapping;
     if (!nutritionFoodMappingClient?.findMany) {
       return items;
     }
@@ -207,7 +210,9 @@ export class RecipeService {
       ratioPercent: item.ratioPercent,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
-      supplementTargets: this.normalizeSupplementTargets(item.supplementTargets),
+      supplementTargets: this.normalizeSupplementTargets(
+        item.supplementTargets,
+      ),
       sortOrder: index,
       ...(supplementAlternativeIngredientIds.length > 0 && {
         supplementAlternatives: {
@@ -352,7 +357,9 @@ export class RecipeService {
         return true;
       }
 
-      if ((existing.nutritionFoodId ?? null) !== (newItem.nutritionFoodId ?? null)) {
+      if (
+        (existing.nutritionFoodId ?? null) !== (newItem.nutritionFoodId ?? null)
+      ) {
         return true;
       }
 
@@ -366,7 +373,9 @@ export class RecipeService {
 
       // Check if nutrient target value changed (for SUPPLEMENT ingredients)
       if (
-        this.normalizeOptionalValueForComparison(existing.nutrientTargetValue) !==
+        this.normalizeOptionalValueForComparison(
+          existing.nutrientTargetValue,
+        ) !==
         this.normalizeOptionalValueForComparison(newItem.nutrientTargetValue)
       ) {
         return true;
@@ -376,7 +385,9 @@ export class RecipeService {
         JSON.stringify(
           this.normalizeSupplementTargets(existing.supplementTargets),
         ) !==
-        JSON.stringify(this.normalizeSupplementTargets(newItem.supplementTargets))
+        JSON.stringify(
+          this.normalizeSupplementTargets(newItem.supplementTargets),
+        )
       ) {
         return true;
       }
@@ -487,10 +498,7 @@ export class RecipeService {
         continue;
       }
       const key = `series:${recipe.seriesId}`;
-      fullSeriesGroups.set(key, [
-        ...(fullSeriesGroups.get(key) ?? []),
-        recipe,
-      ]);
+      fullSeriesGroups.set(key, [...(fullSeriesGroups.get(key) ?? []), recipe]);
     }
 
     return [...groups.values()]
@@ -582,9 +590,8 @@ export class RecipeService {
     const current =
       pendingDraft ??
       currentPublic ??
-      [...group].sort(
-        (left, right) =>
-          this.compareRecipeVersionThenUpdatedAt(right, left),
+      [...group].sort((left, right) =>
+        this.compareRecipeVersionThenUpdatedAt(right, left),
       )[0];
     const summary = this.mapToSummaryDto(current);
     const seriesName =
@@ -615,19 +622,20 @@ export class RecipeService {
     group: any[],
   ): RecipeSeriesStageSummaryDto[] {
     return ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
-      const stageRecipes = group.filter(
-        (recipe) =>
-          recipe.seriesLifeStage === lifeStage ||
-          ((recipe.applicableLifeStages as string[] | undefined) ?? []).includes(
-            lifeStage,
-          ),
-      );
+      const stageRecipes = group.filter((recipe) => {
+        if (recipe.seriesLifeStage) {
+          return recipe.seriesLifeStage === lifeStage;
+        }
+
+        return (
+          (recipe.applicableLifeStages as string[] | undefined) ?? []
+        ).includes(lifeStage);
+      });
       const stageRecipe =
         this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.DRAFT) ??
         this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.PUBLIC) ??
-        [...stageRecipes].sort(
-          (left, right) =>
-            this.compareRecipeVersionThenUpdatedAt(right, left),
+        [...stageRecipes].sort((left, right) =>
+          this.compareRecipeVersionThenUpdatedAt(right, left),
         )[0];
 
       if (!stageRecipe) {
@@ -943,9 +951,16 @@ export class RecipeService {
       );
     }
 
+    const publishData: Prisma.RecipeUpdateInput = {
+      status: RecipeStatus.PUBLIC,
+      ...(recipe.seriesLifeStage
+        ? { applicableLifeStages: [recipe.seriesLifeStage] }
+        : {}),
+    };
+
     const updated = await this.prisma.recipe.update({
       where: { id },
-      data: { status: RecipeStatus.PUBLIC },
+      data: publishData,
       include: this.recipeDetailInclude,
     });
 
@@ -1073,7 +1088,9 @@ export class RecipeService {
     });
 
     const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map((row: { preparationMethod: string | null }) => row.preparationMethod),
+      rows.map(
+        (row: { preparationMethod: string | null }) => row.preparationMethod,
+      ),
     );
 
     const aggregated = new Map<

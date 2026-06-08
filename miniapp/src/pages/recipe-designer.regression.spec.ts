@@ -1378,7 +1378,14 @@ describe('recipe designer publish nutrition report', () => {
             id: 'supplement-1',
             ingredientName: '碳酸钙',
             weightG: 2,
-            ingredient: { type: 'SUPPLEMENT', unitDisplayLabel: 'g' },
+            ingredient: {
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: null,
+              purchaseUnit: 'g',
+              properties: { display_unit: '平勺' },
+              brand: 'NOW',
+              productModel: '227g/瓶',
+            },
             nutritionProfileDisplayName: '碳酸钙粉',
           },
         ],
@@ -1482,7 +1489,7 @@ describe('recipe designer publish nutrition report', () => {
 
     expect(report.ingredientRows).toEqual([
       { ingredientName: '鸡胸肉（熟）', amountLabel: '80g', weightPercentLabel: '80.0%' },
-      { ingredientName: '碳酸钙粉', amountLabel: '2g', weightPercentLabel: '-' },
+      { ingredientName: '碳酸钙粉（NOW · 227g/瓶）', amountLabel: '2平勺', weightPercentLabel: '-' },
     ])
     expect(report.macroRows.find((row) => row.key === 'crudeProtein')).toMatchObject({
       name: '蛋白质',
@@ -1583,5 +1590,21 @@ describe('recipe designer publish nutrition report', () => {
     expect(publishSource).not.toContain('干物质值')
     expect(publishSource).not.toContain('评估结果')
     expect(publishSource).not.toContain('正式食谱名称')
+  })
+
+  it('keeps publish report ingredient and macro tables within the mobile viewport', () => {
+    const ingredientSection = publishSource.match(/<view class="section">\s*<text class="section-title">食谱原料清单[\s\S]*?<text class="section-title">宏量营养分析/)?.[0] || ''
+    const macroSection = publishSource.match(/<view class="section">\s*<text class="section-title">宏量营养分析[\s\S]*?<view v-for="section in nutrientSectionList/)?.[0] || ''
+
+    expect(ingredientSection).not.toContain('scroll-x')
+    expect(macroSection).not.toContain('scroll-x')
+    expect(publishSource).toContain('compact-report-table-wrap')
+    expect(publishSource).toContain('compact-report-table')
+    expect(publishSource).toMatch(/\.compact-report-table\s*\{[\s\S]*width: 100%;/)
+    expect(publishSource).toMatch(/\.ingredient-name-cell\s*\{[\s\S]*flex: 1 1 0;[\s\S]*white-space: normal;/)
+    expect(publishSource).toMatch(/\.amount-cell\s*\{[\s\S]*flex: 0 0 150rpx;/)
+    expect(publishSource).toMatch(/\.percent-cell\s*\{[\s\S]*flex: 0 0 134rpx;/)
+    expect(publishSource).toMatch(/\.macro-table \.nutrient-name-cell\s*\{[\s\S]*flex: 0 0 142rpx;/)
+    expect(publishSource).toMatch(/\.macro-table \.report-number-cell\s*\{[\s\S]*flex: 1 1 0;/)
   })
 })

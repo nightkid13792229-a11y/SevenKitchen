@@ -3005,6 +3005,53 @@ describe('RecipeDesignerService', () => {
     );
   });
 
+  it('formats published supplement report rows with display unit, brand, and spec', () => {
+    const rows = (service as any).buildPublishedIngredientReportRows(
+      {
+        items: [
+          {
+            id: 'supplement-item-1',
+            ingredientId: 'supplement-calcium',
+            nutritionFood: {
+              id: 'food-supplement-calcium',
+              name: '碳酸钙粉营养档案',
+              displayNameZh: '碳酸钙粉',
+              mappings: [],
+            },
+            ingredient: {
+              id: 'supplement-calcium',
+              name: '碳酸钙',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: null,
+              purchaseUnit: 'g',
+              properties: { display_unit: '平勺' },
+              brand: 'NOW',
+              productModel: '227g/瓶',
+            },
+          },
+        ],
+      },
+      {
+        items: [
+          {
+            id: 'supplement-item-1',
+            name: '碳酸钙',
+            weightG: 2,
+            ratioPercent: 2,
+          },
+        ],
+      },
+    );
+
+    expect(rows).toEqual([
+      {
+        ingredientName: '碳酸钙粉（NOW · 227g/瓶）',
+        amountLabel: '2平勺',
+        weightPercentLabel: '-',
+      },
+    ]);
+  });
+
   it('fills missing preparation methods from ingredient history when publishing old designer drafts', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({

@@ -11,6 +11,19 @@ import type {
 import { getRecipeLifeStageLabel } from '../../domain/recipe/enums';
 import { PrismaService } from '../prisma.service';
 
+const DEFAULT_SHOWCASE_LIFE_STAGE_PRIORITY: Record<string, number> = {
+  HIGH_ACTIVITY_ADULT: 0,
+  ADULT: 0,
+  LOW_ACTIVITY_ADULT_OR_SENIOR: 1,
+  SENIOR: 1,
+  REPRODUCTION: 2,
+  PREGNANCY: 2,
+  LACTATION: 2,
+  PUPPY_14_WEEKS_PLUS: 3,
+  PUPPY: 3,
+  PUPPY_UNDER_14_WEEKS: 4,
+};
+
 // Type for Recipe with items included
 type RecipeWithItems = Prisma.RecipeGetPayload<{
   include: {
@@ -200,10 +213,18 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
     // Group by seriesId when present, otherwise recipeId, and take one representative.
     const latestByRecipeGroup = new Map<string, RecipeWithItems>();
+    const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
     for (const recipe of filteredRecipes) {
       const groupKey = recipe.seriesId || recipe.recipeId;
       const existing = latestByRecipeGroup.get(groupKey);
-      if (!existing || this.isNewerPublicRepresentative(recipe, existing)) {
+      if (
+        !existing ||
+        this.isBetterPublicRepresentative(
+          recipe,
+          existing,
+          hasLifeStageFilter,
+        )
+      ) {
         latestByRecipeGroup.set(groupKey, recipe);
       }
     }
@@ -319,10 +340,18 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
     // Group by seriesId when present, otherwise recipeId, and take one representative.
     const latestByRecipeGroup = new Map<string, RecipeWithItems>();
+    const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
     for (const recipe of filteredRecipes) {
       const groupKey = recipe.seriesId || recipe.recipeId;
       const existing = latestByRecipeGroup.get(groupKey);
-      if (!existing || this.isNewerPublicRepresentative(recipe, existing)) {
+      if (
+        !existing ||
+        this.isBetterPublicRepresentative(
+          recipe,
+          existing,
+          hasLifeStageFilter,
+        )
+      ) {
         latestByRecipeGroup.set(groupKey, recipe);
       }
     }
@@ -539,6 +568,32 @@ export class PrismaRecipeRepository implements RecipeRepository {
       SKIN_COAT_CARE: '护肤',
     };
     return labels[tag] || tag;
+  }
+
+  private isBetterPublicRepresentative(
+    candidate: RecipeWithItems,
+    existing: RecipeWithItems,
+    hasLifeStageFilter: boolean,
+  ): boolean {
+    if (!hasLifeStageFilter) {
+      const candidatePriority =
+        this.getDefaultShowcaseLifeStagePriority(candidate);
+      const existingPriority =
+        this.getDefaultShowcaseLifeStagePriority(existing);
+      if (candidatePriority !== existingPriority) {
+        return candidatePriority < existingPriority;
+      }
+    }
+
+    return this.isNewerPublicRepresentative(candidate, existing);
+  }
+
+  private getDefaultShowcaseLifeStagePriority(recipe: RecipeWithItems) {
+    const stage =
+      recipe.seriesLifeStage ||
+      ((recipe.applicableLifeStages as string[] | null) || [])[0] ||
+      '';
+    return DEFAULT_SHOWCASE_LIFE_STAGE_PRIORITY[stage] ?? 99;
   }
 
   private isNewerPublicRepresentative(

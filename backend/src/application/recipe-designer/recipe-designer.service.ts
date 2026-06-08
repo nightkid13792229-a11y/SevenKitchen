@@ -89,6 +89,8 @@ const DESIGN_RECIPE_INCLUDE = {
           unitDisplayLabel: true,
           purchaseUnit: true,
           properties: true,
+          brand: true,
+          productModel: true,
         },
       },
       nutritionFood: {
@@ -103,6 +105,8 @@ const DESIGN_RECIPE_INCLUDE = {
                   unitDisplayLabel: true,
                   purchaseUnit: true,
                   properties: true,
+                  brand: true,
+                  productModel: true,
                 },
               },
             },
@@ -237,6 +241,8 @@ type DesignRecipeItemWithFood = {
     unitDisplayLabel?: string | null;
     purchaseUnit?: string | null;
     properties?: unknown;
+    brand?: string | null;
+    productModel?: string | null;
   } | null;
   nutritionFood: {
     id: string;
@@ -253,6 +259,8 @@ type DesignRecipeItemWithFood = {
         unitDisplayLabel?: string | null;
         purchaseUnit?: string | null;
         properties?: unknown;
+        brand?: string | null;
+        productModel?: string | null;
       } | null;
     }>;
   };
@@ -2686,11 +2694,14 @@ export class RecipeDesignerService {
         draftItem && this.resolveIngredientType(draftItem) === IngredientType.SUPPLEMENT;
 
       return {
-        ingredientName:
+        ingredientName: this.formatPublishedIngredientReportName(
+          draftItem,
           draftItem?.nutritionFood.displayNameZh?.trim() ||
-          draftItem?.nutritionFood.name ||
-          assessedItem.name ||
-          '未命名原料',
+            draftItem?.nutritionFood.name ||
+            assessedItem.name ||
+            '未命名原料',
+          Boolean(isSupplement),
+        ),
         amountLabel: this.formatPublishedReportAmount(
           assessedItem.weightG,
           isSupplement ? this.resolvePublishedSupplementUnit(draftItem) : 'g',
@@ -2702,17 +2713,36 @@ export class RecipeDesignerService {
     });
   }
 
+  private formatPublishedIngredientReportName(
+    item: DesignRecipeItemWithFood | undefined,
+    baseName: string,
+    isSupplement: boolean,
+  ) {
+    if (!isSupplement) return baseName;
+
+    const detailLabel = this.resolvePublishedSupplementBrandSpecLabel(item);
+    return detailLabel ? `${baseName}（${detailLabel}）` : baseName;
+  }
+
+  private resolvePublishedSupplementBrandSpecLabel(
+    item?: DesignRecipeItemWithFood,
+  ) {
+    const ingredient = item ? this.resolveItemIngredient(item) : null;
+    const parts = [
+      normalizeOptionalText(ingredient?.brand),
+      normalizeOptionalText(ingredient?.productModel),
+    ].filter((part): part is string => Boolean(part));
+    return [...new Set(parts)].join(' · ');
+  }
+
   private resolvePublishedSupplementUnit(item?: DesignRecipeItemWithFood) {
     if (!item) return 'g';
 
-    const ingredient =
-      item.ingredient ??
-      item.nutritionFood.mappings?.find((mapping) => mapping.isPrimary)
-        ?.ingredient ??
-      item.nutritionFood.mappings?.[0]?.ingredient;
+    const ingredient = this.resolveItemIngredient(item);
     return (
-      ingredient?.unitDisplayLabel?.trim() ||
-      ingredient?.purchaseUnit?.trim() ||
+      normalizeOptionalText(ingredient?.unitDisplayLabel) ||
+      readSupplementDisplayUnit(ingredient?.properties) ||
+      normalizeOptionalText(ingredient?.purchaseUnit) ||
       'g'
     );
   }

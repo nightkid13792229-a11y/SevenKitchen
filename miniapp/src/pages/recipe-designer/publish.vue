@@ -46,8 +46,8 @@
 
       <view class="section">
         <text class="section-title">食谱原料清单</text>
-        <scroll-view scroll-x class="report-table-scroll">
-          <view class="report-table ingredient-table">
+        <view class="compact-report-table-wrap">
+          <view class="report-table ingredient-table compact-report-table">
             <view class="table-row table-head">
               <text class="table-cell ingredient-name-cell">原料</text>
               <text class="table-cell amount-cell">用量</text>
@@ -59,13 +59,13 @@
               <text class="table-cell percent-cell">{{ row.weightPercentLabel }}</text>
             </view>
           </view>
-        </scroll-view>
+        </view>
       </view>
 
       <view class="section">
         <text class="section-title">宏量营养分析</text>
-        <scroll-view scroll-x class="report-table-scroll">
-          <view class="report-table macro-table">
+        <view class="compact-report-table-wrap">
+          <view class="report-table macro-table compact-report-table">
             <view class="table-row table-head">
               <text class="table-cell nutrient-name-cell">项目</text>
               <text class="table-cell report-number-cell">占配方</text>
@@ -79,7 +79,7 @@
               <text class="table-cell report-number-cell">{{ row.energyPercentLabel }}</text>
             </view>
           </view>
-        </scroll-view>
+        </view>
         <view class="energy-density-list">
           <view v-for="row in report.energyDensityRows" :key="row.label" class="energy-density-row">
             <text class="energy-density-label">能量密度 · {{ row.label }}</text>
@@ -515,7 +515,8 @@ function getErrorMessage(error: unknown) {
   font-weight: 700;
 }
 
-.report-table-scroll {
+.report-table-scroll,
+.compact-report-table-wrap {
   width: 100%;
 }
 
@@ -539,6 +540,11 @@ function getErrorMessage(error: unknown) {
   min-width: 1120rpx;
 }
 
+.compact-report-table {
+  width: 100%;
+  min-width: 0;
+}
+
 .table-row {
   display: flex;
   min-height: 76rpx;
@@ -560,6 +566,9 @@ function getErrorMessage(error: unknown) {
   font-size: 24rpx;
   line-height: 1.35;
   border-right: 1rpx solid #e5e7eb;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .table-head .table-cell {
@@ -572,13 +581,19 @@ function getErrorMessage(error: unknown) {
 }
 
 .ingredient-name-cell {
-  width: 420rpx;
+  flex: 1 1 0;
+  width: auto;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .amount-cell {
-  width: 160rpx;
+  flex: 0 0 150rpx;
+  width: auto;
   justify-content: flex-end;
   text-align: right;
+  padding-left: 10rpx;
+  padding-right: 10rpx;
 }
 
 .nutrient-name-cell {
@@ -589,11 +604,33 @@ function getErrorMessage(error: unknown) {
   width: 140rpx;
 }
 
-.percent-cell,
+.percent-cell {
+  flex: 0 0 134rpx;
+  width: auto;
+  justify-content: flex-end;
+  text-align: right;
+  padding-left: 10rpx;
+  padding-right: 10rpx;
+}
+
 .report-number-cell {
   width: 180rpx;
   justify-content: flex-end;
   text-align: right;
+}
+
+.macro-table .nutrient-name-cell {
+  flex: 0 0 142rpx;
+  width: auto;
+  padding-left: 10rpx;
+  padding-right: 10rpx;
+}
+
+.macro-table .report-number-cell {
+  flex: 1 1 0;
+  width: auto;
+  padding-left: 8rpx;
+  padding-right: 8rpx;
 }
 
 .stacked-head {

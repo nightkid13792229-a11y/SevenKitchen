@@ -104,6 +104,26 @@ describe('recipe detail nutrition report regressions', () => {
     expect(reportPage).not.toContain('status-cell')
   })
 
+  it('keeps standalone ingredient and macro report tables within the mobile viewport', () => {
+    const reportPage = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-nutrition-report/index.vue'),
+      'utf-8',
+    )
+    const ingredientSection = reportPage.match(/<view v-if="ingredientRows.length > 0" class="section">[\s\S]*?<view v-if="macroRows.length > 0 \|\| energyDensityRows.length > 0" class="section">/)?.[0] || ''
+    const macroSection = reportPage.match(/<view v-if="macroRows.length > 0 \|\| energyDensityRows.length > 0" class="section">[\s\S]*?<view\s+v-for="section in nutrientSections"/)?.[0] || ''
+
+    expect(ingredientSection).not.toContain('scroll-x')
+    expect(macroSection).not.toContain('scroll-x')
+    expect(reportPage).toContain('compact-report-table-wrap')
+    expect(reportPage).toContain('compact-report-table')
+    expect(reportPage).toMatch(/\.compact-report-table\s*\{[\s\S]*width: 100%;/)
+    expect(reportPage).toMatch(/\.ingredient-name-cell\s*\{[\s\S]*flex: 1 1 0;[\s\S]*white-space: normal;/)
+    expect(reportPage).toMatch(/\.amount-cell\s*\{[\s\S]*flex: 0 0 150rpx;/)
+    expect(reportPage).toMatch(/\.percent-cell\s*\{[\s\S]*flex: 0 0 134rpx;/)
+    expect(reportPage).toMatch(/\.macro-table \.nutrient-name-cell\s*\{[\s\S]*flex: 0 0 142rpx;/)
+    expect(reportPage).toMatch(/\.macro-table \.report-number-cell\s*\{[\s\S]*flex: 1 1 0;/)
+  })
+
   it('clarifies supplement nutrient targets as per kg food ingredient basis', () => {
     const recipeDetailSource = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),

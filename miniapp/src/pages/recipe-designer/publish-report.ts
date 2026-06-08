@@ -110,7 +110,7 @@ function buildIngredientRows(
     const draftItem = draftItemById.get(String(item.id || '')) || item
     const supplement = isSupplementItem(draftItem) || isSupplementItem(item)
     return {
-      ingredientName: getIngredientProfileName(draftItem, item),
+      ingredientName: getIngredientReportName(draftItem, item, supplement),
       amountLabel: getIngredientAmountLabel(draftItem, item),
       weightPercentLabel: supplement
         ? '-'
@@ -190,6 +190,14 @@ function buildNutrientRow(entry: AssessmentEntryLike): PublishNutrientReportRow 
   }
 }
 
+function getIngredientReportName(draftItem: any, assessedItem: any, supplement: boolean) {
+  const baseName = getIngredientProfileName(draftItem, assessedItem)
+  if (!supplement) return baseName
+
+  const detailLabel = getSupplementBrandSpecLabel(draftItem, assessedItem)
+  return detailLabel ? `${baseName}（${detailLabel}）` : baseName
+}
+
 function getIngredientProfileName(draftItem: any, assessedItem: any) {
   return (
     cleanText(draftItem?.nutritionProfileDisplayName) ||
@@ -202,6 +210,32 @@ function getIngredientProfileName(draftItem: any, assessedItem: any) {
     cleanText(draftItem?.ingredient?.name) ||
     '未命名原料'
   )
+}
+
+function getSupplementBrandSpecLabel(draftItem: any, assessedItem: any) {
+  const sources = [
+    draftItem?.ingredient,
+    assessedItem?.ingredient,
+    draftItem,
+    assessedItem,
+  ]
+  const brand = firstCleanText(sources, ['brand'])
+  const productModel = firstCleanText(sources, ['productModel', 'product_model', 'spec', 'specification', 'model'])
+  const parts = [brand, productModel].filter(Boolean)
+  return Array.from(new Set(parts)).join(' · ')
+}
+
+function firstCleanText(sources: any[], keys: string[]) {
+  for (const source of sources) {
+    const properties = readProperties(source)
+    for (const key of keys) {
+      const direct = cleanText(source?.[key])
+      if (direct) return direct
+      const nested = cleanText(properties?.[key])
+      if (nested) return nested
+    }
+  }
+  return ''
 }
 
 function isSupplementItem(item: any) {
@@ -233,20 +267,32 @@ function getIngredientAmountUnit(draftItem: any, assessedItem: any) {
 }
 
 function readIngredientDisplayUnit(source: any) {
+  const properties = readProperties(source)
   const directUnit =
     cleanText(source?.unitDisplayLabel) ||
-    cleanText(source?.purchaseUnit) ||
+    cleanText(source?.displayUnit) ||
+    cleanText(source?.display_unit) ||
+    cleanText(properties?.unitDisplayLabel) ||
+    cleanText(properties?.displayUnit) ||
+    cleanText(properties?.display_unit) ||
+    cleanText(properties?.servingUnitLabel) ||
+    cleanText(properties?.serving_unit_label) ||
+    cleanText(source?.amountUnitLabel) ||
     cleanText(source?.amountUnit) ||
+    cleanText(source?.purchaseUnit) ||
     cleanText(source?.unit)
   if (directUnit) return directUnit
 
-  const properties = typeof source?.properties === 'string' ? safeParseJson(source.properties) : source?.properties
   return (
-    cleanText(properties?.unitDisplayLabel) ||
-    cleanText(properties?.purchaseUnit) ||
+    cleanText(properties?.amountUnitLabel) ||
     cleanText(properties?.amountUnit) ||
+    cleanText(properties?.purchaseUnit) ||
     cleanText(properties?.unit)
   )
+}
+
+function readProperties(source: any) {
+  return typeof source?.properties === 'string' ? safeParseJson(source.properties) : source?.properties
 }
 
 function safeParseJson(value: string) {

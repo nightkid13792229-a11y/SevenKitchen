@@ -1,0 +1,13 @@
+{
+	"pages": [
+		"pages/index/index"
+	],
+	"window": {
+		"backgroundTextStyle": "light",
+		"navigationBarTextStyle": "black",
+		"titleBarColor": "#fff",
+		"defaultTitle": "SDK打印编辑系统"
+	},
+	"style": "v2",
+	"sitemapLocation": "sitemap.json"
+}

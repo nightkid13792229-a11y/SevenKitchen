@@ -1,0 +1,33 @@
+{
+  "name": "SevenKitchen",
+  "appid": "wx2c1e8f1a2d7c2406",
+  "description": "专业鲜食套餐定制",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true
+  },
+  "mp-weixin": {
+    "appid": "wx2c1e8f1a2d7c2406",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "enhance": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "usingShopPlugin": true,
+    "optimization": {
+      "subPackages": true
+    },
+    "lazyCodeLoading": "requiredComponents"
+  },
+  "h5": {
+    "router": {
+      "mode": "hash"
+    }
+  }
+}
+

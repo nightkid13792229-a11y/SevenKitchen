@@ -1,0 +1,463 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "Seven的厨房",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/dog-profile-list/index",
+      "style": {
+        "navigationBarTitleText": "爱犬信息"
+      }
+    },
+    {
+      "path": "pages/dog-profile-basic/index",
+      "style": {
+        "navigationBarTitleText": "基础信息"
+      }
+    },
+    {
+      "path": "pages/dog-profile-feeding/index",
+      "style": {
+        "navigationBarTitleText": "喂食信息"
+      }
+    },
+    {
+      "path": "pages/dog-profile-health/index",
+      "style": {
+        "navigationBarTitleText": "健康记录"
+      }
+    },
+    {
+      "path": "pages/recipe-detail/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/address-list/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/address-edit/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/order-config/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/orders-list/index",
+      "style": {
+        "navigationBarTitleText": "历史资料"
+      }
+    },
+    {
+      "path": "pages/cart/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/aftersale-apply/index",
+      "style": {
+        "navigationBarTitleText": "迁移说明"
+      }
+    },
+    {
+      "path": "pages/calculate-portion/index",
+      "style": {
+        "navigationBarTitleText": "饭量计算"
+      }
+    },
+    {
+      "path": "pages/weight-management/index",
+      "style": {
+        "navigationBarTitleText": "体重管理"
+      }
+    },
+    {
+      "path": "pages/snapshot/index",
+      "style": {
+        "navigationBarTitleText": "食谱快照"
+      }
+    },
+    {
+      "path": "pages/favorite-recipes/index",
+      "style": {
+        "navigationBarTitleText": "收藏的食谱"
+      }
+    },
+    {
+      "path": "pages/network-settings/index",
+      "style": {
+        "navigationBarTitleText": "网络设置"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/login/staff",
+      "style": {
+        "navigationBarTitleText": "员工登录"
+      }
+    },
+    {
+      "path": "pages/profile-setup/index",
+      "style": {
+        "navigationBarTitleText": "完善个人资料"
+      }
+    },
+    {
+      "path": "pages/phone-bind/index",
+      "style": {
+        "navigationBarTitleText": "旧版资料迁移"
+      }
+    },
+    {
+      "path": "pages/recipe-diy/index",
+      "style": {
+        "navigationBarTitleText": "DIY食谱配置"
+      }
+    },
+    {
+      "path": "pages/diy-sheet-list/index",
+      "style": {
+        "navigationBarTitleText": "资料迁移"
+      }
+    },
+    {
+      "path": "pages/staff-workbench/index",
+      "style": {
+        "navigationBarTitleText": "工作台"
+      }
+    },
+    {
+      "path": "pages/shared-photos/index",
+      "style": {
+        "navigationBarTitleText": "原料照片"
+      }
+    },
+    {
+      "path": "pages/common/webview",
+      "style": {
+        "navigationBarTitleText": "网页"
+      }
+    },
+    {
+      "path": "pages/privacy/index",
+      "style": {
+        "navigationBarTitleText": "隐私政策"
+      }
+    },
+    {
+      "path": "pages/terms/index",
+      "style": {
+        "navigationBarTitleText": "用户协议"
+      }
+    },
+    {
+      "path": "pages/feedback-list/index",
+      "style": {
+        "navigationBarTitleText": "建议反馈",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/feedback-form/index",
+      "style": {
+        "navigationBarTitleText": "提交反馈"
+      }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "pages/staff-inventory",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "库存管理"
+          }
+        },
+        {
+          "path": "stocktake-create",
+          "style": {
+            "navigationBarTitleText": "移动端盘点录入"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-purchasing",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "采购管理"
+          }
+        },
+        {
+          "path": "stock-create",
+          "style": {
+            "navigationBarTitleText": "创建补货采购单"
+          }
+        },
+        {
+          "path": "reimbursement/submit",
+          "style": {
+            "navigationBarTitleText": "提交报销申请"
+          }
+        },
+        {
+          "path": "reimbursement/list",
+          "style": {
+            "navigationBarTitleText": "我的报销申请"
+          }
+        },
+        {
+          "path": "reimbursement/detail",
+          "style": {
+            "navigationBarTitleText": "报销单详情"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "采购清单详情"
+          }
+        },
+        {
+          "path": "record-form",
+          "style": {
+            "navigationBarTitleText": "添加采购记录"
+          }
+        },
+        {
+          "path": "preview",
+          "style": {
+            "navigationBarTitleText": "预览采购需求"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-production",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "生产管理"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "任务详情"
+          }
+        },
+        {
+          "path": "print",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "print-label",
+          "style": {
+            "navigationBarTitleText": "打印标签",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "print-task",
+          "style": {
+            "navigationBarTitleText": "制作单打印",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-orders",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "后台订单",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "历史资料"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-refunds",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "退款管理",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-shipping",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "发货管理"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-recipes",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱管理"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-create",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "创建狗狗档案"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-profile-overview",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "爱犬概览"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-order",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "资料迁移"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/checkout",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "资料迁移"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/diy-sheet",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "资料迁移"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/order-detail",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "历史资料"
+          }
+        }
+      ]
+    }
+  ],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "您的位置信息将用于小程序位置接口的效果展示"
+    },
+    "scope.bluetooth": {
+      "desc": "您的蓝牙将用于连接标签打印机"
+    }
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "SevenKitchen MVP",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f5f5f5"
+  },
+  "mp-weixin": {
+    "__usePrivacyCheck__": true
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#7A7E83",
+    "selectedColor": "#1890ff",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/staff-workbench/index",
+        "iconPath": "static/tabbar/staff.png",
+        "selectedIconPath": "static/tabbar/staff-active.png",
+        "text": "工作台"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "iconPath": "static/tabbar/me.png",
+        "selectedIconPath": "static/tabbar/me-active.png",
+        "text": "我的"
+      }
+    ]
+  }
+}

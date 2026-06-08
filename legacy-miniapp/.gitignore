@@ -1,0 +1,14 @@
+node_modules/
+dist/
+project.private.config.json
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+
+
+mini_program*/

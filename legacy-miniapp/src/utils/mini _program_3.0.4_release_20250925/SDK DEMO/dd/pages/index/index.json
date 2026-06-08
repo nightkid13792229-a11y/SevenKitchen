@@ -1,0 +1,8 @@
+{
+	"usingComponents": {
+		"btn": "../../__antmove/component/btn/btn",
+		"custom-input": "../../__antmove/component/custom-input/custom-input"
+	},
+	"defaultTitle": "SDK打印编辑系统",
+	"component": true
+}

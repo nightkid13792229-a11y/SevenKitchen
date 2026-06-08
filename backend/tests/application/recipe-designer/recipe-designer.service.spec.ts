@@ -4103,6 +4103,103 @@ describe('RecipeDesignerService', () => {
       });
     });
 
+    it('copies from the published same-stage template when a published card points at a newer revision draft', async () => {
+      const revisionItem = item({
+        id: 'revision-item-1',
+        nutritionFoodId: 'revision-food',
+        weightG: 88,
+        sortOrder: 1,
+      });
+      const publishedItem = item({
+        id: 'published-item-1',
+        ingredientId: 'published-ingredient',
+        nutritionFoodId: 'published-food',
+        weightG: 128,
+        sortOrder: 2,
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue({
+        id: 'series-1',
+        name: '燕麦鳕鱼猪肉',
+        status: 'ACTIVE',
+      });
+      prisma.designRecipe.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(
+          draft({
+            id: 'published-under-14-design',
+            seriesId: 'series-1',
+            seriesLifeStage: 'PUPPY_UNDER_14_WEEKS',
+            status: 'PUBLISHED',
+            publishedRecipeId: 'under-14-recipe-id',
+            publishedAt: new Date('2026-06-07T03:22:51.483Z'),
+            items: [publishedItem],
+          }),
+        );
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'under-14-revision-design',
+          seriesId: 'series-1',
+          seriesLifeStage: 'PUPPY_UNDER_14_WEEKS',
+          status: 'COMPLIANT',
+          revisionBaseRecipeId: 'under-14-recipe-id',
+          items: [revisionItem],
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 5 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'late-puppy-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 6,
+          seriesId: 'series-1',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          fediafDogScenario: 'LATE_GROWTH',
+          items: [publishedItem],
+        }),
+      );
+
+      await expect(
+        service.createSeriesStageDraft(
+          'series-1',
+          {
+            scenario: 'LATE_GROWTH',
+            sourceDraftId: 'under-14-revision-design',
+          } as any,
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'late-puppy-design',
+        }),
+      );
+
+      expect(prisma.designRecipe.findFirst).toHaveBeenNthCalledWith(2, {
+        where: expect.objectContaining({
+          seriesId: 'series-1',
+          seriesLifeStage: 'PUPPY_UNDER_14_WEEKS',
+        }),
+        include: expect.any(Object),
+        orderBy: { updatedAt: 'desc' },
+      });
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          seriesId: 'series-1',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          items: {
+            create: [
+              expect.objectContaining({
+                ingredientId: 'published-ingredient',
+                nutritionFoodId: 'published-food',
+                weightG: 128,
+                sortOrder: 2,
+              }),
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+    });
+
     it('retries series creation when the initial design version collides', async () => {
       prisma.recipeSeries.create.mockResolvedValue({
         id: 'series-1',

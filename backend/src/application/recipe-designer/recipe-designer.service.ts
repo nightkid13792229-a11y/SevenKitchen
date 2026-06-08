@@ -1416,14 +1416,40 @@ export class RecipeDesignerService {
     if (source.seriesId !== seriesId) {
       throw new BadRequestException('只能复制同一食谱系列内的已发布阶段');
     }
-    if (!this.isPublishedDraft(source)) {
+    const template = this.isPublishedDraft(source)
+      ? source
+      : await this.findPublishedSeriesStageTemplate(tx, source);
+    if (!template) {
       throw new BadRequestException('只能复制已发布阶段作为模板');
     }
-    if (!source.items.length) {
+    if (!template.items.length) {
       throw new BadRequestException('模板阶段暂无原料，无法复制');
     }
 
-    return source;
+    return template;
+  }
+
+  private async findPublishedSeriesStageTemplate(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    source: DesignRecipeWithItems,
+  ): Promise<DesignRecipeWithItems | null> {
+    if (!source.seriesId || !source.seriesLifeStage) {
+      return null;
+    }
+
+    return (await tx.designRecipe.findFirst({
+      where: {
+        seriesId: source.seriesId,
+        seriesLifeStage: source.seriesLifeStage,
+        OR: [
+          { status: DesignRecipeStatus.PUBLISHED },
+          { publishedRecipeId: { not: null } },
+          { publishedAt: { not: null } },
+        ],
+      },
+      include: DESIGN_RECIPE_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+    })) as unknown as DesignRecipeWithItems | null;
   }
 
   async renameSeries(

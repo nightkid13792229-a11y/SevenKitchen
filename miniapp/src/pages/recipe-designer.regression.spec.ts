@@ -65,7 +65,8 @@ describe('recipe designer mobile entry', () => {
 
   it('supports a customer mode list copy for private life-stage drafts', () => {
     const listCustomerModeBlock = listSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
-    const listSupplementLibraryBlock = listSource.match(/const canManageSupplementLibrary = computed\([\s\S]*?\)/)?.[0] || ''
+    const listSupplementLibraryBlock =
+      listSource.match(/const canManageSupplementLibrary = computed\(\(\) => [^\n]+\)/)?.[0] || ''
     const seriesMetaBlock =
       listSource.match(/function formatSeriesMeta[\s\S]*?\n}\n\nfunction getPublishedTemplateStages/)?.[0] || ''
     const customerSeriesMetaBlock = seriesMetaBlock.match(/if \(isCustomerMode\.value\) \{[\s\S]*?\n  \}/)?.[0] || ''
@@ -256,7 +257,8 @@ describe('recipe designer mobile entry', () => {
 describe('recipe designer editor guardrails', () => {
   it('keeps customer mode out of internal supplement and revision flows', () => {
     const editorCustomerModeBlock = editorSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
-    const revisionGuardBlock = editorSource.match(/const canCreateRevisionDraft = computed\([\s\S]*?\)/)?.[0] || ''
+    const revisionGuardBlock =
+      editorSource.match(/const canCreateRevisionDraft = computed\(\(\) => [^\n]+\)/)?.[0] || ''
     const ensureEditableBlock =
       editorSource.match(/async function ensureEditableDraftAfterLoad[\s\S]*?function updateNavigationTitle/)?.[0] || ''
     const supplementTipBlock = editorSource.match(/const showSupplementLibraryTip = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
@@ -1507,7 +1509,8 @@ describe('recipe designer assessment categorization', () => {
 
 describe('recipe designer publish nutrition report', () => {
   it('shows nutrition report copy to customers without backend publish language', () => {
-    const reportPageTitleBlock = publishSource.match(/const reportPageTitle = computed\([\s\S]*?\)/)?.[0] || ''
+    const reportPageTitleBlock =
+      publishSource.match(/const reportPageTitle = computed\(\(\) =>[\s\S]*?\n\)/)?.[0] || ''
     const publishOnLoadBlock = publishSource.match(/onLoad\(\(options: any\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
 
     expect(publishSource).toContain('isCustomerMode')

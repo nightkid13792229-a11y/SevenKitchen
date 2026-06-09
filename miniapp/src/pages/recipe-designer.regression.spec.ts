@@ -64,6 +64,10 @@ describe('recipe designer mobile entry', () => {
   })
 
   it('supports a customer mode list copy for private life-stage drafts', () => {
+    const listCustomerModeBlock = listSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    const listSupplementLibraryBlock = listSource.match(/const canManageSupplementLibrary = computed\([\s\S]*?\)/)?.[0] || ''
+    const seriesMetaBlock = listSource.match(/function formatSeriesMeta[\s\S]*?\n\}/)?.[0] || ''
+
     expect(listSource).toContain('isCustomerMode')
     expect(listSource).toContain('按生命阶段维护通用食谱草稿')
     expect(listSource).toContain('暂无食谱草稿')
@@ -71,6 +75,13 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('v-if="canManageSupplementLibrary"')
     expect(listSource).toContain('formatSeriesMeta(seriesItem)')
     expect(listSource).not.toContain('为某只狗设计')
+    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
+    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
+    expect(listSupplementLibraryBlock).toContain('!isCustomerMode.value')
+    expect(seriesMetaBlock).toContain('if (isCustomerMode.value)')
+    expect(seriesMetaBlock).toContain('已编辑')
+    expect(seriesMetaBlock).toContain('publishedStageCount')
+    expect(seriesMetaBlock.indexOf('publishedStageCount')).toBeGreaterThan(seriesMetaBlock.indexOf('if (isCustomerMode.value)'))
   })
 
   it('loads recipe designer series cards instead of standalone draft cards', () => {
@@ -234,6 +245,16 @@ describe('recipe designer mobile entry', () => {
 
 describe('recipe designer editor guardrails', () => {
   it('keeps customer mode out of internal supplement and revision flows', () => {
+    const editorCustomerModeBlock = editorSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    const revisionGuardBlock = editorSource.match(/const canCreateRevisionDraft = computed\([\s\S]*?\)/)?.[0] || ''
+    const ensureEditableBlock =
+      editorSource.match(/async function ensureEditableDraftAfterLoad[\s\S]*?function updateNavigationTitle/)?.[0] || ''
+    const supplementTipBlock = editorSource.match(/const showSupplementLibraryTip = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    const canCreateSupplementOptionBlock =
+      editorSource.match(/const canCreateSupplementOption = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    const revisionGuardIndex = ensureEditableBlock.indexOf('if (!canCreateRevisionDraft.value)')
+    const revisionApiIndex = ensureEditableBlock.indexOf('recipeDesignerApi.createRevisionDraft(draftId.value)')
+
     expect(editorSource).toContain('isCustomerMode')
     expect(editorSource).toContain('canCreateRevisionDraft')
     expect(editorSource).toContain('if (!canCreateRevisionDraft.value)')
@@ -241,6 +262,15 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('canCreateSupplementOption.value')
     expect(editorSource).toContain('当前草稿评估结果')
     expect(editorSource).not.toContain('为某只狗设计')
+    expect(editorCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
+    expect(editorCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
+    expect(revisionGuardBlock).toContain('!isCustomerMode.value')
+    expect(revisionGuardIndex).toBeGreaterThanOrEqual(0)
+    expect(revisionApiIndex).toBeGreaterThanOrEqual(0)
+    expect(revisionGuardIndex).toBeLessThan(revisionApiIndex)
+    expect(supplementTipBlock).toContain('canCreateSupplementOption.value')
+    expect(canCreateSupplementOptionBlock).toContain("currentUserRole.value === 'STAFF'")
+    expect(canCreateSupplementOptionBlock).toContain("currentUserRole.value === 'ADMIN'")
   })
 
   it('keeps supplement maintenance out of the add ingredient picker', () => {
@@ -1467,12 +1497,20 @@ describe('recipe designer assessment categorization', () => {
 
 describe('recipe designer publish nutrition report', () => {
   it('shows nutrition report copy to customers without backend publish language', () => {
+    const reportPageTitleBlock = publishSource.match(/const reportPageTitle = computed\([\s\S]*?\)/)?.[0] || ''
+    const publishOnLoadBlock = publishSource.match(/onLoad\(\(options: any\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+
     expect(publishSource).toContain('isCustomerMode')
     expect(publishSource).toContain('reportPageTitle')
     expect(publishSource).toContain('营养报告')
     expect(publishSource).toContain('提交后台草稿')
     expect(publishSource).toContain('canPublishRecipe')
     expect(publishSource).toContain("currentUserRole.value === 'ADMIN'")
+    expect(reportPageTitleBlock).toContain("isCustomerMode.value ? '营养报告' : '提交后台草稿'")
+    expect(publishSource).toContain('uni.setNavigationBarTitle({ title: reportPageTitle.value })')
+    expect(publishSource).toContain('watch(reportPageTitle')
+    expect(publishOnLoadBlock).toContain('uni.setNavigationBarTitle({ title: reportPageTitle.value })')
+    expect(publishOnLoadBlock).not.toContain("uni.setNavigationBarTitle({ title: '提交后台草稿' })")
   })
 
   it('builds ingredient, macro, energy, mineral, and vitamin report rows', () => {

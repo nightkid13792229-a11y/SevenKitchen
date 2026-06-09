@@ -3,10 +3,10 @@
     <view class="toolbar">
       <view class="toolbar-title-block">
         <text class="page-title">食谱设计器</text>
-        <text class="page-subtitle">食谱系列与生命阶段</text>
+        <text class="page-subtitle">{{ listSubtitle }}</text>
       </view>
       <view class="toolbar-actions">
-        <button class="library-btn" @tap="goToSupplementLibrary">补剂库</button>
+        <button v-if="canManageSupplementLibrary" class="library-btn" @tap="goToSupplementLibrary">补剂库</button>
         <button class="new-btn" :disabled="creating" @tap="openCreateDraftSheet">
           新建食谱
         </button>
@@ -18,8 +18,8 @@
     </view>
 
     <view v-else-if="series.length === 0" class="state-block">
-      <text class="empty-title">暂无食谱系列</text>
-      <text class="empty-subtitle">点击新建食谱开始设计</text>
+      <text class="empty-title">{{ emptyTitle }}</text>
+      <text class="empty-subtitle">{{ emptySubtitle }}</text>
     </view>
 
     <view v-else class="series-list">
@@ -32,7 +32,7 @@
           <view class="series-title-block">
             <text class="series-name">{{ seriesItem.name || '未命名食谱' }}</text>
             <text class="series-meta">
-              最近编辑 {{ formatDateTime(seriesItem.updatedAt) }} · 已发布 {{ seriesItem.publishedStageCount || 0 }}/5
+              {{ formatSeriesMeta(seriesItem) }}
             </text>
           </view>
           <view class="series-actions" @tap.stop>
@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import {
   FEDIAF_DOG_SCENARIO_DESCRIPTIONS,
@@ -170,6 +170,7 @@ const renamingSeriesId = ref('')
 const openingStageKey = ref('')
 const createSheetVisible = ref(false)
 const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
+const currentUserRole = ref('')
 
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
@@ -179,7 +180,26 @@ const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.REPRODUCTION, value: 'REPRODUCTION' },
 ]
 
+const isCustomerMode = computed(() => {
+  return currentUserRole.value !== 'STAFF' && currentUserRole.value !== 'ADMIN'
+})
+
+const canManageSupplementLibrary = computed(() => !isCustomerMode.value)
+
+const listSubtitle = computed(() =>
+  isCustomerMode.value ? '按生命阶段维护通用食谱草稿' : '食谱系列与生命阶段',
+)
+
+const emptyTitle = computed(() =>
+  isCustomerMode.value ? '暂无食谱草稿' : '暂无食谱系列',
+)
+
+const emptySubtitle = computed(() =>
+  isCustomerMode.value ? '点击新建食谱开始设计' : '点击新建食谱开始设计',
+)
+
 onShow(() => {
+  currentUserRole.value = getCurrentUserRole()
   loadSeries()
 })
 
@@ -277,7 +297,7 @@ async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: Reci
     return
   }
 
-  const templateStages = getPublishedTemplateStages(seriesItem, stage)
+  const templateStages = isCustomerMode.value ? [] : getPublishedTemplateStages(seriesItem, stage)
   if (templateStages.length > 0) {
     openStageTemplateSheet(seriesItem, stage, templateStages)
     return
@@ -327,6 +347,14 @@ async function createSeriesStageDraft(
   } finally {
     openingStageKey.value = ''
   }
+}
+
+function formatSeriesMeta(seriesItem: RecipeDesignerSeriesCard) {
+  const editedText = `最近编辑 ${formatDateTime(seriesItem.updatedAt)}`
+  if (isCustomerMode.value) {
+    return editedText
+  }
+  return `${editedText} · 已发布 ${seriesItem.publishedStageCount || 0}/5`
 }
 
 function getPublishedTemplateStages(
@@ -443,6 +471,22 @@ function deleteSeries(seriesItem: RecipeDesignerSeriesCard) {
 
 function goToSupplementLibrary() {
   uni.navigateTo({ url: '/pages/recipe-designer/supplement-library' })
+}
+
+function getCurrentUserRole() {
+  try {
+    const rawUserInfo = uni.getStorageSync('userInfo') || uni.getStorageSync('user')
+    const userInfo =
+      typeof rawUserInfo === 'string'
+        ? rawUserInfo
+          ? JSON.parse(rawUserInfo)
+          : null
+        : rawUserInfo
+    return String(userInfo?.role || userInfo?.user?.role || '').toUpperCase()
+  } catch (error) {
+    console.warn('[RecipeDesignerList] Failed to read current user role:', error)
+    return ''
+  }
 }
 
 function formatDateTime(value?: string) {

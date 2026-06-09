@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { recipeDesignerApi } from '../../api/recipe-designer'
 import { CURRENT_SHARE_CONFIG } from '../../config/share.config'
@@ -174,6 +174,14 @@ const userName = computed(() => {
     '未设置'
   )
 })
+
+const isCustomerMode = computed(() => {
+  return currentUserRole.value !== 'STAFF' && currentUserRole.value !== 'ADMIN'
+})
+
+const reportPageTitle = computed(() =>
+  isCustomerMode.value ? '营养报告' : '提交后台草稿',
+)
 
 const canPublishRecipe = computed(() => currentUserRole.value === 'ADMIN')
 
@@ -220,8 +228,8 @@ const nutrientSectionList = computed(() => {
 })
 
 onLoad((options: any) => {
-  uni.setNavigationBarTitle({ title: '提交后台草稿' })
   currentUserRole.value = getCurrentUserRole()
+  uni.setNavigationBarTitle({ title: reportPageTitle.value })
   storedUserName.value = getCurrentUserName()
   draftId.value = options?.id || ''
   routeRecipeName.value = decodeURIComponent(options?.name || '')
@@ -230,6 +238,10 @@ onLoad((options: any) => {
     return
   }
   void loadPublishReport()
+})
+
+watch(reportPageTitle, (title) => {
+  uni.setNavigationBarTitle({ title })
 })
 
 onShareAppMessage(() => {

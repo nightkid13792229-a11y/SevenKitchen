@@ -158,6 +158,12 @@ const DESIGN_RECIPE_LIST_SELECT = {
   },
 };
 
+const DESIGN_RECIPE_SERIES_LIST_SELECT = {
+  ...DESIGN_RECIPE_LIST_SELECT,
+  seriesId: true,
+  seriesLifeStage: true,
+};
+
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
@@ -1247,6 +1253,7 @@ export class RecipeDesignerService {
       },
       include: {
         designs: {
+          select: DESIGN_RECIPE_SERIES_LIST_SELECT,
           orderBy: { updatedAt: 'desc' },
         },
         recipes: {
@@ -1581,12 +1588,22 @@ export class RecipeDesignerService {
       const recipes = series.recipes.filter(
         (recipe) => recipe.seriesLifeStage === lifeStage,
       );
-      const status = this.resolveSeriesStageStatus(designs, recipes);
-      const latestDesign = this.pickLatestByUpdatedAt(designs);
+      const effectiveDesigns = this.getSeriesStageEffectiveDesigns(designs);
+      const publishedDesigns = designs.filter((design) =>
+        this.isPublishedDraft(design),
+      );
+      const status = this.resolveSeriesStageStatus(effectiveDesigns, recipes);
+      const statusDesigns = effectiveDesigns.length
+        ? effectiveDesigns
+        : publishedDesigns;
+      const latestDesign = this.pickLatestByUpdatedAt(statusDesigns);
       const latestPublicRecipe = this.pickLatestByUpdatedAt(
         recipes.filter((recipe) => recipe.status === RecipeStatus.PUBLIC),
       );
-      const latestRecord = this.pickLatestByUpdatedAt([...designs, ...recipes]);
+      const latestRecord = this.pickLatestByUpdatedAt([
+        ...statusDesigns,
+        ...recipes,
+      ]);
 
       return {
         lifeStage,
@@ -1612,18 +1629,18 @@ export class RecipeDesignerService {
   }
 
   private resolveSeriesStageStatus(
-    designs: RecipeSeriesWorkbenchRecord['designs'],
+    effectiveDesigns: RecipeSeriesWorkbenchRecord['designs'],
     recipes: RecipeSeriesWorkbenchRecord['recipes'],
   ): RecipeSeriesStageStatus {
     if (
-      designs.some(
+      effectiveDesigns.some(
         (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
       )
     ) {
       return 'IN_REVIEW';
     }
     if (
-      designs.some(
+      effectiveDesigns.some(
         (design) => design.status === DesignRecipeStatus.NEEDS_REVIEW,
       )
     ) {
@@ -1632,13 +1649,46 @@ export class RecipeDesignerService {
     if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
       return 'DRAFT';
     }
-    if (designs.some((design) => !this.isPublishedDraft(design))) {
+    if (effectiveDesigns.length > 0) {
       return 'MODIFIED';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
       return 'PUBLISHED';
     }
     return 'NOT_DESIGNED';
+  }
+
+  private getSeriesStageEffectiveDesigns(
+    designs: RecipeSeriesWorkbenchRecord['designs'],
+  ) {
+    return designs.filter((design) =>
+      this.hasSeriesStagePublishableChange(design, designs),
+    );
+  }
+
+  private hasSeriesStagePublishableChange(
+    design: RecipeSeriesWorkbenchRecord['designs'][number],
+    stageDesigns: RecipeSeriesWorkbenchRecord['designs'],
+  ) {
+    if (this.isPublishedDraft(design)) {
+      return false;
+    }
+    if (!this.isActiveRevisionDraft(design as DesignRecipeWithItems)) {
+      return true;
+    }
+
+    const baseline = this.findRevisionBaselineDraft(
+      design as DesignRecipeWithItems,
+      stageDesigns as DesignRecipeWithItems[],
+    );
+    if (!baseline) {
+      return true;
+    }
+
+    return !this.hasSamePublishableRecipeInputs(
+      design as DesignRecipeWithItems,
+      baseline,
+    );
   }
 
   private pickLatestByUpdatedAt<T extends { updatedAt?: Date | string | null }>(

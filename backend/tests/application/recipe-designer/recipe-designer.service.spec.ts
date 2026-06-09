@@ -2708,6 +2708,149 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('inherits existing presentation media when publishing a designer revision', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'adult-series-revision',
+        name: '燕麦鳕鱼猪肉 修订',
+        isCompliant: true,
+        seriesId: 'series-oat-cod-pork',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        revisionBaseRecipeId: 'adult-stage-recipe',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.findFirst
+      .mockResolvedValueOnce({
+        recipeId: 'adult-stage-recipe',
+        version: 5,
+      })
+      .mockResolvedValueOnce({
+        coverImageUrl:
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-cover.jpg',
+        coverTitle: '燕麦鳕鱼猪肉',
+        detailImages: [
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-detail.jpg',
+        ],
+        videoUrl: 'https://video.sevenkitchen.cloud/oat-cod-pork.mp4',
+      });
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-adult-v6',
+      recipeId: 'adult-stage-recipe',
+      version: 6,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-adult-v6',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'adult-series-revision',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'adult-stage-recipe',
+        publishedRecipeVersion: 6,
+      }),
+    );
+
+    await service.publishDraft(
+      'adult-series-revision',
+      { name: '燕麦鳕鱼猪肉' },
+      'staff-2',
+    );
+
+    expect(prisma.recipe.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { recipeId: 'adult-stage-recipe', version: 5 },
+      select: {
+        coverImageUrl: true,
+        coverTitle: true,
+        detailImages: true,
+        videoUrl: true,
+      },
+    });
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipeId: 'adult-stage-recipe',
+        version: 6,
+        coverImageUrl:
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-cover.jpg',
+        coverTitle: '燕麦鳕鱼猪肉',
+        detailImages: [
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-detail.jpg',
+        ],
+        videoUrl: 'https://video.sevenkitchen.cloud/oat-cod-pork.mp4',
+      }),
+    });
+  });
+
+  it('inherits series presentation media when publishing a new life-stage recipe', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'senior-series-design',
+        name: '燕麦鳕鱼猪肉',
+        isCompliant: true,
+        seriesId: 'series-oat-cod-pork',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        coverImageUrl:
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-cover.jpg',
+        coverTitle: '燕麦鳕鱼猪肉',
+        detailImages: [],
+        videoUrl: null,
+      });
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-senior-v1',
+      recipeId: 'senior-series-design',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-senior-v1',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'senior-series-design',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'senior-series-design',
+        publishedRecipeVersion: 1,
+      }),
+    );
+
+    await service.publishDraft(
+      'senior-series-design',
+      { name: '燕麦鳕鱼猪肉' },
+      'staff-2',
+    );
+
+    expect(prisma.recipe.findFirst).toHaveBeenNthCalledWith(2, {
+      where: {
+        seriesId: 'series-oat-cod-pork',
+        coverImageUrl: { not: null },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { version: 'desc' }],
+      select: {
+        coverImageUrl: true,
+        coverTitle: true,
+        detailImages: true,
+        videoUrl: true,
+      },
+    });
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipeId: 'senior-series-design',
+        version: 1,
+        coverImageUrl:
+          'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-cover.jpg',
+        coverTitle: '燕麦鳕鱼猪肉',
+      }),
+    });
+  });
+
   it('publishes series drafts with formal recipe series linkage', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({

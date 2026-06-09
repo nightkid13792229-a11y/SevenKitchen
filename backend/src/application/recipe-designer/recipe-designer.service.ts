@@ -278,6 +278,13 @@ type PublishedSupplementNutrientTarget = {
   unit?: string;
 };
 
+type PublishedRecipePresentationMedia = {
+  coverImageUrl: string | null;
+  coverTitle: string | null;
+  detailImages: Prisma.JsonValue | null;
+  videoUrl: string | null;
+};
+
 type RevisionChangeState = 'NOT_REVISION' | 'UNCHANGED' | 'CHANGED';
 
 type DesignRecipeWorkbenchCard = DesignRecipeWithItems & {
@@ -392,6 +399,12 @@ type EditableDesignRecipeRecord = {
 };
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
+const RECIPE_PRESENTATION_MEDIA_SELECT = {
+  coverImageUrl: true,
+  coverTitle: true,
+  detailImages: true,
+  videoUrl: true,
+} as const;
 const NEGATED_SALT_SEARCH_PHRASES = [
   '不加盐',
   '无盐',
@@ -2123,6 +2136,10 @@ export class RecipeDesignerService {
       draft.targetHealthTags,
     );
     const publishTarget = await this.resolvePublishTarget(draft);
+    const presentationMedia = await this.resolvePublishedRecipePresentationMedia(
+      draft,
+      publishTarget,
+    );
     const publishedSeriesLifeStage = this.resolveDraftSeriesLifeStage(draft);
 
     return this.prisma.$transaction(async (tx) => {
@@ -2144,6 +2161,9 @@ export class RecipeDesignerService {
           description: draft.notes,
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
+          ...this.buildPublishedRecipePresentationMediaCreateData(
+            presentationMedia,
+          ),
           ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
           ...(publishedSeriesLifeStage
             ? { seriesLifeStage: publishedSeriesLifeStage }
@@ -2416,6 +2436,84 @@ export class RecipeDesignerService {
     return {
       recipeId: draft.id,
       version: draft.version,
+    };
+  }
+
+  private async resolvePublishedRecipePresentationMedia(
+    draft: DesignRecipeWithItems,
+    publishTarget: { recipeId: string; version: number },
+  ): Promise<PublishedRecipePresentationMedia | null> {
+    const previousVersionMedia =
+      publishTarget.version > 1
+        ? ((await this.prisma.recipe.findFirst({
+            where: {
+              recipeId: publishTarget.recipeId,
+              version: publishTarget.version - 1,
+            },
+            select: RECIPE_PRESENTATION_MEDIA_SELECT,
+          })) as PublishedRecipePresentationMedia | null)
+        : null;
+
+    const seriesFallbackMedia =
+      draft.seriesId && !previousVersionMedia?.coverImageUrl
+        ? ((await this.prisma.recipe.findFirst({
+            where: {
+              seriesId: draft.seriesId,
+              coverImageUrl: { not: null },
+            },
+            orderBy: [{ updatedAt: 'desc' }, { version: 'desc' }],
+            select: RECIPE_PRESENTATION_MEDIA_SELECT,
+          })) as PublishedRecipePresentationMedia | null)
+        : null;
+
+    return this.mergePublishedRecipePresentationMedia(
+      previousVersionMedia,
+      seriesFallbackMedia,
+    );
+  }
+
+  private mergePublishedRecipePresentationMedia(
+    primary: PublishedRecipePresentationMedia | null,
+    fallback: PublishedRecipePresentationMedia | null,
+  ): PublishedRecipePresentationMedia | null {
+    const merged = {
+      coverImageUrl:
+        normalizeOptionalText(primary?.coverImageUrl) ??
+        normalizeOptionalText(fallback?.coverImageUrl),
+      coverTitle:
+        normalizeOptionalText(primary?.coverTitle) ??
+        normalizeOptionalText(fallback?.coverTitle),
+      detailImages: primary?.detailImages ?? fallback?.detailImages ?? null,
+      videoUrl:
+        normalizeOptionalText(primary?.videoUrl) ??
+        normalizeOptionalText(fallback?.videoUrl),
+    };
+
+    if (
+      !merged.coverImageUrl &&
+      !merged.coverTitle &&
+      merged.detailImages === null &&
+      !merged.videoUrl
+    ) {
+      return null;
+    }
+
+    return merged;
+  }
+
+  private buildPublishedRecipePresentationMediaCreateData(
+    media: PublishedRecipePresentationMedia | null,
+  ): Pick<
+    Prisma.RecipeCreateInput,
+    'coverImageUrl' | 'coverTitle' | 'detailImages' | 'videoUrl'
+  > {
+    return {
+      ...(media?.coverImageUrl ? { coverImageUrl: media.coverImageUrl } : {}),
+      ...(media?.coverTitle ? { coverTitle: media.coverTitle } : {}),
+      ...(media?.detailImages !== null && media?.detailImages !== undefined
+        ? { detailImages: media.detailImages as Prisma.InputJsonValue }
+        : {}),
+      ...(media?.videoUrl ? { videoUrl: media.videoUrl } : {}),
     };
   }
 

@@ -35,6 +35,10 @@
         <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
         <text class="action-text">建议反馈</text>
       </view>
+      <view class="action-item" @tap="goToRecipeDesigner">
+        <image class="action-icon" src="/static/home-actions/recipe-designer.png" mode="aspectFit" />
+        <text class="action-text">食谱设计</text>
+      </view>
     </view>
 
     <!-- 狗狗档案预览 -->
@@ -1434,6 +1438,14 @@ const goToFeedback = () => {
   uni.navigateTo({ url: '/pages/feedback-list/index' })
 }
 
+const goToRecipeDesigner = () => {
+  if (!isLoggedIn.value) {
+    goToLogin()
+    return
+  }
+  uni.navigateTo({ url: '/pages/recipe-designer/list' })
+}
+
 // 跳转到体重管理
 const goToWeightManagement = () => {
   if (!isLoggedIn.value) {
@@ -1617,6 +1629,7 @@ defineOptions({
 .quick-actions {
   display: flex;
   justify-content: space-around;
+  gap: 8px;
   background: white;
   margin: 15px 15px 15px;
   border-radius: 12px;
@@ -1626,6 +1639,8 @@ defineOptions({
 
 .action-item {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: 8px;

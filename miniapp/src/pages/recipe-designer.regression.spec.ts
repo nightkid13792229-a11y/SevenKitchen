@@ -264,6 +264,8 @@ describe('recipe designer editor guardrails', () => {
     const supplementTipBlock = editorSource.match(/const showSupplementLibraryTip = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
     const canCreateSupplementOptionBlock =
       editorSource.match(/const canCreateSupplementOption = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+    const revisionCustomerGuardBlock =
+      ensureEditableBlock.match(/if \(!canCreateRevisionDraft\.value\) \{[\s\S]*?\n  \}/)?.[0] || ''
     const revisionGuardIndex = ensureEditableBlock.indexOf('if (!canCreateRevisionDraft.value)')
     const revisionApiIndex = ensureEditableBlock.indexOf('recipeDesignerApi.createRevisionDraft(draftId.value)')
 
@@ -280,6 +282,7 @@ describe('recipe designer editor guardrails', () => {
     expect(revisionGuardIndex).toBeGreaterThanOrEqual(0)
     expect(revisionApiIndex).toBeGreaterThanOrEqual(0)
     expect(revisionGuardIndex).toBeLessThan(revisionApiIndex)
+    expect(revisionCustomerGuardBlock).toContain('return true')
     expect(supplementTipBlock).toContain('canCreateSupplementOption.value')
     expect(canCreateSupplementOptionBlock).toContain("currentUserRole.value === 'STAFF'")
     expect(canCreateSupplementOptionBlock).toContain("currentUserRole.value === 'ADMIN'")

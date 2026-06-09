@@ -31,8 +31,21 @@ describe('RecipeDesignerController authorization', () => {
     expect(source).toMatch(
       /@Post\('supplement-options'\)\s+@UseGuards\(StaffGuard\)/,
     );
-    expect(source).toMatch(
-      /@Post\('supplement-label\/extract'\)[\s\S]*?@UseGuards\(StaffGuard\)/,
+    const supplementLabelRoute = source.match(
+      /@Post\('supplement-label\/extract'\)([\s\S]*?)async extractSupplementLabel/,
+    );
+    expect(supplementLabelRoute).not.toBeNull();
+
+    const supplementLabelDecoratorBlock = supplementLabelRoute?.[1] ?? '';
+    const supplementLabelGuardIndex =
+      supplementLabelDecoratorBlock.indexOf('@UseGuards(StaffGuard)');
+    const supplementLabelInterceptorIndex =
+      supplementLabelDecoratorBlock.indexOf('@UseInterceptors(');
+
+    expect(supplementLabelDecoratorBlock).toContain('@UseGuards(StaffGuard)');
+    expect(supplementLabelInterceptorIndex).toBeGreaterThanOrEqual(0);
+    expect(supplementLabelGuardIndex).toBeLessThan(
+      supplementLabelInterceptorIndex,
     );
     expect(source).toMatch(
       /@Post\('drafts\/:id\/revisions'\)\s+@UseGuards\(StaffGuard\)/,

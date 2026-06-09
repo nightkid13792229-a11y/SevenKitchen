@@ -684,6 +684,64 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
+    it('uses an authenticated admin-owned dog for detail life-stage matching', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'admin-1',
+        customerId: 'admin-1',
+        role: 'ADMIN',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'admin-dog-1',
+        name: 'Star',
+        breedId: 'small-breed-id',
+        birthday: new Date(Date.now() - 8 * 30.4375 * 24 * 60 * 60 * 1000),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'LOW',
+      });
+      mockPrismaService.dogBreed.findUnique.mockResolvedValue({
+        adultAgeMonths: 10,
+        seniorAgeYears: 11,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-puppy',
+          recipeId: 'puppy-recipe-id',
+          name: '牛肉南瓜鲜食 幼犬',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=admin-dog-1')
+        .set('Authorization', 'Bearer admin-token')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).toHaveBeenCalledWith({
+        where: { id: 'admin-dog-1', ownerId: 'admin-1' },
+        select: {
+          id: true,
+          name: true,
+          breedId: true,
+          birthday: true,
+          lifeStageOverride: true,
+          activityLevel: true,
+        },
+      });
+      expect(response.body.data.id).toBe('puppy-recipe-id');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          dogId: 'admin-dog-1',
+          dogName: 'Star',
+          dogLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
     it('returns an accessible private concrete recipe before public series selection', async () => {
       const concreteRecipeId = 'private-recipe-id';
       await recipeRepository.save({
@@ -943,7 +1001,7 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
-    it('does not use dog profile selection without an authenticated customer', async () => {
+    it('does not use dog profile selection without an authenticated user', async () => {
       mockPrismaService.dog.findFirst.mockResolvedValue({
         id: 'foreign-dog',
         birthday: new Date('2020-01-01T00:00:00.000Z'),

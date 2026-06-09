@@ -477,6 +477,8 @@ interface RecipeLifeStageMatch {
   dogId?: string
   matchedDogId?: string
   dogName?: string
+  dogLifeStage?: string
+  dogLifeStageLabel?: string
   lifeStage?: string
   lifeStageLabel?: string
   message?: string
@@ -557,13 +559,31 @@ const selectedLifeStageLabel = computed(() => {
   return matchedVersion?.label || getLifeStageLabel(selectedStage)
 })
 
+const hasDogSpecificLifeStageMatch = computed(() => {
+  const match = recipe.value.lifeStageMatch
+  return Boolean(
+    match?.dogId ||
+      match?.matchedDogId ||
+      match?.dogLifeStage ||
+      match?.dogName,
+  )
+})
+
 const isCurrentLifeStageMatched = computed(() => {
   const match = recipe.value.lifeStageMatch
   return Boolean(
-    match?.matched === true ||
-      match?.status === 'MATCHED' ||
-      match?.matchType === 'MATCHED',
+    hasDogSpecificLifeStageMatch.value &&
+      (
+        match?.matched === true ||
+        match?.status === 'MATCHED' ||
+        match?.matchType === 'MATCHED'
+      ),
   )
+})
+
+const isLifeStageFallbackSelection = computed(() => {
+  const matchType = recipe.value.lifeStageMatch?.matchType
+  return matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
 })
 
 const hasResolvedLifeStageMatch = computed(() => {
@@ -585,7 +605,7 @@ const lifeStageVersionTitle = computed(() => {
 
 const lifeStageVersionCopy = computed(() => {
   if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
-  if (hasResolvedLifeStageMatch.value && !isCurrentLifeStageMatched.value) {
+  if (hasResolvedLifeStageMatch.value && isLifeStageFallbackSelection.value) {
     return '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
   }
   const matchedDogName = recipe.value.lifeStageMatch?.dogName || selectedDog.value?.name

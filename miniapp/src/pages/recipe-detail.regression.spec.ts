@@ -340,11 +340,28 @@ describe('recipe detail nutrition report regressions', () => {
 
     expect(source).toContain('当前狗狗档案没有完全匹配版本，已展示可用替代版本。')
     expect(copySource).toContain('recipe.value.lifeStageMatch?.message')
-    expect(copySource).toContain('!isCurrentLifeStageMatched.value')
+    expect(copySource).toContain('isLifeStageFallbackSelection.value')
     expect(copySource.indexOf('recipe.value.lifeStageMatch?.message'))
-      .toBeLessThan(copySource.indexOf('!isCurrentLifeStageMatched.value'))
-    expect(copySource.indexOf('!isCurrentLifeStageMatched.value'))
+      .toBeLessThan(copySource.indexOf('isLifeStageFallbackSelection.value'))
+    expect(copySource.indexOf('isLifeStageFallbackSelection.value'))
       .toBeLessThan(copySource.indexOf('selectedDog.value'))
+  })
+
+  it('only labels a life-stage version as matched when backend returns dog-specific match metadata', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const matchSource = source.match(
+      /const hasDogSpecificLifeStageMatch = computed\(\(\) => \{[\s\S]*?const isLifeStageFallbackSelection = computed/,
+    )?.[0] || ''
+
+    expect(matchSource).toContain('hasDogSpecificLifeStageMatch')
+    expect(matchSource).toContain('match?.dogId')
+    expect(matchSource).toContain('match?.matchedDogId')
+    expect(matchSource).toContain('match?.dogLifeStage')
+    expect(matchSource.indexOf('hasDogSpecificLifeStageMatch'))
+      .toBeLessThan(matchSource.indexOf("match?.matchType === 'MATCHED'"))
   })
 
   it('guards recipe detail response ordering before state writes and side effects', () => {

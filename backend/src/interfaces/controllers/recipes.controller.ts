@@ -942,14 +942,15 @@ export class RecipesController {
     }
 
     const user = this.getRequestUser(req);
-    if (user?.role !== 'CUSTOMER' || !user.customerId) {
+    const ownerId = user?.customerId || user?.userId;
+    if (!ownerId) {
       return result;
     }
 
     const dog = await this.prisma.dog.findFirst({
       where: {
         id: dogId,
-        ownerId: user.customerId,
+        ownerId,
       },
       select: {
         id: true,

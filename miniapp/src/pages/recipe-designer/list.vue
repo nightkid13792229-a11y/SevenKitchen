@@ -58,8 +58,8 @@
               <text class="stage-scenario">{{ getScenarioLabel(stage.scenario) }}</text>
             </view>
             <view class="stage-status-block">
-              <text class="status-badge" :class="`stage-status-${stage.status}`">
-                {{ seriesStageStatusLabels[stage.status] || stage.status }}
+              <text class="status-badge" :class="getStageStatusClass(stage)">
+                {{ getStageStatusLabel(stage) }}
               </text>
               <text class="stage-updated">{{ formatDateTime(stage.updatedAt) }}</text>
             </view>
@@ -292,8 +292,9 @@ async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: Reci
   const stageKey = `${seriesItem.id}:${stage.lifeStage}`
   if (openingStageKey.value) return
 
-  if (stage.draftId) {
-    uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${stage.draftId}` })
+  const draftId = getCustomerStageDraftId(stage)
+  if (draftId) {
+    uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
     return
   }
 
@@ -355,6 +356,27 @@ function formatSeriesMeta(seriesItem: RecipeDesignerSeriesCard) {
     return editedText
   }
   return `${editedText} · 已发布 ${seriesItem.publishedStageCount || 0}/5`
+}
+
+function getCustomerStageDraftId(stage: RecipeDesignerSeriesStage) {
+  if (isCustomerMode.value && stage.status === 'PUBLISHED') {
+    return ''
+  }
+  return stage.draftId || ''
+}
+
+function getStageStatusLabel(stage: RecipeDesignerSeriesStage) {
+  if (isCustomerMode.value && stage.status === 'PUBLISHED') {
+    return seriesStageStatusLabels.NOT_DESIGNED
+  }
+  return seriesStageStatusLabels[stage.status] || stage.status
+}
+
+function getStageStatusClass(stage: RecipeDesignerSeriesStage) {
+  const status = isCustomerMode.value && stage.status === 'PUBLISHED'
+    ? 'NOT_DESIGNED'
+    : stage.status
+  return `stage-status-${status}`
 }
 
 function getPublishedTemplateStages(

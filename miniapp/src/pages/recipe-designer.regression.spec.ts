@@ -75,6 +75,14 @@ describe('recipe designer mobile entry', () => {
         ? seriesMetaBlock.indexOf(customerSeriesMetaBlock) + customerSeriesMetaBlock.length
         : 0,
     )
+    const openSeriesStageBlock =
+      listSource.match(/async function openSeriesStage[\s\S]*?\n}\n\nfunction openStageTemplateSheet/)?.[0] || ''
+    const customerStageDraftBlock =
+      listSource.match(/function getCustomerStageDraftId[\s\S]*?\n}\n\nfunction getStageStatusLabel/)?.[0] || ''
+    const stageStatusLabelBlock =
+      listSource.match(/function getStageStatusLabel[\s\S]*?\n}\n\nfunction getStageStatusClass/)?.[0] || ''
+    const stageStatusClassBlock =
+      listSource.match(/function getStageStatusClass[\s\S]*?\n}\n\nfunction getPublishedTemplateStages/)?.[0] || ''
 
     expect(listSource).toContain('isCustomerMode')
     expect(listSource).toContain('按生命阶段维护通用食谱草稿')
@@ -93,6 +101,19 @@ describe('recipe designer mobile entry', () => {
     expect(customerSeriesMetaBlock).not.toContain('已发布')
     expect(internalSeriesMetaBlock).toContain('publishedStageCount')
     expect(internalSeriesMetaBlock).toContain('已发布')
+    expect(listSource).toContain('getStageStatusLabel(stage)')
+    expect(listSource).toContain('getStageStatusClass(stage)')
+    expect(openSeriesStageBlock).toContain('const draftId = getCustomerStageDraftId(stage)')
+    expect(openSeriesStageBlock).toContain('if (draftId)')
+    expect(openSeriesStageBlock).not.toContain('if (stage.draftId)')
+    expect(customerStageDraftBlock).toContain("stage.status === 'PUBLISHED'")
+    expect(customerStageDraftBlock).toContain("return ''")
+    expect(stageStatusLabelBlock).toContain('isCustomerMode.value')
+    expect(stageStatusLabelBlock).toContain("stage.status === 'PUBLISHED'")
+    expect(stageStatusLabelBlock).toContain('seriesStageStatusLabels.NOT_DESIGNED')
+    expect(stageStatusClassBlock).toContain('isCustomerMode.value')
+    expect(stageStatusClassBlock).toContain("stage.status === 'PUBLISHED'")
+    expect(stageStatusClassBlock).toContain("'NOT_DESIGNED'")
   })
 
   it('loads recipe designer series cards instead of standalone draft cards', () => {

@@ -2380,7 +2380,7 @@ describe('RecipeDesignerService', () => {
     ]);
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('design-1');
+    const assessment = await service.assessDraft('design-1', 'staff-1');
 
     expect(assessment.totalWeightG).toBe(100);
     expect(assessment.energyDensityKcalPerKg).toBe(1310);
@@ -2413,7 +2413,7 @@ describe('RecipeDesignerService', () => {
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('empty-stage-design');
+    const assessment = await service.assessDraft('empty-stage-design', 'staff-1');
 
     expect(assessment.totalWeightG).toBe(0);
     expect(prisma.designRecipe.update).toHaveBeenCalledWith({
@@ -2436,7 +2436,7 @@ describe('RecipeDesignerService', () => {
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('design-1');
+    const assessment = await service.assessDraft('design-1', 'staff-1');
 
     expect(assessment.groupedEntries.length).toBeGreaterThan(0);
     expect(assessment).not.toHaveProperty('entries');
@@ -2490,7 +2490,7 @@ describe('RecipeDesignerService', () => {
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('design-1');
+    const assessment = await service.assessDraft('design-1', 'staff-1');
 
     expect(assessment.totalWeightG).toBe(100);
     expect(assessment.items.map((candidate) => candidate.id)).toEqual([
@@ -2518,9 +2518,27 @@ describe('RecipeDesignerService', () => {
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
 
-    const assessment = await service.assessDraft('design-published');
+    const assessment = await service.assessDraft('design-published', 'staff-1');
 
     expect(assessment.totalWeightG).toBe(100);
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+  });
+
+  it('does not let customers assess or mutate another customer private draft', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-other',
+        createdBy: 'customer-2',
+        items: [item({ id: 'item-other', weightG: 100 })],
+      }),
+    );
+
+    await expect(
+      service.assessDraft('design-other', {
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      }),
+    ).rejects.toThrow(NotFoundException);
     expect(prisma.designRecipe.update).not.toHaveBeenCalled();
   });
 
@@ -2580,7 +2598,7 @@ describe('RecipeDesignerService', () => {
     ]);
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('design-1');
+    const assessment = await service.assessDraft('design-1', 'staff-1');
     const iodine = assessment.groupedEntries.find(
       (entry) => entry.nutrientKey === 'iodine',
     );
@@ -2641,7 +2659,7 @@ describe('RecipeDesignerService', () => {
     ]);
     prisma.designRecipe.update.mockResolvedValue(draft());
 
-    const assessment = await service.assessDraft('design-1');
+    const assessment = await service.assessDraft('design-1', 'staff-1');
 
     expect(assessment.energyDensityKcalPerKg).toBeNull();
     expect(assessment.overallStatus).toBe('INCOMPLETE');
@@ -4406,7 +4424,14 @@ describe('RecipeDesignerService', () => {
           where: {
             status: 'ACTIVE',
             deletedAt: null,
-            createdBy: { in: ['staff-1', 'admin-1'] },
+            createdBy: {
+              in: [
+                'staff-1',
+                'admin-1',
+                'recipe-designer-backfill',
+                'recipe-series-backfill',
+              ],
+            },
           },
         }),
       );

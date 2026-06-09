@@ -487,7 +487,7 @@ describe('RecipeDesignerController', () => {
     );
     await controller.updateItem('item-1', { weightG: 120 }, currentUser);
     await controller.removeItem('item-1', currentUser);
-    await controller.assessDraft('design-1');
+    await controller.assessDraft('design-1', currentUser);
     await controller.publishDraft(
       'design-1',
       { reviewNote: 'ok' },
@@ -518,7 +518,10 @@ describe('RecipeDesignerController', () => {
       userId: 'staff-1',
       role: 'STAFF',
     });
-    expect(service.assessDraft).toHaveBeenCalledWith('design-1');
+    expect(service.assessDraft).toHaveBeenCalledWith('design-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
     expect(service.publishDraft).toHaveBeenCalledWith(
       'design-1',
       { reviewNote: 'ok' },

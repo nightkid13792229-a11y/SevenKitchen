@@ -161,6 +161,11 @@ const DESIGN_RECIPE_LIST_SELECT = {
 
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
 const RECIPE_DESIGNER_BACKFILL_USER_ID = 'recipe-designer-backfill';
+const RECIPE_SERIES_BACKFILL_USER_ID = 'recipe-series-backfill';
+const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
+  RECIPE_DESIGNER_BACKFILL_USER_ID,
+  RECIPE_SERIES_BACKFILL_USER_ID,
+];
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
@@ -959,6 +964,15 @@ export class RecipeDesignerService {
     return users.map((user) => user.id);
   }
 
+  private async listInternalRecipeDesignerCreatorIds() {
+    return [
+      ...new Set([
+        ...(await this.listInternalRecipeDesignerUserIds()),
+        ...INTERNAL_RECIPE_DESIGNER_CREATOR_IDS,
+      ]),
+    ];
+  }
+
   private async buildSeriesVisibilityWhere(
     context: RecipeDesignerAccessContext,
   ) {
@@ -974,7 +988,7 @@ export class RecipeDesignerService {
       };
     }
 
-    const internalUserIds = await this.listInternalRecipeDesignerUserIds();
+    const internalUserIds = await this.listInternalRecipeDesignerCreatorIds();
     return {
       ...baseWhere,
       createdBy: { in: internalUserIds },
@@ -990,7 +1004,7 @@ export class RecipeDesignerService {
       return series.createdBy === context.userId;
     }
 
-    const internalUserIds = await this.listInternalRecipeDesignerUserIds();
+    const internalUserIds = await this.listInternalRecipeDesignerCreatorIds();
     return Boolean(
       series.createdBy && internalUserIds.includes(series.createdBy),
     );
@@ -1000,7 +1014,7 @@ export class RecipeDesignerService {
     creatorId?: string | null,
   ) {
     if (!creatorId) return false;
-    if (creatorId === RECIPE_DESIGNER_BACKFILL_USER_ID) {
+    if (INTERNAL_RECIPE_DESIGNER_CREATOR_IDS.includes(creatorId)) {
       return true;
     }
 
@@ -2274,8 +2288,11 @@ export class RecipeDesignerService {
     });
   }
 
-  async assessDraft(id: string): Promise<ClientDesignRecipeAssessmentResult> {
-    const draft = await this.loadDraft(id);
+  async assessDraft(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<ClientDesignRecipeAssessmentResult> {
+    const draft = await this.getDraft(id, access);
     const result = await this.assessLoadedDraft(draft);
 
     if (this.isPublishedDraft(draft)) {

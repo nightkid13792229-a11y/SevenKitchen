@@ -345,8 +345,14 @@ export class RecipeDesignerController {
 
   @Post('drafts/:id/assess')
   @ApiOperation({ summary: 'Assess a recipe design draft against FEDIAF 2025' })
-  async assessDraft(@Param('id') id: string): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.assessDraft(id);
+  async assessDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.assessDraft(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(result);
   }
 

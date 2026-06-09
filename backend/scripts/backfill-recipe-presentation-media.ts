@@ -248,7 +248,7 @@ async function main() {
 
   try {
     await runRecipePresentationMediaBackfill({
-      prisma,
+      prisma: prisma as unknown as RecipePresentationMediaPrisma,
       apply: args.apply,
       seriesId: args.seriesId,
       logger: console,

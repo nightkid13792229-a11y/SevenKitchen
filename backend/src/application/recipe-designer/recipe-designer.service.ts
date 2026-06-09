@@ -1629,11 +1629,11 @@ export class RecipeDesignerService {
     ) {
       return 'NEEDS_CHANGES';
     }
-    if (designs.some((design) => !this.isPublishedDraft(design))) {
-      return 'DRAFT';
-    }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
       return 'DRAFT';
+    }
+    if (designs.some((design) => !this.isPublishedDraft(design))) {
+      return 'MODIFIED';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
       return 'PUBLISHED';

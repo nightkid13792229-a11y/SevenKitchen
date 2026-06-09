@@ -156,6 +156,7 @@ const defaultSeriesStages: RecipeDesignerSeriesStage[] = [
 const seriesStageStatusLabels: Record<RecipeSeriesStageStatus, string> = {
   NOT_DESIGNED: '未设计',
   DRAFT: '草稿',
+  MODIFIED: '已修改',
   IN_REVIEW: '审核中',
   PUBLISHED: '已发布',
   NEEDS_CHANGES: '需修改',
@@ -674,6 +675,11 @@ function formatDateTime(value?: string) {
 .stage-status-DRAFT {
   background: #fff7e6;
   color: #d46b08;
+}
+
+.stage-status-MODIFIED {
+  background: #fffbe6;
+  color: #ad8b00;
 }
 
 .stage-status-IN_REVIEW {

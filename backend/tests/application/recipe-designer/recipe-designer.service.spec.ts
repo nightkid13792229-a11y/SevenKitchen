@@ -4173,7 +4173,7 @@ describe('RecipeDesignerService', () => {
             }),
             expect.objectContaining({
               lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-              status: 'DRAFT',
+              status: 'MODIFIED',
             }),
             expect.objectContaining({
               lifeStage: 'REPRODUCTION',
@@ -4550,7 +4550,7 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
               draftId: 'adult-design',
-              status: 'DRAFT',
+              status: 'MODIFIED',
             }),
           ]),
         }),

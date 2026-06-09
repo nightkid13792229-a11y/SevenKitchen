@@ -10,6 +10,7 @@ export type RecipeSeriesLifeStage =
 export type RecipeSeriesStageStatus =
   | 'NOT_DESIGNED'
   | 'DRAFT'
+  | 'MODIFIED'
   | 'IN_REVIEW'
   | 'PUBLISHED'
   | 'NEEDS_CHANGES';

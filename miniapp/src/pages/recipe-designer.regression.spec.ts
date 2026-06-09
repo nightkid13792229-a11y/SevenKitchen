@@ -66,7 +66,8 @@ describe('recipe designer mobile entry', () => {
   it('supports a customer mode list copy for private life-stage drafts', () => {
     const listCustomerModeBlock = listSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
     const listSupplementLibraryBlock = listSource.match(/const canManageSupplementLibrary = computed\([\s\S]*?\)/)?.[0] || ''
-    const seriesMetaBlock = listSource.match(/function formatSeriesMeta[\s\S]*?\n\}/)?.[0] || ''
+    const seriesMetaBlock =
+      listSource.match(/function formatSeriesMeta[\s\S]*?\n}\n\nfunction getPublishedTemplateStages/)?.[0] || ''
     const customerSeriesMetaBlock = seriesMetaBlock.match(/if \(isCustomerMode\.value\) \{[\s\S]*?\n  \}/)?.[0] || ''
     const internalSeriesMetaBlock = seriesMetaBlock.slice(
       customerSeriesMetaBlock

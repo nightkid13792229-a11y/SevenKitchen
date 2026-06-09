@@ -110,9 +110,18 @@
           <text class="warning-text">
             {{ lifeStageReminderText }}
           </text>
-          <button class="btn-continue" @tap="dismissWarning">
-            我已知晓
-          </button>
+          <view class="warning-actions">
+            <button
+              v-if="recommendedLifeStageOption"
+              class="btn-switch-stage"
+              @tap="switchToRecommendedLifeStage"
+            >
+              切换到{{ recommendedLifeStageOption.label }}
+            </button>
+            <button class="btn-continue" @tap="dismissWarning">
+              我已知晓
+            </button>
+          </view>
         </view>
 
         <view class="dog-feeding-grid">
@@ -913,6 +922,20 @@ const lifeStageVersionOptions = computed(() => {
     label: version.label || getLifeStageLabel(version.lifeStage),
   }))
 })
+const recommendedLifeStageOption = computed(() => {
+  const targetLifeStage = selectedDogRecipeLifeStage.value
+  if (!targetLifeStage) return null
+  const currentLifeStage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
+  const version = recipe.value.availableLifeStageVersions?.find(
+    version => version.lifeStage === selectedDogRecipeLifeStage.value,
+  )
+  if (!version || version.lifeStage === currentLifeStage) return null
+  return {
+    recipeId: version.recipeId,
+    lifeStage: version.lifeStage,
+    label: version.label || getLifeStageLabel(version.lifeStage),
+  }
+})
 const dogProfileFacts = computed(() => {
   if (!selectedDog.value) return []
 
@@ -1098,6 +1121,7 @@ const autoConfigParams = ref<{
   packageCount?: number
   perMealG?: number
 }>({})
+const detailHandoffDogId = ref('')
 
 onMounted(async () => {
   const pages = getCurrentPages()
@@ -1107,6 +1131,7 @@ onMounted(async () => {
 
   recipeId.value = currentPage.options?.recipeId || ''
   selectedLifeStage.value = currentPage.options?.lifeStage || ''
+  detailHandoffDogId.value = currentPage.options?.dogId || ''
 
   // 解析自动配置参数
   if (currentPage.options?.autoConfig === 'true') {
@@ -1290,6 +1315,12 @@ async function selectLifeStageVersion(option: { recipeId?: string; lifeStage: st
   }
 }
 
+async function switchToRecommendedLifeStage() {
+  const option = recommendedLifeStageOption.value
+  if (!option) return
+  await selectLifeStageVersion(option)
+}
+
 async function loadDogs() {
   try {
     const res = await request({
@@ -1299,21 +1330,11 @@ async function loadDogs() {
     if (res.code === 0 && res.data) {
       dogs.value = res.data
 
-      // 自动选中狗狗（优先使用自动配置参数中的 dogId）
+      // 自动选中狗狗（再次购买优先，其次详情页传入，再其次本地缓存）
       if (dogs.value.length > 0 && !selectedDogId.value) {
-        if (autoConfigParams.value.dogId) {
-          // 检查指定的 dogId 是否存在
-          const dogExists = dogs.value.find(d => d.id === autoConfigParams.value.dogId)
-          if (dogExists) {
-            selectDog(autoConfigParams.value.dogId!)
-          } else {
-            // 如果指定的狗狗不存在，选中第一个
-            selectDog(dogs.value[0].id)
-          }
-        } else {
-          // 没有自动配置参数，选中第一个
-          selectDog(dogs.value[0].id)
-        }
+        const preferredDogId = autoConfigParams.value.dogId || detailHandoffDogId.value || uni.getStorageSync('dogId') || ''
+        const preferredDog = dogs.value.find(d => d.id === preferredDogId) || dogs.value[0]
+        selectDog(preferredDog.id)
       }
     }
   } catch (error) {
@@ -3895,12 +3916,32 @@ function goToCreateDog() {
   line-height: 1.5;
 }
 
+.warning-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.btn-switch-stage,
 .btn-continue {
-  margin-top: 10rpx;
+  width: 100%;
+  padding: 16rpx;
+  margin: 0;
+  line-height: 1.2;
   border-radius: 8rpx;
+  font-size: 28rpx;
+  border: none;
+}
+
+.btn-switch-stage {
+  background-color: #2f8f4e;
+  color: #fff;
+}
+
+.btn-continue {
   background-color: #e5a23c;
   color: #fff;
-  font-size: 28rpx;
 }
 
 .btn-secondary-full {

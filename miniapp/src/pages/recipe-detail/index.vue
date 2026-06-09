@@ -25,20 +25,6 @@
       <text class="recipe-name">{{ recipe.name }}</text>
 
       <view
-        v-if="recipe.selectedLifeStage || recipe.availableLifeStageVersions?.length"
-        class="life-stage-version-card"
-        @tap="openLifeStageSelector"
-      >
-        <view class="life-stage-version-main">
-          <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
-          <text class="life-stage-version-copy">{{ lifeStageVersionCopy }}</text>
-        </view>
-        <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
-          切换
-        </text>
-      </view>
-
-      <view
         v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
         class="tags-row"
       >
@@ -51,6 +37,43 @@
             {{ getHealthTagLabel(tag) }}
           </text>
         </view>
+      </view>
+
+      <view
+        v-if="dogs.length > 0"
+        class="recipe-detail-dog-selector"
+      >
+        <scroll-view scroll-x class="recipe-detail-dog-scroll">
+          <view class="recipe-detail-dog-chip-row">
+            <view
+              v-for="dog in dogs"
+              :key="dog.id"
+              :class="['recipe-detail-dog-chip', { active: dog.id === selectedDogId }]"
+              @tap="selectDogForDetail(dog.id)"
+            >
+              <image
+                class="recipe-detail-dog-avatar"
+                :src="resolveDogAvatarSrc(dog.avatarUrl)"
+                mode="aspectFill"
+              />
+              <text class="recipe-detail-dog-chip-name">{{ dog.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view
+        v-if="recipe.selectedLifeStage || recipe.availableLifeStageVersions?.length"
+        class="life-stage-version-card"
+        @tap="openLifeStageSelector"
+      >
+        <view class="life-stage-version-main">
+          <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
+          <text class="life-stage-version-copy">{{ lifeStageVersionCopy }}</text>
+        </view>
+        <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
+          切换
+        </text>
       </view>
 
       <text v-if="recipe.description" class="recipe-description">
@@ -363,6 +386,7 @@ export default {
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
@@ -450,6 +474,9 @@ interface RecipeLifeStageMatch {
   status?: string
   matchType?: string
   matched?: boolean
+  dogId?: string
+  matchedDogId?: string
+  dogName?: string
   lifeStage?: string
   lifeStageLabel?: string
   message?: string
@@ -484,6 +511,7 @@ const shareToken = ref('')
 const dogId = ref<string | null>(null)
 const dogs = ref<any[]>([])
 const selectedDogId = ref('')
+const initialDogId = ref('')
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const selectedManualLifeStage = ref('')
@@ -560,8 +588,9 @@ const lifeStageVersionCopy = computed(() => {
   if (hasResolvedLifeStageMatch.value && !isCurrentLifeStageMatched.value) {
     return '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
   }
-  if (isCurrentLifeStageMatched.value && selectedDog.value) {
-    return `根据${selectedDog.value.name}的档案自动展示该生命阶段版本。`
+  const matchedDogName = recipe.value.lifeStageMatch?.dogName || selectedDog.value?.name
+  if (isCurrentLifeStageMatched.value && matchedDogName) {
+    return `根据${matchedDogName}的档案自动展示该生命阶段版本。`
   }
   return '可切换查看该食谱已开放的生命阶段版本。'
 })
@@ -571,8 +600,9 @@ onMounted(async () => {
   const currentPage = pages[pages.length - 1] as any
   recipeId.value = currentPage.options?.recipeId || currentPage.options?.id || ''
   shareToken.value = currentPage.options?.shareToken || ''
+  initialDogId.value = currentPage.options?.dogId || ''
 
-  dogId.value = uni.getStorageSync('dogId') || null
+  dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null
 
   // 【修复】先加载健康标签映射，再加载食谱详情
   // 这样可以确保在渲染标签时，映射表已经准备好了
@@ -616,6 +646,8 @@ function loadRecipeDetail() {
         id: res.data.selectedRecipeId || res.data.id,
         availableLifeStageVersions: res.data.availableLifeStageVersions || [],
       }
+      const matchedDogId = res.data.lifeStageMatch?.dogId || res.data.lifeStageMatch?.matchedDogId
+      syncSelectedDogFromMatch(matchedDogId)
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       const actionRecipeId = selectedRecipeIdForActions.value
       void trackRecipeView(actionRecipeId, shareToken.value).catch((error: any) => {
@@ -713,16 +745,26 @@ async function loadDogsForDetail() {
     if (res.code === 0 && Array.isArray(res.data)) {
       dogs.value = res.data
       if (dogs.value.length > 0) {
-        selectedDogId.value = dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
+        selectedDogId.value = initialDogId.value || dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
         if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
           selectedDogId.value = dogs.value[0].id
         }
+        dogId.value = selectedDogId.value
+        uni.setStorageSync('dogId', selectedDogId.value)
         loadRecipeDetail()
       }
     }
   } catch (error) {
     console.warn('[RecipeDetail] Load dogs failed:', error)
   }
+}
+
+function syncSelectedDogFromMatch(matchedDogId?: string | null) {
+  if (!matchedDogId) return
+  if (dogs.value.length > 0 && !dogs.value.some((dog) => dog.id === matchedDogId)) return
+  selectedDogId.value = matchedDogId
+  dogId.value = matchedDogId
+  uni.setStorageSync('dogId', matchedDogId)
 }
 
 async function checkFavoriteStatus() {
@@ -834,9 +876,14 @@ function generateDiySheet() {
     return
   }
 
+  const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
+  if (selectedDogId.value) {
+    query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
+  }
+
   // 已登录，直接跳转到DIY配置页面
   uni.navigateTo({
-    url: `/pages/recipe-diy/index?recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`
+    url: `/pages/recipe-diy/index?${query.join('&')}`
   })
 }
 
@@ -858,6 +905,9 @@ function goToOrder() {
   }
 
   const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
+  if (selectedDogId.value) {
+    query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
+  }
   if (recipe.value.selectedLifeStage) {
     query.push(`lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}`)
   }
@@ -866,6 +916,15 @@ function goToOrder() {
   uni.navigateTo({
     url: `/pages/recipe-order/index?${query.join('&')}`
   })
+}
+
+function selectDogForDetail(nextDogId: string) {
+  if (!nextDogId || nextDogId === selectedDogId.value) return
+  selectedDogId.value = nextDogId
+  dogId.value = nextDogId
+  selectedManualLifeStage.value = ''
+  uni.setStorageSync('dogId', nextDogId)
+  loadRecipeDetail()
 }
 
 function openLifeStageSelector() {
@@ -1140,6 +1199,64 @@ function onReviewSubmitted() {
   flex-wrap: wrap;
   gap: 8rpx;
   justify-content: center;
+}
+
+.recipe-detail-dog-selector {
+  margin: 16rpx 0 18rpx;
+}
+
+.recipe-detail-dog-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.recipe-detail-dog-chip-row {
+  display: inline-flex;
+  gap: 12rpx;
+  padding: 0 2rpx;
+}
+
+.recipe-detail-dog-chip {
+  width: 214rpx;
+  min-height: 86rpx;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 12rpx;
+  border: 2rpx solid #edf0f2;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+  vertical-align: middle;
+}
+
+.recipe-detail-dog-chip.active {
+  border-color: #2f8f4e;
+  background-color: #f0faf3;
+}
+
+.recipe-detail-dog-avatar {
+  flex: 0 0 auto;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  background-color: #e8efe9;
+}
+
+.recipe-detail-dog-chip-name {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #303833;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recipe-detail-dog-chip.active .recipe-detail-dog-chip-name {
+  color: #217b3f;
 }
 
 .life-stage-version-card {

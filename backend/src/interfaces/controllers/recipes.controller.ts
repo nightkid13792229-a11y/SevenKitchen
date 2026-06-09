@@ -82,6 +82,13 @@ function generateToken(length: number = 32): string {
 const SERIES_FALLBACK_MESSAGE =
   '当前狗狗档案没有完全匹配版本，已展示可用替代版本。';
 
+type ResolvedSeriesLifeStageRequest = {
+  requestedLifeStage?: string;
+  dogId?: string;
+  dogLifeStage?: RecipeSeriesLifeStage;
+  dogName?: string;
+};
+
 @ApiTags('Recipes')
 @Controller('api/v1/recipes')
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
@@ -925,18 +932,18 @@ export class RecipesController {
     manualLifeStage?: string,
     dogId?: string,
     req?: any,
-  ): Promise<string | undefined> {
-    if (manualLifeStage) {
-      return manualLifeStage;
-    }
+  ): Promise<ResolvedSeriesLifeStageRequest> {
+    const result: ResolvedSeriesLifeStageRequest = {
+      requestedLifeStage: manualLifeStage || undefined,
+    };
 
     if (!dogId) {
-      return undefined;
+      return result;
     }
 
     const user = this.getRequestUser(req);
     if (user?.role !== 'CUSTOMER' || !user.customerId) {
-      return undefined;
+      return result;
     }
 
     const dog = await this.prisma.dog.findFirst({
@@ -946,13 +953,37 @@ export class RecipesController {
       },
       select: {
         id: true,
+        name: true,
+        breedId: true,
         birthday: true,
         lifeStageOverride: true,
         activityLevel: true,
       },
     });
 
-    return dog ? mapDogProfileToSeriesLifeStage(dog) : undefined;
+    if (!dog) {
+      return result;
+    }
+
+    const breed = dog.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dog.breedId },
+          select: {
+            adultAgeMonths: true,
+            seniorAgeYears: true,
+          },
+        })
+      : null;
+    const dogLifeStage = mapDogProfileToSeriesLifeStage({
+      ...dog,
+      breed,
+    });
+    return {
+      requestedLifeStage: result.requestedLifeStage ?? dogLifeStage,
+      dogId: dog.id,
+      dogLifeStage,
+      dogName: dog.name,
+    };
   }
 
   private async resolvePublicSeriesSelection(
@@ -972,11 +1003,12 @@ export class RecipesController {
       return null;
     }
 
-    const requestedLifeStage = await this.resolveRequestedSeriesLifeStage(
+    const lifeStageRequest = await this.resolveRequestedSeriesLifeStage(
       manualLifeStage,
       dogId,
       req,
     );
+    const requestedLifeStage = lifeStageRequest.requestedLifeStage;
     const configuredStages = seriesRecipes.map(
       (recipe) => recipe.seriesLifeStage,
     );
@@ -1000,13 +1032,32 @@ export class RecipesController {
       ) ??
       seriesRecipes[0];
     const selectedLifeStage = selectedRecipe.seriesLifeStage;
-    const matchType: RecipeLifeStageMatchDto['matchType'] = exactMatch
-      ? 'MATCHED'
-      : concreteRecipeMatch
-        ? 'MATCHED'
-        : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
-          ? 'FALLBACK_ADULT'
-          : 'FALLBACK_FIRST';
+    const isManualLifeStageMismatch = Boolean(
+      manualLifeStage &&
+        lifeStageRequest.dogLifeStage &&
+        exactMatch &&
+        selectedLifeStage !== lifeStageRequest.dogLifeStage,
+    );
+    const matchType: RecipeLifeStageMatchDto['matchType'] =
+      exactMatch && isManualLifeStageMismatch
+        ? 'MANUAL_MISMATCH'
+        : exactMatch
+          ? 'MATCHED'
+          : concreteRecipeMatch
+            ? 'MATCHED'
+            : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
+              ? 'FALLBACK_ADULT'
+              : 'FALLBACK_FIRST';
+    const message =
+      matchType === 'MANUAL_MISMATCH'
+        ? this.buildManualLifeStageMismatchMessage(
+            lifeStageRequest.dogName,
+            lifeStageRequest.dogLifeStage,
+            selectedLifeStage,
+          )
+        : matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
+          ? SERIES_FALLBACK_MESSAGE
+          : undefined;
 
     const availableLifeStageVersions = seriesRecipes.map((recipe) => ({
       lifeStage: recipe.seriesLifeStage,
@@ -1021,14 +1072,37 @@ export class RecipesController {
       recipe: this.mapPrismaRecipeToControllerRecipe(selectedRecipe),
       lifeStageMatch: {
         requestedLifeStage,
+        ...(lifeStageRequest.dogId
+          ? {
+              dogId: lifeStageRequest.dogId,
+              dogName: lifeStageRequest.dogName,
+            }
+          : {}),
+        ...(lifeStageRequest.dogLifeStage
+          ? {
+              dogLifeStage: lifeStageRequest.dogLifeStage,
+              dogLifeStageLabel: this.getSeriesLifeStageLabel(
+                lifeStageRequest.dogLifeStage,
+              ),
+            }
+          : {}),
         selectedLifeStage,
         matchType,
-        ...(matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
-          ? { message: SERIES_FALLBACK_MESSAGE }
-          : {}),
+        ...(message ? { message } : {}),
       },
       availableLifeStageVersions,
     };
+  }
+
+  private buildManualLifeStageMismatchMessage(
+    dogName: string | undefined,
+    dogLifeStage: string | undefined,
+    selectedLifeStage: string | undefined,
+  ): string {
+    const dogLabel = this.getSeriesLifeStageLabel(dogLifeStage) ?? '未知阶段';
+    const selectedLabel =
+      this.getSeriesLifeStageLabel(selectedLifeStage) ?? '当前阶段';
+    return `${dogName || '当前狗狗'}的档案对应${dogLabel}，当前手动展示${selectedLabel}版本，请确认是否适合。`;
   }
 
   private mapPrismaRecipeToControllerRecipe(recipe: any): Recipe {

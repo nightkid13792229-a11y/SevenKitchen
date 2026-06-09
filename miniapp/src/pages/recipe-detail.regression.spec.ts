@@ -246,6 +246,89 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).toContain('recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}')
   })
 
+  it('lets customers switch the dog used for detail life-stage matching', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+    const selectDogSource = source.match(
+      /function selectDogForDetail[\s\S]*?\n}\n\nfunction openLifeStageSelector/,
+    )?.[0] || ''
+
+    expect(templateSource).toContain('recipe-detail-dog-selector')
+    expect(templateSource).toContain('v-for="dog in dogs"')
+    expect(templateSource).toContain('recipe-detail-dog-avatar')
+    expect(templateSource).toContain(':src="resolveDogAvatarSrc(dog.avatarUrl)"')
+    expect(templateSource).toContain("@tap=\"selectDogForDetail(dog.id)\"")
+    expect(templateSource).toContain("['recipe-detail-dog-chip', { active: dog.id === selectedDogId }]")
+    expect(templateSource).not.toContain('匹配狗狗')
+    expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'")
+    expect(source).toContain('function selectDogForDetail')
+    expect(selectDogSource).toContain('uni.setStorageSync(\'dogId\', nextDogId)')
+    expect(selectDogSource).toContain("selectedManualLifeStage.value = ''")
+    expect(selectDogSource).toContain('loadRecipeDetail()')
+  })
+
+  it('uses the dog id from page options and backend match metadata before cached dog state', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const mountedSource = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || ''
+    const loadRecipeDetailSource = source.match(
+      /function loadRecipeDetail\(\) \{[\s\S]*?\n}\n\nasync function preGenerateShareToken/,
+    )?.[0] || ''
+    const loadDogsSource = source.match(
+      /async function loadDogsForDetail\(\)[\s\S]*?\n}\n\nasync function checkFavoriteStatus/,
+    )?.[0] || ''
+
+    expect(source).toContain("const initialDogId = ref('')")
+    expect(mountedSource).toContain("initialDogId.value = currentPage.options?.dogId || ''")
+    expect(mountedSource).toContain("dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null")
+    expect(loadRecipeDetailSource).toContain('const matchedDogId = res.data.lifeStageMatch?.dogId || res.data.lifeStageMatch?.matchedDogId')
+    expect(loadRecipeDetailSource).toContain('syncSelectedDogFromMatch(matchedDogId)')
+    expect(loadDogsSource).toContain('initialDogId.value || dogId.value || uni.getStorageSync(\'dogId\') || dogs.value[0].id')
+    expect(source).toContain('function syncSelectedDogFromMatch')
+  })
+
+  it('places health tags directly under the recipe name before dog and life-stage controls', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+    const recipeNameIndex = templateSource.indexOf('class="recipe-name"')
+    const tagsIndex = templateSource.indexOf('class="tags-row"')
+    const dogSelectorIndex = templateSource.indexOf('class="recipe-detail-dog-selector"')
+    const lifeStageIndex = templateSource.indexOf('class="life-stage-version-card"')
+
+    expect(recipeNameIndex).toBeGreaterThan(-1)
+    expect(tagsIndex).toBeGreaterThan(recipeNameIndex)
+    expect(dogSelectorIndex).toBeGreaterThan(tagsIndex)
+    expect(lifeStageIndex).toBeGreaterThan(dogSelectorIndex)
+    expect(templateSource).not.toContain('recipe-detail-dog-selector-title')
+    expect(templateSource).not.toContain('recipe-detail-dog-selector-current')
+  })
+
+  it('hands the selected dog from detail into DIY and finished-order flows', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const diySource = source.match(
+      /function generateDiySheet\(\)[\s\S]*?\n}\n\nfunction goToOrder/,
+    )?.[0] || ''
+    const orderSource = source.match(
+      /function goToOrder\(\)[\s\S]*?\n}\n\nfunction selectDogForDetail/,
+    )?.[0] || ''
+
+    expect(diySource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
+    expect(diySource).toContain("url: `/pages/recipe-diy/index?${query.join('&')}`")
+    expect(orderSource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
+    expect(orderSource).toContain('lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}')
+  })
+
   it('uses a non-matched default life stage copy before dog-specific matched copy', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),

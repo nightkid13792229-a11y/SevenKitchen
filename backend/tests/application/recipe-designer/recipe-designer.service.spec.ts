@@ -4575,6 +4575,157 @@ describe('RecipeDesignerService', () => {
       );
     });
 
+    it('keeps an unchanged active revision stage published in the series list', async () => {
+      const publishedItem = item({
+        id: 'published-item',
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-1',
+        weightG: 128,
+        preparationMethod: 'STEAMED',
+        sortOrder: 1,
+      });
+      const publishedDesign = draft({
+        id: 'published-adult-design',
+        name: '燕麦鳕鱼猪肉',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'adult-recipe-id',
+        publishedRecipeVersion: 1,
+        publishedAt: new Date('2026-06-08T08:00:00.000Z'),
+        items: [publishedItem],
+      });
+      const unchangedRevision = draft({
+        id: 'adult-revision-design',
+        name: '燕麦鳕鱼猪肉 修订',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        status: 'COMPLIANT',
+        revisionOfDesignRecipeId: 'published-adult-design',
+        revisionBaseRecipeId: 'adult-recipe-id',
+        updatedAt: new Date('2026-06-09T04:00:00.000Z'),
+        items: [
+          item({
+            id: 'revision-item',
+            ingredientId: 'ingredient-1',
+            nutritionFoodId: 'food-1',
+            weightG: 128,
+            preparationMethod: 'STEAMED',
+            sortOrder: 1,
+          }),
+        ],
+      });
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        {
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-09T04:00:00.000Z'),
+          designs: [unchangedRevision, publishedDesign],
+          recipes: [
+            {
+              recipeId: 'adult-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              version: 1,
+              updatedAt: new Date('2026-06-08T08:00:00.000Z'),
+            },
+          ],
+        },
+      ]);
+
+      const cards = await service.listSeries('staff-1');
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          publishedStageCount: 1,
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              draftId: 'published-adult-design',
+              status: 'PUBLISHED',
+              recipeId: 'adult-recipe-id',
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('marks a published stage modified when its active revision changes publishable inputs', async () => {
+      const publishedDesign = draft({
+        id: 'published-adult-design',
+        name: '燕麦鳕鱼猪肉',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'adult-recipe-id',
+        publishedRecipeVersion: 1,
+        publishedAt: new Date('2026-06-08T08:00:00.000Z'),
+        items: [
+          item({
+            id: 'published-item',
+            ingredientId: 'ingredient-1',
+            nutritionFoodId: 'food-1',
+            weightG: 128,
+            preparationMethod: 'STEAMED',
+            sortOrder: 1,
+          }),
+        ],
+      });
+      const changedRevision = draft({
+        id: 'adult-revision-design',
+        name: '燕麦鳕鱼猪肉 修订',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        status: 'COMPLIANT',
+        revisionOfDesignRecipeId: 'published-adult-design',
+        revisionBaseRecipeId: 'adult-recipe-id',
+        items: [
+          item({
+            id: 'revision-item',
+            ingredientId: 'ingredient-1',
+            nutritionFoodId: 'food-1',
+            weightG: 148,
+            preparationMethod: 'STEAMED',
+            sortOrder: 1,
+          }),
+        ],
+      });
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        {
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-09T04:00:00.000Z'),
+          designs: [changedRevision, publishedDesign],
+          recipes: [
+            {
+              recipeId: 'adult-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              version: 1,
+              updatedAt: new Date('2026-06-08T08:00:00.000Z'),
+            },
+          ],
+        },
+      ]);
+
+      const cards = await service.listSeries('staff-1');
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'MODIFIED',
+            }),
+          ]),
+        }),
+      );
+    });
+
     it('reuses an existing unpublished stage draft', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue({
         id: 'series-1',

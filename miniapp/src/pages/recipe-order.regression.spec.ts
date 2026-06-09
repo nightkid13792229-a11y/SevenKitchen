@@ -153,6 +153,36 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('lifeStage: selectedLifeStage.value');
   });
 
+  it('offers a quick switch to the selected dog matched life-stage recipe version from the warning', () => {
+    const warningSource = templateSource.match(
+      /<view v-if="!isLifeStageMatch && showWarning"[\s\S]*?<\/view>\s*<\/view>\s*<view class="dog-feeding-grid">/,
+    )?.[0] || '';
+    const switchSource = source.match(
+      /async function switchToRecommendedLifeStage[\s\S]*?\n}\n\nasync function loadDogs/,
+    )?.[0] || '';
+
+    expect(warningSource).toContain('v-if="recommendedLifeStageOption"');
+    expect(warningSource).toContain('@tap="switchToRecommendedLifeStage"');
+    expect(warningSource).toContain("切换到{{ recommendedLifeStageOption.label }}");
+    expect(source).toContain('const recommendedLifeStageOption = computed');
+    expect(source).toContain('version.lifeStage === selectedDogRecipeLifeStage.value');
+    expect(switchSource).toContain('const option = recommendedLifeStageOption.value');
+    expect(switchSource).toContain('await selectLifeStageVersion(option)');
+  });
+
+  it('defaults the selected dog from repurchase, detail handoff, cached dog, then first dog', () => {
+    const mountedSource = source.match(/onMounted\(async \(\) => \{[\s\S]*?\n}\)/)?.[0] || '';
+    const loadDogsSource = source.match(
+      /async function loadDogs\(\)[\s\S]*?\n}\n\n\/\/ ========== 生命阶段校验逻辑 ==========/
+    )?.[0] || '';
+
+    expect(source).toContain("const detailHandoffDogId = ref('')");
+    expect(mountedSource).toContain("detailHandoffDogId.value = currentPage.options?.dogId || ''");
+    expect(loadDogsSource).toContain('const preferredDogId = autoConfigParams.value.dogId || detailHandoffDogId.value || uni.getStorageSync(\'dogId\') || \'\'');
+    expect(loadDogsSource).toContain('const preferredDog = dogs.value.find(d => d.id === preferredDogId) || dogs.value[0]');
+    expect(loadDogsSource).toContain('selectDog(preferredDog.id)');
+  });
+
   it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {
     expect(templateSource).not.toContain('食谱信息');
     expect(templateSource).toContain('营养标准');

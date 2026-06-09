@@ -108,7 +108,7 @@
               v-for="recipe in exclusiveRecipes"
               :key="`exclusive-${recipe.id}`"
               class="recommend-card"
-              @tap="viewRecipe(recipe.id)"
+              @tap="viewRecipe(recipe.id, recommendedDog?.id || activeDogId)"
             >
               <image v-if="recipe.displayCoverUrl" class="recommend-cover" :src="recipe.displayCoverUrl" mode="aspectFill" />
               <view v-else class="recommend-cover placeholder">
@@ -131,7 +131,7 @@
               v-for="recipe in generalRecommendedRecipes"
               :key="`general-${recipe.id}`"
               class="recommend-card compact"
-              @tap="viewRecipe(recipe.id)"
+              @tap="viewRecipe(recipe.id, recommendedDog?.id || activeDogId)"
             >
               <image v-if="recipe.displayCoverUrl" class="recommend-cover" :src="recipe.displayCoverUrl" mode="aspectFill" />
               <view class="recommend-body">
@@ -1328,9 +1328,14 @@ function resetFilters() {
 }
 
 // 查看食谱详情
-function viewRecipe(recipeId: string) {
+function viewRecipe(recipeId: string, dogId?: string | null) {
+  const query = [`recipeId=${encodeURIComponent(recipeId)}`]
+  if (dogId) {
+    query.push(`dogId=${encodeURIComponent(dogId)}`)
+  }
+
   uni.navigateTo({
-    url: `/pages/recipe-detail/index?recipeId=${recipeId}`
+    url: `/pages/recipe-detail/index?${query.join('&')}`
   })
 }
 

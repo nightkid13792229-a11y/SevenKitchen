@@ -49,7 +49,13 @@ export const SCENARIO_TO_SERIES_LIFE_STAGE: Record<
   ADULT_MER_110: RecipeLifeStage.HIGH_ACTIVITY_ADULT,
 };
 
-const SENIOR_AGE_MONTHS = 84;
+const DEFAULT_ADULT_AGE_MONTHS = 12;
+const DEFAULT_SENIOR_AGE_YEARS = 7;
+
+interface DogBreedLifeStageThresholds {
+  adultAgeMonths?: number | null;
+  seniorAgeYears?: number | null;
+}
 
 export function mapScenarioToSeriesLifeStage(
   scenario: FediafDogScenarioForSeries,
@@ -70,6 +76,9 @@ export function mapDogProfileToSeriesLifeStage(dog: {
   birthday?: Date | string | null;
   lifeStageOverride?: string | null;
   activityLevel?: string | null;
+  adultAgeMonths?: number | null;
+  seniorAgeYears?: number | null;
+  breed?: DogBreedLifeStageThresholds | null;
   now?: Date;
 }): RecipeSeriesLifeStage {
   const override =
@@ -89,13 +98,22 @@ export function mapDogProfileToSeriesLifeStage(dog: {
       : RecipeLifeStage.HIGH_ACTIVITY_ADULT;
   }
 
-  const ageWeeks = getAgeWeeks(dog.birthday, dog.now ?? new Date());
-  if (override === 'PUPPY' || (ageWeeks !== null && ageWeeks < 52)) {
+  const now = dog.now ?? new Date();
+  const ageWeeks = getAgeWeeks(dog.birthday, now);
+  if (override === 'PUPPY') {
     return ageWeeks !== null && ageWeeks < 14
       ? RecipeLifeStage.PUPPY_UNDER_14_WEEKS
       : RecipeLifeStage.PUPPY_14_WEEKS_PLUS;
   }
-  if (isSeniorAge(dog.birthday, dog.now ?? new Date())) {
+  if (ageWeeks !== null && ageWeeks < 14) {
+    return RecipeLifeStage.PUPPY_UNDER_14_WEEKS;
+  }
+
+  const ageMonths = getAgeMonths(dog.birthday, now);
+  if (ageMonths !== null && ageMonths < resolveAdultAgeMonths(dog)) {
+    return RecipeLifeStage.PUPPY_14_WEEKS_PLUS;
+  }
+  if (isSeniorAge(ageMonths, resolveSeniorAgeYears(dog))) {
     return RecipeLifeStage.LOW_ACTIVITY_ADULT_OR_SENIOR;
   }
 
@@ -121,9 +139,35 @@ function isLowActivity(activityLevel?: string | null): boolean {
   return activityLevel === 'RESTING' || activityLevel === 'LOW';
 }
 
-function isSeniorAge(birthday?: Date | string | null, now: Date = new Date()): boolean {
-  const ageMonths = getAgeMonths(birthday, now);
-  return ageMonths !== null && ageMonths >= SENIOR_AGE_MONTHS;
+function isSeniorAge(ageMonths: number | null, seniorAgeYears: number): boolean {
+  return ageMonths !== null && ageMonths >= seniorAgeYears * 12;
+}
+
+function resolveAdultAgeMonths(dog: {
+  adultAgeMonths?: number | null;
+  breed?: DogBreedLifeStageThresholds | null;
+}): number {
+  return (
+    normalizePositiveNumber(dog.breed?.adultAgeMonths) ??
+    normalizePositiveNumber(dog.adultAgeMonths) ??
+    DEFAULT_ADULT_AGE_MONTHS
+  );
+}
+
+function resolveSeniorAgeYears(dog: {
+  seniorAgeYears?: number | null;
+  breed?: DogBreedLifeStageThresholds | null;
+}): number {
+  return (
+    normalizePositiveNumber(dog.breed?.seniorAgeYears) ??
+    normalizePositiveNumber(dog.seniorAgeYears) ??
+    DEFAULT_SENIOR_AGE_YEARS
+  );
+}
+
+function normalizePositiveNumber(value?: number | null): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
 function getAgeMonths(

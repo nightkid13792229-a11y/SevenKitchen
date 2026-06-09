@@ -19,8 +19,17 @@ export interface RecipeLifeStageVersionDto {
 
 export interface RecipeLifeStageMatchDto {
   requestedLifeStage?: string;
+  dogId?: string;
+  dogName?: string;
+  dogLifeStage?: string;
+  dogLifeStageLabel?: string;
   selectedLifeStage?: string;
-  matchType: 'MATCHED' | 'FALLBACK_ADULT' | 'FALLBACK_FIRST' | 'LEGACY';
+  matchType:
+    | 'MATCHED'
+    | 'MANUAL_MISMATCH'
+    | 'FALLBACK_ADULT'
+    | 'FALLBACK_FIRST'
+    | 'LEGACY';
   message?: string;
 }
 

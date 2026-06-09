@@ -76,9 +76,18 @@
       <text class="warning-text">
         {{ lifeStageReminderText }}
       </text>
-      <button class="btn-continue" @tap="dismissWarning">
-        我已知晓
-      </button>
+      <view class="warning-actions">
+        <button
+          v-if="recommendedLifeStageOption"
+          class="btn-switch-stage"
+          @tap="switchToRecommendedLifeStage"
+        >
+          切换到{{ recommendedLifeStageOption.label }}
+        </button>
+        <button class="btn-continue" @tap="dismissWarning">
+          我已知晓
+        </button>
+      </view>
     </view>
 
     <!-- 确定饭量 -->
@@ -306,6 +315,10 @@ interface Dog {
 
 interface Recipe {
   id: string
+  selectedRecipeId?: string
+  selectedLifeStage?: string
+  selectedLifeStageLabel?: string
+  availableLifeStageVersions?: RecipeLifeStageVersion[]
   name: string
   energyDensityKcalPerKg: number
   nutritionStandard: string
@@ -316,9 +329,22 @@ interface Recipe {
   targetHealthTags: string[]
 }
 
+interface RecipeLifeStageVersion {
+  recipeId?: string
+  lifeStage: string
+  label?: string
+  isSelected?: boolean
+  selected?: boolean
+}
+
 const recipeId = ref('')
+const selectedLifeStage = ref('')
 const recipe = ref<Recipe>({
   id: '',
+  selectedRecipeId: undefined,
+  selectedLifeStage: undefined,
+  selectedLifeStageLabel: undefined,
+  availableLifeStageVersions: [],
   name: '',
   energyDensityKcalPerKg: 0,
   nutritionStandard: '',
@@ -358,6 +384,18 @@ const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: selectedDog.value?.name,
 }))
+const recommendedLifeStageOption = computed(() => {
+  const targetLifeStage = selectedDogRecipeLifeStage.value
+  if (!targetLifeStage) return null
+  const version = recipe.value.availableLifeStageVersions?.find(
+    version => version.lifeStage === selectedDogRecipeLifeStage.value,
+  )
+  if (!version || version.lifeStage === recipe.value.selectedLifeStage) return null
+  return {
+    ...version,
+    label: version.label || getLifeStageLabel(version.lifeStage),
+  }
+})
 
 // 饭量相关
 const dogCalcResult = ref<any>(null)
@@ -391,6 +429,7 @@ const showShelfLife = ref(false)
 
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
+const initialDogId = ref('')
 
 onMounted(async () => {
   console.log('========== [RecipeDiy] onMounted ==========')
@@ -402,6 +441,8 @@ onMounted(async () => {
   console.log('[页面参数]', options)
 
   recipeId.value = options.recipeId || ''
+  initialDogId.value = options.dogId || ''
+  selectedLifeStage.value = options.lifeStage || ''
   console.log('[食谱ID]', recipeId.value)
 
   if (recipeId.value) {
@@ -444,13 +485,23 @@ async function loadRecipe() {
   try {
     const res = await request({
       url: `/recipes/${recipeId.value}`,
-      method: 'GET'
+      method: 'GET',
+      data: selectedLifeStage.value ? { lifeStage: selectedLifeStage.value } : {}
     })
 
     console.log('[RecipeDiy] loadRecipe API响应:', res)
 
     if (res.code === 0 && res.data) {
-      recipe.value = res.data
+      recipe.value = {
+        ...res.data,
+        availableLifeStageVersions: res.data.availableLifeStageVersions || [],
+      }
+      if (!selectedLifeStage.value && res.data.selectedLifeStage) {
+        selectedLifeStage.value = res.data.selectedLifeStage
+      }
+      if (res.data.selectedRecipeId || res.data.id) {
+        recipeId.value = res.data.selectedRecipeId || res.data.id
+      }
       console.log('[RecipeDiy] 食谱信息加载成功:', res.data)
     }
   } catch (error) {
@@ -502,16 +553,17 @@ async function loadDogs() {
       dogs.value = res.data
       console.log('[RecipeDiy] 狗狗列表加载成功, 数量:', res.data.length)
 
-      // 自动选择第一只狗狗（如果还没有选择狗狗）
+      // 自动选择狗狗（优先使用详情页传入，其次使用本地缓存）
       if (res.data.length > 0 && !selectedDogId.value) {
-        const firstDog = res.data[0]
-        console.log('[RecipeDiy] 自动选择第一只狗狗:', firstDog)
+        const preferredDogId = initialDogId.value || uni.getStorageSync('dogId') || ''
+        const preferredDog = res.data.find((dog: Dog) => dog.id === preferredDogId) || res.data[0]
+        console.log('[RecipeDiy] 自动选择狗狗:', preferredDog)
 
-        selectedDogId.value = firstDog.id
-        selectedDog.value = firstDog
+        selectedDogId.value = preferredDog.id
+        selectedDog.value = preferredDog
 
         // 调用饭量计算API
-        await loadDogCalc(firstDog.id)
+        await loadDogCalc(preferredDog.id)
 
         // 校验生命阶段
         checkLifeStageMatch()
@@ -642,6 +694,32 @@ function checkLifeStageMatch() {
   })
 
   console.log('[RecipeDiy] checkLifeStageMatch 结束')
+}
+
+function resetDiyLifeStageDependentState() {
+  dogCalcResult.value = null
+  displayDailyIntakeG.value = 0
+  perMealG.value = 0
+  isPerMealModified.value = false
+  isEditingPerMeal.value = false
+}
+
+async function switchToRecommendedLifeStage() {
+  const option = recommendedLifeStageOption.value
+  if (!option?.lifeStage) return
+
+  selectedLifeStage.value = option.lifeStage
+  if (option.recipeId) {
+    recipeId.value = option.recipeId
+  }
+  showWarning.value = true
+  resetDiyLifeStageDependentState()
+
+  await loadRecipe()
+  if (selectedDogId.value) {
+    await loadDogCalc(selectedDogId.value)
+  }
+  checkLifeStageMatch()
 }
 
 function dismissWarning() {
@@ -1078,15 +1156,30 @@ function getNutritionStandardLabel(standard: string): string {
   margin-bottom: 8rpx;
 }
 
+.warning-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.btn-switch-stage,
 .btn-continue {
   width: 100%;
-  margin-top: 16rpx;
   padding: 16rpx;
-  background-color: #faad14;
-  color: #fff;
   border-radius: 8rpx;
   font-size: 28rpx;
   border: none;
+}
+
+.btn-switch-stage {
+  background-color: #2f8f4e;
+  color: #fff;
+}
+
+.btn-continue {
+  background-color: #faad14;
+  color: #fff;
 }
 
 /* 饭量配置 */

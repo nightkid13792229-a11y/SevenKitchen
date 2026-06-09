@@ -74,6 +74,9 @@ describe('RecipesController (e2e)', () => {
     dog: {
       findFirst: jest.fn(),
     },
+    dogBreed: {
+      findUnique: jest.fn(),
+    },
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -142,6 +145,7 @@ describe('RecipesController (e2e)', () => {
     mockPrismaService.recipe.findMany.mockResolvedValue([]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
     mockPrismaService.dog.findFirst.mockResolvedValue(null);
+    mockPrismaService.dogBreed.findUnique.mockResolvedValue(null);
     mockPrismaService.recipeShareToken.findFirst.mockResolvedValue(null);
     mockPrismaService.recipe.findFirst.mockImplementation(
       async (args?: { where?: { recipeId?: string } }) => {
@@ -568,6 +572,8 @@ describe('RecipesController (e2e)', () => {
       });
       mockPrismaService.dog.findFirst.mockResolvedValue({
         id: 'dog-1',
+        name: '草莓',
+        breedId: null,
         birthday: new Date('2020-01-01T00:00:00.000Z'),
         lifeStageOverride: 'SENIOR',
         activityLevel: 'LOW',
@@ -593,6 +599,8 @@ describe('RecipesController (e2e)', () => {
         where: { id: 'dog-1', ownerId: 'customer-1' },
         select: {
           id: true,
+          name: true,
+          breedId: true,
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,
@@ -605,6 +613,8 @@ describe('RecipesController (e2e)', () => {
         'LOW_ACTIVITY_ADULT_OR_SENIOR',
       );
       expect(response.body.data.lifeStageMatch.matchType).toBe('MATCHED');
+      expect(response.body.data.lifeStageMatch.dogId).toBe('dog-1');
+      expect(response.body.data.lifeStageMatch.dogName).toBe('草莓');
       expect(response.body.data.availableLifeStageVersions).toEqual([
         expect.objectContaining({
           lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -617,6 +627,61 @@ describe('RecipesController (e2e)', () => {
           isCurrent: true,
         }),
       ]);
+    });
+
+    it('uses breed adult age thresholds when matching a dog to a series life stage', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'dog-giant-puppy',
+        name: '巨宝',
+        breedId: 'giant-breed-id',
+        birthday: new Date(Date.now() - 15 * 30.4375 * 24 * 60 * 60 * 1000),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'HIGH',
+      });
+      mockPrismaService.dogBreed.findUnique.mockResolvedValue({
+        adultAgeMonths: 18,
+        seniorAgeYears: 7,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-puppy',
+          recipeId: 'puppy-recipe-id',
+          name: '牛肉南瓜鲜食 幼犬',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=dog-giant-puppy')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(mockPrismaService.dogBreed.findUnique).toHaveBeenCalledWith({
+        where: { id: 'giant-breed-id' },
+        select: {
+          adultAgeMonths: true,
+          seniorAgeYears: true,
+        },
+      });
+      expect(response.body.data.id).toBe('puppy-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('PUPPY_14_WEEKS_PLUS');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          dogId: 'dog-giant-puppy',
+          dogName: '巨宝',
+          dogLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
     });
 
     it('returns an accessible private concrete recipe before public series selection', async () => {
@@ -796,6 +861,49 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
+    it('warns when a manual lifeStage differs from the owned dog life stage', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        name: '草莓',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'ADULT',
+        activityLevel: 'HIGH',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-puppy-under-14-weeks',
+          recipeId: 'puppy-under-14-weeks-recipe-id',
+          name: '牛肉南瓜鲜食 小于 14 周幼犬',
+          seriesLifeStage: 'PUPPY_UNDER_14_WEEKS',
+          applicableLifeStages: ['PUPPY_UNDER_14_WEEKS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=dog-1&lifeStage=PUPPY_UNDER_14_WEEKS')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('puppy-under-14-weeks-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('PUPPY_UNDER_14_WEEKS');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_UNDER_14_WEEKS',
+          dogLifeStage: 'HIGH_ACTIVITY_ADULT',
+          selectedLifeStage: 'PUPPY_UNDER_14_WEEKS',
+          matchType: 'MANUAL_MISMATCH',
+          message:
+            '草莓的档案对应普通成年犬，当前手动展示小于 14 周幼犬版本，请确认是否适合。',
+        }),
+      );
+    });
+
     it('uses an owned dog life stage before a public concrete recipe id default', async () => {
       mockJwtAuthService.validateToken.mockReturnValue({
         userId: 'customer-1',
@@ -893,6 +1001,8 @@ describe('RecipesController (e2e)', () => {
         where: { id: 'foreign-dog', ownerId: 'customer-1' },
         select: {
           id: true,
+          name: true,
+          breedId: true,
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,

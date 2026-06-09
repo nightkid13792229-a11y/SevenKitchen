@@ -10,16 +10,16 @@ import { RecipeDesignerController } from '../../../src/interfaces/controllers/re
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('RecipeDesignerController authorization', () => {
-  it('requires authentication and staff guards', () => {
+  it('requires authentication at class level while leaving staff restrictions to selected methods', () => {
     const guards = Reflect.getMetadata(
       GUARDS_METADATA,
       RecipeDesignerController,
     );
 
-    expect(guards).toEqual([AuthGuard, StaffGuard]);
+    expect(guards).toEqual([AuthGuard]);
   });
 
-  it('requires admin role before publishing a design recipe', () => {
+  it('keeps supplement maintenance and revision routes staff-only', () => {
     const source = readFileSync(
       resolve(
         process.cwd(),
@@ -29,7 +29,27 @@ describe('RecipeDesignerController authorization', () => {
     );
 
     expect(source).toMatch(
-      /@Post\('drafts\/:id\/publish'\)\s+@Roles\('ADMIN'\)/,
+      /@Post\('supplement-options'\)\s+@UseGuards\(StaffGuard\)/,
+    );
+    expect(source).toMatch(
+      /@Post\('supplement-label\/extract'\)[\s\S]*?@UseGuards\(StaffGuard\)/,
+    );
+    expect(source).toMatch(
+      /@Post\('drafts\/:id\/revisions'\)\s+@UseGuards\(StaffGuard\)/,
+    );
+  });
+
+  it('keeps publishing protected by StaffGuard plus admin role metadata', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(
+      /@Post\('drafts\/:id\/publish'\)\s+@UseGuards\(StaffGuard\)\s+@Roles\('ADMIN'\)/,
     );
   });
 
@@ -151,18 +171,33 @@ describe('RecipeDesignerController', () => {
       controller.deleteDraft('design-1', currentUser),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
 
-    expect(service.listDrafts).toHaveBeenCalledWith('staff-1');
-    expect(service.getDraft).toHaveBeenCalledWith('design-1', 'staff-1');
+    expect(service.listDrafts).toHaveBeenCalledWith({
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
+    expect(service.getDraft).toHaveBeenCalledWith('design-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
     expect(service.createDraft).toHaveBeenCalledWith(
       { name: 'new', scenario: 'ADULT_MER_110' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
     expect(service.updateDraft).toHaveBeenCalledWith(
       'design-1',
       { name: 'new' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
-    expect(service.deleteDraft).toHaveBeenCalledWith('design-1', 'staff-1');
+    expect(service.deleteDraft).toHaveBeenCalledWith('design-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
   });
 
   it('delegates series workbench endpoints with CurrentUser ids', async () => {
@@ -202,15 +237,24 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
 
-    expect(service.listSeries).toHaveBeenCalledWith('staff-1');
+    expect(service.listSeries).toHaveBeenCalledWith({
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
     expect(service.createSeries).toHaveBeenCalledWith(
       { name: '牛肉南瓜鲜食', scenario: 'ADULT_MER_110' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
     expect(service.renameSeries).toHaveBeenCalledWith(
       'series-1',
       { name: '新名字' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
     expect(service.deleteSeries).toHaveBeenCalledWith(
       'series-1',
@@ -218,12 +262,18 @@ describe('RecipeDesignerController', () => {
         confirmName: '新名字',
         confirmUserVisibleRemoval: true,
       },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
     expect(service.createSeriesStageDraft).toHaveBeenCalledWith(
       'series-1',
       { scenario: 'ADULT_MER_95' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
   });
 
@@ -248,7 +298,10 @@ describe('RecipeDesignerController', () => {
 
     expect(service.createRevisionDraft).toHaveBeenCalledWith(
       'design-published',
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
   });
 
@@ -435,19 +488,31 @@ describe('RecipeDesignerController', () => {
         nutritionFoodId: 'food-1',
         weightG: 100,
       },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
     expect(service.updateItem).toHaveBeenCalledWith(
       'item-1',
       { weightG: 120 },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
-    expect(service.removeItem).toHaveBeenCalledWith('item-1', 'staff-1');
+    expect(service.removeItem).toHaveBeenCalledWith('item-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
     expect(service.assessDraft).toHaveBeenCalledWith('design-1');
     expect(service.publishDraft).toHaveBeenCalledWith(
       'design-1',
       { reviewNote: 'ok' },
-      'staff-1',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
     );
   });
 });

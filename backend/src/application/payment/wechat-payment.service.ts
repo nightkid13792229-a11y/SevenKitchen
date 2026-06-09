@@ -254,7 +254,10 @@ export class WechatPaymentService {
     const orderId = this.fromOutTradeNo(outTradeNo);
     const tradeState = String(decrypted.trade_state || '');
     const transactionId = String(decrypted.transaction_id || '');
-    const paidFen = Number(decrypted.amount?.payer_total ?? decrypted.amount?.total);
+    const wechatOrderTotalFen = Number(decrypted.amount?.total);
+    const payerTotalFen = Number(
+      decrypted.amount?.payer_total ?? decrypted.amount?.total,
+    );
 
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -265,9 +268,12 @@ export class WechatPaymentService {
     }
 
     const expectedFen = this.toFen(order.amountTotal);
-    if (paidFen !== expectedFen) {
+    const verifiedTotalFen = Number.isFinite(wechatOrderTotalFen)
+      ? wechatOrderTotalFen
+      : payerTotalFen;
+    if (verifiedTotalFen !== expectedFen) {
       this.logger.error(
-        `Wechat notify amount mismatch: order=${order.id}, expected=${expectedFen}, paid=${paidFen}`,
+        `Wechat notify amount mismatch: order=${order.id}, expected=${expectedFen}, total=${verifiedTotalFen}, payer=${payerTotalFen}`,
       );
       throw new BadRequestException('支付金额与订单金额不一致');
     }

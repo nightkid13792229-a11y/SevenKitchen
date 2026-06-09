@@ -211,37 +211,12 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
-    // Group by seriesId when present, otherwise recipeId, and take one representative.
-    const latestByRecipeGroup = new Map<string, RecipeWithItems>();
     const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
-    for (const recipe of filteredRecipes) {
-      const groupKey = recipe.seriesId || recipe.recipeId;
-      const existing = latestByRecipeGroup.get(groupKey);
-      if (
-        !existing ||
-        this.isBetterPublicRepresentative(
-          recipe,
-          existing,
-          hasLifeStageFilter,
-        )
-      ) {
-        latestByRecipeGroup.set(groupKey, recipe);
-      }
-    }
 
-    // Sort by createdAt descending AFTER grouping
-    return Array.from(latestByRecipeGroup.values())
-      .sort((a, b) => {
-        const aTime =
-          a.createdAt instanceof Date
-            ? a.createdAt.getTime()
-            : new Date(a.createdAt).getTime();
-        const bTime =
-          b.createdAt instanceof Date
-            ? b.createdAt.getTime()
-            : new Date(b.createdAt).getTime();
-        return bTime - aTime;
-      })
+    return this.groupPublicRecipeRepresentatives(
+      filteredRecipes,
+      hasLifeStageFilter,
+    )
       .map((r) => this.mapToDomain(r));
   }
 
@@ -338,36 +313,12 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
-    // Group by seriesId when present, otherwise recipeId, and take one representative.
-    const latestByRecipeGroup = new Map<string, RecipeWithItems>();
     const hasLifeStageFilter = Boolean(options?.lifeStages?.length);
-    for (const recipe of filteredRecipes) {
-      const groupKey = recipe.seriesId || recipe.recipeId;
-      const existing = latestByRecipeGroup.get(groupKey);
-      if (
-        !existing ||
-        this.isBetterPublicRepresentative(
-          recipe,
-          existing,
-          hasLifeStageFilter,
-        )
-      ) {
-        latestByRecipeGroup.set(groupKey, recipe);
-      }
-    }
 
-    // Sort by createdAt descending AFTER grouping to ensure correct order
-    const uniqueRecipes = Array.from(latestByRecipeGroup.values()).sort((a, b) => {
-      const aTime =
-        a.createdAt instanceof Date
-          ? a.createdAt.getTime()
-          : new Date(a.createdAt).getTime();
-      const bTime =
-        b.createdAt instanceof Date
-          ? b.createdAt.getTime()
-          : new Date(b.createdAt).getTime();
-      return bTime - aTime;
-    });
+    const uniqueRecipes = this.groupPublicRecipeRepresentatives(
+      filteredRecipes,
+      hasLifeStageFilter,
+    );
     const total = uniqueRecipes.length;
 
     // Apply pagination
@@ -588,12 +539,69 @@ export class PrismaRecipeRepository implements RecipeRepository {
     return this.isNewerPublicRepresentative(candidate, existing);
   }
 
+  private groupPublicRecipeRepresentatives(
+    recipes: RecipeWithItems[],
+    hasLifeStageFilter: boolean,
+  ): RecipeWithItems[] {
+    const groups = new Map<
+      string,
+      { representative: RecipeWithItems; sortCreatedAtMs: number }
+    >();
+
+    for (const recipe of recipes) {
+      const groupKey = recipe.seriesId || recipe.recipeId;
+      const recipeCreatedAtMs = this.getRecipeCreatedAtMs(recipe);
+      const existing = groups.get(groupKey);
+
+      if (!existing) {
+        groups.set(groupKey, {
+          representative: recipe,
+          sortCreatedAtMs: recipeCreatedAtMs,
+        });
+        continue;
+      }
+
+      existing.sortCreatedAtMs = Math.min(
+        existing.sortCreatedAtMs,
+        recipeCreatedAtMs,
+      );
+
+      if (
+        this.isBetterPublicRepresentative(
+          recipe,
+          existing.representative,
+          hasLifeStageFilter,
+        )
+      ) {
+        existing.representative = recipe;
+      }
+    }
+
+    return Array.from(groups.values())
+      .sort((a, b) => {
+        if (a.sortCreatedAtMs !== b.sortCreatedAtMs) {
+          return b.sortCreatedAtMs - a.sortCreatedAtMs;
+        }
+        return (
+          this.getRecipeCreatedAtMs(b.representative) -
+          this.getRecipeCreatedAtMs(a.representative)
+        );
+      })
+      .map((group) => group.representative);
+  }
+
   private getDefaultShowcaseLifeStagePriority(recipe: RecipeWithItems) {
     const stage =
       recipe.seriesLifeStage ||
       ((recipe.applicableLifeStages as string[] | null) || [])[0] ||
       '';
     return DEFAULT_SHOWCASE_LIFE_STAGE_PRIORITY[stage] ?? 99;
+  }
+
+  private getRecipeCreatedAtMs(recipe: RecipeWithItems): number {
+    return recipe.createdAt instanceof Date
+      ? recipe.createdAt.getTime()
+      : new Date(recipe.createdAt).getTime();
   }
 
   private isNewerPublicRepresentative(
@@ -607,14 +615,8 @@ export class PrismaRecipeRepository implements RecipeRepository {
       return candidate.version > existing.version;
     }
 
-    const candidateTime =
-      candidate.createdAt instanceof Date
-        ? candidate.createdAt.getTime()
-        : new Date(candidate.createdAt).getTime();
-    const existingTime =
-      existing.createdAt instanceof Date
-        ? existing.createdAt.getTime()
-        : new Date(existing.createdAt).getTime();
+    const candidateTime = this.getRecipeCreatedAtMs(candidate);
+    const existingTime = this.getRecipeCreatedAtMs(existing);
 
     return candidateTime > existingTime;
   }

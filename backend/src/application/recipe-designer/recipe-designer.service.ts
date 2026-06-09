@@ -2154,7 +2154,8 @@ export class RecipeDesignerService {
     dto: PublishRecipeDesignDraftDto,
     userId: string,
   ) {
-    const recipeName = dto.name?.trim() || '';
+    const requestedRecipeName = dto.name?.trim() || '';
+    const recipeName = this.stripRevisionSuffix(requestedRecipeName);
     const reviewNote = dto.reviewNote?.trim() || null;
 
     if (!recipeName) {
@@ -2286,7 +2287,7 @@ export class RecipeDesignerService {
         where: { id: draft.id },
         data: {
           ...assessmentUpdateData,
-          name: recipeName,
+          ...(this.isActiveRevisionDraft(draft) ? {} : { name: recipeName }),
           status: DesignRecipeStatus.PUBLISHED,
           publishedAt: new Date(),
           publishedRecipeId: recipe.recipeId,

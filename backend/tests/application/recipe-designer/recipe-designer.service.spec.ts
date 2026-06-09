@@ -2850,6 +2850,7 @@ describe('RecipeDesignerService', () => {
       data: expect.objectContaining({
         recipeId: 'adult-stage-recipe',
         version: 6,
+        name: '燕麦鳕鱼猪肉',
         viewCount: 231,
         favoriteCount: 20,
         diyGenCount: 26,
@@ -2860,6 +2861,25 @@ describe('RecipeDesignerService', () => {
         ],
       }),
     });
+    expect(prisma.designRecipePublishSnapshot.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        snapshotData: expect.objectContaining({
+          designRecipe: expect.objectContaining({
+            name: '燕麦鳕鱼猪肉',
+          }),
+        }),
+      }),
+    });
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'adult-series-revision' },
+      data: expect.objectContaining({
+        status: 'PUBLISHED',
+      }),
+      include: expect.any(Object),
+    });
+    expect(
+      prisma.designRecipe.update.mock.calls[0][0].data.name,
+    ).toBeUndefined();
     expect(prisma.favoriteRecipe.updateMany).toHaveBeenCalledWith({
       where: { recipeId: 'recipe-row-adult-v5' },
       data: { recipeId: 'recipe-row-adult-v6' },

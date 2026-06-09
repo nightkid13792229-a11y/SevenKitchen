@@ -94,6 +94,56 @@ describe('PrismaRecipeRepository', () => {
     );
   });
 
+  it('keeps a revised recipe in its original public showcase position', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          publicRecipe({
+            id: 'row-oat-v6',
+            recipeId: 'recipe-oat',
+            version: 6,
+            name: '燕麦鳕鱼猪肉',
+            seriesId: 'series-oat-cod-pork',
+            createdAt: new Date('2026-06-08T07:00:00Z'),
+          }),
+          publicRecipe({
+            id: 'row-beef-v1',
+            recipeId: 'recipe-beef',
+            version: 1,
+            name: '牛肉南瓜鲜食',
+            seriesId: 'series-beef-pumpkin',
+            createdAt: new Date('2026-05-20T07:00:00Z'),
+          }),
+          publicRecipe({
+            id: 'row-oat-v5',
+            recipeId: 'recipe-oat',
+            version: 5,
+            name: '燕麦鳕鱼猪肉',
+            seriesId: 'series-oat-cod-pork',
+            createdAt: new Date('2026-05-01T07:00:00Z'),
+          }),
+        ]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    const result = await repository.findPublicRecipesPaginated({
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.data.map((recipe) => recipe.id)).toEqual([
+      'recipe-beef',
+      'recipe-oat',
+    ]);
+    expect(result.data[1]).toEqual(
+      expect.objectContaining({
+        id: 'recipe-oat',
+        version: 6,
+      }),
+    );
+  });
+
   it('uses the requested child life-stage representative when the public showcase is filtered to under-14-week puppies', async () => {
     const prisma = {
       recipe: {

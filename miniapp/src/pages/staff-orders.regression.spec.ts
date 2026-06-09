@@ -68,8 +68,15 @@ describe('staff order mobile operations', () => {
   it('supports shipping directly from staff order detail', () => {
     expect(detailSource).toContain('showShippingModal');
     expect(detailSource).toContain('confirmShipping');
-    expect(detailSource).toContain('/admin/orders/${order.value.id}/ship');
+    expect(detailSource).toContain('/admin/orders/${orderId}/ship');
     expect(detailSource).not.toContain('请在电脑端操作发货');
+  });
+
+  it('syncs WeChat shipping info after mobile staff shipment', () => {
+    expect(source).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
+    expect(detailSource).toContain('/staff/shipping/orders/${orderId}/wechat-shipping-upload');
+    expect(source).toContain('微信发货同步失败');
+    expect(detailSource).toContain('微信发货同步失败');
   });
 
   it('shows production usage, package plan, and ingredient totals on staff order detail', () => {

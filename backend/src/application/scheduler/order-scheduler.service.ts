@@ -70,7 +70,9 @@ export class OrderSchedulerService {
           continue;
         }
 
-        const shippedAt = new Date(shippedEntry.createdAt);
+        const shippedAt = new Date(
+          shippedEntry.timestamp ?? shippedEntry.createdAt,
+        );
         const daysSinceShipped = Math.floor(
           (now.getTime() - shippedAt.getTime()) / (1000 * 60 * 60 * 24),
         );

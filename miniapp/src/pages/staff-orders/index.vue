@@ -1066,10 +1066,11 @@ async function confirmShipping() {
 
   if (!currentShippingOrder.value) return
 
+  const orderId = currentShippingOrder.value.id
   isShipping.value = true
   try {
     await request({
-      url: `/admin/orders/${currentShippingOrder.value.id}/ship`,
+      url: `/admin/orders/${orderId}/ship`,
       method: 'POST',
       data: {
         carrierCode: carriers[selectedCarrierIndex.value].code,
@@ -1077,10 +1078,24 @@ async function confirmShipping() {
       },
     })
 
-    uni.showToast({
-      title: '发货成功',
-      icon: 'success',
-    })
+    try {
+      await request({
+        url: `/staff/shipping/orders/${orderId}/wechat-shipping-upload`,
+        method: 'POST',
+        suppressErrorToast: true,
+      })
+
+      uni.showToast({
+        title: '发货成功，已同步微信',
+        icon: 'success',
+      })
+    } catch (syncError) {
+      console.error('[StaffOrders] WeChat shipping sync error:', syncError)
+      uni.showToast({
+        title: '发货成功，微信发货同步失败',
+        icon: 'none',
+      })
+    }
 
     closeShippingModal()
     loadOrders(true)

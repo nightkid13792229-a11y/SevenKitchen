@@ -74,6 +74,8 @@
     "audit:fediaf-2025-dog-assessment": "ts-node -r tsconfig-paths/register scripts/audit-fediaf-2025-dog-assessment.ts",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
     "backfill:latest-recipes-to-designer": "ts-node -r tsconfig-paths/register scripts/backfill-latest-recipes-to-designer.ts",
+    "backfill:recipe-nutrition-reports": "ts-node -r tsconfig-paths/register scripts/backfill-recipe-nutrition-reports.ts",
+    "backfill:recipe-nutrition-reports:apply": "ts-node -r tsconfig-paths/register scripts/backfill-recipe-nutrition-reports.ts --apply",
     "review:usda-candidates": "ts-node -r tsconfig-paths/register scripts/export-usda-candidate-review.ts",
     "plan:usda-candidate-confirmations": "ts-node -r tsconfig-paths/register scripts/plan-usda-candidate-confirmations.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",

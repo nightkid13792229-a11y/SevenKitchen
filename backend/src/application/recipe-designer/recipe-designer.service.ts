@@ -418,7 +418,9 @@ type IngredientSearchTextField = 'name' | 'brand' | 'productModel';
 type NutritionFoodSearchTextField = 'name' | 'nameEn' | 'displayNameZh';
 
 function normalizeSearchText(value: unknown) {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function isSaltSearchTerm(term: string) {
@@ -599,10 +601,7 @@ function getCompatibleSourceUnit(
   });
   const firstUnit = fieldUnits[0];
 
-  if (
-    !firstUnit ||
-    !fieldUnits.every((fieldUnit) => fieldUnit === firstUnit)
-  ) {
+  if (!firstUnit || !fieldUnits.every((fieldUnit) => fieldUnit === firstUnit)) {
     return null;
   }
 
@@ -710,10 +709,16 @@ function normalizeSupplementUsageUnit(value: unknown): string {
 }
 
 function readSupplementDisplayUnit(properties: unknown): string | null {
-  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
+  if (
+    !properties ||
+    typeof properties !== 'object' ||
+    Array.isArray(properties)
+  ) {
     return null;
   }
-  return normalizeOptionalText((properties as Record<string, unknown>).display_unit);
+  return normalizeOptionalText(
+    (properties as Record<string, unknown>).display_unit,
+  );
 }
 
 function resolveRecipeDesignerIngredientUnit(
@@ -808,7 +813,12 @@ function normalizeManualSupplementNutrients(
 
 function buildManualSupplementNutritionProfile(
   entries: ManualSupplementNutrientEntry[],
-  basisType: 'PER_1_G' | 'PER_100_G' | 'PER_1_ML' | 'PER_100_ML' | 'PER_SERVING',
+  basisType:
+    | 'PER_1_G'
+    | 'PER_100_G'
+    | 'PER_1_ML'
+    | 'PER_100_ML'
+    | 'PER_SERVING',
   profileName: string,
   options: {
     usageUnit: string;
@@ -825,7 +835,8 @@ function buildManualSupplementNutritionProfile(
     densityGPerMl: options.densityGPerMl,
     servingWeightG: options.servingWeightG,
     amountUnitLabel: options.usageUnit,
-    servingUnitLabel: basisType === 'PER_SERVING' ? options.usageUnit : undefined,
+    servingUnitLabel:
+      basisType === 'PER_SERVING' ? options.usageUnit : undefined,
     sourceType: 'MANUAL',
     sourceKind: 'MANUAL',
     sourceCode: 'MANUAL',
@@ -951,7 +962,8 @@ export class RecipeDesignerService {
     const pageSize = Math.min(50, Math.max(1, Number(dto.pageSize ?? 20)));
     const skip = (page - 1) * pageSize;
     const searchTerms = await this.expandIngredientSearchTerms(dto.search);
-    const nutrientTarget = await this.resolveIngredientNutrientSearchTarget(dto);
+    const nutrientTarget =
+      await this.resolveIngredientNutrientSearchTarget(dto);
     const verifiedMappingWhere = {
       nutritionFood: { status: NutritionFoodStatus.VERIFIED },
     };
@@ -974,13 +986,12 @@ export class RecipeDesignerService {
         orderBy: { name: 'asc' },
         select,
       });
-      const options = ingredients
-        .map((ingredient) =>
-          this.toIngredientOption(
-            ingredient as IngredientOptionRecord,
-            nutrientTarget,
-          ),
-        );
+      const options = ingredients.map((ingredient) =>
+        this.toIngredientOption(
+          ingredient as IngredientOptionRecord,
+          nutrientTarget,
+        ),
+      );
       const supplementOptions = options.filter(
         (option) =>
           option.type === IngredientType.SUPPLEMENT && option.nutrientMatch,
@@ -1082,7 +1093,10 @@ export class RecipeDesignerService {
       dto.densityGPerMl,
       '密度',
     );
-    if (requiresSupplementServingWeight(usageUnit, basisType) && !servingWeightG) {
+    if (
+      requiresSupplementServingWeight(usageUnit, basisType) &&
+      !servingWeightG
+    ) {
       throw new BadRequestException(
         '按包装单位使用、但营养数据按重量或体积标注时，需要填写单位换算',
       );
@@ -1242,7 +1256,9 @@ export class RecipeDesignerService {
       orderBy: { updatedAt: 'desc' },
     })) as RecipeSeriesWorkbenchRecord[];
 
-    return series.map((record) => this.buildSeriesWorkbenchCard(record, userId));
+    return series.map((record) =>
+      this.buildSeriesWorkbenchCard(record, userId),
+    );
   }
 
   async createSeries(dto: CreateRecipeSeriesDto, userId: string) {
@@ -1260,43 +1276,49 @@ export class RecipeDesignerService {
       attempt++
     ) {
       try {
-        return await this.prisma.$transaction(async (tx) => {
-          const series = await tx.recipeSeries.create({
-            data: {
-              name,
-              status: RecipeSeriesStatus.ACTIVE,
-              createdBy: userId,
-            },
-          });
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const series = await tx.recipeSeries.create({
+              data: {
+                name,
+                status: RecipeSeriesStatus.ACTIVE,
+                createdBy: userId,
+              },
+            });
 
-          const version = await this.allocateNextDesignRecipeVersion(tx, name);
-          const design = await tx.designRecipe.create({
-            data: {
+            const version = await this.allocateNextDesignRecipeVersion(
+              tx,
               name,
-              version,
-              status: DesignRecipeStatus.DRAFT,
-              fediafDogScenario: scenario,
-              nutritionStandard: 'FEDIAF_2025',
-              targetHealthTags: [],
-              applicableLifeStages: [lifeStage],
-              createdBy: userId,
-              seriesId: series.id,
-              seriesLifeStage: lifeStage,
-            },
-            include: DESIGN_RECIPE_INCLUDE,
-          });
+            );
+            const design = await tx.designRecipe.create({
+              data: {
+                name,
+                version,
+                status: DesignRecipeStatus.DRAFT,
+                fediafDogScenario: scenario,
+                nutritionStandard: 'FEDIAF_2025',
+                targetHealthTags: [],
+                applicableLifeStages: [lifeStage],
+                createdBy: userId,
+                seriesId: series.id,
+                seriesLifeStage: lifeStage,
+              },
+              include: DESIGN_RECIPE_INCLUDE,
+            });
 
-          return this.buildSeriesWorkbenchCard(
-            {
-              ...series,
-              designs: [design],
-              recipes: [],
-            } as RecipeSeriesWorkbenchRecord,
-            userId,
-          );
-        }, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
+            return this.buildSeriesWorkbenchCard(
+              {
+                ...series,
+                designs: [design],
+                recipes: [],
+              } as RecipeSeriesWorkbenchRecord,
+              userId,
+            );
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
       } catch (error) {
         if (
           attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
@@ -1324,81 +1346,86 @@ export class RecipeDesignerService {
       attempt++
     ) {
       try {
-        return await this.prisma.$transaction(async (tx) => {
-          const series = await tx.recipeSeries.findUnique({
-            where: { id: seriesId },
-          });
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const series = await tx.recipeSeries.findUnique({
+              where: { id: seriesId },
+            });
 
-          if (
-            !series ||
-            series.status !== RecipeSeriesStatus.ACTIVE ||
-            series.deletedAt
-          ) {
-            throw new NotFoundException(`Recipe series ${seriesId} not found`);
-          }
+            if (
+              !series ||
+              series.status !== RecipeSeriesStatus.ACTIVE ||
+              series.deletedAt
+            ) {
+              throw new NotFoundException(
+                `Recipe series ${seriesId} not found`,
+              );
+            }
 
-          const existingDraft = await tx.designRecipe.findFirst({
-            where: {
-              seriesId,
-              seriesLifeStage: lifeStage,
-              status: { not: DesignRecipeStatus.PUBLISHED },
-              publishedRecipeId: null,
-              publishedAt: null,
-            },
-            include: DESIGN_RECIPE_INCLUDE,
-            orderBy: { updatedAt: 'desc' },
-          });
-          if (existingDraft) {
-            return existingDraft;
-          }
-
-          const sourceTemplate = dto.sourceDraftId
-            ? await this.loadSeriesStageSourceTemplate(
-                tx,
+            const existingDraft = await tx.designRecipe.findFirst({
+              where: {
                 seriesId,
-                dto.sourceDraftId,
-              )
-            : null;
-          const version = await this.allocateNextDesignRecipeVersion(
-            tx,
-            series.name,
-          );
+                seriesLifeStage: lifeStage,
+                status: { not: DesignRecipeStatus.PUBLISHED },
+                publishedRecipeId: null,
+                publishedAt: null,
+              },
+              include: DESIGN_RECIPE_INCLUDE,
+              orderBy: { updatedAt: 'desc' },
+            });
+            if (existingDraft) {
+              return existingDraft;
+            }
 
-          return tx.designRecipe.create({
-            data: {
-              name: series.name,
-              version,
-              status: DesignRecipeStatus.DRAFT,
-              fediafDogScenario: dto.scenario,
-              nutritionStandard: 'FEDIAF_2025',
-              targetHealthTags: [],
-              applicableLifeStages: [lifeStage],
-              createdBy: userId,
-              seriesId,
-              seriesLifeStage: lifeStage,
-              ...(sourceTemplate
-                ? {
-                    items: {
-                      create: sourceTemplate.items.map((item) => ({
-                        ingredientId: item.ingredientId,
-                        nutritionFoodId: item.nutritionFoodId,
-                        weightG: item.weightG,
-                        includeInAssessment: item.includeInAssessment,
-                        ratioPercent: item.ratioPercent,
-                        preparationMethod: item.preparationMethod,
-                        nutrientTargetKey: item.nutrientTargetKey,
-                        nutrientTargetValue: item.nutrientTargetValue,
-                        sortOrder: item.sortOrder,
-                      })),
-                    },
-                  }
-                : {}),
-            },
-            include: DESIGN_RECIPE_INCLUDE,
-          });
-        }, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
+            const sourceTemplate = dto.sourceDraftId
+              ? await this.loadSeriesStageSourceTemplate(
+                  tx,
+                  seriesId,
+                  dto.sourceDraftId,
+                )
+              : null;
+            const version = await this.allocateNextDesignRecipeVersion(
+              tx,
+              series.name,
+            );
+
+            return tx.designRecipe.create({
+              data: {
+                name: series.name,
+                version,
+                status: DesignRecipeStatus.DRAFT,
+                fediafDogScenario: dto.scenario,
+                nutritionStandard: 'FEDIAF_2025',
+                targetHealthTags: [],
+                applicableLifeStages: [lifeStage],
+                createdBy: userId,
+                seriesId,
+                seriesLifeStage: lifeStage,
+                ...(sourceTemplate
+                  ? {
+                      items: {
+                        create: sourceTemplate.items.map((item) => ({
+                          ingredientId: item.ingredientId,
+                          nutritionFoodId: item.nutritionFoodId,
+                          weightG: item.weightG,
+                          includeInAssessment: item.includeInAssessment,
+                          ratioPercent: item.ratioPercent,
+                          preparationMethod: item.preparationMethod,
+                          nutrientTargetKey: item.nutrientTargetKey,
+                          nutrientTargetValue: item.nutrientTargetValue,
+                          sortOrder: item.sortOrder,
+                        })),
+                      },
+                    }
+                  : {}),
+              },
+              include: DESIGN_RECIPE_INCLUDE,
+            });
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
       } catch (error) {
         if (
           attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
@@ -1559,10 +1586,7 @@ export class RecipeDesignerService {
       const latestPublicRecipe = this.pickLatestByUpdatedAt(
         recipes.filter((recipe) => recipe.status === RecipeStatus.PUBLIC),
       );
-      const latestRecord = this.pickLatestByUpdatedAt([
-        ...designs,
-        ...recipes,
-      ]);
+      const latestRecord = this.pickLatestByUpdatedAt([...designs, ...recipes]);
 
       return {
         lifeStage,
@@ -1579,8 +1603,9 @@ export class RecipeDesignerService {
       id: series.id,
       name: series.name,
       updatedAt: series.updatedAt,
-      publishedStageCount: stages.filter((stage) => stage.status === 'PUBLISHED')
-        .length,
+      publishedStageCount: stages.filter(
+        (stage) => stage.status === 'PUBLISHED',
+      ).length,
       stages,
     };
   }
@@ -1599,7 +1624,11 @@ export class RecipeDesignerService {
     ) {
       return 'IN_REVIEW';
     }
-    if (designs.some((design) => design.status === DesignRecipeStatus.NEEDS_REVIEW)) {
+    if (
+      designs.some(
+        (design) => design.status === DesignRecipeStatus.NEEDS_REVIEW,
+      )
+    ) {
       return 'NEEDS_CHANGES';
     }
     if (designs.some((design) => !this.isPublishedDraft(design))) {
@@ -1611,9 +1640,11 @@ export class RecipeDesignerService {
   private pickLatestByUpdatedAt<T extends { updatedAt?: Date | string | null }>(
     records: T[],
   ): T | null {
-    return [...records].sort(
-      (left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left),
-    )[0] ?? null;
+    return (
+      [...records].sort(
+        (left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left),
+      )[0] ?? null
+    );
   }
 
   private async allocateNextDesignRecipeVersion(
@@ -1684,7 +1715,9 @@ export class RecipeDesignerService {
     return [...grouped.values()]
       .map((group) => this.buildCurrentDesignRecipeWorkbenchCard(group))
       .filter((draft): draft is DesignRecipeWorkbenchCard => Boolean(draft))
-      .sort((left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left));
+      .sort(
+        (left, right) => this.getUpdatedTime(right) - this.getUpdatedTime(left),
+      );
   }
 
   private toWorkbenchCardSummary(
@@ -1700,10 +1733,7 @@ export class RecipeDesignerService {
     delete summary.versionHistory;
 
     return {
-      ...(summary as Omit<
-        DesignRecipeWorkbenchCardSummary,
-        'versionHistory'
-      >),
+      ...(summary as Omit<DesignRecipeWorkbenchCardSummary, 'versionHistory'>),
       ...(versionHistory?.length
         ? {
             versionHistory: versionHistory.map((item) =>
@@ -1736,23 +1766,29 @@ export class RecipeDesignerService {
     );
   }
 
-  private buildCurrentDesignRecipeWorkbenchCard(group: DesignRecipeWithItems[]) {
+  private buildCurrentDesignRecipeWorkbenchCard(
+    group: DesignRecipeWithItems[],
+  ) {
     const current = this.pickCurrentDesignRecipeCard(group);
     if (!current) return null;
 
-    const versionHistory = [...group].sort((left, right) => {
-      if (this.isActiveRevisionDraft(left) !== this.isActiveRevisionDraft(right)) {
-        return this.isActiveRevisionDraft(left) ? -1 : 1;
-      }
+    const versionHistory = [...group]
+      .sort((left, right) => {
+        if (
+          this.isActiveRevisionDraft(left) !== this.isActiveRevisionDraft(right)
+        ) {
+          return this.isActiveRevisionDraft(left) ? -1 : 1;
+        }
 
-      const leftPublishedVersion = left.publishedRecipeVersion ?? 0;
-      const rightPublishedVersion = right.publishedRecipeVersion ?? 0;
-      if (leftPublishedVersion !== rightPublishedVersion) {
-        return rightPublishedVersion - leftPublishedVersion;
-      }
+        const leftPublishedVersion = left.publishedRecipeVersion ?? 0;
+        const rightPublishedVersion = right.publishedRecipeVersion ?? 0;
+        if (leftPublishedVersion !== rightPublishedVersion) {
+          return rightPublishedVersion - leftPublishedVersion;
+        }
 
-      return this.getUpdatedTime(right) - this.getUpdatedTime(left);
-    }).map((draft) => this.withRevisionChangeState(draft, group));
+        return this.getUpdatedTime(right) - this.getUpdatedTime(left);
+      })
+      .map((draft) => this.withRevisionChangeState(draft, group));
 
     const currentCard = this.withRevisionChangeState(current, group);
 
@@ -1806,23 +1842,28 @@ export class RecipeDesignerService {
       }
     }
 
-    return [...group]
-      .filter((candidate) => candidate.id !== draft.id)
-      .filter((candidate) => this.isPublishedDraft(candidate))
-      .sort((left, right) => {
-        const leftVersion = left.publishedRecipeVersion ?? 0;
-        const rightVersion = right.publishedRecipeVersion ?? 0;
-        if (leftVersion !== rightVersion) {
-          return rightVersion - leftVersion;
-        }
-        return this.getUpdatedTime(right) - this.getUpdatedTime(left);
-      })[0] ?? null;
+    return (
+      [...group]
+        .filter((candidate) => candidate.id !== draft.id)
+        .filter((candidate) => this.isPublishedDraft(candidate))
+        .sort((left, right) => {
+          const leftVersion = left.publishedRecipeVersion ?? 0;
+          const rightVersion = right.publishedRecipeVersion ?? 0;
+          if (leftVersion !== rightVersion) {
+            return rightVersion - leftVersion;
+          }
+          return this.getUpdatedTime(right) - this.getUpdatedTime(left);
+        })[0] ?? null
+    );
   }
 
   private getUpdatedTime(draft: { updatedAt?: Date | string | null }) {
     const rawValue = draft.updatedAt;
     if (!rawValue) return 0;
-    const value = rawValue instanceof Date ? rawValue.getTime() : new Date(rawValue).getTime();
+    const value =
+      rawValue instanceof Date
+        ? rawValue.getTime()
+        : new Date(rawValue).getTime();
     return Number.isFinite(value) ? value : 0;
   }
 
@@ -2245,9 +2286,7 @@ export class RecipeDesignerService {
       baseline &&
       this.hasSamePublishableRecipeInputs(draft, baseline, recipeName)
     ) {
-      throw new BadRequestException(
-        '当前修订与已发布版本一致，无需发布新版本',
-      );
+      throw new BadRequestException('当前修订与已发布版本一致，无需发布新版本');
     }
   }
 
@@ -2269,10 +2308,7 @@ export class RecipeDesignerService {
         status: DesignRecipeStatus.PUBLISHED,
       },
       include: DESIGN_RECIPE_INCLUDE,
-      orderBy: [
-        { publishedRecipeVersion: 'desc' },
-        { updatedAt: 'desc' },
-      ],
+      orderBy: [{ publishedRecipeVersion: 'desc' }, { updatedAt: 'desc' }],
     })) as DesignRecipeWithItems | null;
   }
 
@@ -2335,12 +2371,14 @@ export class RecipeDesignerService {
         if (left.sortOrder !== right.sortOrder) {
           return left.sortOrder - right.sortOrder;
         }
-        return [
-          left.ingredientId.localeCompare(right.ingredientId),
-          left.nutritionFoodId.localeCompare(right.nutritionFoodId),
-          left.preparationMethod.localeCompare(right.preparationMethod),
-          left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
-        ].find((result) => result !== 0) ?? 0;
+        return (
+          [
+            left.ingredientId.localeCompare(right.ingredientId),
+            left.nutritionFoodId.localeCompare(right.nutritionFoodId),
+            left.preparationMethod.localeCompare(right.preparationMethod),
+            left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
+          ].find((result) => result !== 0) ?? 0
+        );
       });
   }
 
@@ -2562,7 +2600,8 @@ export class RecipeDesignerService {
         continue;
       }
 
-      for (const mappedStage of LEGACY_RECIPE_LIFE_STAGE_MAPPINGS[stage] ?? []) {
+      for (const mappedStage of LEGACY_RECIPE_LIFE_STAGE_MAPPINGS[stage] ??
+        []) {
         normalized.add(mappedStage);
       }
     }
@@ -2578,9 +2617,8 @@ export class RecipeDesignerService {
     defaultPreparationMethod: string | null,
   ) {
     const primarySupplementTarget = supplementTargets[0] ?? null;
-    const supplementTargetPayload = this.buildPublishedSupplementTargets(
-      supplementTargets,
-    );
+    const supplementTargetPayload =
+      this.buildPublishedSupplementTargets(supplementTargets);
     const isSupplement =
       this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
 
@@ -2639,7 +2677,9 @@ export class RecipeDesignerService {
           unit: targetField.unit,
         };
       })
-      .filter((target): target is NonNullable<typeof target> => target !== null);
+      .filter(
+        (target): target is NonNullable<typeof target> => target !== null,
+      );
   }
 
   private buildPublishedSupplementTargetMap(
@@ -2749,10 +2789,7 @@ export class RecipeDesignerService {
         label: targetField.label,
         unit: targetField.unit,
       };
-      if (
-        !existing ||
-        nutrientTargetValue > existing.nutrientTargetValue
-      ) {
+      if (!existing || nutrientTargetValue > existing.nutrientTargetValue) {
         targetsByFieldPath.set(targetField.fieldPath, nextTarget);
       }
     }
@@ -2866,6 +2903,21 @@ export class RecipeDesignerService {
     };
   }
 
+  async buildPublishedNutritionDetailedDataForDraft(
+    draft: DesignRecipeWithItems,
+  ) {
+    const targets = await this.targetProvider.getTargets(
+      draft.fediafDogScenario,
+    );
+    const assessment = await this.assessLoadedDraft(draft, targets);
+
+    if (assessment.energyDensityKcalPerKg === null) {
+      throw new BadRequestException('缺少能量数据，无法生成营养报告');
+    }
+
+    return this.buildPublishedNutritionDetailedData(draft, assessment);
+  }
+
   private buildPublishedNutritionReport(
     draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
@@ -2892,7 +2944,8 @@ export class RecipeDesignerService {
     return assessment.items.map((assessedItem) => {
       const draftItem = draftItemById.get(String(assessedItem.id));
       const isSupplement =
-        draftItem && this.resolveIngredientType(draftItem) === IngredientType.SUPPLEMENT;
+        draftItem &&
+        this.resolveIngredientType(draftItem) === IngredientType.SUPPLEMENT;
 
       return {
         ingredientName: this.formatPublishedIngredientReportName(
@@ -2970,8 +3023,7 @@ export class RecipeDesignerService {
         assessment.totalEnergyKcal !== null &&
         assessment.totalEnergyKcal > 0 &&
         definition.energyFactor > 0
-          ? (total * definition.energyFactor * 100) /
-            assessment.totalEnergyKcal
+          ? (total * definition.energyFactor * 100) / assessment.totalEnergyKcal
           : null;
 
       return {
@@ -3071,7 +3123,8 @@ export class RecipeDesignerService {
     if (entry.category === 'AMINO_ACID') return 'aminoAcids';
     if (entry.category === 'FATTY_ACID') return 'fattyAcids';
 
-    const signature = `${entry.nutrientKey ?? ''} ${entry.label ?? ''}`.toLowerCase();
+    const signature =
+      `${entry.nutrientKey ?? ''} ${entry.label ?? ''}`.toLowerCase();
     if (
       /epa|dha|omega|linoleic|linolenic|arachidonic|脂肪酸|亚油酸|花生四烯酸/.test(
         signature,
@@ -3119,7 +3172,9 @@ export class RecipeDesignerService {
       ),
       dryMatterLabel: ratio
         ? ''
-        : this.formatPublishedReportNumber(dryMatterEntry?.currentValue ?? null),
+        : this.formatPublishedReportNumber(
+            dryMatterEntry?.currentValue ?? null,
+          ),
       status: entry.status,
     };
   }
@@ -3358,7 +3413,8 @@ export class RecipeDesignerService {
     targets?: FediafAssessmentTarget[],
   ): Promise<DesignRecipeAssessmentResult> {
     const resolvedTargets =
-      targets ?? (await this.targetProvider.getTargets(draft.fediafDogScenario));
+      targets ??
+      (await this.targetProvider.getTargets(draft.fediafDogScenario));
 
     return assessRecipeDraft({
       scenario: draft.fediafDogScenario,
@@ -3399,7 +3455,10 @@ export class RecipeDesignerService {
     profile: NutritionProfile | null,
     item: DesignRecipeItemWithFood,
   ): NutritionProfile | null {
-    if (!profile || this.resolveIngredientType(item) !== IngredientType.SUPPLEMENT) {
+    if (
+      !profile ||
+      this.resolveIngredientType(item) !== IngredientType.SUPPLEMENT
+    ) {
       return profile;
     }
 
@@ -3484,9 +3543,10 @@ export class RecipeDesignerService {
         : isCompliant
           ? DesignRecipeStatus.COMPLIANT
           : DesignRecipeStatus.NEEDS_REVIEW,
-      reviewStatus: !hasAssessmentItems || isCompliant
-        ? DesignRecipeReviewStatus.NONE
-        : DesignRecipeReviewStatus.REQUIRED,
+      reviewStatus:
+        !hasAssessmentItems || isCompliant
+          ? DesignRecipeReviewStatus.NONE
+          : DesignRecipeReviewStatus.REQUIRED,
     };
   }
 
@@ -3623,9 +3683,7 @@ export class RecipeDesignerService {
       select: { id: true, name: true },
     });
 
-    return new Map(
-      methods.map((method) => [method.id, method.name] as const),
-    );
+    return new Map(methods.map((method) => [method.id, method.name] as const));
   }
 
   private resolveIngredientDisplayName(item: DesignRecipeItemWithFood) {
@@ -3853,10 +3911,7 @@ export class RecipeDesignerService {
       return this.calculateSupplementNutrientMatch(nutritionData, target);
     }
 
-    return this.calculateNutritionFoodNutrientMatch(
-      nutritionData,
-      target,
-    );
+    return this.calculateNutritionFoodNutrientMatch(nutritionData, target);
   }
 
   private calculateSupplementNutrientMatch(

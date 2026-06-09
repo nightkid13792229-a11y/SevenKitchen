@@ -14,6 +14,23 @@ describe('home runtime regressions', () => {
     expect(source).toContain("/pages/feedback-list/index")
   })
 
+  it('adds a recipe designer quick action immediately after feedback', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('食谱设计')
+    expect(source).toContain('@tap="goToRecipeDesigner"')
+    expect(source).toContain('src="/static/home-actions/recipe-designer.png"')
+    expect(source).toContain("/pages/recipe-designer/list")
+
+    const feedbackIndex = source.indexOf('@tap="goToFeedback"')
+    const designerIndex = source.indexOf('@tap="goToRecipeDesigner"')
+    expect(feedbackIndex).toBeGreaterThan(-1)
+    expect(designerIndex).toBeGreaterThan(feedbackIndex)
+  })
+
   it('adds health records to the home quick action tools', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
@@ -61,6 +78,7 @@ describe('home runtime regressions', () => {
       'weight-management',
       'health-records',
       'feedback',
+      'recipe-designer',
     ]
 
     actionIconNames.forEach((name) => {

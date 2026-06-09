@@ -9,6 +9,9 @@ describe('RecipeDesignerService', () => {
   let service: RecipeDesignerService;
 
   const prisma = {
+    user: {
+      findMany: jest.fn(),
+    },
     designRecipe: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -90,6 +93,10 @@ describe('RecipeDesignerService', () => {
     prisma.designRecipe.aggregate.mockResolvedValue({
       _max: { version: null },
     });
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'staff-1' },
+      { id: 'admin-1' },
+    ]);
     prisma.recipeItem.findMany.mockResolvedValue([]);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
     prisma.$transaction.mockImplementation(async (callback: any) =>
@@ -125,6 +132,22 @@ describe('RecipeDesignerService', () => {
       createdAt: new Date('2026-05-20T00:00:00.000Z'),
       updatedAt: new Date('2026-05-20T00:00:00.000Z'),
       items: [],
+      ...overrides,
+    };
+  }
+
+  function seriesRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'series-1',
+      name: '成犬鸡肉配方',
+      status: 'ACTIVE',
+      deletedAt: null,
+      deletedBy: null,
+      createdBy: 'customer-1',
+      createdAt: new Date('2026-05-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-20T00:00:00.000Z'),
+      designs: [],
+      recipes: [],
       ...overrides,
     };
   }
@@ -1517,6 +1540,25 @@ describe('RecipeDesignerService', () => {
     );
   });
 
+  it('does not reveal another customer draft detail', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-other',
+        createdBy: 'customer-2',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'recipe-other',
+        publishedAt: new Date('2026-05-20T00:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      service.getDraft('design-other', {
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
   it('rejects adding items to another staff user draft', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-other', createdBy: 'staff-2', status: 'DRAFT' }),
@@ -1650,6 +1692,49 @@ describe('RecipeDesignerService', () => {
     ).rejects.toThrow(NotFoundException);
 
     expect(prisma.designRecipe.delete).not.toHaveBeenCalled();
+  });
+
+  it('lists only drafts created by the current customer', async () => {
+    prisma.designRecipe.findMany.mockResolvedValue([
+      draft({ id: 'customer-design', createdBy: 'customer-1' }),
+    ]);
+
+    await expect(
+      service.listDrafts({ userId: 'customer-1', role: 'CUSTOMER' }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'customer-design',
+        createdBy: 'customer-1',
+      }),
+    ]);
+
+    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { createdBy: 'customer-1' },
+      }),
+    );
+  });
+
+  it('preserves staff draft listing access to own drafts and published sources', async () => {
+    prisma.designRecipe.findMany.mockResolvedValue([
+      draft({ id: 'staff-design', createdBy: 'staff-1' }),
+    ]);
+
+    await service.listDrafts({ userId: 'staff-1', role: 'STAFF' });
+
+    expect(prisma.designRecipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { createdBy: 'staff-1' },
+            {
+              status: 'PUBLISHED',
+              publishedRecipeId: { not: null },
+            },
+          ],
+        },
+      }),
+    );
   });
 
   it('lists one current workbench card per published recipe series', async () => {
@@ -4203,6 +4288,54 @@ describe('RecipeDesignerService', () => {
       );
     }
 
+    it('lists only active customer-owned series for customer users', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-customer', createdBy: 'customer-1' }),
+      ]);
+
+      await expect(
+        service.listSeries({ userId: 'customer-1', role: 'CUSTOMER' }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          id: 'series-customer',
+          name: '成犬鸡肉配方',
+        }),
+      ]);
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
+            createdBy: 'customer-1',
+          },
+        }),
+      );
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('lists series created by internal users for staff users', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-staff', createdBy: 'staff-1' }),
+      ]);
+
+      await service.listSeries({ userId: 'staff-1', role: 'STAFF' });
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { role: { in: ['STAFF', 'ADMIN'] } },
+        select: { id: true },
+      });
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
+            createdBy: { in: ['staff-1', 'admin-1'] },
+          },
+        }),
+      );
+    });
+
     it('returns one series card with five stage statuses', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
@@ -4346,6 +4479,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
       });
       prisma.designRecipe.findFirst.mockResolvedValue(
         draft({
@@ -4391,6 +4525,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
         designs: [],
       });
       prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 2 } });
@@ -4451,6 +4586,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
       });
       prisma.designRecipe.findFirst.mockResolvedValue(null);
       prisma.designRecipe.findUnique.mockResolvedValue(
@@ -4540,6 +4676,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '燕麦鳕鱼猪肉',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
       });
       prisma.designRecipe.findFirst
         .mockResolvedValueOnce(null)
@@ -4683,6 +4820,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
       });
       prisma.designRecipe.findFirst.mockResolvedValue(null);
       prisma.designRecipe.aggregate
@@ -4740,6 +4878,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
       });
       prisma.designRecipe.findFirst.mockResolvedValue(
         draft({
@@ -4776,6 +4915,7 @@ describe('RecipeDesignerService', () => {
         id: 'series-1',
         name: '牛肉南瓜鲜食',
         status: 'ACTIVE',
+        createdBy: 'staff-1',
         designs: [],
       });
 
@@ -4792,6 +4932,72 @@ describe('RecipeDesignerService', () => {
 
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
       expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not create a stage draft for another customer series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-other',
+          createdBy: 'customer-2',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+
+      await expect(
+        service.createSeriesStageDraft(
+          'series-other',
+          { scenario: 'ADULT_MER_110' },
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.designRecipe.create).not.toHaveBeenCalled();
+    });
+
+    it('does not rename another customer series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-other',
+          createdBy: 'customer-2',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+
+      await expect(
+        service.renameSeries(
+          'series-other',
+          { name: '新名字' },
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
+    });
+
+    it('does not delete another customer series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-other',
+          createdBy: 'customer-2',
+          designs: [],
+          recipes: undefined,
+        }),
+      );
+
+      await expect(
+        service.deleteSeries(
+          'series-other',
+          {
+            confirmName: '成犬鸡肉配方',
+            confirmUserVisibleRemoval: true,
+          },
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
   });
 });

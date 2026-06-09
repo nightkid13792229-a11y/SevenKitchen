@@ -17,6 +17,7 @@ import {
   Prisma,
   RecipeStatus,
   RecipeSeriesStatus,
+  UserRole,
 } from '@prisma/client';
 import { nutritionDataToNutritionProfile } from '../nutrition-standard/nutrient-value-resolver';
 import {
@@ -322,6 +323,7 @@ type RecipeSeriesWorkbenchRecord = {
   id: string;
   name: string;
   status: string;
+  createdBy?: string | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
   designs: Array<{
@@ -406,6 +408,36 @@ type EditableDesignRecipeRecord = {
   publishedRecipeId: string | null;
   publishedAt: Date | null;
 };
+
+type RecipeDesignerAccessInput =
+  | string
+  | {
+      userId: string;
+      role?: string | null;
+    };
+
+interface RecipeDesignerAccessContext {
+  userId: string;
+  role: string;
+}
+
+function normalizeRecipeDesignerAccessContext(
+  input: RecipeDesignerAccessInput,
+): RecipeDesignerAccessContext {
+  if (typeof input === 'string') {
+    return { userId: input, role: UserRole.STAFF };
+  }
+  return {
+    userId: input.userId,
+    role: String(input.role || UserRole.CUSTOMER).toUpperCase(),
+  };
+}
+
+function isInternalRecipeDesignerRole(
+  context: RecipeDesignerAccessContext,
+): boolean {
+  return context.role === UserRole.STAFF || context.role === UserRole.ADMIN;
+}
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
 const RECIPE_PRESENTATION_MEDIA_SELECT = {
@@ -918,6 +950,51 @@ export class RecipeDesignerService {
     private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
 
+  private async listInternalRecipeDesignerUserIds() {
+    const users = await this.prisma.user.findMany({
+      where: { role: { in: [UserRole.STAFF, UserRole.ADMIN] } },
+      select: { id: true },
+    });
+    return users.map((user) => user.id);
+  }
+
+  private async buildSeriesVisibilityWhere(
+    context: RecipeDesignerAccessContext,
+  ) {
+    const baseWhere = {
+      status: RecipeSeriesStatus.ACTIVE,
+      deletedAt: null,
+    };
+
+    if (!isInternalRecipeDesignerRole(context)) {
+      return {
+        ...baseWhere,
+        createdBy: context.userId,
+      };
+    }
+
+    const internalUserIds = await this.listInternalRecipeDesignerUserIds();
+    return {
+      ...baseWhere,
+      createdBy: { in: internalUserIds },
+    };
+  }
+
+  private async isSeriesAccessibleByContext(
+    series: { id: string; createdBy?: string | null } | null,
+    context: RecipeDesignerAccessContext,
+  ) {
+    if (!series) return false;
+    if (!isInternalRecipeDesignerRole(context)) {
+      return series.createdBy === context.userId;
+    }
+
+    const internalUserIds = await this.listInternalRecipeDesignerUserIds();
+    return Boolean(
+      series.createdBy && internalUserIds.includes(series.createdBy),
+    );
+  }
+
   private async expandIngredientSearchTerms(search?: string) {
     const trimmed = search?.trim();
     if (!trimmed) {
@@ -1237,17 +1314,21 @@ export class RecipeDesignerService {
     });
   }
 
-  async listDrafts(createdBy: string) {
+  async listDrafts(access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const where = isInternalRecipeDesignerRole(context)
+      ? {
+          OR: [
+            { createdBy: context.userId },
+            {
+              status: DesignRecipeStatus.PUBLISHED,
+              publishedRecipeId: { not: null },
+            },
+          ],
+        }
+      : { createdBy: context.userId };
     const drafts = (await this.prisma.designRecipe.findMany({
-      where: {
-        OR: [
-          { createdBy },
-          {
-            status: DesignRecipeStatus.PUBLISHED,
-            publishedRecipeId: { not: null },
-          },
-        ],
-      },
+      where,
       select: DESIGN_RECIPE_LIST_SELECT,
       orderBy: { updatedAt: 'desc' },
     })) as unknown as DesignRecipeWithItems[];
@@ -1257,12 +1338,10 @@ export class RecipeDesignerService {
     );
   }
 
-  async listSeries(userId: string) {
+  async listSeries(access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const series = (await this.prisma.recipeSeries.findMany({
-      where: {
-        status: RecipeSeriesStatus.ACTIVE,
-        deletedAt: null,
-      },
+      where: await this.buildSeriesVisibilityWhere(context),
       include: {
         designs: {
           orderBy: { updatedAt: 'desc' },
@@ -1275,11 +1354,15 @@ export class RecipeDesignerService {
     })) as RecipeSeriesWorkbenchRecord[];
 
     return series.map((record) =>
-      this.buildSeriesWorkbenchCard(record, userId),
+      this.buildSeriesWorkbenchCard(record, context.userId),
     );
   }
 
-  async createSeries(dto: CreateRecipeSeriesDto, userId: string) {
+  async createSeries(
+    dto: CreateRecipeSeriesDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('请填写系列名称');
@@ -1300,7 +1383,7 @@ export class RecipeDesignerService {
               data: {
                 name,
                 status: RecipeSeriesStatus.ACTIVE,
-                createdBy: userId,
+                createdBy: context.userId,
               },
             });
 
@@ -1317,7 +1400,7 @@ export class RecipeDesignerService {
                 nutritionStandard: 'FEDIAF_2025',
                 targetHealthTags: [],
                 applicableLifeStages: [lifeStage],
-                createdBy: userId,
+                createdBy: context.userId,
                 seriesId: series.id,
                 seriesLifeStage: lifeStage,
               },
@@ -1330,7 +1413,7 @@ export class RecipeDesignerService {
                 designs: [design],
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
-              userId,
+              context.userId,
             );
           },
           {
@@ -1354,8 +1437,9 @@ export class RecipeDesignerService {
   async createSeriesStageDraft(
     seriesId: string,
     dto: CreateRecipeSeriesStageDraftDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const lifeStage = mapScenarioToSeriesLifeStage(dto.scenario);
 
     for (
@@ -1373,7 +1457,8 @@ export class RecipeDesignerService {
             if (
               !series ||
               series.status !== RecipeSeriesStatus.ACTIVE ||
-              series.deletedAt
+              series.deletedAt ||
+              !(await this.isSeriesAccessibleByContext(series, context))
             ) {
               throw new NotFoundException(
                 `Recipe series ${seriesId} not found`,
@@ -1416,7 +1501,7 @@ export class RecipeDesignerService {
                 nutritionStandard: 'FEDIAF_2025',
                 targetHealthTags: [],
                 applicableLifeStages: [lifeStage],
-                createdBy: userId,
+                createdBy: context.userId,
                 seriesId,
                 seriesLifeStage: lifeStage,
                 ...(sourceTemplate
@@ -1513,11 +1598,24 @@ export class RecipeDesignerService {
   async renameSeries(
     seriesId: string,
     dto: RenameRecipeSeriesDto,
-    _userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('请填写系列名称');
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+    });
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt ||
+      !(await this.isSeriesAccessibleByContext(series, context))
+    ) {
+      throw new NotFoundException(`Recipe series ${seriesId} not found`);
     }
 
     return this.prisma.recipeSeries.update({
@@ -1529,8 +1627,9 @@ export class RecipeDesignerService {
   async deleteSeries(
     seriesId: string,
     dto: DeleteRecipeSeriesDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const series = await this.prisma.recipeSeries.findUnique({
       where: { id: seriesId },
       include: {
@@ -1541,7 +1640,8 @@ export class RecipeDesignerService {
     if (
       !series ||
       series.status !== RecipeSeriesStatus.ACTIVE ||
-      series.deletedAt
+      series.deletedAt ||
+      !(await this.isSeriesAccessibleByContext(series, context))
     ) {
       throw new NotFoundException(`Recipe series ${seriesId} not found`);
     }
@@ -1582,7 +1682,7 @@ export class RecipeDesignerService {
         data: {
           status: RecipeSeriesStatus.DELETED,
           deletedAt: new Date(),
-          deletedBy: userId,
+          deletedBy: context.userId,
         },
       });
     });
@@ -1714,10 +1814,18 @@ export class RecipeDesignerService {
     );
   }
 
-  async getDraft(id: string, userId: string) {
+  async getDraft(id: string, access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.loadDraft(id);
 
-    if (draft.createdBy !== userId && !this.isPublishedDraft(draft)) {
+    if (!isInternalRecipeDesignerRole(context)) {
+      if (draft.createdBy !== context.userId) {
+        throw new NotFoundException(`Design recipe ${id} not found`);
+      }
+      return draft;
+    }
+
+    if (draft.createdBy !== context.userId && !this.isPublishedDraft(draft)) {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
 
@@ -1889,7 +1997,11 @@ export class RecipeDesignerService {
     return Number.isFinite(value) ? value : 0;
   }
 
-  async createDraft(dto: CreateRecipeDesignDraftDto, userId: string) {
+  async createDraft(
+    dto: CreateRecipeDesignDraftDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     return this.prisma.$transaction(async (tx) => {
       const latestVersion = await tx.designRecipe.aggregate({
         where: { name: dto.name },
@@ -1905,7 +2017,7 @@ export class RecipeDesignerService {
           targetHealthTags: dto.targetHealthTags ?? [],
           applicableLifeStages: dto.applicableLifeStages ?? [],
           notes: dto.notes ?? null,
-          createdBy: userId,
+          createdBy: context.userId,
         },
         include: DESIGN_RECIPE_INCLUDE,
       });
@@ -1915,9 +2027,13 @@ export class RecipeDesignerService {
   async updateDraft(
     id: string,
     dto: UpdateRecipeDesignDraftDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
-    const currentDraft = await this.assertDraftEditableByUser(id, userId);
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const currentDraft = await this.assertDraftEditableByUser(
+      id,
+      context.userId,
+    );
     const selectedSeriesLifeStage =
       dto.scenario !== undefined && currentDraft?.seriesId
         ? mapScenarioToSeriesLifeStage(dto.scenario)
@@ -1948,7 +2064,8 @@ export class RecipeDesignerService {
     });
   }
 
-  async deleteDraft(id: string, userId: string) {
+  async deleteDraft(id: string, access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.prisma.designRecipe.findUnique({
       where: { id },
       select: {
@@ -1960,7 +2077,7 @@ export class RecipeDesignerService {
       },
     });
 
-    if (!draft || draft.createdBy !== userId) {
+    if (!draft || draft.createdBy !== context.userId) {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
 
@@ -1977,10 +2094,11 @@ export class RecipeDesignerService {
     });
   }
 
-  async createRevisionDraft(id: string, userId: string) {
+  async createRevisionDraft(id: string, access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const source = await this.loadDraft(id);
 
-    if (source.createdBy !== userId && !this.isPublishedDraft(source)) {
+    if (source.createdBy !== context.userId && !this.isPublishedDraft(source)) {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
     if (!this.isPublishedDraft(source) || !source.publishedRecipeId) {
@@ -1989,7 +2107,7 @@ export class RecipeDesignerService {
 
     const existingRevision = await this.prisma.designRecipe.findFirst({
       where: {
-        createdBy: userId,
+        createdBy: context.userId,
         revisionBaseRecipeId: source.publishedRecipeId,
         status: { not: DesignRecipeStatus.PUBLISHED },
         publishedRecipeId: null,
@@ -2018,7 +2136,7 @@ export class RecipeDesignerService {
         targetHealthTags: source.targetHealthTags,
         applicableLifeStages: source.applicableLifeStages,
         notes: source.notes,
-        createdBy: userId,
+        createdBy: context.userId,
         totalWeightG: source.totalWeightG ?? 0,
         energyDensityKcalPerKg: null,
         calculatedNutrition: {},
@@ -2058,9 +2176,10 @@ export class RecipeDesignerService {
   async addItem(
     designRecipeId: string,
     dto: AddRecipeDesignItemDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
-    await this.assertDraftEditableByUser(designRecipeId, userId);
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertDraftEditableByUser(designRecipeId, context.userId);
     const ingredientId = await this.resolveDesignItemIngredientId(dto);
     const preparationMethod = await this.resolveDesignItemPreparationMethod(
       dto.preparationMethod,
@@ -2095,9 +2214,10 @@ export class RecipeDesignerService {
   async updateItem(
     itemId: string,
     dto: UpdateRecipeDesignItemDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
-    await this.assertItemEditableByUser(itemId, userId);
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertItemEditableByUser(itemId, context.userId);
 
     const data: Prisma.DesignRecipeItemUncheckedUpdateInput = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
@@ -2125,8 +2245,9 @@ export class RecipeDesignerService {
     });
   }
 
-  async removeItem(itemId: string, userId: string) {
-    await this.assertItemEditableByUser(itemId, userId);
+  async removeItem(itemId: string, access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertItemEditableByUser(itemId, context.userId);
 
     return this.prisma.designRecipeItem.delete({
       where: { id: itemId },
@@ -2152,8 +2273,9 @@ export class RecipeDesignerService {
   async publishDraft(
     id: string,
     dto: PublishRecipeDesignDraftDto,
-    userId: string,
+    access: RecipeDesignerAccessInput,
   ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
     const requestedRecipeName = dto.name?.trim() || '';
     const recipeName = this.stripRevisionSuffix(requestedRecipeName);
     const reviewNote = dto.reviewNote?.trim() || null;
@@ -2274,7 +2396,7 @@ export class RecipeDesignerService {
           recipeVersion: recipe.version,
           reviewStatus,
           reviewNote,
-          publishedBy: userId,
+          publishedBy: context.userId,
           snapshotData: this.toJsonValue({
             designRecipe: { ...draft, name: recipeName },
             assessment,
@@ -2295,7 +2417,9 @@ export class RecipeDesignerService {
           reviewStatus,
           reviewNote,
           reviewedBy:
-            reviewStatus === DesignRecipeReviewStatus.APPROVED ? userId : null,
+            reviewStatus === DesignRecipeReviewStatus.APPROVED
+              ? context.userId
+              : null,
           reviewedAt:
             reviewStatus === DesignRecipeReviewStatus.APPROVED
               ? new Date()

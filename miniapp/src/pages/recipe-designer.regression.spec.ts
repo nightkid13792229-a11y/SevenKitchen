@@ -67,6 +67,12 @@ describe('recipe designer mobile entry', () => {
     const listCustomerModeBlock = listSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
     const listSupplementLibraryBlock = listSource.match(/const canManageSupplementLibrary = computed\([\s\S]*?\)/)?.[0] || ''
     const seriesMetaBlock = listSource.match(/function formatSeriesMeta[\s\S]*?\n\}/)?.[0] || ''
+    const customerSeriesMetaBlock = seriesMetaBlock.match(/if \(isCustomerMode\.value\) \{[\s\S]*?\n  \}/)?.[0] || ''
+    const internalSeriesMetaBlock = seriesMetaBlock.slice(
+      customerSeriesMetaBlock
+        ? seriesMetaBlock.indexOf(customerSeriesMetaBlock) + customerSeriesMetaBlock.length
+        : 0,
+    )
 
     expect(listSource).toContain('isCustomerMode')
     expect(listSource).toContain('按生命阶段维护通用食谱草稿')
@@ -80,8 +86,11 @@ describe('recipe designer mobile entry', () => {
     expect(listSupplementLibraryBlock).toContain('!isCustomerMode.value')
     expect(seriesMetaBlock).toContain('if (isCustomerMode.value)')
     expect(seriesMetaBlock).toContain('最近编辑')
-    expect(seriesMetaBlock).toContain('publishedStageCount')
-    expect(seriesMetaBlock.indexOf('publishedStageCount')).toBeGreaterThan(seriesMetaBlock.indexOf('if (isCustomerMode.value)'))
+    expect(customerSeriesMetaBlock).toContain('return editedText')
+    expect(customerSeriesMetaBlock).not.toContain('publishedStageCount')
+    expect(customerSeriesMetaBlock).not.toContain('已发布')
+    expect(internalSeriesMetaBlock).toContain('publishedStageCount')
+    expect(internalSeriesMetaBlock).toContain('已发布')
   })
 
   it('loads recipe designer series cards instead of standalone draft cards', () => {

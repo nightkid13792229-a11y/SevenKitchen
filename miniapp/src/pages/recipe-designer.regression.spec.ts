@@ -79,7 +79,7 @@ describe('recipe designer mobile entry', () => {
     expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
     expect(listSupplementLibraryBlock).toContain('!isCustomerMode.value')
     expect(seriesMetaBlock).toContain('if (isCustomerMode.value)')
-    expect(seriesMetaBlock).toContain('已编辑')
+    expect(seriesMetaBlock).toContain('最近编辑')
     expect(seriesMetaBlock).toContain('publishedStageCount')
     expect(seriesMetaBlock.indexOf('publishedStageCount')).toBeGreaterThan(seriesMetaBlock.indexOf('if (isCustomerMode.value)'))
   })

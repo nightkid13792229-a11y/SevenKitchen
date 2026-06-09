@@ -160,6 +160,7 @@ const DESIGN_RECIPE_LIST_SELECT = {
 };
 
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
+const RECIPE_DESIGNER_BACKFILL_USER_ID = 'recipe-designer-backfill';
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
@@ -993,6 +994,18 @@ export class RecipeDesignerService {
     return Boolean(
       series.createdBy && internalUserIds.includes(series.createdBy),
     );
+  }
+
+  private async isInternalRecipeDesignerCreatorId(
+    creatorId?: string | null,
+  ) {
+    if (!creatorId) return false;
+    if (creatorId === RECIPE_DESIGNER_BACKFILL_USER_ID) {
+      return true;
+    }
+
+    const internalUserIds = await this.listInternalRecipeDesignerUserIds();
+    return internalUserIds.includes(creatorId);
   }
 
   private async expandIngredientSearchTerms(search?: string) {
@@ -2096,8 +2109,15 @@ export class RecipeDesignerService {
 
   async createRevisionDraft(id: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('只有员工可以修订正式食谱');
+    }
+
     const source = await this.loadDraft(id);
 
+    if (!(await this.isInternalRecipeDesignerCreatorId(source.createdBy))) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
     if (source.createdBy !== context.userId && !this.isPublishedDraft(source)) {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
@@ -2276,6 +2296,10 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
+    if (context.role !== UserRole.ADMIN) {
+      throw new BadRequestException('只有管理员可以发布正式食谱');
+    }
+
     const requestedRecipeName = dto.name?.trim() || '';
     const recipeName = this.stripRevisionSuffix(requestedRecipeName);
     const reviewNote = dto.reviewNote?.trim() || null;
@@ -2285,6 +2309,10 @@ export class RecipeDesignerService {
     }
 
     const draft = await this.loadDraft(id);
+    if (!(await this.isInternalRecipeDesignerCreatorId(draft.createdBy))) {
+      throw new BadRequestException('用户私有草稿不能发布为正式食谱');
+    }
+
     await this.assertRevisionHasPublishableChanges(draft, recipeName);
 
     const targets = await this.targetProvider.getTargets(

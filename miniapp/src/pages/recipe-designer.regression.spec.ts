@@ -63,6 +63,16 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/supplement-library')
   })
 
+  it('supports a customer mode list copy for private life-stage drafts', () => {
+    expect(listSource).toContain('isCustomerMode')
+    expect(listSource).toContain('按生命阶段维护通用食谱草稿')
+    expect(listSource).toContain('暂无食谱草稿')
+    expect(listSource).toContain('点击新建食谱开始设计')
+    expect(listSource).toContain('v-if="canManageSupplementLibrary"')
+    expect(listSource).toContain('formatSeriesMeta(seriesItem)')
+    expect(listSource).not.toContain('为某只狗设计')
+  })
+
   it('loads recipe designer series cards instead of standalone draft cards', () => {
     expect(apiSource).toContain('RecipeDesignerSeriesCard')
     expect(apiSource).toContain('RecipeDesignerSeriesStage')
@@ -223,6 +233,16 @@ describe('recipe designer mobile entry', () => {
 })
 
 describe('recipe designer editor guardrails', () => {
+  it('keeps customer mode out of internal supplement and revision flows', () => {
+    expect(editorSource).toContain('isCustomerMode')
+    expect(editorSource).toContain('canCreateRevisionDraft')
+    expect(editorSource).toContain('if (!canCreateRevisionDraft.value)')
+    expect(editorSource).toContain('showSupplementLibraryTip')
+    expect(editorSource).toContain('canCreateSupplementOption.value')
+    expect(editorSource).toContain('当前草稿评估结果')
+    expect(editorSource).not.toContain('为某只狗设计')
+  })
+
   it('keeps supplement maintenance out of the add ingredient picker', () => {
     expect(editorSource).toContain('supplement-library-tip')
     expect(editorSource).toContain('没有找到补剂？去补剂库新增')
@@ -1446,6 +1466,15 @@ describe('recipe designer assessment categorization', () => {
 })
 
 describe('recipe designer publish nutrition report', () => {
+  it('shows nutrition report copy to customers without backend publish language', () => {
+    expect(publishSource).toContain('isCustomerMode')
+    expect(publishSource).toContain('reportPageTitle')
+    expect(publishSource).toContain('营养报告')
+    expect(publishSource).toContain('提交后台草稿')
+    expect(publishSource).toContain('canPublishRecipe')
+    expect(publishSource).toContain("currentUserRole.value === 'ADMIN'")
+  })
+
   it('builds ingredient, macro, energy, mineral, and vitamin report rows', () => {
     const report = buildPublishNutritionReport({
       draft: {

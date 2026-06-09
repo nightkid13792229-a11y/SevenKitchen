@@ -285,6 +285,15 @@ type PublishedRecipePresentationMedia = {
   videoUrl: string | null;
 };
 
+type PublishedRecipeVersionInheritance = PublishedRecipePresentationMedia & {
+  id: string;
+  viewCount: number;
+  favoriteCount: number;
+  diyGenCount: number;
+  likeCount: number;
+  salesCount: number;
+};
+
 type RevisionChangeState = 'NOT_REVISION' | 'UNCHANGED' | 'CHANGED';
 
 type DesignRecipeWorkbenchCard = DesignRecipeWithItems & {
@@ -404,6 +413,15 @@ const RECIPE_PRESENTATION_MEDIA_SELECT = {
   coverTitle: true,
   detailImages: true,
   videoUrl: true,
+} as const;
+const RECIPE_VERSION_INHERITANCE_SELECT = {
+  id: true,
+  viewCount: true,
+  favoriteCount: true,
+  diyGenCount: true,
+  likeCount: true,
+  salesCount: true,
+  ...RECIPE_PRESENTATION_MEDIA_SELECT,
 } as const;
 const NEGATED_SALT_SEARCH_PHRASES = [
   '不加盐',
@@ -2181,7 +2199,7 @@ export class RecipeDesignerService {
       draft.targetHealthTags,
     );
     const publishTarget = await this.resolvePublishTarget(draft);
-    const presentationMedia = await this.resolvePublishedRecipePresentationMedia(
+    const inheritance = await this.resolvePublishedRecipeInheritance(
       draft,
       publishTarget,
     );
@@ -2207,7 +2225,10 @@ export class RecipeDesignerService {
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
           ...this.buildPublishedRecipePresentationMediaCreateData(
-            presentationMedia,
+            inheritance.media,
+          ),
+          ...this.buildPublishedRecipeOperationalCreateData(
+            inheritance.previousVersion,
           ),
           ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
           ...(publishedSeriesLifeStage
@@ -2227,6 +2248,13 @@ export class RecipeDesignerService {
           },
         },
       });
+
+      if (inheritance.previousVersion) {
+        await tx.favoriteRecipe.updateMany({
+          where: { recipeId: inheritance.previousVersion.id },
+          data: { recipeId: recipe.id },
+        });
+      }
 
       const reviewStatus =
         assessment.overallStatus === 'COMPLIANT'
@@ -2481,23 +2509,26 @@ export class RecipeDesignerService {
     };
   }
 
-  private async resolvePublishedRecipePresentationMedia(
+  private async resolvePublishedRecipeInheritance(
     draft: DesignRecipeWithItems,
     publishTarget: { recipeId: string; version: number },
-  ): Promise<PublishedRecipePresentationMedia | null> {
-    const previousVersionMedia =
+  ): Promise<{
+    media: PublishedRecipePresentationMedia | null;
+    previousVersion: PublishedRecipeVersionInheritance | null;
+  }> {
+    const previousVersion =
       publishTarget.version > 1
         ? ((await this.prisma.recipe.findFirst({
             where: {
               recipeId: publishTarget.recipeId,
               version: publishTarget.version - 1,
             },
-            select: RECIPE_PRESENTATION_MEDIA_SELECT,
-          })) as PublishedRecipePresentationMedia | null)
+            select: RECIPE_VERSION_INHERITANCE_SELECT,
+          })) as PublishedRecipeVersionInheritance | null)
         : null;
 
     const seriesFallbackMedia =
-      draft.seriesId && !previousVersionMedia?.coverImageUrl
+      draft.seriesId && !previousVersion?.coverImageUrl
         ? ((await this.prisma.recipe.findFirst({
             where: {
               seriesId: draft.seriesId,
@@ -2508,10 +2539,13 @@ export class RecipeDesignerService {
           })) as PublishedRecipePresentationMedia | null)
         : null;
 
-    return this.mergePublishedRecipePresentationMedia(
-      previousVersionMedia,
-      seriesFallbackMedia,
-    );
+    return {
+      media: this.mergePublishedRecipePresentationMedia(
+        previousVersion,
+        seriesFallbackMedia,
+      ),
+      previousVersion: previousVersion?.id ? previousVersion : null,
+    };
   }
 
   private mergePublishedRecipePresentationMedia(
@@ -2556,6 +2590,25 @@ export class RecipeDesignerService {
         ? { detailImages: media.detailImages as Prisma.InputJsonValue }
         : {}),
       ...(media?.videoUrl ? { videoUrl: media.videoUrl } : {}),
+    };
+  }
+
+  private buildPublishedRecipeOperationalCreateData(
+    previousVersion: PublishedRecipeVersionInheritance | null,
+  ): Pick<
+    Prisma.RecipeUncheckedCreateInput,
+    'viewCount' | 'favoriteCount' | 'diyGenCount' | 'likeCount' | 'salesCount'
+  > {
+    if (!previousVersion) {
+      return {};
+    }
+
+    return {
+      viewCount: previousVersion.viewCount ?? 0,
+      favoriteCount: previousVersion.favoriteCount ?? 0,
+      diyGenCount: previousVersion.diyGenCount ?? 0,
+      likeCount: previousVersion.likeCount ?? 0,
+      salesCount: previousVersion.salesCount ?? 0,
     };
   }
 

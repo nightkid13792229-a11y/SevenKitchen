@@ -1598,14 +1598,15 @@ export class RecipeDesignerService {
         updatedAt: latestRecord?.updatedAt ?? null,
       };
     });
+    const publishedStageCount = stages.filter((stage) =>
+      Boolean(stage.recipeId),
+    ).length;
 
     return {
       id: series.id,
       name: series.name,
       updatedAt: series.updatedAt,
-      publishedStageCount: stages.filter(
-        (stage) => stage.status === 'PUBLISHED',
-      ).length,
+      publishedStageCount,
       stages,
     };
   }
@@ -1614,9 +1615,6 @@ export class RecipeDesignerService {
     designs: RecipeSeriesWorkbenchRecord['designs'],
     recipes: RecipeSeriesWorkbenchRecord['recipes'],
   ): RecipeSeriesStageStatus {
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
-      return 'PUBLISHED';
-    }
     if (
       designs.some(
         (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
@@ -1633,6 +1631,12 @@ export class RecipeDesignerService {
     }
     if (designs.some((design) => !this.isPublishedDraft(design))) {
       return 'DRAFT';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
+      return 'DRAFT';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
+      return 'PUBLISHED';
     }
     return 'NOT_DESIGNED';
   }

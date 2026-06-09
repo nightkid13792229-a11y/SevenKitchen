@@ -4184,6 +4184,59 @@ describe('RecipeDesignerService', () => {
       ]);
     });
 
+    it('shows a stage as draft when a backend recipe draft exists after a public version', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        {
+          id: 'series-1',
+          name: '牛肉南瓜鲜食',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-05-31T14:32:00.000Z'),
+          designs: [
+            draft({
+              id: 'adult-design',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLISHED',
+              publishedRecipeId: 'adult-recipe-id',
+              updatedAt: new Date('2026-05-31T14:32:00.000Z'),
+            }),
+          ],
+          recipes: [
+            {
+              recipeId: 'adult-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              version: 1,
+              updatedAt: new Date('2026-05-31T14:40:00.000Z'),
+            },
+            {
+              recipeId: 'adult-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'DRAFT',
+              version: 2,
+              updatedAt: new Date('2026-05-31T15:00:00.000Z'),
+            },
+          ],
+        },
+      ]);
+
+      const cards = await service.listSeries('staff-1');
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          publishedStageCount: 1,
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'DRAFT',
+              recipeId: 'adult-recipe-id',
+            }),
+          ]),
+        }),
+      );
+    });
+
     it('reuses an existing unpublished stage draft', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue({
         id: 'series-1',

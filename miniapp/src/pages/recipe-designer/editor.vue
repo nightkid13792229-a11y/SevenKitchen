@@ -951,6 +951,12 @@ const canCreateSupplementOption = computed(() => {
   return currentUserRole.value === 'STAFF' || currentUserRole.value === 'ADMIN'
 })
 
+const isCustomerMode = computed(() => {
+  return currentUserRole.value !== 'STAFF' && currentUserRole.value !== 'ADMIN'
+})
+
+const canCreateRevisionDraft = computed(() => !isCustomerMode.value)
+
 const showSupplementLibraryTip = computed(() => {
   return (
     canCreateSupplementOption.value &&
@@ -1040,7 +1046,7 @@ const assessmentStandardContextLabel = computed(() => {
     assessment.value?.standardName || assessment.value?.nutritionStandardName || 'FEDIAF 2025',
   )
   const lifeStage = getScenarioLabel(assessment.value?.scenario || scenario.value)
-  return `${standardName} · ${lifeStage}`
+  return `当前草稿评估结果 · ${standardName} · ${lifeStage}`
 })
 
 const draftSeriesStageLabel = computed(() => {
@@ -1178,6 +1184,11 @@ async function ensureEditableDraftAfterLoad(draft: any) {
     publishedAt: draft?.publishedAt,
   })) {
     return false
+  }
+  if (!canCreateRevisionDraft.value) {
+    uni.showToast({ title: '该食谱草稿不可编辑', icon: 'none' })
+    setTimeout(() => uni.navigateBack(), 800)
+    return true
   }
   if (!draftId.value || redirectingToEditableDraft.value) return true
 

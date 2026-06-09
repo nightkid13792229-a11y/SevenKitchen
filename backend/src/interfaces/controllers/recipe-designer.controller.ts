@@ -59,6 +59,13 @@ const WECHAT_UPLOAD_FALLBACK_MIME_TYPES = new Set([
   '',
 ]);
 
+function toRecipeDesignerAccessContext(user: RequestUser) {
+  return {
+    userId: user.userId,
+    role: user.role,
+  };
+}
+
 function supplementLabelFileFilter(
   _req: unknown,
   file: Express.Multer.File,
@@ -88,7 +95,7 @@ function isAllowedSupplementLabelUpload(file?: Express.Multer.File): boolean {
 @ApiBearerAuth()
 @ApiSecurity('wechat-auth')
 @Controller('api/v1/recipe-designer')
-@UseGuards(AuthGuard, StaffGuard)
+@UseGuards(AuthGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class RecipeDesignerController {
   constructor(
@@ -110,6 +117,7 @@ export class RecipeDesignerController {
   }
 
   @Post('supplement-options')
+  @UseGuards(StaffGuard)
   @ApiOperation({
     summary: 'Create a manual supplement option for recipe design',
   })
@@ -125,6 +133,7 @@ export class RecipeDesignerController {
   }
 
   @Post('supplement-label/extract')
+  @UseGuards(StaffGuard)
   @ApiOperation({
     summary: 'Upload a supplement label image and extract an AI prefill draft',
   })
@@ -162,7 +171,9 @@ export class RecipeDesignerController {
   async listSeries(
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const series = await this.recipeDesignerService.listSeries(user.userId);
+    const series = await this.recipeDesignerService.listSeries(
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(series);
   }
 
@@ -174,7 +185,7 @@ export class RecipeDesignerController {
   ): Promise<ApiResponseDto<any>> {
     const series = await this.recipeDesignerService.createSeries(
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(series);
   }
@@ -189,7 +200,7 @@ export class RecipeDesignerController {
     const series = await this.recipeDesignerService.renameSeries(
       seriesId,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(series);
   }
@@ -204,7 +215,7 @@ export class RecipeDesignerController {
     const series = await this.recipeDesignerService.deleteSeries(
       seriesId,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(series);
   }
@@ -219,7 +230,7 @@ export class RecipeDesignerController {
     const draft = await this.recipeDesignerService.createSeriesStageDraft(
       seriesId,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
   }
@@ -229,7 +240,9 @@ export class RecipeDesignerController {
   async listDrafts(
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const drafts = await this.recipeDesignerService.listDrafts(user.userId);
+    const drafts = await this.recipeDesignerService.listDrafts(
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(drafts);
   }
 
@@ -239,7 +252,10 @@ export class RecipeDesignerController {
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const draft = await this.recipeDesignerService.getDraft(id, user.userId);
+    const draft = await this.recipeDesignerService.getDraft(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(draft);
   }
 
@@ -251,7 +267,7 @@ export class RecipeDesignerController {
   ): Promise<ApiResponseDto<any>> {
     const draft = await this.recipeDesignerService.createDraft(
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
   }
@@ -266,7 +282,7 @@ export class RecipeDesignerController {
     const draft = await this.recipeDesignerService.updateDraft(
       id,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
   }
@@ -277,7 +293,10 @@ export class RecipeDesignerController {
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const draft = await this.recipeDesignerService.deleteDraft(id, user.userId);
+    const draft = await this.recipeDesignerService.deleteDraft(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(draft);
   }
 
@@ -288,7 +307,11 @@ export class RecipeDesignerController {
     @Body() dto: AddRecipeDesignItemDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
-    const item = await this.recipeDesignerService.addItem(id, dto, user.userId);
+    const item = await this.recipeDesignerService.addItem(
+      id,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(item);
   }
 
@@ -302,7 +325,7 @@ export class RecipeDesignerController {
     const item = await this.recipeDesignerService.updateItem(
       itemId,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(item);
   }
@@ -315,19 +338,26 @@ export class RecipeDesignerController {
   ): Promise<ApiResponseDto<any>> {
     const item = await this.recipeDesignerService.removeItem(
       itemId,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(item);
   }
 
   @Post('drafts/:id/assess')
   @ApiOperation({ summary: 'Assess a recipe design draft against FEDIAF 2025' })
-  async assessDraft(@Param('id') id: string): Promise<ApiResponseDto<any>> {
-    const result = await this.recipeDesignerService.assessDraft(id);
+  async assessDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.assessDraft(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
     return ApiResponseDto.success(result);
   }
 
   @Post('drafts/:id/revisions')
+  @UseGuards(StaffGuard)
   @ApiOperation({
     summary: 'Create an editable revision draft from a published recipe design',
   })
@@ -337,12 +367,13 @@ export class RecipeDesignerController {
   ): Promise<ApiResponseDto<any>> {
     const result = await this.recipeDesignerService.createRevisionDraft(
       id,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);
   }
 
   @Post('drafts/:id/publish')
+  @UseGuards(StaffGuard)
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Publish a recipe design draft as a recipe' })
   async publishDraft(
@@ -353,7 +384,7 @@ export class RecipeDesignerController {
     const result = await this.recipeDesignerService.publishDraft(
       id,
       dto,
-      user.userId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);
   }

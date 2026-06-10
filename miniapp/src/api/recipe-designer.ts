@@ -38,13 +38,21 @@ export type RecipeSeriesStageStatus =
   | 'MODIFIED'
   | 'IN_REVIEW'
   | 'PUBLISHED'
+  | 'PRIVATE_CUSTOM'
   | 'NEEDS_CHANGES'
+
+export type RecipeDesignerSeriesStatusFilter = 'DRAFT' | 'PUBLIC' | 'PRIVATE_CUSTOM'
+
+export type RecipeDesignerSeriesStatusCategory =
+  | 'NOT_DESIGNED'
+  | RecipeDesignerSeriesStatusFilter
 
 export interface RecipeDesignerSeriesStage {
   lifeStage: string
   label: string
   scenario: FediafDogScenario
   status: RecipeSeriesStageStatus
+  recipeStatusCategory?: RecipeDesignerSeriesStatusCategory
   draftId?: string
   recipeId?: string
   updatedAt?: string
@@ -61,6 +69,10 @@ export interface RecipeDesignerSeriesCard {
 export interface CreateRecipeSeriesPayload {
   name: string
   scenario?: FediafDogScenario
+}
+
+export interface RecipeDesignerSeriesListQuery {
+  status?: RecipeDesignerSeriesStatusFilter
 }
 
 export interface DeleteRecipeSeriesPayload {
@@ -240,7 +252,8 @@ export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
   getDraft: (draftId: string) =>
     request({ url: `/recipe-designer/drafts/${draftId}`, method: 'GET' }),
-  listSeries: () => request({ url: '/recipe-designer/series', method: 'GET' }),
+  listSeries: (data: RecipeDesignerSeriesListQuery = {}) =>
+    request({ url: '/recipe-designer/series', method: 'GET', data }),
   createSeries: (data: CreateRecipeSeriesPayload) =>
     request({ url: '/recipe-designer/series', method: 'POST', data }),
   renameSeries: (seriesId: string, data: { name: string }) =>

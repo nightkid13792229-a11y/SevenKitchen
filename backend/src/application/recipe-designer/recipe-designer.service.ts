@@ -50,6 +50,7 @@ import type {
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
   ListRecipeDesignerIngredientOptionsDto,
+  ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
   UpdateRecipeDesignDraftDto,
@@ -356,6 +357,12 @@ type RecipeSeriesWorkbenchRecord = {
     updatedAt?: Date | string | null;
   }>;
 };
+
+type RecipeSeriesStageRecipeStatusCategory =
+  | 'NOT_DESIGNED'
+  | 'DRAFT'
+  | 'PUBLIC'
+  | 'PRIVATE_CUSTOM';
 
 type IngredientOptionRecord = {
   id: string;
@@ -1371,7 +1378,10 @@ export class RecipeDesignerService {
     );
   }
 
-  async listSeries(access: RecipeDesignerAccessInput) {
+  async listSeries(
+    access: RecipeDesignerAccessInput,
+    query: ListRecipeDesignerSeriesDto = {},
+  ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     const series = (await this.prisma.recipeSeries.findMany({
       where: await this.buildSeriesVisibilityWhere(context),
@@ -1387,9 +1397,10 @@ export class RecipeDesignerService {
       orderBy: { updatedAt: 'desc' },
     })) as RecipeSeriesWorkbenchRecord[];
 
-    return series.map((record) =>
+    const cards = series.map((record) =>
       this.buildSeriesWorkbenchCard(record, context.userId),
     );
+    return this.filterSeriesWorkbenchCards(cards, query.status);
   }
 
   async createSeries(
@@ -1749,12 +1760,15 @@ export class RecipeDesignerService {
         ...statusDesigns,
         ...recipes,
       ]);
+      const recipeStatusCategory =
+        this.resolveSeriesStageRecipeStatusCategory(effectiveDesigns, recipes);
 
       return {
         lifeStage,
         label: SERIES_LIFE_STAGE_LABELS[lifeStage],
         scenario: mapSeriesLifeStageToScenario(lifeStage),
         status,
+        recipeStatusCategory,
         draftId: latestDesign?.id ?? null,
         recipeId: latestPublicRecipe?.recipeId ?? null,
         updatedAt: latestRecord?.updatedAt ?? null,
@@ -1771,6 +1785,41 @@ export class RecipeDesignerService {
       publishedStageCount,
       stages,
     };
+  }
+
+  private filterSeriesWorkbenchCards<
+    T extends {
+      stages: Array<{
+        recipeStatusCategory: RecipeSeriesStageRecipeStatusCategory;
+      }>;
+    },
+  >(cards: T[], status?: ListRecipeDesignerSeriesDto['status']): T[] {
+    if (!status) {
+      return cards;
+    }
+
+    return cards.filter((card) =>
+      card.stages.some((stage) => stage.recipeStatusCategory === status),
+    );
+  }
+
+  private resolveSeriesStageRecipeStatusCategory(
+    effectiveDesigns: RecipeSeriesWorkbenchRecord['designs'],
+    recipes: RecipeSeriesWorkbenchRecord['recipes'],
+  ): RecipeSeriesStageRecipeStatusCategory {
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)) {
+      return 'PRIVATE_CUSTOM';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
+      return 'DRAFT';
+    }
+    if (effectiveDesigns.length > 0) {
+      return 'DRAFT';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
+      return 'PUBLIC';
+    }
+    return 'NOT_DESIGNED';
   }
 
   private resolveSeriesStageStatus(
@@ -1796,6 +1845,9 @@ export class RecipeDesignerService {
     }
     if (effectiveDesigns.length > 0) {
       return 'MODIFIED';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)) {
+      return 'PRIVATE_CUSTOM';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
       return 'PUBLISHED';

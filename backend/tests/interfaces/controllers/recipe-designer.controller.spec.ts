@@ -220,7 +220,7 @@ describe('RecipeDesignerController', () => {
     service.deleteSeries.mockResolvedValue({ id: 'series-1', status: 'DELETED' });
     service.createSeriesStageDraft.mockResolvedValue({ id: 'design-1' });
 
-    await expect(controller.listSeries(currentUser)).resolves.toEqual(
+    await expect(controller.listSeries({}, currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'series-1' }] }),
     );
     await expect(
@@ -250,10 +250,13 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
 
-    expect(service.listSeries).toHaveBeenCalledWith({
-      userId: 'staff-1',
-      role: 'STAFF',
-    });
+    expect(service.listSeries).toHaveBeenCalledWith(
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+      {},
+    );
     expect(service.createSeries).toHaveBeenCalledWith(
       { name: '牛肉南瓜鲜食', scenario: 'ADULT_MER_110' },
       {
@@ -287,6 +290,24 @@ describe('RecipeDesignerController', () => {
         userId: 'staff-1',
         role: 'STAFF',
       },
+    );
+  });
+
+  it('delegates recipe designer series status filters to the service', async () => {
+    service.listSeries.mockResolvedValue([{ id: 'series-public' }]);
+
+    await expect(
+      controller.listSeries({ status: 'PUBLIC' }, currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: [{ id: 'series-public' }] }),
+    );
+
+    expect(service.listSeries).toHaveBeenCalledWith(
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+      { status: 'PUBLIC' },
     );
   });
 

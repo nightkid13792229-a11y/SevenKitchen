@@ -136,6 +136,32 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).not.toContain('修订')
   })
 
+  it('supports staff admin recipe status filters aligned with web recipe categories', () => {
+    const adminFilterBlock =
+      listSource.match(/const canUseAdminStatusFilter[\s\S]*?\n\}\)/)?.[0] || ''
+    const loadSeriesBlock =
+      listSource.match(/async function loadSeries[\s\S]*?\n}\n\nfunction openCreateDraftSheet/)?.[0] || ''
+
+    expect(apiSource).toContain('RecipeDesignerSeriesStatusFilter')
+    expect(apiSource).toContain('RecipeDesignerSeriesStatusCategory')
+    expect(apiSource).toContain('recipeStatusCategory?: RecipeDesignerSeriesStatusCategory')
+    expect(apiSource).toContain('RecipeDesignerSeriesListQuery')
+    expect(apiSource).toContain('listSeries: (data: RecipeDesignerSeriesListQuery = {})')
+    expect(apiSource).toContain("request({ url: '/recipe-designer/series', method: 'GET', data })")
+    expect(listSource).toContain('status-filter-bar')
+    expect(listSource).toContain('statusFilterOptions')
+    expect(listSource).toContain('selectedSeriesStatusFilter')
+    expect(listSource).toContain('v-if="canUseAdminStatusFilter"')
+    expect(listSource).toContain('@tap="selectSeriesStatusFilter(option.value)"')
+    expect(listSource).toContain("label: '草稿', value: 'DRAFT'")
+    expect(listSource).toContain("label: '已发布', value: 'PUBLIC'")
+    expect(listSource).toContain("label: '私密食谱', value: 'PRIVATE_CUSTOM'")
+    expect(listSource).toContain('function selectSeriesStatusFilter')
+    expect(adminFilterBlock).toContain('!isCustomerMode.value')
+    expect(loadSeriesBlock).toContain('recipeDesignerApi.listSeries({')
+    expect(loadSeriesBlock).toContain('status: selectedSeriesStatusFilter.value || undefined')
+  })
+
   it('opens or creates a series stage draft from a stage row', () => {
     expect(listSource).toContain('openSeriesStage')
     expect(listSource).toContain('@tap.stop="openSeriesStage(seriesItem, stage)"')

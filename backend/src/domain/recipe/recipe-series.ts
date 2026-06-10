@@ -13,6 +13,7 @@ export type RecipeSeriesStageStatus =
   | 'MODIFIED'
   | 'IN_REVIEW'
   | 'PUBLISHED'
+  | 'PRIVATE_CUSTOM'
   | 'NEEDS_CHANGES';
 
 export type FediafDogScenarioForSeries =

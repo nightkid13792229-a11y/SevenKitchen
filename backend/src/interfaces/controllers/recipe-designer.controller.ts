@@ -34,6 +34,7 @@ import {
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
   ListRecipeDesignerIngredientOptionsDto,
+  ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
   UpdateRecipeDesignDraftDto,
@@ -169,10 +170,12 @@ export class RecipeDesignerController {
   @Get('series')
   @ApiOperation({ summary: 'List recipe design series workbench cards' })
   async listSeries(
+    @Query() query: ListRecipeDesignerSeriesDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     const series = await this.recipeDesignerService.listSeries(
       toRecipeDesignerAccessContext(user),
+      query,
     );
     return ApiResponseDto.success(series);
   }

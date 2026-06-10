@@ -13,6 +13,18 @@
       </view>
     </view>
 
+    <view v-if="canUseAdminStatusFilter" class="status-filter-bar">
+      <button
+        v-for="option in statusFilterOptions"
+        :key="option.value || 'ALL'"
+        class="status-filter-btn"
+        :class="{ 'status-filter-btn-active': selectedSeriesStatusFilter === option.value }"
+        @tap="selectSeriesStatusFilter(option.value)"
+      >
+        {{ option.label }}
+      </button>
+    </view>
+
     <view v-if="loading" class="state-block">
       <text>加载中...</text>
     </view>
@@ -116,6 +128,7 @@ import {
   type FediafDogScenario,
   type RecipeDesignerSeriesCard,
   type RecipeDesignerSeriesStage,
+  type RecipeDesignerSeriesStatusFilter,
   type RecipeSeriesStageStatus,
 } from '../../api/recipe-designer'
 import { getScenarioLabel } from './assessment'
@@ -159,8 +172,16 @@ const seriesStageStatusLabels: Record<RecipeSeriesStageStatus, string> = {
   MODIFIED: '已修改',
   IN_REVIEW: '审核中',
   PUBLISHED: '已发布',
+  PRIVATE_CUSTOM: '私密食谱',
   NEEDS_CHANGES: '需修改',
 }
+
+const statusFilterOptions: Array<{ label: string; value: '' | RecipeDesignerSeriesStatusFilter }> = [
+  { label: '全部', value: '' },
+  { label: '草稿', value: 'DRAFT' },
+  { label: '已发布', value: 'PUBLIC' },
+  { label: '私密食谱', value: 'PRIVATE_CUSTOM' },
+]
 
 const series = ref<RecipeDesignerSeriesCard[]>([])
 const loading = ref(false)
@@ -171,6 +192,7 @@ const openingStageKey = ref('')
 const createSheetVisible = ref(false)
 const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
 const currentUserRole = ref('')
+const selectedSeriesStatusFilter = ref<'' | RecipeDesignerSeriesStatusFilter>('')
 
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
@@ -186,6 +208,8 @@ const isCustomerMode = computed(() => {
 
 const canManageSupplementLibrary = computed(() => !isCustomerMode.value)
 
+const canUseAdminStatusFilter = computed(() => !isCustomerMode.value)
+
 const listSubtitle = computed(() =>
   isCustomerMode.value ? '按生命阶段维护通用食谱草稿' : '食谱系列与生命阶段',
 )
@@ -200,13 +224,18 @@ const emptySubtitle = computed(() =>
 
 onShow(() => {
   currentUserRole.value = getCurrentUserRole()
+  if (isCustomerMode.value) {
+    selectedSeriesStatusFilter.value = ''
+  }
   loadSeries()
 })
 
 async function loadSeries() {
   loading.value = true
   try {
-    const res: any = await recipeDesignerApi.listSeries()
+    const res: any = await recipeDesignerApi.listSeries({
+      status: selectedSeriesStatusFilter.value || undefined,
+    })
     const data = res?.data ?? res
     series.value = Array.isArray(data) ? data : data?.items || data?.series || []
   } catch (error) {
@@ -215,6 +244,12 @@ async function loadSeries() {
   } finally {
     loading.value = false
   }
+}
+
+function selectSeriesStatusFilter(value: '' | RecipeDesignerSeriesStatusFilter) {
+  if (selectedSeriesStatusFilter.value === value) return
+  selectedSeriesStatusFilter.value = value
+  loadSeries()
 }
 
 function openCreateDraftSheet() {
@@ -586,6 +621,34 @@ function formatDateTime(value?: string) {
   border: 1rpx solid #b7d9ff;
 }
 
+.status-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
+  margin-bottom: 24rpx;
+  padding: 8rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.status-filter-btn {
+  height: 60rpx;
+  margin: 0;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  background: #f5f7fa;
+  color: #666;
+  font-size: 24rpx;
+  line-height: 60rpx;
+}
+
+.status-filter-btn-active {
+  background: #e6f4ff;
+  color: #1677ff;
+  font-weight: 700;
+}
+
 .state-block {
   display: flex;
   flex-direction: column;
@@ -756,6 +819,11 @@ function formatDateTime(value?: string) {
 .stage-status-PUBLISHED {
   background: #f6ffed;
   color: #389e0d;
+}
+
+.stage-status-PRIVATE_CUSTOM {
+  background: #fff1f0;
+  color: #cf1322;
 }
 
 .stage-status-NEEDS_CHANGES {

@@ -4500,24 +4500,150 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               lifeStage: 'PUPPY_UNDER_14_WEEKS',
               status: 'IN_REVIEW',
+              recipeStatusCategory: 'DRAFT',
             }),
             expect.objectContaining({
               lifeStage: 'PUPPY_14_WEEKS_PLUS',
               status: 'NEEDS_CHANGES',
+              recipeStatusCategory: 'DRAFT',
             }),
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
               status: 'PUBLISHED',
+              recipeStatusCategory: 'PUBLIC',
             }),
             expect.objectContaining({
               lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
               status: 'MODIFIED',
+              recipeStatusCategory: 'DRAFT',
             }),
             expect.objectContaining({
               lifeStage: 'REPRODUCTION',
               status: 'NOT_DESIGNED',
+              recipeStatusCategory: 'NOT_DESIGNED',
             }),
           ],
+        }),
+      ]);
+    });
+
+    it('maps private custom recipe stages ahead of public and draft states', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        {
+          id: 'series-1',
+          name: '私密定制鲜食',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+          designs: [
+            draft({
+              id: 'adult-revision',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'COMPLIANT',
+              revisionBaseRecipeId: 'private-recipe-id',
+              updatedAt: new Date('2026-06-11T09:00:00.000Z'),
+            }),
+          ],
+          recipes: [
+            {
+              recipeId: 'private-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PRIVATE_CUSTOM',
+              version: 1,
+              updatedAt: new Date('2026-06-11T08:30:00.000Z'),
+            },
+            {
+              recipeId: 'private-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              version: 1,
+              updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+            },
+          ],
+        },
+      ]);
+
+      const cards = await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { status: 'PRIVATE_CUSTOM' },
+      );
+
+      expect(cards).toEqual([
+        expect.objectContaining({
+          id: 'series-1',
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              recipeStatusCategory: 'PRIVATE_CUSTOM',
+            }),
+          ]),
+        }),
+      ]);
+    });
+
+    it('filters series cards by admin recipe status category', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        {
+          id: 'series-draft',
+          name: '草稿鲜食',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+          designs: [
+            draft({
+              id: 'draft-design',
+              seriesId: 'series-draft',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'DRAFT',
+            }),
+          ],
+          recipes: [],
+        },
+        {
+          id: 'series-public',
+          name: '公开鲜食',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+          designs: [],
+          recipes: [
+            {
+              recipeId: 'public-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              version: 1,
+              updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+            },
+          ],
+        },
+        {
+          id: 'series-private',
+          name: '私密鲜食',
+          status: 'ACTIVE',
+          deletedAt: null,
+          updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+          designs: [],
+          recipes: [
+            {
+              recipeId: 'private-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PRIVATE_CUSTOM',
+              version: 1,
+              updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+            },
+          ],
+        },
+      ]);
+
+      await expect(
+        service.listSeries(
+          { userId: 'staff-1', role: 'STAFF' },
+          { status: 'PUBLIC' },
+        ),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          id: 'series-public',
         }),
       ]);
     });

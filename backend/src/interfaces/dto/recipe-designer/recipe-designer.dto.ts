@@ -29,6 +29,21 @@ export type RecipeDesignerScenario = (typeof RECIPE_DESIGNER_SCENARIOS)[number];
 export type AssessmentExpressionBasisDto =
   (typeof ASSESSMENT_EXPRESSION_BASES)[number];
 
+export const RECIPE_DESIGNER_SERIES_STATUS_FILTERS = [
+  'DRAFT',
+  'PUBLIC',
+  'PRIVATE_CUSTOM',
+] as const;
+
+export type RecipeDesignerSeriesStatusFilter =
+  (typeof RECIPE_DESIGNER_SERIES_STATUS_FILTERS)[number];
+
+export class ListRecipeDesignerSeriesDto {
+  @IsOptional()
+  @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)
+  status?: RecipeDesignerSeriesStatusFilter;
+}
+
 export class CreateRecipeSeriesDto {
   @IsString()
   name!: string;

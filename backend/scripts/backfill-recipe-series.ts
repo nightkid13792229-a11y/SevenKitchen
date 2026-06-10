@@ -9,6 +9,8 @@ import {
 } from '../src/domain/recipe/recipe-series';
 
 const CREATED_BY = 'recipe-series-backfill';
+const BACKFILL_RECIPE_STATUSES = ['PUBLIC', 'PRIVATE_CUSTOM', 'DRAFT'] as const;
+
 const LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE: Record<
   string,
   RecipeSeriesLifeStage
@@ -67,13 +69,60 @@ type RecipeSeriesBackfillLogger = {
 };
 
 export type RecipeSeriesBackfillRecipe = {
+  id?: string | null;
   recipeId: string;
   name: string;
   version: number;
   status?: string | null;
   seriesId?: string | null;
+  seriesLifeStage?: string | null;
+  energyDensityKcalPerKg?: number | null;
+  productionLossRate?: number | null;
+  batchLaborHours?: number | null;
+  createdAt?: Date | string | null;
+  coverImageUrl?: string | null;
+  coverTitle?: string | null;
+  description?: string | null;
+  detailImages?: unknown;
+  salesCount?: number | null;
+  diyGenCount?: number | null;
+  likeCount?: number | null;
+  favoriteCount?: number | null;
+  viewCount?: number | null;
   applicableLifeStages?: unknown;
+  targetHealthTags?: unknown;
   nutritionDetailedData?: unknown;
+  nutritionStandard?: string | null;
+  productionSteps?: string | null;
+  videoUrl?: string | null;
+  designSource?: string | null;
+  customOrderId?: string | null;
+  isCustomRecipe?: boolean | null;
+  items?: RecipeSeriesBackfillRecipeItem[];
+  healthTagAssignments?: RecipeSeriesBackfillRecipeHealthTagAssignment[];
+};
+
+export type RecipeSeriesBackfillRecipeItem = {
+  ingredientId: string;
+  nutritionFoodId?: string | null;
+  preparationMethod?: string | null;
+  exampleWeight?: number | null;
+  ratioPercent?: number | null;
+  nutrientTargetKey?: string | null;
+  nutrientTargetValue?: number | null;
+  supplementTargets?: unknown;
+  sortOrder?: number | null;
+  supplementAlternatives?: RecipeSeriesBackfillRecipeSupplementAlternative[];
+};
+
+export type RecipeSeriesBackfillRecipeSupplementAlternative = {
+  alternativeIngredientId: string;
+  sortOrder?: number | null;
+  isActive?: boolean | null;
+};
+
+export type RecipeSeriesBackfillRecipeHealthTagAssignment = {
+  healthTagId: string;
 };
 
 export type RecipeSeriesToCreate = {
@@ -89,15 +138,27 @@ export type RecipeSeriesRecipeUpdate = {
   seriesLifeStage: RecipeSeriesLifeStage;
 };
 
+export type RecipeSeriesRecipeClone = {
+  sourceRecipeId: string;
+  sourceVersion: number;
+  recipeId: string;
+  version: number;
+  seriesId: string;
+  seriesLifeStage: RecipeSeriesLifeStage;
+  sourceRecipe?: RecipeSeriesBackfillRecipe;
+};
+
 export type RecipeSeriesBackfillPlan = {
   seriesToCreate: RecipeSeriesToCreate[];
   recipeUpdates: RecipeSeriesRecipeUpdate[];
+  recipeClones: RecipeSeriesRecipeClone[];
 };
 
 type RecipeSeriesBackfillPrisma = {
   recipe: {
     findMany: (args: unknown) => Promise<RecipeSeriesBackfillRecipe[]>;
     update: (args: unknown) => Promise<unknown>;
+    create: (args: unknown) => Promise<unknown>;
   };
   recipeSeries: {
     create: (args: unknown) => Promise<unknown>;
@@ -163,31 +224,79 @@ function getRecipeSeriesDisplayName(
   );
 }
 
-function isPublicBackfillRecipe(recipe: RecipeSeriesBackfillRecipe): boolean {
-  return !recipe.status || recipe.status === 'PUBLIC';
+function isBackfillRecipeStatus(status?: string | null): boolean {
+  return (
+    !status ||
+    BACKFILL_RECIPE_STATUSES.includes(
+      status as (typeof BACKFILL_RECIPE_STATUSES)[number],
+    )
+  );
+}
+
+function isBackfillRecipe(recipe: RecipeSeriesBackfillRecipe): boolean {
+  return isBackfillRecipeStatus(recipe.status);
+}
+
+function isRecipeSeriesLifeStage(
+  value?: string | null,
+): value is RecipeSeriesLifeStage {
+  return ORDERED_RECIPE_SERIES_LIFE_STAGES.includes(
+    value as RecipeSeriesLifeStage,
+  );
+}
+
+function dedupeSeriesLifeStages(
+  stages: RecipeSeriesLifeStage[],
+): RecipeSeriesLifeStage[] {
+  const stageSet = new Set(stages);
+  return ORDERED_RECIPE_SERIES_LIFE_STAGES.filter((stage) =>
+    stageSet.has(stage),
+  );
+}
+
+export function inferSeriesLifeStagesFromRecipe(
+  recipe: Pick<
+    RecipeSeriesBackfillRecipe,
+    'applicableLifeStages' | 'nutritionDetailedData' | 'seriesLifeStage'
+  >,
+): RecipeSeriesLifeStage[] {
+  const explicitSeriesLifeStage =
+    typeof recipe.seriesLifeStage === 'string'
+      ? recipe.seriesLifeStage.trim().toUpperCase()
+      : '';
+
+  const normalizedStages = normalizeStringArray(
+    recipe.applicableLifeStages,
+  ).map((stage) => stage.toUpperCase());
+  const stages = new Set(normalizedStages);
+  const currentSeriesStages = ORDERED_RECIPE_SERIES_LIFE_STAGES.filter(
+    (stage) => stages.has(stage),
+  );
+  const legacySeriesStages = normalizedStages
+    .map((stage) => LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE[stage])
+    .filter((stage): stage is RecipeSeriesLifeStage => Boolean(stage));
+  const inferredStages = dedupeSeriesLifeStages([
+    ...currentSeriesStages,
+    ...legacySeriesStages,
+  ]);
+
+  if (isRecipeSeriesLifeStage(explicitSeriesLifeStage)) {
+    return [
+      explicitSeriesLifeStage,
+      ...inferredStages.filter((stage) => stage !== explicitSeriesLifeStage),
+    ];
+  }
+
+  return inferredStages.length > 0 ? inferredStages : ['HIGH_ACTIVITY_ADULT'];
 }
 
 export function inferSeriesLifeStageFromRecipe(
   recipe: Pick<
     RecipeSeriesBackfillRecipe,
-    'applicableLifeStages' | 'nutritionDetailedData'
+    'applicableLifeStages' | 'nutritionDetailedData' | 'seriesLifeStage'
   >,
 ): RecipeSeriesLifeStage {
-  const normalizedStages = normalizeStringArray(
-    recipe.applicableLifeStages,
-  ).map((stage) => stage.toUpperCase());
-  const stages = new Set(normalizedStages);
-  const currentSeriesStage = ORDERED_RECIPE_SERIES_LIFE_STAGES.find((stage) =>
-    stages.has(stage),
-  );
-  if (currentSeriesStage) return currentSeriesStage;
-
-  for (const stage of normalizedStages) {
-    const legacySeriesStage = LEGACY_LIFE_STAGE_TO_SERIES_LIFE_STAGE[stage];
-    if (legacySeriesStage) return legacySeriesStage;
-  }
-
-  return 'HIGH_ACTIVITY_ADULT';
+  return inferSeriesLifeStagesFromRecipe(recipe)[0];
 }
 
 export function buildRecipeSeriesBackfillPlan(
@@ -195,53 +304,168 @@ export function buildRecipeSeriesBackfillPlan(
 ): RecipeSeriesBackfillPlan {
   const seriesByGroupKey = new Map<string, RecipeSeriesToCreate>();
   const existingSeriesIdByGroupKey = new Map<string, string>();
+  const recipesByGroupKey = new Map<string, RecipeSeriesBackfillRecipe[]>();
+  const cloneRecipeIdByStageKey = new Map<string, string>();
+  const plannedCloneVersionStageKeys = new Set<string>();
   const recipeUpdates: RecipeSeriesRecipeUpdate[] = [];
-  const publicRecipes = recipes.filter(isPublicBackfillRecipe);
+  const recipeClones: RecipeSeriesRecipeClone[] = [];
+  const backfillRecipes = recipes
+    .filter(isBackfillRecipe)
+    .sort((left, right) => compareRecipeMutationIdentity(left, right));
 
-  for (const recipe of publicRecipes) {
+  for (const recipe of backfillRecipes) {
     const groupKey = getRecipeSeriesGroupKey(recipe);
+    recipesByGroupKey.set(groupKey, [
+      ...(recipesByGroupKey.get(groupKey) ?? []),
+      recipe,
+    ]);
+
     if (recipe.seriesId && !existingSeriesIdByGroupKey.has(groupKey)) {
       existingSeriesIdByGroupKey.set(groupKey, recipe.seriesId);
     }
   }
 
-  for (const recipe of publicRecipes) {
-    if (recipe.seriesId) continue;
-
+  for (const recipe of backfillRecipes) {
     const groupKey = getRecipeSeriesGroupKey(recipe);
-    const existingSeriesId = existingSeriesIdByGroupKey.get(groupKey);
-    if (existingSeriesId) {
+    const seriesId = resolveRecipeSeriesIdForBackfill({
+      recipe,
+      groupKey,
+      existingSeriesIdByGroupKey,
+      seriesByGroupKey,
+    });
+    const stages = inferSeriesLifeStagesFromRecipe(recipe);
+    const canonicalStage = stages[0];
+
+    if (
+      recipe.seriesId !== seriesId ||
+      recipe.seriesLifeStage !== canonicalStage
+    ) {
       recipeUpdates.push({
         recipeId: recipe.recipeId,
         version: recipe.version,
-        seriesId: existingSeriesId,
-        seriesLifeStage: inferSeriesLifeStageFromRecipe(recipe),
+        seriesId,
+        seriesLifeStage: canonicalStage,
       });
+    }
+
+    if (stages.length <= 1) {
       continue;
     }
 
-    let series = seriesByGroupKey.get(groupKey);
-    if (!series) {
-      series = {
-        id: randomUUID(),
-        recipeId: recipe.recipeId,
-        name: getRecipeSeriesDisplayName(recipe),
-      };
-      seriesByGroupKey.set(groupKey, series);
-    }
+    for (const stage of stages.slice(1)) {
+      const cloneVersionStageKey = `${groupKey}|${recipe.version}|${stage}`;
+      if (
+        plannedCloneVersionStageKeys.has(cloneVersionStageKey) ||
+        hasExplicitRecipeForStageVersion(
+          recipesByGroupKey.get(groupKey) ?? [],
+          recipe.version,
+          stage,
+        )
+      ) {
+        continue;
+      }
 
-    recipeUpdates.push({
-      recipeId: recipe.recipeId,
-      version: recipe.version,
-      seriesId: series.id,
-      seriesLifeStage: inferSeriesLifeStageFromRecipe(recipe),
-    });
+      plannedCloneVersionStageKeys.add(cloneVersionStageKey);
+      const cloneStageKey = `${groupKey}|${recipe.recipeId}|${stage}`;
+      let cloneRecipeId = cloneRecipeIdByStageKey.get(cloneStageKey);
+      if (!cloneRecipeId) {
+        cloneRecipeId = randomUUID();
+        cloneRecipeIdByStageKey.set(cloneStageKey, cloneRecipeId);
+      }
+
+      recipeClones.push({
+        sourceRecipeId: recipe.recipeId,
+        sourceVersion: recipe.version,
+        recipeId: cloneRecipeId,
+        version: recipe.version,
+        seriesId,
+        seriesLifeStage: stage,
+        sourceRecipe: recipe,
+      });
+    }
   }
 
   return {
     seriesToCreate: Array.from(seriesByGroupKey.values()),
-    recipeUpdates,
+    recipeUpdates: recipeUpdates.sort(compareRecipeMutationIdentity),
+    recipeClones: recipeClones.sort(compareRecipeMutationIdentity),
   };
+}
+
+function resolveRecipeSeriesIdForBackfill({
+  recipe,
+  groupKey,
+  existingSeriesIdByGroupKey,
+  seriesByGroupKey,
+}: {
+  recipe: RecipeSeriesBackfillRecipe;
+  groupKey: string;
+  existingSeriesIdByGroupKey: Map<string, string>;
+  seriesByGroupKey: Map<string, RecipeSeriesToCreate>;
+}): string {
+  if (recipe.seriesId) {
+    return recipe.seriesId;
+  }
+
+  const existingSeriesId = existingSeriesIdByGroupKey.get(groupKey);
+  if (existingSeriesId) {
+    return existingSeriesId;
+  }
+
+  let series = seriesByGroupKey.get(groupKey);
+  if (!series) {
+    series = {
+      id: randomUUID(),
+      recipeId: recipe.recipeId,
+      name: getRecipeSeriesDisplayName(recipe),
+    };
+    seriesByGroupKey.set(groupKey, series);
+  }
+
+  return series.id;
+}
+
+function hasExplicitRecipeForStageVersion(
+  recipes: RecipeSeriesBackfillRecipe[],
+  version: number,
+  stage: RecipeSeriesLifeStage,
+): boolean {
+  return recipes.some((recipe) => {
+    const candidateStage =
+      typeof recipe.seriesLifeStage === 'string'
+        ? recipe.seriesLifeStage.trim().toUpperCase()
+        : '';
+    return (
+      recipe.version === version &&
+      isRecipeSeriesLifeStage(candidateStage) &&
+      candidateStage === stage
+    );
+  });
+}
+
+function compareRecipeMutationIdentity(
+  left: Pick<
+    | RecipeSeriesBackfillRecipe
+    | RecipeSeriesRecipeUpdate
+    | RecipeSeriesRecipeClone,
+    'recipeId' | 'version'
+  > & { seriesLifeStage?: string | null },
+  right: Pick<
+    | RecipeSeriesBackfillRecipe
+    | RecipeSeriesRecipeUpdate
+    | RecipeSeriesRecipeClone,
+    'recipeId' | 'version'
+  > & { seriesLifeStage?: string | null },
+): number {
+  const byRecipeId = left.recipeId.localeCompare(right.recipeId);
+  if (byRecipeId !== 0) return byRecipeId;
+
+  const byVersion = left.version - right.version;
+  if (byVersion !== 0) return byVersion;
+
+  return String(left.seriesLifeStage ?? '').localeCompare(
+    String(right.seriesLifeStage ?? ''),
+  );
 }
 
 async function applyRecipeSeriesBackfillPlan({
@@ -279,7 +503,7 @@ async function applyRecipeSeriesBackfillPlan({
         where: {
           publishedRecipeId: update.recipeId,
           publishedRecipeVersion: update.version,
-          seriesId: null,
+          OR: [{ seriesId: null }, { seriesLifeStage: null }],
         },
         data: {
           seriesId: update.seriesId,
@@ -287,7 +511,108 @@ async function applyRecipeSeriesBackfillPlan({
         },
       });
     }
+
+    for (const clone of plan.recipeClones) {
+      await tx.recipe.create({
+        data: buildRecipeCloneCreateData(clone),
+      });
+    }
   });
+}
+
+function buildRecipeCloneCreateData(clone: RecipeSeriesRecipeClone) {
+  const source = clone.sourceRecipe;
+  if (!source) {
+    throw new Error(
+      `Missing source recipe for ${clone.sourceRecipeId} v${clone.sourceVersion}`,
+    );
+  }
+
+  return {
+    recipeId: clone.recipeId,
+    version: clone.version,
+    name: source.name,
+    status: source.status || 'DRAFT',
+    energyDensityKcalPerKg: source.energyDensityKcalPerKg ?? 0,
+    productionLossRate: source.productionLossRate ?? 1.07,
+    batchLaborHours: source.batchLaborHours ?? 2,
+    ...(source.createdAt ? { createdAt: new Date(source.createdAt) } : {}),
+    applicableLifeStages: [clone.seriesLifeStage],
+    coverImageUrl: source.coverImageUrl,
+    coverTitle: source.coverTitle,
+    description: source.description,
+    detailImages: source.detailImages ?? [],
+    salesCount: 0,
+    diyGenCount: 0,
+    likeCount: 0,
+    favoriteCount: 0,
+    viewCount: 0,
+    nutritionDetailedData: source.nutritionDetailedData ?? undefined,
+    nutritionStandard: source.nutritionStandard || 'FEDIAF_2025',
+    productionSteps: source.productionSteps,
+    targetHealthTags: source.targetHealthTags ?? [],
+    videoUrl: source.videoUrl,
+    designSource: source.designSource,
+    customOrderId: source.customOrderId,
+    isCustomRecipe: source.isCustomRecipe ?? false,
+    seriesId: clone.seriesId,
+    seriesLifeStage: clone.seriesLifeStage,
+    ...(source.items?.length
+      ? {
+          items: {
+            create: source.items.map((item, index) =>
+              buildRecipeItemCloneCreateData(item, index),
+            ),
+          },
+        }
+      : {}),
+    ...(source.healthTagAssignments?.length
+      ? {
+          healthTagAssignments: {
+            create: [
+              ...new Set(
+                source.healthTagAssignments
+                  .map((assignment) => assignment.healthTagId?.trim())
+                  .filter(Boolean),
+              ),
+            ].map((healthTagId) => ({ healthTagId })),
+          },
+        }
+      : {}),
+  };
+}
+
+function buildRecipeItemCloneCreateData(
+  item: RecipeSeriesBackfillRecipeItem,
+  index: number,
+) {
+  const supplementAlternatives =
+    item.supplementAlternatives
+      ?.filter((alternative) => alternative.isActive !== false)
+      .map((alternative, alternativeIndex) => ({
+        alternativeIngredientId: alternative.alternativeIngredientId,
+        sortOrder: alternative.sortOrder ?? alternativeIndex,
+        isActive: alternative.isActive ?? true,
+      })) ?? [];
+
+  return {
+    ingredientId: item.ingredientId,
+    nutritionFoodId: item.nutritionFoodId || undefined,
+    preparationMethod: item.preparationMethod,
+    exampleWeight: item.exampleWeight,
+    ratioPercent: item.ratioPercent,
+    nutrientTargetKey: item.nutrientTargetKey,
+    nutrientTargetValue: item.nutrientTargetValue,
+    supplementTargets: item.supplementTargets ?? undefined,
+    sortOrder: item.sortOrder ?? index,
+    ...(supplementAlternatives.length
+      ? {
+          supplementAlternatives: {
+            create: supplementAlternatives,
+          },
+        }
+      : {}),
+  };
 }
 
 export async function runRecipeSeriesBackfill({
@@ -302,36 +627,70 @@ export async function runRecipeSeriesBackfill({
   disconnect?: boolean;
 }): Promise<RecipeSeriesBackfillPlan> {
   try {
-    const recipesMissingSeries = await prisma.recipe.findMany({
-      where: { status: 'PUBLIC', seriesId: null },
-      select: { recipeId: true },
-      orderBy: [{ recipeId: 'asc' }],
+    const recipes = await prisma.recipe.findMany({
+      where: {
+        status: { in: [...BACKFILL_RECIPE_STATUSES] },
+      },
+      select: {
+        id: true,
+        recipeId: true,
+        name: true,
+        version: true,
+        status: true,
+        seriesId: true,
+        seriesLifeStage: true,
+        energyDensityKcalPerKg: true,
+        productionLossRate: true,
+        batchLaborHours: true,
+        createdAt: true,
+        coverImageUrl: true,
+        coverTitle: true,
+        description: true,
+        detailImages: true,
+        salesCount: true,
+        diyGenCount: true,
+        likeCount: true,
+        favoriteCount: true,
+        viewCount: true,
+        applicableLifeStages: true,
+        targetHealthTags: true,
+        nutritionDetailedData: true,
+        nutritionStandard: true,
+        productionSteps: true,
+        videoUrl: true,
+        designSource: true,
+        customOrderId: true,
+        isCustomRecipe: true,
+        items: {
+          select: {
+            ingredientId: true,
+            nutritionFoodId: true,
+            preparationMethod: true,
+            exampleWeight: true,
+            ratioPercent: true,
+            nutrientTargetKey: true,
+            nutrientTargetValue: true,
+            supplementTargets: true,
+            sortOrder: true,
+            supplementAlternatives: {
+              select: {
+                alternativeIngredientId: true,
+                sortOrder: true,
+                isActive: true,
+              },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+        healthTagAssignments: {
+          select: {
+            healthTagId: true,
+          },
+        },
+      },
+      orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
     });
-    const recipeIds = Array.from(
-      new Set(recipesMissingSeries.map((recipe) => recipe.recipeId)),
-    );
-    const recipes =
-      recipeIds.length > 0
-        ? await prisma.recipe.findMany({
-            where: {
-              status: 'PUBLIC',
-              OR: [
-                { recipeId: { in: recipeIds } },
-                { seriesId: { not: null } },
-              ],
-            },
-            select: {
-              recipeId: true,
-              name: true,
-              version: true,
-              status: true,
-              seriesId: true,
-              applicableLifeStages: true,
-              nutritionDetailedData: true,
-            },
-            orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
-          })
-        : [];
 
     const plan = buildRecipeSeriesBackfillPlan(recipes);
     logger.info(
@@ -340,6 +699,7 @@ export async function runRecipeSeriesBackfill({
           apply,
           seriesToCreate: plan.seriesToCreate.length,
           recipeUpdates: plan.recipeUpdates.length,
+          recipeClones: plan.recipeClones.length,
         },
         null,
         2,

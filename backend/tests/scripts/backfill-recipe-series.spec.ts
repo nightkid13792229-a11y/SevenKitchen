@@ -9,6 +9,7 @@ function createPrismaMock(recipes: any[]) {
     recipe: {
       findMany: jest.fn().mockResolvedValue(recipes),
       update: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
     },
     recipeSeries: {
       create: jest.fn().mockResolvedValue({}),
@@ -136,7 +137,7 @@ describe('recipe series backfill', () => {
     ).toBe(1);
   });
 
-  it('does not reuse non-public same-name recipes as backfill series candidates', () => {
+  it('reuses supported non-public same-name recipes as backfill series candidates', () => {
     const plan = buildRecipeSeriesBackfillPlan([
       {
         recipeId: 'private-adult',
@@ -156,14 +157,197 @@ describe('recipe series backfill', () => {
       },
     ]);
 
-    expect(plan.seriesToCreate).toHaveLength(1);
+    expect(plan.seriesToCreate).toHaveLength(0);
     expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'private-adult',
+        version: 1,
+        seriesId: 'private-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
       {
         recipeId: 'public-puppy',
         version: 1,
-        seriesId: plan.seriesToCreate[0].id,
+        seriesId: 'private-series',
         seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
       },
+    ]);
+  });
+
+  it('includes public, private custom, and draft recipes in the series migration scope', async () => {
+    const prisma = createPrismaMock([]);
+    prisma.recipe.findMany = jest.fn().mockResolvedValueOnce([
+      {
+        recipeId: 'public-recipe',
+        name: '公开食谱',
+        version: 1,
+        status: 'PUBLIC',
+        seriesId: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        nutritionDetailedData: null,
+      },
+      {
+        recipeId: 'private-recipe',
+        name: '私密食谱',
+        version: 1,
+        status: 'PRIVATE_CUSTOM',
+        seriesId: null,
+        applicableLifeStages: ['ADULT'],
+        nutritionDetailedData: null,
+      },
+      {
+        recipeId: 'draft-recipe',
+        name: '草稿食谱',
+        version: 1,
+        status: 'DRAFT',
+        seriesId: null,
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        nutritionDetailedData: null,
+      },
+    ]);
+
+    const plan = await runRecipeSeriesBackfill({
+      prisma,
+      apply: false,
+      logger: {
+        info: jest.fn(),
+        error: jest.fn(),
+      },
+      disconnect: false,
+    });
+
+    expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: {
+          status: { in: ['PUBLIC', 'PRIVATE_CUSTOM', 'DRAFT'] },
+        },
+        orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
+      }),
+    );
+    expect(plan.recipeUpdates.map((update) => update.recipeId)).toEqual([
+      'draft-recipe',
+      'private-recipe',
+      'public-recipe',
+    ]);
+  });
+
+  it('plans stage clones for multi-life-stage legacy recipes and keeps one recipe id per cloned stage history', () => {
+    const plan = buildRecipeSeriesBackfillPlan([
+      {
+        recipeId: 'recipe-a',
+        name: '糙米三文鱼鸭胸鹿腿',
+        version: 4,
+        status: 'PUBLIC',
+        seriesId: null,
+        applicableLifeStages: [
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          'HIGH_ACTIVITY_ADULT',
+        ],
+      },
+      {
+        recipeId: 'recipe-a',
+        name: '糙米三文鱼鸭胸鹿腿',
+        version: 5,
+        status: 'DRAFT',
+        seriesId: null,
+        applicableLifeStages: [
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          'HIGH_ACTIVITY_ADULT',
+        ],
+      },
+    ]);
+
+    expect(plan.seriesToCreate).toHaveLength(1);
+    expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'recipe-a',
+        version: 4,
+        seriesId: plan.seriesToCreate[0].id,
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
+      {
+        recipeId: 'recipe-a',
+        version: 5,
+        seriesId: plan.seriesToCreate[0].id,
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
+    ]);
+    expect(plan.recipeClones).toHaveLength(2);
+    expect(plan.recipeClones).toEqual([
+      expect.objectContaining({
+        sourceRecipeId: 'recipe-a',
+        sourceVersion: 4,
+        version: 4,
+        seriesId: plan.seriesToCreate[0].id,
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      }),
+      expect.objectContaining({
+        sourceRecipeId: 'recipe-a',
+        sourceVersion: 5,
+        version: 5,
+        seriesId: plan.seriesToCreate[0].id,
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      }),
+    ]);
+    expect(plan.recipeClones[0].recipeId).toBe(plan.recipeClones[1].recipeId);
+    expect(plan.recipeClones[0].recipeId).not.toBe('recipe-a');
+  });
+
+  it('plans missing stage clones for partially migrated multi-life-stage recipes', () => {
+    const plan = buildRecipeSeriesBackfillPlan([
+      {
+        recipeId: 'recipe-a',
+        name: '糙米三文鱼鸭胸鹿腿',
+        version: 4,
+        status: 'PUBLIC',
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        applicableLifeStages: ['ADULT', 'SENIOR'],
+      },
+    ]);
+
+    expect(plan.recipeUpdates).toHaveLength(0);
+    expect(plan.recipeClones).toEqual([
+      expect.objectContaining({
+        sourceRecipeId: 'recipe-a',
+        sourceVersion: 4,
+        version: 4,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      }),
+    ]);
+  });
+
+  it('treats legacy seriesLifeStage values as incomplete series metadata', () => {
+    const plan = buildRecipeSeriesBackfillPlan([
+      {
+        recipeId: 'recipe-a',
+        name: '糙米三文鱼鸭胸鹿腿',
+        version: 1,
+        status: 'PUBLIC',
+        seriesId: 'existing-series',
+        seriesLifeStage: 'ADULT',
+        applicableLifeStages: ['ADULT', 'LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      },
+    ]);
+
+    expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'recipe-a',
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
+    ]);
+    expect(plan.recipeClones).toEqual([
+      expect.objectContaining({
+        sourceRecipeId: 'recipe-a',
+        sourceVersion: 1,
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      }),
     ]);
   });
 
@@ -187,6 +371,12 @@ describe('recipe series backfill', () => {
 
     expect(plan.seriesToCreate).toHaveLength(0);
     expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'recipe-a',
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
       {
         recipeId: 'recipe-a',
         version: 2,
@@ -216,6 +406,12 @@ describe('recipe series backfill', () => {
 
     expect(plan.seriesToCreate).toHaveLength(0);
     expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'beef-adult',
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
       {
         recipeId: 'beef-reproduction',
         version: 1,
@@ -277,17 +473,11 @@ describe('recipe series backfill', () => {
 
     expect(plan.seriesToCreate).toHaveLength(1);
     expect(plan.recipeUpdates).toHaveLength(1);
-    expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(1, {
-      where: { status: 'PUBLIC', seriesId: null },
-      select: { recipeId: true },
-      orderBy: [{ recipeId: 'asc' }],
-    });
     expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         where: {
-          status: 'PUBLIC',
-          OR: [{ recipeId: { in: ['recipe-a'] } }, { seriesId: { not: null } }],
+          status: { in: ['PUBLIC', 'PRIVATE_CUSTOM', 'DRAFT'] },
         },
         orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
       }),
@@ -298,31 +488,24 @@ describe('recipe series backfill', () => {
 
   it('loads full recipe families for recipe ids with missing series metadata', async () => {
     const prisma = createPrismaMock([]);
-    prisma.recipe.findMany = jest
-      .fn()
-      .mockResolvedValueOnce([
-        {
-          recipeId: 'recipe-a',
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          recipeId: 'recipe-a',
-          name: '牛肉南瓜鲜食',
-          version: 1,
-          seriesId: 'existing-series',
-          applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
-          nutritionDetailedData: null,
-        },
-        {
-          recipeId: 'recipe-a',
-          name: '牛肉南瓜鲜食',
-          version: 2,
-          seriesId: null,
-          applicableLifeStages: ['PUPPY'],
-          nutritionDetailedData: null,
-        },
-      ]);
+    prisma.recipe.findMany = jest.fn().mockResolvedValueOnce([
+      {
+        recipeId: 'recipe-a',
+        name: '牛肉南瓜鲜食',
+        version: 1,
+        seriesId: 'existing-series',
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        nutritionDetailedData: null,
+      },
+      {
+        recipeId: 'recipe-a',
+        name: '牛肉南瓜鲜食',
+        version: 2,
+        seriesId: null,
+        applicableLifeStages: ['PUPPY'],
+        nutritionDetailedData: null,
+      },
+    ]);
 
     const plan = await runRecipeSeriesBackfill({
       prisma,
@@ -334,23 +517,23 @@ describe('recipe series backfill', () => {
       disconnect: false,
     });
 
-    expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(1, {
-      where: { status: 'PUBLIC', seriesId: null },
-      select: { recipeId: true },
-      orderBy: [{ recipeId: 'asc' }],
-    });
     expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         where: {
-          status: 'PUBLIC',
-          OR: [{ recipeId: { in: ['recipe-a'] } }, { seriesId: { not: null } }],
+          status: { in: ['PUBLIC', 'PRIVATE_CUSTOM', 'DRAFT'] },
         },
         orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
       }),
     );
     expect(plan.seriesToCreate).toHaveLength(0);
     expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'recipe-a',
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
       {
         recipeId: 'recipe-a',
         version: 2,
@@ -362,31 +545,24 @@ describe('recipe series backfill', () => {
 
   it('loads migrated series candidates so distinct recipe ids can reuse existing normalized series', async () => {
     const prisma = createPrismaMock([]);
-    prisma.recipe.findMany = jest
-      .fn()
-      .mockResolvedValueOnce([
-        {
-          recipeId: 'beef-reproduction',
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          recipeId: 'beef-adult',
-          name: '牛肉南瓜鲜食（成犬）',
-          version: 1,
-          seriesId: 'existing-series',
-          applicableLifeStages: ['ADULT'],
-          nutritionDetailedData: null,
-        },
-        {
-          recipeId: 'beef-reproduction',
-          name: '牛肉南瓜鲜食 - REPRODUCTION',
-          version: 1,
-          seriesId: null,
-          applicableLifeStages: ['PREGNANCY'],
-          nutritionDetailedData: null,
-        },
-      ]);
+    prisma.recipe.findMany = jest.fn().mockResolvedValueOnce([
+      {
+        recipeId: 'beef-adult',
+        name: '牛肉南瓜鲜食（成犬）',
+        version: 1,
+        seriesId: 'existing-series',
+        applicableLifeStages: ['ADULT'],
+        nutritionDetailedData: null,
+      },
+      {
+        recipeId: 'beef-reproduction',
+        name: '牛肉南瓜鲜食 - REPRODUCTION',
+        version: 1,
+        seriesId: null,
+        applicableLifeStages: ['PREGNANCY'],
+        nutritionDetailedData: null,
+      },
+    ]);
 
     const plan = await runRecipeSeriesBackfill({
       prisma,
@@ -399,19 +575,22 @@ describe('recipe series backfill', () => {
     });
 
     expect(prisma.recipe.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         where: {
-          status: 'PUBLIC',
-          OR: [
-            { recipeId: { in: ['beef-reproduction'] } },
-            { seriesId: { not: null } },
-          ],
+          status: { in: ['PUBLIC', 'PRIVATE_CUSTOM', 'DRAFT'] },
         },
+        orderBy: [{ recipeId: 'asc' }, { version: 'asc' }],
       }),
     );
     expect(plan.seriesToCreate).toHaveLength(0);
     expect(plan.recipeUpdates).toEqual([
+      {
+        recipeId: 'beef-adult',
+        version: 1,
+        seriesId: 'existing-series',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      },
       {
         recipeId: 'beef-reproduction',
         version: 1,
@@ -511,7 +690,7 @@ describe('recipe series backfill', () => {
       where: {
         publishedRecipeId: 'recipe-a',
         publishedRecipeVersion: 1,
-        seriesId: null,
+        OR: [{ seriesId: null }, { seriesLifeStage: null }],
       },
       data: {
         seriesId: plan.seriesToCreate[0].id,

@@ -424,7 +424,7 @@ const handleSizeChange = (size: number) => {
 };
 
 const handleCreate = () => {
-  router.push('/recipes/create');
+  ElMessage.info('请在食谱设计器中新建系列食谱，并为每个生命阶段创建对应草稿');
 };
 
 const handleView = (row: RecipeSummary) => {

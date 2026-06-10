@@ -82,6 +82,13 @@ test('admin recipe list groups recipe versions and surfaces pending revision sta
   assert.doesNotMatch(listVue, /row\.seriesStages"\n\s+:key="stage\.lifeStage"/)
 })
 
+test('admin recipe list no longer opens the legacy recipe create form', () => {
+  const listVue = read('admin-web/src/views/Recipes/index.vue')
+
+  assert.match(listVue, /食谱设计器中新建系列食谱/)
+  assert.doesNotMatch(listVue, /router\.push\('\/recipes\/create'\)/)
+})
+
 test('admin recipe form exposes current series life stage and stage switching', () => {
   const formVue = read('admin-web/src/views/Recipes/RecipeForm.vue')
   const recipeTypes = read('admin-web/src/types/recipe.ts')

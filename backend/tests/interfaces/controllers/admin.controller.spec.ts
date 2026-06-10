@@ -5,16 +5,20 @@ jest.mock('uuid', () => ({
 import { AdminController } from '../../../src/interfaces/controllers/admin.controller';
 import { MIXED_BREED_VIRTUAL_ID } from '../../../src/domain/dog/constants';
 import { DogSizeCategory, GrowthCurveType } from '../../../src/domain/dog/enums';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 describe('AdminController', () => {
   const buildController = ({
     recipeService = {},
     coverImageService = {},
     prisma = {},
+    jwtAuthService = {},
   }: {
     recipeService?: Record<string, any>;
     coverImageService?: Record<string, any>;
     prisma?: Record<string, any>;
+    jwtAuthService?: Record<string, any>;
   } = {}) =>
     new AdminController(
       {} as any,
@@ -31,7 +35,133 @@ describe('AdminController', () => {
       coverImageService as any,
       {} as any,
       {} as any,
+      jwtAuthService as any,
     );
+
+  describe('customer test identity mode', () => {
+    it('mints a customer token for one fixed production experience test user', async () => {
+      const prisma = {
+        user: {
+          upsert: jest.fn().mockResolvedValue({
+            id: 'production-experience-customer-test-user',
+            phone: '19900000001',
+            nickname: '生产体验版普通用户测试号',
+            avatarUrl: null,
+            role: 'CUSTOMER',
+            status: 'ACTIVE',
+            lastLoginAt: new Date('2026-06-10T00:00:00.000Z'),
+            createdAt: new Date('2026-06-10T00:00:00.000Z'),
+          }),
+        },
+      };
+      const jwtAuthService = {
+        generateTokenForUser: jest.fn().mockReturnValue('customer-test-token'),
+      };
+      const controller = buildController({ prisma, jwtAuthService });
+
+      const result = await controller.enterCustomerTestMode();
+
+      expect(prisma.user.upsert).toHaveBeenCalledWith({
+        where: { id: 'production-experience-customer-test-user' },
+        create: expect.objectContaining({
+          id: 'production-experience-customer-test-user',
+          phone: '19900000001',
+          nickname: '生产体验版普通用户测试号',
+          role: 'CUSTOMER',
+          status: 'ACTIVE',
+        }),
+        update: expect.objectContaining({
+          phone: '19900000001',
+          nickname: '生产体验版普通用户测试号',
+          role: 'CUSTOMER',
+          status: 'ACTIVE',
+        }),
+      });
+      expect(jwtAuthService.generateTokenForUser).toHaveBeenCalledWith(
+        'production-experience-customer-test-user',
+        'CUSTOMER',
+      );
+      expect(result.data).toEqual(
+        expect.objectContaining({
+          token: 'customer-test-token',
+          mode: 'CUSTOMER_TEST',
+          user: expect.objectContaining({
+            id: 'production-experience-customer-test-user',
+            role: 'CUSTOMER',
+            phoneBound: true,
+          }),
+        }),
+      );
+    });
+
+    it('resets only the fixed customer test user recipe designer data', async () => {
+      const tx = {
+        designRecipeItem: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 7 }),
+        },
+        designRecipe: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 3 }),
+        },
+        recipeSeries: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+        },
+      };
+      const prisma = {
+        $transaction: jest.fn(async (callback: any) => callback(tx)),
+      };
+      const controller = buildController({ prisma });
+
+      const result = await controller.resetCustomerTestModeData();
+
+      expect(tx.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: {
+          designRecipe: {
+            createdBy: 'production-experience-customer-test-user',
+            publishedRecipeId: null,
+            publishedAt: null,
+          },
+        },
+      });
+      expect(tx.designRecipe.deleteMany).toHaveBeenCalledWith({
+        where: {
+          createdBy: 'production-experience-customer-test-user',
+          publishedRecipeId: null,
+          publishedAt: null,
+        },
+      });
+      expect(tx.recipeSeries.deleteMany).toHaveBeenCalledWith({
+        where: { createdBy: 'production-experience-customer-test-user' },
+      });
+      expect(result.data).toEqual({
+        deletedDesignRecipeItems: 7,
+        deletedDesignRecipes: 3,
+        deletedRecipeSeries: 2,
+      });
+    });
+
+    it('keeps customer test identity endpoints admin-only and fixed-target', () => {
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/interfaces/controllers/admin.controller.ts'),
+        'utf8',
+      );
+
+      expect(source).toContain("@Post('test-identity/customer-mode')");
+      expect(source).toContain("@Post('test-identity/customer-mode/reset')");
+      expect(source).toMatch(
+        /@Post\('test-identity\/customer-mode'\)\s+@UseGuards\(AuthGuard, AdminGuard\)/,
+      );
+      expect(source).toMatch(
+        /@Post\('test-identity\/customer-mode\/reset'\)\s+@UseGuards\(AuthGuard, AdminGuard\)/,
+      );
+      expect(source).toContain(
+        "const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user'",
+      );
+      const enterRoute = source.match(
+        /@Post\('test-identity\/customer-mode'\)([\s\S]*?)@Post\('test-identity\/customer-mode\/reset'\)/,
+      );
+      expect(enterRoute?.[1] || '').not.toContain('targetUserId');
+    });
+  });
 
   describe('recipe life stage metadata', () => {
     it('returns the five precise recipe life stages used by the designer', async () => {

@@ -92,7 +92,7 @@ import {
 } from '../dto/admin/staff.dto';
 import { AdminGuard, StaffGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
-import { CurrentUser, type RequestUser } from '../auth';
+import { CurrentUser, JwtAuthService, type RequestUser } from '../auth';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CoverImageService } from '../../application/recipe/cover-image.service';
 import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
@@ -109,6 +109,10 @@ import { UseInterceptors } from '@nestjs/common';
 import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin-recipe.dto';
 import type { Ingredient } from '../../domain/ingredient';
 import { resolveOrderProductionPhotos } from './order-production-photos';
+
+const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user';
+const CUSTOMER_TEST_USER_PHONE = '19900000001';
+const CUSTOMER_TEST_USER_NICKNAME = '生产体验版普通用户测试号';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -129,6 +133,7 @@ export class AdminController {
     private readonly coverImageService: CoverImageService,
     private readonly imageOptimizationService: ImageOptimizationService,
     private readonly cosService: TencentCosService,
+    private readonly jwtAuthService?: JwtAuthService,
   ) {}
 
   private mapNutritionFoodMappings(mappings?: any[]) {
@@ -3010,6 +3015,83 @@ export class AdminController {
   }
 
   // ==================== 用户管理接口（统一） ====================
+
+  @Post('test-identity/customer-mode')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '进入生产体验版普通用户测试模式' })
+  async enterCustomerTestMode(): Promise<ApiResponseDto<any>> {
+    const user = await this.prisma.user.upsert({
+      where: { id: CUSTOMER_TEST_USER_ID },
+      create: {
+        id: CUSTOMER_TEST_USER_ID,
+        phone: CUSTOMER_TEST_USER_PHONE,
+        nickname: CUSTOMER_TEST_USER_NICKNAME,
+        role: 'CUSTOMER',
+        status: 'ACTIVE',
+        lastLoginAt: new Date(),
+      },
+      update: {
+        phone: CUSTOMER_TEST_USER_PHONE,
+        nickname: CUSTOMER_TEST_USER_NICKNAME,
+        role: 'CUSTOMER',
+        status: 'ACTIVE',
+        lastLoginAt: new Date(),
+      },
+    });
+
+    const token = this.jwtAuthService!.generateTokenForUser(
+      user.id,
+      'CUSTOMER',
+    );
+
+    return ApiResponseDto.success({
+      mode: 'CUSTOMER_TEST',
+      token,
+      user: {
+        id: user.id,
+        nickname: user.nickname || CUSTOMER_TEST_USER_NICKNAME,
+        avatarUrl: user.avatarUrl,
+        role: 'CUSTOMER',
+        phone: user.phone || CUSTOMER_TEST_USER_PHONE,
+        phoneBound: true,
+      },
+    });
+  }
+
+  @Post('test-identity/customer-mode/reset')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '重置生产体验版普通用户测试数据' })
+  async resetCustomerTestModeData(): Promise<ApiResponseDto<any>> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const deletedDesignRecipeItems = await tx.designRecipeItem.deleteMany({
+        where: {
+          designRecipe: {
+            createdBy: CUSTOMER_TEST_USER_ID,
+            publishedRecipeId: null,
+            publishedAt: null,
+          },
+        },
+      });
+      const deletedDesignRecipes = await tx.designRecipe.deleteMany({
+        where: {
+          createdBy: CUSTOMER_TEST_USER_ID,
+          publishedRecipeId: null,
+          publishedAt: null,
+        },
+      });
+      const deletedRecipeSeries = await tx.recipeSeries.deleteMany({
+        where: { createdBy: CUSTOMER_TEST_USER_ID },
+      });
+
+      return {
+        deletedDesignRecipeItems: deletedDesignRecipeItems.count,
+        deletedDesignRecipes: deletedDesignRecipes.count,
+        deletedRecipeSeries: deletedRecipeSeries.count,
+      };
+    });
+
+    return ApiResponseDto.success(result);
+  }
 
   @Get('users')
   @UseGuards(AuthGuard, AdminGuard)

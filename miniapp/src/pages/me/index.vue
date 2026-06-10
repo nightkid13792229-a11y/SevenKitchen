@@ -17,6 +17,11 @@
 
     <!-- 已登录状态 -->
     <view v-else class="logged-in">
+      <view v-if="customerTestModeActive" class="customer-test-banner">
+        <text class="customer-test-title">当前为普通用户测试模式</text>
+        <text class="customer-test-action" @tap="exitCustomerTestMode">退出</text>
+      </view>
+
       <view
         v-if="!userInfo.phone"
         class="phone-bind-alert"
@@ -171,7 +176,7 @@
           </view>
         </view>
 
-        <view class="info-row">
+        <view class="info-row" @tap="handleTestIdentityHiddenTap">
           <view class="info-label">账户ID</view>
           <view class="info-value-wrapper">
             <text class="info-value info-id">{{ userInfo.id }}</text>
@@ -212,6 +217,36 @@
 
       </view>
 
+      <view v-if="testIdentityPanelVisible" class="test-identity-panel">
+        <view class="section-header">测试身份</view>
+        <view class="test-identity-body">
+          <text class="test-identity-status">
+            {{ customerTestModeActive ? "当前为普通用户测试模式" : "当前为管理员模式" }}
+          </text>
+          <button
+            v-if="!customerTestModeActive"
+            class="test-identity-btn"
+            @tap="enterCustomerTestMode"
+          >
+            进入普通用户测试模式
+          </button>
+          <button
+            v-else
+            class="test-identity-btn secondary"
+            @tap="exitCustomerTestMode"
+          >
+            退出普通用户测试模式
+          </button>
+          <button
+            v-if="!customerTestModeActive"
+            class="test-identity-btn danger"
+            @tap="resetCustomerTestModeData"
+          >
+            重置测试用户数据
+          </button>
+        </view>
+      </view>
+
       <!-- 退出登录 -->
       <view class="logout-section">
         <button class="logout-btn" @tap="handleLogout">退出登录</button>
@@ -233,6 +268,11 @@ import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
 import { getCartItems } from "../../utils/cart";
 import { ensurePhoneBound } from "../../utils/account";
+import {
+  applyCustomerTestModeSession,
+  getCustomerTestModeState,
+  restoreAdminSessionFromCustomerTestMode,
+} from "../../utils/customer-test-mode";
 
 interface UserInfo {
   id: string;
@@ -267,6 +307,8 @@ const orderCounts = ref({
 });
 const cartCount = ref(0);
 const legacyMigrationPromptHidden = ref(false);
+const testIdentityPanelVisible = ref(false);
+const customerTestModeActive = ref(false);
 const LEGACY_MIGRATION_PROMPT_VERSION = "20260523-2";
 
 const getLegacyMigrationPromptStorageKey = () =>
@@ -284,6 +326,34 @@ const showLegacyMigrationEntry = computed(
 // 标志位：防止更新后立即重新加载
 let isJustUpdated = false;
 let updateTimer: NodeJS.Timeout | null = null;
+let testIdentityTapCount = 0;
+let testIdentityTapTimer: ReturnType<typeof setTimeout> | null = null;
+
+function refreshCustomerTestModeState() {
+  customerTestModeActive.value = getCustomerTestModeState().active;
+}
+
+function canUseTestIdentityPanel() {
+  return userInfo.value.role === "ADMIN" || customerTestModeActive.value;
+}
+
+function handleTestIdentityHiddenTap() {
+  if (!canUseTestIdentityPanel()) return;
+
+  testIdentityTapCount += 1;
+  if (testIdentityTapTimer) {
+    clearTimeout(testIdentityTapTimer);
+  }
+  testIdentityTapTimer = setTimeout(() => {
+    testIdentityTapCount = 0;
+    testIdentityTapTimer = null;
+  }, 1500);
+
+  if (testIdentityTapCount >= 5) {
+    testIdentityPanelVisible.value = true;
+    testIdentityTapCount = 0;
+  }
+}
 
 // 加载用户信息
 async function loadUserInfo() {
@@ -477,6 +547,77 @@ function dismissLegacyMigrationPrompt() {
   });
 }
 
+async function enterCustomerTestMode() {
+  isLoading.value = true;
+  try {
+    const res = await request({
+      url: "/admin/test-identity/customer-mode",
+      method: "POST",
+    });
+    if (res.code !== 0 || !res.data?.token || !res.data?.user) {
+      throw new Error(res.message || "进入测试模式失败");
+    }
+    applyCustomerTestModeSession({
+      token: res.data.token,
+      user: res.data.user,
+    });
+    uni.showToast({ title: "已进入普通用户测试模式", icon: "success" });
+    setTimeout(() => {
+      uni.switchTab({ url: "/pages/home/index" });
+    }, 500);
+  } catch (error: any) {
+    uni.showToast({
+      title: error?.message || "进入测试模式失败",
+      icon: "none",
+    });
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function exitCustomerTestMode() {
+  const restored = restoreAdminSessionFromCustomerTestMode();
+  if (!restored) {
+    clearToken();
+    uni.showToast({ title: "请重新登录管理员账号", icon: "none" });
+    return;
+  }
+  uni.showToast({ title: "已恢复管理员身份", icon: "success" });
+  setTimeout(() => {
+    uni.switchTab({ url: "/pages/home/index" });
+  }, 500);
+}
+
+async function resetCustomerTestModeData() {
+  uni.showModal({
+    title: "重置测试数据",
+    content: "只会清理固定普通用户测试号的食谱设计数据，确定继续吗？",
+    confirmText: "重置",
+    confirmColor: "#d92d20",
+    success: async (modalResult) => {
+      if (!modalResult.confirm) return;
+      isLoading.value = true;
+      try {
+        const res = await request({
+          url: "/admin/test-identity/customer-mode/reset",
+          method: "POST",
+        });
+        if (res.code !== 0) {
+          throw new Error(res.message || "重置失败");
+        }
+        uni.showToast({ title: "已重置测试数据", icon: "success" });
+      } catch (error: any) {
+        uni.showToast({
+          title: error?.message || "重置失败",
+          icon: "none",
+        });
+      } finally {
+        isLoading.value = false;
+      }
+    },
+  });
+}
+
 // 更新用户信息
 async function updateUserInfo(data: { nickname?: string; phone?: string }) {
   isLoading.value = true;
@@ -562,6 +703,7 @@ function handleLogout() {
 
 onShow(() => {
   refreshCurrentTabBar();
+  refreshCustomerTestModeState();
 
   // 检查登录状态（每次显示页面时都会执行）
   const token = getToken();
@@ -593,6 +735,31 @@ onShow(() => {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+}
+
+.customer-test-banner {
+  margin: 24rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 12rpx;
+  background: #fff1f0;
+  border: 1rpx solid #ffa39e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.customer-test-title {
+  color: #a8071a;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.customer-test-action {
+  flex-shrink: 0;
+  color: #cf1322;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
 .phone-bind-title,
@@ -919,6 +1086,43 @@ onShow(() => {
 .function-list {
   background: #fff;
   margin-top: 20rpx;
+}
+
+.test-identity-panel {
+  background: #fff;
+  margin-top: 20rpx;
+}
+
+.test-identity-body {
+  padding: 28rpx 32rpx 34rpx;
+}
+
+.test-identity-status {
+  display: block;
+  margin-bottom: 22rpx;
+  color: #344054;
+  font-size: 26rpx;
+}
+
+.test-identity-btn {
+  width: 100%;
+  height: 76rpx;
+  margin-top: 18rpx;
+  border-radius: 12rpx;
+  background: #1677ff;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.test-identity-btn.secondary {
+  background: #344054;
+}
+
+.test-identity-btn.danger {
+  background: #fff;
+  color: #d92d20;
+  border: 1rpx solid #fda29b;
 }
 
 .function-item {

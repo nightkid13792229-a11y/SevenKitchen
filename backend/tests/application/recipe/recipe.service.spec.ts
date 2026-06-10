@@ -14,6 +14,9 @@ describe('RecipeService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    recipeSeries: {
+      update: jest.fn(),
+    },
     recipeItem: {
       deleteMany: jest.fn(),
     },
@@ -813,6 +816,67 @@ describe('RecipeService', () => {
   });
 
   describe('updateRecipe', () => {
+    it('renames the whole recipe series when a series recipe is renamed from admin', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 2,
+        name: '未命名食谱',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1352,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        productionSteps: null,
+        seriesId: 'series-rice-oat-salmon-rabbit',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        items: [],
+      };
+      const updatedRecipe = {
+        ...existingRecipe,
+        name: '大米燕麦三文鱼兔里脊',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        series: {
+          id: 'series-rice-oat-salmon-rabbit',
+          name: '大米燕麦三文鱼兔里脊',
+        },
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-06-10T14:18:50.624Z'),
+        updatedAt: new Date('2026-06-10T14:23:57.124Z'),
+        healthTagAssignments: [],
+      };
+
+      mockPrismaService.recipe.findUnique
+        .mockResolvedValueOnce(existingRecipe)
+        .mockResolvedValueOnce(updatedRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue({
+        id: 'recipe-row-id',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+
+      const result = await service.updateRecipe('recipe-row-id', {
+        name: '大米燕麦三文鱼兔里脊',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+      });
+
+      expect(mockPrismaService.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-rice-oat-salmon-rabbit' },
+        data: { name: '大米燕麦三文鱼兔里脊' },
+      });
+      expect(result.seriesName).toBe('大米燕麦三文鱼兔里脊');
+    });
+
     it('does not create a new version when food supplement targets normalize from null to empty', async () => {
       const existingRecipe = {
         id: 'recipe-row-id',

@@ -872,6 +872,13 @@ export class RecipeService {
       },
     });
 
+    if (existing.seriesId && typeof dto.name === 'string' && dto.name.trim()) {
+      await this.prisma.recipeSeries.update({
+        where: { id: existing.seriesId },
+        data: { name: dto.name },
+      });
+    }
+
     // Update health tag assignments if provided
     if (targetHealthTags !== undefined) {
       // Delete old assignments

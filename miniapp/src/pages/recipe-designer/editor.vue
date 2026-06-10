@@ -1668,6 +1668,17 @@ function selectIngredientOption(option: RecipeDesignerIngredientOption) {
   selectedNutritionProfile.value = getDefaultNutritionProfile(option)
 }
 
+function getNutrientTargetContextForAddItem(option: RecipeDesignerIngredientOption) {
+  if (!isSupplementOption(option)) {
+    return {}
+  }
+
+  return {
+    nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey,
+    nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue,
+  }
+}
+
 function selectNutritionProfile(profile: IngredientNutritionProfileOption) {
   selectedNutritionProfile.value = profile
 }
@@ -1692,8 +1703,7 @@ async function confirmAddIngredient() {
       ingredientId: selectedIngredientOption.value.id,
       nutritionFoodId: selectedNutritionProfile.value.nutritionFoodId,
       weightG,
-      nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey,
-      nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue,
+      ...getNutrientTargetContextForAddItem(selectedIngredientOption.value),
       sortOrder: items.value.length,
     })
     const item = res?.data ?? res

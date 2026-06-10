@@ -413,10 +413,13 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain("return `${formatItemWeightPercentValue(percent)}%`")
   })
 
-  it('persists nutrient target context when adding ingredients from an assessment nutrient', () => {
+  it('persists nutrient target context only when adding supplement options from an assessment nutrient', () => {
     expect(assessmentSource).toContain('targetValue?: number')
     expect(assessmentSource).toContain('targetValue !== null')
     expect(assessmentSource).toContain('{ targetValue }')
+    expect(editorSource).toContain('...getNutrientTargetContextForAddItem(selectedIngredientOption.value)')
+    expect(editorSource).toContain('function getNutrientTargetContextForAddItem')
+    expect(editorSource).toContain('if (!isSupplementOption(option))')
     expect(editorSource).toContain('nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey')
     expect(editorSource).toContain('nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue')
   })

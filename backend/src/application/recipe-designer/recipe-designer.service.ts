@@ -2321,6 +2321,8 @@ export class RecipeDesignerService {
       dto.preparationMethod,
       ingredientId,
     );
+    const shouldPersistNutrientTarget =
+      await this.isIngredientIdSupplement(ingredientId);
 
     const data: Prisma.DesignRecipeItemUncheckedCreateInput = {
       designRecipeId,
@@ -2328,8 +2330,12 @@ export class RecipeDesignerService {
       nutritionFoodId: dto.nutritionFoodId,
       weightG: dto.weightG,
       preparationMethod,
-      nutrientTargetKey: dto.nutrientTargetKey ?? null,
-      nutrientTargetValue: dto.nutrientTargetValue ?? null,
+      ...(shouldPersistNutrientTarget
+        ? {
+            nutrientTargetKey: dto.nutrientTargetKey ?? null,
+            nutrientTargetValue: dto.nutrientTargetValue ?? null,
+          }
+        : {}),
       sortOrder: dto.sortOrder ?? 0,
       includeInAssessment: dto.includeInAssessment ?? true,
     };
@@ -2950,6 +2956,19 @@ export class RecipeDesignerService {
       this.buildPublishedSupplementTargets(supplementTargets);
     const isSupplement =
       this.resolveIngredientType(item) === IngredientType.SUPPLEMENT;
+    const nutrientTargetData = isSupplement
+      ? {
+          nutrientTargetKey:
+            primarySupplementTarget?.nutrientTargetKey ??
+            item.nutrientTargetKey,
+          nutrientTargetValue:
+            primarySupplementTarget?.nutrientTargetValue ??
+            item.nutrientTargetValue,
+          ...(supplementTargetPayload
+            ? { supplementTargets: this.toJsonValue(supplementTargetPayload) }
+            : {}),
+        }
+      : {};
 
     return {
       ingredientId,
@@ -2959,14 +2978,7 @@ export class RecipeDesignerService {
       ratioPercent: isSupplement
         ? null
         : this.findAssessedRatio(assessment, item.id),
-      nutrientTargetKey:
-        primarySupplementTarget?.nutrientTargetKey ?? item.nutrientTargetKey,
-      nutrientTargetValue:
-        primarySupplementTarget?.nutrientTargetValue ??
-        item.nutrientTargetValue,
-      ...(supplementTargetPayload
-        ? { supplementTargets: this.toJsonValue(supplementTargetPayload) }
-        : {}),
+      ...nutrientTargetData,
       sortOrder: item.sortOrder,
       ...(isSupplement ? {} : { exampleWeight: item.weightG }),
     };
@@ -3923,6 +3935,23 @@ export class RecipeDesignerService {
     }
 
     return dto.ingredientId;
+  }
+
+  private async isIngredientIdSupplement(ingredientId: string | null) {
+    if (!ingredientId) {
+      return false;
+    }
+
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: { id: ingredientId },
+      select: { id: true, type: true },
+      take: 1,
+    });
+
+    return (
+      Array.isArray(ingredients) &&
+      ingredients[0]?.type === IngredientType.SUPPLEMENT
+    );
   }
 
   private async resolveDesignItemPreparationMethod(

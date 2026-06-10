@@ -55,9 +55,16 @@ function sanitizeSupplementTargets(targets?: SupplementTarget[]): SupplementTarg
     }));
 }
 
+function isSupplementRecipeItem(item: RecipeItem): boolean {
+  return (item.ingredientType || item.ingredient?.type) === 'SUPPLEMENT';
+}
+
 export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[] {
   return (items || []).map((item) => {
-    const supplementTargets = sanitizeSupplementTargets(item.supplementTargets);
+    const isSupplement = isSupplementRecipeItem(item);
+    const supplementTargets = isSupplement
+      ? sanitizeSupplementTargets(item.supplementTargets)
+      : [];
 
     return stripUndefined({
       ingredientId: item.ingredientId,
@@ -65,8 +72,8 @@ export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[]
       preparationMethod: item.preparationMethod,
       exampleWeight: item.exampleWeight,
       ratioPercent: item.ratioPercent,
-      nutrientTargetKey: item.nutrientTargetKey,
-      nutrientTargetValue: item.nutrientTargetValue,
+      nutrientTargetKey: isSupplement ? item.nutrientTargetKey : undefined,
+      nutrientTargetValue: isSupplement ? item.nutrientTargetValue : undefined,
       supplementTargets:
         supplementTargets.length > 0 ? supplementTargets : undefined,
       supplementAlternativeIngredientIds: uniqueStrings(

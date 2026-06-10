@@ -2821,6 +2821,45 @@ describe('RecipeDesignerService', () => {
     ).not.toEqual(expect.objectContaining({ ingredientId: 'food-1' }));
   });
 
+  it('does not store nutrient target context on food items when adding from a nutrient search', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+      }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-food-1',
+    });
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        id: 'food-item-1',
+        ingredientId: 'food-hemp',
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'food-hemp',
+        nutritionFoodId: 'nutrition-hemp',
+        weightG: 1,
+        nutrientTargetKey: 'magnesium',
+        nutrientTargetValue: 0.2,
+      },
+      { userId: 'staff-1', role: 'STAFF' },
+    );
+
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith({
+      data: expect.not.objectContaining({
+        nutrientTargetKey: 'magnesium',
+        nutrientTargetValue: 0.2,
+      }),
+      include: expect.any(Object),
+    });
+  });
+
   it('publishes revision drafts as the next version of the original formal recipe', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -3806,6 +3845,71 @@ describe('RecipeDesignerService', () => {
     expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
       expectedTargetValue,
     );
+  });
+
+  it('does not publish legacy nutrient target fields for non-supplement ingredients', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-hemp-item',
+            ingredientId: 'food-hemp',
+            weightG: 1,
+            nutrientTargetKey: 'magnesium',
+            nutrientTargetValue: 0.2,
+            ingredient: {
+              id: 'food-hemp',
+              name: '火麻籽',
+              type: 'FOOD',
+            },
+            nutritionFood: {
+              ...item().nutritionFood,
+              id: 'nutrition-hemp',
+              name: '火麻籽',
+              mappings: [
+                {
+                  ingredientId: 'food-hemp',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'food-hemp',
+                    name: '火麻籽',
+                    type: 'FOOD',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { name: '食材目标清理食谱', reviewNote: '允许人工审核发布' },
+      adminAccess,
+    );
+
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const foodItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'food-hemp',
+    );
+
+    expect(foodItem).not.toHaveProperty('nutrientTargetKey');
+    expect(foodItem).not.toHaveProperty('nutrientTargetValue');
+    expect(foodItem).not.toHaveProperty('supplementTargets');
   });
 
   it('stores actual supplement contribution instead of FEDIAF minimum targets', async () => {

@@ -41,6 +41,16 @@ test('buildRecipeSubmitData strips display-only item objects before saving', () 
           preparationMethod: '去壳、生重、打碎',
           exampleWeight: 15,
           ratioPercent: 5.01,
+          nutrientTargetKey: 'magnesium',
+          nutrientTargetValue: 0.2,
+          supplementTargets: [
+            {
+              fieldPath: 'minerals.magnesium',
+              label: '镁',
+              targetValuePerKg: 0.2,
+              unit: 'mg',
+            },
+          ],
           nutritionFoodId: 'nutrition-food-1',
           nutritionState: 'RAW',
           nutritionStateLabel: '生',

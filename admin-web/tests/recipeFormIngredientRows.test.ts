@@ -15,3 +15,9 @@ test('recipe ingredient rows use a row-level key so duplicate ingredients delete
   assert.match(recipeFormSource, /:item-key="getRecipeIngredientRowKey"/);
   assert.match(recipeFormSource, /@click="removeIngredient\(item, index\)"/);
 });
+
+test('recipe ingredient rows only show nutrient targets for supplement rows', () => {
+  assert.match(recipeFormSource, /shouldShowNutrientTarget\(item\)/);
+  assert.match(recipeFormSource, /const shouldShowNutrientTarget = \(item: RecipeItem\)/);
+  assert.match(recipeFormSource, /item\.ingredientType !== 'SUPPLEMENT'/);
+});

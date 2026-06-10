@@ -262,7 +262,7 @@
                       <span v-else>-</span>
                     </div>
                     <div class="row-cell nutrient-target">
-                      <span v-if="getSupplementTargets(item).length > 0 || item.nutrientTargetKey">
+                      <span v-if="shouldShowNutrientTarget(item)">
                         {{ formatNutrientTarget(item) }}
                       </span>
                       <span v-else>-</span>
@@ -1194,6 +1194,16 @@ const createEmptySupplementTarget = (): SupplementTarget => ({
 const normalizeTargetLabel = (value?: string | null) =>
   (value || '').replace(/\s+/g, '').toLowerCase();
 
+const isSupplementRecipeItem = (item: Partial<RecipeItem>) =>
+  item.ingredientType === 'SUPPLEMENT' || item.ingredient?.type === 'SUPPLEMENT';
+
+const shouldShowNutrientTarget = (item: RecipeItem) => {
+  if (item.ingredientType !== 'SUPPLEMENT' && item.ingredient?.type !== 'SUPPLEMENT') {
+    return false;
+  }
+  return getSupplementTargets(item).length > 0 || !!item.nutrientTargetKey;
+};
+
 const getSupplementTargets = (item: Pick<RecipeItem, 'supplementTargets'>) => {
   return Array.isArray(item.supplementTargets)
     ? item.supplementTargets.filter((target) => target.fieldPath)
@@ -1525,7 +1535,7 @@ const loadRecipeDetail = async () => {
     // 补齐旧记录的展示目标，避免编辑老食谱时看不到营养目标。
     if (form.items && form.items.length > 0) {
       form.items = form.items.map((item: any) => {
-        if (!item.supplementTargets?.length) {
+        if (isSupplementRecipeItem(item) && !item.supplementTargets?.length) {
           item.supplementTargets = legacySupplementTargetsFromRow(item);
         }
         return item;
@@ -2155,12 +2165,15 @@ const editIngredient = (row: RecipeItem, index: number) => {
   ingredientForm.preparationMethodText = targetRow.preparationMethod || '';
   ingredientForm.exampleWeight = targetRow.exampleWeight;
   ingredientForm.ratioPercent = targetRow.ratioPercent;
-  ingredientForm.nutrientTargetKey = targetRow.nutrientTargetKey || '';
-  ingredientForm.nutrientTargetValue = targetRow.nutrientTargetValue;
-  ingredientForm.supplementTargets = getSupplementTargets(targetRow).length > 0
-    ? getSupplementTargets(targetRow).map((target) => ({ ...target }))
-    : legacySupplementTargetsFromRow(targetRow);
-  if (targetRow.ingredientType === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
+  const isSupplement = isSupplementRecipeItem(targetRow);
+  ingredientForm.nutrientTargetKey = isSupplement ? targetRow.nutrientTargetKey || '' : '';
+  ingredientForm.nutrientTargetValue = isSupplement ? targetRow.nutrientTargetValue : undefined;
+  ingredientForm.supplementTargets = isSupplement
+    ? getSupplementTargets(targetRow).length > 0
+      ? getSupplementTargets(targetRow).map((target) => ({ ...target }))
+      : legacySupplementTargetsFromRow(targetRow)
+    : [];
+  if (isSupplement && ingredientForm.supplementTargets.length === 0) {
     addSupplementTarget();
   }
   ingredientForm.supplementAlternativeIngredientIds = [
@@ -2183,6 +2196,9 @@ const removeIngredient = (row: RecipeItem, index: number) => {
 
 // Format nutrient target for display
 const formatNutrientTarget = (row: any) => {
+  if (!isSupplementRecipeItem(row)) {
+    return '-';
+  }
   const targets = getSupplementTargets(row);
   const alternativesCount = row.supplementAlternativeIngredientIds?.length || 0;
   const baseText =

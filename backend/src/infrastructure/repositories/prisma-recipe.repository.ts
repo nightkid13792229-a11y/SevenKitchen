@@ -798,6 +798,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
       diyGenCount: record.diyGenCount ?? 0,
       seriesId: record.seriesId,
       seriesLifeStage: record.seriesLifeStage,
+      customerOwnerId: record.customerOwnerId,
+      customerDogId: record.customerDogId,
+      sourceDesignRecipeId: record.sourceDesignRecipeId,
       items: record.items.map(
         (item): RecipeItem => ({
           id: item.id,

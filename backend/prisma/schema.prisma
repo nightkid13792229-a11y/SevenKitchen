@@ -326,6 +326,9 @@ model Recipe {
   isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
   seriesId               String?                     @map("series_id")
   seriesLifeStage        String?                     @map("series_life_stage")
+  customerOwnerId        String?                     @map("customer_owner_id")
+  customerDogId          String?                     @map("customer_dog_id")
+  sourceDesignRecipeId   String?                     @unique @map("source_design_recipe_id")
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   series                 RecipeSeries?               @relation(fields: [seriesId], references: [id])
   healthTagAssignments   RecipeHealthTagAssignment[]
@@ -340,6 +343,8 @@ model Recipe {
   @@index([isCustomRecipe])
   @@index([seriesId])
   @@index([seriesId, seriesLifeStage, status])
+  @@index([customerOwnerId])
+  @@index([customerDogId])
   @@map("recipe")
 }
 
@@ -351,6 +356,7 @@ model RecipeSeries {
   deletedAt      DateTime?                  @map("deleted_at")
   deletedBy      String?                    @map("deleted_by")
   createdBy      String?                    @map("created_by")
+  customerDogId  String?                    @map("customer_dog_id")
   createdAt      DateTime                   @default(now()) @map("created_at")
   updatedAt      DateTime                   @updatedAt @map("updated_at")
   recipes        Recipe[]
@@ -359,6 +365,7 @@ model RecipeSeries {
   @@index([status])
   @@index([businessStatus])
   @@index([updatedAt])
+  @@index([customerDogId])
   @@map("recipe_series")
 }
 
@@ -2139,6 +2146,7 @@ model DesignRecipe {
   revisionBaseRecipeId   String?                       @map("revision_base_recipe_id")
   seriesId               String?                       @map("series_id")
   seriesLifeStage        String?                       @map("series_life_stage")
+  customerDogId          String?                       @map("customer_dog_id")
   createdAt              DateTime                      @default(now()) @map("created_at")
   updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
@@ -2155,6 +2163,7 @@ model DesignRecipe {
   @@index([revisionBaseRecipeId])
   @@index([seriesId])
   @@index([seriesId, seriesLifeStage])
+  @@index([customerDogId])
   @@map("design_recipe")
 }
 

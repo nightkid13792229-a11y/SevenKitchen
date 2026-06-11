@@ -12,6 +12,13 @@ describe('RecipeDesignerService', () => {
     user: {
       findMany: jest.fn(),
     },
+    dog: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    dogBreed: {
+      findUnique: jest.fn(),
+    },
     designRecipe: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -45,6 +52,7 @@ describe('RecipeDesignerService', () => {
     recipe: {
       findFirst: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
     },
     favoriteRecipe: {
@@ -102,6 +110,7 @@ describe('RecipeDesignerService', () => {
     ]);
     prisma.recipeItem.findMany.mockResolvedValue([]);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
+    prisma.dogBreed.findUnique.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
     );
@@ -132,6 +141,7 @@ describe('RecipeDesignerService', () => {
       publishedRecipeVersion: null,
       revisionOfDesignRecipeId: null,
       revisionBaseRecipeId: null,
+      customerDogId: null,
       createdAt: new Date('2026-05-20T00:00:00.000Z'),
       updatedAt: new Date('2026-05-20T00:00:00.000Z'),
       items: [],
@@ -150,6 +160,7 @@ describe('RecipeDesignerService', () => {
       createdBy: 'customer-1',
       createdAt: new Date('2026-05-20T00:00:00.000Z'),
       updatedAt: new Date('2026-05-20T00:00:00.000Z'),
+      customerDogId: null,
       designs: [],
       recipes: [],
       ...overrides,
@@ -4829,6 +4840,83 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  describe('private recipe snapshots', () => {
+    it('rejects private snapshot generation for non-ready customer drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'design-1',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          isCompliant: false,
+          totalWeightG: 100,
+          energyDensityKcalPerKg: 1200,
+          missingDataReport: [],
+          items: [item()],
+        }),
+      );
+
+      await expect(
+        service.createPrivateRecipeSnapshot(
+          'design-1',
+          { target: 'ORDER' } as any,
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('creates a private custom recipe snapshot for ready customer drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'design-1',
+          name: 'Star 控重鸡肉餐',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          isCompliant: true,
+          totalWeightG: 100,
+          energyDensityKcalPerKg: 1200,
+          missingDataReport: [],
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          calculatedNutrition: { energyDensityKcalPerKg: 1200 },
+          items: [item({ weightG: 100 })],
+        }),
+      );
+      prisma.recipe.findFirst.mockResolvedValue(null);
+      prisma.recipe.create.mockResolvedValue({
+        id: 'private-row-1',
+        recipeId: 'private-recipe-1',
+        version: 1,
+        customerDogId: 'dog-1',
+      });
+
+      await expect(
+        service.createPrivateRecipeSnapshot(
+          'design-1',
+          { target: 'DIY' } as any,
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).resolves.toEqual({
+        recipeId: 'private-recipe-1',
+        dogId: 'dog-1',
+        targetUrl:
+          '/pages/recipe-diy/index?recipeId=private-recipe-1&dogId=dog-1',
+      });
+
+      expect(prisma.recipe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PRIVATE_CUSTOM',
+            isCustomRecipe: true,
+            customerOwnerId: 'customer-1',
+            customerDogId: 'dog-1',
+            sourceDesignRecipeId: 'design-1',
+          }),
+        }),
+      );
+    });
+  });
+
   describe('recipe designer series workbench', () => {
     function uniqueNameVersionCollision() {
       return new Prisma.PrismaClientKnownRequestError(
@@ -4850,6 +4938,140 @@ describe('RecipeDesignerService', () => {
         },
       );
     }
+
+    it('requires ordinary customers to create recipe series for their own dog', async () => {
+      prisma.dog.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.createSeries(
+          { name: 'Star 的鲜食食谱', dogId: 'dog-other' } as any,
+          { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' } as any,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(prisma.dog.findFirst).toHaveBeenCalledWith({
+        where: { id: 'dog-other', ownerId: 'customer-1' },
+        select: {
+          id: true,
+          ownerId: true,
+          name: true,
+          breedId: true,
+          birthday: true,
+          lifeStageOverride: true,
+          activityLevel: true,
+        },
+      });
+      expect(prisma.dogBreed.findUnique).not.toHaveBeenCalled();
+      expect(prisma.recipeSeries.create).not.toHaveBeenCalled();
+    });
+
+    it('creates ordinary customer series with inferred dog scenario and dog context', async () => {
+      prisma.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        ownerId: 'customer-1',
+        name: 'Star',
+        breedId: 'breed-1',
+        birthday: new Date('2021-06-01T00:00:00.000Z'),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'LOW',
+      });
+      prisma.dogBreed.findUnique.mockResolvedValue({
+        adultAgeMonths: 12,
+        seniorAgeYears: 7,
+      });
+      prisma.recipeSeries.create.mockResolvedValue(
+        seriesRecord({ id: 'series-dog', customerDogId: 'dog-1' }),
+      );
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'design-dog',
+          seriesId: 'series-dog',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          customerDogId: 'dog-1',
+          series: { id: 'series-dog', name: 'Star 的鲜食食谱' },
+        }),
+      );
+
+      await service.createSeries(
+        { name: 'Star 的鲜食食谱', dogId: 'dog-1' } as any,
+        { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' } as any,
+      );
+
+      expect(prisma.dogBreed.findUnique).toHaveBeenCalledWith({
+        where: { id: 'breed-1' },
+        select: {
+          adultAgeMonths: true,
+          seniorAgeYears: true,
+        },
+      });
+      expect(prisma.recipeSeries.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Star 的鲜食食谱',
+          createdBy: 'user-1',
+          customerDogId: 'dog-1',
+        }),
+      });
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            fediafDogScenario: 'ADULT_MER_95',
+            seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+            customerDogId: 'dog-1',
+          }),
+        }),
+      );
+    });
+
+    it('returns compact dog-first cards for ordinary customer listSeries', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-1',
+          name: 'Star 控重鸡肉餐',
+          customerDogId: 'dog-1',
+          designs: [
+            draft({
+              id: 'design-1',
+              seriesId: 'series-1',
+              seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+              fediafDogScenario: 'ADULT_MER_95',
+              customerDogId: 'dog-1',
+              isCompliant: true,
+              totalWeightG: 100,
+              energyDensityKcalPerKg: 1200,
+              missingDataReport: [],
+              items: [item()],
+            }),
+          ],
+          recipes: [],
+        }),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-1', name: 'Star' }]);
+
+      await expect(
+        service.listSeries({ userId: 'customer-1', role: 'CUSTOMER' }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          id: 'series-1',
+          name: 'Star 控重鸡肉餐',
+          customerDogId: 'dog-1',
+          customerDogName: 'Star',
+          scenario: 'ADULT_MER_95',
+          scenarioLabel: '低能量需求成年犬（95ME）',
+          primaryDraftId: 'design-1',
+          customerStatus: 'READY',
+          actionAvailability: expect.objectContaining({
+            canContinueEditing: true,
+            canOrder: true,
+            canGenerateDiy: true,
+          }),
+        }),
+      ]);
+      expect(prisma.dog.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['dog-1'] }, ownerId: 'customer-1' },
+        select: { id: true, name: true },
+      });
+    });
 
     it('lists only active customer-owned series for customer users', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([

@@ -79,6 +79,23 @@ describe('RecipeDesignerController authorization', () => {
     expect(source).toMatch(/@Get\('drafts\/:id'\)/);
   });
 
+  it('exposes private recipe snapshot creation to authenticated users without StaffGuard', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    const snapshotRoute = source.match(
+      /@Post\('drafts\/:id\/private-recipe-snapshot'\)([\s\S]*?)async createPrivateRecipeSnapshot/,
+    );
+
+    expect(snapshotRoute).not.toBeNull();
+    expect(snapshotRoute?.[1] ?? '').not.toContain('@UseGuards(StaffGuard)');
+  });
+
   it('accepts a source draft id when creating a stage draft from a published template', () => {
     const dtoSource = readFileSync(
       resolve(
@@ -116,6 +133,7 @@ describe('RecipeDesignerController', () => {
     publishDraft: jest.fn(),
     createRevisionDraft: jest.fn(),
     createSupplementOption: jest.fn(),
+    createPrivateRecipeSnapshot: jest.fn(),
   };
   const cosService = {
     uploadImage: jest.fn(),
@@ -338,6 +356,29 @@ describe('RecipeDesignerController', () => {
         role: 'STAFF',
       },
       { status: 'PUBLIC' },
+    );
+  });
+
+  it('delegates private recipe snapshot creation with CurrentUser ids', async () => {
+    service.createPrivateRecipeSnapshot.mockResolvedValue({
+      recipeId: 'private-recipe-1',
+      dogId: 'dog-1',
+      targetUrl:
+        '/pages/recipe-order/index?recipeId=private-recipe-1&dogId=dog-1',
+    });
+
+    await expect(
+      controller.createPrivateRecipeSnapshot(
+        'design-1',
+        { target: 'ORDER' } as any,
+        { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' },
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+
+    expect(service.createPrivateRecipeSnapshot).toHaveBeenCalledWith(
+      'design-1',
+      { target: 'ORDER' },
+      { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' },
     );
   });
 

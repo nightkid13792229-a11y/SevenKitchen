@@ -73,6 +73,9 @@ export interface Recipe {
   diyGenCount?: number;
   seriesId?: string | null;
   seriesLifeStage?: string | null;
+  customerOwnerId?: string | null;
+  customerDogId?: string | null;
+  sourceDesignRecipeId?: string | null;
 }
 
 export interface IngredientGroup {

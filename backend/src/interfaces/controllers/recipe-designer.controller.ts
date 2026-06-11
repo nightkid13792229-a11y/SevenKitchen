@@ -28,6 +28,7 @@ import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
+  CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
   CreateRecipeSeriesDto,
@@ -61,10 +62,14 @@ const WECHAT_UPLOAD_FALLBACK_MIME_TYPES = new Set([
 ]);
 
 function toRecipeDesignerAccessContext(user: RequestUser) {
-  return {
+  const context = {
     userId: user.userId,
     role: user.role,
   };
+  if (user.customerId && user.customerId !== user.userId) {
+    return { ...context, customerId: user.customerId };
+  }
+  return context;
 }
 
 function supplementLabelFileFilter(
@@ -292,6 +297,24 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
+  }
+
+  @Post('drafts/:id/private-recipe-snapshot')
+  @ApiOperation({
+    summary: 'Create or update a private recipe snapshot for order or DIY',
+  })
+  async createPrivateRecipeSnapshot(
+    @Param('id') id: string,
+    @Body() dto: CreatePrivateRecipeSnapshotDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const snapshot =
+      await this.recipeDesignerService.createPrivateRecipeSnapshot(
+        id,
+        dto,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(snapshot);
   }
 
   @Post('drafts')

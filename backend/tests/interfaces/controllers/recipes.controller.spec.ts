@@ -720,6 +720,52 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.name).toBe(recipe.name);
     });
 
+    it('allows only the owner to open a private customer recipe snapshot by direct id', async () => {
+      const recipe: Recipe = {
+        id: 'private-customer-recipe-id',
+        version: 1,
+        name: 'Star 的鲜食食谱',
+        status: 'PRIVATE_CUSTOM',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        customerOwnerId: 'customer-1',
+        customerDogId: 'dog-1',
+        sourceDesignRecipeId: 'design-1',
+        items: [],
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+      mockJwtAuthService.validateToken
+        .mockReturnValueOnce({
+          userId: 'customer-1',
+          customerId: 'customer-1',
+          role: 'CUSTOMER',
+        })
+        .mockReturnValueOnce({
+          userId: 'customer-2',
+          customerId: 'customer-2',
+          role: 'CUSTOMER',
+        });
+
+      const ownerResponse = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .set('Authorization', 'Bearer owner-token')
+        .expect(200);
+
+      expect(ownerResponse.body.code).toBe(0);
+      expect(ownerResponse.body.data.id).toBe(recipe.id);
+      expect(ownerResponse.body.data.name).toBe(recipe.name);
+
+      const foreignResponse = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .set('Authorization', 'Bearer foreign-token')
+        .expect(200);
+
+      expect(foreignResponse.body.code).toBe(404);
+      expect(foreignResponse.body.message).toBe('Recipe not found');
+      expect(foreignResponse.body.data).toBeNull();
+    });
+
     it('selects the dog-matched public life-stage version for a series detail request', async () => {
       mockJwtAuthService.validateToken.mockReturnValue({
         userId: 'customer-1',

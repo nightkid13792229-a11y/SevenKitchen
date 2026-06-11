@@ -46,6 +46,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   AddRecipeDesignItemDto,
   CreateRecipeDesignerSupplementOptionDto,
+  CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignDraftDto,
   CreateRecipeSeriesDto,
   CreateRecipeSeriesStageDraftDto,
@@ -77,6 +78,7 @@ import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RECIPE_SERIES_BUSINESS_STATUS_LABELS,
   SERIES_LIFE_STAGE_LABELS,
+  mapDogProfileToSeriesLifeStage,
   mapScenarioToSeriesLifeStage,
   mapSeriesLifeStageToScenario,
   type RecipeSeriesLifeStage,
@@ -147,6 +149,7 @@ const DESIGN_RECIPE_LIST_SELECT = {
   publishedRecipeVersion: true,
   revisionOfDesignRecipeId: true,
   revisionBaseRecipeId: true,
+  customerDogId: true,
   isCompliant: true,
   reviewStatus: true,
   reviewNote: true,
@@ -202,6 +205,14 @@ const DUPLICATE_SERIES_STAGE_NAME_LABELS: Record<
   REPRODUCTION: '繁殖期母犬',
 };
 
+const FEDIAF_DOG_SCENARIO_LABELS: Record<FediafDogScenarioCode, string> = {
+  EARLY_GROWTH_REPRODUCTION: '小于14周龄幼犬 / 繁殖期母犬',
+  REPRODUCTION: '繁殖期母犬',
+  LATE_GROWTH: '大于等于14周龄幼犬',
+  ADULT_MER_110: '普通成年犬（110ME）',
+  ADULT_MER_95: '低能量需求成年犬（95ME）',
+};
+
 const PUBLISHED_RECIPE_LIFE_STAGES_BY_SCENARIO: Record<
   FediafDogScenarioCode,
   string[]
@@ -248,6 +259,7 @@ type DesignRecipeWithItems = {
   publishedRecipeVersion: number | null;
   revisionOfDesignRecipeId: string | null;
   revisionBaseRecipeId: string | null;
+  customerDogId?: string | null;
   seriesId?: string | null;
   seriesLifeStage?: string | null;
   series?: {
@@ -368,6 +380,7 @@ type RecipeSeriesWorkbenchRecord = {
   status: string;
   businessStatus?: RecipeSeriesBusinessStatus | string | null;
   createdBy?: string | null;
+  customerDogId?: string | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
   designs: Array<{
@@ -379,6 +392,14 @@ type RecipeSeriesWorkbenchRecord = {
     publishedRecipeId?: string | null;
     publishedAt?: Date | null;
     updatedAt?: Date | string | null;
+    name?: string;
+    createdBy?: string;
+    fediafDogScenario?: FediafDogScenarioCode;
+    energyDensityKcalPerKg?: number | null;
+    totalWeightG?: number;
+    customerDogId?: string | null;
+    isCompliant?: boolean;
+    missingDataReport?: unknown;
     items?: unknown[];
   }>;
   recipes: Array<{
@@ -394,6 +415,7 @@ type RecipeSeriesWorkbenchRecord = {
     description?: string | null;
     nutritionStandard?: string | null;
     nutritionDetailedData?: unknown;
+    customerDogId?: string | null;
     updatedAt?: Date | string | null;
     items?: RecipeSeriesCopyableRecipeItem[];
   }>;
@@ -502,11 +524,13 @@ type RecipeDesignerAccessInput =
   | string
   | {
       userId: string;
+      customerId?: string | null;
       role?: string | null;
     };
 
 interface RecipeDesignerAccessContext {
   userId: string;
+  customerId?: string | null;
   role: string;
 }
 
@@ -518,6 +542,7 @@ function normalizeRecipeDesignerAccessContext(
   }
   return {
     userId: input.userId,
+    customerId: input.customerId ?? null,
     role: String(input.role || UserRole.CUSTOMER).toUpperCase(),
   };
 }
@@ -526,6 +551,12 @@ function isInternalRecipeDesignerRole(
   context: RecipeDesignerAccessContext,
 ): boolean {
   return context.role === UserRole.STAFF || context.role === UserRole.ADMIN;
+}
+
+function getRecipeDesignerCustomerOwnerId(
+  context: RecipeDesignerAccessContext,
+): string {
+  return context.customerId || context.userId;
 }
 
 const MAX_SEARCH_EXPANSION_TERMS = 8;
@@ -1103,6 +1134,76 @@ export class RecipeDesignerService {
     return internalUserIds.includes(creatorId);
   }
 
+  private async loadCustomerDogForRecipeDesigner(
+    dogId: string | undefined,
+    context: RecipeDesignerAccessContext,
+  ) {
+    if (isInternalRecipeDesignerRole(context)) {
+      return null;
+    }
+    if (!dogId) {
+      throw new BadRequestException('请选择狗狗后再创建食谱');
+    }
+
+    const dog = await this.prisma.dog.findFirst({
+      where: {
+        id: dogId,
+        ownerId: getRecipeDesignerCustomerOwnerId(context),
+      },
+      select: {
+        id: true,
+        ownerId: true,
+        name: true,
+        breedId: true,
+        birthday: true,
+        lifeStageOverride: true,
+        activityLevel: true,
+      },
+    });
+    if (!dog) {
+      throw new NotFoundException('未找到可用狗狗档案');
+    }
+
+    const breed = dog.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dog.breedId },
+          select: {
+            adultAgeMonths: true,
+            seniorAgeYears: true,
+          },
+        })
+      : null;
+    return { ...dog, breed };
+  }
+
+  private async loadCustomerDogNameMapForSeries(
+    series: RecipeSeriesWorkbenchRecord[],
+    context: RecipeDesignerAccessContext,
+  ) {
+    const dogIds = [
+      ...new Set(
+        series
+          .flatMap((record) => [
+            record.customerDogId,
+            ...record.designs.map((design) => design.customerDogId),
+          ])
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (dogIds.length === 0) {
+      return new Map<string, string>();
+    }
+
+    const dogs = await this.prisma.dog.findMany({
+      where: {
+        id: { in: dogIds },
+        ownerId: getRecipeDesignerCustomerOwnerId(context),
+      },
+      select: { id: true, name: true },
+    });
+    return new Map(dogs.map((dog) => [dog.id, dog.name]));
+  }
+
   private async expandIngredientSearchTerms(search?: string) {
     const trimmed = search?.trim();
     if (!trimmed) {
@@ -1465,6 +1566,16 @@ export class RecipeDesignerService {
       orderBy: { updatedAt: 'desc' },
     })) as RecipeSeriesWorkbenchRecord[];
 
+    if (!isInternalRecipeDesignerRole(context)) {
+      const dogNameById = await this.loadCustomerDogNameMapForSeries(
+        series,
+        context,
+      );
+      return series.map((record) =>
+        this.buildCustomerSeriesCard(record, dogNameById),
+      );
+    }
+
     const cards = series.map((record) =>
       this.buildSeriesWorkbenchCard(record, context.userId),
     );
@@ -1481,7 +1592,18 @@ export class RecipeDesignerService {
       throw new BadRequestException('请填写系列名称');
     }
 
-    const scenario = dto.scenario ?? 'ADULT_MER_110';
+    const customerDog = await this.loadCustomerDogForRecipeDesigner(
+      dto.dogId,
+      context,
+    );
+    const inferredLifeStage = customerDog
+      ? mapDogProfileToSeriesLifeStage(customerDog)
+      : null;
+    const scenario =
+      dto.scenario ??
+      (inferredLifeStage
+        ? mapSeriesLifeStageToScenario(inferredLifeStage)
+        : 'ADULT_MER_110');
     const lifeStage = mapScenarioToSeriesLifeStage(scenario);
 
     for (
@@ -1497,6 +1619,7 @@ export class RecipeDesignerService {
                 name,
                 status: RecipeSeriesStatus.ACTIVE,
                 createdBy: context.userId,
+                ...(customerDog ? { customerDogId: customerDog.id } : {}),
               },
             });
 
@@ -1516,9 +1639,24 @@ export class RecipeDesignerService {
                 createdBy: context.userId,
                 seriesId: series.id,
                 seriesLifeStage: lifeStage,
+                ...(customerDog ? { customerDogId: customerDog.id } : {}),
               },
               include: DESIGN_RECIPE_INCLUDE,
             });
+
+            if (!isInternalRecipeDesignerRole(context)) {
+              return this.buildCustomerSeriesCard(
+                {
+                  ...series,
+                  customerDogId: customerDog?.id ?? null,
+                  designs: [design],
+                  recipes: [],
+                } as RecipeSeriesWorkbenchRecord,
+                new Map(
+                  customerDog ? [[customerDog.id, customerDog.name]] : [],
+                ),
+              );
+            }
 
             return this.buildSeriesWorkbenchCard(
               {
@@ -2429,6 +2567,79 @@ export class RecipeDesignerService {
     };
   }
 
+  private buildCustomerSeriesCard(
+    record: RecipeSeriesWorkbenchRecord,
+    dogNameById: Map<string, string> = new Map(),
+  ) {
+    const primaryDraft = record.designs[0] as
+      | (RecipeSeriesWorkbenchRecord['designs'][number] &
+          Partial<DesignRecipeWithItems>)
+      | undefined;
+    const privateRecipe = record.recipes.find(
+      (recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM,
+    );
+    const customerDogId =
+      record.customerDogId ?? primaryDraft?.customerDogId ?? null;
+    const scenario = (primaryDraft?.fediafDogScenario ??
+      'ADULT_MER_110') as FediafDogScenarioCode;
+    const ready = this.isCustomerDraftReadyForSnapshot(primaryDraft);
+
+    return {
+      id: record.id,
+      name: record.name,
+      customerDogId,
+      customerDogName: customerDogId ? (dogNameById.get(customerDogId) ?? '') : '',
+      scenario,
+      scenarioLabel: this.getScenarioDisplayLabel(scenario),
+      primaryDraftId: primaryDraft?.id ?? '',
+      privateRecipeId: privateRecipe?.recipeId ?? '',
+      customerStatus: ready ? 'READY' : primaryDraft ? 'DRAFT' : 'EMPTY',
+      updatedAt: primaryDraft?.updatedAt ?? record.updatedAt,
+      actionAvailability: {
+        canContinueEditing: Boolean(primaryDraft?.id),
+        canOrder: ready,
+        canGenerateDiy: ready,
+        disabledReason: ready ? '' : '当前食谱还未达到可用条件',
+      },
+    };
+  }
+
+  private getScenarioDisplayLabel(scenario: FediafDogScenarioCode): string {
+    return FEDIAF_DOG_SCENARIO_LABELS[scenario] ?? scenario;
+  }
+
+  private isCustomerDraftReadyForSnapshot(
+    draft?:
+      | (Partial<DesignRecipeWithItems> & {
+          items?: unknown[];
+          totalWeightG?: number;
+          energyDensityKcalPerKg?: number | null;
+          isCompliant?: boolean;
+          missingDataReport?: unknown;
+          createdBy?: string | null;
+          customerDogId?: string | null;
+        })
+      | null,
+  ) {
+    if (!draft) return false;
+    const missing = Array.isArray(draft.missingDataReport)
+      ? draft.missingDataReport
+      : [];
+    return Boolean(
+      draft.createdBy &&
+        draft.customerDogId &&
+        Array.isArray(draft.items) &&
+        draft.items.some((item) => {
+          const maybeItem = item as { includeInAssessment?: boolean };
+          return maybeItem.includeInAssessment !== false;
+        }) &&
+        Number(draft.totalWeightG) > 0 &&
+        Number(draft.energyDensityKcalPerKg) > 0 &&
+        draft.isCompliant &&
+        missing.length === 0,
+    );
+  }
+
   private filterSeriesWorkbenchCards<
     T extends {
       businessStatus?: RecipeDesignerSeriesStatusFilter | string | null;
@@ -3142,6 +3353,89 @@ export class RecipeDesignerService {
     return this.toClientAssessmentResult(result);
   }
 
+  async createPrivateRecipeSnapshot(
+    id: string,
+    dto: CreatePrivateRecipeSnapshotDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const draft = await this.loadDraft(id);
+
+    if (
+      !isInternalRecipeDesignerRole(context) &&
+      !this.isDraftOwnedByContext(draft, context)
+    ) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
+    if (!this.isCustomerDraftReadyForSnapshot(draft)) {
+      throw new BadRequestException('当前食谱还未达到可用条件');
+    }
+
+    const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(draft);
+    const customerOwnerId = isInternalRecipeDesignerRole(context)
+      ? draft.createdBy
+      : getRecipeDesignerCustomerOwnerId(context);
+    const baseData = {
+      name: draft.name,
+      status: RecipeStatus.PRIVATE_CUSTOM,
+      energyDensityKcalPerKg: Number(draft.energyDensityKcalPerKg),
+      productionLossRate: PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE,
+      batchLaborHours: PUBLISHED_RECIPE_BATCH_LABOR_HOURS,
+      applicableLifeStages: this.resolvePublishedLifeStages(draft),
+      targetHealthTags: draft.targetHealthTags,
+      nutritionDetailedData: this.toJsonValue(
+        this.buildPrivateRecipeSnapshotNutritionData(draft),
+      ),
+      nutritionStandard: draft.nutritionStandard ?? 'FEDIAF_2025',
+      description: draft.notes,
+      designSource: 'SETAR_RECIPE_DESIGNER_PRIVATE',
+      isCustomRecipe: true,
+      ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
+      ...(draft.seriesLifeStage
+        ? { seriesLifeStage: draft.seriesLifeStage }
+        : {}),
+      customerOwnerId,
+      customerDogId: draft.customerDogId,
+      sourceDesignRecipeId: draft.id,
+      items: {
+        create: itemCreates,
+      },
+    };
+
+    const existing = await this.prisma.recipe.findFirst({
+      where: { sourceDesignRecipeId: draft.id },
+      select: { id: true, recipeId: true, version: true },
+    });
+    const recipe = existing
+      ? await this.prisma.recipe.update({
+          where: { id: existing.id },
+          data: {
+            ...baseData,
+            items: {
+              deleteMany: {},
+              create: itemCreates,
+            },
+          },
+        })
+      : await this.prisma.recipe.create({
+          data: {
+            recipeId: draft.id,
+            version: 1,
+            ...baseData,
+          },
+        });
+
+    const page =
+      dto.target === 'DIY'
+        ? '/pages/recipe-diy/index'
+        : '/pages/recipe-order/index';
+    return {
+      recipeId: recipe.recipeId,
+      dogId: draft.customerDogId,
+      targetUrl: `${page}?recipeId=${recipe.recipeId}&dogId=${draft.customerDogId}`,
+    };
+  }
+
   async publishDraft(
     id: string,
     dto: PublishRecipeDesignDraftDto,
@@ -3669,6 +3963,72 @@ export class RecipeDesignerService {
     }
 
     return [...normalized];
+  }
+
+  private isDraftOwnedByContext(
+    draft: Pick<DesignRecipeWithItems, 'createdBy'>,
+    context: RecipeDesignerAccessContext,
+  ) {
+    return (
+      draft.createdBy === context.userId ||
+      draft.createdBy === getRecipeDesignerCustomerOwnerId(context)
+    );
+  }
+
+  private buildPrivateRecipeSnapshotItemCreateData(
+    draft: DesignRecipeWithItems,
+  ) {
+    return draft.items
+      .filter((item) => this.isItemIncludedInAssessment(item))
+      .map((item) => ({
+        ingredientId: this.resolveIngredientId(item),
+        nutritionFoodId: item.nutritionFoodId,
+        preparationMethod: this.normalizePreparationMethod(
+          item.preparationMethod,
+        ),
+        ratioPercent: this.resolvePrivateRecipeItemRatio(
+          item,
+          draft.totalWeightG,
+        ),
+        nutrientTargetKey: item.nutrientTargetKey,
+        nutrientTargetValue: item.nutrientTargetValue,
+        sortOrder: item.sortOrder,
+        exampleWeight: item.weightG,
+      }));
+  }
+
+  private resolvePrivateRecipeItemRatio(
+    item: DesignRecipeItemWithFood,
+    totalWeightG: number,
+  ) {
+    const existingRatio = Number(item.ratioPercent);
+    if (Number.isFinite(existingRatio) && existingRatio > 0) {
+      return existingRatio;
+    }
+    const total = Number(totalWeightG);
+    const weight = Number(item.weightG);
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(weight)) {
+      return null;
+    }
+    return Math.round((weight / total) * 10000) / 100;
+  }
+
+  private buildPrivateRecipeSnapshotNutritionData(
+    draft: DesignRecipeWithItems,
+  ) {
+    return {
+      source: 'SETAR_RECIPE_DESIGNER_PRIVATE',
+      schemaVersion: 1,
+      standard: draft.nutritionStandard ?? 'FEDIAF_2025',
+      scenario: draft.fediafDogScenario,
+      generatedAt: new Date().toISOString(),
+      energy_density_kcal_per_kg: draft.energyDensityKcalPerKg,
+      total_weight_g: draft.totalWeightG,
+      nutrients: draft.calculatedNutrition ?? {},
+      complianceStatus: draft.complianceStatus ?? {},
+      assessmentSummary: draft.assessmentSummary ?? {},
+      missingDataReport: draft.missingDataReport ?? [],
+    };
   }
 
   private buildPublishedRecipeItemCreateData(

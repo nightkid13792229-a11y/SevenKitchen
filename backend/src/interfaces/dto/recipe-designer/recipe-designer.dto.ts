@@ -62,6 +62,20 @@ export class CreateRecipeSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SCENARIOS)
   scenario?: RecipeDesignerScenario;
+
+  @IsOptional()
+  @IsString()
+  dogId?: string;
+}
+
+export const PRIVATE_RECIPE_SNAPSHOT_TARGETS = ['ORDER', 'DIY'] as const;
+
+export type PrivateRecipeSnapshotTarget =
+  (typeof PRIVATE_RECIPE_SNAPSHOT_TARGETS)[number];
+
+export class CreatePrivateRecipeSnapshotDto {
+  @IsIn(PRIVATE_RECIPE_SNAPSHOT_TARGETS)
+  target!: PrivateRecipeSnapshotTarget;
 }
 
 export class RenameRecipeSeriesDto {

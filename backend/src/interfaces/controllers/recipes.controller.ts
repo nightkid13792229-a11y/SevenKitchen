@@ -457,6 +457,18 @@ export class RecipesController {
       return recipe;
     }
 
+    if (recipe.status === RecipeStatus.PRIVATE_CUSTOM) {
+      const user = this.getRequestUser(req);
+      if (
+        user &&
+        (user.role === 'STAFF' ||
+          user.role === 'ADMIN' ||
+          recipe.customerOwnerId === (user.customerId || user.userId))
+      ) {
+        return recipe;
+      }
+    }
+
     return (await this.hasRestrictedRecipeAccess(id, shareToken, req))
       ? recipe
       : null;

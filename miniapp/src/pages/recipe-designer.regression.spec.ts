@@ -218,6 +218,7 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
     expect(listSource).toContain('复制此生命阶段')
     expect(listSource).toContain('function duplicateSeriesStage')
+    expect(listSource).toContain('Boolean(stage.draftId || stage.recipeId)')
     expect(listSource).toContain('recipeDesignerApi.duplicateSeriesStage')
     expect(listSource).toContain('stage.lifeStage')
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')

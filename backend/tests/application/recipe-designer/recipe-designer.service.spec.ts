@@ -31,6 +31,7 @@ describe('RecipeDesignerService', () => {
     },
     nutritionFoodMapping: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
     },
     nutritionFood: {
@@ -5964,6 +5965,159 @@ describe('RecipeDesignerService', () => {
                 ingredientId: 'ingredient-adult',
                 nutritionFoodId: 'food-adult',
                 weightG: 128,
+              }),
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('duplicates a published stage from the official recipe when no design draft exists', async () => {
+      const recipeItem = {
+        id: 'recipe-item-1',
+        ingredientId: 'ingredient-senior',
+        nutritionFoodId: null,
+        exampleWeight: 86,
+        ratioPercent: 43,
+        preparationMethod: 'STEAMED',
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 2,
+      };
+      const ratioOnlyRecipeItem = {
+        id: 'recipe-item-2',
+        ingredientId: 'ingredient-ratio-only',
+        nutritionFoodId: null,
+        exampleWeight: null,
+        ratioPercent: 7.5,
+        preparationMethod: 'RAW',
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 3,
+      };
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '糙米三文鱼鸭胸鹿腿',
+          createdBy: 'staff-1',
+          designs: [],
+          recipes: [
+            {
+              id: 'published-version-id',
+              recipeId: 'published-recipe-id',
+              version: 5,
+              name: '糙米三文鱼鸭胸鹿腿',
+              status: 'PUBLIC',
+              energyDensityKcalPerKg: 1379,
+              applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+              targetHealthTags: ['皮毛支持'],
+              description: '公开版本说明',
+              nutritionStandard: 'FEDIAF_2025',
+              nutritionDetailedData: { macros: {} },
+              seriesId: 'series-1',
+              seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+              updatedAt: new Date('2026-06-11T07:54:25.020Z'),
+              items: [recipeItem, ratioOnlyRecipeItem],
+            },
+          ],
+        }),
+      );
+      prisma.recipeSeries.create.mockResolvedValue(
+        seriesRecord({
+          id: 'stage-copy-series',
+          name: '糙米三文鱼鸭胸鹿腿 低能量需求成年犬（95ME）副本',
+          createdBy: 'staff-1',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 3 } });
+      prisma.nutritionFoodMapping.findMany.mockResolvedValue([
+        {
+          ingredientId: 'ingredient-senior',
+          nutritionFoodId: 'food-senior-from-mapping',
+        },
+        {
+          ingredientId: 'ingredient-ratio-only',
+          nutritionFoodId: 'food-ratio-only-from-mapping',
+        },
+      ]);
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'senior-copy-design',
+          name: '糙米三文鱼鸭胸鹿腿 低能量需求成年犬（95ME）副本',
+          version: 4,
+          seriesId: 'stage-copy-series',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          items: [
+            item({
+              id: 'copied-item-1',
+              ingredientId: 'ingredient-senior',
+              nutritionFoodId: 'food-senior-from-mapping',
+              weightG: 86,
+              ratioPercent: 43,
+              preparationMethod: 'STEAMED',
+              sortOrder: 2,
+            }),
+            item({
+              id: 'copied-item-2',
+              ingredientId: 'ingredient-ratio-only',
+              nutritionFoodId: 'food-ratio-only-from-mapping',
+              weightG: 7.5,
+              ratioPercent: 7.5,
+              preparationMethod: 'RAW',
+              sortOrder: 3,
+            }),
+          ],
+        }),
+      );
+
+      await expect(
+        service.duplicateSeriesStage(
+          'series-1',
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'stage-copy-series',
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+              draftId: 'senior-copy-design',
+              status: 'MODIFIED',
+            }),
+          ]),
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: '糙米三文鱼鸭胸鹿腿 低能量需求成年犬（95ME）副本',
+          fediafDogScenario: 'ADULT_MER_95',
+          seriesId: 'stage-copy-series',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          targetHealthTags: ['皮毛支持'],
+          notes: '公开版本说明',
+          items: {
+            create: [
+              expect.objectContaining({
+                ingredientId: 'ingredient-senior',
+                nutritionFoodId: 'food-senior-from-mapping',
+                weightG: 86,
+                ratioPercent: 43,
+                preparationMethod: 'STEAMED',
+                sortOrder: 2,
+              }),
+              expect.objectContaining({
+                ingredientId: 'ingredient-ratio-only',
+                nutritionFoodId: 'food-ratio-only-from-mapping',
+                weightG: 7.5,
+                ratioPercent: 7.5,
+                preparationMethod: 'RAW',
+                sortOrder: 3,
               }),
             ],
           },

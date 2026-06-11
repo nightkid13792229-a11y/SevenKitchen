@@ -185,6 +185,11 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
+const COPYABLE_RECIPE_STATUS_PRIORITY: Record<string, number> = {
+  [RecipeStatus.PRIVATE_CUSTOM]: 3,
+  [RecipeStatus.DRAFT]: 2,
+  [RecipeStatus.PUBLIC]: 1,
+};
 
 const DUPLICATE_SERIES_STAGE_NAME_LABELS: Record<
   RecipeSeriesLifeStage,
@@ -377,13 +382,51 @@ type RecipeSeriesWorkbenchRecord = {
     items?: unknown[];
   }>;
   recipes: Array<{
+    id?: string;
     recipeId: string;
+    name?: string;
     seriesLifeStage?: string | null;
     status: string;
     version?: number;
+    energyDensityKcalPerKg?: number | null;
+    applicableLifeStages?: unknown;
+    targetHealthTags?: unknown;
+    description?: string | null;
+    nutritionStandard?: string | null;
+    nutritionDetailedData?: unknown;
     updatedAt?: Date | string | null;
+    items?: RecipeSeriesCopyableRecipeItem[];
   }>;
 };
+
+type RecipeSeriesCopyableRecipeItem = {
+  id?: string;
+  ingredientId: string;
+  nutritionFoodId?: string | null;
+  exampleWeight?: number | null;
+  ratioPercent?: number | null;
+  preparationMethod?: string | null;
+  nutrientTargetKey?: string | null;
+  nutrientTargetValue?: number | null;
+  sortOrder?: number | null;
+};
+
+type RecipeSeriesCopyableRecipe = RecipeSeriesWorkbenchRecord['recipes'][number] & {
+  seriesLifeStage: RecipeSeriesLifeStage;
+  items: RecipeSeriesCopyableRecipeItem[];
+};
+
+type CopyableSeriesStageSource =
+  | {
+      kind: 'design';
+      lifeStage: RecipeSeriesLifeStage;
+      design: DesignRecipeWithItems;
+    }
+  | {
+      kind: 'recipe';
+      lifeStage: RecipeSeriesLifeStage;
+      recipe: RecipeSeriesCopyableRecipe;
+    };
 
 type RecipeSeriesStageRecipeStatusCategory =
   | 'NOT_DESIGNED'
@@ -1520,10 +1563,10 @@ export class RecipeDesignerService {
               seriesId,
               context,
             );
-            const sourceDesigns = this.getLatestCopyableSeriesDesigns(
-              sourceSeries.designs,
+            const sourceSources = this.getLatestCopyableSeriesStageSources(
+              sourceSeries,
             );
-            if (sourceDesigns.length === 0) {
+            if (sourceSources.length === 0) {
               throw new BadRequestException('该系列暂无可复制的生命阶段');
             }
 
@@ -1541,11 +1584,11 @@ export class RecipeDesignerService {
             );
             const copiedDesigns = [];
             let nextVersion = firstVersion;
-            for (const sourceDesign of sourceDesigns) {
+            for (const source of sourceSources) {
               copiedDesigns.push(
-                await this.createCopiedSeriesDesign(
+                await this.createCopiedSeriesDesignFromSource(
                   tx,
-                  sourceDesign,
+                  source,
                   copiedSeries.id,
                   copyName,
                   nextVersion,
@@ -1604,10 +1647,10 @@ export class RecipeDesignerService {
               seriesId,
               context,
             );
-            const sourceDesign = this.getLatestCopyableSeriesDesigns(
-              sourceSeries.designs,
-            ).find((design) => design.seriesLifeStage === normalizedLifeStage);
-            if (!sourceDesign) {
+            const source = this.getLatestCopyableSeriesStageSources(
+              sourceSeries,
+            ).find((candidate) => candidate.lifeStage === normalizedLifeStage);
+            if (!source) {
               throw new BadRequestException('该生命阶段暂无可复制食谱');
             }
 
@@ -1626,9 +1669,9 @@ export class RecipeDesignerService {
               tx,
               copyName,
             );
-            const copiedDesign = await this.createCopiedSeriesDesign(
+            const copiedDesign = await this.createCopiedSeriesDesignFromSource(
               tx,
-              sourceDesign,
+              source,
               copiedSeries.id,
               copyName,
               version,
@@ -1775,6 +1818,14 @@ export class RecipeDesignerService {
           include: DESIGN_RECIPE_INCLUDE,
           orderBy: { updatedAt: 'desc' },
         },
+        recipes: {
+          include: {
+            items: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+          orderBy: { updatedAt: 'desc' },
+        },
       },
     });
 
@@ -1816,6 +1867,104 @@ export class RecipeDesignerService {
     });
   }
 
+  private getLatestCopyableSeriesStageSources(
+    series: RecipeSeriesWorkbenchRecord & {
+      designs: DesignRecipeWithItems[];
+      recipes: RecipeSeriesWorkbenchRecord['recipes'];
+    },
+  ): CopyableSeriesStageSource[] {
+    const designsByStage = new Map(
+      this.getLatestCopyableSeriesDesigns(series.designs).map((design) => [
+        design.seriesLifeStage as RecipeSeriesLifeStage,
+        design,
+      ]),
+    );
+    const recipesByStage = new Map(
+      this.getLatestCopyableSeriesRecipes(series.recipes).map((recipe) => [
+        recipe.seriesLifeStage,
+        recipe,
+      ]),
+    );
+
+    const sources: CopyableSeriesStageSource[] = [];
+    for (const lifeStage of ORDERED_RECIPE_SERIES_LIFE_STAGES) {
+      const design = designsByStage.get(lifeStage);
+      if (design) {
+        sources.push({ kind: 'design', lifeStage, design });
+        continue;
+      }
+
+      const recipe = recipesByStage.get(lifeStage);
+      if (recipe) {
+        sources.push({ kind: 'recipe', lifeStage, recipe });
+      }
+    }
+
+    return sources;
+  }
+
+  private getLatestCopyableSeriesRecipes(
+    recipes: RecipeSeriesWorkbenchRecord['recipes'],
+  ): RecipeSeriesCopyableRecipe[] {
+    const latestByStage = new Map<
+      RecipeSeriesLifeStage,
+      RecipeSeriesCopyableRecipe
+    >();
+
+    for (const recipe of recipes) {
+      if (!this.isCopyableRecipeStatus(recipe.status)) {
+        continue;
+      }
+      if (
+        !recipe.seriesLifeStage ||
+        !ORDERED_RECIPE_SERIES_LIFE_STAGES.includes(
+          recipe.seriesLifeStage as RecipeSeriesLifeStage,
+        )
+      ) {
+        continue;
+      }
+
+      const lifeStage = recipe.seriesLifeStage as RecipeSeriesLifeStage;
+      const candidate = {
+        ...recipe,
+        seriesLifeStage: lifeStage,
+        items: recipe.items ?? [],
+      };
+      const current = latestByStage.get(lifeStage);
+      if (!current || this.compareCopyableRecipes(candidate, current) > 0) {
+        latestByStage.set(lifeStage, candidate);
+      }
+    }
+
+    return ORDERED_RECIPE_SERIES_LIFE_STAGES.flatMap((lifeStage) => {
+      const recipe = latestByStage.get(lifeStage);
+      return recipe ? [recipe] : [];
+    });
+  }
+
+  private isCopyableRecipeStatus(status: string): boolean {
+    return COPYABLE_RECIPE_STATUS_PRIORITY[status] !== undefined;
+  }
+
+  private compareCopyableRecipes(
+    left: RecipeSeriesCopyableRecipe,
+    right: RecipeSeriesCopyableRecipe,
+  ): number {
+    const byStatusPriority =
+      (COPYABLE_RECIPE_STATUS_PRIORITY[left.status] ?? 0) -
+      (COPYABLE_RECIPE_STATUS_PRIORITY[right.status] ?? 0);
+    if (byStatusPriority !== 0) {
+      return byStatusPriority;
+    }
+
+    const byVersion = (left.version ?? 0) - (right.version ?? 0);
+    if (byVersion !== 0) {
+      return byVersion;
+    }
+
+    return this.getUpdatedTime(left) - this.getUpdatedTime(right);
+  }
+
   private normalizeRecipeSeriesLifeStageForDuplication(
     lifeStage: string,
   ): RecipeSeriesLifeStage {
@@ -1838,6 +1987,35 @@ export class RecipeDesignerService {
     lifeStage: RecipeSeriesLifeStage,
   ) {
     return `${sourceName} ${DUPLICATE_SERIES_STAGE_NAME_LABELS[lifeStage]}副本`;
+  }
+
+  private async createCopiedSeriesDesignFromSource(
+    tx: Pick<PrismaService, 'designRecipe' | 'nutritionFoodMapping'>,
+    source: CopyableSeriesStageSource,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ) {
+    if (source.kind === 'design') {
+      return this.createCopiedSeriesDesign(
+        tx,
+        source.design,
+        seriesId,
+        name,
+        version,
+        createdBy,
+      );
+    }
+
+    return this.createCopiedSeriesDesignFromRecipe(
+      tx,
+      source.recipe,
+      seriesId,
+      name,
+      version,
+      createdBy,
+    );
   }
 
   private async createCopiedSeriesDesign(
@@ -1891,6 +2069,141 @@ export class RecipeDesignerService {
     });
   }
 
+  private async createCopiedSeriesDesignFromRecipe(
+    tx: Pick<PrismaService, 'designRecipe' | 'nutritionFoodMapping'>,
+    source: RecipeSeriesCopyableRecipe,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ) {
+    const lifeStage = source.seriesLifeStage;
+    const items = await this.toCopiedDesignRecipeItemsFromRecipe(tx, source);
+
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: mapSeriesLifeStageToScenario(lifeStage),
+        nutritionStandard: source.nutritionStandard || 'FEDIAF_2025',
+        targetHealthTags: this.normalizeRecipeStringArray(
+          source.targetHealthTags,
+        ),
+        applicableLifeStages: [lifeStage],
+        notes: source.description ?? null,
+        createdBy,
+        totalWeightG: items.reduce((total, item) => total + item.weightG, 0),
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: null,
+        revisionBaseRecipeId: null,
+        seriesId,
+        seriesLifeStage: lifeStage,
+        items: {
+          create: items,
+        },
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    });
+  }
+
+  private async toCopiedDesignRecipeItemsFromRecipe(
+    tx: Pick<PrismaService, 'nutritionFoodMapping'>,
+    source: RecipeSeriesCopyableRecipe,
+  ): Promise<Prisma.DesignRecipeItemUncheckedCreateWithoutDesignRecipeInput[]> {
+    const items = source.items ?? [];
+    const mappingByIngredientId =
+      await this.loadPrimaryNutritionFoodMappingByIngredientId(tx, items);
+
+    return items.map((item, index) => {
+      const nutritionFoodId =
+        item.nutritionFoodId ||
+        mappingByIngredientId.get(item.ingredientId) ||
+        '';
+      if (!nutritionFoodId) {
+        throw new BadRequestException(
+          `正式食谱明细 ${item.id ?? index + 1} 缺少营养档案，无法复制为设计草稿`,
+        );
+      }
+
+      return {
+        ingredientId: item.ingredientId,
+        nutritionFoodId,
+        weightG: this.resolveRecipeItemDesignWeight(item),
+        includeInAssessment: true,
+        ratioPercent: item.ratioPercent ?? null,
+        preparationMethod: item.preparationMethod ?? null,
+        nutrientTargetKey: item.nutrientTargetKey ?? null,
+        nutrientTargetValue: item.nutrientTargetValue ?? null,
+        sortOrder: item.sortOrder ?? index,
+      };
+    });
+  }
+
+  private resolveRecipeItemDesignWeight(
+    item: RecipeSeriesCopyableRecipeItem,
+  ): number {
+    const exampleWeight = Number(item.exampleWeight);
+    if (Number.isFinite(exampleWeight) && exampleWeight > 0) {
+      return exampleWeight;
+    }
+
+    const ratioPercent = Number(item.ratioPercent);
+    if (Number.isFinite(ratioPercent) && ratioPercent > 0) {
+      return ratioPercent;
+    }
+
+    return 0;
+  }
+
+  private async loadPrimaryNutritionFoodMappingByIngredientId(
+    tx: Pick<PrismaService, 'nutritionFoodMapping'>,
+    items: RecipeSeriesCopyableRecipeItem[],
+  ) {
+    const ingredientIds = [
+      ...new Set(
+        items
+          .filter((item) => !item.nutritionFoodId)
+          .map((item) => item.ingredientId)
+          .filter(Boolean),
+      ),
+    ];
+    if (ingredientIds.length === 0) {
+      return new Map<string, string>();
+    }
+
+    const mappings = await tx.nutritionFoodMapping.findMany({
+      where: {
+        ingredientId: { in: ingredientIds },
+        isPrimary: true,
+        nutritionFood: { status: NutritionFoodStatus.VERIFIED },
+      },
+      select: {
+        ingredientId: true,
+        nutritionFoodId: true,
+      },
+    });
+
+    return new Map(
+      mappings.map((mapping) => [
+        mapping.ingredientId,
+        mapping.nutritionFoodId,
+      ]),
+    );
+  }
+
   private toCopiedDesignRecipeItemData(item: DesignRecipeItemWithFood) {
     return {
       ingredientId: item.ingredientId,
@@ -1903,6 +2216,13 @@ export class RecipeDesignerService {
       nutrientTargetValue: item.nutrientTargetValue,
       sortOrder: item.sortOrder,
     };
+  }
+
+  private normalizeRecipeStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
   }
 
   private async loadSeriesStageSourceTemplate(

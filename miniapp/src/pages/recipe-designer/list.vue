@@ -465,7 +465,7 @@ function getStageTemplateLabel(stage: RecipeDesignerSeriesStage) {
 
 function canDuplicateStage(stage: RecipeDesignerSeriesStage) {
   if (isCustomerMode.value && stage.status === 'PUBLISHED') return false
-  return Boolean(stage.draftId) && stage.status !== 'NOT_DESIGNED'
+  return Boolean(stage.draftId || stage.recipeId) && stage.status !== 'NOT_DESIGNED'
 }
 
 function openStageActionSheet(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {

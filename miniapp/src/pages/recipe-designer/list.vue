@@ -75,6 +75,14 @@
               </text>
               <text class="stage-updated">{{ formatDateTime(stage.updatedAt) }}</text>
             </view>
+            <button
+              v-if="canDuplicateStage(stage)"
+              class="stage-more-btn"
+              :disabled="duplicatingStageKey === getStageKey(seriesItem, stage)"
+              @tap.stop="openStageActionSheet(seriesItem, stage)"
+            >
+              ⋯
+            </button>
           </view>
         </view>
       </view>
@@ -187,6 +195,8 @@ const series = ref<RecipeDesignerSeriesCard[]>([])
 const loading = ref(false)
 const creating = ref(false)
 const deletingSeriesId = ref('')
+const duplicatingSeriesId = ref('')
+const duplicatingStageKey = ref('')
 const renamingSeriesId = ref('')
 const openingStageKey = ref('')
 const createSheetVisible = ref(false)
@@ -324,7 +334,7 @@ function getSeriesStages(seriesItem: RecipeDesignerSeriesCard) {
 }
 
 async function openSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
-  const stageKey = `${seriesItem.id}:${stage.lifeStage}`
+  const stageKey = getStageKey(seriesItem, stage)
   if (openingStageKey.value) return
 
   const draftId = getCustomerStageDraftId(stage)
@@ -385,6 +395,10 @@ async function createSeriesStageDraft(
   }
 }
 
+function getStageKey(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  return `${seriesItem.id}:${stage.lifeStage}`
+}
+
 function formatSeriesMeta(seriesItem: RecipeDesignerSeriesCard) {
   const editedText = `最近编辑 ${formatDateTime(seriesItem.updatedAt)}`
   if (isCustomerMode.value) {
@@ -430,21 +444,52 @@ function getStageTemplateLabel(stage: RecipeDesignerSeriesStage) {
   return stage.label || getScenarioLabel(stage.scenario)
 }
 
-function openSeriesActionSheet(seriesItem: RecipeDesignerSeriesCard) {
-  if (renamingSeriesId.value === seriesItem.id || deletingSeriesId.value === seriesItem.id) return
+function canDuplicateStage(stage: RecipeDesignerSeriesStage) {
+  if (isCustomerMode.value && stage.status === 'PUBLISHED') return false
+  return Boolean(stage.draftId) && stage.status !== 'NOT_DESIGNED'
+}
+
+function openStageActionSheet(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  if (!canDuplicateStage(stage)) return
 
   uni.showActionSheet({
-    itemList: ['重命名', '删除'],
+    itemList: ['复制此生命阶段'],
+    success: () => {
+      duplicateSeriesStage(seriesItem, stage)
+    },
+  })
+}
+
+function openSeriesActionSheet(seriesItem: RecipeDesignerSeriesCard) {
+  if (
+    renamingSeriesId.value === seriesItem.id ||
+    deletingSeriesId.value === seriesItem.id ||
+    duplicatingSeriesId.value === seriesItem.id
+  ) {
+    return
+  }
+
+  uni.showActionSheet({
+    itemList: buildSeriesActionItems(seriesItem),
     success: (result: any) => {
-      if (result.tapIndex === 0) {
+      const action = buildSeriesActionItems(seriesItem)[result.tapIndex]
+      if (action === '重命名') {
         renameSeries(seriesItem)
         return
       }
-      if (result.tapIndex === 1) {
+      if (action === '复制整个系列') {
+        duplicateSeries(seriesItem)
+        return
+      }
+      if (action === '删除') {
         deleteSeries(seriesItem)
       }
     },
   })
+}
+
+function buildSeriesActionItems(_seriesItem: RecipeDesignerSeriesCard) {
+  return ['重命名', '复制整个系列', '删除']
 }
 
 function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
@@ -485,6 +530,62 @@ function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
       }
     },
   })
+}
+
+function duplicateSeries(seriesItem: RecipeDesignerSeriesCard) {
+  if (duplicatingSeriesId.value) return
+
+  const seriesName = seriesItem.name || '未命名食谱'
+  uni.showModal({
+    title: '复制整个系列',
+    content: `将「${seriesName}」复制为新的可编辑食谱系列，原食谱不会被修改。`,
+    confirmText: '复制',
+    cancelText: '取消',
+    success: async (result: any) => {
+      if (!result.confirm) return
+
+      duplicatingSeriesId.value = seriesItem.id
+      try {
+        const res: any = await recipeDesignerApi.duplicateSeries(seriesItem.id)
+        const copied = res?.data ?? res
+        uni.showToast({ title: '已创建副本', icon: 'success' })
+        const draftId = extractInitialDraftId(copied)
+        if (draftId) {
+          uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
+          return
+        }
+        await loadSeries()
+      } catch (error) {
+        console.error('[RecipeDesignerList] Failed to duplicate series:', error)
+        uni.showToast({ title: '复制系列失败', icon: 'none' })
+      } finally {
+        duplicatingSeriesId.value = ''
+      }
+    },
+  })
+}
+
+async function duplicateSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  const stageKey = getStageKey(seriesItem, stage)
+  if (duplicatingStageKey.value) return
+
+  duplicatingStageKey.value = stageKey
+  try {
+    const res: any = await recipeDesignerApi.duplicateSeriesStage(seriesItem.id, stage.lifeStage)
+    const copied = res?.data ?? res
+    const draftId = extractInitialDraftId(copied)
+    uni.showToast({ title: '已复制生命阶段', icon: 'success' })
+    if (draftId) {
+      uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
+      return
+    }
+    await loadSeries()
+  } catch (error) {
+    console.error('[RecipeDesignerList] Failed to duplicate series stage:', error)
+    uni.showToast({ title: '复制生命阶段失败', icon: 'none' })
+  } finally {
+    duplicatingStageKey.value = ''
+  }
 }
 
 function deleteSeries(seriesItem: RecipeDesignerSeriesCard) {
@@ -737,6 +838,20 @@ function formatDateTime(value?: string) {
   font-size: 32rpx;
   font-weight: 700;
   line-height: 48rpx;
+}
+
+.stage-more-btn {
+  flex-shrink: 0;
+  width: 48rpx;
+  height: 48rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: #eef5ff;
+  color: #1677ff;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 42rpx;
 }
 
 .stage-list {

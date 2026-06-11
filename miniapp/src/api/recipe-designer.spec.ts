@@ -136,10 +136,13 @@ describe('recipeDesignerApi', () => {
     recipeDesignerApi.renameSeries(seriesId, renamePayload)
     recipeDesignerApi.deleteSeries(seriesId, deletePayload)
     recipeDesignerApi.createSeriesStageDraft(seriesId, stagePayload)
+    recipeDesignerApi.duplicateSeries(seriesId)
+    recipeDesignerApi.duplicateSeriesStage(seriesId, 'HIGH_ACTIVITY_ADULT')
 
     expect(mockedRequest).toHaveBeenNthCalledWith(1, {
       url: '/recipe-designer/series',
       method: 'GET',
+      data: {},
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/series',
@@ -160,6 +163,14 @@ describe('recipeDesignerApi', () => {
       url: `/recipe-designer/series/${seriesId}/stage-drafts`,
       method: 'POST',
       data: stagePayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(6, {
+      url: `/recipe-designer/series/${seriesId}/duplicate`,
+      method: 'POST',
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(7, {
+      url: `/recipe-designer/series/${seriesId}/stages/HIGH_ACTIVITY_ADULT/duplicate`,
+      method: 'POST',
     })
   })
 

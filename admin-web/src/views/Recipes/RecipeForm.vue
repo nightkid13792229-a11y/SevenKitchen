@@ -17,6 +17,9 @@
           <strong>{{ currentRecipe?.seriesName || form.name }}</strong>
         </div>
         <div class="series-context-tags">
+          <el-tag :type="getRecipeSeriesBusinessStatusTagType(currentRecipe?.seriesBusinessStatus)">
+            系列：{{ getRecipeSeriesBusinessStatusLabel(currentRecipe?.seriesBusinessStatus, currentRecipe?.seriesBusinessStatusLabel) }}
+          </el-tag>
           <el-tag type="primary">{{ currentSeriesStageLabel }}</el-tag>
           <el-tag :type="getRecipeStatusTagType(currentRecipe?.status || form.status)">
             {{ getRecipeStatusLabel(currentRecipe?.status || form.status) }}
@@ -917,6 +920,7 @@ import { validateElementForm } from '@/utils/elementFormValidation';
 import { buildRecipeSubmitData } from '@/utils/recipeFormPayload';
 import {
   RecipeStatus,
+  RecipeSeriesBusinessStatus,
   NutritionStandard,
   LifeStage,
   type RecipeForm,
@@ -1425,9 +1429,22 @@ const RecipeStatusTagTypes: Record<RecipeStatus, string> = {
 
 const SeriesStageStatusLabels: Record<string, string> = {
   NOT_DESIGNED: '未设计',
-  DRAFT: '草稿',
-  PUBLIC: '已发布',
+  MODIFIED: '已修改',
+  SUBMITTED: '已提交',
+  PUBLISHED: '已发布',
   PRIVATE_CUSTOM: '私密定制',
+};
+
+const RecipeSeriesBusinessStatusLabels: Record<string, string> = {
+  [RecipeSeriesBusinessStatus.DRAFT]: '草稿',
+  [RecipeSeriesBusinessStatus.PUBLIC]: '已发布',
+  [RecipeSeriesBusinessStatus.PRIVATE_CUSTOM]: '私密定制',
+};
+
+const RecipeSeriesBusinessStatusTagTypes: Record<string, string> = {
+  [RecipeSeriesBusinessStatus.DRAFT]: 'info',
+  [RecipeSeriesBusinessStatus.PUBLIC]: 'success',
+  [RecipeSeriesBusinessStatus.PRIVATE_CUSTOM]: 'danger',
 };
 
 const getLifeStageLabel = (value?: string) => {
@@ -1449,10 +1466,21 @@ const getSeriesStageStatusLabel = (status: string) => {
 };
 
 const getSeriesStageStatusTagType = (status: string) => {
-  if (status === RecipeStatus.PUBLIC) return 'success';
-  if (status === RecipeStatus.DRAFT) return 'warning';
-  if (status === RecipeStatus.PRIVATE_CUSTOM) return 'danger';
+  if (status === 'PUBLISHED') return 'success';
+  if (status === 'SUBMITTED' || status === 'MODIFIED') return 'warning';
+  if (status === 'PRIVATE_CUSTOM') return 'danger';
   return 'info';
+};
+
+const getRecipeSeriesBusinessStatusLabel = (
+  status?: RecipeSeriesBusinessStatus,
+  label?: string,
+) => {
+  return label || (status ? RecipeSeriesBusinessStatusLabels[status] || status : '草稿');
+};
+
+const getRecipeSeriesBusinessStatusTagType = (status?: RecipeSeriesBusinessStatus) => {
+  return status ? RecipeSeriesBusinessStatusTagTypes[status] || 'info' : 'info';
 };
 
 const isSeriesRecipe = computed(() => Boolean(currentRecipe.value?.seriesId));

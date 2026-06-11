@@ -39,6 +39,20 @@ describe('RecipesController (e2e)', () => {
   let app: INestApplication;
   let recipeRepository: InMemoryRecipeRepository;
   let dogRepository: InMemoryDogRepository;
+  const publicSeriesVisibilityGuard = {
+    OR: [
+      { seriesId: null },
+      {
+        series: {
+          is: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+        },
+      },
+    ],
+  };
   const mockBreed = new DogBreed(
     '3fa85f64-5717-4562-b3fc-2c963f66afa6',
     'Test Breed',
@@ -305,6 +319,40 @@ describe('RecipesController (e2e)', () => {
   });
 
   describe('GET /api/v1/recipes/recommendations/:dogId', () => {
+    it('filters recommendation source recipes to standalone recipes or PUBLIC series', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440011';
+      const customerId = '550e8400-e29b-41d4-a716-446655440012';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '饭团',
+        birthday: new Date('2021-01-01T00:00:00.000Z'),
+        currentWeightKg: 5,
+        mealsPerDay: 2,
+        lifeStageOverride: 'NONE',
+        activityLevel: 'MODERATE',
+        cachedTargetFoodKcal: 300,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'PUBLIC',
+            AND: expect.arrayContaining([publicSeriesVisibilityGuard]),
+          }),
+        }),
+      );
+    });
+
     it('returns business recipe ids so recommended recipe cards can open detail and DIY pages', async () => {
       const dogId = '550e8400-e29b-41d4-a716-446655440021';
       const customerId = '550e8400-e29b-41d4-a716-446655440022';
@@ -530,10 +578,11 @@ describe('RecipesController (e2e)', () => {
       expect(mockPrismaService.recipe.findMany).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          where: {
+          where: expect.objectContaining({
             status: 'PUBLIC',
             seriesId: { in: ['series-beef'] },
-          },
+            AND: expect.arrayContaining([publicSeriesVisibilityGuard]),
+          }),
         }),
       );
       expect(response.body.data.exclusive[0].id).toBe('senior-recipe-id');
@@ -563,6 +612,113 @@ describe('RecipesController (e2e)', () => {
         ...overrides,
       };
     }
+
+    it('filters public series detail candidates to standalone recipes or PUBLIC series', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+      ]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1')
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'PUBLIC',
+            OR: [{ seriesId: 'series-1' }, { recipeId: 'series-1' }],
+            AND: expect.arrayContaining([publicSeriesVisibilityGuard]),
+          }),
+        }),
+      );
+    });
+
+    it.each(['PRIVATE_CUSTOM', 'DRAFT'])(
+      'does not expose a public concrete recipe from a %s series by direct id',
+      async (seriesBusinessStatus) => {
+        const concreteRecipeId = 'non-public-series-recipe-id';
+        const nonPublicSeriesRecipe = publicSeriesRecipe({
+          recipeId: concreteRecipeId,
+          seriesId: 'non-public-series-id',
+          series: { businessStatus: seriesBusinessStatus },
+        });
+        await recipeRepository.save({
+          id: concreteRecipeId,
+          version: 1,
+          name: 'Hidden Series Public Recipe',
+          status: 'PUBLIC',
+          energyDensityKcalPerKg: 1200,
+          productionLossRate: 1.07,
+          seriesId: 'non-public-series-id',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          items: [],
+        } as Recipe);
+        mockPrismaService.recipe.findMany.mockImplementation(async () =>
+          seriesBusinessStatus === 'PUBLIC' ? [nonPublicSeriesRecipe] : [],
+        );
+
+        const response = await request(app.getHttpServer())
+          .get(`/api/v1/recipes/${concreteRecipeId}`)
+          .expect(200);
+
+        expect(response.body.code).toBe(404);
+        expect(response.body.message).toBe('Recipe not found');
+        expect(response.body.data).toBeNull();
+      },
+    );
+
+    it('returns a public concrete recipe from a PUBLIC series by direct id', async () => {
+      const concreteRecipeId = 'public-series-recipe-id';
+      const seriesRecipe = publicSeriesRecipe({
+        id: 'row-public-series',
+        recipeId: concreteRecipeId,
+        seriesId: 'public-series-id',
+      });
+      await recipeRepository.save({
+        id: concreteRecipeId,
+        version: 1,
+        name: 'Visible Series Public Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        seriesId: 'public-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+      } as Recipe);
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seriesRecipe])
+        .mockResolvedValueOnce([seriesRecipe]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${concreteRecipeId}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.id).toBe(concreteRecipeId);
+      expect(response.body.data.seriesId).toBe('public-series-id');
+    });
+
+    it('returns a standalone public recipe by direct id', async () => {
+      const recipe: Recipe = {
+        id: 'standalone-public-recipe-id',
+        version: 1,
+        name: 'Standalone Public Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        items: [],
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.id).toBe(recipe.id);
+      expect(response.body.data.name).toBe(recipe.name);
+    });
 
     it('selects the dog-matched public life-stage version for a series detail request', async () => {
       mockJwtAuthService.validateToken.mockReturnValue({
@@ -1371,6 +1527,30 @@ describe('RecipesController (e2e)', () => {
         data: { viewCount: { increment: 1 } },
       });
     });
+
+    it('does not increment view count for a public recipe in a non-public series', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440012',
+        version: 1,
+        name: 'Hidden Series View Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        seriesId: 'hidden-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findFirst.mockResolvedValueOnce(null);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/recipes/${recipe.id}/view`)
+        .expect(200);
+
+      expect(response.body.code).toBe(404);
+      expect(response.body.message).toBe('Recipe not found');
+      expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('POST /api/v1/recipes/:id/diy-sheet', () => {
@@ -1402,6 +1582,94 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.steps[0]).toHaveProperty('stepNumber');
 
       expect(response.body.data.steps[0]).toHaveProperty('description');
+    });
+
+    it('should not generate DIY sheet for a public recipe in a non-public series', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440099',
+        version: 1,
+        name: 'Hidden Series DIY Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        seriesId: 'hidden-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findFirst.mockResolvedValueOnce(null);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/recipes/${recipe.id}/diy-sheet`)
+        .send({})
+        .expect(200);
+
+      expect(response.body.code).toBe(404);
+      expect(response.body.message).toContain('Recipe not found');
+      expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
+
+    it('allows staff to generate DIY sheet for a public recipe in a non-public series', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440098',
+        version: 1,
+        name: 'Staff Hidden Series DIY Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        seriesId: 'hidden-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findFirst.mockResolvedValueOnce(null);
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/recipes/${recipe.id}/diy-sheet`)
+        .set('Authorization', 'Bearer staff-token')
+        .send({})
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.recipeId).toBe(recipe.id);
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith({
+        where: { id: recipe.id },
+        data: { diyGenCount: { increment: 1 } },
+      });
+    });
+
+    it('allows share-token access to generate DIY sheet for a public recipe in a non-public series', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440097',
+        version: 1,
+        name: 'Shared Hidden Series DIY Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        seriesId: 'hidden-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.recipe.findFirst.mockResolvedValueOnce(null);
+      mockPrismaService.recipeShareToken.findFirst.mockResolvedValueOnce({
+        id: 'share-token-row',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/recipes/${recipe.id}/diy-sheet`)
+        .send({ shareToken: 'valid-share-token' })
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.recipeId).toBe(recipe.id);
+      expect(mockPrismaService.recipeShareToken.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          recipe: { recipeId: recipe.id },
+          token: 'valid-share-token',
+        }),
+      });
     });
 
     it('should return 404 for non-existent recipe', async () => {

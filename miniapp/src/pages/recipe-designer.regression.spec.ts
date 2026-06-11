@@ -129,7 +129,9 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('MODIFIED')
     expect(listSource).toContain('已修改')
     expect(listSource).toContain('stage-status-MODIFIED')
-    expect(listSource).toContain('NEEDS_CHANGES')
+    expect(listSource).toContain('SUBMITTED')
+    expect(listSource).toContain('已提交')
+    expect(listSource).toContain('stage-status-SUBMITTED')
     expect(listSource).not.toContain('cover')
     expect(listSource).not.toContain('系列设置')
     expect(listSource).not.toContain('进入编辑')
@@ -144,6 +146,8 @@ describe('recipe designer mobile entry', () => {
 
     expect(apiSource).toContain('RecipeDesignerSeriesStatusFilter')
     expect(apiSource).toContain('RecipeDesignerSeriesStatusCategory')
+    expect(apiSource).toContain('businessStatus?: RecipeDesignerSeriesStatusFilter')
+    expect(apiSource).toContain('businessStatusLabel?: string')
     expect(apiSource).toContain('recipeStatusCategory?: RecipeDesignerSeriesStatusCategory')
     expect(apiSource).toContain('RecipeDesignerSeriesListQuery')
     expect(apiSource).toContain('listSeries: (data: RecipeDesignerSeriesListQuery = {})')
@@ -155,7 +159,10 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('@tap="selectSeriesStatusFilter(option.value)"')
     expect(listSource).toContain("label: '草稿', value: 'DRAFT'")
     expect(listSource).toContain("label: '已发布', value: 'PUBLIC'")
-    expect(listSource).toContain("label: '私密食谱', value: 'PRIVATE_CUSTOM'")
+    expect(listSource).toContain("label: '私密定制', value: 'PRIVATE_CUSTOM'")
+    expect(listSource).toContain('seriesBusinessStatusLabels')
+    expect(listSource).toContain('getSeriesBusinessStatusLabel(seriesItem)')
+    expect(listSource).toContain('getSeriesBusinessStatusClass(seriesItem)')
     expect(listSource).toContain('function selectSeriesStatusFilter')
     expect(adminFilterBlock).toContain('!isCustomerMode.value')
     expect(loadSeriesBlock).toContain('recipeDesignerApi.listSeries({')
@@ -245,16 +252,45 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).not.toContain('function ensureDraftEditable')
   })
 
-  it('shows compact series and stage context in the editor when present', () => {
+  it('allows reverting a series stage draft back to the latest official version', () => {
+    expect(apiSource).toContain('revertDraftToLatestOfficial')
+    expect(apiSource).toContain('/revert-to-latest-official')
+    expect(editorSource).toContain('canRevertToLatestOfficial')
+    expect(editorSource).toContain('revertingToLatestOfficial')
+    expect(editorSource).toContain('confirmRevertToLatestOfficial')
+    expect(editorSource).toContain('recipeDesignerApi.revertDraftToLatestOfficial(draftId.value)')
+    expect(editorSource).toContain('historyState.value = createRecipeDesignerHistoryState()')
+    expect(editorSource).toContain("title: '恢复正式版'")
+    expect(editorSource).toContain("title: '已恢复正式版'")
+    expect(editorSource).toContain('恢复正式版')
+    expect(editorSource).toContain('v-if="canRevertToLatestOfficial"')
+  })
+
+  it('shows only the recipe series name in the editor top context block', () => {
     expect(editorSource).toContain('draftSeriesId')
+    expect(editorSource).toContain('draftSeriesName')
     expect(editorSource).toContain('draftSeriesLifeStage')
-    expect(editorSource).toContain('availableSeriesStages')
     expect(editorSource).toContain('seriesId')
+    expect(editorSource).toContain('series?.name')
     expect(editorSource).toContain('seriesLifeStage')
-    expect(editorSource).toContain('seriesStages')
     expect(editorSource).toContain('series-context-block')
-    expect(editorSource).toContain('draftSeriesStageLabel')
-    expect(editorSource).toContain('assessmentStandardContextLabel')
+    expect(editorSource).toContain('recipeSeriesDisplayName')
+  })
+
+  it('uses the recipe series name instead of the life-stage draft name in the editor header', () => {
+    const seriesContextBlock =
+      editorSource.match(/<view v-if="draftSeriesLifeStage" class="series-context-block">[\s\S]*?<\/view>/)?.[0] || ''
+    const loadDraftBlock =
+      editorSource.match(/async function loadDraft\(\)[\s\S]*?function applyCachedAssessmentFromDraft/)?.[0] || ''
+
+    expect(seriesContextBlock).toContain('recipeSeriesDisplayName')
+    expect(seriesContextBlock).not.toContain('series-context-meta')
+    expect(seriesContextBlock).not.toContain('assessmentStandardName')
+    expect(seriesContextBlock).not.toContain('draftSeriesStageLabel')
+    expect(seriesContextBlock).not.toContain('draftName')
+    expect(seriesContextBlock).not.toContain('当前草稿评估结果')
+    expect(loadDraftBlock).toContain('draftSeriesName.value = String(draft.series?.name || draft.seriesName || \'\')')
+    expect(editorSource).toContain('name=${encodeURIComponent(recipeSeriesDisplayName.value)}')
   })
 
   it('starts unnamed draft creation from life stage selection before navigating to the editor', () => {
@@ -295,6 +331,7 @@ describe('recipe designer mobile entry', () => {
 
   it('loads publish preview draft detail so supplement display units are available', () => {
     expect(publishSource).toContain('recipeDesignerApi.getDraft(draftId.value)')
+    expect(publishSource).toContain('draft.value?.series?.name')
     expect(publishSource).not.toContain('recipeDesignerApi.listDrafts()')
   })
 
@@ -334,7 +371,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('if (!canCreateRevisionDraft.value)')
     expect(editorSource).toContain('showSupplementLibraryTip')
     expect(editorSource).toContain('canCreateSupplementOption.value')
-    expect(editorSource).toContain('当前草稿评估结果')
+    expect(editorSource).not.toContain('当前草稿评估结果')
     expect(editorSource).not.toContain('为某只狗设计')
     expect(editorCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
     expect(editorCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
@@ -462,7 +499,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('@touchmove.stop.prevent="onItemTouchMove"')
     expect(editorSource).toContain('@touchend.stop.prevent="finishItemDrag($event)"')
     expect(editorSource).toContain('v-if="!reorderMode" class="item-action-stack"')
-    expect(editorSource).toContain('v-if="!loading && !redirectingToEditableDraft && !reorderMode" class="ingredient-list-actions"')
+    expect(editorSource).toContain('v-if="!loading && !redirectingToEditableDraft && !revertingToLatestOfficial && !reorderMode" class="ingredient-list-actions"')
     expect(editorSource).toContain(':disabled="reorderMode"')
     expect(editorSource).toContain('function toggleReorderMode')
     expect(editorSource).toContain('if (!reorderMode.value || items.value.length < 2 || dragPersisting.value) return')

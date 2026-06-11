@@ -38,6 +38,17 @@ export const RECIPE_DESIGNER_SERIES_STATUS_FILTERS = [
 export type RecipeDesignerSeriesStatusFilter =
   (typeof RECIPE_DESIGNER_SERIES_STATUS_FILTERS)[number];
 
+export const RECIPE_DESIGNER_SERIES_STAGE_STATUSES = [
+  'NOT_DESIGNED',
+  'MODIFIED',
+  'SUBMITTED',
+  'PUBLISHED',
+  'PRIVATE_CUSTOM',
+] as const;
+
+export type RecipeDesignerSeriesStageStatus =
+  (typeof RECIPE_DESIGNER_SERIES_STAGE_STATUSES)[number];
+
 export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)

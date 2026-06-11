@@ -107,10 +107,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="seriesBusinessStatus" label="系列状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="getRecipeSeriesStatusType(row)">
-              {{ getRecipeSeriesStatusLabel(row) }}
+            <el-tag :type="getRecipeBusinessStatusType(row)">
+              {{ getRecipeBusinessStatusLabel(row) }}
             </el-tag>
             <div v-if="row.pendingDraftVersion" class="pending-version-note">
               待发布修订 v{{ row.pendingDraftVersion.version }}
@@ -260,6 +260,7 @@ import { Plus, Search, Picture } from '@element-plus/icons-vue';
 import { recipeApi } from '@/api/recipes';
 import {
   RecipeStatus,
+  RecipeSeriesBusinessStatus,
   type RecipeSummary,
   type RecipeQuery,
   type RecipeVersionSummary,
@@ -312,9 +313,22 @@ const RecipeStatusTagTypes: Record<RecipeStatus, string> = {
 
 const SeriesStageStatusLabels: Record<string, string> = {
   NOT_DESIGNED: '未设计',
-  DRAFT: '草稿',
-  PUBLIC: '已发布',
+  MODIFIED: '已修改',
+  SUBMITTED: '已提交',
+  PUBLISHED: '已发布',
   PRIVATE_CUSTOM: '私密定制',
+};
+
+const RecipeBusinessStatusLabels: Record<string, string> = {
+  [RecipeSeriesBusinessStatus.DRAFT]: '草稿',
+  [RecipeSeriesBusinessStatus.PUBLIC]: '已发布',
+  [RecipeSeriesBusinessStatus.PRIVATE_CUSTOM]: '私密定制',
+};
+
+const RecipeBusinessStatusTagTypes: Record<string, string> = {
+  [RecipeSeriesBusinessStatus.DRAFT]: 'info',
+  [RecipeSeriesBusinessStatus.PUBLIC]: 'success',
+  [RecipeSeriesBusinessStatus.PRIVATE_CUSTOM]: 'danger',
 };
 
 // Helper functions to get labels from dynamic metadata
@@ -328,18 +342,14 @@ const getHealthTagLabel = (value: string) => {
   return option?.label || value;
 };
 
-const getRecipeSeriesStatusLabel = (row: RecipeSummary) => {
-  if (row.pendingDraftVersion) {
-    return '待发布修订';
-  }
-  return RecipeStatusLabels[row.status as RecipeStatus];
+const getRecipeBusinessStatusLabel = (row: RecipeSummary) => {
+  const status = row.seriesBusinessStatus || row.status;
+  return row.seriesBusinessStatusLabel || RecipeBusinessStatusLabels[status] || RecipeStatusLabels[row.status as RecipeStatus] || status;
 };
 
-const getRecipeSeriesStatusType = (row: RecipeSummary) => {
-  if (row.pendingDraftVersion) {
-    return 'warning';
-  }
-  return RecipeStatusTagTypes[row.status as RecipeStatus];
+const getRecipeBusinessStatusType = (row: RecipeSummary) => {
+  const status = row.seriesBusinessStatus || row.status;
+  return RecipeBusinessStatusTagTypes[status] || RecipeStatusTagTypes[row.status as RecipeStatus] || 'info';
 };
 
 const getRecipeSeriesDisplayName = (row: RecipeSummary) => {
@@ -351,9 +361,9 @@ const getSeriesStageStatusLabel = (status: string) => {
 };
 
 const getSeriesStageStatusType = (status: string) => {
-  if (status === RecipeStatus.PUBLIC) return 'success';
-  if (status === RecipeStatus.DRAFT) return 'warning';
-  if (status === RecipeStatus.PRIVATE_CUSTOM) return 'danger';
+  if (status === 'PUBLISHED') return 'success';
+  if (status === 'SUBMITTED' || status === 'MODIFIED') return 'warning';
+  if (status === 'PRIVATE_CUSTOM') return 'danger';
   return 'info';
 };
 

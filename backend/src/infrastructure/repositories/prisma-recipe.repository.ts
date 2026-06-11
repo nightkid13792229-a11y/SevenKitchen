@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Prisma,
+  RecipeSeriesBusinessStatus,
+  RecipeSeriesStatus,
+  RecipeStatus,
+} from '@prisma/client';
 import type {
   RecipeRepository,
   Recipe,
@@ -55,6 +60,39 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
 @Injectable()
 export class PrismaRecipeRepository implements RecipeRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private buildPublicRecipeWhere(
+    extra: Prisma.RecipeWhereInput = {},
+  ): Prisma.RecipeWhereInput {
+    const extraAnd = Array.isArray(extra.AND)
+      ? extra.AND
+      : extra.AND
+        ? [extra.AND]
+        : [];
+
+    return {
+      ...extra,
+      status: RecipeStatus.PUBLIC,
+      AND: [...extraAnd, this.buildPublicSeriesVisibilityWhere()],
+    };
+  }
+
+  private buildPublicSeriesVisibilityWhere(): Prisma.RecipeWhereInput {
+    return {
+      OR: [
+        { seriesId: null },
+        {
+          series: {
+            is: {
+              businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
+              status: RecipeSeriesStatus.ACTIVE,
+              deletedAt: null,
+            },
+          },
+        },
+      ],
+    };
+  }
 
   async findById(id: string): Promise<Recipe | null> {
     // Find latest version for the given recipe ID
@@ -127,7 +165,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
   async findPublicRecipes(options?: FindRecipesOptions): Promise<Recipe[]> {
     // Build where clause
-    const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
+    const where = this.buildPublicRecipeWhere();
 
     // Filter by health tags (any match) - using relationship table
     if (options?.healthTags && options.healthTags.length > 0) {
@@ -228,7 +266,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
     hasMore: boolean;
   }> {
     // Build where clause
-    const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
+    const where = this.buildPublicRecipeWhere();
 
     // Filter by health tags (any match) - using relationship table
     if (options?.healthTags && options.healthTags.length > 0) {
@@ -343,7 +381,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
   async getFilterOptions(): Promise<FilterOptions> {
     // Get all public recipes with health tag assignments
     const allRecipes = await this.prisma.recipe.findMany({
-      where: { status: 'PUBLIC' },
+      where: this.buildPublicRecipeWhere(),
       select: {
         applicableLifeStages: true,
         healthTagAssignments: {
@@ -452,9 +490,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         type: 'FOOD',
         recipeItems: {
           some: {
-            recipe: {
-              status: 'PUBLIC',
-            },
+            recipe: this.buildPublicRecipeWhere(),
           },
         },
       },

@@ -9,6 +9,19 @@ export enum RecipeStatus {
   PRIVATE_CUSTOM = 'PRIVATE_CUSTOM',
 }
 
+export enum RecipeSeriesBusinessStatus {
+  DRAFT = 'DRAFT',
+  PUBLIC = 'PUBLIC',
+  PRIVATE_CUSTOM = 'PRIVATE_CUSTOM',
+}
+
+export type RecipeSeriesStageStatus =
+  | 'NOT_DESIGNED'
+  | 'MODIFIED'
+  | 'SUBMITTED'
+  | 'PUBLISHED'
+  | 'PRIVATE_CUSTOM';
+
 export enum LifeStage {
   PUPPY_UNDER_14_WEEKS = 'PUPPY_UNDER_14_WEEKS',
   PUPPY_14_WEEKS_PLUS = 'PUPPY_14_WEEKS_PLUS',
@@ -167,7 +180,7 @@ export interface RecipeVersionSummary {
 export interface RecipeSeriesStageSummary {
   lifeStage: string;
   label: string;
-  status: 'NOT_DESIGNED' | RecipeStatus;
+  status: RecipeSeriesStageStatus;
   recipeVersionId?: string;
   recipeId?: string;
   version?: number;
@@ -179,6 +192,8 @@ export interface RecipeSummary {
   recipeId?: string;
   seriesId?: string;
   seriesName?: string;
+  seriesBusinessStatus?: RecipeSeriesBusinessStatus;
+  seriesBusinessStatusLabel?: string;
   seriesLifeStage?: string;
   seriesLifeStageLabel?: string;
   name: string;

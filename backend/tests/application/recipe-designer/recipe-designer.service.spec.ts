@@ -27,6 +27,7 @@ describe('RecipeDesignerService', () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     nutritionFoodMapping: {
       findFirst: jest.fn(),
@@ -142,6 +143,7 @@ describe('RecipeDesignerService', () => {
       id: 'series-1',
       name: '成犬鸡肉配方',
       status: 'ACTIVE',
+      businessStatus: 'DRAFT',
       deletedAt: null,
       deletedBy: null,
       createdBy: 'customer-1',
@@ -4511,6 +4513,321 @@ describe('RecipeDesignerService', () => {
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
+  describe('revertDraftToLatestOfficial', () => {
+    beforeEach(() => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          createdBy: 'staff-1',
+        }),
+      );
+    });
+
+    it('resets an active series stage draft back to the latest published design snapshot', async () => {
+      const changedDraft = draft({
+        id: 'revision-draft',
+        createdBy: 'staff-1',
+        revisionBaseRecipeId: 'recipe-business-id',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        reviewStatus: 'REQUIRED',
+        reviewNote: 'needs review',
+        items: [item({ id: 'changed-item', weightG: 999 })],
+      });
+      const baselineItem = item({
+        id: 'baseline-item',
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'nutrition-food-1',
+        weightG: 80,
+        includeInAssessment: true,
+        ratioPercent: 80,
+        preparationMethod: '熟制',
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+        sortOrder: 0,
+      });
+      const baseline = draft({
+        id: 'published-design',
+        name: '正式成犬鸡肉配方',
+        status: 'PUBLISHED',
+        fediafDogScenario: 'ADULT_MER_110',
+        nutritionStandard: 'FEDIAF_2025',
+        targetHealthTags: ['joint'],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        notes: 'official note',
+        totalWeightG: 80,
+        energyDensityKcalPerKg: 1380,
+        calculatedNutrition: { protein: 20 },
+        complianceStatus: { calcium: 'OK' },
+        assessmentSummary: { overallStatus: 'COMPLIANT' },
+        missingDataReport: [{ nutrient: 'none' }],
+        isCompliant: true,
+        publishedRecipeId: 'recipe-business-id',
+        publishedRecipeVersion: 2,
+        publishedAt: new Date('2026-06-01T00:00:00.000Z'),
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [baselineItem],
+      });
+      const reverted = draft({
+        id: 'revision-draft',
+        name: baseline.name,
+        items: [{ ...baselineItem, id: 'new-baseline-item' }],
+      });
+      const tx = {
+        designRecipeItem: {
+          deleteMany: jest.fn(),
+        },
+        designRecipe: {
+          update: jest.fn().mockResolvedValue(reverted),
+        },
+      };
+
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(changedDraft);
+      prisma.designRecipe.findFirst.mockResolvedValueOnce(baseline);
+      prisma.$transaction.mockImplementation(async (callback: any) =>
+        callback(tx),
+      );
+
+      const result = await service.revertDraftToLatestOfficial(
+        'revision-draft',
+        {
+          userId: 'staff-1',
+          role: 'STAFF',
+        },
+      );
+
+      expect(result).toMatchObject({
+        id: 'revision-draft',
+        items: [expect.objectContaining({ weightG: 80 })],
+      });
+      expect(prisma.designRecipe.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: { not: 'revision-draft' },
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          OR: [
+            { status: 'PUBLISHED' },
+            { publishedRecipeId: { not: null } },
+            { publishedAt: { not: null } },
+          ],
+        },
+        include: expect.any(Object),
+        orderBy: [
+          { publishedRecipeVersion: { sort: 'desc', nulls: 'last' } },
+          { updatedAt: 'desc' },
+        ],
+      });
+      expect(tx.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: { designRecipeId: 'revision-draft' },
+      });
+      expect(tx.designRecipe.update).toHaveBeenCalledWith({
+        where: { id: 'revision-draft' },
+        data: expect.objectContaining({
+          status: 'DRAFT',
+          name: baseline.name,
+          fediafDogScenario: baseline.fediafDogScenario,
+          nutritionStandard: baseline.nutritionStandard,
+          targetHealthTags: baseline.targetHealthTags,
+          applicableLifeStages: baseline.applicableLifeStages,
+          notes: baseline.notes,
+          totalWeightG: baseline.totalWeightG,
+          energyDensityKcalPerKg: baseline.energyDensityKcalPerKg,
+          calculatedNutrition: baseline.calculatedNutrition,
+          complianceStatus: baseline.complianceStatus,
+          assessmentSummary: baseline.assessmentSummary,
+          missingDataReport: baseline.missingDataReport,
+          isCompliant: true,
+          reviewStatus: 'NONE',
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          publishedAt: null,
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+          revisionOfDesignRecipeId: baseline.id,
+          revisionBaseRecipeId: baseline.publishedRecipeId,
+          items: {
+            create: [
+              {
+                ingredientId: 'ingredient-1',
+                nutritionFoodId: 'nutrition-food-1',
+                weightG: 80,
+                includeInAssessment: true,
+                ratioPercent: 80,
+                preparationMethod: '熟制',
+                nutrientTargetKey: null,
+                nutrientTargetValue: null,
+                sortOrder: 0,
+              },
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('allows an internal user to revert a series draft created by another internal user', async () => {
+      const changedDraft = draft({
+        id: 'shared-revision-draft',
+        createdBy: 'admin-1',
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [item({ id: 'changed-item', weightG: 999 })],
+      });
+      const baseline = draft({
+        id: 'published-design',
+        name: '内部共享正式配方',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'recipe-business-id',
+        publishedRecipeVersion: 3,
+        publishedAt: new Date('2026-06-01T00:00:00.000Z'),
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValueOnce(
+        seriesRecord({
+          id: 'series-1',
+          createdBy: 'admin-1',
+        }),
+      );
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(changedDraft);
+      prisma.designRecipe.findFirst.mockResolvedValueOnce(baseline);
+      prisma.designRecipe.update.mockResolvedValueOnce(
+        draft({
+          id: 'shared-revision-draft',
+          name: baseline.name,
+          items: [],
+        }),
+      );
+
+      await expect(
+        service.revertDraftToLatestOfficial('shared-revision-draft', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({ id: 'shared-revision-draft' }),
+      );
+
+      expect(prisma.designRecipe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'shared-revision-draft' },
+          data: expect.objectContaining({ status: 'DRAFT' }),
+        }),
+      );
+    });
+
+    it('does not allow reverting a draft from an inaccessible series', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValueOnce(
+        seriesRecord({
+          id: 'series-1',
+          createdBy: 'customer-1',
+        }),
+      );
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(
+        draft({
+          id: 'foreign-series-draft',
+          createdBy: 'staff-1',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      );
+
+      await expect(
+        service.revertDraftToLatestOfficial('foreign-series-draft', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).rejects.toThrow(
+        new NotFoundException('Design recipe foreign-series-draft not found'),
+      );
+      expect(prisma.designRecipe.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects a series stage draft without an official baseline', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(
+        draft({
+          id: 'revision-draft',
+          createdBy: 'staff-1',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      );
+      prisma.designRecipe.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.revertDraftToLatestOfficial('revision-draft', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).rejects.toThrow(new BadRequestException('没有可撤回到的正式版本'));
+    });
+
+    it('rejects non-series drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(
+        draft({
+          id: 'standalone-draft',
+          createdBy: 'staff-1',
+          seriesId: null,
+          seriesLifeStage: null,
+        }),
+      );
+
+      await expect(
+        service.revertDraftToLatestOfficial('standalone-draft', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).rejects.toThrow(
+        new BadRequestException('只有系列生命阶段草稿可以撤回修改'),
+      );
+      expect(prisma.designRecipe.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects published draft snapshots', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(
+        draft({
+          id: 'published-design',
+          createdBy: 'staff-1',
+          status: 'PUBLISHED',
+          publishedRecipeId: 'recipe-business-id',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      );
+
+      await expect(
+        service.revertDraftToLatestOfficial('published-design', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).rejects.toThrow(new BadRequestException('正式版本无需撤回修改'));
+      expect(prisma.designRecipe.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects archived editable drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValueOnce(
+        draft({
+          id: 'archived-design',
+          createdBy: 'staff-1',
+          status: 'ARCHIVED',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      );
+
+      await expect(
+        service.revertDraftToLatestOfficial('archived-design', {
+          userId: 'staff-1',
+          role: 'STAFF',
+        }),
+      ).rejects.toThrow(new BadRequestException('归档草稿不能撤回修改'));
+      expect(prisma.designRecipe.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
   describe('recipe designer series workbench', () => {
     function uniqueNameVersionCollision() {
       return new Prisma.PrismaClientKnownRequestError(
@@ -4589,11 +4906,15 @@ describe('RecipeDesignerService', () => {
     });
 
     it('returns one series card with five stage statuses', async () => {
+      const puppyItem = item({ id: 'puppy-item' });
+      const latePuppyItem = item({ id: 'late-puppy-item' });
+      const seniorItem = item({ id: 'senior-item' });
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
           id: 'series-1',
           name: '牛肉南瓜鲜食',
           status: 'ACTIVE',
+          businessStatus: 'DRAFT',
           deletedAt: null,
           updatedAt: new Date('2026-05-31T14:32:00.000Z'),
           designs: [
@@ -4604,6 +4925,7 @@ describe('RecipeDesignerService', () => {
               status: 'DRAFT',
               reviewStatus: 'REQUIRED',
               updatedAt: new Date('2026-05-31T12:00:00.000Z'),
+              items: [puppyItem],
             }),
             draft({
               id: 'late-puppy-design',
@@ -4611,6 +4933,7 @@ describe('RecipeDesignerService', () => {
               seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
               status: 'NEEDS_REVIEW',
               updatedAt: new Date('2026-05-31T12:30:00.000Z'),
+              items: [latePuppyItem],
             }),
             draft({
               id: 'adult-design',
@@ -4626,6 +4949,7 @@ describe('RecipeDesignerService', () => {
               seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
               status: 'DRAFT',
               updatedAt: new Date('2026-05-31T13:08:00.000Z'),
+              items: [seniorItem],
             }),
           ],
           recipes: [
@@ -4646,16 +4970,18 @@ describe('RecipeDesignerService', () => {
         expect.objectContaining({
           id: 'series-1',
           name: '牛肉南瓜鲜食',
+          businessStatus: 'DRAFT',
+          businessStatusLabel: '草稿',
           publishedStageCount: 1,
           stages: [
             expect.objectContaining({
               lifeStage: 'PUPPY_UNDER_14_WEEKS',
-              status: 'IN_REVIEW',
+              status: 'MODIFIED',
               recipeStatusCategory: 'DRAFT',
             }),
             expect.objectContaining({
               lifeStage: 'PUPPY_14_WEEKS_PLUS',
-              status: 'NEEDS_CHANGES',
+              status: 'MODIFIED',
               recipeStatusCategory: 'DRAFT',
             }),
             expect.objectContaining({
@@ -4678,12 +5004,122 @@ describe('RecipeDesignerService', () => {
       ]);
     });
 
+    it('returns NOT_DESIGNED for an empty default design draft', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-empty',
+          name: '空草稿鲜食',
+          businessStatus: 'DRAFT',
+          designs: [
+            draft({
+              id: 'empty-design',
+              seriesId: 'series-empty',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [],
+            }),
+          ],
+          recipes: [],
+        }),
+      ]);
+
+      const cards = await service.listSeries({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          businessStatus: 'DRAFT',
+          businessStatusLabel: '草稿',
+          stages: expect.arrayContaining([
+            expect.objectContaining({
+              lifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'NOT_DESIGNED',
+              recipeStatusCategory: 'NOT_DESIGNED',
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('returns MODIFIED for a draft design with ingredients and no backend recipe draft', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-modified',
+          name: '已编辑鲜食',
+          businessStatus: 'DRAFT',
+          designs: [
+            draft({
+              id: 'modified-design',
+              seriesId: 'series-modified',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [item({ id: 'modified-item' })],
+            }),
+          ],
+          recipes: [],
+        }),
+      ]);
+
+      const cards = await service.listSeries({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      expect(cards[0].stages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lifeStage: 'HIGH_ACTIVITY_ADULT',
+            status: 'MODIFIED',
+            recipeStatusCategory: 'DRAFT',
+          }),
+        ]),
+      );
+    });
+
+    it('returns SUBMITTED for a stage with a backend recipe draft version', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-submitted',
+          name: '已提交鲜食',
+          businessStatus: 'DRAFT',
+          designs: [],
+          recipes: [
+            {
+              recipeId: 'submitted-recipe-id',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'DRAFT',
+              version: 2,
+              updatedAt: new Date('2026-06-11T09:00:00.000Z'),
+            },
+          ],
+        }),
+      ]);
+
+      const cards = await service.listSeries({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      expect(cards[0].stages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lifeStage: 'HIGH_ACTIVITY_ADULT',
+            status: 'SUBMITTED',
+            recipeStatusCategory: 'DRAFT',
+          }),
+        ]),
+      );
+    });
+
     it('maps private custom recipe stages ahead of public and draft states', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
           id: 'series-1',
           name: '私密定制鲜食',
           status: 'ACTIVE',
+          businessStatus: 'PRIVATE_CUSTOM',
           deletedAt: null,
           updatedAt: new Date('2026-06-11T08:00:00.000Z'),
           designs: [
@@ -4723,9 +5159,12 @@ describe('RecipeDesignerService', () => {
       expect(cards).toEqual([
         expect.objectContaining({
           id: 'series-1',
+          businessStatus: 'PRIVATE_CUSTOM',
+          businessStatusLabel: '私密定制',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PRIVATE_CUSTOM',
               recipeStatusCategory: 'PRIVATE_CUSTOM',
             }),
           ]),
@@ -4733,12 +5172,13 @@ describe('RecipeDesignerService', () => {
       ]);
     });
 
-    it('filters series cards by admin recipe status category', async () => {
+    it('filters series cards by series business status', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
           id: 'series-draft',
           name: '草稿鲜食',
           status: 'ACTIVE',
+          businessStatus: 'DRAFT',
           deletedAt: null,
           updatedAt: new Date('2026-06-11T08:00:00.000Z'),
           designs: [
@@ -4747,6 +5187,7 @@ describe('RecipeDesignerService', () => {
               seriesId: 'series-draft',
               seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
               status: 'DRAFT',
+              items: [item({ id: 'draft-item' })],
             }),
           ],
           recipes: [],
@@ -4755,23 +5196,25 @@ describe('RecipeDesignerService', () => {
           id: 'series-public',
           name: '公开鲜食',
           status: 'ACTIVE',
+          businessStatus: 'PUBLIC',
           deletedAt: null,
           updatedAt: new Date('2026-06-11T08:00:00.000Z'),
-          designs: [],
-          recipes: [
-            {
-              recipeId: 'public-recipe-id',
+          designs: [
+            draft({
+              id: 'public-series-draft-design',
+              seriesId: 'series-public',
               seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
-              status: 'PUBLIC',
-              version: 1,
-              updatedAt: new Date('2026-06-11T08:00:00.000Z'),
-            },
+              status: 'DRAFT',
+              items: [item({ id: 'public-series-draft-item' })],
+            }),
           ],
+          recipes: [],
         },
         {
           id: 'series-private',
           name: '私密鲜食',
           status: 'ACTIVE',
+          businessStatus: 'PRIVATE_CUSTOM',
           deletedAt: null,
           updatedAt: new Date('2026-06-11T08:00:00.000Z'),
           designs: [],
@@ -4795,16 +5238,19 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual([
         expect.objectContaining({
           id: 'series-public',
+          businessStatus: 'PUBLIC',
+          businessStatusLabel: '已发布',
         }),
       ]);
     });
 
-    it('shows a stage as draft when a backend recipe draft exists after a public version', async () => {
+    it('shows a stage as submitted when a public version also has a backend draft', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         {
           id: 'series-1',
           name: '牛肉南瓜鲜食',
           status: 'ACTIVE',
+          businessStatus: 'PUBLIC',
           deletedAt: null,
           updatedAt: new Date('2026-05-31T14:32:00.000Z'),
           designs: [
@@ -4844,7 +5290,8 @@ describe('RecipeDesignerService', () => {
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
-              status: 'DRAFT',
+              status: 'SUBMITTED',
+              recipeStatusCategory: 'DRAFT',
               recipeId: 'adult-recipe-id',
             }),
           ]),
@@ -4997,6 +5444,7 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
               status: 'MODIFIED',
+              recipeStatusCategory: 'DRAFT',
             }),
           ]),
         }),
@@ -5559,7 +6007,8 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
               draftId: 'adult-design',
-              status: 'MODIFIED',
+              status: 'NOT_DESIGNED',
+              recipeStatusCategory: 'NOT_DESIGNED',
             }),
           ]),
         }),

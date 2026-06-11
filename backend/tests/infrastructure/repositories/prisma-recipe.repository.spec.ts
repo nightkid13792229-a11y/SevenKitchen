@@ -1,6 +1,30 @@
 import { PrismaRecipeRepository } from '../../../src/infrastructure/repositories/prisma-recipe.repository';
 
 describe('PrismaRecipeRepository', () => {
+  const publicSeriesVisibilityGuard = {
+    OR: [
+      { seriesId: null },
+      {
+        series: {
+          is: {
+            businessStatus: 'PUBLIC',
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+        },
+      },
+    ],
+  };
+
+  function expectPublicRecipeWhereGuard(where: unknown) {
+    expect(where).toEqual(
+      expect.objectContaining({
+        status: 'PUBLIC',
+        AND: expect.arrayContaining([publicSeriesVisibilityGuard]),
+      }),
+    );
+  }
+
   function publicRecipe(overrides: Record<string, unknown> = {}) {
     return {
       id: 'row-1',
@@ -30,6 +54,61 @@ describe('PrismaRecipeRepository', () => {
       ...overrides,
     };
   }
+
+  it('queries paginated public showcase recipes only from standalone recipes or PUBLIC series', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    await repository.findPublicRecipesPaginated({
+      page: 1,
+      pageSize: 10,
+    });
+
+    expectPublicRecipeWhereGuard(prisma.recipe.findMany.mock.calls[0][0].where);
+  });
+
+  it('queries public showcase recipes only from standalone recipes or PUBLIC series', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    await repository.findPublicRecipes();
+
+    expectPublicRecipeWhereGuard(prisma.recipe.findMany.mock.calls[0][0].where);
+  });
+
+  it('builds public filter options only from standalone recipes or PUBLIC series', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      recipeHealthTag: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      ingredientTag: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      ingredient: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+
+    await repository.getFilterOptions();
+
+    expectPublicRecipeWhereGuard(prisma.recipe.findMany.mock.calls[0][0].where);
+    expectPublicRecipeWhereGuard(
+      prisma.ingredient.findMany.mock.calls[0][0].where.recipeItems.some
+        .recipe,
+    );
+  });
 
   it('preserves coverTitle when mapping paginated public recipes', async () => {
     const prisma = {

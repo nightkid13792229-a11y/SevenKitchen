@@ -13,6 +13,13 @@ export class GenerateDiySheetDto {
   @IsOptional()
   @IsUUID()
   dogId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Share token for non-public recipes',
+    example: 'abc123sharetoken',
+  })
+  @IsOptional()
+  shareToken?: string;
 }
 
 export class DiySheetStepDto {

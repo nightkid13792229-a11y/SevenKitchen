@@ -21,6 +21,12 @@ import {
   Req,
 } from '@nestjs/common';
 import {
+  Prisma,
+  RecipeSeriesBusinessStatus,
+  RecipeSeriesStatus,
+  RecipeStatus as PrismaRecipeStatus,
+} from '@prisma/client';
+import {
   ApiTags,
   ApiOperation,
   ApiResponse,
@@ -100,6 +106,77 @@ export class RecipesController {
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
   ) {}
+
+  private buildPublicRecipeWhere(
+    extra: Prisma.RecipeWhereInput = {},
+  ): Prisma.RecipeWhereInput {
+    const extraAnd = Array.isArray(extra.AND)
+      ? extra.AND
+      : extra.AND
+        ? [extra.AND]
+        : [];
+
+    return {
+      ...extra,
+      status: PrismaRecipeStatus.PUBLIC,
+      AND: [
+        ...extraAnd,
+        {
+          OR: [
+            { seriesId: null },
+            {
+              series: {
+                is: {
+                  businessStatus: RecipeSeriesBusinessStatus.PUBLIC,
+                  status: RecipeSeriesStatus.ACTIVE,
+                  deletedAt: null,
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  private async isPublicRecipeVisible(recipe: Recipe): Promise<boolean> {
+    if (recipe.status !== RecipeStatus.PUBLIC) {
+      return false;
+    }
+    if (!recipe.seriesId) {
+      return true;
+    }
+
+    const visibleRecipe = await this.prisma.recipe.findFirst({
+      where: this.buildPublicRecipeWhere({ recipeId: recipe.id }),
+      select: { id: true },
+    });
+    return Boolean(visibleRecipe);
+  }
+
+  private async hasRestrictedRecipeAccess(
+    id: string,
+    shareToken?: string,
+    req?: any,
+  ): Promise<boolean> {
+    const user = this.getRequestUser(req);
+    if (user && (user.role === 'STAFF' || user.role === 'ADMIN')) {
+      return true;
+    }
+
+    if (!shareToken) {
+      return false;
+    }
+
+    const tokenRecord = await this.prisma.recipeShareToken.findFirst({
+      where: {
+        recipe: { recipeId: id },
+        token: shareToken,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    return Boolean(tokenRecord);
+  }
 
   private normalizeKeywordList(value?: string | null): string[] {
     if (!value) return [];
@@ -376,44 +453,13 @@ export class RecipesController {
       return null;
     }
 
-    if (recipe.status === 'PUBLIC') {
+    if (await this.isPublicRecipeVisible(recipe)) {
       return recipe;
     }
 
-    let accessGranted = false;
-
-    try {
-      const authHeader = req?.headers?.authorization;
-      if (authHeader && typeof authHeader === 'string') {
-        const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-        if (bearerMatch?.[1]) {
-          const payload = this.jwtAuthService.validateToken(bearerMatch[1]);
-          if (
-            payload &&
-            (payload.role === 'STAFF' || payload.role === 'ADMIN')
-          ) {
-            accessGranted = true;
-          }
-        }
-      }
-    } catch {
-      // Token invalid or missing, continue to check shareToken
-    }
-
-    if (!accessGranted && shareToken) {
-      const tokenRecord = await this.prisma.recipeShareToken.findFirst({
-        where: {
-          recipe: { recipeId: id },
-          token: shareToken,
-          expiresAt: { gt: new Date() },
-        },
-      });
-      if (tokenRecord) {
-        accessGranted = true;
-      }
-    }
-
-    return accessGranted ? recipe : null;
+    return (await this.hasRestrictedRecipeAccess(id, shareToken, req))
+      ? recipe
+      : null;
   }
 
   private async incrementRecipeViewCount(id: string): Promise<void> {
@@ -690,7 +736,7 @@ export class RecipesController {
     ];
 
     const recipes = await this.prisma.recipe.findMany({
-      where: { status: 'PUBLIC' },
+      where: this.buildPublicRecipeWhere(),
       include: recommendationRecipeInclude,
       orderBy: recommendationRecipeOrderBy,
       take: 60,
@@ -705,10 +751,9 @@ export class RecipesController {
     const seriesRecipes =
       seriesIds.length > 0
         ? await this.prisma.recipe.findMany({
-            where: {
-              status: 'PUBLIC',
+            where: this.buildPublicRecipeWhere({
               seriesId: { in: seriesIds },
-            },
+            }),
             include: recommendationRecipeInclude,
             orderBy: recommendationRecipeOrderBy,
           })
@@ -824,10 +869,9 @@ export class RecipesController {
 
   private async loadPublicSeriesRecipes(id: string): Promise<any[]> {
     const candidates = await this.prisma.recipe.findMany({
-      where: {
-        status: 'PUBLIC',
+      where: this.buildPublicRecipeWhere({
         OR: [{ seriesId: id }, { recipeId: id }],
-      },
+      }),
       include: {
         items: {
           include: {
@@ -861,10 +905,7 @@ export class RecipesController {
     }
 
     return this.prisma.recipe.findMany({
-      where: {
-        status: 'PUBLIC',
-        seriesId,
-      },
+      where: this.buildPublicRecipeWhere({ seriesId }),
       include: {
         items: {
           include: {
@@ -1309,7 +1350,16 @@ export class RecipesController {
     }
 
     const recipe = accessibleRecipe;
-    if (!recipe) {
+    const hasRestrictedAccess =
+      recipe?.status === RecipeStatus.PUBLIC && Boolean(recipe.seriesId)
+        ? await this.hasRestrictedRecipeAccess(id, shareToken, req)
+        : false;
+    if (
+      !recipe ||
+      (recipe.status === RecipeStatus.PUBLIC &&
+        Boolean(recipe.seriesId) &&
+        !hasRestrictedAccess)
+    ) {
       return ApiResponseDto.error(404, 'Recipe not found');
     }
 
@@ -1390,8 +1440,18 @@ export class RecipesController {
   async generateDiySheet(
     @Param('id') recipeId: string,
     @Body() dto: GenerateDiySheetDto,
+    @Req() req?: any,
   ): Promise<ApiResponseDto<DiySheetResponseDto> | ApiResponseDto<null>> {
     try {
+      const accessibleRecipe = await this.getAccessibleRecipe(
+        recipeId,
+        dto.shareToken,
+        req,
+      );
+      if (!accessibleRecipe) {
+        return ApiResponseDto.error(404, `Recipe not found: ${recipeId}`);
+      }
+
       const sheetData = await this.diySheetService.generateDiySheet(
         recipeId,
         dto.dogId,

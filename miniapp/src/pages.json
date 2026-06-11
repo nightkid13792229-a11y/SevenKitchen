@@ -373,6 +373,19 @@
             "navigationBarTitleText": "客服商品咨询",
             "enablePullDownRefresh": true
           }
+        },
+        {
+          "path": "customers",
+          "style": {
+            "navigationBarTitleText": "客户与狗狗",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "assisted-order",
+          "style": {
+            "navigationBarTitleText": "代客下单"
+          }
         }
       ]
     },

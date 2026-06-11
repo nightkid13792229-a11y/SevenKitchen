@@ -7,7 +7,9 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -18,6 +20,7 @@ import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 
 const LOCKED_ADDRESS_STATUSES = new Set(['SHIPPED', 'COMPLETED', 'CANCELLED']);
+const LOCKED_AMOUNT_STATUSES = new Set(['SHIPPED', 'COMPLETED', 'CANCELLED']);
 
 function toNumber(value: any): number {
   if (value === null || value === undefined) return 0;
@@ -47,6 +50,42 @@ function normalizeAddress(address: any) {
   };
 }
 
+function normalizeAddressOption(address: any) {
+  const region = address.region ?? null;
+  return {
+    id: address.id,
+    userId: address.userId,
+    recipientName: address.recipientName ?? '',
+    phone: address.phone ?? '',
+    region,
+    regionText: [region?.province, region?.city, region?.district]
+      .filter(Boolean)
+      .join(' '),
+    detail: address.detail ?? '',
+    isDefault: Boolean(address.isDefault),
+  };
+}
+
+function normalizeRecipeOption(recipe: any) {
+  const isPrivateCustom = recipe.status === 'PRIVATE_CUSTOM';
+  return {
+    id: recipe.recipeId,
+    internalId: recipe.id,
+    version: recipe.version,
+    name: recipe.name,
+    status: recipe.status,
+    sourceLabel: isPrivateCustom ? '专属成品' : '公开成品',
+    coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://') ?? null,
+    applicableLifeStages: recipe.applicableLifeStages ?? [],
+    targetHealthTags: recipe.targetHealthTags ?? [],
+    energyDensityKcalPerKg: toNumber(recipe.energyDensityKcalPerKg),
+    customerOwnerId: recipe.customerOwnerId ?? null,
+    customerDogId: recipe.customerDogId ?? null,
+    isCustomRecipe: Boolean(recipe.isCustomRecipe),
+    seriesLifeStage: recipe.seriesLifeStage ?? null,
+  };
+}
+
 @ApiTags('Staff Customer Service')
 @Controller('api/v1/staff/customer-service')
 @UseGuards(AuthGuard, StaffGuard)
@@ -55,6 +94,284 @@ export class StaffCustomerServiceController {
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
   ) {}
+
+  @Get('customers/search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search customers and dogs for staff workflows' })
+  async searchCustomers(@Query() query: { keyword?: string }) {
+    const keyword = String(query.keyword || '').trim();
+    if (!keyword) {
+      return ApiResponseDto.success([]);
+    }
+
+    const customers = await this.prisma.user.findMany({
+      where: {
+        role: 'CUSTOMER',
+        OR: [
+          { phone: { contains: keyword } },
+          { nickname: { contains: keyword, mode: 'insensitive' } },
+          {
+            dogs: {
+              some: { name: { contains: keyword, mode: 'insensitive' } },
+            },
+          },
+          { orders: { some: { id: { contains: keyword } } } },
+        ],
+      },
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+        avatarUrl: true,
+        dogs: {
+          select: {
+            id: true,
+            name: true,
+            breedId: true,
+            customBreedName: true,
+            currentWeightKg: true,
+            mealsPerDay: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
+    const breedIds = Array.from(
+      new Set(
+        customers
+          .flatMap((customer) => customer.dogs.map((dog) => dog.breedId))
+          .filter(Boolean),
+      ),
+    );
+    const breeds = breedIds.length
+      ? await this.prisma.dogBreed.findMany({
+          where: { id: { in: breedIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const breedMap = new Map(breeds.map((breed) => [breed.id, breed.name]));
+
+    return ApiResponseDto.success(
+      customers.map((customer) => ({
+        id: customer.id,
+        nickname: customer.nickname,
+        phone: customer.phone,
+        avatarUrl: customer.avatarUrl,
+        dogs: customer.dogs.map((dog) => ({
+          id: dog.id,
+          name: dog.name,
+          breedName: dog.customBreedName || breedMap.get(dog.breedId) || null,
+          currentWeightKg: dog.currentWeightKg,
+          mealsPerDay: dog.mealsPerDay,
+        })),
+      })),
+    );
+  }
+
+  @Get('customers/:customerId/addresses')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List customer addresses for staff assisted orders' })
+  async listCustomerAddresses(@Param('customerId') customerId: string) {
+    const customer = await this.prisma.user.findUnique({
+      where: { id: customerId },
+      select: { id: true, role: true },
+    });
+    if (!customer || customer.role !== 'CUSTOMER') {
+      return ApiResponseDto.error(404, 'Customer not found');
+    }
+
+    const addresses = await this.prisma.address.findMany({
+      where: { userId: customerId },
+      orderBy: [{ isDefault: 'desc' }, { recipientName: 'asc' }],
+    });
+
+    return ApiResponseDto.success(addresses.map(normalizeAddressOption));
+  }
+
+  @Post('orders/assisted')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create staff-assisted offline-payment order' })
+  async createAssistedOrder(
+    @Body() body: any,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const customerId = String(body.customerId || '').trim();
+      const dogId = String(body.dogId || '').trim();
+      const addressId = body.addressId ? String(body.addressId).trim() : undefined;
+      const items = Array.isArray(body.items) ? body.items : [];
+
+      if (!customerId || !dogId || items.length === 0) {
+        return ApiResponseDto.error(400, 'customerId, dogId and items are required');
+      }
+
+      const dog = await this.prisma.dog.findUnique({
+        where: { id: dogId },
+        select: { id: true, ownerId: true },
+      });
+      if (!dog) {
+        return ApiResponseDto.error(404, 'Dog not found');
+      }
+      if (dog.ownerId !== customerId) {
+        return ApiResponseDto.error(400, 'Dog does not belong to this customer');
+      }
+
+      if (addressId) {
+        const address = await this.prisma.address.findUnique({
+          where: { id: addressId },
+          select: { id: true, userId: true },
+        });
+        if (!address) {
+          return ApiResponseDto.error(404, 'Address not found');
+        }
+        if (address.userId !== customerId) {
+          return ApiResponseDto.error(400, 'Address does not belong to this customer');
+        }
+      }
+
+      const actor = user.role === 'ADMIN' ? 'admin' : 'staff';
+      const createdOrder = await this.orderService.createOrderDraft({
+        customerId,
+        dogId,
+        type: body.type || 'FRESH_FOOD',
+        ingredientSourcePlan: body.ingredientSourcePlan,
+        targetProductionDate: body.targetProductionDate
+          ? new Date(body.targetProductionDate)
+          : null,
+        items,
+        addressId,
+      });
+
+      await this.orderService.confirmOrder(createdOrder.id, actor, user.userId);
+
+      const actualAmount = Number(body.actualAmount);
+      if (Number.isFinite(actualAmount) && actualAmount >= 0) {
+        await this.orderService.updateOrderAmount(createdOrder.id, actualAmount);
+      }
+
+      const auditLine = [
+        `[代客下单] ${new Date().toISOString()}`,
+        `操作人:${user.userId}`,
+        `客户:${customerId}`,
+        `狗狗:${dogId}`,
+        Number.isFinite(actualAmount) && actualAmount >= 0
+          ? `实际收款:${actualAmount.toFixed(2)}`
+          : `实际收款:${toNumber(createdOrder.amountTotal).toFixed(2)}`,
+        body.remark ? `备注:${String(body.remark).trim()}` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      await this.orderService.updateAdminRemark(
+        createdOrder.id,
+        [createdOrder.adminRemark, auditLine].filter(Boolean).join('\n'),
+      );
+
+      const transactionId = `OFFLINE_${Date.now()}_${user.userId.slice(0, 8)}`;
+      const paidOrder = await this.orderService.processPayment(
+        createdOrder.id,
+        'OFFLINE',
+        actor,
+        user.userId,
+        transactionId,
+      );
+
+      return ApiResponseDto.success(paidOrder);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get('dogs/:dogId/finished-food-recipe-options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List finished-food recipe options for staff assisted orders' })
+  async listDogFinishedFoodRecipeOptions(
+    @Param('dogId') dogId: string,
+    @Query() query: { customerId?: string },
+  ) {
+    const customerId = String(query.customerId || '').trim();
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: { id: true, ownerId: true },
+    });
+    if (!dog) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+    if (customerId && dog.ownerId !== customerId) {
+      return ApiResponseDto.error(400, 'Dog does not belong to this customer');
+    }
+
+    const ownerId = customerId || dog.ownerId;
+    const recipes = await this.prisma.recipe.findMany({
+      where: {
+        OR: [
+          {
+            status: 'PUBLIC',
+            OR: [
+              { seriesId: null },
+              {
+                series: {
+                  is: {
+                    businessStatus: 'PUBLIC',
+                    status: 'ACTIVE',
+                    deletedAt: null,
+                  },
+                },
+              },
+            ],
+          },
+          {
+            status: 'PRIVATE_CUSTOM',
+            customerOwnerId: ownerId,
+            OR: [{ customerDogId: null }, { customerDogId: dogId }],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        recipeId: true,
+        version: true,
+        name: true,
+        status: true,
+        coverImageUrl: true,
+        applicableLifeStages: true,
+        targetHealthTags: true,
+        energyDensityKcalPerKg: true,
+        customerOwnerId: true,
+        customerDogId: true,
+        isCustomRecipe: true,
+        seriesLifeStage: true,
+      },
+      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+    });
+
+    const seenRecipeIds = new Set<string>();
+    const latestOptions = recipes
+      .filter((recipe) => {
+        if (seenRecipeIds.has(recipe.recipeId)) return false;
+        seenRecipeIds.add(recipe.recipeId);
+        return true;
+      })
+      .map(normalizeRecipeOption);
+
+    return ApiResponseDto.success(latestOptions);
+  }
+
+  @Get('dogs/:dogId/finished-food-history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get staff-visible finished-food order history for a dog' })
+  async listDogFinishedFoodHistory(@Param('dogId') dogId: string) {
+    const history = await this.orderService.listDogFinishedFoodHistory(dogId);
+    return ApiResponseDto.success(history);
+  }
 
   @Get('orders/:orderId')
   @HttpCode(HttpStatus.OK)
@@ -342,6 +659,7 @@ export class StaffCustomerServiceController {
           paymentStatus: true,
           paidAt: true,
           amountTotal: true,
+          paymentMethod: true,
           adminRemark: true,
         },
       });
@@ -350,8 +668,16 @@ export class StaffCustomerServiceController {
         return ApiResponseDto.error(404, 'Order not found');
       }
 
+      if (LOCKED_AMOUNT_STATUSES.has(order.status)) {
+        return ApiResponseDto.error(400, 'Shipped, completed, or cancelled orders cannot be adjusted');
+      }
+
       const paid = order.paymentStatus === 'SUCCESS' || Boolean(order.paidAt);
-      if (paid || !['INIT', 'PENDING_PAYMENT'].includes(order.status)) {
+      const offlinePayment = order.paymentMethod === 'OFFLINE' || order.paymentMethod === 'OFFLINE_WECHAT';
+      if (paid && !offlinePayment) {
+        return ApiResponseDto.error(400, 'Paid online orders cannot be adjusted here');
+      }
+      if (!paid && !['INIT', 'PENDING_PAYMENT'].includes(order.status)) {
         return ApiResponseDto.error(400, 'Only unpaid orders can be adjusted');
       }
 

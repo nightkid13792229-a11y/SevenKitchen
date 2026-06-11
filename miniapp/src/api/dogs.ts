@@ -83,6 +83,8 @@ const healthRecordCrud = <
 export const dogApi = {
   list: () => request({ url: '/dogs', method: 'GET' }),
   detail: (dogId: string) => request({ url: `/dogs/${dogId}`, method: 'GET' }),
+  finishedFoodHistory: (dogId: string) =>
+    request({ url: `/dogs/${dogId}/finished-food-history`, method: 'GET' }),
   breeds: () => request({ url: '/dogs/breeds', method: 'GET' }),
   hotBreeds: () => request({ url: '/dogs/breeds/hot', method: 'GET' }),
   preview: (data: Record<string, any>) =>

@@ -1135,6 +1135,80 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       );
     });
 
+    it('passes supplement example weight into pricing previews for fixed-ratio supplements', async () => {
+      const dog = createMockDog();
+      const foodIngredient = createFullFoodIngredient();
+      const fixedSupplement = createSupplementIngredient('supplement-fixed', {
+        name: '洋车前子壳粉',
+        diyEnabled: true,
+        procurementEnabled: true,
+      });
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'food-item-1',
+            ingredientId: foodIngredient.id,
+            ratioPercent: 100,
+            exampleWeight: 100,
+          },
+          {
+            id: 'supplement-item-fixed',
+            ingredientId: fixedSupplement.id,
+            ratioPercent: null,
+            exampleWeight: 1,
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            supplementTargets: null,
+          },
+        ],
+      };
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([
+        foodIngredient,
+        fixedSupplement,
+      ]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        pricingPurpose: 'DIY_SHEET',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      } as any);
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      expect(pricingInput.recipe.items[1]).toEqual(
+        expect.objectContaining({
+          ingredientId: fixedSupplement.id,
+          exampleWeight: 1,
+        }),
+      );
+    });
+
     it.each([
       {
         field: 'quantityG',

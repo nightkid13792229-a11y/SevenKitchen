@@ -2142,6 +2142,7 @@ export class OrderService {
         ingredient,
         preparationMethod: prepMethodText,
         ratioPercent: ri.ratioPercent ?? null,
+        exampleWeight: ri.exampleWeight ?? null,
         nutrientTargetKey: ri.nutrientTargetKey ?? null,
         nutrientTargetValue: ri.nutrientTargetValue ?? null,
         supplementTargets: ri.supplementTargets ?? null,

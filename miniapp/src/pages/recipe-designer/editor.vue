@@ -655,6 +655,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import { getLifeStageLabel } from '../../utils/label-mapping'
 import {
   FEDIAF_DOG_SCENARIO_DESCRIPTIONS,
   FEDIAF_DOG_SCENARIO_LABELS,
@@ -1079,9 +1080,12 @@ const assessmentStandardContextLabel = computed(() => {
   return `${assessmentStandardName.value} · ${lifeStage}`
 })
 
-const draftSeriesLifeStageLabel = computed(() =>
-  getScenarioLabel((draftSeriesLifeStage.value || assessment.value?.scenario || scenario.value) as FediafDogScenario),
-)
+const draftSeriesLifeStageLabel = computed(() => {
+  if (draftSeriesLifeStage.value) {
+    return getLifeStageLabel(draftSeriesLifeStage.value)
+  }
+  return getScenarioLabel((assessment.value?.scenario || scenario.value) as FediafDogScenario)
+})
 
 const recipeSeriesDisplayName = computed(() => {
   const seriesName = draftSeriesName.value.trim()

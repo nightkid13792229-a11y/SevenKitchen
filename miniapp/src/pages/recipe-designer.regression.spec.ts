@@ -271,6 +271,7 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('draftSeriesId')
     expect(editorSource).toContain('draftSeriesName')
     expect(editorSource).toContain('draftSeriesLifeStage')
+    expect(editorSource).toContain("import { getLifeStageLabel } from '../../utils/label-mapping'")
     expect(editorSource).toContain('seriesId')
     expect(editorSource).toContain('series?.name')
     expect(editorSource).toContain('seriesLifeStage')
@@ -278,6 +279,7 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('recipeSeriesDisplayName')
     expect(editorSource).toContain('assessmentStandardName')
     expect(editorSource).toContain('draftSeriesLifeStageLabel')
+    expect(editorSource).toContain('getLifeStageLabel(draftSeriesLifeStage.value)')
   })
 
   it('uses the recipe series name instead of the life-stage draft name in the editor header', () => {

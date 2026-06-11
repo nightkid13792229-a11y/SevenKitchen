@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { request } from '../../utils/api'
+import { getLifeStageLabel } from '../../utils/label-mapping'
 
 interface StaffRecipe {
   id: string
@@ -142,16 +143,6 @@ function getStatusClass(status: string): string {
   return map[status] || ''
 }
 
-function getLifeStageLabel(stage: string): string {
-  const map: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-    'PREGNANCY': '妊娠期',
-    'LACTATION': '哺乳期',
-  }
-  return map[stage] || stage
-}
 </script>
 
 <style scoped lang="scss">

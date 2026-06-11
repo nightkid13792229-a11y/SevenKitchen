@@ -185,11 +185,14 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('series-more-btn')
     expect(listSource).toContain('openSeriesActionSheet(seriesItem)')
     expect(listSource).toContain('uni.showActionSheet')
-    expect(listSource).toContain("itemList: ['重命名', '删除']")
+    expect(listSource).toContain('buildSeriesActionItems(seriesItem)')
     expect(listSource).toContain('重命名')
+    expect(listSource).toContain('复制整个系列')
     expect(listSource).toContain('删除')
     expect(listSource).toContain('function renameSeries')
     expect(listSource).toContain('recipeDesignerApi.renameSeries')
+    expect(listSource).toContain('function duplicateSeries')
+    expect(listSource).toContain('recipeDesignerApi.duplicateSeries')
     expect(listSource).toContain('function deleteSeries')
     expect(listSource).toContain('recipeDesignerApi.deleteSeries')
     expect(listSource).toContain('confirmName')
@@ -201,6 +204,16 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).not.toContain('recipeDesignerApi.deleteDraft')
     expect(listSource).not.toContain('recipeDesignerApi.updateDraft')
     expect(listSource).not.toContain('revision-draft-btn')
+  })
+
+  it('lets staff duplicate a single life stage without editing the original stage', () => {
+    expect(apiSource).toContain('duplicateSeriesStage')
+    expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
+    expect(listSource).toContain('复制此生命阶段')
+    expect(listSource).toContain('function duplicateSeriesStage')
+    expect(listSource).toContain('recipeDesignerApi.duplicateSeriesStage')
+    expect(listSource).toContain('stage.lifeStage')
+    expect(listSource).toContain('/pages/recipe-designer/editor?id=')
   })
 
   it('creates a new series and navigates to the backend initial draft when available', () => {

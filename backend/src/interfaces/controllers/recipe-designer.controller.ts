@@ -193,6 +193,21 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(series);
   }
 
+  @Post('series/:seriesId/duplicate')
+  @ApiOperation({
+    summary: 'Duplicate a recipe design series as editable drafts',
+  })
+  async duplicateSeries(
+    @Param('seriesId') seriesId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.duplicateSeries(
+      seriesId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(series);
+  }
+
   @Patch('series/:seriesId')
   @ApiOperation({ summary: 'Rename a recipe design series' })
   async renameSeries(
@@ -236,6 +251,23 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(draft);
+  }
+
+  @Post('series/:seriesId/stages/:lifeStage/duplicate')
+  @ApiOperation({
+    summary: 'Duplicate one recipe series life stage as a new editable series',
+  })
+  async duplicateSeriesStage(
+    @Param('seriesId') seriesId: string,
+    @Param('lifeStage') lifeStage: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.duplicateSeriesStage(
+      seriesId,
+      lifeStage,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(series);
   }
 
   @Get('drafts')

@@ -37,8 +37,9 @@ describe('RecipeDesignerController authorization', () => {
     expect(supplementLabelRoute).not.toBeNull();
 
     const supplementLabelDecoratorBlock = supplementLabelRoute?.[1] ?? '';
-    const supplementLabelGuardIndex =
-      supplementLabelDecoratorBlock.indexOf('@UseGuards(StaffGuard)');
+    const supplementLabelGuardIndex = supplementLabelDecoratorBlock.indexOf(
+      '@UseGuards(StaffGuard)',
+    );
     const supplementLabelInterceptorIndex =
       supplementLabelDecoratorBlock.indexOf('@UseInterceptors(');
 
@@ -101,9 +102,11 @@ describe('RecipeDesignerController', () => {
     createDraft: jest.fn(),
     listSeries: jest.fn(),
     createSeries: jest.fn(),
+    duplicateSeries: jest.fn(),
     renameSeries: jest.fn(),
     deleteSeries: jest.fn(),
     createSeriesStageDraft: jest.fn(),
+    duplicateSeriesStage: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
@@ -217,8 +220,13 @@ describe('RecipeDesignerController', () => {
     service.listSeries.mockResolvedValue([{ id: 'series-1' }]);
     service.createSeries.mockResolvedValue({ id: 'series-2' });
     service.renameSeries.mockResolvedValue({ id: 'series-1', name: '新名字' });
-    service.deleteSeries.mockResolvedValue({ id: 'series-1', status: 'DELETED' });
+    service.deleteSeries.mockResolvedValue({
+      id: 'series-1',
+      status: 'DELETED',
+    });
     service.createSeriesStageDraft.mockResolvedValue({ id: 'design-1' });
+    service.duplicateSeries.mockResolvedValue({ id: 'series-copy' });
+    service.duplicateSeriesStage.mockResolvedValue({ id: 'stage-copy' });
 
     await expect(controller.listSeries({}, currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'series-1' }] }),
@@ -246,6 +254,16 @@ describe('RecipeDesignerController', () => {
       controller.createSeriesStageDraft(
         'series-1',
         { scenario: 'ADULT_MER_95' },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.duplicateSeries('series-1', currentUser),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.duplicateSeriesStage(
+        'series-1',
+        'HIGH_ACTIVITY_ADULT',
         currentUser,
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
@@ -286,6 +304,18 @@ describe('RecipeDesignerController', () => {
     expect(service.createSeriesStageDraft).toHaveBeenCalledWith(
       'series-1',
       { scenario: 'ADULT_MER_95' },
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
+    expect(service.duplicateSeries).toHaveBeenCalledWith('series-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
+    expect(service.duplicateSeriesStage).toHaveBeenCalledWith(
+      'series-1',
+      'HIGH_ACTIVITY_ADULT',
       {
         userId: 'staff-1',
         role: 'STAFF',
@@ -446,13 +476,13 @@ describe('RecipeDesignerController', () => {
       'label.jpg',
       'recipe-designer-supplement-labels',
     );
-    expect(supplementLabelExtractionService.extractFromImage).toHaveBeenCalledWith(
-      {
-        imageUrl: 'https://cdn.example.com/supplement-labels/label.jpg',
-        originalFilename: 'label.jpg',
-        requestedBy: 'staff-1',
-      },
-    );
+    expect(
+      supplementLabelExtractionService.extractFromImage,
+    ).toHaveBeenCalledWith({
+      imageUrl: 'https://cdn.example.com/supplement-labels/label.jpg',
+      originalFilename: 'label.jpg',
+      requestedBy: 'staff-1',
+    });
   });
 
   it('accepts WeChat image uploads that arrive as octet-stream with an image filename', async () => {
@@ -484,7 +514,8 @@ describe('RecipeDesignerController', () => {
         code: 0,
         data: expect.objectContaining({
           ingredientName: '鱼油',
-          imageUrl: 'https://cdn.example.com/supplement-labels/wx-temp-label.jpg',
+          imageUrl:
+            'https://cdn.example.com/supplement-labels/wx-temp-label.jpg',
         }),
       }),
     );

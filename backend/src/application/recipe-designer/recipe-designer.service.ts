@@ -81,6 +81,12 @@ import {
 } from '../../domain/recipe/recipe-series';
 
 const DESIGN_RECIPE_INCLUDE = {
+  series: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   items: {
     include: {
       ingredient: {
@@ -177,6 +183,17 @@ const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
 
+const DUPLICATE_SERIES_STAGE_NAME_LABELS: Record<
+  RecipeSeriesLifeStage,
+  string
+> = {
+  PUPPY_UNDER_14_WEEKS: '小于14周龄幼犬',
+  PUPPY_14_WEEKS_PLUS: '大于等于14周龄幼犬',
+  HIGH_ACTIVITY_ADULT: '普通成年犬（110ME）',
+  LOW_ACTIVITY_ADULT_OR_SENIOR: '低能量需求成年犬（95ME）',
+  REPRODUCTION: '繁殖期母犬',
+};
+
 const PUBLISHED_RECIPE_LIFE_STAGES_BY_SCENARIO: Record<
   FediafDogScenarioCode,
   string[]
@@ -225,6 +242,10 @@ type DesignRecipeWithItems = {
   revisionBaseRecipeId: string | null;
   seriesId?: string | null;
   seriesLifeStage?: string | null;
+  series?: {
+    id: string;
+    name: string;
+  } | null;
   isCompliant: boolean;
   reviewStatus: string;
   reviewNote: string | null;
@@ -1023,9 +1044,7 @@ export class RecipeDesignerService {
     );
   }
 
-  private async isInternalRecipeDesignerCreatorId(
-    creatorId?: string | null,
-  ) {
+  private async isInternalRecipeDesignerCreatorId(creatorId?: string | null) {
     if (!creatorId) return false;
     if (INTERNAL_RECIPE_DESIGNER_CREATOR_IDS.includes(creatorId)) {
       return true;
@@ -1479,6 +1498,164 @@ export class RecipeDesignerService {
     throw new BadRequestException('配方系列创建失败，请重试');
   }
 
+  async duplicateSeries(seriesId: string, access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const sourceSeries = await this.loadAccessibleSeriesForDuplication(
+              tx,
+              seriesId,
+              context,
+            );
+            const sourceDesigns = this.getLatestCopyableSeriesDesigns(
+              sourceSeries.designs,
+            );
+            if (sourceDesigns.length === 0) {
+              throw new BadRequestException('该系列暂无可复制的生命阶段');
+            }
+
+            const copyName = this.buildDuplicateSeriesName(sourceSeries.name);
+            const copiedSeries = await tx.recipeSeries.create({
+              data: {
+                name: copyName,
+                status: RecipeSeriesStatus.ACTIVE,
+                createdBy: context.userId,
+              },
+            });
+            const firstVersion = await this.allocateNextDesignRecipeVersion(
+              tx,
+              copyName,
+            );
+            const copiedDesigns = [];
+            let nextVersion = firstVersion;
+            for (const sourceDesign of sourceDesigns) {
+              copiedDesigns.push(
+                await this.createCopiedSeriesDesign(
+                  tx,
+                  sourceDesign,
+                  copiedSeries.id,
+                  copyName,
+                  nextVersion,
+                  context.userId,
+                ),
+              );
+              nextVersion += 1;
+            }
+
+            return this.buildSeriesWorkbenchCard(
+              {
+                ...copiedSeries,
+                designs: copiedDesigns,
+                recipes: [],
+              } as RecipeSeriesWorkbenchRecord,
+              context.userId,
+            );
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isRetryableSeriesDraftCreateError(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('系列副本创建失败，请重试');
+  }
+
+  async duplicateSeriesStage(
+    seriesId: string,
+    lifeStage: string,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const normalizedLifeStage =
+      this.normalizeRecipeSeriesLifeStageForDuplication(lifeStage);
+
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const sourceSeries = await this.loadAccessibleSeriesForDuplication(
+              tx,
+              seriesId,
+              context,
+            );
+            const sourceDesign = this.getLatestCopyableSeriesDesigns(
+              sourceSeries.designs,
+            ).find((design) => design.seriesLifeStage === normalizedLifeStage);
+            if (!sourceDesign) {
+              throw new BadRequestException('该生命阶段暂无可复制食谱');
+            }
+
+            const copyName = this.buildDuplicateSeriesStageName(
+              sourceSeries.name,
+              normalizedLifeStage,
+            );
+            const copiedSeries = await tx.recipeSeries.create({
+              data: {
+                name: copyName,
+                status: RecipeSeriesStatus.ACTIVE,
+                createdBy: context.userId,
+              },
+            });
+            const version = await this.allocateNextDesignRecipeVersion(
+              tx,
+              copyName,
+            );
+            const copiedDesign = await this.createCopiedSeriesDesign(
+              tx,
+              sourceDesign,
+              copiedSeries.id,
+              copyName,
+              version,
+              context.userId,
+            );
+
+            return this.buildSeriesWorkbenchCard(
+              {
+                ...copiedSeries,
+                designs: [copiedDesign],
+                recipes: [],
+              } as RecipeSeriesWorkbenchRecord,
+              context.userId,
+            );
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isRetryableSeriesDraftCreateError(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('生命阶段副本创建失败，请重试');
+  }
+
   async createSeriesStageDraft(
     seriesId: string,
     dto: CreateRecipeSeriesStageDraftDto,
@@ -1552,17 +1729,9 @@ export class RecipeDesignerService {
                 ...(sourceTemplate
                   ? {
                       items: {
-                        create: sourceTemplate.items.map((item) => ({
-                          ingredientId: item.ingredientId,
-                          nutritionFoodId: item.nutritionFoodId,
-                          weightG: item.weightG,
-                          includeInAssessment: item.includeInAssessment,
-                          ratioPercent: item.ratioPercent,
-                          preparationMethod: item.preparationMethod,
-                          nutrientTargetKey: item.nutrientTargetKey,
-                          nutrientTargetValue: item.nutrientTargetValue,
-                          sortOrder: item.sortOrder,
-                        })),
+                        create: sourceTemplate.items.map((item) =>
+                          this.toCopiedDesignRecipeItemData(item),
+                        ),
                       },
                     }
                   : {}),
@@ -1586,6 +1755,148 @@ export class RecipeDesignerService {
     }
 
     throw new BadRequestException('阶段草稿创建失败，请重试');
+  }
+
+  private async loadAccessibleSeriesForDuplication(
+    tx: Pick<PrismaService, 'recipeSeries'>,
+    seriesId: string,
+    context: RecipeDesignerAccessContext,
+  ) {
+    const series = await tx.recipeSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        designs: {
+          include: DESIGN_RECIPE_INCLUDE,
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    });
+
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt ||
+      !(await this.isSeriesAccessibleByContext(series, context))
+    ) {
+      throw new NotFoundException(`Recipe series ${seriesId} not found`);
+    }
+
+    return series as unknown as RecipeSeriesWorkbenchRecord & {
+      designs: DesignRecipeWithItems[];
+    };
+  }
+
+  private getLatestCopyableSeriesDesigns(
+    designs: DesignRecipeWithItems[],
+  ): DesignRecipeWithItems[] {
+    const latestByStage = new Map<
+      RecipeSeriesLifeStage,
+      DesignRecipeWithItems
+    >();
+    for (const lifeStage of ORDERED_RECIPE_SERIES_LIFE_STAGES) {
+      const latest = designs
+        .filter((design) => design.seriesLifeStage === lifeStage)
+        .sort(
+          (left, right) =>
+            this.getUpdatedTime(right) - this.getUpdatedTime(left),
+        )[0];
+      if (latest) {
+        latestByStage.set(lifeStage, latest);
+      }
+    }
+    return ORDERED_RECIPE_SERIES_LIFE_STAGES.flatMap((lifeStage) => {
+      const design = latestByStage.get(lifeStage);
+      return design ? [design] : [];
+    });
+  }
+
+  private normalizeRecipeSeriesLifeStageForDuplication(
+    lifeStage: string,
+  ): RecipeSeriesLifeStage {
+    if (
+      ORDERED_RECIPE_SERIES_LIFE_STAGES.includes(
+        lifeStage as RecipeSeriesLifeStage,
+      )
+    ) {
+      return lifeStage as RecipeSeriesLifeStage;
+    }
+    throw new BadRequestException('不支持复制该生命阶段');
+  }
+
+  private buildDuplicateSeriesName(sourceName: string) {
+    return `${sourceName} 副本`;
+  }
+
+  private buildDuplicateSeriesStageName(
+    sourceName: string,
+    lifeStage: RecipeSeriesLifeStage,
+  ) {
+    return `${sourceName} ${DUPLICATE_SERIES_STAGE_NAME_LABELS[lifeStage]}副本`;
+  }
+
+  private async createCopiedSeriesDesign(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    source: DesignRecipeWithItems,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ) {
+    const lifeStage =
+      (source.seriesLifeStage as RecipeSeriesLifeStage | null) ||
+      mapScenarioToSeriesLifeStage(source.fediafDogScenario);
+
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: source.fediafDogScenario,
+        nutritionStandard: 'FEDIAF_2025',
+        targetHealthTags: source.targetHealthTags,
+        applicableLifeStages: [lifeStage],
+        notes: source.notes,
+        createdBy,
+        totalWeightG: source.totalWeightG ?? 0,
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: null,
+        revisionBaseRecipeId: null,
+        seriesId,
+        seriesLifeStage: lifeStage,
+        items: {
+          create: source.items.map((item) =>
+            this.toCopiedDesignRecipeItemData(item),
+          ),
+        },
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    });
+  }
+
+  private toCopiedDesignRecipeItemData(item: DesignRecipeItemWithFood) {
+    return {
+      ingredientId: item.ingredientId,
+      nutritionFoodId: item.nutritionFoodId,
+      weightG: item.weightG,
+      includeInAssessment: item.includeInAssessment,
+      ratioPercent: item.ratioPercent,
+      preparationMethod: item.preparationMethod,
+      nutrientTargetKey: item.nutrientTargetKey,
+      nutrientTargetValue: item.nutrientTargetValue,
+      sortOrder: item.sortOrder,
+    };
   }
 
   private async loadSeriesStageSourceTemplate(
@@ -1760,8 +2071,10 @@ export class RecipeDesignerService {
         ...statusDesigns,
         ...recipes,
       ]);
-      const recipeStatusCategory =
-        this.resolveSeriesStageRecipeStatusCategory(effectiveDesigns, recipes);
+      const recipeStatusCategory = this.resolveSeriesStageRecipeStatusCategory(
+        effectiveDesigns,
+        recipes,
+      );
 
       return {
         lifeStage,
@@ -1807,7 +2120,9 @@ export class RecipeDesignerService {
     effectiveDesigns: RecipeSeriesWorkbenchRecord['designs'],
     recipes: RecipeSeriesWorkbenchRecord['recipes'],
   ): RecipeSeriesStageRecipeStatusCategory {
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)) {
+    if (
+      recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)
+    ) {
       return 'PRIVATE_CUSTOM';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
@@ -1846,7 +2161,9 @@ export class RecipeDesignerService {
     if (effectiveDesigns.length > 0) {
       return 'MODIFIED';
     }
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)) {
+    if (
+      recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)
+    ) {
       return 'PRIVATE_CUSTOM';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {

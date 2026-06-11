@@ -322,6 +322,35 @@ function getProductionLossRate(item: any): number {
   return Number.isFinite(lossRate) && lossRate > 0 ? lossRate : 1
 }
 
+function getPositiveNumber(value: unknown): number | undefined {
+  const normalized = Number(value)
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : undefined
+}
+
+function getFixedRatioSupplementAmount(
+  item: any,
+  totalFoodInputWeightG: number,
+  options: CalculateSupplementAmountOptions
+): number | undefined {
+  const ratioPercent =
+    getPositiveNumber(item?.ratio) ??
+    getPositiveNumber(item?.ratioPercent) ??
+    getPositiveNumber(item?.ratio_percent)
+
+  if (!ratioPercent) {
+    return undefined
+  }
+
+  const amount = totalFoodInputWeightG * (ratioPercent / 100)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return undefined
+  }
+
+  return options.includeProductionLoss
+    ? amount * getProductionLossRate(item)
+    : amount
+}
+
 export function formatSupplementTargets(item: any): string {
   return getSupplementTargets(item)
     .map((target) => `每kg食材添加${target.targetValuePerKg}${target.unit}${target.label}`)
@@ -337,6 +366,18 @@ export function calculateSupplementAmountForProduction(
   const breakdowns = getSupplementTargetBreakdowns(item, totalFoodInputWeightG)
 
   if (breakdowns.length === 0) {
+    const fixedRatioAmount = getFixedRatioSupplementAmount(
+      item,
+      totalFoodInputWeightG,
+      options
+    )
+    if (fixedRatioAmount !== undefined) {
+      return {
+        amount: fixedRatioAmount,
+        unit
+      }
+    }
+
     return {
       amount: 0,
       unit

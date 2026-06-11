@@ -214,6 +214,29 @@ describe('supplement nutrient resolution', () => {
     })
   })
 
+  it('falls back to fixed recipe ratio when supplement targets are unavailable', () => {
+    const item = {
+      ratio: 1,
+      unit_display_label: 'g',
+      properties: {
+        production_loss_rate: 1.1
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 10,
+      unit: 'g'
+    })
+    expect(
+      calculateSupplementAmountForProduction(item, 1000, {
+        includeProductionLoss: true
+      })
+    ).toEqual({
+      amount: 11,
+      unit: 'g'
+    })
+  })
+
   it('does not fall back to legacy active nutrients for unknown explicit profile basis', () => {
     const item = {
       supplement_targets: [

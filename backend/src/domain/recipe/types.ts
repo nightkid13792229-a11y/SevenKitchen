@@ -25,6 +25,7 @@ export interface RecipeSnapshotItem {
   ingredient_id: string;
   name: string;
   ratio: number; // or amount logic
+  example_weight?: number;
   nutrition_food_id?: string;
   nutrition_food_name?: string;
   nutrition_state?: string;

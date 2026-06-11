@@ -203,6 +203,37 @@ describe('supplement alternatives helpers', () => {
     expect(getSupplementNutrientUnit(baseItem, selectedOption)).toBe('IU')
   })
 
+  it('keeps fixed-ratio supplement amounts when selected option has no nutrient target', () => {
+    const baseItem = {
+      amount: 10,
+      ratio: 1,
+      unit: 'g',
+      displayUnit: 'g',
+      supplementTargets: []
+    }
+
+    const selectedOption = {
+      id: 'psyllium-alt',
+      ingredientId: 'psyllium-alt',
+      name: '洋车前子壳粉',
+      displayUnit: 'g',
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_1_G' },
+        macros: {
+          fiber: 0.85
+        }
+      }
+    }
+
+    expect(
+      calculateSupplementAmountForOption(
+        baseItem,
+        selectedOption,
+        2000
+      )
+    ).toBeCloseTo(20, 6)
+  })
+
   it('keeps fractional tablet amounts when calculating from ingredient input weight', () => {
     const baseItem = {
       amount: 12,

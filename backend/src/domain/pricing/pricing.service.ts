@@ -85,6 +85,12 @@ export interface Recipe {
   items: RecipeItem[];
 }
 
+interface FixedSupplementDose {
+  ratioPercent: number;
+  unitsTheoretical: number;
+  unitsNeeded: number;
+}
+
 export interface DogProfile {
   mealsPerDay: number;
 }
@@ -301,6 +307,9 @@ export class PricingService {
     // ==========================================
     let costIngredients = 0;
     const ingredientDetails: IngredientCostItem[] = [];
+    const recipeFoodExampleWeightG = this.getRecipeFoodExampleWeightG(
+      recipe.items,
+    );
 
     console.log('[PricingService] Starting cost calculation:', {
       recipeId: recipe.id,
@@ -431,67 +440,12 @@ export class PricingService {
         });
 
         const targets = item.supplementTargets ?? [];
-        if (targets.length === 0) {
-          throw new ValidationError(
-            `supplementTargets are required for SUPPLEMENT ingredient: ${ingredient.name}`,
-          );
-        }
-
         const customLoss =
           ingredient.getProductionLossRate() ?? globalConfig.supplementLossRate;
-        const dose = calculateSupplementDose({
-          nutritionProfile: ingredient.nutritionProfile,
-          targets,
-          basisWeightG: totalNetFoodWeightG,
-          displayUnit: ingredient.unitDisplayLabel,
-          lossRate: customLoss,
-        });
-        const limitingTarget = dose.limitingTarget;
-        const concentration = limitingTarget.concentration;
-        const concentrationUnit = limitingTarget.concentrationUnit;
-        const totalNutrientNeeded = limitingTarget.totalNutrientNeeded;
-        const unitsNeeded = dose.amount;
-        const unitsTheoretical = customLoss > 0 ? unitsNeeded / customLoss : 0;
-        const targetVal = targets.find(
-          (target) => target.fieldPath === limitingTarget.fieldPath,
-        )!.targetValuePerKg;
-
-        console.log('[PricingService] SUPPLEMENT concentration lookup:', {
-          name: ingredient.name,
-          targetKey: limitingTarget.fieldPath,
-          targetVal,
-          targets,
-          targetBreakdown: dose.targetBreakdown,
-          concentration,
-        });
-
         const unitCost = ingredient.getUnitCost();
-        const itemCost = unitsNeeded * unitCost;
-
-        console.log('[PricingService] SUPPLEMENT cost:', {
-          name: ingredient.name,
-          limitingTarget: limitingTarget.fieldPath,
-          targetVal,
-          totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0, // 食材总净重
-          rawInputWeightKg, // 所有原料毛重（对比用）
-          totalNutrientNeeded,
-          unitsTheoretical,
-          customLoss,
-          unitsNeeded,
-          unitCost,
-          itemCost,
-        });
-
         const addTimingEnum = (ingredient.properties as any)?.add_timing;
         const finalPrepMethod = resolveSupplementAddTimingLabel(addTimingEnum);
-        const supplementUnit =
-          ingredient.baseUnitDisplayName ||
-          ingredient.unitDisplayLabel ||
-          (ingredient.baseUnit === 'G'
-            ? 'g'
-            : ingredient.baseUnit === 'ML'
-              ? 'ml'
-              : '个');
+        const supplementUnit = this.getSupplementUnit(ingredient);
 
         console.log('[PricingService] SUPPLEMENT 添加时机:', {
           name: ingredient.name,
@@ -499,31 +453,126 @@ export class PricingService {
           finalPrepMethod,
         });
 
-        // Collect detailed data for SUPPLEMENT
-        ingredientDetails.push({
-          recipeItemId: item.id,
-          name: ingredient.name,
-          type: 'SUPPLEMENT',
-          amount: unitsNeeded, // 补剂的用量已含损耗率
-          netAmount: unitsTheoretical, // 补剂净需求 = 理论用量（不含损耗）
-          purchaseAmount: unitsNeeded, // 补剂采购用量 = 实际用量（含损耗）
-          unit: supplementUnit,
-          unitCost: unitCost,
-          cost: itemCost,
-          calculation: `${limitingTarget.label}营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
-          purchaseChannel: ingredient.purchaseChannel || undefined,
-          brand: ingredient.brand || undefined,
-          productModel: ingredient.productModel || undefined,
-          preparationMethod: finalPrepMethod,
-          ingredientId: ingredient.id,
-          displayUnit: supplementUnit, // 需求展示单位来自标准原料，不使用采购SKU包装单位
-          properties: ingredient.properties, // 添加完整properties（包含purchase_link）
-          nutrientTargetKey: item.nutrientTargetKey || undefined, // 营养素名称
-          nutrientTargetValue: item.nutrientTargetValue || undefined, // 营养目标值
-          supplementTargets: targets,
-        });
+        let supplementDetail: IngredientCostItem | null = null;
+        let targetCalculationError: unknown = null;
 
-        costIngredients += itemCost;
+        if (targets.length > 0) {
+          try {
+            const dose = calculateSupplementDose({
+              nutritionProfile: ingredient.nutritionProfile,
+              targets,
+              basisWeightG: totalNetFoodWeightG,
+              displayUnit: ingredient.unitDisplayLabel,
+              lossRate: customLoss,
+            });
+            const limitingTarget = dose.limitingTarget;
+            const concentration = limitingTarget.concentration;
+            const concentrationUnit = limitingTarget.concentrationUnit;
+            const totalNutrientNeeded = limitingTarget.totalNutrientNeeded;
+            const unitsNeeded = dose.amount;
+            const unitsTheoretical =
+              customLoss > 0 ? unitsNeeded / customLoss : 0;
+            const targetVal = targets.find(
+              (target) => target.fieldPath === limitingTarget.fieldPath,
+            )!.targetValuePerKg;
+
+            console.log('[PricingService] SUPPLEMENT concentration lookup:', {
+              name: ingredient.name,
+              targetKey: limitingTarget.fieldPath,
+              targetVal,
+              targets,
+              targetBreakdown: dose.targetBreakdown,
+              concentration,
+            });
+
+            const itemCost = unitsNeeded * unitCost;
+
+            console.log('[PricingService] SUPPLEMENT cost:', {
+              name: ingredient.name,
+              limitingTarget: limitingTarget.fieldPath,
+              targetVal,
+              totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0,
+              rawInputWeightKg,
+              totalNutrientNeeded,
+              unitsTheoretical,
+              customLoss,
+              unitsNeeded,
+              unitCost,
+              itemCost,
+            });
+
+            supplementDetail = {
+              recipeItemId: item.id,
+              name: ingredient.name,
+              type: 'SUPPLEMENT',
+              amount: unitsNeeded,
+              netAmount: unitsTheoretical,
+              purchaseAmount: unitsNeeded,
+              unit: supplementUnit,
+              unitCost: unitCost,
+              cost: itemCost,
+              calculation: `${limitingTarget.label}营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
+              purchaseChannel: ingredient.purchaseChannel || undefined,
+              brand: ingredient.brand || undefined,
+              productModel: ingredient.productModel || undefined,
+              preparationMethod: finalPrepMethod,
+              ingredientId: ingredient.id,
+              displayUnit: supplementUnit,
+              properties: ingredient.properties,
+              nutrientTargetKey: item.nutrientTargetKey || undefined,
+              nutrientTargetValue: item.nutrientTargetValue || undefined,
+              supplementTargets: targets,
+            };
+          } catch (error) {
+            targetCalculationError = error;
+          }
+        }
+
+        if (!supplementDetail) {
+          const fixedDose = this.resolveFixedSupplementDose(
+            item,
+            totalNetFoodWeightG,
+            recipeFoodExampleWeightG,
+            customLoss,
+          );
+
+          if (!fixedDose) {
+            if (targetCalculationError) {
+              throw targetCalculationError;
+            }
+            throw new ValidationError(
+              `supplementTargets or exampleWeight are required for SUPPLEMENT ingredient: ${ingredient.name}`,
+            );
+          }
+
+          const itemCost = fixedDose.unitsNeeded * unitCost;
+          supplementDetail = {
+            recipeItemId: item.id,
+            name: ingredient.name,
+            type: 'SUPPLEMENT',
+            amount: fixedDose.unitsNeeded,
+            netAmount: fixedDose.unitsTheoretical,
+            purchaseAmount: fixedDose.unitsNeeded,
+            unit: supplementUnit,
+            unitCost: unitCost,
+            cost: itemCost,
+            calculation: `按配方比例${fixedDose.ratioPercent.toFixed(3)}% × 食材净重${totalNetFoodWeightG.toFixed(1)}g = 理论用量${fixedDose.unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${fixedDose.unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
+            purchaseChannel: ingredient.purchaseChannel || undefined,
+            brand: ingredient.brand || undefined,
+            productModel: ingredient.productModel || undefined,
+            preparationMethod: finalPrepMethod,
+            ingredientId: ingredient.id,
+            displayUnit: supplementUnit,
+            properties: ingredient.properties,
+            nutrientTargetKey: item.nutrientTargetKey || undefined,
+            nutrientTargetValue: item.nutrientTargetValue || undefined,
+            supplementTargets: targets,
+          };
+        }
+
+        ingredientDetails.push(supplementDetail);
+
+        costIngredients += supplementDetail.cost;
       }
       // Note: PACKAGING is handled separately below
     }
@@ -739,6 +788,64 @@ export class PricingService {
       laborDetails,
       overheadDetails,
     };
+  }
+
+  private getRecipeFoodExampleWeightG(items: RecipeItem[]): number {
+    return items.reduce((sum, item) => {
+      if (item.ingredient.type !== IngredientType.FOOD) {
+        return sum;
+      }
+
+      const exampleWeight = this.getPositiveNumber(item.exampleWeight);
+      return exampleWeight ? sum + exampleWeight : sum;
+    }, 0);
+  }
+
+  private resolveFixedSupplementDose(
+    item: RecipeItem,
+    totalNetFoodWeightG: number,
+    recipeFoodExampleWeightG: number,
+    lossRate: number,
+  ): FixedSupplementDose | null {
+    const exampleWeight = this.getPositiveNumber(item.exampleWeight);
+    const ratioFromExample =
+      exampleWeight && recipeFoodExampleWeightG > 0
+        ? (exampleWeight / recipeFoodExampleWeightG) * 100
+        : null;
+    const ratioPercent =
+      ratioFromExample ?? this.getPositiveNumber(item.ratioPercent);
+
+    if (!ratioPercent) {
+      return null;
+    }
+
+    const unitsTheoretical = totalNetFoodWeightG * (ratioPercent / 100);
+    if (!Number.isFinite(unitsTheoretical) || unitsTheoretical <= 0) {
+      return null;
+    }
+
+    return {
+      ratioPercent,
+      unitsTheoretical,
+      unitsNeeded: unitsTheoretical * lossRate,
+    };
+  }
+
+  private getPositiveNumber(value: unknown): number | null {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
+  }
+
+  private getSupplementUnit(ingredient: Ingredient): string {
+    return (
+      ingredient.baseUnitDisplayName ||
+      ingredient.unitDisplayLabel ||
+      (ingredient.baseUnit === 'G'
+        ? 'g'
+        : ingredient.baseUnit === 'ML'
+          ? 'ml'
+          : '个')
+    );
   }
 
   private getFoodDensityGPerMl(ingredient: Ingredient): number {

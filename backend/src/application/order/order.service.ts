@@ -1234,6 +1234,10 @@ export class OrderService {
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipeItems.map((item) => item.preparationMethod),
     );
+    const snapshotFoodExampleWeightG = this.getRecipeSnapshotFoodExampleWeightG(
+      recipeItems,
+      ingredientMap,
+    );
 
     const recipeSnapshot: RecipeSnapshot = {
       id: recipe.id,
@@ -1257,7 +1261,12 @@ export class OrderService {
         return {
           ingredient_id: ingredient?.id || ri.ingredientId,
           name: ingredient?.name || 'Unknown',
-          ratio: ri.ratioPercent ?? 0,
+          ratio: this.resolveRecipeSnapshotItemRatio(
+            ri,
+            ingredient,
+            snapshotFoodExampleWeightG,
+          ),
+          example_weight: ri.exampleWeight ?? undefined,
           nutrition_food_id: ri.nutritionFoodId ?? undefined,
           nutrition_food_name: ri.nutritionFood?.name ?? undefined,
           nutrition_state:
@@ -1606,6 +1615,7 @@ export class OrderService {
           ingredient,
           preparationMethod: prepMethodText,
           ratioPercent: ri.ratioPercent ?? null,
+          exampleWeight: ri.exampleWeight ?? null,
           nutrientTargetKey: ri.nutrientTargetKey ?? null,
           nutrientTargetValue: ri.nutrientTargetValue ?? null,
           supplementTargets: ri.supplementTargets ?? null,
@@ -1680,6 +1690,8 @@ export class OrderService {
         dogCalcResult.finalFoodKcal,
         recipe.energyDensityKcalPerKg,
       );
+      const snapshotFoodExampleWeightG =
+        this.getRecipeSnapshotFoodExampleWeightG(recipeItems, ingredientMap);
 
       // Create RecipeSnapshot from recipe (immutable snapshot)
       // Phase 8.9: Include energyDensityKcalPerKg in snapshot for immutability
@@ -1713,7 +1725,12 @@ export class OrderService {
           return {
             ingredient_id: ingredient?.id || ri.ingredientId,
             name: ingredient?.name || 'Unknown',
-            ratio: ri.ratioPercent ?? 0,
+            ratio: this.resolveRecipeSnapshotItemRatio(
+              ri,
+              ingredient,
+              snapshotFoodExampleWeightG,
+            ),
+            example_weight: ri.exampleWeight ?? undefined,
             nutrition_food_id: ri.nutritionFoodId ?? undefined,
             nutrition_food_name: ri.nutritionFood?.name ?? undefined,
             nutrition_state:
@@ -3376,6 +3393,46 @@ export class OrderService {
     });
 
     return this.orderRepository.save(order);
+  }
+
+  private getRecipeSnapshotFoodExampleWeightG(
+    recipeItems: RecipeDomainItem[],
+    ingredientMap: Map<string, Ingredient>,
+  ): number {
+    return recipeItems.reduce((sum, item) => {
+      const ingredient = ingredientMap.get(item.ingredientId);
+      if (ingredient?.type !== IngredientType.FOOD) {
+        return sum;
+      }
+
+      const exampleWeight = this.getPositiveNumber(item.exampleWeight);
+      return exampleWeight ? sum + exampleWeight : sum;
+    }, 0);
+  }
+
+  private resolveRecipeSnapshotItemRatio(
+    item: RecipeDomainItem,
+    ingredient: Ingredient | undefined,
+    foodExampleWeightG: number,
+  ): number {
+    if (ingredient?.type !== IngredientType.SUPPLEMENT) {
+      return item.ratioPercent ?? 0;
+    }
+
+    const ratioPercent = this.getPositiveNumber(item.ratioPercent);
+    if (ratioPercent) {
+      return ratioPercent;
+    }
+
+    const exampleWeight = this.getPositiveNumber(item.exampleWeight);
+    return exampleWeight && foodExampleWeightG > 0
+      ? (exampleWeight / foodExampleWeightG) * 100
+      : 0;
+  }
+
+  private getPositiveNumber(value: unknown): number | null {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
   }
 
   private async unsetOtherDefaultAddresses(

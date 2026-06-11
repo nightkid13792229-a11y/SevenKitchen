@@ -3876,6 +3876,7 @@ describe('RecipeDesignerService', () => {
 
     expect(supplementItem).toEqual(
       expect.objectContaining({
+        exampleWeight: 3,
         nutrientTargetKey: 'calcium',
         nutrientTargetValue: expect.any(Number),
         ratioPercent: null,
@@ -3889,7 +3890,6 @@ describe('RecipeDesignerService', () => {
         ],
       }),
     );
-    expect(supplementItem).not.toHaveProperty('exampleWeight');
     expect(supplementItem.nutrientTargetValue).toBe(expectedTargetValue);
     expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
       expectedTargetValue,

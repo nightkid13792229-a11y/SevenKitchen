@@ -3387,7 +3387,7 @@ export class RecipeDesignerService {
         : this.findAssessedRatio(assessment, item.id),
       ...nutrientTargetData,
       sortOrder: item.sortOrder,
-      ...(isSupplement ? {} : { exampleWeight: item.weightG }),
+      exampleWeight: item.weightG,
     };
   }
 

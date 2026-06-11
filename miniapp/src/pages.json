@@ -80,6 +80,12 @@
       }
     },
     {
+      "path": "pages/order-shipping-notice/index",
+      "style": {
+        "navigationBarTitleText": "物流与食用提醒"
+      }
+    },
+    {
       "path": "pages/cart/index",
       "style": {
         "navigationBarTitleText": "购物车"

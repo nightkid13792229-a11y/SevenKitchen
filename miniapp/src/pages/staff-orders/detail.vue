@@ -414,11 +414,27 @@
         <text class="address-lock-hint">切换后订单会绑定到新狗狗；如已支付，请同时确认规格和差价。</text>
       </view>
     </view>
+
+    <view v-if="showShippingShareFallback" class="shipping-share-fallback">
+      <text class="shipping-share-title">发货信息已保存</text>
+      <text class="shipping-share-copy">如顾客未收到自动提醒，可手动转发物流与食用提醒。</text>
+      <view class="shipping-share-actions">
+        <button
+          class="shipping-share-btn"
+          open-type="share"
+          data-share-type="shipping-notice"
+        >
+          转发给用户
+        </button>
+        <button class="shipping-share-cancel" @tap="showShippingShareFallback = false">稍后</button>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
@@ -563,6 +579,10 @@ const showShippingModal = ref(false)
 const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
 const isShipping = ref(false)
+const showShippingShareFallback = ref(false)
+const shippedShareOrderId = ref('')
+const shippedShareTitle = ref('SevenKitchen 已发货')
+const shippedShareImage = ref('')
 const amountVisible = ref(false)
 const amountDraft = ref('')
 const amountReason = ref('')
@@ -1078,6 +1098,10 @@ async function confirmShipping() {
         trackingNumber: tracking,
       },
     })
+    shippedShareOrderId.value = orderId
+    shippedShareTitle.value = `SevenKitchen 已发货｜${carriers[selectedCarrierIndex.value].name} ${tracking}`
+    shippedShareImage.value = order.value.firstItem?.recipeSnapshot?.coverImageUrl || ''
+    showShippingShareFallback.value = true
     try {
       await request({
         url: `/staff/shipping/orders/${orderId}/wechat-shipping-upload`,
@@ -1107,6 +1131,22 @@ async function confirmShipping() {
     isShipping.value = false
   }
 }
+
+onShareAppMessage((event: any) => {
+  const isShippingNotice = event?.target?.dataset?.shareType === 'shipping-notice'
+  if (isShippingNotice && shippedShareOrderId.value) {
+    return {
+      title: shippedShareTitle.value,
+      path: `/pages/order-shipping-notice/index?orderId=${shippedShareOrderId.value}`,
+      imageUrl: shippedShareImage.value,
+    }
+  }
+
+  return {
+    title: 'SevenKitchen 后台订单',
+    path: `/pages/staff-orders/detail?id=${orderId.value}`,
+  }
+})
 
 function openAmountPanel() {
   if (!order.value || !canAdjustAmount.value) return

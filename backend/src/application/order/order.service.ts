@@ -72,6 +72,7 @@ import {
 } from '../recipe/preparation-method-text.util';
 import { OrderSourcePlanService } from './order-source-plan.service';
 import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-source-plan';
+import { ShippingNotificationService } from '../shipping/shipping-notification.service';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -304,6 +305,8 @@ export class OrderService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly searchGovernanceService?: SearchGovernanceService,
+    @Optional()
+    private readonly shippingNotificationService?: ShippingNotificationService,
   ) {}
 
   private async loadPreparationMethodNameMap(
@@ -2617,7 +2620,23 @@ export class OrderService {
       { trackingNumber, carrierCode },
     );
 
+    await this.sendShippingNotificationSafely(savedOrder.id);
+
     return savedOrder;
+  }
+
+  private async sendShippingNotificationSafely(orderId: string): Promise<void> {
+    if (!this.shippingNotificationService) return;
+
+    try {
+      await this.shippingNotificationService.sendForOrder(orderId);
+    } catch (error) {
+      this.logger.error(
+        `[ShippingNotification] Failed to send notification for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /**

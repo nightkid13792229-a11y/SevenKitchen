@@ -9,6 +9,7 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
@@ -25,6 +26,10 @@ import {
   WechatShippingUploadService,
   WechatSpecialShippingReportResult,
 } from './wechat-shipping-upload.service';
+import {
+  ShippingNotificationResult,
+  ShippingNotificationService,
+} from './shipping-notification.service';
 
 export interface OrderReadyForShipmentDto {
   id: string;
@@ -45,6 +50,7 @@ export interface OrderReadyForShipmentDto {
 export interface MarkOrderAsShippedResult {
   order: Order;
   wechatShippingUpload: WechatShippingUploadResult;
+  shippingNotification: ShippingNotificationResult;
 }
 
 export interface MarkOrderAsShippedDto {
@@ -62,6 +68,8 @@ export class ShippingFulfillmentService {
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     private readonly wechatShippingUploadService: WechatShippingUploadService,
+    @Optional()
+    private readonly shippingNotificationService?: ShippingNotificationService,
   ) {}
 
   /**
@@ -166,6 +174,9 @@ export class ShippingFulfillmentService {
           actor,
           actorId,
         ),
+        shippingNotification: await this.sendShippingNotificationSafely(
+          savedOrder.id,
+        ),
       };
     }
 
@@ -173,14 +184,46 @@ export class ShippingFulfillmentService {
       `Order ${orderId} marked as shipped with tracking number ${dto.trackingNumber} (carrier: ${dto.carrierCode})`,
     );
 
+    const wechatShippingUpload = await this.uploadWechatShippingInfoSafely(
+      reloadedOrder.id,
+      actor,
+      actorId,
+    );
+    const shippingNotification = await this.sendShippingNotificationSafely(
+      reloadedOrder.id,
+    );
+
     return {
       order: reloadedOrder,
-      wechatShippingUpload: await this.uploadWechatShippingInfoSafely(
-        reloadedOrder.id,
-        actor,
-        actorId,
-      ),
+      wechatShippingUpload,
+      shippingNotification,
     };
+  }
+
+  private async sendShippingNotificationSafely(
+    orderId: string,
+  ): Promise<ShippingNotificationResult> {
+    if (!this.shippingNotificationService) {
+      return {
+        success: false,
+        skipped: true,
+        message: '发货订阅通知服务未启用',
+      };
+    }
+
+    try {
+      return await this.shippingNotificationService.sendForOrder(orderId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `[ShippingNotification] Failed to send notification for order ${orderId}: ${message}`,
+      );
+      return {
+        success: false,
+        skipped: false,
+        message,
+      };
+    }
   }
 
   async uploadWechatShippingInfo(

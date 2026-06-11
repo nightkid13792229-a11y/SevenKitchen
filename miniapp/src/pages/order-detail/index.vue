@@ -256,6 +256,22 @@
         </view>
       </view>
 
+      <view
+        v-if="showShippingNotificationOptIn"
+        class="section shipping-notification-section"
+      >
+        <view class="section-title">发货提醒</view>
+        <text class="shipping-notification-copy">
+          发货后自动提醒你快递公司、运单号和食用说明。
+        </text>
+        <button
+          class="shipping-notification-button"
+          @tap="subscribeShippingNotification"
+        >
+          开启发货提醒
+        </button>
+      </view>
+
       <view v-if="orderRefundStatus" class="section refund-status-section">
         <view class="section-title">退款进度</view>
         <view
@@ -925,18 +941,21 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { onShow, onShareAppMessage } from '@dcloudio/uni-app';
-import { request } from '../../utils/api';
+import { request, requestSubscriptionMessage } from '../../utils/api';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   createOrderCustomerAddress,
   createWechatPayment,
+  getShippingNotificationPreference,
   getAdminOrderDetail,
   getAdminOrderFinancialSummary,
   getOrderFinancialSummary,
   listOrderCustomerAddresses,
+  recordShippingNotificationSubscription,
   updateAdminOrderRemark,
   updateOrderCustomerAddress,
   type CustomerOrderFinancialSummary,
+  type ShippingNotificationPreference,
   type StaffOrderAddress,
   type WechatPaymentResult,
 } from '../../api/orders';
@@ -1100,6 +1119,9 @@ const customerServiceConfig = ref<CustomerServiceConfig>({
   orderDetailMerchantNote: null,
 });
 const paying = ref(false);
+const shippingNotificationPreference =
+  ref<ShippingNotificationPreference | null>(null);
+const requestingShippingNotification = ref(false);
 const paymentRemainingSeconds = ref<number | null>(null);
 let paymentTimer: ReturnType<typeof setInterval> | null = null;
 let addressModalClosingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1140,6 +1162,17 @@ const paymentExpired = computed(() => {
     order.value?.paymentAutoCloseEnabled === true &&
     paymentRemainingSeconds.value !== null &&
     paymentRemainingSeconds.value <= 0
+  );
+});
+
+const showShippingNotificationOptIn = computed(() => {
+  if (isStaffOrAdmin.value || !order.value || !shippingNotificationPreference.value) {
+    return false;
+  }
+  return (
+    shippingNotificationPreference.value.canPrompt &&
+    shippingNotificationPreference.value.subscriptionStatus !== 'ACCEPTED' &&
+    ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'].includes(order.value.status)
   );
 });
 
@@ -1749,6 +1782,7 @@ async function loadOrderDetail() {
       prefetchShareToken();
       prefetchSharePhotoImage();
       fetchOrderFinancialSummary();
+      fetchShippingNotificationPreference();
     }
   } catch (error) {
     console.error('Load order detail error:', error);
@@ -1772,6 +1806,77 @@ async function fetchOrderFinancialSummary() {
   } catch (error) {
     console.warn('[Order Detail] Failed to load financial summary:', error);
     orderFinancialSummary.value = null;
+  }
+}
+
+async function fetchShippingNotificationPreference() {
+  if (!orderId.value || isStaffOrAdmin.value) {
+    shippingNotificationPreference.value = null;
+    return;
+  }
+
+  try {
+    const res = await getShippingNotificationPreference(orderId.value);
+    shippingNotificationPreference.value = res.code === 0 && res.data ? res.data : null;
+  } catch (error) {
+    console.warn('[Order Detail] Load shipping notification preference failed:', error);
+    shippingNotificationPreference.value = null;
+  }
+}
+
+function getShippingNotificationPromptKey() {
+  return `shipping_notice_prompted_${orderId.value}`;
+}
+
+async function maybePromptShippingNotificationAfterPayment() {
+  await fetchShippingNotificationPreference();
+  const preference = shippingNotificationPreference.value;
+  if (!preference?.canPrompt || preference.subscriptionStatus !== 'PENDING') {
+    return;
+  }
+
+  const promptedKey = getShippingNotificationPromptKey();
+  if (uni.getStorageSync(promptedKey)) {
+    return;
+  }
+
+  uni.setStorageSync(promptedKey, true);
+  uni.showModal({
+    title: '订阅发货通知',
+    content: '发货后自动提醒你快递公司、运单号和食用说明。',
+    confirmText: '订阅',
+    cancelText: '暂不',
+    success: async (res) => {
+      if (res.confirm) {
+        await subscribeShippingNotification();
+      }
+    },
+  });
+}
+
+async function subscribeShippingNotification() {
+  const preference = shippingNotificationPreference.value;
+  if (!preference?.templateId || requestingShippingNotification.value) {
+    if (!preference?.templateId) {
+      uni.showToast({ title: '发货通知暂未配置', icon: 'none' });
+    }
+    return;
+  }
+
+  requestingShippingNotification.value = true;
+  try {
+    const accepted = await requestSubscriptionMessage(preference.templateId);
+    await recordShippingNotificationSubscription(
+      orderId.value,
+      accepted ? 'ACCEPTED' : 'REJECTED',
+    );
+    await fetchShippingNotificationPreference();
+    uni.showToast({
+      title: accepted ? '已开启发货提醒' : '未开启发货提醒',
+      icon: accepted ? 'success' : 'none',
+    });
+  } finally {
+    requestingShippingNotification.value = false;
   }
 }
 
@@ -2680,6 +2785,7 @@ async function payOrder() {
     });
 
     await loadOrderDetail();
+    await maybePromptShippingNotificationAfterPayment();
   } catch (error: any) {
     console.error('Payment error:', error);
     const errorMessage = error?.errMsg?.includes('cancel')

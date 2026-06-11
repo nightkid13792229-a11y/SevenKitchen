@@ -131,6 +131,25 @@ export interface StaffOrderPackagePlanUpdateResult {
   };
 }
 
+export interface ShippingNotificationPreference {
+  orderId: string;
+  templateId: string;
+  subscriptionStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  sendStatus: 'NOT_SENT' | 'SENT' | 'FAILED' | 'SKIPPED';
+  canPrompt: boolean;
+}
+
+export interface CustomerShippingNotice {
+  orderId: string;
+  carrierCode: string;
+  carrierName: string;
+  trackingNumber: string;
+  imageUrl: string;
+  cookingTips: string;
+  storageTips: string;
+  damageReminder: string;
+}
+
 /**
  * 获取后台订单详情
  */
@@ -172,6 +191,35 @@ export function createWechatPayment(orderId: string) {
   return request<WechatPaymentResult>({
     url: `/orders/${orderId}/wechat-pay`,
     method: 'POST',
+  });
+}
+
+export function getShippingNotificationPreference(orderId: string) {
+  return request<ShippingNotificationPreference>({
+    url: `/orders/${orderId}/shipping-notification/preference`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function recordShippingNotificationSubscription(
+  orderId: string,
+  choice: 'ACCEPTED' | 'REJECTED',
+) {
+  return request({
+    url: `/orders/${orderId}/shipping-notification/subscription`,
+    method: 'POST',
+    quiet: true,
+    suppressErrorToast: true,
+    data: { choice },
+  });
+}
+
+export function getCustomerShippingNotice(orderId: string) {
+  return request<CustomerShippingNotice>({
+    url: `/orders/${orderId}/shipping-notice`,
+    method: 'GET',
   });
 }
 

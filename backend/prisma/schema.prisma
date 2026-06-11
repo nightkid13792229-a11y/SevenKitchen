@@ -88,6 +88,28 @@ model PhotoShareToken {
   @@map("photo_share_token")
 }
 
+model OrderShippingNotification {
+  id                 String                                      @id @default(uuid()) @map("id")
+  orderId            String                                      @unique @map("order_id")
+  customerId         String                                      @map("customer_id")
+  templateId         String?                                     @map("template_id") @db.VarChar(120)
+  subscriptionStatus OrderShippingNotificationSubscriptionStatus @default(PENDING) @map("subscription_status")
+  subscribedAt       DateTime?                                   @map("subscribed_at")
+  declinedAt         DateTime?                                   @map("declined_at")
+  lastPromptedAt     DateTime?                                   @map("last_prompted_at")
+  sendStatus         OrderShippingNotificationSendStatus         @default(NOT_SENT) @map("send_status")
+  sentAt             DateTime?                                   @map("sent_at")
+  msgid              String?                                     @map("msgid") @db.VarChar(120)
+  errorMessage       String?                                     @map("error_message")
+  createdAt          DateTime                                    @default(now()) @map("created_at")
+  updatedAt          DateTime                                    @updatedAt @map("updated_at")
+
+  @@index([customerId])
+  @@index([subscriptionStatus])
+  @@index([sendStatus])
+  @@map("order_shipping_notification")
+}
+
 model RecipeShareToken {
   id        String   @id @default(uuid()) @map("id")
   recipeId  String   @map("recipe_id")
@@ -1564,6 +1586,19 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   BANNED
+}
+
+enum OrderShippingNotificationSubscriptionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum OrderShippingNotificationSendStatus {
+  NOT_SENT
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum AccountMigrationStatus {

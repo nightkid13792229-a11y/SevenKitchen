@@ -13,6 +13,7 @@ import { Order, OrderItem } from 'src/domain/order';
 import { OrderStatus, OrderType } from 'src/domain';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
 import { WechatShippingUploadService } from 'src/application/shipping/wechat-shipping-upload.service';
+import { ShippingNotificationService } from 'src/application/shipping/shipping-notification.service';
 
 describe('ShippingFulfillmentService - Phase 8.14', () => {
   let service: ShippingFulfillmentService;
@@ -48,6 +49,13 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       message: 'Skipped in unit test',
     }),
   };
+  const mockShippingNotificationService = {
+    sendForOrder: jest.fn().mockResolvedValue({
+      success: true,
+      skipped: false,
+      message: '发货订阅通知已发送',
+    }),
+  };
 
   beforeEach(async () => {
     mockOrderRepository.findById.mockReset();
@@ -60,6 +68,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     mockWechatShippingUploadService.listPendingUploads.mockClear();
     mockWechatShippingUploadService.reportPendingSpecialOrders.mockClear();
     mockWechatShippingUploadService.reportSpecialOrderForOrder.mockClear();
+    mockShippingNotificationService.sendForOrder.mockClear();
 
     // Suppress console logs during tests
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -80,6 +89,10 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
         {
           provide: WechatShippingUploadService,
           useValue: mockWechatShippingUploadService,
+        },
+        {
+          provide: ShippingNotificationService,
+          useValue: mockShippingNotificationService,
         },
       ],
     }).compile();
@@ -243,6 +256,33 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       expect(result.order.carrierCode).toBe('SF');
       expect(result.order.shippedAt).toBeInstanceOf(Date);
       expect(result.wechatShippingUpload.success).toBe(true);
+    });
+
+    it('should trigger the customer shipping subscription notification after successful shipment', async () => {
+      // Arrange
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
+      const shippedOrder = createMockOrder(
+        'order-1',
+        OrderStatus.SHIPPED,
+        'SF1234567890',
+        'SF',
+        new Date(),
+      );
+      orderRepository.findById
+        .mockResolvedValueOnce(order)
+        .mockResolvedValueOnce(shippedOrder);
+      orderRepository.save.mockResolvedValue(shippedOrder);
+
+      // Act
+      await service.markOrderAsShipped('order-1', {
+        trackingNumber: 'SF1234567890',
+        carrierCode: 'SF',
+      });
+
+      // Assert
+      expect(mockShippingNotificationService.sendForOrder).toHaveBeenCalledWith(
+        'order-1',
+      );
     });
 
     it('should throw NotFoundException when order not found', async () => {

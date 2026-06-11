@@ -65,6 +65,10 @@ import { AuthGuard, CurrentUser } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth';
 import { resolveOrderProductionPhotos } from './order-production-photos';
+import {
+  ShippingNotificationService,
+  type ShippingNotificationChoice,
+} from '../../application/shipping/shipping-notification.service';
 
 @ApiTags('Orders')
 @Controller('api/v1/orders')
@@ -80,6 +84,7 @@ export class OrdersController {
     private readonly dogRepository: DogRepository,
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
+    private readonly shippingNotificationService: ShippingNotificationService,
   ) {}
 
   @Post()
@@ -267,6 +272,82 @@ export class OrdersController {
       }
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get(':orderId/shipping-notification/preference')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get customer shipping notification preference' })
+  @ApiSecurity('X-Customer-Id')
+  async getShippingNotificationPreference(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const preference =
+        await this.shippingNotificationService.getCustomerPreference(
+          orderId,
+          user.customerId,
+        );
+      return ApiResponseDto.success(preference);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post(':orderId/shipping-notification/subscription')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Record customer shipping notification choice' })
+  @ApiSecurity('X-Customer-Id')
+  async recordShippingNotificationSubscription(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: RequestUser,
+    @Body() body: { choice: ShippingNotificationChoice },
+  ) {
+    const choice = body.choice;
+    if (choice !== 'ACCEPTED' && choice !== 'REJECTED') {
+      return ApiResponseDto.error(400, 'Invalid subscription choice');
+    }
+
+    try {
+      const result = await this.shippingNotificationService.recordCustomerChoice(
+        orderId,
+        user.customerId,
+        choice,
+      );
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get(':orderId/shipping-notice')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get customer shipping notice and cooking tips' })
+  @ApiSecurity('X-Customer-Id')
+  async getShippingNotice(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const notice =
+        await this.shippingNotificationService.getCustomerShippingNotice(
+          orderId,
+          user.customerId,
+        );
+      return ApiResponseDto.success(notice);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
       }
       throw error;
     }

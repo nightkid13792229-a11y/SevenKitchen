@@ -11,8 +11,7 @@
     @touchmove="lockEditorScrollWhileItemDragging"
   >
     <view v-if="draftSeriesLifeStage" class="series-context-block">
-      <text class="series-context-title">{{ draftName || '未命名食谱' }} · {{ draftSeriesStageLabel }}</text>
-      <text class="series-context-meta">{{ assessmentStandardContextLabel }}</text>
+      <text class="series-context-title">{{ recipeSeriesDisplayName }}</text>
     </view>
 
     <view class="section">
@@ -46,6 +45,14 @@
           </button>
         </view>
         <button
+          v-if="canRevertToLatestOfficial"
+          class="link-btn revert-official-btn"
+          :disabled="revertingToLatestOfficial || loading || autoSaveStatus === 'saving'"
+          @tap.stop="confirmRevertToLatestOfficial"
+        >
+          {{ revertingToLatestOfficial ? '恢复中' : '恢复正式版' }}
+        </button>
+        <button
           v-if="items.length > 1"
           class="link-btn sort-mode-btn"
           :class="{ active: reorderMode }"
@@ -55,7 +62,11 @@
         </button>
       </view>
 
-      <view v-if="redirectingToEditableDraft" class="state-block">
+      <view v-if="revertingToLatestOfficial" class="state-block">
+        <text>正在恢复正式版本...</text>
+      </view>
+
+      <view v-else-if="redirectingToEditableDraft" class="state-block">
         <text>正在进入可编辑版本...</text>
       </view>
 
@@ -137,7 +148,7 @@
         </view>
       </view>
 
-      <view v-if="!loading && !redirectingToEditableDraft && !reorderMode" class="ingredient-list-actions">
+      <view v-if="!loading && !redirectingToEditableDraft && !revertingToLatestOfficial && !reorderMode" class="ingredient-list-actions">
         <button class="link-btn secondary-add-btn" @tap="openIngredientPicker()">添加原料</button>
       </view>
     </view>
@@ -314,7 +325,7 @@
             <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
             <button
               class="scenario-switch-btn"
-              :disabled="scenarioSwitching || redirectingToEditableDraft"
+              :disabled="scenarioSwitching || redirectingToEditableDraft || revertingToLatestOfficial"
               @tap.stop="openScenarioSwitchSheet"
             >
               切换
@@ -454,7 +465,7 @@
     <view v-if="showBottomPublishBar" class="bottom-publish-bar" @tap.stop>
       <button
         class="primary-btn bottom-publish-btn"
-        :disabled="loading || redirectingToEditableDraft || autoSaveStatus === 'saving'"
+        :disabled="loading || redirectingToEditableDraft || revertingToLatestOfficial || autoSaveStatus === 'saving'"
         @tap="goToNutritionReport"
       >
         查看营养报告
@@ -649,7 +660,6 @@ import {
   type IngredientOptionListQuery,
   type IngredientOptionListResponse,
   type RecipeDesignerIngredientOption,
-  type RecipeDesignerSeriesStage,
 } from '../../api/recipe-designer'
 import {
   buildAssessmentCategories,
@@ -799,8 +809,8 @@ function getSafeAreaBottomPx(systemInfo: any) {
 const draftId = ref('')
 const draftName = ref('')
 const draftSeriesId = ref('')
+const draftSeriesName = ref('')
 const draftSeriesLifeStage = ref('')
-const availableSeriesStages = ref<RecipeDesignerSeriesStage[]>([])
 const scenario = ref<FediafDogScenario>('ADULT_MER_110')
 const items = ref<DesignerItem[]>([])
 const assessment = ref<any>(null)
@@ -840,6 +850,7 @@ const ingredientPickerVisible = ref(false)
 const ingredientLoading = ref(false)
 const addingItem = ref(false)
 const redirectingToEditableDraft = ref(false)
+const revertingToLatestOfficial = ref(false)
 const reorderMode = ref(false)
 const draggingItemId = ref('')
 const dragTargetIndex = ref(-1)
@@ -887,6 +898,7 @@ const assessmentListVisible = computed(
 const showBottomPublishBar = computed(() => !assessmentListVisible.value)
 
 const autoSaveStatusLabel = computed(() => {
+  if (revertingToLatestOfficial.value) return '恢复正式版本中'
   if (redirectingToEditableDraft.value) return '进入可编辑版本中'
   if (loading.value) return '加载中'
   if (autoSaveStatus.value === 'saving') return '保存中'
@@ -957,6 +969,10 @@ const isCustomerMode = computed(() => {
 
 const canCreateRevisionDraft = computed(() => !isCustomerMode.value)
 
+const canRevertToLatestOfficial = computed(() => {
+  return Boolean(draftSeriesId.value && draftSeriesLifeStage.value && !isCustomerMode.value)
+})
+
 const showSupplementLibraryTip = computed(() => {
   return (
     canCreateSupplementOption.value &&
@@ -1022,7 +1038,13 @@ const detailModalRangeStatusClass = computed(() => {
 const detailContributionUpdating = computed(() => Boolean(updatingDetailContributionItemId.value))
 
 const historyControlsDisabled = computed(() => {
-  return redirectingToEditableDraft.value || loading.value || autoSaveStatus.value === 'saving' || historyActionRunning.value
+  return (
+    redirectingToEditableDraft.value ||
+    revertingToLatestOfficial.value ||
+    loading.value ||
+    autoSaveStatus.value === 'saving' ||
+    historyActionRunning.value
+  )
 })
 
 const canUndoRecipeDesignerHistory = computed(() => {
@@ -1036,30 +1058,32 @@ const canRedoRecipeDesignerHistory = computed(() => {
 const canConfirmScenarioSwitch = computed(() => {
   return (
     !redirectingToEditableDraft.value &&
+    !revertingToLatestOfficial.value &&
     !scenarioSwitching.value &&
     pendingScenario.value !== scenario.value
   )
 })
 
-const assessmentStandardContextLabel = computed(() => {
-  const standardName = cleanAssessmentStandardName(
+const assessmentStandardName = computed(() =>
+  cleanAssessmentStandardName(
     assessment.value?.standardName || assessment.value?.nutritionStandardName || 'FEDIAF 2025',
-  )
+  ),
+)
+
+const assessmentStandardContextLabel = computed(() => {
   const lifeStage = getScenarioLabel(assessment.value?.scenario || scenario.value)
-  return `当前草稿评估结果 · ${standardName} · ${lifeStage}`
+  return `${assessmentStandardName.value} · ${lifeStage}`
 })
 
-const draftSeriesStageLabel = computed(() => {
-  const matchedStage = availableSeriesStages.value.find(
-    (stage) =>
-      stage.lifeStage === draftSeriesLifeStage.value ||
-      stage.scenario === scenario.value,
-  )
-  return matchedStage?.label || getScenarioLabel(scenario.value)
+const recipeSeriesDisplayName = computed(() => {
+  const seriesName = draftSeriesName.value.trim()
+  if (seriesName) return seriesName
+  if (draftSeriesId.value) return '未命名食谱'
+  return draftName.value || '未命名食谱'
 })
 
 const canConfirmAddIngredient = computed(() => {
-  if (redirectingToEditableDraft.value) return false
+  if (redirectingToEditableDraft.value || revertingToLatestOfficial.value) return false
   if (addingItem.value || !selectedIngredientOption.value || !selectedNutritionProfile.value) return false
   const weightG = Number(newItemWeightInput.value)
   return Number.isFinite(weightG) && weightG > 0
@@ -1129,15 +1153,7 @@ async function loadDraft() {
         return
       }
 
-      draftName.value = String(draft.name || '')
-      draftSeriesId.value = String(draft.seriesId || '')
-      draftSeriesLifeStage.value = String(draft.seriesLifeStage || '')
-      availableSeriesStages.value = Array.isArray(draft.seriesStages) ? draft.seriesStages : []
-      scenario.value = getDraftScenario(draft)
-      ingredientTypeHints.value = {}
-      items.value = draft.items || []
-      applyCachedAssessmentFromDraft(draft)
-      await hydrateIngredientTypeHintsForItems(items.value)
+      await applyDraftDetail(draft)
     }
     void refreshAssessment({ quiet: true })
   } catch (error) {
@@ -1146,6 +1162,19 @@ async function loadDraft() {
   } finally {
     loading.value = false
   }
+}
+
+async function applyDraftDetail(draft: any) {
+  draftName.value = String(draft.name || '')
+  draftSeriesId.value = String(draft.seriesId || '')
+  draftSeriesName.value = String(draft.series?.name || draft.seriesName || '')
+  draftSeriesLifeStage.value = String(draft.seriesLifeStage || '')
+  scenario.value = getDraftScenario(draft)
+  ingredientTypeHints.value = {}
+  items.value = draft.items || []
+  assessment.value = null
+  applyCachedAssessmentFromDraft(draft)
+  await hydrateIngredientTypeHintsForItems(items.value)
 }
 
 function applyCachedAssessmentFromDraft(draft: any) {
@@ -2381,6 +2410,10 @@ function goToNutritionReport() {
     uni.showToast({ title: '缺少草稿ID', icon: 'none' })
     return
   }
+  if (revertingToLatestOfficial.value) {
+    uni.showToast({ title: '正在恢复正式版本', icon: 'none' })
+    return
+  }
   if (autoSaveStatus.value === 'saving') {
     uni.showToast({ title: '正在保存最新修改', icon: 'none' })
     return
@@ -2400,8 +2433,62 @@ function goToNutritionReport() {
   navigateToNutritionReport()
 }
 
+function confirmRevertToLatestOfficial() {
+  if (!draftId.value) {
+    uni.showToast({ title: '缺少草稿ID', icon: 'none' })
+    return
+  }
+  if (revertingToLatestOfficial.value) return
+  if (autoSaveStatus.value === 'saving') {
+    uni.showToast({ title: '正在保存最新修改', icon: 'none' })
+    return
+  }
+
+  uni.showModal({
+    title: '恢复正式版',
+    content: '将撤回当前生命阶段的所有未发布修改，恢复到最新正式版本。',
+    confirmText: '恢复',
+    cancelText: '取消',
+    success: (result: any) => {
+      if (result.confirm) {
+        void revertToLatestOfficial()
+      }
+    },
+  })
+}
+
+async function revertToLatestOfficial() {
+  if (!draftId.value || revertingToLatestOfficial.value) return
+
+  revertingToLatestOfficial.value = true
+  updateNavigationTitle()
+  try {
+    const res: any = await recipeDesignerApi.revertDraftToLatestOfficial(draftId.value)
+    const revertedDraft = res?.data ?? res
+    historyState.value = createRecipeDesignerHistoryState()
+    itemWeightEditBaselines.value = {}
+    closeAssessmentEntryDetail()
+    reorderMode.value = false
+    clearItemDragState()
+    if (revertedDraft) {
+      await applyDraftDetail(revertedDraft)
+    } else {
+      await loadDraft()
+    }
+    autoSaveStatus.value = 'saved'
+    await refreshAssessment({ quiet: true })
+    uni.showToast({ title: '已恢复正式版', icon: 'success' })
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to revert to latest official:', error)
+    uni.showToast({ title: '恢复正式版失败', icon: 'none' })
+  } finally {
+    revertingToLatestOfficial.value = false
+    updateNavigationTitle()
+  }
+}
+
 function navigateToNutritionReport() {
-  const url = `/pages/recipe-designer/publish?id=${encodeURIComponent(draftId.value)}&name=${encodeURIComponent(draftName.value)}`
+  const url = `/pages/recipe-designer/publish?id=${encodeURIComponent(draftId.value)}&name=${encodeURIComponent(recipeSeriesDisplayName.value)}`
   uni.navigateTo({ url })
 }
 
@@ -2917,12 +3004,6 @@ function formatAssessmentNumber(value: unknown) {
   white-space: nowrap;
 }
 
-.series-context-meta {
-  color: #667085;
-  font-size: 23rpx;
-  line-height: 1.4;
-}
-
 .section {
   background: #fff;
   border-radius: 12rpx;
@@ -3017,6 +3098,13 @@ function formatAssessmentNumber(value: unknown) {
   background: #fff;
   border: 1rpx solid #d9d9d9;
   color: #333;
+}
+
+.revert-official-btn {
+  flex-shrink: 0;
+  min-width: 150rpx;
+  border-color: #91caff;
+  color: #1677ff;
 }
 
 .icon-text-btn {

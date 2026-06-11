@@ -152,7 +152,13 @@ const reviewNote = ref('')
 const reportSectionTitleOrder = ['微量元素', '维生素', '氨基酸', '脂肪酸']
 
 const recipeName = computed(() => {
-  return draft.value?.name || routeRecipeName.value || '未命名食谱'
+  return (
+    draft.value?.series?.name ||
+    draft.value?.seriesName ||
+    routeRecipeName.value ||
+    draft.value?.name ||
+    '未命名食谱'
+  )
 })
 
 const standardName = computed(() => {

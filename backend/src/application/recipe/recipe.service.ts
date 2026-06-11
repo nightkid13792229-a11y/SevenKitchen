@@ -9,7 +9,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
 import {
   RecipeStatus,
   RecipeHealthTag,
@@ -18,6 +18,7 @@ import {
 } from '../../domain/recipe/enums';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  RECIPE_SERIES_BUSINESS_STATUS_LABELS,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
 import {
@@ -631,9 +632,22 @@ export class RecipeService {
           (recipe.applicableLifeStages as string[] | undefined) ?? []
         ).includes(lifeStage);
       });
+      const privateCustomRecipe = this.findNewestRecipeByStatus(
+        stageRecipes,
+        RecipeStatus.PRIVATE_CUSTOM,
+      );
+      const publicRecipe = this.findNewestRecipeByStatus(
+        stageRecipes,
+        RecipeStatus.PUBLIC,
+      );
+      const submittedRecipe = this.findNewestRecipeByStatus(
+        stageRecipes,
+        RecipeStatus.DRAFT,
+      );
       const stageRecipe =
-        this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.DRAFT) ??
-        this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.PUBLIC) ??
+        privateCustomRecipe ??
+        submittedRecipe ??
+        publicRecipe ??
         [...stageRecipes].sort((left, right) =>
           this.compareRecipeVersionThenUpdatedAt(right, left),
         )[0];
@@ -646,10 +660,19 @@ export class RecipeService {
         };
       }
 
+      const stageStatus =
+        stageRecipe.status === RecipeStatus.PRIVATE_CUSTOM
+          ? 'PRIVATE_CUSTOM'
+          : stageRecipe.status === RecipeStatus.PUBLIC
+            ? 'PUBLISHED'
+            : stageRecipe.status === RecipeStatus.DRAFT
+              ? 'SUBMITTED'
+              : 'NOT_DESIGNED';
+
       return {
         lifeStage,
         label: SERIES_LIFE_STAGE_LABELS[lifeStage],
-        status: stageRecipe.status as RecipeSeriesStageSummaryDto['status'],
+        status: stageStatus as RecipeSeriesStageSummaryDto['status'],
         recipeVersionId: stageRecipe.id,
         recipeId: stageRecipe.recipeId,
         version: stageRecipe.version,
@@ -685,6 +708,51 @@ export class RecipeService {
 
   private getRecipeTimestamp(value: Date | string): number {
     return value instanceof Date ? value.getTime() : new Date(value).getTime();
+  }
+
+  private async syncSeriesBusinessStatus(
+    seriesId?: string | null,
+  ): Promise<RecipeSeriesBusinessStatus | undefined> {
+    if (!seriesId) {
+      return undefined;
+    }
+
+    const recipes = await this.prisma.recipe.findMany({
+      where: { seriesId },
+      select: { status: true },
+    });
+
+    const businessStatus = recipes.some(
+      (recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM,
+    )
+      ? RecipeSeriesBusinessStatus.PRIVATE_CUSTOM
+      : recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)
+        ? RecipeSeriesBusinessStatus.PUBLIC
+        : RecipeSeriesBusinessStatus.DRAFT;
+
+    await this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data: { businessStatus },
+    });
+
+    return businessStatus;
+  }
+
+  private withSyncedSeriesBusinessStatus<T extends { series?: any | null }>(
+    recipe: T,
+    businessStatus?: RecipeSeriesBusinessStatus,
+  ): T {
+    if (!businessStatus || !recipe.series) {
+      return recipe;
+    }
+
+    return {
+      ...recipe,
+      series: {
+        ...recipe.series,
+        businessStatus,
+      },
+    };
   }
 
   /**
@@ -879,6 +947,14 @@ export class RecipeService {
       });
     }
 
+    const shouldSyncSeriesBusinessStatus =
+      Boolean(existing.seriesId && dto.status) &&
+      (dto.status !== existing.status ||
+        dto.status === RecipeStatus.PRIVATE_CUSTOM);
+    if (shouldSyncSeriesBusinessStatus) {
+      await this.syncSeriesBusinessStatus(existing.seriesId);
+    }
+
     // Update health tag assignments if provided
     if (targetHealthTags !== undefined) {
       // Delete old assignments
@@ -930,6 +1006,8 @@ export class RecipeService {
     await this.prisma.recipe.delete({
       where: { id },
     });
+
+    await this.syncSeriesBusinessStatus(recipe.seriesId);
   }
 
   /**
@@ -971,7 +1049,13 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    return await this.mapToDetailDto(updated);
+    const businessStatus = await this.syncSeriesBusinessStatus(
+      updated.seriesId,
+    );
+
+    return await this.mapToDetailDto(
+      this.withSyncedSeriesBusinessStatus(updated, businessStatus),
+    );
   }
 
   /**
@@ -1006,7 +1090,13 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    return await this.mapToDetailDto(updated);
+    const businessStatus = await this.syncSeriesBusinessStatus(
+      updated.seriesId,
+    );
+
+    return await this.mapToDetailDto(
+      this.withSyncedSeriesBusinessStatus(updated, businessStatus),
+    );
   }
 
   /**
@@ -1196,11 +1286,18 @@ export class RecipeService {
    * Map Recipe entity to Summary DTO
    */
   private mapToSummaryDto(recipe: any): RecipeSummaryResponseDto {
+    const seriesBusinessStatus = recipe.series?.businessStatus ?? undefined;
+
     return {
       id: recipe.id,
       recipeId: recipe.recipeId,
       seriesId: recipe.seriesId || undefined,
       seriesName: recipe.series?.name || undefined,
+      seriesBusinessStatus,
+      seriesBusinessStatusLabel: seriesBusinessStatus
+        ? (RECIPE_SERIES_BUSINESS_STATUS_LABELS[seriesBusinessStatus] ??
+          seriesBusinessStatus)
+        : undefined,
       seriesLifeStage: recipe.seriesLifeStage || undefined,
       seriesLifeStageLabel: recipe.seriesLifeStage
         ? SERIES_LIFE_STAGE_LABELS[

@@ -34,12 +34,10 @@ export interface DesignRecipeDraftPayload {
 
 export type RecipeSeriesStageStatus =
   | 'NOT_DESIGNED'
-  | 'DRAFT'
   | 'MODIFIED'
-  | 'IN_REVIEW'
+  | 'SUBMITTED'
   | 'PUBLISHED'
   | 'PRIVATE_CUSTOM'
-  | 'NEEDS_CHANGES'
 
 export type RecipeDesignerSeriesStatusFilter = 'DRAFT' | 'PUBLIC' | 'PRIVATE_CUSTOM'
 
@@ -61,6 +59,8 @@ export interface RecipeDesignerSeriesStage {
 export interface RecipeDesignerSeriesCard {
   id: string
   name: string
+  businessStatus?: RecipeDesignerSeriesStatusFilter
+  businessStatusLabel?: string
   updatedAt?: string
   publishedStageCount: number
   stages: RecipeDesignerSeriesStage[]
@@ -306,6 +306,8 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}`, method: 'DELETE' }),
   createRevisionDraft: (draftId: string) =>
     request({ url: `/recipe-designer/drafts/${draftId}/revisions`, method: 'POST' }),
+  revertDraftToLatestOfficial: (draftId: string) =>
+    request({ url: `/recipe-designer/drafts/${draftId}/revert-to-latest-official`, method: 'POST' }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>

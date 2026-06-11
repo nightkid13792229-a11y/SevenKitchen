@@ -9,12 +9,16 @@ export type RecipeSeriesLifeStage =
 
 export type RecipeSeriesStageStatus =
   | 'NOT_DESIGNED'
-  | 'DRAFT'
   | 'MODIFIED'
-  | 'IN_REVIEW'
+  | 'SUBMITTED'
   | 'PUBLISHED'
-  | 'PRIVATE_CUSTOM'
-  | 'NEEDS_CHANGES';
+  | 'PRIVATE_CUSTOM';
+
+export const RECIPE_SERIES_BUSINESS_STATUS_LABELS: Record<string, string> = {
+  DRAFT: '草稿',
+  PUBLIC: '已发布',
+  PRIVATE_CUSTOM: '私密定制',
+};
 
 export type FediafDogScenarioForSeries =
   | 'EARLY_GROWTH_REPRODUCTION'

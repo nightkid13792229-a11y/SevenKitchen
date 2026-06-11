@@ -15,6 +15,7 @@ import {
   NutritionFoodCategory,
   NutritionFoodStatus,
   Prisma,
+  RecipeSeriesBusinessStatus,
   RecipeStatus,
   RecipeSeriesStatus,
   UserRole,
@@ -49,6 +50,7 @@ import type {
   CreateRecipeSeriesDto,
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
+  RecipeDesignerSeriesStatusFilter,
   ListRecipeDesignerIngredientOptionsDto,
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
@@ -73,6 +75,7 @@ import { SearchGovernanceService } from '../search-governance/search-governance.
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
+  RECIPE_SERIES_BUSINESS_STATUS_LABELS,
   SERIES_LIFE_STAGE_LABELS,
   mapScenarioToSeriesLifeStage,
   mapSeriesLifeStageToScenario,
@@ -253,6 +256,7 @@ type DesignRecipeWithItems = {
   complianceStatus: unknown;
   assessmentSummary: unknown;
   missingDataReport: unknown;
+  complianceScore?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
   items: DesignRecipeItemWithFood[];
@@ -357,6 +361,7 @@ type RecipeSeriesWorkbenchRecord = {
   id: string;
   name: string;
   status: string;
+  businessStatus?: RecipeSeriesBusinessStatus | string | null;
   createdBy?: string | null;
   deletedAt?: Date | null;
   updatedAt?: Date | string | null;
@@ -369,6 +374,7 @@ type RecipeSeriesWorkbenchRecord = {
     publishedRecipeId?: string | null;
     publishedAt?: Date | null;
     updatedAt?: Date | string | null;
+    items?: unknown[];
   }>;
   recipes: Array<{
     recipeId: string;
@@ -2048,6 +2054,8 @@ export class RecipeDesignerService {
     series: RecipeSeriesWorkbenchRecord,
     _userId: string,
   ) {
+    const businessStatus =
+      series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT;
     const stages = ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
       const designs = series.designs.filter(
         (design) => design.seriesLifeStage === lifeStage,
@@ -2071,10 +2079,8 @@ export class RecipeDesignerService {
         ...statusDesigns,
         ...recipes,
       ]);
-      const recipeStatusCategory = this.resolveSeriesStageRecipeStatusCategory(
-        effectiveDesigns,
-        recipes,
-      );
+      const recipeStatusCategory =
+        this.resolveSeriesStageRecipeStatusCategory(status);
 
       return {
         lifeStage,
@@ -2094,6 +2100,9 @@ export class RecipeDesignerService {
     return {
       id: series.id,
       name: series.name,
+      businessStatus,
+      businessStatusLabel:
+        RECIPE_SERIES_BUSINESS_STATUS_LABELS[businessStatus] ?? businessStatus,
       updatedAt: series.updatedAt,
       publishedStageCount,
       stages,
@@ -2102,39 +2111,29 @@ export class RecipeDesignerService {
 
   private filterSeriesWorkbenchCards<
     T extends {
-      stages: Array<{
-        recipeStatusCategory: RecipeSeriesStageRecipeStatusCategory;
-      }>;
+      businessStatus?: RecipeDesignerSeriesStatusFilter | string | null;
     },
   >(cards: T[], status?: ListRecipeDesignerSeriesDto['status']): T[] {
     if (!status) {
       return cards;
     }
 
-    return cards.filter((card) =>
-      card.stages.some((stage) => stage.recipeStatusCategory === status),
-    );
+    return cards.filter((card) => card.businessStatus === status);
   }
 
   private resolveSeriesStageRecipeStatusCategory(
-    effectiveDesigns: RecipeSeriesWorkbenchRecord['designs'],
-    recipes: RecipeSeriesWorkbenchRecord['recipes'],
+    status: RecipeSeriesStageStatus,
   ): RecipeSeriesStageRecipeStatusCategory {
-    if (
-      recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)
-    ) {
+    if (status === 'PRIVATE_CUSTOM') {
       return 'PRIVATE_CUSTOM';
     }
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
-      return 'DRAFT';
-    }
-    if (effectiveDesigns.length > 0) {
-      return 'DRAFT';
-    }
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
+    if (status === 'PUBLISHED') {
       return 'PUBLIC';
     }
-    return 'NOT_DESIGNED';
+    if (status === 'NOT_DESIGNED') {
+      return 'NOT_DESIGNED';
+    }
+    return 'DRAFT';
   }
 
   private resolveSeriesStageStatus(
@@ -2142,34 +2141,26 @@ export class RecipeDesignerService {
     recipes: RecipeSeriesWorkbenchRecord['recipes'],
   ): RecipeSeriesStageStatus {
     if (
-      effectiveDesigns.some(
-        (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
-      )
-    ) {
-      return 'IN_REVIEW';
-    }
-    if (
-      effectiveDesigns.some(
-        (design) => design.status === DesignRecipeStatus.NEEDS_REVIEW,
-      )
-    ) {
-      return 'NEEDS_CHANGES';
-    }
-    if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
-      return 'DRAFT';
-    }
-    if (effectiveDesigns.length > 0) {
-      return 'MODIFIED';
-    }
-    if (
       recipes.some((recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM)
     ) {
       return 'PRIVATE_CUSTOM';
+    }
+    if (recipes.some((recipe) => recipe.status === RecipeStatus.DRAFT)) {
+      return 'SUBMITTED';
+    }
+    if (effectiveDesigns.some((design) => this.hasDesignRecipeItems(design))) {
+      return 'MODIFIED';
     }
     if (recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)) {
       return 'PUBLISHED';
     }
     return 'NOT_DESIGNED';
+  }
+
+  private hasDesignRecipeItems(
+    design: Pick<DesignRecipeWithItems, 'items'> | { items?: unknown[] },
+  ): boolean {
+    return Array.isArray(design.items) && design.items.length > 0;
   }
 
   private getSeriesStageEffectiveDesigns(
@@ -2623,6 +2614,105 @@ export class RecipeDesignerService {
         },
       } as Prisma.DesignRecipeUncheckedCreateInput,
       include: DESIGN_RECIPE_INCLUDE,
+    });
+  }
+
+  async revertDraftToLatestOfficial(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const draft = await this.loadDraft(id);
+
+    if (!draft.seriesId || !draft.seriesLifeStage) {
+      throw new BadRequestException('只有系列生命阶段草稿可以撤回修改');
+    }
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: draft.seriesId },
+      select: {
+        id: true,
+        status: true,
+        deletedAt: true,
+        createdBy: true,
+      },
+    });
+    if (
+      !series ||
+      series.status !== RecipeSeriesStatus.ACTIVE ||
+      series.deletedAt ||
+      !(await this.isSeriesAccessibleByContext(series, context))
+    ) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
+    if (this.isPublishedDraft(draft)) {
+      throw new BadRequestException('正式版本无需撤回修改');
+    }
+    if (draft.status === DesignRecipeStatus.ARCHIVED) {
+      throw new BadRequestException('归档草稿不能撤回修改');
+    }
+
+    const baseline = (await this.prisma.designRecipe.findFirst({
+      where: {
+        id: { not: draft.id },
+        seriesId: draft.seriesId,
+        seriesLifeStage: draft.seriesLifeStage,
+        OR: [
+          { status: DesignRecipeStatus.PUBLISHED },
+          { publishedRecipeId: { not: null } },
+          { publishedAt: { not: null } },
+        ],
+      },
+      include: DESIGN_RECIPE_INCLUDE,
+      orderBy: [
+        { publishedRecipeVersion: { sort: 'desc', nulls: 'last' } },
+        { updatedAt: 'desc' },
+      ],
+    })) as DesignRecipeWithItems | null;
+
+    if (!baseline) {
+      throw new BadRequestException('没有可撤回到的正式版本');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.designRecipeItem.deleteMany({
+        where: { designRecipeId: draft.id },
+      });
+
+      return tx.designRecipe.update({
+        where: { id: draft.id },
+        data: {
+          status: DesignRecipeStatus.DRAFT,
+          name: baseline.name,
+          fediafDogScenario: baseline.fediafDogScenario,
+          nutritionStandard: baseline.nutritionStandard ?? 'FEDIAF_2025',
+          targetHealthTags: baseline.targetHealthTags,
+          applicableLifeStages: baseline.applicableLifeStages,
+          notes: baseline.notes,
+          totalWeightG: baseline.totalWeightG,
+          energyDensityKcalPerKg: baseline.energyDensityKcalPerKg,
+          calculatedNutrition: this.toJsonValue(baseline.calculatedNutrition),
+          complianceStatus: this.toJsonValue(baseline.complianceStatus),
+          assessmentSummary: this.toJsonValue(baseline.assessmentSummary),
+          missingDataReport: this.toJsonValue(baseline.missingDataReport),
+          complianceScore: baseline.complianceScore ?? 0,
+          isCompliant: baseline.isCompliant,
+          reviewStatus: DesignRecipeReviewStatus.NONE,
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          publishedAt: null,
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+          revisionOfDesignRecipeId: baseline.id,
+          revisionBaseRecipeId: baseline.publishedRecipeId,
+          items: {
+            create: baseline.items.map((item) =>
+              this.toCopiedDesignRecipeItemData(item),
+            ),
+          },
+        },
+        include: DESIGN_RECIPE_INCLUDE,
+      });
     });
   }
 

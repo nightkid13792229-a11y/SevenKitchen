@@ -344,18 +344,20 @@ model Recipe {
 }
 
 model RecipeSeries {
-  id        String             @id @default(uuid()) @map("id")
-  name      String             @map("name") @db.VarChar(200)
-  status    RecipeSeriesStatus @default(ACTIVE) @map("status")
-  deletedAt DateTime?          @map("deleted_at")
-  deletedBy String?            @map("deleted_by")
-  createdBy String?            @map("created_by")
-  createdAt DateTime           @default(now()) @map("created_at")
-  updatedAt DateTime           @updatedAt @map("updated_at")
-  recipes   Recipe[]
-  designs   DesignRecipe[]
+  id             String                     @id @default(uuid()) @map("id")
+  name           String                     @map("name") @db.VarChar(200)
+  status         RecipeSeriesStatus         @default(ACTIVE) @map("status")
+  businessStatus RecipeSeriesBusinessStatus @default(DRAFT) @map("business_status")
+  deletedAt      DateTime?                  @map("deleted_at")
+  deletedBy      String?                    @map("deleted_by")
+  createdBy      String?                    @map("created_by")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+  recipes        Recipe[]
+  designs        DesignRecipe[]
 
   @@index([status])
+  @@index([businessStatus])
   @@index([updatedAt])
   @@map("recipe_series")
 }
@@ -1602,6 +1604,12 @@ enum RecipeStatus {
 enum RecipeSeriesStatus {
   ACTIVE
   DELETED
+}
+
+enum RecipeSeriesBusinessStatus {
+  DRAFT
+  PUBLIC
+  PRIVATE_CUSTOM
 }
 
 enum ProductionBatchStatus {

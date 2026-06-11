@@ -407,6 +407,22 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(result);
   }
 
+  @Post('drafts/:id/revert-to-latest-official')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Revert an editable series stage draft to the latest official version',
+  })
+  async revertDraftToLatestOfficial(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.revertDraftToLatestOfficial(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Post('drafts/:id/publish')
   @UseGuards(StaffGuard)
   @Roles('ADMIN')

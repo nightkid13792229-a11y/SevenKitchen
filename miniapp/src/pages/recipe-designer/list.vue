@@ -42,7 +42,12 @@
       >
         <view class="series-header">
           <view class="series-title-block">
-            <text class="series-name">{{ seriesItem.name || '未命名食谱' }}</text>
+            <view class="series-name-row">
+              <text class="series-name">{{ seriesItem.name || '未命名食谱' }}</text>
+              <text class="series-business-badge" :class="getSeriesBusinessStatusClass(seriesItem)">
+                {{ getSeriesBusinessStatusLabel(seriesItem) }}
+              </text>
+            </view>
             <text class="series-meta">
               {{ formatSeriesMeta(seriesItem) }}
             </text>
@@ -176,20 +181,24 @@ const defaultSeriesStages: RecipeDesignerSeriesStage[] = [
 
 const seriesStageStatusLabels: Record<RecipeSeriesStageStatus, string> = {
   NOT_DESIGNED: '未设计',
-  DRAFT: '草稿',
   MODIFIED: '已修改',
-  IN_REVIEW: '审核中',
+  SUBMITTED: '已提交',
   PUBLISHED: '已发布',
-  PRIVATE_CUSTOM: '私密食谱',
-  NEEDS_CHANGES: '需修改',
+  PRIVATE_CUSTOM: '私密定制',
 }
 
 const statusFilterOptions: Array<{ label: string; value: '' | RecipeDesignerSeriesStatusFilter }> = [
   { label: '全部', value: '' },
   { label: '草稿', value: 'DRAFT' },
   { label: '已发布', value: 'PUBLIC' },
-  { label: '私密食谱', value: 'PRIVATE_CUSTOM' },
+  { label: '私密定制', value: 'PRIVATE_CUSTOM' },
 ]
+
+const seriesBusinessStatusLabels: Record<RecipeDesignerSeriesStatusFilter, string> = {
+  DRAFT: '草稿',
+  PUBLIC: '已发布',
+  PRIVATE_CUSTOM: '私密定制',
+}
 
 const series = ref<RecipeDesignerSeriesCard[]>([])
 const loading = ref(false)
@@ -405,6 +414,16 @@ function formatSeriesMeta(seriesItem: RecipeDesignerSeriesCard) {
     return editedText
   }
   return `${editedText} · 已发布 ${seriesItem.publishedStageCount || 0}/5`
+}
+
+function getSeriesBusinessStatusLabel(seriesItem: RecipeDesignerSeriesCard) {
+  const status = seriesItem.businessStatus
+  if (!status) return seriesBusinessStatusLabels.DRAFT
+  return seriesItem.businessStatusLabel || seriesBusinessStatusLabels[status] || status
+}
+
+function getSeriesBusinessStatusClass(seriesItem: RecipeDesignerSeriesCard) {
+  return `series-business-${seriesItem.businessStatus || 'DRAFT'}`
 }
 
 function getCustomerStageDraftId(stage: RecipeDesignerSeriesStage) {
@@ -803,8 +822,17 @@ function formatDateTime(value?: string) {
   min-width: 0;
 }
 
+.series-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
 .series-name {
   display: block;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: #222;
   font-size: 32rpx;
@@ -812,6 +840,26 @@ function formatDateTime(value?: string) {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.series-business-badge {
+  flex-shrink: 0;
+  padding: 6rpx 12rpx;
+  border-radius: 8rpx;
+  background: #fff7e6;
+  color: #d46b08;
+  font-size: 21rpx;
+  line-height: 1.2;
+}
+
+.series-business-PUBLIC {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.series-business-PRIVATE_CUSTOM {
+  background: #fff1f0;
+  color: #cf1322;
 }
 
 .series-meta {
@@ -916,17 +964,12 @@ function formatDateTime(value?: string) {
   color: #777;
 }
 
-.stage-status-DRAFT {
-  background: #fff7e6;
-  color: #d46b08;
-}
-
 .stage-status-MODIFIED {
   background: #fffbe6;
   color: #ad8b00;
 }
 
-.stage-status-IN_REVIEW {
+.stage-status-SUBMITTED {
   background: #f0f6ff;
   color: #1677ff;
 }
@@ -937,11 +980,6 @@ function formatDateTime(value?: string) {
 }
 
 .stage-status-PRIVATE_CUSTOM {
-  background: #fff1f0;
-  color: #cf1322;
-}
-
-.stage-status-NEEDS_CHANGES {
   background: #fff1f0;
   color: #cf1322;
 }

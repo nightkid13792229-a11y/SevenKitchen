@@ -66,9 +66,41 @@ export interface RecipeDesignerSeriesCard {
   stages: RecipeDesignerSeriesStage[]
 }
 
+export interface RecipeDesignerCustomerSeriesCard {
+  id: string
+  name: string
+  customerDogId?: string | null
+  customerDogName?: string
+  scenario?: FediafDogScenario
+  scenarioLabel?: string
+  primaryDraftId?: string
+  privateRecipeId?: string
+  customerStatus?: 'EMPTY' | 'DRAFT' | 'READY'
+  updatedAt?: string
+  actionAvailability?: {
+    canContinueEditing: boolean
+    canOrder: boolean
+    canGenerateDiy: boolean
+    disabledReason?: string
+  }
+}
+
 export interface CreateRecipeSeriesPayload {
   name: string
   scenario?: FediafDogScenario
+  dogId?: string
+}
+
+export type PrivateRecipeSnapshotTarget = 'ORDER' | 'DIY'
+
+export interface CreatePrivateRecipeSnapshotPayload {
+  target: PrivateRecipeSnapshotTarget
+}
+
+export interface PrivateRecipeSnapshotResponse {
+  recipeId: string
+  dogId?: string
+  targetUrl?: string
 }
 
 export interface RecipeDesignerSeriesListQuery {
@@ -308,6 +340,8 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}/revisions`, method: 'POST' }),
   revertDraftToLatestOfficial: (draftId: string) =>
     request({ url: `/recipe-designer/drafts/${draftId}/revert-to-latest-official`, method: 'POST' }),
+  createPrivateRecipeSnapshot: (draftId: string, data: CreatePrivateRecipeSnapshotPayload) =>
+    request({ url: `/recipe-designer/drafts/${draftId}/private-recipe-snapshot`, method: 'POST', data }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>

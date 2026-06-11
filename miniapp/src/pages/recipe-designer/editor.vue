@@ -10,6 +10,11 @@
     @tap="collapseAssessmentIfOpen"
     @touchmove="lockEditorScrollWhileItemDragging"
   >
+    <view v-if="isCustomerMode && customerDogId" class="customer-dog-context-block">
+      <text class="customer-dog-context-title">为 {{ customerDogName }} 设计</text>
+      <text class="customer-dog-context-meta">{{ recipeSeriesDisplayName }} · {{ assessmentStandardName }}</text>
+    </view>
+
     <view v-if="draftSeriesLifeStage" class="series-context-block">
       <text class="series-context-title">{{ recipeSeriesDisplayName }}</text>
       <view class="series-context-details">
@@ -467,7 +472,25 @@
     </view>
 
     <view v-if="showBottomPublishBar" class="bottom-publish-bar" @tap.stop>
+      <view v-if="customerNextActions" class="customer-next-actions">
+        <button
+          class="primary-btn customer-next-btn"
+          :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'ORDER'"
+          @tap="goToPrivateRecipeTarget('ORDER')"
+        >
+          订购成品
+        </button>
+        <button
+          class="secondary-btn customer-next-btn"
+          :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'DIY'"
+          @tap="goToPrivateRecipeTarget('DIY')"
+        >
+          生成 DIY 制作单
+        </button>
+        <button class="link-btn customer-save-btn" @tap="goBackToRecipeDesignerList">仅保存</button>
+      </view>
       <button
+        v-else
         class="primary-btn bottom-publish-btn"
         :disabled="loading || redirectingToEditableDraft || revertingToLatestOfficial || autoSaveStatus === 'saving'"
         @tap="goToNutritionReport"
@@ -816,9 +839,12 @@ const draftName = ref('')
 const draftSeriesId = ref('')
 const draftSeriesName = ref('')
 const draftSeriesLifeStage = ref('')
+const customerDogId = ref('')
+const customerDogName = ref('')
 const scenario = ref<FediafDogScenario>('ADULT_MER_110')
 const items = ref<DesignerItem[]>([])
 const assessment = ref<any>(null)
+const draftIsCompliant = ref(false)
 const loading = ref(false)
 const autoSaveStatus = ref<'saved' | 'saving' | 'failed'>('saved')
 const activeAutoSaveCount = ref(0)
@@ -870,6 +896,7 @@ const selectedIngredientOption = ref<RecipeDesignerIngredientOption | null>(null
 const selectedNutritionProfile = ref<IngredientNutritionProfileOption | null>(null)
 const newItemWeightInput = ref('')
 const currentUserRole = ref('')
+const privateSnapshotCreatingTarget = ref<'ORDER' | 'DIY' | ''>('')
 const ingredientOptionPage = ref(1)
 const ingredientOptionHasMore = ref(false)
 const ingredientOptionPageSize = 20
@@ -977,6 +1004,25 @@ const canCreateRevisionDraft = computed(() => !isCustomerMode.value)
 const canRevertToLatestOfficial = computed(() => {
   return Boolean(draftSeriesId.value && draftSeriesLifeStage.value && !isCustomerMode.value)
 })
+
+const isCompliant = computed(() => {
+  const status = String(
+    assessment.value?.overallStatus ||
+    assessment.value?.summary?.overallStatus ||
+    assessment.value?.status ||
+    '',
+  ).toUpperCase()
+  if (status) return status === 'COMPLIANT'
+  return draftIsCompliant.value
+})
+
+const canCreatePrivateSnapshot = computed(() =>
+  Boolean(customerDogId.value && isCompliant.value && currentTotalWeightG.value > 0),
+)
+
+const customerNextActions = computed(() =>
+  Boolean(isCustomerMode.value && customerDogId.value),
+)
 
 const showSupplementLibraryTip = computed(() => {
   return (
@@ -1181,6 +1227,12 @@ async function applyDraftDetail(draft: any) {
   draftSeriesId.value = String(draft.seriesId || '')
   draftSeriesName.value = String(draft.series?.name || draft.seriesName || '')
   draftSeriesLifeStage.value = String(draft.seriesLifeStage || '')
+  customerDogId.value = String(draft.customerDogId || draft.series?.customerDogId || '')
+  customerDogName.value = String(draft.customerDogName || draft.series?.dog?.name || draft.dog?.name || (customerDogId.value ? '爱犬' : ''))
+  draftIsCompliant.value = Boolean(
+    draft.isCompliant ||
+    String(draft.assessmentSummary?.overallStatus || '').toUpperCase() === 'COMPLIANT',
+  )
   scenario.value = getDraftScenario(draft)
   ingredientTypeHints.value = {}
   items.value = draft.items || []
@@ -1800,6 +1852,44 @@ function goToSupplementLibrary() {
     ? `?returnTo=editor&draftId=${encodeURIComponent(draftId.value)}`
     : ''
   uni.navigateTo({ url: `/pages/recipe-designer/supplement-library${query}` })
+}
+
+function goBackToRecipeDesignerList() {
+  uni.redirectTo({ url: '/pages/recipe-designer/list' })
+}
+
+async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
+  if (!draftId.value || privateSnapshotCreatingTarget.value) return
+  if (!canCreatePrivateSnapshot.value) {
+    uni.showToast({ title: '请先完成营养评估', icon: 'none' })
+    return
+  }
+
+  privateSnapshotCreatingTarget.value = target
+  try {
+    const snapshotPayload =
+      target === 'DIY'
+        ? { target: 'DIY' as const }
+        : { target: 'ORDER' as const }
+    const res: any = await recipeDesignerApi.createPrivateRecipeSnapshot(draftId.value, snapshotPayload)
+    const data = res?.data ?? res
+    const fallbackDogId = data?.dogId || customerDogId.value
+    const url = data?.targetUrl || (
+      target === 'DIY'
+        ? `/pages/recipe-diy/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+        : `/pages/recipe-order/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+    )
+    if (!data?.recipeId && !data?.targetUrl) {
+      uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+      return
+    }
+    uni.navigateTo({ url })
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to create private recipe snapshot:', error)
+    uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+  } finally {
+    privateSnapshotCreatingTarget.value = ''
+  }
 }
 
 function applyPendingSupplementOptionFromStorage() {
@@ -2995,6 +3085,36 @@ function formatAssessmentNumber(value: unknown) {
   padding-top: 0;
 }
 
+.customer-dog-context-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  margin-bottom: 16rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #dbeafe;
+  border-radius: 8rpx;
+  background: #eef8ff;
+}
+
+.customer-dog-context-title {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-dog-context-meta {
+  overflow: hidden;
+  color: #475569;
+  font-size: 23rpx;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .series-context-block {
   display: flex;
   flex-direction: column;
@@ -3067,6 +3187,10 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .recipe-designer-editor-page.ingredient-picker-active .series-context-block {
+  display: none;
+}
+
+.recipe-designer-editor-page.ingredient-picker-active .customer-dog-context-block {
   display: none;
 }
 
@@ -4483,6 +4607,28 @@ function formatAssessmentNumber(value: unknown) {
   height: 76rpx;
   padding: 0;
   line-height: 76rpx;
+}
+
+.customer-next-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr) 128rpx;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.customer-next-btn,
+.customer-save-btn {
+  width: 100%;
+  height: 76rpx;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  line-height: 76rpx;
+}
+
+.customer-save-btn {
+  border-color: #d9e2ec;
+  color: #475569;
 }
 
 .assessment-category-title {

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 vi.mock('../utils/api', () => ({
   request: vi.fn(),
@@ -23,6 +25,8 @@ import {
 const mockedRequest = vi.mocked(request)
 const uploadFile = vi.fn()
 const getStorageSync = vi.fn(() => 'staff-1')
+const apiSourcePath = resolve(process.cwd(), 'src/api/recipe-designer.ts')
+const apiSource = existsSync(apiSourcePath) ? readFileSync(apiSourcePath, 'utf-8') : ''
 
 vi.stubGlobal('uni', {
   uploadFile,
@@ -171,6 +175,33 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(7, {
       url: `/recipe-designer/series/${seriesId}/stages/HIGH_ACTIVITY_ADULT/duplicate`,
       method: 'POST',
+    })
+  })
+
+  it('keeps customer dog-first series and private snapshot API contracts', () => {
+    expect(apiSource).toContain('dogId?: string')
+    expect(apiSource).toContain('RecipeDesignerCustomerSeriesCard')
+    expect(apiSource).toContain('createPrivateRecipeSnapshot')
+    expect(apiSource).toContain('/private-recipe-snapshot')
+
+    const createPayload = {
+      name: 'Star 的鲜食食谱',
+      dogId: 'dog-1',
+      scenario: 'ADULT_MER_95',
+    }
+
+    recipeDesignerApi.createSeries(createPayload)
+    recipeDesignerApi.createPrivateRecipeSnapshot('draft-1', { target: 'ORDER' })
+
+    expect(mockedRequest).toHaveBeenNthCalledWith(1, {
+      url: '/recipe-designer/series',
+      method: 'POST',
+      data: createPayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, {
+      url: '/recipe-designer/drafts/draft-1/private-recipe-snapshot',
+      method: 'POST',
+      data: { target: 'ORDER' },
     })
   })
 

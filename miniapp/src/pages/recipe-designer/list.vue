@@ -2,7 +2,7 @@
   <view class="recipe-designer-list-page">
     <view class="toolbar">
       <view class="toolbar-title-block">
-        <text class="page-title">食谱设计器</text>
+        <text class="page-title">{{ pageTitle }}</text>
         <text class="page-subtitle">{{ listSubtitle }}</text>
       </view>
       <view class="toolbar-actions">
@@ -25,18 +25,62 @@
       </button>
     </view>
 
+    <view v-if="isCustomerMode" class="customer-dog-filter">
+      <button
+        v-for="option in dogFilterOptions"
+        :key="option.id || 'ALL'"
+        class="dog-filter-btn"
+        :class="{ 'dog-filter-btn-active': selectedDogFilterId === option.id }"
+        @tap="selectDogFilter(option.id)"
+      >
+        {{ option.name }}
+      </button>
+    </view>
+
     <view v-if="loading" class="state-block">
       <text>加载中...</text>
     </view>
 
-    <view v-else-if="series.length === 0" class="state-block">
+    <view v-else-if="visibleSeriesEmpty" class="state-block">
       <text class="empty-title">{{ emptyTitle }}</text>
       <text class="empty-subtitle">{{ emptySubtitle }}</text>
     </view>
 
+    <view v-else-if="isCustomerMode" class="customer-series-list">
+      <view
+        v-for="seriesItem in customerSeriesCards"
+        :key="seriesItem.id"
+        class="customer-recipe-card"
+        @tap="openCustomerRecipeCard(seriesItem)"
+      >
+        <view class="customer-card-main">
+          <view class="customer-card-title-row">
+            <text class="customer-card-name">{{ seriesItem.name || '未命名食谱' }}</text>
+            <text class="customer-status-badge" :class="getCustomerStatusClass(seriesItem)">
+              {{ getCustomerStatusLabel(seriesItem) }}
+            </text>
+          </view>
+          <text class="customer-card-meta">
+            {{ getCustomerCardDogName(seriesItem) }} · {{ getCustomerScenarioLabel(seriesItem) }}
+          </text>
+          <text class="customer-card-meta">最近编辑 {{ formatDateTime(seriesItem.updatedAt) }}</text>
+          <text v-if="seriesItem.actionAvailability?.disabledReason" class="customer-disabled-reason">
+            {{ seriesItem.actionAvailability.disabledReason }}
+          </text>
+        </view>
+        <button
+          class="customer-card-action"
+          :disabled="!seriesItem.primaryDraftId"
+          @tap.stop="openCustomerRecipeCard(seriesItem)"
+        >
+          {{ seriesItem.primaryDraftId ? '继续设计' : '待补充' }}
+        </button>
+      </view>
+    </view>
+
     <view v-else class="series-list">
       <view
-        v-for="seriesItem in series"
+        v-for="seriesItem in internalSeriesCards"
         :key="seriesItem.id"
         class="series-card"
       >
@@ -99,7 +143,44 @@
           <text class="sheet-title">新建食谱</text>
         </view>
 
-        <view class="scenario-section">
+        <view v-if="isCustomerMode" class="customer-create-section">
+          <text class="sheet-label">选择狗狗</text>
+          <view v-if="dogs.length === 0" class="customer-create-empty">
+            <text>请先完善狗狗资料，再开始设计私属食谱。</text>
+          </view>
+          <view v-else class="customer-create-dog-list">
+            <view
+              v-for="dog in dogs"
+              :key="dog.id"
+              class="customer-create-dog-card"
+              :class="{ 'customer-create-dog-card-active': String(dog.id || '') === selectedCreateDogId }"
+              @tap="selectCreateDog(dog.id)"
+            >
+              <view class="customer-create-dog-main">
+                <text class="customer-create-dog-name">{{ dog.name || '未命名狗狗' }}</text>
+                <text class="customer-create-dog-stage">{{ getDogScenarioPreview(dog) }}</text>
+              </view>
+              <text v-if="String(dog.id || '') === selectedCreateDogId" class="customer-create-dog-check">✓</text>
+            </view>
+          </view>
+
+          <view class="inferred-scenario-row">
+            <text class="inferred-scenario-label">确认推导阶段</text>
+            <text class="inferred-scenario-value">{{ inferredScenarioLabel }}</text>
+          </view>
+
+          <view class="recipe-name-field">
+            <text class="sheet-label">食谱名称</text>
+            <input
+              class="recipe-name-input"
+              v-model="recipeNameInput"
+              maxlength="40"
+              placeholder="例如 Star 的鲜食食谱"
+            />
+          </view>
+        </view>
+
+        <view v-else class="scenario-section">
           <text class="sheet-label scenario-section-label">生命阶段</text>
           <view class="scenario-option-list">
             <view
@@ -122,7 +203,7 @@
 
         <view class="sheet-actions">
           <button class="cancel-btn" :disabled="creating" @tap="closeCreateDraftSheet">取消</button>
-          <button class="confirm-btn" :disabled="creating" @tap="createSeries">
+          <button class="confirm-btn" :disabled="!canStartRecipeCreation" @tap="createSeries">
             {{ creating ? '创建中' : '开始设计' }}
           </button>
         </view>
@@ -139,12 +220,25 @@ import {
   FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type FediafDogScenario,
+  type RecipeDesignerCustomerSeriesCard,
   type RecipeDesignerSeriesCard,
   type RecipeDesignerSeriesStage,
   type RecipeDesignerSeriesStatusFilter,
   type RecipeSeriesStageStatus,
 } from '../../api/recipe-designer'
+import { dogApi } from '../../api/dogs'
+import { resolveDogRecipeLifeStage, type DogForLifeStage } from '../../utils/life-stage-match'
 import { getScenarioLabel } from './assessment'
+
+type SeriesListItem = RecipeDesignerSeriesCard | RecipeDesignerCustomerSeriesCard
+
+const scenarioByDogRecipeLifeStage: Record<string, FediafDogScenario> = {
+  PUPPY_UNDER_14_WEEKS: 'EARLY_GROWTH_REPRODUCTION',
+  PUPPY_14_WEEKS_PLUS: 'LATE_GROWTH',
+  LOW_ACTIVITY_ADULT_OR_SENIOR: 'ADULT_MER_95',
+  HIGH_ACTIVITY_ADULT: 'ADULT_MER_110',
+  REPRODUCTION: 'REPRODUCTION',
+}
 
 const defaultSeriesStages: RecipeDesignerSeriesStage[] = [
   {
@@ -200,7 +294,8 @@ const seriesBusinessStatusLabels: Record<RecipeDesignerSeriesStatusFilter, strin
   PRIVATE_CUSTOM: '私密定制',
 }
 
-const series = ref<RecipeDesignerSeriesCard[]>([])
+const series = ref<SeriesListItem[]>([])
+const dogs = ref<any[]>([])
 const loading = ref(false)
 const creating = ref(false)
 const deletingSeriesId = ref('')
@@ -212,6 +307,9 @@ const createSheetVisible = ref(false)
 const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
 const currentUserRole = ref('')
 const selectedSeriesStatusFilter = ref<'' | RecipeDesignerSeriesStatusFilter>('')
+const selectedDogFilterId = ref('')
+const selectedCreateDogId = ref('')
+const recipeNameInput = ref('')
 
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
@@ -229,25 +327,79 @@ const canManageSupplementLibrary = computed(() => !isCustomerMode.value)
 
 const canUseAdminStatusFilter = computed(() => !isCustomerMode.value)
 
+const pageTitle = computed(() =>
+  isCustomerMode.value ? '我的食谱设计' : '食谱设计器',
+)
+
 const listSubtitle = computed(() =>
-  isCustomerMode.value ? '按生命阶段维护通用食谱草稿' : '食谱系列与生命阶段',
+  isCustomerMode.value ? '按狗狗查看私属食谱草稿' : '食谱系列与生命阶段',
 )
 
 const emptyTitle = computed(() =>
-  isCustomerMode.value ? '暂无食谱草稿' : '暂无食谱系列',
+  isCustomerMode.value ? '暂无食谱设计' : '暂无食谱系列',
 )
 
 const emptySubtitle = computed(() =>
-  isCustomerMode.value ? '点击新建食谱开始设计' : '点击新建食谱开始设计',
+  isCustomerMode.value ? '先选择狗狗，再开始设计专属鲜食' : '点击新建食谱开始设计',
 )
+
+const dogFilterOptions = computed(() => [
+  { id: '', name: '全部狗狗' },
+  ...dogs.value.map((dog) => ({
+    id: String(dog.id || ''),
+    name: String(dog.name || '未命名狗狗'),
+  })),
+])
+
+const customerSeriesCards = computed<RecipeDesignerCustomerSeriesCard[]>(() => {
+  if (!isCustomerMode.value) return []
+  return (series.value as RecipeDesignerCustomerSeriesCard[]).filter((item) =>
+    selectedDogFilterId.value ? item.customerDogId === selectedDogFilterId.value : true,
+  )
+})
+
+const internalSeriesCards = computed<RecipeDesignerSeriesCard[]>(() => {
+  return isCustomerMode.value ? [] : (series.value as RecipeDesignerSeriesCard[])
+})
+
+const visibleSeriesEmpty = computed(() =>
+  isCustomerMode.value ? customerSeriesCards.value.length === 0 : internalSeriesCards.value.length === 0,
+)
+
+const inferredScenarioLabel = computed(() =>
+  FEDIAF_DOG_SCENARIO_LABELS[newDraftScenario.value] || getScenarioLabel(newDraftScenario.value),
+)
+
+const canStartRecipeCreation = computed(() => {
+  if (creating.value) return false
+  if (!isCustomerMode.value) return true
+  return Boolean(selectedCreateDogId.value && recipeNameInput.value.trim())
+})
 
 onShow(() => {
   currentUserRole.value = getCurrentUserRole()
   if (isCustomerMode.value) {
     selectedSeriesStatusFilter.value = ''
+    void loadDogsForCustomerMode()
   }
   loadSeries()
 })
+
+async function loadDogsForCustomerMode() {
+  if (!isCustomerMode.value) return
+  try {
+    const res: any = await dogApi.list()
+    const data = res?.data ?? res
+    dogs.value = Array.isArray(data) ? data : data?.items || []
+    if (selectedDogFilterId.value && !dogs.value.some((dog) => String(dog.id || '') === selectedDogFilterId.value)) {
+      selectedDogFilterId.value = ''
+    }
+  } catch (error) {
+    console.error('[RecipeDesignerList] Failed to load dogs:', error)
+    dogs.value = []
+    uni.showToast({ title: '加载狗狗失败', icon: 'none' })
+  }
+}
 
 async function loadSeries() {
   loading.value = true
@@ -273,6 +425,9 @@ function selectSeriesStatusFilter(value: '' | RecipeDesignerSeriesStatusFilter) 
 
 function openCreateDraftSheet() {
   if (creating.value) return
+  if (isCustomerMode.value) {
+    prepareCustomerCreateSheet()
+  }
   createSheetVisible.value = true
 }
 
@@ -286,6 +441,18 @@ function selectScenarioOption(value: FediafDogScenario) {
   newDraftScenario.value = value
 }
 
+function selectDogFilter(dogId: string) {
+  selectedDogFilterId.value = dogId
+}
+
+function selectCreateDog(dogId: string) {
+  if (creating.value) return
+  selectedCreateDogId.value = dogId
+  const dog = dogs.value.find((item) => String(item.id || '') === dogId)
+  newDraftScenario.value = resolveScenarioForDog(dog)
+  recipeNameInput.value = buildDefaultRecipeName(dog)
+}
+
 function getScenarioDescription(value: FediafDogScenario) {
   return FEDIAF_DOG_SCENARIO_DESCRIPTIONS[value] || ''
 }
@@ -295,14 +462,25 @@ async function createSeries() {
 
   creating.value = true
   try {
-    const res: any = await recipeDesignerApi.createSeries({
-      name: '未命名食谱',
+    if (isCustomerMode.value && !selectedCreateDogId.value) {
+      uni.showToast({ title: '请选择狗狗', icon: 'none' })
+      return
+    }
+    if (isCustomerMode.value && !recipeNameInput.value.trim()) {
+      uni.showToast({ title: '请输入食谱名称', icon: 'none' })
+      return
+    }
+
+    const createPayload = {
+      name: isCustomerMode.value ? recipeNameInput.value.trim() : '未命名食谱',
       scenario: newDraftScenario.value,
-    })
+      ...(isCustomerMode.value ? { dogId: selectedCreateDogId.value } : {}),
+    }
+    const res: any = await recipeDesignerApi.createSeries(createPayload)
     const created = res?.data ?? res
     const draftId = extractInitialDraftId(created)
     createSheetVisible.value = false
-    newDraftScenario.value = 'ADULT_MER_110'
+    resetCreateSheetState()
     if (draftId) {
       uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
       return
@@ -325,6 +503,72 @@ function extractInitialDraftId(payload: any) {
     payload?.stages?.find((stage: any) => stage?.draftId)?.draftId ||
     ''
   )
+}
+
+function prepareCustomerCreateSheet() {
+  const firstDogId = selectedCreateDogId.value || selectedDogFilterId.value || String(dogs.value[0]?.id || '')
+  selectedCreateDogId.value = firstDogId
+  const dog = dogs.value.find((item) => String(item.id || '') === firstDogId)
+  newDraftScenario.value = resolveScenarioForDog(dog)
+  recipeNameInput.value = buildDefaultRecipeName(dog)
+}
+
+function resetCreateSheetState() {
+  if (isCustomerMode.value) {
+    selectedCreateDogId.value = ''
+    recipeNameInput.value = ''
+  }
+  newDraftScenario.value = 'ADULT_MER_110'
+}
+
+function resolveScenarioForDog(dog: DogForLifeStage | null | undefined): FediafDogScenario {
+  const recipeLifeStage = resolveDogRecipeLifeStage(dog, [])
+  return recipeLifeStage ? scenarioByDogRecipeLifeStage[recipeLifeStage] || 'ADULT_MER_95' : 'ADULT_MER_95'
+}
+
+function buildDefaultRecipeName(dog?: any) {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${dog?.name || '爱犬'} 的鲜食食谱 ${mm}/${dd}`
+}
+
+function getDogScenarioPreview(dog: any) {
+  return FEDIAF_DOG_SCENARIO_LABELS[resolveScenarioForDog(dog)]
+}
+
+function getCustomerCardDogName(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  if (seriesItem.customerDogName) return seriesItem.customerDogName
+  const dog = dogs.value.find((item) => String(item.id || '') === String(seriesItem.customerDogId || ''))
+  return dog?.name || '爱犬'
+}
+
+function getCustomerScenarioLabel(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  if (seriesItem.scenarioLabel) return seriesItem.scenarioLabel
+  if (seriesItem.scenario) return FEDIAF_DOG_SCENARIO_LABELS[seriesItem.scenario] || getScenarioLabel(seriesItem.scenario)
+  return '待确认阶段'
+}
+
+function getCustomerStatusLabel(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  const labels: Record<string, string> = {
+    EMPTY: '待设计',
+    DRAFT: '设计中',
+    READY: '可继续',
+  }
+  return labels[seriesItem.customerStatus || 'DRAFT'] || '设计中'
+}
+
+function getCustomerStatusClass(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  return `customer-status-${seriesItem.customerStatus || 'DRAFT'}`
+}
+
+function openCustomerRecipeCard(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  const draftId = seriesItem.primaryDraftId
+  if (!draftId) {
+    uni.showToast({ title: '暂无可编辑草稿', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
 }
 
 function getSeriesStages(seriesItem: RecipeDesignerSeriesCard) {
@@ -769,6 +1013,35 @@ function formatDateTime(value?: string) {
   font-weight: 700;
 }
 
+.customer-dog-filter {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+  padding-bottom: 4rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.dog-filter-btn {
+  flex: 0 0 auto;
+  height: 60rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #475569;
+  font-size: 24rpx;
+  line-height: 60rpx;
+}
+
+.dog-filter-btn-active {
+  border-color: #1677ff;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-weight: 700;
+}
+
 .state-block {
   display: flex;
   flex-direction: column;
@@ -794,6 +1067,102 @@ function formatDateTime(value?: string) {
   display: flex;
   flex-direction: column;
   gap: 20rpx;
+}
+
+.customer-series-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.customer-recipe-card {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx;
+  border: 1rpx solid #eef2f7;
+  border-radius: 8rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+}
+
+.customer-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.customer-card-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-status-badge {
+  flex: 0 0 auto;
+  padding: 6rpx 12rpx;
+  border-radius: 8rpx;
+  background: #eef5ff;
+  color: #1677ff;
+  font-size: 21rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.customer-status-EMPTY {
+  background: #f5f5f5;
+  color: #777;
+}
+
+.customer-status-READY {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.customer-card-meta,
+.customer-disabled-reason {
+  display: block;
+  margin-top: 8rpx;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 23rpx;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-disabled-reason {
+  color: #b45309;
+}
+
+.customer-card-action {
+  flex: 0 0 auto;
+  width: 142rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 8rpx;
+  background: #1677ff;
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 64rpx;
+}
+
+.customer-card-action[disabled] {
+  background: #e5e7eb;
+  color: #94a3b8;
 }
 
 .series-card {
@@ -1029,6 +1398,126 @@ function formatDateTime(value?: string) {
   flex-shrink: 0;
   color: #666;
   font-size: 26rpx;
+}
+
+.customer-create-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.customer-create-empty {
+  padding: 24rpx;
+  border-radius: 8rpx;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.customer-create-dog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.customer-create-dog-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 92rpx;
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 8rpx;
+  background: #fbfcfe;
+  box-sizing: border-box;
+}
+
+.customer-create-dog-card-active {
+  border-color: #91caff;
+  background: #eef8ff;
+}
+
+.customer-create-dog-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-create-dog-name,
+.customer-create-dog-stage {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-create-dog-name {
+  color: #222;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.customer-create-dog-stage {
+  margin-top: 6rpx;
+  color: #667085;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
+.customer-create-dog-check {
+  flex: 0 0 auto;
+  color: #1677ff;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.inferred-scenario-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 8rpx;
+  background: #f8fafc;
+}
+
+.inferred-scenario-label {
+  flex: 0 0 auto;
+  color: #667085;
+  font-size: 24rpx;
+}
+
+.inferred-scenario-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-size: 25rpx;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipe-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.recipe-name-input {
+  width: 100%;
+  height: 76rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #dbe4ef;
+  border-radius: 8rpx;
+  background: #fff;
+  color: #111827;
+  font-size: 27rpx;
+  box-sizing: border-box;
 }
 
 .scenario-section {

@@ -63,57 +63,53 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/supplement-library')
   })
 
-  it('supports a customer mode list copy for private life-stage drafts', () => {
+  it('renders ordinary customer dog-first recipe cards and create flow', () => {
     const listCustomerModeBlock = listSource.match(/const isCustomerMode = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
+
+    expect(listSource).toContain('isCustomerMode')
+    expect(listSource).toContain('我的食谱设计')
+    expect(listSource).toContain('customerSeriesCards')
+    expect(listSource).toContain('dogFilterOptions')
+    expect(listSource).toContain('selectedCreateDogId')
+    expect(listSource).toContain('recipeNameInput')
+    expect(listSource).toContain('resolveScenarioForDog')
+    expect(listSource).toContain('dogApi.list')
+    expect(listSource).toContain('dogId: selectedCreateDogId.value')
+    expect(listSource).toContain("name: isCustomerMode.value ? recipeNameInput.value.trim() : '未命名食谱'")
+    expect(listSource).toContain('Star 的鲜食食谱')
+    expect(listSource).toContain('customer-recipe-card')
+    expect(listSource).toContain('customer-dog-filter')
+    expect(listSource).toContain('customer-create-dog-list')
+    expect(listSource).toContain('inferredScenarioLabel')
+    expect(listSource).not.toContain('按生命阶段维护通用食谱草稿')
+    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
+    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
+  })
+
+  it('keeps staff and admin recipe designer on the series plus five life-stage workbench', () => {
     const listSupplementLibraryBlock =
       listSource.match(/const canManageSupplementLibrary = computed\(\(\) => [^\n]+\)/)?.[0] || ''
     const seriesMetaBlock =
       listSource.match(/function formatSeriesMeta[\s\S]*?\n}\n\nfunction getPublishedTemplateStages/)?.[0] || ''
-    const customerSeriesMetaBlock = seriesMetaBlock.match(/if \(isCustomerMode\.value\) \{[\s\S]*?\n  \}/)?.[0] || ''
-    const internalSeriesMetaBlock = seriesMetaBlock.slice(
-      customerSeriesMetaBlock
-        ? seriesMetaBlock.indexOf(customerSeriesMetaBlock) + customerSeriesMetaBlock.length
-        : 0,
-    )
     const openSeriesStageBlock =
       listSource.match(/async function openSeriesStage[\s\S]*?\n}\n\nfunction openStageTemplateSheet/)?.[0] || ''
-    const customerStageDraftBlock =
-      listSource.match(/function getCustomerStageDraftId[\s\S]*?\n}\n\nfunction getStageStatusLabel/)?.[0] || ''
-    const stageStatusLabelBlock =
-      listSource.match(/function getStageStatusLabel[\s\S]*?\n}\n\nfunction getStageStatusClass/)?.[0] || ''
-    const stageStatusClassBlock =
-      listSource.match(/function getStageStatusClass[\s\S]*?\n}\n\nfunction getPublishedTemplateStages/)?.[0] || ''
 
-    expect(listSource).toContain('isCustomerMode')
-    expect(listSource).toContain('按生命阶段维护通用食谱草稿')
-    expect(listSource).toContain('暂无食谱草稿')
-    expect(listSource).toContain('点击新建食谱开始设计')
-    expect(listSource).toContain('v-if="canManageSupplementLibrary"')
-    expect(listSource).toContain('formatSeriesMeta(seriesItem)')
-    expect(listSource).not.toContain('为某只狗设计')
-    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
-    expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
+    expect(listSource).toContain('食谱系列与生命阶段')
+    expect(listSource).toContain('stage-list')
+    expect(listSource).toContain('getSeriesStages(seriesItem)')
+    expect(listSource).toContain('publishedStageCount')
+    expect(listSource).toContain('补剂库')
+    expect(listSource).toContain('复制整个系列')
+    expect(listSource).toContain('复制此生命阶段')
+    expect(listSource).toContain('selectedSeriesStatusFilter')
+    expect(listSource).toContain('PRIVATE_CUSTOM')
     expect(listSupplementLibraryBlock).toContain('!isCustomerMode.value')
     expect(seriesMetaBlock).toContain('if (isCustomerMode.value)')
     expect(seriesMetaBlock).toContain('最近编辑')
-    expect(customerSeriesMetaBlock).toContain('return editedText')
-    expect(customerSeriesMetaBlock).not.toContain('publishedStageCount')
-    expect(customerSeriesMetaBlock).not.toContain('已发布')
-    expect(internalSeriesMetaBlock).toContain('publishedStageCount')
-    expect(internalSeriesMetaBlock).toContain('已发布')
-    expect(listSource).toContain('getStageStatusLabel(stage)')
-    expect(listSource).toContain('getStageStatusClass(stage)')
+    expect(seriesMetaBlock).toContain('publishedStageCount')
+    expect(seriesMetaBlock).toContain('已发布')
     expect(openSeriesStageBlock).toContain('const draftId = getCustomerStageDraftId(stage)')
-    expect(openSeriesStageBlock).toContain('if (draftId)')
-    expect(openSeriesStageBlock).not.toContain('if (stage.draftId)')
-    expect(customerStageDraftBlock).toContain("stage.status === 'PUBLISHED'")
-    expect(customerStageDraftBlock).toContain("return ''")
-    expect(stageStatusLabelBlock).toContain('isCustomerMode.value')
-    expect(stageStatusLabelBlock).toContain("stage.status === 'PUBLISHED'")
-    expect(stageStatusLabelBlock).toContain('seriesStageStatusLabels.NOT_DESIGNED')
-    expect(stageStatusClassBlock).toContain('isCustomerMode.value')
-    expect(stageStatusClassBlock).toContain("stage.status === 'PUBLISHED'")
-    expect(stageStatusClassBlock).toContain("'NOT_DESIGNED'")
+    expect(openSeriesStageBlock).toContain('getPublishedTemplateStages(seriesItem, stage)')
   })
 
   it('loads recipe designer series cards instead of standalone draft cards', () => {
@@ -228,7 +224,7 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('createSeries')
     expect(listSource).toContain('recipeDesignerApi.createSeries')
     expect(listSource).toContain('extractInitialDraftId')
-    expect(listSource).toContain("name: '未命名食谱'")
+    expect(listSource).toContain("name: isCustomerMode.value ? recipeNameInput.value.trim() : '未命名食谱'")
     expect(listSource).not.toContain('recipeDesignerApi.createDraft')
   })
 
@@ -301,7 +297,7 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('name=${encodeURIComponent(recipeSeriesDisplayName.value)}')
   })
 
-  it('starts unnamed draft creation from life stage selection before navigating to the editor', () => {
+  it('starts staff draft creation from life stage selection and customer creation from dog plus recipe name', () => {
     expect(listSource).toContain('createSheetVisible')
     expect(listSource).toContain('newDraftScenario')
     expect(listSource).toContain('生命阶段')
@@ -310,12 +306,14 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('scenario-option-desc')
     expect(listSource).toContain('@tap="selectScenarioOption(option.value)"')
     expect(listSource).toContain('openCreateDraftSheet')
-    expect(listSource).toContain("name: '未命名食谱'")
+    expect(listSource).toContain("name: isCustomerMode.value ? recipeNameInput.value.trim() : '未命名食谱'")
+    expect(listSource).toContain('dogId: selectedCreateDogId.value')
+    expect(listSource).toContain('selectedCreateDogId')
+    expect(listSource).toContain('recipeNameInput')
+    expect(listSource).toContain('inferredScenarioLabel')
     expect(listSource).toContain("{{ creating ? '创建中' : '开始设计' }}")
     expect(listSource).not.toContain('newDraftName')
     expect(listSource).not.toContain('canSubmitNewDraft')
-    expect(listSource).not.toContain('请填写食谱名称')
-    expect(listSource).not.toContain('class="sheet-label">食谱名称')
     expect(listSource).not.toContain('<picker')
     expect(listSource).not.toContain('scenario-chevron')
     expect(listSource).not.toContain('sheet-subtitle')
@@ -341,6 +339,21 @@ describe('recipe designer mobile entry', () => {
     expect(publishSource).toContain('recipeDesignerApi.getDraft(draftId.value)')
     expect(publishSource).toContain('draft.value?.series?.name')
     expect(publishSource).not.toContain('recipeDesignerApi.listDrafts()')
+  })
+
+  it('offers customer next actions from editor and nutrition report without staff-only publishing', () => {
+    expect(editorSource).toContain('customerNextActions')
+    expect(editorSource).toContain('createPrivateRecipeSnapshot')
+    expect(editorSource).toContain("target: 'ORDER'")
+    expect(editorSource).toContain("target: 'DIY'")
+    expect(editorSource).toContain('goToPrivateRecipeTarget')
+    expect(editorSource).toContain('为 {{ customerDogName }} 设计')
+    expect(publishSource).toContain('customerReportNextActions')
+    expect(publishSource).toContain('createPrivateRecipeSnapshot')
+    expect(publishSource).toContain("goToPrivateRecipeTarget('ORDER')")
+    expect(publishSource).toContain("goToPrivateRecipeTarget('DIY')")
+    expect(publishSource).toContain('订购成品')
+    expect(publishSource).toContain('生成 DIY 制作单')
   })
 
   it('places reproduction as the last option in the new draft life stage picker', () => {

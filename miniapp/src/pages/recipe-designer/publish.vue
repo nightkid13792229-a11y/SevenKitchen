@@ -122,12 +122,30 @@
       </view>
     </view>
 
-    <view class="footer-actions">
+    <view class="footer-actions" :class="{ 'customer-footer-actions': customerReportNextActions }">
       <button class="secondary-btn" @tap="goBack">返回编辑</button>
-      <button class="share-btn" open-type="share" :disabled="loading">分享</button>
-      <button v-if="canPublishRecipe" class="primary-btn" :disabled="loading || publishing" @tap="handlePublishTap">
-        {{ publishing ? '提交中...' : '提交后台草稿' }}
-      </button>
+      <template v-if="customerReportNextActions">
+        <button
+          class="primary-btn customer-action-btn customer-next-order-btn"
+          :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'ORDER'"
+          @tap="goToPrivateRecipeTarget('ORDER')"
+        >
+          订购成品
+        </button>
+        <button
+          class="secondary-btn customer-action-btn customer-next-diy-btn"
+          :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'DIY'"
+          @tap="goToPrivateRecipeTarget('DIY')"
+        >
+          生成 DIY 制作单
+        </button>
+      </template>
+      <template v-else>
+        <button class="share-btn" open-type="share" :disabled="loading">分享</button>
+        <button v-if="canPublishRecipe" class="primary-btn" :disabled="loading || publishing" @tap="handlePublishTap">
+          {{ publishing ? '提交中...' : '提交后台草稿' }}
+        </button>
+      </template>
     </view>
   </view>
 </template>
@@ -149,6 +167,7 @@ const publishing = ref(false)
 const currentUserRole = ref('')
 const storedUserName = ref('')
 const reviewNote = ref('')
+const privateSnapshotCreatingTarget = ref<'ORDER' | 'DIY' | ''>('')
 const reportSectionTitleOrder = ['微量元素', '维生素', '氨基酸', '脂肪酸']
 
 const recipeName = computed(() => {
@@ -184,6 +203,32 @@ const userName = computed(() => {
 const isCustomerMode = computed(() => {
   return currentUserRole.value !== 'STAFF' && currentUserRole.value !== 'ADMIN'
 })
+
+const customerDogId = computed(() =>
+  String(draft.value?.customerDogId || draft.value?.series?.customerDogId || ''),
+)
+
+const reportIsCompliant = computed(() => {
+  const status = String(
+    assessment.value?.overallStatus ||
+    assessment.value?.summary?.overallStatus ||
+    draft.value?.assessmentSummary?.overallStatus ||
+    draft.value?.status ||
+    '',
+  ).toUpperCase()
+  return status === 'COMPLIANT' || Boolean(draft.value?.isCompliant)
+})
+
+const canCreatePrivateSnapshot = computed(() => {
+  const hasItems =
+    (Array.isArray(draft.value?.items) && draft.value.items.length > 0) ||
+    report.value.ingredientRows.length > 0
+  return Boolean(customerDogId.value && reportIsCompliant.value && hasItems)
+})
+
+const customerReportNextActions = computed(() =>
+  Boolean(isCustomerMode.value && customerDogId.value),
+)
 
 const reportPageTitle = computed(() =>
   isCustomerMode.value ? '营养报告' : '提交后台草稿',
@@ -321,6 +366,40 @@ async function handlePublishTap() {
 
 function goBack() {
   uni.navigateBack()
+}
+
+async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
+  if (!draftId.value || privateSnapshotCreatingTarget.value) return
+  if (!canCreatePrivateSnapshot.value) {
+    uni.showToast({ title: '请先完成营养评估', icon: 'none' })
+    return
+  }
+
+  privateSnapshotCreatingTarget.value = target
+  try {
+    const snapshotPayload =
+      target === 'DIY'
+        ? { target: 'DIY' as const }
+        : { target: 'ORDER' as const }
+    const res: any = await recipeDesignerApi.createPrivateRecipeSnapshot(draftId.value, snapshotPayload)
+    const data = res?.data ?? res
+    const fallbackDogId = data?.dogId || customerDogId.value
+    const url = data?.targetUrl || (
+      target === 'DIY'
+        ? `/pages/recipe-diy/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+        : `/pages/recipe-order/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+    )
+    if (!data?.recipeId && !data?.targetUrl) {
+      uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+      return
+    }
+    uni.navigateTo({ url })
+  } catch (error) {
+    console.error('[RecipeDesignerPublish] Failed to create private recipe snapshot:', error)
+    uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+  } finally {
+    privateSnapshotCreatingTarget.value = ''
+  }
 }
 
 function getSharePath() {
@@ -708,6 +787,10 @@ function getErrorMessage(error: unknown) {
   box-shadow: 0 -4rpx 16rpx rgba(15, 23, 42, 0.08);
 }
 
+.customer-footer-actions {
+  gap: 12rpx;
+}
+
 .primary-btn,
 .secondary-btn,
 .share-btn {
@@ -716,6 +799,13 @@ function getErrorMessage(error: unknown) {
   border-radius: 8rpx;
   font-size: 28rpx;
   line-height: 76rpx;
+}
+
+.customer-footer-actions .primary-btn,
+.customer-footer-actions .secondary-btn {
+  padding: 0 8rpx;
+  font-size: 26rpx;
+  white-space: nowrap;
 }
 
 .primary-btn {

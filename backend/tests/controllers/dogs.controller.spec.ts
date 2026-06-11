@@ -446,4 +446,66 @@ describe('DogsController attachment cleanup', () => {
       'https://img.sevenkitchen.cloud/dogs/avatars/old-avatar.png',
     );
   });
+
+  it('accepts HEIC medical attachments from iPhone uploads', async () => {
+    const {
+      controller,
+      cosService,
+    } = createController();
+
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/medical-reports/temp/report.heic',
+      key: 'medical-reports/temp/report.heic',
+    });
+
+    const result: any = await controller.uploadMedicalAttachment(
+      {
+        size: 1024,
+        mimetype: 'image/heic',
+        originalname: 'report.heic',
+        buffer: Buffer.from('image'),
+      } as any,
+      { customerId: 'owner-1' } as any,
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      expect.objectContaining({ originalname: 'report.heic' }),
+      'report.heic',
+      'medical-reports/temp',
+    );
+    expect(result.data.url).toBe(
+      'https://img.sevenkitchen.cloud/medical-reports/temp/report.heic',
+    );
+  });
+
+  it('accepts HEIF checkup attachments by file extension when mimetype is generic', async () => {
+    const {
+      controller,
+      cosService,
+    } = createController();
+
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/checkup-reports/temp/report.heif',
+      key: 'checkup-reports/temp/report.heif',
+    });
+
+    const result: any = await controller.uploadCheckupAttachment(
+      {
+        size: 1024,
+        mimetype: 'application/octet-stream',
+        originalname: 'report.HEIF',
+        buffer: Buffer.from('image'),
+      } as any,
+      { customerId: 'owner-1' } as any,
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      expect.objectContaining({ originalname: 'report.HEIF' }),
+      'report.HEIF',
+      'checkup-reports/temp',
+    );
+    expect(result.data.url).toBe(
+      'https://img.sevenkitchen.cloud/checkup-reports/temp/report.heif',
+    );
+  });
 });

@@ -83,6 +83,39 @@ import {
 } from '../dto/weight-record/weight-record-response.dto';
 import { parseYYYYMMDD } from '../../utils/date-helpers';
 
+const ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+const ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.heic',
+  '.heif',
+  '.pdf',
+];
+
+function hasAllowedHealthAttachmentType(file: Express.Multer.File) {
+  if (ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) {
+    return true;
+  }
+
+  const normalizedName = file.originalname?.toLowerCase() || '';
+  return ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS.some((extension) =>
+    normalizedName.endsWith(extension),
+  );
+}
+
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
@@ -1364,16 +1397,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 
@@ -1440,16 +1466,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 

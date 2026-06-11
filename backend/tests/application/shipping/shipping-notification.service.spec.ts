@@ -165,9 +165,10 @@ describe('ShippingNotificationService', () => {
       template_id: templateId,
       page: 'pages/order-shipping-notice/index?orderId=order-1',
       data: expect.objectContaining({
-        thing1: { value: 'SevenKitchen订单' },
-        thing2: { value: '顺丰速运' },
-        character_string3: { value: 'SF1234567890' },
+        thing2: { value: 'SevenKitchen订单' },
+        thing5: { value: '顺丰速运' },
+        character_string1: { value: 'SF1234567890' },
+        thing6: { value: '点击查看加热保存说明' },
       }),
     });
     expect(prisma.orderShippingNotification.update).toHaveBeenCalledWith({

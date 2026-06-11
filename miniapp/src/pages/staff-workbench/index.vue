@@ -63,6 +63,18 @@
           <text class="module-arrow">›</text>
         </view>
 
+        <!-- 客户与狗狗 -->
+        <view class="module" @tap="goToCustomerDogs">
+          <view class="module-icon customer-dogs">
+            <text class="module-icon-symbol">客</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">客户与狗狗</text>
+            <text class="module-desc">搜索客户档案、代客下单和查看成品历史</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
         <!-- 退款管理 -->
         <view v-if="isAdmin" class="module" @tap="goToRefunds">
           <view class="module-icon refunds">
@@ -342,6 +354,10 @@ const viewTodayOrders = () => {
   uni.navigateTo({ url: '/pages/staff-orders/index' });
 };
 
+const goToCustomerDogs = () => {
+  uni.navigateTo({ url: '/pages/staff-customer-service/customers' });
+};
+
 const goToRefunds = () => {
   uni.navigateTo({ url: '/pages/staff-refunds/index' });
 };
@@ -476,6 +492,11 @@ const goToRecipeDesigner = () => {
 
   &.shipping {
     background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  }
+
+  &.customer-dogs {
+    background: linear-gradient(135deg, #e8f5ef 0%, #9bd8bd 100%);
+    color: #157347;
   }
 
   &.refunds {

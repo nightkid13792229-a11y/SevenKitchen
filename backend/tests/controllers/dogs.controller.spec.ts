@@ -75,6 +75,9 @@ describe('DogsController attachment cleanup', () => {
       deleteImage: jest.fn(),
       deleteImageByUrl: jest.fn(),
     };
+    const orderService = {
+      listDogFinishedFoodHistory: jest.fn(),
+    };
 
     const controller = new DogsController(
       dogRepository as any,
@@ -87,6 +90,7 @@ describe('DogsController attachment cleanup', () => {
       weightRecordService as any,
       prisma as any,
       cosService as any,
+      orderService as any,
     );
 
     return {
@@ -98,8 +102,49 @@ describe('DogsController attachment cleanup', () => {
       allergyRecordRepository,
       dogService,
       cosService,
+      orderService,
     };
   }
+
+  it('lists finished-food order history only for the current customer dog', async () => {
+    const { controller, dogRepository, orderService } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-1' }));
+    orderService.listDogFinishedFoodHistory.mockResolvedValue([
+      {
+        orderId: 'order-1',
+        recipeName: '鸡肉牛肉鲜食',
+      },
+    ]);
+
+    const result = await (controller as any).listFinishedFoodHistory(
+      'dog-1',
+      { customerId: 'owner-1' },
+    );
+
+    expect(dogRepository.findById).toHaveBeenCalledWith('dog-1');
+    expect(orderService.listDogFinishedFoodHistory).toHaveBeenCalledWith(
+      'dog-1',
+      'owner-1',
+    );
+    expect(result.code).toBe(0);
+    expect(result.data[0]).toMatchObject({
+      orderId: 'order-1',
+      recipeName: '鸡肉牛肉鲜食',
+    });
+  });
+
+  it('does not expose another customer dog finished-food history', async () => {
+    const { controller, dogRepository, orderService } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-2' }));
+
+    const result = await (controller as any).listFinishedFoodHistory(
+      'dog-1',
+      { customerId: 'owner-1' },
+    );
+
+    expect(result.code).toBe(404);
+    expect(orderService.listDogFinishedFoodHistory).not.toHaveBeenCalled();
+  });
 
   it('deletes removed medical attachment files from COS after a successful update', async () => {
     const {

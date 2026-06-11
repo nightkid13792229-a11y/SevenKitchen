@@ -135,3 +135,18 @@ describe('dogApi healthRecords', () => {
     })
   })
 })
+
+describe('dogApi finishedFoodHistory', () => {
+  beforeEach(() => {
+    mockedRequest.mockReset()
+  })
+
+  it('loads customer-visible finished-food order history for a dog', () => {
+    ;(dogApi as any).finishedFoodHistory('dog-1')
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/dogs/dog-1/finished-food-history',
+      method: 'GET',
+    })
+  })
+})

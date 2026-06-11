@@ -433,6 +433,44 @@
       <view class="section-card">
         <view class="section-card__header">
           <view>
+            <text class="section-card__title">成品食谱历史</text>
+            <text class="section-card__desc">只展示这只狗狗订购过的成品鲜食记录。</text>
+          </view>
+        </view>
+
+        <view v-if="finishedFoodHistoryLoading" class="empty-card">
+          <text class="empty-card__desc">正在加载成品订购记录...</text>
+        </view>
+
+        <view v-else-if="finishedFoodHistoryItems.length === 0" class="empty-card">
+          <text class="empty-card__title">暂无成品订购记录</text>
+          <text class="empty-card__desc">下单成品鲜食后，会在这里看到历史食谱。</text>
+        </view>
+
+        <view v-else class="finished-history-list">
+          <view
+            v-for="item in finishedFoodHistoryItems"
+            :key="item.orderItemId"
+            class="finished-history-row"
+            @tap="openFinishedFoodOrder(item.orderId)"
+          >
+            <view class="finished-history-row__main">
+              <text class="finished-history-row__title">{{ item.recipeName }}</text>
+              <text class="finished-history-row__meta">
+                {{ formatHistoryDate(item.orderedAt) }} · {{ formatHistoryStatus(item.orderStatus) }}
+              </text>
+              <text class="finished-history-row__meta">
+                {{ item.packageSummary || `${item.packageSpecG}g x ${item.packageCount}包` }}
+              </text>
+            </view>
+            <text class="finished-history-row__amount">¥{{ formatHistoryAmount(item.amountTotal) }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="section-card">
+        <view class="section-card__header">
+          <view>
             <text class="section-card__title">健康记录与饮食提醒</text>
             <text class="section-card__desc">{{ healthSummary }}</text>
           </view>
@@ -639,6 +677,19 @@ interface DogBreedItem {
   isCommon?: boolean
 }
 
+interface FinishedFoodHistoryItem {
+  orderId: string
+  orderItemId: string
+  orderStatus: string
+  orderedAt: string
+  recipeName: string
+  quantityG: number
+  packageCount: number
+  packageSpecG: number
+  packageSummary?: string
+  amountTotal: number
+}
+
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 const BCS_GUIDE_IMAGE_URL = 'https://img.sevenkitchen.cloud/bcs-standards/BCS-chart.jpg'
 const mealsOptions = ['1', '2', '3', '4', '5']
@@ -672,6 +723,8 @@ const hotBreeds = ref<DogBreedItem[]>([])
 const isLoading = ref(false)
 const loadError = ref('')
 const hasLoadedOnce = ref(false)
+const finishedFoodHistoryLoading = ref(false)
+const finishedFoodHistoryItems = ref<FinishedFoodHistoryItem[]>([])
 const activeEditSection = ref<EditableSection>('')
 const savingSection = ref<EditableSection>('')
 const isHydrating = ref(false)
@@ -1014,6 +1067,7 @@ async function loadDogProfile() {
     if (res.code === 0 && res.data?.profile) {
       applyServerState(res.data.profile, res.data.calcResult || null)
       hasLoadedOnce.value = true
+      void loadFinishedFoodHistory()
       return
     }
 
@@ -1024,6 +1078,58 @@ async function loadDogProfile() {
     isLoading.value = false
     uni.stopPullDownRefresh?.()
   }
+}
+
+async function loadFinishedFoodHistory() {
+  if (!dogId.value) {
+    finishedFoodHistoryItems.value = []
+    return
+  }
+
+  finishedFoodHistoryLoading.value = true
+  try {
+    const res: any = await dogApi.finishedFoodHistory(dogId.value)
+    finishedFoodHistoryItems.value = res.code === 0 && Array.isArray(res.data)
+      ? res.data
+      : []
+  } catch (error) {
+    console.error('[DogProfileOverview] Failed to load finished food history:', error)
+    finishedFoodHistoryItems.value = []
+  } finally {
+    finishedFoodHistoryLoading.value = false
+  }
+}
+
+function openFinishedFoodOrder(orderId: string) {
+  if (!orderId) return
+  uni.navigateTo({ url: `/pages/order-detail/index?orderId=${orderId}` })
+}
+
+function formatHistoryAmount(value: unknown) {
+  const amount = Number(value || 0)
+  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
+}
+
+function formatHistoryDate(value?: string | null) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatHistoryStatus(status?: string) {
+  const map: Record<string, string> = {
+    INIT: '待提交',
+    PENDING_PAYMENT: '待收款',
+    PAID: '已收款',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '制作中',
+    FREEZING: '急冻中',
+    SHIPPED: '已发货',
+    COMPLETED: '已完成',
+    AFTERSALE: '售后中',
+  }
+  return map[status || ''] || status || '-'
 }
 
 function applyServerState(nextProfile: DogProfileDetail, nextCalcResult: DogCalcResult | null) {
@@ -2242,6 +2348,51 @@ function goToWeightManagement() {
   font-size: 24rpx;
   line-height: 1.5;
   color: #627780;
+}
+
+.finished-history-list {
+  margin-top: 18rpx;
+}
+
+.finished-history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid rgba(24, 49, 63, 0.06);
+}
+
+.finished-history-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.finished-history-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.finished-history-row__title {
+  display: block;
+  color: #17313f;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.finished-history-row__meta {
+  display: block;
+  margin-top: 6rpx;
+  color: #6d808a;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.finished-history-row__amount {
+  flex-shrink: 0;
+  color: #d4380d;
+  font-size: 28rpx;
+  font-weight: 800;
 }
 
 .section-subcard {

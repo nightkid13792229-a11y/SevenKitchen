@@ -3134,6 +3134,98 @@ export class OrderService {
     }));
   }
 
+  async listDogFinishedFoodHistory(
+    dogId: string,
+    customerId?: string,
+  ): Promise<
+    Array<{
+      orderId: string;
+      orderItemId: string;
+      orderStatus: string;
+      orderedAt: string;
+      targetProductionDate: string | null;
+      recipeId: string | null;
+      recipeName: string;
+      recipeCoverImageUrl: string | null;
+      quantityG: number;
+      packageCount: number;
+      packageSpecG: number;
+      packageSummary: string;
+      amountTotal: number;
+      paymentMethod: string | null;
+    }>
+  > {
+    const rows = await this.prisma.orderItem.findMany({
+      where: {
+        dogId,
+        order: {
+          type: OrderType.FRESH_FOOD,
+          status: { not: OrderStatus.CANCELLED },
+          ...(customerId ? { customerId } : {}),
+        },
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            targetProductionDate: true,
+            amountTotal: true,
+            totalAmount: true,
+            paymentMethod: true,
+          },
+        },
+      },
+      orderBy: {
+        order: { createdAt: 'desc' },
+      },
+      take: 100,
+    });
+
+    return rows.map((item) => {
+      const snapshot = item.recipeSnapshot as Record<string, any>;
+      const packagePlan = Array.isArray(item.packagePlan)
+        ? (item.packagePlan as Array<{
+            packageSpecG?: number;
+            packageCount?: number;
+          }>)
+        : [];
+      const packageSummary = packagePlan.length
+        ? packagePlan
+            .map((row) => `${Number(row.packageSpecG || 0)}g x ${Number(row.packageCount || 0)}包`)
+            .join('，')
+        : `${item.packageSpecG}g x ${item.packageCount}包`;
+
+      return {
+        orderId: item.order.id,
+        orderItemId: item.id,
+        orderStatus: item.order.status,
+        orderedAt: item.order.createdAt.toISOString(),
+        targetProductionDate: item.order.targetProductionDate
+          ? item.order.targetProductionDate.toISOString()
+          : null,
+        recipeId: typeof snapshot?.id === 'string' ? snapshot.id : null,
+        recipeName:
+          typeof snapshot?.name === 'string' ? snapshot.name : '成品鲜食',
+        recipeCoverImageUrl:
+          typeof snapshot?.coverImageUrl === 'string'
+            ? snapshot.coverImageUrl
+            : typeof snapshot?.cover_image_url === 'string'
+              ? snapshot.cover_image_url
+              : null,
+        quantityG: item.quantityG,
+        packageCount: item.packageCount,
+        packageSpecG: item.packageSpecG,
+        packageSummary,
+        amountTotal: this.roundMoney(
+          this.toNumber(item.order.totalAmount ?? item.order.amountTotal),
+        ),
+        paymentMethod: item.order.paymentMethod,
+      };
+    });
+  }
+
   async switchOrderDog(orderId: string, dogId: string): Promise<Order> {
     const order = await this.getOrderForStaffAddress(orderId);
     this.assertOrderAddressEditable(order);

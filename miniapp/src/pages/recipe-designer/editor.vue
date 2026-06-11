@@ -12,6 +12,10 @@
   >
     <view v-if="draftSeriesLifeStage" class="series-context-block">
       <text class="series-context-title">{{ recipeSeriesDisplayName }}</text>
+      <view class="series-context-details">
+        <text class="series-context-detail">{{ assessmentStandardName }}</text>
+        <text class="series-context-detail">{{ draftSeriesLifeStageLabel }}</text>
+      </view>
     </view>
 
     <view class="section">
@@ -1074,6 +1078,10 @@ const assessmentStandardContextLabel = computed(() => {
   const lifeStage = getScenarioLabel(assessment.value?.scenario || scenario.value)
   return `${assessmentStandardName.value} · ${lifeStage}`
 })
+
+const draftSeriesLifeStageLabel = computed(() =>
+  getScenarioLabel((draftSeriesLifeStage.value || assessment.value?.scenario || scenario.value) as FediafDogScenario),
+)
 
 const recipeSeriesDisplayName = computed(() => {
   const seriesName = draftSeriesName.value.trim()
@@ -3002,6 +3010,22 @@ function formatAssessmentNumber(value: unknown) {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.series-context-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.series-context-detail {
+  max-width: 100%;
+  padding: 4rpx 10rpx;
+  border-radius: 6rpx;
+  background: #f3f4f6;
+  color: #555;
+  font-size: 22rpx;
+  line-height: 1.35;
 }
 
 .section {

@@ -266,7 +266,7 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('v-if="canRevertToLatestOfficial"')
   })
 
-  it('shows only the recipe series name in the editor top context block', () => {
+  it('shows only the recipe series name, nutrition standard, and life stage in the editor top context block', () => {
     expect(editorSource).toContain('draftSeriesId')
     expect(editorSource).toContain('draftSeriesName')
     expect(editorSource).toContain('draftSeriesLifeStage')
@@ -275,6 +275,8 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('seriesLifeStage')
     expect(editorSource).toContain('series-context-block')
     expect(editorSource).toContain('recipeSeriesDisplayName')
+    expect(editorSource).toContain('assessmentStandardName')
+    expect(editorSource).toContain('draftSeriesLifeStageLabel')
   })
 
   it('uses the recipe series name instead of the life-stage draft name in the editor header', () => {
@@ -284,11 +286,14 @@ describe('recipe designer mobile entry', () => {
       editorSource.match(/async function loadDraft\(\)[\s\S]*?function applyCachedAssessmentFromDraft/)?.[0] || ''
 
     expect(seriesContextBlock).toContain('recipeSeriesDisplayName')
+    expect(seriesContextBlock).toContain('assessmentStandardName')
+    expect(seriesContextBlock).toContain('draftSeriesLifeStageLabel')
+    expect(seriesContextBlock).toContain('series-context-details')
     expect(seriesContextBlock).not.toContain('series-context-meta')
-    expect(seriesContextBlock).not.toContain('assessmentStandardName')
-    expect(seriesContextBlock).not.toContain('draftSeriesStageLabel')
+    expect(seriesContextBlock).not.toContain('assessmentStandardContextLabel')
     expect(seriesContextBlock).not.toContain('draftName')
     expect(seriesContextBlock).not.toContain('当前草稿评估结果')
+    expect(seriesContextBlock).not.toContain('评估结果')
     expect(loadDraftBlock).toContain('draftSeriesName.value = String(draft.series?.name || draft.seriesName || \'\')')
     expect(editorSource).toContain('name=${encodeURIComponent(recipeSeriesDisplayName.value)}')
   })

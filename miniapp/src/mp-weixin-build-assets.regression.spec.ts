@@ -149,6 +149,28 @@ describe('mp-weixin build asset regressions', () => {
     expect(fixScript).toContain("'App.wxml'")
   })
 
+  it('removes source-only test files from the generated mini program project', () => {
+    const { removeNonRuntimeBuildFiles } = requireScript('../scripts/fix-components-injection.js')
+    const distDir = mkdtempSync(resolve(tmpdir(), 'sevenkitchen-mp-weixin-tests-'))
+
+    const writeFixture = (path: string, source: string) => {
+      const filePath = resolve(distDir, path)
+      mkdirSync(resolve(filePath, '..'), { recursive: true })
+      writeFileSync(filePath, source, 'utf-8')
+    }
+
+    writeFixture('custom-tab-bar/index.js', 'Component({});')
+    writeFixture('custom-tab-bar/index.regression.spec.ts', 'export {};')
+    writeFixture('pages/home/index.test.js', 'export {};')
+    writeFixture('pages/home/index.js', 'Page({});')
+
+    expect(removeNonRuntimeBuildFiles(distDir)).toBe(2)
+    expect(existsSync(resolve(distDir, 'custom-tab-bar/index.js'))).toBe(true)
+    expect(existsSync(resolve(distDir, 'custom-tab-bar/index.regression.spec.ts'))).toBe(false)
+    expect(existsSync(resolve(distDir, 'pages/home/index.test.js'))).toBe(false)
+    expect(existsSync(resolve(distDir, 'pages/home/index.js'))).toBe(true)
+  })
+
   it('preserves source project config fields required by WeChat DevTools compiler', () => {
     const { syncProjectConfig } = requireScript('../scripts/fix-components-injection.js')
 

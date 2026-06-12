@@ -1251,6 +1251,54 @@ describe('recipe designer assessment', () => {
     expect(result.entries[0].maxValueNote).toContain('1.6:1');
   });
 
+  it('adds omega-6 to omega-3 ratio as an informational fatty acid entry', () => {
+    const input = makeInput();
+    input.items = [
+      {
+        id: 'item-fish',
+        name: '脂肪酸测试食材',
+        weightG: 100,
+        nutritionProfile: {
+          meta: { rawBasisType: 'PER_100_G' },
+          macros: completeAtwaterMacros({
+            energyKcal: 200,
+            moisture: 70,
+          }),
+          minerals: {},
+          vitamins: {},
+          fattyAcids: {
+            linoleicAcid: 2,
+            arachidonicAcid: 0.1,
+            alphaLinolenicAcid: 0.3,
+            epa: 100,
+            dpa: 50,
+            dha: 250,
+          },
+          aminoAcids: {},
+          customItems: [],
+        } as any,
+      },
+    ];
+    input.targets = [];
+
+    const result = assessRecipeDraft(input);
+    const omegaRatio = result.groupedEntries.find(
+      (entry) => entry.nutrientKey === 'omega6Omega3Ratio',
+    );
+
+    expect(omegaRatio).toMatchObject({
+      label: '欧米伽六/欧米伽三比例',
+      category: 'FATTY_ACID',
+      expressionBasis: 'RATIO',
+      unit: ':1',
+      minValue: null,
+      maxValue: null,
+      status: 'INFO',
+      excludeFromAttention: true,
+    });
+    expect(omegaRatio?.currentValue).toBeCloseTo(3, 4);
+  });
+
   it('treats a fully missing ratio target as zero instead of user-facing missing data', () => {
     const input = makeInput();
     for (const item of input.items) {

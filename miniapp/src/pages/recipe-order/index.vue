@@ -62,7 +62,7 @@
           </view>
           <view class="recipe-meta-card">
             <text class="recipe-meta-label">能量密度</text>
-            <text class="recipe-meta-value">{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg</text>
+            <text class="recipe-meta-value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
           </view>
         </view>
       </view>
@@ -505,6 +505,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -907,7 +908,10 @@ const recipeNutritionStandardLabel = computed(() =>
   getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
 const recipeFormulaSoftwareLabel = computed(() =>
-  getInitials(recipe.value.designSource || 'SevenKitchen')
+  formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
+)
+const displayRecipeEnergyDensity = computed(() =>
+  formatEnergyDensityKcalPerKg(recipe.value.energyDensityKcalPerKg)
 )
 const selectedLifeStageLabel = computed(() => {
   if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
@@ -1411,22 +1415,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   }
 
   return tagOrUuid
-}
-
-function getInitials(value: string): string {
-  const source = value.trim()
-  if (!source) return 'SK'
-
-  const words = source.match(/[A-Za-z0-9]+/g) || []
-  if (words.length === 0) return source
-  if (words.length === 1) {
-    const camelParts = words[0].match(/[A-Z][a-z0-9]*/g)
-    if (camelParts && camelParts.length > 1) {
-      return camelParts.map(part => part[0]).join('').toUpperCase()
-    }
-  }
-
-  return words.map(word => word[0]).join('').toUpperCase()
 }
 
 function getNutritionStandardLabel(standard: string): string {

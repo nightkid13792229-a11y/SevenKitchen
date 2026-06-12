@@ -29,7 +29,7 @@
       <view class="nutrition-summary">
         <view class="nutrition-item">
           <text class="label">能量密度</text>
-          <text class="value">{{ recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg }} kcal/kg</text>
+          <text class="value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
         </view>
         <view class="nutrition-item">
           <text class="label">营养标准</text>
@@ -183,7 +183,7 @@
               <view class="step-data">
                 <view class="data-item">
                   <text class="data-label">食谱能量密度：</text>
-                  <text class="data-value">{{ recipe.energyDensityKcalPerKg }} kcal/kg</text>
+                  <text class="data-value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
                 </view>
               </view>
               <view class="calc-result final">
@@ -296,6 +296,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
+import { formatEnergyDensityKcalPerKg } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -361,6 +362,14 @@ const recipe = ref<Recipe>({
   applicableLifeStages: [],
   targetHealthTags: []
 })
+const recipeEnergyDensityKcalPerKg = computed(() => {
+  const directValue = Number(recipe.value.energyDensityKcalPerKg)
+  if (Number.isFinite(directValue) && directValue > 0) return directValue
+  return recipe.value.nutritionDetailedData?.energyDensityKcalPerKg
+})
+const displayRecipeEnergyDensity = computed(() =>
+  formatEnergyDensityKcalPerKg(recipeEnergyDensityKcalPerKg.value)
+)
 
 const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])

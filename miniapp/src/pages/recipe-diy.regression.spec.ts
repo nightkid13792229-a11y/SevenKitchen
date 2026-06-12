@@ -69,4 +69,16 @@ describe('recipe diy regressions', () => {
     expect(source).toContain('国内城市犬')
     expect(source).toContain('2-4周')
   })
+
+  it('rounds recipe energy density before showing it to customers', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("import { formatEnergyDensityKcalPerKg } from '../../utils/recipe-display'")
+    expect(source).toContain('const displayRecipeEnergyDensity = computed')
+    expect(source).toContain('{{ displayRecipeEnergyDensity }} kcal/kg')
+    expect(source).not.toContain('{{ recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg }} kcal/kg')
+  })
 })

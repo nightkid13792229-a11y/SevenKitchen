@@ -261,6 +261,20 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('{{ pricePreviewWarning }}')
   })
 
+  it('shows Setar instead of the internal design source on the diy sheet and saved image', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("import { formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'")
+    expect(source).toContain('const displayRecipeFormulaSoftwareLabel = computed')
+    expect(source).toContain('{{ displayRecipeFormulaSoftwareLabel }}')
+    expect(source).toContain('formulaSource: displayRecipeFormulaSoftwareLabel.value')
+    expect(source).not.toContain('{{ recipe.designSource }}')
+    expect(source).not.toContain('formulaSource: recipe.value.designSource')
+  })
+
   it('renders the saved diy sheet image as a cooking-first share card', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
@@ -277,7 +291,7 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain("logoPath: '/static/logo.png'")
     expect(source).toContain('builder.drawShareSummaryCards({')
     expect(source).toContain("formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard)")
-    expect(source).toContain('formulaSource: recipe.value.designSource')
+    expect(source).toContain('formulaSource: displayRecipeFormulaSoftwareLabel.value')
     expect(source).toContain("['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法']")
     expect(source).toContain("formatFoodPrepAmountForPrint(item.actualAmount)")
     expect(source).toContain('item.recommendedPrintText')

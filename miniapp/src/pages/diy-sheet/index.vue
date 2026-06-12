@@ -39,9 +39,9 @@
             <text class="label">营养标准</text>
             <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
           </view>
-          <view v-if="recipe.designSource" class="nutrition-item">
+          <view v-if="displayRecipeFormulaSoftwareLabel" class="nutrition-item">
             <text class="label">设计来源</text>
-            <text class="value">{{ recipe.designSource }}</text>
+            <text class="value">{{ displayRecipeFormulaSoftwareLabel }}</text>
           </view>
         </view>
       </view>
@@ -523,6 +523,7 @@ import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
+import { formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   formatSupplementTargets,
   getSupplementTargetBreakdowns
@@ -571,6 +572,11 @@ const recipe = ref<any>({
   targetHealthTags: [],
   productionSteps: ''
 })
+const displayRecipeFormulaSoftwareLabel = computed(() =>
+  recipe.value.designSource
+    ? formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
+    : ''
+)
 
 const pricePreview = ref<any>(null)
 
@@ -1224,7 +1230,7 @@ async function handlePrint() {
         packagePlan: `${perMealG.value}g × ${cycleDays.value * dog.value.mealsPerDay}份`,
         packageSub: '每餐一份',
         formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard),
-        formulaSource: recipe.value.designSource
+        formulaSource: displayRecipeFormulaSoftwareLabel.value
       })
     }
 

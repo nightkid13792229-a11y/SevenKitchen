@@ -789,7 +789,7 @@ describe('recipe designer editor guardrails', () => {
     const categories = buildAssessmentCategories([
       {
         nutrientKey: 'custom_ratio',
-        label: '欧米伽六/欧米伽三比例',
+        label: 'Omega-6:Omega-3',
         category: 'RATIO',
         expressionBasis: 'RATIO',
         unit: ':1',
@@ -802,9 +802,9 @@ describe('recipe designer editor guardrails', () => {
     const fattyAcids = categories.find((category) => category.key === 'FATTY_ACID')
 
     expect(fattyAcids?.entries).toHaveLength(1)
-    expect(fattyAcids?.entries[0].label).toBe('欧米伽六/欧米伽三比例')
+    expect(fattyAcids?.entries[0].label).toBe('Omega-6:Omega-3')
     expect(formatAssessmentRatioValue(3)).toBe('3:1')
-    expect(assessmentSource).toContain('欧米伽')
+    expect(assessmentSource).toContain('omega')
   })
 
   it('shows a footnote button for conditional assessment bounds', () => {

@@ -1287,7 +1287,7 @@ describe('recipe designer assessment', () => {
     );
 
     expect(omegaRatio).toMatchObject({
-      label: '欧米伽六/欧米伽三比例',
+      label: 'Omega-6:Omega-3',
       category: 'FATTY_ACID',
       expressionBasis: 'RATIO',
       unit: ':1',

@@ -97,12 +97,36 @@ describe('recipe designer mobile entry', () => {
     expect(customerCardBlock).toContain('customer-card-more-btn')
     expect(customerCardBlock).toContain('customer-card-menu')
     expect(customerCardBlock).toContain('重命名')
-    expect(customerCardBlock).toContain('复制该食谱')
+    expect(customerCardBlock).toContain('复制')
+    expect(customerCardBlock).toContain('删除')
+    expect(customerCardBlock).toContain('@tap.stop="deleteCustomerRecipe(seriesItem)"')
+    expect(customerCardBlock).not.toContain('复制该食谱')
     expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'DIY')")
     expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'ORDER')")
     expect(customerCardBlock).toContain('生成制作单')
     expect(customerCardBlock).toContain('订购成品')
     expect(customerCardBlock).not.toContain('继续设计')
+  })
+
+  it('lets customer recipe overflow menus close outside and delete after a simple confirmation', () => {
+    const busyBlock =
+      listSource.match(/function isCustomerSeriesBusy[\s\S]*?\n}\n\nfunction toggleCustomerRecipeMenu/)?.[0] || ''
+    const deleteCustomerBlock =
+      listSource.match(/function deleteCustomerRecipe[\s\S]*?\n}\n\nfunction canGenerateDiyFromCustomerCard/)?.[0] || ''
+
+    expect(listSource).toContain('customer-card-menu-backdrop')
+    expect(listSource).toContain('@tap.stop="closeCustomerRecipeMenu"')
+    expect(listSource).toContain('function closeCustomerRecipeMenu')
+    expect(busyBlock).toContain('deletingSeriesId.value === seriesItem.id')
+    expect(deleteCustomerBlock).toContain("title: '删除食谱'")
+    expect(deleteCustomerBlock).toContain('删除后不可恢复')
+    expect(deleteCustomerBlock).toContain("confirmText: '删除'")
+    expect(deleteCustomerBlock).toContain('recipeDesignerApi.deleteSeries(seriesItem.id')
+    expect(deleteCustomerBlock).toContain('confirmName: seriesName')
+    expect(deleteCustomerBlock).toContain('confirmUserVisibleRemoval: true')
+    expect(deleteCustomerBlock).toContain('await loadSeries()')
+    expect(deleteCustomerBlock).toContain("uni.showToast({ title: '已删除', icon: 'success' })")
+    expect(deleteCustomerBlock).not.toContain('editable: true')
   })
 
   it('keeps staff and admin recipe designer on the series plus five life-stage workbench', () => {

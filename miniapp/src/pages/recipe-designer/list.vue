@@ -1,5 +1,11 @@
 <template>
   <view class="recipe-designer-list-page">
+    <view
+      v-if="activeCustomerMenuSeriesId"
+      class="customer-card-menu-backdrop"
+      @tap.stop="closeCustomerRecipeMenu"
+    ></view>
+
     <view class="toolbar">
       <view class="toolbar-title-block">
         <text class="page-title">{{ pageTitle }}</text>
@@ -87,7 +93,13 @@
                 :disabled="!seriesItem.primaryDraftId"
                 @tap.stop="duplicateCustomerRecipe(seriesItem)"
               >
-                复制该食谱
+                复制
+              </button>
+              <button
+                class="customer-card-menu-item customer-card-menu-delete"
+                @tap.stop="deleteCustomerRecipe(seriesItem)"
+              >
+                删除
               </button>
             </view>
           </view>
@@ -612,8 +624,13 @@ function isCustomerSeriesBusy(seriesItem: RecipeDesignerCustomerSeriesCard) {
   return (
     renamingSeriesId.value === seriesItem.id ||
     duplicatingSeriesId.value === seriesItem.id ||
+    deletingSeriesId.value === seriesItem.id ||
     customerSnapshotCreatingKey.value.startsWith(`${seriesItem.id}:`)
   )
+}
+
+function closeCustomerRecipeMenu() {
+  activeCustomerMenuSeriesId.value = ''
 }
 
 function toggleCustomerRecipeMenu(seriesItem: RecipeDesignerCustomerSeriesCard) {
@@ -623,17 +640,17 @@ function toggleCustomerRecipeMenu(seriesItem: RecipeDesignerCustomerSeriesCard) 
 }
 
 function renameCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
-  activeCustomerMenuSeriesId.value = ''
+  closeCustomerRecipeMenu()
   renameSeries(seriesItem as RecipeDesignerSeriesCard)
 }
 
 function duplicateCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
   if (duplicatingSeriesId.value) return
 
-  activeCustomerMenuSeriesId.value = ''
+  closeCustomerRecipeMenu()
   const seriesName = seriesItem.name || '未命名食谱'
   uni.showModal({
-    title: '复制该食谱',
+    title: '复制',
     content: `将「${seriesName}」复制为新的可编辑食谱，原食谱不会被修改。`,
     confirmText: '复制',
     cancelText: '取消',
@@ -656,6 +673,38 @@ function duplicateCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
         uni.showToast({ title: '复制食谱失败', icon: 'none' })
       } finally {
         duplicatingSeriesId.value = ''
+      }
+    },
+  })
+}
+
+function deleteCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  if (deletingSeriesId.value) return
+
+  closeCustomerRecipeMenu()
+  const seriesName = seriesItem.name || '未命名食谱'
+  uni.showModal({
+    title: '删除食谱',
+    content: `确定要删除「${seriesName}」吗？删除后不可恢复。`,
+    confirmText: '删除',
+    confirmColor: '#cf1322',
+    cancelText: '取消',
+    success: async (result: any) => {
+      if (!result.confirm) return
+
+      deletingSeriesId.value = seriesItem.id
+      try {
+        await recipeDesignerApi.deleteSeries(seriesItem.id, {
+          confirmName: seriesName,
+          confirmUserVisibleRemoval: true,
+        })
+        await loadSeries()
+        uni.showToast({ title: '已删除', icon: 'success' })
+      } catch (error) {
+        console.error('[RecipeDesignerList] Failed to delete customer recipe:', error)
+        uni.showToast({ title: '删除失败', icon: 'none' })
+      } finally {
+        deletingSeriesId.value = ''
       }
     },
   })
@@ -1225,6 +1274,16 @@ function formatDateTime(value?: string) {
   gap: 16rpx;
 }
 
+.customer-card-menu-backdrop {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  background: transparent;
+}
+
 .customer-recipe-card {
   position: relative;
   display: flex;
@@ -1309,6 +1368,7 @@ function formatDateTime(value?: string) {
 
 .customer-card-menu-anchor {
   position: relative;
+  z-index: 7;
   display: flex;
   justify-content: flex-end;
   min-height: 44rpx;
@@ -1336,7 +1396,7 @@ function formatDateTime(value?: string) {
   position: absolute;
   top: 52rpx;
   right: 0;
-  z-index: 6;
+  z-index: 8;
   width: 184rpx;
   overflow: hidden;
   border: 1rpx solid #e5e7eb;
@@ -1366,6 +1426,10 @@ function formatDateTime(value?: string) {
 .customer-card-menu-item[disabled] {
   color: #94a3b8;
   background: #f8fafc;
+}
+
+.customer-card-menu-delete {
+  color: #cf1322;
 }
 
 .customer-card-quick-actions {

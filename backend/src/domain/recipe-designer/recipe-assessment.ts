@@ -129,6 +129,18 @@ const MACRO_METRIC_FIELD_PATHS = {
   string
 >;
 
+const OMEGA_6_FIELD_PATHS = [
+  'fattyAcids.linoleicAcid',
+  'fattyAcids.arachidonicAcid',
+] as const;
+
+const OMEGA_3_FIELD_PATHS = [
+  'fattyAcids.alphaLinolenicAcid',
+  'fattyAcids.epa',
+  'fattyAcids.dpa',
+  'fattyAcids.dha',
+] as const;
+
 export function assessRecipeDraft(
   input: DesignRecipeAssessmentInput,
 ): DesignRecipeAssessmentResult {
@@ -181,11 +193,15 @@ export function assessRecipeDraft(
     seleniumScopedEntries,
     dryMatterEnergyKcalPer100g,
   );
-  const entries = selectAdultSeleniumDietTargets(
+  const standardEntries = selectAdultSeleniumDietTargets(
     legalMaxConvertedEntries,
     input.scenario,
     totalWeightG,
     moistureTotal,
+  );
+  const entries = appendOmegaFattyAcidRatioEntry(
+    standardEntries,
+    input.items,
   );
   const groupedEntries = groupAssessmentEntries(entries);
   const summary = summarizeEntries(groupedEntries);
@@ -790,6 +806,149 @@ function calculateRatioValue(
     value: finiteOrNull(numerator.total / denominator.total),
     ...(missingAsZero ? { missingAsZero: true } : {}),
   };
+}
+
+function appendOmegaFattyAcidRatioEntry(
+  entries: AssessmentEntry[],
+  items: DesignRecipeAssessmentItemInput[],
+): AssessmentEntry[] {
+  if (!hasOmegaFattyAcidContext(entries, items)) {
+    return entries;
+  }
+
+  return [...entries, createOmegaFattyAcidRatioEntry(items)];
+}
+
+function hasOmegaFattyAcidContext(
+  entries: AssessmentEntry[],
+  items: DesignRecipeAssessmentItemInput[],
+): boolean {
+  return (
+    entries.some((entry) => entry.category === 'FATTY_ACID') ||
+    hasReadableOmegaFattyAcidValue(items)
+  );
+}
+
+function hasReadableOmegaFattyAcidValue(
+  items: DesignRecipeAssessmentItemInput[],
+): boolean {
+  for (const item of items) {
+    if (item.weightG <= 0) continue;
+
+    for (const fieldPath of [...OMEGA_6_FIELD_PATHS, ...OMEGA_3_FIELD_PATHS]) {
+      const read = readProfileFieldAmount(
+        item.nutritionProfile,
+        fieldPath,
+        item.weightG,
+      );
+      if (!read.missing && read.amount !== null) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function createOmegaFattyAcidRatioEntry(
+  items: DesignRecipeAssessmentItemInput[],
+): AssessmentEntry {
+  const omega6Total = getMixedUnitFieldGroupTotal(
+    items,
+    OMEGA_6_FIELD_PATHS,
+    'g',
+    { missingValueAsZero: true },
+  );
+  const omega3Total = getMixedUnitFieldGroupTotal(
+    items,
+    OMEGA_3_FIELD_PATHS,
+    'g',
+    { missingValueAsZero: true },
+  );
+  const missingAsZero = Boolean(
+    omega6Total.missingAsZero || omega3Total.missingAsZero,
+  );
+  const currentValue = calculateTotalRatio(omega6Total, omega3Total);
+
+  return {
+    nutrientKey: 'omega6Omega3Ratio',
+    label: '欧米伽六/欧米伽三比例',
+    category: 'FATTY_ACID',
+    expressionBasis: 'RATIO',
+    unit: ':1',
+    minValue: null,
+    maxValue: null,
+    currentValue,
+    status: 'INFO',
+    excludeFromAttention: true,
+    ...(missingAsZero ? { missingAsZero: true } : {}),
+  };
+}
+
+function getMixedUnitFieldGroupTotal(
+  items: DesignRecipeAssessmentItemInput[],
+  fieldPaths: readonly string[],
+  targetUnit: string,
+  options: { missingValueAsZero?: boolean } = {},
+): FieldTotal {
+  if (fieldPaths.length === 0) {
+    return { total: 0, missing: true };
+  }
+
+  return fieldPaths.reduce<FieldTotal>(
+    (sum, fieldPath) => {
+      const field = findNutritionField(fieldPath);
+      if (!field || !canConvertUnit(field.unit, targetUnit)) {
+        return {
+          total: sum.total,
+          missing: true,
+          missingAsZero: sum.missingAsZero,
+        };
+      }
+
+      const fieldTotal = getFieldTotal(items, fieldPath, options);
+      const convertedTotal = convertUnitValue(
+        fieldTotal.total,
+        field.unit,
+        targetUnit,
+      );
+
+      if (!Number.isFinite(convertedTotal)) {
+        return {
+          total: sum.total,
+          missing: true,
+          missingAsZero: sum.missingAsZero || fieldTotal.missingAsZero,
+        };
+      }
+
+      return {
+        total: sum.total + convertedTotal,
+        missing: sum.missing || fieldTotal.missing,
+        missingAsZero: sum.missingAsZero || fieldTotal.missingAsZero,
+      };
+    },
+    { total: 0, missing: false },
+  );
+}
+
+function calculateTotalRatio(
+  numerator: FieldTotal,
+  denominator: FieldTotal,
+): number | null {
+  if (
+    numerator.missing ||
+    denominator.missing ||
+    !Number.isFinite(numerator.total) ||
+    !Number.isFinite(denominator.total)
+  ) {
+    return null;
+  }
+
+  if (!isPositiveFiniteNumber(denominator.total)) {
+    return null;
+  }
+
+  return finiteOrNull(numerator.total / denominator.total);
 }
 
 function calculateExpressedValue(

@@ -704,7 +704,7 @@ function resolveAssessmentCategory(entry: AssessmentEntryLike): AssessmentCatego
   const text = `${entry.nutrientKey || entry.key || ''} ${entry.label || entry.name || entry.nutrientName || ''}`.toLowerCase()
 
   if (/vitamin|维生素/.test(text)) return 'VITAMIN'
-  if (/epa|dha|omega|linoleic|linolenic|arachidonic|脂肪酸|亚油酸|花生四烯酸/.test(text)) {
+  if (/epa|dha|omega|欧米伽|linoleic|linolenic|arachidonic|脂肪酸|亚油酸|花生四烯酸/.test(text)) {
     return 'FATTY_ACID'
   }
   if (/methionine|cystine|lysine|arginine|histidine|isoleucine|leucine|phenylalanine|threonine|tryptophan|valine|氨|赖氨酸|蛋氨酸/.test(text)) {

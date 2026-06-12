@@ -763,6 +763,28 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('${formatAssessmentNumber(value)}ratio')
   })
 
+  it('keeps omega-6 to omega-3 ratio in the fatty acid assessment list', () => {
+    const categories = buildAssessmentCategories([
+      {
+        nutrientKey: 'custom_ratio',
+        label: '欧米伽六/欧米伽三比例',
+        category: 'RATIO',
+        expressionBasis: 'RATIO',
+        unit: ':1',
+        currentValue: 3,
+        minValue: null,
+        maxValue: null,
+        status: 'INFO',
+      },
+    ])
+    const fattyAcids = categories.find((category) => category.key === 'FATTY_ACID')
+
+    expect(fattyAcids?.entries).toHaveLength(1)
+    expect(fattyAcids?.entries[0].label).toBe('欧米伽六/欧米伽三比例')
+    expect(formatAssessmentRatioValue(3)).toBe('3:1')
+    expect(assessmentSource).toContain('欧米伽')
+  })
+
   it('shows a footnote button for conditional assessment bounds', () => {
     expect(getAssessmentBoundaryNote({ minValueNote: '按当前粗蛋白动态调整。' }, 'min')).toContain(
       '动态调整',

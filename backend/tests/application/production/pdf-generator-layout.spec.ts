@@ -11,14 +11,52 @@ describe('production task PDF layout guardrails', () => {
     'utf8',
   );
 
-  it('uses the approved readable A4 ingredient table fields', () => {
-    expect(source).toContain('formatIngredientNameLine');
-    expect(source).toContain('formatPurchaseSummary');
-    expect(source).toContain('formatIngredientSourceLine');
-    expect(source).toContain('原料 / SKU / 来源');
+  it('uses the approved one-line SKU source ingredient table fields', () => {
+    expect(source).toContain('formatIngredientSkuSourceLine');
+    expect(source).toContain('SKU / 品牌 / 渠道 / 规格');
+    expect(source).not.toContain('formatIngredientNameLine');
+    expect(source).not.toContain('formatIngredientSourceLine');
+    expect(source).not.toContain('原料 / SKU / 来源');
+    expect(source).not.toContain('来源：');
+    expect(source).not.toContain("{ key: 'type'");
     expect(source).not.toContain("{ key: 'purchase'");
     expect(source).toContain('truncateText');
     expect(source).toContain('getPrintableIngredientCount');
+  });
+
+  it('formats SKU source copy inline without showing the standard ingredient name', () => {
+    const service = new PdfGeneratorService();
+    const format = (service as any).formatIngredientSkuSourceLine.bind(service);
+
+    const fullLine = format({
+      name: '牛霖',
+      standardIngredientName: '牛霖',
+      procurementSkuName: 'MM澳洲谷饲牛霖',
+      procurementSkuBrand: '山姆自营',
+      procurementSkuPurchaseChannel: '山姆会员店',
+      procurementSkuProductModel: '1.2kg/盒',
+      amount: '535.66',
+      unit: 'g',
+      typeLabel: '食材',
+      typeClass: 'food',
+    });
+    expect(fullLine).toBe('食材 MM澳洲谷饲牛霖 / 山姆自营 / 山姆会员店 / 1.2kg/盒');
+    expect(fullLine).not.toContain('牛霖 / MM澳洲谷饲牛霖');
+
+    expect(
+      format({
+        name: '海藻粉',
+        standardIngredientName: '海藻粉',
+        procurementSkuName: '有机海藻粉',
+        procurementSkuBrand: '无',
+        procurementSkuPurchaseChannel: '暂无',
+        procurementSkuProductModel: '-',
+        amount: '1.76',
+        unit: '平勺',
+        typeLabel: '补剂',
+        typeClass: 'supplement',
+      }),
+    ).toBe('补剂 有机海藻粉');
   });
 
   it('keeps ingredient table text readable with a larger base font', () => {
@@ -87,18 +125,18 @@ describe('production task PDF layout guardrails', () => {
     expect(source).not.toContain('truncateText(packagePlanSummary');
   });
 
-  it('wraps purchase summaries in ingredient rows instead of hard truncating them', () => {
+  it('wraps inline SKU source rows instead of hard truncating them', () => {
     expect(source).toContain('calculateIngredientRowHeight');
     expect(source).toContain('drawWrappedTableText');
     expect(source).not.toContain(
-      'truncateText(this.formatPurchaseSummary(ing)',
+      'truncateText(this.formatIngredientSkuSourceLine(ing)',
     );
   });
 
-  it('places the combined ingredient source column before preparation', () => {
+  it('places the one-line SKU source column before preparation', () => {
     const methodColumnIndex = source.indexOf("{ key: 'method', label: '制备'");
     const sourceColumnIndex = source.indexOf(
-      "{ key: 'name', label: '原料 / SKU / 来源'",
+      "{ key: 'source', label: 'SKU / 品牌 / 渠道 / 规格'",
     );
 
     expect(methodColumnIndex).toBeGreaterThan(-1);
@@ -106,15 +144,15 @@ describe('production task PDF layout guardrails', () => {
     expect(sourceColumnIndex).toBeLessThan(methodColumnIndex);
   });
 
-  it('wraps standard ingredient sku names and preparation methods instead of hard truncating them', () => {
+  it('wraps SKU source names and preparation methods instead of hard truncating them', () => {
     expect(source).toContain(
-      'const nameHeight = this.getWrappedTableTextHeight',
+      'const sourceHeight = this.getWrappedTableTextHeight',
     );
     expect(source).toContain(
       'const methodHeight = this.getWrappedTableTextHeight',
     );
     expect(source).not.toContain(
-      'truncateText(this.formatIngredientNameLine(ing)',
+      'truncateText(this.formatIngredientSkuSourceLine(ing)',
     );
     expect(source).not.toContain("truncateText(ing.method || '-'");
   });

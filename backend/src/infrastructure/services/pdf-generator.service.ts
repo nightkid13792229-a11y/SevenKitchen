@@ -219,10 +219,10 @@ export class PdfGeneratorService {
   }
 
   private estimateIngredientRowHeight(ingredient: IngredientItem): number {
-    const ingredientText = this.formatIngredientSourceLine(ingredient);
+    const ingredientText = this.formatIngredientSkuSourceLine(ingredient);
     const methodText = ingredient.method || '-';
-    const ingredientLines = this.estimateWrappedLineCount(ingredientText, 24);
-    const methodLines = this.estimateWrappedLineCount(methodText, 18);
+    const ingredientLines = this.estimateWrappedLineCount(ingredientText, 34);
+    const methodLines = this.estimateWrappedLineCount(methodText, 17);
     const lineCount = Math.max(ingredientLines, methodLines);
 
     return 24 + (lineCount - 1) * 11;
@@ -297,48 +297,26 @@ export class PdfGeneratorService {
     return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
   }
 
-  private formatIngredientNameLine(ingredient: IngredientItem): string {
+  private formatIngredientSkuSourceLine(ingredient: IngredientItem): string {
     if (ingredient.isTotalWeight) {
       return ingredient.name || '-';
     }
 
-    const standardName = (ingredient.standardIngredientName || '').trim();
     const skuName = (
       ingredient.procurementSkuName ||
       ingredient.name ||
+      ingredient.standardIngredientName ||
       ''
     ).trim();
-
-    if (standardName && skuName && standardName !== skuName) {
-      return `${standardName} / ${skuName}`;
-    }
-
-    return skuName || standardName || '-';
-  }
-
-  private formatPurchaseSummary(ingredient: IngredientItem): string {
-    if (ingredient.isTotalWeight) {
-      return '-';
-    }
-
-    const parts = this.getPrintablePurchaseSummaryParts(
+    const sourceParts = this.getPrintablePurchaseSummaryParts(
       ingredient.procurementSkuBrand,
       ingredient.procurementSkuPurchaseChannel,
       ingredient.procurementSkuProductModel,
     );
+    const skuSource = [skuName || '-', ...sourceParts].join(' / ');
+    const typeLabel = (ingredient.typeLabel || '').trim();
 
-    return parts.length > 0 ? parts.join(' / ') : '-';
-  }
-
-  private formatIngredientSourceLine(ingredient: IngredientItem): string {
-    const nameLine = this.formatIngredientNameLine(ingredient);
-    const sourceLine = this.formatPurchaseSummary(ingredient);
-
-    if (ingredient.isTotalWeight || sourceLine === '-') {
-      return nameLine;
-    }
-
-    return `${nameLine}\n来源：${sourceLine}`;
+    return [typeLabel, skuSource].filter(Boolean).join(' ') || '-';
   }
 
   private estimateWrappedLineCount(text: string, charsPerLine: number): number {
@@ -681,10 +659,9 @@ export class PdfGeneratorService {
 
     const tableWidth = PdfGeneratorService.INGREDIENT_TABLE_WIDTH;
     const columns: PrintTableColumn[] = [
-      { key: 'type', label: '类型', x: 40, width: 44 },
-      { key: 'name', label: '原料 / SKU / 来源', x: 84, width: 250 },
-      { key: 'amount', label: '用量', x: 334, width: 62 },
-      { key: 'method', label: '制备', x: 396, width: 156 },
+      { key: 'source', label: 'SKU / 品牌 / 渠道 / 规格', x: 40, width: 304 },
+      { key: 'amount', label: '用量', x: 344, width: 60 },
+      { key: 'method', label: '制备', x: 404, width: 148 },
     ];
 
     let tableTop = y;
@@ -731,25 +708,22 @@ export class PdfGeneratorService {
 
       const textY = y + Math.floor(5 * scaleFactor);
       const amountText = `${ing.amount}${ing.unit}`;
-      doc.text(ing.typeLabel || '-', columns[0].x + 3, textY, {
-        width: columns[0].width - 6,
-      });
       this.drawWrappedTableText(
         doc,
-        this.formatIngredientSourceLine(ing),
-        columns[1].x + 3,
+        this.formatIngredientSkuSourceLine(ing),
+        columns[0].x + 3,
         textY,
-        columns[1].width - 6,
+        columns[0].width - 6,
       );
-      doc.text(amountText, columns[2].x + 3, textY, {
-        width: columns[2].width - 6,
+      doc.text(amountText, columns[1].x + 3, textY, {
+        width: columns[1].width - 6,
       });
       this.drawWrappedTableText(
         doc,
         ing.method || '-',
-        columns[3].x + 3,
+        columns[2].x + 3,
         textY,
-        columns[3].width - 6,
+        columns[2].width - 6,
       );
       y += rowHeight;
     });
@@ -810,20 +784,20 @@ export class PdfGeneratorService {
     const verticalPadding = Math.floor(10 * scaleFactor);
     doc.fontSize(this.getIngredientTableFontSize(scaleFactor)).font('Chinese');
 
-    const nameHeight = this.getWrappedTableTextHeight(
+    const sourceHeight = this.getWrappedTableTextHeight(
       doc,
-      this.formatIngredientSourceLine(ingredient),
-      columns[1].width - 6,
+      this.formatIngredientSkuSourceLine(ingredient),
+      columns[0].width - 6,
     );
     const methodHeight = this.getWrappedTableTextHeight(
       doc,
       ingredient.method || '-',
-      columns[3].width - 6,
+      columns[2].width - 6,
     );
 
     return Math.max(
       minRowHeight,
-      nameHeight + verticalPadding,
+      sourceHeight + verticalPadding,
       methodHeight + verticalPadding,
     );
   }

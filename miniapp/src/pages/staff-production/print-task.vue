@@ -63,8 +63,7 @@
             <view class="section-title">原料清单（{{ realIngredientCount }}项）</view>
             <view class="compact-print-table">
               <view class="compact-table-row compact-table-header">
-                <view class="table-cell type">类型</view>
-                <view class="table-cell name">原料 / SKU / 来源</view>
+                <view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>
                 <view class="table-cell amount">用量</view>
                 <view class="table-cell method">制备</view>
               </view>
@@ -74,20 +73,8 @@
                 class="compact-table-row"
                 :class="{ 'total-weight': ingredient.isTotalWeight }"
               >
-                <view class="table-cell type">
-                  <text v-if="ingredient.typeLabel" :class="['type-tag', ingredient.typeClass]">
-                    {{ ingredient.typeLabel }}
-                  </text>
-                  <text v-else>-</text>
-                </view>
-                <view class="table-cell name">
-                  <view class="ingredient-name-line">{{ formatIngredientNameLine(ingredient) }}</view>
-                  <view
-                    v-if="formatPurchaseSummary(ingredient) !== '-'"
-                    class="purchase-summary purchase-summary-full"
-                  >
-                    来源：{{ formatPurchaseSummary(ingredient) }}
-                  </view>
+                <view class="table-cell source">
+                  <view class="ingredient-sku-source-line">{{ formatIngredientSkuSourceLine(ingredient) }}</view>
                 </view>
                 <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
                 <view class="table-cell method">
@@ -287,43 +274,35 @@ function formatDecimal(value: number | null | undefined, decimals = 2): string {
   return value.toFixed(decimals);
 }
 
-function formatIngredientNameLine(ingredient: {
+function formatIngredientSkuSourceLine(ingredient: {
   name?: string
   standardIngredientName?: string
   procurementSkuName?: string
+  procurementSkuBrand?: string
+  procurementSkuPurchaseChannel?: string
+  procurementSkuProductModel?: string
+  typeLabel?: string
   isTotalWeight?: boolean
 }): string {
   if (ingredient.isTotalWeight) {
     return ingredient.name || '-';
   }
 
-  const standardName = ingredient.standardIngredientName || '';
-  const skuName = ingredient.procurementSkuName || ingredient.name || '';
-
-  if (standardName && skuName && standardName !== skuName) {
-    return `${standardName} / ${skuName}`;
-  }
-
-  return skuName || standardName || '-';
-}
-
-function formatPurchaseSummary(ingredient: {
-  procurementSkuBrand?: string
-  procurementSkuPurchaseChannel?: string
-  procurementSkuProductModel?: string
-  isTotalWeight?: boolean
-}): string {
-  if (ingredient.isTotalWeight) {
-    return '-';
-  }
-
-  const parts = getPrintablePurchaseSummaryParts(
+  const skuName = (
+    ingredient.procurementSkuName ||
+    ingredient.name ||
+    ingredient.standardIngredientName ||
+    ''
+  ).trim();
+  const sourceParts = getPrintablePurchaseSummaryParts(
     ingredient.procurementSkuBrand,
     ingredient.procurementSkuPurchaseChannel,
     ingredient.procurementSkuProductModel,
   );
+  const skuSource = [skuName || '-', ...sourceParts].join(' / ');
+  const typeLabel = ingredient.typeLabel?.trim() || '';
 
-  return parts.length > 0 ? parts.join(' / ') : '-';
+  return [typeLabel, skuSource].filter(Boolean).join(' ') || '-';
 }
 
 function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
@@ -738,26 +717,21 @@ const handlePrint = async () => {
     border-right: none;
   }
 
-  &.type {
-    flex: 0 0 58rpx;
-    text-align: center;
-  }
-
-  &.name {
+  &.source {
     flex: 1 1 0;
   }
 
   &.amount {
-    flex: 0 0 82rpx;
+    flex: 0 0 78rpx;
     white-space: nowrap;
   }
 
   &.method {
-    flex: 0 0 205rpx;
+    flex: 0 0 196rpx;
   }
 }
 
-.ingredient-name-line,
+.ingredient-sku-source-line,
 .method-text {
   display: block;
   overflow: visible;
@@ -767,49 +741,13 @@ const handlePrint = async () => {
   overflow-wrap: anywhere;
 }
 
-.ingredient-name-line {
+.ingredient-sku-source-line {
   color: #222;
   font-weight: 600;
 }
 
-.purchase-summary {
-  color: #555;
-}
-
-.purchase-summary-full {
-  display: block;
-  overflow: visible;
-  white-space: normal;
-  text-overflow: clip;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-}
-
 .method-text {
   color: #333;
-}
-
-.type-tag {
-  display: inline-block;
-  padding: 2rpx 6rpx;
-  border-radius: 4rpx;
-  font-size: 14rpx;
-  font-weight: bold;
-
-  &.type-food {
-    background-color: #e7f4ef;
-    color: #389078;
-  }
-
-  &.type-supplement {
-    background-color: #fff3dc;
-    color: #d28a17;
-  }
-
-  &.type-packaging {
-    background-color: #e8f1fb;
-    color: #2e7acb;
-  }
 }
 
 .bottom-action-bar {

@@ -133,6 +133,49 @@ const removeCodeQualityNoDependencyFiles = (distDir) => {
   }
 };
 
+const isNonRuntimeBuildFile = (filePath) => (
+  /\.(?:spec|test)\.[cm]?[jt]s$/.test(normalizeModulePath(filePath))
+);
+
+const removeNonRuntimeBuildFiles = (distDir) => {
+  let removedFiles = 0;
+
+  const visit = (dir) => {
+    if (!fs.existsSync(dir)) {
+      return;
+    }
+
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        visit(entryPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const relativePath = path.relative(distDir, entryPath);
+      if (!isNonRuntimeBuildFile(relativePath)) {
+        continue;
+      }
+
+      fs.rmSync(entryPath, { force: true });
+      removedFiles += 1;
+    }
+  };
+
+  visit(distDir);
+
+  if (removedFiles > 0) {
+    console.log(`✅ 已移除非运行时测试文件: ${removedFiles} 个 (${distDir})`);
+  }
+
+  return removedFiles;
+};
+
 const syncProjectConfig = (projectConfig, rootProjectConfig, normalizedProjectSetting) => {
   const syncedConfig = {
     ...projectConfig,
@@ -455,6 +498,7 @@ const run = () => {
     }
 
     removeCodeQualityNoDependencyFiles(distDir);
+    removeNonRuntimeBuildFiles(distDir);
   }
 
   if (processedDistCount === 0) {
@@ -471,6 +515,7 @@ if (require.main === module) {
 
 module.exports = {
   localizeSubpackageOnlyModules,
+  removeNonRuntimeBuildFiles,
   syncProjectConfig,
   run,
 };

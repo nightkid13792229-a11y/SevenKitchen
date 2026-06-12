@@ -82,8 +82,7 @@ describe('staff production scheduling guardrails', () => {
   it('prints production ingredients by procurement sku without counting subtotal rows', () => {
     expect(printTaskSource).toContain('realIngredientCount');
     expect(printTaskSource).toContain('!ingredient.isTotalWeight');
-    expect(printTaskSource).toContain('formatIngredientNameLine');
-    expect(printTaskSource).toContain('formatPurchaseSummary');
+    expect(printTaskSource).toContain('formatIngredientSkuSourceLine');
     expect(printTaskSource).toContain('standardIngredientName');
     expect(printTaskSource).toContain('procurementSkuName');
     expect(printTaskSource).toContain('procurementSkuBrand');
@@ -98,11 +97,15 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain('compact-print-table');
     expect(printTaskSource).toContain('orderCardsClass');
     expect(printTaskSource).toContain("'single-order'");
-    expect(printTaskSource).toContain('ingredient-name-line');
-    expect(printTaskSource).toContain('purchase-summary');
-    expect(printTaskSource).toContain('原料 / SKU / 来源');
+    expect(printTaskSource).toContain('ingredient-sku-source-line');
+    expect(printTaskSource).toContain('SKU / 品牌 / 渠道 / 规格');
+    expect(printTaskSource).not.toContain('<view class="table-cell type">类型</view>');
+    expect(printTaskSource).not.toContain('<view class="table-cell type">');
+    expect(printTaskSource).not.toContain('原料 / SKU / 来源');
+    expect(printTaskSource).not.toContain('来源：');
+    expect(printTaskSource).not.toContain('purchase-summary');
     expect(printTaskSource).not.toContain('标准原料 / SKU');
-    expect(printTaskSource).not.toContain('品牌 / 渠道 / 规格');
+    expect(printTaskSource).not.toContain('<view class="table-cell purchase">品牌 / 渠道 / 规格</view>');
     expect(printTaskSource).toContain('remark-text');
     expect(printTaskSource).toContain('-webkit-line-clamp: 2');
     expect(printTaskSource).not.toContain('标准：{{ ingredient.standardIngredientName }}');
@@ -173,18 +176,22 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<text class="field-value">{{ formatPackagePlan(order) }}</text>');
   });
 
-  it('shows purchase summaries inside the combined ingredient source cell in production task print preview', () => {
-    expect(printTaskSource).toContain('purchase-summary-full');
-    expect(printTaskSource).toContain('来源：{{ formatPurchaseSummary(ingredient) }}');
+  it('shows SKU, brand, channel and spec inline in the first ingredient column', () => {
+    expect(printTaskSource).toContain('formatIngredientSkuSourceLine(ingredient)');
+    expect(printTaskSource).toContain('getPrintablePurchaseSummaryParts');
     expect(printTaskSource).toContain('word-break: break-all');
+    expect(printTaskSource).not.toContain('formatIngredientNameLine');
+    expect(printTaskSource).not.toContain('formatPurchaseSummary');
+    expect(printTaskSource).not.toContain('purchase-summary-full');
+    expect(printTaskSource).not.toContain('来源：{{ formatPurchaseSummary(ingredient) }}');
     expect(printTaskSource).not.toContain('<view class="purchase-summary">{{ formatPurchaseSummary(ingredient) }}</view>');
     expect(printTaskSource).not.toContain('<view class="table-cell purchase">');
   });
 
-  it('shows the combined ingredient source column before preparation in production task print preview', () => {
-    const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell name">原料 / SKU / 来源</view>');
+  it('shows the inline SKU source column before preparation in production task print preview', () => {
+    const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell source">SKU / 品牌 / 渠道 / 规格</view>');
     const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">制备</view>');
-    const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell name">', sourceHeaderIndex + 1);
+    const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell source">', sourceHeaderIndex + 1);
     const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);
 
     expect(sourceHeaderIndex).toBeGreaterThan(-1);
@@ -195,13 +202,13 @@ describe('staff production scheduling guardrails', () => {
     expect(sourceCellIndex).toBeLessThan(methodCellIndex);
   });
 
-  it('lets ingredient name and preparation cells wrap in production task print preview', () => {
-    expect(printTaskSource).toContain('ingredient-name-line');
+  it('lets ingredient source and preparation cells wrap in production task print preview', () => {
+    expect(printTaskSource).toContain('ingredient-sku-source-line');
     expect(printTaskSource).toContain('method-text');
-    expect(printTaskSource).toContain(`.ingredient-name-line,
+    expect(printTaskSource).toContain(`.ingredient-sku-source-line,
 .method-text {
   display: block;`);
-    expect(printTaskSource).not.toContain(`.ingredient-name-line,
+    expect(printTaskSource).not.toContain(`.ingredient-sku-source-line,
 .method-text {
   display: -webkit-box;`);
   });

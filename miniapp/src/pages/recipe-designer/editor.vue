@@ -10,11 +10,6 @@
     @tap="collapseAssessmentIfOpen"
     @touchmove="lockEditorScrollWhileItemDragging"
   >
-    <view v-if="isCustomerMode && customerDogId" class="customer-dog-context-block">
-      <text class="customer-dog-context-title">为 {{ customerDogName }} 设计</text>
-      <text class="customer-dog-context-meta">{{ recipeSeriesDisplayName }} · {{ assessmentStandardName }}</text>
-    </view>
-
     <view v-if="draftSeriesLifeStage" class="series-context-block">
       <text class="series-context-title">{{ recipeSeriesDisplayName }}</text>
       <view class="series-context-details">
@@ -487,7 +482,7 @@
           :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'DIY'"
           @tap="goToPrivateRecipeTarget('DIY')"
         >
-          生成 DIY 制作单
+          生成制作单
         </button>
         <button class="link-btn customer-save-btn" @tap="goBackToRecipeDesignerList">仅保存</button>
       </view>

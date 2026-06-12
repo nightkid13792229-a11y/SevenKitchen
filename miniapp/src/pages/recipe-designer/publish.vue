@@ -137,7 +137,7 @@
           :disabled="!canCreatePrivateSnapshot || privateSnapshotCreatingTarget === 'DIY'"
           @tap="goToPrivateRecipeTarget('DIY')"
         >
-          生成 DIY 制作单
+          生成制作单
         </button>
       </template>
       <template v-else>

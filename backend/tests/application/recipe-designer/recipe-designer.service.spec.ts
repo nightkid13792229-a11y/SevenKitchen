@@ -6098,6 +6098,104 @@ describe('RecipeDesignerService', () => {
       expect(prisma.designRecipe.deleteMany).not.toHaveBeenCalled();
     });
 
+    it('duplicates an ordinary customer recipe as a dog-bound editable card', async () => {
+      const sourceItem = item({
+        id: 'customer-source-item',
+        ingredientId: 'ingredient-customer',
+        nutritionFoodId: 'food-customer',
+        weightG: 128,
+        sortOrder: 1,
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-dog',
+          name: 'Star 控重鸡肉餐',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          designs: [
+            draft({
+              id: 'customer-source-design',
+              name: 'Star 控重鸡肉餐',
+              createdBy: 'customer-1',
+              status: 'DRAFT',
+              seriesId: 'series-dog',
+              seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+              fediafDogScenario: 'ADULT_MER_95',
+              customerDogId: 'dog-1',
+              items: [sourceItem],
+            }),
+          ],
+          recipes: [],
+        }),
+      );
+      prisma.recipeSeries.create.mockResolvedValue(
+        seriesRecord({
+          id: 'series-dog-copy',
+          name: 'Star 控重鸡肉餐 副本',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 2 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'customer-copy-design',
+          name: 'Star 控重鸡肉餐 副本',
+          createdBy: 'customer-1',
+          version: 3,
+          seriesId: 'series-dog-copy',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          customerDogId: 'dog-1',
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.duplicateSeries('series-dog', {
+          userId: 'customer-1',
+          role: 'CUSTOMER',
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'series-dog-copy',
+          name: 'Star 控重鸡肉餐 副本',
+          customerDogId: 'dog-1',
+          primaryDraftId: 'customer-copy-design',
+          customerStatus: 'DRAFT',
+        }),
+      );
+
+      expect(prisma.recipeSeries.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Star 控重鸡肉餐 副本',
+          status: 'ACTIVE',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+        }),
+      });
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Star 控重鸡肉餐 副本',
+          seriesId: 'series-dog-copy',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          customerDogId: 'dog-1',
+          items: {
+            create: [
+              expect.objectContaining({
+                ingredientId: 'ingredient-customer',
+                nutritionFoodId: 'food-customer',
+                weightG: 128,
+              }),
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+    });
+
     it('duplicates one life stage into a new series containing only that editable draft', async () => {
       const adultItem = item({
         id: 'adult-source-item',

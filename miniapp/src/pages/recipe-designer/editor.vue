@@ -484,7 +484,13 @@
         >
           生成制作单
         </button>
-        <button class="link-btn customer-save-btn" @tap="goBackToRecipeDesignerList">仅保存</button>
+        <button
+          class="link-btn customer-report-btn"
+          :disabled="loading || redirectingToEditableDraft || revertingToLatestOfficial || autoSaveStatus === 'saving'"
+          @tap="goToNutritionReport"
+        >
+          查看营养报告
+        </button>
       </view>
       <button
         v-else
@@ -803,7 +809,7 @@ interface IngredientOptionSection {
 }
 
 const DEFAULT_WINDOW_WIDTH_PX = 375
-const ASSESSMENT_COLLAPSED_HEIGHT_RPX = 136
+const ASSESSMENT_COLLAPSED_HEIGHT_RPX = 188
 const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108
 const EDITOR_BOTTOM_GAP_RPX = 24
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
@@ -1849,10 +1855,6 @@ function goToSupplementLibrary() {
     ? `?returnTo=editor&draftId=${encodeURIComponent(draftId.value)}`
     : ''
   uni.navigateTo({ url: `/pages/recipe-designer/supplement-library${query}` })
-}
-
-function goBackToRecipeDesignerList() {
-  uni.redirectTo({ url: '/pages/recipe-designer/list' })
 }
 
 async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
@@ -4314,9 +4316,9 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  min-height: 136rpx;
+  min-height: 188rpx;
   max-height: calc(100vh - 72px);
-  padding: 8rpx 32rpx 6rpx;
+  padding: 8rpx 32rpx 0;
   background: #eef4f8;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.08);
   border-radius: 20rpx 20rpx 0 0;
@@ -4604,7 +4606,7 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 18;
   padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -4617,13 +4619,13 @@ function formatAssessmentNumber(value: unknown) {
 
 .customer-next-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr) 128rpx;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12rpx;
   align-items: center;
 }
 
 .customer-next-btn,
-.customer-save-btn {
+.customer-report-btn {
   width: 100%;
   height: 76rpx;
   padding: 0 8rpx;
@@ -4632,7 +4634,7 @@ function formatAssessmentNumber(value: unknown) {
   line-height: 76rpx;
 }
 
-.customer-save-btn {
+.customer-report-btn {
   border-color: #d9e2ec;
   color: #475569;
 }

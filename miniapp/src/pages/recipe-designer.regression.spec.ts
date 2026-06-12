@@ -385,11 +385,20 @@ describe('recipe designer mobile entry', () => {
   })
 
   it('offers customer next actions from editor and nutrition report without staff-only publishing', () => {
+    const editorCustomerActionsBlock =
+      editorSource.match(/<view v-if="customerNextActions" class="customer-next-actions">[\s\S]*?\n      <\/view>/)?.[0] || ''
+
     expect(editorSource).toContain('customerNextActions')
     expect(editorSource).toContain('createPrivateRecipeSnapshot')
     expect(editorSource).toContain("target: 'ORDER'")
     expect(editorSource).toContain("target: 'DIY'")
     expect(editorSource).toContain('goToPrivateRecipeTarget')
+    expect(editorCustomerActionsBlock).toContain('订购成品')
+    expect(editorCustomerActionsBlock).toContain('生成制作单')
+    expect(editorCustomerActionsBlock).toContain('查看营养报告')
+    expect(editorCustomerActionsBlock).toContain('@tap="goToNutritionReport"')
+    expect(editorCustomerActionsBlock).not.toContain('仅保存')
+    expect(editorSource).not.toContain('goBackToRecipeDesignerList')
     expect(editorSource).not.toContain('为 {{ customerDogName }} 设计')
     expect(publishSource).toContain('customerReportNextActions')
     expect(publishSource).toContain('createPrivateRecipeSnapshot')
@@ -874,9 +883,9 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('<scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list"')
     expect(editorSource).toContain('ASSESSMENT_COLLAPSED_HEIGHT_RPX')
     expect(editorSource).toContain('assessmentCollapsedHeightPx.value = rpxToPx(ASSESSMENT_COLLAPSED_HEIGHT_RPX, windowWidth)')
-    expect(editorSource).toContain('min-height: 136rpx')
+    expect(editorSource).toContain('min-height: 188rpx')
     expect(editorSource).not.toContain('min-height: 88px')
-    expect(editorSource).toContain('padding: 8rpx 32rpx 6rpx')
+    expect(editorSource).toContain('padding: 8rpx 32rpx 0')
     expect(editorSource).toContain('background: #eef4f8')
     expect(editorSource).toContain('assessment-list-surface')
     expect(editorSource).not.toContain('drawer-toggle')
@@ -1065,8 +1074,17 @@ describe('recipe designer editor guardrails', () => {
   })
 
   it('keeps the collapsed assessment drawer flush with the publish bar on real devices', () => {
+    const collapsedHeightMatch = editorSource.match(/const ASSESSMENT_COLLAPSED_HEIGHT_RPX = (\d+)/)
+    const drawerStyle = editorSource.match(/\.assessment-drawer\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    const publishBarStyle = editorSource.match(/\.bottom-publish-bar\s*\{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(Number(collapsedHeightMatch?.[1] || 0)).toBeGreaterThanOrEqual(184)
     expect(editorSource).toContain('BOTTOM_PUBLISH_BAR_HEIGHT_RPX')
     expect(editorSource).toContain('const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108')
+    expect(drawerStyle).toContain('min-height: 188rpx;')
+    expect(drawerStyle).toContain('padding: 8rpx 32rpx 0;')
+    expect(drawerStyle).not.toContain('padding: 8rpx 32rpx 6rpx;')
+    expect(publishBarStyle).toContain('box-shadow: none;')
     expect(editorSource).toContain('assessmentPublishBarHeightPx')
     expect(editorSource).toContain('getSafeAreaBottomPx')
     expect(editorSource).toContain('const bottomInsetCandidates = [explicitInset, derivedInset]')

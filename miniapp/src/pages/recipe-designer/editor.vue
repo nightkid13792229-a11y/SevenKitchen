@@ -320,11 +320,13 @@
     >
       <view
         class="drawer-touch-zone"
-        @touchstart.stop="onAssessmentTouchStart"
-        @touchmove.stop.prevent="onAssessmentTouchMove"
-        @touchend.stop="onAssessmentTouchEnd"
       >
-        <view class="drawer-drag-zone">
+        <view
+          class="drawer-drag-zone"
+          @touchstart.stop="onAssessmentTouchStart"
+          @touchmove.stop.prevent="onAssessmentTouchMove"
+          @touchend.stop="onAssessmentTouchEnd"
+        >
           <view class="drawer-grip"></view>
         </view>
 
@@ -4332,8 +4334,7 @@ function formatAssessmentNumber(value: unknown) {
   transition: none;
 }
 
-.drawer-touch-zone,
-.drawer-drag-zone {
+.drawer-touch-zone {
   flex: 0 0 auto;
 }
 
@@ -4341,11 +4342,21 @@ function formatAssessmentNumber(value: unknown) {
   padding-bottom: 8rpx;
 }
 
+.drawer-drag-zone {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .drawer-grip {
   flex: 0 0 auto;
   width: 76rpx;
   height: 8rpx;
-  margin: 0 auto 8rpx;
+  margin: 0;
   border-radius: 999rpx;
   background: #d8dde6;
 }

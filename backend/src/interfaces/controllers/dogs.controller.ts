@@ -76,12 +76,46 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import { WeightRecordService } from '../../application/weight-record/weight-record.service';
+import { OrderService } from '../../application/order/order.service';
 import { CreateWeightRecordDto } from '../dto/weight-record/create-weight-record.dto';
 import {
   WeightRecordResponseDto,
   WeightRecordListResponseDto,
 } from '../dto/weight-record/weight-record-response.dto';
 import { parseYYYYMMDD } from '../../utils/date-helpers';
+
+const ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+const ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.heic',
+  '.heif',
+  '.pdf',
+];
+
+function hasAllowedHealthAttachmentType(file: Express.Multer.File) {
+  if (ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) {
+    return true;
+  }
+
+  const normalizedName = file.originalname?.toLowerCase() || '';
+  return ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS.some((extension) =>
+    normalizedName.endsWith(extension),
+  );
+}
 
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
@@ -104,6 +138,7 @@ export class DogsController {
     private readonly weightRecordService: WeightRecordService,
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
+    private readonly orderService?: OrderService,
   ) {}
 
   @Post()
@@ -689,6 +724,35 @@ export class DogsController {
     );
 
     return ApiResponseDto.success(profiles);
+  }
+
+  @Get(':id/finished-food-history')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'List finished-food order history for current customer dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  async listFinishedFoodHistory(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any[]> | ApiResponseDto<null>> {
+    const dog = await this.dogRepository.findById(id);
+    if (!dog || dog.ownerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+    if (!this.orderService) {
+      throw new NotFoundException('Order service not available');
+    }
+
+    const history = await this.orderService.listDogFinishedFoodHistory(
+      id,
+      user.customerId,
+    );
+    return ApiResponseDto.success(history);
   }
 
   @Get(':id')
@@ -1364,16 +1428,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 
@@ -1440,16 +1497,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 

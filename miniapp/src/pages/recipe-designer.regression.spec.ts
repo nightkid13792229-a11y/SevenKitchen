@@ -411,6 +411,26 @@ describe('recipe designer mobile entry', () => {
     expect(publishSource).not.toContain('生成 DIY 制作单')
   })
 
+  it('lets customers continue to order or DIY after confirming nutrition warnings', () => {
+    const editorSnapshotGateBlock =
+      editorSource.match(/const canCreatePrivateSnapshot = computed[\s\S]*?\n\)/)?.[0] || ''
+    const publishSnapshotGateBlock =
+      publishSource.match(/const canCreatePrivateSnapshot = computed[\s\S]*?\n\}\)/)?.[0] || ''
+
+    expect(apiSource).toContain('RecipeDesignerNutritionWarning')
+    expect(apiSource).toContain('nutritionWarning?: RecipeDesignerNutritionWarning | null')
+    expect(listSource).toContain('confirmCustomerNutritionWarning(seriesItem.actionAvailability?.nutritionWarning)')
+    expect(listSource).toContain("title: '营养提醒'")
+    expect(listSource).toContain("confirmText: '继续'")
+    expect(listSource).toContain("cancelText: '返回调整'")
+    expect(editorSnapshotGateBlock).not.toContain('isCompliant.value')
+    expect(editorSource).toContain('confirmRecipeNutritionWarning(getDraftNutritionWarningMessage())')
+    expect(publishSnapshotGateBlock).not.toContain('reportIsCompliant.value')
+    expect(publishSource).toContain('confirmRecipeNutritionWarning(getDraftNutritionWarningMessage())')
+    expect(editorSource).not.toContain("title: '请先完成营养评估'")
+    expect(publishSource).not.toContain("title: '请先完成营养评估'")
+  })
+
   it('places reproduction as the last option in the new draft life stage picker', () => {
     const scenarioOptionsBlock = listSource.match(
       /const scenarioOptions:[\s\S]*?\n\]/,

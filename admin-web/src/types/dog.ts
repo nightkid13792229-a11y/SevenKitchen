@@ -51,9 +51,9 @@ export const DogGenderLabels: Record<DogGender, string> = {
 }
 
 export const ActivityLevelLabels: Record<ActivityLevel, string> = {
-  [ActivityLevel.RESTING]: '静养',
-  [ActivityLevel.LOW]: '低',
-  [ActivityLevel.NORMAL]: '正常',
+  [ActivityLevel.RESTING]: '休息静养',
+  [ActivityLevel.LOW]: '城市日常',
+  [ActivityLevel.NORMAL]: '规律运动',
   [ActivityLevel.HIGH]: '高',
   [ActivityLevel.WORKING]: '工作犬'
 }

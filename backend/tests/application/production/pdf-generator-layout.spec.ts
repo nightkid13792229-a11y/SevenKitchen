@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { PdfGeneratorService } from '../../../src/infrastructure/services/pdf-generator.service';
 
 describe('production task PDF layout guardrails', () => {
   const source = readFileSync(
@@ -10,12 +11,60 @@ describe('production task PDF layout guardrails', () => {
     'utf8',
   );
 
-  it('uses the approved compact A4 ingredient table fields', () => {
+  it('uses the approved readable A4 ingredient table fields', () => {
     expect(source).toContain('formatIngredientNameLine');
     expect(source).toContain('formatPurchaseSummary');
-    expect(source).toContain('品牌 / 渠道 / 规格');
+    expect(source).toContain('formatIngredientSourceLine');
+    expect(source).toContain('原料 / SKU / 来源');
+    expect(source).not.toContain("{ key: 'purchase'");
     expect(source).toContain('truncateText');
     expect(source).toContain('getPrintableIngredientCount');
+  });
+
+  it('keeps ingredient table text readable with a larger base font', () => {
+    expect(source).toContain('INGREDIENT_TABLE_FONT_SIZE = 8.5');
+    expect(source).not.toContain('Math.floor(7 * scaleFactor)');
+  });
+
+  it('keeps dense ingredient lists at full scale instead of shrinking the table text', () => {
+    const service = new PdfGeneratorService();
+    const denseIngredients = Array.from({ length: 20 }, (_, index) => ({
+      name: `原料${index}`,
+      standardIngredientName: `标准原料${index}`,
+      procurementSkuName: `高品质长名称采购SKU${index}`,
+      procurementSkuBrand: '山姆自营',
+      procurementSkuPurchaseChannel: '山姆会员店',
+      procurementSkuProductModel: '1.2kg/盒',
+      amount: '123.45',
+      unit: 'g',
+      typeLabel: '食材',
+      typeClass: 'food',
+      method: '去皮、去骨、生重、打碎、充分搅拌',
+    }));
+
+    const scaleFactor = (service as any).calculateScaleFactor({
+      recipeName: '测试食谱',
+      recipeVersion: '1',
+      currentPotNumber: 1,
+      totalPots: 1,
+      status: 'PENDING',
+      totalProductionG: 1800,
+      createdAt: '2026-06-12T08:09:00.000Z',
+      orderItems: [
+        {
+          packageSpecG: 60,
+          packageCount: 30,
+          dogName: '乖乖',
+          recipientName: '莫',
+          recipientCity: '湖州市',
+        },
+      ],
+      parsedIngredients: denseIngredients,
+    });
+
+    expect(scaleFactor).toBe(1);
+    expect(source).toContain('drawIngredientTableHeader');
+    expect(source).toContain('doc.addPage()');
   });
 
   it('keeps order cards compact without adding an empty odd-order row', () => {
@@ -41,22 +90,32 @@ describe('production task PDF layout guardrails', () => {
   it('wraps purchase summaries in ingredient rows instead of hard truncating them', () => {
     expect(source).toContain('calculateIngredientRowHeight');
     expect(source).toContain('drawWrappedTableText');
-    expect(source).not.toContain('truncateText(this.formatPurchaseSummary(ing)');
+    expect(source).not.toContain(
+      'truncateText(this.formatPurchaseSummary(ing)',
+    );
   });
 
-  it('places preparation before purchase summary in the production task PDF table', () => {
+  it('places the combined ingredient source column before preparation', () => {
     const methodColumnIndex = source.indexOf("{ key: 'method', label: '制备'");
-    const purchaseColumnIndex = source.indexOf("{ key: 'purchase', label: '品牌 / 渠道 / 规格'");
+    const sourceColumnIndex = source.indexOf(
+      "{ key: 'name', label: '原料 / SKU / 来源'",
+    );
 
     expect(methodColumnIndex).toBeGreaterThan(-1);
-    expect(purchaseColumnIndex).toBeGreaterThan(-1);
-    expect(methodColumnIndex).toBeLessThan(purchaseColumnIndex);
+    expect(sourceColumnIndex).toBeGreaterThan(-1);
+    expect(sourceColumnIndex).toBeLessThan(methodColumnIndex);
   });
 
   it('wraps standard ingredient sku names and preparation methods instead of hard truncating them', () => {
-    expect(source).toContain('const nameHeight = this.getWrappedTableTextHeight');
-    expect(source).toContain('const methodHeight = this.getWrappedTableTextHeight');
-    expect(source).not.toContain('truncateText(this.formatIngredientNameLine(ing)');
+    expect(source).toContain(
+      'const nameHeight = this.getWrappedTableTextHeight',
+    );
+    expect(source).toContain(
+      'const methodHeight = this.getWrappedTableTextHeight',
+    );
+    expect(source).not.toContain(
+      'truncateText(this.formatIngredientNameLine(ing)',
+    );
     expect(source).not.toContain("truncateText(ing.method || '-'");
   });
 

@@ -75,6 +75,9 @@ describe('DogsController attachment cleanup', () => {
       deleteImage: jest.fn(),
       deleteImageByUrl: jest.fn(),
     };
+    const orderService = {
+      listDogFinishedFoodHistory: jest.fn(),
+    };
 
     const controller = new DogsController(
       dogRepository as any,
@@ -87,6 +90,7 @@ describe('DogsController attachment cleanup', () => {
       weightRecordService as any,
       prisma as any,
       cosService as any,
+      orderService as any,
     );
 
     return {
@@ -98,8 +102,49 @@ describe('DogsController attachment cleanup', () => {
       allergyRecordRepository,
       dogService,
       cosService,
+      orderService,
     };
   }
+
+  it('lists finished-food order history only for the current customer dog', async () => {
+    const { controller, dogRepository, orderService } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-1' }));
+    orderService.listDogFinishedFoodHistory.mockResolvedValue([
+      {
+        orderId: 'order-1',
+        recipeName: '鸡肉牛肉鲜食',
+      },
+    ]);
+
+    const result = await (controller as any).listFinishedFoodHistory(
+      'dog-1',
+      { customerId: 'owner-1' },
+    );
+
+    expect(dogRepository.findById).toHaveBeenCalledWith('dog-1');
+    expect(orderService.listDogFinishedFoodHistory).toHaveBeenCalledWith(
+      'dog-1',
+      'owner-1',
+    );
+    expect(result.code).toBe(0);
+    expect(result.data[0]).toMatchObject({
+      orderId: 'order-1',
+      recipeName: '鸡肉牛肉鲜食',
+    });
+  });
+
+  it('does not expose another customer dog finished-food history', async () => {
+    const { controller, dogRepository, orderService } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-2' }));
+
+    const result = await (controller as any).listFinishedFoodHistory(
+      'dog-1',
+      { customerId: 'owner-1' },
+    );
+
+    expect(result.code).toBe(404);
+    expect(orderService.listDogFinishedFoodHistory).not.toHaveBeenCalled();
+  });
 
   it('deletes removed medical attachment files from COS after a successful update', async () => {
     const {
@@ -444,6 +489,68 @@ describe('DogsController attachment cleanup', () => {
 
     expect(cosService.deleteImageByUrl).toHaveBeenCalledWith(
       'https://img.sevenkitchen.cloud/dogs/avatars/old-avatar.png',
+    );
+  });
+
+  it('accepts HEIC medical attachments from iPhone uploads', async () => {
+    const {
+      controller,
+      cosService,
+    } = createController();
+
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/medical-reports/temp/report.heic',
+      key: 'medical-reports/temp/report.heic',
+    });
+
+    const result: any = await controller.uploadMedicalAttachment(
+      {
+        size: 1024,
+        mimetype: 'image/heic',
+        originalname: 'report.heic',
+        buffer: Buffer.from('image'),
+      } as any,
+      { customerId: 'owner-1' } as any,
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      expect.objectContaining({ originalname: 'report.heic' }),
+      'report.heic',
+      'medical-reports/temp',
+    );
+    expect(result.data.url).toBe(
+      'https://img.sevenkitchen.cloud/medical-reports/temp/report.heic',
+    );
+  });
+
+  it('accepts HEIF checkup attachments by file extension when mimetype is generic', async () => {
+    const {
+      controller,
+      cosService,
+    } = createController();
+
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/checkup-reports/temp/report.heif',
+      key: 'checkup-reports/temp/report.heif',
+    });
+
+    const result: any = await controller.uploadCheckupAttachment(
+      {
+        size: 1024,
+        mimetype: 'application/octet-stream',
+        originalname: 'report.HEIF',
+        buffer: Buffer.from('image'),
+      } as any,
+      { customerId: 'owner-1' } as any,
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      expect.objectContaining({ originalname: 'report.HEIF' }),
+      'report.HEIF',
+      'checkup-reports/temp',
+    );
+    expect(result.data.url).toBe(
+      'https://img.sevenkitchen.cloud/checkup-reports/temp/report.heif',
     );
   });
 });

@@ -140,6 +140,9 @@ const DESIGN_RECIPE_LIST_SELECT = {
   nutritionStandard: true,
   energyDensityKcalPerKg: true,
   totalWeightG: true,
+  complianceStatus: true,
+  assessmentSummary: true,
+  missingDataReport: true,
   targetHealthTags: true,
   applicableLifeStages: true,
   notes: true,
@@ -399,6 +402,8 @@ type RecipeSeriesWorkbenchRecord = {
     totalWeightG?: number;
     customerDogId?: string | null;
     isCompliant?: boolean;
+    complianceStatus?: unknown;
+    assessmentSummary?: unknown;
     missingDataReport?: unknown;
     items?: unknown[];
   }>;
@@ -2624,7 +2629,7 @@ export class RecipeDesignerService {
       record.customerDogId ?? primaryDraft?.customerDogId ?? null;
     const scenario = (primaryDraft?.fediafDogScenario ??
       'ADULT_MER_110') as FediafDogScenarioCode;
-    const ready = this.isCustomerDraftReadyForSnapshot(primaryDraft);
+    const readiness = this.getCustomerDraftSnapshotReadiness(primaryDraft);
 
     return {
       id: record.id,
@@ -2635,13 +2640,20 @@ export class RecipeDesignerService {
       scenarioLabel: this.getScenarioDisplayLabel(scenario),
       primaryDraftId: primaryDraft?.id ?? '',
       privateRecipeId: privateRecipe?.recipeId ?? '',
-      customerStatus: ready ? 'READY' : primaryDraft ? 'DRAFT' : 'EMPTY',
+      customerStatus: readiness.canCreateSnapshot
+        ? 'READY'
+        : primaryDraft
+          ? 'DRAFT'
+          : 'EMPTY',
       updatedAt: primaryDraft?.updatedAt ?? record.updatedAt,
       actionAvailability: {
         canContinueEditing: Boolean(primaryDraft?.id),
-        canOrder: ready,
-        canGenerateDiy: ready,
-        disabledReason: ready ? '' : '当前食谱还未达到可用条件',
+        canOrder: readiness.canCreateSnapshot,
+        canGenerateDiy: readiness.canCreateSnapshot,
+        disabledReason: readiness.canCreateSnapshot
+          ? ''
+          : readiness.disabledReason,
+        nutritionWarning: readiness.nutritionWarning ?? undefined,
       },
     };
   }
@@ -2663,23 +2675,166 @@ export class RecipeDesignerService {
         })
       | null,
   ) {
-    if (!draft) return false;
+    return this.getCustomerDraftSnapshotReadiness(draft).canCreateSnapshot;
+  }
+
+  private getCustomerDraftSnapshotReadiness(
+    draft?:
+      | (Partial<DesignRecipeWithItems> & {
+          items?: unknown[];
+          totalWeightG?: number;
+          energyDensityKcalPerKg?: number | null;
+          isCompliant?: boolean;
+          complianceStatus?: unknown;
+          assessmentSummary?: unknown;
+          missingDataReport?: unknown;
+          createdBy?: string | null;
+          customerDogId?: string | null;
+        })
+      | null,
+  ): {
+    canCreateSnapshot: boolean;
+    disabledReason: string;
+    nutritionWarning: ReturnType<
+      RecipeDesignerService['buildCustomerNutritionWarning']
+    >;
+  } {
+    if (!draft) {
+      return {
+        canCreateSnapshot: false,
+        disabledReason: '暂无可用草稿',
+        nutritionWarning: null,
+      };
+    }
+    if (!draft.createdBy) {
+      return {
+        canCreateSnapshot: false,
+        disabledReason: '当前食谱还未达到可用条件',
+        nutritionWarning: null,
+      };
+    }
+    if (!draft.customerDogId) {
+      return {
+        canCreateSnapshot: false,
+        disabledReason: '请先绑定狗狗档案',
+        nutritionWarning: null,
+      };
+    }
+    const hasIncludedItems =
+      Array.isArray(draft.items) &&
+      draft.items.some((item) => {
+        const maybeItem = item as { includeInAssessment?: boolean };
+        return maybeItem.includeInAssessment !== false;
+      });
+    if (!hasIncludedItems || Number(draft.totalWeightG) <= 0) {
+      return {
+        canCreateSnapshot: false,
+        disabledReason: '请先添加食材并确认用量',
+        nutritionWarning: null,
+      };
+    }
+    if (Number(draft.energyDensityKcalPerKg) <= 0) {
+      return {
+        canCreateSnapshot: false,
+        disabledReason: '缺少能量数据，暂时无法进入下一步',
+        nutritionWarning: null,
+      };
+    }
+
+    return {
+      canCreateSnapshot: true,
+      disabledReason: '',
+      nutritionWarning: this.buildCustomerNutritionWarning(draft),
+    };
+  }
+
+  private buildCustomerNutritionWarning(
+    draft:
+      | (Partial<DesignRecipeWithItems> & {
+          isCompliant?: boolean;
+          complianceStatus?: unknown;
+          assessmentSummary?: unknown;
+          missingDataReport?: unknown;
+        })
+      | null,
+  ): {
+    hasWarning: true;
+    overallStatus: string;
+    counts: {
+      deficient: number;
+      excess: number;
+      missingData: number;
+    };
+    message: string;
+  } | null {
+    if (!draft) return null;
     const missing = Array.isArray(draft.missingDataReport)
       ? draft.missingDataReport
       : [];
-    return Boolean(
-      draft.createdBy &&
-        draft.customerDogId &&
-        Array.isArray(draft.items) &&
-        draft.items.some((item) => {
-          const maybeItem = item as { includeInAssessment?: boolean };
-          return maybeItem.includeInAssessment !== false;
-        }) &&
-        Number(draft.totalWeightG) > 0 &&
-        Number(draft.energyDensityKcalPerKg) > 0 &&
-        draft.isCompliant &&
-        missing.length === 0,
+    const assessmentSummary = this.asRecord(draft.assessmentSummary);
+    const summary = this.asRecord(assessmentSummary?.summary);
+    const rawSummary = this.asRecord(assessmentSummary?.rawSummary);
+    const overallStatus = String(
+      assessmentSummary?.overallStatus ||
+        (draft.isCompliant ? 'COMPLIANT' : 'NON_COMPLIANT'),
+    ).toUpperCase();
+    const deficient = this.readFirstNonNegativeNumber(
+      summary?.deficient,
+      rawSummary?.deficient,
     );
+    const excess = this.readFirstNonNegativeNumber(
+      summary?.excess,
+      rawSummary?.excess,
+    );
+    const missingData = Math.max(
+      missing.length,
+      this.readFirstNonNegativeNumber(
+        summary?.missingData,
+        rawSummary?.missingData,
+      ),
+    );
+
+    if (
+      draft.isCompliant &&
+      overallStatus === 'COMPLIANT' &&
+      deficient === 0 &&
+      excess === 0 &&
+      missingData === 0
+    ) {
+      return null;
+    }
+
+    const parts: string[] = [];
+    if (missingData > 0) parts.push(`${missingData}项缺少营养数据`);
+    if (deficient > 0) parts.push(`${deficient}项营养不足`);
+    if (excess > 0) parts.push(`${excess}项营养超标`);
+    if (parts.length === 0) {
+      parts.push('部分营养项未达标或需复核');
+    }
+
+    return {
+      hasWarning: true,
+      overallStatus,
+      counts: { deficient, excess, missingData },
+      message: `当前食谱有营养提醒：${parts.join('、')}。可以继续生成制作单或订购，建议后续再优化配方。`,
+    };
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readFirstNonNegativeNumber(...values: unknown[]): number {
+    for (const value of values) {
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue) && numericValue >= 0) {
+        return Math.trunc(numericValue);
+      }
+    }
+    return 0;
   }
 
   private filterSeriesWorkbenchCards<
@@ -3409,8 +3564,9 @@ export class RecipeDesignerService {
     ) {
       throw new NotFoundException(`Design recipe ${id} not found`);
     }
-    if (!this.isCustomerDraftReadyForSnapshot(draft)) {
-      throw new BadRequestException('当前食谱还未达到可用条件');
+    const readiness = this.getCustomerDraftSnapshotReadiness(draft);
+    if (!readiness.canCreateSnapshot) {
+      throw new BadRequestException(readiness.disabledReason);
     }
 
     const itemCreates = this.buildPrivateRecipeSnapshotItemCreateData(draft);
@@ -3471,11 +3627,14 @@ export class RecipeDesignerService {
       dto.target === 'DIY'
         ? '/pages/recipe-diy/index'
         : '/pages/recipe-order/index';
-    return {
+    const response = {
       recipeId: recipe.recipeId,
       dogId: draft.customerDogId,
       targetUrl: `${page}?recipeId=${recipe.recipeId}&dogId=${draft.customerDogId}`,
     };
+    return readiness.nutritionWarning
+      ? { ...response, nutritionWarning: readiness.nutritionWarning }
+      : response;
   }
 
   async publishDraft(

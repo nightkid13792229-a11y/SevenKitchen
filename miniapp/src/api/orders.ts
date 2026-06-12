@@ -131,6 +131,81 @@ export interface StaffOrderPackagePlanUpdateResult {
   };
 }
 
+export interface StaffCustomerDogSummary {
+  id: string;
+  name: string;
+  breedName?: string | null;
+  currentWeightKg?: number | null;
+  mealsPerDay?: number | null;
+}
+
+export interface StaffCustomerSearchResult {
+  id: string;
+  nickname?: string | null;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  dogs: StaffCustomerDogSummary[];
+}
+
+export interface DogFinishedFoodHistoryItem {
+  orderId: string;
+  orderItemId: string;
+  orderStatus: string;
+  orderedAt: string;
+  targetProductionDate: string | null;
+  recipeId: string | null;
+  recipeName: string;
+  recipeCoverImageUrl: string | null;
+  quantityG: number;
+  packageCount: number;
+  packageSpecG: number;
+  packageSummary: string;
+  amountTotal: number;
+  paymentMethod: string | null;
+}
+
+export interface StaffCustomerAddressOption extends StaffOrderAddress {
+  regionText?: string;
+}
+
+export interface StaffFinishedFoodRecipeOption {
+  id: string;
+  internalId?: string;
+  version: number;
+  name: string;
+  status: 'PUBLIC' | 'PRIVATE_CUSTOM' | string;
+  sourceLabel: string;
+  coverImageUrl?: string | null;
+  applicableLifeStages: string[];
+  targetHealthTags: string[];
+  energyDensityKcalPerKg?: number;
+  customerOwnerId?: string | null;
+  customerDogId?: string | null;
+  isCustomRecipe?: boolean;
+  seriesLifeStage?: string | null;
+}
+
+export interface StaffAssistedOrderPayload {
+  customerId: string;
+  dogId: string;
+  addressId?: string;
+  type?: 'FRESH_FOOD';
+  ingredientSourcePlan?: string;
+  targetProductionDate?: string | null;
+  actualAmount?: number;
+  remark?: string;
+  items: Array<{
+    recipeId: string;
+    quantityG: number;
+    packageCount?: number;
+    packageSpecG?: number;
+    packagePlan?: OrderPackagePlanItem[];
+    cycleDays?: number;
+    dailyIntakeG?: number;
+    customRequirements?: string;
+  }>;
+}
+
 /**
  * 获取后台订单详情
  */
@@ -275,6 +350,55 @@ export function updateOrderItemPackagePlan(
 export function getStaffCustomerServiceOrder(orderId: string) {
   return request({
     url: `/staff/customer-service/orders/${orderId}`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function searchStaffCustomers(keyword: string) {
+  return request<StaffCustomerSearchResult[]>({
+    url: '/staff/customer-service/customers/search',
+    method: 'GET',
+    data: { keyword },
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function listStaffCustomerAddresses(customerId: string) {
+  return request<StaffCustomerAddressOption[]>({
+    url: `/staff/customer-service/customers/${customerId}/addresses`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function listStaffDogFinishedFoodRecipeOptions(
+  dogId: string,
+  customerId?: string,
+) {
+  return request<StaffFinishedFoodRecipeOption[]>({
+    url: `/staff/customer-service/dogs/${dogId}/finished-food-recipe-options`,
+    method: 'GET',
+    data: customerId ? { customerId } : undefined,
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function createStaffAssistedOrder(data: StaffAssistedOrderPayload) {
+  return request({
+    url: '/staff/customer-service/orders/assisted',
+    method: 'POST',
+    data,
+  });
+}
+
+export function getStaffDogFinishedFoodHistory(dogId: string) {
+  return request<DogFinishedFoodHistoryItem[]>({
+    url: `/staff/customer-service/dogs/${dogId}/finished-food-history`,
     method: 'GET',
     quiet: true,
     suppressErrorToast: true,

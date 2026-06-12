@@ -63,6 +63,11 @@ describe('create step boundaries', () => {
   it('provides create-step feeding cards without weight or exact-kcal input helpers', () => {
     expect(getCreateFeedingFieldKeys()).toEqual(['bcsScore', 'activityLevel', 'mealsPerDay', 'treatLevel'])
     expect(getCreateActivityChoices()).toHaveLength(5)
+    expect(getCreateActivityChoices()[0]).toMatchObject({
+      value: 'LOW',
+      label: '城市日常',
+      description: expect.stringContaining('30-45分钟'),
+    })
     expect(getCreateMealChoices()).toEqual([
       { value: '1', label: '1 餐/天' },
       { value: '2', label: '2 餐/天' },
@@ -137,7 +142,7 @@ describe('create step boundaries', () => {
 
   it('normalizes invalid restored values back to safe Step 2 defaults', () => {
     expect(normalizeCreateBcsScore('12')).toBe(5)
-    expect(normalizeCreateActivityLevel('EXTREME')).toBe('NORMAL')
+    expect(normalizeCreateActivityLevel('EXTREME')).toBe('LOW')
     expect(normalizeCreateMealsPerDay('99')).toBe('2')
     expect(normalizeCreateTreatLevel('EXACT_KCAL')).toBe('LOW')
   })

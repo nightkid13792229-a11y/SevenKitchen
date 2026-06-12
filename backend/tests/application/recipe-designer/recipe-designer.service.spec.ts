@@ -4841,17 +4841,84 @@ describe('RecipeDesignerService', () => {
   });
 
   describe('private recipe snapshots', () => {
+    it('creates a private snapshot with a nutrition warning for usable non-compliant customer drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'design-warning',
+          name: 'Star 待优化鸡肉餐',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          isCompliant: false,
+          totalWeightG: 100,
+          energyDensityKcalPerKg: 1200,
+          assessmentSummary: {
+            overallStatus: 'NON_COMPLIANT',
+            summary: {
+              compliant: 8,
+              deficient: 1,
+              excess: 0,
+              missingData: 0,
+            },
+          },
+          missingDataReport: [],
+          calculatedNutrition: { energyDensityKcalPerKg: 1200 },
+          items: [item({ weightG: 100 })],
+        }),
+      );
+      prisma.recipe.findFirst.mockResolvedValue(null);
+      prisma.recipe.create.mockResolvedValue({
+        id: 'private-row-warning',
+        recipeId: 'private-recipe-warning',
+        version: 1,
+        customerDogId: 'dog-1',
+      });
+
+      await expect(
+        service.createPrivateRecipeSnapshot(
+          'design-warning',
+          { target: 'ORDER' } as any,
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).resolves.toEqual({
+        recipeId: 'private-recipe-warning',
+        dogId: 'dog-1',
+        targetUrl:
+          '/pages/recipe-order/index?recipeId=private-recipe-warning&dogId=dog-1',
+        nutritionWarning: expect.objectContaining({
+          hasWarning: true,
+          overallStatus: 'NON_COMPLIANT',
+          counts: expect.objectContaining({
+            deficient: 1,
+            excess: 0,
+            missingData: 0,
+          }),
+        }),
+      });
+
+      expect(prisma.recipe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PRIVATE_CUSTOM',
+            isCustomRecipe: true,
+            customerOwnerId: 'customer-1',
+            customerDogId: 'dog-1',
+            sourceDesignRecipeId: 'design-warning',
+          }),
+        }),
+      );
+    });
+
     it('rejects private snapshot generation for non-ready customer drafts', async () => {
       prisma.designRecipe.findUnique.mockResolvedValue(
         draft({
           id: 'design-1',
           createdBy: 'customer-1',
           customerDogId: 'dog-1',
-          isCompliant: false,
-          totalWeightG: 100,
+          isCompliant: true,
+          totalWeightG: 0,
           energyDensityKcalPerKg: 1200,
           missingDataReport: [],
-          items: [item()],
+          items: [],
         }),
       );
 

@@ -64,10 +64,9 @@
             <view class="compact-print-table">
               <view class="compact-table-row compact-table-header">
                 <view class="table-cell type">类型</view>
-                <view class="table-cell name">标准原料 / SKU</view>
+                <view class="table-cell name">原料 / SKU / 来源</view>
                 <view class="table-cell amount">用量</view>
                 <view class="table-cell method">制备</view>
-                <view class="table-cell purchase">品牌 / 渠道 / 规格</view>
               </view>
               <view
                 v-for="(ingredient, index) in parsedIngredients"
@@ -83,13 +82,16 @@
                 </view>
                 <view class="table-cell name">
                   <view class="ingredient-name-line">{{ formatIngredientNameLine(ingredient) }}</view>
+                  <view
+                    v-if="formatPurchaseSummary(ingredient) !== '-'"
+                    class="purchase-summary purchase-summary-full"
+                  >
+                    来源：{{ formatPurchaseSummary(ingredient) }}
+                  </view>
                 </view>
                 <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
                 <view class="table-cell method">
                   <view class="method-text">{{ ingredient.method || '-' }}</view>
-                </view>
-                <view class="table-cell purchase">
-                  <view class="purchase-summary purchase-summary-full">{{ formatPurchaseSummary(ingredient) }}</view>
                 </view>
               </view>
             </view>
@@ -697,12 +699,12 @@ const handlePrint = async () => {
 .compact-print-table {
   border: 1rpx solid #333;
   overflow: hidden;
-  font-size: 16rpx;
+  font-size: 17rpx;
 }
 
 .compact-table-row {
   display: flex;
-  min-height: 38rpx;
+  min-height: 42rpx;
   border-bottom: 1rpx solid #e1e1e1;
 
   &:last-child {
@@ -718,10 +720,10 @@ const handlePrint = async () => {
 }
 
 .compact-table-header {
-  min-height: 34rpx;
+  min-height: 36rpx;
   background-color: #f6f6f6;
   color: #333;
-  font-size: 15rpx;
+  font-size: 16rpx;
   font-weight: bold;
 }
 
@@ -742,7 +744,7 @@ const handlePrint = async () => {
   }
 
   &.name {
-    flex: 0 0 178rpx;
+    flex: 1 1 0;
   }
 
   &.amount {
@@ -750,12 +752,8 @@ const handlePrint = async () => {
     white-space: nowrap;
   }
 
-  &.purchase {
-    flex: 0 0 156rpx;
-  }
-
   &.method {
-    flex: 1;
+    flex: 0 0 205rpx;
   }
 }
 

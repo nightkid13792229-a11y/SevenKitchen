@@ -31,6 +31,9 @@ export const LIFE_STAGE_FACTORS = {
   JUNIOR_GIANT_12_18_MONTHS: 2.0,
   JUNIOR_GIANT_18_24_MONTHS: 1.8,
   JUNIOR_LARGE_12_18_MONTHS: 1.8,
+  // FEDIAF adult maintenance energy recommendation bands.
+  ADULT_MER_95: 95 / 70,
+  ADULT_MER_110: 110 / 70,
   // Adult Base
   ADULT_INTACT: 1.8, // 未绝育基准
   ADULT_NEUTERED: 1.6, // 绝育基准

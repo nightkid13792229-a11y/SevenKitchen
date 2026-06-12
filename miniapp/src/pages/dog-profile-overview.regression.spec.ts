@@ -37,4 +37,17 @@ describe('dog-profile-overview runtime regressions', () => {
     expect(source).toContain('await dogApi.uploadAvatar(')
     expect(source).toContain('addDogToCache({')
   })
+
+  it('shows customer-visible finished-food recipe history without DIY records', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('成品食谱历史')
+    expect(source).toContain('finishedFoodHistory')
+    expect(source).toContain('finishedFoodHistoryItems')
+    expect(source).toContain('/pages/order-detail/index?orderId=')
+    expect(source).not.toContain('DIY历史')
+  })
 })

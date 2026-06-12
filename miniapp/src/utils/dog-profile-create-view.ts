@@ -14,19 +14,19 @@ const TREAT_LEVEL_CHOICES = ['NONE', 'LOW', 'MODERATE', 'HIGH'] as const
 
 const ACTIVITY_LEVEL_CHOICES = [
   {
-    value: 'RESTING',
-    label: '休息',
-    description: '几乎不运动，主要时间休息',
+    value: 'LOW',
+    label: '城市日常',
+    description: '每日散步约30-45分钟，适合多数国内城市犬',
   },
   {
-    value: 'LOW',
-    label: '低活动',
-    description: '偶尔散步，每日运动少于30分钟',
+    value: 'RESTING',
+    label: '休息静养',
+    description: '几乎不运动，主要时间休息或医嘱控量',
   },
   {
     value: 'NORMAL',
-    label: '正常活动',
-    description: '每日散步1-2小时，正常活动量',
+    label: '规律运动',
+    description: '每日主动运动约1小时，活动量稳定',
   },
   {
     value: 'HIGH',
@@ -121,12 +121,12 @@ function isValidCreateBcsScore(value: unknown) {
 
 export function normalizeCreateActivityLevel(value: unknown) {
   if (typeof value !== 'string') {
-    return 'NORMAL'
+    return 'LOW'
   }
 
   return VALID_ACTIVITY_LEVELS.has(value as (typeof ACTIVITY_LEVEL_CHOICES)[number]['value'])
     ? value
-    : 'NORMAL'
+    : 'LOW'
 }
 
 function isValidCreateActivityLevel(value: unknown) {

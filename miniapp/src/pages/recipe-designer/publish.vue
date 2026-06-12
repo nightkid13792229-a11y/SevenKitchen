@@ -208,22 +208,11 @@ const customerDogId = computed(() =>
   String(draft.value?.customerDogId || draft.value?.series?.customerDogId || ''),
 )
 
-const reportIsCompliant = computed(() => {
-  const status = String(
-    assessment.value?.overallStatus ||
-    assessment.value?.summary?.overallStatus ||
-    draft.value?.assessmentSummary?.overallStatus ||
-    draft.value?.status ||
-    '',
-  ).toUpperCase()
-  return status === 'COMPLIANT' || Boolean(draft.value?.isCompliant)
-})
-
 const canCreatePrivateSnapshot = computed(() => {
   const hasItems =
     (Array.isArray(draft.value?.items) && draft.value.items.length > 0) ||
     report.value.ingredientRows.length > 0
-  return Boolean(customerDogId.value && reportIsCompliant.value && hasItems)
+  return Boolean(customerDogId.value && hasItems)
 })
 
 const customerReportNextActions = computed(() =>
@@ -368,10 +357,78 @@ function goBack() {
   uni.navigateBack()
 }
 
+function readWarningCount(value: unknown) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.trunc(numericValue) : 0
+}
+
+function getAssessmentWarningEntries() {
+  if (Array.isArray(assessment.value?.groupedEntries)) return assessment.value.groupedEntries
+  if (Array.isArray(assessment.value?.entries)) return assessment.value.entries
+  return []
+}
+
+function countAssessmentEntriesByStatus(status: string) {
+  return getAssessmentWarningEntries().filter((entry: any) => {
+    return !entry.excludeFromAttention && cleanText(entry?.status).toUpperCase() === status
+  }).length
+}
+
+function getDraftNutritionWarningMessage() {
+  const status = String(
+    assessment.value?.overallStatus ||
+    assessment.value?.summary?.overallStatus ||
+    draft.value?.assessmentSummary?.overallStatus ||
+    draft.value?.status ||
+    '',
+  ).toUpperCase()
+  const summary = assessment.value?.summary || draft.value?.assessmentSummary?.summary || {}
+  const missingData = Math.max(
+    readWarningCount(summary.missingData),
+    countAssessmentEntriesByStatus('MISSING_DATA'),
+  )
+  const deficient = Math.max(
+    readWarningCount(summary.deficient),
+    countAssessmentEntriesByStatus('DEFICIENT'),
+  )
+  const excess = Math.max(
+    readWarningCount(summary.excess),
+    countAssessmentEntriesByStatus('EXCESS'),
+  )
+
+  if ((status === 'COMPLIANT' || (!status && draft.value?.isCompliant)) && missingData === 0 && deficient === 0 && excess === 0) {
+    return ''
+  }
+
+  const parts: string[] = []
+  if (missingData > 0) parts.push(`${missingData}项缺少营养数据`)
+  if (deficient > 0) parts.push(`${deficient}项营养不足`)
+  if (excess > 0) parts.push(`${excess}项营养超标`)
+  if (parts.length === 0) parts.push('部分营养项未达标或需复核')
+  return `当前食谱有营养提醒：${parts.join('、')}。可以继续生成制作单或订购，建议后续再优化配方。`
+}
+
+function confirmRecipeNutritionWarning(message: string) {
+  if (!message) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '营养提醒',
+      content: message,
+      confirmText: '继续',
+      cancelText: '返回调整',
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
   if (!draftId.value || privateSnapshotCreatingTarget.value) return
   if (!canCreatePrivateSnapshot.value) {
-    uni.showToast({ title: '请先完成营养评估', icon: 'none' })
+    uni.showToast({ title: '请先添加食材并确认用量', icon: 'none' })
+    return
+  }
+  if (!(await confirmRecipeNutritionWarning(getDraftNutritionWarningMessage()))) {
     return
   }
 

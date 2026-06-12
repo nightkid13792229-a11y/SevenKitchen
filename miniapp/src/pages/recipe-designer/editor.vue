@@ -1008,19 +1008,8 @@ const canRevertToLatestOfficial = computed(() => {
   return Boolean(draftSeriesId.value && draftSeriesLifeStage.value && !isCustomerMode.value)
 })
 
-const isCompliant = computed(() => {
-  const status = String(
-    assessment.value?.overallStatus ||
-    assessment.value?.summary?.overallStatus ||
-    assessment.value?.status ||
-    '',
-  ).toUpperCase()
-  if (status) return status === 'COMPLIANT'
-  return draftIsCompliant.value
-})
-
 const canCreatePrivateSnapshot = computed(() =>
-  Boolean(customerDogId.value && isCompliant.value && currentTotalWeightG.value > 0),
+  Boolean(customerDogId.value && currentTotalWeightG.value > 0),
 )
 
 const customerNextActions = computed(() =>
@@ -1857,10 +1846,71 @@ function goToSupplementLibrary() {
   uni.navigateTo({ url: `/pages/recipe-designer/supplement-library${query}` })
 }
 
+function readWarningCount(value: unknown) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.trunc(numericValue) : 0
+}
+
+function countAssessmentEntriesByStatus(status: string) {
+  return assessmentEntries.value.filter((entry: AssessmentEntryLike) => {
+    return !entry.excludeFromAttention && String(entry.status || '').toUpperCase() === status
+  }).length
+}
+
+function getDraftNutritionWarningMessage() {
+  const status = String(
+    assessment.value?.overallStatus ||
+    assessment.value?.summary?.overallStatus ||
+    assessment.value?.status ||
+    '',
+  ).toUpperCase()
+  const summary = assessment.value?.summary || {}
+  const missingData = Math.max(
+    readWarningCount(summary.missingData),
+    countAssessmentEntriesByStatus('MISSING_DATA'),
+  )
+  const deficient = Math.max(
+    readWarningCount(summary.deficient),
+    countAssessmentEntriesByStatus('DEFICIENT'),
+  )
+  const excess = Math.max(
+    readWarningCount(summary.excess),
+    countAssessmentEntriesByStatus('EXCESS'),
+  )
+
+  if ((status === 'COMPLIANT' || (!status && draftIsCompliant.value)) && missingData === 0 && deficient === 0 && excess === 0) {
+    return ''
+  }
+
+  const parts: string[] = []
+  if (missingData > 0) parts.push(`${missingData}项缺少营养数据`)
+  if (deficient > 0) parts.push(`${deficient}项营养不足`)
+  if (excess > 0) parts.push(`${excess}项营养超标`)
+  if (parts.length === 0) parts.push('部分营养项未达标或需复核')
+  return `当前食谱有营养提醒：${parts.join('、')}。可以继续生成制作单或订购，建议后续再优化配方。`
+}
+
+function confirmRecipeNutritionWarning(message: string) {
+  if (!message) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '营养提醒',
+      content: message,
+      confirmText: '继续',
+      cancelText: '返回调整',
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
   if (!draftId.value || privateSnapshotCreatingTarget.value) return
   if (!canCreatePrivateSnapshot.value) {
-    uni.showToast({ title: '请先完成营养评估', icon: 'none' })
+    uni.showToast({ title: '请先添加食材并确认用量', icon: 'none' })
+    return
+  }
+  if (!(await confirmRecipeNutritionWarning(getDraftNutritionWarningMessage()))) {
     return
   }
 

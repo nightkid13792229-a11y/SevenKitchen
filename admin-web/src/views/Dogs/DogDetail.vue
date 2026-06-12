@@ -319,6 +319,9 @@
             <div class="intake-label">每日建议喂食量</div>
             <div class="intake-value">{{ calcResult.dailyIntakeG.toFixed(1) }} <span class="unit">克/天</span></div>
             <div class="intake-hint">分 {{ formData.mealsPerDay }} 餐喂食，每餐约 {{ Math.round(calcResult.dailyIntakeG / formData.mealsPerDay) }} 克</div>
+            <div class="intake-hint intake-adjustment-note">
+              起始喂食建议：已按国内城市犬常见活动量保守估算，请观察2-4周体重、便便和饥饿感，再按5%-10%小幅调整。
+            </div>
           </div>
         </div>
 
@@ -394,21 +397,21 @@ const sizeCategories = [
 // Activity level configurations
 const activityLevelConfigs = [
   {
-    value: ActivityLevel.RESTING,
-    label: '休息',
-    description: '几乎不运动，主要时间休息',
-    coefficient: 0.8
-  },
-  {
     value: ActivityLevel.LOW,
-    label: '低活动',
-    description: '偶尔散步，每日运动少于30分钟',
+    label: '城市日常',
+    description: '每日散步约30-45分钟，适合多数国内城市犬',
     coefficient: 0.9
   },
   {
+    value: ActivityLevel.RESTING,
+    label: '休息静养',
+    description: '几乎不运动，主要时间休息或医嘱控量',
+    coefficient: 0.8
+  },
+  {
     value: ActivityLevel.NORMAL,
-    label: '正常活动',
-    description: '每日散步1-2小时，正常活动量',
+    label: '规律运动',
+    description: '每日主动运动约1小时，活动量稳定',
     coefficient: 1.0
   },
   {
@@ -452,7 +455,7 @@ const formData = ref({
   isNeutered: false,
   currentWeightKg: 10.0,
   bcsScore: 5,
-  activityLevel: ActivityLevel.NORMAL,
+  activityLevel: ActivityLevel.LOW,
   lifeStageOverride: LifeStageOverride.NONE,
   sizeClassOverride: null as DogSizeCategory | null,
   mealsPerDay: 2,
@@ -862,6 +865,11 @@ onMounted(() => {
 .intake-hint {
   font-size: 13px;
   color: #999;
+}
+
+.intake-adjustment-note {
+  margin-top: 6px;
+  color: #5b7f63;
 }
 
 .common-breeds-scroll {

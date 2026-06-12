@@ -138,6 +138,10 @@
             <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
           </view>
         </view>
+
+        <text class="section-note feeding-adjustment-note">
+          首单起始喂食量：已按国内城市犬的常见活动量保守估算。建议观察2-4周体重、便便和饥饿感，再按5%-10%小幅调整。
+        </text>
       </view>
     </view>
 
@@ -3714,6 +3718,16 @@ function goToCreateDog() {
 .section-note {
   display: block;
   margin-top: 18rpx;
+}
+
+.feeding-adjustment-note {
+  padding: 16rpx 18rpx;
+  border-radius: 8rpx;
+  background-color: #f6fbf7;
+  border: 1rpx solid #d9f0dd;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #496052;
 }
 
 .calculation-explanation {

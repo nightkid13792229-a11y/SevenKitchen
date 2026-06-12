@@ -100,7 +100,9 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).toContain("'single-order'");
     expect(printTaskSource).toContain('ingredient-name-line');
     expect(printTaskSource).toContain('purchase-summary');
-    expect(printTaskSource).toContain('品牌 / 渠道 / 规格');
+    expect(printTaskSource).toContain('原料 / SKU / 来源');
+    expect(printTaskSource).not.toContain('标准原料 / SKU');
+    expect(printTaskSource).not.toContain('品牌 / 渠道 / 规格');
     expect(printTaskSource).toContain('remark-text');
     expect(printTaskSource).toContain('-webkit-line-clamp: 2');
     expect(printTaskSource).not.toContain('标准：{{ ingredient.standardIngredientName }}');
@@ -171,24 +173,26 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<text class="field-value">{{ formatPackagePlan(order) }}</text>');
   });
 
-  it('lets purchase summary cells wrap in production task print preview', () => {
+  it('shows purchase summaries inside the combined ingredient source cell in production task print preview', () => {
     expect(printTaskSource).toContain('purchase-summary-full');
+    expect(printTaskSource).toContain('来源：{{ formatPurchaseSummary(ingredient) }}');
     expect(printTaskSource).toContain('word-break: break-all');
     expect(printTaskSource).not.toContain('<view class="purchase-summary">{{ formatPurchaseSummary(ingredient) }}</view>');
+    expect(printTaskSource).not.toContain('<view class="table-cell purchase">');
   });
 
-  it('shows preparation before purchase summary in production task print preview', () => {
+  it('shows the combined ingredient source column before preparation in production task print preview', () => {
+    const sourceHeaderIndex = printTaskSource.indexOf('<view class="table-cell name">原料 / SKU / 来源</view>');
     const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">制备</view>');
-    const purchaseHeaderIndex = printTaskSource.indexOf('<view class="table-cell purchase">品牌 / 渠道 / 规格</view>');
+    const sourceCellIndex = printTaskSource.indexOf('<view class="table-cell name">', sourceHeaderIndex + 1);
     const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);
-    const purchaseCellIndex = printTaskSource.indexOf('<view class="table-cell purchase">', purchaseHeaderIndex + 1);
 
+    expect(sourceHeaderIndex).toBeGreaterThan(-1);
     expect(methodHeaderIndex).toBeGreaterThan(-1);
-    expect(purchaseHeaderIndex).toBeGreaterThan(-1);
-    expect(methodHeaderIndex).toBeLessThan(purchaseHeaderIndex);
+    expect(sourceHeaderIndex).toBeLessThan(methodHeaderIndex);
+    expect(sourceCellIndex).toBeGreaterThan(-1);
     expect(methodCellIndex).toBeGreaterThan(-1);
-    expect(purchaseCellIndex).toBeGreaterThan(-1);
-    expect(methodCellIndex).toBeLessThan(purchaseCellIndex);
+    expect(sourceCellIndex).toBeLessThan(methodCellIndex);
   });
 
   it('lets ingredient name and preparation cells wrap in production task print preview', () => {

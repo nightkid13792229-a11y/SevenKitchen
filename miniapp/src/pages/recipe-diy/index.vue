@@ -126,6 +126,13 @@
         </view>
       </view>
 
+      <view class="feeding-adjustment-note">
+        <text class="feeding-adjustment-title">起始喂食建议</text>
+        <text class="feeding-adjustment-copy">
+          当前热量已按国内城市犬的常见活动量保守估算。请连续观察2-4周的体重、便便和饥饿感，再按5%-10%小幅增减。
+        </text>
+      </view>
+
       <!-- 计算说明 -->
       <view class="calculation-explanation">
         <view class="explanation-header" @tap="toggleCalculationDetails">
@@ -1209,6 +1216,29 @@ function getNutritionStandardLabel(standard: string): string {
 
 .feeding-value.readonly {
   color: #666;
+}
+
+.feeding-adjustment-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  background-color: #f6fbf7;
+  border: 1rpx solid #d9f0dd;
+  border-radius: 8rpx;
+}
+
+.feeding-adjustment-title {
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #2f7d42;
+}
+
+.feeding-adjustment-copy {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #496052;
 }
 
 .feeding-value-wrapper {

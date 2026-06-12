@@ -266,6 +266,7 @@ import {
   recipeDesignerApi,
   type FediafDogScenario,
   type RecipeDesignerCustomerSeriesCard,
+  type RecipeDesignerNutritionWarning,
   type RecipeDesignerSeriesCard,
   type RecipeDesignerSeriesStage,
   type RecipeDesignerSeriesStatusFilter,
@@ -726,6 +727,29 @@ function isCustomerSnapshotCreating(seriesItem: RecipeDesignerCustomerSeriesCard
   return customerSnapshotCreatingKey.value === getCustomerSnapshotKey(seriesItem, target)
 }
 
+function getNutritionWarningMessage(warning?: RecipeDesignerNutritionWarning | null) {
+  if (!warning?.hasWarning) return ''
+  return (
+    warning.message ||
+    '当前食谱仍有营养项未达标或缺少数据。你可以继续生成制作单/订购，也可以返回调整食谱。'
+  )
+}
+
+function confirmCustomerNutritionWarning(warning?: RecipeDesignerNutritionWarning | null) {
+  const content = getNutritionWarningMessage(warning)
+  if (!content) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '营养提醒',
+      content,
+      confirmText: '继续',
+      cancelText: '返回调整',
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+}
+
 async function goToCustomerRecipeTarget(seriesItem: RecipeDesignerCustomerSeriesCard, target: 'ORDER' | 'DIY') {
   activeCustomerMenuSeriesId.value = ''
   const draftId = seriesItem.primaryDraftId
@@ -741,6 +765,9 @@ async function goToCustomerRecipeTarget(seriesItem: RecipeDesignerCustomerSeries
       title: seriesItem.actionAvailability?.disabledReason || '当前食谱还未达到可用条件',
       icon: 'none',
     })
+    return
+  }
+  if (!(await confirmCustomerNutritionWarning(seriesItem.actionAvailability?.nutritionWarning))) {
     return
   }
 

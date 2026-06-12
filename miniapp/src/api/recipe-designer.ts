@@ -66,6 +66,17 @@ export interface RecipeDesignerSeriesCard {
   stages: RecipeDesignerSeriesStage[]
 }
 
+export interface RecipeDesignerNutritionWarning {
+  hasWarning: true
+  overallStatus: string
+  counts: {
+    deficient: number
+    excess: number
+    missingData: number
+  }
+  message: string
+}
+
 export interface RecipeDesignerCustomerSeriesCard {
   id: string
   name: string
@@ -82,6 +93,7 @@ export interface RecipeDesignerCustomerSeriesCard {
     canOrder: boolean
     canGenerateDiy: boolean
     disabledReason?: string
+    nutritionWarning?: RecipeDesignerNutritionWarning | null
   }
 }
 
@@ -101,6 +113,7 @@ export interface PrivateRecipeSnapshotResponse {
   recipeId: string
   dogId?: string
   targetUrl?: string
+  nutritionWarning?: RecipeDesignerNutritionWarning | null
 }
 
 export interface RecipeDesignerSeriesListQuery {

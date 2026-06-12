@@ -121,7 +121,6 @@
             {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
           </button>
           <button
-            v-if="order.status === 'COMPLETED' || order.status === 'CANCELLED'"
             class="action-btn secondary"
             @tap="buyAgain(order)"
           >
@@ -395,13 +394,7 @@ function goHome() {
 }
 
 function hasQuickActions(order: Order): boolean {
-  return (
-    order.status === 'PENDING_PAYMENT' ||
-    order.status === 'SHIPPED' ||
-    order.status === 'FREEZING' ||
-    order.status === 'COMPLETED' ||
-    order.status === 'CANCELLED'
-  );
+  return Boolean(order.id);
 }
 
 function canApplyAftersale(status: string): boolean {
@@ -516,7 +509,60 @@ function applyAftersale(orderId: string) {
   });
 }
 
-function buyAgain(order: Order) {
+function getRepurchasePackageCount(item: Order['firstItem']): number {
+  const packageCount = Number(item?.packageCount);
+  if (Number.isFinite(packageCount) && packageCount > 0) {
+    return Math.round(packageCount);
+  }
+
+  const packagePlanTotal = (item?.packagePlan || []).reduce((sum, row) => {
+    const rowCount = Number(row?.packageCount);
+    return Number.isFinite(rowCount) && rowCount > 0 ? sum + rowCount : sum;
+  }, 0);
+
+  return packagePlanTotal > 0 ? Math.round(packagePlanTotal) : 0;
+}
+
+function getRepurchasePackageSpecG(item: Order['firstItem']): number {
+  const packageSpecG = Number(item?.packageSpecG);
+  if (Number.isFinite(packageSpecG) && packageSpecG > 0) {
+    return Math.round(packageSpecG);
+  }
+
+  const firstPlanRow = (item?.packagePlan || []).find((row) => {
+    const rowSpec = Number(row?.packageSpecG);
+    return Number.isFinite(rowSpec) && rowSpec > 0;
+  });
+
+  return firstPlanRow ? Math.round(Number(firstPlanRow.packageSpecG)) : 0;
+}
+
+function buildBuyAgainQueryPairs(order: Order, recipeId: string): string[] {
+  const firstItem = order.firstItem;
+  const queryPairs = [
+    `recipeId=${encodeURIComponent(recipeId)}`,
+    `autoConfig=true`,
+  ];
+
+  if (firstItem?.dogId) {
+    queryPairs.push(`dogId=${encodeURIComponent(firstItem.dogId)}`);
+  }
+
+  const packageCount = getRepurchasePackageCount(firstItem);
+  if (packageCount > 0) {
+    queryPairs.push(`packageCount=${packageCount}`);
+  }
+
+  const packageSpecG = getRepurchasePackageSpecG(firstItem);
+  if (packageSpecG > 0) {
+    queryPairs.push(`packageSpecG=${packageSpecG}`);
+    queryPairs.push(`perMealG=${packageSpecG}`);
+  }
+
+  return queryPairs;
+}
+
+async function buyAgain(order: Order) {
   const recipeId = order.firstItem?.recipeSnapshot?.id;
   if (!recipeId) {
     uni.showToast({
@@ -526,14 +572,40 @@ function buyAgain(order: Order) {
     return;
   }
 
-  const queryPairs = [`recipeId=${encodeURIComponent(recipeId)}`];
-  if (order.firstItem?.dogId) {
-    queryPairs.push(`dogId=${encodeURIComponent(order.firstItem.dogId)}`);
-  }
+  try {
+    uni.showLoading({ title: '检查中...' });
+    const res = await request({
+      url: `/recipes/${recipeId}`,
+      method: 'GET',
+    });
 
-  uni.navigateTo({
-    url: `/pages/recipe-order/index?${queryPairs.join('&')}`,
-  });
+    if (res.code !== 0 || !res.data) {
+      throw new Error(res.message || '获取食谱信息失败');
+    }
+
+    if (!['PUBLIC', 'ACTIVE'].includes(res.data.status)) {
+      uni.showModal({
+        title: '提示',
+        content: '该食谱已下架，无法再次购买',
+        showCancel: false,
+      });
+      return;
+    }
+
+    const queryPairs = buildBuyAgainQueryPairs(order, recipeId);
+    uni.hideLoading();
+    uni.navigateTo({
+      url: `/pages/recipe-order/index?${queryPairs.join('&')}`,
+    });
+  } catch (error) {
+    console.error('Check recipe error:', error);
+    uni.showToast({
+      title: '检查食谱失败',
+      icon: 'none',
+    });
+  } finally {
+    uni.hideLoading();
+  }
 }
 
 function formatAmount(amount?: number): string {

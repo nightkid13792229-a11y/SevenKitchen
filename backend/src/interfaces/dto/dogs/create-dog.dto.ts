@@ -73,7 +73,7 @@ export class CreateDogDto {
   @Max(9)
   bcsScore!: number;
 
-  @ApiProperty({ enum: ActivityLevel, example: ActivityLevel.NORMAL })
+  @ApiProperty({ enum: ActivityLevel, example: ActivityLevel.LOW })
   @IsEnum(ActivityLevel)
   activityLevel!: ActivityLevel;
 

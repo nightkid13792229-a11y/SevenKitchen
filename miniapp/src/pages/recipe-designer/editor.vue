@@ -943,7 +943,7 @@ const assessmentDrawerBottomInsetPx = computed(() =>
 
 const assessmentDrawerStyle = computed(
   () =>
-    `top: ${assessmentDrawerTopPx.value}px; height: calc(100vh - ${assessmentDrawerTopPx.value}px - ${assessmentDrawerBottomInsetPx.value}px);`,
+    `top: ${assessmentDrawerTopPx.value}px; height: ${assessmentDrawerHeightPx.value}px;`,
 )
 
 const editorBottomPaddingPx = computed(() => {

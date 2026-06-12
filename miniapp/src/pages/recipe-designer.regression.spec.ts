@@ -1037,7 +1037,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('assessmentDrawerMaxTopPx')
     expect(editorSource).toContain('assessmentDrawerMinTopPx')
     expect(editorSource).toContain('top: ${assessmentDrawerTopPx.value}px')
-    expect(editorSource).toContain('height: calc(100vh - ${assessmentDrawerTopPx.value}px')
+    expect(editorSource).toContain('height: ${assessmentDrawerHeightPx.value}px')
     expect(editorSource).toContain('assessmentDrawerBottomInsetPx')
     expect(editorSource).toContain('assessmentExpanded.value = assessmentListVisible.value')
     expect(editorSource).not.toContain('setAssessmentExpanded(assessmentDrawerHeightPx.value >= threshold)')
@@ -1051,6 +1051,17 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('padding-bottom: ${editorBottomPaddingPx.value}px')
     expect(editorSource).not.toContain('const publishPadding = showBottomPublishBar.value ? 96 : 0')
     expect(editorSource).not.toContain('padding: 24rpx 32rpx 380rpx')
+  })
+
+  it('uses measured drawer height so customer bottom actions cannot cover nutrition assessment', () => {
+    const drawerStyleBlock =
+      editorSource.match(/const assessmentDrawerStyle = computed[\s\S]*?\n\)/)?.[0] || ''
+
+    expect(drawerStyleBlock).toContain('height: ${assessmentDrawerHeightPx.value}px')
+    expect(drawerStyleBlock).not.toContain('100vh')
+    expect(editorSource).toContain(
+      'windowHeight - assessmentDrawerTopPx.value - assessmentDrawerBottomInsetPx.value',
+    )
   })
 
   it('keeps the collapsed assessment drawer flush with the publish bar on real devices', () => {

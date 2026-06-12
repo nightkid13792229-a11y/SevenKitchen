@@ -6,7 +6,10 @@
 import { Injectable } from '@nestjs/common';
 const PDFDocument = require('pdfkit');
 import * as path from 'path';
-import type { PrintTaskDto, PrintTaskOrderItemDto } from '../../interfaces/dto/production/print-task.dto';
+import type {
+  PrintTaskDto,
+  PrintTaskOrderItemDto,
+} from '../../interfaces/dto/production/print-task.dto';
 
 interface IngredientItem {
   name: string;
@@ -34,6 +37,11 @@ type PrintTableColumn = {
 
 @Injectable()
 export class PdfGeneratorService {
+  private static readonly INGREDIENT_TABLE_FONT_SIZE = 8.5;
+  private static readonly PAGE_TOP = 40;
+  private static readonly PAGE_BOTTOM = 752;
+  private static readonly INGREDIENT_TABLE_WIDTH = 512;
+
   /**
    * Generate PDF for production task
    * @returns PDF buffer
@@ -140,8 +148,8 @@ export class PdfGeneratorService {
     // Orders: two compact cards per row, without a redundant section heading.
     estimatedHeight += 6 + this.estimatePackagingOrdersHeight(data);
 
-    // Ingredients table: compact five-column table with wrapped purchase summaries.
-    estimatedHeight += 22 + 18 + this.estimateIngredientRowsHeight(data);
+    // Ingredient rows paginate, so they should not shrink the whole task sheet.
+    estimatedHeight += 22 + 20;
 
     // Safety margin: 40pt
     const availableHeight = pageHeight - 40;
@@ -186,7 +194,12 @@ export class PdfGeneratorService {
     );
     const recipientLines = order.recipientName ? 1 : 0;
     const remarkLines = order.adminRemark?.trim()
-      ? Math.min(2, Math.ceil(order.adminRemark.trim().length / (isSingleOrder ? 58 : 28)))
+      ? Math.min(
+          2,
+          Math.ceil(
+            order.adminRemark.trim().length / (isSingleOrder ? 58 : 28),
+          ),
+        )
       : 0;
 
     return 68 + (packageLines - 1) * 11 + recipientLines * 11 + remarkLines * 9;
@@ -206,9 +219,13 @@ export class PdfGeneratorService {
   }
 
   private estimateIngredientRowHeight(ingredient: IngredientItem): number {
-    const purchaseText = this.formatPurchaseSummary(ingredient);
-    const purchaseLines = Math.max(1, Math.ceil(purchaseText.length / 18));
-    return 20 + (purchaseLines - 1) * 9;
+    const ingredientText = this.formatIngredientSourceLine(ingredient);
+    const methodText = ingredient.method || '-';
+    const ingredientLines = this.estimateWrappedLineCount(ingredientText, 24);
+    const methodLines = this.estimateWrappedLineCount(methodText, 18);
+    const lineCount = Math.max(ingredientLines, methodLines);
+
+    return 24 + (lineCount - 1) * 11;
   }
 
   /**
@@ -268,7 +285,10 @@ export class PdfGeneratorService {
     return statusMap[status] || status;
   }
 
-  private truncateText(value: string | null | undefined, maxLength: number): string {
+  private truncateText(
+    value: string | null | undefined,
+    maxLength: number,
+  ): string {
     const text = String(value || '').trim();
     if (text.length <= maxLength) {
       return text;
@@ -283,7 +303,11 @@ export class PdfGeneratorService {
     }
 
     const standardName = (ingredient.standardIngredientName || '').trim();
-    const skuName = (ingredient.procurementSkuName || ingredient.name || '').trim();
+    const skuName = (
+      ingredient.procurementSkuName ||
+      ingredient.name ||
+      ''
+    ).trim();
 
     if (standardName && skuName && standardName !== skuName) {
       return `${standardName} / ${skuName}`;
@@ -304,6 +328,27 @@ export class PdfGeneratorService {
     );
 
     return parts.length > 0 ? parts.join(' / ') : '-';
+  }
+
+  private formatIngredientSourceLine(ingredient: IngredientItem): string {
+    const nameLine = this.formatIngredientNameLine(ingredient);
+    const sourceLine = this.formatPurchaseSummary(ingredient);
+
+    if (ingredient.isTotalWeight || sourceLine === '-') {
+      return nameLine;
+    }
+
+    return `${nameLine}\n来源：${sourceLine}`;
+  }
+
+  private estimateWrappedLineCount(text: string, charsPerLine: number): number {
+    return String(text || '-')
+      .split('\n')
+      .reduce(
+        (sum, line) =>
+          sum + Math.max(1, Math.ceil(line.trim().length / charsPerLine)),
+        0,
+      );
   }
 
   private getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
@@ -348,7 +393,10 @@ export class PdfGeneratorService {
 
     for (const item of remarks) {
       const text = `订单 ${item.index + 1}（${item.order.dogName}）：${item.remark}`;
-      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese');
+      doc
+        .fontSize(Math.floor(8 * scaleFactor))
+        .fillColor('#000000')
+        .font('Chinese');
 
       const textHeight = doc.heightOfString(text, {
         width: 500,
@@ -385,7 +433,9 @@ export class PdfGeneratorService {
     let y = startY + Math.floor(6 * scaleFactor);
 
     const isSingleOrder = data.orderItems.length === 1;
-    const cardWidth = isSingleOrder ? Math.floor(512 * scaleFactor) : Math.floor(250 * scaleFactor);
+    const cardWidth = isSingleOrder
+      ? Math.floor(512 * scaleFactor)
+      : Math.floor(250 * scaleFactor);
     const gap = Math.floor(12 * scaleFactor);
     const rowGap = Math.floor(8 * scaleFactor);
     const ordersPerRow = isSingleOrder ? 1 : 2;
@@ -474,9 +524,7 @@ export class PdfGeneratorService {
       .strokeColor('#58a891')
       .lineWidth(0.8)
       .stroke();
-    doc
-      .rect(cardX, y, cardWidth, Math.floor(16 * scaleFactor))
-      .fill('#58a891');
+    doc.rect(cardX, y, cardWidth, Math.floor(16 * scaleFactor)).fill('#58a891');
     doc
       .fontSize(Math.floor(9 * scaleFactor))
       .fillColor('#ffffff')
@@ -534,7 +582,9 @@ export class PdfGeneratorService {
 
     if (order.adminRemark?.trim()) {
       detailY += Math.floor(4 * scaleFactor);
-      doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#666666');
+      doc
+        .fontSize(this.getScaledFontSize(7.5, scaleFactor))
+        .fillColor('#666666');
       this.drawWrappedOrderText(
         doc,
         `备注: ${this.truncateText(order.adminRemark, 56)}`,
@@ -629,31 +679,18 @@ export class PdfGeneratorService {
       .text(`原料清单（${this.getPrintableIngredientCount(data)}项）`, 40, y);
     y += Math.floor(24 * scaleFactor);
 
-    const tableWidth = 512;
+    const tableWidth = PdfGeneratorService.INGREDIENT_TABLE_WIDTH;
     const columns: PrintTableColumn[] = [
-      { key: 'type', label: '类型', x: 40, width: 48 },
-      { key: 'name', label: '标准原料 / SKU', x: 88, width: 138 },
-      { key: 'amount', label: '用量', x: 226, width: 60 },
-      { key: 'method', label: '制备', x: 286, width: 118 },
-      { key: 'purchase', label: '品牌 / 渠道 / 规格', x: 404, width: 148 },
+      { key: 'type', label: '类型', x: 40, width: 44 },
+      { key: 'name', label: '原料 / SKU / 来源', x: 84, width: 250 },
+      { key: 'amount', label: '用量', x: 334, width: 62 },
+      { key: 'method', label: '制备', x: 396, width: 156 },
     ];
-    const headerHeight = Math.floor(18 * scaleFactor);
 
-    doc
-      .rect(40, y, tableWidth, headerHeight)
-      .fillAndStroke('#f5f5f5', '#333333');
-    doc
-      .fontSize(Math.floor(7 * scaleFactor))
-      .fillColor('#333333')
-      .font('Chinese-Bold');
-    columns.forEach((column) => {
-      doc.text(column.label, column.x + 3, y + Math.floor(5 * scaleFactor), {
-        width: column.width - 6,
-      });
-    });
-    y += headerHeight;
+    let tableTop = y;
+    y = this.drawIngredientTableHeader(doc, columns, y, scaleFactor);
+    const pageBottom = this.getPageBottomY(scaleFactor);
 
-    const tableTop = y - headerHeight;
     data.parsedIngredients.forEach((ing: IngredientItem) => {
       const fillColor = ing.isTotalWeight ? '#eef8f2' : '#ffffff';
       const rowHeight = this.calculateIngredientRowHeight(
@@ -662,23 +699,44 @@ export class PdfGeneratorService {
         columns,
         scaleFactor,
       );
+
+      if (
+        y + rowHeight > pageBottom &&
+        y > tableTop + Math.floor(20 * scaleFactor)
+      ) {
+        this.strokeIngredientTableBorder(doc, tableTop, y - tableTop);
+        doc.addPage();
+        if (scaleFactor < 1) {
+          doc.scale(scaleFactor, scaleFactor, { origin: [0, 0] });
+        }
+        y = PdfGeneratorService.PAGE_TOP;
+        doc
+          .fontSize(Math.floor(10 * scaleFactor))
+          .fillColor('#333333')
+          .font('Chinese-Bold')
+          .text(`原料清单（续）`, 40, y);
+        y += Math.floor(20 * scaleFactor);
+        tableTop = y;
+        y = this.drawIngredientTableHeader(doc, columns, y, scaleFactor);
+      }
+
       doc
         .rect(40, y, tableWidth, rowHeight)
         .fillAndStroke(fillColor, '#dddddd');
 
       doc
-        .fontSize(Math.floor(7 * scaleFactor))
+        .fontSize(this.getIngredientTableFontSize(scaleFactor))
         .fillColor(ing.isTotalWeight ? '#2f8f76' : '#333333')
         .font('Chinese');
 
-      const textY = y + Math.floor(4 * scaleFactor);
+      const textY = y + Math.floor(5 * scaleFactor);
       const amountText = `${ing.amount}${ing.unit}`;
       doc.text(ing.typeLabel || '-', columns[0].x + 3, textY, {
         width: columns[0].width - 6,
       });
       this.drawWrappedTableText(
         doc,
-        this.formatIngredientNameLine(ing),
+        this.formatIngredientSourceLine(ing),
         columns[1].x + 3,
         textY,
         columns[1].width - 6,
@@ -693,23 +751,53 @@ export class PdfGeneratorService {
         textY,
         columns[3].width - 6,
       );
-      this.drawWrappedTableText(
-        doc,
-        this.formatPurchaseSummary(ing),
-        columns[4].x + 3,
-        textY,
-        columns[4].width - 6,
-      );
       y += rowHeight;
     });
 
+    this.strokeIngredientTableBorder(doc, tableTop, y - tableTop);
+
+    return y;
+  }
+
+  private drawIngredientTableHeader(
+    doc: any,
+    columns: PrintTableColumn[],
+    y: number,
+    scaleFactor: number,
+  ): number {
+    const headerHeight = Math.floor(20 * scaleFactor);
+
     doc
-      .rect(40, tableTop, tableWidth, y - tableTop)
+      .rect(40, y, PdfGeneratorService.INGREDIENT_TABLE_WIDTH, headerHeight)
+      .fillAndStroke('#f5f5f5', '#333333');
+    doc
+      .fontSize(this.getIngredientTableFontSize(scaleFactor))
+      .fillColor('#333333')
+      .font('Chinese-Bold');
+    columns.forEach((column) => {
+      doc.text(column.label, column.x + 3, y + Math.floor(5 * scaleFactor), {
+        width: column.width - 6,
+      });
+    });
+
+    return y + headerHeight;
+  }
+
+  private strokeIngredientTableBorder(
+    doc: any,
+    tableTop: number,
+    tableHeight: number,
+  ): void {
+    doc
+      .rect(
+        40,
+        tableTop,
+        PdfGeneratorService.INGREDIENT_TABLE_WIDTH,
+        tableHeight,
+      )
       .strokeColor('#333333')
       .lineWidth(1)
       .stroke();
-
-    return y;
   }
 
   private calculateIngredientRowHeight(
@@ -718,19 +806,14 @@ export class PdfGeneratorService {
     columns: PrintTableColumn[],
     scaleFactor: number,
   ): number {
-    const minRowHeight = Math.floor(20 * scaleFactor);
-    const verticalPadding = Math.floor(8 * scaleFactor);
-    doc.fontSize(Math.floor(7 * scaleFactor)).font('Chinese');
+    const minRowHeight = Math.floor(24 * scaleFactor);
+    const verticalPadding = Math.floor(10 * scaleFactor);
+    doc.fontSize(this.getIngredientTableFontSize(scaleFactor)).font('Chinese');
 
     const nameHeight = this.getWrappedTableTextHeight(
       doc,
-      this.formatIngredientNameLine(ingredient),
+      this.formatIngredientSourceLine(ingredient),
       columns[1].width - 6,
-    );
-    const purchaseHeight = this.getWrappedTableTextHeight(
-      doc,
-      this.formatPurchaseSummary(ingredient),
-      columns[4].width - 6,
     );
     const methodHeight = this.getWrappedTableTextHeight(
       doc,
@@ -741,7 +824,6 @@ export class PdfGeneratorService {
     return Math.max(
       minRowHeight,
       nameHeight + verticalPadding,
-      purchaseHeight + verticalPadding,
       methodHeight + verticalPadding,
     );
   }
@@ -771,6 +853,21 @@ export class PdfGeneratorService {
         lineGap: 0,
       }),
     );
+  }
+
+  private getIngredientTableFontSize(scaleFactor: number): number {
+    return this.getScaledFontSize(
+      PdfGeneratorService.INGREDIENT_TABLE_FONT_SIZE,
+      scaleFactor,
+    );
+  }
+
+  private getScaledFontSize(baseSize: number, scaleFactor: number): number {
+    return Number((baseSize * scaleFactor).toFixed(1));
+  }
+
+  private getPageBottomY(scaleFactor: number): number {
+    return PdfGeneratorService.PAGE_BOTTOM / Math.max(scaleFactor, 0.01);
   }
 
   /**

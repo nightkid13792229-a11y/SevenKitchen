@@ -63,7 +63,14 @@ describe('create step boundaries', () => {
   it('provides create-step feeding cards without weight or exact-kcal input helpers', () => {
     expect(getCreateFeedingFieldKeys()).toEqual(['bcsScore', 'activityLevel', 'mealsPerDay', 'treatLevel'])
     expect(getCreateActivityChoices()).toHaveLength(5)
-    expect(getCreateActivityChoices()[0]).toMatchObject({
+    expect(getCreateActivityChoices().map(option => option.value)).toEqual([
+      'RESTING',
+      'LOW',
+      'NORMAL',
+      'HIGH',
+      'WORKING',
+    ])
+    expect(getCreateActivityChoices()[1]).toMatchObject({
       value: 'LOW',
       label: '城市日常',
       description: expect.stringContaining('30-45分钟'),

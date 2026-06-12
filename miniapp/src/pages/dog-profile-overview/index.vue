@@ -701,8 +701,8 @@ const sizeClassChoices = [
   { value: 'GIANT', label: '巨型犬' },
 ]
 const activityLevelOptions = [
-  { value: 'LOW', label: '城市日常', description: '每日散步约30-45分钟，适合多数国内城市犬' },
   { value: 'RESTING', label: '休息静养', description: '几乎不运动，主要时间休息或医嘱控量' },
+  { value: 'LOW', label: '城市日常', description: '每日散步约30-45分钟，适合多数国内城市犬' },
   { value: 'NORMAL', label: '规律运动', description: '每日主动运动约1小时，活动量稳定' },
   { value: 'HIGH', label: '高活动', description: '每日运动2-4小时，经常跑步或玩耍' },
   { value: 'WORKING', label: '工作犬', description: '高强度训练或工作犬场景' },

@@ -50,4 +50,23 @@ describe('dog-profile-overview runtime regressions', () => {
     expect(source).toContain('/pages/order-detail/index?orderId=')
     expect(source).not.toContain('DIY历史')
   })
+
+  it('orders activity choices from resting through city routine to active levels', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+      'utf-8',
+    )
+    const optionsSource = source.match(/const activityLevelOptions = \[[\s\S]*?\n\]/)?.[0] || ''
+
+    expect(optionsSource.indexOf("value: 'RESTING'")).toBeLessThan(
+      optionsSource.indexOf("value: 'LOW'"),
+    )
+    expect(optionsSource.indexOf("value: 'LOW'")).toBeLessThan(
+      optionsSource.indexOf("value: 'NORMAL'"),
+    )
+    expect(optionsSource.indexOf("value: 'NORMAL'")).toBeLessThan(
+      optionsSource.indexOf("value: 'HIGH'"),
+    )
+    expect(source).toContain("activityLevel: 'LOW'")
+  })
 })

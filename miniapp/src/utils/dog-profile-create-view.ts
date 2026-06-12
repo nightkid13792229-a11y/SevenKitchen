@@ -14,14 +14,14 @@ const TREAT_LEVEL_CHOICES = ['NONE', 'LOW', 'MODERATE', 'HIGH'] as const
 
 const ACTIVITY_LEVEL_CHOICES = [
   {
-    value: 'LOW',
-    label: '城市日常',
-    description: '每日散步约30-45分钟，适合多数国内城市犬',
-  },
-  {
     value: 'RESTING',
     label: '休息静养',
     description: '几乎不运动，主要时间休息或医嘱控量',
+  },
+  {
+    value: 'LOW',
+    label: '城市日常',
+    description: '每日散步约30-45分钟，适合多数国内城市犬',
   },
   {
     value: 'NORMAL',

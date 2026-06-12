@@ -397,16 +397,16 @@ const sizeCategories = [
 // Activity level configurations
 const activityLevelConfigs = [
   {
-    value: ActivityLevel.LOW,
-    label: '城市日常',
-    description: '每日散步约30-45分钟，适合多数国内城市犬',
-    coefficient: 0.9
-  },
-  {
     value: ActivityLevel.RESTING,
     label: '休息静养',
     description: '几乎不运动，主要时间休息或医嘱控量',
     coefficient: 0.8
+  },
+  {
+    value: ActivityLevel.LOW,
+    label: '城市日常',
+    description: '每日散步约30-45分钟，适合多数国内城市犬',
+    coefficient: 0.9
   },
   {
     value: ActivityLevel.NORMAL,

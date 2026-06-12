@@ -243,6 +243,21 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(series);
   }
 
+  @Post('series/:seriesId/delete')
+  @ApiOperation({ summary: 'Delete a recipe design series safely' })
+  async deleteSeriesCommand(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: DeleteRecipeSeriesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.recipeDesignerService.deleteSeries(
+      seriesId,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(series);
+  }
+
   @Post('series/:seriesId/stage-drafts')
   @ApiOperation({ summary: 'Create or reuse a recipe series stage draft' })
   async createSeriesStageDraft(

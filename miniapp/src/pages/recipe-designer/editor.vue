@@ -484,7 +484,13 @@
         >
           生成制作单
         </button>
-        <button class="link-btn customer-save-btn" @tap="goBackToRecipeDesignerList">仅保存</button>
+        <button
+          class="link-btn customer-report-btn"
+          :disabled="loading || redirectingToEditableDraft || revertingToLatestOfficial || autoSaveStatus === 'saving'"
+          @tap="goToNutritionReport"
+        >
+          查看营养报告
+        </button>
       </view>
       <button
         v-else
@@ -803,7 +809,7 @@ interface IngredientOptionSection {
 }
 
 const DEFAULT_WINDOW_WIDTH_PX = 375
-const ASSESSMENT_COLLAPSED_HEIGHT_RPX = 136
+const ASSESSMENT_COLLAPSED_HEIGHT_RPX = 188
 const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108
 const EDITOR_BOTTOM_GAP_RPX = 24
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
@@ -943,7 +949,7 @@ const assessmentDrawerBottomInsetPx = computed(() =>
 
 const assessmentDrawerStyle = computed(
   () =>
-    `top: ${assessmentDrawerTopPx.value}px; height: calc(100vh - ${assessmentDrawerTopPx.value}px - ${assessmentDrawerBottomInsetPx.value}px);`,
+    `top: ${assessmentDrawerTopPx.value}px; height: ${assessmentDrawerHeightPx.value}px;`,
 )
 
 const editorBottomPaddingPx = computed(() => {
@@ -1002,19 +1008,8 @@ const canRevertToLatestOfficial = computed(() => {
   return Boolean(draftSeriesId.value && draftSeriesLifeStage.value && !isCustomerMode.value)
 })
 
-const isCompliant = computed(() => {
-  const status = String(
-    assessment.value?.overallStatus ||
-    assessment.value?.summary?.overallStatus ||
-    assessment.value?.status ||
-    '',
-  ).toUpperCase()
-  if (status) return status === 'COMPLIANT'
-  return draftIsCompliant.value
-})
-
 const canCreatePrivateSnapshot = computed(() =>
-  Boolean(customerDogId.value && isCompliant.value && currentTotalWeightG.value > 0),
+  Boolean(customerDogId.value && currentTotalWeightG.value > 0),
 )
 
 const customerNextActions = computed(() =>
@@ -1851,14 +1846,71 @@ function goToSupplementLibrary() {
   uni.navigateTo({ url: `/pages/recipe-designer/supplement-library${query}` })
 }
 
-function goBackToRecipeDesignerList() {
-  uni.redirectTo({ url: '/pages/recipe-designer/list' })
+function readWarningCount(value: unknown) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.trunc(numericValue) : 0
+}
+
+function countAssessmentEntriesByStatus(status: string) {
+  return assessmentEntries.value.filter((entry: AssessmentEntryLike) => {
+    return !entry.excludeFromAttention && String(entry.status || '').toUpperCase() === status
+  }).length
+}
+
+function getDraftNutritionWarningMessage() {
+  const status = String(
+    assessment.value?.overallStatus ||
+    assessment.value?.summary?.overallStatus ||
+    assessment.value?.status ||
+    '',
+  ).toUpperCase()
+  const summary = assessment.value?.summary || {}
+  const missingData = Math.max(
+    readWarningCount(summary.missingData),
+    countAssessmentEntriesByStatus('MISSING_DATA'),
+  )
+  const deficient = Math.max(
+    readWarningCount(summary.deficient),
+    countAssessmentEntriesByStatus('DEFICIENT'),
+  )
+  const excess = Math.max(
+    readWarningCount(summary.excess),
+    countAssessmentEntriesByStatus('EXCESS'),
+  )
+
+  if ((status === 'COMPLIANT' || (!status && draftIsCompliant.value)) && missingData === 0 && deficient === 0 && excess === 0) {
+    return ''
+  }
+
+  const parts: string[] = []
+  if (missingData > 0) parts.push(`${missingData}项缺少营养数据`)
+  if (deficient > 0) parts.push(`${deficient}项营养不足`)
+  if (excess > 0) parts.push(`${excess}项营养超标`)
+  if (parts.length === 0) parts.push('部分营养项未达标或需复核')
+  return `当前食谱有营养提醒：${parts.join('、')}。可以继续生成制作单或订购，建议后续再优化配方。`
+}
+
+function confirmRecipeNutritionWarning(message: string) {
+  if (!message) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '营养提醒',
+      content: message,
+      confirmText: '继续',
+      cancelText: '返回调整',
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    })
+  })
 }
 
 async function goToPrivateRecipeTarget(target: 'ORDER' | 'DIY') {
   if (!draftId.value || privateSnapshotCreatingTarget.value) return
   if (!canCreatePrivateSnapshot.value) {
-    uni.showToast({ title: '请先完成营养评估', icon: 'none' })
+    uni.showToast({ title: '请先添加食材并确认用量', icon: 'none' })
+    return
+  }
+  if (!(await confirmRecipeNutritionWarning(getDraftNutritionWarningMessage()))) {
     return
   }
 
@@ -4314,9 +4366,9 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  min-height: 136rpx;
+  min-height: 188rpx;
   max-height: calc(100vh - 72px);
-  padding: 8rpx 32rpx 6rpx;
+  padding: 8rpx 32rpx 0;
   background: #eef4f8;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.08);
   border-radius: 20rpx 20rpx 0 0;
@@ -4604,7 +4656,7 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 18;
   padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #fff;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -4617,13 +4669,13 @@ function formatAssessmentNumber(value: unknown) {
 
 .customer-next-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr) 128rpx;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12rpx;
   align-items: center;
 }
 
 .customer-next-btn,
-.customer-save-btn {
+.customer-report-btn {
   width: 100%;
   height: 76rpx;
   padding: 0 8rpx;
@@ -4632,7 +4684,7 @@ function formatAssessmentNumber(value: unknown) {
   line-height: 76rpx;
 }
 
-.customer-save-btn {
+.customer-report-btn {
   border-color: #d9e2ec;
   color: #475569;
 }

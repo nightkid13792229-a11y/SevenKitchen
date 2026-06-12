@@ -97,12 +97,36 @@ describe('recipe designer mobile entry', () => {
     expect(customerCardBlock).toContain('customer-card-more-btn')
     expect(customerCardBlock).toContain('customer-card-menu')
     expect(customerCardBlock).toContain('重命名')
-    expect(customerCardBlock).toContain('复制该食谱')
+    expect(customerCardBlock).toContain('复制')
+    expect(customerCardBlock).toContain('删除')
+    expect(customerCardBlock).toContain('@tap.stop="deleteCustomerRecipe(seriesItem)"')
+    expect(customerCardBlock).not.toContain('复制该食谱')
     expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'DIY')")
     expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'ORDER')")
     expect(customerCardBlock).toContain('生成制作单')
     expect(customerCardBlock).toContain('订购成品')
     expect(customerCardBlock).not.toContain('继续设计')
+  })
+
+  it('lets customer recipe overflow menus close outside and delete after a simple confirmation', () => {
+    const busyBlock =
+      listSource.match(/function isCustomerSeriesBusy[\s\S]*?\n}\n\nfunction toggleCustomerRecipeMenu/)?.[0] || ''
+    const deleteCustomerBlock =
+      listSource.match(/function deleteCustomerRecipe[\s\S]*?\n}\n\nfunction canGenerateDiyFromCustomerCard/)?.[0] || ''
+
+    expect(listSource).toContain('customer-card-menu-backdrop')
+    expect(listSource).toContain('@tap.stop="closeCustomerRecipeMenu"')
+    expect(listSource).toContain('function closeCustomerRecipeMenu')
+    expect(busyBlock).toContain('deletingSeriesId.value === seriesItem.id')
+    expect(deleteCustomerBlock).toContain("title: '删除食谱'")
+    expect(deleteCustomerBlock).toContain('删除后不可恢复')
+    expect(deleteCustomerBlock).toContain("confirmText: '删除'")
+    expect(deleteCustomerBlock).toContain('recipeDesignerApi.deleteSeries(seriesItem.id')
+    expect(deleteCustomerBlock).toContain('confirmName: seriesName')
+    expect(deleteCustomerBlock).toContain('confirmUserVisibleRemoval: true')
+    expect(deleteCustomerBlock).toContain('await loadSeries()')
+    expect(deleteCustomerBlock).toContain("uni.showToast({ title: '已删除', icon: 'success' })")
+    expect(deleteCustomerBlock).not.toContain('editable: true')
   })
 
   it('keeps staff and admin recipe designer on the series plus five life-stage workbench', () => {
@@ -361,11 +385,20 @@ describe('recipe designer mobile entry', () => {
   })
 
   it('offers customer next actions from editor and nutrition report without staff-only publishing', () => {
+    const editorCustomerActionsBlock =
+      editorSource.match(/<view v-if="customerNextActions" class="customer-next-actions">[\s\S]*?\n      <\/view>/)?.[0] || ''
+
     expect(editorSource).toContain('customerNextActions')
     expect(editorSource).toContain('createPrivateRecipeSnapshot')
     expect(editorSource).toContain("target: 'ORDER'")
     expect(editorSource).toContain("target: 'DIY'")
     expect(editorSource).toContain('goToPrivateRecipeTarget')
+    expect(editorCustomerActionsBlock).toContain('订购成品')
+    expect(editorCustomerActionsBlock).toContain('生成制作单')
+    expect(editorCustomerActionsBlock).toContain('查看营养报告')
+    expect(editorCustomerActionsBlock).toContain('@tap="goToNutritionReport"')
+    expect(editorCustomerActionsBlock).not.toContain('仅保存')
+    expect(editorSource).not.toContain('goBackToRecipeDesignerList')
     expect(editorSource).not.toContain('为 {{ customerDogName }} 设计')
     expect(publishSource).toContain('customerReportNextActions')
     expect(publishSource).toContain('createPrivateRecipeSnapshot')
@@ -376,6 +409,26 @@ describe('recipe designer mobile entry', () => {
     expect(publishSource).toContain('生成制作单')
     expect(editorSource).not.toContain('生成 DIY 制作单')
     expect(publishSource).not.toContain('生成 DIY 制作单')
+  })
+
+  it('lets customers continue to order or DIY after confirming nutrition warnings', () => {
+    const editorSnapshotGateBlock =
+      editorSource.match(/const canCreatePrivateSnapshot = computed[\s\S]*?\n\)/)?.[0] || ''
+    const publishSnapshotGateBlock =
+      publishSource.match(/const canCreatePrivateSnapshot = computed[\s\S]*?\n\}\)/)?.[0] || ''
+
+    expect(apiSource).toContain('RecipeDesignerNutritionWarning')
+    expect(apiSource).toContain('nutritionWarning?: RecipeDesignerNutritionWarning | null')
+    expect(listSource).toContain('confirmCustomerNutritionWarning(seriesItem.actionAvailability?.nutritionWarning)')
+    expect(listSource).toContain("title: '营养提醒'")
+    expect(listSource).toContain("confirmText: '继续'")
+    expect(listSource).toContain("cancelText: '返回调整'")
+    expect(editorSnapshotGateBlock).not.toContain('isCompliant.value')
+    expect(editorSource).toContain('confirmRecipeNutritionWarning(getDraftNutritionWarningMessage())')
+    expect(publishSnapshotGateBlock).not.toContain('reportIsCompliant.value')
+    expect(publishSource).toContain('confirmRecipeNutritionWarning(getDraftNutritionWarningMessage())')
+    expect(editorSource).not.toContain("title: '请先完成营养评估'")
+    expect(publishSource).not.toContain("title: '请先完成营养评估'")
   })
 
   it('places reproduction as the last option in the new draft life stage picker', () => {
@@ -850,9 +903,9 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('<scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list"')
     expect(editorSource).toContain('ASSESSMENT_COLLAPSED_HEIGHT_RPX')
     expect(editorSource).toContain('assessmentCollapsedHeightPx.value = rpxToPx(ASSESSMENT_COLLAPSED_HEIGHT_RPX, windowWidth)')
-    expect(editorSource).toContain('min-height: 136rpx')
+    expect(editorSource).toContain('min-height: 188rpx')
     expect(editorSource).not.toContain('min-height: 88px')
-    expect(editorSource).toContain('padding: 8rpx 32rpx 6rpx')
+    expect(editorSource).toContain('padding: 8rpx 32rpx 0')
     expect(editorSource).toContain('background: #eef4f8')
     expect(editorSource).toContain('assessment-list-surface')
     expect(editorSource).not.toContain('drawer-toggle')
@@ -1013,7 +1066,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('assessmentDrawerMaxTopPx')
     expect(editorSource).toContain('assessmentDrawerMinTopPx')
     expect(editorSource).toContain('top: ${assessmentDrawerTopPx.value}px')
-    expect(editorSource).toContain('height: calc(100vh - ${assessmentDrawerTopPx.value}px')
+    expect(editorSource).toContain('height: ${assessmentDrawerHeightPx.value}px')
     expect(editorSource).toContain('assessmentDrawerBottomInsetPx')
     expect(editorSource).toContain('assessmentExpanded.value = assessmentListVisible.value')
     expect(editorSource).not.toContain('setAssessmentExpanded(assessmentDrawerHeightPx.value >= threshold)')
@@ -1029,9 +1082,29 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('padding: 24rpx 32rpx 380rpx')
   })
 
+  it('uses measured drawer height so customer bottom actions cannot cover nutrition assessment', () => {
+    const drawerStyleBlock =
+      editorSource.match(/const assessmentDrawerStyle = computed[\s\S]*?\n\)/)?.[0] || ''
+
+    expect(drawerStyleBlock).toContain('height: ${assessmentDrawerHeightPx.value}px')
+    expect(drawerStyleBlock).not.toContain('100vh')
+    expect(editorSource).toContain(
+      'windowHeight - assessmentDrawerTopPx.value - assessmentDrawerBottomInsetPx.value',
+    )
+  })
+
   it('keeps the collapsed assessment drawer flush with the publish bar on real devices', () => {
+    const collapsedHeightMatch = editorSource.match(/const ASSESSMENT_COLLAPSED_HEIGHT_RPX = (\d+)/)
+    const drawerStyle = editorSource.match(/\.assessment-drawer\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    const publishBarStyle = editorSource.match(/\.bottom-publish-bar\s*\{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(Number(collapsedHeightMatch?.[1] || 0)).toBeGreaterThanOrEqual(184)
     expect(editorSource).toContain('BOTTOM_PUBLISH_BAR_HEIGHT_RPX')
     expect(editorSource).toContain('const BOTTOM_PUBLISH_BAR_HEIGHT_RPX = 108')
+    expect(drawerStyle).toContain('min-height: 188rpx;')
+    expect(drawerStyle).toContain('padding: 8rpx 32rpx 0;')
+    expect(drawerStyle).not.toContain('padding: 8rpx 32rpx 6rpx;')
+    expect(publishBarStyle).toContain('box-shadow: none;')
     expect(editorSource).toContain('assessmentPublishBarHeightPx')
     expect(editorSource).toContain('getSafeAreaBottomPx')
     expect(editorSource).toContain('const bottomInsetCandidates = [explicitInset, derivedInset]')

@@ -159,8 +159,8 @@ describe('recipeDesignerApi', () => {
       data: renamePayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(4, {
-      url: `/recipe-designer/series/${seriesId}`,
-      method: 'DELETE',
+      url: `/recipe-designer/series/${seriesId}/delete`,
+      method: 'POST',
       data: deletePayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(5, {

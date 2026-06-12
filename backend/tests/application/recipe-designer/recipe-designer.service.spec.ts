@@ -4841,17 +4841,84 @@ describe('RecipeDesignerService', () => {
   });
 
   describe('private recipe snapshots', () => {
+    it('creates a private snapshot with a nutrition warning for usable non-compliant customer drafts', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'design-warning',
+          name: 'Star 待优化鸡肉餐',
+          createdBy: 'customer-1',
+          customerDogId: 'dog-1',
+          isCompliant: false,
+          totalWeightG: 100,
+          energyDensityKcalPerKg: 1200,
+          assessmentSummary: {
+            overallStatus: 'NON_COMPLIANT',
+            summary: {
+              compliant: 8,
+              deficient: 1,
+              excess: 0,
+              missingData: 0,
+            },
+          },
+          missingDataReport: [],
+          calculatedNutrition: { energyDensityKcalPerKg: 1200 },
+          items: [item({ weightG: 100 })],
+        }),
+      );
+      prisma.recipe.findFirst.mockResolvedValue(null);
+      prisma.recipe.create.mockResolvedValue({
+        id: 'private-row-warning',
+        recipeId: 'private-recipe-warning',
+        version: 1,
+        customerDogId: 'dog-1',
+      });
+
+      await expect(
+        service.createPrivateRecipeSnapshot(
+          'design-warning',
+          { target: 'ORDER' } as any,
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).resolves.toEqual({
+        recipeId: 'private-recipe-warning',
+        dogId: 'dog-1',
+        targetUrl:
+          '/pages/recipe-order/index?recipeId=private-recipe-warning&dogId=dog-1',
+        nutritionWarning: expect.objectContaining({
+          hasWarning: true,
+          overallStatus: 'NON_COMPLIANT',
+          counts: expect.objectContaining({
+            deficient: 1,
+            excess: 0,
+            missingData: 0,
+          }),
+        }),
+      });
+
+      expect(prisma.recipe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PRIVATE_CUSTOM',
+            isCustomRecipe: true,
+            customerOwnerId: 'customer-1',
+            customerDogId: 'dog-1',
+            sourceDesignRecipeId: 'design-warning',
+          }),
+        }),
+      );
+    });
+
     it('rejects private snapshot generation for non-ready customer drafts', async () => {
       prisma.designRecipe.findUnique.mockResolvedValue(
         draft({
           id: 'design-1',
           createdBy: 'customer-1',
           customerDogId: 'dog-1',
-          isCompliant: false,
-          totalWeightG: 100,
+          isCompliant: true,
+          totalWeightG: 0,
           energyDensityKcalPerKg: 1200,
           missingDataReport: [],
-          items: [item()],
+          items: [],
         }),
       );
 
@@ -6623,6 +6690,55 @@ describe('RecipeDesignerService', () => {
 
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
       expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets customers delete their own recipe series with pending review drafts', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '成犬鸡肉配方',
+          createdBy: 'customer-1',
+          designs: [
+            draft({
+              id: 'design-1',
+              createdBy: 'customer-1',
+              reviewStatus: 'REQUIRED',
+              customerDogId: 'dog-1',
+            }),
+          ],
+          recipes: undefined,
+        }),
+      );
+      prisma.recipeSeries.update.mockResolvedValue({
+        id: 'series-1',
+        status: 'DELETED',
+      });
+
+      await expect(
+        service.deleteSeries(
+          'series-1',
+          {
+            confirmName: '成犬鸡肉配方',
+            confirmUserVisibleRemoval: true,
+          },
+          { userId: 'customer-1', role: 'CUSTOMER' },
+        ),
+      ).resolves.toEqual(expect.objectContaining({ id: 'series-1' }));
+
+      expect(prisma.designRecipe.deleteMany).toHaveBeenCalledWith({
+        where: {
+          seriesId: 'series-1',
+          status: { not: 'PUBLISHED' },
+          publishedRecipeId: null,
+        },
+      });
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-1' },
+        data: expect.objectContaining({
+          status: 'DELETED',
+          deletedBy: 'customer-1',
+        }),
+      });
     });
 
     it('does not create a stage draft for another customer series', async () => {

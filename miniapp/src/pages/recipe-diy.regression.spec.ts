@@ -58,4 +58,15 @@ describe('recipe diy regressions', () => {
     expect(switchSource).toContain('await loadDogCalc(selectedDogId.value)')
     expect(switchSource).toContain('checkLifeStageMatch()')
   })
+
+  it('explains that dog calories are a starting feeding suggestion for domestic city dogs', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('起始喂食建议')
+    expect(source).toContain('国内城市犬')
+    expect(source).toContain('2-4周')
+  })
 })

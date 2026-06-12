@@ -169,7 +169,7 @@ const form = reactive<Record<string, any>>({
   isNeutered: false,
   currentWeightKg: '',
   bcsScore: 5,
-  activityLevel: 'NORMAL',
+  activityLevel: 'LOW',
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
@@ -335,7 +335,7 @@ function resetHealthForm() {
   form.isNeutered = false
   form.currentWeightKg = ''
   form.bcsScore = 5
-  form.activityLevel = 'NORMAL'
+  form.activityLevel = 'LOW'
   form.lifeStageOverride = 'NONE'
   form.sizeClassOverride = null
   form.mealsPerDay = '2'
@@ -409,7 +409,7 @@ function populateForm(profile: Record<string, any>) {
   form.isNeutered = profile.isNeutered ?? false
   form.currentWeightKg = profile.currentWeightKg?.toString() || ''
   form.bcsScore = profile.bcsScore ?? 5
-  form.activityLevel = profile.activityLevel || 'NORMAL'
+  form.activityLevel = profile.activityLevel || 'LOW'
   form.lifeStageOverride = profile.lifeStageOverride || 'NONE'
   form.sizeClassOverride = profile.sizeClassOverride || null
   form.mealsPerDay = (profile.mealsPerDay || 2).toString()

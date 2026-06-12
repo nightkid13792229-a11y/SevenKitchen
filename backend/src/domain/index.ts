@@ -15,6 +15,7 @@ export * from './dog/dog.entity';
 export * from './dog/dog-breed.entity';
 export * from './dog/dog.repository';
 export * from './dog/constants';
+export * from './dog/dog-stage.service';
 export * from './dog/dog-calc.service';
 
 // Ingredient Domain

@@ -11,6 +11,7 @@ import {
   calculateFreshFoodNeeds,
   calculateAgeMonths,
   determineSizeClass,
+  resolveDogProfileStage,
 } from 'src/domain/dog/dog-calc.service';
 import { Dog } from 'src/domain/dog/dog.entity';
 import {
@@ -28,6 +29,7 @@ describe('DogCalcService', () => {
     currentWeightKg?: number;
     bcsScore?: number;
     activityLevel?: ActivityLevel;
+    gender?: DogGender;
     isNeutered?: boolean;
     lifeStageOverride?: LifeStageOverride;
     sizeClassOverride?: DogSizeCategory | null;
@@ -42,7 +44,7 @@ describe('DogCalcService', () => {
       'breed-id-1',
       null,
       overrides?.birthday ?? new Date('2020-01-01'),
-      DogGender.MALE,
+      overrides?.gender ?? DogGender.MALE,
       overrides?.isNeutered ?? false,
       overrides?.currentWeightKg ?? 10.0,
       overrides?.bcsScore ?? 5,
@@ -105,7 +107,7 @@ describe('DogCalcService', () => {
   });
 
   describe('calculateTotalDer', () => {
-    it('should calculate DER for an adult intact dog', () => {
+    it('uses FEDIAF MER110 for a regular adult dog without stacking neuter modifiers', () => {
       const dog = createMockDog({
         birthday: new Date('2019-01-01'), // 5+ years old
         isNeutered: false,
@@ -113,28 +115,20 @@ describe('DogCalcService', () => {
       });
 
       const der = calculateTotalDer(dog);
-      // Should be RER * ADULT_INTACT (1.8) * NORMAL (1.0) * BCS (1.0 for ideal)
-      expect(der).toBeGreaterThan(0);
-      // For 10kg dog: RER ≈ 393.6, DER ≈ 393.6 * 1.8 ≈ 708
-      // Allow ±10 kcal tolerance for floating point precision
-      expect(der).toBeGreaterThan(698);
-      expect(der).toBeLessThan(718);
+
+      expect(der).toBeCloseTo(calculateRER(10) * (110 / 70), 1);
     });
 
-    it('should calculate DER for a neutered adult dog', () => {
+    it('uses FEDIAF MER95 for a low-activity city adult dog', () => {
       const dog = createMockDog({
         birthday: new Date('2019-01-01'),
         isNeutered: true,
-        activityLevel: ActivityLevel.NORMAL,
+        activityLevel: ActivityLevel.LOW,
       });
 
       const der = calculateTotalDer(dog);
-      // Should be RER * ADULT_NEUTERED (1.6) * NORMAL (1.0) * BCS (1.0)
-      expect(der).toBeGreaterThan(0);
-      // For 10kg dog: RER ≈ 393.6, DER ≈ 393.6 * 1.6 ≈ 630
-      // Allow ±10 kcal tolerance for floating point precision
-      expect(der).toBeGreaterThan(620);
-      expect(der).toBeLessThan(640);
+
+      expect(der).toBeCloseTo(calculateRER(10) * (95 / 70), 1);
     });
 
     it('should calculate DER for a puppy (2 months old)', () => {
@@ -180,12 +174,7 @@ describe('DogCalcService', () => {
       });
 
       const der = calculateTotalDer(dog);
-      // Should be RER * ADULT_NEUTERED (1.6) * NORMAL (1.0) * BCS (0.8)
-      expect(der).toBeGreaterThan(0);
-      // For 10kg dog: RER ≈ 393.6, DER ≈ 393.6 * 1.6 * 0.8 ≈ 504
-      // Allow ±10 kcal tolerance for floating point precision
-      expect(der).toBeGreaterThan(494);
-      expect(der).toBeLessThan(514);
+      expect(der).toBeCloseTo(calculateRER(10) * (110 / 70) * 0.8, 1);
     });
 
     it('should apply BCS adjustment for underweight dog (BCS 2)', () => {
@@ -196,12 +185,42 @@ describe('DogCalcService', () => {
       });
 
       const der = calculateTotalDer(dog);
-      // Should be RER * ADULT_NEUTERED (1.6) * NORMAL (1.0) * BCS (1.4)
-      expect(der).toBeGreaterThan(0);
-      // For 10kg dog: RER ≈ 393.6, DER ≈ 393.6 * 1.6 * 1.4 ≈ 882
-      // Allow ±10 kcal tolerance for floating point precision
-      expect(der).toBeGreaterThan(872);
-      expect(der).toBeLessThan(892);
+      expect(der).toBeCloseTo(calculateRER(10) * (110 / 70) * 1.4, 1);
+    });
+
+    it('uses a manual senior override for calories even when age is adult', () => {
+      const dog = createMockDog({
+        birthday: new Date('2021-01-01'),
+        isNeutered: true,
+        activityLevel: ActivityLevel.NORMAL,
+        lifeStageOverride: LifeStageOverride.SENIOR,
+      });
+
+      const der = calculateTotalDer(dog);
+
+      expect(der).toBeCloseTo(calculateRER(10) * 1.4, 1);
+    });
+
+    it('keeps pregnancy and lactation in the same recipe stage but different calorie stages', () => {
+      const pregnancy = createMockDog({
+        gender: DogGender.FEMALE,
+        lifeStageOverride: LifeStageOverride.PREGNANCY,
+      });
+      const lactation = createMockDog({
+        gender: DogGender.FEMALE,
+        lifeStageOverride: LifeStageOverride.LACTATION,
+      });
+
+      const pregnancyStage = resolveDogProfileStage(pregnancy);
+      const lactationStage = resolveDogProfileStage(lactation);
+
+      expect(pregnancyStage.recipeLifeStage).toBe('REPRODUCTION');
+      expect(lactationStage.recipeLifeStage).toBe('REPRODUCTION');
+      expect(pregnancyStage.energyStage).toBe('PREGNANCY');
+      expect(lactationStage.energyStage).toBe('LACTATION');
+      expect(calculateTotalDer(lactation)).toBeGreaterThan(
+        calculateTotalDer(pregnancy),
+      );
     });
   });
 
@@ -366,6 +385,57 @@ describe('DogCalcService', () => {
 
       // Puppy should have higher DER than adult (same weight)
       expect(puppyResult.der).toBeGreaterThan(adultResult.der);
+    });
+
+    it('returns recipe and FEDIAF stage details for a low-activity adult city dog', () => {
+      const dog = createMockDog({
+        birthday: new Date('2021-01-01'),
+        isNeutered: true,
+        activityLevel: ActivityLevel.LOW,
+      });
+
+      const result = calculateDogEnergy(dog, undefined, null, true);
+
+      expect(result.calcDetails).toMatchObject({
+        lifeStage: 'ADULT',
+        energyStage: 'ADULT',
+        energyFactorKey: 'ADULT_MER_95',
+        recipeLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafScenario: 'ADULT_MER_95',
+        activityBasis: 'LOW',
+        isManualLifeStageOverride: false,
+      });
+      expect(result.der).toBeCloseTo(calculateRER(10) * (95 / 70), 1);
+    });
+
+    it('defaults missing activity to the low-activity domestic city assumption', () => {
+      const dog = createMockDog({
+        birthday: new Date('2019-01-01'),
+        isNeutered: true,
+      });
+      (dog as unknown as { activityLevel?: ActivityLevel }).activityLevel =
+        undefined;
+
+      const result = calculateDogEnergy(dog, undefined, null, true);
+
+      expect(result.calcDetails).toMatchObject({
+        activityBasis: 'LOW',
+        energyFactorKey: 'ADULT_MER_95',
+      });
+      expect(result.der).toBeCloseTo(calculateRER(10) * (95 / 70), 1);
+    });
+
+    it('reports warnings for clearly conflicting manual life-stage overrides', () => {
+      const dog = createMockDog({
+        birthday: new Date('2021-01-01'),
+        lifeStageOverride: LifeStageOverride.PUPPY,
+      });
+
+      const result = calculateDogEnergy(dog, undefined, null, true);
+
+      expect(result.calcDetails?.warnings).toContain(
+        'LIFE_STAGE_OVERRIDE_CONFLICT',
+      );
     });
   });
 });

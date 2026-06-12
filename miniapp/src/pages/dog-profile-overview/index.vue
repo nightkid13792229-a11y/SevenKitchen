@@ -701,9 +701,9 @@ const sizeClassChoices = [
   { value: 'GIANT', label: '巨型犬' },
 ]
 const activityLevelOptions = [
-  { value: 'RESTING', label: '休息', description: '几乎不运动，主要时间休息' },
-  { value: 'LOW', label: '低活动', description: '偶尔散步，每日运动少于30分钟' },
-  { value: 'NORMAL', label: '正常活动', description: '每日散步1-2小时，正常活动量' },
+  { value: 'LOW', label: '城市日常', description: '每日散步约30-45分钟，适合多数国内城市犬' },
+  { value: 'RESTING', label: '休息静养', description: '几乎不运动，主要时间休息或医嘱控量' },
+  { value: 'NORMAL', label: '规律运动', description: '每日主动运动约1小时，活动量稳定' },
   { value: 'HIGH', label: '高活动', description: '每日运动2-4小时，经常跑步或玩耍' },
   { value: 'WORKING', label: '工作犬', description: '高强度训练或工作犬场景' },
 ]
@@ -759,7 +759,7 @@ const form = reactive<Record<string, any>>({
   isNeutered: false,
   currentWeightKg: '',
   bcsScore: 5,
-  activityLevel: 'NORMAL',
+  activityLevel: 'LOW',
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
@@ -1161,7 +1161,7 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.isNeutered = nextProfile.isNeutered ?? false
   form.currentWeightKg = nextProfile.currentWeightKg?.toString() || ''
   form.bcsScore = nextProfile.bcsScore ?? 5
-  form.activityLevel = nextProfile.activityLevel || 'NORMAL'
+  form.activityLevel = nextProfile.activityLevel || 'LOW'
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
   form.sizeClassOverride = nextProfile.sizeClassOverride || null
   form.mealsPerDay = (nextProfile.mealsPerDay || 2).toString()

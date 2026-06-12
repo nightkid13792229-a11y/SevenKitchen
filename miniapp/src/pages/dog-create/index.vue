@@ -664,7 +664,7 @@ const formData = ref<FormData>({
   isNeutered: false,
   currentWeightKg: '',
   bcsScore: 5,
-  activityLevel: 'NORMAL',
+  activityLevel: 'LOW',
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
@@ -2077,8 +2077,9 @@ function getTreatLevelLabel(treatLevel?: string): string {
 
 function getActivityLevelText(activityLevel: string): string {
   const texts: Record<string, string> = {
-    'LOW': '低活动量',
-    'NORMAL': '正常活动量',
+    'RESTING': '休息静养',
+    'LOW': '城市日常',
+    'NORMAL': '规律运动',
     'HIGH': '高活动量'
   }
   return texts[activityLevel] || activityLevel

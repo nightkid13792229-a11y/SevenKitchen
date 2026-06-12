@@ -7,8 +7,8 @@
 import { Dog } from './dog.entity';
 import { DogBreed } from './dog-breed.entity';
 import {
+  ActivityLevel,
   DogSizeCategory,
-  LifeStageOverride,
   TreatInputMode,
   TreatLevel,
 } from './enums';
@@ -17,10 +17,14 @@ import {
   ACTIVITY_MULTIPLIERS,
   TREAT_LIMITS,
   BCS_PARAMS,
-  SIZE_CLASS_ADULT_THRESHOLDS,
-  SIZE_CLASS_SENIOR_THRESHOLDS,
   MIXED_BREED_VIRTUAL_ID,
 } from './constants';
+import {
+  resolveDogProfileStage,
+  type ResolvedDogProfileStage,
+} from './dog-stage.service';
+
+export { resolveDogProfileStage } from './dog-stage.service';
 
 /**
  * DogCalcResult
@@ -49,6 +53,16 @@ export interface DogCalcResult {
     // Additional info for display (not used in calculation)
     isNeutered: boolean;
     activityLevel: string;
+    energyStage?: string;
+    energyFactorKey?: string;
+    recipeLifeStage?: string;
+    fediafScenario?: string;
+    activityBasis?: string;
+    autoLifeStage?: string;
+    overrideLifeStage?: string;
+    effectiveLifeStage?: string;
+    isManualLifeStageOverride?: boolean;
+    warnings?: string[];
 
     // Treat info
     treatMode: string;
@@ -111,45 +125,6 @@ export function validateMixedBreedDog(
 }
 
 /**
- * Get adult threshold in months for size class
- * Priority: DogBreed.adult_age_months > Size Class Default
- * Based on docs/07_Core_Architecture.md Section 3.1.2
- */
-function getAdultThresholdMonths(
-  sizeClass: DogSizeCategory,
-  breed?: DogBreed | null,
-): number {
-  // Priority 1: If breed and breed.adult_age_months exists, return it
-  if (breed) {
-    return breed.getAdultThresholdMonths();
-  }
-
-  // Priority 2: Use size class defaults
-  return SIZE_CLASS_ADULT_THRESHOLDS[sizeClass] ?? 12;
-}
-
-/**
- * Check if dog is senior
- * Priority: DogBreed.senior_age_years > Size Class Default
- * Based on docs/07_Core_Architecture.md Section 3.1.2
- */
-function checkIsSenior(
-  ageMonths: number,
-  sizeClass: DogSizeCategory,
-  breed?: DogBreed | null,
-): boolean {
-  // Priority 1: If breed and breed.senior_age_years exists, use it
-  if (breed) {
-    return breed.isSenior(ageMonths);
-  }
-
-  // Priority 2: Use size class defaults
-  const ageYears = ageMonths / 12.0;
-  const threshold = SIZE_CLASS_SENIOR_THRESHOLDS[sizeClass] ?? 10;
-  return ageYears >= threshold;
-}
-
-/**
  * Get life stage factor based on dog's age, size, and override
  * Based on docs/07_Core_Architecture.md Section 3.1.2
  */
@@ -159,104 +134,10 @@ function getLifeStageFactor(
   sizeClass: DogSizeCategory,
   breed?: DogBreed | null,
 ): number {
-  const adultThreshold = getAdultThresholdMonths(sizeClass, breed);
-
-  // A. Pregnancy Override
-  if (dog.lifeStageOverride === LifeStageOverride.PREGNANCY) {
-    return LIFE_STAGE_FACTORS.PREGNANCY;
-  }
-
-  // B. Lactation Override
-  if (dog.lifeStageOverride === LifeStageOverride.LACTATION) {
-    return LIFE_STAGE_FACTORS.LACTATION;
-  }
-
-  // C. Puppy & Growth Stages
-  if (ageMonths < adultThreshold) {
-    // C1. Rapid growth (< 4 months)
-    if (ageMonths < 4) {
-      return LIFE_STAGE_FACTORS.PUPPY_0_4_MONTHS;
-    }
-
-    // C2. Fast growth (4-6 months)
-    if (ageMonths < 6) {
-      if (
-        sizeClass === DogSizeCategory.LARGE ||
-        sizeClass === DogSizeCategory.GIANT
-      ) {
-        return LIFE_STAGE_FACTORS.PUPPY_4_6_MONTHS_LARGE_GIANT;
-      }
-      return LIFE_STAGE_FACTORS.PUPPY_4_6_MONTHS_GENERIC;
-    }
-
-    // C3. Transition growth I (6-9 months)
-    if (ageMonths < 9) {
-      if (sizeClass === DogSizeCategory.GIANT) {
-        return LIFE_STAGE_FACTORS.PUPPY_6_9_MONTHS_GIANT;
-      }
-      if (sizeClass === DogSizeCategory.LARGE) {
-        return LIFE_STAGE_FACTORS.PUPPY_6_9_MONTHS_LARGE;
-      }
-      return LIFE_STAGE_FACTORS.PUPPY_6_9_MONTHS_GENERIC;
-    }
-
-    // C4. Transition growth II (9-12 months)
-    if (ageMonths < 12) {
-      if (sizeClass === DogSizeCategory.GIANT) {
-        return LIFE_STAGE_FACTORS.PUPPY_9_12_MONTHS_GIANT;
-      }
-      if (sizeClass === DogSizeCategory.LARGE) {
-        return LIFE_STAGE_FACTORS.PUPPY_9_12_MONTHS_LARGE;
-      }
-      return LIFE_STAGE_FACTORS.PUPPY_9_12_MONTHS_GENERIC;
-    }
-
-    // C5. Late growth (12 months ~ adult threshold)
-    if (sizeClass === DogSizeCategory.GIANT) {
-      if (ageMonths < 18) {
-        return LIFE_STAGE_FACTORS.JUNIOR_GIANT_12_18_MONTHS;
-      }
-      return LIFE_STAGE_FACTORS.JUNIOR_GIANT_18_24_MONTHS;
-    }
-
-    if (sizeClass === DogSizeCategory.LARGE) {
-      return LIFE_STAGE_FACTORS.JUNIOR_LARGE_12_18_MONTHS;
-    }
-
-    // Fallback for Medium/Small late bloomers
-    return LIFE_STAGE_FACTORS.ADULT_INTACT;
-  }
-
-  // D. Senior
-  if (checkIsSenior(ageMonths, sizeClass, breed)) {
-    return LIFE_STAGE_FACTORS.SENIOR;
-  }
-
-  // E. Adult Default
-  return LIFE_STAGE_FACTORS.ADULT_INTACT;
-}
-
-/**
- * Check if dog is in growth or reproduction stage
- * Used to prevent applying neuter/activity modifiers
- */
-function isGrowthOrReproStage(
-  dog: Dog,
-  ageMonths: number,
-  sizeClass: DogSizeCategory,
-  breed?: DogBreed | null,
-): boolean {
-  // 1. Check reproduction state
-  if (
-    dog.lifeStageOverride === LifeStageOverride.PREGNANCY ||
-    dog.lifeStageOverride === LifeStageOverride.LACTATION
-  ) {
-    return true;
-  }
-
-  // 2. Check growth state
-  const adultThreshold = getAdultThresholdMonths(sizeClass, breed);
-  return ageMonths < adultThreshold;
+  void ageMonths;
+  void sizeClass;
+  const resolved = resolveDogProfileStage(dog, breed);
+  return LIFE_STAGE_FACTORS[resolved.energyFactorKey];
 }
 
 /**
@@ -269,18 +150,33 @@ function applyAdultModifiers(
   ageMonths: number,
   sizeClass: DogSizeCategory,
   breed?: DogBreed | null,
+  resolvedStage?: ResolvedDogProfileStage,
 ): number {
+  const resolved = resolvedStage ?? resolveDogProfileStage(dog, breed);
   // Safety guard: if in growth/repro stage, return base factor unchanged
-  if (isGrowthOrReproStage(dog, ageMonths, sizeClass, breed)) {
+  if (
+    resolved.energyStage === 'PUPPY' ||
+    resolved.energyStage === 'PREGNANCY' ||
+    resolved.energyStage === 'LACTATION'
+  ) {
     return baseFactor;
   }
 
-  // Only apply modifiers to non-pregnant, non-lactating adult dogs
-  let currentFactor = baseFactor;
-  const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
+  if (
+    resolved.energyStage === 'ADULT' &&
+    resolved.activityBasis !== ActivityLevel.WORKING
+  ) {
+    return baseFactor;
+  }
 
-  // 2. Neutered adjustment (only for non-senior adults)
-  if (!isSenior) {
+  void ageMonths;
+  void sizeClass;
+  void breed;
+
+  // Only apply neuter modifiers to non-senior adult dogs
+  let currentFactor = baseFactor;
+
+  if (resolved.energyStage !== 'SENIOR') {
     if (dog.isNeutered) {
       currentFactor = LIFE_STAGE_FACTORS.ADULT_NEUTERED;
     } else {
@@ -290,7 +186,7 @@ function applyAdultModifiers(
 
   // 3. Activity multiplier
   const multiplier =
-    ACTIVITY_MULTIPLIERS[dog.activityLevel] ?? ACTIVITY_MULTIPLIERS.NORMAL;
+    ACTIVITY_MULTIPLIERS[resolved.activityBasis] ?? ACTIVITY_MULTIPLIERS.LOW;
   currentFactor *= multiplier;
 
   return currentFactor;
@@ -347,29 +243,7 @@ export function calculateRER(weightKg: number): number {
  * Based on docs/07_Core_Architecture.md Section 3.1.5 Function A
  */
 export function calculateTotalDer(dog: Dog, breed?: DogBreed | null): number {
-  const ageMonths = calculateAgeMonths(dog.birthday);
-  const sizeClass = determineSizeClass(dog, breed);
-
-  // 1. Calculate RER
-  const rer = calculateRER(dog.currentWeightKg);
-
-  // 2. Get life stage base factor
-  const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
-
-  // 3. Apply adult modifiers (neuter & activity)
-  const adjustedFactor = applyAdultModifiers(
-    stageFactor,
-    dog,
-    ageMonths,
-    sizeClass,
-    breed,
-  );
-
-  // 4. Apply BCS adjustment
-  const bcsCoeff = getBcsAdjustment(dog.bcsScore);
-
-  // 5. Return total DER
-  return rer * adjustedFactor * bcsCoeff;
+  return calculateTotalDerWithDetails(dog, breed).der;
 }
 
 /**
@@ -379,9 +253,15 @@ export function calculateTotalDer(dog: Dog, breed?: DogBreed | null): number {
 export function calculateTotalDerWithDetails(
   dog: Dog,
   breed?: DogBreed | null,
-): { der: number; adjustedFactor: number; bcsCoeff: number } {
+): {
+  der: number;
+  adjustedFactor: number;
+  bcsCoeff: number;
+  resolvedStage: ResolvedDogProfileStage;
+} {
   const ageMonths = calculateAgeMonths(dog.birthday);
   const sizeClass = determineSizeClass(dog, breed);
+  const resolvedStage = resolveDogProfileStage(dog, breed);
 
   // 1. Calculate RER
   const rer = calculateRER(dog.currentWeightKg);
@@ -396,6 +276,7 @@ export function calculateTotalDerWithDetails(
     ageMonths,
     sizeClass,
     breed,
+    resolvedStage,
   );
 
   // 4. Apply BCS adjustment
@@ -404,7 +285,7 @@ export function calculateTotalDerWithDetails(
   // 5. Calculate DER
   const der = rer * adjustedFactor * bcsCoeff;
 
-  return { der, adjustedFactor, bcsCoeff };
+  return { der, adjustedFactor, bcsCoeff, resolvedStage };
 }
 
 /**
@@ -536,23 +417,22 @@ export function calculateDogEnergy(
     const ageMonths = calculateAgeMonths(dog.birthday);
     const sizeClass = determineSizeClass(dog, breed);
 
-    // Get life stage
+    const { adjustedFactor, bcsCoeff, resolvedStage } =
+      calculateTotalDerWithDetails(dog, breed);
+
+    // Keep the legacy lifeStage field compatible while exposing explicit stages.
     let lifeStage: string;
-    if (dog.lifeStageOverride !== LifeStageOverride.NONE) {
-      lifeStage = dog.lifeStageOverride;
-    } else if (isGrowthOrReproStage(dog, ageMonths, sizeClass, breed)) {
+    if (resolvedStage.energyStage === 'PUPPY') {
       lifeStage = 'GROWTH';
-    } else if (checkIsSenior(ageMonths, sizeClass, breed)) {
+    } else if (resolvedStage.energyStage === 'SENIOR') {
       lifeStage = 'SENIOR';
+    } else if (resolvedStage.energyStage === 'PREGNANCY') {
+      lifeStage = 'PREGNANCY';
+    } else if (resolvedStage.energyStage === 'LACTATION') {
+      lifeStage = 'LACTATION';
     } else {
       lifeStage = 'ADULT';
     }
-
-    // Get calculation details with adjusted factor
-    const { adjustedFactor, bcsCoeff } = calculateTotalDerWithDetails(
-      dog,
-      breed,
-    );
 
     // Get treat percentage
     let treatPercentage: number | undefined;
@@ -574,7 +454,17 @@ export function calculateDogEnergy(
       stageFactor: adjustedFactor, // Use adjusted factor (includes neuter & activity)
       bcsMultiplier: bcsCoeff,
       isNeutered: dog.isNeutered,
-      activityLevel: dog.activityLevel,
+      activityLevel: dog.activityLevel ?? resolvedStage.activityBasis,
+      energyStage: resolvedStage.energyStage,
+      energyFactorKey: resolvedStage.energyFactorKey,
+      recipeLifeStage: resolvedStage.recipeLifeStage,
+      fediafScenario: resolvedStage.fediafScenario,
+      activityBasis: resolvedStage.activityBasis,
+      autoLifeStage: resolvedStage.autoLifeStage,
+      overrideLifeStage: resolvedStage.overrideLifeStage,
+      effectiveLifeStage: resolvedStage.effectiveLifeStage,
+      isManualLifeStageOverride: resolvedStage.isManualLifeStageOverride,
+      warnings: resolvedStage.warnings,
       treatMode: dog.treatInputMode,
       treatLevel: dog.treatLevel ?? undefined,
       treatPercentage,

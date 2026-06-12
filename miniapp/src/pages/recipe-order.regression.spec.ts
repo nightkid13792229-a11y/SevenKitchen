@@ -582,4 +582,10 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('function copySevenDadWechatId()');
     expect(source).not.toContain('data: SEVEN_DAD_WECHAT_ID');
   });
+
+  it('explains finished-product calorie recommendations as adjustable starting portions', () => {
+    expect(templateSource).toContain('首单起始喂食量');
+    expect(templateSource).toContain('国内城市犬');
+    expect(templateSource).toContain('5%-10%');
+  });
 });

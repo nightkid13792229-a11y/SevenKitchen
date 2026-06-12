@@ -2513,6 +2513,7 @@ export class RecipeDesignerService {
       throw new BadRequestException('请确认下架用户可见食谱');
     }
     if (
+      isInternalRecipeDesignerRole(context) &&
       series.designs.some(
         (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
       )

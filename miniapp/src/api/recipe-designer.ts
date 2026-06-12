@@ -291,7 +291,7 @@ export const recipeDesignerApi = {
   renameSeries: (seriesId: string, data: { name: string }) =>
     request({ url: `/recipe-designer/series/${seriesId}`, method: 'PATCH', data }),
   deleteSeries: (seriesId: string, data: DeleteRecipeSeriesPayload) =>
-    request({ url: `/recipe-designer/series/${seriesId}`, method: 'DELETE', data }),
+    request({ url: `/recipe-designer/series/${seriesId}/delete`, method: 'POST', data }),
   duplicateSeries: (seriesId: string) =>
     request({ url: `/recipe-designer/series/${seriesId}/duplicate`, method: 'POST' }),
   duplicateSeriesStage: (seriesId: string, lifeStage: string) =>

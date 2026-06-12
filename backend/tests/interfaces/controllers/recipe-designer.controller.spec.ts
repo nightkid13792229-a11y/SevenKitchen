@@ -269,6 +269,16 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
     await expect(
+      controller.deleteSeriesCommand(
+        'series-1',
+        {
+          confirmName: '新名字',
+          confirmUserVisibleRemoval: true,
+        },
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
       controller.createSeriesStageDraft(
         'series-1',
         { scenario: 'ADULT_MER_95' },
@@ -308,7 +318,21 @@ describe('RecipeDesignerController', () => {
         role: 'STAFF',
       },
     );
-    expect(service.deleteSeries).toHaveBeenCalledWith(
+    expect(service.deleteSeries).toHaveBeenCalledTimes(2);
+    expect(service.deleteSeries).toHaveBeenNthCalledWith(
+      1,
+      'series-1',
+      {
+        confirmName: '新名字',
+        confirmUserVisibleRemoval: true,
+      },
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
+    expect(service.deleteSeries).toHaveBeenNthCalledWith(
+      2,
       'series-1',
       {
         confirmName: '新名字',

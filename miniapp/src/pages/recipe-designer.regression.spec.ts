@@ -894,12 +894,28 @@ describe('recipe designer editor guardrails', () => {
     const standardContextStyle = editorSource.match(/\.standard-context\s*\{[\s\S]*?\n\}/)?.[0] || ''
     expect(standardContextStyle).toContain('text-align: right;')
     expect(standardContextStyle).toContain('max-width:')
+    const drawerDragZoneStyle = editorSource.match(/\.drawer-drag-zone\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(drawerDragZoneStyle).toContain('width: 100%;')
+    expect(drawerDragZoneStyle).toContain('height: 40rpx;')
+    expect(drawerDragZoneStyle).toContain('display: flex;')
+    expect(drawerDragZoneStyle).toContain('align-items: center;')
+    expect(drawerDragZoneStyle).toContain('justify-content: center;')
+    const drawerTouchZoneOpening = editorSource.match(/<view\s+class="drawer-touch-zone"[\s\S]*?>/)?.[0] || ''
+    const drawerDragZoneOpening = editorSource.match(/<view\s+class="drawer-drag-zone"[\s\S]*?>/)?.[0] || ''
+    expect(drawerTouchZoneOpening).not.toContain('@touchstart')
+    expect(drawerTouchZoneOpening).not.toContain('@touchmove')
+    expect(drawerTouchZoneOpening).not.toContain('@touchend')
+    expect(drawerDragZoneOpening).toContain('@touchstart.stop="onAssessmentTouchStart"')
+    expect(drawerDragZoneOpening).toContain('@touchmove.stop.prevent="onAssessmentTouchMove"')
+    expect(drawerDragZoneOpening).toContain('@touchend.stop="onAssessmentTouchEnd"')
     expect(editorSource).toContain(`class="drawer-touch-zone"
-        @touchstart.stop="onAssessmentTouchStart"
-        @touchmove.stop.prevent="onAssessmentTouchMove"
-        @touchend.stop="onAssessmentTouchEnd"
       >
-        <view class="drawer-drag-zone">
+        <view
+          class="drawer-drag-zone"
+          @touchstart.stop="onAssessmentTouchStart"
+          @touchmove.stop.prevent="onAssessmentTouchMove"
+          @touchend.stop="onAssessmentTouchEnd"
+        >
           <view class="drawer-grip"></view>
         </view>
 

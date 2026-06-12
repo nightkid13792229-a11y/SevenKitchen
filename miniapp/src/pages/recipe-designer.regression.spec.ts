@@ -86,6 +86,25 @@ describe('recipe designer mobile entry', () => {
     expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")
   })
 
+  it('uses customer recipe cards as the edit entry and reserves card actions for conversion and menu actions', () => {
+    const customerCardBlock = listSource.match(/<view v-else-if="isCustomerMode" class="customer-series-list">[\s\S]*?<view v-else class="series-list">/)?.[0] || ''
+    const titleRowBlock = customerCardBlock.match(/<view class="customer-card-title-row">[\s\S]*?<\/view>/)?.[0] || ''
+
+    expect(listSource).toContain('payload?.primaryDraftId')
+    expect(titleRowBlock.indexOf('customer-status-badge')).toBeGreaterThanOrEqual(0)
+    expect(titleRowBlock.indexOf('customer-card-name')).toBeGreaterThanOrEqual(0)
+    expect(titleRowBlock.indexOf('customer-status-badge')).toBeLessThan(titleRowBlock.indexOf('customer-card-name'))
+    expect(customerCardBlock).toContain('customer-card-more-btn')
+    expect(customerCardBlock).toContain('customer-card-menu')
+    expect(customerCardBlock).toContain('重命名')
+    expect(customerCardBlock).toContain('复制该食谱')
+    expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'DIY')")
+    expect(customerCardBlock).toContain("goToCustomerRecipeTarget(seriesItem, 'ORDER')")
+    expect(customerCardBlock).toContain('生成制作单')
+    expect(customerCardBlock).toContain('订购成品')
+    expect(customerCardBlock).not.toContain('继续设计')
+  })
+
   it('keeps staff and admin recipe designer on the series plus five life-stage workbench', () => {
     const listSupplementLibraryBlock =
       listSource.match(/const canManageSupplementLibrary = computed\(\(\) => [^\n]+\)/)?.[0] || ''
@@ -347,13 +366,16 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain("target: 'ORDER'")
     expect(editorSource).toContain("target: 'DIY'")
     expect(editorSource).toContain('goToPrivateRecipeTarget')
-    expect(editorSource).toContain('为 {{ customerDogName }} 设计')
+    expect(editorSource).not.toContain('为 {{ customerDogName }} 设计')
     expect(publishSource).toContain('customerReportNextActions')
     expect(publishSource).toContain('createPrivateRecipeSnapshot')
     expect(publishSource).toContain("goToPrivateRecipeTarget('ORDER')")
     expect(publishSource).toContain("goToPrivateRecipeTarget('DIY')")
     expect(publishSource).toContain('订购成品')
-    expect(publishSource).toContain('生成 DIY 制作单')
+    expect(editorSource).toContain('生成制作单')
+    expect(publishSource).toContain('生成制作单')
+    expect(editorSource).not.toContain('生成 DIY 制作单')
+    expect(publishSource).not.toContain('生成 DIY 制作单')
   })
 
   it('places reproduction as the last option in the new draft life stage picker', () => {

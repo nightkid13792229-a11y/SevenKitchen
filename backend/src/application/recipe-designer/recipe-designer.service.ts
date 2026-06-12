@@ -1709,11 +1709,17 @@ export class RecipeDesignerService {
             }
 
             const copyName = this.buildDuplicateSeriesName(sourceSeries.name);
+            const copiedCustomerDogId = !isInternalRecipeDesignerRole(context)
+              ? this.getCustomerDogIdForSeriesCopy(sourceSeries, sourceSources)
+              : null;
             const copiedSeries = await tx.recipeSeries.create({
               data: {
                 name: copyName,
                 status: RecipeSeriesStatus.ACTIVE,
                 createdBy: context.userId,
+                ...(copiedCustomerDogId
+                  ? { customerDogId: copiedCustomerDogId }
+                  : {}),
               },
             });
             const firstVersion = await this.allocateNextDesignRecipeVersion(
@@ -1731,9 +1737,21 @@ export class RecipeDesignerService {
                   copyName,
                   nextVersion,
                   context.userId,
+                  copiedCustomerDogId,
                 ),
               );
               nextVersion += 1;
+            }
+
+            if (!isInternalRecipeDesignerRole(context)) {
+              return this.buildCustomerSeriesCard(
+                {
+                  ...copiedSeries,
+                  customerDogId: copiedCustomerDogId,
+                  designs: copiedDesigns,
+                  recipes: [],
+                } as RecipeSeriesWorkbenchRecord,
+              );
             }
 
             return this.buildSeriesWorkbenchCard(
@@ -2127,6 +2145,22 @@ export class RecipeDesignerService {
     return `${sourceName} ${DUPLICATE_SERIES_STAGE_NAME_LABELS[lifeStage]}副本`;
   }
 
+  private getCustomerDogIdForSeriesCopy(
+    sourceSeries: RecipeSeriesWorkbenchRecord & {
+      designs: DesignRecipeWithItems[];
+    },
+    sourceSources: CopyableSeriesStageSource[],
+  ) {
+    return (
+      sourceSeries.customerDogId ??
+      sourceSources.find((source) => source.kind === 'design')?.design
+        .customerDogId ??
+      sourceSources.find((source) => source.kind === 'recipe')?.recipe
+        .customerDogId ??
+      null
+    );
+  }
+
   private async createCopiedSeriesDesignFromSource(
     tx: Pick<PrismaService, 'designRecipe' | 'nutritionFoodMapping'>,
     source: CopyableSeriesStageSource,
@@ -2134,6 +2168,7 @@ export class RecipeDesignerService {
     name: string,
     version: number,
     createdBy: string,
+    customerDogId?: string | null,
   ) {
     if (source.kind === 'design') {
       return this.createCopiedSeriesDesign(
@@ -2143,6 +2178,7 @@ export class RecipeDesignerService {
         name,
         version,
         createdBy,
+        customerDogId,
       );
     }
 
@@ -2153,6 +2189,7 @@ export class RecipeDesignerService {
       name,
       version,
       createdBy,
+      customerDogId,
     );
   }
 
@@ -2163,6 +2200,7 @@ export class RecipeDesignerService {
     name: string,
     version: number,
     createdBy: string,
+    customerDogId?: string | null,
   ) {
     const lifeStage =
       (source.seriesLifeStage as RecipeSeriesLifeStage | null) ||
@@ -2197,6 +2235,7 @@ export class RecipeDesignerService {
         revisionBaseRecipeId: null,
         seriesId,
         seriesLifeStage: lifeStage,
+        ...(customerDogId ? { customerDogId } : {}),
         items: {
           create: source.items.map((item) =>
             this.toCopiedDesignRecipeItemData(item),
@@ -2214,6 +2253,7 @@ export class RecipeDesignerService {
     name: string,
     version: number,
     createdBy: string,
+    customerDogId?: string | null,
   ) {
     const lifeStage = source.seriesLifeStage;
     const items = await this.toCopiedDesignRecipeItemsFromRecipe(tx, source);
@@ -2249,6 +2289,7 @@ export class RecipeDesignerService {
         revisionBaseRecipeId: null,
         seriesId,
         seriesLifeStage: lifeStage,
+        ...(customerDogId ? { customerDogId } : {}),
         items: {
           create: items,
         },

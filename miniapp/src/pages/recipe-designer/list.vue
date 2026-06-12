@@ -51,14 +51,15 @@
         v-for="seriesItem in customerSeriesCards"
         :key="seriesItem.id"
         class="customer-recipe-card"
+        :class="{ 'customer-recipe-card-menu-open': activeCustomerMenuSeriesId === seriesItem.id }"
         @tap="openCustomerRecipeCard(seriesItem)"
       >
         <view class="customer-card-main">
           <view class="customer-card-title-row">
-            <text class="customer-card-name">{{ seriesItem.name || '未命名食谱' }}</text>
             <text class="customer-status-badge" :class="getCustomerStatusClass(seriesItem)">
               {{ getCustomerStatusLabel(seriesItem) }}
             </text>
+            <text class="customer-card-name">{{ seriesItem.name || '未命名食谱' }}</text>
           </view>
           <text class="customer-card-meta">
             {{ getCustomerCardDogName(seriesItem) }} · {{ getCustomerScenarioLabel(seriesItem) }}
@@ -68,13 +69,45 @@
             {{ seriesItem.actionAvailability.disabledReason }}
           </text>
         </view>
-        <button
-          class="customer-card-action"
-          :disabled="!seriesItem.primaryDraftId"
-          @tap.stop="openCustomerRecipeCard(seriesItem)"
-        >
-          {{ seriesItem.primaryDraftId ? '继续设计' : '待补充' }}
-        </button>
+        <view class="customer-card-actions" @tap.stop>
+          <view class="customer-card-menu-anchor">
+            <button
+              class="customer-card-more-btn"
+              :disabled="isCustomerSeriesBusy(seriesItem)"
+              @tap.stop="toggleCustomerRecipeMenu(seriesItem)"
+            >
+              ⋯
+            </button>
+            <view v-if="activeCustomerMenuSeriesId === seriesItem.id" class="customer-card-menu">
+              <button class="customer-card-menu-item" @tap.stop="renameCustomerRecipe(seriesItem)">
+                重命名
+              </button>
+              <button
+                class="customer-card-menu-item"
+                :disabled="!seriesItem.primaryDraftId"
+                @tap.stop="duplicateCustomerRecipe(seriesItem)"
+              >
+                复制该食谱
+              </button>
+            </view>
+          </view>
+          <view class="customer-card-quick-actions">
+            <button
+              class="customer-quick-btn customer-quick-diy-btn"
+              :disabled="!canGenerateDiyFromCustomerCard(seriesItem) || isCustomerSnapshotCreating(seriesItem, 'DIY')"
+              @tap.stop="goToCustomerRecipeTarget(seriesItem, 'DIY')"
+            >
+              {{ isCustomerSnapshotCreating(seriesItem, 'DIY') ? '生成中' : '生成制作单' }}
+            </button>
+            <button
+              class="customer-quick-btn customer-quick-order-btn"
+              :disabled="!canOrderFromCustomerCard(seriesItem) || isCustomerSnapshotCreating(seriesItem, 'ORDER')"
+              @tap.stop="goToCustomerRecipeTarget(seriesItem, 'ORDER')"
+            >
+              {{ isCustomerSnapshotCreating(seriesItem, 'ORDER') ? '进入中' : '订购成品' }}
+            </button>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -303,6 +336,8 @@ const duplicatingSeriesId = ref('')
 const duplicatingStageKey = ref('')
 const renamingSeriesId = ref('')
 const openingStageKey = ref('')
+const activeCustomerMenuSeriesId = ref('')
+const customerSnapshotCreatingKey = ref('')
 const createSheetVisible = ref(false)
 const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
 const currentUserRole = ref('')
@@ -443,6 +478,7 @@ function selectScenarioOption(value: FediafDogScenario) {
 
 function selectDogFilter(dogId: string) {
   selectedDogFilterId.value = dogId
+  activeCustomerMenuSeriesId.value = ''
 }
 
 function selectCreateDog(dogId: string) {
@@ -497,6 +533,7 @@ async function createSeries() {
 function extractInitialDraftId(payload: any) {
   return (
     payload?.initialDraftId ||
+    payload?.primaryDraftId ||
     payload?.draftId ||
     payload?.draft?.id ||
     payload?.initialDraft?.id ||
@@ -569,6 +606,119 @@ function openCustomerRecipeCard(seriesItem: RecipeDesignerCustomerSeriesCard) {
     return
   }
   uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
+}
+
+function isCustomerSeriesBusy(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  return (
+    renamingSeriesId.value === seriesItem.id ||
+    duplicatingSeriesId.value === seriesItem.id ||
+    customerSnapshotCreatingKey.value.startsWith(`${seriesItem.id}:`)
+  )
+}
+
+function toggleCustomerRecipeMenu(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  if (isCustomerSeriesBusy(seriesItem)) return
+  activeCustomerMenuSeriesId.value =
+    activeCustomerMenuSeriesId.value === seriesItem.id ? '' : seriesItem.id
+}
+
+function renameCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  activeCustomerMenuSeriesId.value = ''
+  renameSeries(seriesItem as RecipeDesignerSeriesCard)
+}
+
+function duplicateCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  if (duplicatingSeriesId.value) return
+
+  activeCustomerMenuSeriesId.value = ''
+  const seriesName = seriesItem.name || '未命名食谱'
+  uni.showModal({
+    title: '复制该食谱',
+    content: `将「${seriesName}」复制为新的可编辑食谱，原食谱不会被修改。`,
+    confirmText: '复制',
+    cancelText: '取消',
+    success: async (result: any) => {
+      if (!result.confirm) return
+
+      duplicatingSeriesId.value = seriesItem.id
+      try {
+        const res: any = await recipeDesignerApi.duplicateSeries(seriesItem.id)
+        const copied = res?.data ?? res
+        uni.showToast({ title: '已创建副本', icon: 'success' })
+        const draftId = extractInitialDraftId(copied)
+        if (draftId) {
+          uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
+          return
+        }
+        await loadSeries()
+      } catch (error) {
+        console.error('[RecipeDesignerList] Failed to duplicate customer recipe:', error)
+        uni.showToast({ title: '复制食谱失败', icon: 'none' })
+      } finally {
+        duplicatingSeriesId.value = ''
+      }
+    },
+  })
+}
+
+function canGenerateDiyFromCustomerCard(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  return Boolean(seriesItem.primaryDraftId && seriesItem.actionAvailability?.canGenerateDiy)
+}
+
+function canOrderFromCustomerCard(seriesItem: RecipeDesignerCustomerSeriesCard) {
+  return Boolean(seriesItem.primaryDraftId && seriesItem.actionAvailability?.canOrder)
+}
+
+function getCustomerSnapshotKey(seriesItem: RecipeDesignerCustomerSeriesCard, target: 'ORDER' | 'DIY') {
+  return `${seriesItem.id}:${target}`
+}
+
+function isCustomerSnapshotCreating(seriesItem: RecipeDesignerCustomerSeriesCard, target: 'ORDER' | 'DIY') {
+  return customerSnapshotCreatingKey.value === getCustomerSnapshotKey(seriesItem, target)
+}
+
+async function goToCustomerRecipeTarget(seriesItem: RecipeDesignerCustomerSeriesCard, target: 'ORDER' | 'DIY') {
+  activeCustomerMenuSeriesId.value = ''
+  const draftId = seriesItem.primaryDraftId
+  if (!draftId) {
+    uni.showToast({ title: '暂无可用草稿', icon: 'none' })
+    return
+  }
+  const allowed = target === 'DIY'
+    ? seriesItem.actionAvailability?.canGenerateDiy
+    : seriesItem.actionAvailability?.canOrder
+  if (!allowed) {
+    uni.showToast({
+      title: seriesItem.actionAvailability?.disabledReason || '当前食谱还未达到可用条件',
+      icon: 'none',
+    })
+    return
+  }
+
+  const creatingKey = getCustomerSnapshotKey(seriesItem, target)
+  if (customerSnapshotCreatingKey.value) return
+
+  customerSnapshotCreatingKey.value = creatingKey
+  try {
+    const res: any = await recipeDesignerApi.createPrivateRecipeSnapshot(draftId, { target })
+    const data = res?.data ?? res
+    const fallbackDogId = data?.dogId || seriesItem.customerDogId || ''
+    const url = data?.targetUrl || (
+      target === 'DIY'
+        ? `/pages/recipe-diy/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+        : `/pages/recipe-order/index?recipeId=${data?.recipeId}&dogId=${fallbackDogId}`
+    )
+    if (!data?.recipeId && !data?.targetUrl) {
+      uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+      return
+    }
+    uni.navigateTo({ url })
+  } catch (error) {
+    console.error('[RecipeDesignerList] Failed to open customer recipe target:', error)
+    uni.showToast({ title: '暂时无法进入下一步', icon: 'none' })
+  } finally {
+    customerSnapshotCreatingKey.value = ''
+  }
 }
 
 function getSeriesStages(seriesItem: RecipeDesignerSeriesCard) {
@@ -1076,8 +1226,9 @@ function formatDateTime(value?: string) {
 }
 
 .customer-recipe-card {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 20rpx;
   padding: 24rpx;
   border: 1rpx solid #eef2f7;
@@ -1147,20 +1298,105 @@ function formatDateTime(value?: string) {
   color: #b45309;
 }
 
-.customer-card-action {
-  flex: 0 0 auto;
-  width: 142rpx;
-  height: 64rpx;
+.customer-card-actions {
+  position: relative;
+  flex: 0 0 180rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12rpx;
+}
+
+.customer-card-menu-anchor {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 44rpx;
+}
+
+.customer-card-more-btn {
+  width: 52rpx;
+  height: 44rpx;
   margin: 0;
   padding: 0;
   border-radius: 8rpx;
-  background: #1677ff;
-  color: #fff;
-  font-size: 24rpx;
-  line-height: 64rpx;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 32rpx;
+  font-weight: 800;
+  line-height: 38rpx;
 }
 
-.customer-card-action[disabled] {
+.customer-card-more-btn[disabled] {
+  color: #a8b4c2;
+  background: #f3f4f6;
+}
+
+.customer-card-menu {
+  position: absolute;
+  top: 52rpx;
+  right: 0;
+  z-index: 6;
+  width: 184rpx;
+  overflow: hidden;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 8rpx;
+  background: #fff;
+  box-shadow: 0 10rpx 28rpx rgba(15, 23, 42, 0.14);
+}
+
+.customer-card-menu-item {
+  width: 100%;
+  height: 64rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border-radius: 0;
+  background: #fff;
+  color: #1f2937;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 64rpx;
+  text-align: left;
+}
+
+.customer-card-menu-item + .customer-card-menu-item {
+  border-top: 1rpx solid #f1f5f9;
+}
+
+.customer-card-menu-item[disabled] {
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
+.customer-card-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-top: auto;
+}
+
+.customer-quick-btn {
+  width: 100%;
+  height: 54rpx;
+  margin: 0;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 54rpx;
+}
+
+.customer-quick-diy-btn {
+  background: #f0f7ff;
+  color: #1677ff;
+}
+
+.customer-quick-order-btn {
+  background: #1677ff;
+  color: #fff;
+}
+
+.customer-quick-btn[disabled] {
   background: #e5e7eb;
   color: #94a3b8;
 }

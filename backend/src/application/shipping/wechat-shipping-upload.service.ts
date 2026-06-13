@@ -19,6 +19,32 @@ export interface WechatSpecialShippingReportResult {
   response?: unknown;
 }
 
+export interface WechatShippingOrderStatusResult {
+  success: boolean;
+  skipped?: boolean;
+  message: string;
+  orderState?: 1 | 2 | 3 | 4 | 5;
+  orderStateLabel?: string;
+  inComplaint?: boolean;
+  response?: unknown;
+}
+
+export const WECHAT_ORDER_STATE_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: '待发货',
+  2: '已发货',
+  3: '确认收货',
+  4: '交易完成',
+  5: '已退款',
+};
+
+const WECHAT_ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'];
+
+function isWechatOnlinePaymentMethod(
+  paymentMethod?: string | null,
+): boolean {
+  return WECHAT_ONLINE_PAYMENT_METHODS.includes(paymentMethod || '');
+}
+
 export interface WechatShippingUploadCandidate {
   orderId: string;
   status: string;
@@ -81,7 +107,7 @@ export class WechatShippingUploadService {
       };
     }
 
-    if (order.paymentMethod !== 'WECHAT_PAY') {
+    if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
       return {
         success: true,
         skipped: true,
@@ -169,6 +195,96 @@ export class WechatShippingUploadService {
     };
   }
 
+  async queryShippingOrderStatus(
+    orderId: string,
+  ): Promise<WechatShippingOrderStatusResult> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        transactionId: true,
+      },
+    });
+
+    if (!order) {
+      return {
+        success: false,
+        skipped: true,
+        message: `订单不存在：${orderId}`,
+      };
+    }
+
+    if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
+      return {
+        success: true,
+        skipped: true,
+        message: '非微信支付订单，无需查询微信发货订单状态',
+      };
+    }
+
+    if (order.paymentStatus !== 'SUCCESS') {
+      return {
+        success: true,
+        skipped: true,
+        message: '订单尚未完成微信支付，无需查询微信发货订单状态',
+      };
+    }
+
+    const paymentConfig = await this.prisma.paymentConfig.upsert({
+      where: { id: 'singleton' },
+      create: {},
+      update: {},
+      select: {
+        appId: true,
+        mchId: true,
+      },
+    });
+
+    if (!paymentConfig.mchId) {
+      return {
+        success: false,
+        skipped: true,
+        message: '后台支付配置缺少微信支付商户号，无法查询微信发货订单状态',
+      };
+    }
+
+    const response = await this.wechatService.getShippingOrder(
+      order.transactionId
+        ? {
+            transactionId: order.transactionId,
+            merchantId: paymentConfig.mchId,
+          }
+        : {
+            merchantId: paymentConfig.mchId,
+            merchantTradeNo: this.toOutTradeNo(order.id),
+          },
+      paymentConfig.appId || undefined,
+    );
+    const orderState = response.order?.order_state;
+
+    if (orderState == null) {
+      return {
+        success: false,
+        skipped: false,
+        message: '微信发货订单状态响应缺少订单状态',
+        response,
+      };
+    }
+
+    return {
+      success: true,
+      message: '微信发货订单状态已查询',
+      orderState,
+      orderStateLabel: orderState
+        ? WECHAT_ORDER_STATE_LABELS[orderState]
+        : undefined,
+      inComplaint: response.order?.in_complaint,
+      response,
+    };
+  }
+
   async reportSpecialOrderForOrder(
     orderId: string,
     actor: 'customer' | 'staff' | 'admin' | 'system' = 'system',
@@ -189,7 +305,7 @@ export class WechatShippingUploadService {
       };
     }
 
-    if (order.paymentMethod !== 'WECHAT_PAY') {
+    if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
       return {
         success: true,
         skipped: true,
@@ -280,7 +396,7 @@ export class WechatShippingUploadService {
     const orders = await this.prisma.order.findMany({
       where: {
         status: 'SHIPPED',
-        paymentMethod: 'WECHAT_PAY',
+        paymentMethod: { in: WECHAT_ONLINE_PAYMENT_METHODS },
         trackingNumber: { not: null },
         carrierCode: { not: null },
       },
@@ -390,7 +506,7 @@ export class WechatShippingUploadService {
     const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
     const orders = await this.prisma.order.findMany({
       where: {
-        paymentMethod: 'WECHAT_PAY',
+        paymentMethod: { in: WECHAT_ONLINE_PAYMENT_METHODS },
         paymentStatus: 'SUCCESS',
         status: { in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'] as any },
       },

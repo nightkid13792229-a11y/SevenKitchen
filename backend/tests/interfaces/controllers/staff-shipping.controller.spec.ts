@@ -5,9 +5,13 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { StaffShippingController } from 'src/staff-shipping.controller';
 import { ShippingFulfillmentService } from 'src/application/shipping/shipping-fulfillment.service';
 import { OrderStatus } from 'src/domain';
+import { AuthGuard } from 'src/interfaces/auth/auth.guard';
+import { StaffGuard } from 'src/interfaces/guards/role.guard';
 
 describe('StaffShippingController - Phase 8.14', () => {
   let controller: StaffShippingController;
@@ -16,6 +20,7 @@ describe('StaffShippingController - Phase 8.14', () => {
   const mockShippingFulfillmentService: jest.Mocked<ShippingFulfillmentService> = {
     listOrdersReadyForShipment: jest.fn(),
     markOrderAsShipped: jest.fn(),
+    queryWechatShippingOrderStatus: jest.fn(),
   } as any;
 
   beforeEach(async () => {
@@ -32,7 +37,12 @@ describe('StaffShippingController - Phase 8.14', () => {
           useValue: mockShippingFulfillmentService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(StaffGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .compile();
 
     controller = module.get<StaffShippingController>(
       StaffShippingController,
@@ -243,6 +253,55 @@ describe('StaffShippingController - Phase 8.14', () => {
       expect(result.data).toHaveProperty('trackingNumber');
       expect(result.data).toHaveProperty('carrierCode');
       expect(result.data).toHaveProperty('shippedAt');
+    });
+  });
+
+  describe('GET /staff/shipping/orders/:orderId/wechat-shipping-status', () => {
+    it('should keep the diagnostic endpoint staff-guarded', () => {
+      const source = readFileSync(
+        resolve(
+          process.cwd(),
+          'src/interfaces/controllers/staff-shipping.controller.ts',
+        ),
+        'utf8',
+      );
+
+      expect(source).toMatch(
+        /@Get\('orders\/:orderId\/wechat-shipping-status'\)\s+@UseGuards\(AuthGuard, StaffGuard\)/,
+      );
+    });
+
+    it('should return WeChat shipping order status', async () => {
+      // Arrange
+      const mockResult = {
+        success: true,
+        skipped: false,
+        message: '微信订单状态：确认收货',
+        orderState: 3 as const,
+        orderStateLabel: '确认收货',
+        inComplaint: false,
+        response: {
+          order_state: 3,
+          order_state_desc: '确认收货',
+        },
+      };
+      shippingFulfillmentService.queryWechatShippingOrderStatus.mockResolvedValue(
+        mockResult,
+      );
+
+      // Act
+      const result =
+        await controller.getWechatShippingOrderStatus('order-1');
+
+      // Assert
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual(mockResult);
+      expect(
+        shippingFulfillmentService.queryWechatShippingOrderStatus,
+      ).toHaveBeenCalledWith('order-1');
+      expect(
+        shippingFulfillmentService.queryWechatShippingOrderStatus,
+      ).toHaveBeenCalledTimes(1);
     });
   });
 });

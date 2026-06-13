@@ -48,6 +48,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       skipped: true,
       message: 'Skipped in unit test',
     }),
+    queryShippingOrderStatus: jest.fn(),
   };
   const mockShippingNotificationService = {
     sendForOrder: jest.fn().mockResolvedValue({
@@ -69,6 +70,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     mockWechatShippingUploadService.reportPendingSpecialOrders.mockClear();
     mockWechatShippingUploadService.reportSpecialOrderForOrder.mockClear();
     mockShippingNotificationService.sendForOrder.mockClear();
+    mockWechatShippingUploadService.queryShippingOrderStatus.mockReset();
 
     // Suppress console logs during tests
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -444,5 +446,230 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       expect(savedOrder.carrierCode).toBe('SF');
       expect(savedOrder.shippedAt).toBeInstanceOf(Date);
     });
+  });
+
+  describe('queryWechatShippingOrderStatus', () => {
+    it('should delegate to WechatShippingUploadService and return status details', async () => {
+      mockWechatShippingUploadService.queryShippingOrderStatus.mockResolvedValue({
+        success: true,
+        message: '微信发货订单状态已查询',
+        orderState: 3,
+        orderStateLabel: '确认收货',
+        inComplaint: false,
+      });
+
+      const result = await service.queryWechatShippingOrderStatus('order-1');
+
+      expect(
+        mockWechatShippingUploadService.queryShippingOrderStatus,
+      ).toHaveBeenCalledWith('order-1');
+      expect(result.orderState).toBe(3);
+      expect(result.orderStateLabel).toBe('确认收货');
+    });
+  });
+});
+
+describe('WechatShippingUploadService queryShippingOrderStatus', () => {
+  let service: WechatShippingUploadService;
+  let mockPrisma: {
+    order: { findUnique: jest.Mock };
+    paymentConfig: { upsert: jest.Mock };
+  };
+  let mockWechatService: {
+    getShippingOrder: jest.Mock;
+  };
+
+  const mockOrder = (
+    overrides: Partial<{
+      id: string;
+      paymentMethod: string;
+      paymentStatus: string;
+      transactionId: string | null;
+    }> = {},
+  ) => ({
+    id: 'order-1',
+    paymentMethod: 'WECHAT_PAY',
+    paymentStatus: 'SUCCESS',
+    transactionId: '4200000000000000001',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    mockPrisma = {
+      order: {
+        findUnique: jest.fn(),
+      },
+      paymentConfig: {
+        upsert: jest.fn(),
+      },
+    };
+    mockWechatService = {
+      getShippingOrder: jest.fn(),
+    };
+    service = new WechatShippingUploadService(
+      mockPrisma as any,
+      mockWechatService as any,
+    );
+  });
+
+  it('maps successful WeChat status response queried by transaction id', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder());
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-app-id',
+      mchId: '1900000001',
+    });
+    mockWechatService.getShippingOrder.mockResolvedValue({
+      errcode: 0,
+      errmsg: 'ok',
+      order: {
+        order_state: 3,
+        in_complaint: false,
+      },
+    });
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(mockWechatService.getShippingOrder).toHaveBeenCalledWith(
+      {
+        transactionId: '4200000000000000001',
+        merchantId: '1900000001',
+      },
+      'wx-app-id',
+    );
+    expect(result).toMatchObject({
+      success: true,
+      orderState: 3,
+      orderStateLabel: '确认收货',
+      inComplaint: false,
+    });
+  });
+
+  it('treats legacy WECHAT payment method as an online WeChat order', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(
+      mockOrder({ paymentMethod: 'WECHAT' }),
+    );
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-app-id',
+      mchId: '1900000001',
+    });
+    mockWechatService.getShippingOrder.mockResolvedValue({
+      errcode: 0,
+      errmsg: 'ok',
+      order: {
+        order_state: 3,
+      },
+    });
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(mockWechatService.getShippingOrder).toHaveBeenCalledWith(
+      {
+        transactionId: '4200000000000000001',
+        merchantId: '1900000001',
+      },
+      'wx-app-id',
+    );
+    expect(result).toMatchObject({
+      success: true,
+      orderState: 3,
+    });
+  });
+
+  it('falls back to merchant trade number when transaction id is missing', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(
+      mockOrder({
+        id: 'order-with-dashes-1',
+        transactionId: null,
+      }),
+    );
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-app-id',
+      mchId: '1900000001',
+    });
+    mockWechatService.getShippingOrder.mockResolvedValue({
+      errcode: 0,
+      errmsg: 'ok',
+      order: {
+        order_state: 3,
+      },
+    });
+
+    await service.queryShippingOrderStatus('order-with-dashes-1');
+
+    expect(mockWechatService.getShippingOrder).toHaveBeenCalledWith(
+      {
+        merchantId: '1900000001',
+        merchantTradeNo: 'orderwithdashes1',
+      },
+      'wx-app-id',
+    );
+  });
+
+  it('fails clearly when WeChat status response is missing order state', async () => {
+    const response = {
+      errcode: 0,
+      errmsg: 'ok',
+      order: {},
+    };
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder());
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-app-id',
+      mchId: '1900000001',
+    });
+    mockWechatService.getShippingOrder.mockResolvedValue(response);
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(result).toEqual({
+      success: false,
+      skipped: false,
+      message: '微信发货订单状态响应缺少订单状态',
+      response,
+    });
+  });
+
+  it('skips non-WeChat payment without querying WeChat', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(
+      mockOrder({ paymentMethod: 'ALIPAY' }),
+    );
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(result).toMatchObject({
+      success: true,
+      skipped: true,
+    });
+    expect(mockWechatService.getShippingOrder).not.toHaveBeenCalled();
+  });
+
+  it('skips unpaid WeChat order without querying WeChat', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(
+      mockOrder({ paymentStatus: 'PENDING' }),
+    );
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(result).toMatchObject({
+      success: true,
+      skipped: true,
+    });
+    expect(mockWechatService.getShippingOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns skipped failure when merchant id is missing', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue(mockOrder());
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-app-id',
+      mchId: null,
+    });
+
+    const result = await service.queryShippingOrderStatus('order-1');
+
+    expect(result).toMatchObject({
+      success: false,
+      skipped: true,
+      message: '后台支付配置缺少微信支付商户号，无法查询微信发货订单状态',
+    });
+    expect(mockWechatService.getShippingOrder).not.toHaveBeenCalled();
   });
 });

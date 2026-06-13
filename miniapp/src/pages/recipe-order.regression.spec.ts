@@ -236,7 +236,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('>添加多个分装规格</button>');
     expect(templateSource).not.toContain('>添加规格</button>');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
-    expect(source).toContain('getInitials');
+    expect(source).toContain('formatRecipeFormulaSoftwareLabel');
     expect(source).toContain('calculateDogAgeText');
     expect(source).toContain("MALE: '弟弟'");
     expect(source).toContain("FEMALE: '妹妹'");
@@ -587,5 +587,14 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('首单起始喂食量');
     expect(templateSource).toContain('国内城市犬');
     expect(templateSource).toContain('5%-10%');
+  });
+
+  it('shows customer-facing recipe metadata without internal abbreviations or decimals', () => {
+    expect(source).toContain("import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'");
+    expect(source).toContain('const displayRecipeEnergyDensity = computed');
+    expect(templateSource).toContain('{{ displayRecipeEnergyDensity }} kcal/kg');
+    expect(source).toContain('formatRecipeFormulaSoftwareLabel(recipe.value.designSource)');
+    expect(source).not.toContain('getInitials(recipe.value.designSource');
+    expect(templateSource).not.toContain("{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg");
   });
 });

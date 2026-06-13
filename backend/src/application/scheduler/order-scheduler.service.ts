@@ -6,16 +6,26 @@ import {
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { ShippingFulfillmentService } from '../shipping/shipping-fulfillment.service';
+
+const WECHAT_ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'];
+
+function isWechatOnlinePaymentMethod(
+  paymentMethod?: string | null,
+): boolean {
+  return WECHAT_ONLINE_PAYMENT_METHODS.includes(paymentMethod || '');
+}
 
 /**
  * Order Scheduler Service
  *
  * Handles scheduled tasks for order management:
- * - Auto-complete shipped orders after 7 days
+ * - Auto-complete shipped orders after 10 days
  * - Auto-cancel unpaid orders after payment timeout
  */
 @Injectable()
 export class OrderSchedulerService {
+  private static readonly AUTO_COMPLETE_DAYS = 10;
   private readonly logger = new Logger(OrderSchedulerService.name);
 
   constructor(
@@ -24,11 +34,12 @@ export class OrderSchedulerService {
     private readonly statusHistoryRepository: any,
     private readonly orderService: OrderService,
     private readonly platformConfigService: PlatformConfigService,
+    private readonly shippingFulfillmentService: ShippingFulfillmentService,
   ) {}
 
   /**
    * Auto-complete shipped orders
-   * Runs every hour to check for orders that have been shipped for 7+ days
+   * Runs every hour to check for orders that have been shipped for 10+ days
    *
    * Cron: Every hour at minute 0
    */
@@ -55,40 +66,43 @@ export class OrderSchedulerService {
       let completedCount = 0;
 
       for (const order of shippedOrders) {
-        // Get the shipping timestamp from order status history
-        const statusHistory = await this.statusHistoryRepository.findByOrderId(
-          order.id,
-        );
-        const shippedEntry = statusHistory?.find(
-          (entry: any) => entry.toStatus === 'SHIPPED',
-        );
-
-        if (!shippedEntry) {
-          this.logger.warn(
-            `[OrderScheduler] Order ${order.id} has SHIPPED status but no status history entry`,
+        try {
+          // Get the shipping timestamp from order status history
+          const statusHistory = await this.statusHistoryRepository.findByOrderId(
+            order.id,
           );
-          continue;
-        }
-
-        const shippedAt = new Date(
-          shippedEntry.timestamp ?? shippedEntry.createdAt,
-        );
-        const daysSinceShipped = Math.floor(
-          (now.getTime() - shippedAt.getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        // Auto-complete after 7 days
-        if (daysSinceShipped >= 7) {
-          this.logger.log(
-            `[OrderScheduler] Auto-completing order ${order.id} (shipped ${daysSinceShipped} days ago)`,
+          const shippedEntry = statusHistory?.find(
+            (entry: any) => entry.toStatus === 'SHIPPED',
           );
 
-          await this.orderService.completeOrder(order.id, 'system', null, {
-            autoCompleted: true,
-            daysSinceShipped,
-          });
+          if (!shippedEntry) {
+            this.logger.warn(
+              `[OrderScheduler] Order ${order.id} has SHIPPED status but no status history entry`,
+            );
+            continue;
+          }
 
-          completedCount++;
+          const shippedAt = new Date(
+            shippedEntry.timestamp ?? shippedEntry.createdAt,
+          );
+          const daysSinceShipped = Math.floor(
+            (now.getTime() - shippedAt.getTime()) / (1000 * 60 * 60 * 24),
+          );
+
+          // Auto-complete after 10 days
+          if (
+            daysSinceShipped >= OrderSchedulerService.AUTO_COMPLETE_DAYS &&
+            (await this.completeOrderIfEligible(order, daysSinceShipped))
+          ) {
+            completedCount++;
+          }
+        } catch (error) {
+          this.logger.error(
+            `[OrderScheduler] Error processing shipped order ${order.id}: ${
+              (error as Error).message
+            }`,
+            (error as Error).stack,
+          );
         }
       }
 
@@ -102,6 +116,70 @@ export class OrderSchedulerService {
         `[OrderScheduler] Error during auto-complete task: ${(error as Error).message}`,
         (error as Error).stack,
       );
+    }
+  }
+
+  private async completeOrderIfEligible(
+    order: any,
+    daysSinceShipped: number,
+  ): Promise<boolean> {
+    if (!isWechatOnlinePaymentMethod(order.paymentMethod)) {
+      this.logger.log(
+        `[OrderScheduler] Auto-completing order ${order.id} (shipped ${daysSinceShipped} days ago)`,
+      );
+
+      await this.orderService.completeOrder(order.id, 'system', null, {
+        autoCompleted: true,
+        daysSinceShipped,
+      });
+
+      return true;
+    }
+
+    const wechatStatus = await this.queryWechatStatusForAutoComplete(order.id);
+    if (wechatStatus?.queryFailed) {
+      return false;
+    }
+
+    const wechatOrderState = wechatStatus?.orderState;
+    const canComplete =
+      wechatStatus?.success !== false &&
+      wechatStatus?.skipped !== true &&
+      (wechatOrderState === 3 || wechatOrderState === 4);
+
+    if (!canComplete) {
+      this.logger.debug(
+        `[OrderScheduler] Skipping WeChat Pay order ${order.id}; WeChat order state is ${wechatOrderState ?? 'missing'} (${wechatStatus?.orderStateLabel ?? 'unknown'})`,
+      );
+      return false;
+    }
+
+    this.logger.log(
+      `[OrderScheduler] Auto-completing WeChat Pay order ${order.id} (shipped ${daysSinceShipped} days ago, WeChat state ${wechatOrderState})`,
+    );
+
+    await this.orderService.completeOrder(order.id, 'system', null, {
+      autoCompleted: true,
+      daysSinceShipped,
+      wechatOrderState,
+      wechatOrderStateLabel: wechatStatus?.orderStateLabel,
+    });
+
+    return true;
+  }
+
+  private async queryWechatStatusForAutoComplete(orderId: string): Promise<any> {
+    try {
+      return await this.shippingFulfillmentService.queryWechatShippingOrderStatus(
+        orderId,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `[OrderScheduler] Skipping WeChat Pay order ${orderId}; failed to query WeChat shipping status: ${
+          (error as Error).message
+        }`,
+      );
+      return { queryFailed: true };
     }
   }
 

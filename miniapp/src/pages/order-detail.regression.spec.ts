@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('order detail runtime regressions', () => {
+  const wechatConfirmReceiptSource = readFileSync(
+    resolve(process.cwd(), 'src/utils/wechat-confirm-receipt.ts'),
+    'utf-8',
+  )
+
   it('keeps the address in basic info without rendering a duplicate delivery section', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
@@ -247,5 +252,16 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('getOrderTotalNetWeight(order)')
     expect(source).toContain('formatPackagePlan(order)')
     expect(source).toContain('hasPackagePlan(order)')
+  })
+
+  it('keeps detail confirm receipt behind the WeChat confirm-receipt helper', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(wechatConfirmReceiptSource).toContain('confirmWechatReceiptBeforeInternalComplete')
+    expect(source).toContain('confirmWechatReceiptBeforeInternalComplete')
+    expect(source).toContain('await confirmWechatReceiptBeforeInternalComplete(order.value)')
   })
 })

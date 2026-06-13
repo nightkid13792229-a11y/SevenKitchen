@@ -4935,7 +4935,7 @@ describe('RecipeDesignerService', () => {
       prisma.designRecipe.findUnique.mockResolvedValue(
         draft({
           id: 'design-1',
-          name: 'Star 控重鸡肉餐',
+          name: 'Star 的鲜食食谱 06/13',
           createdBy: 'customer-1',
           customerDogId: 'dog-1',
           isCompliant: true,
@@ -4946,6 +4946,7 @@ describe('RecipeDesignerService', () => {
           seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
           fediafDogScenario: 'ADULT_MER_95',
           calculatedNutrition: { energyDensityKcalPerKg: 1200 },
+          series: { id: 'series-1', name: 'Star 控重鸡肉餐' },
           items: [item({ weightG: 100 })],
         }),
       );
@@ -4973,7 +4974,9 @@ describe('RecipeDesignerService', () => {
       expect(prisma.recipe.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            name: 'Star 控重鸡肉餐',
             status: 'PRIVATE_CUSTOM',
+            designSource: 'Setar',
             isCustomRecipe: true,
             customerOwnerId: 'customer-1',
             customerDogId: 'dog-1',

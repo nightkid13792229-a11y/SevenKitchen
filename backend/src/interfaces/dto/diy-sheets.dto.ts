@@ -51,6 +51,18 @@ export class PurchaseListItemDto {
   lossRateStr!: string;
 }
 
+export class DIYSheetPackagePlanItemDto {
+  @ApiProperty({ description: '每袋克数', example: 80 })
+  @IsInt()
+  @Min(1)
+  packageSpecG!: number;
+
+  @ApiProperty({ description: '该规格袋数', example: 10 })
+  @IsInt()
+  @Min(1)
+  packageCount!: number;
+}
+
 /**
  * 创建DIY制作单DTO
  */
@@ -81,6 +93,16 @@ export class CreateDIYSheetDto {
   @IsNumber()
   @Min(1)
   dailyIntakeG!: number;
+
+  @ApiPropertyOptional({
+    description: '分装明细，支持多规格分装',
+    type: [DIYSheetPackagePlanItemDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DIYSheetPackagePlanItemDto)
+  packagePlan?: DIYSheetPackagePlanItemDto[];
 
   @ApiProperty({
     description: '采购清单',
@@ -124,6 +146,12 @@ export class DIYSheetResponseDto {
 
   @ApiProperty({ description: '每日摄入克数' })
   dailyIntakeG!: number;
+
+  @ApiPropertyOptional({
+    description: '分装明细，支持多规格分装',
+    type: [DIYSheetPackagePlanItemDto],
+  })
+  packagePlan?: DIYSheetPackagePlanItemDto[] | null;
 
   @ApiProperty({ description: '采购清单', type: [PurchaseListItemDto] })
   purchaseList!: PurchaseListItemDto[];

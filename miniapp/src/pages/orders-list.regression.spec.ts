@@ -7,6 +7,10 @@ describe('orders list repurchase action contract', () => {
     resolve(process.cwd(), 'src/pages/orders-list/index.vue'),
     'utf-8',
   );
+  const wechatConfirmReceiptSource = readFileSync(
+    resolve(process.cwd(), 'src/utils/wechat-confirm-receipt.ts'),
+    'utf-8',
+  );
   const templateSource = source.slice(0, source.indexOf('<script setup'));
   const buyAgainButtonSource =
     templateSource.match(
@@ -18,6 +22,10 @@ describe('orders list repurchase action contract', () => {
   const repurchaseSource =
     source.match(/function getRepurchasePackageCount[\s\S]*?\n}\n\nfunction formatAmount/)?.[0] ||
     '';
+  const mpWeixinConfirmReceiptSource =
+    wechatConfirmReceiptSource.match(
+      /\/\/ #ifdef MP-WEIXIN[\s\S]*?\/\/ #endif/,
+    )?.[0] || '';
 
   it('shows buy again on every order card without status gating', () => {
     expect(buyAgainButtonSource).toContain('@tap="buyAgain(order)"');
@@ -37,5 +45,22 @@ describe('orders list repurchase action contract', () => {
     expect(repurchaseSource).toContain('packageCount');
     expect(repurchaseSource).toContain('packageSpecG');
     expect(repurchaseSource).toContain('perMealG');
+  });
+
+  it('keeps list confirm receipt behind the WeChat confirm-receipt helper', () => {
+    expect(wechatConfirmReceiptSource).toContain('confirmWechatReceiptBeforeInternalComplete');
+    expect(source).toContain('confirmWechatReceiptBeforeInternalComplete');
+    expect(source).toContain('confirmReceivedFromList(order)');
+    expect(source).toContain('await confirmWechatReceiptBeforeInternalComplete(order)');
+  });
+
+  it('treats both current and legacy WeChat payment method values as online WeChat orders', () => {
+    expect(wechatConfirmReceiptSource).toContain("paymentMethod === 'WECHAT_PAY'");
+    expect(wechatConfirmReceiptSource).toContain("paymentMethod === 'WECHAT'");
+  });
+
+  it('does not skip WeChat Pay confirmation when the WeChat API is unavailable', () => {
+    expect(mpWeixinConfirmReceiptSource).toContain('当前微信版本不支持确认收货，请升级微信后重试');
+    expect(mpWeixinConfirmReceiptSource).not.toContain("return { skipped: true, status: 'success' };");
   });
 });

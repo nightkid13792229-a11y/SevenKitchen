@@ -513,6 +513,9 @@ export class OrderSummaryDto {
   paymentRemainingSeconds?: number | null;
   paymentTimeoutMinutes?: number | null;
   paymentAutoCloseEnabled?: boolean | null;
+  paymentMethod?: string | null;
+  transactionId?: string | null;
+  paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
 
   firstItem?: {
     dog?: {

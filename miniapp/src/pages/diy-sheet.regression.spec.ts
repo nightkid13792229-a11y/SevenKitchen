@@ -134,6 +134,23 @@ describe('diy sheet layout regressions', () => {
     expect(confirmButtonBlock).toContain('color: #fff')
   })
 
+  it('opens configured mini program product links instead of copying recommendation URLs', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const handlePurchaseStart = source.indexOf('function handlePurchase(')
+    const handlePurchaseEnd = source.indexOf('function getRecipeLossRate')
+    const handlePurchaseBlock = source.slice(handlePurchaseStart, handlePurchaseEnd)
+
+    expect(source).toContain('canOpenMiniProgramPurchaseLink(rp.purchaseLink)')
+    expect(source).toContain('canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)')
+    expect(handlePurchaseBlock).toContain('uni.navigateToMiniProgram({')
+    expect(handlePurchaseBlock).toContain('appId: getMiniProgramPurchaseAppId(purchaseLink)')
+    expect(handlePurchaseBlock).toContain('path: getMiniProgramPurchasePath(purchaseLink)')
+    expect(handlePurchaseBlock).not.toContain('uni.setClipboardData')
+  })
+
   it('marks pricing previews as DIY sheet usage so procurement source plans do not block sheet generation', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
@@ -228,7 +245,8 @@ describe('diy sheet layout regressions', () => {
 
     expect(source).toContain("import {\n  buildFallbackFoodIngredientItems,")
     expect(source).toContain('collectFoodIngredientIdsForRecommendations(')
-    expect(source).toContain('const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)')
+    expect(source).toContain('const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))')
+    expect(source).toContain('const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || dailyIntakeG.value * cycleDays.value)')
     expect(source).toContain('const foodSourceItems = computed(() => {')
     expect(source).toContain('return buildFallbackFoodIngredientItems(recipe.value.items || [], totalFoodNetWeightG.value)')
     expect(source).toContain('...foodSourceItems.value.map((item: any) => buildPurchaseListItem(item))')
@@ -247,18 +265,71 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName')
   })
 
-  it('keeps the diy sheet readable by showing a warning when supplement pricing preview fails', () => {
+  it('keeps diy sheets free of customer-facing price preview warnings', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(source).toContain('pricePreview.value = null')
+    expect(source).toContain("pricingPurpose: 'DIY_SHEET'")
+    expect(source).not.toContain('getDiySheetPricePreviewWarning')
+    expect(source).not.toContain('pricePreviewWarning')
+    expect(templateSource).not.toContain('价格预览')
+    expect(templateSource).not.toContain('preview-warning-summary')
+  })
+
+  it('syncs custom package plans into the diy sheet page, share path, and saved image', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(source).toContain("import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'")
+    expect(source).toContain('const packagePlan = ref<PackagePlanItem[]>([])')
+    expect(source).toContain('function parsePackagePlanParam')
+    expect(source).toContain('packagePlan.value = parsePackagePlanParam(options.packagePlan)')
+    expect(source).toContain('function buildLegacyPackagePlan')
+    expect(source).toContain('const packagePlanSummaryText = computed')
+    expect(source).toContain('const packagePlanSubText = computed')
+    expect(source).toContain('packagePlan: packagePlan.value')
+    expect(source).toContain('packagePlan: packagePlanSummaryText.value')
+    expect(source).toContain('packageSub: packagePlanSubText.value')
+    expect(source).toContain('packagePlan=${encodeURIComponent(JSON.stringify(packagePlan.value))}')
+    expect(templateSource).toContain('分装：{{ packagePlanSummaryText }}')
+    expect(templateSource).toContain('{{ packagePlanSubText }}')
+  })
+
+  it('saves the package plan with the persisted DIY sheet payload', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const autoSaveSource = source.match(
+      /async function autoSaveDiySheet\(\)[\s\S]*?\n}\n\nasync function loadRecipe/,
+    )?.[0] || ''
+    const manualSaveSource = source.match(
+      /async function handleSave\(\)[\s\S]*?\n}\n\n\/\/ 分享配置/,
+    )?.[0] || ''
+
+    expect(autoSaveSource).toContain('packagePlan: packagePlan.value')
+    expect(manualSaveSource).toContain('packagePlan: packagePlan.value')
+  })
+
+  it('shows Setar instead of the internal design source on the diy sheet and saved image', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('const pricePreviewWarning = ref(\'\')')
-    expect(source).toContain('pricePreviewWarning.value = \'\'')
-    expect(source).toContain('pricePreview.value = null')
-    expect(source).toContain('pricePreviewWarning.value = getDiySheetPricePreviewWarning(error)')
-    expect(source).toContain('<view v-if="pricePreviewWarning" class="preview-warning-summary">')
-    expect(source).toContain('{{ pricePreviewWarning }}')
+    expect(source).toContain("import { formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'")
+    expect(source).toContain('const displayRecipeFormulaSoftwareLabel = computed')
+    expect(source).toContain('{{ displayRecipeFormulaSoftwareLabel }}')
+    expect(source).toContain('formulaSource: displayRecipeFormulaSoftwareLabel.value')
+    expect(source).not.toContain('{{ recipe.designSource }}')
+    expect(source).not.toContain('formulaSource: recipe.value.designSource')
   })
 
   it('renders the saved diy sheet image as a cooking-first share card', () => {
@@ -277,7 +348,7 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain("logoPath: '/static/logo.png'")
     expect(source).toContain('builder.drawShareSummaryCards({')
     expect(source).toContain("formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard)")
-    expect(source).toContain('formulaSource: recipe.value.designSource')
+    expect(source).toContain('formulaSource: displayRecipeFormulaSoftwareLabel.value')
     expect(source).toContain("['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法']")
     expect(source).toContain("formatFoodPrepAmountForPrint(item.actualAmount)")
     expect(source).toContain('item.recommendedPrintText')

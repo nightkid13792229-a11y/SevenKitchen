@@ -197,6 +197,41 @@
         - recommended_daily_intake_g（若提供 dog_id）
 
 
+### Save Customer DIY Sheet
+    POST /user/diy-sheets
+
+    Purpose:
+        保存用户生成的 DIY 制作单，用于历史查看、评价权限和跨设备再次打开。
+
+    Request:
+        - recipe_id
+        - recipe_name
+        - dog_id
+        - cycle_days
+        - per_meal_g
+        - daily_intake_g
+        - package_plan[]（可选，多规格分装明细）
+            - package_spec_g
+            - package_count
+        - purchase_list[]
+        - production_steps
+
+    Response:
+        - DIYSheet
+        - package_plan 原样返回；历史制作单再次打开时应继续传给制作单页面。
+
+
+### List Customer DIY Sheets
+    GET /user/diy-sheets
+
+    Purpose:
+        获取当前用户保存过的 DIY 制作单。
+
+    Response:
+        - DIYSheet[]
+        - 每条记录包含 package_plan（如保存时提供），用于恢复多规格分装。
+
+
 ------------------------------------------------------------
 ## 2.4 Order APIs
 ------------------------------------------------------------

@@ -4,8 +4,13 @@ export const DIY_SHEET_SPEC_MODAL_TITLE = '选择商品'
 export const DIY_SHEET_PURCHASE_LABEL = '已选商品'
 export const DIY_SHEET_RECOMMENDATION_ENTRY_TEXT = '点击查看'
 
-type PurchaseLinkLike = {
+export type PurchaseLinkLike = {
   platform?: string | null
+  url?: string | null
+  mini_program_appid?: string | null
+  mini_program_path?: string | null
+  miniProgramAppId?: string | null
+  miniProgramPath?: string | null
 } | null | undefined
 
 interface SpecRecommendedPurchaseChannelDisplayInput {
@@ -24,12 +29,12 @@ const PURCHASE_LINK_PLATFORM_LABELS: Record<string, string> = {
 }
 
 const PURCHASE_TIP_BY_PLATFORM: Record<string, string> = {
-  TAOBAO: '口令已复制，打开淘宝即可查看商品',
-  JD: '口令已复制，打开京东即可查看商品',
-  PINDUODUO: '口令已复制，打开拼多多即可查看商品',
-  IHERB: '已复制 iHerb 购买链接',
-  OTHER: '已复制，打开对应App即可查看',
-  WEBVIEW: '已复制购买链接'
+  TAOBAO: '已复制淘宝/天猫商品链接',
+  JD: '已复制京东商品链接',
+  PINDUODUO: '已复制拼多多商品链接',
+  IHERB: '已复制 iHerb 商品链接',
+  OTHER: '已复制商品链接',
+  WEBVIEW: '已复制商品链接'
 }
 
 export function formatRecommendationActionLabel(count?: number): string {
@@ -92,8 +97,31 @@ export function getRecommendedPurchaseChannelDisplay(
 export function getPurchaseTipByPlatform(platform?: string | null): string {
   const normalizedPlatform = platform?.trim().toUpperCase()
   return normalizedPlatform
-    ? PURCHASE_TIP_BY_PLATFORM[normalizedPlatform] || '已复制购买链接'
-    : '已复制购买链接'
+    ? PURCHASE_TIP_BY_PLATFORM[normalizedPlatform] || '已复制商品链接'
+    : '已复制商品链接'
+}
+
+export function getMiniProgramPurchaseAppId(purchaseLink: PurchaseLinkLike): string {
+  return String(
+    purchaseLink?.mini_program_appid ||
+      purchaseLink?.miniProgramAppId ||
+      ''
+  ).trim()
+}
+
+export function getMiniProgramPurchasePath(purchaseLink: PurchaseLinkLike): string {
+  return String(
+    purchaseLink?.mini_program_path ||
+      purchaseLink?.miniProgramPath ||
+      ''
+  ).trim()
+}
+
+export function canOpenMiniProgramPurchaseLink(purchaseLink: PurchaseLinkLike): boolean {
+  return !!(
+    getMiniProgramPurchaseAppId(purchaseLink) &&
+    getMiniProgramPurchasePath(purchaseLink)
+  )
 }
 
 export function getRecommendationEntryDisplayText(hasRecommendationDetail: boolean): string {

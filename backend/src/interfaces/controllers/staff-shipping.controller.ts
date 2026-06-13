@@ -13,6 +13,7 @@ import {
   HttpCode,
   HttpStatus,
   UsePipes,
+  UseGuards,
   ValidationPipe,
   BadRequestException,
 } from '@nestjs/common';
@@ -26,8 +27,11 @@ import {
 } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
 import { ShippingFulfillmentService } from '../../application/shipping/shipping-fulfillment.service';
+import type { WechatShippingOrderStatusResult } from '../../application/shipping/wechat-shipping-upload.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { OrderStatus } from '../../domain';
+import { AuthGuard } from '../auth/auth.guard';
+import { StaffGuard } from '../guards/role.guard';
 
 export class MarkOrderAsShippedRequestDto {
   @ApiProperty({ description: 'Tracking number', example: 'SF1234567890' })
@@ -162,6 +166,20 @@ export class StaffShippingController {
         orderId,
         'staff',
         null,
+      );
+    return ApiResponseDto.success(result);
+  }
+
+  @Get('orders/:orderId/wechat-shipping-status')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiOperation({ summary: 'Query WeChat shipping order status for an order' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async getWechatShippingOrderStatus(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<WechatShippingOrderStatusResult>> {
+    const result =
+      await this.shippingFulfillmentService.queryWechatShippingOrderStatus(
+        orderId,
       );
     return ApiResponseDto.success(result);
   }

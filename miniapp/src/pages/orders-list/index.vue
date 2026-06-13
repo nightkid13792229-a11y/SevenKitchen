@@ -116,7 +116,7 @@
             v-if="order.status === 'SHIPPED'"
             class="action-btn primary"
             :disabled="receivingOrderId === order.id"
-            @tap="confirmReceivedFromList(order.id)"
+            @tap="confirmReceivedFromList(order)"
           >
             {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
           </button>
@@ -164,6 +164,7 @@ import {
 import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
+import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 // DEBUG flag for development logging
@@ -182,6 +183,8 @@ interface Order {
   createdAt?: string;
   trackingNumber?: string;
   carrierCode?: string;
+  paymentMethod?: string | null;
+  transactionId?: string | null;
   firstItem?: {
     dogId?: string;
     dog?: {
@@ -466,7 +469,7 @@ function viewLogistics(order: Order) {
   });
 }
 
-async function confirmReceivedFromList(orderId: string) {
+async function confirmReceivedFromList(order: Order) {
   if (receivingOrderId.value) return;
 
   uni.showModal({
@@ -476,10 +479,11 @@ async function confirmReceivedFromList(orderId: string) {
       if (!res.confirm) return;
 
       try {
-        receivingOrderId.value = orderId;
+        receivingOrderId.value = order.id;
         uni.showLoading({ title: '确认中...' });
+        await confirmWechatReceiptBeforeInternalComplete(order);
         const result = await request({
-          url: `/orders/${orderId}/complete`,
+          url: `/orders/${order.id}/complete`,
           method: 'POST',
         });
         if (result.code !== 0) {

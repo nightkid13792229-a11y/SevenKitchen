@@ -3574,7 +3574,7 @@ export class RecipeDesignerService {
       ? draft.createdBy
       : getRecipeDesignerCustomerOwnerId(context);
     const baseData = {
-      name: draft.name,
+      name: this.resolvePrivateRecipeSnapshotDisplayName(draft),
       status: RecipeStatus.PRIVATE_CUSTOM,
       energyDensityKcalPerKg: Number(draft.energyDensityKcalPerKg),
       productionLossRate: PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE,
@@ -3586,7 +3586,7 @@ export class RecipeDesignerService {
       ),
       nutritionStandard: draft.nutritionStandard ?? 'FEDIAF_2025',
       description: draft.notes,
-      designSource: 'SETAR_RECIPE_DESIGNER_PRIVATE',
+      designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
       isCustomRecipe: true,
       ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
       ...(draft.seriesLifeStage
@@ -3635,6 +3635,14 @@ export class RecipeDesignerService {
     return readiness.nutritionWarning
       ? { ...response, nutritionWarning: readiness.nutritionWarning }
       : response;
+  }
+
+  private resolvePrivateRecipeSnapshotDisplayName(
+    draft: DesignRecipeWithItems,
+  ): string {
+    const seriesName = draft.series?.name?.trim();
+    const draftName = draft.name?.trim();
+    return seriesName || draftName || '私属食谱';
   }
 
   async publishDraft(

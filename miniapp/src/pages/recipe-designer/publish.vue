@@ -8,7 +8,7 @@
       <view class="section recipe-summary-section">
         <view class="summary-title-row">
           <view class="summary-title-main">
-            <image class="summary-logo" src="/static/logo.png" mode="aspectFit" />
+            <image class="summary-logo" :src="STATIC_LOGO_SRC" mode="aspectFit" />
             <text class="page-title">基础信息</text>
           </view>
         </view>
@@ -168,6 +168,7 @@ const currentUserRole = ref('')
 const storedUserName = ref('')
 const reviewNote = ref('')
 const privateSnapshotCreatingTarget = ref<'ORDER' | 'DIY' | ''>('')
+const STATIC_LOGO_SRC = '/static/logo.png'
 const reportSectionTitleOrder = ['微量元素', '维生素', '氨基酸', '脂肪酸']
 
 const recipeName = computed(() => {

@@ -1,11 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf-8')
 const requireScript = createRequire(import.meta.url)
+const MEDIA_ASSET_EXTENSIONS = new Set([
+  '.aac',
+  '.gif',
+  '.jpg',
+  '.jpeg',
+  '.m4a',
+  '.mp3',
+  '.png',
+  '.svg',
+  '.wav',
+  '.webp',
+])
+const WECHAT_MEDIA_RESOURCE_BUDGET_BYTES = 200 * 1024
+
+const collectMediaAssetSizes = (dir: string): Array<{ path: string; size: number }> => {
+  if (!existsSync(dir)) {
+    return []
+  }
+
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = resolve(dir, entry.name)
+
+    if (entry.isDirectory()) {
+      return collectMediaAssetSizes(entryPath)
+    }
+
+    if (!entry.isFile()) {
+      return []
+    }
+
+    const dotIndex = entry.name.lastIndexOf('.')
+    const extension = dotIndex >= 0 ? entry.name.slice(dotIndex).toLowerCase() : ''
+    if (!MEDIA_ASSET_EXTENSIONS.has(extension)) {
+      return []
+    }
+
+    return [{ path: entryPath, size: statSync(entryPath).size }]
+  })
+}
 
 describe('mp-weixin build asset regressions', () => {
   it('keeps tabbar static assets available in the generated mini program project', () => {
@@ -33,6 +80,16 @@ describe('mp-weixin build asset regressions', () => {
     const packageJson = JSON.parse(readSource('package.json'))
 
     expect(packageJson.scripts['build:mp-weixin']).toContain('--minify esbuild')
+  })
+
+  it('keeps generated image and audio resources within the WeChat code quality budget', () => {
+    const distDir = resolve(process.cwd(), 'dist/build/mp-weixin')
+    const mediaAssets = collectMediaAssetSizes(distDir)
+    const totalMediaBytes = mediaAssets.reduce((sum, asset) => sum + asset.size, 0)
+
+    expect(existsSync(distDir)).toBe(true)
+    expect(mediaAssets.length).toBeGreaterThan(0)
+    expect(totalMediaBytes).toBeLessThanOrEqual(WECHAT_MEDIA_RESOURCE_BUDGET_BYTES)
   })
 
   it('keeps staff feature pages in subpackages so the main package stays small', () => {

@@ -13,7 +13,7 @@
       <view class="section recipe-summary-section">
         <view class="summary-title-row">
           <view class="summary-title-main">
-            <image class="summary-logo" src="/static/logo.png" mode="aspectFit" />
+            <image class="summary-logo" :src="STATIC_LOGO_SRC" mode="aspectFit" />
             <text class="page-title">基础信息</text>
           </view>
         </view>
@@ -136,6 +136,7 @@ const recipeId = ref('')
 const shareToken = ref('')
 const recipe = ref<any>({})
 const report = ref<NutritionReport | null>(null)
+const STATIC_LOGO_SRC = '/static/logo.png'
 
 const ingredientRows = computed(() => report.value?.ingredientRows || [])
 const macroRows = computed(() => report.value?.macroRows || [])

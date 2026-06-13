@@ -2,7 +2,7 @@
   <view class="login-container">
     <!-- Logo区域 -->
     <view class="logo-section">
-      <image class="logo" src="../../static/logo.png" mode="aspectFit"></image>
+      <image class="logo" :src="STATIC_LOGO_SRC" mode="aspectFit"></image>
       <text class="app-name">Seven的厨房</text>
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>
@@ -51,6 +51,7 @@ import { getCurrentMiniProgramAppId } from "../../utils/account";
 
 const loading = ref(false);
 const isAgreed = ref(false);
+const STATIC_LOGO_SRC = "/static/logo.png";
 
 onLoad(() => {
   // 检查是否已登录

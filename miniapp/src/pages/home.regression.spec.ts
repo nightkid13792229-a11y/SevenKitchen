@@ -276,20 +276,20 @@ describe('home runtime regressions', () => {
     expect(source).not.toContain('const calculateAgeText =')
   })
 
-  it('passes the active recommendation dog into recipe detail navigation', () => {
+  it('does not render or load personalized recipe recommendations on the home page', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
-    const viewRecipeSource = source.match(
-      /function viewRecipe[\s\S]*?\n}\n\n\/\/ 获取生命阶段标签/,
-    )?.[0] || ''
 
-    expect(templateSource).toContain('@tap="viewRecipe(recipe.id, recommendedDog?.id || activeDogId)"')
-    expect(source).toContain('function viewRecipe(recipeId: string, dogId?: string | null)')
-    expect(viewRecipeSource).toContain('const query = [`recipeId=${encodeURIComponent(recipeId)}`]')
-    expect(viewRecipeSource).toContain('query.push(`dogId=${encodeURIComponent(dogId)}`)')
-    expect(viewRecipeSource).toContain("url: `/pages/recipe-detail/index?${query.join('&')}`")
+    expect(templateSource).not.toContain('专属食谱推荐')
+    expect(templateSource).not.toContain('personalized-section')
+    expect(templateSource).not.toContain('selectDogForRecommendations')
+    expect(templateSource).not.toContain('exclusiveRecipes')
+    expect(templateSource).not.toContain('generalRecommendedRecipes')
+    expect(source).not.toContain('recipeRecommendationApi')
+    expect(source).not.toContain('loadPersonalizedRecommendations')
+    expect(source).not.toContain('recommendedDog')
   })
 })

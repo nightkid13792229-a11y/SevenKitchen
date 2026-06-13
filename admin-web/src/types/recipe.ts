@@ -15,11 +15,18 @@ export enum RecipeSeriesBusinessStatus {
   PRIVATE_CUSTOM = 'PRIVATE_CUSTOM',
 }
 
+export enum RecipeManagementCategory {
+  STANDARD = 'STANDARD',
+  PRIVATE_CUSTOM = 'PRIVATE_CUSTOM',
+  USER_RECIPE = 'USER_RECIPE',
+}
+
 export type RecipeSeriesStageStatus =
   | 'NOT_DESIGNED'
   | 'MODIFIED'
   | 'SUBMITTED'
   | 'PUBLISHED'
+  | 'USER_RECIPE'
   | 'PRIVATE_CUSTOM';
 
 export enum LifeStage {
@@ -194,6 +201,8 @@ export interface RecipeSummary {
   seriesName?: string;
   seriesBusinessStatus?: RecipeSeriesBusinessStatus;
   seriesBusinessStatusLabel?: string;
+  managementCategory?: RecipeManagementCategory;
+  managementCategoryLabel?: string;
   seriesLifeStage?: string;
   seriesLifeStageLabel?: string;
   name: string;
@@ -252,6 +261,7 @@ export interface RecipeForm {
 
 export interface RecipeQuery {
   status?: RecipeStatus;
+  category?: RecipeManagementCategory;
   lifeStage?: LifeStage;
   healthTag?: string; // Now using UUID instead of enum
   search?: string;

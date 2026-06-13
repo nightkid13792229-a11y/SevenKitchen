@@ -1,5 +1,6 @@
 import { RecipeService } from 'src/application/recipe/recipe.service';
 import { RecipeStatus } from 'src/domain/recipe/enums';
+import { UserRole } from 'src/domain/user/enums';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   SERIES_LIFE_STAGE_LABELS,
@@ -17,6 +18,12 @@ describe('RecipeService', () => {
     },
     recipeSeries: {
       update: jest.fn(),
+    },
+    designRecipe: {
+      findMany: jest.fn(),
+    },
+    user: {
+      findMany: jest.fn(),
     },
     recipeItem: {
       deleteMany: jest.fn(),
@@ -47,9 +54,198 @@ describe('RecipeService', () => {
     mockPrismaService.recipeItem.deleteMany.mockResolvedValue({ count: 0 });
     mockPrismaService.nutritionFoodMapping.findMany.mockResolvedValue([]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+    mockPrismaService.designRecipe.findMany.mockResolvedValue([]);
+    mockPrismaService.user.findMany.mockResolvedValue([]);
   });
 
   describe('getAllRecipes', () => {
+    it('excludes customer-authored designer recipes from the default admin recipe list while keeping staff private custom recipes', async () => {
+      const baseRecipe = {
+        version: 1,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        seriesId: null,
+        seriesLifeStage: null,
+        series: null,
+        createdAt: new Date('2026-06-13T08:00:00.000Z'),
+        updatedAt: new Date('2026-06-13T08:00:00.000Z'),
+      };
+      const publicRecipe = {
+        ...baseRecipe,
+        id: 'public-recipe-row',
+        recipeId: 'public-recipe-id',
+        name: '标准公开食谱',
+        status: RecipeStatus.PUBLIC,
+        sourceDesignRecipeId: null,
+      };
+      const staffPrivateRecipe = {
+        ...baseRecipe,
+        id: 'staff-private-recipe-row',
+        recipeId: 'staff-private-recipe-id',
+        name: '员工定制食谱',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        sourceDesignRecipeId: 'staff-design-recipe-id',
+      };
+      const customerRecipe = {
+        ...baseRecipe,
+        id: 'customer-recipe-row',
+        recipeId: 'customer-recipe-id',
+        name: 'Seven 的测试食谱',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        seriesId: 'customer-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: {
+          id: 'customer-series-id',
+          name: 'Seven 的测试食谱系列',
+        },
+        sourceDesignRecipeId: 'customer-design-recipe-id',
+      };
+
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        customerRecipe,
+        staffPrivateRecipe,
+        publicRecipe,
+      ]);
+      mockPrismaService.designRecipe.findMany.mockResolvedValue([
+        {
+          id: 'customer-design-recipe-id',
+          createdBy: 'customer-user-id',
+        },
+        {
+          id: 'staff-design-recipe-id',
+          createdBy: 'staff-user-id',
+        },
+      ]);
+      mockPrismaService.user.findMany.mockResolvedValue([
+        {
+          id: 'customer-user-id',
+        },
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      expect(result.total).toBe(2);
+      expect(result.data.map((recipe) => recipe.id)).toEqual([
+        'staff-private-recipe-row',
+        'public-recipe-row',
+      ]);
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          managementCategory: 'PRIVATE_CUSTOM',
+          managementCategoryLabel: '私密定制',
+        }),
+      );
+      expect(result.data[1]).toEqual(
+        expect.objectContaining({
+          managementCategory: 'STANDARD',
+          managementCategoryLabel: '标准食谱',
+        }),
+      );
+      expect(mockPrismaService.user.findMany).toHaveBeenCalledWith({
+        where: {
+          id: {
+            in: ['customer-user-id', 'staff-user-id'],
+          },
+          role: UserRole.CUSTOMER,
+        },
+        select: { id: true },
+      });
+    });
+
+    it('returns customer-authored designer recipes only when the user recipe category is selected', async () => {
+      const baseRecipe = {
+        version: 1,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        seriesId: null,
+        seriesLifeStage: null,
+        series: null,
+        createdAt: new Date('2026-06-13T08:00:00.000Z'),
+        updatedAt: new Date('2026-06-13T08:00:00.000Z'),
+      };
+      const staffPrivateRecipe = {
+        ...baseRecipe,
+        id: 'staff-private-recipe-row',
+        recipeId: 'staff-private-recipe-id',
+        name: '员工定制食谱',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        sourceDesignRecipeId: 'staff-design-recipe-id',
+      };
+      const customerRecipe = {
+        ...baseRecipe,
+        id: 'customer-recipe-row',
+        recipeId: 'customer-recipe-id',
+        name: 'Seven 的测试食谱',
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        seriesId: 'customer-series-id',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        series: {
+          id: 'customer-series-id',
+          name: 'Seven 的测试食谱系列',
+        },
+        sourceDesignRecipeId: 'customer-design-recipe-id',
+      };
+
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        staffPrivateRecipe,
+        customerRecipe,
+      ]);
+      mockPrismaService.designRecipe.findMany.mockResolvedValue([
+        {
+          id: 'customer-design-recipe-id',
+          createdBy: 'customer-user-id',
+        },
+        {
+          id: 'staff-design-recipe-id',
+          createdBy: 'staff-user-id',
+        },
+      ]);
+      mockPrismaService.user.findMany.mockResolvedValue([
+        {
+          id: 'customer-user-id',
+        },
+      ]);
+
+      const result = await service.getAllRecipes({
+        category: 'USER_RECIPE',
+        page: 1,
+        pageSize: 20,
+      } as any);
+
+      expect(result.total).toBe(1);
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 'customer-recipe-row',
+          managementCategory: 'USER_RECIPE',
+          managementCategoryLabel: '用户的食谱',
+        }),
+      );
+      expect(
+        result.data[0].seriesStages?.find(
+          (stage) => stage.lifeStage === 'HIGH_ACTIVITY_ADULT',
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          status: 'USER_RECIPE',
+          recipeVersionId: 'customer-recipe-row',
+        }),
+      );
+    });
+
     it('selects the latest same-status series representative and stage by recipe version, not updatedAt', async () => {
       const baseRecipe = {
         recipeId: 'adult-recipe-id',

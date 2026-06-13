@@ -16,11 +16,16 @@ import {
   LifeStage,
   NutritionStandard,
 } from '../../domain/recipe/enums';
+import { UserRole } from '../../domain/user/enums';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RECIPE_SERIES_BUSINESS_STATUS_LABELS,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
+import {
+  ADMIN_RECIPE_MANAGEMENT_CATEGORY_LABELS,
+  AdminRecipeManagementCategory,
+} from '../../interfaces/dto/recipes/admin-recipe.dto';
 import {
   extractLegacyPreparationMethodIds,
   normalizePreparationMethodHistoryText,
@@ -413,6 +418,7 @@ export class RecipeService {
   async getAllRecipes(query: RecipeQueryDto): Promise<RecipeListResponseDto> {
     const {
       status,
+      category,
       lifeStage,
       healthTag,
       search,
@@ -457,14 +463,23 @@ export class RecipeService {
       include: this.recipeListInclude,
       orderBy: { createdAt: 'desc' },
     });
-    const fullSeriesRecipes = await this.loadFullSeriesRecipesForAdminList(
+    const filteredRecipes = await this.applyAdminRecipeManagementCategoryFilter(
       recipes,
+      category,
+    );
+    const fullSeriesRecipes = await this.loadFullSeriesRecipesForAdminList(
+      filteredRecipes,
       Boolean(status || lifeStage || healthTag || search),
     );
+    const filteredFullSeriesRecipes =
+      await this.applyAdminRecipeManagementCategoryFilter(
+        fullSeriesRecipes,
+        category,
+      );
 
     const groupedRecipes = this.buildRecipeSeriesListRows(
-      recipes,
-      fullSeriesRecipes,
+      filteredRecipes,
+      filteredFullSeriesRecipes,
     );
     const total = groupedRecipes.length;
     const data = groupedRecipes.slice(
@@ -478,6 +493,171 @@ export class RecipeService {
       page,
       pageSize,
     };
+  }
+
+  private async applyAdminRecipeManagementCategoryFilter(
+    recipes: any[],
+    requestedCategory?: AdminRecipeManagementCategory,
+  ): Promise<any[]> {
+    const recipesWithCategory =
+      await this.withAdminRecipeManagementCategories(recipes);
+
+    if (requestedCategory) {
+      return recipesWithCategory.filter(
+        (recipe) => recipe.managementCategory === requestedCategory,
+      );
+    }
+
+    return recipesWithCategory.filter(
+      (recipe) =>
+        recipe.managementCategory !== AdminRecipeManagementCategory.USER_RECIPE,
+    );
+  }
+
+  private async withAdminRecipeManagementCategories(
+    recipes: any[],
+  ): Promise<any[]> {
+    if (recipes.length === 0) {
+      return recipes;
+    }
+
+    const customerCreatedSourceDesignRecipeIds =
+      await this.loadCustomerCreatedSourceDesignRecipeIds(recipes);
+
+    return recipes.map((recipe) => {
+      const managementCategory = this.resolveAdminRecipeManagementCategory(
+        recipe,
+        customerCreatedSourceDesignRecipeIds,
+      );
+
+      return {
+        ...recipe,
+        managementCategory,
+        managementCategoryLabel:
+          ADMIN_RECIPE_MANAGEMENT_CATEGORY_LABELS[managementCategory],
+      };
+    });
+  }
+
+  private async loadCustomerCreatedSourceDesignRecipeIds(
+    recipes: any[],
+  ): Promise<Set<string>> {
+    const sourceDesignRecipeIds = [
+      ...new Set(
+        recipes
+          .map((recipe) => recipe.sourceDesignRecipeId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    if (sourceDesignRecipeIds.length === 0) {
+      return new Set();
+    }
+
+    const designRecipeClient = (this.prisma as any).designRecipe;
+    const userClient = (this.prisma as any).user;
+
+    if (!designRecipeClient?.findMany || !userClient?.findMany) {
+      return new Set();
+    }
+
+    const sourceDesignRecipes = await designRecipeClient.findMany({
+      where: {
+        id: {
+          in: sourceDesignRecipeIds,
+        },
+      },
+      select: {
+        id: true,
+        createdBy: true,
+      },
+    });
+
+    const sourceDesignRecipeById = new Map<string, { createdBy: string }>(
+      sourceDesignRecipes.map((designRecipe: any) => [
+        designRecipe.id,
+        designRecipe,
+      ]),
+    );
+    const creatorIds = [
+      ...new Set(
+        sourceDesignRecipes
+          .map((designRecipe: any) => designRecipe.createdBy)
+          .filter((id: unknown): id is string => Boolean(id)),
+      ),
+    ];
+
+    if (creatorIds.length === 0) {
+      return new Set();
+    }
+
+    const customerUsers = await userClient.findMany({
+      where: {
+        id: {
+          in: creatorIds,
+        },
+        role: UserRole.CUSTOMER,
+      },
+      select: { id: true },
+    });
+    const customerUserIds = new Set(
+      customerUsers.map((user: { id: string }) => user.id),
+    );
+
+    return new Set(
+      sourceDesignRecipeIds.filter((sourceDesignRecipeId) => {
+        const sourceDesignRecipe = sourceDesignRecipeById.get(
+          sourceDesignRecipeId,
+        );
+        return sourceDesignRecipe
+          ? customerUserIds.has(sourceDesignRecipe.createdBy)
+          : false;
+      }),
+    );
+  }
+
+  private resolveAdminRecipeManagementCategory(
+    recipe: any,
+    customerCreatedSourceDesignRecipeIds: Set<string>,
+  ): AdminRecipeManagementCategory {
+    if (recipe.status !== RecipeStatus.PRIVATE_CUSTOM) {
+      return AdminRecipeManagementCategory.STANDARD;
+    }
+
+    if (
+      recipe.sourceDesignRecipeId &&
+      customerCreatedSourceDesignRecipeIds.has(recipe.sourceDesignRecipeId)
+    ) {
+      return AdminRecipeManagementCategory.USER_RECIPE;
+    }
+
+    return AdminRecipeManagementCategory.PRIVATE_CUSTOM;
+  }
+
+  private resolveAdminRecipeGroupManagementCategory(
+    group: any[],
+  ): AdminRecipeManagementCategory {
+    if (
+      group.some(
+        (recipe) =>
+          recipe.managementCategory ===
+          AdminRecipeManagementCategory.USER_RECIPE,
+      )
+    ) {
+      return AdminRecipeManagementCategory.USER_RECIPE;
+    }
+
+    if (
+      group.some(
+        (recipe) =>
+          recipe.managementCategory ===
+          AdminRecipeManagementCategory.PRIVATE_CUSTOM,
+      )
+    ) {
+      return AdminRecipeManagementCategory.PRIVATE_CUSTOM;
+    }
+
+    return AdminRecipeManagementCategory.STANDARD;
   }
 
   private buildRecipeSeriesListRows(
@@ -532,12 +712,17 @@ export class RecipeService {
       null;
     const current = pendingDraft ?? currentPublic ?? sortedByVersion[0];
     const summary = this.mapToSummaryDto(current);
+    const managementCategory =
+      this.resolveAdminRecipeGroupManagementCategory(group);
     const versionHistory = sortedByVersion.map((recipe) =>
       this.mapToVersionSummaryDto(recipe),
     );
 
     return {
       ...summary,
+      managementCategory,
+      managementCategoryLabel:
+        ADMIN_RECIPE_MANAGEMENT_CATEGORY_LABELS[managementCategory],
       currentPublicVersion: currentPublic
         ? this.mapToVersionSummaryDto(currentPublic)
         : undefined,
@@ -595,6 +780,8 @@ export class RecipeService {
         this.compareRecipeVersionThenUpdatedAt(right, left),
       )[0];
     const summary = this.mapToSummaryDto(current);
+    const managementCategory =
+      this.resolveAdminRecipeGroupManagementCategory(group);
     const seriesName =
       current.series?.name ??
       group.find((recipe) => recipe.series?.name)?.series.name ??
@@ -604,6 +791,9 @@ export class RecipeService {
       ...summary,
       seriesId: current.seriesId,
       seriesName,
+      managementCategory,
+      managementCategoryLabel:
+        ADMIN_RECIPE_MANAGEMENT_CATEGORY_LABELS[managementCategory],
       currentPublicVersion: currentPublic
         ? this.mapToVersionSummaryDto(currentPublic)
         : undefined,
@@ -661,7 +851,10 @@ export class RecipeService {
       }
 
       const stageStatus =
-        stageRecipe.status === RecipeStatus.PRIVATE_CUSTOM
+        stageRecipe.managementCategory ===
+        AdminRecipeManagementCategory.USER_RECIPE
+          ? 'USER_RECIPE'
+          : stageRecipe.status === RecipeStatus.PRIVATE_CUSTOM
           ? 'PRIVATE_CUSTOM'
           : stageRecipe.status === RecipeStatus.PUBLIC
             ? 'PUBLISHED'

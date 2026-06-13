@@ -22,6 +22,21 @@ import {
 } from '../../../domain/recipe/enums';
 import type { NutritionDetailedData } from '../../../domain/recipe/types';
 
+export enum AdminRecipeManagementCategory {
+  STANDARD = 'STANDARD',
+  PRIVATE_CUSTOM = 'PRIVATE_CUSTOM',
+  USER_RECIPE = 'USER_RECIPE',
+}
+
+export const ADMIN_RECIPE_MANAGEMENT_CATEGORY_LABELS: Record<
+  AdminRecipeManagementCategory,
+  string
+> = {
+  [AdminRecipeManagementCategory.STANDARD]: '标准食谱',
+  [AdminRecipeManagementCategory.PRIVATE_CUSTOM]: '私密定制',
+  [AdminRecipeManagementCategory.USER_RECIPE]: '用户的食谱',
+};
+
 export class SupplementTargetDto {
   @IsString()
   fieldPath!: string;
@@ -249,6 +264,10 @@ export class RecipeQueryDto {
   status?: any;
 
   @IsOptional()
+  @IsEnum(AdminRecipeManagementCategory)
+  category?: AdminRecipeManagementCategory;
+
+  @IsOptional()
   @IsEnum(LifeStage)
   lifeStage?: LifeStage;
 
@@ -293,6 +312,7 @@ export interface RecipeSeriesStageSummaryDto {
     | 'MODIFIED'
     | 'SUBMITTED'
     | 'PUBLISHED'
+    | 'USER_RECIPE'
     | 'PRIVATE_CUSTOM';
   recipeVersionId?: string;
   recipeId?: string;
@@ -307,6 +327,8 @@ export interface RecipeSummaryResponseDto {
   seriesName?: string;
   seriesBusinessStatus?: 'DRAFT' | 'PUBLIC' | 'PRIVATE_CUSTOM';
   seriesBusinessStatusLabel?: string;
+  managementCategory?: AdminRecipeManagementCategory;
+  managementCategoryLabel?: string;
   seriesLifeStage?: string;
   seriesLifeStageLabel?: string;
   name: string;

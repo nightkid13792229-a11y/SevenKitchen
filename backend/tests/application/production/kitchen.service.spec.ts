@@ -24,11 +24,15 @@ describe('StaffProductionService', () => {
     orderRepository = {},
     productionService = {},
     purchaseListRepository = { findMany: jest.fn().mockResolvedValue({ list: [] }) },
+    cosService = {},
+    pdfGenerator = {},
   }: {
     productionRepository?: Record<string, any>;
     orderRepository?: Record<string, any>;
     productionService?: Record<string, any>;
     purchaseListRepository?: Record<string, any>;
+    cosService?: Record<string, any>;
+    pdfGenerator?: Record<string, any>;
   }) => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -55,17 +59,65 @@ describe('StaffProductionService', () => {
         },
         {
           provide: TencentCosService,
-          useValue: {},
+          useValue: cosService,
         },
         {
           provide: PdfGeneratorService,
-          useValue: {},
+          useValue: pdfGenerator,
         },
       ],
     }).compile();
 
     return moduleRef.get(StaffProductionService);
   };
+
+  it('uses a fresh PDF object name each time a production task is printed', async () => {
+    const pdfGenerator = {
+      generateProductionTaskPDF: jest
+        .fn()
+        .mockResolvedValue(Buffer.from('%PDF-test')),
+    };
+    const cosService = {
+      uploadFile: jest
+        .fn()
+        .mockImplementation(async (_buffer, filename: string, folder: string) => ({
+          url: `https://cdn.example.com/${folder}/${filename}`,
+          key: `${folder}/${filename}`,
+        })),
+    };
+    const service = await buildService({ cosService, pdfGenerator });
+
+    await service.printProductionTask({
+      taskId: 'unit-cache-risk',
+      recipeName: '藜麦兔里脊猪肉',
+      recipeVersion: 7,
+      currentPotNumber: 1,
+      totalPots: 1,
+      status: 'PENDING',
+      totalProductionG: 4050,
+      createdAt: '2026-06-13T14:01:00+08:00',
+      orderItems: [],
+      parsedIngredients: [],
+    });
+    await service.printProductionTask({
+      taskId: 'unit-cache-risk',
+      recipeName: '藜麦兔里脊猪肉',
+      recipeVersion: 7,
+      currentPotNumber: 1,
+      totalPots: 1,
+      status: 'PENDING',
+      totalProductionG: 4050,
+      createdAt: '2026-06-13T14:01:00+08:00',
+      orderItems: [],
+      parsedIngredients: [],
+    });
+
+    const firstFilename = cosService.uploadFile.mock.calls[0][1];
+    const secondFilename = cosService.uploadFile.mock.calls[1][1];
+    expect(firstFilename).toMatch(/^task-unit-cache-risk-\d+-[a-f0-9]{8}\.pdf$/);
+    expect(secondFilename).toMatch(/^task-unit-cache-risk-\d+-[a-f0-9]{8}\.pdf$/);
+    expect(secondFilename).not.toBe(firstFilename);
+  });
 
   it('reports unscheduled purchasing orders even when today already has a production batch', async () => {
     const productionRepository = {

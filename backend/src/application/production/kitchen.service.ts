@@ -11,6 +11,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { ProductionService } from './production.service';
 import { PurchasingService } from '../purchasing/purchasing.service';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
@@ -1133,7 +1134,7 @@ export class StaffProductionService {
       // Upload to COS
       const uploadResult = await this.cosService.uploadFile(
         pdfBuffer,
-        `task-${taskData.taskId || Date.now()}.pdf`,
+        this.buildProductionTaskPdfFilename(taskData.taskId),
         'print-tasks',
       );
 
@@ -1151,5 +1152,17 @@ export class StaffProductionService {
       );
       throw new BadRequestException('生成PDF失败，请重试');
     }
+  }
+
+  private buildProductionTaskPdfFilename(taskId?: string): string {
+    const normalizedTaskId =
+      String(taskId || 'adhoc')
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'adhoc';
+    const nonce = randomBytes(4).toString('hex');
+
+    return `task-${normalizedTaskId}-${Date.now()}-${nonce}.pdf`;
   }
 }

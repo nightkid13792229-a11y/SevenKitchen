@@ -31,7 +31,11 @@ import {
   normalizeNutritionProfile,
 } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../domain/ingredient/types';
-import { readProfileValuePer100g } from '../../domain/recipe-designer/nutrition-profile-reader';
+import {
+  getProfileEffectiveWeightG,
+  readProfileValuePer100g,
+} from '../../domain/recipe-designer/nutrition-profile-reader';
+import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
 import {
   assessRecipeDraft,
   type DesignRecipeAssessmentResult,
@@ -3692,6 +3696,8 @@ export class RecipeDesignerService {
         item,
         ingredientId: this.resolveIngredientId(item),
       }));
+    const publishedFoodRatioMap =
+      this.buildPublishedFoodRatioMap(ingredientItems);
     const defaultPreparationMethods =
       await this.loadDefaultPreparationMethodMap(
         ingredientItems.map(({ ingredientId }) => ingredientId),
@@ -3747,6 +3753,7 @@ export class RecipeDesignerService {
                 item,
                 ingredientId,
                 assessment,
+                publishedFoodRatioMap,
                 supplementTargetMap.get(item.id) ?? [],
                 defaultPreparationMethods.get(ingredientId) ?? null,
               ),
@@ -4244,6 +4251,7 @@ export class RecipeDesignerService {
     item: DesignRecipeItemWithFood,
     ingredientId: string,
     assessment: DesignRecipeAssessmentResult,
+    publishedFoodRatioMap: Map<string, number>,
     supplementTargets: PublishedSupplementNutrientTarget[],
     defaultPreparationMethod: string | null,
   ) {
@@ -4273,11 +4281,27 @@ export class RecipeDesignerService {
         defaultPreparationMethod,
       ratioPercent: isSupplement
         ? null
-        : this.findAssessedRatio(assessment, item.id),
+        : (publishedFoodRatioMap.get(item.id) ??
+          this.findAssessedRatio(assessment, item.id)),
       ...nutrientTargetData,
       sortOrder: item.sortOrder,
       exampleWeight: item.weightG,
     };
+  }
+
+  private buildPublishedFoodRatioMap(
+    ingredientItems: Array<{ item: DesignRecipeWithItems['items'][number] }>,
+  ) {
+    return buildFoodWeightRatioMap(
+      ingredientItems.map(({ item }) => ({
+        id: item.id,
+        type: this.resolveIngredientType(item),
+        effectiveWeightG: getProfileEffectiveWeightG(
+          this.toAssessmentNutritionProfile(item),
+          item.weightG,
+        ),
+      })),
+    );
   }
 
   private buildPublishedSupplementTargets(

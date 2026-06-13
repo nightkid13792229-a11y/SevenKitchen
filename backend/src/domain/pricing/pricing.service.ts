@@ -18,6 +18,10 @@ import {
   summarizePackagePlan,
   type OrderPackagePlanItem,
 } from '../order';
+import {
+  normalizeFoodRatioPercent,
+  sumFoodRatioPercent,
+} from '../recipe/food-ratio-normalization';
 
 export interface GlobalConfig {
   laborHourlyRate: number;
@@ -307,6 +311,7 @@ export class PricingService {
     // ==========================================
     let costIngredients = 0;
     const ingredientDetails: IngredientCostItem[] = [];
+    const foodRatioTotalPercent = sumFoodRatioPercent(recipe.items);
     const recipeFoodExampleWeightG = this.getRecipeFoodExampleWeightG(
       recipe.items,
     );
@@ -342,8 +347,12 @@ export class PricingService {
 
         // 不含生产损耗和出肉率的净需求（用于前端显示和补剂用量计算）
         // 单位：kg (从 totalNetFoodWeightG 转换)
+        const normalizedRatioPercent = normalizeFoodRatioPercent(
+          item.ratioPercent,
+          foodRatioTotalPercent,
+        );
         const itemNetNeededKg =
-          (totalNetFoodWeightG / 1000.0) * (item.ratioPercent / 100.0);
+          (totalNetFoodWeightG / 1000.0) * (normalizedRatioPercent / 100.0);
 
         // 出肉率校准（用于成本计算）
         const yieldRate = ingredient.getEdibleYieldRate();
@@ -370,6 +379,8 @@ export class PricingService {
           type: ingredient.type,
           baseUnit: ingredient.baseUnit,
           ratioPercent: item.ratioPercent,
+          normalizedRatioPercent,
+          foodRatioTotalPercent,
           itemNetNeededKg,
           yieldRate,
           itemGrossPurchaseKg,

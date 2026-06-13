@@ -2876,6 +2876,150 @@ describe('RecipeDesignerService', () => {
     ).not.toEqual(expect.objectContaining({ ingredientId: 'food-1' }));
   });
 
+  it('publishes food ratios from FOOD-only weights when gram supplements are present', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'oat-item',
+            ingredientId: 'ingredient-oat',
+            weightG: 100,
+            ingredient: {
+              id: 'ingredient-oat',
+              name: '燕麦',
+              type: 'FOOD',
+            },
+            nutritionFood: {
+              id: 'food-oat',
+              name: '燕麦',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: {
+                  energyKcal: 380,
+                  moisture: 10,
+                  crudeProtein: 13,
+                  crudeFat: 7,
+                  ash: 2,
+                  fiber: 10,
+                },
+                minerals: { calcium: 54, phosphorus: 523 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [],
+            },
+          }),
+          item({
+            id: 'cod-item',
+            ingredientId: 'ingredient-cod',
+            weightG: 93.2,
+            ingredient: {
+              id: 'ingredient-cod',
+              name: '鳕鱼',
+              type: 'FOOD',
+            },
+            nutritionFood: {
+              id: 'food-cod',
+              name: '鳕鱼',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: {
+                  energyKcal: 82,
+                  moisture: 81,
+                  crudeProtein: 18,
+                  crudeFat: 0.7,
+                  ash: 1.2,
+                  fiber: 0,
+                },
+                minerals: { calcium: 16, phosphorus: 203 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [],
+            },
+          }),
+          item({
+            id: 'calcium-item',
+            ingredientId: 'ingredient-calcium',
+            weightG: 1.3,
+            ingredient: {
+              id: 'ingredient-calcium',
+              name: '碳酸钙粉',
+              type: 'SUPPLEMENT',
+            },
+            nutritionFood: {
+              id: 'food-calcium',
+              name: '碳酸钙粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: {
+                  energyKcal: 0,
+                  moisture: 0,
+                  crudeProtein: 0,
+                  crudeFat: 0,
+                  ash: 100,
+                  fiber: 0,
+                },
+                minerals: { calcium: 40000, phosphorus: 0 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([]);
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      {
+        name: '燕麦鳕鱼鲜食',
+        reviewNote: '补剂按目标营养素发布',
+      },
+      adminAccess,
+    );
+
+    const publishedItems = prisma.recipe.create.mock.calls[0][0].data.items
+      .create as Array<{ ingredientId: string; ratioPercent: number | null }>;
+    const foodItems = publishedItems.filter((publishedItem) =>
+      ['ingredient-oat', 'ingredient-cod'].includes(publishedItem.ingredientId),
+    );
+    const calciumItem = publishedItems.find(
+      (publishedItem) => publishedItem.ingredientId === 'ingredient-calcium',
+    );
+
+    expect(foodItems).toHaveLength(2);
+    expect(
+      foodItems.reduce(
+        (sum, publishedItem) => sum + (publishedItem.ratioPercent ?? 0),
+        0,
+      ),
+    ).toBeCloseTo(100, 8);
+    expect(foodItems[0].ratioPercent).toBeCloseTo((100 / 193.2) * 100, 8);
+    expect(foodItems[1].ratioPercent).toBeCloseTo((93.2 / 193.2) * 100, 8);
+    expect(calciumItem?.ratioPercent).toBeNull();
+  });
+
   it('does not store nutrient target context on food items when adding from a nutrient search', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({

@@ -12,7 +12,20 @@
     <!-- Filters -->
     <el-card class="filter-card">
       <el-row :gutter="16">
-        <el-col :span="6">
+        <el-col :span="5">
+          <el-select
+            v-model="filters.category"
+            placeholder="分类"
+            clearable
+            @change="handleFilterChange"
+          >
+            <el-option label="标准食谱" :value="RecipeManagementCategory.STANDARD" />
+            <el-option label="私密定制" :value="RecipeManagementCategory.PRIVATE_CUSTOM" />
+            <el-option label="用户的食谱" :value="RecipeManagementCategory.USER_RECIPE" />
+          </el-select>
+        </el-col>
+
+        <el-col :span="4">
           <el-select
             v-model="filters.status"
             placeholder="状态"
@@ -21,11 +34,10 @@
           >
             <el-option label="草稿" :value="RecipeStatus.DRAFT" />
             <el-option label="已发布" :value="RecipeStatus.PUBLIC" />
-            <el-option label="私密定制" :value="RecipeStatus.PRIVATE_CUSTOM" />
           </el-select>
         </el-col>
 
-        <el-col :span="6">
+        <el-col :span="5">
           <el-select
             v-model="filters.lifeStage"
             placeholder="生命阶段"
@@ -41,7 +53,7 @@
           </el-select>
         </el-col>
 
-        <el-col :span="6">
+        <el-col :span="5">
           <el-select
             v-model="filters.healthTag"
             placeholder="健康标签"
@@ -57,7 +69,7 @@
           </el-select>
         </el-col>
 
-        <el-col :span="6">
+        <el-col :span="5">
           <el-input
             v-model="filters.search"
             placeholder="搜索名称或ID"
@@ -261,6 +273,7 @@ import { recipeApi } from '@/api/recipes';
 import {
   RecipeStatus,
   RecipeSeriesBusinessStatus,
+  RecipeManagementCategory,
   type RecipeSummary,
   type RecipeQuery,
   type RecipeVersionSummary,
@@ -284,6 +297,7 @@ const lifeStageOptions = ref<EnumOption[]>([]);
 const healthTagOptions = ref<EnumOption[]>([]);
 
 const filters = reactive<RecipeQuery>({
+  category: undefined,
   status: undefined,
   lifeStage: undefined,
   healthTag: undefined,
@@ -316,6 +330,7 @@ const SeriesStageStatusLabels: Record<string, string> = {
   MODIFIED: '已修改',
   SUBMITTED: '已提交',
   PUBLISHED: '已发布',
+  USER_RECIPE: '用户的食谱',
   PRIVATE_CUSTOM: '私密定制',
 };
 
@@ -331,6 +346,18 @@ const RecipeBusinessStatusTagTypes: Record<string, string> = {
   [RecipeSeriesBusinessStatus.PRIVATE_CUSTOM]: 'danger',
 };
 
+const RecipeManagementCategoryLabels: Record<RecipeManagementCategory, string> = {
+  [RecipeManagementCategory.STANDARD]: '标准食谱',
+  [RecipeManagementCategory.PRIVATE_CUSTOM]: '私密定制',
+  [RecipeManagementCategory.USER_RECIPE]: '用户的食谱',
+};
+
+const RecipeManagementCategoryTagTypes: Record<RecipeManagementCategory, string> = {
+  [RecipeManagementCategory.STANDARD]: 'info',
+  [RecipeManagementCategory.PRIVATE_CUSTOM]: 'danger',
+  [RecipeManagementCategory.USER_RECIPE]: 'primary',
+};
+
 // Helper functions to get labels from dynamic metadata
 const getLifeStageLabel = (value: string) => {
   const option = lifeStageOptions.value.find(opt => opt.value === value);
@@ -343,11 +370,19 @@ const getHealthTagLabel = (value: string) => {
 };
 
 const getRecipeBusinessStatusLabel = (row: RecipeSummary) => {
+  if (row.managementCategory && row.managementCategory !== RecipeManagementCategory.STANDARD) {
+    return row.managementCategoryLabel || RecipeManagementCategoryLabels[row.managementCategory] || row.managementCategory;
+  }
+
   const status = row.seriesBusinessStatus || row.status;
   return row.seriesBusinessStatusLabel || RecipeBusinessStatusLabels[status] || RecipeStatusLabels[row.status as RecipeStatus] || status;
 };
 
 const getRecipeBusinessStatusType = (row: RecipeSummary) => {
+  if (row.managementCategory && row.managementCategory !== RecipeManagementCategory.STANDARD) {
+    return RecipeManagementCategoryTagTypes[row.managementCategory] || 'info';
+  }
+
   const status = row.seriesBusinessStatus || row.status;
   return RecipeBusinessStatusTagTypes[status] || RecipeStatusTagTypes[row.status as RecipeStatus] || 'info';
 };
@@ -363,6 +398,7 @@ const getSeriesStageStatusLabel = (status: string) => {
 const getSeriesStageStatusType = (status: string) => {
   if (status === 'PUBLISHED') return 'success';
   if (status === 'SUBMITTED' || status === 'MODIFIED') return 'warning';
+  if (status === 'USER_RECIPE') return 'primary';
   if (status === 'PRIVATE_CUSTOM') return 'danger';
   return 'info';
 };
@@ -583,6 +619,11 @@ onMounted(() => {
 
 .filter-card {
   margin-bottom: 20px;
+}
+
+.filter-card :deep(.el-select),
+.filter-card :deep(.el-input) {
+  width: 100%;
 }
 
 .table-card {

@@ -35,6 +35,22 @@ const SUBPACKAGE_ONLY_HELPER_MODULES = [
   'utils/page-scroll.js',
   'utils/print-canvas.js',
 ];
+const MAIN_PACKAGE_COMPILER_FALLBACK_HELPER_MODULES = [
+  'api/orders.js',
+  'utils/diy-sheet-format.js',
+  'utils/dog-breed-search.js',
+  'utils/dog-breed-search-catalog.js',
+  'utils/dog-breed-ui.js',
+  'utils/dog-profile-create-actions.js',
+  'utils/dog-profile-create-view.js',
+  'utils/dog-profile-draft.js',
+  'utils/dog-profile-overview.js',
+  'utils/dog-recommendation-summary.js',
+  'utils/label-mapping.js',
+  'utils/order-package-plan.js',
+  'utils/page-scroll.js',
+  'utils/print-canvas.js',
+];
 const DIST_DIRS = [
   path.join(__dirname, '../dist/build/mp-weixin'),
   path.join(__dirname, '../dist/dev/mp-weixin'),
@@ -327,6 +343,9 @@ const localizeSubpackageOnlyModules = (
   distDir,
   appJson,
   modulePaths = SUBPACKAGE_ONLY_HELPER_MODULES,
+  mainPackageFallbackModules = modulePaths === SUBPACKAGE_ONLY_HELPER_MODULES
+    ? MAIN_PACKAGE_COMPILER_FALLBACK_HELPER_MODULES
+    : [],
 ) => {
   const subpackageRoots = getSubpackageRoots(appJson);
 
@@ -335,6 +354,7 @@ const localizeSubpackageOnlyModules = (
   }
 
   const selectedModules = new Set(modulePaths.map(normalizeModulePath));
+  const mainPackageFallbackModuleSet = new Set(mainPackageFallbackModules.map(normalizeModulePath));
   const copiedModulesByRoot = new Map();
   let copiedModules = 0;
   let rewrittenFiles = 0;
@@ -407,7 +427,11 @@ const localizeSubpackageOnlyModules = (
   for (const modulePath of selectedModules) {
     const moduleFilePath = path.join(distDir, modulePath);
 
-    if (!fs.existsSync(moduleFilePath) || keepModules.has(modulePath)) {
+    if (
+      !fs.existsSync(moduleFilePath) ||
+      keepModules.has(modulePath) ||
+      mainPackageFallbackModuleSet.has(modulePath)
+    ) {
       continue;
     }
 

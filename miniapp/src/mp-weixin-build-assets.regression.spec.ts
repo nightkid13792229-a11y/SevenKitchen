@@ -268,4 +268,38 @@ describe('mp-weixin build asset regressions', () => {
     expect(existsSync(resolve(distDir, 'utils/order-package-plan.js'))).toBe(false)
     expect(existsSync(resolve(distDir, 'utils/api.js'))).toBe(true)
   })
+
+  it('keeps dog profile helper fallbacks in the main package for WeChat upload compilation', () => {
+    const { localizeSubpackageOnlyModules } = requireScript('../scripts/fix-components-injection.js')
+    const distDir = mkdtempSync(resolve(tmpdir(), 'sevenkitchen-mp-weixin-dog-profile-'))
+    const appJson = {
+      pages: [{ path: 'pages/home/index' }],
+      subPackages: [
+        { root: 'pages/dog-create', pages: [{ path: 'index' }] },
+      ],
+    }
+
+    const writeFixture = (path: string, source: string) => {
+      const filePath = resolve(distDir, path)
+      mkdirSync(resolve(filePath, '..'), { recursive: true })
+      writeFileSync(filePath, source, 'utf-8')
+    }
+
+    writeFixture(
+      'pages/dog-create/index.js',
+      'const draft = require("../../utils/dog-profile-draft.js"); exports.draft = draft;',
+    )
+    writeFixture(
+      'utils/dog-profile-draft.js',
+      'exports.saveDogProfileDraft = function saveDogProfileDraft() {};',
+    )
+
+    localizeSubpackageOnlyModules(distDir, appJson)
+
+    expect(readFileSync(resolve(distDir, 'pages/dog-create/index.js'), 'utf-8')).toContain(
+      'require("./utils/dog-profile-draft.js")',
+    )
+    expect(existsSync(resolve(distDir, 'pages/dog-create/utils/dog-profile-draft.js'))).toBe(true)
+    expect(existsSync(resolve(distDir, 'utils/dog-profile-draft.js'))).toBe(true)
+  })
 })

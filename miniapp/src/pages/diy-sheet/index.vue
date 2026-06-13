@@ -334,7 +334,7 @@
                       lazy-load
                     />
                   </view>
-                  <view v-if="canOpenMiniProgramPurchaseLink(rp.purchaseLink)" class="rp-card-actions">
+                  <view v-if="rp.purchaseLink?.url" class="rp-card-actions">
                     <button
                       class="btn-purchase btn-purchase-sm"
                       @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
@@ -370,7 +370,7 @@
                 <text class="spec-detail-field-value">{{ getSpecPurchaseChannelDisplay(currentSpec) }}</text>
               </view>
             </view>
-            <view v-if="currentSpec.imageUrl || canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)" class="spec-detail-aside">
+            <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink?.url" class="spec-detail-aside">
               <view v-if="currentSpec.imageUrl" class="spec-image-block">
                 <image
                   :src="getOptimizedProductImageUrl(currentSpec.imageUrl)"
@@ -379,7 +379,7 @@
                   lazy-load
                 />
               </view>
-              <view v-if="canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)" class="spec-detail-actions">
+              <view v-if="currentSpec.purchaseLink?.url" class="spec-detail-actions">
                 <button
                   class="btn-purchase btn-purchase-sm"
                   @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
@@ -544,12 +544,9 @@ import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
-  canOpenMiniProgramPurchaseLink,
   formatFoodSelectedProductDisplayText,
   formatRecommendationActionLabel,
   formatSelectedProductDisplayText,
-  getMiniProgramPurchaseAppId,
-  getMiniProgramPurchasePath,
   getPurchaseTipByPlatform,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
@@ -1622,35 +1619,40 @@ function detectPlatformFromUrl(url: string): string {
   return 'OTHER'
 }
 
-// 处理推荐商品购买链接 - 直接跳转目标商品小程序
+// 处理推荐商品购买链接 - 复制到剪贴板
 function handlePurchase(purchaseLink: any, productName: string) {
   if (!purchaseLink) {
     uni.showToast({
-      title: '商品链接未配置',
+      title: '购买链接未配置',
       icon: 'none'
     })
     return
   }
 
-  if (!canOpenMiniProgramPurchaseLink(purchaseLink)) {
+  const { url, platform } = purchaseLink
+  if (!url) {
     uni.showToast({
-      title: '请先配置小程序商品链接',
+      title: '购买链接未配置',
       icon: 'none'
     })
     return
   }
 
-  const miniProgramPath = getMiniProgramPurchasePath(purchaseLink)
-  uni.navigateToMiniProgram({
-    appId: getMiniProgramPurchaseAppId(purchaseLink),
-    ...(miniProgramPath ? { path: miniProgramPath } : {}),
+  uni.setClipboardData({
+    data: url,
     success: () => {
-      console.log('[DIYSheet] 商品小程序跳转成功:', productName)
+      const tip = getPurchaseTipByPlatform(platform)
+      uni.showModal({
+        title: productName,
+        content: tip,
+        showCancel: false,
+        confirmText: '知道了'
+      })
     },
     fail: (err) => {
-      console.error('[DIYSheet] 商品小程序跳转失败:', err)
+      console.error('[DIYSheet] 复制失败:', err)
       uni.showToast({
-        title: '跳转失败，请稍后重试',
+        title: '复制失败，请重试',
         icon: 'none'
       })
     }

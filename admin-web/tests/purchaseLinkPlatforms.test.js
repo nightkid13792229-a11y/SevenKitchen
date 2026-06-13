@@ -22,11 +22,13 @@ test('family DIY recommendation purchase links expose iHerb across admin, backen
   assert.match(miniappCopy, /已复制 iHerb 商品链接/)
 })
 
-test('admin mini program product paths are optional when AppID is configured', () => {
+test('admin recommendation purchase links use copyable URL fields instead of mini program AppID fields', () => {
   const adminForm = read('admin-web/src/views/Ingredients/IngredientForm.vue')
 
-  assert.doesNotMatch(adminForm, /请同时填写目标小程序 AppID 和商品页路径/)
-  assert.match(adminForm, /商品页路径可留空/)
-  assert.match(adminForm, /!miniProgramAppId && miniProgramPath/)
-  assert.match(adminForm, /!appId && path/)
+  assert.match(adminForm, /el-form-item label="购买链接"/)
+  assert.match(adminForm, /v-model="rpForm\.purchaseLinkUrl"/)
+  assert.match(adminForm, /placeholder="商品购买链接或口令"/)
+  assert.doesNotMatch(adminForm, /商品小程序链接/)
+  assert.doesNotMatch(adminForm, /purchaseLinkMiniProgram/)
+  assert.doesNotMatch(adminForm, /mini_program_appid/)
 })

@@ -7,10 +7,6 @@ export const DIY_SHEET_RECOMMENDATION_ENTRY_TEXT = '点击查看'
 export type PurchaseLinkLike = {
   platform?: string | null
   url?: string | null
-  mini_program_appid?: string | null
-  mini_program_path?: string | null
-  miniProgramAppId?: string | null
-  miniProgramPath?: string | null
 } | null | undefined
 
 interface SpecRecommendedPurchaseChannelDisplayInput {
@@ -99,26 +95,6 @@ export function getPurchaseTipByPlatform(platform?: string | null): string {
   return normalizedPlatform
     ? PURCHASE_TIP_BY_PLATFORM[normalizedPlatform] || '已复制商品链接'
     : '已复制商品链接'
-}
-
-export function getMiniProgramPurchaseAppId(purchaseLink: PurchaseLinkLike): string {
-  return String(
-    purchaseLink?.mini_program_appid ||
-      purchaseLink?.miniProgramAppId ||
-      ''
-  ).trim()
-}
-
-export function getMiniProgramPurchasePath(purchaseLink: PurchaseLinkLike): string {
-  return String(
-    purchaseLink?.mini_program_path ||
-      purchaseLink?.miniProgramPath ||
-      ''
-  ).trim()
-}
-
-export function canOpenMiniProgramPurchaseLink(purchaseLink: PurchaseLinkLike): boolean {
-  return !!getMiniProgramPurchaseAppId(purchaseLink)
 }
 
 export function getRecommendationEntryDisplayText(hasRecommendationDetail: boolean): string {

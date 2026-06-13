@@ -436,7 +436,7 @@
 
         <template v-if="showSupplementPurchaseLinkField">
           <div class="capability-fields">
-            <el-form-item label="商品小程序链接">
+            <el-form-item label="购买链接">
               <div style="width: 100%">
                 <el-select
                   v-model="supplementPurchaseLink.platform"
@@ -447,21 +447,16 @@
                   <el-option label="京东" value="JD" />
                   <el-option label="拼多多" value="PINDUODUO" />
                   <el-option label="iHerb" value="IHERB" />
-                  <el-option label="其他小程序" value="OTHER" />
-                  <el-option label="网页链接（历史）" value="WEBVIEW" />
+                  <el-option label="其他链接" value="OTHER" />
+                  <el-option label="网页链接" value="WEBVIEW" />
                 </el-select>
                 <el-input
-                  v-model="supplementPurchaseLink.mini_program_appid"
-                  placeholder="目标小程序 AppID，如 wx91d27dbf599dff74"
-                  style="width: 100%; margin-bottom: 8px"
-                />
-                <el-input
-                  v-model="supplementPurchaseLink.mini_program_path"
-                  placeholder="商品页路径（可选），如 pages/product/detail?id=123"
+                  v-model="supplementPurchaseLink.url"
+                  placeholder="补剂产品购买链接或口令"
                   style="width: 100%"
                 />
                 <div class="form-tip">
-                  用户点击“去购买”后会直接打开目标小程序；商品页路径可留空，留空时打开目标小程序首页。不要再填写淘口令或外部 App 链接。
+                  用户点击“去购买”后会复制这里填写的商品链接或口令。
                 </div>
               </div>
             </el-form-item>
@@ -735,7 +730,7 @@
             >新增DIY推荐商品</el-button
           >
           <span class="hint-text" style="margin-left: 8px"
-            >面向用户家庭制作场景，维护可直接跳转的商品小程序链接</span
+            >面向用户家庭制作场景，维护可复制的商品链接或口令</span
           >
         </div>
         <div v-if="recommendedProducts.length === 0" class="rp-empty">
@@ -791,8 +786,6 @@
             <div
               v-if="
                 rp.purchaseChannel ||
-                rp.purchaseLink?.mini_program_appid ||
-                rp.purchaseLink?.mini_program_path ||
                 rp.purchaseLink?.url ||
                 rp.imageUrl
               "
@@ -801,8 +794,7 @@
               <span v-if="rp.purchaseChannel"
                 >渠道：{{ rp.purchaseChannel }}</span
               >
-              <span v-if="rp.purchaseLink?.mini_program_appid">已配置小程序商品链接</span>
-              <span v-else-if="rp.purchaseLink?.url">仅有旧链接，需补小程序路径</span>
+              <span v-if="rp.purchaseLink?.url">已配置推荐链接</span>
               <span v-if="rp.imageUrl">已配置商品图片</span>
             </div>
           </div>
@@ -970,7 +962,7 @@
         class="sku-dialog-alert"
       >
         这里记录的是面向家庭 DIY
-        的推荐商品，可配置商品小程序链接和商品图片，方便小程序端展示并直接跳转。
+        的推荐商品，可配置购买链接或口令和商品图片，方便小程序端展示并复制给用户。
       </el-alert>
       <el-form-item label="SKU 名称" required>
         <el-input
@@ -1005,7 +997,7 @@
           style="width: 300px"
         />
       </el-form-item>
-      <el-form-item label="商品小程序链接">
+      <el-form-item label="购买链接">
         <div style="width: 100%">
           <el-select
             v-model="rpForm.purchaseLinkPlatform"
@@ -1016,21 +1008,16 @@
             <el-option label="京东" value="JD" />
             <el-option label="拼多多" value="PINDUODUO" />
             <el-option label="iHerb" value="IHERB" />
-            <el-option label="其他小程序" value="OTHER" />
+            <el-option label="其他链接" value="OTHER" />
             <el-option label="网页链接" value="WEBVIEW" />
           </el-select>
           <el-input
-            v-model="rpForm.purchaseLinkMiniProgramAppId"
-            placeholder="目标小程序 AppID，如 wx91d27dbf599dff74"
-            style="width: 100%; margin-bottom: 8px"
-          />
-          <el-input
-            v-model="rpForm.purchaseLinkMiniProgramPath"
-            placeholder="商品页路径（可选），如 pages/product/detail?id=123"
+            v-model="rpForm.purchaseLinkUrl"
+            placeholder="商品购买链接或口令"
             style="width: 100%"
           />
           <div class="form-tip">
-            用户点击“去购买”后会直接打开目标小程序；商品页路径可留空，留空时打开目标小程序首页。不要再填写淘口令或外部 App 链接。
+            用户点击“去购买”后会复制这里填写的商品链接或口令。
           </div>
         </div>
       </el-form-item>
@@ -1725,8 +1712,7 @@ const supplementPurchaseLink = computed<PurchaseLinkConfig>({
     if (!supplementProperties.purchase_link) {
       supplementProperties.purchase_link = {
         platform: 'OTHER',
-        mini_program_appid: '',
-        mini_program_path: '',
+        url: '',
       }
     }
     return supplementProperties.purchase_link
@@ -1933,8 +1919,7 @@ function getDefaultSupplementProperties(): SupplementProperties {
     supplier_name: null,
     purchase_link: {
       platform: 'OTHER',
-      mini_program_appid: '',
-      mini_program_path: '',
+      url: '',
     },
     image_url: null,
     marketing_highlights: {},
@@ -2086,22 +2071,14 @@ function syncProperties() {
   if (formData.type === IngredientType.FOOD) {
     formData.properties = { ...foodProperties }
   } else if (formData.type === IngredientType.SUPPLEMENT) {
-    const appId = supplementProperties.purchase_link?.mini_program_appid?.trim()
-    const path = supplementProperties.purchase_link?.mini_program_path?.trim()
-    const legacyUrl = supplementProperties.purchase_link?.url?.trim()
+    const purchaseUrl = supplementProperties.purchase_link?.url?.trim()
     const normalizedPurchaseLink =
-      appId
+      purchaseUrl
         ? {
-            platform: supplementProperties.purchase_link?.platform || 'OTHER',
-            mini_program_appid: appId,
-            ...(path ? { mini_program_path: path } : {}),
+            platform: supplementProperties.purchase_link?.platform || 'WEBVIEW',
+            url: purchaseUrl,
           }
-        : legacyUrl
-          ? {
-              platform: supplementProperties.purchase_link?.platform || 'WEBVIEW',
-              url: legacyUrl,
-            }
-          : undefined
+        : undefined
     supplementProperties.active_nutrients =
       buildSupplementActiveNutrientsFromNutritionProfile(
         formData.nutritionProfile,
@@ -2494,8 +2471,7 @@ const rpForm = reactive({
   productModel: '',
   purchaseChannel: '',
   purchaseLinkPlatform: 'TAOBAO' as string,
-  purchaseLinkMiniProgramAppId: '',
-  purchaseLinkMiniProgramPath: '',
+  purchaseLinkUrl: '',
   imageUrl: '',
   isActive: true,
   sortOrder: 0,
@@ -2730,10 +2706,7 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.productModel = rp.productModel || ''
     rpForm.purchaseChannel = rp.purchaseChannel || ''
     rpForm.purchaseLinkPlatform = rp.purchaseLink?.platform || 'TAOBAO'
-    rpForm.purchaseLinkMiniProgramAppId =
-      rp.purchaseLink?.mini_program_appid || ''
-    rpForm.purchaseLinkMiniProgramPath =
-      rp.purchaseLink?.mini_program_path || ''
+    rpForm.purchaseLinkUrl = rp.purchaseLink?.url || ''
     rpForm.imageUrl = rp.imageUrl || ''
     rpForm.isActive = rp.isActive
     rpForm.sortOrder = rp.sortOrder
@@ -2745,8 +2718,7 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.productModel = ''
     rpForm.purchaseChannel = ''
     rpForm.purchaseLinkPlatform = 'TAOBAO'
-    rpForm.purchaseLinkMiniProgramAppId = ''
-    rpForm.purchaseLinkMiniProgramPath = ''
+    rpForm.purchaseLinkUrl = ''
     rpForm.imageUrl = ''
     rpForm.isActive = true
     rpForm.sortOrder = 0
@@ -2895,18 +2867,11 @@ const saveRp = async () => {
   }
   if (!props.ingredient?.id) return
 
-  const miniProgramAppId = rpForm.purchaseLinkMiniProgramAppId.trim()
-  const miniProgramPath = rpForm.purchaseLinkMiniProgramPath.trim()
-  if (!miniProgramAppId && miniProgramPath) {
-    ElMessage.warning('请先填写目标小程序 AppID')
-    return
-  }
-
-  const purchaseLink = miniProgramAppId
+  const purchaseLinkUrl = rpForm.purchaseLinkUrl.trim()
+  const purchaseLink = purchaseLinkUrl
     ? {
         platform: rpForm.purchaseLinkPlatform,
-        mini_program_appid: miniProgramAppId,
-        ...(miniProgramPath ? { mini_program_path: miniProgramPath } : {}),
+        url: purchaseLinkUrl,
       }
     : undefined
 
@@ -3136,13 +3101,6 @@ const handleSubmit = async () => {
         throw new Error('ML类型必须输入密度且必须大于0')
       }
     } else if (formData.type === IngredientType.SUPPLEMENT) {
-      // 补剂验证
-      const appId = supplementProperties.purchase_link?.mini_program_appid?.trim()
-      const path = supplementProperties.purchase_link?.mini_program_path?.trim()
-      if (!appId && path) {
-        throw new Error('请先填写目标小程序 AppID')
-      }
-
       if (formData.procurementEnabled) {
         if (!getSingleLayerPurchaseUnit()) {
           throw new Error('请填写采购单位')

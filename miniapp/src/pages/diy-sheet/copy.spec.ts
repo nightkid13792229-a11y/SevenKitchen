@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canOpenMiniProgramPurchaseLink,
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   getPurchaseTipByPlatform,
   getRecommendedPurchaseChannelDisplay,
@@ -100,26 +99,4 @@ describe('diy-sheet copy', () => {
     expect(getPurchaseTipByPlatform('IHERB')).toBe('已复制 iHerb 商品链接')
   })
 
-  it('recognizes configured mini program purchase links', () => {
-    expect(canOpenMiniProgramPurchaseLink({
-      platform: 'JD',
-      mini_program_appid: 'wx123',
-      mini_program_path: 'pages/product/detail?id=sku-1'
-    })).toBe(true)
-
-    expect(canOpenMiniProgramPurchaseLink({
-      platform: 'IHERB',
-      mini_program_appid: 'wxihb1234567890'
-    })).toBe(true)
-
-    expect(canOpenMiniProgramPurchaseLink({
-      platform: 'JD',
-      mini_program_path: 'pages/product/detail?id=sku-1'
-    })).toBe(false)
-
-    expect(canOpenMiniProgramPurchaseLink({
-      platform: 'JD',
-      url: 'https://jd.example/product'
-    })).toBe(false)
-  })
 })

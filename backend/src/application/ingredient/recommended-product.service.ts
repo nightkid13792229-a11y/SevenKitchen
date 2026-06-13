@@ -82,7 +82,7 @@ export class RecommendedProductService {
     ).sort((left, right) => left.localeCompare(right));
   }
 
-  private normalizeMiniProgramPurchaseLink(
+  private normalizeCopyablePurchaseLink(
     purchaseLink: object | undefined,
   ): object | undefined {
     if (purchaseLink === undefined) {
@@ -90,16 +90,11 @@ export class RecommendedProductService {
     }
 
     const value = purchaseLink as Record<string, unknown>;
-    const appId = String(
-      value.mini_program_appid || value.miniProgramAppId || '',
-    ).trim();
-    const path = String(
-      value.mini_program_path || value.miniProgramPath || '',
-    ).trim();
+    const url = String(value.url || '').trim();
 
-    if (!appId) {
+    if (!url) {
       throw new BadRequestException(
-        '小程序商品链接需要配置目标小程序 AppID',
+        '购买链接需要配置可复制的商品链接或口令',
       );
     }
 
@@ -107,8 +102,7 @@ export class RecommendedProductService {
 
     return {
       ...(platform && { platform }),
-      mini_program_appid: appId,
-      ...(path && { mini_program_path: path }),
+      url,
     };
   }
 
@@ -224,7 +218,7 @@ export class RecommendedProductService {
         brand: dto.brand || null,
         productModel: dto.productModel || null,
         purchaseChannel: dto.purchaseChannel || null,
-        purchaseLink: this.normalizeMiniProgramPurchaseLink(dto.purchaseLink),
+        purchaseLink: this.normalizeCopyablePurchaseLink(dto.purchaseLink),
         imageUrl: dto.imageUrl || null,
         activeNutrients:
           dto.marketingNutritionHighlights || dto.activeNutrients || undefined,
@@ -271,7 +265,7 @@ export class RecommendedProductService {
           purchaseChannel: dto.purchaseChannel || null,
         }),
         ...(dto.purchaseLink !== undefined && {
-          purchaseLink: this.normalizeMiniProgramPurchaseLink(
+          purchaseLink: this.normalizeCopyablePurchaseLink(
             dto.purchaseLink,
           ) as any,
         }),

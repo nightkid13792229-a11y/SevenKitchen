@@ -134,7 +134,7 @@ describe('diy sheet layout regressions', () => {
     expect(confirmButtonBlock).toContain('color: #fff')
   })
 
-  it('opens configured mini program product links instead of copying recommendation URLs', () => {
+  it('copies configured recommendation purchase links instead of opening product mini programs', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
       'utf-8',
@@ -143,12 +143,11 @@ describe('diy sheet layout regressions', () => {
     const handlePurchaseEnd = source.indexOf('function getRecipeLossRate')
     const handlePurchaseBlock = source.slice(handlePurchaseStart, handlePurchaseEnd)
 
-    expect(source).toContain('canOpenMiniProgramPurchaseLink(rp.purchaseLink)')
-    expect(source).toContain('canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)')
-    expect(handlePurchaseBlock).toContain('uni.navigateToMiniProgram({')
-    expect(handlePurchaseBlock).toContain('appId: getMiniProgramPurchaseAppId(purchaseLink)')
-    expect(handlePurchaseBlock).toContain('...(miniProgramPath ? { path: miniProgramPath } : {})')
-    expect(handlePurchaseBlock).not.toContain('uni.setClipboardData')
+    expect(source).toContain('v-if="rp.purchaseLink?.url"')
+    expect(source).toContain('v-if="currentSpec.purchaseLink?.url"')
+    expect(handlePurchaseBlock).toContain('uni.setClipboardData({')
+    expect(handlePurchaseBlock).toContain('data: url')
+    expect(handlePurchaseBlock).not.toContain('uni.navigateToMiniProgram')
   })
 
   it('marks pricing previews as DIY sheet usage so procurement source plans do not block sheet generation', () => {

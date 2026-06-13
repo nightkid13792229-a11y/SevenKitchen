@@ -108,6 +108,16 @@ describe('diy-sheet copy', () => {
     })).toBe(true)
 
     expect(canOpenMiniProgramPurchaseLink({
+      platform: 'IHERB',
+      mini_program_appid: 'wxihb1234567890'
+    })).toBe(true)
+
+    expect(canOpenMiniProgramPurchaseLink({
+      platform: 'JD',
+      mini_program_path: 'pages/product/detail?id=sku-1'
+    })).toBe(false)
+
+    expect(canOpenMiniProgramPurchaseLink({
       platform: 'JD',
       url: 'https://jd.example/product'
     })).toBe(false)

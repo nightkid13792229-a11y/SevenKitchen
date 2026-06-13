@@ -97,19 +97,18 @@ export class RecommendedProductService {
       value.mini_program_path || value.miniProgramPath || '',
     ).trim();
 
-    if (!appId || !path) {
+    if (!appId) {
       throw new BadRequestException(
-        '小程序商品链接需要配置目标小程序 AppID 和页面路径',
+        '小程序商品链接需要配置目标小程序 AppID',
       );
     }
 
     const platform = String(value.platform || '').trim().toUpperCase();
 
     return {
-      ...value,
       ...(platform && { platform }),
       mini_program_appid: appId,
-      mini_program_path: path,
+      ...(path && { mini_program_path: path }),
     };
   }
 

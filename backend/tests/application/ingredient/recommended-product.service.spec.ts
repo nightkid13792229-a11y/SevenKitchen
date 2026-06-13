@@ -168,6 +168,40 @@ describe('RecommendedProductService', () => {
     });
   });
 
+  it('create allows mini program purchase links without a page path', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      type: IngredientType.FOOD,
+    });
+    mockPrismaService.recommendedProduct.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'rp-1',
+        ingredientId: data.ingredientId,
+        name: data.name,
+        purchaseLink: data.purchaseLink ?? null,
+        activeNutrients: null,
+      }),
+    );
+
+    await service.create('ingredient-1', {
+      name: 'iHerb 补剂',
+      purchaseLink: {
+        platform: 'IHERB',
+        mini_program_appid: 'wxihb1234567890',
+        mini_program_path: '  ',
+      },
+    });
+
+    expect(mockPrismaService.recommendedProduct.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        purchaseLink: {
+          platform: 'IHERB',
+          mini_program_appid: 'wxihb1234567890',
+        },
+      }),
+    });
+  });
+
   it('rejects legacy URL-only purchase links for user-facing recommended products', async () => {
     mockPrismaService.ingredient.findUnique.mockResolvedValue({
       id: 'ingredient-1',
@@ -182,7 +216,7 @@ describe('RecommendedProductService', () => {
           url: 'https://jd.example/product',
         },
       }),
-    ).rejects.toThrow('小程序商品链接需要配置目标小程序 AppID 和页面路径');
+    ).rejects.toThrow('小程序商品链接需要配置目标小程序 AppID');
 
     expect(mockPrismaService.recommendedProduct.create).not.toHaveBeenCalled();
   });

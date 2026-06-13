@@ -1640,9 +1640,10 @@ function handlePurchase(purchaseLink: any, productName: string) {
     return
   }
 
+  const miniProgramPath = getMiniProgramPurchasePath(purchaseLink)
   uni.navigateToMiniProgram({
     appId: getMiniProgramPurchaseAppId(purchaseLink),
-    path: getMiniProgramPurchasePath(purchaseLink),
+    ...(miniProgramPath ? { path: miniProgramPath } : {}),
     success: () => {
       console.log('[DIYSheet] 商品小程序跳转成功:', productName)
     },

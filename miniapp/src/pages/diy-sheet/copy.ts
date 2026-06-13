@@ -118,10 +118,7 @@ export function getMiniProgramPurchasePath(purchaseLink: PurchaseLinkLike): stri
 }
 
 export function canOpenMiniProgramPurchaseLink(purchaseLink: PurchaseLinkLike): boolean {
-  return !!(
-    getMiniProgramPurchaseAppId(purchaseLink) &&
-    getMiniProgramPurchasePath(purchaseLink)
-  )
+  return !!getMiniProgramPurchaseAppId(purchaseLink)
 }
 
 export function getRecommendationEntryDisplayText(hasRecommendationDetail: boolean): string {

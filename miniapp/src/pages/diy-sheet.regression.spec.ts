@@ -147,7 +147,7 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)')
     expect(handlePurchaseBlock).toContain('uni.navigateToMiniProgram({')
     expect(handlePurchaseBlock).toContain('appId: getMiniProgramPurchaseAppId(purchaseLink)')
-    expect(handlePurchaseBlock).toContain('path: getMiniProgramPurchasePath(purchaseLink)')
+    expect(handlePurchaseBlock).toContain('...(miniProgramPath ? { path: miniProgramPath } : {})')
     expect(handlePurchaseBlock).not.toContain('uni.setClipboardData')
   })
 

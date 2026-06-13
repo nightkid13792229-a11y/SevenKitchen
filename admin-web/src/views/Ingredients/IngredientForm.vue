@@ -457,11 +457,11 @@
                 />
                 <el-input
                   v-model="supplementPurchaseLink.mini_program_path"
-                  placeholder="商品页路径，如 pages/product/detail?id=123"
+                  placeholder="商品页路径（可选），如 pages/product/detail?id=123"
                   style="width: 100%"
                 />
                 <div class="form-tip">
-                  用户点击“去购买”后会直接打开该小程序商品页；不要再填写淘口令或外部 App 链接。
+                  用户点击“去购买”后会直接打开目标小程序；商品页路径可留空，留空时打开目标小程序首页。不要再填写淘口令或外部 App 链接。
                 </div>
               </div>
             </el-form-item>
@@ -801,7 +801,7 @@
               <span v-if="rp.purchaseChannel"
                 >渠道：{{ rp.purchaseChannel }}</span
               >
-              <span v-if="rp.purchaseLink?.mini_program_appid && rp.purchaseLink?.mini_program_path">已配置小程序商品链接</span>
+              <span v-if="rp.purchaseLink?.mini_program_appid">已配置小程序商品链接</span>
               <span v-else-if="rp.purchaseLink?.url">仅有旧链接，需补小程序路径</span>
               <span v-if="rp.imageUrl">已配置商品图片</span>
             </div>
@@ -1026,11 +1026,11 @@
           />
           <el-input
             v-model="rpForm.purchaseLinkMiniProgramPath"
-            placeholder="商品页路径，如 pages/product/detail?id=123"
+            placeholder="商品页路径（可选），如 pages/product/detail?id=123"
             style="width: 100%"
           />
           <div class="form-tip">
-            用户点击“去购买”后会直接打开该小程序商品页；不要再填写淘口令或外部 App 链接。
+            用户点击“去购买”后会直接打开目标小程序；商品页路径可留空，留空时打开目标小程序首页。不要再填写淘口令或外部 App 链接。
           </div>
         </div>
       </el-form-item>
@@ -2090,11 +2090,11 @@ function syncProperties() {
     const path = supplementProperties.purchase_link?.mini_program_path?.trim()
     const legacyUrl = supplementProperties.purchase_link?.url?.trim()
     const normalizedPurchaseLink =
-      appId && path
+      appId
         ? {
             platform: supplementProperties.purchase_link?.platform || 'OTHER',
             mini_program_appid: appId,
-            mini_program_path: path,
+            ...(path ? { mini_program_path: path } : {}),
           }
         : legacyUrl
           ? {
@@ -2897,16 +2897,16 @@ const saveRp = async () => {
 
   const miniProgramAppId = rpForm.purchaseLinkMiniProgramAppId.trim()
   const miniProgramPath = rpForm.purchaseLinkMiniProgramPath.trim()
-  if ((miniProgramAppId && !miniProgramPath) || (!miniProgramAppId && miniProgramPath)) {
-    ElMessage.warning('请同时填写目标小程序 AppID 和商品页路径')
+  if (!miniProgramAppId && miniProgramPath) {
+    ElMessage.warning('请先填写目标小程序 AppID')
     return
   }
 
-  const purchaseLink = miniProgramAppId && miniProgramPath
+  const purchaseLink = miniProgramAppId
     ? {
         platform: rpForm.purchaseLinkPlatform,
         mini_program_appid: miniProgramAppId,
-        mini_program_path: miniProgramPath,
+        ...(miniProgramPath ? { mini_program_path: miniProgramPath } : {}),
       }
     : undefined
 
@@ -3139,8 +3139,8 @@ const handleSubmit = async () => {
       // 补剂验证
       const appId = supplementProperties.purchase_link?.mini_program_appid?.trim()
       const path = supplementProperties.purchase_link?.mini_program_path?.trim()
-      if ((appId && !path) || (!appId && path)) {
-        throw new Error('请同时填写目标小程序 AppID 和商品页路径')
+      if (!appId && path) {
+        throw new Error('请先填写目标小程序 AppID')
       }
 
       if (formData.procurementEnabled) {

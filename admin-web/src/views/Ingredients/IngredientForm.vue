@@ -436,7 +436,7 @@
 
         <template v-if="showSupplementPurchaseLinkField">
           <div class="capability-fields">
-            <el-form-item label="购买链接">
+            <el-form-item label="商品小程序链接">
               <div style="width: 100%">
                 <el-select
                   v-model="supplementPurchaseLink.platform"
@@ -448,13 +448,21 @@
                   <el-option label="拼多多" value="PINDUODUO" />
                   <el-option label="iHerb" value="IHERB" />
                   <el-option label="其他小程序" value="OTHER" />
-                  <el-option label="网页链接" value="WEBVIEW" />
+                  <el-option label="网页链接（历史）" value="WEBVIEW" />
                 </el-select>
                 <el-input
-                  v-model="supplementPurchaseLink.url"
-                  placeholder="补剂产品购买链接"
+                  v-model="supplementPurchaseLink.mini_program_appid"
+                  placeholder="目标小程序 AppID，如 wx91d27dbf599dff74"
+                  style="width: 100%; margin-bottom: 8px"
+                />
+                <el-input
+                  v-model="supplementPurchaseLink.mini_program_path"
+                  placeholder="商品页路径，如 pages/product/detail?id=123"
                   style="width: 100%"
                 />
+                <div class="form-tip">
+                  用户点击“去购买”后会直接打开该小程序商品页；不要再填写淘口令或外部 App 链接。
+                </div>
               </div>
             </el-form-item>
 
@@ -1716,8 +1724,9 @@ const supplementPurchaseLink = computed<PurchaseLinkConfig>({
   get: () => {
     if (!supplementProperties.purchase_link) {
       supplementProperties.purchase_link = {
-        url: '',
-        platform: 'WEBVIEW',
+        platform: 'OTHER',
+        mini_program_appid: '',
+        mini_program_path: '',
       }
     }
     return supplementProperties.purchase_link
@@ -1923,8 +1932,9 @@ function getDefaultSupplementProperties(): SupplementProperties {
     display_unit: '',
     supplier_name: null,
     purchase_link: {
-      url: '',
-      platform: 'WEBVIEW',
+      platform: 'OTHER',
+      mini_program_appid: '',
+      mini_program_path: '',
     },
     image_url: null,
     marketing_highlights: {},
@@ -2076,13 +2086,22 @@ function syncProperties() {
   if (formData.type === IngredientType.FOOD) {
     formData.properties = { ...foodProperties }
   } else if (formData.type === IngredientType.SUPPLEMENT) {
+    const appId = supplementProperties.purchase_link?.mini_program_appid?.trim()
+    const path = supplementProperties.purchase_link?.mini_program_path?.trim()
+    const legacyUrl = supplementProperties.purchase_link?.url?.trim()
     const normalizedPurchaseLink =
-      supplementProperties.purchase_link?.url?.trim()
+      appId && path
         ? {
-            ...supplementProperties.purchase_link,
-            url: supplementProperties.purchase_link.url.trim(),
+            platform: supplementProperties.purchase_link?.platform || 'OTHER',
+            mini_program_appid: appId,
+            mini_program_path: path,
           }
-        : undefined
+        : legacyUrl
+          ? {
+              platform: supplementProperties.purchase_link?.platform || 'WEBVIEW',
+              url: legacyUrl,
+            }
+          : undefined
     supplementProperties.active_nutrients =
       buildSupplementActiveNutrientsFromNutritionProfile(
         formData.nutritionProfile,
@@ -3118,6 +3137,12 @@ const handleSubmit = async () => {
       }
     } else if (formData.type === IngredientType.SUPPLEMENT) {
       // 补剂验证
+      const appId = supplementProperties.purchase_link?.mini_program_appid?.trim()
+      const path = supplementProperties.purchase_link?.mini_program_path?.trim()
+      if ((appId && !path) || (!appId && path)) {
+        throw new Error('请同时填写目标小程序 AppID 和商品页路径')
+      }
+
       if (formData.procurementEnabled) {
         if (!getSingleLayerPurchaseUnit()) {
           throw new Error('请填写采购单位')

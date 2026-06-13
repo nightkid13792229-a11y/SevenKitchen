@@ -23,6 +23,7 @@ import {
   WechatShippingUploadPendingSummary,
   WechatShippingUploadResult,
   WechatShippingUploadService,
+  WechatShippingOrderStatusResult,
   WechatSpecialShippingReportResult,
 } from './wechat-shipping-upload.service';
 
@@ -233,6 +234,12 @@ export class ShippingFulfillmentService {
     actorId?: string | null,
   ): Promise<WechatSpecialShippingReportResult> {
     return this.reportWechatSpecialShippingOrderSafely(orderId, actor, actorId);
+  }
+
+  async queryWechatShippingOrderStatus(
+    orderId: string,
+  ): Promise<WechatShippingOrderStatusResult> {
+    return this.wechatShippingUploadService.queryShippingOrderStatus(orderId);
   }
 
   async reportPendingWechatSpecialShippingOrders(

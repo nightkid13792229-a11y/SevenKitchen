@@ -82,6 +82,37 @@ export class RecommendedProductService {
     ).sort((left, right) => left.localeCompare(right));
   }
 
+  private normalizeMiniProgramPurchaseLink(
+    purchaseLink: object | undefined,
+  ): object | undefined {
+    if (purchaseLink === undefined) {
+      return undefined;
+    }
+
+    const value = purchaseLink as Record<string, unknown>;
+    const appId = String(
+      value.mini_program_appid || value.miniProgramAppId || '',
+    ).trim();
+    const path = String(
+      value.mini_program_path || value.miniProgramPath || '',
+    ).trim();
+
+    if (!appId || !path) {
+      throw new BadRequestException(
+        '小程序商品链接需要配置目标小程序 AppID 和页面路径',
+      );
+    }
+
+    const platform = String(value.platform || '').trim().toUpperCase();
+
+    return {
+      ...value,
+      ...(platform && { platform }),
+      mini_program_appid: appId,
+      mini_program_path: path,
+    };
+  }
+
   /**
    * Batch find active recommended products by ingredient IDs (user-facing)
    */
@@ -194,7 +225,7 @@ export class RecommendedProductService {
         brand: dto.brand || null,
         productModel: dto.productModel || null,
         purchaseChannel: dto.purchaseChannel || null,
-        purchaseLink: dto.purchaseLink || undefined,
+        purchaseLink: this.normalizeMiniProgramPurchaseLink(dto.purchaseLink),
         imageUrl: dto.imageUrl || null,
         activeNutrients:
           dto.marketingNutritionHighlights || dto.activeNutrients || undefined,
@@ -241,7 +272,9 @@ export class RecommendedProductService {
           purchaseChannel: dto.purchaseChannel || null,
         }),
         ...(dto.purchaseLink !== undefined && {
-          purchaseLink: dto.purchaseLink as any,
+          purchaseLink: this.normalizeMiniProgramPurchaseLink(
+            dto.purchaseLink,
+          ) as any,
         }),
         ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
         ...((dto.activeNutrients !== undefined ||

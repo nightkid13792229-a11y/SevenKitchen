@@ -947,6 +947,7 @@ import { getNutritionStandardLabel } from '../../utils/label-mapping';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
 import { openCustomerServiceChat } from '../../utils/customer-service';
+import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
   getSourcePlanLabel,
   type IngredientSourcePlanCode,
@@ -2726,20 +2727,22 @@ async function confirmReceived() {
       if (res.confirm) {
         try {
           uni.showLoading({ title: '确认中...' });
+          await confirmWechatReceiptBeforeInternalComplete(order.value);
           const result = await request({
             url: `/orders/${orderId.value}/complete`,
             method: 'POST',
           });
-          if (result.code === 0) {
-            uni.showToast({
-              title: '已确认收货',
-              icon: 'success',
-            });
-            loadOrderDetail();
+          if (result.code !== 0) {
+            throw new Error(result.message || '确认失败');
           }
-        } catch (error) {
           uni.showToast({
-            title: '确认失败',
+            title: '已确认收货',
+            icon: 'success',
+          });
+          loadOrderDetail();
+        } catch (error: any) {
+          uni.showToast({
+            title: error?.message || '确认失败',
             icon: 'none',
           });
         } finally {

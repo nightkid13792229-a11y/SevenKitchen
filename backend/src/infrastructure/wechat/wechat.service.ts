@@ -80,6 +80,54 @@ interface WechatShippingInfoResponse {
   errmsg: string;
 }
 
+export type WechatShippingOrderQuery =
+  | {
+      transactionId: string;
+      merchantId?: string;
+      subMerchantId?: string;
+      merchantTradeNo?: never;
+    }
+  | {
+      merchantId: string;
+      merchantTradeNo: string;
+      subMerchantId?: string;
+      transactionId?: never;
+    };
+
+export interface WechatShippingOrder {
+  transaction_id?: string;
+  merchant_id?: string;
+  sub_merchant_id?: string;
+  merchant_trade_no?: string;
+  description?: string;
+  paid_amount?: number;
+  openid?: string;
+  trade_create_time?: number;
+  pay_time?: number;
+  in_complaint?: boolean;
+  order_state: 1 | 2 | 3 | 4 | 5;
+  shipping?: unknown;
+}
+
+export interface WechatShippingOrderResponse {
+  errcode: number;
+  errmsg: string;
+  order?: WechatShippingOrder;
+}
+
+export interface WechatTradeManagedResponse {
+  errcode: number;
+  errmsg: string;
+  is_trade_managed?: boolean;
+}
+
+export interface WechatTradeManagementConfirmationResponse {
+  errcode: number;
+  errmsg: string;
+  completed?: boolean;
+  is_trade_management_confirmation_completed?: boolean;
+}
+
 interface WechatSpecialShippingOrderResponse {
   errcode: number;
   errmsg: string;
@@ -462,6 +510,115 @@ export class WechatService {
     if (data.errcode !== 0) {
       throw new Error(
         `WeChat shipping upload failed: ${data.errcode} - ${data.errmsg}`,
+      );
+    }
+
+    return data;
+  }
+
+  async getShippingOrder(
+    query: WechatShippingOrderQuery,
+    appId?: string,
+  ): Promise<WechatShippingOrderResponse> {
+    const hasTransactionId = Boolean(query.transactionId);
+    const hasMerchantTradeNo = Boolean(query.merchantId && query.merchantTradeNo);
+
+    if (!hasTransactionId && !hasMerchantTradeNo) {
+      throw new Error(
+        'WeChat shipping order query requires transactionId or merchantId with merchantTradeNo',
+      );
+    }
+
+    if (this.isMockMode()) {
+      this.logger.log('===== MOCK MODE - Getting WeChat Shipping Order =====');
+      this.logger.log(JSON.stringify(query, null, 2));
+      return {
+        errcode: 0,
+        errmsg: 'ok',
+        order: {
+          transaction_id: query.transactionId,
+          merchant_id: query.merchantId,
+          sub_merchant_id: query.subMerchantId,
+          merchant_trade_no: query.merchantTradeNo,
+          order_state: 3,
+        },
+      };
+    }
+
+    const accessToken = await this.getAccessToken(appId);
+    const url = `https://api.weixin.qq.com/wxa/sec/order/get_order?access_token=${accessToken}`;
+    const payload = {
+      ...(query.transactionId ? { transaction_id: query.transactionId } : {}),
+      ...(query.merchantId ? { merchant_id: query.merchantId } : {}),
+      ...(query.subMerchantId
+        ? { sub_merchant_id: query.subMerchantId }
+        : {}),
+      ...(query.merchantTradeNo
+        ? { merchant_trade_no: query.merchantTradeNo }
+        : {}),
+    };
+    const response = await axios.post<WechatShippingOrderResponse>(
+      url,
+      payload,
+    );
+    const data = response.data;
+
+    if (data.errcode !== 0) {
+      throw new Error(
+        `WeChat shipping order query failed: ${data.errcode} - ${data.errmsg}`,
+      );
+    }
+
+    return data;
+  }
+
+  async isTradeManaged(
+    appId?: string,
+  ): Promise<WechatTradeManagedResponse> {
+    if (this.isMockMode()) {
+      this.logger.log('===== MOCK MODE - Checking WeChat Trade Managed =====');
+      return { errcode: 0, errmsg: 'ok', is_trade_managed: true };
+    }
+
+    const config = this.getAppConfig(appId);
+    const accessToken = await this.getAccessToken(config.appId);
+    const url = `https://api.weixin.qq.com/wxa/sec/order/is_trade_managed?access_token=${accessToken}`;
+    const response = await axios.post<WechatTradeManagedResponse>(url, {
+      appid: config.appId,
+    });
+    const data = response.data;
+
+    if (data.errcode !== 0) {
+      throw new Error(
+        `WeChat trade managed check failed: ${data.errcode} - ${data.errmsg}`,
+      );
+    }
+
+    return data;
+  }
+
+  async isTradeManagementConfirmationCompleted(
+    appId?: string,
+  ): Promise<WechatTradeManagementConfirmationResponse> {
+    if (this.isMockMode()) {
+      this.logger.log(
+        '===== MOCK MODE - Checking WeChat Trade Management Confirmation =====',
+      );
+      return { errcode: 0, errmsg: 'ok', completed: true };
+    }
+
+    const config = this.getAppConfig(appId);
+    const accessToken = await this.getAccessToken(config.appId);
+    const url = `https://api.weixin.qq.com/wxa/sec/order/is_trade_management_confirmation_completed?access_token=${accessToken}`;
+    const response =
+      await axios.post<WechatTradeManagementConfirmationResponse>(url, {
+        appid: config.appId,
+      });
+    const data = response.data;
+
+    if (data.errcode !== 0) {
+      throw new Error(
+        `WeChat trade management confirmation check failed: ${data.errcode} - ${data.errmsg}`,
       );
     }
 

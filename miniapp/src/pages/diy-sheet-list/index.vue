@@ -79,6 +79,11 @@
 import { ref, onMounted } from 'vue'
 import { request } from '../../utils/api'
 
+type PackagePlanItem = {
+  packageSpecG: number
+  packageCount: number
+}
+
 interface DIYSheet {
   id: string
   recipeId: string
@@ -88,6 +93,7 @@ interface DIYSheet {
   cycleDays: number
   perMealG: number
   dailyIntakeG: number
+  packagePlan?: PackagePlanItem[]
   purchaseList: any
   productionSteps: string
   createdAt: string
@@ -136,8 +142,17 @@ function viewSheet(sheetId: string) {
   }
 
   // 跳转到DIY制作单页面，传递必要的参数
+  const params = {
+    recipeId: sheet.recipeId,
+    dogId: sheet.dogId,
+    cycleDays: String(sheet.cycleDays),
+    perMealG: String(sheet.perMealG),
+    dailyIntakeG: String(sheet.dailyIntakeG),
+    packagePlan: JSON.stringify(sheet.packagePlan || []),
+  }
+
   uni.navigateTo({
-    url: `/pages/diy-sheet/index?recipeId=${sheet.recipeId}&dogId=${sheet.dogId}&cycleDays=${sheet.cycleDays}&perMealG=${sheet.perMealG}&dailyIntakeG=${sheet.dailyIntakeG}`
+    url: `/pages/diy-sheet/index?recipeId=${encodeURIComponent(params.recipeId)}&dogId=${encodeURIComponent(params.dogId)}&cycleDays=${encodeURIComponent(params.cycleDays)}&perMealG=${encodeURIComponent(params.perMealG)}&dailyIntakeG=${encodeURIComponent(params.dailyIntakeG)}&packagePlan=${encodeURIComponent(params.packagePlan)}`
   })
 }
 

@@ -132,4 +132,58 @@ describe('RecommendedProductService', () => {
       }),
     });
   });
+
+  it('create stores mini program purchase links for user-facing purchase jumps', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      type: IngredientType.FOOD,
+    });
+    mockPrismaService.recommendedProduct.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'rp-1',
+        ingredientId: data.ingredientId,
+        name: data.name,
+        purchaseLink: data.purchaseLink ?? null,
+        activeNutrients: null,
+      }),
+    );
+
+    await service.create('ingredient-1', {
+      name: '京东牛肉',
+      purchaseLink: {
+        platform: 'JD',
+        mini_program_appid: 'wx91d27dbf599dff74',
+        mini_program_path: 'pages/product/detail?id=123',
+      },
+    });
+
+    expect(mockPrismaService.recommendedProduct.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        purchaseLink: {
+          platform: 'JD',
+          mini_program_appid: 'wx91d27dbf599dff74',
+          mini_program_path: 'pages/product/detail?id=123',
+        },
+      }),
+    });
+  });
+
+  it('rejects legacy URL-only purchase links for user-facing recommended products', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      type: IngredientType.FOOD,
+    });
+
+    await expect(
+      service.create('ingredient-1', {
+        name: '旧口令商品',
+        purchaseLink: {
+          platform: 'JD',
+          url: 'https://jd.example/product',
+        },
+      }),
+    ).rejects.toThrow('小程序商品链接需要配置目标小程序 AppID 和页面路径');
+
+    expect(mockPrismaService.recommendedProduct.create).not.toHaveBeenCalled();
+  });
 });

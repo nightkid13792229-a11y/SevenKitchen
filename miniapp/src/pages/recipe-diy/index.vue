@@ -35,6 +35,10 @@
           <text class="label">营养标准</text>
           <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
         </view>
+        <view class="nutrition-item">
+          <text class="label">设计软件</text>
+          <text class="value">{{ recipeFormulaSoftwareLabel }}</text>
+        </view>
       </view>
     </view>
 
@@ -50,17 +54,34 @@
         <button class="btn-create-dog" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
 
-      <picker v-else mode="selector" :range="dogPickerOptions" range-key="label" @change="onDogPickerChange">
-        <view class="dog-picker">
-          <text v-if="!selectedDog" class="picker-placeholder">
-            请选择爱犬 →
-          </text>
-          <view v-else class="dog-selected">
-            <text class="dog-text">{{ selectedDog?.name }} | {{ selectedDog?.breedName }} | {{ selectedDog?.currentWeightKg }}kg | {{ selectedDog?.mealsPerDay }}餐/天</text>
-            <text class="picker-check">✓</text>
+      <view v-else class="dog-feeding-content">
+        <scroll-view scroll-x class="order-dog-scroll">
+          <view
+            v-for="dog in dogs"
+            :key="dog.id"
+            :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
+            @tap="selectDog(dog.id)"
+          >
+            <image class="order-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
+            <view class="order-dog-copy">
+              <text class="order-dog-name">{{ dog.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+
+        <view v-if="selectedDog" class="dog-profile-context">
+          <view class="dog-profile-facts">
+            <view
+              v-for="fact in dogProfileFacts"
+              :key="fact.label"
+              class="dog-profile-fact"
+            >
+              <text class="dog-profile-fact-label">{{ fact.label }}</text>
+              <text class="dog-profile-fact-value">{{ fact.value }}</text>
+            </view>
           </view>
         </view>
-      </picker>
+      </view>
 
       <view v-if="!selectedDog" class="picker-hint">
         提示：请先选择爱犬以计算推荐饭量
@@ -96,33 +117,18 @@
         <text class="title-text">确定饭量</text>
       </view>
 
-      <view class="feeding-info">
-        <view class="feeding-item">
-          <text class="feeding-label">每日饭量</text>
-          <text class="feeding-value readonly">{{ Math.round(displayDailyIntakeG) }}g/天</text>
+      <view class="dog-feeding-grid">
+        <view class="dog-feeding-item daily-intake-item">
+          <text class="feeding-label">每日参考</text>
+          <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
         </view>
-        <view class="feeding-item">
-          <text class="feeding-label">每餐饭量</text>
-
-          <!-- 只读模式 -->
-          <view v-if="!isEditingPerMeal" class="feeding-value-wrapper">
-            <text class="feeding-value">{{ Math.round(perMealG) }}g/餐</text>
-            <button class="btn-edit" @tap="startEditPerMeal">修改</button>
-            <button v-if="isPerMealModified" class="btn-reset" @tap="resetPerMeal">重置</button>
-          </view>
-
-          <!-- 编辑模式 -->
-          <view v-else class="feeding-edit-wrapper">
-            <input
-              class="feeding-input-small"
-              type="number"
-              v-model="tempPerMealG"
-              @input="onTempPerMealChange"
-            />
-            <text class="feeding-unit">g/餐</text>
-            <button class="btn-save" @tap="savePerMeal">确定</button>
-            <button class="btn-cancel" @tap="cancelEditPerMeal">取消</button>
-          </view>
+        <view class="dog-feeding-item">
+          <text class="feeding-label">每餐约</text>
+          <text class="feeding-value">{{ perMealIntakeText }}</text>
+        </view>
+        <view class="dog-feeding-item">
+          <text class="feeding-label">主食能量</text>
+          <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
         </view>
       </view>
 
@@ -213,48 +219,71 @@
       </view>
     </view>
 
-    <!-- 制作周期 -->
+    <!-- 配置天数与分装 -->
     <view class="section cycle-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">制作周期</text>
+        <text class="title-text">配置天数</text>
         <text class="required">*</text>
       </view>
 
-      <view class="cycle-and-custom-row">
-        <view class="cycle-options">
-          <view
-            v-for="option in cycleOptions"
-            :key="option.days"
-            class="cycle-option"
-            :class="{ active: cycleDays === option.days }"
-            @tap="selectCycle(option.days)"
-          >
-            <text class="cycle-text">{{ option.days }}天</text>
-          </view>
+      <view class="cycle-options">
+        <view
+          v-for="days in ORDER_CYCLE_OPTIONS"
+          :key="days"
+          class="cycle-option"
+          :class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"
+          @tap="selectCycle(days)"
+        >
+          <text class="cycle-text">{{ days }}天</text>
         </view>
+      </view>
 
-        <!-- 自选天数 -->
-        <view class="custom-cycle-inline">
-          <!-- 编辑模式：显示输入框和确定按钮 -->
-          <template v-if="!isCustomDaysMode">
-            <text class="custom-label">自选</text>
+      <view class="package-plan-toolbar">
+        <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
+        <button class="package-edit-button" @tap="togglePackageEditor">
+          {{ showPackageEditor ? '取消自定义' : '自定义分装' }}
+        </button>
+      </view>
+
+      <view v-if="packagePlanValidationMessage" class="min-order-warning">
+        <text class="warning-text">{{ packagePlanValidationMessage }}</text>
+      </view>
+
+      <view v-if="showPackageEditor" class="package-plan-list">
+        <view
+          v-for="(row, index) in packagePlan"
+          :key="index"
+          class="package-plan-row"
+        >
+          <view class="package-input-group">
+            <text class="package-input-label">每袋</text>
             <input
-              class="custom-input-white"
+              class="package-input"
               type="number"
-              v-model="customDays"
-              placeholder="1-90"
+              :value="row.packageSpecG"
+              @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
             />
-            <text class="custom-unit">天</text>
-            <button class="btn-confirm-custom" @tap="confirmCustomDays">确定</button>
-          </template>
-
-          <!-- 查看模式：显示天数和修改按钮 -->
-          <template v-else>
-            <text class="custom-label">自选</text>
-            <text class="custom-days-display">{{ cycleDays }}天</text>
-            <button class="btn-edit-custom" @tap="editCustomDays">修改</button>
-          </template>
+            <text class="package-input-unit">g</text>
+          </view>
+          <view class="package-input-group">
+            <text class="package-input-label">袋数</text>
+            <input
+              class="package-input"
+              type="number"
+              :value="row.packageCount"
+              @input="updatePackagePlanRow(index, 'packageCount', $event.detail.value)"
+            />
+            <text class="package-input-unit">袋</text>
+          </view>
+          <button
+            class="btn-remove-row"
+            :disabled="packagePlan.length <= 1"
+            @tap="removePackagePlanRow(index)"
+          >
+            删除
+          </button>
         </view>
+        <button class="btn-add-row" @tap="addPackagePlanRow">添加多个分装规格</button>
       </view>
 
       <!-- 保质期说明 -->
@@ -284,7 +313,7 @@
     <view class="bottom-bar">
       <button
         class="btn-generate"
-        :disabled="!selectedDogId || isGeneratingSheet"
+        :disabled="!canGenerateSheet || isGeneratingSheet"
         @tap="generateSheet"
       >
         生成制作单
@@ -296,7 +325,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
-import { formatEnergyDensityKcalPerKg } from '../../utils/recipe-display'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -304,6 +334,15 @@ import {
   resolveDogLifeStage,
   resolveDogRecipeLifeStage,
 } from '../../utils/life-stage-match'
+import {
+  DEFAULT_ORDER_CYCLE_DAYS,
+  MIN_PACKAGE_SPEC_G,
+  ORDER_CYCLE_OPTIONS,
+  buildDefaultPackagePlan,
+  estimateFeedDays,
+  getPackagePlanTotal,
+  type PackagePlanItem,
+} from '../../utils/order-package-plan'
 
 interface Dog {
   id: string
@@ -312,10 +351,13 @@ interface Dog {
   breedId: string
   currentWeightKg: number
   mealsPerDay: number
-  birthday: string
+  birthday?: string
+  ageText?: string
+  gender?: string
   activityLevel?: string
-  lifeStageOverride: string
-  breed: {
+  lifeStageOverride?: string
+  avatarUrl?: string
+  breed?: {
     adultAgeMonths: number
     seniorAgeYears: number
   }
@@ -333,6 +375,7 @@ interface Recipe {
   nutritionDetailedData: {
     energyDensityKcalPerKg: number
   }
+  designSource?: string
   applicableLifeStages: string[]
   targetHealthTags: string[]
 }
@@ -343,6 +386,13 @@ interface RecipeLifeStageVersion {
   label?: string
   isSelected?: boolean
   selected?: boolean
+}
+
+interface Breed {
+  id: string
+  name: string
+  adultAgeMonths: number
+  seniorAgeYears?: number
 }
 
 const recipeId = ref('')
@@ -370,6 +420,9 @@ const recipeEnergyDensityKcalPerKg = computed(() => {
 const displayRecipeEnergyDensity = computed(() =>
   formatEnergyDensityKcalPerKg(recipeEnergyDensityKcalPerKg.value)
 )
+const recipeFormulaSoftwareLabel = computed(() =>
+  formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
+)
 
 const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
@@ -380,13 +433,6 @@ const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
-
-const dogPickerOptions = computed(() => {
-  return dogs.value.map(dog => ({
-    value: dog.id,
-    label: `${dog.name} | ${dog.breedName} | ${dog.currentWeightKg}kg | ${dog.mealsPerDay}餐/天`
-  }))
-})
 
 // 生命阶段校验
 const isLifeStageMatch = ref(true)
@@ -412,6 +458,59 @@ const recommendedLifeStageOption = computed(() => {
     label: version.label || getLifeStageLabel(version.lifeStage),
   }
 })
+const dogProfileFacts = computed(() => {
+  if (!selectedDog.value) return []
+
+  return [
+    { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
+    { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
+    { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
+    { label: '餐次', value: `每日 ${selectedDog.value.mealsPerDay} 餐` },
+  ]
+})
+const dailyMainFoodEnergyText = computed(() => {
+  const kcal = dogCalcResult.value?.finalFoodKcal
+  if (!kcal || !Number.isFinite(kcal)) return '计算中'
+  return `${Math.round(kcal)} kcal/天`
+})
+const dailySuggestedIntakeText = computed(() => {
+  if (!displayDailyIntakeG.value) return '计算中'
+  return `${Math.round(displayDailyIntakeG.value)}g/天`
+})
+const perMealIntakeText = computed(() => {
+  if (!perMealG.value) return '计算中'
+  return `${Math.round(perMealG.value)}g`
+})
+const normalizedPackagePlan = computed(() =>
+  packagePlan.value.map(row => normalizePackagePlanRow(row))
+)
+const packagePlanTotal = computed(() => getPackagePlanTotal(normalizedPackagePlan.value))
+const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
+const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
+const estimatedFeedDays = computed(() =>
+  estimateFeedDays(totalGrams.value, displayDailyIntakeG.value)
+)
+const hasInvalidPackageSpec = computed(() =>
+  normalizedPackagePlan.value.some(row => row.packageSpecG < MIN_PACKAGE_SPEC_G)
+)
+const packagePlanValidationMessage = computed(() => (
+  hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
+))
+const packagePlanInlineSummaryText = computed(() => {
+  const specs = Array.from(new Set(
+    normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
+  ))
+  const specText = specs.length > 0 ? specs.join('、') : '-'
+
+  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g / 约${estimatedFeedDays.value}天`
+})
+const canGenerateSheet = computed(() => Boolean(
+  selectedDogId.value
+  && displayDailyIntakeG.value > 0
+  && perMealG.value > 0
+  && normalizedPackagePlan.value.length > 0
+  && !packagePlanValidationMessage.value
+))
 
 // 饭量相关
 const dogCalcResult = ref<any>(null)
@@ -421,24 +520,12 @@ const isPerMealModified = ref(false)
 const isEditingPerMeal = ref(false)
 const tempPerMealG = ref(0)
 
-// 周期
-const cycleDays = ref(7)
-
-// 周期选项
-const cycleOptions = [
-  { days: 7, packageCount: 14 },
-  { days: 15, packageCount: 30 },
-  { days: 30, packageCount: 60 }
-]
-
-// 预设选项天数（用于判断是否为自定义天数）
-const presetDays = [7, 15, 30]
-
-// 自选天数
-const customDays = ref('')
-
-// 是否处于自定义天数模式（非预设选项）
-const isCustomDaysMode = ref(false)
+const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
+const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
+const packagePlan = ref<PackagePlanItem[]>([])
+const packagePlanDogId = ref<string | null>(null)
+const showPackageEditor = ref(false)
+const isCustomPackagePlan = ref(false)
 
 // 保质期说明展开状态
 const showShelfLife = ref(false)
@@ -575,14 +662,7 @@ async function loadDogs() {
         const preferredDog = res.data.find((dog: Dog) => dog.id === preferredDogId) || res.data[0]
         console.log('[RecipeDiy] 自动选择狗狗:', preferredDog)
 
-        selectedDogId.value = preferredDog.id
-        selectedDog.value = preferredDog
-
-        // 调用饭量计算API
-        await loadDogCalc(preferredDog.id)
-
-        // 校验生命阶段
-        checkLifeStageMatch()
+        await selectDog(preferredDog.id)
       }
     }
   } catch (error) {
@@ -592,44 +672,22 @@ async function loadDogs() {
   console.log('[RecipeDiy] loadDogs 结束')
 }
 
-async function onDogPickerChange(e: any) {
-  console.log('========== [RecipeDiy] onDogPickerChange ==========')
-  console.log('[选择参数]', e.detail)
+async function selectDog(dogId: string) {
+  if (!dogId) return
 
-  // picker返回的是索引，不是dogId
-  const index = parseInt(e.detail.value)
-  console.log('[选择的索引]', index)
+  const dog = dogs.value.find(item => item.id === dogId)
+  if (!dog) return
 
-  const dog = dogs.value[index]
-  console.log('[索引对应的狗狗]', dog)
+  selectedDogId.value = dog.id
+  selectedDog.value = dog
+  isCustomPackagePlan.value = false
+  showPackageEditor.value = false
+  packagePlan.value = []
+  packagePlanDogId.value = null
+  resetDiyLifeStageDependentState()
 
-  if (dog) {
-    const dogId = dog.id
-    console.log('[狗狗ID]', dogId)
-
-    // 重要：先更新 selectedDog，再调用其他函数
-    selectedDogId.value = dogId
-    selectedDog.value = dog
-
-    console.log('[DEBUG] selectedDog 已更新:', selectedDog.value.name)
-
-    // 调用饭量计算API
-    await loadDogCalc(dogId)
-
-    console.log('[DEBUG] 准备调用 checkLifeStageMatch')
-    console.log('[DEBUG] 当前 recipe.value.applicableLifeStages:', recipe.value.applicableLifeStages)
-
-    // 校验生命阶段
-    checkLifeStageMatch()
-
-    console.log('[DEBUG] checkLifeStageMatch 调用完成')
-    console.log('[DEBUG] isLifeStageMatch.value:', isLifeStageMatch.value)
-    console.log('[DEBUG] showWarning.value:', showWarning.value)
-  } else {
-    console.error('[错误] 未找到索引对应的狗狗, index:', index, 'dogs.length:', dogs.value.length)
-  }
-
-  console.log('========== [RecipeDiy] onDogPickerChange 结束 ==========')
+  await loadDogCalc(dog.id)
+  checkLifeStageMatch()
 }
 
 async function loadDogCalc(dogId: string) {
@@ -650,6 +708,7 @@ async function loadDogCalc(dogId: string) {
       displayDailyIntakeG.value = res.data.dailyIntakeG
       perMealG.value = res.data.perMealIntakeG
       isPerMealModified.value = false
+      rebuildPackagePlan()
 
       console.log('[计算结果]', {
         dailyIntakeG: res.data.dailyIntakeG,
@@ -718,6 +777,8 @@ function resetDiyLifeStageDependentState() {
   perMealG.value = 0
   isPerMealModified.value = false
   isEditingPerMeal.value = false
+  packagePlan.value = []
+  packagePlanDogId.value = null
 }
 
 async function switchToRecommendedLifeStage() {
@@ -740,6 +801,36 @@ async function switchToRecommendedLifeStage() {
 
 function dismissWarning() {
   showWarning.value = false
+}
+
+function calculateDogAgeText(dog: Dog): string {
+  if (dog.ageText) return dog.ageText
+  if (!dog.birthday) return '年龄未知'
+
+  const birthday = new Date(dog.birthday)
+  if (Number.isNaN(birthday.getTime())) return '年龄未知'
+
+  const now = new Date()
+  let months = (now.getFullYear() - birthday.getFullYear()) * 12
+    + now.getMonth() - birthday.getMonth()
+
+  if (now.getDate() < birthday.getDate()) {
+    months -= 1
+  }
+
+  if (months < 0) return '年龄未知'
+  if (months < 12) return `${months}个月`
+
+  const years = Math.floor(months / 12)
+  return `${years}岁`
+}
+
+function getDogGenderLabel(gender?: string): string {
+  const map: Record<string, string> = {
+    MALE: '弟弟',
+    FEMALE: '妹妹',
+  }
+  return gender ? map[gender] || gender : '性别未知'
 }
 
 function startEditPerMeal() {
@@ -785,59 +876,97 @@ function toggleCalculationDetails() {
 }
 
 function selectCycle(days: number) {
-  cycleDays.value = days
-  customDays.value = '' // 清空自选天数
-  isCustomDaysMode.value = false // 点击预设选项，退出自定义模式
-}
-
-function confirmCustomDays() {
-  const days = Number(customDays.value)
-
-  // 检查是否为数字
-  if (isNaN(days)) {
+  if (isCustomPackagePlan.value) {
     uni.showToast({
-      title: '请输入有效的天数',
+      title: '请先取消自定义分装后再切换配置天数',
       icon: 'none'
     })
     return
   }
 
-  // 检查是否为整数
-  if (!Number.isInteger(days)) {
-    uni.showToast({
-      title: '天数必须是整数',
-      icon: 'none'
-    })
-    return
-  }
-
-  // 检查范围
-  if (days < 1 || days > 90) {
-    uni.showToast({
-      title: '请输入1-90之间的天数',
-      icon: 'none'
-    })
-    return
-  }
-
-  cycleDays.value = days
-
-  // 判断是否为自定义天数（不在预设选项中）
-  isCustomDaysMode.value = !presetDays.includes(days)
-
-  // 清空输入框
-  customDays.value = ''
-}
-
-function editCustomDays() {
-  // 回填当前值到输入框
-  customDays.value = String(cycleDays.value)
-  // 切换回编辑模式
-  isCustomDaysMode.value = false
+  selectedCycleDays.value = days
+  lastSelectedCycleDays.value = days
+  showPackageEditor.value = false
+  rebuildPackagePlan()
 }
 
 function toggleShelfLife() {
   showShelfLife.value = !showShelfLife.value
+}
+
+function rebuildPackagePlan() {
+  packagePlan.value = buildDefaultPackagePlan({
+    dailyIntakeG: displayDailyIntakeG.value,
+    mealsPerDay: selectedDog.value?.mealsPerDay || 2,
+    days: selectedCycleDays.value,
+  })
+  packagePlanDogId.value = selectedDogId.value
+}
+
+function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
+  return {
+    packageSpecG: normalizePackageSpecValue(row.packageSpecG),
+    packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
+  }
+}
+
+function normalizePackageSpecValue(value: string | number | null | undefined): number {
+  const normalized = Math.floor(Number(value))
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
+}
+
+function togglePackageEditor() {
+  if (isCustomPackagePlan.value) {
+    cancelCustomPackagePlan()
+    return
+  }
+
+  lastSelectedCycleDays.value = selectedCycleDays.value || lastSelectedCycleDays.value
+  isCustomPackagePlan.value = true
+  showPackageEditor.value = true
+}
+
+function cancelCustomPackagePlan() {
+  isCustomPackagePlan.value = false
+  showPackageEditor.value = false
+  selectedCycleDays.value = lastSelectedCycleDays.value
+  rebuildPackagePlan()
+}
+
+function addPackagePlanRow() {
+  packagePlan.value = [
+    ...packagePlan.value,
+    {
+      packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
+      packageCount: 1,
+    },
+  ]
+}
+
+function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
+  const nextValue = field === 'packageSpecG'
+    ? normalizePackageSpecValue(value)
+    : Math.max(1, Math.floor(Number(value) || 1))
+  packagePlan.value = packagePlan.value.map((row, rowIndex) =>
+    rowIndex === index ? { ...row, [field]: nextValue } : row
+  )
+}
+
+function removePackagePlanRow(index: number) {
+  if (packagePlan.value.length <= 1) {
+    return
+  }
+  packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
+}
+
+function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
+  const primaryRow = [...plan].sort(
+    (left, right) =>
+      right.packageCount - left.packageCount
+      || right.packageSpecG - left.packageSpecG,
+  )[0]
+
+  return primaryRow?.packageSpecG || 1
 }
 
 function generateSheet() {
@@ -848,6 +977,22 @@ function generateSheet() {
   if (!selectedDogId.value) {
     uni.showToast({
       title: '请先选择狗狗档案',
+      icon: 'none'
+    })
+    return
+  }
+
+  if (!canGenerateSheet.value) {
+    uni.showToast({
+      title: '饭量和分装生成中，请稍后',
+      icon: 'none'
+    })
+    return
+  }
+
+  if (packagePlanValidationMessage.value) {
+    uni.showToast({
+      title: packagePlanValidationMessage.value,
       icon: 'none'
     })
     return
@@ -911,14 +1056,17 @@ function navigateToSheet() {
   const params = {
     recipeId: recipeId.value,
     dogId: selectedDogId.value,
-    cycleDays: cycleDays.value,
+    cycleDays: selectedCycleDays.value,
     perMealG: Math.round(perMealG.value),
     isPerMealModified: isPerMealModified.value,
     dailyIntakeG: Math.round(displayDailyIntakeG.value),
+    packageCount: totalPackages.value,
+    packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
+    packagePlan: JSON.stringify(normalizedPackagePlan.value),
   }
 
-  const queryString = Object.keys(params)
-    .map(key => `${key}=${encodeURIComponent(params[key])}`)
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
     .join('&')
 
   // 跳转到制作单页面
@@ -1138,6 +1286,105 @@ function getNutritionStandardLabel(standard: string): string {
   line-height: 1.5;
 }
 
+.dog-feeding-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.order-dog-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.order-dog-chip {
+  width: 214rpx;
+  min-height: 86rpx;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-right: 14rpx;
+  padding: 12rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #edf0f2;
+  background-color: #f8faf9;
+  color: #25282b;
+  vertical-align: middle;
+}
+
+.order-dog-chip.active {
+  border-color: #2f8f4e;
+  background-color: #f0faf3;
+}
+
+.order-dog-avatar {
+  flex: 0 0 auto;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  background-color: #e8efe9;
+}
+
+.order-dog-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.order-dog-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 25rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.order-dog-chip.active .order-dog-name {
+  color: #226d3a;
+}
+
+.dog-profile-context {
+  padding: 14rpx 16rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+  border: 1rpx solid #edf0f2;
+}
+
+.dog-profile-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.dog-profile-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  max-width: 100%;
+  padding: 4rpx 10rpx;
+  border-radius: 6rpx;
+  background-color: #fff;
+  color: #25282b;
+  line-height: 1.35;
+}
+
+.dog-profile-fact-label {
+  font-size: 21rpx;
+  color: #7a838b;
+}
+
+.dog-profile-fact-value {
+  min-width: 0;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #25282b;
+  word-break: keep-all;
+}
+
 /* 警告卡片 */
 .warning-card {
   background-color: #fffbe6;
@@ -1225,6 +1472,30 @@ function getNutritionStandardLabel(standard: string): string {
 
 .feeding-value.readonly {
   color: #666;
+}
+
+.dog-feeding-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.dog-feeding-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 16rpx 10rpx;
+  background-color: #f8faf9;
+  border-radius: 8rpx;
+  text-align: center;
+}
+
+.dog-feeding-item:nth-child(3),
+.daily-intake-item {
+  background-color: #f4fbf5;
 }
 
 .feeding-adjustment-note {
@@ -1457,10 +1728,127 @@ function getNutritionStandardLabel(standard: string): string {
   background-color: #f0f9ff;
 }
 
+.cycle-option.disabled {
+  opacity: 0.5;
+}
+
 .cycle-text {
   font-size: 28rpx;
   font-weight: bold;
   color: #333;
+}
+
+.package-plan-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.package-plan-inline-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #25282b;
+  line-height: 1.45;
+}
+
+.package-edit-button {
+  min-width: 172rpx;
+  height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 18rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #2f8f4e;
+  color: #2f8f4e;
+  background-color: #fff;
+  font-size: 25rpx;
+}
+
+.min-order-warning {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  background-color: #fff7e8;
+  border: 1rpx solid #f3c67d;
+  border-radius: 8rpx;
+}
+
+.package-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.package-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+}
+
+.package-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.package-input-label,
+.package-input-unit {
+  font-size: 24rpx;
+  color: #687078;
+}
+
+.package-input {
+  width: 116rpx;
+  height: 58rpx;
+  text-align: center;
+  border: 1rpx solid #d8dee4;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #25282b;
+  background-color: #fff;
+}
+
+.btn-add-row,
+.btn-remove-row {
+  min-width: 118rpx;
+  height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.btn-add-row {
+  width: 100%;
+  border: 1rpx dashed #2f8f4e;
+  color: #2f8f4e;
+  background-color: #fff;
+}
+
+.btn-remove-row {
+  border: none;
+  color: #687078;
+  background-color: #eef1f3;
+}
+
+.btn-remove-row[disabled] {
+  color: #b7bdc3;
 }
 
 .custom-cycle-inline {

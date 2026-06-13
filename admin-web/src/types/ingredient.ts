@@ -384,7 +384,7 @@ export interface ActiveNutrientValue {
 
 // 购买链接配置
 export interface PurchaseLinkConfig {
-  url: string; // 购买链接URL
+  url?: string; // 旧购买链接URL（兼容历史数据）
   platform: "TAOBAO" | "JD" | "PINDUODUO" | "IHERB" | "OTHER" | "WEBVIEW"; // 平台类型
   mini_program_appid?: string; // 小程序appid（跳转小程序时必需）
   mini_program_path?: string; // 小程序路径（跳转小程序时必需）

@@ -61,6 +61,7 @@ export class DIYSheetStorageService {
           cycleDays: dto.cycleDays,
           perMealG: dto.perMealG,
           dailyIntakeG: dto.dailyIntakeG,
+          packagePlan: dto.packagePlan as any,
           purchaseList: dto.purchaseList as any,
           productionSteps: dto.productionSteps,
         },
@@ -79,6 +80,7 @@ export class DIYSheetStorageService {
         cycleDays: dto.cycleDays,
         perMealG: dto.perMealG,
         dailyIntakeG: dto.dailyIntakeG,
+        packagePlan: dto.packagePlan as any,
         purchaseList: dto.purchaseList as any, // Prisma Json类型需要使用any
         productionSteps: dto.productionSteps,
       },
@@ -145,6 +147,7 @@ export class DIYSheetStorageService {
       cycleDays: sheet.cycleDays,
       perMealG: sheet.perMealG,
       dailyIntakeG: sheet.dailyIntakeG,
+      packagePlan: sheet.packagePlan ?? null,
       purchaseList: sheet.purchaseList,
       productionSteps: sheet.productionSteps,
       createdAt: sheet.createdAt.toISOString(),

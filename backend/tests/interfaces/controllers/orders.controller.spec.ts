@@ -1143,7 +1143,10 @@ describe('OrdersController (e2e)', () => {
       const order1 = createTestOrder({
         id: 'order-id-1',
         customerId,
-        status: OrderStatus.INIT,
+        status: OrderStatus.SHIPPED,
+        paymentMethod: 'WECHAT_PAY',
+        transactionId: '4200000000000000001',
+        paymentStatus: 'SUCCESS',
         items: [
           createTestOrderItem({
             id: 'item-id-1',
@@ -1205,6 +1208,15 @@ describe('OrdersController (e2e)', () => {
       const orderIds = summaries.map((s: { id: string }) => s.id);
       expect(orderIds).toContain('order-id-1');
       expect(orderIds).toContain('order-id-2');
+
+      const wechatPaidSummary = summaries.find(
+        (summary: { id: string }) => summary.id === 'order-id-1',
+      );
+      expect(wechatPaidSummary).toMatchObject({
+        paymentMethod: 'WECHAT_PAY',
+        transactionId: '4200000000000000001',
+        paymentStatus: 'SUCCESS',
+      });
     });
 
     it('should not leak other customer orders', async () => {

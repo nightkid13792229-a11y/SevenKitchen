@@ -1145,6 +1145,7 @@ model DIYSheet {
   cycleDays       Int      @map("cycle_days")
   perMealG        Float    @map("per_meal_g")
   dailyIntakeG    Float    @map("daily_intake_g")
+  packagePlan     Json?    @map("package_plan")
   purchaseList    Json     @map("purchase_list")
   productionSteps String?  @map("production_steps")
   createdAt       DateTime @default(now()) @map("created_at")

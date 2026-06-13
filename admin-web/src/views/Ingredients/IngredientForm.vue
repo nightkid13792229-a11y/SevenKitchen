@@ -727,7 +727,7 @@
             >新增DIY推荐商品</el-button
           >
           <span class="hint-text" style="margin-left: 8px"
-            >面向用户家庭制作场景，维护带广告联盟链接的推荐商品</span
+            >面向用户家庭制作场景，维护可直接跳转的商品小程序链接</span
           >
         </div>
         <div v-if="recommendedProducts.length === 0" class="rp-empty">
@@ -783,6 +783,8 @@
             <div
               v-if="
                 rp.purchaseChannel ||
+                rp.purchaseLink?.mini_program_appid ||
+                rp.purchaseLink?.mini_program_path ||
                 rp.purchaseLink?.url ||
                 rp.imageUrl
               "
@@ -791,7 +793,8 @@
               <span v-if="rp.purchaseChannel"
                 >渠道：{{ rp.purchaseChannel }}</span
               >
-              <span v-if="rp.purchaseLink?.url">已配置推荐链接</span>
+              <span v-if="rp.purchaseLink?.mini_program_appid && rp.purchaseLink?.mini_program_path">已配置小程序商品链接</span>
+              <span v-else-if="rp.purchaseLink?.url">仅有旧链接，需补小程序路径</span>
               <span v-if="rp.imageUrl">已配置商品图片</span>
             </div>
           </div>
@@ -959,7 +962,7 @@
         class="sku-dialog-alert"
       >
         这里记录的是面向家庭 DIY
-        的推荐商品，可配置购买链接和商品图片，方便小程序端展示给用户。
+        的推荐商品，可配置商品小程序链接和商品图片，方便小程序端展示并直接跳转。
       </el-alert>
       <el-form-item label="SKU 名称" required>
         <el-input
@@ -994,7 +997,7 @@
           style="width: 300px"
         />
       </el-form-item>
-      <el-form-item label="购买链接">
+      <el-form-item label="商品小程序链接">
         <div style="width: 100%">
           <el-select
             v-model="rpForm.purchaseLinkPlatform"
@@ -1009,10 +1012,18 @@
             <el-option label="网页链接" value="WEBVIEW" />
           </el-select>
           <el-input
-            v-model="rpForm.purchaseLinkUrl"
-            placeholder="商品购买链接"
+            v-model="rpForm.purchaseLinkMiniProgramAppId"
+            placeholder="目标小程序 AppID，如 wx91d27dbf599dff74"
+            style="width: 100%; margin-bottom: 8px"
+          />
+          <el-input
+            v-model="rpForm.purchaseLinkMiniProgramPath"
+            placeholder="商品页路径，如 pages/product/detail?id=123"
             style="width: 100%"
           />
+          <div class="form-tip">
+            用户点击“去购买”后会直接打开该小程序商品页；不要再填写淘口令或外部 App 链接。
+          </div>
         </div>
       </el-form-item>
       <el-form-item label="商品图片">
@@ -2463,8 +2474,9 @@ const rpForm = reactive({
   brand: '',
   productModel: '',
   purchaseChannel: '',
-  purchaseLinkUrl: '',
   purchaseLinkPlatform: 'TAOBAO' as string,
+  purchaseLinkMiniProgramAppId: '',
+  purchaseLinkMiniProgramPath: '',
   imageUrl: '',
   isActive: true,
   sortOrder: 0,
@@ -2698,8 +2710,11 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.brand = rp.brand || ''
     rpForm.productModel = rp.productModel || ''
     rpForm.purchaseChannel = rp.purchaseChannel || ''
-    rpForm.purchaseLinkUrl = rp.purchaseLink?.url || ''
     rpForm.purchaseLinkPlatform = rp.purchaseLink?.platform || 'TAOBAO'
+    rpForm.purchaseLinkMiniProgramAppId =
+      rp.purchaseLink?.mini_program_appid || ''
+    rpForm.purchaseLinkMiniProgramPath =
+      rp.purchaseLink?.mini_program_path || ''
     rpForm.imageUrl = rp.imageUrl || ''
     rpForm.isActive = rp.isActive
     rpForm.sortOrder = rp.sortOrder
@@ -2710,8 +2725,9 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.brand = ''
     rpForm.productModel = ''
     rpForm.purchaseChannel = ''
-    rpForm.purchaseLinkUrl = ''
     rpForm.purchaseLinkPlatform = 'TAOBAO'
+    rpForm.purchaseLinkMiniProgramAppId = ''
+    rpForm.purchaseLinkMiniProgramPath = ''
     rpForm.imageUrl = ''
     rpForm.isActive = true
     rpForm.sortOrder = 0
@@ -2860,8 +2876,19 @@ const saveRp = async () => {
   }
   if (!props.ingredient?.id) return
 
-  const purchaseLink = rpForm.purchaseLinkUrl
-    ? { url: rpForm.purchaseLinkUrl, platform: rpForm.purchaseLinkPlatform }
+  const miniProgramAppId = rpForm.purchaseLinkMiniProgramAppId.trim()
+  const miniProgramPath = rpForm.purchaseLinkMiniProgramPath.trim()
+  if ((miniProgramAppId && !miniProgramPath) || (!miniProgramAppId && miniProgramPath)) {
+    ElMessage.warning('请同时填写目标小程序 AppID 和商品页路径')
+    return
+  }
+
+  const purchaseLink = miniProgramAppId && miniProgramPath
+    ? {
+        platform: rpForm.purchaseLinkPlatform,
+        mini_program_appid: miniProgramAppId,
+        mini_program_path: miniProgramPath,
+      }
     : undefined
 
   const data: RecommendedProductForm = {
@@ -3610,6 +3637,13 @@ const handleCancel = () => {
 
 .sku-dialog-alert {
   margin-bottom: 16px;
+}
+
+.form-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 
 .rp-card-detail {

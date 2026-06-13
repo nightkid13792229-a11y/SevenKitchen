@@ -79,13 +79,15 @@
           <text class="info-text">
             制作周期：{{ cycleDays }}天 | 每餐：{{ perMealG }}g | 每日：{{ dailyIntakeG }}g
           </text>
+          <text class="info-text secondary-info-text">
+            分装：{{ packagePlanSummaryText }}
+          </text>
+          <text class="info-text secondary-info-text">
+            {{ packagePlanSubText }}
+          </text>
           <text v-if="foodItemsTotal.actualAmount > 0" class="info-text secondary-info-text">
             净食材约 {{ foodItemsTotal.theoreticalAmountStr }} | 采购量约 {{ foodItemsTotal.actualAmountStr }}（含损耗）
           </text>
-        </view>
-
-        <view v-if="pricePreviewWarning" class="preview-warning-summary">
-          <text class="preview-warning-text">{{ pricePreviewWarning }}</text>
         </view>
 
         <!-- 食材 -->
@@ -210,7 +212,11 @@
         <view class="card-title">
           <text class="title-text">分装建议</text>
         </view>
-        <text class="card-content">建议使用食品真空袋抽真空保存</text>
+        <view class="card-content multi-line">
+          <text class="content-line">{{ packagePlanSummaryText }}</text>
+          <text class="content-line">{{ packagePlanSubText }}</text>
+          <text class="content-line">建议使用食品真空袋抽真空保存</text>
+        </view>
       </view>
 
       <!-- 储存&保质期 -->
@@ -328,7 +334,7 @@
                       lazy-load
                     />
                   </view>
-                  <view v-if="rp.purchaseLink" class="rp-card-actions">
+                  <view v-if="canOpenMiniProgramPurchaseLink(rp.purchaseLink)" class="rp-card-actions">
                     <button
                       class="btn-purchase btn-purchase-sm"
                       @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
@@ -364,7 +370,7 @@
                 <text class="spec-detail-field-value">{{ getSpecPurchaseChannelDisplay(currentSpec) }}</text>
               </view>
             </view>
-            <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink" class="spec-detail-aside">
+            <view v-if="currentSpec.imageUrl || canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)" class="spec-detail-aside">
               <view v-if="currentSpec.imageUrl" class="spec-image-block">
                 <image
                   :src="getOptimizedProductImageUrl(currentSpec.imageUrl)"
@@ -373,7 +379,7 @@
                   lazy-load
                 />
               </view>
-              <view v-if="currentSpec.purchaseLink" class="spec-detail-actions">
+              <view v-if="canOpenMiniProgramPurchaseLink(currentSpec.purchaseLink)" class="spec-detail-actions">
                 <button
                   class="btn-purchase btn-purchase-sm"
                   @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
@@ -523,6 +529,7 @@ import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
+import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
 import { formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   formatSupplementTargets,
@@ -537,16 +544,18 @@ import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
+  canOpenMiniProgramPurchaseLink,
   formatFoodSelectedProductDisplayText,
   formatRecommendationActionLabel,
   formatSelectedProductDisplayText,
+  getMiniProgramPurchaseAppId,
+  getMiniProgramPurchasePath,
   getPurchaseTipByPlatform,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
 import {
   buildFallbackFoodIngredientItems,
-  collectFoodIngredientIdsForRecommendations,
-  getDiySheetPricePreviewWarning
+  collectFoodIngredientIdsForRecommendations
 } from './fallback'
 
 // 页面参数
@@ -555,6 +564,7 @@ const dogId = ref('')
 const cycleDays = ref(7)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
+const packagePlan = ref<PackagePlanItem[]>([])
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -613,7 +623,6 @@ const previewImageUrl = ref('')
 const isPageDataLoaded = ref(false)
 const isGeneratingImage = ref(false)
 const showWarning = ref(true)
-const pricePreviewWarning = ref('')
 
 const PRINT_CANVAS_LOGICAL_WIDTH = 1200
 const PRINT_CANVAS_LOGICAL_HEIGHT = 1697
@@ -627,7 +636,23 @@ const printCanvasStyle = computed(() => ({
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
-const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)
+const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
+const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || dailyIntakeG.value * cycleDays.value)
+const packagePlanSummaryText = computed(() => {
+  if (packagePlan.value.length === 0) {
+    return `${Math.round(perMealG.value)}g×${Math.max(1, Math.round(totalFoodNetWeightG.value / Math.max(perMealG.value, 1)))}袋`
+  }
+
+  return packagePlan.value
+    .map(row => `${row.packageSpecG}g×${row.packageCount}袋`)
+    .join('，')
+})
+const packagePlanSubText = computed(() => {
+  const totalPackages = packagePlanTotal.value.totalPackages
+  const totalGrams = totalFoodNetWeightG.value
+  if (!totalPackages || !totalGrams) return '按当前饭量生成分装'
+  return `共 ${totalPackages}袋 / 总净重 ${Math.round(totalGrams)}g`
+})
 
 const ingredientDetails = computed(() => {
   return pricePreview.value?.pricingBreakdown?.ingredientDetails || []
@@ -883,6 +908,55 @@ function formatSupplementAmount(amount: number, unit?: string): string {
   return `${amount}${unit || 'g'}`
 }
 
+function parsePackagePlanParam(value: string | undefined): PackagePlanItem[] {
+  if (!value) return []
+
+  try {
+    const decoded = decodeURIComponent(value)
+    const parsed = JSON.parse(decoded)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((row: any) => {
+        const packageSpecG = Math.floor(Number(row?.packageSpecG))
+        const packageCount = Math.floor(Number(row?.packageCount))
+
+        if (
+          !Number.isFinite(packageSpecG)
+          || !Number.isFinite(packageCount)
+          || packageSpecG <= 0
+          || packageCount <= 0
+        ) {
+          return null
+        }
+
+        return { packageSpecG, packageCount }
+      })
+      .filter((row: PackagePlanItem | null): row is PackagePlanItem => row !== null)
+  } catch (error) {
+    console.warn('[DIYSheet] packagePlan 参数解析失败:', error)
+    return []
+  }
+}
+
+function buildLegacyPackagePlan(): PackagePlanItem[] {
+  const totalG = dailyIntakeG.value * cycleDays.value
+  const packageSpecG = Math.max(1, Math.round(perMealG.value || dailyIntakeG.value || totalG || 1))
+  const packageCount = Math.max(1, Math.round(totalG / packageSpecG))
+
+  return [{ packageSpecG, packageCount }]
+}
+
+function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
+  const primaryRow = [...plan].sort(
+    (left, right) =>
+      right.packageCount - left.packageCount
+      || right.packageSpecG - left.packageSpecG,
+  )[0]
+
+  return primaryRow?.packageSpecG || Math.max(1, Math.round(perMealG.value || 1))
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
@@ -895,6 +969,10 @@ onMounted(() => {
   cycleDays.value = parseInt(options.cycleDays || '7')
   perMealG.value = parseFloat(options.perMealG || '0')
   dailyIntakeG.value = parseFloat(options.dailyIntakeG || '0')
+  packagePlan.value = parsePackagePlanParam(options.packagePlan)
+  if (packagePlan.value.length === 0) {
+    packagePlan.value = buildLegacyPackagePlan()
+  }
 
   if (recipeId.value && dogId.value) {
     loadData()
@@ -953,6 +1031,7 @@ async function autoSaveDiySheet() {
         cycleDays: cycleDays.value,
         perMealG: perMealG.value,
         dailyIntakeG: dailyIntakeG.value,
+        packagePlan: packagePlan.value,
         purchaseList: purchaseListData.value,
         productionSteps: recipe.value.productionSteps
       }
@@ -1044,10 +1123,9 @@ async function loadDog() {
 
 async function loadPricePreview() {
   try {
-    // 计算总重量和包装规格
-    const totalG = dailyIntakeG.value * cycleDays.value
-    const pkgSpecG = perMealG.value
-    const pkgCount = Math.round(totalG / pkgSpecG)
+    const totalG = totalFoodNetWeightG.value
+    const pkgSpecG = getPrimaryPackageSpecG(packagePlan.value)
+    const pkgCount = packagePlanTotal.value.totalPackages || Math.max(1, Math.round(totalG / pkgSpecG))
 
     const res = await request({
       url: '/orders/pricing/preview',
@@ -1061,6 +1139,7 @@ async function loadPricePreview() {
           quantityG: totalG,
           packageCount: pkgCount,
           packageSpecG: pkgSpecG,
+          packagePlan: packagePlan.value,
           cycleDays: cycleDays.value,
           dailyIntakeG: dailyIntakeG.value
         }]
@@ -1069,13 +1148,11 @@ async function loadPricePreview() {
 
     if (res.code === 0 && res.data) {
       pricePreview.value = res.data
-      pricePreviewWarning.value = ''
-      console.log('[DIYSheet] 价格预览加载成功')
+      console.log('[DIYSheet] DIY清单明细加载成功')
     }
   } catch (error) {
     pricePreview.value = null
-    pricePreviewWarning.value = getDiySheetPricePreviewWarning(error)
-    console.error('[DIYSheet] Load price preview error:', error)
+    console.error('[DIYSheet] Load DIY sheet details error:', error)
     // 不显示错误提示，因为采购清单可以降级处理
   }
 }
@@ -1227,8 +1304,8 @@ async function handlePrint() {
         dogSub: `专为 ${dog.value.name} 生成`,
         cycle: `${cycleDays.value}天`,
         cycleSub: `每日 ${dailyIntakeG.value}g，每餐 ${perMealG.value}g`,
-        packagePlan: `${perMealG.value}g × ${cycleDays.value * dog.value.mealsPerDay}份`,
-        packageSub: '每餐一份',
+        packagePlan: packagePlanSummaryText.value,
+        packageSub: packagePlanSubText.value,
         formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard),
         formulaSource: displayRecipeFormulaSoftwareLabel.value
       })
@@ -1404,6 +1481,7 @@ async function handleSave() {
       cycleDays: cycleDays.value,
       perMealG: perMealG.value,
       dailyIntakeG: dailyIntakeG.value,
+      packagePlan: packagePlan.value,
       purchaseList: purchaseListData.value,
       productionSteps: recipe.value.productionSteps
     }
@@ -1439,8 +1517,11 @@ async function handleSave() {
 }
 
 // 分享配置
+const packagePlanQueryParam = computed(() =>
+  `packagePlan=${encodeURIComponent(JSON.stringify(packagePlan.value))}`
+)
 const sharePath = computed(() => {
-  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}`
+  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}`
 })
 
 const shareTitle = computed(() => {
@@ -1541,42 +1622,34 @@ function detectPlatformFromUrl(url: string): string {
   return 'OTHER'
 }
 
-// 处理购买链接 - 复制到剪贴板
+// 处理推荐商品购买链接 - 直接跳转目标商品小程序
 function handlePurchase(purchaseLink: any, productName: string) {
   if (!purchaseLink) {
     uni.showToast({
-      title: '购买链接未配置',
+      title: '商品链接未配置',
       icon: 'none'
     })
     return
   }
 
-  const { url, platform } = purchaseLink
-
-  if (!url) {
+  if (!canOpenMiniProgramPurchaseLink(purchaseLink)) {
     uni.showToast({
-      title: '购买链接未配置',
+      title: '请先配置小程序商品链接',
       icon: 'none'
     })
     return
   }
 
-  // 复制链接到剪贴板
-  uni.setClipboardData({
-    data: url,
+  uni.navigateToMiniProgram({
+    appId: getMiniProgramPurchaseAppId(purchaseLink),
+    path: getMiniProgramPurchasePath(purchaseLink),
     success: () => {
-      const tip = getPurchaseTipByPlatform(platform)
-      uni.showModal({
-        title: productName,
-        content: tip,
-        showCancel: false,
-        confirmText: '知道了'
-      })
+      console.log('[DIYSheet] 商品小程序跳转成功:', productName)
     },
     fail: (err) => {
-      console.error('[DIYSheet] 复制失败:', err)
+      console.error('[DIYSheet] 商品小程序跳转失败:', err)
       uni.showToast({
-        title: '复制失败，请重试',
+        title: '跳转失败，请稍后重试',
         icon: 'none'
       })
     }
@@ -1755,7 +1828,7 @@ onShareAppMessage(() => {
 onShareTimeline(() => {
   return {
     title: shareTitle.value,
-    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}`,
+    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}`,
     imageUrl: normalizeImageUrl(recipe.value.coverImageUrl) || ''
   }
 })

@@ -326,7 +326,7 @@ describe('mp-weixin build asset regressions', () => {
     expect(existsSync(resolve(distDir, 'utils/api.js'))).toBe(true)
   })
 
-  it('keeps dog profile helper fallbacks in the main package for WeChat upload compilation', () => {
+  it('removes dog profile helper fallbacks from the main package after localizing them', () => {
     const { localizeSubpackageOnlyModules } = requireScript('../scripts/fix-components-injection.js')
     const distDir = mkdtempSync(resolve(tmpdir(), 'sevenkitchen-mp-weixin-dog-profile-'))
     const appJson = {
@@ -357,6 +357,6 @@ describe('mp-weixin build asset regressions', () => {
       'require("./utils/dog-profile-draft.js")',
     )
     expect(existsSync(resolve(distDir, 'pages/dog-create/utils/dog-profile-draft.js'))).toBe(true)
-    expect(existsSync(resolve(distDir, 'utils/dog-profile-draft.js'))).toBe(true)
+    expect(existsSync(resolve(distDir, 'utils/dog-profile-draft.js'))).toBe(false)
   })
 })

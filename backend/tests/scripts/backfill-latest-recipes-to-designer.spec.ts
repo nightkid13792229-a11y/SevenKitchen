@@ -307,6 +307,86 @@ describe('latest recipe designer backfill', () => {
     });
   });
 
+  it('applies private custom recipes as series-linked published designer source drafts', async () => {
+    const prisma = createPrismaMock([
+      recipe({
+        id: 'private-row-1',
+        recipeId: 'private-recipe-1',
+        version: 2,
+        status: 'PRIVATE_CUSTOM',
+        name: 'Lucky 定制食谱',
+        seriesId: 'series-lucky',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        customerDogId: 'dog-lucky',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      }),
+    ]);
+
+    const counters = await runLatestRecipeDesignerBackfill({
+      prisma,
+      apply: true,
+      privateCustomOnly: true,
+      logger: { info: jest.fn(), error: jest.fn() },
+    });
+
+    expect(counters.applied).toBe(1);
+    expect(prisma.recipe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: { in: ['PRIVATE_CUSTOM'] },
+        },
+      }),
+    );
+    expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'Lucky 定制食谱',
+        status: 'PUBLISHED',
+        fediafDogScenario: 'ADULT_MER_95',
+        publishedRecipeId: 'private-recipe-1',
+        publishedRecipeVersion: 2,
+        seriesId: 'series-lucky',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        customerDogId: 'dog-lucky',
+      }),
+      select: { id: true },
+    });
+  });
+
+  it('drops overlong legacy preparation method ids during designer backfill', async () => {
+    const prisma = createPrismaMock([
+      recipe({
+        items: [
+          item({
+            preparationMethod: [
+              'a6409a79-402b-41d1-bfe1-031a67da0876',
+              'dd27baa4-36cb-4405-9092-0eb37e6160fa',
+              '7ac2b49e-63fc-4cfa-b48d-6e0b0681958d',
+            ].join(', '),
+          }),
+        ],
+      }),
+    ]);
+
+    await runLatestRecipeDesignerBackfill({
+      prisma,
+      apply: true,
+      logger: { info: jest.fn(), error: jest.fn() },
+    });
+
+    expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        items: {
+          create: [
+            expect.objectContaining({
+              preparationMethod: null,
+            }),
+          ],
+        },
+      }),
+      select: { id: true },
+    });
+  });
+
   it('skips latest recipes that already have a published designer source draft', async () => {
     const prisma = createPrismaMock(
       [recipe({ recipeId: 'recipe-series-1', version: 3 })],
@@ -337,11 +417,13 @@ describe('latest recipe designer backfill', () => {
         '--recipe-id',
         'recipe-series-1',
         '--include-draft-status',
+        '--private-custom-only',
       ]),
     ).toEqual({
       apply: true,
       recipeId: 'recipe-series-1',
       includeDraftStatus: true,
+      privateCustomOnly: true,
     });
   });
 });

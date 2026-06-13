@@ -469,6 +469,99 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
   });
 });
 
+describe('WechatShippingUploadService uploadForOrder', () => {
+  let service: WechatShippingUploadService;
+  let mockPrisma: {
+    order: { findUnique: jest.Mock };
+    paymentConfig: { upsert: jest.Mock };
+    userWechatIdentity: { findFirst: jest.Mock };
+  };
+  let mockWechatService: {
+    uploadShippingInfo: jest.Mock;
+  };
+
+  beforeEach(() => {
+    mockPrisma = {
+      order: {
+        findUnique: jest.fn(),
+      },
+      paymentConfig: {
+        upsert: jest.fn(),
+      },
+      userWechatIdentity: {
+        findFirst: jest.fn(),
+      },
+    };
+    mockWechatService = {
+      uploadShippingInfo: jest.fn(),
+    };
+    service = new WechatShippingUploadService(
+      mockPrisma as any,
+      mockWechatService as any,
+    );
+  });
+
+  it('uses the openid for the configured payment app when uploading shipping info', async () => {
+    mockPrisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      paymentMethod: 'WECHAT_PAY',
+      transactionId: '4200000000000000001',
+      trackingNumber: 'SF123456789',
+      carrierCode: 'SF',
+      customerId: 'customer-1',
+      customer: {
+        id: 'customer-1',
+        phone: '17700000000',
+        wechatOpenid: 'legacy-primary-app-openid',
+      },
+      address: {
+        phone: '17700000000',
+      },
+      items: [
+        {
+          recipeSnapshot: {
+            name: '鲜食套餐',
+          },
+        },
+      ],
+    });
+    mockPrisma.paymentConfig.upsert.mockResolvedValue({
+      appId: 'wx-payment-app',
+      mchId: '1900000001',
+    });
+    mockPrisma.userWechatIdentity.findFirst.mockResolvedValue({
+      openid: 'payment-app-openid',
+    });
+    mockWechatService.uploadShippingInfo.mockResolvedValue({
+      errcode: 0,
+      errmsg: 'ok',
+    });
+
+    await service.uploadForOrder('order-1');
+
+    expect(mockPrisma.userWechatIdentity.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: 'customer-1',
+        appId: 'wx-payment-app',
+      },
+      orderBy: {
+        lastLoginAt: 'desc',
+      },
+      select: {
+        openid: true,
+      },
+    });
+    expect(mockWechatService.uploadShippingInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payer: {
+          openid: 'payment-app-openid',
+        },
+      }),
+      'wx-payment-app',
+    );
+  });
+});
+
 describe('WechatShippingUploadService queryShippingOrderStatus', () => {
   let service: WechatShippingUploadService;
   let mockPrisma: {

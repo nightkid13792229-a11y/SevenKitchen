@@ -115,14 +115,6 @@ export class WechatShippingUploadService {
       };
     }
 
-    if (!order.customer.wechatOpenid) {
-      return {
-        success: false,
-        skipped: true,
-        message: '订单用户缺少微信 openid，无法上传微信发货信息',
-      };
-    }
-
     if (!order.trackingNumber || !order.carrierCode) {
       return {
         success: false,
@@ -146,6 +138,19 @@ export class WechatShippingUploadService {
         success: false,
         skipped: true,
         message: '后台支付配置缺少微信支付商户号，无法上传微信发货信息',
+      };
+    }
+
+    const payerOpenid = await this.resolveShippingPayerOpenid(
+      order.customerId,
+      paymentConfig.appId,
+      order.customer.wechatOpenid,
+    );
+    if (!payerOpenid) {
+      return {
+        success: false,
+        skipped: true,
+        message: '订单用户缺少微信 openid，无法上传微信发货信息',
       };
     }
 
@@ -175,7 +180,7 @@ export class WechatShippingUploadService {
       ],
       upload_time: this.formatWechatTimestamp(new Date()),
       payer: {
-        openid: order.customer.wechatOpenid,
+        openid: payerOpenid,
       },
     };
 
@@ -537,6 +542,33 @@ export class WechatShippingUploadService {
 
   private toOutTradeNo(orderId: string) {
     return orderId.replace(/-/g, '');
+  }
+
+  private async resolveShippingPayerOpenid(
+    customerId: string,
+    appId?: string | null,
+    legacyOpenid?: string | null,
+  ) {
+    if (appId) {
+      const identity = await this.prisma.userWechatIdentity.findFirst({
+        where: {
+          userId: customerId,
+          appId,
+        },
+        orderBy: {
+          lastLoginAt: 'desc',
+        },
+        select: {
+          openid: true,
+        },
+      });
+
+      if (identity?.openid) {
+        return identity.openid;
+      }
+    }
+
+    return legacyOpenid || null;
   }
 
   private resolveSpecialShippingDelayTo(paidAt: Date) {

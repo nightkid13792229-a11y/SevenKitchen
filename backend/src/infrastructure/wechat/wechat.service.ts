@@ -80,6 +80,8 @@ interface WechatShippingInfoResponse {
   errmsg: string;
 }
 
+const WECHAT_SHIPPING_INFO_NOT_UPDATED = 10060023;
+
 export type WechatShippingOrderQuery =
   | {
       transactionId: string;
@@ -507,7 +509,10 @@ export class WechatService {
     const response = await axios.post<WechatShippingInfoResponse>(url, payload);
     const data = response.data;
 
-    if (data.errcode !== 0) {
+    if (
+      data.errcode !== 0 &&
+      data.errcode !== WECHAT_SHIPPING_INFO_NOT_UPDATED
+    ) {
       throw new Error(
         `WeChat shipping upload failed: ${data.errcode} - ${data.errmsg}`,
       );

@@ -28,6 +28,7 @@ import {
   ALLERGY_RECORD_REPOSITORY,
 } from 'src/application/health/health.service';
 import { WeightRecordService } from 'src/application/weight-record/weight-record.service';
+import { OrderService } from 'src/application/order/order.service';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { TencentCosService } from 'src/infrastructure/services/tencent-cos.service';
 
@@ -85,6 +86,9 @@ describe('AuthGuard (e2e)', () => {
     delete: jest.fn(),
     updateSyncedToProfile: jest.fn(),
   };
+  const mockOrderService = {
+    listDogFinishedFoodHistory: jest.fn(),
+  };
   const mockCosService = {
     uploadImage: jest.fn(),
     deleteImage: jest.fn(),
@@ -132,6 +136,10 @@ describe('AuthGuard (e2e)', () => {
         {
           provide: WeightRecordService,
           useValue: mockWeightRecordService,
+        },
+        {
+          provide: OrderService,
+          useValue: mockOrderService,
         },
         {
           provide: PrismaService,

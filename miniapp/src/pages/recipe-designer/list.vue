@@ -210,7 +210,7 @@
           </view>
 
           <view class="inferred-scenario-row">
-            <text class="inferred-scenario-label">确认推导阶段</text>
+            <text class="inferred-scenario-label">已匹配的生命阶段</text>
             <text class="inferred-scenario-value">{{ inferredScenarioLabel }}</text>
           </view>
 

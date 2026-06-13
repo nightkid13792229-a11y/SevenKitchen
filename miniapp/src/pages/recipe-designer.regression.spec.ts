@@ -81,6 +81,8 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('customer-dog-filter')
     expect(listSource).toContain('customer-create-dog-list')
     expect(listSource).toContain('inferredScenarioLabel')
+    expect(listSource).toContain('已匹配的生命阶段')
+    expect(listSource).not.toContain('确认推导阶段')
     expect(listSource).not.toContain('按生命阶段维护通用食谱草稿')
     expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'STAFF'")
     expect(listCustomerModeBlock).toContain("currentUserRole.value !== 'ADMIN'")

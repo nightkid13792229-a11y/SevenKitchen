@@ -41,6 +41,12 @@ import type {
   RecipeListResponseDto,
 } from '../../interfaces/dto/recipes/admin-recipe.dto';
 
+type AdminRecipeUserRecipeEvidence = {
+  customerCreatedSourceDesignRecipeIds: Set<string>;
+  missingSourceDesignRecipeIds: Set<string>;
+  customerUserIds: Set<string>;
+};
+
 @Injectable()
 export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
@@ -521,13 +527,13 @@ export class RecipeService {
       return recipes;
     }
 
-    const customerCreatedSourceDesignRecipeIds =
-      await this.loadCustomerCreatedSourceDesignRecipeIds(recipes);
+    const userRecipeEvidence =
+      await this.loadAdminRecipeUserRecipeEvidence(recipes);
 
     return recipes.map((recipe) => {
       const managementCategory = this.resolveAdminRecipeManagementCategory(
         recipe,
-        customerCreatedSourceDesignRecipeIds,
+        userRecipeEvidence,
       );
 
       return {
@@ -539,9 +545,9 @@ export class RecipeService {
     });
   }
 
-  private async loadCustomerCreatedSourceDesignRecipeIds(
+  private async loadAdminRecipeUserRecipeEvidence(
     recipes: any[],
-  ): Promise<Set<string>> {
+  ): Promise<AdminRecipeUserRecipeEvidence> {
     const sourceDesignRecipeIds = [
       ...new Set(
         recipes
@@ -549,29 +555,44 @@ export class RecipeService {
           .filter((id): id is string => Boolean(id)),
       ),
     ];
+    const customerOwnerIds = [
+      ...new Set(
+        recipes
+          .map((recipe) => recipe.customerOwnerId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const emptyEvidence: AdminRecipeUserRecipeEvidence = {
+      customerCreatedSourceDesignRecipeIds: new Set(),
+      missingSourceDesignRecipeIds: new Set(),
+      customerUserIds: new Set(),
+    };
 
-    if (sourceDesignRecipeIds.length === 0) {
-      return new Set();
+    if (sourceDesignRecipeIds.length === 0 && customerOwnerIds.length === 0) {
+      return emptyEvidence;
     }
 
     const designRecipeClient = (this.prisma as any).designRecipe;
     const userClient = (this.prisma as any).user;
 
-    if (!designRecipeClient?.findMany || !userClient?.findMany) {
-      return new Set();
+    if (!userClient?.findMany) {
+      return emptyEvidence;
     }
 
-    const sourceDesignRecipes = await designRecipeClient.findMany({
-      where: {
-        id: {
-          in: sourceDesignRecipeIds,
-        },
-      },
-      select: {
-        id: true,
-        createdBy: true,
-      },
-    });
+    const sourceDesignRecipes =
+      sourceDesignRecipeIds.length > 0 && designRecipeClient?.findMany
+        ? await designRecipeClient.findMany({
+            where: {
+              id: {
+                in: sourceDesignRecipeIds,
+              },
+            },
+            select: {
+              id: true,
+              createdBy: true,
+            },
+          })
+        : [];
 
     const sourceDesignRecipeById = new Map<string, { createdBy: string }>(
       sourceDesignRecipes.map((designRecipe: any) => [
@@ -586,39 +607,57 @@ export class RecipeService {
           .filter((id: unknown): id is string => Boolean(id)),
       ),
     ];
+    const customerLookupIds = [...new Set([...creatorIds, ...customerOwnerIds])];
 
-    if (creatorIds.length === 0) {
-      return new Set();
+    if (customerLookupIds.length === 0) {
+      return {
+        ...emptyEvidence,
+        missingSourceDesignRecipeIds: new Set(
+          sourceDesignRecipeIds.filter(
+            (sourceDesignRecipeId) =>
+              !sourceDesignRecipeById.has(sourceDesignRecipeId),
+          ),
+        ),
+      };
     }
 
     const customerUsers = await userClient.findMany({
       where: {
         id: {
-          in: creatorIds,
+          in: customerLookupIds,
         },
         role: UserRole.CUSTOMER,
       },
       select: { id: true },
     });
-    const customerUserIds = new Set(
+    const customerUserIds = new Set<string>(
       customerUsers.map((user: { id: string }) => user.id),
     );
 
-    return new Set(
-      sourceDesignRecipeIds.filter((sourceDesignRecipeId) => {
-        const sourceDesignRecipe = sourceDesignRecipeById.get(
-          sourceDesignRecipeId,
-        );
-        return sourceDesignRecipe
-          ? customerUserIds.has(sourceDesignRecipe.createdBy)
-          : false;
-      }),
-    );
+    return {
+      customerCreatedSourceDesignRecipeIds: new Set(
+        sourceDesignRecipeIds.filter((sourceDesignRecipeId) => {
+          const sourceDesignRecipe = sourceDesignRecipeById.get(
+            sourceDesignRecipeId,
+          );
+          return sourceDesignRecipe
+            ? customerUserIds.has(sourceDesignRecipe.createdBy)
+            : false;
+        }),
+      ),
+      missingSourceDesignRecipeIds: new Set(
+        sourceDesignRecipeIds.filter(
+          (sourceDesignRecipeId) =>
+            !sourceDesignRecipeById.has(sourceDesignRecipeId),
+        ),
+      ),
+      customerUserIds,
+    };
   }
 
   private resolveAdminRecipeManagementCategory(
     recipe: any,
-    customerCreatedSourceDesignRecipeIds: Set<string>,
+    userRecipeEvidence: AdminRecipeUserRecipeEvidence,
   ): AdminRecipeManagementCategory {
     if (recipe.status !== RecipeStatus.PRIVATE_CUSTOM) {
       return AdminRecipeManagementCategory.STANDARD;
@@ -626,7 +665,22 @@ export class RecipeService {
 
     if (
       recipe.sourceDesignRecipeId &&
-      customerCreatedSourceDesignRecipeIds.has(recipe.sourceDesignRecipeId)
+      userRecipeEvidence.customerCreatedSourceDesignRecipeIds.has(
+        recipe.sourceDesignRecipeId,
+      )
+    ) {
+      return AdminRecipeManagementCategory.USER_RECIPE;
+    }
+
+    if (
+      recipe.isCustomRecipe &&
+      !recipe.customOrderId &&
+      recipe.sourceDesignRecipeId &&
+      userRecipeEvidence.missingSourceDesignRecipeIds.has(
+        recipe.sourceDesignRecipeId,
+      ) &&
+      recipe.customerOwnerId &&
+      userRecipeEvidence.customerUserIds.has(recipe.customerOwnerId)
     ) {
       return AdminRecipeManagementCategory.USER_RECIPE;
     }

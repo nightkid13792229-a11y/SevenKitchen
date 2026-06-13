@@ -10,6 +10,7 @@ export type LatestRecipeDesignerBackfillArgs = {
   apply: boolean;
   recipeId: string | null;
   includeDraftStatus: boolean;
+  privateCustomOnly: boolean;
 };
 
 export type LatestRecipeBackfillCounters = {
@@ -59,6 +60,9 @@ export type LatestRecipeRecord = {
   description: string | null;
   nutritionDetailedData: unknown;
   nutritionStandard: string | null;
+  seriesId?: string | null;
+  seriesLifeStage?: string | null;
+  customerDogId?: string | null;
   updatedAt?: Date | string | null;
   items: LatestRecipeItemRecord[];
 };
@@ -181,6 +185,12 @@ function resolveBackfillWeightG(item: LatestRecipeItemRecord) {
 
 function shouldIncludeItemInAssessment(item: LatestRecipeItemRecord) {
   return isFinitePositiveNumber(item.exampleWeight);
+}
+
+function normalizeDesignPreparationMethod(value: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 100 ? null : trimmed;
 }
 
 function inferFediafDogScenario(recipe: LatestRecipeRecord): string {
@@ -450,6 +460,9 @@ function buildDesignRecipeCreateData({
     publishedRecipeVersion: recipe.version,
     revisionOfDesignRecipeId: null,
     revisionBaseRecipeId: null,
+    ...(recipe.seriesId ? { seriesId: recipe.seriesId } : {}),
+    ...(recipe.seriesLifeStage ? { seriesLifeStage: recipe.seriesLifeStage } : {}),
+    ...(recipe.customerDogId ? { customerDogId: recipe.customerDogId } : {}),
     items: {
       create: recipe.items.map((recipeItem) => ({
         ingredientId: recipeItem.ingredientId,
@@ -457,7 +470,9 @@ function buildDesignRecipeCreateData({
         weightG: resolveBackfillWeightG(recipeItem)!,
         includeInAssessment: shouldIncludeItemInAssessment(recipeItem),
         ratioPercent: recipeItem.ratioPercent,
-        preparationMethod: recipeItem.preparationMethod,
+        preparationMethod: normalizeDesignPreparationMethod(
+          recipeItem.preparationMethod,
+        ),
         nutrientTargetKey: recipeItem.nutrientTargetKey,
         nutrientTargetValue: recipeItem.nutrientTargetValue,
         sortOrder: recipeItem.sortOrder,
@@ -560,12 +575,14 @@ export async function runLatestRecipeDesignerBackfill({
   logger,
   recipeId,
   includeDraftStatus = false,
+  privateCustomOnly = false,
 }: {
   prisma: LatestRecipeDesignerBackfillPrisma;
   apply: boolean;
   logger: BackfillLogger;
   recipeId?: string | null;
   includeDraftStatus?: boolean;
+  privateCustomOnly?: boolean;
 }): Promise<LatestRecipeBackfillCounters> {
   logger.info(
     apply
@@ -573,11 +590,15 @@ export async function runLatestRecipeDesignerBackfill({
       : 'Dry run: latest recipe designer backfill...',
   );
 
-  const statuses = includeDraftStatus ? ['PUBLIC', 'DRAFT'] : ['PUBLIC'];
+  const statuses = privateCustomOnly
+    ? ['PRIVATE_CUSTOM']
+    : includeDraftStatus
+      ? ['PUBLIC', 'DRAFT']
+      : ['PUBLIC'];
   const recipes = await prisma.recipe.findMany({
     where: {
-      isCustomRecipe: false,
       status: { in: statuses },
+      ...(privateCustomOnly ? {} : { isCustomRecipe: false }),
       ...(recipeId ? { recipeId } : {}),
     },
     include: {
@@ -688,6 +709,7 @@ export function parseLatestRecipeDesignerBackfillArgs(
     apply: false,
     recipeId: null,
     includeDraftStatus: false,
+    privateCustomOnly: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -699,6 +721,10 @@ export function parseLatestRecipeDesignerBackfillArgs(
     }
     if (value === '--include-draft-status') {
       args.includeDraftStatus = true;
+      continue;
+    }
+    if (value === '--private-custom-only') {
+      args.privateCustomOnly = true;
       continue;
     }
     if (value === '--recipe-id') {
@@ -730,6 +756,7 @@ async function main() {
       apply: args.apply,
       recipeId: args.recipeId,
       includeDraftStatus: args.includeDraftStatus,
+      privateCustomOnly: args.privateCustomOnly,
       logger: {
         info: (message) => console.log(message),
         error: (message) => console.error(message),

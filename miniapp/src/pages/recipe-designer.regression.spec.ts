@@ -267,6 +267,16 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).not.toContain('revision-draft-btn')
   })
 
+  it('prefills the recipe rename modal with only the recipe name', () => {
+    const renameSeriesBlock =
+      listSource.match(/function renameSeries[\s\S]*?\n}\n\nfunction duplicateSeries/)?.[0] || ''
+
+    expect(renameSeriesBlock).toContain("title: '重命名食谱'")
+    expect(renameSeriesBlock).toContain('editable: true')
+    expect(renameSeriesBlock).toContain('content: currentName')
+    expect(renameSeriesBlock).not.toContain('content: `当前名称：${currentName}`')
+  })
+
   it('lets staff duplicate a single life stage without editing the original stage', () => {
     expect(apiSource).toContain('duplicateSeriesStage')
     expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')

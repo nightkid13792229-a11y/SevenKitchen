@@ -987,7 +987,7 @@ function renameSeries(seriesItem: RecipeDesignerSeriesCard) {
   const currentName = seriesItem.name || '未命名食谱'
   uni.showModal({
     title: '重命名食谱',
-    content: `当前名称：${currentName}`,
+    content: currentName,
     editable: true,
     placeholderText: '请输入食谱名称',
     confirmText: '保存',

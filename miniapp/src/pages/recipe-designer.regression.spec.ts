@@ -110,6 +110,16 @@ describe('recipe designer mobile entry', () => {
     expect(customerCardBlock).not.toContain('继续设计')
   })
 
+  it('never treats a recipe series id as an editor draft id after copying', () => {
+    const extractBlock =
+      listSource.match(/function extractInitialDraftId[\s\S]*?\n}\n\nfunction prepareCustomerCreateSheet/)?.[0] || ''
+
+    expect(extractBlock).toContain('payload?.initialDraftId')
+    expect(extractBlock).toContain('payload?.primaryDraftId')
+    expect(extractBlock).toContain('payload?.stages?.find((stage: any) => stage?.draftId)?.draftId')
+    expect(extractBlock).not.toContain('payload?.id')
+  })
+
   it('lets customer recipe overflow menus close outside and delete after a simple confirmation', () => {
     const busyBlock =
       listSource.match(/function isCustomerSeriesBusy[\s\S]*?\n}\n\nfunction toggleCustomerRecipeMenu/)?.[0] || ''

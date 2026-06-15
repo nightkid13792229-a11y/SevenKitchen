@@ -58,6 +58,7 @@ export interface RecipeDesignerSeriesStage {
 
 export interface RecipeDesignerSeriesCard {
   id: string
+  initialDraftId?: string
   name: string
   businessStatus?: RecipeDesignerSeriesStatusFilter
   businessStatusLabel?: string
@@ -79,6 +80,7 @@ export interface RecipeDesignerNutritionWarning {
 
 export interface RecipeDesignerCustomerSeriesCard {
   id: string
+  initialDraftId?: string
   name: string
   customerDogId?: string | null
   customerDogName?: string

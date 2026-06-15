@@ -547,7 +547,6 @@ async function createSeries() {
 function extractInitialDraftId(payload: any) {
   return (
     payload?.initialDraftId ||
-    payload?.id ||
     payload?.primaryDraftId ||
     payload?.draftId ||
     payload?.draft?.id ||

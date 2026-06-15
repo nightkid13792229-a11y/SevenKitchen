@@ -1676,6 +1676,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              design.id,
             );
           },
           {
@@ -1772,6 +1773,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              copiedDesigns[0]?.id,
             );
           },
           {
@@ -1852,6 +1854,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              copiedDesign.id,
             );
           },
           {
@@ -2802,6 +2805,7 @@ export class RecipeDesignerService {
   private buildSeriesWorkbenchCard(
     series: RecipeSeriesWorkbenchRecord,
     _userId: string,
+    initialDraftIdOverride?: string,
   ) {
     const businessStatus =
       series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT;
@@ -2845,9 +2849,13 @@ export class RecipeDesignerService {
     const publishedStageCount = stages.filter((stage) =>
       Boolean(stage.recipeId),
     ).length;
+    const initialDraftId =
+      initialDraftIdOverride ||
+      (stages.find((stage) => stage.draftId)?.draftId ?? '');
 
     return {
       id: series.id,
+      initialDraftId,
       name: series.name,
       businessStatus,
       businessStatusLabel:
@@ -2877,6 +2885,7 @@ export class RecipeDesignerService {
 
     return {
       id: record.id,
+      initialDraftId: primaryDraft?.id ?? '',
       name: record.name,
       customerDogId,
       customerDogName: customerDogId ? (dogNameById.get(customerDogId) ?? '') : '',

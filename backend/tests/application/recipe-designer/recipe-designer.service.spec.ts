@@ -6294,6 +6294,7 @@ describe('RecipeDesignerService', () => {
         expect.objectContaining({
           id: 'series-copy',
           name: '燕麦鳕鱼猪肉 副本',
+          initialDraftId: 'adult-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -6624,6 +6625,7 @@ describe('RecipeDesignerService', () => {
           id: 'series-dog-copy',
           name: 'Star 控重鸡肉餐 副本',
           customerDogId: 'dog-1',
+          initialDraftId: 'customer-copy-design',
           primaryDraftId: 'customer-copy-design',
           customerStatus: 'DRAFT',
         }),
@@ -6724,6 +6726,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'stage-copy-series',
+          initialDraftId: 'adult-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -6864,6 +6867,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'stage-copy-series',
+          initialDraftId: 'senior-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
@@ -6938,6 +6942,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'series-1',
+          initialDraftId: 'adult-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',

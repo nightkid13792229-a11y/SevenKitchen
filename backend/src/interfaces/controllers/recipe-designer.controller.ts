@@ -39,6 +39,7 @@ import {
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReorderRecipeDesignItemsDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
@@ -421,6 +422,21 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(item);
+  }
+
+  @Patch('drafts/:id/items/reorder')
+  @ApiOperation({ summary: 'Batch update design recipe item sort order' })
+  async reorderItems(
+    @Param('id') id: string,
+    @Body() dto: ReorderRecipeDesignItemsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.reorderItems(
+      id,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
   }
 
   @Delete('items/:itemId')

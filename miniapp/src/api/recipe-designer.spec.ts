@@ -72,6 +72,12 @@ describe('recipeDesignerApi', () => {
     recipeDesignerApi.updateDraft(draftId, draftPayload)
     recipeDesignerApi.addItem(draftId, itemPayload)
     recipeDesignerApi.updateItem(itemId, updateItemPayload)
+    recipeDesignerApi.reorderItems(draftId, {
+      items: [
+        { id: 'item-2', sortOrder: 0 },
+        { id: 'item-1', sortOrder: 1 },
+      ],
+    })
     recipeDesignerApi.removeItem(itemId)
     recipeDesignerApi.assessDraft(draftId)
     recipeDesignerApi.publishDraft(draftId, { reviewNote: 'ready' })
@@ -105,14 +111,24 @@ describe('recipeDesignerApi', () => {
       data: updateItemPayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(7, {
+      url: `/recipe-designer/drafts/${draftId}/items/reorder`,
+      method: 'PATCH',
+      data: {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(8, {
       url: `/recipe-designer/items/${itemId}`,
       method: 'DELETE',
     })
-    expect(mockedRequest).toHaveBeenNthCalledWith(8, {
+    expect(mockedRequest).toHaveBeenNthCalledWith(9, {
       url: `/recipe-designer/drafts/${draftId}/assess`,
       method: 'POST',
     })
-    expect(mockedRequest).toHaveBeenNthCalledWith(9, {
+    expect(mockedRequest).toHaveBeenNthCalledWith(10, {
       url: `/recipe-designer/drafts/${draftId}/publish`,
       method: 'POST',
       data: { reviewNote: 'ready' },

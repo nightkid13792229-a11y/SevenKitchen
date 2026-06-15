@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -8,6 +9,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 export const RECIPE_DESIGNER_SCENARIOS = [
@@ -300,6 +302,24 @@ export class UpdateRecipeDesignItemDto {
   @IsOptional()
   @IsBoolean()
   includeInAssessment?: boolean;
+}
+
+export class ReorderRecipeDesignItemDto {
+  @IsString()
+  id!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder!: number;
+}
+
+export class ReorderRecipeDesignItemsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderRecipeDesignItemDto)
+  items!: ReorderRecipeDesignItemDto[];
 }
 
 export class PublishRecipeDesignDraftDto {

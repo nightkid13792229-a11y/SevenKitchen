@@ -61,6 +61,7 @@ import type {
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReorderRecipeDesignItemsDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../../interfaces/dto/recipe-designer/recipe-designer.dto';
@@ -3770,6 +3771,49 @@ export class RecipeDesignerService {
       include: {
         nutritionFood: true,
       },
+    });
+  }
+
+  async reorderItems(
+    designRecipeId: string,
+    dto: ReorderRecipeDesignItemsDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertDraftEditableByUser(designRecipeId, context.userId);
+    const items = dto.items ?? [];
+    if (items.length === 0) {
+      throw new BadRequestException('排序项不能为空');
+    }
+
+    const seenItemIds = new Set<string>();
+    const normalizedItems = items.map((item) => {
+      const itemId = String(item.id || '').trim();
+      const sortOrder = Number(item.sortOrder);
+      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0) {
+        throw new BadRequestException('排序项格式不正确');
+      }
+      if (seenItemIds.has(itemId)) {
+        throw new BadRequestException('排序项不能重复');
+      }
+      seenItemIds.add(itemId);
+      return { id: itemId, sortOrder };
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      let updatedCount = 0;
+      for (const item of normalizedItems) {
+        const result = await tx.designRecipeItem.updateMany({
+          where: { id: item.id, designRecipeId },
+          data: { sortOrder: item.sortOrder },
+        });
+        if (result.count !== 1) {
+          throw new NotFoundException(`Design recipe item ${item.id} not found`);
+        }
+        updatedCount += result.count;
+      }
+
+      return { updatedCount };
     });
   }
 

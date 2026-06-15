@@ -33,6 +33,7 @@ describe('RecipeDesignerService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -1656,6 +1657,38 @@ describe('RecipeDesignerService', () => {
     ).rejects.toThrow(NotFoundException);
 
     expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
+  });
+
+  it('persists item reorder updates in one draft-scoped transaction', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.designRecipeItem.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    await expect(
+      service.reorderItems(
+        'design-1',
+        {
+          items: [
+            { id: 'item-2', sortOrder: 0 },
+            { id: 'item-1', sortOrder: 1 },
+          ],
+        },
+        { userId: 'staff-1', role: 'STAFF' },
+      ),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.designRecipeItem.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'item-2', designRecipeId: 'design-1' },
+      data: { sortOrder: 0 },
+    });
+    expect(prisma.designRecipeItem.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'item-1', designRecipeId: 'design-1' },
+      data: { sortOrder: 1 },
+    });
   });
 
   it('rejects item deletion from another staff user', async () => {

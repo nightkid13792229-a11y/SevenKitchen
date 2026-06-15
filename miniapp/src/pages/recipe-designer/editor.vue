@@ -308,6 +308,7 @@
     </view>
 
     <view
+      v-if="!reorderMode"
       class="assessment-drawer"
       :class="{ expanded: assessmentExpanded, dragging: assessmentDragging }"
       :style="assessmentDrawerStyle"
@@ -741,6 +742,12 @@ import {
   type RecipeDesignerHistoryItemSnapshot,
   type RecipeDesignerHistoryState,
 } from './editor-history'
+import {
+  buildReorderedItems,
+  getChangedSortOrderUpdates,
+  moveItem,
+  type SortOrderUpdate,
+} from './reorder'
 
 interface StandardIngredientSnapshot {
   id?: string
@@ -953,6 +960,7 @@ const assessmentDrawerStyle = computed(
 )
 
 const editorBottomPaddingPx = computed(() => {
+  if (reorderMode.value) return Math.ceil(editorBottomGapPx.value)
   const drawerPadding = Math.ceil(assessmentDrawerHeightPx.value)
   const publishPadding = showBottomPublishBar.value ? assessmentPublishBarHeightPx.value : 0
   return Math.ceil(drawerPadding + publishPadding + editorBottomGapPx.value)
@@ -1496,23 +1504,27 @@ function onItemTouchMove(event: any) {
   const currentIndex = items.value.findIndex((item) => item.id === draggingItemId.value)
   if (currentIndex < 0) return
   const targetIndex = getDragTargetIndex(getTouchClientY(event), currentIndex)
-  if (targetIndex === currentIndex) return
+  if (targetIndex === dragTargetIndex.value) return
   dragTargetIndex.value = targetIndex
-  items.value = moveItem(items.value, currentIndex, targetIndex)
   pulseItemDragFeedback()
-  void nextTick(() => captureItemRowRects())
 }
 
 async function finishItemDrag(event?: any) {
   if (!draggingItemId.value) return
   stopItemDragEvent(event)
-  const orderChanged = items.value.some((item, index) => dragOriginalOrderIds[index] !== item.id)
+  const draggedItemId = draggingItemId.value
+  const beforeItems = items.value
+  const fromIndex = beforeItems.findIndex((item) => item.id === draggedItemId)
+  const toIndex = dragTargetIndex.value
   const beforeOrderIds = [...dragOriginalOrderIds]
+  const movedItems = fromIndex >= 0 && toIndex >= 0 ? moveItem(beforeItems, fromIndex, toIndex) : beforeItems
+  const orderedItems = buildReorderedItems(movedItems, movedItems.map((item) => item.id))
+  const orderChanged = beforeOrderIds.some((itemId, index) => orderedItems[index]?.id !== itemId)
+  const sortOrderUpdates = getChangedSortOrderUpdates(beforeItems, orderedItems)
   clearItemDragState()
   if (!orderChanged) return
-  const orderedItems = items.value.map((item, index) => ({ ...item, sortOrder: index }))
   items.value = orderedItems
-  const persisted = await persistItemSortOrder(orderedItems)
+  const persisted = await persistItemSortOrder(sortOrderUpdates)
   if (persisted) {
     pushEditorHistory(createReorderItemsHistoryEntry(beforeOrderIds, orderedItems.map((item) => item.id)))
   }
@@ -1553,14 +1565,13 @@ function clearItemDragState() {
   itemRowRects = []
 }
 
-async function persistItemSortOrder(orderedItems: DesignerItem[]) {
+async function persistItemSortOrder(sortOrderUpdates: SortOrderUpdate[]) {
+  if (sortOrderUpdates.length === 0) return true
   if (dragPersisting.value) return false
   dragPersisting.value = true
   beginAutoSave()
   try {
-    await Promise.all(
-      orderedItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })),
-    )
+    await recipeDesignerApi.reorderItems(draftId.value, { items: sortOrderUpdates })
     finishAutoSave()
     return true
   } catch (error) {
@@ -1572,14 +1583,6 @@ async function persistItemSortOrder(orderedItems: DesignerItem[]) {
   } finally {
     dragPersisting.value = false
   }
-}
-
-function moveItem(list: DesignerItem[], fromIndex: number, toIndex: number) {
-  const next = [...list]
-  const [item] = next.splice(fromIndex, 1)
-  if (!item) return list
-  next.splice(toIndex, 0, item)
-  return next
 }
 
 function getDragTargetIndex(clientY: number, fallbackIndex: number) {
@@ -2491,15 +2494,12 @@ async function removeHistoryItem(itemId: string) {
 
 async function applyHistoryOrder(orderIds: string[]) {
   const resolvedOrderIds = resolveHistoryOrderIds(historyState.value, orderIds)
-  const itemById = new Map(items.value.map((item) => [item.id, item]))
-  const orderedItems = resolvedOrderIds
-    .map((itemId) => itemById.get(itemId))
-    .filter((item): item is DesignerItem => Boolean(item))
-  const orderedIdSet = new Set(orderedItems.map((item) => item.id))
-  const remainingItems = items.value.filter((item) => !orderedIdSet.has(item.id))
-  const nextItems = [...orderedItems, ...remainingItems].map((item, index) => ({ ...item, sortOrder: index }))
+  const nextItems = buildReorderedItems(items.value, resolvedOrderIds)
+  const sortOrderUpdates = getChangedSortOrderUpdates(items.value, nextItems)
   items.value = nextItems
-  await Promise.all(nextItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })))
+  if (sortOrderUpdates.length > 0) {
+    await recipeDesignerApi.reorderItems(draftId.value, { items: sortOrderUpdates })
+  }
 }
 
 function sortItemsBySortOrder(list: DesignerItem[]) {

@@ -129,6 +129,7 @@ describe('RecipeDesignerController', () => {
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
     updateItem: jest.fn(),
+    reorderItems: jest.fn(),
     removeItem: jest.fn(),
     assessDraft: jest.fn(),
     publishDraft: jest.fn(),
@@ -610,6 +611,7 @@ describe('RecipeDesignerController', () => {
   it('delegates item mutations, assessment, and publish with CurrentUser ids', async () => {
     service.addItem.mockResolvedValue({ id: 'item-1' });
     service.updateItem.mockResolvedValue({ id: 'item-1', weightG: 120 });
+    service.reorderItems.mockResolvedValue({ updatedCount: 2 });
     service.removeItem.mockResolvedValue({ id: 'item-1' });
     service.assessDraft.mockResolvedValue({ overallStatus: 'COMPLIANT' });
     service.publishDraft.mockResolvedValue({ status: 'PUBLISHED' });
@@ -624,6 +626,16 @@ describe('RecipeDesignerController', () => {
       currentUser,
     );
     await controller.updateItem('item-1', { weightG: 120 }, currentUser);
+    await controller.reorderItems(
+      'design-1',
+      {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
+      currentUser,
+    );
     await controller.removeItem('item-1', currentUser);
     await controller.assessDraft('design-1', currentUser);
     await controller.publishDraft(
@@ -647,6 +659,19 @@ describe('RecipeDesignerController', () => {
     expect(service.updateItem).toHaveBeenCalledWith(
       'item-1',
       { weightG: 120 },
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
+    expect(service.reorderItems).toHaveBeenCalledWith(
+      'design-1',
+      {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
       {
         userId: 'staff-1',
         role: 'STAFF',

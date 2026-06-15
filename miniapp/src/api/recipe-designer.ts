@@ -154,6 +154,13 @@ export interface UpdateDesignRecipeItemPayload {
   includeInAssessment?: boolean
 }
 
+export interface ReorderDesignRecipeItemsPayload {
+  items: Array<{
+    id: string
+    sortOrder: number
+  }>
+}
+
 export interface PublishDesignRecipePayload {
   name?: string
   reviewNote?: string
@@ -373,6 +380,8 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'PATCH', data }),
+  reorderItems: (draftId: string, data: ReorderDesignRecipeItemsPayload) =>
+    request({ url: `/recipe-designer/drafts/${draftId}/items/reorder`, method: 'PATCH', data }),
   removeItem: (itemId: string) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'DELETE' }),
   assessDraft: (draftId: string) =>

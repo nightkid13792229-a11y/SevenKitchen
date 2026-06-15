@@ -705,7 +705,7 @@ function deleteCustomerRecipe(seriesItem: RecipeDesignerCustomerSeriesCard) {
         uni.showToast({ title: '已删除', icon: 'success' })
       } catch (error) {
         console.error('[RecipeDesignerList] Failed to delete customer recipe:', error)
-        uni.showToast({ title: '删除失败', icon: 'none' })
+        uni.showToast({ title: getRecipeDesignerDeleteErrorMessage(error) || '删除失败', icon: 'none' })
       } finally {
         deletingSeriesId.value = ''
       }
@@ -1228,7 +1228,7 @@ function deleteSeries(seriesItem: RecipeDesignerSeriesCard) {
         uni.showToast({ title: '已删除', icon: 'success' })
       } catch (error) {
         console.error('[RecipeDesignerList] Failed to delete series:', error)
-        uni.showToast({ title: '删除失败', icon: 'none' })
+        uni.showToast({ title: getRecipeDesignerDeleteErrorMessage(error) || '删除失败', icon: 'none' })
       } finally {
         deletingSeriesId.value = ''
       }
@@ -1238,6 +1238,21 @@ function deleteSeries(seriesItem: RecipeDesignerSeriesCard) {
 
 function goToSupplementLibrary() {
   uni.navigateTo({ url: '/pages/recipe-designer/supplement-library' })
+}
+
+function getRecipeDesignerDeleteErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.trim()
+  }
+  if (typeof error === 'string') {
+    return error.trim()
+  }
+  if (error && typeof error === 'object') {
+    const payload = error as Record<string, unknown>
+    const message = payload.message ?? payload.errMsg
+    return typeof message === 'string' ? message.trim() : ''
+  }
+  return ''
 }
 
 function getCurrentUserRole() {

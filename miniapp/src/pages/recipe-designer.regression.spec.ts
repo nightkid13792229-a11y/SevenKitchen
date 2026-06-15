@@ -131,6 +131,19 @@ describe('recipe designer mobile entry', () => {
     expect(deleteCustomerBlock).not.toContain('editable: true')
   })
 
+  it('surfaces backend delete failure reasons for recipe series deletion', () => {
+    const deleteCustomerBlock =
+      listSource.match(/function deleteCustomerRecipe[\s\S]*?\n}\n\nfunction canGenerateDiyFromCustomerCard/)?.[0] || ''
+    const deleteSeriesBlock =
+      listSource.match(/function deleteSeries[\s\S]*?\n}\n\nfunction goToSupplementLibrary/)?.[0] || ''
+
+    expect(listSource).toContain('function getRecipeDesignerDeleteErrorMessage')
+    expect(deleteCustomerBlock).toContain('getRecipeDesignerDeleteErrorMessage(error) ||')
+    expect(deleteSeriesBlock).toContain('getRecipeDesignerDeleteErrorMessage(error) ||')
+    expect(deleteCustomerBlock).not.toContain("uni.showToast({ title: '删除失败', icon: 'none' })")
+    expect(deleteSeriesBlock).not.toContain("uni.showToast({ title: '删除失败', icon: 'none' })")
+  })
+
   it('keeps staff and admin recipe designer on the series plus five life-stage workbench', () => {
     const listSupplementLibraryBlock =
       listSource.match(/const canManageSupplementLibrary = computed\(\(\) => [^\n]+\)/)?.[0] || ''

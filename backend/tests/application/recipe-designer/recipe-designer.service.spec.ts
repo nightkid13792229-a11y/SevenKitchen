@@ -7086,6 +7086,55 @@ describe('RecipeDesignerService', () => {
       expect(prisma.recipe.updateMany).not.toHaveBeenCalled();
     });
 
+    it('lets internal users delete a recipe series with pending review drafts', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '成犬鸡肉配方',
+          createdBy: 'staff-1',
+          designs: [
+            draft({
+              id: 'design-1',
+              createdBy: 'staff-1',
+              reviewStatus: 'REQUIRED',
+              status: 'NEEDS_REVIEW',
+            }),
+          ],
+          recipes: undefined,
+        }),
+      );
+      prisma.recipeSeries.update.mockResolvedValue({
+        id: 'series-1',
+        status: 'DELETED',
+      });
+
+      await expect(
+        service.deleteSeries(
+          'series-1',
+          {
+            confirmName: '成犬鸡肉配方',
+            confirmUserVisibleRemoval: true,
+          },
+          adminAccess,
+        ),
+      ).resolves.toEqual(expect.objectContaining({ id: 'series-1' }));
+
+      expect(prisma.designRecipe.deleteMany).toHaveBeenCalledWith({
+        where: {
+          seriesId: 'series-1',
+          status: { not: 'PUBLISHED' },
+          publishedRecipeId: null,
+        },
+      });
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-1' },
+        data: expect.objectContaining({
+          status: 'DELETED',
+          deletedBy: 'admin-1',
+        }),
+      });
+    });
+
     it('lets customers delete their own recipe series with pending review drafts', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({

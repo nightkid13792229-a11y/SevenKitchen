@@ -116,6 +116,47 @@ describe('WechatService shipping order APIs', () => {
     expect(axiosPostSpy).not.toHaveBeenCalled();
   });
 
+  it('treats unchanged shipping upload responses as idempotent success', async () => {
+    const service = new WechatService();
+    jest.spyOn(service, 'getAccessToken').mockResolvedValue('ACCESS_TOKEN');
+    jest.spyOn(axios, 'post').mockResolvedValue({
+      data: {
+        errcode: 10060023,
+        errmsg: '发货信息未更新',
+      },
+    });
+
+    const result = await service.uploadShippingInfo(
+      {
+        order_key: {
+          order_number_type: 2,
+          mchid: '1900000109',
+          transaction_id: '420000123',
+        },
+        logistics_type: 1,
+        delivery_mode: 1,
+        is_all_delivered: true,
+        shipping_list: [
+          {
+            tracking_no: 'SF123456789',
+            express_company: 'SF',
+            item_desc: '鲜食套餐',
+          },
+        ],
+        upload_time: '2026-06-14T00:00:00.000+08:00',
+        payer: {
+          openid: 'payer-openid',
+        },
+      },
+      'wx-live-appid',
+    );
+
+    expect(result).toEqual({
+      errcode: 10060023,
+      errmsg: '发货信息未更新',
+    });
+  });
+
   it('checks whether an app is trade managed', async () => {
     const service = new WechatService();
     jest.spyOn(service, 'getAccessToken').mockResolvedValue('ACCESS_TOKEN');

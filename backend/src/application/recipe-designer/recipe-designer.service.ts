@@ -2521,14 +2521,6 @@ export class RecipeDesignerService {
     if (!dto.confirmUserVisibleRemoval) {
       throw new BadRequestException('请确认下架用户可见食谱');
     }
-    if (
-      isInternalRecipeDesignerRole(context) &&
-      series.designs.some(
-        (design) => design.reviewStatus === DesignRecipeReviewStatus.REQUIRED,
-      )
-    ) {
-      throw new BadRequestException('仍有待审核草稿，不能删除系列');
-    }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.designRecipe.deleteMany({

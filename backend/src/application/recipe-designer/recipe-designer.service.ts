@@ -49,6 +49,7 @@ import type {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   AddRecipeDesignItemDto,
+  CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignDraftDto,
@@ -1971,6 +1972,112 @@ export class RecipeDesignerService {
     throw new BadRequestException('阶段草稿创建失败，请重试');
   }
 
+  async copySeriesStageIngredients(
+    seriesId: string,
+    lifeStage: string,
+    dto: CopyRecipeSeriesStageIngredientsDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    const targetLifeStage =
+      this.normalizeRecipeSeriesLifeStageForDuplication(lifeStage);
+    const sourceLifeStage = this.normalizeRecipeSeriesLifeStageForDuplication(
+      dto.sourceLifeStage,
+    );
+
+    if (sourceLifeStage === targetLifeStage) {
+      throw new BadRequestException('请选择不同的来源生命阶段');
+    }
+
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const series = await this.loadAccessibleSeriesForDuplication(
+              tx,
+              seriesId,
+              context,
+            );
+            const sources = this.getLatestCopyableSeriesStageSources(series);
+            const source = sources.find(
+              (candidate) => candidate.lifeStage === sourceLifeStage,
+            );
+            if (!source) {
+              throw new BadRequestException('来源生命阶段暂无可复制原料');
+            }
+
+            const copiedItems =
+              await this.toCopiedDesignRecipeItemsFromStageSource(tx, source);
+            if (copiedItems.length === 0) {
+              throw new BadRequestException('来源生命阶段暂无原料，无法复制');
+            }
+
+            const targetDraft =
+              await this.resolveEditableSeriesStageDraftForIngredientCopy(
+                tx,
+                series,
+                sources,
+                targetLifeStage,
+                context.userId,
+              );
+
+            await tx.designRecipeItem.deleteMany({
+              where: { designRecipeId: targetDraft.id },
+            });
+
+            return tx.designRecipe.update({
+              where: { id: targetDraft.id },
+              data: {
+                status: DesignRecipeStatus.DRAFT,
+                fediafDogScenario: mapSeriesLifeStageToScenario(targetLifeStage),
+                applicableLifeStages: [targetLifeStage],
+                totalWeightG: copiedItems.reduce(
+                  (total, item) => total + item.weightG,
+                  0,
+                ),
+                energyDensityKcalPerKg: null,
+                calculatedNutrition: {},
+                complianceStatus: {},
+                assessmentSummary: {},
+                missingDataReport: [],
+                complianceScore: 0,
+                isCompliant: false,
+                reviewStatus: DesignRecipeReviewStatus.NONE,
+                reviewNote: null,
+                reviewedBy: null,
+                reviewedAt: null,
+                publishedAt: null,
+                publishedRecipeId: null,
+                publishedRecipeVersion: null,
+                items: {
+                  create: copiedItems,
+                },
+              },
+              include: DESIGN_RECIPE_INCLUDE,
+            });
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isRetryableSeriesDraftCreateError(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('生命阶段原料复制失败，请重试');
+  }
+
   private async loadAccessibleSeriesForDuplication(
     tx: Pick<PrismaService, 'recipeSeries'>,
     seriesId: string,
@@ -2152,6 +2259,146 @@ export class RecipeDesignerService {
     lifeStage: RecipeSeriesLifeStage,
   ) {
     return `${sourceName} ${DUPLICATE_SERIES_STAGE_NAME_LABELS[lifeStage]}副本`;
+  }
+
+  private async toCopiedDesignRecipeItemsFromStageSource(
+    tx: Pick<PrismaService, 'nutritionFoodMapping'>,
+    source: CopyableSeriesStageSource,
+  ) {
+    if (source.kind === 'design') {
+      return source.design.items.map((item) =>
+        this.toCopiedDesignRecipeItemData(item),
+      );
+    }
+
+    return this.toCopiedDesignRecipeItemsFromRecipe(tx, source.recipe);
+  }
+
+  private async resolveEditableSeriesStageDraftForIngredientCopy(
+    tx: Pick<PrismaService, 'designRecipe' | 'nutritionFoodMapping'>,
+    series: RecipeSeriesWorkbenchRecord & {
+      designs: DesignRecipeWithItems[];
+      recipes: RecipeSeriesWorkbenchRecord['recipes'];
+    },
+    sources: CopyableSeriesStageSource[],
+    targetLifeStage: RecipeSeriesLifeStage,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    const designs = series.designs as DesignRecipeWithItems[];
+    const existingDraft = this.pickLatestByUpdatedAt(
+      designs.filter(
+        (design) =>
+          design.seriesLifeStage === targetLifeStage &&
+          !this.isPublishedDraft(design) &&
+          design.status !== DesignRecipeStatus.ARCHIVED,
+      ),
+    );
+    if (existingDraft) {
+      return existingDraft;
+    }
+
+    const targetSource = sources.find(
+      (candidate) => candidate.lifeStage === targetLifeStage,
+    );
+    if (!targetSource) {
+      throw new BadRequestException('目标生命阶段暂无可覆盖食谱');
+    }
+
+    const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
+    return this.createEditableSeriesStageDraftShell(
+      tx,
+      targetSource,
+      series.id,
+      series.name,
+      version,
+      createdBy,
+    );
+  }
+
+  private async createEditableSeriesStageDraftShell(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    source: CopyableSeriesStageSource,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    if (source.kind === 'recipe') {
+      return tx.designRecipe.create({
+        data: {
+          name,
+          version,
+          status: DesignRecipeStatus.DRAFT,
+          fediafDogScenario: mapSeriesLifeStageToScenario(source.lifeStage),
+          nutritionStandard: source.recipe.nutritionStandard || 'FEDIAF_2025',
+          targetHealthTags: this.normalizeRecipeStringArray(
+            source.recipe.targetHealthTags,
+          ),
+          applicableLifeStages: [source.lifeStage],
+          notes: source.recipe.description ?? null,
+          createdBy,
+          totalWeightG: 0,
+          energyDensityKcalPerKg: null,
+          calculatedNutrition: {},
+          complianceStatus: {},
+          assessmentSummary: {},
+          missingDataReport: [],
+          isCompliant: false,
+          reviewStatus: DesignRecipeReviewStatus.NONE,
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          publishedAt: null,
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+          revisionOfDesignRecipeId: null,
+          revisionBaseRecipeId: source.recipe.recipeId,
+          seriesId,
+          seriesLifeStage: source.lifeStage,
+          ...(source.recipe.customerDogId
+            ? { customerDogId: source.recipe.customerDogId }
+            : {}),
+        } as Prisma.DesignRecipeUncheckedCreateInput,
+        include: DESIGN_RECIPE_INCLUDE,
+      }) as unknown as Promise<DesignRecipeWithItems>;
+    }
+
+    const base = source.design;
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: mapSeriesLifeStageToScenario(source.lifeStage),
+        nutritionStandard: base.nutritionStandard || 'FEDIAF_2025',
+        targetHealthTags: base.targetHealthTags,
+        applicableLifeStages: [source.lifeStage],
+        notes: base.notes,
+        createdBy,
+        totalWeightG: base.totalWeightG ?? 0,
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: this.isPublishedDraft(base) ? base.id : null,
+        revisionBaseRecipeId: this.isPublishedDraft(base)
+          ? base.publishedRecipeId
+          : null,
+        seriesId,
+        seriesLifeStage: source.lifeStage,
+        ...(base.customerDogId ? { customerDogId: base.customerDogId } : {}),
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    }) as unknown as Promise<DesignRecipeWithItems>;
   }
 
   private getCustomerDogIdForSeriesCopy(

@@ -124,6 +124,7 @@ describe('RecipeDesignerController', () => {
     deleteSeries: jest.fn(),
     createSeriesStageDraft: jest.fn(),
     duplicateSeriesStage: jest.fn(),
+    copySeriesStageIngredients: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
@@ -245,6 +246,9 @@ describe('RecipeDesignerController', () => {
     service.createSeriesStageDraft.mockResolvedValue({ id: 'design-1' });
     service.duplicateSeries.mockResolvedValue({ id: 'series-copy' });
     service.duplicateSeriesStage.mockResolvedValue({ id: 'stage-copy' });
+    service.copySeriesStageIngredients.mockResolvedValue({
+      id: 'target-stage-draft',
+    });
 
     await expect(controller.listSeries({}, currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'series-1' }] }),
@@ -292,6 +296,14 @@ describe('RecipeDesignerController', () => {
       controller.duplicateSeriesStage(
         'series-1',
         'HIGH_ACTIVITY_ADULT',
+        currentUser,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.copySeriesStageIngredients(
+        'series-1',
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
         currentUser,
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
@@ -358,6 +370,15 @@ describe('RecipeDesignerController', () => {
     expect(service.duplicateSeriesStage).toHaveBeenCalledWith(
       'series-1',
       'HIGH_ACTIVITY_ADULT',
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
+    expect(service.copySeriesStageIngredients).toHaveBeenCalledWith(
+      'series-1',
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
       {
         userId: 'staff-1',
         role: 'STAFF',

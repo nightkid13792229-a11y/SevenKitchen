@@ -265,6 +265,21 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')
   })
 
+  it('lets staff copy another life stage ingredient list into an already designed target stage', () => {
+    expect(apiSource).toContain('copySeriesStageIngredients')
+    expect(apiSource).toContain('/copy-ingredients')
+    expect(apiSource).toContain('sourceLifeStage')
+    expect(listSource).toContain('从其他阶段复制原料')
+    expect(listSource).toContain('copyingStageKey')
+    expect(listSource).toContain('getCopyableIngredientSourceStages(seriesItem, stage)')
+    expect(listSource).toContain("stage.status !== 'NOT_DESIGNED'")
+    expect(listSource).toContain('sourceStage.lifeStage')
+    expect(listSource).toContain('recipeDesignerApi.copySeriesStageIngredients(seriesItem.id, stage.lifeStage')
+    expect(listSource).toContain("confirmText: '覆盖'")
+    expect(listSource).toContain("uni.showToast({ title: '已复制原料', icon: 'success' })")
+    expect(listSource).toContain('/pages/recipe-designer/editor?id=')
+  })
+
   it('creates a new series and navigates to the backend initial draft when available', () => {
     expect(listSource).toContain('createSeries')
     expect(listSource).toContain('recipeDesignerApi.createSeries')

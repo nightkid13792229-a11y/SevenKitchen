@@ -134,6 +134,9 @@ describe('recipeDesignerApi', () => {
       scenario: 'EARLY_GROWTH_REPRODUCTION',
       sourceDraftId: 'published-adult-design',
     } satisfies Parameters<typeof recipeDesignerApi.createSeriesStageDraft>[1]
+    const stageIngredientCopyPayload = {
+      sourceLifeStage: 'HIGH_ACTIVITY_ADULT',
+    } satisfies Parameters<typeof recipeDesignerApi.copySeriesStageIngredients>[2]
 
     recipeDesignerApi.listSeries()
     recipeDesignerApi.createSeries(createPayload)
@@ -142,6 +145,11 @@ describe('recipeDesignerApi', () => {
     recipeDesignerApi.createSeriesStageDraft(seriesId, stagePayload)
     recipeDesignerApi.duplicateSeries(seriesId)
     recipeDesignerApi.duplicateSeriesStage(seriesId, 'HIGH_ACTIVITY_ADULT')
+    recipeDesignerApi.copySeriesStageIngredients(
+      seriesId,
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      stageIngredientCopyPayload,
+    )
 
     expect(mockedRequest).toHaveBeenNthCalledWith(1, {
       url: '/recipe-designer/series',
@@ -175,6 +183,11 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(7, {
       url: `/recipe-designer/series/${seriesId}/stages/HIGH_ACTIVITY_ADULT/duplicate`,
       method: 'POST',
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(8, {
+      url: `/recipe-designer/series/${seriesId}/stages/LOW_ACTIVITY_ADULT_OR_SENIOR/copy-ingredients`,
+      method: 'POST',
+      data: stageIngredientCopyPayload,
     })
   })
 

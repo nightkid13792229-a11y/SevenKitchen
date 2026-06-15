@@ -100,6 +100,11 @@ export class CreateRecipeSeriesStageDraftDto {
   sourceDraftId?: string;
 }
 
+export class CopyRecipeSeriesStageIngredientsDto {
+  @IsString()
+  sourceLifeStage!: string;
+}
+
 export const SUPPLEMENT_NUTRITION_BASIS_TYPES = [
   'PER_1_G',
   'PER_100_G',

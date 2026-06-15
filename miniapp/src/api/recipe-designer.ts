@@ -130,6 +130,10 @@ export interface CreateRecipeSeriesStageDraftPayload {
   sourceDraftId?: string
 }
 
+export interface CopyRecipeSeriesStageIngredientsPayload {
+  sourceLifeStage: string
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
@@ -311,6 +315,16 @@ export const recipeDesignerApi = {
     request({
       url: `/recipe-designer/series/${seriesId}/stages/${lifeStage}/duplicate`,
       method: 'POST',
+    }),
+  copySeriesStageIngredients: (
+    seriesId: string,
+    lifeStage: string,
+    data: CopyRecipeSeriesStageIngredientsPayload,
+  ) =>
+    request({
+      url: `/recipe-designer/series/${seriesId}/stages/${lifeStage}/copy-ingredients`,
+      method: 'POST',
+      data,
     }),
   createSeriesStageDraft: (seriesId: string, data: CreateRecipeSeriesStageDraftPayload) =>
     request({ url: `/recipe-designer/series/${seriesId}/stage-drafts`, method: 'POST', data }),

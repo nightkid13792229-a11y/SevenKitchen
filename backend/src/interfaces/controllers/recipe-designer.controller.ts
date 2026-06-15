@@ -29,6 +29,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
   CreatePrivateRecipeSnapshotDto,
+  CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
   CreateRecipeSeriesDto,
@@ -288,6 +289,25 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(series);
+  }
+
+  @Post('series/:seriesId/stages/:lifeStage/copy-ingredients')
+  @ApiOperation({
+    summary: 'Copy ingredients from another life stage into this stage draft',
+  })
+  async copySeriesStageIngredients(
+    @Param('seriesId') seriesId: string,
+    @Param('lifeStage') lifeStage: string,
+    @Body() dto: CopyRecipeSeriesStageIngredientsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.copySeriesStageIngredients(
+      seriesId,
+      lifeStage,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(draft);
   }
 
   @Get('drafts')

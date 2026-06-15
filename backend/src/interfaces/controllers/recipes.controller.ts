@@ -570,6 +570,7 @@ export class RecipesController {
         coverImageUrl: true,
         version: true,
         createdAt: true,
+        updatedAt: true,
         applicableLifeStages: true,
         targetHealthTags: true,
       },
@@ -592,7 +593,20 @@ export class RecipesController {
         applicableLifeStages: r.applicableLifeStages || [],
         targetHealthTags: r.targetHealthTags || [],
         createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       }));
+
+    if (status === RecipeStatus.PRIVATE_CUSTOM) {
+      summaries.sort((left: any, right: any) => {
+        const leftUpdatedAt = new Date(
+          left.updatedAt || left.createdAt,
+        ).getTime();
+        const rightUpdatedAt = new Date(
+          right.updatedAt || right.createdAt,
+        ).getTime();
+        return rightUpdatedAt - leftUpdatedAt;
+      });
+    }
 
     return ApiResponseDto.success(summaries);
   }

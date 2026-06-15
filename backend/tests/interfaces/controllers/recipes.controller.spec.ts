@@ -178,6 +178,76 @@ describe('RecipesController (e2e)', () => {
     }
   });
 
+  describe('GET /api/v1/recipes/staff/all', () => {
+    it('orders private custom recipes by most recently updated first', async () => {
+      mockJwtAuthService.validateToken.mockReturnValueOnce({
+        userId: 'staff-1',
+        customerId: 'staff-1',
+        role: 'STAFF',
+      });
+      const olderUpdate = new Date('2026-06-10T08:00:00.000Z');
+      const newerUpdate = new Date('2026-06-12T08:00:00.000Z');
+
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: 'row-private-a-v2',
+          recipeId: 'private-a',
+          name: '星星的鲜食',
+          status: 'PRIVATE_CUSTOM',
+          coverImageUrl: null,
+          version: 2,
+          createdAt: new Date('2026-06-01T08:00:00.000Z'),
+          updatedAt: olderUpdate,
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-private-a-v1',
+          recipeId: 'private-a',
+          name: '星星的鲜食旧版',
+          status: 'PRIVATE_CUSTOM',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-05-30T08:00:00.000Z'),
+          updatedAt: new Date('2026-06-09T08:00:00.000Z'),
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+        {
+          id: 'row-private-b-v1',
+          recipeId: 'private-b',
+          name: '毛毛的鲜食',
+          status: 'PRIVATE_CUSTOM',
+          coverImageUrl: null,
+          version: 1,
+          createdAt: new Date('2026-06-02T08:00:00.000Z'),
+          updatedAt: newerUpdate,
+          applicableLifeStages: [],
+          targetHealthTags: [],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/staff/all?status=PRIVATE_CUSTOM')
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'PRIVATE_CUSTOM' },
+          orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+          select: expect.objectContaining({
+            updatedAt: true,
+          }),
+        }),
+      );
+      expect(
+        response.body.data.map((recipe: { id: string }) => recipe.id),
+      ).toEqual(['private-b', 'private-a']);
+      expect(response.body.data[0].updatedAt).toBe(newerUpdate.toISOString());
+    });
+  });
+
   describe('GET /api/v1/recipes', () => {
     it('should return seeded recipe after app initialization', async () => {
       // Seed the canonical recipe

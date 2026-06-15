@@ -130,6 +130,10 @@ export interface CreateRecipeSeriesStageDraftPayload {
   sourceDraftId?: string
 }
 
+export interface CopyRecipeStageItemsPayload {
+  sourceDraftId: string
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
@@ -355,6 +359,8 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}/revert-to-latest-official`, method: 'POST' }),
   createPrivateRecipeSnapshot: (draftId: string, data: CreatePrivateRecipeSnapshotPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/private-recipe-snapshot`, method: 'POST', data }),
+  copyStageItemsFromDraft: (draftId: string, data: CopyRecipeStageItemsPayload) =>
+    request({ url: `/recipe-designer/drafts/${draftId}/copy-items-from-stage`, method: 'POST', data }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>

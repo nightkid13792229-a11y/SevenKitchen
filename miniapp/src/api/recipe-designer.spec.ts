@@ -73,6 +73,7 @@ describe('recipeDesignerApi', () => {
     recipeDesignerApi.addItem(draftId, itemPayload)
     recipeDesignerApi.updateItem(itemId, updateItemPayload)
     recipeDesignerApi.removeItem(itemId)
+    recipeDesignerApi.copyStageItemsFromDraft(draftId, { sourceDraftId: 'adult-design' })
     recipeDesignerApi.assessDraft(draftId)
     recipeDesignerApi.publishDraft(draftId, { reviewNote: 'ready' })
 
@@ -109,10 +110,15 @@ describe('recipeDesignerApi', () => {
       method: 'DELETE',
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(8, {
+      url: `/recipe-designer/drafts/${draftId}/copy-items-from-stage`,
+      method: 'POST',
+      data: { sourceDraftId: 'adult-design' },
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(9, {
       url: `/recipe-designer/drafts/${draftId}/assess`,
       method: 'POST',
     })
-    expect(mockedRequest).toHaveBeenNthCalledWith(9, {
+    expect(mockedRequest).toHaveBeenNthCalledWith(10, {
       url: `/recipe-designer/drafts/${draftId}/publish`,
       method: 'POST',
       data: { reviewNote: 'ready' },

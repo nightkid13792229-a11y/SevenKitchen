@@ -6170,6 +6170,91 @@ describe('RecipeDesignerService', () => {
       });
     });
 
+    it('replaces an editable stage draft items from another same-series stage', async () => {
+      const sourceItem = item({
+        id: 'adult-source-item',
+        ingredientId: 'ingredient-adult',
+        nutritionFoodId: 'food-adult',
+        weightG: 128,
+        includeInAssessment: false,
+        ratioPercent: 64,
+        preparationMethod: 'STEAMED',
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: 500,
+        sortOrder: 3,
+      });
+      prisma.designRecipe.findUnique
+        .mockResolvedValueOnce({
+          id: 'senior-design',
+          createdBy: 'staff-1',
+          status: 'DRAFT',
+          publishedRecipeId: null,
+          publishedAt: null,
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        })
+        .mockResolvedValueOnce(
+          draft({
+            id: 'adult-design',
+            seriesId: 'series-1',
+            seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+            status: 'COMPLIANT',
+            publishedRecipeId: null,
+            publishedAt: null,
+            items: [sourceItem],
+          }),
+        );
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.copyStageItemsToDraft(
+          'senior-design',
+          { sourceDraftId: 'adult-design' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-design',
+          items: [expect.objectContaining({ id: 'adult-source-item' })],
+        }),
+      );
+
+      expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+        where: { id: 'senior-design' },
+        data: expect.objectContaining({
+          calculatedNutrition: {},
+          complianceStatus: {},
+          assessmentSummary: {},
+          missingDataReport: [],
+          isCompliant: false,
+          items: {
+            deleteMany: {},
+            create: [
+              expect.objectContaining({
+                ingredientId: 'ingredient-adult',
+                nutritionFoodId: 'food-adult',
+                weightG: 128,
+                includeInAssessment: false,
+                ratioPercent: 64,
+                preparationMethod: 'STEAMED',
+                nutrientTargetKey: 'calcium',
+                nutrientTargetValue: 500,
+                sortOrder: 3,
+              }),
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+    });
+
     it('duplicates a whole recipe series into a new editable series without touching source drafts', async () => {
       const adultItem = item({
         id: 'adult-source-item',

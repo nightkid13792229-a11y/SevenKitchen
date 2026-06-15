@@ -49,6 +49,7 @@ import type {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   AddRecipeDesignItemDto,
+  CopyRecipeStageItemsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignDraftDto,
@@ -1969,6 +1970,73 @@ export class RecipeDesignerService {
     }
 
     throw new BadRequestException('阶段草稿创建失败，请重试');
+  }
+
+  async copyStageItemsToDraft(
+    id: string,
+    dto: CopyRecipeStageItemsDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+
+    return this.prisma.$transaction(async (tx) => {
+      const target = await tx.designRecipe.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          createdBy: true,
+          status: true,
+          publishedRecipeId: true,
+          publishedAt: true,
+          seriesId: true,
+          seriesLifeStage: true,
+        },
+      });
+
+      this.assertEditableDraft(target, id, context.userId);
+      if (!target?.seriesId || !target.seriesLifeStage) {
+        throw new BadRequestException('只有系列生命阶段草稿可以复制原料');
+      }
+      if (dto.sourceDraftId === id) {
+        throw new BadRequestException('请选择其他生命阶段作为来源');
+      }
+
+      const source = (await tx.designRecipe.findUnique({
+        where: { id: dto.sourceDraftId },
+        include: DESIGN_RECIPE_INCLUDE,
+      })) as unknown as DesignRecipeWithItems | null;
+
+      if (!source) {
+        throw new BadRequestException('来源生命阶段不存在');
+      }
+      if (source.seriesId !== target.seriesId) {
+        throw new BadRequestException('只能复制同一食谱系列内的生命阶段原料');
+      }
+      if (source.seriesLifeStage === target.seriesLifeStage) {
+        throw new BadRequestException('请选择其他生命阶段作为来源');
+      }
+      if (!source.items.length) {
+        throw new BadRequestException('来源生命阶段暂无原料，无法复制');
+      }
+
+      return tx.designRecipe.update({
+        where: { id },
+        data: {
+          calculatedNutrition: {},
+          complianceStatus: {},
+          assessmentSummary: {},
+          missingDataReport: [],
+          isCompliant: false,
+          items: {
+            deleteMany: {},
+            create: source.items.map((item) =>
+              this.toCopiedDesignRecipeItemData(item),
+            ),
+          },
+        },
+        include: DESIGN_RECIPE_INCLUDE,
+      });
+    });
   }
 
   private async loadAccessibleSeriesForDuplication(

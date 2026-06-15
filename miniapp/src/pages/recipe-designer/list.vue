@@ -170,9 +170,9 @@
               <text class="stage-updated">{{ formatDateTime(stage.updatedAt) }}</text>
             </view>
             <button
-              v-if="canDuplicateStage(stage)"
+              v-if="hasStageActions(seriesItem, stage)"
               class="stage-more-btn"
-              :disabled="duplicatingStageKey === getStageKey(seriesItem, stage)"
+              :disabled="isStageActionBusy(seriesItem, stage)"
               @tap.stop="openStageActionSheet(seriesItem, stage)"
             >
               ⋯
@@ -277,6 +277,8 @@ import { resolveDogRecipeLifeStage, type DogForLifeStage } from '../../utils/lif
 import { getScenarioLabel } from './assessment'
 
 type SeriesListItem = RecipeDesignerSeriesCard | RecipeDesignerCustomerSeriesCard
+type StageActionItem = '复制其他阶段原料' | '复制为新食谱系列'
+type StageItemCopySource = RecipeDesignerSeriesStage & { draftId: string }
 
 const scenarioByDogRecipeLifeStage: Record<string, FediafDogScenario> = {
   PUPPY_UNDER_14_WEEKS: 'EARLY_GROWTH_REPRODUCTION',
@@ -347,6 +349,7 @@ const creating = ref(false)
 const deletingSeriesId = ref('')
 const duplicatingSeriesId = ref('')
 const duplicatingStageKey = ref('')
+const copyingStageItemsKey = ref('')
 const renamingSeriesId = ref('')
 const openingStageKey = ref('')
 const activeCustomerMenuSeriesId = ref('')
@@ -933,18 +936,127 @@ function getStageTemplateLabel(stage: RecipeDesignerSeriesStage) {
   return stage.label || getScenarioLabel(stage.scenario)
 }
 
+function getStageItemCopySourceStages(
+  seriesItem: RecipeDesignerSeriesCard,
+  targetStage: RecipeDesignerSeriesStage,
+): StageItemCopySource[] {
+  return getSeriesStages(seriesItem).filter((stage): stage is StageItemCopySource =>
+    Boolean(
+      stage.draftId &&
+        stage.lifeStage !== targetStage.lifeStage &&
+        stage.status !== 'NOT_DESIGNED',
+    ),
+  )
+}
+
+function canCopyItemsIntoStage(
+  seriesItem: RecipeDesignerSeriesCard,
+  stage: RecipeDesignerSeriesStage,
+) {
+  if (isCustomerMode.value) return false
+  return getStageItemCopySourceStages(seriesItem, stage).length > 0
+}
+
 function canDuplicateStage(stage: RecipeDesignerSeriesStage) {
   if (isCustomerMode.value && stage.status === 'PUBLISHED') return false
   return Boolean(stage.draftId || stage.recipeId) && stage.status !== 'NOT_DESIGNED'
 }
 
+function hasStageActions(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  return buildStageActionItems(seriesItem, stage).length > 0
+}
+
+function isStageActionBusy(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
+  const stageKey = getStageKey(seriesItem, stage)
+  return duplicatingStageKey.value === stageKey || copyingStageItemsKey.value === stageKey
+}
+
 function openStageActionSheet(seriesItem: RecipeDesignerSeriesCard, stage: RecipeDesignerSeriesStage) {
-  if (!canDuplicateStage(stage)) return
+  const actionItems = buildStageActionItems(seriesItem, stage)
+  if (actionItems.length === 0) return
 
   uni.showActionSheet({
-    itemList: ['复制此生命阶段'],
-    success: () => {
-      duplicateSeriesStage(seriesItem, stage)
+    itemList: actionItems,
+    success: (result: any) => {
+      const action = actionItems[result.tapIndex]
+      if (action === '复制其他阶段原料') {
+        openStageItemCopySourceSheet(seriesItem, stage)
+        return
+      }
+      if (action === '复制为新食谱系列') {
+        duplicateSeriesStage(seriesItem, stage)
+      }
+    },
+  })
+}
+
+function buildStageActionItems(
+  seriesItem: RecipeDesignerSeriesCard,
+  stage: RecipeDesignerSeriesStage,
+): StageActionItem[] {
+  const actions: StageActionItem[] = []
+  if (canCopyItemsIntoStage(seriesItem, stage)) {
+    actions.push('复制其他阶段原料')
+  }
+  if (canDuplicateStage(stage)) {
+    actions.push('复制为新食谱系列')
+  }
+  return actions
+}
+
+function openStageItemCopySourceSheet(
+  seriesItem: RecipeDesignerSeriesCard,
+  targetStage: RecipeDesignerSeriesStage,
+) {
+  const sources = getStageItemCopySourceStages(seriesItem, targetStage)
+  if (sources.length === 0) {
+    uni.showToast({ title: '暂无可复制阶段', icon: 'none' })
+    return
+  }
+
+  uni.showActionSheet({
+    title: '选择来源阶段',
+    itemList: sources.map((source) => formatStageItemCopySourceLabel(source)),
+    success: (result: any) => {
+      const sourceStage = sources[result.tapIndex]
+      if (sourceStage) {
+        confirmCopyStageItemsIntoStage(seriesItem, targetStage, sourceStage)
+      }
+    },
+  })
+}
+
+function formatStageItemCopySourceLabel(stage: RecipeDesignerSeriesStage) {
+  const label = getStageTemplateLabel(stage)
+  const status = getStageItemCopySourceStatusLabel(stage)
+  return status ? `${label} · ${status}` : label
+}
+
+function getStageItemCopySourceStatusLabel(stage: RecipeDesignerSeriesStage) {
+  const statusLabels: Partial<Record<RecipeSeriesStageStatus, string>> = {
+    MODIFIED: '已修改',
+    SUBMITTED: '已提交',
+    PUBLISHED: '已发布',
+    PRIVATE_CUSTOM: '私密定制',
+  }
+  return statusLabels[stage.status] || ''
+}
+
+function confirmCopyStageItemsIntoStage(
+  seriesItem: RecipeDesignerSeriesCard,
+  targetStage: RecipeDesignerSeriesStage,
+  sourceStage: StageItemCopySource,
+) {
+  uni.showModal({
+    title: '复制其他阶段原料',
+    content: `将用「${getStageTemplateLabel(sourceStage)}」的原料替换「${getStageTemplateLabel(targetStage)}」当前原料。`,
+    confirmText: '替换',
+    cancelText: '取消',
+    confirmColor: '#1677ff',
+    success: (result: any) => {
+      if (result.confirm) {
+        void copyStageItemsIntoSeriesStage(seriesItem, targetStage, sourceStage)
+      }
     },
   })
 }
@@ -1074,6 +1186,56 @@ async function duplicateSeriesStage(seriesItem: RecipeDesignerSeriesCard, stage:
     uni.showToast({ title: '复制生命阶段失败', icon: 'none' })
   } finally {
     duplicatingStageKey.value = ''
+  }
+}
+
+async function ensureTargetStageDraftForCopy(
+  seriesItem: RecipeDesignerSeriesCard,
+  stage: RecipeDesignerSeriesStage,
+) {
+  if (stage.status !== 'PUBLISHED' && stage.draftId) {
+    return stage.draftId
+  }
+
+  const res: any = await recipeDesignerApi.createSeriesStageDraft(seriesItem.id, {
+    scenario: stage.scenario,
+  })
+  const draft = res?.data ?? res
+  const draftId = draft?.id || draft?.draftId || draft?.draft?.id
+  if (!draftId) {
+    throw new Error('目标阶段草稿创建失败')
+  }
+  return draftId
+}
+
+async function copyStageItemsIntoSeriesStage(
+  seriesItem: RecipeDesignerSeriesCard,
+  targetStage: RecipeDesignerSeriesStage,
+  sourceStage: StageItemCopySource,
+) {
+  const stageKey = getStageKey(seriesItem, targetStage)
+  if (copyingStageItemsKey.value) return
+  if (!sourceStage.draftId) {
+    uni.showToast({ title: '来源阶段不可复制', icon: 'none' })
+    return
+  }
+
+  copyingStageItemsKey.value = stageKey
+  try {
+    const targetDraftId = await ensureTargetStageDraftForCopy(seriesItem, targetStage)
+    await recipeDesignerApi.copyStageItemsFromDraft(targetDraftId, {
+      sourceDraftId: sourceStage.draftId,
+    })
+    uni.showToast({ title: '已复制原料', icon: 'success' })
+    await loadSeries()
+  } catch (error) {
+    console.error('[RecipeDesignerList] Failed to copy stage items:', error)
+    uni.showToast({
+      title: getRecipeDesignerDeleteErrorMessage(error) || '复制原料失败',
+      icon: 'none',
+    })
+  } finally {
+    copyingStageItemsKey.value = ''
   }
 }
 

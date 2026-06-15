@@ -158,7 +158,8 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('publishedStageCount')
     expect(listSource).toContain('补剂库')
     expect(listSource).toContain('复制整个系列')
-    expect(listSource).toContain('复制此生命阶段')
+    expect(listSource).toContain('复制其他阶段原料')
+    expect(listSource).toContain('复制为新食谱系列')
     expect(listSource).toContain('selectedSeriesStatusFilter')
     expect(listSource).toContain('PRIVATE_CUSTOM')
     expect(listSupplementLibraryBlock).toContain('!isCustomerMode.value')
@@ -280,12 +281,27 @@ describe('recipe designer mobile entry', () => {
   it('lets staff duplicate a single life stage without editing the original stage', () => {
     expect(apiSource).toContain('duplicateSeriesStage')
     expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
-    expect(listSource).toContain('复制此生命阶段')
+    expect(listSource).toContain('复制为新食谱系列')
     expect(listSource).toContain('function duplicateSeriesStage')
     expect(listSource).toContain('Boolean(stage.draftId || stage.recipeId)')
     expect(listSource).toContain('recipeDesignerApi.duplicateSeriesStage')
     expect(listSource).toContain('stage.lifeStage')
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')
+  })
+
+  it('lets staff copy ingredient rows into a target life stage from the series card menu', () => {
+    expect(apiSource).toContain('copyStageItemsFromDraft')
+    expect(listSource).toContain('copyingStageItemsKey')
+    expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
+    expect(listSource).toContain('复制其他阶段原料')
+    expect(listSource).toContain('openStageItemCopySourceSheet')
+    expect(listSource).toContain('getStageItemCopySourceStages')
+    expect(listSource).toContain('ensureTargetStageDraftForCopy')
+    expect(listSource).toContain('recipeDesignerApi.createSeriesStageDraft')
+    expect(listSource).toContain('recipeDesignerApi.copyStageItemsFromDraft')
+    expect(listSource).toContain('function copyStageItemsIntoSeriesStage')
+    expect(listSource).toContain('sourceStage.draftId')
+    expect(listSource).toContain('await loadSeries()')
   })
 
   it('creates a new series and navigates to the backend initial draft when available', () => {
@@ -1174,6 +1190,16 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('class="food-badge"')
     expect(editorSource).not.toContain('多档案')
     expect(editorSource).not.toContain('主档案')
+  })
+
+  it('keeps cross-stage ingredient copy on the series card menu instead of the editor', () => {
+    expect(editorSource).not.toContain('copy-stage-btn')
+    expect(editorSource).not.toContain('复制阶段原料')
+    expect(editorSource).not.toContain('openStageItemCopySheet')
+    expect(editorSource).not.toContain('stageItemCopySources')
+    expect(editorSource).not.toContain('copyStageItemsFromDraft')
+    expect(editorSource).not.toContain('confirmCopyStageItemsFromSource')
+    expect(editorSource).not.toContain('copyingStageItems')
   })
 
   it('keeps the add ingredient picker header and footer fixed while only the result list scrolls', () => {

@@ -31,6 +31,7 @@ import {
   CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
+  CopyRecipeStageItemsDto,
   CreateRecipeSeriesDto,
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
@@ -330,6 +331,23 @@ export class RecipeDesignerController {
         toRecipeDesignerAccessContext(user),
       );
     return ApiResponseDto.success(snapshot);
+  }
+
+  @Post('drafts/:id/copy-items-from-stage')
+  @ApiOperation({
+    summary: 'Replace editable draft items from another stage in the same series',
+  })
+  async copyStageItemsToDraft(
+    @Param('id') id: string,
+    @Body() dto: CopyRecipeStageItemsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.copyStageItemsToDraft(
+      id,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(draft);
   }
 
   @Post('drafts')

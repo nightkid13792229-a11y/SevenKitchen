@@ -1,0 +1,389 @@
+import {
+  validateIngredientImportManifest,
+  type IngredientImportManifest,
+} from 'src/application/standard-ingredient-import/ingredient-import-manifest';
+
+const completeFoodManifest: IngredientImportManifest = {
+  version: 1,
+  operationMode: 'local-draft',
+  ingredient: {
+    type: 'FOOD',
+    name: 'Chicken breast',
+    procurementSkus: [
+      {
+        sku: 'chicken-breast-wholesale',
+        supplier: 'SevenKitchen QA Market',
+      },
+    ],
+  },
+  nutritionProfiles: [
+    {
+      id: 'profile-usda-171077',
+      basis: 'PER_100G',
+      nutrients: {
+        energyKcal: { value: 165, unit: 'kcal' },
+        proteinG: { value: 31.02, unit: 'g' },
+        fatG: { value: 3.57, unit: 'g' },
+        carbohydrateG: { value: 0, unit: 'g', measuredZero: true },
+      },
+    },
+  ],
+  sourceCandidates: [
+    {
+      sourceId: 'USDA:171077',
+      sourceName: 'USDA FoodData Central',
+      matchedName: 'Chicken breast, cooked',
+    },
+  ],
+  dbAlignmentReport: {
+    id: 'db-align-food-001',
+    status: 'passing',
+  },
+  operatorConfirmation: {
+    localWriteApproved: true,
+    productionPackageApproved: false,
+  },
+};
+
+const completeSupplementManifest: IngredientImportManifest = {
+  version: 1,
+  operationMode: 'production-package',
+  ingredient: {
+    type: 'SUPPLEMENT',
+    name: 'Wild fish oil',
+  },
+  packageEvidence: {
+    metadata: {
+      source: 'operator-package-review',
+      capturedAt: '2026-06-16T08:00:00.000Z',
+    },
+    packageImages: [
+      {
+        uri: 'cos://sevenkitchen/package-evidence/fish-oil-front.jpg',
+        kind: 'front-label',
+      },
+    ],
+    labelSources: [],
+  },
+  operatorConfirmation: {
+    localWriteApproved: false,
+    productionPackageApproved: true,
+  },
+};
+
+describe('validateIngredientImportManifest', () => {
+  it('accepts a complete FOOD manifest with procurement SKUs', () => {
+    const result = validateIngredientImportManifest(makeFoodManifest());
+
+    expect(result).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('accepts a complete SUPPLEMENT manifest with package image evidence', () => {
+    const result = validateIngredientImportManifest(makeSupplementManifest());
+
+    expect(result).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('rejects manifests that do not declare version 1', () => {
+    const manifest = makeFoodManifest({ version: 2 as never });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'INVALID_VERSION', path: 'version' }),
+    );
+  });
+
+  it('rejects PACKAGING because v1 only supports FOOD and SUPPLEMENT', () => {
+    const manifest = makeFoodManifest({
+      ingredient: { type: 'PACKAGING' as never, name: 'Box' },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'INGREDIENT_TYPE_NOT_SUPPORTED' }),
+    );
+  });
+
+  it('rejects whole database migration modes and flags', () => {
+    const manifest = makeFoodManifest({
+      operationMode: 'whole-database-migration' as never,
+      wholeDatabaseMigration: true,
+      migrationFlags: { wholeDatabase: true },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'WHOLE_DATABASE_MIGRATION_FORBIDDEN',
+          path: 'operationMode',
+        }),
+        expect.objectContaining({
+          code: 'WHOLE_DATABASE_MIGRATION_FORBIDDEN',
+          path: 'wholeDatabaseMigration',
+        }),
+        expect.objectContaining({
+          code: 'WHOLE_DATABASE_MIGRATION_FORBIDDEN',
+          path: 'migrationFlags.wholeDatabase',
+        }),
+      ]),
+    );
+  });
+
+  it('requires FOOD manifests to include nutrition profiles and source candidates', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [],
+      sourceCandidates: [],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'FOOD_NUTRITION_REQUIRED',
+          path: 'nutritionProfiles',
+        }),
+        expect.objectContaining({
+          code: 'FOOD_NUTRITION_REQUIRED',
+          path: 'sourceCandidates',
+        }),
+      ]),
+    );
+  });
+
+  it('forbids procurement SKUs for SUPPLEMENT manifests', () => {
+    const manifest = makeSupplementManifest({
+      ingredient: {
+        type: 'SUPPLEMENT',
+        name: 'Vitamin D3',
+        procurementSkus: [
+          {
+            sku: 'vitamin-d3-1000iu',
+            supplier: 'Supplement Vendor',
+          },
+        ],
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN',
+        path: 'ingredient.procurementSkus',
+      }),
+    );
+  });
+
+  it('requires SUPPLEMENT manifests to include a package photo or equivalent label source', () => {
+    const manifest = makeSupplementManifest({
+      packageEvidence: {
+        metadata: {
+          source: 'operator-package-review',
+          capturedAt: '2026-06-16T08:00:00.000Z',
+        },
+        packageImages: [],
+        labelSources: [],
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED',
+        path: 'packageEvidence',
+      }),
+    );
+  });
+
+  it('treats empty, null, non-numeric, and unmeasured zero nutrient values as missing', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-with-missing-values',
+          basis: 'PER_100G',
+          nutrients: {
+            proteinG: { value: '', unit: 'g' },
+            fatG: { value: null, unit: 'g' },
+            calciumMg: { value: 'not provided', unit: 'mg' },
+            phosphorusMg: { value: 0, unit: 'mg' },
+            carbohydrateG: { value: 0, unit: 'g', measuredZero: true },
+          },
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+    const missingValuePaths = result.errors
+      .filter((error) => error.code === 'NUTRIENT_VALUE_MISSING')
+      .map((error) => error.path);
+
+    expect(result.ok).toBe(false);
+    expect(missingValuePaths).toEqual(
+      expect.arrayContaining([
+        'nutritionProfiles[0].nutrients.proteinG.value',
+        'nutritionProfiles[0].nutrients.fatG.value',
+        'nutritionProfiles[0].nutrients.calciumMg.value',
+        'nutritionProfiles[0].nutrients.phosphorusMg.value',
+      ]),
+    );
+    expect(missingValuePaths).not.toContain(
+      'nutritionProfiles[0].nutrients.carbohydrateG.value',
+    );
+  });
+
+  it('requires local draft writes to have a passing DB alignment report and operator approval', () => {
+    const manifest = makeFoodManifest({
+      dbAlignmentReport: {
+        id: '',
+        status: 'failing',
+      },
+      operatorConfirmation: {
+        localWriteApproved: false,
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'LOCAL_WRITE_ALIGNMENT_REQUIRED',
+          path: 'dbAlignmentReport',
+        }),
+        expect.objectContaining({
+          code: 'LOCAL_WRITE_CONFIRMATION_REQUIRED',
+          path: 'operatorConfirmation.localWriteApproved',
+        }),
+      ]),
+    );
+  });
+
+  it('requires production package exports to have operator approval', () => {
+    const manifest = makeSupplementManifest({
+      operatorConfirmation: {
+        productionPackageApproved: false,
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'PRODUCTION_PACKAGE_CONFIRMATION_REQUIRED',
+        path: 'operatorConfirmation.productionPackageApproved',
+      }),
+    );
+  });
+
+  it('returns every applicable error instead of stopping at the first one', () => {
+    const manifest = makeFoodManifest({
+      version: 99 as never,
+      wholeDatabaseMigration: true,
+      nutritionProfiles: [
+        {
+          id: 'bad-profile',
+          basis: 'PER_100G',
+          nutrients: {
+            proteinG: { value: null, unit: 'g' },
+          },
+        },
+      ],
+      sourceCandidates: [],
+      dbAlignmentReport: {
+        id: '',
+        status: 'failing',
+      },
+      operatorConfirmation: {
+        localWriteApproved: false,
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+    const codes = result.errors.map((error) => error.code);
+
+    expect(result.ok).toBe(false);
+    expect(codes).toEqual(
+      expect.arrayContaining([
+        'INVALID_VERSION',
+        'WHOLE_DATABASE_MIGRATION_FORBIDDEN',
+        'FOOD_NUTRITION_REQUIRED',
+        'NUTRIENT_VALUE_MISSING',
+        'LOCAL_WRITE_ALIGNMENT_REQUIRED',
+        'LOCAL_WRITE_CONFIRMATION_REQUIRED',
+      ]),
+    );
+  });
+});
+
+function makeFoodManifest(
+  overrides: Partial<IngredientImportManifest> = {},
+): IngredientImportManifest {
+  return mergeManifest(completeFoodManifest, overrides);
+}
+
+function makeSupplementManifest(
+  overrides: Partial<IngredientImportManifest> = {},
+): IngredientImportManifest {
+  return mergeManifest(completeSupplementManifest, overrides);
+}
+
+function mergeManifest(
+  base: IngredientImportManifest,
+  overrides: Partial<IngredientImportManifest>,
+): IngredientImportManifest {
+  const manifest = cloneManifest(base);
+
+  return {
+    ...manifest,
+    ...overrides,
+    ingredient:
+      overrides.ingredient === undefined
+        ? manifest.ingredient
+        : {
+            ...manifest.ingredient,
+            ...overrides.ingredient,
+          },
+    dbAlignmentReport:
+      overrides.dbAlignmentReport === undefined
+        ? manifest.dbAlignmentReport
+        : {
+            ...manifest.dbAlignmentReport,
+            ...overrides.dbAlignmentReport,
+          },
+    operatorConfirmation:
+      overrides.operatorConfirmation === undefined
+        ? manifest.operatorConfirmation
+        : {
+            ...manifest.operatorConfirmation,
+            ...overrides.operatorConfirmation,
+          },
+  };
+}
+
+function cloneManifest(
+  manifest: IngredientImportManifest,
+): IngredientImportManifest {
+  return JSON.parse(JSON.stringify(manifest)) as IngredientImportManifest;
+}

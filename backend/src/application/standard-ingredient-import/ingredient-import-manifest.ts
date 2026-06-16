@@ -274,7 +274,7 @@ function hasItems<T>(items: T[] | undefined): boolean {
 function hasPackageEvidence(
   packageEvidence: SupplementPackageEvidence | undefined,
 ): boolean {
-  if (!packageEvidence?.metadata) {
+  if (!packageEvidence) {
     return false;
   }
 

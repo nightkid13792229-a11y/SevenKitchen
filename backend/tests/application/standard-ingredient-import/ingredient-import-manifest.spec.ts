@@ -92,6 +92,28 @@ describe('validateIngredientImportManifest', () => {
     });
   });
 
+  it('accepts SUPPLEMENT label source evidence without package images or metadata', () => {
+    const manifest = makeSupplementManifest({
+      packageEvidence: {
+        packageImages: [],
+        labelSources: [
+          {
+            sourceId: 'vendor-label:f792',
+            labelText: 'Guaranteed analysis from vendor label PDF',
+          },
+        ],
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
   it('rejects manifests that do not declare version 1', () => {
     const manifest = makeFoodManifest({ version: 2 as never });
 

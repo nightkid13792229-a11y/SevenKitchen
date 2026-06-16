@@ -30,6 +30,7 @@ export interface NutritionSourceCandidate {
 export interface RankNutritionSourceCandidatesInput {
   requestedState: NutritionStateTag;
   candidates: NutritionSourceCandidate[];
+  minimumPrimaryCoveragePercent?: number;
 }
 
 export interface RankedNutritionSourceCandidate
@@ -67,14 +68,25 @@ const cfctSource: ApprovedNutritionSource = 'CFCT';
 /**
  * Ranks approved nutrition source candidates with deterministic policy scores.
  *
+ * CFCT candidates are retained only when no primary official source candidate
+ * matches the requested state and meets the configured completeness threshold.
  * These scores are selection aids for import tooling. They do not replace
  * operator review of semantic fit, nutrient completeness, or final acceptance.
  */
 export function rankNutritionSourceCandidates(
   input: RankNutritionSourceCandidatesInput,
 ): RankedNutritionSourceCandidate[] {
+  const minimumPrimaryCoveragePercent =
+    input.minimumPrimaryCoveragePercent ?? 60;
   const sourceStateAvailability = collectSourceStateAvailability(
     input.candidates,
+  );
+  const hasFallbackBlockingPrimary = input.candidates.some((candidate) =>
+    isFallbackBlockingPrimary({
+      candidate,
+      requestedState: input.requestedState,
+      minimumPrimaryCoveragePercent,
+    }),
   );
 
   return input.candidates
@@ -93,7 +105,11 @@ export function rankNutritionSourceCandidates(
       } =>
         entry.source !== undefined &&
         hasDeclaredStateTags(entry.candidate) &&
-        entry.candidate.stateTags.includes(input.requestedState),
+        entry.candidate.stateTags.includes(input.requestedState) &&
+        shouldIncludeForCfctFallbackPolicy({
+          source: entry.source,
+          hasFallbackBlockingPrimary,
+        }),
     )
     .map(({ candidate, originalIndex, source }) => {
       const fallbackOnly = source === cfctSource;
@@ -122,6 +138,30 @@ export function rankNutritionSourceCandidates(
       return left.originalIndex - right.originalIndex;
     })
     .map(({ originalIndex: _originalIndex, ...candidate }) => candidate);
+}
+
+function isFallbackBlockingPrimary(input: {
+  candidate: NutritionSourceCandidate;
+  requestedState: NutritionStateTag;
+  minimumPrimaryCoveragePercent: number;
+}): boolean {
+  const source = toApprovedNutritionSource(input.candidate.source);
+
+  return (
+    source !== undefined &&
+    source !== cfctSource &&
+    hasDeclaredStateTags(input.candidate) &&
+    input.candidate.stateTags.includes(input.requestedState) &&
+    input.candidate.essentialCoveragePercent >=
+      input.minimumPrimaryCoveragePercent
+  );
+}
+
+function shouldIncludeForCfctFallbackPolicy(input: {
+  source: ApprovedNutritionSource;
+  hasFallbackBlockingPrimary: boolean;
+}): boolean {
+  return input.source !== cfctSource || !input.hasFallbackBlockingPrimary;
 }
 
 function collectSourceStateAvailability(

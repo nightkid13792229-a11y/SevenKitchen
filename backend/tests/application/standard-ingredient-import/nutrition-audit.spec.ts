@@ -300,4 +300,31 @@ describe('mergeSupplementalNutritionFields', () => {
     expect(result.nutrients).not.toHaveProperty('linoleicAcidG');
     expect(result.nutrients).toHaveProperty('dhaG');
   });
+
+  it('refuses supplemental parent fields that make existing child nutrients invalid', () => {
+    const result = mergeSupplementalNutritionFields({
+      profileName: 'Multi-source parent conflict sample',
+      nutrients: {
+        linoleicAcidG: { value: 11, unit: 'g' },
+      },
+      sourceForms: {},
+      supplementalSources: [
+        {
+          sourceId: 'fat-lab-a',
+          nutrients: {
+            fatG: { value: 10, unit: 'g' },
+          },
+        },
+      ],
+    });
+
+    expect(result.refusedFields).toContainEqual(
+      expect.objectContaining({
+        field: 'fatG',
+        sourceId: 'fat-lab-a',
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+      }),
+    );
+    expect(result.nutrients).not.toHaveProperty('fatG');
+  });
 });

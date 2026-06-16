@@ -987,7 +987,11 @@ function issueReferencesField(
   issue: NutritionAuditIssue,
   field: string,
 ): boolean {
-  return issue.field === field || issue.fields?.includes(field) === true;
+  return (
+    issue.field === field ||
+    issue.parentField === field ||
+    issue.fields?.includes(field) === true
+  );
 }
 
 function cloneNutrients(

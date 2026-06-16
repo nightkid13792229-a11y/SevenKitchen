@@ -60,6 +60,25 @@ describe('auditNutritionProfileForImport', () => {
     );
   });
 
+  it('blocks bare canonical fatty acids that exceed unitless total fat aliases', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Unitless chicken fat sample',
+      nutrients: {
+        fat: { value: 10 },
+        linoleicAcid: { value: 11 },
+      },
+      sourceForms: {},
+    });
+
+    expect(result.blockingIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+        field: 'linoleicAcid',
+        parentField: 'fat',
+      }),
+    );
+  });
+
   it('blocks combined EPA, DHA, and DPA values that exceed total fat', () => {
     const result = auditNutritionProfileForImport({
       profileName: 'Fish oil sample',
@@ -100,6 +119,25 @@ describe('auditNutritionProfileForImport', () => {
     );
   });
 
+  it('blocks bare canonical amino acids that exceed unitless protein aliases', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Unitless amino acid sample',
+      nutrients: {
+        crudeProtein: { value: 30 },
+        lysine: { value: 31 },
+      },
+      sourceForms: {},
+    });
+
+    expect(result.blockingIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+        field: 'lysine',
+        parentField: 'crudeProtein',
+      }),
+    );
+  });
+
   it('blocks ash mineral totals that exceed ash grams', () => {
     const result = auditNutritionProfileForImport({
       profileName: 'Impossible ash sample',
@@ -135,6 +173,26 @@ describe('auditNutritionProfileForImport', () => {
     expect(result.blockingIssues).not.toContainEqual(
       expect.objectContaining({ code: 'MACRO_ENERGY_MISMATCH' }),
     );
+    expect(result.reviewIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'MACRO_ENERGY_MISMATCH',
+        field: 'energyKcal',
+      }),
+    );
+  });
+
+  it('emits energy review issues for bare canonical macro fields without explicit units', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Unitless energy mismatch sample',
+      nutrients: {
+        crudeProtein: { value: 10 },
+        carbohydrate: { value: 10 },
+        crudeFat: { value: 10 },
+        energyKcal: { value: 250 },
+      },
+      sourceForms: {},
+    });
+
     expect(result.reviewIssues).toContainEqual(
       expect.objectContaining({
         code: 'MACRO_ENERGY_MISMATCH',

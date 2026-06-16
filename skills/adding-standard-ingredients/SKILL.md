@@ -1,85 +1,101 @@
 ---
 name: adding-standard-ingredients
-description: Controlled project workflow for adding FOOD and SUPPLEMENT standard ingredients with source-backed nutrition, DB alignment checks, local-only draft writes, and production migration packages. Use this project-only Skill when adding a new FOOD or SUPPLEMENT standard ingredient to SevenKitchen.
+description: Use when adding a new FOOD or SUPPLEMENT standard ingredient to SevenKitchen, including source-backed nutrition lookup, supplement package-label extraction, local DB draft writes, and production migration package export.
 ---
 
 # Adding Standard Ingredients
 
-## Overview
+## Purpose
 
-[TODO: 1-2 sentences explaining what this skill enables]
+Use this project-only workflow to add standard ingredients safely. It separates local draft writes from production migration packages and blocks work when nutrition evidence, units, or database alignment are not sufficient.
 
-## Structuring This Skill
+## Non-Negotiable Gates
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+- Never write local data until local and production database alignment passes.
+- Never apply data directly to production.
+- Never migrate or sync the whole database.
+- Never invent nutrition values or supplement concentrations.
+- Use FOOD for logical food ingredients; use SUPPLEMENT for concrete supplement products.
+- Do not create procurement SKUs for SUPPLEMENT ingredients.
+- Ask the user for supplement package photos or equivalent label evidence when none is provided.
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+## Required References
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+Load these only when needed:
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
+- `references/source-policy.md` for nutrition source selection.
+- `references/nutrition-audit.md` for completeness, unit, and canine/FEDIAF checks.
+- `references/operator-checklist.md` before local apply and production package export.
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
+## Workflow
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+1. Classify the ingredient as FOOD or SUPPLEMENT. Ask if ambiguous.
+2. Prepare a manifest from `assets/ingredient-import-template.food.json` or `assets/ingredient-import-template.supplement.json`.
+3. Run DB alignment before any local write:
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/check-db-alignment.ts \
+  --local-env .env \
+  --production-env .env.production.readonly \
+  --out ../.standard-ingredient-import/alignment.json
+```
 
-## [TODO: Replace with the first main section based on chosen structure]
+4. Collect source evidence and fill the manifest.
+5. Audit the manifest:
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --out ../.standard-ingredient-import/ingredient.audit.json
+```
 
-## Resources (optional)
+6. Ask the user to confirm local write only after alignment and audit pass.
+7. Apply to the local development database only:
 
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --alignment ../.standard-ingredient-import/alignment.json \
+  --audit-out ../.standard-ingredient-import/ingredient.local-apply.json
+```
 
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
+8. After user review, build a production package only:
 
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/build-production-migration-package.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --local-audit ../.standard-ingredient-import/ingredient.local-apply.json \
+  --out-dir ../.standard-ingredient-import/ingredient-production-package
+```
 
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
+## FOOD Rules
 
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
+- Select official nutrition sources according to `references/source-policy.md`.
+- Prefer the most complete source that has both raw and cooked profiles for the same source.
+- CFCT is fallback-only.
+- Audit FEDIAF 2025 essential nutrient coverage before local write.
+- Treat null, blank, non-numeric, and unmeasured zero values as missing.
+- Multi-source field supplementation is allowed only when parent-child and unit checks pass.
+- FOOD may have procurement SKUs.
 
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
+## SUPPLEMENT Rules
 
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
+- Require package photos or equivalent label evidence.
+- Extract brand, product model, serving size, active nutrients, units, net content, and evidence notes.
+- Do not infer missing concentrations.
+- Store label evidence in `Ingredient.properties`.
+- Do not create procurement SKUs.
 
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
+## Canine/FEDIAF Canonicalization
 
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
+- Vitamin A and E must use the backend converters in `backend/src/domain/ingredient/`.
+- Vitamin D may auto-convert only ordinary D2/D3 forms using `1 ug = 40 IU`.
+- Unclear vitamin A/D/E forms are review-only.
 
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
+## User Communication
 
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+Explain decisions in business language. Tell the user when the workflow stops and why, especially for failed DB alignment, weak sources, missing supplement photos, incomplete essential nutrients, or unit conflicts.

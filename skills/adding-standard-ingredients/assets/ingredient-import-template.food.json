@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "",
+    "brand": null,
+    "productModel": null,
+    "tagIds": [],
+    "procurementSkus": []
+  },
+  "nutritionProfiles": [
+    {
+      "id": "",
+      "name": "",
+      "dataSource": "",
+      "externalId": null,
+      "category": "OTHER",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "nutrients": {}
+    }
+  ],
+  "sourceCandidates": [],
+  "dbAlignmentReport": {
+    "id": "",
+    "status": ""
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": false,
+    "productionPackageApproved": false
+  }
+}
+

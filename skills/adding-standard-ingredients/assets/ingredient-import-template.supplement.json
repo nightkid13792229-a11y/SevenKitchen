@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "ingredient": {
+    "type": "SUPPLEMENT",
+    "name": "",
+    "brand": "",
+    "productModel": "",
+    "tagIds": []
+  },
+  "packageEvidence": {
+    "packageImages": [],
+    "labelSources": []
+  },
+  "supplementLabel": {
+    "servingSize": "",
+    "activeNutrients": {},
+    "notes": ""
+  },
+  "dbAlignmentReport": {
+    "id": "",
+    "status": ""
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": false,
+    "productionPackageApproved": false
+  }
+}
+

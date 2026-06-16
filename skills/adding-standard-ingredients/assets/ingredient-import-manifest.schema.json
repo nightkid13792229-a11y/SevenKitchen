@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sevenkitchen.local/schemas/ingredient-import-manifest.schema.json",
+  "title": "SevenKitchen Standard Ingredient Import Manifest",
+  "type": "object",
+  "required": ["version", "operationMode", "ingredient", "operatorConfirmation"],
+  "properties": {
+    "version": { "const": 1 },
+    "operationMode": {
+      "enum": ["local-draft", "production-package"]
+    },
+    "updateExistingIngredientId": { "type": "string" },
+    "ingredient": {
+      "type": "object",
+      "required": ["type", "name"],
+      "properties": {
+        "type": { "enum": ["FOOD", "SUPPLEMENT"] },
+        "name": { "type": "string", "minLength": 1 },
+        "brand": { "type": ["string", "null"] },
+        "productModel": { "type": ["string", "null"] },
+        "tagIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "procurementSkus": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "nutritionProfiles": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "sourceCandidates": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "packageEvidence": {
+      "type": "object",
+      "properties": {
+        "packageImages": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "labelSources": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "supplementLabel": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "dbAlignmentReport": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "operatorConfirmation": {
+      "type": "object",
+      "properties": {
+        "localWriteApproved": { "type": "boolean" },
+        "productionPackageApproved": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+

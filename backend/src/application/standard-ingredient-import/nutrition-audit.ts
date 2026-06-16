@@ -83,7 +83,29 @@ const GRAM_DEFAULT_FIELDS = new Set([
   ...AMINO_ACID_BASE_FIELDS,
 ]);
 
-const MILLIGRAM_DEFAULT_FIELDS = new Set(MINERAL_BASE_FIELDS);
+const MINERAL_DEFAULT_UNIT_BY_FIELD = new Map(
+  FEDIAF_2025_DOG_NUTRIENTS.filter(
+    (nutrient) =>
+      nutrient.category === 'MINERAL' || nutrient.category === 'TRACE_ELEMENT',
+  ).flatMap((nutrient) => {
+    const unit = normalizeUnit(
+      nutrient.defaultIngredientUnit ?? nutrient.defaultStandardUnit,
+    );
+    if (unit !== 'mg' && unit !== 'ug') {
+      return [];
+    }
+
+    const fieldKey = nutrient.fieldPath?.split('.').pop();
+    const fields = [nutrient.code, ...(fieldKey ? [fieldKey] : [])];
+    return fields.map((field) => [field, unit] as const);
+  }),
+);
+
+for (const field of MINERAL_BASE_FIELDS) {
+  if (!MINERAL_DEFAULT_UNIT_BY_FIELD.has(field)) {
+    MINERAL_DEFAULT_UNIT_BY_FIELD.set(field, 'mg');
+  }
+}
 
 type SourceFormMetadataValue = string | number | boolean | null | undefined;
 
@@ -863,8 +885,9 @@ function inferUnit(field: string, unit: string | null | undefined): string {
   if (GRAM_DEFAULT_FIELDS.has(field)) {
     return 'g';
   }
-  if (MILLIGRAM_DEFAULT_FIELDS.has(field)) {
-    return 'mg';
+  const mineralDefaultUnit = MINERAL_DEFAULT_UNIT_BY_FIELD.get(field);
+  if (mineralDefaultUnit) {
+    return mineralDefaultUnit;
   }
   const normalizedField = field.toLowerCase();
   if (normalizedField.endsWith('kcal')) {

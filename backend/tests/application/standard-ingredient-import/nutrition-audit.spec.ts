@@ -158,6 +158,70 @@ describe('auditNutritionProfileForImport', () => {
     );
   });
 
+  it('treats unitless canonical iodine as micrograms for ash checks', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Trace iodine sample',
+      nutrients: {
+        ashG: { value: 1, unit: 'g' },
+        iodine: { value: 900 },
+      },
+      sourceForms: {},
+    });
+
+    expect(result.blockingIssues).not.toContainEqual(
+      expect.objectContaining({
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+        field: 'ashMinerals',
+      }),
+    );
+    expect(result.normalizedNutrients.iodine).toMatchObject({
+      value: 900,
+      unit: 'ug',
+    });
+  });
+
+  it('treats unitless canonical selenium as micrograms for ash checks', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Trace selenium sample',
+      nutrients: {
+        ashG: { value: 1, unit: 'g' },
+        selenium: { value: 500 },
+      },
+      sourceForms: {},
+    });
+
+    expect(result.blockingIssues).not.toContainEqual(
+      expect.objectContaining({
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+        field: 'ashMinerals',
+      }),
+    );
+    expect(result.normalizedNutrients.selenium).toMatchObject({
+      value: 500,
+      unit: 'ug',
+    });
+  });
+
+  it('keeps unitless canonical milligram minerals in ash checks', () => {
+    const result = auditNutritionProfileForImport({
+      profileName: 'Unitless ash mineral sample',
+      nutrients: {
+        ashG: { value: 1, unit: 'g' },
+        calcium: { value: 800 },
+        phosphorus: { value: 400 },
+      },
+      sourceForms: {},
+    });
+
+    expect(result.blockingIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'CHILD_NUTRIENT_EXCEEDS_PARENT',
+        field: 'ashMinerals',
+        parentField: 'ashG',
+      }),
+    );
+  });
+
   it('emits review issues for macro energy values outside tolerance without blocking', () => {
     const result = auditNutritionProfileForImport({
       profileName: 'Energy mismatch sample',

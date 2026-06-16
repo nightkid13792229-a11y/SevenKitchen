@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adding Standard Ingredients"
+  short_description: "Add FOOD and SUPPLEMENT ingredients safely"
+  default_prompt: "Use $adding-standard-ingredients when adding a new FOOD or SUPPLEMENT standard ingredient to SevenKitchen."

@@ -315,6 +315,7 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain("stage.status !== 'NOT_DESIGNED'")
     expect(listSource).toContain('sourceStage.lifeStage')
     expect(listSource).toContain('recipeDesignerApi.copySeriesStageIngredients(seriesItem.id, stage.lifeStage')
+    expect(copyBlock).toContain('draft?.id || extractInitialDraftId(draft)')
     expect(listSource).toContain("confirmText: '替换'")
     expect(listSource).toContain("uni.showToast({ title: '已复制原料', icon: 'success' })")
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')

@@ -1195,7 +1195,7 @@ async function copyStageIngredientsFromSource(
       sourceLifeStage: sourceStage.lifeStage,
     })
     const draft = res?.data ?? res
-    const draftId = extractInitialDraftId(draft)
+    const draftId = draft?.id || extractInitialDraftId(draft)
     uni.showToast({ title: '已复制原料', icon: 'success' })
     if (!draftId) {
       throw new Error('目标阶段草稿创建失败')

@@ -90,6 +90,7 @@ describe('rankNutritionSourceCandidates', () => {
       candidates,
     });
 
+    expect(ranked[0].source).toBe('CFCT');
     expect(ranked).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -157,6 +158,40 @@ describe('rankNutritionSourceCandidates', () => {
     });
 
     expect(ranked.map((candidate) => candidate.source)).toEqual(['MEXT']);
+  });
+
+  it('rejects candidates with contradictory state tags', () => {
+    const rawRanked = rankNutritionSourceCandidates({
+      requestedState: 'raw',
+      candidates: [
+        makeCandidate({
+          source: 'USDA_FDC',
+          stateTags: ['raw', 'cooked'],
+        }),
+        makeCandidate({
+          source: 'NZFCD',
+          stateTags: ['raw'],
+        }),
+      ],
+    });
+    const peeledRanked = rankNutritionSourceCandidates({
+      requestedState: 'peeled',
+      candidates: [
+        makeCandidate({
+          source: 'NEVO',
+          stateTags: ['peeled', 'unpeeled'],
+        }),
+        makeCandidate({
+          source: 'COFID',
+          stateTags: ['peeled'],
+        }),
+      ],
+    });
+
+    expect(rawRanked.map((candidate) => candidate.source)).toEqual(['NZFCD']);
+    expect(peeledRanked.map((candidate) => candidate.source)).toEqual([
+      'COFID',
+    ]);
   });
 
   it('accepts candidates declaring supported state tags', () => {
@@ -230,6 +265,28 @@ describe('rankNutritionSourceCandidates', () => {
     });
 
     expect(ranked.map((candidate) => candidate.source)).toEqual(['NEVO']);
+  });
+
+  it('allows CFCT when a high-coverage primary official source has the wrong state', () => {
+    const candidates: NutritionSourceCandidate[] = [
+      makeCandidate({
+        source: 'USDA_FDC',
+        stateTags: ['cooked'],
+        essentialCoveragePercent: 100,
+      }),
+      makeCandidate({
+        source: 'CFCT',
+        stateTags: ['raw'],
+        essentialCoveragePercent: 88,
+      }),
+    ];
+
+    const ranked = rankNutritionSourceCandidates({
+      requestedState: 'raw',
+      candidates,
+    });
+
+    expect(ranked.map((candidate) => candidate.source)).toEqual(['CFCT']);
   });
 
   it('requires an explicit requested state change before using a cooked profile for a raw request', () => {

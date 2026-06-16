@@ -65,6 +65,26 @@ const MINERAL_BASE_FIELDS = [
   'zinc',
 ];
 
+const GRAM_DEFAULT_FIELDS = new Set([
+  'fat',
+  'crudeFat',
+  'protein',
+  'crudeProtein',
+  'carbohydrate',
+  'carbohydrates',
+  'carbs',
+  'ash',
+  'linoleicAcid',
+  'alphaLinolenicAcid',
+  'arachidonicAcid',
+  'epa',
+  'dha',
+  'dpa',
+  ...AMINO_ACID_BASE_FIELDS,
+]);
+
+const MILLIGRAM_DEFAULT_FIELDS = new Set(MINERAL_BASE_FIELDS);
+
 type SourceFormMetadataValue = string | number | boolean | null | undefined;
 
 export interface NutritionImportNutrientValue {
@@ -836,6 +856,15 @@ function normalizeUnit(unit: string | null | undefined): string {
 function inferUnit(field: string, unit: string | null | undefined): string {
   if (unit?.trim()) {
     return unit.trim();
+  }
+  if (field === 'energyKcal' || field === 'energy') {
+    return 'kcal';
+  }
+  if (GRAM_DEFAULT_FIELDS.has(field)) {
+    return 'g';
+  }
+  if (MILLIGRAM_DEFAULT_FIELDS.has(field)) {
+    return 'mg';
   }
   const normalizedField = field.toLowerCase();
   if (normalizedField.endsWith('kcal')) {

@@ -206,16 +206,60 @@
             >
               查看
             </el-button>
-            <el-button
-              v-if="row.pendingDraftVersion || row.status === RecipeStatus.DRAFT"
-              link
-              type="success"
-              size="small"
-              :disabled="!getPublishTarget(row)"
-              @click="handlePublish(row.pendingDraftVersion || row)"
+            <el-popover
+              v-if="getPendingPublishStages(row).length"
+              :visible="activePublishPopoverKey === getRecipePublishRowKey(row)"
+              trigger="manual"
+              placement="bottom-end"
+              :width="300"
+              popper-class="recipe-publish-popover"
             >
-              发布
-            </el-button>
+              <template #reference>
+                <el-button
+                  link
+                  type="success"
+                  size="small"
+                  :loading="publishingRowKey === getRecipePublishRowKey(row)"
+                  @click.stop="openPublishPopover(row)"
+                >
+                  发布
+                </el-button>
+              </template>
+              <div class="publish-popover-content">
+                <div class="publish-popover-title">选择要发布的生命阶段</div>
+                <el-checkbox-group v-model="selectedPublishStageIds" class="publish-stage-list">
+                  <el-checkbox
+                    v-for="stage in getPendingPublishStages(row)"
+                    :key="stage.publishRecipeId"
+                    :label="stage.publishRecipeId"
+                    :value="stage.publishRecipeId"
+                    class="publish-stage-option"
+                  >
+                    <span class="publish-stage-label">{{ stage.label }}</span>
+                    <el-tag v-if="stage.version" size="small" type="warning">v{{ stage.version }}</el-tag>
+                  </el-checkbox>
+                </el-checkbox-group>
+                <div class="publish-popover-actions">
+                  <el-button size="small" @click="closePublishPopover">取消</el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :disabled="!selectedPublishStageIds.length || publishingRowKey === getRecipePublishRowKey(row)"
+                    @click="publishSelectedStages(row)"
+                  >
+                    发布所选
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="success"
+                    :disabled="publishingRowKey === getRecipePublishRowKey(row)"
+                    @click="publishAllPendingStages(row)"
+                  >
+                    一键发布全部
+                  </el-button>
+                </div>
+              </div>
+            </el-popover>
             <el-button
               v-if="row.status === RecipeStatus.PUBLIC"
               link
@@ -271,12 +315,16 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Search, Picture } from '@element-plus/icons-vue';
 import { recipeApi } from '@/api/recipes';
 import {
+  getPendingPublishStages as resolvePendingPublishStages,
+  getRecipePublishRowKey,
+  type PendingPublishStage,
+} from '@/utils/recipeMultiStagePublish';
+import {
   RecipeStatus,
   RecipeSeriesBusinessStatus,
   RecipeManagementCategory,
   type RecipeSummary,
   type RecipeQuery,
-  type RecipeVersionSummary,
   type RecipeSeriesStageSummary,
 } from '@/types/recipe';
 
@@ -291,6 +339,9 @@ const router = useRouter();
 // Data
 const loading = ref(false);
 const recipes = ref<RecipeSummary[]>([]);
+const activePublishPopoverKey = ref<string>();
+const selectedPublishStageIds = ref<string[]>([]);
+const publishingRowKey = ref<string>();
 
 // Metadata (enum options)
 const lifeStageOptions = ref<EnumOption[]>([]);
@@ -412,12 +463,8 @@ const getOperableRecipeId = (row: Pick<RecipeSummary, 'id' | 'seriesId'>) => {
   return row.id;
 };
 
-const getPublishTarget = (
-  row: RecipeSummary,
-): RecipeVersionSummary | RecipeSummary | undefined => {
-  const target = row.pendingDraftVersion || row;
-  if (!target?.id || target.id === row.seriesId) return undefined;
-  return target;
+const getPendingPublishStages = (row: RecipeSummary) => {
+  return resolvePendingPublishStages(row);
 };
 
 // Methods
@@ -502,21 +549,83 @@ const handleEdit = (row: RecipeSummary) => {
   router.push(`/recipes/${id}/edit`);
 };
 
-const handlePublish = async (row: RecipeSummary | NonNullable<RecipeSummary['pendingDraftVersion']>) => {
-  const id = row.id;
-  if (!id) return;
+const openPublishPopover = (row: RecipeSummary) => {
+  const stages = getPendingPublishStages(row);
+  if (!stages.length) {
+    ElMessage.info('没有待发布的生命阶段');
+    return;
+  }
+
+  activePublishPopoverKey.value = getRecipePublishRowKey(row);
+  selectedPublishStageIds.value = stages.map((stage) => stage.publishRecipeId);
+};
+
+const closePublishPopover = () => {
+  activePublishPopoverKey.value = undefined;
+  selectedPublishStageIds.value = [];
+};
+
+const publishSelectedStages = async (row: RecipeSummary) => {
+  const selectedIds = new Set(selectedPublishStageIds.value);
+  const selectedStages = getPendingPublishStages(row).filter((stage) =>
+    selectedIds.has(stage.publishRecipeId),
+  );
+  await publishPendingStages(row, selectedStages);
+};
+
+const publishAllPendingStages = async (row: RecipeSummary) => {
+  await publishPendingStages(row, getPendingPublishStages(row));
+};
+
+const publishPendingStages = async (
+  row: RecipeSummary,
+  stages: PendingPublishStage[],
+) => {
+  if (!stages.length) {
+    ElMessage.warning('请选择要发布的生命阶段');
+    return;
+  }
+
+  const rowKey = getRecipePublishRowKey(row);
+  publishingRowKey.value = rowKey;
+  const failures: Array<{ stage: PendingPublishStage; message: string }> = [];
 
   try {
-    await ElMessageBox.confirm('确认发布该食谱？', '提示', {
-      type: 'warning',
-    });
+    for (const stage of stages) {
+      try {
+        await recipeApi.publish(stage.publishRecipeId);
+      } catch (error: any) {
+        failures.push({
+          stage,
+          message: error?.message || '发布失败',
+        });
+      }
+    }
 
-    await recipeApi.publish(id);
-    ElMessage.success('发布成功');
-    loadRecipes();
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '发布失败');
+    closePublishPopover();
+    await loadRecipes();
+
+    if (!failures.length) {
+      ElMessage.success(stages.length > 1 ? '全部生命阶段发布成功' : '发布成功');
+      return;
+    }
+
+    const failureText = failures
+      .map(({ stage, message }) => `${stage.label}：${message}`)
+      .join('；');
+    const message =
+      failures.length === stages.length
+        ? `发布失败：${failureText}`
+        : `部分发布失败：${failureText}`;
+
+    ElMessage({
+      type: failures.length === stages.length ? 'error' : 'warning',
+      message,
+      duration: 6000,
+    });
+  } finally {
+    if (publishingRowKey.value === rowKey) {
+      publishingRowKey.value = undefined;
     }
   }
 };
@@ -697,6 +806,49 @@ onMounted(() => {
   gap: 4px;
   font-size: 12px;
   color: #666;
+}
+
+.publish-popover-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.publish-popover-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.publish-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.publish-stage-option {
+  width: 100%;
+  margin-right: 0;
+}
+
+.publish-stage-option :deep(.el-checkbox__label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.publish-stage-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publish-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pagination {

@@ -220,6 +220,7 @@
                   type="success"
                   size="small"
                   :loading="publishingRowKey === getRecipePublishRowKey(row)"
+                  :disabled="publishingRecipeStages"
                   @click.stop="openPublishPopover(row)"
                 >
                   发布
@@ -227,7 +228,11 @@
               </template>
               <div class="publish-popover-content">
                 <div class="publish-popover-title">选择要发布的生命阶段</div>
-                <el-checkbox-group v-model="selectedPublishStageIds" class="publish-stage-list">
+                <el-checkbox-group
+                  v-model="selectedPublishStageIds"
+                  class="publish-stage-list"
+                  :disabled="publishingRecipeStages"
+                >
                   <el-checkbox
                     v-for="stage in getPendingPublishStages(row)"
                     :key="stage.publishRecipeId"
@@ -240,11 +245,17 @@
                   </el-checkbox>
                 </el-checkbox-group>
                 <div class="publish-popover-actions">
-                  <el-button size="small" @click="closePublishPopover">取消</el-button>
+                  <el-button
+                    size="small"
+                    :disabled="publishingRecipeStages"
+                    @click="closePublishPopover"
+                  >
+                    取消
+                  </el-button>
                   <el-button
                     size="small"
                     type="primary"
-                    :disabled="!selectedPublishStageIds.length || publishingRowKey === getRecipePublishRowKey(row)"
+                    :disabled="publishingRecipeStages || !selectedPublishStageIds.length"
                     @click="publishSelectedStages(row)"
                   >
                     发布所选
@@ -252,7 +263,7 @@
                   <el-button
                     size="small"
                     type="success"
-                    :disabled="publishingRowKey === getRecipePublishRowKey(row)"
+                    :disabled="publishingRecipeStages"
                     @click="publishAllPendingStages(row)"
                   >
                     一键发布全部
@@ -341,6 +352,7 @@ const loading = ref(false);
 const recipes = ref<RecipeSummary[]>([]);
 const activePublishPopoverKey = ref<string>();
 const selectedPublishStageIds = ref<string[]>([]);
+const publishingRecipeStages = ref(false);
 const publishingRowKey = ref<string>();
 
 // Metadata (enum options)
@@ -550,6 +562,11 @@ const handleEdit = (row: RecipeSummary) => {
 };
 
 const openPublishPopover = (row: RecipeSummary) => {
+  if (publishingRecipeStages.value) {
+    ElMessage.info('食谱正在发布中，请稍后再试');
+    return;
+  }
+
   const stages = getPendingPublishStages(row);
   if (!stages.length) {
     ElMessage.info('没有待发布的生命阶段');
@@ -581,12 +598,18 @@ const publishPendingStages = async (
   row: RecipeSummary,
   stages: PendingPublishStage[],
 ) => {
+  if (publishingRecipeStages.value) {
+    ElMessage.info('食谱正在发布中，请稍后再试');
+    return;
+  }
+
   if (!stages.length) {
     ElMessage.warning('请选择要发布的生命阶段');
     return;
   }
 
   const rowKey = getRecipePublishRowKey(row);
+  publishingRecipeStages.value = true;
   publishingRowKey.value = rowKey;
   const failures: Array<{ stage: PendingPublishStage; message: string }> = [];
 
@@ -602,7 +625,9 @@ const publishPendingStages = async (
       }
     }
 
-    closePublishPopover();
+    if (activePublishPopoverKey.value === rowKey) {
+      closePublishPopover();
+    }
     await loadRecipes();
 
     if (!failures.length) {
@@ -624,6 +649,7 @@ const publishPendingStages = async (
       duration: 6000,
     });
   } finally {
+    publishingRecipeStages.value = false;
     if (publishingRowKey.value === rowKey) {
       publishingRowKey.value = undefined;
     }

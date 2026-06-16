@@ -302,6 +302,8 @@ describe('recipe designer mobile entry', () => {
   it('lets staff copy another life stage ingredient list into a target stage from the series card menu', () => {
     const copyAvailabilityBlock =
       listSource.match(/function canCopyIngredientsIntoStage[\s\S]*?\n}/)?.[0] || ''
+    const copyBlock =
+      listSource.match(/async function copyStageIngredientsFromSource[\s\S]*?\n}\n\nfunction deleteSeries/)?.[0] || ''
 
     expect(apiSource).toContain('copySeriesStageIngredients')
     expect(apiSource).toContain('/copy-ingredients')
@@ -318,6 +320,9 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')
     expect(copyAvailabilityBlock).not.toContain("stage.status !== 'NOT_DESIGNED'")
     expect(copyAvailabilityBlock).not.toContain('Boolean(stage.draftId || stage.recipeId)')
+    expect(copyBlock).toContain("throw new Error('目标阶段草稿创建失败')")
+    expect(copyBlock).toContain('uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })')
+    expect(copyBlock).not.toContain('await loadSeries()')
     expect(listSource).not.toContain('从其他阶段复制原料')
     expect(listSource).not.toContain('复制此生命阶段')
   })

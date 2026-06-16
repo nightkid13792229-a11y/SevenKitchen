@@ -2304,11 +2304,18 @@ export class RecipeDesignerService {
     const targetSource = sources.find(
       (candidate) => candidate.lifeStage === targetLifeStage,
     );
+    const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
     if (!targetSource) {
-      throw new BadRequestException('目标生命阶段暂无可覆盖食谱');
+      return this.createBlankEditableSeriesStageDraftShell(
+        tx,
+        targetLifeStage,
+        series.id,
+        series.name,
+        version,
+        createdBy,
+      );
     }
 
-    const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
     return this.createEditableSeriesStageDraftShell(
       tx,
       targetSource,
@@ -2317,6 +2324,47 @@ export class RecipeDesignerService {
       version,
       createdBy,
     );
+  }
+
+  private async createBlankEditableSeriesStageDraftShell(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    lifeStage: RecipeSeriesLifeStage,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: mapSeriesLifeStageToScenario(lifeStage),
+        nutritionStandard: 'FEDIAF_2025',
+        targetHealthTags: [],
+        applicableLifeStages: [lifeStage],
+        createdBy,
+        totalWeightG: 0,
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: null,
+        revisionBaseRecipeId: null,
+        seriesId,
+        seriesLifeStage: lifeStage,
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    }) as unknown as Promise<DesignRecipeWithItems>;
   }
 
   private async createEditableSeriesStageDraftShell(

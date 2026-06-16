@@ -6458,6 +6458,96 @@ describe('RecipeDesignerService', () => {
       expect(prisma.designRecipe.create).not.toHaveBeenCalled();
     });
 
+    it('creates an editable target stage draft before copying when the target stage is not designed yet', async () => {
+      const sourceItem = item({
+        id: 'adult-source-item',
+        ingredientId: 'ingredient-adult',
+        nutritionFoodId: 'food-adult',
+        weightG: 128,
+        includeInAssessment: true,
+        ratioPercent: 64,
+        preparationMethod: 'STEAMED',
+        sortOrder: 1,
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          createdBy: 'staff-1',
+          designs: [
+            draft({
+              id: 'adult-source-design',
+              name: '燕麦鳕鱼猪肉',
+              status: 'DRAFT',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [sourceItem],
+            }),
+          ],
+          recipes: [],
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 4 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          status: 'DRAFT',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          items: [],
+        }),
+      );
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          totalWeightG: 128,
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.copySeriesStageIngredients(
+          'series-1',
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-design',
+          items: [expect.objectContaining({ weightG: 128 })],
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          status: 'DRAFT',
+          fediafDogScenario: 'ADULT_MER_95',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+          createdBy: 'staff-1',
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: { designRecipeId: 'senior-design' },
+      });
+    });
+
     it('creates an editable revision draft before copying into a published target stage', async () => {
       const sourceItem = item({
         id: 'adult-source-item',

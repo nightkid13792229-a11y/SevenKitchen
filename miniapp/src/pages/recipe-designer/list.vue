@@ -1197,11 +1197,10 @@ async function copyStageIngredientsFromSource(
     const draft = res?.data ?? res
     const draftId = extractInitialDraftId(draft)
     uni.showToast({ title: '已复制原料', icon: 'success' })
-    if (draftId) {
-      uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
-      return
+    if (!draftId) {
+      throw new Error('目标阶段草稿创建失败')
     }
-    await loadSeries()
+    uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
   } catch (error) {
     console.error('[RecipeDesignerList] Failed to copy series stage ingredients:', error)
     uni.showToast({ title: getRecipeDesignerDeleteErrorMessage(error) || '复制原料失败', icon: 'none' })

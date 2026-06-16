@@ -65,6 +65,11 @@ const approvedNutritionSources: ApprovedNutritionSource[] = [
 
 const cfctSource: ApprovedNutritionSource = 'CFCT';
 
+const contradictoryStateTagPairs: [NutritionStateTag, NutritionStateTag][] = [
+  ['raw', 'cooked'],
+  ['peeled', 'unpeeled'],
+];
+
 /**
  * Ranks approved nutrition source candidates with deterministic policy scores.
  *
@@ -88,6 +93,14 @@ export function rankNutritionSourceCandidates(
       minimumPrimaryCoveragePercent,
     }),
   );
+  const hasAllowedCfctFallback =
+    !hasFallbackBlockingPrimary &&
+    input.candidates.some((candidate) =>
+      isCfctFallbackCandidate({
+        candidate,
+        requestedState: input.requestedState,
+      }),
+    );
 
   return input.candidates
     .map((candidate, originalIndex) => ({
@@ -105,10 +118,14 @@ export function rankNutritionSourceCandidates(
       } =>
         entry.source !== undefined &&
         hasDeclaredStateTags(entry.candidate) &&
+        !hasContradictoryStateTags(entry.candidate.stateTags) &&
         entry.candidate.stateTags.includes(input.requestedState) &&
         shouldIncludeForCfctFallbackPolicy({
+          candidate: entry.candidate,
           source: entry.source,
           hasFallbackBlockingPrimary,
+          hasAllowedCfctFallback,
+          minimumPrimaryCoveragePercent,
         }),
     )
     .map(({ candidate, originalIndex, source }) => {
@@ -151,17 +168,43 @@ function isFallbackBlockingPrimary(input: {
     source !== undefined &&
     source !== cfctSource &&
     hasDeclaredStateTags(input.candidate) &&
+    !hasContradictoryStateTags(input.candidate.stateTags) &&
     input.candidate.stateTags.includes(input.requestedState) &&
     input.candidate.essentialCoveragePercent >=
       input.minimumPrimaryCoveragePercent
   );
 }
 
+function isCfctFallbackCandidate(input: {
+  candidate: NutritionSourceCandidate;
+  requestedState: NutritionStateTag;
+}): boolean {
+  const source = toApprovedNutritionSource(input.candidate.source);
+
+  return (
+    source === cfctSource &&
+    hasDeclaredStateTags(input.candidate) &&
+    !hasContradictoryStateTags(input.candidate.stateTags) &&
+    input.candidate.stateTags.includes(input.requestedState)
+  );
+}
+
 function shouldIncludeForCfctFallbackPolicy(input: {
+  candidate: NutritionSourceCandidate;
   source: ApprovedNutritionSource;
   hasFallbackBlockingPrimary: boolean;
+  hasAllowedCfctFallback: boolean;
+  minimumPrimaryCoveragePercent: number;
 }): boolean {
-  return input.source !== cfctSource || !input.hasFallbackBlockingPrimary;
+  if (input.source === cfctSource) {
+    return !input.hasFallbackBlockingPrimary;
+  }
+
+  return (
+    !input.hasAllowedCfctFallback ||
+    input.candidate.essentialCoveragePercent >=
+      input.minimumPrimaryCoveragePercent
+  );
 }
 
 function collectSourceStateAvailability(
@@ -175,7 +218,11 @@ function collectSourceStateAvailability(
   candidates.forEach((candidate) => {
     const source = toApprovedNutritionSource(candidate.source);
 
-    if (source === undefined || !hasDeclaredStateTags(candidate)) {
+    if (
+      source === undefined ||
+      !hasDeclaredStateTags(candidate) ||
+      hasContradictoryStateTags(candidate.stateTags)
+    ) {
       return;
     }
 
@@ -234,6 +281,13 @@ function hasDeclaredStateTags(
   candidate: NutritionSourceCandidate,
 ): candidate is NutritionSourceCandidate & { stateTags: NutritionStateTag[] } {
   return candidate.stateTags !== undefined && candidate.stateTags.length > 0;
+}
+
+function hasContradictoryStateTags(stateTags: NutritionStateTag[]): boolean {
+  return contradictoryStateTagPairs.some(
+    ([firstStateTag, secondStateTag]) =>
+      stateTags.includes(firstStateTag) && stateTags.includes(secondStateTag),
+  );
 }
 
 function toApprovedNutritionSource(

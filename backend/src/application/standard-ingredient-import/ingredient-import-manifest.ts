@@ -27,9 +27,11 @@ export interface IngredientImportManifest {
   version: 1;
   ingredient: IngredientImportDescriptor;
   operationMode: IngredientImportMode;
+  updateExistingIngredientId?: string;
   nutritionProfiles?: IngredientImportNutritionProfile[];
   sourceCandidates?: IngredientImportSourceCandidate[];
   packageEvidence?: SupplementPackageEvidence;
+  supplementLabel?: SupplementLabelEvidence;
   dbAlignmentReport?: DbAlignmentReport;
   operatorConfirmation?: OperatorConfirmation;
   wholeDatabaseMigration?: boolean;
@@ -39,17 +41,44 @@ export interface IngredientImportManifest {
 export interface IngredientImportDescriptor {
   type: IngredientImportType;
   name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  tagIds?: string[];
+  notes?: string | null;
   procurementSkus?: ProcurementSkuManifest[];
 }
 
 export interface ProcurementSkuManifest {
   sku: string;
+  name?: string;
   supplier?: string;
+  supplierName?: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPurchasePrice?: number | null;
+  referencePurchasePrice?: number | null;
+  sourceTier?: 'ORGANIC' | 'MARKET_PREMIUM' | 'WHOLESALE' | null;
+  notes?: string | null;
 }
 
 export interface IngredientImportNutritionProfile {
   id: string;
+  name?: string;
+  nameEn?: string | null;
+  dataSource?: string;
+  externalId?: string | null;
+  category?: string;
   basis: string;
+  preparationState?: string | null;
+  preparationStateLabel?: string | null;
+  ediblePortionLabel?: string | null;
+  processingLabel?: string | null;
+  isPrimary?: boolean;
+  yieldRate?: number;
+  notes?: string | null;
   nutrients: Record<string, IngredientImportNutrientValue>;
 }
 
@@ -83,6 +112,12 @@ export interface SupplementLabelSource {
   uri?: string;
   sourceId?: string;
   labelText?: string;
+}
+
+export interface SupplementLabelEvidence {
+  servingSize?: string;
+  activeNutrients?: Record<string, number | string | null>;
+  notes?: string;
 }
 
 export interface DbAlignmentReport {

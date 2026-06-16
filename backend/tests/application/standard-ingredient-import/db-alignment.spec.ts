@@ -1,5 +1,7 @@
 import {
+  collectDatabaseAlignmentSnapshot,
   compareDatabaseAlignmentSnapshots,
+  type DatabaseAlignmentPrismaClient,
   type DatabaseAlignmentSnapshot,
 } from 'src/application/standard-ingredient-import/db-alignment';
 
@@ -177,3 +179,126 @@ describe('compareDatabaseAlignmentSnapshots', () => {
     expect(first.id).toBe(second.id);
   });
 });
+
+describe('collectDatabaseAlignmentSnapshot', () => {
+  it('includes DB nutrient definitions in the critical nutrient alias hash', async () => {
+    const firstPrisma = makePrismaFixtureWithNutrientDefinitions([
+      nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
+    ]);
+    const secondPrisma = makePrismaFixtureWithNutrientDefinitions([
+      nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
+      nutrientDefinition({ code: 'phosphorus', sortOrder: 20 }),
+    ]);
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema',
+    });
+
+    expect(firstPrisma.nutrientDefinitionFindMany).toHaveBeenCalledWith({
+      select: {
+        code: true,
+        fieldPath: true,
+        name: true,
+        nameEn: true,
+        category: true,
+        defaultIngredientUnit: true,
+        defaultStandardUnit: true,
+        isDirect: true,
+        isDerived: true,
+        expression: true,
+        sortOrder: true,
+        isActive: true,
+      },
+      orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
+    });
+    expect(first.criticalDataHashes.nutrientAliases).not.toBe(
+      second.criticalDataHashes.nutrientAliases,
+    );
+    expect(firstPrisma.writeSpies.$executeRaw).not.toHaveBeenCalled();
+    expect(firstPrisma.writeSpies.$executeRawUnsafe).not.toHaveBeenCalled();
+    expect(
+      firstPrisma.writeSpies.nutritionNutrientDefinitionCreate,
+    ).not.toHaveBeenCalled();
+  });
+});
+
+function makePrismaFixtureWithNutrientDefinitions(
+  nutrientDefinitions: unknown[],
+): {
+  client: DatabaseAlignmentPrismaClient;
+  nutrientDefinitionFindMany: jest.Mock;
+  writeSpies: {
+    $executeRaw: jest.Mock;
+    $executeRawUnsafe: jest.Mock;
+    nutritionNutrientDefinitionCreate: jest.Mock;
+  };
+} {
+  const nutrientDefinitionFindMany = jest
+    .fn()
+    .mockResolvedValue(nutrientDefinitions);
+  const writeSpies = {
+    $executeRaw: jest.fn(),
+    $executeRawUnsafe: jest.fn(),
+    nutritionNutrientDefinitionCreate: jest.fn(),
+  };
+  const clientWithWriteSpies = {
+    $queryRaw: jest.fn().mockResolvedValue([
+      {
+        migration_name: '202606010001_a',
+        checksum: 'migration:checksum',
+        finished_at: '2026-06-16T00:00:00.000Z',
+      },
+    ]),
+    $executeRaw: writeSpies.$executeRaw,
+    $executeRawUnsafe: writeSpies.$executeRawUnsafe,
+    nutritionStandardVersion: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    nutritionStandardEntry: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    nutritionNutrientDefinition: {
+      findMany: nutrientDefinitionFindMany,
+      create: writeSpies.nutritionNutrientDefinitionCreate,
+    },
+    ingredientTag: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+  const client: DatabaseAlignmentPrismaClient = clientWithWriteSpies;
+
+  return {
+    client,
+    nutrientDefinitionFindMany,
+    writeSpies,
+  };
+}
+
+function nutrientDefinition(
+  overrides: Partial<{
+    code: string;
+    sortOrder: number;
+  }> = {},
+) {
+  return {
+    code: overrides.code ?? 'calcium',
+    fieldPath: 'minerals.calcium',
+    name: 'Calcium',
+    nameEn: 'Calcium',
+    category: 'MINERAL',
+    defaultIngredientUnit: 'mg',
+    defaultStandardUnit: 'g/1000kcal',
+    isDirect: true,
+    isDerived: false,
+    expression: null,
+    sortOrder: overrides.sortOrder ?? 10,
+    isActive: true,
+  };
+}

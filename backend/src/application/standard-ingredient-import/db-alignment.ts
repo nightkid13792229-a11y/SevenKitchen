@@ -78,6 +78,7 @@ export interface DatabaseAlignmentPrismaClient {
   $queryRaw: DatabaseAlignmentQueryRaw;
   nutritionStandardVersion: DatabaseAlignmentFindManyDelegate;
   nutritionStandardEntry: DatabaseAlignmentFindManyDelegate;
+  nutritionNutrientDefinition: DatabaseAlignmentFindManyDelegate;
   ingredientTag: DatabaseAlignmentFindManyDelegate;
   order?: DatabaseAlignmentCountDelegate;
   inventoryLedgerEntry?: DatabaseAlignmentCountDelegate;
@@ -163,6 +164,7 @@ export async function collectDatabaseAlignmentSnapshot(
     schemaPrisma,
     nutritionStandardVersions,
     nutritionStandardEntries,
+    nutritionNutrientDefinitions,
     ingredientTags,
     rowCounts,
   ] = await Promise.all([
@@ -170,6 +172,7 @@ export async function collectDatabaseAlignmentSnapshot(
     readSchemaFile(schemaPrismaPath),
     collectNutritionStandardVersions(prisma),
     collectNutritionStandardEntries(prisma),
+    collectNutritionNutrientDefinitions(prisma),
     collectIngredientTags(prisma),
     collectNonCriticalRowCounts(prisma),
   ]);
@@ -185,7 +188,10 @@ export async function collectDatabaseAlignmentSnapshot(
         entries: nutritionStandardEntries,
       }),
       ingredientTags: hashComparableValue(ingredientTags),
-      nutrientAliases: hashComparableValue(NUTRITION_FIELD_CATALOG),
+      nutrientAliases: hashComparableValue({
+        fieldCatalog: NUTRITION_FIELD_CATALOG,
+        nutrientDefinitions: nutritionNutrientDefinitions,
+      }),
     },
     rowCounts,
   };
@@ -403,6 +409,28 @@ async function collectNutritionStandardEntries(
       { basis: 'asc' },
       { unit: 'asc' },
     ],
+  });
+}
+
+async function collectNutritionNutrientDefinitions(
+  prisma: DatabaseAlignmentPrismaClient,
+): Promise<unknown[]> {
+  return prisma.nutritionNutrientDefinition.findMany({
+    select: {
+      code: true,
+      fieldPath: true,
+      name: true,
+      nameEn: true,
+      category: true,
+      defaultIngredientUnit: true,
+      defaultStandardUnit: true,
+      isDirect: true,
+      isDerived: true,
+      expression: true,
+      sortOrder: true,
+      isActive: true,
+    },
+    orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
   });
 }
 

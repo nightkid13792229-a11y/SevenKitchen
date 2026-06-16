@@ -94,6 +94,44 @@ test('getPendingPublishStages returns every pending draft stage from a recipe se
   );
 });
 
+test('getPendingPublishStages uses submitted stage version ids when draft metadata is absent', () => {
+  const stages = getPendingPublishStages({
+    id: 'series-row',
+    seriesId: 'series-1',
+    name: '牛肉南瓜',
+    version: 4,
+    status: RecipeStatus.PUBLIC,
+    applicableLifeStages: [],
+    targetHealthTags: [],
+    energyDensityKcalPerKg: 1200,
+    salesCount: 0,
+    diyGenCount: 0,
+    likeCount: 0,
+    favoriteCount: 0,
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-02T00:00:00.000Z',
+    seriesStages: [
+      {
+        lifeStage: 'PUPPY_14_WEEKS_PLUS',
+        label: '幼犬',
+        status: 'SUBMITTED',
+        recipeVersionId: 'puppy-draft-v4',
+        recipeId: 'puppy-recipe',
+        version: 4,
+      },
+    ],
+  });
+
+  assert.deepEqual(stages, [
+    {
+      lifeStage: 'PUPPY_14_WEEKS_PLUS',
+      label: '幼犬',
+      publishRecipeId: 'puppy-draft-v4',
+      version: 4,
+    },
+  ]);
+});
+
 test('getPendingPublishStages falls back to the row pending draft for legacy non-series rows', () => {
   const stages = getPendingPublishStages({
     id: 'public-row',
@@ -126,6 +164,33 @@ test('getPendingPublishStages falls back to the row pending draft for legacy non
       label: '当前食谱',
       publishRecipeId: 'legacy-draft-v3',
       version: 3,
+    },
+  ]);
+});
+
+test('getPendingPublishStages falls back to the row itself for legacy draft rows', () => {
+  const stages = getPendingPublishStages({
+    id: 'legacy-draft-row',
+    name: '鸡肉饭',
+    version: 5,
+    status: RecipeStatus.DRAFT,
+    applicableLifeStages: ['HIGH_ACTIVITY_ADULT'] as any,
+    targetHealthTags: [],
+    energyDensityKcalPerKg: 1100,
+    salesCount: 0,
+    diyGenCount: 0,
+    likeCount: 0,
+    favoriteCount: 0,
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-02T00:00:00.000Z',
+  });
+
+  assert.deepEqual(stages, [
+    {
+      lifeStage: 'LEGACY_RECIPE',
+      label: '当前食谱',
+      publishRecipeId: 'legacy-draft-row',
+      version: 5,
     },
   ]);
 });

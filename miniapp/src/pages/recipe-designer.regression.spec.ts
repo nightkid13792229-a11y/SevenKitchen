@@ -290,6 +290,11 @@ describe('recipe designer mobile entry', () => {
   })
 
   it('lets staff copy ingredient rows into a target life stage from the series card menu', () => {
+    const copyAvailabilityBlock =
+      listSource.match(/function canCopyItemsIntoStage[\s\S]*?\n}/)?.[0] || ''
+    const copyBlock =
+      listSource.match(/async function copyStageItemsIntoSeriesStage[\s\S]*?\n}\n\nfunction deleteSeries/)?.[0] || ''
+
     expect(apiSource).toContain('copyStageItemsFromDraft')
     expect(listSource).toContain('copyingStageItemsKey')
     expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
@@ -301,7 +306,10 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('recipeDesignerApi.copyStageItemsFromDraft')
     expect(listSource).toContain('function copyStageItemsIntoSeriesStage')
     expect(listSource).toContain('sourceStage.draftId')
-    expect(listSource).toContain('await loadSeries()')
+    expect(copyAvailabilityBlock).not.toContain("stage.status !== 'NOT_DESIGNED'")
+    expect(copyAvailabilityBlock).not.toContain('Boolean(stage.draftId || stage.recipeId)')
+    expect(copyBlock).toContain('uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${targetDraftId}` })')
+    expect(copyBlock).not.toContain('await loadSeries()')
   })
 
   it('creates a new series and navigates to the backend initial draft when available', () => {

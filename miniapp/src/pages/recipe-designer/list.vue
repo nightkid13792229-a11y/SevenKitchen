@@ -1227,7 +1227,7 @@ async function copyStageItemsIntoSeriesStage(
       sourceDraftId: sourceStage.draftId,
     })
     uni.showToast({ title: '已复制原料', icon: 'success' })
-    await loadSeries()
+    uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${targetDraftId}` })
   } catch (error) {
     console.error('[RecipeDesignerList] Failed to copy stage items:', error)
     uni.showToast({

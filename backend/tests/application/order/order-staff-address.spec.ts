@@ -14,8 +14,15 @@ describe('OrderService staff order addresses', () => {
     findByUserId: jest.Mock;
     save: jest.Mock;
   };
+  let prisma: {
+    preparationMethod: { findMany: jest.Mock };
+    order: { findMany: jest.Mock };
+  };
 
-  function createOrder(status = OrderStatus.PAID): Order {
+  function createOrder(
+    status = OrderStatus.PAID,
+    dogId: string | null = null,
+  ): Order {
     return Order.fromPrismaData({
       id: 'order-1',
       customerId: 'customer-1',
@@ -29,7 +36,7 @@ describe('OrderService staff order addresses', () => {
       amountTotal: 110,
       totalAmount: 110,
       pricingBreakdownSnapshot: null,
-      dogId: null,
+      dogId,
       addressId: null,
       shippingAddressSnapshot: null,
       trackingNumber: null,
@@ -82,6 +89,10 @@ describe('OrderService staff order addresses', () => {
       findByUserId: jest.fn(),
       save: jest.fn((address: Address) => Promise.resolve(address)),
     };
+    prisma = {
+      preparationMethod: { findMany: jest.fn() },
+      order: { findMany: jest.fn().mockResolvedValue([]) },
+    };
 
     service = new OrderService(
       orderRepository as any,
@@ -95,7 +106,7 @@ describe('OrderService staff order addresses', () => {
       {} as any,
       addressRepository as any,
       {} as any,
-      { preparationMethod: { findMany: jest.fn() } } as any,
+      prisma as any,
     );
   });
 
@@ -223,6 +234,48 @@ describe('OrderService staff order addresses', () => {
       recipientName: '王五',
       phone: '13700137000',
       detail: '体育西路1号',
+    });
+  });
+
+  it('marks and sorts customer addresses previously used by the current dog', async () => {
+    orderRepository.findById.mockResolvedValue(createOrder(OrderStatus.PAID, 'dog-1'));
+    addressRepository.findByUserId.mockResolvedValue([
+      createAddress('address-3', 'customer-1', true),
+      createAddress('address-1'),
+      createAddress('address-2'),
+    ]);
+    prisma.order.findMany.mockResolvedValue([
+      { addressId: 'address-2', createdAt: new Date('2026-06-12T10:00:00.000Z') },
+      { addressId: 'address-1', createdAt: new Date('2026-06-10T10:00:00.000Z') },
+      { addressId: 'address-2', createdAt: new Date('2026-06-01T10:00:00.000Z') },
+    ]);
+
+    const result = await service.listOrderCustomerAddresses('order-1');
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          customerId: 'customer-1',
+          addressId: { in: ['address-3', 'address-1', 'address-2'] },
+        }),
+      }),
+    );
+    expect(result.map((address) => address.id)).toEqual([
+      'address-2',
+      'address-1',
+      'address-3',
+    ]);
+    expect(result[0] as any).toMatchObject({
+      id: 'address-2',
+      usedByCurrentDog: true,
+      dogAddressUsageCount: 2,
+      dogAddressLastUsedAt: '2026-06-12T10:00:00.000Z',
+    });
+    expect(result[2] as any).toMatchObject({
+      id: 'address-3',
+      usedByCurrentDog: false,
+      dogAddressUsageCount: 0,
+      dogAddressLastUsedAt: null,
     });
   });
 });

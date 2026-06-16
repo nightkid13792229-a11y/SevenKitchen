@@ -55,9 +55,24 @@ describe('staff order address reuse', () => {
     expect(detailSource).toContain('saveAddressForm');
     expect(detailSource).toContain('addressForm.isDefault');
   });
+
+  it('groups address selector options by addresses previously used by the current dog', () => {
+    expect(detailSource).toContain('该狗狗常用地址');
+    expect(detailSource).toContain('客户其他地址');
+    expect(detailSource).toContain('dogMatchedAddresses');
+    expect(detailSource).toContain('otherCustomerAddresses');
+    expect(detailSource).toContain('usedByCurrentDog');
+    expect(detailSource).toContain('dogAddressUsageCount');
+  });
 });
 
 describe('staff order mobile operations', () => {
+  it('lets staff copy the full order number from the staff order detail page', () => {
+    expect(detailSource).toContain('copyOrderId');
+    expect(detailSource).toContain('订单号已复制');
+    expect(detailSource).toContain('@tap="copyOrderId"');
+  });
+
   it('keeps shipment contact information usable on staff order detail', () => {
     expect(detailSource).toContain('formatPhoneForStaffOrder');
     expect(detailSource).toContain('copyFullAddress');
@@ -99,9 +114,31 @@ describe('staff order mobile operations', () => {
     expect(ordersApiSource).toContain('updateOrderItemPackagePlan');
   });
 
+  it('shows and shares preparation photos from staff order detail', () => {
+    expect(detailSource).toContain('备餐图');
+    expect(detailSource).toContain('productionPhotos');
+    expect(detailSource).toContain('previewProductionPhoto');
+    expect(detailSource).toContain('ensureProductionPhotoShareToken');
+    expect(detailSource).toContain('data-share-type="photos"');
+    expect(detailSource).toContain('/orders/${order.value.id}/share-photos');
+    expect(detailSource).toContain('/pages/shared-photos/index?token=${shareToken.value}');
+  });
+
+  it('lets staff edit admin remarks that flow into production print tasks', () => {
+    expect(detailSource).toContain('管理员备注');
+    expect(detailSource).toContain('remarkDraft');
+    expect(detailSource).toContain('saveAdminRemark');
+    expect(detailSource).toContain('clearAdminRemark');
+    expect(detailSource).toContain('会同步到生产制作单和打印版');
+    expect(ordersApiSource).toContain('updateAdminOrderRemark');
+    expect(detailSource).toContain('updateAdminOrderRemark');
+  });
+
   it('exposes mobile staff actions for price, refund, and dog profile handling', () => {
     expect(detailSource).toContain('openAmountPanel');
     expect(detailSource).toContain('saveAmountAdjustment');
+    expect(detailSource).toContain('isOfflinePaidOrder');
+    expect(detailSource).toContain('修改价格');
     expect(detailSource).toContain('openRefundPanel');
     expect(detailSource).toContain('refundAmountDraft');
     expect(detailSource).toContain('saveRefundAdjustment');

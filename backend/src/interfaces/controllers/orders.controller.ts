@@ -1662,11 +1662,13 @@ export class OrdersController {
         return ApiResponseDto.error(404, 'Order not found');
       }
 
-      // Check permission: only order owner or admin can share
+      // Check permission: order owner or staff workspace users can share
       // Note: role comparison is case-insensitive to handle both 'admin' and 'ADMIN'
+      const normalizedRole = user.role?.toLowerCase();
       if (
         order.customerId !== user.customerId &&
-        user.role?.toLowerCase() !== 'admin'
+        normalizedRole !== 'admin' &&
+        normalizedRole !== 'staff'
       ) {
         return ApiResponseDto.error(
           403,

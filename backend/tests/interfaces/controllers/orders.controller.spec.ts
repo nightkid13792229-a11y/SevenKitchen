@@ -1644,6 +1644,48 @@ describe('OrdersController (e2e)', () => {
     });
   });
 
+  describe('POST /api/v1/orders/:id/share-photos', () => {
+    it('allows staff users to create a share token for an order with production photos', async () => {
+      const order = createTestOrder({
+        id: 'staff-share-photos-order',
+        customerId: 'photo-owner',
+        status: OrderStatus.IN_PRODUCTION,
+      });
+      await orderRepository.save(order);
+      mockPrismaService.orderItem.findMany.mockResolvedValueOnce([
+        { id: 'item-staff-share-photos-order' },
+      ]);
+      mockPrismaService.packagingUnit.findMany.mockResolvedValueOnce([
+        {
+          photosRaw: ['https://cdn.example.com/raw-1.jpg'],
+          photosCooked: [],
+          photosPortioned: [],
+        },
+      ]);
+      mockPrismaService.photoShareToken.create.mockClear();
+      const jwtService = moduleFixture.get(JwtAuthService);
+      const token = jwtService.generateTokenForUser('staff-1', 'STAFF');
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/orders/${order.id}/share-photos`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          token: expect.any(String),
+        }),
+      );
+      expect(mockPrismaService.photoShareToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          orderId: order.id,
+          createdBy: 'staff-1',
+        }),
+      });
+    });
+  });
+
   describe('GET /api/v1/orders/items/:itemId/snapshot', () => {
     it('should return snapshot for order item', async () => {
       const recipeSnapshot: RecipeSnapshot = {

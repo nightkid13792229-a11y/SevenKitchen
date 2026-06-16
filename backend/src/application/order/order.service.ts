@@ -243,6 +243,12 @@ export interface StaffOrderAddressResult {
   order: Order;
 }
 
+export type StaffOrderAddressOption = Address & {
+  usedByCurrentDog: boolean;
+  dogAddressUsageCount: number;
+  dogAddressLastUsedAt: string | null;
+};
+
 export interface StaffOrderDog {
   id: string;
   name: string;
@@ -3040,9 +3046,57 @@ export class OrderService {
     });
   }
 
-  async listOrderCustomerAddresses(orderId: string): Promise<Address[]> {
+  async listOrderCustomerAddresses(
+    orderId: string,
+  ): Promise<StaffOrderAddressOption[]> {
     const order = await this.getOrderForStaffAddress(orderId);
-    return this.addressRepository.findByUserId(order.customerId);
+    const addresses = await this.addressRepository.findByUserId(
+      order.customerId,
+    );
+    if (addresses.length === 0) {
+      return [];
+    }
+
+    const originalIndexById = new Map(
+      addresses.map((address, index) => [address.id, index]),
+    );
+    const dogAddressUsage = await this.loadCurrentDogAddressUsage(
+      order,
+      addresses.map((address) => address.id),
+    );
+
+    return addresses
+      .map((address) => {
+        const usage = dogAddressUsage.get(address.id);
+        return Object.assign(address, {
+          usedByCurrentDog: Boolean(usage),
+          dogAddressUsageCount: usage?.count ?? 0,
+          dogAddressLastUsedAt: usage?.lastUsedAt.toISOString() ?? null,
+        });
+      })
+      .sort((a, b) => {
+        if (a.usedByCurrentDog !== b.usedByCurrentDog) {
+          return a.usedByCurrentDog ? -1 : 1;
+        }
+        if (a.usedByCurrentDog && b.usedByCurrentDog) {
+          const aTime = a.dogAddressLastUsedAt
+            ? Date.parse(a.dogAddressLastUsedAt)
+            : 0;
+          const bTime = b.dogAddressLastUsedAt
+            ? Date.parse(b.dogAddressLastUsedAt)
+            : 0;
+          if (aTime !== bTime) {
+            return bTime - aTime;
+          }
+        }
+        if (a.isDefault !== b.isDefault) {
+          return a.isDefault ? -1 : 1;
+        }
+        return (
+          (originalIndexById.get(a.id) ?? 0) -
+          (originalIndexById.get(b.id) ?? 0)
+        );
+      });
   }
 
   async createOrderCustomerAddress(
@@ -3445,6 +3499,61 @@ export class OrderService {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
     return order;
+  }
+
+  private async loadCurrentDogAddressUsage(
+    order: Order,
+    addressIds: string[],
+  ): Promise<Map<string, { count: number; lastUsedAt: Date }>> {
+    const currentDogId =
+      order.dogId ?? order.items.find((item) => item.dogId)?.dogId ?? null;
+    if (
+      !currentDogId ||
+      addressIds.length === 0 ||
+      !this.prisma?.order?.findMany
+    ) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.order.findMany({
+      where: {
+        customerId: order.customerId,
+        addressId: { in: addressIds },
+        status: { not: OrderStatus.CANCELLED },
+        OR: [
+          { dogId: currentDogId },
+          {
+            items: {
+              some: { dogId: currentDogId },
+            },
+          },
+        ],
+      },
+      select: {
+        addressId: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const usage = new Map<string, { count: number; lastUsedAt: Date }>();
+    for (const row of rows) {
+      if (!row.addressId) {
+        continue;
+      }
+      const existing = usage.get(row.addressId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        usage.set(row.addressId, {
+          count: 1,
+          lastUsedAt: row.createdAt,
+        });
+      }
+    }
+    return usage;
   }
 
   private assertOrderAddressEditable(order: Order): void {

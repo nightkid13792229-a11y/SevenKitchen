@@ -2,13 +2,16 @@ import {
   collectDatabaseAlignmentSnapshot,
   compareDatabaseAlignmentSnapshots,
   type DatabaseAlignmentPrismaClient,
+  type DatabaseMigrationSnapshot,
   type DatabaseAlignmentSnapshot,
 } from 'src/application/standard-ingredient-import/db-alignment';
+
+type MigrationInput = string | DatabaseMigrationSnapshot;
 
 type SnapshotOverrides = Partial<
   Omit<DatabaseAlignmentSnapshot, 'migrations' | 'criticalDataHashes'>
 > & {
-  migrations?: string[];
+  migrations?: MigrationInput[];
   criticalDataHashes?: Partial<DatabaseAlignmentSnapshot['criticalDataHashes']>;
 };
 
@@ -19,11 +22,7 @@ const makeSnapshot = (
   collectedAt: overrides.collectedAt ?? '2026-06-16T00:00:00.000Z',
   migrations: (
     overrides.migrations ?? ['202606010001_a', '202606020001_b']
-  ).map((migrationName) => ({
-    migrationName,
-    checksum: `${migrationName}:checksum`,
-    finishedAt: '2026-06-16T00:00:00.000Z',
-  })),
+  ).map(toMigrationSnapshot),
   schemaHash: overrides.schemaHash ?? 'schema:v1',
   criticalDataHashes: {
     nutritionStandards:
@@ -37,6 +36,20 @@ const makeSnapshot = (
     inventory_ledger_entry: 13,
   },
 });
+
+const toMigrationSnapshot = (
+  migration: MigrationInput,
+): DatabaseMigrationSnapshot => {
+  if (typeof migration === 'string') {
+    return {
+      migrationName: migration,
+      checksum: `${migration}:checksum`,
+      finishedAt: '2026-06-16T00:00:00.000Z',
+    };
+  }
+
+  return migration;
+};
 
 describe('compareDatabaseAlignmentSnapshots', () => {
   it('passes identical Prisma migration history and reference snapshots', () => {
@@ -103,6 +116,116 @@ describe('compareDatabaseAlignmentSnapshots', () => {
         code: 'SCHEMA_HASH_MISMATCH',
         subject: 'schema.prisma',
       }),
+    );
+  });
+
+  it('fails when matching migrations have different non-null checksums', () => {
+    const local = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'local-checksum',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+      ],
+    });
+    const production = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'production-checksum',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const result = compareDatabaseAlignmentSnapshots({ local, production });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockingIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'MIGRATION_CHECKSUM_MISMATCH',
+        subject: '202606010001_a',
+      }),
+    );
+  });
+
+  it('fails when either matching migration checksum is missing', () => {
+    const local = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'local-checksum',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+      ],
+    });
+    const production = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: null,
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const result = compareDatabaseAlignmentSnapshots({ local, production });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockingIssues).toContainEqual(
+      expect.objectContaining({
+        code: 'MIGRATION_CHECKSUM_MISSING',
+        subject: '202606010001_a',
+        localValue: 'local-checksum',
+        productionValue: null,
+      }),
+    );
+  });
+
+  it('fails when any local or production migration is unfinished', () => {
+    const local = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'checksum-a',
+          finishedAt: null,
+        },
+      ],
+    });
+    const production = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'checksum-a',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+        {
+          migrationName: '202606020001_b',
+          checksum: 'checksum-b',
+          finishedAt: null,
+        },
+      ],
+    });
+
+    const result = compareDatabaseAlignmentSnapshots({ local, production });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockingIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'MIGRATION_NOT_FINISHED',
+          subject: '202606010001_a',
+        }),
+        expect.objectContaining({
+          code: 'LOCAL_MISSING_PRODUCTION_MIGRATION',
+          subject: '202606020001_b',
+        }),
+        expect.objectContaining({
+          code: 'MIGRATION_NOT_FINISHED',
+          subject: '202606020001_b',
+        }),
+      ]),
     );
   });
 
@@ -181,14 +304,85 @@ describe('compareDatabaseAlignmentSnapshots', () => {
 });
 
 describe('collectDatabaseAlignmentSnapshot', () => {
+  it('normalizes migration rows from the raw query and hashes schema contents', async () => {
+    const firstPrisma = makePrismaFixture({
+      migrations: [
+        {
+          migration_name: '202606010001_a',
+          checksum: 'checksum-a',
+          finished_at: new Date('2026-06-16T00:00:00.000Z'),
+        },
+        {
+          migration_name: '202606020001_b',
+          checksum: 'checksum-b',
+          finished_at: '2026-06-17T00:00:00.000Z',
+        },
+      ],
+    });
+    const secondPrisma = makePrismaFixture();
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema-v1',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema-v2',
+    });
+
+    expect(firstPrisma.queryRaw).toHaveBeenCalledTimes(1);
+    expect(first.migrations).toEqual([
+      {
+        migrationName: '202606010001_a',
+        checksum: 'checksum-a',
+        finishedAt: '2026-06-16T00:00:00.000Z',
+      },
+      {
+        migrationName: '202606020001_b',
+        checksum: 'checksum-b',
+        finishedAt: '2026-06-17T00:00:00.000Z',
+      },
+    ]);
+    expect(first.schemaHash).not.toBe(second.schemaHash);
+  });
+
+  it('calls reference data selectors and optional row count delegates', async () => {
+    const prisma = makePrismaFixture({
+      includeRowCountDelegates: true,
+    });
+
+    const snapshot = await collectDatabaseAlignmentSnapshot(prisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema',
+    });
+
+    expect(prisma.nutritionStandardVersionFindMany).toHaveBeenCalledTimes(1);
+    expect(prisma.nutritionStandardEntryFindMany).toHaveBeenCalledTimes(1);
+    expect(prisma.nutrientDefinitionFindMany).toHaveBeenCalledTimes(1);
+    expect(prisma.ingredientTagFindMany).toHaveBeenCalledTimes(1);
+    expect(prisma.orderCount).toHaveBeenCalledTimes(1);
+    expect(prisma.inventoryLedgerEntryCount).toHaveBeenCalledTimes(1);
+    expect(snapshot.rowCounts).toEqual({
+      order: 42,
+      inventory_ledger_entry: 7,
+    });
+  });
+
   it('includes DB nutrient definitions in the critical nutrient alias hash', async () => {
-    const firstPrisma = makePrismaFixtureWithNutrientDefinitions([
-      nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
-    ]);
-    const secondPrisma = makePrismaFixtureWithNutrientDefinitions([
-      nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
-      nutrientDefinition({ code: 'phosphorus', sortOrder: 20 }),
-    ]);
+    const firstPrisma = makePrismaFixture({
+      nutrientDefinitions: [
+        nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
+      ],
+    });
+    const secondPrisma = makePrismaFixture({
+      nutrientDefinitions: [
+        nutrientDefinition({ code: 'calcium', sortOrder: 10 }),
+        nutrientDefinition({ code: 'phosphorus', sortOrder: 20 }),
+      ],
+    });
 
     const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
       databaseLabel: 'local',
@@ -229,54 +423,92 @@ describe('collectDatabaseAlignmentSnapshot', () => {
   });
 });
 
-function makePrismaFixtureWithNutrientDefinitions(
-  nutrientDefinitions: unknown[],
+function makePrismaFixture(
+  overrides: Partial<{
+    migrations: Array<{
+      migration_name: string;
+      checksum: string | null;
+      finished_at: Date | string | null;
+    }>;
+    nutrientDefinitions: unknown[];
+    includeRowCountDelegates: boolean;
+  }> = {},
 ): {
   client: DatabaseAlignmentPrismaClient;
+  queryRaw: jest.Mock;
+  nutritionStandardVersionFindMany: jest.Mock;
+  nutritionStandardEntryFindMany: jest.Mock;
   nutrientDefinitionFindMany: jest.Mock;
+  ingredientTagFindMany: jest.Mock;
+  orderCount: jest.Mock;
+  inventoryLedgerEntryCount: jest.Mock;
   writeSpies: {
     $executeRaw: jest.Mock;
     $executeRawUnsafe: jest.Mock;
     nutritionNutrientDefinitionCreate: jest.Mock;
   };
 } {
+  const queryRaw = jest.fn().mockResolvedValue(
+    overrides.migrations ?? [
+      {
+        migration_name: '202606010001_a',
+        checksum: 'migration:checksum',
+        finished_at: '2026-06-16T00:00:00.000Z',
+      },
+    ],
+  );
+  const nutritionStandardVersionFindMany = jest.fn().mockResolvedValue([]);
+  const nutritionStandardEntryFindMany = jest.fn().mockResolvedValue([]);
   const nutrientDefinitionFindMany = jest
     .fn()
-    .mockResolvedValue(nutrientDefinitions);
+    .mockResolvedValue(overrides.nutrientDefinitions ?? []);
+  const ingredientTagFindMany = jest.fn().mockResolvedValue([]);
+  const orderCount = jest.fn().mockResolvedValue(42);
+  const inventoryLedgerEntryCount = jest.fn().mockResolvedValue(7);
   const writeSpies = {
     $executeRaw: jest.fn(),
     $executeRawUnsafe: jest.fn(),
     nutritionNutrientDefinitionCreate: jest.fn(),
   };
   const clientWithWriteSpies = {
-    $queryRaw: jest.fn().mockResolvedValue([
-      {
-        migration_name: '202606010001_a',
-        checksum: 'migration:checksum',
-        finished_at: '2026-06-16T00:00:00.000Z',
-      },
-    ]),
+    $queryRaw: queryRaw,
     $executeRaw: writeSpies.$executeRaw,
     $executeRawUnsafe: writeSpies.$executeRawUnsafe,
     nutritionStandardVersion: {
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: nutritionStandardVersionFindMany,
     },
     nutritionStandardEntry: {
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: nutritionStandardEntryFindMany,
     },
     nutritionNutrientDefinition: {
       findMany: nutrientDefinitionFindMany,
       create: writeSpies.nutritionNutrientDefinitionCreate,
     },
     ingredientTag: {
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: ingredientTagFindMany,
     },
+    ...(overrides.includeRowCountDelegates
+      ? {
+          order: {
+            count: orderCount,
+          },
+          inventoryLedgerEntry: {
+            count: inventoryLedgerEntryCount,
+          },
+        }
+      : {}),
   };
   const client: DatabaseAlignmentPrismaClient = clientWithWriteSpies;
 
   return {
     client,
+    queryRaw,
+    nutritionStandardVersionFindMany,
+    nutritionStandardEntryFindMany,
     nutrientDefinitionFindMany,
+    ingredientTagFindMany,
+    orderCount,
+    inventoryLedgerEntryCount,
     writeSpies,
   };
 }

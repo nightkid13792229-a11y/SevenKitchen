@@ -738,6 +738,15 @@ describe('RecipeService', () => {
               recipeId: 'puppy-recipe-id',
               version: 1,
               updatedAt: '2026-05-28T09:00:00.000Z',
+              pendingDraftVersion: {
+                id: 'puppy-draft-row',
+                recipeId: 'puppy-recipe-id',
+                name: '幼犬配方',
+                version: 1,
+                status: RecipeStatus.DRAFT,
+                createdAt: '2026-05-28T08:58:00.000Z',
+                updatedAt: '2026-05-28T09:00:00.000Z',
+              },
             };
           }
           if (lifeStage === 'HIGH_ACTIVITY_ADULT') {
@@ -749,6 +758,7 @@ describe('RecipeService', () => {
               recipeId: 'adult-recipe-id',
               version: 1,
               updatedAt: '2026-05-27T08:58:00.000Z',
+              pendingDraftVersion: undefined,
             };
           }
           return {

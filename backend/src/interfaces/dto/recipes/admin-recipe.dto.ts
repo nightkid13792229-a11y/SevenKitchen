@@ -297,6 +297,7 @@ export class RecipeQueryDto {
  */
 export interface RecipeVersionSummaryDto {
   id: string;
+  recipeId?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -318,6 +319,7 @@ export interface RecipeSeriesStageSummaryDto {
   recipeId?: string;
   version?: number;
   updatedAt?: string;
+  pendingDraftVersion?: RecipeVersionSummaryDto;
 }
 
 export interface RecipeSummaryResponseDto {

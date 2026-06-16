@@ -924,6 +924,9 @@ export class RecipeService {
         recipeId: stageRecipe.recipeId,
         version: stageRecipe.version,
         updatedAt: stageRecipe.updatedAt.toISOString(),
+        pendingDraftVersion: submittedRecipe
+          ? this.mapToVersionSummaryDto(submittedRecipe)
+          : undefined,
       };
     });
   }
@@ -1572,6 +1575,7 @@ export class RecipeService {
   private mapToVersionSummaryDto(recipe: any): RecipeVersionSummaryDto {
     return {
       id: recipe.id,
+      recipeId: recipe.recipeId,
       name: recipe.name,
       version: recipe.version,
       status: recipe.status as RecipeStatus,

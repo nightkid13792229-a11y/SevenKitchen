@@ -28,7 +28,9 @@ export interface DatabaseAlignmentSnapshot {
 export type DatabaseAlignmentIssueCode =
   | 'PRODUCTION_MISSING_LOCAL_MIGRATION'
   | 'LOCAL_MISSING_PRODUCTION_MIGRATION'
+  | 'MIGRATION_CHECKSUM_MISSING'
   | 'MIGRATION_CHECKSUM_MISMATCH'
+  | 'MIGRATION_NOT_FINISHED'
   | 'SCHEMA_HASH_MISMATCH'
   | 'NUTRITION_STANDARDS_MISMATCH'
   | 'INGREDIENT_TAGS_MISMATCH'
@@ -209,6 +211,8 @@ function compareMigrationHistories(
   const localByName = migrationsByName(local.migrations);
   const productionByName = migrationsByName(production.migrations);
 
+  compareMigrationCompletion(localByName, productionByName, blockingIssues);
+
   for (const migration of local.migrations) {
     const productionMigration = productionByName.get(migration.migrationName);
     if (!productionMigration) {
@@ -223,10 +227,20 @@ function compareMigrationHistories(
     }
 
     if (
-      migration.checksum &&
-      productionMigration.checksum &&
-      migration.checksum !== productionMigration.checksum
+      !hasMigrationValue(migration.checksum) ||
+      !hasMigrationValue(productionMigration.checksum)
     ) {
+      blockingIssues.push({
+        code: 'MIGRATION_CHECKSUM_MISSING',
+        subject: migration.migrationName,
+        message: `Migration ${migration.migrationName} is missing a checksum.`,
+        localValue: migration.checksum ?? null,
+        productionValue: productionMigration.checksum ?? null,
+      });
+      continue;
+    }
+
+    if (migration.checksum !== productionMigration.checksum) {
       blockingIssues.push({
         code: 'MIGRATION_CHECKSUM_MISMATCH',
         subject: migration.migrationName,
@@ -248,6 +262,45 @@ function compareMigrationHistories(
       });
     }
   }
+}
+
+function compareMigrationCompletion(
+  localByName: Map<string, DatabaseMigrationSnapshot>,
+  productionByName: Map<string, DatabaseMigrationSnapshot>,
+  blockingIssues: DatabaseAlignmentIssue[],
+): void {
+  const migrationNames = new Set([
+    ...localByName.keys(),
+    ...productionByName.keys(),
+  ]);
+
+  for (const migrationName of [...migrationNames].sort()) {
+    const localMigration = localByName.get(migrationName);
+    const productionMigration = productionByName.get(migrationName);
+
+    const localUnfinished =
+      localMigration !== undefined &&
+      !hasMigrationValue(localMigration.finishedAt);
+    const productionUnfinished =
+      productionMigration !== undefined &&
+      !hasMigrationValue(productionMigration.finishedAt);
+
+    if (!localUnfinished && !productionUnfinished) {
+      continue;
+    }
+
+    blockingIssues.push({
+      code: 'MIGRATION_NOT_FINISHED',
+      subject: migrationName,
+      message: `Migration ${migrationName} is not finished in local or production.`,
+      localValue: localMigration?.finishedAt ?? null,
+      productionValue: productionMigration?.finishedAt ?? null,
+    });
+  }
+}
+
+function hasMigrationValue(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function compareSchemaHashes(

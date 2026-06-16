@@ -46,7 +46,7 @@ describe('rankNutritionSourceCandidates', () => {
     );
   });
 
-  it('keeps CFCT behind primary official sources', () => {
+  it('filters out CFCT when a primary official source meets the default coverage threshold', () => {
     const candidates: NutritionSourceCandidate[] = [
       makeCandidate({ source: 'CFCT', essentialCoveragePercent: 91 }),
       makeCandidate({ source: 'USDA_FDC', essentialCoveragePercent: 82 }),
@@ -57,9 +57,7 @@ describe('rankNutritionSourceCandidates', () => {
       candidates,
     });
 
-    expect(ranked[0].source).toBe('USDA_FDC');
-    expect(ranked[1].source).toBe('CFCT');
-    expect(ranked[1].fallbackOnly).toBe(true);
+    expect(ranked.map((candidate) => candidate.source)).toEqual(['USDA_FDC']);
   });
 
   it('accepts CFCT as fallback when no primary candidate is available', () => {
@@ -79,6 +77,54 @@ describe('rankNutritionSourceCandidates', () => {
         fallbackOnly: true,
       }),
     ]);
+  });
+
+  it('allows CFCT when matching primary official coverage is below the default threshold', () => {
+    const candidates: NutritionSourceCandidate[] = [
+      makeCandidate({ source: 'USDA_FDC', essentialCoveragePercent: 59 }),
+      makeCandidate({ source: 'CFCT', essentialCoveragePercent: 90 }),
+    ];
+
+    const ranked = rankNutritionSourceCandidates({
+      requestedState: 'raw',
+      candidates,
+    });
+
+    expect(ranked).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'CFCT',
+          fallbackOnly: true,
+        }),
+      ]),
+    );
+  });
+
+  it('uses custom minimum primary coverage when deciding whether CFCT is blocked', () => {
+    const candidates: NutritionSourceCandidate[] = [
+      makeCandidate({ source: 'USDA_FDC', essentialCoveragePercent: 72 }),
+      makeCandidate({ source: 'CFCT', essentialCoveragePercent: 90 }),
+    ];
+    const customThresholdInput = {
+      requestedState: 'raw' as const,
+      candidates,
+      minimumPrimaryCoveragePercent: 75,
+    };
+
+    const defaultRanked = rankNutritionSourceCandidates({
+      requestedState: 'raw',
+      candidates,
+    });
+    const customThresholdRanked = rankNutritionSourceCandidates(
+      customThresholdInput,
+    );
+
+    expect(defaultRanked.map((candidate) => candidate.source)).toEqual([
+      'USDA_FDC',
+    ]);
+    expect(
+      customThresholdRanked.map((candidate) => candidate.source),
+    ).toContain('CFCT');
   });
 
   it('rejects unofficial scraped pages, marketplaces, blogs, and LLM nutrient summaries', () => {

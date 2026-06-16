@@ -112,7 +112,7 @@ export function rankNutritionSourceCandidates(
       (
         entry,
       ): entry is {
-        candidate: NutritionSourceCandidate;
+        candidate: NutritionSourceCandidate & { stateTags: NutritionStateTag[] };
         originalIndex: number;
         source: ApprovedNutritionSource;
       } =>

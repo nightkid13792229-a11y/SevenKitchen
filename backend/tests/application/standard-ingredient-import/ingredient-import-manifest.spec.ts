@@ -237,6 +237,29 @@ describe('validateIngredientImportManifest', () => {
     );
   });
 
+  it('describes missing SUPPLEMENT evidence without requiring metadata', () => {
+    const manifest = makeSupplementManifest({
+      packageEvidence: {
+        metadata: {
+          source: 'operator-package-review',
+          capturedAt: '2026-06-16T08:00:00.000Z',
+        },
+        packageImages: [],
+        labelSources: [],
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+    const evidenceError = result.errors.find(
+      (error) => error.code === 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED',
+    );
+
+    expect(evidenceError?.message).toContain(
+      'package photo or equivalent label source',
+    );
+    expect(evidenceError?.message).not.toContain('metadata');
+  });
+
   it('treats empty, null, non-numeric, and unmeasured zero nutrient values as missing', () => {
     const manifest = makeFoodManifest({
       nutritionProfiles: [

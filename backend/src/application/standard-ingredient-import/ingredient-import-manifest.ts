@@ -205,7 +205,7 @@ function validateSupplementManifest(
       code: 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED',
       path: 'packageEvidence',
       message:
-        'SUPPLEMENT import manifests must include package evidence metadata and a package photo or equivalent label source.',
+        'SUPPLEMENT import manifests must include a package photo or equivalent label source.',
     });
   }
 }

@@ -177,6 +177,7 @@ export interface IngredientPreparationMethodHistoryItem {
 
 export interface RecipeVersionSummary {
   id: string;
+  recipeId?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -192,6 +193,7 @@ export interface RecipeSeriesStageSummary {
   recipeId?: string;
   version?: number;
   updatedAt?: string;
+  pendingDraftVersion?: RecipeVersionSummary;
 }
 
 export interface RecipeSummary {

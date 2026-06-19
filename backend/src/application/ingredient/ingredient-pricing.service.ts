@@ -3,9 +3,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { INGREDIENT_REPOSITORY } from './ingredient.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProcurementSkuService } from './procurement-sku.service';
-import {
-  PURCHASE_RECORD_REPOSITORY,
-} from '../purchasing/purchasing.service.tokens';
+import { PURCHASE_RECORD_REPOSITORY } from '../purchasing/purchasing.service.tokens';
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import type { Ingredient } from '../../domain/ingredient';
@@ -37,6 +35,13 @@ export interface IngredientPriceChangeView {
 interface WeightedAccumulator {
   totalAmount: number;
   totalQuantity: number;
+}
+
+interface PurchaseRecordPricingBasis {
+  baseQuantity: number;
+  baseUnitCost: number;
+  ingredientPurchaseQuantity: number;
+  ingredientPricePerPurchaseUnit: number;
 }
 
 interface AutoApprovalEvaluation {
@@ -126,7 +131,8 @@ export class IngredientPricingService {
     const ingredientIds = Array.from(
       new Set(purchaseRecords.map((record) => record.ingredientId)),
     );
-    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
     const ingredientMap = new Map<string, Ingredient>(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
@@ -134,13 +140,21 @@ export class IngredientPricingService {
     const changeRows = purchaseRecords.flatMap((record) => {
       const ingredient = ingredientMap.get(record.ingredientId);
 
-      if (!ingredient || record.actualQuantity <= 0) {
+      if (!ingredient) {
         return [];
       }
 
-      const sourcePricePerPurchaseUnit = this.roundCurrency(
-        record.actualCost / record.actualQuantity,
+      const pricingBasis = this.buildPurchaseRecordPricingBasis(
+        record,
+        ingredient,
       );
+
+      if (!pricingBasis) {
+        return [];
+      }
+
+      const sourcePricePerPurchaseUnit =
+        pricingBasis.ingredientPricePerPurchaseUnit;
       const previousCurrentPricePerPurchaseUnit = this.roundCurrency(
         ingredient.currentPricePerPurchaseUnit,
       );
@@ -154,7 +168,7 @@ export class IngredientPricingService {
           reimbursementId,
           purchaseRecordId: record.id,
           ingredientName: ingredient.name,
-          sourceQuantity: record.actualQuantity,
+          sourceQuantity: pricingBasis.ingredientPurchaseQuantity,
           sourcePricePerPurchaseUnit,
           previousCurrentPricePerPurchaseUnit,
           previousEffectivePrice,
@@ -189,7 +203,7 @@ export class IngredientPricingService {
   async autoApproveEligibleChangesForReimbursement(
     reimbursementId: string,
   ): Promise<IngredientPriceChangeView[]> {
-    const pendingChanges = await this.prisma.ingredientPriceChange.findMany({
+    const pendingChanges = (await this.prisma.ingredientPriceChange.findMany({
       where: {
         reimbursementId,
         status: 'PENDING',
@@ -197,7 +211,7 @@ export class IngredientPricingService {
       orderBy: {
         createdAt: 'asc',
       },
-    }) as IngredientPriceChangeRecord[];
+    })) as IngredientPriceChangeRecord[];
 
     const evaluations = await this.evaluateAutoApproval(pendingChanges);
     const eligibleChanges = pendingChanges.filter(
@@ -258,17 +272,18 @@ export class IngredientPricingService {
     reviewerId?: string | null,
     reviewComment?: string,
   ): Promise<void> {
-    const pendingOrApprovedChanges = await this.prisma.ingredientPriceChange.findMany({
-      where: {
-        reimbursementId,
-        status: {
-          in: ['PENDING', 'APPROVED'],
+    const pendingOrApprovedChanges =
+      await this.prisma.ingredientPriceChange.findMany({
+        where: {
+          reimbursementId,
+          status: {
+            in: ['PENDING', 'APPROVED'],
+          },
         },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
+        orderBy: {
+          createdAt: 'asc',
+        },
+      });
 
     if (pendingOrApprovedChanges.length === 0) {
       return;
@@ -304,7 +319,7 @@ export class IngredientPricingService {
   async getPriceChangesForReimbursement(
     reimbursementId: string,
   ): Promise<IngredientPriceChangeView[]> {
-    const rows = await this.prisma.ingredientPriceChange.findMany({
+    const rows = (await this.prisma.ingredientPriceChange.findMany({
       where: { reimbursementId },
       include: {
         ingredient: {
@@ -321,7 +336,7 @@ export class IngredientPricingService {
           createdAt: 'asc',
         },
       ],
-    }) as Array<
+    })) as Array<
       IngredientPriceChangeRecord & {
         ingredient?: {
           purchaseUnit: string | null;
@@ -382,7 +397,10 @@ export class IngredientPricingService {
 
     const groupedEffectiveAccumulator = new Map<string, WeightedAccumulator>();
     const ingredientCurrentAccumulator = new Map<string, WeightedAccumulator>();
-    const procurementSkuCurrentAccumulator = new Map<string, WeightedAccumulator>();
+    const procurementSkuCurrentAccumulator = new Map<
+      string,
+      WeightedAccumulator
+    >();
     const procurementSkuContext = new Map<
       string,
       {
@@ -396,6 +414,49 @@ export class IngredientPricingService {
     const ingredientMap = new Map(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
+    const purchaseRecordEntries = await Promise.all(
+      changes.map(
+        async (change) =>
+          [
+            change.purchaseRecordId,
+            await this.purchaseRecordRepository.findById(
+              change.purchaseRecordId,
+            ),
+          ] as const,
+      ),
+    );
+    const purchaseRecordMap = new Map(
+      purchaseRecordEntries.filter((entry) => entry[1] !== null),
+    );
+    const procurementSkuIds = Array.from(
+      new Set(
+        purchaseRecordEntries
+          .map(([, purchaseRecord]) => purchaseRecord?.procurementSkuId)
+          .filter((procurementSkuId): procurementSkuId is string =>
+            Boolean(procurementSkuId),
+          ),
+      ),
+    );
+    const procurementSkus =
+      procurementSkuIds.length > 0
+        ? await this.prisma.procurementSku.findMany({
+            where: {
+              id: {
+                in: procurementSkuIds,
+              },
+            },
+            select: {
+              id: true,
+              purchaseToBaseRatio: true,
+            },
+          })
+        : [];
+    const procurementSkuRatioMap = new Map(
+      procurementSkus.map((sku) => [
+        sku.id,
+        this.resolvePurchaseToBaseRatio(sku.purchaseToBaseRatio),
+      ]),
+    );
 
     for (const change of changes) {
       const sourceIngredient = ingredientMap.get(change.ingredientId);
@@ -403,36 +464,63 @@ export class IngredientPricingService {
         continue;
       }
 
+      const purchaseRecord = purchaseRecordMap.get(change.purchaseRecordId);
+      const pricingBasis = purchaseRecord
+        ? this.buildPurchaseRecordPricingBasis(purchaseRecord, sourceIngredient)
+        : null;
+      const sourceIngredientRatio = this.resolvePurchaseToBaseRatio(
+        sourceIngredient.purchaseToBaseRatio,
+      );
+      const ingredientPricePerPurchaseUnit =
+        pricingBasis?.ingredientPricePerPurchaseUnit ??
+        change.sourcePricePerPurchaseUnit.toNumber();
+      const ingredientPurchaseQuantity =
+        pricingBasis?.ingredientPurchaseQuantity ??
+        this.toNumericSourceQuantity(change.sourceQuantity);
+      const baseUnitCost =
+        pricingBasis?.baseUnitCost ??
+        ingredientPricePerPurchaseUnit / sourceIngredientRatio;
+      const baseQuantity =
+        pricingBasis?.baseQuantity ??
+        ingredientPurchaseQuantity * sourceIngredientRatio;
+
       const effectiveKey = this.buildEffectiveKey(change.ingredientId);
       groupedEffectiveAccumulator.set(
         effectiveKey,
         this.mergeWeightedAccumulator(
           groupedEffectiveAccumulator.get(effectiveKey),
-          change.sourcePricePerPurchaseUnit.toNumber() /
-            sourceIngredient.purchaseToBaseRatio,
-          this.toNumericSourceQuantity(change.sourceQuantity) *
-            sourceIngredient.purchaseToBaseRatio,
+          baseUnitCost,
+          baseQuantity,
         ),
       );
       ingredientCurrentAccumulator.set(
         change.ingredientId,
         this.mergeWeightedAccumulator(
           ingredientCurrentAccumulator.get(change.ingredientId),
-          change.sourcePricePerPurchaseUnit.toNumber(),
-          this.toNumericSourceQuantity(change.sourceQuantity),
+          ingredientPricePerPurchaseUnit,
+          ingredientPurchaseQuantity,
         ),
       );
 
-      const purchaseRecord = await this.purchaseRecordRepository.findById(
-        change.purchaseRecordId,
-      );
       if (purchaseRecord?.procurementSkuId) {
+        const procurementSkuRatio =
+          procurementSkuRatioMap.get(purchaseRecord.procurementSkuId) ??
+          sourceIngredientRatio;
+        const procurementSkuPricePerPurchaseUnit = pricingBasis
+          ? this.roundCurrency(baseUnitCost * procurementSkuRatio)
+          : change.sourcePricePerPurchaseUnit.toNumber();
+        const procurementSkuPurchaseQuantity = pricingBasis
+          ? baseQuantity / procurementSkuRatio
+          : ingredientPurchaseQuantity;
+
         procurementSkuCurrentAccumulator.set(
           purchaseRecord.procurementSkuId,
           this.mergeWeightedAccumulator(
-            procurementSkuCurrentAccumulator.get(purchaseRecord.procurementSkuId),
-            change.sourcePricePerPurchaseUnit.toNumber(),
-            this.toNumericSourceQuantity(change.sourceQuantity),
+            procurementSkuCurrentAccumulator.get(
+              purchaseRecord.procurementSkuId,
+            ),
+            procurementSkuPricePerPurchaseUnit,
+            procurementSkuPurchaseQuantity,
           ),
         );
 
@@ -448,7 +536,10 @@ export class IngredientPricingService {
     }
 
     const appliedCurrentPriceByIngredient = new Map<string, number>();
-    for (const [ingredientId, accumulator] of ingredientCurrentAccumulator.entries()) {
+    for (const [
+      ingredientId,
+      accumulator,
+    ] of ingredientCurrentAccumulator.entries()) {
       const currentPrice = this.toWeightedPrice(accumulator);
       appliedCurrentPriceByIngredient.set(ingredientId, currentPrice);
       await this.ingredientRepository.update(ingredientId, {
@@ -487,7 +578,8 @@ export class IngredientPricingService {
       }
 
       const effectiveKey = this.buildEffectiveKey(change.ingredientId);
-      const effectiveAccumulator = groupedEffectiveAccumulator.get(effectiveKey);
+      const effectiveAccumulator =
+        groupedEffectiveAccumulator.get(effectiveKey);
       if (!effectiveAccumulator) {
         continue;
       }
@@ -517,9 +609,8 @@ export class IngredientPricingService {
       }
 
       const effectiveKey = this.buildEffectiveKey(change.ingredientId);
-      const appliedEffectiveUnitCost = appliedEffectiveUnitCostByKey.get(
-        effectiveKey,
-      );
+      const appliedEffectiveUnitCost =
+        appliedEffectiveUnitCostByKey.get(effectiveKey);
       const appliedEffectivePrice = this.roundCurrency(
         (appliedEffectiveUnitCost ??
           change.proposedEffectivePrice.toNumber() /
@@ -549,26 +640,31 @@ export class IngredientPricingService {
     reimbursementId: string,
     approvedChanges: IngredientPriceChangeRecord[],
   ): Promise<void> {
-    const fallbackApprovedByIngredient = new Map<string, IngredientPriceChangeRecord>();
+    const fallbackApprovedByIngredient = new Map<
+      string,
+      IngredientPriceChangeRecord
+    >();
 
     for (const change of approvedChanges) {
       fallbackApprovedByIngredient.set(change.ingredientId, change);
     }
 
-    for (const [ingredientId, fallbackChange] of fallbackApprovedByIngredient.entries()) {
-      const latestApproved = await this.prisma.ingredientPriceChange.findFirst({
-        where: {
-          ingredientId,
-          status: 'APPROVED',
-          reimbursementId: {
-            not: reimbursementId,
+    for (const [
+      ingredientId,
+      fallbackChange,
+    ] of fallbackApprovedByIngredient.entries()) {
+      const latestApproved = (await this.prisma.ingredientPriceChange.findFirst(
+        {
+          where: {
+            ingredientId,
+            status: 'APPROVED',
+            reimbursementId: {
+              not: reimbursementId,
+            },
           },
+          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
         },
-        orderBy: [
-          { reviewedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
-      }) as IngredientPriceChangeRecord | null;
+      )) as IngredientPriceChangeRecord | null;
 
       const restoredCurrentPrice =
         latestApproved?.appliedCurrentPricePerPurchaseUnit?.toNumber() ??
@@ -579,20 +675,22 @@ export class IngredientPricingService {
       });
     }
 
-    for (const [ingredientId, fallbackChange] of fallbackApprovedByIngredient.entries()) {
-      const latestApproved = await this.prisma.ingredientPriceChange.findFirst({
-        where: {
-          ingredientId,
-          status: 'APPROVED',
-          reimbursementId: {
-            not: reimbursementId,
+    for (const [
+      ingredientId,
+      fallbackChange,
+    ] of fallbackApprovedByIngredient.entries()) {
+      const latestApproved = (await this.prisma.ingredientPriceChange.findFirst(
+        {
+          where: {
+            ingredientId,
+            status: 'APPROVED',
+            reimbursementId: {
+              not: reimbursementId,
+            },
           },
+          orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
         },
-        orderBy: [
-          { reviewedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
-      }) as IngredientPriceChangeRecord | null;
+      )) as IngredientPriceChangeRecord | null;
 
       const restoredEffectivePrice =
         latestApproved?.appliedEffectivePricePerPurchaseUnit?.toNumber() ??
@@ -607,8 +705,10 @@ export class IngredientPricingService {
 
   private async getAutoApproveThreshold(): Promise<number> {
     const config = await this.globalConfigService.getGlobalConfig();
-    return config.ingredientPriceAutoApproveThreshold ??
-      this.defaultAutoApproveThreshold;
+    return (
+      config.ingredientPriceAutoApproveThreshold ??
+      this.defaultAutoApproveThreshold
+    );
   }
 
   private async evaluateAutoApproval(
@@ -625,29 +725,38 @@ export class IngredientPricingService {
       new Set(changes.map((change) => change.ingredientId)),
     );
 
-    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
     const ingredientMap = new Map(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
 
-    const approvedHistoryRows = await this.prisma.ingredientPriceChange.findMany({
-      where: {
-        status: 'APPROVED',
-        ingredientId: { in: ingredientIds },
-      },
-      select: {
-        ingredientId: true,
-      },
-    });
+    const approvedHistoryRows =
+      await this.prisma.ingredientPriceChange.findMany({
+        where: {
+          status: 'APPROVED',
+          ingredientId: { in: ingredientIds },
+        },
+        select: {
+          ingredientId: true,
+        },
+      });
     const approvedHistoryKeys = new Set(
-      approvedHistoryRows.map((row) => this.buildEffectiveKey(row.ingredientId)),
+      approvedHistoryRows.map((row) =>
+        this.buildEffectiveKey(row.ingredientId),
+      ),
     );
 
     const historyEntries = await Promise.all(
-      ingredientIds.map(async (ingredientId) => [
-        ingredientId,
-        await this.purchaseRecordRepository.findByIngredientId(ingredientId),
-      ] as const),
+      ingredientIds.map(
+        async (ingredientId) =>
+          [
+            ingredientId,
+            await this.purchaseRecordRepository.findByIngredientId(
+              ingredientId,
+            ),
+          ] as const,
+      ),
     );
     const purchaseHistoryMap = new Map(historyEntries);
 
@@ -679,9 +788,7 @@ export class IngredientPricingService {
         )
           .filter((record) => record.id !== change.purchaseRecordId)
           .slice(0, this.quantityOutlierSampleSize)
-          .map(
-            (record) => record.actualQuantity * ingredient.purchaseToBaseRatio,
-          );
+          .map((record) => this.resolveActualBaseQuantity(record, ingredient));
 
         if (
           historicalBaseQuantities.length >= this.quantityOutlierHistoryMinCount
@@ -743,6 +850,65 @@ export class IngredientPricingService {
     return `ingredient:${ingredientId}`;
   }
 
+  private buildPurchaseRecordPricingBasis(
+    record: {
+      actualQuantity: number;
+      actualBaseQuantity?: number;
+      actualCost: number;
+    },
+    ingredient: Pick<Ingredient, 'purchaseToBaseRatio'>,
+  ): PurchaseRecordPricingBasis | null {
+    const baseQuantity = this.resolveActualBaseQuantity(record, ingredient);
+    const ingredientRatio = this.resolvePurchaseToBaseRatio(
+      ingredient.purchaseToBaseRatio,
+    );
+
+    if (
+      !Number.isFinite(baseQuantity) ||
+      baseQuantity <= 0 ||
+      !Number.isFinite(record.actualCost)
+    ) {
+      return null;
+    }
+
+    const baseUnitCost = record.actualCost / baseQuantity;
+    const ingredientPurchaseQuantity = baseQuantity / ingredientRatio;
+
+    return {
+      baseQuantity,
+      baseUnitCost,
+      ingredientPurchaseQuantity,
+      ingredientPricePerPurchaseUnit: this.roundCurrency(
+        baseUnitCost * ingredientRatio,
+      ),
+    };
+  }
+
+  private resolveActualBaseQuantity(
+    record: {
+      actualQuantity: number;
+      actualBaseQuantity?: number;
+    },
+    ingredient: Pick<Ingredient, 'purchaseToBaseRatio'>,
+  ): number {
+    if (
+      record.actualBaseQuantity !== undefined &&
+      Number.isFinite(record.actualBaseQuantity) &&
+      record.actualBaseQuantity > 0
+    ) {
+      return record.actualBaseQuantity;
+    }
+
+    return (
+      record.actualQuantity *
+      this.resolvePurchaseToBaseRatio(ingredient.purchaseToBaseRatio)
+    );
+  }
+
+  private resolvePurchaseToBaseRatio(ratio?: number | null): number {
+    return Number.isFinite(ratio) && Number(ratio) > 0 ? Number(ratio) : 1;
+  }
+
   private mergeWeightedAccumulator(
     existingAccumulator: WeightedAccumulator | undefined,
     nextPrice: number,
@@ -766,7 +932,9 @@ export class IngredientPricingService {
       return 0;
     }
 
-    return this.roundCurrency(accumulator.totalAmount / accumulator.totalQuantity);
+    return this.roundCurrency(
+      accumulator.totalAmount / accumulator.totalQuantity,
+    );
   }
 
   private toWeightedUnitCost(accumulator: WeightedAccumulator): number {
@@ -774,7 +942,9 @@ export class IngredientPricingService {
       return 0;
     }
 
-    return Number((accumulator.totalAmount / accumulator.totalQuantity).toFixed(6));
+    return Number(
+      (accumulator.totalAmount / accumulator.totalQuantity).toFixed(6),
+    );
   }
 
   private roundCurrency(value: number): number {
@@ -785,7 +955,9 @@ export class IngredientPricingService {
     return Number(value.toFixed(4));
   }
 
-  private toNumericSourceQuantity(sourceQuantity: number | DecimalLike): number {
+  private toNumericSourceQuantity(
+    sourceQuantity: number | DecimalLike,
+  ): number {
     if (
       sourceQuantity !== null &&
       typeof sourceQuantity === 'object' &&

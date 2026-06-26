@@ -136,6 +136,15 @@ export interface CopyRecipeSeriesStageIngredientsPayload {
   sourceLifeStage: string
 }
 
+export interface SupplementTargetPayload {
+  fieldPath: string
+  label?: string
+  unit?: string
+  nutrientTargetKey?: string
+  targetValue?: number
+  expressionBasis?: string
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string
@@ -143,6 +152,7 @@ export interface DesignRecipeItemPayload {
   preparationMethod?: string
   nutrientTargetKey?: string
   nutrientTargetValue?: number
+  supplementTargets?: SupplementTargetPayload[]
   sortOrder?: number
   includeInAssessment?: boolean
 }
@@ -152,6 +162,7 @@ export interface UpdateDesignRecipeItemPayload {
   preparationMethod?: string | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: SupplementTargetPayload[] | null
   sortOrder?: number
   includeInAssessment?: boolean
 }

@@ -2215,6 +2215,7 @@ model DesignRecipeItem {
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
+  supplementTargets   Json?         @map("supplement_targets")
   sortOrder           Int           @default(0) @map("sort_order")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

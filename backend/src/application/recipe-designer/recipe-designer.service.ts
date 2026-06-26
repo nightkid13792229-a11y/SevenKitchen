@@ -33,6 +33,7 @@ import {
 import type { NutritionProfile } from '../../domain/ingredient/types';
 import {
   getProfileEffectiveWeightG,
+  readProfileFieldAmount,
   readProfileValuePer100g,
 } from '../../domain/recipe-designer/nutrition-profile-reader';
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
@@ -175,6 +176,7 @@ const DESIGN_RECIPE_LIST_SELECT = {
       preparationMethod: true,
       nutrientTargetKey: true,
       nutrientTargetValue: true,
+      supplementTargets: true,
       sortOrder: true,
     },
     orderBy: { sortOrder: 'asc' as const },
@@ -298,6 +300,7 @@ type DesignRecipeItemWithFood = {
   preparationMethod: string | null;
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
+  supplementTargets?: unknown;
   sortOrder: number;
   ingredient?: {
     id: string;
@@ -343,6 +346,22 @@ type PublishedSupplementNutrientTarget = {
   unit?: string;
 };
 
+type DesignSupplementTarget = {
+  nutrientTargetKey: string;
+  fieldPath: string;
+  label: string;
+  unit: string;
+  targetValue?: number | null;
+  expressionBasis?: string | null;
+};
+
+type RemovableSupplementWarning = {
+  itemId: string;
+  itemName: string;
+  targetLabels: string[];
+  message: string;
+};
+
 type PublishedRecipePresentationMedia = {
   coverImageUrl: string | null;
   coverTitle: string | null;
@@ -381,7 +400,9 @@ type DesignRecipeWorkbenchCardSummary = Omit<
 type ClientDesignRecipeAssessmentResult = Omit<
   DesignRecipeAssessmentResult,
   'entries'
->;
+> & {
+  removableSupplementWarnings: RemovableSupplementWarning[];
+};
 
 type RecipeSeriesWorkbenchRecord = {
   id: string;
@@ -441,13 +462,15 @@ type RecipeSeriesCopyableRecipeItem = {
   preparationMethod?: string | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  supplementTargets?: unknown;
   sortOrder?: number | null;
 };
 
-type RecipeSeriesCopyableRecipe = RecipeSeriesWorkbenchRecord['recipes'][number] & {
-  seriesLifeStage: RecipeSeriesLifeStage;
-  items: RecipeSeriesCopyableRecipeItem[];
-};
+type RecipeSeriesCopyableRecipe =
+  RecipeSeriesWorkbenchRecord['recipes'][number] & {
+    seriesLifeStage: RecipeSeriesLifeStage;
+    items: RecipeSeriesCopyableRecipeItem[];
+  };
 
 type CopyableSeriesStageSource =
   | {
@@ -1713,9 +1736,8 @@ export class RecipeDesignerService {
               seriesId,
               context,
             );
-            const sourceSources = this.getLatestCopyableSeriesStageSources(
-              sourceSeries,
-            );
+            const sourceSources =
+              this.getLatestCopyableSeriesStageSources(sourceSeries);
             if (sourceSources.length === 0) {
               throw new BadRequestException('该系列暂无可复制的生命阶段');
             }
@@ -1756,14 +1778,12 @@ export class RecipeDesignerService {
             }
 
             if (!isInternalRecipeDesignerRole(context)) {
-              return this.buildCustomerSeriesCard(
-                {
-                  ...copiedSeries,
-                  customerDogId: copiedCustomerDogId,
-                  designs: copiedDesigns,
-                  recipes: [],
-                } as RecipeSeriesWorkbenchRecord,
-              );
+              return this.buildCustomerSeriesCard({
+                ...copiedSeries,
+                customerDogId: copiedCustomerDogId,
+                designs: copiedDesigns,
+                recipes: [],
+              } as RecipeSeriesWorkbenchRecord);
             }
 
             return this.buildSeriesWorkbenchCard(
@@ -2625,6 +2645,9 @@ export class RecipeDesignerService {
         );
       }
 
+      const supplementTargets = this.normalizeDesignSupplementTargets(
+        item.supplementTargets,
+      );
       return {
         ingredientId: item.ingredientId,
         nutritionFoodId,
@@ -2634,6 +2657,9 @@ export class RecipeDesignerService {
         preparationMethod: item.preparationMethod ?? null,
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
+        ...(supplementTargets.length > 0
+          ? { supplementTargets: this.toJsonValue(supplementTargets) }
+          : {}),
         sortOrder: item.sortOrder ?? index,
       };
     });
@@ -2692,6 +2718,9 @@ export class RecipeDesignerService {
   }
 
   private toCopiedDesignRecipeItemData(item: DesignRecipeItemWithFood) {
+    const supplementTargets = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+    );
     return {
       ingredientId: item.ingredientId,
       nutritionFoodId: item.nutritionFoodId,
@@ -2701,6 +2730,9 @@ export class RecipeDesignerService {
       preparationMethod: item.preparationMethod,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
+      ...(supplementTargets.length > 0
+        ? { supplementTargets: this.toJsonValue(supplementTargets) }
+        : {}),
       sortOrder: item.sortOrder,
     };
   }
@@ -2936,7 +2968,9 @@ export class RecipeDesignerService {
       initialDraftId: primaryDraft?.id ?? '',
       name: record.name,
       customerDogId,
-      customerDogName: customerDogId ? (dogNameById.get(customerDogId) ?? '') : '',
+      customerDogName: customerDogId
+        ? (dogNameById.get(customerDogId) ?? '')
+        : '',
       scenario,
       scenarioLabel: this.getScenarioDisplayLabel(scenario),
       primaryDraftId: primaryDraft?.id ?? '',
@@ -3629,17 +3663,25 @@ export class RecipeDesignerService {
         seriesId: source.seriesId,
         seriesLifeStage: source.seriesLifeStage,
         items: {
-          create: source.items.map((item) => ({
-            ingredientId: item.ingredientId,
-            nutritionFoodId: item.nutritionFoodId,
-            weightG: item.weightG,
-            includeInAssessment: item.includeInAssessment,
-            ratioPercent: item.ratioPercent,
-            preparationMethod: item.preparationMethod,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue: item.nutrientTargetValue,
-            sortOrder: item.sortOrder,
-          })),
+          create: source.items.map((item) => {
+            const supplementTargets = this.normalizeDesignSupplementTargets(
+              item.supplementTargets,
+            );
+            return {
+              ingredientId: item.ingredientId,
+              nutritionFoodId: item.nutritionFoodId,
+              weightG: item.weightG,
+              includeInAssessment: item.includeInAssessment,
+              ratioPercent: item.ratioPercent,
+              preparationMethod: item.preparationMethod,
+              nutrientTargetKey: item.nutrientTargetKey,
+              nutrientTargetValue: item.nutrientTargetValue,
+              ...(supplementTargets.length > 0
+                ? { supplementTargets: this.toJsonValue(supplementTargets) }
+                : {}),
+              sortOrder: item.sortOrder,
+            };
+          }),
         },
       } as Prisma.DesignRecipeUncheckedCreateInput,
       include: DESIGN_RECIPE_INCLUDE,
@@ -3759,8 +3801,15 @@ export class RecipeDesignerService {
     );
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
+    const supplementTargets = shouldPersistNutrientTarget
+      ? this.normalizeDesignSupplementTargets(
+          dto.supplementTargets,
+          dto.nutrientTargetKey,
+          dto.nutrientTargetValue,
+        )
+      : [];
 
-    const data: Prisma.DesignRecipeItemUncheckedCreateInput = {
+    const data = {
       designRecipeId,
       ingredientId,
       nutritionFoodId: dto.nutritionFoodId,
@@ -3770,10 +3819,15 @@ export class RecipeDesignerService {
         ? {
             nutrientTargetKey: dto.nutrientTargetKey ?? null,
             nutrientTargetValue: dto.nutrientTargetValue ?? null,
+            ...(supplementTargets.length > 0
+              ? { supplementTargets: this.toJsonValue(supplementTargets) }
+              : {}),
           }
         : {}),
       sortOrder: dto.sortOrder ?? 0,
       includeInAssessment: dto.includeInAssessment ?? true,
+    } as Prisma.DesignRecipeItemUncheckedCreateInput & {
+      supplementTargets?: Prisma.InputJsonValue;
     };
 
     return this.prisma.designRecipeItem.create({
@@ -3796,8 +3850,18 @@ export class RecipeDesignerService {
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     await this.assertItemEditableByUser(itemId, context.userId);
+    const supplementTargets =
+      dto.supplementTargets !== undefined
+        ? this.normalizeDesignSupplementTargets(dto.supplementTargets)
+        : dto.nutrientTargetKey !== undefined
+          ? this.normalizeDesignSupplementTargets(
+              undefined,
+              dto.nutrientTargetKey,
+              dto.nutrientTargetValue,
+            )
+          : undefined;
 
-    const data: Prisma.DesignRecipeItemUncheckedUpdateInput = {
+    const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
       ...(dto.preparationMethod !== undefined
         ? { preparationMethod: dto.preparationMethod }
@@ -3808,10 +3872,20 @@ export class RecipeDesignerService {
       ...(dto.nutrientTargetValue !== undefined
         ? { nutrientTargetValue: dto.nutrientTargetValue }
         : {}),
+      ...(supplementTargets !== undefined
+        ? {
+            supplementTargets:
+              supplementTargets.length > 0
+                ? this.toJsonValue(supplementTargets)
+                : null,
+          }
+        : {}),
       ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       ...(dto.includeInAssessment !== undefined
         ? { includeInAssessment: dto.includeInAssessment }
         : {}),
+    } as Prisma.DesignRecipeItemUncheckedUpdateInput & {
+      supplementTargets?: Prisma.InputJsonValue | null;
     };
 
     return this.prisma.designRecipeItem.update({
@@ -3880,10 +3954,17 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ): Promise<ClientDesignRecipeAssessmentResult> {
     const draft = await this.getDraft(id, access);
-    const result = await this.assessLoadedDraft(draft);
+    const targets = await this.targetProvider.getTargets(
+      draft.fediafDogScenario,
+    );
+    const result = await this.assessLoadedDraft(draft, targets);
+    const removableSupplementWarnings = this.buildRemovableSupplementWarnings(
+      draft,
+      targets,
+    );
 
     if (this.isPublishedDraft(draft)) {
-      return this.toClientAssessmentResult(result);
+      return this.toClientAssessmentResult(result, removableSupplementWarnings);
     }
 
     await this.prisma.designRecipe.update({
@@ -3891,7 +3972,7 @@ export class RecipeDesignerService {
       data: this.buildAssessmentUpdateData(result),
     });
 
-    return this.toClientAssessmentResult(result);
+    return this.toClientAssessmentResult(result, removableSupplementWarnings);
   }
 
   async createPrivateRecipeSnapshot(
@@ -4044,7 +4125,6 @@ export class RecipeDesignerService {
       );
     const supplementTargetMap = this.buildPublishedSupplementTargetMap(
       draft,
-      targets,
       assessment,
     );
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
@@ -4252,6 +4332,9 @@ export class RecipeDesignerService {
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
         ),
+        supplementTargets: JSON.stringify(
+          this.normalizeDesignSupplementTargets(item.supplementTargets),
+        ),
         sortOrder: item.sortOrder ?? 0,
       }))
       .sort((left, right) => {
@@ -4264,6 +4347,7 @@ export class RecipeDesignerService {
             left.nutritionFoodId.localeCompare(right.nutritionFoodId),
             left.preparationMethod.localeCompare(right.preparationMethod),
             left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
+            left.supplementTargets.localeCompare(right.supplementTargets),
           ].find((result) => result !== 0) ?? 0
         );
       });
@@ -4536,21 +4620,29 @@ export class RecipeDesignerService {
   ) {
     return draft.items
       .filter((item) => this.isItemIncludedInAssessment(item))
-      .map((item) => ({
-        ingredientId: this.resolveIngredientId(item),
-        nutritionFoodId: item.nutritionFoodId,
-        preparationMethod: this.normalizePreparationMethod(
-          item.preparationMethod,
-        ),
-        ratioPercent: this.resolvePrivateRecipeItemRatio(
-          item,
-          draft.totalWeightG,
-        ),
-        nutrientTargetKey: item.nutrientTargetKey,
-        nutrientTargetValue: item.nutrientTargetValue,
-        sortOrder: item.sortOrder,
-        exampleWeight: item.weightG,
-      }));
+      .map((item) => {
+        const supplementTargets = this.normalizeDesignSupplementTargets(
+          item.supplementTargets,
+        );
+        return {
+          ingredientId: this.resolveIngredientId(item),
+          nutritionFoodId: item.nutritionFoodId,
+          preparationMethod: this.normalizePreparationMethod(
+            item.preparationMethod,
+          ),
+          ratioPercent: this.resolvePrivateRecipeItemRatio(
+            item,
+            draft.totalWeightG,
+          ),
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          ...(supplementTargets.length > 0
+            ? { supplementTargets: this.toJsonValue(supplementTargets) }
+            : {}),
+          sortOrder: item.sortOrder,
+          exampleWeight: item.weightG,
+        };
+      });
   }
 
   private resolvePrivateRecipeItemRatio(
@@ -4685,7 +4777,6 @@ export class RecipeDesignerService {
 
   private buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
-    targets: FediafAssessmentTarget[],
     assessment: DesignRecipeAssessmentResult,
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
@@ -4698,116 +4789,243 @@ export class RecipeDesignerService {
         continue;
       }
 
-      const assessmentWithoutItem = assessRecipeDraft({
-        scenario: draft.fediafDogScenario,
-        targets,
-        items: this.buildAssessmentItems(draft, item.id),
-      });
-      const itemTargets = this.resolveSupplementTargetsFromRemovedAssessment(
-        item,
-        assessment,
-        assessmentWithoutItem,
+      result.set(
+        item.id,
+        this.resolveExplicitPublishedSupplementTargets(item, assessment),
       );
-
-      if (itemTargets.length > 0) {
-        result.set(item.id, itemTargets);
-      }
     }
 
     return result;
   }
 
-  private resolveSupplementTargetsFromRemovedAssessment(
+  private resolveExplicitPublishedSupplementTargets(
     item: DesignRecipeItemWithFood,
     assessment: DesignRecipeAssessmentResult,
-    assessmentWithoutItem: DesignRecipeAssessmentResult,
   ): PublishedSupplementNutrientTarget[] {
     if (assessment.totalWeightG <= 0) {
-      return [];
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在总重量为 0 的配方中生成营养目标`,
+      );
     }
 
-    const targetsByFieldPath = new Map<
-      string,
-      PublishedSupplementNutrientTarget
-    >();
+    const designTargets = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+    );
+    if (designTargets.length === 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布`,
+      );
+    }
 
-    for (const entry of assessment.entries) {
-      if (this.isAssessmentRatioEntry(entry)) {
+    return designTargets
+      .map((target) =>
+        this.resolveExplicitPublishedSupplementTarget(item, target, assessment),
+      )
+      .sort((left, right) => {
+        if (right.nutrientTargetValue !== left.nutrientTargetValue) {
+          return right.nutrientTargetValue - left.nutrientTargetValue;
+        }
+        return (left.fieldPath ?? '').localeCompare(right.fieldPath ?? '');
+      });
+  }
+
+  private resolveExplicitPublishedSupplementTarget(
+    item: DesignRecipeItemWithFood,
+    target: DesignSupplementTarget,
+    assessment: DesignRecipeAssessmentResult,
+  ): PublishedSupplementNutrientTarget {
+    const targetField = this.resolveSupplementTargetField(target.fieldPath);
+    if (!targetField) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养目标 ${target.fieldPath} 不在可发布字段中`,
+      );
+    }
+
+    const amountRead = readProfileFieldAmount(
+      this.toAssessmentNutritionProfile(item),
+      targetField.fieldPath,
+      item.weightG,
+    );
+    const contributionAmount = Number(amountRead.amount);
+    if (amountRead.missing || !Number.isFinite(contributionAmount)) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案缺少${targetField.label}数据，无法生成营养目标`,
+      );
+    }
+    if (contributionAmount <= 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案中${targetField.label}含量为 0，无法生成营养目标`,
+      );
+    }
+
+    const nutrientTargetValue = this.roundPublishedSupplementTargetValue(
+      (contributionAmount / assessment.totalWeightG) * 1000,
+    );
+    if (!Number.isFinite(nutrientTargetValue) || nutrientTargetValue <= 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的${targetField.label}目标值无效，无法发布`,
+      );
+    }
+
+    return {
+      nutrientTargetKey: target.nutrientTargetKey || targetField.fieldKey,
+      nutrientTargetValue,
+      fieldPath: targetField.fieldPath,
+      label: targetField.label,
+      unit: targetField.unit,
+    };
+  }
+
+  private buildRemovableSupplementWarnings(
+    draft: DesignRecipeWithItems,
+    targets: FediafAssessmentTarget[],
+  ): RemovableSupplementWarning[] {
+    const warnings: RemovableSupplementWarning[] = [];
+
+    for (const item of draft.items) {
+      if (
+        !this.isItemIncludedInAssessment(item) ||
+        this.resolveIngredientType(item) !== IngredientType.SUPPLEMENT
+      ) {
         continue;
       }
 
+      const designTargets = this.normalizeDesignSupplementTargets(
+        item.supplementTargets,
+      );
+      if (designTargets.length === 0) {
+        continue;
+      }
+
+      const assessmentWithoutItem = assessRecipeDraft({
+        scenario: draft.fediafDogScenario,
+        targets,
+        items: this.buildAssessmentItems(draft, item.id),
+      });
+      if (
+        !designTargets.every((target) =>
+          this.isSupplementTargetStillSufficientWithoutItem(
+            assessmentWithoutItem,
+            target,
+          ),
+        )
+      ) {
+        continue;
+      }
+
+      const targetLabels = designTargets.map((target) => target.label);
+      warnings.push({
+        itemId: item.id,
+        itemName: this.resolveIngredientDisplayName(item),
+        targetLabels,
+        message: `移除该补剂后，${targetLabels.join('、')}仍然满足最低充足性；是否保留由管理员按配方意图决定。`,
+      });
+    }
+
+    return warnings;
+  }
+
+  private isSupplementTargetStillSufficientWithoutItem(
+    assessmentWithoutItem: DesignRecipeAssessmentResult,
+    target: DesignSupplementTarget,
+  ) {
+    const entry = this.findAssessmentEntryBySupplementTargetField(
+      assessmentWithoutItem,
+      target.fieldPath,
+    );
+    if (!entry) {
+      return false;
+    }
+
+    return entry.status !== 'DEFICIENT' && entry.status !== 'MISSING_DATA';
+  }
+
+  private findAssessmentEntryBySupplementTargetField(
+    assessment: DesignRecipeAssessmentResult,
+    fieldPath: string,
+  ): AssessmentEntry | undefined {
+    return assessment.entries.find((entry) => {
+      if (this.isAssessmentRatioEntry(entry)) {
+        return false;
+      }
       const targetField = this.resolveSupplementTargetField(entry.nutrientKey);
+      return targetField?.fieldPath === fieldPath;
+    });
+  }
+
+  private normalizeDesignSupplementTargets(
+    value: unknown,
+    legacyTargetKey?: string | null,
+    legacyTargetValue?: number | null,
+  ): DesignSupplementTarget[] {
+    const rawTargets = Array.isArray(value) ? value : [];
+    const normalizedTargets: DesignSupplementTarget[] = [];
+
+    for (const rawTarget of rawTargets) {
+      const targetRecord = this.asRecord(rawTarget);
+      if (!targetRecord) {
+        continue;
+      }
+      const targetKey = this.normalizeOptionalTargetText(
+        targetRecord.fieldPath ??
+          targetRecord.nutrientTargetKey ??
+          targetRecord.nutrientKey ??
+          targetRecord.fieldKey,
+      );
+      if (!targetKey) {
+        continue;
+      }
+      const targetField = this.resolveSupplementTargetField(targetKey);
       if (!targetField) {
         continue;
       }
-
-      const entryWithoutItem = this.findMatchingAssessmentEntry(
-        assessmentWithoutItem,
-        entry,
-      );
-      if (entryWithoutItem?.status !== 'DEFICIENT') {
-        continue;
-      }
-
-      const contributor = (entry.contributors ?? []).find(
-        (candidate) => candidate.itemId === item.id,
-      );
-      const contributorAmount = Number(contributor?.amount);
-      if (
-        !contributor ||
-        !Number.isFinite(contributorAmount) ||
-        contributorAmount <= 0 ||
-        contributor.missing
-      ) {
-        continue;
-      }
-
-      const contributionInTargetUnit = convertUnitValue(
-        contributorAmount,
-        contributor.unit || entry.unit,
-        targetField.unit,
-      );
-      if (
-        contributionInTargetUnit === null ||
-        !Number.isFinite(contributionInTargetUnit) ||
-        contributionInTargetUnit <= 0
-      ) {
-        continue;
-      }
-
-      const nutrientTargetValue = this.roundPublishedSupplementTargetValue(
-        (contributionInTargetUnit / assessment.totalWeightG) * 1000,
-      );
-      if (!Number.isFinite(nutrientTargetValue) || nutrientTargetValue <= 0) {
-        continue;
-      }
-
-      const existing = targetsByFieldPath.get(targetField.fieldPath);
-      const nextTarget = {
-        nutrientTargetKey: entry.nutrientKey,
-        nutrientTargetValue,
+      normalizedTargets.push({
+        nutrientTargetKey: targetField.fieldKey,
         fieldPath: targetField.fieldPath,
-        label: targetField.label,
-        unit: targetField.unit,
-      };
-      if (!existing || nutrientTargetValue > existing.nutrientTargetValue) {
-        targetsByFieldPath.set(targetField.fieldPath, nextTarget);
+        label:
+          this.normalizeOptionalTargetText(targetRecord.label) ??
+          targetField.label,
+        unit:
+          this.normalizeOptionalTargetText(targetRecord.unit) ??
+          targetField.unit,
+        targetValue: this.readOptionalFiniteNumber(
+          targetRecord.targetValue ?? targetRecord.targetValuePerKg,
+        ),
+        expressionBasis: this.normalizeOptionalTargetText(
+          targetRecord.expressionBasis,
+        ),
+      });
+    }
+
+    if (normalizedTargets.length === 0 && legacyTargetKey) {
+      const targetField = this.resolveSupplementTargetField(legacyTargetKey);
+      if (targetField) {
+        normalizedTargets.push({
+          nutrientTargetKey: targetField.fieldKey,
+          fieldPath: targetField.fieldPath,
+          label: targetField.label,
+          unit: targetField.unit,
+          targetValue: this.readOptionalFiniteNumber(legacyTargetValue),
+          expressionBasis: null,
+        });
       }
     }
 
-    return [...targetsByFieldPath.values()];
+    return [
+      ...new Map(
+        normalizedTargets.map((target) => [target.fieldPath, target]),
+      ).values(),
+    ];
   }
 
-  private findMatchingAssessmentEntry(
-    assessment: DesignRecipeAssessmentResult,
-    sourceEntry: AssessmentEntry,
-  ) {
-    return assessment.entries.find(
-      (entry) =>
-        entry.nutrientKey === sourceEntry.nutrientKey &&
-        entry.expressionBasis === sourceEntry.expressionBasis &&
-        !this.isAssessmentRatioEntry(entry),
-    );
+  private normalizeOptionalTargetText(value: unknown): string | null {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    return normalized || null;
+  }
+
+  private readOptionalFiniteNumber(value: unknown): number | null {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
   }
 
   private roundPublishedSupplementTargetValue(value: number) {
@@ -5553,10 +5771,14 @@ export class RecipeDesignerService {
 
   private toClientAssessmentResult(
     result: DesignRecipeAssessmentResult,
+    removableSupplementWarnings: RemovableSupplementWarning[] = [],
   ): ClientDesignRecipeAssessmentResult {
     const clientResult: Partial<DesignRecipeAssessmentResult> = { ...result };
     delete clientResult.entries;
-    return clientResult as ClientDesignRecipeAssessmentResult;
+    return {
+      ...clientResult,
+      removableSupplementWarnings,
+    } as ClientDesignRecipeAssessmentResult;
   }
 
   private resolveIngredientId(item: DesignRecipeItemWithFood): string {

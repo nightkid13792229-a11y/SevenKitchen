@@ -55,6 +55,14 @@ describe('recipeDesignerApi', () => {
       preparationMethod: 'cooked',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.2,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 1,
     } satisfies Parameters<typeof recipeDesignerApi.addItem>[1]
     const updateItemPayload = {
@@ -62,6 +70,14 @@ describe('recipeDesignerApi', () => {
       preparationMethod: 'steamed',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.4,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 2,
       includeInAssessment: false,
     } satisfies UpdateDesignRecipeItemPayload
@@ -277,6 +293,7 @@ describe('recipeDesignerApi', () => {
       preparationMethod: null,
       nutrientTargetKey: null,
       nutrientTargetValue: null,
+      supplementTargets: null,
     })
     recipeDesignerApi.publishDraft('draft-1', { name: '三文鱼成犬维护' })
 
@@ -287,6 +304,7 @@ describe('recipeDesignerApi', () => {
         preparationMethod: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
+        supplementTargets: null,
       },
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {

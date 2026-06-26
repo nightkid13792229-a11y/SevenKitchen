@@ -149,6 +149,12 @@
               <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
             </view>
           </view>
+          <view
+            v-if="getRemovableSupplementWarning(item)"
+            class="supplement-removal-hint"
+          >
+            <text>{{ getRemovableSupplementWarningMessage(item) }}</text>
+          </view>
         </view>
       </view>
 
@@ -692,6 +698,7 @@ import {
   type IngredientOptionListQuery,
   type IngredientOptionListResponse,
   type RecipeDesignerIngredientOption,
+  type SupplementTargetPayload,
 } from '../../api/recipe-designer'
 import {
   buildAssessmentCategories,
@@ -758,15 +765,6 @@ interface StandardIngredientSnapshot {
   properties?: Record<string, unknown> | null
 }
 
-interface StandardIngredientSnapshot {
-  id?: string
-  name?: string
-  type?: string
-  unitDisplayLabel?: string | null
-  purchaseUnit?: string | null
-  properties?: Record<string, unknown> | null
-}
-
 interface DesignerItem {
   id: string
   name?: string
@@ -793,7 +791,15 @@ interface DesignerItem {
   preparationMethod?: string
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: SupplementTargetPayload[] | null
   sortOrder?: number
+}
+
+interface RemovableSupplementWarning {
+  itemId: string
+  itemName?: string
+  targetLabels?: string[]
+  message?: string
 }
 
 type HistoryActionDirection = 'undo' | 'redo'
@@ -826,6 +832,51 @@ const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_110, value: 'ADULT_MER_110' },
   { label: FEDIAF_DOG_SCENARIO_LABELS.REPRODUCTION, value: 'REPRODUCTION' },
 ]
+
+const SUPPLEMENT_TARGET_FIELD_BY_NUTRIENT_KEY: Record<string, string> = {
+  calcium: 'minerals.calcium',
+  phosphorus: 'minerals.phosphorus',
+  potassium: 'minerals.potassium',
+  sodium: 'minerals.sodium',
+  magnesium: 'minerals.magnesium',
+  chloride: 'minerals.chloride',
+  iron: 'minerals.iron',
+  zinc: 'minerals.zinc',
+  copper: 'minerals.copper',
+  manganese: 'minerals.manganese',
+  selenium: 'minerals.selenium',
+  iodine: 'minerals.iodine',
+  vitaminA: 'vitamins.vitaminA',
+  vitaminD: 'vitamins.vitaminD',
+  vitaminE: 'vitamins.vitaminE',
+  vitaminK: 'vitamins.vitaminK',
+  thiamine: 'vitamins.thiamine',
+  riboflavin: 'vitamins.riboflavin',
+  niacin: 'vitamins.niacin',
+  pantothenicAcid: 'vitamins.pantothenicAcid',
+  vitaminB6: 'vitamins.vitaminB6',
+  folicAcid: 'vitamins.folicAcid',
+  vitaminB12: 'vitamins.vitaminB12',
+  choline: 'vitamins.choline',
+  biotin: 'vitamins.biotin',
+  linoleicAcid: 'fattyAcids.linoleicAcid',
+  alphaLinolenicAcid: 'fattyAcids.alphaLinolenicAcid',
+  arachidonicAcid: 'fattyAcids.arachidonicAcid',
+  epa: 'fattyAcids.epa',
+  dha: 'fattyAcids.dha',
+  arginine: 'aminoAcids.arginine',
+  histidine: 'aminoAcids.histidine',
+  isoleucine: 'aminoAcids.isoleucine',
+  leucine: 'aminoAcids.leucine',
+  lysine: 'aminoAcids.lysine',
+  methionine: 'aminoAcids.methionine',
+  cystine: 'aminoAcids.cystine',
+  phenylalanine: 'aminoAcids.phenylalanine',
+  tyrosine: 'aminoAcids.tyrosine',
+  threonine: 'aminoAcids.threonine',
+  tryptophan: 'aminoAcids.tryptophan',
+  valine: 'aminoAcids.valine',
+}
 
 function rpxToPx(rpx: number, windowWidth = DEFAULT_WINDOW_WIDTH_PX) {
   return Math.ceil((rpx * windowWidth) / 750)
@@ -1040,6 +1091,17 @@ const selectedIngredientUnitLabel = computed(() => {
 
 const assessmentEntries = computed(() => {
   return assessment.value?.groupedEntries || assessment.value?.entries || assessment.value?.nutrients || []
+})
+
+const removableSupplementWarningByItemId = computed<Record<string, RemovableSupplementWarning>>(() => {
+  const warnings = Array.isArray(assessment.value?.removableSupplementWarnings)
+    ? assessment.value.removableSupplementWarnings
+    : []
+  return Object.fromEntries(
+    warnings
+      .filter((warning: RemovableSupplementWarning) => warning?.itemId)
+      .map((warning: RemovableSupplementWarning) => [warning.itemId, warning]),
+  )
 })
 
 const assessmentCategories = computed(() => buildAssessmentCategories(assessmentEntries.value, assessment.value || {}))
@@ -1457,6 +1519,19 @@ function isItemIncludedInAssessment(item: DesignerItem) {
   return item.includeInAssessment !== false
 }
 
+function getRemovableSupplementWarning(item: DesignerItem): RemovableSupplementWarning | undefined {
+  return removableSupplementWarningByItemId.value[item.id]
+}
+
+function getRemovableSupplementWarningMessage(item: DesignerItem) {
+  const warning = getRemovableSupplementWarning(item)
+  if (warning?.message) return warning.message
+  const targetLabels = Array.isArray(warning?.targetLabels) && warning.targetLabels.length > 0
+    ? warning.targetLabels.join('、')
+    : '目标营养素'
+  return `移除该补剂后，${targetLabels}仍然满足最低充足性；是否保留由管理员按配方意图决定。`
+}
+
 async function toggleItemAssessment(item: DesignerItem, event: any) {
   const nextIncluded = Boolean(event.detail?.value)
   const previousIncluded = isItemIncludedInAssessment(item)
@@ -1757,14 +1832,28 @@ function selectIngredientOption(option: RecipeDesignerIngredientOption) {
 }
 
 function getNutrientTargetContextForAddItem(option: RecipeDesignerIngredientOption) {
-  if (!isSupplementOption(option)) {
+  const target = ingredientNutrientSearchTarget.value
+  if (!isSupplementOption(option) || !target) {
     return {}
   }
 
-  return {
-    nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey,
-    nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue,
+  const supplementTarget: SupplementTargetPayload = {
+    fieldPath: resolveSupplementTargetFieldPath(target.nutrientKey),
+    nutrientTargetKey: target.nutrientKey,
+    label: target.label,
+    ...(target.targetValue !== undefined ? { targetValue: target.targetValue } : {}),
+    ...(target.expressionBasis ? { expressionBasis: target.expressionBasis } : {}),
   }
+
+  return {
+    nutrientTargetKey: target.nutrientKey,
+    nutrientTargetValue: target.targetValue,
+    supplementTargets: [supplementTarget],
+  }
+}
+
+function resolveSupplementTargetFieldPath(nutrientKey: string) {
+  return SUPPLEMENT_TARGET_FIELD_BY_NUTRIENT_KEY[nutrientKey] || nutrientKey
 }
 
 function selectNutritionProfile(profile: IngredientNutritionProfileOption) {
@@ -2443,6 +2532,9 @@ function buildOptimisticDesignerItem(itemSnapshot: RecipeDesignerHistoryItemSnap
     preparationMethod: itemSnapshot.preparationMethod ?? undefined,
     nutrientTargetKey: itemSnapshot.nutrientTargetKey ?? null,
     nutrientTargetValue: itemSnapshot.nutrientTargetValue ?? null,
+    supplementTargets: itemSnapshot.supplementTargets
+      ? itemSnapshot.supplementTargets.map((target) => ({ ...target }))
+      : null,
     sortOrder: itemSnapshot.sortOrder,
   }
 }
@@ -2452,6 +2544,9 @@ function cloneDesignerItems(list: DesignerItem[]) {
     ...item,
     ingredient: item.ingredient ? { ...item.ingredient } : undefined,
     nutritionFood: item.nutritionFood ? { ...item.nutritionFood } : undefined,
+    supplementTargets: item.supplementTargets
+      ? item.supplementTargets.map((target) => ({ ...target }))
+      : item.supplementTargets,
   }))
 }
 
@@ -3485,6 +3580,17 @@ function formatAssessmentNumber(value: unknown) {
 
 .item-row-excluded {
   opacity: 0.62;
+}
+
+.supplement-removal-hint {
+  margin: 8rpx 12rpx 0 86rpx;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid #ffd591;
+  border-radius: 8rpx;
+  background: #fff7e6;
+  color: #8a4b00;
+  font-size: 22rpx;
+  line-height: 1.45;
 }
 
 .item-drag-handle-shell {

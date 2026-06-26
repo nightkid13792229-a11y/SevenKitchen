@@ -106,6 +106,14 @@ describe('recipe designer editor history', () => {
       preparationMethod: '熟制',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.2,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 3,
     })
 
@@ -117,6 +125,14 @@ describe('recipe designer editor history', () => {
       preparationMethod: '熟制',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.2,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 3,
     })
   })

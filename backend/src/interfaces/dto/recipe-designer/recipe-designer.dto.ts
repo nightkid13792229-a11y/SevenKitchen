@@ -265,6 +265,11 @@ export class AddRecipeDesignItemDto {
   nutrientTargetValue?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  supplementTargets?: Array<Record<string, unknown>>;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
@@ -293,6 +298,11 @@ export class UpdateRecipeDesignItemDto {
   @Type(() => Number)
   @IsNumber()
   nutrientTargetValue?: number | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  supplementTargets?: Array<Record<string, unknown>> | null;
 
   @IsOptional()
   @Type(() => Number)

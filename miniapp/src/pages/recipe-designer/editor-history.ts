@@ -1,3 +1,5 @@
+import type { SupplementTargetPayload } from '../../api/recipe-designer'
+
 export const RECIPE_DESIGNER_HISTORY_LIMIT = 20
 
 export interface RecipeDesignerHistoryItemPatch {
@@ -6,6 +8,7 @@ export interface RecipeDesignerHistoryItemPatch {
   preparationMethod?: string | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: SupplementTargetPayload[] | null
   sortOrder?: number
 }
 
@@ -149,6 +152,7 @@ export function snapshotRecipeDesignerItem(item: Record<string, any>): RecipeDes
     ...(item.nutrientTargetValue !== undefined
       ? { nutrientTargetValue: item.nutrientTargetValue === null ? null : toFiniteNumber(item.nutrientTargetValue, 0) }
       : {}),
+    ...(item.supplementTargets !== undefined ? { supplementTargets: cloneSupplementTargets(item.supplementTargets) } : {}),
     sortOrder: toFiniteNumber(item.sortOrder, 0),
   }
 }
@@ -167,6 +171,9 @@ export function buildHistoryItemAddPayload(snapshot: RecipeDesignerHistoryItemSn
     ...(snapshot.nutrientTargetKey !== undefined ? { nutrientTargetKey: snapshot.nutrientTargetKey ?? undefined } : {}),
     ...(snapshot.nutrientTargetValue !== undefined && snapshot.nutrientTargetValue !== null
       ? { nutrientTargetValue: snapshot.nutrientTargetValue }
+      : {}),
+    ...(Array.isArray(snapshot.supplementTargets)
+      ? { supplementTargets: cloneSupplementTargets(snapshot.supplementTargets) || [] }
       : {}),
     ...(snapshot.sortOrder !== undefined ? { sortOrder: toFiniteNumber(snapshot.sortOrder, 0) } : {}),
   }
@@ -247,4 +254,11 @@ function firstString(...values: unknown[]) {
 function toFiniteNumber(value: unknown, fallback: number) {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : fallback
+}
+
+function cloneSupplementTargets(value: unknown): SupplementTargetPayload[] | null {
+  if (!Array.isArray(value)) return value === null ? null : []
+  return value
+    .filter((target): target is Record<string, unknown> => Boolean(target) && typeof target === 'object')
+    .map((target) => ({ ...target } as SupplementTargetPayload))
 }

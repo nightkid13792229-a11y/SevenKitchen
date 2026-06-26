@@ -630,9 +630,20 @@ describe('recipe designer editor guardrails', () => {
     expect(assessmentSource).toContain('{ targetValue }')
     expect(editorSource).toContain('...getNutrientTargetContextForAddItem(selectedIngredientOption.value)')
     expect(editorSource).toContain('function getNutrientTargetContextForAddItem')
-    expect(editorSource).toContain('if (!isSupplementOption(option))')
-    expect(editorSource).toContain('nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey')
-    expect(editorSource).toContain('nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue')
+    expect(editorSource).toContain('if (!isSupplementOption(option) || !target)')
+    expect(editorSource).toContain('const supplementTarget: SupplementTargetPayload')
+    expect(editorSource).toContain('fieldPath: resolveSupplementTargetFieldPath(target.nutrientKey)')
+    expect(editorSource).toContain('nutrientTargetKey: target.nutrientKey')
+    expect(editorSource).toContain('nutrientTargetValue: target.targetValue')
+    expect(editorSource).toContain('supplementTargets: [supplementTarget]')
+  })
+
+  it('prompts admins when a supplement can be removed without hurting nutrient sufficiency', () => {
+    expect(editorSource).toContain('removableSupplementWarnings')
+    expect(editorSource).toContain('removableSupplementWarningByItemId')
+    expect(editorSource).toContain('getRemovableSupplementWarning(item)')
+    expect(editorSource).toContain('supplement-removal-hint')
+    expect(editorSource).toContain('是否保留由管理员按配方意图决定')
   })
 
   it('keeps nutrient target context after returning from the supplement library', () => {

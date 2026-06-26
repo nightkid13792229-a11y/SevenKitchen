@@ -178,6 +178,7 @@ describe('RecipeDesignerService', () => {
       preparationMethod: 'RAW',
       nutrientTargetKey: null,
       nutrientTargetValue: null,
+      supplementTargets: null,
       sortOrder: 0,
       nutritionFood: {
         id: 'food-1',
@@ -2539,6 +2540,90 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('warns when an explicit supplement target remains sufficient after removing the supplement', async () => {
+    const cholineSupplement = {
+      id: 'ingredient-choline',
+      name: '胆碱片',
+      type: 'SUPPLEMENT',
+      unitDisplayLabel: '片',
+      purchaseUnit: '片',
+      properties: null,
+    };
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [
+          item({
+            id: 'food-item-1',
+            nutritionFood: {
+              ...item().nutritionFood,
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                vitamins: { choline: 60 },
+              },
+            },
+          }),
+          item({
+            id: 'supplement-choline-item',
+            ingredientId: 'ingredient-choline',
+            weightG: 1,
+            ingredient: cholineSupplement,
+            supplementTargets: [
+              {
+                fieldPath: 'vitamins.choline',
+                label: '胆碱',
+                unit: 'mg',
+              },
+            ],
+            nutritionFood: {
+              id: 'food-choline',
+              name: '胆碱片',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: { choline: 1000 },
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'ingredient-choline',
+                  isPrimary: true,
+                  ingredient: cholineSupplement,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'choline',
+        label: '胆碱',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 425,
+        maxValue: null,
+        fieldPaths: ['vitamins.choline'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(draft());
+
+    const assessment = await service.assessDraft('design-1', 'staff-1');
+
+    expect(assessment.removableSupplementWarnings).toEqual([
+      expect.objectContaining({
+        itemId: 'supplement-choline-item',
+        itemName: '胆碱片',
+        targetLabels: ['胆碱'],
+      }),
+    ]);
+    expect(assessment).not.toHaveProperty('entries');
+  });
+
   it('excludes disabled draft items from nutrition assessment without deleting them', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -2985,6 +3070,13 @@ describe('RecipeDesignerService', () => {
               name: '碳酸钙粉',
               type: 'SUPPLEMENT',
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-calcium',
               name: '碳酸钙粉',
@@ -4010,6 +4102,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-calcium',
               name: '鸡蛋壳粉',
@@ -4082,6 +4181,122 @@ describe('RecipeDesignerService', () => {
     expect(supplementItem.nutrientTargetValue).toBe(expectedTargetValue);
     expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
       expectedTargetValue,
+    );
+  });
+
+  it('publishes explicit supplement targets even when removing the supplement keeps the nutrient compliant', async () => {
+    const cholineSupplement = {
+      id: 'supplement-choline',
+      name: '胆碱片',
+      type: 'SUPPLEMENT',
+      unitDisplayLabel: '片',
+      purchaseUnit: '片',
+      properties: null,
+    };
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-item-1',
+            ingredientId: 'ingredient-1',
+            weightG: 100,
+            nutritionFood: {
+              id: 'food-1',
+              name: '胆碱充足基础食材',
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                vitamins: { choline: 60 },
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+          item({
+            id: 'supplement-choline-item',
+            ingredientId: 'supplement-choline',
+            weightG: 1,
+            nutrientTargetKey: 'choline',
+            nutrientTargetValue: 425,
+            supplementTargets: [
+              {
+                fieldPath: 'vitamins.choline',
+                label: '胆碱',
+                unit: 'mg',
+              },
+            ],
+            ingredient: cholineSupplement,
+            nutritionFood: {
+              id: 'food-supplement-choline',
+              name: '胆碱片',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: { choline: 1000 },
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-choline',
+                  isPrimary: true,
+                  ingredient: cholineSupplement,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'choline',
+        label: '胆碱',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 425,
+        maxValue: null,
+        fieldPaths: ['vitamins.choline'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { name: '小米鳕鱼鸡胸' },
+      adminAccess,
+    );
+
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-choline',
+    );
+
+    expect(supplementItem).toEqual(
+      expect.objectContaining({
+        nutrientTargetKey: 'choline',
+        nutrientTargetValue: Math.round((10 / 101) * 1000),
+        supplementTargets: [
+          expect.objectContaining({
+            fieldPath: 'vitamins.choline',
+            label: '胆碱',
+            unit: 'mg',
+            targetValuePerKg: Math.round((10 / 101) * 1000),
+          }),
+        ],
+      }),
     );
   });
 
@@ -4183,6 +4398,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-calcium',
               name: '鸡蛋壳粉',
@@ -4222,6 +4444,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.iodine',
+                label: '碘',
+                unit: 'μg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-iodine',
               name: '海藻粉',
@@ -4313,7 +4542,7 @@ describe('RecipeDesignerService', () => {
     expect(iodineTarget.targetValuePerKg).toBe(Math.round((300 / 102) * 1000));
   });
 
-  it('keeps only deficient nutrients when publishing a multi-nutrient supplement target', async () => {
+  it('publishes every explicit target for a multi-nutrient supplement', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4346,6 +4575,18 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+              {
+                fieldPath: 'minerals.zinc',
+                label: '锌',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-multi',
               name: '复合矿物粉',
@@ -4419,18 +4660,30 @@ describe('RecipeDesignerService', () => {
       (createdItem: any) => createdItem.ingredientId === 'supplement-multi',
     );
 
-    expect(supplementItem.supplementTargets).toHaveLength(1);
-    expect(supplementItem.supplementTargets[0]).toMatchObject({
-      fieldPath: 'minerals.zinc',
-      label: '锌',
-      unit: 'mg',
-    });
-    expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
-      Math.round((30 / 101) * 1000),
+    expect(supplementItem.supplementTargets).toHaveLength(2);
+    expect(supplementItem.supplementTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: 'minerals.calcium',
+          label: '钙',
+          unit: 'mg',
+          targetValuePerKg: Math.round((10 / 101) * 1000),
+        }),
+        expect.objectContaining({
+          fieldPath: 'minerals.zinc',
+          label: '锌',
+          unit: 'mg',
+          targetValuePerKg: Math.round((30 / 101) * 1000),
+        }),
+      ]),
     );
+    expect(supplementItem).toMatchObject({
+      nutrientTargetKey: 'zinc',
+      nutrientTargetValue: Math.round((30 / 101) * 1000),
+    });
   });
 
-  it('infers supplement nutrient targets from assessment contribution when designer target context is missing', async () => {
+  it('rejects publishing when an included supplement has no explicit design target', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4492,48 +4745,174 @@ describe('RecipeDesignerService', () => {
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
-    prisma.designRecipe.update.mockResolvedValue(
-      draft({ status: 'PUBLISHED' }),
-    );
-    prisma.recipe.create.mockResolvedValue({
-      id: 'recipe-row-1',
-      recipeId: 'design-1',
-      version: 1,
-    });
-    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
-      id: 'snapshot-1',
-    });
 
-    await service.publishDraft(
-      'design-1',
-      { name: '补剂目标推断食谱', reviewNote: '补剂目标推断回归测试' },
-      adminAccess,
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '补剂目标缺失食谱', reviewNote: '补剂目标缺失回归测试' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「鸡蛋壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
+      ),
     );
 
-    const createData = prisma.recipe.create.mock.calls[0][0].data;
-    const supplementItem = createData.items.create.find(
-      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
-    );
-    const expectedTargetValue = Math.round((380 / 101) * 1000);
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
+  });
 
-    expect(supplementItem).toEqual(
-      expect.objectContaining({
-        nutrientTargetKey: 'calcium',
-        nutrientTargetValue: expect.any(Number),
-        supplementTargets: [
-          expect.objectContaining({
-            fieldPath: 'minerals.calcium',
-            label: '钙',
-            targetValuePerKg: expect.any(Number),
-            unit: 'mg',
+  it('rejects publishing when an explicit supplement target has no nutrition profile amount', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item(),
+          item({
+            id: 'supplement-item-1',
+            ingredientId: 'supplement-calcium',
+            weightG: 1,
+            nutrientTargetKey: 'calcium',
+            nutrientTargetValue: 500,
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
+            ingredient: {
+              id: 'supplement-calcium',
+              name: '鸡蛋壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-calcium',
+              name: '鸡蛋壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-calcium',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-calcium',
+                    name: '鸡蛋壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
           }),
         ],
       }),
     );
-    expect(supplementItem.nutrientTargetValue).toBe(expectedTargetValue);
-    expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
-      expectedTargetValue,
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        {
+          name: '补剂营养档案缺失食谱',
+          reviewNote: '补剂营养档案缺失回归测试',
+        },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「鸡蛋壳粉」的营养档案缺少钙数据，无法生成营养目标',
+      ),
     );
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy nutrient target keys from inferring supplement targets during publish', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-item-1',
+            ingredientId: 'ingredient-1',
+            weightG: 100,
+            nutritionFood: {
+              id: 'food-1',
+              name: '低钙基础食材',
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                minerals: { calcium: 0, phosphorus: 500 },
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+          item({
+            id: 'supplement-item-1',
+            ingredientId: 'supplement-calcium',
+            weightG: 1,
+            nutrientTargetKey: 'calcium',
+            nutrientTargetValue: 500,
+            ingredient: {
+              id: 'supplement-calcium',
+              name: '鸡蛋壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-calcium',
+              name: '鸡蛋壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: { calcium: 38000 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-calcium',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-calcium',
+                    name: '鸡蛋壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '旧字段目标食谱', reviewNote: '旧字段不能推断补剂目标' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「鸡蛋壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
+      ),
+    );
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
   it('rejects publishing without a final recipe name', async () => {
@@ -5192,7 +5571,11 @@ describe('RecipeDesignerService', () => {
       await expect(
         service.createSeries(
           { name: 'Star 的鲜食食谱', dogId: 'dog-other' } as any,
-          { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' } as any,
+          {
+            userId: 'user-1',
+            customerId: 'customer-1',
+            role: 'CUSTOMER',
+          } as any,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
 

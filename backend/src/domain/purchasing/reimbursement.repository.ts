@@ -12,6 +12,13 @@ export interface ReimbursementRepository {
   save(reimbursement: Reimbursement): Promise<Reimbursement>;
 
   /**
+   * 保存报销单并在同一事务中替换关联采购清单
+   */
+  saveWithPurchaseListReplacement(
+    reimbursement: Reimbursement,
+  ): Promise<Reimbursement>;
+
+  /**
    * 根据ID查找报销单
    */
   findById(id: string): Promise<Reimbursement | null>;

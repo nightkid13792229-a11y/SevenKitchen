@@ -11,6 +11,8 @@ const recordFormSource = readPage('staff-purchasing/record-form.vue');
 const stockCreateSource = readPage('staff-purchasing/stock-create.vue');
 const reimbursementListSource = readPage('staff-purchasing/reimbursement/list.vue');
 const reimbursementDetailSource = readPage('staff-purchasing/reimbursement/detail.vue');
+const reimbursementSubmitSource = readPage('staff-purchasing/reimbursement/submit.vue');
+const reimbursementConstantsSource = readPage('staff-purchasing/constants/reimbursement.ts');
 const purchasingApiSource = readPage('staff-purchasing/api/purchasing.ts');
 
 describe('staff purchasing wording', () => {
@@ -97,6 +99,40 @@ describe('staff reimbursement detail guardrails', () => {
     expect(reimbursementDetailSource).not.toContain('请先审核报销单中的价格变更');
     expect(reimbursementDetailSource).not.toContain(':disabled="uploading || hasPendingPriceChanges"');
     expect(reimbursementDetailSource).not.toContain('存在待人工审核的价格变更，请先审核报销单');
+  });
+});
+
+describe('staff reimbursement employee flow', () => {
+  it('uses two employee-facing reimbursement types without a separate multi-list entry', () => {
+    expect(reimbursementSubmitSource).toContain('采购报销');
+    expect(reimbursementSubmitSource).toContain('经营费用报销');
+    expect(reimbursementSubmitSource).toContain('flowType');
+    expect(reimbursementSubmitSource).not.toContain('多张采购清单合并报销');
+  });
+
+  it('keeps packaging in purchase reimbursement and out of operating categories', () => {
+    expect(reimbursementSubmitSource).toContain('包材');
+    expect(reimbursementSubmitSource).toContain('包材清单');
+    expect(reimbursementConstantsSource).not.toContain("{ value: 'PACKAGING'");
+  });
+
+  it('makes multi-item operating expenses and confirmation explicit', () => {
+    expect(reimbursementSubmitSource).toContain('费用 1');
+    expect(reimbursementSubmitSource).toContain('添加一项费用');
+    expect(reimbursementSubmitSource).toContain('确认提交');
+    expect(reimbursementSubmitSource).toContain('提交成功');
+  });
+
+  it('does not ask employees for finance allocation fields or expose debug URLs', () => {
+    expect(reimbursementSubmitSource).not.toContain('debug-url');
+    expect(reimbursementSubmitSource).not.toContain('归属月份');
+    expect(reimbursementSubmitSource).not.toContain('均摊周期');
+    expect(reimbursementSubmitSource).not.toContain('是否均摊');
+  });
+
+  it('supports direct reimbursement from a completed purchase list', () => {
+    expect(reimbursementSubmitSource).toContain('purchaseListId');
+    expect(detailSource).toContain('goToReimbursementAfterCompletion');
   });
 });
 

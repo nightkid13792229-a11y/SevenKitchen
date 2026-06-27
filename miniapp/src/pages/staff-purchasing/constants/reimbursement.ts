@@ -1,9 +1,25 @@
+export const reimbursementFlowTypeOptions = [
+  {
+    value: 'PURCHASE',
+    label: '采购报销',
+    description: '食材、补剂、包材等已完成采购清单',
+  },
+  {
+    value: 'OPERATING',
+    label: '经营费用报销',
+    description: '房租、水电、工资/人工、工具、杂物、其它日常支出',
+  },
+] as const;
+
+export type ReimbursementFlowType =
+  (typeof reimbursementFlowTypeOptions)[number]['value'];
+
 export const reimbursementCustomFeeCategoryOptions = [
   { value: 'RENT', label: '房租' },
   { value: 'UTILITIES', label: '水电' },
   { value: 'TOOLS', label: '工具' },
   { value: 'SUNDRIES', label: '杂物' },
-  { value: 'PAYROLL', label: '工资' },
+  { value: 'PAYROLL', label: '工资/人工' },
   { value: 'OTHER', label: '其它' },
 ] as const;
 

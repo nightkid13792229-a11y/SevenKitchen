@@ -3495,6 +3495,62 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('assigns the next design version when publishing with an existing final name', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'senior-series-copy',
+        name: '小米鳕鱼鸡胸 低能量需求成年犬（95ME）副本',
+        version: 1,
+        isCompliant: true,
+        seriesId: 'series-xiaomi-copy',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.findFirst.mockResolvedValue(null);
+    prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 5 } });
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-senior-v1',
+      recipeId: 'senior-series-copy',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-senior-v1',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'senior-series-copy',
+        name: '小米鳕鱼鸡胸',
+        version: 6,
+        status: 'PUBLISHED',
+        publishedRecipeId: 'senior-series-copy',
+        publishedRecipeVersion: 1,
+      }),
+    );
+
+    await service.publishDraft(
+      'senior-series-copy',
+      { name: '小米鳕鱼鸡胸' },
+      adminAccess,
+    );
+
+    expect(prisma.designRecipe.aggregate).toHaveBeenCalledWith({
+      where: { name: '小米鳕鱼鸡胸' },
+      _max: { version: true },
+    });
+    expect(prisma.designRecipe.update).toHaveBeenLastCalledWith({
+      where: { id: 'senior-series-copy' },
+      data: expect.objectContaining({
+        name: '小米鳕鱼鸡胸',
+        version: 6,
+        status: 'PUBLISHED',
+      }),
+      include: expect.any(Object),
+    });
+  });
+
   it('publishes series drafts with formal recipe series linkage', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -4683,7 +4739,7 @@ describe('RecipeDesignerService', () => {
     });
   });
 
-  it('rejects publishing when an included supplement has no explicit design target', async () => {
+  it('publishes a missing supplement target when removing the supplement creates one nutrient deficiency', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4745,21 +4801,42 @@ describe('RecipeDesignerService', () => {
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
 
-    await expect(
-      service.publishDraft(
-        'design-1',
-        { name: '补剂目标缺失食谱', reviewNote: '补剂目标缺失回归测试' },
-        adminAccess,
-      ),
-    ).rejects.toThrow(
-      new BadRequestException(
-        '补剂原料「鸡蛋壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
-      ),
+    await service.publishDraft(
+      'design-1',
+      { name: '补剂目标自动归因食谱', reviewNote: '补剂目标自动归因回归测试' },
+      adminAccess,
     );
 
-    expect(prisma.recipe.create).not.toHaveBeenCalled();
-    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
+    );
+    const expectedTargetValue = Math.round((380 / 101) * 1000);
+
+    expect(supplementItem).toEqual(
+      expect.objectContaining({
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: expectedTargetValue,
+        supplementTargets: [
+          expect.objectContaining({
+            fieldPath: 'minerals.calcium',
+            targetValuePerKg: expectedTargetValue,
+          }),
+        ],
+      }),
+    );
   });
 
   it('rejects publishing when an explicit supplement target has no nutrition profile amount', async () => {
@@ -4837,7 +4914,7 @@ describe('RecipeDesignerService', () => {
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
-  it('keeps legacy nutrient target keys from inferring supplement targets during publish', async () => {
+  it('uses removal attribution instead of trusting legacy nutrient target fields during publish', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4899,20 +4976,36 @@ describe('RecipeDesignerService', () => {
       }),
     );
     targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
 
-    await expect(
-      service.publishDraft(
-        'design-1',
-        { name: '旧字段目标食谱', reviewNote: '旧字段不能推断补剂目标' },
-        adminAccess,
-      ),
-    ).rejects.toThrow(
-      new BadRequestException(
-        '补剂原料「鸡蛋壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
-      ),
+    await service.publishDraft(
+      'design-1',
+      { name: '旧字段目标食谱', reviewNote: '旧字段不能推断补剂目标' },
+      adminAccess,
     );
 
-    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
+    );
+
+    expect(supplementItem).toEqual(
+      expect.objectContaining({
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: Math.round((380 / 101) * 1000),
+      }),
+    );
+    expect(supplementItem.nutrientTargetValue).not.toBe(500);
   });
 
   it('rejects publishing without a final recipe name', async () => {

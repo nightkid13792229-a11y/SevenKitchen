@@ -41,6 +41,7 @@ import {
   assessRecipeDraft,
   type DesignRecipeAssessmentResult,
 } from '../../domain/recipe-designer/recipe-assessment';
+import { inferSupplementTargetsByRemoval } from '../../domain/recipe-designer/supplement-target-inference';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -4126,6 +4127,7 @@ export class RecipeDesignerService {
     const supplementTargetMap = this.buildPublishedSupplementTargetMap(
       draft,
       assessment,
+      targets,
     );
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
       draft.targetHealthTags,
@@ -4215,11 +4217,14 @@ export class RecipeDesignerService {
         },
       });
 
+      const publishedDesignIdentity =
+        await this.resolvePublishedDesignRecipeIdentity(tx, draft, recipeName);
+
       return tx.designRecipe.update({
         where: { id: draft.id },
         data: {
           ...assessmentUpdateData,
-          ...(this.isActiveRevisionDraft(draft) ? {} : { name: recipeName }),
+          ...publishedDesignIdentity,
           status: DesignRecipeStatus.PUBLISHED,
           publishedAt: new Date(),
           publishedRecipeId: recipe.recipeId,
@@ -4238,6 +4243,25 @@ export class RecipeDesignerService {
         include: DESIGN_RECIPE_INCLUDE,
       });
     });
+  }
+
+  private async resolvePublishedDesignRecipeIdentity(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    draft: DesignRecipeWithItems,
+    recipeName: string,
+  ) {
+    if (this.isActiveRevisionDraft(draft)) {
+      return {};
+    }
+
+    if ((draft.name ?? '').trim() === recipeName) {
+      return { name: recipeName };
+    }
+
+    return {
+      name: recipeName,
+      version: await this.allocateNextDesignRecipeVersion(tx, recipeName),
+    };
   }
 
   private async assertRevisionHasPublishableChanges(
@@ -4778,6 +4802,7 @@ export class RecipeDesignerService {
   private buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
 
@@ -4791,7 +4816,12 @@ export class RecipeDesignerService {
 
       result.set(
         item.id,
-        this.resolveExplicitPublishedSupplementTargets(item, assessment),
+        this.resolveExplicitPublishedSupplementTargets(
+          item,
+          draft,
+          assessment,
+          targets,
+        ),
       );
     }
 
@@ -4800,7 +4830,9 @@ export class RecipeDesignerService {
 
   private resolveExplicitPublishedSupplementTargets(
     item: DesignRecipeItemWithFood,
+    draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
   ): PublishedSupplementNutrientTarget[] {
     if (assessment.totalWeightG <= 0) {
       throw new BadRequestException(
@@ -4808,9 +4840,17 @@ export class RecipeDesignerService {
       );
     }
 
-    const designTargets = this.normalizeDesignSupplementTargets(
+    let designTargets = this.normalizeDesignSupplementTargets(
       item.supplementTargets,
     );
+    if (designTargets.length === 0) {
+      designTargets = this.inferDesignSupplementTargetsByRemoval(
+        item,
+        draft,
+        assessment,
+        targets,
+      );
+    }
     if (designTargets.length === 0) {
       throw new BadRequestException(
         `补剂原料「${this.resolveIngredientDisplayName(item)}」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布`,
@@ -4827,6 +4867,34 @@ export class RecipeDesignerService {
         }
         return (left.fieldPath ?? '').localeCompare(right.fieldPath ?? '');
       });
+  }
+
+  private inferDesignSupplementTargetsByRemoval(
+    item: DesignRecipeItemWithFood,
+    draft: DesignRecipeWithItems,
+    assessment: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
+  ): DesignSupplementTarget[] {
+    return inferSupplementTargetsByRemoval({
+      itemId: item.id,
+      itemName: this.resolveIngredientDisplayName(item),
+      itemNutritionProfile: this.toAssessmentNutritionProfile(item),
+      itemWeightG: item.weightG,
+      totalRecipeWeightG: assessment.totalWeightG,
+      fullAssessment: assessment,
+      assessmentWithoutItem: assessRecipeDraft({
+        scenario: draft.fediafDogScenario,
+        targets,
+        items: this.buildAssessmentItems(draft, item.id),
+      }),
+    }).map((target) => ({
+      nutrientTargetKey: target.fieldKey,
+      fieldPath: target.fieldPath,
+      label: target.label,
+      unit: target.unit,
+      targetValue: null,
+      expressionBasis: null,
+    }));
   }
 
   private resolveExplicitPublishedSupplementTarget(

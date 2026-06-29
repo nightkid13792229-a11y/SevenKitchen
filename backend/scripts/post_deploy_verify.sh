@@ -44,7 +44,7 @@ declare -a FAILED=()
 # Test 1: Check if service is running (if systemd is used)
 test_service_running() {
   echo "Test 1: Checking if service is running..."
-  if systemctl list-unit-files | grep -q sevenkitchen-backend.service; then
+  if systemctl list-unit-files sevenkitchen-backend.service >/dev/null 2>&1; then
     if systemctl is-active --quiet sevenkitchen-backend.service; then
       ok "Systemd service is running"
       PASSED+=("Service running")
@@ -194,7 +194,8 @@ test_database_connection() {
   fi
   
   if command -v psql >/dev/null 2>&1; then
-    if psql "$DATABASE_URL" -c "SELECT 1;" >/dev/null 2>&1; then
+    PSQL_URL=$(printf '%s' "$DATABASE_URL" | perl -0pe 's/([?&])timezone=[^&]*//g; s/([?&])schema=[^&]*//g; s/[?&]$//; s/\?&/?/g')
+    if psql "$PSQL_URL" -c "SELECT 1;" >/dev/null 2>&1; then
       ok "Database connection successful"
       PASSED+=("Database connection")
       return 0
@@ -253,4 +254,3 @@ else
   echo ""
   exit 0
 fi
-

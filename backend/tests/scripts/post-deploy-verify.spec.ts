@@ -16,8 +16,12 @@ describe('post_deploy_verify.sh', () => {
     expect(syntax.status).toBe(0);
 
     const script = readFileSync(scriptPath, 'utf8');
+    expect(script).toMatch(
+      /systemctl list-unit-files sevenkitchen-backend\.service/,
+    );
     expect(script).toMatch(/systemctl is-active --quiet sevenkitchen-backend/);
     expect(script).toMatch(/api\/v1\/health/);
-    expect(script).toMatch(/psql "\$DATABASE_URL" -c "SELECT 1;"/);
+    expect(script).toMatch(/PSQL_URL=\$\(printf '%s' "\$DATABASE_URL"/);
+    expect(script).toMatch(/psql "\$PSQL_URL" -c "SELECT 1;"/);
   });
 });

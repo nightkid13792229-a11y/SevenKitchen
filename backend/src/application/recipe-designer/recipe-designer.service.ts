@@ -190,6 +190,13 @@ const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   seriesLifeStage: true,
 };
 
+const RECIPE_SERIES_WORKBENCH_RECIPE_SELECT = {
+  recipeId: true,
+  seriesLifeStage: true,
+  status: true,
+  updatedAt: true,
+};
+
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
 const RECIPE_DESIGNER_BACKFILL_USER_ID = 'recipe-designer-backfill';
 const RECIPE_SERIES_BACKFILL_USER_ID = 'recipe-series-backfill';
@@ -1595,6 +1602,7 @@ export class RecipeDesignerService {
           orderBy: { updatedAt: 'desc' },
         },
         recipes: {
+          select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
           orderBy: { updatedAt: 'desc' },
         },
       },

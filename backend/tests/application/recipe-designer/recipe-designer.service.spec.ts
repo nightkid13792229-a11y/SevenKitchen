@@ -5851,6 +5851,30 @@ describe('RecipeDesignerService', () => {
       );
     });
 
+    it('selects compact recipe fields for series workbench cards', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-staff', createdBy: 'staff-1' }),
+      ]);
+
+      await service.listSeries({ userId: 'staff-1', role: 'STAFF' });
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            recipes: {
+              select: {
+                recipeId: true,
+                seriesLifeStage: true,
+                status: true,
+                updatedAt: true,
+              },
+              orderBy: { updatedAt: 'desc' },
+            },
+          }),
+        }),
+      );
+    });
+
     it('returns one series card with five stage statuses', async () => {
       const puppyItem = item({ id: 'puppy-item' });
       const latePuppyItem = item({ id: 'late-puppy-item' });

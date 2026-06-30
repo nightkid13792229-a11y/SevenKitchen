@@ -160,6 +160,24 @@ describe('buildProductionMigrationPackage', () => {
     expect(result.files.upSql).not.toContain('INSERT INTO procurement_sku');
     expect(result.files.reviewSummary).toContain('Supplement evidence: present');
   });
+
+  it('refuses production packages for existing-ingredient updates', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          updateExistingIngredientId: 'existing-ingredient',
+        }),
+        localImportAudit: makeAudit({
+          ingredientIds: ['existing-ingredient'],
+        }),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCTION_PACKAGE_UPDATE_EXISTING_FORBIDDEN',
+    });
+  });
 });
 
 function decimalLike(value: string) {

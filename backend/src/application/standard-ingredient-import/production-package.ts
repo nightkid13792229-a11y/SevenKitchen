@@ -9,6 +9,7 @@ import type { LocalIngredientImportAudit } from './local-ingredient-import';
 
 export type ProductionPackageErrorCode =
   | 'LOCAL_IMPORT_AUDIT_REQUIRED'
+  | 'PRODUCTION_PACKAGE_UPDATE_EXISTING_FORBIDDEN'
   | ReturnType<typeof validateIngredientImportManifest>['errors'][number]['code'];
 
 export class ProductionPackageError extends Error {
@@ -122,6 +123,7 @@ export async function buildProductionMigrationPackage(
 ): Promise<ProductionMigrationPackageResult> {
   assertLocalAudit(input.localImportAudit);
   assertManifestValid(input.manifest);
+  assertNewRecordOnlyScope(input.manifest);
 
   const rows = await collectPackageRows(input.prisma, input.localImportAudit);
   const fileBodies = buildPackageFiles(input.manifest, input.localImportAudit, rows);
@@ -170,6 +172,20 @@ function assertManifestValid(manifest: IngredientImportManifest): void {
     firstError.code,
     firstError.message,
     validation.errors,
+  );
+}
+
+function assertNewRecordOnlyScope(manifest: IngredientImportManifest): void {
+  if (manifest.updateExistingIngredientId === undefined) {
+    return;
+  }
+
+  throw new ProductionPackageError(
+    'PRODUCTION_PACKAGE_UPDATE_EXISTING_FORBIDDEN',
+    'Production package export only supports newly added ingredient records.',
+    {
+      updateExistingIngredientId: manifest.updateExistingIngredientId,
+    },
   );
 }
 

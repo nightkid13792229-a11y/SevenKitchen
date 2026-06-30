@@ -101,9 +101,47 @@ describe('api request data normalization', () => {
       url: 'https://api.example.com/api/v1/dogs/calc-preview',
       method: 'POST',
       data: { currentWeightKg: 3.1 },
+      timeout: 15000,
       header: expect.objectContaining({
         Authorization: 'Bearer token-123',
       }),
+    }))
+  })
+
+  it('sets a default request timeout and allows per-request overrides', async () => {
+    const wxRequest = vi.fn((options: any) => {
+      options.success({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: 'ok',
+          data: { items: [] },
+        },
+      })
+    })
+
+    vi.stubGlobal('uni', {
+      getStorageSync: vi.fn(() => ''),
+    })
+    vi.stubGlobal('wx', {
+      request: wxRequest,
+    })
+
+    await request({
+      url: '/recipe-designer/series',
+      method: 'GET',
+    })
+    await request({
+      url: '/recipe-designer/series',
+      method: 'GET',
+      timeout: 30000,
+    })
+
+    expect(wxRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      timeout: 15000,
+    }))
+    expect(wxRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      timeout: 30000,
     }))
   })
 

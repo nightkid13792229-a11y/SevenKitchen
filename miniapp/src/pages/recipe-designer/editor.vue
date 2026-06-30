@@ -756,15 +756,6 @@ import {
   type SortOrderUpdate,
 } from './reorder'
 
-interface StandardIngredientSnapshot {
-  id?: string
-  name?: string
-  type?: string
-  unitDisplayLabel?: string | null
-  purchaseUnit?: string | null
-  properties?: Record<string, unknown> | null
-}
-
 interface DesignerItem {
   id: string
   name?: string

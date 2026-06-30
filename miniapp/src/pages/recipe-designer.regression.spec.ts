@@ -231,7 +231,22 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('function selectSeriesStatusFilter')
     expect(adminFilterBlock).toContain('!isCustomerMode.value')
     expect(loadSeriesBlock).toContain('recipeDesignerApi.listSeries({')
-    expect(loadSeriesBlock).toContain('status: selectedSeriesStatusFilter.value || undefined')
+    expect(loadSeriesBlock).toContain("const requestKey = selectedSeriesStatusFilter.value || ''")
+    expect(loadSeriesBlock).toContain('status: requestKey || undefined')
+  })
+
+  it('deduplicates in-flight recipe series loads and ignores stale responses', () => {
+    const loadSeriesBlock =
+      listSource.match(/async function loadSeries[\s\S]*?\n}\n\nfunction openCreateDraftSheet/)?.[0] || ''
+
+    expect(listSource).toContain('let activeSeriesRequest')
+    expect(listSource).toContain('let seriesLoadingPromise')
+    expect(loadSeriesBlock).toContain('const requestKey = selectedSeriesStatusFilter.value ||')
+    expect(loadSeriesBlock).toContain('seriesLoadingPromise && activeSeriesRequest?.key === requestKey')
+    expect(loadSeriesBlock).toContain('const requestState = {')
+    expect(loadSeriesBlock).toContain('activeSeriesRequest !== requestState')
+    expect(loadSeriesBlock).toContain('activeSeriesRequest === requestState')
+    expect(loadSeriesBlock).toContain('seriesLoadingPromise = null')
   })
 
   it('opens or creates a series stage draft from a stage row', () => {

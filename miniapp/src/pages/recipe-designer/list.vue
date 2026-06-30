@@ -344,6 +344,9 @@ const seriesBusinessStatusLabels: Record<RecipeDesignerSeriesStatusFilter, strin
 const series = ref<SeriesListItem[]>([])
 const dogs = ref<any[]>([])
 const loading = ref(false)
+let seriesRequestSequence = 0
+let activeSeriesRequest: { id: number; key: string } | null = null
+let seriesLoadingPromise: Promise<void> | null = null
 const creating = ref(false)
 const deletingSeriesId = ref('')
 const duplicatingSeriesId = ref('')
@@ -452,19 +455,38 @@ async function loadDogsForCustomerMode() {
 }
 
 async function loadSeries() {
-  loading.value = true
-  try {
-    const res: any = await recipeDesignerApi.listSeries({
-      status: selectedSeriesStatusFilter.value || undefined,
-    })
-    const data = res?.data ?? res
-    series.value = Array.isArray(data) ? data : data?.items || data?.series || []
-  } catch (error) {
-    console.error('[RecipeDesignerList] Failed to load series:', error)
-    uni.showToast({ title: '加载食谱系列失败', icon: 'none' })
-  } finally {
-    loading.value = false
+  const requestKey = selectedSeriesStatusFilter.value || ''
+  if (seriesLoadingPromise && activeSeriesRequest?.key === requestKey) {
+    return seriesLoadingPromise
   }
+
+  const requestState = {
+    id: ++seriesRequestSequence,
+    key: requestKey,
+  }
+  activeSeriesRequest = requestState
+  loading.value = true
+  seriesLoadingPromise = (async () => {
+    try {
+      const res: any = await recipeDesignerApi.listSeries({
+        status: requestKey || undefined,
+      })
+      if (activeSeriesRequest !== requestState) return
+      const data = res?.data ?? res
+      series.value = Array.isArray(data) ? data : data?.items || data?.series || []
+    } catch (error) {
+      if (activeSeriesRequest !== requestState) return
+      console.error('[RecipeDesignerList] Failed to load series:', error)
+      uni.showToast({ title: '加载食谱系列失败', icon: 'none' })
+    } finally {
+      if (activeSeriesRequest === requestState) {
+        loading.value = false
+        activeSeriesRequest = null
+        seriesLoadingPromise = null
+      }
+    }
+  })()
+  return seriesLoadingPromise
 }
 
 function selectSeriesStatusFilter(value: '' | RecipeDesignerSeriesStatusFilter) {

@@ -53,6 +53,11 @@ export function validateSupplementTargets(targets: SupplementTarget[]): void {
         `Supplement target must be greater than zero: ${target.fieldPath}`,
       );
     }
+    if (!canUseTargetUnit(field.unit, target.unit)) {
+      throw new Error(
+        `Unit mismatch for ${target.fieldPath}: expected ${field.unit}, got ${target.unit}`,
+      );
+    }
     seen.add(target.fieldPath);
   }
 }
@@ -77,24 +82,32 @@ export function calculateSupplementDose(
       );
     }
 
-    if (target.unit !== field.unit) {
-      throw new Error(
-        `Unit mismatch for ${target.fieldPath}: expected ${field.unit}, got ${target.unit}`,
-      );
-    }
+    const concentrationPerUnit = convertFieldUnitValue(
+      resolution.concentrationPerUnit,
+      field.unit,
+      target.unit,
+    );
+    const concentrationPerG =
+      resolution.concentrationPerG === undefined
+        ? undefined
+        : convertFieldUnitValue(
+            resolution.concentrationPerG,
+            field.unit,
+            target.unit,
+          );
 
     const totalNutrientNeeded = basisWeightKg * target.targetValuePerKg;
     const requiredAmount =
-      (totalNutrientNeeded / resolution.concentrationPerUnit) * lossRate;
+      (totalNutrientNeeded / concentrationPerUnit) * lossRate;
 
     return {
       fieldPath: target.fieldPath,
       label: target.label || field.label,
       targetUnit: target.unit,
-      concentration: resolution.concentrationPerUnit,
-      concentrationUnit: field.unit,
+      concentration: concentrationPerUnit,
+      concentrationUnit: target.unit,
       doseUnit: resolution.doseUnit,
-      concentrationPerG: resolution.concentrationPerG,
+      concentrationPerG,
       servingWeightG: resolution.servingWeightG,
       totalNutrientNeeded,
       requiredAmount,
@@ -111,4 +124,66 @@ export function calculateSupplementDose(
     limitingTarget,
     targetBreakdown,
   };
+}
+
+function canUseTargetUnit(fieldUnit: string, targetUnit: string): boolean {
+  return (
+    normalizeUnit(fieldUnit) === normalizeUnit(targetUnit) ||
+    convertMassUnit(1, fieldUnit, targetUnit) !== null
+  );
+}
+
+function convertFieldUnitValue(
+  value: number,
+  fieldUnit: string,
+  targetUnit: string,
+) {
+  if (normalizeUnit(fieldUnit) === normalizeUnit(targetUnit)) {
+    return value;
+  }
+
+  const convertedValue = convertMassUnit(value, fieldUnit, targetUnit);
+  if (convertedValue === null) {
+    throw new Error(
+      `Unit mismatch: cannot convert ${fieldUnit} to ${targetUnit}`,
+    );
+  }
+  return convertedValue;
+}
+
+function normalizeUnit(unit: string | null | undefined): string {
+  const normalized = (unit ?? '').trim().toLowerCase();
+  if (normalized === 'μg' || normalized === 'ug' || normalized === 'mcg') {
+    return 'ug';
+  }
+  return normalized;
+}
+
+function massUnitFactor(unit: string): number | null {
+  switch (normalizeUnit(unit)) {
+    case 'g':
+      return 1;
+    case 'mg':
+      return 1 / 1000;
+    case 'ug':
+      return 1 / 1_000_000;
+    default:
+      return null;
+  }
+}
+
+function convertMassUnit(
+  value: number,
+  fromUnit: string,
+  toUnit: string,
+): number | null {
+  const fromFactor = massUnitFactor(fromUnit);
+  const toFactor = massUnitFactor(toUnit);
+
+  if (fromFactor === null || toFactor === null) {
+    return null;
+  }
+
+  const convertedValue = (value * fromFactor) / toFactor;
+  return Number.isFinite(convertedValue) ? convertedValue : null;
 }

@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import {
   inferSupplementTargetFieldFromIngredientName,
@@ -52,6 +53,81 @@ export type SupplementTargetBackfillPlan<TTarget> =
       reason: SupplementTargetBackfillReason;
       target?: undefined;
     };
+
+export interface PlannedRecipeSupplementTargetUpdate {
+  id: string;
+  target: SupplementTargetV2 | SupplementTargetV2[];
+  [key: string]: unknown;
+}
+
+export interface PlannedDesignSupplementTargetUpdate {
+  id: string;
+  target: DesignSupplementTargetReference | DesignSupplementTargetReference[];
+  [key: string]: unknown;
+}
+
+export interface SupplementTargetBackfillReportInput {
+  recipeItemsScanned: number;
+  designRecipeItemsScanned: number;
+  plannedUpdates: PlannedRecipeSupplementTargetUpdate[];
+  plannedDesignUpdates: PlannedDesignSupplementTargetUpdate[];
+  skippedExisting: number;
+  skippedDesignExisting: number;
+  attributedDesignTargetCount: number;
+  manualReview: any[];
+}
+
+export function buildSupplementTargetBackfillReport(
+  input: SupplementTargetBackfillReportInput,
+) {
+  return {
+    counts: {
+      recipeItemsScanned: input.recipeItemsScanned,
+      plannedRecipeItemUpdates: input.plannedUpdates.length,
+      skippedRecipeItemsAlreadyHavingV2Targets: input.skippedExisting,
+      designRecipeItemsScanned: input.designRecipeItemsScanned,
+      plannedDesignRecipeItemUpdates: input.plannedDesignUpdates.length,
+      designRecipeNutrientGapAttributions: input.attributedDesignTargetCount,
+      skippedDesignItemsAlreadyHavingV2Targets: input.skippedDesignExisting,
+      manualReviewItems: input.manualReview.length,
+    },
+    plannedRecipeItemUpdates: input.plannedUpdates.map((update) => {
+      const { id, target, ...details } = update;
+      return {
+        table: 'recipe_item',
+        recipeItemId: id,
+        ...details,
+        target,
+      };
+    }),
+    plannedDesignRecipeItemUpdates: input.plannedDesignUpdates.map(
+      (update) => {
+        const { id, target, ...details } = update;
+        return {
+          table: 'design_recipe_item',
+          designRecipeItemId: id,
+          ...details,
+          target,
+        };
+      },
+    ),
+    manualReview: input.manualReview,
+  };
+}
+
+function readReportJsonPath(argv: string[]): string | null {
+  const equalsArg = argv.find((arg) => arg.startsWith('--report-json='));
+  if (equalsArg) {
+    return equalsArg.slice('--report-json='.length) || null;
+  }
+
+  const flagIndex = argv.indexOf('--report-json');
+  if (flagIndex >= 0) {
+    return argv[flagIndex + 1] ?? null;
+  }
+
+  return null;
+}
 
 interface BaseSupplementBackfillInput {
   id: string;
@@ -545,6 +621,7 @@ async function buildAttributedDesignTargetMap(
 
 async function main() {
   const apply = process.argv.includes('--apply');
+  const reportJsonPath = readReportJsonPath(process.argv);
   const prisma = new PrismaClient();
 
   try {
@@ -595,14 +672,8 @@ async function main() {
     });
     const attributedDesignTargets = await buildAttributedDesignTargetMap(prisma);
 
-    const plannedUpdates: Array<{
-      id: string;
-      target: SupplementTargetV2 | SupplementTargetV2[];
-    }> = [];
-    const plannedDesignUpdates: Array<{
-      id: string;
-      target: DesignSupplementTargetReference | DesignSupplementTargetReference[];
-    }> = [];
+    const plannedUpdates: PlannedRecipeSupplementTargetUpdate[] = [];
+    const plannedDesignUpdates: PlannedDesignSupplementTargetUpdate[] = [];
     const manualReview: any[] = [];
     let skippedExisting = 0;
     let skippedDesignExisting = 0;
@@ -641,7 +712,17 @@ async function main() {
       }
 
       if (plan.action === 'update') {
-        plannedUpdates.push({ id: item.id, target: plan.target });
+        plannedUpdates.push({
+          id: item.id,
+          recipeId: item.recipe?.recipeId,
+          recipeVersion: item.recipe?.version,
+          recipeName: item.recipe?.name,
+          ingredientName: item.ingredient?.name,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          reason: plan.reason,
+          target: plan.target,
+        });
       }
     }
 
@@ -678,7 +759,19 @@ async function main() {
       }
 
       if (plan.action === 'update') {
-        plannedDesignUpdates.push({ id: item.id, target: plan.target });
+        plannedDesignUpdates.push({
+          id: item.id,
+          designRecipeId: item.designRecipe?.id,
+          designRecipeName: item.designRecipe?.name,
+          designRecipeStatus: item.designRecipe?.status,
+          scenario: item.designRecipe?.fediafDogScenario,
+          seriesLifeStage: item.designRecipe?.seriesLifeStage,
+          ingredientName: item.ingredient?.name,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          reason: plan.reason,
+          target: plan.target,
+        });
       }
     }
 
@@ -707,6 +800,21 @@ async function main() {
     if (manualReview.length > 0) {
       console.log('Manual review required:');
       console.log(JSON.stringify(manualReview, null, 2));
+    }
+
+    if (reportJsonPath) {
+      const report = buildSupplementTargetBackfillReport({
+        recipeItemsScanned: recipeItems.length,
+        designRecipeItemsScanned: designRecipeItems.length,
+        plannedUpdates,
+        plannedDesignUpdates,
+        skippedExisting,
+        skippedDesignExisting,
+        attributedDesignTargetCount: attributedDesignTargets.size,
+        manualReview,
+      });
+      writeFileSync(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`);
+      console.log(`Report JSON written: ${reportJsonPath}`);
     }
 
     if (apply) {

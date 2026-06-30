@@ -71,6 +71,12 @@ const SUPPLEMENT_TARGET_FIELDS = {
     label: '胆碱',
     unit: 'mg',
   },
+  taurine: {
+    fieldPath: 'aminoAcids.taurine',
+    fieldKey: 'taurine',
+    label: '牛磺酸',
+    unit: 'mg',
+  },
 } as const satisfies Record<string, SupplementTargetFieldReference>;
 
 const LEGACY_TARGET_MAPPING: Record<string, SupplementTargetFieldReference> = {
@@ -100,6 +106,8 @@ const LEGACY_TARGET_MAPPING: Record<string, SupplementTargetFieldReference> = {
   维生素e: SUPPLEMENT_TARGET_FIELDS.vitaminE,
   choline: SUPPLEMENT_TARGET_FIELDS.choline,
   胆碱: SUPPLEMENT_TARGET_FIELDS.choline,
+  taurine: SUPPLEMENT_TARGET_FIELDS.taurine,
+  牛磺酸: SUPPLEMENT_TARGET_FIELDS.taurine,
 };
 
 const SUPPLEMENT_NAME_TARGET_MAPPING: Record<
@@ -108,11 +116,17 @@ const SUPPLEMENT_NAME_TARGET_MAPPING: Record<
 > = {
   鸡蛋壳粉: SUPPLEMENT_TARGET_FIELDS.calcium,
   蛋壳粉: SUPPLEMENT_TARGET_FIELDS.calcium,
+  碳酸钙: SUPPLEMENT_TARGET_FIELDS.calcium,
+  碳酸钙粉: SUPPLEMENT_TARGET_FIELDS.calcium,
   海藻粉: SUPPLEMENT_TARGET_FIELDS.iodine,
   海带粉: SUPPLEMENT_TARGET_FIELDS.iodine,
   海带片: SUPPLEMENT_TARGET_FIELDS.iodine,
+  葡萄糖酸锌片: SUPPLEMENT_TARGET_FIELDS.zinc,
+  锌片: SUPPLEMENT_TARGET_FIELDS.zinc,
   双甘氨酸亚铁胶囊: SUPPLEMENT_TARGET_FIELDS.iron,
   双甘氨酸铜片: SUPPLEMENT_TARGET_FIELDS.copper,
+  胆碱片: SUPPLEMENT_TARGET_FIELDS.choline,
+  牛磺酸胶囊: SUPPLEMENT_TARGET_FIELDS.taurine,
 };
 
 export function normalizeSupplementTargetKey(value: string): string {

@@ -1,4 +1,5 @@
 import {
+  buildSupplementTargetBackfillReport,
   inferDesignSupplementTargetByIngredientName,
   mapLegacyDesignSupplementTarget,
   mapLegacySupplementTarget,
@@ -108,6 +109,16 @@ describe('backfill recipe supplement targets v2', () => {
         unit: 'mg',
       },
     ],
+    [
+      '牛磺酸',
+      0.37,
+      {
+        fieldPath: 'aminoAcids.taurine',
+        label: '牛磺酸',
+        targetValuePerKg: 0.37,
+        unit: 'mg',
+      },
+    ],
   ])('maps %s', (key, value, expected) => {
     expect(mapLegacySupplementTarget(key, value)).toEqual(expected);
   });
@@ -172,6 +183,50 @@ describe('backfill recipe supplement targets v2', () => {
         expressionBasis: null,
       },
     ],
+    [
+      '碳酸钙粉',
+      {
+        fieldPath: 'minerals.calcium',
+        nutrientTargetKey: 'calcium',
+        label: '钙',
+        unit: 'mg',
+        targetValue: null,
+        expressionBasis: null,
+      },
+    ],
+    [
+      '葡萄糖酸锌片',
+      {
+        fieldPath: 'minerals.zinc',
+        nutrientTargetKey: 'zinc',
+        label: '锌',
+        unit: 'mg',
+        targetValue: null,
+        expressionBasis: null,
+      },
+    ],
+    [
+      '牛磺酸胶囊',
+      {
+        fieldPath: 'aminoAcids.taurine',
+        nutrientTargetKey: 'taurine',
+        label: '牛磺酸',
+        unit: 'mg',
+        targetValue: null,
+        expressionBasis: null,
+      },
+    ],
+    [
+      '胆碱片',
+      {
+        fieldPath: 'vitamins.choline',
+        nutrientTargetKey: 'choline',
+        label: '胆碱',
+        unit: 'mg',
+        targetValue: null,
+        expressionBasis: null,
+      },
+    ],
   ])('infers design target for known supplement name %s', (name, expected) => {
     expect(inferDesignSupplementTargetByIngredientName(name)).toEqual(expected);
   });
@@ -179,15 +234,15 @@ describe('backfill recipe supplement targets v2', () => {
   it('plans design recipe item updates from known supplement names when legacy fields are blank', () => {
     expect(
       planDesignSupplementTargetBackfill({
-        id: 'design-item-eggshell',
-        ingredientName: '鸡蛋壳粉',
+        id: 'design-item-calcium-carbonate',
+        ingredientName: '碳酸钙粉',
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         supplementTargets: null,
       }),
     ).toEqual({
       action: 'update',
-      id: 'design-item-eggshell',
+      id: 'design-item-calcium-carbonate',
       reason: 'INFERRED_FROM_INGREDIENT_NAME',
       target: {
         fieldPath: 'minerals.calcium',
@@ -195,6 +250,30 @@ describe('backfill recipe supplement targets v2', () => {
         label: '钙',
         unit: 'mg',
         targetValue: null,
+        expressionBasis: null,
+      },
+    });
+  });
+
+  it('plans design recipe item updates from taurine legacy target fields', () => {
+    expect(
+      planDesignSupplementTargetBackfill({
+        id: 'design-item-taurine',
+        ingredientName: '牛磺酸胶囊',
+        nutrientTargetKey: '牛磺酸',
+        nutrientTargetValue: 0.37,
+        supplementTargets: null,
+      }),
+    ).toEqual({
+      action: 'update',
+      id: 'design-item-taurine',
+      reason: 'LEGACY_TARGET_FIELD',
+      target: {
+        fieldPath: 'aminoAcids.taurine',
+        nutrientTargetKey: 'taurine',
+        label: '牛磺酸',
+        unit: 'mg',
+        targetValue: 0.37,
         expressionBasis: null,
       },
     });
@@ -287,8 +366,8 @@ describe('backfill recipe supplement targets v2', () => {
   it('plans official recipe item updates by computing target value from supplement contribution', () => {
     expect(
       planRecipeSupplementTargetBackfill({
-        id: 'recipe-item-eggshell',
-        ingredientName: '鸡蛋壳粉',
+        id: 'recipe-item-calcium-carbonate',
+        ingredientName: '碳酸钙粉',
         nutrientTargetKey: null,
         nutrientTargetValue: null,
         supplementTargets: null,
@@ -301,7 +380,7 @@ describe('backfill recipe supplement targets v2', () => {
       }),
     ).toEqual({
       action: 'update',
-      id: 'recipe-item-eggshell',
+      id: 'recipe-item-calcium-carbonate',
       reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
       target: {
         fieldPath: 'minerals.calcium',
@@ -339,6 +418,115 @@ describe('backfill recipe supplement targets v2', () => {
         targetValuePerKg: 18.25,
         unit: 'mg',
       },
+    });
+  });
+
+  it('serializes planned updates and manual review rows for production review', () => {
+    expect(
+      buildSupplementTargetBackfillReport({
+        recipeItemsScanned: 2,
+        designRecipeItemsScanned: 3,
+        plannedUpdates: [
+          {
+            id: 'recipe-item-calcium',
+            recipeId: 'recipe-calcium',
+            recipeVersion: 2,
+            recipeName: '碳酸钙测试配方',
+            ingredientName: '碳酸钙粉',
+            reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+            target: {
+              fieldPath: 'minerals.calcium',
+              label: '钙',
+              targetValuePerKg: 1200,
+              unit: 'mg',
+            },
+          },
+        ],
+        plannedDesignUpdates: [
+          {
+            id: 'design-item-taurine',
+            designRecipeId: 'design-taurine',
+            designRecipeName: '牛磺酸测试设计配方',
+            designRecipeStatus: 'PUBLISHED',
+            ingredientName: '牛磺酸胶囊',
+            reason: 'LEGACY_TARGET_FIELD',
+            target: {
+              fieldPath: 'aminoAcids.taurine',
+              nutrientTargetKey: 'taurine',
+              label: '牛磺酸',
+              unit: 'mg',
+              targetValue: 0.37,
+              expressionBasis: null,
+            },
+          },
+        ],
+        skippedExisting: 4,
+        skippedDesignExisting: 5,
+        attributedDesignTargetCount: 1,
+        manualReview: [
+          {
+            table: 'design_recipe_item',
+            designRecipeItemId: 'design-item-fish-oil',
+            ingredientName: '鱼油胶囊',
+            reason: 'MISSING_TARGET_MAPPING',
+          },
+        ],
+      }),
+    ).toEqual({
+      counts: {
+        recipeItemsScanned: 2,
+        plannedRecipeItemUpdates: 1,
+        skippedRecipeItemsAlreadyHavingV2Targets: 4,
+        designRecipeItemsScanned: 3,
+        plannedDesignRecipeItemUpdates: 1,
+        designRecipeNutrientGapAttributions: 1,
+        skippedDesignItemsAlreadyHavingV2Targets: 5,
+        manualReviewItems: 1,
+      },
+      plannedRecipeItemUpdates: [
+        {
+          table: 'recipe_item',
+          recipeItemId: 'recipe-item-calcium',
+          recipeId: 'recipe-calcium',
+          recipeVersion: 2,
+          recipeName: '碳酸钙测试配方',
+          ingredientName: '碳酸钙粉',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+          target: {
+            fieldPath: 'minerals.calcium',
+            label: '钙',
+            targetValuePerKg: 1200,
+            unit: 'mg',
+          },
+        },
+      ],
+      plannedDesignRecipeItemUpdates: [
+        {
+          table: 'design_recipe_item',
+          designRecipeItemId: 'design-item-taurine',
+          designRecipeId: 'design-taurine',
+          designRecipeName: '牛磺酸测试设计配方',
+          designRecipeStatus: 'PUBLISHED',
+          ingredientName: '牛磺酸胶囊',
+          reason: 'LEGACY_TARGET_FIELD',
+          target: {
+            fieldPath: 'aminoAcids.taurine',
+            nutrientTargetKey: 'taurine',
+            label: '牛磺酸',
+            unit: 'mg',
+            targetValue: 0.37,
+            expressionBasis: null,
+          },
+        },
+      ],
+      manualReview: [
+        {
+          table: 'design_recipe_item',
+          designRecipeItemId: 'design-item-fish-oil',
+          ingredientName: '鱼油胶囊',
+          reason: 'MISSING_TARGET_MAPPING',
+        },
+      ],
     });
   });
 });

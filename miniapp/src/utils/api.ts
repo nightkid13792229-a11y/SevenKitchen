@@ -57,6 +57,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   data?: any
   header?: Record<string, string>
+  timeout?: number
   retryOn401?: boolean // Internal flag to prevent infinite retry loops
   quiet?: boolean
   suppressErrorToast?: boolean
@@ -65,6 +66,8 @@ interface RequestOptions {
 type MiniProgramRuntime = {
   request?: (options: Record<string, any>) => any
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000
 
 function isEmptyQueryValue(value: unknown): boolean {
   if (value === undefined || value === null) {
@@ -312,6 +315,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       method,
       data,
       header,
+      timeout: options.timeout ?? DEFAULT_REQUEST_TIMEOUT_MS,
       success: (res: any) => {
         // Handle 204 No Content (DELETE responses)
         if (res.statusCode === 204) {

@@ -145,6 +145,15 @@ export interface SupplementTargetPayload {
   expressionBasis?: string
 }
 
+export interface SupplementTargetPayload {
+  fieldPath: string
+  label?: string
+  unit?: string
+  nutrientTargetKey?: string
+  targetValue?: number
+  expressionBasis?: string
+}
+
 export interface DesignRecipeItemPayload {
   ingredientId?: string
   nutritionFoodId: string

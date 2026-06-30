@@ -27,6 +27,11 @@ import {
   listSupplementTargetFields,
 } from '../../domain/ingredient/nutrition-field-catalog';
 import {
+  inferSupplementTargetFieldFromIngredientName,
+  resolveSupplementTargetField as resolveSupplementTargetFieldReference,
+  toDesignSupplementTargetReference,
+} from '../../domain/ingredient/supplement-target-mapping';
+import {
   createEmptyNutritionProfile,
   normalizeNutritionProfile,
 } from '../../domain/ingredient/nutrition-profile.utils';
@@ -256,9 +261,6 @@ const LEGACY_RECIPE_LIFE_STAGE_MAPPINGS: Record<string, string[]> = {
   PREGNANCY: [RecipeLifeStage.REPRODUCTION],
   LACTATION: [RecipeLifeStage.REPRODUCTION],
 };
-
-const normalizeNutritionTargetKey = (value: string) =>
-  value.replace(/\s+/g, '').toLowerCase();
 
 type DesignRecipeWithItems = {
   id: string;
@@ -2654,8 +2656,8 @@ export class RecipeDesignerService {
         );
       }
 
-      const supplementTargets = this.normalizeDesignSupplementTargets(
-        item.supplementTargets,
+      const supplementTargets = this.normalizeCopiedDesignSupplementTargets(
+        item,
       );
       return {
         ingredientId: item.ingredientId,
@@ -2727,9 +2729,7 @@ export class RecipeDesignerService {
   }
 
   private toCopiedDesignRecipeItemData(item: DesignRecipeItemWithFood) {
-    const supplementTargets = this.normalizeDesignSupplementTargets(
-      item.supplementTargets,
-    );
+    const supplementTargets = this.normalizeCopiedDesignSupplementTargets(item);
     return {
       ingredientId: item.ingredientId,
       nutritionFoodId: item.nutritionFoodId,
@@ -3673,9 +3673,8 @@ export class RecipeDesignerService {
         seriesLifeStage: source.seriesLifeStage,
         items: {
           create: source.items.map((item) => {
-            const supplementTargets = this.normalizeDesignSupplementTargets(
-              item.supplementTargets,
-            );
+            const supplementTargets =
+              this.normalizeCopiedDesignSupplementTargets(item);
             return {
               ingredientId: item.ingredientId,
               nutritionFoodId: item.nutritionFoodId,
@@ -5094,6 +5093,52 @@ export class RecipeDesignerService {
     ];
   }
 
+  private normalizeCopiedDesignSupplementTargets(
+    item: {
+      supplementTargets?: unknown;
+      nutrientTargetKey?: string | null;
+      nutrientTargetValue?: number | null;
+      ingredient?: {
+        id?: string | null;
+        name?: string | null;
+      } | null;
+      nutritionFood?: {
+        name?: string | null;
+        displayNameZh?: string | null;
+        mappings?: Array<{
+          ingredientId?: string | null;
+          isPrimary?: boolean | null;
+          ingredient?: { name?: string | null } | null;
+        }>;
+      } | null;
+    },
+  ): DesignSupplementTarget[] {
+    const targets = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+      item.nutrientTargetKey,
+      item.nutrientTargetValue,
+    );
+    if (targets.length > 0) {
+      return targets;
+    }
+
+    const displayName =
+      item.ingredient?.name ??
+      item.nutritionFood?.mappings?.find(
+        (mapping) => mapping.ingredientId === item.ingredient?.id,
+      )?.ingredient?.name ??
+      item.nutritionFood?.mappings?.find((mapping) => mapping.isPrimary)
+        ?.ingredient?.name ??
+      item.nutritionFood?.mappings?.[0]?.ingredient?.name ??
+      item.nutritionFood?.displayNameZh ??
+      item.nutritionFood?.name;
+    const inferredField =
+      inferSupplementTargetFieldFromIngredientName(displayName);
+    return inferredField
+      ? [toDesignSupplementTargetReference(inferredField, null)]
+      : [];
+  }
+
   private normalizeOptionalTargetText(value: unknown): string | null {
     const normalized = typeof value === 'string' ? value.trim() : '';
     return normalized || null;
@@ -5121,16 +5166,7 @@ export class RecipeDesignerService {
   }
 
   private resolveSupplementTargetField(targetKey: string) {
-    const normalizedTargetKey = normalizeNutritionTargetKey(targetKey);
-
-    return listSupplementTargetFields().find((field) => {
-      return (
-        field.fieldPath === targetKey ||
-        field.fieldKey === targetKey ||
-        normalizeNutritionTargetKey(field.label) === normalizedTargetKey ||
-        normalizeNutritionTargetKey(field.fieldKey) === normalizedTargetKey
-      );
-    });
+    return resolveSupplementTargetFieldReference(targetKey);
   }
 
   private buildPublishedHealthTagAssignments(targetHealthTags: string[]) {

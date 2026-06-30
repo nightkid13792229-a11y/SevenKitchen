@@ -2046,6 +2046,14 @@ describe('RecipeDesignerService', () => {
       nutrientTargetKey: 'calcium',
       nutrientTargetValue: 1200,
       sortOrder: 7,
+      ingredient: {
+        id: 'ingredient-source',
+        name: '鸡蛋壳粉',
+        type: 'SUPPLEMENT',
+        unitDisplayLabel: 'g',
+        purchaseUnit: 'g',
+        properties: null,
+      },
     });
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -2128,6 +2136,15 @@ describe('RecipeDesignerService', () => {
               preparationMethod: '蒸熟',
               nutrientTargetKey: 'calcium',
               nutrientTargetValue: 1200,
+              supplementTargets: [
+                expect.objectContaining({
+                  fieldPath: 'minerals.calcium',
+                  nutrientTargetKey: 'calcium',
+                  label: '钙',
+                  unit: 'mg',
+                  targetValue: 1200,
+                }),
+              ],
               sortOrder: 7,
             }),
           ],
@@ -4832,11 +4849,79 @@ describe('RecipeDesignerService', () => {
         supplementTargets: [
           expect.objectContaining({
             fieldPath: 'minerals.calcium',
+            label: '钙',
+            unit: 'mg',
             targetValuePerKg: expectedTargetValue,
           }),
         ],
       }),
     );
+  });
+
+  it('rejects publishing when a missing supplement target cannot be attributed to one nutrient gap', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item(),
+          item({
+            id: 'supplement-fiber-item',
+            ingredientId: 'supplement-fiber',
+            weightG: 1,
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            ingredient: {
+              id: 'supplement-fiber',
+              name: '洋车前子壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-fiber',
+              name: '洋车前子壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0, fiber: 80 },
+                minerals: {},
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-fiber',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-fiber',
+                    name: '洋车前子壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '功能性补剂食谱', reviewNote: '功能性补剂缺少营养目标' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「洋车前子壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
+      ),
+    );
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
   });
 
   it('rejects publishing when an explicit supplement target has no nutrition profile amount', async () => {
@@ -4937,8 +5022,8 @@ describe('RecipeDesignerService', () => {
             id: 'supplement-item-1',
             ingredientId: 'supplement-calcium',
             weightG: 1,
-            nutrientTargetKey: 'calcium',
-            nutrientTargetValue: 500,
+            nutrientTargetKey: 'magnesium',
+            nutrientTargetValue: 999,
             ingredient: {
               id: 'supplement-calcium',
               name: '鸡蛋壳粉',
@@ -4990,7 +5075,7 @@ describe('RecipeDesignerService', () => {
 
     await service.publishDraft(
       'design-1',
-      { name: '旧字段目标食谱', reviewNote: '旧字段不能推断补剂目标' },
+      { name: '旧字段目标食谱', reviewNote: '旧字段按缺口归因' },
       adminAccess,
     );
 
@@ -4998,14 +5083,20 @@ describe('RecipeDesignerService', () => {
     const supplementItem = createData.items.create.find(
       (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
     );
+    const expectedTargetValue = Math.round((380 / 101) * 1000);
 
     expect(supplementItem).toEqual(
       expect.objectContaining({
         nutrientTargetKey: 'calcium',
-        nutrientTargetValue: Math.round((380 / 101) * 1000),
+        nutrientTargetValue: expectedTargetValue,
+        supplementTargets: [
+          expect.objectContaining({
+            fieldPath: 'minerals.calcium',
+            targetValuePerKg: expectedTargetValue,
+          }),
+        ],
       }),
     );
-    expect(supplementItem.nutrientTargetValue).not.toBe(500);
   });
 
   it('rejects publishing without a final recipe name', async () => {
@@ -5851,9 +5942,19 @@ describe('RecipeDesignerService', () => {
       );
     });
 
-    it('selects compact recipe fields for series workbench cards', async () => {
+    it('uses compact recipe fields for the series workbench list', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
-        seriesRecord({ id: 'series-staff', createdBy: 'staff-1' }),
+        seriesRecord({
+          id: 'series-staff',
+          recipes: [
+            {
+              recipeId: 'recipe-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              updatedAt: new Date('2026-06-01T08:00:00.000Z'),
+            },
+          ],
+        }),
       ]);
 
       await service.listSeries({ userId: 'staff-1', role: 'STAFF' });
@@ -5873,6 +5974,13 @@ describe('RecipeDesignerService', () => {
           }),
         }),
       );
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.include.recipes).not.toHaveProperty('include');
+      expect(query.include.recipes.select).not.toHaveProperty(
+        'nutritionDetailedData',
+      );
+      expect(query.include.recipes.select).not.toHaveProperty('detailImages');
+      expect(query.include.recipes.select).not.toHaveProperty('items');
     });
 
     it('returns one series card with five stage statuses', async () => {
@@ -7359,6 +7467,17 @@ describe('RecipeDesignerService', () => {
         nutrientTargetValue: null,
         sortOrder: 2,
       };
+      const legacySupplementRecipeItem = {
+        id: 'recipe-item-supplement',
+        ingredientId: 'supplement-zinc',
+        nutritionFoodId: null,
+        exampleWeight: 0.1,
+        ratioPercent: null,
+        preparationMethod: null,
+        nutrientTargetKey: '锌',
+        nutrientTargetValue: 35,
+        sortOrder: 4,
+      };
       const ratioOnlyRecipeItem = {
         id: 'recipe-item-2',
         ingredientId: 'ingredient-ratio-only',
@@ -7392,7 +7511,11 @@ describe('RecipeDesignerService', () => {
               seriesId: 'series-1',
               seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
               updatedAt: new Date('2026-06-11T07:54:25.020Z'),
-              items: [recipeItem, ratioOnlyRecipeItem],
+              items: [
+                recipeItem,
+                ratioOnlyRecipeItem,
+                legacySupplementRecipeItem,
+              ],
             },
           ],
         }),
@@ -7415,6 +7538,10 @@ describe('RecipeDesignerService', () => {
         {
           ingredientId: 'ingredient-ratio-only',
           nutritionFoodId: 'food-ratio-only-from-mapping',
+        },
+        {
+          ingredientId: 'supplement-zinc',
+          nutritionFoodId: 'food-zinc-from-mapping',
         },
       ]);
       prisma.designRecipe.create.mockResolvedValue(
@@ -7443,6 +7570,17 @@ describe('RecipeDesignerService', () => {
               ratioPercent: 7.5,
               preparationMethod: 'RAW',
               sortOrder: 3,
+            }),
+            item({
+              id: 'copied-item-supplement',
+              ingredientId: 'supplement-zinc',
+              nutritionFoodId: 'food-zinc-from-mapping',
+              weightG: 0.1,
+              ratioPercent: null,
+              preparationMethod: null,
+              nutrientTargetKey: '锌',
+              nutrientTargetValue: 35,
+              sortOrder: 4,
             }),
           ],
         }),
@@ -7493,6 +7631,23 @@ describe('RecipeDesignerService', () => {
                 ratioPercent: 7.5,
                 preparationMethod: 'RAW',
                 sortOrder: 3,
+              }),
+              expect.objectContaining({
+                ingredientId: 'supplement-zinc',
+                nutritionFoodId: 'food-zinc-from-mapping',
+                weightG: 0.1,
+                nutrientTargetKey: '锌',
+                nutrientTargetValue: 35,
+                supplementTargets: [
+                  expect.objectContaining({
+                    fieldPath: 'minerals.zinc',
+                    nutrientTargetKey: 'zinc',
+                    label: '锌',
+                    unit: 'mg',
+                    targetValue: 35,
+                  }),
+                ],
+                sortOrder: 4,
               }),
             ],
           },

@@ -348,6 +348,39 @@ describe('collectDatabaseAlignmentSnapshot', () => {
     expect(first.schemaHash).not.toBe(second.schemaHash);
   });
 
+  it('excludes rolled-back Prisma migration attempts from the migration snapshot', async () => {
+    const prisma = makePrismaFixture({
+      migrations: [
+        {
+          migration_name: '202606010001_a',
+          checksum: 'rolled-back-checksum',
+          finished_at: null,
+          rolled_back_at: '2026-06-15T00:00:00.000Z',
+        },
+        {
+          migration_name: '202606010001_a',
+          checksum: 'applied-checksum',
+          finished_at: '2026-06-16T00:00:00.000Z',
+          rolled_back_at: null,
+        },
+      ],
+    });
+
+    const snapshot = await collectDatabaseAlignmentSnapshot(prisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'schema',
+    });
+
+    expect(snapshot.migrations).toEqual([
+      {
+        migrationName: '202606010001_a',
+        checksum: 'applied-checksum',
+        finishedAt: '2026-06-16T00:00:00.000Z',
+      },
+    ]);
+  });
+
   it('calls reference data selectors and optional row count delegates', async () => {
     const prisma = makePrismaFixture({
       includeRowCountDelegates: true,
@@ -429,6 +462,7 @@ function makePrismaFixture(
       migration_name: string;
       checksum: string | null;
       finished_at: Date | string | null;
+      rolled_back_at?: Date | string | null;
     }>;
     nutrientDefinitions: unknown[];
     includeRowCountDelegates: boolean;

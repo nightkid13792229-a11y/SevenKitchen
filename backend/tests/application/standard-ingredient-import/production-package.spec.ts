@@ -27,6 +27,26 @@ describe('buildProductionMigrationPackage', () => {
     });
   });
 
+  it('refuses export without a passing production DB alignment report', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          dbAlignmentReport: {
+            id: '',
+            status: 'not-run',
+          },
+        }),
+        localImportAudit: makeAudit(),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCTION_DB_ALIGNMENT_REQUIRED',
+    });
+  });
+
+
   it('refuses export when local apply audit is missing', async () => {
     await expect(
       buildProductionMigrationPackage({
@@ -69,6 +89,30 @@ describe('buildProductionMigrationPackage', () => {
     expect(result.files.reviewSummary).toContain('Unit audit');
     expect(writes['manifest.json']).toContain('"wholeDatabaseMigration": false');
     expect(writes['up.sql']).toBe(result.files.upSql);
+  });
+
+  it('emits Prisma Decimal values as numeric SQL literals', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: decimalLike('0'),
+            effectivePricePerPurchaseUnit: decimalLike('12.34'),
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("VALUES (0, 12.34, 'ingredient-1'");
+    expect(result.files.upSql).not.toContain("'\"0\"'");
+    expect(result.files.upSql).not.toContain("'\"12.34\"'");
   });
 
   it('includes FOOD-related records in deterministic parent-before-child order', async () => {
@@ -118,6 +162,14 @@ describe('buildProductionMigrationPackage', () => {
   });
 });
 
+function decimalLike(value: string) {
+  return {
+    decimalPlaces: () => (value.split('.')[1] ?? '').length,
+    toJSON: () => value,
+    toString: () => value,
+  };
+}
+
 function makeFoodProductionManifest(
   overrides: Partial<IngredientImportManifest> = {},
 ): IngredientImportManifest {
@@ -145,6 +197,10 @@ function makeFoodProductionManifest(
       },
     ],
     sourceCandidates: [{ sourceId: 'USDA:123', sourceName: 'USDA FDC' }],
+    dbAlignmentReport: {
+      id: 'production-alignment-ok',
+      status: 'passing',
+    },
     operatorConfirmation: {
       localWriteApproved: false,
       productionPackageApproved: true,
@@ -169,6 +225,10 @@ function makeSupplementProductionManifest(): IngredientImportManifest {
     supplementLabel: {
       servingSize: '1 capsule',
     },
+    dbAlignmentReport: {
+      id: 'production-alignment-ok',
+      status: 'passing',
+    },
     operatorConfirmation: {
       localWriteApproved: false,
       productionPackageApproved: true,
@@ -183,6 +243,7 @@ function makeAudit(
     version: 1,
     createdAt: '2026-06-16T08:00:00.000Z',
     alignmentId: 'alignment-ok',
+    dbAlignmentStatus: 'passing',
     manifestHash: 'manifest-hash',
     ingredientIds: ['ingredient-1'],
     nutritionFoodIds: ['nutrition-food-1'],

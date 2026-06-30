@@ -65,6 +65,10 @@ const completeSupplementManifest: IngredientImportManifest = {
     ],
     labelSources: [],
   },
+  dbAlignmentReport: {
+    id: 'db-align-production-001',
+    status: 'passing',
+  },
   operatorConfirmation: {
     localWriteApproved: false,
     productionPackageApproved: true,
@@ -296,7 +300,27 @@ describe('validateIngredientImportManifest', () => {
     );
   });
 
-  it('requires local draft writes to have a passing DB alignment report and operator approval', () => {
+  it('accepts local draft writes without a DB alignment report when the operator approves', () => {
+    const manifest = makeFoodManifest({
+      dbAlignmentReport: {
+        id: '',
+        status: 'failing',
+      },
+      operatorConfirmation: {
+        localWriteApproved: true,
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('requires local draft writes to have operator approval', () => {
     const manifest = makeFoodManifest({
       dbAlignmentReport: {
         id: '',
@@ -310,17 +334,16 @@ describe('validateIngredientImportManifest', () => {
     const result = validateIngredientImportManifest(manifest);
 
     expect(result.ok).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'LOCAL_WRITE_ALIGNMENT_REQUIRED',
-          path: 'dbAlignmentReport',
-        }),
-        expect.objectContaining({
-          code: 'LOCAL_WRITE_CONFIRMATION_REQUIRED',
-          path: 'operatorConfirmation.localWriteApproved',
-        }),
-      ]),
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'LOCAL_WRITE_CONFIRMATION_REQUIRED',
+        path: 'operatorConfirmation.localWriteApproved',
+      }),
+    );
+    expect(result.errors).not.toContainEqual(
+      expect.objectContaining({
+        code: 'LOCAL_WRITE_ALIGNMENT_REQUIRED',
+      }),
     );
   });
 
@@ -341,6 +364,29 @@ describe('validateIngredientImportManifest', () => {
       }),
     );
   });
+
+  it('requires production package exports to have a passing DB alignment report', () => {
+    const manifest = makeSupplementManifest({
+      dbAlignmentReport: {
+        id: '',
+        status: 'failing',
+      },
+      operatorConfirmation: {
+        productionPackageApproved: true,
+      },
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'PRODUCTION_DB_ALIGNMENT_REQUIRED',
+        path: 'dbAlignmentReport',
+      }),
+    );
+  });
+
 
   it('returns every applicable error instead of stopping at the first one', () => {
     const manifest = makeFoodManifest({
@@ -375,7 +421,6 @@ describe('validateIngredientImportManifest', () => {
         'WHOLE_DATABASE_MIGRATION_FORBIDDEN',
         'FOOD_NUTRITION_REQUIRED',
         'NUTRIENT_VALUE_MISSING',
-        'LOCAL_WRITE_ALIGNMENT_REQUIRED',
         'LOCAL_WRITE_CONFIRMATION_REQUIRED',
       ]),
     );

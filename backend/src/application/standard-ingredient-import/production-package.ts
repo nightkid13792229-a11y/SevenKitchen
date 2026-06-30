@@ -410,11 +410,53 @@ function sqlLiteral(value: unknown): string {
   if (value instanceof Date) {
     return sqlLiteral(value.toISOString());
   }
+  if (isDecimalLike(value)) {
+    return decimalSqlLiteral(value);
+  }
   if (typeof value === 'object') {
     return sqlLiteral(JSON.stringify(value));
   }
 
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function isDecimalLike(value: unknown): value is {
+  decimalPlaces: () => number;
+  toJSON: () => unknown;
+  toString: () => string;
+} {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as {
+    decimalPlaces?: unknown;
+    toJSON?: unknown;
+    toString?: unknown;
+  };
+  if (
+    typeof candidate.decimalPlaces !== 'function' ||
+    typeof candidate.toJSON !== 'function' ||
+    typeof candidate.toString !== 'function'
+  ) {
+    return false;
+  }
+
+  const stringValue = candidate.toString();
+  return (
+    typeof stringValue === 'string' &&
+    candidate.toJSON() === stringValue &&
+    isSqlNumericText(stringValue)
+  );
+}
+
+function decimalSqlLiteral(value: { toString: () => string }): string {
+  const literal = value.toString();
+  return isSqlNumericText(literal) ? literal : 'NULL';
+}
+
+function isSqlNumericText(value: string): boolean {
+  return /^-?(?:\d+|\d+\.\d+|\.\d+)(?:e[+-]?\d+)?$/i.test(value);
 }
 
 function snakeCase(value: string): string {

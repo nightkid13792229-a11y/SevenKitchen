@@ -18,7 +18,7 @@ const {
 
 const usage = `
 Usage:
-  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --alignment ../.standard-ingredient-import/alignment.json --audit-out ../.standard-ingredient-import/ingredient.local-apply.json
+  node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts --manifest ../.standard-ingredient-import/ingredient.manifest.json --audit-out ../.standard-ingredient-import/ingredient.local-apply.json [--alignment ../.standard-ingredient-import/alignment.json]
 `;
 
 async function main(): Promise<void> {
@@ -28,10 +28,11 @@ async function main(): Promise<void> {
   const manifest = await readJsonFile<IngredientImportManifest>(
     requireStringArg(args, 'manifest'),
   );
-  const alignmentFile = await readJsonFile<{
-    result?: DatabaseAlignmentResult;
-  }>(requireStringArg(args, 'alignment'));
-  const alignment = alignmentFile.result ?? (alignmentFile as DatabaseAlignmentResult);
+  const alignmentPath = args.alignment;
+  const alignment =
+    typeof alignmentPath === 'string' && alignmentPath.trim()
+      ? await readAlignment(alignmentPath)
+      : null;
   const auditOutputPath = requireStringArg(args, 'audit-out');
   const prisma = createPrismaClient();
   try {
@@ -46,6 +47,13 @@ async function main(): Promise<void> {
   } finally {
     await disconnectPrisma(prisma);
   }
+}
+
+async function readAlignment(path: string): Promise<DatabaseAlignmentResult> {
+  const alignmentFile = await readJsonFile<{
+    result?: DatabaseAlignmentResult;
+  }>(path);
+  return alignmentFile.result ?? (alignmentFile as DatabaseAlignmentResult);
 }
 
 main().catch((error) => {

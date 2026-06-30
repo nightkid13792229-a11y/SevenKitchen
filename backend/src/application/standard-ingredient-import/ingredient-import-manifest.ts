@@ -11,6 +11,7 @@ export interface ManifestValidationIssue {
     | 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN'
     | 'LOCAL_WRITE_ALIGNMENT_REQUIRED'
     | 'LOCAL_WRITE_CONFIRMATION_REQUIRED'
+    | 'PRODUCTION_DB_ALIGNMENT_REQUIRED'
     | 'PRODUCTION_PACKAGE_CONFIRMATION_REQUIRED'
     | 'NUTRIENT_VALUE_MISSING';
   path: string;
@@ -79,6 +80,10 @@ export interface IngredientImportNutritionProfile {
   isPrimary?: boolean;
   yieldRate?: number;
   notes?: string | null;
+  sourceForms?: Record<
+    string,
+    Record<string, string | number | boolean | null>
+  >;
   nutrients: Record<string, IngredientImportNutrientValue>;
 }
 
@@ -270,15 +275,6 @@ function validateOperationApprovals(
   errors: ManifestValidationIssue[],
 ): void {
   if (manifest.operationMode === 'local-draft') {
-    if (!hasPassingDbAlignmentReport(manifest.dbAlignmentReport)) {
-      errors.push({
-        code: 'LOCAL_WRITE_ALIGNMENT_REQUIRED',
-        path: 'dbAlignmentReport',
-        message:
-          'Local draft writes require a passing DB alignment report id.',
-      });
-    }
-
     if (manifest.operatorConfirmation?.localWriteApproved !== true) {
       errors.push({
         code: 'LOCAL_WRITE_CONFIRMATION_REQUIRED',
@@ -287,6 +283,18 @@ function validateOperationApprovals(
           'Local draft writes require explicit operator confirmation.',
       });
     }
+  }
+
+  if (
+    manifest.operationMode === 'production-package' &&
+    !hasPassingDbAlignmentReport(manifest.dbAlignmentReport)
+  ) {
+    errors.push({
+      code: 'PRODUCTION_DB_ALIGNMENT_REQUIRED',
+      path: 'dbAlignmentReport',
+      message:
+        'Production package exports require a passing DB alignment report id.',
+    });
   }
 
   if (

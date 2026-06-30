@@ -193,6 +193,7 @@ export type NutritionProfileSourceType =
   | "CFCT"
   | "USDA"
   | "NZFCD"
+  | "MEXT"
   | "LITERATURE"
   | "SUPPLIER"
   | "SUPPLEMENT_LABEL"

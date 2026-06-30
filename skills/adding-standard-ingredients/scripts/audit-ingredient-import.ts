@@ -31,11 +31,12 @@ async function main(): Promise<void> {
     manifest.ingredient.type === 'FOOD'
       ? (manifest.nutritionProfiles ?? []).map((profile: any) => ({
           profileId: profile.id,
-          audit: auditNutritionProfileForImport({
-            profileName: profile.name ?? profile.id,
-            nutrients: profile.nutrients,
-          }),
-        }))
+        audit: auditNutritionProfileForImport({
+          profileName: profile.name ?? profile.id,
+          nutrients: profile.nutrients,
+          sourceForms: profile.sourceForms ?? {},
+        }),
+      }))
       : [];
   const rankedSources =
     manifest.ingredient.type === 'FOOD'

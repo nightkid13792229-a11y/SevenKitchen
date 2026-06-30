@@ -166,6 +166,31 @@ test("nutrition profile editing preserves all source metadata fields", () => {
   );
 });
 
+test("nutrition profile editing maps flat value-unit nutrient data into grouped form fields", () => {
+  const form = normalizeIngredientNutritionProfileToForm({
+    energyKcal: { value: 380, unit: "kcal" },
+    moisture: { value: 8, unit: "g" },
+    crudeProtein: { value: 12.5, unit: "g" },
+    crudeFat: { value: 9.8, unit: "g" },
+    calcium: { value: 37, unit: "mg" },
+    iodine: { value: 74, unit: "ug" },
+    arachidonicAcid: { value: 25, unit: "mg" },
+    vitaminK: { value: 2, unit: "ug" },
+    arginine: { value: 0.85, unit: "g" },
+  } as any);
+
+  assert.equal(form.macros.energyKcal, 380);
+  assert.equal(form.macros.moisture, 8);
+  assert.equal(form.macros.crudeProtein, 12.5);
+  assert.equal(form.macros.crudeFat, 9.8);
+  assert.equal(form.minerals.calcium, 37);
+  assert.equal(form.minerals.iodine, 74);
+  assert.equal(form.fattyAcids.arachidonicAcid, 0.025);
+  assert.equal(form.vitamins.vitaminK, 2);
+  assert.equal(form.aminoAcids.arginine, 0.85);
+  assert.equal(form.meta.fieldDisplayUnits?.arachidonicAcid, "mg");
+});
+
 test("nutrition source forms and conversion notes drop empty or invalid entries", () => {
   const empty = normalizeIngredientNutritionProfileToForm(null);
   const payload = buildIngredientNutritionPayload({
@@ -241,6 +266,7 @@ test("nutrition source type options preserve legacy sources and source-code-back
     new Set([
       "USDA",
       "NZFCD",
+      "MEXT",
       "CFCT",
       "SUPPLEMENT_LABEL",
       "LABEL",

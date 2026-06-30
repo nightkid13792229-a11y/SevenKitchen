@@ -95,6 +95,7 @@ export const INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS: readonly IngredientNutrit
   [
     { label: "USDA", value: "USDA" },
     { label: "NZFCD", value: "NZFCD" },
+    { label: "MEXT", value: "MEXT" },
     { label: "CFCT", value: "CFCT" },
     { label: "补剂标签", value: "SUPPLEMENT_LABEL" },
     { label: "商品标签", value: "LABEL" },

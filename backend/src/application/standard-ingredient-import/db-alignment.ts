@@ -97,6 +97,7 @@ interface RawPrismaMigrationRow {
   migration_name: string;
   checksum: string | null;
   finished_at: Date | string | null;
+  rolled_back_at?: Date | string | null;
 }
 
 type CriticalHashKey = keyof DatabaseAlignmentCriticalDataHashes;
@@ -376,16 +377,22 @@ async function collectMigrationHistory(
   prisma: DatabaseAlignmentPrismaClient,
 ): Promise<DatabaseMigrationSnapshot[]> {
   const rows = await prisma.$queryRaw<RawPrismaMigrationRow[]>`
-    SELECT migration_name, checksum, finished_at
+    SELECT migration_name, checksum, finished_at, rolled_back_at
     FROM _prisma_migrations
+    WHERE rolled_back_at IS NULL
     ORDER BY migration_name ASC
   `;
 
-  return rows.map((row) => ({
-    migrationName: row.migration_name,
-    checksum: row.checksum,
-    finishedAt: normalizeTimestamp(row.finished_at),
-  }));
+  return rows
+    .filter(
+      (row) =>
+        !hasMigrationValue(normalizeTimestamp(row.rolled_back_at ?? null)),
+    )
+    .map((row) => ({
+      migrationName: row.migration_name,
+      checksum: row.checksum,
+      finishedAt: normalizeTimestamp(row.finished_at),
+    }));
 }
 
 async function collectNutritionStandardVersions(

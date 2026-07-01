@@ -19,6 +19,7 @@ const completeFoodManifest: IngredientImportManifest = {
   nutritionProfiles: [
     {
       id: 'profile-usda-171077',
+      dataSource: 'USDA_FDC',
       basis: 'PER_100G',
       preparationState: 'cooked',
       nutrients: {
@@ -251,6 +252,80 @@ describe('validateIngredientImportManifest', () => {
       expect.objectContaining({
         code: 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED',
         path: 'sourceCandidates',
+      }),
+    );
+  });
+
+  it('requires each FOOD nutrition profile to use an approved source', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'blog-profile',
+          dataSource: 'BLOG_NUTRITION_TABLE',
+          basis: 'PER_100G',
+          preparationState: 'cooked',
+          nutrients: {
+            energyKcal: { value: 165, unit: 'kcal' },
+            proteinG: { value: 31.02, unit: 'g' },
+          },
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'FOOD_PROFILE_SOURCE_NOT_APPROVED',
+        path: 'nutritionProfiles[0].dataSource',
+      }),
+    );
+  });
+
+  it('requires every FOOD nutrition profile to have a matching source candidate', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-usda-raw',
+          dataSource: 'USDA_FDC',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: {
+            energyKcal: { value: 120, unit: 'kcal' },
+            proteinG: { value: 20, unit: 'g' },
+          },
+        },
+        {
+          id: 'profile-usda-cooked',
+          dataSource: 'USDA_FDC',
+          basis: 'PER_100G',
+          preparationState: 'cooked',
+          nutrients: {
+            energyKcal: { value: 165, unit: 'kcal' },
+            proteinG: { value: 31.02, unit: 'g' },
+          },
+        },
+      ],
+      sourceCandidates: [
+        {
+          sourceId: 'USDA_FDC:raw-only',
+          sourceName: 'USDA FoodData Central',
+          source: 'USDA_FDC',
+          matchedName: 'Chicken breast, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 92,
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'FOOD_PROFILE_SOURCE_CANDIDATE_REQUIRED',
+        path: 'nutritionProfiles[1].dataSource',
       }),
     );
   });

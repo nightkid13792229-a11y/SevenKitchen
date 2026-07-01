@@ -1,5 +1,7 @@
 import {
   rankNutritionSourceCandidates,
+  toApprovedNutritionSource,
+  type ApprovedNutritionSource,
   type NutritionSourceCandidate,
   type NutritionStateTag,
 } from './source-policy';
@@ -13,6 +15,8 @@ export interface ManifestValidationIssue {
     | 'INGREDIENT_TYPE_NOT_SUPPORTED'
     | 'WHOLE_DATABASE_MIGRATION_FORBIDDEN'
     | 'FOOD_NUTRITION_REQUIRED'
+    | 'FOOD_PROFILE_SOURCE_CANDIDATE_REQUIRED'
+    | 'FOOD_PROFILE_SOURCE_NOT_APPROVED'
     | 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED'
     | 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED'
     | 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN'
@@ -237,6 +241,7 @@ function validateFoodManifest(
     });
   } else {
     validateFoodSourceCandidates(manifest, errors);
+    validateFoodProfileSourceBindings(manifest, errors);
   }
 }
 
@@ -292,6 +297,69 @@ function toNutritionSourceCandidate(
   };
 }
 
+function validateFoodProfileSourceBindings(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): void {
+  const candidates = (manifest.sourceCandidates ?? [])
+    .map(toNutritionSourceCandidate)
+    .filter(
+      (candidate): candidate is NutritionSourceCandidate => candidate !== null,
+    );
+
+  (manifest.nutritionProfiles ?? []).forEach((profile, profileIndex) => {
+    const approvedSource = resolveProfileApprovedSource(profile.dataSource);
+    if (approvedSource === undefined) {
+      errors.push({
+        code: 'FOOD_PROFILE_SOURCE_NOT_APPROVED',
+        path: `nutritionProfiles[${profileIndex}].dataSource`,
+        message:
+          'FOOD nutrition profiles must declare dataSource as an approved nutrition source code.',
+      });
+      return;
+    }
+
+    const requestedState = resolveProfileNutritionState(profile);
+    const rankedCandidates = rankNutritionSourceCandidates({
+      requestedState,
+      candidates,
+    });
+    const hasMatchingCandidate = rankedCandidates.some(
+      (candidate) =>
+        candidate.source === approvedSource &&
+        candidate.essentialCoveragePercent >= 60,
+    );
+
+    if (hasMatchingCandidate) {
+      return;
+    }
+
+    errors.push({
+      code: 'FOOD_PROFILE_SOURCE_CANDIDATE_REQUIRED',
+      path: `nutritionProfiles[${profileIndex}].dataSource`,
+      message:
+        'Each FOOD nutrition profile must be backed by a matching approved source candidate with matching state tags and at least 60 percent essential coverage.',
+    });
+  });
+}
+
+function resolveProfileApprovedSource(
+  dataSource: string | undefined,
+): ApprovedNutritionSource | undefined {
+  const normalizedSource = dataSource?.trim().toUpperCase();
+  if (!normalizedSource) {
+    return undefined;
+  }
+  if (normalizedSource === 'USDA') {
+    return 'USDA_FDC';
+  }
+  if (normalizedSource === 'NZFCD_FOODFILES') {
+    return 'NZFCD';
+  }
+
+  return toApprovedNutritionSource(normalizedSource);
+}
+
 function sourceFromSourceId(sourceId: string | undefined): string | undefined {
   const prefix = sourceId?.split(':')[0]?.trim();
   if (!prefix) {
@@ -306,8 +374,13 @@ function sourceFromSourceId(sourceId: string | undefined): string | undefined {
 function resolveRequestedNutritionState(
   manifest: IngredientImportManifest,
 ): NutritionStateTag {
-  const preparationState = manifest.nutritionProfiles?.[0]?.preparationState;
-  const normalizedState = preparationState?.trim() as
+  return resolveProfileNutritionState(manifest.nutritionProfiles?.[0]);
+}
+
+function resolveProfileNutritionState(
+  profile: IngredientImportNutritionProfile | undefined,
+): NutritionStateTag {
+  const normalizedState = profile?.preparationState?.trim() as
     | NutritionStateTag
     | undefined;
   return isNutritionStateTag(normalizedState) ? normalizedState : 'raw';

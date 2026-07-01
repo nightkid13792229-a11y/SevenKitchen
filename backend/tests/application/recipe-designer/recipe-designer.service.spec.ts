@@ -1390,7 +1390,43 @@ describe('RecipeDesignerService', () => {
         nutritionFoodId: 'food-raw',
         weightG: 100,
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
+    });
+  });
+
+  it('does not fetch raw nutrition data when returning a newly added design item', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+    });
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        weightG: 100,
+      } as any,
+      'staff-1',
+    );
+
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith({
+      data: expect.any(Object),
+      select: expect.objectContaining({
+        nutritionFood: {
+          select: expect.not.objectContaining({
+            nutritionData: true,
+          }),
+        },
+      }),
     });
   });
 
@@ -1431,7 +1467,7 @@ describe('RecipeDesignerService', () => {
         ingredientId: 'ingredient-mussel',
         preparationMethod: '蒸熟、压泥',
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
     });
   });
 
@@ -1636,6 +1672,34 @@ describe('RecipeDesignerService', () => {
     ).rejects.toThrow(NotFoundException);
 
     expect(prisma.designRecipeItem.create).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch raw nutrition data when returning an updated design item', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.designRecipeItem.update.mockResolvedValue(item({ id: 'item-1' }));
+
+    await service.updateItem('item-1', { weightG: 120 }, 'staff-1');
+
+    expect(prisma.designRecipeItem.update).toHaveBeenCalledWith({
+      where: { id: 'item-1' },
+      data: { weightG: 120 },
+      select: expect.objectContaining({
+        nutritionFood: {
+          select: expect.not.objectContaining({
+            nutritionData: true,
+          }),
+        },
+      }),
+    });
   });
 
   it('rejects item updates from another staff user', async () => {
@@ -3197,7 +3261,7 @@ describe('RecipeDesignerService', () => {
         nutrientTargetKey: 'magnesium',
         nutrientTargetValue: 0.2,
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
     });
   });
 

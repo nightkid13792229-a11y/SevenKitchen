@@ -144,6 +144,60 @@ const DESIGN_RECIPE_INCLUDE = {
   },
 };
 
+const DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT = {
+  id: true,
+  name: true,
+  type: true,
+  unitDisplayLabel: true,
+  purchaseUnit: true,
+  properties: true,
+  brand: true,
+  productModel: true,
+} satisfies Prisma.IngredientSelect;
+
+const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
+  id: true,
+  designRecipeId: true,
+  ingredientId: true,
+  nutritionFoodId: true,
+  weightG: true,
+  includeInAssessment: true,
+  ratioPercent: true,
+  preparationMethod: true,
+  nutrientTargetKey: true,
+  nutrientTargetValue: true,
+  sortOrder: true,
+  createdAt: true,
+  updatedAt: true,
+  ingredient: {
+    select: DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT,
+  },
+  nutritionFood: {
+    select: {
+      id: true,
+      name: true,
+      nameEn: true,
+      displayNameZh: true,
+      category: true,
+      dataSource: true,
+      status: true,
+      mappings: {
+        select: {
+          id: true,
+          nutritionFoodId: true,
+          ingredientId: true,
+          yieldRate: true,
+          isPrimary: true,
+          notes: true,
+          ingredient: {
+            select: DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.DesignRecipeItemSelect;
+
 const DESIGN_RECIPE_LIST_SELECT = {
   id: true,
   name: true,
@@ -3840,14 +3894,7 @@ export class RecipeDesignerService {
 
     return this.prisma.designRecipeItem.create({
       data,
-      include: {
-        ingredient: true,
-        nutritionFood: {
-          include: {
-            mappings: true,
-          },
-        },
-      },
+      select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
     });
   }
 
@@ -3899,9 +3946,7 @@ export class RecipeDesignerService {
     return this.prisma.designRecipeItem.update({
       where: { id: itemId },
       data,
-      include: {
-        nutritionFood: true,
-      },
+      select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
     });
   }
 

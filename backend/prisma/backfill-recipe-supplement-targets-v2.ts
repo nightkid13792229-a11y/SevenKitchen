@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import {
   inferSupplementTargetFieldFromIngredientName,
@@ -52,6 +53,426 @@ export type SupplementTargetBackfillPlan<TTarget> =
       reason: SupplementTargetBackfillReason;
       target?: undefined;
     };
+
+export interface PlannedRecipeSupplementTargetUpdate {
+  id: string;
+  target: SupplementTargetV2 | SupplementTargetV2[];
+  [key: string]: unknown;
+}
+
+export interface PlannedDesignSupplementTargetUpdate {
+  id: string;
+  target: DesignSupplementTargetReference | DesignSupplementTargetReference[];
+  [key: string]: unknown;
+}
+
+export interface SupplementTargetBackfillReportInput {
+  recipeItemsScanned: number;
+  designRecipeItemsScanned: number;
+  plannedUpdates: PlannedRecipeSupplementTargetUpdate[];
+  plannedDesignUpdates: PlannedDesignSupplementTargetUpdate[];
+  skippedExisting: number;
+  skippedDesignExisting: number;
+  attributedDesignTargetCount: number;
+  manualReview: any[];
+}
+
+export interface SupplementTargetBackfillReportCounts {
+  recipeItemsScanned: number;
+  plannedRecipeItemUpdates: number;
+  skippedRecipeItemsAlreadyHavingV2Targets: number;
+  designRecipeItemsScanned: number;
+  plannedDesignRecipeItemUpdates: number;
+  designRecipeNutrientGapAttributions: number;
+  skippedDesignItemsAlreadyHavingV2Targets: number;
+  manualReviewItems: number;
+}
+
+export type SupplementTargetBackfillTable =
+  | 'recipe_item'
+  | 'design_recipe_item';
+
+export interface SupplementTargetBackfillItemRef {
+  table: SupplementTargetBackfillTable;
+  itemId: string;
+}
+
+export interface SupplementTargetBackfillTargetMismatch
+  extends SupplementTargetBackfillItemRef {
+  approvedTarget: unknown;
+  plannedTarget: unknown;
+}
+
+export interface SupplementTargetBackfillAllowlistSummary {
+  approvedRows: number;
+  matchedApprovedRows: number;
+  skippedNonAllowlistedPlannedUpdates: SupplementTargetBackfillItemRef[];
+  unmatchedApprovedRows: SupplementTargetBackfillItemRef[];
+  targetMismatches: SupplementTargetBackfillTargetMismatch[];
+}
+
+export type PlannedRecipeSupplementTargetReportRow = {
+  table: 'recipe_item';
+  recipeItemId: string;
+  target: SupplementTargetV2 | SupplementTargetV2[];
+} & Record<string, unknown>;
+
+export type PlannedDesignSupplementTargetReportRow = {
+  table: 'design_recipe_item';
+  designRecipeItemId: string;
+  target: DesignSupplementTargetReference | DesignSupplementTargetReference[];
+} & Record<string, unknown>;
+
+export interface SupplementTargetBackfillReport {
+  counts: SupplementTargetBackfillReportCounts;
+  plannedRecipeItemUpdates: PlannedRecipeSupplementTargetReportRow[];
+  plannedDesignRecipeItemUpdates: PlannedDesignSupplementTargetReportRow[];
+  manualReview: any[];
+  allowlist?: SupplementTargetBackfillAllowlistSummary;
+}
+
+export interface SupplementTargetBackfillAllowlist {
+  rows: Record<string, unknown>[];
+}
+
+export interface SupplementTargetBackfillCliOptions {
+  apply: boolean;
+  reportJsonPath: string | null;
+  allowlistJsonPath: string | null;
+  includeDesignGapAttribution: boolean;
+}
+
+export function buildSupplementTargetBackfillReport(
+  input: SupplementTargetBackfillReportInput,
+): SupplementTargetBackfillReport {
+  return {
+    counts: {
+      recipeItemsScanned: input.recipeItemsScanned,
+      plannedRecipeItemUpdates: input.plannedUpdates.length,
+      skippedRecipeItemsAlreadyHavingV2Targets: input.skippedExisting,
+      designRecipeItemsScanned: input.designRecipeItemsScanned,
+      plannedDesignRecipeItemUpdates: input.plannedDesignUpdates.length,
+      designRecipeNutrientGapAttributions: input.attributedDesignTargetCount,
+      skippedDesignItemsAlreadyHavingV2Targets: input.skippedDesignExisting,
+      manualReviewItems: input.manualReview.length,
+    },
+    plannedRecipeItemUpdates: input.plannedUpdates.map((update) => {
+      const { id, target, ...details } = update;
+      return {
+        table: 'recipe_item',
+        recipeItemId: id,
+        ...details,
+        target,
+      };
+    }),
+    plannedDesignRecipeItemUpdates: input.plannedDesignUpdates.map(
+      (update) => {
+        const { id, target, ...details } = update;
+        return {
+          table: 'design_recipe_item',
+          designRecipeItemId: id,
+          ...details,
+          target,
+        };
+      },
+    ),
+    manualReview: input.manualReview,
+  };
+}
+
+function readFlagPath(argv: string[], flag: string): string | null {
+  const equalsArg = argv.find((arg) => arg.startsWith(`${flag}=`));
+  if (equalsArg) {
+    return equalsArg.slice(flag.length + 1) || null;
+  }
+
+  const flagIndex = argv.indexOf(flag);
+  if (flagIndex >= 0) {
+    return argv[flagIndex + 1] ?? null;
+  }
+
+  return null;
+}
+
+export function readSupplementTargetBackfillCliOptions(
+  argv: string[],
+): SupplementTargetBackfillCliOptions {
+  const apply = argv.includes('--apply');
+  const allowlistJsonPath = readFlagPath(argv, '--allowlist-json');
+  if (apply && !allowlistJsonPath) {
+    throw new Error(
+      'Apply mode for recipe supplement target v2 backfill requires --allowlist-json.',
+    );
+  }
+
+  return {
+    apply,
+    reportJsonPath: readFlagPath(argv, '--report-json'),
+    allowlistJsonPath,
+    includeDesignGapAttribution: argv.includes(
+      '--include-design-gap-attribution',
+    ),
+  };
+}
+
+export function shouldBuildAttributedDesignTargets(argv: string[]): boolean {
+  const options = readSupplementTargetBackfillCliOptions(argv);
+  return (
+    !options.allowlistJsonPath || options.includeDesignGapAttribution === true
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toRecordRows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+export function parseSupplementTargetBackfillAllowlist(
+  value: unknown,
+): SupplementTargetBackfillAllowlist {
+  if (isRecord(value) && Array.isArray(value.rows)) {
+    return { rows: toRecordRows(value.rows) };
+  }
+
+  throw new Error(
+    'Allowlist JSON must contain reviewed rows with explicit review decisions.',
+  );
+}
+
+function loadSupplementTargetBackfillAllowlist(
+  path: string,
+): SupplementTargetBackfillAllowlist {
+  return parseSupplementTargetBackfillAllowlist(
+    JSON.parse(readFileSync(path, 'utf8')),
+  );
+}
+
+function normalizeAllowlistDecision(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim().toLowerCase() : null;
+}
+
+function isApprovedAllowlistRow(row: Record<string, unknown>): boolean {
+  const decision = normalizeAllowlistDecision(row.reviewDecision);
+  return decision === 'approve' || decision === 'approved';
+}
+
+function normalizeAllowlistTable(
+  value: unknown,
+): SupplementTargetBackfillTable | null {
+  if (value === 'recipe_item' || value === 'design_recipe_item') {
+    return value;
+  }
+  return null;
+}
+
+function readText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readAllowlistRowRef(
+  row: Record<string, unknown>,
+): SupplementTargetBackfillItemRef | null {
+  const table =
+    normalizeAllowlistTable(row.table) ??
+    (readText(row.recipeItemId) ? 'recipe_item' : null) ??
+    (readText(row.designRecipeItemId) ? 'design_recipe_item' : null);
+  if (!table) {
+    return null;
+  }
+
+  const itemId =
+    readText(row.itemId) ??
+    (table === 'recipe_item'
+      ? readText(row.recipeItemId)
+      : readText(row.designRecipeItemId));
+  return itemId ? { table, itemId } : null;
+}
+
+function allowlistKey(ref: SupplementTargetBackfillItemRef): string {
+  return `${ref.table}:${ref.itemId}`;
+}
+
+const TARGET_COMPARISON_KEYS = [
+  'fieldPath',
+  'nutrientTargetKey',
+  'label',
+  'unit',
+  'targetValue',
+  'targetValuePerKg',
+  'expressionBasis',
+] as const;
+
+function normalizeTargetForAllowlist(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeTargetForAllowlist);
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const normalized: Record<string, unknown> = {};
+  for (const key of TARGET_COMPARISON_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      normalized[key] = value[key];
+    }
+  }
+  return normalized;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (isRecord(value)) {
+    const entries = Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function targetsMatch(approvedTarget: unknown, plannedTarget: unknown): boolean {
+  if (approvedTarget === undefined) {
+    return false;
+  }
+  return (
+    stableStringify(normalizeTargetForAllowlist(approvedTarget)) ===
+    stableStringify(normalizeTargetForAllowlist(plannedTarget))
+  );
+}
+
+export function filterSupplementTargetBackfillReportByAllowlist(
+  report: SupplementTargetBackfillReport,
+  allowlistInput: SupplementTargetBackfillAllowlist | unknown,
+): SupplementTargetBackfillReport {
+  const allowlist = parseSupplementTargetBackfillAllowlist(allowlistInput);
+  const approvedRows = new Map<
+    string,
+    { ref: SupplementTargetBackfillItemRef; target: unknown }
+  >();
+  let approvedRowCount = 0;
+
+  for (const row of allowlist.rows) {
+    if (!isApprovedAllowlistRow(row)) {
+      continue;
+    }
+
+    const ref = readAllowlistRowRef(row);
+    if (!ref) {
+      continue;
+    }
+
+    approvedRowCount += 1;
+    approvedRows.set(allowlistKey(ref), {
+      ref,
+      target: Object.prototype.hasOwnProperty.call(row, 'target')
+        ? row.target
+        : undefined,
+    });
+  }
+
+  const matchedKeys = new Set<string>();
+  const mismatchedKeys = new Set<string>();
+  const skippedNonAllowlistedPlannedUpdates: SupplementTargetBackfillItemRef[] =
+    [];
+  const targetMismatches: SupplementTargetBackfillTargetMismatch[] = [];
+
+  function isRowAllowed(
+    ref: SupplementTargetBackfillItemRef,
+    plannedTarget: unknown,
+  ): boolean {
+    const key = allowlistKey(ref);
+    const approvedRow = approvedRows.get(key);
+    if (!approvedRow) {
+      skippedNonAllowlistedPlannedUpdates.push(ref);
+      return false;
+    }
+
+    if (!targetsMatch(approvedRow.target, plannedTarget)) {
+      mismatchedKeys.add(key);
+      targetMismatches.push({
+        ...ref,
+        approvedTarget: approvedRow.target,
+        plannedTarget,
+      });
+      return false;
+    }
+
+    matchedKeys.add(key);
+    return true;
+  }
+
+  const plannedRecipeItemUpdates = report.plannedRecipeItemUpdates.filter(
+    (row) =>
+      isRowAllowed(
+        { table: 'recipe_item', itemId: row.recipeItemId },
+        row.target,
+      ),
+  );
+  const plannedDesignRecipeItemUpdates =
+    report.plannedDesignRecipeItemUpdates.filter((row) =>
+      isRowAllowed(
+        { table: 'design_recipe_item', itemId: row.designRecipeItemId },
+        row.target,
+      ),
+    );
+
+  const unmatchedApprovedRows = [...approvedRows.entries()]
+    .filter(([key]) => !matchedKeys.has(key) && !mismatchedKeys.has(key))
+    .map(([, row]) => row.ref);
+
+  return {
+    ...report,
+    counts: {
+      ...report.counts,
+      plannedRecipeItemUpdates: plannedRecipeItemUpdates.length,
+      plannedDesignRecipeItemUpdates: plannedDesignRecipeItemUpdates.length,
+    },
+    plannedRecipeItemUpdates,
+    plannedDesignRecipeItemUpdates,
+    allowlist: {
+      approvedRows: approvedRowCount,
+      matchedApprovedRows: matchedKeys.size,
+      skippedNonAllowlistedPlannedUpdates,
+      unmatchedApprovedRows,
+      targetMismatches,
+    },
+  };
+}
+
+function assertAllowlistReportCanApply(
+  report: SupplementTargetBackfillReport,
+): void {
+  const allowlist = report.allowlist;
+  if (!allowlist) {
+    return;
+  }
+
+  if (allowlist.approvedRows === 0) {
+    throw new Error('Apply mode requires at least one approved allowlist row.');
+  }
+
+  if (allowlist.targetMismatches.length > 0) {
+    throw new Error(
+      `Apply blocked: ${allowlist.targetMismatches.length} allowlist target mismatch(es).`,
+    );
+  }
+
+  if (allowlist.unmatchedApprovedRows.length > 0) {
+    throw new Error(
+      `Apply blocked: ${allowlist.unmatchedApprovedRows.length} approved allowlist row(s) did not match a planned update.`,
+    );
+  }
+
+  if (allowlist.matchedApprovedRows === 0) {
+    throw new Error('Apply blocked: allowlist did not match any planned update.');
+  }
+}
 
 interface BaseSupplementBackfillInput {
   id: string;
@@ -544,7 +965,10 @@ async function buildAttributedDesignTargetMap(
 }
 
 async function main() {
-  const apply = process.argv.includes('--apply');
+  const options = readSupplementTargetBackfillCliOptions(process.argv);
+  const allowlist = options.allowlistJsonPath
+    ? loadSupplementTargetBackfillAllowlist(options.allowlistJsonPath)
+    : null;
   const prisma = new PrismaClient();
 
   try {
@@ -593,16 +1017,15 @@ async function main() {
       },
       orderBy: [{ designRecipeId: 'asc' }, { sortOrder: 'asc' }],
     });
-    const attributedDesignTargets = await buildAttributedDesignTargetMap(prisma);
+    const buildDesignGapAttribution = shouldBuildAttributedDesignTargets(
+      process.argv,
+    );
+    const attributedDesignTargets = buildDesignGapAttribution
+      ? await buildAttributedDesignTargetMap(prisma)
+      : new Map<string, InferredSupplementTarget[]>();
 
-    const plannedUpdates: Array<{
-      id: string;
-      target: SupplementTargetV2 | SupplementTargetV2[];
-    }> = [];
-    const plannedDesignUpdates: Array<{
-      id: string;
-      target: DesignSupplementTargetReference | DesignSupplementTargetReference[];
-    }> = [];
+    const plannedUpdates: PlannedRecipeSupplementTargetUpdate[] = [];
+    const plannedDesignUpdates: PlannedDesignSupplementTargetUpdate[] = [];
     const manualReview: any[] = [];
     let skippedExisting = 0;
     let skippedDesignExisting = 0;
@@ -641,7 +1064,17 @@ async function main() {
       }
 
       if (plan.action === 'update') {
-        plannedUpdates.push({ id: item.id, target: plan.target });
+        plannedUpdates.push({
+          id: item.id,
+          recipeId: item.recipe?.recipeId,
+          recipeVersion: item.recipe?.version,
+          recipeName: item.recipe?.name,
+          ingredientName: item.ingredient?.name,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          reason: plan.reason,
+          target: plan.target,
+        });
       }
     }
 
@@ -678,39 +1111,122 @@ async function main() {
       }
 
       if (plan.action === 'update') {
-        plannedDesignUpdates.push({ id: item.id, target: plan.target });
+        plannedDesignUpdates.push({
+          id: item.id,
+          designRecipeId: item.designRecipe?.id,
+          designRecipeName: item.designRecipe?.name,
+          designRecipeStatus: item.designRecipe?.status,
+          scenario: item.designRecipe?.fediafDogScenario,
+          seriesLifeStage: item.designRecipe?.seriesLifeStage,
+          ingredientName: item.ingredient?.name,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          reason: plan.reason,
+          target: plan.target,
+        });
       }
     }
 
+    let report = buildSupplementTargetBackfillReport({
+      recipeItemsScanned: recipeItems.length,
+      designRecipeItemsScanned: designRecipeItems.length,
+      plannedUpdates,
+      plannedDesignUpdates,
+      skippedExisting,
+      skippedDesignExisting,
+      attributedDesignTargetCount: attributedDesignTargets.size,
+      manualReview,
+    });
+
+    if (allowlist) {
+      report = filterSupplementTargetBackfillReportByAllowlist(
+        report,
+        allowlist,
+      );
+    }
+
+    const recipeItemIdsToApply = new Set(
+      report.plannedRecipeItemUpdates.map((update) => update.recipeItemId),
+    );
+    const designRecipeItemIdsToApply = new Set(
+      report.plannedDesignRecipeItemUpdates.map(
+        (update) => update.designRecipeItemId,
+      ),
+    );
+    const plannedUpdatesToApply = plannedUpdates.filter((update) =>
+      recipeItemIdsToApply.has(update.id),
+    );
+    const plannedDesignUpdatesToApply = plannedDesignUpdates.filter((update) =>
+      designRecipeItemIdsToApply.has(update.id),
+    );
+
     console.log(
-      apply
+      options.apply
         ? 'Applying recipe supplement target v2 backfill...'
         : 'Dry run: recipe supplement target v2 backfill...',
     );
-    console.log(`Scanned supplement recipe items: ${recipeItems.length}`);
-    console.log(`Planned recipe item updates: ${plannedUpdates.length}`);
-    console.log(`Skipped items already having v2 targets: ${skippedExisting}`);
     console.log(
-      `Scanned supplement design recipe items: ${designRecipeItems.length}`,
+      `Scanned supplement recipe items: ${report.counts.recipeItemsScanned}`,
     );
     console.log(
-      `Planned design recipe item updates: ${plannedDesignUpdates.length}`,
+      `Planned recipe item updates: ${report.counts.plannedRecipeItemUpdates}`,
     );
     console.log(
-      `Design recipe nutrient gap attributions: ${attributedDesignTargets.size}`,
+      `Skipped items already having v2 targets: ${report.counts.skippedRecipeItemsAlreadyHavingV2Targets}`,
     );
     console.log(
-      `Skipped design items already having v2 targets: ${skippedDesignExisting}`,
+      `Scanned supplement design recipe items: ${report.counts.designRecipeItemsScanned}`,
     );
-    console.log(`Manual review items: ${manualReview.length}`);
+    console.log(
+      `Planned design recipe item updates: ${report.counts.plannedDesignRecipeItemUpdates}`,
+    );
+    console.log(
+      `Design recipe nutrient gap attributions: ${report.counts.designRecipeNutrientGapAttributions}`,
+    );
+    console.log(
+      `Skipped design items already having v2 targets: ${report.counts.skippedDesignItemsAlreadyHavingV2Targets}`,
+    );
+    console.log(`Manual review items: ${report.counts.manualReviewItems}`);
 
-    if (manualReview.length > 0) {
-      console.log('Manual review required:');
-      console.log(JSON.stringify(manualReview, null, 2));
+    if (allowlist && !buildDesignGapAttribution) {
+      console.log(
+        'Allowlist mode: skipped design nutrient gap attribution. Pass --include-design-gap-attribution to include it.',
+      );
     }
 
-    if (apply) {
-      for (const update of plannedUpdates) {
+    if (report.allowlist) {
+      console.log(`Allowlist approved rows: ${report.allowlist.approvedRows}`);
+      console.log(
+        `Allowlist matched planned updates: ${report.allowlist.matchedApprovedRows}`,
+      );
+      console.log(
+        `Allowlist skipped non-approved planned updates: ${report.allowlist.skippedNonAllowlistedPlannedUpdates.length}`,
+      );
+      console.log(
+        `Allowlist unmatched approved rows: ${report.allowlist.unmatchedApprovedRows.length}`,
+      );
+      console.log(
+        `Allowlist target mismatches: ${report.allowlist.targetMismatches.length}`,
+      );
+    }
+
+    if (report.manualReview.length > 0) {
+      console.log('Manual review required:');
+      console.log(JSON.stringify(report.manualReview, null, 2));
+    }
+
+    if (options.reportJsonPath) {
+      writeFileSync(
+        options.reportJsonPath,
+        `${JSON.stringify(report, null, 2)}\n`,
+      );
+      console.log(`Report JSON written: ${options.reportJsonPath}`);
+    }
+
+    if (options.apply) {
+      assertAllowlistReportCanApply(report);
+
+      for (const update of plannedUpdatesToApply) {
         await (prisma as any).recipeItem.update({
           where: { id: update.id },
           data: {
@@ -720,7 +1236,7 @@ async function main() {
           },
         });
       }
-      for (const update of plannedDesignUpdates) {
+      for (const update of plannedDesignUpdatesToApply) {
         await (prisma as any).designRecipeItem.update({
           where: { id: update.id },
           data: {

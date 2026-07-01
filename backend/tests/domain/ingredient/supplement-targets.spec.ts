@@ -154,6 +154,37 @@ describe('supplement targets v2 dosing', () => {
     expect(result.amount).toBeCloseTo(2.1, 6);
   });
 
+  it('converts taurine gram concentration to milligram supplement targets', () => {
+    const result = calculateSupplementDose({
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: {},
+        vitamins: {},
+        fattyAcids: {},
+        aminoAcids: { taurine: 0.5 },
+        customItems: [],
+      } as any,
+      targets: [
+        {
+          fieldPath: 'aminoAcids.taurine',
+          label: '牛磺酸',
+          targetValuePerKg: 370,
+          unit: 'mg',
+        },
+      ],
+      basisWeightG: 1000,
+      displayUnit: '粒',
+      lossRate: 1,
+    });
+
+    expect(result.amount).toBeCloseTo(0.74, 6);
+    expect(result.unit).toBe('粒');
+    expect(result.limitingTarget.concentration).toBe(500);
+    expect(result.limitingTarget.concentrationUnit).toBe('mg');
+    expect(result.limitingTarget.totalNutrientNeeded).toBe(370);
+  });
+
   it('rejects EPA+DHA as a field path', () => {
     expect(() =>
       validateSupplementTargets([

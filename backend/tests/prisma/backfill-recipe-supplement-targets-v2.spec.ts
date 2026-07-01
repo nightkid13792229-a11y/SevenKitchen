@@ -704,6 +704,83 @@ describe('backfill recipe supplement targets v2', () => {
     ]);
   });
 
+  it('rejects raw dry-run reports as production apply allowlists', () => {
+    const report = buildSupplementTargetBackfillReport({
+      recipeItemsScanned: 1,
+      designRecipeItemsScanned: 0,
+      plannedUpdates: [
+        {
+          id: 'recipe-item-raw-report',
+          ingredientName: '碳酸钙粉',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+          target: {
+            fieldPath: 'minerals.calcium',
+            label: '钙',
+            targetValuePerKg: 1200,
+            unit: 'mg',
+          },
+        },
+      ],
+      plannedDesignUpdates: [],
+      skippedExisting: 0,
+      skippedDesignExisting: 0,
+      attributedDesignTargetCount: 0,
+      manualReview: [],
+    });
+
+    expect(() =>
+      filterSupplementTargetBackfillReportByAllowlist(report, report),
+    ).toThrow('Allowlist JSON must contain reviewed rows');
+  });
+
+  it('blocks approved allowlist rows that do not include a reviewed target', () => {
+    const plannedTarget = {
+      fieldPath: 'minerals.calcium',
+      label: '钙',
+      targetValuePerKg: 1200,
+      unit: 'mg',
+    };
+    const report = buildSupplementTargetBackfillReport({
+      recipeItemsScanned: 1,
+      designRecipeItemsScanned: 0,
+      plannedUpdates: [
+        {
+          id: 'recipe-item-id-only',
+          ingredientName: '碳酸钙粉',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+          target: plannedTarget,
+        },
+      ],
+      plannedDesignUpdates: [],
+      skippedExisting: 0,
+      skippedDesignExisting: 0,
+      attributedDesignTargetCount: 0,
+      manualReview: [],
+    });
+
+    const filtered = filterSupplementTargetBackfillReportByAllowlist(report, {
+      rows: [
+        {
+          reviewDecision: 'approve',
+          table: 'recipe_item',
+          itemId: 'recipe-item-id-only',
+        },
+      ],
+    });
+
+    expect(filtered.counts.plannedRecipeItemUpdates).toBe(0);
+    expect(filtered.plannedRecipeItemUpdates).toEqual([]);
+    expect(filtered.allowlist.matchedApprovedRows).toBe(0);
+    expect(filtered.allowlist.targetMismatches).toEqual([
+      {
+        table: 'recipe_item',
+        itemId: 'recipe-item-id-only',
+        approvedTarget: undefined,
+        plannedTarget,
+      },
+    ]);
+  });
+
   it('skips expensive design nutrient gap attribution by default in allowlist mode', () => {
     expect(shouldBuildAttributedDesignTargets(['node', 'script'])).toBe(true);
     expect(

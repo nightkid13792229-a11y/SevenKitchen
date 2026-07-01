@@ -233,32 +233,12 @@ function toRecordRows(value: unknown): Record<string, unknown>[] {
 export function parseSupplementTargetBackfillAllowlist(
   value: unknown,
 ): SupplementTargetBackfillAllowlist {
-  if (Array.isArray(value)) {
-    return { rows: toRecordRows(value) };
-  }
-
-  if (!isRecord(value)) {
-    throw new Error('Allowlist JSON must be an object or array.');
-  }
-
-  if (Array.isArray(value.rows)) {
+  if (isRecord(value) && Array.isArray(value.rows)) {
     return { rows: toRecordRows(value.rows) };
   }
 
-  const plannedRows = [
-    ...toRecordRows(value.plannedRecipeItemUpdates),
-    ...toRecordRows(value.plannedDesignRecipeItemUpdates),
-  ].map((row) => ({
-    reviewDecision: 'approve',
-    ...row,
-  }));
-
-  if (plannedRows.length > 0) {
-    return { rows: plannedRows };
-  }
-
   throw new Error(
-    'Allowlist JSON must contain rows, plannedRecipeItemUpdates, or plannedDesignRecipeItemUpdates.',
+    'Allowlist JSON must contain reviewed rows with explicit review decisions.',
   );
 }
 
@@ -358,7 +338,7 @@ function stableStringify(value: unknown): string {
 
 function targetsMatch(approvedTarget: unknown, plannedTarget: unknown): boolean {
   if (approvedTarget === undefined) {
-    return true;
+    return false;
   }
   return (
     stableStringify(normalizeTargetForAllowlist(approvedTarget)) ===

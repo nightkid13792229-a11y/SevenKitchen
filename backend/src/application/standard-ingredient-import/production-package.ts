@@ -5,12 +5,22 @@ import {
   validateIngredientImportManifest,
   type IngredientImportManifest,
 } from './ingredient-import-manifest';
-import type { LocalIngredientImportAudit } from './local-ingredient-import';
+import {
+  buildProductionPackageManifestHash,
+  type LocalIngredientImportAudit,
+} from './local-ingredient-import';
 
 export type ProductionPackageErrorCode =
   | 'LOCAL_IMPORT_AUDIT_REQUIRED'
+  | 'LOCAL_IMPORT_AUDIT_ALIGNMENT_MISMATCH'
+  | 'LOCAL_IMPORT_AUDIT_ALIGNMENT_REQUIRED'
+  | 'LOCAL_IMPORT_AUDIT_MANIFEST_MISMATCH'
+  | 'LOCAL_IMPORT_AUDIT_RECORDS_MISSING'
+  | 'PRODUCTION_PACKAGE_MODE_REQUIRED'
   | 'PRODUCTION_PACKAGE_UPDATE_EXISTING_FORBIDDEN'
-  | ReturnType<typeof validateIngredientImportManifest>['errors'][number]['code'];
+  | ReturnType<
+      typeof validateIngredientImportManifest
+    >['errors'][number]['code'];
 
 export class ProductionPackageError extends Error {
   constructor(
@@ -123,22 +133,32 @@ export async function buildProductionMigrationPackage(
 ): Promise<ProductionMigrationPackageResult> {
   assertLocalAudit(input.localImportAudit);
   assertManifestValid(input.manifest);
+  assertProductionPackageMode(input.manifest);
   assertNewRecordOnlyScope(input.manifest);
+  assertLocalAuditMatchesManifest(input.manifest, input.localImportAudit);
+  assertLocalAuditMatchesAlignment(input.manifest, input.localImportAudit);
 
   const rows = await collectPackageRows(input.prisma, input.localImportAudit);
-  const fileBodies = buildPackageFiles(input.manifest, input.localImportAudit, rows);
+  assertAllAuditRowsCollected(input.localImportAudit, rows);
+  const fileBodies = buildPackageFiles(
+    input.manifest,
+    input.localImportAudit,
+    rows,
+  );
   const writePackageFile = input.writePackageFile ?? writeFileToOutputDir;
 
   await Promise.all(
-    ([
-      ['manifest.json', fileBodies.manifestJson],
-      ['review-summary.md', fileBodies.reviewSummary],
-      ['up.sql', fileBodies.upSql],
-      ['down.sql', fileBodies.downSql],
-      ['source-audit.json', fileBodies.sourceAuditJson],
-      ['unit-audit.json', fileBodies.unitAuditJson],
-    ] as Array<[ProductionMigrationPackageFileName, string]>).map(
-      ([fileName, body]) => writePackageFile(input.outputDir, fileName, body),
+    (
+      [
+        ['manifest.json', fileBodies.manifestJson],
+        ['review-summary.md', fileBodies.reviewSummary],
+        ['up.sql', fileBodies.upSql],
+        ['down.sql', fileBodies.downSql],
+        ['source-audit.json', fileBodies.sourceAuditJson],
+        ['unit-audit.json', fileBodies.unitAuditJson],
+      ] as Array<[ProductionMigrationPackageFileName, string]>
+    ).map(([fileName, body]) =>
+      writePackageFile(input.outputDir, fileName, body),
     ),
   );
 
@@ -175,6 +195,18 @@ function assertManifestValid(manifest: IngredientImportManifest): void {
   );
 }
 
+function assertProductionPackageMode(manifest: IngredientImportManifest): void {
+  if (manifest.operationMode === 'production-package') {
+    return;
+  }
+
+  throw new ProductionPackageError(
+    'PRODUCTION_PACKAGE_MODE_REQUIRED',
+    'Production package export requires operationMode production-package.',
+    { operationMode: manifest.operationMode },
+  );
+}
+
 function assertNewRecordOnlyScope(manifest: IngredientImportManifest): void {
   if (manifest.updateExistingIngredientId === undefined) {
     return;
@@ -185,6 +217,59 @@ function assertNewRecordOnlyScope(manifest: IngredientImportManifest): void {
     'Production package export only supports newly added ingredient records.',
     {
       updateExistingIngredientId: manifest.updateExistingIngredientId,
+    },
+  );
+}
+
+function assertLocalAuditMatchesManifest(
+  manifest: IngredientImportManifest,
+  localImportAudit: LocalIngredientImportAudit,
+): void {
+  const packageManifestHash = buildProductionPackageManifestHash(manifest);
+
+  if (localImportAudit.packageManifestHash === packageManifestHash) {
+    return;
+  }
+
+  throw new ProductionPackageError(
+    'LOCAL_IMPORT_AUDIT_MANIFEST_MISMATCH',
+    'Production package export requires a local import audit created from the same ingredient manifest content.',
+    {
+      auditPackageManifestHash: localImportAudit.packageManifestHash ?? null,
+      packageManifestHash,
+      legacyManifestHash: localImportAudit.manifestHash,
+    },
+  );
+}
+
+function assertLocalAuditMatchesAlignment(
+  manifest: IngredientImportManifest,
+  localImportAudit: LocalIngredientImportAudit,
+): void {
+  if (
+    localImportAudit.dbAlignmentStatus !== 'passing' ||
+    !localImportAudit.alignmentId
+  ) {
+    throw new ProductionPackageError(
+      'LOCAL_IMPORT_AUDIT_ALIGNMENT_REQUIRED',
+      'Production package export requires a local import audit with passing DB alignment.',
+      {
+        auditAlignmentId: localImportAudit.alignmentId,
+        auditDbAlignmentStatus: localImportAudit.dbAlignmentStatus,
+      },
+    );
+  }
+
+  if (manifest.dbAlignmentReport?.id === localImportAudit.alignmentId) {
+    return;
+  }
+
+  throw new ProductionPackageError(
+    'LOCAL_IMPORT_AUDIT_ALIGNMENT_MISMATCH',
+    'Production package export requires the manifest DB alignment report to match the local import audit.',
+    {
+      manifestAlignmentId: manifest.dbAlignmentReport?.id ?? null,
+      auditAlignmentId: localImportAudit.alignmentId,
     },
   );
 }
@@ -217,6 +302,37 @@ async function collectPackageRows(
     ingredientTagAssignments,
     procurementSkus,
   };
+}
+
+function assertAllAuditRowsCollected(
+  audit: LocalIngredientImportAudit,
+  rows: PackageRows,
+): void {
+  const missingRows = PACKAGE_TABLES.flatMap((table) => {
+    const collectedIds = new Set(
+      rows[table.key]
+        .map((row) => row.id)
+        .filter((id): id is string => typeof id === 'string'),
+    );
+
+    return audit[table.auditKey]
+      .filter((id) => !collectedIds.has(id))
+      .map((id) => ({
+        tableName: table.tableName,
+        auditKey: table.auditKey,
+        id,
+      }));
+  });
+
+  if (missingRows.length === 0) {
+    return;
+  }
+
+  throw new ProductionPackageError(
+    'LOCAL_IMPORT_AUDIT_RECORDS_MISSING',
+    'Production package export requires every row listed in the local import audit to exist in the local database.',
+    missingRows,
+  );
 }
 
 async function findRowsByIds(
@@ -257,6 +373,7 @@ function buildPackageFiles(
       createdAt: audit.createdAt,
       alignmentId: audit.alignmentId,
       manifestHash: audit.manifestHash,
+      packageManifestHash: audit.packageManifestHash,
     },
     recordCounts: recordCounts(rows),
     ids: {
@@ -410,7 +527,9 @@ function insertSql(tableName: string, row: Record<string, unknown>): string {
   const columns = Object.keys(row).sort();
   return `INSERT INTO ${tableName} (${columns
     .map((column) => snakeCase(column))
-    .join(', ')}) VALUES (${columns.map((column) => sqlLiteral(row[column])).join(', ')});`;
+    .join(
+      ', ',
+    )}) VALUES (${columns.map((column) => sqlLiteral(row[column])).join(', ')});`;
 }
 
 function sqlLiteral(value: unknown): string {

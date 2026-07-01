@@ -30,7 +30,9 @@ export type LocalIngredientImportErrorCode =
   | 'DB_ALIGNMENT_REPORT_MISMATCH'
   | 'INGREDIENT_ALREADY_EXISTS'
   | 'NUTRITION_AUDIT_BLOCKING'
-  | ReturnType<typeof validateIngredientImportManifest>['errors'][number]['code'];
+  | ReturnType<
+      typeof validateIngredientImportManifest
+    >['errors'][number]['code'];
 
 export class LocalIngredientImportError extends Error {
   constructor(
@@ -49,6 +51,7 @@ export interface LocalIngredientImportAudit {
   alignmentId: string | null;
   dbAlignmentStatus: 'passing' | 'not-required-for-local';
   manifestHash: string;
+  packageManifestHash: string;
   ingredientIds: string[];
   nutritionFoodIds: string[];
   nutritionFoodMappingIds: string[];
@@ -87,8 +90,7 @@ export interface StandardIngredientImportTransaction {
   };
 }
 
-export interface StandardIngredientImportPrismaClient
-  extends StandardIngredientImportTransaction {
+export interface StandardIngredientImportPrismaClient extends StandardIngredientImportTransaction {
   $transaction<T>(
     callback: (tx: StandardIngredientImportTransaction) => Promise<T>,
   ): Promise<T>;
@@ -146,6 +148,7 @@ export async function applyLocalIngredientImport(
     createdAt: (input.now ?? new Date()).toISOString(),
     ...summarizeLocalAlignment(input.alignment),
     manifestHash: sha256Stable(input.manifest),
+    packageManifestHash: buildProductionPackageManifestHash(input.manifest),
     ...transactionResult,
     nutritionAudits,
   };
@@ -258,7 +261,9 @@ async function applyManifestInTransaction(
   return result;
 }
 
-function buildIngredientData(manifest: IngredientImportManifest): Record<string, unknown> {
+function buildIngredientData(
+  manifest: IngredientImportManifest,
+): Record<string, unknown> {
   const ingredient = manifest.ingredient;
   const isSupplement = ingredient.type === 'SUPPLEMENT';
   const primaryNutritionProfile =
@@ -270,7 +275,8 @@ function buildIngredientData(manifest: IngredientImportManifest): Record<string,
     procurementStrategy: 'DAILY_PURCHASE',
     diyEnabled: ingredient.type === 'FOOD',
     procurementEnabled:
-      ingredient.type === 'FOOD' && (ingredient.procurementSkus?.length ?? 0) > 0,
+      ingredient.type === 'FOOD' &&
+      (ingredient.procurementSkus?.length ?? 0) > 0,
     brand: ingredient.brand ?? null,
     productModel: ingredient.productModel ?? null,
     purchaseChannel: null,
@@ -314,7 +320,8 @@ async function applyFoodNutrition(
   result: TransactionResult,
 ): Promise<void> {
   const profiles = manifest.nutritionProfiles ?? [];
-  const primaryProfile = profiles.find((profile) => profile.isPrimary) ?? profiles[0];
+  const primaryProfile =
+    profiles.find((profile) => profile.isPrimary) ?? profiles[0];
 
   for (const profile of profiles) {
     const nutritionFood = await tx.nutritionFood.create({
@@ -340,7 +347,9 @@ function buildNutritionFoodData(
   ingredientName: string,
 ): Record<string, unknown> {
   return {
-    name: profile.name ?? `${ingredientName} ${profile.preparationState ?? profile.id}`,
+    name:
+      profile.name ??
+      `${ingredientName} ${profile.preparationState ?? profile.id}`,
     nameEn: profile.nameEn ?? null,
     category: profile.category ?? 'OTHER',
     dataSource: profile.dataSource ?? 'MANUAL',
@@ -351,7 +360,9 @@ function buildNutritionFoodData(
     ediblePortionLabel: profile.ediblePortionLabel ?? null,
     processingLabel: profile.processingLabel ?? null,
     nutritionData: buildNutritionFoodProfile(profile),
-    notes: profile.notes ?? `Created by standard ingredient import (${profile.basis}).`,
+    notes:
+      profile.notes ??
+      `Created by standard ingredient import (${profile.basis}).`,
     createdBy: 'standard-ingredient-import',
     verifiedBy: 'standard-ingredient-import',
     verifiedAt: new Date(),
@@ -455,7 +466,10 @@ function addImportCustomItem(
 }
 
 function mapImportBasisToRawBasisType(basis: string): NutritionRawBasisType {
-  const normalized = basis.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const normalized = basis
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
   if (normalized === 'PER_100ML' || normalized === 'PER_100_ML') {
     return 'PER_100_ML';
   }
@@ -509,10 +523,15 @@ function mapProfileDataSourceToSourceType(
 }
 
 function normalizeImportKey(value: string): string {
-  return value.trim().toLowerCase().replace(/[_\s-]+/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s-]+/g, '');
 }
 
-function resolveImportNutrientFieldPath(field: string): `${NutritionFieldTab}.${string}` | null {
+function resolveImportNutrientFieldPath(
+  field: string,
+): `${NutritionFieldTab}.${string}` | null {
   const key = normalizeImportKey(field);
   return importNutrientFieldPathByAlias[key] ?? null;
 }
@@ -663,7 +682,7 @@ function convertImportNutrientValue(
   const gramsByUnit: Record<string, number> = {
     g: 1,
     mg: 0.001,
-    'μg': 0.000001,
+    μg: 0.000001,
   };
   const fromFactor = gramsByUnit[normalizedFrom];
   const toFactor = gramsByUnit[normalizedTo];
@@ -716,11 +735,31 @@ async function writeAuditJson(
   audit: LocalIngredientImportAudit,
 ): Promise<void> {
   await mkdir(dirname(auditOutputPath), { recursive: true });
-  await writeFile(auditOutputPath, `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+  await writeFile(
+    auditOutputPath,
+    `${JSON.stringify(audit, null, 2)}\n`,
+    'utf8',
+  );
 }
 
 function sha256Stable(value: unknown): string {
   return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+export function buildProductionPackageManifestHash(
+  manifest: IngredientImportManifest,
+): string {
+  return sha256Stable({
+    version: manifest.version,
+    updateExistingIngredientId: manifest.updateExistingIngredientId,
+    ingredient: manifest.ingredient,
+    nutritionProfiles: manifest.nutritionProfiles,
+    sourceCandidates: manifest.sourceCandidates,
+    packageEvidence: manifest.packageEvidence,
+    supplementLabel: manifest.supplementLabel,
+    wholeDatabaseMigration: manifest.wholeDatabaseMigration,
+    migrationFlags: manifest.migrationFlags,
+  });
 }
 
 function stableStringify(value: unknown): string {

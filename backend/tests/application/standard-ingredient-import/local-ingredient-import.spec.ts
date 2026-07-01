@@ -157,6 +157,7 @@ describe('applyLocalIngredientImport', () => {
         nutritionFoodMappingIds: ['mapping-1'],
         procurementSkuIds: ['procurement-sku-1'],
         manifestHash: expect.any(String),
+        packageManifestHash: expect.any(String),
       }),
     );
     expect(result.auditPath).toBe('/tmp/duck-egg.local-apply.json');
@@ -308,8 +309,12 @@ function makeFoodManifest(
     ],
     sourceCandidates: [
       {
-        sourceId: 'USDA:123',
+        sourceId: 'USDA_FDC:123',
         sourceName: 'USDA FoodData Central',
+        source: 'USDA_FDC',
+        matchedName: 'Duck egg, raw',
+        stateTags: ['raw'],
+        essentialCoveragePercent: 88,
       },
     ],
     dbAlignmentReport: {
@@ -368,7 +373,9 @@ function makePrisma(
   const prisma = {
     $transaction: jest.fn(async (callback: any) => callback(prisma)),
     ingredient: {
-      findFirst: jest.fn().mockResolvedValue(options.existingIngredient ?? null),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(options.existingIngredient ?? null),
       create: jest.fn().mockResolvedValue({ id: 'ingredient-1' }),
       update: jest.fn().mockResolvedValue({ id: 'existing-ingredient' }),
     },

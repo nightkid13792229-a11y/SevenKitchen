@@ -20,6 +20,7 @@ const completeFoodManifest: IngredientImportManifest = {
     {
       id: 'profile-usda-171077',
       basis: 'PER_100G',
+      preparationState: 'cooked',
       nutrients: {
         energyKcal: { value: 165, unit: 'kcal' },
         proteinG: { value: 31.02, unit: 'g' },
@@ -30,9 +31,12 @@ const completeFoodManifest: IngredientImportManifest = {
   ],
   sourceCandidates: [
     {
-      sourceId: 'USDA:171077',
+      sourceId: 'USDA_FDC:171077',
       sourceName: 'USDA FoodData Central',
+      source: 'USDA_FDC',
       matchedName: 'Chicken breast, cooked',
+      stateTags: ['cooked'],
+      essentialCoveragePercent: 92,
     },
   ],
   dbAlignmentReport: {
@@ -190,6 +194,64 @@ describe('validateIngredientImportManifest', () => {
           path: 'sourceCandidates',
         }),
       ]),
+    );
+  });
+
+  it('requires FOOD source candidates to satisfy the approved source policy', () => {
+    const manifest = makeFoodManifest({
+      sourceCandidates: [
+        {
+          sourceId: 'BLOG:chicken-breast',
+          sourceName: 'Personal nutrition blog',
+          matchedName: 'Chicken breast',
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED',
+        path: 'sourceCandidates',
+      }),
+    );
+  });
+
+  it('requires FOOD source candidates to match the requested preparation state', () => {
+    const manifest = makeFoodManifest({
+      sourceCandidates: [
+        {
+          sourceId: 'USDA_FDC:171077',
+          sourceName: 'USDA FoodData Central',
+          source: 'USDA_FDC',
+          matchedName: 'Chicken breast, cooked',
+          stateTags: ['cooked'],
+          essentialCoveragePercent: 92,
+        },
+      ],
+      nutritionProfiles: [
+        {
+          id: 'profile-usda-171077',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: {
+            energyKcal: { value: 165, unit: 'kcal' },
+            proteinG: { value: 31.02, unit: 'g' },
+          },
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED',
+        path: 'sourceCandidates',
+      }),
     );
   });
 
@@ -386,7 +448,6 @@ describe('validateIngredientImportManifest', () => {
       }),
     );
   });
-
 
   it('returns every applicable error instead of stopping at the first one', () => {
     const manifest = makeFoodManifest({

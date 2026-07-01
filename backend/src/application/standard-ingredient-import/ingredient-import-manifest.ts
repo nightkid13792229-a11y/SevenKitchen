@@ -1,3 +1,9 @@
+import {
+  rankNutritionSourceCandidates,
+  type NutritionSourceCandidate,
+  type NutritionStateTag,
+} from './source-policy';
+
 export type IngredientImportType = 'FOOD' | 'SUPPLEMENT';
 export type IngredientImportMode = 'local-draft' | 'production-package';
 
@@ -7,6 +13,7 @@ export interface ManifestValidationIssue {
     | 'INGREDIENT_TYPE_NOT_SUPPORTED'
     | 'WHOLE_DATABASE_MIGRATION_FORBIDDEN'
     | 'FOOD_NUTRITION_REQUIRED'
+    | 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED'
     | 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED'
     | 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN'
     | 'LOCAL_WRITE_ALIGNMENT_REQUIRED'
@@ -96,7 +103,10 @@ export interface IngredientImportNutrientValue {
 export interface IngredientImportSourceCandidate {
   sourceId: string;
   sourceName: string;
+  source?: string;
   matchedName?: string;
+  stateTags?: NutritionStateTag[];
+  essentialCoveragePercent?: number;
 }
 
 export interface SupplementPackageEvidence {
@@ -225,7 +235,82 @@ function validateFoodManifest(
       path: 'sourceCandidates',
       message: 'FOOD import manifests must include source candidates.',
     });
+  } else {
+    validateFoodSourceCandidates(manifest, errors);
   }
+}
+
+function validateFoodSourceCandidates(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): void {
+  const requestedState = resolveRequestedNutritionState(manifest);
+  const candidates = (manifest.sourceCandidates ?? [])
+    .map(toNutritionSourceCandidate)
+    .filter(
+      (candidate): candidate is NutritionSourceCandidate => candidate !== null,
+    );
+  const rankedCandidates = rankNutritionSourceCandidates({
+    requestedState,
+    candidates,
+  });
+  const hasUsableCandidate = rankedCandidates.some(
+    (candidate) => candidate.essentialCoveragePercent >= 60,
+  );
+
+  if (hasUsableCandidate) {
+    return;
+  }
+
+  errors.push({
+    code: 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED',
+    path: 'sourceCandidates',
+    message:
+      'FOOD source candidates must include an approved nutrition source with matching state tags and at least 60 percent essential coverage.',
+  });
+}
+
+function toNutritionSourceCandidate(
+  candidate: IngredientImportSourceCandidate,
+): NutritionSourceCandidate | null {
+  const source = firstText(
+    candidate.source,
+    sourceFromSourceId(candidate.sourceId),
+  );
+  if (!source) {
+    return null;
+  }
+
+  return {
+    source,
+    matchedName: candidate.matchedName,
+    stateTags: candidate.stateTags,
+    essentialCoveragePercent:
+      typeof candidate.essentialCoveragePercent === 'number'
+        ? candidate.essentialCoveragePercent
+        : 0,
+  };
+}
+
+function sourceFromSourceId(sourceId: string | undefined): string | undefined {
+  const prefix = sourceId?.split(':')[0]?.trim();
+  if (!prefix) {
+    return undefined;
+  }
+  if (prefix === 'USDA') {
+    return 'USDA_FDC';
+  }
+  return prefix;
+}
+
+function resolveRequestedNutritionState(
+  manifest: IngredientImportManifest,
+): NutritionStateTag {
+  const preparationState = manifest.nutritionProfiles?.[0]?.preparationState;
+  const normalizedState = preparationState?.trim() as
+    | NutritionStateTag
+    | undefined;
+  return isNutritionStateTag(normalizedState) ? normalizedState : 'raw';
 }
 
 function validateSupplementManifest(
@@ -279,8 +364,7 @@ function validateOperationApprovals(
       errors.push({
         code: 'LOCAL_WRITE_CONFIRMATION_REQUIRED',
         path: 'operatorConfirmation.localWriteApproved',
-        message:
-          'Local draft writes require explicit operator confirmation.',
+        message: 'Local draft writes require explicit operator confirmation.',
       });
     }
   }
@@ -330,9 +414,7 @@ function hasPackageEvidence(
 function hasUsablePackageImage(
   packageImages: SupplementPackageImage[] | undefined,
 ): boolean {
-  return (
-    packageImages?.some((image) => image.uri.trim().length > 0) === true
-  );
+  return packageImages?.some((image) => image.uri.trim().length > 0) === true;
 }
 
 function hasEquivalentLabelSource(
@@ -387,4 +469,25 @@ function isNumericValueMissing(
 
 function hasText(value: string | undefined): boolean {
   return value?.trim().length ? true : false;
+}
+
+function firstText(...values: Array<string | undefined>): string | undefined {
+  return values.find((value) => hasText(value))?.trim();
+}
+
+const nutritionStateTags: NutritionStateTag[] = [
+  'raw',
+  'cooked',
+  'dried',
+  'peeled',
+  'unpeeled',
+  'oil',
+  'powder',
+  'prepared',
+];
+
+function isNutritionStateTag(
+  value: NutritionStateTag | undefined,
+): value is NutritionStateTag {
+  return value !== undefined && nutritionStateTags.includes(value);
 }

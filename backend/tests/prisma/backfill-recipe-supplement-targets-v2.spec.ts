@@ -1,10 +1,13 @@
 import {
   buildSupplementTargetBackfillReport,
+  filterSupplementTargetBackfillReportByAllowlist,
   inferDesignSupplementTargetByIngredientName,
   mapLegacyDesignSupplementTarget,
   mapLegacySupplementTarget,
   planDesignSupplementTargetBackfill,
   planRecipeSupplementTargetBackfill,
+  readSupplementTargetBackfillCliOptions,
+  shouldBuildAttributedDesignTargets,
 } from '../../prisma/backfill-recipe-supplement-targets-v2';
 
 describe('backfill recipe supplement targets v2', () => {
@@ -527,6 +530,215 @@ describe('backfill recipe supplement targets v2', () => {
           reason: 'MISSING_TARGET_MAPPING',
         },
       ],
+    });
+  });
+
+  it('filters production apply reports to approved allowlist rows only', () => {
+    const calciumTarget = {
+      fieldPath: 'minerals.calcium',
+      label: '钙',
+      targetValuePerKg: 1200,
+      unit: 'mg',
+    };
+    const taurineTarget = {
+      fieldPath: 'aminoAcids.taurine',
+      nutrientTargetKey: 'taurine',
+      label: '牛磺酸',
+      unit: 'mg',
+      targetValue: 0.37,
+      expressionBasis: null,
+    };
+    const report = buildSupplementTargetBackfillReport({
+      recipeItemsScanned: 3,
+      designRecipeItemsScanned: 3,
+      plannedUpdates: [
+        {
+          id: 'recipe-item-calcium',
+          ingredientName: '碳酸钙粉',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+          target: calciumTarget,
+        },
+        {
+          id: 'recipe-item-extra',
+          ingredientName: '额外补剂',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME_AND_PROFILE',
+          target: {
+            fieldPath: 'minerals.iron',
+            label: '铁',
+            targetValuePerKg: 10,
+            unit: 'mg',
+          },
+        },
+      ],
+      plannedDesignUpdates: [
+        {
+          id: 'design-item-taurine',
+          ingredientName: '牛磺酸胶囊',
+          reason: 'LEGACY_TARGET_FIELD',
+          target: taurineTarget,
+        },
+        {
+          id: 'design-item-hold',
+          ingredientName: '暂缓补剂',
+          reason: 'INFERRED_FROM_INGREDIENT_NAME',
+          target: {
+            fieldPath: 'minerals.zinc',
+            nutrientTargetKey: 'zinc',
+            label: '锌',
+            unit: 'mg',
+            targetValue: null,
+            expressionBasis: null,
+          },
+        },
+      ],
+      skippedExisting: 0,
+      skippedDesignExisting: 0,
+      attributedDesignTargetCount: 0,
+      manualReview: [],
+    });
+
+    const filtered = filterSupplementTargetBackfillReportByAllowlist(report, {
+      rows: [
+        {
+          reviewDecision: 'approve',
+          table: 'recipe_item',
+          itemId: 'recipe-item-calcium',
+          target: calciumTarget,
+        },
+        {
+          reviewDecision: 'approve',
+          table: 'design_recipe_item',
+          itemId: 'design-item-taurine',
+          target: taurineTarget,
+        },
+        {
+          reviewDecision: 'hold',
+          table: 'design_recipe_item',
+          itemId: 'design-item-hold',
+        },
+      ],
+    });
+
+    expect(filtered.counts.plannedRecipeItemUpdates).toBe(1);
+    expect(filtered.counts.plannedDesignRecipeItemUpdates).toBe(1);
+    expect(filtered.plannedRecipeItemUpdates).toHaveLength(1);
+    expect(filtered.plannedRecipeItemUpdates[0].recipeItemId).toBe(
+      'recipe-item-calcium',
+    );
+    expect(filtered.plannedDesignRecipeItemUpdates).toHaveLength(1);
+    expect(filtered.plannedDesignRecipeItemUpdates[0].designRecipeItemId).toBe(
+      'design-item-taurine',
+    );
+    expect(filtered.allowlist).toMatchObject({
+      approvedRows: 2,
+      matchedApprovedRows: 2,
+      targetMismatches: [],
+      unmatchedApprovedRows: [],
+    });
+    expect(filtered.allowlist.skippedNonAllowlistedPlannedUpdates).toEqual([
+      { table: 'recipe_item', itemId: 'recipe-item-extra' },
+      { table: 'design_recipe_item', itemId: 'design-item-hold' },
+    ]);
+  });
+
+  it('blocks allowlisted rows whose reviewed target no longer matches the planned target', () => {
+    const report = buildSupplementTargetBackfillReport({
+      recipeItemsScanned: 1,
+      designRecipeItemsScanned: 0,
+      plannedUpdates: [
+        {
+          id: 'recipe-item-taurine',
+          ingredientName: '牛磺酸胶囊',
+          reason: 'LEGACY_TARGET_FIELD',
+          target: {
+            fieldPath: 'aminoAcids.taurine',
+            label: '牛磺酸',
+            targetValuePerKg: 370,
+            unit: 'mg',
+          },
+        },
+      ],
+      plannedDesignUpdates: [],
+      skippedExisting: 0,
+      skippedDesignExisting: 0,
+      attributedDesignTargetCount: 0,
+      manualReview: [],
+    });
+
+    const filtered = filterSupplementTargetBackfillReportByAllowlist(report, {
+      rows: [
+        {
+          reviewDecision: 'approve',
+          table: 'recipe_item',
+          itemId: 'recipe-item-taurine',
+          target: {
+            fieldPath: 'aminoAcids.taurine',
+            label: '牛磺酸',
+            targetValuePerKg: 370,
+            unit: 'g',
+          },
+        },
+      ],
+    });
+
+    expect(filtered.counts.plannedRecipeItemUpdates).toBe(0);
+    expect(filtered.plannedRecipeItemUpdates).toEqual([]);
+    expect(filtered.allowlist.matchedApprovedRows).toBe(0);
+    expect(filtered.allowlist.targetMismatches).toEqual([
+      {
+        table: 'recipe_item',
+        itemId: 'recipe-item-taurine',
+        approvedTarget: {
+          fieldPath: 'aminoAcids.taurine',
+          label: '牛磺酸',
+          targetValuePerKg: 370,
+          unit: 'g',
+        },
+        plannedTarget: {
+          fieldPath: 'aminoAcids.taurine',
+          label: '牛磺酸',
+          targetValuePerKg: 370,
+          unit: 'mg',
+        },
+      },
+    ]);
+  });
+
+  it('skips expensive design nutrient gap attribution by default in allowlist mode', () => {
+    expect(shouldBuildAttributedDesignTargets(['node', 'script'])).toBe(true);
+    expect(
+      shouldBuildAttributedDesignTargets([
+        'node',
+        'script',
+        '--allowlist-json',
+        'approved.json',
+      ]),
+    ).toBe(false);
+    expect(
+      shouldBuildAttributedDesignTargets([
+        'node',
+        'script',
+        '--allowlist-json=approved.json',
+        '--include-design-gap-attribution',
+      ]),
+    ).toBe(true);
+  });
+
+  it('requires an allowlist JSON file for apply mode', () => {
+    expect(() =>
+      readSupplementTargetBackfillCliOptions(['node', 'script', '--apply']),
+    ).toThrow('--allowlist-json');
+    expect(
+      readSupplementTargetBackfillCliOptions([
+        'node',
+        'script',
+        '--apply',
+        '--allowlist-json',
+        'approved.json',
+      ]),
+    ).toMatchObject({
+      apply: true,
+      allowlistJsonPath: 'approved.json',
     });
   });
 });

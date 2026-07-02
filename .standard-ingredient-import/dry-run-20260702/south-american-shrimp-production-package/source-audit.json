@@ -1,0 +1,31 @@
+{
+  "sourceCandidates": [
+    {
+      "sourceId": "MEXT:10415",
+      "sourceName": "Japan Standard Tables of Food Composition",
+      "source": "MEXT",
+      "matchedName": "魚介類/＜えび・かに類＞/（えび類）/バナメイえび/養殖/生 / whiteleg shrimp, raw / Litopenaeus vannamei",
+      "stateTags": [
+        "raw",
+        "peeled"
+      ],
+      "essentialCoveragePercent": 95.65
+    },
+    {
+      "sourceId": "USDA_FDC:174210",
+      "sourceName": "USDA FoodData Central",
+      "source": "USDA_FDC",
+      "matchedName": "Crustaceans, shrimp, mixed species, raw (may contain additives to retain moisture)",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 93.48
+    }
+  ],
+  "nutritionAudits": [
+    {
+      "profileId": "mext-10415-whiteleg-shrimp-raw",
+      "essentialCoveragePercent": 95.65217391304348
+    }
+  ]
+}

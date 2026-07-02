@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "operationMode": "production-package",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "南美对虾虾仁",
+    "brand": null,
+    "productModel": null,
+    "notes": "标准食材草稿。业务定义为南美对虾/南美白虾虾仁，生，去壳可食部，未调味，未熟制。营养档案采用 MEXT 日本食品标准成分表（八订）增补2023年 10415：バナメイえび/養殖/生，英名 whiteleg shrimp, raw，学名 Litopenaeus vannamei。MEXT 未找到同源水煮/蒸熟档案；本次放宽生熟同源要求，优先采用语义最精确的生档案。",
+    "tagIds": [],
+    "procurementSkus": []
+  },
+  "nutritionProfiles": [
+    {
+      "id": "mext-10415-whiteleg-shrimp-raw",
+      "name": "南美对虾虾仁，生（MEXT whiteleg shrimp）",
+      "nameEn": "FISH, MOLLUSKS AND CRUSTACEANS/Crustacean/whiteleg shrimp, raw",
+      "dataSource": "MEXT",
+      "externalId": "MEXT:10415",
+      "category": "SEAFOOD",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "preparationStateLabel": "生",
+      "ediblePortionLabel": "可食部；每 100g",
+      "processingLabel": "生；养殖；whiteleg shrimp；Litopenaeus vannamei",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "MEXT 10415 / 日本食品标准成分表（八订）增补2023年。主表、氨基酸表和脂肪酸表均按可食部每 100g 录入；MEXT 页面报告维生素 A、维生素 D 为 0，维生素 K 为 (0)，本草稿按来源报告零值处理。剩余 FEDIAF 必需营养缺口为氯和胆碱。",
+      "nutrients": {
+        "moisture": { "value": 78.6, "unit": "g" },
+        "energyKcal": { "value": 82, "unit": "kcal" },
+        "proteinG": { "value": 19.6, "unit": "g" },
+        "fatG": { "value": 0.6, "unit": "g" },
+        "ash": { "value": 1.3, "unit": "g" },
+        "carbohydrateG": { "value": 0.7, "unit": "g" },
+        "fiberG": { "value": 0, "unit": "g", "measuredZero": true },
+        "calciumMg": { "value": 68, "unit": "mg" },
+        "phosphorusMg": { "value": 220, "unit": "mg" },
+        "potassiumMg": { "value": 270, "unit": "mg" },
+        "sodiumMg": { "value": 140, "unit": "mg" },
+        "magnesiumMg": { "value": 37, "unit": "mg" },
+        "ironMg": { "value": 1.4, "unit": "mg" },
+        "zincMg": { "value": 1.2, "unit": "mg" },
+        "copperMg": { "value": 0.33, "unit": "mg" },
+        "manganeseMg": { "value": 0.1, "unit": "mg" },
+        "iodineUg": { "value": 10, "unit": "ug" },
+        "seleniumUg": { "value": 27, "unit": "ug" },
+        "vitaminA": { "value": 0, "unit": "ug", "measuredZero": true },
+        "vitaminD": { "value": 0, "unit": "ug", "measuredZero": true },
+        "vitaminE": { "value": 1.7, "unit": "mg" },
+        "vitaminK": { "value": 0, "unit": "ug", "measuredZero": true },
+        "vitaminC": { "value": 1, "unit": "mg" },
+        "vitaminB1": { "value": 0.03, "unit": "mg" },
+        "vitaminB2": { "value": 0.04, "unit": "mg" },
+        "vitaminB3": { "value": 3.6, "unit": "mg" },
+        "vitaminB5": { "value": 0.23, "unit": "mg" },
+        "vitaminB6": { "value": 0.14, "unit": "mg" },
+        "vitaminB7Ug": { "value": 1.9, "unit": "ug" },
+        "vitaminB9Ug": { "value": 38, "unit": "ug" },
+        "vitaminB12Ug": { "value": 1.2, "unit": "ug" },
+        "saturatedFattyAcids": { "value": 0.1, "unit": "g" },
+        "monounsaturatedFattyAcids": { "value": 0.05, "unit": "g" },
+        "polyunsaturatedFattyAcids": { "value": 0.15, "unit": "g" },
+        "linoleicAcid": { "value": 47, "unit": "mg" },
+        "alphaLinolenicAcid": { "value": 3, "unit": "mg" },
+        "arachidonicAcid": { "value": 13, "unit": "mg" },
+        "epa": { "value": 36, "unit": "mg" },
+        "dpa": { "value": 2, "unit": "mg" },
+        "dha": { "value": 40, "unit": "mg" },
+        "tryptophan": { "value": 190, "unit": "mg" },
+        "threonine": { "value": 770, "unit": "mg" },
+        "isoleucine": { "value": 790, "unit": "mg" },
+        "leucine": { "value": 1400, "unit": "mg" },
+        "lysine": { "value": 1600, "unit": "mg" },
+        "methionine": { "value": 520, "unit": "mg" },
+        "cystine": { "value": 230, "unit": "mg" },
+        "phenylalanine": { "value": 770, "unit": "mg" },
+        "tyrosine": { "value": 680, "unit": "mg" },
+        "valine": { "value": 830, "unit": "mg" },
+        "arginine": { "value": 1800, "unit": "mg" },
+        "histidine": { "value": 400, "unit": "mg" },
+        "glutamicAcid": { "value": 3000, "unit": "mg" },
+        "glycine": { "value": 1300, "unit": "mg" },
+        "proline": { "value": 1100, "unit": "mg" }
+      },
+      "sourceForms": {
+        "vitaminA": {
+          "source": "MEXT",
+          "basisType": "PER_100_G",
+          "sourceUnit": "ug",
+          "sourceValue": 0,
+          "sourceFoodId": "10415",
+          "sourceComponent": "レチノール活性当量",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=10_10415_7",
+          "vitaminAForm": "SOURCE_RETINOL_ACTIVITY_EQUIVALENTS"
+        },
+        "vitaminD": {
+          "source": "MEXT",
+          "basisType": "PER_100_G",
+          "sourceUnit": "ug",
+          "sourceValue": 0,
+          "sourceFoodId": "10415",
+          "sourceComponent": "ビタミンD",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=10_10415_7",
+          "vitaminDForm": "total_vitamin_d_d2_d3"
+        },
+        "vitaminE": {
+          "source": "MEXT",
+          "basisType": "PER_100_G",
+          "sourceUnit": "mg",
+          "sourceValue": 1.7,
+          "sourceFoodId": "10415",
+          "sourceComponent": "トコフェロール",
+          "evidenceUri": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=10_10415_7",
+          "vitaminEForm": "FEDIAF_CONSERVATIVE_TOCOPHEROL_ACTIVITY",
+          "alphaTocopherolMg": 1.7,
+          "betaTocopherolMg": 0,
+          "gammaTocopherolMg": 0.3,
+          "deltaTocopherolMg": 0
+        }
+      }
+    }
+  ],
+  "sourceCandidates": [
+    {
+      "sourceId": "MEXT:10415",
+      "sourceName": "Japan Standard Tables of Food Composition",
+      "source": "MEXT",
+      "matchedName": "魚介類/＜えび・かに類＞/（えび類）/バナメイえび/養殖/生 / whiteleg shrimp, raw / Litopenaeus vannamei",
+      "stateTags": ["raw", "peeled"],
+      "essentialCoveragePercent": 95.65
+    },
+    {
+      "sourceId": "USDA_FDC:174210",
+      "sourceName": "USDA FoodData Central",
+      "source": "USDA_FDC",
+      "matchedName": "Crustaceans, shrimp, mixed species, raw (may contain additives to retain moisture)",
+      "stateTags": ["raw"],
+      "essentialCoveragePercent": 93.48
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "5543a5b1ca65",
+    "status": "passing"
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

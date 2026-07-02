@@ -1,6 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
 
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
 
@@ -89,7 +87,15 @@ export interface DatabaseAlignmentPrismaClient {
 export interface CollectDatabaseAlignmentSnapshotOptions {
   databaseLabel: string;
   collectedAt?: string;
+  /**
+   * @deprecated Schema alignment now hashes the live database catalog.
+   * This option is kept only for older script/test callers.
+   */
   schemaPrismaPath?: string;
+  /**
+   * @deprecated Schema alignment now hashes the live database catalog.
+   * This option is kept only for older script/test callers.
+   */
   readSchemaFile?: (schemaPrismaPath: string) => Promise<string>;
 }
 
@@ -98,6 +104,24 @@ interface RawPrismaMigrationRow {
   checksum: string | null;
   finished_at: Date | string | null;
   rolled_back_at?: Date | string | null;
+}
+
+interface RawDatabaseSchemaCatalogRow {
+  object_kind: string;
+  table_schema: string;
+  table_name: string;
+  object_name: string;
+  ordinal_position: number | string | null;
+  definition: string | null;
+}
+
+interface DatabaseSchemaCatalogObject {
+  objectKind: string;
+  tableSchema: string;
+  tableName: string;
+  objectName: string;
+  ordinalPosition: number;
+  definition: unknown;
 }
 
 type CriticalHashKey = keyof DatabaseAlignmentCriticalDataHashes;
@@ -158,13 +182,12 @@ export async function collectDatabaseAlignmentSnapshot(
   prisma: DatabaseAlignmentPrismaClient,
   options: CollectDatabaseAlignmentSnapshotOptions,
 ): Promise<DatabaseAlignmentSnapshot> {
-  const schemaPrismaPath =
-    options.schemaPrismaPath ?? defaultSchemaPrismaPath();
-  const readSchemaFile = options.readSchemaFile ?? readSchemaPrismaFile;
+  void options.schemaPrismaPath;
+  void options.readSchemaFile;
 
   const [
     migrations,
-    schemaPrisma,
+    databaseSchemaCatalog,
     nutritionStandardVersions,
     nutritionStandardEntries,
     nutritionNutrientDefinitions,
@@ -172,7 +195,7 @@ export async function collectDatabaseAlignmentSnapshot(
     rowCounts,
   ] = await Promise.all([
     collectMigrationHistory(prisma),
-    readSchemaFile(schemaPrismaPath),
+    collectDatabaseSchemaCatalog(prisma),
     collectNutritionStandardVersions(prisma),
     collectNutritionStandardEntries(prisma),
     collectNutritionNutrientDefinitions(prisma),
@@ -184,7 +207,7 @@ export async function collectDatabaseAlignmentSnapshot(
     databaseLabel: options.databaseLabel,
     collectedAt: options.collectedAt ?? new Date().toISOString(),
     migrations,
-    schemaHash: sha256Hex(schemaPrisma),
+    schemaHash: hashComparableValue(databaseSchemaCatalog),
     criticalDataHashes: {
       nutritionStandards: hashComparableValue({
         versions: nutritionStandardVersions,
@@ -198,6 +221,147 @@ export async function collectDatabaseAlignmentSnapshot(
     },
     rowCounts,
   };
+}
+
+async function collectDatabaseSchemaCatalog(
+  prisma: DatabaseAlignmentPrismaClient,
+): Promise<DatabaseSchemaCatalogObject[]> {
+  const rows = await prisma.$queryRaw<RawDatabaseSchemaCatalogRow[]>`
+    WITH base_tables AS (
+      SELECT table_schema, table_name
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_type = 'BASE TABLE'
+        AND table_name <> '_prisma_migrations'
+    )
+    SELECT
+      'column'::text AS object_kind,
+      cols.table_schema::text AS table_schema,
+      cols.table_name::text AS table_name,
+      cols.column_name::text AS object_name,
+      cols.ordinal_position::integer AS ordinal_position,
+      jsonb_build_object(
+        'dataType', cols.data_type,
+        'udtName', cols.udt_name,
+        'isNullable', cols.is_nullable,
+        'columnDefault', cols.column_default,
+        'characterMaximumLength', cols.character_maximum_length,
+        'numericPrecision', cols.numeric_precision,
+        'numericScale', cols.numeric_scale,
+        'datetimePrecision', cols.datetime_precision,
+        'identityGeneration', cols.identity_generation,
+        'isGenerated', cols.is_generated,
+        'generationExpression', cols.generation_expression
+      )::text AS definition
+    FROM information_schema.columns cols
+    INNER JOIN base_tables
+      ON base_tables.table_schema = cols.table_schema
+     AND base_tables.table_name = cols.table_name
+    UNION ALL
+    SELECT
+      'constraint'::text AS object_kind,
+      nsp.nspname::text AS table_schema,
+      cls.relname::text AS table_name,
+      con.conname::text AS object_name,
+      0::integer AS ordinal_position,
+      jsonb_build_object(
+        'constraintType', con.contype,
+        'definition', pg_get_constraintdef(con.oid, true)
+      )::text AS definition
+    FROM pg_constraint con
+    INNER JOIN pg_class cls ON cls.oid = con.conrelid
+    INNER JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+    WHERE nsp.nspname = current_schema()
+      AND cls.relkind IN ('r', 'p')
+      AND cls.relname <> '_prisma_migrations'
+    UNION ALL
+    SELECT
+      'index'::text AS object_kind,
+      indexes.schemaname::text AS table_schema,
+      indexes.tablename::text AS table_name,
+      indexes.indexname::text AS object_name,
+      0::integer AS ordinal_position,
+      indexes.indexdef::text AS definition
+    FROM pg_indexes indexes
+    INNER JOIN base_tables
+      ON base_tables.table_schema = indexes.schemaname
+     AND base_tables.table_name = indexes.tablename
+    ORDER BY table_schema ASC,
+             table_name ASC,
+             object_kind ASC,
+             object_name ASC,
+             ordinal_position ASC
+  `;
+
+  return rows
+    .filter(shouldIncludeDatabaseSchemaCatalogRow)
+    .map(normalizeDatabaseSchemaCatalogRow);
+}
+
+function shouldIncludeDatabaseSchemaCatalogRow(
+  row: RawDatabaseSchemaCatalogRow,
+): boolean {
+  if (row.object_kind !== 'constraint') {
+    return true;
+  }
+
+  const definition = parseSchemaCatalogDefinition(row.definition);
+  if (!isRecord(definition)) {
+    return true;
+  }
+
+  return definition.constraintType !== 'u';
+}
+
+function normalizeDatabaseSchemaCatalogRow(
+  row: RawDatabaseSchemaCatalogRow,
+): DatabaseSchemaCatalogObject {
+  if (row.object_kind === 'index') {
+    const indexDefinition = normalizeIndexDefinition(row.definition ?? '');
+
+    return {
+      objectKind: row.object_kind,
+      tableSchema: row.table_schema,
+      tableName: row.table_name,
+      objectName: indexDefinition,
+      ordinalPosition: 0,
+      definition: indexDefinition,
+    };
+  }
+
+  return {
+    objectKind: row.object_kind,
+    tableSchema: row.table_schema,
+    tableName: row.table_name,
+    objectName: row.object_name,
+    ordinalPosition:
+      row.object_kind === 'column' ? 0 : Number(row.ordinal_position ?? 0),
+    definition: parseSchemaCatalogDefinition(row.definition),
+  };
+}
+
+function normalizeIndexDefinition(indexDefinition: string): string {
+  return indexDefinition.replace(
+    /^CREATE( UNIQUE)? INDEX \S+ ON (?:\S+\.)?(\S+) /,
+    (_match, unique: string | undefined, tableName: string) =>
+      `CREATE${unique ?? ''} INDEX ON ${tableName} `,
+  );
+}
+
+function parseSchemaCatalogDefinition(definition: string | null): unknown {
+  if (definition === null) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(definition);
+  } catch {
+    return definition;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 export function hashDatabaseAlignmentValue(value: unknown): string {
@@ -529,10 +693,6 @@ async function collectNonCriticalRowCounts(
   return rowCounts;
 }
 
-async function readSchemaPrismaFile(schemaPrismaPath: string): Promise<string> {
-  return readFile(schemaPrismaPath, 'utf8');
-}
-
 function migrationsByName(
   migrations: DatabaseMigrationSnapshot[],
 ): Map<string, DatabaseMigrationSnapshot> {
@@ -614,13 +774,4 @@ function normalizeTimestamp(value: Date | string | null): string | null {
   }
 
   return value;
-}
-
-function defaultSchemaPrismaPath(): string {
-  const cwd = process.cwd();
-  if (basename(cwd) === 'backend') {
-    return join(cwd, 'prisma/schema.prisma');
-  }
-
-  return join(cwd, 'backend/prisma/schema.prisma');
 }

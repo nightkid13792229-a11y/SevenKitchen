@@ -304,7 +304,7 @@ describe('compareDatabaseAlignmentSnapshots', () => {
 });
 
 describe('collectDatabaseAlignmentSnapshot', () => {
-  it('normalizes migration rows from the raw query and hashes schema contents', async () => {
+  it('normalizes migration rows from the raw query and hashes database catalog rows', async () => {
     const firstPrisma = makePrismaFixture({
       migrations: [
         {
@@ -318,21 +318,32 @@ describe('collectDatabaseAlignmentSnapshot', () => {
           finished_at: '2026-06-17T00:00:00.000Z',
         },
       ],
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          definition: '{"dataType":"text","isNullable":"NO"}',
+        }),
+      ],
     });
-    const secondPrisma = makePrismaFixture();
+    const secondPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          definition: '{"dataType":"varchar","isNullable":"NO"}',
+        }),
+      ],
+    });
 
     const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
       databaseLabel: 'local',
       collectedAt: '2026-06-16T00:00:00.000Z',
-      readSchemaFile: async () => 'schema-v1',
+      readSchemaFile: async () => 'same-local-schema-file',
     });
     const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
       databaseLabel: 'local',
       collectedAt: '2026-06-16T00:00:00.000Z',
-      readSchemaFile: async () => 'schema-v2',
+      readSchemaFile: async () => 'same-local-schema-file',
     });
 
-    expect(firstPrisma.queryRaw).toHaveBeenCalledTimes(1);
+    expect(firstPrisma.queryRaw).toHaveBeenCalledTimes(2);
     expect(first.migrations).toEqual([
       {
         migrationName: '202606010001_a',
@@ -346,6 +357,150 @@ describe('collectDatabaseAlignmentSnapshot', () => {
       },
     ]);
     expect(first.schemaHash).not.toBe(second.schemaHash);
+  });
+
+  it('hashes actual database catalog rows instead of trusting the local schema file', async () => {
+    const migrations = [
+      {
+        migration_name: '202606010001_a',
+        checksum: 'checksum-a',
+        finished_at: '2026-06-16T00:00:00.000Z',
+      },
+    ];
+    const firstPrisma = makePrismaFixture({ migrations });
+    const secondPrisma = makePrismaFixture({ migrations });
+
+    firstPrisma.queryRaw
+      .mockResolvedValueOnce(migrations)
+      .mockResolvedValueOnce([
+        schemaCatalogRow({
+          definition: '{"dataType":"text","isNullable":"NO"}',
+        }),
+      ]);
+    secondPrisma.queryRaw
+      .mockResolvedValueOnce(migrations)
+      .mockResolvedValueOnce([
+        schemaCatalogRow({
+          definition: '{"dataType":"varchar","isNullable":"NO"}',
+        }),
+      ]);
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'same-local-schema-file',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'production',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+      readSchemaFile: async () => 'same-local-schema-file',
+    });
+
+    expect(firstPrisma.queryRaw).toHaveBeenCalledTimes(2);
+    expect(secondPrisma.queryRaw).toHaveBeenCalledTimes(2);
+    expect(first.schemaHash).not.toBe(second.schemaHash);
+  });
+
+  it('ignores non-semantic column order differences in database catalog hashes', async () => {
+    const firstPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          object_name: 'notes',
+          ordinal_position: 4,
+          definition: '{"dataType":"text","isNullable":"YES"}',
+        }),
+      ],
+    });
+    const secondPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          object_name: 'notes',
+          ordinal_position: 10,
+          definition: '{"dataType":"text","isNullable":"YES"}',
+        }),
+      ],
+    });
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'production',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+
+    expect(first.schemaHash).toBe(second.schemaHash);
+  });
+
+  it('ignores non-semantic index name differences when index definitions match', async () => {
+    const firstPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          object_kind: 'index',
+          object_name:
+            'ingredient_nutrition_candidate_ingredient_id_source_record__key',
+          definition:
+            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_id_source_record__key ON public.ingredient_nutrition_candidate USING btree (ingredient_id, source_record_id)',
+        }),
+      ],
+    });
+    const secondPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          object_kind: 'index',
+          object_name:
+            'ingredient_nutrition_candidate_ingredient_id_source_record_id_k',
+          definition:
+            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_id_source_record_id_k ON public.ingredient_nutrition_candidate USING btree (ingredient_id, source_record_id)',
+        }),
+      ],
+    });
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'production',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+
+    expect(first.schemaHash).toBe(second.schemaHash);
+  });
+
+  it('uses unique indexes rather than duplicate unique constraint catalog rows for schema hashes', async () => {
+    const uniqueIndex = schemaCatalogRow({
+      object_kind: 'index',
+      object_name: 'custom_recipe_schedule_date_key',
+      definition:
+        'CREATE UNIQUE INDEX custom_recipe_schedule_date_key ON public.custom_recipe_schedule USING btree (date)',
+    });
+    const firstPrisma = makePrismaFixture({
+      schemaCatalogRows: [uniqueIndex],
+    });
+    const secondPrisma = makePrismaFixture({
+      schemaCatalogRows: [
+        schemaCatalogRow({
+          object_kind: 'constraint',
+          object_name: 'custom_recipe_schedule_date_key',
+          definition:
+            '{"definition":"UNIQUE (date)","constraintType":"u"}',
+        }),
+        uniqueIndex,
+      ],
+    });
+
+    const first = await collectDatabaseAlignmentSnapshot(firstPrisma.client, {
+      databaseLabel: 'local',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+    const second = await collectDatabaseAlignmentSnapshot(secondPrisma.client, {
+      databaseLabel: 'production',
+      collectedAt: '2026-06-16T00:00:00.000Z',
+    });
+
+    expect(first.schemaHash).toBe(second.schemaHash);
   });
 
   it('excludes rolled-back Prisma migration attempts from the migration snapshot', async () => {
@@ -464,6 +619,7 @@ function makePrismaFixture(
       finished_at: Date | string | null;
       rolled_back_at?: Date | string | null;
     }>;
+    schemaCatalogRows: Array<ReturnType<typeof schemaCatalogRow>>;
     nutrientDefinitions: unknown[];
     includeRowCountDelegates: boolean;
   }> = {},
@@ -482,15 +638,28 @@ function makePrismaFixture(
     nutritionNutrientDefinitionCreate: jest.Mock;
   };
 } {
-  const queryRaw = jest.fn().mockResolvedValue(
+  const migrationRows =
     overrides.migrations ?? [
       {
         migration_name: '202606010001_a',
         checksum: 'migration:checksum',
         finished_at: '2026-06-16T00:00:00.000Z',
       },
-    ],
-  );
+    ];
+  const schemaRows = overrides.schemaCatalogRows ?? [schemaCatalogRow()];
+  const queryRaw = jest.fn((strings: TemplateStringsArray) => {
+    const sql = strings.join('');
+
+    if (sql.includes('information_schema.columns')) {
+      return Promise.resolve(schemaRows);
+    }
+
+    if (sql.includes('FROM _prisma_migrations')) {
+      return Promise.resolve(migrationRows);
+    }
+
+    return Promise.resolve([]);
+  });
   const nutritionStandardVersionFindMany = jest.fn().mockResolvedValue([]);
   const nutritionStandardEntryFindMany = jest.fn().mockResolvedValue([]);
   const nutrientDefinitionFindMany = jest
@@ -566,5 +735,25 @@ function nutrientDefinition(
     expression: null,
     sortOrder: overrides.sortOrder ?? 10,
     isActive: true,
+  };
+}
+
+function schemaCatalogRow(
+  overrides: Partial<{
+    object_kind: string;
+    table_schema: string;
+    table_name: string;
+    object_name: string;
+    ordinal_position: number;
+    definition: string;
+  }> = {},
+) {
+  return {
+    object_kind: overrides.object_kind ?? 'column',
+    table_schema: overrides.table_schema ?? 'public',
+    table_name: overrides.table_name ?? 'ingredient',
+    object_name: overrides.object_name ?? 'name',
+    ordinal_position: overrides.ordinal_position ?? 1,
+    definition: overrides.definition ?? '{"dataType":"text"}',
   };
 }

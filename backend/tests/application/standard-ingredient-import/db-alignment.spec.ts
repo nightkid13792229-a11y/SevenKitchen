@@ -405,8 +405,13 @@ describe('collectDatabaseAlignmentSnapshot', () => {
     const firstPrisma = makePrismaFixture({
       schemaCatalogRows: [
         schemaCatalogRow({
+          object_name: 'id',
+          ordinal_position: 1,
+          definition: '{"dataType":"uuid","isNullable":"NO"}',
+        }),
+        schemaCatalogRow({
           object_name: 'notes',
-          ordinal_position: 4,
+          ordinal_position: 2,
           definition: '{"dataType":"text","isNullable":"YES"}',
         }),
       ],
@@ -417,6 +422,11 @@ describe('collectDatabaseAlignmentSnapshot', () => {
           object_name: 'notes',
           ordinal_position: 10,
           definition: '{"dataType":"text","isNullable":"YES"}',
+        }),
+        schemaCatalogRow({
+          object_name: 'id',
+          ordinal_position: 5,
+          definition: '{"dataType":"uuid","isNullable":"NO"}',
         }),
       ],
     });
@@ -438,10 +448,15 @@ describe('collectDatabaseAlignmentSnapshot', () => {
       schemaCatalogRows: [
         schemaCatalogRow({
           object_kind: 'index',
-          object_name:
-            'ingredient_nutrition_candidate_ingredient_id_source_record__key',
+          object_name: 'ingredient_name_idx',
           definition:
-            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_id_source_record__key ON public.ingredient_nutrition_candidate USING btree (ingredient_id, source_record_id)',
+            'CREATE INDEX ingredient_name_idx ON public.ingredient USING btree (name)',
+        }),
+        schemaCatalogRow({
+          object_kind: 'index',
+          object_name: 'ingredient_nutrition_candidate_ingredient_id_key',
+          definition:
+            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_id_key ON public.ingredient_nutrition_candidate USING btree (ingredient_id)',
         }),
       ],
     });
@@ -449,10 +464,15 @@ describe('collectDatabaseAlignmentSnapshot', () => {
       schemaCatalogRows: [
         schemaCatalogRow({
           object_kind: 'index',
-          object_name:
-            'ingredient_nutrition_candidate_ingredient_id_source_record_id_k',
+          object_name: 'ingredient_nutrition_candidate_ingredient_idx',
           definition:
-            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_id_source_record_id_k ON public.ingredient_nutrition_candidate USING btree (ingredient_id, source_record_id)',
+            'CREATE UNIQUE INDEX ingredient_nutrition_candidate_ingredient_idx ON public.ingredient_nutrition_candidate USING btree (ingredient_id)',
+        }),
+        schemaCatalogRow({
+          object_kind: 'index',
+          object_name: 'ingredient_name_renamed_idx',
+          definition:
+            'CREATE INDEX ingredient_name_renamed_idx ON public.ingredient USING btree (name)',
         }),
       ],
     });

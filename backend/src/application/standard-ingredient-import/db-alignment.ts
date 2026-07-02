@@ -295,7 +295,8 @@ async function collectDatabaseSchemaCatalog(
 
   return rows
     .filter(shouldIncludeDatabaseSchemaCatalogRow)
-    .map(normalizeDatabaseSchemaCatalogRow);
+    .map(normalizeDatabaseSchemaCatalogRow)
+    .sort(compareDatabaseSchemaCatalogObjects);
 }
 
 function shouldIncludeDatabaseSchemaCatalogRow(
@@ -346,6 +347,35 @@ function normalizeIndexDefinition(indexDefinition: string): string {
     (_match, unique: string | undefined, tableName: string) =>
       `CREATE${unique ?? ''} INDEX ON ${tableName} `,
   );
+}
+
+function compareDatabaseSchemaCatalogObjects(
+  first: DatabaseSchemaCatalogObject,
+  second: DatabaseSchemaCatalogObject,
+): number {
+  return (
+    compareStrings(first.tableSchema, second.tableSchema) ||
+    compareStrings(first.tableName, second.tableName) ||
+    compareStrings(first.objectKind, second.objectKind) ||
+    compareStrings(first.objectName, second.objectName) ||
+    first.ordinalPosition - second.ordinalPosition ||
+    compareStrings(
+      stableStringify(first.definition),
+      stableStringify(second.definition),
+    )
+  );
+}
+
+function compareStrings(first: string, second: string): number {
+  if (first < second) {
+    return -1;
+  }
+
+  if (first > second) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function parseSchemaCatalogDefinition(definition: string | null): unknown {

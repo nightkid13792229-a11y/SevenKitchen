@@ -249,6 +249,38 @@ describe('buildNutritionFoodProfile', () => {
     expect(profile.meta.sourceProvider).toBe('MEXT');
     expect(profile.meta.sampleState).toBe('RAW');
   });
+
+  it('stores source form canonical values after unit conversion', () => {
+    const profile = buildNutritionFoodProfile({
+      id: 'mext-shrimp-raw',
+      name: '南美对虾虾仁，生',
+      dataSource: 'MEXT',
+      externalId: 'MEXT:10415',
+      basis: 'PER_100_G',
+      preparationState: 'raw',
+      nutrients: {
+        proteinG: { value: 19.6, unit: 'g' },
+        fatG: { value: 0.6, unit: 'g' },
+        linoleicAcid: { value: 47, unit: 'mg' },
+        lysine: { value: 1600, unit: 'mg' },
+      },
+    });
+
+    expect(profile.fattyAcids.linoleicAcid).toBeCloseTo(0.047);
+    expect(profile.aminoAcids.lysine).toBeCloseTo(1.6);
+    expect(
+      profile.meta.sourceForms?.['fattyAcids.linoleicAcid']?.canonicalValue,
+    ).toBeCloseTo(0.047);
+    expect(
+      profile.meta.sourceForms?.['aminoAcids.lysine']?.canonicalValue,
+    ).toBeCloseTo(1.6);
+    expect(
+      profile.meta.sourceForms?.['fattyAcids.linoleicAcid']?.canonicalUnit,
+    ).toBe('g');
+    expect(profile.meta.sourceForms?.['aminoAcids.lysine']?.canonicalUnit).toBe(
+      'g',
+    );
+  });
 });
 
 function makeAlignment(

@@ -39,6 +39,13 @@
 - 维生素 E：`2.536 IU/100g`。
 - 已知缺失项：氯、胆碱。
 
+## 后续元数据修正
+
+- 已执行 `south-american-shrimp-sourceform-correction-package/up.sql`。
+- 修正内容：`meta.sourceForms.*.canonicalValue` 中 18 个 mg 到 g 换算后的来源元数据。
+- 实际营养字段未变化。
+- 修正结果详见 `south-american-shrimp-sourceform-correction.production-apply-result.md`。
+
 ## 回滚
 
 如需回滚，仅执行生产包中的：

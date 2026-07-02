@@ -427,6 +427,7 @@ export function buildNutritionFoodProfile(
       ...(nutritionProfile.meta.sourceForms ?? {}),
       [fieldDefinition.fieldPath]: buildImportSourceForm(
         value,
+        convertedValue,
         fieldDefinition.unit,
       ),
     };
@@ -437,13 +438,14 @@ export function buildNutritionFoodProfile(
 
 function buildImportSourceForm(
   value: NormalizedNutrientValue,
+  convertedValue: number,
   canonicalUnit: string,
 ): NutritionSourceForm {
   return {
     ...(value.sourceForm ?? {}),
     originalValue: value.sourceValue,
     originalUnit: value.sourceUnit,
-    canonicalValue: value.value,
+    canonicalValue: convertedValue,
     canonicalUnit,
     basisType: 'PER_100_G',
     measuredZero: value.measuredZero,

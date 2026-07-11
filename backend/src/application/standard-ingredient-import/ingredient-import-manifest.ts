@@ -11,6 +11,7 @@ export type IngredientImportMode = 'local-draft' | 'production-package';
 
 export interface ManifestValidationIssue {
   code:
+    | 'INVALID_MANIFEST_SHAPE'
     | 'INVALID_VERSION'
     | 'INGREDIENT_TYPE_NOT_SUPPORTED'
     | 'WHOLE_DATABASE_MIGRATION_FORBIDDEN'
@@ -18,6 +19,8 @@ export interface ManifestValidationIssue {
     | 'FOOD_PROFILE_SOURCE_CANDIDATE_REQUIRED'
     | 'FOOD_PROFILE_SOURCE_NOT_APPROVED'
     | 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED'
+    | 'CFCT_FALLBACK_SEARCH_REQUIRED'
+    | 'CFCT_FALLBACK_SEARCH_INCOMPLETE'
     | 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED'
     | 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN'
     | 'LOCAL_WRITE_ALIGNMENT_REQUIRED'
@@ -42,6 +45,7 @@ export interface IngredientImportManifest {
   updateExistingIngredientId?: string;
   nutritionProfiles?: IngredientImportNutritionProfile[];
   sourceCandidates?: IngredientImportSourceCandidate[];
+  sourceSearchLog?: NutritionSourceSearchEntry[];
   packageEvidence?: SupplementPackageEvidence;
   supplementLabel?: SupplementLabelEvidence;
   dbAlignmentReport?: DbAlignmentReport;
@@ -111,6 +115,15 @@ export interface IngredientImportSourceCandidate {
   matchedName?: string;
   stateTags?: NutritionStateTag[];
   essentialCoveragePercent?: number;
+}
+
+export interface NutritionSourceSearchEntry {
+  source?: string;
+  status?: string;
+  query?: string;
+  searchedAt?: string;
+  evidenceUri?: string;
+  notes?: string;
 }
 
 export interface SupplementPackageEvidence {
@@ -240,9 +253,165 @@ function validateFoodManifest(
       message: 'FOOD import manifests must include source candidates.',
     });
   } else {
+    if (!validateFoodSourceCandidateShapes(manifest, errors)) {
+      return;
+    }
     validateFoodSourceCandidates(manifest, errors);
     validateFoodProfileSourceBindings(manifest, errors);
   }
+
+  if (
+    foodManifestUsesCfctFallback(manifest) &&
+    !hasItems(manifest.sourceSearchLog)
+  ) {
+    errors.push({
+      code: 'CFCT_FALLBACK_SEARCH_REQUIRED',
+      path: 'sourceSearchLog',
+      message:
+        'FOOD imports using CFCT fallback data must include source search evidence.',
+    });
+  } else if (
+    foodManifestUsesCfctFallback(manifest) &&
+    !hasCompleteCfctFallbackSearchEvidence(manifest.sourceSearchLog)
+  ) {
+    errors.push({
+      code: 'CFCT_FALLBACK_SEARCH_INCOMPLETE',
+      path: 'sourceSearchLog',
+      message:
+        'FOOD imports using CFCT fallback data must document an exhausted search of every primary official nutrition source.',
+    });
+  }
+}
+
+function foodManifestUsesCfctFallback(
+  manifest: IngredientImportManifest,
+): boolean {
+  return (
+    manifest.nutritionProfiles?.some((profile) =>
+      hasCfctSourceToken(profile.dataSource),
+    ) === true ||
+    manifest.sourceCandidates?.some((candidate) =>
+      [candidate.sourceId, candidate.sourceName, candidate.source].some(
+        hasCfctSourceToken,
+      ),
+    ) === true
+  );
+}
+
+function hasCfctSourceToken(value: string | null | undefined): boolean {
+  const normalizedValue = value?.trim();
+
+  return (
+    normalizedValue !== undefined &&
+    normalizedValue.toUpperCase().split(/[^A-Z0-9]+/).includes('CFCT')
+  );
+}
+
+const primaryOfficialNutritionSources = [
+  'USDA_FDC',
+  'NZFCD',
+  'NEVO',
+  'MEXT',
+  'AFCD',
+  'AUSNUT',
+  'CNF',
+  'COFID',
+  'CIQUAL',
+];
+
+const exhaustedSearchStatuses = new Set([
+  'searched_no_match',
+  'state_mismatch',
+  'coverage_too_low',
+  'source_unavailable',
+]);
+
+function hasCompleteCfctFallbackSearchEvidence(
+  sourceSearchLog: NutritionSourceSearchEntry[] | undefined,
+): boolean {
+  if (!Array.isArray(sourceSearchLog)) {
+    return false;
+  }
+
+  const entriesBySource = new Map<string, Record<string, unknown>>();
+  for (const entry of sourceSearchLog) {
+    if (!isRecord(entry) || !hasCompleteSearchEvidence(entry)) {
+      return false;
+    }
+
+    const sourceValue = entry.source;
+    if (!hasTextValue(sourceValue)) {
+      return false;
+    }
+
+    const source = sourceValue.trim().toUpperCase();
+    if (entriesBySource.has(source)) {
+      return false;
+    }
+    entriesBySource.set(source, entry);
+  }
+
+  const cfctEntry = entriesBySource.get('CFCT');
+  if (cfctEntry === undefined) {
+    return false;
+  }
+
+  return primaryOfficialNutritionSources.every((source) => {
+    const entry = entriesBySource.get(source);
+    return (
+      entry !== undefined &&
+      exhaustedSearchStatuses.has(entry.status as string)
+    );
+  });
+}
+
+function hasCompleteSearchEvidence(entry: Record<string, unknown>): boolean {
+  return (
+    hasTextValue(entry.source) &&
+    hasTextValue(entry.status) &&
+    hasTextValue(entry.query) &&
+    hasTextValue(entry.searchedAt) &&
+    Number.isFinite(Date.parse(entry.searchedAt)) &&
+    hasTextValue(entry.evidenceUri) &&
+    hasTextValue(entry.notes)
+  );
+}
+
+function hasTextValue(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateFoodSourceCandidateShapes(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): boolean {
+  let isValid = true;
+
+  (manifest.sourceCandidates ?? []).forEach((candidate, candidateIndex) => {
+    const stateTags = candidate.stateTags;
+    if (stateTags === undefined) {
+      return;
+    }
+
+    if (
+      !Array.isArray(stateTags) ||
+      stateTags.some((stateTag) => !isNutritionStateTag(stateTag))
+    ) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `sourceCandidates[${candidateIndex}].stateTags`,
+        message:
+          'FOOD source candidate state tags must be an array of supported nutrition states.',
+      });
+    }
+  });
+
+  return isValid;
 }
 
 function validateFoodSourceCandidates(

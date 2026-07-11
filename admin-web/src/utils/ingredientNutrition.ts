@@ -1,6 +1,7 @@
 import {
   getIngredientNutritionResolvedDisplayUnit,
   INGREDIENT_NUTRITION_TAB_DEFINITIONS,
+  INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP,
   INGREDIENT_NUTRITION_FIELD_UNITS,
   INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS,
   type IngredientNutritionTabKey,
@@ -20,6 +21,10 @@ import type {
   NutritionSourceForm,
   VitaminNutritionProfileTab,
 } from "../types/ingredient.ts";
+import {
+  convertIngredientNutritionFieldValue,
+  normalizeIngredientNutritionUnit,
+} from "./ingredientNutritionUnits.ts";
 
 interface LegacyNutritionProfile {
   items: NutritionItem[];
@@ -50,9 +55,20 @@ function createAliasMap<TKey extends string>(
 const MACRO_ALIASES = createAliasMap<keyof NutritionProfileV2["macros"]>(
   "macros",
   {
+    energy_kcal: "energyKcal",
     protein: "crudeProtein",
+    proteing: "crudeProtein",
     proteincontent: "crudeProtein",
+    crudeproteing: "crudeProtein",
+    fat: "crudeFat",
+    fatg: "crudeFat",
+    crudefatg: "crudeFat",
+    carbohydrate_g: "carbohydrate",
+    carbohydrateg: "carbohydrate",
     fiber: "fiber",
+    fiberg: "fiber",
+    moistureg: "moisture",
+    ashg: "ash",
     solublefiber: "solubleFiber",
     insolublefiber: "insolubleFiber",
   },
@@ -62,7 +78,33 @@ const MINERAL_ALIASES = createAliasMap<keyof NutritionProfileV2["minerals"]>(
   "minerals",
   {
     ca: "calcium",
+    calcium_mg: "calcium",
+    calciummg: "calcium",
     p: "phosphorus",
+    phosphorus_mg: "phosphorus",
+    phosphorusmg: "phosphorus",
+    potassium_mg: "potassium",
+    potassiummg: "potassium",
+    sodium_mg: "sodium",
+    sodiummg: "sodium",
+    magnesium_mg: "magnesium",
+    magnesiummg: "magnesium",
+    iron_mg: "iron",
+    ironmg: "iron",
+    zinc_mg: "zinc",
+    zincmg: "zinc",
+    copper_mg: "copper",
+    coppermg: "copper",
+    manganese_mg: "manganese",
+    manganesemg: "manganese",
+    selenium_ug: "selenium",
+    seleniumug: "selenium",
+    selenium_mcg: "selenium",
+    seleniummcg: "selenium",
+    iodine_ug: "iodine",
+    iodineug: "iodine",
+    iodine_mcg: "iodine",
+    iodinemcg: "iodine",
     i: "iodine",
     氯化物: "chloride",
   },
@@ -71,6 +113,9 @@ const MINERAL_ALIASES = createAliasMap<keyof NutritionProfileV2["minerals"]>(
 const VITAMIN_ALIASES = createAliasMap<keyof NutritionProfileV2["vitamins"]>(
   "vitamins",
   {
+    vitaminaiu: "vitaminA",
+    vitamindiu: "vitaminD",
+    vitamineiu: "vitaminE",
     vitaminb1: "vitaminB1",
     thiamine: "vitaminB1",
     vitaminb2: "vitaminB2",
@@ -96,9 +141,16 @@ const VITAMIN_ALIASES = createAliasMap<keyof NutritionProfileV2["vitamins"]>(
 const FATTY_ACID_ALIASES = createAliasMap<
   keyof NutritionProfileV2["fattyAcids"]
 >("fattyAcids", {
+  linoleicacidg: "linoleicAcid",
   alphalinolenicacid: "alphaLinolenicAcid",
+  alphalinolenicacidg: "alphaLinolenicAcid",
   α亚麻酸: "alphaLinolenicAcid",
   omega3: "alphaLinolenicAcid",
+  arachidonicacidg: "arachidonicAcid",
+  arachidonicacidmg: "arachidonicAcid",
+  epamg: "epa",
+  dhamg: "dha",
+  dpamg: "dpa",
 });
 
 const AMINO_ACID_ALIASES = createAliasMap<
@@ -106,6 +158,31 @@ const AMINO_ACID_ALIASES = createAliasMap<
 >("aminoAcids", {});
 
 type IngredientNutritionFormValue = NutritionProfileV2;
+
+type ResolvedNutritionField = {
+  tabKey: IngredientNutritionTabKey;
+  fieldKey: string;
+};
+
+function resolveFlatNutrientField(rawKey: string): ResolvedNutritionField | null {
+  const normalizedKey = normalizeAlias(rawKey);
+  const macroKey = MACRO_ALIASES[normalizedKey];
+  if (macroKey) return { tabKey: "macros", fieldKey: macroKey };
+
+  const mineralKey = MINERAL_ALIASES[normalizedKey];
+  if (mineralKey) return { tabKey: "minerals", fieldKey: mineralKey };
+
+  const vitaminKey = VITAMIN_ALIASES[normalizedKey];
+  if (vitaminKey) return { tabKey: "vitamins", fieldKey: vitaminKey };
+
+  const fattyAcidKey = FATTY_ACID_ALIASES[normalizedKey];
+  if (fattyAcidKey) return { tabKey: "fattyAcids", fieldKey: fattyAcidKey };
+
+  const aminoAcidKey = AMINO_ACID_ALIASES[normalizedKey];
+  if (aminoAcidKey) return { tabKey: "aminoAcids", fieldKey: aminoAcidKey };
+
+  return null;
+}
 
 function cloneTabRecord(tabKey: IngredientNutritionTabKey) {
   return { ...INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS[tabKey] };
@@ -149,6 +226,147 @@ function normalizeNumber(value: unknown): number | null {
   }
 
   return null;
+}
+
+function isGroupedNutritionProfile(input: object): input is NutritionProfileV2 {
+  return (
+    "meta" in input ||
+    "macros" in input ||
+    "minerals" in input ||
+    "vitamins" in input ||
+    "fattyAcids" in input ||
+    "aminoAcids" in input ||
+    "customItems" in input
+  );
+}
+
+function readFlatNutrientValue(
+  input: unknown,
+): { value: number; unit: string | null } | null {
+  if (typeof input === "number" || typeof input === "string") {
+    const value = normalizeNumber(input);
+    return value === null ? null : { value, unit: null };
+  }
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const record = input as Record<string, unknown>;
+  const value = normalizeNumber(record.value ?? record.amount);
+  if (value === null) {
+    return null;
+  }
+
+  return {
+    value,
+    unit: typeof record.unit === "string" ? record.unit : null,
+  };
+}
+
+function isAmbiguousActivityUnit(fieldKey: string, unit: string): boolean {
+  const normalizedUnit = normalizeIngredientNutritionUnit(unit);
+  return (
+    (fieldKey === "vitaminA" || fieldKey === "vitaminE") &&
+    normalizedUnit !== "IU" &&
+    !unit.includes("（")
+  );
+}
+
+function assignAmbiguousFlatNutrientAsCustomItem(
+  profile: NutritionProfileV2,
+  rawKey: string,
+  value: number,
+  unit: string,
+): void {
+  profile.customItems.push({
+    name: rawKey,
+    value,
+    unit,
+    rawBasisType: profile.meta.rawBasisType,
+    note: "来源单位无法自动换算为犬用活性单位，请复核来源形态后再映射到标准字段。",
+  });
+}
+
+function normalizeFlatValueUnitProfile(
+  input: Record<string, unknown>,
+): IngredientNutritionFormValue {
+  const profile = createEmptyIngredientNutritionFormValue();
+
+  for (const [rawKey, rawValue] of Object.entries(input)) {
+    const resolvedField = resolveFlatNutrientField(rawKey);
+    if (!resolvedField) {
+      continue;
+    }
+
+    const flatValue = readFlatNutrientValue(rawValue);
+    if (!flatValue) {
+      continue;
+    }
+
+    const fieldDefinition =
+      INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[resolvedField.fieldKey];
+    if (!fieldDefinition) {
+      continue;
+    }
+
+    const sourceUnit = flatValue.unit
+      ? normalizeIngredientNutritionUnit(flatValue.unit)
+      : fieldDefinition.unit;
+
+    if (isAmbiguousActivityUnit(resolvedField.fieldKey, sourceUnit)) {
+      assignAmbiguousFlatNutrientAsCustomItem(
+        profile,
+        rawKey,
+        flatValue.value,
+        sourceUnit,
+      );
+      continue;
+    }
+
+    const canonicalValue = convertIngredientNutritionFieldValue(
+      resolvedField.fieldKey,
+      flatValue.value,
+      sourceUnit,
+      fieldDefinition.unit,
+    );
+    (profile[resolvedField.tabKey] as Record<string, number | null>)[
+      resolvedField.fieldKey
+    ] = canonicalValue;
+
+    const displayUnit = getIngredientNutritionResolvedDisplayUnit(
+      resolvedField.fieldKey,
+      sourceUnit,
+    );
+    if (displayUnit && displayUnit !== fieldDefinition.unit) {
+      profile.meta.fieldDisplayUnits = {
+        ...(profile.meta.fieldDisplayUnits ?? {}),
+        [resolvedField.fieldKey]: displayUnit,
+      };
+    }
+  }
+
+  return profile;
+}
+
+function isFlatValueUnitNutritionProfile(
+  input: unknown,
+): input is Record<string, unknown> {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    isLegacyNutritionProfile(input) ||
+    isGroupedNutritionProfile(input)
+  ) {
+    return false;
+  }
+
+  return Object.entries(input as Record<string, unknown>).some(
+    ([rawKey, rawValue]) =>
+      !!resolveFlatNutrientField(rawKey) &&
+      readFlatNutrientValue(rawValue) !== null,
+  );
 }
 
 function normalizeUnitLabel(unit: string | null | undefined): string {
@@ -565,6 +783,10 @@ export function normalizeIngredientNutritionProfileToForm(
     }
 
     return profile;
+  }
+
+  if (isFlatValueUnitNutritionProfile(input)) {
+    return normalizeFlatValueUnitProfile(input);
   }
 
   const empty = createEmptyIngredientNutritionFormValue();

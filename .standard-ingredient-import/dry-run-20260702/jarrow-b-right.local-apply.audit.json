@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "createdAt": "2026-07-02T04:10:59.553Z",
+  "alignmentId": "5543a5b1ca65",
+  "dbAlignmentStatus": "passing",
+  "manifestHash": "fa9a55d7f294d491347c574b5d0e1cfa62f49a8fe9593d802b4909ce1cc3c602",
+  "packageManifestHash": "3994ccdb63bc1e5c1161e6c8d56b8ad9b4b90991e1fc1e165ec2c56558e828ed",
+  "ingredientIds": [
+    "814a9199-f944-4c8f-b651-61f6e4eea765"
+  ],
+  "nutritionFoodIds": [],
+  "nutritionFoodMappingIds": [],
+  "ingredientTagAssignmentIds": [],
+  "procurementSkuIds": [],
+  "nutritionAudits": []
+}

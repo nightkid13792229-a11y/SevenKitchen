@@ -366,6 +366,28 @@ describe('validateIngredientImportManifest', () => {
     );
   });
 
+  it('does not require CFCT fallback evidence when the selected profile uses a primary source', () => {
+    const manifest = makeFoodManifest({
+      sourceCandidates: [
+        ...completeFoodManifest.sourceCandidates!,
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:comparison-only',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Chicken breast, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+    });
+
+    expect(validateIngredientImportManifest(manifest)).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
   it('requires complete primary-source search evidence before FOOD imports use CFCT fallback data', () => {
     const manifest = makeFoodManifest({
       nutritionProfiles: [

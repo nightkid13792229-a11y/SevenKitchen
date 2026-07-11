@@ -287,14 +287,11 @@ function foodManifestUsesCfctFallback(
   manifest: IngredientImportManifest,
 ): boolean {
   return (
-    manifest.nutritionProfiles?.some((profile) =>
-      hasCfctSourceToken(profile.dataSource),
-    ) === true ||
-    manifest.sourceCandidates?.some((candidate) =>
-      [candidate.sourceId, candidate.sourceName, candidate.source].some(
-        hasCfctSourceToken,
-      ),
-    ) === true
+    Array.isArray(manifest.nutritionProfiles) &&
+    manifest.nutritionProfiles.some(
+      (profile) =>
+        isRecord(profile) && hasCfctSourceToken(profile.dataSource as string),
+    )
   );
 }
 
@@ -392,6 +389,16 @@ function validateFoodSourceCandidateShapes(
   let isValid = true;
 
   (manifest.sourceCandidates ?? []).forEach((candidate, candidateIndex) => {
+    if (!isRecord(candidate)) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `sourceCandidates[${candidateIndex}]`,
+        message: 'FOOD source candidates must be objects.',
+      });
+      return;
+    }
+
     const stateTags = candidate.stateTags;
     if (stateTags === undefined) {
       return;
@@ -476,7 +483,11 @@ function validateFoodProfileSourceBindings(
       (candidate): candidate is NutritionSourceCandidate => candidate !== null,
     );
 
-  (manifest.nutritionProfiles ?? []).forEach((profile, profileIndex) => {
+  if (!Array.isArray(manifest.nutritionProfiles)) {
+    return;
+  }
+
+  manifest.nutritionProfiles.forEach((profile, profileIndex) => {
     const approvedSource = resolveProfileApprovedSource(profile.dataSource);
     if (approvedSource === undefined) {
       errors.push({
@@ -578,10 +589,39 @@ function validateSupplementManifest(
 }
 
 function validateNutrientValues(
-  profiles: IngredientImportNutritionProfile[],
+  profiles: unknown,
   errors: ManifestValidationIssue[],
 ): void {
+  if (!Array.isArray(profiles)) {
+    if (profiles !== undefined) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: 'nutritionProfiles',
+        message: 'Nutrition profiles must be an array.',
+      });
+    }
+    return;
+  }
+
   profiles.forEach((profile, profileIndex) => {
+    if (!isRecord(profile)) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}]`,
+        message: 'Nutrition profiles must be objects.',
+      });
+      return;
+    }
+
+    if (!isRecord(profile.nutrients)) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}].nutrients`,
+        message: 'Nutrition profile nutrients must be an object.',
+      });
+      return;
+    }
+
     for (const [nutrientCode, nutrientValue] of Object.entries(
       profile.nutrients,
     )) {
@@ -679,8 +719,12 @@ function hasPassingDbAlignmentReport(
 }
 
 function isNutrientValueMissing(
-  nutrientValue: IngredientImportNutrientValue,
+  nutrientValue: unknown,
 ): boolean {
+  if (!isRecord(nutrientValue)) {
+    return true;
+  }
+
   const value = nutrientValue.value;
 
   if (value === null) {
@@ -695,12 +739,16 @@ function isNutrientValueMissing(
     return isNumericValueMissing(Number(trimmedValue), nutrientValue);
   }
 
+  if (typeof value !== 'number') {
+    return true;
+  }
+
   return isNumericValueMissing(value, nutrientValue);
 }
 
 function isNumericValueMissing(
   value: number,
-  nutrientValue: IngredientImportNutrientValue,
+  nutrientValue: Record<string, unknown>,
 ): boolean {
   if (!Number.isFinite(value)) {
     return true;

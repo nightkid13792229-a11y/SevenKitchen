@@ -330,6 +330,202 @@ describe('validateIngredientImportManifest', () => {
     );
   });
 
+  it('requires source search evidence before FOOD imports use CFCT fallback data', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-cfct-001',
+          dataSource: 'CFCT',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: {
+            energyKcal: { value: 110, unit: 'kcal' },
+          },
+        },
+      ],
+      sourceCandidates: [
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:example-food',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Example food, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'CFCT_FALLBACK_SEARCH_REQUIRED',
+        path: 'sourceSearchLog',
+      }),
+    );
+  });
+
+  it('does not require CFCT fallback evidence when the selected profile uses a primary source', () => {
+    const manifest = makeFoodManifest({
+      sourceCandidates: [
+        ...completeFoodManifest.sourceCandidates!,
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:comparison-only',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Chicken breast, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+    });
+
+    expect(validateIngredientImportManifest(manifest)).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('requires complete primary-source search evidence before FOOD imports use CFCT fallback data', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-cfct-002',
+          dataSource: 'CFCT',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: {
+            energyKcal: { value: 110, unit: 'kcal' },
+          },
+        },
+      ],
+      sourceCandidates: [
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:example-food',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Example food, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+      sourceSearchLog: [
+        {
+          source: 'CFCT',
+          status: 'candidate_found',
+          query: 'example food raw',
+          searchedAt: '2026-07-11T12:00:00.000Z',
+          evidenceUri: 'https://example.test/cfct',
+          notes: 'CFCT candidate found.',
+        },
+      ],
+    });
+
+    const result = validateIngredientImportManifest(manifest);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'CFCT_FALLBACK_SEARCH_INCOMPLETE',
+        path: 'sourceSearchLog',
+      }),
+    );
+  });
+
+  it('accepts CFCT fallback data after primary-source searches are exhausted', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-cfct-003',
+          dataSource: 'CFCT',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: {
+            energyKcal: { value: 110, unit: 'kcal' },
+          },
+        },
+      ],
+      sourceCandidates: [
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:example-food',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Example food, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+      sourceSearchLog: [
+        ...[
+          'USDA_FDC',
+          'NZFCD',
+          'NEVO',
+          'MEXT',
+          'AFCD',
+          'AUSNUT',
+          'CNF',
+          'COFID',
+          'CIQUAL',
+        ].map((source) => ({
+          source,
+          status: 'searched_no_match',
+          query: `${source} example food raw`,
+          searchedAt: '2026-07-11T12:00:00.000Z',
+          evidenceUri: `https://example.test/${source}`,
+          notes: `${source} has no matching raw record.`,
+        })),
+        {
+          source: 'CFCT',
+          status: 'candidate_found',
+          query: 'CFCT example food raw',
+          searchedAt: '2026-07-11T12:00:00.000Z',
+          evidenceUri: 'https://example.test/CFCT',
+          notes: 'CFCT fallback candidate selected after primary searches.',
+        },
+      ],
+    });
+
+    expect(validateIngredientImportManifest(manifest)).toEqual({
+      ok: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('requires the CFCT search evidence to identify a usable fallback candidate', () => {
+    const manifest = makeFoodManifest({
+      nutritionProfiles: [
+        {
+          id: 'profile-cfct-004',
+          dataSource: 'CFCT',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: { energyKcal: { value: 110, unit: 'kcal' } },
+        },
+      ],
+      sourceCandidates: [
+        {
+          source: 'CFCT',
+          sourceId: 'CFCT:example-food',
+          sourceName: 'Chinese Food Composition Table',
+          matchedName: 'Example food, raw',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 90,
+        },
+      ],
+      sourceSearchLog: completeCfctFallbackSearchLog('searched_no_match'),
+    });
+
+    expect(validateIngredientImportManifest(manifest).errors).toContainEqual(
+      expect.objectContaining({
+        code: 'CFCT_FALLBACK_SEARCH_INCOMPLETE',
+        path: 'sourceSearchLog',
+      }),
+    );
+  });
+
   it('forbids procurement SKUs for SUPPLEMENT manifests', () => {
     const manifest = makeSupplementManifest({
       ingredient: {
@@ -562,6 +758,37 @@ describe('validateIngredientImportManifest', () => {
     );
   });
 });
+
+function completeCfctFallbackSearchLog(cfctStatus: string) {
+  return [
+    ...[
+      'USDA_FDC',
+      'NZFCD',
+      'NEVO',
+      'MEXT',
+      'AFCD',
+      'AUSNUT',
+      'CNF',
+      'COFID',
+      'CIQUAL',
+    ].map((source) => ({
+      source,
+      status: 'searched_no_match',
+      query: `${source} example food raw`,
+      searchedAt: '2026-07-11T12:00:00.000Z',
+      evidenceUri: `https://example.test/${source}`,
+      notes: `${source} has no matching raw record.`,
+    })),
+    {
+      source: 'CFCT',
+      status: cfctStatus,
+      query: 'CFCT example food raw',
+      searchedAt: '2026-07-11T12:00:00.000Z',
+      evidenceUri: 'https://example.test/CFCT',
+      notes: 'CFCT fallback candidate selected after primary searches.',
+    },
+  ];
+}
 
 function makeFoodManifest(
   overrides: Partial<IngredientImportManifest> = {},

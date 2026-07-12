@@ -92,6 +92,50 @@
         "additionalProperties": false
       }
     },
+    "sourceSearchLog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "status",
+          "query",
+          "searchedAt",
+          "evidenceUri",
+          "notes"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "USDA_FDC",
+              "NZFCD",
+              "NEVO",
+              "MEXT",
+              "AFCD",
+              "AUSNUT",
+              "CNF",
+              "COFID",
+              "CIQUAL",
+              "CFCT"
+            ]
+          },
+          "status": {
+            "enum": [
+              "searched_no_match",
+              "state_mismatch",
+              "coverage_too_low",
+              "source_unavailable",
+              "candidate_found"
+            ]
+          },
+          "query": { "type": "string", "minLength": 1 },
+          "searchedAt": { "type": "string", "format": "date-time" },
+          "evidenceUri": { "type": "string", "minLength": 1 },
+          "notes": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
     "packageEvidence": {
       "type": "object",
       "properties": {

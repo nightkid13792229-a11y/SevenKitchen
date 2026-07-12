@@ -25,11 +25,13 @@ async function main(): Promise<void> {
 
   const manifestPath = requireStringArg(args, 'manifest');
   const out = requireStringArg(args, 'out');
-  const manifest = await readJsonFile<IngredientImportManifest>(manifestPath);
+  const manifest = await readJsonFile<unknown>(manifestPath);
   const validation = validateIngredientImportManifest(manifest);
+  const foodManifest =
+    validation.ok && isFoodManifest(manifest) ? manifest : null;
   const nutritionAudits =
-    manifest.ingredient.type === 'FOOD'
-      ? (manifest.nutritionProfiles ?? []).map((profile: any) => ({
+    foodManifest !== null
+      ? (foodManifest.nutritionProfiles ?? []).map((profile: any) => ({
           profileId: profile.id,
           audit: auditNutritionProfileForImport({
             profileName: profile.name ?? profile.id,
@@ -39,8 +41,8 @@ async function main(): Promise<void> {
         }))
       : [];
   const rankedSources =
-    manifest.ingredient.type === 'FOOD'
-      ? rankSourcesFromManifest(manifest)
+    foodManifest !== null
+      ? rankSourcesFromManifest(foodManifest)
       : [];
   const blockingIssues = [
     ...validation.errors,
@@ -62,6 +64,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(`Audit passed: ${out}`);
+}
+
+function isFoodManifest(value: unknown): value is IngredientImportManifest {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as any).ingredient === 'object' &&
+    (value as any).ingredient !== null &&
+    (value as any).ingredient.type === 'FOOD'
+  );
 }
 
 function rankSourcesFromManifest(manifest: IngredientImportManifest) {

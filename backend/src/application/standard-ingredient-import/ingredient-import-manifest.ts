@@ -11,6 +11,7 @@ export type IngredientImportMode = 'local-draft' | 'production-package';
 
 export interface ManifestValidationIssue {
   code:
+    | 'INVALID_MANIFEST_SHAPE'
     | 'INVALID_VERSION'
     | 'INGREDIENT_TYPE_NOT_SUPPORTED'
     | 'WHOLE_DATABASE_MIGRATION_FORBIDDEN'
@@ -18,6 +19,8 @@ export interface ManifestValidationIssue {
     | 'FOOD_PROFILE_SOURCE_CANDIDATE_REQUIRED'
     | 'FOOD_PROFILE_SOURCE_NOT_APPROVED'
     | 'FOOD_SOURCE_CANDIDATE_NOT_APPROVED'
+    | 'CFCT_FALLBACK_SEARCH_REQUIRED'
+    | 'CFCT_FALLBACK_SEARCH_INCOMPLETE'
     | 'SUPPLEMENT_PACKAGE_PHOTO_REQUIRED'
     | 'SUPPLEMENT_PROCUREMENT_SKU_FORBIDDEN'
     | 'LOCAL_WRITE_ALIGNMENT_REQUIRED'
@@ -42,6 +45,7 @@ export interface IngredientImportManifest {
   updateExistingIngredientId?: string;
   nutritionProfiles?: IngredientImportNutritionProfile[];
   sourceCandidates?: IngredientImportSourceCandidate[];
+  sourceSearchLog?: NutritionSourceSearchEntry[];
   packageEvidence?: SupplementPackageEvidence;
   supplementLabel?: SupplementLabelEvidence;
   dbAlignmentReport?: DbAlignmentReport;
@@ -111,6 +115,15 @@ export interface IngredientImportSourceCandidate {
   matchedName?: string;
   stateTags?: NutritionStateTag[];
   essentialCoveragePercent?: number;
+}
+
+export interface NutritionSourceSearchEntry {
+  source?: string;
+  status?: string;
+  query?: string;
+  searchedAt?: string;
+  evidenceUri?: string;
+  notes?: string;
 }
 
 export interface SupplementPackageEvidence {
@@ -233,6 +246,11 @@ function validateFoodManifest(
     });
   }
 
+  const foodNutritionProfilesAreValid = validateFoodNutritionProfileShapes(
+    manifest,
+    errors,
+  );
+
   if (!hasItems(manifest.sourceCandidates)) {
     errors.push({
       code: 'FOOD_NUTRITION_REQUIRED',
@@ -240,9 +258,230 @@ function validateFoodManifest(
       message: 'FOOD import manifests must include source candidates.',
     });
   } else {
+    if (!validateFoodSourceCandidateShapes(manifest, errors)) {
+      return;
+    }
     validateFoodSourceCandidates(manifest, errors);
-    validateFoodProfileSourceBindings(manifest, errors);
+    if (foodNutritionProfilesAreValid) {
+      validateFoodProfileSourceBindings(manifest, errors);
+    }
   }
+
+  if (
+    foodNutritionProfilesAreValid &&
+    foodManifestUsesCfctFallback(manifest) &&
+    !hasItems(manifest.sourceSearchLog)
+  ) {
+    errors.push({
+      code: 'CFCT_FALLBACK_SEARCH_REQUIRED',
+      path: 'sourceSearchLog',
+      message:
+        'FOOD imports using CFCT fallback data must include source search evidence.',
+    });
+  } else if (
+    foodNutritionProfilesAreValid &&
+    foodManifestUsesCfctFallback(manifest) &&
+    !hasCompleteCfctFallbackSearchEvidence(manifest.sourceSearchLog)
+  ) {
+    errors.push({
+      code: 'CFCT_FALLBACK_SEARCH_INCOMPLETE',
+      path: 'sourceSearchLog',
+      message:
+        'FOOD imports using CFCT fallback data must document an exhausted search of every primary official nutrition source.',
+    });
+  }
+}
+
+function foodManifestUsesCfctFallback(
+  manifest: IngredientImportManifest,
+): boolean {
+  return (
+    Array.isArray(manifest.nutritionProfiles) &&
+    manifest.nutritionProfiles.some(
+      (profile) =>
+        isRecord(profile) && hasCfctSourceToken(profile.dataSource),
+    )
+  );
+}
+
+function hasCfctSourceToken(value: unknown): boolean {
+  if (!hasTextValue(value)) {
+    return false;
+  }
+
+  const normalizedValue = value.trim();
+
+  return (
+    normalizedValue.toUpperCase().split(/[^A-Z0-9]+/).includes('CFCT')
+  );
+}
+
+const primaryOfficialNutritionSources = [
+  'USDA_FDC',
+  'NZFCD',
+  'NEVO',
+  'MEXT',
+  'AFCD',
+  'AUSNUT',
+  'CNF',
+  'COFID',
+  'CIQUAL',
+];
+
+const exhaustedSearchStatuses = new Set([
+  'searched_no_match',
+  'state_mismatch',
+  'coverage_too_low',
+  'source_unavailable',
+]);
+
+function hasCompleteCfctFallbackSearchEvidence(
+  sourceSearchLog: NutritionSourceSearchEntry[] | undefined,
+): boolean {
+  if (!Array.isArray(sourceSearchLog)) {
+    return false;
+  }
+
+  const entriesBySource = new Map<string, Record<string, unknown>>();
+  for (const entry of sourceSearchLog) {
+    if (!isRecord(entry) || !hasCompleteSearchEvidence(entry)) {
+      return false;
+    }
+
+    const sourceValue = entry.source;
+    if (!hasTextValue(sourceValue)) {
+      return false;
+    }
+
+    const source = sourceValue.trim().toUpperCase();
+    if (entriesBySource.has(source)) {
+      return false;
+    }
+    entriesBySource.set(source, entry);
+  }
+
+  const cfctEntry = entriesBySource.get('CFCT');
+  if (cfctEntry?.status !== 'candidate_found') {
+    return false;
+  }
+
+  return primaryOfficialNutritionSources.every((source) => {
+    const entry = entriesBySource.get(source);
+    return (
+      entry !== undefined &&
+      exhaustedSearchStatuses.has(entry.status as string)
+    );
+  });
+}
+
+function hasCompleteSearchEvidence(entry: Record<string, unknown>): boolean {
+  return (
+    hasTextValue(entry.source) &&
+    hasTextValue(entry.status) &&
+    hasTextValue(entry.query) &&
+    hasTextValue(entry.searchedAt) &&
+    Number.isFinite(Date.parse(entry.searchedAt)) &&
+    hasTextValue(entry.evidenceUri) &&
+    hasTextValue(entry.notes)
+  );
+}
+
+function hasTextValue(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateFoodSourceCandidateShapes(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): boolean {
+  let isValid = true;
+
+  (manifest.sourceCandidates ?? []).forEach((candidate, candidateIndex) => {
+    if (!isRecord(candidate)) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `sourceCandidates[${candidateIndex}]`,
+        message: 'FOOD source candidates must be objects.',
+      });
+      return;
+    }
+
+    const stateTags = candidate.stateTags;
+    if (stateTags === undefined) {
+      return;
+    }
+
+    if (
+      !Array.isArray(stateTags) ||
+      stateTags.some((stateTag) => !isNutritionStateTag(stateTag))
+    ) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `sourceCandidates[${candidateIndex}].stateTags`,
+        message:
+          'FOOD source candidate state tags must be an array of supported nutrition states.',
+      });
+    }
+
+    for (const field of [
+      'sourceId',
+      'sourceName',
+      'source',
+      'matchedName',
+    ]) {
+      if (candidate[field] !== undefined && !hasTextValue(candidate[field])) {
+        isValid = false;
+        errors.push({
+          code: 'INVALID_MANIFEST_SHAPE',
+          path: `sourceCandidates[${candidateIndex}].${field}`,
+          message: `FOOD source candidate ${field} must be text when provided.`,
+        });
+      }
+    }
+  });
+
+  return isValid;
+}
+
+function validateFoodNutritionProfileShapes(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): boolean {
+  if (!Array.isArray(manifest.nutritionProfiles)) {
+    return manifest.nutritionProfiles === undefined;
+  }
+
+  let isValid = true;
+  manifest.nutritionProfiles.forEach((profile, profileIndex) => {
+    if (!isRecord(profile)) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}]`,
+        message: 'FOOD nutrition profiles must be objects.',
+      });
+      return;
+    }
+
+    for (const field of ['dataSource', 'preparationState']) {
+      if (profile[field] !== undefined && !hasTextValue(profile[field])) {
+        isValid = false;
+        errors.push({
+          code: 'INVALID_MANIFEST_SHAPE',
+          path: `nutritionProfiles[${profileIndex}].${field}`,
+          message: `FOOD nutrition profile ${field} must be text when provided.`,
+        });
+      }
+    }
+  });
+
+  return isValid;
 }
 
 function validateFoodSourceCandidates(
@@ -307,7 +546,11 @@ function validateFoodProfileSourceBindings(
       (candidate): candidate is NutritionSourceCandidate => candidate !== null,
     );
 
-  (manifest.nutritionProfiles ?? []).forEach((profile, profileIndex) => {
+  if (!Array.isArray(manifest.nutritionProfiles)) {
+    return;
+  }
+
+  manifest.nutritionProfiles.forEach((profile, profileIndex) => {
     const approvedSource = resolveProfileApprovedSource(profile.dataSource);
     if (approvedSource === undefined) {
       errors.push({
@@ -344,12 +587,12 @@ function validateFoodProfileSourceBindings(
 }
 
 function resolveProfileApprovedSource(
-  dataSource: string | undefined,
+  dataSource: unknown,
 ): ApprovedNutritionSource | undefined {
-  const normalizedSource = dataSource?.trim().toUpperCase();
-  if (!normalizedSource) {
+  if (!hasTextValue(dataSource)) {
     return undefined;
   }
+  const normalizedSource = dataSource.trim().toUpperCase();
   if (normalizedSource === 'USDA') {
     return 'USDA_FDC';
   }
@@ -360,8 +603,8 @@ function resolveProfileApprovedSource(
   return toApprovedNutritionSource(normalizedSource);
 }
 
-function sourceFromSourceId(sourceId: string | undefined): string | undefined {
-  const prefix = sourceId?.split(':')[0]?.trim();
+function sourceFromSourceId(sourceId: unknown): string | undefined {
+  const prefix = typeof sourceId === 'string' ? sourceId.split(':')[0]?.trim() : undefined;
   if (!prefix) {
     return undefined;
   }
@@ -378,11 +621,11 @@ function resolveRequestedNutritionState(
 }
 
 function resolveProfileNutritionState(
-  profile: IngredientImportNutritionProfile | undefined,
+  profile: unknown,
 ): NutritionStateTag {
-  const normalizedState = profile?.preparationState?.trim() as
-    | NutritionStateTag
-    | undefined;
+  const normalizedState = isRecord(profile) && hasTextValue(profile.preparationState)
+    ? profile.preparationState.trim()
+    : undefined;
   return isNutritionStateTag(normalizedState) ? normalizedState : 'raw';
 }
 
@@ -409,10 +652,39 @@ function validateSupplementManifest(
 }
 
 function validateNutrientValues(
-  profiles: IngredientImportNutritionProfile[],
+  profiles: unknown,
   errors: ManifestValidationIssue[],
 ): void {
+  if (!Array.isArray(profiles)) {
+    if (profiles !== undefined) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: 'nutritionProfiles',
+        message: 'Nutrition profiles must be an array.',
+      });
+    }
+    return;
+  }
+
   profiles.forEach((profile, profileIndex) => {
+    if (!isRecord(profile)) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}]`,
+        message: 'Nutrition profiles must be objects.',
+      });
+      return;
+    }
+
+    if (!isRecord(profile.nutrients)) {
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}].nutrients`,
+        message: 'Nutrition profile nutrients must be an object.',
+      });
+      return;
+    }
+
     for (const [nutrientCode, nutrientValue] of Object.entries(
       profile.nutrients,
     )) {
@@ -510,8 +782,12 @@ function hasPassingDbAlignmentReport(
 }
 
 function isNutrientValueMissing(
-  nutrientValue: IngredientImportNutrientValue,
+  nutrientValue: unknown,
 ): boolean {
+  if (!isRecord(nutrientValue)) {
+    return true;
+  }
+
   const value = nutrientValue.value;
 
   if (value === null) {
@@ -526,12 +802,16 @@ function isNutrientValueMissing(
     return isNumericValueMissing(Number(trimmedValue), nutrientValue);
   }
 
+  if (typeof value !== 'number') {
+    return true;
+  }
+
   return isNumericValueMissing(value, nutrientValue);
 }
 
 function isNumericValueMissing(
   value: number,
-  nutrientValue: IngredientImportNutrientValue,
+  nutrientValue: Record<string, unknown>,
 ): boolean {
   if (!Number.isFinite(value)) {
     return true;
@@ -540,11 +820,11 @@ function isNumericValueMissing(
   return value === 0 && nutrientValue.measuredZero !== true;
 }
 
-function hasText(value: string | undefined): boolean {
-  return value?.trim().length ? true : false;
+function hasText(value: unknown): value is string {
+  return hasTextValue(value);
 }
 
-function firstText(...values: Array<string | undefined>): string | undefined {
+function firstText(...values: unknown[]): string | undefined {
   return values.find((value) => hasText(value))?.trim();
 }
 
@@ -559,8 +839,9 @@ const nutritionStateTags: NutritionStateTag[] = [
   'prepared',
 ];
 
-function isNutritionStateTag(
-  value: NutritionStateTag | undefined,
-): value is NutritionStateTag {
-  return value !== undefined && nutritionStateTags.includes(value);
+function isNutritionStateTag(value: unknown): value is NutritionStateTag {
+  return (
+    typeof value === 'string' &&
+    nutritionStateTags.includes(value as NutritionStateTag)
+  );
 }

@@ -91,6 +91,10 @@ export class ReimbursementService {
   ): Promise<PreparedReimbursementSubmission> {
     const purchaseListIds = dto.purchaseListIds || [];
 
+    if (new Set(purchaseListIds).size !== purchaseListIds.length) {
+      throw new BadRequestException('同一采购清单不能重复提交');
+    }
+
     // 验证发票照片
     if (dto.receiptUrls.length === 0) {
       throw new BadRequestException('至少需要一张发票照片');
@@ -321,6 +325,8 @@ export class ReimbursementService {
   async resubmitReimbursement(
     id: string,
     dto: SubmitReimbursementDto,
+    actorUserId?: string,
+    isAdmin = false,
   ): Promise<Reimbursement> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
@@ -335,6 +341,19 @@ export class ReimbursementService {
     ) {
       throw new BadRequestException(
         `只有被驳回或需要重新提交的报销单才能重新提交。当前状态：${reimbursement.status}`,
+      );
+    }
+
+    if (!isAdmin && reimbursement.submittedById !== actorUserId) {
+      throw new BadRequestException('只能重新提交本人创建的报销单');
+    }
+
+    if (
+      dto.receiptUrls.length !== reimbursement.receiptUrls.length ||
+      dto.receiptUrls.some((url, index) => reimbursement.receiptUrls[index] !== url)
+    ) {
+      throw new BadRequestException(
+        '重新提交时请通过凭证管理单独增删凭证，不能直接替换凭证链接',
       );
     }
 

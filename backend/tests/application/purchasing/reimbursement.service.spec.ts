@@ -328,7 +328,7 @@ describe('ReimbursementService', () => {
 
     const result = await service.resubmitReimbursement('reimbursement-1', {
       purchaseListIds: [],
-      receiptUrls: ['https://example.com/new.jpg'],
+      receiptUrls: ['https://example.com/old.jpg'],
       totalActualCost: 260,
       platformShippingFee: 10,
       platformPackagingFee: 0,
@@ -336,13 +336,13 @@ describe('ReimbursementService', () => {
         { category: 'RENT', description: '6月房租', amount: 200 },
         { category: 'UTILITIES', description: '6月水电', amount: 50 },
       ],
-    });
+    }, 'staff-1');
 
     expect(result.status).toBe(ReimbursementStatus.PENDING_REVIEW);
     expect(result.reviewedById).toBeUndefined();
     expect(result.reviewedAt).toBeUndefined();
     expect(result.reviewComment).toBeUndefined();
-    expect(result.receiptUrls).toEqual(['https://example.com/new.jpg']);
+    expect(result.receiptUrls).toEqual(['https://example.com/old.jpg']);
     expect(result.totalActualCost).toBe(260);
     expect(result.platformShippingFee).toBe(10);
     expect(result.platformPackagingFee).toBe(0);
@@ -369,7 +369,7 @@ describe('ReimbursementService', () => {
     await expect(
       service.resubmitReimbursement('reimbursement-1', {
         purchaseListIds: [],
-        receiptUrls: ['https://example.com/new.jpg'],
+        receiptUrls: ['https://example.com/old.jpg'],
         totalActualCost: 260,
         platformShippingFee: 10,
         platformPackagingFee: 0,
@@ -377,7 +377,7 @@ describe('ReimbursementService', () => {
           { category: 'RENT', description: '6月房租', amount: 200 },
           { category: 'UTILITIES', description: '6月水电', amount: 40 },
         ],
-      }),
+      }, 'staff-1'),
     ).rejects.toThrow('报销总金额与费用明细不匹配');
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
   });
@@ -423,12 +423,12 @@ describe('ReimbursementService', () => {
 
     const result = await service.resubmitReimbursement('reimbursement-1', {
       purchaseListIds: ['purchase-list-2'],
-      receiptUrls: ['https://example.com/new.jpg'],
+      receiptUrls: ['https://example.com/old.jpg'],
       totalActualCost: 185,
       platformShippingFee: 0,
       platformPackagingFee: 0,
       customFees: [],
-    });
+    }, 'staff-1');
 
     expect(result.purchaseLists).toEqual([selectedPurchaseList]);
     expect(

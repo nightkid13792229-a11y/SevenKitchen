@@ -246,6 +246,11 @@ function validateFoodManifest(
     });
   }
 
+  const foodNutritionProfilesAreValid = validateFoodNutritionProfileShapes(
+    manifest,
+    errors,
+  );
+
   if (!hasItems(manifest.sourceCandidates)) {
     errors.push({
       code: 'FOOD_NUTRITION_REQUIRED',
@@ -257,10 +262,13 @@ function validateFoodManifest(
       return;
     }
     validateFoodSourceCandidates(manifest, errors);
-    validateFoodProfileSourceBindings(manifest, errors);
+    if (foodNutritionProfilesAreValid) {
+      validateFoodProfileSourceBindings(manifest, errors);
+    }
   }
 
   if (
+    foodNutritionProfilesAreValid &&
     foodManifestUsesCfctFallback(manifest) &&
     !hasItems(manifest.sourceSearchLog)
   ) {
@@ -271,6 +279,7 @@ function validateFoodManifest(
         'FOOD imports using CFCT fallback data must include source search evidence.',
     });
   } else if (
+    foodNutritionProfilesAreValid &&
     foodManifestUsesCfctFallback(manifest) &&
     !hasCompleteCfctFallbackSearchEvidence(manifest.sourceSearchLog)
   ) {
@@ -290,16 +299,19 @@ function foodManifestUsesCfctFallback(
     Array.isArray(manifest.nutritionProfiles) &&
     manifest.nutritionProfiles.some(
       (profile) =>
-        isRecord(profile) && hasCfctSourceToken(profile.dataSource as string),
+        isRecord(profile) && hasCfctSourceToken(profile.dataSource),
     )
   );
 }
 
-function hasCfctSourceToken(value: string | null | undefined): boolean {
-  const normalizedValue = value?.trim();
+function hasCfctSourceToken(value: unknown): boolean {
+  if (!hasTextValue(value)) {
+    return false;
+  }
+
+  const normalizedValue = value.trim();
 
   return (
-    normalizedValue !== undefined &&
     normalizedValue.toUpperCase().split(/[^A-Z0-9]+/).includes('CFCT')
   );
 }
@@ -349,7 +361,7 @@ function hasCompleteCfctFallbackSearchEvidence(
   }
 
   const cfctEntry = entriesBySource.get('CFCT');
-  if (cfctEntry === undefined) {
+  if (cfctEntry?.status !== 'candidate_found') {
     return false;
   }
 
@@ -415,6 +427,57 @@ function validateFoodSourceCandidateShapes(
         message:
           'FOOD source candidate state tags must be an array of supported nutrition states.',
       });
+    }
+
+    for (const field of [
+      'sourceId',
+      'sourceName',
+      'source',
+      'matchedName',
+    ]) {
+      if (candidate[field] !== undefined && !hasTextValue(candidate[field])) {
+        isValid = false;
+        errors.push({
+          code: 'INVALID_MANIFEST_SHAPE',
+          path: `sourceCandidates[${candidateIndex}].${field}`,
+          message: `FOOD source candidate ${field} must be text when provided.`,
+        });
+      }
+    }
+  });
+
+  return isValid;
+}
+
+function validateFoodNutritionProfileShapes(
+  manifest: IngredientImportManifest,
+  errors: ManifestValidationIssue[],
+): boolean {
+  if (!Array.isArray(manifest.nutritionProfiles)) {
+    return manifest.nutritionProfiles === undefined;
+  }
+
+  let isValid = true;
+  manifest.nutritionProfiles.forEach((profile, profileIndex) => {
+    if (!isRecord(profile)) {
+      isValid = false;
+      errors.push({
+        code: 'INVALID_MANIFEST_SHAPE',
+        path: `nutritionProfiles[${profileIndex}]`,
+        message: 'FOOD nutrition profiles must be objects.',
+      });
+      return;
+    }
+
+    for (const field of ['dataSource', 'preparationState']) {
+      if (profile[field] !== undefined && !hasTextValue(profile[field])) {
+        isValid = false;
+        errors.push({
+          code: 'INVALID_MANIFEST_SHAPE',
+          path: `nutritionProfiles[${profileIndex}].${field}`,
+          message: `FOOD nutrition profile ${field} must be text when provided.`,
+        });
+      }
     }
   });
 
@@ -524,12 +587,12 @@ function validateFoodProfileSourceBindings(
 }
 
 function resolveProfileApprovedSource(
-  dataSource: string | undefined,
+  dataSource: unknown,
 ): ApprovedNutritionSource | undefined {
-  const normalizedSource = dataSource?.trim().toUpperCase();
-  if (!normalizedSource) {
+  if (!hasTextValue(dataSource)) {
     return undefined;
   }
+  const normalizedSource = dataSource.trim().toUpperCase();
   if (normalizedSource === 'USDA') {
     return 'USDA_FDC';
   }
@@ -540,8 +603,8 @@ function resolveProfileApprovedSource(
   return toApprovedNutritionSource(normalizedSource);
 }
 
-function sourceFromSourceId(sourceId: string | undefined): string | undefined {
-  const prefix = sourceId?.split(':')[0]?.trim();
+function sourceFromSourceId(sourceId: unknown): string | undefined {
+  const prefix = typeof sourceId === 'string' ? sourceId.split(':')[0]?.trim() : undefined;
   if (!prefix) {
     return undefined;
   }
@@ -558,11 +621,11 @@ function resolveRequestedNutritionState(
 }
 
 function resolveProfileNutritionState(
-  profile: IngredientImportNutritionProfile | undefined,
+  profile: unknown,
 ): NutritionStateTag {
-  const normalizedState = profile?.preparationState?.trim() as
-    | NutritionStateTag
-    | undefined;
+  const normalizedState = isRecord(profile) && hasTextValue(profile.preparationState)
+    ? profile.preparationState.trim()
+    : undefined;
   return isNutritionStateTag(normalizedState) ? normalizedState : 'raw';
 }
 
@@ -757,11 +820,11 @@ function isNumericValueMissing(
   return value === 0 && nutrientValue.measuredZero !== true;
 }
 
-function hasText(value: string | undefined): boolean {
-  return value?.trim().length ? true : false;
+function hasText(value: unknown): value is string {
+  return hasTextValue(value);
 }
 
-function firstText(...values: Array<string | undefined>): string | undefined {
+function firstText(...values: unknown[]): string | undefined {
   return values.find((value) => hasText(value))?.trim();
 }
 
@@ -776,8 +839,9 @@ const nutritionStateTags: NutritionStateTag[] = [
   'prepared',
 ];
 
-function isNutritionStateTag(
-  value: NutritionStateTag | undefined,
-): value is NutritionStateTag {
-  return value !== undefined && nutritionStateTags.includes(value);
+function isNutritionStateTag(value: unknown): value is NutritionStateTag {
+  return (
+    typeof value === 'string' &&
+    nutritionStateTags.includes(value as NutritionStateTag)
+  );
 }

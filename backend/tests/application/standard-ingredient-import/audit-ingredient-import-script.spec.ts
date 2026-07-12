@@ -110,6 +110,61 @@ describe('audit-ingredient-import script', () => {
     expect(result.audit?.ok).toBe(false);
   });
 
+  it('reports validation errors instead of crashing when a FOOD nutrition profile is null', () => {
+    const result = runAudit({
+      version: 1,
+      operationMode: 'local-draft',
+      ingredient: { type: 'FOOD', name: 'Malformed food' },
+      nutritionProfiles: [null],
+      sourceCandidates: [
+        {
+          source: 'USDA_FDC',
+          sourceId: 'USDA_FDC:171077',
+          sourceName: 'USDA FoodData Central',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 92,
+        },
+      ],
+      operatorConfirmation: { localWriteApproved: false },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Audit failed with');
+    expect(result.stderr).not.toContain('Cannot read properties');
+    expect(result.audit?.ok).toBe(false);
+  });
+
+  it('reports validation errors instead of crashing when a FOOD source id is not text', () => {
+    const result = runAudit({
+      version: 1,
+      operationMode: 'local-draft',
+      ingredient: { type: 'FOOD', name: 'Malformed food' },
+      nutritionProfiles: [
+        {
+          id: 'profile-1',
+          dataSource: 'USDA_FDC',
+          basis: 'PER_100G',
+          preparationState: 'raw',
+          nutrients: { energyKcal: { value: 12, unit: 'kcal' } },
+        },
+      ],
+      sourceCandidates: [
+        {
+          sourceId: 123,
+          sourceName: 'USDA FoodData Central',
+          stateTags: ['raw'],
+          essentialCoveragePercent: 92,
+        },
+      ],
+      operatorConfirmation: { localWriteApproved: false },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Audit failed with');
+    expect(result.stderr).not.toContain('split is not a function');
+    expect(result.audit?.ok).toBe(false);
+  });
+
   function runAudit(manifest: unknown): {
     status: number | null;
     stderr: string;

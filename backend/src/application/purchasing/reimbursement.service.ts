@@ -43,6 +43,15 @@ export interface ReviewReimbursementDto {
   comment?: string;
 }
 
+interface PreparedReimbursementSubmission {
+  purchaseLists: PurchaseList[];
+  purchaseListIds: string[];
+  totalEstimatedCost: number;
+  normalizedCustomFees: ReimbursementCustomFee[];
+  purchaseListsTotal: number;
+  calculatedTotal: number;
+}
+
 @Injectable()
 export class ReimbursementService {
   private readonly logger = new Logger(ReimbursementService.name);
@@ -76,14 +85,15 @@ export class ReimbursementService {
     return `${prefix}${sequence}`;
   }
 
-  /**
-   * 提交报销申请
-   */
-  async submitReimbursement(
+  private async prepareReimbursementSubmission(
     dto: SubmitReimbursementDto,
-    submittedById: string,
-  ): Promise<Reimbursement> {
+    options?: { reimbursementId?: string },
+  ): Promise<PreparedReimbursementSubmission> {
     const purchaseListIds = dto.purchaseListIds || [];
+
+    if (new Set(purchaseListIds).size !== purchaseListIds.length) {
+      throw new BadRequestException('同一采购清单不能重复提交');
+    }
 
     // 验证发票照片
     if (dto.receiptUrls.length === 0) {
@@ -97,10 +107,6 @@ export class ReimbursementService {
     if (dto.totalActualCost <= 0) {
       throw new BadRequestException('实际采购总额必须大于0');
     }
-
-    this.logger.log(
-      `Submitting reimbursement for ${purchaseListIds.length} purchase lists by user ${submittedById}`,
-    );
 
     // 查询所有采购清单（如果有）
     const purchaseLists: PurchaseList[] = [];
@@ -120,7 +126,11 @@ export class ReimbursementService {
       }
 
       // 验证采购清单未被其他报销单关联
-      if (list.reimbursementId) {
+      const allowedReimbursementId = options?.reimbursementId;
+      if (
+        list.reimbursementId &&
+        list.reimbursementId !== allowedReimbursementId
+      ) {
         throw new BadRequestException(
           `采购清单 ${listId} 已关联到报销单 ${list.reimbursementId}`,
         );
@@ -190,6 +200,34 @@ export class ReimbursementService {
       `Validated reimbursement cost details: purchaseLists=¥${purchaseListsTotal}, ` +
         `shipping=¥${dto.platformShippingFee || 0}, packaging=¥${dto.platformPackagingFee || 0}, ` +
         `custom=¥${customFeesTotal}, total=¥${dto.totalActualCost}`,
+    );
+
+    return {
+      purchaseLists,
+      purchaseListIds,
+      totalEstimatedCost,
+      normalizedCustomFees,
+      purchaseListsTotal,
+      calculatedTotal,
+    };
+  }
+
+  /**
+   * 提交报销申请
+   */
+  async submitReimbursement(
+    dto: SubmitReimbursementDto,
+    submittedById: string,
+  ): Promise<Reimbursement> {
+    const {
+      purchaseLists,
+      purchaseListIds,
+      totalEstimatedCost,
+      normalizedCustomFees,
+    } = await this.prepareReimbursementSubmission(dto);
+
+    this.logger.log(
+      `Submitting reimbursement for ${purchaseListIds.length} purchase lists by user ${submittedById}`,
     );
 
     // 生成报销单号
@@ -287,6 +325,8 @@ export class ReimbursementService {
   async resubmitReimbursement(
     id: string,
     dto: SubmitReimbursementDto,
+    actorUserId?: string,
+    isAdmin = false,
   ): Promise<Reimbursement> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
@@ -304,17 +344,61 @@ export class ReimbursementService {
       );
     }
 
+    if (!isAdmin && reimbursement.submittedById !== actorUserId) {
+      throw new BadRequestException('只能重新提交本人创建的报销单');
+    }
+
+    if (
+      dto.receiptUrls.length !== reimbursement.receiptUrls.length ||
+      dto.receiptUrls.some((url, index) => reimbursement.receiptUrls[index] !== url)
+    ) {
+      throw new BadRequestException(
+        '重新提交时请通过凭证管理单独增删凭证，不能直接替换凭证链接',
+      );
+    }
+
     this.logger.log(`Resubmitting reimbursement ${id}`);
 
-    // 重新提交（会清除审核信息）
-    reimbursement.resubmit(dto.receiptUrls);
+    const {
+      purchaseLists,
+      purchaseListIds,
+      totalEstimatedCost,
+      normalizedCustomFees,
+    } = await this.prepareReimbursementSubmission(dto, {
+      reimbursementId: id,
+    });
+
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: ReimbursementStatus.PENDING_REVIEW,
+      totalActualCost: dto.totalActualCost,
+      totalEstimatedCost,
+      receiptUrls: dto.receiptUrls,
+      receiptKeys: reimbursement.receiptKeys,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists,
+      platformShippingFee: dto.platformShippingFee,
+      platformPackagingFee: dto.platformPackagingFee,
+      customFees: normalizedCustomFees,
+      paymentProofUrls: reimbursement.paymentProofUrls,
+      paymentProofKeys: reimbursement.paymentProofKeys,
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: undefined,
+    });
 
     // 保存报销单
-    const saved = await this.reimbursementRepository.save(reimbursement);
+    const saved =
+      await this.reimbursementRepository.saveWithPurchaseListReplacement(
+        updated,
+      );
 
     await this.ingredientPricingService.syncPendingChangesForReimbursement(
       saved.id,
-      reimbursement.purchaseLists.map((purchaseList) => purchaseList.id),
+      purchaseListIds,
     );
     await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
       saved.id,
@@ -584,7 +668,7 @@ export class ReimbursementService {
       submittedAt: reimbursement.submittedAt,
       reviewedById:
         finalStatus === ReimbursementStatus.REIMBURSED
-          ? operatorId ?? reimbursement.reviewedById
+          ? (operatorId ?? reimbursement.reviewedById)
           : reimbursement.reviewedById,
       reviewedAt:
         finalStatus === ReimbursementStatus.REIMBURSED

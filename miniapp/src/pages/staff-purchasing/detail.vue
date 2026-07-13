@@ -1579,6 +1579,12 @@ const clearItemNoPurchase = (item: any) => {
   });
 };
 
+const goToReimbursementAfterCompletion = () => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/reimbursement/submit?purchaseListId=${purchaseListId.value}`,
+  });
+};
+
 // 确认采购完成
 const completePurchase = () => {
   const unhandledItems = getUnhandledPurchaseItems();
@@ -1604,6 +1610,17 @@ const completePurchase = () => {
             uni.showToast({ title: '操作成功', icon: 'success' });
             // 刷新详情
             await loadDetail();
+            uni.showModal({
+              title: '采购已完成',
+              content: '是否现在提交这张采购清单的报销？',
+              confirmText: '去报销',
+              cancelText: '稍后',
+              success: (modalRes) => {
+                if (modalRes.confirm) {
+                  goToReimbursementAfterCompletion();
+                }
+              },
+            });
           } else {
             uni.showToast({
               title: response.message || '操作失败',

@@ -1,396 +1,700 @@
 <template>
   <view class="submit-reimbursement-page">
-    <!-- 顶部标题 -->
-    <view class="header">
-      <text class="title">提交报销申请</text>
-      <text class="subtitle">采购清单可选，行政杂费可直接登记并上传支付记录</text>
+    <view class="page-header">
+      <text class="title">{{ resubmitId ? '重新提交报销' : '申请报销' }}</text>
+      <text class="subtitle">{{ stepSubtitle }}</text>
     </view>
 
-    <!-- 已完成的采购清单 -->
-    <view class="section">
-      <text class="section-title">选择采购清单（可选）</text>
-      <view v-if="completedPurchaseLists.length === 0" class="empty-state">
-        <text class="empty-text">暂无已完成的采购清单</text>
-        <text class="empty-hint">您可以直接提交其它费用的报销申请</text>
+    <view class="step-indicator">
+      <view
+        v-for="step in visibleSteps"
+        :key="step.value"
+        class="step-dot"
+        :class="{ active: step.value === currentStep, done: isStepDone(step.value) }"
+      >
+        <text class="dot-index">{{ step.index }}</text>
+        <text class="dot-label">{{ step.label }}</text>
       </view>
-      <view v-else class="purchase-lists">
+    </view>
+
+    <view v-if="currentStep === 'TYPE'" class="section">
+      <text class="section-title">选择报销类型</text>
+      <view class="type-options">
         <view
-          v-for="list in completedPurchaseLists"
+          v-for="option in reimbursementFlowTypeOptions"
+          :key="option.value"
+          class="type-option"
+          :class="{ selected: flowType === option.value }"
+          @tap="selectFlowType(option.value)"
+        >
+          <view class="type-copy">
+            <text class="type-title">{{ option.label }}</text>
+            <text class="type-desc">{{ option.description }}</text>
+          </view>
+          <text class="type-check">{{ flowType === option.value ? '已选' : '选择' }}</text>
+        </view>
+      </view>
+      <view class="notice-strip">
+        <text>买了食材、补剂、包材，走采购报销；房租、水电、工资/人工等日常支出，走经营费用报销。</text>
+      </view>
+    </view>
+
+    <view v-if="currentStep === 'PURCHASE_DETAILS'" class="section">
+      <view class="section-head">
+        <text class="section-title">采购报销</text>
+        <text class="section-total">已选 ¥{{ purchaseListsTotalText }}</text>
+      </view>
+
+      <view class="filter-tabs">
+        <view
+          v-for="filter in purchaseListFilters"
+          :key="filter.value"
+          class="filter-tab"
+          :class="{ active: activePurchaseFilter === filter.value }"
+          @tap="activePurchaseFilter = filter.value"
+        >
+          <text>{{ filter.label }}</text>
+        </view>
+      </view>
+
+      <view v-if="filteredPurchaseLists.length === 0" class="empty-state">
+        <text class="empty-title">暂无可选采购清单</text>
+        <text class="empty-desc">包材采购请先创建包材补货清单，再回来关联报销。</text>
+      </view>
+
+      <view v-else class="purchase-list">
+        <view
+          v-for="list in filteredPurchaseLists"
           :key="list.id"
-          class="list-item"
+          class="purchase-item"
           :class="{ selected: selectedListIds.includes(list.id) }"
           @tap="togglePurchaseList(list.id)"
         >
-          <view class="checkbox">
-            <text v-if="selectedListIds.includes(list.id)" class="check-icon">✓</text>
-            <text v-else class="uncheck-icon">⬜</text>
+          <view class="purchase-main">
+            <view class="purchase-title-row">
+              <text class="purchase-kind">{{ getPurchaseListKindLabel(list) }}</text>
+              <text class="purchase-date">{{ formatDate(list.targetDate) }}</text>
+            </view>
+            <text class="purchase-summary">{{ getPurchaseListSummary(list) }}</text>
+            <text class="purchase-meta">{{ list.itemCount || getPurchaseItems(list).length || 0 }} 项 · ¥{{ getPurchaseListAmount(list).toFixed(2) }}</text>
           </view>
-          <view class="list-info">
-            <text class="list-date">{{ formatDate(list.targetDate) }}</text>
-            <text class="list-count">{{ list.itemCount }} 种原料</text>
-            <text class="list-cost">采购金额: ¥{{ (list.totalActualCost ?? list.totalEstimatedCost).toFixed(2) }}</text>
+          <text class="select-state">{{ selectedListIds.includes(list.id) ? '已选' : '选择' }}</text>
+        </view>
+      </view>
+
+      <view class="fee-grid">
+        <view class="field">
+          <text class="field-label">采购相关运费</text>
+          <view class="money-input">
+            <text>¥</text>
+            <input v-model="platformShippingFee" type="digit" placeholder="0.00" />
           </view>
         </view>
+        <view class="field">
+          <text class="field-label">采购相关打包费</text>
+          <view class="money-input">
+            <text>¥</text>
+            <input v-model="platformPackagingFee" type="digit" placeholder="0.00" />
+          </view>
+        </view>
+      </view>
+
+      <view v-if="!hasPackagingLists" class="notice-strip">
+        <text>包材清单会进入采购报销，不放在经营费用里。没有包材清单时，请先到补货里创建包材补货清单。</text>
       </view>
     </view>
 
-    <!-- 其它费用 -->
-    <view class="section">
-      <text class="section-title">行政杂费 / 其它费用</text>
-      <view class="fees-row">
-        <view class="fee-item-half">
-          <text class="fee-label">平台运费</text>
-          <view class="fee-input-wrapper">
-            <text class="currency">¥</text>
-            <input
-              class="fee-input"
-              type="digit"
-              v-model="platformShippingFee"
-              placeholder="0.00"
-              @input="calculateTotal"
-            />
-          </view>
-        </view>
-        <view class="fee-item-half">
-          <text class="fee-label">平台打包费</text>
-          <view class="fee-input-wrapper">
-            <text class="currency">¥</text>
-            <input
-              class="fee-input"
-              type="digit"
-              v-model="platformPackagingFee"
-              placeholder="0.00"
-              @input="calculateTotal"
-            />
-          </view>
+    <view v-if="currentStep === 'OPERATING_DETAILS'" class="section">
+      <view class="section-head">
+        <text class="section-title">经营费用报销</text>
+        <text class="section-total">合计 ¥{{ operatingTotalText }}</text>
+      </view>
+
+      <view class="category-row">
+        <view
+          v-for="option in customFeeCategoryOptions"
+          :key="option.value"
+          class="category-chip"
+          @tap="selectCustomFeeCategory(0, option.value)"
+        >
+          <text>{{ option.label }}</text>
         </view>
       </view>
-      <view class="custom-fees">
-        <view class="custom-fee-header">
-          <text class="custom-fee-title">添加行政费用分类</text>
-          <view class="add-custom-fee-btn" @tap="addCustomFee">
-            <text>+ 添加</text>
+
+      <view class="expense-list">
+        <view
+          v-for="(fee, index) in customFees"
+          :key="index"
+          class="expense-item"
+        >
+          <view class="expense-head">
+            <text class="expense-title">{{ index === 0 ? '费用 1' : `费用 ${index + 1}` }}</text>
+            <text
+              v-if="index > 0"
+              class="remove-link"
+              @tap="deleteCustomFee(index)"
+            >
+              删除
+            </text>
           </view>
-        </view>
-        <view v-if="customFees.length === 0" class="empty-custom-fees">
-          <text>暂无行政杂费</text>
-        </view>
-        <view v-else class="custom-fee-list">
-          <view
-            v-for="(fee, index) in customFees"
-            :key="index"
-            class="custom-fee-item"
-          >
-            <view class="custom-fee-content">
-              <view class="custom-fee-inputs">
-                <view class="custom-fee-category-group">
-                  <view
-                    v-for="option in customFeeCategoryOptions"
-                    :key="option.value"
-                    class="category-chip"
-                    :class="{ active: fee.category === option.value }"
-                    @tap.stop="selectCustomFeeCategory(index, option.value)"
-                  >
-                    <text>{{ option.label }}</text>
-                  </view>
-                </view>
-                <input
-                  class="custom-fee-desc"
-                  v-model="fee.description"
-                  placeholder="补充说明（如 2026年4月房租）"
-                />
-                <view class="custom-fee-amount-wrapper">
-                  <text class="currency">¥</text>
-                  <input
-                    class="custom-fee-amount"
-                    type="digit"
-                    v-model="fee.amount"
-                    placeholder="0.00"
-                    @input="calculateTotal"
-                  />
-                </view>
-              </view>
-              <view class="delete-custom-fee-btn" @tap.stop="deleteCustomFee(index)">
-                <text>删除</text>
-              </view>
+          <view class="category-row compact">
+            <view
+              v-for="option in customFeeCategoryOptions"
+              :key="option.value"
+              class="category-chip"
+              :class="{ active: fee.category === option.value }"
+              @tap="selectCustomFeeCategory(index, option.value)"
+            >
+              <text>{{ option.label }}</text>
             </view>
           </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 支付记录照片上传 -->
-    <view class="section">
-      <text class="section-title">上传转账或支付记录照片</text>
-      <view class="photo-upload">
-        <view v-for="(photo, index) in receiptUrls" :key="index" class="photo-item">
-          <image :src="photo.url" mode="aspectFill" @tap="previewPhoto(index)" @error="handleImageError(index, photo.url)" />
-          <text class="debug-url" v-if="true">{{ photo.url.slice(-30) }}</text>
-          <view class="delete-btn" @tap.stop="deletePhoto(index)">
-            <text>×</text>
+          <input
+            v-model="fee.description"
+            class="text-input"
+            placeholder="说明，例如 6月房租、临时工具"
+          />
+          <view class="money-input">
+            <text>¥</text>
+            <input v-model="fee.amount" type="digit" placeholder="0.00" />
           </view>
         </view>
+      </view>
+
+      <button class="ghost-btn" @tap="addCustomFee">添加一项费用</button>
+      <view class="notice-strip">
+        <text>员工只填写实际发生的费用和凭证；是否分摊、分摊周期和成本归属由管理员处理。</text>
+      </view>
+    </view>
+
+    <view v-if="currentStep === 'RECEIPTS'" class="section">
+      <view class="section-head">
+        <text class="section-title">上传支付凭证</text>
+        <text class="section-total">{{ receiptUrls.length }} 张</text>
+      </view>
+      <view v-if="!resubmitId" class="notice-strip">
+        <text>凭证需要看清金额和支付时间，可上传转账截图、支付记录或发票照片。</text>
+      </view>
+      <view v-else class="notice-strip">
+        <text>重新提交时凭证不能在此修改；如需更换凭证，请先返回报销详情，通过凭证管理处理。</text>
+      </view>
+
+      <view class="photo-grid">
         <view
-          class="upload-btn"
-          @tap="uploadPhoto"
+          v-for="(photo, index) in receiptUrls"
+          :key="`${photo.url}-${index}`"
+          class="photo-item"
         >
-          <text class="icon">+</text>
-          <text class="text">添加照片</text>
+          <image
+            :src="photo.url"
+            mode="aspectFill"
+            @tap="previewPhoto(index)"
+            @error="handleImageError(index)"
+          />
+          <view
+            v-if="!resubmitId"
+            class="delete-photo"
+            @tap.stop="deletePhoto(index)"
+          >
+            <text>删除</text>
+          </view>
+        </view>
+        <view v-if="!resubmitId" class="upload-tile" @tap="uploadPhoto">
+          <text class="upload-plus">+</text>
+          <text>添加凭证</text>
         </view>
       </view>
     </view>
 
-    <!-- 提交按钮和总金额 -->
-    <view class="bottom-actions">
-      <view class="total-display">
-        <text class="total-label">总报销金额:</text>
-        <text class="total-amount">¥{{ totalReimbursementAmount }}</text>
+    <view v-if="currentStep === 'CONFIRM'" class="section">
+      <text class="section-title">确认提交</text>
+      <view class="summary-block">
+        <view class="summary-row">
+          <text class="label">报销类型</text>
+          <text class="value">{{ flowTypeLabel }}</text>
+        </view>
+        <view class="summary-row">
+          <text class="label">支付凭证</text>
+          <text class="value">{{ receiptUrls.length }} 张</text>
+        </view>
+        <view class="summary-row total">
+          <text class="label">报销合计</text>
+          <text class="value">¥{{ totalReimbursementAmount }}</text>
+        </view>
       </view>
+
+      <view v-if="flowType === 'PURCHASE'" class="confirm-list">
+        <view
+          v-for="list in selectedPurchaseLists"
+          :key="list.id"
+          class="confirm-row"
+        >
+          <text>{{ getPurchaseListKindLabel(list) }} · {{ formatDate(list.targetDate) }}</text>
+          <text>¥{{ getPurchaseListAmount(list).toFixed(2) }}</text>
+        </view>
+        <view v-if="shippingFeeAmount > 0" class="confirm-row">
+          <text>采购相关运费</text>
+          <text>¥{{ shippingFeeAmount.toFixed(2) }}</text>
+        </view>
+        <view v-if="packagingFeeAmount > 0" class="confirm-row">
+          <text>采购相关打包费</text>
+          <text>¥{{ packagingFeeAmount.toFixed(2) }}</text>
+        </view>
+      </view>
+
+      <view v-else class="confirm-list">
+        <view
+          v-for="(fee, index) in normalizedOperatingFees"
+          :key="index"
+          class="confirm-row"
+        >
+          <text>{{ getReimbursementCustomFeeCategoryLabel(fee.category) }} · {{ fee.description }}</text>
+          <text>¥{{ fee.amount.toFixed(2) }}</text>
+        </view>
+      </view>
+
+      <view class="notice-strip">
+        <text>提交后进入管理员处理。如果金额和凭证时间不一致，管理员会要求补充说明。</text>
+      </view>
+    </view>
+
+    <view v-if="currentStep === 'SUCCESS'" class="section success-section">
+      <text class="success-title">提交成功</text>
+      <text v-if="lastSubmittedReimbursement?.claimNumber" class="success-number">
+        {{ lastSubmittedReimbursement.claimNumber }}
+      </text>
+      <text class="success-amount">¥{{ totalReimbursementAmount }}</text>
+      <text class="success-desc">当前状态：待报销。管理员处理后会更新状态。</text>
+      <view class="success-actions">
+        <button
+          v-if="lastSubmittedReimbursement?.id"
+          class="primary-btn"
+          @tap="goToSubmittedDetail"
+        >
+          查看详情
+        </button>
+        <button class="ghost-btn" @tap="goToList">返回列表</button>
+      </view>
+    </view>
+
+    <view v-if="currentStep !== 'SUCCESS'" class="bottom-actions">
+      <button v-if="canGoBack" class="ghost-btn" @tap="goBack">上一步</button>
       <button
-        class="submit-btn"
-        @tap="submitReimbursement"
-        :loading="submitting"
-        :disabled="!canSubmit"
+        v-if="currentStep !== 'CONFIRM'"
+        class="primary-btn"
+        @tap="goNext"
       >
-        <text v-if="!submitting">提交报销申请</text>
-        <text v-else>提交中...</text>
+        下一步
+      </button>
+      <button
+        v-else
+        class="primary-btn"
+        :loading="submitting"
+        :disabled="submitting"
+        @tap="submitReimbursement"
+      >
+        {{ submitting ? '提交中...' : '确认提交' }}
       </button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto, getReimbursementDetail } from '../api/purchasing';
 import {
-  reimbursementCustomFeeCategoryOptions,
-  type ReimbursementCustomFeeCategory,
-  inferReimbursementCustomFeeCategory,
+  deleteReceiptPhoto,
+  getPurchaseLists,
+  getReimbursementDetail,
+  resubmitReimbursement as resubmitReimbursementApi,
+  submitReimbursement as submitReimbursementApi,
+  uploadReceiptPhoto,
+} from '../api/purchasing';
+import {
   getReimbursementCustomFeeCategoryLabel,
+  inferReimbursementCustomFeeCategory,
+  reimbursementCustomFeeCategoryOptions,
+  reimbursementFlowTypeOptions,
+  type ReimbursementCustomFeeCategory,
 } from '../constants/reimbursement';
+import {
+  calculateReimbursementTotal,
+  getPurchaseListKindLabel,
+  isPackagingPurchaseList,
+  normalizeOperatingExpenseFees,
+  validateReimbursementStep,
+  type ReimbursementFlowStep,
+  type ReimbursementFlowType,
+} from './form-state';
 
-// 自定义费用类型
 interface CustomFee {
   category?: ReimbursementCustomFeeCategory;
   description: string;
   amount: string;
 }
 
-// 照片类型
 interface ReceiptPhoto {
   url: string;
   key: string;
 }
 
-// 状态管理
+type PurchaseFilter = 'ALL' | 'ORDER_DEMAND' | 'STOCK_REPLENISHMENT' | 'PACKAGING';
+
 const completedPurchaseLists = ref<any[]>([]);
 const selectedListIds = ref<string[]>([]);
 const receiptUrls = ref<ReceiptPhoto[]>([]);
 const platformShippingFee = ref('');
 const platformPackagingFee = ref('');
-const customFees = ref<CustomFee[]>([]);
+const customFees = ref<CustomFee[]>([
+  { category: 'RENT', description: '', amount: '' },
+]);
 const submitting = ref(false);
-const totalReimbursementAmount = ref('0.00');
-const customFeeCategoryOptions = reimbursementCustomFeeCategoryOptions;
+const flowType = ref<ReimbursementFlowType | ''>('');
+const currentStep = ref<ReimbursementFlowStep>('TYPE');
+const activePurchaseFilter = ref<PurchaseFilter>('ALL');
+const resubmitId = ref('');
+const lastSubmittedReimbursement = ref<any | null>(null);
 
-// 计算属性
-const canSubmit = computed(() => {
-  return (
-    receiptUrls.value.length > 0 &&
-    !submitting.value
+const purchaseListFilters: Array<{ label: string; value: PurchaseFilter }> = [
+  { label: '全部', value: 'ALL' },
+  { label: '日采', value: 'ORDER_DEMAND' },
+  { label: '补货', value: 'STOCK_REPLENISHMENT' },
+  { label: '包材', value: 'PACKAGING' },
+];
+
+const visibleSteps = computed(() => {
+  const detailStep =
+    flowType.value === 'OPERATING'
+      ? { value: 'OPERATING_DETAILS' as const, label: '费用', index: 2 }
+      : { value: 'PURCHASE_DETAILS' as const, label: '采购', index: 2 };
+
+  return [
+    { value: 'TYPE' as const, label: '类型', index: 1 },
+    detailStep,
+    { value: 'RECEIPTS' as const, label: '凭证', index: 3 },
+    { value: 'CONFIRM' as const, label: '确认', index: 4 },
+  ];
+});
+
+const stepSubtitle = computed(() => {
+  const copy: Record<ReimbursementFlowStep, string> = {
+    TYPE: '先选这次报销属于哪类支出',
+    PURCHASE_DETAILS: '选择一张或多张已完成采购清单',
+    OPERATING_DETAILS: '一次可以添加多项经营费用',
+    RECEIPTS: '上传能看清金额和支付时间的凭证',
+    CONFIRM: '核对无误后再交给管理员处理',
+    SUCCESS: '报销申请已进入管理员处理',
+  };
+
+  return copy[currentStep.value];
+});
+
+const canGoBack = computed(() => {
+  return currentStep.value !== 'TYPE' && currentStep.value !== 'SUCCESS';
+});
+
+const selectedPurchaseLists = computed(() => {
+  const selected = new Set(selectedListIds.value);
+  return completedPurchaseLists.value.filter((list) => selected.has(list.id));
+});
+
+const filteredPurchaseLists = computed(() => {
+  return completedPurchaseLists.value.filter((list) => {
+    if (activePurchaseFilter.value === 'ALL') return true;
+    if (activePurchaseFilter.value === 'PACKAGING') {
+      return isPackagingPurchaseList(list);
+    }
+    if (activePurchaseFilter.value === 'STOCK_REPLENISHMENT') {
+      return list.kind === 'STOCK_REPLENISHMENT' && !isPackagingPurchaseList(list);
+    }
+    return list.kind === activePurchaseFilter.value;
+  });
+});
+
+const hasPackagingLists = computed(() => {
+  return completedPurchaseLists.value.some((list) => isPackagingPurchaseList(list));
+});
+
+const shippingFeeAmount = computed(() => {
+  const parsed = Number(platformShippingFee.value);
+  return Number.isFinite(parsed) ? parsed : 0;
+});
+
+const packagingFeeAmount = computed(() => {
+  const parsed = Number(platformPackagingFee.value);
+  return Number.isFinite(parsed) ? parsed : 0;
+});
+
+const purchaseListsTotal = computed(() => {
+  return selectedPurchaseLists.value.reduce(
+    (sum, list) => sum + getPurchaseListAmount(list),
+    0,
   );
 });
 
-// 页面加载
-onLoad((options: any) => {
-  if (options.resubmitId) {
-    // 重新提交模式：加载已有报销单数据
-    loadExistingReimbursement(options.resubmitId);
-  } else {
-    // 新建模式：加载已完成的采购清单
-    loadCompletedPurchaseLists();
-  }
+const purchaseListsTotalText = computed(() => {
+  return purchaseListsTotal.value.toFixed(2);
 });
 
-// 计算总报销金额
-const calculateTotal = () => {
-  // 1. 采购清单金额（优先使用实际采购金额）
-  const purchaseListsTotal = completedPurchaseLists.value
-    .filter(list => selectedListIds.value.includes(list.id))
-    .reduce((sum, list) => sum + (list.totalActualCost ?? list.totalEstimatedCost), 0);
+const normalizedOperatingResult = computed(() =>
+  normalizeOperatingExpenseFees(customFees.value),
+);
 
-  // 2. 平台运费
-  const shippingFee = parseFloat(platformShippingFee.value) || 0;
+const normalizedOperatingFees = computed(() => {
+  return normalizedOperatingResult.value.ok
+    ? normalizedOperatingResult.value.fees
+    : [];
+});
 
-  // 3. 平台打包费
-  const packagingFee = parseFloat(platformPackagingFee.value) || 0;
+const operatingTotalText = computed(() => {
+  return normalizedOperatingFees.value
+    .reduce((sum, fee) => sum + fee.amount, 0)
+    .toFixed(2);
+});
 
-  // 4. 自定义费用
-  const customFeesTotal = customFees.value.reduce((sum, fee) => {
-    return sum + (parseFloat(fee.amount) || 0);
-  }, 0);
+const totalAmount = computed(() => {
+  if (flowType.value === 'OPERATING') {
+    return calculateReimbursementTotal({
+      purchaseLists: [],
+      selectedListIds: [],
+      platformShippingFee: 0,
+      platformPackagingFee: 0,
+      customFees: customFees.value,
+    });
+  }
 
-  // 计算总额
-  const total = purchaseListsTotal + shippingFee + packagingFee + customFeesTotal;
-  totalReimbursementAmount.value = total.toFixed(2);
+  return calculateReimbursementTotal({
+    purchaseLists: completedPurchaseLists.value,
+    selectedListIds: selectedListIds.value,
+    platformShippingFee: platformShippingFee.value,
+    platformPackagingFee: platformPackagingFee.value,
+    customFees: [],
+  });
+});
+
+const totalReimbursementAmount = computed(() => totalAmount.value.toFixed(2));
+
+const flowTypeLabel = computed(() => {
+  return flowType.value === 'OPERATING' ? '经营费用报销' : '采购报销';
+});
+
+onLoad((options: any) => {
+  initializePage(options || {});
+});
+
+const initializePage = async (options: any) => {
+  const purchaseListId = options.purchaseListId ? `${options.purchaseListId}` : '';
+  resubmitId.value = options.resubmitId ? `${options.resubmitId}` : '';
+
+  if (resubmitId.value) {
+    await loadExistingReimbursement(resubmitId.value);
+    return;
+  }
+
+  if (purchaseListId) {
+    flowType.value = 'PURCHASE';
+    currentStep.value = 'PURCHASE_DETAILS';
+  }
+
+  await loadCompletedPurchaseLists();
+
+  if (purchaseListId) {
+    selectLoadedPurchaseList(purchaseListId);
+  }
 };
 
-// 加载已完成的采购清单
-const loadCompletedPurchaseLists = async () => {
+const selectLoadedPurchaseList = (purchaseListId: string) => {
+  const loaded = completedPurchaseLists.value.some(
+    (list) => list.id === purchaseListId,
+  );
+
+  if (!loaded) {
+    uni.showToast({
+      title: '采购清单暂不可报销，请返回清单重试',
+      icon: 'none',
+    });
+    return;
+  }
+
+  selectedListIds.value = Array.from(
+    new Set([...selectedListIds.value, purchaseListId]),
+  );
+};
+
+const mergePurchaseLists = (lists: any[]) => {
+  const map = new Map<string, any>();
+  [...completedPurchaseLists.value, ...lists].forEach((list) => {
+    if (list?.id) {
+      map.set(list.id, list);
+    }
+  });
+  completedPurchaseLists.value = Array.from(map.values());
+};
+
+const loadCompletedPurchaseLists = async (extraLists: any[] = []) => {
   try {
-    const res: any = await getPurchaseLists({ status: 'COMPLETED', excludeReimbursed: true, pageSize: 100 });
+    const res: any = await getPurchaseLists({
+      status: 'COMPLETED',
+      excludeReimbursed: true,
+      pageSize: 100,
+    });
+
     if (res.code === 0) {
-      completedPurchaseLists.value = res.data.list;
+      completedPurchaseLists.value = Array.isArray(res.data?.list)
+        ? res.data.list
+        : [];
+      mergePurchaseLists(extraLists);
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
   } catch (error: any) {
     console.error('加载采购清单失败', error);
     uni.showToast({ title: '加载失败', icon: 'none' });
+    mergePurchaseLists(extraLists);
   }
 };
 
-// 加载已有报销单数据（用于重新提交）
 const loadExistingReimbursement = async (id: string) => {
   try {
     uni.showLoading({ title: '加载中...' });
-
     const res: any = await getReimbursementDetail(id);
 
-    if (res.code === 0) {
-      const data = res.data;
-
-      // 填充费用明细
-      platformShippingFee.value = data.platformShippingFee?.toString() || '';
-      platformPackagingFee.value = data.platformPackagingFee?.toString() || '';
-      customFees.value = data.customFees?.map((fee: any) => ({
-        category:
-          fee.category ||
-          inferReimbursementCustomFeeCategory(fee.description) ||
-          'OTHER',
-        description: fee.description,
-        amount: fee.amount.toString()
-      })) || [];
-
-      // 填充采购清单
-      completedPurchaseLists.value = data.purchaseLists || [];
-      selectedListIds.value = data.purchaseLists?.map((list: any) => list.id) || [];
-
-      // 填充照片
-      receiptUrls.value = data.receiptUrls?.map((url: string, index: number) => ({
-        url,
-        key: `existing_${index}`
-      })) || [];
-
-      // 重新计算总额
-      calculateTotal();
-
-      uni.hideLoading();
-    } else {
-      uni.hideLoading();
+    if (res.code !== 0) {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
+      return;
     }
+
+    const data = res.data || {};
+    const existingLists = Array.isArray(data.purchaseLists)
+      ? data.purchaseLists
+      : [];
+
+    flowType.value = existingLists.length > 0 ? 'PURCHASE' : 'OPERATING';
+    currentStep.value =
+      flowType.value === 'PURCHASE' ? 'PURCHASE_DETAILS' : 'OPERATING_DETAILS';
+    selectedListIds.value = existingLists.map((list: any) => list.id);
+    platformShippingFee.value = data.platformShippingFee?.toString() || '';
+    platformPackagingFee.value = data.platformPackagingFee?.toString() || '';
+    customFees.value =
+      Array.isArray(data.customFees) && data.customFees.length > 0
+        ? data.customFees.map((fee: any) => ({
+            category:
+              fee.category ||
+              inferReimbursementCustomFeeCategory(fee.description) ||
+              'OTHER',
+            description: fee.description || '',
+            amount: fee.amount?.toString() || '',
+          }))
+        : [{ category: 'RENT', description: '', amount: '' }];
+    receiptUrls.value = Array.isArray(data.receiptUrls)
+      ? data.receiptUrls.map((url: string, index: number) => ({
+          url,
+          key: `existing_${index}`,
+        }))
+      : [];
+
+    await loadCompletedPurchaseLists(existingLists);
   } catch (error: any) {
-    uni.hideLoading();
     console.error('加载报销单失败', error);
     uni.showToast({ title: '加载失败', icon: 'none' });
+  } finally {
+    uni.hideLoading();
   }
 };
 
-// 切换采购清单选择
+const selectFlowType = (type: ReimbursementFlowType) => {
+  flowType.value = type;
+  if (type === 'OPERATING' && customFees.value.length === 0) {
+    customFees.value = [{ category: 'RENT', description: '', amount: '' }];
+  }
+};
+
+const goNext = () => {
+  const validation = validateCurrentStep();
+  if (!validation.ok) {
+    uni.showToast({ title: validation.message || '请补充信息', icon: 'none' });
+    return;
+  }
+
+  if (currentStep.value === 'TYPE') {
+    currentStep.value =
+      flowType.value === 'OPERATING' ? 'OPERATING_DETAILS' : 'PURCHASE_DETAILS';
+    return;
+  }
+
+  if (
+    currentStep.value === 'PURCHASE_DETAILS' ||
+    currentStep.value === 'OPERATING_DETAILS'
+  ) {
+    currentStep.value = 'RECEIPTS';
+    return;
+  }
+
+  if (currentStep.value === 'RECEIPTS') {
+    currentStep.value = 'CONFIRM';
+  }
+};
+
+const goBack = () => {
+  if (currentStep.value === 'CONFIRM') {
+    currentStep.value = 'RECEIPTS';
+    return;
+  }
+
+  if (currentStep.value === 'RECEIPTS') {
+    currentStep.value =
+      flowType.value === 'OPERATING' ? 'OPERATING_DETAILS' : 'PURCHASE_DETAILS';
+    return;
+  }
+
+  currentStep.value = 'TYPE';
+};
+
+const validateCurrentStep = () => {
+  return validateReimbursementStep({
+    currentStep: currentStep.value,
+    flowType: flowType.value,
+    selectedListIds: selectedListIds.value,
+    customFees: customFees.value,
+    receiptUrls: receiptUrls.value,
+    purchaseLists: completedPurchaseLists.value,
+  });
+};
+
+const isStepDone = (step: ReimbursementFlowStep) => {
+  const order = visibleSteps.value.map((item) => item.value);
+  return order.indexOf(step) < order.indexOf(currentStep.value);
+};
+
 const togglePurchaseList = (id: string) => {
-  const index = selectedListIds.value.indexOf(id);
-  if (index > -1) {
-    selectedListIds.value.splice(index, 1);
-  } else {
-    selectedListIds.value.push(id);
+  if (selectedListIds.value.includes(id)) {
+    selectedListIds.value = selectedListIds.value.filter((item) => item !== id);
+    return;
   }
-  calculateTotal();
+
+  selectedListIds.value = [...selectedListIds.value, id];
 };
 
-// 上传照片
-const uploadPhoto = () => {
-  uni.chooseImage({
-    count: 9,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: async (res) => {
-      const tempFilePaths = res.tempFilePaths;
-
-      uni.showLoading({ title: '上传中...' });
-
-      try {
-        // 上传所有选中的照片
-        const uploadPromises = tempFilePaths.map(filePath => uploadReceiptPhoto(filePath));
-        const results = await Promise.all(uploadPromises);
-
-        console.log('[Upload] All results:', results);
-
-        // 提取URL和key（响应结构：{code: 0, message: "...", data: {url, key}}）
-        const photos = results.map((result: any) => ({
-          url: result.data.url,
-          key: result.data.key,
-        }));
-
-        console.log('[Upload] Parsed photos:', photos);
-
-        receiptUrls.value.push(...photos);
-
-        uni.hideLoading();
-        uni.showToast({ title: '上传成功', icon: 'success' });
-      } catch (error: any) {
-        uni.hideLoading();
-        uni.showToast({ title: error.message || '上传失败', icon: 'none' });
-      }
-    },
-  });
+const getPurchaseItems = (list: any) => {
+  return Array.isArray(list?.items) ? list.items : [];
 };
 
-// 删除照片
-const deletePhoto = async (index: number) => {
-  uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这张照片吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        const photo = receiptUrls.value[index];
-
-        // 调用后端API删除COS中的文件
-        try {
-          await deleteReceiptPhoto(photo.key);
-          // 从前端数组中移除
-          receiptUrls.value.splice(index, 1);
-          uni.showToast({ title: '删除成功', icon: 'success' });
-        } catch (error: any) {
-          console.error('删除照片失败', error);
-          uni.showToast({ title: error.message || '删除失败', icon: 'none' });
-        }
-      }
-    },
-  });
+const getPurchaseListAmount = (list: any) => {
+  const amount = Number(list?.totalActualCost ?? list?.totalEstimatedCost ?? 0);
+  return Number.isFinite(amount) ? amount : 0;
 };
 
-// 预览照片
-const previewPhoto = (index: number) => {
-  const urls = receiptUrls.value.map(photo => photo.url);
-  uni.previewImage({
-    urls: urls,
-    current: urls[index],
-  });
+const getPurchaseListSummary = (list: any) => {
+  const items = getPurchaseItems(list);
+  if (items.length === 0) {
+    return getPurchaseListKindLabel(list) === '包材' ? '包材清单' : '采购清单';
+  }
+
+  return items
+    .slice(0, 3)
+    .map((item: any) => item.ingredientName || item.name || '采购项')
+    .join('、');
 };
 
-// 处理图片加载错误
-const handleImageError = (index: number, url: string) => {
-  console.error(`[Image Error] Failed to load image at index ${index}:`, url);
-  console.error('[Image Error] Photo object:', receiptUrls.value[index]);
-  uni.showToast({
-    title: '图片加载失败',
-    icon: 'none',
-  });
-};
-
-// 添加自定义费用
 const addCustomFee = () => {
   customFees.value.push({ category: 'OTHER', description: '', amount: '' });
 };
@@ -405,89 +709,114 @@ const selectCustomFeeCategory = (
   fee.category = category;
 };
 
-// 删除自定义费用
 const deleteCustomFee = (index: number) => {
-  uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这项费用吗？',
-    success: (res) => {
-      if (res.confirm) {
-        customFees.value.splice(index, 1);
-        calculateTotal();
+  if (index === 0 || customFees.value.length <= 1) return;
+  customFees.value.splice(index, 1);
+};
+
+const uploadPhoto = () => {
+  uni.chooseImage({
+    count: Math.max(1, 10 - receiptUrls.value.length),
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: async (res) => {
+      const tempFilePaths = res.tempFilePaths || [];
+      uni.showLoading({ title: '上传中...' });
+
+      try {
+        const results = await Promise.all(
+          tempFilePaths.map((filePath) => uploadReceiptPhoto(filePath)),
+        );
+        const photos = results.map((result: any) => ({
+          url: result.data.url,
+          key: result.data.key,
+        }));
+        receiptUrls.value.push(...photos);
+        uni.showToast({ title: '上传成功', icon: 'success' });
+      } catch (error: any) {
+        uni.showToast({ title: error.message || '上传失败', icon: 'none' });
+      } finally {
+        uni.hideLoading();
       }
     },
   });
 };
 
-// 提交报销申请
+const deletePhoto = async (index: number) => {
+  const photo = receiptUrls.value[index];
+  if (!photo) return;
+
+  try {
+    if (photo.key && !photo.key.startsWith('existing_')) {
+      await deleteReceiptPhoto(photo.key);
+    }
+    receiptUrls.value.splice(index, 1);
+    uni.showToast({ title: '已删除', icon: 'success' });
+  } catch (error: any) {
+    console.error('删除照片失败', error);
+    uni.showToast({ title: error.message || '删除失败', icon: 'none' });
+  }
+};
+
+const previewPhoto = (index: number) => {
+  const urls = receiptUrls.value.map((photo) => photo.url);
+  uni.previewImage({
+    urls,
+    current: urls[index],
+  });
+};
+
+const handleImageError = (index: number) => {
+  console.error('报销凭证图片加载失败', index);
+  uni.showToast({ title: '图片加载失败', icon: 'none' });
+};
+
 const submitReimbursement = async () => {
-  if (!canSubmit.value) {
+  const validation = validateCurrentStep();
+  if (!validation.ok) {
+    uni.showToast({ title: validation.message || '请补充信息', icon: 'none' });
     return;
   }
 
-  if (receiptUrls.value.length === 0) {
-    uni.showToast({ title: '请上传支付记录照片', icon: 'none' });
+  if (totalAmount.value <= 0) {
+    uni.showToast({ title: '报销金额需大于0', icon: 'none' });
     return;
-  }
-
-  const normalizedCustomFees = [];
-  for (const fee of customFees.value) {
-    const description = fee.description.trim();
-    const amount = parseFloat(fee.amount);
-    const isEmptyRow = !description && !fee.amount;
-
-    if (isEmptyRow) {
-      continue;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      uni.showToast({ title: '行政费用金额需大于0', icon: 'none' });
-      return;
-    }
-
-    if (fee.category === 'OTHER' && !description) {
-      uni.showToast({ title: '其它费用请补充说明', icon: 'none' });
-      return;
-    }
-
-    normalizedCustomFees.push({
-      category: fee.category || 'OTHER',
-      description:
-        description ||
-        getReimbursementCustomFeeCategoryLabel(fee.category || 'OTHER'),
-      amount,
-    });
   }
 
   submitting.value = true;
 
   try {
-    const totalAmount = parseFloat(totalReimbursementAmount.value);
+    const urls = receiptUrls.value.map((photo) => photo.url);
+    const payload =
+      flowType.value === 'OPERATING'
+        ? {
+            purchaseListIds: [],
+            receiptUrls: urls,
+            totalActualCost: totalAmount.value,
+            platformShippingFee: 0,
+            platformPackagingFee: 0,
+            customFees: normalizedOperatingFees.value,
+          }
+        : {
+            purchaseListIds: selectedListIds.value,
+            receiptUrls: urls,
+            totalActualCost: totalAmount.value,
+            platformShippingFee: shippingFeeAmount.value,
+            platformPackagingFee: packagingFeeAmount.value,
+            customFees: [],
+          };
 
-    // 将照片对象数组转换为URL数组
-    const urls = receiptUrls.value.map(photo => photo.url);
-
-    const res: any = await submitReimbursementApi({
-      purchaseListIds: selectedListIds.value,
-      receiptUrls: urls,
-      totalActualCost: totalAmount,
-      // 新增字段
-      platformShippingFee: parseFloat(platformShippingFee.value) || 0,
-      platformPackagingFee: parseFloat(platformPackagingFee.value) || 0,
-      customFees: normalizedCustomFees,
-    });
+    const res: any = resubmitId.value
+      ? await resubmitReimbursementApi(resubmitId.value, payload)
+      : await submitReimbursementApi(payload);
 
     if (res.code === 0) {
-      uni.showToast({ title: '提交成功', icon: 'success' });
-      setTimeout(() => {
-        // 使用 redirectTo 重新加载列表页，确保显示最新数据
-        uni.redirectTo({
-          url: '/pages/staff-purchasing/reimbursement/list'
-        });
-      }, 1500);
-    } else {
-      uni.showToast({ title: res.message || '提交失败', icon: 'none' });
+      lastSubmittedReimbursement.value = res.data || null;
+      currentStep.value = 'SUCCESS';
+      return;
     }
+
+    uni.showToast({ title: res.message || '提交失败', icon: 'none' });
   } catch (error: any) {
     console.error('提交报销申请失败', error);
     uni.showToast({ title: error.message || '提交失败', icon: 'none' });
@@ -496,8 +825,22 @@ const submitReimbursement = async () => {
   }
 };
 
-// 格式化日期
+const goToSubmittedDetail = () => {
+  if (!lastSubmittedReimbursement.value?.id) return;
+
+  uni.redirectTo({
+    url: `/pages/staff-purchasing/reimbursement/detail?id=${lastSubmittedReimbursement.value.id}`,
+  });
+};
+
+const goToList = () => {
+  uni.redirectTo({
+    url: '/pages/staff-purchasing/reimbursement/list',
+  });
+};
+
 const formatDate = (dateStr: string) => {
+  if (!dateStr) return '-';
   const date = new Date(dateStr);
   const month = date.getMonth() + 1;
   const day = date.getDate();
@@ -508,438 +851,461 @@ const formatDate = (dateStr: string) => {
 <style scoped lang="scss">
 .submit-reimbursement-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
-  padding-bottom: 180rpx;
+  padding-bottom: 150rpx;
+  background-color: #f6f7f9;
 }
 
-.header {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-  padding: 40rpx 32rpx;
-  margin-bottom: 24rpx;
+.page-header {
+  padding: 40rpx 32rpx 28rpx;
+  background-color: #ffffff;
+  border-bottom: 1rpx solid #eef0f3;
 
   .title {
     display: block;
-    font-size: 44rpx;
-    font-weight: bold;
-    color: #333;
     margin-bottom: 8rpx;
+    color: #20242a;
+    font-size: 40rpx;
+    font-weight: 700;
   }
 
   .subtitle {
     display: block;
+    color: #6b7280;
     font-size: 24rpx;
-    color: rgba(51, 51, 51, 0.7);
   }
+}
+
+.step-indicator {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
+  padding: 20rpx 24rpx;
+  background-color: #ffffff;
+}
+
+.step-dot {
+  min-width: 0;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  border-radius: 8rpx;
+  color: #8a93a3;
+  background-color: #f2f4f7;
+
+  &.active {
+    color: #0f5132;
+    background-color: #dff5e8;
+  }
+
+  &.done {
+    color: #1d4ed8;
+    background-color: #e8f0ff;
+  }
+}
+
+.dot-index,
+.dot-label {
+  font-size: 22rpx;
+  white-space: nowrap;
 }
 
 .section {
-  background-color: #fff;
-  margin: 0 32rpx 24rpx;
-  padding: 32rpx;
-  border-radius: 16rpx;
-
-  .section-title {
-    display: block;
-    font-size: 30rpx;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 24rpx;
-  }
+  margin: 24rpx 24rpx 0;
+  padding: 28rpx;
+  border-radius: 8rpx;
+  background-color: #ffffff;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60rpx 32rpx;
-
-  .empty-text {
-    font-size: 28rpx;
-    color: #999;
-    margin-bottom: 8rpx;
-  }
-
-  .empty-hint {
-    font-size: 24rpx;
-    color: #ccc;
-  }
-}
-
-.purchase-lists {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.list-item {
-  display: flex;
-  align-items: center;
-  padding: 24rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
-  border: 2rpx solid transparent;
-  transition: all 0.3s;
-
-  &.selected {
-    background-color: #e8f5e9;
-    border-color: #51cf66;
-  }
-
-  .checkbox {
-    margin-right: 16rpx;
-
-    .check-icon {
-      font-size: 36rpx;
-      color: #51cf66;
-    }
-
-    .uncheck-icon {
-      font-size: 36rpx;
-      color: #ddd;
-    }
-  }
-
-  .list-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6rpx;
-
-    .list-date {
-      font-size: 28rpx;
-      color: #333;
-      font-weight: 500;
-    }
-
-    .list-count {
-      font-size: 24rpx;
-      color: #666;
-    }
-
-    .list-cost {
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #ff6b6b;
-    }
-  }
-}
-
-.fee-item {
+.section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24rpx;
-
-  .fee-label {
-    font-size: 28rpx;
-    color: #333;
-    width: 180rpx;
-  }
-
-  .fee-input-wrapper {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    background-color: #f5f5f5;
-    border-radius: 12rpx;
-    padding: 0 24rpx;
-    height: 80rpx;
-
-    .currency {
-      font-size: 28rpx;
-      color: #333;
-      margin-right: 8rpx;
-    }
-
-    .fee-input {
-      flex: 1;
-      font-size: 28rpx;
-      color: #333;
-    }
-  }
+  gap: 16rpx;
+  margin-bottom: 22rpx;
 }
 
-.fees-row {
-  display: flex;
-  gap: 24rpx;
-  margin-bottom: 32rpx;
+.section-title {
+  display: block;
+  margin-bottom: 22rpx;
+  color: #20242a;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
-.fee-item-half {
-  flex: 1;
+.section-head .section-title {
+  margin-bottom: 0;
+}
+
+.section-total {
+  flex-shrink: 0;
+  color: #1677ff;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.type-options,
+.purchase-list,
+.expense-list,
+.confirm-list {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
-
-  .fee-label {
-    font-size: 26rpx;
-    color: #666;
-  }
-
-  .fee-input-wrapper {
-    display: flex;
-    align-items: center;
-    background-color: #f5f5f5;
-    border-radius: 12rpx;
-    padding: 0 20rpx;
-    height: 80rpx;
-
-    .currency {
-      font-size: 28rpx;
-      color: #333;
-      margin-right: 8rpx;
-    }
-
-    .fee-input {
-      flex: 1;
-      font-size: 28rpx;
-      color: #333;
-    }
-  }
+  gap: 18rpx;
 }
 
-.custom-fees {
-  margin-top: 24rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #f0f0f0;
-
-  .custom-fee-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16rpx;
-
-    .custom-fee-title {
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .add-custom-fee-btn {
-      padding: 8rpx 16rpx;
-      background-color: #51cf66;
-      color: #fff;
-      border-radius: 8rpx;
-      font-size: 24rpx;
-    }
-  }
-
-  .empty-custom-fees {
-    padding: 32rpx;
-    text-align: center;
-    color: #999;
-    font-size: 24rpx;
-    background-color: #f9f9f9;
-    border-radius: 12rpx;
-  }
-
-  .custom-fee-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16rpx;
-  }
-
-  .custom-fee-item {
-    background-color: #f9f9f9;
-    border-radius: 12rpx;
-    padding: 16rpx;
-
-    .custom-fee-content {
-      display: flex;
-      align-items: flex-start;
-      gap: 12rpx;
-
-      .custom-fee-inputs {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 12rpx;
-
-        .custom-fee-category-group {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12rpx;
-
-          .category-chip {
-            padding: 10rpx 18rpx;
-            border-radius: 999rpx;
-            background-color: #fff;
-            color: #666;
-            font-size: 24rpx;
-            border: 1rpx solid #e5e7eb;
-
-            &.active {
-              background-color: #fff3bf;
-              color: #8f5b00;
-              border-color: #ffd43b;
-              font-weight: 600;
-            }
-          }
-        }
-
-        .custom-fee-desc {
-          padding: 12rpx 16rpx;
-          background-color: #fff;
-          border-radius: 8rpx;
-          font-size: 26rpx;
-        }
-
-        .custom-fee-amount-wrapper {
-          display: flex;
-          align-items: center;
-          background-color: #fff;
-          border-radius: 8rpx;
-          padding: 0 16rpx;
-          width: 220rpx;
-
-          .currency {
-            font-size: 24rpx;
-            color: #333;
-            margin-right: 4rpx;
-          }
-
-          .custom-fee-amount {
-            flex: 1;
-            font-size: 26rpx;
-          }
-        }
-      }
-
-      .delete-custom-fee-btn {
-        padding: 12rpx 16rpx;
-        background-color: #ff6b6b;
-        color: #fff;
-        border-radius: 8rpx;
-        font-size: 24rpx;
-        white-space: nowrap;
-      }
-    }
-  }
+.type-option,
+.purchase-item,
+.expense-item,
+.summary-block,
+.confirm-row {
+  border: 1rpx solid #e5e7eb;
+  border-radius: 8rpx;
+  background-color: #ffffff;
 }
 
-.photo-upload {
+.type-option,
+.purchase-item {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 24rpx;
+
+  &.selected {
+    border-color: #22c55e;
+    background-color: #f0fdf4;
+  }
+}
+
+.type-copy,
+.purchase-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.type-title,
+.purchase-date,
+.expense-title {
+  display: block;
+  color: #20242a;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.type-desc,
+.purchase-summary,
+.purchase-meta,
+.empty-desc,
+.success-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.type-check,
+.select-state {
+  flex-shrink: 0;
+  min-width: 80rpx;
+  color: #1677ff;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: right;
+}
+
+.notice-strip {
+  margin-top: 22rpx;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  color: #5f4b16;
+  background-color: #fff7df;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.filter-tabs,
+.category-row {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 22rpx;
+  overflow-x: auto;
+}
+
+.filter-tab,
+.category-chip {
+  flex-shrink: 0;
+  min-height: 58rpx;
+  padding: 0 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+  color: #4b5563;
+  background-color: #f2f4f7;
+  font-size: 24rpx;
+
+  &.active {
+    color: #ffffff;
+    background-color: #1677ff;
+  }
+}
+
+.category-row.compact {
   flex-wrap: wrap;
+  overflow: visible;
+}
+
+.purchase-title-row,
+.expense-head,
+.summary-row,
+.confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16rpx;
+}
+
+.purchase-kind {
+  flex-shrink: 0;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  color: #0f766e;
+  background-color: #ccfbf1;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.empty-state {
+  padding: 56rpx 24rpx;
+  text-align: center;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+}
+
+.empty-title {
+  display: block;
+  color: #4b5563;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.fee-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+  margin-top: 22rpx;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 10rpx;
+  color: #4b5563;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.money-input,
+.text-input {
+  min-height: 78rpx;
+  box-sizing: border-box;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+}
+
+.money-input {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 0 20rpx;
+
+  text {
+    color: #6b7280;
+    font-size: 26rpx;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    font-size: 28rpx;
+  }
+}
+
+.text-input {
+  width: 100%;
+  margin-bottom: 14rpx;
+  padding: 0 20rpx;
+  font-size: 26rpx;
+}
+
+.expense-item {
+  padding: 22rpx;
+}
+
+.expense-head {
+  margin-bottom: 18rpx;
+}
+
+.remove-link {
+  color: #d92d20;
+  font-size: 24rpx;
+}
+
+.ghost-btn,
+.primary-btn {
+  height: 82rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 82rpx;
+}
+
+.ghost-btn {
+  color: #374151;
+  background-color: #eef0f3;
+}
+
+.primary-btn {
+  color: #ffffff;
+  background-color: #1677ff;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.photo-item,
+.upload-tile {
+  aspect-ratio: 1;
+  border-radius: 8rpx;
+  overflow: hidden;
+  background-color: #f2f4f7;
 }
 
 .photo-item {
   position: relative;
-  width: 200rpx;
-  height: 200rpx;
 
   image {
     width: 100%;
     height: 100%;
-    border-radius: 12rpx;
-    background-color: #f5f5f5;
-  }
-
-  .debug-url {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    font-size: 18rpx;
-    padding: 8rpx;
-    border-radius: 0 0 12rpx 12rpx;
-    word-break: break-all;
-    text-align: center;
-  }
-
-  .delete-btn {
-    position: absolute;
-    top: -10rpx;
-    right: -10rpx;
-    width: 44rpx;
-    height: 44rpx;
-    background-color: #ff6b6b;
-    color: #fff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32rpx;
-    box-shadow: 0 4rpx 12rpx rgba(255, 107, 107, 0.4);
   }
 }
 
-.upload-btn {
-  width: 200rpx;
-  height: 200rpx;
-  border: 2rpx dashed #ddd;
-  border-radius: 12rpx;
+.delete-photo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.58);
+  font-size: 22rpx;
+}
+
+.upload-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  background-color: #fafafa;
+  color: #6b7280;
+  font-size: 24rpx;
+  border: 2rpx dashed #cbd5e1;
+}
 
-  .icon {
-    font-size: 48rpx;
-    color: #999;
+.upload-plus {
+  margin-bottom: 8rpx;
+  font-size: 44rpx;
+  line-height: 1;
+}
+
+.summary-block {
+  padding: 22rpx;
+  margin-bottom: 18rpx;
+}
+
+.summary-row {
+  padding: 10rpx 0;
+
+  .label {
+    color: #6b7280;
+    font-size: 25rpx;
   }
 
-  .text {
-    font-size: 24rpx;
-    color: #999;
+  .value {
+    color: #20242a;
+    font-size: 26rpx;
+    font-weight: 700;
+  }
+
+  &.total .value {
+    color: #1677ff;
+    font-size: 34rpx;
+  }
+}
+
+.confirm-row {
+  padding: 18rpx 20rpx;
+  color: #374151;
+  font-size: 24rpx;
+}
+
+.success-section {
+  text-align: center;
+}
+
+.success-title {
+  display: block;
+  color: #16a34a;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+
+.success-number {
+  display: block;
+  margin-top: 16rpx;
+  color: #20242a;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.success-amount {
+  display: block;
+  margin-top: 18rpx;
+  color: #1677ff;
+  font-size: 44rpx;
+  font-weight: 800;
+}
+
+.success-actions {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 30rpx;
+
+  button {
+    flex: 1;
   }
 }
 
 .bottom-actions {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
-  padding: 24rpx 32rpx;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.05);
-  z-index: 100;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  gap: 18rpx;
+  padding: 20rpx 24rpx 28rpx;
+  background-color: #ffffff;
+  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.08);
 
-  .total-display {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16rpx 0;
-    margin-bottom: 16rpx;
-
-    .total-label {
-      font-size: 28rpx;
-      color: #666;
-    }
-
-    .total-amount {
-      font-size: 36rpx;
-      font-weight: bold;
-      color: #ff6b6b;
-    }
-  }
-
-  .submit-btn {
-    width: 100%;
-    height: 88rpx;
-    background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%);
-    color: #fff;
-    border-radius: 16rpx;
-    font-size: 32rpx;
-    font-weight: bold;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 8rpx 16rpx rgba(81, 207, 102, 0.3);
-
-    &:active {
-      opacity: 0.8;
-    }
-
-    &[disabled] {
-      background: #ddd;
-      box-shadow: none;
-    }
+  button {
+    flex: 1;
   }
 }
 </style>

@@ -382,6 +382,94 @@ describe('ReimbursementService', () => {
     expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
   });
 
+  it('rejects resubmission by someone other than the original submitter', async () => {
+    const rejected = new Reimbursement({
+      id: 'reimbursement-1',
+      claimNumber: 'BX202606260001',
+      status: ReimbursementStatus.REQUIRES_RESUBMIT,
+      totalActualCost: 120,
+      totalEstimatedCost: 0,
+      receiptUrls: ['https://example.com/old.jpg'],
+      submittedById: 'staff-1',
+      submittedAt: new Date('2026-06-26T02:00:00.000Z'),
+    });
+    mockReimbursementRepository.findById.mockResolvedValue(rejected);
+
+    await expect(
+      service.resubmitReimbursement(
+        'reimbursement-1',
+        {
+          purchaseListIds: [],
+          receiptUrls: ['https://example.com/old.jpg'],
+          totalActualCost: 120,
+          customFees: [{ category: 'OTHER', description: '旧费用', amount: 120 }],
+        },
+        'staff-2',
+      ),
+    ).rejects.toThrow('只能重新提交本人创建的报销单');
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate purchase lists when resubmitting', async () => {
+    const rejected = new Reimbursement({
+      id: 'reimbursement-1',
+      claimNumber: 'BX202606260001',
+      status: ReimbursementStatus.REQUIRES_RESUBMIT,
+      totalActualCost: 120,
+      totalEstimatedCost: 0,
+      receiptUrls: ['https://example.com/old.jpg'],
+      submittedById: 'staff-1',
+      submittedAt: new Date('2026-06-26T02:00:00.000Z'),
+    });
+    mockReimbursementRepository.findById.mockResolvedValue(rejected);
+
+    await expect(
+      service.resubmitReimbursement(
+        'reimbursement-1',
+        {
+          purchaseListIds: ['purchase-list-2', 'purchase-list-2'],
+          receiptUrls: ['https://example.com/old.jpg'],
+          totalActualCost: 120,
+          customFees: [{ category: 'OTHER', description: '旧费用', amount: 120 }],
+        },
+        'staff-1',
+      ),
+    ).rejects.toThrow('同一采购清单不能重复提交');
+    expect(mockPurchaseListRepository.findById).not.toHaveBeenCalled();
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('requires receipt changes to use receipt management instead of resubmission', async () => {
+    const rejected = new Reimbursement({
+      id: 'reimbursement-1',
+      claimNumber: 'BX202606260001',
+      status: ReimbursementStatus.REQUIRES_RESUBMIT,
+      totalActualCost: 120,
+      totalEstimatedCost: 0,
+      receiptUrls: ['https://example.com/old.jpg'],
+      receiptKeys: ['old-receipt-key'],
+      submittedById: 'staff-1',
+      submittedAt: new Date('2026-06-26T02:00:00.000Z'),
+    });
+    mockReimbursementRepository.findById.mockResolvedValue(rejected);
+
+    await expect(
+      service.resubmitReimbursement(
+        'reimbursement-1',
+        {
+          purchaseListIds: [],
+          receiptUrls: ['https://example.com/new.jpg'],
+          totalActualCost: 120,
+          customFees: [{ category: 'OTHER', description: '旧费用', amount: 120 }],
+        },
+        'staff-1',
+      ),
+    ).rejects.toThrow(
+      '重新提交时请通过凭证管理单独增删凭证，不能直接替换凭证链接',
+    );
+    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+  });
+
   it('allows resubmission to replace selected purchase lists owned by the same reimbursement', async () => {
     const selectedPurchaseList = new PurchaseList({
       id: 'purchase-list-2',

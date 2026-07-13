@@ -171,8 +171,11 @@
         <text class="section-title">上传支付凭证</text>
         <text class="section-total">{{ receiptUrls.length }} 张</text>
       </view>
-      <view class="notice-strip">
+      <view v-if="!resubmitId" class="notice-strip">
         <text>凭证需要看清金额和支付时间，可上传转账截图、支付记录或发票照片。</text>
+      </view>
+      <view v-else class="notice-strip">
+        <text>重新提交时凭证不能在此修改；如需更换凭证，请先返回报销详情，通过凭证管理处理。</text>
       </view>
 
       <view class="photo-grid">
@@ -187,11 +190,15 @@
             @tap="previewPhoto(index)"
             @error="handleImageError(index)"
           />
-          <view class="delete-photo" @tap.stop="deletePhoto(index)">
+          <view
+            v-if="!resubmitId"
+            class="delete-photo"
+            @tap.stop="deletePhoto(index)"
+          >
             <text>删除</text>
           </view>
         </view>
-        <view class="upload-tile" @tap="uploadPhoto">
+        <view v-if="!resubmitId" class="upload-tile" @tap="uploadPhoto">
           <text class="upload-plus">+</text>
           <text>添加凭证</text>
         </view>

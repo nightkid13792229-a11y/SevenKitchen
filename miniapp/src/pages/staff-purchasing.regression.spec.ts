@@ -123,6 +123,16 @@ describe('staff reimbursement employee flow', () => {
     expect(reimbursementSubmitSource).toContain('提交成功');
   });
 
+  it('locks receipt changes while resubmitting so they use receipt management', () => {
+    expect(reimbursementSubmitSource).toContain(
+      'v-if="!resubmitId"\n            class="delete-photo"',
+    );
+    expect(reimbursementSubmitSource).toContain(
+      'v-if="!resubmitId" class="upload-tile"',
+    );
+    expect(reimbursementSubmitSource).toContain('重新提交时凭证不能在此修改');
+  });
+
   it('does not ask employees for finance allocation fields or expose debug URLs', () => {
     expect(reimbursementSubmitSource).not.toContain('debug-url');
     expect(reimbursementSubmitSource).not.toContain('归属月份');

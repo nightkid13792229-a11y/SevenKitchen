@@ -3993,6 +3993,53 @@ export class RecipeDesignerService {
     });
   }
 
+  async updateItemOrder(
+    designRecipeId: string,
+    itemIds: string[],
+    access: RecipeDesignerAccessInput,
+  ): Promise<Array<{ id: string; sortOrder: number }>> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertDraftEditableByUser(designRecipeId, context.userId);
+
+    if (new Set(itemIds).size !== itemIds.length) {
+      throw new BadRequestException('原料排序包含重复项');
+    }
+
+    const items = await this.prisma.designRecipeItem.findMany({
+      where: { designRecipeId },
+      select: { id: true, sortOrder: true },
+    });
+    const existingIds = new Set(items.map((item) => item.id));
+
+    if (
+      items.length !== itemIds.length ||
+      itemIds.some((itemId) => !existingIds.has(itemId))
+    ) {
+      throw new BadRequestException('原料排序必须包含当前草稿的全部原料');
+    }
+
+    const currentOrderById = new Map(
+      items.map((item) => [item.id, item.sortOrder]),
+    );
+    const changedItems = itemIds
+      .map((id, sortOrder) => ({ id, sortOrder }))
+      .filter(({ id, sortOrder }) => currentOrderById.get(id) !== sortOrder);
+
+    await this.prisma.$transaction((tx) =>
+      Promise.all(
+        changedItems.map(({ id, sortOrder }) =>
+          tx.designRecipeItem.update({
+            where: { id },
+            data: { sortOrder },
+            select: { id: true, sortOrder: true },
+          }),
+        ),
+      ),
+    );
+
+    return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
+  }
+
   async removeItem(itemId: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
     await this.assertItemEditableByUser(itemId, context.userId);

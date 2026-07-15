@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -40,8 +41,10 @@ import {
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
   ReorderRecipeDesignItemsDto,
+  UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
+  UpdateRecipeDesignItemOrderDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
 import { Roles, StaffGuard } from '../guards/role.guard';
 
@@ -437,6 +440,23 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);
+  }
+
+  @Put('drafts/:id/item-order')
+  @ApiOperation({
+    summary: 'Replace the full item ordering for a design draft',
+  })
+  async updateItemOrder(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecipeDesignItemOrderDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const items = await this.recipeDesignerService.updateItemOrder(
+      id,
+      dto.itemIds,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(items);
   }
 
   @Delete('items/:itemId')

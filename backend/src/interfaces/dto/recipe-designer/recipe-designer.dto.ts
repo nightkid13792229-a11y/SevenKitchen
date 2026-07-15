@@ -332,6 +332,12 @@ export class ReorderRecipeDesignItemsDto {
   items!: ReorderRecipeDesignItemDto[];
 }
 
+export class UpdateRecipeDesignItemOrderDto {
+  @IsArray()
+  @IsString({ each: true })
+  itemIds!: string[];
+}
+
 export class PublishRecipeDesignDraftDto {
   @IsOptional()
   @IsString()

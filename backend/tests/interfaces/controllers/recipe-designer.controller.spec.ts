@@ -130,6 +130,7 @@ describe('RecipeDesignerController', () => {
     addItem: jest.fn(),
     updateItem: jest.fn(),
     reorderItems: jest.fn(),
+    updateItemOrder: jest.fn(),
     removeItem: jest.fn(),
     assessDraft: jest.fn(),
     publishDraft: jest.fn(),
@@ -692,6 +693,35 @@ describe('RecipeDesignerController', () => {
         userId: 'staff-1',
         role: 'STAFF',
       },
+    );
+  });
+
+  it('delegates a full item ordering to the service with the current user access context', async () => {
+    service.updateItemOrder.mockResolvedValue([
+      { id: 'item-2', sortOrder: 0 },
+      { id: 'item-1', sortOrder: 1 },
+    ]);
+
+    await expect(
+      (controller as any).updateItemOrder(
+        'design-1',
+        { itemIds: ['item-2', 'item-1'] },
+        currentUser,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      }),
+    );
+
+    expect(service.updateItemOrder).toHaveBeenCalledWith(
+      'design-1',
+      ['item-2', 'item-1'],
+      { userId: 'staff-1', role: 'STAFF' },
     );
   });
 });

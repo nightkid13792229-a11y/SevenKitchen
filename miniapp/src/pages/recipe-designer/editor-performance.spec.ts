@@ -1,9 +1,68 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createKeyedSerialMutationQueue,
   createLatestTaskScheduler,
+  createLatestRevisionTracker,
   moveItemToIndex,
   shouldTriggerDragFeedback,
 } from './editor-performance'
+
+describe('createKeyedSerialMutationQueue', () => {
+  it('serializes same-key writes in client order while retaining the latest mutation version', async () => {
+    let rejectFirst!: (error: Error) => void
+    let signalFirstStarted!: () => void
+    const calls: string[] = []
+    const queue = createKeyedSerialMutationQueue()
+    const firstVersion = queue.begin('item-1')
+    let displayedWeight = 10
+    const firstStarted = new Promise<void>((resolve) => {
+      signalFirstStarted = resolve
+    })
+    const firstSave = queue.enqueue('item-1', () => new Promise<void>((_resolve, reject) => {
+      calls.push('A')
+      signalFirstStarted()
+      rejectFirst = reject
+    })).catch(() => {
+      if (queue.isCurrent('item-1', firstVersion)) displayedWeight = 5
+    })
+
+    await firstStarted
+
+    const secondVersion = queue.begin('item-1')
+    displayedWeight = 20
+    const secondSave = queue.enqueue('item-1', async () => {
+      calls.push('B')
+    })
+
+    expect(calls).toEqual(['A'])
+    rejectFirst(new Error('A failed'))
+    await Promise.all([firstSave, secondSave])
+
+    expect(calls).toEqual(['A', 'B'])
+    expect(queue.isCurrent('item-1', firstVersion)).toBe(false)
+    expect(queue.isCurrent('item-1', secondVersion)).toBe(true)
+    expect(displayedWeight).toBe(20)
+  })
+})
+
+describe('createLatestRevisionTracker', () => {
+  it('ignores stale responses and remains updating until the newest revision completes', () => {
+    const tracker = createLatestRevisionTracker()
+    const firstRevision = tracker.begin()
+    let appliedAssessment = ''
+    const secondRevision = tracker.begin()
+
+    if (tracker.isCurrent(firstRevision)) appliedAssessment = 'stale'
+    expect(tracker.complete(firstRevision)).toBe(false)
+    expect(tracker.isUpdating()).toBe(true)
+
+    if (tracker.isCurrent(secondRevision)) appliedAssessment = 'latest'
+    expect(tracker.complete(secondRevision)).toBe(true)
+
+    expect(appliedAssessment).toBe('latest')
+    expect(tracker.isUpdating()).toBe(false)
+  })
+})
 
 describe('createLatestTaskScheduler', () => {
   it('runs only the latest value scheduled before the delay expires', async () => {

@@ -751,7 +751,9 @@ import {
   type RecipeDesignerHistoryState,
 } from './editor-history'
 import {
+  createKeyedSerialMutationQueue,
   createLatestTaskScheduler,
+  createLatestRevisionTracker,
   moveItemToIndex,
   shouldTriggerDragFeedback,
 } from './editor-performance'
@@ -938,6 +940,9 @@ const historyActionRunning = ref(false)
 const historyActionDirection = ref<HistoryActionDirection | ''>('')
 const itemWeightDrafts = ref<Record<string, string>>({})
 const itemWeightEditBaselines = ref<Record<string, number>>({})
+const itemWeightPersistedValues = ref<Record<string, number>>({})
+const itemWeightEditVersions = ref<Record<string, number>>({})
+const itemWeightSavingVersions = ref<Record<string, number>>({})
 const scenarioSwitchSheetVisible = ref(false)
 const scenarioSwitching = ref(false)
 const pendingScenario = ref<FediafDogScenario>('ADULT_MER_110')
@@ -974,15 +979,15 @@ let dragStartY = 0
 let dragOriginalOrderIds: string[] = []
 let itemRowRects: Array<{ top: number; bottom: number }> = []
 let lastItemDragFeedbackAt = 0
+const itemWeightMutationQueue = createKeyedSerialMutationQueue()
+const assessmentRevisionTracker = createLatestRevisionTracker()
 
-const assessmentRefreshScheduler = createLatestTaskScheduler(async () => {
+const assessmentRefreshScheduler = createLatestTaskScheduler(async (revision: number) => {
   try {
-    await refreshAssessment()
+    await refreshAssessment({}, revision)
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to refresh scheduled assessment:', error)
     uni.showToast({ title: '营养评估更新失败', icon: 'none' })
-  } finally {
-    assessmentUpdating.value = false
   }
 }, 400)
 
@@ -1314,6 +1319,7 @@ async function applyDraftDetail(draft: any) {
   )
   scenario.value = getDraftScenario(draft)
   ingredientTypeHints.value = {}
+  itemWeightPersistedValues.value = {}
   items.value = draft.items || []
   assessment.value = null
   applyCachedAssessmentFromDraft(draft)
@@ -1461,10 +1467,16 @@ function setAssessmentDrawerTop(topPx: number, windowHeightOverride?: number) {
   )
 }
 
-async function refreshAssessment(options: { quiet?: boolean } = {}) {
+function syncAssessmentUpdating() {
+  assessmentUpdating.value = assessmentRevisionTracker.isUpdating()
+}
+
+async function refreshAssessment(options: { quiet?: boolean } = {}, revision = assessmentRevisionTracker.begin()) {
+  syncAssessmentUpdating()
   try {
     const res: any = await recipeDesignerApi.assessDraft(draftId.value)
     const data = res?.data ?? res
+    if (!assessmentRevisionTracker.isCurrent(revision)) return
     assessment.value = data
     const assessedItems = data?.items || data?.draft?.items
     if (Array.isArray(assessedItems)) {
@@ -1475,15 +1487,19 @@ async function refreshAssessment(options: { quiet?: boolean } = {}) {
     restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
-    if (!options.quiet) {
+    if (assessmentRevisionTracker.isCurrent(revision) && !options.quiet) {
       throw error
     }
+  } finally {
+    assessmentRevisionTracker.complete(revision)
+    syncAssessmentUpdating()
   }
 }
 
 function scheduleAssessmentRefresh() {
-  assessmentUpdating.value = true
-  assessmentRefreshScheduler.schedule(undefined)
+  const revision = assessmentRevisionTracker.begin()
+  syncAssessmentUpdating()
+  assessmentRefreshScheduler.schedule(revision)
 }
 
 function getItemWeightDraft(item: DesignerItem) {
@@ -1491,11 +1507,20 @@ function getItemWeightDraft(item: DesignerItem) {
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
-  if (itemWeightEditBaselines.value[item.id] === undefined) {
-    itemWeightEditBaselines.value = {
-      ...itemWeightEditBaselines.value,
+  const version = itemWeightMutationQueue.begin(item.id)
+  if (itemWeightPersistedValues.value[item.id] === undefined) {
+    itemWeightPersistedValues.value = {
+      ...itemWeightPersistedValues.value,
       [item.id]: Number(item.weightG || 0),
     }
+  }
+  itemWeightEditBaselines.value = {
+    ...itemWeightEditBaselines.value,
+    [item.id]: Number(item.weightG || 0),
+  }
+  itemWeightEditVersions.value = {
+    ...itemWeightEditVersions.value,
+    [item.id]: version,
   }
   itemWeightDrafts.value = {
     ...itemWeightDrafts.value,
@@ -1504,45 +1529,78 @@ function onWeightInput(item: DesignerItem, event: any) {
 }
 
 async function updateWeight(item: DesignerItem) {
-  const previousWeightG = itemWeightEditBaselines.value[item.id] ?? Number(item.weightG || 0)
+  const previousWeightG =
+    itemWeightPersistedValues.value[item.id] ??
+    itemWeightEditBaselines.value[item.id] ??
+    Number(item.weightG || 0)
   const weightG = Number(itemWeightDrafts.value[item.id] ?? item.weightG ?? 0)
+  const mutationVersion = itemWeightEditVersions.value[item.id] ?? itemWeightMutationQueue.begin(item.id)
   if (!Number.isFinite(weightG) || weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
     return
   }
   if (Math.abs(weightG - previousWeightG) < 0.0001) {
-    clearItemWeightEditBaseline(item.id)
+    clearItemWeightEditBaseline(item.id, mutationVersion)
     return
   }
+  if (itemWeightSavingVersions.value[item.id] === mutationVersion) return
 
   beginAutoSave()
+  itemWeightSavingVersions.value = {
+    ...itemWeightSavingVersions.value,
+    [item.id]: mutationVersion,
+  }
   item.weightG = weightG
+  let persistedBeforeSave = previousWeightG
   try {
-    await recipeDesignerApi.updateItem(item.id, { weightG })
-    scheduleAssessmentRefresh()
+    await itemWeightMutationQueue.enqueue(item.id, async () => {
+      persistedBeforeSave = itemWeightPersistedValues.value[item.id] ?? previousWeightG
+      await recipeDesignerApi.updateItem(item.id, { weightG })
+      itemWeightPersistedValues.value = {
+        ...itemWeightPersistedValues.value,
+        [item.id]: weightG,
+      }
+    })
+    if (itemWeightMutationQueue.isCurrent(item.id, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      pushEditorHistory(
+        createUpdateItemHistoryEntry({
+          itemId: item.id,
+          itemName: getItemName(item),
+          before: { weightG: persistedBeforeSave },
+          after: { weightG },
+        }),
+      )
+    }
     finishAutoSave()
-    pushEditorHistory(
-      createUpdateItemHistoryEntry({
-        itemId: item.id,
-        itemName: getItemName(item),
-        before: { weightG: previousWeightG },
-        after: { weightG },
-      }),
-    )
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
-    item.weightG = previousWeightG
-    failAutoSave()
-    uni.showToast({ title: '更新用量失败', icon: 'none' })
+    if (itemWeightMutationQueue.isCurrent(item.id, mutationVersion)) {
+      item.weightG = persistedBeforeSave
+      failAutoSave()
+      uni.showToast({ title: '更新用量失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   } finally {
-    clearItemWeightEditBaseline(item.id)
+    clearItemWeightEditBaseline(item.id, mutationVersion)
   }
 }
 
-function clearItemWeightEditBaseline(itemId: string) {
+function clearItemWeightEditBaseline(itemId: string, mutationVersion?: number) {
+  if (
+    mutationVersion !== undefined &&
+    !itemWeightMutationQueue.isCurrent(itemId, mutationVersion)
+  ) return
   const nextBaselines = { ...itemWeightEditBaselines.value }
   delete nextBaselines[itemId]
   itemWeightEditBaselines.value = nextBaselines
+  const nextVersions = { ...itemWeightEditVersions.value }
+  delete nextVersions[itemId]
+  itemWeightEditVersions.value = nextVersions
+  const nextSavingVersions = { ...itemWeightSavingVersions.value }
+  delete nextSavingVersions[itemId]
+  itemWeightSavingVersions.value = nextSavingVersions
   const nextDrafts = { ...itemWeightDrafts.value }
   delete nextDrafts[itemId]
   itemWeightDrafts.value = nextDrafts
@@ -2386,7 +2444,7 @@ function finishAutoSave() {
 }
 
 function failAutoSave() {
-  activeAutoSaveCount.value = 0
+  activeAutoSaveCount.value = Math.max(0, activeAutoSaveCount.value - 1)
   autoSaveStatus.value = 'failed'
 }
 
@@ -2747,7 +2805,11 @@ async function revertToLatestOfficial() {
     const res: any = await recipeDesignerApi.revertDraftToLatestOfficial(draftId.value)
     const revertedDraft = res?.data ?? res
     historyState.value = createRecipeDesignerHistoryState()
+    itemWeightDrafts.value = {}
     itemWeightEditBaselines.value = {}
+    itemWeightEditVersions.value = {}
+    itemWeightSavingVersions.value = {}
+    itemWeightPersistedValues.value = {}
     closeAssessmentEntryDetail()
     reorderMode.value = false
     clearItemDragState()

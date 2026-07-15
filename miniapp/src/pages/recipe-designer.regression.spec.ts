@@ -70,7 +70,7 @@ describe('recipe designer mobile entry', () => {
     expect(weightInputBlock).toContain(':value="getItemWeightDraft(item)"')
     expect(onWeightInputBlock).toContain('itemWeightDrafts.value')
     expect(onWeightInputBlock).not.toContain('item.weightG =')
-    expect(editorSource).toContain('createLatestTaskScheduler(async () =>')
+    expect(editorSource).toContain('createLatestTaskScheduler(async (revision: number) =>')
     expect(editorSource).toContain('}, 400)')
     expect(editorSource).toContain('scheduleAssessmentRefresh()')
     expect(editorSource).toContain('assessmentUpdating')
@@ -1161,7 +1161,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('let scenarioPersisted = false')
     expect(editorSource).toContain('if (!scenarioPersisted) {')
     expect(editorSource).toContain('rememberAssessmentScrollPosition()')
-    expect(editorSource).toContain('await refreshAssessment()')
+    expect(editorSource).toContain('scheduleAssessmentRefresh()')
     expect(editorSource).toContain('scenarioSwitchSheetVisible.value = false')
   })
 

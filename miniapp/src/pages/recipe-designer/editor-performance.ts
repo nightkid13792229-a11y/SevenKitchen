@@ -4,6 +4,77 @@ export interface LatestTaskScheduler<T> {
   cancel(): void
 }
 
+export interface KeyedSerialMutationQueue {
+  begin(key: string): number
+  enqueue<T>(key: string, task: () => Promise<T> | T): Promise<T>
+  isCurrent(key: string, version: number): boolean
+}
+
+export function createKeyedSerialMutationQueue(): KeyedSerialMutationQueue {
+  const tails = new Map<string, Promise<void>>()
+  const versions = new Map<string, number>()
+
+  return {
+    begin(key) {
+      const version = (versions.get(key) || 0) + 1
+      versions.set(key, version)
+      return version
+    },
+
+    enqueue<T>(key: string, task: () => Promise<T> | T): Promise<T> {
+      const previous = tails.get(key) || Promise.resolve()
+      const next = previous.catch(() => undefined).then(task)
+      const tail = next.then(
+        () => undefined,
+        () => undefined,
+      )
+      tails.set(key, tail)
+      void tail.then(() => {
+        if (tails.get(key) === tail) tails.delete(key)
+      })
+      return next
+    },
+
+    isCurrent(key, version) {
+      return versions.get(key) === version
+    },
+  }
+}
+
+export interface LatestRevisionTracker {
+  begin(): number
+  complete(revision: number): boolean
+  isCurrent(revision: number): boolean
+  isUpdating(): boolean
+}
+
+export function createLatestRevisionTracker(): LatestRevisionTracker {
+  let latestRevision = 0
+  let updating = false
+
+  return {
+    begin() {
+      latestRevision += 1
+      updating = true
+      return latestRevision
+    },
+
+    complete(revision) {
+      if (revision !== latestRevision) return false
+      updating = false
+      return true
+    },
+
+    isCurrent(revision) {
+      return revision === latestRevision
+    },
+
+    isUpdating() {
+      return updating
+    },
+  }
+}
+
 export function createLatestTaskScheduler<T>(
   task: (value: T) => Promise<void> | void,
   delayMs: number,

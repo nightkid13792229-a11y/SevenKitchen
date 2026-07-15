@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { validate } from 'class-validator';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
@@ -7,6 +8,7 @@ import { SupplementLabelExtractionService } from '../../../src/application/recip
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
+import { UpdateRecipeDesignItemOrderDto } from '../../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('RecipeDesignerController authorization', () => {
@@ -106,6 +108,18 @@ describe('RecipeDesignerController authorization', () => {
     );
 
     expect(dtoSource).toContain('sourceDraftId?: string');
+  });
+
+  it('accepts an empty item ordering but rejects a non-array itemIds body', async () => {
+    const emptyOrder = new UpdateRecipeDesignItemOrderDto();
+    emptyOrder.itemIds = [];
+    const malformedOrder = new UpdateRecipeDesignItemOrderDto();
+    (malformedOrder as any).itemIds = 'item-1';
+
+    await expect(validate(emptyOrder)).resolves.toEqual([]);
+    await expect(validate(malformedOrder)).resolves.toEqual([
+      expect.objectContaining({ property: 'itemIds' }),
+    ]);
   });
 });
 

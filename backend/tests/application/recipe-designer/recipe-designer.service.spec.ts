@@ -1780,16 +1780,23 @@ describe('RecipeDesignerService', () => {
   });
 
   it('atomically persists a supplied full item ordering and updates only changed items', async () => {
-    prisma.designRecipe.findUnique.mockResolvedValue(
+    const tx = {
+      designRecipe: { findUnique: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
     );
-    prisma.designRecipeItem.findMany.mockResolvedValue([
+    tx.designRecipeItem.findMany.mockResolvedValue([
       { id: 'item-1', sortOrder: 0 },
       { id: 'item-2', sortOrder: 1 },
       { id: 'item-3', sortOrder: 2 },
     ]);
-    prisma.designRecipeItem.update.mockImplementation(({ where, data }: any) =>
+    tx.designRecipeItem.update.mockImplementation(({ where, data }: any) =>
       Promise.resolve({ id: where.id, sortOrder: data.sortOrder }),
+    );
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
     );
 
     await expect(
@@ -1804,19 +1811,34 @@ describe('RecipeDesignerService', () => {
       { id: 'item-3', sortOrder: 2 },
     ]);
 
-    expect(prisma.designRecipe.findUnique).toHaveBeenCalledTimes(1);
-    expect(prisma.designRecipeItem.findMany).toHaveBeenCalledWith({
+    expect(prisma.designRecipe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.designRecipeItem.findMany).not.toHaveBeenCalled();
+    expect(tx.designRecipe.findUnique).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      select: {
+        id: true,
+        createdBy: true,
+        status: true,
+        publishedRecipeId: true,
+        publishedAt: true,
+        seriesId: true,
+        seriesLifeStage: true,
+      },
+    });
+    expect(tx.designRecipeItem.findMany).toHaveBeenCalledWith({
       where: { designRecipeId: 'design-1' },
       select: { id: true, sortOrder: true },
     });
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.designRecipeItem.update).toHaveBeenCalledTimes(2);
-    expect(prisma.designRecipeItem.update).toHaveBeenNthCalledWith(1, {
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(tx.designRecipeItem.update).toHaveBeenCalledTimes(2);
+    expect(tx.designRecipeItem.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'item-2' },
       data: { sortOrder: 0 },
       select: { id: true, sortOrder: true },
     });
-    expect(prisma.designRecipeItem.update).toHaveBeenNthCalledWith(2, {
+    expect(tx.designRecipeItem.update).toHaveBeenNthCalledWith(2, {
       where: { id: 'item-1' },
       data: { sortOrder: 1 },
       select: { id: true, sortOrder: true },
@@ -1829,21 +1851,77 @@ describe('RecipeDesignerService', () => {
     [['item-1'], 'omits an existing item'],
     [['item-1', 'item-2', 'item-missing'], 'contains an unknown item'],
   ])('rejects a supplied ordering that %s', async (itemIds) => {
-    prisma.designRecipe.findUnique.mockResolvedValue(
+    const tx = {
+      designRecipe: { findUnique: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
     );
-    prisma.designRecipeItem.findMany.mockResolvedValue([
+    tx.designRecipeItem.findMany.mockResolvedValue([
       { id: 'item-1', sortOrder: 0 },
       { id: 'item-2', sortOrder: 1 },
     ]);
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
+    );
 
     await expect(
       (service as any).updateItemOrder('design-1', itemIds, 'staff-1'),
     ).rejects.toThrow(BadRequestException);
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.designRecipeItem.update).not.toHaveBeenCalled();
     expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts an empty full ordering for an empty editable draft', async () => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
+    );
+
+    await expect(
+      (service as any).updateItemOrder('design-1', [], 'staff-1'),
+    ).resolves.toEqual([]);
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(tx.designRecipeItem.update).not.toHaveBeenCalled();
+  });
+
+  it('retries a serializable item-order transaction once after a P2034 conflict', async () => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([]);
+    prisma.$transaction
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('write conflict', {
+          code: 'P2034',
+          clientVersion: 'test',
+        }),
+      )
+      .mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await expect(
+      (service as any).updateItemOrder('design-1', [], 'staff-1'),
+    ).resolves.toEqual([]);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(tx.designRecipe.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it('hard deletes an unpublished draft created by the current staff user', async () => {

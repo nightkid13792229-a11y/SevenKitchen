@@ -266,6 +266,7 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
+const DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS = 3;
 const COPYABLE_RECIPE_STATUS_PRIORITY: Record<string, number> = {
   [RecipeStatus.PRIVATE_CUSTOM]: 3,
   [RecipeStatus.DRAFT]: 2,
@@ -3999,45 +4000,83 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ): Promise<Array<{ id: string; sortOrder: number }>> {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertDraftEditableByUser(designRecipeId, context.userId);
 
-    if (new Set(itemIds).size !== itemIds.length) {
-      throw new BadRequestException('原料排序包含重复项');
-    }
-
-    const items = await this.prisma.designRecipeItem.findMany({
-      where: { designRecipeId },
-      select: { id: true, sortOrder: true },
-    });
-    const existingIds = new Set(items.map((item) => item.id));
-
-    if (
-      items.length !== itemIds.length ||
-      itemIds.some((itemId) => !existingIds.has(itemId))
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS;
+      attempt++
     ) {
-      throw new BadRequestException('原料排序必须包含当前草稿的全部原料');
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const draft = await tx.designRecipe.findUnique({
+              where: { id: designRecipeId },
+              select: {
+                id: true,
+                createdBy: true,
+                status: true,
+                publishedRecipeId: true,
+                publishedAt: true,
+                seriesId: true,
+                seriesLifeStage: true,
+              },
+            });
+            this.assertEditableDraft(draft, designRecipeId, context.userId);
+
+            if (new Set(itemIds).size !== itemIds.length) {
+              throw new BadRequestException('原料排序包含重复项');
+            }
+
+            const items = await tx.designRecipeItem.findMany({
+              where: { designRecipeId },
+              select: { id: true, sortOrder: true },
+            });
+            const existingIds = new Set(items.map((item) => item.id));
+
+            if (
+              items.length !== itemIds.length ||
+              itemIds.some((itemId) => !existingIds.has(itemId))
+            ) {
+              throw new BadRequestException(
+                '原料排序必须包含当前草稿的全部原料',
+              );
+            }
+
+            const currentOrderById = new Map(
+              items.map((item) => [item.id, item.sortOrder]),
+            );
+            const changedItems = itemIds
+              .map((id, sortOrder) => ({ id, sortOrder }))
+              .filter(
+                ({ id, sortOrder }) => currentOrderById.get(id) !== sortOrder,
+              );
+
+            await Promise.all(
+              changedItems.map(({ id, sortOrder }) =>
+                tx.designRecipeItem.update({
+                  where: { id },
+                  data: { sortOrder },
+                  select: { id: true, sortOrder: true },
+                }),
+              ),
+            );
+
+            return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS &&
+          this.isTransactionConflict(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
     }
 
-    const currentOrderById = new Map(
-      items.map((item) => [item.id, item.sortOrder]),
-    );
-    const changedItems = itemIds
-      .map((id, sortOrder) => ({ id, sortOrder }))
-      .filter(({ id, sortOrder }) => currentOrderById.get(id) !== sortOrder);
-
-    await this.prisma.$transaction((tx) =>
-      Promise.all(
-        changedItems.map(({ id, sortOrder }) =>
-          tx.designRecipeItem.update({
-            where: { id },
-            data: { sortOrder },
-            select: { id: true, sortOrder: true },
-          }),
-        ),
-      ),
-    );
-
-    return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
+    throw new BadRequestException('原料排序失败，请重试');
   }
 
   async removeItem(itemId: string, access: RecipeDesignerAccessInput) {

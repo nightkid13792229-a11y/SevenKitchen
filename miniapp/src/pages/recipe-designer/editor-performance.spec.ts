@@ -81,6 +81,30 @@ describe('createKeyedWeightMutationCoordinator', () => {
     expect(mutations.isCurrent('item-1', historyVersion)).toBe(false)
     expect(mutations.isCurrent('item-1', failedMainVersion)).toBe(true)
   })
+
+  it('serializes rapid assessment-toggle writes in user order', async () => {
+    let rejectFirst!: (reason: Error) => void
+    const mutations = createKeyedWeightMutationCoordinator()
+    const firstVersion = mutations.begin('item-1', 100)
+    const calls: boolean[] = []
+    const first = mutations.enqueueMutation('item-1', () => new Promise<void>((_resolve, reject) => {
+      calls.push(false)
+      rejectFirst = reject
+    })).catch(() => mutations.isCurrent('item-1', firstVersion))
+    await Promise.resolve()
+    await Promise.resolve()
+    const secondVersion = mutations.begin('item-1', 100)
+    const second = mutations.enqueueMutation('item-1', async () => {
+      calls.push(true)
+    })
+
+    rejectFirst(new Error('older toggle failed'))
+    await Promise.all([first, second])
+
+    expect(calls).toEqual([false, true])
+    expect(mutations.isCurrent('item-1', firstVersion)).toBe(false)
+    expect(mutations.isCurrent('item-1', secondVersion)).toBe(true)
+  })
 })
 
 describe('createLatestRevisionTracker', () => {

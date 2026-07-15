@@ -3893,10 +3893,12 @@ export class RecipeDesignerService {
       supplementTargets?: Prisma.InputJsonValue;
     };
 
-    return this.prisma.designRecipeItem.create({
+    const created = await this.prisma.designRecipeItem.create({
       data,
       select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
     });
+    await this.touchDesignRecipe(designRecipeId);
+    return created;
   }
 
   async updateItem(
@@ -3905,7 +3907,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertItemEditableByUser(itemId, context.userId);
+    const draft = await this.assertItemEditableByUser(itemId, context.userId);
     const supplementTargets =
       dto.supplementTargets !== undefined
         ? this.normalizeDesignSupplementTargets(dto.supplementTargets)
@@ -3944,7 +3946,7 @@ export class RecipeDesignerService {
       supplementTargets?: Prisma.InputJsonValue | null;
     };
 
-    return this.prisma.designRecipeItem.update({
+    const updated = await this.prisma.designRecipeItem.update({
       where: { id: itemId },
       data,
       select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
@@ -3992,6 +3994,8 @@ export class RecipeDesignerService {
 
       return { updatedCount };
     });
+    await this.touchDesignRecipe(draft.id);
+    return updated;
   }
 
   async updateItemOrder(
@@ -4061,6 +4065,12 @@ export class RecipeDesignerService {
               ),
             );
 
+            if (tx.designRecipe.update) {
+              await tx.designRecipe.update({
+                where: { id: designRecipeId },
+                data: { updatedAt: new Date() },
+              });
+            }
             return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -4081,11 +4091,13 @@ export class RecipeDesignerService {
 
   async removeItem(itemId: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertItemEditableByUser(itemId, context.userId);
+    const draft = await this.assertItemEditableByUser(itemId, context.userId);
 
-    return this.prisma.designRecipeItem.delete({
+    const deleted = await this.prisma.designRecipeItem.delete({
       where: { id: itemId },
     });
+    await this.touchDesignRecipe(draft.id);
+    return deleted;
   }
 
   async assessDraft(
@@ -4106,10 +4118,15 @@ export class RecipeDesignerService {
       return this.toClientAssessmentResult(result, removableSupplementWarnings);
     }
 
-    await this.prisma.designRecipe.update({
-      where: { id },
-      data: this.buildAssessmentUpdateData(result),
-    });
+    const assessmentData = this.buildAssessmentUpdateData(result);
+    if (this.prisma.designRecipe.updateMany) {
+      await this.prisma.designRecipe.updateMany({
+        where: { id, updatedAt: (draft as any).updatedAt },
+        data: assessmentData,
+      });
+    } else {
+      await this.prisma.designRecipe.update({ where: { id }, data: assessmentData });
+    }
 
     return this.toClientAssessmentResult(result, removableSupplementWarnings);
   }
@@ -5821,6 +5838,13 @@ export class RecipeDesignerService {
     return draft;
   }
 
+  private async touchDesignRecipe(id: string) {
+    await this.prisma.designRecipe.update({
+      where: { id },
+      data: { updatedAt: new Date() },
+    });
+  }
+
   private async assertItemEditableByUser(itemId: string, userId: string) {
     const item = await this.prisma.designRecipeItem.findUnique({
       where: { id: itemId },
@@ -5843,6 +5867,7 @@ export class RecipeDesignerService {
     }
 
     this.assertEditableDraft(item.designRecipe, item.designRecipe.id, userId);
+    return item.designRecipe;
   }
 
   private assertEditableDraft(

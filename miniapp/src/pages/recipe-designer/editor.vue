@@ -1474,31 +1474,34 @@ function syncAssessmentUpdating() {
 }
 
 async function refreshAssessment(options: { quiet?: boolean } = {}, request = assessmentMutationGuard.beginAssessment()) {
-  syncAssessmentUpdating()
-  try {
-    const res: any = await recipeDesignerApi.assessDraft(draftId.value)
-    const data = res?.data ?? res
-    if (!assessmentMutationGuard.isCurrent(request)) return
-    assessment.value = data
-    const assessedItems = data?.items || data?.draft?.items
-    if (Array.isArray(assessedItems)) {
-      items.value = mergeAssessedItems(items.value, assessedItems)
-      assessedItems.forEach((item) => {
-        itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
-      })
-    }
-    refreshDetailModalFromAssessment()
-    await nextTick()
-    restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
-  } catch (error) {
-    console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
-    if (assessmentMutationGuard.isCurrent(request) && !options.quiet) {
-      throw error
-    }
-  } finally {
-    assessmentMutationGuard.complete(request)
+  return itemWeightMutations.enqueueMutation(`assessment:${draftId.value}`, async () => {
     syncAssessmentUpdating()
-  }
+    try {
+      if (!assessmentMutationGuard.isCurrent(request)) return
+      const res: any = await recipeDesignerApi.assessDraft(draftId.value)
+      const data = res?.data ?? res
+      if (!assessmentMutationGuard.isCurrent(request)) return
+      assessment.value = data
+      const assessedItems = data?.items || data?.draft?.items
+      if (Array.isArray(assessedItems)) {
+        items.value = mergeAssessedItems(items.value, assessedItems)
+        assessedItems.forEach((item) => {
+          itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+        })
+      }
+      refreshDetailModalFromAssessment()
+      await nextTick()
+      restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
+    } catch (error) {
+      console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
+      if (assessmentMutationGuard.isCurrent(request) && !options.quiet) {
+        throw error
+      }
+    } finally {
+      assessmentMutationGuard.complete(request)
+      syncAssessmentUpdating()
+    }
+  })
 }
 
 function scheduleAssessmentRefresh() {
@@ -1631,30 +1634,39 @@ function getRemovableSupplementWarningMessage(item: DesignerItem) {
 async function toggleItemAssessment(item: DesignerItem, event: any) {
   const nextIncluded = Boolean(event.detail?.value)
   const previousIncluded = isItemIncludedInAssessment(item)
+  const mutationVersion = itemWeightMutations.begin(item.id, Number(item.weightG || 0))
   item.includeInAssessment = nextIncluded
 
   invalidateAssessmentForMutation()
   beginAutoSave()
   try {
-    await recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded })
-    scheduleAssessmentRefresh()
-    finishAutoSave()
-    if (nextIncluded !== previousIncluded) {
-      pushEditorHistory(
-        createUpdateItemHistoryEntry({
-          itemId: item.id,
-          itemName: getItemName(item),
-          before: { includeInAssessment: previousIncluded },
-          after: { includeInAssessment: nextIncluded },
-        }),
-      )
+    await itemWeightMutations.enqueueMutation(item.id, () =>
+      recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded }),
+    )
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      if (nextIncluded !== previousIncluded) {
+        pushEditorHistory(
+          createUpdateItemHistoryEntry({
+            itemId: item.id,
+            itemName: getItemName(item),
+            before: { includeInAssessment: previousIncluded },
+            after: { includeInAssessment: nextIncluded },
+          }),
+        )
+      }
     }
+    finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item assessment participation:', error)
-    invalidateAssessmentForMutation()
-    item.includeInAssessment = previousIncluded
-    failAutoSave()
-    uni.showToast({ title: '更新计算开关失败', icon: 'none' })
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      invalidateAssessmentForMutation()
+      item.includeInAssessment = previousIncluded
+      failAutoSave()
+      uni.showToast({ title: '更新计算开关失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   }
 }
 

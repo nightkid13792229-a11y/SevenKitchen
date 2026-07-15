@@ -44,6 +44,7 @@ export function createKeyedSerialMutationQueue(): KeyedSerialMutationQueue {
 export interface KeyedWeightMutationCoordinator {
   begin(key: string, initialPersistedWeightG: number): number
   enqueue<T>(key: string, weightG: number, task: () => Promise<T> | T): Promise<{ result: T; persistedBeforeWeightG: number }>
+  enqueueMutation<T>(key: string, task: () => Promise<T> | T): Promise<T>
   clear(): void
   getPersisted(key: string): number | undefined
   setPersisted(key: string, weightG: number): void
@@ -71,6 +72,10 @@ export function createKeyedWeightMutationCoordinator(): KeyedWeightMutationCoord
         return taskResult
       })
       return { result, persistedBeforeWeightG }
+    },
+
+    enqueueMutation<T>(key: string, task: () => Promise<T> | T) {
+      return queue.enqueue(key, task)
     },
 
     getPersisted(key) {

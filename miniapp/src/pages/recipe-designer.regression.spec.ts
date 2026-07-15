@@ -75,7 +75,7 @@ describe('recipe designer mobile entry', () => {
     expect(weightInputBlock).toContain(':value="getItemWeightDraft(item)"')
     expect(onWeightInputBlock).toContain('itemWeightDrafts.value')
     expect(onWeightInputBlock).not.toContain('item.weightG =')
-    expect(editorSource).toContain('createLatestTaskScheduler(async (revision: number) =>')
+    expect(editorSource).toContain('createLatestTaskScheduler(async (request) =>')
     expect(editorSource).toContain('}, 400)')
     expect(editorSource).toContain('scheduleAssessmentRefresh()')
     expect(editorSource).toContain('assessmentUpdating')

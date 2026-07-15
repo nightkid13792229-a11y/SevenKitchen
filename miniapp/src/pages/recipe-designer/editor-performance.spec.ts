@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createKeyedSerialMutationQueue,
   createKeyedWeightMutationCoordinator,
+  createAssessmentMutationGuard,
   createLatestTaskScheduler,
   createLatestRevisionTracker,
   moveItemToIndex,
@@ -98,6 +99,35 @@ describe('createLatestRevisionTracker', () => {
 
     expect(appliedAssessment).toBe('latest')
     expect(tracker.isUpdating()).toBe(false)
+  })
+})
+
+describe('createAssessmentMutationGuard', () => {
+  it('ignores an in-flight stale assessment after an optimistic weight mutation succeeds', async () => {
+    let resolveAssessment!: (weightG: number) => void
+    const guard = createAssessmentMutationGuard()
+    const request = guard.beginAssessment()
+    let visibleWeightG = 5
+    let persistedWeightG = 5
+    const inFlightAssessment = new Promise<number>((resolve) => {
+      resolveAssessment = resolve
+    }).then((weightG) => {
+      if (guard.isCurrent(request)) {
+        visibleWeightG = weightG
+        persistedWeightG = weightG
+      }
+      guard.complete(request)
+    })
+
+    guard.beginMutation()
+    visibleWeightG = 10
+    persistedWeightG = 10
+    resolveAssessment(5)
+    await inFlightAssessment
+
+    expect(visibleWeightG).toBe(10)
+    expect(persistedWeightG).toBe(10)
+    expect(guard.isUpdating()).toBe(false)
   })
 })
 

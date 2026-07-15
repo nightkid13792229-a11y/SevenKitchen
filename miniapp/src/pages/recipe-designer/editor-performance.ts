@@ -125,6 +125,53 @@ export function createLatestRevisionTracker(): LatestRevisionTracker {
   }
 }
 
+export interface AssessmentMutationRequest {
+  assessmentRevision: number
+  mutationGeneration: number
+}
+
+export interface AssessmentMutationGuard {
+  beginAssessment(): AssessmentMutationRequest
+  beginMutation(): number
+  complete(request: AssessmentMutationRequest): boolean
+  isCurrent(request: AssessmentMutationRequest): boolean
+  isUpdating(): boolean
+}
+
+export function createAssessmentMutationGuard(): AssessmentMutationGuard {
+  const assessmentRevisions = createLatestRevisionTracker()
+  let mutationGeneration = 0
+
+  return {
+    beginAssessment() {
+      return {
+        assessmentRevision: assessmentRevisions.begin(),
+        mutationGeneration,
+      }
+    },
+
+    beginMutation() {
+      mutationGeneration += 1
+      return mutationGeneration
+    },
+
+    complete(request) {
+      return assessmentRevisions.complete(request.assessmentRevision)
+    },
+
+    isCurrent(request) {
+      return (
+        request.mutationGeneration === mutationGeneration &&
+        assessmentRevisions.isCurrent(request.assessmentRevision)
+      )
+    },
+
+    isUpdating() {
+      return assessmentRevisions.isUpdating()
+    },
+  }
+}
+
 export function createLatestTaskScheduler<T>(
   task: (value: T) => Promise<void> | void,
   delayMs: number,

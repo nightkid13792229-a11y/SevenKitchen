@@ -751,9 +751,9 @@ import {
   type RecipeDesignerHistoryState,
 } from './editor-history'
 import {
+  createAssessmentMutationGuard,
   createKeyedWeightMutationCoordinator,
   createLatestTaskScheduler,
-  createLatestRevisionTracker,
   moveItemToIndex,
   shouldTriggerDragFeedback,
 } from './editor-performance'
@@ -979,11 +979,11 @@ let dragOriginalOrderIds: string[] = []
 let itemRowRects: Array<{ top: number; bottom: number }> = []
 let lastItemDragFeedbackAt = 0
 const itemWeightMutations = createKeyedWeightMutationCoordinator()
-const assessmentRevisionTracker = createLatestRevisionTracker()
+const assessmentMutationGuard = createAssessmentMutationGuard()
 
-const assessmentRefreshScheduler = createLatestTaskScheduler(async (revision: number) => {
+const assessmentRefreshScheduler = createLatestTaskScheduler(async (request) => {
   try {
-    await refreshAssessment({}, revision)
+    await refreshAssessment({}, request)
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to refresh scheduled assessment:', error)
     uni.showToast({ title: '营养评估更新失败', icon: 'none' })
@@ -1470,15 +1470,15 @@ function setAssessmentDrawerTop(topPx: number, windowHeightOverride?: number) {
 }
 
 function syncAssessmentUpdating() {
-  assessmentUpdating.value = assessmentRevisionTracker.isUpdating()
+  assessmentUpdating.value = assessmentMutationGuard.isUpdating()
 }
 
-async function refreshAssessment(options: { quiet?: boolean } = {}, revision = assessmentRevisionTracker.begin()) {
+async function refreshAssessment(options: { quiet?: boolean } = {}, request = assessmentMutationGuard.beginAssessment()) {
   syncAssessmentUpdating()
   try {
     const res: any = await recipeDesignerApi.assessDraft(draftId.value)
     const data = res?.data ?? res
-    if (!assessmentRevisionTracker.isCurrent(revision)) return
+    if (!assessmentMutationGuard.isCurrent(request)) return
     assessment.value = data
     const assessedItems = data?.items || data?.draft?.items
     if (Array.isArray(assessedItems)) {
@@ -1492,19 +1492,24 @@ async function refreshAssessment(options: { quiet?: boolean } = {}, revision = a
     restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
-    if (assessmentRevisionTracker.isCurrent(revision) && !options.quiet) {
+    if (assessmentMutationGuard.isCurrent(request) && !options.quiet) {
       throw error
     }
   } finally {
-    assessmentRevisionTracker.complete(revision)
+    assessmentMutationGuard.complete(request)
     syncAssessmentUpdating()
   }
 }
 
 function scheduleAssessmentRefresh() {
-  const revision = assessmentRevisionTracker.begin()
+  const request = assessmentMutationGuard.beginAssessment()
   syncAssessmentUpdating()
-  assessmentRefreshScheduler.schedule(revision)
+  assessmentRefreshScheduler.schedule(request)
+}
+
+function invalidateAssessmentForMutation() {
+  assessmentMutationGuard.beginMutation()
+  syncAssessmentUpdating()
 }
 
 function getItemWeightDraft(item: DesignerItem) {
@@ -1545,6 +1550,7 @@ async function updateWeight(item: DesignerItem) {
   }
   if (itemWeightSavingVersions.value[item.id] === mutationVersion) return
 
+  invalidateAssessmentForMutation()
   beginAutoSave()
   itemWeightSavingVersions.value = {
     ...itemWeightSavingVersions.value,
@@ -1574,6 +1580,7 @@ async function updateWeight(item: DesignerItem) {
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
     if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      invalidateAssessmentForMutation()
       item.weightG = persistedBeforeSave
       failAutoSave()
       uni.showToast({ title: '更新用量失败', icon: 'none' })
@@ -1626,6 +1633,7 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
   const previousIncluded = isItemIncludedInAssessment(item)
   item.includeInAssessment = nextIncluded
 
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
     await recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded })
@@ -1643,6 +1651,7 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
     }
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item assessment participation:', error)
+    invalidateAssessmentForMutation()
     item.includeInAssessment = previousIncluded
     failAutoSave()
     uni.showToast({ title: '更新计算开关失败', icon: 'none' })
@@ -1961,6 +1970,7 @@ async function confirmAddIngredient() {
   }
 
   addingItem.value = true
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
     setIngredientTypeHint(selectedIngredientOption.value)
@@ -2002,6 +2012,7 @@ function removeIngredient(item: DesignerItem) {
     confirmColor: '#cf1322',
     success: async (result: any) => {
       if (!result.confirm) return
+      invalidateAssessmentForMutation()
       beginAutoSave()
       try {
         await recipeDesignerApi.removeItem(item.id)
@@ -2402,6 +2413,7 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
   if (updatingDetailContributionItemId.value) return
   const item = items.value.find((candidate) => candidate.id === itemId)
   const beforeWeightG = previousWeightG ?? Number(item?.weightG || 0)
+  invalidateAssessmentForMutation()
   const mutationVersion = itemWeightMutations.begin(itemId, beforeWeightG)
   updatingDetailContributionItemId.value = itemId
   beginAutoSave()
@@ -2429,6 +2441,7 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update contribution weight:', error)
     if (itemWeightMutations.isCurrent(itemId, mutationVersion)) {
+      invalidateAssessmentForMutation()
       items.value = items.value.map((item) =>
         item.id === itemId ? { ...item, weightG: itemWeightMutations.getPersisted(itemId) ?? beforeWeightG } : item,
       )
@@ -2660,6 +2673,7 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
     weightG === undefined
       ? undefined
       : itemWeightMutations.begin(resolvedItemId, Number(item?.weightG || 0))
+  if (weightG !== undefined) invalidateAssessmentForMutation()
   let updatedItem: any
   try {
     if (weightG === undefined) {
@@ -2678,6 +2692,7 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
     if (mutationVersion !== undefined && !itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) {
       return
     }
+    if (mutationVersion !== undefined) invalidateAssessmentForMutation()
     throw error
   }
   items.value = items.value.map((item) =>
@@ -2693,6 +2708,7 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
 }
 
 async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipeDesignerItem>) {
+  invalidateAssessmentForMutation()
   const payload = buildHistoryItemAddPayload(itemSnapshot)
   const res: any = await recipeDesignerApi.addItem(draftId.value, payload)
   const restoredItem = res?.data ?? res
@@ -2707,6 +2723,7 @@ async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipe
 }
 
 async function removeHistoryItem(itemId: string) {
+  invalidateAssessmentForMutation()
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
   await recipeDesignerApi.removeItem(resolvedItemId)
   items.value = items.value.filter((item) => item.id !== resolvedItemId)
@@ -2759,6 +2776,7 @@ async function confirmScenarioSwitch() {
   let scenarioPersisted = false
   rememberAssessmentScrollPosition()
   scenarioSwitching.value = true
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
     await recipeDesignerApi.updateDraft(draftId.value, { scenario: pendingScenario.value })

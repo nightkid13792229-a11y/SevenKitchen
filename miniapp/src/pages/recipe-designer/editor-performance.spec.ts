@@ -129,6 +129,26 @@ describe('createAssessmentMutationGuard', () => {
     expect(persistedWeightG).toBe(10)
     expect(guard.isUpdating()).toBe(false)
   })
+
+  it('rejects an old assessment while a history include undo or redo is optimistic', async () => {
+    let resolveAssessment!: (included: boolean) => void
+    const guard = createAssessmentMutationGuard()
+    const request = guard.beginAssessment()
+    let includedInAssessment = true
+    const inFlightAssessment = new Promise<boolean>((resolve) => {
+      resolveAssessment = resolve
+    }).then((included) => {
+      if (guard.isCurrent(request)) includedInAssessment = included
+      guard.complete(request)
+    })
+
+    guard.beginMutation()
+    includedInAssessment = false
+    resolveAssessment(true)
+    await inFlightAssessment
+
+    expect(includedInAssessment).toBe(false)
+  })
 })
 
 describe('createLatestTaskScheduler', () => {

@@ -91,6 +91,7 @@ describe('recipe designer mobile entry', () => {
     expect(detailWeightBlock).toContain('itemWeightMutations.enqueue(')
     expect(historyWeightBlock).toContain('itemWeightMutations.enqueue(')
     expect(editorSource).toContain('itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))')
+    expect(historyWeightBlock).toContain('if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()')
   })
 
   it('links staff workbench to the recipe designer draft list', () => {

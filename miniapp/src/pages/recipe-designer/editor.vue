@@ -2669,11 +2669,11 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
   const item = items.value.find((candidate) => candidate.id === resolvedItemId)
   const weightG = patch.weightG === undefined ? undefined : Number(patch.weightG || 0)
+  if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()
   const mutationVersion =
     weightG === undefined
       ? undefined
       : itemWeightMutations.begin(resolvedItemId, Number(item?.weightG || 0))
-  if (weightG !== undefined) invalidateAssessmentForMutation()
   let updatedItem: any
   try {
     if (weightG === undefined) {
@@ -2692,7 +2692,7 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
     if (mutationVersion !== undefined && !itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) {
       return
     }
-    if (mutationVersion !== undefined) invalidateAssessmentForMutation()
+    if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()
     throw error
   }
   items.value = items.value.map((item) =>
@@ -2705,6 +2705,10 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
       : item,
   )
   scheduleAssessmentRefresh()
+}
+
+function isAssessmentRelevantHistoryItemPatch(patch: RecipeDesignerHistoryItemPatch) {
+  return patch.weightG !== undefined || patch.includeInAssessment !== undefined
 }
 
 async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipeDesignerItem>) {

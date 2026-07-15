@@ -12,11 +12,15 @@ export function createLatestTaskScheduler<T>(
   let latestValue!: T
   let timer: ReturnType<typeof setTimeout> | undefined
   let inFlight: Promise<void> | undefined
-  const idleResolvers: Array<() => void> = []
+  const idleWaiters: Array<{ resolve: () => void; reject: (reason?: unknown) => void }> = []
 
   const resolveWhenIdle = () => {
     if (hasPendingValue || timer || inFlight) return
-    idleResolvers.splice(0).forEach((resolve) => resolve())
+    idleWaiters.splice(0).forEach(({ resolve }) => resolve())
+  }
+
+  const rejectIdleWaiters = (error: unknown) => {
+    idleWaiters.splice(0).forEach(({ reject }) => reject(error))
   }
 
   const runPendingTask = () => {
@@ -34,16 +38,27 @@ export function createLatestTaskScheduler<T>(
 
     const currentTask = Promise.resolve(result)
     inFlight = currentTask
-    void currentTask.catch(() => undefined).then(() => {
-      if (inFlight !== currentTask) return
-      inFlight = undefined
+    void currentTask.then(
+      () => {
+        if (inFlight !== currentTask) return
+        inFlight = undefined
 
-      if (hasPendingValue && !timer) {
-        runPendingTask()
-      } else {
-        resolveWhenIdle()
-      }
-    })
+        if (hasPendingValue && !timer) {
+          runPendingTask()
+        } else {
+          resolveWhenIdle()
+        }
+      },
+      (error) => {
+        if (inFlight !== currentTask) return
+        inFlight = undefined
+        rejectIdleWaiters(error)
+
+        if (hasPendingValue && !timer) {
+          runPendingTask()
+        }
+      },
+    )
   }
 
   const scheduleTimer = () => {
@@ -72,8 +87,8 @@ export function createLatestTaskScheduler<T>(
       }
 
       if (!hasPendingValue && !inFlight) return Promise.resolve()
-      return new Promise((resolve) => {
-        idleResolvers.push(resolve)
+      return new Promise((resolve, reject) => {
+        idleWaiters.push({ resolve, reject })
       })
     },
 

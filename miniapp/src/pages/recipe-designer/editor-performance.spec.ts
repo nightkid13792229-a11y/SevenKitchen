@@ -99,6 +99,22 @@ describe('createLatestTaskScheduler', () => {
     expect(received).toEqual([])
     vi.useRealTimers()
   })
+
+  it('rejects flush when the latest task fails and remains usable for a later success', async () => {
+    const received: string[] = []
+    const scheduler = createLatestTaskScheduler(async (value: string) => {
+      if (value === 'fail') throw new Error('assessment failed')
+      received.push(value)
+    }, 100)
+
+    scheduler.schedule('fail')
+    await expect(scheduler.flush()).rejects.toThrow('assessment failed')
+
+    scheduler.schedule('success')
+    await scheduler.flush()
+
+    expect(received).toEqual(['success'])
+  })
 })
 
 describe('moveItemToIndex', () => {

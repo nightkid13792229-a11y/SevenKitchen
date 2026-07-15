@@ -41,6 +41,56 @@ export function createKeyedSerialMutationQueue(): KeyedSerialMutationQueue {
   }
 }
 
+export interface KeyedWeightMutationCoordinator {
+  begin(key: string, initialPersistedWeightG: number): number
+  enqueue<T>(key: string, weightG: number, task: () => Promise<T> | T): Promise<{ result: T; persistedBeforeWeightG: number }>
+  clear(): void
+  getPersisted(key: string): number | undefined
+  setPersisted(key: string, weightG: number): void
+  isCurrent(key: string, version: number): boolean
+}
+
+export function createKeyedWeightMutationCoordinator(): KeyedWeightMutationCoordinator {
+  const queue = createKeyedSerialMutationQueue()
+  const persistedWeightGByKey = new Map<string, number>()
+
+  return {
+    begin(key, initialPersistedWeightG) {
+      if (!persistedWeightGByKey.has(key)) {
+        persistedWeightGByKey.set(key, initialPersistedWeightG)
+      }
+      return queue.begin(key)
+    },
+
+    async enqueue<T>(key: string, weightG: number, task: () => Promise<T> | T) {
+      let persistedBeforeWeightG = persistedWeightGByKey.get(key) ?? 0
+      const result = await queue.enqueue(key, async () => {
+        persistedBeforeWeightG = persistedWeightGByKey.get(key) ?? 0
+        const taskResult = await task()
+        persistedWeightGByKey.set(key, weightG)
+        return taskResult
+      })
+      return { result, persistedBeforeWeightG }
+    },
+
+    getPersisted(key) {
+      return persistedWeightGByKey.get(key)
+    },
+
+    clear() {
+      persistedWeightGByKey.clear()
+    },
+
+    setPersisted(key, weightG) {
+      persistedWeightGByKey.set(key, weightG)
+    },
+
+    isCurrent(key, version) {
+      return queue.isCurrent(key, version)
+    },
+  }
+}
+
 export interface LatestRevisionTracker {
   begin(): number
   complete(revision: number): boolean

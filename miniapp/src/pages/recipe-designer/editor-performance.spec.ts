@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createKeyedSerialMutationQueue,
+  createKeyedWeightMutationCoordinator,
   createLatestTaskScheduler,
   createLatestRevisionTracker,
   moveItemToIndex,
@@ -42,6 +43,42 @@ describe('createKeyedSerialMutationQueue', () => {
     expect(queue.isCurrent('item-1', firstVersion)).toBe(false)
     expect(queue.isCurrent('item-1', secondVersion)).toBe(true)
     expect(displayedWeight).toBe(20)
+  })
+})
+
+describe('createKeyedWeightMutationCoordinator', () => {
+  it('keeps the latest persisted weight across main, detail, and history mutations before a later main save fails', async () => {
+    const mutations = createKeyedWeightMutationCoordinator()
+    const calls: string[] = []
+    const mainVersion = mutations.begin('item-1', 5)
+    await mutations.enqueue('item-1', 10, async () => {
+      calls.push('main')
+    })
+
+    const detailVersion = mutations.begin('item-1', 10)
+    await mutations.enqueue('item-1', 15, async () => {
+      calls.push('detail')
+    })
+
+    const historyVersion = mutations.begin('item-1', 15)
+    await mutations.enqueue('item-1', 12, async () => {
+      calls.push('history')
+    })
+
+    const failedMainVersion = mutations.begin('item-1', 12)
+    await expect(
+      mutations.enqueue('item-1', 20, async () => {
+        calls.push('main-fail')
+        throw new Error('save failed')
+      }),
+    ).rejects.toThrow('save failed')
+
+    expect(calls).toEqual(['main', 'detail', 'history', 'main-fail'])
+    expect(mutations.getPersisted('item-1')).toBe(12)
+    expect(mutations.isCurrent('item-1', mainVersion)).toBe(false)
+    expect(mutations.isCurrent('item-1', detailVersion)).toBe(false)
+    expect(mutations.isCurrent('item-1', historyVersion)).toBe(false)
+    expect(mutations.isCurrent('item-1', failedMainVersion)).toBe(true)
   })
 })
 

@@ -57,6 +57,10 @@ describe('recipe designer mobile entry', () => {
       editorSource.match(/async function persistItemSortOrder[\s\S]*?\n}\n\nfunction getDragTargetIndex/)?.[0] || ''
     const historyOrderBlock =
       editorSource.match(/async function applyHistoryOrder[\s\S]*?\n}\n\nfunction sortItemsBySortOrder/)?.[0] || ''
+    const detailWeightBlock =
+      editorSource.match(/async function updateDetailContributionItemWeight[\s\S]*?\n}\n\nfunction beginAutoSave/)?.[0] || ''
+    const historyWeightBlock =
+      editorSource.match(/async function applyHistoryItemPatch[\s\S]*?\n}\n\nasync function restoreHistoryItem/)?.[0] || ''
 
     expect(apiSource).toContain('updateItemOrder: (draftId: string, itemIds: string[])')
     expect(apiSource).toContain('`/recipe-designer/drafts/${draftId}/item-order`')
@@ -66,6 +70,7 @@ describe('recipe designer mobile entry', () => {
     expect(editorSource).toContain('createLatestTaskScheduler')
     expect(editorSource).toContain('moveItemToIndex')
     expect(editorSource).toContain('shouldTriggerDragFeedback')
+    expect(editorSource).toContain('createKeyedWeightMutationCoordinator')
     expect(editorSource).toContain('const itemWeightDrafts = ref<Record<string, string>>({})')
     expect(weightInputBlock).toContain(':value="getItemWeightDraft(item)"')
     expect(onWeightInputBlock).toContain('itemWeightDrafts.value')
@@ -83,6 +88,9 @@ describe('recipe designer mobile entry', () => {
     expect(persistItemSortOrderBlock).not.toContain('Promise.all')
     expect(historyOrderBlock).toContain('recipeDesignerApi.updateItemOrder(')
     expect(historyOrderBlock).not.toContain('Promise.all')
+    expect(detailWeightBlock).toContain('itemWeightMutations.enqueue(')
+    expect(historyWeightBlock).toContain('itemWeightMutations.enqueue(')
+    expect(editorSource).toContain('itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))')
   })
 
   it('links staff workbench to the recipe designer draft list', () => {

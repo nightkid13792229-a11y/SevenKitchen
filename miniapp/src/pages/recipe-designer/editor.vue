@@ -751,7 +751,7 @@ import {
   type RecipeDesignerHistoryState,
 } from './editor-history'
 import {
-  createKeyedSerialMutationQueue,
+  createKeyedWeightMutationCoordinator,
   createLatestTaskScheduler,
   createLatestRevisionTracker,
   moveItemToIndex,
@@ -940,7 +940,6 @@ const historyActionRunning = ref(false)
 const historyActionDirection = ref<HistoryActionDirection | ''>('')
 const itemWeightDrafts = ref<Record<string, string>>({})
 const itemWeightEditBaselines = ref<Record<string, number>>({})
-const itemWeightPersistedValues = ref<Record<string, number>>({})
 const itemWeightEditVersions = ref<Record<string, number>>({})
 const itemWeightSavingVersions = ref<Record<string, number>>({})
 const scenarioSwitchSheetVisible = ref(false)
@@ -979,7 +978,7 @@ let dragStartY = 0
 let dragOriginalOrderIds: string[] = []
 let itemRowRects: Array<{ top: number; bottom: number }> = []
 let lastItemDragFeedbackAt = 0
-const itemWeightMutationQueue = createKeyedSerialMutationQueue()
+const itemWeightMutations = createKeyedWeightMutationCoordinator()
 const assessmentRevisionTracker = createLatestRevisionTracker()
 
 const assessmentRefreshScheduler = createLatestTaskScheduler(async (revision: number) => {
@@ -1319,8 +1318,11 @@ async function applyDraftDetail(draft: any) {
   )
   scenario.value = getDraftScenario(draft)
   ingredientTypeHints.value = {}
-  itemWeightPersistedValues.value = {}
   items.value = draft.items || []
+  itemWeightMutations.clear()
+  items.value.forEach((item) => {
+    itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+  })
   assessment.value = null
   applyCachedAssessmentFromDraft(draft)
   await hydrateIngredientTypeHintsForItems(items.value)
@@ -1481,6 +1483,9 @@ async function refreshAssessment(options: { quiet?: boolean } = {}, revision = a
     const assessedItems = data?.items || data?.draft?.items
     if (Array.isArray(assessedItems)) {
       items.value = mergeAssessedItems(items.value, assessedItems)
+      assessedItems.forEach((item) => {
+        itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+      })
     }
     refreshDetailModalFromAssessment()
     await nextTick()
@@ -1507,13 +1512,7 @@ function getItemWeightDraft(item: DesignerItem) {
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
-  const version = itemWeightMutationQueue.begin(item.id)
-  if (itemWeightPersistedValues.value[item.id] === undefined) {
-    itemWeightPersistedValues.value = {
-      ...itemWeightPersistedValues.value,
-      [item.id]: Number(item.weightG || 0),
-    }
-  }
+  const version = itemWeightMutations.begin(item.id, Number(item.weightG || 0))
   itemWeightEditBaselines.value = {
     ...itemWeightEditBaselines.value,
     [item.id]: Number(item.weightG || 0),
@@ -1530,11 +1529,12 @@ function onWeightInput(item: DesignerItem, event: any) {
 
 async function updateWeight(item: DesignerItem) {
   const previousWeightG =
-    itemWeightPersistedValues.value[item.id] ??
+    itemWeightMutations.getPersisted(item.id) ??
     itemWeightEditBaselines.value[item.id] ??
     Number(item.weightG || 0)
   const weightG = Number(itemWeightDrafts.value[item.id] ?? item.weightG ?? 0)
-  const mutationVersion = itemWeightEditVersions.value[item.id] ?? itemWeightMutationQueue.begin(item.id)
+  const mutationVersion =
+    itemWeightEditVersions.value[item.id] ?? itemWeightMutations.begin(item.id, Number(item.weightG || 0))
   if (!Number.isFinite(weightG) || weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
     return
@@ -1553,15 +1553,13 @@ async function updateWeight(item: DesignerItem) {
   item.weightG = weightG
   let persistedBeforeSave = previousWeightG
   try {
-    await itemWeightMutationQueue.enqueue(item.id, async () => {
-      persistedBeforeSave = itemWeightPersistedValues.value[item.id] ?? previousWeightG
-      await recipeDesignerApi.updateItem(item.id, { weightG })
-      itemWeightPersistedValues.value = {
-        ...itemWeightPersistedValues.value,
-        [item.id]: weightG,
-      }
-    })
-    if (itemWeightMutationQueue.isCurrent(item.id, mutationVersion)) {
+    const persistedMutation = await itemWeightMutations.enqueue(
+      item.id,
+      weightG,
+      () => recipeDesignerApi.updateItem(item.id, { weightG }),
+    )
+    persistedBeforeSave = persistedMutation.persistedBeforeWeightG
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
       scheduleAssessmentRefresh()
       pushEditorHistory(
         createUpdateItemHistoryEntry({
@@ -1575,7 +1573,7 @@ async function updateWeight(item: DesignerItem) {
     finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
-    if (itemWeightMutationQueue.isCurrent(item.id, mutationVersion)) {
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
       item.weightG = persistedBeforeSave
       failAutoSave()
       uni.showToast({ title: '更新用量失败', icon: 'none' })
@@ -1590,7 +1588,7 @@ async function updateWeight(item: DesignerItem) {
 function clearItemWeightEditBaseline(itemId: string, mutationVersion?: number) {
   if (
     mutationVersion !== undefined &&
-    !itemWeightMutationQueue.isCurrent(itemId, mutationVersion)
+    !itemWeightMutations.isCurrent(itemId, mutationVersion)
   ) return
   const nextBaselines = { ...itemWeightEditBaselines.value }
   delete nextBaselines[itemId]
@@ -2404,27 +2402,41 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
   if (updatingDetailContributionItemId.value) return
   const item = items.value.find((candidate) => candidate.id === itemId)
   const beforeWeightG = previousWeightG ?? Number(item?.weightG || 0)
+  const mutationVersion = itemWeightMutations.begin(itemId, beforeWeightG)
   updatingDetailContributionItemId.value = itemId
   beginAutoSave()
+  items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
   try {
-    await recipeDesignerApi.updateItem(itemId, { weightG })
-    items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
-    scheduleAssessmentRefresh()
-    finishAutoSave()
-    if (Math.abs(weightG - beforeWeightG) >= 0.0001) {
-      pushEditorHistory(
-        createUpdateItemHistoryEntry({
-          itemId,
-          itemName: item ? getItemName(item) : '原料',
-          before: { weightG: beforeWeightG },
-          after: { weightG },
-        }),
-      )
+    const persistedMutation = await itemWeightMutations.enqueue(
+      itemId,
+      weightG,
+      () => recipeDesignerApi.updateItem(itemId, { weightG }),
+    )
+    if (itemWeightMutations.isCurrent(itemId, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      if (Math.abs(weightG - persistedMutation.persistedBeforeWeightG) >= 0.0001) {
+        pushEditorHistory(
+          createUpdateItemHistoryEntry({
+            itemId,
+            itemName: item ? getItemName(item) : '原料',
+            before: { weightG: persistedMutation.persistedBeforeWeightG },
+            after: { weightG },
+          }),
+        )
+      }
     }
+    finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update contribution weight:', error)
-    failAutoSave()
-    uni.showToast({ title: '更新用量失败', icon: 'none' })
+    if (itemWeightMutations.isCurrent(itemId, mutationVersion)) {
+      items.value = items.value.map((item) =>
+        item.id === itemId ? { ...item, weightG: itemWeightMutations.getPersisted(itemId) ?? beforeWeightG } : item,
+      )
+      failAutoSave()
+      uni.showToast({ title: '更新用量失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   } finally {
     updatingDetailContributionItemId.value = ''
     clearDetailContributionWeightDraft(itemId)
@@ -2642,8 +2654,32 @@ function cloneDesignerItems(list: DesignerItem[]) {
 
 async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistoryItemPatch) {
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
-  const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
-  const updatedItem = res?.data ?? res
+  const item = items.value.find((candidate) => candidate.id === resolvedItemId)
+  const weightG = patch.weightG === undefined ? undefined : Number(patch.weightG || 0)
+  const mutationVersion =
+    weightG === undefined
+      ? undefined
+      : itemWeightMutations.begin(resolvedItemId, Number(item?.weightG || 0))
+  let updatedItem: any
+  try {
+    if (weightG === undefined) {
+      const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
+      updatedItem = res?.data ?? res
+    } else {
+      const persistedMutation = await itemWeightMutations.enqueue(
+        resolvedItemId,
+        weightG,
+        () => recipeDesignerApi.updateItem(resolvedItemId, patch),
+      )
+      updatedItem = persistedMutation.result?.data ?? persistedMutation.result
+      if (!itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) return
+    }
+  } catch (error) {
+    if (mutationVersion !== undefined && !itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) {
+      return
+    }
+    throw error
+  }
   items.value = items.value.map((item) =>
     item.id === resolvedItemId
       ? {
@@ -2809,7 +2845,7 @@ async function revertToLatestOfficial() {
     itemWeightEditBaselines.value = {}
     itemWeightEditVersions.value = {}
     itemWeightSavingVersions.value = {}
-    itemWeightPersistedValues.value = {}
+    itemWeightMutations.clear()
     closeAssessmentEntryDetail()
     reorderMode.value = false
     clearItemDragState()

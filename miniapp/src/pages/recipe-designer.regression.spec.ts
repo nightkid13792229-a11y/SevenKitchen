@@ -44,6 +44,47 @@ const assessmentSource = readSource('src/pages/recipe-designer/assessment.ts')
 const publishSource = readSource('src/pages/recipe-designer/publish.vue')
 
 describe('recipe designer mobile entry', () => {
+  it('keeps editor mutations responsive with local drafts, deferred assessment, and batch ordering', () => {
+    const weightInputBlock =
+      editorSource.match(/<view class="weight-editor">[\s\S]*?<\/view>\n            <view class="item-ratio-column">/)?.[0] || ''
+    const onWeightInputBlock =
+      editorSource.match(/function onWeightInput[\s\S]*?\n}\n\nasync function updateWeight/)?.[0] || ''
+    const onItemTouchMoveBlock =
+      editorSource.match(/function onItemTouchMove[\s\S]*?\n}\n\nasync function finishItemDrag/)?.[0] || ''
+    const finishItemDragBlock =
+      editorSource.match(/async function finishItemDrag[\s\S]*?\n}\n\nfunction cancelItemDrag/)?.[0] || ''
+    const persistItemSortOrderBlock =
+      editorSource.match(/async function persistItemSortOrder[\s\S]*?\n}\n\nfunction getDragTargetIndex/)?.[0] || ''
+    const historyOrderBlock =
+      editorSource.match(/async function applyHistoryOrder[\s\S]*?\n}\n\nfunction sortItemsBySortOrder/)?.[0] || ''
+
+    expect(apiSource).toContain('updateItemOrder: (draftId: string, itemIds: string[])')
+    expect(apiSource).toContain('`/recipe-designer/drafts/${draftId}/item-order`')
+    expect(apiSource).toContain("method: 'PUT'")
+    expect(apiSource).toContain('data: { itemIds }')
+    expect(editorSource).toContain("from './editor-performance'")
+    expect(editorSource).toContain('createLatestTaskScheduler')
+    expect(editorSource).toContain('moveItemToIndex')
+    expect(editorSource).toContain('shouldTriggerDragFeedback')
+    expect(editorSource).toContain('const itemWeightDrafts = ref<Record<string, string>>({})')
+    expect(weightInputBlock).toContain(':value="getItemWeightDraft(item)"')
+    expect(onWeightInputBlock).toContain('itemWeightDrafts.value')
+    expect(onWeightInputBlock).not.toContain('item.weightG =')
+    expect(editorSource).toContain('createLatestTaskScheduler(async () =>')
+    expect(editorSource).toContain('}, 400)')
+    expect(editorSource).toContain('scheduleAssessmentRefresh()')
+    expect(editorSource).toContain('assessmentUpdating')
+    expect(editorSource).toContain('营养评估更新中')
+    expect(onItemTouchMoveBlock).toContain('dragTargetIndex.value = targetIndex')
+    expect(onItemTouchMoveBlock).not.toContain('items.value =')
+    expect(onItemTouchMoveBlock).not.toContain('nextTick')
+    expect(finishItemDragBlock).toContain('moveItemToIndex(items.value, itemId, targetIndex)')
+    expect(persistItemSortOrderBlock).toContain('recipeDesignerApi.updateItemOrder(')
+    expect(persistItemSortOrderBlock).not.toContain('Promise.all')
+    expect(historyOrderBlock).toContain('recipeDesignerApi.updateItemOrder(')
+    expect(historyOrderBlock).not.toContain('Promise.all')
+  })
+
   it('links staff workbench to the recipe designer draft list', () => {
     expect(staffWorkbenchSource).toContain('食谱设计器')
     expect(staffWorkbenchSource).toContain('goToRecipeDesigner')

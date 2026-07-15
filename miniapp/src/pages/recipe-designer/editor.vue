@@ -124,7 +124,7 @@
               <input
                 class="weight-input"
                 type="digit"
-                :value="formatItemWeightInput(item.weightG)"
+                :value="getItemWeightDraft(item)"
                 :disabled="reorderMode"
                 @input="onWeightInput(item, $event)"
                 @blur="updateWeight(item)"
@@ -335,6 +335,7 @@
         <view class="drawer-handle">
           <view class="drawer-title-row">
             <text class="drawer-title">营养评估</text>
+            <text v-if="assessmentUpdating" class="assessment-updating">营养评估更新中</text>
             <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
             <button
               class="scenario-switch-btn"
@@ -750,11 +751,20 @@ import {
   type RecipeDesignerHistoryState,
 } from './editor-history'
 import {
-  buildReorderedItems,
-  getChangedSortOrderUpdates,
-  moveItem,
-  type SortOrderUpdate,
-} from './reorder'
+  createLatestTaskScheduler,
+  moveItemToIndex,
+  shouldTriggerDragFeedback,
+} from './editor-performance'
+
+interface StandardIngredientSnapshot {
+  id?: string
+  name?: string
+  type?: string
+  unitDisplayLabel?: string | null
+  purchaseUnit?: string | null
+  properties?: Record<string, unknown> | null
+}
+
 
 interface DesignerItem {
   id: string
@@ -900,6 +910,7 @@ const draftIsCompliant = ref(false)
 const loading = ref(false)
 const autoSaveStatus = ref<'saved' | 'saving' | 'failed'>('saved')
 const activeAutoSaveCount = ref(0)
+const assessmentUpdating = ref(false)
 const assessmentExpanded = ref(false)
 const assessmentDragging = ref(false)
 const assessmentDrawerTopPx = ref(0)
@@ -925,6 +936,7 @@ const detailContributionWeightDrafts = ref<Record<string, string>>({})
 const historyState = ref(createRecipeDesignerHistoryState())
 const historyActionRunning = ref(false)
 const historyActionDirection = ref<HistoryActionDirection | ''>('')
+const itemWeightDrafts = ref<Record<string, string>>({})
 const itemWeightEditBaselines = ref<Record<string, number>>({})
 const scenarioSwitchSheetVisible = ref(false)
 const scenarioSwitching = ref(false)
@@ -961,6 +973,18 @@ let dragPreparedIndex = -1
 let dragStartY = 0
 let dragOriginalOrderIds: string[] = []
 let itemRowRects: Array<{ top: number; bottom: number }> = []
+let lastItemDragFeedbackAt = 0
+
+const assessmentRefreshScheduler = createLatestTaskScheduler(async () => {
+  try {
+    await refreshAssessment()
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to refresh scheduled assessment:', error)
+    uni.showToast({ title: '营养评估更新失败', icon: 'none' })
+  } finally {
+    assessmentUpdating.value = false
+  }
+}, 400)
 
 const ASSESSMENT_RANGE_COLORS = {
   deficient: '#fed7aa',
@@ -987,6 +1011,7 @@ const autoSaveStatusLabel = computed(() => {
   if (loading.value) return '加载中'
   if (autoSaveStatus.value === 'saving') return '保存中'
   if (autoSaveStatus.value === 'failed') return '保存失败'
+  if (assessmentUpdating.value) return '营养评估更新中'
   return '已保存'
 })
 
@@ -1252,6 +1277,7 @@ watch(autoSaveStatusLabel, () => {
 
 onUnmounted(() => {
   clearIngredientSearchDebounce()
+  assessmentRefreshScheduler.cancel()
 })
 
 async function loadDraft() {
@@ -1455,6 +1481,15 @@ async function refreshAssessment(options: { quiet?: boolean } = {}) {
   }
 }
 
+function scheduleAssessmentRefresh() {
+  assessmentUpdating.value = true
+  assessmentRefreshScheduler.schedule(undefined)
+}
+
+function getItemWeightDraft(item: DesignerItem) {
+  return itemWeightDrafts.value[item.id] ?? formatItemWeightInput(item.weightG)
+}
+
 function onWeightInput(item: DesignerItem, event: any) {
   if (itemWeightEditBaselines.value[item.id] === undefined) {
     itemWeightEditBaselines.value = {
@@ -1462,13 +1497,16 @@ function onWeightInput(item: DesignerItem, event: any) {
       [item.id]: Number(item.weightG || 0),
     }
   }
-  item.weightG = Number(event.detail.value || 0)
+  itemWeightDrafts.value = {
+    ...itemWeightDrafts.value,
+    [item.id]: String(event.detail?.value ?? ''),
+  }
 }
 
 async function updateWeight(item: DesignerItem) {
   const previousWeightG = itemWeightEditBaselines.value[item.id] ?? Number(item.weightG || 0)
-  const weightG = Number(item.weightG || 0)
-  if (weightG < 0) {
+  const weightG = Number(itemWeightDrafts.value[item.id] ?? item.weightG ?? 0)
+  if (!Number.isFinite(weightG) || weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
     return
   }
@@ -1478,9 +1516,10 @@ async function updateWeight(item: DesignerItem) {
   }
 
   beginAutoSave()
+  item.weightG = weightG
   try {
     await recipeDesignerApi.updateItem(item.id, { weightG })
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     pushEditorHistory(
       createUpdateItemHistoryEntry({
@@ -1504,6 +1543,9 @@ function clearItemWeightEditBaseline(itemId: string) {
   const nextBaselines = { ...itemWeightEditBaselines.value }
   delete nextBaselines[itemId]
   itemWeightEditBaselines.value = nextBaselines
+  const nextDrafts = { ...itemWeightDrafts.value }
+  delete nextDrafts[itemId]
+  itemWeightDrafts.value = nextDrafts
 }
 
 function isItemIncludedInAssessment(item: DesignerItem) {
@@ -1531,7 +1573,7 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
   beginAutoSave()
   try {
     await recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded })
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     if (nextIncluded !== previousIncluded) {
       pushEditorHistory(
@@ -1578,19 +1620,15 @@ function onItemTouchMove(event: any) {
 async function finishItemDrag(event?: any) {
   if (!draggingItemId.value) return
   stopItemDragEvent(event)
-  const draggedItemId = draggingItemId.value
-  const beforeItems = items.value
-  const fromIndex = beforeItems.findIndex((item) => item.id === draggedItemId)
-  const toIndex = dragTargetIndex.value
+  const itemId = draggingItemId.value
+  const targetIndex = dragTargetIndex.value
+  const orderedItems = moveItemToIndex(items.value, itemId, targetIndex).map((item, index) => ({ ...item, sortOrder: index }))
+  const orderChanged = orderedItems.some((item, index) => dragOriginalOrderIds[index] !== item.id)
   const beforeOrderIds = [...dragOriginalOrderIds]
-  const movedItems = fromIndex >= 0 && toIndex >= 0 ? moveItem(beforeItems, fromIndex, toIndex) : beforeItems
-  const orderedItems = buildReorderedItems(movedItems, movedItems.map((item) => item.id))
-  const orderChanged = beforeOrderIds.some((itemId, index) => orderedItems[index]?.id !== itemId)
-  const sortOrderUpdates = getChangedSortOrderUpdates(beforeItems, orderedItems)
   clearItemDragState()
   if (!orderChanged) return
   items.value = orderedItems
-  const persisted = await persistItemSortOrder(sortOrderUpdates)
+  const persisted = await persistItemSortOrder(orderedItems)
   if (persisted) {
     pushEditorHistory(createReorderItemsHistoryEntry(beforeOrderIds, orderedItems.map((item) => item.id)))
   }
@@ -1620,6 +1658,9 @@ function showDragInsertionMarker(index: number) {
 }
 
 function pulseItemDragFeedback() {
+  const now = Date.now()
+  if (!shouldTriggerDragFeedback(lastItemDragFeedbackAt, now)) return
+  lastItemDragFeedbackAt = now
   uni.vibrateShort?.({ type: 'light' })
 }
 
@@ -1629,15 +1670,15 @@ function clearItemDragState() {
   dragPreparedIndex = -1
   dragOriginalOrderIds = []
   itemRowRects = []
+  lastItemDragFeedbackAt = 0
 }
 
-async function persistItemSortOrder(sortOrderUpdates: SortOrderUpdate[]) {
-  if (sortOrderUpdates.length === 0) return true
+async function persistItemSortOrder(orderedItems: DesignerItem[]) {
   if (dragPersisting.value) return false
   dragPersisting.value = true
   beginAutoSave()
   try {
-    await recipeDesignerApi.reorderItems(draftId.value, { items: sortOrderUpdates })
+    await recipeDesignerApi.updateItemOrder(draftId.value, orderedItems.map((item) => item.id))
     finishAutoSave()
     return true
   } catch (error) {
@@ -1881,7 +1922,7 @@ async function confirmAddIngredient() {
     ingredientPickerVisible.value = false
     selectedIngredientOption.value = null
     selectedNutritionProfile.value = null
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     if (item?.id) {
       pushEditorHistory(createAddItemHistoryEntry(snapshotRecipeDesignerItem(item)))
@@ -1909,7 +1950,7 @@ function removeIngredient(item: DesignerItem) {
       try {
         await recipeDesignerApi.removeItem(item.id)
         items.value = items.value.filter((candidate) => candidate.id !== item.id)
-        await refreshAssessment()
+        scheduleAssessmentRefresh()
         finishAutoSave()
         pushEditorHistory(createRemoveItemHistoryEntry(itemSnapshot))
         uni.showToast({ title: '已删除', icon: 'success' })
@@ -2310,7 +2351,7 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
   try {
     await recipeDesignerApi.updateItem(itemId, { weightG })
     items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     if (Math.abs(weightG - beforeWeightG) >= 0.0001) {
       pushEditorHistory(
@@ -2554,7 +2595,7 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
         }
       : item,
   )
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
 }
 
 async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipeDesignerItem>) {
@@ -2568,24 +2609,27 @@ async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipe
       restoredItem,
     ])
   }
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
 }
 
 async function removeHistoryItem(itemId: string) {
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
   await recipeDesignerApi.removeItem(resolvedItemId)
   items.value = items.value.filter((item) => item.id !== resolvedItemId)
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
 }
 
 async function applyHistoryOrder(orderIds: string[]) {
   const resolvedOrderIds = resolveHistoryOrderIds(historyState.value, orderIds)
-  const nextItems = buildReorderedItems(items.value, resolvedOrderIds)
-  const sortOrderUpdates = getChangedSortOrderUpdates(items.value, nextItems)
+  const itemById = new Map(items.value.map((item) => [item.id, item]))
+  const orderedItems = resolvedOrderIds
+    .map((itemId) => itemById.get(itemId))
+    .filter((item): item is DesignerItem => Boolean(item))
+  const orderedIdSet = new Set(orderedItems.map((item) => item.id))
+  const remainingItems = items.value.filter((item) => !orderedIdSet.has(item.id))
+  const nextItems = [...orderedItems, ...remainingItems].map((item, index) => ({ ...item, sortOrder: index }))
   items.value = nextItems
-  if (sortOrderUpdates.length > 0) {
-    await recipeDesignerApi.reorderItems(draftId.value, { items: sortOrderUpdates })
-  }
+  await recipeDesignerApi.updateItemOrder(draftId.value, nextItems.map((item) => item.id))
 }
 
 function sortItemsBySortOrder(list: DesignerItem[]) {
@@ -2626,7 +2670,7 @@ async function confirmScenarioSwitch() {
     await recipeDesignerApi.updateDraft(draftId.value, { scenario: pendingScenario.value })
     scenarioPersisted = true
     scenario.value = pendingScenario.value
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     scenarioSwitchSheetVisible.value = false
     uni.showToast({ title: '已切换生命阶段', icon: 'success' })

@@ -404,6 +404,12 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/items/${itemId}`, method: 'PATCH', data }),
   reorderItems: (draftId: string, data: ReorderDesignRecipeItemsPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items/reorder`, method: 'PATCH', data }),
+  updateItemOrder: (draftId: string, itemIds: string[]) =>
+    request({
+      url: `/recipe-designer/drafts/${draftId}/item-order`,
+      method: 'PUT',
+      data: { itemIds },
+    }),
   removeItem: (itemId: string) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'DELETE' }),
   assessDraft: (draftId: string) =>

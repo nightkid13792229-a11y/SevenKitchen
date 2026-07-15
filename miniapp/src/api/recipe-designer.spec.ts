@@ -314,6 +314,16 @@ describe('recipeDesignerApi', () => {
     })
   })
 
+  it('persists a complete draft item order through the batch item-order endpoint', () => {
+    recipeDesignerApi.updateItemOrder('draft-1', ['item-3', 'item-1', 'item-2'])
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/recipe-designer/drafts/draft-1/item-order',
+      method: 'PUT',
+      data: { itemIds: ['item-3', 'item-1', 'item-2'] },
+    })
+  })
+
   it('deletes unpublished design drafts through the draft endpoint', () => {
     recipeDesignerApi.deleteDraft('draft-1')
 

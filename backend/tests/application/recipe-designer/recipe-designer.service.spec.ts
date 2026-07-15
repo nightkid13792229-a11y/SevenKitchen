@@ -26,6 +26,7 @@ describe('RecipeDesignerService', () => {
       aggregate: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -106,6 +107,7 @@ describe('RecipeDesignerService', () => {
     prisma.designRecipe.aggregate.mockResolvedValue({
       _max: { version: null },
     });
+    prisma.designRecipe.updateMany.mockResolvedValue({ count: 1 });
     prisma.user.findMany.mockResolvedValue([
       { id: 'staff-1' },
       { id: 'admin-1' },
@@ -123,6 +125,7 @@ describe('RecipeDesignerService', () => {
       id: 'design-1',
       name: '成犬鸡肉配方',
       version: 1,
+      contentRevision: 0,
       status: 'DRAFT',
       fediafDogScenario: 'ADULT_MER_110',
       totalWeightG: 0,
@@ -1429,6 +1432,39 @@ describe('RecipeDesignerService', () => {
         },
       }),
     });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
+  });
+
+  it('increments the content revision in the same transaction as item updates and removals', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.designRecipeItem.update.mockResolvedValue(item({ weightG: 120 }));
+    prisma.designRecipeItem.delete.mockResolvedValue(item());
+
+    await service.updateItem('item-1', { weightG: 120 }, 'staff-1');
+    await service.removeItem('item-1', 'staff-1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
+    expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
   });
 
   it('defaults a new design item to the latest recipe preparation method for that ingredient', async () => {
@@ -1781,7 +1817,7 @@ describe('RecipeDesignerService', () => {
 
   it('atomically persists a supplied full item ordering and updates only changed items', async () => {
     const tx = {
-      designRecipe: { findUnique: jest.fn() },
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
       designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
     };
     tx.designRecipe.findUnique.mockResolvedValue(
@@ -1843,7 +1879,10 @@ describe('RecipeDesignerService', () => {
       data: { sortOrder: 1 },
       select: { id: true, sortOrder: true },
     });
-    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+    expect(tx.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
   });
 
   it.each([
@@ -1852,7 +1891,7 @@ describe('RecipeDesignerService', () => {
     [['item-1', 'item-2', 'item-missing'], 'contains an unknown item'],
   ])('rejects a supplied ordering that %s', async (itemIds) => {
     const tx = {
-      designRecipe: { findUnique: jest.fn() },
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
       designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
     };
     tx.designRecipe.findUnique.mockResolvedValue(
@@ -1877,7 +1916,7 @@ describe('RecipeDesignerService', () => {
 
   it('accepts an empty full ordering for an empty editable draft', async () => {
     const tx = {
-      designRecipe: { findUnique: jest.fn() },
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
       designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
     };
     tx.designRecipe.findUnique.mockResolvedValue(
@@ -1900,7 +1939,7 @@ describe('RecipeDesignerService', () => {
 
   it('retries a serializable item-order transaction once after a P2034 conflict', async () => {
     const tx = {
-      designRecipe: { findUnique: jest.fn() },
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
       designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
     };
     tx.designRecipe.findUnique.mockResolvedValue(
@@ -2700,8 +2739,8 @@ describe('RecipeDesignerService', () => {
     expect(assessment.items[0]).toEqual(
       expect.objectContaining({ id: 'item-1', ratioPercent: 100 }),
     );
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 100,
         energyDensityKcalPerKg: 1310,
@@ -2712,6 +2751,31 @@ describe('RecipeDesignerService', () => {
         isCompliant: true,
       }),
     });
+  });
+
+  it('does not persist an assessment computed before an item mutation advances the content revision', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        contentRevision: 4,
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    // Simulates a concurrent child mutation committing its version increment
+    // between the assessment read and its conditional write.
+    prisma.designRecipe.updateMany.mockResolvedValue({ count: 0 });
+
+    const assessment = await service.assessDraft('design-1', 'staff-1');
+
+    expect(assessment.totalWeightG).toBe(100);
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 4 },
+      data: expect.objectContaining({
+        totalWeightG: 100,
+        calculatedNutrition: assessment.nutrients,
+      }),
+    });
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
   });
 
   it('keeps an untouched empty draft in draft state after automatic assessment', async () => {
@@ -2732,8 +2796,8 @@ describe('RecipeDesignerService', () => {
     );
 
     expect(assessment.totalWeightG).toBe(0);
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'empty-stage-design' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'empty-stage-design', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 0,
         status: 'DRAFT',
@@ -2756,8 +2820,8 @@ describe('RecipeDesignerService', () => {
 
     expect(assessment.groupedEntries.length).toBeGreaterThan(0);
     expect(assessment).not.toHaveProperty('entries');
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         complianceStatus: assessment.groupedEntries,
         assessmentSummary: expect.objectContaining({
@@ -2897,8 +2961,8 @@ describe('RecipeDesignerService', () => {
       'item-included',
     ]);
     expect(assessment.nutrients.calcium.per1000Kcal).toBeLessThan(5000);
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 100,
       }),
@@ -3063,8 +3127,8 @@ describe('RecipeDesignerService', () => {
 
     expect(assessment.energyDensityKcalPerKg).toBeNull();
     expect(assessment.overallStatus).toBe('INCOMPLETE');
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         energyDensityKcalPerKg: null,
         assessmentSummary: expect.objectContaining({

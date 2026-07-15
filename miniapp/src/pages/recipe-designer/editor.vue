@@ -1322,6 +1322,7 @@ async function applyDraftDetail(draft: any) {
   itemWeightMutations.clear()
   items.value.forEach((item) => {
     itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+    itemWeightMutations.setPersistedIncludeInAssessment(item.id, isItemIncludedInAssessment(item))
   })
   assessment.value = null
   applyCachedAssessmentFromDraft(draft)
@@ -1487,6 +1488,7 @@ async function refreshAssessment(options: { quiet?: boolean } = {}, request = as
         items.value = mergeAssessedItems(items.value, assessedItems)
         assessedItems.forEach((item) => {
           itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+          itemWeightMutations.setPersistedIncludeInAssessment(item.id, item.includeInAssessment !== false)
         })
       }
       refreshDetailModalFromAssessment()
@@ -1634,23 +1636,23 @@ function getRemovableSupplementWarningMessage(item: DesignerItem) {
 async function toggleItemAssessment(item: DesignerItem, event: any) {
   const nextIncluded = Boolean(event.detail?.value)
   const previousIncluded = isItemIncludedInAssessment(item)
-  const mutationVersion = itemWeightMutations.begin(item.id, Number(item.weightG || 0))
+  const mutationVersion = itemWeightMutations.begin(item.id, Number(item.weightG || 0), previousIncluded)
   item.includeInAssessment = nextIncluded
 
   invalidateAssessmentForMutation()
   beginAutoSave()
   try {
-    await itemWeightMutations.enqueueMutation(item.id, () =>
+    const persistedMutation = await itemWeightMutations.enqueueAssessmentToggle(item.id, nextIncluded, () =>
       recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded }),
     )
     if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
       scheduleAssessmentRefresh()
-      if (nextIncluded !== previousIncluded) {
+      if (nextIncluded !== persistedMutation.persistedBeforeIncludeInAssessment) {
         pushEditorHistory(
           createUpdateItemHistoryEntry({
             itemId: item.id,
             itemName: getItemName(item),
-            before: { includeInAssessment: previousIncluded },
+            before: { includeInAssessment: persistedMutation.persistedBeforeIncludeInAssessment },
             after: { includeInAssessment: nextIncluded },
           }),
         )
@@ -1661,7 +1663,7 @@ async function toggleItemAssessment(item: DesignerItem, event: any) {
     console.error('[RecipeDesignerEditor] Failed to update item assessment participation:', error)
     if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
       invalidateAssessmentForMutation()
-      item.includeInAssessment = previousIncluded
+      item.includeInAssessment = itemWeightMutations.getPersistedIncludeInAssessment(item.id) ?? previousIncluded
       failAutoSave()
       uni.showToast({ title: '更新计算开关失败', icon: 'none' })
     } else {
@@ -1996,6 +1998,8 @@ async function confirmAddIngredient() {
     const item = res?.data ?? res
     if (item?.id) {
       items.value = [...items.value, item]
+      itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+      itemWeightMutations.setPersistedIncludeInAssessment(item.id, item.includeInAssessment !== false)
     }
     ingredientPickerVisible.value = false
     selectedIngredientOption.value = null
@@ -2681,16 +2685,29 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
   const item = items.value.find((candidate) => candidate.id === resolvedItemId)
   const weightG = patch.weightG === undefined ? undefined : Number(patch.weightG || 0)
+  const includeInAssessment = patch.includeInAssessment
   if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()
   const mutationVersion =
-    weightG === undefined
+    weightG === undefined && includeInAssessment === undefined
       ? undefined
-      : itemWeightMutations.begin(resolvedItemId, Number(item?.weightG || 0))
+      : itemWeightMutations.begin(
+          resolvedItemId,
+          Number(item?.weightG || 0),
+          item?.includeInAssessment !== false,
+        )
   let updatedItem: any
   try {
-    if (weightG === undefined) {
+    if (weightG === undefined && includeInAssessment === undefined) {
       const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
       updatedItem = res?.data ?? res
+    } else if (weightG === undefined) {
+      const persistedMutation = await itemWeightMutations.enqueueAssessmentToggle(
+        resolvedItemId,
+        Boolean(includeInAssessment),
+        () => recipeDesignerApi.updateItem(resolvedItemId, patch),
+      )
+      updatedItem = persistedMutation.result?.data ?? persistedMutation.result
+      if (!itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) return
     } else {
       const persistedMutation = await itemWeightMutations.enqueue(
         resolvedItemId,
@@ -2734,6 +2751,8 @@ async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipe
       ...items.value.filter((item) => item.id !== restoredItem.id && item.id !== itemSnapshot.id),
       restoredItem,
     ])
+    itemWeightMutations.setPersisted(restoredItem.id, Number(restoredItem.weightG || 0))
+    itemWeightMutations.setPersistedIncludeInAssessment(restoredItem.id, restoredItem.includeInAssessment !== false)
   }
   scheduleAssessmentRefresh()
 }

@@ -42,23 +42,30 @@ export function createKeyedSerialMutationQueue(): KeyedSerialMutationQueue {
 }
 
 export interface KeyedWeightMutationCoordinator {
-  begin(key: string, initialPersistedWeightG: number): number
+  begin(key: string, initialPersistedWeightG: number, initialIncludeInAssessment?: boolean): number
   enqueue<T>(key: string, weightG: number, task: () => Promise<T> | T): Promise<{ result: T; persistedBeforeWeightG: number }>
+  enqueueAssessmentToggle<T>(key: string, includeInAssessment: boolean, task: () => Promise<T> | T): Promise<{ result: T; persistedBeforeIncludeInAssessment: boolean }>
   enqueueMutation<T>(key: string, task: () => Promise<T> | T): Promise<T>
   clear(): void
   getPersisted(key: string): number | undefined
+  getPersistedIncludeInAssessment(key: string): boolean | undefined
   setPersisted(key: string, weightG: number): void
+  setPersistedIncludeInAssessment(key: string, includeInAssessment: boolean): void
   isCurrent(key: string, version: number): boolean
 }
 
 export function createKeyedWeightMutationCoordinator(): KeyedWeightMutationCoordinator {
   const queue = createKeyedSerialMutationQueue()
   const persistedWeightGByKey = new Map<string, number>()
+  const persistedIncludeInAssessmentByKey = new Map<string, boolean>()
 
   return {
-    begin(key, initialPersistedWeightG) {
+    begin(key, initialPersistedWeightG, initialIncludeInAssessment = true) {
       if (!persistedWeightGByKey.has(key)) {
         persistedWeightGByKey.set(key, initialPersistedWeightG)
+      }
+      if (!persistedIncludeInAssessmentByKey.has(key)) {
+        persistedIncludeInAssessmentByKey.set(key, initialIncludeInAssessment)
       }
       return queue.begin(key)
     },
@@ -74,6 +81,17 @@ export function createKeyedWeightMutationCoordinator(): KeyedWeightMutationCoord
       return { result, persistedBeforeWeightG }
     },
 
+    async enqueueAssessmentToggle<T>(key: string, includeInAssessment: boolean, task: () => Promise<T> | T) {
+      let persistedBeforeIncludeInAssessment = persistedIncludeInAssessmentByKey.get(key) ?? true
+      const result = await queue.enqueue(key, async () => {
+        persistedBeforeIncludeInAssessment = persistedIncludeInAssessmentByKey.get(key) ?? true
+        const taskResult = await task()
+        persistedIncludeInAssessmentByKey.set(key, includeInAssessment)
+        return taskResult
+      })
+      return { result, persistedBeforeIncludeInAssessment }
+    },
+
     enqueueMutation<T>(key: string, task: () => Promise<T> | T) {
       return queue.enqueue(key, task)
     },
@@ -82,12 +100,21 @@ export function createKeyedWeightMutationCoordinator(): KeyedWeightMutationCoord
       return persistedWeightGByKey.get(key)
     },
 
+    getPersistedIncludeInAssessment(key) {
+      return persistedIncludeInAssessmentByKey.get(key)
+    },
+
     clear() {
       persistedWeightGByKey.clear()
+      persistedIncludeInAssessmentByKey.clear()
     },
 
     setPersisted(key, weightG) {
       persistedWeightGByKey.set(key, weightG)
+    },
+
+    setPersistedIncludeInAssessment(key, includeInAssessment) {
+      persistedIncludeInAssessmentByKey.set(key, includeInAssessment)
     },
 
     isCurrent(key, version) {

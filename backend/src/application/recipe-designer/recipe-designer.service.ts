@@ -321,6 +321,7 @@ type DesignRecipeWithItems = {
   id: string;
   name: string;
   version: number;
+  contentRevision: number;
   status: string;
   fediafDogScenario: FediafDogScenarioCode;
   nutritionStandard?: string | null;
@@ -3893,12 +3894,17 @@ export class RecipeDesignerService {
       supplementTargets?: Prisma.InputJsonValue;
     };
 
-    const created = await this.prisma.designRecipeItem.create({
-      data,
-      select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.designRecipeItem.create({
+        data,
+        select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+      });
+      await tx.designRecipe.update({
+        where: { id: designRecipeId },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return created;
     });
-    await this.touchDesignRecipe(designRecipeId);
-    return created;
   }
 
   async updateItem(
@@ -3946,10 +3952,17 @@ export class RecipeDesignerService {
       supplementTargets?: Prisma.InputJsonValue | null;
     };
 
-    const updated = await this.prisma.designRecipeItem.update({
-      where: { id: itemId },
-      data,
-      select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.designRecipeItem.update({
+        where: { id: itemId },
+        data,
+        select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+      });
+      await tx.designRecipe.update({
+        where: { id: draft.id },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return updated;
     });
   }
 
@@ -3961,41 +3974,26 @@ export class RecipeDesignerService {
     const context = normalizeRecipeDesignerAccessContext(access);
     await this.assertDraftEditableByUser(designRecipeId, context.userId);
     const items = dto.items ?? [];
-    if (items.length === 0) {
-      throw new BadRequestException('排序项不能为空');
-    }
-
+    if (items.length === 0) throw new BadRequestException('排序项不能为空');
     const seenItemIds = new Set<string>();
     const normalizedItems = items.map((item) => {
       const itemId = String(item.id || '').trim();
       const sortOrder = Number(item.sortOrder);
-      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0) {
-        throw new BadRequestException('排序项格式不正确');
-      }
-      if (seenItemIds.has(itemId)) {
-        throw new BadRequestException('排序项不能重复');
-      }
+      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0) throw new BadRequestException('排序项格式不正确');
+      if (seenItemIds.has(itemId)) throw new BadRequestException('排序项不能重复');
       seenItemIds.add(itemId);
       return { id: itemId, sortOrder };
     });
-
     return this.prisma.$transaction(async (tx) => {
       let updatedCount = 0;
       for (const item of normalizedItems) {
-        const result = await tx.designRecipeItem.updateMany({
-          where: { id: item.id, designRecipeId },
-          data: { sortOrder: item.sortOrder },
-        });
-        if (result.count !== 1) {
-          throw new NotFoundException(`Design recipe item ${item.id} not found`);
-        }
+        const result = await tx.designRecipeItem.updateMany({ where: { id: item.id, designRecipeId }, data: { sortOrder: item.sortOrder } });
+        if (result.count !== 1) throw new NotFoundException(`Design recipe item ${item.id} not found`);
         updatedCount += result.count;
       }
-
+      await tx.designRecipe.update({ where: { id: designRecipeId }, data: { contentRevision: { increment: 1 } } });
       return { updatedCount };
     });
-    await this.touchDesignRecipe(draft.id);
-    return updated;
   }
 
   async updateItemOrder(
@@ -4065,12 +4063,10 @@ export class RecipeDesignerService {
               ),
             );
 
-            if (tx.designRecipe.update) {
-              await tx.designRecipe.update({
-                where: { id: designRecipeId },
-                data: { updatedAt: new Date() },
-              });
-            }
+            await tx.designRecipe.update({
+              where: { id: designRecipeId },
+              data: { contentRevision: { increment: 1 } },
+            });
             return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -4093,11 +4089,16 @@ export class RecipeDesignerService {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.assertItemEditableByUser(itemId, context.userId);
 
-    const deleted = await this.prisma.designRecipeItem.delete({
-      where: { id: itemId },
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.designRecipeItem.delete({
+        where: { id: itemId },
+      });
+      await tx.designRecipe.update({
+        where: { id: draft.id },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return deleted;
     });
-    await this.touchDesignRecipe(draft.id);
-    return deleted;
   }
 
   async assessDraft(
@@ -4119,14 +4120,10 @@ export class RecipeDesignerService {
     }
 
     const assessmentData = this.buildAssessmentUpdateData(result);
-    if (this.prisma.designRecipe.updateMany) {
-      await this.prisma.designRecipe.updateMany({
-        where: { id, updatedAt: (draft as any).updatedAt },
-        data: assessmentData,
-      });
-    } else {
-      await this.prisma.designRecipe.update({ where: { id }, data: assessmentData });
-    }
+    await this.prisma.designRecipe.updateMany({
+      where: { id, contentRevision: draft.contentRevision },
+      data: assessmentData,
+    });
 
     return this.toClientAssessmentResult(result, removableSupplementWarnings);
   }
@@ -5836,13 +5833,6 @@ export class RecipeDesignerService {
 
     this.assertEditableDraft(draft, id, userId);
     return draft;
-  }
-
-  private async touchDesignRecipe(id: string) {
-    await this.prisma.designRecipe.update({
-      where: { id },
-      data: { updatedAt: new Date() },
-    });
   }
 
   private async assertItemEditableByUser(itemId: string, userId: string) {

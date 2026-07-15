@@ -105,6 +105,21 @@ describe('createKeyedWeightMutationCoordinator', () => {
     expect(mutations.isCurrent('item-1', firstVersion)).toBe(false)
     expect(mutations.isCurrent('item-1', secondVersion)).toBe(true)
   })
+
+  it('keeps the persisted assessment-toggle state when false fails before a later true succeeds', async () => {
+    const mutations = createKeyedWeightMutationCoordinator()
+    mutations.begin('item-1', 100, true)
+
+    await expect(
+      mutations.enqueueAssessmentToggle('item-1', false, async () => {
+        throw new Error('disable failed')
+      }),
+    ).rejects.toThrow('disable failed')
+
+    await mutations.enqueueAssessmentToggle('item-1', true, async () => undefined)
+
+    expect(mutations.getPersistedIncludeInAssessment('item-1')).toBe(true)
+  })
 })
 
 describe('createLatestRevisionTracker', () => {

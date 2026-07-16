@@ -1577,9 +1577,27 @@ describe('RecipeDesignerService', () => {
         fediafDogScenario: 'ADULT_MER_95',
         seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
         applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        contentRevision: { increment: 1 },
       }),
       include: expect.any(Object),
     });
+
+    // A subsequent assessment must use the version committed with the scenario.
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'series-design',
+        contentRevision: 1,
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    await service.assessDraft('series-design', 'staff-1');
+    expect(prisma.designRecipe.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: 'series-design', contentRevision: 1 },
+      }),
+    );
   });
 
   it('loads a draft detail for the current staff user', async () => {
@@ -5650,6 +5668,7 @@ describe('RecipeDesignerService', () => {
       expect(tx.designRecipe.update).toHaveBeenCalledWith({
         where: { id: 'revision-draft' },
         data: expect.objectContaining({
+          contentRevision: { increment: 1 },
           status: 'DRAFT',
           name: baseline.name,
           fediafDogScenario: baseline.fediafDogScenario,
@@ -5691,6 +5710,26 @@ describe('RecipeDesignerService', () => {
         }),
         include: expect.any(Object),
       });
+
+      // A later assessment must CAS on the revision committed with the
+      // replacement, so an assessment started before the revert cannot write.
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'revision-draft',
+          contentRevision: 1,
+          createdBy: 'staff-1',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          items: [],
+        }),
+      );
+      targetProvider.getTargets.mockResolvedValue(compliantTargets());
+      await service.assessDraft('revision-draft', 'staff-1');
+      expect(prisma.designRecipe.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: 'revision-draft', contentRevision: 1 },
+        }),
+      );
     });
 
     it('allows an internal user to revert a series draft created by another internal user', async () => {

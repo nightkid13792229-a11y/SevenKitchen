@@ -2123,6 +2123,7 @@ export class RecipeDesignerService {
             return tx.designRecipe.update({
               where: { id: targetDraft.id },
               data: {
+                contentRevision: { increment: 1 },
                 status: DesignRecipeStatus.DRAFT,
                 fediafDogScenario: mapSeriesLifeStageToScenario(targetLifeStage),
                 applicableLifeStages: [targetLifeStage],
@@ -3609,7 +3610,10 @@ export class RecipeDesignerService {
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.scenario !== undefined
-          ? { fediafDogScenario: dto.scenario }
+          ? {
+              fediafDogScenario: dto.scenario,
+              contentRevision: { increment: 1 },
+            }
           : {}),
         ...(dto.targetHealthTags !== undefined
           ? { targetHealthTags: dto.targetHealthTags }
@@ -3816,6 +3820,7 @@ export class RecipeDesignerService {
       return tx.designRecipe.update({
         where: { id: draft.id },
         data: {
+          contentRevision: { increment: 1 },
           status: DesignRecipeStatus.DRAFT,
           name: baseline.name,
           fediafDogScenario: baseline.fediafDogScenario,

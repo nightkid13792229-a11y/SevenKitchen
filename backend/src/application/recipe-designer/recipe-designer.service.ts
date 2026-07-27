@@ -245,6 +245,10 @@ const DESIGN_RECIPE_LIST_SELECT = {
 
 const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   ...DESIGN_RECIPE_LIST_SELECT,
+  items: false,
+  _count: {
+    select: { items: true },
+  },
   seriesId: true,
   seriesLifeStage: true,
 };
@@ -499,6 +503,7 @@ type RecipeSeriesWorkbenchRecord = {
     assessmentSummary?: unknown;
     missingDataReport?: unknown;
     items?: unknown[];
+    _count?: { items: number };
   }>;
   recipes: Array<{
     id?: string;
@@ -1652,8 +1657,14 @@ export class RecipeDesignerService {
     query: ListRecipeDesignerSeriesDto = {},
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
+    const usePagination = query.page !== undefined || query.pageSize !== undefined;
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
     const series = (await this.prisma.recipeSeries.findMany({
-      where: await this.buildSeriesVisibilityWhere(context),
+      where: {
+        ...(await this.buildSeriesVisibilityWhere(context)),
+        ...(query.status ? { businessStatus: query.status } : {}),
+      },
       include: {
         designs: {
           select: DESIGN_RECIPE_SERIES_LIST_SELECT,
@@ -1664,23 +1675,34 @@ export class RecipeDesignerService {
           orderBy: { updatedAt: 'desc' },
         },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      ...(usePagination
+        ? {
+            skip: (page - 1) * pageSize,
+            take: pageSize + 1,
+          }
+        : {}),
     })) as RecipeSeriesWorkbenchRecord[];
+
+    const hasMore = usePagination && series.length > pageSize;
+    const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
 
     if (!isInternalRecipeDesignerRole(context)) {
       const dogNameById = await this.loadCustomerDogNameMapForSeries(
-        series,
+        visibleSeries,
         context,
       );
-      return series.map((record) =>
+      const items = visibleSeries.map((record) =>
         this.buildCustomerSeriesCard(record, dogNameById),
       );
+      return usePagination ? { items, page, pageSize, hasMore } : items;
     }
 
-    const cards = series.map((record) =>
+    const cards = visibleSeries.map((record) =>
       this.buildSeriesWorkbenchCard(record, context.userId),
     );
-    return this.filterSeriesWorkbenchCards(cards, query.status);
+    const items = this.filterSeriesWorkbenchCards(cards, query.status);
+    return usePagination ? { items, page, pageSize, hasMore } : items;
   }
 
   async createSeries(
@@ -3287,9 +3309,14 @@ export class RecipeDesignerService {
   }
 
   private hasDesignRecipeItems(
-    design: Pick<DesignRecipeWithItems, 'items'> | { items?: unknown[] },
+    design: {
+      items?: unknown[];
+      _count?: { items: number };
+    },
   ): boolean {
-    return Array.isArray(design.items) && design.items.length > 0;
+    return design._count?.items !== undefined
+      ? design._count.items > 0
+      : Array.isArray(design.items) && design.items.length > 0;
   }
 
   private getSeriesStageEffectiveDesigns(

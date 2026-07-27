@@ -170,7 +170,7 @@ describe('recipeDesignerApi', () => {
       sourceLifeStage: 'HIGH_ACTIVITY_ADULT',
     } satisfies Parameters<typeof recipeDesignerApi.copySeriesStageIngredients>[2]
 
-    recipeDesignerApi.listSeries()
+    recipeDesignerApi.listSeries({ page: 2, pageSize: 20 })
     recipeDesignerApi.createSeries(createPayload)
     recipeDesignerApi.renameSeries(seriesId, renamePayload)
     recipeDesignerApi.deleteSeries(seriesId, deletePayload)
@@ -186,7 +186,7 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(1, {
       url: '/recipe-designer/series',
       method: 'GET',
-      data: {},
+      data: { page: 2, pageSize: 20 },
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/series',

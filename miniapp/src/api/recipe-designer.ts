@@ -120,6 +120,15 @@ export interface PrivateRecipeSnapshotResponse {
 
 export interface RecipeDesignerSeriesListQuery {
   status?: RecipeDesignerSeriesStatusFilter
+  page?: number
+  pageSize?: number
+}
+
+export interface RecipeDesignerSeriesListResponse {
+  items: RecipeDesignerSeriesCard[] | RecipeDesignerCustomerSeriesCard[]
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 export interface DeleteRecipeSeriesPayload {

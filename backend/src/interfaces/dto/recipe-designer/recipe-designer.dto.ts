@@ -8,6 +8,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -55,6 +56,19 @@ export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)
   status?: RecipeDesignerSeriesStatusFilter;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
 }
 
 export class CreateRecipeSeriesDto {

@@ -388,6 +388,7 @@ model RecipeSeries {
   @@index([businessStatus])
   @@index([updatedAt])
   @@index([customerDogId])
+  @@index([createdBy, status, businessStatus, updatedAt])
   @@map("recipe_series")
 }
 

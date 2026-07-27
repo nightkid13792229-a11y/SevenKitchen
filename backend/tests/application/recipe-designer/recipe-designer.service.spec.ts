@@ -6296,6 +6296,44 @@ describe('RecipeDesignerService', () => {
       expect(query.include.recipes.select).not.toHaveProperty('items');
     });
 
+    it('paginates the series workbench query and only selects an item count for designs', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-page-1' }),
+        seriesRecord({ id: 'series-page-2' }),
+        seriesRecord({ id: 'series-page-3' }),
+      ]);
+
+      await expect(
+        service.listSeries(
+          { userId: 'staff-1', role: 'STAFF' },
+          { page: 2, pageSize: 2 },
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          page: 2,
+          pageSize: 2,
+          hasMore: true,
+          items: expect.any(Array),
+        }),
+      );
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 2,
+          take: 3,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          include: expect.objectContaining({
+            designs: expect.objectContaining({
+              select: expect.objectContaining({
+                items: false,
+                _count: { select: { items: true } },
+              }),
+            }),
+          }),
+        }),
+      );
+    });
+
     it('returns one series card with five stage statuses', async () => {
       const puppyItem = item({ id: 'puppy-item' });
       const latePuppyItem = item({ id: 'late-puppy-item' });

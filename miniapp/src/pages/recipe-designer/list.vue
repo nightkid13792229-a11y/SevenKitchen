@@ -43,7 +43,7 @@
       </button>
     </view>
 
-    <view v-if="loading" class="state-block">
+    <view v-if="loading && series.length === 0" class="state-block">
       <text>加载中...</text>
     </view>
 
@@ -121,6 +121,10 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <view v-if="!visibleSeriesEmpty && hasMoreSeries" class="series-load-more">
+      <text>{{ loadingMoreSeries ? '加载更多食谱...' : '上拉加载更多' }}</text>
     </view>
 
     <view v-else class="series-list">
@@ -259,6 +263,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { onReachBottom } from '@dcloudio/uni-app'
 import { onShow } from '@dcloudio/uni-app'
 import {
   FEDIAF_DOG_SCENARIO_DESCRIPTIONS,
@@ -344,8 +349,11 @@ const seriesBusinessStatusLabels: Record<RecipeDesignerSeriesStatusFilter, strin
 const series = ref<SeriesListItem[]>([])
 const dogs = ref<any[]>([])
 const loading = ref(false)
+const loadingMoreSeries = ref(false)
+const currentSeriesPage = ref(0)
+const hasMoreSeries = ref(true)
 let seriesRequestSequence = 0
-let activeSeriesRequest: { id: number; key: string } | null = null
+let activeSeriesRequest: { id: number; key: string; page: number } | null = null
 let seriesLoadingPromise: Promise<void> | null = null
 const creating = ref(false)
 const deletingSeriesId = ref('')
@@ -454,26 +462,36 @@ async function loadDogsForCustomerMode() {
   }
 }
 
-async function loadSeries() {
+async function loadSeries(options: { append?: boolean } = {}) {
+  const append = options.append === true
   const requestKey = selectedSeriesStatusFilter.value || ''
-  if (seriesLoadingPromise && activeSeriesRequest?.key === requestKey) {
+  const page = append ? currentSeriesPage.value + 1 : 1
+  if (append && (!hasMoreSeries.value || loading.value || loadingMoreSeries.value)) return
+  if (seriesLoadingPromise && activeSeriesRequest?.key === requestKey && activeSeriesRequest.page === page) {
     return seriesLoadingPromise
   }
 
   const requestState = {
     id: ++seriesRequestSequence,
     key: requestKey,
+    page,
   }
   activeSeriesRequest = requestState
-  loading.value = true
+  if (append) loadingMoreSeries.value = true
+  else loading.value = true
   seriesLoadingPromise = (async () => {
     try {
       const res: any = await recipeDesignerApi.listSeries({
         status: requestKey || undefined,
+        page,
+        pageSize: 20,
       })
       if (activeSeriesRequest !== requestState) return
       const data = res?.data ?? res
-      series.value = Array.isArray(data) ? data : data?.items || data?.series || []
+      const items = Array.isArray(data) ? data : data?.items || data?.series || []
+      series.value = append ? [...series.value, ...items] : items
+      currentSeriesPage.value = page
+      hasMoreSeries.value = Array.isArray(data) ? false : Boolean(data?.hasMore)
     } catch (error) {
       if (activeSeriesRequest !== requestState) return
       console.error('[RecipeDesignerList] Failed to load series:', error)
@@ -481,6 +499,7 @@ async function loadSeries() {
     } finally {
       if (activeSeriesRequest === requestState) {
         loading.value = false
+        loadingMoreSeries.value = false
         activeSeriesRequest = null
         seriesLoadingPromise = null
       }
@@ -488,6 +507,10 @@ async function loadSeries() {
   })()
   return seriesLoadingPromise
 }
+
+onReachBottom(() => {
+  void loadSeries({ append: true })
+})
 
 function selectSeriesStatusFilter(value: '' | RecipeDesignerSeriesStatusFilter) {
   if (selectedSeriesStatusFilter.value === value) return

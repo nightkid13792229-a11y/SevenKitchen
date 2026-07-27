@@ -44,6 +44,15 @@ const assessmentSource = readSource('src/pages/recipe-designer/assessment.ts')
 const publishSource = readSource('src/pages/recipe-designer/publish.vue')
 
 describe('recipe designer mobile entry', () => {
+  it('loads recipe series by page so the first screen is not blocked by the full list', () => {
+    expect(listSource).toContain("import { onReachBottom } from '@dcloudio/uni-app'")
+    expect(listSource).toContain('pageSize: 20')
+    expect(listSource).toContain('hasMoreSeries')
+    expect(listSource).toContain('onReachBottom(() =>')
+    expect(listSource).toContain("loadingMoreSeries ? '加载更多食谱...' : '上拉加载更多'")
+    expect(listSource).toContain('loading && series.length === 0')
+  })
+
   it('keeps editor mutations responsive with local drafts, deferred assessment, and batch ordering', () => {
     const weightInputBlock =
       editorSource.match(/<view class="weight-editor">[\s\S]*?<\/view>\n            <view class="item-ratio-column">/)?.[0] || ''

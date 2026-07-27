@@ -230,7 +230,8 @@ async function applyManifestInTransaction(
         });
 
   const result: TransactionResult = {
-    ingredientIds: [ingredient.id],
+    ingredientIds:
+      manifest.updateExistingIngredientId === undefined ? [ingredient.id] : [],
     nutritionFoodIds: [],
     nutritionFoodMappingIds: [],
     ingredientTagAssignmentIds: [],
@@ -247,8 +248,11 @@ async function applyManifestInTransaction(
     result.ingredientTagAssignmentIds.push(tagAssignment.id);
   }
 
+  if ((manifest.nutritionProfiles?.length ?? 0) > 0) {
+    await applyNutritionProfiles(tx, manifest, ingredient.id, result);
+  }
+
   if (manifest.ingredient.type === 'FOOD') {
-    await applyFoodNutrition(tx, manifest, ingredient.id, result);
     await applyFoodProcurementSkus(tx, manifest, ingredient.id, result);
   }
 
@@ -295,7 +299,7 @@ function buildIngredientData(manifest: IngredientImportManifest): Record<string,
   };
 }
 
-async function applyFoodNutrition(
+async function applyNutritionProfiles(
   tx: StandardIngredientImportTransaction,
   manifest: IngredientImportManifest,
   ingredientId: string,
@@ -338,7 +342,7 @@ function buildNutritionFoodData(
     preparationStateLabel: profile.preparationStateLabel ?? null,
     ediblePortionLabel: profile.ediblePortionLabel ?? null,
     processingLabel: profile.processingLabel ?? null,
-    nutritionData: profile.nutrients,
+    nutritionData: profile.nutritionData ?? profile.nutrients,
     notes: profile.notes ?? `Created by standard ingredient import (${profile.basis}).`,
     createdBy: 'standard-ingredient-import',
     verifiedBy: 'standard-ingredient-import',

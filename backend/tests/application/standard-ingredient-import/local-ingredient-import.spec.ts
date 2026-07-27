@@ -151,6 +151,75 @@ describe('applyLocalIngredientImport', () => {
     expect(prisma.procurementSku.create).not.toHaveBeenCalled();
   });
 
+  it('creates a nutrition profile and primary mapping for an existing SUPPLEMENT without exporting the ingredient row', async () => {
+    const prisma = makePrisma({
+      existingIngredient: { id: 'existing-supplement' },
+    });
+    const writeAuditFile = jest.fn().mockResolvedValue(undefined);
+
+    await applyLocalIngredientImport({
+      prisma,
+      manifest: makeSupplementManifest({
+        updateExistingIngredientId: 'existing-supplement',
+        nutritionProfiles: [
+          {
+            id: 'fish-oil-label',
+            name: 'Fish oil label profile',
+            dataSource: 'SUPPLEMENT_LABEL',
+            externalId: 'SUPPLEMENT_LABEL:existing-supplement',
+            category: 'SUPPLEMENT',
+            basis: 'PER_SERVING',
+            preparationState: 'CONCENTRATE',
+            nutritionData: {
+              meta: { rawBasisType: 'PER_SERVING' },
+              macros: {},
+              minerals: {},
+              vitamins: {},
+              fattyAcids: { epa: 180, dha: 120 },
+              aminoAcids: {},
+              customItems: [],
+            },
+            nutrients: {
+              epaMg: { value: 180, unit: 'mg' },
+              dhaMg: { value: 120, unit: 'mg' },
+            },
+            isPrimary: true,
+          },
+        ],
+      }),
+      alignment: makeAlignment(),
+      auditOutputPath: '/tmp/fish-oil-profile.local-apply.json',
+      writeAuditFile,
+    });
+
+    expect(prisma.nutritionFood.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'Fish oil label profile',
+        category: 'SUPPLEMENT',
+        dataSource: 'SUPPLEMENT_LABEL',
+        nutritionData: expect.objectContaining({
+          meta: { rawBasisType: 'PER_SERVING' },
+          fattyAcids: { epa: 180, dha: 120 },
+        }),
+      }),
+    });
+    expect(prisma.nutritionFoodMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ingredientId: 'existing-ingredient',
+        nutritionFoodId: 'nutrition-food-1',
+        isPrimary: true,
+      }),
+    });
+    expect(writeAuditFile).toHaveBeenCalledWith(
+      '/tmp/fish-oil-profile.local-apply.json',
+      expect.objectContaining({
+        ingredientIds: [],
+        nutritionFoodIds: ['nutrition-food-1'],
+        nutritionFoodMappingIds: ['mapping-1'],
+      }),
+    );
+  });
+
   it('does not overwrite an existing ingredient unless updateExistingIngredientId is declared', async () => {
     const prisma = makePrisma({
       existingIngredient: { id: 'existing-ingredient' },

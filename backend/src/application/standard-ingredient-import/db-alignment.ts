@@ -8,6 +8,7 @@ export interface DatabaseMigrationSnapshot {
   migrationName: string;
   checksum?: string | null;
   finishedAt?: string | null;
+  rolledBackAt?: string | null;
 }
 
 export interface DatabaseAlignmentCriticalDataHashes {
@@ -97,6 +98,7 @@ interface RawPrismaMigrationRow {
   migration_name: string;
   checksum: string | null;
   finished_at: Date | string | null;
+  rolled_back_at: Date | string | null;
 }
 
 type CriticalHashKey = keyof DatabaseAlignmentCriticalDataHashes;
@@ -208,12 +210,18 @@ function compareMigrationHistories(
   production: DatabaseAlignmentSnapshot,
   blockingIssues: DatabaseAlignmentIssue[],
 ): void {
-  const localByName = migrationsByName(local.migrations);
-  const productionByName = migrationsByName(production.migrations);
+  const localMigrations = activeMigrationAttempts(local.migrations);
+  const productionMigrations = activeMigrationAttempts(production.migrations);
+  const localByName = migrationsByName(localMigrations);
+  const productionByName = migrationsByName(productionMigrations);
 
-  compareMigrationCompletion(localByName, productionByName, blockingIssues);
+  compareMigrationCompletion(
+    localMigrations,
+    productionMigrations,
+    blockingIssues,
+  );
 
-  for (const migration of local.migrations) {
+  for (const migration of localMigrations) {
     const productionMigration = productionByName.get(migration.migrationName);
     if (!productionMigration) {
       blockingIssues.push({
@@ -251,7 +259,7 @@ function compareMigrationHistories(
     }
   }
 
-  for (const migration of production.migrations) {
+  for (const migration of productionMigrations) {
     if (!localByName.has(migration.migrationName)) {
       blockingIssues.push({
         code: 'LOCAL_MISSING_PRODUCTION_MIGRATION',
@@ -265,10 +273,12 @@ function compareMigrationHistories(
 }
 
 function compareMigrationCompletion(
-  localByName: Map<string, DatabaseMigrationSnapshot>,
-  productionByName: Map<string, DatabaseMigrationSnapshot>,
+  localMigrations: DatabaseMigrationSnapshot[],
+  productionMigrations: DatabaseMigrationSnapshot[],
   blockingIssues: DatabaseAlignmentIssue[],
 ): void {
+  const localByName = migrationsByName(localMigrations);
+  const productionByName = migrationsByName(productionMigrations);
   const migrationNames = new Set([
     ...localByName.keys(),
     ...productionByName.keys(),
@@ -376,16 +386,21 @@ async function collectMigrationHistory(
   prisma: DatabaseAlignmentPrismaClient,
 ): Promise<DatabaseMigrationSnapshot[]> {
   const rows = await prisma.$queryRaw<RawPrismaMigrationRow[]>`
-    SELECT migration_name, checksum, finished_at
+    SELECT migration_name, checksum, finished_at, rolled_back_at
     FROM _prisma_migrations
     ORDER BY migration_name ASC
   `;
 
-  return rows.map((row) => ({
-    migrationName: row.migration_name,
-    checksum: row.checksum,
-    finishedAt: normalizeTimestamp(row.finished_at),
-  }));
+  return rows.map((row) => {
+    const rolledBackAt = normalizeTimestamp(row.rolled_back_at);
+
+    return {
+      migrationName: row.migration_name,
+      checksum: row.checksum,
+      finishedAt: normalizeTimestamp(row.finished_at),
+      ...(rolledBackAt ? { rolledBackAt } : {}),
+    };
+  });
 }
 
 async function collectNutritionStandardVersions(
@@ -529,8 +544,23 @@ async function readSchemaPrismaFile(schemaPrismaPath: string): Promise<string> {
 function migrationsByName(
   migrations: DatabaseMigrationSnapshot[],
 ): Map<string, DatabaseMigrationSnapshot> {
-  return new Map(
-    migrations.map((migration) => [migration.migrationName, migration]),
+  const migrationsByName = new Map<string, DatabaseMigrationSnapshot>();
+
+  for (const migration of migrations) {
+    const existing = migrationsByName.get(migration.migrationName);
+    if (!existing || hasMigrationValue(migration.finishedAt)) {
+      migrationsByName.set(migration.migrationName, migration);
+    }
+  }
+
+  return migrationsByName;
+}
+
+function activeMigrationAttempts(
+  migrations: DatabaseMigrationSnapshot[],
+): DatabaseMigrationSnapshot[] {
+  return migrations.filter(
+    (migration) => !hasMigrationValue(migration.rolledBackAt),
   );
 }
 

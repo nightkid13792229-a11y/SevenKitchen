@@ -79,6 +79,7 @@ export interface IngredientImportNutritionProfile {
   isPrimary?: boolean;
   yieldRate?: number;
   notes?: string | null;
+  nutritionData?: Record<string, unknown>;
   nutrients: Record<string, IngredientImportNutrientValue>;
 }
 
@@ -250,6 +251,14 @@ function validateNutrientValues(
   errors: ManifestValidationIssue[],
 ): void {
   profiles.forEach((profile, profileIndex) => {
+    if (
+      profile.nutritionData &&
+      typeof profile.nutritionData === 'object' &&
+      Object.keys(profile.nutritionData).length > 0
+    ) {
+      return;
+    }
+
     for (const [nutrientCode, nutrientValue] of Object.entries(
       profile.nutrients,
     )) {

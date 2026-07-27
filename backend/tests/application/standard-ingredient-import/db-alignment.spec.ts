@@ -229,6 +229,38 @@ describe('compareDatabaseAlignmentSnapshots', () => {
     );
   });
 
+  it('ignores a rolled-back migration attempt when the migration later completed', () => {
+    const local = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'checksum-a',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+        {
+          migrationName: '202606010001_a',
+          checksum: 'failed-attempt-checksum',
+          finishedAt: null,
+          rolledBackAt: '2026-06-15T00:00:00.000Z',
+        } as DatabaseMigrationSnapshot,
+      ],
+    });
+    const production = makeSnapshot({
+      migrations: [
+        {
+          migrationName: '202606010001_a',
+          checksum: 'checksum-a',
+          finishedAt: '2026-06-16T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const result = compareDatabaseAlignmentSnapshots({ local, production });
+
+    expect(result.ok).toBe(true);
+    expect(result.blockingIssues).toEqual([]);
+  });
+
   it('fails for critical reference data hash differences', () => {
     const local = makeSnapshot({
       criticalDataHashes: {

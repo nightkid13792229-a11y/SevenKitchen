@@ -1,0 +1,33 @@
+{
+  "lookupDate": "2026-07-16",
+  "source": "USDA FoodData Central API",
+  "records": [
+    {
+      "fdcId": 168385,
+      "officialDescription": "Amaranth leaves, raw",
+      "scientificName": "Amaranthus spp.",
+      "state": "raw",
+      "recordUrl": "https://fdc.nal.usda.gov/food-details/168385/nutrients",
+      "apiRecordUrl": "https://api.nal.usda.gov/fdc/v1/food/168385?api_key=DEMO_KEY",
+      "selectionReason": "Official USDA leaf-vegetable record for raw amaranth; chosen as the primary same-source raw profile."
+    },
+    {
+      "fdcId": 169202,
+      "officialDescription": "Amaranth leaves, cooked, boiled, drained, without salt",
+      "scientificName": "Amaranthus spp.",
+      "scientificNameProvenance": "The cooked USDA SR Legacy record does not populate scientificName; Amaranthus spp. is inherited from the paired same-source raw FDC 168385 record for the same food.",
+      "state": "cooked",
+      "recordUrl": "https://fdc.nal.usda.gov/food-details/169202/nutrients",
+      "apiRecordUrl": "https://api.nal.usda.gov/fdc/v1/food/169202?api_key=DEMO_KEY",
+      "selectionReason": "Official USDA same-source cooked leaf profile, specifically boiled, drained, and without salt; chosen as the secondary prepared-state profile."
+    }
+  ],
+  "excludedSources": [
+    {
+      "source": "MEXT / Japanese food composition tables",
+      "record": "Amaranthus",
+      "reason": "Excluded: the available MEXT Amaranthus record is whole grain, not the amaranth leaf vegetable required for 苋菜."
+    }
+  ],
+  "selectionSummary": "USDA was selected because it provides official, same-source raw and cooked amaranth-leaf records. CFCT was not used."
+}

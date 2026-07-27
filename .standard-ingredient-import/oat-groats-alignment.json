@@ -1,0 +1,1520 @@
+{
+  "result": {
+    "id": "e4e54f19797d",
+    "checkedAt": "2026-07-20T17:48:53.019Z",
+    "ok": true,
+    "localDatabaseLabel": "local",
+    "productionDatabaseLabel": "production",
+    "blockingIssues": [],
+    "warnings": [
+      {
+        "code": "NON_CRITICAL_ROW_COUNT_MISMATCH",
+        "subject": "inventory_ledger_entry",
+        "message": "Non-critical row count differs for inventory_ledger_entry.",
+        "localValue": 0,
+        "productionValue": 385
+      },
+      {
+        "code": "NON_CRITICAL_ROW_COUNT_MISMATCH",
+        "subject": "order",
+        "message": "Non-critical row count differs for order.",
+        "localValue": 2,
+        "productionValue": 308
+      }
+    ]
+  },
+  "localSnapshot": {
+    "databaseLabel": "local",
+    "collectedAt": "2026-07-20T17:48:52.728Z",
+    "migrations": [
+      {
+        "migrationName": "$(date +%Y%m%d%H%M%S)_rename_waiting_to_purchasing",
+        "checksum": "23e07710cef5c2cd4e7ef565113f90f7005e747b2b26bd85717fbf120ccf0eba",
+        "finishedAt": "2026-06-29T08:57:30.942Z"
+      },
+      {
+        "migrationName": "20251215000000_order_persistence",
+        "checksum": "ef2f754bd945c51778ac26f20f6bdda88e4bf408beabc833f6ea4d62538e24bd",
+        "finishedAt": "2025-12-21T15:00:31.505Z"
+      },
+      {
+        "migrationName": "20251215010000_address_persistence",
+        "checksum": "32cb6be33586a4c59051e6fb20c24be884013c4967af71b7810c7e6ef0a7dcab",
+        "finishedAt": "2025-12-21T15:00:31.517Z"
+      },
+      {
+        "migrationName": "20251215020000_dog_persistence",
+        "checksum": "64e2c3b0b720f4ffb34cfa6c3b04b83027f130f9724c6eea830298fa18ac282d",
+        "finishedAt": "2025-12-21T15:00:31.533Z"
+      },
+      {
+        "migrationName": "20251216060116_recipe_persistence",
+        "checksum": "ab0f0ba40e5a809c6c2299c986dbd754c4ef8a9809c0435469b69529dc4f6fee",
+        "finishedAt": "2025-12-21T15:00:31.564Z"
+      },
+      {
+        "migrationName": "20251216063921_order_persistence_table_mapping",
+        "checksum": "132030671523bdcbbf619723d1e42a68b0b1a0eb94c42b9c57fc3d536ba2848a",
+        "finishedAt": "2025-12-21T15:00:31.590Z"
+      },
+      {
+        "migrationName": "20251216070826_address_persistence_table_mapping",
+        "checksum": "acfab0d2d8e720a74308aca6160e93e8f26a55927bf547a098baf1a06aa02f86",
+        "finishedAt": "2025-12-21T15:00:31.602Z"
+      },
+      {
+        "migrationName": "20251216101028_add_order_dog_address_references",
+        "checksum": "f4fabd38e7716ea0fc0c4fb76e242b361c65849e26b78f3644766ba6502dc88c",
+        "finishedAt": "2025-12-21T15:00:31.606Z"
+      },
+      {
+        "migrationName": "20251216115956_add_daily_intake_g_to_order_item",
+        "checksum": "2c198d269255ca2d325cbcdb2834fc61d6333735791cb2b77f3cd631fcef31b4",
+        "finishedAt": "2025-12-21T15:00:31.610Z"
+      },
+      {
+        "migrationName": "20251216133724_add_production_batch_and_packaging_unit",
+        "checksum": "59f57acf58fd4496f4e41fb64bca8bef885e3f6492cd676460586ed881c91c63",
+        "finishedAt": "2025-12-21T15:00:31.635Z"
+      },
+      {
+        "migrationName": "20251216151402_add_allocation_lock_to_order_item",
+        "checksum": "5b1c8eaef8ddc0db914369aea009b31643ffdbfa09fe7319d7dffc9d9b049304",
+        "finishedAt": "2025-12-21T15:00:31.643Z"
+      },
+      {
+        "migrationName": "20251216161937_add_kitchen_task_fields_to_packaging_unit",
+        "checksum": "2f19b156fd937ad9c5eb3b729e3cccee200a485129189232fa79912699393b6c",
+        "finishedAt": "2025-12-21T15:00:31.651Z"
+      },
+      {
+        "migrationName": "20251217010000_add_inventory_ledger_entry",
+        "checksum": "6a88637c935128c9fe587dbe35b4f5f891d9cb1e6811475b0270e5ab366d75c6",
+        "finishedAt": "2025-12-21T15:00:31.668Z"
+      },
+      {
+        "migrationName": "20251219193259_add_order_cancellation_fields",
+        "checksum": "147f0b4e6e5cc0b9b3b43ffb4184ed335acca587f05588b33ca8ce27e75bbf17",
+        "finishedAt": "2025-12-21T15:00:31.673Z"
+      },
+      {
+        "migrationName": "20251219202028_add_payment_tracking_fields",
+        "checksum": "a487e8d3ed776e309b150db691503db5139c95cb74ca0d5fb1cc4161db700a8d",
+        "finishedAt": "2025-12-21T15:00:31.677Z"
+      },
+      {
+        "migrationName": "20251219202948_add_order_status_history",
+        "checksum": "7a8ffade89c1a1a5fb57607e0ce094a45ded58c3752d9ba21e42af63d143322c",
+        "finishedAt": "2025-12-21T15:00:31.692Z"
+      },
+      {
+        "migrationName": "20251219225121_fix_order_payment_columns",
+        "checksum": "8633a0da6af51fa9960f58c7560d31aa8147ac2ea05085977003a63462ab8c69",
+        "finishedAt": "2025-12-21T15:00:31.696Z"
+      },
+      {
+        "migrationName": "20251220000000_add_order_shipping_fields",
+        "checksum": "5ad2d73f911f81d8fcf08892e4a93ac663766cf0f55826e38fe324fb8a433ee4",
+        "finishedAt": "2025-12-21T15:00:31.700Z"
+      },
+      {
+        "migrationName": "20251220003000_fix_order_shipping_columns",
+        "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+        "finishedAt": "2025-12-21T15:00:31.703Z"
+      },
+      {
+        "migrationName": "20251220010000_fix_all_order_lifecycle_columns",
+        "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+        "finishedAt": "2025-12-21T15:00:31.707Z"
+      },
+      {
+        "migrationName": "20251224145000_add_custom_breed_name",
+        "checksum": "e70200027d6b45fd7c1cdd7b2ff765bbedab52cc6c682557bc15a5ecd986aaf8",
+        "finishedAt": "2025-12-24T07:29:23.223Z"
+      },
+      {
+        "migrationName": "20260106195839_add_example_weight_to_recipe_item",
+        "checksum": "e0b4b554951a022b9445e124d51c0965fd159af6ededcf3a2e65231271b26dcd",
+        "finishedAt": "2026-01-06T12:00:44.426Z"
+      },
+      {
+        "migrationName": "20260109000000_add_order_freezing_and_aftersale",
+        "checksum": "3a9343622ab1b0ad2363305d5156de62b91f4a7ce4b058815dfe11cacff9b409",
+        "finishedAt": "2026-01-09T14:44:00.527Z"
+      },
+      {
+        "migrationName": "20260109000000_phase9_order_status_optimization",
+        "checksum": "127e400bf4f3452f373a875cebad26ad1063fd79b602879aba06e138916da936",
+        "finishedAt": null,
+        "rolledBackAt": "2026-01-09T14:44:07.939Z"
+      },
+      {
+        "migrationName": "20260109000000_phase9_order_status_optimization",
+        "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+        "finishedAt": "2026-05-11T05:06:30.109Z"
+      },
+      {
+        "migrationName": "20260109000000_phase9_order_status_optimization",
+        "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+        "finishedAt": null,
+        "rolledBackAt": "2026-05-11T05:06:30.101Z"
+      },
+      {
+        "migrationName": "20260125192532_add_reimbursement_cost_details",
+        "checksum": "14245bd2879e200f25bffd7e0e0c85b4b189a899e9017818ed4d82a96a9f116a",
+        "finishedAt": "2026-01-25T11:29:34.753Z"
+      },
+      {
+        "migrationName": "20260125205511_update_reimbursement_status_and_add_payment_proof",
+        "checksum": "422c9af0829deac49b7efc38d001296f126afe6795e050e0ebabf84435b4c936",
+        "finishedAt": "2026-01-25T12:55:20.216Z"
+      },
+      {
+        "migrationName": "20260125225305_remove_allergy_record_fields",
+        "checksum": "f085c3a040dbefb85fbcd53d247f56d424ce6435e7ee1457bb24e4116ad04a80",
+        "finishedAt": "2026-01-25T14:53:14.683Z"
+      },
+      {
+        "migrationName": "20260127183915_add_min_pot_weight_config",
+        "checksum": "b5e26ee1f7d142ad19100bb1a400db1293781243dfee81de93b65bff00fee5bf",
+        "finishedAt": "2026-01-27T10:39:24.957Z"
+      },
+      {
+        "migrationName": "20260130050000_create_user_table_if_missing",
+        "checksum": "b494af7be83f94a88134ecc9da0464e3b5337bef49b9cbe6c4d5b95edabe48c8",
+        "finishedAt": "2026-06-11T07:09:50.756Z"
+      },
+      {
+        "migrationName": "20260130_add_is_custom_recipe",
+        "checksum": "822621e0aaacf3a0c8569ca868167512e2de993208035e93ddde7b0f8d0d58a7",
+        "finishedAt": "2026-01-31T15:33:49.263Z"
+      },
+      {
+        "migrationName": "20260131000000_add_favorite_recipe_table",
+        "checksum": "f5844494b04f94902083e190addf96defe03b763816a91739e6be11de7088226",
+        "finishedAt": null,
+        "rolledBackAt": "2026-01-31T15:34:05.681Z"
+      },
+      {
+        "migrationName": "20260131000000_add_favorite_recipe_table",
+        "checksum": "92f28cbfc786e8f6b9b82301b36bb37c7fd0956ce22e296f8737c7c4c92cb2ab",
+        "finishedAt": "2026-01-31T15:34:05.683Z"
+      },
+      {
+        "migrationName": "20260201230300_add_original_target_production_date",
+        "checksum": "8ae0cfac4d2d29fac10fad9e2398b5405260befb35fc224be796175422086875",
+        "finishedAt": "2026-06-11T07:09:46.140Z"
+      },
+      {
+        "migrationName": "20260201230300_add_original_target_production_date",
+        "checksum": "8ae0cfac4d2d29fac10fad9e2398b5405260befb35fc224be796175422086875",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-11T07:09:46.137Z"
+      },
+      {
+        "migrationName": "20260201230900_create_missing_foundation_tables_if_missing",
+        "checksum": "2498dfe5db5c8b5764c38c27ce51a1edb1a8f6f0964d6674b4b69f251a992b94",
+        "finishedAt": "2026-06-11T07:09:50.771Z"
+      },
+      {
+        "migrationName": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+        "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+        "finishedAt": "2026-06-16T17:06:40.764Z"
+      },
+      {
+        "migrationName": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+        "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:06:40.760Z"
+      },
+      {
+        "migrationName": "2026020123300000_add_only_missing_tables",
+        "checksum": "342a7b7722326c3726905ec0870837767578da091b79141faa75ffd1293494e7",
+        "finishedAt": "2026-06-16T17:07:45.733Z"
+      },
+      {
+        "migrationName": "2026020123300000_add_only_missing_tables",
+        "checksum": "342a7b7722326c3726905ec0870837767578da091b79141faa75ffd1293494e7",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:07:45.730Z"
+      },
+      {
+        "migrationName": "20260203210000_add_reimbursement_table",
+        "checksum": "2834d15d6e49e923f5508743018086f9ddd750cba76f7d8cb06398a6316bbb58",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:08:21.241Z"
+      },
+      {
+        "migrationName": "20260203210000_add_reimbursement_table",
+        "checksum": "2834d15d6e49e923f5508743018086f9ddd750cba76f7d8cb06398a6316bbb58",
+        "finishedAt": "2026-06-16T17:08:21.244Z"
+      },
+      {
+        "migrationName": "20260204170000_add_is_common_to_dog_breed",
+        "checksum": "e05e19f9fe17e7e9f05ea99ab0f3411ad6f074e3378bbadd918f3f2523f48b48",
+        "finishedAt": "2026-06-16T17:08:56.453Z"
+      },
+      {
+        "migrationName": "20260204170000_add_is_common_to_dog_breed",
+        "checksum": "e05e19f9fe17e7e9f05ea99ab0f3411ad6f074e3378bbadd918f3f2523f48b48",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:08:56.450Z"
+      },
+      {
+        "migrationName": "20260329000000_add_recipe_share_token",
+        "checksum": "3b0c19979efa36d35ff2860538f0d9c27f4a2c6c79b5d892b7f2b8614d6d69e1",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:09:11.509Z"
+      },
+      {
+        "migrationName": "20260329000000_add_recipe_share_token",
+        "checksum": "3b0c19979efa36d35ff2860538f0d9c27f4a2c6c79b5d892b7f2b8614d6d69e1",
+        "finishedAt": "2026-06-16T17:09:11.512Z"
+      },
+      {
+        "migrationName": "20260331120000_add_ingredient_price_change",
+        "checksum": "ef1af38d0180c5e4ab0a9521a1cc608e1789592e4d555df246641be689cf0f38",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:09:43.420Z"
+      },
+      {
+        "migrationName": "20260331120000_add_ingredient_price_change",
+        "checksum": "ef1af38d0180c5e4ab0a9521a1cc608e1789592e4d555df246641be689cf0f38",
+        "finishedAt": "2026-06-16T17:09:43.423Z"
+      },
+      {
+        "migrationName": "20260331180000_add_home_header_bg_image_url",
+        "checksum": "bb506ceb981b0fb265c9a90ea410b824c09b48dd0dff26a872a2beb22c3b7819",
+        "finishedAt": "2026-06-16T17:09:52.280Z"
+      },
+      {
+        "migrationName": "20260331180000_add_home_header_bg_image_url",
+        "checksum": "bb506ceb981b0fb265c9a90ea410b824c09b48dd0dff26a872a2beb22c3b7819",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:09:52.276Z"
+      },
+      {
+        "migrationName": "20260331223000_make_purchase_record_quantity_decimal",
+        "checksum": "d2cef0c65c9f14915e74b83e852aa6ea628746542ca3819377a6d6d92d0d36ca",
+        "finishedAt": "2026-06-16T17:09:52.934Z"
+      },
+      {
+        "migrationName": "20260401170000_add_purchase_record_normalization_fields",
+        "checksum": "c672db4489ab27ea38b51a24c3ca348259b0c41344ab3343c7339c412eb8b4f9",
+        "finishedAt": "2026-06-16T17:10:09.063Z"
+      },
+      {
+        "migrationName": "20260401170000_add_purchase_record_normalization_fields",
+        "checksum": "c672db4489ab27ea38b51a24c3ca348259b0c41344ab3343c7339c412eb8b4f9",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:10:09.060Z"
+      },
+      {
+        "migrationName": "20260401193000_add_purchase_item_suggested_product_fields",
+        "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:10:23.176Z"
+      },
+      {
+        "migrationName": "20260401193000_add_purchase_item_suggested_product_fields",
+        "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+        "finishedAt": "2026-06-16T17:10:23.180Z"
+      },
+      {
+        "migrationName": "20260401210000_remove_pricing_group_fields",
+        "checksum": "538b17ac2057c738640841b89665355c6dfbc0ebb991f2f150c5b97f47957705",
+        "finishedAt": "2026-06-16T17:10:23.832Z"
+      },
+      {
+        "migrationName": "20260401233000_add_order_admin_remark",
+        "checksum": "98bf799af235157df46719e99af6ace558b121055aebb1b80c17c268a56100c1",
+        "finishedAt": "2026-06-16T17:10:31.967Z"
+      },
+      {
+        "migrationName": "20260401233000_add_order_admin_remark",
+        "checksum": "98bf799af235157df46719e99af6ace558b121055aebb1b80c17c268a56100c1",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:10:31.966Z"
+      },
+      {
+        "migrationName": "20260402120000_add_stock_replenishment_purchasing",
+        "checksum": "2990a9df48530a524e1e4133d7fd91dc3946bdeee3a7d358bb084c8f4195c0ef",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:10:57.604Z"
+      },
+      {
+        "migrationName": "20260402120000_add_stock_replenishment_purchasing",
+        "checksum": "2990a9df48530a524e1e4133d7fd91dc3946bdeee3a7d358bb084c8f4195c0ef",
+        "finishedAt": "2026-06-16T17:10:57.608Z"
+      },
+      {
+        "migrationName": "20260402153000_add_ingredient_stock_policy_fields",
+        "checksum": "6eb03d508a48ce765fe5826476e6288425bf3725bd505c0d4ceb5bd866959152",
+        "finishedAt": "2026-06-16T17:11:12.456Z"
+      },
+      {
+        "migrationName": "20260402153000_add_ingredient_stock_policy_fields",
+        "checksum": "6eb03d508a48ce765fe5826476e6288425bf3725bd505c0d4ceb5bd866959152",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:11:12.453Z"
+      },
+      {
+        "migrationName": "20260402190000_add_aliases_to_dog_breed",
+        "checksum": "f1e945d6bbbc8aaca999c6415643d1c8e6c30f805114f9e421d1b34d4cbee293",
+        "finishedAt": "2026-06-16T17:11:20.398Z"
+      },
+      {
+        "migrationName": "20260402190000_add_aliases_to_dog_breed",
+        "checksum": "f1e945d6bbbc8aaca999c6415643d1c8e6c30f805114f9e421d1b34d4cbee293",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:11:20.395Z"
+      },
+      {
+        "migrationName": "20260402213000_add_inventory_management_foundation",
+        "checksum": "0f264a39dff10f0ec0a491797512a23094ee970b77656ed8b44fc042c3c80c77",
+        "finishedAt": "2026-06-16T17:11:58.161Z"
+      },
+      {
+        "migrationName": "20260402213000_add_inventory_management_foundation",
+        "checksum": "0f264a39dff10f0ec0a491797512a23094ee970b77656ed8b44fc042c3c80c77",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:11:58.158Z"
+      },
+      {
+        "migrationName": "20260403121500_add_procurement_sku",
+        "checksum": "a0f3916e663395bd23d561e1de63a5726ddc5d63327f94ca1011ba5621e0700a",
+        "finishedAt": "2026-06-16T17:12:16.903Z"
+      },
+      {
+        "migrationName": "20260403121500_add_procurement_sku",
+        "checksum": "a0f3916e663395bd23d561e1de63a5726ddc5d63327f94ca1011ba5621e0700a",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:12:16.900Z"
+      },
+      {
+        "migrationName": "20260403133000_add_purchase_procurement_sku_snapshots",
+        "checksum": "597494363221b3dbefb8ee562dd56b11baa9d8e3f648e61d660daa7bc9a00442",
+        "finishedAt": "2026-06-16T17:12:32.464Z"
+      },
+      {
+        "migrationName": "20260403133000_add_purchase_procurement_sku_snapshots",
+        "checksum": "597494363221b3dbefb8ee562dd56b11baa9d8e3f648e61d660daa7bc9a00442",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:12:32.461Z"
+      },
+      {
+        "migrationName": "20260403183000_add_reimbursement_paid_fields",
+        "checksum": "84145b09cf272bf36e4d6837aac970f80418b83e2f160cba2008dea2409e7b8d",
+        "finishedAt": "2026-06-16T17:12:48.501Z"
+      },
+      {
+        "migrationName": "20260403183000_add_reimbursement_paid_fields",
+        "checksum": "84145b09cf272bf36e4d6837aac970f80418b83e2f160cba2008dea2409e7b8d",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:12:48.499Z"
+      },
+      {
+        "migrationName": "20260403190000_add_dog_profile_event",
+        "checksum": "e45756a50bbaeedf2b206cbc5dccb8ba66f65cc52fe4073cae53e565b81b0072",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:13:12.751Z"
+      },
+      {
+        "migrationName": "20260403190000_add_dog_profile_event",
+        "checksum": "e45756a50bbaeedf2b206cbc5dccb8ba66f65cc52fe4073cae53e565b81b0072",
+        "finishedAt": "2026-06-16T17:13:12.754Z"
+      },
+      {
+        "migrationName": "20260403190000_add_finance_expense_foundation",
+        "checksum": "3e5c468ad77be134a6ee18e3fda250266edec8f915edb1a120925309625131d2",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:13:50.291Z"
+      },
+      {
+        "migrationName": "20260403190000_add_finance_expense_foundation",
+        "checksum": "3e5c468ad77be134a6ee18e3fda250266edec8f915edb1a120925309625131d2",
+        "finishedAt": "2026-06-16T17:13:50.298Z"
+      },
+      {
+        "migrationName": "20260407123000_add_dog_avatar",
+        "checksum": "85d25a12e70ff18fb10a58368f09004890cbb426b9423c8ad3ab585e78aaeea8",
+        "finishedAt": "2026-06-16T17:14:01.106Z"
+      },
+      {
+        "migrationName": "20260407123000_add_dog_avatar",
+        "checksum": "85d25a12e70ff18fb10a58368f09004890cbb426b9423c8ad3ab585e78aaeea8",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:14:01.103Z"
+      },
+      {
+        "migrationName": "20260407234500_add_missing_recommended_product_table",
+        "checksum": "bc7a53da7e9d947aa0d66898d011b2bd39b772b2de6b8598471190ec7981099b",
+        "finishedAt": "2026-06-16T17:14:02.234Z"
+      },
+      {
+        "migrationName": "20260408133000_add_feedback_nutrition_design_foundation",
+        "checksum": "31d644dfe89572911c11c6289b5316f04fc27d91203d8478a34e2cb2dcea2a56",
+        "finishedAt": "2026-06-16T17:14:33.332Z"
+      },
+      {
+        "migrationName": "20260408133000_add_feedback_nutrition_design_foundation",
+        "checksum": "31d644dfe89572911c11c6289b5316f04fc27d91203d8478a34e2cb2dcea2a56",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:14:33.330Z"
+      },
+      {
+        "migrationName": "20260411150000_add_ingredient_nutrition_profile",
+        "checksum": "1d49300e5400f9d76e481c3c1ade07a041df2d68d0869475b2a976b14370560f",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:14:46.443Z"
+      },
+      {
+        "migrationName": "20260411150000_add_ingredient_nutrition_profile",
+        "checksum": "1d49300e5400f9d76e481c3c1ade07a041df2d68d0869475b2a976b14370560f",
+        "finishedAt": "2026-06-16T17:14:46.447Z"
+      },
+      {
+        "migrationName": "20260411153000_extend_procurement_sku_domain_fields",
+        "checksum": "1e7f0d7c9074f3ded72af8a9ba3817eb7d7ae1e7eece17e87dba9b4a859607e3",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:15:04.980Z"
+      },
+      {
+        "migrationName": "20260411153000_extend_procurement_sku_domain_fields",
+        "checksum": "1e7f0d7c9074f3ded72af8a9ba3817eb7d7ae1e7eece17e87dba9b4a859607e3",
+        "finishedAt": "2026-06-16T17:15:04.984Z"
+      },
+      {
+        "migrationName": "20260411173000_add_procurement_sku_to_inventory_ledger",
+        "checksum": "04c1796d77db39ad04320873a7baea59f5a1bc7a94789bcfd582463a7f6fc0a1",
+        "finishedAt": "2026-06-16T17:15:29.709Z"
+      },
+      {
+        "migrationName": "20260411173000_add_procurement_sku_to_inventory_ledger",
+        "checksum": "04c1796d77db39ad04320873a7baea59f5a1bc7a94789bcfd582463a7f6fc0a1",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:15:29.701Z"
+      },
+      {
+        "migrationName": "20260411183000_add_procurement_sku_to_inventory_operations",
+        "checksum": "459a942d25894ea12f436d6a1ad304d964b925c6fa9d42104abfbd0d4ffbbe50",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:15:50.625Z"
+      },
+      {
+        "migrationName": "20260411183000_add_procurement_sku_to_inventory_operations",
+        "checksum": "459a942d25894ea12f436d6a1ad304d964b925c6fa9d42104abfbd0d4ffbbe50",
+        "finishedAt": "2026-06-16T17:15:50.632Z"
+      },
+      {
+        "migrationName": "20260414134500_fix_ingredient_price_change_source_quantity_precision",
+        "checksum": "cada635b557155c045b422384a7a8f05144f03d2de382a2eaedaf0805c56ce03",
+        "finishedAt": "2026-06-16T17:15:55.092Z"
+      },
+      {
+        "migrationName": "20260414180000_ingredient_domain_restructure",
+        "checksum": "496ed4d724473831ae281a9eb6aeb8ab9ced660d6862fe8439b8449dfa526e1b",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:18:01.146Z"
+      },
+      {
+        "migrationName": "20260414180000_ingredient_domain_restructure",
+        "checksum": "496ed4d724473831ae281a9eb6aeb8ab9ced660d6862fe8439b8449dfa526e1b",
+        "finishedAt": "2026-06-16T17:18:01.152Z"
+      },
+      {
+        "migrationName": "202604160001_add_order_item_package_plan",
+        "checksum": "adcb051193d10fff0ff09e568ef230142c7814a14ad0aa220292a54a748abd2f",
+        "finishedAt": "2026-06-16T17:18:15.161Z"
+      },
+      {
+        "migrationName": "202604170001_add_inventory_allocations",
+        "checksum": "6bc231cb55d9b4a25dd33e094cc4d8efdef2563914a86088dc4cd786c22bcb63",
+        "finishedAt": "2026-06-16T17:19:08.275Z"
+      },
+      {
+        "migrationName": "202604170001_add_inventory_allocations",
+        "checksum": "6bc231cb55d9b4a25dd33e094cc4d8efdef2563914a86088dc4cd786c22bcb63",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:19:08.266Z"
+      },
+      {
+        "migrationName": "202604170002_add_production_completion_settlement",
+        "checksum": "7ee9805ed0ad0fac68986d34db7b97c5c127fedcb47e7f05c26dcdcb2586af1f",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:20:17.247Z"
+      },
+      {
+        "migrationName": "202604170002_add_production_completion_settlement",
+        "checksum": "7ee9805ed0ad0fac68986d34db7b97c5c127fedcb47e7f05c26dcdcb2586af1f",
+        "finishedAt": "2026-06-16T17:20:17.250Z"
+      },
+      {
+        "migrationName": "202604170003_add_order_settlement_adjustments",
+        "checksum": "0675894f436af5a2e31af91c3b61e821e34e9ee2862233ba6574b7059680f71d",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:21:20.150Z"
+      },
+      {
+        "migrationName": "202604170003_add_order_settlement_adjustments",
+        "checksum": "0675894f436af5a2e31af91c3b61e821e34e9ee2862233ba6574b7059680f71d",
+        "finishedAt": "2026-06-16T17:21:20.157Z"
+      },
+      {
+        "migrationName": "20260417190000_add_recipe_item_supplement_targets",
+        "checksum": "c202a41cdadd35452ab8952fdc4d46263b9b554015c7fbdf1ab932511c1f1c0a",
+        "finishedAt": "2026-06-16T17:21:54.401Z"
+      },
+      {
+        "migrationName": "20260417190000_add_recipe_item_supplement_targets",
+        "checksum": "c202a41cdadd35452ab8952fdc4d46263b9b554015c7fbdf1ab932511c1f1c0a",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:21:54.394Z"
+      },
+      {
+        "migrationName": "202604180001_add_procurement_sku_source_tier",
+        "checksum": "6d47927ea81ade404a936b411892b621a7821c9d77afcf467ac50a702ece1627",
+        "finishedAt": "2026-06-16T17:22:26.172Z"
+      },
+      {
+        "migrationName": "202604180001_add_procurement_sku_source_tier",
+        "checksum": "6d47927ea81ade404a936b411892b621a7821c9d77afcf467ac50a702ece1627",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:22:26.165Z"
+      },
+      {
+        "migrationName": "202604190001_add_procurement_sku_price_history",
+        "checksum": "f9dc06bc83fa51c211e0d1e2fff3f29484a90e80e5ebe987a886dbf786feb7ff",
+        "finishedAt": "2026-06-16T17:22:33.199Z"
+      },
+      {
+        "migrationName": "202604190002_backfill_procurement_sku_price_history",
+        "checksum": "0fe99948e116567e2b7d2af6d0fc9917b2456d2e9333982c0cafed30ec26bc2e",
+        "finishedAt": "2026-06-16T17:22:33.234Z"
+      },
+      {
+        "migrationName": "202604190003_remove_procurement_sku_display_unit",
+        "checksum": "74790f6d3ad2a4a9aaa224d1997cfa24fc4f3e6150a9be6913ddb5f1dfcd5aac",
+        "finishedAt": "2026-06-16T17:22:33.251Z"
+      },
+      {
+        "migrationName": "202604190004_backfill_missing_procurement_sku_initial_price_history",
+        "checksum": "57d35479ee87832bae281d15863736a091dc7ba09c976860b1328b16bc8b43fe",
+        "finishedAt": "2026-06-16T17:22:33.273Z"
+      },
+      {
+        "migrationName": "202604210001_add_purchase_item_no_purchase_marker",
+        "checksum": "70e2a8112e294fdf270925a2946c267b34be4f58397db62f4e273d726d4629e5",
+        "finishedAt": "2026-06-16T17:23:31.680Z"
+      },
+      {
+        "migrationName": "202604210001_add_purchase_item_no_purchase_marker",
+        "checksum": "70e2a8112e294fdf270925a2946c267b34be4f58397db62f4e273d726d4629e5",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:23:31.668Z"
+      },
+      {
+        "migrationName": "20260425120000_add_diy_sheet_header_bg_config",
+        "checksum": "aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:24:24.229Z"
+      },
+      {
+        "migrationName": "20260425120000_add_diy_sheet_header_bg_config",
+        "checksum": "aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2",
+        "finishedAt": "2026-06-16T17:24:24.233Z"
+      },
+      {
+        "migrationName": "202604280001_add_order_shipping_address_snapshot",
+        "checksum": "c8fc6ec1c2bd842c440eed42c68707a2971d3f9bc15f8111ba0d3ef0d850bb30",
+        "finishedAt": "2026-06-16T17:24:24.892Z"
+      },
+      {
+        "migrationName": "202605070001_add_platform_payment_customer_service_config",
+        "checksum": "30a9a60a4292b48f232e9777daa6bee618f3e6ad48fefa1a520463d988ed1311",
+        "finishedAt": "2026-05-31T06:48:27.771Z"
+      },
+      {
+        "migrationName": "202605110001_add_nutrition_governance",
+        "checksum": "8ce2ac5d8fc701c160043bab8cedb4ada9626f7c07fec7e1b2467c8bb63fc072",
+        "finishedAt": "2026-05-11T05:07:37.586Z"
+      },
+      {
+        "migrationName": "202605120001_add_recipe_item_nutrition_food_state",
+        "checksum": "5c9542202e9a53b286bd82a685bc482ed11ebe41aa93c86dbd4b4b9e5fbc54ea",
+        "finishedAt": "2026-06-16T17:24:51.046Z"
+      },
+      {
+        "migrationName": "202605120001_add_recipe_item_nutrition_food_state",
+        "checksum": "5c9542202e9a53b286bd82a685bc482ed11ebe41aa93c86dbd4b4b9e5fbc54ea",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:24:51.043Z"
+      },
+      {
+        "migrationName": "202605120002_agent_assisted_nutrition_review",
+        "checksum": "94e9682d07c8188ff5d947690ebff9c59812bfa99f417179ac074456f1c48578",
+        "finishedAt": "2026-06-16T17:25:23.926Z"
+      },
+      {
+        "migrationName": "202605120002_agent_assisted_nutrition_review",
+        "checksum": "94e9682d07c8188ff5d947690ebff9c59812bfa99f417179ac074456f1c48578",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:25:23.923Z"
+      },
+      {
+        "migrationName": "202605130001_deepseek_agent_nutrition_matching",
+        "checksum": "3be7f2b8de1132e82f1da1a7a32a6d5a309a2aabe9ea8fba7ec451e52e1dc11e",
+        "finishedAt": "2026-06-16T17:25:24.576Z"
+      },
+      {
+        "migrationName": "202605170001_replace_fediaf_standard_table",
+        "checksum": "c5c0b3c40fde3885230436cfbc37ed43188982f4e4dc60bb3940cc6055d1f5cd",
+        "finishedAt": "2026-06-16T17:26:45.803Z"
+      },
+      {
+        "migrationName": "202605170001_replace_fediaf_standard_table",
+        "checksum": "c5c0b3c40fde3885230436cfbc37ed43188982f4e4dc60bb3940cc6055d1f5cd",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:26:45.798Z"
+      },
+      {
+        "migrationName": "202605180001_add_nzfcd_nutrition_source",
+        "checksum": "10ed0017222374461ee1d54230734e0c8e6d543986d3643bf7a86e5f6565c500",
+        "finishedAt": "2026-06-16T17:26:50.304Z"
+      },
+      {
+        "migrationName": "202605180002_add_agent_review_model",
+        "checksum": "278c31f8c7105d723ec61088a22ef8f3b829c1e41702c2f85b26a9527d7eba35",
+        "finishedAt": "2026-06-16T17:26:50.317Z"
+      },
+      {
+        "migrationName": "20260518010000_mobile_recipe_designer_free_total",
+        "checksum": "5f323e13afc620ea689f062aaf281aa2e59804eabbd2e13b83163ddb1da5669e",
+        "finishedAt": "2026-06-16T17:27:29.936Z"
+      },
+      {
+        "migrationName": "20260518010000_mobile_recipe_designer_free_total",
+        "checksum": "5f323e13afc620ea689f062aaf281aa2e59804eabbd2e13b83163ddb1da5669e",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:27:29.932Z"
+      },
+      {
+        "migrationName": "20260518020000_allow_design_recipe_missing_energy_density",
+        "checksum": "cd7ebf0bc53c058fd8717add954ad4400a96c003d54c5fb906bcc357e2b9768b",
+        "finishedAt": "2026-06-16T17:27:36.842Z"
+      },
+      {
+        "migrationName": "20260518030000_add_design_recipe_item_ingredient_id",
+        "checksum": "725024a171fe2f946d64750d411bb5b39be62d5aa43d576d468a6e63d81a772b",
+        "finishedAt": "2026-06-16T17:27:36.860Z"
+      },
+      {
+        "migrationName": "20260518040000_add_nutrition_food_display_name_zh",
+        "checksum": "108a9dfb1901bbb404d6a7844d3ab8e426012d4230fa0d96d6a6e85240fcfcff",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:28:03.579Z"
+      },
+      {
+        "migrationName": "20260518040000_add_nutrition_food_display_name_zh",
+        "checksum": "108a9dfb1901bbb404d6a7844d3ab8e426012d4230fa0d96d6a6e85240fcfcff",
+        "finishedAt": "2026-06-16T17:28:03.585Z"
+      },
+      {
+        "migrationName": "202605200001_add_tfda_nutrition_governance_source_type",
+        "checksum": "9a408c1de7c74733b8655cd923262050e5a3df0dfbb6e63e166154b5c4c9980c",
+        "finishedAt": "2026-06-16T17:28:06.442Z"
+      },
+      {
+        "migrationName": "202605200002_add_recipe_designer_reproduction_scenario",
+        "checksum": "5cddf5522bdc26f61077927b06b9116177631649ecd97cc8dec4a244a07e9b3a",
+        "finishedAt": "2026-06-16T17:28:06.448Z"
+      },
+      {
+        "migrationName": "20260520162000_add_order_detail_notes",
+        "checksum": "f602511456a7c2c30a19124017070149f9659870ce7c8b46e68dd92893afba8e",
+        "finishedAt": "2026-05-31T06:48:27.760Z"
+      },
+      {
+        "migrationName": "202605210001_add_nevo_nutrition_source_type",
+        "checksum": "2e18ca113be0770173fb0ae8619d59da45b6c5ec7ed7eb48da8e3f1898433127",
+        "finishedAt": "2026-06-16T17:28:06.453Z"
+      },
+      {
+        "migrationName": "20260521160000_add_user_wechat_identity",
+        "checksum": "af4c79aa9a01994c392e9bdad72aa7944bcb5c4fe72fc4f9b7f8bfd58f74ba7f",
+        "finishedAt": "2026-05-31T07:04:16.387Z"
+      },
+      {
+        "migrationName": "202605220001_add_search_governance",
+        "checksum": "fcb01e79e3cb710a2b501c1e1faef98d6a7f0043ea865e93bfb0776a101c9831",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-16T17:29:00.398Z"
+      },
+      {
+        "migrationName": "202605220001_add_search_governance",
+        "checksum": "fcb01e79e3cb710a2b501c1e1faef98d6a7f0043ea865e93bfb0776a101c9831",
+        "finishedAt": "2026-06-16T17:29:00.408Z"
+      },
+      {
+        "migrationName": "20260522091500_add_account_migration",
+        "checksum": "d859de1b807c67d9cdc2419958c3f255e478e7b9fdbb49cfd2216bc6e69ff448",
+        "finishedAt": "2026-05-31T07:04:38.347Z"
+      },
+      {
+        "migrationName": "20260522105000_add_order_refund_records",
+        "checksum": "3cc71b2c9fff7a2a170649ae8b43186fb3b867d7eb83ef367763a9b9e24fc24a",
+        "finishedAt": "2026-06-16T17:29:06.622Z"
+      },
+      {
+        "migrationName": "20260522183500_add_customer_service_float_button",
+        "checksum": "408e300159a61d6e9e50b309af338b52b50b5082d1317f93aadf149ec6874799",
+        "finishedAt": "2026-05-31T06:48:27.767Z"
+      },
+      {
+        "migrationName": "20260522193000_add_customer_service_conversations",
+        "checksum": "465d0f00f83046c99cff04ed826be8c81ce3f49046897b9a6bb029aae9f38f1b",
+        "finishedAt": "2026-06-16T17:29:06.712Z"
+      },
+      {
+        "migrationName": "202605260001_add_design_recipe_item_include_in_assessment",
+        "checksum": "3cb055b3b2cb1d6630ef37015f419fe146929f3bbf93bf0b0d7de150b042e408",
+        "finishedAt": "2026-05-26T07:53:14.323Z"
+      },
+      {
+        "migrationName": "202605270001_remove_recipe_nutrition_report_url",
+        "checksum": "f8330a9f5ccad916c544ad9543c445f33a8943c0ffc865e2f9e6146265c1ff0e",
+        "finishedAt": "2026-06-16T17:29:06.727Z"
+      },
+      {
+        "migrationName": "202605270002_add_recipe_designer_revision_links",
+        "checksum": "41adce9f0ee3a8054099e4ddb39909e352a8c2f2af0ff698cefa8d2c82131b12",
+        "finishedAt": "2026-06-16T17:29:06.742Z"
+      },
+      {
+        "migrationName": "202605270003_add_ingredient_creation_agent",
+        "checksum": "aaef4141ecb7ada41d4d78abd5634af15afa15a321caf83d2abc246fd985cd73",
+        "finishedAt": "2026-06-16T17:29:06.901Z"
+      },
+      {
+        "migrationName": "202605300001_drop_ingredient_creation_agent",
+        "checksum": "9a6234f63962afc2c4e4c4d8bcd5028d462a741e814ee7a897b032eef777ccf4",
+        "finishedAt": "2026-06-16T17:29:06.954Z"
+      },
+      {
+        "migrationName": "202605310001_add_recipe_series_life_stage_versions",
+        "checksum": "54a12efd5857bec1919f3dd6111e8d0e9719f9feb0fa3b595c90112a7151f0c3",
+        "finishedAt": "2026-05-31T06:47:23.376Z"
+      },
+      {
+        "migrationName": "202606110001_add_order_shipping_notification",
+        "checksum": "40f1c75b9a3ff2bb5213b4d619cba4777a07cba3f3baf2ae51a4155c6690df77",
+        "finishedAt": "2026-06-16T17:29:07.018Z"
+      },
+      {
+        "migrationName": "202606110001_reclassify_fiber_ingredients_as_food",
+        "checksum": "cdbb465c5cc6e917e0ee7a30458810bf5f8a337222d40ba6f57013cafec7f75c",
+        "finishedAt": "2026-06-16T17:29:07.054Z"
+      },
+      {
+        "migrationName": "202606110002_backfill_fiber_food_recipe_ratios",
+        "checksum": "83dadd5aab6dc4fbfb955716813f28b6b941b277d780ce64ce24ba259f871a45",
+        "finishedAt": "2026-06-16T17:29:07.114Z"
+      },
+      {
+        "migrationName": "202606110002_revert_functional_powders_to_supplements",
+        "checksum": "eaee2c115d2518ee5f5fe9a3a301869d5b187e7c52edfb3a94f677f0b3b37d1d",
+        "finishedAt": "2026-06-16T17:29:07.319Z"
+      },
+      {
+        "migrationName": "20260611090000_add_recipe_series_business_status",
+        "checksum": "45b3eb1dde288f1cac0d14fd04270168015a3c12f386a0614ea1173f814fefdf",
+        "finishedAt": "2026-06-16T17:29:07.514Z"
+      },
+      {
+        "migrationName": "20260611180000_add_customer_recipe_designer_context",
+        "checksum": "00c487288183fb4c2f0b7904ea161b90014ecde4dcc4990c1e21c7f9d5bccde8",
+        "finishedAt": "2026-06-16T17:29:07.634Z"
+      },
+      {
+        "migrationName": "202606130001_add_diy_sheet_package_plan",
+        "checksum": "dcb993644488816dd67d36aac56e73d32bac2a092e0747e7e0f06494cb264834",
+        "finishedAt": "2026-06-16T17:29:07.722Z"
+      },
+      {
+        "migrationName": "202606160001_update_food_edible_yield_rates",
+        "checksum": "d0644d6391c8ce89773a2f7b946449b52efa41f8b24268b61a1446727eb0a068",
+        "finishedAt": "2026-06-29T08:02:27.762Z"
+      },
+      {
+        "migrationName": "202606190001_repair_reimbursement_sku_unit_prices",
+        "checksum": "830487c8adc5d3b1d783421dee1f67251fd76180e68f237ab5cbaa1335b7753c",
+        "finishedAt": "2026-06-29T08:02:34.267Z"
+      },
+      {
+        "migrationName": "202606260001_add_design_recipe_item_supplement_targets",
+        "checksum": "23461f42b78ea4f50a16c80af34a55a7302a9cdf73664e1b935c3a4aba294b55",
+        "finishedAt": "2026-06-29T04:54:11.342Z"
+      },
+      {
+        "migrationName": "202606290001_add_black_rice_standard_ingredient",
+        "checksum": "c5c56e62deeebba75109c650c651e6b410947e4c7ccc45662101c2917a8dcbe3",
+        "finishedAt": "2026-06-29T08:54:45.730Z"
+      }
+    ],
+    "schemaHash": "ea7e794b38600803025cec64806814a76037627369dd9176f6cb6df686868b09",
+    "criticalDataHashes": {
+      "nutritionStandards": "7a48670e33e5262c46a1cb173ccc214afa98902de3d871c744d5a782a4ac1ec0",
+      "ingredientTags": "30e93e6c5ae61e2220c38bd17ea6124f072d51a3590ab5c558057ce5255a0b21",
+      "nutrientAliases": "fdf792c799b5af83cd1872fb65e320b6daf9a17979ce36409b519a9f13d399b7"
+    },
+    "rowCounts": {
+      "inventory_ledger_entry": 0,
+      "order": 2
+    }
+  },
+  "productionSnapshot": {
+    "databaseLabel": "production",
+    "collectedAt": "2026-07-20T17:48:53.019Z",
+    "migrations": [
+      {
+        "migrationName": "$(date +%Y%m%d%H%M%S)_rename_waiting_to_purchasing",
+        "checksum": "23e07710cef5c2cd4e7ef565113f90f7005e747b2b26bd85717fbf120ccf0eba",
+        "finishedAt": "2026-06-29T08:58:01.783Z"
+      },
+      {
+        "migrationName": "$(date +%Y%m%d%H%M%S)_rename_waiting_to_purchasing",
+        "checksum": "1c9d7b863225475599da3b2753dad9cbeefba979d54c46bc25b77b0841c65f23",
+        "finishedAt": null,
+        "rolledBackAt": "2026-01-29T13:14:51.411Z"
+      },
+      {
+        "migrationName": "20251215000000_order_persistence",
+        "checksum": "ef2f754bd945c51778ac26f20f6bdda88e4bf408beabc833f6ea4d62538e24bd",
+        "finishedAt": "2025-12-21T15:00:31.505Z"
+      },
+      {
+        "migrationName": "20251215010000_address_persistence",
+        "checksum": "32cb6be33586a4c59051e6fb20c24be884013c4967af71b7810c7e6ef0a7dcab",
+        "finishedAt": "2025-12-21T15:00:31.517Z"
+      },
+      {
+        "migrationName": "20251215020000_dog_persistence",
+        "checksum": "64e2c3b0b720f4ffb34cfa6c3b04b83027f130f9724c6eea830298fa18ac282d",
+        "finishedAt": "2025-12-21T15:00:31.533Z"
+      },
+      {
+        "migrationName": "20251216060116_recipe_persistence",
+        "checksum": "ab0f0ba40e5a809c6c2299c986dbd754c4ef8a9809c0435469b69529dc4f6fee",
+        "finishedAt": "2025-12-21T15:00:31.564Z"
+      },
+      {
+        "migrationName": "20251216063921_order_persistence_table_mapping",
+        "checksum": "132030671523bdcbbf619723d1e42a68b0b1a0eb94c42b9c57fc3d536ba2848a",
+        "finishedAt": "2025-12-21T15:00:31.590Z"
+      },
+      {
+        "migrationName": "20251216070826_address_persistence_table_mapping",
+        "checksum": "acfab0d2d8e720a74308aca6160e93e8f26a55927bf547a098baf1a06aa02f86",
+        "finishedAt": "2025-12-21T15:00:31.602Z"
+      },
+      {
+        "migrationName": "20251216101028_add_order_dog_address_references",
+        "checksum": "f4fabd38e7716ea0fc0c4fb76e242b361c65849e26b78f3644766ba6502dc88c",
+        "finishedAt": "2025-12-21T15:00:31.606Z"
+      },
+      {
+        "migrationName": "20251216115956_add_daily_intake_g_to_order_item",
+        "checksum": "2c198d269255ca2d325cbcdb2834fc61d6333735791cb2b77f3cd631fcef31b4",
+        "finishedAt": "2025-12-21T15:00:31.610Z"
+      },
+      {
+        "migrationName": "20251216133724_add_production_batch_and_packaging_unit",
+        "checksum": "59f57acf58fd4496f4e41fb64bca8bef885e3f6492cd676460586ed881c91c63",
+        "finishedAt": "2025-12-21T15:00:31.635Z"
+      },
+      {
+        "migrationName": "20251216151402_add_allocation_lock_to_order_item",
+        "checksum": "5b1c8eaef8ddc0db914369aea009b31643ffdbfa09fe7319d7dffc9d9b049304",
+        "finishedAt": "2025-12-21T15:00:31.643Z"
+      },
+      {
+        "migrationName": "20251216161937_add_kitchen_task_fields_to_packaging_unit",
+        "checksum": "2f19b156fd937ad9c5eb3b729e3cccee200a485129189232fa79912699393b6c",
+        "finishedAt": "2025-12-21T15:00:31.651Z"
+      },
+      {
+        "migrationName": "20251217010000_add_inventory_ledger_entry",
+        "checksum": "6a88637c935128c9fe587dbe35b4f5f891d9cb1e6811475b0270e5ab366d75c6",
+        "finishedAt": "2025-12-21T15:00:31.668Z"
+      },
+      {
+        "migrationName": "20251219193259_add_order_cancellation_fields",
+        "checksum": "147f0b4e6e5cc0b9b3b43ffb4184ed335acca587f05588b33ca8ce27e75bbf17",
+        "finishedAt": "2025-12-21T15:00:31.673Z"
+      },
+      {
+        "migrationName": "20251219202028_add_payment_tracking_fields",
+        "checksum": "a487e8d3ed776e309b150db691503db5139c95cb74ca0d5fb1cc4161db700a8d",
+        "finishedAt": "2025-12-21T15:00:31.677Z"
+      },
+      {
+        "migrationName": "20251219202948_add_order_status_history",
+        "checksum": "7a8ffade89c1a1a5fb57607e0ce094a45ded58c3752d9ba21e42af63d143322c",
+        "finishedAt": "2025-12-21T15:00:31.692Z"
+      },
+      {
+        "migrationName": "20251219225121_fix_order_payment_columns",
+        "checksum": "8633a0da6af51fa9960f58c7560d31aa8147ac2ea05085977003a63462ab8c69",
+        "finishedAt": "2025-12-21T15:00:31.696Z"
+      },
+      {
+        "migrationName": "20251220000000_add_order_shipping_fields",
+        "checksum": "5ad2d73f911f81d8fcf08892e4a93ac663766cf0f55826e38fe324fb8a433ee4",
+        "finishedAt": "2025-12-21T15:00:31.700Z"
+      },
+      {
+        "migrationName": "20251220003000_fix_order_shipping_columns",
+        "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+        "finishedAt": "2025-12-21T15:00:31.703Z"
+      },
+      {
+        "migrationName": "20251220010000_fix_all_order_lifecycle_columns",
+        "checksum": "d887a697bf3b22f51283f709ed214b30ba6b253225a8201d1dd4421bd0b04e1a",
+        "finishedAt": "2025-12-21T15:00:31.707Z"
+      },
+      {
+        "migrationName": "20251224145000_add_custom_breed_name",
+        "checksum": "e70200027d6b45fd7c1cdd7b2ff765bbedab52cc6c682557bc15a5ecd986aaf8",
+        "finishedAt": "2025-12-24T07:29:23.223Z"
+      },
+      {
+        "migrationName": "20260106195839_add_example_weight_to_recipe_item",
+        "checksum": "e0b4b554951a022b9445e124d51c0965fd159af6ededcf3a2e65231271b26dcd",
+        "finishedAt": "2026-01-09T05:53:27.421Z"
+      },
+      {
+        "migrationName": "20260109000000_add_order_freezing_and_aftersale",
+        "checksum": "3a9343622ab1b0ad2363305d5156de62b91f4a7ce4b058815dfe11cacff9b409",
+        "finishedAt": "2026-01-29T13:15:06.590Z"
+      },
+      {
+        "migrationName": "20260109000000_phase9_order_status_optimization",
+        "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+        "finishedAt": null,
+        "rolledBackAt": "2026-02-01T17:29:42.961Z"
+      },
+      {
+        "migrationName": "20260109000000_phase9_order_status_optimization",
+        "checksum": "430934e0fa832426e2efd04e56cef894f7704c163064e9552d44407a7c6b00ad",
+        "finishedAt": "2026-02-01T17:29:42.963Z"
+      },
+      {
+        "migrationName": "20260125192532_add_reimbursement_cost_details",
+        "checksum": "14245bd2879e200f25bffd7e0e0c85b4b189a899e9017818ed4d82a96a9f116a",
+        "finishedAt": "2026-02-01T17:30:05.069Z"
+      },
+      {
+        "migrationName": "20260125192532_add_reimbursement_cost_details",
+        "checksum": "14245bd2879e200f25bffd7e0e0c85b4b189a899e9017818ed4d82a96a9f116a",
+        "finishedAt": null,
+        "rolledBackAt": "2026-02-01T17:30:05.067Z"
+      },
+      {
+        "migrationName": "20260125205511_update_reimbursement_status_and_add_payment_proof",
+        "checksum": "422c9af0829deac49b7efc38d001296f126afe6795e050e0ebabf84435b4c936",
+        "finishedAt": null,
+        "rolledBackAt": "2026-02-01T07:10:41.618Z"
+      },
+      {
+        "migrationName": "20260125205511_update_reimbursement_status_and_add_payment_proof",
+        "checksum": "422c9af0829deac49b7efc38d001296f126afe6795e050e0ebabf84435b4c936",
+        "finishedAt": "2026-02-01T07:10:41.620Z"
+      },
+      {
+        "migrationName": "20260125225305_remove_allergy_record_fields",
+        "checksum": "f085c3a040dbefb85fbcd53d247f56d424ce6435e7ee1457bb24e4116ad04a80",
+        "finishedAt": "2026-02-01T07:10:43.748Z"
+      },
+      {
+        "migrationName": "20260127183915_add_min_pot_weight_config",
+        "checksum": "b5e26ee1f7d142ad19100bb1a400db1293781243dfee81de93b65bff00fee5bf",
+        "finishedAt": "2026-02-01T07:10:43.752Z"
+      },
+      {
+        "migrationName": "20260130050000_create_user_table_if_missing",
+        "checksum": "b494af7be83f94a88134ecc9da0464e3b5337bef49b9cbe6c4d5b95edabe48c8",
+        "finishedAt": "2026-05-27T19:20:11.260Z"
+      },
+      {
+        "migrationName": "20260130_add_is_custom_recipe",
+        "checksum": "822621e0aaacf3a0c8569ca868167512e2de993208035e93ddde7b0f8d0d58a7",
+        "finishedAt": "2026-02-01T07:10:43.756Z"
+      },
+      {
+        "migrationName": "20260131000000_add_favorite_recipe_table",
+        "checksum": "92f28cbfc786e8f6b9b82301b36bb37c7fd0956ce22e296f8737c7c4c92cb2ab",
+        "finishedAt": null,
+        "rolledBackAt": "2026-02-01T17:30:16.482Z"
+      },
+      {
+        "migrationName": "20260131000000_add_favorite_recipe_table",
+        "checksum": "92f28cbfc786e8f6b9b82301b36bb37c7fd0956ce22e296f8737c7c4c92cb2ab",
+        "finishedAt": "2026-02-01T17:30:16.484Z"
+      },
+      {
+        "migrationName": "20260201230300_add_original_target_production_date",
+        "checksum": "8ae0cfac4d2d29fac10fad9e2398b5405260befb35fc224be796175422086875",
+        "finishedAt": "2026-02-01T15:08:11.151Z"
+      },
+      {
+        "migrationName": "20260201230900_create_missing_foundation_tables_if_missing",
+        "checksum": "2498dfe5db5c8b5764c38c27ce51a1edb1a8f6f0964d6674b4b69f251a992b94",
+        "finishedAt": "2026-05-27T19:20:11.281Z"
+      },
+      {
+        "migrationName": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+        "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+        "finishedAt": null,
+        "rolledBackAt": "2026-02-01T17:30:26.227Z"
+      },
+      {
+        "migrationName": "20260201231000_add_missing_purchase_and_custom_recipe_tables",
+        "checksum": "5b541480a3b807a89d628e5f85b2cd2815557cf39e128c50c86d7382b534c672",
+        "finishedAt": "2026-02-01T17:30:26.228Z"
+      },
+      {
+        "migrationName": "2026020123300000_add_only_missing_tables",
+        "checksum": "342a7b7722326c3726905ec0870837767578da091b79141faa75ffd1293494e7",
+        "finishedAt": "2026-02-01T16:42:37.901Z"
+      },
+      {
+        "migrationName": "20260203210000_add_reimbursement_table",
+        "checksum": "2834d15d6e49e923f5508743018086f9ddd750cba76f7d8cb06398a6316bbb58",
+        "finishedAt": "2026-02-03T12:40:35.992Z"
+      },
+      {
+        "migrationName": "20260204170000_add_is_common_to_dog_breed",
+        "checksum": "e05e19f9fe17e7e9f05ea99ab0f3411ad6f074e3378bbadd918f3f2523f48b48",
+        "finishedAt": "2026-02-05T15:06:35.456Z"
+      },
+      {
+        "migrationName": "20260329000000_add_recipe_share_token",
+        "checksum": "3b0c19979efa36d35ff2860538f0d9c27f4a2c6c79b5d892b7f2b8614d6d69e1",
+        "finishedAt": "2026-03-29T16:17:44.738Z"
+      },
+      {
+        "migrationName": "20260331120000_add_ingredient_price_change",
+        "checksum": "ef1af38d0180c5e4ab0a9521a1cc608e1789592e4d555df246641be689cf0f38",
+        "finishedAt": "2026-04-08T04:26:53.355Z"
+      },
+      {
+        "migrationName": "20260331180000_add_home_header_bg_image_url",
+        "checksum": "bb506ceb981b0fb265c9a90ea410b824c09b48dd0dff26a872a2beb22c3b7819",
+        "finishedAt": "2026-04-08T04:26:53.359Z"
+      },
+      {
+        "migrationName": "20260331223000_make_purchase_record_quantity_decimal",
+        "checksum": "d2cef0c65c9f14915e74b83e852aa6ea628746542ca3819377a6d6d92d0d36ca",
+        "finishedAt": "2026-04-08T04:26:53.413Z"
+      },
+      {
+        "migrationName": "20260401170000_add_purchase_record_normalization_fields",
+        "checksum": "c672db4489ab27ea38b51a24c3ca348259b0c41344ab3343c7339c412eb8b4f9",
+        "finishedAt": "2026-04-08T04:26:53.440Z"
+      },
+      {
+        "migrationName": "20260401193000_add_purchase_item_suggested_product_fields",
+        "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+        "finishedAt": null,
+        "rolledBackAt": "2026-04-08T04:29:39.468Z"
+      },
+      {
+        "migrationName": "20260401193000_add_purchase_item_suggested_product_fields",
+        "checksum": "ff40d7bd23268e6eefbcfc17449865040eb9ceb3c3b1d979b3e66b28a0cf675b",
+        "finishedAt": "2026-04-08T04:29:39.471Z"
+      },
+      {
+        "migrationName": "20260401210000_remove_pricing_group_fields",
+        "checksum": "538b17ac2057c738640841b89665355c6dfbc0ebb991f2f150c5b97f47957705",
+        "finishedAt": "2026-04-08T04:29:56.852Z"
+      },
+      {
+        "migrationName": "20260401233000_add_order_admin_remark",
+        "checksum": "98bf799af235157df46719e99af6ace558b121055aebb1b80c17c268a56100c1",
+        "finishedAt": "2026-04-08T04:29:56.857Z"
+      },
+      {
+        "migrationName": "20260402120000_add_stock_replenishment_purchasing",
+        "checksum": "2990a9df48530a524e1e4133d7fd91dc3946bdeee3a7d358bb084c8f4195c0ef",
+        "finishedAt": "2026-04-08T04:29:56.867Z"
+      },
+      {
+        "migrationName": "20260402153000_add_ingredient_stock_policy_fields",
+        "checksum": "6eb03d508a48ce765fe5826476e6288425bf3725bd505c0d4ceb5bd866959152",
+        "finishedAt": "2026-04-08T04:29:56.872Z"
+      },
+      {
+        "migrationName": "20260402190000_add_aliases_to_dog_breed",
+        "checksum": "f1e945d6bbbc8aaca999c6415643d1c8e6c30f805114f9e421d1b34d4cbee293",
+        "finishedAt": "2026-04-08T04:29:56.879Z"
+      },
+      {
+        "migrationName": "20260402213000_add_inventory_management_foundation",
+        "checksum": "0f264a39dff10f0ec0a491797512a23094ee970b77656ed8b44fc042c3c80c77",
+        "finishedAt": "2026-04-08T04:29:56.916Z"
+      },
+      {
+        "migrationName": "20260403121500_add_procurement_sku",
+        "checksum": "a0f3916e663395bd23d561e1de63a5726ddc5d63327f94ca1011ba5621e0700a",
+        "finishedAt": "2026-04-07T15:33:29.439Z"
+      },
+      {
+        "migrationName": "20260403133000_add_purchase_procurement_sku_snapshots",
+        "checksum": "597494363221b3dbefb8ee562dd56b11baa9d8e3f648e61d660daa7bc9a00442",
+        "finishedAt": "2026-04-07T15:33:29.445Z"
+      },
+      {
+        "migrationName": "20260403183000_add_reimbursement_paid_fields",
+        "checksum": "84145b09cf272bf36e4d6837aac970f80418b83e2f160cba2008dea2409e7b8d",
+        "finishedAt": "2026-04-08T03:17:07.825Z"
+      },
+      {
+        "migrationName": "20260403190000_add_dog_profile_event",
+        "checksum": "e45756a50bbaeedf2b206cbc5dccb8ba66f65cc52fe4073cae53e565b81b0072",
+        "finishedAt": "2026-04-08T04:29:56.934Z"
+      },
+      {
+        "migrationName": "20260403190000_add_finance_expense_foundation",
+        "checksum": "3e5c468ad77be134a6ee18e3fda250266edec8f915edb1a120925309625131d2",
+        "finishedAt": "2026-04-08T03:17:07.901Z"
+      },
+      {
+        "migrationName": "20260407123000_add_dog_avatar",
+        "checksum": "85d25a12e70ff18fb10a58368f09004890cbb426b9423c8ad3ab585e78aaeea8",
+        "finishedAt": "2026-04-10T09:16:04.490Z"
+      },
+      {
+        "migrationName": "20260407234500_add_missing_recommended_product_table",
+        "checksum": "bc7a53da7e9d947aa0d66898d011b2bd39b772b2de6b8598471190ec7981099b",
+        "finishedAt": "2026-04-07T16:07:37.311Z"
+      },
+      {
+        "migrationName": "20260408133000_add_feedback_nutrition_design_foundation",
+        "checksum": "31d644dfe89572911c11c6289b5316f04fc27d91203d8478a34e2cb2dcea2a56",
+        "finishedAt": "2026-04-08T05:20:42.395Z"
+      },
+      {
+        "migrationName": "20260411150000_add_ingredient_nutrition_profile",
+        "checksum": "1d49300e5400f9d76e481c3c1ade07a041df2d68d0869475b2a976b14370560f",
+        "finishedAt": "2026-04-14T06:39:46.065Z"
+      },
+      {
+        "migrationName": "20260411153000_extend_procurement_sku_domain_fields",
+        "checksum": "1e7f0d7c9074f3ded72af8a9ba3817eb7d7ae1e7eece17e87dba9b4a859607e3",
+        "finishedAt": "2026-04-14T06:39:46.070Z"
+      },
+      {
+        "migrationName": "20260411173000_add_procurement_sku_to_inventory_ledger",
+        "checksum": "04c1796d77db39ad04320873a7baea59f5a1bc7a94789bcfd582463a7f6fc0a1",
+        "finishedAt": "2026-04-14T06:39:46.080Z"
+      },
+      {
+        "migrationName": "20260411183000_add_procurement_sku_to_inventory_operations",
+        "checksum": "459a942d25894ea12f436d6a1ad304d964b925c6fa9d42104abfbd0d4ffbbe50",
+        "finishedAt": "2026-04-14T06:39:46.093Z"
+      },
+      {
+        "migrationName": "20260414134500_fix_ingredient_price_change_source_quantity_precision",
+        "checksum": "cada635b557155c045b422384a7a8f05144f03d2de382a2eaedaf0805c56ce03",
+        "finishedAt": "2026-04-14T05:43:00.837Z"
+      },
+      {
+        "migrationName": "20260414180000_ingredient_domain_restructure",
+        "checksum": "496ed4d724473831ae281a9eb6aeb8ab9ced660d6862fe8439b8449dfa526e1b",
+        "finishedAt": "2026-04-16T02:52:49.413Z"
+      },
+      {
+        "migrationName": "202604160001_add_order_item_package_plan",
+        "checksum": "adcb051193d10fff0ff09e568ef230142c7814a14ad0aa220292a54a748abd2f",
+        "finishedAt": "2026-04-23T07:49:14.137Z"
+      },
+      {
+        "migrationName": "202604170001_add_inventory_allocations",
+        "checksum": "6bc231cb55d9b4a25dd33e094cc4d8efdef2563914a86088dc4cd786c22bcb63",
+        "finishedAt": "2026-04-23T07:49:14.175Z"
+      },
+      {
+        "migrationName": "202604170002_add_production_completion_settlement",
+        "checksum": "7ee9805ed0ad0fac68986d34db7b97c5c127fedcb47e7f05c26dcdcb2586af1f",
+        "finishedAt": "2026-04-23T07:49:14.228Z"
+      },
+      {
+        "migrationName": "202604170003_add_order_settlement_adjustments",
+        "checksum": "0675894f436af5a2e31af91c3b61e821e34e9ee2862233ba6574b7059680f71d",
+        "finishedAt": "2026-04-23T07:49:14.251Z"
+      },
+      {
+        "migrationName": "20260417190000_add_recipe_item_supplement_targets",
+        "checksum": "c202a41cdadd35452ab8952fdc4d46263b9b554015c7fbdf1ab932511c1f1c0a",
+        "finishedAt": "2026-04-17T14:27:30.781Z"
+      },
+      {
+        "migrationName": "202604180001_add_procurement_sku_source_tier",
+        "checksum": "6d47927ea81ade404a936b411892b621a7821c9d77afcf467ac50a702ece1627",
+        "finishedAt": "2026-04-23T07:49:14.260Z"
+      },
+      {
+        "migrationName": "202604190001_add_procurement_sku_price_history",
+        "checksum": "f9dc06bc83fa51c211e0d1e2fff3f29484a90e80e5ebe987a886dbf786feb7ff",
+        "finishedAt": "2026-04-23T07:49:14.313Z"
+      },
+      {
+        "migrationName": "202604190002_backfill_procurement_sku_price_history",
+        "checksum": "0fe99948e116567e2b7d2af6d0fc9917b2456d2e9333982c0cafed30ec26bc2e",
+        "finishedAt": "2026-04-23T07:49:14.325Z"
+      },
+      {
+        "migrationName": "202604190003_remove_procurement_sku_display_unit",
+        "checksum": "74790f6d3ad2a4a9aaa224d1997cfa24fc4f3e6150a9be6913ddb5f1dfcd5aac",
+        "finishedAt": "2026-04-23T07:49:14.330Z"
+      },
+      {
+        "migrationName": "202604190004_backfill_missing_procurement_sku_initial_price_history",
+        "checksum": "57d35479ee87832bae281d15863736a091dc7ba09c976860b1328b16bc8b43fe",
+        "finishedAt": "2026-04-23T07:49:14.334Z"
+      },
+      {
+        "migrationName": "202604210001_add_purchase_item_no_purchase_marker",
+        "checksum": "70e2a8112e294fdf270925a2946c267b34be4f58397db62f4e273d726d4629e5",
+        "finishedAt": "2026-04-23T07:49:14.338Z"
+      },
+      {
+        "migrationName": "20260425120000_add_diy_sheet_header_bg_config",
+        "checksum": "aff1df589798f939704902c9d09153380c531200253b18eef50cd002b3aa12e2",
+        "finishedAt": "2026-04-25T12:49:26.373Z"
+      },
+      {
+        "migrationName": "202604280001_add_order_shipping_address_snapshot",
+        "checksum": "c8fc6ec1c2bd842c440eed42c68707a2971d3f9bc15f8111ba0d3ef0d850bb30",
+        "finishedAt": "2026-04-28T15:19:44.714Z"
+      },
+      {
+        "migrationName": "202605070001_add_platform_payment_customer_service_config",
+        "checksum": "30a9a60a4292b48f232e9777daa6bee618f3e6ad48fefa1a520463d988ed1311",
+        "finishedAt": "2026-05-20T03:51:28.133Z"
+      },
+      {
+        "migrationName": "202605070001_add_platform_payment_customer_service_config",
+        "checksum": "862e63abb24d1da30a3c5c0b90bf56a767e4ec9cb4483ee59aaed0b30f9c786d",
+        "finishedAt": null,
+        "rolledBackAt": "2026-05-20T03:51:16.510Z"
+      },
+      {
+        "migrationName": "202605110001_add_nutrition_governance",
+        "checksum": "8ce2ac5d8fc701c160043bab8cedb4ada9626f7c07fec7e1b2467c8bb63fc072",
+        "finishedAt": "2026-05-27T19:20:11.490Z"
+      },
+      {
+        "migrationName": "202605120001_add_recipe_item_nutrition_food_state",
+        "checksum": "5c9542202e9a53b286bd82a685bc482ed11ebe41aa93c86dbd4b4b9e5fbc54ea",
+        "finishedAt": "2026-05-27T19:20:11.506Z"
+      },
+      {
+        "migrationName": "202605120002_agent_assisted_nutrition_review",
+        "checksum": "94e9682d07c8188ff5d947690ebff9c59812bfa99f417179ac074456f1c48578",
+        "finishedAt": "2026-05-27T19:20:11.514Z"
+      },
+      {
+        "migrationName": "202605130001_deepseek_agent_nutrition_matching",
+        "checksum": "3be7f2b8de1132e82f1da1a7a32a6d5a309a2aabe9ea8fba7ec451e52e1dc11e",
+        "finishedAt": "2026-05-27T19:20:11.535Z"
+      },
+      {
+        "migrationName": "202605170001_replace_fediaf_standard_table",
+        "checksum": "c5c0b3c40fde3885230436cfbc37ed43188982f4e4dc60bb3940cc6055d1f5cd",
+        "finishedAt": "2026-05-27T19:20:11.621Z"
+      },
+      {
+        "migrationName": "202605180001_add_nzfcd_nutrition_source",
+        "checksum": "10ed0017222374461ee1d54230734e0c8e6d543986d3643bf7a86e5f6565c500",
+        "finishedAt": "2026-05-27T19:20:11.625Z"
+      },
+      {
+        "migrationName": "202605180002_add_agent_review_model",
+        "checksum": "278c31f8c7105d723ec61088a22ef8f3b829c1e41702c2f85b26a9527d7eba35",
+        "finishedAt": "2026-05-27T19:20:11.629Z"
+      },
+      {
+        "migrationName": "20260518010000_mobile_recipe_designer_free_total",
+        "checksum": "5f323e13afc620ea689f062aaf281aa2e59804eabbd2e13b83163ddb1da5669e",
+        "finishedAt": "2026-05-27T19:20:11.654Z"
+      },
+      {
+        "migrationName": "20260518020000_allow_design_recipe_missing_energy_density",
+        "checksum": "cd7ebf0bc53c058fd8717add954ad4400a96c003d54c5fb906bcc357e2b9768b",
+        "finishedAt": "2026-05-27T19:20:11.658Z"
+      },
+      {
+        "migrationName": "20260518030000_add_design_recipe_item_ingredient_id",
+        "checksum": "725024a171fe2f946d64750d411bb5b39be62d5aa43d576d468a6e63d81a772b",
+        "finishedAt": "2026-05-27T19:20:11.668Z"
+      },
+      {
+        "migrationName": "20260518040000_add_nutrition_food_display_name_zh",
+        "checksum": "108a9dfb1901bbb404d6a7844d3ab8e426012d4230fa0d96d6a6e85240fcfcff",
+        "finishedAt": "2026-05-27T19:20:11.675Z"
+      },
+      {
+        "migrationName": "202605200001_add_tfda_nutrition_governance_source_type",
+        "checksum": "9a408c1de7c74733b8655cd923262050e5a3df0dfbb6e63e166154b5c4c9980c",
+        "finishedAt": "2026-05-27T19:20:11.678Z"
+      },
+      {
+        "migrationName": "202605200002_add_recipe_designer_reproduction_scenario",
+        "checksum": "5cddf5522bdc26f61077927b06b9116177631649ecd97cc8dec4a244a07e9b3a",
+        "finishedAt": "2026-05-27T19:20:11.682Z"
+      },
+      {
+        "migrationName": "20260520162000_add_order_detail_notes",
+        "checksum": "f602511456a7c2c30a19124017070149f9659870ce7c8b46e68dd92893afba8e",
+        "finishedAt": "2026-05-20T08:09:21.856Z"
+      },
+      {
+        "migrationName": "202605210001_add_nevo_nutrition_source_type",
+        "checksum": "2e18ca113be0770173fb0ae8619d59da45b6c5ec7ed7eb48da8e3f1898433127",
+        "finishedAt": "2026-05-27T19:20:11.687Z"
+      },
+      {
+        "migrationName": "20260521160000_add_user_wechat_identity",
+        "checksum": "af4c79aa9a01994c392e9bdad72aa7944bcb5c4fe72fc4f9b7f8bfd58f74ba7f",
+        "finishedAt": "2026-05-21T08:28:46.626Z"
+      },
+      {
+        "migrationName": "202605220001_add_search_governance",
+        "checksum": "fcb01e79e3cb710a2b501c1e1faef98d6a7f0043ea865e93bfb0776a101c9831",
+        "finishedAt": "2026-05-27T19:20:11.732Z"
+      },
+      {
+        "migrationName": "20260522091500_add_account_migration",
+        "checksum": "d859de1b807c67d9cdc2419958c3f255e478e7b9fdbb49cfd2216bc6e69ff448",
+        "finishedAt": "2026-05-22T03:26:12.322Z"
+      },
+      {
+        "migrationName": "20260522105000_add_order_refund_records",
+        "checksum": "3cc71b2c9fff7a2a170649ae8b43186fb3b867d7eb83ef367763a9b9e24fc24a",
+        "finishedAt": "2026-05-22T03:26:12.362Z"
+      },
+      {
+        "migrationName": "20260522183500_add_customer_service_float_button",
+        "checksum": "408e300159a61d6e9e50b309af338b52b50b5082d1317f93aadf149ec6874799",
+        "finishedAt": "2026-05-23T02:16:26.448Z"
+      },
+      {
+        "migrationName": "20260522193000_add_customer_service_conversations",
+        "checksum": "465d0f00f83046c99cff04ed826be8c81ce3f49046897b9a6bb029aae9f38f1b",
+        "finishedAt": "2026-05-23T02:16:26.581Z"
+      },
+      {
+        "migrationName": "202605260001_add_design_recipe_item_include_in_assessment",
+        "checksum": "3cb055b3b2cb1d6630ef37015f419fe146929f3bbf93bf0b0d7de150b042e408",
+        "finishedAt": "2026-05-27T19:20:11.736Z"
+      },
+      {
+        "migrationName": "202605270001_remove_recipe_nutrition_report_url",
+        "checksum": "f8330a9f5ccad916c544ad9543c445f33a8943c0ffc865e2f9e6146265c1ff0e",
+        "finishedAt": "2026-05-27T19:20:11.755Z"
+      },
+      {
+        "migrationName": "202605270002_add_recipe_designer_revision_links",
+        "checksum": "41adce9f0ee3a8054099e4ddb39909e352a8c2f2af0ff698cefa8d2c82131b12",
+        "finishedAt": "2026-05-27T19:20:11.768Z"
+      },
+      {
+        "migrationName": "202605270003_add_ingredient_creation_agent",
+        "checksum": "aaef4141ecb7ada41d4d78abd5634af15afa15a321caf83d2abc246fd985cd73",
+        "finishedAt": "2026-05-27T19:20:11.841Z"
+      },
+      {
+        "migrationName": "202605300001_drop_ingredient_creation_agent",
+        "checksum": "9a6234f63962afc2c4e4c4d8bcd5028d462a741e814ee7a897b032eef777ccf4",
+        "finishedAt": "2026-05-30T05:52:39.977Z"
+      },
+      {
+        "migrationName": "202605310001_add_recipe_series_life_stage_versions",
+        "checksum": "54a12efd5857bec1919f3dd6111e8d0e9719f9feb0fa3b595c90112a7151f0c3",
+        "finishedAt": "2026-06-04T05:39:26.522Z"
+      },
+      {
+        "migrationName": "202606110001_add_order_shipping_notification",
+        "checksum": "40f1c75b9a3ff2bb5213b4d619cba4777a07cba3f3baf2ae51a4155c6690df77",
+        "finishedAt": "2026-06-11T14:37:19.572Z"
+      },
+      {
+        "migrationName": "202606110001_reclassify_fiber_ingredients_as_food",
+        "checksum": "cdbb465c5cc6e917e0ee7a30458810bf5f8a337222d40ba6f57013cafec7f75c",
+        "finishedAt": "2026-06-11T02:51:21.249Z"
+      },
+      {
+        "migrationName": "202606110002_backfill_fiber_food_recipe_ratios",
+        "checksum": "83dadd5aab6dc4fbfb955716813f28b6b941b277d780ce64ce24ba259f871a45",
+        "finishedAt": "2026-06-11T04:42:48.080Z"
+      },
+      {
+        "migrationName": "202606110002_revert_functional_powders_to_supplements",
+        "checksum": "eaee2c115d2518ee5f5fe9a3a301869d5b187e7c52edfb3a94f677f0b3b37d1d",
+        "finishedAt": "2026-06-11T07:12:23.451Z"
+      },
+      {
+        "migrationName": "20260611090000_add_recipe_series_business_status",
+        "checksum": "45b3eb1dde288f1cac0d14fd04270168015a3c12f386a0614ea1173f814fefdf",
+        "finishedAt": "2026-06-11T04:42:48.162Z"
+      },
+      {
+        "migrationName": "20260611180000_add_customer_recipe_designer_context",
+        "checksum": "00c487288183fb4c2f0b7904ea161b90014ecde4dcc4990c1e21c7f9d5bccde8",
+        "finishedAt": "2026-06-11T11:39:06.608Z"
+      },
+      {
+        "migrationName": "202606130001_add_diy_sheet_package_plan",
+        "checksum": "dcb993644488816dd67d36aac56e73d32bac2a092e0747e7e0f06494cb264834",
+        "finishedAt": "2026-06-13T07:28:11.611Z"
+      },
+      {
+        "migrationName": "202606160001_update_food_edible_yield_rates",
+        "checksum": "d0644d6391c8ce89773a2f7b946449b52efa41f8b24268b61a1446727eb0a068",
+        "finishedAt": "2026-06-16T09:05:05.143Z"
+      },
+      {
+        "migrationName": "202606190001_repair_reimbursement_sku_unit_prices",
+        "checksum": "830487c8adc5d3b1d783421dee1f67251fd76180e68f237ab5cbaa1335b7753c",
+        "finishedAt": "2026-06-19T14:12:42.181Z"
+      },
+      {
+        "migrationName": "202606260001_add_design_recipe_item_supplement_targets",
+        "checksum": "23461f42b78ea4f50a16c80af34a55a7302a9cdf73664e1b935c3a4aba294b55",
+        "finishedAt": "2026-06-26T05:10:09.162Z"
+      },
+      {
+        "migrationName": "202606290001_add_black_rice_standard_ingredient",
+        "checksum": "e3675ec58bd3ae165cdeeb38037ad9975dc3fc38436702dd4f4f3f502b35b1d7",
+        "finishedAt": null,
+        "rolledBackAt": "2026-06-29T09:03:06.836Z"
+      },
+      {
+        "migrationName": "202606290001_add_black_rice_standard_ingredient",
+        "checksum": "c5c56e62deeebba75109c650c651e6b410947e4c7ccc45662101c2917a8dcbe3",
+        "finishedAt": "2026-06-29T09:03:09.824Z"
+      }
+    ],
+    "schemaHash": "ea7e794b38600803025cec64806814a76037627369dd9176f6cb6df686868b09",
+    "criticalDataHashes": {
+      "nutritionStandards": "7a48670e33e5262c46a1cb173ccc214afa98902de3d871c744d5a782a4ac1ec0",
+      "ingredientTags": "30e93e6c5ae61e2220c38bd17ea6124f072d51a3590ab5c558057ce5255a0b21",
+      "nutrientAliases": "fdf792c799b5af83cd1872fb65e320b6daf9a17979ce36409b519a9f13d399b7"
+    },
+    "rowCounts": {
+      "order": 308,
+      "inventory_ledger_entry": 385
+    }
+  }
+}

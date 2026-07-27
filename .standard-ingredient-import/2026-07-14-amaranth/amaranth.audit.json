@@ -1,0 +1,358 @@
+{
+  "manifestPath": "../.standard-ingredient-import/2026-07-14-amaranth/amaranth.manifest.json",
+  "ok": true,
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "rankedSources": [
+    {
+      "source": "USDA_FDC",
+      "matchedName": "Amaranth leaves, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 64.29,
+      "fallbackOnly": false,
+      "score": 1192.145,
+      "scoreComponents": {
+        "primaryApprovedOfficialSource": 1000,
+        "exactSemanticStateMatch": 100,
+        "sameSourceRawCookedPairAvailability": 60,
+        "essentialCoverage": 32.145,
+        "cfctFallbackOnlyPenalty": 0
+      }
+    }
+  ],
+  "nutritionAudits": [
+    {
+      "profileId": "usda-fdc-168385-amaranth-leaves-raw",
+      "audit": {
+        "essentialCoveragePercent": 84.78260869565217,
+        "presentEssentialNutrients": [
+          "crudeProtein",
+          "crudeFat",
+          "arginine",
+          "histidine",
+          "isoleucine",
+          "leucine",
+          "lysine",
+          "methionine",
+          "methionineCystine",
+          "phenylalanine",
+          "phenylalanineTyrosine",
+          "threonine",
+          "tryptophan",
+          "valine",
+          "linoleicAcid",
+          "alphaLinolenicAcid",
+          "calcium",
+          "phosphorus",
+          "calciumPhosphorusRatio",
+          "potassium",
+          "sodium",
+          "magnesium",
+          "copper",
+          "iron",
+          "manganese",
+          "selenium",
+          "seleniumWetDiet",
+          "seleniumDryDiet",
+          "zinc",
+          "vitaminA",
+          "vitaminD",
+          "vitaminB1",
+          "vitaminB2",
+          "vitaminB5",
+          "vitaminB6",
+          "vitaminB12",
+          "vitaminB3",
+          "vitaminB9",
+          "vitaminK"
+        ],
+        "missingEssentialNutrients": [
+          "arachidonicAcid",
+          "epaDha",
+          "chloride",
+          "iodine",
+          "vitaminE",
+          "vitaminB7",
+          "choline"
+        ],
+        "blockingIssues": [],
+        "reviewIssues": [
+          {
+            "code": "VITAMIN_D_FORM_REVIEW_REQUIRED",
+            "field": "vitaminD",
+            "path": "nutrients.vitaminD",
+            "message": "vitaminD requires source-form review before canonicalization."
+          }
+        ],
+        "normalizedNutrients": {
+          "energyKcal": {
+            "value": 23,
+            "unit": "kcal",
+            "sourceValue": 23,
+            "sourceUnit": "kcal",
+            "measuredZero": false
+          },
+          "crudeProtein": {
+            "value": 2.46,
+            "unit": "g",
+            "sourceValue": 2.46,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "crudeFat": {
+            "value": 0.33,
+            "unit": "g",
+            "sourceValue": 0.33,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "calcium": {
+            "value": 215,
+            "unit": "mg",
+            "sourceValue": 215,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "phosphorus": {
+            "value": 50,
+            "unit": "mg",
+            "sourceValue": 50,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "potassium": {
+            "value": 611,
+            "unit": "mg",
+            "sourceValue": 611,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "sodium": {
+            "value": 20,
+            "unit": "mg",
+            "sourceValue": 20,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "magnesium": {
+            "value": 55,
+            "unit": "mg",
+            "sourceValue": 55,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "iron": {
+            "value": 2.32,
+            "unit": "mg",
+            "sourceValue": 2.32,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "zinc": {
+            "value": 0.9,
+            "unit": "mg",
+            "sourceValue": 0.9,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "copper": {
+            "value": 0.162,
+            "unit": "mg",
+            "sourceValue": 0.162,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "manganese": {
+            "value": 0.885,
+            "unit": "mg",
+            "sourceValue": 0.885,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "selenium": {
+            "value": 0.9,
+            "unit": "µg",
+            "sourceValue": 0.9,
+            "sourceUnit": "µg",
+            "measuredZero": false
+          },
+          "vitaminAIu": {
+            "value": 0,
+            "unit": "IU",
+            "sourceValue": 0,
+            "sourceUnit": "IU",
+            "measuredZero": true,
+            "sourceForm": {
+              "vitaminAForm": "SOURCE_DECLARED_IU",
+              "sourceCompound": "source-declared vitamin A activity",
+              "conversionStatus": "SOURCE_DECLARED_IU_FALLBACK",
+              "conversionFactorSource": "FEDIAF_2025_TABLE_VII_14",
+              "retinolUgPerIu": 0.3,
+              "betaCaroteneIuPerMg": 833,
+              "sourceDeclaredIu": 0
+            }
+          },
+          "vitaminK": {
+            "value": 1140,
+            "unit": "µg",
+            "sourceValue": 1140,
+            "sourceUnit": "µg",
+            "measuredZero": false
+          },
+          "vitaminB1": {
+            "value": 0.027,
+            "unit": "mg",
+            "sourceValue": 0.027,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "vitaminB2": {
+            "value": 0.158,
+            "unit": "mg",
+            "sourceValue": 0.158,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "vitaminB3": {
+            "value": 0.658,
+            "unit": "mg",
+            "sourceValue": 0.658,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "vitaminB5": {
+            "value": 0.064,
+            "unit": "mg",
+            "sourceValue": 0.064,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "vitaminB6": {
+            "value": 0.192,
+            "unit": "mg",
+            "sourceValue": 0.192,
+            "sourceUnit": "mg",
+            "measuredZero": false
+          },
+          "vitaminB9": {
+            "value": 85,
+            "unit": "µg",
+            "sourceValue": 85,
+            "sourceUnit": "µg",
+            "measuredZero": false
+          },
+          "vitaminB12": {
+            "value": 0,
+            "unit": "µg",
+            "sourceValue": 0,
+            "sourceUnit": "µg",
+            "measuredZero": true
+          },
+          "linoleicAcid": {
+            "value": 0.145,
+            "unit": "g",
+            "sourceValue": 0.145,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "alphaLinolenicAcid": {
+            "value": 0.002,
+            "unit": "g",
+            "sourceValue": 0.002,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "arginine": {
+            "value": 0.121,
+            "unit": "g",
+            "sourceValue": 0.121,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "lysine": {
+            "value": 0.127,
+            "unit": "g",
+            "sourceValue": 0.127,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "methionine": {
+            "value": 0.036,
+            "unit": "g",
+            "sourceValue": 0.036,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "cystine": {
+            "value": 0.029,
+            "unit": "g",
+            "sourceValue": 0.029,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "tryptophan": {
+            "value": 0.031,
+            "unit": "g",
+            "sourceValue": 0.031,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "threonine": {
+            "value": 0.099,
+            "unit": "g",
+            "sourceValue": 0.099,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "leucine": {
+            "value": 0.195,
+            "unit": "g",
+            "sourceValue": 0.195,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "isoleucine": {
+            "value": 0.119,
+            "unit": "g",
+            "sourceValue": 0.119,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "valine": {
+            "value": 0.137,
+            "unit": "g",
+            "sourceValue": 0.137,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "phenylalanine": {
+            "value": 0.133,
+            "unit": "g",
+            "sourceValue": 0.133,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "tyrosine": {
+            "value": 0.08,
+            "unit": "g",
+            "sourceValue": 0.08,
+            "sourceUnit": "g",
+            "measuredZero": false
+          },
+          "histidine": {
+            "value": 0.052,
+            "unit": "g",
+            "sourceValue": 0.052,
+            "sourceUnit": "g",
+            "measuredZero": false
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "sourceCandidates": [
+    {
+      "source": "AFCD",
+      "sourceId": "AFCD:F006136",
+      "sourceName": "Australian Food Composition Database Release 3.0",
+      "matchedName": "Oats, hulled, uncooked",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 91.3,
+      "role": "identity-primary-raw-profile",
+      "url": "https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files",
+      "notes": "身份最贴近“燕麦米/去壳燕麦”；官方 Excel 文件中 Derivation=Analysed。无精确同源熟制 hulled oats 档案。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:173904",
+      "sourceName": "USDA FoodData Central SR Legacy",
+      "matchedName": "Cereals, oats, regular and quick, not fortified, dry",
+      "stateTags": [
+        "dried"
+      ],
+      "essentialCoveragePercent": 89.1,
+      "role": "supplemental-fields",
+      "fieldsUsed": [
+        "copper",
+        "manganese",
+        "essential amino acids except tryptophan",
+        "choline",
+        "vitaminK"
+      ],
+      "url": "https://fdc.nal.usda.gov/download-datasets/",
+      "notes": "官方 SR Legacy 干燕麦档案，字段覆盖好，但语义是 regular/quick oats，不优先于 AFCD hulled oats。"
+    },
+    {
+      "source": "USDA_FDC",
+      "sourceId": "USDA_FDC:173905",
+      "sourceName": "USDA FoodData Central SR Legacy",
+      "matchedName": "Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt",
+      "stateTags": [
+        "cooked"
+      ],
+      "essentialCoveragePercent": 84.8,
+      "role": "cooked-reference-not-imported",
+      "url": "https://fdc.nal.usda.gov/download-datasets/",
+      "notes": "同为 USDA 的 cooked oats 候选，但不是精确的 oat groats/hulled oats 熟制；保留为审核参考，不导入为燕麦米熟制档案。"
+    },
+    {
+      "source": "MEXT",
+      "sourceId": "MEXT:01004",
+      "sourceName": "Japan MEXT Standard Tables of Food Composition",
+      "matchedName": "CEREALS/Common oats/oatmeal, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 56.5,
+      "role": "supplemental-fields",
+      "fieldsUsed": [
+        "vitaminB5",
+        "vitaminB7"
+      ],
+      "url": "https://fooddb.mext.go.jp/details/details.pl?ITEM_NO=1_01004_7",
+      "notes": "官方 raw oatmeal 档案，非去壳燕麦米精确档案；仅用于补泛酸和生物素。"
+    },
+    {
+      "source": "CNF",
+      "sourceId": "CNF:4421",
+      "sourceName": "Canadian Nutrient File",
+      "matchedName": "Grains, oats",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 0,
+      "role": "candidate-not-adopted",
+      "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=4421&wbdisable=true",
+      "notes": "找到官方候选，但本次未下载/解析完整营养明细；不优先于 AFCD hulled oats。"
+    },
+    {
+      "source": "CIQUAL",
+      "sourceId": "CIQUAL:9310",
+      "sourceName": "ANSES Ciqual 2025",
+      "matchedName": "Oat, raw",
+      "stateTags": [
+        "raw"
+      ],
+      "essentialCoveragePercent": 0,
+      "role": "candidate-not-adopted",
+      "url": "https://zenodo.org/records/17550133",
+      "notes": "找到 Oat, raw 和 cooked oat flakes 候选；不是精确 hulled oat groats。"
+    }
+  ],
+  "nutritionAudits": [
+    {
+      "profileId": "afcd-f006136-oat-groats-raw-merged-v1",
+      "essentialCoveragePercent": 91.30434782608695
+    }
+  ]
+}

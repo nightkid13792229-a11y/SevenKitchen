@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "updateExistingIngredientId": "69cf7ec3-e39c-4367-8994-46db8e6a9946",
+  "ingredient": {
+    "type": "SUPPLEMENT",
+    "name": "Swanson Albion 铜 2mg 片",
+    "brand": "Swanson",
+    "productModel": "Albion Copper, 2 mg, 300 tablets",
+    "notes": "基于产品 Supplement Facts 标签建立每片营养档案。"
+  },
+  "packageEvidence": {
+    "metadata": {
+      "source": "operator-provided-iherb-screenshots",
+      "capturedAt": "2026-07-02T00:00:00.000Z"
+    },
+    "labelSources": [
+      {
+        "sourceId": "operator-image:swanson-albion-copper-supplement-facts",
+        "labelText": "Supplement Facts. Serving Size 1 Tablet. Copper (from Albion copper bisglycinate chelate) 2 mg, 222% Daily Value."
+      }
+    ]
+  },
+  "supplementLabel": {
+    "servingSize": "1 tablet",
+    "activeNutrients": {
+      "copperMg": 2
+    },
+    "notes": "铜来自 Albion copper bisglycinate chelate；不推断其他未标示成分。"
+  },
+  "nutritionProfiles": [
+    {
+      "id": "supplement-label-swanson-albion-copper-per-tablet",
+      "name": "Swanson Albion 铜 · 每片标签营养",
+      "dataSource": "SUPPLEMENT_LABEL",
+      "externalId": "SUPPLEMENT_LABEL:69cf7ec3-e39c-4367-8994-46db8e6a9946",
+      "category": "SUPPLEMENT",
+      "basis": "PER_SERVING",
+      "preparationState": "CONCENTRATE",
+      "preparationStateLabel": "浓缩补剂",
+      "ediblePortionLabel": "每1片标签标示量",
+      "processingLabel": "补剂标签导入",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "仅录入标签已标示的铜含量。",
+      "nutritionData": {
+        "meta": {
+          "rawBasisType": "PER_SERVING",
+          "sampleState": "CONCENTRATE",
+          "sourceType": "SUPPLEMENT_LABEL",
+          "sourceKind": "PACKAGING_LABEL",
+          "externalId": "SUPPLEMENT_LABEL:69cf7ec3-e39c-4367-8994-46db8e6a9946",
+          "sourceTitle": "Swanson Albion Copper Supplement Facts",
+          "sourceProvider": "Swanson",
+          "confidenceLevel": "HIGH"
+        },
+        "macros": {},
+        "minerals": {
+          "copper": 2
+        },
+        "vitamins": {},
+        "fattyAcids": {},
+        "aminoAcids": {},
+        "customItems": []
+      },
+      "nutrients": {}
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "6183164788c1",
+    "status": "passing"
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

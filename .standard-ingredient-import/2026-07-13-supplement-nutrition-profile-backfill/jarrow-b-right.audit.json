@@ -1,0 +1,11 @@
+{
+  "manifestPath": "../.standard-ingredient-import/2026-07-13-supplement-nutrition-profile-backfill/jarrow-b-right.manifest.json",
+  "ok": true,
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "rankedSources": [],
+  "nutritionAudits": []
+}

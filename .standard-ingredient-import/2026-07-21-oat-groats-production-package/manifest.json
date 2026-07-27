@@ -1,0 +1,32 @@
+{
+  "packageVersion": 1,
+  "scope": "new-standard-ingredient-records-only",
+  "wholeDatabaseMigration": false,
+  "ingredientType": "FOOD",
+  "ingredientName": "燕麦米",
+  "localImportAudit": {
+    "createdAt": "2026-07-20T17:52:16.099Z",
+    "alignmentId": "e4e54f19797d",
+    "manifestHash": "3ff534f5e554eda5103067fe54a3cf715f58ef4d7c8b8b5acbaf0503f806d1db"
+  },
+  "recordCounts": {
+    "ingredient": 1,
+    "nutrition_food": 1,
+    "nutrition_food_mapping": 1,
+    "ingredient_tag_assignment": 0,
+    "procurement_sku": 0
+  },
+  "ids": {
+    "ingredientIds": [
+      "fcd93c98-3500-4c89-afe3-1bce83afa092"
+    ],
+    "nutritionFoodIds": [
+      "6852c161-55b9-4b36-a8d3-283ae19315f2"
+    ],
+    "nutritionFoodMappingIds": [
+      "16bf0aec-9237-4458-885a-27d25bc390f8"
+    ],
+    "ingredientTagAssignmentIds": [],
+    "procurementSkuIds": []
+  }
+}

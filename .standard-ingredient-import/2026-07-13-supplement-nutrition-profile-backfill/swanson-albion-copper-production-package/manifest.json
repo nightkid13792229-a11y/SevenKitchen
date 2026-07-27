@@ -1,0 +1,30 @@
+{
+  "packageVersion": 1,
+  "scope": "new-standard-ingredient-records-only",
+  "wholeDatabaseMigration": false,
+  "ingredientType": "SUPPLEMENT",
+  "ingredientName": "Swanson Albion 铜 2mg 片",
+  "localImportAudit": {
+    "createdAt": "2026-07-12T19:11:05.479Z",
+    "alignmentId": "6183164788c1",
+    "manifestHash": "0f7a2b1a1dd5f59284eba48272580c0210dab189ea3ae914b14cf63145c3fa96"
+  },
+  "recordCounts": {
+    "ingredient": 0,
+    "nutrition_food": 1,
+    "nutrition_food_mapping": 1,
+    "ingredient_tag_assignment": 0,
+    "procurement_sku": 0
+  },
+  "ids": {
+    "ingredientIds": [],
+    "nutritionFoodIds": [
+      "dcd4ec98-e1e0-47ad-a67b-381118e12d65"
+    ],
+    "nutritionFoodMappingIds": [
+      "d4dc01bf-d96f-4958-91d6-be82ca7f7983"
+    ],
+    "ingredientTagAssignmentIds": [],
+    "procurementSkuIds": []
+  }
+}

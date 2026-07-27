@@ -245,7 +245,6 @@ const DESIGN_RECIPE_LIST_SELECT = {
 
 const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   ...DESIGN_RECIPE_LIST_SELECT,
-  items: false,
   _count: {
     select: { items: true },
   },

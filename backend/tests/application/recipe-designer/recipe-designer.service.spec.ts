@@ -6296,7 +6296,7 @@ describe('RecipeDesignerService', () => {
       expect(query.include.recipes.select).not.toHaveProperty('items');
     });
 
-    it('paginates the series workbench query and only selects an item count for designs', async () => {
+    it('paginates the series workbench query with the item fields needed for revision comparison', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({ id: 'series-page-1' }),
         seriesRecord({ id: 'series-page-2' }),
@@ -6325,7 +6325,19 @@ describe('RecipeDesignerService', () => {
           include: expect.objectContaining({
             designs: expect.objectContaining({
               select: expect.objectContaining({
-                items: false,
+                items: expect.objectContaining({
+                  select: expect.objectContaining({
+                    ingredientId: true,
+                    nutritionFoodId: true,
+                    weightG: true,
+                    includeInAssessment: true,
+                    preparationMethod: true,
+                    nutrientTargetKey: true,
+                    nutrientTargetValue: true,
+                    supplementTargets: true,
+                    sortOrder: true,
+                  }),
+                }),
                 _count: { select: { items: true } },
               }),
             }),

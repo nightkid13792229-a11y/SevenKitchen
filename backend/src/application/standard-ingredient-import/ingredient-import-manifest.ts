@@ -99,6 +99,7 @@ export interface IngredientImportNutritionProfile {
     string,
     Record<string, string | number | boolean | null>
   >;
+  nutritionData?: Record<string, unknown>;
   nutrients: Record<string, IngredientImportNutrientValue>;
 }
 
@@ -676,12 +677,24 @@ function validateNutrientValues(
       return;
     }
 
+    const hasNutritionData =
+      isRecord(profile.nutritionData) &&
+      Object.keys(profile.nutritionData).length > 0;
+
     if (!isRecord(profile.nutrients)) {
+      if (hasNutritionData) {
+        return;
+      }
+
       errors.push({
         code: 'INVALID_MANIFEST_SHAPE',
         path: `nutritionProfiles[${profileIndex}].nutrients`,
         message: 'Nutrition profile nutrients must be an object.',
       });
+      return;
+    }
+
+    if (hasNutritionData) {
       return;
     }
 

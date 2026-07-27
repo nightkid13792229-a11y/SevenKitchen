@@ -6,6 +6,7 @@ export interface DatabaseMigrationSnapshot {
   migrationName: string;
   checksum?: string | null;
   finishedAt?: string | null;
+  rolledBackAt?: string | null;
 }
 
 export interface DatabaseAlignmentCriticalDataHashes {
@@ -403,12 +404,18 @@ function compareMigrationHistories(
   production: DatabaseAlignmentSnapshot,
   blockingIssues: DatabaseAlignmentIssue[],
 ): void {
-  const localByName = migrationsByName(local.migrations);
-  const productionByName = migrationsByName(production.migrations);
+  const localMigrations = activeMigrationAttempts(local.migrations);
+  const productionMigrations = activeMigrationAttempts(production.migrations);
+  const localByName = migrationsByName(localMigrations);
+  const productionByName = migrationsByName(productionMigrations);
 
-  compareMigrationCompletion(localByName, productionByName, blockingIssues);
+  compareMigrationCompletion(
+    localMigrations,
+    productionMigrations,
+    blockingIssues,
+  );
 
-  for (const migration of local.migrations) {
+  for (const migration of localMigrations) {
     const productionMigration = productionByName.get(migration.migrationName);
     if (!productionMigration) {
       blockingIssues.push({
@@ -446,7 +453,7 @@ function compareMigrationHistories(
     }
   }
 
-  for (const migration of production.migrations) {
+  for (const migration of productionMigrations) {
     if (!localByName.has(migration.migrationName)) {
       blockingIssues.push({
         code: 'LOCAL_MISSING_PRODUCTION_MIGRATION',
@@ -460,10 +467,12 @@ function compareMigrationHistories(
 }
 
 function compareMigrationCompletion(
-  localByName: Map<string, DatabaseMigrationSnapshot>,
-  productionByName: Map<string, DatabaseMigrationSnapshot>,
+  localMigrations: DatabaseMigrationSnapshot[],
+  productionMigrations: DatabaseMigrationSnapshot[],
   blockingIssues: DatabaseAlignmentIssue[],
 ): void {
+  const localByName = migrationsByName(localMigrations);
+  const productionByName = migrationsByName(productionMigrations);
   const migrationNames = new Set([
     ...localByName.keys(),
     ...productionByName.keys(),
@@ -726,8 +735,23 @@ async function collectNonCriticalRowCounts(
 function migrationsByName(
   migrations: DatabaseMigrationSnapshot[],
 ): Map<string, DatabaseMigrationSnapshot> {
-  return new Map(
-    migrations.map((migration) => [migration.migrationName, migration]),
+  const migrationsByName = new Map<string, DatabaseMigrationSnapshot>();
+
+  for (const migration of migrations) {
+    const existing = migrationsByName.get(migration.migrationName);
+    if (!existing || hasMigrationValue(migration.finishedAt)) {
+      migrationsByName.set(migration.migrationName, migration);
+    }
+  }
+
+  return migrationsByName;
+}
+
+function activeMigrationAttempts(
+  migrations: DatabaseMigrationSnapshot[],
+): DatabaseMigrationSnapshot[] {
+  return migrations.filter(
+    (migration) => !hasMigrationValue(migration.rolledBackAt),
   );
 }
 

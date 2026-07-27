@@ -4,6 +4,9 @@
 # Git worktrees
 .worktrees/
 
+# Local generated artifacts
+tmp/
+
 # Cursor
 .cursor/
 

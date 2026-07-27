@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "updateExistingIngredientId": "814a9199-f944-4c8f-b651-61f6e4eea765",
+  "ingredient": {
+    "type": "SUPPLEMENT",
+    "name": "Jarrow Formulas B-Right B族维生素复合胶囊",
+    "brand": "Jarrow Formulas",
+    "productModel": "B-Right Optimized B-Complex, 100 veggie capsules",
+    "notes": "基于产品 Supplement Facts 标签建立每粒营养档案。"
+  },
+  "packageEvidence": {
+    "metadata": {
+      "source": "operator-provided-iherb-screenshots",
+      "capturedAt": "2026-07-02T00:00:00.000Z"
+    },
+    "labelSources": [
+      {
+        "sourceId": "operator-image:jarrow-b-right-supplement-facts",
+        "labelText": "Supplement Facts. Serving Size 1 Capsule. Thiamin 25 mg; Riboflavin 25 mg; Niacin 25 mg NE; Vitamin B6 35 mg; Folate 680 mcg DFE / 400 mcg as 6S-5-Methyltetrahydrofolate; Vitamin B12 100 mcg; Biotin 300 mcg; Pantothenic Acid 100 mg; Choline 50 mg; Pantethine 25 mg; Inositol 50 mg."
+      }
+    ]
+  },
+  "supplementLabel": {
+    "servingSize": "1 capsule",
+    "activeNutrients": {
+      "vitaminB1Mg": 25,
+      "vitaminB2Mg": 25,
+      "vitaminB3MgNE": 25,
+      "vitaminB6Mg": 35,
+      "folateMcgDFE": 680,
+      "folate5MthfMcg": 400,
+      "vitaminB12Mcg": 100,
+      "biotinMcg": 300,
+      "pantothenicAcidMg": 100,
+      "cholineMg": 50,
+      "pantethineMg": 25,
+      "inositolMg": 50
+    },
+    "notes": "B9 主字段按标签的实际 5-MTHF 含量 400μg 入库；680μg DFE 作为标签当量保留在自定义项中。"
+  },
+  "nutritionProfiles": [
+    {
+      "id": "supplement-label-jarrow-b-right-per-capsule",
+      "name": "Jarrow Formulas B-Right · 每粒标签营养",
+      "dataSource": "SUPPLEMENT_LABEL",
+      "externalId": "SUPPLEMENT_LABEL:814a9199-f944-4c8f-b651-61f6e4eea765",
+      "category": "SUPPLEMENT",
+      "basis": "PER_SERVING",
+      "preparationState": "CONCENTRATE",
+      "preparationStateLabel": "浓缩补剂",
+      "ediblePortionLabel": "每1粒标签标示量",
+      "processingLabel": "补剂标签导入",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "仅录入标签已标示的营养成分；未推断未标示成分。",
+      "nutritionData": {
+        "meta": {
+          "rawBasisType": "PER_SERVING",
+          "sampleState": "CONCENTRATE",
+          "sourceType": "SUPPLEMENT_LABEL",
+          "sourceKind": "PACKAGING_LABEL",
+          "externalId": "SUPPLEMENT_LABEL:814a9199-f944-4c8f-b651-61f6e4eea765",
+          "sourceTitle": "Jarrow Formulas B-Right Supplement Facts",
+          "sourceProvider": "Jarrow Formulas",
+          "confidenceLevel": "HIGH",
+          "fieldDisplayUnits": {
+            "vitamins.vitaminB9": "μg"
+          }
+        },
+        "macros": {},
+        "minerals": {},
+        "vitamins": {
+          "vitaminB1": 25,
+          "vitaminB2": 25,
+          "vitaminB3": 25,
+          "vitaminB5": 100,
+          "vitaminB6": 35,
+          "vitaminB7": 300,
+          "vitaminB9": 400,
+          "vitaminB12": 100,
+          "choline": 50
+        },
+        "fattyAcids": {},
+        "aminoAcids": {},
+        "customItems": [
+          {
+            "name": "叶酸（标签 DFE 当量）",
+            "value": 680,
+            "unit": "μg DFE",
+            "rawBasisType": "PER_SERVING",
+            "note": "标签同时标示为 400μg 6S-5-MTHF。"
+          },
+          {
+            "name": "泛硫乙胺",
+            "value": 25,
+            "unit": "mg",
+            "rawBasisType": "PER_SERVING"
+          },
+          {
+            "name": "肌醇",
+            "value": 50,
+            "unit": "mg",
+            "rawBasisType": "PER_SERVING"
+          }
+        ]
+      },
+      "nutrients": {}
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "6183164788c1",
+    "status": "passing"
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

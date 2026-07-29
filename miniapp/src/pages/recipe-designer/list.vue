@@ -123,10 +123,6 @@
       </view>
     </view>
 
-    <view v-if="!visibleSeriesEmpty && hasMoreSeries" class="series-load-more">
-      <text>{{ loadingMoreSeries ? '加载更多食谱...' : '上拉加载更多' }}</text>
-    </view>
-
     <view v-else class="series-list">
       <view
         v-for="seriesItem in internalSeriesCards"
@@ -184,6 +180,10 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <view v-if="loadingMoreSeries" class="loading-more-state">
+      <text>加载更多食谱...</text>
     </view>
 
     <view v-if="createSheetVisible" class="create-sheet-mask" @tap="closeCreateDraftSheet">
@@ -1485,6 +1485,13 @@ function formatDateTime(value?: string) {
   display: flex;
   flex-direction: column;
   gap: 20rpx;
+}
+
+.loading-more-state {
+  padding: 24rpx 0;
+  color: #999;
+  font-size: 24rpx;
+  text-align: center;
 }
 
 .customer-series-list {

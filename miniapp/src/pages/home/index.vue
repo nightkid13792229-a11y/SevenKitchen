@@ -164,9 +164,18 @@
           <view class="recipe-name-row">
             <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
             <view class="recipe-stats">
-              <text class="stat-item">👁 {{ formatStatNum(recipe.viewCount) }}</text>
-              <text class="stat-item">⭐ {{ formatStatNum(recipe.favoriteCount) }}</text>
-              <text class="stat-item">🍳 {{ formatStatNum(recipe.diyGenCount) }}</text>
+              <view class="stat-item">
+                <image class="stat-icon" src="/static/ui-icons/view.png" mode="aspectFit" />
+                <text>{{ formatStatNum(recipe.viewCount) }}</text>
+              </view>
+              <view class="stat-item">
+                <image class="stat-icon" src="/static/ui-icons/favorite.png" mode="aspectFit" />
+                <text>{{ formatStatNum(recipe.favoriteCount) }}</text>
+              </view>
+              <view class="stat-item">
+                <image class="stat-icon" src="/static/ui-icons/cook.png" mode="aspectFit" />
+                <text>{{ formatStatNum(recipe.diyGenCount) }}</text>
+              </view>
             </view>
           </view>
 
@@ -1842,9 +1851,18 @@ defineOptions({
 }
 
 .stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3rpx;
   font-size: 20rpx;
   color: #999;
   white-space: nowrap;
+}
+
+.stat-icon {
+  width: 22rpx;
+  height: 22rpx;
+  flex-shrink: 0;
 }
 
 .tags-row {

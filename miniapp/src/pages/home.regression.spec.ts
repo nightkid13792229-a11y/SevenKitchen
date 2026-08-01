@@ -88,6 +88,20 @@ describe('home runtime regressions', () => {
     })
   })
 
+  it('uses bundled PNG icons for recipe view, favorite, and cooking statistics', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('src="/static/ui-icons/view.png"')
+    expect(source).toContain('src="/static/ui-icons/favorite.png"')
+    expect(source).toContain('src="/static/ui-icons/cook.png"')
+    expect(source).not.toContain('👁 {{ formatStatNum(recipe.viewCount) }}')
+    expect(source).not.toContain('⭐ {{ formatStatNum(recipe.favoriteCount) }}')
+    expect(source).not.toContain('🍳 {{ formatStatNum(recipe.diyGenCount) }}')
+  })
+
   it('uses the configured global homepage header background image', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

@@ -36,7 +36,9 @@ describe('staff workbench compact icon grid', () => {
       '报销管理',
       '食谱设计器',
     ])
-    expect(moduleConfig).toContain("badgeKey: 'orders'")
+    for (const badgeKey of ['purchasing', 'production', 'orders', 'inventory', 'reimbursement']) {
+      expect(moduleConfig).toContain(`badgeKey: '${badgeKey}'`)
+    }
     expect(source).toContain('badgeCount(module.badgeKey)')
   })
 
@@ -50,9 +52,17 @@ describe('staff workbench compact icon grid', () => {
     expect(source).not.toContain('欢迎，')
     expect(source).not.toContain('退款管理')
     expect(source).not.toContain('/pages/staff-refunds/index')
-    expect(source).not.toContain('🛒')
-    expect(source).not.toContain('🏭')
-    expect(source).not.toContain('📦')
+    for (const emoji of ['🛒', '🏭', '📦', '🧾', '📚', '📋']) {
+      expect(source).not.toContain(emoji)
+    }
+    expect(source).not.toContain('module-icon-symbol')
+    expect(source).not.toContain('font-size: 48rpx')
+  })
+
+  it('preserves permission and summary loading', () => {
+    expect(source).toContain('checkPermission()')
+    expect(source).toContain('loadStats()')
+    expect(source).toContain('/staff/workbench/summary')
   })
 
   it('preserves customer and recipe designer navigation', () => {

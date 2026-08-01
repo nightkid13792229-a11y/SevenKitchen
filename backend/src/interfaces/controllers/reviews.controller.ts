@@ -27,6 +27,7 @@ import {
 } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { ImageContentSafetyError } from '../../infrastructure/services/tencent-cos.service';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { CreateReviewDto } from '../dto/reviews/create-review.dto';
@@ -512,6 +513,9 @@ export class ReviewsController {
       });
     } catch (error) {
       console.error('[Reviews] Photo upload failed:', error);
+      if (error instanceof ImageContentSafetyError) {
+        throw error;
+      }
       throw new BadRequestException('照片上传失败，请重试');
     }
   }

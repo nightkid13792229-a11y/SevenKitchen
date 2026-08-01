@@ -1,4 +1,5 @@
 import { ReviewsController } from 'src/interfaces/controllers/reviews.controller';
+import { ImageContentSafetyError } from 'src/infrastructure/services/tencent-cos.service';
 
 describe('ReviewsController content security', () => {
   it('does not save an admin review when WeChat flags its content', async () => {
@@ -107,5 +108,23 @@ describe('ReviewsController content security', () => {
       photos: [{ url: 'https://cdn.example/review-photos/a.jpg', key: 'review-photos/a.jpg' }],
       count: 1,
     });
+  });
+
+  it('keeps the image safety rejection message visible to the user', async () => {
+    const controller = new ReviewsController(
+      {} as any,
+      {
+        uploadReviewedImage: jest.fn().mockRejectedValue(
+          new ImageContentSafetyError('图片含违规或不适宜信息，请更换后重试'),
+        ),
+      } as any,
+      {} as any,
+    );
+
+    await expect(
+      controller.uploadPhotos([
+        { originalname: 'a.jpg', size: 10, mimetype: 'image/jpeg' },
+      ] as any),
+    ).rejects.toThrow('图片含违规或不适宜信息，请更换后重试');
   });
 });

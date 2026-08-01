@@ -62,6 +62,7 @@ describe('staff workbench compact icon grid', () => {
     expect(source).not.toContain('class="header"')
     expect(source).not.toContain('欢迎，')
     expect(source).not.toContain('退款管理')
+    expect(source).not.toContain('goToRefunds')
     expect(source).not.toContain('/pages/staff-refunds/index')
     for (const emoji of ['🛒', '🏭', '📦', '🧾', '📚', '📋']) {
       expect(source).not.toContain(emoji)

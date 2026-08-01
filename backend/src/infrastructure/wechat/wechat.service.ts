@@ -135,6 +135,11 @@ interface WechatSpecialShippingOrderResponse {
   errmsg: string;
 }
 
+interface WechatContentSecurityResponse {
+  errcode: number;
+  errmsg: string;
+}
+
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -386,6 +391,37 @@ export class WechatService {
       this.logger.error('Failed to get WeChat access token:', error);
       throw new Error('Failed to get WeChat access token');
     }
+  }
+
+  async checkTextContent(
+    content: string,
+    openid: string,
+  ): Promise<{ safe: boolean }> {
+    if (this.isMockMode()) {
+      return { safe: true };
+    }
+
+    const accessToken = await this.getAccessToken();
+    const response = await axios.post<WechatContentSecurityResponse>(
+      `https://api.weixin.qq.com/wxa/msg_sec_check?access_token=${accessToken}`,
+      {
+        content,
+        version: 2,
+        scene: 2,
+        openid,
+      },
+    );
+
+    if (response.data.errcode === 0) {
+      return { safe: true };
+    }
+    if (response.data.errcode === 87014) {
+      return { safe: false };
+    }
+
+    throw new Error(
+      `WeChat content security check failed: ${response.data.errcode} - ${response.data.errmsg}`,
+    );
   }
 
   async getPhoneNumber(

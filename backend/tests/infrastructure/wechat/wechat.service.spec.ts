@@ -198,3 +198,37 @@ describe('WechatService shipping order APIs', () => {
     expect(result.completed).toBe(true);
   });
 });
+
+describe('WechatService content security APIs', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      WECHAT_APP_ID: 'wx-live-appid',
+      WECHAT_APP_SECRET: 'live-secret',
+      WECHAT_FORCE_MOCK: '',
+    };
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    process.env = originalEnv;
+  });
+
+  it('flags review text reported as risky by WeChat', async () => {
+    const service = new WechatService();
+    jest.spyOn(service, 'getAccessToken').mockResolvedValue('ACCESS_TOKEN');
+    jest.spyOn(axios, 'post').mockResolvedValue({
+      data: { errcode: 87014, errmsg: 'risky content' },
+    });
+
+    await expect(
+      service.checkTextContent('风险文本', 'openid-1'),
+    ).resolves.toEqual({ safe: false });
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://api.weixin.qq.com/wxa/msg_sec_check?access_token=ACCESS_TOKEN',
+      { content: '风险文本', version: 2, scene: 2, openid: 'openid-1' },
+    );
+  });
+});

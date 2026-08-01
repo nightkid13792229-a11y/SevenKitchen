@@ -27,6 +27,7 @@ import {
 } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { CreateReviewDto } from '../dto/reviews/create-review.dto';
 import { AuthGuard, CurrentUser } from '../auth';
@@ -39,7 +40,39 @@ export class ReviewsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
+    private readonly wechatService: WechatService,
   ) {}
+
+  private async validateReviewContent(
+    user: RequestUser,
+    content: string,
+  ): Promise<ApiResponseDto<null> | null> {
+    const account = await this.prisma.user.findUnique({
+      where: { id: user.customerId },
+      select: { wechatOpenid: true },
+    });
+
+    if (!account?.wechatOpenid) {
+      return ApiResponseDto.error(503, '内容安全验证暂不可用，请稍后重试');
+    }
+
+    try {
+      const result = await this.wechatService.checkTextContent(
+        content,
+        account.wechatOpenid,
+      );
+      if (!result.safe) {
+        return ApiResponseDto.error(
+          400,
+          '发布失败：内容含违规或不适宜信息，请修改后重试',
+        );
+      }
+      return null;
+    } catch (error) {
+      console.error('评价内容安全验证失败:', error);
+      return ApiResponseDto.error(503, '内容安全验证暂不可用，请稍后重试');
+    }
+  }
 
   private ensureAdmin(user: RequestUser): ApiResponseDto<null> | null {
     if (user.role !== 'ADMIN') {
@@ -278,6 +311,9 @@ export class ReviewsController {
       return ApiResponseDto.error(404, 'Recipe not found');
     }
 
+    const securityError = await this.validateReviewContent(user, dto.content);
+    if (securityError) return securityError;
+
     const review = await this.prisma.recipeReview.create({
       data: {
         userId: dto.userId || user.customerId,
@@ -344,6 +380,9 @@ export class ReviewsController {
       if (!recipe) {
         return new ApiResponseDto(404, '食谱不存在', null);
       }
+
+      const securityError = await this.validateReviewContent(user, dto.content);
+      if (securityError) return securityError;
 
       // 权限检查：只有购买或 DIY 制作过该食谱的用户才能评价
       const eligibility = await this.checkReviewEligibility(user.customerId, recipe.id, recipe.recipeId);

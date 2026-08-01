@@ -75,21 +75,6 @@
           <text class="module-arrow">›</text>
         </view>
 
-        <!-- 退款管理 -->
-        <view v-if="isAdmin" class="module" @tap="goToRefunds">
-          <view class="module-icon refunds">
-            <text class="module-icon-symbol">审</text>
-          </view>
-          <view class="module-content">
-            <text class="module-title">退款管理</text>
-            <text class="module-desc">审核客户退款申请并保留审核人记录</text>
-          </view>
-          <text v-if="badgeCount('refunds') > 0" class="module-badge">{{
-            formatBadge(badgeCount('refunds'))
-          }}</text>
-          <text class="module-arrow">›</text>
-        </view>
-
         <!-- 报销管理 -->
         <view class="module" @tap="goToReimbursement">
           <view class="module-icon reimbursement">
@@ -358,10 +343,6 @@ const goToCustomerDogs = () => {
   uni.navigateTo({ url: '/pages/staff-customer-service/customers' });
 };
 
-const goToRefunds = () => {
-  uni.navigateTo({ url: '/pages/staff-refunds/index' });
-};
-
 const goToReimbursement = () => {
   uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
@@ -497,10 +478,6 @@ const goToRecipeDesigner = () => {
   &.customer-dogs {
     background: linear-gradient(135deg, #e8f5ef 0%, #9bd8bd 100%);
     color: #157347;
-  }
-
-  &.refunds {
-    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
   }
 
   &.reimbursement {

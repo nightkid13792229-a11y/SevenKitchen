@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const source = readFileSync(resolve(__dirname, 'staff-workbench/index.vue'), 'utf8')
+const staffOrdersSource = readFileSync(resolve(__dirname, 'staff-orders/index.vue'), 'utf8')
 const iconNames = [
   'purchasing',
   'production',
@@ -15,6 +16,16 @@ const iconNames = [
 ]
 
 describe('staff workbench compact icon grid', () => {
+  it('surfaces admin refund reviews from aftersale orders without a separate refund route', () => {
+    expect(staffOrdersSource).toContain("{ label: '售后中', value: 'AFTERSALE'")
+    expect(staffOrdersSource).toContain('aftersaleType?: string | null')
+    expect(staffOrdersSource).toContain('function getStoredStaffUser()')
+    expect(staffOrdersSource).toContain("getStoredStaffUser()?.role === 'ADMIN'")
+    expect(staffOrdersSource).toContain("order.status === 'AFTERSALE' && order.aftersaleType === 'REFUND'")
+    expect(staffOrdersSource).toContain('退款待审核')
+    expect(staffOrdersSource).not.toContain('/pages/staff-refunds/index')
+  })
+
   it('renders today overview before a three-column module grid', () => {
     expect(source).toContain('今日概览')
     expect(source).toContain('const workbenchModules')

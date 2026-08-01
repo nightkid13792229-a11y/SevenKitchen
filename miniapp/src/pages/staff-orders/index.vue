@@ -76,6 +76,7 @@
           <text class="order-status" :style="{ color: getStatusColor(order) }">
             {{ getStatusText(order) }}
           </text>
+          <text v-if="isRefundReviewOrder(order)" class="refund-review-cue">退款待审核</text>
         </view>
 
         <!-- 订单时间信息 -->
@@ -334,6 +335,7 @@ function isTodayOrder(dateStr?: string): boolean {
 interface Order {
   id: string
   status: string
+  aftersaleType?: string | null
   cancellationReason?: string | null
   refundStatus?: {
     success: boolean
@@ -370,6 +372,24 @@ interface Order {
     regionText: string
     detailAddress: string
   }
+}
+
+function getStoredStaffUser(): { role?: string } | null {
+  for (const key of ['user', 'userInfo']) {
+    try {
+      const storedUser = uni.getStorageSync(key)
+      if (!storedUser) continue
+
+      const user = typeof storedUser === 'string' ? JSON.parse(storedUser) : storedUser
+      if (user && typeof user === 'object') {
+        return user.user && typeof user.user === 'object' ? user.user : user
+      }
+    } catch {
+      // Try the next storage key when a stale value cannot be parsed.
+    }
+  }
+
+  return null
 }
 
 // 状态筛选选项
@@ -435,6 +455,12 @@ const stats = ref({
 })
 
 // 计算属性
+const isAdmin = computed(() => getStoredStaffUser()?.role === 'ADMIN')
+
+function isRefundReviewOrder(order: Order): boolean {
+  return isAdmin.value && order.status === 'AFTERSALE' && order.aftersaleType === 'REFUND'
+}
+
 const statusFilterText = computed(() => {
   const option = statusOptions.value.find((s) => s.value === selectedStatus.value)
   return option ? option.label : '状态'
@@ -1500,6 +1526,15 @@ onShareAppMessage((event: any) => {
 .order-status {
   font-size: 28rpx;
   font-weight: bold;
+}
+
+.refund-review-cue {
+  margin-left: 12rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background-color: #fff1f0;
+  color: #cf1322;
+  font-size: 22rpx;
 }
 
 // 客户信息

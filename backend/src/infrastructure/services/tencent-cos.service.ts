@@ -25,6 +25,7 @@ export class TencentCosService {
   private readonly bucket: string;
   private readonly region: string;
   private readonly cdnDomain: string | undefined;
+  private readonly imageAuditBizType: string | undefined;
 
   constructor(private readonly configService: ConfigService) {
     this.secretId = this.configService.get<string>('COS_SECRET_ID') || '';
@@ -33,6 +34,9 @@ export class TencentCosService {
     this.region =
       this.configService.get<string>('COS_REGION') || 'ap-guangzhou';
     this.cdnDomain = this.configService.get<string>('COS_CDN_DOMAIN');
+    this.imageAuditBizType = this.configService
+      .get<string>('COS_IMAGE_AUDIT_BIZ_TYPE')
+      ?.trim() || undefined;
 
     if (!this.secretId || !this.secretKey || !this.bucket) {
       console.error(
@@ -178,6 +182,9 @@ export class TencentCosService {
       Query: {
         'ci-process': 'sensitive-content-recognition',
         'large-image-detect': 1,
+        ...(this.imageAuditBizType
+          ? { 'biz-type': this.imageAuditBizType }
+          : {}),
       },
     });
     return { safe: Number(result.RecognitionResult?.Result) === 0 };

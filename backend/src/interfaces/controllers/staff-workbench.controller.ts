@@ -23,7 +23,6 @@ interface StaffWorkbenchSummary {
     purchasing: number;
     production: number;
     orders: number;
-    refunds: number;
     reimbursement: number;
     inventory: number;
   };
@@ -104,11 +103,12 @@ export class StaffWorkbenchController {
       }),
     ]);
 
+    const ordersPending =
+      orderPending + (role === 'ADMIN' ? refundPending : 0);
     const badges = {
       purchasing: purchasePending,
       production: productionPending,
-      orders: orderPending,
-      refunds: role === 'ADMIN' ? refundPending : 0,
+      orders: ordersPending,
       reimbursement: reimbursementPending,
       inventory: inventoryPending,
     };

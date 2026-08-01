@@ -88,4 +88,24 @@ describe('ReviewsController content security', () => {
     expect(prisma.recipeReview.create).toHaveBeenCalledTimes(1);
     expect(response.code).toBe(0);
   });
+
+  it('uses the reviewed-image upload path before returning a photo URL', async () => {
+    const cosService = {
+      uploadReviewedImage: jest.fn().mockResolvedValue({
+        url: 'https://cdn.example/review-photos/a.jpg',
+        key: 'review-photos/a.jpg',
+      }),
+    };
+    const controller = new ReviewsController({} as any, cosService as any, {} as any);
+
+    const response = await controller.uploadPhotos([
+      { originalname: 'a.jpg', size: 10, mimetype: 'image/jpeg' },
+    ] as any);
+
+    expect(cosService.uploadReviewedImage).toHaveBeenCalledTimes(1);
+    expect(response.data).toEqual({
+      photos: [{ url: 'https://cdn.example/review-photos/a.jpg', key: 'review-photos/a.jpg' }],
+      count: 1,
+    });
+  });
 });

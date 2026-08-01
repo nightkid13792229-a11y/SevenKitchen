@@ -501,11 +501,7 @@ export class ReviewsController {
 
     try {
       const uploadPromises = files.map((file) =>
-        this.cosService.uploadImage(
-          file,
-          file.originalname,
-          'review-photos',
-        ),
+        this.cosService.uploadReviewedImage(file),
       );
 
       const results = await Promise.all(uploadPromises);

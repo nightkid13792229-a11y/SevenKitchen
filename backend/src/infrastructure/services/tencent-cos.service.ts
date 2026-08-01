@@ -12,6 +12,12 @@ export interface UploadResult {
   key: string;
 }
 
+export class ImageContentSafetyError extends BadRequestException {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 @Injectable()
 export class TencentCosService {
   private readonly secretId: string;
@@ -120,6 +126,75 @@ export class TencentCosService {
       console.error('[TencentCosService] Upload failed:', error);
       throw new BadRequestException('Failed to upload image to COS');
     }
+  }
+
+  async uploadReviewedImage(file: Express.Multer.File): Promise<UploadResult> {
+    const temporary = await this.uploadPrivateImage(file);
+    try {
+      const inspection = await this.inspectImage(temporary.key);
+      if (!inspection.safe) {
+        throw new ImageContentSafetyError('图片含违规或不适宜信息，请更换后重试');
+      }
+
+      const ext = this.getFileExtension(file.originalname);
+      const key = `review-photos/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+      const cosClient = this.createCosClient();
+      await cosClient.putObjectCopy({
+        Bucket: this.bucket,
+        Region: this.region,
+        Key: key,
+        CopySource: `/${this.bucket}/${temporary.key}`,
+      });
+      await this.deleteImage(temporary.key);
+      return { url: this.buildPublicUrl(key), key };
+    } catch (error) {
+      await this.deleteImage(temporary.key).catch(() => undefined);
+      if (error instanceof ImageContentSafetyError) throw error;
+      throw new BadRequestException('图片安全验证暂不可用，请稍后重试');
+    }
+  }
+
+  private async uploadPrivateImage(file: Express.Multer.File): Promise<{ key: string }> {
+    if (!file?.buffer || !file.originalname) {
+      throw new BadRequestException('Invalid file format');
+    }
+    const key = `review-uploads/pending/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${this.getFileExtension(file.originalname)}`;
+    await this.createCosClient().putObject({
+      Bucket: this.bucket,
+      Region: this.region,
+      Key: key,
+      Body: file.buffer,
+      ACL: 'private',
+    });
+    return { key };
+  }
+
+  private async inspectImage(key: string): Promise<{ safe: boolean }> {
+    const result = await this.createCosClient().request({
+      Method: 'GET',
+      Bucket: this.bucket,
+      Region: this.region,
+      Key: key,
+      Query: {
+        'ci-process': 'sensitive-content-recognition',
+        'large-image-detect': 1,
+      },
+    });
+    return { safe: Number(result.RecognitionResult?.Result) === 0 };
+  }
+
+  private createCosClient(): any {
+    if (!this.secretId || !this.secretKey || !this.bucket) {
+      throw new BadRequestException('COS credentials not configured');
+    }
+    const COS = require('cos-nodejs-sdk-v5');
+    return new COS({ SecretId: this.secretId, SecretKey: this.secretKey });
+  }
+
+  private buildPublicUrl(key: string): string {
+    return this.cdnDomain
+      ? `https://${this.cdnDomain}/${key}`
+      : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
   }
 
   /**

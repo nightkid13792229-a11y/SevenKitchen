@@ -34,4 +34,30 @@ describe('TencentCosService review image security', () => {
       Query: expect.objectContaining({ 'biz-type': 'ffeaddbd8dbe11f19e40525400141ffd' }),
     }));
   });
+
+  it('copies an approved image with the COS CopySource URL format', async () => {
+    const service = new TencentCosService({
+      get: jest.fn((key: string) =>
+        ({
+          COS_SECRET_ID: 'id', COS_SECRET_KEY: 'key', COS_BUCKET: 'bucket-123',
+          COS_REGION: 'ap-chengdu',
+        })[key],
+      ),
+    } as any);
+    const putObjectCopy = jest.fn().mockResolvedValue({});
+    jest.spyOn(service as any, 'uploadPrivateImage').mockResolvedValue({
+      key: 'review-uploads/pending/a.jpg',
+    });
+    jest.spyOn(service as any, 'inspectImage').mockResolvedValue({ safe: true });
+    jest.spyOn(service as any, 'createCosClient').mockReturnValue({ putObjectCopy });
+    jest.spyOn(service, 'deleteImage').mockResolvedValue();
+
+    await service.uploadReviewedImage(
+      { buffer: Buffer.from('image'), originalname: 'a.jpg' } as any,
+    );
+
+    expect(putObjectCopy).toHaveBeenCalledWith(expect.objectContaining({
+      CopySource: 'bucket-123.cos.ap-chengdu.myqcloud.com/review-uploads/pending/a.jpg',
+    }));
+  });
 });

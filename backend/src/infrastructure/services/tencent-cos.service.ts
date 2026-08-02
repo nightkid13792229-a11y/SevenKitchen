@@ -147,7 +147,7 @@ export class TencentCosService {
         Bucket: this.bucket,
         Region: this.region,
         Key: key,
-        CopySource: `/${this.bucket}/${temporary.key}`,
+        CopySource: `${this.bucket}.cos.${this.region}.myqcloud.com/${temporary.key}`,
       });
       await this.deleteImage(temporary.key);
       return { url: this.buildPublicUrl(key), key };

@@ -211,6 +211,49 @@ describe('buildProductionMigrationPackage', () => {
     expect(result.files.upSql).not.toContain('\'"12.34"\'');
   });
 
+  it('emits Decimal JSON values as unquoted SQL numerics', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: { toJSON: () => '0' },
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("VALUES (0, 'ingredient-1'");
+    expect(result.files.upSql).not.toContain('\'"0"\'');
+  });
+
+  it('emits invalid Decimal JSON values as NULL', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: { toJSON: () => 'Infinity' },
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("VALUES (NULL, 'ingredient-1'");
+  });
+
   it('includes FOOD-related records in deterministic parent-before-child order', async () => {
     const result = await buildProductionMigrationPackage({
       prisma: makePrisma(),

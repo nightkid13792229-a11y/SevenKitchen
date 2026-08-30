@@ -556,38 +556,32 @@ function sqlLiteral(value: unknown): string {
 }
 
 function isDecimalLike(value: unknown): value is {
-  decimalPlaces: () => number;
   toJSON: () => unknown;
-  toString: () => string;
 } {
   if (value === null || typeof value !== 'object') {
     return false;
   }
 
   const candidate = value as {
-    decimalPlaces?: unknown;
     toJSON?: unknown;
-    toString?: unknown;
   };
-  if (
-    typeof candidate.decimalPlaces !== 'function' ||
-    typeof candidate.toJSON !== 'function' ||
-    typeof candidate.toString !== 'function'
-  ) {
-    return false;
-  }
-
-  const stringValue = candidate.toString();
-  return (
-    typeof stringValue === 'string' &&
-    candidate.toJSON() === stringValue &&
-    isSqlNumericText(stringValue)
-  );
+  return typeof candidate.toJSON === 'function';
 }
 
-function decimalSqlLiteral(value: { toString: () => string }): string {
-  const literal = value.toString();
-  return isSqlNumericText(literal) ? literal : 'NULL';
+function decimalSqlLiteral(value: { toJSON: () => unknown }): string {
+  const literal = value.toJSON();
+  if (typeof literal === 'number') {
+    return Number.isFinite(literal) ? String(literal) : 'NULL';
+  }
+  if (
+    typeof literal === 'string' &&
+    isSqlNumericText(literal) &&
+    Number.isFinite(Number(literal))
+  ) {
+    return literal;
+  }
+
+  return 'NULL';
 }
 
 function isSqlNumericText(value: string): boolean {

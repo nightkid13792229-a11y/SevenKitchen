@@ -613,6 +613,48 @@ describe('AdminController', () => {
   });
 
   describe('getOrderDetail', () => {
+    it('returns an aftersale refund type in the admin order list', async () => {
+      const mockOrderService = {
+        listAllOrders: jest.fn().mockResolvedValue({
+          total: 1,
+          list: [
+            {
+              id: 'aftersale-refund-order',
+              status: 'AFTERSALE',
+              aftersaleType: 'REFUND',
+              items: [],
+              createdAt: new Date('2026-08-01T00:00:00.000Z'),
+              customer: { nickname: '退款客户', phone: '13800000000' },
+            },
+          ],
+        }),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.listOrders({});
+
+      expect(result.data).toEqual(
+        expect.objectContaining({
+          list: [expect.objectContaining({ aftersaleType: 'REFUND' })],
+        }),
+      );
+    });
+
     it('delegates admin order keyword search directly to the order service', async () => {
       const mockOrderService = {
         listAllOrders: jest.fn().mockResolvedValue({ list: [], total: 0 }),

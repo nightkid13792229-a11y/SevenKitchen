@@ -1400,6 +1400,7 @@ export class AdminController {
           return {
             id: order.id,
             status: order.status,
+            aftersaleType: order.aftersaleType ?? null,
             type: order.type,
             totalAmount: order.totalAmount ?? order.amountTotal,
             amountTotal: order.totalAmount ?? order.amountTotal,

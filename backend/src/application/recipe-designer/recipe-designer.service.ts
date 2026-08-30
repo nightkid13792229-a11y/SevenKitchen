@@ -2416,7 +2416,7 @@ export class RecipeDesignerService {
         recipes: {
           include: {
             items: {
-              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              orderBy: { sortOrder: 'asc' },
             },
           },
           orderBy: { updatedAt: 'desc' },
@@ -3103,7 +3103,7 @@ export class RecipeDesignerService {
         status: RecipeStatus.PUBLIC,
       },
       include: {
-        items: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+        items: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { updatedAt: 'desc' },
     });

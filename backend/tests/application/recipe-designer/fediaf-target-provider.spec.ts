@@ -303,7 +303,7 @@ describe('PrismaFediafTargetProvider', () => {
         nutrient: {
           code: 'epa_dha',
           name: 'EPA + DHA',
-          category: 'DERIVED_RATIO',
+          category: 'FATTY_ACID',
           fieldPath: null,
           expression: {
             op: 'sum',
@@ -319,7 +319,7 @@ describe('PrismaFediafTargetProvider', () => {
     expect(target).toEqual(
       expect.objectContaining({
         nutrientKey: 'epa_dha',
-        category: 'COMBINATION',
+        category: 'FATTY_ACID',
         calculation: 'SUM',
         fieldPaths: ['fattyAcids.epa', 'fattyAcids.dha'],
         unit: 'g',
@@ -462,7 +462,7 @@ describe('PrismaFediafTargetProvider', () => {
     expect(target).toEqual(
       expect.objectContaining({
         nutrientKey: 'ca_p_ratio',
-        category: 'RATIO',
+        category: 'MINERAL',
         calculation: 'RATIO',
         expressionBasis: 'RATIO',
         fieldPaths: ['minerals.calcium', 'minerals.phosphorus'],
@@ -623,7 +623,7 @@ describe('PrismaFediafTargetProvider', () => {
     });
     expect(targets[2]).toMatchObject({
       nutrientKey: 'epaDha',
-      category: 'COMBINATION',
+      category: 'FATTY_ACID',
       calculation: 'SUM',
       fieldPaths: ['fattyAcids.epa', 'fattyAcids.dha'],
       excludeFromAttention: true,

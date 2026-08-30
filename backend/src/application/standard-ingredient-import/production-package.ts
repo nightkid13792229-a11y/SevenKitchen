@@ -404,6 +404,11 @@ function sqlLiteral(value: unknown): string {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? String(value) : 'NULL';
   }
+  if (isDecimalLike(value)) {
+    const normalizedValue = value.toJSON();
+    const numericValue = Number(normalizedValue);
+    return Number.isFinite(numericValue) ? String(numericValue) : 'NULL';
+  }
   if (typeof value === 'boolean') {
     return value ? 'TRUE' : 'FALSE';
   }
@@ -415,6 +420,27 @@ function sqlLiteral(value: unknown): string {
   }
 
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function isDecimalLike(
+  value: unknown,
+): value is { toJSON(): string | number } {
+  if (!value || typeof value !== 'object' || !('toJSON' in value)) {
+    return false;
+  }
+
+  const toJSON = (value as { toJSON?: unknown }).toJSON;
+  if (typeof toJSON !== 'function') {
+    return false;
+  }
+
+  const normalizedValue = toJSON.call(value);
+  return (
+    (typeof normalizedValue === 'number' && Number.isFinite(normalizedValue)) ||
+    (typeof normalizedValue === 'string' &&
+      normalizedValue.trim() !== '' &&
+      Number.isFinite(Number(normalizedValue)))
+  );
 }
 
 function snakeCase(value: string): string {

@@ -87,6 +87,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "食谱管理" },
       },
       {
+        path: "recipe-designer",
+        name: "RecipeDesigner",
+        component: () => import("@/views/RecipeDesigner/index.vue"),
+        meta: { title: "食谱设计器" },
+      },
+      {
+        path: "recipe-designer/series/:seriesId/drafts/:draftId",
+        name: "RecipeDesignerEditor",
+        component: () => import("@/views/RecipeDesigner/Editor.vue"),
+        meta: { title: "配方编辑" },
+      },
+      {
+        path: "recipe-designer/drafts/:draftId/publish",
+        name: "RecipeDesignerPublish",
+        component: () => import("@/views/RecipeDesigner/Publish.vue"),
+        meta: { title: "发布配方" },
+      },
+      {
         path: "nutrition-standards/fediaf-2025-dog",
         name: "FediafDogStandard",
         component: () =>

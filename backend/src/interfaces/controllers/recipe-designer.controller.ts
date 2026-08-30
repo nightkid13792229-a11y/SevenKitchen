@@ -28,6 +28,8 @@ import { AuthGuard, CurrentUser, type RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
+  AiDesignSuggestDto,
+  BatchReorderDesignItemsDto,
   CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
@@ -39,6 +41,8 @@ import {
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  SetRecipeSeriesReferenceDogDto,
+  UpdateDogDesignNotesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
@@ -491,6 +495,122 @@ export class RecipeDesignerController {
     const result = await this.recipeDesignerService.publishDraft(
       id,
       dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Get('drafts/:id/assessment-inputs')
+  @ApiOperation({
+    summary: 'Return local assessment inputs (targets + item profiles) for a design draft',
+  })
+  async getDraftAssessmentInputs(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.getDraftAssessmentInputs(
+      id,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Get('dogs/:dogId/design-insight')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Return a dog dietary profile, design history ingredient summary and order summary',
+  })
+  async getDogDesignInsight(
+    @Param('dogId') dogId: string,
+    @CurrentUser() user: RequestUser,
+    @Query('recentDays') recentDays?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.getDogDesignInsight(
+      dogId,
+      toRecipeDesignerAccessContext(user),
+      recentDays,
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Patch('dogs/:dogId/design-notes')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Maintain dog dietary design notes (allergies / picky / preferred / medical history)',
+  })
+  async updateDogDesignNotes(
+    @Param('dogId') dogId: string,
+    @Body() dto: UpdateDogDesignNotesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.updateDogDesignNotes(
+      dogId,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Post('dogs/:dogId/design-insight/ai-suggest')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Generate AI recipe design suggestions from a dog profile and design history',
+  })
+  async generateAiDesignSuggestions(
+    @Param('dogId') dogId: string,
+    @Body() dto: AiDesignSuggestDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.generateAiDesignSuggestions(
+      dogId,
+      toRecipeDesignerAccessContext(user),
+      dto.draftId,
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Patch('series/:seriesId/reference-dog')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Set or clear the reference dog of an internal recipe design series',
+  })
+  async setSeriesReferenceDog(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: SetRecipeSeriesReferenceDogDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.setSeriesReferenceDog(
+      seriesId,
+      dto.referenceDogId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Post('items/batch-order')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Batch persist design item sort order',
+  })
+  async batchUpdateItemOrder(
+    @Body() dto: BatchReorderDesignItemsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.batchUpdateItemOrder(
+      dto.order,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Get('customer-access')
+  @ApiOperation({
+    summary: 'Return whether the current customer has recipe design history (entry visibility)',
+  })
+  async getCustomerDesignerAccess(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.getCustomerDesignerAccess(
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);

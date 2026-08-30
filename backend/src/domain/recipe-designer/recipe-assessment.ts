@@ -1388,7 +1388,6 @@ function isRatioTarget(target: FediafAssessmentTarget): boolean {
 
   return (
     isRatioShaped(target) &&
-    target.category === 'RATIO' &&
     isSupportedExpressionBasis(target.expressionBasis) &&
     (hasExplicitRatioCalculation || hasNativeRatioBasis) &&
     fieldPaths?.length === 2 &&

@@ -33,10 +33,14 @@
           <el-icon><Search /></el-icon>
           <span>搜索治理</span>
         </el-menu-item>
-        <el-menu-item index="/recipes">
-          <el-icon><Food /></el-icon>
-          <span>食谱管理</span>
-        </el-menu-item>
+        <el-sub-menu index="recipe-management">
+          <template #title>
+            <el-icon><Food /></el-icon>
+            <span>食谱管理</span>
+          </template>
+          <el-menu-item index="/recipes">食谱列表</el-menu-item>
+          <el-menu-item index="/recipe-designer">食谱设计</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="nutrition-standards">
           <template #title>
             <el-icon><DocumentChecked /></el-icon>

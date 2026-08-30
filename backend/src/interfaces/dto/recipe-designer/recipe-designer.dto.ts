@@ -66,6 +66,10 @@ export class CreateRecipeSeriesDto {
   @IsOptional()
   @IsString()
   dogId?: string;
+
+  @IsOptional()
+  @IsString()
+  referenceDogId?: string;
 }
 
 export const PRIVATE_RECIPE_SNAPSHOT_TARGETS = ['ORDER', 'DIY'] as const;
@@ -89,6 +93,41 @@ export class DeleteRecipeSeriesDto {
 
   @IsBoolean()
   confirmUserVisibleRemoval!: boolean;
+}
+
+export class SetRecipeSeriesReferenceDogDto {
+  @IsOptional()
+  @IsString()
+  referenceDogId?: string | null;
+}
+
+export class UpdateDogDesignNotesDto {
+  @IsOptional()
+  @IsString()
+  allergyFoods?: string | null;
+
+  @IsOptional()
+  @IsString()
+  pickyFoods?: string | null;
+
+  @IsOptional()
+  @IsString()
+  preferredFoods?: string | null;
+
+  @IsOptional()
+  @IsString()
+  medicalHistory?: string | null;
+}
+
+export class BatchReorderDesignItemsDto {
+  @IsArray()
+  order!: Array<{ id: string; sortOrder: number }>;
+}
+
+export class AiDesignSuggestDto {
+  @IsOptional()
+  @IsString()
+  draftId?: string;
 }
 
 export class CreateRecipeSeriesStageDraftDto {
@@ -132,6 +171,14 @@ export class ListRecipeDesignerIngredientOptionsDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsIn(['FOOD', 'SUPPLEMENT'])
+  type?: 'FOOD' | 'SUPPLEMENT';
 
   @IsOptional()
   @IsString()

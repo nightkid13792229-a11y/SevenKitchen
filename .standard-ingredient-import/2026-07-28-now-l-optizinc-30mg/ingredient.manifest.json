@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "operationMode": "local-draft",
+  "ingredient": {
+    "type": "SUPPLEMENT",
+    "name": "NOW Foods L-OptiZinc 锌 30mg 素食胶囊",
+    "brand": "NOW Foods",
+    "productModel": "L-OptiZinc, 30 mg, 100 Veg Capsules",
+    "notes": "基于用户提供的产品正反面包装标签建立；每份为 1 粒素食胶囊。"
+  },
+  "packageEvidence": {
+    "metadata": {
+      "source": "operator-provided-iherb-screenshots",
+      "capturedAt": "2026-07-28T00:00:00.000Z"
+    },
+    "labelSources": [
+      {
+        "sourceId": "operator-image:now-foods-l-optizinc-30mg-front-and-supplement-facts",
+        "labelText": "NOW L-OptiZinc 30 mg, 100 Veg Capsules. Supplement Facts: Serving Size 1 Veg Capsule. Zinc (elemental) 30 mg (from 167 mg L-OptiZinc zinc monomethionine). Copper (elemental) 0.3 mg (from 3 mg Copper Bisglycinate)."
+      }
+    ]
+  },
+  "supplementLabel": {
+    "servingSize": "1 Veg Capsule",
+    "activeNutrients": {
+      "zincMg": 30,
+      "copperMg": 0.3
+    },
+    "notes": "元素锌 30 mg，来源为 167 mg L-OptiZinc 锌单蛋氨酸；元素铜 0.3 mg，来源为 3 mg 双甘氨酸铜。仅录入包装已标示的元素营养素，不将化合物总量作为元素含量。"
+  },
+  "nutritionProfiles": [
+    {
+      "id": "supplement-label-now-foods-l-optizinc-30mg-per-capsule",
+      "name": "NOW Foods L-OptiZinc 锌 30mg · 每粒标签营养",
+      "dataSource": "SUPPLEMENT_LABEL",
+      "externalId": "SUPPLEMENT_LABEL:now-foods-l-optizinc-30mg",
+      "category": "SUPPLEMENT",
+      "basis": "PER_SERVING",
+      "preparationState": "CONCENTRATE",
+      "preparationStateLabel": "浓缩补剂",
+      "ediblePortionLabel": "每 1 粒素食胶囊标签标示量",
+      "processingLabel": "补剂标签导入",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "notes": "仅录入标签已标示的元素锌和元素铜含量。",
+      "nutritionData": {
+        "meta": {
+          "rawBasisType": "PER_SERVING",
+          "sampleState": "CONCENTRATE",
+          "sourceType": "SUPPLEMENT_LABEL",
+          "sourceKind": "PACKAGING_LABEL",
+          "externalId": "SUPPLEMENT_LABEL:now-foods-l-optizinc-30mg",
+          "sourceTitle": "NOW Foods L-OptiZinc Supplement Facts",
+          "sourceProvider": "NOW Foods",
+          "confidenceLevel": "HIGH"
+        },
+        "macros": {},
+        "minerals": {
+          "zinc": 30,
+          "copper": 0.3
+        },
+        "vitamins": {},
+        "fattyAcids": {},
+        "aminoAcids": {},
+        "customItems": [
+          {
+            "name": "L-OptiZinc 锌单蛋氨酸",
+            "value": 167,
+            "unit": "mg",
+            "rawBasisType": "PER_SERVING",
+            "note": "标签注明该化合物提供元素锌 30 mg。"
+          },
+          {
+            "name": "双甘氨酸铜",
+            "value": 3,
+            "unit": "mg",
+            "rawBasisType": "PER_SERVING",
+            "note": "标签注明该化合物提供元素铜 0.3 mg。"
+          }
+        ]
+      },
+      "nutrients": {}
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "bbc7c848e5b2",
+    "status": "passing"
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

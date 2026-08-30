@@ -297,6 +297,7 @@ model Dog {
   treatLevel           TreatLevel          @default(LOW) @map("treat_level")
   manualTreatKcal      Int?                @map("manual_treat_kcal")
   medicalHistory       String?             @map("medical_history")
+  preferredFoods       String?             @map("preferred_foods")
   cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
   createdAt            DateTime            @default(now()) @map("created_at")
   customBreedName      String?             @map("custom_breed_name")
@@ -379,6 +380,7 @@ model RecipeSeries {
   deletedBy      String?                    @map("deleted_by")
   createdBy      String?                    @map("created_by")
   customerDogId  String?                    @map("customer_dog_id")
+  referenceDogId String?                    @map("reference_dog_id")
   createdAt      DateTime                   @default(now()) @map("created_at")
   updatedAt      DateTime                   @updatedAt @map("updated_at")
   recipes        Recipe[]
@@ -388,6 +390,7 @@ model RecipeSeries {
   @@index([businessStatus])
   @@index([updatedAt])
   @@index([customerDogId])
+  @@index([referenceDogId])
   @@map("recipe_series")
 }
 

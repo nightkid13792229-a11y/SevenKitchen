@@ -1,0 +1,11 @@
+{
+  "manifestPath": "../.standard-ingredient-import/2026-07-28-now-l-optizinc-30mg/ingredient.manifest.json",
+  "ok": true,
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "rankedSources": [],
+  "nutritionAudits": []
+}

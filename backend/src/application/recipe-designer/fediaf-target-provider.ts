@@ -167,7 +167,8 @@ export class PrismaFediafTargetProvider implements FediafTargetProvider {
 
     const calculation = this.resolveCalculation(parsedExpression);
     if (
-      category !== 'RATIO' &&
+      calculation !== 'RATIO' &&
+      expressionBasis !== 'RATIO' &&
       !this.canAssessFieldsInStandardUnit(fieldPaths, entry.unit)
     ) {
       return null;
@@ -404,15 +405,24 @@ export class PrismaFediafTargetProvider implements FediafTargetProvider {
     nutrientCategory: string,
     parsedExpression: ParsedExpression | null,
   ): AssessmentCategory | null {
-    if (parsedExpression) {
-      return parsedExpression.category;
+    // 组合/比例指标按其基础分类归组（氨基酸组合→氨基酸、EPA+DHA→脂肪酸、钙磷比→矿物质），
+    // 表达式类别仅作为无法归入基础分类时的兜底
+    const baseCategory = this.resolveBaseCategory(nutrientCategory);
+    if (baseCategory) {
+      return baseCategory;
     }
+    return parsedExpression?.category ?? null;
+  }
 
+  private resolveBaseCategory(
+    nutrientCategory: string,
+  ): AssessmentCategory | null {
     switch (nutrientCategory) {
       case 'MACRONUTRIENT':
         return 'MACRO';
       case 'MINERAL':
       case 'TRACE_ELEMENT':
+      case 'DERIVED_RATIO': // 钙磷比归入矿物质
         return 'MINERAL';
       case 'VITAMIN':
         return 'VITAMIN';
@@ -420,8 +430,6 @@ export class PrismaFediafTargetProvider implements FediafTargetProvider {
         return 'FATTY_ACID';
       case 'AMINO_ACID':
         return 'AMINO_ACID';
-      case 'DERIVED_RATIO':
-        return 'RATIO';
       default:
         return null;
     }

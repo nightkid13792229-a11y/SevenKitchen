@@ -71,6 +71,30 @@ describe('buildProductionMigrationPackage', () => {
     expect(writes['up.sql']).toBe(result.files.upSql);
   });
 
+  it('serializes Decimal-like numeric values as SQL numerics', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: {
+              toJSON: () => '0',
+            },
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("current_price_per_purchase_unit");
+    expect(result.files.upSql).not.toContain("'\"0\"'");
+  });
+
   it('includes FOOD-related records in deterministic parent-before-child order', async () => {
     const result = await buildProductionMigrationPackage({
       prisma: makePrisma(),

@@ -9,9 +9,12 @@
     <!-- Header -->
     <div class="page-header">
       <h2>原料管理</h2>
-      <el-button type="primary" @click="handleCreate" :icon="Plus">
-        新增标准原料
-      </el-button>
+      <div class="header-actions">
+        <el-button :icon="Plus" @click="openSupplementDialog">新增补剂</el-button>
+        <el-button type="primary" @click="handleCreate" :icon="Plus">
+          新增标准原料
+        </el-button>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -405,6 +408,9 @@
         <IngredientTagsPanel />
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 新增补剂（含拍照识别标签；补剂数据与食谱设计器共用） -->
+    <SupplementOptionForm v-model="supplementDialogVisible" @saved="handleSupplementSaved" />
   </div>
 </template>
 
@@ -428,6 +434,7 @@ import IngredientFormComponent from './IngredientForm.vue'
 import IngredientNutritionDialog from './components/IngredientNutritionDialog.vue'
 import IngredientNutritionGovernancePanel from './components/IngredientNutritionGovernancePanel.vue'
 import IngredientTagsPanel from './components/IngredientTagsPanel.vue'
+import SupplementOptionForm from './components/SupplementOptionForm.vue'
 import { getIngredientTypeCapabilities } from '@/utils/ingredientTypeCapabilities'
 
 // Data
@@ -616,6 +623,21 @@ const handleCreate = () => {
   copySourceName.value = ''
   currentIngredient.value = undefined
   dialogVisible.value = true
+}
+
+// 新增补剂（合并自食谱设计器补剂库，数据与设计器共用）
+const supplementDialogVisible = ref(false)
+
+const openSupplementDialog = () => {
+  supplementDialogVisible.value = true
+}
+
+const handleSupplementSaved = () => {
+  // 补剂也是原料（type=SUPPLEMENT），保存后刷新标准原料列表
+  if (filterTypes.value.length > 0 && !filterTypes.value.includes(IngredientType.SUPPLEMENT)) {
+    filterTypes.value = [...filterTypes.value, IngredientType.SUPPLEMENT]
+  }
+  handleFilter()
 }
 
 const handleDialogClose = () => {

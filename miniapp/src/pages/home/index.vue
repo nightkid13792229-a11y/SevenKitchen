@@ -35,7 +35,7 @@
         <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
         <text class="action-text">建议反馈</text>
       </view>
-      <view class="action-item" @tap="goToRecipeDesigner">
+      <view v-if="showRecipeDesignerEntry" class="action-item" @tap="goToRecipeDesigner">
         <image class="action-icon" src="/static/home-actions/recipe-designer.png" mode="aspectFit" />
         <text class="action-text">食谱设计</text>
       </view>
@@ -344,6 +344,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import { recipeDesignerApi } from '../../api/recipe-designer'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -500,6 +501,23 @@ const checkLoginStatus = () => {
   isLoggedIn.value = !!token
 }
 
+// 食谱设计入口可见性：新客户隐藏，有设计记录的老客户保留
+const showRecipeDesignerEntry = ref(false)
+
+const loadRecipeDesignerAccess = async () => {
+  if (!isLoggedIn.value) {
+    showRecipeDesignerEntry.value = false
+    return
+  }
+  try {
+    const res: any = await recipeDesignerApi.getCustomerDesignerAccess()
+    showRecipeDesignerEntry.value = Boolean(res?.data?.hasDesignHistory ?? res?.hasDesignHistory)
+  } catch (error) {
+    console.warn('[Home] Failed to load recipe designer access:', error)
+    showRecipeDesignerEntry.value = false
+  }
+}
+
 // 页面加载
 function getQueryStringValue(value: unknown) {
   if (Array.isArray(value)) return String(value[0] || '')
@@ -540,6 +558,7 @@ onLoad((options = {}) => {
 onMounted(() => {
   hasMountedHome.value = true
   checkLoginStatus()
+  loadRecipeDesignerAccess()
   loadRecipeCoverOriginalOnlyMap()
   loadHomeHeaderBackground()
 
@@ -585,6 +604,7 @@ onUnmounted(() => {
 onShow(() => {
   refreshCurrentTabBar()
   checkLoginStatus()
+  loadRecipeDesignerAccess()
 
   if (!hasMountedHome.value) {
     return

@@ -1,0 +1,2 @@
+ALTER TABLE "design_recipe"
+ADD COLUMN IF NOT EXISTS "content_revision" INTEGER NOT NULL DEFAULT 0;

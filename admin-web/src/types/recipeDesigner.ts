@@ -47,6 +47,8 @@ export interface RecipeDesignerSeriesCard {
   updatedAt?: string
   publishedStageCount: number
   stages: RecipeDesignerSeriesStage[]
+  /** 默认阶段（第一个有草稿的阶段）的草稿 ID，用于创建后进入编辑器 */
+  initialDraftId?: string | null
 }
 
 export interface CreateRecipeSeriesPayload {

@@ -24,6 +24,15 @@ import type {
 
 export interface RecipeDesignerSeriesListQuery {
   status?: RecipeDesignerSeriesStatusFilter
+  page?: number
+  pageSize?: number
+}
+
+export interface RecipeDesignerSeriesListResult {
+  items: RecipeDesignerSeriesCard[]
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 export interface CreateRecipeSeriesStageDraftPayload {
@@ -83,7 +92,7 @@ export interface CreateSupplementOptionPayload {
 
 export const recipeDesignerApi = {
   // 系列
-  listSeries: (query: RecipeDesignerSeriesListQuery = {}): Promise<RecipeDesignerSeriesCard[]> =>
+  listSeries: (query: RecipeDesignerSeriesListQuery = {}): Promise<RecipeDesignerSeriesListResult> =>
     api.get('/recipe-designer/series', { params: query }),
   createSeries: (data: CreateRecipeSeriesPayload): Promise<RecipeDesignerSeriesCard> =>
     api.post('/recipe-designer/series', data),

@@ -14,7 +14,7 @@
       <template #header>
         <div class="card-header">
           <span>食谱设计</span>
-          <el-radio-group v-model="statusFilter" size="small" @change="loadSeries">
+          <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
             <el-radio-button :value="undefined">全部</el-radio-button>
             <el-radio-button value="DRAFT">草稿</el-radio-button>
             <el-radio-button value="PUBLIC">已发布</el-radio-button>
@@ -26,7 +26,7 @@
       <el-empty v-if="loading && series.length === 0" description="加载中…" />
       <el-empty v-else-if="!loading && series.length === 0" description="还没有设计系列，点击右上角「新建设计系列」开始" />
 
-      <div v-loading="loading" class="series-grid">
+      <div v-loading="loading" class="series-grid" @scroll.passive="handleSeriesScroll">
         <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name">{{ card.name }}</div>
@@ -46,7 +46,7 @@
               v-for="stage in card.stages"
               :key="stage.lifeStage"
               class="stage-cell stage-clickable"
-              :class="{ published: Boolean(stage.recipeId) }"
+              :class="stageCellClass(stage)"
               @click="openStage(card, stage)"
             >
               <div class="stage-label">{{ stage.label }}</div>
@@ -71,9 +71,6 @@
               </div>
             </div>
           </div>
-          <div class="stage-progress">
-            已发布 {{ card.publishedStageCount }} / {{ card.stages.length }} 个生命阶段
-          </div>
 
           <div class="series-card-actions">
             <el-button size="small" text @click="handleCardCommand('duplicate', card)">复制系列</el-button>
@@ -81,6 +78,9 @@
             <el-button size="small" text type="danger" @click="handleCardCommand('delete', card)">删除系列</el-button>
           </div>
         </div>
+      </div>
+      <div v-if="seriesHasMore" class="loadmore-tip">
+        {{ loadingMore ? '加载中…' : '继续向下滚动加载更多' }}
       </div>
     </el-card>
 
@@ -182,10 +182,14 @@ import {
 const router = useRouter()
 
 const loading = ref(false)
+const loadingMore = ref(false)
 const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
+const seriesPage = ref(1)
+const seriesHasMore = ref(true)
+const SERIES_PAGE_SIZE = 20
 
 const createDialogVisible = ref(false)
 const createForm = reactive<{ name: string; referenceDogId?: string; scenario?: FediafDogScenario }>({
@@ -218,24 +222,21 @@ function formatTime(value?: string): string {
 
 function stageTagType(stage: RecipeDesignerSeriesStage): 'success' | 'warning' | 'info' | 'danger' | 'primary' {
   if (stage.recipeId) return 'success'
-  if (stage.status === 'SUBMITTED') return 'warning'
-  if (stage.status === 'MODIFIED') return 'primary'
-  if (stage.status === 'NOT_DESIGNED') return 'info'
+  if (stage.draftId) return 'primary'
   return 'info'
 }
 
 function stageStatusLabel(stage: RecipeDesignerSeriesStage): string {
   if (stage.recipeId) return '已发布'
-  switch (stage.status) {
-    case 'MODIFIED':
-      return '设计中'
-    case 'SUBMITTED':
-      return '待审核'
-    case 'PRIVATE_CUSTOM':
-      return '定制'
-    default:
-      return '未设计'
-  }
+  if (stage.draftId) return '有草稿'
+  return '空白'
+}
+
+/** 阶段格子底色：已发布=绿底、有草稿=蓝底、空白=灰底 */
+function stageCellClass(stage: RecipeDesignerSeriesStage): Record<string, boolean> {
+  if (stage.recipeId) return { 'stage-cell-published': true }
+  if (stage.draftId) return { 'stage-cell-drafted': true }
+  return { 'stage-cell-blank': true }
 }
 
 function dogLabel(dog: DogProfile): string {
@@ -254,15 +255,43 @@ async function searchDogs(keyword: string) {
   }
 }
 
-async function loadSeries() {
-  loading.value = true
+async function loadSeries(reset = true) {
+  if (reset) {
+    seriesPage.value = 1
+    seriesHasMore.value = true
+    loading.value = true
+  } else {
+    if (loadingMore.value || !seriesHasMore.value) return
+    loadingMore.value = true
+  }
   try {
-    series.value = await recipeDesignerApi.listSeries({ status: statusFilter.value })
+    const res = await recipeDesignerApi.listSeries({
+      status: statusFilter.value,
+      page: reset ? 1 : seriesPage.value + 1,
+      pageSize: SERIES_PAGE_SIZE,
+    })
+    const items = Array.isArray(res) ? res : res.items
+    series.value = reset ? items : [...series.value, ...items]
+    seriesPage.value = reset ? 1 : seriesPage.value + 1
+    seriesHasMore.value = Array.isArray(res) ? false : Boolean(res.hasMore)
   } catch {
     series.value = []
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+function handleSeriesScroll(event: Event) {
+  const el = event.target as HTMLElement
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
+    void loadSeries(false)
+  }
+}
+
+/** 状态筛选变化：重置到第一页重新加载 */
+function onStatusFilterChange() {
+  void loadSeries(true)
 }
 
 function openCreateDialog() {
@@ -291,14 +320,20 @@ async function createSeries() {
   }
   creating.value = true
   try {
-    await recipeDesignerApi.createSeries({
+    const card = await recipeDesignerApi.createSeries({
       name,
       referenceDogId: createForm.referenceDogId,
       scenario: createForm.scenario
     })
     ElMessage.success('系列创建成功')
     createDialogVisible.value = false
-    await loadSeries()
+    // 创建成功后直接进入默认阶段（第一个有草稿的阶段）编辑器
+    const targetDraftId = card?.initialDraftId || card?.stages.find((s) => s.draftId)?.draftId
+    if (targetDraftId) {
+      router.push(`/recipe-designer/series/${card.id}/drafts/${targetDraftId}`)
+    } else {
+      await loadSeries(true)
+    }
   } catch {
     // 错误提示由拦截器统一处理
   } finally {
@@ -346,7 +381,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
     try {
       await recipeDesignerApi.duplicateSeries(card.id)
       ElMessage.success('系列已复制')
-      await loadSeries()
+      await loadSeries(true)
     } catch {
       // 已提示
     }
@@ -370,7 +405,7 @@ async function handleCardCommand(command: string, card: RecipeDesignerSeriesCard
         confirmUserVisibleRemoval: true
       })
       ElMessage.success('系列已删除')
-      await loadSeries()
+      await loadSeries(true)
     } catch (error) {
       if (error === 'cancel' || error === 'close') return
       // 其它错误已由拦截器提示
@@ -389,7 +424,7 @@ async function confirmRename() {
     await recipeDesignerApi.renameSeries(renameForm.id, { name })
     ElMessage.success('已重命名')
     renameDialogVisible.value = false
-    await loadSeries()
+    await loadSeries(true)
   } finally {
     renaming.value = false
   }
@@ -421,7 +456,7 @@ async function handleStageCommand(
     try {
       await recipeDesignerApi.duplicateSeriesStage(card.id, stage.lifeStage)
       ElMessage.success('已复制为新系列')
-      await loadSeries()
+      await loadSeries(true)
     } catch {
       // 拦截器已提示
     } finally {
@@ -486,7 +521,7 @@ async function confirmCopyItems() {
   }
 }
 
-onMounted(loadSeries)
+onMounted(() => loadSeries(true))
 </script>
 
 <style scoped>
@@ -521,6 +556,14 @@ onMounted(loadSeries)
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   min-height: 120px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+.loadmore-tip {
+  text-align: center;
+  padding: 10px 0;
+  font-size: 12px;
+  color: #909399;
 }
 .series-card {
   border: 1px solid #e4e7ed;
@@ -580,9 +623,17 @@ onMounted(loadSeries)
   border-color: #a0cfff;
   background: #ecf5ff;
 }
-.stage-cell.published {
+.stage-cell.stage-cell-published {
   border-color: #67c23a;
   background: #f0f9eb;
+}
+.stage-cell.stage-cell-drafted {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+.stage-cell.stage-cell-blank {
+  border-color: #ebeef5;
+  background: #fafafa;
 }
 .stage-label {
   font-size: 11px;
@@ -616,11 +667,6 @@ onMounted(loadSeries)
 .click-guard {
   display: inline-flex;
   align-items: center;
-}
-.stage-progress {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #909399;
 }
 .series-card-actions {
   margin-top: 10px;

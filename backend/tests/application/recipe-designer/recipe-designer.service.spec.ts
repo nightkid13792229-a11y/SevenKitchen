@@ -6368,7 +6368,7 @@ describe('RecipeDesignerService', () => {
       expect(query.include.recipes.select).not.toHaveProperty('items');
     });
 
-    it('paginates the series workbench query with the item fields needed for revision comparison', async () => {
+    it('paginates the series workbench query without loading full item details', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({ id: 'series-page-1' }),
         seriesRecord({ id: 'series-page-2' }),
@@ -6396,21 +6396,11 @@ describe('RecipeDesignerService', () => {
           orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           include: expect.objectContaining({
             designs: expect.objectContaining({
+              // 列表页只按有无原料判断，不加载 items 全量与嵌套档案，避免拖慢
               select: expect.objectContaining({
-                items: expect.objectContaining({
-                  select: expect.objectContaining({
-                    ingredientId: true,
-                    nutritionFoodId: true,
-                    weightG: true,
-                    includeInAssessment: true,
-                    preparationMethod: true,
-                    nutrientTargetKey: true,
-                    nutrientTargetValue: true,
-                    supplementTargets: true,
-                    sortOrder: true,
-                  }),
-                }),
                 _count: { select: { items: true } },
+                seriesId: true,
+                seriesLifeStage: true,
               }),
             }),
           }),

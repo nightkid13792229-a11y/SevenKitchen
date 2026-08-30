@@ -26,7 +26,7 @@
       <el-empty v-if="loading && series.length === 0" description="加载中…" />
       <el-empty v-else-if="!loading && series.length === 0" description="还没有设计系列，点击右上角「新建设计系列」开始" />
 
-      <div v-loading="loading" class="series-grid" @scroll.passive="handleSeriesScroll">
+      <div v-loading="loading" class="series-grid">
         <div v-for="card in series" :key="card.id" class="series-card">
           <div class="series-card-head">
             <div class="series-name">{{ card.name }}</div>
@@ -80,7 +80,10 @@
         </div>
       </div>
       <div v-if="seriesHasMore" class="loadmore-tip">
-        {{ loadingMore ? '加载中…' : '继续向下滚动加载更多' }}
+        <div ref="loadMoreSentinel" class="load-more-sentinel" />
+        <el-button size="small" text :loading="loadingMore" @click="loadSeries(false)">
+          {{ loadingMore ? '加载中…' : '加载更多系列' }}
+        </el-button>
       </div>
     </el-card>
 
@@ -164,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus } from '@element-plus/icons-vue'
@@ -190,6 +193,8 @@ const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined
 const seriesPage = ref(1)
 const seriesHasMore = ref(true)
 const SERIES_PAGE_SIZE = 20
+const loadMoreSentinel = ref<HTMLElement | null>(null)
+let seriesObserver: IntersectionObserver | null = null
 
 const createDialogVisible = ref(false)
 const createForm = reactive<{ name: string; referenceDogId?: string; scenario?: FediafDogScenario }>({
@@ -282,10 +287,27 @@ async function loadSeries(reset = true) {
   }
 }
 
-function handleSeriesScroll(event: Event) {
-  const el = event.target as HTMLElement
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
-    void loadSeries(false)
+/** 用 IntersectionObserver 监听底部哨兵，接近时自动加载下一页（不依赖具体滚动容器） */
+function setupSeriesObserver() {
+  if (typeof IntersectionObserver === 'undefined') return
+  if (seriesObserver) seriesObserver.disconnect()
+  seriesObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && seriesHasMore.value && !loadingMore.value) {
+          void loadSeries(false)
+        }
+      }
+    },
+    { rootMargin: '120px' }
+  )
+  if (loadMoreSentinel.value) seriesObserver.observe(loadMoreSentinel.value)
+}
+
+function teardownSeriesObserver() {
+  if (seriesObserver) {
+    seriesObserver.disconnect()
+    seriesObserver = null
   }
 }
 
@@ -521,7 +543,12 @@ async function confirmCopyItems() {
   }
 }
 
-onMounted(() => loadSeries(true))
+onMounted(async () => {
+  await loadSeries(true)
+  setupSeriesObserver()
+})
+
+onBeforeUnmount(teardownSeriesObserver)
 </script>
 
 <style scoped>
@@ -556,14 +583,16 @@ onMounted(() => loadSeries(true))
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   min-height: 120px;
-  max-height: calc(100vh - 280px);
-  overflow-y: auto;
 }
 .loadmore-tip {
   text-align: center;
   padding: 10px 0;
   font-size: 12px;
   color: #909399;
+}
+.load-more-sentinel {
+  height: 1px;
+  width: 100%;
 }
 .series-card {
   border: 1px solid #e4e7ed;

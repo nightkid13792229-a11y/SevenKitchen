@@ -265,7 +265,23 @@ const DESIGN_RECIPE_LIST_SELECT = {
 };
 
 const DESIGN_RECIPE_SERIES_LIST_SELECT = {
-  ...DESIGN_RECIPE_LIST_SELECT,
+  id: true,
+  name: true,
+  version: true,
+  status: true,
+  fediafDogScenario: true,
+  nutritionStandard: true,
+  createdBy: true,
+  publishedAt: true,
+  publishedRecipeId: true,
+  publishedRecipeVersion: true,
+  revisionOfDesignRecipeId: true,
+  revisionBaseRecipeId: true,
+  customerDogId: true,
+  isCompliant: true,
+  reviewStatus: true,
+  createdAt: true,
+  updatedAt: true,
   _count: {
     select: { items: true },
   },

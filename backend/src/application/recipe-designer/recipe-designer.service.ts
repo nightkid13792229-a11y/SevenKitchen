@@ -271,6 +271,9 @@ const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   status: true,
   fediafDogScenario: true,
   nutritionStandard: true,
+  targetHealthTags: true,
+  applicableLifeStages: true,
+  notes: true,
   createdBy: true,
   publishedAt: true,
   publishedRecipeId: true,
@@ -284,6 +287,22 @@ const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   updatedAt: true,
   _count: {
     select: { items: true },
+  },
+  // 修订对比需要 item 标量字段；列表不需要食材/营养档案嵌套，故只取标量
+  items: {
+    select: {
+      id: true,
+      ingredientId: true,
+      nutritionFoodId: true,
+      weightG: true,
+      includeInAssessment: true,
+      preparationMethod: true,
+      nutrientTargetKey: true,
+      nutrientTargetValue: true,
+      supplementTargets: true,
+      sortOrder: true,
+    },
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
   },
   seriesId: true,
   seriesLifeStage: true,

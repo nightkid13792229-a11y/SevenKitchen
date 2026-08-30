@@ -6396,11 +6396,22 @@ describe('RecipeDesignerService', () => {
           orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           include: expect.objectContaining({
             designs: expect.objectContaining({
-              // 列表页只按有无原料判断，不加载 items 全量与嵌套档案，避免拖慢
+              // 列表页只需要 item 标量字段（修订对比用），不加载食材/营养档案嵌套，避免拖慢
               select: expect.objectContaining({
                 _count: { select: { items: true } },
                 seriesId: true,
                 seriesLifeStage: true,
+                targetHealthTags: true,
+                applicableLifeStages: true,
+                items: expect.objectContaining({
+                  select: expect.objectContaining({
+                    ingredientId: true,
+                    nutritionFoodId: true,
+                    weightG: true,
+                    supplementTargets: true,
+                    sortOrder: true,
+                  }),
+                }),
               }),
             }),
           }),

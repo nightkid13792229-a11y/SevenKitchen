@@ -2383,6 +2383,9 @@ export class AdminController {
       region: address.region,
       detail: address.detail,
       isDefault: address.isDefault ?? false,
+      usedByCurrentDog: address.usedByCurrentDog ?? false,
+      dogAddressUsageCount: address.dogAddressUsageCount ?? 0,
+      dogAddressLastUsedAt: address.dogAddressLastUsedAt ?? null,
     };
   }
 

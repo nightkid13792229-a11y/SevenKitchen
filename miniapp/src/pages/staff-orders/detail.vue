@@ -21,7 +21,10 @@
         <view class="info-list">
           <view class="info-item">
             <text class="info-label">订单号</text>
-            <text class="info-value">{{ order.id }}</text>
+            <view class="info-value-with-action">
+              <text class="info-value">{{ order.id }}</text>
+              <text class="action-link" @tap="copyOrderId">复制</text>
+            </view>
           </view>
           <view class="info-item">
             <text class="info-label">订单状态</text>
@@ -158,6 +161,68 @@
         </view>
       </view>
 
+      <!-- 备餐图 -->
+      <view class="section" v-if="hasProductionPhotos">
+        <view class="section-title-row">
+          <view>
+            <view class="section-title compact">备餐图</view>
+            <text class="section-subtitle" v-if="order.productionPhotos?.uploadedAt">
+              上传时间：{{ formatDateTime(order.productionPhotos.uploadedAt) }}
+            </text>
+          </view>
+          <button
+            v-if="shareToken"
+            class="address-action-btn secondary photo-share-btn"
+            open-type="share"
+            data-share-type="photos"
+          >
+            一键分享
+          </button>
+        </view>
+        <view class="production-photo-grid">
+          <image
+            v-for="(photo, index) in order.productionPhotos?.photos || []"
+            :key="`${photo}-${index}`"
+            class="production-photo"
+            :src="normalizeImageUrl(photo)"
+            mode="aspectFill"
+            @tap="previewProductionPhoto(index)"
+          />
+        </view>
+      </view>
+
+      <!-- 管理员备注 -->
+      <view class="section remark-section">
+        <view class="section-title">管理员备注</view>
+        <textarea
+          v-model="remarkDraft"
+          class="remark-textarea"
+          maxlength="200"
+          auto-height
+          placeholder="填写分装要求、制作顺序、特殊提醒"
+        />
+        <view class="remark-meta">
+          <text class="remark-hint">仅员工/管理员可见，会同步到生产制作单和打印版</text>
+          <text class="remark-count">{{ remarkDraft.length }}/200</text>
+        </view>
+        <view class="remark-actions">
+          <button
+            class="remark-btn secondary"
+            :disabled="savingAdminRemark || !canClearAdminRemark"
+            @tap="clearAdminRemark"
+          >
+            清空
+          </button>
+          <button
+            class="remark-btn primary"
+            :disabled="savingAdminRemark || !isAdminRemarkDirty"
+            @tap="saveAdminRemark"
+          >
+            {{ savingAdminRemark ? '保存中...' : '保存备注' }}
+          </button>
+        </view>
+      </view>
+
       <!-- 收货地址 -->
       <view class="section">
         <view class="section-title">📍 收货地址</view>
@@ -212,7 +277,7 @@
         <button v-if="canConfirmPayment" class="action-btn primary" @tap="confirmPayment">确认收款</button>
         <button v-if="canStartProduction" class="action-btn orange" @tap="startProduction">开始制作</button>
         <button v-if="canShip" class="action-btn cyan" @tap="shipOrder">发货</button>
-        <button v-if="canAdjustAmount" class="action-btn orange" @tap="openAmountPanel">待支付改价</button>
+        <button v-if="canAdjustAmount" class="action-btn orange" @tap="openAmountPanel">修改价格</button>
         <button v-if="canAdminRefund" class="action-btn red" @tap="adminRefundOrder">管理员退款/退差价</button>
       </view>
     </view>
@@ -236,18 +301,41 @@
           <button class="address-action-btn primary" @tap="openCreateAddressFormFromSelect">录入新地址</button>
         </view>
         <view v-else class="address-select-list">
-          <view
-            v-for="address in customerAddresses"
-            :key="address.id"
-            class="address-select-item"
-            @tap="selectCustomerAddress(address)"
-          >
-            <view class="address-header">
-              <text class="recipient-name">{{ address.recipientName }}</text>
-              <text class="recipient-phone">{{ formatPhoneForStaffOrder(address.phone) }}</text>
-              <text v-if="address.isDefault" class="default-tag">默认</text>
+          <view v-if="dogMatchedAddresses.length" class="address-option-group">
+            <text class="address-group-title">该狗狗常用地址</text>
+            <view
+              v-for="address in dogMatchedAddresses"
+              :key="address.id"
+              class="address-select-item"
+              @tap="selectCustomerAddress(address)"
+            >
+              <view class="address-header">
+                <text class="recipient-name">{{ address.recipientName }}</text>
+                <text class="recipient-phone">{{ formatPhoneForStaffOrder(address.phone) }}</text>
+                <text class="default-tag">用过{{ address.dogAddressUsageCount || 1 }}次</text>
+                <text v-if="address.isDefault" class="default-tag">默认</text>
+              </view>
+              <text class="address-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
+              <text v-if="address.dogAddressLastUsedAt" class="address-meta">
+                最近使用：{{ formatDateTime(address.dogAddressLastUsedAt) }}
+              </text>
             </view>
-            <text class="address-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
+          </view>
+          <view v-if="otherCustomerAddresses.length" class="address-option-group">
+            <text class="address-group-title">客户其他地址</text>
+            <view
+              v-for="address in otherCustomerAddresses"
+              :key="address.id"
+              class="address-select-item"
+              @tap="selectCustomerAddress(address)"
+            >
+              <view class="address-header">
+                <text class="recipient-name">{{ address.recipientName }}</text>
+                <text class="recipient-phone">{{ formatPhoneForStaffOrder(address.phone) }}</text>
+                <text v-if="address.isDefault" class="default-tag">默认</text>
+              </view>
+              <text class="address-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
+            </view>
           </view>
           <button class="address-action-btn primary full" @tap="openCreateAddressFormFromSelect">录入新地址</button>
         </view>
@@ -326,7 +414,7 @@
     <view v-if="amountVisible" class="modal-mask" @tap="closeAmountPanel">
       <view class="modal-panel" @tap.stop>
         <view class="modal-header">
-          <text class="modal-title">待支付订单改价</text>
+          <text class="modal-title">修改订单价格</text>
           <text class="modal-close" @tap="closeAmountPanel">×</text>
         </view>
         <view class="form-item">
@@ -337,7 +425,7 @@
           <text class="form-label">改价原因</text>
           <textarea class="form-textarea" v-model="amountReason" placeholder="例如客服协商优惠、手工减免" />
         </view>
-        <text class="address-lock-hint">仅待支付订单允许直接改价；已支付订单请走退款或退差价。</text>
+        <text class="address-lock-hint">待支付订单、线下已支付未发货订单允许直接改价；微信已支付订单请走退款或退差价。</text>
         <button class="address-save-btn" :disabled="savingAmount" @tap="saveAmountAdjustment">
           {{ savingAmount ? '保存中...' : '确认改价' }}
         </button>
@@ -444,6 +532,7 @@ import {
   listOrderCustomerAddresses,
   retryWechatRefund,
   switchOrderDog as switchExistingOrderDog,
+  updateAdminOrderRemark,
   updateOrderCustomerAddress,
   updateOrderItemPackagePlan,
   updateStaffCustomerServiceAmount,
@@ -452,6 +541,7 @@ import {
   type StaffOrderDog,
 } from '../../api/orders'
 import { formatShortDateTime } from '../../utils/date'
+import { normalizeImageUrl } from '../../utils/config'
 
 // 获取页面参数
 const orderId = ref('')
@@ -483,6 +573,7 @@ interface OrderDetail {
   paidAt?: string | null
   customerName?: string
   customerPhone?: string
+  adminRemark?: string | null
   customer?: {
     nickname?: string | null
     phone?: string | null
@@ -497,6 +588,11 @@ interface OrderDetail {
   trackingNumber?: string | null
   carrierCode?: string | null
   shippedAt?: string | null
+  productionPhotos?: {
+    unitId: string
+    photos: string[]
+    uploadedAt: string | null
+  } | null
   address?: {
     id?: string
     recipientName: string
@@ -583,6 +679,13 @@ const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
 const shippedShareTitle = ref('SevenKitchen 已发货')
 const shippedShareImage = ref('')
+const shareToken = ref('')
+const shareTokenOrderId = ref('')
+const sharePhotoImageUrl = ref('')
+const sharePhotoSourceUrl = ref('')
+const isPreparingSharePhotoImage = ref(false)
+const remarkDraft = ref('')
+const savingAdminRemark = ref(false)
 const amountVisible = ref(false)
 const amountDraft = ref('')
 const amountReason = ref('')
@@ -657,9 +760,17 @@ const canEditPackagePlan = computed(() => {
   return ['INIT', 'PENDING_PAYMENT', 'PAID'].includes(order.value.status)
 })
 
+const isOfflinePaidOrder = computed(() => {
+  if (!order.value) return false
+  const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
+  return paid && ['OFFLINE', 'OFFLINE_WECHAT'].includes(order.value.paymentMethod || '')
+})
+
 const canAdjustAmount = computed(() => {
   if (!order.value) return false
   const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
+  if (['SHIPPED', 'COMPLETED', 'CANCELLED'].includes(order.value.status)) return false
+  if (isOfflinePaidOrder.value) return true
   return !paid && ['INIT', 'PENDING_PAYMENT'].includes(order.value.status)
 })
 
@@ -690,6 +801,18 @@ const orderCustomerPhone = computed(() => {
 })
 
 const currentDogId = computed(() => firstOrderItem.value?.dog?.id || firstOrderItem.value?.dogId || order.value?.dogId || '')
+
+const hasProductionPhotos = computed(() => {
+  return Boolean(order.value?.productionPhotos?.photos?.length)
+})
+
+const dogMatchedAddresses = computed(() => {
+  return customerAddresses.value.filter((address) => address.usedByCurrentDog)
+})
+
+const otherCustomerAddresses = computed(() => {
+  return customerAddresses.value.filter((address) => !address.usedByCurrentDog)
+})
 
 const totalQuantityG = computed(() => {
   return orderItems.value.reduce((sum, item) => sum + toNumber(item.quantityG), 0)
@@ -730,6 +853,10 @@ const packageDraftTotalG = computed(() => {
     return sum + readPositiveInteger(row.packageSpecG) * readPositiveInteger(row.packageCount)
   }, 0)
 })
+const normalizedRemarkDraft = computed(() => remarkDraft.value.trim())
+const currentAdminRemark = computed(() => (order.value?.adminRemark ?? '').trim())
+const isAdminRemarkDirty = computed(() => normalizedRemarkDraft.value !== currentAdminRemark.value)
+const canClearAdminRemark = computed(() => Boolean(normalizedRemarkDraft.value || currentAdminRemark.value))
 
 function getStoredUser() {
   try {
@@ -758,6 +885,8 @@ async function loadOrderDetail() {
 
     if (response.code === 0 && response.data) {
       order.value = response.data
+      remarkDraft.value = response.data.adminRemark || ''
+      void ensureProductionPhotoShareToken()
     }
   } catch (error: any) {
     console.error('[OrderDetail] Load error:', error)
@@ -983,6 +1112,19 @@ function copyPhone() {
   })
 }
 
+function copyOrderId() {
+  if (!order.value?.id) return
+  uni.setClipboardData({
+    data: order.value.id,
+    success: () => {
+      uni.showToast({
+        title: '订单号已复制',
+        icon: 'success',
+      })
+    },
+  })
+}
+
 function copyFullAddress() {
   if (!order.value?.address) return
   const address = order.value.address
@@ -1001,6 +1143,160 @@ function copyFullAddress() {
         title: '地址已复制',
         icon: 'success',
       })
+    },
+  })
+}
+
+function getFirstProductionPhotoUrl(): string {
+  return order.value?.productionPhotos?.photos?.[0] || ''
+}
+
+function getProductionPhotosShareDogName(): string {
+  const names = new Set<string>()
+  orderItems.value.forEach((item) => {
+    const dogName = (item.dog?.name || '').trim()
+    if (dogName) {
+      names.add(dogName)
+    }
+  })
+  const dogNames = Array.from(names)
+  if (dogNames.length === 0) return 'SevenKitchen'
+  if (dogNames.length === 1) return dogNames[0]
+  return `${dogNames[0]}等${dogNames.length}只狗狗`
+}
+
+function getProductionPhotosShareTitle(): string {
+  return `${getProductionPhotosShareDogName()}备餐图`
+}
+
+function getProductionPhotosShareImageUrl(): string {
+  return sharePhotoImageUrl.value || normalizeImageUrl(getFirstProductionPhotoUrl())
+}
+
+async function prepareProductionPhotoShareImage() {
+  const firstPhoto = normalizeImageUrl(getFirstProductionPhotoUrl())
+  if (!firstPhoto) {
+    sharePhotoImageUrl.value = ''
+    sharePhotoSourceUrl.value = ''
+    isPreparingSharePhotoImage.value = false
+    return
+  }
+  if (sharePhotoSourceUrl.value === firstPhoto && (sharePhotoImageUrl.value || isPreparingSharePhotoImage.value)) {
+    return
+  }
+
+  sharePhotoSourceUrl.value = firstPhoto
+  sharePhotoImageUrl.value = ''
+  if (!/^https?:\/\//.test(firstPhoto)) {
+    sharePhotoImageUrl.value = firstPhoto
+    return
+  }
+
+  isPreparingSharePhotoImage.value = true
+  try {
+    const downloadRes = await uni.downloadFile({ url: firstPhoto })
+    if (sharePhotoSourceUrl.value !== firstPhoto) return
+    const statusCode = Number(downloadRes.statusCode || 0)
+    sharePhotoImageUrl.value =
+      statusCode >= 200 && statusCode < 300 && downloadRes.tempFilePath ? downloadRes.tempFilePath : firstPhoto
+  } catch (error) {
+    if (sharePhotoSourceUrl.value === firstPhoto) {
+      sharePhotoImageUrl.value = firstPhoto
+    }
+  } finally {
+    if (sharePhotoSourceUrl.value === firstPhoto) {
+      isPreparingSharePhotoImage.value = false
+    }
+  }
+}
+
+async function ensureProductionPhotoShareToken() {
+  if (!order.value) return
+  if (!hasProductionPhotos.value) {
+    shareToken.value = ''
+    shareTokenOrderId.value = ''
+    sharePhotoImageUrl.value = ''
+    sharePhotoSourceUrl.value = ''
+    return
+  }
+  void prepareProductionPhotoShareImage()
+  if (shareToken.value && shareTokenOrderId.value === order.value.id) {
+    return
+  }
+
+  try {
+    const response = await request({
+      url: `/orders/${order.value.id}/share-photos`,
+      method: 'POST',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+    if (response.code === 0 && response.data?.token) {
+      shareToken.value = response.data.token
+      shareTokenOrderId.value = order.value.id
+    } else {
+      shareToken.value = ''
+      shareTokenOrderId.value = ''
+    }
+  } catch (error) {
+    console.error('[OrderDetail] Prepare production photo share token error:', error)
+    shareToken.value = ''
+    shareTokenOrderId.value = ''
+  }
+}
+
+function previewProductionPhoto(index: number) {
+  const photos = order.value?.productionPhotos?.photos?.map((photo) => normalizeImageUrl(photo)).filter(Boolean) || []
+  if (photos.length === 0) return
+  uni.previewImage({
+    current: index,
+    urls: photos,
+  })
+}
+
+async function saveAdminRemark() {
+  if (!order.value || savingAdminRemark.value || !isAdminRemarkDirty.value) return
+
+  savingAdminRemark.value = true
+  uni.showLoading({ title: '保存中...' })
+  try {
+    const response = await updateAdminOrderRemark(order.value.id, normalizedRemarkDraft.value || null)
+    if (response.code !== 0 || !response.data) {
+      throw new Error(response.message || '保存失败')
+    }
+
+    order.value = {
+      ...order.value,
+      ...response.data,
+      adminRemark: response.data.adminRemark ?? null,
+    }
+    remarkDraft.value = response.data.adminRemark || ''
+    uni.showToast({
+      title: '备注已保存',
+      icon: 'success',
+    })
+  } catch (error: any) {
+    console.error('[OrderDetail] Update admin remark error:', error)
+    uni.showToast({
+      title: error?.message || '保存失败',
+      icon: 'none',
+    })
+  } finally {
+    savingAdminRemark.value = false
+    uni.hideLoading()
+  }
+}
+
+function clearAdminRemark() {
+  if (!canClearAdminRemark.value || savingAdminRemark.value) return
+
+  uni.showModal({
+    title: '清空备注',
+    content: '确定要清空管理员备注吗？',
+    success: async (res) => {
+      if (!res.confirm) return
+      remarkDraft.value = ''
+      await saveAdminRemark()
     },
   })
 }
@@ -1133,6 +1429,15 @@ async function confirmShipping() {
 }
 
 onShareAppMessage((event: any) => {
+  const isSharePhotos = event?.target?.dataset?.shareType === 'photos'
+  if (isSharePhotos && shareToken.value) {
+    return {
+      title: getProductionPhotosShareTitle(),
+      path: `/pages/shared-photos/index?token=${shareToken.value}`,
+      imageUrl: getProductionPhotosShareImageUrl(),
+    }
+  }
+
   const isShippingNotice = event?.target?.dataset?.shareType === 'shipping-notice'
   if (isShippingNotice && shippedShareOrderId.value) {
     return {
@@ -1660,6 +1965,26 @@ async function saveAddressForm() {
   margin-bottom: 24rpx;
 }
 
+.section-title.compact {
+  margin-bottom: 4rpx;
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.section-subtitle,
+.address-meta {
+  display: block;
+  font-size: 24rpx;
+  color: #8a94a6;
+  line-height: 1.5;
+}
+
 // 信息列表
 .info-list {
   display: flex;
@@ -1682,6 +2007,21 @@ async function saveAddressForm() {
   font-size: 28rpx;
   color: #333;
   font-weight: 500;
+}
+
+.info-value-with-action {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16rpx;
+}
+
+.info-value-with-action .info-value {
+  min-width: 0;
+  text-align: right;
+  word-break: break-all;
 }
 
 .action-link {
@@ -1833,6 +2173,104 @@ async function saveAddressForm() {
   text-align: right;
 }
 
+.production-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.production-photo {
+  width: 100%;
+  height: 156rpx;
+  border-radius: 10rpx;
+  background-color: #f2f4f7;
+}
+
+.photo-share-btn {
+  flex-shrink: 0;
+  min-width: 150rpx;
+}
+
+.remark-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.remark-section .section-title {
+  margin-bottom: 0;
+}
+
+.remark-textarea {
+  width: 100%;
+  min-height: 180rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  border: 2rpx solid #eef2f6;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #333;
+}
+
+.remark-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24rpx;
+}
+
+.remark-hint {
+  flex: 1;
+  font-size: 24rpx;
+  color: #8a94a6;
+  line-height: 1.5;
+}
+
+.remark-count {
+  font-size: 24rpx;
+  color: #999;
+  white-space: nowrap;
+}
+
+.remark-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.remark-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  border: none;
+}
+
+.remark-btn.primary {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.remark-btn.secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 2rpx solid #d6e8ff;
+}
+
+.remark-btn[disabled] {
+  opacity: 0.5;
+}
+
+.remark-btn::after {
+  border: none;
+}
+
 // 地址卡片
 .address-card {
   display: flex;
@@ -1981,6 +2419,18 @@ async function saveAddressForm() {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
+}
+
+.address-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.address-group-title {
+  font-size: 25rpx;
+  color: #667085;
+  font-weight: 700;
 }
 
 .address-select-item {

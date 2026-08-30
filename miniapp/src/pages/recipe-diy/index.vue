@@ -396,6 +396,7 @@ interface Breed {
 }
 
 const recipeId = ref('')
+const shareToken = ref('')
 const selectedLifeStage = ref('')
 const recipe = ref<Recipe>({
   id: '',
@@ -544,6 +545,7 @@ onMounted(async () => {
   console.log('[页面参数]', options)
 
   recipeId.value = options.recipeId || ''
+  shareToken.value = options.shareToken || ''
   initialDogId.value = options.dogId || ''
   selectedLifeStage.value = options.lifeStage || ''
   console.log('[食谱ID]', recipeId.value)
@@ -586,10 +588,18 @@ async function loadRecipe() {
   console.log('[RecipeDiy] loadRecipe 开始, recipeId:', recipeId.value)
 
   try {
+    const requestData: Record<string, string> = {}
+    if (selectedLifeStage.value) {
+      requestData.lifeStage = selectedLifeStage.value
+    }
+    if (shareToken.value) {
+      requestData.shareToken = shareToken.value
+    }
+
     const res = await request({
       url: `/recipes/${recipeId.value}`,
       method: 'GET',
-      data: selectedLifeStage.value ? { lifeStage: selectedLifeStage.value } : {}
+      data: requestData
     })
 
     console.log('[RecipeDiy] loadRecipe API响应:', res)
@@ -1028,7 +1038,8 @@ async function generateAndNavigateToSheet() {
       url: `/recipes/${recipeId.value}/diy-sheet`,
       method: 'POST',
       data: {
-        dogId: selectedDogId.value
+        dogId: selectedDogId.value,
+        ...(shareToken.value ? { shareToken: shareToken.value } : {})
       }
     })
 
@@ -1063,6 +1074,7 @@ function navigateToSheet() {
     packageCount: totalPackages.value,
     packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
     packagePlan: JSON.stringify(normalizedPackagePlan.value),
+    ...(shareToken.value ? { shareToken: shareToken.value } : {})
   }
 
   const queryString = Object.entries(params)

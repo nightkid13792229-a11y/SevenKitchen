@@ -301,7 +301,7 @@ CREATE_ORDER_BODY="{
     \"quantityG\": ${QUANTITY_G},
     \"packageCount\": ${PACKAGE_COUNT},
     \"packageSpecG\": ${PACKAGE_SPEC_G},
-    \"customRequirements\": {}
+    \"customRequirements\": \"\"
   }],
   \"addressId\": \"${ADDRESS_ID}\",
   \"targetProductionDate\": \"2025-12-22T00:00:00Z\"

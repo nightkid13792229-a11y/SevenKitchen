@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 
 import {
   auditNutritionProfileForImport,
+  type NormalizedNutrientValue,
   type NutritionImportAuditResult,
 } from './nutrition-audit';
 import {
@@ -13,13 +14,25 @@ import {
   type ProcurementSkuManifest,
 } from './ingredient-import-manifest';
 import type { DatabaseAlignmentResult } from './db-alignment';
+import { createEmptyNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
+import {
+  findNutritionField,
+  type NutritionFieldTab,
+} from '../../domain/ingredient/nutrition-field-catalog';
+import type {
+  NutritionProfileV2,
+  NutritionRawBasisType,
+  NutritionSourceForm,
+} from '../../domain/ingredient/types';
 
 export type LocalIngredientImportErrorCode =
   | 'DB_ALIGNMENT_NOT_OK'
   | 'DB_ALIGNMENT_REPORT_MISMATCH'
   | 'INGREDIENT_ALREADY_EXISTS'
   | 'NUTRITION_AUDIT_BLOCKING'
-  | ReturnType<typeof validateIngredientImportManifest>['errors'][number]['code'];
+  | ReturnType<
+      typeof validateIngredientImportManifest
+    >['errors'][number]['code'];
 
 export class LocalIngredientImportError extends Error {
   constructor(
@@ -35,8 +48,10 @@ export class LocalIngredientImportError extends Error {
 export interface LocalIngredientImportAudit {
   version: 1;
   createdAt: string;
-  alignmentId: string;
+  alignmentId: string | null;
+  dbAlignmentStatus: 'passing' | 'not-required-for-local';
   manifestHash: string;
+  packageManifestHash: string;
   ingredientIds: string[];
   nutritionFoodIds: string[];
   nutritionFoodMappingIds: string[];
@@ -75,8 +90,7 @@ export interface StandardIngredientImportTransaction {
   };
 }
 
-export interface StandardIngredientImportPrismaClient
-  extends StandardIngredientImportTransaction {
+export interface StandardIngredientImportPrismaClient extends StandardIngredientImportTransaction {
   $transaction<T>(
     callback: (tx: StandardIngredientImportTransaction) => Promise<T>,
   ): Promise<T>;
@@ -85,7 +99,7 @@ export interface StandardIngredientImportPrismaClient
 export interface ApplyLocalIngredientImportInput {
   prisma: StandardIngredientImportPrismaClient;
   manifest: IngredientImportManifest;
-  alignment: DatabaseAlignmentResult;
+  alignment?: DatabaseAlignmentResult | null;
   auditOutputPath: string;
   now?: Date;
   writeAuditFile?: (
@@ -105,7 +119,6 @@ interface TransactionResult {
 export async function applyLocalIngredientImport(
   input: ApplyLocalIngredientImportInput,
 ): Promise<LocalIngredientImportResult> {
-  assertAlignment(input.manifest, input.alignment);
   assertManifestValid(input.manifest);
 
   const nutritionAudits = buildNutritionAudits(input.manifest);
@@ -133,8 +146,9 @@ export async function applyLocalIngredientImport(
   const audit: LocalIngredientImportAudit = {
     version: 1,
     createdAt: (input.now ?? new Date()).toISOString(),
-    alignmentId: input.alignment.id,
+    ...summarizeLocalAlignment(input.alignment),
     manifestHash: sha256Stable(input.manifest),
+    packageManifestHash: buildProductionPackageManifestHash(input.manifest),
     ...transactionResult,
     nutritionAudits,
   };
@@ -147,28 +161,20 @@ export async function applyLocalIngredientImport(
   };
 }
 
-function assertAlignment(
-  manifest: IngredientImportManifest,
-  alignment: DatabaseAlignmentResult,
-): void {
-  if (!alignment.ok) {
-    throw new LocalIngredientImportError(
-      'DB_ALIGNMENT_NOT_OK',
-      'Local ingredient import requires passing local/production DB alignment.',
-      alignment.blockingIssues,
-    );
+function summarizeLocalAlignment(
+  alignment: DatabaseAlignmentResult | null | undefined,
+): Pick<LocalIngredientImportAudit, 'alignmentId' | 'dbAlignmentStatus'> {
+  if (alignment?.ok === true) {
+    return {
+      alignmentId: alignment.id,
+      dbAlignmentStatus: 'passing',
+    };
   }
 
-  if (manifest.dbAlignmentReport?.id !== alignment.id) {
-    throw new LocalIngredientImportError(
-      'DB_ALIGNMENT_REPORT_MISMATCH',
-      'Manifest DB alignment report id does not match the checked alignment result.',
-      {
-        manifestAlignmentId: manifest.dbAlignmentReport?.id ?? null,
-        alignmentId: alignment.id,
-      },
-    );
-  }
+  return {
+    alignmentId: null,
+    dbAlignmentStatus: 'not-required-for-local',
+  };
 }
 
 function assertManifestValid(manifest: IngredientImportManifest): void {
@@ -196,7 +202,7 @@ function buildNutritionAudits(
     const audit = auditNutritionProfileForImport({
       profileName: profile.name ?? profile.id,
       nutrients: profile.nutrients,
-      sourceForms: {},
+      sourceForms: profile.sourceForms ?? {},
     });
     if (audit.blockingIssues.length > 0) {
       throw new LocalIngredientImportError(
@@ -259,9 +265,13 @@ async function applyManifestInTransaction(
   return result;
 }
 
-function buildIngredientData(manifest: IngredientImportManifest): Record<string, unknown> {
+function buildIngredientData(
+  manifest: IngredientImportManifest,
+): Record<string, unknown> {
   const ingredient = manifest.ingredient;
   const isSupplement = ingredient.type === 'SUPPLEMENT';
+  const primaryNutritionProfile =
+    ingredient.type === 'FOOD' ? findPrimaryNutritionProfile(manifest) : null;
 
   return {
     name: ingredient.name,
@@ -269,7 +279,8 @@ function buildIngredientData(manifest: IngredientImportManifest): Record<string,
     procurementStrategy: 'DAILY_PURCHASE',
     diyEnabled: ingredient.type === 'FOOD',
     procurementEnabled:
-      ingredient.type === 'FOOD' && (ingredient.procurementSkus?.length ?? 0) > 0,
+      ingredient.type === 'FOOD' &&
+      (ingredient.procurementSkus?.length ?? 0) > 0,
     brand: ingredient.brand ?? null,
     productModel: ingredient.productModel ?? null,
     purchaseChannel: null,
@@ -277,11 +288,8 @@ function buildIngredientData(manifest: IngredientImportManifest): Record<string,
     baseUnit: 'G',
     unitDisplayLabel: 'g',
     nutritionProfile:
-      ingredient.type === 'FOOD'
-        ? (manifest.nutritionProfiles?.find((profile) => profile.isPrimary)
-            ?.nutrients ??
-          manifest.nutritionProfiles?.[0]?.nutrients ??
-          null)
+      primaryNutritionProfile !== null
+        ? buildNutritionFoodProfile(primaryNutritionProfile)
         : null,
     purchaseUnit: 'g',
     purchaseToBaseRatio: 1,
@@ -299,6 +307,16 @@ function buildIngredientData(manifest: IngredientImportManifest): Record<string,
   };
 }
 
+function findPrimaryNutritionProfile(
+  manifest: IngredientImportManifest,
+): IngredientImportNutritionProfile | null {
+  return (
+    manifest.nutritionProfiles?.find((profile) => profile.isPrimary) ??
+    manifest.nutritionProfiles?.[0] ??
+    null
+  );
+}
+
 async function applyNutritionProfiles(
   tx: StandardIngredientImportTransaction,
   manifest: IngredientImportManifest,
@@ -306,7 +324,8 @@ async function applyNutritionProfiles(
   result: TransactionResult,
 ): Promise<void> {
   const profiles = manifest.nutritionProfiles ?? [];
-  const primaryProfile = profiles.find((profile) => profile.isPrimary) ?? profiles[0];
+  const primaryProfile =
+    profiles.find((profile) => profile.isPrimary) ?? profiles[0];
 
   for (const profile of profiles) {
     const nutritionFood = await tx.nutritionFood.create({
@@ -332,7 +351,9 @@ function buildNutritionFoodData(
   ingredientName: string,
 ): Record<string, unknown> {
   return {
-    name: profile.name ?? `${ingredientName} ${profile.preparationState ?? profile.id}`,
+    name:
+      profile.name ??
+      `${ingredientName} ${profile.preparationState ?? profile.id}`,
     nameEn: profile.nameEn ?? null,
     category: profile.category ?? 'OTHER',
     dataSource: profile.dataSource ?? 'MANUAL',
@@ -342,12 +363,340 @@ function buildNutritionFoodData(
     preparationStateLabel: profile.preparationStateLabel ?? null,
     ediblePortionLabel: profile.ediblePortionLabel ?? null,
     processingLabel: profile.processingLabel ?? null,
-    nutritionData: profile.nutritionData ?? profile.nutrients,
-    notes: profile.notes ?? `Created by standard ingredient import (${profile.basis}).`,
+    nutritionData: profile.nutritionData ?? buildNutritionFoodProfile(profile),
+    notes:
+      profile.notes ??
+      `Created by standard ingredient import (${profile.basis}).`,
     createdBy: 'standard-ingredient-import',
     verifiedBy: 'standard-ingredient-import',
     verifiedAt: new Date(),
   };
+}
+
+export function buildNutritionFoodProfile(
+  profile: IngredientImportNutritionProfile,
+): NutritionProfileV2 {
+  const audit = auditNutritionProfileForImport({
+    profileName: profile.name ?? profile.id,
+    nutrients: profile.nutrients,
+    sourceForms: profile.sourceForms ?? {},
+  });
+  const nutritionProfile = createEmptyNutritionProfile();
+  const rawBasisType = mapImportBasisToRawBasisType(profile.basis);
+
+  nutritionProfile.meta = {
+    ...nutritionProfile.meta,
+    rawBasisType,
+    sampleState: mapPreparationStateToSampleState(profile.preparationState),
+    sourceType: mapProfileDataSourceToSourceType(profile.dataSource) as any,
+    sourceKind: profile.dataSource ? 'FOOD_DATABASE' : null,
+    sourceCode: profile.dataSource as any,
+    externalId: profile.externalId ?? profile.id,
+    sourceTitle: profile.nameEn ?? profile.name ?? profile.id,
+    sourceProvider: profile.dataSource ?? null,
+    confidenceLevel: 'MEDIUM',
+    sourceForms: {},
+  };
+
+  for (const [field, value] of Object.entries(audit.normalizedNutrients)) {
+    const fieldPath = resolveImportNutrientFieldPath(field);
+    if (!fieldPath) {
+      addImportCustomItem(nutritionProfile, field, value, rawBasisType);
+      continue;
+    }
+
+    const fieldDefinition = findNutritionField(fieldPath);
+    if (!fieldDefinition) {
+      addImportCustomItem(nutritionProfile, field, value, rawBasisType);
+      continue;
+    }
+
+    const convertedValue = convertImportNutrientValue(
+      value.value,
+      value.unit,
+      fieldDefinition.unit,
+    );
+    if (convertedValue === null) {
+      addImportCustomItem(nutritionProfile, field, value, rawBasisType);
+      continue;
+    }
+
+    const tabValues = nutritionProfile[fieldDefinition.tabKey] as Record<
+      string,
+      number | null
+    >;
+    tabValues[fieldDefinition.fieldKey] = convertedValue;
+
+    nutritionProfile.meta.sourceForms = {
+      ...(nutritionProfile.meta.sourceForms ?? {}),
+      [fieldDefinition.fieldPath]: buildImportSourceForm(
+        value,
+        convertedValue,
+        fieldDefinition.unit,
+      ),
+    };
+  }
+
+  return nutritionProfile;
+}
+
+function buildImportSourceForm(
+  value: NormalizedNutrientValue,
+  convertedValue: number,
+  canonicalUnit: string,
+): NutritionSourceForm {
+  return {
+    ...(value.sourceForm ?? {}),
+    originalValue: value.sourceValue,
+    originalUnit: value.sourceUnit,
+    canonicalValue: convertedValue,
+    canonicalUnit,
+    basisType: 'PER_100_G',
+    measuredZero: value.measuredZero,
+  };
+}
+
+function addImportCustomItem(
+  profile: NutritionProfileV2,
+  field: string,
+  value: NormalizedNutrientValue,
+  rawBasisType: NutritionRawBasisType,
+): void {
+  profile.customItems.push({
+    name: field,
+    value: value.value,
+    unit: value.unit,
+    rawBasisType,
+    sourceNutrientName: field,
+  });
+}
+
+function mapImportBasisToRawBasisType(basis: string): NutritionRawBasisType {
+  const normalized = basis
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (normalized === 'PER_100ML' || normalized === 'PER_100_ML') {
+    return 'PER_100_ML';
+  }
+  if (normalized === 'PER_1G' || normalized === 'PER_1_G') {
+    return 'PER_1_G';
+  }
+  if (normalized === 'PER_1ML' || normalized === 'PER_1_ML') {
+    return 'PER_1_ML';
+  }
+  if (normalized === 'PER_SERVING') {
+    return 'PER_SERVING';
+  }
+  return 'PER_100_G';
+}
+
+function mapPreparationStateToSampleState(
+  preparationState: string | null | undefined,
+): NutritionProfileV2['meta']['sampleState'] {
+  switch ((preparationState ?? '').trim().toLowerCase()) {
+    case 'raw':
+      return 'RAW';
+    case 'cooked':
+      return 'COOKED';
+    case 'powder':
+      return 'POWDER';
+    case 'oil':
+      return 'OIL';
+    case 'freeze_dried':
+    case 'freeze-dried':
+      return 'FREEZE_DRIED';
+    case 'air_dried':
+    case 'air-dried':
+      return 'AIR_DRIED';
+    default:
+      return undefined;
+  }
+}
+
+function mapProfileDataSourceToSourceType(
+  dataSource: string | null | undefined,
+): string | null {
+  const normalized = (dataSource ?? '').trim().toUpperCase();
+  if (!normalized) return null;
+  if (normalized === 'USDA_FDC' || normalized === 'USDA') return 'USDA';
+  if (normalized === 'NZFCD' || normalized === 'NZFCD_FOODFILES') {
+    return 'NZFCD';
+  }
+  if (normalized === 'MEXT') return 'MEXT';
+  if (normalized === 'CFCT') return 'CFCT';
+  return 'OTHER';
+}
+
+function normalizeImportKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s-]+/g, '');
+}
+
+function resolveImportNutrientFieldPath(
+  field: string,
+): `${NutritionFieldTab}.${string}` | null {
+  const key = normalizeImportKey(field);
+  return importNutrientFieldPathByAlias[key] ?? null;
+}
+
+const importNutrientFieldPathByAlias: Record<
+  string,
+  `${NutritionFieldTab}.${string}`
+> = {
+  energykcal: 'macros.energyKcal',
+  moisture: 'macros.moisture',
+  moistureg: 'macros.moisture',
+  water: 'macros.moisture',
+  waterg: 'macros.moisture',
+  protein: 'macros.crudeProtein',
+  proteing: 'macros.crudeProtein',
+  crudeprotein: 'macros.crudeProtein',
+  crudeproteing: 'macros.crudeProtein',
+  fat: 'macros.crudeFat',
+  fatg: 'macros.crudeFat',
+  crudefat: 'macros.crudeFat',
+  crudefatg: 'macros.crudeFat',
+  ash: 'macros.ash',
+  ashg: 'macros.ash',
+  carbohydrate: 'macros.carbohydrate',
+  carbohydrates: 'macros.carbohydrate',
+  carbohydrateg: 'macros.carbohydrate',
+  carbs: 'macros.carbohydrate',
+  carbsg: 'macros.carbohydrate',
+  fiber: 'macros.fiber',
+  fiberg: 'macros.fiber',
+
+  calcium: 'minerals.calcium',
+  calciummg: 'minerals.calcium',
+  phosphorus: 'minerals.phosphorus',
+  phosphorusmg: 'minerals.phosphorus',
+  potassium: 'minerals.potassium',
+  potassiummg: 'minerals.potassium',
+  sodium: 'minerals.sodium',
+  sodiummg: 'minerals.sodium',
+  chloride: 'minerals.chloride',
+  chloridemg: 'minerals.chloride',
+  magnesium: 'minerals.magnesium',
+  magnesiummg: 'minerals.magnesium',
+  copper: 'minerals.copper',
+  coppermg: 'minerals.copper',
+  iodine: 'minerals.iodine',
+  iodineug: 'minerals.iodine',
+  iodinemcg: 'minerals.iodine',
+  iron: 'minerals.iron',
+  ironmg: 'minerals.iron',
+  manganese: 'minerals.manganese',
+  manganesemg: 'minerals.manganese',
+  selenium: 'minerals.selenium',
+  seleniumug: 'minerals.selenium',
+  seleniummcg: 'minerals.selenium',
+  zinc: 'minerals.zinc',
+  zincmg: 'minerals.zinc',
+
+  vitaminaiu: 'vitamins.vitaminA',
+  vitamina: 'vitamins.vitaminA',
+  vitamindiu: 'vitamins.vitaminD',
+  vitamind: 'vitamins.vitaminD',
+  vitamineiu: 'vitamins.vitaminE',
+  vitamine: 'vitamins.vitaminE',
+  vitamink: 'vitamins.vitaminK',
+  vitaminkug: 'vitamins.vitaminK',
+  vitaminkmcg: 'vitamins.vitaminK',
+  vitaminb1: 'vitamins.vitaminB1',
+  vitaminb2: 'vitamins.vitaminB2',
+  vitaminb3: 'vitamins.vitaminB3',
+  vitaminb5: 'vitamins.vitaminB5',
+  vitaminb6: 'vitamins.vitaminB6',
+  vitaminb7: 'vitamins.vitaminB7',
+  vitaminb7ug: 'vitamins.vitaminB7',
+  vitaminb7mcg: 'vitamins.vitaminB7',
+  vitaminb9: 'vitamins.vitaminB9',
+  vitaminb9ug: 'vitamins.vitaminB9',
+  vitaminb9mcg: 'vitamins.vitaminB9',
+  vitaminb12: 'vitamins.vitaminB12',
+  vitaminb12ug: 'vitamins.vitaminB12',
+  vitaminb12mcg: 'vitamins.vitaminB12',
+  choline: 'vitamins.choline',
+  cholinemg: 'vitamins.choline',
+  vitaminc: 'vitamins.vitaminC',
+
+  saturatedfattyacids: 'fattyAcids.saturatedFattyAcids',
+  monounsaturatedfattyacids: 'fattyAcids.monounsaturatedFattyAcids',
+  polyunsaturatedfattyacids: 'fattyAcids.polyunsaturatedFattyAcids',
+  linoleicacid: 'fattyAcids.linoleicAcid',
+  linoleicacidg: 'fattyAcids.linoleicAcid',
+  alphalinolenicacid: 'fattyAcids.alphaLinolenicAcid',
+  alphalinolenicacidg: 'fattyAcids.alphaLinolenicAcid',
+  arachidonicacid: 'fattyAcids.arachidonicAcid',
+  arachidonicacidg: 'fattyAcids.arachidonicAcid',
+  arachidonicacidmg: 'fattyAcids.arachidonicAcid',
+  epa: 'fattyAcids.epa',
+  epamg: 'fattyAcids.epa',
+  dha: 'fattyAcids.dha',
+  dhamg: 'fattyAcids.dha',
+  dpa: 'fattyAcids.dpa',
+  dpamg: 'fattyAcids.dpa',
+
+  arginine: 'aminoAcids.arginine',
+  histidine: 'aminoAcids.histidine',
+  isoleucine: 'aminoAcids.isoleucine',
+  leucine: 'aminoAcids.leucine',
+  lysine: 'aminoAcids.lysine',
+  methionine: 'aminoAcids.methionine',
+  cystine: 'aminoAcids.cystine',
+  phenylalanine: 'aminoAcids.phenylalanine',
+  tyrosine: 'aminoAcids.tyrosine',
+  threonine: 'aminoAcids.threonine',
+  tryptophan: 'aminoAcids.tryptophan',
+  valine: 'aminoAcids.valine',
+  taurine: 'aminoAcids.taurine',
+  glutamicacid: 'aminoAcids.glutamicAcid',
+  glycine: 'aminoAcids.glycine',
+  proline: 'aminoAcids.proline',
+};
+
+function normalizeImportUnit(unit: string): string {
+  const normalized = unit.trim();
+  const compact = normalized.toLowerCase();
+  if (compact === 'ug' || compact === 'mcg' || compact === 'μg') return 'μg';
+  if (compact === 'iu') return 'IU';
+  if (compact === 'kj') return 'kJ';
+  return normalized;
+}
+
+function convertImportNutrientValue(
+  value: number,
+  fromUnit: string,
+  toUnit: string,
+): number | null {
+  const normalizedFrom = normalizeImportUnit(fromUnit);
+  const normalizedTo = normalizeImportUnit(toUnit);
+  if (normalizedFrom === normalizedTo) {
+    return value;
+  }
+
+  if (normalizedFrom === 'kJ' && normalizedTo === 'kcal') {
+    return value / 4.184;
+  }
+  if (normalizedFrom === 'kcal' && normalizedTo === 'kJ') {
+    return value * 4.184;
+  }
+
+  const gramsByUnit: Record<string, number> = {
+    g: 1,
+    mg: 0.001,
+    μg: 0.000001,
+  };
+  const fromFactor = gramsByUnit[normalizedFrom];
+  const toFactor = gramsByUnit[normalizedTo];
+  if (fromFactor === undefined || toFactor === undefined) {
+    return null;
+  }
+
+  return (value * fromFactor) / toFactor;
 }
 
 async function applyFoodProcurementSkus(
@@ -392,11 +741,31 @@ async function writeAuditJson(
   audit: LocalIngredientImportAudit,
 ): Promise<void> {
   await mkdir(dirname(auditOutputPath), { recursive: true });
-  await writeFile(auditOutputPath, `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+  await writeFile(
+    auditOutputPath,
+    `${JSON.stringify(audit, null, 2)}\n`,
+    'utf8',
+  );
 }
 
 function sha256Stable(value: unknown): string {
   return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+export function buildProductionPackageManifestHash(
+  manifest: IngredientImportManifest,
+): string {
+  return sha256Stable({
+    version: manifest.version,
+    updateExistingIngredientId: manifest.updateExistingIngredientId,
+    ingredient: manifest.ingredient,
+    nutritionProfiles: manifest.nutritionProfiles,
+    sourceCandidates: manifest.sourceCandidates,
+    packageEvidence: manifest.packageEvidence,
+    supplementLabel: manifest.supplementLabel,
+    wholeDatabaseMigration: manifest.wholeDatabaseMigration,
+    migrationFlags: manifest.migrationFlags,
+  });
 }
 
 function stableStringify(value: unknown): string {

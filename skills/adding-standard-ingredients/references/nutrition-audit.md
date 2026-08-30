@@ -34,4 +34,3 @@ When supplementing fields from another source, reject either child-field or pare
 - Vitamin E uses the backend vitamin E converter and FEDIAF 2025 activity metadata.
 - Vitamin D ordinary D2/D3 forms use `1 ug = 40 IU`.
 - Unclear vitamin D forms, special metabolites, or ambiguous total vitamin D sources are review-only.
-

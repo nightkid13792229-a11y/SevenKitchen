@@ -1452,12 +1452,16 @@ export class StaffPurchasingController {
   async resubmitReimbursement(
     @Param('id') id: string,
     @Body() dto: SubmitReimbursementDto,
+    @UserId() userId?: string,
+    @UserRole() role?: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Resubmitting reimbursement: ${id}`);
 
     const reimbursement = await this.reimbursementService.resubmitReimbursement(
       id,
       dto,
+      userId,
+      role === 'ADMIN',
     );
 
     return ApiResponseDto.success(reimbursement, '报销单重新提交成功');

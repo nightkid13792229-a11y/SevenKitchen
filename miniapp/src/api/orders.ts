@@ -85,6 +85,9 @@ export interface StaffOrderAddress {
   };
   detail: string;
   isDefault: boolean;
+  usedByCurrentDog?: boolean;
+  dogAddressUsageCount?: number;
+  dogAddressLastUsedAt?: string | null;
 }
 
 export interface StaffOrderAddressInput {

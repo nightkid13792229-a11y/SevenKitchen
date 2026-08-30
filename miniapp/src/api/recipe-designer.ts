@@ -58,6 +58,7 @@ export interface RecipeDesignerSeriesStage {
 
 export interface RecipeDesignerSeriesCard {
   id: string
+  initialDraftId?: string
   name: string
   businessStatus?: RecipeDesignerSeriesStatusFilter
   businessStatusLabel?: string
@@ -79,6 +80,7 @@ export interface RecipeDesignerNutritionWarning {
 
 export interface RecipeDesignerCustomerSeriesCard {
   id: string
+  initialDraftId?: string
   name: string
   customerDogId?: string | null
   customerDogName?: string
@@ -118,6 +120,15 @@ export interface PrivateRecipeSnapshotResponse {
 
 export interface RecipeDesignerSeriesListQuery {
   status?: RecipeDesignerSeriesStatusFilter
+  page?: number
+  pageSize?: number
+}
+
+export interface RecipeDesignerSeriesListResponse {
+  items: RecipeDesignerSeriesCard[] | RecipeDesignerCustomerSeriesCard[]
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 export interface DeleteRecipeSeriesPayload {
@@ -130,8 +141,26 @@ export interface CreateRecipeSeriesStageDraftPayload {
   sourceDraftId?: string
 }
 
-export interface CopyRecipeStageItemsPayload {
-  sourceDraftId: string
+export interface CopyRecipeSeriesStageIngredientsPayload {
+  sourceLifeStage: string
+}
+
+export interface SupplementTargetPayload {
+  fieldPath: string
+  label?: string
+  unit?: string
+  nutrientTargetKey?: string
+  targetValue?: number
+  expressionBasis?: string
+}
+
+export interface SupplementTargetPayload {
+  fieldPath: string
+  label?: string
+  unit?: string
+  nutrientTargetKey?: string
+  targetValue?: number
+  expressionBasis?: string
 }
 
 export interface DesignRecipeItemPayload {
@@ -141,6 +170,7 @@ export interface DesignRecipeItemPayload {
   preparationMethod?: string
   nutrientTargetKey?: string
   nutrientTargetValue?: number
+  supplementTargets?: SupplementTargetPayload[]
   sortOrder?: number
   includeInAssessment?: boolean
 }
@@ -150,8 +180,16 @@ export interface UpdateDesignRecipeItemPayload {
   preparationMethod?: string | null
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: SupplementTargetPayload[] | null
   sortOrder?: number
   includeInAssessment?: boolean
+}
+
+export interface ReorderDesignRecipeItemsPayload {
+  items: Array<{
+    id: string
+    sortOrder: number
+  }>
 }
 
 export interface PublishDesignRecipePayload {
@@ -318,6 +356,16 @@ export const recipeDesignerApi = {
       url: `/recipe-designer/series/${seriesId}/stages/${lifeStage}/duplicate`,
       method: 'POST',
     }),
+  copySeriesStageIngredients: (
+    seriesId: string,
+    lifeStage: string,
+    data: CopyRecipeSeriesStageIngredientsPayload,
+  ) =>
+    request({
+      url: `/recipe-designer/series/${seriesId}/stages/${lifeStage}/copy-ingredients`,
+      method: 'POST',
+      data,
+    }),
   createSeriesStageDraft: (seriesId: string, data: CreateRecipeSeriesStageDraftPayload) =>
     request({ url: `/recipe-designer/series/${seriesId}/stage-drafts`, method: 'POST', data }),
   listIngredientOptions: (data: IngredientOptionListQuery = {}) =>
@@ -361,12 +409,18 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}/revert-to-latest-official`, method: 'POST' }),
   createPrivateRecipeSnapshot: (draftId: string, data: CreatePrivateRecipeSnapshotPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/private-recipe-snapshot`, method: 'POST', data }),
-  copyStageItemsFromDraft: (draftId: string, data: CopyRecipeStageItemsPayload) =>
-    request({ url: `/recipe-designer/drafts/${draftId}/copy-items-from-stage`, method: 'POST', data }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'PATCH', data }),
+  reorderItems: (draftId: string, data: ReorderDesignRecipeItemsPayload) =>
+    request({ url: `/recipe-designer/drafts/${draftId}/items/reorder`, method: 'PATCH', data }),
+  updateItemOrder: (draftId: string, itemIds: string[]) =>
+    request({
+      url: `/recipe-designer/drafts/${draftId}/item-order`,
+      method: 'PUT',
+      data: { itemIds },
+    }),
   removeItem: (itemId: string) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'DELETE' }),
   assessDraft: (draftId: string) =>

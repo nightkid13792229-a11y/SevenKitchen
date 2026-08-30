@@ -391,6 +391,7 @@ model RecipeSeries {
   @@index([updatedAt])
   @@index([customerDogId])
   @@index([referenceDogId])
+  @@index([createdBy, status, businessStatus, updatedAt])
   @@map("recipe_series")
 }
 
@@ -2159,6 +2160,7 @@ model DesignRecipe {
   id                     String                        @id @default(uuid()) @map("id")
   name                   String                        @map("name") @db.VarChar(200)
   version                Int                           @default(1) @map("version")
+  contentRevision        Int                           @default(0) @map("content_revision")
   status                 DesignRecipeStatus            @default(DRAFT) @map("status")
   fediafDogScenario      FediafDogScenario             @default(ADULT_MER_110) @map("fediaf_dog_scenario")
   energyDensityKcalPerKg Float?                        @map("energy_density_kcal_per_kg")
@@ -2218,6 +2220,7 @@ model DesignRecipeItem {
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
+  supplementTargets   Json?         @map("supplement_targets")
   sortOrder           Int           @default(0) @map("sort_order")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")

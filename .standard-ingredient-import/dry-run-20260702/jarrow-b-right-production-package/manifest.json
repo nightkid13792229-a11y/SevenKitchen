@@ -1,0 +1,29 @@
+{
+  "packageVersion": 1,
+  "scope": "new-standard-ingredient-records-only",
+  "wholeDatabaseMigration": false,
+  "ingredientType": "SUPPLEMENT",
+  "ingredientName": "Jarrow Formulas B-Right B族维生素复合胶囊",
+  "localImportAudit": {
+    "createdAt": "2026-07-02T04:10:59.553Z",
+    "alignmentId": "5543a5b1ca65",
+    "manifestHash": "fa9a55d7f294d491347c574b5d0e1cfa62f49a8fe9593d802b4909ce1cc3c602",
+    "packageManifestHash": "3994ccdb63bc1e5c1161e6c8d56b8ad9b4b90991e1fc1e165ec2c56558e828ed"
+  },
+  "recordCounts": {
+    "ingredient": 1,
+    "nutrition_food": 0,
+    "nutrition_food_mapping": 0,
+    "ingredient_tag_assignment": 0,
+    "procurement_sku": 0
+  },
+  "ids": {
+    "ingredientIds": [
+      "814a9199-f944-4c8f-b651-61f6e4eea765"
+    ],
+    "nutritionFoodIds": [],
+    "nutritionFoodMappingIds": [],
+    "ingredientTagAssignmentIds": [],
+    "procurementSkuIds": []
+  }
+}

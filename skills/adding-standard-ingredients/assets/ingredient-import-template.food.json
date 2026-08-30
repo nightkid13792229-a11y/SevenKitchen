@@ -23,7 +23,17 @@
       "nutrients": {}
     }
   ],
-  "sourceCandidates": [],
+  "sourceCandidates": [
+    {
+      "sourceId": "",
+      "sourceName": "",
+      "source": "USDA_FDC",
+      "matchedName": "",
+      "stateTags": ["raw"],
+      "essentialCoveragePercent": 0
+    }
+  ],
+  "sourceSearchLog": [],
   "dbAlignmentReport": {
     "id": "",
     "status": ""
@@ -33,4 +43,3 @@
     "productionPackageApproved": false
   }
 }
-

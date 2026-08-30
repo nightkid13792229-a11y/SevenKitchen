@@ -37,4 +37,3 @@ Rejected as nutrition sources:
 ## Completeness Threshold
 
 Use the backend scorer in `source-policy.ts`. The default primary-source threshold is 60 percent FEDIAF essential coverage. If at least one primary source meets that threshold and matches state, CFCT is filtered out.
-

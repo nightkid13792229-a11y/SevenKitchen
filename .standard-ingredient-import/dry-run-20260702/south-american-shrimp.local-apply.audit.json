@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "createdAt": "2026-07-02T08:13:29.312Z",
+  "alignmentId": "5543a5b1ca65",
+  "dbAlignmentStatus": "passing",
+  "manifestHash": "4ac203b6f6b532093e805245240e27516aeefeabc87e45dc3f5849f2eff51059",
+  "packageManifestHash": "61a5c400b21aee828684618d0e4e15c461cc206eed9e5cd890e9d4e144bf9584",
+  "ingredientIds": [
+    "b60e08c5-73c0-4219-ba91-9afff5c5268f"
+  ],
+  "nutritionFoodIds": [
+    "3a11ef71-44f1-4b74-8e10-9c28e6e6b259"
+  ],
+  "nutritionFoodMappingIds": [
+    "b8750796-28c7-44eb-a192-cec5437977de"
+  ],
+  "ingredientTagAssignmentIds": [],
+  "procurementSkuIds": [],
+  "nutritionAudits": [
+    {
+      "profileId": "mext-10415-whiteleg-shrimp-raw",
+      "essentialCoveragePercent": 95.65217391304348,
+      "blockingIssues": [],
+      "reviewIssues": []
+    }
+  ]
+}

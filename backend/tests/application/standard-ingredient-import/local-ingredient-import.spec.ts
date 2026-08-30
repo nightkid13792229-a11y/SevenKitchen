@@ -1,5 +1,6 @@
 import {
   applyLocalIngredientImport,
+  buildNutritionFoodProfile,
   type LocalIngredientImportAudit,
 } from 'src/application/standard-ingredient-import/local-ingredient-import';
 import type {
@@ -8,16 +9,34 @@ import type {
 } from 'src/application/standard-ingredient-import';
 
 describe('applyLocalIngredientImport', () => {
-  it('refuses to run when DB alignment is not ok', async () => {
-    await expect(
-      applyLocalIngredientImport({
-        prisma: makePrisma(),
-        manifest: makeFoodManifest(),
-        alignment: makeAlignment({ ok: false }),
-        auditOutputPath: '/tmp/audit.json',
-        writeAuditFile: jest.fn(),
-      }),
-    ).rejects.toMatchObject({ code: 'DB_ALIGNMENT_NOT_OK' });
+  it('records local writes without requiring a passing production DB alignment', async () => {
+    const prisma = makePrisma();
+
+    const result = await applyLocalIngredientImport({
+      prisma,
+      manifest: makeFoodManifest(),
+      alignment: makeAlignment({ ok: false }),
+      auditOutputPath: '/tmp/duck-egg.local-apply.json',
+      writeAuditFile: jest.fn().mockResolvedValue(undefined),
+      now: new Date('2026-06-16T08:00:00.000Z'),
+    });
+
+    expect(result.audit.alignmentId).toBeNull();
+    expect(result.audit.dbAlignmentStatus).toBe('not-required-for-local');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('records passing alignment metadata when it is supplied', async () => {
+    const result = await applyLocalIngredientImport({
+      prisma: makePrisma(),
+      manifest: makeFoodManifest(),
+      alignment: makeAlignment(),
+      auditOutputPath: '/tmp/duck-egg.local-apply.json',
+      writeAuditFile: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(result.audit.alignmentId).toBe('alignment-ok');
+    expect(result.audit.dbAlignmentStatus).toBe('passing');
   });
 
   it('refuses to run when local write confirmation is false', async () => {
@@ -74,6 +93,18 @@ describe('applyLocalIngredientImport', () => {
         name: 'Duck egg',
         type: 'FOOD',
         baseUnit: 'G',
+        nutritionProfile: expect.objectContaining({
+          macros: expect.objectContaining({
+            crudeFat: 13,
+            crudeProtein: 13,
+            energyKcal: 185,
+          }),
+          meta: expect.objectContaining({
+            sourceType: 'USDA',
+            sourceCode: 'USDA_FDC',
+            sampleState: 'RAW',
+          }),
+        }),
         properties: expect.objectContaining({
           importSource: 'standard-ingredient-import',
         }),
@@ -84,7 +115,16 @@ describe('applyLocalIngredientImport', () => {
         name: 'Duck egg raw profile',
         dataSource: 'USDA_FDC',
         nutritionData: expect.objectContaining({
-          fatG: { value: 13, unit: 'g' },
+          macros: expect.objectContaining({
+            crudeFat: 13,
+            crudeProtein: 13,
+            energyKcal: 185,
+          }),
+          meta: expect.objectContaining({
+            sourceType: 'USDA',
+            sourceCode: 'USDA_FDC',
+            sampleState: 'RAW',
+          }),
         }),
       }),
     });
@@ -110,11 +150,14 @@ describe('applyLocalIngredientImport', () => {
     expect(writeAuditFile).toHaveBeenCalledWith(
       '/tmp/duck-egg.local-apply.json',
       expect.objectContaining<Partial<LocalIngredientImportAudit>>({
+        alignmentId: 'alignment-ok',
+        dbAlignmentStatus: 'passing',
         ingredientIds: ['ingredient-1'],
         nutritionFoodIds: ['nutrition-food-1'],
         nutritionFoodMappingIds: ['mapping-1'],
         procurementSkuIds: ['procurement-sku-1'],
         manifestHash: expect.any(String),
+        packageManifestHash: expect.any(String),
       }),
     );
     expect(result.auditPath).toBe('/tmp/duck-egg.local-apply.json');
@@ -257,6 +300,58 @@ describe('applyLocalIngredientImport', () => {
   });
 });
 
+describe('buildNutritionFoodProfile', () => {
+  it('keeps MEXT as the nutrition profile source type', () => {
+    const profile = buildNutritionFoodProfile({
+      id: 'black-rice-raw',
+      name: '黑米，生/干',
+      dataSource: 'MEXT',
+      externalId: 'MEXT:01182',
+      basis: 'PER_100_G',
+      preparationState: 'raw',
+      nutrients: {},
+    });
+
+    expect(profile.meta.sourceType).toBe('MEXT');
+    expect(profile.meta.sourceCode).toBe('MEXT');
+    expect(profile.meta.sourceKind).toBe('FOOD_DATABASE');
+    expect(profile.meta.sourceProvider).toBe('MEXT');
+    expect(profile.meta.sampleState).toBe('RAW');
+  });
+
+  it('stores source form canonical values after unit conversion', () => {
+    const profile = buildNutritionFoodProfile({
+      id: 'mext-shrimp-raw',
+      name: '南美对虾虾仁，生',
+      dataSource: 'MEXT',
+      externalId: 'MEXT:10415',
+      basis: 'PER_100_G',
+      preparationState: 'raw',
+      nutrients: {
+        proteinG: { value: 19.6, unit: 'g' },
+        fatG: { value: 0.6, unit: 'g' },
+        linoleicAcid: { value: 47, unit: 'mg' },
+        lysine: { value: 1600, unit: 'mg' },
+      },
+    });
+
+    expect(profile.fattyAcids.linoleicAcid).toBeCloseTo(0.047);
+    expect(profile.aminoAcids.lysine).toBeCloseTo(1.6);
+    expect(
+      profile.meta.sourceForms?.['fattyAcids.linoleicAcid']?.canonicalValue,
+    ).toBeCloseTo(0.047);
+    expect(
+      profile.meta.sourceForms?.['aminoAcids.lysine']?.canonicalValue,
+    ).toBeCloseTo(1.6);
+    expect(
+      profile.meta.sourceForms?.['fattyAcids.linoleicAcid']?.canonicalUnit,
+    ).toBe('g');
+    expect(profile.meta.sourceForms?.['aminoAcids.lysine']?.canonicalUnit).toBe(
+      'g',
+    );
+  });
+});
+
 function makeAlignment(
   overrides: Partial<DatabaseAlignmentResult> = {},
 ): DatabaseAlignmentResult {
@@ -315,8 +410,12 @@ function makeFoodManifest(
     ],
     sourceCandidates: [
       {
-        sourceId: 'USDA:123',
+        sourceId: 'USDA_FDC:123',
         sourceName: 'USDA FoodData Central',
+        source: 'USDA_FDC',
+        matchedName: 'Duck egg, raw',
+        stateTags: ['raw'],
+        essentialCoveragePercent: 88,
       },
     ],
     dbAlignmentReport: {
@@ -375,7 +474,9 @@ function makePrisma(
   const prisma = {
     $transaction: jest.fn(async (callback: any) => callback(prisma)),
     ingredient: {
-      findFirst: jest.fn().mockResolvedValue(options.existingIngredient ?? null),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(options.existingIngredient ?? null),
       create: jest.fn().mockResolvedValue({ id: 'ingredient-1' }),
       update: jest.fn().mockResolvedValue({ id: 'existing-ingredient' }),
     },

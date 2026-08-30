@@ -11,7 +11,8 @@ Use this project-only workflow to add standard ingredients safely. It separates 
 
 ## Non-Negotiable Gates
 
-- Never write local data until local and production database alignment passes.
+- Local development writes do not require production DB alignment, but they must pass local schema, manifest, source, nutrition, unit, duplicate, and operator-confirmation checks.
+- Never build a production package until local and production database alignment passes.
 - Never apply data directly to production.
 - Never migrate or sync the whole database.
 - Never invent nutrition values or supplement concentrations.
@@ -31,7 +32,27 @@ Load these only when needed:
 
 1. Classify the ingredient as FOOD or SUPPLEMENT. Ask if ambiguous.
 2. Prepare a manifest from `assets/ingredient-import-template.food.json` or `assets/ingredient-import-template.supplement.json`.
-3. Run DB alignment before any local write:
+3. Collect source evidence and fill the manifest.
+4. Audit the manifest:
+
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --out ../.standard-ingredient-import/ingredient.audit.json
+```
+
+5. Ask the user to confirm local write only after source, nutrition, unit, duplicate, and local schema checks pass.
+6. Apply to the local development database only. DB alignment is optional for local apply; when a passing alignment file exists, pass it for audit provenance:
+
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --audit-out ../.standard-ingredient-import/ingredient.local-apply.json
+```
+
+7. Before production package export, run DB alignment:
 
 ```bash
 cd backend
@@ -41,28 +62,7 @@ node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-in
   --out ../.standard-ingredient-import/alignment.json
 ```
 
-4. Collect source evidence and fill the manifest.
-5. Audit the manifest:
-
-```bash
-cd backend
-node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/audit-ingredient-import.ts \
-  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
-  --out ../.standard-ingredient-import/ingredient.audit.json
-```
-
-6. Ask the user to confirm local write only after alignment and audit pass.
-7. Apply to the local development database only:
-
-```bash
-cd backend
-node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts \
-  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
-  --alignment ../.standard-ingredient-import/alignment.json \
-  --audit-out ../.standard-ingredient-import/ingredient.local-apply.json
-```
-
-8. After user review, build a production package only:
+8. After user review, build a production package only. The manifest must include the passing production alignment report id and production-package confirmation:
 
 ```bash
 cd backend
@@ -70,6 +70,16 @@ node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-in
   --manifest ../.standard-ingredient-import/ingredient.manifest.json \
   --local-audit ../.standard-ingredient-import/ingredient.local-apply.json \
   --out-dir ../.standard-ingredient-import/ingredient-production-package
+```
+
+If a passing alignment file is available during local apply, it can be attached:
+
+```bash
+cd backend
+node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-ingredients/scripts/apply-local-ingredient-import.ts \
+  --manifest ../.standard-ingredient-import/ingredient.manifest.json \
+  --audit-out ../.standard-ingredient-import/ingredient.local-apply.json \
+  --alignment ../.standard-ingredient-import/alignment.json
 ```
 
 ## FOOD Rules
@@ -99,3 +109,5 @@ node -r ts-node/register -r tsconfig-paths/register ../skills/adding-standard-in
 ## User Communication
 
 Explain decisions in business language. Tell the user when the workflow stops and why, especially for failed DB alignment, weak sources, missing supplement photos, incomplete essential nutrients, or unit conflicts.
+
+For local development writes, failed or missing production-readonly DB alignment is a production-package blocker, not a local-write blocker. Report it clearly, but continue local write only when the user has approved and all local/source/nutrition checks pass.

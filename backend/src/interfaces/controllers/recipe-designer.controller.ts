@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -31,9 +32,9 @@ import {
   AiDesignSuggestDto,
   BatchReorderDesignItemsDto,
   CreatePrivateRecipeSnapshotDto,
+  CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreateRecipeDesignDraftDto,
-  CopyRecipeStageItemsDto,
   CreateRecipeSeriesDto,
   CreateRecipeSeriesStageDraftDto,
   DeleteRecipeSeriesDto,
@@ -41,8 +42,10 @@ import {
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReorderRecipeDesignItemsDto,
   SetRecipeSeriesReferenceDogDto,
   UpdateDogDesignNotesDto,
+  UpdateRecipeDesignItemOrderDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
@@ -295,6 +298,25 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(series);
   }
 
+  @Post('series/:seriesId/stages/:lifeStage/copy-ingredients')
+  @ApiOperation({
+    summary: 'Copy ingredients from another life stage into this stage draft',
+  })
+  async copySeriesStageIngredients(
+    @Param('seriesId') seriesId: string,
+    @Param('lifeStage') lifeStage: string,
+    @Body() dto: CopyRecipeSeriesStageIngredientsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.copySeriesStageIngredients(
+      seriesId,
+      lifeStage,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(draft);
+  }
+
   @Get('drafts')
   @ApiOperation({ summary: 'List recipe design drafts for current staff user' })
   async listDrafts(
@@ -335,23 +357,6 @@ export class RecipeDesignerController {
         toRecipeDesignerAccessContext(user),
       );
     return ApiResponseDto.success(snapshot);
-  }
-
-  @Post('drafts/:id/copy-items-from-stage')
-  @ApiOperation({
-    summary: 'Replace editable draft items from another stage in the same series',
-  })
-  async copyStageItemsToDraft(
-    @Param('id') id: string,
-    @Body() dto: CopyRecipeStageItemsDto,
-    @CurrentUser() user: RequestUser,
-  ): Promise<ApiResponseDto<any>> {
-    const draft = await this.recipeDesignerService.copyStageItemsToDraft(
-      id,
-      dto,
-      toRecipeDesignerAccessContext(user),
-    );
-    return ApiResponseDto.success(draft);
   }
 
   @Post('drafts')
@@ -423,6 +428,38 @@ export class RecipeDesignerController {
       toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(item);
+  }
+
+  @Patch('drafts/:id/items/reorder')
+  @ApiOperation({ summary: 'Batch update design recipe item sort order' })
+  async reorderItems(
+    @Param('id') id: string,
+    @Body() dto: ReorderRecipeDesignItemsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.reorderItems(
+      id,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  @Put('drafts/:id/item-order')
+  @ApiOperation({
+    summary: 'Replace the full item ordering for a design draft',
+  })
+  async updateItemOrder(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecipeDesignItemOrderDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const items = await this.recipeDesignerService.updateItemOrder(
+      id,
+      dto.itemIds,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(items);
   }
 
   @Delete('items/:itemId')

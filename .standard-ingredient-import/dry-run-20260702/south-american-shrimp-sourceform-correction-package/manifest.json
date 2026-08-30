@@ -1,0 +1,12 @@
+{
+  "packageVersion": 1,
+  "scope": "south-american-shrimp-sourceforms-canonical-value-correction",
+  "wholeDatabaseMigration": false,
+  "ingredientId": "b60e08c5-73c0-4219-ba91-9afff5c5268f",
+  "nutritionFoodId": "3a11ef71-44f1-4b74-8e10-9c28e6e6b259",
+  "dataSource": "MEXT",
+  "externalId": "MEXT:10415",
+  "actualNutritionValuesChanged": false,
+  "sourceMetadataChanged": true,
+  "correctedFieldCount": 18
+}

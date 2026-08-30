@@ -44,6 +44,66 @@ const assessmentSource = readSource('src/pages/recipe-designer/assessment.ts')
 const publishSource = readSource('src/pages/recipe-designer/publish.vue')
 
 describe('recipe designer mobile entry', () => {
+  it('keeps the first page of recipe series visible while more pages are available', () => {
+    expect(listSource).toContain("import { onReachBottom } from '@dcloudio/uni-app'")
+    expect(listSource).toContain('pageSize: 20')
+    expect(listSource).toContain('hasMoreSeries')
+    expect(listSource).toContain('onReachBottom(() =>')
+    expect(listSource).toContain('loading && series.length === 0')
+    expect(listSource).toContain('v-if="loadingMoreSeries" class="loading-more-state"')
+    expect(listSource).not.toContain('class="series-load-more"')
+  })
+
+  it('keeps editor mutations responsive with local drafts, deferred assessment, and batch ordering', () => {
+    const weightInputBlock =
+      editorSource.match(/<view class="weight-editor">[\s\S]*?<\/view>\n            <view class="item-ratio-column">/)?.[0] || ''
+    const onWeightInputBlock =
+      editorSource.match(/function onWeightInput[\s\S]*?\n}\n\nasync function updateWeight/)?.[0] || ''
+    const onItemTouchMoveBlock =
+      editorSource.match(/function onItemTouchMove[\s\S]*?\n}\n\nasync function finishItemDrag/)?.[0] || ''
+    const finishItemDragBlock =
+      editorSource.match(/async function finishItemDrag[\s\S]*?\n}\n\nfunction cancelItemDrag/)?.[0] || ''
+    const persistItemSortOrderBlock =
+      editorSource.match(/async function persistItemSortOrder[\s\S]*?\n}\n\nfunction getDragTargetIndex/)?.[0] || ''
+    const historyOrderBlock =
+      editorSource.match(/async function applyHistoryOrder[\s\S]*?\n}\n\nfunction sortItemsBySortOrder/)?.[0] || ''
+    const detailWeightBlock =
+      editorSource.match(/async function updateDetailContributionItemWeight[\s\S]*?\n}\n\nfunction beginAutoSave/)?.[0] || ''
+    const historyWeightBlock =
+      editorSource.match(/async function applyHistoryItemPatch[\s\S]*?\n}\n\nasync function restoreHistoryItem/)?.[0] || ''
+
+    expect(apiSource).toContain('updateItemOrder: (draftId: string, itemIds: string[])')
+    expect(apiSource).toContain('`/recipe-designer/drafts/${draftId}/item-order`')
+    expect(apiSource).toContain("method: 'PUT'")
+    expect(apiSource).toContain('data: { itemIds }')
+    expect(editorSource).toContain("from './editor-performance'")
+    expect(editorSource).toContain('createLatestTaskScheduler')
+    expect(editorSource).toContain('moveItemToIndex')
+    expect(editorSource).toContain('shouldTriggerDragFeedback')
+    expect(editorSource).toContain('createKeyedWeightMutationCoordinator')
+    expect(editorSource).toContain('const itemWeightDrafts = ref<Record<string, string>>({})')
+    expect(weightInputBlock).toContain(':value="getItemWeightDraft(item)"')
+    expect(onWeightInputBlock).toContain('itemWeightDrafts.value')
+    expect(onWeightInputBlock).not.toContain('item.weightG =')
+    expect(editorSource).toContain('createLatestTaskScheduler(async (request) =>')
+    expect(editorSource).toContain('}, 400)')
+    expect(editorSource).toContain('scheduleAssessmentRefresh()')
+    expect(editorSource).toContain('assessmentUpdating')
+    expect(editorSource).toContain('营养评估更新中')
+    expect(onItemTouchMoveBlock).toContain('dragTargetIndex.value = targetIndex')
+    expect(onItemTouchMoveBlock).not.toContain('items.value =')
+    expect(onItemTouchMoveBlock).not.toContain('nextTick')
+    expect(finishItemDragBlock).toContain('moveItemToIndex(items.value, itemId, targetIndex)')
+    expect(persistItemSortOrderBlock).toContain('recipeDesignerApi.updateItemOrder(')
+    expect(persistItemSortOrderBlock).not.toContain('Promise.all')
+    expect(historyOrderBlock).toContain('recipeDesignerApi.updateItemOrder(')
+    expect(historyOrderBlock).not.toContain('Promise.all')
+    expect(detailWeightBlock).toContain('itemWeightMutations.enqueue(')
+    expect(historyWeightBlock).toContain('itemWeightMutations.enqueue(')
+    expect(editorSource).toContain('itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))')
+    expect(historyWeightBlock).toContain('if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()')
+  })
+
   it('links staff workbench to the recipe designer draft list', () => {
     expect(staffWorkbenchSource).toContain('食谱设计器')
     expect(staffWorkbenchSource).toContain('goToRecipeDesigner')
@@ -108,6 +168,16 @@ describe('recipe designer mobile entry', () => {
     expect(customerCardBlock).toContain('生成制作单')
     expect(customerCardBlock).toContain('订购成品')
     expect(customerCardBlock).not.toContain('继续设计')
+  })
+
+  it('never treats a recipe series id as an editor draft id after copying', () => {
+    const extractBlock =
+      listSource.match(/function extractInitialDraftId[\s\S]*?\n}\n\nfunction prepareCustomerCreateSheet/)?.[0] || ''
+
+    expect(extractBlock).toContain('payload?.initialDraftId')
+    expect(extractBlock).toContain('payload?.primaryDraftId')
+    expect(extractBlock).toContain('payload?.stages?.find((stage: any) => stage?.draftId)?.draftId')
+    expect(extractBlock).not.toContain('payload?.id')
   })
 
   it('lets customer recipe overflow menus close outside and delete after a simple confirmation', () => {
@@ -221,7 +291,22 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('function selectSeriesStatusFilter')
     expect(adminFilterBlock).toContain('!isCustomerMode.value')
     expect(loadSeriesBlock).toContain('recipeDesignerApi.listSeries({')
-    expect(loadSeriesBlock).toContain('status: selectedSeriesStatusFilter.value || undefined')
+    expect(loadSeriesBlock).toContain("const requestKey = selectedSeriesStatusFilter.value || ''")
+    expect(loadSeriesBlock).toContain('status: requestKey || undefined')
+  })
+
+  it('deduplicates in-flight recipe series loads and ignores stale responses', () => {
+    const loadSeriesBlock =
+      listSource.match(/async function loadSeries[\s\S]*?\n}\n\nfunction openCreateDraftSheet/)?.[0] || ''
+
+    expect(listSource).toContain('let activeSeriesRequest')
+    expect(listSource).toContain('let seriesLoadingPromise')
+    expect(loadSeriesBlock).toContain('const requestKey = selectedSeriesStatusFilter.value ||')
+    expect(loadSeriesBlock).toContain('seriesLoadingPromise && activeSeriesRequest?.key === requestKey')
+    expect(loadSeriesBlock).toContain('const requestState = {')
+    expect(loadSeriesBlock).toContain('activeSeriesRequest !== requestState')
+    expect(loadSeriesBlock).toContain('activeSeriesRequest === requestState')
+    expect(loadSeriesBlock).toContain('seriesLoadingPromise = null')
   })
 
   it('opens or creates a series stage draft from a stage row', () => {
@@ -289,27 +374,33 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('/pages/recipe-designer/editor?id=')
   })
 
-  it('lets staff copy ingredient rows into a target life stage from the series card menu', () => {
+  it('lets staff copy another life stage ingredient list into a target stage from the series card menu', () => {
     const copyAvailabilityBlock =
-      listSource.match(/function canCopyItemsIntoStage[\s\S]*?\n}/)?.[0] || ''
+      listSource.match(/function canCopyIngredientsIntoStage[\s\S]*?\n}/)?.[0] || ''
     const copyBlock =
-      listSource.match(/async function copyStageItemsIntoSeriesStage[\s\S]*?\n}\n\nfunction deleteSeries/)?.[0] || ''
+      listSource.match(/async function copyStageIngredientsFromSource[\s\S]*?\n}\n\nfunction deleteSeries/)?.[0] || ''
 
-    expect(apiSource).toContain('copyStageItemsFromDraft')
-    expect(listSource).toContain('copyingStageItemsKey')
-    expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
+    expect(apiSource).toContain('copySeriesStageIngredients')
+    expect(apiSource).toContain('/copy-ingredients')
+    expect(apiSource).toContain('sourceLifeStage')
     expect(listSource).toContain('复制其他阶段原料')
-    expect(listSource).toContain('openStageItemCopySourceSheet')
-    expect(listSource).toContain('getStageItemCopySourceStages')
-    expect(listSource).toContain('ensureTargetStageDraftForCopy')
-    expect(listSource).toContain('recipeDesignerApi.createSeriesStageDraft')
-    expect(listSource).toContain('recipeDesignerApi.copyStageItemsFromDraft')
-    expect(listSource).toContain('function copyStageItemsIntoSeriesStage')
-    expect(listSource).toContain('sourceStage.draftId')
+    expect(listSource).toContain('copyingStageKey')
+    expect(listSource).toContain('openStageActionSheet(seriesItem, stage)')
+    expect(listSource).toContain('getCopyableIngredientSourceStages(seriesItem, stage)')
+    expect(listSource).toContain("stage.status !== 'NOT_DESIGNED'")
+    expect(listSource).toContain('sourceStage.lifeStage')
+    expect(listSource).toContain('recipeDesignerApi.copySeriesStageIngredients(seriesItem.id, stage.lifeStage')
+    expect(copyBlock).toContain('draft?.id || extractInitialDraftId(draft)')
+    expect(listSource).toContain("confirmText: '替换'")
+    expect(listSource).toContain("uni.showToast({ title: '已复制原料', icon: 'success' })")
+    expect(listSource).toContain('/pages/recipe-designer/editor?id=')
     expect(copyAvailabilityBlock).not.toContain("stage.status !== 'NOT_DESIGNED'")
     expect(copyAvailabilityBlock).not.toContain('Boolean(stage.draftId || stage.recipeId)')
-    expect(copyBlock).toContain('uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${targetDraftId}` })')
+    expect(copyBlock).toContain("throw new Error('目标阶段草稿创建失败')")
+    expect(copyBlock).toContain('uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })')
     expect(copyBlock).not.toContain('await loadSeries()')
+    expect(listSource).not.toContain('从其他阶段复制原料')
+    expect(listSource).not.toContain('复制此生命阶段')
   })
 
   it('creates a new series and navigates to the backend initial draft when available', () => {
@@ -614,9 +705,20 @@ describe('recipe designer editor guardrails', () => {
     expect(assessmentSource).toContain('{ targetValue }')
     expect(editorSource).toContain('...getNutrientTargetContextForAddItem(selectedIngredientOption.value)')
     expect(editorSource).toContain('function getNutrientTargetContextForAddItem')
-    expect(editorSource).toContain('if (!isSupplementOption(option))')
-    expect(editorSource).toContain('nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey')
-    expect(editorSource).toContain('nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue')
+    expect(editorSource).toContain('if (!isSupplementOption(option) || !target)')
+    expect(editorSource).toContain('const supplementTarget: SupplementTargetPayload')
+    expect(editorSource).toContain('fieldPath: resolveSupplementTargetFieldPath(target.nutrientKey)')
+    expect(editorSource).toContain('nutrientTargetKey: target.nutrientKey')
+    expect(editorSource).toContain('nutrientTargetValue: target.targetValue')
+    expect(editorSource).toContain('supplementTargets: [supplementTarget]')
+  })
+
+  it('prompts admins when a supplement can be removed without hurting nutrient sufficiency', () => {
+    expect(editorSource).toContain('removableSupplementWarnings')
+    expect(editorSource).toContain('removableSupplementWarningByItemId')
+    expect(editorSource).toContain('getRemovableSupplementWarning(item)')
+    expect(editorSource).toContain('supplement-removal-hint')
+    expect(editorSource).toContain('是否保留由管理员按配方意图决定')
   })
 
   it('keeps nutrient target context after returning from the supplement library', () => {
@@ -1078,7 +1180,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('let scenarioPersisted = false')
     expect(editorSource).toContain('if (!scenarioPersisted) {')
     expect(editorSource).toContain('rememberAssessmentScrollPosition()')
-    expect(editorSource).toContain('await refreshAssessment()')
+    expect(editorSource).toContain('scheduleAssessmentRefresh()')
     expect(editorSource).toContain('scenarioSwitchSheetVisible.value = false')
   })
 

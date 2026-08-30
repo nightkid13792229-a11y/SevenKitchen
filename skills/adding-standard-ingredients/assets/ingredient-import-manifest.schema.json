@@ -3,7 +3,12 @@
   "$id": "https://sevenkitchen.local/schemas/ingredient-import-manifest.schema.json",
   "title": "SevenKitchen Standard Ingredient Import Manifest",
   "type": "object",
-  "required": ["version", "operationMode", "ingredient", "operatorConfirmation"],
+  "required": [
+    "version",
+    "operationMode",
+    "ingredient",
+    "operatorConfirmation"
+  ],
   "properties": {
     "version": { "const": 1 },
     "operationMode": {
@@ -35,7 +40,101 @@
     },
     "sourceCandidates": {
       "type": "array",
-      "items": { "type": "object" }
+      "items": {
+        "type": "object",
+        "required": [
+          "sourceId",
+          "sourceName",
+          "source",
+          "stateTags",
+          "essentialCoveragePercent"
+        ],
+        "properties": {
+          "sourceId": { "type": "string", "minLength": 1 },
+          "sourceName": { "type": "string", "minLength": 1 },
+          "source": {
+            "enum": [
+              "USDA_FDC",
+              "NZFCD",
+              "NEVO",
+              "MEXT",
+              "AFCD",
+              "AUSNUT",
+              "CNF",
+              "COFID",
+              "CIQUAL",
+              "CFCT"
+            ]
+          },
+          "matchedName": { "type": "string" },
+          "stateTags": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "raw",
+                "cooked",
+                "dried",
+                "peeled",
+                "unpeeled",
+                "oil",
+                "powder",
+                "prepared"
+              ]
+            }
+          },
+          "essentialCoveragePercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sourceSearchLog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "status",
+          "query",
+          "searchedAt",
+          "evidenceUri",
+          "notes"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "USDA_FDC",
+              "NZFCD",
+              "NEVO",
+              "MEXT",
+              "AFCD",
+              "AUSNUT",
+              "CNF",
+              "COFID",
+              "CIQUAL",
+              "CFCT"
+            ]
+          },
+          "status": {
+            "enum": [
+              "searched_no_match",
+              "state_mismatch",
+              "coverage_too_low",
+              "source_unavailable",
+              "candidate_found"
+            ]
+          },
+          "query": { "type": "string", "minLength": 1 },
+          "searchedAt": { "type": "string", "format": "date-time" },
+          "evidenceUri": { "type": "string", "minLength": 1 },
+          "notes": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
     },
     "packageEvidence": {
       "type": "object",
@@ -74,4 +173,3 @@
   },
   "additionalProperties": false
 }
-

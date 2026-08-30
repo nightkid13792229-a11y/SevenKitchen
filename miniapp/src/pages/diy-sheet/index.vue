@@ -557,6 +557,7 @@ import {
 
 // 页面参数
 const recipeId = ref('')
+const shareToken = ref('')
 const dogId = ref('')
 const cycleDays = ref(7)
 const perMealG = ref(0)
@@ -962,6 +963,7 @@ onMounted(() => {
   console.log('[DIYSheet] 页面参数:', options)
 
   recipeId.value = options.recipeId || ''
+  shareToken.value = options.shareToken || ''
   dogId.value = options.dogId || ''
   cycleDays.value = parseInt(options.cycleDays || '7')
   perMealG.value = parseFloat(options.perMealG || '0')
@@ -1042,7 +1044,10 @@ async function loadRecipe() {
   try {
     const res = await request({
       url: `/recipes/${recipeId.value}`,
-      method: 'GET'
+      method: 'GET',
+      data: {
+        ...(shareToken.value ? { shareToken: shareToken.value } : {})
+      }
     })
 
     if (res.code === 0 && res.data) {
@@ -1517,8 +1522,11 @@ async function handleSave() {
 const packagePlanQueryParam = computed(() =>
   `packagePlan=${encodeURIComponent(JSON.stringify(packagePlan.value))}`
 )
+const shareTokenQueryParam = computed(() =>
+  shareToken.value ? `&shareToken=${encodeURIComponent(shareToken.value)}` : ''
+)
 const sharePath = computed(() => {
-  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}`
+  return `/pages/diy-sheet/index?recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`
 })
 
 const shareTitle = computed(() => {
@@ -1831,7 +1839,7 @@ onShareAppMessage(() => {
 onShareTimeline(() => {
   return {
     title: shareTitle.value,
-    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}`,
+    query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}&${packagePlanQueryParam.value}${shareTokenQueryParam.value}`,
     imageUrl: normalizeImageUrl(recipe.value.coverImageUrl) || ''
   }
 })

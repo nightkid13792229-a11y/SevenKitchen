@@ -1,0 +1,11 @@
+{
+  "manifestPath": "../.standard-ingredient-import/dry-run-20260702/jarrow-b-right.manifest.json",
+  "ok": true,
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "rankedSources": [],
+  "nutritionAudits": []
+}

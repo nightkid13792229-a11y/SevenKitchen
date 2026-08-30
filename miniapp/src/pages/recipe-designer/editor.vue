@@ -124,7 +124,7 @@
               <input
                 class="weight-input"
                 type="digit"
-                :value="formatItemWeightInput(item.weightG)"
+                :value="getItemWeightDraft(item)"
                 :disabled="reorderMode"
                 @input="onWeightInput(item, $event)"
                 @blur="updateWeight(item)"
@@ -148,6 +148,12 @@
               </view>
               <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
             </view>
+          </view>
+          <view
+            v-if="getRemovableSupplementWarning(item)"
+            class="supplement-removal-hint"
+          >
+            <text>{{ getRemovableSupplementWarningMessage(item) }}</text>
           </view>
         </view>
       </view>
@@ -308,6 +314,7 @@
     </view>
 
     <view
+      v-if="!reorderMode"
       class="assessment-drawer"
       :class="{ expanded: assessmentExpanded, dragging: assessmentDragging }"
       :style="assessmentDrawerStyle"
@@ -328,6 +335,7 @@
         <view class="drawer-handle">
           <view class="drawer-title-row">
             <text class="drawer-title">营养评估</text>
+            <text v-if="assessmentUpdating" class="assessment-updating">营养评估更新中</text>
             <text class="standard-context">{{ assessmentStandardContextLabel }}</text>
             <button
               class="scenario-switch-btn"
@@ -691,6 +699,7 @@ import {
   type IngredientOptionListQuery,
   type IngredientOptionListResponse,
   type RecipeDesignerIngredientOption,
+  type SupplementTargetPayload,
 } from '../../api/recipe-designer'
 import {
   buildAssessmentCategories,
@@ -741,6 +750,13 @@ import {
   type RecipeDesignerHistoryItemSnapshot,
   type RecipeDesignerHistoryState,
 } from './editor-history'
+import {
+  createAssessmentMutationGuard,
+  createKeyedWeightMutationCoordinator,
+  createLatestTaskScheduler,
+  moveItemToIndex,
+  shouldTriggerDragFeedback,
+} from './editor-performance'
 
 interface StandardIngredientSnapshot {
   id?: string
@@ -751,14 +767,6 @@ interface StandardIngredientSnapshot {
   properties?: Record<string, unknown> | null
 }
 
-interface StandardIngredientSnapshot {
-  id?: string
-  name?: string
-  type?: string
-  unitDisplayLabel?: string | null
-  purchaseUnit?: string | null
-  properties?: Record<string, unknown> | null
-}
 
 interface DesignerItem {
   id: string
@@ -786,7 +794,15 @@ interface DesignerItem {
   preparationMethod?: string
   nutrientTargetKey?: string | null
   nutrientTargetValue?: number | null
+  supplementTargets?: SupplementTargetPayload[] | null
   sortOrder?: number
+}
+
+interface RemovableSupplementWarning {
+  itemId: string
+  itemName?: string
+  targetLabels?: string[]
+  message?: string
 }
 
 type HistoryActionDirection = 'undo' | 'redo'
@@ -820,6 +836,51 @@ const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.REPRODUCTION, value: 'REPRODUCTION' },
 ]
 
+const SUPPLEMENT_TARGET_FIELD_BY_NUTRIENT_KEY: Record<string, string> = {
+  calcium: 'minerals.calcium',
+  phosphorus: 'minerals.phosphorus',
+  potassium: 'minerals.potassium',
+  sodium: 'minerals.sodium',
+  magnesium: 'minerals.magnesium',
+  chloride: 'minerals.chloride',
+  iron: 'minerals.iron',
+  zinc: 'minerals.zinc',
+  copper: 'minerals.copper',
+  manganese: 'minerals.manganese',
+  selenium: 'minerals.selenium',
+  iodine: 'minerals.iodine',
+  vitaminA: 'vitamins.vitaminA',
+  vitaminD: 'vitamins.vitaminD',
+  vitaminE: 'vitamins.vitaminE',
+  vitaminK: 'vitamins.vitaminK',
+  thiamine: 'vitamins.thiamine',
+  riboflavin: 'vitamins.riboflavin',
+  niacin: 'vitamins.niacin',
+  pantothenicAcid: 'vitamins.pantothenicAcid',
+  vitaminB6: 'vitamins.vitaminB6',
+  folicAcid: 'vitamins.folicAcid',
+  vitaminB12: 'vitamins.vitaminB12',
+  choline: 'vitamins.choline',
+  biotin: 'vitamins.biotin',
+  linoleicAcid: 'fattyAcids.linoleicAcid',
+  alphaLinolenicAcid: 'fattyAcids.alphaLinolenicAcid',
+  arachidonicAcid: 'fattyAcids.arachidonicAcid',
+  epa: 'fattyAcids.epa',
+  dha: 'fattyAcids.dha',
+  arginine: 'aminoAcids.arginine',
+  histidine: 'aminoAcids.histidine',
+  isoleucine: 'aminoAcids.isoleucine',
+  leucine: 'aminoAcids.leucine',
+  lysine: 'aminoAcids.lysine',
+  methionine: 'aminoAcids.methionine',
+  cystine: 'aminoAcids.cystine',
+  phenylalanine: 'aminoAcids.phenylalanine',
+  tyrosine: 'aminoAcids.tyrosine',
+  threonine: 'aminoAcids.threonine',
+  tryptophan: 'aminoAcids.tryptophan',
+  valine: 'aminoAcids.valine',
+}
+
 function rpxToPx(rpx: number, windowWidth = DEFAULT_WINDOW_WIDTH_PX) {
   return Math.ceil((rpx * windowWidth) / 750)
 }
@@ -851,6 +912,7 @@ const draftIsCompliant = ref(false)
 const loading = ref(false)
 const autoSaveStatus = ref<'saved' | 'saving' | 'failed'>('saved')
 const activeAutoSaveCount = ref(0)
+const assessmentUpdating = ref(false)
 const assessmentExpanded = ref(false)
 const assessmentDragging = ref(false)
 const assessmentDrawerTopPx = ref(0)
@@ -876,7 +938,10 @@ const detailContributionWeightDrafts = ref<Record<string, string>>({})
 const historyState = ref(createRecipeDesignerHistoryState())
 const historyActionRunning = ref(false)
 const historyActionDirection = ref<HistoryActionDirection | ''>('')
+const itemWeightDrafts = ref<Record<string, string>>({})
 const itemWeightEditBaselines = ref<Record<string, number>>({})
+const itemWeightEditVersions = ref<Record<string, number>>({})
+const itemWeightSavingVersions = ref<Record<string, number>>({})
 const scenarioSwitchSheetVisible = ref(false)
 const scenarioSwitching = ref(false)
 const pendingScenario = ref<FediafDogScenario>('ADULT_MER_110')
@@ -912,6 +977,18 @@ let dragPreparedIndex = -1
 let dragStartY = 0
 let dragOriginalOrderIds: string[] = []
 let itemRowRects: Array<{ top: number; bottom: number }> = []
+let lastItemDragFeedbackAt = 0
+const itemWeightMutations = createKeyedWeightMutationCoordinator()
+const assessmentMutationGuard = createAssessmentMutationGuard()
+
+const assessmentRefreshScheduler = createLatestTaskScheduler(async (request) => {
+  try {
+    await refreshAssessment({}, request)
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to refresh scheduled assessment:', error)
+    uni.showToast({ title: '营养评估更新失败', icon: 'none' })
+  }
+}, 400)
 
 const ASSESSMENT_RANGE_COLORS = {
   deficient: '#fed7aa',
@@ -938,6 +1015,7 @@ const autoSaveStatusLabel = computed(() => {
   if (loading.value) return '加载中'
   if (autoSaveStatus.value === 'saving') return '保存中'
   if (autoSaveStatus.value === 'failed') return '保存失败'
+  if (assessmentUpdating.value) return '营养评估更新中'
   return '已保存'
 })
 
@@ -953,6 +1031,7 @@ const assessmentDrawerStyle = computed(
 )
 
 const editorBottomPaddingPx = computed(() => {
+  if (reorderMode.value) return Math.ceil(editorBottomGapPx.value)
   const drawerPadding = Math.ceil(assessmentDrawerHeightPx.value)
   const publishPadding = showBottomPublishBar.value ? assessmentPublishBarHeightPx.value : 0
   return Math.ceil(drawerPadding + publishPadding + editorBottomGapPx.value)
@@ -1032,6 +1111,17 @@ const selectedIngredientUnitLabel = computed(() => {
 
 const assessmentEntries = computed(() => {
   return assessment.value?.groupedEntries || assessment.value?.entries || assessment.value?.nutrients || []
+})
+
+const removableSupplementWarningByItemId = computed<Record<string, RemovableSupplementWarning>>(() => {
+  const warnings = Array.isArray(assessment.value?.removableSupplementWarnings)
+    ? assessment.value.removableSupplementWarnings
+    : []
+  return Object.fromEntries(
+    warnings
+      .filter((warning: RemovableSupplementWarning) => warning?.itemId)
+      .map((warning: RemovableSupplementWarning) => [warning.itemId, warning]),
+  )
 })
 
 const assessmentCategories = computed(() => buildAssessmentCategories(assessmentEntries.value, assessment.value || {}))
@@ -1191,6 +1281,7 @@ watch(autoSaveStatusLabel, () => {
 
 onUnmounted(() => {
   clearIngredientSearchDebounce()
+  assessmentRefreshScheduler.cancel()
 })
 
 async function loadDraft() {
@@ -1228,6 +1319,11 @@ async function applyDraftDetail(draft: any) {
   scenario.value = getDraftScenario(draft)
   ingredientTypeHints.value = {}
   items.value = draft.items || []
+  itemWeightMutations.clear()
+  items.value.forEach((item) => {
+    itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+    itemWeightMutations.setPersistedIncludeInAssessment(item.id, isItemIncludedInAssessment(item))
+  })
   assessment.value = null
   applyCachedAssessmentFromDraft(draft)
   await hydrateIngredientTypeHintsForItems(items.value)
@@ -1374,106 +1470,205 @@ function setAssessmentDrawerTop(topPx: number, windowHeightOverride?: number) {
   )
 }
 
-async function refreshAssessment(options: { quiet?: boolean } = {}) {
-  try {
-    const res: any = await recipeDesignerApi.assessDraft(draftId.value)
-    const data = res?.data ?? res
-    assessment.value = data
-    const assessedItems = data?.items || data?.draft?.items
-    if (Array.isArray(assessedItems)) {
-      items.value = mergeAssessedItems(items.value, assessedItems)
+function syncAssessmentUpdating() {
+  assessmentUpdating.value = assessmentMutationGuard.isUpdating()
+}
+
+async function refreshAssessment(options: { quiet?: boolean } = {}, request = assessmentMutationGuard.beginAssessment()) {
+  return itemWeightMutations.enqueueMutation(`assessment:${draftId.value}`, async () => {
+    syncAssessmentUpdating()
+    try {
+      if (!assessmentMutationGuard.isCurrent(request)) return
+      const res: any = await recipeDesignerApi.assessDraft(draftId.value)
+      const data = res?.data ?? res
+      if (!assessmentMutationGuard.isCurrent(request)) return
+      assessment.value = data
+      const assessedItems = data?.items || data?.draft?.items
+      if (Array.isArray(assessedItems)) {
+        items.value = mergeAssessedItems(items.value, assessedItems)
+        assessedItems.forEach((item) => {
+          itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+          itemWeightMutations.setPersistedIncludeInAssessment(item.id, item.includeInAssessment !== false)
+        })
+      }
+      refreshDetailModalFromAssessment()
+      await nextTick()
+      restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
+    } catch (error) {
+      console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
+      if (assessmentMutationGuard.isCurrent(request) && !options.quiet) {
+        throw error
+      }
+    } finally {
+      assessmentMutationGuard.complete(request)
+      syncAssessmentUpdating()
     }
-    refreshDetailModalFromAssessment()
-    await nextTick()
-    restoreAssessmentScrollPosition(selectedAssessmentCategory.value)
-  } catch (error) {
-    console.error('[RecipeDesignerEditor] Failed to refresh assessment:', error)
-    if (!options.quiet) {
-      throw error
-    }
-  }
+  })
+}
+
+function scheduleAssessmentRefresh() {
+  const request = assessmentMutationGuard.beginAssessment()
+  syncAssessmentUpdating()
+  assessmentRefreshScheduler.schedule(request)
+}
+
+function invalidateAssessmentForMutation() {
+  assessmentMutationGuard.beginMutation()
+  syncAssessmentUpdating()
+}
+
+function getItemWeightDraft(item: DesignerItem) {
+  return itemWeightDrafts.value[item.id] ?? formatItemWeightInput(item.weightG)
 }
 
 function onWeightInput(item: DesignerItem, event: any) {
-  if (itemWeightEditBaselines.value[item.id] === undefined) {
-    itemWeightEditBaselines.value = {
-      ...itemWeightEditBaselines.value,
-      [item.id]: Number(item.weightG || 0),
-    }
+  const version = itemWeightMutations.begin(item.id, Number(item.weightG || 0))
+  itemWeightEditBaselines.value = {
+    ...itemWeightEditBaselines.value,
+    [item.id]: Number(item.weightG || 0),
   }
-  item.weightG = Number(event.detail.value || 0)
+  itemWeightEditVersions.value = {
+    ...itemWeightEditVersions.value,
+    [item.id]: version,
+  }
+  itemWeightDrafts.value = {
+    ...itemWeightDrafts.value,
+    [item.id]: String(event.detail?.value ?? ''),
+  }
 }
 
 async function updateWeight(item: DesignerItem) {
-  const previousWeightG = itemWeightEditBaselines.value[item.id] ?? Number(item.weightG || 0)
-  const weightG = Number(item.weightG || 0)
-  if (weightG < 0) {
+  const previousWeightG =
+    itemWeightMutations.getPersisted(item.id) ??
+    itemWeightEditBaselines.value[item.id] ??
+    Number(item.weightG || 0)
+  const weightG = Number(itemWeightDrafts.value[item.id] ?? item.weightG ?? 0)
+  const mutationVersion =
+    itemWeightEditVersions.value[item.id] ?? itemWeightMutations.begin(item.id, Number(item.weightG || 0))
+  if (!Number.isFinite(weightG) || weightG < 0) {
     uni.showToast({ title: '用量不能小于0', icon: 'none' })
     return
   }
   if (Math.abs(weightG - previousWeightG) < 0.0001) {
-    clearItemWeightEditBaseline(item.id)
+    clearItemWeightEditBaseline(item.id, mutationVersion)
     return
   }
+  if (itemWeightSavingVersions.value[item.id] === mutationVersion) return
 
+  invalidateAssessmentForMutation()
   beginAutoSave()
+  itemWeightSavingVersions.value = {
+    ...itemWeightSavingVersions.value,
+    [item.id]: mutationVersion,
+  }
+  item.weightG = weightG
+  let persistedBeforeSave = previousWeightG
   try {
-    await recipeDesignerApi.updateItem(item.id, { weightG })
-    await refreshAssessment()
-    finishAutoSave()
-    pushEditorHistory(
-      createUpdateItemHistoryEntry({
-        itemId: item.id,
-        itemName: getItemName(item),
-        before: { weightG: previousWeightG },
-        after: { weightG },
-      }),
+    const persistedMutation = await itemWeightMutations.enqueue(
+      item.id,
+      weightG,
+      () => recipeDesignerApi.updateItem(item.id, { weightG }),
     )
+    persistedBeforeSave = persistedMutation.persistedBeforeWeightG
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      pushEditorHistory(
+        createUpdateItemHistoryEntry({
+          itemId: item.id,
+          itemName: getItemName(item),
+          before: { weightG: persistedBeforeSave },
+          after: { weightG },
+        }),
+      )
+    }
+    finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
-    item.weightG = previousWeightG
-    failAutoSave()
-    uni.showToast({ title: '更新用量失败', icon: 'none' })
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      invalidateAssessmentForMutation()
+      item.weightG = persistedBeforeSave
+      failAutoSave()
+      uni.showToast({ title: '更新用量失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   } finally {
-    clearItemWeightEditBaseline(item.id)
+    clearItemWeightEditBaseline(item.id, mutationVersion)
   }
 }
 
-function clearItemWeightEditBaseline(itemId: string) {
+function clearItemWeightEditBaseline(itemId: string, mutationVersion?: number) {
+  if (
+    mutationVersion !== undefined &&
+    !itemWeightMutations.isCurrent(itemId, mutationVersion)
+  ) return
   const nextBaselines = { ...itemWeightEditBaselines.value }
   delete nextBaselines[itemId]
   itemWeightEditBaselines.value = nextBaselines
+  const nextVersions = { ...itemWeightEditVersions.value }
+  delete nextVersions[itemId]
+  itemWeightEditVersions.value = nextVersions
+  const nextSavingVersions = { ...itemWeightSavingVersions.value }
+  delete nextSavingVersions[itemId]
+  itemWeightSavingVersions.value = nextSavingVersions
+  const nextDrafts = { ...itemWeightDrafts.value }
+  delete nextDrafts[itemId]
+  itemWeightDrafts.value = nextDrafts
 }
 
 function isItemIncludedInAssessment(item: DesignerItem) {
   return item.includeInAssessment !== false
 }
 
+function getRemovableSupplementWarning(item: DesignerItem): RemovableSupplementWarning | undefined {
+  return removableSupplementWarningByItemId.value[item.id]
+}
+
+function getRemovableSupplementWarningMessage(item: DesignerItem) {
+  const warning = getRemovableSupplementWarning(item)
+  if (warning?.message) return warning.message
+  const targetLabels = Array.isArray(warning?.targetLabels) && warning.targetLabels.length > 0
+    ? warning.targetLabels.join('、')
+    : '目标营养素'
+  return `移除该补剂后，${targetLabels}仍然满足最低充足性；是否保留由管理员按配方意图决定。`
+}
+
 async function toggleItemAssessment(item: DesignerItem, event: any) {
   const nextIncluded = Boolean(event.detail?.value)
   const previousIncluded = isItemIncludedInAssessment(item)
+  const mutationVersion = itemWeightMutations.begin(item.id, Number(item.weightG || 0), previousIncluded)
   item.includeInAssessment = nextIncluded
 
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
-    await recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded })
-    await refreshAssessment()
-    finishAutoSave()
-    if (nextIncluded !== previousIncluded) {
-      pushEditorHistory(
-        createUpdateItemHistoryEntry({
-          itemId: item.id,
-          itemName: getItemName(item),
-          before: { includeInAssessment: previousIncluded },
-          after: { includeInAssessment: nextIncluded },
-        }),
-      )
+    const persistedMutation = await itemWeightMutations.enqueueAssessmentToggle(item.id, nextIncluded, () =>
+      recipeDesignerApi.updateItem(item.id, { includeInAssessment: nextIncluded }),
+    )
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      if (nextIncluded !== persistedMutation.persistedBeforeIncludeInAssessment) {
+        pushEditorHistory(
+          createUpdateItemHistoryEntry({
+            itemId: item.id,
+            itemName: getItemName(item),
+            before: { includeInAssessment: persistedMutation.persistedBeforeIncludeInAssessment },
+            after: { includeInAssessment: nextIncluded },
+          }),
+        )
+      }
     }
+    finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update item assessment participation:', error)
-    item.includeInAssessment = previousIncluded
-    failAutoSave()
-    uni.showToast({ title: '更新计算开关失败', icon: 'none' })
+    if (itemWeightMutations.isCurrent(item.id, mutationVersion)) {
+      invalidateAssessmentForMutation()
+      item.includeInAssessment = itemWeightMutations.getPersistedIncludeInAssessment(item.id) ?? previousIncluded
+      failAutoSave()
+      uni.showToast({ title: '更新计算开关失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   }
 }
 
@@ -1496,21 +1691,21 @@ function onItemTouchMove(event: any) {
   const currentIndex = items.value.findIndex((item) => item.id === draggingItemId.value)
   if (currentIndex < 0) return
   const targetIndex = getDragTargetIndex(getTouchClientY(event), currentIndex)
-  if (targetIndex === currentIndex) return
+  if (targetIndex === dragTargetIndex.value) return
   dragTargetIndex.value = targetIndex
-  items.value = moveItem(items.value, currentIndex, targetIndex)
   pulseItemDragFeedback()
-  void nextTick(() => captureItemRowRects())
 }
 
 async function finishItemDrag(event?: any) {
   if (!draggingItemId.value) return
   stopItemDragEvent(event)
-  const orderChanged = items.value.some((item, index) => dragOriginalOrderIds[index] !== item.id)
+  const itemId = draggingItemId.value
+  const targetIndex = dragTargetIndex.value
+  const orderedItems = moveItemToIndex(items.value, itemId, targetIndex).map((item, index) => ({ ...item, sortOrder: index }))
+  const orderChanged = orderedItems.some((item, index) => dragOriginalOrderIds[index] !== item.id)
   const beforeOrderIds = [...dragOriginalOrderIds]
   clearItemDragState()
   if (!orderChanged) return
-  const orderedItems = items.value.map((item, index) => ({ ...item, sortOrder: index }))
   items.value = orderedItems
   const persisted = await persistItemSortOrder(orderedItems)
   if (persisted) {
@@ -1542,6 +1737,9 @@ function showDragInsertionMarker(index: number) {
 }
 
 function pulseItemDragFeedback() {
+  const now = Date.now()
+  if (!shouldTriggerDragFeedback(lastItemDragFeedbackAt, now)) return
+  lastItemDragFeedbackAt = now
   uni.vibrateShort?.({ type: 'light' })
 }
 
@@ -1551,6 +1749,7 @@ function clearItemDragState() {
   dragPreparedIndex = -1
   dragOriginalOrderIds = []
   itemRowRects = []
+  lastItemDragFeedbackAt = 0
 }
 
 async function persistItemSortOrder(orderedItems: DesignerItem[]) {
@@ -1558,9 +1757,7 @@ async function persistItemSortOrder(orderedItems: DesignerItem[]) {
   dragPersisting.value = true
   beginAutoSave()
   try {
-    await Promise.all(
-      orderedItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })),
-    )
+    await recipeDesignerApi.updateItemOrder(draftId.value, orderedItems.map((item) => item.id))
     finishAutoSave()
     return true
   } catch (error) {
@@ -1572,14 +1769,6 @@ async function persistItemSortOrder(orderedItems: DesignerItem[]) {
   } finally {
     dragPersisting.value = false
   }
-}
-
-function moveItem(list: DesignerItem[], fromIndex: number, toIndex: number) {
-  const next = [...list]
-  const [item] = next.splice(fromIndex, 1)
-  if (!item) return list
-  next.splice(toIndex, 0, item)
-  return next
 }
 
 function getDragTargetIndex(clientY: number, fallbackIndex: number) {
@@ -1754,14 +1943,28 @@ function selectIngredientOption(option: RecipeDesignerIngredientOption) {
 }
 
 function getNutrientTargetContextForAddItem(option: RecipeDesignerIngredientOption) {
-  if (!isSupplementOption(option)) {
+  const target = ingredientNutrientSearchTarget.value
+  if (!isSupplementOption(option) || !target) {
     return {}
   }
 
-  return {
-    nutrientTargetKey: ingredientNutrientSearchTarget.value?.nutrientKey,
-    nutrientTargetValue: ingredientNutrientSearchTarget.value?.targetValue,
+  const supplementTarget: SupplementTargetPayload = {
+    fieldPath: resolveSupplementTargetFieldPath(target.nutrientKey),
+    nutrientTargetKey: target.nutrientKey,
+    label: target.label,
+    ...(target.targetValue !== undefined ? { targetValue: target.targetValue } : {}),
+    ...(target.expressionBasis ? { expressionBasis: target.expressionBasis } : {}),
   }
+
+  return {
+    nutrientTargetKey: target.nutrientKey,
+    nutrientTargetValue: target.targetValue,
+    supplementTargets: [supplementTarget],
+  }
+}
+
+function resolveSupplementTargetFieldPath(nutrientKey: string) {
+  return SUPPLEMENT_TARGET_FIELD_BY_NUTRIENT_KEY[nutrientKey] || nutrientKey
 }
 
 function selectNutritionProfile(profile: IngredientNutritionProfileOption) {
@@ -1781,6 +1984,7 @@ async function confirmAddIngredient() {
   }
 
   addingItem.value = true
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
     setIngredientTypeHint(selectedIngredientOption.value)
@@ -1794,11 +1998,13 @@ async function confirmAddIngredient() {
     const item = res?.data ?? res
     if (item?.id) {
       items.value = [...items.value, item]
+      itemWeightMutations.setPersisted(item.id, Number(item.weightG || 0))
+      itemWeightMutations.setPersistedIncludeInAssessment(item.id, item.includeInAssessment !== false)
     }
     ingredientPickerVisible.value = false
     selectedIngredientOption.value = null
     selectedNutritionProfile.value = null
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     if (item?.id) {
       pushEditorHistory(createAddItemHistoryEntry(snapshotRecipeDesignerItem(item)))
@@ -1822,11 +2028,12 @@ function removeIngredient(item: DesignerItem) {
     confirmColor: '#cf1322',
     success: async (result: any) => {
       if (!result.confirm) return
+      invalidateAssessmentForMutation()
       beginAutoSave()
       try {
         await recipeDesignerApi.removeItem(item.id)
         items.value = items.value.filter((candidate) => candidate.id !== item.id)
-        await refreshAssessment()
+        scheduleAssessmentRefresh()
         finishAutoSave()
         pushEditorHistory(createRemoveItemHistoryEntry(itemSnapshot))
         uni.showToast({ title: '已删除', icon: 'success' })
@@ -2222,27 +2429,43 @@ async function updateDetailContributionItemWeight(itemId: string, weightG: numbe
   if (updatingDetailContributionItemId.value) return
   const item = items.value.find((candidate) => candidate.id === itemId)
   const beforeWeightG = previousWeightG ?? Number(item?.weightG || 0)
+  invalidateAssessmentForMutation()
+  const mutationVersion = itemWeightMutations.begin(itemId, beforeWeightG)
   updatingDetailContributionItemId.value = itemId
   beginAutoSave()
+  items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
   try {
-    await recipeDesignerApi.updateItem(itemId, { weightG })
-    items.value = items.value.map((item) => (item.id === itemId ? { ...item, weightG } : item))
-    await refreshAssessment()
-    finishAutoSave()
-    if (Math.abs(weightG - beforeWeightG) >= 0.0001) {
-      pushEditorHistory(
-        createUpdateItemHistoryEntry({
-          itemId,
-          itemName: item ? getItemName(item) : '原料',
-          before: { weightG: beforeWeightG },
-          after: { weightG },
-        }),
-      )
+    const persistedMutation = await itemWeightMutations.enqueue(
+      itemId,
+      weightG,
+      () => recipeDesignerApi.updateItem(itemId, { weightG }),
+    )
+    if (itemWeightMutations.isCurrent(itemId, mutationVersion)) {
+      scheduleAssessmentRefresh()
+      if (Math.abs(weightG - persistedMutation.persistedBeforeWeightG) >= 0.0001) {
+        pushEditorHistory(
+          createUpdateItemHistoryEntry({
+            itemId,
+            itemName: item ? getItemName(item) : '原料',
+            before: { weightG: persistedMutation.persistedBeforeWeightG },
+            after: { weightG },
+          }),
+        )
+      }
     }
+    finishAutoSave()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to update contribution weight:', error)
-    failAutoSave()
-    uni.showToast({ title: '更新用量失败', icon: 'none' })
+    if (itemWeightMutations.isCurrent(itemId, mutationVersion)) {
+      invalidateAssessmentForMutation()
+      items.value = items.value.map((item) =>
+        item.id === itemId ? { ...item, weightG: itemWeightMutations.getPersisted(itemId) ?? beforeWeightG } : item,
+      )
+      failAutoSave()
+      uni.showToast({ title: '更新用量失败', icon: 'none' })
+    } else {
+      finishAutoSave()
+    }
   } finally {
     updatingDetailContributionItemId.value = ''
     clearDetailContributionWeightDraft(itemId)
@@ -2262,7 +2485,7 @@ function finishAutoSave() {
 }
 
 function failAutoSave() {
-  activeAutoSaveCount.value = 0
+  activeAutoSaveCount.value = Math.max(0, activeAutoSaveCount.value - 1)
   autoSaveStatus.value = 'failed'
 }
 
@@ -2440,6 +2663,9 @@ function buildOptimisticDesignerItem(itemSnapshot: RecipeDesignerHistoryItemSnap
     preparationMethod: itemSnapshot.preparationMethod ?? undefined,
     nutrientTargetKey: itemSnapshot.nutrientTargetKey ?? null,
     nutrientTargetValue: itemSnapshot.nutrientTargetValue ?? null,
+    supplementTargets: itemSnapshot.supplementTargets
+      ? itemSnapshot.supplementTargets.map((target) => ({ ...target }))
+      : null,
     sortOrder: itemSnapshot.sortOrder,
   }
 }
@@ -2449,13 +2675,55 @@ function cloneDesignerItems(list: DesignerItem[]) {
     ...item,
     ingredient: item.ingredient ? { ...item.ingredient } : undefined,
     nutritionFood: item.nutritionFood ? { ...item.nutritionFood } : undefined,
+    supplementTargets: item.supplementTargets
+      ? item.supplementTargets.map((target) => ({ ...target }))
+      : item.supplementTargets,
   }))
 }
 
 async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistoryItemPatch) {
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
-  const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
-  const updatedItem = res?.data ?? res
+  const item = items.value.find((candidate) => candidate.id === resolvedItemId)
+  const weightG = patch.weightG === undefined ? undefined : Number(patch.weightG || 0)
+  const includeInAssessment = patch.includeInAssessment
+  if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()
+  const mutationVersion =
+    weightG === undefined && includeInAssessment === undefined
+      ? undefined
+      : itemWeightMutations.begin(
+          resolvedItemId,
+          Number(item?.weightG || 0),
+          item?.includeInAssessment !== false,
+        )
+  let updatedItem: any
+  try {
+    if (weightG === undefined && includeInAssessment === undefined) {
+      const res: any = await recipeDesignerApi.updateItem(resolvedItemId, patch)
+      updatedItem = res?.data ?? res
+    } else if (weightG === undefined) {
+      const persistedMutation = await itemWeightMutations.enqueueAssessmentToggle(
+        resolvedItemId,
+        Boolean(includeInAssessment),
+        () => recipeDesignerApi.updateItem(resolvedItemId, patch),
+      )
+      updatedItem = persistedMutation.result?.data ?? persistedMutation.result
+      if (!itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) return
+    } else {
+      const persistedMutation = await itemWeightMutations.enqueue(
+        resolvedItemId,
+        weightG,
+        () => recipeDesignerApi.updateItem(resolvedItemId, patch),
+      )
+      updatedItem = persistedMutation.result?.data ?? persistedMutation.result
+      if (!itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) return
+    }
+  } catch (error) {
+    if (mutationVersion !== undefined && !itemWeightMutations.isCurrent(resolvedItemId, mutationVersion)) {
+      return
+    }
+    if (isAssessmentRelevantHistoryItemPatch(patch)) invalidateAssessmentForMutation()
+    throw error
+  }
   items.value = items.value.map((item) =>
     item.id === resolvedItemId
       ? {
@@ -2465,10 +2733,15 @@ async function applyHistoryItemPatch(itemId: string, patch: RecipeDesignerHistor
         }
       : item,
   )
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
+}
+
+function isAssessmentRelevantHistoryItemPatch(patch: RecipeDesignerHistoryItemPatch) {
+  return patch.weightG !== undefined || patch.includeInAssessment !== undefined
 }
 
 async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipeDesignerItem>) {
+  invalidateAssessmentForMutation()
   const payload = buildHistoryItemAddPayload(itemSnapshot)
   const res: any = await recipeDesignerApi.addItem(draftId.value, payload)
   const restoredItem = res?.data ?? res
@@ -2478,15 +2751,18 @@ async function restoreHistoryItem(itemSnapshot: ReturnType<typeof snapshotRecipe
       ...items.value.filter((item) => item.id !== restoredItem.id && item.id !== itemSnapshot.id),
       restoredItem,
     ])
+    itemWeightMutations.setPersisted(restoredItem.id, Number(restoredItem.weightG || 0))
+    itemWeightMutations.setPersistedIncludeInAssessment(restoredItem.id, restoredItem.includeInAssessment !== false)
   }
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
 }
 
 async function removeHistoryItem(itemId: string) {
+  invalidateAssessmentForMutation()
   const resolvedItemId = resolveHistoryItemId(historyState.value, itemId)
   await recipeDesignerApi.removeItem(resolvedItemId)
   items.value = items.value.filter((item) => item.id !== resolvedItemId)
-  await refreshAssessment()
+  scheduleAssessmentRefresh()
 }
 
 async function applyHistoryOrder(orderIds: string[]) {
@@ -2499,7 +2775,7 @@ async function applyHistoryOrder(orderIds: string[]) {
   const remainingItems = items.value.filter((item) => !orderedIdSet.has(item.id))
   const nextItems = [...orderedItems, ...remainingItems].map((item, index) => ({ ...item, sortOrder: index }))
   items.value = nextItems
-  await Promise.all(nextItems.map((item, index) => recipeDesignerApi.updateItem(item.id, { sortOrder: index })))
+  await recipeDesignerApi.updateItemOrder(draftId.value, nextItems.map((item) => item.id))
 }
 
 function sortItemsBySortOrder(list: DesignerItem[]) {
@@ -2535,12 +2811,13 @@ async function confirmScenarioSwitch() {
   let scenarioPersisted = false
   rememberAssessmentScrollPosition()
   scenarioSwitching.value = true
+  invalidateAssessmentForMutation()
   beginAutoSave()
   try {
     await recipeDesignerApi.updateDraft(draftId.value, { scenario: pendingScenario.value })
     scenarioPersisted = true
     scenario.value = pendingScenario.value
-    await refreshAssessment()
+    scheduleAssessmentRefresh()
     finishAutoSave()
     scenarioSwitchSheetVisible.value = false
     uni.showToast({ title: '已切换生命阶段', icon: 'success' })
@@ -2617,7 +2894,11 @@ async function revertToLatestOfficial() {
     const res: any = await recipeDesignerApi.revertDraftToLatestOfficial(draftId.value)
     const revertedDraft = res?.data ?? res
     historyState.value = createRecipeDesignerHistoryState()
+    itemWeightDrafts.value = {}
     itemWeightEditBaselines.value = {}
+    itemWeightEditVersions.value = {}
+    itemWeightSavingVersions.value = {}
+    itemWeightMutations.clear()
     closeAssessmentEntryDetail()
     reorderMode.value = false
     clearItemDragState()
@@ -3485,6 +3766,17 @@ function formatAssessmentNumber(value: unknown) {
 
 .item-row-excluded {
   opacity: 0.62;
+}
+
+.supplement-removal-hint {
+  margin: 8rpx 12rpx 0 86rpx;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid #ffd591;
+  border-radius: 8rpx;
+  background: #fff7e6;
+  color: #8a4b00;
+  font-size: 22rpx;
+  line-height: 1.45;
 }
 
 .item-drag-handle-shell {

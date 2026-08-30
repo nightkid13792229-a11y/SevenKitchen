@@ -33,8 +33,7 @@ export interface RankNutritionSourceCandidatesInput {
   minimumPrimaryCoveragePercent?: number;
 }
 
-export interface RankedNutritionSourceCandidate
-  extends NutritionSourceCandidate {
+export interface RankedNutritionSourceCandidate extends NutritionSourceCandidate {
   source: ApprovedNutritionSource;
   stateTags: NutritionStateTag[];
   fallbackOnly: boolean;
@@ -112,7 +111,9 @@ export function rankNutritionSourceCandidates(
       (
         entry,
       ): entry is {
-        candidate: NutritionSourceCandidate & { stateTags: NutritionStateTag[] };
+        candidate: NutritionSourceCandidate & {
+          stateTags: NutritionStateTag[];
+        };
         originalIndex: number;
         source: ApprovedNutritionSource;
       } =>
@@ -290,7 +291,7 @@ function hasContradictoryStateTags(stateTags: NutritionStateTag[]): boolean {
   );
 }
 
-function toApprovedNutritionSource(
+export function toApprovedNutritionSource(
   source: string,
 ): ApprovedNutritionSource | undefined {
   return approvedNutritionSources.find(

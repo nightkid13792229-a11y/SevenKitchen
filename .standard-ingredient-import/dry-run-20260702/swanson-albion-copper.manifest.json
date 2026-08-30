@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "operationMode": "production-package",
+  "ingredient": {
+    "type": "SUPPLEMENT",
+    "name": "Swanson Albion 铜 2mg 片",
+    "brand": "Swanson",
+    "productModel": "Albion Copper, 2 mg, 300 tablets",
+    "notes": "演练用补剂草稿。英文品名为 Swanson Albion Copper。标签来自用户提供的 iHerb 商品截图和瓶身 Supplement Facts 图片；正式入库前建议复核产品批次和当前销售页面标签是否一致。",
+    "tagIds": []
+  },
+  "packageEvidence": {
+    "metadata": {
+      "source": "operator-provided-iherb-screenshots",
+      "capturedAt": "2026-07-02T00:00:00.000Z"
+    },
+    "packageImages": [
+      {
+        "uri": "file:///tmp/codex-remote-attachments/019f13d4-dd9c-7922-970f-b2f618374896/9fa49a00-d717-4c79-9660-071ee8ced32c/1-Photo-1.jpg",
+        "kind": "front-label"
+      },
+      {
+        "uri": "file:///tmp/codex-remote-attachments/019f13d4-dd9c-7922-970f-b2f618374896/9fa49a00-d717-4c79-9660-071ee8ced32c/2-Photo-2.jpg",
+        "kind": "supplement-facts"
+      }
+    ],
+    "labelSources": [
+      {
+        "sourceId": "operator-image:swanson-albion-copper-supplement-facts",
+        "labelText": "Supplement Facts. Serving Size 1 Tablet. Copper (from Albion copper bisglycinate chelate) 2 mg, 222% Daily Value. Other Ingredients: Calcium carbonate, microcrystalline cellulose (plant fiber), stearic acid, maltodextrin, magnesium stearate, croscarmellose sodium, pharmaceutical glaze."
+      }
+    ]
+  },
+  "supplementLabel": {
+    "servingSize": "1 tablet",
+    "netContent": "300 tablets",
+    "dosageForm": "tablet",
+    "activeNutrients": {
+      "copperMg": 2
+    },
+    "dailyValuePercent": {
+      "copper": 222
+    },
+    "activeForms": {
+      "copper": "Albion copper bisglycinate chelate"
+    },
+    "otherIngredients": [
+      "calcium carbonate",
+      "microcrystalline cellulose (plant fiber)",
+      "stearic acid",
+      "maltodextrin",
+      "magnesium stearate",
+      "croscarmellose sodium",
+      "pharmaceutical glaze"
+    ],
+    "notes": "Copper label line states 2 mg per tablet from Albion copper bisglycinate chelate. Values transcribed from provided image; no concentration was inferred beyond visible label text."
+  },
+  "dbAlignmentReport": {
+    "id": "5543a5b1ca65",
+    "status": "passing"
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": true,
+    "productionPackageApproved": true
+  }
+}

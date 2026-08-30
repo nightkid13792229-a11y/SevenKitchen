@@ -294,8 +294,8 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('source-plan-desc');
     expect(templateSource).not.toContain('sourcePlanFallbackNote');
     expect(source).toContain('const selectedSourcePlanDescription = computed');
-    expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
-    expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
+    expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
+    expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
     expect(source).not.toContain('ingredientSummaryMeta');
     expect(source).not.toContain('种食材 · ${supplementIngredients.value.length}种补剂');
     expect(source).not.toContain('净重 ${totalFoodKg.toFixed(2)}kg');

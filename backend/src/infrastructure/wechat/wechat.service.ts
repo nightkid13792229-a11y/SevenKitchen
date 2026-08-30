@@ -80,6 +80,8 @@ interface WechatShippingInfoResponse {
   errmsg: string;
 }
 
+const WECHAT_SHIPPING_INFO_NOT_UPDATED = 10060023;
+
 export type WechatShippingOrderQuery =
   | {
       transactionId: string;
@@ -129,6 +131,11 @@ export interface WechatTradeManagementConfirmationResponse {
 }
 
 interface WechatSpecialShippingOrderResponse {
+  errcode: number;
+  errmsg: string;
+}
+
+interface WechatContentSecurityResponse {
   errcode: number;
   errmsg: string;
 }
@@ -386,6 +393,37 @@ export class WechatService {
     }
   }
 
+  async checkTextContent(
+    content: string,
+    openid: string,
+  ): Promise<{ safe: boolean }> {
+    if (this.isMockMode()) {
+      return { safe: true };
+    }
+
+    const accessToken = await this.getAccessToken();
+    const response = await axios.post<WechatContentSecurityResponse>(
+      `https://api.weixin.qq.com/wxa/msg_sec_check?access_token=${accessToken}`,
+      {
+        content,
+        version: 2,
+        scene: 2,
+        openid,
+      },
+    );
+
+    if (response.data.errcode === 0) {
+      return { safe: true };
+    }
+    if (response.data.errcode === 87014) {
+      return { safe: false };
+    }
+
+    throw new Error(
+      `WeChat content security check failed: ${response.data.errcode} - ${response.data.errmsg}`,
+    );
+  }
+
   async getPhoneNumber(
     code: string,
     appId?: string,
@@ -507,7 +545,10 @@ export class WechatService {
     const response = await axios.post<WechatShippingInfoResponse>(url, payload);
     const data = response.data;
 
-    if (data.errcode !== 0) {
+    if (
+      data.errcode !== 0 &&
+      data.errcode !== WECHAT_SHIPPING_INFO_NOT_UPDATED
+    ) {
       throw new Error(
         `WeChat shipping upload failed: ${data.errcode} - ${data.errmsg}`,
       );

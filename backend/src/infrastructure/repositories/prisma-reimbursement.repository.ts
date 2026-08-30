@@ -20,11 +20,52 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     return customFees as unknown as Prisma.InputJsonValue;
   }
 
-  async save(reimbursement: Reimbursement): Promise<Reimbursement> {
+  private reimbursementInclude = {
+    purchaseLists: {
+      include: {
+        items: true,
+      },
+    },
+    submittedBy: {
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+      },
+    },
+    reviewedBy: {
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+      },
+    },
+  } as const;
+
+  private userInclude = {
+    submittedBy: {
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+      },
+    },
+    reviewedBy: {
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+      },
+    },
+  } as const;
+
+  private upsertReimbursement(
+    client: Pick<PrismaService, 'reimbursement'>,
+    reimbursement: Reimbursement,
+  ) {
     const data = reimbursement.toPrisma();
 
-    // 保存报销单（不包含关联的purchaseLists，因为这需要单独更新）
-    const saved = await this.prisma.reimbursement.upsert({
+    return client.reimbursement.upsert({
       where: { id: reimbursement.id },
       update: {
         status: data.status,
@@ -36,9 +77,9 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
         customFees: this.toCustomFeesJson(data.customFees),
         paymentProofUrls: data.paymentProofUrls,
         paymentProofKeys: data.paymentProofKeys,
-        reviewedById: data.reviewedById,
-        reviewedAt: data.reviewedAt,
-        reviewComment: data.reviewComment,
+        reviewedById: data.reviewedById ?? null,
+        reviewedAt: data.reviewedAt ?? null,
+        reviewComment: data.reviewComment ?? null,
         updatedAt: data.updatedAt,
       },
       create: {
@@ -58,64 +99,74 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       },
-      include: {
-        submittedBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-        reviewedBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: this.userInclude,
     });
+  }
 
-    // 关联采购清单（如果是新建的）
-    if (!reimbursement.id || reimbursement.id === data.id) {
-      // 为每个采购清单关联报销单ID
-      await Promise.all(
-        reimbursement.purchaseLists.map((list) =>
-          this.prisma.purchaseList.update({
-            where: { id: list.id },
-            data: { reimbursementId: saved.id },
-          }),
-        ),
-      );
-    }
-
-    // 重新查询，包含完整的关联数据
-    const complete = await this.prisma.reimbursement.findUnique({
-      where: { id: saved.id },
-      include: {
-        purchaseLists: {
-          include: {
-            items: true,
-          },
-        },
-        submittedBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-        reviewedBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+  private async findCompleteReimbursement(
+    client: Pick<PrismaService, 'reimbursement'>,
+    id: string,
+  ) {
+    const complete = await client.reimbursement.findUnique({
+      where: { id },
+      include: this.reimbursementInclude,
     });
 
     return Reimbursement.fromPrisma(complete!);
+  }
+
+  async save(reimbursement: Reimbursement): Promise<Reimbursement> {
+    // 保存报销单（不包含关联的purchaseLists，因为这需要单独更新）
+    const saved = await this.upsertReimbursement(this.prisma, reimbursement);
+
+    // 关联采购清单（如果是新建的）
+    await Promise.all(
+      reimbursement.purchaseLists.map((list) =>
+        this.prisma.purchaseList.update({
+          where: { id: list.id },
+          data: { reimbursementId: saved.id },
+        }),
+      ),
+    );
+
+    return this.findCompleteReimbursement(this.prisma, saved.id);
+  }
+
+  async saveWithPurchaseListReplacement(
+    reimbursement: Reimbursement,
+  ): Promise<Reimbursement> {
+    return this.prisma.$transaction(async (tx) => {
+      const saved = await this.upsertReimbursement(tx, reimbursement);
+      const selectedListIds = reimbursement.purchaseLists.map(
+        (list) => list.id,
+      );
+
+      await tx.purchaseList.updateMany({
+        where: {
+          reimbursementId: saved.id,
+          id: { notIn: selectedListIds },
+        },
+        data: { reimbursementId: null },
+      });
+
+      if (selectedListIds.length > 0) {
+        const linked = await tx.purchaseList.updateMany({
+          where: {
+            id: { in: selectedListIds },
+            OR: [{ reimbursementId: null }, { reimbursementId: saved.id }],
+          },
+          data: { reimbursementId: saved.id },
+        });
+
+        if (linked.count !== selectedListIds.length) {
+          throw new Error(
+            `Unable to replace purchase-list links for reimbursement ${saved.id}`,
+          );
+        }
+      }
+
+      return this.findCompleteReimbursement(tx, saved.id);
+    });
   }
 
   async findById(id: string): Promise<Reimbursement | null> {

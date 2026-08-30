@@ -11,8 +11,13 @@ describe('IngredientPricingService', () => {
 
   const mockPrismaService = {
     ingredientPriceChange: {
+      createMany: jest.fn(),
+      deleteMany: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+    },
+    procurementSku: {
+      findMany: jest.fn(),
     },
   } as any;
 
@@ -25,6 +30,7 @@ describe('IngredientPricingService', () => {
   const mockPurchaseRecordRepository = {
     findByIngredientId: jest.fn(),
     findById: jest.fn(),
+    findByPurchaseListId: jest.fn(),
   } as any;
 
   const mockGlobalConfigService = {
@@ -113,6 +119,55 @@ describe('IngredientPricingService', () => {
     expect(result[0].sourceQuantity).toBe(0.69);
   });
 
+  it('uses actual base quantity to create reimbursement price changes in ingredient purchase units', async () => {
+    mockPrismaService.ingredientPriceChange.deleteMany.mockResolvedValue({
+      count: 0,
+    });
+    mockPrismaService.ingredientPriceChange.createMany.mockResolvedValue({
+      count: 1,
+    });
+    mockPrismaService.ingredientPriceChange.findMany.mockResolvedValue([]);
+    mockPurchaseRecordRepository.findByPurchaseListId.mockResolvedValue([
+      {
+        id: 'purchase-record-1',
+        ingredientId: 'ingredient-1',
+        actualQuantity: 3375,
+        actualBaseQuantity: 3375,
+        actualCost: 101,
+      },
+    ]);
+    mockIngredientRepository.findByIds.mockResolvedValue([
+      {
+        id: 'ingredient-1',
+        name: '猪里脊',
+        currentPricePerPurchaseUnit: 30,
+        purchaseToBaseRatio: 1000,
+        getEffectivePricePerPurchaseUnit: () => 30,
+      },
+    ]);
+    mockGlobalConfigService.getGlobalConfig.mockResolvedValue({
+      ingredientPriceAutoApproveThreshold: 0.08,
+    });
+
+    await service.syncPendingChangesForReimbursement('reimbursement-1', [
+      'purchase-list-1',
+    ]);
+
+    expect(
+      mockPrismaService.ingredientPriceChange.createMany,
+    ).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          ingredientId: 'ingredient-1',
+          purchaseRecordId: 'purchase-record-1',
+          sourceQuantity: 3.375,
+          sourcePricePerPurchaseUnit: 29.93,
+          proposedEffectivePrice: 29.93,
+        }),
+      ],
+    });
+  });
+
   it('updates linked procurement sku current purchase price when reimbursement price changes are approved', async () => {
     mockPrismaService.ingredientPriceChange.findMany.mockResolvedValue([
       {
@@ -145,7 +200,15 @@ describe('IngredientPricingService', () => {
     mockPurchaseRecordRepository.findById.mockResolvedValue({
       id: 'purchase-record-1',
       procurementSkuId: 'sku-1',
+      actualBaseQuantity: 3375,
+      actualCost: 101,
     });
+    mockPrismaService.procurementSku.findMany.mockResolvedValue([
+      {
+        id: 'sku-1',
+        purchaseToBaseRatio: 1000,
+      },
+    ]);
 
     await service.applyApprovedChangesForReimbursement(
       'reimbursement-1',
@@ -153,9 +216,11 @@ describe('IngredientPricingService', () => {
       '审核通过',
     );
 
-    expect(mockProcurementSkuService.applyCurrentPurchasePrice).toHaveBeenCalledWith(
+    expect(
+      mockProcurementSkuService.applyCurrentPurchasePrice,
+    ).toHaveBeenCalledWith(
       'sku-1',
-      76.5,
+      29.93,
       expect.objectContaining({
         source: 'REIMBURSEMENT',
         reimbursementId: 'reimbursement-1',

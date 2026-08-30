@@ -55,6 +55,14 @@ describe('recipeDesignerApi', () => {
       preparationMethod: 'cooked',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.2,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 1,
     } satisfies Parameters<typeof recipeDesignerApi.addItem>[1]
     const updateItemPayload = {
@@ -62,6 +70,14 @@ describe('recipeDesignerApi', () => {
       preparationMethod: 'steamed',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.4,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.calcium',
+          nutrientTargetKey: 'calcium',
+          label: '钙',
+          unit: 'mg',
+        },
+      ],
       sortOrder: 2,
       includeInAssessment: false,
     } satisfies UpdateDesignRecipeItemPayload
@@ -72,8 +88,13 @@ describe('recipeDesignerApi', () => {
     recipeDesignerApi.updateDraft(draftId, draftPayload)
     recipeDesignerApi.addItem(draftId, itemPayload)
     recipeDesignerApi.updateItem(itemId, updateItemPayload)
+    recipeDesignerApi.reorderItems(draftId, {
+      items: [
+        { id: 'item-2', sortOrder: 0 },
+        { id: 'item-1', sortOrder: 1 },
+      ],
+    })
     recipeDesignerApi.removeItem(itemId)
-    recipeDesignerApi.copyStageItemsFromDraft(draftId, { sourceDraftId: 'adult-design' })
     recipeDesignerApi.assessDraft(draftId)
     recipeDesignerApi.publishDraft(draftId, { reviewNote: 'ready' })
 
@@ -106,13 +127,18 @@ describe('recipeDesignerApi', () => {
       data: updateItemPayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(7, {
-      url: `/recipe-designer/items/${itemId}`,
-      method: 'DELETE',
+      url: `/recipe-designer/drafts/${draftId}/items/reorder`,
+      method: 'PATCH',
+      data: {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(8, {
-      url: `/recipe-designer/drafts/${draftId}/copy-items-from-stage`,
-      method: 'POST',
-      data: { sourceDraftId: 'adult-design' },
+      url: `/recipe-designer/items/${itemId}`,
+      method: 'DELETE',
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(9, {
       url: `/recipe-designer/drafts/${draftId}/assess`,
@@ -140,19 +166,27 @@ describe('recipeDesignerApi', () => {
       scenario: 'EARLY_GROWTH_REPRODUCTION',
       sourceDraftId: 'published-adult-design',
     } satisfies Parameters<typeof recipeDesignerApi.createSeriesStageDraft>[1]
+    const stageIngredientCopyPayload = {
+      sourceLifeStage: 'HIGH_ACTIVITY_ADULT',
+    } satisfies Parameters<typeof recipeDesignerApi.copySeriesStageIngredients>[2]
 
-    recipeDesignerApi.listSeries()
+    recipeDesignerApi.listSeries({ page: 2, pageSize: 20 })
     recipeDesignerApi.createSeries(createPayload)
     recipeDesignerApi.renameSeries(seriesId, renamePayload)
     recipeDesignerApi.deleteSeries(seriesId, deletePayload)
     recipeDesignerApi.createSeriesStageDraft(seriesId, stagePayload)
     recipeDesignerApi.duplicateSeries(seriesId)
     recipeDesignerApi.duplicateSeriesStage(seriesId, 'HIGH_ACTIVITY_ADULT')
+    recipeDesignerApi.copySeriesStageIngredients(
+      seriesId,
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      stageIngredientCopyPayload,
+    )
 
     expect(mockedRequest).toHaveBeenNthCalledWith(1, {
       url: '/recipe-designer/series',
       method: 'GET',
-      data: {},
+      data: { page: 2, pageSize: 20 },
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/series',
@@ -181,6 +215,11 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(7, {
       url: `/recipe-designer/series/${seriesId}/stages/HIGH_ACTIVITY_ADULT/duplicate`,
       method: 'POST',
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(8, {
+      url: `/recipe-designer/series/${seriesId}/stages/LOW_ACTIVITY_ADULT_OR_SENIOR/copy-ingredients`,
+      method: 'POST',
+      data: stageIngredientCopyPayload,
     })
   })
 
@@ -254,6 +293,7 @@ describe('recipeDesignerApi', () => {
       preparationMethod: null,
       nutrientTargetKey: null,
       nutrientTargetValue: null,
+      supplementTargets: null,
     })
     recipeDesignerApi.publishDraft('draft-1', { name: '三文鱼成犬维护' })
 
@@ -264,12 +304,23 @@ describe('recipeDesignerApi', () => {
         preparationMethod: null,
         nutrientTargetKey: null,
         nutrientTargetValue: null,
+        supplementTargets: null,
       },
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/drafts/draft-1/publish',
       method: 'POST',
       data: { name: '三文鱼成犬维护' },
+    })
+  })
+
+  it('persists a complete draft item order through the batch item-order endpoint', () => {
+    recipeDesignerApi.updateItemOrder('draft-1', ['item-3', 'item-1', 'item-2'])
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/recipe-designer/drafts/draft-1/item-order',
+      method: 'PUT',
+      data: { itemIds: ['item-3', 'item-1', 'item-2'] },
     })
   })
 

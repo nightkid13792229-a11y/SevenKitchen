@@ -27,12 +27,18 @@ import {
   listSupplementTargetFields,
 } from '../../domain/ingredient/nutrition-field-catalog';
 import {
+  inferSupplementTargetFieldFromIngredientName,
+  resolveSupplementTargetField as resolveSupplementTargetFieldReference,
+  toDesignSupplementTargetReference,
+} from '../../domain/ingredient/supplement-target-mapping';
+import {
   createEmptyNutritionProfile,
   normalizeNutritionProfile,
 } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../domain/ingredient/types';
 import {
   getProfileEffectiveWeightG,
+  readProfileFieldAmount,
   readProfileValuePer100g,
 } from '../../domain/recipe-designer/nutrition-profile-reader';
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
@@ -40,6 +46,7 @@ import {
   assessRecipeDraft,
   type DesignRecipeAssessmentResult,
 } from '../../domain/recipe-designer/recipe-assessment';
+import { inferSupplementTargetsByRemoval } from '../../domain/recipe-designer/supplement-target-inference';
 import type {
   AssessmentEntry,
   AssessmentExpressionBasis,
@@ -49,7 +56,7 @@ import type {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   AddRecipeDesignItemDto,
-  CopyRecipeStageItemsDto,
+  CopyRecipeSeriesStageIngredientsDto,
   CreateRecipeDesignerSupplementOptionDto,
   CreatePrivateRecipeSnapshotDto,
   CreateRecipeDesignDraftDto,
@@ -61,6 +68,7 @@ import type {
   ListRecipeDesignerSeriesDto,
   PublishRecipeDesignDraftDto,
   RenameRecipeSeriesDto,
+  ReorderRecipeDesignItemsDto,
   UpdateDogDesignNotesDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
@@ -157,6 +165,60 @@ const DESIGN_RECIPE_INCLUDE = {
   },
 };
 
+const DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT = {
+  id: true,
+  name: true,
+  type: true,
+  unitDisplayLabel: true,
+  purchaseUnit: true,
+  properties: true,
+  brand: true,
+  productModel: true,
+} satisfies Prisma.IngredientSelect;
+
+const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
+  id: true,
+  designRecipeId: true,
+  ingredientId: true,
+  nutritionFoodId: true,
+  weightG: true,
+  includeInAssessment: true,
+  ratioPercent: true,
+  preparationMethod: true,
+  nutrientTargetKey: true,
+  nutrientTargetValue: true,
+  sortOrder: true,
+  createdAt: true,
+  updatedAt: true,
+  ingredient: {
+    select: DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT,
+  },
+  nutritionFood: {
+    select: {
+      id: true,
+      name: true,
+      nameEn: true,
+      displayNameZh: true,
+      category: true,
+      dataSource: true,
+      status: true,
+      mappings: {
+        select: {
+          id: true,
+          nutritionFoodId: true,
+          ingredientId: true,
+          yieldRate: true,
+          isPrimary: true,
+          notes: true,
+          ingredient: {
+            select: DESIGN_RECIPE_ITEM_CLIENT_INGREDIENT_SELECT,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.DesignRecipeItemSelect;
+
 const DESIGN_RECIPE_LIST_SELECT = {
   id: true,
   name: true,
@@ -195,6 +257,7 @@ const DESIGN_RECIPE_LIST_SELECT = {
       preparationMethod: true,
       nutrientTargetKey: true,
       nutrientTargetValue: true,
+      supplementTargets: true,
       sortOrder: true,
     },
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
@@ -203,8 +266,18 @@ const DESIGN_RECIPE_LIST_SELECT = {
 
 const DESIGN_RECIPE_SERIES_LIST_SELECT = {
   ...DESIGN_RECIPE_LIST_SELECT,
+  _count: {
+    select: { items: true },
+  },
   seriesId: true,
   seriesLifeStage: true,
+};
+
+const RECIPE_SERIES_WORKBENCH_RECIPE_SELECT = {
+  recipeId: true,
+  seriesLifeStage: true,
+  status: true,
+  updatedAt: true,
 };
 
 const RECIPE_DESIGNER_PUBLISHED_SOURCE = 'Setar';
@@ -217,6 +290,7 @@ const INTERNAL_RECIPE_DESIGNER_CREATOR_IDS = [
 const PUBLISHED_RECIPE_PRODUCTION_LOSS_RATE = 1.05;
 const PUBLISHED_RECIPE_BATCH_LABOR_HOURS = 2;
 const DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS = 3;
+const DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS = 3;
 const COPYABLE_RECIPE_STATUS_PRIORITY: Record<string, number> = {
   [RecipeStatus.PRIVATE_CUSTOM]: 3,
   [RecipeStatus.DRAFT]: 2,
@@ -267,13 +341,11 @@ const LEGACY_RECIPE_LIFE_STAGE_MAPPINGS: Record<string, string[]> = {
   LACTATION: [RecipeLifeStage.REPRODUCTION],
 };
 
-const normalizeNutritionTargetKey = (value: string) =>
-  value.replace(/\s+/g, '').toLowerCase();
-
 type DesignRecipeWithItems = {
   id: string;
   name: string;
   version: number;
+  contentRevision: number;
   status: string;
   fediafDogScenario: FediafDogScenarioCode;
   nutritionStandard?: string | null;
@@ -318,6 +390,7 @@ type DesignRecipeItemWithFood = {
   preparationMethod: string | null;
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
+  supplementTargets?: unknown;
   sortOrder: number;
   ingredient?: {
     id: string;
@@ -363,6 +436,22 @@ type PublishedSupplementNutrientTarget = {
   unit?: string;
 };
 
+type DesignSupplementTarget = {
+  nutrientTargetKey: string;
+  fieldPath: string;
+  label: string;
+  unit: string;
+  targetValue?: number | null;
+  expressionBasis?: string | null;
+};
+
+type RemovableSupplementWarning = {
+  itemId: string;
+  itemName: string;
+  targetLabels: string[];
+  message: string;
+};
+
 type PublishedRecipePresentationMedia = {
   coverImageUrl: string | null;
   coverTitle: string | null;
@@ -401,7 +490,9 @@ type DesignRecipeWorkbenchCardSummary = Omit<
 type ClientDesignRecipeAssessmentResult = Omit<
   DesignRecipeAssessmentResult,
   'entries'
->;
+> & {
+  removableSupplementWarnings: RemovableSupplementWarning[];
+};
 
 type RecipeSeriesWorkbenchRecord = {
   id: string;
@@ -433,6 +524,7 @@ type RecipeSeriesWorkbenchRecord = {
     assessmentSummary?: unknown;
     missingDataReport?: unknown;
     items?: unknown[];
+    _count?: { items: number };
   }>;
   recipes: Array<{
     id?: string;
@@ -462,13 +554,15 @@ type RecipeSeriesCopyableRecipeItem = {
   preparationMethod?: string | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  supplementTargets?: unknown;
   sortOrder?: number | null;
 };
 
-type RecipeSeriesCopyableRecipe = RecipeSeriesWorkbenchRecord['recipes'][number] & {
-  seriesLifeStage: RecipeSeriesLifeStage;
-  items: RecipeSeriesCopyableRecipeItem[];
-};
+type RecipeSeriesCopyableRecipe =
+  RecipeSeriesWorkbenchRecord['recipes'][number] & {
+    seriesLifeStage: RecipeSeriesLifeStage;
+    items: RecipeSeriesCopyableRecipeItem[];
+  };
 
 type CopyableSeriesStageSource =
   | {
@@ -1715,34 +1809,52 @@ export class RecipeDesignerService {
     query: ListRecipeDesignerSeriesDto = {},
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
+    const usePagination = query.page !== undefined || query.pageSize !== undefined;
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
     const series = (await this.prisma.recipeSeries.findMany({
-      where: await this.buildSeriesVisibilityWhere(context),
+      where: {
+        ...(await this.buildSeriesVisibilityWhere(context)),
+        ...(query.status ? { businessStatus: query.status } : {}),
+      },
       include: {
         designs: {
           select: DESIGN_RECIPE_SERIES_LIST_SELECT,
           orderBy: { updatedAt: 'desc' },
         },
         recipes: {
+          select: RECIPE_SERIES_WORKBENCH_RECIPE_SELECT,
           orderBy: { updatedAt: 'desc' },
         },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      ...(usePagination
+        ? {
+            skip: (page - 1) * pageSize,
+            take: pageSize + 1,
+          }
+        : {}),
     })) as RecipeSeriesWorkbenchRecord[];
+
+    const hasMore = usePagination && series.length > pageSize;
+    const visibleSeries = hasMore ? series.slice(0, pageSize) : series;
 
     if (!isInternalRecipeDesignerRole(context)) {
       const dogNameById = await this.loadCustomerDogNameMapForSeries(
-        series,
+        visibleSeries,
         context,
       );
-      return series.map((record) =>
+      const items = visibleSeries.map((record) =>
         this.buildCustomerSeriesCard(record, dogNameById),
       );
+      return usePagination ? { items, page, pageSize, hasMore } : items;
     }
 
-    const cards = series.map((record) =>
+    const cards = visibleSeries.map((record) =>
       this.buildSeriesWorkbenchCard(record, context.userId),
     );
-    return this.filterSeriesWorkbenchCards(cards, query.status);
+    const items = this.filterSeriesWorkbenchCards(cards, query.status);
+    return usePagination ? { items, page, pageSize, hasMore } : items;
   }
 
   async createSeries(
@@ -1840,6 +1952,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              design.id,
             );
           },
           {
@@ -1876,9 +1989,8 @@ export class RecipeDesignerService {
               seriesId,
               context,
             );
-            const sourceSources = this.getLatestCopyableSeriesStageSources(
-              sourceSeries,
-            );
+            const sourceSources =
+              this.getLatestCopyableSeriesStageSources(sourceSeries);
             if (sourceSources.length === 0) {
               throw new BadRequestException('该系列暂无可复制的生命阶段');
             }
@@ -1919,14 +2031,12 @@ export class RecipeDesignerService {
             }
 
             if (!isInternalRecipeDesignerRole(context)) {
-              return this.buildCustomerSeriesCard(
-                {
-                  ...copiedSeries,
-                  customerDogId: copiedCustomerDogId,
-                  designs: copiedDesigns,
-                  recipes: [],
-                } as RecipeSeriesWorkbenchRecord,
-              );
+              return this.buildCustomerSeriesCard({
+                ...copiedSeries,
+                customerDogId: copiedCustomerDogId,
+                designs: copiedDesigns,
+                recipes: [],
+              } as RecipeSeriesWorkbenchRecord);
             }
 
             return this.buildSeriesWorkbenchCard(
@@ -1936,6 +2046,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              copiedDesigns[0]?.id,
             );
           },
           {
@@ -2016,6 +2127,7 @@ export class RecipeDesignerService {
                 recipes: [],
               } as RecipeSeriesWorkbenchRecord,
               context.userId,
+              copiedDesign.id,
             );
           },
           {
@@ -2182,71 +2294,111 @@ export class RecipeDesignerService {
     throw new BadRequestException('阶段草稿创建失败，请重试');
   }
 
-  async copyStageItemsToDraft(
-    id: string,
-    dto: CopyRecipeStageItemsDto,
+  async copySeriesStageIngredients(
+    seriesId: string,
+    lifeStage: string,
+    dto: CopyRecipeSeriesStageIngredientsDto,
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
+    const targetLifeStage =
+      this.normalizeRecipeSeriesLifeStageForDuplication(lifeStage);
+    const sourceLifeStage = this.normalizeRecipeSeriesLifeStageForDuplication(
+      dto.sourceLifeStage,
+    );
 
-    return this.prisma.$transaction(async (tx) => {
-      const target = await tx.designRecipe.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          createdBy: true,
-          status: true,
-          publishedRecipeId: true,
-          publishedAt: true,
-          seriesId: true,
-          seriesLifeStage: true,
-        },
-      });
+    if (sourceLifeStage === targetLifeStage) {
+      throw new BadRequestException('请选择不同的来源生命阶段');
+    }
 
-      this.assertEditableDraft(target, id, context.userId);
-      if (!target?.seriesId || !target.seriesLifeStage) {
-        throw new BadRequestException('只有系列生命阶段草稿可以复制原料');
-      }
-      if (dto.sourceDraftId === id) {
-        throw new BadRequestException('请选择其他生命阶段作为来源');
-      }
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const series = await this.loadAccessibleSeriesForDuplication(
+              tx,
+              seriesId,
+              context,
+            );
+            const sources = this.getLatestCopyableSeriesStageSources(series);
+            const source = sources.find(
+              (candidate) => candidate.lifeStage === sourceLifeStage,
+            );
+            if (!source) {
+              throw new BadRequestException('来源生命阶段暂无可复制原料');
+            }
 
-      const source = (await tx.designRecipe.findUnique({
-        where: { id: dto.sourceDraftId },
-        include: DESIGN_RECIPE_INCLUDE,
-      })) as unknown as DesignRecipeWithItems | null;
+            const copiedItems =
+              await this.toCopiedDesignRecipeItemsFromStageSource(tx, source);
+            if (copiedItems.length === 0) {
+              throw new BadRequestException('来源生命阶段暂无原料，无法复制');
+            }
 
-      if (!source) {
-        throw new BadRequestException('来源生命阶段不存在');
-      }
-      if (source.seriesId !== target.seriesId) {
-        throw new BadRequestException('只能复制同一食谱系列内的生命阶段原料');
-      }
-      if (source.seriesLifeStage === target.seriesLifeStage) {
-        throw new BadRequestException('请选择其他生命阶段作为来源');
-      }
-      if (!source.items.length) {
-        throw new BadRequestException('来源生命阶段暂无原料，无法复制');
-      }
+            const targetDraft =
+              await this.resolveEditableSeriesStageDraftForIngredientCopy(
+                tx,
+                series,
+                sources,
+                targetLifeStage,
+                context.userId,
+              );
 
-      return tx.designRecipe.update({
-        where: { id },
-        data: {
-          calculatedNutrition: {},
-          complianceStatus: {},
-          assessmentSummary: {},
-          missingDataReport: [],
-          isCompliant: false,
-          items: {
-            deleteMany: {},
-            create: source.items.map((item) =>
-              this.toCopiedDesignRecipeItemData(item),
-            ),
+            await tx.designRecipeItem.deleteMany({
+              where: { designRecipeId: targetDraft.id },
+            });
+
+            return tx.designRecipe.update({
+              where: { id: targetDraft.id },
+              data: {
+                contentRevision: { increment: 1 },
+                status: DesignRecipeStatus.DRAFT,
+                fediafDogScenario: mapSeriesLifeStageToScenario(targetLifeStage),
+                applicableLifeStages: [targetLifeStage],
+                totalWeightG: copiedItems.reduce(
+                  (total, item) => total + item.weightG,
+                  0,
+                ),
+                energyDensityKcalPerKg: null,
+                calculatedNutrition: {},
+                complianceStatus: {},
+                assessmentSummary: {},
+                missingDataReport: [],
+                complianceScore: 0,
+                isCompliant: false,
+                reviewStatus: DesignRecipeReviewStatus.NONE,
+                reviewNote: null,
+                reviewedBy: null,
+                reviewedAt: null,
+                publishedAt: null,
+                publishedRecipeId: null,
+                publishedRecipeVersion: null,
+                items: {
+                  create: copiedItems,
+                },
+              },
+              include: DESIGN_RECIPE_INCLUDE,
+            });
           },
-        },
-        include: DESIGN_RECIPE_INCLUDE,
-      });
-    });
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_VERSION_CREATE_MAX_ATTEMPTS &&
+          this.isRetryableSeriesDraftCreateError(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('生命阶段原料复制失败，请重试');
   }
 
   private async loadAccessibleSeriesForDuplication(
@@ -2432,6 +2584,194 @@ export class RecipeDesignerService {
     return `${sourceName} ${DUPLICATE_SERIES_STAGE_NAME_LABELS[lifeStage]}副本`;
   }
 
+  private async toCopiedDesignRecipeItemsFromStageSource(
+    tx: Pick<PrismaService, 'nutritionFoodMapping'>,
+    source: CopyableSeriesStageSource,
+  ) {
+    if (source.kind === 'design') {
+      return source.design.items.map((item) =>
+        this.toCopiedDesignRecipeItemData(item),
+      );
+    }
+
+    return this.toCopiedDesignRecipeItemsFromRecipe(tx, source.recipe);
+  }
+
+  private async resolveEditableSeriesStageDraftForIngredientCopy(
+    tx: Pick<PrismaService, 'designRecipe' | 'nutritionFoodMapping'>,
+    series: RecipeSeriesWorkbenchRecord & {
+      designs: DesignRecipeWithItems[];
+      recipes: RecipeSeriesWorkbenchRecord['recipes'];
+    },
+    sources: CopyableSeriesStageSource[],
+    targetLifeStage: RecipeSeriesLifeStage,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    const designs = series.designs as DesignRecipeWithItems[];
+    const existingDraft = this.pickLatestByUpdatedAt(
+      designs.filter(
+        (design) =>
+          design.seriesLifeStage === targetLifeStage &&
+          !this.isPublishedDraft(design) &&
+          design.status !== DesignRecipeStatus.ARCHIVED,
+      ),
+    );
+    if (existingDraft) {
+      return existingDraft;
+    }
+
+    const targetSource = sources.find(
+      (candidate) => candidate.lifeStage === targetLifeStage,
+    );
+    const version = await this.allocateNextDesignRecipeVersion(tx, series.name);
+    if (!targetSource) {
+      return this.createBlankEditableSeriesStageDraftShell(
+        tx,
+        targetLifeStage,
+        series.id,
+        series.name,
+        version,
+        createdBy,
+      );
+    }
+
+    return this.createEditableSeriesStageDraftShell(
+      tx,
+      targetSource,
+      series.id,
+      series.name,
+      version,
+      createdBy,
+    );
+  }
+
+  private async createBlankEditableSeriesStageDraftShell(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    lifeStage: RecipeSeriesLifeStage,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: mapSeriesLifeStageToScenario(lifeStage),
+        nutritionStandard: 'FEDIAF_2025',
+        targetHealthTags: [],
+        applicableLifeStages: [lifeStage],
+        createdBy,
+        totalWeightG: 0,
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: null,
+        revisionBaseRecipeId: null,
+        seriesId,
+        seriesLifeStage: lifeStage,
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    }) as unknown as Promise<DesignRecipeWithItems>;
+  }
+
+  private async createEditableSeriesStageDraftShell(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    source: CopyableSeriesStageSource,
+    seriesId: string,
+    name: string,
+    version: number,
+    createdBy: string,
+  ): Promise<DesignRecipeWithItems> {
+    if (source.kind === 'recipe') {
+      return tx.designRecipe.create({
+        data: {
+          name,
+          version,
+          status: DesignRecipeStatus.DRAFT,
+          fediafDogScenario: mapSeriesLifeStageToScenario(source.lifeStage),
+          nutritionStandard: source.recipe.nutritionStandard || 'FEDIAF_2025',
+          targetHealthTags: this.normalizeRecipeStringArray(
+            source.recipe.targetHealthTags,
+          ),
+          applicableLifeStages: [source.lifeStage],
+          notes: source.recipe.description ?? null,
+          createdBy,
+          totalWeightG: 0,
+          energyDensityKcalPerKg: null,
+          calculatedNutrition: {},
+          complianceStatus: {},
+          assessmentSummary: {},
+          missingDataReport: [],
+          isCompliant: false,
+          reviewStatus: DesignRecipeReviewStatus.NONE,
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          publishedAt: null,
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+          revisionOfDesignRecipeId: null,
+          revisionBaseRecipeId: source.recipe.recipeId,
+          seriesId,
+          seriesLifeStage: source.lifeStage,
+          ...(source.recipe.customerDogId
+            ? { customerDogId: source.recipe.customerDogId }
+            : {}),
+        } as Prisma.DesignRecipeUncheckedCreateInput,
+        include: DESIGN_RECIPE_INCLUDE,
+      }) as unknown as Promise<DesignRecipeWithItems>;
+    }
+
+    const base = source.design;
+    return tx.designRecipe.create({
+      data: {
+        name,
+        version,
+        status: DesignRecipeStatus.DRAFT,
+        fediafDogScenario: mapSeriesLifeStageToScenario(source.lifeStage),
+        nutritionStandard: base.nutritionStandard || 'FEDIAF_2025',
+        targetHealthTags: base.targetHealthTags,
+        applicableLifeStages: [source.lifeStage],
+        notes: base.notes,
+        createdBy,
+        totalWeightG: base.totalWeightG ?? 0,
+        energyDensityKcalPerKg: null,
+        calculatedNutrition: {},
+        complianceStatus: {},
+        assessmentSummary: {},
+        missingDataReport: [],
+        isCompliant: false,
+        reviewStatus: DesignRecipeReviewStatus.NONE,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        publishedAt: null,
+        publishedRecipeId: null,
+        publishedRecipeVersion: null,
+        revisionOfDesignRecipeId: this.isPublishedDraft(base) ? base.id : null,
+        revisionBaseRecipeId: this.isPublishedDraft(base)
+          ? base.publishedRecipeId
+          : null,
+        seriesId,
+        seriesLifeStage: source.lifeStage,
+        ...(base.customerDogId ? { customerDogId: base.customerDogId } : {}),
+      } as Prisma.DesignRecipeUncheckedCreateInput,
+      include: DESIGN_RECIPE_INCLUDE,
+    }) as unknown as Promise<DesignRecipeWithItems>;
+  }
+
   private getCustomerDogIdForSeriesCopy(
     sourceSeries: RecipeSeriesWorkbenchRecord & {
       designs: DesignRecipeWithItems[];
@@ -2604,6 +2944,9 @@ export class RecipeDesignerService {
         );
       }
 
+      const supplementTargets = this.normalizeCopiedDesignSupplementTargets(
+        item,
+      );
       return {
         ingredientId: item.ingredientId,
         nutritionFoodId,
@@ -2615,6 +2958,9 @@ export class RecipeDesignerService {
         ),
         nutrientTargetKey: item.nutrientTargetKey ?? null,
         nutrientTargetValue: item.nutrientTargetValue ?? null,
+        ...(supplementTargets.length > 0
+          ? { supplementTargets: this.toJsonValue(supplementTargets) }
+          : {}),
         sortOrder: item.sortOrder ?? index,
       };
     });
@@ -2689,6 +3035,7 @@ export class RecipeDesignerService {
   }
 
   private toCopiedDesignRecipeItemData(item: DesignRecipeItemWithFood) {
+    const supplementTargets = this.normalizeCopiedDesignSupplementTargets(item);
     return {
       ingredientId: item.ingredientId,
       nutritionFoodId: item.nutritionFoodId,
@@ -2698,6 +3045,9 @@ export class RecipeDesignerService {
       preparationMethod: item.preparationMethod,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
+      ...(supplementTargets.length > 0
+        ? { supplementTargets: this.toJsonValue(supplementTargets) }
+        : {}),
       sortOrder: item.sortOrder,
     };
   }
@@ -2912,6 +3262,7 @@ export class RecipeDesignerService {
   private buildSeriesWorkbenchCard(
     series: RecipeSeriesWorkbenchRecord,
     _userId: string,
+    initialDraftIdOverride?: string,
   ) {
     const businessStatus =
       series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT;
@@ -2955,9 +3306,13 @@ export class RecipeDesignerService {
     const publishedStageCount = stages.filter((stage) =>
       Boolean(stage.recipeId),
     ).length;
+    const initialDraftId =
+      initialDraftIdOverride ||
+      (stages.find((stage) => stage.draftId)?.draftId ?? '');
 
     return {
       id: series.id,
+      initialDraftId,
       name: series.name,
       businessStatus,
       businessStatusLabel:
@@ -2988,9 +3343,12 @@ export class RecipeDesignerService {
 
     return {
       id: record.id,
+      initialDraftId: primaryDraft?.id ?? '',
       name: record.name,
       customerDogId,
-      customerDogName: customerDogId ? (dogNameById.get(customerDogId) ?? '') : '',
+      customerDogName: customerDogId
+        ? (dogNameById.get(customerDogId) ?? '')
+        : '',
       scenario,
       scenarioLabel: this.getScenarioDisplayLabel(scenario),
       primaryDraftId: primaryDraft?.id ?? '',
@@ -3241,9 +3599,14 @@ export class RecipeDesignerService {
   }
 
   private hasDesignRecipeItems(
-    design: Pick<DesignRecipeWithItems, 'items'> | { items?: unknown[] },
+    design: {
+      items?: unknown[];
+      _count?: { items: number };
+    },
   ): boolean {
-    return Array.isArray(design.items) && design.items.length > 0;
+    return design._count?.items !== undefined
+      ? design._count.items > 0
+      : Array.isArray(design.items) && design.items.length > 0;
   }
 
   private getSeriesStageEffectiveDesigns(
@@ -3578,7 +3941,10 @@ export class RecipeDesignerService {
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.scenario !== undefined
-          ? { fediafDogScenario: dto.scenario }
+          ? {
+              fediafDogScenario: dto.scenario,
+              contentRevision: { increment: 1 },
+            }
           : {}),
         ...(dto.targetHealthTags !== undefined
           ? { targetHealthTags: dto.targetHealthTags }
@@ -3697,17 +4063,24 @@ export class RecipeDesignerService {
         seriesId: source.seriesId,
         seriesLifeStage: source.seriesLifeStage,
         items: {
-          create: source.items.map((item) => ({
-            ingredientId: item.ingredientId,
-            nutritionFoodId: item.nutritionFoodId,
-            weightG: item.weightG,
-            includeInAssessment: item.includeInAssessment,
-            ratioPercent: item.ratioPercent,
-            preparationMethod: item.preparationMethod,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue: item.nutrientTargetValue,
-            sortOrder: item.sortOrder,
-          })),
+          create: source.items.map((item) => {
+            const supplementTargets =
+              this.normalizeCopiedDesignSupplementTargets(item);
+            return {
+              ingredientId: item.ingredientId,
+              nutritionFoodId: item.nutritionFoodId,
+              weightG: item.weightG,
+              includeInAssessment: item.includeInAssessment,
+              ratioPercent: item.ratioPercent,
+              preparationMethod: item.preparationMethod,
+              nutrientTargetKey: item.nutrientTargetKey,
+              nutrientTargetValue: item.nutrientTargetValue,
+              ...(supplementTargets.length > 0
+                ? { supplementTargets: this.toJsonValue(supplementTargets) }
+                : {}),
+              sortOrder: item.sortOrder,
+            };
+          }),
         },
       } as Prisma.DesignRecipeUncheckedCreateInput,
       include: DESIGN_RECIPE_INCLUDE,
@@ -3778,6 +4151,7 @@ export class RecipeDesignerService {
       return tx.designRecipe.update({
         where: { id: draft.id },
         data: {
+          contentRevision: { increment: 1 },
           status: DesignRecipeStatus.DRAFT,
           name: baseline.name,
           fediafDogScenario: baseline.fediafDogScenario,
@@ -3829,6 +4203,13 @@ export class RecipeDesignerService {
     );
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
+    const supplementTargets = shouldPersistNutrientTarget
+      ? this.normalizeDesignSupplementTargets(
+          dto.supplementTargets,
+          dto.nutrientTargetKey,
+          dto.nutrientTargetValue,
+        )
+      : [];
 
     // 未显式指定排序时，自动排到当前草稿明细末尾，避免新增项 sort_order 全部为 0 导致顺序冲突
     let sortOrder = dto.sortOrder;
@@ -3850,22 +4231,27 @@ export class RecipeDesignerService {
         ? {
             nutrientTargetKey: dto.nutrientTargetKey ?? null,
             nutrientTargetValue: dto.nutrientTargetValue ?? null,
+            ...(supplementTargets.length > 0
+              ? { supplementTargets: this.toJsonValue(supplementTargets) }
+              : {}),
           }
         : {}),
       sortOrder,
       includeInAssessment: dto.includeInAssessment ?? true,
+    } as Prisma.DesignRecipeItemUncheckedCreateInput & {
+      supplementTargets?: Prisma.InputJsonValue;
     };
 
-    return this.prisma.designRecipeItem.create({
-      data,
-      include: {
-        ingredient: true,
-        nutritionFood: {
-          include: {
-            mappings: true,
-          },
-        },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.designRecipeItem.create({
+        data,
+        select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+      });
+      await tx.designRecipe.update({
+        where: { id: designRecipeId },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return created;
     });
   }
 
@@ -3875,9 +4261,19 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertItemEditableByUser(itemId, context.userId);
+    const draft = await this.assertItemEditableByUser(itemId, context.userId);
+    const supplementTargets =
+      dto.supplementTargets !== undefined
+        ? this.normalizeDesignSupplementTargets(dto.supplementTargets)
+        : dto.nutrientTargetKey !== undefined
+          ? this.normalizeDesignSupplementTargets(
+              undefined,
+              dto.nutrientTargetKey,
+              dto.nutrientTargetValue,
+            )
+          : undefined;
 
-    const data: Prisma.DesignRecipeItemUncheckedUpdateInput = {
+    const data = {
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
       ...(dto.preparationMethod !== undefined
         ? { preparationMethod: dto.preparationMethod }
@@ -3888,27 +4284,168 @@ export class RecipeDesignerService {
       ...(dto.nutrientTargetValue !== undefined
         ? { nutrientTargetValue: dto.nutrientTargetValue }
         : {}),
+      ...(supplementTargets !== undefined
+        ? {
+            supplementTargets:
+              supplementTargets.length > 0
+                ? this.toJsonValue(supplementTargets)
+                : null,
+          }
+        : {}),
       ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
       ...(dto.includeInAssessment !== undefined
         ? { includeInAssessment: dto.includeInAssessment }
         : {}),
+    } as Prisma.DesignRecipeItemUncheckedUpdateInput & {
+      supplementTargets?: Prisma.InputJsonValue | null;
     };
 
-    return this.prisma.designRecipeItem.update({
-      where: { id: itemId },
-      data,
-      include: {
-        nutritionFood: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.designRecipeItem.update({
+        where: { id: itemId },
+        data,
+        select: DESIGN_RECIPE_ITEM_CLIENT_SELECT,
+      });
+      await tx.designRecipe.update({
+        where: { id: draft.id },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return updated;
     });
+  }
+
+  async reorderItems(
+    designRecipeId: string,
+    dto: ReorderRecipeDesignItemsDto,
+    access: RecipeDesignerAccessInput,
+  ) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    await this.assertDraftEditableByUser(designRecipeId, context.userId);
+    const items = dto.items ?? [];
+    if (items.length === 0) throw new BadRequestException('排序项不能为空');
+    const seenItemIds = new Set<string>();
+    const normalizedItems = items.map((item) => {
+      const itemId = String(item.id || '').trim();
+      const sortOrder = Number(item.sortOrder);
+      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0) throw new BadRequestException('排序项格式不正确');
+      if (seenItemIds.has(itemId)) throw new BadRequestException('排序项不能重复');
+      seenItemIds.add(itemId);
+      return { id: itemId, sortOrder };
+    });
+    return this.prisma.$transaction(async (tx) => {
+      let updatedCount = 0;
+      for (const item of normalizedItems) {
+        const result = await tx.designRecipeItem.updateMany({ where: { id: item.id, designRecipeId }, data: { sortOrder: item.sortOrder } });
+        if (result.count !== 1) throw new NotFoundException(`Design recipe item ${item.id} not found`);
+        updatedCount += result.count;
+      }
+      await tx.designRecipe.update({ where: { id: designRecipeId }, data: { contentRevision: { increment: 1 } } });
+      return { updatedCount };
+    });
+  }
+
+  async updateItemOrder(
+    designRecipeId: string,
+    itemIds: string[],
+    access: RecipeDesignerAccessInput,
+  ): Promise<Array<{ id: string; sortOrder: number }>> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+
+    for (
+      let attempt = 1;
+      attempt <= DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const draft = await tx.designRecipe.findUnique({
+              where: { id: designRecipeId },
+              select: {
+                id: true,
+                createdBy: true,
+                status: true,
+                publishedRecipeId: true,
+                publishedAt: true,
+                seriesId: true,
+                seriesLifeStage: true,
+              },
+            });
+            this.assertEditableDraft(draft, designRecipeId, context.userId);
+
+            if (new Set(itemIds).size !== itemIds.length) {
+              throw new BadRequestException('原料排序包含重复项');
+            }
+
+            const items = await tx.designRecipeItem.findMany({
+              where: { designRecipeId },
+              select: { id: true, sortOrder: true },
+            });
+            const existingIds = new Set(items.map((item) => item.id));
+
+            if (
+              items.length !== itemIds.length ||
+              itemIds.some((itemId) => !existingIds.has(itemId))
+            ) {
+              throw new BadRequestException(
+                '原料排序必须包含当前草稿的全部原料',
+              );
+            }
+
+            const currentOrderById = new Map(
+              items.map((item) => [item.id, item.sortOrder]),
+            );
+            const changedItems = itemIds
+              .map((id, sortOrder) => ({ id, sortOrder }))
+              .filter(
+                ({ id, sortOrder }) => currentOrderById.get(id) !== sortOrder,
+              );
+
+            await Promise.all(
+              changedItems.map(({ id, sortOrder }) =>
+                tx.designRecipeItem.update({
+                  where: { id },
+                  data: { sortOrder },
+                  select: { id: true, sortOrder: true },
+                }),
+              ),
+            );
+
+            await tx.designRecipe.update({
+              where: { id: designRecipeId },
+              data: { contentRevision: { increment: 1 } },
+            });
+            return itemIds.map((id, sortOrder) => ({ id, sortOrder }));
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          attempt < DESIGN_RECIPE_ITEM_ORDER_MAX_ATTEMPTS &&
+          this.isTransactionConflict(error)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new BadRequestException('原料排序失败，请重试');
   }
 
   async removeItem(itemId: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertItemEditableByUser(itemId, context.userId);
+    const draft = await this.assertItemEditableByUser(itemId, context.userId);
 
-    return this.prisma.designRecipeItem.delete({
-      where: { id: itemId },
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.designRecipeItem.delete({
+        where: { id: itemId },
+      });
+      await tx.designRecipe.update({
+        where: { id: draft.id },
+        data: { contentRevision: { increment: 1 } },
+      });
+      return deleted;
     });
   }
 
@@ -3917,18 +4454,26 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ): Promise<ClientDesignRecipeAssessmentResult> {
     const draft = await this.getDraft(id, access);
-    const result = await this.assessLoadedDraft(draft);
+    const targets = await this.targetProvider.getTargets(
+      draft.fediafDogScenario,
+    );
+    const result = await this.assessLoadedDraft(draft, targets);
+    const removableSupplementWarnings = this.buildRemovableSupplementWarnings(
+      draft,
+      targets,
+    );
 
     if (this.isPublishedDraft(draft)) {
-      return this.toClientAssessmentResult(result);
+      return this.toClientAssessmentResult(result, removableSupplementWarnings);
     }
 
-    await this.prisma.designRecipe.update({
-      where: { id },
-      data: this.buildAssessmentUpdateData(result),
+    const assessmentData = this.buildAssessmentUpdateData(result);
+    await this.prisma.designRecipe.updateMany({
+      where: { id, contentRevision: draft.contentRevision },
+      data: assessmentData,
     });
 
-    return this.toClientAssessmentResult(result);
+    return this.toClientAssessmentResult(result, removableSupplementWarnings);
   }
 
   async createPrivateRecipeSnapshot(
@@ -4081,8 +4626,8 @@ export class RecipeDesignerService {
       );
     const supplementTargetMap = this.buildPublishedSupplementTargetMap(
       draft,
-      targets,
       assessment,
+      targets,
     );
     const healthTagAssignments = this.buildPublishedHealthTagAssignments(
       draft.targetHealthTags,
@@ -4172,11 +4717,14 @@ export class RecipeDesignerService {
         },
       });
 
+      const publishedDesignIdentity =
+        await this.resolvePublishedDesignRecipeIdentity(tx, draft, recipeName);
+
       return tx.designRecipe.update({
         where: { id: draft.id },
         data: {
           ...assessmentUpdateData,
-          ...(this.isActiveRevisionDraft(draft) ? {} : { name: recipeName }),
+          ...publishedDesignIdentity,
           status: DesignRecipeStatus.PUBLISHED,
           publishedAt: new Date(),
           publishedRecipeId: recipe.recipeId,
@@ -4195,6 +4743,25 @@ export class RecipeDesignerService {
         include: DESIGN_RECIPE_INCLUDE,
       });
     });
+  }
+
+  private async resolvePublishedDesignRecipeIdentity(
+    tx: Pick<PrismaService, 'designRecipe'>,
+    draft: DesignRecipeWithItems,
+    recipeName: string,
+  ) {
+    if (this.isActiveRevisionDraft(draft)) {
+      return {};
+    }
+
+    if ((draft.name ?? '').trim() === recipeName) {
+      return { name: recipeName };
+    }
+
+    return {
+      name: recipeName,
+      version: await this.allocateNextDesignRecipeVersion(tx, recipeName),
+    };
   }
 
   private async assertRevisionHasPublishableChanges(
@@ -4289,6 +4856,9 @@ export class RecipeDesignerService {
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
         ),
+        supplementTargets: JSON.stringify(
+          this.normalizeDesignSupplementTargets(item.supplementTargets),
+        ),
         sortOrder: item.sortOrder ?? 0,
       }))
       .sort((left, right) => {
@@ -4301,6 +4871,7 @@ export class RecipeDesignerService {
             left.nutritionFoodId.localeCompare(right.nutritionFoodId),
             left.preparationMethod.localeCompare(right.preparationMethod),
             left.nutrientTargetKey.localeCompare(right.nutrientTargetKey),
+            left.supplementTargets.localeCompare(right.supplementTargets),
           ].find((result) => result !== 0) ?? 0
         );
       });
@@ -4573,21 +5144,29 @@ export class RecipeDesignerService {
   ) {
     return draft.items
       .filter((item) => this.isItemIncludedInAssessment(item))
-      .map((item) => ({
-        ingredientId: this.resolveIngredientId(item),
-        nutritionFoodId: item.nutritionFoodId,
-        preparationMethod: this.normalizePreparationMethod(
-          item.preparationMethod,
-        ),
-        ratioPercent: this.resolvePrivateRecipeItemRatio(
-          item,
-          draft.totalWeightG,
-        ),
-        nutrientTargetKey: item.nutrientTargetKey,
-        nutrientTargetValue: item.nutrientTargetValue,
-        sortOrder: item.sortOrder,
-        exampleWeight: item.weightG,
-      }));
+      .map((item) => {
+        const supplementTargets = this.normalizeDesignSupplementTargets(
+          item.supplementTargets,
+        );
+        return {
+          ingredientId: this.resolveIngredientId(item),
+          nutritionFoodId: item.nutritionFoodId,
+          preparationMethod: this.normalizePreparationMethod(
+            item.preparationMethod,
+          ),
+          ratioPercent: this.resolvePrivateRecipeItemRatio(
+            item,
+            draft.totalWeightG,
+          ),
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue,
+          ...(supplementTargets.length > 0
+            ? { supplementTargets: this.toJsonValue(supplementTargets) }
+            : {}),
+          sortOrder: item.sortOrder,
+          exampleWeight: item.weightG,
+        };
+      });
   }
 
   private resolvePrivateRecipeItemRatio(
@@ -4722,8 +5301,8 @@ export class RecipeDesignerService {
 
   private buildPublishedSupplementTargetMap(
     draft: DesignRecipeWithItems,
-    targets: FediafAssessmentTarget[],
     assessment: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
   ) {
     const result = new Map<string, PublishedSupplementNutrientTarget[]>();
 
@@ -4735,116 +5314,332 @@ export class RecipeDesignerService {
         continue;
       }
 
-      const assessmentWithoutItem = assessRecipeDraft({
-        scenario: draft.fediafDogScenario,
-        targets,
-        items: this.buildAssessmentItems(draft, item.id),
-      });
-      const itemTargets = this.resolveSupplementTargetsFromRemovedAssessment(
-        item,
-        assessment,
-        assessmentWithoutItem,
+      result.set(
+        item.id,
+        this.resolveExplicitPublishedSupplementTargets(
+          item,
+          draft,
+          assessment,
+          targets,
+        ),
       );
-
-      if (itemTargets.length > 0) {
-        result.set(item.id, itemTargets);
-      }
     }
 
     return result;
   }
 
-  private resolveSupplementTargetsFromRemovedAssessment(
+  private resolveExplicitPublishedSupplementTargets(
     item: DesignRecipeItemWithFood,
+    draft: DesignRecipeWithItems,
     assessment: DesignRecipeAssessmentResult,
-    assessmentWithoutItem: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
   ): PublishedSupplementNutrientTarget[] {
     if (assessment.totalWeightG <= 0) {
-      return [];
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」无法在总重量为 0 的配方中生成营养目标`,
+      );
     }
 
-    const targetsByFieldPath = new Map<
-      string,
-      PublishedSupplementNutrientTarget
-    >();
+    let designTargets = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+    );
+    if (designTargets.length === 0) {
+      designTargets = this.inferDesignSupplementTargetsByRemoval(
+        item,
+        draft,
+        assessment,
+        targets,
+      );
+    }
+    if (designTargets.length === 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布`,
+      );
+    }
 
-    for (const entry of assessment.entries) {
-      if (this.isAssessmentRatioEntry(entry)) {
+    return designTargets
+      .map((target) =>
+        this.resolveExplicitPublishedSupplementTarget(item, target, assessment),
+      )
+      .sort((left, right) => {
+        if (right.nutrientTargetValue !== left.nutrientTargetValue) {
+          return right.nutrientTargetValue - left.nutrientTargetValue;
+        }
+        return (left.fieldPath ?? '').localeCompare(right.fieldPath ?? '');
+      });
+  }
+
+  private inferDesignSupplementTargetsByRemoval(
+    item: DesignRecipeItemWithFood,
+    draft: DesignRecipeWithItems,
+    assessment: DesignRecipeAssessmentResult,
+    targets: FediafAssessmentTarget[],
+  ): DesignSupplementTarget[] {
+    return inferSupplementTargetsByRemoval({
+      itemId: item.id,
+      itemName: this.resolveIngredientDisplayName(item),
+      itemNutritionProfile: this.toAssessmentNutritionProfile(item),
+      itemWeightG: item.weightG,
+      totalRecipeWeightG: assessment.totalWeightG,
+      fullAssessment: assessment,
+      assessmentWithoutItem: assessRecipeDraft({
+        scenario: draft.fediafDogScenario,
+        targets,
+        items: this.buildAssessmentItems(draft, item.id),
+      }),
+    }).map((target) => ({
+      nutrientTargetKey: target.fieldKey,
+      fieldPath: target.fieldPath,
+      label: target.label,
+      unit: target.unit,
+      targetValue: null,
+      expressionBasis: null,
+    }));
+  }
+
+  private resolveExplicitPublishedSupplementTarget(
+    item: DesignRecipeItemWithFood,
+    target: DesignSupplementTarget,
+    assessment: DesignRecipeAssessmentResult,
+  ): PublishedSupplementNutrientTarget {
+    const targetField = this.resolveSupplementTargetField(target.fieldPath);
+    if (!targetField) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养目标 ${target.fieldPath} 不在可发布字段中`,
+      );
+    }
+
+    const amountRead = readProfileFieldAmount(
+      this.toAssessmentNutritionProfile(item),
+      targetField.fieldPath,
+      item.weightG,
+    );
+    const contributionAmount = Number(amountRead.amount);
+    if (amountRead.missing || !Number.isFinite(contributionAmount)) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案缺少${targetField.label}数据，无法生成营养目标`,
+      );
+    }
+    if (contributionAmount <= 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的营养档案中${targetField.label}含量为 0，无法生成营养目标`,
+      );
+    }
+
+    const nutrientTargetValue = this.roundPublishedSupplementTargetValue(
+      (contributionAmount / assessment.totalWeightG) * 1000,
+    );
+    if (!Number.isFinite(nutrientTargetValue) || nutrientTargetValue <= 0) {
+      throw new BadRequestException(
+        `补剂原料「${this.resolveIngredientDisplayName(item)}」的${targetField.label}目标值无效，无法发布`,
+      );
+    }
+
+    return {
+      nutrientTargetKey: target.nutrientTargetKey || targetField.fieldKey,
+      nutrientTargetValue,
+      fieldPath: targetField.fieldPath,
+      label: targetField.label,
+      unit: targetField.unit,
+    };
+  }
+
+  private buildRemovableSupplementWarnings(
+    draft: DesignRecipeWithItems,
+    targets: FediafAssessmentTarget[],
+  ): RemovableSupplementWarning[] {
+    const warnings: RemovableSupplementWarning[] = [];
+
+    for (const item of draft.items) {
+      if (
+        !this.isItemIncludedInAssessment(item) ||
+        this.resolveIngredientType(item) !== IngredientType.SUPPLEMENT
+      ) {
         continue;
       }
 
+      const designTargets = this.normalizeDesignSupplementTargets(
+        item.supplementTargets,
+      );
+      if (designTargets.length === 0) {
+        continue;
+      }
+
+      const assessmentWithoutItem = assessRecipeDraft({
+        scenario: draft.fediafDogScenario,
+        targets,
+        items: this.buildAssessmentItems(draft, item.id),
+      });
+      if (
+        !designTargets.every((target) =>
+          this.isSupplementTargetStillSufficientWithoutItem(
+            assessmentWithoutItem,
+            target,
+          ),
+        )
+      ) {
+        continue;
+      }
+
+      const targetLabels = designTargets.map((target) => target.label);
+      warnings.push({
+        itemId: item.id,
+        itemName: this.resolveIngredientDisplayName(item),
+        targetLabels,
+        message: `移除该补剂后，${targetLabels.join('、')}仍然满足最低充足性；是否保留由管理员按配方意图决定。`,
+      });
+    }
+
+    return warnings;
+  }
+
+  private isSupplementTargetStillSufficientWithoutItem(
+    assessmentWithoutItem: DesignRecipeAssessmentResult,
+    target: DesignSupplementTarget,
+  ) {
+    const entry = this.findAssessmentEntryBySupplementTargetField(
+      assessmentWithoutItem,
+      target.fieldPath,
+    );
+    if (!entry) {
+      return false;
+    }
+
+    return entry.status !== 'DEFICIENT' && entry.status !== 'MISSING_DATA';
+  }
+
+  private findAssessmentEntryBySupplementTargetField(
+    assessment: DesignRecipeAssessmentResult,
+    fieldPath: string,
+  ): AssessmentEntry | undefined {
+    return assessment.entries.find((entry) => {
+      if (this.isAssessmentRatioEntry(entry)) {
+        return false;
+      }
       const targetField = this.resolveSupplementTargetField(entry.nutrientKey);
+      return targetField?.fieldPath === fieldPath;
+    });
+  }
+
+  private normalizeDesignSupplementTargets(
+    value: unknown,
+    legacyTargetKey?: string | null,
+    legacyTargetValue?: number | null,
+  ): DesignSupplementTarget[] {
+    const rawTargets = Array.isArray(value) ? value : [];
+    const normalizedTargets: DesignSupplementTarget[] = [];
+
+    for (const rawTarget of rawTargets) {
+      const targetRecord = this.asRecord(rawTarget);
+      if (!targetRecord) {
+        continue;
+      }
+      const targetKey = this.normalizeOptionalTargetText(
+        targetRecord.fieldPath ??
+          targetRecord.nutrientTargetKey ??
+          targetRecord.nutrientKey ??
+          targetRecord.fieldKey,
+      );
+      if (!targetKey) {
+        continue;
+      }
+      const targetField = this.resolveSupplementTargetField(targetKey);
       if (!targetField) {
         continue;
       }
-
-      const entryWithoutItem = this.findMatchingAssessmentEntry(
-        assessmentWithoutItem,
-        entry,
-      );
-      if (entryWithoutItem?.status !== 'DEFICIENT') {
-        continue;
-      }
-
-      const contributor = (entry.contributors ?? []).find(
-        (candidate) => candidate.itemId === item.id,
-      );
-      const contributorAmount = Number(contributor?.amount);
-      if (
-        !contributor ||
-        !Number.isFinite(contributorAmount) ||
-        contributorAmount <= 0 ||
-        contributor.missing
-      ) {
-        continue;
-      }
-
-      const contributionInTargetUnit = convertUnitValue(
-        contributorAmount,
-        contributor.unit || entry.unit,
-        targetField.unit,
-      );
-      if (
-        contributionInTargetUnit === null ||
-        !Number.isFinite(contributionInTargetUnit) ||
-        contributionInTargetUnit <= 0
-      ) {
-        continue;
-      }
-
-      const nutrientTargetValue = this.roundPublishedSupplementTargetValue(
-        (contributionInTargetUnit / assessment.totalWeightG) * 1000,
-      );
-      if (!Number.isFinite(nutrientTargetValue) || nutrientTargetValue <= 0) {
-        continue;
-      }
-
-      const existing = targetsByFieldPath.get(targetField.fieldPath);
-      const nextTarget = {
-        nutrientTargetKey: entry.nutrientKey,
-        nutrientTargetValue,
+      normalizedTargets.push({
+        nutrientTargetKey: targetField.fieldKey,
         fieldPath: targetField.fieldPath,
-        label: targetField.label,
-        unit: targetField.unit,
-      };
-      if (!existing || nutrientTargetValue > existing.nutrientTargetValue) {
-        targetsByFieldPath.set(targetField.fieldPath, nextTarget);
+        label:
+          this.normalizeOptionalTargetText(targetRecord.label) ??
+          targetField.label,
+        unit:
+          this.normalizeOptionalTargetText(targetRecord.unit) ??
+          targetField.unit,
+        targetValue: this.readOptionalFiniteNumber(
+          targetRecord.targetValue ?? targetRecord.targetValuePerKg,
+        ),
+        expressionBasis: this.normalizeOptionalTargetText(
+          targetRecord.expressionBasis,
+        ),
+      });
+    }
+
+    if (normalizedTargets.length === 0 && legacyTargetKey) {
+      const targetField = this.resolveSupplementTargetField(legacyTargetKey);
+      if (targetField) {
+        normalizedTargets.push({
+          nutrientTargetKey: targetField.fieldKey,
+          fieldPath: targetField.fieldPath,
+          label: targetField.label,
+          unit: targetField.unit,
+          targetValue: this.readOptionalFiniteNumber(legacyTargetValue),
+          expressionBasis: null,
+        });
       }
     }
 
-    return [...targetsByFieldPath.values()];
+    return [
+      ...new Map(
+        normalizedTargets.map((target) => [target.fieldPath, target]),
+      ).values(),
+    ];
   }
 
-  private findMatchingAssessmentEntry(
-    assessment: DesignRecipeAssessmentResult,
-    sourceEntry: AssessmentEntry,
-  ) {
-    return assessment.entries.find(
-      (entry) =>
-        entry.nutrientKey === sourceEntry.nutrientKey &&
-        entry.expressionBasis === sourceEntry.expressionBasis &&
-        !this.isAssessmentRatioEntry(entry),
+  private normalizeCopiedDesignSupplementTargets(
+    item: {
+      supplementTargets?: unknown;
+      nutrientTargetKey?: string | null;
+      nutrientTargetValue?: number | null;
+      ingredient?: {
+        id?: string | null;
+        name?: string | null;
+      } | null;
+      nutritionFood?: {
+        name?: string | null;
+        displayNameZh?: string | null;
+        mappings?: Array<{
+          ingredientId?: string | null;
+          isPrimary?: boolean | null;
+          ingredient?: { name?: string | null } | null;
+        }>;
+      } | null;
+    },
+  ): DesignSupplementTarget[] {
+    const targets = this.normalizeDesignSupplementTargets(
+      item.supplementTargets,
+      item.nutrientTargetKey,
+      item.nutrientTargetValue,
     );
+    if (targets.length > 0) {
+      return targets;
+    }
+
+    const displayName =
+      item.ingredient?.name ??
+      item.nutritionFood?.mappings?.find(
+        (mapping) => mapping.ingredientId === item.ingredient?.id,
+      )?.ingredient?.name ??
+      item.nutritionFood?.mappings?.find((mapping) => mapping.isPrimary)
+        ?.ingredient?.name ??
+      item.nutritionFood?.mappings?.[0]?.ingredient?.name ??
+      item.nutritionFood?.displayNameZh ??
+      item.nutritionFood?.name;
+    const inferredField =
+      inferSupplementTargetFieldFromIngredientName(displayName);
+    return inferredField
+      ? [toDesignSupplementTargetReference(inferredField, null)]
+      : [];
+  }
+
+  private normalizeOptionalTargetText(value: unknown): string | null {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    return normalized || null;
+  }
+
+  private readOptionalFiniteNumber(value: unknown): number | null {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
   }
 
   private roundPublishedSupplementTargetValue(value: number) {
@@ -4864,16 +5659,7 @@ export class RecipeDesignerService {
   }
 
   private resolveSupplementTargetField(targetKey: string) {
-    const normalizedTargetKey = normalizeNutritionTargetKey(targetKey);
-
-    return listSupplementTargetFields().find((field) => {
-      return (
-        field.fieldPath === targetKey ||
-        field.fieldKey === targetKey ||
-        normalizeNutritionTargetKey(field.label) === normalizedTargetKey ||
-        normalizeNutritionTargetKey(field.fieldKey) === normalizedTargetKey
-      );
-    });
+    return resolveSupplementTargetFieldReference(targetKey);
   }
 
   private buildPublishedHealthTagAssignments(targetHealthTags: string[]) {
@@ -5419,6 +6205,7 @@ export class RecipeDesignerService {
     }
 
     this.assertEditableDraft(item.designRecipe, item.designRecipe.id, userId);
+    return item.designRecipe;
   }
 
   private assertEditableDraft(
@@ -5590,10 +6377,14 @@ export class RecipeDesignerService {
 
   private toClientAssessmentResult(
     result: DesignRecipeAssessmentResult,
+    removableSupplementWarnings: RemovableSupplementWarning[] = [],
   ): ClientDesignRecipeAssessmentResult {
     const clientResult: Partial<DesignRecipeAssessmentResult> = { ...result };
     delete clientResult.entries;
-    return clientResult as ClientDesignRecipeAssessmentResult;
+    return {
+      ...clientResult,
+      removableSupplementWarnings,
+    } as ClientDesignRecipeAssessmentResult;
   }
 
   private resolveIngredientId(item: DesignRecipeItemWithFood): string {

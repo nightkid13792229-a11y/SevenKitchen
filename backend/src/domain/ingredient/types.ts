@@ -104,6 +104,7 @@ export interface NutritionMeta {
     | 'MANUAL_ESTIMATE'
     | 'USDA'
     | 'NZFCD'
+    | 'MEXT'
     | 'NEVO'
     | 'TFDA'
     | 'CFCT'

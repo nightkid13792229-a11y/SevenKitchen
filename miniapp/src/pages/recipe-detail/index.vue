@@ -900,6 +900,9 @@ function generateDiySheet() {
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
   }
+  if (shareToken.value) {
+    query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+  }
 
   // 已登录，直接跳转到DIY配置页面
   uni.navigateTo({

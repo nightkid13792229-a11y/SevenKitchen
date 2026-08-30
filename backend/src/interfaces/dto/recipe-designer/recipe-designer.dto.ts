@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -7,7 +8,9 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 export const RECIPE_DESIGNER_SCENARIOS = [
@@ -53,6 +56,19 @@ export class ListRecipeDesignerSeriesDto {
   @IsOptional()
   @IsIn(RECIPE_DESIGNER_SERIES_STATUS_FILTERS)
   status?: RecipeDesignerSeriesStatusFilter;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
 }
 
 export class CreateRecipeSeriesDto {
@@ -139,9 +155,9 @@ export class CreateRecipeSeriesStageDraftDto {
   sourceDraftId?: string;
 }
 
-export class CopyRecipeStageItemsDto {
+export class CopyRecipeSeriesStageIngredientsDto {
   @IsString()
-  sourceDraftId!: string;
+  sourceLifeStage!: string;
 }
 
 export const SUPPLEMENT_NUTRITION_BASIS_TYPES = [
@@ -310,6 +326,11 @@ export class AddRecipeDesignItemDto {
   nutrientTargetValue?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  supplementTargets?: Array<Record<string, unknown>>;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
@@ -340,6 +361,11 @@ export class UpdateRecipeDesignItemDto {
   nutrientTargetValue?: number | null;
 
   @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  supplementTargets?: Array<Record<string, unknown>> | null;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
@@ -347,6 +373,30 @@ export class UpdateRecipeDesignItemDto {
   @IsOptional()
   @IsBoolean()
   includeInAssessment?: boolean;
+}
+
+export class ReorderRecipeDesignItemDto {
+  @IsString()
+  id!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  sortOrder!: number;
+}
+
+export class ReorderRecipeDesignItemsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderRecipeDesignItemDto)
+  items!: ReorderRecipeDesignItemDto[];
+}
+
+export class UpdateRecipeDesignItemOrderDto {
+  @IsArray()
+  @IsString({ each: true })
+  itemIds!: string[];
 }
 
 export class PublishRecipeDesignDraftDto {

@@ -1,0 +1,1648 @@
+{
+  "version": 1,
+  "operationMode": "production-package",
+  "ingredient": {
+    "type": "FOOD",
+    "name": "苋菜",
+    "brand": null,
+    "productModel": null,
+    "tagIds": [],
+    "procurementSkus": [],
+    "notes": "USDA FDC 168385 / 169202 are same-source Amaranthus spp. leaf-vegetable profiles; MEXT Amaranthus is excluded because it is whole grain."
+  },
+  "nutritionProfiles": [
+    {
+      "id": "usda-fdc-168385-amaranth-leaves-raw",
+      "name": "苋菜（生）",
+      "nameEn": "Amaranth leaves, raw",
+      "dataSource": "USDA_FDC",
+      "externalId": "USDA_FDC:168385",
+      "category": "VEGETABLE",
+      "basis": "PER_100G",
+      "preparationState": "raw",
+      "preparationStateLabel": "生",
+      "ediblePortionLabel": "叶，每100克",
+      "processingLabel": "生",
+      "isPrimary": true,
+      "yieldRate": 1,
+      "nutritionData": {
+        "meta": {
+          "rawBasisType": "PER_100_G",
+          "sourceType": "USDA",
+          "sourceKind": "FOOD_DATABASE",
+          "sourceCode": "USDA_FDC",
+          "sourceProvider": "USDA FoodData Central",
+          "sourceForms": {
+            "macros.moisture": {
+              "sourceNutrientId": 1051,
+              "sourceNutrientName": "Water",
+              "originalValue": 91.69,
+              "originalUnit": "g",
+              "canonicalValue": 91.69,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.energyKcal": {
+              "sourceNutrientId": 1008,
+              "sourceNutrientName": "Energy",
+              "originalValue": 23,
+              "originalUnit": "kcal",
+              "canonicalValue": 23,
+              "canonicalUnit": "kcal",
+              "basisType": "PER_100_G"
+            },
+            "macros.crudeProtein": {
+              "sourceNutrientId": 1003,
+              "sourceNutrientName": "Protein",
+              "originalValue": 2.46,
+              "originalUnit": "g",
+              "canonicalValue": 2.46,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.crudeFat": {
+              "sourceNutrientId": 1004,
+              "sourceNutrientName": "Total lipid (fat)",
+              "originalValue": 0.33,
+              "originalUnit": "g",
+              "canonicalValue": 0.33,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.ash": {
+              "sourceNutrientId": 1007,
+              "sourceNutrientName": "Ash",
+              "originalValue": 1.5,
+              "originalUnit": "g",
+              "canonicalValue": 1.5,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.carbohydrate": {
+              "sourceNutrientId": 1005,
+              "sourceNutrientName": "Carbohydrate, by difference",
+              "originalValue": 4.02,
+              "originalUnit": "g",
+              "canonicalValue": 4.02,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "minerals.calcium": {
+              "sourceNutrientId": 1087,
+              "sourceNutrientName": "Calcium, Ca",
+              "originalValue": 215,
+              "originalUnit": "mg",
+              "canonicalValue": 215,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.iron": {
+              "sourceNutrientId": 1089,
+              "sourceNutrientName": "Iron, Fe",
+              "originalValue": 2.32,
+              "originalUnit": "mg",
+              "canonicalValue": 2.32,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.magnesium": {
+              "sourceNutrientId": 1090,
+              "sourceNutrientName": "Magnesium, Mg",
+              "originalValue": 55,
+              "originalUnit": "mg",
+              "canonicalValue": 55,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.phosphorus": {
+              "sourceNutrientId": 1091,
+              "sourceNutrientName": "Phosphorus, P",
+              "originalValue": 50,
+              "originalUnit": "mg",
+              "canonicalValue": 50,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.potassium": {
+              "sourceNutrientId": 1092,
+              "sourceNutrientName": "Potassium, K",
+              "originalValue": 611,
+              "originalUnit": "mg",
+              "canonicalValue": 611,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.sodium": {
+              "sourceNutrientId": 1093,
+              "sourceNutrientName": "Sodium, Na",
+              "originalValue": 20,
+              "originalUnit": "mg",
+              "canonicalValue": 20,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.zinc": {
+              "sourceNutrientId": 1095,
+              "sourceNutrientName": "Zinc, Zn",
+              "originalValue": 0.9,
+              "originalUnit": "mg",
+              "canonicalValue": 0.9,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.copper": {
+              "sourceNutrientId": 1098,
+              "sourceNutrientName": "Copper, Cu",
+              "originalValue": 0.162,
+              "originalUnit": "mg",
+              "canonicalValue": 0.162,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.manganese": {
+              "sourceNutrientId": 1101,
+              "sourceNutrientName": "Manganese, Mn",
+              "originalValue": 0.885,
+              "originalUnit": "mg",
+              "canonicalValue": 0.885,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.selenium": {
+              "sourceNutrientId": 1103,
+              "sourceNutrientName": "Selenium, Se",
+              "originalValue": 0.9,
+              "originalUnit": "µg",
+              "canonicalValue": 0.9,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminC": {
+              "sourceNutrientId": 1162,
+              "sourceNutrientName": "Vitamin C, total ascorbic acid",
+              "originalValue": 43.3,
+              "originalUnit": "mg",
+              "canonicalValue": 43.3,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB1": {
+              "sourceNutrientId": 1165,
+              "sourceNutrientName": "Thiamin",
+              "originalValue": 0.027,
+              "originalUnit": "mg",
+              "canonicalValue": 0.027,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB2": {
+              "sourceNutrientId": 1166,
+              "sourceNutrientName": "Riboflavin",
+              "originalValue": 0.158,
+              "originalUnit": "mg",
+              "canonicalValue": 0.158,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB3": {
+              "sourceNutrientId": 1167,
+              "sourceNutrientName": "Niacin",
+              "originalValue": 0.658,
+              "originalUnit": "mg",
+              "canonicalValue": 0.658,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB5": {
+              "sourceNutrientId": 1170,
+              "sourceNutrientName": "Pantothenic acid",
+              "originalValue": 0.064,
+              "originalUnit": "mg",
+              "canonicalValue": 0.064,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB6": {
+              "sourceNutrientId": 1175,
+              "sourceNutrientName": "Vitamin B-6",
+              "originalValue": 0.192,
+              "originalUnit": "mg",
+              "canonicalValue": 0.192,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB9": {
+              "sourceNutrientId": 1177,
+              "sourceNutrientName": "Folate, total",
+              "originalValue": 85,
+              "originalUnit": "µg",
+              "canonicalValue": 85,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB12": {
+              "sourceNutrientId": 1178,
+              "sourceNutrientName": "Vitamin B-12",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminA": {
+              "sourceNutrientId": 1105,
+              "sourceNutrientName": "Retinol",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "IU",
+              "basisType": "PER_100_G",
+              "vitaminAForm": "FEDIAF_DOG_RETINOL_ACTIVITY",
+              "sourceCompound": "retinol",
+              "conversionStatus": "COMPONENT_ACTIVITY",
+              "conversionFactorSource": "FEDIAF_2025_TABLE_VII_14",
+              "retinolUgPerIu": 0.3,
+              "betaCaroteneIuPerMg": 833,
+              "retinolUg": 0,
+              "retinolIu": 0,
+              "betaCaroteneUg": null,
+              "betaCaroteneIu": 0
+            },
+            "vitamins.vitaminD": {
+              "sourceNutrientId": 1114,
+              "sourceNutrientName": "Vitamin D (D2 + D3)",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "IU",
+              "basisType": "PER_100_G",
+              "sourceCompound": "Vitamin D (D2 + D3)",
+              "vitaminDForm": "D2_PLUS_D3",
+              "conversionFactor": 40,
+              "conversionFactorUnit": "IU_PER_UG"
+            },
+            "vitamins.vitaminK": {
+              "sourceNutrientId": 1185,
+              "sourceNutrientName": "Vitamin K (phylloquinone)",
+              "originalValue": 1140,
+              "originalUnit": "µg",
+              "canonicalValue": 1140,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G",
+              "sourceCompound": "phylloquinone (K1)",
+              "vitaminKForm": "K1_PHYLLOQUINONE"
+            },
+            "fattyAcids.saturatedFattyAcids": {
+              "sourceNutrientId": 1258,
+              "sourceNutrientName": "Fatty acids, total saturated",
+              "originalValue": 0.091,
+              "originalUnit": "g",
+              "canonicalValue": 0.091,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.monounsaturatedFattyAcids": {
+              "sourceNutrientId": 1292,
+              "sourceNutrientName": "Fatty acids, total monounsaturated",
+              "originalValue": 0.076,
+              "originalUnit": "g",
+              "canonicalValue": 0.076,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.polyunsaturatedFattyAcids": {
+              "sourceNutrientId": 1293,
+              "sourceNutrientName": "Fatty acids, total polyunsaturated",
+              "originalValue": 0.147,
+              "originalUnit": "g",
+              "canonicalValue": 0.147,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.linoleicAcid": {
+              "sourceNutrientId": 1269,
+              "sourceNutrientName": "PUFA 18:2",
+              "originalValue": 0.145,
+              "originalUnit": "g",
+              "canonicalValue": 0.145,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G",
+              "sourceCompound": "PUFA 18:2",
+              "fattyAcidSpecificity": "CHAIN_LENGTH_GENERIC"
+            },
+            "fattyAcids.alphaLinolenicAcid": {
+              "sourceNutrientId": 1270,
+              "sourceNutrientName": "PUFA 18:3",
+              "originalValue": 0.002,
+              "originalUnit": "g",
+              "canonicalValue": 0.002,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G",
+              "sourceCompound": "PUFA 18:3",
+              "fattyAcidSpecificity": "CHAIN_LENGTH_GENERIC"
+            },
+            "aminoAcids.tryptophan": {
+              "sourceNutrientId": 1210,
+              "sourceNutrientName": "Tryptophan",
+              "originalValue": 0.031,
+              "originalUnit": "g",
+              "canonicalValue": 0.031,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.threonine": {
+              "sourceNutrientId": 1211,
+              "sourceNutrientName": "Threonine",
+              "originalValue": 0.099,
+              "originalUnit": "g",
+              "canonicalValue": 0.099,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.isoleucine": {
+              "sourceNutrientId": 1212,
+              "sourceNutrientName": "Isoleucine",
+              "originalValue": 0.119,
+              "originalUnit": "g",
+              "canonicalValue": 0.119,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.leucine": {
+              "sourceNutrientId": 1213,
+              "sourceNutrientName": "Leucine",
+              "originalValue": 0.195,
+              "originalUnit": "g",
+              "canonicalValue": 0.195,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.lysine": {
+              "sourceNutrientId": 1214,
+              "sourceNutrientName": "Lysine",
+              "originalValue": 0.127,
+              "originalUnit": "g",
+              "canonicalValue": 0.127,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.methionine": {
+              "sourceNutrientId": 1215,
+              "sourceNutrientName": "Methionine",
+              "originalValue": 0.036,
+              "originalUnit": "g",
+              "canonicalValue": 0.036,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.cystine": {
+              "sourceNutrientId": 1216,
+              "sourceNutrientName": "Cystine",
+              "originalValue": 0.029,
+              "originalUnit": "g",
+              "canonicalValue": 0.029,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.phenylalanine": {
+              "sourceNutrientId": 1217,
+              "sourceNutrientName": "Phenylalanine",
+              "originalValue": 0.133,
+              "originalUnit": "g",
+              "canonicalValue": 0.133,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.tyrosine": {
+              "sourceNutrientId": 1218,
+              "sourceNutrientName": "Tyrosine",
+              "originalValue": 0.08,
+              "originalUnit": "g",
+              "canonicalValue": 0.08,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.valine": {
+              "sourceNutrientId": 1219,
+              "sourceNutrientName": "Valine",
+              "originalValue": 0.137,
+              "originalUnit": "g",
+              "canonicalValue": 0.137,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.arginine": {
+              "sourceNutrientId": 1220,
+              "sourceNutrientName": "Arginine",
+              "originalValue": 0.121,
+              "originalUnit": "g",
+              "canonicalValue": 0.121,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.histidine": {
+              "sourceNutrientId": 1221,
+              "sourceNutrientName": "Histidine",
+              "originalValue": 0.052,
+              "originalUnit": "g",
+              "canonicalValue": 0.052,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.glutamicAcid": {
+              "sourceNutrientId": 1224,
+              "sourceNutrientName": "Glutamic acid",
+              "originalValue": 0.292,
+              "originalUnit": "g",
+              "canonicalValue": 0.292,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.glycine": {
+              "sourceNutrientId": 1225,
+              "sourceNutrientName": "Glycine",
+              "originalValue": 0.132,
+              "originalUnit": "g",
+              "canonicalValue": 0.132,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.proline": {
+              "sourceNutrientId": 1226,
+              "sourceNutrientName": "Proline",
+              "originalValue": 0.121,
+              "originalUnit": "g",
+              "canonicalValue": 0.121,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            }
+          },
+          "conversionNotes": {
+            "vitamins.vitaminA": "FEDIAF 2025 dog vitamin A activity: retinol 0.3 µg = 1 IU; provitamin A (beta-carotene) in dogs 1 mg = 833 IU. USDA Vitamin A, IU is used only when component rows are unavailable.",
+            "vitamins.vitaminD": "1 µg vitamin D = 40 IU",
+            "fattyAcids.linoleicAcid": "USDA PUFA 18:2 is used for linoleic acid only when a more specific 18:2 row is absent.",
+            "fattyAcids.alphaLinolenicAcid": "USDA PUFA 18:3 is used for alpha-linolenic acid only when a more specific 18:3 n-3 row is absent."
+          },
+          "externalId": "168385",
+          "sourceVersion": "USDA_FDC:4/1/2019",
+          "confidenceLevel": "HIGH",
+          "sourceTitle": "USDA FoodData Central",
+          "sampleState": "RAW",
+          "versionNote": "Direct USDA FoodData Central API extraction for FDC 168385; lookup date 2026-07-16."
+        },
+        "macros": {
+          "energyKcal": 23,
+          "moisture": 91.69,
+          "crudeProtein": 2.46,
+          "crudeFat": 0.33,
+          "ash": 1.5,
+          "carbohydrate": 4.02,
+          "fiber": null,
+          "solubleFiber": null,
+          "insolubleFiber": null
+        },
+        "minerals": {
+          "calcium": 215,
+          "phosphorus": 50,
+          "potassium": 611,
+          "sodium": 20,
+          "magnesium": 55,
+          "chloride": null,
+          "iron": 2.32,
+          "zinc": 0.9,
+          "copper": 0.162,
+          "manganese": 0.885,
+          "selenium": 0.9,
+          "iodine": null
+        },
+        "vitamins": {
+          "vitaminA": 0,
+          "vitaminD": 0,
+          "vitaminE": null,
+          "vitaminK": 1140,
+          "vitaminB1": 0.027,
+          "vitaminB2": 0.158,
+          "vitaminB3": 0.658,
+          "vitaminB5": 0.064,
+          "vitaminB6": 0.192,
+          "vitaminB7": null,
+          "vitaminB9": 85,
+          "vitaminB12": 0,
+          "choline": null,
+          "vitaminC": 43.3
+        },
+        "fattyAcids": {
+          "saturatedFattyAcids": 0.091,
+          "monounsaturatedFattyAcids": 0.076,
+          "polyunsaturatedFattyAcids": 0.147,
+          "linoleicAcid": 0.145,
+          "alphaLinolenicAcid": 0.002,
+          "arachidonicAcid": null,
+          "epa": null,
+          "dpa": null,
+          "dha": null
+        },
+        "aminoAcids": {
+          "arginine": 0.121,
+          "lysine": 0.127,
+          "methionine": 0.036,
+          "cystine": 0.029,
+          "taurine": null,
+          "tryptophan": 0.031,
+          "threonine": 0.099,
+          "leucine": 0.195,
+          "isoleucine": 0.119,
+          "valine": 0.137,
+          "phenylalanine": 0.133,
+          "tyrosine": 0.08,
+          "histidine": 0.052,
+          "glutamicAcid": 0.292,
+          "glycine": 0.132,
+          "proline": 0.121
+        },
+        "customItems": [
+          {
+            "name": "Vitamin A, RAE",
+            "value": 146,
+            "unit": "µg",
+            "rawBasisType": "PER_100_G",
+            "note": "未计入维生素 A 主字段：主字段优先采用视黄醇与 β-胡萝卜素按 FEDIAF 2025 犬用活性换算；不可拆分的 RAE/RE 来源项仅保留用于追溯和人工审核。",
+            "sourceNutrientId": 1106,
+            "sourceNutrientName": "Vitamin A, RAE",
+            "canonicalFieldPath": "vitamins.vitaminA",
+            "reviewCategory": "USDA_VITAMIN_A_RELATED",
+            "reviewStatus": "NOT_COUNTED"
+          }
+        ]
+      },
+      "nutrients": {
+        "moisture": {
+          "value": 91.69,
+          "unit": "g"
+        },
+        "energyKcal": {
+          "value": 23,
+          "unit": "kcal"
+        },
+        "crudeProtein": {
+          "value": 2.46,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 0.33,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 1.5,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 4.02,
+          "unit": "g"
+        },
+        "calcium": {
+          "value": 215,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 2.32,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 55,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 50,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 611,
+          "unit": "mg"
+        },
+        "sodium": {
+          "value": 20,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 0.9,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.162,
+          "unit": "mg"
+        },
+        "manganese": {
+          "value": 0.885,
+          "unit": "mg"
+        },
+        "selenium": {
+          "value": 0.9,
+          "unit": "μg"
+        },
+        "vitaminC": {
+          "value": 43.3,
+          "unit": "mg"
+        },
+        "vitaminB1": {
+          "value": 0.027,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.158,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 0.658,
+          "unit": "mg"
+        },
+        "vitaminB5": {
+          "value": 0.064,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.192,
+          "unit": "mg"
+        },
+        "vitaminB9": {
+          "value": 85,
+          "unit": "μg"
+        },
+        "vitaminB12": {
+          "value": 0,
+          "unit": "μg",
+          "measuredZero": true
+        },
+        "vitaminA": {
+          "value": 0,
+          "unit": "IU",
+          "measuredZero": true
+        },
+        "vitaminD": {
+          "value": 0,
+          "unit": "IU",
+          "measuredZero": true
+        },
+        "vitaminK": {
+          "value": 1140,
+          "unit": "μg"
+        },
+        "saturatedFattyAcids": {
+          "value": 0.091,
+          "unit": "g"
+        },
+        "monounsaturatedFattyAcids": {
+          "value": 0.076,
+          "unit": "g"
+        },
+        "polyunsaturatedFattyAcids": {
+          "value": 0.147,
+          "unit": "g"
+        },
+        "linoleicAcid": {
+          "value": 0.145,
+          "unit": "g"
+        },
+        "alphaLinolenicAcid": {
+          "value": 0.002,
+          "unit": "g"
+        },
+        "tryptophan": {
+          "value": 0.031,
+          "unit": "g"
+        },
+        "threonine": {
+          "value": 0.099,
+          "unit": "g"
+        },
+        "isoleucine": {
+          "value": 0.119,
+          "unit": "g"
+        },
+        "leucine": {
+          "value": 0.195,
+          "unit": "g"
+        },
+        "lysine": {
+          "value": 0.127,
+          "unit": "g"
+        },
+        "methionine": {
+          "value": 0.036,
+          "unit": "g"
+        },
+        "cystine": {
+          "value": 0.029,
+          "unit": "g"
+        },
+        "phenylalanine": {
+          "value": 0.133,
+          "unit": "g"
+        },
+        "tyrosine": {
+          "value": 0.08,
+          "unit": "g"
+        },
+        "valine": {
+          "value": 0.137,
+          "unit": "g"
+        },
+        "arginine": {
+          "value": 0.121,
+          "unit": "g"
+        },
+        "histidine": {
+          "value": 0.052,
+          "unit": "g"
+        },
+        "glutamicAcid": {
+          "value": 0.292,
+          "unit": "g"
+        },
+        "glycine": {
+          "value": 0.132,
+          "unit": "g"
+        },
+        "proline": {
+          "value": 0.121,
+          "unit": "g"
+        }
+      }
+    },
+    {
+      "id": "usda-fdc-169202-amaranth-leaves-boiled-drained-without-salt",
+      "name": "苋菜（水煮、沥干、无盐）",
+      "nameEn": "Amaranth leaves, cooked, boiled, drained, without salt",
+      "dataSource": "USDA_FDC",
+      "externalId": "USDA_FDC:169202",
+      "category": "VEGETABLE",
+      "basis": "PER_100G",
+      "preparationState": "cooked",
+      "preparationStateLabel": "水煮、沥干、无盐",
+      "ediblePortionLabel": "叶，水煮后沥干，每100克",
+      "processingLabel": "水煮、沥干、无盐",
+      "isPrimary": false,
+      "yieldRate": 1,
+      "nutritionData": {
+        "meta": {
+          "rawBasisType": "PER_100_G",
+          "sourceType": "USDA",
+          "sourceKind": "FOOD_DATABASE",
+          "sourceCode": "USDA_FDC",
+          "sourceProvider": "USDA FoodData Central",
+          "sourceForms": {
+            "macros.moisture": {
+              "sourceNutrientId": 1051,
+              "sourceNutrientName": "Water",
+              "originalValue": 91.49,
+              "originalUnit": "g",
+              "canonicalValue": 91.49,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.energyKcal": {
+              "sourceNutrientId": 1008,
+              "sourceNutrientName": "Energy",
+              "originalValue": 21,
+              "originalUnit": "kcal",
+              "canonicalValue": 21,
+              "canonicalUnit": "kcal",
+              "basisType": "PER_100_G"
+            },
+            "macros.crudeProtein": {
+              "sourceNutrientId": 1003,
+              "sourceNutrientName": "Protein",
+              "originalValue": 2.11,
+              "originalUnit": "g",
+              "canonicalValue": 2.11,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.crudeFat": {
+              "sourceNutrientId": 1004,
+              "sourceNutrientName": "Total lipid (fat)",
+              "originalValue": 0.18,
+              "originalUnit": "g",
+              "canonicalValue": 0.18,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.ash": {
+              "sourceNutrientId": 1007,
+              "sourceNutrientName": "Ash",
+              "originalValue": 2.11,
+              "originalUnit": "g",
+              "canonicalValue": 2.11,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "macros.carbohydrate": {
+              "sourceNutrientId": 1005,
+              "sourceNutrientName": "Carbohydrate, by difference",
+              "originalValue": 4.11,
+              "originalUnit": "g",
+              "canonicalValue": 4.11,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "minerals.calcium": {
+              "sourceNutrientId": 1087,
+              "sourceNutrientName": "Calcium, Ca",
+              "originalValue": 209,
+              "originalUnit": "mg",
+              "canonicalValue": 209,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.iron": {
+              "sourceNutrientId": 1089,
+              "sourceNutrientName": "Iron, Fe",
+              "originalValue": 2.26,
+              "originalUnit": "mg",
+              "canonicalValue": 2.26,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.magnesium": {
+              "sourceNutrientId": 1090,
+              "sourceNutrientName": "Magnesium, Mg",
+              "originalValue": 55,
+              "originalUnit": "mg",
+              "canonicalValue": 55,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.phosphorus": {
+              "sourceNutrientId": 1091,
+              "sourceNutrientName": "Phosphorus, P",
+              "originalValue": 72,
+              "originalUnit": "mg",
+              "canonicalValue": 72,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.potassium": {
+              "sourceNutrientId": 1092,
+              "sourceNutrientName": "Potassium, K",
+              "originalValue": 641,
+              "originalUnit": "mg",
+              "canonicalValue": 641,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.sodium": {
+              "sourceNutrientId": 1093,
+              "sourceNutrientName": "Sodium, Na",
+              "originalValue": 21,
+              "originalUnit": "mg",
+              "canonicalValue": 21,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.zinc": {
+              "sourceNutrientId": 1095,
+              "sourceNutrientName": "Zinc, Zn",
+              "originalValue": 0.88,
+              "originalUnit": "mg",
+              "canonicalValue": 0.88,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.copper": {
+              "sourceNutrientId": 1098,
+              "sourceNutrientName": "Copper, Cu",
+              "originalValue": 0.158,
+              "originalUnit": "mg",
+              "canonicalValue": 0.158,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.manganese": {
+              "sourceNutrientId": 1101,
+              "sourceNutrientName": "Manganese, Mn",
+              "originalValue": 0.861,
+              "originalUnit": "mg",
+              "canonicalValue": 0.861,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "minerals.selenium": {
+              "sourceNutrientId": 1103,
+              "sourceNutrientName": "Selenium, Se",
+              "originalValue": 0.9,
+              "originalUnit": "µg",
+              "canonicalValue": 0.9,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminC": {
+              "sourceNutrientId": 1162,
+              "sourceNutrientName": "Vitamin C, total ascorbic acid",
+              "originalValue": 41.1,
+              "originalUnit": "mg",
+              "canonicalValue": 41.1,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB1": {
+              "sourceNutrientId": 1165,
+              "sourceNutrientName": "Thiamin",
+              "originalValue": 0.02,
+              "originalUnit": "mg",
+              "canonicalValue": 0.02,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB2": {
+              "sourceNutrientId": 1166,
+              "sourceNutrientName": "Riboflavin",
+              "originalValue": 0.134,
+              "originalUnit": "mg",
+              "canonicalValue": 0.134,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB3": {
+              "sourceNutrientId": 1167,
+              "sourceNutrientName": "Niacin",
+              "originalValue": 0.559,
+              "originalUnit": "mg",
+              "canonicalValue": 0.559,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB5": {
+              "sourceNutrientId": 1170,
+              "sourceNutrientName": "Pantothenic acid",
+              "originalValue": 0.062,
+              "originalUnit": "mg",
+              "canonicalValue": 0.062,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB6": {
+              "sourceNutrientId": 1175,
+              "sourceNutrientName": "Vitamin B-6",
+              "originalValue": 0.177,
+              "originalUnit": "mg",
+              "canonicalValue": 0.177,
+              "canonicalUnit": "mg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB9": {
+              "sourceNutrientId": 1177,
+              "sourceNutrientName": "Folate, total",
+              "originalValue": 57,
+              "originalUnit": "µg",
+              "canonicalValue": 57,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminB12": {
+              "sourceNutrientId": 1178,
+              "sourceNutrientName": "Vitamin B-12",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "μg",
+              "basisType": "PER_100_G"
+            },
+            "vitamins.vitaminA": {
+              "sourceNutrientId": 1105,
+              "sourceNutrientName": "Retinol",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "IU",
+              "basisType": "PER_100_G",
+              "vitaminAForm": "FEDIAF_DOG_RETINOL_ACTIVITY",
+              "sourceCompound": "retinol",
+              "conversionStatus": "COMPONENT_ACTIVITY",
+              "conversionFactorSource": "FEDIAF_2025_TABLE_VII_14",
+              "retinolUgPerIu": 0.3,
+              "betaCaroteneIuPerMg": 833,
+              "retinolUg": 0,
+              "retinolIu": 0,
+              "betaCaroteneUg": null,
+              "betaCaroteneIu": 0
+            },
+            "vitamins.vitaminD": {
+              "sourceNutrientId": 1114,
+              "sourceNutrientName": "Vitamin D (D2 + D3)",
+              "originalValue": 0,
+              "originalUnit": "µg",
+              "canonicalValue": 0,
+              "canonicalUnit": "IU",
+              "basisType": "PER_100_G",
+              "sourceCompound": "Vitamin D (D2 + D3)",
+              "vitaminDForm": "D2_PLUS_D3",
+              "conversionFactor": 40,
+              "conversionFactorUnit": "IU_PER_UG"
+            },
+            "fattyAcids.saturatedFattyAcids": {
+              "sourceNutrientId": 1258,
+              "sourceNutrientName": "Fatty acids, total saturated",
+              "originalValue": 0.05,
+              "originalUnit": "g",
+              "canonicalValue": 0.05,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.monounsaturatedFattyAcids": {
+              "sourceNutrientId": 1292,
+              "sourceNutrientName": "Fatty acids, total monounsaturated",
+              "originalValue": 0.041,
+              "originalUnit": "g",
+              "canonicalValue": 0.041,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.polyunsaturatedFattyAcids": {
+              "sourceNutrientId": 1293,
+              "sourceNutrientName": "Fatty acids, total polyunsaturated",
+              "originalValue": 0.08,
+              "originalUnit": "g",
+              "canonicalValue": 0.08,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "fattyAcids.linoleicAcid": {
+              "sourceNutrientId": 1269,
+              "sourceNutrientName": "PUFA 18:2",
+              "originalValue": 0.079,
+              "originalUnit": "g",
+              "canonicalValue": 0.079,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G",
+              "sourceCompound": "PUFA 18:2",
+              "fattyAcidSpecificity": "CHAIN_LENGTH_GENERIC"
+            },
+            "fattyAcids.alphaLinolenicAcid": {
+              "sourceNutrientId": 1270,
+              "sourceNutrientName": "PUFA 18:3",
+              "originalValue": 0.001,
+              "originalUnit": "g",
+              "canonicalValue": 0.001,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G",
+              "sourceCompound": "PUFA 18:3",
+              "fattyAcidSpecificity": "CHAIN_LENGTH_GENERIC"
+            },
+            "aminoAcids.tryptophan": {
+              "sourceNutrientId": 1210,
+              "sourceNutrientName": "Tryptophan",
+              "originalValue": 0.027,
+              "originalUnit": "g",
+              "canonicalValue": 0.027,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.threonine": {
+              "sourceNutrientId": 1211,
+              "sourceNutrientName": "Threonine",
+              "originalValue": 0.085,
+              "originalUnit": "g",
+              "canonicalValue": 0.085,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.isoleucine": {
+              "sourceNutrientId": 1212,
+              "sourceNutrientName": "Isoleucine",
+              "originalValue": 0.102,
+              "originalUnit": "g",
+              "canonicalValue": 0.102,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.leucine": {
+              "sourceNutrientId": 1213,
+              "sourceNutrientName": "Leucine",
+              "originalValue": 0.167,
+              "originalUnit": "g",
+              "canonicalValue": 0.167,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.lysine": {
+              "sourceNutrientId": 1214,
+              "sourceNutrientName": "Lysine",
+              "originalValue": 0.109,
+              "originalUnit": "g",
+              "canonicalValue": 0.109,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.methionine": {
+              "sourceNutrientId": 1215,
+              "sourceNutrientName": "Methionine",
+              "originalValue": 0.031,
+              "originalUnit": "g",
+              "canonicalValue": 0.031,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.cystine": {
+              "sourceNutrientId": 1216,
+              "sourceNutrientName": "Cystine",
+              "originalValue": 0.025,
+              "originalUnit": "g",
+              "canonicalValue": 0.025,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.phenylalanine": {
+              "sourceNutrientId": 1217,
+              "sourceNutrientName": "Phenylalanine",
+              "originalValue": 0.114,
+              "originalUnit": "g",
+              "canonicalValue": 0.114,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.tyrosine": {
+              "sourceNutrientId": 1218,
+              "sourceNutrientName": "Tyrosine",
+              "originalValue": 0.068,
+              "originalUnit": "g",
+              "canonicalValue": 0.068,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.valine": {
+              "sourceNutrientId": 1219,
+              "sourceNutrientName": "Valine",
+              "originalValue": 0.118,
+              "originalUnit": "g",
+              "canonicalValue": 0.118,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.arginine": {
+              "sourceNutrientId": 1220,
+              "sourceNutrientName": "Arginine",
+              "originalValue": 0.104,
+              "originalUnit": "g",
+              "canonicalValue": 0.104,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.histidine": {
+              "sourceNutrientId": 1221,
+              "sourceNutrientName": "Histidine",
+              "originalValue": 0.044,
+              "originalUnit": "g",
+              "canonicalValue": 0.044,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.glutamicAcid": {
+              "sourceNutrientId": 1224,
+              "sourceNutrientName": "Glutamic acid",
+              "originalValue": 0.25,
+              "originalUnit": "g",
+              "canonicalValue": 0.25,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.glycine": {
+              "sourceNutrientId": 1225,
+              "sourceNutrientName": "Glycine",
+              "originalValue": 0.113,
+              "originalUnit": "g",
+              "canonicalValue": 0.113,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            },
+            "aminoAcids.proline": {
+              "sourceNutrientId": 1226,
+              "sourceNutrientName": "Proline",
+              "originalValue": 0.104,
+              "originalUnit": "g",
+              "canonicalValue": 0.104,
+              "canonicalUnit": "g",
+              "basisType": "PER_100_G"
+            }
+          },
+          "conversionNotes": {
+            "vitamins.vitaminA": "FEDIAF 2025 dog vitamin A activity: retinol 0.3 µg = 1 IU; provitamin A (beta-carotene) in dogs 1 mg = 833 IU. USDA Vitamin A, IU is used only when component rows are unavailable.",
+            "vitamins.vitaminD": "1 µg vitamin D = 40 IU",
+            "fattyAcids.linoleicAcid": "USDA PUFA 18:2 is used for linoleic acid only when a more specific 18:2 row is absent.",
+            "fattyAcids.alphaLinolenicAcid": "USDA PUFA 18:3 is used for alpha-linolenic acid only when a more specific 18:3 n-3 row is absent."
+          },
+          "externalId": "169202",
+          "sourceVersion": "USDA_FDC:4/1/2019",
+          "confidenceLevel": "HIGH",
+          "sourceTitle": "USDA FoodData Central",
+          "sampleState": "COOKED",
+          "versionNote": "Direct USDA FoodData Central API extraction for FDC 169202; lookup date 2026-07-16."
+        },
+        "macros": {
+          "energyKcal": 21,
+          "moisture": 91.49,
+          "crudeProtein": 2.11,
+          "crudeFat": 0.18,
+          "ash": 2.11,
+          "carbohydrate": 4.11,
+          "fiber": null,
+          "solubleFiber": null,
+          "insolubleFiber": null
+        },
+        "minerals": {
+          "calcium": 209,
+          "phosphorus": 72,
+          "potassium": 641,
+          "sodium": 21,
+          "magnesium": 55,
+          "chloride": null,
+          "iron": 2.26,
+          "zinc": 0.88,
+          "copper": 0.158,
+          "manganese": 0.861,
+          "selenium": 0.9,
+          "iodine": null
+        },
+        "vitamins": {
+          "vitaminA": 0,
+          "vitaminD": 0,
+          "vitaminE": null,
+          "vitaminK": null,
+          "vitaminB1": 0.02,
+          "vitaminB2": 0.134,
+          "vitaminB3": 0.559,
+          "vitaminB5": 0.062,
+          "vitaminB6": 0.177,
+          "vitaminB7": null,
+          "vitaminB9": 57,
+          "vitaminB12": 0,
+          "choline": null,
+          "vitaminC": 41.1
+        },
+        "fattyAcids": {
+          "saturatedFattyAcids": 0.05,
+          "monounsaturatedFattyAcids": 0.041,
+          "polyunsaturatedFattyAcids": 0.08,
+          "linoleicAcid": 0.079,
+          "alphaLinolenicAcid": 0.001,
+          "arachidonicAcid": null,
+          "epa": null,
+          "dpa": null,
+          "dha": null
+        },
+        "aminoAcids": {
+          "arginine": 0.104,
+          "lysine": 0.109,
+          "methionine": 0.031,
+          "cystine": 0.025,
+          "taurine": null,
+          "tryptophan": 0.027,
+          "threonine": 0.085,
+          "leucine": 0.167,
+          "isoleucine": 0.102,
+          "valine": 0.118,
+          "phenylalanine": 0.114,
+          "tyrosine": 0.068,
+          "histidine": 0.044,
+          "glutamicAcid": 0.25,
+          "glycine": 0.113,
+          "proline": 0.104
+        },
+        "customItems": [
+          {
+            "name": "Vitamin A, RAE",
+            "value": 139,
+            "unit": "µg",
+            "rawBasisType": "PER_100_G",
+            "note": "未计入维生素 A 主字段：主字段优先采用视黄醇与 β-胡萝卜素按 FEDIAF 2025 犬用活性换算；不可拆分的 RAE/RE 来源项仅保留用于追溯和人工审核。",
+            "sourceNutrientId": 1106,
+            "sourceNutrientName": "Vitamin A, RAE",
+            "canonicalFieldPath": "vitamins.vitaminA",
+            "reviewCategory": "USDA_VITAMIN_A_RELATED",
+            "reviewStatus": "NOT_COUNTED"
+          }
+        ]
+      },
+      "nutrients": {
+        "moisture": {
+          "value": 91.49,
+          "unit": "g"
+        },
+        "energyKcal": {
+          "value": 21,
+          "unit": "kcal"
+        },
+        "crudeProtein": {
+          "value": 2.11,
+          "unit": "g"
+        },
+        "crudeFat": {
+          "value": 0.18,
+          "unit": "g"
+        },
+        "ash": {
+          "value": 2.11,
+          "unit": "g"
+        },
+        "carbohydrate": {
+          "value": 4.11,
+          "unit": "g"
+        },
+        "calcium": {
+          "value": 209,
+          "unit": "mg"
+        },
+        "iron": {
+          "value": 2.26,
+          "unit": "mg"
+        },
+        "magnesium": {
+          "value": 55,
+          "unit": "mg"
+        },
+        "phosphorus": {
+          "value": 72,
+          "unit": "mg"
+        },
+        "potassium": {
+          "value": 641,
+          "unit": "mg"
+        },
+        "sodium": {
+          "value": 21,
+          "unit": "mg"
+        },
+        "zinc": {
+          "value": 0.88,
+          "unit": "mg"
+        },
+        "copper": {
+          "value": 0.158,
+          "unit": "mg"
+        },
+        "manganese": {
+          "value": 0.861,
+          "unit": "mg"
+        },
+        "selenium": {
+          "value": 0.9,
+          "unit": "μg"
+        },
+        "vitaminC": {
+          "value": 41.1,
+          "unit": "mg"
+        },
+        "vitaminB1": {
+          "value": 0.02,
+          "unit": "mg"
+        },
+        "vitaminB2": {
+          "value": 0.134,
+          "unit": "mg"
+        },
+        "vitaminB3": {
+          "value": 0.559,
+          "unit": "mg"
+        },
+        "vitaminB5": {
+          "value": 0.062,
+          "unit": "mg"
+        },
+        "vitaminB6": {
+          "value": 0.177,
+          "unit": "mg"
+        },
+        "vitaminB9": {
+          "value": 57,
+          "unit": "μg"
+        },
+        "vitaminB12": {
+          "value": 0,
+          "unit": "μg",
+          "measuredZero": true
+        },
+        "vitaminA": {
+          "value": 0,
+          "unit": "IU",
+          "measuredZero": true
+        },
+        "vitaminD": {
+          "value": 0,
+          "unit": "IU",
+          "measuredZero": true
+        },
+        "saturatedFattyAcids": {
+          "value": 0.05,
+          "unit": "g"
+        },
+        "monounsaturatedFattyAcids": {
+          "value": 0.041,
+          "unit": "g"
+        },
+        "polyunsaturatedFattyAcids": {
+          "value": 0.08,
+          "unit": "g"
+        },
+        "linoleicAcid": {
+          "value": 0.079,
+          "unit": "g"
+        },
+        "alphaLinolenicAcid": {
+          "value": 0.001,
+          "unit": "g"
+        },
+        "tryptophan": {
+          "value": 0.027,
+          "unit": "g"
+        },
+        "threonine": {
+          "value": 0.085,
+          "unit": "g"
+        },
+        "isoleucine": {
+          "value": 0.102,
+          "unit": "g"
+        },
+        "leucine": {
+          "value": 0.167,
+          "unit": "g"
+        },
+        "lysine": {
+          "value": 0.109,
+          "unit": "g"
+        },
+        "methionine": {
+          "value": 0.031,
+          "unit": "g"
+        },
+        "cystine": {
+          "value": 0.025,
+          "unit": "g"
+        },
+        "phenylalanine": {
+          "value": 0.114,
+          "unit": "g"
+        },
+        "tyrosine": {
+          "value": 0.068,
+          "unit": "g"
+        },
+        "valine": {
+          "value": 0.118,
+          "unit": "g"
+        },
+        "arginine": {
+          "value": 0.104,
+          "unit": "g"
+        },
+        "histidine": {
+          "value": 0.044,
+          "unit": "g"
+        },
+        "glutamicAcid": {
+          "value": 0.25,
+          "unit": "g"
+        },
+        "glycine": {
+          "value": 0.113,
+          "unit": "g"
+        },
+        "proline": {
+          "value": 0.104,
+          "unit": "g"
+        }
+      }
+    }
+  ],
+  "sourceCandidates": [
+    {
+      "sourceId": "USDA_FDC:168385",
+      "sourceName": "USDA FoodData Central",
+      "matchedName": "Amaranth leaves, raw",
+      "state": "raw",
+      "isPrimary": true,
+      "essentialCoveragePercent": 84.78260869565217,
+      "presentEssentialNutrients": [
+        "crudeProtein",
+        "crudeFat",
+        "arginine",
+        "histidine",
+        "isoleucine",
+        "leucine",
+        "lysine",
+        "methionine",
+        "methionineCystine",
+        "phenylalanine",
+        "phenylalanineTyrosine",
+        "threonine",
+        "tryptophan",
+        "valine",
+        "linoleicAcid",
+        "alphaLinolenicAcid",
+        "calcium",
+        "phosphorus",
+        "calciumPhosphorusRatio",
+        "potassium",
+        "sodium",
+        "magnesium",
+        "copper",
+        "iron",
+        "manganese",
+        "selenium",
+        "seleniumWetDiet",
+        "seleniumDryDiet",
+        "zinc",
+        "vitaminA",
+        "vitaminD",
+        "vitaminB1",
+        "vitaminB2",
+        "vitaminB5",
+        "vitaminB6",
+        "vitaminB12",
+        "vitaminB3",
+        "vitaminB9",
+        "vitaminK"
+      ],
+      "missingEssentialNutrients": [
+        "arachidonicAcid",
+        "epaDha",
+        "chloride",
+        "iodine",
+        "vitaminE",
+        "vitaminB7",
+        "choline"
+      ],
+      "coverageCalculation": "auditNutritionProfileForImport over the explicit flat nutrients audit map; no CFCT supplementation."
+    },
+    {
+      "sourceId": "USDA_FDC:169202",
+      "sourceName": "USDA FoodData Central",
+      "matchedName": "Amaranth leaves, cooked, boiled, drained, without salt",
+      "state": "cooked",
+      "isPrimary": false,
+      "essentialCoveragePercent": 82.6086956521739,
+      "presentEssentialNutrients": [
+        "crudeProtein",
+        "crudeFat",
+        "arginine",
+        "histidine",
+        "isoleucine",
+        "leucine",
+        "lysine",
+        "methionine",
+        "methionineCystine",
+        "phenylalanine",
+        "phenylalanineTyrosine",
+        "threonine",
+        "tryptophan",
+        "valine",
+        "linoleicAcid",
+        "alphaLinolenicAcid",
+        "calcium",
+        "phosphorus",
+        "calciumPhosphorusRatio",
+        "potassium",
+        "sodium",
+        "magnesium",
+        "copper",
+        "iron",
+        "manganese",
+        "selenium",
+        "seleniumWetDiet",
+        "seleniumDryDiet",
+        "zinc",
+        "vitaminA",
+        "vitaminD",
+        "vitaminB1",
+        "vitaminB2",
+        "vitaminB5",
+        "vitaminB6",
+        "vitaminB12",
+        "vitaminB3",
+        "vitaminB9"
+      ],
+      "missingEssentialNutrients": [
+        "arachidonicAcid",
+        "epaDha",
+        "chloride",
+        "iodine",
+        "vitaminE",
+        "vitaminB7",
+        "choline",
+        "vitaminK"
+      ],
+      "coverageCalculation": "auditNutritionProfileForImport over the explicit flat nutrients audit map; no CFCT supplementation."
+    }
+  ],
+  "dbAlignmentReport": {
+    "id": "",
+    "status": ""
+  },
+  "confirmations": {
+    "localWriteApproved": false,
+    "productionPackageApproved": true
+  },
+  "operatorConfirmation": {
+    "localWriteApproved": false,
+    "productionPackageApproved": true
+  }
+}

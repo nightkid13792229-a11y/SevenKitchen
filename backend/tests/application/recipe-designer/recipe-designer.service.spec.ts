@@ -32,6 +32,7 @@ describe('RecipeDesignerService', () => {
       aggregate: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -42,6 +43,7 @@ describe('RecipeDesignerService', () => {
       create: jest.fn(),
       createMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -122,6 +124,7 @@ describe('RecipeDesignerService', () => {
     prisma.designRecipeItem.aggregate.mockResolvedValue({
       _max: { sortOrder: null },
     });
+    prisma.designRecipe.updateMany.mockResolvedValue({ count: 1 });
     prisma.user.findMany.mockResolvedValue([
       { id: 'staff-1' },
       { id: 'staff-2' },
@@ -140,6 +143,7 @@ describe('RecipeDesignerService', () => {
       id: 'design-1',
       name: '成犬鸡肉配方',
       version: 1,
+      contentRevision: 0,
       status: 'DRAFT',
       fediafDogScenario: 'ADULT_MER_110',
       totalWeightG: 0,
@@ -196,6 +200,7 @@ describe('RecipeDesignerService', () => {
       preparationMethod: 'RAW',
       nutrientTargetKey: null,
       nutrientTargetValue: null,
+      supplementTargets: null,
       sortOrder: 0,
       nutritionFood: {
         id: 'food-1',
@@ -1409,7 +1414,76 @@ describe('RecipeDesignerService', () => {
         nutritionFoodId: 'food-raw',
         weightG: 100,
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
+    });
+  });
+
+  it('does not fetch raw nutrition data when returning a newly added design item', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+    });
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        weightG: 100,
+      } as any,
+      'staff-1',
+    );
+
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith({
+      data: expect.any(Object),
+      select: expect.objectContaining({
+        nutritionFood: {
+          select: expect.not.objectContaining({
+            nutritionData: true,
+          }),
+        },
+      }),
+    });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
+  });
+
+  it('increments the content revision in the same transaction as item updates and removals', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.designRecipeItem.update.mockResolvedValue(item({ weightG: 120 }));
+    prisma.designRecipeItem.delete.mockResolvedValue(item());
+
+    await service.updateItem('item-1', { weightG: 120 }, 'staff-1');
+    await service.removeItem('item-1', 'staff-1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
+    expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
     });
   });
 
@@ -1450,7 +1524,7 @@ describe('RecipeDesignerService', () => {
         ingredientId: 'ingredient-mussel',
         preparationMethod: '蒸熟、压泥',
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
     });
   });
 
@@ -1523,9 +1597,27 @@ describe('RecipeDesignerService', () => {
         fediafDogScenario: 'ADULT_MER_95',
         seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
         applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        contentRevision: { increment: 1 },
       }),
       include: expect.any(Object),
     });
+
+    // A subsequent assessment must use the version committed with the scenario.
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'series-design',
+        contentRevision: 1,
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    await service.assessDraft('series-design', 'staff-1');
+    expect(prisma.designRecipe.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: 'series-design', contentRevision: 1 },
+      }),
+    );
   });
 
   it('loads a draft detail for the current staff user', async () => {
@@ -1708,6 +1800,34 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipeItem.create).not.toHaveBeenCalled();
   });
 
+  it('does not fetch raw nutrition data when returning an updated design item', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.designRecipeItem.update.mockResolvedValue(item({ id: 'item-1' }));
+
+    await service.updateItem('item-1', { weightG: 120 }, 'staff-1');
+
+    expect(prisma.designRecipeItem.update).toHaveBeenCalledWith({
+      where: { id: 'item-1' },
+      data: { weightG: 120 },
+      select: expect.objectContaining({
+        nutritionFood: {
+          select: expect.not.objectContaining({
+            nutritionData: true,
+          }),
+        },
+      }),
+    });
+  });
+
   it('rejects item updates from another staff user', async () => {
     prisma.designRecipeItem.findUnique.mockResolvedValue({
       id: 'item-other',
@@ -1730,6 +1850,38 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
   });
 
+  it('persists item reorder updates in one draft-scoped transaction', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.designRecipeItem.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    await expect(
+      service.reorderItems(
+        'design-1',
+        {
+          items: [
+            { id: 'item-2', sortOrder: 0 },
+            { id: 'item-1', sortOrder: 1 },
+          ],
+        },
+        { userId: 'staff-1', role: 'STAFF' },
+      ),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.designRecipeItem.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'item-2', designRecipeId: 'design-1' },
+      data: { sortOrder: 0 },
+    });
+    expect(prisma.designRecipeItem.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'item-1', designRecipeId: 'design-1' },
+      data: { sortOrder: 1 },
+    });
+  });
+
   it('rejects item deletion from another staff user', async () => {
     prisma.designRecipeItem.findUnique.mockResolvedValue({
       id: 'item-other',
@@ -1750,6 +1902,154 @@ describe('RecipeDesignerService', () => {
     );
 
     expect(prisma.designRecipeItem.delete).not.toHaveBeenCalled();
+  });
+
+  it('atomically persists a supplied full item ordering and updates only changed items', async () => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([
+      { id: 'item-1', sortOrder: 0 },
+      { id: 'item-2', sortOrder: 1 },
+      { id: 'item-3', sortOrder: 2 },
+    ]);
+    tx.designRecipeItem.update.mockImplementation(({ where, data }: any) =>
+      Promise.resolve({ id: where.id, sortOrder: data.sortOrder }),
+    );
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
+    );
+
+    await expect(
+      (service as any).updateItemOrder(
+        'design-1',
+        ['item-2', 'item-1', 'item-3'],
+        'staff-1',
+      ),
+    ).resolves.toEqual([
+      { id: 'item-2', sortOrder: 0 },
+      { id: 'item-1', sortOrder: 1 },
+      { id: 'item-3', sortOrder: 2 },
+    ]);
+
+    expect(prisma.designRecipe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.designRecipeItem.findMany).not.toHaveBeenCalled();
+    expect(tx.designRecipe.findUnique).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      select: {
+        id: true,
+        createdBy: true,
+        status: true,
+        publishedRecipeId: true,
+        publishedAt: true,
+        seriesId: true,
+        seriesLifeStage: true,
+      },
+    });
+    expect(tx.designRecipeItem.findMany).toHaveBeenCalledWith({
+      where: { designRecipeId: 'design-1' },
+      select: { id: true, sortOrder: true },
+    });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(tx.designRecipeItem.update).toHaveBeenCalledTimes(2);
+    expect(tx.designRecipeItem.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'item-2' },
+      data: { sortOrder: 0 },
+      select: { id: true, sortOrder: true },
+    });
+    expect(tx.designRecipeItem.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'item-1' },
+      data: { sortOrder: 1 },
+      select: { id: true, sortOrder: true },
+    });
+    expect(tx.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: { contentRevision: { increment: 1 } },
+    });
+  });
+
+  it.each([
+    [['item-1', 'item-1'], 'contains duplicate item ids'],
+    [['item-1'], 'omits an existing item'],
+    [['item-1', 'item-2', 'item-missing'], 'contains an unknown item'],
+  ])('rejects a supplied ordering that %s', async (itemIds) => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([
+      { id: 'item-1', sortOrder: 0 },
+      { id: 'item-2', sortOrder: 1 },
+    ]);
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
+    );
+
+    await expect(
+      (service as any).updateItemOrder('design-1', itemIds, 'staff-1'),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.designRecipeItem.update).not.toHaveBeenCalled();
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts an empty full ordering for an empty editable draft', async () => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(tx),
+    );
+
+    await expect(
+      (service as any).updateItemOrder('design-1', [], 'staff-1'),
+    ).resolves.toEqual([]);
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(tx.designRecipeItem.update).not.toHaveBeenCalled();
+  });
+
+  it('retries a serializable item-order transaction once after a P2034 conflict', async () => {
+    const tx = {
+      designRecipe: { findUnique: jest.fn(), update: jest.fn() },
+      designRecipeItem: { findMany: jest.fn(), update: jest.fn() },
+    };
+    tx.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    tx.designRecipeItem.findMany.mockResolvedValue([]);
+    prisma.$transaction
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('write conflict', {
+          code: 'P2034',
+          clientVersion: 'test',
+        }),
+      )
+      .mockImplementationOnce(async (callback: any) => callback(tx));
+
+    await expect(
+      (service as any).updateItemOrder('design-1', [], 'staff-1'),
+    ).resolves.toEqual([]);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(tx.designRecipe.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it('hard deletes an unpublished draft created by the current staff user', async () => {
@@ -2084,6 +2384,14 @@ describe('RecipeDesignerService', () => {
       nutrientTargetKey: 'calcium',
       nutrientTargetValue: 1200,
       sortOrder: 7,
+      ingredient: {
+        id: 'ingredient-source',
+        name: '鸡蛋壳粉',
+        type: 'SUPPLEMENT',
+        unitDisplayLabel: 'g',
+        purchaseUnit: 'g',
+        properties: null,
+      },
     });
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -2166,6 +2474,15 @@ describe('RecipeDesignerService', () => {
               preparationMethod: '蒸熟',
               nutrientTargetKey: 'calcium',
               nutrientTargetValue: 1200,
+              supplementTargets: [
+                expect.objectContaining({
+                  fieldPath: 'minerals.calcium',
+                  nutrientTargetKey: 'calcium',
+                  label: '钙',
+                  unit: 'mg',
+                  targetValue: 1200,
+                }),
+              ],
               sortOrder: 7,
             }),
           ],
@@ -2511,8 +2828,8 @@ describe('RecipeDesignerService', () => {
     expect(assessment.items[0]).toEqual(
       expect.objectContaining({ id: 'item-1', ratioPercent: 100 }),
     );
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 100,
         energyDensityKcalPerKg: 1310,
@@ -2523,6 +2840,31 @@ describe('RecipeDesignerService', () => {
         isCompliant: true,
       }),
     });
+  });
+
+  it('does not persist an assessment computed before an item mutation advances the content revision', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        contentRevision: 4,
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    // Simulates a concurrent child mutation committing its version increment
+    // between the assessment read and its conditional write.
+    prisma.designRecipe.updateMany.mockResolvedValue({ count: 0 });
+
+    const assessment = await service.assessDraft('design-1', 'staff-1');
+
+    expect(assessment.totalWeightG).toBe(100);
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 4 },
+      data: expect.objectContaining({
+        totalWeightG: 100,
+        calculatedNutrition: assessment.nutrients,
+      }),
+    });
+    expect(prisma.designRecipe.update).not.toHaveBeenCalled();
   });
 
   it('keeps an untouched empty draft in draft state after automatic assessment', async () => {
@@ -2543,8 +2885,8 @@ describe('RecipeDesignerService', () => {
     );
 
     expect(assessment.totalWeightG).toBe(0);
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'empty-stage-design' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'empty-stage-design', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 0,
         status: 'DRAFT',
@@ -2567,8 +2909,8 @@ describe('RecipeDesignerService', () => {
 
     expect(assessment.groupedEntries.length).toBeGreaterThan(0);
     expect(assessment).not.toHaveProperty('entries');
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         complianceStatus: assessment.groupedEntries,
         assessmentSummary: expect.objectContaining({
@@ -2576,6 +2918,90 @@ describe('RecipeDesignerService', () => {
         }),
       }),
     });
+  });
+
+  it('warns when an explicit supplement target remains sufficient after removing the supplement', async () => {
+    const cholineSupplement = {
+      id: 'ingredient-choline',
+      name: '胆碱片',
+      type: 'SUPPLEMENT',
+      unitDisplayLabel: '片',
+      purchaseUnit: '片',
+      properties: null,
+    };
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [
+          item({
+            id: 'food-item-1',
+            nutritionFood: {
+              ...item().nutritionFood,
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                vitamins: { choline: 60 },
+              },
+            },
+          }),
+          item({
+            id: 'supplement-choline-item',
+            ingredientId: 'ingredient-choline',
+            weightG: 1,
+            ingredient: cholineSupplement,
+            supplementTargets: [
+              {
+                fieldPath: 'vitamins.choline',
+                label: '胆碱',
+                unit: 'mg',
+              },
+            ],
+            nutritionFood: {
+              id: 'food-choline',
+              name: '胆碱片',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: { choline: 1000 },
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'ingredient-choline',
+                  isPrimary: true,
+                  ingredient: cholineSupplement,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'choline',
+        label: '胆碱',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 425,
+        maxValue: null,
+        fieldPaths: ['vitamins.choline'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(draft());
+
+    const assessment = await service.assessDraft('design-1', 'staff-1');
+
+    expect(assessment.removableSupplementWarnings).toEqual([
+      expect.objectContaining({
+        itemId: 'supplement-choline-item',
+        itemName: '胆碱片',
+        targetLabels: ['胆碱'],
+      }),
+    ]);
+    expect(assessment).not.toHaveProperty('entries');
   });
 
   it('excludes disabled draft items from nutrition assessment without deleting them', async () => {
@@ -2624,8 +3050,8 @@ describe('RecipeDesignerService', () => {
       'item-included',
     ]);
     expect(assessment.nutrients.calcium.per1000Kcal).toBeLessThan(5000);
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         totalWeightG: 100,
       }),
@@ -2790,8 +3216,8 @@ describe('RecipeDesignerService', () => {
 
     expect(assessment.energyDensityKcalPerKg).toBeNull();
     expect(assessment.overallStatus).toBe('INCOMPLETE');
-    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-      where: { id: 'design-1' },
+    expect(prisma.designRecipe.updateMany).toHaveBeenCalledWith({
+      where: { id: 'design-1', contentRevision: 0 },
       data: expect.objectContaining({
         energyDensityKcalPerKg: null,
         assessmentSummary: expect.objectContaining({
@@ -3024,6 +3450,13 @@ describe('RecipeDesignerService', () => {
               name: '碳酸钙粉',
               type: 'SUPPLEMENT',
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-calcium',
               name: '碳酸钙粉',
@@ -3127,7 +3560,7 @@ describe('RecipeDesignerService', () => {
         nutrientTargetKey: 'magnesium',
         nutrientTargetValue: 0.2,
       }),
-      include: expect.any(Object),
+      select: expect.any(Object),
     });
   });
 
@@ -3439,6 +3872,62 @@ describe('RecipeDesignerService', () => {
           'https://img.sevenkitchen.cloud/recipes/oat-cod-pork-cover.jpg',
         coverTitle: '燕麦鳕鱼猪肉',
       }),
+    });
+  });
+
+  it('assigns the next design version when publishing with an existing final name', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'senior-series-copy',
+        name: '小米鳕鱼鸡胸 低能量需求成年犬（95ME）副本',
+        version: 1,
+        isCompliant: true,
+        seriesId: 'series-xiaomi-copy',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.findFirst.mockResolvedValue(null);
+    prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 5 } });
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-senior-v1',
+      recipeId: 'senior-series-copy',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-senior-v1',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({
+        id: 'senior-series-copy',
+        name: '小米鳕鱼鸡胸',
+        version: 6,
+        status: 'PUBLISHED',
+        publishedRecipeId: 'senior-series-copy',
+        publishedRecipeVersion: 1,
+      }),
+    );
+
+    await service.publishDraft(
+      'senior-series-copy',
+      { name: '小米鳕鱼鸡胸' },
+      adminAccess,
+    );
+
+    expect(prisma.designRecipe.aggregate).toHaveBeenCalledWith({
+      where: { name: '小米鳕鱼鸡胸' },
+      _max: { version: true },
+    });
+    expect(prisma.designRecipe.update).toHaveBeenLastCalledWith({
+      where: { id: 'senior-series-copy' },
+      data: expect.objectContaining({
+        name: '小米鳕鱼鸡胸',
+        version: 6,
+        status: 'PUBLISHED',
+      }),
+      include: expect.any(Object),
     });
   });
 
@@ -4049,6 +4538,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-calcium',
               name: '鸡蛋壳粉',
@@ -4121,6 +4617,122 @@ describe('RecipeDesignerService', () => {
     expect(supplementItem.nutrientTargetValue).toBe(expectedTargetValue);
     expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
       expectedTargetValue,
+    );
+  });
+
+  it('publishes explicit supplement targets even when removing the supplement keeps the nutrient compliant', async () => {
+    const cholineSupplement = {
+      id: 'supplement-choline',
+      name: '胆碱片',
+      type: 'SUPPLEMENT',
+      unitDisplayLabel: '片',
+      purchaseUnit: '片',
+      properties: null,
+    };
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-item-1',
+            ingredientId: 'ingredient-1',
+            weightG: 100,
+            nutritionFood: {
+              id: 'food-1',
+              name: '胆碱充足基础食材',
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                vitamins: { choline: 60 },
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+          item({
+            id: 'supplement-choline-item',
+            ingredientId: 'supplement-choline',
+            weightG: 1,
+            nutrientTargetKey: 'choline',
+            nutrientTargetValue: 425,
+            supplementTargets: [
+              {
+                fieldPath: 'vitamins.choline',
+                label: '胆碱',
+                unit: 'mg',
+              },
+            ],
+            ingredient: cholineSupplement,
+            nutritionFood: {
+              id: 'food-supplement-choline',
+              name: '胆碱片',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: { choline: 1000 },
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-choline',
+                  isPrimary: true,
+                  ingredient: cholineSupplement,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'choline',
+        label: '胆碱',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 425,
+        maxValue: null,
+        fieldPaths: ['vitamins.choline'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { name: '小米鳕鱼鸡胸' },
+      adminAccess,
+    );
+
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-choline',
+    );
+
+    expect(supplementItem).toEqual(
+      expect.objectContaining({
+        nutrientTargetKey: 'choline',
+        nutrientTargetValue: Math.round((10 / 101) * 1000),
+        supplementTargets: [
+          expect.objectContaining({
+            fieldPath: 'vitamins.choline',
+            label: '胆碱',
+            unit: 'mg',
+            targetValuePerKg: Math.round((10 / 101) * 1000),
+          }),
+        ],
+      }),
     );
   });
 
@@ -4222,6 +4834,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-calcium',
               name: '鸡蛋壳粉',
@@ -4261,6 +4880,13 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.iodine',
+                label: '碘',
+                unit: 'μg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-iodine',
               name: '海藻粉',
@@ -4352,7 +4978,7 @@ describe('RecipeDesignerService', () => {
     expect(iodineTarget.targetValuePerKg).toBe(Math.round((300 / 102) * 1000));
   });
 
-  it('keeps only deficient nutrients when publishing a multi-nutrient supplement target', async () => {
+  it('publishes every explicit target for a multi-nutrient supplement', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4385,6 +5011,18 @@ describe('RecipeDesignerService', () => {
               purchaseUnit: 'g',
               properties: null,
             },
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+              {
+                fieldPath: 'minerals.zinc',
+                label: '锌',
+                unit: 'mg',
+              },
+            ],
             nutritionFood: {
               id: 'food-supplement-multi',
               name: '复合矿物粉',
@@ -4458,18 +5096,30 @@ describe('RecipeDesignerService', () => {
       (createdItem: any) => createdItem.ingredientId === 'supplement-multi',
     );
 
-    expect(supplementItem.supplementTargets).toHaveLength(1);
-    expect(supplementItem.supplementTargets[0]).toMatchObject({
-      fieldPath: 'minerals.zinc',
-      label: '锌',
-      unit: 'mg',
-    });
-    expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
-      Math.round((30 / 101) * 1000),
+    expect(supplementItem.supplementTargets).toHaveLength(2);
+    expect(supplementItem.supplementTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: 'minerals.calcium',
+          label: '钙',
+          unit: 'mg',
+          targetValuePerKg: Math.round((10 / 101) * 1000),
+        }),
+        expect.objectContaining({
+          fieldPath: 'minerals.zinc',
+          label: '锌',
+          unit: 'mg',
+          targetValuePerKg: Math.round((30 / 101) * 1000),
+        }),
+      ]),
     );
+    expect(supplementItem).toMatchObject({
+      nutrientTargetKey: 'zinc',
+      nutrientTargetValue: Math.round((30 / 101) * 1000),
+    });
   });
 
-  it('infers supplement nutrient targets from assessment contribution when designer target context is missing', async () => {
+  it('publishes a missing supplement target when removing the supplement creates one nutrient deficiency', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
         isCompliant: true,
@@ -4545,7 +5195,7 @@ describe('RecipeDesignerService', () => {
 
     await service.publishDraft(
       'design-1',
-      { name: '补剂目标推断食谱', reviewNote: '补剂目标推断回归测试' },
+      { name: '补剂目标自动归因食谱', reviewNote: '补剂目标自动归因回归测试' },
       adminAccess,
     );
 
@@ -4558,20 +5208,257 @@ describe('RecipeDesignerService', () => {
     expect(supplementItem).toEqual(
       expect.objectContaining({
         nutrientTargetKey: 'calcium',
-        nutrientTargetValue: expect.any(Number),
+        nutrientTargetValue: expectedTargetValue,
         supplementTargets: [
           expect.objectContaining({
             fieldPath: 'minerals.calcium',
             label: '钙',
-            targetValuePerKg: expect.any(Number),
             unit: 'mg',
+            targetValuePerKg: expectedTargetValue,
           }),
         ],
       }),
     );
-    expect(supplementItem.nutrientTargetValue).toBe(expectedTargetValue);
-    expect(supplementItem.supplementTargets[0].targetValuePerKg).toBe(
-      expectedTargetValue,
+  });
+
+  it('rejects publishing when a missing supplement target cannot be attributed to one nutrient gap', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item(),
+          item({
+            id: 'supplement-fiber-item',
+            ingredientId: 'supplement-fiber',
+            weightG: 1,
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            ingredient: {
+              id: 'supplement-fiber',
+              name: '洋车前子壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-fiber',
+              name: '洋车前子壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0, fiber: 80 },
+                minerals: {},
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-fiber',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-fiber',
+                    name: '洋车前子壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { name: '功能性补剂食谱', reviewNote: '功能性补剂缺少营养目标' },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「洋车前子壳粉」缺少营养目标，请在食谱编辑器中从营养评估项添加补剂后再发布',
+      ),
+    );
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects publishing when an explicit supplement target has no nutrition profile amount', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item(),
+          item({
+            id: 'supplement-item-1',
+            ingredientId: 'supplement-calcium',
+            weightG: 1,
+            nutrientTargetKey: 'calcium',
+            nutrientTargetValue: 500,
+            supplementTargets: [
+              {
+                fieldPath: 'minerals.calcium',
+                label: '钙',
+                unit: 'mg',
+              },
+            ],
+            ingredient: {
+              id: 'supplement-calcium',
+              name: '鸡蛋壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-calcium',
+              name: '鸡蛋壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: {},
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-calcium',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-calcium',
+                    name: '鸡蛋壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        {
+          name: '补剂营养档案缺失食谱',
+          reviewNote: '补剂营养档案缺失回归测试',
+        },
+        adminAccess,
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        '补剂原料「鸡蛋壳粉」的营养档案缺少钙数据，无法生成营养目标',
+      ),
+    );
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+  });
+
+  it('uses removal attribution instead of trusting legacy nutrient target fields during publish', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-item-1',
+            ingredientId: 'ingredient-1',
+            weightG: 100,
+            nutritionFood: {
+              id: 'food-1',
+              name: '低钙基础食材',
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                minerals: { calcium: 0, phosphorus: 500 },
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+          item({
+            id: 'supplement-item-1',
+            ingredientId: 'supplement-calcium',
+            weightG: 1,
+            nutrientTargetKey: 'magnesium',
+            nutrientTargetValue: 999,
+            ingredient: {
+              id: 'supplement-calcium',
+              name: '鸡蛋壳粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-calcium',
+              name: '鸡蛋壳粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: { energyKcal: 0 },
+                minerals: { calcium: 38000 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-calcium',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-calcium',
+                    name: '鸡蛋壳粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { name: '旧字段目标食谱', reviewNote: '旧字段按缺口归因' },
+      adminAccess,
+    );
+
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-calcium',
+    );
+    const expectedTargetValue = Math.round((380 / 101) * 1000);
+
+    expect(supplementItem).toEqual(
+      expect.objectContaining({
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: expectedTargetValue,
+        supplementTargets: [
+          expect.objectContaining({
+            fieldPath: 'minerals.calcium',
+            targetValuePerKg: expectedTargetValue,
+          }),
+        ],
+      }),
     );
   });
 
@@ -4852,6 +5739,7 @@ describe('RecipeDesignerService', () => {
       expect(tx.designRecipe.update).toHaveBeenCalledWith({
         where: { id: 'revision-draft' },
         data: expect.objectContaining({
+          contentRevision: { increment: 1 },
           status: 'DRAFT',
           name: baseline.name,
           fediafDogScenario: baseline.fediafDogScenario,
@@ -4893,6 +5781,26 @@ describe('RecipeDesignerService', () => {
         }),
         include: expect.any(Object),
       });
+
+      // A later assessment must CAS on the revision committed with the
+      // replacement, so an assessment started before the revert cannot write.
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'revision-draft',
+          contentRevision: 1,
+          createdBy: 'staff-1',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          items: [],
+        }),
+      );
+      targetProvider.getTargets.mockResolvedValue(compliantTargets());
+      await service.assessDraft('revision-draft', 'staff-1');
+      expect(prisma.designRecipe.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: 'revision-draft', contentRevision: 1 },
+        }),
+      );
     });
 
     it('allows an internal user to revert a series draft created by another internal user', async () => {
@@ -5231,7 +6139,11 @@ describe('RecipeDesignerService', () => {
       await expect(
         service.createSeries(
           { name: 'Star 的鲜食食谱', dogId: 'dog-other' } as any,
-          { userId: 'user-1', customerId: 'customer-1', role: 'CUSTOMER' } as any,
+          {
+            userId: 'user-1',
+            customerId: 'customer-1',
+            role: 'CUSTOMER',
+          } as any,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
 
@@ -5411,6 +6323,97 @@ describe('RecipeDesignerService', () => {
               ],
             },
           },
+        }),
+      );
+    });
+
+    it('uses compact recipe fields for the series workbench list', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-staff',
+          recipes: [
+            {
+              recipeId: 'recipe-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              updatedAt: new Date('2026-06-01T08:00:00.000Z'),
+            },
+          ],
+        }),
+      ]);
+
+      await service.listSeries({ userId: 'staff-1', role: 'STAFF' });
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            recipes: {
+              select: {
+                recipeId: true,
+                seriesLifeStage: true,
+                status: true,
+                updatedAt: true,
+              },
+              orderBy: { updatedAt: 'desc' },
+            },
+          }),
+        }),
+      );
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.include.recipes).not.toHaveProperty('include');
+      expect(query.include.recipes.select).not.toHaveProperty(
+        'nutritionDetailedData',
+      );
+      expect(query.include.recipes.select).not.toHaveProperty('detailImages');
+      expect(query.include.recipes.select).not.toHaveProperty('items');
+    });
+
+    it('paginates the series workbench query with the item fields needed for revision comparison', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-page-1' }),
+        seriesRecord({ id: 'series-page-2' }),
+        seriesRecord({ id: 'series-page-3' }),
+      ]);
+
+      await expect(
+        service.listSeries(
+          { userId: 'staff-1', role: 'STAFF' },
+          { page: 2, pageSize: 2 },
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          page: 2,
+          pageSize: 2,
+          hasMore: true,
+          items: expect.any(Array),
+        }),
+      );
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 2,
+          take: 3,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          include: expect.objectContaining({
+            designs: expect.objectContaining({
+              select: expect.objectContaining({
+                items: expect.objectContaining({
+                  select: expect.objectContaining({
+                    ingredientId: true,
+                    nutritionFoodId: true,
+                    weightG: true,
+                    includeInAssessment: true,
+                    preparationMethod: true,
+                    nutrientTargetKey: true,
+                    nutrientTargetValue: true,
+                    supplementTargets: true,
+                    sortOrder: true,
+                  }),
+                }),
+                _count: { select: { items: true } },
+              }),
+            }),
+          }),
         }),
       );
     });
@@ -6437,91 +7440,6 @@ describe('RecipeDesignerService', () => {
       });
     });
 
-    it('replaces an editable stage draft items from another same-series stage', async () => {
-      const sourceItem = item({
-        id: 'adult-source-item',
-        ingredientId: 'ingredient-adult',
-        nutritionFoodId: 'food-adult',
-        weightG: 128,
-        includeInAssessment: false,
-        ratioPercent: 64,
-        preparationMethod: 'STEAMED',
-        nutrientTargetKey: 'calcium',
-        nutrientTargetValue: 500,
-        sortOrder: 3,
-      });
-      prisma.designRecipe.findUnique
-        .mockResolvedValueOnce({
-          id: 'senior-design',
-          createdBy: 'staff-1',
-          status: 'DRAFT',
-          publishedRecipeId: null,
-          publishedAt: null,
-          seriesId: 'series-1',
-          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-        })
-        .mockResolvedValueOnce(
-          draft({
-            id: 'adult-design',
-            seriesId: 'series-1',
-            seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
-            status: 'COMPLIANT',
-            publishedRecipeId: null,
-            publishedAt: null,
-            items: [sourceItem],
-          }),
-        );
-      prisma.designRecipe.update.mockResolvedValue(
-        draft({
-          id: 'senior-design',
-          seriesId: 'series-1',
-          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
-          items: [sourceItem],
-        }),
-      );
-
-      await expect(
-        service.copyStageItemsToDraft(
-          'senior-design',
-          { sourceDraftId: 'adult-design' },
-          'staff-1',
-        ),
-      ).resolves.toEqual(
-        expect.objectContaining({
-          id: 'senior-design',
-          items: [expect.objectContaining({ id: 'adult-source-item' })],
-        }),
-      );
-
-      expect(prisma.designRecipe.update).toHaveBeenCalledWith({
-        where: { id: 'senior-design' },
-        data: expect.objectContaining({
-          calculatedNutrition: {},
-          complianceStatus: {},
-          assessmentSummary: {},
-          missingDataReport: [],
-          isCompliant: false,
-          items: {
-            deleteMany: {},
-            create: [
-              expect.objectContaining({
-                ingredientId: 'ingredient-adult',
-                nutritionFoodId: 'food-adult',
-                weightG: 128,
-                includeInAssessment: false,
-                ratioPercent: 64,
-                preparationMethod: 'STEAMED',
-                nutrientTargetKey: 'calcium',
-                nutrientTargetValue: 500,
-                sortOrder: 3,
-              }),
-            ],
-          },
-        }),
-        include: expect.any(Object),
-      });
-    });
-
     it('duplicates a whole recipe series into a new editable series without touching source drafts', async () => {
       const adultItem = item({
         id: 'adult-source-item',
@@ -6613,6 +7531,7 @@ describe('RecipeDesignerService', () => {
         expect.objectContaining({
           id: 'series-copy',
           name: '燕麦鳕鱼猪肉 副本',
+          initialDraftId: 'adult-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -6662,6 +7581,310 @@ describe('RecipeDesignerService', () => {
       });
       expect(prisma.designRecipe.update).not.toHaveBeenCalled();
       expect(prisma.designRecipe.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('overwrites an existing target stage draft with another same-series stage ingredient list', async () => {
+      const sourceItem = item({
+        id: 'adult-source-item',
+        ingredientId: 'ingredient-adult',
+        nutritionFoodId: 'food-adult',
+        weightG: 128,
+        includeInAssessment: true,
+        ratioPercent: 64,
+        preparationMethod: 'STEAMED',
+        nutrientTargetKey: 'calcium',
+        nutrientTargetValue: 500,
+        sortOrder: 1,
+      });
+      const oldTargetItem = item({
+        id: 'old-senior-item',
+        ingredientId: 'ingredient-old',
+        nutritionFoodId: 'food-old',
+        weightG: 40,
+        sortOrder: 0,
+      });
+      const targetDraft = draft({
+        id: 'senior-design',
+        name: '燕麦鳕鱼猪肉',
+        status: 'DRAFT',
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        items: [oldTargetItem],
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          createdBy: 'staff-1',
+          designs: [
+            draft({
+              id: 'adult-source-design',
+              name: '燕麦鳕鱼猪肉',
+              status: 'DRAFT',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [sourceItem],
+            }),
+            targetDraft,
+          ],
+          recipes: [],
+        }),
+      );
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({
+          ...targetDraft,
+          items: [sourceItem],
+          totalWeightG: 128,
+        }),
+      );
+
+      await expect(
+        service.copySeriesStageIngredients(
+          'series-1',
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-design',
+          items: [expect.objectContaining({ weightG: 128 })],
+        }),
+      );
+
+      expect(prisma.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: { designRecipeId: 'senior-design' },
+      });
+      expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+        where: { id: 'senior-design' },
+        data: expect.objectContaining({
+          status: 'DRAFT',
+          fediafDogScenario: 'ADULT_MER_95',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+          totalWeightG: 128,
+          energyDensityKcalPerKg: null,
+          calculatedNutrition: {},
+          complianceStatus: {},
+          assessmentSummary: {},
+          missingDataReport: [],
+          isCompliant: false,
+          reviewStatus: 'NONE',
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          items: {
+            create: [
+              expect.objectContaining({
+                ingredientId: 'ingredient-adult',
+                nutritionFoodId: 'food-adult',
+                weightG: 128,
+                includeInAssessment: true,
+                ratioPercent: 64,
+                preparationMethod: 'STEAMED',
+                nutrientTargetKey: 'calcium',
+                nutrientTargetValue: 500,
+                sortOrder: 1,
+              }),
+            ],
+          },
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipe.create).not.toHaveBeenCalled();
+    });
+
+    it('creates an editable target stage draft before copying when the target stage is not designed yet', async () => {
+      const sourceItem = item({
+        id: 'adult-source-item',
+        ingredientId: 'ingredient-adult',
+        nutritionFoodId: 'food-adult',
+        weightG: 128,
+        includeInAssessment: true,
+        ratioPercent: 64,
+        preparationMethod: 'STEAMED',
+        sortOrder: 1,
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          createdBy: 'staff-1',
+          designs: [
+            draft({
+              id: 'adult-source-design',
+              name: '燕麦鳕鱼猪肉',
+              status: 'DRAFT',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [sourceItem],
+            }),
+          ],
+          recipes: [],
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 4 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          status: 'DRAFT',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          items: [],
+        }),
+      );
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({
+          id: 'senior-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          totalWeightG: 128,
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.copySeriesStageIngredients(
+          'series-1',
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-design',
+          items: [expect.objectContaining({ weightG: 128 })],
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          status: 'DRAFT',
+          fediafDogScenario: 'ADULT_MER_95',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+          createdBy: 'staff-1',
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: { designRecipeId: 'senior-design' },
+      });
+    });
+
+    it('creates an editable revision draft before copying into a published target stage', async () => {
+      const sourceItem = item({
+        id: 'adult-source-item',
+        ingredientId: 'ingredient-adult',
+        nutritionFoodId: 'food-adult',
+        weightG: 128,
+        sortOrder: 1,
+      });
+      const publishedTarget = draft({
+        id: 'published-senior-design',
+        name: '燕麦鳕鱼猪肉',
+        status: 'PUBLISHED',
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        fediafDogScenario: 'ADULT_MER_95',
+        publishedRecipeId: 'senior-recipe-id',
+        publishedAt: new Date('2026-06-01T00:00:00.000Z'),
+        items: [item({ id: 'published-senior-item', weightG: 60 })],
+      });
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '燕麦鳕鱼猪肉',
+          createdBy: 'staff-1',
+          designs: [
+            draft({
+              id: 'adult-source-design',
+              name: '燕麦鳕鱼猪肉',
+              status: 'DRAFT',
+              seriesId: 'series-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              fediafDogScenario: 'ADULT_MER_110',
+              items: [sourceItem],
+            }),
+            publishedTarget,
+          ],
+          recipes: [],
+        }),
+      );
+      prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 4 } });
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({
+          id: 'senior-revision-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          revisionOfDesignRecipeId: 'published-senior-design',
+          revisionBaseRecipeId: 'senior-recipe-id',
+          items: [],
+        }),
+      );
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({
+          id: 'senior-revision-design',
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          fediafDogScenario: 'ADULT_MER_95',
+          revisionOfDesignRecipeId: 'published-senior-design',
+          revisionBaseRecipeId: 'senior-recipe-id',
+          items: [sourceItem],
+        }),
+      );
+
+      await expect(
+        service.copySeriesStageIngredients(
+          'series-1',
+          'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
+          'staff-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'senior-revision-design',
+          revisionBaseRecipeId: 'senior-recipe-id',
+          items: [expect.objectContaining({ weightG: 128 })],
+        }),
+      );
+
+      expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: '燕麦鳕鱼猪肉',
+          version: 5,
+          status: 'DRAFT',
+          fediafDogScenario: 'ADULT_MER_95',
+          seriesId: 'series-1',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          revisionOfDesignRecipeId: 'published-senior-design',
+          revisionBaseRecipeId: 'senior-recipe-id',
+          publishedRecipeId: null,
+          publishedRecipeVersion: null,
+        }),
+        include: expect.any(Object),
+      });
+      expect(prisma.designRecipeItem.deleteMany).toHaveBeenCalledWith({
+        where: { designRecipeId: 'senior-revision-design' },
+      });
     });
 
     it('duplicates an ordinary customer recipe as a dog-bound editable card', async () => {
@@ -6729,6 +7952,7 @@ describe('RecipeDesignerService', () => {
           id: 'series-dog-copy',
           name: 'Star 控重鸡肉餐 副本',
           customerDogId: 'dog-1',
+          initialDraftId: 'customer-copy-design',
           primaryDraftId: 'customer-copy-design',
           customerStatus: 'DRAFT',
         }),
@@ -6829,6 +8053,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'stage-copy-series',
+          initialDraftId: 'adult-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',
@@ -6871,6 +8096,17 @@ describe('RecipeDesignerService', () => {
         nutrientTargetValue: null,
         sortOrder: 2,
       };
+      const legacySupplementRecipeItem = {
+        id: 'recipe-item-supplement',
+        ingredientId: 'supplement-zinc',
+        nutritionFoodId: null,
+        exampleWeight: 0.1,
+        ratioPercent: null,
+        preparationMethod: null,
+        nutrientTargetKey: '锌',
+        nutrientTargetValue: 35,
+        sortOrder: 4,
+      };
       const ratioOnlyRecipeItem = {
         id: 'recipe-item-2',
         ingredientId: 'ingredient-ratio-only',
@@ -6904,7 +8140,11 @@ describe('RecipeDesignerService', () => {
               seriesId: 'series-1',
               seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
               updatedAt: new Date('2026-06-11T07:54:25.020Z'),
-              items: [recipeItem, ratioOnlyRecipeItem],
+              items: [
+                recipeItem,
+                ratioOnlyRecipeItem,
+                legacySupplementRecipeItem,
+              ],
             },
           ],
         }),
@@ -6927,6 +8167,10 @@ describe('RecipeDesignerService', () => {
         {
           ingredientId: 'ingredient-ratio-only',
           nutritionFoodId: 'food-ratio-only-from-mapping',
+        },
+        {
+          ingredientId: 'supplement-zinc',
+          nutritionFoodId: 'food-zinc-from-mapping',
         },
       ]);
       prisma.designRecipe.create.mockResolvedValue(
@@ -6956,6 +8200,17 @@ describe('RecipeDesignerService', () => {
               preparationMethod: 'RAW',
               sortOrder: 3,
             }),
+            item({
+              id: 'copied-item-supplement',
+              ingredientId: 'supplement-zinc',
+              nutritionFoodId: 'food-zinc-from-mapping',
+              weightG: 0.1,
+              ratioPercent: null,
+              preparationMethod: null,
+              nutrientTargetKey: '锌',
+              nutrientTargetValue: 35,
+              sortOrder: 4,
+            }),
           ],
         }),
       );
@@ -6969,6 +8224,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'stage-copy-series',
+          initialDraftId: 'senior-copy-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
@@ -7004,6 +8260,23 @@ describe('RecipeDesignerService', () => {
                 ratioPercent: 7.5,
                 preparationMethod: 'RAW',
                 sortOrder: 3,
+              }),
+              expect.objectContaining({
+                ingredientId: 'supplement-zinc',
+                nutritionFoodId: 'food-zinc-from-mapping',
+                weightG: 0.1,
+                nutrientTargetKey: '锌',
+                nutrientTargetValue: 35,
+                supplementTargets: [
+                  expect.objectContaining({
+                    fieldPath: 'minerals.zinc',
+                    nutrientTargetKey: 'zinc',
+                    label: '锌',
+                    unit: 'mg',
+                    targetValue: 35,
+                  }),
+                ],
+                sortOrder: 4,
               }),
             ],
           },
@@ -7043,6 +8316,7 @@ describe('RecipeDesignerService', () => {
       ).resolves.toEqual(
         expect.objectContaining({
           id: 'series-1',
+          initialDraftId: 'adult-design',
           stages: expect.arrayContaining([
             expect.objectContaining({
               lifeStage: 'HIGH_ACTIVITY_ADULT',

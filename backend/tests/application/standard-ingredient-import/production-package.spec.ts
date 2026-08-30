@@ -6,6 +6,7 @@ import type {
   IngredientImportManifest,
   LocalIngredientImportAudit,
 } from 'src/application/standard-ingredient-import';
+import { buildProductionPackageManifestHash } from 'src/application/standard-ingredient-import/local-ingredient-import';
 
 describe('buildProductionMigrationPackage', () => {
   it('refuses export without production-package confirmation', async () => {
@@ -27,6 +28,45 @@ describe('buildProductionMigrationPackage', () => {
     });
   });
 
+  it('refuses export without a passing production DB alignment report', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          dbAlignmentReport: {
+            id: '',
+            status: 'not-run',
+          },
+        }),
+        localImportAudit: makeAudit(),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCTION_DB_ALIGNMENT_REQUIRED',
+    });
+  });
+
+  it('refuses export when the manifest is still a local draft', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          operationMode: 'local-draft',
+          operatorConfirmation: {
+            localWriteApproved: true,
+            productionPackageApproved: false,
+          },
+        }),
+        localImportAudit: makeAudit(),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCTION_PACKAGE_MODE_REQUIRED',
+    });
+  });
+
   it('refuses export when local apply audit is missing', async () => {
     await expect(
       buildProductionMigrationPackage({
@@ -39,10 +79,67 @@ describe('buildProductionMigrationPackage', () => {
     ).rejects.toMatchObject({ code: 'LOCAL_IMPORT_AUDIT_REQUIRED' });
   });
 
+  it('refuses export when the local audit was created from different manifest content', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          ingredient: {
+            type: 'FOOD',
+            name: 'Duck egg changed after local apply',
+            tagIds: ['tag-egg'],
+          },
+        }),
+        localImportAudit: makeAudit(),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'LOCAL_IMPORT_AUDIT_MANIFEST_MISMATCH',
+    });
+  });
+
+  it('refuses export when the local audit did not record passing DB alignment', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest(),
+        localImportAudit: makeAudit({
+          alignmentId: null,
+          dbAlignmentStatus: 'not-required-for-local',
+        }),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'LOCAL_IMPORT_AUDIT_ALIGNMENT_REQUIRED',
+    });
+  });
+
+  it('refuses export when the local audit alignment differs from the manifest', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest(),
+        localImportAudit: makeAudit({
+          alignmentId: 'stale-alignment',
+        }),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'LOCAL_IMPORT_AUDIT_ALIGNMENT_MISMATCH',
+    });
+  });
+
   it('emits package files containing only records listed in the local audit', async () => {
     const writes: Record<string, string> = {};
     const writePackageFile = jest.fn(
-      async (_outputDir: string, fileName: keyof ProductionMigrationPackageFiles, body: string) => {
+      async (
+        _outputDir: string,
+        fileName: keyof ProductionMigrationPackageFiles,
+        body: string,
+      ) => {
         writes[fileName] = body;
       },
     );
@@ -67,11 +164,30 @@ describe('buildProductionMigrationPackage', () => {
     expect(result.files.downSql).toContain('DELETE FROM ingredient');
     expect(result.files.reviewSummary).toContain('Duck egg');
     expect(result.files.reviewSummary).toContain('Unit audit');
-    expect(writes['manifest.json']).toContain('"wholeDatabaseMigration": false');
+    expect(writes['manifest.json']).toContain(
+      '"wholeDatabaseMigration": false',
+    );
+    expect(writes['manifest.json']).toContain('"packageManifestHash"');
     expect(writes['up.sql']).toBe(result.files.upSql);
   });
 
-  it('serializes Decimal-like numeric values as SQL numerics', async () => {
+  it('refuses export when rows listed in the local audit are missing', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma({
+          nutritionFoods: [],
+        }),
+        manifest: makeFoodProductionManifest(),
+        localImportAudit: makeAudit(),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'LOCAL_IMPORT_AUDIT_RECORDS_MISSING',
+    });
+  });
+
+  it('emits Prisma Decimal values as numeric SQL literals', async () => {
     const result = await buildProductionMigrationPackage({
       prisma: makePrisma({
         ingredients: [
@@ -79,9 +195,8 @@ describe('buildProductionMigrationPackage', () => {
             id: 'ingredient-1',
             name: 'Duck egg',
             type: 'FOOD',
-            currentPricePerPurchaseUnit: {
-              toJSON: () => '0',
-            },
+            currentPricePerPurchaseUnit: decimalLike('0'),
+            effectivePricePerPurchaseUnit: decimalLike('12.34'),
           },
         ],
       }),
@@ -91,8 +206,52 @@ describe('buildProductionMigrationPackage', () => {
       writePackageFile: jest.fn(),
     });
 
-    expect(result.files.upSql).toContain("current_price_per_purchase_unit");
-    expect(result.files.upSql).not.toContain("'\"0\"'");
+    expect(result.files.upSql).toContain("VALUES (0, 12.34, 'ingredient-1'");
+    expect(result.files.upSql).not.toContain('\'"0"\'');
+    expect(result.files.upSql).not.toContain('\'"12.34"\'');
+  });
+
+  it('emits Decimal JSON values as unquoted SQL numerics', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: { toJSON: () => '0' },
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("VALUES (0, 'ingredient-1'");
+    expect(result.files.upSql).not.toContain('\'"0"\'');
+  });
+
+  it('emits invalid Decimal JSON values as NULL', async () => {
+    const result = await buildProductionMigrationPackage({
+      prisma: makePrisma({
+        ingredients: [
+          {
+            id: 'ingredient-1',
+            name: 'Duck egg',
+            type: 'FOOD',
+            currentPricePerPurchaseUnit: { toJSON: () => 'Infinity' },
+          },
+        ],
+      }),
+      manifest: makeFoodProductionManifest(),
+      localImportAudit: makeAudit(),
+      outputDir: '/tmp/package',
+      writePackageFile: jest.fn(),
+    });
+
+    expect(result.files.upSql).toContain("VALUES (NULL, 'ingredient-1'");
   });
 
   it('includes FOOD-related records in deterministic parent-before-child order', async () => {
@@ -117,7 +276,9 @@ describe('buildProductionMigrationPackage', () => {
     expect(upSql.indexOf('INSERT INTO ingredient_tag_assignment')).toBeLessThan(
       upSql.indexOf('INSERT INTO procurement_sku'),
     );
-    expect(result.files.downSql.indexOf('DELETE FROM procurement_sku')).toBeLessThan(
+    expect(
+      result.files.downSql.indexOf('DELETE FROM procurement_sku'),
+    ).toBeLessThan(
       result.files.downSql.indexOf('DELETE FROM ingredient_tag_assignment'),
     );
   });
@@ -125,10 +286,15 @@ describe('buildProductionMigrationPackage', () => {
   it('omits procurement SKU records for SUPPLEMENT packages and reports evidence status', async () => {
     const result = await buildProductionMigrationPackage({
       prisma: makePrisma({
-        procurementSkus: [{ id: 'procurement-sku-1', ingredientId: 'ingredient-1' }],
+        procurementSkus: [
+          { id: 'procurement-sku-1', ingredientId: 'ingredient-1' },
+        ],
       }),
       manifest: makeSupplementProductionManifest(),
       localImportAudit: makeAudit({
+        packageManifestHash: buildProductionPackageManifestHash(
+          makeSupplementProductionManifest(),
+        ),
         procurementSkuIds: [],
         nutritionFoodIds: [],
         nutritionFoodMappingIds: [],
@@ -138,9 +304,37 @@ describe('buildProductionMigrationPackage', () => {
     });
 
     expect(result.files.upSql).not.toContain('INSERT INTO procurement_sku');
-    expect(result.files.reviewSummary).toContain('Supplement evidence: present');
+    expect(result.files.reviewSummary).toContain(
+      'Supplement evidence: present',
+    );
+  });
+
+  it('refuses production packages for existing-ingredient updates', async () => {
+    await expect(
+      buildProductionMigrationPackage({
+        prisma: makePrisma(),
+        manifest: makeFoodProductionManifest({
+          updateExistingIngredientId: 'existing-ingredient',
+        }),
+        localImportAudit: makeAudit({
+          ingredientIds: ['existing-ingredient'],
+        }),
+        outputDir: '/tmp/package',
+        writePackageFile: jest.fn(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRODUCTION_PACKAGE_UPDATE_EXISTING_FORBIDDEN',
+    });
   });
 });
+
+function decimalLike(value: string) {
+  return {
+    decimalPlaces: () => (value.split('.')[1] ?? '').length,
+    toJSON: () => value,
+    toString: () => value,
+  };
+}
 
 function makeFoodProductionManifest(
   overrides: Partial<IngredientImportManifest> = {},
@@ -168,7 +362,20 @@ function makeFoodProductionManifest(
         isPrimary: true,
       },
     ],
-    sourceCandidates: [{ sourceId: 'USDA:123', sourceName: 'USDA FDC' }],
+    sourceCandidates: [
+      {
+        sourceId: 'USDA_FDC:123',
+        sourceName: 'USDA FDC',
+        source: 'USDA_FDC',
+        matchedName: 'Duck egg, raw',
+        stateTags: ['raw'],
+        essentialCoveragePercent: 88,
+      },
+    ],
+    dbAlignmentReport: {
+      id: 'production-alignment-ok',
+      status: 'passing',
+    },
     operatorConfirmation: {
       localWriteApproved: false,
       productionPackageApproved: true,
@@ -193,6 +400,10 @@ function makeSupplementProductionManifest(): IngredientImportManifest {
     supplementLabel: {
       servingSize: '1 capsule',
     },
+    dbAlignmentReport: {
+      id: 'production-alignment-ok',
+      status: 'passing',
+    },
     operatorConfirmation: {
       localWriteApproved: false,
       productionPackageApproved: true,
@@ -206,8 +417,12 @@ function makeAudit(
   return {
     version: 1,
     createdAt: '2026-06-16T08:00:00.000Z',
-    alignmentId: 'alignment-ok',
+    alignmentId: 'production-alignment-ok',
+    dbAlignmentStatus: 'passing',
     manifestHash: 'manifest-hash',
+    packageManifestHash: buildProductionPackageManifestHash(
+      makeFoodProductionManifest(),
+    ),
     ingredientIds: ['ingredient-1'],
     nutritionFoodIds: ['nutrition-food-1'],
     nutritionFoodMappingIds: ['mapping-1'],
@@ -236,18 +451,22 @@ function makePrisma(
 ) {
   return {
     ingredient: {
-      findMany: jest.fn().mockResolvedValue(
-        overrides.ingredients ?? [
-          { id: 'ingredient-1', name: 'Duck egg', type: 'FOOD' },
-        ],
-      ),
+      findMany: jest
+        .fn()
+        .mockResolvedValue(
+          overrides.ingredients ?? [
+            { id: 'ingredient-1', name: 'Duck egg', type: 'FOOD' },
+          ],
+        ),
     },
     nutritionFood: {
-      findMany: jest.fn().mockResolvedValue(
-        overrides.nutritionFoods ?? [
-          { id: 'nutrition-food-1', name: 'Duck egg raw profile' },
-        ],
-      ),
+      findMany: jest
+        .fn()
+        .mockResolvedValue(
+          overrides.nutritionFoods ?? [
+            { id: 'nutrition-food-1', name: 'Duck egg raw profile' },
+          ],
+        ),
     },
     nutritionFoodMapping: {
       findMany: jest.fn().mockResolvedValue(

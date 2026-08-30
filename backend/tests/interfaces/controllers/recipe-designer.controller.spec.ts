@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { validate } from 'class-validator';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
@@ -7,6 +8,7 @@ import { SupplementLabelExtractionService } from '../../../src/application/recip
 import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
+import { UpdateRecipeDesignItemOrderDto } from '../../../src/interfaces/dto/recipe-designer/recipe-designer.dto';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('RecipeDesignerController authorization', () => {
@@ -107,6 +109,18 @@ describe('RecipeDesignerController authorization', () => {
 
     expect(dtoSource).toContain('sourceDraftId?: string');
   });
+
+  it('accepts an empty item ordering but rejects a non-array itemIds body', async () => {
+    const emptyOrder = new UpdateRecipeDesignItemOrderDto();
+    emptyOrder.itemIds = [];
+    const malformedOrder = new UpdateRecipeDesignItemOrderDto();
+    (malformedOrder as any).itemIds = 'item-1';
+
+    await expect(validate(emptyOrder)).resolves.toEqual([]);
+    await expect(validate(malformedOrder)).resolves.toEqual([
+      expect.objectContaining({ property: 'itemIds' }),
+    ]);
+  });
 });
 
 describe('RecipeDesignerController', () => {
@@ -124,11 +138,13 @@ describe('RecipeDesignerController', () => {
     deleteSeries: jest.fn(),
     createSeriesStageDraft: jest.fn(),
     duplicateSeriesStage: jest.fn(),
-    copyStageItemsToDraft: jest.fn(),
+    copySeriesStageIngredients: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
     addItem: jest.fn(),
     updateItem: jest.fn(),
+    reorderItems: jest.fn(),
+    updateItemOrder: jest.fn(),
     removeItem: jest.fn(),
     assessDraft: jest.fn(),
     publishDraft: jest.fn(),
@@ -246,7 +262,9 @@ describe('RecipeDesignerController', () => {
     service.createSeriesStageDraft.mockResolvedValue({ id: 'design-1' });
     service.duplicateSeries.mockResolvedValue({ id: 'series-copy' });
     service.duplicateSeriesStage.mockResolvedValue({ id: 'stage-copy' });
-    service.copyStageItemsToDraft.mockResolvedValue({ id: 'design-1' });
+    service.copySeriesStageIngredients.mockResolvedValue({
+      id: 'target-stage-draft',
+    });
 
     await expect(controller.listSeries({}, currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'series-1' }] }),
@@ -298,9 +316,10 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
     await expect(
-      controller.copyStageItemsToDraft(
-        'design-1',
-        { sourceDraftId: 'adult-design' },
+      controller.copySeriesStageIngredients(
+        'series-1',
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
         currentUser,
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
@@ -372,9 +391,10 @@ describe('RecipeDesignerController', () => {
         role: 'STAFF',
       },
     );
-    expect(service.copyStageItemsToDraft).toHaveBeenCalledWith(
-      'design-1',
-      { sourceDraftId: 'adult-design' },
+    expect(service.copySeriesStageIngredients).toHaveBeenCalledWith(
+      'series-1',
+      'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      { sourceLifeStage: 'HIGH_ACTIVITY_ADULT' },
       {
         userId: 'staff-1',
         role: 'STAFF',
@@ -606,6 +626,7 @@ describe('RecipeDesignerController', () => {
   it('delegates item mutations, assessment, and publish with CurrentUser ids', async () => {
     service.addItem.mockResolvedValue({ id: 'item-1' });
     service.updateItem.mockResolvedValue({ id: 'item-1', weightG: 120 });
+    service.reorderItems.mockResolvedValue({ updatedCount: 2 });
     service.removeItem.mockResolvedValue({ id: 'item-1' });
     service.assessDraft.mockResolvedValue({ overallStatus: 'COMPLIANT' });
     service.publishDraft.mockResolvedValue({ status: 'PUBLISHED' });
@@ -620,6 +641,16 @@ describe('RecipeDesignerController', () => {
       currentUser,
     );
     await controller.updateItem('item-1', { weightG: 120 }, currentUser);
+    await controller.reorderItems(
+      'design-1',
+      {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
+      currentUser,
+    );
     await controller.removeItem('item-1', currentUser);
     await controller.assessDraft('design-1', currentUser);
     await controller.publishDraft(
@@ -648,6 +679,19 @@ describe('RecipeDesignerController', () => {
         role: 'STAFF',
       },
     );
+    expect(service.reorderItems).toHaveBeenCalledWith(
+      'design-1',
+      {
+        items: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      },
+      {
+        userId: 'staff-1',
+        role: 'STAFF',
+      },
+    );
     expect(service.removeItem).toHaveBeenCalledWith('item-1', {
       userId: 'staff-1',
       role: 'STAFF',
@@ -663,6 +707,35 @@ describe('RecipeDesignerController', () => {
         userId: 'staff-1',
         role: 'STAFF',
       },
+    );
+  });
+
+  it('delegates a full item ordering to the service with the current user access context', async () => {
+    service.updateItemOrder.mockResolvedValue([
+      { id: 'item-2', sortOrder: 0 },
+      { id: 'item-1', sortOrder: 1 },
+    ]);
+
+    await expect(
+      (controller as any).updateItemOrder(
+        'design-1',
+        { itemIds: ['item-2', 'item-1'] },
+        currentUser,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: [
+          { id: 'item-2', sortOrder: 0 },
+          { id: 'item-1', sortOrder: 1 },
+        ],
+      }),
+    );
+
+    expect(service.updateItemOrder).toHaveBeenCalledWith(
+      'design-1',
+      ['item-2', 'item-1'],
+      { userId: 'staff-1', role: 'STAFF' },
     );
   });
 });

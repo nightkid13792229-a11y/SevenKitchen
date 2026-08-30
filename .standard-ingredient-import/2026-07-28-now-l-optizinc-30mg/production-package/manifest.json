@@ -5,9 +5,10 @@
   "ingredientType": "SUPPLEMENT",
   "ingredientName": "NOW Foods L-OptiZinc 锌 30mg 素食胶囊",
   "localImportAudit": {
-    "createdAt": "2026-07-28T06:30:32.186Z",
+    "createdAt": "2026-08-04T15:16:47.549Z",
     "alignmentId": "bbc7c848e5b2",
-    "manifestHash": "54dca03ff1aa2055302adee0d339e79f85aa8c417a5c714982fab508827d543d"
+    "manifestHash": "54dca03ff1aa2055302adee0d339e79f85aa8c417a5c714982fab508827d543d",
+    "packageManifestHash": "d6f2b1e42b6d61659bd6ebac6579b70634314d9ec7567b97d95a99ed15c3d370"
   },
   "recordCounts": {
     "ingredient": 1,
@@ -18,13 +19,13 @@
   },
   "ids": {
     "ingredientIds": [
-      "65c2b45f-bae2-47e8-a7e1-7aa3c347dd4b"
+      "1456a2f8-1016-48a1-b276-c51ca9df7d22"
     ],
     "nutritionFoodIds": [
-      "98f0055d-8048-4284-8d4a-0f01478a9bdd"
+      "f9580744-389a-4c76-9103-93a8d9a77535"
     ],
     "nutritionFoodMappingIds": [
-      "832de39e-2661-4898-b4a1-857669cd0b90"
+      "fdc251ca-c618-4049-8a56-44852d662831"
     ],
     "ingredientTagAssignmentIds": [],
     "procurementSkuIds": []

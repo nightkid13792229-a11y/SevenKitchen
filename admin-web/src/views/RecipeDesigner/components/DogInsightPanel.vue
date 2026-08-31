@@ -416,8 +416,32 @@ const dogOptions = ref<DogProfile[]>([])
 const dogLoading = ref(false)
 const savingDog = ref(false)
 
+/** 重名狗狗的区分：姓名 + 品种 + 性别 + 体重 + 年龄 */
 function dogLabel(dog: DogProfile): string {
-  return dog.name || '未命名'
+  const parts: string[] = [dog.name || '未命名']
+  const breed = dog.breedName || dog.customBreedName
+  if (breed) parts.push(breed)
+  if (dog.gender) parts.push(DogGenderLabels[dog.gender])
+  if (dog.currentWeightKg) parts.push(`${dog.currentWeightKg}kg`)
+  const ageText = dogAgeText(dog.birthday)
+  if (ageText) parts.push(ageText)
+  return parts.filter(Boolean).join(' · ')
+}
+
+/** 从出生日期计算年龄文本（岁/月） */
+function dogAgeText(birthday?: string): string {
+  if (!birthday) return ''
+  const birth = new Date(birthday)
+  const now = new Date()
+  if (Number.isNaN(birth.getTime()) || birth > now) return ''
+  const months =
+    (now.getFullYear() - birth.getFullYear()) * 12 +
+    (now.getMonth() - birth.getMonth())
+  if (months < 0) return ''
+  if (months < 12) return `${months} 个月`
+  const years = Math.floor(months / 12)
+  const remMonths = months % 12
+  return remMonths ? `${years} 岁 ${remMonths} 个月` : `${years} 岁`
 }
 
 async function searchDogs(keyword: string) {

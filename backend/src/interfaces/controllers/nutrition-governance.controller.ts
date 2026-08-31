@@ -187,31 +187,41 @@ export class NutritionGovernanceController {
   }
 
   @Get('agent-settings')
-  @ApiOperation({ summary: '获取营养治理 Agent 设置' })
+  @ApiOperation({ summary: '获取 Agent 设置（可按用途）' })
   @ApiResponse({ status: 200, description: 'Agent 设置' })
-  async getAgentSettings(): Promise<ApiResponseDto<unknown>> {
-    const result = await this.nutritionGovernanceService.getAgentSettings();
+  async getAgentSettings(
+    @Query('purpose') purpose?: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.getAgentSettings(
+      purpose,
+    );
     return new ApiResponseDto(0, 'Success', result);
   }
 
   @Post('agent-settings/test')
   @ApiOperation({ summary: '测试 DeepSeek Agent 连接' })
   @ApiResponse({ status: 201, description: 'DeepSeek 连接测试完成' })
-  async testAgentSettings(): Promise<ApiResponseDto<unknown>> {
-    const result = await this.nutritionGovernanceService.testAgentSettings();
+  async testAgentSettings(
+    @Query('purpose') purpose?: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.testAgentSettings(
+      purpose,
+    );
     return new ApiResponseDto(0, 'DeepSeek 连接测试完成', result);
   }
 
   @Put('agent-settings')
-  @ApiOperation({ summary: '保存营养治理 Agent 设置' })
+  @ApiOperation({ summary: '保存 Agent 设置（可按用途）' })
   @ApiResponse({ status: 200, description: 'Agent 设置已保存' })
   async updateAgentSettings(
     @Body() dto: UpdateAgentSettingsDto,
     @CurrentUser() user: RequestUser,
+    @Query('purpose') purpose?: string,
   ): Promise<ApiResponseDto<unknown>> {
     const result = await this.nutritionGovernanceService.updateAgentSettings(
       dto,
       user.userId,
+      purpose,
     );
     return new ApiResponseDto(0, 'Agent 设置已保存', result);
   }

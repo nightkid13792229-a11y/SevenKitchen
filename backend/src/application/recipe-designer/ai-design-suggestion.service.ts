@@ -6,6 +6,8 @@ import type {
 } from '../../domain/recipe-designer/dog-design-insight';
 
 const DEEPSEEK_CHAT_PATH = '/chat/completions';
+/** 食谱设计 AI 建议对应的 Agent 用途（未单独配置时回退全局默认） */
+export const RECIPE_DESIGN_AGENT_PURPOSE = 'RECIPE_DESIGN';
 
 export interface AiSuggestionIngredientItem {
   name: string;
@@ -73,7 +75,9 @@ export class AiDesignSuggestionService {
     input: AiDesignSuggestionInput,
   ): Promise<AiDesignSuggestionResult> {
     const config =
-      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig();
+      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
+        purpose: RECIPE_DESIGN_AGENT_PURPOSE,
+      });
 
     const parsed = await this.callDeepSeek({
       input,

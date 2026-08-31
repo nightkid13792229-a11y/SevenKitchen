@@ -8,6 +8,8 @@ import {
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 export const NUTRITION_AGENT_PURPOSE = 'NUTRITION_CANDIDATE_REVIEW';
+/** 全局默认用途：所有未单独指定用途的 AI/Agent 都回退到这里 */
+export const DEFAULT_AGENT_PURPOSE = 'DEFAULT';
 export const DEEPSEEK_PROVIDER = 'DEEPSEEK';
 
 const DEFAULT_DEEPSEEK_SETTINGS = {
@@ -23,6 +25,7 @@ const DEFAULT_DEEPSEEK_SETTINGS = {
 } as const;
 
 export interface AgentProviderSettingsView {
+  purpose: string;
   provider: typeof DEEPSEEK_PROVIDER;
   enabled: boolean;
   baseUrl: string;
@@ -62,16 +65,17 @@ export interface DeepSeekRuntimeConfig {
 export class AgentProviderConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSettings(): Promise<AgentProviderSettingsView> {
-    const config = await this.findDeepSeekConfig();
+  async getSettings(purpose?: string): Promise<AgentProviderSettingsView> {
+    const config = await this.findDeepSeekConfig(purpose);
     return this.toSettingsView(config);
   }
 
   async updateSettings(
     input: UpdateAgentProviderSettingsInput,
     userId?: string,
+    purpose: string = DEFAULT_AGENT_PURPOSE,
   ): Promise<AgentProviderSettingsView> {
-    const current = await this.findDeepSeekConfig();
+    const current = await this.findDeepSeekConfig(purpose);
     const baseUrl = normalizeBaseUrl(
       input.baseUrl ?? current?.baseUrl ?? DEFAULT_DEEPSEEK_SETTINGS.baseUrl,
     );
@@ -129,12 +133,13 @@ export class AgentProviderConfigService {
     const saved = await this.prisma.agentProviderConfig.upsert({
       where: {
         purpose_provider: {
-          purpose: NUTRITION_AGENT_PURPOSE,
+          purpose,
           provider: DEEPSEEK_PROVIDER,
         },
       },
       create: {
-        ...DEFAULT_DEEPSEEK_SETTINGS,
+        purpose,
+        provider: DEEPSEEK_PROVIDER,
         enabled,
         baseUrl,
         model,
@@ -153,9 +158,15 @@ export class AgentProviderConfigService {
   }
 
   async getEnabledDeepSeekRuntimeConfig(input: {
-    purpose?: 'DEFAULT' | 'REVIEW';
+    purpose?: string;
+    /** 指定用途未配置时是否回退到全局默认（默认 true） */
+    fallbackToDefault?: boolean;
   } = {}): Promise<DeepSeekRuntimeConfig> {
-    const config = await this.findDeepSeekConfig();
+    const purpose = input.purpose || DEFAULT_AGENT_PURPOSE;
+    const config = await this.findDeepSeekConfig(
+      purpose,
+      input.fallbackToDefault ?? true,
+    );
 
     if (!config?.enabled) {
       throw new BadRequestException('DeepSeek Agent 设置未启用');
@@ -184,11 +195,30 @@ export class AgentProviderConfigService {
     await this.getEnabledDeepSeekRuntimeConfig();
   }
 
-  private async findDeepSeekConfig() {
+  /**
+   * 查询某用途的 DeepSeek 配置；该用途未配置时回退到全局默认(DEFAULT)。
+   * 传入用途时优先查该用途，无则回退 DEFAULT；都无则返回 null。
+   */
+  private async findDeepSeekConfig(
+    purpose?: string,
+    fallbackToDefault = true,
+  ) {
+    if (purpose && purpose !== DEFAULT_AGENT_PURPOSE) {
+      const specific = await this.prisma.agentProviderConfig.findUnique({
+        where: {
+          purpose_provider: {
+            purpose,
+            provider: DEEPSEEK_PROVIDER,
+          },
+        },
+      });
+      if (specific) return specific;
+      if (!fallbackToDefault) return null;
+    }
     return this.prisma.agentProviderConfig.findUnique({
       where: {
         purpose_provider: {
-          purpose: NUTRITION_AGENT_PURPOSE,
+          purpose: DEFAULT_AGENT_PURPOSE,
           provider: DEEPSEEK_PROVIDER,
         },
       },
@@ -197,6 +227,7 @@ export class AgentProviderConfigService {
 
   private toSettingsView(config: any | null): AgentProviderSettingsView {
     return {
+      purpose: config?.purpose ?? DEFAULT_AGENT_PURPOSE,
       provider: DEEPSEEK_PROVIDER,
       enabled: config?.enabled ?? DEFAULT_DEEPSEEK_SETTINGS.enabled,
       baseUrl: config?.baseUrl ?? DEFAULT_DEEPSEEK_SETTINGS.baseUrl,

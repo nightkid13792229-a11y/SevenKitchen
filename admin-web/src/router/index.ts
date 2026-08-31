@@ -81,6 +81,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "搜索治理" },
       },
       {
+        path: "agent-config",
+        name: "AgentConfig",
+        component: () => import("@/views/AgentConfig/index.vue"),
+        meta: { title: "AI / Agent 配置" },
+      },
+      {
         path: "recipes",
         name: "Recipes",
         component: () => import("@/views/Recipes/index.vue"),

@@ -33,6 +33,10 @@
           <el-icon><Search /></el-icon>
           <span>搜索治理</span>
         </el-menu-item>
+        <el-menu-item index="/agent-config">
+          <el-icon><Setting /></el-icon>
+          <span>AI / Agent 配置</span>
+        </el-menu-item>
         <el-sub-menu index="recipe-management">
           <template #title>
             <el-icon><Food /></el-icon>

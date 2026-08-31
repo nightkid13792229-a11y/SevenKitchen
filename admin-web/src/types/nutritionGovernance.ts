@@ -45,6 +45,7 @@ export interface NutritionGovernanceOverview {
 }
 
 export interface AgentProviderSettings {
+  purpose?: string;
   provider: "DEEPSEEK";
   enabled: boolean;
   baseUrl: string;

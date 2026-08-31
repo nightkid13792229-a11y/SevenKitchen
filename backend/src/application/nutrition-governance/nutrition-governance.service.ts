@@ -1150,20 +1150,23 @@ export class NutritionGovernanceService {
     };
   }
 
-  async getAgentSettings() {
-    return this.getAgentProviderConfigService().getSettings();
+  async getAgentSettings(purpose?: string) {
+    return this.getAgentProviderConfigService().getSettings(purpose);
   }
 
-  async updateAgentSettings(input: unknown, userId: string) {
+  async updateAgentSettings(input: unknown, userId: string, purpose?: string) {
     return this.getAgentProviderConfigService().updateSettings(
       input as any,
       userId,
+      purpose,
     );
   }
 
-  async testAgentSettings() {
+  async testAgentSettings(purpose?: string) {
     const runtime =
-      await this.getAgentProviderConfigService().getEnabledDeepSeekRuntimeConfig();
+      await this.getAgentProviderConfigService().getEnabledDeepSeekRuntimeConfig({
+        purpose,
+      });
     const provider = new DeepSeekNutritionCandidateReviewProvider(runtime);
     const review = await provider.reviewFoodCandidate({
       ingredient: { id: 'test', name: '鸡胸肉', type: 'FOOD' },

@@ -59,16 +59,23 @@ export const nutritionGovernanceApi = {
       params: { queue }
     }),
 
-  getAgentSettings: (): Promise<AgentProviderSettings> =>
-    api.get('/admin/nutrition-governance/agent-settings'),
+  getAgentSettings: (purpose?: string): Promise<AgentProviderSettings> =>
+    api.get('/admin/nutrition-governance/agent-settings', {
+      params: purpose ? { purpose } : {}
+    }),
 
   updateAgentSettings: (
-    data: UpdateAgentProviderSettingsPayload
+    data: UpdateAgentProviderSettingsPayload,
+    purpose?: string
   ): Promise<AgentProviderSettings> =>
-    api.put('/admin/nutrition-governance/agent-settings', data),
+    api.put('/admin/nutrition-governance/agent-settings', data, {
+      params: purpose ? { purpose } : {}
+    }),
 
-  testAgentSettings: (): Promise<AgentSettingsTestResult> =>
-    api.post('/admin/nutrition-governance/agent-settings/test'),
+  testAgentSettings: (purpose?: string): Promise<AgentSettingsTestResult> =>
+    api.post('/admin/nutrition-governance/agent-settings/test', null, {
+      params: purpose ? { purpose } : {}
+    }),
 
   startBatchAgentReview: (
     data: BatchAgentReviewPayload

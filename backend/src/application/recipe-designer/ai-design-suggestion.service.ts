@@ -64,7 +64,9 @@ export class AiDesignSuggestionService {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await this.agentProviderConfigService.assertCanRun();
+      await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
+        purpose: RECIPE_DESIGN_AGENT_PURPOSE,
+      });
       return true;
     } catch {
       return false;

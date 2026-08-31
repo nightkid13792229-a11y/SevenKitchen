@@ -97,6 +97,10 @@ export interface DogProfile {
   breedId: string
   customBreedName: string | null
   breedName?: string // Extended from breed lookup
+  /** 归属客户微信昵称（/admin/dogs 返回） */
+  ownerNickname?: string | null
+  /** 归属客户手机号（/admin/dogs 返回） */
+  ownerPhone?: string | null
   birthday: string // ISO 8601 date string
   gender: DogGender
   isNeutered: boolean

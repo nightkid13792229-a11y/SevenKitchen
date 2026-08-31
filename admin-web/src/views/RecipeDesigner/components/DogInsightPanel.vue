@@ -425,7 +425,25 @@ function dogLabel(dog: DogProfile): string {
   if (dog.currentWeightKg) parts.push(`${dog.currentWeightKg}kg`)
   const ageText = dogAgeText(dog.birthday)
   if (ageText) parts.push(ageText)
+  const ownerText = dogOwnerLabel(dog)
+  if (ownerText) parts.push(ownerText)
   return parts.filter(Boolean).join(' · ')
+}
+
+/** 归属客户展示：微信昵称优先，缺失/占位时用手机号后四位兜底，都没有则显示"客户" */
+function dogOwnerLabel(dog: DogProfile): string {
+  const nickname = dog.ownerNickname?.trim()
+  if (nickname && nickname !== '微信用户') return nickname
+  const phone = dog.ownerPhone?.trim()
+  if (phone) return maskPhone(phone)
+  return '客户'
+}
+
+/** 手机号后四位掩码，如 138****5678 */
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 4) return phone
+  return `${digits.slice(0, 3)}****${digits.slice(-4)}`
 }
 
 /** 从出生日期计算年龄文本（岁/月） */

@@ -2534,6 +2534,11 @@ export class AdminController {
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSizeNum,
+        include: {
+          owner: {
+            select: { nickname: true, phone: true },
+          },
+        },
       }),
       this.prisma.dog.count({ where }),
     ]);
@@ -2546,6 +2551,8 @@ export class AdminController {
     const dogs = allDogs.map((dog: any) => ({
       id: dog.id,
       ownerId: dog.ownerId,
+      ownerNickname: dog.owner?.nickname ?? null,
+      ownerPhone: dog.owner?.phone ?? null,
       name: dog.name,
       breedId: dog.breedId,
       customBreedName: dog.customBreedName,

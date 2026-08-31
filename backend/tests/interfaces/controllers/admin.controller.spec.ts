@@ -593,6 +593,11 @@ describe('AdminController', () => {
         orderBy: { createdAt: 'desc' },
         skip: 10,
         take: 10,
+        include: {
+          owner: {
+            select: { nickname: true, phone: true },
+          },
+        },
       });
       expect(mockPrisma.dog.count).toHaveBeenCalledWith({
         where: expectedWhere,

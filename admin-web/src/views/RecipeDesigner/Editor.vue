@@ -796,7 +796,7 @@ onBeforeUnmount(() => {
 .designer-editor {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 0px);
+  min-height: 100%;
   box-sizing: border-box;
 }
 .editor-header {
@@ -857,10 +857,9 @@ onBeforeUnmount(() => {
   color: #f56c6c;
 }
 .editor-body {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
-  min-height: 0;
-  overflow-x: auto;
+  align-items: stretch;
 }
 .pane {
   display: flex;
@@ -883,7 +882,6 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   border-right: 1px solid #e4e7ed;
   background: #fafbfc;
-  overflow-y: auto;
 }
 .pane-right {
   width: 330px;
@@ -895,13 +893,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .assessment-pane {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
 }
 .dog-pane {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 1 0 auto;
 }
 .pane-title {
   padding: 10px 12px;
@@ -920,9 +915,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 .item-list {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+  flex: 1 0 auto;
   padding: 6px;
 }
 .item-row {
@@ -1022,7 +1015,6 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .dog-pane {
-  overflow-y: auto;
   padding: 0 12px;
   box-sizing: border-box;
 }

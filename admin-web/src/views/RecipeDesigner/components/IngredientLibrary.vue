@@ -31,7 +31,7 @@
       </el-select>
     </div>
 
-    <div v-loading="loading" class="option-list">
+    <div v-loading="loading" class="option-list" @scroll.passive="handleScroll">
       <el-empty v-if="!loading && visibleOptions.length === 0" description="没有找到可添加的原料" :image-size="60" />
       <template v-for="option in visibleOptions" :key="option.id">
         <!-- 食材：点击展开营养档案，从档案行添加 -->
@@ -90,7 +90,6 @@
         </div>
       </template>
       <div v-if="hasMore && !loading" class="load-more-tip">
-        <div ref="loadMoreSentinel" class="load-more-sentinel" />
         <el-button size="small" text :loading="loadingMore" @click="loadMore">
           {{ loadingMore ? '加载中…' : '加载更多' }}
         </el-button>
@@ -100,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
@@ -130,8 +129,6 @@ const allOptions = ref<RecipeDesignerIngredientOption[]>([])
 const page = ref(1)
 const pageSize = 30
 const total = ref(0)
-const loadMoreSentinel = ref<HTMLElement | null>(null)
-let loadMoreObserver: IntersectionObserver | null = null
 /** 展开营养档案的食材 ID 集合 */
 const expandedIds = ref<Set<string>>(new Set())
 const foodCategories = ref<string[]>([])
@@ -203,27 +200,11 @@ function handleCategoryChange() {
   load()
 }
 
-/** 监听底部哨兵，接近底部时自动加载下一页（不依赖容器滚动） */
-function setupLoadMoreObserver() {
-  if (typeof IntersectionObserver === 'undefined') return
-  if (loadMoreObserver) loadMoreObserver.disconnect()
-  loadMoreObserver = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting && hasMore.value && !loadingMore.value && !loading.value) {
-          void loadMore()
-        }
-      }
-    },
-    { rootMargin: '120px' }
-  )
-  if (loadMoreSentinel.value) loadMoreObserver.observe(loadMoreSentinel.value)
-}
-
-function teardownLoadMoreObserver() {
-  if (loadMoreObserver) {
-    loadMoreObserver.disconnect()
-    loadMoreObserver = null
+/** 滚动到底部时加载下一页 */
+function handleScroll(event: Event) {
+  const el = event.target as HTMLElement
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
+    void loadMore()
   }
 }
 
@@ -291,34 +272,24 @@ function handleAddProfile(
 
 watch(
   () => props.scenario,
-  async () => {
+  () => {
     // 场景变化时清空重载（营养匹配优先级可能变化）
     allOptions.value = []
     page.value = 1
-    await load()
-    await nextTick()
-    setupLoadMoreObserver()
+    load()
   }
 )
 
-watch(activeTab, async () => {
+watch(activeTab, () => {
   // 切换页签：分类体系不同，重置分类并重载
   category.value = ''
   page.value = 1
   allOptions.value = []
   expandedIds.value = new Set()
-  await load()
-  await nextTick()
-  setupLoadMoreObserver()
+  load()
 })
 
-onMounted(async () => {
-  await load()
-  await nextTick()
-  setupLoadMoreObserver()
-})
-
-onBeforeUnmount(teardownLoadMoreObserver)
+onMounted(load)
 </script>
 
 <style scoped>
@@ -342,11 +313,9 @@ onBeforeUnmount(teardownLoadMoreObserver)
   width: 100%;
 }
 .option-list {
-  flex: 1 0 auto;
-}
-.load-more-sentinel {
-  height: 1px;
-  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 .option-item {
   padding: 8px 10px;

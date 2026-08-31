@@ -796,7 +796,7 @@ onBeforeUnmount(() => {
 .designer-editor {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
   box-sizing: border-box;
 }
 .editor-header {
@@ -857,14 +857,17 @@ onBeforeUnmount(() => {
   color: #f56c6c;
 }
 .editor-body {
-  flex: 1 0 auto;
+  flex: 1;
   display: flex;
-  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
 }
 .pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: #fff;
 }
 .pane-library {
@@ -882,6 +885,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   border-right: 1px solid #e4e7ed;
   background: #fafbfc;
+  overflow-y: auto;
 }
 .pane-right {
   width: 330px;
@@ -893,10 +897,14 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .assessment-pane {
-  flex: 1 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .dog-pane {
-  flex: 1 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .pane-title {
   padding: 10px 12px;
@@ -915,7 +923,9 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 .item-list {
-  flex: 1 0 auto;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
   padding: 6px;
 }
 .item-row {

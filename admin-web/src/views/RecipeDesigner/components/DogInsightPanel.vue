@@ -158,76 +158,6 @@
         </div>
       </div>
 
-      <div class="panel-section ai-section">
-        <div class="section-title">
-          <span>🤖 AI 设计建议</span>
-          <el-tooltip content="基于爱犬档案与历史食材生成，仅供设计参考，最终以 FEDIAF 营养评估为准" placement="top">
-            <el-icon class="ai-tip"><QuestionFilled /></el-icon>
-          </el-tooltip>
-        </div>
-        <template v-if="!insight.aiEnabled">
-          <div class="empty-tip">AI 助手尚未配置，请联系管理员在「AI 服务配置」中启用</div>
-        </template>
-        <template v-else>
-          <el-button
-            v-if="!aiSuggestion"
-            size="small"
-            type="primary"
-            plain
-            :loading="aiLoading"
-            :disabled="aiLoading"
-            @click="requestAiSuggestions"
-          >
-            {{ aiLoading ? 'AI 分析中…' : '生成设计建议' }}
-          </el-button>
-          <div v-else class="ai-result">
-            <div class="ai-summary">{{ aiSuggestion.summary }}</div>
-            <div v-if="aiSuggestion.warnings.length" class="ai-warnings">
-              <div v-for="(warning, index) in aiSuggestion.warnings" :key="index" class="ai-warning">
-                ⚠️ {{ warning }}
-              </div>
-            </div>
-            <div v-if="aiSuggestion.ingredientSuggestions.length" class="ai-block">
-              <div class="ai-block-title">推荐食材</div>
-              <div v-for="(item, index) in aiSuggestion.ingredientSuggestions" :key="index" class="ai-row">
-                <span class="ai-name">{{ item.name }}</span>
-                <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div v-if="aiSuggestion.avoidIngredients.length" class="ai-block">
-              <div class="ai-block-title avoid">避免食材</div>
-              <div v-for="(item, index) in aiSuggestion.avoidIngredients" :key="index" class="ai-row">
-                <span class="ai-name">{{ item.name }}</span>
-                <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div v-if="aiSuggestion.nutritionFocus.length" class="ai-block">
-              <div class="ai-block-title">营养注意</div>
-              <div v-for="(item, index) in aiSuggestion.nutritionFocus" :key="index" class="ai-row">
-                <span class="ai-name">{{ item.point }}</span>
-                <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div v-if="aiSuggestion.supplementSuggestions.length" class="ai-block">
-              <div class="ai-block-title">补剂建议</div>
-              <div v-for="(item, index) in aiSuggestion.supplementSuggestions" :key="index" class="ai-row">
-                <span class="ai-name">{{ item.name }}</span>
-                <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div v-if="aiSuggestion.reuseSuggestions.length" class="ai-block">
-              <div class="ai-block-title">可沿用既往食材</div>
-              <div v-for="(item, index) in aiSuggestion.reuseSuggestions" :key="index" class="ai-row">
-                <span class="ai-name">{{ item.name }}</span>
-                <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div class="ai-footer">
-              <el-button size="small" text type="primary" @click="aiSuggestion = null">重新生成</el-button>
-            </div>
-          </div>
-        </template>
-      </div>
     </template>
 
     <div v-else class="empty-tip">
@@ -271,7 +201,7 @@ import {
   TreatLevelLabels,
   type DogProfile
 } from '@/types/dog'
-import type { AiDesignSuggestion, DogDesignInsight, UpdateDogDesignNotesPayload } from '@/types/recipeDesigner'
+import type { DogDesignInsight, UpdateDogDesignNotesPayload } from '@/types/recipeDesigner'
 
 const props = defineProps<{
   dogId?: string | null
@@ -293,8 +223,6 @@ const editingNotes = ref(false)
 const savingNotes = ref(false)
 const notesForm = reactive<UpdateDogDesignNotesPayload>({})
 
-const aiLoading = ref(false)
-const aiSuggestion = ref<AiDesignSuggestion | null>(null)
 
 /* ---------- 设计档案展示辅助 ---------- */
 
@@ -536,22 +464,9 @@ async function saveNotes() {
   }
 }
 
-async function requestAiSuggestions() {
-  if (!props.dogId) return
-  aiLoading.value = true
-  try {
-    aiSuggestion.value = await recipeDesignerApi.generateAiSuggestions(props.dogId, props.draftId)
-  } catch {
-    aiSuggestion.value = null
-  } finally {
-    aiLoading.value = false
-  }
-}
-
 watch(
   () => props.dogId,
   () => {
-    aiSuggestion.value = null
     loadInsight()
   },
   { immediate: true }

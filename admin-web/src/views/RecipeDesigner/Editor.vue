@@ -73,6 +73,11 @@
           配方明细
           <span class="item-count">原料 {{ items.length }} 种 · 总重 {{ includedTotalWeightText }}</span>
         </div>
+        <AiDesignSuggestionPanel
+          v-if="draft"
+          :dog-id="referenceDogId"
+          :draft-id="draft?.id"
+        />
         <div v-loading="initialLoading" class="item-list">
           <el-empty v-if="!initialLoading && items.length === 0" description="从左侧原料库点击食材加入配方" />
           <draggable
@@ -190,6 +195,7 @@ import AssessmentPanel from './components/AssessmentPanel.vue'
 import GaugePanel from './components/GaugePanel.vue'
 import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
+import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessment'
 
 /** 兜底烹饪方式选项（后端未提供时使用） */

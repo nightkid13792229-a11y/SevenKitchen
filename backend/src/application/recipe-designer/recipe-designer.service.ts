@@ -8138,6 +8138,11 @@ function deriveKnowledgeTags(profile: {
     tags.add('endocrine');
     keywords.push('甲减', '甲亢', '甲状腺');
   }
+  if (/肝|肝硬化|肝炎|肝硬化|门体分流|肝衰|肝性脑病|肝脂质|脂肪肝|铜中毒|胆管炎/i.test(historyText)) {
+    tags.add('hepatic');
+    tags.add('liver');
+    keywords.push('肝脏', '肝病', '肝');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8150,6 +8155,8 @@ function deriveKnowledgeTags(profile: {
       'diabetes',
       'thyroid',
       'endocrine',
+      'hepatic',
+      'liver',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

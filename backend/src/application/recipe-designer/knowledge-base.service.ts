@@ -14,6 +14,7 @@ import { GI_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/g
 import { SKIN_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/skin';
 import { UROLITH_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/urolith';
 import { ENDOCRINE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/endocrine';
+import { HEPATIC_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/hepatic';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -26,6 +27,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   SKIN: SKIN_KNOWLEDGE,
   UROLITH: UROLITH_KNOWLEDGE,
   ENDOCRINE: ENDOCRINE_KNOWLEDGE,
+  HEPATIC: HEPATIC_KNOWLEDGE,
 };
 
 /**

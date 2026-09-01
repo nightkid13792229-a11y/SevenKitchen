@@ -16,7 +16,8 @@ export type KnowledgeDomain =
   | 'GI' // 肠道病 / IBD
   | 'SKIN' // 皮肤过敏 / 被毛
   | 'UROLITH' // 泌尿结石
-  | 'ENDOCRINE'; // 内分泌 / 代谢疾病（糖尿病、甲状腺）
+  | 'ENDOCRINE' // 内分泌 / 代谢疾病（糖尿病、甲状腺）
+  | 'HEPATIC'; // 肝胆疾病
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -29,6 +30,7 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   SKIN: '皮肤过敏/被毛',
   UROLITH: '泌尿结石',
   ENDOCRINE: '内分泌/代谢',
+  HEPATIC: '肝胆疾病',
 };
 
 export interface KnowledgeCitation {

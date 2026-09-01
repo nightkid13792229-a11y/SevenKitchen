@@ -21,6 +21,7 @@ import { ONCO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data
 import { NEURO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/neuro';
 import { DENTAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/dental';
 import { REPRO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/repro';
+import { SAFE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/safe';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -40,6 +41,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   NEURO: NEURO_KNOWLEDGE,
   DENTAL: DENTAL_KNOWLEDGE,
   REPRO: REPRO_KNOWLEDGE,
+  SAFE: SAFE_KNOWLEDGE,
 };
 
 /**

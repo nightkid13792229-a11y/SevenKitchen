@@ -19,7 +19,8 @@ export type KnowledgeDomain =
   | 'ENDOCRINE' // 内分泌 / 代谢疾病（糖尿病、甲状腺）
   | 'HEPATIC' // 肝胆疾病
   | 'CARDIO' // 心血管疾病
-  | 'ORTHO'; // 骨关节 / 骨关节炎
+  | 'ORTHO' // 骨关节 / 骨关节炎
+  | 'ONCO'; // 癌症 / 肿瘤
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -35,6 +36,7 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   HEPATIC: '肝胆疾病',
   CARDIO: '心血管疾病',
   ORTHO: '骨关节/骨关节炎',
+  ONCO: '癌症/肿瘤',
 };
 
 export interface KnowledgeCitation {

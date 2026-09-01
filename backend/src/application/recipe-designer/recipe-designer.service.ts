@@ -8155,6 +8155,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('joint');
     keywords.push('骨关节炎', '关节', '骨科');
   }
+  if (/癌|肿瘤|淋巴瘤|肉瘤|癌症|恶性/i.test(historyText)) {
+    tags.add('onco');
+    tags.add('cancer');
+    tags.add('tumor');
+    keywords.push('癌症', '肿瘤', '癌');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8175,6 +8181,9 @@ function deriveKnowledgeTags(profile: {
       'ortho',
       'arthritis',
       'joint',
+      'onco',
+      'cancer',
+      'tumor',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

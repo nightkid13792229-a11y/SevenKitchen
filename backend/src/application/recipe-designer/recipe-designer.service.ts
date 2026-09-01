@@ -8180,6 +8180,13 @@ function deriveKnowledgeTags(profile: {
     keywords.push('妊娠', '哺乳', '繁殖');
   }
 
+  // 危重症/营养支持：作为支持性领域，可与疾病领域叠加，不加入下方兜底排除
+  if (/危重|重症|病危|住院|恶病质|严重营养不良/i.test(historyText)) {
+    tags.add('critical');
+    tags.add('hospitalized');
+    keywords.push('危重症', '营养支持', '住院');
+  }
+
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
     ![

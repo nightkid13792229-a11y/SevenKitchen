@@ -22,6 +22,7 @@ import { NEURO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/dat
 import { DENTAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/dental';
 import { REPRO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/repro';
 import { SAFE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/safe';
+import { CRITICAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/critical';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -42,6 +43,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   DENTAL: DENTAL_KNOWLEDGE,
   REPRO: REPRO_KNOWLEDGE,
   SAFE: SAFE_KNOWLEDGE,
+  CRITICAL: CRITICAL_KNOWLEDGE,
 };
 
 /**

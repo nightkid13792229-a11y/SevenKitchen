@@ -77,6 +77,7 @@
           v-if="draft"
           :dog-id="referenceDogId"
           :draft-id="draft?.id"
+          @add-item="handleAiAddItem"
         />
         <div v-loading="initialLoading" class="item-list">
           <el-empty v-if="!initialLoading && items.length === 0" description="从左侧原料库点击食材加入配方" />
@@ -636,6 +637,31 @@ async function handleRevert() {
     // 错误提示由拦截器统一处理
   } finally {
     reverting.value = false
+  }
+}
+
+/** AI 面板一键添加（推荐食材已由后端匹配好 ingredientId / nutritionFoodId） */
+async function handleAiAddItem(payload: {
+  name: string
+  ingredientId?: string
+  nutritionFoodId?: string
+  weightG?: number
+}) {
+  if (!draft.value) return
+  if (!payload.nutritionFoodId) return
+  const itemPayload = {
+    ingredientId: payload.ingredientId,
+    nutritionFoodId: payload.nutritionFoodId,
+    weightG: payload.weightG ?? 100,
+    includeInAssessment: true,
+  }
+  try {
+    const created = await recipeDesignerApi.addItem(draft.value.id, itemPayload)
+    items.value = [...items.value, created]
+    recordHistory({ type: 'add', item: created })
+    await refreshInputs(draft.value.id)
+  } catch {
+    // 拦截器已提示
   }
 }
 

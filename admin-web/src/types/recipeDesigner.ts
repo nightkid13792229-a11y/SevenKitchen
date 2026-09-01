@@ -260,6 +260,148 @@ export interface AiDesignSuggestion {
   provider: string
 }
 
+/**
+ * AI 设计建议四步向导类型（对应 backend recipe-ai-wizard）
+ */
+
+// 步骤一：营养方案
+export interface NutritionPlanCitation {
+  id: string
+  source: string
+  chapter?: string
+}
+
+export interface NutritionFocusPoint {
+  point: string
+  reason: string
+  citationIds?: string[]
+}
+
+export interface MacroRatioPlan {
+  protein: string
+  fat: string
+  carbohydrate: string
+  note?: string
+}
+
+export interface NutritionPlanResult {
+  summary: string
+  caloriesPerDayKcal: number | null
+  caloriesBasis: string
+  mealsPerDay: number | null
+  macroRatio: MacroRatioPlan | null
+  nutritionFocus: NutritionFocusPoint[]
+  precautions: NutritionFocusPoint[]
+  citations: NutritionPlanCitation[]
+  warnings: string[]
+}
+
+// 步骤二：食材推荐
+export interface IngredientRecommendationItem {
+  name: string
+  category: string
+  categoryLabel: string
+  inLibrary: boolean
+  ingredientId?: string
+  nutritionFoodId?: string
+  suggestedWeightG: number | null
+  reason: string
+  avoidRecent?: boolean
+}
+
+export interface IngredientRecommendationResult {
+  framework: {
+    templateName: string
+    covered: string[]
+    missing: string[]
+    note?: string
+  }
+  recommendations: IngredientRecommendationItem[]
+  avoidIngredients: Array<{ name: string; reason: string }>
+  diversityNotes: string[]
+  warnings: string[]
+}
+
+// 步骤三：食谱审核
+export type ReviewIssueLevel = 'error' | 'warning' | 'info'
+export type ReviewIssueCategory =
+  | 'structure'
+  | 'ratio'
+  | 'diversity'
+  | 'plan'
+  | 'nutrition'
+
+export interface ReviewIssue {
+  level: ReviewIssueLevel
+  category: ReviewIssueCategory
+  message: string
+  suggestion?: string
+  suggestedIngredient?: {
+    name: string
+    category?: string
+    weightG?: number
+  }
+}
+
+export interface RecipeReviewResult {
+  overall: 'pass' | 'attention' | 'risk'
+  summary: string
+  issues: ReviewIssue[]
+  planDeviations: Array<{ item: string; expected: string; actual: string }>
+  warnings: string[]
+}
+
+// 步骤四：制作 SOP
+export interface SopStep {
+  title: string
+  description: string
+  ingredients?: string[]
+  temperature?: string
+  duration?: string
+  equipment?: string
+  qualityCheck?: string
+}
+
+export interface SopStage {
+  stage: string
+  steps: SopStep[]
+}
+
+export interface SopResult {
+  production: SopStage[]
+  customer: SopStage[]
+  warnings: string[]
+}
+
+// 向导持久化数据（GET /recipe-designer/drafts/:id/ai-design-data）
+export interface RecipeAiDesignData {
+  nutritionPlan?: {
+    result: NutritionPlanResult
+    accepted: boolean
+    acceptedAt?: string
+    note?: string
+  } | null
+  nutritionPlanHistory: Array<{
+    result: NutritionPlanResult
+    note?: string
+    createdAt: string
+  }>
+  ingredientRecommendations: Array<{
+    result: IngredientRecommendationResult
+    createdAt: string
+  }>
+  reviewResults: Array<{
+    result: RecipeReviewResult
+    createdAt: string
+  }>
+  sop?: {
+    result: SopResult
+    accepted: boolean
+    acceptedAt?: string
+  } | null
+  updatedAt: string
+}
+
 export interface IngredientNutrientMatch {
   nutrientKey: string
   label: string

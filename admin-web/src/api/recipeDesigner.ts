@@ -13,9 +13,14 @@ import type {
   DraftAssessmentInputs,
   FediafDogScenario,
   IngredientOptionListResponse,
+  IngredientRecommendationResult,
+  NutritionPlanResult,
+  RecipeAiDesignData,
   RecipeDesignerIngredientOption,
   RecipeDesignerSeriesCard,
   RecipeDesignerSeriesStatusFilter,
+  RecipeReviewResult,
+  SopResult,
   SupplementLabelExtractionDraft,
   SupplementNutritionBasisType,
   SupplementUsageUnit,
@@ -167,5 +172,22 @@ export const recipeDesignerApi = {
   updateDogDesignNotes: (dogId: string, data: UpdateDogDesignNotesPayload): Promise<unknown> =>
     api.patch(`/recipe-designer/dogs/${dogId}/design-notes`, data),
   generateAiSuggestions: (dogId: string, draftId?: string): Promise<AiDesignSuggestion> =>
-    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-suggest`, { draftId })
+    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-suggest`, { draftId }),
+
+  // AI 设计建议四步向导
+  generateAiNutritionPlan: (dogId: string, draftId?: string): Promise<NutritionPlanResult> =>
+    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId }),
+  acceptAiNutritionPlan: (
+    draftId: string,
+    data: { accepted: boolean; note?: string | null; plan?: NutritionPlanResult | null }
+  ): Promise<NutritionPlanResult> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai/nutrition-plan/accept`, data),
+  generateAiIngredientRecommendation: (draftId: string): Promise<IngredientRecommendationResult> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai/ingredient-recommendation`),
+  reviewAiRecipe: (draftId: string): Promise<RecipeReviewResult> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai/review`),
+  generateAiSop: (draftId: string): Promise<SopResult> =>
+    api.post(`/recipe-designer/drafts/${draftId}/ai/sop`),
+  getAiDesignData: (draftId: string): Promise<RecipeAiDesignData> =>
+    api.get(`/recipe-designer/drafts/${draftId}/ai-design-data`),
 }

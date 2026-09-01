@@ -187,6 +187,8 @@ import { NutritionUnitNormalizerService } from './application/nutrition-calculat
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
 import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
+import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
+import { RecipeAiWizardService } from './application/recipe-designer/recipe-ai-wizard.service';
 import {
   SupplementLabelExtractionService,
   SUPPLEMENT_LABEL_OCR_PROVIDER,
@@ -681,6 +683,8 @@ validatePrismaConfig();
     NutritionFoodService,
     SupplementLabelExtractionService,
     AiDesignSuggestionService,
+    KnowledgeBaseService,
+    RecipeAiWizardService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,

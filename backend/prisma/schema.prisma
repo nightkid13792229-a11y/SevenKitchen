@@ -2192,6 +2192,7 @@ model DesignRecipe {
   updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
   aiGenerationLog        DesignRecipeAIGenerationLog?
+  aiDesignData           DesignRecipeAiDesignData?
   publishSnapshots       DesignRecipePublishSnapshot[]
   series                 RecipeSeries?                 @relation(fields: [seriesId], references: [id])
 
@@ -2251,6 +2252,32 @@ model DesignRecipeAIGenerationLog {
   @@index([generationModel])
   @@index([finalAttemptResult])
   @@map("design_recipe_ai_generation_log")
+}
+
+model DesignRecipeAiDesignData {
+  id                        String       @id @default(uuid()) @map("id")
+  designRecipeId            String       @unique @map("design_recipe_id")
+  /// 当前营养方案（认可后保存的版本）
+  nutritionPlan             Json?        @map("nutrition_plan")
+  nutritionPlanAccepted     Boolean      @default(false) @map("nutrition_plan_accepted")
+  nutritionPlanAcceptedAt   DateTime?    @map("nutrition_plan_accepted_at")
+  nutritionPlanNote         String?      @map("nutrition_plan_note") @db.VarChar(2000)
+  /// 营养方案历史版本（留痕）
+  nutritionPlanHistory      Json         @default("[]") @map("nutrition_plan_history")
+  /// 食材推荐结果（可多轮）
+  ingredientRecommendations Json         @default("[]") @map("ingredient_recommendations")
+  /// 食谱审核记录
+  reviewResults             Json         @default("[]") @map("review_results")
+  /// 制作 SOP（production + customer）
+  sop                       Json?        @map("sop")
+  sopAccepted               Boolean      @default(false) @map("sop_accepted")
+  sopAcceptedAt             DateTime?    @map("sop_accepted_at")
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+  designRecipe              DesignRecipe @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+
+  @@index([designRecipeId])
+  @@map("design_recipe_ai_design_data")
 }
 
 model DesignRecipePublishSnapshot {

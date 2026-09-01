@@ -83,6 +83,18 @@ import {
   type AiDesignSuggestionInput,
 } from './ai-design-suggestion.service';
 import {
+  RecipeAiWizardService,
+  type AiWizardDogProfile,
+  type AiWizardDraftSummary,
+} from './recipe-ai-wizard.service';
+import type {
+  IngredientRecommendationResult,
+  NutritionPlanResult,
+  RecipeAiDesignData,
+  RecipeReviewResult,
+  SopResult,
+} from '../../domain/recipe-designer/recipe-ai-wizard/types';
+import {
   getNutritionProfileSourceName,
   resolveNutritionProfileDisplayName,
 } from '../nutrition-food/nutrition-food-display-name';
@@ -1231,6 +1243,8 @@ export class RecipeDesignerService {
     private readonly searchGovernanceService?: SearchGovernanceService,
     @Optional()
     private readonly aiDesignSuggestionService?: AiDesignSuggestionService,
+    @Optional()
+    private readonly recipeAiWizardService?: RecipeAiWizardService,
   ) {}
 
   private async listInternalRecipeDesignerUserIds() {
@@ -7352,4 +7366,868 @@ export class RecipeDesignerService {
   private toJsonValue(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
+
+  // ---------- AI 设计建议四步向导 ----------
+
+  /** 步骤一：生成营养方案 */
+  async generateAiNutritionPlan(
+    dogId: string,
+    draftId: string | undefined,
+    access: RecipeDesignerAccessInput,
+  ): Promise<NutritionPlanResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
+    }
+    if (!this.recipeAiWizardService) {
+      throw new BadRequestException('AI 设计建议服务不可用');
+    }
+
+    const profile = await this.buildAiWizardDogProfile(dogId);
+    const { tags, keywords } = deriveKnowledgeTags(profile);
+    const currentDraft = draftId
+      ? await this.buildAiWizardDraftSummary(draftId, access)
+      : null;
+
+    const result = await this.recipeAiWizardService.generateNutritionPlan({
+      dog: profile,
+      knowledgeTags: tags,
+      extraKeywords: keywords,
+      currentDraft,
+    });
+
+    if (draftId) {
+      await this.persistAiNutritionPlan(draftId, access, result, {
+        accepted: false,
+        note: null,
+      });
+    }
+
+    return result;
+  }
+
+  /** 步骤一（共识）：认可/修改营养方案 */
+  async acceptAiNutritionPlan(
+    draftId: string,
+    dto: {
+      accepted: boolean;
+      note?: string | null;
+      plan?: unknown;
+    },
+    access: RecipeDesignerAccessInput,
+  ): Promise<NutritionPlanResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可确认营养方案');
+    }
+    const data = await this.getOrCreateAiDesignData(draftId, access);
+    const current = (data.nutritionPlan ?? {}) as Record<string, unknown>;
+    const history = Array.isArray(data.nutritionPlanHistory)
+      ? (data.nutritionPlanHistory as Array<Record<string, unknown>>)
+      : [];
+
+    const plan =
+      (dto.plan as NutritionPlanResult | null | undefined) ??
+      (current.result as NutritionPlanResult | null);
+    if (!plan) {
+      throw new BadRequestException('尚无营养方案可确认，请先生成');
+    }
+
+    if (dto.accepted) {
+      // 认可：写入当前方案 + 历史留痕
+      const now = new Date().toISOString();
+      await this.prisma.designRecipeAiDesignData.upsert({
+        where: { designRecipeId: draftId },
+        create: {
+          designRecipeId: draftId,
+          nutritionPlan: this.toJsonValue({
+            result: plan,
+            accepted: true,
+            acceptedAt: new Date().toISOString(),
+            note: dto.note ?? null,
+          }),
+          nutritionPlanAccepted: true,
+          nutritionPlanAcceptedAt: new Date(),
+          nutritionPlanNote: dto.note ?? null,
+          nutritionPlanHistory: this.toJsonValue([
+            ...history,
+            { result: plan, note: dto.note ?? '认可', createdAt: now },
+          ]),
+        },
+        update: {
+          nutritionPlan: this.toJsonValue({
+            result: plan,
+            accepted: true,
+            acceptedAt: new Date().toISOString(),
+            note: dto.note ?? null,
+          }),
+          nutritionPlanAccepted: true,
+          nutritionPlanAcceptedAt: new Date(),
+          nutritionPlanNote: dto.note ?? null,
+          nutritionPlanHistory: this.toJsonValue([
+            ...history,
+            { result: plan, note: dto.note ?? '认可', createdAt: now },
+          ]),
+        },
+      });
+    } else {
+      // 拒绝：仅留痕，不置为已认可
+      const now = new Date().toISOString();
+      await this.prisma.designRecipeAiDesignData.upsert({
+        where: { designRecipeId: draftId },
+        create: {
+          designRecipeId: draftId,
+          nutritionPlan: this.toJsonValue({
+            result: plan,
+            accepted: false,
+            acceptedAt: null,
+            note: dto.note ?? null,
+          }),
+          nutritionPlanHistory: this.toJsonValue([
+            ...history,
+            { result: plan, note: dto.note ?? '未认可（修改中）', createdAt: now },
+          ]),
+        },
+        update: {
+          nutritionPlan: this.toJsonValue({
+            result: plan,
+            accepted: false,
+            acceptedAt: null,
+            note: dto.note ?? null,
+          }),
+          nutritionPlanHistory: this.toJsonValue([
+            ...history,
+            { result: plan, note: dto.note ?? '未认可（修改中）', createdAt: now },
+          ]),
+        },
+      });
+    }
+
+    return plan;
+  }
+
+  /** 步骤二：食材推荐 */
+  async generateAiIngredientRecommendation(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<IngredientRecommendationResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
+    }
+    if (!this.recipeAiWizardService) {
+      throw new BadRequestException('AI 设计建议服务不可用');
+    }
+
+    const draft = await this.getDraft(draftId, access);
+    const dogId = await this.resolveDraftReferenceDogId(draft, context);
+    if (!dogId) {
+      throw new BadRequestException('请先为该配方设置参考爱犬');
+    }
+
+    const profile = await this.buildAiWizardDogProfile(dogId);
+    const { tags } = deriveKnowledgeTags(profile);
+    const insight = await this.getDogDesignInsight(dogId, access);
+    const aiData = await this.getOrCreateAiDesignData(draftId, access);
+    // 食材推荐需在营养方案达成共识（认可）后进行
+    if (!aiData.nutritionPlan || !aiData.nutritionPlan.accepted) {
+      throw new BadRequestException(
+        '请先在「营养方案」步骤生成并认可方案，再进行食材推荐',
+      );
+    }
+    const nutritionPlan = aiData.nutritionPlan
+      ? ((aiData.nutritionPlan as Record<string, unknown>)
+          .result as NutritionPlanResult)
+      : null;
+
+    const result = await this.recipeAiWizardService.generateIngredientRecommendation(
+      {
+        dog: profile,
+        nutritionPlan,
+        knowledgeTags: tags,
+        designHistory: insight.designHistory,
+        orderSummary: insight.orderSummary,
+        frameworkTemplateName: deriveFrameworkTemplateName(tags),
+        currentDraft: await this.buildAiWizardDraftSummary(draftId, access),
+      },
+    );
+
+    // 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 ID 以便一键添加
+    const enriched = await this.enrichRecommendationWithLibrary(result);
+
+    await this.prisma.designRecipeAiDesignData.upsert({
+      where: { designRecipeId: draftId },
+      create: {
+        designRecipeId: draftId,
+        ingredientRecommendations: this.toJsonValue([
+          { result: enriched, createdAt: new Date().toISOString() },
+        ]),
+      },
+      update: {
+        ingredientRecommendations: this.toJsonValue([
+          ...(Array.isArray(aiData.ingredientRecommendations)
+            ? (aiData.ingredientRecommendations as Array<Record<string, unknown>>)
+            : []),
+          { result: enriched, createdAt: new Date().toISOString() },
+        ]),
+      },
+    });
+
+    return enriched;
+  }
+
+  /** 步骤三：食谱审核 */
+  async reviewAiRecipe(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<RecipeReviewResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
+    }
+    if (!this.recipeAiWizardService) {
+      throw new BadRequestException('AI 设计建议服务不可用');
+    }
+
+    const draft = await this.getDraft(draftId, access);
+    const dogId = await this.resolveDraftReferenceDogId(draft, context);
+    const aiData = await this.getOrCreateAiDesignData(draftId, access);
+    const nutritionPlan = aiData.nutritionPlan
+      ? ((aiData.nutritionPlan as Record<string, unknown>)
+          .result as NutritionPlanResult)
+      : null;
+
+    let tags: string[] = [];
+    if (dogId) {
+      const profile = await this.buildAiWizardDogProfile(dogId);
+      tags = deriveKnowledgeTags(profile).tags;
+    }
+
+    const result = await this.recipeAiWizardService.reviewRecipe({
+      nutritionPlan,
+      knowledgeTags: tags,
+      frameworkTemplateName: deriveFrameworkTemplateName(tags),
+      draft: await this.buildAiWizardDraftSummary(draftId, access),
+    });
+
+    await this.prisma.designRecipeAiDesignData.upsert({
+      where: { designRecipeId: draftId },
+      create: {
+        designRecipeId: draftId,
+        reviewResults: this.toJsonValue([
+          { result, createdAt: new Date().toISOString() },
+        ]),
+      },
+      update: {
+        reviewResults: this.toJsonValue([
+          ...(Array.isArray(aiData.reviewResults)
+            ? (aiData.reviewResults as Array<Record<string, unknown>>)
+            : []),
+          { result, createdAt: new Date().toISOString() },
+        ]),
+      },
+    });
+
+    return result;
+  }
+
+  /** 步骤四：生成制作 SOP */
+  async generateAiSop(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<SopResult> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可使用 AI 设计建议');
+    }
+    if (!this.recipeAiWizardService) {
+      throw new BadRequestException('AI 设计建议服务不可用');
+    }
+
+    const result = await this.recipeAiWizardService.generateSop({
+      draft: await this.buildAiWizardDraftSummary(draftId, access),
+      audience: 'both',
+    });
+
+    await this.prisma.designRecipeAiDesignData.upsert({
+      where: { designRecipeId: draftId },
+      create: {
+        designRecipeId: draftId,
+        sop: this.toJsonValue({ result, accepted: false }),
+      },
+      update: {
+        sop: this.toJsonValue({ result, accepted: false }),
+      },
+    });
+
+    return result;
+  }
+
+  /** 读取配方草稿上的 AI 设计数据 */
+  async getAiDesignData(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<RecipeAiDesignData> {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (!isInternalRecipeDesignerRole(context)) {
+      throw new BadRequestException('仅内部角色可查看 AI 设计数据');
+    }
+    return this.getOrCreateAiDesignData(draftId, access);
+  }
+
+  /** 构建完整犬档案（含体检/病历/体重趋势）供 AI 使用 */
+  private async buildAiWizardDogProfile(
+    dogId: string,
+  ): Promise<AiWizardDogProfile> {
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      include: {
+        checkupRecords: {
+          orderBy: { checkupDate: 'desc' },
+          take: 8,
+          select: {
+            checkupType: true,
+            checkupDate: true,
+            findings: true,
+            recommendations: true,
+          },
+        },
+        medicalRecords: {
+          orderBy: { visitDate: 'desc' },
+          take: 8,
+          select: {
+            visitDate: true,
+            chiefComplaint: true,
+            diagnosis: true,
+            treatment: true,
+            medications: true,
+            status: true,
+          },
+        },
+        weightRecords: {
+          orderBy: { recordDate: 'desc' },
+          take: 6,
+          select: { recordDate: true, weightKg: true },
+        },
+      },
+    });
+    if (!dog) {
+      throw new NotFoundException('爱犬不存在');
+    }
+
+    const breed = dog.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dog.breedId },
+          select: {
+            name: true,
+            sizeCategory: true,
+            adultAgeMonths: true,
+            seniorAgeYears: true,
+          },
+        })
+      : null;
+    const dogForLifeStage = { ...dog, breed };
+
+    const lifeStage = mapDogProfileToSeriesLifeStage(dogForLifeStage);
+    const lifeStageLabel = SERIES_LIFE_STAGE_LABELS[lifeStage] ?? null;
+
+    return {
+      name: dog.name,
+      breedName: breed?.name ?? dog.customBreedName ?? null,
+      gender: dog.gender,
+      ageMonths: dog.birthday
+        ? calcMonthsBetween(dog.birthday, new Date())
+        : null,
+      isNeutered: dog.isNeutered,
+      bcsScore: dog.bcsScore,
+      currentWeightKg: dog.currentWeightKg,
+      lifeStageLabel,
+      activityLevel: dog.activityLevel,
+      mealsPerDay: dog.mealsPerDay,
+      treatLevel: dog.treatLevel,
+      manualTreatKcal: dog.manualTreatKcal,
+      targetFoodKcal: dog.cachedTargetFoodKcal,
+      allergyFoods: dog.allergyFoods,
+      pickyFoods: dog.pickyFoods,
+      preferredFoods: dog.preferredFoods,
+      medicalHistory: dog.medicalHistory,
+      weightTrend: dog.weightRecords
+        .slice()
+        .reverse()
+        .map((record) => ({
+          date: record.recordDate.toISOString().slice(0, 10),
+          weightKg: record.weightKg,
+        })),
+      checkups: dog.checkupRecords.map((record) => ({
+        type: record.checkupType,
+        date: record.checkupDate.toISOString().slice(0, 10),
+        findings: record.findings,
+        recommendations: record.recommendations,
+      })),
+      medicalRecords: dog.medicalRecords.map((record) => ({
+        date: record.visitDate.toISOString().slice(0, 10),
+        chiefComplaint: record.chiefComplaint,
+        diagnosis: record.diagnosis,
+        treatment: record.treatment,
+        medications: record.medications,
+        status: record.status,
+      })),
+    };
+  }
+
+  /** 构建配方草稿摘要供 AI 使用 */
+  private async buildAiWizardDraftSummary(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<AiWizardDraftSummary> {
+    const draft = await this.getDraft(draftId, access);
+    const items = (draft.items ?? [])
+      .filter((item) => item.includeInAssessment !== false)
+      .map((item) => ({
+        name: this.resolveIngredientDisplayName(item),
+        category: this.resolveIngredientType(item),
+        weightG: item.weightG,
+        ratioPercent: item.ratioPercent,
+        isSupplement:
+          this.resolveIngredientType(item) === IngredientType.SUPPLEMENT,
+        preparationMethod: item.preparationMethod ?? null,
+        nutritionProfileSummary: this.buildAiItemNutritionProfileSummary(item),
+      }));
+    return {
+      name: draft.name,
+      scenario: draft.fediafDogScenario,
+      items,
+      totalWeightG: draft.totalWeightG,
+      energyDensityKcalPerKg: draft.energyDensityKcalPerKg,
+      assessmentSummaryText: this.buildAiAssessmentSummaryText(draft),
+    };
+  }
+
+  private buildAiItemNutritionProfileSummary(
+    item: DesignRecipeItemWithFood,
+  ): string | null {
+    const profile = item.nutritionFood?.nutritionData as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    if (!profile || typeof profile !== 'object') return null;
+    const parts: string[] = [];
+    const macro = profile.macros as Record<string, unknown> | null;
+    if (macro && typeof macro === 'object') {
+      const energy = macro.energyKcalPer100g ?? macro.energyKcal ?? macro.energy;
+      if (typeof energy === 'number') parts.push(`能量${energy}kcal/100g`);
+      const protein = macro.proteinG ?? macro.protein;
+      if (typeof protein === 'number') parts.push(`蛋白${protein}g/100g`);
+      const fat = macro.fatG ?? macro.fat;
+      if (typeof fat === 'number') parts.push(`脂肪${fat}g/100g`);
+      const carb = macro.carbohydrateG ?? macro.carbohydrate;
+      if (typeof carb === 'number') parts.push(`碳水${carb}g/100g`);
+    }
+    return parts.length > 0 ? parts.join('，') : null;
+  }
+
+  /** 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 inLibrary 与 ID 供一键添加 */
+  private async enrichRecommendationWithLibrary(
+    result: IngredientRecommendationResult,
+  ): Promise<IngredientRecommendationResult> {
+    const names = result.recommendations
+      .map((rec) => rec.name)
+      .filter((name) => Boolean(name) && name !== '未命名');
+    if (names.length === 0) return result;
+
+    // 营养食材库全量加载（数量有限，便于做名称包含匹配）
+    const foods = await this.prisma.nutritionFood.findMany({
+      select: {
+        id: true,
+        name: true,
+        displayNameZh: true,
+        mappings: {
+          select: {
+            ingredientId: true,
+            isPrimary: true,
+            ingredient: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    // 原料库全量名称（数量有限），做包含匹配
+    const allIngredients = await this.prisma.ingredient.findMany({
+      select: { id: true, name: true, type: true },
+    });
+
+    // 营养食材 → 主原料映射（供“按原料反查营养食材”用）
+    const foodByIngredientId = new Map<string, (typeof foods)[number]>();
+    for (const food of foods) {
+      for (const mapping of food.mappings ?? []) {
+        if (!foodByIngredientId.has(mapping.ingredientId)) {
+          foodByIngredientId.set(mapping.ingredientId, food);
+        }
+      }
+    }
+
+    // 去掉括号内容与空格，便于名称匹配（如「鸭胸肉（去皮）」→「鸭胸肉」）
+    const normalizeName = (value: string): string =>
+      value
+        .replace(/[（(][^（()）]*[）)]/g, '')
+        .replace(/\s+/g, '')
+        .trim();
+
+    /** 在营养食材库中按名称找最贴合的一项（先精确，再包含，取名称最短者） */
+    const resolveFood = (recName: string) => {
+      const normalized = normalizeName(recName);
+      const exact = foods.find(
+        (food) =>
+          normalizeName(food.name) === normalized ||
+          (food.displayNameZh && normalizeName(food.displayNameZh) === normalized),
+      );
+      if (exact) return exact;
+      const contains = foods
+        .filter((food) => {
+          const zhName = food.displayNameZh ?? '';
+          const foodNames = [normalizeName(food.name)];
+          if (zhName) foodNames.push(normalizeName(zhName));
+          return foodNames.some(
+            (candidate) =>
+              (candidate.length >= 2 &&
+                (normalized.includes(candidate) || candidate.includes(normalized))) ||
+              normalized.length >= 2 &&
+                (food.name.includes(normalized) || zhName.includes(normalized)),
+          );
+        })
+        .sort(
+          (a, b) =>
+            (a.displayNameZh ?? a.name).length - (b.displayNameZh ?? b.name).length,
+        )[0];
+      return contains;
+    };
+
+    /** 在原料库中按名称找（先精确，再包含） */
+    const resolveIngredient = (recName: string) => {
+      const normalized = normalizeName(recName);
+      const exact = allIngredients.find(
+        (ingredient) => normalizeName(ingredient.name) === normalized,
+      );
+      if (exact) return exact;
+      if (normalized.length >= 2) {
+        const candidate = allIngredients
+          .filter((ingredient) => {
+            const candidateName = normalizeName(ingredient.name);
+            return (
+              candidateName.length >= 2 &&
+              (normalized.includes(candidateName) || candidateName.includes(normalized))
+            );
+          })
+          .sort(
+            (a, b) =>
+              normalizeName(a.name).length - normalizeName(b.name).length,
+          )[0];
+        if (candidate) return candidate;
+      }
+      return undefined;
+    };
+
+    return {
+      ...result,
+      recommendations: result.recommendations.map((rec) => {
+        const food = resolveFood(rec.name);
+        const ingredient = resolveIngredient(rec.name);
+        const primaryMapping =
+          food?.mappings?.find((mapping) => mapping.isPrimary) ??
+          food?.mappings?.[0];
+        const resolvedIngredientId =
+          ingredient?.id ?? primaryMapping?.ingredientId ?? undefined;
+        // 若按原料名匹配到营养食材（AI 名称与原料名一致但营养食材名不同），补上 food
+        const resolvedFood =
+          food ??
+          (resolvedIngredientId
+            ? foodByIngredientId.get(resolvedIngredientId)
+            : undefined);
+        return {
+          ...rec,
+          inLibrary: Boolean(resolvedFood || ingredient),
+          nutritionFoodId: resolvedFood?.id ?? undefined,
+          ingredientId: resolvedIngredientId,
+        };
+      }),
+    };
+  }
+
+  /** 获取（或初始化）配方草稿的 AI 设计数据 */
+  private async getOrCreateAiDesignData(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<RecipeAiDesignData> {
+    await this.getDraft(draftId, access);
+    const record = await this.prisma.designRecipeAiDesignData.findUnique({
+      where: { designRecipeId: draftId },
+    });
+    if (!record) {
+      return {
+        nutritionPlan: null,
+        nutritionPlanHistory: [],
+        ingredientRecommendations: [],
+        reviewResults: [],
+        sop: null,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return normalizeAiDesignDataRecord(record);
+  }
+
+  /** 保存营养方案（生成后写入，未认可状态） */
+  private async persistAiNutritionPlan(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+    result: NutritionPlanResult,
+    meta: { accepted: boolean; note: string | null },
+  ): Promise<void> {
+    const aiData = await this.getOrCreateAiDesignData(draftId, access);
+    const history = aiData.nutritionPlanHistory;
+    const now = new Date().toISOString();
+    const wrapped = {
+      result,
+      accepted: meta.accepted,
+      acceptedAt: meta.accepted ? new Date().toISOString() : null,
+      note: meta.note,
+    };
+    await this.prisma.designRecipeAiDesignData.upsert({
+      where: { designRecipeId: draftId },
+      create: {
+        designRecipeId: draftId,
+        nutritionPlan: this.toJsonValue(wrapped),
+        nutritionPlanAccepted: meta.accepted,
+        nutritionPlanNote: meta.note,
+        nutritionPlanHistory: this.toJsonValue([
+          ...history,
+          { result, note: meta.note ?? '生成', createdAt: now },
+        ]),
+      },
+      update: {
+        nutritionPlan: this.toJsonValue(wrapped),
+        nutritionPlanAccepted: meta.accepted,
+        nutritionPlanNote: meta.note,
+        nutritionPlanHistory: this.toJsonValue([
+          ...history,
+          { result, note: meta.note ?? '生成', createdAt: now },
+        ]),
+      },
+    });
+  }
+
+  /** 解析草稿的参考犬 ID */
+  private async resolveDraftReferenceDogId(
+    draft: { seriesId?: string | null; customerDogId?: string | null },
+    context: RecipeDesignerAccessContext,
+  ): Promise<string | null> {
+    if (draft.customerDogId) return draft.customerDogId;
+    if (draft.seriesId) {
+      const series = await this.prisma.recipeSeries.findUnique({
+        where: { id: draft.seriesId },
+        select: { referenceDogId: true, customerDogId: true },
+      });
+      return series?.referenceDogId ?? series?.customerDogId ?? null;
+    }
+    return null;
+  }
+}
+
+// ---------- AI 四步向导辅助函数 ----------
+
+/** 由犬档案推导知识检索标签与关键词 */
+function deriveKnowledgeTags(profile: {
+  lifeStageLabel: string | null;
+  ageMonths: number | null;
+  bcsScore: number | null;
+  currentWeightKg: number;
+  weightTrend: Array<{ date: string; weightKg: number }>;
+  medicalHistory: string | null;
+  checkups: Array<{ findings: string | null; recommendations: string | null }>;
+  medicalRecords: Array<{
+    diagnosis: string | null;
+    chiefComplaint: string | null;
+  }>;
+}): { tags: string[]; keywords: string[] } {
+  const tags = new Set<string>();
+  const keywords: string[] = [];
+
+  // 生命阶段
+  const stageText = profile.lifeStageLabel ?? '';
+  if (/幼犬|14 周/.test(stageText)) {
+    tags.add('puppy');
+    tags.add('growth');
+  }
+  if (profile.ageMonths !== null && profile.ageMonths >= 84) {
+    tags.add('senior');
+    tags.add('geriatric');
+  }
+
+  // 体况
+  if (profile.bcsScore !== null) {
+    if (profile.bcsScore >= 7) {
+      tags.add('overweight');
+      tags.add('obese');
+      keywords.push('减重', '体重管理');
+    } else if (profile.bcsScore <= 3) {
+      tags.add('underweight');
+      keywords.push('增重', '体重管理');
+    }
+  }
+  if (profile.weightTrend.length >= 2) {
+    const first = profile.weightTrend[0].weightKg;
+    const last = profile.weightTrend[profile.weightTrend.length - 1].weightKg;
+    if (first > 0 && last > 0) {
+      const changeRatio = (last - first) / first;
+      if (changeRatio <= -0.05) {
+        tags.add('weight-loss');
+        keywords.push('体重下降');
+      } else if (changeRatio >= 0.05) {
+        tags.add('weight-gain');
+        keywords.push('体重上升');
+      }
+    }
+  }
+
+  // 病史 / 体检 / 病历关键词
+  const historyText = [
+    profile.medicalHistory ?? '',
+    ...profile.checkups.map(
+      (item) => `${item.findings ?? ''} ${item.recommendations ?? ''}`,
+    ),
+    ...profile.medicalRecords.map(
+      (item) => `${item.diagnosis ?? ''} ${item.chiefComplaint ?? ''}`,
+    ),
+  ].join(' ');
+
+  if (/肾|蛋白尿|肾衰|creatinine|肌酐/i.test(historyText)) {
+    tags.add('ckd');
+    tags.add('renal');
+    tags.add('kidney');
+    keywords.push('肾病', '磷');
+  }
+  if (/胰腺|胰炎|高脂|甘油三酯|血脂/i.test(historyText)) {
+    tags.add('pancreatitis');
+    tags.add('hyperlipidemia');
+    tags.add('low-fat');
+    keywords.push('低脂', '胰腺炎');
+  }
+  if (/肠|IBD|炎症性肠病|腹泻|便血|结肠炎|呕吐/i.test(historyText)) {
+    tags.add('ibd');
+    tags.add('cie');
+    tags.add('gi');
+    keywords.push('肠道', '消化');
+  }
+  if (/皮肤|瘙痒|过敏|掉毛|被毛|脱毛|湿疹/i.test(historyText)) {
+    tags.add('skin');
+    tags.add('food-allergy');
+    tags.add('coat');
+    keywords.push('皮肤', '过敏');
+  }
+  if (/结石|尿石|膀胱|尿路|结晶/i.test(historyText)) {
+    tags.add('urolith');
+    tags.add('urinary');
+    keywords.push('结石', '泌尿');
+  }
+
+  // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
+  if (
+    !['ckd', 'pancreatitis', 'ibd', 'skin', 'urolith'].some((tag) =>
+      tags.has(tag),
+    ) &&
+    !tags.has('puppy') &&
+    !tags.has('growth') &&
+    !tags.has('senior') &&
+    !tags.has('geriatric') &&
+    profile.ageMonths !== null &&
+    profile.ageMonths >= 12
+  ) {
+    tags.add('general');
+    tags.add('adult');
+    keywords.push('成年犬', '维持期');
+  }
+
+  return { tags: [...tags], keywords };
+}
+
+/** 由标签推导食谱结构框架模板名 */
+function deriveFrameworkTemplateName(tags: string[]): string {
+  const set = new Set(tags);
+  if (set.has('ckd') || set.has('renal')) return '肾脏病低磷模板';
+  if (set.has('pancreatitis') || set.has('hyperlipidemia')) return '胰腺炎/低脂模板';
+  if (set.has('urolith')) return '泌尿结石模板（需先明确结石类型）';
+  return '默认模板';
+}
+
+/** 计算两个日期之间的完整月数 */
+function calcMonthsBetween(from: Date, to: Date): number {
+  return (
+    (to.getFullYear() - from.getFullYear()) * 12 +
+    (to.getMonth() - from.getMonth())
+  );
+}
+
+/** 将 Prisma 记录归一化为 RecipeAiDesignData */
+function normalizeAiDesignDataRecord(record: {
+  nutritionPlan: unknown;
+  nutritionPlanAccepted: boolean;
+  nutritionPlanAcceptedAt: Date | null;
+  nutritionPlanNote: string | null;
+  nutritionPlanHistory: unknown;
+  ingredientRecommendations: unknown;
+  reviewResults: unknown;
+  sop: unknown;
+  sopAccepted: boolean;
+  sopAcceptedAt: Date | null;
+  updatedAt: Date;
+}): RecipeAiDesignData {
+  return {
+    nutritionPlan:
+      record.nutritionPlan &&
+      typeof record.nutritionPlan === 'object' &&
+      !Array.isArray(record.nutritionPlan)
+        ? {
+            result: (record.nutritionPlan as Record<string, unknown>)
+              .result as NutritionPlanResult,
+            accepted: record.nutritionPlanAccepted,
+            acceptedAt: record.nutritionPlanAcceptedAt
+              ? record.nutritionPlanAcceptedAt.toISOString()
+              : undefined,
+            note: record.nutritionPlanNote ?? undefined,
+          }
+        : null,
+    nutritionPlanHistory: Array.isArray(record.nutritionPlanHistory)
+      ? (record.nutritionPlanHistory as Array<{
+          result: NutritionPlanResult;
+          note?: string;
+          createdAt: string;
+        }>)
+      : [],
+    ingredientRecommendations: Array.isArray(
+      record.ingredientRecommendations,
+    )
+      ? (record.ingredientRecommendations as Array<{
+          result: IngredientRecommendationResult;
+          createdAt: string;
+        }>)
+      : [],
+    reviewResults: Array.isArray(record.reviewResults)
+      ? (record.reviewResults as Array<{
+          result: RecipeReviewResult;
+          createdAt: string;
+        }>)
+      : [],
+    sop:
+      record.sop &&
+      typeof record.sop === 'object' &&
+      !Array.isArray(record.sop)
+        ? {
+            result: (record.sop as Record<string, unknown>)
+              .result as SopResult,
+            accepted: record.sopAccepted,
+            acceptedAt: record.sopAcceptedAt
+              ? record.sopAcceptedAt.toISOString()
+              : undefined,
+          }
+        : null,
+    updatedAt: record.updatedAt.toISOString(),
+  };
 }

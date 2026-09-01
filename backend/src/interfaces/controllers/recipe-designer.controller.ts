@@ -30,6 +30,8 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
   AiDesignSuggestDto,
+  AiNutritionPlanAcceptDto,
+  AiNutritionPlanGenerateDto,
   BatchReorderDesignItemsDto,
   CreatePrivateRecipeSnapshotDto,
   CopyRecipeSeriesStageIngredientsDto,
@@ -602,6 +604,115 @@ export class RecipeDesignerController {
       dogId,
       toRecipeDesignerAccessContext(user),
       dto.draftId,
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  // ---------- AI 设计建议四步向导 ----------
+
+  /** 步骤一：生成营养方案 */
+  @Post('dogs/:dogId/design-insight/ai-nutrition-plan')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Step 1: generate a nutrition plan with knowledge citations for a dog',
+  })
+  async generateAiNutritionPlan(
+    @Param('dogId') dogId: string,
+    @Body() dto: AiNutritionPlanGenerateDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.generateAiNutritionPlan(
+      dogId,
+      dto.draftId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  /** 步骤一（共识）：认可 / 修改营养方案 */
+  @Post('drafts/:draftId/ai/nutrition-plan/accept')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Accept or revise the nutrition plan for a draft',
+  })
+  async acceptAiNutritionPlan(
+    @Param('draftId') draftId: string,
+    @Body() dto: AiNutritionPlanAcceptDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.acceptAiNutritionPlan(
+      draftId,
+      dto,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  /** 步骤二：食材推荐 */
+  @Post('drafts/:draftId/ai/ingredient-recommendation')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Step 2: recommend ingredients based on the accepted nutrition plan',
+  })
+  async generateAiIngredientRecommendation(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result =
+      await this.recipeDesignerService.generateAiIngredientRecommendation(
+        draftId,
+        toRecipeDesignerAccessContext(user),
+      );
+    return ApiResponseDto.success(result);
+  }
+
+  /** 步骤三：食谱审核 */
+  @Post('drafts/:draftId/ai/review')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Step 3: review the recipe against the plan, framework and diversity',
+  })
+  async reviewAiRecipe(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.reviewAiRecipe(
+      draftId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  /** 步骤四：生成制作 SOP */
+  @Post('drafts/:draftId/ai/sop')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Step 4: generate production and customer SOP for the draft',
+  })
+  async generateAiSop(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.generateAiSop(
+      draftId,
+      toRecipeDesignerAccessContext(user),
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  /** 读取配方草稿上的 AI 设计数据 */
+  @Get('drafts/:draftId/ai-design-data')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Read persisted AI design data (plan / recommendations / reviews / SOP) of a draft',
+  })
+  async getAiDesignData(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeDesignerService.getAiDesignData(
+      draftId,
+      toRecipeDesignerAccessContext(user),
     );
     return ApiResponseDto.success(result);
   }

@@ -22,7 +22,8 @@ export type KnowledgeDomain =
   | 'ORTHO' // 骨关节 / 骨关节炎
   | 'ONCO' // 癌症 / 肿瘤
   | 'NEURO' // 神经认知 / 脑老化（CDS）
-  | 'DENTAL'; // 口腔 / 牙周病
+  | 'DENTAL' // 口腔 / 牙周病
+  | 'REPRO'; // 繁殖围产期（母犬妊娠/哺乳）
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -41,6 +42,7 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   ONCO: '癌症/肿瘤',
   NEURO: '神经认知/脑老化',
   DENTAL: '口腔/牙周病',
+  REPRO: '繁殖围产期',
 };
 
 export interface KnowledgeCitation {

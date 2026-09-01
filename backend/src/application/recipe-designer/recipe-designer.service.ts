@@ -8173,6 +8173,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('oral');
     keywords.push('口腔', '牙周', '牙龈');
   }
+  if (/妊娠|怀孕|哺乳|产仔|发情|配种|待产|繁殖/i.test(historyText)) {
+    tags.add('repro');
+    tags.add('pregnant');
+    tags.add('lactating');
+    keywords.push('妊娠', '哺乳', '繁殖');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8202,6 +8208,9 @@ function deriveKnowledgeTags(profile: {
       'dental',
       'periodontal',
       'oral',
+      'repro',
+      'pregnant',
+      'lactating',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

@@ -8161,6 +8161,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('tumor');
     keywords.push('癌症', '肿瘤', '癌');
   }
+  if (/认知|痴呆|脑老化|脑衰弱|记忆|认知功能障碍/i.test(historyText)) {
+    tags.add('neuro');
+    tags.add('cognitive');
+    tags.add('cds');
+    keywords.push('认知', '脑老化', '记忆');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8184,6 +8190,9 @@ function deriveKnowledgeTags(profile: {
       'onco',
       'cancer',
       'tumor',
+      'neuro',
+      'cognitive',
+      'cds',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

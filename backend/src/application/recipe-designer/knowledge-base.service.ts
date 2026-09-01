@@ -18,6 +18,7 @@ import { HEPATIC_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/d
 import { CARDIO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/cardio';
 import { ORTHO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/ortho';
 import { ONCO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/onco';
+import { NEURO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/neuro';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -34,6 +35,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   CARDIO: CARDIO_KNOWLEDGE,
   ORTHO: ORTHO_KNOWLEDGE,
   ONCO: ONCO_KNOWLEDGE,
+  NEURO: NEURO_KNOWLEDGE,
 };
 
 /**

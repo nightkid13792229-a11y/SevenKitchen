@@ -20,7 +20,8 @@ export type KnowledgeDomain =
   | 'HEPATIC' // 肝胆疾病
   | 'CARDIO' // 心血管疾病
   | 'ORTHO' // 骨关节 / 骨关节炎
-  | 'ONCO'; // 癌症 / 肿瘤
+  | 'ONCO' // 癌症 / 肿瘤
+  | 'NEURO'; // 神经认知 / 脑老化（CDS）
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -37,6 +38,7 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   CARDIO: '心血管疾病',
   ORTHO: '骨关节/骨关节炎',
   ONCO: '癌症/肿瘤',
+  NEURO: '神经认知/脑老化',
 };
 
 export interface KnowledgeCitation {

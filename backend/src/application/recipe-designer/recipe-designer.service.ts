@@ -8127,12 +8127,30 @@ function deriveKnowledgeTags(profile: {
     tags.add('urinary');
     keywords.push('结石', '泌尿');
   }
+  if (/糖尿|血糖|胰岛素/i.test(historyText)) {
+    tags.add('diabetes');
+    tags.add('diabetic');
+    tags.add('endocrine');
+    keywords.push('糖尿病', '血糖', '降糖');
+  }
+  if (/甲减|甲状腺功能减退|甲状腺|甲亢|甲状腺功能亢进/i.test(historyText)) {
+    tags.add('thyroid');
+    tags.add('endocrine');
+    keywords.push('甲减', '甲亢', '甲状腺');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
-    !['ckd', 'pancreatitis', 'ibd', 'skin', 'urolith'].some((tag) =>
-      tags.has(tag),
-    ) &&
+    ![
+      'ckd',
+      'pancreatitis',
+      'ibd',
+      'skin',
+      'urolith',
+      'diabetes',
+      'thyroid',
+      'endocrine',
+    ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&
     !tags.has('senior') &&

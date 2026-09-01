@@ -13,6 +13,7 @@ import { PANCREATITIS_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-b
 import { GI_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/gi';
 import { SKIN_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/skin';
 import { UROLITH_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/urolith';
+import { ENDOCRINE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/endocrine';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -24,6 +25,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GI: GI_KNOWLEDGE,
   SKIN: SKIN_KNOWLEDGE,
   UROLITH: UROLITH_KNOWLEDGE,
+  ENDOCRINE: ENDOCRINE_KNOWLEDGE,
 };
 
 /**

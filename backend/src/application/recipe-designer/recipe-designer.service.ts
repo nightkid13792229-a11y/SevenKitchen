@@ -8149,6 +8149,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('heart');
     keywords.push('心脏', '心衰', '心血管');
   }
+  if (/关节|骨关节炎|关节炎|骨科|髌骨|十字韧带|髋关节|退行性关节/i.test(historyText)) {
+    tags.add('ortho');
+    tags.add('arthritis');
+    tags.add('joint');
+    keywords.push('骨关节炎', '关节', '骨科');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8166,6 +8172,9 @@ function deriveKnowledgeTags(profile: {
       'cardio',
       'cardiac',
       'heart',
+      'ortho',
+      'arthritis',
+      'joint',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

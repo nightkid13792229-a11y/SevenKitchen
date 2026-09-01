@@ -16,6 +16,7 @@ import { UROLITH_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/d
 import { ENDOCRINE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/endocrine';
 import { HEPATIC_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/hepatic';
 import { CARDIO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/cardio';
+import { ORTHO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/ortho';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -30,6 +31,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   ENDOCRINE: ENDOCRINE_KNOWLEDGE,
   HEPATIC: HEPATIC_KNOWLEDGE,
   CARDIO: CARDIO_KNOWLEDGE,
+  ORTHO: ORTHO_KNOWLEDGE,
 };
 
 /**

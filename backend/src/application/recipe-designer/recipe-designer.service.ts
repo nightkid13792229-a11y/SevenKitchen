@@ -8143,6 +8143,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('liver');
     keywords.push('肝脏', '肝病', '肝');
   }
+  if (/心|心脏|心衰|充血性心衰|心肌病|瓣膜|心血管|心功能不全/i.test(historyText)) {
+    tags.add('cardio');
+    tags.add('cardiac');
+    tags.add('heart');
+    keywords.push('心脏', '心衰', '心血管');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8157,6 +8163,9 @@ function deriveKnowledgeTags(profile: {
       'endocrine',
       'hepatic',
       'liver',
+      'cardio',
+      'cardiac',
+      'heart',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

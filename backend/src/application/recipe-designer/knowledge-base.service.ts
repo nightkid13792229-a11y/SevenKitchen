@@ -19,6 +19,7 @@ import { CARDIO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/da
 import { ORTHO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/ortho';
 import { ONCO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/onco';
 import { NEURO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/neuro';
+import { DENTAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/dental';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -36,6 +37,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   ORTHO: ORTHO_KNOWLEDGE,
   ONCO: ONCO_KNOWLEDGE,
   NEURO: NEURO_KNOWLEDGE,
+  DENTAL: DENTAL_KNOWLEDGE,
 };
 
 /**

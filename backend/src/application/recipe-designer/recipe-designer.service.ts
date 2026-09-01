@@ -8167,6 +8167,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('cds');
     keywords.push('认知', '脑老化', '记忆');
   }
+  if (/牙|牙周|牙龈|口腔|牙齿|牙结石|口炎/i.test(historyText)) {
+    tags.add('dental');
+    tags.add('periodontal');
+    tags.add('oral');
+    keywords.push('口腔', '牙周', '牙龈');
+  }
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
@@ -8193,6 +8199,9 @@ function deriveKnowledgeTags(profile: {
       'neuro',
       'cognitive',
       'cds',
+      'dental',
+      'periodontal',
+      'oral',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

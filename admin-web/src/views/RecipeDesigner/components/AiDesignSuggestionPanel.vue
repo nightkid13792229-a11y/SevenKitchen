@@ -1,6 +1,6 @@
 <template>
   <div class="ai-panel">
-    <div class="ai-panel-head" @click="toggleExpanded">
+    <div class="ai-panel-head">
       <span class="ai-panel-title">🤖 AI 设计建议</span>
       <el-tooltip
         content="四步向导：营养方案（权威资料引用）→ 食材推荐 → 食谱审核 → 制作 SOP。结果保存在配方草稿上，仅供设计参考。"
@@ -8,14 +8,10 @@
       >
         <el-icon class="ai-tip"><QuestionFilled /></el-icon>
       </el-tooltip>
-      <el-icon class="ai-expand-icon" :class="{ expanded }">
-        <ArrowDown v-if="!expanded" />
-        <ArrowUp v-else />
-      </el-icon>
-      <el-icon class="ai-close-icon" @click.stop="emit('close')"><Close /></el-icon>
+      <el-icon class="ai-close-icon" @click="emit('close')"><Close /></el-icon>
     </div>
 
-    <div v-if="expanded" class="ai-panel-body">
+    <div class="ai-panel-body">
       <!-- 未设置参考爱犬 -->
       <div v-if="!dogId" class="ai-empty">
         <el-icon><WarningFilled /></el-icon>
@@ -51,7 +47,7 @@
               size="small"
               type="primary"
               plain
-              @click="generateNutritionPlan"
+              @click="generateNutritionPlan(planNote || null)"
             >
               {{ nutritionPlan ? '重新生成' : '生成营养方案' }}
             </el-button>
@@ -91,6 +87,21 @@
               <div v-for="(item, index) in nutritionPlan.nutritionFocus" :key="index" class="ai-row">
                 <span class="ai-name">{{ item.point }}</span>
                 <span class="ai-reason">{{ item.reason }}</span>
+                <div
+                  v-if="item.citationIds?.length"
+                  class="ai-cite-toggle"
+                  @click="toggleCitation('f' + index)"
+                >
+                  <el-icon><Notebook /></el-icon>
+                  <span>引用 {{ item.citationIds.length }}</span>
+                  <el-icon class="ai-cite-arrow" :class="{ open: expandedCitationKey === 'f' + index }"><ArrowDown /></el-icon>
+                </div>
+                <div v-if="expandedCitationKey === 'f' + index" class="ai-cite-list">
+                  <div v-for="(c, ci) in citationRefs(item.citationIds)" :key="ci" class="ai-citation">
+                    <el-tag size="small" type="info">{{ c.id }}</el-tag>
+                    <span>{{ c.source }}{{ c.chapter ? ' · ' + c.chapter : '' }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="nutritionPlan.precautions.length" class="ai-block">
@@ -98,13 +109,21 @@
               <div v-for="(item, index) in nutritionPlan.precautions" :key="index" class="ai-row">
                 <span class="ai-name">{{ item.point }}</span>
                 <span class="ai-reason">{{ item.reason }}</span>
-              </div>
-            </div>
-            <div v-if="nutritionPlan.citations.length" class="ai-block">
-              <div class="ai-block-title">出处引用</div>
-              <div v-for="(item, index) in nutritionPlan.citations" :key="index" class="ai-citation">
-                <el-tag size="small" type="info">{{ item.id }}</el-tag>
-                <span>{{ item.source }}{{ item.chapter ? ' · ' + item.chapter : '' }}</span>
+                <div
+                  v-if="item.citationIds?.length"
+                  class="ai-cite-toggle"
+                  @click="toggleCitation('p' + index)"
+                >
+                  <el-icon><Notebook /></el-icon>
+                  <span>引用 {{ item.citationIds.length }}</span>
+                  <el-icon class="ai-cite-arrow" :class="{ open: expandedCitationKey === 'p' + index }"><ArrowDown /></el-icon>
+                </div>
+                <div v-if="expandedCitationKey === 'p' + index" class="ai-cite-list">
+                  <div v-for="(c, ci) in citationRefs(item.citationIds)" :key="ci" class="ai-citation">
+                    <el-tag size="small" type="info">{{ c.id }}</el-tag>
+                    <span>{{ c.source }}{{ c.chapter ? ' · ' + c.chapter : '' }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="nutritionPlan.warnings.length" class="ai-warnings">
@@ -118,15 +137,15 @@
                 v-model="planNote"
                 type="textarea"
                 :rows="2"
-                placeholder="如需修改方案，请在此填写修改意见（可选），再点击认可"
+                placeholder="如需修改方案，请在此填写修改建议，然后点「按建议重新生成」；满意则点「认可方案」"
                 class="plan-note-input"
               />
               <div class="plan-action-buttons">
-                <el-button type="primary" size="small" :loading="acceptLoading" @click="acceptPlan(true)">
-                  认可方案
+                <el-button type="primary" size="small" :loading="planLoading" @click="generateNutritionPlan(planNote || null)">
+                  按建议重新生成
                 </el-button>
-                <el-button size="small" :loading="acceptLoading" @click="acceptPlan(false)">
-                  不认可（记录意见）
+                <el-button size="small" :loading="acceptLoading" @click="acceptPlan">
+                  认可方案
                 </el-button>
               </div>
             </div>
@@ -347,11 +366,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ArrowUp, Close, QuestionFilled, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Close, Notebook, QuestionFilled, WarningFilled } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type {
   IngredientRecommendationItem,
   IngredientRecommendationResult,
+  NutritionPlanCitation,
   NutritionPlanResult,
   RecipeAiDesignData,
   RecipeReviewResult,
@@ -374,7 +394,6 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
-const expanded = ref(false)
 const aiEnabled = ref(false)
 const currentStep = ref(0)
 const planLoading = ref(false)
@@ -409,11 +428,6 @@ const overallLabel = computed(() => {
   }
   return map[review.value.overall] ?? review.value.overall
 })
-
-function toggleExpanded() {
-  expanded.value = !expanded.value
-  if (expanded.value) void loadAiDesignData()
-}
 
 function issueLevelLabel(level: ReviewIssue['level']): string {
   return { error: '问题', warning: '提醒', info: '提示' }[level] ?? level
@@ -461,16 +475,19 @@ async function loadAiDesignData() {
   }
 }
 
-async function generateNutritionPlan() {
+async function generateNutritionPlan(userNotes?: string | null) {
   if (!props.dogId) return
   planLoading.value = true
   try {
     nutritionPlan.value = await recipeDesignerApi.generateAiNutritionPlan(
       props.dogId,
       props.draftId,
+      userNotes ?? null,
     )
     nutritionPlanAccepted.value = false
-    planNote.value = ''
+    if (userNotes) {
+      ElMessage.success('已按您填写的修改建议重新生成营养方案')
+    }
     await loadAiDesignData()
   } catch {
     // 拦截器已提示
@@ -479,20 +496,17 @@ async function generateNutritionPlan() {
   }
 }
 
-async function acceptPlan(accepted: boolean) {
+async function acceptPlan() {
   if (!props.draftId || !nutritionPlan.value) return
   acceptLoading.value = true
   try {
     await recipeDesignerApi.acceptAiNutritionPlan(props.draftId, {
-      accepted,
+      accepted: true,
       note: planNote.value || null,
-      plan: accepted ? nutritionPlan.value : null,
+      plan: nutritionPlan.value,
     })
-    if (accepted) {
-      ElMessage.success('营养方案已认可，可作为后续步骤的依据')
-    } else {
-      ElMessage.info('已记录修改意见，可重新生成或调整')
-    }
+    ElMessage.success('营养方案已认可，可作为后续步骤的依据')
+    planNote.value = ''
     await loadAiDesignData()
   } catch {
     // 拦截器已提示
@@ -572,7 +586,7 @@ watch(
     nutritionPlanAccepted.value = false
     aiEnabled.value = false
     currentStep.value = 0
-    if (expanded.value) void loadAiDesignData()
+    void loadAiDesignData()
     void loadAiEnabled()
   },
   { immediate: true }
@@ -581,6 +595,24 @@ watch(
 onMounted(() => {
   void loadAiEnabled()
 })
+
+// 需求2：观点旁的出处引用（点击展开/收起）
+const expandedCitationKey = ref<string>('')
+
+function citationRefs(citationIds?: string[]) {
+  if (!citationIds?.length || !nutritionPlan.value?.citations?.length) return []
+  const map = new Map(
+    nutritionPlan.value.citations.map((c) => [c.id, c]),
+  )
+  return citationIds.map((id) => map.get(id)).filter(Boolean) as Array<
+    NonNullable<NutritionPlanCitation>
+  >
+}
+
+function toggleCitation(key: string) {
+  expandedCitationKey.value =
+    expandedCitationKey.value === key ? '' : key
+}
 </script>
 
 <style scoped>
@@ -620,20 +652,11 @@ onMounted(() => {
   font-size: 13px;
   color: #909399;
 }
-.ai-expand-icon {
-  margin-left: auto;
-  font-size: 13px;
-  color: #909399;
-  transition: transform 0.2s;
-}
-.ai-expand-icon.expanded {
-  transform: rotate(180deg);
-}
 .ai-close-icon {
+  margin-left: auto;
   font-size: 14px;
   color: #909399;
   cursor: pointer;
-  margin-left: 2px;
 }
 .ai-close-icon:hover {
   color: #f56c6c;
@@ -857,6 +880,36 @@ onMounted(() => {
 .ai-citation .el-tag {
   flex-shrink: 0;
   margin-top: 1px;
+}
+.ai-cite-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  cursor: pointer;
+  user-select: none;
+}
+.ai-cite-toggle:hover {
+  color: #409eff;
+}
+.ai-cite-arrow {
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.ai-cite-arrow.open {
+  transform: rotate(180deg);
+}
+.ai-cite-list {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: #f8f9fb;
+  border-radius: 6px;
+  border-left: 3px solid #409eff;
+}
+.ai-cite-list .ai-citation {
+  padding: 3px 0;
 }
 .ai-rec-row {
   display: flex;

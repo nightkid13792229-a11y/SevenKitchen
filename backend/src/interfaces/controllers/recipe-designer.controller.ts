@@ -625,6 +625,7 @@ export class RecipeDesignerController {
       dogId,
       dto.draftId,
       toRecipeDesignerAccessContext(user),
+      dto.userNotes,
     );
     return ApiResponseDto.success(result);
   }

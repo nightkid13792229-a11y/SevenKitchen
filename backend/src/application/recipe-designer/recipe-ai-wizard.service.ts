@@ -75,6 +75,8 @@ export interface NutritionPlanInput {
   knowledgeTags: string[];
   extraKeywords: string[];
   currentDraft: AiWizardDraftSummary | null;
+  /** 用户/营养师对既有方案的修改建议（按建议优化重生成） */
+  userNotes?: string | null;
 }
 
 export interface IngredientRecommendationInput {
@@ -142,6 +144,7 @@ export class RecipeAiWizardService {
         dog: input.dog,
         knowledgeContext,
         currentDraft: input.currentDraft ?? null,
+        userNotes: input.userNotes ?? null,
       },
     });
     return normalizeNutritionPlanResult(parsed);
@@ -232,6 +235,7 @@ function buildNutritionPlanSystemPrompt(): string {
   return [
     '你是一名资深宠物犬鲜食营养师，为宠物鲜食工作室的配方设计提供营养方案。',
     '你会收到一只犬的完整档案（性别、年龄、绝育、BCS、活动量、餐数、零食、目标热量、体重趋势、体检记录、病历等），以及一段「可引用的权威知识条目」。',
+    '若提供了 userNotes（用户/营养师对既有方案的修改建议），请把该建议作为优先修订意见，在不违背犬档案与权威知识的基础上，据此优化/调整方案；若 userNotes 为空则按常规生成。',
     '请基于犬档案与知识条目，生成一份完整营养方案：',
     '- summary: string，1-2 句概括核心营养要点与设计方向。',
     '- caloriesPerDayKcal: number|null，每日目标热量（kcal）。结合体重、体重趋势、活动量、零食热量计算；数据不足时为 null 并说明。',

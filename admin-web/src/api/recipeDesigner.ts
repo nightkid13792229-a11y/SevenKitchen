@@ -175,8 +175,8 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-suggest`, { draftId }),
 
   // AI 设计建议四步向导
-  generateAiNutritionPlan: (dogId: string, draftId?: string): Promise<NutritionPlanResult> =>
-    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId }),
+  generateAiNutritionPlan: (dogId: string, draftId?: string, userNotes?: string | null): Promise<NutritionPlanResult> =>
+    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId, userNotes }),
   acceptAiNutritionPlan: (
     draftId: string,
     data: { accepted: boolean; note?: string | null; plan?: NutritionPlanResult | null }

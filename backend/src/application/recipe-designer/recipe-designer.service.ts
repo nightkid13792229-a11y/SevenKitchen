@@ -7374,6 +7374,7 @@ export class RecipeDesignerService {
     dogId: string,
     draftId: string | undefined,
     access: RecipeDesignerAccessInput,
+    userNotes?: string | null,
   ): Promise<NutritionPlanResult> {
     const context = normalizeRecipeDesignerAccessContext(access);
     if (!isInternalRecipeDesignerRole(context)) {
@@ -7394,6 +7395,7 @@ export class RecipeDesignerService {
       knowledgeTags: tags,
       extraKeywords: keywords,
       currentDraft,
+      userNotes: userNotes ?? null,
     });
 
     if (draftId) {

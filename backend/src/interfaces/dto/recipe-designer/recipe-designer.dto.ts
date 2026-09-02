@@ -150,6 +150,10 @@ export class AiNutritionPlanGenerateDto {
   @IsOptional()
   @IsString()
   draftId?: string;
+
+  @IsOptional()
+  @IsString()
+  userNotes?: string;
 }
 
 export class AiNutritionPlanAcceptDto {

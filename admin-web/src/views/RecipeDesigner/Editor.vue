@@ -39,6 +39,11 @@
           @click="redo"
         >重做</el-button>
         <el-button
+          text
+          :type="aiPanelVisible ? 'primary' : 'default'"
+          @click="aiPanelVisible = !aiPanelVisible"
+        >🤖 AI 设计建议</el-button>
+        <el-button
           v-if="canRevert"
           text
           :loading="reverting"
@@ -73,12 +78,6 @@
           配方明细
           <span class="item-count">原料 {{ items.length }} 种 · 总重 {{ includedTotalWeightText }}</span>
         </div>
-        <AiDesignSuggestionPanel
-          v-if="draft"
-          :dog-id="referenceDogId"
-          :draft-id="draft?.id"
-          @add-item="handleAiAddItem"
-        />
         <div v-loading="initialLoading" class="item-list">
           <el-empty v-if="!initialLoading && items.length === 0" description="从左侧原料库点击食材加入配方" />
           <draggable
@@ -170,6 +169,15 @@
         </div>
       </div>
     </div>
+
+    <!-- AI 设计建议：右侧独立抽屉（不占编辑区布局，内容过长在抽屉内滚动） -->
+    <AiDesignSuggestionPanel
+      v-if="draft && aiPanelVisible"
+      :dog-id="referenceDogId"
+      :draft-id="draft?.id"
+      @add-item="handleAiAddItem"
+      @close="aiPanelVisible = false"
+    />
   </div>
 </template>
 
@@ -243,6 +251,7 @@ const assessment = computed<DesignRecipeAssessmentResult | null>(() => {
 })
 
 const referenceDogId = ref<string | null>(null)
+const aiPanelVisible = ref(false)
 
 function syncReferenceDog() {
   referenceDogId.value = draft.value?.series?.referenceDogId ?? null

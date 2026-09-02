@@ -12,6 +12,7 @@
         <ArrowDown v-if="!expanded" />
         <ArrowUp v-else />
       </el-icon>
+      <el-icon class="ai-close-icon" @click.stop="emit('close')"><Close /></el-icon>
     </div>
 
     <div v-if="expanded" class="ai-panel-body">
@@ -346,7 +347,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ArrowUp, QuestionFilled, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, Close, QuestionFilled, WarningFilled } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type {
   IngredientRecommendationItem,
@@ -370,6 +371,7 @@ const emit = defineEmits<{
     nutritionFoodId?: string
     weightG?: number
   }): void
+  (event: 'close'): void
 }>()
 
 const expanded = ref(false)
@@ -583,7 +585,17 @@ onMounted(() => {
 
 <style scoped>
 .ai-panel {
-  border-bottom: 1px solid #ebeef5;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #ebeef5;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.08);
+  z-index: 20;
 }
 .ai-panel-head {
   display: flex;
@@ -593,6 +605,8 @@ onMounted(() => {
   cursor: pointer;
   user-select: none;
   background: #fafafa;
+  flex-shrink: 0;
+  border-bottom: 1px solid #ebeef5;
 }
 .ai-panel-head:hover {
   background: #f0f2f5;
@@ -615,7 +629,19 @@ onMounted(() => {
 .ai-expand-icon.expanded {
   transform: rotate(180deg);
 }
+.ai-close-icon {
+  font-size: 14px;
+  color: #909399;
+  cursor: pointer;
+  margin-left: 2px;
+}
+.ai-close-icon:hover {
+  color: #f56c6c;
+}
 .ai-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 10px;
 }
 .ai-empty {

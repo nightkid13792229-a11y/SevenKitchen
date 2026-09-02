@@ -57,7 +57,7 @@ export const GROWTH_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第17章 幼犬生长', note: '表17-1 关键营养因子；正文 Protein 节' },
       { source: 'FEDIAF 犬猫营养指南', chapter: '生长阶段', note: '表 III-3a/3b 犬全价粮推荐营养水平（早期/后期生长）' },
-      { source: 'NRC《犬猫营养需要》(2006)', chapter: '生长', note: '17.5% DM 最低推荐允许量等数值经 SACN5 第17章转引' },
+      { source: 'NRC《犬猫营养需要》(2006)', chapter: '生长', note: '17.5% DM 最低推荐允许量等数值经 SACN5 第17章转引（NRC 原书表15-3 幼犬断奶后生长 RA）' },
     ],
     priority: 'HIGH',
   },

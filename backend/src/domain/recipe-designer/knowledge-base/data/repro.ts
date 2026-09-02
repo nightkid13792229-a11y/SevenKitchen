@@ -62,7 +62,7 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
       '繁殖期营养需求远高于维持（尤其哺乳），需用专门的繁殖/成长配方或合理搭配。',
     ],
     citations: [
-      { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: '表15-5 繁殖犬关键营养因素、表15-9 商品粮对比' },
+      { source: '小动物临床营养学（第5版）', chapter: '第15章 繁殖犬的饲养', note: '表15-5 繁殖犬关键营养因素、表15-9 商品粮对比；对应 NRC 原书表15-8 母犬妊娠晚期/哺乳高峰 RA' },
     ],
     priority: 'HIGH',
   },

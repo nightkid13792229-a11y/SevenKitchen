@@ -17,7 +17,8 @@ import type { KnowledgeEntry } from '../types';
  * - FEDIAF 犬猫营养指南（2025 版，本地 PDF）：
  *   表 III-3a 犬全价粮推荐营养水平、7.2.4.1 犬每日能量摄入建议（表 VII-6/VII-7）、
  *   7.7 常见人食风险（葡萄/巧克力/洋葱大蒜）
- * - NRC《犬猫营养需要》(2006) 数值经 SACN5 第13章转引，已在 note 中注明。
+ * - NRC《犬猫营养需要》(2006)：成犬维持营养需要量表15-5（Recommended Allowance），幼犬表15-3、母犬表15-8；
+ *   数值经 SACN5 第13章转引，本次已补充原书表格出处。
  */
 export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
@@ -45,7 +46,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       '具体喂食量需结合个体活动量、绝育状态、品种与环境温度，由营养师/兽医判断。',
     ],
     citations: [
-      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Energy 节、表13-2、绝育犬能量建议；RER 与 NRC 2006 数值经本章转引' },
+      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Energy 节、表13-2、绝育犬能量建议；RER 与 NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持）' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '7.2.4.1 犬每日能量摄入建议', note: '表 VII-6 各年龄 MER、表 VII-7 活动量与品种差异' },
     ],
     priority: 'HIGH',
@@ -74,7 +75,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       '鲜食/自制粮的氨基酸谱需由营养师按配方核算，不能仅看粗蛋白百分比。',
     ],
     citations: [
-      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Protein 节；NRC 2006 最低推荐允许量经本章转引' },
+      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Protein 节；NRC 2006 最低推荐允许量经本章转引（NRC 原书表15-5 成犬维持 RA）' },
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '自制粮蛋白/磷过量的常见问题' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬粗蛋白与氨基酸最低水平' },
     ],
@@ -104,7 +105,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
       'EPA/DHA 等补充剂的具体剂量需结合个体情况，由营养师判断；长期大剂量鱼油需评估维生素 E 平衡。',
     ],
     citations: [
-      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Fat and Essential Fatty Acids 节；NRC 2006 数值经本章转引' },
+      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Fat and Essential Fatty Acids 节；NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持 RA）' },
       { source: '小动物临床营养学（第5版）', chapter: '第14章 中老年犬饲养', note: '中老年犬脂肪推荐 7-15% DM' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬脂肪与亚油酸最低水平' },
     ],
@@ -134,7 +135,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第12章 正常犬饲养导论', note: '表12-5 成年犬 RDA 与牛肉对比' },
-      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Phosphorus 节；NRC 2006 数值经本章转引' },
+      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Phosphorus 节；NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持 RA）' },
       { source: '小动物临床营养学（第5版）', chapter: '第10章 家庭自制宠物食品', note: '自制粮钙磷失衡与纠正方法' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬钙磷最低水平与钙磷比' },
     ],
@@ -166,7 +167,7 @@ export const GENERAL_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第12章 正常犬饲养导论', note: '表12-5 成年犬矿物质 RDA' },
-      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Sodium and Chloride 节、硒最低需要；NRC 2006 数值经本章转引' },
+      { source: '小动物临床营养学（第5版）', chapter: '第13章 青年成年犬饲养：中年前期', note: 'Sodium and Chloride 节、硒最低需要；NRC 2006 数值经本章转引（NRC 原书表15-5 成犬维持 RA）' },
       { source: 'FEDIAF 犬猫营养指南（2025）', chapter: '3.2.2 犬全价粮推荐营养水平', note: '表 III-3a 成年犬矿物质与微量元素最低水平及上限' },
     ],
     priority: 'MEDIUM',

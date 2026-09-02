@@ -8179,6 +8179,12 @@ function deriveKnowledgeTags(profile: {
     tags.add('lactating');
     keywords.push('妊娠', '哺乳', '繁殖');
   }
+  if (/贫血|缺铁|血细胞|红细胞|造血|血液学/i.test(historyText)) {
+    tags.add('hemo');
+    tags.add('anemia');
+    tags.add('blood');
+    keywords.push('贫血', '造血', '血液');
+  }
 
   // 危重症/营养支持：作为支持性领域，可与疾病领域叠加，不加入下方兜底排除
   if (/危重|重症|病危|住院|恶病质|严重营养不良/i.test(historyText)) {
@@ -8218,6 +8224,9 @@ function deriveKnowledgeTags(profile: {
       'repro',
       'pregnant',
       'lactating',
+      'hemo',
+      'anemia',
+      'blood',
     ].some((tag) => tags.has(tag)) &&
     !tags.has('puppy') &&
     !tags.has('growth') &&

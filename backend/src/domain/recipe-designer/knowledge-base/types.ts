@@ -25,7 +25,8 @@ export type KnowledgeDomain =
   | 'DENTAL' // 口腔 / 牙周病
   | 'REPRO' // 繁殖围产期（母犬妊娠/哺乳）
   | 'SAFE' // 食品安全 / 实操风险
-  | 'CRITICAL'; // 危重症 / 营养支持
+  | 'CRITICAL' // 危重症 / 营养支持
+  | 'HEMO'; // 血液 / 造血营养（贫血）
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -47,6 +48,7 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   REPRO: '繁殖围产期',
   SAFE: '食品安全/实操',
   CRITICAL: '危重症/营养支持',
+  HEMO: '血液/造血营养',
 };
 
 export interface KnowledgeCitation {

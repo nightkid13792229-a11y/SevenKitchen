@@ -23,6 +23,7 @@ import { DENTAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/da
 import { REPRO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/repro';
 import { SAFE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/safe';
 import { CRITICAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/critical';
+import { HEMO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/hemo';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -44,6 +45,7 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   REPRO: REPRO_KNOWLEDGE,
   SAFE: SAFE_KNOWLEDGE,
   CRITICAL: CRITICAL_KNOWLEDGE,
+  HEMO: HEMO_KNOWLEDGE,
 };
 
 /**

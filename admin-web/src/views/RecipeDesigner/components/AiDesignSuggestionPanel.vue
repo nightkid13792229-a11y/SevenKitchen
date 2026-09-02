@@ -56,9 +56,14 @@
           <div v-if="planLoading" class="ai-loading">正在基于爱犬档案与权威资料生成营养方案…</div>
 
           <div v-else-if="nutritionPlan" class="ai-result">
-            <div v-if="nutritionPlanAccepted" class="plan-accepted-tag">
-              ✅ 方案已认可
-              <span v-if="nutritionPlanNote" class="plan-note">（{{ nutritionPlanNote }}）</span>
+            <div v-if="nutritionPlanAccepted" class="plan-accepted-row">
+              <div class="plan-accepted-tag">
+                ✅ 方案已认可
+                <span v-if="nutritionPlanNote" class="plan-note">（{{ nutritionPlanNote }}）</span>
+              </div>
+              <el-button size="small" text type="warning" :loading="unacceptLoading" @click="unacceptPlan">
+                撤销认可
+              </el-button>
             </div>
             <div class="plan-summary">{{ nutritionPlan.summary }}</div>
 
@@ -401,6 +406,7 @@ const recommendationLoading = ref(false)
 const reviewLoading = ref(false)
 const sopLoading = ref(false)
 const acceptLoading = ref(false)
+const unacceptLoading = ref(false)
 const planNote = ref('')
 const sopTab = ref<'production' | 'customer'>('production')
 const addingName = ref('')
@@ -505,13 +511,34 @@ async function acceptPlan() {
       note: planNote.value || null,
       plan: nutritionPlan.value,
     })
-    ElMessage.success('营养方案已认可，可作为后续步骤的依据')
+    ElMessage.success('营养方案已认可，自动进入食材推荐')
     planNote.value = ''
     await loadAiDesignData()
+    // 认可成功后：跳到第二步 食材推荐 并自动生成推荐
+    currentStep.value = 1
+    void generateRecommendation()
   } catch {
     // 拦截器已提示
   } finally {
     acceptLoading.value = false
+  }
+}
+
+async function unacceptPlan() {
+  if (!props.draftId || !nutritionPlan.value) return
+  unacceptLoading.value = true
+  try {
+    await recipeDesignerApi.acceptAiNutritionPlan(props.draftId, {
+      accepted: false,
+      note: planNote.value || null,
+      plan: nutritionPlan.value,
+    })
+    ElMessage.info('已撤销认可，方案可继续修改')
+    await loadAiDesignData()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    unacceptLoading.value = false
   }
 }
 
@@ -766,11 +793,16 @@ function toggleCitation(key: string) {
 }
 .ai-result .ai-block-title.avoid {
   color: #f56c6c;
-}.plan-accepted-tag {
+}.plan-accepted-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.plan-accepted-tag {
   color: #67c23a;
   font-size: 12.5px;
   font-weight: 600;
-  margin-bottom: 6px;
 }
 .plan-note {
   color: #909399;

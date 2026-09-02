@@ -174,20 +174,20 @@ export const recipeDesignerApi = {
   generateAiSuggestions: (dogId: string, draftId?: string): Promise<AiDesignSuggestion> =>
     api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-suggest`, { draftId }),
 
-  // AI 设计建议四步向导
+  // AI 设计建议四步向导（AI 生成耗时较长，单独设置较长的请求超时，避免 30s 默认超时误判失败）
   generateAiNutritionPlan: (dogId: string, draftId?: string, userNotes?: string | null): Promise<NutritionPlanResult> =>
-    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId, userNotes }),
+    api.post(`/recipe-designer/dogs/${dogId}/design-insight/ai-nutrition-plan`, { draftId, userNotes }, { timeout: 180000 }),
   acceptAiNutritionPlan: (
     draftId: string,
     data: { accepted: boolean; note?: string | null; plan?: NutritionPlanResult | null }
   ): Promise<NutritionPlanResult> =>
     api.post(`/recipe-designer/drafts/${draftId}/ai/nutrition-plan/accept`, data),
   generateAiIngredientRecommendation: (draftId: string): Promise<IngredientRecommendationResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/ingredient-recommendation`),
+    api.post(`/recipe-designer/drafts/${draftId}/ai/ingredient-recommendation`, undefined, { timeout: 180000 }),
   reviewAiRecipe: (draftId: string): Promise<RecipeReviewResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/review`),
+    api.post(`/recipe-designer/drafts/${draftId}/ai/review`, undefined, { timeout: 180000 }),
   generateAiSop: (draftId: string): Promise<SopResult> =>
-    api.post(`/recipe-designer/drafts/${draftId}/ai/sop`),
+    api.post(`/recipe-designer/drafts/${draftId}/ai/sop`, undefined, { timeout: 180000 }),
   getAiDesignData: (draftId: string): Promise<RecipeAiDesignData> =>
     api.get(`/recipe-designer/drafts/${draftId}/ai-design-data`),
 }

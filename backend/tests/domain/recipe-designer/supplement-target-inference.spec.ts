@@ -218,4 +218,200 @@ describe('supplement target inference by nutrient gap attribution', () => {
       }),
     ).toBeNull();
   });
+
+  describe('contribution fallback when no deficiency gap is attributed', () => {
+    const vitaminTargets: FediafAssessmentTarget[] = [
+      {
+        nutrientKey: 'vitaminB1',
+        label: '维生素 B1',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB1'],
+      },
+      {
+        nutrientKey: 'vitaminB2',
+        label: '维生素 B2',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB2'],
+      },
+      {
+        nutrientKey: 'vitaminB6',
+        label: '维生素 B6',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB6'],
+      },
+      {
+        nutrientKey: 'vitaminB12',
+        label: '维生素 B12',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'μg',
+        minValue: 5,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB12'],
+      },
+    ];
+
+    const vitaminSufficientFood: DesignRecipeAssessmentItemInput = {
+      ...baseFood,
+      nutritionProfile: {
+        ...baseFood.nutritionProfile,
+        vitamins: {
+          vitaminB1: 0.6,
+          vitaminB2: 0.6,
+          vitaminB6: 0.7,
+          vitaminB12: 2,
+        },
+      },
+    };
+
+    const yeastLikeSupplement: DesignRecipeAssessmentItemInput = {
+      id: 'yeast',
+      name: '营养酵母粉',
+      ingredientType: 'SUPPLEMENT',
+      weightG: 5,
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_1_G' },
+        macros: { energyKcal: 0, crudeProtein: 0.5 },
+        minerals: {},
+        vitamins: {
+          vitaminB1: 0.6,
+          vitaminB2: 0.6,
+          vitaminB6: 0.7,
+          vitaminB12: 2,
+        },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: [],
+      },
+    };
+
+    it('infers contributed B-vitamin targets when the recipe is already sufficient', () => {
+      const fullAssessment = assess(
+        [vitaminSufficientFood, yeastLikeSupplement],
+        vitaminTargets,
+      );
+      const assessmentWithoutSupplement = assess(
+        [vitaminSufficientFood],
+        vitaminTargets,
+      );
+
+      expect(
+        inferSupplementTargetsByRemoval({
+          itemId: yeastLikeSupplement.id,
+          itemName: yeastLikeSupplement.name,
+          itemNutritionProfile: yeastLikeSupplement.nutritionProfile,
+          itemWeightG: yeastLikeSupplement.weightG,
+          totalRecipeWeightG: fullAssessment.totalWeightG,
+          fullAssessment,
+          assessmentWithoutItem: assessmentWithoutSupplement,
+        }),
+      ).toEqual([
+        {
+          fieldPath: 'vitamins.vitaminB1',
+          fieldKey: 'vitaminB1',
+          label: '维生素 B1',
+          unit: 'mg',
+          targetValuePerKg: 28.571,
+          reason: 'CONTRIBUTES_NUTRIENT',
+        },
+        {
+          fieldPath: 'vitamins.vitaminB12',
+          fieldKey: 'vitaminB12',
+          label: '维生素 B12',
+          unit: 'μg',
+          targetValuePerKg: 95.238,
+          reason: 'CONTRIBUTES_NUTRIENT',
+        },
+        {
+          fieldPath: 'vitamins.vitaminB2',
+          fieldKey: 'vitaminB2',
+          label: '维生素 B2',
+          unit: 'mg',
+          targetValuePerKg: 28.571,
+          reason: 'CONTRIBUTES_NUTRIENT',
+        },
+        {
+          fieldPath: 'vitamins.vitaminB6',
+          fieldKey: 'vitaminB6',
+          label: '维生素 B6',
+          unit: 'mg',
+          targetValuePerKg: 33.333,
+          reason: 'CONTRIBUTES_NUTRIENT',
+        },
+      ]);
+    });
+
+    it('does not include macro nutrients in the contribution fallback', () => {
+      const fullAssessment = assess(
+        [vitaminSufficientFood, yeastLikeSupplement],
+        vitaminTargets,
+      );
+      const assessmentWithoutSupplement = assess(
+        [vitaminSufficientFood],
+        vitaminTargets,
+      );
+
+      const inferred = inferSupplementTargetsByRemoval({
+        itemId: yeastLikeSupplement.id,
+        itemName: yeastLikeSupplement.name,
+        itemNutritionProfile: yeastLikeSupplement.nutritionProfile,
+        itemWeightG: yeastLikeSupplement.weightG,
+        totalRecipeWeightG: fullAssessment.totalWeightG,
+        fullAssessment,
+        assessmentWithoutItem: assessmentWithoutSupplement,
+      });
+
+      expect(
+        inferred.some((target) => target.fieldPath === 'macros.crudeProtein'),
+      ).toBe(false);
+    });
+
+    it('keeps deficiency attribution when removal creates a deficiency', () => {
+      // 底方缺少 B12 数据：删除补剂后 B12 归零 → 仍走缺口归因，而非贡献兜底
+      const foodWithoutB12: DesignRecipeAssessmentItemInput = {
+        ...vitaminSufficientFood,
+        nutritionProfile: {
+          ...vitaminSufficientFood.nutritionProfile,
+          vitamins: { vitaminB1: 0.6, vitaminB2: 0.6, vitaminB6: 0.7 },
+        },
+      };
+      const fullAssessment = assess(
+        [foodWithoutB12, yeastLikeSupplement],
+        vitaminTargets,
+      );
+      const assessmentWithoutSupplement = assess(
+        [foodWithoutB12],
+        vitaminTargets,
+      );
+
+      const inferred = inferSupplementTargetsByRemoval({
+        itemId: yeastLikeSupplement.id,
+        itemName: yeastLikeSupplement.name,
+        itemNutritionProfile: yeastLikeSupplement.nutritionProfile,
+        itemWeightG: yeastLikeSupplement.weightG,
+        totalRecipeWeightG: fullAssessment.totalWeightG,
+        fullAssessment,
+        assessmentWithoutItem: assessmentWithoutSupplement,
+      });
+
+      expect(
+        inferred.some((target) => target.reason === 'CONTRIBUTES_NUTRIENT'),
+      ).toBe(false);
+      expect(
+        inferred.find((target) => target.fieldPath === 'vitamins.vitaminB12'),
+      ).toMatchObject({ reason: 'CREATES_DEFICIENCY' });
+    });
+  });
 });

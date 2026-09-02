@@ -1649,8 +1649,7 @@ describe('RecipeDesignerService', () => {
             ingredientId: 'ingredient-1',
             nutritionFoodId: 'food-1',
             weightG: 60,
-            preparationMethod:
-              'a6409a79-402b-41d1-bfe1-031a67da0876',
+            preparationMethod: 'a6409a79-402b-41d1-bfe1-031a67da0876',
             includeInAssessment: true,
           },
           {
@@ -5285,6 +5284,180 @@ describe('RecipeDesignerService', () => {
 
     expect(prisma.recipe.create).not.toHaveBeenCalled();
     expect(prisma.designRecipePublishSnapshot.create).not.toHaveBeenCalled();
+  });
+
+  it('publishes a library-added B-vitamin supplement without explicit targets via contribution fallback', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        isCompliant: true,
+        items: [
+          item({
+            id: 'food-item-1',
+            ingredientId: 'ingredient-1',
+            weightG: 100,
+            nutritionFood: {
+              ...item().nutritionFood,
+              nutritionData: {
+                ...item().nutritionFood.nutritionData,
+                vitamins: {
+                  vitaminB1: 0.6,
+                  vitaminB2: 0.6,
+                  vitaminB6: 0.7,
+                  vitaminB12: 2,
+                },
+              },
+            },
+          }),
+          item({
+            id: 'supplement-yeast',
+            ingredientId: 'supplement-yeast',
+            weightG: 5,
+            nutrientTargetKey: null,
+            nutrientTargetValue: null,
+            ingredient: {
+              id: 'supplement-yeast',
+              name: '营养酵母粉',
+              type: 'SUPPLEMENT',
+              unitDisplayLabel: 'g',
+              purchaseUnit: 'g',
+              properties: null,
+            },
+            nutritionFood: {
+              id: 'food-supplement-yeast',
+              name: '营养酵母粉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_1_G' },
+                macros: { energyKcal: 0, crudeProtein: 0.5 },
+                minerals: {},
+                vitamins: {
+                  vitaminB1: 0.6,
+                  vitaminB2: 0.6,
+                  vitaminB6: 0.7,
+                  vitaminB12: 2,
+                },
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [
+                {
+                  ingredientId: 'supplement-yeast',
+                  isPrimary: true,
+                  ingredient: {
+                    id: 'supplement-yeast',
+                    name: '营养酵母粉',
+                    type: 'SUPPLEMENT',
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      ...compliantTargets(),
+      {
+        nutrientKey: 'vitaminB1',
+        label: '维生素 B1',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB1'],
+      },
+      {
+        nutrientKey: 'vitaminB2',
+        label: '维生素 B2',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB2'],
+      },
+      {
+        nutrientKey: 'vitaminB6',
+        label: '维生素 B6',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 1,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB6'],
+      },
+      {
+        nutrientKey: 'vitaminB12',
+        label: '维生素 B12',
+        category: 'VITAMIN',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'μg',
+        minValue: 5,
+        maxValue: null,
+        fieldPaths: ['vitamins.vitaminB12'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ status: 'PUBLISHED' }),
+    );
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { name: '营养酵母粉配方', reviewNote: '补剂目标贡献兜底回归测试' },
+      adminAccess,
+    );
+
+    const createData = prisma.recipe.create.mock.calls[0][0].data;
+    const supplementItem = createData.items.create.find(
+      (createdItem: any) => createdItem.ingredientId === 'supplement-yeast',
+    );
+
+    expect(supplementItem).toMatchObject({
+      nutrientTargetKey: 'vitaminB12',
+      nutrientTargetValue: 95,
+    });
+    expect(supplementItem.supplementTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldPath: 'vitamins.vitaminB12',
+          label: '维生素 B12',
+          unit: 'μg',
+          targetValuePerKg: 95,
+        }),
+        expect.objectContaining({
+          fieldPath: 'vitamins.vitaminB6',
+          label: '维生素 B6',
+          unit: 'mg',
+          targetValuePerKg: 33,
+        }),
+        expect.objectContaining({
+          fieldPath: 'vitamins.vitaminB1',
+          label: '维生素 B1',
+          unit: 'mg',
+          targetValuePerKg: 29,
+        }),
+        expect.objectContaining({
+          fieldPath: 'vitamins.vitaminB2',
+          label: '维生素 B2',
+          unit: 'mg',
+          targetValuePerKg: 29,
+        }),
+      ]),
+    );
+    expect(
+      supplementItem.supplementTargets.some(
+        (target: any) => target.fieldPath === 'macros.crudeProtein',
+      ),
+    ).toBe(false);
   });
 
   it('rejects publishing when an explicit supplement target has no nutrition profile amount', async () => {
@@ -8967,10 +9140,10 @@ describe('RecipeDesignerService', () => {
 
     it('rejects AI suggestions for customer role', async () => {
       await expect(
-        (service as any).generateAiDesignSuggestions(
-          'dog-1',
-          { userId: 'customer-1', role: 'CUSTOMER' },
-        ),
+        (service as any).generateAiDesignSuggestions('dog-1', {
+          userId: 'customer-1',
+          role: 'CUSTOMER',
+        }),
       ).rejects.toThrow(BadRequestException);
     });
   });

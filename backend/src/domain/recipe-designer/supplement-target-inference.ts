@@ -12,7 +12,8 @@ import type { AssessmentEntry } from './types';
 
 export type SupplementTargetInferenceReason =
   | 'CREATES_DEFICIENCY'
-  | 'WORSENS_DEFICIENCY';
+  | 'WORSENS_DEFICIENCY'
+  | 'CONTRIBUTES_NUTRIENT';
 
 export interface InferredSupplementTarget {
   fieldPath: string;
@@ -99,7 +100,48 @@ export function inferSupplementTargetsByRemoval(
     })
     .filter((candidate): candidate is Candidate => candidate !== null);
 
-  const inferredTargets = candidates
+  // 缺口归因推断为空时的兜底：补剂从原料库正常添加后，即使删除它不会造成新缺口
+  // （配方本身已达标，或删除后仅数据缺失），也按它对 FEDIAF 可评估微量营养素的
+  // 实际贡献生成营养目标，避免发布时因"缺少营养目标"被硬性拦截。
+  // 仅统计非宏量营养素（维生素/矿物质/氨基酸/脂肪酸），纯功能性补剂（如膳食纤维）
+  // 不产出目标，维持原有"必须能归因到营养缺口"的校验语义。
+  const effectiveCandidates =
+    candidates.length > 0
+      ? candidates
+      : input.fullAssessment.entries
+          .map((entry): Candidate | null => {
+            if (entry.category === 'MACRO') {
+              return null;
+            }
+
+            const field = resolveAssessmentSupplementTargetField(entry);
+            if (!field) {
+              return null;
+            }
+
+            const amountRead = readProfileFieldAmount(
+              input.itemNutritionProfile,
+              field.fieldPath,
+              input.itemWeightG,
+            );
+            const contributionAmount = Number(amountRead.amount);
+            if (
+              amountRead.missing ||
+              !Number.isFinite(contributionAmount) ||
+              contributionAmount <= 0
+            ) {
+              return null;
+            }
+
+            return {
+              field,
+              amountRead,
+              reason: 'CONTRIBUTES_NUTRIENT' as const,
+            };
+          })
+          .filter((candidate): candidate is Candidate => candidate !== null);
+
+  const inferredTargets = effectiveCandidates
     .map((candidate) => {
       const contributionAmount = Number(candidate.amountRead.amount);
       const targetValuePerKg = roundTargetValuePerKg(
@@ -118,9 +160,7 @@ export function inferSupplementTargetsByRemoval(
         reason: candidate.reason,
       };
     })
-    .filter(
-      (target): target is InferredSupplementTarget => target !== null,
-    );
+    .filter((target): target is InferredSupplementTarget => target !== null);
 
   return [
     ...new Map(

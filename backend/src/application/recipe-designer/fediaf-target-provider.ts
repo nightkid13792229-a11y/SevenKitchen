@@ -23,6 +23,23 @@ export interface FediafTargetProvider {
 
 const FEDIAF_2025_DOG_CODE = 'FEDIAF_2025_DOG';
 const ANNEX_7_8_SOURCE_TYPE = 'ANNEX_7_8';
+
+/**
+ * 内部参考营养素（非 FEDIAF 表内要求，仅用于设计器内展示与按原料调整）：
+ * FEDIAF 2025 犬标准未对膳食纤维、净碳水设上下限，标准表里没有这两行，
+ * 导致设计器里它们只能以「宏量构成」只读比例出现、无法像其它营养素一样
+ * 打开原料贡献占比弹窗调整用量。这里在目标清单末尾统一附加为
+ * 无上下限的参考条目（min/max 为空 + excludeFromAttention），
+ * 评估引擎会把它们标记为 INFO/参考，不计入达标/不足/超标统计。
+ */
+const INTERNAL_REFERENCE_MACROS = [
+  { nutrientKey: 'fiber', label: '膳食纤维', fieldPath: 'macros.fiber' },
+  {
+    nutrientKey: 'carbohydrate',
+    label: '净碳水',
+    fieldPath: 'macros.carbohydrate',
+  },
+] as const;
 const CALCIUM_PHOSPHORUS_RATIO_KEYS = new Set([
   'calciumPhosphorusRatio',
   'ca_p_ratio',
@@ -137,9 +154,41 @@ export class PrismaFediafTargetProvider implements FediafTargetProvider {
       );
     }
 
-    return entries
-      .map((entry) => this.mapEntry(entry as StandardEntryLike, scenario))
-      .filter((target): target is FediafAssessmentTarget => target !== null);
+    return this.appendInternalReferenceTargets(
+      entries
+        .map((entry) => this.mapEntry(entry as StandardEntryLike, scenario))
+        .filter((target): target is FediafAssessmentTarget => target !== null),
+    );
+  }
+
+  /**
+   * 在 FEDIAF 目标末尾附加内部参考营养素（膳食纤维 / 净碳水）。
+   * 若某阶段标准表未来已包含同名同口径条目，则跳过避免重复。
+   */
+  private appendInternalReferenceTargets(
+    targets: FediafAssessmentTarget[],
+  ): FediafAssessmentTarget[] {
+    const existingKeys = new Set(
+      targets.map((target) => `${target.nutrientKey}:${target.expressionBasis}`),
+    );
+
+    const references: FediafAssessmentTarget[] =
+      INTERNAL_REFERENCE_MACROS.filter(
+        ({ nutrientKey }) =>
+          !existingKeys.has(`${nutrientKey}:PER_1000_KCAL_ME`),
+      ).map(({ nutrientKey, label, fieldPath }) => ({
+        nutrientKey,
+        label,
+        category: 'MACRO',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'g',
+        minValue: null,
+        maxValue: null,
+        excludeFromAttention: true,
+        fieldPaths: [fieldPath],
+      }));
+
+    return [...targets, ...references];
   }
 
   private mapEntry(

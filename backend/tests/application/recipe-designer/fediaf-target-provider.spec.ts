@@ -216,6 +216,8 @@ describe('PrismaFediafTargetProvider', () => {
     expect(targets).toEqual([
       expect.objectContaining({ nutrientKey: 'lysine', maxValue: 7 }),
       expect.objectContaining({ nutrientKey: 'calcium', maxValue: 4 }),
+      expect.objectContaining({ nutrientKey: 'fiber', minValue: null, maxValue: null }),
+      expect.objectContaining({ nutrientKey: 'carbohydrate', minValue: null, maxValue: null }),
     ]);
   });
 
@@ -559,7 +561,11 @@ describe('PrismaFediafTargetProvider', () => {
     const provider = new PrismaFediafTargetProvider(prisma);
     const targets = await provider.getTargets('ADULT_MER_110');
 
-    expect(targets.map((target) => target.nutrientKey)).toEqual(['calcium']);
+    expect(targets.map((target) => target.nutrientKey)).toEqual([
+      'calcium',
+      'fiber',
+      'carbohydrate',
+    ]);
   });
 
   it('keeps Annex entries with no recommendation bounds as reference-only targets', async () => {
@@ -614,6 +620,8 @@ describe('PrismaFediafTargetProvider', () => {
       'alphaLinolenicAcid',
       'epaDha',
       'calcium',
+      'fiber',
+      'carbohydrate',
     ]);
     expect(targets[0]).toMatchObject({
       nutrientKey: 'vitaminK',
@@ -628,6 +636,69 @@ describe('PrismaFediafTargetProvider', () => {
       fieldPaths: ['fattyAcids.epa', 'fattyAcids.dha'],
       excludeFromAttention: true,
     });
+  });
+
+  it('appends fiber and net-carbohydrate as reference-only macro targets', async () => {
+    prisma.nutritionStandardEntry.findMany.mockResolvedValue([entry()]);
+
+    const provider = new PrismaFediafTargetProvider(prisma);
+    const targets = await provider.getTargets('ADULT_MER_110');
+
+    expect(targets.map((target) => target.nutrientKey)).toEqual([
+      'calcium',
+      'fiber',
+      'carbohydrate',
+    ]);
+    const fiber = targets.find((target) => target.nutrientKey === 'fiber')!;
+    const carbohydrate = targets.find(
+      (target) => target.nutrientKey === 'carbohydrate',
+    )!;
+    expect(fiber).toMatchObject({
+      label: '膳食纤维',
+      category: 'MACRO',
+      expressionBasis: 'PER_1000_KCAL_ME',
+      unit: 'g',
+      minValue: null,
+      maxValue: null,
+      excludeFromAttention: true,
+      fieldPaths: ['macros.fiber'],
+    });
+    expect(carbohydrate).toMatchObject({
+      label: '净碳水',
+      category: 'MACRO',
+      expressionBasis: 'PER_1000_KCAL_ME',
+      unit: 'g',
+      minValue: null,
+      maxValue: null,
+      excludeFromAttention: true,
+      fieldPaths: ['macros.carbohydrate'],
+    });
+  });
+
+  it('does not duplicate internal reference macros when the annex already lists them', async () => {
+    prisma.nutritionStandardEntry.findMany.mockResolvedValue([
+      entry({
+        id: 'entry-carbohydrate',
+        unit: 'g',
+        minValue: null,
+        maxValue: null,
+        nutrient: {
+          code: 'carbohydrate',
+          name: '净碳水',
+          category: 'MACRONUTRIENT',
+          fieldPath: 'macros.carbohydrate',
+          expression: null,
+        },
+      }),
+      entry(),
+    ]);
+
+    const provider = new PrismaFediafTargetProvider(prisma);
+    const targets = await provider.getTargets('ADULT_MER_110');
+
+    const keys = targets.map((target) => target.nutrientKey);
+    expect(keys.filter((key) => key === 'carbohydrate')).toHaveLength(1);
+    expect(keys.filter((key) => key === 'fiber')).toHaveLength(1);
   });
 
   it('rejects unsupported scenarios and missing target rows', async () => {

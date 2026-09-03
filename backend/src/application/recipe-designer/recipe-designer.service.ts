@@ -1405,14 +1405,19 @@ export class RecipeDesignerService {
   /**
    * 系列关键词搜索条件：
    * 1. 系列名称；
-   * 2. 参考爱犬 / 客户爱犬名称；
-   * 3. 各阶段草稿明细或已发布配方中用到的原料名称（标准原料名或营养食物名）。
+   * 2. 参考爱犬 / 客户爱犬名称（含草稿与已发布配方上的客户犬、定制订单犬）；
+   * 3. 历史匹配：订单记录与 DIY 记录中该犬用过的食谱所属系列；
+   * 4. 各阶段草稿明细或已发布配方中用到的原料名称（标准原料名或营养食物名）。
    */
   private async buildSeriesKeywordWhere(
     search: string,
   ): Promise<Prisma.RecipeSeriesWhereInput> {
     const nameKeyword = { contains: search, mode: 'insensitive' as const };
     const matchedDogIds = await this.findDogIdsByName(search);
+    const dogUsageRecipeClauses =
+      matchedDogIds.length > 0
+        ? await this.buildDogUsageRecipeClauses(matchedDogIds)
+        : [];
     return {
       OR: [
         { name: nameKeyword },
@@ -1420,8 +1425,16 @@ export class RecipeDesignerService {
           ? [
               { referenceDogId: { in: matchedDogIds } },
               { customerDogId: { in: matchedDogIds } },
+              { designs: { some: { customerDogId: { in: matchedDogIds } } } },
+              { recipes: { some: { customerDogId: { in: matchedDogIds } } } },
+              {
+                recipes: {
+                  some: { customOrder: { dogId: { in: matchedDogIds } } },
+                },
+              },
             ]
           : []),
+        ...dogUsageRecipeClauses,
         {
           designs: {
             some: {
@@ -1452,6 +1465,43 @@ export class RecipeDesignerService {
         },
       ],
     };
+  }
+
+  /**
+   * 历史匹配：该犬在订单明细（recipeSnapshot）与 DIY 记录中使用过的食谱，
+   * 用于匹配这些食谱所属的设计系列（recipeId 即公开食谱 ID）。
+   */
+  private async buildDogUsageRecipeClauses(
+    dogIds: string[],
+  ): Promise<Prisma.RecipeSeriesWhereInput[]> {
+    const [orderItems, diySheets] = await Promise.all([
+      this.prisma.orderItem.findMany({
+        where: { dogId: { in: dogIds } },
+        select: { recipeSnapshot: true },
+      }),
+      this.prisma.dIYSheet.findMany({
+        where: { dogId: { in: dogIds } },
+        select: { recipeId: true },
+      }),
+    ]);
+    const recipeIds = new Set<string>();
+    for (const item of (orderItems ?? []) as Array<{
+      recipeSnapshot?: { id?: string } | null;
+    }>) {
+      if (item?.recipeSnapshot?.id) {
+        recipeIds.add(item.recipeSnapshot.id);
+      }
+    }
+    for (const sheet of (diySheets ?? []) as Array<{
+      recipeId?: string;
+    }>) {
+      if (sheet?.recipeId) {
+        recipeIds.add(sheet.recipeId);
+      }
+    }
+    return recipeIds.size > 0
+      ? [{ recipes: { some: { recipeId: { in: [...recipeIds] } } } }]
+      : [];
   }
 
   /** 按名称模糊查找爱犬 ID（大小写不敏感，用于系列关键词搜索） */

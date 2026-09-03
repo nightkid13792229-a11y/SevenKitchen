@@ -25,6 +25,9 @@ describe('RecipeDesignerService', () => {
     orderItem: {
       findMany: jest.fn(),
     },
+    dIYSheet: {
+      findMany: jest.fn(),
+    },
     designRecipe: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -6573,11 +6576,57 @@ describe('RecipeDesignerService', () => {
         expect.arrayContaining([
           { referenceDogId: { in: ['dog-9'] } },
           { customerDogId: { in: ['dog-9'] } },
+          { designs: { some: { customerDogId: { in: ['dog-9'] } } } },
+          { recipes: { some: { customerDogId: { in: ['dog-9'] } } } },
+          {
+            recipes: {
+              some: { customOrder: { dogId: { in: ['dog-9'] } } },
+            },
+          },
         ]),
       );
       expect(prisma.dog.findMany).toHaveBeenCalledWith({
         where: { name: { contains: '旺财', mode: 'insensitive' } },
         select: { id: true },
+      });
+    });
+
+    it('matches series via order item and DIY history of a dog', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([
+        { id: 'dog-9', name: '旺财' },
+      ]);
+      prisma.orderItem.findMany.mockResolvedValue([
+        { recipeSnapshot: { id: 'recipe-abc' } },
+      ]);
+      prisma.dIYSheet.findMany.mockResolvedValue([
+        { recipeId: 'recipe-def' },
+      ]);
+
+      await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { search: '旺财' },
+      );
+
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.where.OR).toEqual(
+        expect.arrayContaining([
+          {
+            recipes: {
+              some: { recipeId: { in: ['recipe-abc', 'recipe-def'] } },
+            },
+          },
+        ]),
+      );
+      expect(prisma.orderItem.findMany).toHaveBeenCalledWith({
+        where: { dogId: { in: ['dog-9'] } },
+        select: { recipeSnapshot: true },
+      });
+      expect(prisma.dIYSheet.findMany).toHaveBeenCalledWith({
+        where: { dogId: { in: ['dog-9'] } },
+        select: { recipeId: true },
       });
     });
 

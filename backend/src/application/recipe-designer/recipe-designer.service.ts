@@ -1381,6 +1381,88 @@ export class RecipeDesignerService {
     return new Map(dogs.map((dog) => [dog.id, dog.name]));
   }
 
+  /** 内部工作台卡片展示用：批量加载系列「参考爱犬」名称 */
+  private async loadReferenceDogNameMapForSeries(
+    series: RecipeSeriesWorkbenchRecord[],
+  ) {
+    const dogIds = [
+      ...new Set(
+        series
+          .map((record) => record.referenceDogId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (dogIds.length === 0) {
+      return new Map<string, string>();
+    }
+    const dogs = await this.prisma.dog.findMany({
+      where: { id: { in: dogIds } },
+      select: { id: true, name: true },
+    });
+    return new Map((dogs ?? []).map((dog) => [dog.id, dog.name]));
+  }
+
+  /**
+   * 系列关键词搜索条件：
+   * 1. 系列名称；
+   * 2. 参考爱犬 / 客户爱犬名称；
+   * 3. 各阶段草稿明细或已发布配方中用到的原料名称（标准原料名或营养食物名）。
+   */
+  private async buildSeriesKeywordWhere(
+    search: string,
+  ): Promise<Prisma.RecipeSeriesWhereInput> {
+    const nameKeyword = { contains: search, mode: 'insensitive' as const };
+    const matchedDogIds = await this.findDogIdsByName(search);
+    return {
+      OR: [
+        { name: nameKeyword },
+        ...(matchedDogIds.length > 0
+          ? [
+              { referenceDogId: { in: matchedDogIds } },
+              { customerDogId: { in: matchedDogIds } },
+            ]
+          : []),
+        {
+          designs: {
+            some: {
+              items: {
+                some: {
+                  OR: [
+                    { ingredient: { name: nameKeyword } },
+                    { nutritionFood: { name: nameKeyword } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          recipes: {
+            some: {
+              items: {
+                some: {
+                  OR: [
+                    { ingredient: { name: nameKeyword } },
+                    { nutritionFood: { name: nameKeyword } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+  }
+
+  /** 按名称模糊查找爱犬 ID（大小写不敏感，用于系列关键词搜索） */
+  private async findDogIdsByName(search: string): Promise<string[]> {
+    const dogs = await this.prisma.dog.findMany({
+      where: { name: { contains: search, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    return (dogs ?? []).map((dog) => dog.id);
+  }
+
   private async expandIngredientSearchTerms(search?: string) {
     const trimmed = search?.trim();
     if (!trimmed) {
@@ -1871,11 +1953,14 @@ export class RecipeDesignerService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const search = query.search?.trim();
+    const searchWhere = search
+      ? await this.buildSeriesKeywordWhere(search)
+      : undefined;
     const series = (await this.prisma.recipeSeries.findMany({
       where: {
         ...(await this.buildSeriesVisibilityWhere(context)),
         ...(query.status ? { businessStatus: query.status } : {}),
-        ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
+        ...(searchWhere ?? {}),
       },
       include: {
         designs: {
@@ -1910,8 +1995,18 @@ export class RecipeDesignerService {
       return usePagination ? { items, page, pageSize, hasMore } : items;
     }
 
+    const referenceDogNameById = await this.loadReferenceDogNameMapForSeries(
+      visibleSeries,
+    );
     const cards = visibleSeries.map((record) =>
-      this.buildSeriesWorkbenchCard(record, context.userId),
+      this.buildSeriesWorkbenchCard(
+        record,
+        context.userId,
+        undefined,
+        record.referenceDogId
+          ? referenceDogNameById.get(record.referenceDogId) ?? null
+          : null,
+      ),
     );
     const items = this.filterSeriesWorkbenchCards(cards, query.status);
     return usePagination ? { items, page, pageSize, hasMore } : items;
@@ -3343,6 +3438,7 @@ export class RecipeDesignerService {
     series: RecipeSeriesWorkbenchRecord,
     _userId: string,
     initialDraftIdOverride?: string,
+    referenceDogName?: string | null,
   ) {
     const businessStatus =
       series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT;
@@ -3398,6 +3494,7 @@ export class RecipeDesignerService {
       businessStatusLabel:
         RECIPE_SERIES_BUSINESS_STATUS_LABELS[businessStatus] ?? businessStatus,
       referenceDogId: series.referenceDogId ?? null,
+      referenceDogName: referenceDogName ?? null,
       updatedAt: series.updatedAt,
       publishedStageCount,
       stages,

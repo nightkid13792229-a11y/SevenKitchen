@@ -6510,11 +6510,98 @@ describe('RecipeDesignerService', () => {
         { search: '  鸡肉 ' },
       );
 
-      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.where.OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: '鸡肉', mode: 'insensitive' } },
+        ]),
+      );
+    });
+
+    it('matches series by ingredient names used in drafts and published recipes', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
+      ]);
+
+      await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { search: '三文鱼' },
+      );
+
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      const orClauses = query.where.OR as Array<Record<string, unknown>>;
+      expect(orClauses.some((clause) => 'designs' in clause)).toBe(true);
+      expect(orClauses.some((clause) => 'recipes' in clause)).toBe(true);
+
+      const ingredientMatcher = {
+        some: {
+          OR: [
+            { ingredient: { name: { contains: '三文鱼', mode: 'insensitive' } } },
+            { nutritionFood: { name: { contains: '三文鱼', mode: 'insensitive' } } },
+          ],
+        },
+      };
+      const recipeClause = orClauses.find((clause) => 'recipes' in clause);
+      expect(recipeClause).toEqual(
         expect.objectContaining({
-          where: expect.objectContaining({
-            name: { contains: '鸡肉', mode: 'insensitive' },
-          }),
+          recipes: { some: { items: ingredientMatcher } },
+        }),
+      );
+      const designClause = orClauses.find((clause) => 'designs' in clause);
+      expect(designClause).toEqual(
+        expect.objectContaining({
+          designs: { some: { items: ingredientMatcher } },
+        }),
+      );
+    });
+
+    it('matches series by reference or customer dog name', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([
+        { id: 'dog-9', name: '旺财' },
+      ]);
+
+      await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { search: '旺财' },
+      );
+
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.where.OR).toEqual(
+        expect.arrayContaining([
+          { referenceDogId: { in: ['dog-9'] } },
+          { customerDogId: { in: ['dog-9'] } },
+        ]),
+      );
+      expect(prisma.dog.findMany).toHaveBeenCalledWith({
+        where: { name: { contains: '旺财', mode: 'insensitive' } },
+        select: { id: true },
+      });
+    });
+
+    it('includes the reference dog name on internal workbench cards', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-dog',
+          createdBy: 'staff-1',
+          referenceDogId: 'dog-9',
+        }),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([
+        { id: 'dog-9', name: '旺财' },
+      ]);
+
+      const cards = await service.listSeries({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          referenceDogId: 'dog-9',
+          referenceDogName: '旺财',
         }),
       );
     });
@@ -6531,6 +6618,7 @@ describe('RecipeDesignerService', () => {
 
       const query = prisma.recipeSeries.findMany.mock.calls[0][0];
       expect(query.where).not.toHaveProperty('name');
+      expect(query.where).not.toHaveProperty('OR');
     });
 
     it('uses compact recipe fields for the series workbench list', async () => {

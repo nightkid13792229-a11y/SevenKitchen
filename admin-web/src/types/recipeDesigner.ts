@@ -44,6 +44,8 @@ export interface RecipeDesignerSeriesCard {
   businessStatus?: RecipeDesignerSeriesStatusFilter
   businessStatusLabel?: string
   referenceDogId?: string | null
+  /** 参考爱犬名称（后端工作台卡片附带，用于搜索定位展示） */
+  referenceDogName?: string | null
   updatedAt?: string
   publishedStageCount: number
   stages: RecipeDesignerSeriesStage[]

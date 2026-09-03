@@ -18,7 +18,7 @@
             <el-input
               v-model="searchKeyword"
               class="series-search"
-              placeholder="搜索系列名称"
+              placeholder="搜索系列名称 / 原料 / 参考爱犬"
               clearable
             >
               <template #prefix>
@@ -50,6 +50,7 @@
             </el-tag>
           </div>
           <div class="series-meta">
+            <span v-if="card.referenceDogName" class="dog-chip">🐶 {{ card.referenceDogName }}</span>
             <span class="updated-at">更新于 {{ formatTime(card.updatedAt) }}</span>
           </div>
 
@@ -341,7 +342,7 @@ watch(searchKeyword, () => {
 
 const emptyDescription = computed(() =>
   searchKeyword.value.trim()
-    ? `没有找到名称包含「${searchKeyword.value.trim()}」的设计系列`
+    ? `没有找到名称、原料或爱犬包含「${searchKeyword.value.trim()}」的设计系列`
     : '还没有设计系列，点击右上角「新建设计系列」开始'
 )
 
@@ -618,7 +619,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 .series-search {
-  width: 240px;
+  width: 280px;
 }
 .series-grid {
   display: grid;
@@ -663,6 +664,15 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   margin: 8px 0 10px;
+  font-size: 12px;
+  color: #606266;
+}
+.dog-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #f4f4f5;
+  border-radius: 10px;
+  padding: 2px 10px;
   font-size: 12px;
   color: #606266;
 }

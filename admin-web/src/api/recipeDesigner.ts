@@ -29,6 +29,7 @@ import type {
 
 export interface RecipeDesignerSeriesListQuery {
   status?: RecipeDesignerSeriesStatusFilter
+  search?: string
   page?: number
   pageSize?: number
 }

@@ -58,6 +58,10 @@ export class ListRecipeDesignerSeriesDto {
   status?: RecipeDesignerSeriesStatusFilter;
 
   @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)

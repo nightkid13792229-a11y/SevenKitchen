@@ -14,17 +14,29 @@
       <template #header>
         <div class="card-header">
           <span>食谱设计</span>
-          <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
-            <el-radio-button :value="undefined">全部</el-radio-button>
-            <el-radio-button value="DRAFT">草稿</el-radio-button>
-            <el-radio-button value="PUBLIC">已发布</el-radio-button>
-            <el-radio-button value="PRIVATE_CUSTOM">定制</el-radio-button>
-          </el-radio-group>
+          <div class="card-header-controls">
+            <el-input
+              v-model="searchKeyword"
+              class="series-search"
+              placeholder="搜索系列名称"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <el-radio-group v-model="statusFilter" size="small" @change="onStatusFilterChange">
+              <el-radio-button :value="undefined">全部</el-radio-button>
+              <el-radio-button value="DRAFT">草稿</el-radio-button>
+              <el-radio-button value="PUBLIC">已发布</el-radio-button>
+              <el-radio-button value="PRIVATE_CUSTOM">定制</el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
       </template>
 
       <el-empty v-if="loading && series.length === 0" description="加载中…" />
-      <el-empty v-else-if="!loading && series.length === 0" description="还没有设计系列，点击右上角「新建设计系列」开始" />
+      <el-empty v-else-if="!loading && series.length === 0" :description="emptyDescription" />
 
       <div v-loading="loading" class="series-grid">
         <div v-for="card in series" :key="card.id" class="series-card">
@@ -167,10 +179,10 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MoreFilled, Plus } from '@element-plus/icons-vue'
+import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { dogApi } from '@/api/dogs'
 import type { DogProfile } from '@/types/dog'
@@ -190,11 +202,13 @@ const creating = ref(false)
 const renaming = ref(false)
 const series = ref<RecipeDesignerSeriesCard[]>([])
 const statusFilter = ref<RecipeDesignerSeriesStatusFilter | undefined>(undefined)
+const searchKeyword = ref('')
 const seriesPage = ref(1)
 const seriesHasMore = ref(true)
 const SERIES_PAGE_SIZE = 20
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 let seriesObserver: IntersectionObserver | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const createDialogVisible = ref(false)
 const createForm = reactive<{ name: string; referenceDogId?: string; scenario?: FediafDogScenario }>({
@@ -272,6 +286,7 @@ async function loadSeries(reset = true) {
   try {
     const res = await recipeDesignerApi.listSeries({
       status: statusFilter.value,
+      search: searchKeyword.value.trim() || undefined,
       page: reset ? 1 : seriesPage.value + 1,
       pageSize: SERIES_PAGE_SIZE,
     })
@@ -315,6 +330,20 @@ function teardownSeriesObserver() {
 function onStatusFilterChange() {
   void loadSeries(true)
 }
+
+/** 名称搜索：输入停顿 300ms 后自动搜索（清空按钮立即生效） */
+watch(searchKeyword, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    void loadSeries(true)
+  }, 300)
+})
+
+const emptyDescription = computed(() =>
+  searchKeyword.value.trim()
+    ? `没有找到名称包含「${searchKeyword.value.trim()}」的设计系列`
+    : '还没有设计系列，点击右上角「新建设计系列」开始'
+)
 
 function openCreateDialog() {
   createForm.name = ''
@@ -548,7 +577,10 @@ onMounted(async () => {
   setupSeriesObserver()
 })
 
-onBeforeUnmount(teardownSeriesObserver)
+onBeforeUnmount(() => {
+  teardownSeriesObserver()
+  if (searchTimer) clearTimeout(searchTimer)
+})
 </script>
 
 <style scoped>
@@ -577,6 +609,16 @@ onBeforeUnmount(teardownSeriesObserver)
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.card-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.series-search {
+  width: 240px;
 }
 .series-grid {
   display: grid;

@@ -1870,10 +1870,12 @@ export class RecipeDesignerService {
       query.page !== undefined || query.pageSize !== undefined;
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    const search = query.search?.trim();
     const series = (await this.prisma.recipeSeries.findMany({
       where: {
         ...(await this.buildSeriesVisibilityWhere(context)),
         ...(query.status ? { businessStatus: query.status } : {}),
+        ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
       },
       include: {
         designs: {

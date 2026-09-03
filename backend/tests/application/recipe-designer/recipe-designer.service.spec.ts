@@ -6500,6 +6500,39 @@ describe('RecipeDesignerService', () => {
       );
     });
 
+    it('applies case-insensitive name search to the series workbench query', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-search', createdBy: 'staff-1' }),
+      ]);
+
+      await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { search: '  鸡肉 ' },
+      );
+
+      expect(prisma.recipeSeries.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            name: { contains: '鸡肉', mode: 'insensitive' },
+          }),
+        }),
+      );
+    });
+
+    it('omits the name filter when search is empty', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({ id: 'series-no-search', createdBy: 'staff-1' }),
+      ]);
+
+      await service.listSeries(
+        { userId: 'staff-1', role: 'STAFF' },
+        { search: '   ' },
+      );
+
+      const query = prisma.recipeSeries.findMany.mock.calls[0][0];
+      expect(query.where).not.toHaveProperty('name');
+    });
+
     it('uses compact recipe fields for the series workbench list', async () => {
       prisma.recipeSeries.findMany.mockResolvedValue([
         seriesRecord({

@@ -8779,6 +8779,93 @@ describe('RecipeDesignerService', () => {
       expect(prisma.recipeSeries.update).not.toHaveBeenCalled();
     });
 
+    it('renames a series and syncs all of its draft names with fresh versions', async () => {
+      prisma.recipeSeries.findUnique.mockResolvedValue(
+        seriesRecord({
+          id: 'series-1',
+          name: '成犬鸡肉配方',
+          createdBy: 'staff-1',
+          designs: undefined,
+          recipes: undefined,
+        }),
+      );
+      prisma.recipeSeries.update.mockResolvedValue(
+        seriesRecord({ id: 'series-1', name: 'ID的兔肉定制' }),
+      );
+      prisma.designRecipe.findMany.mockResolvedValue([
+        { id: 'design-1' },
+        { id: 'design-2' },
+      ]);
+      prisma.designRecipe.aggregate
+        .mockResolvedValueOnce({ _max: { version: 4 } })
+        .mockResolvedValueOnce({ _max: { version: 5 } });
+
+      await service.renameSeries(
+        'series-1',
+        { name: 'ID的兔肉定制' },
+        { userId: 'staff-1', role: 'STAFF' },
+      );
+
+      expect(prisma.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-1' },
+        data: { name: 'ID的兔肉定制' },
+      });
+      expect(prisma.designRecipe.update).toHaveBeenCalledTimes(2);
+      expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(1, {
+        where: { id: 'design-1' },
+        data: { name: 'ID的兔肉定制', version: 5 },
+      });
+      expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(2, {
+        where: { id: 'design-2' },
+        data: { name: 'ID的兔肉定制', version: 6 },
+      });
+    });
+
+    it('publishes a series draft under the series name regardless of the requested name', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'series-design',
+          name: 'ID的兔肉定制',
+          isCompliant: true,
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          series: {
+            id: 'series-1',
+            name: 'ID的兔肉定制',
+            referenceDogId: null,
+          },
+          items: [item()],
+        }),
+      );
+      targetProvider.getTargets.mockResolvedValue(compliantTargets());
+      prisma.recipe.create.mockResolvedValue({
+        id: 'recipe-row-1',
+        recipeId: 'series-design',
+        version: 1,
+      });
+      prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+        id: 'snapshot-1',
+      });
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({ id: 'series-design', status: 'PUBLISHED' }),
+      );
+
+      await service.publishDraft(
+        'series-design',
+        { name: '旧名称' },
+        adminAccess,
+      );
+
+      expect(prisma.recipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          recipeId: 'series-design',
+          name: 'ID的兔肉定制',
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      });
+    });
+
     it('does not delete another customer series', async () => {
       prisma.recipeSeries.findUnique.mockResolvedValue(
         seriesRecord({

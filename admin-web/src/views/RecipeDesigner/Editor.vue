@@ -3,7 +3,15 @@
     <div class="editor-header">
       <el-button :icon="ArrowLeft" text @click="goBack">返回</el-button>
       <div class="header-info">
-        <span class="draft-name">{{ draft?.name || '加载中…' }}</span>
+        <span class="draft-name">{{ seriesDisplayName }}</span>
+        <el-button
+          v-if="draft?.seriesId"
+          size="small"
+          text
+          :icon="EditPen"
+          class="rename-series-btn"
+          @click="openRenameDialog"
+        >改名</el-button>
         <span v-if="draft?.seriesLifeStage" class="stage-tag">
           {{ stageLabel }}
         </span>
@@ -178,14 +186,23 @@
       @add-item="handleAiAddItem"
       @close="aiPanelVisible = false"
     />
+
+    <!-- 系列改名（合并命名模型：编辑页与列表、发布页共用同一个系列名） -->
+    <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
+      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, CircleCheckFilled, Delete, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type { CreateRecipeSeriesStageDraftPayload } from '@/api/recipeDesigner'
@@ -230,6 +247,45 @@ const items = ref<DesignerItem[]>([])
 const initialLoading = ref(true)
 /** 切换生命阶段中 */
 const switchingStage = ref(false)
+
+/** 合并命名模型：详情页显示系列名（草稿名自动跟随系列名） */
+const seriesDisplayName = computed(() => {
+  const seriesName = draft.value?.series?.name?.trim()
+  return seriesName || draft.value?.name || '加载中…'
+})
+
+const renameDialogVisible = ref(false)
+const renameForm = reactive({ name: '' })
+const renaming = ref(false)
+
+function openRenameDialog() {
+  renameForm.name = seriesDisplayName.value === '加载中…' ? '' : seriesDisplayName.value
+  renameDialogVisible.value = true
+}
+
+async function confirmRename() {
+  const name = renameForm.name.trim()
+  if (!name) {
+    ElMessage.warning('请填写系列名称')
+    return
+  }
+  if (!draft.value?.seriesId) {
+    ElMessage.error('该草稿不属于任何系列，无法改名')
+    return
+  }
+  renaming.value = true
+  try {
+    await recipeDesignerApi.renameSeries(draft.value.seriesId, { name })
+    if (draft.value.series) draft.value.series.name = name
+    draft.value.name = name
+    renameDialogVisible.value = false
+    ElMessage.success('系列名称已更新，旗下所有配方同步生效')
+  } catch (error) {
+    ElMessage.error('改名失败，请重试')
+  } finally {
+    renaming.value = false
+  }
+}
 
 const { loadInputs, refreshInputs, loadingInputs: assessmentLoading, inputsError, compute } = useRecipeDesignerAssessment()
 const {

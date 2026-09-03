@@ -68,7 +68,11 @@
               placeholder="请输入食谱名称"
               maxlength="100"
               show-word-limit
+              :readonly="isSeriesRecipe"
             />
+            <div v-if="isSeriesRecipe" class="field-hint">
+              名称由食谱系列统一管理，如需改名请到「食谱设计器」重命名系列
+            </div>
           </el-form-item>
 
           <el-form-item label="封面图" prop="coverImageUrl">
@@ -2306,6 +2310,14 @@ onMounted(async () => {
 <style scoped>
 .recipe-form-page {
   padding: 20px;
+}
+
+.field-hint {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
 }
 
 .page-header {

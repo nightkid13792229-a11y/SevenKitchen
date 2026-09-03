@@ -23,7 +23,7 @@
           <template #header>配方信息</template>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="系列阶段">
-              {{ draft.name }}
+              {{ seriesDisplayName }}
             </el-descriptions-item>
             <el-descriptions-item label="生命阶段">
               {{ draft.seriesLifeStage || '—' }}
@@ -182,7 +182,18 @@
           <template #header>发布设置</template>
           <el-form label-width="96px" class="publish-form">
             <el-form-item label="发布名称">
-              <el-input v-model="publishForm.name" placeholder="留空使用配方名" maxlength="60" />
+              <template v-if="draft?.seriesId">
+                <div class="publish-name-row">
+                  <el-input :model-value="seriesDisplayName" readonly class="publish-name-input" />
+                  <el-button size="small" text type="primary" @click="openRenameDialog">改名</el-button>
+                </div>
+              </template>
+              <el-input
+                v-else
+                v-model="publishForm.name"
+                placeholder="请填写发布名称"
+                maxlength="60"
+              />
             </el-form-item>
             <el-form-item label="审核备注" :required="publishRequiresReview">
               <el-input
@@ -209,6 +220,15 @@
 
       <el-empty v-else-if="!loading" description="未找到该草稿" />
     </div>
+
+    <!-- 系列改名（合并命名模型：发布名自动跟随系列名） -->
+    <el-dialog v-model="renameDialogVisible" title="重命名系列" width="420px">
+      <el-input v-model="renameForm.name" maxlength="60" show-word-limit />
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="renaming" @click="confirmRename">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -235,6 +255,50 @@ const publishForm = reactive<{ name: string; reviewNote: string }>({
   name: '',
   reviewNote: ''
 })
+
+/** 合并命名模型：系列草稿的发布名固定为系列名 */
+const seriesDisplayName = computed(() => {
+  const seriesName = draft.value?.series?.name?.trim()
+  return seriesName || draft.value?.name || ''
+})
+
+const effectivePublishName = computed(() => {
+  if (draft.value?.seriesId) return seriesDisplayName.value
+  return publishForm.name.trim() || draft.value?.name || ''
+})
+
+const renameDialogVisible = ref(false)
+const renameForm = reactive({ name: '' })
+const renaming = ref(false)
+
+function openRenameDialog() {
+  renameForm.name = seriesDisplayName.value
+  renameDialogVisible.value = true
+}
+
+async function confirmRename() {
+  const name = renameForm.name.trim()
+  if (!name) {
+    ElMessage.warning('请填写系列名称')
+    return
+  }
+  if (!draft.value?.seriesId) {
+    ElMessage.error('该草稿不属于任何系列，无法改名')
+    return
+  }
+  renaming.value = true
+  try {
+    await recipeDesignerApi.renameSeries(draft.value.seriesId, { name })
+    if (draft.value.series) draft.value.series.name = name
+    draft.value.name = name
+    renameDialogVisible.value = false
+    ElMessage.success('系列名称已更新，发布名将随新名称生效')
+  } catch {
+    ElMessage.error('改名失败，请重试')
+  } finally {
+    renaming.value = false
+  }
+}
 
 const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')
 
@@ -369,7 +433,7 @@ async function confirmPublish() {
   }
   try {
     await ElMessageBox.confirm(
-      `确认将「${publishForm.name.trim() || draft.value?.name || ''}」发布到食谱管理？发布后将进入后台审核流程。`,
+      `确认将「${effectivePublishName.value}」发布到食谱管理？发布后将进入后台审核流程。`,
       '发布确认',
       {
         confirmButtonText: '确认发布',
@@ -383,9 +447,8 @@ async function confirmPublish() {
 
   publishing.value = true
   try {
-    const recipeName = publishForm.name.trim() || draft.value?.name || ''
     await recipeDesignerApi.publishDraft(draftId, {
-      name: recipeName,
+      name: effectivePublishName.value,
       ...(publishForm.reviewNote.trim() ? { reviewNote: publishForm.reviewNote.trim() } : {})
     })
     ElMessage.success('发布成功，已进入食谱管理审核')
@@ -432,6 +495,15 @@ onMounted(load)
   justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;
+}
+.publish-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.publish-name-input {
+  flex: 1;
 }
 .muted {
   color: #909399;

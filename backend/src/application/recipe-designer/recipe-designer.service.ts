@@ -1502,7 +1502,10 @@ export class RecipeDesignerService {
             option.type !== IngredientType.SUPPLEMENT && option.nutrientMatch,
         )
         .sort(compareIngredientOptionsByNutrientMatch);
-      const pagedFoodOptions = foodOptions.slice(skip, skip + effectivePageSize);
+      const pagedFoodOptions = foodOptions.slice(
+        skip,
+        skip + effectivePageSize,
+      );
       const total = supplementOptions.length + foodOptions.length;
       await this.recordIngredientOptionSearch(dto.search, total);
 
@@ -1540,7 +1543,10 @@ export class RecipeDesignerService {
         }))
         .filter((candidate) => candidate.score > 0)
         .sort(compareIngredientSearchResults);
-      const pagedIngredients = rankedIngredients.slice(skip, skip + effectivePageSize);
+      const pagedIngredients = rankedIngredients.slice(
+        skip,
+        skip + effectivePageSize,
+      );
       await this.recordIngredientOptionSearch(
         dto.search,
         rankedIngredients.length,
@@ -1682,8 +1688,10 @@ export class RecipeDesignerService {
     return [...categories].sort((a, b) => {
       const idxA = this.SUPPLEMENT_CATEGORY_ORDER.indexOf(a);
       const idxB = this.SUPPLEMENT_CATEGORY_ORDER.indexOf(b);
-      const orderA = idxA === -1 ? this.SUPPLEMENT_CATEGORY_ORDER.length - 1 : idxA;
-      const orderB = idxB === -1 ? this.SUPPLEMENT_CATEGORY_ORDER.length - 1 : idxB;
+      const orderA =
+        idxA === -1 ? this.SUPPLEMENT_CATEGORY_ORDER.length - 1 : idxA;
+      const orderB =
+        idxB === -1 ? this.SUPPLEMENT_CATEGORY_ORDER.length - 1 : idxB;
       return orderA - orderB;
     });
   }
@@ -1858,7 +1866,8 @@ export class RecipeDesignerService {
     query: ListRecipeDesignerSeriesDto = {},
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const usePagination = query.page !== undefined || query.pageSize !== undefined;
+    const usePagination =
+      query.page !== undefined || query.pageSize !== undefined;
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const series = (await this.prisma.recipeSeries.findMany({
@@ -2261,11 +2270,10 @@ export class RecipeDesignerService {
                         designRecipeId: existingDraft.id,
                       })),
                     });
-                    const updated =
-                      await tx.designRecipe.findUnique({
-                        where: { id: existingDraft.id },
-                        include: DESIGN_RECIPE_INCLUDE,
-                      });
+                    const updated = await tx.designRecipe.findUnique({
+                      where: { id: existingDraft.id },
+                      include: DESIGN_RECIPE_INCLUDE,
+                    });
                     if (updated) {
                       return updated;
                     }
@@ -2405,7 +2413,8 @@ export class RecipeDesignerService {
               data: {
                 contentRevision: { increment: 1 },
                 status: DesignRecipeStatus.DRAFT,
-                fediafDogScenario: mapSeriesLifeStageToScenario(targetLifeStage),
+                fediafDogScenario:
+                  mapSeriesLifeStageToScenario(targetLifeStage),
                 applicableLifeStages: [targetLifeStage],
                 totalWeightG: copiedItems.reduce(
                   (total, item) => total + item.weightG,
@@ -2993,9 +3002,8 @@ export class RecipeDesignerService {
         );
       }
 
-      const supplementTargets = this.normalizeCopiedDesignSupplementTargets(
-        item,
-      );
+      const supplementTargets =
+        this.normalizeCopiedDesignSupplementTargets(item);
       return {
         ingredientId: item.ingredientId,
         nutritionFoodId,
@@ -3026,7 +3034,10 @@ export class RecipeDesignerService {
     if (!value) return null;
     const trimmed = value.trim();
     if (!trimmed) return null;
-    const firstSegment = trimmed.split(',').map((s) => s.trim()).find(Boolean);
+    const firstSegment = trimmed
+      .split(',')
+      .map((s) => s.trim())
+      .find(Boolean);
     const candidate = firstSegment || trimmed;
     return candidate.length > 100 ? candidate.slice(0, 100) : candidate;
   }
@@ -3245,9 +3256,27 @@ export class RecipeDesignerService {
       throw new NotFoundException(`Recipe series ${seriesId} not found`);
     }
 
-    return this.prisma.recipeSeries.update({
-      where: { id: seriesId },
-      data: { name },
+    // 合并命名模型：系列名是唯一名字，旗下所有草稿名同步跟随
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.recipeSeries.update({
+        where: { id: seriesId },
+        data: { name },
+      });
+
+      const designs = await tx.designRecipe.findMany({
+        where: { seriesId, name: { not: name } },
+        select: { id: true },
+      });
+
+      for (const design of designs) {
+        const version = await this.allocateNextDesignRecipeVersion(tx, name);
+        await tx.designRecipe.update({
+          where: { id: design.id },
+          data: { name, version },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -3647,12 +3676,10 @@ export class RecipeDesignerService {
     return 'NOT_DESIGNED';
   }
 
-  private hasDesignRecipeItems(
-    design: {
-      items?: unknown[];
-      _count?: { items: number };
-    },
-  ): boolean {
+  private hasDesignRecipeItems(design: {
+    items?: unknown[];
+    _count?: { items: number };
+  }): boolean {
     return design._count?.items !== undefined
       ? design._count.items > 0
       : Array.isArray(design.items) && design.items.length > 0;
@@ -4076,7 +4103,9 @@ export class RecipeDesignerService {
       return existingRevision;
     }
 
-    const revisionName = this.buildRevisionDraftName(source.name);
+    // 合并命名模型：修订草稿沿用系列名（无系列时才带“修订”后缀区分）
+    const seriesName = source.series?.name?.trim() || '';
+    const revisionName = seriesName || this.buildRevisionDraftName(source.name);
     const latestVersion = await this.prisma.designRecipe.aggregate({
       where: { name: revisionName },
       _max: { version: true },
@@ -4376,19 +4405,30 @@ export class RecipeDesignerService {
     const normalizedItems = items.map((item) => {
       const itemId = String(item.id || '').trim();
       const sortOrder = Number(item.sortOrder);
-      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0) throw new BadRequestException('排序项格式不正确');
-      if (seenItemIds.has(itemId)) throw new BadRequestException('排序项不能重复');
+      if (!itemId || !Number.isFinite(sortOrder) || sortOrder < 0)
+        throw new BadRequestException('排序项格式不正确');
+      if (seenItemIds.has(itemId))
+        throw new BadRequestException('排序项不能重复');
       seenItemIds.add(itemId);
       return { id: itemId, sortOrder };
     });
     return this.prisma.$transaction(async (tx) => {
       let updatedCount = 0;
       for (const item of normalizedItems) {
-        const result = await tx.designRecipeItem.updateMany({ where: { id: item.id, designRecipeId }, data: { sortOrder: item.sortOrder } });
-        if (result.count !== 1) throw new NotFoundException(`Design recipe item ${item.id} not found`);
+        const result = await tx.designRecipeItem.updateMany({
+          where: { id: item.id, designRecipeId },
+          data: { sortOrder: item.sortOrder },
+        });
+        if (result.count !== 1)
+          throw new NotFoundException(
+            `Design recipe item ${item.id} not found`,
+          );
         updatedCount += result.count;
       }
-      await tx.designRecipe.update({ where: { id: designRecipeId }, data: { contentRevision: { increment: 1 } } });
+      await tx.designRecipe.update({
+        where: { id: designRecipeId },
+        data: { contentRevision: { increment: 1 } },
+      });
       return { updatedCount };
     });
   }
@@ -4630,17 +4670,20 @@ export class RecipeDesignerService {
       throw new BadRequestException('只有管理员可以发布正式食谱');
     }
 
+    const draft = await this.loadDraft(id);
+    if (!(await this.isInternalRecipeDesignerCreatorId(draft.createdBy))) {
+      throw new BadRequestException('用户私有草稿不能发布为正式食谱');
+    }
+
     const requestedRecipeName = dto.name?.trim() || '';
-    const recipeName = this.stripRevisionSuffix(requestedRecipeName);
+    const seriesName = draft.series?.name?.trim() || '';
+    const recipeName = this.stripRevisionSuffix(
+      seriesName || requestedRecipeName,
+    );
     const reviewNote = dto.reviewNote?.trim() || null;
 
     if (!recipeName) {
       throw new BadRequestException('请填写食谱名称');
-    }
-
-    const draft = await this.loadDraft(id);
-    if (!(await this.isInternalRecipeDesignerCreatorId(draft.createdBy))) {
-      throw new BadRequestException('用户私有草稿不能发布为正式食谱');
     }
 
     await this.assertRevisionHasPublishableChanges(draft, recipeName);
@@ -5635,26 +5678,24 @@ export class RecipeDesignerService {
     ];
   }
 
-  private normalizeCopiedDesignSupplementTargets(
-    item: {
-      supplementTargets?: unknown;
-      nutrientTargetKey?: string | null;
-      nutrientTargetValue?: number | null;
-      ingredient?: {
-        id?: string | null;
-        name?: string | null;
-      } | null;
-      nutritionFood?: {
-        name?: string | null;
-        displayNameZh?: string | null;
-        mappings?: Array<{
-          ingredientId?: string | null;
-          isPrimary?: boolean | null;
-          ingredient?: { name?: string | null } | null;
-        }>;
-      } | null;
-    },
-  ): DesignSupplementTarget[] {
+  private normalizeCopiedDesignSupplementTargets(item: {
+    supplementTargets?: unknown;
+    nutrientTargetKey?: string | null;
+    nutrientTargetValue?: number | null;
+    ingredient?: {
+      id?: string | null;
+      name?: string | null;
+    } | null;
+    nutritionFood?: {
+      name?: string | null;
+      displayNameZh?: string | null;
+      mappings?: Array<{
+        ingredientId?: string | null;
+        isPrimary?: boolean | null;
+        ingredient?: { name?: string | null } | null;
+      }>;
+    } | null;
+  }): DesignSupplementTarget[] {
     const targets = this.normalizeDesignSupplementTargets(
       item.supplementTargets,
       item.nutrientTargetKey,
@@ -7322,9 +7363,7 @@ export class RecipeDesignerService {
     });
   }
 
-  private buildAiAssessmentSummaryText(
-    draft: DesignRecipeWithItems,
-  ): string {
+  private buildAiAssessmentSummaryText(draft: DesignRecipeWithItems): string {
     const summary = draft.assessmentSummary as
       | Record<string, unknown>
       | null
@@ -7487,7 +7526,11 @@ export class RecipeDesignerService {
           }),
           nutritionPlanHistory: this.toJsonValue([
             ...history,
-            { result: plan, note: dto.note ?? '未认可（修改中）', createdAt: now },
+            {
+              result: plan,
+              note: dto.note ?? '未认可（修改中）',
+              createdAt: now,
+            },
           ]),
         },
         update: {
@@ -7499,7 +7542,11 @@ export class RecipeDesignerService {
           }),
           nutritionPlanHistory: this.toJsonValue([
             ...history,
-            { result: plan, note: dto.note ?? '未认可（修改中）', createdAt: now },
+            {
+              result: plan,
+              note: dto.note ?? '未认可（修改中）',
+              createdAt: now,
+            },
           ]),
         },
       });
@@ -7542,8 +7589,8 @@ export class RecipeDesignerService {
           .result as NutritionPlanResult)
       : null;
 
-    const result = await this.recipeAiWizardService.generateIngredientRecommendation(
-      {
+    const result =
+      await this.recipeAiWizardService.generateIngredientRecommendation({
         dog: profile,
         nutritionPlan,
         knowledgeTags: tags,
@@ -7551,8 +7598,7 @@ export class RecipeDesignerService {
         orderSummary: insight.orderSummary,
         frameworkTemplateName: deriveFrameworkTemplateName(tags),
         currentDraft: await this.buildAiWizardDraftSummary(draftId, access),
-      },
-    );
+      });
 
     // 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 ID 以便一键添加
     const enriched = await this.enrichRecommendationWithLibrary(result);
@@ -7568,7 +7614,9 @@ export class RecipeDesignerService {
       update: {
         ingredientRecommendations: this.toJsonValue([
           ...(Array.isArray(aiData.ingredientRecommendations)
-            ? (aiData.ingredientRecommendations as Array<Record<string, unknown>>)
+            ? (aiData.ingredientRecommendations as Array<
+                Record<string, unknown>
+              >)
             : []),
           { result: enriched, createdAt: new Date().toISOString() },
         ]),
@@ -7816,7 +7864,8 @@ export class RecipeDesignerService {
     const parts: string[] = [];
     const macro = profile.macros as Record<string, unknown> | null;
     if (macro && typeof macro === 'object') {
-      const energy = macro.energyKcalPer100g ?? macro.energyKcal ?? macro.energy;
+      const energy =
+        macro.energyKcalPer100g ?? macro.energyKcal ?? macro.energy;
       if (typeof energy === 'number') parts.push(`能量${energy}kcal/100g`);
       const protein = macro.proteinG ?? macro.protein;
       if (typeof protein === 'number') parts.push(`蛋白${protein}g/100g`);
@@ -7880,7 +7929,8 @@ export class RecipeDesignerService {
       const exact = foods.find(
         (food) =>
           normalizeName(food.name) === normalized ||
-          (food.displayNameZh && normalizeName(food.displayNameZh) === normalized),
+          (food.displayNameZh &&
+            normalizeName(food.displayNameZh) === normalized),
       );
       if (exact) return exact;
       const contains = foods
@@ -7891,14 +7941,17 @@ export class RecipeDesignerService {
           return foodNames.some(
             (candidate) =>
               (candidate.length >= 2 &&
-                (normalized.includes(candidate) || candidate.includes(normalized))) ||
-              normalized.length >= 2 &&
-                (food.name.includes(normalized) || zhName.includes(normalized)),
+                (normalized.includes(candidate) ||
+                  candidate.includes(normalized))) ||
+              (normalized.length >= 2 &&
+                (food.name.includes(normalized) ||
+                  zhName.includes(normalized))),
           );
         })
         .sort(
           (a, b) =>
-            (a.displayNameZh ?? a.name).length - (b.displayNameZh ?? b.name).length,
+            (a.displayNameZh ?? a.name).length -
+            (b.displayNameZh ?? b.name).length,
         )[0];
       return contains;
     };
@@ -7916,7 +7969,8 @@ export class RecipeDesignerService {
             const candidateName = normalizeName(ingredient.name);
             return (
               candidateName.length >= 2 &&
-              (normalized.includes(candidateName) || candidateName.includes(normalized))
+              (normalized.includes(candidateName) ||
+                candidateName.includes(normalized))
             );
           })
           .sort(
@@ -8140,18 +8194,28 @@ function deriveKnowledgeTags(profile: {
     tags.add('endocrine');
     keywords.push('甲减', '甲亢', '甲状腺');
   }
-  if (/肝|肝硬化|肝炎|肝硬化|门体分流|肝衰|肝性脑病|肝脂质|脂肪肝|铜中毒|胆管炎/i.test(historyText)) {
+  if (
+    /肝|肝硬化|肝炎|肝硬化|门体分流|肝衰|肝性脑病|肝脂质|脂肪肝|铜中毒|胆管炎/i.test(
+      historyText,
+    )
+  ) {
     tags.add('hepatic');
     tags.add('liver');
     keywords.push('肝脏', '肝病', '肝');
   }
-  if (/心|心脏|心衰|充血性心衰|心肌病|瓣膜|心血管|心功能不全/i.test(historyText)) {
+  if (
+    /心|心脏|心衰|充血性心衰|心肌病|瓣膜|心血管|心功能不全/i.test(historyText)
+  ) {
     tags.add('cardio');
     tags.add('cardiac');
     tags.add('heart');
     keywords.push('心脏', '心衰', '心血管');
   }
-  if (/关节|骨关节炎|关节炎|骨科|髌骨|十字韧带|髋关节|退行性关节/i.test(historyText)) {
+  if (
+    /关节|骨关节炎|关节炎|骨科|髌骨|十字韧带|髋关节|退行性关节/i.test(
+      historyText,
+    )
+  ) {
     tags.add('ortho');
     tags.add('arthritis');
     tags.add('joint');
@@ -8249,7 +8313,8 @@ function deriveKnowledgeTags(profile: {
 function deriveFrameworkTemplateName(tags: string[]): string {
   const set = new Set(tags);
   if (set.has('ckd') || set.has('renal')) return '肾脏病低磷模板';
-  if (set.has('pancreatitis') || set.has('hyperlipidemia')) return '胰腺炎/低脂模板';
+  if (set.has('pancreatitis') || set.has('hyperlipidemia'))
+    return '胰腺炎/低脂模板';
   if (set.has('urolith')) return '泌尿结石模板（需先明确结石类型）';
   return '默认模板';
 }
@@ -8298,9 +8363,7 @@ function normalizeAiDesignDataRecord(record: {
           createdAt: string;
         }>)
       : [],
-    ingredientRecommendations: Array.isArray(
-      record.ingredientRecommendations,
-    )
+    ingredientRecommendations: Array.isArray(record.ingredientRecommendations)
       ? (record.ingredientRecommendations as Array<{
           result: IngredientRecommendationResult;
           createdAt: string;
@@ -8313,12 +8376,9 @@ function normalizeAiDesignDataRecord(record: {
         }>)
       : [],
     sop:
-      record.sop &&
-      typeof record.sop === 'object' &&
-      !Array.isArray(record.sop)
+      record.sop && typeof record.sop === 'object' && !Array.isArray(record.sop)
         ? {
-            result: (record.sop as Record<string, unknown>)
-              .result as SopResult,
+            result: (record.sop as Record<string, unknown>).result as SopResult,
             accepted: record.sopAccepted,
             acceptedAt: record.sopAcceptedAt
               ? record.sopAcceptedAt.toISOString()

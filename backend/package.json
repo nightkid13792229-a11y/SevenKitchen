@@ -37,6 +37,8 @@
     "backfill:recipe-supplement-alternatives:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-alternatives.ts --apply",
     "backfill:recipe-supplement-targets-v2": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts",
     "backfill:recipe-supplement-targets-v2:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts --apply",
+    "sync:series-draft-names": "ts-node -r tsconfig-paths/register scripts/sync-series-draft-names.ts",
+    "sync:series-draft-names:apply": "ts-node -r tsconfig-paths/register scripts/sync-series-draft-names.ts --apply",
     "import:cfct-private": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts",
     "import:cfct-private:apply": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts --apply",
     "ocr:cfct-pages": "bash scripts/cfct-ocr-pages.sh",

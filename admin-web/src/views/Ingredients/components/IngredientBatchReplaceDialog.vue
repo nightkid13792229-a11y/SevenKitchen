@@ -50,17 +50,27 @@
           <div class="scope-title">
             选择要替换的食谱（共 {{ affectedRecipes.length }} 个）
           </div>
-          <el-radio-group v-model="scopeFilter" size="small">
-            <el-radio-button label="ALL">全部</el-radio-button>
-            <el-radio-button label="PUBLIC">已发布</el-radio-button>
-            <el-radio-button label="DRAFT">草稿</el-radio-button>
-          </el-radio-group>
+          <div class="scope-filter">
+            <span class="selected-count">
+              {{ scopeFilter === 'ALL' ? affectedRecipes.length : filteredAffectedRecipes.length }} 个中，已选
+              <b>{{ selectedRecipeIds.length }}</b> 个
+            </span>
+            <el-radio-group v-model="scopeFilter" size="small">
+              <el-radio-button label="ALL">全部</el-radio-button>
+              <el-radio-button label="PUBLIC">已发布</el-radio-button>
+              <el-radio-button label="DRAFT">草稿</el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
+        <div class="scope-hint">
+          先在上方按状态筛选，再勾选/取消要替换的食谱；「预览影响」只处理打勾的食谱。
         </div>
 
         <el-table
           ref="scopeTableRef"
           v-loading="loadingAffected"
           :data="filteredAffectedRecipes"
+          row-key="recipeId"
           size="small"
           max-height="320"
           @selection-change="handleScopeSelectionChange"
@@ -351,6 +361,12 @@ watch(
   }
 )
 
+// 切换「全部/已发布/草稿」筛选时，把选中范围同步为当前筛选下显示的食谱，
+// 避免预览误带上其它状态（被隐藏）的已选行。
+watch(scopeFilter, () => {
+  nextTickRestoreSelection()
+})
+
 function resetState() {
   step.value = 'config'
   toIngredientId.value = ''
@@ -413,20 +429,22 @@ async function loadAffectedRecipes() {
 function nextTickRestoreSelection() {
   setTimeout(() => {
     if (scopeTableRef.value) {
+      // 先清空勾选态，再按当前筛选下的目标集合逐行勾选。
+      // 勾选/取消会触发 selection-change，最终 selectedRecipeIds 与表格一致。
+      scopeTableRef.value.clearSelection()
+      selectedRecipeIds.value = filteredAffectedRecipes.value.map((r) => r.recipeId)
       filteredAffectedRecipes.value.forEach((row) => {
-        scopeTableRef.value.toggleRowSelection(row, true)
+        if (selectedRecipeIds.value.includes(row.recipeId)) {
+          scopeTableRef.value.toggleRowSelection(row, true)
+        }
       })
     }
   }, 50)
 }
 
 function handleScopeSelectionChange(selection: BatchReplaceAffectedRecipe[]) {
-  const selected = new Set(selection.map((r) => r.recipeId))
-  // 保留未显示在其他筛选下的已选项
-  const hiddenSelected = selectedRecipeIds.value.filter(
-    (id) => !filteredAffectedRecipes.value.some((r) => r.recipeId === id)
-  )
-  selectedRecipeIds.value = [...hiddenSelected, ...selected]
+  // 选中集完全由当前表格的勾选状态决定（切换筛选会同步重设，见 watch scopeFilter）
+  selectedRecipeIds.value = selection.map((r) => r.recipeId)
 }
 
 function candidateLabel(candidate: Ingredient) {
@@ -723,6 +741,29 @@ function resolveTargetLabel(key: string): ResolvedTargetLabel {
 .scope-title {
   font-weight: 600;
   color: #303133;
+}
+
+.scope-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selected-count {
+  color: #606266;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.selected-count b {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.scope-hint {
+  color: #909399;
+  font-size: 12px;
+  margin-bottom: 6px;
 }
 
 .usage-text {

@@ -25,6 +25,8 @@ import {
 } from '../../domain/ingredient/nutrition-field-catalog';
 import { readProfileFieldAmount } from '../../domain/recipe-designer/nutrition-profile-reader';
 import { mapSeriesLifeStageToScenario } from '../../domain/recipe/recipe-series';
+import { normalizeNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
+import { nutritionDataToNutritionProfile } from '../../application/nutrition-standard/nutrient-value-resolver';
 import type { NutritionProfile, SupplementTarget } from '../../domain/ingredient/types';
 import type { NutritionDetailedData } from '../../domain/recipe/types';
 
@@ -144,6 +146,7 @@ interface LoadedRecipe {
       id: string;
       name: string;
       displayNameZh: string | null;
+      nutritionData: Prisma.JsonValue;
     } | null;
     supplementAlternatives: Array<{
       id: string;
@@ -166,6 +169,7 @@ interface IngredientOption {
   properties: Prisma.JsonValue;
   primaryNutritionFoodId: string | null;
   primaryNutritionFoodName: string | null;
+  primaryNutritionFoodData: Prisma.JsonValue | null;
 }
 
 @Injectable()
@@ -568,7 +572,12 @@ export class IngredientBatchReplaceService {
               },
             },
             nutritionFood: {
-              select: { id: true, name: true, displayNameZh: true },
+              select: {
+                id: true,
+                name: true,
+                displayNameZh: true,
+                nutritionData: true,
+              },
             },
             supplementAlternatives: {
               orderBy: { sortOrder: 'asc' },
@@ -619,7 +628,7 @@ export class IngredientBatchReplaceService {
       select: {
         nutritionFoodId: true,
         nutritionFood: {
-          select: { name: true, displayNameZh: true },
+          select: { name: true, displayNameZh: true, nutritionData: true },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -632,6 +641,8 @@ export class IngredientBatchReplaceService {
         primaryMapping?.nutritionFood?.displayNameZh?.trim() ||
         primaryMapping?.nutritionFood?.name ||
         null,
+      primaryNutritionFoodData:
+        primaryMapping?.nutritionFood?.nutritionData ?? null,
     };
   }
 
@@ -649,6 +660,18 @@ export class IngredientBatchReplaceService {
     const targets = await this.targetProvider.getTargets(scenario);
     cache.set(scenario, targets);
     return targets;
+  }
+
+  private resolveItemProfile(
+    nutritionFoodData: Prisma.JsonValue | null,
+    ingredientProfile: Prisma.JsonValue,
+  ): NutritionProfile | null {
+    // 与食谱设计器口径一致：优先使用营养库档案，原料档案兜底
+    const fromNutritionFood = resolveNutritionProfileData(nutritionFoodData);
+    if (fromNutritionFood) {
+      return fromNutritionFood;
+    }
+    return resolveNutritionProfileData(ingredientProfile);
   }
 
   private resolveScenario(recipe: LoadedRecipe): FediafDogScenarioCode {
@@ -777,8 +800,14 @@ export class IngredientBatchReplaceService {
 
         const replaced = isReplaced(item);
         const profile = replaced
-          ? (toIngredient.nutritionProfile as NutritionProfile | null)
-          : (item.ingredient.nutritionProfile as NutritionProfile | null);
+          ? this.resolveItemProfile(
+              toIngredient.primaryNutritionFoodData,
+              toIngredient.nutritionProfile,
+            )
+          : this.resolveItemProfile(
+              item.nutritionFood?.nutritionData ?? null,
+              item.ingredient.nutritionProfile,
+            );
         const name = replaced
           ? (toIngredient.primaryNutritionFoodName ||
               toIngredient.name)
@@ -819,8 +848,14 @@ export class IngredientBatchReplaceService {
       const replaced = isReplaced(item);
       const replacedIngredient = replaced ? toIngredient : null;
       const profile = replaced
-        ? (toIngredient.nutritionProfile as NutritionProfile | null)
-        : (item.ingredient.nutritionProfile as NutritionProfile | null);
+        ? this.resolveItemProfile(
+            toIngredient.primaryNutritionFoodData,
+            toIngredient.nutritionProfile,
+          )
+        : this.resolveItemProfile(
+            item.nutritionFood?.nutritionData ?? null,
+            item.ingredient.nutritionProfile,
+          );
       const goal = this.resolveItemSupplementGoal(item, warnings, recipe.name);
 
       let amount: number | null = null;
@@ -1205,6 +1240,29 @@ function extractSummary(
   }
   const summary = asRecord(data.summary) ?? data;
   return summaryFromRecord(summary);
+}
+
+/**
+ * 将营养档案数据转换为评估引擎可用的营养档案。
+ * 与食谱设计器口径一致：分组格式直接规范化，旧版平铺格式走 legacy 转换。
+ */
+function resolveNutritionProfileData(data: unknown): NutritionProfile | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  const record = data as Record<string, unknown>;
+  const isGrouped =
+    'meta' in record ||
+    'macros' in record ||
+    'minerals' in record ||
+    'vitamins' in record ||
+    'fattyAcids' in record ||
+    'aminoAcids' in record ||
+    'items' in record;
+  if (isGrouped) {
+    return normalizeNutritionProfile(data as NutritionProfile);
+  }
+  return nutritionDataToNutritionProfile(record);
 }
 
 function summaryFromReport(

@@ -324,6 +324,7 @@ const RECIPE_SERIES_WORKBENCH_RECIPE_SELECT = {
   recipeId: true,
   seriesLifeStage: true,
   status: true,
+  referenceDogId: true,
   updatedAt: true,
 };
 
@@ -413,6 +414,7 @@ type DesignRecipeWithItems = {
   series?: {
     id: string;
     name: string;
+    referenceDogId?: string | null;
   } | null;
   isCompliant: boolean;
   reviewStatus: string;
@@ -587,6 +589,7 @@ type RecipeSeriesWorkbenchRecord = {
     nutritionStandard?: string | null;
     nutritionDetailedData?: unknown;
     customerDogId?: string | null;
+    referenceDogId?: string | null;
     updatedAt?: Date | string | null;
     items?: RecipeSeriesCopyableRecipeItem[];
   }>;
@@ -1381,14 +1384,17 @@ export class RecipeDesignerService {
     return new Map(dogs.map((dog) => [dog.id, dog.name]));
   }
 
-  /** 内部工作台卡片展示用：批量加载系列「参考爱犬」名称 */
+  /** 内部工作台卡片展示用：批量加载系列「参考爱犬」名称（含已发布配方上的历史参考犬） */
   private async loadReferenceDogNameMapForSeries(
     series: RecipeSeriesWorkbenchRecord[],
   ) {
     const dogIds = [
       ...new Set(
         series
-          .map((record) => record.referenceDogId)
+          .flatMap((record) => [
+            record.referenceDogId,
+            ...record.recipes.map((recipe) => recipe.referenceDogId),
+          ])
           .filter((id): id is string => Boolean(id)),
       ),
     ];
@@ -1427,6 +1433,11 @@ export class RecipeDesignerService {
               { customerDogId: { in: matchedDogIds } },
               { designs: { some: { customerDogId: { in: matchedDogIds } } } },
               { recipes: { some: { customerDogId: { in: matchedDogIds } } } },
+              {
+                recipes: {
+                  some: { referenceDogId: { in: matchedDogIds } },
+                },
+              },
               {
                 recipes: {
                   some: { customOrder: { dogId: { in: matchedDogIds } } },
@@ -2048,16 +2059,26 @@ export class RecipeDesignerService {
     const referenceDogNameById = await this.loadReferenceDogNameMapForSeries(
       visibleSeries,
     );
-    const cards = visibleSeries.map((record) =>
-      this.buildSeriesWorkbenchCard(
+    const cards = visibleSeries.map((record) => {
+      const referenceDogIds = [
+        record.referenceDogId,
+        ...record.recipes.map((recipe) => recipe.referenceDogId),
+      ].filter((id): id is string => Boolean(id));
+      const referenceDogNames = [
+        ...new Set(
+          referenceDogIds
+            .map((id) => referenceDogNameById.get(id) ?? '')
+            .filter(Boolean),
+        ),
+      ];
+      return this.buildSeriesWorkbenchCard(
         record,
         context.userId,
         undefined,
-        record.referenceDogId
-          ? referenceDogNameById.get(record.referenceDogId) ?? null
-          : null,
-      ),
-    );
+        referenceDogNames[0] ?? null,
+        referenceDogNames,
+      );
+    });
     const items = this.filterSeriesWorkbenchCards(cards, query.status);
     return usePagination ? { items, page, pageSize, hasMore } : items;
   }
@@ -3489,6 +3510,7 @@ export class RecipeDesignerService {
     _userId: string,
     initialDraftIdOverride?: string,
     referenceDogName?: string | null,
+    referenceDogNames?: string[],
   ) {
     const businessStatus =
       series.businessStatus ?? RecipeSeriesBusinessStatus.DRAFT;
@@ -3545,6 +3567,8 @@ export class RecipeDesignerService {
         RECIPE_SERIES_BUSINESS_STATUS_LABELS[businessStatus] ?? businessStatus,
       referenceDogId: series.referenceDogId ?? null,
       referenceDogName: referenceDogName ?? null,
+      referenceDogNames:
+        referenceDogNames ?? (referenceDogName ? [referenceDogName] : []),
       updatedAt: series.updatedAt,
       publishedStageCount,
       stages,
@@ -4899,6 +4923,9 @@ export class RecipeDesignerService {
           description: draft.notes,
           designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
           isCustomRecipe: false,
+          ...(draft.series?.referenceDogId
+            ? { referenceDogId: draft.series.referenceDogId }
+            : {}),
           ...this.buildPublishedRecipePresentationMediaCreateData(
             inheritance.media,
           ),

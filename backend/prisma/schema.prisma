@@ -351,6 +351,8 @@ model Recipe {
   seriesLifeStage        String?                     @map("series_life_stage")
   customerOwnerId        String?                     @map("customer_owner_id")
   customerDogId          String?                     @map("customer_dog_id")
+  /// 发布该配方时设计系列的参考爱犬（仅作历史记录，用于后台按爱犬搜索）
+  referenceDogId         String?                     @map("reference_dog_id")
   sourceDesignRecipeId   String?                     @unique @map("source_design_recipe_id")
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   series                 RecipeSeries?               @relation(fields: [seriesId], references: [id])
@@ -368,6 +370,7 @@ model Recipe {
   @@index([seriesId, seriesLifeStage, status])
   @@index([customerOwnerId])
   @@index([customerDogId])
+  @@index([referenceDogId])
   @@map("recipe")
 }
 

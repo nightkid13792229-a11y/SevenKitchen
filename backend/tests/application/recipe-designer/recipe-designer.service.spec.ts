@@ -6580,6 +6580,11 @@ describe('RecipeDesignerService', () => {
           { recipes: { some: { customerDogId: { in: ['dog-9'] } } } },
           {
             recipes: {
+              some: { referenceDogId: { in: ['dog-9'] } },
+            },
+          },
+          {
+            recipes: {
               some: { customOrder: { dogId: { in: ['dog-9'] } } },
             },
           },
@@ -6651,6 +6656,42 @@ describe('RecipeDesignerService', () => {
         expect.objectContaining({
           referenceDogId: 'dog-9',
           referenceDogName: '旺财',
+          referenceDogNames: ['旺财'],
+        }),
+      );
+    });
+
+    it('lists current and historical reference dogs from published recipes on workbench cards', async () => {
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord({
+          id: 'series-dog-history',
+          createdBy: 'staff-1',
+          referenceDogId: 'dog-9',
+          recipes: [
+            {
+              recipeId: 'recipe-1',
+              seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+              status: 'PUBLIC',
+              referenceDogId: 'dog-8',
+              updatedAt: new Date('2026-06-01T08:00:00.000Z'),
+            },
+          ],
+        }),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([
+        { id: 'dog-9', name: '旺财' },
+        { id: 'dog-8', name: '小白' },
+      ]);
+
+      const cards = await service.listSeries({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+
+      expect(cards[0]).toEqual(
+        expect.objectContaining({
+          referenceDogName: '旺财',
+          referenceDogNames: ['旺财', '小白'],
         }),
       );
     });
@@ -6695,6 +6736,7 @@ describe('RecipeDesignerService', () => {
                 recipeId: true,
                 seriesLifeStage: true,
                 status: true,
+                referenceDogId: true,
                 updatedAt: true,
               },
               orderBy: { updatedAt: 'desc' },
@@ -9032,6 +9074,49 @@ describe('RecipeDesignerService', () => {
           name: 'ID的兔肉定制',
           seriesId: 'series-1',
           seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        }),
+      });
+    });
+
+    it('records the series reference dog on the published recipe as history', async () => {
+      prisma.designRecipe.findUnique.mockResolvedValue(
+        draft({
+          id: 'series-design',
+          name: '旺财兔肉定制',
+          isCompliant: true,
+          seriesId: 'series-1',
+          seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+          series: {
+            id: 'series-1',
+            name: '旺财兔肉定制',
+            referenceDogId: 'dog-9',
+          },
+          items: [item()],
+        }),
+      );
+      targetProvider.getTargets.mockResolvedValue(compliantTargets());
+      prisma.recipe.create.mockResolvedValue({
+        id: 'recipe-row-1',
+        recipeId: 'series-design',
+        version: 1,
+      });
+      prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+        id: 'snapshot-1',
+      });
+      prisma.designRecipe.update.mockResolvedValue(
+        draft({ id: 'series-design', status: 'PUBLISHED' }),
+      );
+
+      await service.publishDraft(
+        'series-design',
+        { name: '旺财兔肉定制' },
+        adminAccess,
+      );
+
+      expect(prisma.recipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          recipeId: 'series-design',
+          referenceDogId: 'dog-9',
         }),
       });
     });

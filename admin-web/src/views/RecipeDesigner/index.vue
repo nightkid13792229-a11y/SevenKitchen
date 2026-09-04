@@ -51,6 +51,9 @@
           </div>
           <div class="series-meta">
             <span v-if="card.referenceDogName" class="dog-chip">🐶 {{ card.referenceDogName }}</span>
+            <span v-if="historicalDogNames(card)" class="dog-chip muted" :title="`历史参考犬：${historicalDogNames(card)}`">
+              曾参考：{{ historicalDogNames(card) }}
+            </span>
             <span class="updated-at">更新于 {{ formatTime(card.updatedAt) }}</span>
           </div>
 
@@ -238,6 +241,13 @@ function formatTime(value?: string): string {
   if (!value) return '—'
   const date = new Date(value)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/** 历史上参考过该系列的狗狗名称（不含当前参考犬），用于卡片提示 */
+function historicalDogNames(card: RecipeDesignerSeriesCard): string {
+  const names = card.referenceDogNames ?? []
+  if (names.length <= 1) return ''
+  return names.slice(1).join('、')
 }
 
 function stageTagType(stage: RecipeDesignerSeriesStage): 'success' | 'warning' | 'info' | 'danger' | 'primary' {

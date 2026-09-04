@@ -46,6 +46,8 @@ export interface RecipeDesignerSeriesCard {
   referenceDogId?: string | null
   /** 参考爱犬名称（后端工作台卡片附带，用于搜索定位展示） */
   referenceDogName?: string | null
+  /** 参考爱犬名称列表：第一位为当前参考犬，其后为历史上发布时记录过的参考犬 */
+  referenceDogNames?: string[] | null
   updatedAt?: string
   publishedStageCount: number
   stages: RecipeDesignerSeriesStage[]

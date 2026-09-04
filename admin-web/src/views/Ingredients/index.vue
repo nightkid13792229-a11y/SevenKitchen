@@ -280,6 +280,14 @@
               使用情况
             </el-button>
             <el-button
+              type="primary"
+              size="small"
+              link
+              @click="handleOpenBatchReplace(row)"
+            >
+              批量替换
+            </el-button>
+            <el-button
               type="danger"
               size="small"
               link
@@ -398,6 +406,13 @@
         <el-button @click="usageDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- Batch Replace Dialog -->
+    <IngredientBatchReplaceDialog
+      v-model:visible="batchReplaceVisible"
+      :from-ingredient="batchReplaceIngredient"
+      @success="handleBatchReplaceSuccess"
+    />
       </el-tab-pane>
 
       <el-tab-pane label="营养档案" name="nutrition" lazy>
@@ -435,6 +450,7 @@ import IngredientNutritionDialog from './components/IngredientNutritionDialog.vu
 import IngredientNutritionGovernancePanel from './components/IngredientNutritionGovernancePanel.vue'
 import IngredientTagsPanel from './components/IngredientTagsPanel.vue'
 import SupplementOptionForm from './components/SupplementOptionForm.vue'
+import IngredientBatchReplaceDialog from './components/IngredientBatchReplaceDialog.vue'
 import { getIngredientTypeCapabilities } from '@/utils/ingredientTypeCapabilities'
 
 // Data
@@ -773,6 +789,20 @@ const handleViewUsage = async (ingredient: Ingredient) => {
   } finally {
     loadingUsage.value = false
   }
+}
+
+// ==================== 批量替换原料 ====================
+
+const batchReplaceVisible = ref(false)
+const batchReplaceIngredient = ref<Ingredient | null>(null)
+
+const handleOpenBatchReplace = (ingredient: Ingredient) => {
+  batchReplaceIngredient.value = ingredient
+  batchReplaceVisible.value = true
+}
+
+const handleBatchReplaceSuccess = () => {
+  loadData()
 }
 
 const handleDelete = async (ingredient: Ingredient) => {

@@ -79,6 +79,34 @@ export const ingredientApi = {
   deleteIngredientDiyImage: async (key: string) =>
     api.post('/admin/ingredients/delete-diy-image', { key }),
 
+  // ==================== 批量替换原料 ====================
+
+  /**
+   * 查询使用某原料的全部食谱（批量替换范围选择）
+   */
+  listBatchReplaceAffectedRecipes: (
+    ingredientId: string
+  ): Promise<BatchReplaceAffectedRecipe[]> =>
+    api.get(`/admin/ingredients/${ingredientId}/batch-replace/affected-recipes`),
+
+  /**
+   * 预览批量替换影响（含营养报告重算对比，不改数据）
+   */
+  previewBatchReplace: (
+    ingredientId: string,
+    data: BatchReplaceRequest
+  ): Promise<BatchReplacePreviewRecipeResult[]> =>
+    api.post(`/admin/ingredients/${ingredientId}/batch-replace/preview`, data),
+
+  /**
+   * 执行批量替换（事务内替换原料并重算覆盖营养报告）
+   */
+  executeBatchReplace: (
+    ingredientId: string,
+    data: BatchReplaceRequest
+  ): Promise<BatchReplaceExecuteRecipeResult[]> =>
+    api.post(`/admin/ingredients/${ingredientId}/batch-replace/execute`, data),
+
   // ==================== 家庭 DIY 推荐商品 ====================
 
   /**
@@ -214,4 +242,73 @@ export const nutritionFoodApi = {
     ingredientId: string
   ): Promise<void> =>
     api.delete(`/nutrition-foods/${nutritionFoodId}/mappings/${ingredientId}`)
+}
+
+// ==================== 批量替换原料类型 ====================
+
+export interface BatchReplaceAffectedRecipeItem {
+  recipeItemId: string
+  sortOrder: number
+  ratioPercent: number | null
+  exampleWeight: number | null
+  nutrientTargetKey: string | null
+  nutrientTargetValue: number | null
+  supplementTargets: Array<{
+    fieldPath: string
+    label: string
+    targetValuePerKg: number
+    unit: string
+  }> | null
+}
+
+export interface BatchReplaceAffectedRecipe {
+  recipeId: string
+  recipeName: string
+  version: number
+  status: string
+  seriesName: string | null
+  seriesLifeStage: string | null
+  nutritionStandard: string
+  hasNutritionReport: boolean
+  reportScenario: string | null
+  items: BatchReplaceAffectedRecipeItem[]
+  itemsUsageText?: string
+}
+
+export interface BatchReplaceItemOverride {
+  recipeItemId: string
+  exampleWeight?: number
+  ratioPercent?: number
+  nutrientTargetValue?: number
+}
+
+export interface BatchReplaceRequest {
+  toIngredientId: string
+  recipeIds: string[]
+  itemOverrides?: BatchReplaceItemOverride[]
+}
+
+export interface BatchReplacePreviewRecipeResult {
+  recipeId: string
+  recipeName: string
+  ok: boolean
+  warnings: string[]
+  scenario: string
+  before: Record<string, number | null> | null
+  after: Record<string, number | null> | null
+  afterEnergyDensityKcalPerKg: number | null
+  supplementDoses: Array<{
+    recipeItemId: string
+    amount: number
+    unit: string
+  }>
+}
+
+export interface BatchReplaceExecuteRecipeResult {
+  recipeId: string
+  recipeName: string
+  ok: boolean
+  versionBefore: number
+  versionAfter: number
+  warnings: string[]
 }

@@ -178,6 +178,8 @@ import { AdminDogProfileAnalyticsController } from './interfaces/controllers/adm
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
+import { IngredientBatchReplaceController } from './interfaces/controllers/ingredient-batch-replace.controller';
+import { IngredientBatchReplaceService } from './application/ingredient/ingredient-batch-replace.service';
 import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
 import { RecipeDesignerController } from './interfaces/controllers/recipe-designer.controller';
 import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
@@ -312,6 +314,7 @@ validatePrismaConfig();
     ProcurementSkuController,
     IngredientSuggestionsController,
     NutritionCalculationController,
+    IngredientBatchReplaceController,
     NutritionStandardController,
     RecipeDesignerController,
     PlatformConfigController,
@@ -709,6 +712,7 @@ validatePrismaConfig();
     IngredientReadinessService,
     FediafTargetSelectorService,
     NutritionUnitNormalizerService,
+    IngredientBatchReplaceService,
     NutritionStandardService,
     RecipeDesignerService,
     {

@@ -75,7 +75,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="version" label="版本" width="64" />
-          <el-table-column label="该原料用量" min-width="200">
+          <el-table-column label="用量 / 目标" min-width="220">
             <template #default="{ row }">
               <span class="usage-text">{{ row.itemsUsageText }}</span>
             </template>
@@ -255,6 +255,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientApi, type BatchReplaceAffectedRecipe, type BatchReplacePreviewRecipeResult, type BatchReplaceExecuteRecipeResult } from '@/api/ingredients'
+import { listSupplementTargetFields, listDerivedNutritionFields } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 import type { Ingredient } from '@/types/ingredient'
 
 const props = defineProps<{
@@ -397,13 +398,7 @@ async function loadAffectedRecipes() {
     affectedRecipes.value = recipes.map((recipe) => ({
       ...recipe,
       itemsUsageText: recipe.items
-        .map((item) => {
-          if (item.nutrientTargetKey) {
-            return `${item.nutrientTargetKey} ${item.nutrientTargetValue}`
-          }
-          const weight = item.exampleWeight ?? null
-          return weight !== null ? `${weight}g（${item.ratioPercent ?? '-'}%）` : `${item.ratioPercent ?? '-'}%`
-        })
+        .map((item) => describeRecipeItemUsage(item))
         .join('；'),
     }))
     selectedRecipeIds.value = affectedRecipes.value.map((r) => r.recipeId)
@@ -449,10 +444,16 @@ function buildOverrideRows() {
     for (const item of recipe.items) {
       const isSupplement = item.nutrientTargetKey !== null || item.supplementTargets !== null
       if (isSupplement) {
+        const target = item.nutrientTargetKey
+          ? resolveTargetLabel(item.nutrientTargetKey)
+          : null
+        const label = target
+          ? `补剂目标「${target.label}」`
+          : `补剂目标「${item.supplementTargets?.[0]?.label ?? '营养目标'}」`
         rows.push({
           recipeItemId: item.recipeItemId,
           recipeId: recipe.recipeId,
-          label: `补剂目标「${item.nutrientTargetKey || (item.supplementTargets?.[0]?.label ?? '营养目标')}」`,
+          label,
           kind: 'SUPPLEMENT',
           unit: '每kg',
           originalWeight: null,
@@ -609,6 +610,76 @@ function diffLabel(result: BatchReplacePreviewRecipeResult, key: string) {
   const diff = after - before
   if (Math.abs(diff) < 0.005) return '不变'
   return `${diff > 0 ? '+' : ''}${String(Math.round(diff * 100) / 100)}`
+}
+
+// 根据原料项的营养目标/用量，生成一列易懂的说明文本
+function describeRecipeItemUsage(item: {
+  nutrientTargetKey: string | null
+  nutrientTargetValue: number | null
+  exampleWeight: number | null
+  ratioPercent: number | null
+}): string {
+  // 补剂：显示营养目标（中文名 + 目标值 + 单位）
+  if (item.nutrientTargetKey) {
+    const target = resolveTargetLabel(item.nutrientTargetKey)
+    const value = item.nutrientTargetValue ?? null
+    if (value !== null) {
+      return `目标 ${target.label} ${value}${target.unitUnit}${target.perKg}`
+    }
+    return `目标 ${target.label}`
+  }
+  // 食材：显示克数 / 比例
+  const weight = item.exampleWeight ?? null
+  if (weight !== null) {
+    const ratio = item.ratioPercent !== null ? `${item.ratioPercent}%` : '未填比例'
+    return `${weight}g（${ratio}）`
+  }
+  if (item.ratioPercent !== null) {
+    return `${item.ratioPercent}%`
+  }
+  return '未填用量'
+}
+
+// 把营养字段编码（如 vitaminB2）解析为中文名 + 单位
+interface ResolvedTargetLabel {
+  label: string
+  unitUnit: string
+  perKg: string
+}
+
+function resolveTargetLabel(key: string): ResolvedTargetLabel {
+  const normalized = key.replace(/[\s_-]+/g, '').toLowerCase()
+  const field = listSupplementTargetFields().find((f) => {
+    const label = f.label.replace(/[\s_-]+/g, '').toLowerCase()
+    const fieldKey = f.fieldKey.replace(/[\s_-]+/g, '').toLowerCase()
+    const fieldPath = f.fieldPath.replace(/[\s_.-]+/g, '').toLowerCase()
+    const srcKey = key.replace(/[\s_-]+/g, '').toLowerCase()
+    return (
+      label === srcKey || fieldKey === srcKey || fieldPath === srcKey
+    )
+  })
+  if (field) {
+    return {
+      label: field.label,
+      unitUnit: field.unit,
+      perKg: '/kg',
+    }
+  }
+  // 组合目标（如 EPA+DHA）在派生目录
+  const derived = listDerivedNutritionFields().find((d) => {
+    const label = d.label.replace(/[\s_-]+/g, '').toLowerCase()
+    const fieldPath = d.fieldPath.replace(/[\s_.-]+/g, '').toLowerCase()
+    const srcKey = key.replace(/[\s_-]+/g, '').toLowerCase()
+    return label === srcKey || fieldPath === srcKey
+  })
+  if (derived) {
+    return {
+      label: derived.label,
+      unitUnit: derived.unit === 'ratio' ? '' : derived.unit,
+      perKg: derived.unit === 'ratio' ? '' : '/kg',
+    }
+  }
+  return { label: key, unitUnit: '', perKg: '' }
 }
 </script>
 

@@ -308,6 +308,13 @@ export class IngredientBatchReplaceService {
         source: REPLACE_REPORT_SOURCE,
       });
 
+      const afterSummary = summaryFromReport(report);
+      if (afterSummary === null) {
+        warnings.push(
+          '该食谱原料的营养数据缺失较多，替换后无法重算营养报告（替换仍会执行，原报告保持不变）',
+        );
+      }
+
       results.push({
         recipeId: recipe.id,
         recipeName: recipe.name,
@@ -315,7 +322,7 @@ export class IngredientBatchReplaceService {
         warnings,
         scenario,
         before: extractSummary(recipe.nutritionDetailedData),
-        after: summaryFromReport(report),
+        after: afterSummary,
         afterEnergyDensityKcalPerKg:
           assessment.energyDensityKcalPerKg ?? null,
         supplementDoses: build.supplementDoses,
@@ -383,6 +390,13 @@ export class IngredientBatchReplaceService {
               source: REPLACE_REPORT_SOURCE,
             });
             newEnergyDensity = assessment.energyDensityKcalPerKg ?? null;
+            if (summaryFromReport(report) === null) {
+              warnings.push(
+                '该食谱原料的营养数据缺失较多，本次替换未覆盖原营养报告',
+              );
+              report = null;
+              newEnergyDensity = null;
+            }
           } catch (error) {
             throw new BadRequestException(
               `食谱「${recipe.name}」营养报告重算失败，本次替换已回滚：${errorMessage(error)}`,

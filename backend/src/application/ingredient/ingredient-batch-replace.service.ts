@@ -389,64 +389,190 @@ export class IngredientBatchReplaceService {
       Awaited<ReturnType<FediafTargetProvider['getTargets']>>
     >();
 
-    return this.prisma.$transaction(async (tx) => {
-      const results: BatchReplaceExecuteRecipeResult[] = [];
+    // ---------------------------------------------------------------
+    // 阶段一（事务外）：对每个食谱做评估与报告构建，生成写库计划。
+    // 评估/构建是纯计算（结果已由 context 加载），放在事务外可显著缩短
+    // 事务时间，避免批量替换超过事务超时（Transaction API error）。
+    // ---------------------------------------------------------------
+    interface RecipeWritePlan {
+      recipeId: string;
+      recipeName: string;
+      recipe: (typeof context.recipes)[number];
+      newVersion: number;
+      report: NutritionDetailedData | null;
+      newEnergyDensity: number | null;
+      warnings: string[];
+      rebuildItems: Array<{
+        id: string;
+        recipeId: string;
+        recipeVersion: number;
+        ingredientId: string;
+        nutritionFoodId: string | null;
+        preparationMethod: string | null;
+        ratioPercent: number | null;
+        nutrientTargetKey: string | null;
+        nutrientTargetValue: number | null;
+        supplementTargets: Prisma.InputJsonValue | undefined;
+        sortOrder: number;
+        exampleWeight: number | null;
+      }>;
+      rebuildAlternatives: Array<{
+        id: string;
+        recipeItemId: string;
+        alternativeIngredientId: string;
+        sortOrder: number;
+        isActive: boolean;
+      }>;
+    }
 
-      for (const recipe of context.recipes) {
-        const warnings: string[] = [];
-        this.appendStandardWarning(recipe, warnings);
-        const scenario = this.resolveScenario(recipe);
-        const targets = await this.getTargetsCached(scenario, targetsCache);
+    const plans: RecipeWritePlan[] = [];
+    for (const recipe of context.recipes) {
+      const warnings: string[] = [];
+      this.appendStandardWarning(recipe, warnings);
+      const scenario = this.resolveScenario(recipe);
+      const targets = await this.getTargetsCached(scenario, targetsCache);
 
-        // 计算替换后的评估项（含补剂新剂量），为报告重算做准备
-        const build = this.buildAssessmentItems(
-          recipe,
-          context.fromIngredient.id,
-          context.toIngredient,
-          overrideById,
-          warnings,
-        );
+      // 计算替换后的评估项（含补剂新剂量），为报告重算做准备
+      const build = this.buildAssessmentItems(
+        recipe,
+        context.fromIngredient.id,
+        context.toIngredient,
+        overrideById,
+        warnings,
+      );
 
-        let report: NutritionDetailedData | null = null;
-        let newEnergyDensity: number | null = null;
+      let report: NutritionDetailedData | null = null;
+      let newEnergyDensity: number | null = null;
 
-        if (build.items.length > 0) {
-          try {
-            const assessment = assessRecipeDraft({
-              scenario,
-              targets,
-              items: build.items,
-            });
-            report = buildPublishedNutritionDetailedData({
-              items: build.reportItems,
-              assessment,
-              scenario,
-              standard: REPORT_STANDARD,
-              source: REPLACE_REPORT_SOURCE,
-            });
-            newEnergyDensity = assessment.energyDensityKcalPerKg ?? null;
-            if (summaryFromReport(report) === null) {
-              warnings.push(
-                '该食谱原料的营养数据缺失较多，本次替换未覆盖原营养报告',
-              );
-              report = null;
-              newEnergyDensity = null;
-            }
-          } catch (error) {
-            throw new BadRequestException(
-              `食谱「${recipe.name}」营养报告重算失败，本次替换已回滚：${errorMessage(error)}`,
+      if (build.items.length > 0) {
+        try {
+          const assessment = assessRecipeDraft({
+            scenario,
+            targets,
+            items: build.items,
+          });
+          report = buildPublishedNutritionDetailedData({
+            items: build.reportItems,
+            assessment,
+            scenario,
+            standard: REPORT_STANDARD,
+            source: REPLACE_REPORT_SOURCE,
+          });
+          newEnergyDensity = assessment.energyDensityKcalPerKg ?? null;
+          if (summaryFromReport(report) === null) {
+            warnings.push(
+              '该食谱原料的营养数据缺失较多，本次替换未覆盖原营养报告',
             );
+            report = null;
+            newEnergyDensity = null;
           }
-        } else {
+        } catch (error) {
           throw new BadRequestException(
-            `食谱「${recipe.name}」替换后没有可参与营养计算的原料项，本次替换已回滚。`,
+            `食谱「${recipe.name}」营养报告重算失败，本次替换已回滚：${errorMessage(error)}`,
           );
         }
+      } else {
+        throw new BadRequestException(
+          `食谱「${recipe.name}」替换后没有可参与营养计算的原料项，本次替换已回滚。`,
+        );
+      }
 
-        const newVersion = recipe.version + 1;
+      const newVersion = recipe.version + 1;
 
-        // 1. 删除旧版本原料项（替代补剂配置随原料项级联删除，
-        //    执行重建时过滤掉引用旧原料的替代品）
+      // 重建原料项（替换原料引用 + 可选用量覆盖）
+      const rebuildItems = recipe.items.map((item) => {
+        const override = overrideById.get(item.id);
+        const replaced = item.ingredientId === context.fromIngredient.id;
+        const isSupplement =
+          item.ingredient.type === IngredientType.SUPPLEMENT;
+
+        const exampleWeight =
+          replaced && override?.exampleWeight !== undefined
+            ? override.exampleWeight
+            : item.exampleWeight;
+        const ratioPercent =
+          replaced && isSupplement
+            ? null
+            : replaced && override
+              ? resolveOverrideRatio(override, recipe, context.fromIngredient.id)
+              : item.ratioPercent;
+        const nutrientTargetValue =
+          replaced && override?.nutrientTargetValue !== undefined
+            ? override.nutrientTargetValue
+            : item.nutrientTargetValue;
+
+        return {
+          id: item.id,
+          recipeId: recipe.recipeId,
+          recipeVersion: newVersion,
+          ingredientId: replaced
+            ? context.toIngredient.id
+            : item.ingredientId,
+          nutritionFoodId: replaced
+            ? (context.toIngredient.primaryNutritionFoodId ??
+              item.nutritionFoodId)
+            : item.nutritionFoodId,
+          preparationMethod: item.preparationMethod,
+          ratioPercent,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue,
+          supplementTargets: item.supplementTargets as
+            | Prisma.InputJsonValue
+            | undefined,
+          sortOrder: item.sortOrder,
+          exampleWeight,
+        };
+      });
+
+      // 重建替代补剂（排除引用旧原料的配置）
+      const rebuildAlternatives: Array<{
+        id: string;
+        recipeItemId: string;
+        alternativeIngredientId: string;
+        sortOrder: number;
+        isActive: boolean;
+      }> = [];
+      for (const item of recipe.items) {
+        for (const alternative of item.supplementAlternatives ?? []) {
+          if (
+            alternative.alternativeIngredientId === context.fromIngredient.id
+          ) {
+            continue;
+          }
+          rebuildAlternatives.push({
+            id: alternative.id,
+            recipeItemId: item.id,
+            alternativeIngredientId: alternative.alternativeIngredientId,
+            sortOrder: alternative.sortOrder,
+            isActive: alternative.isActive,
+          });
+        }
+      }
+
+      plans.push({
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        recipe,
+        newVersion,
+        report,
+        newEnergyDensity,
+        warnings,
+        rebuildItems,
+        rebuildAlternatives,
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // 阶段二（事务内）：只做写库，尽量快，避免事务超时。
+    // ---------------------------------------------------------------
+    return this.prisma.$transaction(
+      async (tx) => {
+        const results: BatchReplaceExecuteRecipeResult[] = [];
+
+      for (const plan of plans) {
+        const { recipe, newVersion, warnings } = plan;
+
+        // 1. 删除旧版本原料项（替代补剂配置随原料项级联删除）
         await tx.recipeItem.deleteMany({
           where: {
             recipeId: recipe.recipeId,
@@ -455,8 +581,6 @@ export class IngredientBatchReplaceService {
         });
 
         // 0. 清空可能存在的目标版本行，避免 (recipe_id, version) 唯一约束冲突。
-        //    当同一逻辑食谱已存在更高版本行（而当前选中行是含该原料的旧版）时，
-        //    version+1 可能与已有行冲突，这里先移除该目标版本行。
         await tx.recipe.deleteMany({
           where: {
             recipeId: recipe.recipeId,
@@ -469,94 +593,25 @@ export class IngredientBatchReplaceService {
           where: { id: recipe.id },
           data: {
             version: newVersion,
-            ...(report !== null
+            ...(plan.report !== null
               ? {
                   nutritionDetailedData:
-                    report as unknown as Prisma.InputJsonValue,
+                    plan.report as unknown as Prisma.InputJsonValue,
                 }
               : {}),
-            ...(newEnergyDensity !== null
-              ? { energyDensityKcalPerKg: newEnergyDensity }
+            ...(plan.newEnergyDensity !== null
+              ? { energyDensityKcalPerKg: plan.newEnergyDensity }
               : {}),
           },
         });
 
-        // 3. 重建原料项（替换原料引用 + 可选用量覆盖；替代品过滤旧原料）
-        const rebuildItems = recipe.items.map((item) => {
-          const override = overrideById.get(item.id);
-          const replaced = item.ingredientId === context.fromIngredient.id;
-          const isSupplement =
-            item.ingredient.type === IngredientType.SUPPLEMENT;
+        // 3. 重建原料项
+        await tx.recipeItem.createMany({ data: plan.rebuildItems });
 
-          const exampleWeight =
-            replaced && override?.exampleWeight !== undefined
-              ? override.exampleWeight
-              : item.exampleWeight;
-          const ratioPercent =
-            replaced && isSupplement
-              ? null
-              : replaced && override
-                ? resolveOverrideRatio(
-                    override,
-                    recipe,
-                    context.fromIngredient.id,
-                  )
-                : item.ratioPercent;
-          const nutrientTargetValue =
-            replaced && override?.nutrientTargetValue !== undefined
-              ? override.nutrientTargetValue
-              : item.nutrientTargetValue;
-
-          return {
-            id: item.id,
-            recipeId: recipe.recipeId,
-            recipeVersion: newVersion,
-            ingredientId: replaced
-              ? context.toIngredient.id
-              : item.ingredientId,
-            nutritionFoodId: replaced
-              ? (context.toIngredient.primaryNutritionFoodId ??
-                item.nutritionFoodId)
-              : item.nutritionFoodId,
-            preparationMethod: item.preparationMethod,
-            ratioPercent,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue,
-            supplementTargets: item.supplementTargets as
-              | Prisma.InputJsonValue
-              | undefined,
-            sortOrder: item.sortOrder,
-            exampleWeight,
-          };
-        });
-
-        await tx.recipeItem.createMany({ data: rebuildItems });
-
-        // 4. 重建替代补剂（排除引用旧原料的配置）
-        const rebuildAlternatives: Array<{
-          id: string;
-          recipeItemId: string;
-          alternativeIngredientId: string;
-          sortOrder: number;
-          isActive: boolean;
-        }> = [];
-        for (const item of recipe.items) {
-          for (const alternative of item.supplementAlternatives ?? []) {
-            if (alternative.alternativeIngredientId === context.fromIngredient.id) {
-              continue;
-            }
-            rebuildAlternatives.push({
-              id: alternative.id,
-              recipeItemId: item.id,
-              alternativeIngredientId: alternative.alternativeIngredientId,
-              sortOrder: alternative.sortOrder,
-              isActive: alternative.isActive,
-            });
-          }
-        }
-        if (rebuildAlternatives.length > 0) {
+        // 4. 重建替代补剂
+        if (plan.rebuildAlternatives.length > 0) {
           await tx.recipeSupplementAlternative.createMany({
-            data: rebuildAlternatives,
+            data: plan.rebuildAlternatives,
           });
         }
 
@@ -571,7 +626,9 @@ export class IngredientBatchReplaceService {
       }
 
       return results;
-    });
+      },
+      { timeout: 120000, maxWait: 120000 },
+    );
   }
 
   // ---------------------------------------------------------------

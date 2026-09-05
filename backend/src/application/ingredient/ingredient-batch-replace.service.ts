@@ -96,6 +96,27 @@ export interface BatchReplacePreviewRecipeResult {
     amount: number;
     unit: string;
   }>;
+  replacedItems: ReplacedItemCompare[];
+}
+
+/**
+ * 被替换原料项在替换前后的用量对比（预览用）。
+ * - 食材：对比每份克数 / 比例
+ * - 补剂：对比理论添加量（按营养目标 + 各自浓度换算）
+ */
+export interface ReplacedItemCompare {
+  recipeItemId: string;
+  kind: 'FOOD' | 'SUPPLEMENT';
+  beforeName: string;
+  beforeWeightG: number | null;
+  beforeRatioPercent: number | null;
+  beforeDoseAmount: number | null;
+  beforeDoseUnit: string | null;
+  afterName: string;
+  afterWeightG: number | null;
+  afterRatioPercent: number | null;
+  afterDoseAmount: number | null;
+  afterDoseUnit: string | null;
 }
 
 export interface BatchReplaceExecuteRecipeResult {
@@ -273,6 +294,7 @@ export class IngredientBatchReplaceService {
           after: null,
           afterEnergyDensityKcalPerKg: null,
           supplementDoses: build.supplementDoses,
+          replacedItems: build.replacedItems,
         });
         continue;
       }
@@ -296,6 +318,7 @@ export class IngredientBatchReplaceService {
           after: null,
           afterEnergyDensityKcalPerKg: null,
           supplementDoses: build.supplementDoses,
+          replacedItems: build.replacedItems,
         });
         continue;
       }
@@ -326,6 +349,7 @@ export class IngredientBatchReplaceService {
         afterEnergyDensityKcalPerKg:
           assessment.energyDensityKcalPerKg ?? null,
         supplementDoses: build.supplementDoses,
+        replacedItems: build.replacedItems,
       });
     }
 
@@ -762,6 +786,7 @@ export class IngredientBatchReplaceService {
       amount: number;
       unit: string;
     }>;
+    replacedItems: ReplacedItemCompare[];
   } {
     const items: DesignRecipeAssessmentItemInput[] = [];
     const reportItems: PublishedReportItemInput[] = [];
@@ -770,6 +795,7 @@ export class IngredientBatchReplaceService {
       amount: number;
       unit: string;
     }> = [];
+    const replacedItems: ReplacedItemCompare[] = [];
 
     const isReplaced = (item: LoadedRecipe['items'][number]) =>
       item.ingredientId === fromIngredientId;
@@ -855,6 +881,26 @@ export class IngredientBatchReplaceService {
             ? toIngredient.properties
             : item.ingredient.properties,
         });
+        if (replaced) {
+          replacedItems.push({
+            recipeItemId: item.id,
+            kind: 'FOOD',
+            beforeName: ingredientDisplayName(
+              item.ingredient.name,
+              item.ingredient.brand,
+              item.ingredient.productModel,
+            ),
+            beforeWeightG: item.exampleWeight,
+            beforeRatioPercent: item.ratioPercent,
+            beforeDoseAmount: null,
+            beforeDoseUnit: null,
+            afterName: name,
+            afterWeightG: weightG > 0 ? weightG : null,
+            afterRatioPercent: ratioPercent,
+            afterDoseAmount: null,
+            afterDoseUnit: null,
+          });
+        }
         continue;
       }
 
@@ -874,6 +920,32 @@ export class IngredientBatchReplaceService {
 
       let amount: number | null = null;
       let doseUnit = normalizeText(toIngredient.unitDisplayLabel) || 'g';
+
+      // 替换前旧补剂的理论剂量（用于前后对比）
+      let beforeAmount: number | null = null;
+      let beforeDoseUnit: string | null = null;
+      if (replaced && goal !== null) {
+        const oldProfile = this.resolveItemProfile(
+          item.nutritionFood?.nutritionData ?? null,
+          item.ingredient.nutritionProfile,
+        );
+        const oldDose = this.calculateSupplementAmount(
+          goal,
+          oldProfile,
+          basisWeightG,
+          {
+            unitDisplayLabel: item.ingredient.unitDisplayLabel,
+            properties: item.ingredient.properties,
+          },
+        );
+        if (oldDose !== null) {
+          beforeAmount = oldDose.amount;
+          beforeDoseUnit =
+            normalizeText(item.ingredient.unitDisplayLabel) ||
+            oldDose.unit ||
+            null;
+        }
+      }
 
       if (replacedIngredient) {
         if (goal !== null) {
@@ -953,9 +1025,33 @@ export class IngredientBatchReplaceService {
         properties:
           replacedIngredient?.properties ?? item.ingredient.properties,
       });
+      if (replaced) {
+        replacedItems.push({
+          recipeItemId: item.id,
+          kind: 'SUPPLEMENT',
+          beforeName: ingredientDisplayName(
+            item.ingredient.name,
+            item.ingredient.brand,
+            item.ingredient.productModel,
+          ),
+          beforeWeightG: item.exampleWeight,
+          beforeRatioPercent: null,
+          beforeDoseAmount:
+            beforeAmount !== null && Number.isFinite(beforeAmount)
+              ? beforeAmount
+              : null,
+          beforeDoseUnit: beforeDoseUnit,
+          afterName: name,
+          afterWeightG: null,
+          afterRatioPercent: null,
+          afterDoseAmount:
+            amount !== null && Number.isFinite(amount) ? amount : null,
+          afterDoseUnit: doseUnit,
+        });
+      }
     }
 
-    return { items, reportItems, supplementDoses };
+    return { items, reportItems, supplementDoses, replacedItems };
   }
 
   private resolveItemSupplementGoal(
@@ -1340,6 +1436,15 @@ function resolveOverrideRatio(
 
 function roundPercent(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+// 生成带品牌/规格的原料展示名，便于前后对比时对称呈现
+function ingredientDisplayName(
+  name: string,
+  brand: string | null,
+  productModel: string | null,
+): string {
+  return [name, brand, productModel].filter((part) => !!part).join(' · ');
 }
 
 function isNonNullJson(value: Prisma.JsonValue): boolean {

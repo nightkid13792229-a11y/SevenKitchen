@@ -125,6 +125,26 @@
             </div>
           </div>
 
+          <!-- 被替换原料 前后对比 -->
+          <div v-if="result.replacedItems?.length" class="replaced-compare">
+            <div class="compare-title">被替换原料</div>
+            <div
+              v-for="comp in result.replacedItems"
+              :key="comp.recipeItemId"
+              class="compare-row"
+            >
+              <div class="compare-side before">
+                <div class="compare-name">{{ comp.beforeName }}</div>
+                <div class="compare-amount">{{ beforeUsage(comp) }}</div>
+              </div>
+              <div class="compare-arrow">→</div>
+              <div class="compare-side after">
+                <div class="compare-name">{{ comp.afterName }}</div>
+                <div class="compare-amount">{{ afterUsage(comp) }}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 用量微调区 -->
           <div class="override-row" v-if="overrideRowsByRecipe.get(result.recipeId)?.length">
             <div
@@ -264,7 +284,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ingredientApi, type BatchReplaceAffectedRecipe, type BatchReplacePreviewRecipeResult, type BatchReplaceExecuteRecipeResult } from '@/api/ingredients'
+import { ingredientApi, type BatchReplaceAffectedRecipe, type BatchReplacePreviewRecipeResult, type BatchReplaceExecuteRecipeResult, type BatchReplaceReplacedItemCompare } from '@/api/ingredients'
 import { listSupplementTargetFields, listDerivedNutritionFields } from '@/utils/recipeDesigner/nutritionFieldCatalog'
 import type { Ingredient } from '@/types/ingredient'
 
@@ -630,6 +650,44 @@ function diffLabel(result: BatchReplacePreviewRecipeResult, key: string) {
   return `${diff > 0 ? '+' : ''}${String(Math.round(diff * 100) / 100)}`
 }
 
+// 被替换食材的替换前用量文案
+function beforeUsage(comp: BatchReplaceReplacedItemCompare): string {
+  if (comp.kind === 'SUPPLEMENT') {
+    if (comp.beforeDoseAmount !== null) {
+      return `理论用量 ${formatNumber(comp.beforeDoseAmount)} ${comp.beforeDoseUnit || ''}`
+    }
+    return '未填用量'
+  }
+  const weight = comp.beforeWeightG
+  if (weight !== null && Number.isFinite(weight)) {
+    const ratio = comp.beforeRatioPercent !== null ? `${comp.beforeRatioPercent}%` : '未填比例'
+    return `${weight}g（${ratio}）`
+  }
+  if (comp.beforeRatioPercent !== null) {
+    return `${comp.beforeRatioPercent}%`
+  }
+  return '未填用量'
+}
+
+// 被替换食材的替换后用量文案
+function afterUsage(comp: BatchReplaceReplacedItemCompare): string {
+  if (comp.kind === 'SUPPLEMENT') {
+    if (comp.afterDoseAmount !== null) {
+      return `理论用量 ${formatNumber(comp.afterDoseAmount)} ${comp.afterDoseUnit || ''}`
+    }
+    return '替换后无法自动换算'
+  }
+  const weight = comp.afterWeightG
+  if (weight !== null && Number.isFinite(weight)) {
+    const ratio = comp.afterRatioPercent !== null ? `${comp.afterRatioPercent}%` : '未填比例'
+    return `${weight}g（${ratio}）`
+  }
+  if (comp.afterRatioPercent !== null) {
+    return `${comp.afterRatioPercent}%`
+  }
+  return '替换后未填用量'
+}
+
 // 根据原料项的营养目标/用量，生成一列易懂的说明文本
 function describeRecipeItemUsage(item: {
   nutrientTargetKey: string | null
@@ -813,6 +871,70 @@ function resolveTargetLabel(key: string): ResolvedTargetLabel {
 .dose-summary {
   color: #409eff;
   font-size: 13px;
+}
+
+.replaced-compare {
+  background: #f0f7ff;
+  border: 1px solid #d6e9ff;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.compare-title {
+  font-size: 12px;
+  color: #409eff;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.compare-row:last-child {
+  margin-bottom: 0;
+}
+
+.compare-side {
+  flex: 1;
+  min-width: 0;
+}
+
+.compare-side.before {
+  text-align: right;
+}
+
+.compare-side.after {
+  text-align: left;
+}
+
+.compare-name {
+  font-size: 13px;
+  color: #303133;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-amount {
+  font-size: 13px;
+  color: #606266;
+  margin-top: 2px;
+}
+
+.compare-arrow {
+  color: #909399;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.compare-side.after .compare-amount {
+  color: #409eff;
 }
 
 .override-row {

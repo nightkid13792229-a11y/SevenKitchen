@@ -302,6 +302,22 @@ export interface BatchReplacePreviewRecipeResult {
     amount: number
     unit: string
   }>
+  replacedItems: BatchReplaceReplacedItemCompare[]
+}
+
+export interface BatchReplaceReplacedItemCompare {
+  recipeItemId: string
+  kind: 'FOOD' | 'SUPPLEMENT'
+  beforeName: string
+  beforeWeightG: number | null
+  beforeRatioPercent: number | null
+  beforeDoseAmount: number | null
+  beforeDoseUnit: string | null
+  afterName: string
+  afterWeightG: number | null
+  afterRatioPercent: number | null
+  afterDoseAmount: number | null
+  afterDoseUnit: string | null
 }
 
 export interface BatchReplaceExecuteRecipeResult {

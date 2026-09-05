@@ -454,6 +454,16 @@ export class IngredientBatchReplaceService {
           },
         });
 
+        // 0. 清空可能存在的目标版本行，避免 (recipe_id, version) 唯一约束冲突。
+        //    当同一逻辑食谱已存在更高版本行（而当前选中行是含该原料的旧版）时，
+        //    version+1 可能与已有行冲突，这里先移除该目标版本行。
+        await tx.recipe.deleteMany({
+          where: {
+            recipeId: recipe.recipeId,
+            version: newVersion,
+          },
+        });
+
         // 2. 升版本 + 写回营养报告
         await tx.recipe.update({
           where: { id: recipe.id },
@@ -1006,10 +1016,15 @@ export class IngredientBatchReplaceService {
         continue;
       }
 
-      const name =
-        item.nutritionFood?.displayNameZh?.trim() ||
-        item.nutritionFood?.name ||
-        item.ingredient.name;
+      const name = replaced
+        ? ingredientDisplayName(
+            toIngredient.name,
+            toIngredient.brand,
+            toIngredient.productModel,
+          )
+        : item.nutritionFood?.displayNameZh?.trim() ||
+          item.nutritionFood?.name ||
+          item.ingredient.name;
       items.push({
         id: item.id,
         name,

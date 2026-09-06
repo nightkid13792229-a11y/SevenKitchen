@@ -215,7 +215,16 @@
      独立回读验证：宏量/矿物质/维生素（含犬用换算）/16 项氨基酸/脂肪酸全部正确落库，字段级 sourceForms 溯源完整；
   3. NOW Foods L-OptiZinc（SUPPLEMENT）：原料 `f533b01e-…` + 营养档案 `b4c164e8-…`
      （PER_SERVING，PENDING），`properties.nutritionPending=true` 营养待补标记在生产环境生效。
-- ⚠️ 发现生产 API 鉴权缺口（见"生产 API 现状核实"节），已记录待单独处理。
+- ✅ 生产后台默认密码已修改（2026-09-06，经 `/auth/change-password` 官方接口；旧密码失效已验证，
+  新密码已同步到本地 gitignored 凭据文件）。**强烈建议用户尽快在后台管理界面再次自行修改一次。**
+- ✅ admin API 鉴权缺口已修复并部署生产：AdminController、admin procurement-skus、
+  admin ingredient-suggestions 控制器统一加 `AuthGuard+StaffGuard`（匿名 401、伪造 X-Customer-Id 403、
+  员工/管理员令牌放行），全量单测 1782 项通过；生产实测 401/403/200 符合预期，健康检查不受影响。
+  admin-web 始终带 Bearer 令牌、小程序员工端带 STAFF 令牌，兼容性已核实。
+- ✅ 全部改动已提交 Git 并推送（`feature/web-recipe-designer` @ `972978d8`，服务器 main 已快进合并），
+  凭据与草稿产物均已排除在版本库外。
+- ⚠️ 遗留（后续可做）：`/staff/kitchen` 控制器同样无守卫，建议下轮补上；其余无守卫控制器
+  （recommended-products/shared-photos/health）为公开接口，属正常。
 
 ## 待完成（下一步）
 

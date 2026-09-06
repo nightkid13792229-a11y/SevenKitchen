@@ -210,9 +210,21 @@ export class IngredientBatchReplaceService {
       throw new NotFoundException(`原料不存在: ${ingredientId}`);
     }
 
+    // 先找出任一版本仍引用该原料的逻辑食谱（recipeId 集合）
+    const affectedLogicIds = (
+      await this.prisma.recipe.findMany({
+        where: { items: { some: { ingredientId } } },
+        select: { recipeId: true },
+        distinct: ['recipeId'],
+      })
+    ).map((r) => r.recipeId);
+
+    // 查询这些逻辑食谱的【全部版本行】（不按是否含该原料过滤）。
+    // 不能直接 where items.some，否则某逻辑食谱的“最新版本”若已不引用该原料，
+    // 就不会被查到，去重时会误把“仍含旧原料的历史版本”当成最新版。
     const recipes = await this.prisma.recipe.findMany({
       where: {
-        items: { some: { ingredientId } },
+        recipeId: { in: affectedLogicIds },
       },
       include: {
         series: { select: { name: true } },
@@ -239,7 +251,12 @@ export class IngredientBatchReplaceService {
         latestByLogicStatus.set(key, recipe);
       }
     }
-    const deduped = Array.from(latestByLogicStatus.values());
+    // 只保留“最新版本仍引用该原料”的食谱。
+    // 若某逻辑食谱的最新版本已替换、不再引用该原料（items 为空），
+    // 说明它已处理完成，仅历史版本残留旧原料，不应再列入待替换清单。
+    const deduped = Array.from(latestByLogicStatus.values()).filter(
+      (recipe) => recipe.items.length > 0,
+    );
 
     return deduped.map((recipe) => ({
       recipeId: recipe.id,

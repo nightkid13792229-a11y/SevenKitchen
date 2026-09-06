@@ -1,8 +1,12 @@
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { IngredientSuggestionsController } from 'src/interfaces/controllers/ingredient-suggestions.controller';
 import { IngredientService } from 'src/application/ingredient/ingredient.service';
 import { RecommendedProductService } from 'src/application/ingredient/recommended-product.service';
 import { ProcurementSkuService } from 'src/application/ingredient/procurement-sku.service';
+import { AuthGuard } from 'src/interfaces/auth/auth.guard';
+import { StaffGuard } from 'src/interfaces/guards/role.guard';
+import { JwtAuthService } from 'src/interfaces/auth/jwt.service';
 
 describe('IngredientSuggestionsController', () => {
   let controller: IngredientSuggestionsController;
@@ -21,10 +25,23 @@ describe('IngredientSuggestionsController', () => {
     listPurchaseChannels: jest.fn(),
   };
 
+  const jwtAuthService = {
+    validateToken: jest.fn(() => ({
+      userId: 'admin-user-001',
+      customerId: 'admin-user-001',
+      role: 'ADMIN',
+    })),
+    generateTokenForUser: jest.fn(),
+  };
+
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [IngredientSuggestionsController],
       providers: [
+        AuthGuard,
+        StaffGuard,
+        Reflector,
+        { provide: JwtAuthService, useValue: jwtAuthService },
         {
           provide: IngredientService,
           useValue: ingredientService,

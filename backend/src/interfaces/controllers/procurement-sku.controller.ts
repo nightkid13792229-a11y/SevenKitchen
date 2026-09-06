@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -19,8 +20,11 @@ import type {
   UpdateProcurementSkuDto,
 } from '../../application/ingredient/procurement-sku.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { AuthGuard } from '../auth/auth.guard';
+import { StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Admin Procurement Skus')
+@UseGuards(AuthGuard, StaffGuard)
 @Controller('api/v1/admin/ingredients/:ingredientId/procurement-skus')
 export class ProcurementSkuController {
   constructor(

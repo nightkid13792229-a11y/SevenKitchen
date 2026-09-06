@@ -108,6 +108,9 @@ export interface NutritionMeta {
     | 'NEVO'
     | 'TFDA'
     | 'CFCT'
+    | 'CNF'
+    | 'COFID'
+    | 'CIQUAL'
     | 'SUPPLEMENT_LABEL'
     | 'MANUAL'
     | null;

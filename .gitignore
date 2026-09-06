@@ -53,3 +53,7 @@ backend/direct-*.js
 backend/*.sql
 backend/sql/
 miniapp/verify-*.js
+
+# 新增原料半自动流程的工作产物（草稿/匹配中间文件不入库）
+.standard-ingredient-import/*.match.json
+.standard-ingredient-import/*.draft.json

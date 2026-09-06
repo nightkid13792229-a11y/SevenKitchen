@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "summary": {
+    "name": "原料中文名（如：去皮鸡腿肉）",
+    "nameEn": "英文名（可选，如：Chicken leg, skinless, raw）",
+    "type": "FOOD",
+    "state": "raw",
+    "coveragePercent": 87,
+    "missingNutrients": ["vitaminB12", "chloride"],
+    "evidenceNotes": "营养数据来源：本地营养库 USDA_FDC 记录 <sourceRecordId>。补剂此处注明包装照片/标签依据。",
+    "notesForUser": "给用户看的业务语言总结。"
+  },
+  "ingredient": {
+    "name": "原料中文名",
+    "type": "FOOD",
+    "procurementStrategy": "DAILY_PURCHASE",
+    "diyEnabled": false,
+    "procurementEnabled": true,
+    "brand": null,
+    "productModel": null,
+    "purchaseChannel": null,
+    "notes": "可选备注",
+    "baseUnit": "G",
+    "baseUnitDisplayName": "克",
+    "unitDisplayLabel": "g",
+    "purchaseUnit": "g",
+    "purchaseToBaseRatio": 1,
+    "currentPricePerPurchaseUnit": 0.05,
+    "effectivePricePerPurchaseUnit": 0.05,
+    "properties": {
+      "nutritionPending": false,
+      "nutritionCoveragePercent": 87,
+      "missingNutrients": ["vitaminB12", "chloride"],
+      "nutritionSourceRecordId": "本地营养库记录 ID（可追溯）"
+    }
+  },
+  "nutritionFood": {
+    "name": "营养档案名（通常与原料名一致）",
+    "nameEn": "可选英文名",
+    "category": "MEAT",
+    "dataSource": "USDA",
+    "externalId": "USDA FDC 编号",
+    "preparationState": "RAW",
+    "preparationStateLabel": "生重",
+    "ediblePortionLabel": "去皮",
+    "nutritionData": {
+      "crudeProtein": 20.1,
+      "crudeFat": 3.8,
+      "carbohydrate": 0.0,
+      "calcium": 9,
+      "phosphorus": 180,
+      "vitaminA": 32
+    },
+    "notes": "来源：本地营养库 <sourceRecordId>（USDA_FDC，PER_100_G）"
+  },
+  "mapping": {
+    "isPrimary": true,
+    "yieldRate": 1,
+    "notes": null
+  },
+  "procurementSku": {
+    "name": "采购件名称（含品牌/规格）",
+    "brand": null,
+    "productModel": null,
+    "purchaseChannel": "本地市场",
+    "supplierName": null,
+    "purchaseUnit": "g",
+    "purchaseToBaseRatio": 1,
+    "currentPurchasePrice": 0.05,
+    "referencePurchasePrice": 0.05,
+    "isDefault": true,
+    "notes": null
+  },
+  "tags": null,
+  "_enumHelp": {
+    "ingredient.type": "FOOD | SUPPLEMENT | OTHER",
+    "ingredient.baseUnit": "G | ML | PCS",
+    "ingredient.procurementStrategy": "DAILY_PURCHASE | STOCK_REPLENISHMENT | HYBRID（补剂也用这三者，无 SUPPLEMENT_PURCHASE）",
+    "nutritionFood.category": "MEAT | ORGAN | SEAFOOD | VEGETABLE | FRUIT | GRAIN | DAIRY | EGG | OIL | SUPPLEMENT | OTHER",
+    "nutritionFood.preparationState": "RAW | COOKED | DRIED | CONCENTRATE | POWDER | OIL（营养档案用）",
+    "ingredient.state": "raw | cooked | dried | powder | concentrate | oil（原料状态小写）",
+    "nutritionData": "NutritionProfileV2 完整结构（meta/macros/minerals/vitamins/aminoAcids/fattyAcids/customItems）。SUPPLEMENT 档按标签用 PER_SERVING 基准 + customItems 记化合物；覆盖不全时 ingredient.properties.nutritionPending=true。"
+  },
+  "_supplementExample": {
+    "summary": {
+      "name": "NOW Foods L-OptiZinc 锌 30mg 素食胶囊",
+      "type": "SUPPLEMENT",
+      "state": "concentrate",
+      "coveragePercent": 2,
+      "missingNutrients": ["除锌/铜外全部营养素"],
+      "evidenceNotes": "依据包装标签照片 Supplement Facts。"
+    },
+    "ingredient": {
+      "name": "NOW Foods L-OptiZinc 锌 30mg 素食胶囊",
+      "type": "SUPPLEMENT",
+      "procurementStrategy": "DAILY_PURCHASE",
+      "diyEnabled": false,
+      "procurementEnabled": true,
+      "brand": "NOW Foods",
+      "productModel": "L-OptiZinc 30mg 100粒",
+      "purchaseChannel": "iHerb",
+      "baseUnit": "G",
+      "baseUnitDisplayName": "克",
+      "unitDisplayLabel": "粒",
+      "purchaseUnit": "粒",
+      "purchaseToBaseRatio": 1,
+      "properties": { "nutritionPending": true, "nutritionCoveragePercent": 2 }
+    },
+    "nutritionFood": {
+      "name": "NOW Foods L-OptiZinc 锌 30mg 营养档案",
+      "category": "SUPPLEMENT",
+      "dataSource": "SUPPLEMENT_LABEL",
+      "preparationState": "CONCENTRATE",
+      "nutritionData": {
+        "meta": { "rawBasisType": "PER_SERVING", "sourceType": "SUPPLEMENT_LABEL", "sourceKind": "PACKAGING_LABEL", "confidenceLevel": "HIGH", "servingUnitLabel": "粒" },
+        "macros": {},
+        "minerals": { "zinc": 30, "copper": 0.3 },
+        "vitamins": {},
+        "aminoAcids": {},
+        "fattyAcids": {},
+        "customItems": [
+          { "name": "L-OptiZinc 锌单蛋氨酸", "value": 167, "unit": "mg", "rawBasisType": "PER_SERVING", "note": "标签注明该化合物提供元素锌 30 mg。" }
+        ]
+      }
+    },
+    "mapping": { "isPrimary": true, "yieldRate": 1 },
+    "procurementSku": null
+  }
+}

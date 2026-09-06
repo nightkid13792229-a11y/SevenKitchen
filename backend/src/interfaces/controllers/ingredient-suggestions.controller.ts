@@ -1,9 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
 import { RecommendedProductService } from '../../application/ingredient/recommended-product.service';
 import { ProcurementSkuService } from '../../application/ingredient/procurement-sku.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { AuthGuard } from '../auth/auth.guard';
+import { StaffGuard } from '../guards/role.guard';
 
 const normalizeDistinctValues = (
   values: Array<string | null | undefined>,
@@ -17,6 +19,7 @@ const normalizeDistinctValues = (
   ).sort((left, right) => left.localeCompare(right));
 
 @ApiTags('Admin Ingredient Suggestions')
+@UseGuards(AuthGuard, StaffGuard)
 @Controller('api/v1/admin/ingredient-suggestions')
 export class IngredientSuggestionsController {
   constructor(

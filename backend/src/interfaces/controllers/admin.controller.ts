@@ -115,6 +115,7 @@ const CUSTOMER_TEST_USER_PHONE = '19900000001';
 const CUSTOMER_TEST_USER_NICKNAME = '生产体验版普通用户测试号';
 
 @ApiTags('Admin')
+@UseGuards(AuthGuard, StaffGuard)
 @Controller('api/v1/admin')
 export class AdminController {
   constructor(

@@ -1,6 +1,10 @@
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { ProcurementSkuService } from 'src/application/ingredient/procurement-sku.service';
 import { ProcurementSkuController } from 'src/interfaces/controllers/procurement-sku.controller';
+import { AuthGuard } from 'src/interfaces/auth/auth.guard';
+import { StaffGuard } from 'src/interfaces/guards/role.guard';
+import { JwtAuthService } from 'src/interfaces/auth/jwt.service';
 
 describe('ProcurementSkuController', () => {
   let controller: ProcurementSkuController;
@@ -19,10 +23,23 @@ describe('ProcurementSkuController', () => {
     delete: jest.fn(),
   };
 
+  const jwtAuthService = {
+    validateToken: jest.fn(() => ({
+      userId: 'admin-user-001',
+      customerId: 'admin-user-001',
+      role: 'ADMIN',
+    })),
+    generateTokenForUser: jest.fn(),
+  };
+
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ProcurementSkuController],
       providers: [
+        AuthGuard,
+        StaffGuard,
+        Reflector,
+        { provide: JwtAuthService, useValue: jwtAuthService },
         { provide: ProcurementSkuService, useValue: procurementSkuService },
       ],
     }).compile();

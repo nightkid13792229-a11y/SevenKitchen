@@ -140,6 +140,14 @@ export function getSourcePriority(
       return 1;
     case 'NZFCD':
       return 2;
+    case 'MEXT':
+      return 2;
+    case 'CNF':
+      return 2;
+    case 'COFID':
+      return 2;
+    case 'CIQUAL':
+      return 2;
     case 'NEVO':
       return 3;
     case 'TFDA':

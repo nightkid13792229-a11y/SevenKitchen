@@ -9,6 +9,10 @@ export type NutritionGovernanceSourceType =
   | 'NEVO'
   | 'TFDA'
   | 'CFCT'
+  | 'MEXT'
+  | 'COFID'
+  | 'CIQUAL'
+  | 'CNF'
   | 'SUPPLEMENT_LABEL'
   | 'MANUAL';
 

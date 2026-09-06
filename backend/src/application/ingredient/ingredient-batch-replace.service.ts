@@ -224,16 +224,22 @@ export class IngredientBatchReplaceService {
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
     });
 
-    // 同一逻辑食谱（recipeId）可能存在多个版本行，这里只保留最新版本，
-    // 避免列表重复，也避免执行时 update version 撞上已存在的下一个版本。
-    const latestByLogic = new Map<string, (typeof recipes)[number]>();
+    // 同一逻辑食谱（recipeId）在同一种状态下可能存在多个版本行。
+    // 这里每个「逻辑食谱 + 状态」只保留最新版本，避免列表重复，也避免执行时
+    // update version 撞上已存在的下一个版本。注意：不能只按 recipeId 去重，
+    // 否则当某逻辑食谱的“最新含原料版本”是草稿时，它已发布的版本会被整个丢掉。
+    const latestByLogicStatus = new Map<
+      string,
+      (typeof recipes)[number]
+    >();
     for (const recipe of recipes) {
-      const existing = latestByLogic.get(recipe.recipeId);
+      const key = `${recipe.recipeId}::${recipe.status}`;
+      const existing = latestByLogicStatus.get(key);
       if (!existing || recipe.version > existing.version) {
-        latestByLogic.set(recipe.recipeId, recipe);
+        latestByLogicStatus.set(key, recipe);
       }
     }
-    const deduped = Array.from(latestByLogic.values());
+    const deduped = Array.from(latestByLogicStatus.values());
 
     return deduped.map((recipe) => ({
       recipeId: recipe.id,

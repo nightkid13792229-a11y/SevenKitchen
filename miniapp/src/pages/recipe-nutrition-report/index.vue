@@ -213,17 +213,18 @@ function getRowStatusClass(row: Record<string, any>) {
 .nutrition-report-page {
   min-height: 100vh;
   padding: 24rpx 28rpx 40rpx;
-  background: #f6f7f9;
+  background: #f0f3e9;
   box-sizing: border-box;
 }
 
 .state-panel,
 .section {
-  background: #fff;
-  border-radius: 8rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
   padding: 28rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .state-panel {
@@ -231,18 +232,18 @@ function getRowStatusClass(row: Record<string, any>) {
   flex-direction: column;
   gap: 10rpx;
   align-items: center;
-  color: #666;
+  color: #6b6653;
 }
 
 .state-title {
   font-size: 30rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .state-copy {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .recipe-summary-section {
@@ -266,12 +267,12 @@ function getRowStatusClass(row: Record<string, any>) {
 .summary-logo {
   width: 46rpx;
   height: 46rpx;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
 }
 
 .page-title,
 .report-title {
-  color: #111827;
+  color: #26261f;
   font-size: 34rpx;
   font-weight: 700;
 }
@@ -285,13 +286,13 @@ function getRowStatusClass(row: Record<string, any>) {
 
 .summary-label {
   flex: 0 0 150rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 25rpx;
 }
 
 .summary-value {
   flex: 1;
-  color: #111827;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 600;
   text-align: right;
@@ -305,7 +306,7 @@ function getRowStatusClass(row: Record<string, any>) {
 .section-title {
   display: block;
   margin-bottom: 20rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 700;
 }
@@ -317,9 +318,9 @@ function getRowStatusClass(row: Record<string, any>) {
 
 .report-table {
   min-width: 920rpx;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-bottom: 0;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
   overflow: hidden;
 }
 
@@ -343,13 +344,13 @@ function getRowStatusClass(row: Record<string, any>) {
 .table-row {
   display: flex;
   min-height: 76rpx;
-  border-bottom: 1rpx solid #e5e7eb;
-  background: #fff;
+  border-bottom: 1rpx solid #e5e8d4;
+  background: #fbfcf7;
 }
 
 .table-head {
   min-height: 72rpx;
-  background: #f3f4f6;
+  background: #eef2e4;
 }
 
 .table-cell {
@@ -357,17 +358,17 @@ function getRowStatusClass(row: Record<string, any>) {
   align-items: center;
   padding: 14rpx 16rpx;
   box-sizing: border-box;
-  color: #1f2937;
+  color: #26261f;
   font-size: 24rpx;
   line-height: 1.35;
-  border-right: 1rpx solid #e5e7eb;
+  border-right: 1rpx solid #e5e8d4;
   min-width: 0;
   white-space: normal;
   word-break: break-word;
 }
 
 .table-head .table-cell {
-  color: #374151;
+  color: #6b6653;
   font-weight: 700;
 }
 
@@ -439,7 +440,7 @@ function getRowStatusClass(row: Record<string, any>) {
 .status-deficient .report-current-cell,
 .status-excess .nutrient-name-cell,
 .status-excess .report-current-cell {
-  color: #dc2626;
+  color: #b4553f;
   font-weight: 700;
 }
 
@@ -455,17 +456,18 @@ function getRowStatusClass(row: Record<string, any>) {
   justify-content: space-between;
   align-items: center;
   padding: 16rpx 18rpx;
-  border-radius: 8rpx;
-  background: #f8fafc;
+  border-radius: 12rpx;
+  background: #f2f4ea;
+  border: 1rpx solid #eef1e2;
 }
 
 .energy-density-label {
-  color: #64748b;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
 .energy-density-value {
-  color: #0f172a;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 700;
 }

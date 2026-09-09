@@ -249,7 +249,7 @@ onShareTimeline(() => {
 <style scoped>
 .favorite-recipes {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f0f3e9;
   padding-bottom: 40rpx;
 }
 
@@ -263,7 +263,7 @@ onShareTimeline(() => {
 
 .loading-text {
   font-size: 28rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 /* 空状态 */
@@ -283,21 +283,22 @@ onShareTimeline(() => {
 .title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 }
 
 .desc {
   font-size: 28rpx;
-  color: #999;
+  color: #968f6d;
   margin-bottom: 48rpx;
 }
 
 .btn-browse {
   width: 300rpx;
   height: 72rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
   border-radius: 36rpx;
   font-size: 28rpx;
   border: none;
@@ -305,27 +306,28 @@ onShareTimeline(() => {
 
 /* 食谱列表 */
 .recipe-list {
-  padding: 20rpx;
+  padding: 24rpx;
 }
 
 .recipe-card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
   overflow: hidden;
-  margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+  margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .recipe-cover {
   width: 100%;
   height: 360rpx;
-  background: #f0f0f0;
+  background: #f2f4ea;
 }
 
 .recipe-cover-placeholder {
   width: 100%;
   height: 360rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -342,14 +344,14 @@ onShareTimeline(() => {
 .recipe-name {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 12rpx;
   display: block;
 }
 
 .recipe-desc {
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   line-height: 1.6;
   margin-bottom: 16rpx;
   display: -webkit-box;
@@ -366,7 +368,7 @@ onShareTimeline(() => {
 
 .meta-item {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .recipe-tags {
@@ -377,10 +379,11 @@ onShareTimeline(() => {
 
 .tag {
   font-size: 22rpx;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
+  color: #1e3a2f;
+  background: #eef2e4;
+  border: 1rpx solid #dde3cd;
   padding: 6rpx 16rpx;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
 }
 
 .recipe-action {
@@ -388,8 +391,8 @@ onShareTimeline(() => {
   align-items: center;
   justify-content: center;
   padding: 20rpx;
-  border-top: 1rpx solid #f0f0f0;
-  background: #fafafa;
+  border-top: 1rpx solid #eef1e2;
+  background: #fbfcf7;
 }
 
 .action-icon {
@@ -399,6 +402,6 @@ onShareTimeline(() => {
 
 .action-text {
   font-size: 28rpx;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 </style>

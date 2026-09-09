@@ -26,12 +26,15 @@ describe('staff workbench compact icon grid', () => {
     expect(staffOrdersSource).not.toContain('/pages/staff-refunds/index')
   })
 
-  it('renders today overview before a three-column module grid', () => {
-    expect(source).toContain('今日概览')
+  it('renders the three-column module grid directly without the retired overview stats', () => {
     expect(source).toContain('const workbenchModules')
     expect(source).toContain('workbench-grid')
     expect(source).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
-    expect(source.indexOf('今日概览')).toBeLessThan(source.indexOf('workbench-grid'))
+    expect(source).not.toContain('今日概览')
+    expect(source).not.toContain('今日订单')
+    expect(source).not.toContain('todayOrders')
+    expect(source).not.toContain('pendingTasks')
+    expect(source).not.toContain('shippingCount')
   })
 
   it('uses the eight approved icon modules in the required order', () => {

@@ -6,24 +6,6 @@
     </view>
 
     <view v-else class="workbench-container">
-      <view class="stats-section">
-        <text class="section-title">今日概览</text>
-        <view class="stats">
-          <view class="stat-item">
-            <text class="stat-value">{{ todayOrders }}</text>
-            <text class="stat-label">今日订单</text>
-          </view>
-          <view class="stat-item">
-            <text class="stat-value">{{ pendingTasks }}</text>
-            <text class="stat-label">待处理</text>
-          </view>
-          <view class="stat-item">
-            <text class="stat-value">{{ shippingCount }}</text>
-            <text class="stat-label">待发货</text>
-          </view>
-        </view>
-      </view>
-
       <view class="workbench-grid">
         <view
           v-for="module in workbenchModules"
@@ -52,9 +34,6 @@ import { request } from '../../utils/api'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
 
 const isStaff = ref(false)
-const todayOrders = ref(0)
-const pendingTasks = ref(0)
-const shippingCount = ref(0)
 
 type WorkbenchBadgeKey =
   | 'purchasing'
@@ -72,9 +51,6 @@ type WorkbenchModule = {
 }
 
 interface WorkbenchSummary {
-  todayOrders: number
-  pendingTasks: number
-  shippingCount: number
   badges?: Partial<WorkbenchBadges>
 }
 
@@ -155,9 +131,6 @@ const loadStats = async () => {
       quiet: true,
       suppressErrorToast: true,
     })
-    todayOrders.value = response.data?.todayOrders || 0
-    pendingTasks.value = response.data?.pendingTasks || 0
-    shippingCount.value = response.data?.shippingCount || 0
     todoCounts.value = response.data?.badges || {}
   } catch (error) {
     console.error('[StaffWorkbench] Failed to load stats:', error)
@@ -260,7 +233,7 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
 .staff-workbench {
   min-height: 100vh;
   padding-bottom: 120rpx;
-  background: #f5f5f5;
+  background: #f0f3e9;
 }
 
 .no-permission {
@@ -274,57 +247,17 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
   .message {
     margin-bottom: 16rpx;
     font-size: 32rpx;
-    color: #333;
+    color: #26261f;
   }
 
   .hint {
     font-size: 24rpx;
-    color: #999;
+    color: #968f6d;
   }
 }
 
 .workbench-container {
-  padding: 24rpx 32rpx;
-}
-
-.stats-section {
-  margin-bottom: 32rpx;
-}
-
-.section-title {
-  display: block;
-  padding-left: 8rpx;
-  margin-bottom: 16rpx;
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
-}
-
-.stats {
-  display: flex;
-  gap: 16rpx;
-}
-
-.stat-item {
-  flex: 1;
-  padding: 28rpx 12rpx;
-  text-align: center;
-  background: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
-}
-
-.stat-value {
-  display: block;
-  margin-bottom: 8rpx;
-  font-size: 44rpx;
-  font-weight: bold;
-  color: #1890ff;
-}
-
-.stat-label {
-  font-size: 24rpx;
-  color: #666;
+  padding: 24rpx;
 }
 
 .workbench-grid {
@@ -341,9 +274,10 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
   justify-content: center;
   min-height: 190rpx;
   padding: 20rpx 12rpx;
-  background: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 
   &:active {
     transform: scale(0.98);
@@ -370,7 +304,7 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
 
 .module-title {
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   text-align: center;
 }
 
@@ -386,7 +320,7 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
   line-height: 32rpx;
   color: #fff;
   text-align: center;
-  background: #ff4d4f;
+  background: #b4553f;
   border-radius: 999rpx;
 }
 </style>

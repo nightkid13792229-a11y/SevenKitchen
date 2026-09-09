@@ -122,12 +122,18 @@ describe('backfill recipe supplement targets v2', () => {
         unit: 'mg',
       },
     ],
+    [
+      'EPA+DHA',
+      600,
+      {
+        fieldPath: 'derived.epaDha',
+        label: 'EPA + DHA',
+        targetValuePerKg: 600,
+        unit: 'mg',
+      },
+    ],
   ])('maps %s', (key, value, expected) => {
     expect(mapLegacySupplementTarget(key, value)).toEqual(expected);
-  });
-
-  it('requires manual review for EPA+DHA', () => {
-    expect(mapLegacySupplementTarget('EPA+DHA', 600)).toBeNull();
   });
 
   it('maps legacy design supplement targets even when only the field is needed', () => {

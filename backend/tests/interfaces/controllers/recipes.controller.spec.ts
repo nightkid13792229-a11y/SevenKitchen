@@ -34,6 +34,7 @@ import {
 import { GrowthCurveType } from 'src/domain/dog/enums';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { JwtAuthService } from 'src/auth/jwt.service';
+import { OrderService } from 'src/application/order/order.service';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;
@@ -100,6 +101,9 @@ describe('RecipesController (e2e)', () => {
     generateToken: jest.fn(),
     generateTokenForUser: jest.fn(),
   };
+  const mockOrderService = {
+    computeRecipeReferencePrice: jest.fn(),
+  };
 
   beforeEach(async () => {
     // Create shared repository instances
@@ -138,6 +142,10 @@ describe('RecipesController (e2e)', () => {
         {
           provide: JwtAuthService,
           useValue: mockJwtAuthService,
+        },
+        {
+          provide: OrderService,
+          useValue: mockOrderService,
         },
       ],
     }).compile();

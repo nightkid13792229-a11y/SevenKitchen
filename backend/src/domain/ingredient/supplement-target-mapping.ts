@@ -1,4 +1,7 @@
-import { listSupplementTargetFields } from './nutrition-field-catalog';
+import {
+  listDerivedNutritionFields,
+  listSupplementTargetFields,
+} from './nutrition-field-catalog';
 
 export interface SupplementTargetFieldReference {
   fieldPath: string;
@@ -77,6 +80,12 @@ const SUPPLEMENT_TARGET_FIELDS = {
     label: '牛磺酸',
     unit: 'mg',
   },
+  epaDha: {
+    fieldPath: 'derived.epaDha',
+    fieldKey: 'epaDha',
+    label: 'EPA + DHA',
+    unit: 'mg',
+  },
 } as const satisfies Record<string, SupplementTargetFieldReference>;
 
 const LEGACY_TARGET_MAPPING: Record<string, SupplementTargetFieldReference> = {
@@ -108,6 +117,8 @@ const LEGACY_TARGET_MAPPING: Record<string, SupplementTargetFieldReference> = {
   胆碱: SUPPLEMENT_TARGET_FIELDS.choline,
   taurine: SUPPLEMENT_TARGET_FIELDS.taurine,
   牛磺酸: SUPPLEMENT_TARGET_FIELDS.taurine,
+  'epa+dha': SUPPLEMENT_TARGET_FIELDS.epaDha,
+  epadha: SUPPLEMENT_TARGET_FIELDS.epaDha,
 };
 
 const SUPPLEMENT_NAME_TARGET_MAPPING: Record<
@@ -193,12 +204,33 @@ export function resolveSupplementTargetField(
     );
   });
 
-  return field
+  if (field) {
+    return {
+      fieldPath: field.fieldPath,
+      fieldKey: field.fieldKey,
+      label: field.label,
+      unit: field.unit,
+    };
+  }
+
+  const derivedField = listDerivedNutritionFields().find((candidate) => {
+    return (
+      candidate.fieldPath === targetKey ||
+      normalizeSupplementTargetLookupKey(candidate.label) ===
+        normalizedTargetKey ||
+      normalizeSupplementTargetLookupKey(candidate.fieldPath) ===
+        normalizedTargetKey
+    );
+  });
+
+  return derivedField
     ? {
-        fieldPath: field.fieldPath,
-        fieldKey: field.fieldKey,
-        label: field.label,
-        unit: field.unit,
+        fieldPath: derivedField.fieldPath,
+        fieldKey: derivedField.fieldPath.slice(
+          derivedField.fieldPath.lastIndexOf('.') + 1,
+        ),
+        label: derivedField.label,
+        unit: derivedField.unit,
       }
     : null;
 }

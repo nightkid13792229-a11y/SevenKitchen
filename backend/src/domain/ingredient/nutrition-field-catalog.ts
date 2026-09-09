@@ -551,24 +551,71 @@ export function findNutritionField(
   return field ? cloneNutritionField(field) : undefined;
 }
 
+export function findDerivedNutritionField(
+  fieldPath: string | null | undefined,
+): DerivedNutritionFieldDefinition | undefined {
+  const field = DERIVED_NUTRITION_FIELD_CATALOG.find(
+    (field) => field.fieldPath === fieldPath,
+  );
+  return field ? cloneDerivedNutritionField(field) : undefined;
+}
+
+export function findAnyNutritionField(
+  fieldPath: string | null | undefined,
+): NutritionFieldDefinition | DerivedNutritionFieldDefinition | undefined {
+  return findNutritionField(fieldPath) ?? findDerivedNutritionField(fieldPath);
+}
+
 export function getNutritionProfileFieldValue(
   nutritionProfile: NutritionProfile | null | undefined,
   fieldPath: string,
 ): number | undefined {
   const field = findNutritionField(fieldPath);
-  if (!field) {
+  if (field) {
+    const normalized = normalizeNutritionProfile(
+      nutritionProfile,
+    ) as NutritionProfileV2 | null;
+    const tabValues = normalized?.[field.tabKey] as
+      | Record<string, number | null | undefined>
+      | undefined;
+    const value = tabValues?.[field.fieldKey];
+
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : undefined;
+  }
+
+  const derived = findDerivedNutritionField(fieldPath);
+  if (!derived) {
     return undefined;
   }
 
-  const normalized = normalizeNutritionProfile(
-    nutritionProfile,
-  ) as NutritionProfileV2 | null;
-  const tabValues = normalized?.[field.tabKey] as
-    | Record<string, number | null | undefined>
-    | undefined;
-  const value = tabValues?.[field.fieldKey];
+  if (derived.formula === 'SUM') {
+    let total = 0;
+    let found = false;
+    for (const sourcePath of derived.sourceFieldPaths) {
+      const value = getNutritionProfileFieldValue(nutritionProfile, sourcePath);
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        total += value;
+        found = true;
+      }
+    }
+    return found ? total : undefined;
+  }
 
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined;
+  if (derived.formula === 'RATIO') {
+    const [numerator, denominator] = derived.sourceFieldPaths.map((path) =>
+      getNutritionProfileFieldValue(nutritionProfile, path),
+    );
+    if (
+      typeof numerator !== 'number' ||
+      typeof denominator !== 'number' ||
+      denominator === 0
+    ) {
+      return undefined;
+    }
+    return numerator / denominator;
+  }
+
+  return undefined;
 }

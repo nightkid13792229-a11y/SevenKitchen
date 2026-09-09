@@ -1,4 +1,4 @@
-import { findNutritionField } from './nutrition-field-catalog';
+import { findAnyNutritionField } from './nutrition-field-catalog';
 import { resolveSupplementConcentration } from './supplement-concentration-resolver';
 import type { NutritionProfile, SupplementTarget } from './types';
 
@@ -37,7 +37,7 @@ export function validateSupplementTargets(targets: SupplementTarget[]): void {
 
   const seen = new Set<string>();
   for (const target of targets) {
-    const field = findNutritionField(target.fieldPath);
+    const field = findAnyNutritionField(target.fieldPath);
     if (!field) {
       throw new Error(
         `Unsupported supplement target fieldPath: ${target.fieldPath}`,
@@ -70,7 +70,7 @@ export function calculateSupplementDose(
   const basisWeightKg = input.basisWeightG / 1000;
   const lossRate = input.lossRate ?? 1;
   const targetBreakdown = input.targets.map((target) => {
-    const field = findNutritionField(target.fieldPath)!;
+    const field = findAnyNutritionField(target.fieldPath)!;
     const resolution = resolveSupplementConcentration(
       input.nutritionProfile,
       target.fieldPath,

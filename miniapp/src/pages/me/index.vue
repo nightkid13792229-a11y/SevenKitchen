@@ -40,26 +40,6 @@
         <text class="phone-bind-action">去绑定</text>
       </view>
 
-      <!-- 用户头像区域 -->
-      <view v-if="showLegacyMigrationEntry" class="legacy-migration-entry">
-        <view class="legacy-migration-main">
-          <text class="legacy-migration-title">旧版资料迁移</text>
-          <text class="legacy-migration-desc"
-            >已在旧版填写手机号后，可在这里授权同一手机号并同步历史资料。</text
-          >
-        </view>
-        <view class="legacy-migration-actions">
-          <button class="legacy-migration-action" @tap="goToLegacyMigration">
-            去同步
-          </button>
-          <button
-            class="legacy-migration-dismiss"
-            @tap.stop="dismissLegacyMigrationPrompt"
-          >
-            不再提示
-          </button>
-        </view>
-      </view>
       <view class="user-profile-section" @tap="editProfile">
         <image
           class="user-avatar"
@@ -276,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
@@ -320,22 +300,8 @@ const orderCounts = ref({
   received: 0,
   aftersale: 0,
 });
-const legacyMigrationPromptHidden = ref(false);
 const testIdentityPanelVisible = ref(false);
 const customerTestModeActive = ref(false);
-const LEGACY_MIGRATION_PROMPT_VERSION = "20260523-2";
-
-const getLegacyMigrationPromptStorageKey = () =>
-  userInfo.value.id
-    ? `legacy_migration_prompt_hidden:${LEGACY_MIGRATION_PROMPT_VERSION}:${userInfo.value.id}`
-    : `legacy_migration_prompt_hidden:${LEGACY_MIGRATION_PROMPT_VERSION}`;
-
-const showLegacyMigrationEntry = computed(
-  () =>
-    isLoggedIn.value &&
-    Boolean(userInfo.value.phone) &&
-    !legacyMigrationPromptHidden.value,
-);
 
 // 标志位：防止更新后立即重新加载
 let isJustUpdated = false;
@@ -388,8 +354,6 @@ async function loadUserInfo() {
 
     if (res.code === 0 && res.data) {
       userInfo.value = res.data;
-      legacyMigrationPromptHidden.value =
-        uni.getStorageSync(getLegacyMigrationPromptStorageKey()) === true;
       console.log("[Me Page] userInfo.value after update:", userInfo.value);
       console.log("[Me Page] nickname:", userInfo.value.nickname);
       console.log("[Me Page] avatarUrl:", userInfo.value.avatarUrl);
@@ -541,32 +505,6 @@ function editPhone() {
 function goToPhoneBind() {
   uni.navigateTo({
     url: "/pages/phone-bind/index?redirect=%2Fpages%2Fme%2Findex",
-  });
-}
-
-function goToLegacyMigration() {
-  uni.navigateTo({
-    url: "/pages/migration/index",
-  });
-}
-
-function dismissLegacyMigrationPrompt() {
-  uni.showModal({
-    title: "请慎重选择",
-    content:
-      "您正在关闭旧版资料同步迁移提示。这意味着本账号以后不会再主动提醒您同步旧版资料；如果后续发现历史资料没有同步，可以在客服协助下处理。若您已经知晓，请轻点“不再提示”永久关闭该提示。",
-    confirmText: "不再提示",
-    cancelText: "先保留",
-    confirmColor: "#d92d20",
-    success: (res) => {
-      if (!res.confirm) return;
-      legacyMigrationPromptHidden.value = true;
-      uni.setStorageSync(getLegacyMigrationPromptStorageKey(), true);
-      uni.showToast({
-        title: "已关闭提示",
-        icon: "success",
-      });
-    },
   });
 }
 
@@ -742,16 +680,17 @@ onShow(() => {
 <style scoped>
 .me-container {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f0f3e9;
   padding-bottom: 120rpx; /* 避开底部导航栏 */
 }
 
+/* ===== 提示条（12rpx 徽章圆角档） ===== */
 .phone-bind-alert {
   margin: 24rpx;
   padding: 24rpx;
   border-radius: 12rpx;
-  background: #fff7e6;
-  border: 1rpx solid #ffd591;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -762,8 +701,8 @@ onShow(() => {
   margin: 24rpx;
   padding: 22rpx 24rpx;
   border-radius: 12rpx;
-  background: #fff1f0;
-  border: 1rpx solid #ffa39e;
+  background: #f8e8e2;
+  border: 1rpx solid rgba(180, 85, 63, 0.35);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -771,14 +710,14 @@ onShow(() => {
 }
 
 .customer-test-title {
-  color: #a8071a;
+  color: #a04a35;
   font-size: 28rpx;
   font-weight: 700;
 }
 
 .customer-test-action {
   flex-shrink: 0;
-  color: #cf1322;
+  color: #b4553f;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -789,84 +728,26 @@ onShow(() => {
 }
 
 .phone-bind-title {
-  color: #ad6800;
+  color: #8a6b33;
   font-size: 30rpx;
   font-weight: 700;
   margin-bottom: 8rpx;
 }
 
 .phone-bind-desc {
-  color: #8c5a18;
+  color: #8d7547;
   font-size: 24rpx;
   line-height: 1.5;
 }
 
 .phone-bind-action {
   flex-shrink: 0;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 26rpx;
   font-weight: 700;
 }
 
-.legacy-migration-entry {
-  margin: 0 24rpx 24rpx;
-  padding: 24rpx 26rpx;
-  border-radius: 12rpx;
-  background: #f7fbff;
-  border: 1rpx solid #b7d7ff;
-}
-
-.legacy-migration-main {
-  margin-bottom: 22rpx;
-}
-
-.legacy-migration-title,
-.legacy-migration-desc {
-  display: block;
-}
-
-.legacy-migration-title {
-  color: #155eef;
-  font-size: 30rpx;
-  font-weight: 700;
-  margin-bottom: 8rpx;
-}
-
-.legacy-migration-desc {
-  color: #344054;
-  font-size: 24rpx;
-  line-height: 1.5;
-}
-
-.legacy-migration-actions {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.legacy-migration-action,
-.legacy-migration-dismiss {
-  height: 58rpx;
-  min-width: 144rpx;
-  padding: 0 24rpx;
-  border-radius: 29rpx;
-  font-size: 25rpx;
-  font-weight: 700;
-  line-height: 58rpx;
-}
-
-.legacy-migration-action {
-  background: #1677ff;
-  color: #fff;
-}
-
-.legacy-migration-dismiss {
-  background: #fff;
-  color: #667085;
-  border: 1rpx solid #d0d5dd;
-}
-
-/* 未登录状态 */
+/* ===== 未登录状态 ===== */
 .not-logged-in {
   display: flex;
   flex-direction: column;
@@ -886,48 +767,53 @@ onShow(() => {
 .login-title {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 48rpx;
 }
 
 .login-btn {
   width: 600rpx;
   height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 32rpx;
-  border: none;
   margin-bottom: 80rpx;
 }
 
 .benefits-section {
   width: 600rpx;
-  background: #fff;
-  border-radius: 16rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
   padding: 40rpx;
 }
 
 .benefits-title {
   font-size: 28rpx;
-  color: #666;
+  color: #968f6d;
   margin-bottom: 24rpx;
   display: block;
 }
 
 .benefit-item {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   line-height: 48rpx;
 }
 
-/* 已登录状态 */
+/* ===== 已登录状态 ===== */
 .user-profile-section {
-  background: #fff;
-  padding: 40rpx 32rpx 32rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: 28rpx;
+  margin: 24rpx;
+  padding: 44rpx 32rpx 38rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-shadow: 0 14rpx 36rpx rgba(20, 41, 31, 0.24);
 }
 
 .user-avatar {
@@ -935,30 +821,40 @@ onShow(() => {
   height: 160rpx;
   border-radius: 80rpx;
   margin-bottom: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #24493a;
+  border: 3rpx solid rgba(216, 188, 133, 0.85);
 }
 
 .user-nickname {
   font-size: 32rpx;
   font-weight: 500;
-  color: #333;
+  color: #f3eddd;
   margin-bottom: 8rpx;
 }
 
 .edit-hint {
   font-size: 24rpx;
-  color: #999;
+  color: rgba(243, 237, 221, 0.62);
 }
 
-.info-section {
-  background: #fff;
-  margin-top: 20rpx;
+/* ===== 卡片通用（微绿白 + 暖绿边，28rpx 圆角） ===== */
+.info-section,
+.function-list,
+.test-identity-panel {
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
+  margin: 0 24rpx 24rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .mall-section {
-  background: #fff;
-  margin-top: 20rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
+  margin: 0 24rpx 24rpx;
   padding: 34rpx 24rpx 38rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .mall-section-header {
@@ -971,12 +867,12 @@ onShow(() => {
 .mall-section-title {
   font-size: 32rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
 }
 
 .mall-section-link {
   font-size: 24rpx;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .mall-shortcuts {
@@ -1016,7 +912,7 @@ onShow(() => {
 .shortcut-text {
   font-size: 25rpx;
   font-weight: 600;
-  color: #2f3640;
+  color: #26261f;
   white-space: nowrap;
 }
 
@@ -1028,7 +924,7 @@ onShow(() => {
   height: 30rpx;
   padding: 0 8rpx;
   border-radius: 18rpx;
-  background: #ff4d4f;
+  background: #b4553f;
   color: #fff;
   font-size: 20rpx;
   line-height: 30rpx;
@@ -1039,8 +935,8 @@ onShow(() => {
   padding: 24rpx 32rpx;
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
-  border-bottom: 1rpx solid #f0f0f0;
+  color: #26261f;
+  border-bottom: 1rpx solid #ecefe0;
 }
 
 .info-row {
@@ -1048,7 +944,7 @@ onShow(() => {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #ecefe0;
 }
 
 .info-row:last-child {
@@ -1057,7 +953,7 @@ onShow(() => {
 
 .info-label {
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
 }
 
 .info-value-wrapper {
@@ -1067,28 +963,18 @@ onShow(() => {
 
 .info-value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   margin-right: 8rpx;
 }
 
 .info-id {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .arrow {
   font-size: 32rpx;
-  color: #999;
-}
-
-.function-list {
-  background: #fff;
-  margin-top: 20rpx;
-}
-
-.test-identity-panel {
-  background: #fff;
-  margin-top: 20rpx;
+  color: #b08d4f;
 }
 
 .test-identity-body {
@@ -1098,7 +984,7 @@ onShow(() => {
 .test-identity-status {
   display: block;
   margin-bottom: 22rpx;
-  color: #344054;
+  color: #6b6653;
   font-size: 26rpx;
 }
 
@@ -1107,20 +993,22 @@ onShow(() => {
   height: 76rpx;
   margin-top: 18rpx;
   border-radius: 12rpx;
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  color: #f3eddd;
   font-size: 28rpx;
   font-weight: 700;
 }
 
 .test-identity-btn.secondary {
-  background: #344054;
+  background: #6b6653;
+  border: 1rpx solid #dde3cd;
 }
 
 .test-identity-btn.danger {
-  background: #fff;
-  color: #d92d20;
-  border: 1rpx solid #fda29b;
+  background: #fbfcf7;
+  color: #b4553f;
+  border: 1rpx solid rgba(180, 85, 63, 0.4);
 }
 
 .function-item {
@@ -1128,7 +1016,7 @@ onShow(() => {
   align-items: center;
   justify-content: space-between;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #ecefe0;
 }
 
 .function-item:last-child {
@@ -1138,24 +1026,24 @@ onShow(() => {
 .function-text {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .function-count {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .logout-section {
-  padding: 40rpx 32rpx;
+  padding: 8rpx 32rpx 40rpx;
 }
 
 .logout-btn {
   width: 100%;
   height: 88rpx;
-  background: #fff;
-  color: #ff4d4f;
-  border: 1rpx solid #ff4d4f;
+  background: #fbfcf7;
+  color: #b4553f;
+  border: 1rpx solid rgba(180, 85, 63, 0.5);
   border-radius: 44rpx;
   font-size: 32rpx;
 }

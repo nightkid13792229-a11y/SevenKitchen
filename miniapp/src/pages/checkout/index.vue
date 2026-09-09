@@ -163,12 +163,6 @@
             <text class="config-label">总净重</text>
             <text class="config-value">{{ orderConfig.totalGrams }}g</text>
           </view>
-          <view class="config-item">
-            <text class="config-label">来源方案</text>
-            <text class="config-value">{{
-              orderConfig.ingredientSourcePlanLabel || '-'
-            }}</text>
-          </view>
         </view>
 
         <view
@@ -236,6 +230,10 @@
       <view class="price-card-simple">
         <text class="price-label">支付金额</text>
         <text class="price-value-large">¥{{ totalAmount.toFixed(2) }}</text>
+      </view>
+
+      <view class="price-card-note">
+        <text class="price-note-text">已含冷链配送费</text>
       </view>
     </view>
 
@@ -1778,6 +1776,17 @@ function goToAddAddress() {
   padding: 32rpx 24rpx;
   background-color: #f9f9f9;
   border-radius: 12rpx;
+}
+
+.price-card-note {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12rpx 24rpx 0;
+}
+
+.price-note-text {
+  font-size: 22rpx;
+  color: #999;
 }
 
 .price-label {

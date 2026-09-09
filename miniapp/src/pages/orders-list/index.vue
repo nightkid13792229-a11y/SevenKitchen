@@ -423,13 +423,13 @@ async function payOrderFromList(orderId: string) {
     uni.hideLoading();
     await requestWechatPayment(res.data);
     uni.showToast({
-      title: '支付处理中',
+      title: '支付成功',
       icon: 'success',
     });
     loadOrders();
   } catch (error: any) {
     const errorMessage = error?.errMsg?.includes('cancel')
-      ? '已取消支付'
+      ? '未扣款，订单仍为待付款'
       : error instanceof Error
         ? error.message
         : '支付失败，请重试';

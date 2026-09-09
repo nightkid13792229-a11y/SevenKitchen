@@ -439,7 +439,7 @@
 
           <view class="payment-tip">
             <text class="tip-text"
-              >支付完成后订单会由微信支付回调确认，请稍后刷新查看状态。</text
+              >支付完成后订单会自动确认；如状态暂未更新，请稍等片刻或下拉刷新。</text
             >
           </view>
         </view>
@@ -881,10 +881,16 @@
         </button>
         <button
           class="btn-action btn-primary"
-          :disabled="paying || paymentExpired"
+          :disabled="paying || paymentExpired || paymentConfirming"
           @tap="payOrder"
         >
-          {{ paymentExpired ? '已超时' : '立即支付' }}
+          {{
+            paymentExpired
+              ? '已超时'
+              : paymentConfirming
+                ? '支付确认中，请勿重复支付'
+                : '立即支付'
+          }}
         </button>
       </view>
 
@@ -940,7 +946,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { onShow, onShareAppMessage } from '@dcloudio/uni-app';
+import { onShow, onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request, requestSubscriptionMessage } from '../../utils/api';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
@@ -1120,6 +1126,10 @@ const customerServiceConfig = ref<CustomerServiceConfig>({
   orderDetailMerchantNote: null,
 });
 const paying = ref(false);
+// 支付成功后、后端回调确认前的中间态：防止重复支付
+const paymentConfirming = ref(false);
+// 页面是否仍活跃（离开后停止支付确认轮询）
+let pageActive = true;
 const shippingNotificationPreference =
   ref<ShippingNotificationPreference | null>(null);
 const requestingShippingNotification = ref(false);
@@ -1696,6 +1706,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  pageActive = false;
   if (paymentTimer) {
     clearInterval(paymentTimer);
     paymentTimer = null;
@@ -1758,9 +1769,11 @@ async function fetchOrderDetailResponse() {
   });
 }
 
-async function loadOrderDetail() {
+async function loadOrderDetail(quiet = false) {
   try {
-    uni.showLoading({ title: '加载中...' });
+    if (!quiet) {
+      uni.showLoading({ title: '加载中...' });
+    }
 
     const res = await fetchOrderDetailResponse();
 
@@ -1788,7 +1801,9 @@ async function loadOrderDetail() {
   } catch (error) {
     console.error('Load order detail error:', error);
   } finally {
-    uni.hideLoading();
+    if (!quiet) {
+      uni.hideLoading();
+    }
   }
 }
 
@@ -2289,6 +2304,15 @@ onShow(() => {
   uni.$on('address-selected', handleAddressSelected);
 });
 
+onPullDownRefresh(async () => {
+  if (!orderId.value) {
+    uni.stopPullDownRefresh();
+    return;
+  }
+  await loadOrderDetail(true);
+  uni.stopPullDownRefresh();
+});
+
 // 分享照片相关 - 预获取的分享 token（只有获取成功时才会有值）
 const shareToken = ref<string>('');
 const shareTokenOrderId = ref<string>('');
@@ -2764,7 +2788,7 @@ async function loadCustomerServiceConfig() {
 
 // 立即付款
 async function payOrder() {
-  if (paying.value || paymentExpired.value) {
+  if (paying.value || paymentExpired.value || paymentConfirming.value) {
     return;
   }
 
@@ -2780,17 +2804,25 @@ async function payOrder() {
     uni.hideLoading();
     await requestWechatPayment(res.data);
 
+    // 微信已确认扣款成功，但后端回调确认可能有延迟：进入"确认中"中间态，防止重复支付
+    paymentConfirming.value = true;
     uni.showToast({
-      title: '支付处理中',
+      title: '支付成功，正在确认',
       icon: 'success',
     });
 
-    await loadOrderDetail();
-    await maybePromptShippingNotificationAfterPayment();
+    await loadOrderDetail(true);
+    if (isPaymentSettled()) {
+      paymentConfirming.value = false;
+      await maybePromptShippingNotificationAfterPayment();
+      return;
+    }
+
+    pollPaymentConfirmation(1);
   } catch (error: any) {
     console.error('Payment error:', error);
     const errorMessage = error?.errMsg?.includes('cancel')
-      ? '已取消支付'
+      ? '未扣款，订单仍为待付款'
       : error instanceof Error
         ? error.message
         : '支付失败，请重试';
@@ -2802,6 +2834,52 @@ async function payOrder() {
     paying.value = false;
     uni.hideLoading();
   }
+}
+
+// 支付是否已确认（状态离开待付款即视为后端已确认）
+function isPaymentSettled(): boolean {
+  const status = order.value?.status;
+  return Boolean(status && status !== 'PENDING_PAYMENT' && status !== 'INIT');
+}
+
+// 支付确认轮询：每 2 秒刷新一次订单状态，最多约 16 秒
+async function pollPaymentConfirmation(attempt: number) {
+  if (!pageActive || !paymentConfirming.value) {
+    return;
+  }
+
+  if (attempt > 8) {
+    paymentConfirming.value = false;
+    uni.showToast({
+      title: '支付结果确认中，可下拉刷新',
+      icon: 'none',
+      duration: 2500,
+    });
+    return;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  if (!pageActive || !paymentConfirming.value) {
+    return;
+  }
+
+  try {
+    await loadOrderDetail(true);
+  } catch (error) {
+    console.warn('[Payment poll] refresh failed:', error);
+  }
+
+  if (isPaymentSettled()) {
+    paymentConfirming.value = false;
+    uni.showToast({
+      title: '支付成功',
+      icon: 'success',
+    });
+    await maybePromptShippingNotificationAfterPayment();
+    return;
+  }
+
+  pollPaymentConfirmation(attempt + 1);
 }
 
 // 联系客服

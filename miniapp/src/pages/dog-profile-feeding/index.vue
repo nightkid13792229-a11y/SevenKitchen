@@ -19,7 +19,7 @@
         <view class="field-group">
           <view class="field-label-row">
             <text class="field-label">当前体重（kg）</text>
-            <text class="field-link" @tap="goToWeightManagement">体重管理</text>
+            <text class="field-link" @tap="goToWeightManagement">健康管理</text>
           </view>
           <input
             class="field-input"
@@ -642,7 +642,7 @@ function goToWeightManagement() {
   }
 
   uni.navigateTo({
-    url: `/pages/weight-management/index?dogId=${encodeURIComponent(dogId.value)}`,
+    url: `/pages/dog-profile-health/index?dogId=${encodeURIComponent(dogId.value)}`,
   })
 }
 

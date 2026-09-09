@@ -25,21 +25,6 @@
       <text class="recipe-name">{{ recipe.name }}</text>
 
       <view
-        v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
-        class="tags-row"
-      >
-        <view class="tags-container">
-          <text
-            v-for="tag in recipe.targetHealthTags"
-            :key="tag"
-            class="tag health-tag"
-          >
-            {{ getHealthTagLabel(tag) }}
-          </text>
-        </view>
-      </view>
-
-      <view
         v-if="dogs.length > 0"
         class="recipe-detail-dog-selector"
       >
@@ -264,25 +249,39 @@
 
     <!-- 底部操作按钮 -->
     <view class="bottom-actions">
-      <view class="quick-actions">
-        <button
-          class="quick-action btn-favorite"
-          :class="{ active: isFavorite }"
-          @tap="toggleFavorite"
-        >
-          <text class="icon">{{ isFavorite ? '★' : '☆' }}</text>
-          <text class="quick-label">收藏</text>
-        </button>
+      <!-- 参考价条（接口未就绪时不展示） -->
+      <view v-if="displayReferencePrice" class="reference-price-strip">
+        <view class="reference-price-copy">
+          <text class="reference-price-value">
+            约¥{{ formatReferencePrice(displayReferencePrice.amount) }}/100g{{
+              displayReferencePrice.isMin ? '起' : ''
+            }}
+          </text>
+          <text class="reference-price-note">价格按狗狗档案精确计算，已含冷链配送</text>
+        </view>
       </view>
 
-      <view class="action-buttons">
-        <button class="btn-diy" @tap="generateDiySheet">
-          自己制作
-        </button>
+      <view class="bottom-actions-row">
+        <view class="quick-actions">
+          <button
+            class="quick-action btn-favorite"
+            :class="{ active: isFavorite }"
+            @tap="toggleFavorite"
+          >
+            <text class="icon">{{ isFavorite ? '★' : '☆' }}</text>
+            <text class="quick-label">收藏</text>
+          </button>
+        </view>
 
-        <button class="btn-order" @tap="goToOrder">
-          订购成品
-        </button>
+        <view class="action-buttons">
+          <button class="btn-diy" @tap="generateDiySheet">
+            自己制作
+          </button>
+
+          <button class="btn-order" @tap="goToOrder">
+            订购成品
+          </button>
+        </view>
       </view>
     </view>
 
@@ -310,9 +309,15 @@
               {{ version.description }}
             </text>
           </view>
-          <text v-if="isLifeStageVersionSelected(version)" class="life-stage-version-selected">
-            当前
-          </text>
+          <view class="life-stage-version-option-side">
+            <text
+              v-if="getVersionReferencePrice(version)"
+              class="life-stage-version-option-price"
+            >约¥{{ formatReferencePrice(getVersionReferencePrice(version)) }}/100g</text>
+            <text v-if="isLifeStageVersionSelected(version)" class="life-stage-version-selected">
+              当前
+            </text>
+          </view>
         </view>
       </view>
     </view>
@@ -521,8 +526,17 @@ const lifeStageSelectorVisible = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 let recipeDetailRequestSeq = 0
 
-// 健康标签UUID到名称的映射（动态加载）
-const healthTagUuidLabelMap = ref<Record<string, string>>({})
+// 参考价（每100g、已含运费）：由后端参考价接口自动计算，接口未就绪时留空不展示
+interface RecipeReferencePriceEntry {
+  recipeId: string
+  lifeStage: string
+  pricePer100g: number
+}
+interface RecipeReferencePriceData {
+  lifeStagePrices: RecipeReferencePriceEntry[]
+  minPricePer100g: number
+}
+const referencePriceData = ref<RecipeReferencePriceData | null>(null)
 
 // 原料排序（按sortOrder升序）
 const sortedItems = computed(() => {
@@ -543,6 +557,88 @@ const hasStructuredNutritionReport = computed(() => {
 const selectedDog = computed(() => {
   return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
 })
+
+// 当前生效的生命阶段版本（对应食谱ID）
+const activeLifeStageVersionRecipeId = computed(() => {
+  const selectedStage = recipe.value.selectedLifeStage
+  if (!selectedStage) return ''
+  const version = recipe.value.availableLifeStageVersions?.find(
+    (v) => v.lifeStage === selectedStage,
+  )
+  return version?.recipeId || ''
+})
+
+// 展示参考价：有生效版本价则展示该价；否则展示全阶段最低价（加"起"）
+const displayReferencePrice = computed(() => {
+  const data = referencePriceData.value
+  if (!data) return null
+
+  const activeRecipeId = activeLifeStageVersionRecipeId.value
+  if (activeRecipeId) {
+    const entry = data.lifeStagePrices.find((item) => item.recipeId === activeRecipeId)
+    if (entry && Number.isFinite(entry.pricePer100g)) {
+      return { amount: entry.pricePer100g, isMin: false }
+    }
+  }
+
+  if (Number.isFinite(data.minPricePer100g)) {
+    return { amount: data.minPricePer100g, isMin: true }
+  }
+
+  return null
+})
+
+function getVersionReferencePrice(version: { recipeId?: string; lifeStage: string }): number | null {
+  const data = referencePriceData.value
+  if (!data) return null
+
+  const entry = data.lifeStagePrices.find(
+    (item) => item.recipeId === version.recipeId || (!version.recipeId && item.lifeStage === version.lifeStage),
+  )
+  if (entry && Number.isFinite(entry.pricePer100g)) {
+    return entry.pricePer100g
+  }
+
+  return null
+}
+
+function formatReferencePrice(amount: number): string {
+  return Number(amount).toFixed(2)
+}
+
+// 拉取食谱参考价（每100g、已含运费），失败时静默降级
+async function loadRecipeReferencePrice() {
+  if (!recipeId.value) return
+
+  try {
+    const res: any = await request({
+      url: `/recipes/${recipeId.value}/reference-price`,
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+
+    if (res?.code !== 0 || !res?.data) return
+
+    const lifeStagePrices = Array.isArray(res.data.lifeStagePrices)
+      ? res.data.lifeStagePrices
+          .map((item: any) => ({
+            recipeId: String(item?.recipeId || ''),
+            lifeStage: String(item?.lifeStage || ''),
+            pricePer100g: Number(item?.pricePer100g),
+          }))
+          .filter((item: RecipeReferencePriceEntry) =>
+            Number.isFinite(item.pricePer100g))
+      : []
+
+    const minPricePer100g = Number(res.data.minPricePer100g)
+    if (lifeStagePrices.length === 0 && !Number.isFinite(minPricePer100g)) return
+
+    referencePriceData.value = { lifeStagePrices, minPricePer100g }
+  } catch (error) {
+    console.warn('[RecipeDetail] Load reference price failed:', error)
+  }
+}
 
 const selectedRecipeIdForActions = computed(() => {
   return recipe.value.selectedRecipeId || recipe.value.id || recipeId.value
@@ -624,10 +720,6 @@ onMounted(async () => {
 
   dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null
 
-  // 【修复】先加载健康标签映射，再加载食谱详情
-  // 这样可以确保在渲染标签时，映射表已经准备好了
-  await loadHealthTagMapping()
-
   if (recipeId.value) {
     loadDogsForDetail()
     loadRecipeDetail()
@@ -666,6 +758,8 @@ function loadRecipeDetail() {
         id: res.data.selectedRecipeId || res.data.id,
         availableLifeStageVersions: res.data.availableLifeStageVersions || [],
       }
+      // 拉取参考价（接口未就绪时静默降级，不展示价格）
+      loadRecipeReferencePrice()
       const matchedDogId = res.data.lifeStageMatch?.dogId || res.data.lifeStageMatch?.matchedDogId
       syncSelectedDogFromMatch(matchedDogId)
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
@@ -727,28 +821,6 @@ async function preGenerateShareToken() {
   } catch (error) {
     // 非员工用户可能无法生成令牌，静默失败
   }
-}
-
-function loadHealthTagMapping(): Promise<void> {
-  return request({
-    url: '/recipes/filter-options',
-    method: 'GET'
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      // 建立健康标签UUID到label的映射
-      const uuidMap: Record<string, string> = {}
-      if (res.data.healthTags && Array.isArray(res.data.healthTags)) {
-        res.data.healthTags.forEach((tag: any) => {
-          if (tag.value && tag.label) {
-            uuidMap[tag.value] = tag.label
-          }
-        })
-      }
-      healthTagUuidLabelMap.value = uuidMap
-    }
-  }).catch((err: any) => {
-    console.error('Load health tag mapping error:', err)
-  })
 }
 
 async function loadDogsForDetail() {
@@ -995,31 +1067,6 @@ function getLifeStageLabel(stage: string): string {
   return result || stage
 }
 
-function getHealthTagLabel(tagOrUuid: string): string {
-  // 优先使用动态映射（UUID -> label）
-  if (healthTagUuidLabelMap.value[tagOrUuid]) {
-    return healthTagUuidLabelMap.value[tagOrUuid]
-  }
-
-  // 兼容旧的枚举值（用于向后兼容）
-  const enumMap: Record<string, string> = {
-    'HEALTHY': '健康',
-    'PICKY_EATER': '挑食',
-    'SENSITIVE_STOMACH': '敏感胃',
-    'PANCREATITIS_SUPPORT': '胰腺炎友好',
-    'LOW_FAT': '低脂',
-    'SKIN_COAT_CARE': '护肤',
-  }
-
-  if (enumMap[tagOrUuid]) {
-    return enumMap[tagOrUuid]
-  }
-
-  // 如果都找不到，记录警告并返回原始值
-  console.warn('[RecipeDetail] 未找到健康标签映射:', tagOrUuid, '当前映射表大小:', Object.keys(healthTagUuidLabelMap.value).length)
-  return tagOrUuid
-}
-
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
@@ -1196,34 +1243,6 @@ function onReviewSubmitted() {
   text-align: center;
 }
 
-.section-label {
-  font-size: 26rpx;
-  color: #666;
-  display: inline-block;
-  margin-right: 8rpx;
-}
-
-.tags-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 16rpx;
-  gap: 8rpx;
-}
-
-.tags-row .section-label {
-  margin-right: 0;
-  margin-bottom: 8rpx;
-}
-
-.tags-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  justify-content: center;
-}
-
 .recipe-detail-dog-selector {
   margin: 16rpx 0 18rpx;
 }
@@ -1325,23 +1344,6 @@ function onReviewSubmitted() {
   background-color: #fff;
   font-size: 24rpx;
   font-weight: 700;
-}
-
-.tag {
-  display: inline-block;
-  padding: 6rpx 16rpx;
-  border-radius: 6rpx;
-  font-size: 22rpx;
-}
-
-.life-stage-tag {
-  background-color: #e3f2fd;
-  color: #1976d2;
-}
-
-.health-tag {
-  background-color: #fff3e0;
-  color: #f57c00;
 }
 
 .recipe-description {
@@ -1664,14 +1666,47 @@ function onReviewSubmitted() {
   left: 0;
   right: 0;
   display: flex;
-  align-items: center;
-  gap: 16rpx;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10rpx;
   padding: 10rpx 20rpx calc(12rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(12rpx + env(safe-area-inset-bottom));
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
   box-shadow: 0 -8rpx 22rpx rgba(15, 23, 42, 0.06);
   box-sizing: border-box;
+}
+
+.bottom-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.reference-price-strip {
+  display: flex;
+  align-items: center;
+  border-radius: 16rpx;
+  padding: 12rpx 20rpx;
+  background: #fdf6ef;
+  border: 1rpx solid rgba(224, 87, 47, 0.14);
+}
+
+.reference-price-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.reference-price-value {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #e0572f;
+}
+
+.reference-price-note {
+  font-size: 20rpx;
+  color: #9a8a7f;
 }
 
 .life-stage-sheet-mask {
@@ -1756,6 +1791,20 @@ function onReviewSubmitted() {
   font-size: 24rpx;
   font-weight: 700;
   color: #2f8f4e;
+}
+
+.life-stage-version-option-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6rpx;
+}
+
+.life-stage-version-option-price {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #e0572f;
 }
 
 .quick-actions {

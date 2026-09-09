@@ -3,9 +3,9 @@
     <!-- 登录引导Banner（游客模式显示） -->
     <view v-if="showLoginBanner && !isLoggedIn" class="login-banner">
       <view class="banner-content">
-        <text class="banner-icon">🔔</text>
+        <view class="banner-accent" aria-hidden="true"></view>
         <view class="banner-text">
-          <text class="banner-title">登录后可创建狗狗档案，进行饭量计算等功能</text>
+          <text class="banner-title">登录后按你家狗狗体重，一键算出饭量和价格</text>
         </view>
         <view class="banner-actions">
           <text class="banner-login-btn" @tap="goToLogin">立即登录</text>
@@ -20,48 +20,47 @@
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
       <view class="action-item" @tap="goToCalculatePortion">
-        <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
+        <view class="action-icon-shell">
+          <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
+        </view>
         <text class="action-text">饭量计算</text>
+        <text class="action-sub">按体重算饭量</text>
       </view>
-      <view class="action-item" @tap="goToWeightManagement">
-        <image class="action-icon" src="/static/home-actions/weight-management.png" mode="aspectFit" />
-        <text class="action-text">体重管理</text>
-      </view>
+      <view class="action-divider" aria-hidden="true"></view>
       <view class="action-item" @tap="goToHealthRecords">
-        <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
-        <text class="action-text">健康记录</text>
-      </view>
-      <view class="action-item" @tap="goToFeedback">
-        <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
-        <text class="action-text">建议反馈</text>
-      </view>
-      <view v-if="showRecipeDesignerEntry" class="action-item" @tap="goToRecipeDesigner">
-        <image class="action-icon" src="/static/home-actions/recipe-designer.png" mode="aspectFit" />
-        <text class="action-text">食谱设计</text>
+        <view class="action-icon-shell">
+          <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
+        </view>
+        <text class="action-text">健康管理</text>
+        <text class="action-sub">健康档案与记录</text>
       </view>
     </view>
 
-    <!-- 狗狗档案预览 -->
-    <view class="section" v-if="dogs.length > 0">
+    <!-- 狗狗档案预览（紧凑单行） -->
+    <view class="section dog-section" v-if="dogs.length > 0">
       <view class="section-header">
-        <text class="section-title">我的狗狗</text>
+        <view class="section-heading">
+          <view class="section-accent" aria-hidden="true"></view>
+          <text class="section-title">我的狗狗</text>
+        </view>
         <view class="section-more" @tap="goToDogList">
           <text>查看全部</text>
           <text class="arrow">›</text>
         </view>
       </view>
       <scroll-view scroll-x class="dog-scroll">
-        <view class="dog-card" v-for="dog in dogs" :key="dog.id" @tap="goToDogDetail(dog.id)">
+        <view class="dog-compact-item" v-for="dog in dogs" :key="dog.id" @tap="goToDogDetail(dog.id)">
           <image
-            class="dog-card-avatar"
+            class="dog-compact-avatar"
             :src="resolveDogAvatarSrc(dog.avatarUrl)"
             mode="aspectFill"
           />
-          <view class="dog-card-name-overlay">
-            <text class="dog-card-name">{{ dog.name }}</text>
+          <view class="dog-compact-copy">
+            <text class="dog-compact-name">{{ dog.name }}</text>
+            <text v-if="dog.currentWeightKg != null" class="dog-compact-weight">{{ dog.currentWeightKg }}kg</text>
           </view>
         </view>
-        <view class="dog-card add-dog" @tap="goToDogCreate">
+        <view class="dog-compact-item dog-compact-add" @tap="goToDogCreate">
           <text class="add-icon">+</text>
           <text class="add-text">添加档案</text>
         </view>
@@ -70,15 +69,21 @@
 
     <!-- 无狗狗时的引导 -->
     <view class="empty-dog-section" v-else>
+      <view class="empty-ornament" aria-hidden="true">
+        <view class="empty-ornament-inner"></view>
+      </view>
       <text class="empty-title">还没有狗狗档案</text>
-      <text class="empty-desc">创建档案后，才能使用食谱饭量计算等功能</text>
+      <text class="empty-desc">建档后可一键算出你家狗狗的饭量和订单价</text>
       <button v-if="!isLoggedIn" class="create-btn" @tap="goToLogin">立即登录</button>
       <button v-else class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
     <!-- 食谱橱窗标题 -->
     <view class="recipe-showcase-header">
-      <text class="section-title">食谱橱窗</text>
+      <view class="section-heading">
+        <view class="section-accent" aria-hidden="true"></view>
+        <text class="section-title">食谱橱窗</text>
+      </view>
       <text class="recipe-count">共 {{ totalCount }} 道食谱</text>
       <text v-if="activeFiltersCount > 0" class="clear-all" @tap="clearAllFilters">清除筛选</text>
     </view>
@@ -136,6 +141,9 @@
         v-for="recipe in renderedRecipes"
         :key="recipe.id"
         class="recipe-card"
+        hover-class="card-hover"
+        :hover-start-time="20"
+        :hover-stay-time="70"
         @tap="viewRecipe(recipe.id)"
       >
         <!-- 封面图容器 - 使用固定高度容器避免布局问题 -->
@@ -162,7 +170,10 @@
         <!-- 食谱信息 - 使用强制渲染 -->
         <view class="recipe-info" :id="'info-' + recipe.id">
           <view class="recipe-name-row">
-            <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
+            <view class="recipe-name-wrap">
+              <text class="recipe-orderable-badge">可订购</text>
+              <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
+            </view>
             <view class="recipe-stats">
               <view class="stat-item">
                 <image class="stat-icon" src="/static/ui-icons/view.png" mode="aspectFit" />
@@ -179,22 +190,10 @@
             </view>
           </view>
 
-          <!-- 健康标签 -->
-          <view
-            v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
-            class="tags-row"
-          >
-            <text class="tags-label">健康标签：</text>
-            <view class="tags">
-              <!-- 健康标签 -->
-              <text
-                v-for="tag in recipe.targetHealthTags"
-                :key="'health-' + tag"
-                class="tag health-tag"
-              >
-                {{ getHealthTagLabel(tag) }}
-              </text>
-            </view>
+          <!-- 参考价 -->
+          <view v-if="referencePriceMap[recipe.id]" class="recipe-order-row">
+            <text class="recipe-price-label">参考价</text>
+            <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].minPricePer100g) }}/100g起</text>
           </view>
 
           <!-- 主要原料 (前6名) -->
@@ -219,7 +218,9 @@
 
       <!-- 空状态 -->
       <view v-if="recipes.length === 0 && !loading" class="empty-recipe-state">
-        <view class="empty-icon">🥗</view>
+        <view class="empty-ornament" aria-hidden="true">
+          <view class="empty-ornament-inner"></view>
+        </view>
         <view class="empty-title">暂无食谱</view>
         <view class="empty-subtitle">当前筛选条件下没有找到食谱</view>
         <button class="btn-reset" @tap="resetFilters">重置筛选</button>
@@ -423,6 +424,8 @@ const hasMore = ref(true)
 const totalCount = ref(0)
 const currentPage = ref(1)
 const pageSize = 10
+// 参考价（每100g起，已含运费）：由后端参考价接口自动计算，接口未就绪时留空不展示
+const referencePriceMap = ref<Record<string, { minPricePer100g: number }>>({})
 const INITIAL_RECIPE_RENDER_COUNT = 3
 const INITIAL_RECIPE_RENDER_DELAY_MS = 300
 const STALE_RECIPE_COVER_REVEAL_DELAY_MS = 1500
@@ -489,7 +492,7 @@ const headerSectionStyle = computed(() => {
 
   return {
     backgroundImage: `url("${homeHeaderBgImageUrl.value}")`,
-    backgroundSize: 'contain',
+    backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat'
   }
@@ -907,6 +910,9 @@ function loadRecipes(isRefresh = false) {
       scheduleInitialRecipeRender(requestPage)
       scheduleStaleRecipeCoverReveal()
 
+      // 拉取已加载食谱的参考价（接口未就绪时静默降级，不展示价格）
+      loadReferencePrices(newRecipes.map((recipe: Recipe) => recipe.id))
+
       // 调试：检查每个食谱的name字段
       newRecipes.forEach((recipe: Recipe, index: number) => {
         if (!recipe.name || recipe.name.trim() === '') {
@@ -1229,6 +1235,39 @@ function viewRecipe(recipeId: string, dogId?: string | null) {
 }
 
 // 获取生命阶段标签
+// 拉取食谱参考价（每100g起、已含运费）。接口未就绪或失败时静默降级：不展示价格。
+async function loadReferencePrices(recipeIds: string[]) {
+  const targetIds = recipeIds.filter((id) => Boolean(id) && !referencePriceMap.value[id])
+  if (targetIds.length === 0) return
+
+  try {
+    const res: any = await request({
+      url: '/recipes/reference-prices',
+      method: 'GET',
+      data: { ids: targetIds.join(',') },
+      quiet: true,
+      suppressErrorToast: true,
+    })
+
+    if (res?.code !== 0) return
+
+    const items = Array.isArray(res?.data?.items) ? res.data.items : []
+    items.forEach((item: any) => {
+      const recipeId = item?.recipeId
+      const minPricePer100g = Number(item?.minPricePer100g)
+      if (recipeId && Number.isFinite(minPricePer100g)) {
+        referencePriceMap.value[recipeId] = { minPricePer100g }
+      }
+    })
+  } catch (error) {
+    console.warn('[Home] Load reference prices failed:', error)
+  }
+}
+
+function formatReferencePrice(amount: number): string {
+  return Number(amount).toFixed(2)
+}
+
 function formatStatNum(num: number | undefined): string {
   if (!num || num < 1) return '0'
   if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
@@ -1254,36 +1293,6 @@ function getLifeStageLabel(stage: string): string {
     console.warn('[Home] 未知的生命阶段标签:', stage)
   }
   return result || stage
-}
-
-// 获取健康标签
-function getHealthTagLabel(tagOrUuid: string): string {
-  // 优先使用动态映射（UUID -> label）
-  if (healthTagUuidLabelMap.value[tagOrUuid]) {
-    return healthTagUuidLabelMap.value[tagOrUuid]
-  }
-
-  // 兼容旧的枚举值（用于向后兼容）
-  const enumMap: Record<string, string> = {
-    'HEALTHY': '健康',
-    'PICKY_EATER': '挑食',
-    'SENSITIVE_STOMACH': '敏感胃',
-    'PANCREATITIS_SUPPORT': '胰腺炎友好',
-    'LOW_FAT': '低脂',
-    'SKIN_COAT_CARE': '护肤',
-  }
-
-  if (enumMap[tagOrUuid]) {
-    return enumMap[tagOrUuid]
-  }
-
-  if (!healthTagMappingLoaded.value) {
-    return tagOrUuid
-  }
-
-  // 如果都找不到，记录警告并返回原始值
-  console.warn('[Home] 未找到健康标签映射:', tagOrUuid, '当前映射表大小:', Object.keys(healthTagUuidLabelMap.value).length)
-  return tagOrUuid
 }
 
 // 下拉刷新
@@ -1323,33 +1332,7 @@ const goToOrderList = () => {
   uni.navigateTo({ url: '/pages/orders-list/index' })
 }
 
-// 跳转到建议反馈
-const goToFeedback = () => {
-  if (!isLoggedIn.value) {
-    checkLoginAndNavigate('/pages/feedback-list/index')
-    return
-  }
-  uni.navigateTo({ url: '/pages/feedback-list/index' })
-}
-
-const goToRecipeDesigner = () => {
-  if (!isLoggedIn.value) {
-    goToLogin()
-    return
-  }
-  uni.navigateTo({ url: '/pages/recipe-designer/list' })
-}
-
-// 跳转到体重管理
-const goToWeightManagement = () => {
-  if (!isLoggedIn.value) {
-    checkLoginAndNavigate('/pages/weight-management/index')
-    return
-  }
-  uni.navigateTo({ url: '/pages/weight-management/index' })
-}
-
-// 跳转到健康记录
+// 跳转到健康管理
 const goToHealthRecords = () => {
   if (!isLoggedIn.value) {
     checkLoginAndNavigate('/pages/dog-profile-health/index')
@@ -1453,27 +1436,35 @@ defineOptions({
 </script>
 
 <style scoped>
+/* ==========================================================
+   SevenKitchen 首页 · 高级质感风（深墨绿 + 金色）
+   全局设计规范见 App.vue 中 page 级别的 CSS 变量
+   ========================================================== */
+
 .home-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
-  padding-bottom: 20px;
+  background-color: #f6f2ea;
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
-/* 登录引导Banner */
+/* ---------- 登录引导Banner ---------- */
 .login-banner {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-  padding: 24rpx 32rpx;
+  background: linear-gradient(135deg, #14291f 0%, #1e3a2f 60%, #2b5040 100%);
+  padding: 20rpx 28rpx;
 }
 
 .banner-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
 }
 
-.banner-icon {
-  font-size: 40rpx;
-  margin-right: 16rpx;
+.banner-accent {
+  width: 6rpx;
+  height: 56rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d8bc85 0%, #b08d4f 100%);
+  margin-right: 20rpx;
+  flex-shrink: 0;
 }
 
 .banner-text {
@@ -1482,9 +1473,10 @@ defineOptions({
 }
 
 .banner-title {
-  font-size: 28rpx;
-  color: #333;
-  line-height: 40rpx;
+  font-size: 26rpx;
+  color: #f3eddd;
+  line-height: 38rpx;
+  letter-spacing: 1rpx;
 }
 
 .banner-actions {
@@ -1494,41 +1486,67 @@ defineOptions({
 }
 
 .banner-login-btn {
-  background: #fff;
-  color: #e17055;
-  padding: 12rpx 24rpx;
-  border-radius: 20rpx;
+  background: linear-gradient(135deg, #d8bc85 0%, #b08d4f 100%);
+  color: #1e3a2f;
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
   font-size: 24rpx;
   font-weight: bold;
+  letter-spacing: 1rpx;
+  box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.18);
 }
 
 .banner-close {
-  font-size: 48rpx;
-  color: #333;
+  font-size: 44rpx;
+  color: rgba(243, 237, 221, 0.7);
   line-height: 1;
+  padding: 0 4rpx;
 }
 
-
-/* 顶部图片区 */
+/* ---------- 顶部品牌区 ---------- */
 .header-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(150deg, #14291f 0%, #1e3a2f 55%, #2b5040 100%);
   background-position: center;
   background-repeat: no-repeat;
-  background-size: contain;
-  height: 400rpx;
+  background-size: cover;
+  height: 240rpx;
   padding: 0;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 快捷功能入口 */
+.header-section::before {
+  content: '';
+  position: absolute;
+  right: -80rpx;
+  top: -60rpx;
+  width: 320rpx;
+  height: 320rpx;
+  border-radius: 50%;
+  background: rgba(216, 188, 133, 0.12);
+}
+
+.header-section::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4rpx;
+  background: linear-gradient(90deg, rgba(216, 188, 133, 0) 0%, #b08d4f 50%, rgba(216, 188, 133, 0) 100%);
+}
+
+/* ---------- 快捷功能入口 ---------- */
 .quick-actions {
   display: flex;
-  justify-content: space-around;
-  gap: 8px;
-  background: white;
-  margin: 15px 15px 15px;
-  border-radius: 12px;
-  padding: 20px 10px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  align-items: stretch;
+  background: #ffffff;
+  margin: -36rpx 24rpx 0;
+  border-radius: 28rpx;
+  padding: 30rpx 12rpx;
+  box-shadow: 0 12rpx 40rpx rgba(30, 46, 36, 0.1);
+  position: relative;
+  z-index: 2;
 }
 
 .action-item {
@@ -1537,62 +1555,101 @@ defineOptions({
   min-width: 0;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 8rpx;
+}
+
+.action-icon-shell {
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(160deg, #eef3ea 0%, #e2ebdd 100%);
+  border: 1rpx solid #d5e0d1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6rpx;
 }
 
 .action-icon {
-  width: 56rpx;
-  height: 56rpx;
+  width: 52rpx;
+  height: 52rpx;
   display: block;
   flex-shrink: 0;
 }
 
 .action-text {
-  font-size: 12px;
-  color: #333;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #26261f;
+  letter-spacing: 1rpx;
 }
 
-/* 区块样式 */
+.action-sub {
+  font-size: 20rpx;
+  color: #9c9687;
+}
+
+.action-divider {
+  width: 1rpx;
+  background: #efe9db;
+  margin: 6rpx 0;
+}
+
+/* ---------- 通用区块 ---------- */
 .section {
-  background: white;
-  margin: 15px;
-  border-radius: 12px;
-  padding: 15px;
+  background: #ffffff;
+  margin: 24rpx;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 22rpx;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.section-accent {
+  width: 8rpx;
+  height: 34rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d8bc85 0%, #b08d4f 100%);
+  flex-shrink: 0;
 }
 
 .section-title {
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+  letter-spacing: 2rpx;
 }
 
 .section-more {
   display: flex;
   align-items: center;
-  color: #999;
-  font-size: 14px;
+  color: #9c9687;
+  font-size: 24rpx;
 }
 
 .arrow {
-  margin-left: 4px;
-  font-size: 16px;
+  margin-left: 6rpx;
+  font-size: 28rpx;
+  color: #b08d4f;
 }
 
-/* 狗狗卡片 */
+/* ---------- 狗狗卡片（紧凑单行） ---------- */
 .dog-scroll {
   white-space: nowrap;
-  /* 确保右侧有padding，让最后一张卡片右边也有空间 */
   padding-right: 20rpx;
-  /* 强制容器不换行 */
   overflow-x: scroll;
-  /* 隐藏滚动条但保留滚动功能 */
   -webkit-overflow-scrolling: touch;
 }
 
@@ -1600,445 +1657,158 @@ defineOptions({
   display: none;
 }
 
-.dog-card {
+.dog-compact-item {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  width: 220rpx !important;
-  min-width: 220rpx !important;
-  max-width: 220rpx !important;
-  height: 220rpx !important;
-  flex-shrink: 0 !important; /* 防止卡片被压缩 */
-  background: #f8f8f8;
-  border-radius: 8px;
-  padding: 0;
-  margin-right: 20rpx; /* 增加卡片间距 */
-  vertical-align: top;
-  box-sizing: border-box !important;
-}
-
-.dog-card.add-dog {
-  border: 1px dashed #ccc;
-  background: white;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8rpx;
-}
-
-.dog-card-avatar {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.dog-card-name-overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: flex-end;
-  padding: 54rpx 18rpx 16rpx;
-  box-sizing: border-box;
-  background: linear-gradient(
-    180deg,
-    rgba(26, 28, 33, 0) 0%,
-    rgba(26, 28, 33, 0.42) 100%
-  );
-}
-
-.dog-card-name {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
-  padding: 6rpx 12rpx;
+  gap: 14rpx;
+  background: #f7f4ec;
+  border: 1rpx solid #ece4d0;
   border-radius: 999rpx;
-  background: rgba(18, 20, 24, 0.58);
-  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.16);
+  padding: 10rpx 24rpx 10rpx 10rpx;
+  margin-right: 16rpx;
+  vertical-align: top;
+}
+
+.dog-compact-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 999rpx;
+  display: block;
+  flex-shrink: 0;
+  background: #e6e6e6;
+  border: 2rpx solid #d8c9a8;
   box-sizing: border-box;
-  font-size: 28rpx;
-  line-height: 1.2;
-  font-weight: 700;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.22);
 }
 
-.add-icon {
-  font-size: 48rpx;
+.dog-compact-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.dog-compact-name {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #26261f;
+}
+
+.dog-compact-weight {
+  font-size: 20rpx;
+  color: #9c9687;
+}
+
+.dog-compact-add {
+  border: 1rpx dashed #c9bfa6;
+  background: #ffffff;
+  color: #9c9687;
+}
+
+.dog-compact-add .add-icon {
+  font-size: 36rpx;
   line-height: 1;
-  color: #999;
+  color: #b08d4f;
 }
 
-.add-text {
+.dog-compact-add .add-text {
   font-size: 24rpx;
-  color: #999;
 }
 
-/* 空状态 */
+/* ---------- 空状态 ---------- */
 .empty-dog-section {
-  background: white;
-  margin: 15px;
-  border-radius: 12px;
-  padding: 40px 20px;
+  background: #ffffff;
+  margin: 24rpx;
+  border-radius: 28rpx;
+  padding: 56rpx 40rpx;
   text-align: center;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 15px;
+.empty-ornament {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto 30rpx;
+  border-radius: 50%;
+  background: #f2ede0;
+  border: 2rpx solid #ddcfa8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-ornament-inner {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 .empty-title {
   display: block;
   font-size: 16px;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 8px;
 }
 
 .empty-desc {
   display: block;
   font-size: 14px;
-  color: #999;
+  color: #9c9687;
   margin-bottom: 20px;
 }
 
 .create-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
   border: none;
-  border-radius: 20px;
+  border-radius: 999rpx;
   padding: 10px 30px;
   font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  box-shadow: 0 10rpx 24rpx rgba(30, 58, 47, 0.28);
 }
 
-/* ==================== 食谱橱窗样式 ==================== */
-
-/* 筛选区域 */
-.filter-bar {
-  background-color: #fff;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid #e5e5e5;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.filter-scroll {
-  white-space: nowrap;
-}
-
-.filter-group {
-  display: flex;
-  padding: 0 20rpx;
-}
-
-.filter-tag {
-  display: inline-block;
-  padding: 12rpx 24rpx;
-  margin-right: 16rpx;
-  border-radius: 40rpx;
-  font-size: 28rpx;
-  background-color: #f0f0f0;
-  color: #666;
-  border: 2rpx solid transparent;
-  transition: all 0.3s;
-}
-
-.filter-tag.active {
-  background-color: #07c160;
-  color: #fff;
-  border-color: #07c160;
-}
-
-/* 食谱列表 */
-.recipe-list {
-  padding: 20rpx;
-}
-
-.recipe-card {
-  background-color: #fff;
-  border-radius: 16rpx;
-  overflow: hidden;
-  margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
-  /* 隔离每个卡片的渲染，避免相互影响 */
-  contain: layout style;
-}
-
-/* 封面图容器 - 固定高度避免布局问题 */
-.recipe-cover-wrapper {
-  width: 100%;
-  height: 360rpx;
-  position: relative;
-  overflow: hidden;
-  /* 隔离图片渲染，避免影响后续元素 */
-  contain: layout;
-}
-
-/* 封面图 */
-.recipe-cover {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.recipe-cover.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.placeholder-text {
-  font-size: 120rpx;
-  font-weight: bold;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.recipe-cover-badge-gradient {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: flex-end;
-  padding: 56rpx 24rpx 20rpx;
-  box-sizing: border-box;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(20, 18, 16, 0) 0%,
-    rgba(20, 18, 16, 0.18) 52%,
-    rgba(20, 18, 16, 0.34) 100%
-  );
-}
-
-.recipe-cover-title-badge {
-  max-width: 340rpx;
-  padding: 8rpx 16rpx;
-  border-radius: 8rpx;
-  background: rgba(32, 29, 25, 0.58);
-  color: #fff;
-  font-size: 24rpx;
-  font-weight: 500;
-  line-height: 32rpx;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.16);
-}
-
-/* 食谱信息 */
-.recipe-info {
-  padding: 24rpx;
-  position: relative;
-  z-index: 1;
-  background-color: #fff;
-  /* 强制 GPU 加速，避免渲染阻塞 */
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.recipe-name-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16rpx;
-}
-
-.recipe-name {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
-  line-height: 1.4;
-  word-break: break-all;
-  overflow-wrap: break-word;
-  min-height: 45rpx;
-  flex: 1;
-  margin-right: 12rpx;
-}
-
-.recipe-stats {
-  display: flex;
-  gap: 8rpx;
-  flex-shrink: 0;
-}
-
-.stat-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 3rpx;
-  font-size: 20rpx;
-  color: #999;
-  white-space: nowrap;
-}
-
-.stat-icon {
-  width: 22rpx;
-  height: 22rpx;
-  flex-shrink: 0;
-}
-
-.tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 16rpx;
-  gap: 8rpx;
-}
-
-.tags-label {
-  font-size: 26rpx;
-  color: #666;
-  flex-shrink: 0;
-}
-
-.tags-row .tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 16rpx;
-  gap: 8rpx;
-}
-
-.tag {
-  display: inline-block;
-  padding: 6rpx 16rpx;
-  border-radius: 6rpx;
-  font-size: 22rpx;
-  white-space: nowrap;
-}
-
-.life-stage-tag {
-  background-color: #e3f2fd;
-  color: #1976d2;
-}
-
-.health-tag {
-  background-color: #fff3e0;
-  color: #f57c00;
-}
-
-.ingredients {
-  font-size: 26rpx;
-  color: #666;
-  line-height: 1.6;
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.ingredients-label {
-  color: #999;
-  flex-shrink: 0;
-}
-
-.ingredients-list {
-  flex: 1;
-}
-
-/* 状态 */
-.loading-state,
-.no-more {
-  text-align: center;
-  padding: 40rpx 0;
-  color: #999;
-  font-size: 28rpx;
-}
-
-.empty-recipe-state {
-  text-align: center;
-  padding: 120rpx 40rpx;
-}
-
-.empty-recipe-state .empty-icon {
-  font-size: 120rpx;
-  margin-bottom: 24rpx;
-}
-
-.empty-recipe-state .empty-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  margin-bottom: 16rpx;
-  color: #333;
-}
-
-.empty-recipe-state .empty-subtitle {
-  font-size: 28rpx;
-  line-height: 1.6;
-  margin-bottom: 40rpx;
-  color: #999;
-}
-
-.btn-reset {
-  width: 240rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  background-color: #07c160;
-  color: #fff;
-  border-radius: 40rpx;
-  font-size: 28rpx;
-}
-
-/* ==================== 筛选相关样式 ==================== */
-
+/* ---------- 食谱橱窗 ---------- */
 .recipe-showcase-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32rpx 30rpx 20rpx;
-  background: #fff;
+  padding: 40rpx 28rpx 20rpx;
   gap: 16rpx;
 }
 
 .recipe-showcase-header .section-title {
-  font-size: 40rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #26261f;
   flex-shrink: 0;
 }
 
 .recipe-count {
-  font-size: 26rpx;
-  color: #999;
+  font-size: 24rpx;
+  color: #9c9687;
   margin-left: auto;
 }
 
 .clear-all {
-  font-size: 26rpx;
-  color: #667eea;
+  font-size: 24rpx;
+  color: #b08d4f;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
-/* 固定筛选栏（吸顶） */
+/* ---------- 固定筛选栏 ---------- */
 .filter-bar {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: #fff;
-  padding: 20rpx 30rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  background: rgba(246, 242, 234, 0.96);
+  padding: 16rpx 28rpx;
+  border-bottom: 1rpx solid #ece5d4;
   display: flex;
   align-items: center;
   gap: 16rpx;
-}
-
-.filter-title {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
-  flex-shrink: 0;
 }
 
 .filter-buttons {
@@ -2058,27 +1828,27 @@ defineOptions({
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 16rpx 24rpx;
-  background: #f5f5f5;
-  border-radius: 40rpx;
+  padding: 14rpx 26rpx;
+  background: #ffffff;
+  border-radius: 999rpx;
   font-size: 26rpx;
-  color: #666;
+  color: #6e6a5e;
   white-space: nowrap;
-  border: 2rpx solid transparent;
-  transition: all 0.3s;
+  border: 1rpx solid #e3dcc8;
   flex-shrink: 0;
 }
 
 .filter-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-color: #667eea;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  border-color: #1e3a2f;
+  box-shadow: 0 8rpx 20rpx rgba(30, 58, 47, 0.22);
 }
 
 .filter-btn.excluded {
-  background: #ffebee;
-  color: #f44336;
-  border-color: #f44336;
+  background: #f7e9e3;
+  color: #b4553f;
+  border-color: #d9b3a6;
 }
 
 .filter-btn-text {
@@ -2088,43 +1858,272 @@ defineOptions({
 }
 
 .dropdown-arrow {
-  font-size: 20rpx;
-  color: #999;
+  font-size: 18rpx;
+  color: #9c9687;
   margin-left: 4rpx;
   flex-shrink: 0;
 }
 
 .filter-btn.active .dropdown-arrow {
-  color: #fff;
+  color: #d8bc85;
 }
 
 .filter-btn.excluded .dropdown-arrow {
-  color: #f44336;
+  color: #b4553f;
 }
 
 .remove-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32rpx;
-  height: 32rpx;
-  background: rgba(255, 255, 255, 0.3);
+  width: 30rpx;
+  height: 30rpx;
+  background: rgba(0, 0, 0, 0.14);
   border-radius: 50%;
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: bold;
+  color: #ffffff;
   flex-shrink: 0;
 }
 
-/* 筛选抽屉遮罩 */
+/* ---------- 食谱列表 ---------- */
+.recipe-list {
+  padding: 8rpx 24rpx 24rpx;
+}
+
+.recipe-card {
+  background-color: #ffffff;
+  border-radius: 28rpx;
+  overflow: hidden;
+  margin-bottom: 28rpx;
+  box-shadow: 0 10rpx 32rpx rgba(30, 46, 36, 0.08);
+  border: 1rpx solid #f0ead9;
+  contain: layout style;
+}
+
+.card-hover {
+  opacity: 0.94;
+}
+
+.recipe-cover-wrapper {
+  width: 100%;
+  height: 380rpx;
+  position: relative;
+  overflow: hidden;
+  contain: layout;
+}
+
+.recipe-cover {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.recipe-cover.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(150deg, #24493a 0%, #1e3a2f 60%, #14291f 100%);
+}
+
+.placeholder-text {
+  font-size: 120rpx;
+  font-weight: bold;
+  color: rgba(216, 188, 133, 0.9);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.recipe-cover-badge-gradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 56rpx 24rpx 20rpx;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(20, 26, 21, 0) 0%, rgba(20, 26, 21, 0.55) 100%);
+}
+
+.recipe-cover-title-badge {
+  max-width: 340rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(22, 34, 27, 0.62);
+  border: 1rpx solid rgba(216, 188, 133, 0.55);
+  color: #f0e6cd;
+  font-size: 22rpx;
+  font-weight: 500;
+  line-height: 32rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-info {
+  padding: 26rpx 28rpx 30rpx;
+  position: relative;
+  z-index: 1;
+  background-color: #ffffff;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.recipe-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14rpx;
+  gap: 16rpx;
+}
+
+.recipe-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.recipe-orderable-badge {
+  flex-shrink: 0;
+  font-size: 20rpx;
+  color: #1e3a2f;
+  background: linear-gradient(160deg, #f0e6cd 0%, #e8d9b6 100%);
+  border: 1rpx solid #d8c49a;
+  border-radius: 12rpx;
+  padding: 4rpx 14rpx;
+  letter-spacing: 1rpx;
+}
+
+.recipe-order-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.recipe-price-label {
+  font-size: 22rpx;
+  color: #9c9687;
+  letter-spacing: 2rpx;
+  flex-shrink: 0;
+}
+
+.recipe-price-text {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #a9843e;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.recipe-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+  line-height: 1.4;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  min-height: 45rpx;
+  min-width: 0;
+}
+
+.recipe-stats {
+  display: flex;
+  gap: 14rpx;
+  flex-shrink: 0;
+  padding-top: 6rpx;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3rpx;
+  font-size: 20rpx;
+  color: #9c9687;
+  white-space: nowrap;
+}
+
+.stat-icon {
+  width: 22rpx;
+  height: 22rpx;
+  flex-shrink: 0;
+}
+
+.ingredients {
+  font-size: 26rpx;
+  color: #6e6a5e;
+  line-height: 1.7;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.ingredients-label {
+  color: #9c9687;
+  flex-shrink: 0;
+}
+
+.ingredients-list {
+  flex: 1;
+}
+
+/* ---------- 状态 ---------- */
+.loading-state,
+.no-more {
+  text-align: center;
+  padding: 40rpx 0;
+  color: #9c9687;
+  font-size: 26rpx;
+  letter-spacing: 2rpx;
+}
+
+.empty-recipe-state {
+  text-align: center;
+  padding: 100rpx 40rpx;
+}
+
+.empty-recipe-state .empty-ornament {
+  margin-bottom: 32rpx;
+}
+
+.empty-recipe-state .empty-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  margin-bottom: 16rpx;
+  color: #26261f;
+}
+
+.empty-recipe-state .empty-subtitle {
+  font-size: 26rpx;
+  line-height: 1.6;
+  margin-bottom: 44rpx;
+  color: #9c9687;
+}
+
+.btn-reset {
+  width: 260rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  letter-spacing: 2rpx;
+  box-shadow: 0 10rpx 24rpx rgba(30, 58, 47, 0.25);
+}
+
+/* ---------- 筛选抽屉 ---------- */
 .drawer-mask {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(20, 26, 21, 0.55);
   z-index: 999;
-  animation: fadeIn 0.3s;
+  animation: fadeIn 0.25s;
 }
 
 @keyframes fadeIn {
@@ -2136,19 +2135,18 @@ defineOptions({
   }
 }
 
-/* 筛选抽屉内容 */
 .drawer-content {
   position: absolute;
-  top: 100rpx; /* 从筛选栏下方开始显示 */
-  left: 30rpx;
-  right: 30rpx;
-  background: #fff;
-  border-radius: 16rpx;
-  max-height: 70vh;
+  top: 120rpx;
+  left: 24rpx;
+  right: 24rpx;
+  background: #ffffff;
+  border-radius: 28rpx;
+  max-height: 74vh;
   display: flex;
   flex-direction: column;
   animation: slideDown 0.3s ease-out;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20rpx 60rpx rgba(20, 26, 21, 0.35);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -2164,51 +2162,49 @@ defineOptions({
   }
 }
 
-/* 抽屉头部 */
 .drawer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #f0ead9;
   flex-shrink: 0;
 }
 
 .drawer-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #26261f;
+  letter-spacing: 2rpx;
 }
 
 .close-btn {
-  font-size: 60rpx;
-  color: #999;
+  font-size: 52rpx;
+  color: #9c9687;
   line-height: 1;
 }
 
-/* 抽屉主体 */
 .drawer-body {
   flex: 1;
-  padding: 32rpx;
+  padding: 28rpx;
   box-sizing: border-box;
   overflow-x: hidden;
 }
 
 .drawer-desc {
-  font-size: 26rpx;
-  color: #999;
+  font-size: 24rpx;
+  color: #8a6d3b;
   margin-bottom: 24rpx;
   padding: 16rpx 20rpx;
-  background: #fff3e0;
-  border-radius: 8rpx;
-  border-left: 4rpx solid #ff9800;
+  background: #f6efe0;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #b08d4f;
   box-sizing: border-box;
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
 }
 
-/* 标签网格 */
 .tag-grid {
   display: flex;
   flex-wrap: wrap;
@@ -2216,36 +2212,37 @@ defineOptions({
 }
 
 .tag-item {
-  padding: 16rpx 32rpx;
-  background: #f5f5f5;
-  border-radius: 40rpx;
-  font-size: 28rpx;
-  color: #333;
-  border: 2rpx solid transparent;
-  transition: all 0.3s;
+  padding: 14rpx 30rpx;
+  background: #f7f4ec;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #4c4a40;
+  border: 1rpx solid #e5ddc8;
+  transition: all 0.2s;
 }
 
 .tag-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-color: #667eea;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  border-color: #1e3a2f;
+  box-shadow: 0 6rpx 16rpx rgba(30, 58, 47, 0.2);
 }
 
 .tag-item.excluded {
-  background: #ffebee;
-  color: #f44336;
-  border-color: #f44336;
+  background: #f7e9e3;
+  color: #b4553f;
+  border-color: #d9b3a6;
   text-decoration: line-through;
 }
 
-/* 已选排除标签 */
 .excluded-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
   margin-bottom: 24rpx;
   padding: 20rpx;
-  background: #fff3e0;
+  background: #f6efe0;
+  border: 1rpx dashed #d8c49a;
   border-radius: 12rpx;
   box-sizing: border-box;
   word-wrap: break-word;
@@ -2254,18 +2251,18 @@ defineOptions({
 }
 
 .excluded-label {
-  font-size: 26rpx;
-  color: #f57c00;
+  font-size: 24rpx;
+  color: #8a6d3b;
   align-self: center;
 }
 
 .excluded-tag {
   padding: 8rpx 20rpx;
-  background: #fff;
-  border-radius: 24rpx;
-  font-size: 24rpx;
-  color: #f57c00;
-  border: 1rpx solid #ff9800;
+  background: #ffffff;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #8a6d3b;
+  border: 1rpx solid #d8c49a;
   box-sizing: border-box;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -2275,41 +2272,37 @@ defineOptions({
 .drawer-actions {
   display: flex;
   gap: 16rpx;
-  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid #f0f0f0;
-  background: #fff;
+  padding: 24rpx 28rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #f0ead9;
+  background: #ffffff;
   flex-shrink: 0;
 }
 
 .drawer-action {
   flex: 1;
-  height: 80rpx;
+  height: 84rpx;
   border-radius: 999rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
   font-weight: 600;
+  letter-spacing: 2rpx;
 }
 
 .drawer-action-secondary {
-  background: #f5f5f5;
-  color: #666;
+  background: #f7f4ec;
+  color: #6e6a5e;
+  border: 1rpx solid #e5ddc8;
 }
 
 .drawer-action-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #24493a 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  box-shadow: 0 10rpx 24rpx rgba(30, 58, 47, 0.28);
 }
 
-.section-subtitle {
-  font-size: 28rpx;
-  color: #666;
-  margin-bottom: 16rpx;
-  font-weight: bold;
-}
-
-/* 食材分组样式 */
+/* ---------- 食材分组 ---------- */
 .ingredient-group {
   margin-bottom: 16rpx;
 }
@@ -2317,28 +2310,29 @@ defineOptions({
 .group-header {
   display: flex;
   align-items: center;
-  padding: 16rpx 20rpx;
-  background: #f8f8f8;
-  border-radius: 8rpx;
-  margin-bottom: 12rpx;
+  padding: 18rpx 22rpx;
+  background: #f7f4ec;
+  border: 1rpx solid #ece4d0;
+  border-radius: 12rpx;
+  margin-bottom: 14rpx;
 }
 
 .group-arrow {
-  font-size: 22rpx;
-  color: #999;
+  font-size: 20rpx;
+  color: #b08d4f;
   margin-right: 12rpx;
 }
 
 .group-name {
   font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: #26261f;
   flex: 1;
 }
 
 .group-count {
-  font-size: 24rpx;
-  color: #999;
+  font-size: 22rpx;
+  color: #9c9687;
   margin-left: 8rpx;
 }
 

@@ -1,4 +1,4 @@
-export const DEFAULT_DOG_AVATAR_SRC = '/static/logo.png'
+export const DEFAULT_DOG_AVATAR_SRC = '/static/dog-avatar-default.png'
 
 export function resolveDogAvatarSrc(
   avatarUrl?: string | null,

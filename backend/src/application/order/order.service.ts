@@ -2280,6 +2280,103 @@ export class OrderService {
   }
 
   /**
+   * Compute a recipe's reference price per 100g (shipping included).
+   * Used for home showcase and recipe detail reference price display (P0-2).
+   *
+   * Caliber:
+   * - Fixed source plan MARKET_PREMIUM (商超优先), matching the default
+   *   customer-facing ordering口径.
+   * - Reference quantity = globalConfig.minOrderWeightG (起订量), a single
+   *   package, one meal per day; shipping is amortized over that weight.
+   * - pricePer100g = (productPrice + shippingFee) * 100 / referenceWeightG.
+   */
+  async computeRecipeReferencePrice(recipeId: string): Promise<{
+    recipeId: string;
+    pricePer100g: number;
+    amountProduct: number;
+    amountShipping: number;
+  }> {
+    const recipe = await this.recipeRepository.findById(recipeId);
+    if (!recipe) {
+      throw new NotFoundException(`Recipe not found: ${recipeId}`);
+    }
+
+    const recipeItems = recipe.items || [];
+    const ingredientMap = await this.resolveOrderRecipeIngredientMap({
+      recipeItems,
+      ingredientSourcePlan: 'MARKET_PREMIUM',
+      useSupplementProcurementAlternatives: false,
+    });
+
+    const prepMethodMap = await this.loadPreparationMethodNameMap(
+      recipeItems.map((item) => item.preparationMethod),
+    );
+
+    const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
+      const ingredient = ingredientMap.get(ri.ingredientId);
+      if (!ingredient) {
+        throw new NotFoundException(`Ingredient not found: ${ri.ingredientId}`);
+      }
+
+      const prepMethodText =
+        resolvePreparationMethodText(ri.preparationMethod, prepMethodMap, {
+          preserveUnresolvedLegacy: false,
+        }) ?? null;
+
+      return {
+        id: (ri as any).id,
+        ingredientId: ingredient.id,
+        ingredient,
+        preparationMethod: prepMethodText,
+        ratioPercent: ri.ratioPercent ?? null,
+        exampleWeight: ri.exampleWeight ?? null,
+        nutrientTargetKey: ri.nutrientTargetKey ?? null,
+        nutrientTargetValue: ri.nutrientTargetValue ?? null,
+        supplementTargets: ri.supplementTargets ?? null,
+      };
+    });
+
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
+    const referenceWeightG = globalConfig.minOrderWeightG || 1000;
+
+    const pricing = await this.pricingService.calculateOrderPrice({
+      dog: { mealsPerDay: 1 },
+      recipe: {
+        id: recipe.id,
+        productionLossRate: recipe.productionLossRate,
+        batchLaborHours: recipe.batchLaborHours || 2.0,
+        items: pricingRecipeItems,
+      },
+      dailyG: referenceWeightG,
+      days: 1,
+      discountRate: 1.0,
+      globalConfig,
+      totalNetFoodWeightG: referenceWeightG,
+      totalPacks: 1,
+      singlePackSpecG: referenceWeightG,
+    });
+
+    const totalWeightG = referenceWeightG + (pricing.weightPackagingG || 0);
+    const shippingResult =
+      await this.shippingService.calculateShippingFeePreview({
+        totalWeightG,
+        shippingTemplateId: null, // 默认生效模板（全国一口价）
+      });
+
+    const pricePer100g = this.roundMoney(
+      ((pricing.productPrice + shippingResult.amountShipping) * 100) /
+        referenceWeightG,
+    );
+
+    return {
+      recipeId,
+      pricePer100g,
+      amountProduct: this.roundMoney(pricing.productPrice),
+      amountShipping: this.roundMoney(shippingResult.amountShipping),
+    };
+  }
+
+  /**
    * Map PricingBreakdownSnapshot to PriceExplanationDto (Phase 7.2)
    * Read-only presentation mapping - no recalculation, only simple subtraction for marginAmount
    * @param snapshot Pricing breakdown snapshot from order

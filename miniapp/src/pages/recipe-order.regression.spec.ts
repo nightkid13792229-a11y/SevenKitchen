@@ -85,7 +85,6 @@ describe('recipe-order phase one UI contract', () => {
       'recipe-life-stage-picker',
       'dog-profile-context',
       '配置天数',
-      '原料来源',
       '说明',
       'bottom-bar',
     ];
@@ -280,58 +279,20 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain(':class="{ active: !isCustomPackagePlan && selectedCycleDays === days, disabled: isCustomPackagePlan }"');
   });
 
-  it('merges source plan selection and ingredient list into one compact section', () => {
+  it('removes the source plan selector and keeps the ingredient detail list', () => {
     expect(templateSource).toContain('ingredient-source-section');
-    expect(templateSource).toContain('原料来源');
-    expect(templateSource).not.toContain('方案会影响原料清单和订单价格');
-    expect(templateSource).toContain('source-plan-card compact');
-    expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
-    expect(templateSource).toContain('formatSourcePlanPrice(option.code)');
-    expect(templateSource).not.toContain('formatSourcePlanDescription(option.code)');
-    expect(templateSource).not.toContain('ingredient-summary');
-    expect(templateSource).toContain('source-plan-safety-copy');
-    expect(templateSource).toContain('{{ selectedSourcePlanDescription }}');
-    expect(templateSource).not.toContain('source-plan-desc');
-    expect(templateSource).not.toContain('sourcePlanFallbackNote');
-    expect(source).toContain('const selectedSourcePlanDescription = computed');
+    expect(templateSource).not.toContain('原料来源');
+    expect(templateSource).not.toContain('source-plan-card compact');
+    expect(templateSource).not.toContain('formatSourcePlanShortName(option.code)');
+    expect(templateSource).not.toContain('formatSourcePlanPrice(option.code)');
+    expect(templateSource).not.toContain('source-plan-safety-copy');
+    expect(templateSource).not.toContain('{{ selectedSourcePlanDescription }}');
+    expect(templateSource).toContain('原料明细');
     expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
     expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
-    expect(source).not.toContain('ingredientSummaryMeta');
-    expect(source).not.toContain('种食材 · ${supplementIngredients.value.length}种补剂');
-    expect(source).not.toContain('净重 ${totalFoodKg.toFixed(2)}kg');
-    expect(templateSource).toContain('原料清单生成中，请稍后查看');
-    expect(templateSource).not.toContain('<text class="title-text">原料采购方案</text>');
-    expect(templateSource).not.toContain('<text class="title-text">原料清单</text>');
-    expect(templateSource).not.toContain('<text class="title-text">采购来源</text>');
-    expect(templateSource).not.toContain('<text class="title-text">原料与采购</text>');
-    expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
-    expect(templateSource).not.toContain('>已选</text>');
-    expect(source).toContain('function formatSourcePlanShortName');
-    expect(source).toContain("ORGANIC: '有机优先'");
-    expect(source).toContain("MARKET_PREMIUM: '商超优先'");
-    expect(source).toContain("WHOLESALE: '批发优先'");
-    expect(source).toContain('function formatSourcePlanDescription');
-    expect(source).toContain('flex-direction: row;');
-    expect(source).toContain('text-align: center;');
-    expect(source).not.toContain('align-self: flex-end;');
-    expect(source).toContain('优先采购有机食材，如果没有有机来源，再向下选择。');
-    expect(source).toContain('优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。');
-    expect(source).toContain('优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。');
-    expect(source).not.toContain("ORGANIC: '溯源优选'");
-    expect(source).not.toContain("MARKET_PREMIUM: '精选日常'");
-    expect(source).not.toContain("WHOLESALE: '安心基础'");
-    expect(source).not.toContain("WHOLESALE: '性价比优先'");
-    expect(source).not.toContain('所有档位均满足或高于人类食品安全标准');
-    expect(source).not.toContain('优先选择有机、草饲、散养、非转基因来源');
-    expect(source).not.toContain('优先选择山姆、盒马、沃集鲜等商超来源');
-    expect(source).not.toContain('人食级原料，优先选择生鲜批发来源');
-    expect(source).not.toContain('原料优先选择有机、非转基因、生态散养来源');
-    expect(source).not.toContain('原料优先选择山姆、盒马、沃集鲜等知名商超来源');
-    expect(source).not.toContain('原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源');
-    expect(source).not.toContain('个别原料买不到时，会自动选择标准接近的来源');
-    expect(source).toContain('source-plan-card');
-    expect(source).toContain('formatSourcePlanPrice(option.code)');
-    expect(source).toContain('loadSourcePlanPricePreviews');
+    expect(source).not.toContain('loadSourcePlanPricePreviews');
+    expect(source).not.toContain('selectedSourcePlanDescription');
+    expect(source).not.toContain('SourcePlanPriceState');
   });
 
   it('shows ingredients and supplements in a compact two-line detail layout', () => {

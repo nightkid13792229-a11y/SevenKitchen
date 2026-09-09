@@ -9,6 +9,10 @@ import { Ingredient } from '../ingredient/ingredient.entity';
 import { IngredientType } from '../ingredient/enums';
 import { resolveSupplementAddTimingLabel } from '../ingredient/supplement-add-timing';
 import { calculateSupplementDose } from '../ingredient/supplement-targets';
+import {
+  inferSupplementTargetFieldFromIngredientName,
+  mapLegacySupplementTargetField,
+} from '../ingredient/supplement-target-mapping';
 import type { SupplementTarget } from '../ingredient/types';
 import { ValidationError } from '../common/errors';
 import { PackagingService } from '../packaging';
@@ -450,7 +454,7 @@ export class PricingService {
           supplementTargets: item.supplementTargets,
         });
 
-        const targets = item.supplementTargets ?? [];
+        const targets = this.resolveSupplementTargets(item, ingredient);
         const customLoss =
           ingredient.getProductionLossRate() ?? globalConfig.supplementLossRate;
         const unitCost = ingredient.getUnitCost();
@@ -840,6 +844,54 @@ export class PricingService {
       unitsTheoretical,
       unitsNeeded: unitsTheoretical * lossRate,
     };
+  }
+
+  /**
+   * Resolve supplement targets for pricing, with a legacy fallback.
+   * - Prefer structured `supplementTargets` (v2) when present.
+   * - Otherwise derive a single target from legacy `nutrientTargetKey/Value`.
+   * - Finally fall back to inferring the field from the ingredient name.
+   */
+  private resolveSupplementTargets(
+    item: RecipeItem,
+    ingredient: Ingredient,
+  ): SupplementTarget[] {
+    if (Array.isArray(item.supplementTargets) && item.supplementTargets.length > 0) {
+      return item.supplementTargets;
+    }
+
+    const value = Number(item.nutrientTargetValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      return [];
+    }
+
+    const legacyField = mapLegacySupplementTargetField(item.nutrientTargetKey);
+    if (legacyField) {
+      return [
+        {
+          fieldPath: legacyField.fieldPath,
+          label: legacyField.label,
+          targetValuePerKg: value,
+          unit: legacyField.unit,
+        },
+      ];
+    }
+
+    const nameField = inferSupplementTargetFieldFromIngredientName(
+      ingredient.name,
+    );
+    if (nameField) {
+      return [
+        {
+          fieldPath: nameField.fieldPath,
+          label: nameField.label,
+          targetValuePerKg: value,
+          unit: nameField.unit,
+        },
+      ];
+    }
+
+    return [];
   }
 
   private getPositiveNumber(value: unknown): number | null {

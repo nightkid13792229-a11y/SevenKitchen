@@ -176,16 +176,16 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).not.toContain('>成品<')
   })
 
-  it('shows recipe health tags without the health tag section label', () => {
+  it('does not render health tags on recipe detail', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('</template>'))
 
-    expect(templateSource).toContain('v-for="tag in recipe.targetHealthTags"')
-    expect(templateSource).toContain('class="tag health-tag"')
-    expect(templateSource).not.toContain('<text class="section-label">健康标签')
+    expect(templateSource).not.toContain('v-for="tag in recipe.targetHealthTags"')
+    expect(templateSource).not.toContain('class="tag health-tag"')
+    expect(templateSource).not.toContain('class="tags-row"')
   })
 
   it('does not render a customer service entry on recipe detail', () => {
@@ -292,21 +292,20 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).toContain('function syncSelectedDogFromMatch')
   })
 
-  it('places health tags directly under the recipe name before dog and life-stage controls', () => {
+  it('places dog and life-stage controls directly under the recipe name (no health tags)', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
     const recipeNameIndex = templateSource.indexOf('class="recipe-name"')
-    const tagsIndex = templateSource.indexOf('class="tags-row"')
     const dogSelectorIndex = templateSource.indexOf('class="recipe-detail-dog-selector"')
     const lifeStageIndex = templateSource.indexOf('class="life-stage-version-card"')
 
     expect(recipeNameIndex).toBeGreaterThan(-1)
-    expect(tagsIndex).toBeGreaterThan(recipeNameIndex)
-    expect(dogSelectorIndex).toBeGreaterThan(tagsIndex)
+    expect(dogSelectorIndex).toBeGreaterThan(recipeNameIndex)
     expect(lifeStageIndex).toBeGreaterThan(dogSelectorIndex)
+    expect(templateSource).not.toContain('class="tags-row"')
     expect(templateSource).not.toContain('recipe-detail-dog-selector-title')
     expect(templateSource).not.toContain('recipe-detail-dog-selector-current')
   })

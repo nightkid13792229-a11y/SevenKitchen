@@ -55,6 +55,7 @@ import {
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
+import { OrderService } from '../../application/order/order.service';
 import {
   GenerateDiySheetDto,
   DiySheetResponseDto,
@@ -105,6 +106,7 @@ export class RecipesController {
     private readonly diySheetService: DiySheetService,
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
+    private readonly orderService: OrderService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -1315,6 +1317,119 @@ export class RecipesController {
       items: allIngredients,
       description: (recipe as any).description,
     };
+  }
+
+  /**
+   * Resolve the life-stage version recipe IDs for a recipe (or series) id.
+   * Returns [{ recipeId, lifeStage }] for the latest public version per stage,
+   * or a single entry (lifeStage null) for standalone recipes.
+   */
+  private async resolveReferencePriceLifeStageVersions(
+    id: string,
+  ): Promise<Array<{ recipeId: string; lifeStage: string | null }>> {
+    const seriesRecipes = this.latestPublicVersionBySeriesStage(
+      await this.loadPublicSeriesRecipes(id),
+    );
+    if (seriesRecipes.length > 0) {
+      return seriesRecipes.map((recipe) => ({
+        recipeId: recipe.recipeId,
+        lifeStage: recipe.seriesLifeStage ?? null,
+      }));
+    }
+    return [{ recipeId: id, lifeStage: null }];
+  }
+
+  @Get('reference-prices')
+  @ApiOperation({
+    summary: 'Get reference prices (per 100g, shipping included) for recipes',
+  })
+  @ApiQuery({
+    name: 'ids',
+    required: true,
+    description: 'Comma-separated recipe IDs',
+  })
+  async getReferencePrices(
+    @Query('ids') ids?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const idList = (ids || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => Boolean(id));
+
+    const items: Array<{
+      recipeId: string;
+      minPricePer100g: number | null;
+      lifeStagePrices: Array<{
+        recipeId: string;
+        lifeStage: string | null;
+        pricePer100g: number;
+      }>;
+    }> = [];
+
+    for (const id of idList) {
+      try {
+        const versions = await this.resolveReferencePriceLifeStageVersions(id);
+        const lifeStagePrices: Array<{
+          recipeId: string;
+          lifeStage: string | null;
+          pricePer100g: number;
+        }> = [];
+        for (const version of versions) {
+          const price = await this.orderService.computeRecipeReferencePrice(
+            version.recipeId,
+          );
+          lifeStagePrices.push({
+            recipeId: version.recipeId,
+            lifeStage: version.lifeStage,
+            pricePer100g: price.pricePer100g,
+          });
+        }
+
+        const prices = lifeStagePrices.map((item) => item.pricePer100g);
+        const minPricePer100g = prices.length > 0 ? Math.min(...prices) : null;
+
+        items.push({ recipeId: id, minPricePer100g, lifeStagePrices });
+      } catch (error) {
+        // 无法计算参考价（缺系统配置/原料等）时跳过，前端静默不展示
+        console.warn(
+          `[Recipes] Skip reference price for recipe ${id}:`,
+          (error as Error)?.message,
+        );
+      }
+    }
+
+    return ApiResponseDto.success({ items });
+  }
+
+  @Get(':id/reference-price')
+  @ApiOperation({
+    summary: 'Get reference price (per 100g, shipping included) for a recipe',
+  })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  async getReferencePrice(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    const versions = await this.resolveReferencePriceLifeStageVersions(id);
+    const lifeStagePrices: Array<{
+      recipeId: string;
+      lifeStage: string | null;
+      pricePer100g: number;
+    }> = [];
+    for (const version of versions) {
+      const price = await this.orderService.computeRecipeReferencePrice(
+        version.recipeId,
+      );
+      lifeStagePrices.push({
+        recipeId: version.recipeId,
+        lifeStage: version.lifeStage,
+        pricePer100g: price.pricePer100g,
+      });
+    }
+
+    const prices = lifeStagePrices.map((item) => item.pricePer100g);
+    const minPricePer100g = prices.length > 0 ? Math.min(...prices) : null;
+
+    return ApiResponseDto.success({ minPricePer100g, lifeStagePrices });
   }
 
   @Get(':id')

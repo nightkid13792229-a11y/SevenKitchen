@@ -216,26 +216,6 @@
     </view>
 
     <view class="section ingredient-source-section" v-if="selectedDog">
-      <view class="section-title">
-        <view class="title-stack">
-          <text class="title-text">原料来源</text>
-        </view>
-      </view>
-
-      <view class="source-plan-options compact">
-        <view
-          v-for="option in SOURCE_PLAN_OPTIONS"
-          :key="option.code"
-          class="source-plan-card compact"
-          :class="{ active: selectedSourcePlan === option.code }"
-          @tap="selectSourcePlan(option.code)"
-        >
-          <text class="source-plan-name">{{ formatSourcePlanShortName(option.code) }}</text>
-          <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
-        </view>
-      </view>
-      <text class="source-plan-safety-copy">{{ selectedSourcePlanDescription }}</text>
-
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
       </view>
@@ -502,6 +482,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -517,7 +498,6 @@ import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
-  SOURCE_PLAN_OPTIONS,
   buildDefaultPackagePlan,
   estimateFeedDays,
   getPackagePlanTotal,
@@ -619,8 +599,6 @@ interface PricePreview {
     overheadDetails?: OverheadCostDetail
   }
 }
-
-type SourcePlanPriceState = Record<IngredientSourcePlanCode, number | null>
 
 interface ProductExplanationCard {
   title: string
@@ -750,19 +728,12 @@ const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
 const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
-const sourcePlanPrices = ref<SourcePlanPriceState>({
-  ORGANIC: null,
-  MARKET_PREMIUM: null,
-  WHOLESALE: null,
-})
-const sourcePlanPriceLoading = ref(false)
 const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
 const showPackageEditor = ref(false)
 const isCustomPackagePlan = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
-let sourcePlanPriceRequestSeq = 0
 let pricePreviewDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // 显示的每日饭量
@@ -899,7 +870,6 @@ const hasSelectedCycleOrCustomPackagePlan = computed(() => Boolean(
   selectedCycleDays.value || isCustomPackagePlan.value,
 ))
 const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
-const selectedSourcePlanDescription = computed(() => formatSourcePlanDescription(selectedSourcePlan.value))
 const perMealG = computed(() => {
   if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
   return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
@@ -1061,31 +1031,6 @@ function getIngredientTypeClass(type: string): string {
   return type === 'SUPPLEMENT' ? 'supplement' : 'food'
 }
 
-function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
-  const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '有机优先',
-    MARKET_PREMIUM: '商超优先',
-    WHOLESALE: '批发优先',
-  }
-  return map[code]
-}
-
-function formatSourcePlanDescription(code: IngredientSourcePlanCode): string {
-  const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '优先采购有机食材，如果没有有机来源，再向下选择。',
-    MARKET_PREMIUM: '优先采购山姆、盒马等商超来源的食材，如果没有，再向下选择本地农贸市场或者批发市场的来源。',
-    WHOLESALE: '优先采用本地大型食材批发市场来源，包括但不限于成都海吉星、海霸王、美菜网等批发市场。营养价值与有机或者商超来源几乎没有差异，但品控没有大型商超那么严格。',
-  }
-  return map[code]
-}
-
-function formatSourcePlanPrice(code: IngredientSourcePlanCode): string {
-  if (sourcePlanPriceLoading.value) return '计算中'
-  const amount = sourcePlanPrices.value[code]
-  if (amount === null || !Number.isFinite(amount)) return '切换后计算'
-  return `¥${amount.toFixed(2)}`
-}
-
 function formatIngredientAmount(ingredient: IngredientCostItem): string {
   const amount = ingredient.netAmount ?? ingredient.amount
   const displayUnit = ingredient.displayUnit || ingredient.unit
@@ -1109,7 +1054,6 @@ function togglePackageEditor() {
   showPackageEditor.value = true
   invalidatePackagePlanPricingPreview()
   loadPricePreview()
-  loadSourcePlanPricePreviews()
 }
 
 function cancelCustomPackagePlan() {
@@ -1120,7 +1064,6 @@ function cancelCustomPackagePlan() {
   rebuildPackagePlan()
   pricePreviewError.value = ''
   loadPricePreview()
-  loadSourcePlanPricePreviews()
 }
 
 // 自动配置参数（从订单详情页"再次购买"传递）
@@ -1298,18 +1241,12 @@ async function selectLifeStageVersion(option: { recipeId?: string; lifeStage: st
 
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
-  sourcePlanPriceRequestSeq += 1
   dogCalcRequestSeq += 1
   selectedLifeStage.value = option.lifeStage
   if (option.recipeId) {
     recipeId.value = option.recipeId
   }
   pricePreviewError.value = ''
-  sourcePlanPrices.value = {
-    ORGANIC: null,
-    MARKET_PREMIUM: null,
-    WHOLESALE: null,
-  }
   resetPricePreviewState()
   displayDailyIntakeG.value = 0
   dogCalcResult.value = null
@@ -1344,9 +1281,12 @@ async function loadDogs() {
         const preferredDog = dogs.value.find(d => d.id === preferredDogId) || dogs.value[0]
         selectDog(preferredDog.id)
       }
+
+      dogListLoadedOnce = true
     }
   } catch (error) {
     console.error('Load dogs error:', error)
+    dogListLoadedOnce = true
   }
 }
 
@@ -1471,7 +1411,6 @@ function selectDog(dogId: string) {
 
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
-  sourcePlanPriceRequestSeq += 1
   selectedDogId.value = dogId
   isCustomPackagePlan.value = false
   showPackageEditor.value = false
@@ -1481,11 +1420,6 @@ function selectDog(dogId: string) {
   dogCalcResult.value = null
   packagePlanDogId.value = null
   pricePreviewError.value = ''
-  sourcePlanPrices.value = {
-    ORGANIC: null,
-    MARKET_PREMIUM: null,
-    WHOLESALE: null,
-  }
   resetPricePreviewState()
   loadDogCalcResult(dogId)
   checkLifeStageMatch()  // 校验生命阶段
@@ -1552,7 +1486,6 @@ async function loadDogCalcResult(dogId: string) {
 
       // 加载价格预览
       loadPricePreview()
-      loadSourcePlanPricePreviews()
     }
   } catch (error) {
     if (requestSeq !== dogCalcRequestSeq) {
@@ -1624,14 +1557,12 @@ function schedulePricePreview() {
   pricePreviewDebounceTimer = setTimeout(() => {
     pricePreviewDebounceTimer = null
     loadPricePreview()
-    loadSourcePlanPricePreviews()
   }, 300)
 }
 
 function invalidatePackagePlanPricingPreview() {
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
-  sourcePlanPriceRequestSeq += 1
   pricePreviewError.value = ''
   resetPricePreviewState()
 }
@@ -1666,13 +1597,6 @@ function removePackagePlanRow(index: number) {
   packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
   invalidatePackagePlanPricingPreview()
   schedulePricePreview()
-}
-
-function selectSourcePlan(code: IngredientSourcePlanCode) {
-  selectedSourcePlan.value = code
-  pricePreviewError.value = ''
-  loadPricePreview()
-  loadSourcePlanPricePreviews()
 }
 
 // 选择制作工艺
@@ -1712,7 +1636,6 @@ function selectCycle(days: number) {
   rebuildPackagePlan()
   pricePreviewError.value = ''
   loadPricePreview()
-  loadSourcePlanPricePreviews()
 }
 
 function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
@@ -1779,10 +1702,6 @@ async function loadPricePreview() {
       }
       // ✅ 保存快照ID
       pricingSnapshotId.value = res.data.snapshotId || null
-      sourcePlanPrices.value = {
-        ...sourcePlanPrices.value,
-        [selectedSourcePlan.value]: pricePreview.value.amountTotal,
-      }
       console.log('[Price Preview] Snapshot ID:', pricingSnapshotId.value)
     } else if (requestSeq === pricingPreviewRequestSeq) {
       pricePreviewError.value = '价格暂未生成'
@@ -1804,64 +1723,6 @@ async function loadPricePreview() {
   } finally {
     if (requestSeq === pricingPreviewRequestSeq) {
       isPricePreviewLoading.value = false
-    }
-  }
-}
-
-async function loadSourcePlanPricePreviews() {
-  const requestSeq = ++sourcePlanPriceRequestSeq
-
-  if (!selectedDog.value || !isPackagePlanReadyForDog.value || !minimumOrderMet.value) {
-    sourcePlanPrices.value = {
-      ORGANIC: null,
-      MARKET_PREMIUM: null,
-      WHOLESALE: null,
-    }
-    return
-  }
-
-  if (packagePlanValidationMessage.value) {
-    sourcePlanPrices.value = {
-      ORGANIC: null,
-      MARKET_PREMIUM: null,
-      WHOLESALE: null,
-    }
-    return
-  }
-
-  sourcePlanPriceLoading.value = true
-
-  try {
-    const previews = await Promise.all(
-      SOURCE_PLAN_OPTIONS.map(async (option) => {
-        try {
-          const res = await requestPricingPreview(option.code)
-          return [
-            option.code,
-            res.code === 0 && res.data ? Number(res.data.amountTotal || 0) : null,
-          ] as const
-        } catch (error) {
-          console.error('[Source Plan Price] preview failed:', option.code, error)
-          return [option.code, null] as const
-        }
-      }),
-    )
-
-    if (requestSeq !== sourcePlanPriceRequestSeq) {
-      return
-    }
-
-    sourcePlanPrices.value = previews.reduce((next, [code, amount]) => ({
-      ...next,
-      [code]: amount,
-    }), {
-      ORGANIC: null,
-      MARKET_PREMIUM: null,
-      WHOLESALE: null,
-    } as SourcePlanPriceState)
-  } finally {
-    if (requestSeq === sourcePlanPriceRequestSeq) {
-      sourcePlanPriceLoading.value = false
     }
   }
 }
@@ -1930,9 +1791,20 @@ async function continueBuyNow() {
 
 function goToCreateDog() {
   uni.navigateTo({
-    url: '/pages/dog-create/index'
+    url: `/pages/dog-create/index?redirect=order&recipeId=${encodeURIComponent(recipeId.value)}`
   })
 }
+
+// 首次进入时：建档成功后回跳本页，自动加载新狗狗
+let dogListLoadedOnce = false
+
+onShow(() => {
+  if (!recipeId.value || !dogListLoadedOnce) return
+  // 从建档页返回且此前没有狗狗档案时，重新拉取狗狗列表（新档案会自动选中）
+  if (dogs.value.length === 0) {
+    loadDogs()
+  }
+})
 </script>
 
 <style scoped>

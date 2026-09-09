@@ -114,8 +114,28 @@ onShow(() => {
 
 <style>
 /* App全局样式 */
+/* SevenKitchen 设计规范（高级质感风 · 深墨绿 + 金色）
+   所有页面统一从这里取色，后续页面改造沿用同一套变量 */
 page {
-  background-color: #f5f5f5;
+  --sk-bg: #f6f2ea;             /* 页面背景：暖象牙白 */
+  --sk-surface: #ffffff;        /* 卡片表面 */
+  --sk-primary: #1e3a2f;        /* 主色：深墨绿 */
+  --sk-primary-strong: #24493a; /* 主色亮阶（渐变用） */
+  --sk-primary-deep: #14291f;   /* 主色暗阶（渐变用） */
+  --sk-primary-tint: #eef3ea;   /* 主色浅底 */
+  --sk-gold: #b08d4f;           /* 点缀金 */
+  --sk-gold-bright: #d8bc85;    /* 亮金（深绿底上使用） */
+  --sk-gold-soft: #f6efe0;      /* 金浅底 */
+  --sk-ink: #26261f;            /* 主文字 */
+  --sk-ink-2: #6e6a5e;          /* 次要文字 */
+  --sk-ink-3: #9c9687;          /* 弱文字 */
+  --sk-line: #ece5d4;           /* 分隔线 */
+  --sk-danger: #b4553f;         /* 警示/排除色 */
+  --sk-danger-soft: #f7e9e3;    /* 警示浅底 */
+  --sk-radius-card: 28rpx;      /* 卡片圆角 */
+  --sk-radius-badge: 12rpx;     /* 小徽章/小容器圆角 */
+  --sk-radius-pill: 999rpx;     /* 胶囊圆角（标签/按钮/头像） */
+  background-color: var(--sk-bg, #f6f2ea);
   font-size: 14px;
 }
 

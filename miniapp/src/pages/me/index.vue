@@ -74,18 +74,21 @@
           >
         </view>
         <view class="mall-shortcuts">
-          <view class="mall-shortcut mall-shortcut-cart" @tap="goToCart">
-            <text v-if="cartCount > 0" class="shortcut-badge">{{
-              cartCount
+          <view
+            class="mall-shortcut mall-shortcut-production"
+            @tap="goToOrders('IN_PROGRESS')"
+          >
+            <text v-if="orderCounts.inProgress > 0" class="shortcut-badge">{{
+              orderCounts.inProgress
             }}</text>
             <view class="shortcut-icon-shell">
               <image
                 class="shortcut-icon-image"
-                src="/static/mall/cart.png"
+                src="/static/ui-icons/production.png"
                 mode="aspectFit"
               />
             </view>
-            <text class="shortcut-text">购物车</text>
+            <text class="shortcut-text">制作中</text>
           </view>
           <view
             class="mall-shortcut mall-shortcut-payment"
@@ -215,6 +218,14 @@
           >
         </view>
 
+        <view class="function-item" @tap="goToRecipeDesigner">
+          <text class="function-text">食谱设计</text>
+        </view>
+
+        <view class="function-item" @tap="goToFeedback">
+          <text class="function-text">建议反馈</text>
+        </view>
+
       </view>
 
       <view v-if="testIdentityPanelVisible" class="test-identity-panel">
@@ -266,7 +277,6 @@ import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
-import { getCartItems } from "../../utils/cart";
 import { ensurePhoneBound } from "../../utils/account";
 import {
   applyCustomerTestModeSession,
@@ -301,11 +311,11 @@ const userInfo = ref<UserInfo>({
 
 const orderCounts = ref({
   pendingPayment: 0,
+  inProgress: 0,
   waitReceive: 0,
   received: 0,
   aftersale: 0,
 });
-const cartCount = ref(0);
 const legacyMigrationPromptHidden = ref(false);
 const testIdentityPanelVisible = ref(false);
 const customerTestModeActive = ref(false);
@@ -406,6 +416,11 @@ async function loadOrderCounts() {
       pendingPayment: orders.filter(
         (order: any) => order.status === "PENDING_PAYMENT",
       ).length,
+      inProgress: orders.filter((order: any) =>
+        ["PAID", "PURCHASING", "IN_PRODUCTION", "FREEZING"].includes(
+          order.status,
+        ),
+      ).length,
       waitReceive: orders.filter((order: any) => order.status === "SHIPPED")
         .length,
       received: orders.filter((order: any) => order.status === "COMPLETED")
@@ -416,10 +431,6 @@ async function loadOrderCounts() {
   } catch (error) {
     console.warn("[Me Page] Load order counts failed:", error);
   }
-}
-
-function loadCartCount() {
-  cartCount.value = getCartItems().length;
 }
 
 // 跳转登录页
@@ -467,9 +478,17 @@ async function goToFavoriteRecipes() {
   });
 }
 
-function goToCart() {
+async function goToRecipeDesigner() {
+  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: "/pages/cart/index",
+    url: "/pages/recipe-designer/list",
+  });
+}
+
+async function goToFeedback() {
+  if (!(await ensurePhoneBound())) return;
+  uni.navigateTo({
+    url: "/pages/feedback-list/index",
   });
 }
 
@@ -710,10 +729,8 @@ onShow(() => {
   if (token) {
     loadUserInfo();
     loadOrderCounts();
-    loadCartCount();
   } else {
     isLoggedIn.value = false;
-    cartCount.value = 0;
   }
 });
 </script>
@@ -989,7 +1006,7 @@ onShow(() => {
   box-shadow: 0 10rpx 22rpx rgba(31, 41, 51, 0.07);
 }
 
-.mall-shortcut-cart .shortcut-icon-shell {
+.mall-shortcut-production .shortcut-icon-shell {
   background: #fff3e8;
 }
 

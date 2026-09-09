@@ -1,9 +1,9 @@
 <template>
   <view class="page">
     <view class="hero-card">
-      <text class="hero-card__eyebrow">健康记录</text>
+      <text class="hero-card__eyebrow">健康管理</text>
       <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
-      <text class="hero-card__subtitle">集中维护病史、体检和过敏记录，并补充挑食提醒。</text>
+      <text class="hero-card__subtitle">集中维护病史、体检、过敏、饮食提醒和体重记录。</text>
     </view>
 
     <view v-if="loadError" class="state-card">
@@ -66,6 +66,11 @@
             />
           </view>
         </view>
+
+        <WeightManagementSection
+          :dog-id="dogId"
+          :dog-profile="weightSectionDogProfile"
+        />
       </template>
 
       <view v-else class="section-card">
@@ -90,6 +95,7 @@
 import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
+import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
@@ -154,6 +160,13 @@ const isSecondaryActionDisabled = computed(() =>
 const selectedDog = computed(() => (
   selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] || null : null
 ))
+
+// 体重管理区块需要的档案信息
+const weightSectionDogProfile = computed(() => ({
+  currentWeightKg: form.currentWeightKg
+    ? Number(form.currentWeightKg)
+    : null,
+}))
 const hasUnsavedDietReminder = computed(() =>
   hasUnsavedDietReminderChange(form.pickyFoods, savedPickyFoods.value),
 )

@@ -771,6 +771,9 @@ const backendLifeStageInfo = ref<{
 } | null>(null)
 
 const isLegacyRedirecting = ref(false)
+
+// 从订购配置页跳转建档：建档成功后回跳订购页继续下单
+const returnToOrderRecipeId = ref('')
 const currentCreateStep = ref<DogProfileCreateStep>('basic')
 const restoringCreateDraft = ref(false)
 const suppressDerivedStateInvalidation = ref(false)
@@ -1141,6 +1144,14 @@ onLoad((options: any) => {
     isLegacyRedirecting.value = true
     uni.redirectTo({ url: legacyRedirectRoute })
     return
+  }
+
+  // 从订购配置页进入：记录回跳信息（建档成功后回到订购页继续下单）
+  const redirectParam = Array.isArray(options?.redirect) ? options.redirect[0] : options?.redirect
+  if (redirectParam === 'order') {
+    const recipeId = Array.isArray(options?.recipeId) ? options.recipeId[0] : options?.recipeId
+    returnToOrderRecipeId.value = String(recipeId || '')
+    console.log('[DogCreate] Will return to order after create, recipeId:', returnToOrderRecipeId.value)
   }
 
   console.log('[DogCreate] Create mode')
@@ -2261,6 +2272,19 @@ async function submit() {
       })
 
       setTimeout(() => {
+        if (returnToOrderRecipeId.value) {
+          // 从订购配置页建档：返回订购页继续下单（原订购页实例仍在页面栈中）
+          uni.navigateBack({
+            delta: 1,
+            fail: () => {
+              // 兜底：页面栈异常时直接重建订购页
+              uni.redirectTo({
+                url: `/pages/recipe-order/index?recipeId=${encodeURIComponent(returnToOrderRecipeId.value)}&dogId=${encodeURIComponent(resultDogId)}`,
+              })
+            },
+          })
+          return
+        }
         uni.redirectTo({
           url: '/pages/dog-profile-list/index'
         })

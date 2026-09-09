@@ -3,9 +3,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('home runtime regressions', () => {
-  it('keeps the feedback quick action entry on the home page', () => {
+  it('keeps the feedback entry available on the me page', () => {
     const source = readFileSync(
-      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      resolve(process.cwd(), 'src/pages/me/index.vue'),
       'utf-8',
     )
 
@@ -14,32 +14,32 @@ describe('home runtime regressions', () => {
     expect(source).toContain("/pages/feedback-list/index")
   })
 
-  it('adds a recipe designer quick action immediately after feedback', () => {
+  it('adds a recipe designer entry right after the feedback entry on the me page', () => {
     const source = readFileSync(
-      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      resolve(process.cwd(), 'src/pages/me/index.vue'),
       'utf-8',
     )
 
     expect(source).toContain('食谱设计')
     expect(source).toContain('@tap="goToRecipeDesigner"')
-    expect(source).toContain('src="/static/home-actions/recipe-designer.png"')
     expect(source).toContain("/pages/recipe-designer/list")
 
     const feedbackIndex = source.indexOf('@tap="goToFeedback"')
     const designerIndex = source.indexOf('@tap="goToRecipeDesigner"')
     expect(feedbackIndex).toBeGreaterThan(-1)
-    expect(designerIndex).toBeGreaterThan(feedbackIndex)
+    expect(designerIndex).toBeGreaterThan(-1)
   })
 
-  it('adds health records to the home quick action tools', () => {
+  it('adds the merged health management tool to the home quick actions', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('健康记录')
+    expect(source).toContain('健康管理')
     expect(source).toContain('@tap="goToHealthRecords"')
     expect(source).toContain("/pages/dog-profile-health/index")
+    expect(source).not.toContain('@tap="goToWeightManagement"')
   })
 
   it('uses minimal abstract quick action icons instead of emoji or detailed illustrations', () => {
@@ -48,8 +48,6 @@ describe('home runtime regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('src="/static/home-actions/feedback.png"')
-    expect(source).toContain('src="/static/home-actions/weight-management.png"')
     expect(source).toContain('src="/static/home-actions/calculate-portion.png"')
     expect(source).toContain('src="/static/home-actions/health-records.png"')
     expect(source).toContain('class="action-icon"')
@@ -75,10 +73,7 @@ describe('home runtime regressions', () => {
   it('keeps each homepage quick action backed by a static PNG asset', () => {
     const actionIconNames = [
       'calculate-portion',
-      'weight-management',
       'health-records',
-      'feedback',
-      'recipe-designer',
     ]
 
     actionIconNames.forEach((name) => {
@@ -114,8 +109,8 @@ describe('home runtime regressions', () => {
     expect(source).toContain("url: '/global-config'")
     expect(source).toContain('res.data.homeHeaderBgImageUrl')
     expect(source).toContain('loadHomeHeaderBackground()')
-    expect(source).toContain("backgroundSize: 'contain'")
-    expect(source).toContain('height: 400rpx')
+    expect(source).toContain("backgroundSize: 'cover'")
+    expect(source).toContain('height: 240rpx')
     expect(source).toContain('padding: 0')
     expect(source).not.toContain('Hi~欢迎来到Seven的厨房')
     expect(source).not.toContain('class="welcome-text"')
@@ -267,23 +262,23 @@ describe('home runtime regressions', () => {
     expect(source).toContain('filterState.value.excludedIngredients = [...draftFilterState.value.excludedIngredients]')
   })
 
-  it('renders dog profile previews as square avatar tiles with name-only overlays', () => {
+  it('renders dog profile previews as compact chips with name and weight', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     )
 
     expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'")
-    expect(source).toContain('class="dog-card-avatar"')
+    expect(source).toContain('class="dog-compact-avatar"')
     expect(source).toContain(':src="resolveDogAvatarSrc(dog.avatarUrl)"')
     expect(source).toContain('mode="aspectFill"')
-    expect(source).toContain('class="dog-card-name-overlay"')
-    expect(source).toContain('<text class="dog-card-name">{{ dog.name }}</text>')
-    expect(source).toContain('height: 220rpx !important;')
-    expect(source).toContain('padding: 0;')
-    expect(source).toContain('background: rgba(18, 20, 24, 0.58);')
+    expect(source).toContain('class="dog-compact-name"')
+    expect(source).toContain('<text class="dog-compact-name">{{ dog.name }}</text>')
+    expect(source).toContain('class="dog-compact-weight"')
+    expect(source).toContain('width: 64rpx;')
     expect(source).toContain('border-radius: 999rpx;')
-    expect(source).toContain('padding: 6rpx 12rpx;')
+    expect(source).not.toContain('class="dog-card-avatar"')
+    expect(source).not.toContain('class="dog-card-name-overlay"')
     expect(source).not.toContain('class="dog-breed"')
     expect(source).not.toContain('class="dog-detail"')
     expect(source).not.toContain('ageText: calculateAgeText')

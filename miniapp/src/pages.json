@@ -34,7 +34,7 @@
     {
       "path": "pages/dog-profile-health/index",
       "style": {
-        "navigationBarTitleText": "健康记录"
+        "navigationBarTitleText": "健康管理"
       }
     },
     {
@@ -86,12 +86,6 @@
       }
     },
     {
-      "path": "pages/cart/index",
-      "style": {
-        "navigationBarTitleText": "购物车"
-      }
-    },
-    {
       "path": "pages/aftersale-apply/index",
       "style": {
         "navigationBarTitleText": "申请售后"
@@ -101,12 +95,6 @@
       "path": "pages/calculate-portion/index",
       "style": {
         "navigationBarTitleText": "饭量计算"
-      }
-    },
-    {
-      "path": "pages/weight-management/index",
-      "style": {
-        "navigationBarTitleText": "体重管理"
       }
     },
     {
@@ -478,7 +466,8 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "订单详情"
+            "navigationBarTitleText": "订单详情",
+            "enablePullDownRefresh": true
           }
         }
       ]
@@ -495,17 +484,17 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "SevenKitchen MVP",
-    "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f5f5f5"
+    "navigationBarBackgroundColor": "#F6F2EA",
+    "backgroundColor": "#F6F2EA"
   },
   "mp-weixin": {
     "__usePrivacyCheck__": true
   },
   "tabBar": {
     "custom": true,
-    "color": "#7A7E83",
-    "selectedColor": "#1890ff",
-    "backgroundColor": "#ffffff",
+    "color": "#9C9687",
+    "selectedColor": "#1E3A2F",
+    "backgroundColor": "#FDFCF8",
     "borderStyle": "black",
     "list": [
       {

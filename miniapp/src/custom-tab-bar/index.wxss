@@ -4,13 +4,14 @@
   left: 0;
   right: 0;
   height: 100rpx;
-  background-color: #ffffff;
-  border-top: 1rpx solid #e5e5e5;
+  background-color: #fdfcf8;
+  border-top: 1rpx solid #ece5d4;
   display: flex;
   justify-content: space-around;
   align-items: center;
   padding-bottom: env(safe-area-inset-bottom);
   z-index: 9999;
+  box-shadow: 0 -8rpx 24rpx rgba(30, 46, 36, 0.05);
 }
 
 .tab-bar-item {
@@ -20,33 +21,43 @@
   align-items: center;
   justify-content: center;
   height: 100%;
+  position: relative;
   transition: all 0.3s;
 }
 
 .tab-bar-item.active .icon {
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .tab-bar-item.active .text {
-  color: #1890ff;
-  font-weight: 500;
-}
-
-.tab-bar-item.staff-item .icon {
-  font-size: 44rpx;
-  color: #1890ff;
+  color: #1e3a2f;
+  font-weight: 600;
 }
 
 .tab-bar-item .icon {
-  width: 56rpx;
-  height: 56rpx;
-  margin-bottom: 4rpx;
+  width: 52rpx;
+  height: 52rpx;
+  margin-bottom: 2rpx;
   transition: transform 0.3s;
 }
 
 .tab-bar-item .text {
   font-size: 22rpx;
-  color: #7a7e83;
+  color: #9c9687;
   transition: color 0.3s;
   margin-top: 2rpx;
+  letter-spacing: 1rpx;
+}
+
+/* 选中项顶部金色指示条 */
+.tab-bar-item.active::before {
+  content: '';
+  position: absolute;
+  top: -1rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48rpx;
+  height: 6rpx;
+  border-radius: 0 0 999rpx 999rpx;
+  background: linear-gradient(90deg, #d8bc85, #b08d4f);
 }

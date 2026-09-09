@@ -71,11 +71,15 @@ describe('customer service page placement regressions', () => {
     expect(source).toContain('font-size: 26rpx;')
   })
 
-  it('does not show customer service on the cart page', () => {
-    const source = readPage('src/pages/cart/index.vue')
+  it('keeps the cart page and its shortcut removed from the mini program', () => {
+    const pagesJson = readPage('src/pages.json')
 
-    expect(source).not.toContain('<CustomerServiceFloatButton')
-    expect(source).not.toContain('CustomerServiceInlineButton')
-    expect(source).not.toContain('购物车咨询')
+    expect(pagesJson).not.toContain('pages/cart/index')
+
+    const meSource = readPage('src/pages/me/index.vue')
+    const meTemplateSource = meSource.slice(0, meSource.indexOf('<script setup'))
+
+    expect(meTemplateSource).not.toContain('购物车')
+    expect(meTemplateSource).toContain('制作中')
   })
 })

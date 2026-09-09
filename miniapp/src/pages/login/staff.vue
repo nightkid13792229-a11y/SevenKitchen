@@ -167,17 +167,17 @@ const goBack = () => {
 <style scoped lang="scss">
 .staff-login-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f0f3e9;
 }
 
 .header {
   position: relative;
   height: 88rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1rpx solid #e5e5e5;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .back-btn {
@@ -187,14 +187,14 @@ const goBack = () => {
 
   .icon {
     font-size: 48rpx;
-    color: #333;
+    color: #26261f;
   }
 }
 
 .title {
   font-size: 32rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .form-section {
@@ -208,19 +208,19 @@ const goBack = () => {
 .label {
   display: block;
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
   margin-bottom: 16rpx;
 }
 
 .input {
   width: 100%;
   height: 88rpx;
-  background-color: #fff;
-  border-radius: 8rpx;
+  background-color: #fbfcf7;
+  border-radius: 12rpx;
   padding: 0 24rpx;
   font-size: 28rpx;
-  color: #333;
-  border: 1rpx solid #e5e5e5;
+  color: #26261f;
+  border: 1rpx solid #dfe3ca;
   box-sizing: border-box;
 }
 
@@ -237,36 +237,38 @@ const goBack = () => {
 .send-code-btn {
   width: 200rpx;
   height: 88rpx;
-  background-color: #667eea;
-  color: #fff;
-  border-radius: 8rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  border-radius: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 26rpx;
-  border: none;
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
 
   &:disabled {
-    background-color: #ccc;
+    background: #c9c9b8;
+    border-color: #c9c9b8;
   }
 }
 
 .login-btn {
   width: 100%;
   height: 96rpx;
-  background-color: #667eea;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   border-radius: 48rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 32rpx;
-  font-weight: 500;
-  border: none;
+  font-weight: 600;
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
   margin-top: 48rpx;
 
   &:disabled {
-    background-color: #ccc;
+    background: #c9c9b8;
+    border-color: #c9c9b8;
   }
 }
 
@@ -277,6 +279,6 @@ const goBack = () => {
 
 .tips {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 </style>

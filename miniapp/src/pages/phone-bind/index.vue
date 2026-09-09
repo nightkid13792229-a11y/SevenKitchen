@@ -190,35 +190,38 @@ function cancelMerge() {
 .phone-bind-page {
   min-height: 100vh;
   padding: 48rpx 32rpx;
-  background: #f6f7fb;
+  background: #f0f3e9;
   box-sizing: border-box;
 }
 
 .panel {
-  background: #fff;
-  border-radius: 16rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
   padding: 44rpx 36rpx;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .icon-shell {
   width: 96rpx;
   height: 96rpx;
-  border-radius: 50%;
-  background: #1677ff;
-  color: #fff;
+  border-radius: 28rpx;
+  background: linear-gradient(160deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  color: #d8bc85;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
   font-weight: 700;
   margin: 0 auto 28rpx;
+  box-shadow: 0 10rpx 22rpx rgba(30, 58, 47, 0.2);
 }
 
 .title {
   display: block;
   text-align: center;
-  color: #1f2937;
+  color: #26261f;
   font-size: 40rpx;
   font-weight: 700;
   margin-bottom: 18rpx;
@@ -226,15 +229,15 @@ function cancelMerge() {
 
 .desc {
   display: block;
-  color: #667085;
+  color: #6b6653;
   font-size: 28rpx;
   line-height: 1.7;
   margin-bottom: 36rpx;
 }
 
 .history-card {
-  background: #fff7e6;
-  border: 1rpx solid #ffd591;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
   border-radius: 12rpx;
   padding: 24rpx;
   margin-bottom: 32rpx;
@@ -247,20 +250,20 @@ function cancelMerge() {
 }
 
 .history-title {
-  color: #ad6800;
+  color: #8a6b33;
   font-weight: 700;
   font-size: 30rpx;
   margin-bottom: 12rpx;
 }
 
 .history-line {
-  color: #5f370e;
+  color: #6f5f3a;
   font-size: 26rpx;
   line-height: 1.7;
 }
 
 .history-tip {
-  color: #8c5a18;
+  color: #8d7547;
   font-size: 24rpx;
   line-height: 1.6;
   margin-top: 12rpx;
@@ -270,19 +273,21 @@ function cancelMerge() {
 .ghost-btn {
   width: 100%;
   height: 88rpx;
-  border-radius: 10rpx;
+  border-radius: 44rpx;
   font-size: 30rpx;
   margin-top: 20rpx;
 }
 
 .primary-btn {
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
+  font-weight: 600;
 }
 
 .ghost-btn {
-  background: #fff;
-  color: #1677ff;
-  border: 2rpx solid #1677ff;
+  background: #fbfcf7;
+  color: #1e3a2f;
+  border: 2rpx solid rgba(176, 141, 79, 0.55);
 }
 </style>

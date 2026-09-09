@@ -296,7 +296,7 @@ async function uploadAvatar(filePath: string): Promise<string> {
 <style scoped>
 .profile-setup-container {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f0f3e9;
   padding: 40rpx 32rpx;
 }
 
@@ -309,21 +309,23 @@ async function uploadAvatar(filePath: string): Promise<string> {
   display: block;
   font-size: 48rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 }
 
 .subtitle {
   display: block;
   font-size: 28rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .form-section {
-  background: #fff;
-  border-radius: 16rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 28rpx;
   padding: 40rpx 32rpx;
   margin-bottom: 40rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .form-item {
@@ -339,7 +341,7 @@ async function uploadAvatar(filePath: string): Promise<string> {
 
 .label {
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
   margin-bottom: 24rpx;
   align-self: flex-start;
 }
@@ -362,7 +364,9 @@ async function uploadAvatar(filePath: string): Promise<string> {
   width: 200rpx;
   height: 200rpx;
   border-radius: 100rpx;
-  background-color: #f5f5f5;
+  background-color: #24493a;
+  border: 3rpx solid rgba(216, 188, 133, 0.85);
+  box-sizing: border-box;
 }
 
 .avatar-overlay {
@@ -371,7 +375,7 @@ async function uploadAvatar(filePath: string): Promise<string> {
   left: 0;
   right: 0;
   height: 60rpx;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(20, 41, 31, 0.55);
   border-bottom-left-radius: 100rpx;
   border-bottom-right-radius: 100rpx;
   display: flex;
@@ -381,25 +385,26 @@ async function uploadAvatar(filePath: string): Promise<string> {
 
 .avatar-text {
   font-size: 24rpx;
-  color: #fff;
+  color: #f3eddd;
 }
 
 /* 昵称输入 */
 .nickname-input {
   width: 100%;
   height: 88rpx;
-  background: #f5f5f5;
+  background: #f2f4ea;
+  border: 1rpx solid #dde3cd;
   border-radius: 12rpx;
   padding: 0 24rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   box-sizing: border-box;
 }
 
 .tip {
   align-self: flex-end;
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
   margin-top: 12rpx;
 }
 
@@ -411,15 +416,16 @@ async function uploadAvatar(filePath: string): Promise<string> {
 .submit-btn {
   width: 100%;
   height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 32rpx;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
+  box-shadow: 0 12rpx 32rpx rgba(30, 58, 47, 0.22);
 }
 
 .submit-btn[disabled] {
-  background: #ccc;
+  background: #c9c9b8;
 }
 </style>

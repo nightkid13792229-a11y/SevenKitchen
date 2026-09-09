@@ -259,7 +259,7 @@ const handleWechatLogin = async () => {
 <style scoped>
 .login-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(165deg, #24493a 0%, #1e3a2f 45%, #14291f 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -277,21 +277,23 @@ const handleWechatLogin = async () => {
 .logo {
   width: 160rpx;
   height: 160rpx;
-  border-radius: 24rpx;
+  border-radius: 28rpx;
   margin-bottom: 32rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
+  border: 2rpx solid rgba(216, 188, 133, 0.7);
+  box-shadow: 0 16rpx 44rpx rgba(8, 20, 14, 0.45);
 }
 
 .app-name {
   font-size: 48rpx;
   font-weight: bold;
-  color: #fff;
+  color: #f3eddd;
   margin-bottom: 16rpx;
 }
 
 .app-slogan {
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(243, 237, 221, 0.65);
 }
 
 .login-section {
@@ -314,21 +316,21 @@ const handleWechatLogin = async () => {
 .checkbox {
   width: 36rpx;
   height: 36rpx;
-  border: 2rpx solid #ccc;
+  border: 2rpx solid rgba(216, 188, 133, 0.7);
   border-radius: 6rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fff;
+  background-color: transparent;
 }
 
 .checkbox.checked {
-  background-color: #07c160;
-  border-color: #07c160;
+  background-color: #b08d4f;
+  border-color: #d8bc85;
 }
 
 .check-icon {
-  color: #fff;
+  color: #14291f;
   font-size: 24rpx;
   font-weight: bold;
 }
@@ -336,27 +338,28 @@ const handleWechatLogin = async () => {
 .agreement-text {
   flex: 1;
   font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(243, 237, 221, 0.65);
   line-height: 1.5;
 }
 
 .link {
-  color: #fff;
+  color: #d8bc85;
   text-decoration: underline;
 }
 
 .primary-login-btn {
   width: 100%;
   height: 96rpx;
-  background-color: #07c160;
-  color: #fff;
+  background: linear-gradient(150deg, #d8bc85 0%, #b08d4f 100%);
+  color: #1e3a2f;
   border-radius: 48rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 32rpx;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
+  box-shadow: 0 12rpx 32rpx rgba(8, 20, 14, 0.35);
 }
 
 .primary-login-btn:disabled {
@@ -365,7 +368,8 @@ const handleWechatLogin = async () => {
 
 .btn-disabled {
   opacity: 0.5;
-  background-color: #ccc !important;
+  background: rgba(243, 237, 221, 0.4) !important;
+  color: rgba(243, 237, 221, 0.8) !important;
 }
 
 /* 游客模式入口 */
@@ -377,7 +381,7 @@ const handleWechatLogin = async () => {
 
 .guest-text {
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(243, 237, 221, 0.65);
   text-decoration: underline;
 }
 </style>

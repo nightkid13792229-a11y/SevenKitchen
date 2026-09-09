@@ -210,21 +210,22 @@ function calculateAgeText(birthday: string) {
 
 <style scoped>
 .container {
-  padding: 20rpx;
+  padding: 24rpx;
   padding-bottom: 120rpx;
 }
 
 .dog-list {
-  padding: 20rpx 0;
+  padding: 4rpx 0;
 }
 
 /* 狗狗卡片样式 */
 .dog-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
   padding: 30rpx;
   margin-bottom: 20rpx;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
@@ -232,7 +233,7 @@ function calculateAgeText(birthday: string) {
 
 .dog-card:active {
   transform: scale(0.98);
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4rpx 16rpx rgba(30, 46, 36, 0.08);
 }
 
 .dog-card-content {
@@ -258,7 +259,7 @@ function calculateAgeText(birthday: string) {
 .dog-name {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .gender-icon {
@@ -267,16 +268,16 @@ function calculateAgeText(birthday: string) {
 }
 
 .gender-icon.male {
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .gender-icon.female {
-  color: #ff69b4;
+  color: #c48f77;
 }
 
 .dog-breed {
   font-size: 26rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .dog-stats {
@@ -288,12 +289,12 @@ function calculateAgeText(birthday: string) {
 
 .stat-text {
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
 }
 
 .arrow {
   font-size: 32rpx;
-  color: #ccc;
+  color: #b08d4f;
   font-weight: bold;
 }
 
@@ -301,7 +302,7 @@ function calculateAgeText(birthday: string) {
   width: 100%;
   margin-top: 24rpx;
   padding-top: 20rpx;
-  border-top: 1px solid #f5f5f5;
+  border-top: 1rpx solid #eef1e2;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -310,7 +311,7 @@ function calculateAgeText(birthday: string) {
 
 .card-tip {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .btn-delete {
@@ -320,9 +321,9 @@ function calculateAgeText(birthday: string) {
   margin: 0;
   padding: 0 24rpx;
   border-radius: 999rpx;
-  border: 1px solid #ffd6d2;
-  background-color: #fff1f0;
-  color: #fa5151;
+  border: 1rpx solid rgba(180, 85, 63, 0.4);
+  background-color: #f8e8e2;
+  color: #b4553f;
   font-size: 26rpx;
 }
 
@@ -338,7 +339,7 @@ function calculateAgeText(birthday: string) {
 .empty-state {
   text-align: center;
   padding: 100rpx 0;
-  color: #999;
+  color: #968f6d;
 }
 
 .empty-text {
@@ -351,9 +352,10 @@ function calculateAgeText(birthday: string) {
   width: 200rpx;
   height: 70rpx;
   line-height: 70rpx;
-  background-color: #07c160;
-  color: #fff;
-  border-radius: 8rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
+  border-radius: 999rpx;
   font-size: 28rpx;
 }
 
@@ -367,16 +369,17 @@ function calculateAgeText(birthday: string) {
   display: block;
   margin-bottom: 30rpx;
   font-size: 28rpx;
-  color: #fa5151;
+  color: #b4553f;
 }
 
 .btn-retry {
   width: 200rpx;
   height: 70rpx;
   line-height: 70rpx;
-  background-color: #fa5151;
-  color: #fff;
-  border-radius: 8rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
+  border-radius: 999rpx;
   font-size: 28rpx;
 }
 
@@ -386,19 +389,20 @@ function calculateAgeText(birthday: string) {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 20rpx;
-  border-top: 1px solid #eee;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.04);
+  border-top: 1rpx solid #e5e8d4;
+  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.06);
 }
 
 .btn-add {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-radius: 12rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
+  border-radius: 999rpx;
   font-size: 32rpx;
   font-weight: bold;
   border: none;

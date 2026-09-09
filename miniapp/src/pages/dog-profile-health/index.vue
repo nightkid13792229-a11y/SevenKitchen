@@ -675,15 +675,15 @@ function goToDogCreate() {
   min-height: 100vh;
   padding: 24rpx 24rpx calc(132rpx + env(safe-area-inset-bottom));
   background:
-    radial-gradient(circle at top right, rgba(7, 193, 96, 0.16), transparent 24%),
-    linear-gradient(180deg, #f4faf7 0%, #eef5f1 100%);
+    radial-gradient(circle at top right, rgba(176, 141, 79, 0.12), transparent 26%),
+    linear-gradient(180deg, #f0f3e9 0%, #f2f4ea 100%);
 }
 
 .hero-card {
   padding: 32rpx;
-  border-radius: 34rpx;
-  color: #fff;
-  background: linear-gradient(135deg, #395b3a 0%, #1b7b4e 100%);
+  border-radius: 28rpx;
+  color: #f3eddd;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   box-shadow: 0 18rpx 36rpx rgba(27, 92, 64, 0.18);
 }
 
@@ -691,7 +691,7 @@ function goToDogCreate() {
   display: block;
   font-size: 22rpx;
   letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.76);
+  color: #d8bc85;
   text-transform: uppercase;
 }
 
@@ -707,7 +707,7 @@ function goToDogCreate() {
   margin-top: 10rpx;
   font-size: 24rpx;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(243, 237, 221, 0.72);
 }
 
 .content,
@@ -725,8 +725,8 @@ function goToDogCreate() {
 .state-card {
   padding: 30rpx;
   border-radius: 30rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12rpx 32rpx rgba(24, 40, 60, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.06);
 }
 
 .section-card__title,
@@ -734,7 +734,7 @@ function goToDogCreate() {
   display: block;
   font-size: 32rpx;
   font-weight: 700;
-  color: #17313f;
+  color: #26261f;
 }
 
 .dog-picker-card {
@@ -747,8 +747,8 @@ function goToDogCreate() {
   min-height: 84rpx;
   border-radius: 22rpx;
   padding: 0 24rpx;
-  background: #f8fbf9;
-  border: 1rpx solid rgba(20, 47, 58, 0.08);
+  background: #fbfcf7;
+  border: 1rpx solid rgba(30, 46, 36, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -760,7 +760,7 @@ function goToDogCreate() {
   flex: 1;
   font-size: 28rpx;
   font-weight: 600;
-  color: #17313f;
+  color: #26261f;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -769,7 +769,7 @@ function goToDogCreate() {
 .dog-selector__arrow {
   flex-shrink: 0;
   font-size: 22rpx;
-  color: #6b7d86;
+  color: #6b6653;
 }
 
 .state-card__desc {
@@ -777,7 +777,7 @@ function goToDogCreate() {
   margin-top: 10rpx;
   font-size: 24rpx;
   line-height: 1.5;
-  color: #6b7d86;
+  color: #6b6653;
 }
 
 .state-card__button {
@@ -785,10 +785,10 @@ function goToDogCreate() {
   height: 80rpx;
   line-height: 80rpx;
   border-radius: 20rpx;
-  color: #fff;
+  color: #f3eddd;
   font-size: 28rpx;
   font-weight: 700;
-  background: linear-gradient(135deg, #0d6b43 0%, #0c8a55 100%);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 .state-card__button::after {
@@ -803,7 +803,7 @@ function goToDogCreate() {
   display: block;
   font-size: 24rpx;
   font-weight: 600;
-  color: #415b65;
+  color: #6b6653;
 }
 
 .field-help {
@@ -811,7 +811,7 @@ function goToDogCreate() {
   margin-top: 8rpx;
   font-size: 22rpx;
   line-height: 1.6;
-  color: #6c7d86;
+  color: #6b6653;
 }
 
 .field-textarea {
@@ -822,8 +822,8 @@ function goToDogCreate() {
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
   font-size: 28rpx;
-  color: #17313f;
-  background: #f8fbf9;
-  border: 1rpx solid rgba(20, 47, 58, 0.08);
+  color: #26261f;
+  background: #fbfcf7;
+  border: 1rpx solid rgba(30, 46, 36, 0.08);
 }
 </style>

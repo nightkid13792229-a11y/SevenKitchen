@@ -110,7 +110,7 @@ describe('order detail runtime regressions', () => {
     )
 
     expect(source).toContain('function shouldFetchOrderFinancialSummary')
-    expect(source).toContain("return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status)")
+    expect(source).toContain("return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE', 'CANCELLED'].includes(status)")
     expect(source).toContain('if (!shouldFetchOrderFinancialSummary(order.value?.status))')
     expect(source).toContain('orderFinancialSummary.value = null')
   })
@@ -263,5 +263,62 @@ describe('order detail runtime regressions', () => {
     expect(wechatConfirmReceiptSource).toContain('confirmWechatReceiptBeforeInternalComplete')
     expect(source).toContain('confirmWechatReceiptBeforeInternalComplete')
     expect(source).toContain('await confirmWechatReceiptBeforeInternalComplete(order.value)')
+  })
+
+  it('registers the address-selected listener once and removes it on unmount', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("uni.$on('address-selected', handleAddressSelected)")
+    expect(source).toContain("uni.$off('address-selected', handleAddressSelected)")
+    // 不再在 onShow 里重复注册（旧实现会累积监听导致多笔订单地址串改）
+    expect(source).not.toContain('onShow(() =>')
+  })
+
+  it('shows a load error state with retry and back actions', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('loadError')
+    expect(source).toContain('v-if="loadError"')
+    expect(source).toContain('retryLoadOrder')
+    expect(source).toContain('goBackToList')
+  })
+
+  it('offers re-order instead of a dead pay button when payment expires', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('v-if="paymentExpired"')
+    expect(source).toContain('重新下单')
+    // 超时后不再出现"已超时"的死支付按钮
+    expect(source).not.toContain(":disabled=\"paying || paymentExpired || paymentConfirming\"")
+  })
+
+  it('fetches the refund summary for cancelled orders to show refund progress', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("'AFTERSALE', 'CANCELLED'")
+  })
+
+  it('removes the dead view-logistics stub button for shipped orders', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).not.toContain('@tap="viewLogistics"')
+    expect(source).not.toContain("title: '查看物流...'")
+    // 保留复制单号入口
+    expect(source).toContain('copyTrackingNumber')
   })
 })

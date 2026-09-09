@@ -106,7 +106,7 @@
             查看物流
           </button>
           <button
-            v-if="canApplyAftersale(order.status)"
+            v-if="canApplyAftersale(order.status, order.completedAt)"
             class="action-btn secondary"
             @tap="applyAftersale(order.id)"
           >
@@ -165,6 +165,10 @@ import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
+import {
+  getOrderStatusText,
+  canApplyAftersale,
+} from '../../utils/order-aftersale';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 // DEBUG flag for development logging
@@ -181,6 +185,7 @@ interface Order {
   totalAmount?: number;
   itemCount?: number;
   createdAt?: string;
+  completedAt?: string;
   trackingNumber?: string;
   carrierCode?: string;
   paymentMethod?: string | null;
@@ -398,10 +403,6 @@ function goHome() {
 
 function hasQuickActions(order: Order): boolean {
   return Boolean(order.id);
-}
-
-function canApplyAftersale(status: string): boolean {
-  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status);
 }
 
 function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
@@ -636,7 +637,7 @@ function getStatusText(orderOrStatus: Order | string): string {
     CANCELLED: '已取消',
     AFTERSALE: '售后中',
   };
-  return statusMap[status] || status;
+  return statusMap[status] || getOrderStatusText(status);
 }
 
 function getStatusColor(orderOrStatus: Order | string): string {

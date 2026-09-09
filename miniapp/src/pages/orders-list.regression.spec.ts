@@ -17,7 +17,7 @@ describe('orders list repurchase action contract', () => {
       /<button[\s\S]*?@tap="buyAgain\(order\)"[\s\S]*?<\/button>/,
     )?.[0] || '';
   const hasQuickActionsSource =
-    source.match(/function hasQuickActions[\s\S]*?\n}\n\nfunction canApplyAftersale/)?.[0] ||
+    source.match(/function hasQuickActions[\s\S]*?\n}\n\nfunction requestWechatPayment/)?.[0] ||
     '';
   const repurchaseSource =
     source.match(/function getRepurchasePackageCount[\s\S]*?\n}\n\nfunction formatAmount/)?.[0] ||
@@ -62,5 +62,13 @@ describe('orders list repurchase action contract', () => {
   it('does not skip WeChat Pay confirmation when the WeChat API is unavailable', () => {
     expect(mpWeixinConfirmReceiptSource).toContain('当前微信版本不支持确认收货，请升级微信后重试');
     expect(mpWeixinConfirmReceiptSource).not.toContain("return { skipped: true, status: 'success' };");
+  });
+
+  it('uses the shared aftersale eligibility rule with completedAt for the 7-day lock', () => {
+    expect(source).toContain('canApplyAftersale(order.status, order.completedAt)');
+    // 列表页不再写死 FREEZING/SHIPPED/COMPLETED，统一走共享规则
+    expect(source).not.toContain("return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)");
+    // 列表项类型补齐 completedAt，用于"已完成 7 天后退款/重做锁定"
+    expect(source).toContain('completedAt?: string;');
   });
 });

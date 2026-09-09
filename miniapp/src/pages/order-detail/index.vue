@@ -1,6 +1,21 @@
 <template>
   <view class="order-detail-page">
-    <view v-if="order" class="order-detail">
+    <!-- 加载失败错误态 -->
+    <view v-if="loadError" class="order-error-state">
+      <text class="order-error-icon">⚠️</text>
+      <text class="order-error-title">加载失败</text>
+      <text class="order-error-desc">订单可能不存在，或网络暂时异常，请稍后重试</text>
+      <view class="order-error-actions">
+        <button class="order-error-btn retry" @tap="retryLoadOrder">
+          重试
+        </button>
+        <button class="order-error-btn back" @tap="goBackToList">
+          返回列表
+        </button>
+      </view>
+    </view>
+
+    <view v-else-if="order" class="order-detail">
       <!-- 订单类型标签 -->
       <view class="order-type-tag">鲜食制作订单</view>
 
@@ -641,19 +656,19 @@
       <!-- 售后服务（付款后到完成前后均可申请） -->
       <view
         class="section aftersale-section"
-        v-if="canApplyAftersale(order.status)"
+        v-if="canApplyAftersale(order.status, order.completedAt)"
       >
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
           <button
-            v-if="canApplyRefund(order.status)"
+            v-if="canApplyRefund(order.status, order.completedAt)"
             class="btn-aftersale"
             @tap="applyAftersaleType('REFUND')"
           >
             <text class="btn-text">申请退款</text>
           </button>
           <button
-            v-if="canApplyRemake(order.status)"
+            v-if="canApplyRemake(order.status, order.completedAt)"
             class="btn-aftersale"
             @tap="applyAftersaleType('REMAKE')"
           >
@@ -880,16 +895,22 @@
           取消订单
         </button>
         <button
+          v-if="paymentExpired"
           class="btn-action btn-primary"
-          :disabled="paying || paymentExpired || paymentConfirming"
+          @tap="buyAgain"
+        >
+          重新下单
+        </button>
+        <button
+          v-else
+          class="btn-action btn-primary"
+          :disabled="paying || paymentConfirming"
           @tap="payOrder"
         >
           {{
-            paymentExpired
-              ? '已超时'
-              : paymentConfirming
-                ? '支付确认中，请勿重复支付'
-                : '立即支付'
+            paymentConfirming
+              ? '支付确认中，请勿重复支付'
+              : '立即支付'
           }}
         </button>
       </view>
@@ -911,9 +932,6 @@
 
       <!-- 已发货状态 -->
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="viewLogistics">
-          查看物流
-        </button>
         <button class="btn-action btn-secondary" @tap="applyAftersale">
           申请售后
         </button>
@@ -946,7 +964,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { onShow, onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
+import { onShareAppMessage, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request, requestSubscriptionMessage } from '../../utils/api';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
@@ -973,6 +991,13 @@ import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
 import { openCustomerServiceChat } from '../../utils/customer-service';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
+import {
+  getOrderStatusText,
+  canApplyRefund,
+  canApplyRemake,
+  canApplyComplaint,
+  canApplyAftersale,
+} from '../../utils/order-aftersale';
 import {
   getSourcePlanLabel,
   type IngredientSourcePlanCode,
@@ -1064,6 +1089,7 @@ interface Order {
   trackingNumber?: string;
   carrierCode?: string;
   shippedAt?: string;
+  completedAt?: string;
   paymentMethod?: string;
   transactionId?: string;
   paidAt?: string;
@@ -1113,6 +1139,7 @@ interface CustomerServiceConfig {
 
 const order = ref<Order | null>(null);
 const orderId = ref('');
+const loadError = ref(false);
 const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null);
 const customerServiceConfig = ref<CustomerServiceConfig>({
   enabled: false,
@@ -1320,7 +1347,8 @@ const settlementDescription = computed(() => {
 });
 
 function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
-  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status);
+  // 已取消/已退款订单也要拉取退款汇总，展示退款进度
+  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE', 'CANCELLED'].includes(status);
 }
 
 function formatIngredientSourcePlan(plan?: string | null): string {
@@ -1648,6 +1676,9 @@ onMounted(async () => {
     return;
   }
 
+  // 注册地址选择监听（仅一次；onUnmounted 时移除，避免重复注册导致多笔订单地址串改）
+  uni.$on('address-selected', handleAddressSelected);
+
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1] as any;
   orderId.value = currentPage.options?.id || currentPage.options?.orderId || '';
@@ -1707,6 +1738,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   pageActive = false;
+  uni.$off('address-selected', handleAddressSelected);
   if (paymentTimer) {
     clearInterval(paymentTimer);
     paymentTimer = null;
@@ -1778,6 +1810,7 @@ async function loadOrderDetail(quiet = false) {
     const res = await fetchOrderDetailResponse();
 
     if (res.code === 0 && res.data) {
+      loadError.value = false;
       order.value = res.data;
       orderId.value = res.data.id || orderId.value;
       syncPaymentTimer();
@@ -1800,10 +1833,24 @@ async function loadOrderDetail(quiet = false) {
     }
   } catch (error) {
     console.error('Load order detail error:', error);
+    loadError.value = true;
   } finally {
     if (!quiet) {
       uni.hideLoading();
     }
+  }
+}
+
+function retryLoadOrder() {
+  loadOrderDetail();
+}
+
+function goBackToList() {
+  const pages = getCurrentPages();
+  if (pages.length > 1) {
+    uni.navigateBack();
+  } else {
+    uni.reLaunch({ url: '/pages/orders-list/index' });
   }
 }
 
@@ -2298,12 +2345,6 @@ async function updateOrderDate(newDateStr: string) {
   }
 }
 
-// 监听地址选择事件（从地址列表返回）
-onShow(() => {
-  // 监听地址选择事件
-  uni.$on('address-selected', handleAddressSelected);
-});
-
 onPullDownRefresh(async () => {
   if (!orderId.value) {
     uni.stopPullDownRefresh();
@@ -2634,7 +2675,7 @@ function getStatusText(orderOrStatus: Order | string): string {
     CANCELLED: '已取消',
     AFTERSALE: '售后中',
   };
-  return statusMap[status] || status;
+  return statusMap[status] || getOrderStatusText(status);
 }
 
 function getStatusIcon(status: string): string {
@@ -2894,14 +2935,6 @@ function contactService() {
   });
 }
 
-function viewLogistics() {
-  uni.showToast({
-    title: '查看物流...',
-    icon: 'none',
-  });
-  // TODO: 跳转到物流详情页
-}
-
 // 确认收货
 async function confirmReceived() {
   uni.showModal({
@@ -3022,42 +3055,6 @@ async function buyAgain() {
   }
 }
 
-// 判断是否可以申请售后
-// Phase 9.1: paid orders can apply for aftersale throughout the fulfillment flow.
-function canApplyAftersale(status: string): boolean {
-  return (
-    canApplyRefund(status) ||
-    canApplyRemake(status) ||
-    canApplyComplaint(status)
-  );
-}
-
-function canApplyRefund(status: string): boolean {
-  return [
-    'PAID',
-    'PURCHASING',
-    'IN_PRODUCTION',
-    'FREEZING',
-    'SHIPPED',
-    'COMPLETED',
-  ].includes(status);
-}
-
-function canApplyRemake(status: string): boolean {
-  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status);
-}
-
-function canApplyComplaint(status: string): boolean {
-  return [
-    'PAID',
-    'PURCHASING',
-    'IN_PRODUCTION',
-    'FREEZING',
-    'SHIPPED',
-    'COMPLETED',
-  ].includes(status);
-}
-
 // 计算总袋数
 function getTotalPackageCount(): number {
   if (!order.value?.items) return 0;
@@ -3147,9 +3144,9 @@ function previewProductionPhotos(index: number) {
   });
 }
 
-// 申请售后（旧函数，保留向后兼容）
+// 申请售后（底部按钮统一入口，默认聚焦"申请退款"，不再默认成"投诉"）
 function applyAftersale() {
-  applyAftersaleType('COMPLAINT');
+  applyAftersaleType('REFUND');
 }
 
 // 申请退款（旧函数，保留向后兼容）
@@ -3163,6 +3160,66 @@ async function applyRefund() {
   min-height: 100vh;
   background-color: #f5f5f5;
   padding-bottom: 140rpx;
+}
+
+.order-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 60rpx 40rpx;
+  text-align: center;
+}
+
+.order-error-icon {
+  font-size: 96rpx;
+  line-height: 1;
+  margin-bottom: 24rpx;
+}
+
+.order-error-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #26261f;
+  margin-bottom: 12rpx;
+}
+
+.order-error-desc {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 48rpx;
+  line-height: 1.5;
+}
+
+.order-error-actions {
+  display: flex;
+  gap: 24rpx;
+}
+
+.order-error-btn {
+  min-width: 200rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 32rpx;
+  font-size: 28rpx;
+  border-radius: 40rpx;
+  border: none;
+}
+
+.order-error-btn::after {
+  border: none;
+}
+
+.order-error-btn.retry {
+  background-color: #1e3a2f;
+  color: #fff;
+}
+
+.order-error-btn.back {
+  background-color: #fff;
+  color: #1e3a2f;
+  border: 1rpx solid #d5d5d5;
 }
 
 .order-detail {

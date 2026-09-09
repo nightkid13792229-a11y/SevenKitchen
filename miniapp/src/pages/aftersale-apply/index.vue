@@ -95,7 +95,7 @@ import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 const orderId = ref('');
-const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('COMPLAINT');
+const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('REFUND');
 const reason = ref('');
 const photos = ref<string[]>([]);
 const orderInfo = ref<any>(null);
@@ -127,7 +127,7 @@ onMounted(async () => {
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1] as any;
   orderId.value = currentPage.options?.orderId || '';
-  const type = currentPage.options?.type || 'COMPLAINT';
+  const type = currentPage.options?.type || 'REFUND';
 
   if (type) {
     selectedType.value = type as 'REFUND' | 'REMAKE' | 'COMPLAINT';

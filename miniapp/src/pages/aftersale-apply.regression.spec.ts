@@ -16,4 +16,14 @@ describe('aftersale apply regressions', () => {
     expect(source).toContain('suppressErrorToast: true')
     expect(source).not.toContain("uni.showToast({ title: '提交成功'")
   })
+
+  it('defaults the aftersale type to refund instead of complaint', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/aftersale-apply/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('REFUND')")
+    expect(source).toContain("currentPage.options?.type || 'REFUND'")
+  })
 })

@@ -83,7 +83,7 @@ describe('home runtime regressions', () => {
     })
   })
 
-  it('uses bundled PNG icons for recipe view, favorite, and cooking statistics', () => {
+  it('uses bundled PNG icons for recipe view and favorite statistics', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
@@ -91,7 +91,7 @@ describe('home runtime regressions', () => {
 
     expect(source).toContain('src="/static/ui-icons/view.png"')
     expect(source).toContain('src="/static/ui-icons/favorite.png"')
-    expect(source).toContain('src="/static/ui-icons/cook.png"')
+    expect(source).not.toContain('src="/static/ui-icons/cook.png"')
     expect(source).not.toContain('👁 {{ formatStatNum(recipe.viewCount) }}')
     expect(source).not.toContain('⭐ {{ formatStatNum(recipe.favoriteCount) }}')
     expect(source).not.toContain('🍳 {{ formatStatNum(recipe.diyGenCount) }}')

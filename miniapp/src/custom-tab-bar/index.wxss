@@ -4,8 +4,8 @@
   left: 0;
   right: 0;
   height: 100rpx;
-  background-color: #fdfcf8;
-  border-top: 1rpx solid #ece5d4;
+  background-color: #f9faf2;
+  border-top: 1rpx solid #e3e6d4;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -43,7 +43,7 @@
 
 .tab-bar-item .text {
   font-size: 22rpx;
-  color: #9c9687;
+  color: #968f6d;
   transition: color 0.3s;
   margin-top: 2rpx;
   letter-spacing: 1rpx;

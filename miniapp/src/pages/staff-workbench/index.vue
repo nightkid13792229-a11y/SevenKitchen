@@ -357,8 +357,10 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
   width: 72rpx;
   height: 72rpx;
   margin-bottom: 14rpx;
-  background: #f4f6f8;
-  border-radius: 20rpx;
+  background: linear-gradient(160deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: 28rpx;
+  box-shadow: 0 10rpx 22rpx rgba(30, 58, 47, 0.22);
 }
 
 .module-icon {

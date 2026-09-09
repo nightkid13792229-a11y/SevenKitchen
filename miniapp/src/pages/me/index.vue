@@ -2,7 +2,11 @@
   <view class="me-container">
     <!-- 未登录状态 -->
     <view v-if="!isLoggedIn" class="not-logged-in">
-      <view class="login-avatar">未登录</view>
+      <image
+        class="login-avatar"
+        src="/static/user-avatar-default.png"
+        mode="aspectFill"
+      ></image>
       <text class="login-title">未登录</text>
       <button class="login-btn" @tap="goToLogin">立即登录</button>
 
@@ -874,13 +878,9 @@ onShow(() => {
   width: 160rpx;
   height: 160rpx;
   border-radius: 50%;
-  background: #e0e0e0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  color: #999;
+  display: block;
   margin-bottom: 32rpx;
+  box-shadow: 0 12rpx 28rpx rgba(30, 58, 47, 0.18);
 }
 
 .login-title {
@@ -1001,29 +1001,10 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 32rpx;
-  background: #f6f7f9;
-  box-shadow: 0 10rpx 22rpx rgba(31, 41, 51, 0.07);
-}
-
-.mall-shortcut-production .shortcut-icon-shell {
-  background: #fff3e8;
-}
-
-.mall-shortcut-payment .shortcut-icon-shell {
-  background: #eaf4ff;
-}
-
-.mall-shortcut-shipping .shortcut-icon-shell {
-  background: #f1efff;
-}
-
-.mall-shortcut-received .shortcut-icon-shell {
-  background: #e9fff4;
-}
-
-.mall-shortcut-aftersale .shortcut-icon-shell {
-  background: #fff1e8;
+  border-radius: 28rpx;
+  background: linear-gradient(160deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  box-shadow: 0 10rpx 22rpx rgba(30, 58, 47, 0.2);
 }
 
 .shortcut-icon-image {

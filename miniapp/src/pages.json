@@ -484,17 +484,17 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "SevenKitchen MVP",
-    "navigationBarBackgroundColor": "#F6F2EA",
-    "backgroundColor": "#F6F2EA"
+    "navigationBarBackgroundColor": "#F0F3E9",
+    "backgroundColor": "#F0F3E9"
   },
   "mp-weixin": {
     "__usePrivacyCheck__": true
   },
   "tabBar": {
     "custom": true,
-    "color": "#9C9687",
+    "color": "#968F6D",
     "selectedColor": "#1E3A2F",
-    "backgroundColor": "#FDFCF8",
+    "backgroundColor": "#F9FAF2",
     "borderStyle": "black",
     "list": [
       {

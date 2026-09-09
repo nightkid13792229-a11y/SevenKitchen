@@ -1,4 +1,4 @@
-export const DEFAULT_USER_AVATAR_SRC = '/static/logo.png'
+export const DEFAULT_USER_AVATAR_SRC = '/static/user-avatar-default.png'
 
 export function resolveUserAvatarSrc(avatarUrl?: string | null): string {
   const normalized = typeof avatarUrl === 'string' ? avatarUrl.trim() : ''

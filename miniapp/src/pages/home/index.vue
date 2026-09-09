@@ -20,17 +20,13 @@
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
       <view class="action-item" @tap="goToCalculatePortion">
-        <view class="action-icon-shell">
-          <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
-        </view>
+        <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
         <text class="action-text">饭量计算</text>
         <text class="action-sub">按体重算饭量</text>
       </view>
       <view class="action-divider" aria-hidden="true"></view>
       <view class="action-item" @tap="goToHealthRecords">
-        <view class="action-icon-shell">
-          <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
-        </view>
+        <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
         <text class="action-text">健康管理</text>
         <text class="action-sub">健康档案与记录</text>
       </view>
@@ -182,10 +178,6 @@
               <view class="stat-item">
                 <image class="stat-icon" src="/static/ui-icons/favorite.png" mode="aspectFit" />
                 <text>{{ formatStatNum(recipe.favoriteCount) }}</text>
-              </view>
-              <view class="stat-item">
-                <image class="stat-icon" src="/static/ui-icons/cook.png" mode="aspectFit" />
-                <text>{{ formatStatNum(recipe.diyGenCount) }}</text>
               </view>
             </view>
           </view>
@@ -1443,7 +1435,7 @@ defineOptions({
 
 .home-container {
   min-height: 100vh;
-  background-color: #f6f2ea;
+  background-color: #f0f3e9;
   padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -1540,11 +1532,12 @@ defineOptions({
 .quick-actions {
   display: flex;
   align-items: stretch;
-  background: #ffffff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
   margin: -36rpx 24rpx 0;
   border-radius: 28rpx;
-  padding: 30rpx 12rpx;
-  box-shadow: 0 12rpx 40rpx rgba(30, 46, 36, 0.1);
+  padding: 34rpx 12rpx;
+  box-shadow: 0 16rpx 44rpx rgba(20, 41, 31, 0.32);
   position: relative;
   z-index: 2;
 }
@@ -1558,46 +1551,36 @@ defineOptions({
   gap: 8rpx;
 }
 
-.action-icon-shell {
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(160deg, #eef3ea 0%, #e2ebdd 100%);
-  border: 1rpx solid #d5e0d1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 6rpx;
-}
-
 .action-icon {
-  width: 52rpx;
-  height: 52rpx;
+  width: 60rpx;
+  height: 60rpx;
   display: block;
   flex-shrink: 0;
+  margin-bottom: 8rpx;
 }
 
 .action-text {
   font-size: 28rpx;
   font-weight: 600;
-  color: #26261f;
+  color: #f3eddd;
   letter-spacing: 1rpx;
 }
 
 .action-sub {
   font-size: 20rpx;
-  color: #9c9687;
+  color: rgba(243, 237, 221, 0.6);
 }
 
 .action-divider {
   width: 1rpx;
-  background: #efe9db;
-  margin: 6rpx 0;
+  background: rgba(216, 188, 133, 0.35);
+  margin: 10rpx 0;
 }
 
 /* ---------- 通用区块 ---------- */
 .section {
-  background: #ffffff;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
   margin: 24rpx;
   border-radius: 28rpx;
   padding: 28rpx;
@@ -1635,7 +1618,7 @@ defineOptions({
 .section-more {
   display: flex;
   align-items: center;
-  color: #9c9687;
+  color: #968f6d;
   font-size: 24rpx;
 }
 
@@ -1661,8 +1644,8 @@ defineOptions({
   display: inline-flex;
   align-items: center;
   gap: 14rpx;
-  background: #f7f4ec;
-  border: 1rpx solid #ece4d0;
+  background: #eef2e4;
+  border: 1rpx solid #dbe2c6;
   border-radius: 999rpx;
   padding: 10rpx 24rpx 10rpx 10rpx;
   margin-right: 16rpx;
@@ -1694,13 +1677,13 @@ defineOptions({
 
 .dog-compact-weight {
   font-size: 20rpx;
-  color: #9c9687;
+  color: #968f6d;
 }
 
 .dog-compact-add {
-  border: 1rpx dashed #c9bfa6;
-  background: #ffffff;
-  color: #9c9687;
+  border: 1rpx dashed #c2c9a4;
+  background: #fbfcf7;
+  color: #968f6d;
 }
 
 .dog-compact-add .add-icon {
@@ -1715,7 +1698,8 @@ defineOptions({
 
 /* ---------- 空状态 ---------- */
 .empty-dog-section {
-  background: #ffffff;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
   margin: 24rpx;
   border-radius: 28rpx;
   padding: 56rpx 40rpx;
@@ -1753,7 +1737,7 @@ defineOptions({
 .empty-desc {
   display: block;
   font-size: 14px;
-  color: #9c9687;
+  color: #968f6d;
   margin-bottom: 20px;
 }
 
@@ -1787,7 +1771,7 @@ defineOptions({
 
 .recipe-count {
   font-size: 24rpx;
-  color: #9c9687;
+  color: #968f6d;
   margin-left: auto;
 }
 
@@ -1803,9 +1787,9 @@ defineOptions({
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(246, 242, 234, 0.96);
+  background: rgba(240, 243, 233, 0.96);
   padding: 16rpx 28rpx;
-  border-bottom: 1rpx solid #ece5d4;
+  border-bottom: 1rpx solid #e3e6d4;
   display: flex;
   align-items: center;
   gap: 16rpx;
@@ -1829,12 +1813,12 @@ defineOptions({
   align-items: center;
   gap: 8rpx;
   padding: 14rpx 26rpx;
-  background: #ffffff;
+  background: #fbfcf7;
   border-radius: 999rpx;
   font-size: 26rpx;
-  color: #6e6a5e;
+  color: #6b6653;
   white-space: nowrap;
-  border: 1rpx solid #e3dcc8;
+  border: 1rpx solid #dfe3ca;
   flex-shrink: 0;
 }
 
@@ -1892,12 +1876,12 @@ defineOptions({
 }
 
 .recipe-card {
-  background-color: #ffffff;
+  background-color: #fbfcf7;
   border-radius: 28rpx;
   overflow: hidden;
   margin-bottom: 28rpx;
   box-shadow: 0 10rpx 32rpx rgba(30, 46, 36, 0.08);
-  border: 1rpx solid #f0ead9;
+  border: 1rpx solid #e5e8d4;
   contain: layout style;
 }
 
@@ -1965,7 +1949,7 @@ defineOptions({
   padding: 26rpx 28rpx 30rpx;
   position: relative;
   z-index: 1;
-  background-color: #ffffff;
+  background-color: #fbfcf7;
   transform: translateZ(0);
   will-change: transform;
 }
@@ -2007,7 +1991,7 @@ defineOptions({
 
 .recipe-price-label {
   font-size: 22rpx;
-  color: #9c9687;
+  color: #968f6d;
   letter-spacing: 2rpx;
   flex-shrink: 0;
 }
@@ -2040,28 +2024,28 @@ defineOptions({
 .stat-item {
   display: inline-flex;
   align-items: center;
-  gap: 3rpx;
+  gap: 6rpx;
   font-size: 20rpx;
-  color: #9c9687;
+  color: #968f6d;
   white-space: nowrap;
 }
 
 .stat-icon {
-  width: 22rpx;
-  height: 22rpx;
+  width: 30rpx;
+  height: 30rpx;
   flex-shrink: 0;
 }
 
 .ingredients {
   font-size: 26rpx;
-  color: #6e6a5e;
+  color: #6b6653;
   line-height: 1.7;
   display: flex;
   flex-wrap: wrap;
 }
 
 .ingredients-label {
-  color: #9c9687;
+  color: #968f6d;
   flex-shrink: 0;
 }
 
@@ -2074,7 +2058,7 @@ defineOptions({
 .no-more {
   text-align: center;
   padding: 40rpx 0;
-  color: #9c9687;
+  color: #968f6d;
   font-size: 26rpx;
   letter-spacing: 2rpx;
 }
@@ -2099,7 +2083,7 @@ defineOptions({
   font-size: 26rpx;
   line-height: 1.6;
   margin-bottom: 44rpx;
-  color: #9c9687;
+  color: #968f6d;
 }
 
 .btn-reset {
@@ -2140,7 +2124,7 @@ defineOptions({
   top: 120rpx;
   left: 24rpx;
   right: 24rpx;
-  background: #ffffff;
+  background: #fbfcf7;
   border-radius: 28rpx;
   max-height: 74vh;
   display: flex;
@@ -2167,7 +2151,7 @@ defineOptions({
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0ead9;
+  border-bottom: 1rpx solid #e7e9d8;
   flex-shrink: 0;
 }
 
@@ -2213,11 +2197,11 @@ defineOptions({
 
 .tag-item {
   padding: 14rpx 30rpx;
-  background: #f7f4ec;
+  background: #f0f3e9;
   border-radius: 999rpx;
   font-size: 26rpx;
-  color: #4c4a40;
-  border: 1rpx solid #e5ddc8;
+  color: #4b4a3d;
+  border: 1rpx solid #dde3cd;
   transition: all 0.2s;
 }
 
@@ -2273,8 +2257,8 @@ defineOptions({
   display: flex;
   gap: 16rpx;
   padding: 24rpx 28rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid #f0ead9;
-  background: #ffffff;
+  border-top: 1rpx solid #e7e9d8;
+  background: #fbfcf7;
   flex-shrink: 0;
 }
 
@@ -2291,9 +2275,9 @@ defineOptions({
 }
 
 .drawer-action-secondary {
-  background: #f7f4ec;
-  color: #6e6a5e;
-  border: 1rpx solid #e5ddc8;
+  background: #f0f3e9;
+  color: #6b6653;
+  border: 1rpx solid #dde3cd;
 }
 
 .drawer-action-primary {
@@ -2311,8 +2295,8 @@ defineOptions({
   display: flex;
   align-items: center;
   padding: 18rpx 22rpx;
-  background: #f7f4ec;
-  border: 1rpx solid #ece4d0;
+  background: #eef2e4;
+  border: 1rpx solid #dbe2c6;
   border-radius: 12rpx;
   margin-bottom: 14rpx;
 }
@@ -2332,7 +2316,7 @@ defineOptions({
 
 .group-count {
   font-size: 22rpx;
-  color: #9c9687;
+  color: #968f6d;
   margin-left: 8rpx;
 }
 

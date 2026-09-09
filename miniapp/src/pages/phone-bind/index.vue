@@ -131,10 +131,13 @@ async function handleGetPhoneNumber(event: any) {
 
     if (response.data?.status === "NEEDS_LEGACY_MIGRATION") {
       pendingMerge.value = null;
-      uni.showToast({
-        title: "该手机号存在旧版资料，请稍后重试或联系客服",
-        icon: "none",
-      });
+      if (response.data?.token) {
+        saveLoginState(response.data);
+        uni.showToast({ title: "绑定成功", icon: "success" });
+        setTimeout(goAfterBound, 500);
+      } else {
+        uni.showToast({ title: "绑定失败，请重试", icon: "none" });
+      }
       return;
     }
 

@@ -363,53 +363,22 @@ export class AuthController {
         return ApiResponseDto.error(404, '当前用户不存在');
       }
 
+      // 旧版资料迁移功能已下线：检测到待迁移旧资料时不再暂停绑定、不再提示同步，
+      // 直接释放旧账号的手机号占用并完成当前账号绑定（旧资料保持原样，不再同步）。
       const pendingLegacyMigration =
         await this.findLatestPendingMigrationByPhone(phone);
       if (
         pendingLegacyMigration &&
         pendingLegacyMigration.sourceUserId !== currentUser.id
       ) {
-        const sourceUser = await this.prisma.user.findUnique({
-          where: { id: pendingLegacyMigration.sourceUserId },
-          include: this.userSummaryInclude(),
+        await this.prisma.user.updateMany({
+          where: { id: pendingLegacyMigration.sourceUserId, phone },
+          data: { phone: null },
         });
-        if (sourceUser) {
-          const sourceSummary = this.buildUserSummary(sourceUser);
-          const sourceDataCount = this.getSyncableUserDataCount(sourceSummary);
-          if (sourceDataCount > 0) {
-            const updatedMigration = await this.prisma.accountMigration.update({
-              where: { id: pendingLegacyMigration.id },
-              data: {
-                status: 'PHONE_VERIFIED',
-                phone,
-                verifiedUserId: currentUser.id,
-                targetUserId: currentUser.id,
-                verifiedAt: new Date(),
-                metadata: {
-                  ...((pendingLegacyMigration.metadata as Record<
-                    string,
-                    unknown
-                  >) || {}),
-                  verifiedAppId: this.normalizeAppId(dto.appId) || null,
-                  phoneMasked: this.maskPhone(phone),
-                  sourceDataCount,
-                  matchedByBoundPhone: true,
-                },
-              },
-            });
-
-            return ApiResponseDto.success({
-              status: 'NEEDS_LEGACY_MIGRATION',
-              migrationToken: updatedMigration.token,
-              phone: this.maskPhone(phone),
-              sourceUser: sourceSummary,
-              sourceDataCount,
-              syncableSourceData: true,
-              needsConfirmation: true,
-              message: '发现旧版待同步资料，请确认是否同步到当前账号',
-            });
-          }
-        }
+        await this.prisma.accountMigration.update({
+          where: { id: pendingLegacyMigration.id },
+          data: { status: 'CANCELLED' },
+        });
       }
 
       if (currentUser.phone === phone) {

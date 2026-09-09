@@ -286,7 +286,7 @@ function save() {
 }
 
 .form-section {
-  background-color: #fff;
+  background-color: #f3eddd;
   padding: 30rpx;
   border-radius: 8rpx;
 }
@@ -325,14 +325,14 @@ function save() {
   display: block;
   font-size: 28rpx;
   margin-bottom: 10rpx;
-  color: #333;
+  color: #26261f;
   font-weight: bold;
 }
 
 .input {
   width: 100%;
   height: 80rpx;
-  border: 1px solid #ddd;
+  border: 1px solid #dde3cd;
   border-radius: 8rpx;
   padding: 0 20rpx;
   font-size: 28rpx;
@@ -343,38 +343,38 @@ function save() {
 .picker-input {
   width: 100%;
   height: 80rpx;
-  border: 1px solid #ddd;
+  border: 1px solid #dde3cd;
   border-radius: 8rpx;
   padding: 0 20rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  background-color: #fff;
+  background-color: #f3eddd;
 }
 
 .selected-text {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .picker-input .placeholder {
   flex: 1;
   font-size: 28rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .arrow {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
   margin-left: 10rpx;
 }
 
 .textarea {
   width: 100%;
   min-height: 150rpx;
-  border: 1px solid #ddd;
+  border: 1px solid #dde3cd;
   border-radius: 8rpx;
   padding: 20rpx;
   font-size: 28rpx;
@@ -389,16 +389,16 @@ function save() {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #07c160;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 32rpx;
   margin-top: 20rpx;
 }
 
 .btn-disabled {
-  background-color: #ccc !important;
-  color: #999 !important;
+  background-color: #c9c9b8 !important;
+  color: #968f6d !important;
 }
 
 /* 隐私协议勾选样式 */
@@ -407,9 +407,9 @@ function save() {
   align-items: flex-start;
   margin-top: 40rpx;
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 1rpx solid #eee;
+  border: 1rpx solid #e5e8d4;
 }
 
 .checkbox-wrapper {
@@ -420,21 +420,21 @@ function save() {
 .checkbox {
   width: 40rpx;
   height: 40rpx;
-  border: 2rpx solid #ddd;
+  border: 2rpx solid #dde3cd;
   border-radius: 6rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fff;
+  background-color: #f3eddd;
 }
 
 .checkbox.checked {
-  background-color: #07c160;
-  border-color: #07c160;
+  background-color: #1e3a2f;
+  border-color: #1e3a2f;
 }
 
 .check-icon {
-  color: #fff;
+  color: #f3eddd;
   font-size: 24rpx;
   font-weight: bold;
 }
@@ -442,18 +442,18 @@ function save() {
 .agreement-text {
   flex: 1;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.6;
 }
 
 .link {
-  color: #1890ff;
+  color: #b08d4f;
   text-decoration: underline;
 }
 
 .privacy-hint {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
   text-align: center;
   margin-top: 16rpx;
   margin-bottom: 20rpx;

@@ -210,7 +210,7 @@ function deleteAddress(addressId: string) {
 }
 
 .address-item {
-  background-color: #fff;
+  background-color: #f3eddd;
   padding: 30rpx;
   margin-bottom: 20rpx;
   border-radius: 8rpx;
@@ -236,21 +236,21 @@ function deleteAddress(addressId: string) {
 
 .phone {
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
   margin-right: 20rpx;
 }
 
 .default-tag {
   font-size: 24rpx;
-  color: #07c160;
-  background-color: #e6f7ff;
+  color: #1e3a2f;
+  background-color: #eef2e4;
   padding: 4rpx 12rpx;
   border-radius: 4rpx;
 }
 
 .address-text {
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -259,7 +259,7 @@ function deleteAddress(addressId: string) {
   justify-content: space-between;
   align-items: center;
   padding-top: 8rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .footer-left {
@@ -287,19 +287,19 @@ function deleteAddress(addressId: string) {
 }
 
 .btn-default {
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
   padding: 5rpx 10rpx;
 }
 
 .btn-edit {
-  background-color: #faad14;
-  color: #fff;
+  background-color: #8a6b33;
+  color: #f3eddd;
   padding: 5rpx 10rpx;
 }
 
 .btn-delete {
-  color: #999;
+  color: #968f6d;
   padding: 5rpx 0;
   background-color: transparent;
 }
@@ -307,7 +307,7 @@ function deleteAddress(addressId: string) {
 .empty-state {
   text-align: center;
   padding: 100rpx 0;
-  color: #999;
+  color: #968f6d;
 }
 
 .bottom-bar {
@@ -315,9 +315,9 @@ function deleteAddress(addressId: string) {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
+  background-color: #f3eddd;
   padding: 20rpx;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #e5e8d4;
 }
 
 .btn-add {
@@ -328,8 +328,8 @@ function deleteAddress(addressId: string) {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #07c160;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 32rpx;
 }

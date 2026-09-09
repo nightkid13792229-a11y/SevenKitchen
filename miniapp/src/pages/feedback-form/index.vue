@@ -158,7 +158,7 @@ const handleSubmit = async () => {
 .feedback-form {
   padding: 20rpx 30rpx;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f0f3e9;
 }
 
 .form-section {
@@ -171,7 +171,7 @@ const handleSubmit = async () => {
 .section-label {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
   margin-bottom: 20rpx;
 }
 
@@ -187,15 +187,15 @@ const handleSubmit = async () => {
   justify-content: center;
   padding: 20rpx 0;
   border-radius: 12rpx;
-  background: #f5f5f5;
+  background: #f0f3e9;
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   transition: all 0.2s;
 }
 
 .type-option.active {
-  background: #e8f4fd;
-  color: #1890ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 600;
 }
 
@@ -210,7 +210,7 @@ const handleSubmit = async () => {
   line-height: 1.6;
   padding: 20rpx;
   box-sizing: border-box;
-  background: #f9f9f9;
+  background: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -219,7 +219,7 @@ const handleSubmit = async () => {
   right: 20rpx;
   bottom: 20rpx;
   font-size: 22rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .image-list {
@@ -265,7 +265,7 @@ const handleSubmit = async () => {
   width: 180rpx;
   height: 180rpx;
   border-radius: 12rpx;
-  border: 2rpx dashed #ccc;
+  border: 2rpx dashed #c9c9b8;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -275,12 +275,12 @@ const handleSubmit = async () => {
 
 .add-icon {
   font-size: 48rpx;
-  color: #ccc;
+  color: #c9c9b8;
 }
 
 .add-text {
   font-size: 22rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .submit-btn {
@@ -288,7 +288,7 @@ const handleSubmit = async () => {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
-  background: #1890ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: white;
   font-size: 32rpx;
   font-weight: 600;
@@ -297,7 +297,7 @@ const handleSubmit = async () => {
 }
 
 .submit-btn[disabled] {
-  background: #b3d9ff;
+  background: #eef2e4;
   color: white;
 }
 </style>

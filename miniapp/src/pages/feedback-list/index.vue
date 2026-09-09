@@ -451,7 +451,7 @@ onReachBottom(() => {
 <style scoped>
 .feedback-list {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #f0f3e9;
   padding-bottom: 120rpx;
 }
 
@@ -463,7 +463,7 @@ onReachBottom(() => {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  background: #1890ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: white;
   padding: 20rpx 32rpx;
   border-radius: 44rpx;
@@ -500,7 +500,7 @@ onReachBottom(() => {
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: #f0f0f0;
+  background: #eef1e2;
 }
 
 .user-info {
@@ -513,12 +513,12 @@ onReachBottom(() => {
 .user-name {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .feedback-time {
   font-size: 22rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .type-tag {
@@ -529,18 +529,18 @@ onReachBottom(() => {
 }
 
 .type-bug {
-  background: #fff1f0;
-  color: #f5222d;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .type-suggestion {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .type-other {
-  background: #f9f0ff;
-  color: #722ed1;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .card-content {
@@ -549,7 +549,7 @@ onReachBottom(() => {
 
 .content-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.6;
   word-break: break-all;
 }
@@ -569,7 +569,7 @@ onReachBottom(() => {
 
 /* 回复区域 */
 .replies-section {
-  background: #f7f8fa;
+  background: #f0f3e9;
   border-radius: 12rpx;
   padding: 16rpx 20rpx;
   margin-top: 16rpx;
@@ -583,7 +583,7 @@ onReachBottom(() => {
 }
 
 .reply-item + .reply-item {
-  border-top: 1rpx solid #eee;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .reply-indent {
@@ -600,7 +600,7 @@ onReachBottom(() => {
   width: 48rpx;
   height: 48rpx;
   border-radius: 50%;
-  background: #f0f0f0;
+  background: #eef1e2;
   flex-shrink: 0;
 }
 
@@ -620,12 +620,12 @@ onReachBottom(() => {
 .reply-name {
   font-size: 24rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .admin-tag {
   font-size: 18rpx;
-  background: #1890ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: white;
   padding: 2rpx 10rpx;
   border-radius: 8rpx;
@@ -633,13 +633,13 @@ onReachBottom(() => {
 
 .reply-content {
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
   word-break: break-all;
 }
 
 .at-user {
-  color: #1890ff;
+  color: #b08d4f;
   font-weight: 500;
 }
 
@@ -669,7 +669,7 @@ onReachBottom(() => {
 
 .reply-action-text {
   font-size: 22rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 /* 底部操作栏 */
@@ -679,7 +679,7 @@ onReachBottom(() => {
   gap: 24rpx;
   margin-top: 16rpx;
   padding-top: 12rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .action-btn {
@@ -688,11 +688,11 @@ onReachBottom(() => {
 
 .action-text {
   font-size: 24rpx;
-  color: #666;
+  color: #6b6653;
 }
 
 .delete-action {
-  color: #999;
+  color: #968f6d;
 }
 
 /* 底部回复输入框 */
@@ -711,7 +711,7 @@ onReachBottom(() => {
 .reply-input-bar {
   width: 100%;
   background: white;
-  border-top: 1rpx solid #eee;
+  border-top: 1rpx solid #e5e8d4;
   padding: 16rpx 24rpx;
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
 }
@@ -775,7 +775,7 @@ onReachBottom(() => {
 .reply-input {
   flex: 1;
   height: 72rpx;
-  background: #f5f5f5;
+  background: #f0f3e9;
   border-radius: 36rpx;
   padding: 0 28rpx;
   font-size: 28rpx;
@@ -783,14 +783,14 @@ onReachBottom(() => {
 
 .reply-send-btn {
   flex-shrink: 0;
-  background: #ddd;
+  background: #dde3cd;
   border-radius: 36rpx;
   padding: 12rpx 28rpx;
   transition: background 0.2s;
 }
 
 .reply-send-btn.active {
-  background: #1890ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 .send-text {
@@ -815,7 +815,7 @@ onReachBottom(() => {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 /* 加载状态 */
@@ -826,7 +826,7 @@ onReachBottom(() => {
 
 .loading-text {
   font-size: 26rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .no-more {
@@ -836,6 +836,6 @@ onReachBottom(() => {
 
 .no-more-text {
   font-size: 24rpx;
-  color: #ccc;
+  color: #c9c9b8;
 }
 </style>

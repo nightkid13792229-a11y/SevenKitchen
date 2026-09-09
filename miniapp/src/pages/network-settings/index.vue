@@ -166,12 +166,12 @@ async function testConnection() {
 <style scoped>
 .container {
   padding: 20rpx;
-  background-color: #f5f5f5;
+  background-color: #f0f3e9;
   min-height: 100vh;
 }
 
 .section {
-  background-color: #fff;
+  background-color: #f3eddd;
   border-radius: 12rpx;
   padding: 30rpx;
   margin-bottom: 20rpx;
@@ -180,13 +180,13 @@ async function testConnection() {
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 10rpx;
 }
 
 .section-desc {
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   margin-bottom: 20rpx;
 }
 
@@ -198,14 +198,14 @@ async function testConnection() {
   width: 100%;
   height: 80rpx;
   padding: 0 20rpx;
-  border: 2rpx solid #e0e0e0;
+  border: 2rpx solid #dde3cd;
   border-radius: 8rpx;
   font-size: 28rpx;
-  background-color: #fff;
+  background-color: #f3eddd;
 }
 
 .input:focus {
-  border-color: #007aff;
+  border-color: #b08d4f;
 }
 
 .hint {
@@ -214,7 +214,7 @@ async function testConnection() {
 
 .hint-text {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .test-group {
@@ -230,13 +230,13 @@ async function testConnection() {
 }
 
 .test-result.success {
-  background-color: #e8f5e9;
-  color: #2e7d32;
+  background-color: #eef2e4;
+  color: #1e3a2f;
 }
 
 .test-result.error {
-  background-color: #ffebee;
-  color: #c62828;
+  background-color: #f8e8e2;
+  color: #b4553f;
 }
 
 .button-group {
@@ -257,21 +257,21 @@ async function testConnection() {
 }
 
 .btn-primary {
-  background-color: #007aff;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
 }
 
 .btn-primary:active {
-  background-color: #0051d5;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 .btn-secondary {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: #eef1e2;
+  color: #26261f;
 }
 
 .btn-secondary:active {
-  background-color: #e0e0e0;
+  background-color: #dde3cd;
 }
 
 .help-text {
@@ -279,7 +279,7 @@ async function testConnection() {
   flex-direction: column;
   gap: 10rpx;
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   line-height: 1.6;
 }
 </style>

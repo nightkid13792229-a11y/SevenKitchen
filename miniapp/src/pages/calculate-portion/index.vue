@@ -617,7 +617,7 @@ function calculate() {
 <style scoped>
 .container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f0f3e9;
   padding: 20rpx;
   padding-bottom: 40rpx;
 }
@@ -632,7 +632,7 @@ function calculate() {
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 20rpx;
 }
 
@@ -645,25 +645,25 @@ function calculate() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8f8f8;
-  border: 1px solid #e0e0e0;
+  background: #fbfcf7;
+  border: 1px solid #dde3cd;
   border-radius: 8rpx;
   padding: 24rpx;
 }
 
 .selector-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .selector-arrow {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 /* 狗狗信息卡片 */
 .dog-info-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   border-radius: 12rpx;
   padding: 24rpx;
   color: white;
@@ -687,11 +687,11 @@ function calculate() {
 }
 
 .dog-gender.male {
-  color: #a0d8ff;
+  color: #d8bc85;
 }
 
 .dog-gender.female {
-  color: #ffb3ba;
+  color: #c48f77;
 }
 
 .dog-breed {
@@ -734,7 +734,7 @@ function calculate() {
 /* 输入模式切换 */
 .mode-tabs {
   display: flex;
-  background: #f5f5f5;
+  background: #f0f3e9;
   border-radius: 8rpx;
   padding: 4rpx;
   margin-bottom: 20rpx;
@@ -745,14 +745,14 @@ function calculate() {
   text-align: center;
   padding: 16rpx;
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   border-radius: 6rpx;
   transition: all 0.3s;
 }
 
 .tab.active {
   background: white;
-  color: #667eea;
+  color: #b08d4f;
   font-weight: bold;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
 }
@@ -763,7 +763,7 @@ function calculate() {
 }
 
 .input-card {
-  background: #f8f8f8;
+  background: #fbfcf7;
   border-radius: 8rpx;
   padding: 20rpx;
 }
@@ -780,7 +780,7 @@ function calculate() {
 
 .input-label {
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   width: 240rpx;
   flex-shrink: 0;
 }
@@ -788,33 +788,33 @@ function calculate() {
 .input-field {
   flex: 1;
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #dde3cd;
   border-radius: 6rpx;
   padding: 16rpx 20rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .input-field.readonly {
-  background: #f0f0f0;
-  color: #999;
+  background: #eef1e2;
+  color: #968f6d;
 }
 
 .picker-button {
   flex: 1;
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #dde3cd;
   border-radius: 6rpx;
   padding: 16rpx 20rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   display: flex;
   justify-content: space-between;
 }
 
 .unit-text {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
   margin-left: 12rpx;
 }
 
@@ -822,7 +822,7 @@ function calculate() {
 .calculate-btn {
   width: 100%;
   height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: white;
   border: none;
   border-radius: 44rpx;
@@ -837,7 +837,7 @@ function calculate() {
 
 /* 结果卡片 */
 .result-card {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(150deg, #d8bc85 0%, #b08d4f 100%);
   border-radius: 12rpx;
   padding: 32rpx;
 }
@@ -865,12 +865,12 @@ function calculate() {
 .result-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .result-value.highlight {
   font-size: 40rpx;
-  color: #e17055;
+  color: #b4553f;
 }
 
 .result-subtext {
@@ -883,7 +883,7 @@ function calculate() {
 
 .result-tip {
   font-size: 24rpx;
-  color: #666;
+  color: #6b6653;
   text-align: center;
   margin-top: 24rpx;
   padding: 16rpx;

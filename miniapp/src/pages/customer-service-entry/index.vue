@@ -98,7 +98,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 32rpx;
-  background: #f5f5f5;
+  background: #f0f3e9;
   box-sizing: border-box;
 }
 
@@ -107,14 +107,14 @@ onMounted(() => {
   max-width: 620rpx;
   padding: 44rpx 36rpx;
   border-radius: 16rpx;
-  background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(15, 23, 42, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.08);
   box-sizing: border-box;
 }
 
 .entry-title {
   display: block;
-  color: #1f2933;
+  color: #26261f;
   font-size: 34rpx;
   font-weight: 700;
   text-align: center;
@@ -123,7 +123,7 @@ onMounted(() => {
 .entry-subtitle {
   display: block;
   margin-top: 14rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 26rpx;
   line-height: 1.5;
   text-align: center;
@@ -140,15 +140,15 @@ onMounted(() => {
 }
 
 .entry-button {
-  background: #1890ff;
-  color: #ffffff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .entry-secondary {
   margin-top: 18rpx;
-  background: #ffffff;
-  color: #6b7280;
-  border: 1rpx solid #e5e7eb;
+  background: #fbfcf7;
+  color: #6b6653;
+  border: 1rpx solid #e5e8d4;
 }
 
 .entry-button::after,

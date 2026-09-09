@@ -211,20 +211,20 @@ function goToRecipeList() {
 <style scoped>
 .diy-sheet-list-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f0f3e9;
 }
 
 .page-header {
-  background-color: #fff;
+  background-color: #f3eddd;
   padding: 24rpx;
   text-align: center;
-  border-bottom: 1rpx solid #e5e5e5;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .page-title {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .list-content {
@@ -238,7 +238,7 @@ function goToRecipeList() {
   align-items: center;
   justify-content: center;
   padding: 120rpx 40rpx;
-  background-color: #fff;
+  background-color: #f3eddd;
   border-radius: 16rpx;
 }
 
@@ -249,22 +249,22 @@ function goToRecipeList() {
 
 .empty-text {
   font-size: 32rpx;
-  color: #333;
+  color: #26261f;
   font-weight: bold;
   margin-bottom: 12rpx;
 }
 
 .empty-hint {
   font-size: 26rpx;
-  color: #999;
+  color: #968f6d;
   margin-bottom: 40rpx;
   text-align: center;
 }
 
 .btn-explore {
   padding: 20rpx 60rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 28rpx;
   border: none;
@@ -278,10 +278,10 @@ function goToRecipeList() {
 }
 
 .sheet-card {
-  background-color: #fff;
+  background-color: #f3eddd;
   border-radius: 16rpx;
   overflow: hidden;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2rpx 12rpx rgba(30, 46, 36, 0.06);
 }
 
 .card-header {
@@ -289,7 +289,7 @@ function goToRecipeList() {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .header-left {
@@ -311,17 +311,17 @@ function goToRecipeList() {
 .recipe-name {
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .sheet-meta {
   font-size: 24rpx;
-  color: #999;
+  color: #968f6d;
 }
 
 .card-arrow {
   font-size: 32rpx;
-  color: #ccc;
+  color: #c9c9b8;
 }
 
 .card-content {
@@ -338,14 +338,14 @@ function goToRecipeList() {
 
 .content-label {
   font-size: 26rpx;
-  color: #666;
+  color: #6b6653;
   width: 140rpx;
   flex-shrink: 0;
 }
 
 .content-value {
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -367,14 +367,14 @@ function goToRecipeList() {
 }
 
 .view-btn {
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
 }
 
 .delete-btn {
-  background-color: #fff;
-  color: #ff4d4f;
-  border: 1rpx solid #ff4d4f;
+  background-color: #f3eddd;
+  color: #b4553f;
+  border: 1rpx solid rgba(180, 85, 63, 0.5);
 }
 
 .btn-text {
@@ -397,6 +397,6 @@ function goToRecipeList() {
 
 .loading-text {
   font-size: 28rpx;
-  color: #666;
+  color: #6b6653;
 }
 </style>

@@ -15,7 +15,7 @@ export interface ShareResult {
 
 // 默认配置
 const DEFAULT_CONFIG = {
-  title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+  title: '赛文的食堂 - 为您的爱犬定制健康食谱',
   imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
   path: '/pages/home/index'
 }

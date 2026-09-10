@@ -14,8 +14,8 @@
     <!-- 照片列表 -->
     <view v-else-if="photos.length > 0" class="photos-container">
       <view class="header">
-        <text class="title">SevenKitchen原料照片</text>
-        <text class="subtitle">来自SevenKitchen的新鲜食材照片</text>
+        <text class="title">赛文的食堂·原料照片</text>
+        <text class="subtitle">来自赛文的食堂的新鲜食材照片</text>
       </view>
 
       <view class="photos-grid">
@@ -30,7 +30,7 @@
       </view>
 
       <view class="footer">
-        <text class="footer-text">照片来自SevenKitchen，仅供查看</text>
+        <text class="footer-text">照片来自赛文的食堂，仅供查看</text>
         <text class="footer-time">上传时间：{{ formatDateTime(uploadedAt) }}</text>
       </view>
     </view>

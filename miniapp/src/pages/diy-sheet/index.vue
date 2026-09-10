@@ -1290,7 +1290,7 @@ async function handlePrint() {
 
     // 2. 绘制分享图品牌头部
     builder.drawBrandHeader({
-      brand: 'Seven的厨房',
+      brand: '赛文的食堂',
       logoPath: '/static/logo.png',
       avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
       backgroundImage: headerBackground,
@@ -1384,7 +1384,7 @@ async function handlePrint() {
 
     // 10. 绘制页脚
     const dateStr = new Date().toLocaleDateString('zh-CN')
-    builder.drawFooter(`Seven厨房 | ${dateStr}`)
+    builder.drawFooter(`赛文的食堂 | ${dateStr}`)
 
     // 11. 导出为图片
     const imagePath = await builder.toImage()

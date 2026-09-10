@@ -342,7 +342,7 @@ describe('diy sheet layout regressions', () => {
     )
 
     expect(source).toContain('builder.drawBrandHeader({')
-    expect(source).toContain("brand: 'Seven的厨房'")
+    expect(source).toContain("brand: '赛文的食堂'")
     expect(source).not.toContain("brand: 'seven 的厨房'")
     expect(source).toContain("logoPath: '/static/logo.png'")
     expect(source).toContain('builder.drawShareSummaryCards({')

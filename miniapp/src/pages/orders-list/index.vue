@@ -91,13 +91,16 @@
 
         <view v-if="hasQuickActions(order)" class="order-actions" @tap.stop>
           <button
-            v-if="order.status === 'PENDING_PAYMENT'"
+            v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
             class="action-btn primary"
             :disabled="payingOrderId === order.id"
             @tap="payOrderFromList(order.id)"
           >
             {{ payingOrderId === order.id ? '调起支付中' : '立即付款' }}
           </button>
+          <text v-if="isPaymentExpired(order)" class="order-expired-text">
+            支付已超时，订单已关闭
+          </text>
           <button
             v-if="order.status === 'SHIPPED'"
             class="action-btn secondary"
@@ -190,6 +193,9 @@ interface Order {
   carrierCode?: string;
   paymentMethod?: string | null;
   transactionId?: string | null;
+  paymentDeadline?: string | null;
+  paymentRemainingSeconds?: number | null;
+  paymentAutoCloseEnabled?: boolean | null;
   firstItem?: {
     dogId?: string;
     dog?: {
@@ -222,7 +228,7 @@ const selectedStatus = ref<string>('ALL');
 const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
-  { label: '制作中', value: 'IN_PROGRESS', count: 0 },
+  { label: '已付款/制作中', value: 'IN_PROGRESS', count: 0 },
   { label: '待收货', value: 'WAIT_RECEIVE', count: 0 },
   { label: '已收货', value: 'RECEIVED', count: 0 },
   { label: '售后中', value: 'AFTERSALE', count: 0 },
@@ -249,7 +255,7 @@ const emptyText = computed(() => {
   const copyMap: Record<string, string> = {
     ALL: '去首页选择食谱，下单后订单会出现在这里。',
     PENDING_PAYMENT: '没有需要付款的订单。',
-    IN_PROGRESS: '没有正在制作的订单。',
+    IN_PROGRESS: '没有已付款或正在制作的订单。',
     WAIT_RECEIVE: '没有等待收货的订单。',
     RECEIVED: '没有已收货订单。',
     AFTERSALE: '没有售后中的订单。',
@@ -618,10 +624,26 @@ function formatAmount(amount?: number): string {
   return amount.toFixed(2);
 }
 
+// 判断待付款订单是否已支付超时（与详情页逻辑一致）
+function isPaymentExpired(order: Order): boolean {
+  if (order.status !== 'PENDING_PAYMENT') return false;
+  if (order.paymentAutoCloseEnabled !== true) return false;
+  if (order.paymentRemainingSeconds != null) {
+    return order.paymentRemainingSeconds <= 0;
+  }
+  if (order.paymentDeadline) {
+    return new Date(order.paymentDeadline).getTime() <= Date.now();
+  }
+  return false;
+}
+
 function getStatusText(orderOrStatus: Order | string): string {
   const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
   if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
     return '已退款（钱款原路退回）'
+  }
+  if (typeof orderOrStatus !== 'string' && isPaymentExpired(orderOrStatus)) {
+    return '已超时关闭'
   }
   // Phase 9: Simplified status text aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status text
@@ -644,6 +666,9 @@ function getStatusColor(orderOrStatus: Order | string): string {
   const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
   if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
     return '#16a34a'
+  }
+  if (typeof orderOrStatus !== 'string' && isPaymentExpired(orderOrStatus)) {
+    return '#999'
   }
   // Phase 9: Simplified status colors aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status colors
@@ -975,6 +1000,12 @@ function formatAddress(address?: { regionText?: string }): string {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+}
+
+.order-expired-text {
+  align-self: center;
+  font-size: 24rpx;
+  color: #999;
 }
 
 .action-btn::after,

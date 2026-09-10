@@ -72,11 +72,15 @@ interface Address {
 
 const addresses = ref<Address[]>([])
 const mode = ref('manage') // 'manage' or 'select'
+const from = ref('')
+const orderId = ref('')
 
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   mode.value = currentPage.options?.mode || 'manage'
+  from.value = currentPage.options?.from || ''
+  orderId.value = currentPage.options?.orderId || ''
 })
 
 onShow(() => {
@@ -124,8 +128,17 @@ function onAddressTap(addressId: string) {
 }
 
 function addAddress() {
+  // 从订单详情页进入时，把订单上下文透传给新增地址页，保存后自动绑定订单
+  const params = [
+    mode.value === 'select' ? 'mode=select' : '',
+    from.value ? `from=${from.value}` : '',
+    orderId.value ? `orderId=${orderId.value}` : '',
+  ]
+    .filter(Boolean)
+    .join('&')
+
   uni.navigateTo({
-    url: '/pages/address-edit/index'
+    url: `/pages/address-edit/index${params ? `?${params}` : ''}`
   })
 }
 

@@ -225,7 +225,7 @@ onShow(() => {
 onShareAppMessage(() => {
   console.log('[Favorites Share] ========== 转发给朋友分享函数被调用 ==========')
   const config = {
-    title: '我收藏的狗狗食谱 - Seven的厨房',
+    title: '我收藏的狗狗食谱 - 赛文的食堂',
     imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
     path: '/pages/favorite-recipes/index'
   }
@@ -237,7 +237,7 @@ onShareAppMessage(() => {
 onShareTimeline(() => {
   console.log('[Favorites Share] ========== 分享到朋友圈函数被调用 ==========')
   const config = {
-    title: '我收藏的狗狗食谱 - Seven的厨房',
+    title: '我收藏的狗狗食谱 - 赛文的食堂',
     imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl
   }
   console.log('[Favorites Share] 朋友圈配置:', JSON.stringify(config, null, 2))

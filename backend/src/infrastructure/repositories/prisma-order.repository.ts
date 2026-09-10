@@ -8,6 +8,7 @@ import { RecipeSnapshot } from '../../domain/recipe/types';
 import { PrismaService } from '../prisma.service';
 import { OrderStatus, OrderType } from '../../domain';
 import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 @Injectable()
 export class PrismaOrderRepository implements OrderRepository {
@@ -71,10 +72,24 @@ export class PrismaOrderRepository implements OrderRepository {
     if (!existing) {
       // Use transaction to ensure atomicity: create Order and OrderItems together
       await this.prisma.$transaction(async (tx) => {
+        // Step 0: 生成友好短号（当日自增序列，SK + YYYYMMDD + -NNN）
+        const dateKey = TimezoneUtil.toShanghaiDateString(new Date()).replace(
+          /-/g,
+          '',
+        );
+        const seq = await tx.orderSequence.upsert({
+          where: { dateKey },
+          update: { lastSeq: { increment: 1 } },
+          create: { dateKey, lastSeq: 1 },
+        });
+        const orderNo = `SK${dateKey}-${String(seq.lastSeq).padStart(3, '0')}`;
+        order.orderNo = orderNo;
+
         // Step 1: Create Order first (without items)
         await tx.order.create({
           data: {
             id: order.id,
+            orderNo,
             customerId: order.customerId,
             dogId: order.dogId ?? null,
             addressId: order.addressId ?? null,
@@ -154,6 +169,7 @@ export class PrismaOrderRepository implements OrderRepository {
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
+          orderNo: order.orderNo ?? null,
           customerId: order.customerId,
           dogId: order.dogId ?? null,
           addressId: order.addressId ?? null,
@@ -327,6 +343,7 @@ export class PrismaOrderRepository implements OrderRepository {
       true, // skipValidation
       (record as any).adminRemark ?? null,
       ((record as any).shippingAddressSnapshot as any) ?? null,
+      (record as any).orderNo ?? null,
     );
   }
 

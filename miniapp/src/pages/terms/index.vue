@@ -8,7 +8,7 @@
       <view class="section">
         <text class="section-title">引言</text>
         <text class="section-content"
-          >欢迎您使用"Seven的厨房"小程序！为使用"Seven的厨房"小程序服务（以下简称"本服务"），您应当阅读并遵守《用户协议》（以下简称"本协议"）。请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的相应条款。</text
+          >欢迎您使用"赛文的食堂"小程序！为使用"赛文的食堂"小程序服务（以下简称"本服务"），您应当阅读并遵守《用户协议》（以下简称"本协议"）。请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的相应条款。</text
         >
         <text class="section-content"
           >除非您已阅读并接受本协议所有条款，否则您无权使用本服务。您使用本服务即视为您已阅读并同意上述协议的约束。</text
@@ -18,7 +18,7 @@
       <view class="section">
         <text class="section-title">一、服务内容</text>
         <text class="section-content"
-          >1. 本服务是"Seven的厨房"为您提供的宠物鲜食订购及相关服务平台。</text
+          >1. 本服务是"赛文的食堂"为您提供的宠物鲜食订购及相关服务平台。</text
         >
         <text class="section-content"
           >2.
@@ -97,7 +97,7 @@
         <text class="section-title">六、知识产权</text>
         <text class="section-content"
           >1.
-          本服务中的所有内容，包括但不限于文字、图片、音频、视频、软件、程序等，均为"Seven的厨房"或其许可方所有。</text
+          本服务中的所有内容，包括但不限于文字、图片、音频、视频、软件、程序等，均为"赛文的食堂"或其许可方所有。</text
         >
         <text class="section-content"
           >2. 未经书面授权，您不得复制、修改、传播上述内容。</text

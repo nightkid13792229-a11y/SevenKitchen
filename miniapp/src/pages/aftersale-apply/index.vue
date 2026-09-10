@@ -4,12 +4,21 @@
       <text class="page-title">{{ pageTitle }}</text>
     </view>
 
+    <!-- 订单信息加载失败错误态 -->
+    <view v-if="loadFailed" class="section load-failed">
+      <text class="load-failed-icon">⚠️</text>
+      <text class="load-failed-title">订单信息加载失败</text>
+      <text class="load-failed-desc">暂时无法确认订单信息，为避免提交到错误订单，请重试或联系客服。</text>
+      <button class="btn-retry" @tap="loadOrderInfo">重新加载</button>
+    </view>
+
+    <block v-if="!loadFailed">
     <!-- 订单信息 -->
     <view class="section order-info" v-if="orderInfo">
       <text class="section-title">订单信息</text>
       <view class="info-item">
         <text class="label">订单编号:</text>
-        <text class="value">{{ formatOrderId(orderId) }}</text>
+        <text class="value">{{ orderInfo?.orderNo || formatOrderId(orderId) }}</text>
       </view>
       <view class="info-item">
         <text class="label">订单状态:</text>
@@ -72,7 +81,7 @@
         class="customer-service-bottom-action"
         source-type="AFTERSALE"
         :order-id="orderId"
-        :order-no="formatOrderId(orderId)"
+        :order-no="orderInfo?.orderNo || formatOrderId(orderId)"
         title="售后申请咨询"
       />
       <button
@@ -84,6 +93,7 @@
         {{ submitting ? '提交中...' : '提交申请' }}
       </button>
     </view>
+    </block>
   </view>
 </template>
 
@@ -100,6 +110,7 @@ const reason = ref('');
 const photos = ref<string[]>([]);
 const orderInfo = ref<any>(null);
 const submitting = ref(false);
+const loadFailed = ref(false);
 
 const aftersaleTypes = [
   { value: 'REFUND', label: '申请退款', icon: '💰' },
@@ -140,16 +151,20 @@ onMounted(async () => {
 
 async function loadOrderInfo() {
   try {
+    loadFailed.value = false;
     uni.showLoading({ title: '加载中...' });
     const res = await request({
       url: `/orders/${orderId.value}`,
       method: 'GET',
     });
-    if (res.code === 0) {
+    if (res.code === 0 && res.data) {
       orderInfo.value = res.data;
+    } else {
+      loadFailed.value = true;
     }
   } catch (error) {
     console.error('Load order info error:', error);
+    loadFailed.value = true;
   } finally {
     uni.hideLoading();
   }
@@ -213,6 +228,12 @@ function showAftersaleSubmittedModal(title = '申请已提交') {
 
 async function submitAftersale() {
   if (submitting.value) {
+    return;
+  }
+
+  // 订单信息未加载成功时阻断提交，避免把售后提交到错误订单
+  if (loadFailed.value || !orderInfo.value) {
+    uni.showToast({ title: '订单信息加载失败，请先重试', icon: 'none' });
     return;
   }
 
@@ -370,6 +391,49 @@ function getStatusText(status: string): string {
   margin: 20rpx;
   padding: 30rpx;
   border-radius: 16rpx;
+}
+
+.load-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 40rpx;
+  text-align: center;
+
+  .load-failed-icon {
+    font-size: 88rpx;
+    line-height: 1;
+    margin-bottom: 20rpx;
+  }
+
+  .load-failed-title {
+    font-size: 32rpx;
+    font-weight: bold;
+    color: #26261f;
+    margin-bottom: 12rpx;
+  }
+
+  .load-failed-desc {
+    font-size: 26rpx;
+    color: #999;
+    line-height: 1.5;
+    margin-bottom: 40rpx;
+  }
+
+  .btn-retry {
+    min-width: 240rpx;
+    height: 80rpx;
+    line-height: 80rpx;
+    background-color: #1e3a2f;
+    color: #fff;
+    font-size: 28rpx;
+    border-radius: 40rpx;
+    border: none;
+
+    &::after {
+      border: none;
+    }
+  }
 }
 
 .section-title {

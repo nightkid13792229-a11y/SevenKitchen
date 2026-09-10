@@ -202,6 +202,14 @@ function save() {
     return
   }
 
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
+    uni.showToast({
+      title: '手机号格式不正确，请输入 11 位手机号',
+      icon: 'none'
+    })
+    return
+  }
+
   uni.showLoading({ title: '保存中...' })
 
   const payload = {

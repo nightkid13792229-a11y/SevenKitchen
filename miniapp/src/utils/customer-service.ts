@@ -51,7 +51,7 @@ export const defaultCustomerServiceConfig: CustomerServiceConfig = {
   orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
   productCardTitleTemplate: '咨询商品 {productName}',
   productCardPathTemplate: '/pages/recipe-detail/index?recipeId={productId}',
-  defaultCardTitleTemplate: 'SevenKitchen 客服咨询',
+  defaultCardTitleTemplate: '赛文的食堂 客服咨询',
   defaultCardPathTemplate: '/pages/home/index',
   welcomeMessage: null,
   orderDetailDeliveryNote: null,

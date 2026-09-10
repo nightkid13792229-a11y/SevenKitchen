@@ -2330,6 +2330,7 @@ export class AdminController {
 
     return {
       id: order.id,
+      orderNo: order.orderNo ?? null,
       customerId: order.customerId,
       customer,
       dogId: order.dogId,

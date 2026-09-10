@@ -83,6 +83,7 @@ export class Order {
     skipValidation?: boolean, // Internal: skip validation for admin updates
     public adminRemark: string | null = null,
     public shippingAddressSnapshot: ShippingAddressSnapshot | null = null,
+    public orderNo: string | null = null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -136,6 +137,7 @@ export class Order {
       true, // skip validation
       data.adminRemark ?? null,
       data.shippingAddressSnapshot ?? null,
+      data.orderNo ?? null,
     );
   }
 

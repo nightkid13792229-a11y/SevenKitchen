@@ -3,7 +3,7 @@
     <!-- Logo区域 -->
     <view class="logo-section">
       <image class="logo" :src="STATIC_LOGO_SRC" mode="aspectFit"></image>
-      <text class="app-name">Seven的厨房</text>
+      <text class="app-name">赛文的食堂</text>
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>
 
@@ -52,14 +52,27 @@ import { getCurrentMiniProgramAppId } from "../../utils/account";
 const loading = ref(false);
 const isAgreed = ref(false);
 const STATIC_LOGO_SRC = "/static/logo.png";
+const redirectUrl = ref("");
 
-onLoad(() => {
+onLoad((options: any) => {
+  redirectUrl.value = options?.redirect ? decodeURIComponent(options.redirect) : "";
   // 检查是否已登录
   const token = uni.getStorageSync("token");
   if (token) {
-    uni.switchTab({ url: "/pages/home/index" });
+    goToRedirect();
   }
 });
+
+function goToRedirect() {
+  if (redirectUrl.value) {
+    uni.redirectTo({
+      url: redirectUrl.value,
+      fail: () => uni.switchTab({ url: "/pages/home/index" }),
+    });
+  } else {
+    uni.switchTab({ url: "/pages/home/index" });
+  }
+}
 
 // 切换协议同意状态
 const toggleAgreement = () => {
@@ -202,8 +215,9 @@ const handleWechatLogin = async () => {
       console.log("[Login] Needs profile setup:", needsProfileSetup);
 
       if (!user.phone && !user.phoneBound) {
-        const phoneBindRedirect =
-          role === "STAFF" || role === "ADMIN"
+        const phoneBindRedirect = redirectUrl.value
+          ? encodeURIComponent(redirectUrl.value)
+          : role === "STAFF" || role === "ADMIN"
             ? "%2Fpages%2Fstaff-workbench%2Findex"
             : "%2Fpages%2Fhome%2Findex";
         setTimeout(() => {
@@ -216,16 +230,19 @@ const handleWechatLogin = async () => {
 
       if (needsProfileSetup) {
         // 新用户或未设置头像昵称，跳转到完善资料页面
+        const profileRedirect = redirectUrl.value
+          ? `?redirect=${encodeURIComponent(redirectUrl.value)}`
+          : "";
         setTimeout(() => {
           uni.redirectTo({
-            url: "/pages/profile-setup/index",
+            url: `/pages/profile-setup/index${profileRedirect}`,
           });
         }, 500);
       } else {
         // 已设置过头像昵称，直接进入首页
         if (isNewUser) {
           uni.showToast({
-            title: "欢迎加入Seven的厨房！",
+            title: "欢迎加入赛文的食堂！",
             icon: "success",
             duration: 2000,
           });
@@ -238,7 +255,7 @@ const handleWechatLogin = async () => {
         }
 
         setTimeout(() => {
-          uni.switchTab({ url: "/pages/home/index" });
+          goToRedirect();
         }, 500);
       }
     } else {

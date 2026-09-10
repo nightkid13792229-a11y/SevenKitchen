@@ -1406,7 +1406,7 @@ defineOptions({
   onShareAppMessage() {
     console.log('[Home Share] ========== 转发给朋友分享函数被调用 ==========')
     const config = {
-      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+      title: '赛文的食堂 - 为您的爱犬定制健康食谱',
       imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
       path: '/pages/home/index'
     }
@@ -1417,7 +1417,7 @@ defineOptions({
   onShareTimeline() {
     console.log('[Home Share] ========== 分享到朋友圈函数被调用 ==========')
     const config = {
-      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+      title: '赛文的食堂 - 为您的爱犬定制健康食谱',
       imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl
     }
     console.log('[Home Share] 朋友圈配置:', JSON.stringify(config, null, 2))

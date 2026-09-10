@@ -67,16 +67,29 @@ import {
 const avatarUrl = ref('')
 const nickname = ref('')
 const isNewAvatar = ref(false) // 标记是否是新选择的头像（需要上传）
+const redirectUrl = ref('')
 
 // 是否可以提交
 const canSubmit = computed(() => {
   return avatarUrl.value.length > 0 && nickname.value.trim().length > 0
 })
 
-onLoad(() => {
+onLoad((options: any) => {
+  redirectUrl.value = options?.redirect ? decodeURIComponent(options.redirect) : ''
   // 从后端获取当前用户信息
   loadUserInfo()
 })
+
+function finishProfileSetup() {
+  if (redirectUrl.value) {
+    uni.redirectTo({
+      url: redirectUrl.value,
+      fail: () => uni.switchTab({ url: '/pages/me/index' }),
+    })
+  } else {
+    uni.switchTab({ url: '/pages/me/index' })
+  }
+}
 
 // 加载用户信息
 async function loadUserInfo() {
@@ -190,11 +203,9 @@ async function handleSubmit() {
         uni.setStorageSync('user', user)
       }
 
-      // 延迟跳转到"我的"页面
+      // 延迟跳转：有回跳目标则返回，否则去"我的"
       setTimeout(() => {
-        uni.switchTab({
-          url: '/pages/me/index'
-        })
+        finishProfileSetup()
       }, 1500)
     } else {
       uni.showToast({
@@ -244,11 +255,9 @@ async function saveUserInfo(nickname: string, avatarUrl: string | null) {
         uni.setStorageSync('user', user)
       }
 
-      // 延迟跳转到"我的"页面
+      // 延迟跳转：有回跳目标则返回，否则去"我的"
       setTimeout(() => {
-        uni.switchTab({
-          url: '/pages/me/index'
-        })
+        finishProfileSetup()
       }, 1500)
     } else {
       uni.showToast({

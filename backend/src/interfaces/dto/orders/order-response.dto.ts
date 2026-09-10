@@ -207,6 +207,9 @@ export class OrderDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
 
+  @ApiPropertyOptional({ example: 'SK20260601-012', nullable: true })
+  orderNo?: string | null;
+
   @ApiProperty({ example: 'uuid' })
   customerId!: string;
 

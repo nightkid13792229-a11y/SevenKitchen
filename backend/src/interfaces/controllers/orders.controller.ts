@@ -1088,6 +1088,7 @@ export class OrdersController {
 
     return {
       id: order.id,
+      orderNo: order.orderNo ?? null,
       customerId: order.customerId,
       dogId: order.dogId,
       addressId: order.addressId,

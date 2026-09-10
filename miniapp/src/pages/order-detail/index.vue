@@ -91,7 +91,7 @@
         <view class="section-title">基本信息</view>
         <view class="info-row">
           <text class="label">订单编号:</text>
-          <text class="value order-id">{{ formatOrderId(order.id) }}</text>
+          <text class="value order-id">{{ order.orderNo || formatOrderId(order.id) }}</text>
           <button class="btn-copy" @tap="copyOrderId">复制</button>
         </view>
         <view class="info-row">
@@ -446,7 +446,7 @@
 
           <view class="order-id-copy">
             <text class="order-id-label">订单号:</text>
-            <text class="order-id-value">{{ formatOrderId(order.id) }}</text>
+            <text class="order-id-value">{{ order.orderNo || formatOrderId(order.id) }}</text>
             <button class="btn-copy-order-id" @tap="copyOrderId">
               复制订单号
             </button>
@@ -1051,6 +1051,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  orderNo?: string | null;
   customerId?: string; // 添加customerId字段用于权限验证
   type: string;
   status: string;
@@ -1229,7 +1230,7 @@ const paymentCountdownText = computed(() => {
 });
 
 const customerServiceOrderTitle = computed(() => {
-  const orderNo = order.value?.id ? formatOrderId(order.value.id) : '';
+  const orderNo = order.value?.orderNo || (order.value?.id ? formatOrderId(order.value.id) : '');
   return customerServiceConfig.value.orderCardTitleTemplate
     .split('{orderNo}')
     .join(orderNo)
@@ -1242,7 +1243,7 @@ const customerServiceOrderPath = computed(() => {
     .split('{orderId}')
     .join(order.value?.id || orderId.value)
     .split('{orderNo}')
-    .join(order.value?.id ? formatOrderId(order.value.id) : '');
+    .join(order.value?.orderNo || (order.value?.id ? formatOrderId(order.value.id) : ''));
 });
 
 function syncPaymentTimer() {
@@ -1393,7 +1394,7 @@ const groupedItems = computed(() => {
 
 const orderCenterTitle = computed(() => {
   const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
-  if (!firstName) return 'SevenKitchen 鲜食订单';
+  if (!firstName) return '赛文的食堂 鲜食订单';
   const itemCount = order.value?.items?.length || 1;
   return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName;
 });
@@ -2140,7 +2141,7 @@ async function selectCustomerAddress(address: StaffOrderAddress) {
 function resetAddressForm() {
   addressForm.value = {
     recipientName: '',
-    phone: '',
+    phone: order.value?.customer?.phone || '',
     province: '',
     city: '',
     district: '',
@@ -2226,6 +2227,13 @@ function validateAddressForm(): boolean {
   ) {
     uni.showToast({
       title: '请填写完整收货地址',
+      icon: 'none',
+    });
+    return false;
+  }
+  if (!/^1[3-9]\d{9}$/.test(form.phone)) {
+    uni.showToast({
+      title: '手机号格式不正确，请输入 11 位手机号',
       icon: 'none',
     });
     return false;
@@ -2377,7 +2385,7 @@ function getProductionPhotosShareDogName(): string {
 
   const dogNames = Array.from(names);
   if (dogNames.length === 0) {
-    return 'SevenKitchen';
+    return '赛文的食堂';
   }
   if (dogNames.length === 1) {
     return dogNames[0];
@@ -2525,7 +2533,7 @@ onShareAppMessage((e: any) => {
 
   // 默认分享订单详情页
   return {
-    title: 'SevenKitchen订单详情',
+    title: '赛文的食堂订单详情',
     path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
     imageUrl: '',
   };
@@ -2736,7 +2744,7 @@ function getCarrierName(code?: string): string {
 
 function copyOrderId() {
   uni.setClipboardData({
-    data: order.value?.id || '',
+    data: order.value?.orderNo || order.value?.id || '',
     success: () => {
       uni.showToast({ title: '订单号已复制', icon: 'success' });
     },

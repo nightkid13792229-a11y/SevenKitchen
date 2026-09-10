@@ -24,6 +24,11 @@
     <view class="info-section">
       <text class="recipe-name">{{ recipe.name }}</text>
 
+      <view v-if="showNoDogHint" class="no-dog-hint">
+        <text class="no-dog-hint-text">订购前需先创建狗狗档案，才能按体重精确计算份量与价格</text>
+        <button class="no-dog-hint-btn" @tap="goCreateDog">一键建档</button>
+      </view>
+
       <view
         v-if="dogs.length > 0"
         class="recipe-detail-dog-selector"
@@ -74,7 +79,7 @@
       </view>
       <view class="nutrition-item">
         <text class="label">设计软件</text>
-        <text class="value">{{ recipe.designSource || '七厨房' }}</text>
+        <text class="value">{{ recipe.designSource || '赛文的食堂' }}</text>
       </view>
     </view>
 
@@ -348,8 +353,8 @@ export default {
   onShareAppMessage() {
     // 动态生成标题
     const title = currentRecipeName
-      ? `${currentRecipeName} | Seven的厨房`
-      : '精选食谱 | Seven的厨房'
+      ? `${currentRecipeName} | 赛文的食堂`
+      : '精选食谱 | 赛文的食堂'
 
     // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
@@ -373,8 +378,8 @@ export default {
   onShareTimeline() {
     // 动态生成标题
     const title = currentRecipeName
-      ? `${currentRecipeName} | Seven的厨房`
-      : '精选食谱 | Seven的厨房'
+      ? `${currentRecipeName} | 赛文的食堂`
+      : '精选食谱 | 赛文的食堂'
 
     // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
@@ -517,6 +522,7 @@ const recipeId = ref('')
 const shareToken = ref('')
 const dogId = ref<string | null>(null)
 const dogs = ref<any[]>([])
+const dogsLoaded = ref(false)
 const selectedDogId = ref('')
 const initialDogId = ref('')
 const showReviewForm = ref(false)
@@ -557,6 +563,9 @@ const hasStructuredNutritionReport = computed(() => {
 const selectedDog = computed(() => {
   return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
 })
+
+// 已登录但未建档：在详情页提前预告，避免进入订购配置页才被拦下
+const showNoDogHint = computed(() => dogsLoaded.value && dogs.value.length === 0)
 
 // 当前生效的生命阶段版本（对应食谱ID）
 const activeLifeStageVersionRecipeId = computed(() => {
@@ -836,6 +845,7 @@ async function loadDogsForDetail() {
     })
     if (res.code === 0 && Array.isArray(res.data)) {
       dogs.value = res.data
+      dogsLoaded.value = true
       if (dogs.value.length > 0) {
         selectedDogId.value = initialDogId.value || dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
         if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
@@ -874,16 +884,7 @@ async function toggleFavorite() {
   // 检查是否登录
   const token = uni.getStorageSync('token')
   if (!token) {
-    uni.showToast({
-      title: '请先登录',
-      icon: 'none'
-    })
-    // 延迟跳转到登录页
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/login/index'
-      })
-    }, 1500)
+    promptLoginAndRedirect('收藏需要登录，登录后继续为你保存收藏')
     return
   }
 
@@ -911,15 +912,7 @@ async function toggleFavorite() {
     console.error('[RecipeDetail] Failed to toggle favorite:', error)
     // 如果是未授权错误，提示登录
     if (error.message?.includes('401') || error.message?.includes('Unauthorized') || error.message?.includes('未授权')) {
-      uni.showToast({
-        title: '请先登录',
-        icon: 'none'
-      })
-      setTimeout(() => {
-        uni.navigateTo({
-          url: '/pages/login/index'
-        })
-      }, 1500)
+      promptLoginAndRedirect('登录状态已失效，请重新登录')
     } else {
       uni.showToast({
         title: error.message || '操作失败',
@@ -955,16 +948,7 @@ function generateDiySheet() {
   // 检查是否登录
   const token = uni.getStorageSync('token')
   if (!token) {
-    uni.showToast({
-      title: '请先登录',
-      icon: 'none'
-    })
-    // 延迟跳转到登录页
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/login/index'
-      })
-    }, 1500)
+    promptLoginAndRedirect('制作 DIY 食谱单需要登录，登录后继续为你生成')
     return
   }
 
@@ -986,16 +970,7 @@ function goToOrder() {
   // 检查是否登录
   const token = uni.getStorageSync('token')
   if (!token) {
-    uni.showToast({
-      title: '请先登录',
-      icon: 'none'
-    })
-    // 延迟跳转到登录页
-    setTimeout(() => {
-      uni.navigateTo({
-        url: '/pages/login/index'
-      })
-    }, 1500)
+    promptLoginAndRedirect('购买成品需要登录，登录后继续为你配置订单')
     return
   }
 
@@ -1020,6 +995,33 @@ function selectDogForDetail(nextDogId: string) {
   selectedManualLifeStage.value = ''
   uni.setStorageSync('dogId', nextDogId)
   loadRecipeDetail()
+}
+
+function goCreateDog() {
+  uni.navigateTo({
+    url: '/pages/dog-create/index',
+  })
+}
+
+function promptLoginAndRedirect(message: string) {
+  uni.showModal({
+    title: '需要登录',
+    content: message,
+    confirmText: '去登录',
+    cancelText: '暂不',
+    success: (res) => {
+      if (!res.confirm) return
+
+      const params = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+      if (shareToken.value) {
+        params.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+      }
+      const redirect = `/pages/recipe-detail/index?${params.join('&')}`
+      uni.navigateTo({
+        url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
+      })
+    },
+  })
 }
 
 function openLifeStageSelector() {
@@ -1133,10 +1135,7 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
 async function openReviewForm() {
   const token = uni.getStorageSync('token')
   if (!token) {
-    uni.showToast({ title: '请先登录', icon: 'none' })
-    setTimeout(() => {
-      uni.navigateTo({ url: '/pages/login/index' })
-    }, 1500)
+    promptLoginAndRedirect('写评价需要登录，登录后继续为你填写评价')
     return
   }
 
@@ -1241,6 +1240,41 @@ function onReviewSubmitted() {
   margin-bottom: 8rpx;
   line-height: 1.4;
   text-align: center;
+}
+
+.no-dog-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 16rpx 0;
+  padding: 20rpx 24rpx;
+  background-color: #fdf6ec;
+  border: 1rpx solid #f0d9b5;
+  border-radius: 12rpx;
+}
+
+.no-dog-hint-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #8a6d3b;
+  line-height: 1.5;
+}
+
+.no-dog-hint-btn {
+  flex-shrink: 0;
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 24rpx;
+  font-size: 26rpx;
+  color: #fff;
+  background-color: #1e3a2f;
+  border-radius: 32rpx;
+  border: none;
+}
+
+.no-dog-hint-btn::after {
+  border: none;
 }
 
 .recipe-detail-dog-selector {

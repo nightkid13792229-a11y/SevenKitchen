@@ -9,6 +9,7 @@ datasource db {
 
 model Order {
   id                           String                      @id @default(uuid()) @map("id")
+  orderNo                      String?                     @unique @map("order_no") @db.VarChar(20)
   customerId                   String                      @map("customer_id")
   status                       OrderStatus
   type                         OrderType
@@ -55,6 +56,14 @@ model Order {
   @@index([status])
   @@index([aftersaleType])
   @@map("order")
+}
+
+// 订单友好短号当日自增序列（SK + YYYYMMDD + -NNN）
+model OrderSequence {
+  dateKey String @id @map("date_key") @db.VarChar(8)
+  lastSeq Int    @map("last_seq") @default(0)
+
+  @@map("order_sequence")
 }
 
 model OrderStatusHistory {

@@ -421,7 +421,7 @@ function drawFooter(ctx: any, y: number) {
   ctx.setTextAlign('center');
 
   // 只显示系统名称，不显示打印时间
-  ctx.fillText('Seven的厨房', A4_WIDTH / 2, y + 12);
+  ctx.fillText('赛文的食堂', A4_WIDTH / 2, y + 12);
 }
 
 /**

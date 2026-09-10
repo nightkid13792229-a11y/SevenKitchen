@@ -287,7 +287,7 @@ watch(reportPageTitle, (title) => {
 
 onShareAppMessage(() => {
   return {
-    title: `${recipeName.value} 营养报告 - Seven的厨房`,
+    title: `${recipeName.value} 营养报告 - 赛文的食堂`,
     path: getSharePath(),
     imageUrl: CURRENT_SHARE_CONFIG.recipeImageUrl,
   }

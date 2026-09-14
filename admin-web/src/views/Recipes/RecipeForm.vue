@@ -258,6 +258,15 @@
                     </div>
                     <div class="row-cell preparation-method">
                       {{ formatPreparationMethods(item.preparationMethod) }}
+                      <el-tooltip
+                        v-if="preparationBasisHint(item)"
+                        :content="preparationBasisHint(item)!"
+                        placement="top"
+                      >
+                        <el-icon class="preparation-basis-warning">
+                          <WarningFilled />
+                        </el-icon>
+                      </el-tooltip>
                     </div>
                     <div class="row-cell example-weight">
                       <span v-if="item.exampleWeight !== undefined && item.exampleWeight !== null">
@@ -914,7 +923,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules, UploadProps } from 'element-plus';
-import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue';
+import { Plus, Delete, InfoFilled, WarningFilled } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
@@ -925,6 +934,9 @@ import {
   appendPreparationMethodText,
   getDefaultPreparationMethodFromHistory,
 } from '@/utils/preparationMethodText';
+import {
+  preparationBasisMismatchHint,
+} from '@/utils/preparationBasis';
 import { validateElementForm } from '@/utils/elementFormValidation';
 import { buildRecipeSubmitData } from '@/utils/recipeFormPayload';
 import {
@@ -2302,6 +2314,14 @@ const formatPreparationMethods = (preparationMethod: string | undefined) => {
   return preparationMethod?.trim() || '-';
 };
 
+/** 制备方法的称重口径与营养状态不一致时给出提示；一致则返回 null */
+const preparationBasisHint = (item: RecipeItem): string | null =>
+  preparationBasisMismatchHint(
+    item.preparationMethod,
+    item.nutritionFood?.preparationState ?? item.nutritionState,
+    item.nutritionStateLabel ?? item.nutritionFood?.preparationStateLabel,
+  );
+
 // Get tag type for ingredient type
 const getTypeTagType = (type: string) => {
   const typeMap: Record<string, any> = {
@@ -2850,6 +2870,12 @@ onMounted(async () => {
 .nutrition-state-missing {
   color: #e6a23c;
   font-weight: 600;
+}
+
+.preparation-basis-warning {
+  margin-left: 6px;
+  color: #e6a23c;
+  vertical-align: middle;
 }
 
 .row-cell:nth-child(5) {

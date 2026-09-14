@@ -105,7 +105,17 @@
                 <span class="item-type-tag" :class="itemTypeTagClass(element)">{{ itemTypeLabel(element) }}</span>
                 <div class="item-main">
                   <div class="item-name">{{ itemDisplayName(element) }}</div>
-                  <div class="item-meta">{{ itemProfileName(element) }}</div>
+                  <div class="item-meta">
+                    {{ itemProfileName(element) }}
+                    <span
+                      v-if="itemPreparationText(element)"
+                      class="item-preparation"
+                      :class="{ 'item-preparation-mismatch': itemPreparationHint(element) }"
+                      :title="itemPreparationHint(element) || '制备方法（由系统按营养档案自动带出）'"
+                    >
+                      · 制备：{{ itemPreparationText(element) }}
+                    </span>
+                  </div>
                 </div>
                 <div class="weight-editor">
                   <el-input-number
@@ -223,6 +233,7 @@ import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
 import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessment'
+import { preparationBasisMismatchHint } from '@/utils/preparationBasis'
 
 /** 兜底烹饪方式选项（后端未提供时使用） */
 
@@ -356,6 +367,19 @@ function itemProfileName(item: DesignerItem): string {
     item.nutritionFoodName ||
     item.nutritionFood?.name ||
     '未选择营养档案'
+  )
+}
+
+/** 制备方法文案（后端已把字典 ID 解析成中文） */
+function itemPreparationText(item: DesignerItem): string {
+  return String(item.preparationMethodLabel || item.preparationMethod || '').trim()
+}
+
+/** 制备方法的称重口径与所选营养档案不一致时给出提示 */
+function itemPreparationHint(item: DesignerItem): string | null {
+  return preparationBasisMismatchHint(
+    itemPreparationText(item),
+    item.nutritionFood?.preparationState ?? null
   )
 }
 
@@ -1077,6 +1101,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.item-preparation {
+  margin-left: 6px;
+  color: #909399;
+}
+.item-preparation-mismatch {
+  color: #e6a23c;
 }
 .item-meta {
   margin-top: 2px;

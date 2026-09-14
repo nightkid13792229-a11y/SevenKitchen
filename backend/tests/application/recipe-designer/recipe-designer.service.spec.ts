@@ -57,6 +57,7 @@ describe('RecipeDesignerService', () => {
     },
     nutritionFood: {
       create: jest.fn(),
+      findUnique: jest.fn(),
     },
     ingredient: {
       count: jest.fn(),
@@ -134,6 +135,7 @@ describe('RecipeDesignerService', () => {
       { id: 'admin-1' },
     ]);
     prisma.recipeItem.findMany.mockResolvedValue([]);
+    prisma.nutritionFood.findUnique.mockResolvedValue(null);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
     prisma.dogBreed.findUnique.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback: any) =>
@@ -1419,6 +1421,94 @@ describe('RecipeDesignerService', () => {
       }),
       select: expect.any(Object),
     });
+  });
+
+  it('aligns the auto-generated preparation method with the selected nutrition profile state', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+    });
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      preparationState: 'COOKED',
+    });
+    // 该原料上一次的写法是「生重」，与本次选择的熟制档案冲突
+    prisma.recipeItem.findMany.mockResolvedValue([
+      {
+        ingredientId: 'ingredient-pumpkin',
+        preparationMethod: '生重、打碎、充分搅拌',
+        recipe: { updatedAt: new Date('2026-09-01T00:00:00.000Z') },
+      },
+    ]);
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-pumpkin',
+        nutritionFoodId: 'food-cooked',
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-pumpkin',
+        nutritionFoodId: 'food-cooked',
+        weightG: 100,
+        sortOrder: 0,
+      } as any,
+      'staff-1',
+    );
+
+    expect(prisma.nutritionFood.findUnique).toHaveBeenCalledWith({
+      where: { id: 'food-cooked' },
+      select: { preparationState: true },
+    });
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ingredientId: 'ingredient-pumpkin',
+          preparationMethod: '熟重、打碎、充分搅拌',
+        }),
+      }),
+    );
+  });
+
+  it('keeps an explicitly provided preparation method untouched', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+    });
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      preparationState: 'COOKED',
+    });
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-pumpkin',
+        nutritionFoodId: 'food-cooked',
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-pumpkin',
+        nutritionFoodId: 'food-cooked',
+        preparationMethod: '去皮、生重、打碎',
+        weightG: 100,
+        sortOrder: 0,
+      } as any,
+      'staff-1',
+    );
+
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          preparationMethod: '去皮、生重、打碎',
+        }),
+      }),
+    );
   });
 
   it('does not fetch raw nutrition data when returning a newly added design item', async () => {

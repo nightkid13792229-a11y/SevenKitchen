@@ -93,6 +93,7 @@ export interface DesignerItem {
     id?: string
     name?: string
     displayNameZh?: string | null
+    preparationState?: string | null
     mappings?: Array<{
       ingredientId?: string | null
       isPrimary?: boolean

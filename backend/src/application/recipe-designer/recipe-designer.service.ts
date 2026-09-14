@@ -105,6 +105,7 @@ import {
 } from '../recipe/preparation-method-text.util';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
 import { LifeStage as RecipeLifeStage } from '../../domain/recipe/enums';
+import { alignPreparationMethodBasis } from '../../domain/recipe-designer/preparation-basis';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RECIPE_SERIES_BUSINESS_STATUS_LABELS,
@@ -211,6 +212,7 @@ const DESIGN_RECIPE_ITEM_CLIENT_SELECT = {
       name: true,
       nameEn: true,
       displayNameZh: true,
+      preparationState: true,
       category: true,
       dataSource: true,
       status: true,
@@ -455,6 +457,7 @@ type DesignRecipeItemWithFood = {
     id: string;
     name: string;
     displayNameZh?: string | null;
+    preparationState?: string | null;
     nutritionData: unknown;
     mappings?: Array<{
       ingredientId: string;
@@ -4451,6 +4454,7 @@ export class RecipeDesignerService {
     const preparationMethod = await this.resolveDesignItemPreparationMethod(
       dto.preparationMethod,
       ingredientId,
+      dto.nutritionFoodId,
     );
     const shouldPersistNutrientTarget =
       await this.isIngredientIdSupplement(ingredientId);
@@ -5505,7 +5509,10 @@ export class RecipeDesignerService {
       nutritionFoodId: this.resolvePublishedNutritionFoodId(item, ingredientId),
       preparationMethod:
         this.normalizePreparationMethod(item.preparationMethod) ??
-        defaultPreparationMethod,
+        alignPreparationMethodBasis(
+          defaultPreparationMethod,
+          item.nutritionFood?.preparationState ?? null,
+        ),
       ratioPercent: isSupplement
         ? null
         : (publishedFoodRatioMap.get(item.id) ??
@@ -6743,11 +6750,13 @@ export class RecipeDesignerService {
   private async resolveDesignItemPreparationMethod(
     explicitPreparationMethod: string | null | undefined,
     ingredientId: string | null,
+    nutritionFoodId?: string | null,
   ) {
     const normalizedExplicit = this.normalizePreparationMethod(
       explicitPreparationMethod,
     );
     if (normalizedExplicit) {
+      // 人工显式填写的内容不做改写
       return normalizedExplicit;
     }
 
@@ -6755,7 +6764,32 @@ export class RecipeDesignerService {
       return null;
     }
 
-    return this.resolveDefaultPreparationMethodForIngredient(ingredientId);
+    const fallback =
+      await this.resolveDefaultPreparationMethodForIngredient(ingredientId);
+
+    // 自动生成的默认文案必须与所选营养档案的称重口径一致，
+    // 否则会出现「档案是熟、文案却写生重」这类矛盾。
+    return alignPreparationMethodBasis(
+      fallback,
+      await this.resolveNutritionFoodPreparationState(nutritionFoodId),
+    );
+  }
+
+  /** 读取营养档案的制备状态（决定称重口径：生/熟/干…） */
+  private async resolveNutritionFoodPreparationState(
+    nutritionFoodId?: string | null,
+  ): Promise<string | null> {
+    const id = nutritionFoodId?.trim();
+    if (!id) {
+      return null;
+    }
+
+    const nutritionFood = await this.prisma.nutritionFood.findUnique({
+      where: { id },
+      select: { preparationState: true },
+    });
+
+    return nutritionFood?.preparationState ?? null;
   }
 
   private normalizePreparationMethod(value: string | null | undefined) {

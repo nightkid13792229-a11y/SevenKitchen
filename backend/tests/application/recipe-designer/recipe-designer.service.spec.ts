@@ -3715,6 +3715,84 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('carries the nutrition profile (raw/cooked state) selected in the designer into the published recipe', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-nutrition-profile',
+        isCompliant: true,
+        items: [
+          item({
+            id: 'item-cooked-pepper',
+            nutritionFoodId: 'food-cooked-pepper',
+            preparationMethod: '水煮沥干',
+            nutritionFood: {
+              ...item().nutritionFood,
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: false }],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-nutrition-profile',
+      recipeId: 'design-nutrition-profile',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-nutrition-profile',
+    });
+    prisma.designRecipe.update.mockResolvedValue(
+      draft({ id: 'design-nutrition-profile', status: 'PUBLISHED' }),
+    );
+
+    await service.publishDraft(
+      'design-nutrition-profile',
+      { name: '熟制红甜椒配方' },
+      adminAccess,
+    );
+
+    const publishedItems = prisma.recipe.create.mock.calls[0][0].data.items
+      .create as Array<{ ingredientId: string; nutritionFoodId: string | null }>;
+
+    expect(publishedItems).toEqual([
+      expect.objectContaining({
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-cooked-pepper',
+      }),
+    ]);
+  });
+
+  it('rejects publishing when the selected nutrition profile is not mapped to the ingredient', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-unmapped-profile',
+        isCompliant: true,
+        items: [
+          item({
+            ingredientId: 'ingredient-1',
+            nutritionFoodId: 'food-unmapped',
+            nutritionFood: {
+              ...item().nutritionFood,
+              mappings: [{ ingredientId: 'ingredient-other', isPrimary: true }],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+
+    await expect(
+      service.publishDraft(
+        'design-unmapped-profile',
+        { name: '未映射营养档案配方' },
+        adminAccess,
+      ),
+    ).rejects.toThrow('营养档案与原料不匹配');
+
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
+  });
+
   it('inherits operational counters and moves favorites when publishing a designer revision', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({

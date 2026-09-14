@@ -250,8 +250,11 @@
                         {{ IngredientTypeLabels[item.ingredientType] || item.ingredientType }}
                       </el-tag>
                     </div>
-                    <div class="row-cell nutrition-state">
-                      {{ formatNutritionStateLabel(item) }}
+                    <div
+                      class="row-cell nutrition-state"
+                      :class="{ 'nutrition-state-missing': !hasNutritionProfile(item) }"
+                    >
+                      {{ formatRecipeItemNutritionState(item) }}
                     </div>
                     <div class="row-cell preparation-method">
                       {{ formatPreparationMethods(item.preparationMethod) }}
@@ -709,7 +712,9 @@
                 </div>
               </el-option>
             </el-select>
-            <div class="form-item-tip">未指定时默认使用该原料的主档案。</div>
+            <div class="form-item-tip">
+              请按食谱设计器确定的状态选择（生/熟等）。该原料有多个档案时不会自动选默认值，必须人工确认。
+            </div>
           </el-form-item>
 
           <el-form-item label="示例重量" required>
@@ -1170,6 +1175,41 @@ const formatNutritionProfileOptionLabel = (mapping: NutritionFoodMapping) => {
   return stateLabel === '-' ? foodName : `${stateLabel} · ${foodName}`;
 };
 
+/** 是否已指定用于计算的营养档案（决定生/熟状态） */
+const hasNutritionProfile = (value: any) => formatNutritionStateLabel(value) !== '-';
+
+/** 原料清单「营养状态」列：缺失时明确提示，不静默当成已设置 */
+const formatRecipeItemNutritionState = (value: any) =>
+  hasNutritionProfile(value) ? formatNutritionStateLabel(value) : '未设置';
+
+/** 保存前检查：列出有多个营养档案（生/熟不同）却未选择的食材 */
+const findFoodItemsMissingNutritionProfile = (): string[] => {
+  return (form.items || [])
+    .filter((item) => !isSupplementRecipeItem(item))
+    .filter((item) => !item.nutritionFoodId)
+    .filter((item) => {
+      const ingredient = availableIngredients.value.find(
+        (candidate) => candidate.id === item.ingredientId,
+      );
+      // 唯一档案由后端安全回填；多个档案无法推断，必须人工确认
+      return getIngredientNutritionFoodMappings(ingredient).length > 1;
+    })
+    .map((item) => item.ingredientName || item.ingredientId);
+};
+
+/** 保存前拦截：多档案原料必须逐项确认，避免后台用主档案顶替生/熟 */
+const assertNutritionProfilesSelected = (): boolean => {
+  const missing = findFoodItemsMissingNutritionProfile();
+  if (missing.length === 0) {
+    return true;
+  }
+
+  ElMessage.warning(
+    `以下原料有多个营养档案（生/熟不同），请点击「编辑」逐项选择后再保存：${[...new Set(missing)].join('、')}`,
+  );
+  return false;
+};
+
 const selectDefaultNutritionFoodForIngredient = (ingredient: any) => {
   const mappings = getIngredientNutritionFoodMappings(ingredient);
 
@@ -1310,7 +1350,13 @@ watch(
       ingredientForm.supplementTargets = [];
       ingredientForm.supplementAlternativeIngredientIds = [];
       if (ingredient.type === 'FOOD') {
-        selectDefaultNutritionFoodForIngredient(ingredient);
+        // 编辑历史原料且原本没有营养档案时，不再自动预选主档案：
+        // 主档案未必是设计时选定的生/熟，必须由人工确认。
+        const isEditingExistingWithoutProfile =
+          Boolean(editingIngredientRowKey.value) && !ingredientForm.nutritionFoodId;
+        if (!isEditingExistingWithoutProfile) {
+          selectDefaultNutritionFoodForIngredient(ingredient);
+        }
       }
     } else if (ingredient?.type === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
       ingredientForm.nutritionFoodId = '';
@@ -1757,6 +1803,7 @@ const extractCosKeyFromUrl = (url: string): string | null => {
 
 const handleSubmit = async () => {
   if (!(await validateElementForm(formRef.value))) return;
+  if (!assertNutritionProfilesSelected()) return;
 
   submitting.value = true;
   try {
@@ -1785,6 +1832,7 @@ const handleSubmit = async () => {
 
 const handleSaveDraft = async () => {
   if (!(await validateElementForm(formRef.value))) return;
+  if (!assertNutritionProfilesSelected()) return;
 
   submitting.value = true;
   try {
@@ -2045,7 +2093,7 @@ const saveIngredient = () => {
       return;
     }
     if (availableNutritionFoodMappings.value.length > 0 && !ingredientForm.nutritionFoodId) {
-      ElMessage.warning('食材类型请选择营养档案');
+      ElMessage.warning(`请为「${ingredient.name}」选择营养档案（生/熟）`);
       return;
     }
   }
@@ -2797,6 +2845,11 @@ onMounted(async () => {
 .row-cell:nth-child(4) {
   width: 120px;
   justify-content: center;
+}
+
+.nutrition-state-missing {
+  color: #e6a23c;
+  font-weight: 600;
 }
 
 .row-cell:nth-child(5) {

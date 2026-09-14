@@ -155,24 +155,33 @@ export class RecipeService {
       return items;
     }
 
-    const mappings = await nutritionFoodMappingClient.findMany({
+    const mappings = (await nutritionFoodMappingClient.findMany({
       where: {
         ingredientId: { in: ingredientIds },
       },
       include: {
         nutritionFood: true,
+        ingredient: { select: { name: true } },
       },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
-    });
+    })) as Array<{
+      ingredientId: string;
+      nutritionFoodId: string;
+      isPrimary: boolean;
+      ingredient?: { name?: string | null } | null;
+    }>;
 
-    const mappingsByIngredientId = new Map<string, any[]>();
+    const mappingsByIngredientId = new Map<string, typeof mappings>();
     for (const mapping of mappings) {
       const current = mappingsByIngredientId.get(mapping.ingredientId) || [];
       current.push(mapping);
       mappingsByIngredientId.set(mapping.ingredientId, current);
     }
 
-    return items.map((item) => {
+    /** 该原料有多个营养档案（生/熟、不同加工方式）却未指定时，无法推断用户要哪一个 */
+    const ambiguousIngredientLabels: string[] = [];
+
+    const resolvedItems = items.map((item) => {
       if (!item.ingredientId) {
         return item;
       }
@@ -194,14 +203,32 @@ export class RecipeService {
         return item;
       }
 
-      const defaultMapping =
-        ingredientMappings.find((mapping) => mapping.isPrimary) ||
-        (ingredientMappings.length === 1 ? ingredientMappings[0] : undefined);
+      // 只有唯一候选档案时才可安全回填；多候选时静默取主档案会改写生/熟状态
+      const onlyMapping =
+        ingredientMappings.length === 1 ? ingredientMappings[0] : undefined;
 
-      return defaultMapping
-        ? { ...item, nutritionFoodId: defaultMapping.nutritionFoodId }
-        : item;
+      if (onlyMapping) {
+        return { ...item, nutritionFoodId: onlyMapping.nutritionFoodId };
+      }
+
+      if (ingredientMappings.length > 1) {
+        ambiguousIngredientLabels.push(
+          ingredientMappings[0]?.ingredient?.name ?? item.ingredientId,
+        );
+      }
+
+      return item;
     });
+
+    if (ambiguousIngredientLabels.length > 0) {
+      throw new BadRequestException(
+        `以下原料有多个营养档案（生/熟不同），请逐项选择后再保存：${[
+          ...new Set(ambiguousIngredientLabels),
+        ].join('、')}`,
+      );
+    }
+
+    return resolvedItems;
   }
 
   private buildRecipeItemCreateData(item: Record<string, any>, index: number) {

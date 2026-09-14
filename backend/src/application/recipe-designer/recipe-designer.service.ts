@@ -5500,6 +5500,9 @@ export class RecipeDesignerService {
 
     return {
       ingredientId,
+      // 设计器里选定的营养档案（决定生/熟等状态）必须随发布一起落库，
+      // 否则正式食谱只能靠后台保存时回填默认档案，导致生熟状态被改写。
+      nutritionFoodId: this.resolvePublishedNutritionFoodId(item, ingredientId),
       preparationMethod:
         this.normalizePreparationMethod(item.preparationMethod) ??
         defaultPreparationMethod,
@@ -5511,6 +5514,35 @@ export class RecipeDesignerService {
       sortOrder: item.sortOrder,
       exampleWeight: item.weightG,
     };
+  }
+
+  /**
+   * 发布时解析原料项的营养档案：
+   * - 设计器中已选定且确实映射到该原料 → 原样带入正式食谱；
+   * - 档案与原料不匹配（历史脏数据）→ 明确报错，避免发布出无法计算的食谱。
+   */
+  private resolvePublishedNutritionFoodId(
+    item: DesignRecipeItemWithFood,
+    ingredientId: string,
+  ): string | null {
+    const nutritionFoodId = item.nutritionFoodId?.trim();
+    if (!nutritionFoodId) {
+      return null;
+    }
+
+    const mappings = item.nutritionFood?.mappings ?? [];
+    if (
+      mappings.length > 0 &&
+      !mappings.some((mapping) => mapping.ingredientId === ingredientId)
+    ) {
+      const ingredientLabel =
+        item.ingredient?.name ?? item.nutritionFood?.name ?? ingredientId;
+      throw new BadRequestException(
+        `原料「${ingredientLabel}」选择的营养档案与原料不匹配，无法发布正式食谱，请在设计器中重新选择营养档案`,
+      );
+    }
+
+    return nutritionFoodId;
   }
 
   private buildPublishedFoodRatioMap(

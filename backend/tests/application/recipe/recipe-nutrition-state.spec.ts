@@ -199,4 +199,91 @@ describe('recipe nutrition state selection', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('rejects a food item without a profile when the ingredient has multiple nutrition profiles', async () => {
+    mockPrismaService.nutritionFoodMapping.findMany.mockResolvedValue([
+      {
+        ingredientId: 'ingredient-rice',
+        nutritionFoodId: 'nutrition-food-cooked-rice',
+        isPrimary: true,
+        ingredient: { name: '糙米' },
+        nutritionFood: createdRecipe.items[0].nutritionFood,
+      },
+      {
+        ingredientId: 'ingredient-rice',
+        nutritionFoodId: 'nutrition-food-raw-rice',
+        isPrimary: false,
+        ingredient: { name: '糙米' },
+        nutritionFood: createdRecipe.items[0].nutritionFood,
+      },
+    ]);
+
+    await expect(
+      service.createRecipe({
+        name: '糙米生熟歧义食谱',
+        nutritionStandard: 'FEDIAF_2021',
+        energyDensityKcalPerKg: 1500,
+        items: [
+          {
+            ingredientId: 'ingredient-rice',
+            preparationMethod: '煮熟后压散',
+            exampleWeight: 80,
+            ratioPercent: 20,
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      '以下原料有多个营养档案（生/熟不同），请逐项选择后再保存：糙米',
+    );
+
+    expect(mockPrismaService.recipe.create).not.toHaveBeenCalled();
+  });
+
+  it('persists an explicitly selected profile even when the ingredient has multiple candidates', async () => {
+    mockPrismaService.nutritionFoodMapping.findMany.mockResolvedValue([
+      {
+        ingredientId: 'ingredient-rice',
+        nutritionFoodId: 'nutrition-food-cooked-rice',
+        isPrimary: true,
+        ingredient: { name: '糙米' },
+        nutritionFood: createdRecipe.items[0].nutritionFood,
+      },
+      {
+        ingredientId: 'ingredient-rice',
+        nutritionFoodId: 'nutrition-food-raw-rice',
+        isPrimary: false,
+        ingredient: { name: '糙米' },
+        nutritionFood: createdRecipe.items[0].nutritionFood,
+      },
+    ]);
+
+    await service.createRecipe({
+      name: '糙米明确选择食谱',
+      nutritionStandard: 'FEDIAF_2021',
+      energyDensityKcalPerKg: 1500,
+      items: [
+        {
+          ingredientId: 'ingredient-rice',
+          nutritionFoodId: 'nutrition-food-raw-rice',
+          preparationMethod: '生重',
+          exampleWeight: 80,
+          ratioPercent: 20,
+        },
+      ],
+    });
+
+    expect(mockPrismaService.recipe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            create: [
+              expect.objectContaining({
+                nutritionFoodId: 'nutrition-food-raw-rice',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
 });

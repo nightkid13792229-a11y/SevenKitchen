@@ -181,35 +181,33 @@ async function main() {
   );
 
   try {
-    const snapshots = await prisma.designRecipePublishSnapshot.findMany({
+    // 快照数据总量可达数十 MB，只取元信息，正文分批读取，避免小内存服务器 OOM
+    const snapshotMetaRows = await prisma.designRecipePublishSnapshot.findMany({
       select: {
+        id: true,
         recipeId: true,
         recipeVersion: true,
-        snapshotData: true,
       },
       orderBy: { recipeVersion: 'asc' },
     });
 
-    const snapshotsByRecipeId = new Map<
+    const snapshotMetaByRecipeId = new Map<
       string,
-      Array<{ version: number; items: Map<string, string | null> }>
+      Array<{ id: string; version: number }>
     >();
-    for (const snapshot of snapshots) {
+    for (const snapshot of snapshotMetaRows) {
       if (snapshot.recipeVersion == null) {
         continue;
       }
 
-      const list = snapshotsByRecipeId.get(snapshot.recipeId) ?? [];
-      list.push({
-        version: snapshot.recipeVersion,
-        items: parseSnapshotNutritionFoodIds(snapshot.snapshotData),
-      });
-      snapshotsByRecipeId.set(snapshot.recipeId, list);
+      const list = snapshotMetaByRecipeId.get(snapshot.recipeId) ?? [];
+      list.push({ id: snapshot.id, version: snapshot.recipeVersion });
+      snapshotMetaByRecipeId.set(snapshot.recipeId, list);
     }
 
     const recipeRows = await prisma.recipe.findMany({
       where: {
-        recipeId: { in: [...snapshotsByRecipeId.keys()] },
+        recipeId: { in: [...snapshotMetaByRecipeId.keys()] },
         ...(args.recipeRowId ? { id: args.recipeRowId } : {}),
       },
       select: {
@@ -231,9 +229,27 @@ async function main() {
             ) === index,
         );
 
+    // 每个食谱行对应的「发布时的设计意图」快照（发布后保存会抬高版本号）
+    const rowsBySnapshotId = new Map<string, typeof selectedRows>();
+    for (const row of selectedRows) {
+      const snapshot = pickSnapshotForVersion(
+        snapshotMetaByRecipeId.get(row.recipeId) ?? [],
+        row.version,
+      );
+      if (!snapshot) {
+        continue;
+      }
+
+      const list = rowsBySnapshotId.get(snapshot.id) ?? [];
+      list.push(row);
+      rowsBySnapshotId.set(snapshot.id, list);
+    }
+
+    const scannedRows = [...rowsBySnapshotId.values()].flat();
+
     const recipeItemRows = await prisma.recipeItem.findMany({
       where: {
-        OR: selectedRows.map((row) => ({
+        OR: scannedRows.map((row) => ({
           recipeId: row.recipeId,
           recipeVersion: row.version,
         })),
@@ -273,14 +289,87 @@ async function main() {
       }
     }
 
+    const itemsByRecipeRow = new Map<string, typeof recipeItemRows>();
+    for (const item of recipeItemRows) {
+      const key = `${item.recipeId}::${item.recipeVersion}`;
+      const list = itemsByRecipeRow.get(key) ?? [];
+      list.push(item);
+      itemsByRecipeRow.set(key, list);
+    }
+
+    const SNAPSHOT_BATCH_SIZE = 5;
+    const designFoodIds = new Set<string>();
+    const candidateDrafts: Array<{
+      row: (typeof recipeRows)[number];
+      item: (typeof recipeItemRows)[number];
+      designNutritionFoodId: string;
+      action: 'auto-fix' | 'manual-review';
+    }> = [];
+    let scannedItems = 0;
+
+    const snapshotIds = [...rowsBySnapshotId.keys()];
+    for (
+      let index = 0;
+      index < snapshotIds.length;
+      index += SNAPSHOT_BATCH_SIZE
+    ) {
+      const batchIds = snapshotIds.slice(index, index + SNAPSHOT_BATCH_SIZE);
+      const batch = await prisma.designRecipePublishSnapshot.findMany({
+        where: { id: { in: batchIds } },
+        select: { id: true, snapshotData: true },
+      });
+
+      for (const snapshot of batch) {
+        const designItems = parseSnapshotNutritionFoodIds(
+          snapshot.snapshotData,
+        );
+        for (const foodId of designItems.values()) {
+          if (foodId) {
+            designFoodIds.add(foodId);
+          }
+        }
+
+        for (const row of rowsBySnapshotId.get(snapshot.id) ?? []) {
+          for (const item of itemsByRecipeRow.get(
+            `${row.recipeId}::${row.version}`,
+          ) ?? []) {
+            scannedItems += 1;
+            const designNutritionFoodId =
+              designItems.get(item.ingredientId) ?? null;
+            if (!designNutritionFoodId) {
+              continue;
+            }
+            const primaryNutritionFoodId =
+              primaryByIngredientId.get(item.ingredientId) ?? null;
+            const action = classifyNutritionProfileRepair({
+              currentNutritionFoodId: item.nutritionFoodId,
+              designNutritionFoodId,
+              primaryNutritionFoodId,
+            });
+
+            if (action === 'noop') {
+              continue;
+            }
+
+            candidateDrafts.push({
+              row,
+              item,
+              designNutritionFoodId,
+              action,
+            });
+          }
+        }
+      }
+    }
+
+    const scannedRecipes = scannedRows.length;
+
     const foodIds = [
       ...new Set(
         [
           ...recipeItemRows.map((row) => row.nutritionFoodId),
           ...primaryByIngredientId.values(),
-          ...[...snapshotsByRecipeId.values()].flatMap((list) =>
-            list.flatMap((snapshot) => [...snapshot.items.values()]),
-          ),
+          ...designFoodIds,
         ].filter((value): value is string => Boolean(value)),
       ),
     ];
@@ -306,66 +395,23 @@ async function main() {
       return foodById.get(id)?.preparationStateLabel ?? '—';
     };
 
-    const itemsByRecipeRow = new Map<string, typeof recipeItemRows>();
-    for (const item of recipeItemRows) {
-      const key = `${item.recipeId}::${item.recipeVersion}`;
-      const list = itemsByRecipeRow.get(key) ?? [];
-      list.push(item);
-      itemsByRecipeRow.set(key, list);
-    }
-
-    const candidates: RepairCandidate[] = [];
-    let scannedItems = 0;
-    let scannedRecipes = 0;
-
-    for (const row of selectedRows) {
-      const snapshot = pickSnapshotForVersion(
-        snapshotsByRecipeId.get(row.recipeId) ?? [],
-        row.version,
-      );
-      if (!snapshot) {
-        continue;
-      }
-
-      scannedRecipes += 1;
-      const items =
-        itemsByRecipeRow.get(`${row.recipeId}::${row.version}`) ?? [];
-      for (const item of items) {
-        scannedItems += 1;
-        const designNutritionFoodId =
-          snapshot.items.get(item.ingredientId) ?? null;
-        if (!designNutritionFoodId) {
-          continue;
-        }
-        const primaryNutritionFoodId =
-          primaryByIngredientId.get(item.ingredientId) ?? null;
-        const action = classifyNutritionProfileRepair({
-          currentNutritionFoodId: item.nutritionFoodId,
-          designNutritionFoodId,
-          primaryNutritionFoodId,
-        });
-
-        if (action === 'noop') {
-          continue;
-        }
-
-        candidates.push({
-          recipeRowId: row.id,
-          recipeId: row.recipeId,
-          recipeName: row.name,
-          recipeStatus: String(row.status),
-          recipeVersion: row.version,
-          ingredientName: item.ingredient?.name ?? item.ingredientId,
-          currentFoodLabel: foodLabel(item.nutritionFoodId),
-          currentStateLabel: foodState(item.nutritionFoodId),
-          designFoodLabel: foodLabel(designNutritionFoodId),
-          designStateLabel: foodState(designNutritionFoodId),
-          action,
-          recipeItemId: item.id,
-          designNutritionFoodId,
-        });
-      }
-    }
+    const candidates: RepairCandidate[] = candidateDrafts.map(
+      ({ row, item, designNutritionFoodId, action }) => ({
+        recipeRowId: row.id,
+        recipeId: row.recipeId,
+        recipeName: row.name,
+        recipeStatus: String(row.status),
+        recipeVersion: row.version,
+        ingredientName: item.ingredient?.name ?? item.ingredientId,
+        currentFoodLabel: foodLabel(item.nutritionFoodId),
+        currentStateLabel: foodState(item.nutritionFoodId),
+        designFoodLabel: foodLabel(designNutritionFoodId),
+        designStateLabel: foodState(designNutritionFoodId),
+        action,
+        recipeItemId: item.id,
+        designNutritionFoodId,
+      }),
+    );
 
     const autoFixable = candidates.filter((item) => item.action === 'auto-fix');
     const manualReview = candidates.filter(

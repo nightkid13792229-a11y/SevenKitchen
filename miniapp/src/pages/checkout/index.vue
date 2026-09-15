@@ -1245,12 +1245,12 @@ function goToAddAddress() {
 <style scoped>
 .checkout-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 200rpx;
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1259,13 +1259,13 @@ function goToAddAddress() {
   margin-bottom: 20rpx;
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .title-text {
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .order-note-section {
@@ -1279,10 +1279,10 @@ function goToAddAddress() {
   padding: 20rpx;
   box-sizing: border-box;
   border-radius: 12rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
   font-size: 28rpx;
   line-height: 1.6;
-  color: #333;
+  color: #26261f;
 }
 
 .order-note-footer {
@@ -1296,14 +1296,14 @@ function goToAddAddress() {
 .order-note-hint {
   flex: 1;
   font-size: 24rpx;
-  color: #8c8c8c;
+  color: #6b6653;
   line-height: 1.45;
 }
 
 .order-note-count {
   flex-shrink: 0;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 收货地址 */
@@ -1316,13 +1316,13 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   transition: background-color 0.2s;
 }
 
 .address-card:active {
-  background-color: #f0f0f0;
+  background-color: #f0f3e9;
 }
 
 .address-info {
@@ -1340,21 +1340,21 @@ function goToAddAddress() {
 
 .recipient {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .default-badge {
   padding: 4rpx 12rpx;
-  background-color: #ff4d4f;
-  color: #fff;
+  background-color: #b4553f;
+  color: #f3eddd;
   font-size: 20rpx;
   border-radius: 4rpx;
 }
 
 .detail {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .no-address-card {
@@ -1371,13 +1371,13 @@ function goToAddAddress() {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .btn-add-address {
   padding: 12rpx 32rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 24rpx;
   font-size: 26rpx;
   border: none;
@@ -1386,18 +1386,18 @@ function goToAddAddress() {
 .shipping-note {
   margin-top: 16rpx;
   padding: 12rpx 16rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
 }
 
 .note-text {
   font-size: 24rpx;
-  color: #0050b3;
+  color: #b08d4f;
 }
 
 .arrow {
   font-size: 32rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 20rpx;
 }
 
@@ -1417,7 +1417,7 @@ function goToAddAddress() {
 .address-selector {
   width: 100%;
   max-height: 70vh;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 24rpx 24rpx 0 0;
   display: flex;
   flex-direction: column;
@@ -1428,18 +1428,18 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .selector-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .selector-close {
   font-size: 48rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1;
 }
 
@@ -1453,11 +1453,11 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx 32rpx;
-  border-bottom: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .address-list-item.selected {
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
 }
 
 .list-address-info {
@@ -1475,21 +1475,21 @@ function goToAddAddress() {
 
 .list-recipient {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .list-detail {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .check-icon {
   width: 40rpx;
   height: 40rpx;
   border-radius: 50%;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1498,7 +1498,7 @@ function goToAddAddress() {
 
 .selector-footer {
   padding: 24rpx 32rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .btn-manage-address {
@@ -1509,9 +1509,9 @@ function goToAddAddress() {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #fff;
-  color: #1890ff;
-  border: 2rpx solid #1890ff;
+  background-color: #fbfcf7;
+  color: #b08d4f;
+  border: 2rpx solid #1e3a2f;
   border-radius: 44rpx;
   font-size: 28rpx;
   font-weight: bold;
@@ -1520,7 +1520,7 @@ function goToAddAddress() {
 
 /* 制作日期选择 */
 .production-date-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1529,37 +1529,37 @@ function goToAddAddress() {
   display: flex;
   align-items: center;
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 1rpx solid #e8e8e8;
+  border: 1rpx solid #e5e8d4;
 }
 
 .date-display-button:active {
-  background-color: #f0f0f0;
+  background-color: #f0f3e9;
 }
 
 .date-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .date-value {
   flex: 1;
   font-size: 32rpx;
-  color: #333;
+  color: #26261f;
   font-weight: bold;
   margin-left: 16rpx;
 }
 
 .auto-tag {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 8rpx;
 }
 
 .picker-arrow {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 16rpx;
 }
 
@@ -1568,21 +1568,21 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 2rpx solid #1890ff;
+  border: 2rpx solid #1e3a2f;
 }
 
 .date-tips {
   margin-top: 16rpx;
   padding: 16rpx;
-  background-color: #fff7e6;
+  background-color: #f6efe0;
   border-radius: 8rpx;
 }
 
 .tip-text {
   font-size: 24rpx;
-  color: #ff9800;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
@@ -1600,25 +1600,25 @@ function goToAddAddress() {
   flex-direction: column;
   align-items: center;
   padding: 16rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
 }
 
 .date-info-label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 8rpx;
 }
 
 .date-info-value {
   font-size: 28rpx;
-  color: #52c41a;
+  color: #1e3a2f;
   font-weight: bold;
 }
 
 /* 配置信息板块 */
 .config-info-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1634,28 +1634,28 @@ function goToAddAddress() {
 }
 
 .dog-info-card {
-  background-color: #e6f7ff;
-  border-left: 4rpx solid #1890ff;
+  background-color: #eef2e4;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .order-info-card {
-  background-color: #f6ffed;
-  border-left: 4rpx solid #52c41a;
+  background-color: #eef2e4;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .requirement-card {
-  background-color: #fff9f0;
-  border-left: 4rpx solid #fa8c16;
+  background-color: #f6efe0;
+  border-left: 4rpx solid #b08d4f;
 }
 
 .recipe-card {
-  background-color: #f9f9f9;
-  border-left: 4rpx solid #722ed1;
+  background-color: #fbfcf7;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .recipe-card-top {
-  background-color: #f9f9f9;
-  border-left: 4rpx solid #722ed1;
+  background-color: #fbfcf7;
+  border-left: 4rpx solid #1e3a2f;
   margin-bottom: 16rpx;
 }
 
@@ -1663,7 +1663,7 @@ function goToAddAddress() {
   display: block;
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 }
 
@@ -1683,14 +1683,14 @@ function goToAddAddress() {
 
 .config-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   flex-shrink: 0;
 }
 
 .config-value {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
   text-align: right;
   word-break: break-word;
@@ -1713,7 +1713,7 @@ function goToAddAddress() {
   width: 80rpx;
   height: 80rpx;
   border-radius: 8rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1723,13 +1723,13 @@ function goToAddAddress() {
 .recipe-cover-placeholder text {
   font-size: 32rpx;
   font-weight: bold;
-  color: rgba(255, 255, 255, 0.9);
+  color: #f3eddd;
 }
 
 .recipe-name {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -1739,7 +1739,7 @@ function goToAddAddress() {
   margin-bottom: 12rpx;
   font-size: 26rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .package-plan-section {
@@ -1752,19 +1752,19 @@ function goToAddAddress() {
   justify-content: flex-start;
   padding: 12rpx 16rpx;
   margin-top: 12rpx;
-  background-color: rgba(255, 255, 255, 0.6);
+  background-color: rgba(251, 252, 247, 0.6);
   border-radius: 8rpx;
 }
 
 .package-plan-row-text {
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   word-break: break-word;
 }
 
 /* 简化价格展示 */
 .price-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1774,7 +1774,7 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 32rpx 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -1786,32 +1786,32 @@ function goToAddAddress() {
 
 .price-note-text {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .price-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .price-value-large {
   font-size: 48rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 /* 支付方式提示 */
 .payment-guide-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
 
 .payment-guide-card {
   padding: 24rpx;
-  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  background: linear-gradient(135deg, #eef2e4 0%, #e2e8d4 100%);
   border-radius: 12rpx;
-  border-left: 4rpx solid #1890ff;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .guide-header {
@@ -1828,7 +1828,7 @@ function goToAddAddress() {
 .guide-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .guide-steps {
@@ -1851,8 +1851,8 @@ function goToAddAddress() {
   height: 36rpx;
   line-height: 36rpx;
   text-align: center;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 50%;
   font-size: 22rpx;
   font-weight: bold;
@@ -1862,7 +1862,7 @@ function goToAddAddress() {
 .step-text {
   flex: 1;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   line-height: 36rpx;
 }
 
@@ -1871,28 +1871,28 @@ function goToAddAddress() {
   align-items: center;
   gap: 12rpx;
   padding: 16rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   margin-bottom: 16rpx;
 }
 
 .contact-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .contact-value {
   flex: 1;
   font-size: 28rpx;
-  color: #1890ff;
+  color: #b08d4f;
   font-weight: bold;
   font-family: monospace;
 }
 
 .btn-copy-wechat {
   padding: 8rpx 20rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 6rpx;
   font-size: 24rpx;
   border: none;
@@ -1903,7 +1903,7 @@ function goToAddAddress() {
   align-items: center;
   gap: 8rpx;
   padding: 12rpx;
-  background-color: #fff7e6;
+  background-color: #f6efe0;
   border-radius: 8rpx;
 }
 
@@ -1914,7 +1914,7 @@ function goToAddAddress() {
 .tip-text {
   flex: 1;
   font-size: 24rpx;
-  color: #ff9800;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
@@ -1929,8 +1929,8 @@ function goToAddAddress() {
   justify-content: space-between;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
-  background-color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+  background-color: #fbfcf7;
+  box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
   z-index: 100;
 }
 
@@ -1950,7 +1950,7 @@ function goToAddAddress() {
 .bottom-total {
   max-width: 100%;
   font-size: 36rpx;
-  color: #e6543f;
+  color: #b4553f;
   font-weight: 800;
   line-height: 1.15;
   text-align: right;
@@ -1959,7 +1959,7 @@ function goToAddAddress() {
 .bottom-estimate {
   max-width: 100%;
   font-size: 23rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.3;
   display: flex;
   flex-direction: column;
@@ -1987,8 +1987,8 @@ function goToAddAddress() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 40rpx;
   font-size: 30rpx;
   font-weight: 700;
@@ -1996,8 +1996,8 @@ function goToAddAddress() {
 }
 
 .btn-submit-order[disabled] {
-  background-color: #d8dde3;
-  color: #fff;
+  background-color: #eef2e4;
+  color: #968f6d;
 }
 
 .customer-service-bottom-action {
@@ -2024,7 +2024,7 @@ function goToAddAddress() {
 
 .payment-modal {
   width: 640rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 24rpx;
   overflow: hidden;
 }
@@ -2034,18 +2034,18 @@ function goToAddAddress() {
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .modal-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .modal-close {
   font-size: 48rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1;
 }
 
@@ -2059,18 +2059,18 @@ function goToAddAddress() {
   align-items: center;
   margin-bottom: 32rpx;
   padding-bottom: 24rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .amount-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .amount-value {
   font-size: 40rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 .payment-methods {
@@ -2083,14 +2083,14 @@ function goToAddAddress() {
   display: flex;
   align-items: center;
   padding: 24rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
   gap: 16rpx;
 }
 
 .payment-method-item.active {
-  border-color: #1890ff;
-  background-color: #f0f9ff;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .method-icon {
@@ -2108,18 +2108,18 @@ function goToAddAddress() {
 .method-name {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .method-desc {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .method-radio {
   width: 40rpx;
   height: 40rpx;
-  border: 2rpx solid #d9d9d9;
+  border: 2rpx solid #e5e8d4;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2128,26 +2128,26 @@ function goToAddAddress() {
 }
 
 .method-radio.checked {
-  border-color: #1890ff;
-  background-color: #1890ff;
+  border-color: #1e3a2f;
+  background-color: #1e3a2f;
 }
 
 .radio-dot {
   font-size: 24rpx;
-  color: #fff;
+  color: #f3eddd;
 }
 
 .password-input {
   margin-top: 24rpx;
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
 .password-label {
   display: block;
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 16rpx;
   text-align: center;
 }
@@ -2161,7 +2161,7 @@ function goToAddAddress() {
 .dot {
   width: 48rpx;
   height: 48rpx;
-  border: 2rpx solid #d9d9d9;
+  border: 2rpx solid #e5e8d4;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2169,13 +2169,13 @@ function goToAddAddress() {
 }
 
 .dot.filled {
-  border-color: #1890ff;
-  background-color: #f0f9ff;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .dot text {
   font-size: 32rpx;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .password-input-hidden {
@@ -2196,8 +2196,8 @@ function goToAddAddress() {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 32rpx;
   font-weight: bold;
@@ -2206,7 +2206,7 @@ function goToAddAddress() {
 }
 
 .btn-pay-confirm[disabled] {
-  background-color: #ccc;
-  color: #999;
+  background-color: #f2f4ea;
+  color: #6b6653;
 }
 </style>

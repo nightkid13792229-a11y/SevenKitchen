@@ -74,7 +74,7 @@ function loadSnapshot() {
 }
 
 .snapshot-detail {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 30rpx;
   border-radius: 8rpx;
 }
@@ -82,7 +82,7 @@ function loadSnapshot() {
 .snapshot-header {
   margin-bottom: 30rpx;
   padding-bottom: 20rpx;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #eef1e2;
 }
 
 .snapshot-title {
@@ -90,12 +90,12 @@ function loadSnapshot() {
   font-weight: bold;
   display: block;
   margin-bottom: 10rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .snapshot-note {
   font-size: 24rpx;
-  color: #ff9800;
+  color: #8a6b33;
   display: block;
   line-height: 1.6;
 }
@@ -111,35 +111,35 @@ function loadSnapshot() {
 }
 
 .label {
-  color: #666;
+  color: #26261f;
   margin-right: 20rpx;
   width: 200rpx;
 }
 
 .value {
-  color: #333;
+  color: #26261f;
   flex: 1;
 }
 
 .raw-data {
   margin-top: 30rpx;
   padding-top: 30rpx;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #eef1e2;
 }
 
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
   margin-bottom: 20rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .json-view {
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding: 20rpx;
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   word-break: break-all;
   max-height: 600rpx;
   overflow-y: auto;

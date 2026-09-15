@@ -1160,7 +1160,7 @@ function onReviewSubmitted() {
 <style scoped>
 .recipe-detail-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 190rpx;
 }
 
@@ -1168,7 +1168,7 @@ function onReviewSubmitted() {
 .cover-section {
   width: 100%;
   height: 360rpx;
-  background-color: #f0f0f0;
+  background-color: #f0f3e9;
   position: relative;
 }
 
@@ -1189,9 +1189,9 @@ function onReviewSubmitted() {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(20, 18, 16, 0) 0%,
-    rgba(20, 18, 16, 0.18) 52%,
-    rgba(20, 18, 16, 0.34) 100%
+    rgba(38, 38, 31, 0.0) 0%,
+    rgba(38, 38, 31, 0.18) 52%,
+    rgba(38, 38, 31, 0.34) 100%
   );
 }
 
@@ -1199,15 +1199,15 @@ function onReviewSubmitted() {
   max-width: 340rpx;
   padding: 8rpx 16rpx;
   border-radius: 8rpx;
-  background: rgba(32, 29, 25, 0.58);
-  color: #fff;
+  background: rgba(38, 38, 31, 0.58);
+  color: #f3eddd;
   font-size: 24rpx;
   font-weight: 500;
   line-height: 32rpx;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4rpx 14rpx rgba(30, 46, 36, 0.16);
 }
 
 .cover-placeholder {
@@ -1216,18 +1216,18 @@ function onReviewSubmitted() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
 }
 
 .placeholder-text {
   font-size: 120rpx;
   font-weight: bold;
-  color: rgba(255, 255, 255, 0.9);
+  color: #f3eddd;
 }
 
 /* 基础信息区 */
 .info-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1235,7 +1235,7 @@ function onReviewSubmitted() {
 .recipe-name {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   display: block;
   margin-bottom: 8rpx;
   line-height: 1.4;
@@ -1249,15 +1249,15 @@ function onReviewSubmitted() {
   gap: 16rpx;
   margin: 16rpx 0;
   padding: 20rpx 24rpx;
-  background-color: #fdf6ec;
-  border: 1rpx solid #f0d9b5;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 12rpx;
 }
 
 .no-dog-hint-text {
   flex: 1;
   font-size: 26rpx;
-  color: #8a6d3b;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
@@ -1267,7 +1267,7 @@ function onReviewSubmitted() {
   line-height: 64rpx;
   padding: 0 24rpx;
   font-size: 26rpx;
-  color: #fff;
+  color: #f3eddd;
   background-color: #1e3a2f;
   border-radius: 32rpx;
   border: none;
@@ -1300,15 +1300,15 @@ function onReviewSubmitted() {
   align-items: center;
   gap: 12rpx;
   padding: 12rpx;
-  border: 2rpx solid #edf0f2;
+  border: 2rpx solid #eef1e2;
   border-radius: 8rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
   vertical-align: middle;
 }
 
 .recipe-detail-dog-chip.active {
-  border-color: #2f8f4e;
-  background-color: #f0faf3;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .recipe-detail-dog-avatar {
@@ -1316,7 +1316,7 @@ function onReviewSubmitted() {
   width: 58rpx;
   height: 58rpx;
   border-radius: 50%;
-  background-color: #e8efe9;
+  background-color: #eef2e4;
 }
 
 .recipe-detail-dog-chip-name {
@@ -1325,14 +1325,14 @@ function onReviewSubmitted() {
   flex: 1;
   font-size: 24rpx;
   font-weight: 700;
-  color: #303833;
+  color: #26261f;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .recipe-detail-dog-chip.active .recipe-detail-dog-chip-name {
-  color: #217b3f;
+  color: #1e3a2f;
 }
 
 .life-stage-version-card {
@@ -1343,8 +1343,8 @@ function onReviewSubmitted() {
   margin: 18rpx 0;
   padding: 22rpx;
   border-radius: 12rpx;
-  background: #f4fbf5;
-  border: 1rpx solid #dcefe2;
+  background: #eef2e4;
+  border: 1rpx solid #e5e8d4;
 }
 
 .life-stage-version-main {
@@ -1360,13 +1360,13 @@ function onReviewSubmitted() {
 .life-stage-version-title {
   font-size: 28rpx;
   font-weight: 800;
-  color: #264b2e;
+  color: #26261f;
 }
 
 .life-stage-version-copy {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #58705d;
+  color: #26261f;
   line-height: 1.45;
 }
 
@@ -1374,22 +1374,22 @@ function onReviewSubmitted() {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: 6rpx;
-  color: #2f8f4e;
-  background-color: #fff;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
   font-size: 24rpx;
   font-weight: 700;
 }
 
 .recipe-description {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
   display: block;
 }
 
 /* 营养数据卡片 */
 .nutrition-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin: 20rpx;
@@ -1406,18 +1406,18 @@ function onReviewSubmitted() {
 
 .nutrition-item .label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 4rpx;
 }
 
 .nutrition-item .value {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .nutrition-report-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 22rpx 24rpx;
   margin: 20rpx;
@@ -1430,8 +1430,8 @@ function onReviewSubmitted() {
   width: 72rpx;
   height: 72rpx;
   border-radius: 8rpx;
-  background-color: #e8f5e9;
-  color: #07c160;
+  background-color: #eef2e4;
+  color: #1e3a2f;
   font-size: 22rpx;
   font-weight: 700;
   display: flex;
@@ -1449,23 +1449,23 @@ function onReviewSubmitted() {
 .report-title {
   font-size: 30rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .report-subtitle {
   font-size: 24rpx;
-  color: #888;
+  color: #6b6653;
 }
 
 .report-action {
   font-size: 26rpx;
   font-weight: 600;
-  color: #07c160;
+  color: #1e3a2f;
 }
 
 /* 原料卡片 */
 .ingredients-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin: 20rpx;
@@ -1481,19 +1481,19 @@ function onReviewSubmitted() {
 .card-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .card-subtitle {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 表格标题 */
 .ingredient-table-header {
   display: flex;
   padding: 16rpx 0;
-  border-bottom: 2rpx solid #e5e5e5;
+  border-bottom: 2rpx solid #e5e8d4;
   margin-bottom: 8rpx;
 }
 
@@ -1501,7 +1501,7 @@ function onReviewSubmitted() {
   flex: 1;
   font-size: 26rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   text-align: left;
 }
 
@@ -1509,7 +1509,7 @@ function onReviewSubmitted() {
   flex: 1.5;
   font-size: 26rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   text-align: center;
 }
 
@@ -1517,7 +1517,7 @@ function onReviewSubmitted() {
   flex: 0 0 120rpx;
   font-size: 26rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   text-align: right;
 }
 
@@ -1526,7 +1526,7 @@ function onReviewSubmitted() {
   display: flex;
   align-items: center;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .ingredient-item:last-child {
@@ -1537,7 +1537,7 @@ function onReviewSubmitted() {
   flex: 1;
   font-size: 30rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
   text-align: left;
   display: flex;
   align-items: center;
@@ -1558,23 +1558,23 @@ function onReviewSubmitted() {
   border-radius: 4rpx;
   font-size: 20rpx;
   font-weight: normal;
-  background-color: #f4f4f5;
-  color: #606266;
+  background-color: #fbfcf7;
+  color: #26261f;
 }
 
 .type-food {
-  background-color: #e8f5e9;
-  color: #2e7d32;
+  background-color: #eef2e4;
+  color: #1e3a2f;
 }
 
 .type-supplement {
-  background-color: #fff3e0;
-  color: #ef6c00;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 .type-packaging {
-  background-color: #e3f2fd;
-  color: #1565c0;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 
 .preparation-method {
@@ -1584,7 +1584,7 @@ function onReviewSubmitted() {
   justify-content: center;
   align-items: center;
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .preparation-method .method-text {
@@ -1597,19 +1597,19 @@ function onReviewSubmitted() {
   flex: 0 0 120rpx;
   font-size: 28rpx;
   font-weight: bold;
-  color: #07c160;
+  color: #1e3a2f;
   text-align: right;
 }
 
 .nutrient-target-value {
   font-size: 24rpx;
-  color: #ff6b6b;
+  color: #b4553f;
   font-weight: normal;
 }
 
 /* 核心营养成分板块 */
 .nutrition-panel {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin: 20rpx;
@@ -1626,14 +1626,14 @@ function onReviewSubmitted() {
   flex-direction: column;
   align-items: center;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   text-align: center;
 }
 
 .nutrition-label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 8rpx;
 }
 
@@ -1648,22 +1648,22 @@ function onReviewSubmitted() {
 .nutrition-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #07c160;
+  color: #1e3a2f;
 }
 
 .nutrition-unit {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 能量密度特殊样式 */
 .highlight-energy .nutrition-value {
-  color: #ff6b6b;
+  color: #b4553f;
 }
 
 /* 钙磷比特殊样式 */
 .highlight-ratio .nutrition-value {
-  color: #4dabf7;
+  color: #b08d4f;
 }
 
 /* 写评价按钮区域 */
@@ -1679,12 +1679,12 @@ function onReviewSubmitted() {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #fff;
-  color: #07c160;
+  background-color: #fbfcf7;
+  color: #1e3a2f;
   font-size: 30rpx;
   font-weight: 500;
   border-radius: 44rpx;
-  border: 2rpx solid #07c160;
+  border: 2rpx solid #1e3a2f;
   padding: 0;
   margin: 0;
 }
@@ -1705,9 +1705,9 @@ function onReviewSubmitted() {
   gap: 10rpx;
   padding: 10rpx 20rpx calc(12rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(12rpx + env(safe-area-inset-bottom));
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
-  box-shadow: 0 -8rpx 22rpx rgba(15, 23, 42, 0.06);
+  background-color: #fbfcf7;
+  border-top: 1rpx solid #e5e8d4;
+  box-shadow: 0 -8rpx 22rpx rgba(30, 46, 36, 0.06);
   box-sizing: border-box;
 }
 
@@ -1722,8 +1722,8 @@ function onReviewSubmitted() {
   align-items: center;
   border-radius: 16rpx;
   padding: 12rpx 20rpx;
-  background: #fdf6ef;
-  border: 1rpx solid rgba(224, 87, 47, 0.14);
+  background: #f6efe0;
+  border: 1rpx solid rgba(180, 85, 63, 0.14);
 }
 
 .reference-price-copy {
@@ -1735,12 +1735,12 @@ function onReviewSubmitted() {
 .reference-price-value {
   font-size: 30rpx;
   font-weight: 800;
-  color: #e0572f;
+  color: #b4553f;
 }
 
 .reference-price-note {
   font-size: 20rpx;
-  color: #9a8a7f;
+  color: #6b6653;
 }
 
 .life-stage-sheet-mask {
@@ -1758,7 +1758,7 @@ function onReviewSubmitted() {
   box-sizing: border-box;
   padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
   border-radius: 24rpx 24rpx 0 0;
-  background: #fff;
+  background: #fbfcf7;
 }
 
 .life-stage-sheet-header {
@@ -1771,7 +1771,7 @@ function onReviewSubmitted() {
 .life-stage-sheet-title {
   font-size: 32rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .life-stage-sheet-close {
@@ -1779,8 +1779,8 @@ function onReviewSubmitted() {
   height: 56rpx;
   line-height: 56rpx;
   border-radius: 50%;
-  background: #f2f4f5;
-  color: #687078;
+  background: #f0f3e9;
+  color: #6b6653;
   text-align: center;
   font-size: 34rpx;
 }
@@ -1791,11 +1791,11 @@ function onReviewSubmitted() {
   justify-content: space-between;
   gap: 18rpx;
   padding: 22rpx 0;
-  border-bottom: 1rpx solid #eef0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .life-stage-version-option.active {
-  color: #2f8f4e;
+  color: #1e3a2f;
 }
 
 .life-stage-version-option-main {
@@ -1815,7 +1815,7 @@ function onReviewSubmitted() {
 
 .life-stage-version-option-copy {
   margin-top: 6rpx;
-  color: #687078;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -1824,7 +1824,7 @@ function onReviewSubmitted() {
   flex: 0 0 auto;
   font-size: 24rpx;
   font-weight: 700;
-  color: #2f8f4e;
+  color: #1e3a2f;
 }
 
 .life-stage-version-option-side {
@@ -1838,7 +1838,7 @@ function onReviewSubmitted() {
 .life-stage-version-option-price {
   font-size: 26rpx;
   font-weight: 800;
-  color: #e0572f;
+  color: #b4553f;
 }
 
 .quick-actions {
@@ -1856,7 +1856,7 @@ function onReviewSubmitted() {
   gap: 0;
   border-radius: 42rpx;
   overflow: hidden;
-  box-shadow: 0 8rpx 18rpx rgba(24, 144, 255, 0.12);
+  box-shadow: 0 8rpx 18rpx rgba(30, 46, 36, 0.12);
 }
 
 .quick-action,
@@ -1885,7 +1885,7 @@ function onReviewSubmitted() {
   flex-direction: column;
   gap: 8rpx;
   background: transparent;
-  color: #606266;
+  color: #26261f;
   font-size: 22rpx;
   border-radius: 0;
 }
@@ -1896,18 +1896,18 @@ function onReviewSubmitted() {
   align-items: center;
   justify-content: center;
   font-size: 40rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1;
 }
 
 .btn-favorite.active .icon {
-  color: #f6ad00;
+  color: #8a6b33;
 }
 
 .quick-label {
   display: block;
   font-size: 22rpx;
-  color: #606266;
+  color: #26261f;
   line-height: 1;
 }
 
@@ -1916,8 +1916,8 @@ function onReviewSubmitted() {
   border-radius: 42rpx 0 0 42rpx;
   font-size: 26rpx;
   font-weight: 600;
-  background-color: #07c160;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-order {
@@ -1925,7 +1925,7 @@ function onReviewSubmitted() {
   border-radius: 0 42rpx 42rpx 0;
   font-size: 26rpx;
   font-weight: 600;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 </style>

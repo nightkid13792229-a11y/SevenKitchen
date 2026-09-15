@@ -106,7 +106,7 @@ function previewPhoto(index: number) {
 <style scoped>
 .shared-photos-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
 }
 
 /* 加载状态 */
@@ -120,7 +120,7 @@ function previewPhoto(index: number) {
 
 .loading-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 错误状态 */
@@ -139,15 +139,15 @@ function previewPhoto(index: number) {
   line-height: 120rpx;
   text-align: center;
   font-size: 80rpx;
-  color: #fff;
-  background-color: #ff3b30;
+  color: #f3eddd;
+  background-color: #b4553f;
   border-radius: 50%;
   margin-bottom: 32rpx;
 }
 
 .error-text {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   text-align: center;
   line-height: 1.6;
 }
@@ -165,14 +165,14 @@ function previewPhoto(index: number) {
   display: block;
   font-size: 40rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 12rpx;
 }
 
 .subtitle {
   display: block;
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 照片网格 */
@@ -187,7 +187,7 @@ function previewPhoto(index: number) {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 12rpx;
-  background-color: #e0e0e0;
+  background-color: #f0f3e9;
 }
 
 /* 底部信息 */
@@ -201,12 +201,12 @@ function previewPhoto(index: number) {
 
 .footer-text {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .footer-time {
   font-size: 22rpx;
-  color: #ccc;
+  color: #968f6d;
 }
 
 /* 空状态 */
@@ -220,6 +220,6 @@ function previewPhoto(index: number) {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 </style>

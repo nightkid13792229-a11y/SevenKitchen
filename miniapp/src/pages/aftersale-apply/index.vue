@@ -369,25 +369,25 @@ function getStatusText(status: string): string {
 <style scoped lang="scss">
 .aftersale-apply-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 120rpx;
 }
 
 .header {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 30rpx;
   text-align: center;
-  border-bottom: 1rpx solid #eee;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .page-title {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 20rpx;
   padding: 30rpx;
   border-radius: 16rpx;
@@ -415,7 +415,7 @@ function getStatusText(status: string): string {
 
   .load-failed-desc {
     font-size: 26rpx;
-    color: #999;
+    color: #6b6653;
     line-height: 1.5;
     margin-bottom: 40rpx;
   }
@@ -425,7 +425,7 @@ function getStatusText(status: string): string {
     height: 80rpx;
     line-height: 80rpx;
     background-color: #1e3a2f;
-    color: #fff;
+    color: #f3eddd;
     font-size: 28rpx;
     border-radius: 40rpx;
     border: none;
@@ -440,7 +440,7 @@ function getStatusText(status: string): string {
   display: block;
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 20rpx;
 }
 
@@ -457,12 +457,12 @@ function getStatusText(status: string): string {
 
   .label {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
   }
 
   .value {
     font-size: 28rpx;
-    color: #333;
+    color: #26261f;
     font-weight: 500;
   }
 }
@@ -471,8 +471,8 @@ function getStatusText(status: string): string {
   margin-top: 20rpx;
   padding: 18rpx 20rpx;
   border-radius: 12rpx;
-  background: #fff7e6;
-  color: #ad6800;
+  background: #f6efe0;
+  color: #8a6b33;
   font-size: 26rpx;
   line-height: 1.5;
 }
@@ -487,13 +487,13 @@ function getStatusText(status: string): string {
   display: flex;
   align-items: center;
   padding: 30rpx;
-  border: 2rpx solid #eee;
+  border: 2rpx solid #eef1e2;
   border-radius: 12rpx;
   position: relative;
 
   &.active {
-    border-color: #1890ff;
-    background-color: #f0f8ff;
+    border-color: #1e3a2f;
+    background-color: #eef2e4;
   }
 }
 
@@ -505,12 +505,12 @@ function getStatusText(status: string): string {
 .type-label {
   flex: 1;
   font-size: 30rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .check-icon {
   font-size: 40rpx;
-  color: #1890ff;
+  color: #b08d4f;
   font-weight: bold;
 }
 
@@ -518,16 +518,16 @@ function getStatusText(status: string): string {
   width: 100%;
   min-height: 300rpx;
   padding: 20rpx;
-  border: 1rpx solid #eee;
+  border: 1rpx solid #eef1e2;
   border-radius: 8rpx;
   font-size: 28rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
 }
 
 .char-count {
   text-align: right;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   margin-top: 10rpx;
 }
 
@@ -560,7 +560,7 @@ function getStatusText(status: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #f3eddd;
   font-size: 32rpx;
   line-height: 1;
 }
@@ -568,8 +568,8 @@ function getStatusText(status: string): string {
 .btn-add {
   width: 160rpx;
   height: 160rpx;
-  background-color: #f9f9f9;
-  border: 2rpx dashed #ddd;
+  background-color: #fbfcf7;
+  border: 2rpx dashed #e5e8d4;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -579,20 +579,20 @@ function getStatusText(status: string): string {
 
 .add-icon {
   font-size: 60rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1;
 }
 
 .add-text {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
   margin-top: 8rpx;
 }
 
 .image-hint {
   display: block;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   margin-top: 10rpx;
 }
 
@@ -601,9 +601,9 @@ function getStatusText(status: string): string {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 20rpx 30rpx;
-  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -2rpx 10rpx rgba(30, 46, 36, 0.1);
   display: flex;
   align-items: center;
   gap: 18rpx;
@@ -619,8 +619,8 @@ function getStatusText(status: string): string {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 32rpx;
   border: none;
@@ -628,8 +628,8 @@ function getStatusText(status: string): string {
 
   &.disabled,
   &[disabled] {
-    background-color: #9ecfff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #968f6d;
   }
 }
 

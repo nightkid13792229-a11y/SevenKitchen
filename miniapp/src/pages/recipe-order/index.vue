@@ -1810,13 +1810,13 @@ onShow(() => {
 <style scoped>
 .recipe-order-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 140rpx;
 }
 
 /* 食谱头部 */
 .recipe-header {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1846,7 +1846,7 @@ onShow(() => {
 .recipe-name {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   line-height: 1.4;
   text-align: center;
 }
@@ -1867,21 +1867,21 @@ onShow(() => {
 }
 
 .recipe-tags .health-tag {
-  background-color: #fff3e0;
-  color: #f57c00;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 /* 通用区块 */
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
 
 /* 警告卡片 */
 .warning-card {
-  background-color: #fffbe6;
-  border: 1rpx solid #ffe58f;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 12rpx;
   padding: 20rpx;
   margin-bottom: 20rpx;
@@ -1901,12 +1901,12 @@ onShow(() => {
 .warning-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #856404;
+  color: #8a6b33;
 }
 
 .warning-text {
   font-size: 26rpx;
-  color: #856404;
+  color: #8a6b33;
   line-height: 1.6;
   display: block;
   margin-bottom: 8rpx;
@@ -1916,8 +1916,8 @@ onShow(() => {
   width: 100%;
   margin-top: 16rpx;
   padding: 16rpx;
-  background-color: #faad14;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 28rpx;
   border: none;
@@ -1932,7 +1932,7 @@ onShow(() => {
 .title-text {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   flex: 1;
 }
 
@@ -1942,12 +1942,12 @@ onShow(() => {
 
 .toggle-icon {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 8rpx;
 }
 
 .required {
-  color: #ff4d4f;
+  color: #b4553f;
   margin-left: 8rpx;
   font-size: 32rpx;
 }
@@ -1961,7 +1961,7 @@ onShow(() => {
 .empty-text {
   display: block;
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
   margin-bottom: 30rpx;
 }
 
@@ -1973,8 +1973,8 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 35rpx;
   font-size: 28rpx;
   border: none;
@@ -1985,14 +1985,14 @@ onShow(() => {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
 }
 
 .picker-placeholder {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .dog-selected {
@@ -2009,17 +2009,17 @@ onShow(() => {
 .dog-text {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .picker-arrow {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 预估喂食量 */
 .feeding-section {
-  border-top: 1rpx solid #e8e8e8;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .feeding-info {
@@ -2033,23 +2033,23 @@ onShow(() => {
   justify-content: space-between;
   align-items: center;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
 .feeding-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .feeding-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .feeding-value.readonly {
-  color: #999;
+  color: #6b6653;
 }
 
 .feeding-value-wrapper {
@@ -2068,23 +2068,23 @@ onShow(() => {
   width: 100rpx;
   height: 60rpx;
   text-align: center;
-  border: 2rpx solid #1890ff;
+  border: 2rpx solid #1e3a2f;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #333;
-  background-color: #fff;
+  color: #26261f;
+  background-color: #fbfcf7;
 }
 
 .feeding-unit {
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .btn-edit {
   padding: 8rpx 20rpx;
-  background-color: #fff;
-  color: #1890ff;
-  border: 2rpx solid #1890ff;
+  background-color: #fbfcf7;
+  color: #b08d4f;
+  border: 2rpx solid #1e3a2f;
   border-radius: 8rpx;
   font-size: 26rpx;
   line-height: 1.2;
@@ -2092,9 +2092,9 @@ onShow(() => {
 
 .btn-reset {
   padding: 8rpx 20rpx;
-  background-color: #fff;
-  color: #ff9800;
-  border: 2rpx solid #ff9800;
+  background-color: #fbfcf7;
+  color: #8a6b33;
+  border: 2rpx solid #b08d4f;
   border-radius: 8rpx;
   font-size: 26rpx;
   line-height: 1.2;
@@ -2102,8 +2102,8 @@ onShow(() => {
 
 .btn-save {
   padding: 8rpx 20rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 26rpx;
@@ -2112,9 +2112,9 @@ onShow(() => {
 
 .btn-cancel {
   padding: 8rpx 20rpx;
-  background-color: #fff;
-  color: #999;
-  border: 2rpx solid #ddd;
+  background-color: #fbfcf7;
+  color: #6b6653;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 26rpx;
   line-height: 1.2;
@@ -2124,9 +2124,9 @@ onShow(() => {
 .calculation-explanation {
   margin-top: 24rpx;
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
 }
 
 .explanation-header {
@@ -2142,7 +2142,7 @@ onShow(() => {
 .explanation-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .explanation-content {
@@ -2157,35 +2157,35 @@ onShow(() => {
 
 .calc-card {
   padding: 20rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
 }
 
 .calc-card.highlight {
-  border-color: #ffd591;
-  background-color: #fffbf0;
+  border-color: #b08d4f;
+  background-color: #f6efe0;
 }
 
 .card-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 12rpx;
   display: block;
 }
 
 .formula-box {
   padding: 12rpx 16rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
-  border: 1rpx solid #bae7ff;
+  border: 1rpx solid #e5e8d4;
   margin-bottom: 12rpx;
 }
 
 .formula-text {
   font-size: 24rpx;
-  color: #0050b3;
+  color: #b08d4f;
   font-family: 'Courier New', monospace;
   line-height: 1.5;
 }
@@ -2205,12 +2205,12 @@ onShow(() => {
 }
 
 .data-label {
-  color: #666;
+  color: #26261f;
   min-width: 160rpx;
 }
 
 .data-value {
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -2219,36 +2219,36 @@ onShow(() => {
   flex-direction: column;
   gap: 8rpx;
   padding: 12rpx 16rpx;
-  background-color: #f6ffed;
+  background-color: #eef2e4;
   border-radius: 8rpx;
-  border: 1rpx solid #b7eb8f;
+  border: 1rpx solid #dde3cd;
 }
 
 .calc-result.final {
-  background-color: #fff7e6;
-  border-color: #ffd591;
+  background-color: #f6efe0;
+  border-color: #b08d4f;
 }
 
 .result-value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: bold;
 }
 
 .result-value.highlight {
-  color: #ff4d4f;
+  color: #b4553f;
   font-size: 32rpx;
 }
 
 .result-note {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
   font-style: italic;
 }
 
 .result-warning {
   font-size: 22rpx;
-  color: #ff4d4f;
+  color: #b4553f;
   font-weight: bold;
 }
 
@@ -2264,13 +2264,13 @@ onShow(() => {
   flex-direction: column;
   align-items: center;
   padding: 20rpx 12rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
 .cycle-option.active {
-  border-color: #1890ff;
-  background-color: #f0f9ff;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .cycle-option.disabled {
@@ -2280,19 +2280,19 @@ onShow(() => {
 .cycle-text {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .cycle-desc {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .total-summary {
   display: flex;
   justify-content: space-between;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   gap: 24rpx;
 }
@@ -2305,13 +2305,13 @@ onShow(() => {
 
 .summary-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .summary-value {
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .package-plan-list {
@@ -2325,7 +2325,7 @@ onShow(() => {
   align-items: center;
   gap: 12rpx;
   padding: 16rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -2340,7 +2340,7 @@ onShow(() => {
 .package-input-label,
 .package-input-unit {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   flex-shrink: 0;
 }
 
@@ -2348,11 +2348,11 @@ onShow(() => {
   width: 120rpx;
   height: 60rpx;
   text-align: center;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #333;
-  background-color: #fff;
+  color: #26261f;
+  background-color: #fbfcf7;
 }
 
 .btn-add-row {
@@ -2364,8 +2364,8 @@ onShow(() => {
   justify-content: center;
   box-sizing: border-box;
   padding: 0 20rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -2380,16 +2380,16 @@ onShow(() => {
   justify-content: center;
   box-sizing: border-box;
   padding: 0 16rpx;
-  background-color: #fff;
-  color: #ff4d4f;
-  border: 2rpx solid #ffccc7;
+  background-color: #fbfcf7;
+  color: #b4553f;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 24rpx;
 }
 
 .btn-remove-row[disabled] {
-  color: #bfbfbf;
-  border-color: #f0f0f0;
+  color: #968f6d;
+  border-color: #eef1e2;
 }
 
 .package-summary {
@@ -2409,8 +2409,8 @@ onShow(() => {
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 20rpx;
-  background-color: #fff7e6;
-  border: 2rpx solid #ffa940;
+  background-color: #f6efe0;
+  border: 2rpx solid #b08d4f;
   border-radius: 12rpx;
   display: flex;
   align-items: center;
@@ -2423,7 +2423,7 @@ onShow(() => {
 
 .warning-text {
   font-size: 26rpx;
-  color: #d46b08;
+  color: #8a6b33;
   line-height: 1.4;
 }
 
@@ -2431,8 +2431,8 @@ onShow(() => {
 .shelf-life-notice {
   margin-top: 20rpx;
   padding: 20rpx;
-  background-color: #f0f9ff;
-  border: 2rpx solid #91d5ff;
+  background-color: #eef2e4;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
@@ -2447,7 +2447,7 @@ onShow(() => {
 .notice-title-text {
   font-size: 28rpx;
   font-weight: bold;
-  color: #0050b3;
+  color: #b08d4f;
 }
 
 .notice-content {
@@ -2473,14 +2473,14 @@ onShow(() => {
 
 .notice-text {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
   flex: 1;
 }
 
 /* 制作要求 */
 .requirements-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -2496,17 +2496,17 @@ onShow(() => {
 /* 第一组：口感选择 - 橙色主题 */
 .preparation-group {
   padding: 20rpx;
-  background-color: #fff7e6;
+  background-color: #f6efe0;
   border-radius: 12rpx;
-  border: 2rpx solid #ffe7ba;
+  border: 2rpx solid #b08d4f;
 }
 
 /* 第二组：烹饪方式 - 绿色主题 */
 .cooking-group {
   padding: 20rpx;
-  background-color: #f6ffed;
+  background-color: #eef2e4;
   border-radius: 12rpx;
-  border: 2rpx solid #d9f7be;
+  border: 2rpx solid #e5e8d4;
 }
 
 .option-row {
@@ -2523,7 +2523,7 @@ onShow(() => {
   border: 2rpx solid rgba(0, 0, 0, 0.1);
   border-radius: 12rpx;
   text-align: center;
-  background-color: #fff;
+  background-color: #fbfcf7;
   transition: all 0.3s;
 }
 
@@ -2534,14 +2534,14 @@ onShow(() => {
 
 .option-name {
   font-size: 30rpx;
-  color: #333;
+  color: #26261f;
   margin-bottom: 12rpx;
   font-weight: bold;
 }
 
 .option-tip {
   font-size: 22rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.5;
 }
 
@@ -2553,40 +2553,40 @@ onShow(() => {
 
 .option-tip-highlight {
   font-size: 22rpx;
-  color: #ff4d4f;
+  color: #b4553f;
   font-weight: bold;
   line-height: 1.5;
 }
 
 .option-tip-warning {
   font-size: 22rpx;
-  color: #faad14;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
 /* 第一组选中状态 - 橙色 */
 .preparation-group .option-card.active {
-  border-color: #fa8c16;
-  background-color: #fff7e6;
+  border-color: #b08d4f;
+  background-color: #f6efe0;
 }
 
 .preparation-group .option-card.active .option-name {
-  color: #fa8c16;
+  color: #8a6b33;
 }
 
 /* 第二组选中状态 - 绿色 */
 .cooking-group .option-card.active {
-  border-color: #52c41a;
-  background-color: #f6ffed;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .cooking-group .option-card.active .option-name {
-  color: #52c41a;
+  color: #1e3a2f;
 }
 
 /* 包装及说明 */
 .package-info-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -2600,15 +2600,15 @@ onShow(() => {
 .package-example-card {
   flex-shrink: 0;
   padding: 20rpx;
-  background-color: #f0f9ff;
-  border: 2rpx solid #91d5ff;
+  background-color: #eef2e4;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
 .example-title {
   font-size: 26rpx;
   font-weight: bold;
-  color: #0050b3;
+  color: #b08d4f;
   margin-bottom: 16rpx;
   display: block;
 }
@@ -2619,7 +2619,7 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   overflow: hidden;
 }
@@ -2642,7 +2642,7 @@ onShow(() => {
 
 .placeholder-text {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 右侧：包装规格及配送服务 */
@@ -2657,8 +2657,8 @@ onShow(() => {
 .shipping-service-card {
   flex: 1;
   padding: 20rpx;
-  background-color: #f0f9ff;
-  border: 2rpx solid #91d5ff;
+  background-color: #eef2e4;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
@@ -2681,7 +2681,7 @@ onShow(() => {
 .title-text {
   font-size: 26rpx;
   font-weight: bold;
-  color: #0050b3;
+  color: #b08d4f;
 }
 
 .detail-content {
@@ -2690,7 +2690,7 @@ onShow(() => {
 
 .detail-text {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -2707,8 +2707,8 @@ onShow(() => {
   height: 60rpx;
   line-height: 60rpx;
   text-align: center;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+  color: #f3eddd;
   font-size: 24rpx;
   font-weight: bold;
   border-radius: 8rpx;
@@ -2723,13 +2723,13 @@ onShow(() => {
 .shipping-name {
   font-size: 26rpx;
   font-weight: bold;
-  color: #ff6b35;
+  color: #8a6b33;
 }
 
 /* 价格 */
 .price-card {
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -2738,7 +2738,7 @@ onShow(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16rpx 0;
-  border-bottom: 1rpx solid #e8e8e8;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .price-item:last-child {
@@ -2747,23 +2747,23 @@ onShow(() => {
 
 .price-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .price-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .price-value.total {
   font-size: 36rpx;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 /* 价格明细 */
 .price-breakdown-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
   border-radius: 16rpx;
@@ -2781,14 +2781,14 @@ onShow(() => {
 
 .toggle-icon {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .subtitle {
   display: block;
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .breakdown-content {
@@ -2798,7 +2798,7 @@ onShow(() => {
 .breakdown-group {
   margin-bottom: 24rpx;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -2807,17 +2807,17 @@ onShow(() => {
 }
 
 .breakdown-group.final {
-  background-color: #fff7e6;
-  border: 2rpx solid #ffd591;
+  background-color: #f6efe0;
+  border: 2rpx solid #b08d4f;
 }
 
 .breakdown-group-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
   padding-bottom: 12rpx;
-  border-bottom: 1rpx solid #e8e8e8;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .breakdown-item {
@@ -2830,7 +2830,7 @@ onShow(() => {
 .breakdown-item.total {
   padding-top: 16rpx;
   margin-top: 8rpx;
-  border-top: 1rpx dashed #d9d9d9;
+  border-top: 1rpx dashed #e5e8d4;
 }
 
 .breakdown-item.final {
@@ -2839,23 +2839,23 @@ onShow(() => {
 
 .breakdown-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .breakdown-value {
   font-size: 28rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .breakdown-value.highlight {
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 .breakdown-value.final {
   font-size: 32rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 /* 详细展示样式 */
@@ -2868,11 +2868,11 @@ onShow(() => {
 
 .toggle-icon-small {
   font-size: 20rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .breakdown-item.summary {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 12rpx 16rpx;
   border-radius: 8rpx;
   margin-bottom: 12rpx;
@@ -2885,17 +2885,17 @@ onShow(() => {
 }
 
 .detail-item {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 16rpx;
   border-radius: 8rpx;
-  border-left: 4rpx solid #1890ff;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .detail-item-nested {
-  background-color: #fafafa;
+  background-color: #fbfcf7;
   padding: 12rpx;
   border-radius: 6rpx;
-  border-left: 3rpx solid #faad14;
+  border-left: 3rpx solid #b08d4f;
   margin-bottom: 12rpx;
 }
 
@@ -2909,31 +2909,31 @@ onShow(() => {
 .detail-name {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .detail-type {
   font-size: 22rpx;
   padding: 4rpx 12rpx;
-  background-color: #e6f7ff;
-  color: #1890ff;
+  background-color: #eef2e4;
+  color: #b08d4f;
   border-radius: 4rpx;
 }
 
 .detail-box {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 16rpx;
   border-radius: 8rpx;
-  border-left: 4rpx solid #52c41a;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .detail-subtitle {
   font-size: 26rpx;
   font-weight: bold;
-  color: #52c41a;
+  color: #1e3a2f;
   margin: 16rpx 0 12rpx 0;
   padding-bottom: 8rpx;
-  border-bottom: 1rpx dashed #d9d9d9;
+  border-bottom: 1rpx dashed #e5e8d4;
 }
 
 .detail-row {
@@ -2945,28 +2945,28 @@ onShow(() => {
 
 .detail-label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .detail-value {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .detail-value.highlight {
-  color: #ff4d4f;
+  color: #b4553f;
   font-weight: bold;
 }
 
 .detail-spec {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 8rpx;
 }
 
 .detail-count {
   font-size: 22rpx;
-  color: #52c41a;
+  color: #1e3a2f;
   margin-left: 8rpx;
   font-weight: 500;
 }
@@ -2974,10 +2974,10 @@ onShow(() => {
 .detail-calculation {
   margin-top: 12rpx;
   padding: 12rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 6rpx;
   font-size: 22rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -2992,8 +2992,8 @@ onShow(() => {
   justify-content: space-between;
   gap: 16rpx;
   padding: 16rpx 20rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
+  background-color: #fbfcf7;
+  border-top: 1rpx solid #e5e8d4;
   z-index: 999;
 }
 
@@ -3014,14 +3014,14 @@ onShow(() => {
   max-width: 100%;
   font-size: 36rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
   text-align: right;
 }
 
 .bottom-estimate {
   max-width: 100%;
   font-size: 22rpx;
-  color: #666;
+  color: #26261f;
   text-align: right;
   display: flex;
   flex-direction: column;
@@ -3053,13 +3053,13 @@ onShow(() => {
   line-height: 1;
   white-space: nowrap;
   border: none;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-buy-now[disabled] {
-  background-color: #ccc;
-  color: #999;
+  background-color: #f2f4ea;
+  color: #6b6653;
 }
 
 .customer-service-bottom-action {
@@ -3069,17 +3069,17 @@ onShow(() => {
 /* Redesigned recipe order page */
 .recipe-order-page {
   min-height: 100vh;
-  background-color: #f6f7f8;
+  background-color: #fbfcf7;
   padding-bottom: 170rpx;
 }
 
 .product-hero {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin-bottom: 20rpx;
 }
 
 .recipe-info-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin-bottom: 20rpx;
 }
 
@@ -3094,8 +3094,8 @@ onShow(() => {
   height: 64rpx;
   padding: 0 22rpx;
   border-radius: 8rpx;
-  background-color: #f6faf7;
-  border: 1rpx solid #dceee0;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3110,13 +3110,13 @@ onShow(() => {
   white-space: nowrap;
   font-size: 26rpx;
   font-weight: 800;
-  color: #226d3a;
+  color: #26261f;
 }
 
 .recipe-life-stage-picker-arrow {
   flex: 0 0 auto;
   font-size: 20rpx;
-  color: #2f8f4e;
+  color: #1e3a2f;
   transition: transform 0.18s ease;
 }
 
@@ -3142,9 +3142,9 @@ onShow(() => {
   z-index: 31;
   overflow: hidden;
   border-radius: 8rpx;
-  border: 1rpx solid #dceee0;
-  background-color: #fff;
-  box-shadow: 0 12rpx 32rpx rgba(18, 24, 31, 0.14);
+  border: 1rpx solid #e5e8d4;
+  background-color: #fbfcf7;
+  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.14);
 }
 
 .recipe-life-stage-dropdown-option {
@@ -3154,7 +3154,7 @@ onShow(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  border-bottom: 1rpx solid #edf0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .recipe-life-stage-dropdown-option:last-child {
@@ -3162,7 +3162,7 @@ onShow(() => {
 }
 
 .recipe-life-stage-dropdown-option.active {
-  background-color: #f0faf3;
+  background-color: #eef2e4;
 }
 
 .recipe-life-stage-dropdown-label {
@@ -3172,13 +3172,13 @@ onShow(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 25rpx;
-  color: #25282b;
+  color: #26261f;
 }
 
 .recipe-life-stage-dropdown-option.active .recipe-life-stage-dropdown-label,
 .recipe-life-stage-dropdown-check {
   font-weight: 800;
-  color: #226d3a;
+  color: #26261f;
 }
 
 .recipe-life-stage-dropdown-check {
@@ -3199,12 +3199,12 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #eef5ef;
+  background-color: #eef2e4;
 }
 
 .hero-placeholder-text {
   font-size: 32rpx;
-  color: #6f8f76;
+  color: #6b6653;
 }
 
 .hero-content {
@@ -3220,7 +3220,7 @@ onShow(() => {
   display: block;
   font-size: 40rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.3;
   text-align: center;
 }
@@ -3243,8 +3243,8 @@ onShow(() => {
 }
 
 .recipe-tags .health-tag {
-  background-color: #fff5e8;
-  color: #a76416;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 .hero-meta-row,
@@ -3260,14 +3260,14 @@ onShow(() => {
 .hero-meta-row {
   margin-top: 22rpx;
   padding-top: 20rpx;
-  border-top: 1rpx solid #edf0f2;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .hero-meta-label,
 .summary-label,
 .feeding-label {
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .hero-meta-value,
@@ -3275,7 +3275,7 @@ onShow(() => {
 .summary-value,
 .feeding-value {
   font-size: 28rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 700;
 }
 
@@ -3295,13 +3295,13 @@ onShow(() => {
   gap: 8rpx;
   padding: 18rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
   text-align: center;
 }
 
 .recipe-meta-label {
   font-size: 23rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.3;
 }
 
@@ -3315,8 +3315,8 @@ onShow(() => {
   margin-top: 24rpx;
   padding: 22rpx;
   border-radius: 8rpx;
-  background-color: #f6faf7;
-  border: 2rpx solid #dceee0;
+  background-color: #eef2e4;
+  border: 2rpx solid #e5e8d4;
 }
 
 .hero-dog-copy,
@@ -3337,7 +3337,7 @@ onShow(() => {
 .hero-dog-hint,
 .calc-line {
   font-size: 24rpx;
-  color: #6f7378;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -3346,7 +3346,7 @@ onShow(() => {
 .product-explanation-title,
 .logistics-title {
   font-size: 28rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -3355,9 +3355,9 @@ onShow(() => {
 .section-action-button,
 .btn-secondary-full {
   border-radius: 8rpx;
-  border: 2rpx solid #2f8f4e;
-  color: #2f8f4e;
-  background-color: #fff;
+  border: 2rpx solid #1e3a2f;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
   font-size: 26rpx;
   text-align: center;
 }
@@ -3388,7 +3388,7 @@ onShow(() => {
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 28rpx;
   margin-bottom: 20rpx;
 }
@@ -3405,7 +3405,7 @@ onShow(() => {
   display: block;
   font-size: 32rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.35;
 }
 
@@ -3420,19 +3420,19 @@ onShow(() => {
   gap: 10rpx;
   padding: 24rpx;
   border-radius: 8rpx;
-  background-color: #f7faf8;
-  border: 1rpx solid #e3ede5;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
 }
 
 .dog-empty-title {
   font-size: 28rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .dog-empty-copy {
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -3462,15 +3462,15 @@ onShow(() => {
   margin-right: 14rpx;
   padding: 12rpx;
   border-radius: 8rpx;
-  border: 2rpx solid #edf0f2;
-  background-color: #f8faf9;
-  color: #25282b;
+  border: 2rpx solid #eef1e2;
+  background-color: #fbfcf7;
+  color: #26261f;
   vertical-align: middle;
 }
 
 .order-dog-chip.active {
-  border-color: #2f8f4e;
-  background-color: #f0faf3;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .order-dog-avatar {
@@ -3478,7 +3478,7 @@ onShow(() => {
   width: 58rpx;
   height: 58rpx;
   border-radius: 50%;
-  background-color: #e8efe9;
+  background-color: #eef2e4;
 }
 
 .order-dog-copy {
@@ -3495,18 +3495,18 @@ onShow(() => {
   white-space: nowrap;
   font-size: 25rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .order-dog-chip.active .order-dog-name {
-  color: #226d3a;
+  color: #26261f;
 }
 
 .dog-profile-context {
   padding: 14rpx 16rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
-  border: 1rpx solid #edf0f2;
+  background-color: #fbfcf7;
+  border: 1rpx solid #eef1e2;
 }
 
 .dog-profile-facts {
@@ -3522,21 +3522,21 @@ onShow(() => {
   max-width: 100%;
   padding: 4rpx 10rpx;
   border-radius: 6rpx;
-  background-color: #fff;
-  color: #25282b;
+  background-color: #fbfcf7;
+  color: #26261f;
   line-height: 1.35;
 }
 
 .dog-profile-fact-label {
   font-size: 21rpx;
-  color: #7a838b;
+  color: #6b6653;
 }
 
 .dog-profile-fact-value {
   min-width: 0;
   font-size: 23rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
   word-break: keep-all;
 }
 
@@ -3556,7 +3556,7 @@ onShow(() => {
   justify-content: center;
   gap: 8rpx;
   padding: 16rpx 10rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   text-align: center;
 }
@@ -3568,7 +3568,7 @@ onShow(() => {
 
 .dog-feeding-item:nth-child(3),
 .daily-intake-item {
-  background-color: #f4fbf5;
+  background-color: #eef2e4;
 }
 
 .inline-warning-card {
@@ -3583,19 +3583,19 @@ onShow(() => {
 .feeding-adjustment-note {
   padding: 16rpx 18rpx;
   border-radius: 8rpx;
-  background-color: #f6fbf7;
-  border: 1rpx solid #d9f0dd;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
   font-size: 24rpx;
   line-height: 1.6;
-  color: #496052;
+  color: #26261f;
 }
 
 .calculation-explanation {
   margin-top: 22rpx;
   padding: 20rpx;
   border-radius: 8rpx;
-  background-color: #f8fafc;
-  border: 1rpx solid #e6ebef;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
 }
 
 .explanation-header {
@@ -3607,7 +3607,7 @@ onShow(() => {
 .explanation-title {
   font-size: 27rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
 }
 
 .calc-cards {
@@ -3619,14 +3619,14 @@ onShow(() => {
 
 .calc-card {
   padding: 18rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
-  border: 1rpx solid #edf0f2;
+  border: 1rpx solid #eef1e2;
 }
 
 .calc-card.highlight {
-  border-color: #f2d6a4;
-  background-color: #fff9ed;
+  border-color: #b08d4f;
+  background-color: #f6efe0;
 }
 
 .card-title {
@@ -3634,11 +3634,11 @@ onShow(() => {
   margin-bottom: 8rpx;
   font-size: 26rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
 }
 
 .calc-line.strong {
-  color: #e6543f;
+  color: #b4553f;
   font-weight: 800;
 }
 
@@ -3654,8 +3654,8 @@ onShow(() => {
 
 .custom-tag {
   padding: 10rpx 14rpx;
-  color: #2f8f4e;
-  background-color: #ecf8ef;
+  color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .cycle-options {
@@ -3666,15 +3666,15 @@ onShow(() => {
 .cycle-option {
   flex: 1;
   padding: 18rpx 12rpx;
-  border: 2rpx solid #e5e7eb;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   text-align: center;
-  background-color: #fff;
+  background-color: #fbfcf7;
 }
 
 .cycle-option.active {
-  border-color: #2f8f4e;
-  background-color: #f4fbf5;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .cycle-option.disabled {
@@ -3683,7 +3683,7 @@ onShow(() => {
 
 .cycle-text {
   font-size: 28rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 700;
 }
 
@@ -3700,7 +3700,7 @@ onShow(() => {
   min-width: 0;
   font-size: 26rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.45;
 }
 
@@ -3714,9 +3714,9 @@ onShow(() => {
   box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
-  border: 2rpx solid #2f8f4e;
-  color: #2f8f4e;
-  background-color: #fff;
+  border: 2rpx solid #1e3a2f;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
   font-size: 25rpx;
 }
 
@@ -3730,18 +3730,18 @@ onShow(() => {
 .package-preview-row {
   padding: 18rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
 }
 
 .package-preview-main {
   font-size: 28rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 700;
 }
 
 .package-preview-sub {
   font-size: 24rpx;
-  color: #6f7378;
+  color: #6b6653;
 }
 
 .total-summary {
@@ -3750,7 +3750,7 @@ onShow(() => {
   gap: 12rpx;
   margin-top: 18rpx;
   padding: 18rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
@@ -3764,29 +3764,29 @@ onShow(() => {
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 18rpx;
-  background-color: #fff7e8;
-  border: 1rpx solid #f3c67d;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 8rpx;
 }
 
 .warning-card {
   margin: 0 0 20rpx;
   padding: 24rpx 28rpx;
-  background-color: #fff9ed;
-  border-left: 6rpx solid #e5a23c;
+  background-color: #f6efe0;
+  border-left: 6rpx solid #b08d4f;
 }
 
 .warning-title {
   font-size: 30rpx;
   font-weight: 800;
-  color: #7a5317;
+  color: #8a6b33;
 }
 
 .warning-text {
   display: block;
   margin-bottom: 12rpx;
   font-size: 26rpx;
-  color: #7a5317;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
@@ -3809,13 +3809,13 @@ onShow(() => {
 }
 
 .btn-switch-stage {
-  background-color: #2f8f4e;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-continue {
-  background-color: #e5a23c;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
 }
 
 .btn-secondary-full {
@@ -3842,7 +3842,7 @@ onShow(() => {
   gap: 12rpx;
   padding: 16rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
 }
 
 .package-input-group {
@@ -3856,18 +3856,18 @@ onShow(() => {
 .package-input-label,
 .package-input-unit {
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .package-input {
   width: 116rpx;
   height: 58rpx;
   text-align: center;
-  border: 1rpx solid #d8dee4;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #25282b;
-  background-color: #fff;
+  color: #26261f;
+  background-color: #fbfcf7;
 }
 
 .btn-add-row,
@@ -3886,20 +3886,20 @@ onShow(() => {
 
 .btn-add-row {
   align-self: flex-start;
-  color: #fff;
-  background-color: #2f8f4e;
+  color: #f3eddd;
+  background-color: #1e3a2f;
   border: none;
 }
 
 .btn-remove-row {
-  color: #c74b35;
-  background-color: #fff;
-  border: 1rpx solid #f0c5bc;
+  color: #b4553f;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
 }
 
 .btn-remove-row[disabled] {
-  color: #a8b0b8;
-  border-color: #e5e7eb;
+  color: #968f6d;
+  border-color: #e5e8d4;
 }
 
 .source-plan-options {
@@ -3916,9 +3916,9 @@ onShow(() => {
 .source-plan-card {
   gap: 18rpx;
   padding: 22rpx;
-  border: 2rpx solid #e5e7eb;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
 }
 
 .source-plan-card.compact {
@@ -3933,14 +3933,14 @@ onShow(() => {
 }
 
 .source-plan-card.active {
-  border-color: #2f8f4e;
-  background-color: #f4fbf5;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .source-plan-name {
   font-size: 28rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .source-plan-card.compact .source-plan-name {
@@ -3951,7 +3951,7 @@ onShow(() => {
 .source-plan-price {
   font-size: 28rpx;
   font-weight: 800;
-  color: #e6543f;
+  color: #b4553f;
 }
 
 .source-plan-card.compact .source-plan-price {
@@ -3964,8 +3964,8 @@ onShow(() => {
   margin-top: 16rpx;
   padding: 18rpx;
   border-radius: 8rpx;
-  background: #fff7ef;
-  color: #7a5b43;
+  background: #f6efe0;
+  color: #8a6b33;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -3977,12 +3977,12 @@ onShow(() => {
   padding: 20rpx;
   margin-top: 18rpx;
   border-radius: 8rpx;
-  background-color: #f7faf8;
+  background-color: #fbfcf7;
 }
 
 .ingredient-summary-note {
   font-size: 23rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.45;
 }
 
@@ -3990,13 +3990,13 @@ onShow(() => {
   margin-top: 16rpx;
   padding: 20rpx;
   border-radius: 8rpx;
-  background-color: #f8fafc;
-  border: 1rpx solid #e8edf2;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
 }
 
 .ingredient-empty-text {
   font-size: 25rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .ingredients-content {
@@ -4013,13 +4013,13 @@ onShow(() => {
 .ingredient-list-title-text {
   font-size: 28rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.35;
 }
 
 .ingredient-row-compact {
   padding: 22rpx 0;
-  border-bottom: 1rpx solid #eef0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .ingredient-row-main {
@@ -4058,13 +4058,13 @@ onShow(() => {
 }
 
 .ingredient-type-tag.food {
-  color: #257b43;
-  background-color: #e7f6eb;
+  color: #26261f;
+  background-color: #eef2e4;
 }
 
 .ingredient-type-tag.supplement {
-  color: #526173;
-  background-color: #edf2f7;
+  color: #b08d4f;
+  background-color: #eef2e4;
 }
 
 .ingredient-name {
@@ -4074,7 +4074,7 @@ onShow(() => {
   text-overflow: clip;
   font-size: 26rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.35;
   word-break: break-all;
 }
@@ -4085,7 +4085,7 @@ onShow(() => {
   column-gap: 18rpx;
   row-gap: 6rpx;
   margin-top: 10rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.42;
 }
 
@@ -4096,7 +4096,7 @@ onShow(() => {
 }
 
 .ingredient-meta-label {
-  color: #8b949e;
+  color: #6b6653;
   margin-right: 6rpx;
 }
 
@@ -4104,7 +4104,7 @@ onShow(() => {
   min-width: 92rpx;
   text-align: right;
   font-size: 26rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 800;
   line-height: 1.35;
   white-space: nowrap;
@@ -4121,8 +4121,8 @@ onShow(() => {
   gap: 18rpx;
   padding: 22rpx;
   border-radius: 8rpx;
-  background-color: #f8fafc;
-  border: 1rpx solid #e8edf2;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
 }
 
 .product-explanation-logistics-card {
@@ -4145,7 +4145,7 @@ onShow(() => {
   display: block;
   margin-top: -4rpx;
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -4164,14 +4164,14 @@ onShow(() => {
   justify-content: flex-start;
   padding: 18rpx 10rpx;
   border-radius: 8rpx;
-  border: 1rpx solid #e4ebf0;
-  background-color: #fbfcfd;
+  border: 1rpx solid #e5e8d4;
+  background-color: #eef2e4;
   text-align: center;
 }
 
 .product-explanation-storage-item.highlight {
-  border-color: #f0d4a1;
-  background-color: #fff9ed;
+  border-color: #b08d4f;
+  background-color: #f6efe0;
 }
 
 .product-explanation-storage-temp {
@@ -4179,12 +4179,12 @@ onShow(() => {
   margin-bottom: 10rpx;
   font-size: 30rpx;
   font-weight: 800;
-  color: #2f8f4e;
+  color: #1e3a2f;
   line-height: 1.2;
 }
 
 .product-explanation-storage-item.highlight .product-explanation-storage-temp {
-  color: #a76416;
+  color: #8a6b33;
 }
 
 .product-explanation-storage-title {
@@ -4192,14 +4192,14 @@ onShow(() => {
   margin-bottom: 8rpx;
   font-size: 24rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.25;
 }
 
 .product-explanation-storage-copy {
   display: block;
   font-size: 21rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.45;
 }
 
@@ -4215,8 +4215,8 @@ onShow(() => {
   gap: 16rpx;
   padding: 18rpx;
   border-radius: 8rpx;
-  border: 1rpx solid #e4ebf0;
-  background-color: #fbfcfd;
+  border: 1rpx solid #e5e8d4;
+  background-color: #eef2e4;
 }
 
 .product-explanation-cooking-label {
@@ -4232,13 +4232,13 @@ onShow(() => {
 }
 
 .product-explanation-cooking-item.recommend .product-explanation-cooking-label {
-  background-color: #ecf8ef;
-  color: #2f8f4e;
+  background-color: #eef2e4;
+  color: #1e3a2f;
 }
 
 .product-explanation-cooking-item.avoid .product-explanation-cooking-label {
-  background-color: #fff2ef;
-  color: #c74b35;
+  background-color: #f8e8e2;
+  color: #b4553f;
 }
 
 .product-explanation-cooking-copy {
@@ -4250,7 +4250,7 @@ onShow(() => {
   margin-bottom: 10rpx;
   font-size: 27rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.35;
 }
 
@@ -4267,23 +4267,23 @@ onShow(() => {
   justify-content: center;
   padding: 6rpx 12rpx;
   border-radius: 6rpx;
-  background-color: #f2f6f4;
-  color: #2f633f;
+  background-color: #eef2e4;
+  color: #26261f;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 1.2;
 }
 
 .product-explanation-cooking-item.avoid .product-explanation-cooking-tag {
-  background-color: #fff6f4;
-  color: #a33d28;
+  background-color: #f8e8e2;
+  color: #b4553f;
 }
 
 .product-explanation-cooking-line {
   display: block;
   margin-top: 6rpx;
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.55;
 }
 
@@ -4294,13 +4294,13 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   border-radius: 8rpx;
-  background-color: #eef6ff;
-  color: #2566a8;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 
 .product-explanation-media.video {
-  background-color: #fff5e8;
-  color: #a76416;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 .product-explanation-media-label {
@@ -4323,7 +4323,7 @@ onShow(() => {
   width: 100%;
   height: 72rpx;
   border-radius: 8rpx;
-  background-color: #f1f5f9;
+  background-color: #eef2e4;
 }
 
 .product-explanation-logistics-visual {
@@ -4332,7 +4332,7 @@ onShow(() => {
   gap: 12rpx;
   padding: 16rpx;
   border-radius: 8rpx;
-  background: linear-gradient(180deg, #f7fafc 0%, #eef3f6 100%);
+  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
 }
 
 .product-explanation-package-frame {
@@ -4343,8 +4343,8 @@ onShow(() => {
   justify-content: center;
   overflow: hidden;
   border-radius: 8rpx;
-  background-color: #fff;
-  border: 1rpx solid #e4ebf0;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
 }
 
 .product-explanation-logistics-package-image {
@@ -4359,8 +4359,8 @@ onShow(() => {
   gap: 16rpx;
   padding: 12rpx 14rpx;
   border-radius: 8rpx;
-  background-color: #fff;
-  border: 1rpx solid #e6edf5;
+  background-color: #fbfcf7;
+  border: 1rpx solid #eef1e2;
 }
 
 .product-explanation-shipping-main {
@@ -4391,21 +4391,21 @@ onShow(() => {
 .product-explanation-shipping-title {
   font-size: 26rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .product-explanation-shipping-subtitle {
   margin-top: 2rpx;
   font-size: 22rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .product-explanation-shipping-pill {
   margin-left: auto;
   padding: 6rpx 14rpx;
   border-radius: 999rpx;
-  background-color: #edf6ff;
-  color: #2566a8;
+  background-color: #eef2e4;
+  color: #b08d4f;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1.2;
@@ -4430,7 +4430,7 @@ onShow(() => {
   min-width: 0;
   font-size: 20rpx;
   font-weight: 700;
-  color: #2566a8;
+  color: #b08d4f;
 }
 
 .product-explanation-copy {
@@ -4448,7 +4448,7 @@ onShow(() => {
 }
 
 .price-breakdown-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 28rpx;
 }
 
@@ -4463,7 +4463,7 @@ onShow(() => {
 .breakdown-group {
   padding: 18rpx;
   border-radius: 8rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
 }
 
 .breakdown-item {
@@ -4476,22 +4476,22 @@ onShow(() => {
 .breakdown-item.total {
   margin-top: 8rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #e2e8ef;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .breakdown-label {
   font-size: 25rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .breakdown-value {
   font-size: 26rpx;
-  color: #25282b;
+  color: #26261f;
   font-weight: 700;
 }
 
 .breakdown-value.final {
-  color: #e6543f;
+  color: #b4553f;
 }
 
 .bottom-bar {
@@ -4505,8 +4505,8 @@ onShow(() => {
   justify-content: space-between;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
-  background-color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+  background-color: #fbfcf7;
+  box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
 }
 
 .bottom-price {
@@ -4525,7 +4525,7 @@ onShow(() => {
 .bottom-total {
   max-width: 100%;
   font-size: 36rpx;
-  color: #e6543f;
+  color: #b4553f;
   font-weight: 800;
   line-height: 1.15;
   text-align: right;
@@ -4534,7 +4534,7 @@ onShow(() => {
 .bottom-estimate {
   max-width: 100%;
   font-size: 23rpx;
-  color: #687078;
+  color: #6b6653;
   line-height: 1.3;
   text-align: right;
   display: flex;
@@ -4563,8 +4563,8 @@ onShow(() => {
   border-radius: 40rpx;
   box-sizing: border-box;
   padding: 0 18rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   font-size: 26rpx;
   line-height: 1;
   white-space: nowrap;
@@ -4573,8 +4573,8 @@ onShow(() => {
 }
 
 .btn-buy-now[disabled] {
-  background-color: #d8dde3;
-  color: #fff;
+  background-color: #eef2e4;
+  color: #968f6d;
 }
 
 </style>

@@ -618,7 +618,7 @@ function backToRecipes() {
 }
 
 .order-form {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 30rpx;
   border-radius: 8rpx;
 }
@@ -631,7 +631,7 @@ function backToRecipes() {
   font-size: 32rpx;
   font-weight: bold;
   margin-bottom: 20rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .form-item {
@@ -642,18 +642,18 @@ function backToRecipes() {
   display: block;
   font-size: 28rpx;
   margin-bottom: 10rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .input {
   width: 100%;
   height: 80rpx;
-  border: 1px solid #ddd;
+  border: 1px solid #e5e8d4;
   border-radius: 8rpx;
   padding: 0 20rpx;
   font-size: 28rpx;
@@ -663,19 +663,19 @@ function backToRecipes() {
 .address-selector {
   height: 80rpx;
   line-height: 80rpx;
-  border: 1px solid #ddd;
+  border: 1px solid #e5e8d4;
   border-radius: 8rpx;
   padding: 0 20rpx;
   font-size: 28rpx;
 }
 
 .placeholder {
-  color: #999;
+  color: #6b6653;
 }
 
 .api-gap-notice {
-  background-color: #fff7e6;
-  border: 1px solid #ffd591;
+  background-color: #f6efe0;
+  border: 1px solid #b08d4f;
   border-radius: 8rpx;
   padding: 20rpx;
   margin-bottom: 30rpx;
@@ -684,13 +684,13 @@ function backToRecipes() {
 .notice-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #fa8c16;
+  color: #8a6b33;
   margin-bottom: 10rpx;
 }
 
 .notice-content {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -700,30 +700,30 @@ function backToRecipes() {
 }
 
 .pricing-hint {
-  background-color: #f0f0f0;
-  border: 1px solid #d9d9d9;
+  background-color: #f0f3e9;
+  border: 1px solid #e5e8d4;
   border-radius: 8rpx;
   padding: 20rpx;
   margin-bottom: 30rpx;
-  color: #666;
+  color: #26261f;
   font-size: 28rpx;
   text-align: center;
 }
 
 .pricing-error {
-  background-color: #fff1f0;
-  border: 1px solid #ffccc7;
+  background-color: #f8e8e2;
+  border: 1px solid #e5e8d4;
   border-radius: 8rpx;
   padding: 20rpx;
   margin-bottom: 30rpx;
-  color: #ff4d4f;
+  color: #b4553f;
   font-size: 28rpx;
 }
 
 .price-section {
   margin-bottom: 30rpx;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
@@ -738,15 +738,15 @@ function backToRecipes() {
   font-weight: bold;
   font-size: 32rpx;
   padding-top: 15rpx;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid #e5e8d4;
 }
 
 .price-label {
-  color: #666;
+  color: #26261f;
 }
 
 .price-value {
-  color: #333;
+  color: #26261f;
   font-weight: bold;
 }
 
@@ -756,16 +756,16 @@ function backToRecipes() {
   width: auto;
   height: 88rpx;
   line-height: 88rpx;
-  background-color: #07c160;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 32rpx;
   margin-top: 20rpx;
 }
 
 .btn[disabled] {
-  background-color: #ccc;
-  color: #999;
+  background-color: #f2f4ea;
+  color: #6b6653;
 }
 
 .bottom-bar {
@@ -778,8 +778,8 @@ function backToRecipes() {
   align-items: center;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
-  background-color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+  background-color: #fbfcf7;
+  box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
 }
 
 .customer-service-bottom-action {
@@ -789,7 +789,7 @@ function backToRecipes() {
 .result-section {
   margin-top: 30rpx;
   padding: 20rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
 }
 
@@ -797,7 +797,7 @@ function backToRecipes() {
   font-size: 32rpx;
   font-weight: bold;
   margin-bottom: 20rpx;
-  color: #07c160;
+  color: #1e3a2f;
 }
 
 .result-item {
@@ -806,13 +806,13 @@ function backToRecipes() {
 
 .result-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   margin-right: 20rpx;
 }
 
 .result-value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: bold;
 }
 
@@ -830,7 +830,7 @@ function backToRecipes() {
 }
 
 .modal-content {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 40rpx;
   margin: 40rpx;
@@ -842,13 +842,13 @@ function backToRecipes() {
   font-size: 36rpx;
   font-weight: bold;
   margin-bottom: 20rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .modal-body {
   font-size: 28rpx;
   line-height: 1.6;
-  color: #666;
+  color: #26261f;
   margin-bottom: 40rpx;
 }
 
@@ -868,12 +868,12 @@ function backToRecipes() {
 }
 
 .modal-btn.primary {
-  background-color: #07c160;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .modal-btn.secondary {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: #f0f3e9;
+  color: #26261f;
 }
 </style>

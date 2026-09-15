@@ -1129,12 +1129,12 @@ function getNutritionStandardLabel(standard: string): string {
 <style scoped>
 .recipe-diy-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 140rpx;
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1148,11 +1148,11 @@ function getNutritionStandardLabel(standard: string): string {
 .title-text {
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .required {
-  color: #ff4d4f;
+  color: #b4553f;
   margin-left: 4rpx;
 }
 
@@ -1169,7 +1169,7 @@ function getNutritionStandardLabel(standard: string): string {
 .recipe-name {
   font-size: 40rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   display: block;
 }
 
@@ -1183,7 +1183,7 @@ function getNutritionStandardLabel(standard: string): string {
 
 .section-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   margin-right: 12rpx;
 }
 
@@ -1200,13 +1200,13 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .life-stage-tag {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 
 .health-tag {
-  background-color: #fff3e0;
-  color: #f57c00;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 .nutrition-summary {
@@ -1214,7 +1214,7 @@ function getNutritionStandardLabel(standard: string): string {
   justify-content: space-around;
   gap: 20rpx;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
@@ -1226,12 +1226,12 @@ function getNutritionStandardLabel(standard: string): string {
 
 .nutrition-item .label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .nutrition-item .value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -1245,14 +1245,14 @@ function getNutritionStandardLabel(standard: string): string {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
   margin-bottom: 20rpx;
 }
 
 .btn-create-dog {
   padding: 16rpx 32rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 28rpx;
   border: none;
@@ -1261,14 +1261,14 @@ function getNutritionStandardLabel(standard: string): string {
 .dog-picker {
   padding: 24rpx;
   background-color: #ffffff;
-  border: 2rpx solid #1890ff;
+  border: 2rpx solid #1e3a2f;
   border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(24, 144, 255, 0.1);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.1);
 }
 
 .picker-placeholder {
   font-size: 28rpx;
-  color: #1890ff;
+  color: #b08d4f;
   font-weight: 500;
 }
 
@@ -1280,13 +1280,13 @@ function getNutritionStandardLabel(standard: string): string {
 
 .dog-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .picker-check {
   font-size: 32rpx;
-  color: #52c41a;
+  color: #1e3a2f;
   font-weight: bold;
 }
 
@@ -1294,7 +1294,7 @@ function getNutritionStandardLabel(standard: string): string {
   margin-top: 12rpx;
   padding: 0 8rpx;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -1319,15 +1319,15 @@ function getNutritionStandardLabel(standard: string): string {
   margin-right: 14rpx;
   padding: 12rpx;
   border-radius: 8rpx;
-  border: 2rpx solid #edf0f2;
-  background-color: #f8faf9;
-  color: #25282b;
+  border: 2rpx solid #eef1e2;
+  background-color: #fbfcf7;
+  color: #26261f;
   vertical-align: middle;
 }
 
 .order-dog-chip.active {
-  border-color: #2f8f4e;
-  background-color: #f0faf3;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .order-dog-avatar {
@@ -1335,7 +1335,7 @@ function getNutritionStandardLabel(standard: string): string {
   width: 58rpx;
   height: 58rpx;
   border-radius: 50%;
-  background-color: #e8efe9;
+  background-color: #eef2e4;
 }
 
 .order-dog-copy {
@@ -1352,18 +1352,18 @@ function getNutritionStandardLabel(standard: string): string {
   white-space: nowrap;
   font-size: 25rpx;
   font-weight: 800;
-  color: #25282b;
+  color: #26261f;
 }
 
 .order-dog-chip.active .order-dog-name {
-  color: #226d3a;
+  color: #26261f;
 }
 
 .dog-profile-context {
   padding: 14rpx 16rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
-  border: 1rpx solid #edf0f2;
+  background-color: #fbfcf7;
+  border: 1rpx solid #eef1e2;
 }
 
 .dog-profile-facts {
@@ -1379,28 +1379,28 @@ function getNutritionStandardLabel(standard: string): string {
   max-width: 100%;
   padding: 4rpx 10rpx;
   border-radius: 6rpx;
-  background-color: #fff;
-  color: #25282b;
+  background-color: #fbfcf7;
+  color: #26261f;
   line-height: 1.35;
 }
 
 .dog-profile-fact-label {
   font-size: 21rpx;
-  color: #7a838b;
+  color: #6b6653;
 }
 
 .dog-profile-fact-value {
   min-width: 0;
   font-size: 23rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
   word-break: keep-all;
 }
 
 /* 警告卡片 */
 .warning-card {
-  background-color: #fffbe6;
-  border: 1rpx solid #ffe58f;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 12rpx;
   padding: 20rpx;
   margin-bottom: 20rpx;
@@ -1420,12 +1420,12 @@ function getNutritionStandardLabel(standard: string): string {
 .warning-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #856404;
+  color: #8a6b33;
 }
 
 .warning-text {
   font-size: 26rpx;
-  color: #856404;
+  color: #8a6b33;
   line-height: 1.6;
   display: block;
   margin-bottom: 8rpx;
@@ -1448,13 +1448,13 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .btn-switch-stage {
-  background-color: #2f8f4e;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-continue {
-  background-color: #faad14;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
 }
 
 /* 饭量配置 */
@@ -1472,18 +1472,18 @@ function getNutritionStandardLabel(standard: string): string {
 
 .feeding-label {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .feeding-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .feeding-value.readonly {
-  color: #666;
+  color: #26261f;
 }
 
 .dog-feeding-grid {
@@ -1500,14 +1500,14 @@ function getNutritionStandardLabel(standard: string): string {
   justify-content: center;
   gap: 8rpx;
   padding: 16rpx 10rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   text-align: center;
 }
 
 .dog-feeding-item:nth-child(3),
 .daily-intake-item {
-  background-color: #f4fbf5;
+  background-color: #eef2e4;
 }
 
 .feeding-adjustment-note {
@@ -1516,21 +1516,21 @@ function getNutritionStandardLabel(standard: string): string {
   gap: 8rpx;
   margin-top: 20rpx;
   padding: 18rpx 20rpx;
-  background-color: #f6fbf7;
-  border: 1rpx solid #d9f0dd;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
 }
 
 .feeding-adjustment-title {
   font-size: 25rpx;
   font-weight: 700;
-  color: #2f7d42;
+  color: #1e3a2f;
 }
 
 .feeding-adjustment-copy {
   font-size: 24rpx;
   line-height: 1.6;
-  color: #496052;
+  color: #26261f;
 }
 
 .feeding-value-wrapper {
@@ -1549,7 +1549,7 @@ function getNutritionStandardLabel(standard: string): string {
   width: 120rpx;
   height: 60rpx;
   padding: 0 12rpx;
-  border: 1rpx solid #d9d9d9;
+  border: 1rpx solid #e5e8d4;
   border-radius: 6rpx;
   font-size: 28rpx;
   text-align: center;
@@ -1557,7 +1557,7 @@ function getNutritionStandardLabel(standard: string): string {
 
 .feeding-unit {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .btn-edit,
@@ -1571,29 +1571,29 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .btn-edit {
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-reset {
-  background-color: #ff4d4f;
-  color: #fff;
+  background-color: #b4553f;
+  color: #f3eddd;
 }
 
 .btn-save {
-  background-color: #52c41a;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-cancel {
-  background-color: #d9d9d9;
-  color: #666;
+  background-color: #f2f4ea;
+  color: #26261f;
 }
 
 /* 计算说明 */
 .calculation-explanation {
   margin-top: 24rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
   padding-top: 20rpx;
 }
 
@@ -1613,12 +1613,12 @@ function getNutritionStandardLabel(standard: string): string {
 .explanation-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .toggle-icon {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .explanation-content {
@@ -1633,19 +1633,19 @@ function getNutritionStandardLabel(standard: string): string {
 
 .calc-card {
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border-left: 4rpx solid #d9d9d9;
+  border-left: 4rpx solid #e5e8d4;
 }
 
 .calc-card.highlight {
-  background-color: #e6f7ff;
-  border-left-color: #1890ff;
+  background-color: #eef2e4;
+  border-left-color: #1e3a2f;
 }
 
 .card-title {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 12rpx;
   display: block;
 }
@@ -1659,34 +1659,34 @@ function getNutritionStandardLabel(standard: string): string {
 .result-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .result-value.highlight {
-  color: #1890ff;
+  color: #b08d4f;
   font-size: 36rpx;
 }
 
 .result-note {
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .result-warning {
   font-size: 22rpx;
-  color: #faad14;
+  color: #8a6b33;
 }
 
 .formula-box {
   padding: 12rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 6rpx;
   margin-bottom: 12rpx;
 }
 
 .formula-text {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.5;
 }
 
@@ -1702,12 +1702,12 @@ function getNutritionStandardLabel(standard: string): string {
 
 .data-label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .data-value {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -1731,13 +1731,13 @@ function getNutritionStandardLabel(standard: string): string {
   flex-direction: column;
   align-items: center;
   padding: 20rpx 12rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
 .cycle-option.active {
-  border-color: #1890ff;
-  background-color: #f0f9ff;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .cycle-option.disabled {
@@ -1747,7 +1747,7 @@ function getNutritionStandardLabel(standard: string): string {
 .cycle-text {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .package-plan-toolbar {
@@ -1763,7 +1763,7 @@ function getNutritionStandardLabel(standard: string): string {
   min-width: 0;
   font-size: 26rpx;
   font-weight: 700;
-  color: #25282b;
+  color: #26261f;
   line-height: 1.45;
 }
 
@@ -1777,17 +1777,17 @@ function getNutritionStandardLabel(standard: string): string {
   box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
-  border: 2rpx solid #2f8f4e;
-  color: #2f8f4e;
-  background-color: #fff;
+  border: 2rpx solid #1e3a2f;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
   font-size: 25rpx;
 }
 
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 18rpx;
-  background-color: #fff7e8;
-  border: 1rpx solid #f3c67d;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 8rpx;
 }
 
@@ -1804,7 +1804,7 @@ function getNutritionStandardLabel(standard: string): string {
   gap: 12rpx;
   padding: 16rpx;
   border-radius: 8rpx;
-  background-color: #f8faf9;
+  background-color: #fbfcf7;
 }
 
 .package-input-group {
@@ -1818,18 +1818,18 @@ function getNutritionStandardLabel(standard: string): string {
 .package-input-label,
 .package-input-unit {
   font-size: 24rpx;
-  color: #687078;
+  color: #6b6653;
 }
 
 .package-input {
   width: 116rpx;
   height: 58rpx;
   text-align: center;
-  border: 1rpx solid #d8dee4;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #25282b;
-  background-color: #fff;
+  color: #26261f;
+  background-color: #fbfcf7;
 }
 
 .btn-add-row,
@@ -1848,19 +1848,19 @@ function getNutritionStandardLabel(standard: string): string {
 
 .btn-add-row {
   width: 100%;
-  border: 1rpx dashed #2f8f4e;
-  color: #2f8f4e;
-  background-color: #fff;
+  border: 1rpx dashed #1e3a2f;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
 }
 
 .btn-remove-row {
   border: none;
-  color: #687078;
-  background-color: #eef1f3;
+  color: #6b6653;
+  background-color: #eef2e4;
 }
 
 .btn-remove-row[disabled] {
-  color: #b7bdc3;
+  color: #968f6d;
 }
 
 .custom-cycle-inline {
@@ -1868,36 +1868,36 @@ function getNutritionStandardLabel(standard: string): string {
   align-items: center;
   gap: 8rpx;
   padding: 20rpx 16rpx;
-  background-color: #fff;
-  border: 2rpx solid #e8e8e8;
+  background-color: #fbfcf7;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
 .custom-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .custom-input-white {
   width: 80rpx;
   height: 56rpx;
   text-align: center;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 26rpx;
-  color: #333;
-  background-color: #fff;
+  color: #26261f;
+  background-color: #fbfcf7;
 }
 
 .custom-unit {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .btn-confirm-custom {
   padding: 8rpx 16rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -1908,14 +1908,14 @@ function getNutritionStandardLabel(standard: string): string {
 .custom-days-display {
   font-size: 26rpx;
   font-weight: bold;
-  color: #1890ff;
+  color: #b08d4f;
   padding: 0 12rpx;
 }
 
 .btn-edit-custom {
   padding: 8rpx 20rpx;
-  background-color: #52c41a;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -1927,8 +1927,8 @@ function getNutritionStandardLabel(standard: string): string {
 .shelf-life-notice {
   margin-top: 20rpx;
   padding: 20rpx;
-  background-color: #f0f9ff;
-  border: 2rpx solid #91d5ff;
+  background-color: #eef2e4;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
 }
 
@@ -1943,7 +1943,7 @@ function getNutritionStandardLabel(standard: string): string {
 .notice-title-text {
   font-size: 28rpx;
   font-weight: bold;
-  color: #0050b3;
+  color: #b08d4f;
 }
 
 .notice-content {
@@ -1969,7 +1969,7 @@ function getNutritionStandardLabel(standard: string): string {
 
 .notice-text {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
   flex: 1;
 }
@@ -1981,8 +1981,8 @@ function getNutritionStandardLabel(standard: string): string {
   left: 0;
   right: 0;
   padding: 16rpx 20rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
+  background-color: #fbfcf7;
+  border-top: 1rpx solid #e5e8d4;
   z-index: 100;
 }
 
@@ -1992,8 +1992,8 @@ function getNutritionStandardLabel(standard: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 44rpx;
   font-size: 32rpx;
   font-weight: bold;
@@ -2001,7 +2001,7 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .btn-generate[disabled] {
-  background-color: #ccc;
-  color: #999;
+  background-color: #f2f4ea;
+  color: #6b6653;
 }
 </style>

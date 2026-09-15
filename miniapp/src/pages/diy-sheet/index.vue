@@ -1848,12 +1848,12 @@ onShareTimeline(() => {
 <style scoped>
 .diy-sheet-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 180rpx;
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
 }
@@ -1870,12 +1870,12 @@ onShareTimeline(() => {
 .title-text {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .toggle-icon {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 食谱信息卡片 */
@@ -1898,7 +1898,7 @@ onShareTimeline(() => {
 .recipe-cover-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1906,7 +1906,7 @@ onShareTimeline(() => {
 
 .placeholder-text {
   font-size: 36rpx;
-  color: #fff;
+  color: #f3eddd;
   font-weight: bold;
 }
 
@@ -1917,7 +1917,7 @@ onShareTimeline(() => {
 .recipe-name {
   font-size: 40rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   display: block;
   margin-bottom: 20rpx;
   text-align: center;
@@ -1938,13 +1938,13 @@ onShareTimeline(() => {
 }
 
 .life-stage-tag {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 
 .health-tag {
-  background-color: #fff3e0;
-  color: #f57c00;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 .nutrition-summary {
@@ -1952,7 +1952,7 @@ onShareTimeline(() => {
   justify-content: space-around;
   gap: 20rpx;
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   margin-top: 16rpx;
 }
@@ -1965,20 +1965,20 @@ onShareTimeline(() => {
 
 .nutrition-item .label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .nutrition-item .value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .warning-card {
   margin: 20rpx 24rpx;
   padding: 24rpx;
-  background-color: #fff7e6;
-  border: 1rpx solid #ffd591;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   border-radius: 12rpx;
 }
 
@@ -1991,13 +1991,13 @@ onShareTimeline(() => {
 .warning-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #d46b08;
+  color: #8a6b33;
 }
 
 .warning-text {
   display: block;
   font-size: 26rpx;
-  color: #8c5a00;
+  color: #8a6b33;
   line-height: 1.6;
   margin-bottom: 16rpx;
 }
@@ -2005,8 +2005,8 @@ onShareTimeline(() => {
 .btn-continue {
   height: 64rpx;
   line-height: 64rpx;
-  background-color: #faad14;
-  color: #fff;
+  background-color: #b08d4f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 26rpx;
   border: none;
@@ -2022,43 +2022,43 @@ onShareTimeline(() => {
 /* 狗狗信息 */
 .dog-info-summary {
   padding: 16rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
-  border-left: 4rpx solid #1890ff;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 /* 制作信息 */
 .making-info-summary {
   padding: 16rpx;
-  background-color: #f0f9ff;
+  background-color: #eef2e4;
   border-radius: 8rpx;
-  border-left: 4rpx solid #1890ff;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .preview-warning-summary {
   padding: 16rpx 18rpx;
-  background-color: #fff7e6;
+  background-color: #f6efe0;
   border-radius: 8rpx;
-  border-left: 4rpx solid #faad14;
+  border-left: 4rpx solid #b08d4f;
 }
 
 .preview-warning-text {
   display: block;
   font-size: 25rpx;
-  color: #ad6800;
+  color: #8a6b33;
   line-height: 1.5;
 }
 
 .info-text {
   display: block;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
 }
 
 .secondary-info-text {
   margin-top: 6rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .ingredient-group {
@@ -2070,14 +2070,14 @@ onShareTimeline(() => {
 .ingredient-category-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   padding: 12rpx 0;
 }
 
 .ingredient-table {
   display: flex;
   flex-direction: column;
-  border: 1rpx solid #e8e8e8;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
   overflow: hidden;
 }
@@ -2089,12 +2089,12 @@ onShareTimeline(() => {
 }
 
 .table-header {
-  background-color: #fafafa;
-  border-bottom: 1rpx solid #e8e8e8;
+  background-color: #fbfcf7;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .table-row {
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .table-row:last-child {
@@ -2103,18 +2103,18 @@ onShareTimeline(() => {
 
 /* 合计行样式 */
 .total-row {
-  background-color: #fff7e6;
-  border-top: 2rpx solid #ffd591;
+  background-color: #f6efe0;
+  border-top: 2rpx solid #b08d4f;
   font-weight: bold;
 }
 
 .total-label {
-  color: #333;
+  color: #26261f;
   font-weight: bold;
 }
 
 .total-value {
-  color: #ff4d4f;
+  color: #b4553f;
   font-weight: bold;
 }
 
@@ -2127,11 +2127,11 @@ onShareTimeline(() => {
 
 .header-item {
   font-weight: bold;
-  color: #666;
+  color: #26261f;
 }
 
 .row-item {
-  color: #333;
+  color: #26261f;
 }
 
 .name-col {
@@ -2161,7 +2161,7 @@ onShareTimeline(() => {
 }
 
 .row-item.highlight {
-  color: #1890ff;
+  color: #b08d4f;
   font-weight: bold;
 }
 
@@ -2206,7 +2206,7 @@ onShareTimeline(() => {
 .recommend-main {
   max-width: 100%;
   font-size: 22rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.35;
   word-break: break-word;
 }
@@ -2214,9 +2214,9 @@ onShareTimeline(() => {
 .recommend-badge {
   padding: 2rpx 10rpx;
   border-radius: 999rpx;
-  background-color: #e6f4ff;
-  color: #1677ff;
-  border: 1rpx solid #bae0ff;
+  background-color: #eef2e4;
+  color: #b08d4f;
+  border: 1rpx solid #e5e8d4;
   font-size: 19rpx;
   font-weight: 600;
   line-height: 1.35;
@@ -2226,9 +2226,9 @@ onShareTimeline(() => {
 }
 
 .recommend-badge-replace {
-  background-color: #fff7e6;
-  border-color: #ffd591;
-  color: #d46b08;
+  background-color: #f6efe0;
+  border-color: #b08d4f;
+  color: #8a6b33;
 }
 
 /* 补剂表格4列布局 */
@@ -2243,7 +2243,7 @@ onShareTimeline(() => {
   justify-content: center;
   text-align: center;
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .supplement-table .timing-col {
@@ -2265,7 +2265,7 @@ onShareTimeline(() => {
 
 .no-data-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 /* 制作流程 */
@@ -2275,13 +2275,13 @@ onShareTimeline(() => {
 
 .steps-content {
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 }
 
 .steps-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.8;
   white-space: pre-wrap;
 }
@@ -2295,7 +2295,7 @@ onShareTimeline(() => {
 }
 
 .info-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   border-radius: 12rpx;
   display: flex;
@@ -2310,7 +2310,7 @@ onShareTimeline(() => {
 
 .card-content {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -2322,12 +2322,12 @@ onShareTimeline(() => {
 
 .content-line {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.5;
 }
 
 .content-line.warning {
-  color: #faad14;
+  color: #8a6b33;
 }
 
 /* 底部操作栏 */
@@ -2337,8 +2337,8 @@ onShareTimeline(() => {
   left: 0;
   right: 0;
   padding: 16rpx 20rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
+  background-color: #fbfcf7;
+  border-top: 1rpx solid #e5e8d4;
   display: flex;
   gap: 12rpx;
   z-index: 100;
@@ -2350,21 +2350,21 @@ onShareTimeline(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   border: none;
 }
 
 .action-btn.primary {
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .action-btn.success {
-  background-color: #52c41a;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .btn-text {
@@ -2397,7 +2397,7 @@ onShareTimeline(() => {
 
 .spec-content {
   width: 600rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
 }
@@ -2407,18 +2407,18 @@ onShareTimeline(() => {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  border-bottom: 1rpx solid #e5e5e5;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .spec-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .btn-close {
   font-size: 40rpx;
-  color: #999;
+  color: #6b6653;
   padding: 0 8rpx;
 }
 
@@ -2434,7 +2434,7 @@ onShareTimeline(() => {
 
 .spec-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   min-width: 200rpx;
   flex-shrink: 0;
   white-space: nowrap;
@@ -2442,14 +2442,14 @@ onShareTimeline(() => {
 
 .spec-value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   flex: 1;
   word-break: break-all;
 }
 
 .btn-purchase {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   padding: 8rpx 24rpx;
@@ -2465,42 +2465,42 @@ onShareTimeline(() => {
 /* 用量详情弹窗样式 */
 .spec-divider {
   height: 1rpx;
-  background-color: #e8e8e8;
+  background-color: #f0f3e9;
   margin: 20rpx 0;
 }
 
 .calculation-detail {
   margin: 20rpx 0;
   padding: 20rpx;
-  background-color: #f7f9fc;
+  background-color: #eef2e4;
   border-radius: 8rpx;
-  border-left: 4rpx solid #1890ff;
+  border-left: 4rpx solid #1e3a2f;
 }
 
 .calculation-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   display: block;
   margin-bottom: 12rpx;
 }
 
 .calculation-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
   display: block;
 }
 
 .highlight-row {
-  background-color: #fff7e6;
+  background-color: #f6efe0;
   padding: 12rpx;
   border-radius: 8rpx;
   margin-top: 8rpx;
 }
 
 .highlight-value {
-  color: #ff4d4f;
+  color: #b4553f;
   font-weight: bold;
   font-size: 30rpx;
 }
@@ -2514,7 +2514,7 @@ onShareTimeline(() => {
 .card-title .view-more {
   margin-left: auto;
   font-size: 24rpx;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .equipment-list {
@@ -2529,7 +2529,7 @@ onShareTimeline(() => {
   align-items: center;
   gap: 8rpx;
   padding: 12rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   min-width: 100rpx;
 }
@@ -2544,7 +2544,7 @@ onShareTimeline(() => {
   width: 60rpx;
   height: 60rpx;
   border-radius: 8rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2552,13 +2552,13 @@ onShareTimeline(() => {
 
 .placeholder-icon {
   font-size: 28rpx;
-  color: #fff;
+  color: #f3eddd;
   font-weight: bold;
 }
 
 .equipment-name {
   font-size: 22rpx;
-  color: #666;
+  color: #26261f;
   text-align: center;
 }
 
@@ -2578,7 +2578,7 @@ onShareTimeline(() => {
 .equipment-modal-content {
   width: 100%;
   max-height: 80vh;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 32rpx 32rpx 0 0;
   overflow: hidden;
   display: flex;
@@ -2590,13 +2590,13 @@ onShareTimeline(() => {
   align-items: center;
   justify-content: space-between;
   padding: 32rpx 32rpx 24rpx;
-  border-bottom: 1rpx solid #e5e5e5;
+  border-bottom: 1rpx solid #e5e8d4;
 }
 
 .equipment-modal-title {
   font-size: 36rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .equipment-modal-body {
@@ -2611,7 +2611,7 @@ onShareTimeline(() => {
 
 .equipment-detail-item {
   padding: 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   margin-bottom: 20rpx;
   display: flex;
@@ -2636,7 +2636,7 @@ onShareTimeline(() => {
   width: 120rpx;
   height: 120rpx;
   border-radius: 12rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2645,7 +2645,7 @@ onShareTimeline(() => {
 
 .placeholder-text-large {
   font-size: 48rpx;
-  color: #fff;
+  color: #f3eddd;
   font-weight: bold;
 }
 
@@ -2659,22 +2659,22 @@ onShareTimeline(() => {
 .equipment-detail-name {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .equipment-detail-brand {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .equipment-detail-spec {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .equipment-detail-reason {
   padding: 16rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -2684,12 +2684,12 @@ onShareTimeline(() => {
 .reason-label {
   font-size: 26rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .reason-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -2699,8 +2699,8 @@ onShareTimeline(() => {
 }
 
 .btn-purchase-equipment {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
   border: none;
   border-radius: 12rpx;
   padding: 16rpx 48rpx;
@@ -2721,9 +2721,9 @@ onShareTimeline(() => {
 
 .rp-card {
   padding: 20rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
-  border: 2rpx solid #e8e8e8;
+  border: 2rpx solid #e5e8d4;
   transition: all 0.2s;
 }
 
@@ -2732,8 +2732,8 @@ onShareTimeline(() => {
 }
 
 .rp-card-active {
-  background-color: #f0f7ff;
-  border-color: #1890ff;
+  background-color: #eef2e4;
+  border-color: #1e3a2f;
 }
 
 .rp-card-header {
@@ -2746,17 +2746,17 @@ onShareTimeline(() => {
 .rp-card-name {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .rp-card-active .rp-card-name {
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .rp-card-badge {
   font-size: 22rpx;
-  color: #fff;
-  background-color: #1890ff;
+  color: #f3eddd;
+  background-color: #1e3a2f;
   padding: 4rpx 16rpx;
   border-radius: 16rpx;
 }
@@ -2788,14 +2788,14 @@ onShareTimeline(() => {
   height: 180rpx;
   border-radius: 12rpx;
   overflow: hidden;
-  background-color: #fff;
+  background-color: #fbfcf7;
 }
 
 .rp-card-image {
   width: 100%;
   height: 100%;
   display: block;
-  background-color: #fff;
+  background-color: #fbfcf7;
 }
 
 .rp-card-field {
@@ -2807,12 +2807,12 @@ onShareTimeline(() => {
 
 .rp-card-field-label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .rp-card-field-value {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
   text-align: left;
   word-break: break-all;
@@ -2838,14 +2838,14 @@ onShareTimeline(() => {
 }
 
 .spec-action-btn-secondary {
-  background: #f5f5f5;
-  color: #666;
-  border: 1rpx solid #d9d9d9;
+  background: #fbfcf7;
+  color: #26261f;
+  border: 1rpx solid #e5e8d4;
 }
 
 .spec-action-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
   border: none;
 }
 
@@ -2855,14 +2855,14 @@ onShareTimeline(() => {
   flex-shrink: 0;
   border-radius: 16rpx;
   overflow: hidden;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
 }
 
 .spec-image {
   width: 100%;
   height: 100%;
   display: block;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
 }
 
 .spec-detail-main {
@@ -2889,12 +2889,12 @@ onShareTimeline(() => {
 
 .spec-detail-field-label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .spec-detail-field-value {
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   line-height: 1.5;
   text-align: left;
   word-break: break-all;
@@ -2914,9 +2914,9 @@ onShareTimeline(() => {
 }
 
 .btn-purchase-sm {
-  background: #fff;
-  color: #6f4fc8;
-  border: 2rpx solid #d8cff7;
+  background: #fbfcf7;
+  color: #b08d4f;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   width: 100%;
   height: 64rpx;
@@ -2929,7 +2929,7 @@ onShareTimeline(() => {
 }
 
 .btn-purchase-sm:active {
-  background: #f6f1ff;
+  background: #eef2e4;
   opacity: 1;
 }
 

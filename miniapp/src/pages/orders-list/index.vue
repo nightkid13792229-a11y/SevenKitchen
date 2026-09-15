@@ -801,7 +801,7 @@ function formatAddress(address?: { regionText?: string }): string {
 /* 状态筛选Tab */
 .status-tabs {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 20rpx;
   margin-bottom: 20rpx;
   border-radius: 16rpx;
@@ -817,7 +817,7 @@ function formatAddress(address?: { regionText?: string }): string {
   padding: 12rpx 24rpx;
   margin-right: 16rpx;
   border-radius: 20rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   display: flex;
   align-items: center;
   gap: 4rpx;
@@ -825,26 +825,26 @@ function formatAddress(address?: { regionText?: string }): string {
 }
 
 .tab-item.active {
-  background-color: #1890ff;
+  background-color: #1e3a2f;
 }
 
 .tab-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .tab-item.active .tab-text {
-  color: #fff;
+  color: #f3eddd;
   font-weight: bold;
 }
 
 .tab-count {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .tab-item.active .tab-count {
-  color: rgba(255, 255, 255, 0.9);
+  color: #f3eddd;
 }
 
 .order-list {
@@ -852,11 +852,11 @@ function formatAddress(address?: { regionText?: string }): string {
 }
 
 .order-item {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
 }
 
 .order-header {
@@ -865,12 +865,12 @@ function formatAddress(address?: { regionText?: string }): string {
   align-items: center;
   margin-bottom: 16rpx;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .order-time {
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .order-status {
@@ -884,20 +884,20 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .dogs-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
 .order-summary {
   margin-bottom: 16rpx;
   padding: 12rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
 .summary-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .order-items {
@@ -922,7 +922,7 @@ function formatAddress(address?: { regionText?: string }): string {
 .recipe-name {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
   min-width: 0;
   word-break: break-all;
@@ -938,7 +938,7 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .meal-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   min-width: 0;
   word-break: break-all;
   overflow-wrap: anywhere;
@@ -946,7 +946,7 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .meal-separator {
   font-size: 26rpx;
-  color: #ccc;
+  color: #968f6d;
 }
 
 .order-address {
@@ -956,7 +956,7 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .address-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .order-amount {
@@ -968,13 +968,13 @@ function formatAddress(address?: { regionText?: string }): string {
 
 .amount-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .amount-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
 }
 
 .order-actions {
@@ -984,7 +984,7 @@ function formatAddress(address?: { regionText?: string }): string {
   flex-wrap: wrap;
   margin-top: 20rpx;
   padding-top: 18rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .action-btn {
@@ -1005,7 +1005,7 @@ function formatAddress(address?: { regionText?: string }): string {
 .order-expired-text {
   align-self: center;
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .action-btn::after,
@@ -1014,18 +1014,18 @@ function formatAddress(address?: { regionText?: string }): string {
 }
 
 .action-btn.primary {
-  color: #fff;
-  background: #1890ff;
+  color: #f3eddd;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 .action-btn.secondary {
-  color: #333;
-  background: #f5f7fa;
+  color: #26261f;
+  background: #eef2e4;
 }
 
 .action-btn[disabled] {
-  color: #fff;
-  background: #a0cfff;
+  color: #968f6d;
+  background: #1e3a2f;
 }
 
 .empty-state {
@@ -1040,7 +1040,7 @@ function formatAddress(address?: { regionText?: string }): string {
 .empty-title {
   font-size: 32rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
   margin-bottom: 14rpx;
 }
 
@@ -1048,7 +1048,7 @@ function formatAddress(address?: { regionText?: string }): string {
   width: 520rpx;
   font-size: 26rpx;
   line-height: 1.6;
-  color: #999;
+  color: #6b6653;
 }
 
 .empty-action {
@@ -1057,8 +1057,8 @@ function formatAddress(address?: { regionText?: string }): string {
   line-height: 1;
   margin-top: 32rpx;
   border-radius: 36rpx;
-  background: #07c160;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 26rpx;
   font-weight: 600;
   display: flex;
@@ -1074,8 +1074,8 @@ function formatAddress(address?: { regionText?: string }): string {
   bottom: 0;
   z-index: 30;
   padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
-  background-color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+  background-color: #fbfcf7;
+  box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
   box-sizing: border-box;
 }
 

@@ -95,7 +95,7 @@ function copyTrackingNumber() {
 .shipping-notice-page {
   min-height: 100vh;
   padding: 24rpx;
-  background: #f5f6f8;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -109,7 +109,7 @@ function copyTrackingNumber() {
   width: 100%;
   height: 360rpx;
   border-radius: 16rpx;
-  background: #e5e7eb;
+  background: #f0f3e9;
 }
 
 .section,
@@ -117,13 +117,13 @@ function copyTrackingNumber() {
   padding: 28rpx;
   border-radius: 16rpx;
   background: #ffffff;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4rpx 16rpx rgba(30, 46, 36, 0.06);
 }
 
 .section-title {
   display: block;
   margin-bottom: 18rpx;
-  color: #1f2933;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 700;
 }
@@ -137,13 +137,13 @@ function copyTrackingNumber() {
 
 .info-label {
   width: 132rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 26rpx;
 }
 
 .info-value {
   flex: 1;
-  color: #1f2933;
+  color: #26261f;
   font-size: 28rpx;
 }
 
@@ -157,7 +157,7 @@ function copyTrackingNumber() {
   line-height: 56rpx;
   padding: 0 22rpx;
   border-radius: 28rpx;
-  background: #07c160;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: #ffffff;
   font-size: 24rpx;
 }
@@ -169,7 +169,7 @@ function copyTrackingNumber() {
 
 .paragraph {
   display: block;
-  color: #374151;
+  color: #26261f;
   font-size: 27rpx;
   line-height: 1.7;
   white-space: pre-line;

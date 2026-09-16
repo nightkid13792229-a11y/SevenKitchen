@@ -71,18 +71,6 @@
       </text>
     </view>
 
-    <!-- 营养数据卡片 -->
-    <view class="nutrition-card">
-      <view class="nutrition-item">
-        <text class="label">营养标准</text>
-        <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
-      </view>
-      <view class="nutrition-item">
-        <text class="label">设计软件</text>
-        <text class="value">{{ recipe.designSource || '赛文的食堂' }}</text>
-      </view>
-    </view>
-
     <!-- 食谱配方列表 -->
     <view class="ingredients-card">
       <view class="card-header">
@@ -133,6 +121,21 @@
       </view>
     </view>
 
+    <!-- 营养标准背书（结论式 + 可展开说明） -->
+    <view class="standard-card" @tap="toggleStandardExplain">
+      <view class="standard-main">
+        <text class="standard-badge">✓</text>
+        <view class="standard-copy">
+          <text class="standard-title">符合 {{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
+          <text class="standard-sub">犬营养标准</text>
+        </view>
+      </view>
+      <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
+    </view>
+    <view v-if="standardExplainVisible" class="standard-explain">
+      <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
+    </view>
+
     <!-- 核心营养成分 -->
     <view class="nutrition-panel" v-if="recipe.nutritionDetailedData">
       <view class="card-header">
@@ -147,6 +150,7 @@
               {{ formatNumber(recipe.nutritionDetailedData.proteinPercent) }}
             </text>
             <text class="nutrition-unit">%</text>
+            <text class="nutrition-basis">（DM）</text>
           </view>
         </view>
 
@@ -157,6 +161,7 @@
               {{ formatNumber(recipe.nutritionDetailedData.fatPercent) }}
             </text>
             <text class="nutrition-unit">%</text>
+            <text class="nutrition-basis">（DM）</text>
           </view>
         </view>
 
@@ -167,6 +172,7 @@
               {{ formatNumber(recipe.nutritionDetailedData.ashPercent) }}
             </text>
             <text class="nutrition-unit">%</text>
+            <text class="nutrition-basis">（DM）</text>
           </view>
         </view>
 
@@ -187,6 +193,7 @@
               {{ formatNumber(recipe.nutritionDetailedData.crudeFiberPercent) }}
             </text>
             <text class="nutrition-unit">%</text>
+            <text class="nutrition-basis">（DM）</text>
           </view>
         </view>
 
@@ -197,6 +204,7 @@
               {{ formatNumber(recipe.nutritionDetailedData.carbohydratePercent) }}
             </text>
             <text class="nutrition-unit">%</text>
+            <text class="nutrition-basis">（DM）</text>
           </view>
         </view>
 
@@ -219,6 +227,8 @@
           </view>
         </view>
       </view>
+
+      <text class="nutrition-basis-note">以上营养指标按干物质（DM）计，即去除水分后的占比；含水量为实际含水率。</text>
     </view>
 
     <!-- 详细营养报告入口 -->
@@ -529,6 +539,7 @@ const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const selectedManualLifeStage = ref('')
 const lifeStageSelectorVisible = ref(false)
+const standardExplainVisible = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 let recipeDetailRequestSeq = 0
 
@@ -1069,6 +1080,29 @@ function getLifeStageLabel(stage: string): string {
   return result || stage
 }
 
+// 营养标准的通俗解释（配合"符合 XX 犬营养标准"的结论式展示）
+const NUTRITION_STANDARD_EXPLAIN: Record<string, string> = {
+  FEDIAF_2021:
+    'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
+  FEDIAF_2025:
+    'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
+  AAFCO_2019:
+    'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
+  GB_T_31216:
+    'GB/T 31216 是中国国家标准《全价宠物食品 犬粮》，规定了全价犬粮的营养指标要求。',
+}
+
+const nutritionStandardExplain = computed(() => {
+  return (
+    NUTRITION_STANDARD_EXPLAIN[recipe.value.nutritionStandard] ||
+    '该食谱按所选营养标准设计，覆盖对应生命阶段的必需营养素。'
+  )
+})
+
+function toggleStandardExplain() {
+  standardExplainVisible.value = !standardExplainVisible.value
+}
+
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
@@ -1394,20 +1428,84 @@ function onReviewSubmitted() {
 }
 
 /* 营养数据卡片 */
-.nutrition-card {
-  background-color: #fbfcf7;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin: 20rpx;
+/* 营养标准背书卡 */
+.standard-card {
   display: flex;
-  justify-content: space-around;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20rpx;
+  padding: 24rpx 28rpx;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 16rpx;
 }
 
-.nutrition-item {
+.standard-main {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.standard-badge {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.standard-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  gap: 4rpx;
+}
+
+.standard-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.standard-sub {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.standard-toggle {
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
+.standard-explain {
+  margin: -8rpx 20rpx 20rpx;
+  padding: 20rpx 24rpx;
+  background-color: #f2f4ea;
+  border-radius: 12rpx;
+}
+
+.standard-explain-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b6653;
+}
+
+/* 营养指标干物质（DM）口径标注 */
+.nutrition-basis {
+  font-size: 20rpx;
+  color: #968f6d;
+  margin-left: 2rpx;
+}
+
+.nutrition-basis-note {
+  display: block;
+  margin-top: 20rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #968f6d;
 }
 
 .nutrition-item .label {

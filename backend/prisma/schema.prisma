@@ -342,6 +342,8 @@ model Recipe {
   coverImageUrl          String?                     @map("cover_image_url")
   coverTitle             String?                     @map("cover_title") @db.VarChar(20)
   description            String?                     @map("description")
+  /// 一句话卖点（合规文案，由 AI 生成 + 人工确认后保存）
+  sellingPoint           String?                     @map("selling_point") @db.VarChar(120)
   detailImages           Json?                       @map("detail_images")
   diyGenCount            Int                         @default(0) @map("diy_gen_count")
   favoriteCount          Int                         @default(0) @map("favorite_count")

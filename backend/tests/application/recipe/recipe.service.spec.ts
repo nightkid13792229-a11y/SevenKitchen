@@ -970,6 +970,48 @@ describe('RecipeService', () => {
         ]),
       );
     });
+
+    it('exposes sellingPoint so the edit form can load the saved value', async () => {
+      mockPrismaService.recipe.findUnique.mockResolvedValue({
+        id: 'row-1',
+        recipeId: 'recipe-1',
+        version: 1,
+        name: '燕麦鳕鱼猪肉',
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1244,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: '以鳕鱼提供动物蛋白。',
+        sellingPoint: '含鳕鱼与红薯，符合 FEDIAF 2025',
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2021',
+        nutritionDetailedData: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        viewCount: 0,
+        seriesId: null,
+        series: null,
+        seriesLifeStage: null,
+        applicableLifeStages: ['ADULT'],
+        targetHealthTags: [],
+        items: [],
+        healthTagAssignments: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      const result = await service.getRecipeById('row-1');
+
+      expect(result.sellingPoint).toBe('含鳕鱼与红薯，符合 FEDIAF 2025');
+      expect(result.description).toBe('以鳕鱼提供动物蛋白。');
+    });
   });
 
   describe('publishRecipe', () => {

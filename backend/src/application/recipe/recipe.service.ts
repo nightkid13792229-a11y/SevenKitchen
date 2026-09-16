@@ -1557,6 +1557,7 @@ export class RecipeService {
         detailImages: recipe.detailImages as Prisma.InputJsonValue,
         videoUrl: recipe.videoUrl,
         description: recipe.description,
+        sellingPoint: recipe.sellingPoint,
         designSource: recipe.designSource,
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
@@ -1784,6 +1785,7 @@ export class RecipeService {
       detailImages: (recipe.detailImages as string[]) || undefined,
       videoUrl: recipe.videoUrl || undefined,
       description: recipe.description || undefined,
+      sellingPoint: recipe.sellingPoint || undefined,
       designSource: recipe.designSource || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,

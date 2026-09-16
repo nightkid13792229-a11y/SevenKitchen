@@ -32,6 +32,28 @@ export const recipeApi = {
   },
 
   /**
+   * AI 文案生成是否可用（未配置模型时按钮置灰）
+   */
+  getCopywritingAvailability: () => {
+    return request.get<{ available: boolean }>(
+      '/admin/recipes/ai-copywriting/availability',
+    );
+  },
+
+  /**
+   * AI 生成合规卖点与说明（只生成，不落库；落库走既有保存流程）
+   */
+  generateCopywriting: (id: string) => {
+    return request.post<{
+      sellingPoint: string;
+      description: string;
+      suggestedTags: string[];
+      basis: string;
+      provider: string;
+    }>(`/admin/recipes/${id}/ai-copywriting`);
+  },
+
+  /**
    * Create new recipe
    */
   create: (data: RecipeForm) => {

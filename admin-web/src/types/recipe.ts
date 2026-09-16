@@ -232,6 +232,8 @@ export interface RecipeDetail extends RecipeSummary {
   detailImages?: string[];
   videoUrl?: string;
   description?: string;
+  /** 一句话卖点（合规文案，AI 生成 + 人工确认） */
+  sellingPoint?: string;
   designSource?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
@@ -248,6 +250,8 @@ export interface RecipeForm {
   detailImages?: string[];
   videoUrl?: string;
   description?: string;
+  /** 一句话卖点（合规文案，AI 生成 + 人工确认） */
+  sellingPoint?: string;
   designSource?: string;
   nutritionStandard: NutritionStandard;
   energyDensityKcalPerKg: number;

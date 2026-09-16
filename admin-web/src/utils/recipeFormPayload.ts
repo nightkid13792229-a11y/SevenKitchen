@@ -96,6 +96,7 @@ export function buildRecipeSubmitData(
     detailImages: form.detailImages || [],
     videoUrl: form.videoUrl,
     description: form.description,
+    sellingPoint: form.sellingPoint,
     designSource: form.designSource,
     nutritionStandard: form.nutritionStandard,
     energyDensityKcalPerKg: form.energyDensityKcalPerKg,

@@ -147,6 +147,37 @@
             />
           </el-form-item>
 
+          <el-form-item label="一句话卖点">
+            <el-input
+              v-model="form.sellingPoint"
+              placeholder="一句话说明这款食谱的核心卖点（可选，不超过 40 字）"
+              maxlength="40"
+              show-word-limit
+              :disabled="isReadOnly"
+            />
+            <div v-if="!isReadOnly" class="ai-copywriting-actions">
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                :loading="aiGenerating"
+                :disabled="!aiAvailable || !isEdit"
+                @click="handleGenerateCopywriting"
+              >
+                AI 生成卖点与说明
+              </el-button>
+              <span v-if="!aiAvailable" class="ai-copywriting-hint">
+                未配置「食谱文案生成」模型，请先在系统设置中启用
+              </span>
+              <span v-else-if="!isEdit" class="ai-copywriting-hint">
+                请先保存食谱后再生成文案
+              </span>
+              <span v-else class="ai-copywriting-hint">
+                生成结果需人工确认后保存，命中违规表述会被拒绝
+              </span>
+            </div>
+          </el-form-item>
+
           <el-form-item label="食谱描述">
             <el-input
               v-model="form.description"
@@ -915,6 +946,58 @@
       </template>
     </el-dialog>
 
+    <!-- AI 生成的卖点与说明：人工确认后再采纳 -->
+    <el-dialog v-model="aiDialogVisible" title="AI 生成的卖点与说明" width="680px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="生成结果仅为草稿，请确认无误后采纳；采纳后仍需点击保存才会生效。"
+        style="margin-bottom: 16px"
+      />
+      <el-form label-width="90px">
+        <el-form-item label="一句话卖点">
+          <el-input v-model="aiDraft.sellingPoint" maxlength="40" show-word-limit />
+        </el-form-item>
+        <el-form-item label="详细说明">
+          <el-input
+            v-model="aiDraft.description"
+            type="textarea"
+            :rows="5"
+            maxlength="400"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="推荐标签">
+          <div class="ai-tag-list">
+            <el-tag
+              v-for="tag in aiDraft.suggestedTags"
+              :key="tag"
+              :type="aiDraft.adoptedTags.includes(tag) ? 'success' : 'info'"
+              class="ai-tag"
+              @click="toggleAiTag(tag)"
+            >
+              {{ tag }}{{ aiDraft.adoptedTags.includes(tag) ? ' ✓' : ' +' }}
+            </el-tag>
+            <span v-if="aiDraft.suggestedTags.length === 0" class="ai-copywriting-hint">
+              本次未推荐标签
+            </span>
+          </div>
+          <div class="ai-copywriting-hint">点击标签以采纳 / 取消采纳</div>
+        </el-form-item>
+        <el-form-item v-if="aiDraft.basis" label="生成依据">
+          <span class="ai-copywriting-hint">{{ aiDraft.basis }}</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="aiDialogVisible = false">取消</el-button>
+        <el-button :loading="aiGenerating" @click="handleGenerateCopywriting">
+          重新生成
+        </el-button>
+        <el-button type="primary" @click="applyAiCopywriting">采纳</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -1010,6 +1093,7 @@ const form = reactive<RecipeForm>({
   detailImages: [],
   videoUrl: undefined,
   description: undefined,
+  sellingPoint: undefined,
   designSource: undefined,
   nutritionStandard: NutritionStandard.FEDIAF_2021,
   energyDensityKcalPerKg: 1500,
@@ -2366,9 +2450,78 @@ watch(recipeId, async (nextRecipeId, previousRecipeId) => {
   }
 });
 
+// ===== AI 合规文案生成（阶段三）=====
+const aiAvailable = ref(false);
+const aiGenerating = ref(false);
+const aiDialogVisible = ref(false);
+const aiDraft = reactive({
+  sellingPoint: '',
+  description: '',
+  suggestedTags: [] as string[],
+  adoptedTags: [] as string[],
+  basis: '',
+});
+
+async function checkAiCopywritingAvailability() {
+  try {
+    const res = await recipeApi.getCopywritingAvailability();
+    aiAvailable.value = Boolean(res?.available);
+  } catch {
+    aiAvailable.value = false;
+  }
+}
+
+async function handleGenerateCopywriting() {
+  if (!recipeId.value) return;
+  aiGenerating.value = true;
+  try {
+    const draft = await recipeApi.generateCopywriting(recipeId.value);
+    aiDraft.sellingPoint = draft.sellingPoint || '';
+    aiDraft.description = draft.description || '';
+    aiDraft.suggestedTags = draft.suggestedTags || [];
+    aiDraft.adoptedTags = [...(draft.suggestedTags || [])];
+    aiDraft.basis = draft.basis || '';
+    aiDialogVisible.value = true;
+  } catch (error: any) {
+    // 命中禁用表述时后端会在 message 中指出命中的词
+    ElMessage.error(error.message || 'AI 生成失败');
+  } finally {
+    aiGenerating.value = false;
+  }
+}
+
+function toggleAiTag(tag: string) {
+  const index = aiDraft.adoptedTags.indexOf(tag);
+  if (index >= 0) {
+    aiDraft.adoptedTags.splice(index, 1);
+  } else {
+    aiDraft.adoptedTags.push(tag);
+  }
+}
+
+function applyAiCopywriting() {
+  form.sellingPoint = aiDraft.sellingPoint || undefined;
+  form.description = aiDraft.description || undefined;
+
+  // 推荐标签按名称映射回标签 ID，合并进现有选择（不覆盖人工已选项）
+  const idByName = new Map(
+    healthTagOptions.value.map((option) => [option.label, option.value]),
+  );
+  const merged = new Set(form.targetHealthTags || []);
+  for (const name of aiDraft.adoptedTags) {
+    const id = idByName.get(name);
+    if (id) merged.add(id);
+  }
+  form.targetHealthTags = Array.from(merged);
+
+  aiDialogVisible.value = false;
+  ElMessage.success('已填入表单，请确认后点击保存');
+}
+
 onMounted(async () => {
   loadMetadata();
   loadAvailableIngredients();
+  checkAiCopywritingAvailability();
   if (isEdit.value) {
     await loadRecipeDetail();
   }
@@ -2378,6 +2531,29 @@ onMounted(async () => {
 <style scoped>
 .recipe-form-page {
   padding: 20px;
+}
+
+.ai-copywriting-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ai-copywriting-hint {
+  color: #909399;
+  font-size: 12px;
+}
+
+.ai-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ai-tag {
+  cursor: pointer;
 }
 
 .field-hint {

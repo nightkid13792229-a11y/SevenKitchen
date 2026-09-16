@@ -1568,6 +1568,7 @@ describe('RecipeService', () => {
         detailImages: [],
         nutritionStandard: 'FEDIAF_2021',
         applicableLifeStages: [],
+        sellingPoint: '含鳕鱼与红薯的成犬鲜食',
         items: [
           {
             ingredientId: 'food-1',
@@ -1583,6 +1584,14 @@ describe('RecipeService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             version: 2,
+          }),
+        }),
+      );
+      // 卖点必须随保存写入（防止"生成了但存不进去"）
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sellingPoint: '含鳕鱼与红薯的成犬鲜食',
           }),
         }),
       );

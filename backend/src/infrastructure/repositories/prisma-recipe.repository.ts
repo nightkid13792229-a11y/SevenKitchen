@@ -397,6 +397,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
       select: {
         id: true,
         name: true,
+        parentId: true,
       },
       orderBy: { sort: 'asc' },
     });
@@ -438,12 +439,26 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     });
 
-    // Include all health tags (even those not yet assigned to any recipe)
-    const healthTags = allHealthTags.map((tag) => ({
-      value: tag.id,
-      label: tag.name,
-      count: healthTagMap.get(tag.id) || 0,
-    }));
+    // 只暴露「可筛选」的标签：
+    // 1) 排除分组标签（有子标签的父级，如「原料事实」「营养特性」）——它们是组织维度，不是筛选项
+    // 2) 排除关联为 0 的标签——避免顾客端出现"点了没结果"的空筛选项
+    const groupTagIds = new Set(
+      allHealthTags
+        .filter((tag) =>
+          allHealthTags.some((child) => child.parentId === tag.id),
+        )
+        .map((tag) => tag.id),
+    );
+    const healthTags = allHealthTags
+      .filter((tag) => {
+        if (groupTagIds.has(tag.id)) return false;
+        return (healthTagMap.get(tag.id) || 0) > 0;
+      })
+      .map((tag) => ({
+        value: tag.id,
+        label: tag.name,
+        count: healthTagMap.get(tag.id) || 0,
+      }));
 
     // Ingredient tags (direct from database)
     const ingredientTags = allTags.map((tag) => ({

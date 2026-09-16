@@ -4592,6 +4592,26 @@ export class AdminController {
     }
   }
 
+  @Get('recipes/ai-copywriting/availability')
+  @ApiOperation({ summary: 'AI 文案生成是否可用' })
+  @ApiResponse({ status: 200, description: 'Availability' })
+  async getRecipeCopywritingAvailability(): Promise<ApiResponseDto<any>> {
+    const available = await this.recipeService.isRecipeCopywritingAvailable();
+    return ApiResponseDto.success({ available });
+  }
+
+  @Post('recipes/:id/ai-copywriting')
+  @ApiOperation({ summary: 'AI 生成合规卖点与说明（只生成，不落库）' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  @ApiResponse({ status: 200, description: 'Generated copywriting draft' })
+  @ApiResponse({ status: 400, description: '禁用表述 / 词表未初始化 / AI 不可用' })
+  async generateRecipeCopywriting(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.recipeService.generateRecipeCopywriting(id);
+    return ApiResponseDto.success(result);
+  }
+
   @Put('recipes/:id')
   // @UseGuards(AuthGuard, AdminGuard) // 暂时移除认证以便测试
   @ApiOperation({ summary: 'Update recipe (creates new version)' })

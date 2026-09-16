@@ -129,6 +129,10 @@ export class CreateRecipeDto {
 
   @IsOptional()
   @IsString()
+  sellingPoint?: string;
+
+  @IsOptional()
+  @IsString()
   designSource?: string;
 
   @IsString()
@@ -204,6 +208,10 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  sellingPoint?: string;
 
   @IsOptional()
   @IsString()

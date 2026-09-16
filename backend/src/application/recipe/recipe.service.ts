@@ -7,6 +7,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
@@ -15,7 +16,10 @@ import {
   RecipeHealthTag,
   LifeStage,
   NutritionStandard,
+  RECIPE_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/enums';
+import { RecipeCopywritingService } from '../recipe-designer/recipe-copywriting.service';
+import type { RecipeCopywritingResult } from '../recipe-designer/recipe-copywriting.service';
 import { UserRole } from '../../domain/user/enums';
 import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
@@ -49,7 +53,11 @@ type AdminRecipeUserRecipeEvidence = {
 
 @Injectable()
 export class RecipeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly recipeCopywritingService?: RecipeCopywritingService,
+  ) {}
 
   private readonly recipeDetailInclude = {
     series: true,
@@ -1090,6 +1098,7 @@ export class RecipeService {
         detailImages: dto.detailImages || [],
         videoUrl: dto.videoUrl,
         description: dto.description,
+        sellingPoint: dto.sellingPoint,
         designSource: dto.designSource,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: Prisma.JsonNull,
@@ -1132,6 +1141,89 @@ export class RecipeService {
   /**
    * Update recipe (creates new version only when ingredients change)
    */
+  /**
+   * AI 生成合规卖点与说明（只生成、不落库）
+   *
+   * 合规边界：
+   * - 只把「词表中的子标签」作为可推荐标签（分组标签与未审核标签不参与）
+   * - 输出经禁用词硬校验，命中则整条拒绝
+   */
+  async generateRecipeCopywriting(
+    recipeId: string,
+  ): Promise<RecipeCopywritingResult> {
+    if (!this.recipeCopywritingService) {
+      throw new BadRequestException('AI 文案生成服务不可用');
+    }
+
+    const recipe = await this.prisma.recipe.findUnique({
+      where: { id: recipeId },
+      include: {
+        items: {
+          include: { ingredient: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+    if (!recipe) {
+      throw new NotFoundException('食谱不存在');
+    }
+
+    // 合规白名单：词表中的子标签（分组标签是组织维度，不能作为卖点）
+    const vocabularyTags = await this.prisma.recipeHealthTag.findMany({
+      where: { parentId: { not: null } },
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
+      select: { name: true },
+    });
+    if (vocabularyTags.length === 0) {
+      throw new BadRequestException(
+        '合规标签词表尚未初始化，请先执行标签词表初始化脚本',
+      );
+    }
+
+    const detailed = (recipe.nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+
+    const foodItems = recipe.items
+      .filter((item) => item.ingredient?.type === 'FOOD')
+      .map((item) => ({
+        name: item.ingredient?.name || '',
+        ratio: item.ratioPercent ?? null,
+      }))
+      .filter((item) => Boolean(item.name));
+
+    const supplementItems = recipe.items
+      .filter((item) => item.ingredient?.type === 'SUPPLEMENT')
+      .map((item) => {
+        const target =
+          item.nutrientTargetKey && item.nutrientTargetValue != null
+            ? `每kg食材添加${item.nutrientTargetValue}${item.nutrientTargetKey}`
+            : '';
+        return { name: item.ingredient?.name || '', targetText: target };
+      })
+      .filter((item) => Boolean(item.name));
+
+    return this.recipeCopywritingService.generate({
+      recipeName: recipe.name,
+      nutritionStandard: recipe.nutritionStandard,
+      lifeStageLabels: ((recipe.applicableLifeStages as string[]) || [])
+        .map((stage) => RECIPE_LIFE_STAGE_LABELS[stage] || stage)
+        .filter(Boolean),
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg ?? null,
+      moisturePercent: nutrition?.moisture_pct ?? null,
+      fatPercentDm: nutrition?.fat_dm_pct ?? null,
+      proteinPercentDm: nutrition?.protein_dm_pct ?? null,
+      foodItems,
+      supplementItems,
+      currentDescription: recipe.description ?? null,
+      allowedTags: vocabularyTags.map((tag) => tag.name),
+    });
+  }
+
+  /** AI 文案生成是否可用（后台据此决定按钮是否置灰） */
+  async isRecipeCopywritingAvailable(): Promise<boolean> {
+    return (await this.recipeCopywritingService?.isAvailable()) ?? false;
+  }
+
   async updateRecipe(
     id: string,
     dto: Record<string, any>,
@@ -1198,6 +1290,7 @@ export class RecipeService {
         detailImages: dto.detailImages,
         videoUrl: dto.videoUrl,
         description: dto.description,
+        sellingPoint: dto.sellingPoint,
         designSource: dto.designSource,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: undefined,

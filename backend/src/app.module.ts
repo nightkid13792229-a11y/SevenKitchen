@@ -189,6 +189,7 @@ import { NutritionUnitNormalizerService } from './application/nutrition-calculat
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
 import { AiDesignSuggestionService } from './application/recipe-designer/ai-design-suggestion.service';
+import { RecipeCopywritingService } from './application/recipe-designer/recipe-copywriting.service';
 import { KnowledgeBaseService } from './application/recipe-designer/knowledge-base.service';
 import { RecipeAiWizardService } from './application/recipe-designer/recipe-ai-wizard.service';
 import {
@@ -686,6 +687,7 @@ validatePrismaConfig();
     NutritionFoodService,
     SupplementLabelExtractionService,
     AiDesignSuggestionService,
+    RecipeCopywritingService,
     KnowledgeBaseService,
     RecipeAiWizardService,
     {

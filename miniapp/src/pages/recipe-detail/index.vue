@@ -53,17 +53,9 @@
 
       <text class="recipe-name">{{ recipe.name }}</text>
 
-      <!-- 价格锚点（首屏可见）：有价显示价，无价说明如何获得 -->
-      <view v-if="displayReferencePrice" class="price-anchor">
-        <text class="price-anchor-value">约 ¥{{ formatReferencePrice(displayReferencePrice.amount) }}</text>
-        <text class="price-anchor-unit">/100g</text>
-        <text v-if="displayReferencePrice.isMin" class="price-anchor-from">起</text>
-        <text class="price-anchor-note">
-          {{ displayReferencePrice.isMin ? '按狗狗体重精确计算最终价格 · 已含冷链配送' : '已含冷链配送' }}
-        </text>
-      </view>
-      <view v-else-if="showPriceFallbackCopy" class="price-anchor price-anchor--fallback">
-        <text class="price-anchor-note">价格按狗狗体重计算，进入订购可见</text>
+      <!-- 参考价统一只在底部固定栏展示；此处仅在拿不到价格时说明价格如何获得，避免信息真空 -->
+      <view v-if="showPriceFallbackCopy" class="price-hint">
+        <text class="price-hint-text">价格按狗狗体重计算，进入订购可见</text>
       </view>
 
       <view v-if="showNoDogHint" class="no-dog-hint">
@@ -404,11 +396,11 @@
 
         <view class="action-buttons">
           <button class="btn-diy" @tap="generateDiySheet">
-            生成原料清单
+            自己做
           </button>
 
           <button class="btn-order" @tap="goToOrder">
-            订购成品
+            买成品
           </button>
         </view>
       </view>
@@ -2188,45 +2180,18 @@ function onReviewSubmitted() {
   gap: 16rpx;
 }
 
-/* 首屏价格锚点 */
-.price-anchor {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4rpx;
+/* 无参考价时的价格说明（有价时价格只在底部固定栏展示，避免重复） */
+.price-hint {
   margin-top: 16rpx;
-  padding: 16rpx 24rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid rgba(176, 141, 79, 0.35);
-  border-radius: 16rpx;
+  padding: 14rpx 24rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 12rpx;
 }
 
-.price-anchor-value {
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #8a6b33;
-}
-
-.price-anchor-unit {
-  font-size: 24rpx;
-  color: #8a6b33;
-}
-
-.price-anchor-from {
-  font-size: 24rpx;
-  color: #8a6b33;
-}
-
-.price-anchor-note {
-  flex-basis: 100%;
+.price-hint-text {
   font-size: 22rpx;
   color: #968f6d;
-}
-
-.price-anchor--fallback {
-  background-color: #f2f4ea;
-  border-color: #e5e8d4;
 }
 
 /* 非公开食谱（内部预览）提示 */
@@ -2435,21 +2400,24 @@ function onReviewSubmitted() {
   line-height: 1;
 }
 
+/* 次级路径：自己做（浅绿底 + 墨绿字） */
 .btn-diy {
   flex: 1;
   border-radius: 42rpx 0 0 42rpx;
   font-size: 26rpx;
   font-weight: 600;
-  background-color: #1e3a2f;
-  color: #f3eddd;
+  background-color: #eef2e4;
+  color: #1e3a2f;
+  border-right: 1rpx solid #dde3cd;
 }
 
+/* 主转化路径：买成品（金色渐变 + 墨绿字，视觉权重最高） */
 .btn-order {
   flex: 1;
   border-radius: 0 42rpx 42rpx 0;
   font-size: 26rpx;
-  font-weight: 600;
-  background-color: #1e3a2f;
-  color: #f3eddd;
+  font-weight: 700;
+  background: linear-gradient(150deg, #d8bc85 0%, #b08d4f 100%);
+  color: #1e3a2f;
 }
 </style>

@@ -161,8 +161,8 @@ describe('recipe detail nutrition report regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('生成原料清单')
-    expect(source).toContain('订购成品')
+    expect(source).toContain('自己做')
+    expect(source).toContain('买成品')
     expect(source).not.toContain('现做成品')
     expect(source).not.toContain('/static/icons/cart-orange.png')
     expect(source).not.toContain('handleCartTap')
@@ -171,7 +171,6 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).not.toContain('移出购物车')
     expect(source).not.toContain('removeCartItem')
     expect(source).not.toContain('cart-glyph')
-    expect(source).not.toContain('自己做')
     expect(source).not.toContain('我要自己做')
     expect(source).not.toContain('>成品<')
   })

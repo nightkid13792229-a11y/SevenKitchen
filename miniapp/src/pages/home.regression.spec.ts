@@ -301,4 +301,18 @@ describe('home runtime regressions', () => {
     expect(source).not.toContain('loadPersonalizedRecommendations')
     expect(source).not.toContain('recommendedDog')
   })
+
+  it('hides the health tag filter from customers pending tag dictionary compliance', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(source).toContain('const HEALTH_TAG_FILTER_ENABLED = false')
+    expect(templateSource).toContain('v-if="HEALTH_TAG_FILTER_ENABLED"')
+    expect(templateSource).toContain('v-if="HEALTH_TAG_FILTER_ENABLED && showHealthTagsDrawer"')
+    // 关闭期间不向接口发送健康标签筛选参数
+    expect(source).toContain('if (HEALTH_TAG_FILTER_ENABLED && selectedHealthTags.length > 0)')
+  })
 })

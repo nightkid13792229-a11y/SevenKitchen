@@ -99,8 +99,9 @@
           >×</text>
         </view>
 
-        <!-- 健康类型按钮 -->
+        <!-- 健康类型按钮（字典合规化完成前不对顾客展示） -->
         <view
+          v-if="HEALTH_TAG_FILTER_ENABLED"
           :class="['filter-btn', { active: filterState.selectedHealthTags.filter(Boolean).length > 0 }]"
           @tap="openHealthTagsDrawer"
         >
@@ -245,8 +246,8 @@
       </view>
     </view>
 
-    <!-- 健康类型筛选抽屉 -->
-    <view v-if="showHealthTagsDrawer" class="drawer-mask" @tap="cancelHealthTagsDrawer">
+    <!-- 健康类型筛选抽屉（字典合规化完成前不对顾客展示） -->
+    <view v-if="HEALTH_TAG_FILTER_ENABLED && showHealthTagsDrawer" class="drawer-mask" @tap="cancelHealthTagsDrawer">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
           <text class="drawer-title">疾病/功能</text>
@@ -457,6 +458,10 @@ const ingredientNameMap = ref<Record<string, string>>({})
 // 食材名称→所有IDs映射（用于排除）
 const ingredientNameToIds = ref<Record<string, string[]>>({})
 
+// 健康类型筛选开关：标签字典尚未完成合规化（生产库存在疾病名/功效类标签），
+// 因此暂不对顾客展示该筛选项。字典清理完成后改回 true 即可恢复。
+const HEALTH_TAG_FILTER_ENABLED = false
+
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 const healthTagMappingLoaded = ref(false)
@@ -466,7 +471,9 @@ let healthTagMappingPromise: Promise<void> | null = null
 const activeFiltersCount = computed(() => {
   let count = 0
   count += filterState.value.selectedLifeStages.filter(Boolean).length
-  count += filterState.value.selectedHealthTags.filter(Boolean).length
+  if (HEALTH_TAG_FILTER_ENABLED) {
+    count += filterState.value.selectedHealthTags.filter(Boolean).length
+  }
   count += getExcludedIngredientNames().length
   return count
 })
@@ -867,7 +874,7 @@ function loadRecipes(isRefresh = false) {
   if (selectedLifeStages.length > 0) {
     params.lifeStages = selectedLifeStages.join(',')
   }
-  if (selectedHealthTags.length > 0) {
+  if (HEALTH_TAG_FILTER_ENABLED && selectedHealthTags.length > 0) {
     params.healthTags = selectedHealthTags.join(',')
   }
   if (filterState.value.excludedIngredients.length > 0) {

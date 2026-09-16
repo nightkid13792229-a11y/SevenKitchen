@@ -88,53 +88,116 @@
       </text>
     </view>
 
-    <!-- 食谱配方列表 -->
+    <!-- 食谱配方：主料与营养补充剂分表展示（口径不同，避免同一列混用） -->
     <view class="ingredients-card">
       <view class="card-header">
         <text class="card-title">食谱配方</text>
-        <text class="card-subtitle">共 {{ recipe.items.length }} 种原料</text>
+        <text class="card-subtitle">共 {{ recipe.items.length }} 项物料</text>
       </view>
 
-      <!-- 表格标题 -->
-      <view class="ingredient-table-header">
-        <text class="header-name">原料</text>
-        <text class="header-method">制备方法</text>
-        <text class="header-ratio">占比/用量</text>
+      <!-- 主料表 -->
+      <view v-if="foodItems.length > 0" class="ingredient-block">
+        <view class="ingredient-block-header">
+          <text class="ingredient-block-title">主料</text>
+          <text class="ingredient-block-count">{{ foodItems.length }} 种</text>
+        </view>
+        <view class="ingredient-table-header">
+          <text class="header-name">原料</text>
+          <text class="header-method">制备方法</text>
+          <text class="header-ratio">占比</text>
+        </view>
+        <view
+          v-for="item in foodItems"
+          :key="item.ingredientId"
+          class="ingredient-item"
+        >
+          <view class="ingredient-name">
+            <text>{{ item.name }}</text>
+            <text
+              v-if="item.ingredientType"
+              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
+            >
+              {{ getIngredientTypeLabel(item.ingredientType) }}
+            </text>
+            <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
+              {{ item.nutritionStateLabel }}
+            </text>
+          </view>
+          <view class="preparation-method">
+            <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
+            <text v-else class="method-text">-</text>
+          </view>
+          <text class="ingredient-ratio">{{ formatFoodRatio(item) }}</text>
+        </view>
       </view>
 
-      <view
-        v-for="(item, index) in sortedItems"
-        :key="item.ingredientId"
-        class="ingredient-item"
-      >
-        <view class="ingredient-name">
-          <text>{{ item.name }}</text>
-          <text
-            v-if="item.ingredientType"
-            :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
-          >
-            {{ getIngredientTypeLabel(item.ingredientType) }}
-          </text>
-          <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
-            {{ item.nutritionStateLabel }}
+      <!-- 营养补充剂表 -->
+      <view v-if="supplementItems.length > 0" class="ingredient-block">
+        <view class="ingredient-block-header">
+          <text class="ingredient-block-title">营养补充剂</text>
+          <text class="ingredient-block-count">{{ supplementItems.length }} 种</text>
+        </view>
+        <view class="ingredient-table-header ingredient-table-header--supplement">
+          <text class="header-name">补充剂</text>
+          <text class="header-ratio">每kg食材添加量</text>
+        </view>
+        <view
+          v-for="item in supplementItems"
+          :key="item.ingredientId"
+          class="ingredient-item ingredient-item--supplement"
+        >
+          <view class="ingredient-name">
+            <text>{{ item.name }}</text>
+            <text
+              v-if="item.ingredientType"
+              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
+            >
+              {{ getIngredientTypeLabel(item.ingredientType) }}
+            </text>
+            <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
+              {{ item.nutritionStateLabel }}
+            </text>
+            <text v-if="item.preparationMethod" class="supplement-method">
+              {{ item.preparationMethod }}
+            </text>
+          </view>
+          <text class="ingredient-ratio nutrient-target-value">
+            {{ getNutrientTargetText(item) || '-' }}
           </text>
         </view>
-        <view class="preparation-method">
-          <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
-          <text v-else class="method-text">-</text>
+      </view>
+
+      <!-- 其他物料（包材等，无营养口径） -->
+      <view v-if="otherItems.length > 0" class="ingredient-block">
+        <view class="ingredient-block-header">
+          <text class="ingredient-block-title">其他物料</text>
+          <text class="ingredient-block-count">{{ otherItems.length }} 种</text>
         </view>
-        <!-- 食材类型：显示占比 -->
-        <text v-if="item.ingredientType === 'FOOD' && item.ratio && item.ratio > 0" class="ingredient-ratio">
-          {{ formatRatio(item.ratio) }}%
-        </text>
-        <!-- 补剂类型：显示营养目标值 -->
-        <text v-else-if="item.ingredientType === 'SUPPLEMENT' && getNutrientTargetText(item)" class="ingredient-ratio nutrient-target-value">
-          {{ getNutrientTargetText(item) }}
-        </text>
-        <!-- 其他情况：显示占位符 -->
-        <text v-else class="ingredient-ratio">
-          -
-        </text>
+        <view class="ingredient-table-header">
+          <text class="header-name">物料</text>
+          <text class="header-method">制备方法</text>
+          <text class="header-ratio">占比</text>
+        </view>
+        <view
+          v-for="item in otherItems"
+          :key="item.ingredientId"
+          class="ingredient-item"
+        >
+          <view class="ingredient-name">
+            <text>{{ item.name }}</text>
+            <text
+              v-if="item.ingredientType"
+              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
+            >
+              {{ getIngredientTypeLabel(item.ingredientType) }}
+            </text>
+          </view>
+          <view class="preparation-method">
+            <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
+            <text v-else class="method-text">-</text>
+          </view>
+          <text class="ingredient-ratio">{{ formatFoodRatio(item) }}</text>
+        </view>
       </view>
     </view>
 
@@ -579,6 +642,16 @@ const referencePriceLoading = ref(true)
 const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
 })
+
+// 配方分组：主料按"占比"口径，补剂按"每kg食材添加量"口径，分开成两张表
+const foodItems = computed(() =>
+  sortedItems.value.filter((item) => item.ingredientType === 'FOOD'))
+const supplementItems = computed(() =>
+  sortedItems.value.filter((item) => item.ingredientType === 'SUPPLEMENT'))
+const otherItems = computed(() =>
+  sortedItems.value.filter(
+    (item) => item.ingredientType !== 'FOOD' && item.ingredientType !== 'SUPPLEMENT',
+  ))
 
 const hasStructuredNutritionReport = computed(() => {
   const report = recipe.value.nutritionDetailedData?.report
@@ -1166,6 +1239,11 @@ function getIngredientTypeClass(type: string): string {
   return map[type] || ''
 }
 
+function formatFoodRatio(item: RecipeItem): string {
+  if (item.ratio && item.ratio > 0) return `${formatRatio(item.ratio)}%`
+  return '-'
+}
+
 function getNutrientTargetText(item: RecipeItem): string {
   const targetText = formatSupplementTargets(item)
   if (targetText) return targetText
@@ -1738,6 +1816,61 @@ function onReviewSubmitted() {
   font-weight: bold;
   color: #1e3a2f;
   text-align: right;
+}
+
+/* 配方分组（主料 / 营养补充剂 / 其他物料） */
+.ingredient-block {
+  margin-top: 28rpx;
+}
+
+.ingredient-block-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.ingredient-block-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.ingredient-block-count {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+/* 营养补充剂表：两列（补充剂 / 每kg食材添加量） */
+.ingredient-table-header--supplement .header-name {
+  flex: 1;
+}
+
+.ingredient-table-header--supplement .header-ratio {
+  flex: 0 0 300rpx;
+}
+
+.ingredient-item--supplement {
+  align-items: flex-start;
+}
+
+.ingredient-item--supplement .ingredient-name {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6rpx;
+}
+
+.ingredient-item--supplement .ingredient-ratio {
+  flex: 0 0 300rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.supplement-method {
+  font-size: 22rpx;
+  color: #968f6d;
 }
 
 .nutrient-target-value {

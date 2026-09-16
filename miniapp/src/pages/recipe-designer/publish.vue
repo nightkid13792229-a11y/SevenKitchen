@@ -543,22 +543,22 @@ function getErrorMessage(error: unknown) {
 <style scoped lang="scss">
 .recipe-designer-publish-page {
   min-height: 100vh;
-  background: #f6f7f9;
+  background: #fbfcf7;
   padding: 24rpx 28rpx 164rpx;
   box-sizing: border-box;
 }
 
 .section {
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 8rpx;
   padding: 28rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .state-block {
   text-align: center;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 28rpx;
 }
 
@@ -588,7 +588,7 @@ function getErrorMessage(error: unknown) {
 
 .page-title,
 .report-title {
-  color: #111827;
+  color: #26261f;
   font-size: 34rpx;
   font-weight: 700;
 }
@@ -602,13 +602,13 @@ function getErrorMessage(error: unknown) {
 
 .summary-label {
   flex: 0 0 150rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 25rpx;
 }
 
 .summary-value {
   flex: 1;
-  color: #111827;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 600;
   text-align: right;
@@ -631,18 +631,18 @@ function getErrorMessage(error: unknown) {
   gap: 8rpx;
   padding: 18rpx;
   border-radius: 8rpx;
-  background: #fff7ed;
-  border: 1rpx solid #fed7aa;
+  background: #f6efe0;
+  border: 1rpx solid #b08d4f;
 }
 
 .review-alert-title {
-  color: #9a3412;
+  color: #8a6b33;
   font-size: 26rpx;
   font-weight: 700;
 }
 
 .review-alert-row {
-  color: #9a3412;
+  color: #8a6b33;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -652,10 +652,10 @@ function getErrorMessage(error: unknown) {
   min-height: 144rpx;
   padding: 18rpx;
   box-sizing: border-box;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
-  color: #111827;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 26rpx;
   line-height: 1.45;
 }
@@ -663,7 +663,7 @@ function getErrorMessage(error: unknown) {
 .section-title {
   display: block;
   margin-bottom: 20rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 700;
 }
@@ -675,7 +675,7 @@ function getErrorMessage(error: unknown) {
 
 .report-table {
   min-width: 920rpx;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-bottom: 0;
   border-radius: 8rpx;
   overflow: hidden;
@@ -701,13 +701,13 @@ function getErrorMessage(error: unknown) {
 .table-row {
   display: flex;
   min-height: 76rpx;
-  border-bottom: 1rpx solid #e5e7eb;
-  background: #fff;
+  border-bottom: 1rpx solid #e5e8d4;
+  background: #fbfcf7;
 }
 
 .table-head {
   min-height: 72rpx;
-  background: #f3f4f6;
+  background: #fbfcf7;
 }
 
 .table-cell {
@@ -715,17 +715,17 @@ function getErrorMessage(error: unknown) {
   align-items: center;
   padding: 14rpx 16rpx;
   box-sizing: border-box;
-  color: #1f2937;
+  color: #26261f;
   font-size: 24rpx;
   line-height: 1.35;
-  border-right: 1rpx solid #e5e7eb;
+  border-right: 1rpx solid #e5e8d4;
   min-width: 0;
   white-space: normal;
   word-break: break-word;
 }
 
 .table-head .table-cell {
-  color: #374151;
+  color: #26261f;
   font-weight: 700;
 }
 
@@ -797,13 +797,13 @@ function getErrorMessage(error: unknown) {
 .status-deficient .report-current-cell,
 .status-excess .nutrient-name-cell,
 .status-excess .report-current-cell {
-  color: #dc2626;
+  color: #b4553f;
   font-weight: 700;
 }
 
 .empty-cell {
   width: 100%;
-  color: #9ca3af;
+  color: #968f6d;
 }
 
 .energy-density-list {
@@ -819,16 +819,16 @@ function getErrorMessage(error: unknown) {
   align-items: center;
   padding: 16rpx 18rpx;
   border-radius: 8rpx;
-  background: #f8fafc;
+  background: #eef2e4;
 }
 
 .energy-density-label {
-  color: #64748b;
+  color: #b08d4f;
   font-size: 24rpx;
 }
 
 .energy-density-value {
-  color: #0f172a;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -841,8 +841,8 @@ function getErrorMessage(error: unknown) {
   display: flex;
   gap: 16rpx;
   padding: 20rpx 32rpx 36rpx;
-  background: #fff;
-  box-shadow: 0 -4rpx 16rpx rgba(15, 23, 42, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.08);
 }
 
 .customer-footer-actions {
@@ -867,17 +867,17 @@ function getErrorMessage(error: unknown) {
 }
 
 .primary-btn {
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .secondary-btn {
-  background: #eef5ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .share-btn {
-  background: #ecfdf5;
-  color: #047857;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 </style>

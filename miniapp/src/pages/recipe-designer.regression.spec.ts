@@ -974,9 +974,9 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain("deficient: '#fed7aa'")
     expect(editorSource).toContain("excess: '#fecaca'")
     expect(editorSource).toContain('.status-deficient')
-    expect(editorSource).toContain('#c2410c')
+    expect(editorSource).toContain('#8a6b33')
     expect(editorSource).toContain('.status-excess')
-    expect(editorSource).toContain('#dc2626')
+    expect(editorSource).toContain('#b4553f')
     expect(editorSource).not.toContain('#fee2e2 0 ${minPosition}%')
     expect(editorSource).not.toContain('#fde68a ${maxPosition}% 100%')
   })
@@ -1057,7 +1057,7 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('min-height: 188rpx')
     expect(editorSource).not.toContain('min-height: 88px')
     expect(editorSource).toContain('padding: 8rpx 32rpx 0')
-    expect(editorSource).toContain('background: #eef4f8')
+    expect(editorSource).toContain('background: #fbfcf7')
     expect(editorSource).toContain('assessment-list-surface')
     expect(editorSource).not.toContain('drawer-toggle')
     expect(editorSource).not.toContain('上拉查看')
@@ -1091,7 +1091,7 @@ describe('recipe designer editor guardrails', () => {
     expect(stickyHeaderStyle).toContain('position: sticky;')
     expect(stickyHeaderStyle).toContain('top: 0;')
     expect(stickyHeaderStyle).toContain('z-index:')
-    expect(stickyHeaderStyle).toContain('background: #fff;')
+    expect(stickyHeaderStyle).toContain('background: #fbfcf7;')
   })
 
   it('moves the ingredient action bar to the top while the ingredient picker is open', () => {
@@ -1124,11 +1124,11 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('dragTargetIndex.value = targetIndex')
     expect(editorSource).toContain('dragTargetIndex.value = -1')
     const draggingStyle = editorSource.match(/\.item-row\.dragging\s*\{[\s\S]*?\n\}/)?.[0] || ''
-    expect(draggingStyle).toContain('border-color: #1677ff;')
+    expect(draggingStyle).toContain('border-color: #1e3a2f;')
     expect(draggingStyle).toContain('box-shadow:')
     expect(draggingStyle).toContain('transform: scale')
     const markerStyle = editorSource.match(/\.drag-insertion-marker\s*\{[\s\S]*?\n\}/)?.[0] || ''
-    expect(markerStyle).toContain('background: #1677ff;')
+    expect(markerStyle).toContain('background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);')
     expect(markerStyle).toContain('box-shadow:')
   })
 

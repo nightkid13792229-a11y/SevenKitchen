@@ -126,12 +126,12 @@ describe('diy sheet layout regressions', () => {
     const purchaseButtonBlock = source.match(/\.btn-purchase-sm\s*\{[\s\S]*?\}/)?.[0] || ''
     const confirmButtonBlock = source.match(/\.spec-action-btn-primary\s*\{[\s\S]*?\}/)?.[0] || ''
 
-    expect(purchaseButtonBlock).toContain('background: #fff')
-    expect(purchaseButtonBlock).toContain('color: #6f4fc8')
-    expect(purchaseButtonBlock).toContain('border: 2rpx solid #d8cff7')
+    expect(purchaseButtonBlock).toContain('background: #fbfcf7')
+    expect(purchaseButtonBlock).toContain('color: #b08d4f')
+    expect(purchaseButtonBlock).toContain('border: 2rpx solid #e5e8d4')
     expect(purchaseButtonBlock).not.toContain('linear-gradient')
-    expect(confirmButtonBlock).toContain('background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
-    expect(confirmButtonBlock).toContain('color: #fff')
+    expect(confirmButtonBlock).toContain('background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%)')
+    expect(confirmButtonBlock).toContain('color: #f3eddd')
   })
 
   it('copies configured recommendation purchase links instead of opening product mini programs', () => {
@@ -174,12 +174,12 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('white-space: nowrap')
     expect(source).toContain('text-decoration: none')
     expect(source).toContain('.recommend-main')
-    expect(source.match(/\.recommend-main\s*\{[\s\S]*?\}/)?.[0]).toContain('color: #333')
+    expect(source.match(/\.recommend-main\s*\{[\s\S]*?\}/)?.[0]).toContain('color: #26261f')
     expect(source).not.toContain('recommend-link')
     expect(source).not.toContain('brand-link')
     expect(source).toMatch(/class="recommend-badge"[\s\S]{0,180}@tap\.stop="showSpecModal\(item\)"/)
-    expect(source).toContain('#fff7e6')
-    expect(source).toContain('#d46b08')
+    expect(source).toContain('#f6efe0')
+    expect(source).toContain('#8a6b33')
     expect(source).not.toContain('getRecommendationEntryDisplayText(hasSpecDetail)')
     expect(source).not.toContain('点击查看')
     expect(source).not.toContain('function getFoodRecommendationDisplayText')

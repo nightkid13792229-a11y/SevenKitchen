@@ -791,7 +791,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-library-page {
   min-height: 100vh;
   padding: 24rpx 32rpx 64rpx;
-  background: #f5f5f5;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -828,7 +828,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 
 .page-title {
   display: block;
-  color: #222;
+  color: #26261f;
   font-size: 40rpx;
   font-weight: 800;
 }
@@ -836,7 +836,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .page-subtitle {
   display: block;
   margin-top: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -852,20 +852,20 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 }
 
 .primary-btn {
-  background: #1890ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .plain-btn {
-  background: #f7f8fa;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .link-btn {
   padding: 0 18rpx;
-  border: 1rpx solid #d9d9d9;
-  background: #fff;
-  color: #333;
+  border: 1rpx solid #e5e8d4;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .header-create-btn {
@@ -879,13 +879,13 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   margin-bottom: 20rpx;
   padding: 24rpx;
   border-radius: 12rpx;
-  background: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  background: #fbfcf7;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .action-note {
   display: block;
-  color: #667085;
+  color: #6b6653;
   font-size: 23rpx;
   line-height: 1.45;
 }
@@ -897,7 +897,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 
 .state-block {
   padding: 100rpx 0;
-  color: #888;
+  color: #6b6653;
   font-size: 28rpx;
   text-align: center;
 }
@@ -910,9 +910,9 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-ai-summary {
   margin-bottom: 16rpx;
   padding: 14rpx;
-  border: 1rpx solid #c9e3ff;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #f3f9ff;
+  background: #eef2e4;
 }
 
 .supplement-ai-title,
@@ -923,14 +923,14 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 }
 
 .supplement-ai-title {
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 23rpx;
   font-weight: 700;
 }
 
 .supplement-ai-warning {
   margin-top: 8rpx;
-  color: #a16207;
+  color: #8a6b33;
   font-size: 21rpx;
   line-height: 1.45;
 }
@@ -938,11 +938,11 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-ocr-block {
   margin-top: 12rpx;
   padding-top: 12rpx;
-  border-top: 1rpx solid #dbeafe;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .supplement-ocr-title {
-  color: #555;
+  color: #26261f;
   font-size: 21rpx;
   font-weight: 700;
 }
@@ -950,7 +950,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-ocr-text {
   max-height: 144rpx;
   margin-top: 6rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 20rpx;
   line-height: 1.45;
   overflow: hidden;
@@ -971,7 +971,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 
 .supplement-field-label {
   flex: 0 0 148rpx;
-  color: #555;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -981,10 +981,10 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   min-width: 0;
   height: 62rpx;
   padding: 0 18rpx;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
-  color: #222;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 24rpx;
   box-sizing: border-box;
 }
@@ -1001,18 +1001,18 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   height: 58rpx;
   margin: 0;
   padding: 0;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 23rpx;
   line-height: 58rpx;
 }
 
 .basis-option.active {
-  border-color: #1890ff;
-  background: #e6f4ff;
-  color: #1677ff;
+  border-color: #1e3a2f;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 700;
 }
 
@@ -1043,7 +1043,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-conversion-prefix,
 .supplement-conversion-suffix {
   flex: 0 0 auto;
-  color: #555;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -1057,7 +1057,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 }
 
 .supplement-section-title {
-  color: #222;
+  color: #26261f;
   font-size: 25rpx;
   font-weight: 700;
 }
@@ -1076,13 +1076,13 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 
 .supplement-nutrient-group {
   padding: 12rpx 0;
-  border-top: 1rpx solid #eef2f6;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .supplement-group-title {
   display: block;
   margin-bottom: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 21rpx;
   font-weight: 700;
 }
@@ -1104,7 +1104,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   flex: 1 1 70rpx;
   min-width: 0;
   overflow: hidden;
-  color: #333;
+  color: #26261f;
   font-size: 23rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1114,9 +1114,9 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   flex: 0 0 130rpx;
   height: 54rpx;
   padding: 0 10rpx;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -1125,7 +1125,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   min-width: 0;
   height: 100%;
   padding: 0;
-  color: #222;
+  color: #26261f;
   font-size: 24rpx;
   text-align: right;
 }
@@ -1133,7 +1133,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-nutrient-unit {
   flex-shrink: 0;
   margin-left: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 21rpx;
 }
 
@@ -1149,13 +1149,13 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 }
 
 .section-title {
-  color: #222;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
 }
 
 .section-total {
-  color: #777;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -1168,20 +1168,20 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
   height: 72rpx;
   padding: 0 20rpx;
   border-radius: 10rpx;
-  background: #f7f8fa;
-  color: #222;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 26rpx;
   box-sizing: border-box;
 }
 
 .supplement-list {
   margin-top: 20rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .supplement-option {
   padding: 22rpx 0;
-  border-bottom: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .supplement-option-main {
@@ -1191,7 +1191,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 
 .supplement-option-name {
   display: block;
-  color: #222;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -1200,7 +1200,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .supplement-option-meta {
   display: block;
   margin-top: 6rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 22rpx;
   line-height: 1.4;
 }
@@ -1215,7 +1215,7 @@ function getSupplementOptionMeta(option: RecipeDesignerIngredientOption) {
 .load-more-btn {
   width: 100%;
   margin-top: 18rpx;
-  background: #f7f8fa;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
 }
 </style>

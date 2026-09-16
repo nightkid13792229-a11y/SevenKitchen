@@ -3402,7 +3402,7 @@ function formatAssessmentNumber(value: unknown) {
 <style scoped lang="scss">
 .recipe-designer-editor-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #fbfcf7;
   padding: 24rpx 32rpx 0;
   box-sizing: border-box;
 }
@@ -3421,14 +3421,14 @@ function formatAssessmentNumber(value: unknown) {
   gap: 6rpx;
   margin-bottom: 16rpx;
   padding: 18rpx 22rpx;
-  border: 1rpx solid #dbeafe;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #eef8ff;
+  background: #eef2e4;
 }
 
 .customer-dog-context-title {
   overflow: hidden;
-  color: #0f172a;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -3438,7 +3438,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .customer-dog-context-meta {
   overflow: hidden;
-  color: #475569;
+  color: #b08d4f;
   font-size: 23rpx;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -3451,14 +3451,14 @@ function formatAssessmentNumber(value: unknown) {
   gap: 6rpx;
   margin-bottom: 20rpx;
   padding: 18rpx 22rpx;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
+  background: #fbfcf7;
 }
 
 .series-context-title {
   overflow: hidden;
-  color: #222;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -3476,18 +3476,18 @@ function formatAssessmentNumber(value: unknown) {
   max-width: 100%;
   padding: 4rpx 10rpx;
   border-radius: 6rpx;
-  background: #f3f4f6;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 22rpx;
   line-height: 1.35;
 }
 
 .section {
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 12rpx;
   padding: 28rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .section-header,
@@ -3509,10 +3509,10 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 24;
   margin: -28rpx -28rpx 20rpx;
   padding: 24rpx 28rpx 18rpx;
-  border-bottom: 1rpx solid #eef0f3;
+  border-bottom: 1rpx solid #eef1e2;
   border-radius: 12rpx 12rpx 0 0;
-  background: #fff;
-  box-shadow: 0 6rpx 14rpx rgba(15, 23, 42, 0.04);
+  background: #fbfcf7;
+  box-shadow: 0 6rpx 14rpx rgba(30, 46, 36, 0.04);
   box-sizing: border-box;
 }
 
@@ -3561,47 +3561,47 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .primary-btn {
-  background: #1890ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .secondary-btn {
-  background: #f0f6ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .plain-btn {
-  background: #f7f8fa;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .link-btn {
   padding: 0 18rpx;
-  background: #fff;
-  border: 1rpx solid #d9d9d9;
-  color: #333;
+  background: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+  color: #26261f;
 }
 
 .revert-official-btn {
   flex-shrink: 0;
   min-width: 150rpx;
-  border-color: #91caff;
-  color: #1677ff;
+  border-color: #e5e8d4;
+  color: #b08d4f;
 }
 
 .icon-text-btn {
   flex-shrink: 0;
   width: 88rpx;
   padding: 0;
-  background: #fff1f0;
-  color: #cf1322;
+  background: #f8e8e2;
+  color: #b4553f;
   font-size: 24rpx;
 }
 
 .section-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #222;
+  color: #26261f;
 }
 
 .section-heading {
@@ -3613,7 +3613,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .section-total {
-  color: #777;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -3629,10 +3629,10 @@ function formatAssessmentNumber(value: unknown) {
   height: 54rpx;
   margin: 0;
   padding: 0;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
-  color: #1677ff;
+  background: #fbfcf7;
+  color: #b08d4f;
   font-size: 0;
   line-height: 1;
 }
@@ -3679,8 +3679,8 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .history-btn[disabled] {
-  color: #b8c2cc;
-  background: #f5f7fa;
+  color: #b08d4f;
+  background: #eef2e4;
 }
 
 .sort-mode-btn {
@@ -3691,16 +3691,16 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .sort-mode-btn.active {
-  border-color: #91caff;
-  background: #e6f4ff;
-  color: #1677ff;
+  border-color: #e5e8d4;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 700;
 }
 
 .state-block {
   padding: 80rpx 0;
   text-align: center;
-  color: #999;
+  color: #6b6653;
   font-size: 26rpx;
 }
 
@@ -3720,8 +3720,8 @@ function formatAssessmentNumber(value: unknown) {
   height: 6rpx;
   margin: 0 8rpx 10rpx;
   border-radius: 999rpx;
-  background: #1677ff;
-  box-shadow: 0 0 0 6rpx rgba(22, 119, 255, 0.12);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  box-shadow: 0 0 0 6rpx rgba(30, 46, 36, 0.12);
 }
 
 .ingredient-list-actions {
@@ -3733,8 +3733,8 @@ function formatAssessmentNumber(value: unknown) {
   height: 72rpx;
   line-height: 72rpx;
   border-style: dashed;
-  background: #f8fafc;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .item-row {
@@ -3743,7 +3743,7 @@ function formatAssessmentNumber(value: unknown) {
   gap: 14rpx;
   padding: 20rpx 12rpx;
   border: 1rpx solid transparent;
-  border-top-color: #f0f0f0;
+  border-top-color: #eef1e2;
   border-radius: 12rpx;
   box-sizing: border-box;
   transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
@@ -3751,14 +3751,14 @@ function formatAssessmentNumber(value: unknown) {
 
 .item-row-reordering {
   gap: 10rpx;
-  background: #fbfdff;
-  border-color: #e5edf7;
+  background: #eef2e4;
+  border-color: #eef1e2;
 }
 
 .item-row.dragging {
-  border-color: #1677ff;
-  background: #eef6ff;
-  box-shadow: 0 12rpx 28rpx rgba(24, 144, 255, 0.22);
+  border-color: #1e3a2f;
+  background: #eef2e4;
+  box-shadow: 0 12rpx 28rpx rgba(30, 46, 36, 0.22);
   opacity: 0.96;
   transform: scale(1.018);
   z-index: 2;
@@ -3771,10 +3771,10 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-removal-hint {
   margin: 8rpx 12rpx 0 86rpx;
   padding: 12rpx 16rpx;
-  border: 1rpx solid #ffd591;
+  border: 1rpx solid #b08d4f;
   border-radius: 8rpx;
-  background: #fff7e6;
-  color: #8a4b00;
+  background: #f6efe0;
+  color: #8a6b33;
   font-size: 22rpx;
   line-height: 1.45;
 }
@@ -3799,7 +3799,7 @@ function formatAssessmentNumber(value: unknown) {
   padding: 0;
   border: 0;
   border-radius: 10rpx;
-  background: #f3f6fa;
+  background: #eef2e4;
   box-sizing: border-box;
 }
 
@@ -3811,11 +3811,11 @@ function formatAssessmentNumber(value: unknown) {
   width: 26rpx;
   height: 4rpx;
   border-radius: 999rpx;
-  background: #9aa4b2;
+  background: #f2f4ea;
 }
 
 .item-row.dragging .drag-handle {
-  background: #dbeafe;
+  background: #eef2e4;
 }
 
 .item-leading {
@@ -3838,18 +3838,18 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .item-type-tag.food {
-  background: #ecfdf3;
-  color: #15803d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .item-type-tag.supplement {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .item-type-tag.packaging {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .item-main {
@@ -3860,14 +3860,14 @@ function formatAssessmentNumber(value: unknown) {
 .item-name {
   display: block;
   font-size: 28rpx;
-  color: #222;
+  color: #26261f;
   font-weight: 600;
 }
 
 .item-meta {
   display: block;
   margin-top: 8rpx;
-  color: #888;
+  color: #6b6653;
   font-size: 22rpx;
 }
 
@@ -3880,7 +3880,7 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: flex-end;
   gap: 6rpx;
   padding: 0 12rpx;
-  background: #f7f8fa;
+  background: #fbfcf7;
   border-radius: 10rpx;
 }
 
@@ -3888,11 +3888,11 @@ function formatAssessmentNumber(value: unknown) {
   width: 72rpx;
   text-align: right;
   font-size: 28rpx;
-  color: #222;
+  color: #26261f;
 }
 
 .weight-unit {
-  color: #777;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -3905,7 +3905,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .item-ratio {
-  color: #555;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   white-space: nowrap;
@@ -3932,11 +3932,11 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .item-row-excluded .weight-editor {
-  background: #f1f5f9;
+  background: #eef2e4;
 }
 
 .item-row-excluded .item-name {
-  color: #6b7280;
+  color: #6b6653;
 }
 
 .ingredient-picker-mask {
@@ -3959,7 +3959,7 @@ function formatAssessmentNumber(value: unknown) {
   max-height: 86vh;
   padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   border-radius: 24rpx 24rpx 0 0;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -3986,7 +3986,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .picker-title {
   display: block;
-  color: #222;
+  color: #26261f;
   font-size: 32rpx;
   font-weight: 700;
 }
@@ -3994,7 +3994,7 @@ function formatAssessmentNumber(value: unknown) {
 .picker-nutrient-context {
   display: block;
   margin-top: 8rpx;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 22rpx;
   font-weight: 700;
 }
@@ -4003,8 +4003,8 @@ function formatAssessmentNumber(value: unknown) {
   flex-shrink: 0;
   width: 68rpx;
   padding: 0;
-  background: #f5f5f5;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 34rpx;
 }
 
@@ -4018,8 +4018,8 @@ function formatAssessmentNumber(value: unknown) {
   height: 72rpx;
   padding: 0 20rpx;
   border-radius: 10rpx;
-  background: #f7f8fa;
-  color: #222;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 26rpx;
   box-sizing: border-box;
 }
@@ -4031,15 +4031,15 @@ function formatAssessmentNumber(value: unknown) {
   gap: 16rpx;
   margin-top: 18rpx;
   padding: 16rpx 18rpx;
-  border: 1rpx solid #dce8f5;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
-  background: #f8fbff;
+  background: #eef2e4;
 }
 
 .supplement-library-copy {
   flex: 1;
   min-width: 0;
-  color: #222;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -4054,17 +4054,17 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-form-panel {
   margin-top: 14rpx;
   padding: 18rpx;
-  border: 1rpx solid #d8e6f3;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
-  background: #fbfdff;
+  background: #eef2e4;
 }
 
 .supplement-ai-summary {
   margin-bottom: 16rpx;
   padding: 14rpx;
-  border: 1rpx solid #c9e3ff;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #f3f9ff;
+  background: #eef2e4;
 }
 
 .supplement-ai-title,
@@ -4075,14 +4075,14 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .supplement-ai-title {
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 23rpx;
   font-weight: 700;
 }
 
 .supplement-ai-warning {
   margin-top: 8rpx;
-  color: #a16207;
+  color: #8a6b33;
   font-size: 21rpx;
   line-height: 1.45;
 }
@@ -4090,11 +4090,11 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-ocr-block {
   margin-top: 12rpx;
   padding-top: 12rpx;
-  border-top: 1rpx solid #dbeafe;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .supplement-ocr-title {
-  color: #555;
+  color: #26261f;
   font-size: 21rpx;
   font-weight: 700;
 }
@@ -4102,7 +4102,7 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-ocr-text {
   max-height: 120rpx;
   margin-top: 6rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 20rpx;
   line-height: 1.45;
   overflow: hidden;
@@ -4134,7 +4134,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .supplement-field-label {
   flex: 0 0 148rpx;
-  color: #555;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -4144,10 +4144,10 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   height: 62rpx;
   padding: 0 18rpx;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
-  color: #222;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 24rpx;
   box-sizing: border-box;
 }
@@ -4164,18 +4164,18 @@ function formatAssessmentNumber(value: unknown) {
   height: 58rpx;
   margin: 0;
   padding: 0;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 23rpx;
   line-height: 58rpx;
 }
 
 .basis-option.active {
-  border-color: #1890ff;
-  background: #e6f4ff;
-  color: #1677ff;
+  border-color: #1e3a2f;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 700;
 }
 
@@ -4206,7 +4206,7 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-conversion-prefix,
 .supplement-conversion-suffix {
   flex: 0 0 auto;
-  color: #555;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -4220,7 +4220,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .supplement-section-title {
-  color: #222;
+  color: #26261f;
   font-size: 25rpx;
   font-weight: 700;
 }
@@ -4232,13 +4232,13 @@ function formatAssessmentNumber(value: unknown) {
 
 .supplement-nutrient-group {
   padding: 12rpx 0;
-  border-top: 1rpx solid #eef2f6;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .supplement-group-title {
   display: block;
   margin-bottom: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 21rpx;
   font-weight: 700;
 }
@@ -4260,7 +4260,7 @@ function formatAssessmentNumber(value: unknown) {
   flex: 1 1 70rpx;
   min-width: 0;
   overflow: hidden;
-  color: #333;
+  color: #26261f;
   font-size: 23rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4270,9 +4270,9 @@ function formatAssessmentNumber(value: unknown) {
   flex: 0 0 130rpx;
   height: 54rpx;
   padding: 0 10rpx;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -4281,7 +4281,7 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   height: 100%;
   padding: 0;
-  color: #222;
+  color: #26261f;
   font-size: 24rpx;
   text-align: right;
 }
@@ -4289,7 +4289,7 @@ function formatAssessmentNumber(value: unknown) {
 .supplement-nutrient-unit {
   flex-shrink: 0;
   margin-left: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 21rpx;
 }
 
@@ -4306,8 +4306,8 @@ function formatAssessmentNumber(value: unknown) {
 
 .ingredient-list {
   margin-top: 20rpx;
-  border-top: 1rpx solid #f0f0f0;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .picker-scroll-body {
@@ -4317,7 +4317,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .picker-state {
   padding: 96rpx 0;
-  color: #999;
+  color: #6b6653;
   font-size: 26rpx;
   text-align: center;
 }
@@ -4325,7 +4325,7 @@ function formatAssessmentNumber(value: unknown) {
 .picker-state-note {
   display: block;
   margin-top: 12rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 22rpx;
   line-height: 1.4;
 }
@@ -4337,9 +4337,9 @@ function formatAssessmentNumber(value: unknown) {
 .ingredient-option-section {
   margin: 16rpx 0;
   padding: 16rpx;
-  border: 1rpx solid #edf2f7;
+  border: 1rpx solid #eef1e2;
   border-radius: 14rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -4350,13 +4350,13 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .ingredient-option-section-supplement {
-  border-color: #d6eaff;
-  background: #f7fbff;
+  border-color: #e5e8d4;
+  background: #eef2e4;
 }
 
 .ingredient-option-section-food {
-  border-color: #dbeedd;
-  background: #fbfdf8;
+  border-color: #e5e8d4;
+  background: #eef2e4;
 }
 
 .ingredient-option-section-header {
@@ -4365,7 +4365,7 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: space-between;
   gap: 16rpx;
   padding: 0 2rpx 14rpx;
-  border-bottom: 1rpx solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1rpx solid rgba(221, 227, 205, 0.18);
 }
 
 .ingredient-option-section-heading {
@@ -4380,8 +4380,8 @@ function formatAssessmentNumber(value: unknown) {
   flex: 0 0 auto;
   padding: 3rpx 10rpx;
   border-radius: 999rpx;
-  background: #fff;
-  color: #1677ff;
+  background: #fbfcf7;
+  color: #b08d4f;
   font-size: 20rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -4392,7 +4392,7 @@ function formatAssessmentNumber(value: unknown) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #4b5563;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -4402,18 +4402,18 @@ function formatAssessmentNumber(value: unknown) {
 
 .section-count {
   flex: 0 0 auto;
-  color: #667085;
+  color: #6b6653;
   font-size: 21rpx;
   font-weight: 800;
 }
 
 .ingredient-option-section-food .ingredient-section-kind {
-  color: #15803d;
+  color: #1e3a2f;
 }
 
 .food-option {
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid #eef1e2;
   box-sizing: border-box;
 }
 
@@ -4421,27 +4421,27 @@ function formatAssessmentNumber(value: unknown) {
 .ingredient-option-section-food .food-option {
   margin-top: 12rpx;
   padding: 18rpx 18rpx 18rpx 22rpx;
-  border: 1rpx solid rgba(148, 163, 184, 0.18);
+  border: 1rpx solid rgba(221, 227, 205, 0.18);
   border-radius: 12rpx;
-  background: #fff;
+  background: #fbfcf7;
 }
 
 .ingredient-option-section-supplement .food-option:last-child,
 .ingredient-option-section-food .food-option:last-child {
-  border-bottom: 1rpx solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1rpx solid rgba(221, 227, 205, 0.18);
 }
 
 .supplement-option {
-  box-shadow: inset 6rpx 0 0 #3b82f6;
+  box-shadow: inset 6rpx 0 0 #1e3a2f;
 }
 
 .food-source-option {
-  box-shadow: inset 6rpx 0 0 #22c55e;
+  box-shadow: inset 6rpx 0 0 #1e3a2f;
 }
 
 .food-option.selected {
-  border-color: #1677ff;
-  background: #edf4ff;
+  border-color: #1e3a2f;
+  background: #eef2e4;
 }
 
 .food-option-mainline {
@@ -4455,7 +4455,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .food-name {
   display: block;
-  color: #222;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 600;
   line-height: 1.35;
@@ -4464,18 +4464,18 @@ function formatAssessmentNumber(value: unknown) {
 .food-nutrient-match {
   display: block;
   margin-top: 6rpx;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1.35;
 }
 
 .supplement-option .food-nutrient-match {
-  color: #2563eb;
+  color: #b08d4f;
 }
 
 .food-source-option .food-nutrient-match {
-  color: #15803d;
+  color: #1e3a2f;
 }
 
 .ingredient-option-detail-list {
@@ -4484,14 +4484,14 @@ function formatAssessmentNumber(value: unknown) {
   gap: 6rpx;
   margin-top: 10rpx;
   padding: 12rpx 14rpx;
-  border: 1rpx solid #e7f0ff;
+  border: 1rpx solid #eef1e2;
   border-radius: 10rpx;
-  background: #fbfdff;
+  background: #eef2e4;
 }
 
 .ingredient-option-detail {
   display: block;
-  color: #555;
+  color: #26261f;
   font-size: 22rpx;
   line-height: 1.45;
   word-break: break-word;
@@ -4504,19 +4504,19 @@ function formatAssessmentNumber(value: unknown) {
   margin-top: 16rpx;
   padding: 12rpx;
   border-radius: 10rpx;
-  background: #f7f8fa;
+  background: #fbfcf7;
 }
 
 .profile-option {
   padding: 14rpx 16rpx;
-  border: 1rpx solid #e8e8e8;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
+  background: #fbfcf7;
 }
 
 .profile-option.active {
-  border-color: #1677ff;
-  background: #edf4ff;
+  border-color: #1e3a2f;
+  background: #eef2e4;
 }
 
 .profile-name,
@@ -4526,7 +4526,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .profile-name {
-  color: #222;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 600;
   line-height: 1.35;
@@ -4534,15 +4534,15 @@ function formatAssessmentNumber(value: unknown) {
 
 .profile-meta {
   margin-top: 6rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 21rpx;
 }
 
 .load-more-btn {
   width: 100%;
   margin: 18rpx 0;
-  background: #f7f8fa;
-  color: #555;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .picker-footer {
@@ -4551,10 +4551,10 @@ function formatAssessmentNumber(value: unknown) {
 
 .picker-footer-panel {
   padding: 22rpx 18rpx;
-  border: 1rpx solid #e8edf3;
+  border: 1rpx solid #eef1e2;
   border-radius: 14rpx;
-  background: #f8fafc;
-  box-shadow: 0 -4rpx 14rpx rgba(15, 23, 42, 0.06);
+  background: #eef2e4;
+  box-shadow: 0 -4rpx 14rpx rgba(30, 46, 36, 0.06);
 }
 
 .selected-info {
@@ -4564,14 +4564,14 @@ function formatAssessmentNumber(value: unknown) {
 
 .selected-label {
   display: block;
-  color: #888;
+  color: #6b6653;
   font-size: 22rpx;
 }
 
 .selected-name {
   display: block;
   margin-top: 6rpx;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 600;
   overflow: hidden;
@@ -4581,7 +4581,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .selected-profile {
   margin-top: 6rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 22rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4607,14 +4607,14 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .weight-label {
-  color: #333;
+  color: #26261f;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1;
 }
 
 .required-mark {
-  color: #ff4d4f;
+  color: #b4553f;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 1;
@@ -4626,10 +4626,10 @@ function formatAssessmentNumber(value: unknown) {
   width: 154rpx;
   height: 68rpx;
   padding: 0 14rpx;
-  border: 2rpx solid #91caff;
+  border: 2rpx solid #e5e8d4;
   border-radius: 12rpx;
-  background: #fff;
-  box-shadow: 0 0 0 4rpx rgba(24, 144, 255, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 0 0 4rpx rgba(30, 46, 36, 0.08);
   box-sizing: border-box;
 }
 
@@ -4640,7 +4640,7 @@ function formatAssessmentNumber(value: unknown) {
   padding: 0;
   background: transparent;
   text-align: right;
-  color: #222;
+  color: #26261f;
   font-size: 28rpx;
   box-sizing: border-box;
 }
@@ -4661,8 +4661,8 @@ function formatAssessmentNumber(value: unknown) {
   min-height: 188rpx;
   max-height: calc(100vh - 72px);
   padding: 8rpx 32rpx 0;
-  background: #eef4f8;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.08);
+  background: #eef2e4;
+  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.08);
   border-radius: 20rpx 20rpx 0 0;
   box-sizing: border-box;
   overflow: hidden;
@@ -4697,7 +4697,7 @@ function formatAssessmentNumber(value: unknown) {
   height: 8rpx;
   margin: 0;
   border-radius: 999rpx;
-  background: #d8dde6;
+  background: #eef2e4;
 }
 
 .drawer-handle {
@@ -4718,7 +4718,7 @@ function formatAssessmentNumber(value: unknown) {
   flex-shrink: 0;
   font-size: 30rpx;
   font-weight: 700;
-  color: #222;
+  color: #26261f;
 }
 
 .standard-context {
@@ -4728,7 +4728,7 @@ function formatAssessmentNumber(value: unknown) {
   margin-left: auto;
   display: block;
   overflow: hidden;
-  color: #333;
+  color: #26261f;
   font-size: 22rpx;
   font-weight: 700;
   text-align: right;
@@ -4742,18 +4742,18 @@ function formatAssessmentNumber(value: unknown) {
   height: 42rpx;
   margin: 0;
   padding: 0;
-  border: 1rpx solid #b6d9ff;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
-  color: #1677ff;
+  background: #fbfcf7;
+  color: #b08d4f;
   font-size: 21rpx;
   font-weight: 800;
   line-height: 42rpx;
 }
 
 .scenario-switch-btn[disabled] {
-  color: #9fb6cf;
-  background: #f5f7fa;
+  color: #b08d4f;
+  background: #eef2e4;
 }
 
 .scenario-switch-mask {
@@ -4765,7 +4765,7 @@ function formatAssessmentNumber(value: unknown) {
   z-index: 95;
   display: flex;
   align-items: flex-end;
-  background: rgba(17, 24, 39, 0.36);
+  background: rgba(30, 58, 47, 0.36);
 }
 
 .scenario-switch-panel {
@@ -4773,7 +4773,7 @@ function formatAssessmentNumber(value: unknown) {
   max-height: 78vh;
   padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
   border-radius: 20rpx 20rpx 0 0;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -4785,7 +4785,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .scenario-switch-title {
-  color: #222;
+  color: #26261f;
   font-size: 32rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -4793,7 +4793,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .scenario-switch-close {
   flex: 0 0 auto;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 24rpx;
   font-weight: 800;
 }
@@ -4801,7 +4801,7 @@ function formatAssessmentNumber(value: unknown) {
 .scenario-switch-note {
   display: block;
   margin-top: 10rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 23rpx;
   line-height: 1.45;
 }
@@ -4815,15 +4815,15 @@ function formatAssessmentNumber(value: unknown) {
 
 .scenario-option {
   padding: 18rpx 20rpx;
-  border: 1rpx solid #edf0f5;
+  border: 1rpx solid #eef1e2;
   border-radius: 12rpx;
-  background: #fbfcfe;
+  background: #eef2e4;
   box-sizing: border-box;
 }
 
 .scenario-option-active {
-  border-color: #91caff;
-  background: #eef8ff;
+  border-color: #e5e8d4;
+  background: #eef2e4;
 }
 
 .scenario-option-main {
@@ -4836,7 +4836,7 @@ function formatAssessmentNumber(value: unknown) {
 .scenario-option-title {
   flex: 1;
   min-width: 0;
-  color: #222;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -4844,7 +4844,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .scenario-option-check {
   flex: 0 0 auto;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 1;
@@ -4853,7 +4853,7 @@ function formatAssessmentNumber(value: unknown) {
 .scenario-option-desc {
   display: block;
   margin-top: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 22rpx;
   line-height: 1.45;
 }
@@ -4892,17 +4892,17 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   height: 56rpx;
   line-height: 56rpx;
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 999rpx;
-  color: #555;
+  color: #26261f;
   font-size: 22rpx;
   font-weight: 700;
   text-align: center;
 }
 
 .assessment-category-tab.active {
-  background: #e6f4ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .assessment-category-badge {
@@ -4912,10 +4912,10 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 28rpx;
   height: 28rpx;
   padding: 0 6rpx;
-  border: 4rpx solid #fff;
+  border: 4rpx solid #eef1e2;
   border-radius: 999rpx;
-  background: #ef4444;
-  color: #fff;
+  background: #b4553f;
+  color: #f3eddd;
   font-size: 18rpx;
   line-height: 28rpx;
   text-align: center;
@@ -4933,9 +4933,9 @@ function formatAssessmentNumber(value: unknown) {
 
 .assessment-list-surface {
   padding: 0 20rpx;
-  border: 1rpx solid #dbe7f1;
+  border: 1rpx solid #e5e8d4;
   border-radius: 14rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -4947,7 +4947,7 @@ function formatAssessmentNumber(value: unknown) {
   bottom: 0;
   z-index: 18;
   padding: 16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom));
-  background: #fff;
+  background: #fbfcf7;
   box-shadow: none;
   box-sizing: border-box;
 }
@@ -4977,21 +4977,21 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .customer-report-btn {
-  border-color: #d9e2ec;
-  color: #475569;
+  border-color: #e5e8d4;
+  color: #b08d4f;
 }
 
 .assessment-category-title {
   display: block;
   padding: 18rpx 0 4rpx;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 700;
 }
 
 .assessment-empty {
   padding: 36rpx 0 12rpx;
-  color: #999;
+  color: #6b6653;
   text-align: center;
   font-size: 24rpx;
 }
@@ -4999,7 +4999,7 @@ function formatAssessmentNumber(value: unknown) {
 .assessment-entry {
   display: block;
   padding: 20rpx 0 26rpx;
-  border-bottom: 1rpx solid #f5f5f5;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .entry-heading,
@@ -5026,7 +5026,7 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -5034,7 +5034,7 @@ function formatAssessmentNumber(value: unknown) {
 .entry-basis,
 .entry-dry-matter {
   flex: 0 0 auto;
-  color: #777;
+  color: #6b6653;
   font-size: 20rpx;
   font-weight: 700;
 }
@@ -5044,10 +5044,10 @@ function formatAssessmentNumber(value: unknown) {
   max-width: 168rpx;
   min-height: 34rpx;
   padding: 0 12rpx;
-  border: 1rpx solid #cfe8ff;
+  border: 1rpx solid #e5e8d4;
   border-radius: 999rpx;
-  color: #2187e8;
-  background: #f3f9ff;
+  color: #b08d4f;
+  background: #eef2e4;
   overflow: hidden;
   text-align: center;
   font-size: 20rpx;
@@ -5059,8 +5059,8 @@ function formatAssessmentNumber(value: unknown) {
 
 .entry-dry-matter {
   padding-left: 10rpx;
-  border-left: 1rpx solid #e8e8e8;
-  color: #444;
+  border-left: 1rpx solid #e5e8d4;
+  color: #26261f;
 }
 
 .entry-dry-matter-side {
@@ -5090,7 +5090,7 @@ function formatAssessmentNumber(value: unknown) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -5107,7 +5107,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .macro-overview-value {
   flex: 0 0 auto;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 800;
 }
@@ -5117,7 +5117,7 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #777;
+  color: #6b6653;
   font-size: 20rpx;
   font-weight: 700;
 }
@@ -5125,7 +5125,7 @@ function formatAssessmentNumber(value: unknown) {
 .macro-overview-dry-matter {
   flex: 0 0 108rpx;
   min-height: 1em;
-  color: #444;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   text-align: right;
@@ -5144,7 +5144,7 @@ function formatAssessmentNumber(value: unknown) {
   top: 30rpx;
   height: 12rpx;
   border-radius: 999rpx;
-  background: #e5e7eb;
+  background: #f0f3e9;
 }
 
 .entry-range-marker {
@@ -5153,7 +5153,7 @@ function formatAssessmentNumber(value: unknown) {
   width: 6rpx;
   height: 28rpx;
   border-radius: 999rpx;
-  background: #111827;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   transform: translateX(-50%);
 }
 
@@ -5169,7 +5169,7 @@ function formatAssessmentNumber(value: unknown) {
   align-items: center;
   gap: 6rpx;
   top: 0;
-  color: #777;
+  color: #6b6653;
   font-size: 20rpx;
   font-weight: 700;
 }
@@ -5181,8 +5181,8 @@ function formatAssessmentNumber(value: unknown) {
   width: 24rpx;
   height: 24rpx;
   border-radius: 999rpx;
-  background: #edf2ff;
-  color: #2563eb;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 18rpx;
   font-weight: 800;
   line-height: 24rpx;
@@ -5190,7 +5190,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .entry-range-current {
   top: 50rpx;
-  color: #222;
+  color: #26261f;
   font-size: 20rpx;
   font-weight: 800;
 }
@@ -5200,7 +5200,7 @@ function formatAssessmentNumber(value: unknown) {
   left: 0;
   right: 0;
   top: 78rpx;
-  color: #be123c;
+  color: #b4553f;
   font-size: 20rpx;
   font-weight: 700;
   line-height: 24rpx;
@@ -5210,13 +5210,13 @@ function formatAssessmentNumber(value: unknown) {
 .entry-missing-detail {
   display: block;
   margin-top: 10rpx;
-  color: #888;
+  color: #6b6653;
   font-size: 22rpx;
 }
 
 .entry-reference-value {
   margin-top: 12rpx;
-  color: #333;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   line-height: 32rpx;
@@ -5233,7 +5233,7 @@ function formatAssessmentNumber(value: unknown) {
   align-items: center;
   justify-content: center;
   padding: 32rpx;
-  background: rgba(17, 24, 39, 0.36);
+  background: rgba(30, 58, 47, 0.36);
   box-sizing: border-box;
 }
 
@@ -5245,7 +5245,7 @@ function formatAssessmentNumber(value: unknown) {
   flex-direction: column;
   padding: 28rpx 28rpx 24rpx;
   border-radius: 16rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -5256,13 +5256,13 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: space-between;
   gap: 24rpx;
   padding-bottom: 20rpx;
-  border-bottom: 1rpx solid #f1f5f9;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .detail-modal-title {
   min-width: 0;
   overflow: hidden;
-  color: #222;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
   text-overflow: ellipsis;
@@ -5271,7 +5271,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .detail-modal-close {
   flex: 0 0 auto;
-  color: #2563eb;
+  color: #b08d4f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -5285,9 +5285,9 @@ function formatAssessmentNumber(value: unknown) {
 .detail-range-preview {
   margin-top: 18rpx;
   padding: 18rpx;
-  border: 1rpx solid #edf2f7;
+  border: 1rpx solid #eef1e2;
   border-radius: 12rpx;
-  background: #fbfdff;
+  background: #eef2e4;
 }
 
 .detail-range-summary {
@@ -5301,7 +5301,7 @@ function formatAssessmentNumber(value: unknown) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #667085;
+  color: #6b6653;
   font-size: 23rpx;
   font-weight: 800;
   text-overflow: ellipsis;
@@ -5326,7 +5326,7 @@ function formatAssessmentNumber(value: unknown) {
   position: relative;
   height: 12rpx;
   border-radius: 999rpx;
-  background: #e5e7eb;
+  background: #f0f3e9;
 }
 
 .detail-range-current {
@@ -5339,10 +5339,10 @@ function formatAssessmentNumber(value: unknown) {
   flex-direction: column;
   gap: 4rpx;
   padding: 8rpx 10rpx;
-  border: 1rpx solid #dbeafe;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
-  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.08);
   box-sizing: border-box;
 }
 
@@ -5356,14 +5356,14 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .detail-range-current-title {
-  color: #667085;
+  color: #6b6653;
   font-size: 19rpx;
   font-weight: 800;
   line-height: 1;
 }
 
 .detail-range-current-value {
-  color: #222;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 900;
   line-height: 1.12;
@@ -5375,7 +5375,7 @@ function formatAssessmentNumber(value: unknown) {
   width: 6rpx;
   height: 28rpx;
   border-radius: 999rpx;
-  background: #111827;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   transform: translateX(-50%);
 }
 
@@ -5388,11 +5388,11 @@ function formatAssessmentNumber(value: unknown) {
   gap: 8rpx;
   padding: 4rpx 8rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.92);
-  color: #2563eb;
+  background: #fbfcf7;
+  color: #b08d4f;
   font-size: 19rpx;
   font-weight: 800;
-  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.12);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.12);
 }
 
 .detail-loading-spinner,
@@ -5400,8 +5400,8 @@ function formatAssessmentNumber(value: unknown) {
   flex: 0 0 auto;
   width: 22rpx;
   height: 22rpx;
-  border: 3rpx solid #bfdbfe;
-  border-top-color: #2563eb;
+  border: 3rpx solid #e5e8d4;
+  border-top-color: #1e3a2f;
   border-radius: 999rpx;
   animation: detail-spin 0.8s linear infinite;
   box-sizing: border-box;
@@ -5413,7 +5413,7 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: space-between;
   min-height: 30rpx;
   margin-top: 14rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 21rpx;
   font-weight: 700;
 }
@@ -5421,7 +5421,7 @@ function formatAssessmentNumber(value: unknown) {
 .detail-modal-table {
   margin-top: 18rpx;
   overflow: hidden;
-  border: 1rpx solid #edf2f7;
+  border: 1rpx solid #eef1e2;
   border-radius: 12rpx;
 }
 
@@ -5431,7 +5431,7 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: space-between;
   gap: 20rpx;
   padding: 16rpx 18rpx;
-  background: #f8fafc;
+  background: #eef2e4;
 }
 
 .detail-modal-row {
@@ -5440,12 +5440,12 @@ function formatAssessmentNumber(value: unknown) {
   justify-content: space-between;
   gap: 20rpx;
   padding: 18rpx;
-  border-top: 1rpx solid #f1f5f9;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .detail-modal-label {
   flex: 0 0 210rpx;
-  color: #666;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   line-height: 1.45;
@@ -5453,7 +5453,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .detail-modal-value {
   flex: 1;
-  color: #222;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   line-height: 1.45;
@@ -5468,14 +5468,14 @@ function formatAssessmentNumber(value: unknown) {
 .detail-contribution-title {
   display: block;
   margin-bottom: 12rpx;
-  color: #222;
+  color: #26261f;
   font-size: 26rpx;
   font-weight: 800;
 }
 
 .detail-contribution-table {
   overflow: hidden;
-  border: 1rpx solid #edf2f7;
+  border: 1rpx solid #eef1e2;
   border-radius: 12rpx;
 }
 
@@ -5488,14 +5488,14 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .detail-contribution-head {
-  background: #f8fafc;
-  color: #667085;
+  background: #eef2e4;
+  color: #6b6653;
   font-size: 21rpx;
   font-weight: 800;
 }
 
 .detail-contribution-row {
-  border-top: 1rpx solid #f1f5f9;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .detail-contribution-name,
@@ -5524,7 +5524,7 @@ function formatAssessmentNumber(value: unknown) {
 .detail-contribution-row .detail-contribution-weight,
 .detail-contribution-row .detail-contribution-amount,
 .detail-contribution-row .detail-contribution-percent {
-  color: #222;
+  color: #26261f;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -5544,9 +5544,9 @@ function formatAssessmentNumber(value: unknown) {
   align-items: center;
   height: 52rpx;
   padding: 0 10rpx;
-  border: 1rpx solid #d9e4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -5555,7 +5555,7 @@ function formatAssessmentNumber(value: unknown) {
   min-width: 0;
   height: 100%;
   padding: 0;
-  color: #222;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 800;
   text-align: right;
@@ -5568,16 +5568,16 @@ function formatAssessmentNumber(value: unknown) {
   margin: 0;
   padding: 0;
   border-radius: 8rpx;
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 19rpx;
   font-weight: 800;
   line-height: 52rpx;
 }
 
 .detail-contribution-weight-confirm-btn[disabled] {
-  background: #e5e7eb;
-  color: #98a2b3;
+  background: #f0f3e9;
+  color: #968f6d;
 }
 
 .detail-contribution-spinner {
@@ -5590,7 +5590,7 @@ function formatAssessmentNumber(value: unknown) {
 .detail-contribution-weight-unit {
   flex: 0 0 auto;
   margin-left: 6rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 20rpx;
   font-weight: 800;
 }
@@ -5599,7 +5599,7 @@ function formatAssessmentNumber(value: unknown) {
   display: block;
   min-width: 0;
   overflow: hidden;
-  color: #222;
+  color: #26261f;
   font-size: 23rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -5612,13 +5612,13 @@ function formatAssessmentNumber(value: unknown) {
   margin-top: 8rpx;
   overflow: hidden;
   border-radius: 999rpx;
-  background: #eef2f7;
+  background: #eef2e4;
 }
 
 .detail-contribution-bar-fill {
   height: 100%;
   border-radius: 999rpx;
-  background: #1677ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
 }
 
 @keyframes detail-spin {
@@ -5635,8 +5635,8 @@ function formatAssessmentNumber(value: unknown) {
   height: 72rpx;
   margin: 0;
   border-radius: 12rpx;
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 25rpx;
   font-weight: 800;
   line-height: 72rpx;
@@ -5645,33 +5645,33 @@ function formatAssessmentNumber(value: unknown) {
 .detail-modal-footer {
   flex: 0 0 auto;
   padding-top: 18rpx;
-  border-top: 1rpx solid #f1f5f9;
-  background: #fff;
+  border-top: 1rpx solid #eef1e2;
+  background: #fbfcf7;
 }
 
 .status-compliant {
-  background: #f6ffed;
-  color: #389e0d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .status-deficient {
-  background: #fff7ed;
-  color: #c2410c;
+  background: #f6efe0;
+  color: #8a6b33;
 }
 
 .status-excess {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .status-conflict {
-  background: #fff1f2;
-  color: #be123c;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .status-missing,
 .status-pending {
-  background: #f5f5f5;
-  color: #777;
+  background: #fbfcf7;
+  color: #6b6653;
 }
 </style>

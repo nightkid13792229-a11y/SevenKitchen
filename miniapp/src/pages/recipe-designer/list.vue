@@ -1343,7 +1343,7 @@ function formatDateTime(value?: string) {
 <style scoped lang="scss">
 .recipe-designer-list-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #fbfcf7;
   padding: 24rpx 32rpx 48rpx;
 }
 
@@ -1371,14 +1371,14 @@ function formatDateTime(value?: string) {
   display: block;
   font-size: 40rpx;
   font-weight: 700;
-  color: #222;
+  color: #26261f;
 }
 
 .page-subtitle {
   display: block;
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #777;
+  color: #6b6653;
 }
 
 .new-btn,
@@ -1393,14 +1393,14 @@ function formatDateTime(value?: string) {
 }
 
 .new-btn {
-  background: #1890ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .library-btn {
-  background: #fff;
-  color: #1677ff;
-  border: 1rpx solid #b7d9ff;
+  background: #fbfcf7;
+  color: #b08d4f;
+  border: 1rpx solid #e5e8d4;
 }
 
 .status-filter-bar {
@@ -1410,8 +1410,8 @@ function formatDateTime(value?: string) {
   margin-bottom: 24rpx;
   padding: 8rpx;
   border-radius: 12rpx;
-  background: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  background: #fbfcf7;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .status-filter-btn {
@@ -1419,15 +1419,15 @@ function formatDateTime(value?: string) {
   margin: 0;
   padding: 0 8rpx;
   border-radius: 8rpx;
-  background: #f5f7fa;
-  color: #666;
+  background: #eef2e4;
+  color: #26261f;
   font-size: 24rpx;
   line-height: 60rpx;
 }
 
 .status-filter-btn-active {
-  background: #e6f4ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 700;
 }
 
@@ -1445,18 +1445,18 @@ function formatDateTime(value?: string) {
   height: 60rpx;
   margin: 0;
   padding: 0 22rpx;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 999rpx;
-  background: #fff;
-  color: #475569;
+  background: #fbfcf7;
+  color: #b08d4f;
   font-size: 24rpx;
   line-height: 60rpx;
 }
 
 .dog-filter-btn-active {
-  border-color: #1677ff;
-  background: #e6f4ff;
-  color: #1677ff;
+  border-color: #1e3a2f;
+  background: #eef2e4;
+  color: #b08d4f;
   font-weight: 700;
 }
 
@@ -1466,18 +1466,18 @@ function formatDateTime(value?: string) {
   align-items: center;
   justify-content: center;
   min-height: 360rpx;
-  color: #888;
+  color: #6b6653;
   font-size: 28rpx;
 }
 
 .empty-title {
-  color: #333;
+  color: #26261f;
   font-size: 30rpx;
   margin-bottom: 12rpx;
 }
 
 .empty-subtitle {
-  color: #999;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -1489,7 +1489,7 @@ function formatDateTime(value?: string) {
 
 .loading-more-state {
   padding: 24rpx 0;
-  color: #999;
+  color: #6b6653;
   font-size: 24rpx;
   text-align: center;
 }
@@ -1516,10 +1516,10 @@ function formatDateTime(value?: string) {
   align-items: stretch;
   gap: 20rpx;
   padding: 24rpx;
-  border: 1rpx solid #eef2f7;
+  border: 1rpx solid #eef1e2;
   border-radius: 8rpx;
-  background: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  background: #fbfcf7;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .customer-card-main {
@@ -1538,7 +1538,7 @@ function formatDateTime(value?: string) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -1550,21 +1550,21 @@ function formatDateTime(value?: string) {
   flex: 0 0 auto;
   padding: 6rpx 12rpx;
   border-radius: 8rpx;
-  background: #eef5ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 21rpx;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .customer-status-EMPTY {
-  background: #f5f5f5;
-  color: #777;
+  background: #fbfcf7;
+  color: #6b6653;
 }
 
 .customer-status-READY {
-  background: #f6ffed;
-  color: #389e0d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .customer-card-meta,
@@ -1572,7 +1572,7 @@ function formatDateTime(value?: string) {
   display: block;
   margin-top: 8rpx;
   overflow: hidden;
-  color: #64748b;
+  color: #b08d4f;
   font-size: 23rpx;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -1580,7 +1580,7 @@ function formatDateTime(value?: string) {
 }
 
 .customer-disabled-reason {
-  color: #b45309;
+  color: #8a6b33;
 }
 
 .customer-card-actions {
@@ -1606,16 +1606,16 @@ function formatDateTime(value?: string) {
   margin: 0;
   padding: 0;
   border-radius: 8rpx;
-  background: #f8fafc;
-  color: #475569;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 32rpx;
   font-weight: 800;
   line-height: 38rpx;
 }
 
 .customer-card-more-btn[disabled] {
-  color: #a8b4c2;
-  background: #f3f4f6;
+  color: #b08d4f;
+  background: #fbfcf7;
 }
 
 .customer-card-menu {
@@ -1625,10 +1625,10 @@ function formatDateTime(value?: string) {
   z-index: 8;
   width: 184rpx;
   overflow: hidden;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
-  box-shadow: 0 10rpx 28rpx rgba(15, 23, 42, 0.14);
+  background: #fbfcf7;
+  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.14);
 }
 
 .customer-card-menu-item {
@@ -1637,8 +1637,8 @@ function formatDateTime(value?: string) {
   margin: 0;
   padding: 0 18rpx;
   border-radius: 0;
-  background: #fff;
-  color: #1f2937;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
   line-height: 64rpx;
@@ -1646,16 +1646,16 @@ function formatDateTime(value?: string) {
 }
 
 .customer-card-menu-item + .customer-card-menu-item {
-  border-top: 1rpx solid #f1f5f9;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .customer-card-menu-item[disabled] {
-  color: #94a3b8;
-  background: #f8fafc;
+  color: #b08d4f;
+  background: #eef2e4;
 }
 
 .customer-card-menu-delete {
-  color: #cf1322;
+  color: #b4553f;
 }
 
 .customer-card-quick-actions {
@@ -1677,25 +1677,25 @@ function formatDateTime(value?: string) {
 }
 
 .customer-quick-diy-btn {
-  background: #f0f7ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .customer-quick-order-btn {
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 
 .customer-quick-btn[disabled] {
-  background: #e5e7eb;
-  color: #94a3b8;
+  background: #f0f3e9;
+  color: #b08d4f;
 }
 
 .series-card {
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 12rpx;
   padding: 28rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .series-header,
@@ -1729,7 +1729,7 @@ function formatDateTime(value?: string) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #222;
+  color: #26261f;
   font-size: 32rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -1741,26 +1741,26 @@ function formatDateTime(value?: string) {
   flex-shrink: 0;
   padding: 6rpx 12rpx;
   border-radius: 8rpx;
-  background: #fff7e6;
-  color: #d46b08;
+  background: #f6efe0;
+  color: #8a6b33;
   font-size: 21rpx;
   line-height: 1.2;
 }
 
 .series-business-PUBLIC {
-  background: #f6ffed;
-  color: #389e0d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .series-business-PRIVATE_CUSTOM {
-  background: #fff1f0;
-  color: #cf1322;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .series-meta {
   display: block;
   margin-top: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 23rpx;
   line-height: 1.4;
 }
@@ -1776,8 +1776,8 @@ function formatDateTime(value?: string) {
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  background: #f0f6ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 32rpx;
   font-weight: 700;
   line-height: 48rpx;
@@ -1790,8 +1790,8 @@ function formatDateTime(value?: string) {
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  background: #eef5ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 28rpx;
   font-weight: 700;
   line-height: 42rpx;
@@ -1808,9 +1808,9 @@ function formatDateTime(value?: string) {
   gap: 18rpx;
   min-height: 92rpx;
   padding: 16rpx 18rpx;
-  border: 1rpx solid #edf0f5;
+  border: 1rpx solid #eef1e2;
   border-radius: 10rpx;
-  background: #fbfcfe;
+  background: #eef2e4;
   box-sizing: border-box;
 }
 
@@ -1822,7 +1822,7 @@ function formatDateTime(value?: string) {
 .stage-label {
   display: block;
   overflow: hidden;
-  color: #222;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -1834,7 +1834,7 @@ function formatDateTime(value?: string) {
 .stage-updated {
   display: block;
   margin-top: 6rpx;
-  color: #888;
+  color: #6b6653;
   font-size: 22rpx;
   line-height: 1.35;
 }
@@ -1849,34 +1849,34 @@ function formatDateTime(value?: string) {
   flex-shrink: 0;
   padding: 6rpx 14rpx;
   border-radius: 8rpx;
-  background: #edf4ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 22rpx;
 }
 
 .stage-status-NOT_DESIGNED {
-  background: #f5f5f5;
-  color: #777;
+  background: #fbfcf7;
+  color: #6b6653;
 }
 
 .stage-status-MODIFIED {
-  background: #fffbe6;
-  color: #ad8b00;
+  background: #f6efe0;
+  color: #8a6b33;
 }
 
 .stage-status-SUBMITTED {
-  background: #f0f6ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .stage-status-PUBLISHED {
-  background: #f6ffed;
-  color: #389e0d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .stage-status-PRIVATE_CUSTOM {
-  background: #fff1f0;
-  color: #cf1322;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .create-sheet-mask {
@@ -1897,7 +1897,7 @@ function formatDateTime(value?: string) {
   overflow-y: auto;
   padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   border-radius: 24rpx 24rpx 0 0;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
 }
 
@@ -1915,14 +1915,14 @@ function formatDateTime(value?: string) {
 
 .sheet-title {
   display: block;
-  color: #222;
+  color: #26261f;
   font-size: 34rpx;
   font-weight: 700;
 }
 
 .sheet-label {
   flex-shrink: 0;
-  color: #666;
+  color: #26261f;
   font-size: 26rpx;
 }
 
@@ -1935,8 +1935,8 @@ function formatDateTime(value?: string) {
 .customer-create-empty {
   padding: 24rpx;
   border-radius: 8rpx;
-  background: #f8fafc;
-  color: #64748b;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -1954,15 +1954,15 @@ function formatDateTime(value?: string) {
   gap: 20rpx;
   min-height: 92rpx;
   padding: 18rpx 20rpx;
-  border: 1rpx solid #edf0f5;
+  border: 1rpx solid #eef1e2;
   border-radius: 8rpx;
-  background: #fbfcfe;
+  background: #eef2e4;
   box-sizing: border-box;
 }
 
 .customer-create-dog-card-active {
-  border-color: #91caff;
-  background: #eef8ff;
+  border-color: #e5e8d4;
+  background: #eef2e4;
 }
 
 .customer-create-dog-main {
@@ -1980,7 +1980,7 @@ function formatDateTime(value?: string) {
 }
 
 .customer-create-dog-name {
-  color: #222;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -1988,14 +1988,14 @@ function formatDateTime(value?: string) {
 
 .customer-create-dog-stage {
   margin-top: 6rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 22rpx;
   line-height: 1.35;
 }
 
 .customer-create-dog-check {
   flex: 0 0 auto;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 30rpx;
   font-weight: 800;
 }
@@ -2007,12 +2007,12 @@ function formatDateTime(value?: string) {
   gap: 20rpx;
   padding: 18rpx 20rpx;
   border-radius: 8rpx;
-  background: #f8fafc;
+  background: #eef2e4;
 }
 
 .inferred-scenario-label {
   flex: 0 0 auto;
-  color: #667085;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -2020,7 +2020,7 @@ function formatDateTime(value?: string) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #111827;
+  color: #26261f;
   font-size: 25rpx;
   font-weight: 800;
   text-align: right;
@@ -2038,17 +2038,17 @@ function formatDateTime(value?: string) {
   width: 100%;
   height: 76rpx;
   padding: 0 20rpx;
-  border: 1rpx solid #dbe4ef;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
-  color: #111827;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 27rpx;
   box-sizing: border-box;
 }
 
 .scenario-section {
   padding-top: 24rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .scenario-section-label {
@@ -2064,15 +2064,15 @@ function formatDateTime(value?: string) {
 
 .scenario-option {
   padding: 18rpx 20rpx;
-  border: 1rpx solid #edf0f5;
+  border: 1rpx solid #eef1e2;
   border-radius: 12rpx;
-  background: #fbfcfe;
+  background: #eef2e4;
   box-sizing: border-box;
 }
 
 .scenario-option-active {
-  border-color: #91caff;
-  background: #eef8ff;
+  border-color: #e5e8d4;
+  background: #eef2e4;
 }
 
 .scenario-option-main {
@@ -2085,7 +2085,7 @@ function formatDateTime(value?: string) {
 .scenario-option-title {
   flex: 1;
   min-width: 0;
-  color: #222;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
   line-height: 1.35;
@@ -2093,7 +2093,7 @@ function formatDateTime(value?: string) {
 
 .scenario-option-check {
   flex-shrink: 0;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 28rpx;
   font-weight: 700;
   line-height: 1;
@@ -2102,7 +2102,7 @@ function formatDateTime(value?: string) {
 .scenario-option-desc {
   display: block;
   margin-top: 8rpx;
-  color: #777;
+  color: #6b6653;
   font-size: 23rpx;
   line-height: 1.45;
 }
@@ -2123,12 +2123,12 @@ function formatDateTime(value?: string) {
 }
 
 .cancel-btn {
-  background: #f0f6ff;
-  color: #1677ff;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .confirm-btn {
-  background: #1890ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
 }
 </style>

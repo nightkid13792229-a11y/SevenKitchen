@@ -42,15 +42,7 @@
             </text>
           </view>
 
-          <view class="recipe-tags">
-            <text
-              v-for="(tag, index) in parseHealthTags(item.recipe?.targetHealthTags)"
-              :key="index"
-              class="tag"
-            >
-              {{ tag }}
-            </text>
-          </view>
+          <!-- 健康标签暂不展示：待标签字典合规化后仅展示合规标签 -->
         </view>
 
         <view class="recipe-action" @tap.stop="removeFavorite(item.recipeId, item.recipe?.name)">

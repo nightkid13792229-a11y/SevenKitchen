@@ -1,5 +1,30 @@
 <template>
   <view class="recipe-detail-page" :class="{ 'has-reference-price': !!displayReferencePrice }">
+    <!-- 首次加载骨架屏 -->
+    <view v-if="showDetailSkeleton" class="detail-skeleton">
+      <view class="skeleton-cover"></view>
+      <view class="skeleton-body">
+        <view class="skeleton-line skeleton-line--title"></view>
+        <view class="skeleton-line skeleton-line--price"></view>
+        <view class="skeleton-line skeleton-line--text"></view>
+        <view class="skeleton-block"></view>
+        <view class="skeleton-block"></view>
+      </view>
+    </view>
+
+    <!-- 加载失败（可重试） -->
+    <view v-else-if="showDetailError" class="detail-error">
+      <text class="detail-error-title">食谱加载失败</text>
+      <text class="detail-error-copy">请检查网络后重试</text>
+      <button class="detail-error-btn" @tap="retryLoadDetail">重新加载</button>
+    </view>
+
+    <!-- 正文 -->
+    <block v-else>
+    <view v-if="detailRefreshing" class="detail-refreshing-bar">
+      <text class="detail-refreshing-text">正在更新…</text>
+    </view>
+
     <!-- 封面静态图 -->
     <view class="cover-section">
       <image
@@ -418,6 +443,7 @@
         </view>
       </view>
     </view>
+    </block>
   </view>
 </template>
 
@@ -622,6 +648,9 @@ const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const selectedManualLifeStage = ref('')
 const lifeStageSelectorVisible = ref(false)
 const standardExplainVisible = ref(false)
+const detailLoading = ref(true)
+const detailRefreshing = ref(false)
+const detailLoadFailed = ref(false)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 let recipeDetailRequestSeq = 0
 
@@ -667,6 +696,16 @@ const hasStructuredNutritionReport = computed(() => {
 const selectedDog = computed(() => {
   return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
 })
+
+// 首次加载骨架屏 / 失败重试态
+const showDetailSkeleton = computed(() => detailLoading.value && !recipe.value.id)
+const showDetailError = computed(() => detailLoadFailed.value && !recipe.value.id)
+
+function retryLoadDetail() {
+  detailLoadFailed.value = false
+  detailLoading.value = true
+  loadRecipeDetail()
+}
 
 // 非公开食谱（员工预览 / 分享链接）：给内部人员一个低调提示，避免误以为已上线
 const isNonPublicRecipe = computed(() => {
@@ -856,7 +895,12 @@ onMounted(async () => {
 
 function loadRecipeDetail() {
   const currentRequestSeq = ++recipeDetailRequestSeq
-  uni.showLoading({ title: '加载中...' })
+  // 首次加载用骨架屏；已有内容时只显示区块级"更新中"，不再用全屏遮罩打断阅读
+  const hasContent = Boolean(recipe.value.id)
+  detailRefreshing.value = hasContent
+  if (!hasContent) {
+    detailLoading.value = true
+  }
 
   // 构建请求参数：非公开食谱通过URL传入的shareToken传递给后端
   const data: any = {}
@@ -881,6 +925,7 @@ function loadRecipeDetail() {
     }
 
     if (res.code === 0 && res.data) {
+      detailLoadFailed.value = false
       recipe.value = {
         ...res.data,
         id: res.data.selectedRecipeId || res.data.id,
@@ -921,12 +966,21 @@ function loadRecipeDetail() {
     if (currentRequestSeq !== recipeDetailRequestSeq) return
 
     console.error('Load recipe error:', err)
+    if (!recipe.value.id) {
+      // 首次加载失败：给出可重试的失败态，而不是停在空白页
+      detailLoadFailed.value = true
+      return
+    }
+    // 已有内容时刷新失败：保留旧内容，仅提示
     uni.showToast({
-      title: '加载失败',
+      title: '更新失败，请稍后重试',
       icon: 'none'
     })
   }).finally(() => {
     if (currentRequestSeq === recipeDetailRequestSeq) {
+      detailLoading.value = false
+      detailRefreshing.value = false
+      // 兜底关闭可能残留的全屏加载态
       uni.hideLoading()
     }
   })
@@ -1305,6 +1359,105 @@ function onReviewSubmitted() {
 </script>
 
 <style scoped>
+/* 首次加载骨架屏 */
+.detail-skeleton {
+  padding-bottom: 40rpx;
+}
+
+.skeleton-cover {
+  width: 100%;
+  height: 420rpx;
+  background-color: #ecefe0;
+}
+
+.skeleton-body {
+  padding: 24rpx;
+}
+
+.skeleton-line {
+  height: 32rpx;
+  margin-bottom: 20rpx;
+  border-radius: 8rpx;
+  background-color: #eef1e2;
+}
+
+.skeleton-line--title {
+  width: 60%;
+  height: 44rpx;
+}
+
+.skeleton-line--price {
+  width: 45%;
+  height: 60rpx;
+}
+
+.skeleton-line--text {
+  width: 80%;
+}
+
+.skeleton-block {
+  height: 220rpx;
+  margin-top: 24rpx;
+  border-radius: 16rpx;
+  background-color: #f2f4ea;
+}
+
+.skeleton-cover,
+.skeleton-line,
+.skeleton-block {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+/* 加载失败（可重试） */
+.detail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 200rpx 48rpx 0;
+}
+
+.detail-error-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.detail-error-copy {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #968f6d;
+}
+
+.detail-error-btn {
+  width: 320rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  margin-top: 40rpx;
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  border-radius: 999rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  font-size: 28rpx;
+}
+
+/* 切换狗狗 / 生命阶段时的区块级更新提示 */
+.detail-refreshing-bar {
+  padding: 12rpx 24rpx;
+  background-color: #f2f4ea;
+  text-align: center;
+}
+
+.detail-refreshing-text {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
 .recipe-detail-page {
   min-height: 100vh;
   background-color: #fbfcf7;

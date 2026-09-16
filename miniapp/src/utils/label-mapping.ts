@@ -99,6 +99,34 @@ export function getNutritionStandardLabel(standard: string): string {
 }
 
 /**
+ * 获取营养标准的通俗解释（用于"符合 XX 犬营养标准"背书卡的展开说明）
+ * @param standard - 营养标准代码
+ * @returns 通俗解释文案
+ */
+export function getNutritionStandardExplain(standard: string): string {
+  const map: Record<string, string> = {
+    'FEDIAF_2021':
+      'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
+    'FEDIAF_2025':
+      'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
+    'AAFCO_2019':
+      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
+    'AAFCO_2021':
+      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
+    'AAFCO_2022':
+      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
+    'NRC_2006':
+      'NRC（美国国家科学研究委员会）发布的犬营养需要量，是动物营养学研究的权威参考。',
+    'GB_T_31216':
+      'GB/T 31216 是中国国家标准《全价宠物食品 犬粮》，规定了全价犬粮的营养指标要求。',
+  }
+  return (
+    map[standard] ||
+    '该食谱按所选营养标准设计，覆盖对应生命阶段的必需营养素。'
+  );
+}
+
+/**
  * 获取原料类型中文名称
  * @param type - 原料类型代码
  * @returns 中文名称

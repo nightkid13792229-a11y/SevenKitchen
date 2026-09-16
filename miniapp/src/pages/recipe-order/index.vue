@@ -1,5 +1,13 @@
 <template>
   <view class="recipe-order-page">
+    <!-- 页面级加载失败：给出可重试的失败态，避免误显示为"未建档" -->
+    <view v-if="pageLoadError" class="page-load-error">
+      <text class="page-load-error-title">页面加载失败</text>
+      <text class="page-load-error-copy">{{ pageLoadError }}</text>
+      <button class="page-load-error-btn button-reset" @tap="retryPageLoad">重新加载</button>
+    </view>
+
+    <block v-else>
     <view class="recipe-info-section">
       <view
         v-if="lifeStageVersionOptions.length > 0"
@@ -38,38 +46,35 @@
 
       <view class="recipe-info-body">
         <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
-        <view
-          v-if="recipe.targetHealthTags && recipe.targetHealthTags.length > 0"
-          class="recipe-tags"
-        >
-          <text
-            v-for="tag in recipe.targetHealthTags"
-            :key="tag"
-            class="tag health-tag"
-          >
-            {{ getHealthTagLabel(tag) }}
-          </text>
-        </view>
+        <!-- 健康标签暂不展示：与食谱详情页保持一致，待标签字典合规化后仅展示合规标签 -->
 
-        <view class="recipe-meta-grid">
-          <view class="recipe-meta-card">
-            <text class="recipe-meta-label">营养标准</text>
-            <text class="recipe-meta-value">{{ recipeNutritionStandardLabel }}</text>
+        <!-- 营养标准背书（与食谱详情页同一展示方式） -->
+        <view class="standard-card" @tap="toggleStandardExplain">
+          <view class="standard-main">
+            <text class="standard-badge">✓</text>
+            <view class="standard-copy">
+              <text class="standard-title">符合 {{ recipeNutritionStandardLabel }}</text>
+              <text class="standard-sub">犬营养标准</text>
+            </view>
           </view>
-          <view class="recipe-meta-card">
-            <text class="recipe-meta-label">配方软件</text>
-            <text class="recipe-meta-value">{{ recipeFormulaSoftwareLabel }}</text>
-          </view>
-          <view class="recipe-meta-card">
-            <text class="recipe-meta-label">能量密度</text>
-            <text class="recipe-meta-value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
-          </view>
+          <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
+        </view>
+        <view v-if="standardExplainVisible" class="standard-explain">
+          <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
         </view>
       </view>
     </view>
 
     <view class="section dog-feeding-section">
-      <view v-if="dogs.length === 0" class="dog-empty-state">
+      <view v-if="dogsLoadFailed" class="dogs-load-error">
+        <text class="dogs-load-error-title">狗狗档案加载失败</text>
+        <text class="dogs-load-error-copy">请检查网络后重试，避免重复建档</text>
+        <button class="section-action-button dogs-load-error-btn button-reset" @tap="retryDogsLoad">
+          重新加载
+        </button>
+      </view>
+
+      <view v-else-if="dogs.length === 0" class="dog-empty-state">
         <text class="dog-empty-title">请先创建狗狗档案</text>
         <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算建议用量。</text>
         <button class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建档案</button>
@@ -477,6 +482,7 @@
         确认订单
       </button>
     </view>
+    </block>
   </view>
 </template>
 
@@ -484,9 +490,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getNutritionStandardExplain } from '../../utils/label-mapping'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
-import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -877,12 +883,31 @@ const perMealG = computed(() => {
 const recipeNutritionStandardLabel = computed(() =>
   getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
-const recipeFormulaSoftwareLabel = computed(() =>
-  formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
+const standardExplainVisible = ref(false)
+const nutritionStandardExplain = computed(() =>
+  getNutritionStandardExplain(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
-const displayRecipeEnergyDensity = computed(() =>
-  formatEnergyDensityKcalPerKg(recipe.value.energyDensityKcalPerKg)
-)
+
+function toggleStandardExplain() {
+  standardExplainVisible.value = !standardExplainVisible.value
+}
+
+// 页面级加载状态：食谱加载失败时给可重试失败态，而不是误显示成"未建档"
+const pageLoadError = ref('')
+const dogsLoadFailed = ref(false)
+
+async function retryPageLoad() {
+  pageLoadError.value = ''
+  dogsLoadFailed.value = false
+  await loadBreeds()
+  await loadRecipeDetail()
+  await loadDogs()
+}
+
+async function retryDogsLoad() {
+  dogsLoadFailed.value = false
+  await loadDogs()
+}
 const selectedLifeStageLabel = computed(() => {
   if (recipe.value.selectedLifeStageLabel) return recipe.value.selectedLifeStageLabel
   const stage = selectedLifeStage.value || recipe.value.selectedLifeStage || ''
@@ -1214,6 +1239,7 @@ async function loadRecipeDetail() {
       data,
     })
     if (res.code === 0 && res.data) {
+      pageLoadError.value = ''
       recipe.value = res.data
       if (!selectedLifeStage.value && res.data.selectedLifeStage) {
         selectedLifeStage.value = res.data.selectedLifeStage
@@ -1224,6 +1250,7 @@ async function loadRecipeDetail() {
     }
   } catch (error) {
     console.error('Load recipe error:', error)
+    pageLoadError.value = '食谱信息加载失败，请检查网络后重试'
   }
 }
 
@@ -1273,6 +1300,7 @@ async function loadDogs() {
       method: 'GET'
     })
     if (res.code === 0 && res.data) {
+      dogsLoadFailed.value = false
       dogs.value = res.data
 
       // 自动选中狗狗（再次购买优先，其次详情页传入，再其次本地缓存）
@@ -1286,6 +1314,8 @@ async function loadDogs() {
     }
   } catch (error) {
     console.error('Load dogs error:', error)
+    dogs.value = []
+    dogsLoadFailed.value = true
     dogListLoadedOnce = true
   }
 }
@@ -1808,6 +1838,133 @@ onShow(() => {
 </script>
 
 <style scoped>
+/* 营养标准背书卡（与食谱详情页同一展示方式） */
+.standard-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding: 22rpx 24rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 16rpx;
+  box-shadow: 0 8rpx 22rpx rgba(176, 141, 79, 0.14);
+}
+
+.standard-main {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.standard-badge {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.standard-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.standard-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.standard-sub {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.standard-toggle {
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
+.standard-explain {
+  margin-top: 10rpx;
+  padding: 20rpx 24rpx;
+  background-color: #f2f4ea;
+  border-radius: 12rpx;
+}
+
+.standard-explain-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b6653;
+}
+
+/* 页面级加载失败态 */
+.page-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 200rpx 48rpx 0;
+}
+
+.page-load-error-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.page-load-error-copy {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #968f6d;
+  text-align: center;
+}
+
+.page-load-error-btn {
+  width: 320rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  margin-top: 40rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  color: #f3eddd;
+  font-size: 28rpx;
+}
+
+/* 狗狗档案加载失败（区别于"未建档"空态） */
+.dogs-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 32rpx;
+  text-align: center;
+}
+
+.dogs-load-error-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.dogs-load-error-copy {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #968f6d;
+}
+
+.dogs-load-error-btn {
+  width: 320rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  margin-top: 28rpx;
+}
+
 .recipe-order-page {
   min-height: 100vh;
   background-color: #fbfcf7;
@@ -1849,26 +2006,6 @@ onShow(() => {
   color: #26261f;
   line-height: 1.4;
   text-align: center;
-}
-
-.recipe-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  justify-content: center;
-  margin-top: 12rpx;
-}
-
-.recipe-tags .tag {
-  display: inline-block;
-  padding: 6rpx 16rpx;
-  border-radius: 6rpx;
-  font-size: 22rpx;
-}
-
-.recipe-tags .health-tag {
-  background-color: #f6efe0;
-  color: #8a6b33;
 }
 
 /* 通用区块 */
@@ -3225,28 +3362,6 @@ onShow(() => {
   text-align: center;
 }
 
-.recipe-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-  justify-content: center;
-  margin-top: 16rpx;
-}
-
-.recipe-tags .tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8rpx 14rpx;
-  border-radius: 6rpx;
-  font-size: 22rpx;
-}
-
-.recipe-tags .health-tag {
-  background-color: #f6efe0;
-  color: #8a6b33;
-}
-
 .hero-meta-row,
 .hero-dog-card,
 .package-preview-row,
@@ -3277,37 +3392,6 @@ onShow(() => {
   font-size: 28rpx;
   color: #26261f;
   font-weight: 700;
-}
-
-.recipe-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12rpx;
-  margin-top: 24rpx;
-}
-
-.recipe-meta-card {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  padding: 18rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  text-align: center;
-}
-
-.recipe-meta-label {
-  font-size: 23rpx;
-  color: #6b6653;
-  line-height: 1.3;
-}
-
-.recipe-meta-value {
-  line-height: 1.35;
-  word-break: break-word;
 }
 
 .hero-dog-card {

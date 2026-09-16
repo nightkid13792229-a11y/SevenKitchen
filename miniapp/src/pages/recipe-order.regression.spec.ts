@@ -85,7 +85,7 @@ describe('recipe-order phase one UI contract', () => {
       'recipe-life-stage-picker',
       'dog-profile-context',
       '配置天数',
-      '说明',
+      '>说明<',
       'bottom-bar',
     ];
 
@@ -185,8 +185,7 @@ describe('recipe-order phase one UI contract', () => {
   it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {
     expect(templateSource).not.toContain('食谱信息');
     expect(templateSource).toContain('营养标准');
-    expect(templateSource).toContain('配方软件');
-    expect(templateSource).toContain('能量密度');
+    expect(templateSource).toContain('犬营养标准');
     expect(templateSource).toContain('dog-profile-context');
     expect(templateSource).not.toContain('档案依据');
     expect(templateSource).toContain('v-for="fact in dogProfileFacts"');
@@ -229,13 +228,13 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('dogPickerOptions');
     expect(source).not.toContain('onDogPickerChange');
     expect(source).not.toContain("].join(' ｜ ')");
-    expect(source).toContain('.recipe-meta-card');
+    expect(source).toContain('.standard-card');
     expect(source).toContain('align-items: center;');
     expect(source).toContain('text-align: center;');
     expect(templateSource).toContain('>添加多个分装规格</button>');
     expect(templateSource).not.toContain('>添加规格</button>');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
-    expect(source).toContain('formatRecipeFormulaSoftwareLabel');
+    expect(source).toContain('getNutritionStandardExplain');
     expect(source).toContain('calculateDogAgeText');
     expect(source).toContain("MALE: '弟弟'");
     expect(source).toContain("FEMALE: '妹妹'");
@@ -551,11 +550,36 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('shows customer-facing recipe metadata without internal abbreviations or decimals', () => {
-    expect(source).toContain("import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'");
-    expect(source).toContain('const displayRecipeEnergyDensity = computed');
-    expect(templateSource).toContain('{{ displayRecipeEnergyDensity }} kcal/kg');
-    expect(source).toContain('formatRecipeFormulaSoftwareLabel(recipe.value.designSource)');
-    expect(source).not.toContain('getInitials(recipe.value.designSource');
+    // 营养标准改为结论式背书卡，解释文案与食谱详情页共用同一份
+    expect(source).toContain("import { getNutritionStandardExplain } from '../../utils/label-mapping'");
+    expect(source).toContain('const nutritionStandardExplain = computed');
+    expect(templateSource).toContain('符合 {{ recipeNutritionStandardLabel }}');
+    expect(templateSource).toContain('犬营养标准');
+    expect(source).toContain('function toggleStandardExplain');
+    // 内部工具名与裸技术指标不再出现在顾客页面
+    expect(templateSource).not.toContain('配方软件');
+    expect(templateSource).not.toContain('能量密度');
+    expect(source).not.toContain('formatRecipeFormulaSoftwareLabel');
+    expect(source).not.toContain('displayRecipeEnergyDensity');
     expect(templateSource).not.toContain("{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg");
+  });
+
+  it('does not render health tags on the order page pending tag dictionary compliance', () => {
+    expect(templateSource).not.toContain('class="tag health-tag"');
+    expect(templateSource).not.toContain('v-for="tag in recipe.targetHealthTags"');
+    expect(templateSource).not.toContain('class="recipe-tags"');
+  });
+
+  it('shows a retryable error state instead of the empty-dog state when loading fails', () => {
+    expect(templateSource).toContain('v-if="pageLoadError"');
+    expect(templateSource).toContain('@tap="retryPageLoad"');
+    expect(templateSource).toContain('v-if="dogsLoadFailed"');
+    expect(templateSource).toContain('@tap="retryDogsLoad"');
+    // 加载失败态必须优先于"请先创建狗狗档案"，避免误导家长重复建档
+    expect(templateSource.indexOf('dogsLoadFailed')).toBeLessThan(
+      templateSource.indexOf('请先创建狗狗档案'),
+    );
+    expect(source).toContain("pageLoadError.value = '食谱信息加载失败，请检查网络后重试'");
+    expect(source).toContain('dogsLoadFailed.value = true');
   });
 });

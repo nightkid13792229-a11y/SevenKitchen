@@ -496,6 +496,7 @@ import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { getNutritionStandardExplain } from '../../utils/label-mapping'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
@@ -1257,24 +1258,10 @@ function getLifeStageLabel(stage: string): string {
   return result || stage
 }
 
-// 营养标准的通俗解释（配合"符合 XX 犬营养标准"的结论式展示）
-const NUTRITION_STANDARD_EXPLAIN: Record<string, string> = {
-  FEDIAF_2021:
-    'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
-  FEDIAF_2025:
-    'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
-  AAFCO_2019:
-    'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
-  GB_T_31216:
-    'GB/T 31216 是中国国家标准《全价宠物食品 犬粮》，规定了全价犬粮的营养指标要求。',
-}
-
-const nutritionStandardExplain = computed(() => {
-  return (
-    NUTRITION_STANDARD_EXPLAIN[recipe.value.nutritionStandard] ||
-    '该食谱按所选营养标准设计，覆盖对应生命阶段的必需营养素。'
-  )
-})
+// 营养标准的通俗解释（与订购配置页共用同一份文案，保证两页展示一致）
+const nutritionStandardExplain = computed(() =>
+  getNutritionStandardExplain(recipe.value.nutritionStandard),
+)
 
 function toggleStandardExplain() {
   standardExplainVisible.value = !standardExplainVisible.value

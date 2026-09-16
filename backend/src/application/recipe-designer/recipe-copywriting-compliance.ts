@@ -15,7 +15,10 @@ import {
  * 因为 AI 不是合规责任主体，平台才是。
  *
  * ⚠️ 命名注意：刻意避开「肝」「肾」等单字，以免误伤合法食材名（猪肝 / 牛肝 等）。
- * 后续如需运营自助维护，可将该清单迁移到数据库或配置文件。
+ *
+ * 可配置：内置清单之外，可通过环境变量 `RECIPE_COPYWRITING_FORBIDDEN_CLAIMS`
+ * （英文逗号分隔）追加禁用词，无需改代码即可扩充，例如：
+ *   RECIPE_COPYWRITING_FORBIDDEN_CLAIMS=护心,降糖,化毛
  */
 export const FORBIDDEN_CLAIM_PATTERNS: string[] = [
   // 器官 / 疾病指向
@@ -64,6 +67,17 @@ export const FORBIDDEN_CLAIM_PATTERNS: string[] = [
 ];
 
 /**
+ * 生效的禁用词表 = 内置清单 + 环境变量追加（去重，保持内置顺序在前）。
+ */
+export function getForbiddenClaimPatterns(): string[] {
+  const extra = (process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS || '')
+    .split(',')
+    .map((word) => word.trim())
+    .filter(Boolean);
+  return Array.from(new Set([...FORBIDDEN_CLAIM_PATTERNS, ...extra]));
+}
+
+/**
  * 扫描文本中命中的禁用表述，返回命中的词（去重、保持清单顺序）。
  */
 export function scanForbiddenClaims(
@@ -73,7 +87,7 @@ export function scanForbiddenClaims(
     .map((text) => (typeof text === 'string' ? text : ''))
     .join('\n');
   if (!joined.trim()) return [];
-  return FORBIDDEN_CLAIM_PATTERNS.filter((pattern) =>
+  return getForbiddenClaimPatterns().filter((pattern) =>
     joined.includes(pattern),
   );
 }

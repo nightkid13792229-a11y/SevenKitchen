@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   assertCopywritingCompliant,
   FORBIDDEN_CLAIM_PATTERNS,
+  getForbiddenClaimPatterns,
   normalizeCopywritingOutput,
   scanForbiddenClaims,
 } from '../../src/application/recipe-designer/recipe-copywriting-compliance';
@@ -136,6 +137,35 @@ describe('食谱文案合规校验', () => {
       expect(prompt).toContain('allowedTags');
       expect(prompt).toContain('sellingPoint');
       expect(prompt).toContain('description');
+    });
+  });
+
+  describe('禁用词表可配置（无需改代码即可扩充）', () => {
+    const ORIGINAL = process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS;
+
+    afterEach(() => {
+      if (ORIGINAL === undefined) {
+        delete process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS;
+      } else {
+        process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS = ORIGINAL;
+      }
+    });
+
+    it('未配置环境变量时只用内置清单', () => {
+      delete process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS;
+      expect(getForbiddenClaimPatterns()).toEqual(FORBIDDEN_CLAIM_PATTERNS);
+    });
+
+    it('环境变量可追加禁用词：去空白、去重，并参与扫描', () => {
+      process.env.RECIPE_COPYWRITING_FORBIDDEN_CLAIMS = ' 护心 , 降糖 ,护心,';
+      const patterns = getForbiddenClaimPatterns();
+      expect(patterns).toContain('护心');
+      expect(patterns).toContain('降糖');
+      expect(patterns.filter((word) => word === '护心')).toHaveLength(1);
+      // 内置词仍在
+      expect(patterns).toContain('护肾');
+      // 追加词真的会被扫描命中
+      expect(scanForbiddenClaims('本品护心效果好')).toEqual(['护心']);
     });
   });
 });

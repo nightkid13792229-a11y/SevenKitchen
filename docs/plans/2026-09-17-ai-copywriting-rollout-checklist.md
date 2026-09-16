@@ -91,6 +91,17 @@ npx ts-node -r tsconfig-paths/register prisma/seed-health-tag-vocabulary.ts --ap
 - **再次调用 `filter-options`，健康标签仍只返回 3 个** ← 关键回归点
   （词表标签关联为 0，应被新逻辑过滤掉）
 
+### 步骤 4.5 · （可选）追加禁用词
+
+内置禁用词清单已覆盖疾病名、医疗用语与功效承诺。如需临时扩充，**无需改代码**，
+在服务端环境变量中追加即可（英文逗号分隔）：
+
+```
+RECIPE_COPYWRITING_FORBIDDEN_CLAIMS=护心,降糖,化毛
+```
+
+追加词会同时用于「提示词约束」与「输出硬校验」，两者始终一致。
+
 ### 步骤 5 · 后台配置 AI 模型
 
 1. 进入后台「Agent 配置」

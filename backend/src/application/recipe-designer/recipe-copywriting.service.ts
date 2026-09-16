@@ -4,7 +4,7 @@ import { AgentProviderConfigService } from '../nutrition-governance/agent-provid
 import { callDeepSeekJson } from './deepseek-chat';
 import {
   assertCopywritingCompliant,
-  FORBIDDEN_CLAIM_PATTERNS,
+  getForbiddenClaimPatterns,
   normalizeCopywritingOutput,
   type RecipeCopywritingPayload,
 } from './recipe-copywriting-compliance';
@@ -90,7 +90,7 @@ export class RecipeCopywritingService {
           currentDescription: input.currentDescription ?? null,
         },
         allowedTags: input.allowedTags,
-        forbiddenPatterns: FORBIDDEN_CLAIM_PATTERNS,
+        forbiddenPatterns: getForbiddenClaimPatterns(),
       },
     });
 

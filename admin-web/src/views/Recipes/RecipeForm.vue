@@ -1689,6 +1689,7 @@ const loadRecipeDetail = async () => {
       detailImages: detail.detailImages || [],
       videoUrl: detail.videoUrl,
       description: detail.description,
+      sellingPoint: detail.sellingPoint,
       designSource: detail.designSource,
       nutritionStandard: detail.nutritionStandard,
       energyDensityKcalPerKg: detail.energyDensityKcalPerKg,

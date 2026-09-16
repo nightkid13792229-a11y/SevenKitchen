@@ -2,8 +2,8 @@
   "name": "SevenKitchen",
   "appid": "wx92924e25093f8f18",
   "description": "专业鲜食套餐定制",
-  "versionName": "1.0.0",
-  "versionCode": "100",
+  "versionName" : "1.1.0",
+  "versionCode" : "110",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true

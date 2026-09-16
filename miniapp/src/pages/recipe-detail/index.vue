@@ -121,17 +121,13 @@
     <view class="ingredients-card">
       <view class="card-header">
         <text class="card-title">食谱配方</text>
-        <text class="card-subtitle">共 {{ recipe.items.length }} 项物料</text>
+        <text class="card-subtitle">共 {{ recipe.items.length }} 项原料</text>
       </view>
 
-      <!-- 主料表 -->
+      <!-- 食材表 -->
       <view v-if="foodItems.length > 0" class="ingredient-block">
-        <view class="ingredient-block-header">
-          <text class="ingredient-block-title">食材</text>
-          <text class="ingredient-block-count">{{ foodItems.length }} 种</text>
-        </view>
         <view class="ingredient-table-header">
-          <text class="header-name">原料</text>
+          <text class="header-name">食材</text>
           <text class="header-method">制备方法</text>
           <text class="header-ratio">占比</text>
         </view>
@@ -159,10 +155,6 @@
         <view class="ingredient-block-header">
           <text class="ingredient-block-title">营养补充剂</text>
           <text class="ingredient-block-count">{{ supplementItems.length }} 种</text>
-        </view>
-        <view class="ingredient-table-header ingredient-table-header--supplement">
-          <text class="header-name">补充剂</text>
-          <text class="header-ratio">每kg食材添加量</text>
         </view>
         <view
           v-for="item in supplementItems"
@@ -1976,6 +1968,10 @@ function onReviewSubmitted() {
   margin-top: 28rpx;
 }
 
+.ingredient-block--supplement .ingredient-block-header {
+  margin-bottom: 4rpx;
+}
+
 .ingredient-block-header {
   display: flex;
   align-items: baseline;
@@ -2009,15 +2005,6 @@ function onReviewSubmitted() {
 .ingredient-block-count {
   font-size: 22rpx;
   color: #968f6d;
-}
-
-/* 营养补充剂表：两列（补充剂 / 每kg食材添加量） */
-.ingredient-table-header--supplement .header-name {
-  flex: 1;
-}
-
-.ingredient-table-header--supplement .header-ratio {
-  flex: 0 0 300rpx;
 }
 
 .ingredient-item--supplement {

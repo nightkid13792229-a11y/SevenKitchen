@@ -1211,6 +1211,7 @@ export class RecipesController {
       nutritionStandard: recipe.nutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData,
       description: recipe.description,
+      sellingPoint: (recipe as any).sellingPoint,
       viewCount: recipe.viewCount ?? 0,
       favoriteCount: recipe.favoriteCount ?? 0,
       diyGenCount: recipe.diyGenCount ?? 0,
@@ -1316,6 +1317,7 @@ export class RecipesController {
       nutritionDetailedData,
       items: allIngredients,
       description: (recipe as any).description,
+      sellingPoint: (recipe as any).sellingPoint,
     };
   }
 

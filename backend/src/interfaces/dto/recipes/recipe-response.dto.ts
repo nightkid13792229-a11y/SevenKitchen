@@ -95,6 +95,9 @@ export class RecipeDetailDto extends RecipeSummaryDto {
   @ApiPropertyOptional()
   description?: string;
 
+  @ApiPropertyOptional({ description: '一句话卖点（合规文案）' })
+  sellingPoint?: string;
+
   @ApiPropertyOptional({ example: 'HIGH_ACTIVITY_ADULT' })
   selectedLifeStage?: string;
 

@@ -389,4 +389,25 @@ describe('recipe detail nutrition report regressions', () => {
     expect(loadRecipeDetailSource.indexOf('if (currentRequestSeq === recipeDetailRequestSeq) {'))
       .toBeLessThan(loadRecipeDetailSource.indexOf('uni.hideLoading()'))
   })
+
+  it('renders the compliant selling point right under the recipe name when present', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(source).toContain('sellingPoint?: string')
+    expect(templateSource).toContain('v-if="recipe.sellingPoint"')
+    expect(templateSource).toContain('class="recipe-selling-point"')
+    expect(templateSource).toContain('{{ recipe.sellingPoint }}')
+    // 位置：紧跟在食谱名之后、狗狗选择器之前，不打乱既有信息顺序
+    const nameIndex = templateSource.indexOf('class="recipe-name"')
+    const sellingPointIndex = templateSource.indexOf('class="recipe-selling-point"')
+    const dogSelectorIndex = templateSource.indexOf('class="recipe-detail-dog-selector"')
+    expect(sellingPointIndex).toBeGreaterThan(nameIndex)
+    expect(sellingPointIndex).toBeLessThan(dogSelectorIndex)
+    // 无卖点时整块不渲染（不出现空占位）
+    expect(templateSource).not.toContain('class="recipe-selling-point" v-else')
+  });
 })

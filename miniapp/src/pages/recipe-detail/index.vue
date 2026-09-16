@@ -53,6 +53,11 @@
 
       <text class="recipe-name">{{ recipe.name }}</text>
 
+      <!-- 一句话卖点（AI 生成 + 人工确认的合规文案） -->
+      <view v-if="recipe.sellingPoint" class="recipe-selling-point">
+        <text class="recipe-selling-point-text">{{ recipe.sellingPoint }}</text>
+      </view>
+
       <!-- 参考价统一只在底部固定栏展示；此处仅在拿不到价格时说明价格如何获得，避免信息真空 -->
       <view v-if="showPriceFallbackCopy" class="price-hint">
         <text class="price-hint-text">价格按狗狗体重计算，进入订购可见</text>
@@ -561,6 +566,8 @@ interface RecipeDetail {
   coverImageUrl?: string
   coverTitle?: string
   description?: string
+  /** 一句话卖点（合规文案，AI 生成 + 人工确认） */
+  sellingPoint?: string
   nutritionStandard: string
   designSource?: string
   energyDensityKcalPerKg: number
@@ -1684,6 +1691,21 @@ function onReviewSubmitted() {
   background-color: #fbfcf7;
   font-size: 24rpx;
   font-weight: 700;
+}
+
+/* 一句话卖点：金色竖条强调，作为核心价值主张 */
+.recipe-selling-point {
+  display: flex;
+  margin-top: 14rpx;
+  padding-left: 18rpx;
+  border-left: 6rpx solid #b08d4f;
+}
+
+.recipe-selling-point-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #1e3a2f;
 }
 
 .recipe-description {

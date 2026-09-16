@@ -311,7 +311,7 @@ const confirmDelete = (item: any) => {
 <style scoped lang="scss">
 .reimbursement-list-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 160rpx; // 为底部按钮留出空间
 }
 
@@ -321,26 +321,26 @@ const confirmDelete = (item: any) => {
   left: 0;
   right: 0;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.08);
+  background-color: #fbfcf7;
+  box-shadow: 0 -2rpx 12rpx rgba(30, 46, 36, 0.08);
   z-index: 100;
 }
 
 .submit-btn {
   width: 100%;
   height: 96rpx;
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   border-radius: 48rpx;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4rpx 12rpx rgba(253, 203, 110, 0.4);
+  box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.35);
 
   text {
     font-size: 32rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   &:active {
@@ -350,7 +350,7 @@ const confirmDelete = (item: any) => {
 }
 
 .header {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
@@ -358,20 +358,20 @@ const confirmDelete = (item: any) => {
     display: block;
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 8rpx;
   }
 
   .subtitle {
     display: block;
     font-size: 24rpx;
-    color: rgba(51, 51, 51, 0.7);
+    color: rgba(38, 38, 31, 0.6);
   }
 }
 
 .status-tabs {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   overflow: hidden;
@@ -385,12 +385,12 @@ const confirmDelete = (item: any) => {
 
   .tab-text {
     font-size: 26rpx;
-    color: #666;
+    color: #26261f;
   }
 
   &.active {
     .tab-text {
-      color: #1890ff;
+      color: #b08d4f;
       font-weight: bold;
     }
   }
@@ -408,7 +408,7 @@ const confirmDelete = (item: any) => {
 
   text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 
   .empty-icon {
@@ -424,10 +424,10 @@ const confirmDelete = (item: any) => {
 }
 
 .list-item {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.05);
 
   .item-header {
     display: flex;
@@ -435,7 +435,7 @@ const confirmDelete = (item: any) => {
     align-items: center;
     margin-bottom: 16rpx;
     padding-bottom: 16rpx;
-    border-bottom: 1rpx solid #f5f5f5;
+    border-bottom: 1rpx solid #eef1e2;
 
     .header-left {
       display: flex;
@@ -445,12 +445,12 @@ const confirmDelete = (item: any) => {
       .claim-number {
         font-size: 28rpx;
         font-weight: bold;
-        color: #333;
+        color: #26261f;
       }
 
       .submit-date {
         font-size: 22rpx;
-        color: #999;
+        color: #6b6653;
       }
     }
 
@@ -460,23 +460,23 @@ const confirmDelete = (item: any) => {
       font-size: 22rpx;
 
       &.pending {
-        background-color: #fff7e6;
-        color: #fa8c16;
+        background-color: #f6efe0;
+        color: #8a6b33;
       }
 
       &.reimbursed {
-        background-color: #e8f5e9;
-        color: #37b24d;
+        background-color: #eef2e4;
+        color: #1e3a2f;
       }
 
       &.rejected {
-        background-color: #ffebee;
-        color: #f44336;
+        background-color: #f8e8e2;
+        color: #b4553f;
       }
 
       &.resubmit {
-        background-color: #fff3e0;
-        color: #f57c00;
+        background-color: #f6efe0;
+        color: #8a6b33;
       }
     }
 
@@ -519,13 +519,13 @@ const confirmDelete = (item: any) => {
 
       .label {
         font-size: 24rpx;
-        color: #999;
+        color: #6b6653;
       }
 
       .value {
         font-size: 26rpx;
         font-weight: bold;
-        color: #ff6b6b;
+        color: #b4553f;
       }
     }
   }
@@ -533,12 +533,12 @@ const confirmDelete = (item: any) => {
   .item-summary {
     margin-bottom: 16rpx;
     padding: 14rpx 18rpx;
-    background-color: #fff7e6;
+    background-color: #f6efe0;
     border-radius: 12rpx;
 
     .summary-text {
       font-size: 24rpx;
-      color: #ad6800;
+      color: #8a6b33;
       line-height: 1.5;
     }
   }
@@ -549,12 +549,12 @@ const confirmDelete = (item: any) => {
     gap: 12rpx;
     margin-bottom: 16rpx;
     padding: 16rpx;
-    background-color: #f9f9f9;
+    background-color: #fbfcf7;
     border-radius: 12rpx;
 
     .purchases-title {
       font-size: 24rpx;
-      color: #666;
+      color: #26261f;
       margin-bottom: 8rpx;
     }
 
@@ -565,29 +565,29 @@ const confirmDelete = (item: any) => {
 
       .purchase-tag {
         padding: 6rpx 12rpx;
-        background-color: #fff;
+        background-color: #fbfcf7;
         border-radius: 6rpx;
         font-size: 22rpx;
-        color: #1890ff;
+        color: #b08d4f;
       }
     }
   }
 
   .item-review {
     padding-top: 16rpx;
-    border-top: 1rpx solid #f5f5f5;
+    border-top: 1rpx solid #eef1e2;
 
     .review-info {
       display: block;
       font-size: 24rpx;
-      color: #666;
+      color: #26261f;
       margin-bottom: 8rpx;
     }
 
     .review-comment {
       display: block;
       font-size: 24rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 }
@@ -599,7 +599,7 @@ const confirmDelete = (item: any) => {
 
   text {
     font-size: 26rpx;
-    color: #1890ff;
+    color: #b08d4f;
   }
 }
 </style>

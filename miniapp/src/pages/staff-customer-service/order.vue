@@ -663,9 +663,9 @@ function sourceText(type?: string) {
 .cs-order-page {
   min-height: 100vh;
   padding: 24rpx;
-  background: #f4f6f8;
+  background: #eef2e4;
   box-sizing: border-box;
-  color: #1f2933;
+  color: #26261f;
 }
 
 .content {
@@ -678,7 +678,7 @@ function sourceText(type?: string) {
 .section,
 .state-card {
   background: #ffffff;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
   box-sizing: border-box;
 }
@@ -693,7 +693,7 @@ function sourceText(type?: string) {
 
 .eyebrow {
   display: block;
-  color: #1f7a5a;
+  color: #1e3a2f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -701,7 +701,7 @@ function sourceText(type?: string) {
 .title {
   display: block;
   margin-top: 8rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 38rpx;
   font-weight: 800;
 }
@@ -711,7 +711,7 @@ function sourceText(type?: string) {
 .state-copy {
   display: block;
   margin-top: 8rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -720,8 +720,8 @@ function sourceText(type?: string) {
   flex-shrink: 0;
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
-  background: #e8f5ef;
-  color: #157347;
+  background: #eef2e4;
+  color: #1e3a2f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -751,7 +751,7 @@ function sourceText(type?: string) {
 .modal-title,
 .state-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
 }
@@ -766,7 +766,7 @@ function sourceText(type?: string) {
   min-width: 0;
   padding: 16rpx;
   border-radius: 10rpx;
-  background: #f8fafc;
+  background: #eef2e4;
 }
 
 .wide {
@@ -777,7 +777,7 @@ function sourceText(type?: string) {
 .record-copy,
 .product-meta {
   display: block;
-  color: #667085;
+  color: #6b6653;
   font-size: 23rpx;
   line-height: 1.45;
 }
@@ -786,14 +786,14 @@ function sourceText(type?: string) {
 .amount {
   display: block;
   margin-top: 6rpx;
-  color: #1f2933;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 700;
 }
 
 .amount,
 .record-amount {
-  color: #b42318;
+  color: #b4553f;
 }
 
 .wrap {
@@ -813,19 +813,19 @@ function sourceText(type?: string) {
 }
 
 .mini-btn {
-  background: #eef4ff;
-  color: #1d4ed8;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .price-btn {
-  background: #fff4e5;
-  color: #b54708;
+  background: #f6efe0;
+  color: #8a6b33;
 }
 
 .amount-hint {
   display: block;
   margin-top: 6rpx;
-  color: #b54708;
+  color: #8a6b33;
   font-size: 22rpx;
   line-height: 1.4;
 }
@@ -833,7 +833,7 @@ function sourceText(type?: string) {
 .primary-btn {
   width: 100%;
   margin-top: 22rpx;
-  background: #1677ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: #ffffff;
 }
 
@@ -841,8 +841,8 @@ function sourceText(type?: string) {
   width: 100%;
   margin-top: 14rpx;
   background: #ffffff;
-  color: #475467;
-  border: 1rpx solid #d0d5dd;
+  color: #b08d4f;
+  border: 1rpx solid #e5e8d4;
 }
 
 button::after {
@@ -859,7 +859,7 @@ button[disabled] {
   display: flex;
   gap: 16rpx;
   padding: 18rpx 0;
-  border-bottom: 1rpx solid #edf0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .product-row:last-child,
@@ -872,7 +872,7 @@ button[disabled] {
   width: 118rpx;
   height: 118rpx;
   border-radius: 10rpx;
-  background: #f1f5f9;
+  background: #eef2e4;
   flex-shrink: 0;
 }
 
@@ -885,7 +885,7 @@ button[disabled] {
 .address-name,
 .record-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 27rpx;
   font-weight: 700;
   line-height: 1.45;
@@ -897,8 +897,8 @@ button[disabled] {
   display: block;
   padding: 18rpx;
   border-radius: 10rpx;
-  background: #f8fafc;
-  color: #344054;
+  background: #eef2e4;
+  color: #26261f;
   font-size: 26rpx;
   line-height: 1.55;
 }
@@ -906,7 +906,7 @@ button[disabled] {
 .address-detail {
   display: block;
   margin-top: 6rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -922,7 +922,7 @@ button[disabled] {
   width: 132rpx;
   height: 132rpx;
   border-radius: 10rpx;
-  background: #f1f5f9;
+  background: #eef2e4;
 }
 
 .record-row {
@@ -933,7 +933,7 @@ button[disabled] {
 .record-amount,
 .record-time {
   flex-shrink: 0;
-  color: #475467;
+  color: #b08d4f;
   font-size: 24rpx;
 }
 
@@ -945,19 +945,19 @@ button[disabled] {
 
 .action-btn {
   width: 100%;
-  background: #f2f4f7;
-  color: #1f2933;
+  background: #eef2e4;
+  color: #26261f;
   font-weight: 700;
 }
 
 .danger {
-  background: #d93026;
+  background: #b4553f;
   color: #ffffff;
 }
 
 .danger-outline {
-  background: #fff5f4;
-  color: #b42318;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .modal-mask {
@@ -968,7 +968,7 @@ button[disabled] {
   align-items: flex-end;
   justify-content: center;
   padding: 24rpx;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(30, 58, 47, 0.45);
   box-sizing: border-box;
 }
 
@@ -988,11 +988,11 @@ button[disabled] {
   width: 100%;
   margin-top: 18rpx;
   padding: 0 18rpx;
-  border: 1rpx solid #d0d5dd;
+  border: 1rpx solid #e5e8d4;
   border-radius: 10rpx;
   background: #ffffff;
   box-sizing: border-box;
-  color: #111827;
+  color: #26261f;
   font-size: 27rpx;
 }
 

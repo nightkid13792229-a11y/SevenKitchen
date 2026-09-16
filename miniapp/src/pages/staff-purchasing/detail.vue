@@ -1963,19 +1963,19 @@ const confirmDeleteItem = (item: any) => {
 <style scoped lang="scss">
 .purchase-detail-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 140rpx;
 }
 
 .header {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
   .title {
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 }
 
@@ -1988,7 +1988,7 @@ const confirmDeleteItem = (item: any) => {
 
   text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 
   .error-icon {
@@ -1998,14 +1998,14 @@ const confirmDeleteItem = (item: any) => {
 
   .error-text {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
     margin-bottom: 24rpx;
   }
 
   .retry-btn {
     padding: 16rpx 48rpx;
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border-radius: 8rpx;
     font-size: 28rpx;
     border: none;
@@ -2017,7 +2017,7 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin-bottom: 24rpx;
   border-radius: 16rpx;
   padding: 32rpx;
@@ -2026,7 +2026,7 @@ const confirmDeleteItem = (item: any) => {
     display: block;
     font-size: 30rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 24rpx;
   }
 
@@ -2036,7 +2036,7 @@ const confirmDeleteItem = (item: any) => {
 
   .divider {
     height: 1rpx;
-    background-color: #f0f0f0;
+    background-color: #f0f3e9;
     margin: 24rpx 0;
   }
 }
@@ -2063,7 +2063,7 @@ const confirmDeleteItem = (item: any) => {
       .target-date {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333;
+        color: #26261f;
       }
 
       .time-badge {
@@ -2071,13 +2071,13 @@ const confirmDeleteItem = (item: any) => {
         border-radius: 999rpx;
         font-size: 22rpx;
         font-weight: 600;
-        background: rgba(255, 202, 40, 0.18);
-        color: #8a5a00;
+        background: rgba(176, 141, 79, 0.18);
+        color: #8a6b33;
       }
 
       .create-time {
         font-size: 22rpx;
-        color: #999;
+        color: #6b6653;
       }
     }
 
@@ -2088,23 +2088,23 @@ const confirmDeleteItem = (item: any) => {
       font-weight: bold;
 
       &.draft {
-        background-color: #f0f0f0;
-        color: #666;
+        background-color: #f0f3e9;
+        color: #26261f;
       }
 
       &.pending {
-        background-color: #fff7e6;
-        color: #fa8c16;
+        background-color: #f6efe0;
+        color: #8a6b33;
       }
 
       &.completed {
-        background-color: #f6ffed;
-        color: #52c41a;
+        background-color: #eef2e4;
+        color: #1e3a2f;
       }
 
       &.cancelled {
-        background-color: #ffebee;
-        color: #f44336;
+        background-color: #f8e8e2;
+        color: #b4553f;
       }
     }
   }
@@ -2115,7 +2115,7 @@ const confirmDeleteItem = (item: any) => {
     justify-content: space-between;
     margin-bottom: 12rpx;
     padding: 16rpx 0;
-    border-top: 1rpx solid #f5f5f5;
+    border-top: 1rpx solid #eef1e2;
 
     &:last-child {
       margin-bottom: 0;
@@ -2124,20 +2124,20 @@ const confirmDeleteItem = (item: any) => {
 
     .label {
       font-size: 26rpx;
-      color: #666;
+      color: #26261f;
     }
 
     .value {
       font-size: 26rpx;
-      color: #333;
+      color: #26261f;
       font-weight: 500;
     }
   }
 }
 
 .pending-append-card {
-  border: 2rpx solid #ffe08a;
-  background: linear-gradient(180deg, #fffdf5 0%, #fff7e6 100%);
+  border: 2rpx solid #b08d4f;
+  background: linear-gradient(180deg, #f6efe0 0%, #ecdfc6 100%);
 
   .section-header {
     display: flex;
@@ -2148,13 +2148,13 @@ const confirmDeleteItem = (item: any) => {
 
   .pending-title {
     margin-bottom: 0;
-    color: #8c5b00;
+    color: #8a6b33;
   }
 
   .pending-count {
     font-size: 24rpx;
-    color: #ad6800;
-    background-color: rgba(250, 173, 20, 0.12);
+    color: #8a6b33;
+    background-color: rgba(176, 141, 79, 0.12);
     padding: 8rpx 16rpx;
     border-radius: 999rpx;
   }
@@ -2162,7 +2162,7 @@ const confirmDeleteItem = (item: any) => {
   .pending-hint {
     display: block;
     font-size: 24rpx;
-    color: #8c6d1f;
+    color: #8a6b33;
     line-height: 1.6;
   }
 
@@ -2172,7 +2172,7 @@ const confirmDeleteItem = (item: any) => {
     justify-content: space-between;
     gap: 16rpx;
     font-size: 24rpx;
-    color: #7a5d1c;
+    color: #8a6b33;
     flex-wrap: wrap;
   }
 
@@ -2190,18 +2190,18 @@ const confirmDeleteItem = (item: any) => {
     gap: 16rpx;
     padding: 18rpx 20rpx;
     border-radius: 12rpx;
-    background-color: rgba(255, 255, 255, 0.78);
+    background-color: rgba(251, 252, 247, 0.6);
   }
 
   .pending-order-id {
     font-size: 26rpx;
-    color: #333;
+    color: #26261f;
     font-weight: 500;
   }
 
   .pending-order-date {
     font-size: 24rpx;
-    color: #999;
+    color: #6b6653;
   }
 
   .pending-append-item-list {
@@ -2214,7 +2214,7 @@ const confirmDeleteItem = (item: any) => {
   .pending-append-subtitle {
     font-size: 24rpx;
     font-weight: 700;
-    color: #8c5b00;
+    color: #8a6b33;
   }
 
   .pending-append-item {
@@ -2224,8 +2224,8 @@ const confirmDeleteItem = (item: any) => {
     gap: 18rpx;
     padding: 18rpx 20rpx;
     border-radius: 12rpx;
-    background-color: #fff;
-    border: 1rpx solid rgba(250, 173, 20, 0.18);
+    background-color: #fbfcf7;
+    border: 1rpx solid rgba(176, 141, 79, 0.18);
   }
 
   .pending-append-main {
@@ -2239,14 +2239,14 @@ const confirmDeleteItem = (item: any) => {
   .pending-append-name {
     font-size: 26rpx;
     font-weight: 700;
-    color: #333;
+    color: #26261f;
     line-height: 1.35;
   }
 
   .pending-append-spec,
   .pending-append-audit {
     font-size: 22rpx;
-    color: #8c6d1f;
+    color: #8a6b33;
     line-height: 1.45;
   }
 
@@ -2261,12 +2261,12 @@ const confirmDeleteItem = (item: any) => {
 
   .pending-append-quantity-label {
     font-size: 20rpx;
-    color: #ad6800;
+    color: #8a6b33;
   }
 
   .pending-append-quantity-value {
     font-size: 28rpx;
-    color: #fa8c16;
+    color: #8a6b33;
     font-weight: 800;
   }
 
@@ -2277,8 +2277,8 @@ const confirmDeleteItem = (item: any) => {
     line-height: 80rpx;
     border-radius: 40rpx;
     border: none;
-    background: linear-gradient(135deg, #faad14 0%, #f59e0b 100%);
-    color: #fff;
+    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+    color: #f3eddd;
     font-size: 28rpx;
     font-weight: 600;
   }
@@ -2292,19 +2292,19 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .ingredient-group {
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   overflow: hidden;
 
   .group-header {
-    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+    background: linear-gradient(135deg, #f0f3e9 0%, #f2f4ea 100%);
     padding: 16rpx 24rpx;
-    border-bottom: 1rpx solid #e5e5e5;
+    border-bottom: 1rpx solid #e5e8d4;
 
     .group-title {
       font-size: 26rpx;
       font-weight: bold;
-      color: #333;
+      color: #26261f;
     }
   }
 
@@ -2322,7 +2322,7 @@ const confirmDeleteItem = (item: any) => {
 }
 
 .item-card {
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
   transition: all 0.3s;
@@ -2350,7 +2350,7 @@ const confirmDeleteItem = (item: any) => {
           min-width: 0;
           font-size: 30rpx;
           font-weight: 600;
-          color: #333;
+          color: #26261f;
           line-height: 1.45;
         }
 
@@ -2359,7 +2359,7 @@ const confirmDeleteItem = (item: any) => {
           max-width: 260rpx;
           font-size: 22rpx;
           font-weight: 600;
-          color: #fa541c;
+          color: #8a6b33;
           line-height: 1.4;
           text-align: right;
         }
@@ -2375,12 +2375,12 @@ const confirmDeleteItem = (item: any) => {
           font-size: 24rpx;
 
           &.primary {
-            color: #1890ff;
+            color: #b08d4f;
             font-weight: 500;
           }
 
           &.secondary {
-            color: #8c8c8c;
+            color: #6b6653;
           }
         }
       }
@@ -2393,14 +2393,14 @@ const confirmDeleteItem = (item: any) => {
 
         .spec {
           font-size: 22rpx;
-          color: #666;
+          color: #26261f;
           padding: 4rpx 12rpx;
-          background-color: #f0f0f0;
+          background-color: #f0f3e9;
           border-radius: 4rpx;
 
           &.brand {
-            background-color: #eef8f1;
-            color: #2f855a;
+            background-color: #eef2e4;
+            color: #1e3a2f;
           }
         }
       }
@@ -2422,10 +2422,10 @@ const confirmDeleteItem = (item: any) => {
           min-width: 260rpx;
           font-size: 22rpx;
           line-height: 1.45;
-          color: #8c8c8c;
+          color: #6b6653;
 
           .audit-divider {
-            color: #d9d9d9;
+            color: #968f6d;
           }
         }
 
@@ -2437,18 +2437,18 @@ const confirmDeleteItem = (item: any) => {
 
           .quantity-label {
             font-size: 24rpx;
-            color: #666;
+            color: #26261f;
           }
 
           .quantity-value {
             font-size: 32rpx;
             font-weight: bold;
-            color: #1890ff;
+            color: #b08d4f;
           }
 
           .quantity-unit {
             font-size: 22rpx;
-            color: #999;
+            color: #6b6653;
           }
         }
       }
@@ -2460,8 +2460,8 @@ const confirmDeleteItem = (item: any) => {
 
       .continue-add-btn {
         padding: 12rpx 20rpx;
-        background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-        color: #fff;
+        background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+        color: #f3eddd;
         border-radius: 8rpx;
         font-size: 24rpx;
         border: none;
@@ -2476,7 +2476,7 @@ const confirmDeleteItem = (item: any) => {
   }
 
   .item-expanded {
-    background-color: #fff;
+    background-color: #fbfcf7;
 
     .records-list {
       padding: 0 24rpx 24rpx;
@@ -2487,9 +2487,9 @@ const confirmDeleteItem = (item: any) => {
 
     .record-item {
       padding: 24rpx;
-      background-color: #f9f9f9;
+      background-color: #fbfcf7;
       border-radius: 12rpx;
-      border-left: 4rpx solid #1890ff;
+      border-left: 4rpx solid #1e3a2f;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -2503,7 +2503,7 @@ const confirmDeleteItem = (item: any) => {
           display: block;
           margin-bottom: 8rpx;
           font-size: 24rpx;
-          color: #1890ff;
+          color: #b08d4f;
           font-weight: 500;
         }
 
@@ -2517,18 +2517,18 @@ const confirmDeleteItem = (item: any) => {
           .record-quantity {
             font-size: 28rpx;
             font-weight: bold;
-            color: #1890ff;
+            color: #b08d4f;
           }
 
           .record-cost {
             font-size: 28rpx;
             font-weight: bold;
-            color: #ff6b6b;
+            color: #b4553f;
           }
 
           .record-channel {
             font-size: 24rpx;
-            color: #666;
+            color: #26261f;
           }
         }
 
@@ -2539,15 +2539,15 @@ const confirmDeleteItem = (item: any) => {
 
           .detail {
             font-size: 22rpx;
-            color: #999;
+            color: #6b6653;
             padding: 4rpx 8rpx;
-            background-color: #f0f0f0;
+            background-color: #f0f3e9;
             border-radius: 4rpx;
           }
 
           .detail-time {
             font-size: 22rpx;
-            color: #999;
+            color: #6b6653;
           }
         }
       }
@@ -2560,8 +2560,8 @@ const confirmDeleteItem = (item: any) => {
 
         .edit-btn {
           padding: 8rpx 24rpx;
-          background-color: #1677ff;
-          color: #fff;
+          background-color: #1e3a2f;
+          color: #f3eddd;
           border-radius: 8rpx;
           font-size: 22rpx;
           border: none;
@@ -2574,8 +2574,8 @@ const confirmDeleteItem = (item: any) => {
 
         .delete-btn {
           padding: 8rpx 24rpx;
-          background-color: #ff4d4f;
-          color: #fff;
+          background-color: #b4553f;
+          color: #f3eddd;
           border-radius: 8rpx;
           font-size: 22rpx;
           border: none;
@@ -2597,7 +2597,7 @@ const confirmDeleteItem = (item: any) => {
 
   .empty-text {
     font-size: 26rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
@@ -2612,26 +2612,26 @@ const confirmDeleteItem = (item: any) => {
   align-items: center;
   gap: 12rpx;
   padding: 12rpx 16rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 
   .order-id {
     font-size: 24rpx;
-    color: #1890ff;
+    color: #b08d4f;
     font-family: monospace;
   }
 
   .copy-btn {
     padding: 4rpx 12rpx;
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border-radius: 4rpx;
     font-size: 20rpx;
     border: none;
     line-height: 1.5;
 
     .copy-btn-text {
-      color: #fff;
+      color: #f3eddd;
     }
 
     &:active {
@@ -2646,9 +2646,9 @@ const confirmDeleteItem = (item: any) => {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 24rpx 32rpx;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -4rpx 16rpx rgba(30, 46, 36, 0.05);
   z-index: 100;
   display: flex;
   gap: 12rpx;
@@ -2665,22 +2665,22 @@ const confirmDeleteItem = (item: any) => {
     justify-content: center;
 
     &.start {
-      background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
-      color: #fff;
-      box-shadow: 0 8rpx 16rpx rgba(82, 196, 26, 0.3);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+      color: #f3eddd;
+      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
     }
 
     &.complete {
-      background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%);
-      color: #fff;
-      box-shadow: 0 8rpx 16rpx rgba(81, 207, 102, 0.3);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+      color: #f3eddd;
+      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
     }
 
     &.reopen {
       width: 100%;
-      background: #fff7e6;
-      color: #ad6800;
-      border: 1rpx solid #ffd591;
+      background: #f6efe0;
+      color: #8a6b33;
+      border: 1rpx solid #b08d4f;
       box-shadow: none;
     }
 
@@ -2700,7 +2700,7 @@ const confirmDeleteItem = (item: any) => {
     .completed-text {
       font-size: 32rpx;
       font-weight: bold;
-      color: #52c41a;
+      color: #1e3a2f;
     }
 
     .reimburse,
@@ -2717,9 +2717,9 @@ const confirmDeleteItem = (item: any) => {
     }
 
     .reimburse {
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-      color: #fff;
-      box-shadow: 0 8rpx 16rpx rgba(24, 144, 255, 0.3);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+      color: #f3eddd;
+      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
 
       &:active {
         opacity: 0.8;
@@ -2727,9 +2727,9 @@ const confirmDeleteItem = (item: any) => {
     }
 
     .view-reimburse {
-      background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
-      color: #fff;
-      box-shadow: 0 8rpx 16rpx rgba(114, 46, 209, 0.3);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+      color: #f3eddd;
+      box-shadow: 0 8rpx 16rpx rgba(30, 46, 36, 0.3);
 
       &:active {
         opacity: 0.8;
@@ -2754,7 +2754,7 @@ const confirmDeleteItem = (item: any) => {
 .modal-content {
   width: 100%;
   max-height: 80vh;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 32rpx 32rpx 0 0;
   overflow: hidden;
   display: flex;
@@ -2763,7 +2763,7 @@ const confirmDeleteItem = (item: any) => {
 
 .modal-header {
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2771,12 +2771,12 @@ const confirmDeleteItem = (item: any) => {
   .modal-title {
     font-size: 32rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .modal-close {
     font-size: 48rpx;
-    color: #999;
+    color: #6b6653;
     line-height: 1;
     padding: 0 16rpx;
   }
@@ -2791,7 +2791,7 @@ const confirmDeleteItem = (item: any) => {
   padding: 24rpx;
   margin-bottom: 24rpx;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, #fff9e6 0%, #fff2cc 100%);
+  background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
   display: flex;
   flex-direction: column;
   gap: 10rpx;
@@ -2806,18 +2806,18 @@ const confirmDeleteItem = (item: any) => {
   .summary-name {
     font-size: 30rpx;
     font-weight: 700;
-    color: #333;
+    color: #26261f;
   }
 
   .summary-demand {
     font-size: 24rpx;
-    color: #8c6d1f;
+    color: #8a6b33;
     flex-shrink: 0;
   }
 
   .summary-subtext {
     font-size: 22rpx;
-    color: #8c6d1f;
+    color: #8a6b33;
     line-height: 1.5;
   }
 
@@ -2835,14 +2835,14 @@ const confirmDeleteItem = (item: any) => {
     min-width: 0;
     padding: 14rpx 10rpx;
     border-radius: 12rpx;
-    background-color: rgba(255, 255, 255, 0.72);
-    border: 1rpx solid rgba(232, 197, 115, 0.48);
+    background-color: rgba(251, 252, 247, 0.6);
+    border: 1rpx solid rgba(176, 141, 79, 0.48);
 
     .metric-label {
       display: block;
       margin-bottom: 6rpx;
       font-size: 20rpx;
-      color: #8c6d1f;
+      color: #8a6b33;
       white-space: nowrap;
     }
 
@@ -2850,12 +2850,12 @@ const confirmDeleteItem = (item: any) => {
       display: block;
       font-size: 26rpx;
       font-weight: 700;
-      color: #333;
+      color: #26261f;
       white-space: nowrap;
     }
 
     &.primary .metric-value {
-      color: #1890ff;
+      color: #b08d4f;
     }
   }
 }
@@ -2877,7 +2877,7 @@ const confirmDeleteItem = (item: any) => {
     .form-title-hint {
       flex-shrink: 0;
       font-size: 22rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 
@@ -2885,7 +2885,7 @@ const confirmDeleteItem = (item: any) => {
     display: block;
     font-size: 28rpx;
     font-weight: 500;
-    color: #333;
+    color: #26261f;
     margin-bottom: 12rpx;
   }
 
@@ -2905,8 +2905,8 @@ const confirmDeleteItem = (item: any) => {
     flex-shrink: 0;
     padding: 4rpx 14rpx;
     border-radius: 999rpx;
-    background-color: #e6f4ff;
-    color: #096dd9;
+    background-color: #eef2e4;
+    color: #b08d4f;
     font-size: 22rpx;
     font-weight: 600;
   }
@@ -2923,7 +2923,7 @@ const confirmDeleteItem = (item: any) => {
       right: 24rpx;
       top: 50%;
       transform: translateY(-50%);
-      color: #666;
+      color: #26261f;
       font-size: 26rpx;
       font-weight: 600;
       pointer-events: none;
@@ -2935,8 +2935,8 @@ const confirmDeleteItem = (item: any) => {
     height: 80rpx;
     padding: 0 24rpx;
     font-size: 28rpx;
-    color: #333;
-    background-color: #f5f5f5;
+    color: #26261f;
+    background-color: #fbfcf7;
     border-radius: 8rpx;
     box-sizing: border-box;
   }
@@ -2946,8 +2946,8 @@ const confirmDeleteItem = (item: any) => {
       height: 80rpx;
       padding: 0 24rpx;
       font-size: 28rpx;
-      color: #666;
-      background-color: #f5f5f5;
+      color: #26261f;
+      background-color: #fbfcf7;
       border-radius: 8rpx;
       display: flex;
       align-items: center;
@@ -2959,30 +2959,30 @@ const confirmDeleteItem = (item: any) => {
     margin-top: 10rpx;
     font-size: 22rpx;
     line-height: 1.5;
-    color: #8c8c8c;
+    color: #6b6653;
   }
 
   .picker-input {
     height: 80rpx;
     padding: 0 24rpx;
     font-size: 28rpx;
-    background-color: #f5f5f5;
+    background-color: #fbfcf7;
     border-radius: 8rpx;
     display: flex;
     align-items: center;
     justify-content: space-between;
 
     .value {
-      color: #333;
+      color: #26261f;
     }
 
     .placeholder {
-      color: #999;
+      color: #6b6653;
     }
 
     .arrow {
       font-size: 32rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 
@@ -2999,7 +2999,7 @@ const confirmDeleteItem = (item: any) => {
       flex-shrink: 0;
       padding: 0 24rpx;
       height: 80rpx;
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
       border-radius: 8rpx;
       display: flex;
       align-items: center;
@@ -3007,7 +3007,7 @@ const confirmDeleteItem = (item: any) => {
 
       text {
         font-size: 26rpx;
-        color: #fff;
+        color: #f3eddd;
         font-weight: 500;
       }
 
@@ -3027,8 +3027,8 @@ const confirmDeleteItem = (item: any) => {
     min-height: 64rpx;
     padding: 0 24rpx;
     border-radius: 999rpx;
-    background: #f5f5f5;
-    color: #666;
+    background: #fbfcf7;
+    color: #26261f;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3042,15 +3042,15 @@ const confirmDeleteItem = (item: any) => {
     }
 
     &.active {
-      background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
-      color: #333;
-      box-shadow: 0 6rpx 16rpx rgba(255, 202, 40, 0.24);
+      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+      color: #26261f;
+      box-shadow: 0 6rpx 16rpx rgba(30, 46, 36, 0.24);
     }
 
     &.custom-entry {
-      background: #fff7e6;
-      color: #ad6800;
-      border: 1rpx dashed rgba(250, 173, 20, 0.5);
+      background: #f6efe0;
+      color: #8a6b33;
+      border: 1rpx dashed rgba(176, 141, 79, 0.5);
     }
   }
 
@@ -3063,8 +3063,8 @@ const confirmDeleteItem = (item: any) => {
   .record-sku-empty {
     padding: 24rpx;
     border-radius: 16rpx;
-    background-color: #fff7e6;
-    border: 1rpx solid rgba(250, 173, 20, 0.28);
+    background-color: #f6efe0;
+    border: 1rpx solid rgba(176, 141, 79, 0.28);
     display: flex;
     flex-direction: column;
     gap: 8rpx;
@@ -3072,13 +3072,13 @@ const confirmDeleteItem = (item: any) => {
     .empty-title {
       font-size: 28rpx;
       font-weight: 700;
-      color: #ad6800;
+      color: #8a6b33;
     }
 
     .empty-desc {
       font-size: 24rpx;
       line-height: 1.5;
-      color: #8c6d1f;
+      color: #8a6b33;
     }
   }
 
@@ -3089,18 +3089,18 @@ const confirmDeleteItem = (item: any) => {
     gap: 16rpx;
     padding: 18rpx 20rpx;
     border-radius: 16rpx;
-    border: 2rpx solid #f0f0f0;
-    background-color: #fafafa;
+    border: 2rpx solid #eef1e2;
+    background-color: #fbfcf7;
 
     &.active {
-      border-color: #1890ff;
-      background-color: #edf6ff;
-      box-shadow: 0 8rpx 20rpx rgba(24, 144, 255, 0.12);
+      border-color: #1e3a2f;
+      background-color: #eef2e4;
+      box-shadow: 0 8rpx 20rpx rgba(30, 46, 36, 0.12);
 
       .record-sku-check {
-        border-color: #1890ff;
-        background-color: #1890ff;
-        color: #fff;
+        border-color: #1e3a2f;
+        background-color: #1e3a2f;
+        color: #f3eddd;
       }
     }
   }
@@ -3121,22 +3121,22 @@ const confirmDeleteItem = (item: any) => {
     flex-shrink: 0;
     padding: 4rpx 12rpx;
     border-radius: 999rpx;
-    background-color: #f0f0f0;
-    color: #666;
+    background-color: #f0f3e9;
+    color: #26261f;
     font-size: 20rpx;
     font-weight: 600;
   }
 
   .record-sku-option.active .record-sku-badge {
-    background-color: rgba(24, 144, 255, 0.12);
-    color: #096dd9;
+    background-color: rgba(30, 58, 47, 0.12);
+    color: #b08d4f;
   }
 
   .record-sku-name {
     flex: 1;
     min-width: 0;
     font-size: 28rpx;
-    color: #333;
+    color: #26261f;
     font-weight: 700;
     line-height: 1.35;
   }
@@ -3149,8 +3149,8 @@ const confirmDeleteItem = (item: any) => {
     text {
       padding: 4rpx 10rpx;
       border-radius: 8rpx;
-      background-color: #f0f0f0;
-      color: #666;
+      background-color: #f0f3e9;
+      color: #26261f;
       font-size: 22rpx;
       line-height: 1.35;
     }
@@ -3161,7 +3161,7 @@ const confirmDeleteItem = (item: any) => {
     width: 36rpx;
     height: 36rpx;
     border-radius: 50%;
-    border: 3rpx solid #d9d9d9;
+    border: 3rpx solid #e5e8d4;
     color: transparent;
     display: flex;
     align-items: center;
@@ -3175,8 +3175,8 @@ const confirmDeleteItem = (item: any) => {
     min-height: 160rpx;
     padding: 16rpx 24rpx;
     font-size: 28rpx;
-    color: #333;
-    background-color: #f5f5f5;
+    color: #26261f;
+    background-color: #fbfcf7;
     border-radius: 8rpx;
     box-sizing: border-box;
   }
@@ -3184,7 +3184,7 @@ const confirmDeleteItem = (item: any) => {
   .form-hint {
     display: block;
     font-size: 22rpx;
-    color: #999;
+    color: #6b6653;
     margin-top: 8rpx;
     line-height: 1.4;
   }
@@ -3192,7 +3192,7 @@ const confirmDeleteItem = (item: any) => {
   .char-count {
     display: block;
     font-size: 22rpx;
-    color: #999;
+    color: #6b6653;
     text-align: right;
     margin-top: 8rpx;
   }
@@ -3210,7 +3210,7 @@ const confirmDeleteItem = (item: any) => {
   margin-bottom: 0;
   padding: 22rpx;
   border-radius: 16rpx;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
 }
 
 .record-entry-meta {
@@ -3230,33 +3230,33 @@ const confirmDeleteItem = (item: any) => {
 
   .meta-label {
     flex-shrink: 0;
-    color: #777;
+    color: #6b6653;
   }
 
   .meta-value {
     min-width: 0;
-    color: #333;
+    color: #26261f;
     font-weight: 700;
     text-align: right;
     overflow-wrap: anywhere;
 
     &.price-tone-good {
-      color: #2f855a;
+      color: #1e3a2f;
     }
 
     &.price-tone-bad {
-      color: #e5484d;
+      color: #b4553f;
     }
   }
 }
 
 .input-placeholder {
-  color: #999;
+  color: #6b6653;
 }
 
 .modal-footer {
   padding: 24rpx 32rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
   display: flex;
   gap: 24rpx;
 
@@ -3269,13 +3269,13 @@ const confirmDeleteItem = (item: any) => {
     border: none;
 
     &.cancel {
-      background-color: #f5f5f5;
-      color: #666;
+      background-color: #fbfcf7;
+      color: #26261f;
     }
 
     &.submit {
-      background: linear-gradient(135deg, #faad14 0%, #d48806 100%);
-      color: #fff;
+      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+      color: #f3eddd;
     }
 
     &:active {
@@ -3288,11 +3288,11 @@ const confirmDeleteItem = (item: any) => {
 // 新增样式：日期变更警告横幅
 // ==========================================
 .date-change-warning {
-  background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%);
+  background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   padding: 24rpx;
-  border-left: 6rpx solid #fa8c16;
+  border-left: 6rpx solid #b08d4f;
 
   .warning-header {
     display: flex;
@@ -3307,7 +3307,7 @@ const confirmDeleteItem = (item: any) => {
     .warning-title {
       font-size: 28rpx;
       font-weight: bold;
-      color: #ad6800;
+      color: #8a6b33;
     }
   }
 
@@ -3317,7 +3317,7 @@ const confirmDeleteItem = (item: any) => {
     gap: 12rpx;
     margin-bottom: 16rpx;
     padding: 16rpx;
-    background-color: rgba(255, 255, 255, 0.6);
+    background-color: rgba(251, 252, 247, 0.6);
     border-radius: 8rpx;
 
     .warning-item {
@@ -3327,13 +3327,13 @@ const confirmDeleteItem = (item: any) => {
 
       .order-info {
         font-size: 26rpx;
-        color: #ad6800;
+        color: #8a6b33;
         font-weight: 500;
       }
 
       .order-detail {
         font-size: 22rpx;
-        color: #8c6800;
+        color: #8a6b33;
       }
     }
   }
@@ -3354,8 +3354,8 @@ const confirmDeleteItem = (item: any) => {
       justify-content: center;
 
       &.ignore {
-        background-color: rgba(250, 140, 22, 0.1);
-        color: #ad6800;
+        background-color: rgba(176, 141, 79, 0.1);
+        color: #8a6b33;
       }
 
       &:active {
@@ -3376,8 +3376,8 @@ const confirmDeleteItem = (item: any) => {
 
   .delete-item-btn {
     padding: 8rpx 20rpx;
-    background-color: #ff4d4f;
-    color: #fff;
+    background-color: #b4553f;
+    color: #f3eddd;
     border-radius: 8rpx;
     font-size: 24rpx;
     border: none;
@@ -3391,8 +3391,8 @@ const confirmDeleteItem = (item: any) => {
 
   .continue-add-btn {
     padding: 12rpx 20rpx;
-    background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-    color: #fff;
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd;
     border-radius: 8rpx;
     font-size: 24rpx;
     border: none;
@@ -3406,11 +3406,11 @@ const confirmDeleteItem = (item: any) => {
 
   .no-purchase-btn {
     padding: 12rpx 20rpx;
-    background-color: #fff7e6;
-    color: #ad6800;
+    background-color: #f6efe0;
+    color: #8a6b33;
     border-radius: 8rpx;
     font-size: 24rpx;
-    border: 1rpx solid #ffd591;
+    border: 1rpx solid #b08d4f;
     line-height: 1.5;
     white-space: nowrap;
 
@@ -3424,8 +3424,8 @@ const confirmDeleteItem = (item: any) => {
   margin: 0 24rpx 24rpx;
   padding: 20rpx 24rpx;
   border-radius: 12rpx;
-  background-color: #fff7e6;
-  border: 1rpx solid #ffd591;
+  background-color: #f6efe0;
+  border: 1rpx solid #b08d4f;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3442,20 +3442,20 @@ const confirmDeleteItem = (item: any) => {
   .no-purchase-title {
     font-size: 26rpx;
     font-weight: 600;
-    color: #ad6800;
+    color: #8a6b33;
   }
 
   .no-purchase-reason {
     font-size: 22rpx;
-    color: #8c8c8c;
+    color: #6b6653;
   }
 
   .clear-no-purchase-btn {
     padding: 8rpx 18rpx;
     border-radius: 8rpx;
-    background-color: #fff;
-    color: #ad6800;
-    border: 1rpx solid #ffd591;
+    background-color: #fbfcf7;
+    color: #8a6b33;
+    border: 1rpx solid #b08d4f;
     font-size: 22rpx;
     line-height: 1.5;
     white-space: nowrap;

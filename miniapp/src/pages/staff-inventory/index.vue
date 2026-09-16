@@ -649,7 +649,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 .inventory-page {
   min-height: 100vh;
   padding: 32rpx 24rpx 48rpx;
-  background: linear-gradient(180deg, #f5fbfa 0%, #f7f7fb 100%);
+  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
 }
 
 .header {
@@ -660,14 +660,14 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   display: block;
   font-size: 44rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .subtitle {
   display: block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #5d726b;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -682,29 +682,29 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   padding: 24rpx;
   border-radius: 24rpx;
   background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(18, 49, 43, 0.06);
+  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
 }
 
 .summary-card.danger {
-  background: linear-gradient(135deg, #fff2f2 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f8e8e2 0%, #ffffff 100%);
 }
 
 .summary-card.warning {
-  background: linear-gradient(135deg, #fff8ec 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f6efe0 0%, #ffffff 100%);
 }
 
 .summary-value {
   display: block;
   font-size: 42rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .summary-label {
   display: block;
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #6b7f78;
+  color: #6b6653;
 }
 
 .quick-actions {
@@ -721,7 +721,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   border-radius: 999rpx;
   border: none;
   background: #ffffff;
-  color: #12312b;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 600;
 }
@@ -735,7 +735,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 .action-btn.primary,
 .mini-btn.primary,
 .inline-btn.primary {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   color: #ffffff;
 }
 
@@ -744,7 +744,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   padding: 8rpx;
   margin-bottom: 20rpx;
   border-radius: 999rpx;
-  background: rgba(15, 118, 110, 0.08);
+  background: rgba(30, 58, 47, 0.08);
 }
 
 .tab-item {
@@ -752,15 +752,15 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   padding: 18rpx 0;
   text-align: center;
   border-radius: 999rpx;
-  color: #52706a;
+  color: #26261f;
   font-size: 26rpx;
 }
 
 .tab-item.active {
   background: #ffffff;
-  color: #0f766e;
+  color: #1e3a2f;
   font-weight: 700;
-  box-shadow: 0 8rpx 20rpx rgba(15, 118, 110, 0.12);
+  box-shadow: 0 8rpx 20rpx rgba(30, 46, 36, 0.12);
 }
 
 .filter-card,
@@ -771,7 +771,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   padding: 24rpx;
   border-radius: 24rpx;
   background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(18, 49, 43, 0.06);
+  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
 }
 
 .filter-card,
@@ -784,9 +784,9 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   height: 80rpx;
   padding: 0 24rpx;
   border-radius: 18rpx;
-  background: #f3f7f6;
+  background: #eef2e4;
   font-size: 26rpx;
-  color: #12312b;
+  color: #26261f;
   box-sizing: border-box;
 }
 
@@ -803,14 +803,14 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 .filter-chip {
   padding: 12rpx 24rpx;
   border-radius: 999rpx;
-  background: #edf3f2;
-  color: #5d726b;
+  background: #eef2e4;
+  color: #26261f;
   font-size: 24rpx;
 }
 
 .filter-chip.active {
-  background: #d9f5ef;
-  color: #0f766e;
+  background: #1e3a2f;
+  color: #1e3a2f;
   font-weight: 700;
 }
 
@@ -820,7 +820,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   justify-content: space-between;
   margin-top: 18rpx;
   padding-top: 18rpx;
-  border-top: 1rpx solid #edf1f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .toggle-label,
@@ -837,7 +837,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 .filter-pill text,
 .stocktake-metrics text {
   font-size: 24rpx;
-  color: #60756f;
+  color: #26261f;
 }
 
 .state-title,
@@ -845,7 +845,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .state-hint,
@@ -881,7 +881,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .status-badge,
@@ -895,25 +895,25 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 }
 
 .status-badge.success {
-  background: #dcfce7;
-  color: #15803d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .status-badge.warning {
-  background: #fef3c7;
-  color: #b45309;
+  background: #b08d4f;
+  color: #8a6b33;
 }
 
 .status-badge.danger,
 .stocktake-status.applied {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .status-badge.neutral,
 .stocktake-status.draft {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .metric-grid {
@@ -926,13 +926,13 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 .metric-item {
   padding: 18rpx;
   border-radius: 18rpx;
-  background: #f6faf9;
+  background: #eef2e4;
 }
 
 .metric-label {
   display: block;
   font-size: 22rpx;
-  color: #6b7f78;
+  color: #6b6653;
 }
 
 .metric-value {
@@ -940,7 +940,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   margin-top: 8rpx;
   font-size: 26rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
   line-height: 1.4;
 }
 
@@ -972,8 +972,8 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   padding: 0 28rpx;
   border-radius: 999rpx;
   border: none;
-  background: #edf3f2;
-  color: #12312b;
+  background: #eef2e4;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -986,7 +986,7 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
   margin-bottom: 16rpx;
   padding: 16rpx 20rpx;
   border-radius: 18rpx;
-  background: #ecfdf5;
+  background: #eef2e4;
 }
 
 .ledger-delta,
@@ -996,24 +996,24 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 }
 
 .positive {
-  color: #15803d;
+  color: #1e3a2f;
 }
 
 .negative {
-  color: #b91c1c;
+  color: #b4553f;
 }
 
 .ledger-tag {
   display: inline-flex;
   margin-bottom: 10rpx;
-  background: #eef6ff;
-  color: #2563eb;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .ledger-note {
   margin-top: 10rpx;
   padding-top: 10rpx;
-  border-top: 1rpx solid #edf1f0;
+  border-top: 1rpx solid #eef1e2;
   line-height: 1.6;
 }
 
@@ -1032,6 +1032,6 @@ const formatLedgerDetail = (item: InventoryLedgerItem) => {
 
 .stocktake-line {
   padding: 18rpx 0;
-  border-top: 1rpx solid #edf1f0;
+  border-top: 1rpx solid #eef1e2;
 }
 </style>

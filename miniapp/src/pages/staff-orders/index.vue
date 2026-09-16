@@ -1181,7 +1181,7 @@ onShareAppMessage((event: any) => {
 <style scoped lang="scss">
 .staff-orders {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 40rpx;
 }
 
@@ -1192,8 +1192,8 @@ onShareAppMessage((event: any) => {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.3);
 }
 
 .status-bar {
@@ -1224,14 +1224,14 @@ onShareAppMessage((event: any) => {
 
 .back-icon {
   font-size: 48rpx;
-  color: #fff;
+  color: #f3eddd;
   font-weight: bold;
 }
 
 .header-title {
   font-size: 36rpx;
   font-weight: bold;
-  color: #fff;
+  color: #f3eddd;
   flex: 1;
   text-align: center;
   position: absolute;
@@ -1258,7 +1258,7 @@ onShareAppMessage((event: any) => {
   width: 64rpx;
   height: 64rpx;
   border-radius: 32rpx;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(251, 252, 247, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1271,11 +1271,11 @@ onShareAppMessage((event: any) => {
 // 统计卡片
 .stats-card {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 24rpx 32rpx;
   border-radius: 16rpx;
   padding: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
 }
 
 .stat-item {
@@ -1289,17 +1289,17 @@ onShareAppMessage((event: any) => {
 .stat-value {
   font-size: 40rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .stat-label {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .stat-divider {
   width: 2rpx;
-  background-color: #f0f0f0;
+  background-color: #f0f3e9;
   margin: 0 16rpx;
 }
 
@@ -1324,14 +1324,14 @@ onShareAppMessage((event: any) => {
   align-items: center;
   min-height: 80rpx;
   padding: 0 24rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .quick-search-icon {
   font-size: 28rpx;
-  color: #667eea;
+  color: #b08d4f;
   margin-right: 12rpx;
 }
 
@@ -1339,14 +1339,14 @@ onShareAppMessage((event: any) => {
   flex: 1;
   height: 80rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .quick-search-clear {
   padding: 8rpx;
   font-size: 36rpx;
   line-height: 1;
-  color: #bbb;
+  color: #968f6d;
 }
 
 .quick-search-btn {
@@ -1355,8 +1355,8 @@ onShareAppMessage((event: any) => {
   line-height: 80rpx;
   padding: 0;
   border-radius: 16rpx;
-  background: linear-gradient(135deg, #667eea 0%, #7b5cff 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  color: #f3eddd;
   font-size: 28rpx;
   font-weight: 600;
 }
@@ -1371,20 +1371,20 @@ onShareAppMessage((event: any) => {
   align-items: center;
   justify-content: center;
   gap: 8rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 20rpx 24rpx;
   border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .filter-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .filter-arrow {
   font-size: 20rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .filter-reset {
@@ -1393,7 +1393,7 @@ onShareAppMessage((event: any) => {
 
 .reset-text {
   font-size: 28rpx;
-  color: #667eea;
+  color: #b08d4f;
 }
 
 // 订单列表
@@ -1402,11 +1402,11 @@ onShareAppMessage((event: any) => {
 }
 
 .order-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
 }
 
 .pagination-section {
@@ -1419,7 +1419,7 @@ onShareAppMessage((event: any) => {
 
 .pagination-text {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .load-more,
@@ -1431,8 +1431,8 @@ onShareAppMessage((event: any) => {
 }
 
 .load-more {
-  background-color: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  background-color: #fbfcf7;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
 }
 
 .load-more.disabled {
@@ -1441,17 +1441,17 @@ onShareAppMessage((event: any) => {
 
 .load-more-text {
   font-size: 26rpx;
-  color: #667eea;
+  color: #b08d4f;
   font-weight: 500;
 }
 
 .no-more {
-  background-color: #f3f4f6;
+  background-color: #fbfcf7;
 }
 
 .no-more-text {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .order-header {
@@ -1460,13 +1460,13 @@ onShareAppMessage((event: any) => {
   align-items: center;
   margin-bottom: 16rpx;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .order-times {
   margin-bottom: 16rpx;
   padding: 12rpx;
-  background-color: #f8f9fa;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
@@ -1483,13 +1483,13 @@ onShareAppMessage((event: any) => {
 
 .time-label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   flex-shrink: 0;
 }
 
 .time-value {
   font-size: 24rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
   margin-left: 16rpx;
   text-align: right;
@@ -1504,13 +1504,13 @@ onShareAppMessage((event: any) => {
 
 .order-label {
   font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(243, 237, 221, 0.6);
 }
 
 .order-id {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1520,7 +1520,7 @@ onShareAppMessage((event: any) => {
 
 .order-time {
   font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(243, 237, 221, 0.6);
 }
 
 .order-status {
@@ -1532,8 +1532,8 @@ onShareAppMessage((event: any) => {
   margin-left: 12rpx;
   padding: 4rpx 12rpx;
   border-radius: 999rpx;
-  background-color: #fff1f0;
-  color: #cf1322;
+  background-color: #f8e8e2;
+  color: #b4553f;
   font-size: 22rpx;
 }
 
@@ -1544,24 +1544,24 @@ onShareAppMessage((event: any) => {
   gap: 8rpx;
   margin-bottom: 16rpx;
   padding: 12rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
 .customer-label {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .customer-name {
   font-size: 28rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .customer-phone {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   margin-left: auto;
 }
 
@@ -1569,13 +1569,13 @@ onShareAppMessage((event: any) => {
 .order-summary {
   margin-bottom: 16rpx;
   padding: 12rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
 .summary-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 // 狗狗信息
@@ -1585,7 +1585,7 @@ onShareAppMessage((event: any) => {
 
 .dogs-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -1612,7 +1612,7 @@ onShareAppMessage((event: any) => {
 .recipe-name {
   flex: 1;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -1624,12 +1624,12 @@ onShareAppMessage((event: any) => {
 
 .meal-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .meal-separator {
   font-size: 26rpx;
-  color: #ccc;
+  color: #968f6d;
 }
 
 .quick-entry-row {
@@ -1647,13 +1647,13 @@ onShareAppMessage((event: any) => {
 }
 
 .quick-entry-chip.pet {
-  background-color: #eef6ff;
-  color: #1677ff;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 
 .quick-entry-chip.recipe {
-  background-color: #fff4e8;
-  color: #d46b08;
+  background-color: #f6efe0;
+  color: #8a6b33;
 }
 
 // 收货地址
@@ -1664,7 +1664,7 @@ onShareAppMessage((event: any) => {
 
 .address-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 // 订单金额
@@ -1688,14 +1688,14 @@ onShareAppMessage((event: any) => {
 
 .amount-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   flex-shrink: 0;
 }
 
 .amount-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
   margin-left: 8rpx;
   flex-shrink: 0;
 }
@@ -1703,12 +1703,12 @@ onShareAppMessage((event: any) => {
 .amount-input {
   width: 200rpx;
   height: 56rpx;
-  border: 2rpx solid #667eea;
+  border: 2rpx solid #dde3cd;
   border-radius: 8rpx;
   padding: 0 16rpx;
   font-size: 32rpx;
   font-weight: bold;
-  color: #ff4d4f;
+  color: #b4553f;
   margin-left: 8rpx;
   flex-shrink: 0;
 }
@@ -1724,8 +1724,8 @@ onShareAppMessage((event: any) => {
   padding: 8rpx 20rpx;
   height: 56rpx;
   line-height: 40rpx;
-  background-color: #667eea;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 24rpx;
   border: none;
@@ -1734,7 +1734,7 @@ onShareAppMessage((event: any) => {
 }
 
 .edit-amount-btn.confirm-btn {
-  background-color: #52c41a;
+  background-color: #1e3a2f;
 }
 
 .edit-amount-btn::after {
@@ -1745,8 +1745,8 @@ onShareAppMessage((event: any) => {
   padding: 8rpx 20rpx;
   height: 56rpx;
   line-height: 40rpx;
-  background-color: #ff4d4f;
-  color: #fff;
+  background-color: #b4553f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 24rpx;
   border: none;
@@ -1767,7 +1767,7 @@ onShareAppMessage((event: any) => {
 
 .breakdown-item {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 // 操作按钮
@@ -1776,7 +1776,7 @@ onShareAppMessage((event: any) => {
   gap: 16rpx;
   margin-top: 16rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .action-btn {
@@ -1790,29 +1790,29 @@ onShareAppMessage((event: any) => {
   justify-content: center;
 
   &.primary {
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.orange {
-    background-color: #faad14;
-    color: #fff;
+    background-color: #b08d4f;
+    color: #f3eddd;
   }
 
   &.cyan {
-    background-color: #13c2c2;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.green {
-    background-color: #52c41a;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.secondary {
-    background-color: #fff;
-    color: #666;
-    border: 2rpx solid #d9d9d9;
+    background-color: #fbfcf7;
+    color: #26261f;
+    border: 2rpx solid #e5e8d4;
   }
 
   &::after {
@@ -1836,13 +1836,13 @@ onShareAppMessage((event: any) => {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
   margin-bottom: 16rpx;
 }
 
 .empty-hint {
   font-size: 24rpx;
-  color: #ccc;
+  color: #968f6d;
 }
 
 // 加载状态
@@ -1855,7 +1855,7 @@ onShareAppMessage((event: any) => {
 
 .loading-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 // 弹窗
@@ -1873,7 +1873,7 @@ onShareAppMessage((event: any) => {
 
 .popup-content {
   width: 100%;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 32rpx 32rpx 0 0;
   padding: 32rpx;
   max-height: 70vh;
@@ -1883,7 +1883,7 @@ onShareAppMessage((event: any) => {
 .popup-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   text-align: center;
   margin-bottom: 32rpx;
 }
@@ -1899,23 +1899,23 @@ onShareAppMessage((event: any) => {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
 
   &.active {
-    background-color: #e6f7ff;
-    border: 2rpx solid #1890ff;
+    background-color: #eef2e4;
+    border: 2rpx solid #1e3a2f;
   }
 }
 
 .option-text {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .option-count {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 // 搜索框
@@ -1926,7 +1926,7 @@ onShareAppMessage((event: any) => {
 .search-input {
   width: 100%;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   font-size: 28rpx;
 }
@@ -1944,13 +1944,13 @@ onShareAppMessage((event: any) => {
   border: none;
 
   &.cancel {
-    background-color: #f5f5f5;
-    color: #666;
+    background-color: #fbfcf7;
+    color: #26261f;
   }
 
   &.confirm {
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &::after {
@@ -1974,7 +1974,7 @@ onShareAppMessage((event: any) => {
 
 .shipping-modal-content {
   width: 640rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 24rpx;
   overflow: hidden;
   animation: modalSlideUp 0.3s ease-out;
@@ -1985,17 +1985,17 @@ onShareAppMessage((event: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 
   .modal-title {
     font-size: 36rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .modal-close {
     font-size: 48rpx;
-    color: #999;
+    color: #6b6653;
     line-height: 1;
     padding: 0 16rpx;
   }
@@ -2015,7 +2015,7 @@ onShareAppMessage((event: any) => {
   .form-label {
     display: block;
     font-size: 28rpx;
-    color: #333;
+    color: #26261f;
     margin-bottom: 16rpx;
     font-weight: 500;
   }
@@ -2026,14 +2026,14 @@ onShareAppMessage((event: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 
   .arrow {
     font-size: 32rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
@@ -2041,21 +2041,21 @@ onShareAppMessage((event: any) => {
   width: 100%;
   height: 88rpx;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   box-sizing: border-box;
 
   &:focus {
-    background-color: #fff;
-    border: 2rpx solid #667eea;
+    background-color: #fbfcf7;
+    border: 2rpx solid #dde3cd;
   }
 }
 
 .modal-footer {
   display: flex;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .modal-btn {
@@ -2068,16 +2068,16 @@ onShareAppMessage((event: any) => {
   background: none;
 
   &.cancel {
-    color: #666;
-    border-right: 1rpx solid #f0f0f0;
+    color: #26261f;
+    border-right: 1rpx solid #eef1e2;
   }
 
   &.confirm {
-    color: #667eea;
+    color: #b08d4f;
     font-weight: 500;
 
     &:disabled {
-      color: #ccc;
+      color: #968f6d;
     }
   }
 

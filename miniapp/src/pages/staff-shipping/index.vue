@@ -238,12 +238,12 @@ const copyTrackingNumber = (order: any) => {
 <style scoped lang="scss">
 .shipping-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 120rpx;
 }
 
 .header {
-  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
@@ -251,14 +251,14 @@ const copyTrackingNumber = (order: any) => {
     display: block;
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 8rpx;
   }
 
   .subtitle {
     display: block;
     font-size: 24rpx;
-    color: rgba(51, 51, 51, 0.7);
+    color: rgba(38, 38, 31, 0.6);
   }
 }
 
@@ -270,33 +270,33 @@ const copyTrackingNumber = (order: any) => {
 
 .stat-card {
   flex: 1;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 32rpx 24rpx;
   border-radius: 16rpx;
   text-align: center;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 
   .stat-value {
     display: block;
     font-size: 48rpx;
     font-weight: bold;
-    color: #fcb69f;
+    color: #8a6b33;
     margin-bottom: 8rpx;
   }
 
   .stat-label {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
 .tabs {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   padding: 8rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .tab-item {
@@ -304,13 +304,13 @@ const copyTrackingNumber = (order: any) => {
   text-align: center;
   padding: 16rpx;
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   border-radius: 12rpx;
   transition: all 0.3s;
 
   &.active {
-    background-color: #fcb69f;
-    color: #fff;
+    background-color: #b08d4f;
+    color: #f3eddd;
     font-weight: 500;
   }
 }
@@ -332,16 +332,16 @@ const copyTrackingNumber = (order: any) => {
 
   .empty-text {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
 .order-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .order-header {
@@ -350,12 +350,12 @@ const copyTrackingNumber = (order: any) => {
   align-items: center;
   margin-bottom: 24rpx;
   padding-bottom: 24rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .order-id {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .order-status {
@@ -364,18 +364,18 @@ const copyTrackingNumber = (order: any) => {
   font-size: 22rpx;
 
   &.pending {
-    background-color: #fff7e6;
-    color: #fa8c16;
+    background-color: #f6efe0;
+    color: #8a6b33;
   }
 
   &.shipped {
-    background-color: #e6f7ff;
-    color: #1890ff;
+    background-color: #eef2e4;
+    color: #b08d4f;
   }
 
   &.completed {
-    background-color: #f6ffed;
-    color: #52c41a;
+    background-color: #eef2e4;
+    color: #1e3a2f;
   }
 }
 
@@ -397,7 +397,7 @@ const copyTrackingNumber = (order: any) => {
   gap: 8rpx;
   font-size: 28rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 
   .icon {
@@ -411,19 +411,19 @@ const copyTrackingNumber = (order: any) => {
 
   .label {
     font-size: 26rpx;
-    color: #666;
+    color: #26261f;
     width: 160rpx;
     flex-shrink: 0;
   }
 
   .value {
     font-size: 26rpx;
-    color: #333;
+    color: #26261f;
     flex: 1;
     word-break: break-all;
 
     &.highlight {
-      color: #fcb69f;
+      color: #8a6b33;
       font-weight: 500;
     }
   }
@@ -442,14 +442,14 @@ const copyTrackingNumber = (order: any) => {
   border: none;
 
   &.primary {
-    background-color: #fcb69f;
-    color: #fff;
+    background-color: #b08d4f;
+    color: #f3eddd;
   }
 
   &.outline {
-    background-color: #fff;
-    border: 2rpx solid #d9d9d9;
-    color: #666;
+    background-color: #fbfcf7;
+    border: 2rpx solid #e5e8d4;
+    color: #26261f;
   }
 
   &:active {
@@ -473,7 +473,7 @@ const copyTrackingNumber = (order: any) => {
 
 .modal-content {
   width: 640rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
 }
@@ -483,18 +483,18 @@ const copyTrackingNumber = (order: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .modal-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .modal-close {
   font-size: 48rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1;
 }
 
@@ -513,7 +513,7 @@ const copyTrackingNumber = (order: any) => {
 .form-label {
   display: block;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 }
 
@@ -522,30 +522,30 @@ const copyTrackingNumber = (order: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 
   .arrow {
     font-size: 32rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
 .form-input {
   width: 100%;
   padding: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   box-sizing: border-box;
 }
 
 .modal-footer {
   display: flex;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .modal-btn {
@@ -558,12 +558,12 @@ const copyTrackingNumber = (order: any) => {
   background: none;
 
   &.cancel {
-    color: #666;
-    border-right: 1rpx solid #f0f0f0;
+    color: #26261f;
+    border-right: 1rpx solid #eef1e2;
   }
 
   &.confirm {
-    color: #fcb69f;
+    color: #8a6b33;
     font-weight: 500;
   }
 }

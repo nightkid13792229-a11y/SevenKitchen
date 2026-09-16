@@ -889,7 +889,7 @@ function goBack() {
 <style scoped lang="scss">
 .print-label-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 32rpx;
 }
 
@@ -899,7 +899,7 @@ function goBack() {
   left: 0;
   right: 0;
   width: 100%;
-  background-color: #fff;
+  background-color: #fbfcf7;
   z-index: 999;
 }
 
@@ -912,8 +912,8 @@ function goBack() {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-bottom: 1rpx solid #eee;
+  background-color: #fbfcf7;
+  border-bottom: 1rpx solid #eef1e2;
   z-index: 999;
 }
 
@@ -926,19 +926,19 @@ function goBack() {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-bottom: 1rpx solid #eee;
+  background-color: #fbfcf7;
+  border-bottom: 1rpx solid #eef1e2;
   z-index: 999;
 
   .back-btn {
     font-size: 32rpx;
-    color: #333;
+    color: #26261f;
   }
 
   .title {
     font-size: 32rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .placeholder {
@@ -953,7 +953,7 @@ function goBack() {
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 24rpx;
   display: flex;
   align-items: center;
@@ -962,8 +962,8 @@ function goBack() {
 
 .batch-badge {
   font-size: 24rpx;
-  color: #fff;
-  background-color: #56ab91;
+  color: #f3eddd;
+  background-color: #1e3a2f;
   padding: 4rpx 12rpx;
   border-radius: 12rpx;
   font-weight: normal;
@@ -982,7 +982,7 @@ function goBack() {
   align-items: center;
   justify-content: space-between;
   padding: 16rpx 24rpx;
-  background-color: #f0f9f5;
+  background-color: #eef2e4;
   border-radius: 12rpx;
   margin-bottom: 16rpx;
 }
@@ -990,23 +990,23 @@ function goBack() {
 .batch-title {
   font-size: 28rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 }
 
 .current-badge {
   font-size: 22rpx;
-  color: #fff;
-  background-color: #ff9800;
+  color: #f3eddd;
+  background-color: #b08d4f;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
 }
 
 .order-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
   position: relative;
 }
 
@@ -1019,7 +1019,7 @@ function goBack() {
   .order-index {
     font-size: 28rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .header-buttons {
@@ -1030,8 +1030,8 @@ function goBack() {
   .preview-btn {
     padding: 8rpx 16rpx;
     font-size: 24rpx;
-    background-color: #56ab91;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border: none;
     border-radius: 8rpx;
     white-space: nowrap;
@@ -1040,8 +1040,8 @@ function goBack() {
   .print-btn {
     padding: 8rpx 16rpx;
     font-size: 24rpx;
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border: none;
     border-radius: 8rpx;
     white-space: nowrap;
@@ -1066,21 +1066,21 @@ function goBack() {
     min-width: 0;
 
     &.editable-row {
-      background-color: #f8f9fa;
+      background-color: #fbfcf7;
       padding: 8rpx;
       border-radius: 8rpx;
-      border: 1rpx dashed #ddd;
+      border: 1rpx dashed #e5e8d4;
     }
 
     .label {
       font-size: 26rpx;
-      color: #666;
+      color: #26261f;
       min-width: 140rpx;
     }
 
     .value {
       font-size: 26rpx;
-      color: #333;
+      color: #26261f;
       flex: 1;
       min-width: 0;
       word-break: break-all;
@@ -1091,16 +1091,16 @@ function goBack() {
       width: 100rpx;
       height: 56rpx;
       padding: 0 8rpx;
-      border: 1rpx solid #ddd;
+      border: 1rpx solid #e5e8d4;
       border-radius: 8rpx;
       font-size: 26rpx;
       text-align: center;
-      background-color: #fff;
+      background-color: #fbfcf7;
     }
 
     .unit {
       font-size: 26rpx;
-      color: #333;
+      color: #26261f;
       margin: 0 8rpx;
     }
 
@@ -1109,10 +1109,10 @@ function goBack() {
 
       .picker-value {
         font-size: 26rpx;
-        color: #1890ff;
+        color: #b08d4f;
         padding: 8rpx 16rpx;
-        background-color: #fff;
-        border: 1rpx solid #ddd;
+        background-color: #fbfcf7;
+        border: 1rpx solid #e5e8d4;
         border-radius: 8rpx;
         text-align: center;
       }
@@ -1128,7 +1128,7 @@ function goBack() {
 
   .label {
     font-size: 26rpx;
-    color: #666;
+    color: #26261f;
   }
 
   .counter {
@@ -1142,8 +1142,8 @@ function goBack() {
       display: flex;
       align-items: center;
       justify-content: center;
-      background-color: #f5f5f5;
-      border: 1rpx solid #ddd;
+      background-color: #fbfcf7;
+      border: 1rpx solid #e5e8d4;
       border-radius: 8rpx;
       font-size: 32rpx;
     }
@@ -1152,7 +1152,7 @@ function goBack() {
       width: 100rpx;
       height: 60rpx;
       text-align: center;
-      border: 1rpx solid #ddd;
+      border: 1rpx solid #e5e8d4;
       border-radius: 8rpx;
       font-size: 28rpx;
     }
@@ -1170,12 +1170,12 @@ function goBack() {
 
     .label {
       font-size: 28rpx;
-      color: #666;
+      color: #26261f;
     }
 
     .value {
       font-size: 28rpx;
-      color: #333;
+      color: #26261f;
       flex: 1;
       margin-left: 16rpx;
       min-width: 0;
@@ -1186,8 +1186,8 @@ function goBack() {
     .search-btn {
       padding: 8rpx 16rpx;
       font-size: 24rpx;
-      background-color: #56ab91;
-      color: #fff;
+      background-color: #1e3a2f;
+      color: #f3eddd;
       border: none;
       border-radius: 8rpx;
     }
@@ -1196,21 +1196,21 @@ function goBack() {
   // 打印机列表（内联样式）
   .printer-list-inline {
     margin-top: 16rpx;
-    background-color: #fff;
+    background-color: #fbfcf7;
     border-radius: 12rpx;
-    box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4rpx 12rpx rgba(30, 46, 36, 0.1);
     overflow: hidden;
 
     .printer-list-header {
       display: flex;
       justify-content: flex-end;
       padding: 16rpx 24rpx;
-      background-color: #f8f9fa;
-      border-bottom: 1rpx solid #eee;
+      background-color: #fbfcf7;
+      border-bottom: 1rpx solid #eef1e2;
 
       .close-btn {
         font-size: 40rpx;
-        color: #999;
+        color: #6b6653;
         line-height: 1;
       }
     }
@@ -1225,10 +1225,10 @@ function goBack() {
       justify-content: space-between;
       align-items: center;
       padding: 24rpx 32rpx;
-      border-bottom: 1rpx solid #f5f5f5;
+      border-bottom: 1rpx solid #eef1e2;
 
       &:active {
-        background-color: #f9f9f9;
+        background-color: #fbfcf7;
       }
 
       &:last-child {
@@ -1244,18 +1244,18 @@ function goBack() {
         .printer-name {
           font-size: 28rpx;
           font-weight: 500;
-          color: #333;
+          color: #26261f;
         }
 
         .printer-device-id {
           font-size: 24rpx;
-          color: #999;
+          color: #6b6653;
         }
       }
 
       .select-icon {
         font-size: 32rpx;
-        color: #56ab91;
+        color: #1e3a2f;
       }
     }
   }
@@ -1265,7 +1265,7 @@ function goBack() {
 .preview-popup {
   width: 600rpx;
   max-width: 90vw;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
   position: relative;

@@ -482,7 +482,7 @@ const handlePrint = async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f2f3f2;
+  background-color: #f0f3e9;
   overflow: hidden;
 }
 
@@ -493,8 +493,8 @@ const handlePrint = async () => {
   padding-left: 24rpx;
   padding-right: 24rpx;
   padding-bottom: 20rpx;
-  background: #56ab91;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.1);
   position: fixed;
   top: 0;
   left: 0;
@@ -511,15 +511,15 @@ const handlePrint = async () => {
   line-height: 1.4;
 
   &.back {
-    background-color: rgba(255, 255, 255, 0.22);
-    color: #fff;
+    background-color: rgba(251, 252, 247, 0.22);
+    color: #f3eddd;
   }
 }
 
 .action-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #fff;
+  color: #f3eddd;
   flex: 1;
   text-align: center;
 }
@@ -537,8 +537,8 @@ const handlePrint = async () => {
   min-height: 1004rpx;
   aspect-ratio: 210 / 297;
   margin: 0 auto 28rpx;
-  background-color: #fff;
-  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.12);
+  background-color: #fbfcf7;
+  box-shadow: 0 6rpx 24rpx rgba(30, 46, 36, 0.12);
   box-sizing: border-box;
 }
 
@@ -553,14 +553,14 @@ const handlePrint = async () => {
 .header-section {
   text-align: center;
   padding-bottom: 14rpx;
-  border-bottom: 2rpx solid #56ab91;
+  border-bottom: 2rpx solid #1e3a2f;
   margin-bottom: 14rpx;
 }
 
 .compact-task-title-line {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   line-height: 1.18;
 }
 
@@ -570,7 +570,7 @@ const handlePrint = async () => {
   justify-content: center;
   gap: 22rpx;
   font-size: 18rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .section {
@@ -580,11 +580,11 @@ const handlePrint = async () => {
 .section-title {
   font-size: 24rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   line-height: 1.2;
   margin-bottom: 12rpx;
   padding-left: 10rpx;
-  border-left: 5rpx solid #56ab91;
+  border-left: 5rpx solid #1e3a2f;
 }
 
 .order-cards {
@@ -598,15 +598,15 @@ const handlePrint = async () => {
 }
 
 .order-card {
-  border: 1rpx solid #d9e9e3;
-  background-color: #fbfdfc;
+  border: 1rpx solid #e5e8d4;
+  background-color: #eef2e4;
   overflow: hidden;
 }
 
 .order-card-title {
   padding: 7rpx 10rpx;
-  background-color: #56ab91;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   font-size: 20rpx;
   font-weight: bold;
 }
@@ -631,14 +631,14 @@ const handlePrint = async () => {
 }
 
 .field-label {
-  color: #777;
+  color: #6b6653;
   flex: 0 0 auto;
 }
 
 .field-value {
   min-width: 0;
   flex: 1;
-  color: #333;
+  color: #26261f;
   font-weight: 600;
   overflow: hidden;
   white-space: nowrap;
@@ -664,7 +664,7 @@ const handlePrint = async () => {
 .remark-text {
   flex: 1;
   min-width: 0;
-  color: #555;
+  color: #26261f;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -676,7 +676,7 @@ const handlePrint = async () => {
 }
 
 .compact-print-table {
-  border: 1rpx solid #333;
+  border: 1rpx solid #c9c9b8;
   overflow: hidden;
   font-size: 17rpx;
 }
@@ -684,24 +684,24 @@ const handlePrint = async () => {
 .compact-table-row {
   display: flex;
   min-height: 42rpx;
-  border-bottom: 1rpx solid #e1e1e1;
+  border-bottom: 1rpx solid #e5e8d4;
 
   &:last-child {
     border-bottom: none;
   }
 
   &.total-weight {
-    background-color: #eef8f2;
-    color: #2f8f76;
+    background-color: #eef2e4;
+    color: #1e3a2f;
     font-weight: bold;
-    border-top: 2rpx solid #56ab91;
+    border-top: 2rpx solid #1e3a2f;
   }
 }
 
 .compact-table-header {
   min-height: 36rpx;
-  background-color: #f6f6f6;
-  color: #333;
+  background-color: #fbfcf7;
+  color: #26261f;
   font-size: 16rpx;
   font-weight: bold;
 }
@@ -710,7 +710,7 @@ const handlePrint = async () => {
   min-width: 0;
   padding: 6rpx 5rpx;
   box-sizing: border-box;
-  border-right: 1rpx solid #e5e5e5;
+  border-right: 1rpx solid #e5e8d4;
   line-height: 1.22;
 
   &:last-child {
@@ -742,12 +742,12 @@ const handlePrint = async () => {
 }
 
 .ingredient-sku-source-line {
-  color: #222;
+  color: #26261f;
   font-weight: 600;
 }
 
 .method-text {
-  color: #333;
+  color: #26261f;
 }
 
 .bottom-action-bar {
@@ -755,9 +755,9 @@ const handlePrint = async () => {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 20rpx 32rpx;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.1);
   z-index: 100;
 }
 
@@ -765,8 +765,8 @@ const handlePrint = async () => {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
-  background-color: #56ab91;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 32rpx;
@@ -774,7 +774,7 @@ const handlePrint = async () => {
   text-align: center;
 
   &:active {
-    background-color: #4a9680;
+    background-color: #1e3a2f;
   }
 }
 </style>

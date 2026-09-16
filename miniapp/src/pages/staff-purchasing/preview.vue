@@ -504,25 +504,25 @@ const getPreparationLabel = (item: any) => {
 <style scoped lang="scss">
 .preview-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 32rpx;
 }
 
 .header {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
   .title {
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 }
 
 // 日期选择器区域
 .date-selector-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   padding: 32rpx;
@@ -538,26 +538,26 @@ const getPreparationLabel = (item: any) => {
       display: block;
       font-size: 28rpx;
       font-weight: 500;
-      color: #333;
+      color: #26261f;
       margin-bottom: 12rpx;
     }
 
     .picker-value {
       height: 80rpx;
       padding: 0 24rpx;
-      background-color: #f5f5f5;
+      background-color: #fbfcf7;
       border-radius: 8rpx;
       display: flex;
       align-items: center;
 
       .value {
         font-size: 28rpx;
-        color: #333;
+        color: #26261f;
       }
 
       .placeholder {
         font-size: 28rpx;
-        color: #999;
+        color: #6b6653;
       }
     }
   }
@@ -565,14 +565,14 @@ const getPreparationLabel = (item: any) => {
   .quick-select-section {
     margin-top: 24rpx;
     padding-top: 24rpx;
-    border-top: 1rpx solid #f0f0f0;
+    border-top: 1rpx solid #eef1e2;
     display: flex;
     align-items: center;
     gap: 16rpx;
 
     .section-label {
       font-size: 26rpx;
-      color: #666;
+      color: #26261f;
       white-space: nowrap;
     }
 
@@ -585,8 +585,8 @@ const getPreparationLabel = (item: any) => {
     .quick-btn {
       flex: 1;
       height: 64rpx;
-      background: #f5f5f5;
-      color: #666;
+      background: #fbfcf7;
+      color: #26261f;
       border-radius: 8rpx;
       font-size: 26rpx;
       border: none;
@@ -596,8 +596,8 @@ const getPreparationLabel = (item: any) => {
       transition: all 0.3s;
 
       &.active {
-        background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-        color: #fff;
+        background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+        color: #f3eddd;
         font-weight: 500;
       }
 
@@ -613,8 +613,8 @@ const getPreparationLabel = (item: any) => {
     .preview-btn {
       width: 100%;
       height: 88rpx;
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-      color: #fff;
+      background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+      color: #f3eddd;
       border-radius: 16rpx;
       font-size: 32rpx;
       font-weight: bold;
@@ -637,7 +637,7 @@ const getPreparationLabel = (item: any) => {
 
 // 统计卡片
 .stats-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -654,19 +654,19 @@ const getPreparationLabel = (item: any) => {
     .stat-value {
       font-size: 48rpx;
       font-weight: bold;
-      color: #1890ff;
+      color: #b08d4f;
     }
 
     .stat-label {
       font-size: 24rpx;
-      color: #666;
+      color: #26261f;
     }
   }
 
   .divider {
     width: 1rpx;
     height: 60rpx;
-    background-color: #f0f0f0;
+    background-color: #f0f3e9;
   }
 }
 
@@ -674,7 +674,7 @@ const getPreparationLabel = (item: any) => {
 .date-range-section,
 .ingredients-section,
 .orders-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -683,7 +683,7 @@ const getPreparationLabel = (item: any) => {
     display: block;
     font-size: 30rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 24rpx;
   }
 
@@ -691,7 +691,7 @@ const getPreparationLabel = (item: any) => {
     display: block;
     margin: -8rpx 0 24rpx;
     font-size: 24rpx;
-    color: #8c6d1f;
+    color: #8a6b33;
     line-height: 1.6;
   }
 }
@@ -704,19 +704,19 @@ const getPreparationLabel = (item: any) => {
 }
 
 .ingredient-group {
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 12rpx;
   overflow: hidden;
 
   .group-header {
-    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+    background: linear-gradient(135deg, #f0f3e9 0%, #f2f4ea 100%);
     padding: 16rpx 24rpx;
-    border-bottom: 1rpx solid #e5e5e5;
+    border-bottom: 1rpx solid #e5e8d4;
 
     .group-title {
       font-size: 26rpx;
       font-weight: bold;
-      color: #333;
+      color: #26261f;
     }
   }
 
@@ -733,13 +733,13 @@ const getPreparationLabel = (item: any) => {
 
   .date {
     font-size: 28rpx;
-    color: #1890ff;
+    color: #b08d4f;
     font-weight: 500;
   }
 
   .separator {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
@@ -755,13 +755,13 @@ const getPreparationLabel = (item: any) => {
   flex-direction: column;
   gap: 16rpx;
   padding: 20rpx 16rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
-  border: 1rpx solid #f0f0f0;
+  border: 1rpx solid #eef1e2;
 
   &.fully-covered {
-    border-color: #6bbf8f;
-    background-color: #f2fbf6;
+    border-color: #dde3cd;
+    background-color: #eef2e4;
   }
 
   .ingredient-main {
@@ -778,7 +778,7 @@ const getPreparationLabel = (item: any) => {
     .ingredient-name {
       font-size: 28rpx;
       font-weight: 500;
-      color: #333;
+      color: #26261f;
       margin-bottom: 8rpx;
       display: block;
     }
@@ -791,13 +791,13 @@ const getPreparationLabel = (item: any) => {
 
       .procurement-sku {
         font-size: 22rpx;
-        color: #1890ff;
+        color: #b08d4f;
         font-weight: 500;
       }
 
       .suggested-sku {
         font-size: 22rpx;
-        color: #8c8c8c;
+        color: #6b6653;
       }
     }
 
@@ -809,9 +809,9 @@ const getPreparationLabel = (item: any) => {
       .channel,
       .model {
         font-size: 22rpx;
-        color: #666;
+        color: #26261f;
         padding: 4rpx 12rpx;
-        background-color: #f0f0f0;
+        background-color: #f0f3e9;
         border-radius: 4rpx;
       }
     }
@@ -826,12 +826,12 @@ const getPreparationLabel = (item: any) => {
     .quantity {
       font-size: 32rpx;
       font-weight: bold;
-      color: #1890ff;
+      color: #b08d4f;
     }
 
     .unit {
       font-size: 22rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 
@@ -840,9 +840,9 @@ const getPreparationLabel = (item: any) => {
     flex-direction: column;
     gap: 6rpx;
     padding: 12rpx 16rpx;
-    background-color: rgba(107, 191, 143, 0.1);
+    background-color: rgba(30, 58, 47, 0.1);
     border-radius: 6rpx;
-    color: #4f735b;
+    color: #1e3a2f;
     font-size: 24rpx;
     line-height: 1.45;
   }
@@ -852,11 +852,11 @@ const getPreparationLabel = (item: any) => {
     flex-direction: column;
     gap: 12rpx;
     padding-top: 16rpx;
-    border-top: 1rpx dashed #f0d58a;
+    border-top: 1rpx dashed #b08d4f;
 
     .preparation-label {
       font-size: 22rpx;
-      color: #8c6d1f;
+      color: #8a6b33;
       font-weight: 600;
     }
 
@@ -869,8 +869,8 @@ const getPreparationLabel = (item: any) => {
     .preparation-tag {
       padding: 8rpx 16rpx;
       border-radius: 999rpx;
-      background: linear-gradient(135deg, #fff4cc 0%, #ffe39a 100%);
-      color: #7a5200;
+      background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+      color: #8a6b33;
       font-size: 22rpx;
       line-height: 1.4;
     }
@@ -890,19 +890,19 @@ const getPreparationLabel = (item: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 16rpx 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   margin-bottom: 8rpx;
 
   .header-id {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
     font-weight: 500;
   }
 
   .header-date {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
     font-weight: 500;
   }
 }
@@ -912,18 +912,18 @@ const getPreparationLabel = (item: any) => {
   justify-content: space-between;
   align-items: center;
   padding: 16rpx 24rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 
   .order-id {
     font-size: 24rpx;
-    color: #1890ff;
+    color: #b08d4f;
     font-family: monospace;
   }
 
   .order-date {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
@@ -941,7 +941,7 @@ const getPreparationLabel = (item: any) => {
 
   .empty-text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 </style>

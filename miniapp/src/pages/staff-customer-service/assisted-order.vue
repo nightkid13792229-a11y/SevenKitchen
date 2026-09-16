@@ -304,15 +304,15 @@ async function submitAssistedOrder() {
 .assisted-order-page {
   min-height: 100vh;
   padding: 24rpx;
-  background: #f4f6f8;
+  background: #eef2e4;
   box-sizing: border-box;
-  color: #1f2933;
+  color: #26261f;
 }
 
 .top-panel,
 .section {
   background: #ffffff;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
   box-sizing: border-box;
 }
@@ -324,7 +324,7 @@ async function submitAssistedOrder() {
 
 .eyebrow {
   display: block;
-  color: #157347;
+  color: #1e3a2f;
   font-size: 24rpx;
   font-weight: 800;
 }
@@ -332,7 +332,7 @@ async function submitAssistedOrder() {
 .title {
   display: block;
   margin-top: 8rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 38rpx;
   font-weight: 800;
 }
@@ -340,7 +340,7 @@ async function submitAssistedOrder() {
 .subtitle {
   display: block;
   margin-top: 8rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
 }
 
@@ -351,7 +351,7 @@ async function submitAssistedOrder() {
 
 .section-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
   margin-bottom: 18rpx;
@@ -359,19 +359,19 @@ async function submitAssistedOrder() {
 
 .selector-state {
   padding: 26rpx 20rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 26rpx;
-  background: #f9fafb;
+  background: #fbfcf7;
 }
 
 .selector-box {
   min-height: 96rpx;
   padding: 18rpx 20rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -385,7 +385,7 @@ async function submitAssistedOrder() {
 
 .selector-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -394,13 +394,13 @@ async function submitAssistedOrder() {
 .selector-meta {
   display: block;
   margin-top: 6rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.35;
 }
 
 .selector-arrow {
-  color: #9ca3af;
+  color: #968f6d;
   font-size: 40rpx;
   line-height: 1;
 }
@@ -416,8 +416,8 @@ async function submitAssistedOrder() {
   flex: 0 0 auto;
   padding: 4rpx 10rpx;
   border-radius: 6rpx;
-  color: #166534;
-  background: #dcfce7;
+  color: #1e3a2f;
+  background: #eef2e4;
   font-size: 20rpx;
   font-weight: 800;
 }
@@ -438,7 +438,7 @@ async function submitAssistedOrder() {
 .field-label {
   display: block;
   margin-bottom: 8rpx;
-  color: #374151;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -449,9 +449,9 @@ async function submitAssistedOrder() {
   width: 100%;
   min-height: 76rpx;
   padding: 0 20rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background: #fff;
+  background: #fbfcf7;
   box-sizing: border-box;
   font-size: 28rpx;
 }
@@ -470,13 +470,13 @@ async function submitAssistedOrder() {
   height: 88rpx;
   line-height: 88rpx;
   border-radius: 8rpx;
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 30rpx;
   font-weight: 800;
 }
 
 .submit-btn[disabled] {
-  background: #9ca3af;
+  background: #f2f4ea;
 }
 </style>

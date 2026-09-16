@@ -533,33 +533,33 @@ const submit = async () => {
 <style scoped lang="scss">
 .stock-create-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #fbfcf7;
   padding-bottom: 220rpx;
 }
 
 .hero {
   padding: 40rpx 32rpx 28rpx;
-  background: linear-gradient(135deg, #c7f0d8 0%, #f2f7c9 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #b08d4f 100%);
 }
 
 .hero-title {
   display: block;
   font-size: 40rpx;
   font-weight: 700;
-  color: #1f2937;
+  color: #26261f;
 }
 
 .hero-subtitle {
   display: block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: rgba(31, 41, 55, 0.72);
+  color: rgba(38, 38, 31, 0.6);
 }
 
 .section {
   margin: 24rpx 24rpx 0;
   padding: 28rpx;
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 20rpx;
 }
 
@@ -574,12 +574,12 @@ const submit = async () => {
   display: block;
   font-size: 30rpx;
   font-weight: 600;
-  color: #111827;
+  color: #26261f;
 }
 
 .section-subtitle {
   font-size: 24rpx;
-  color: #6b7280;
+  color: #6b6653;
 }
 
 .suggestion-pills {
@@ -595,18 +595,18 @@ const submit = async () => {
 }
 
 .suggestion-pill.danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .suggestion-pill.warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: #b08d4f;
+  color: #8a6b33;
 }
 
 .suggestion-pill.neutral {
-  background: #e2e8f0;
-  color: #475569;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .suggestion-btn {
@@ -614,21 +614,21 @@ const submit = async () => {
   height: 78rpx;
   line-height: 78rpx;
   border-radius: 999rpx;
-  background: #0f766e;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 28rpx;
 }
 
 .suggestion-btn[disabled] {
-  background: #cbd5e1;
-  color: #fff;
+  background: #eef2e4;
+  color: #968f6d;
 }
 
 .suggestion-hint {
   display: block;
   margin-top: 16rpx;
   font-size: 24rpx;
-  color: #64748b;
+  color: #b08d4f;
   line-height: 1.6;
 }
 
@@ -637,18 +637,18 @@ const submit = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  background: #f8fafc;
+  background: #eef2e4;
   border-radius: 16rpx;
 }
 
 .picker-value {
   font-size: 28rpx;
-  color: #111827;
+  color: #26261f;
 }
 
 .picker-arrow {
   font-size: 32rpx;
-  color: #94a3b8;
+  color: #b08d4f;
 }
 
 .search-input,
@@ -657,7 +657,7 @@ const submit = async () => {
   min-height: 84rpx;
   padding: 0 24rpx;
   border-radius: 16rpx;
-  background: #f8fafc;
+  background: #eef2e4;
   font-size: 28rpx;
   box-sizing: border-box;
 }
@@ -672,14 +672,14 @@ const submit = async () => {
 .filter-chip {
   padding: 14rpx 24rpx;
   border-radius: 999rpx;
-  background: #eef2f7;
-  color: #475569;
+  background: #eef2e4;
+  color: #b08d4f;
   font-size: 24rpx;
 }
 
 .filter-chip.active {
-  background: #d9f99d;
-  color: #365314;
+  background: #1e3a2f;
+  color: #1e3a2f;
 }
 
 .ingredient-list,
@@ -693,17 +693,17 @@ const submit = async () => {
 .selected-card {
   padding: 24rpx;
   border-radius: 18rpx;
-  background: #f8fafc;
+  background: #eef2e4;
 }
 
 .ingredient-card.is-danger {
-  background: #fff7f7;
-  box-shadow: inset 0 0 0 2rpx #fecaca;
+  background: #f8e8e2;
+  box-shadow: inset 0 0 0 2rpx #b4553f;
 }
 
 .ingredient-card.is-warning {
-  background: #fffbeb;
-  box-shadow: inset 0 0 0 2rpx #fde68a;
+  background: #f6efe0;
+  box-shadow: inset 0 0 0 2rpx #b08d4f;
 }
 
 .ingredient-main,
@@ -729,7 +729,7 @@ const submit = async () => {
 .selected-name {
   font-size: 28rpx;
   font-weight: 600;
-  color: #111827;
+  color: #26261f;
 }
 
 .strategy-badge {
@@ -739,18 +739,18 @@ const submit = async () => {
 }
 
 .strategy-badge.stock {
-  background: #dcfce7;
-  color: #166534;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .strategy-badge.hybrid {
-  background: #fef3c7;
-  color: #92400e;
+  background: #b08d4f;
+  color: #8a6b33;
 }
 
 .strategy-badge.daily {
-  background: #e5e7eb;
-  color: #4b5563;
+  background: #f0f3e9;
+  color: #26261f;
 }
 
 .stock-status-badge {
@@ -760,23 +760,23 @@ const submit = async () => {
 }
 
 .stock-status-badge.danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .stock-status-badge.warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: #b08d4f;
+  color: #8a6b33;
 }
 
 .stock-status-badge.success {
-  background: #dcfce7;
-  color: #166534;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .stock-status-badge.muted {
-  background: #e2e8f0;
-  color: #475569;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .ingredient-meta {
@@ -789,21 +789,21 @@ const submit = async () => {
 .meta-tag,
 .selected-meta {
   font-size: 22rpx;
-  color: #64748b;
+  color: #b08d4f;
 }
 
 .ingredient-detail {
   display: block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #475569;
+  color: #b08d4f;
 }
 
 .ingredient-suggestion {
   display: block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #166534;
+  color: #1e3a2f;
 }
 
 .add-btn {
@@ -811,14 +811,14 @@ const submit = async () => {
   height: 68rpx;
   line-height: 68rpx;
   border-radius: 999rpx;
-  background: #1f8f55;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 24rpx;
 }
 
 .add-btn[disabled] {
-  background: #cbd5e1;
-  color: #fff;
+  background: #eef2e4;
+  color: #968f6d;
 }
 
 .field-row {
@@ -835,7 +835,7 @@ const submit = async () => {
   display: block;
   margin-bottom: 10rpx;
   font-size: 24rpx;
-  color: #475569;
+  color: #b08d4f;
 }
 
 .input-wrapper {
@@ -846,26 +846,26 @@ const submit = async () => {
 
 .input-suffix {
   font-size: 26rpx;
-  color: #475569;
+  color: #b08d4f;
 }
 
 .remove-btn {
   padding: 8rpx 0 8rpx 24rpx;
   font-size: 24rpx;
-  color: #dc2626;
+  color: #b4553f;
 }
 
 .selected-footer {
   margin-top: 18rpx;
   font-size: 24rpx;
-  color: #166534;
+  color: #1e3a2f;
 }
 
 .loading-state,
 .empty-state {
   padding: 48rpx 24rpx;
   text-align: center;
-  color: #64748b;
+  color: #b08d4f;
 }
 
 .empty-state.soft {
@@ -886,8 +886,8 @@ const submit = async () => {
   justify-content: space-between;
   gap: 24rpx;
   padding: 24rpx 28rpx calc(24rpx + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 -8rpx 24rpx rgba(30, 46, 36, 0.08);
 }
 
 .bottom-summary {
@@ -897,14 +897,14 @@ const submit = async () => {
 
 .summary-label {
   font-size: 22rpx;
-  color: #64748b;
+  color: #b08d4f;
 }
 
 .summary-amount {
   margin-top: 6rpx;
   font-size: 36rpx;
   font-weight: 700;
-  color: #111827;
+  color: #26261f;
 }
 
 .submit-btn {
@@ -913,8 +913,8 @@ const submit = async () => {
   height: 84rpx;
   line-height: 84rpx;
   border-radius: 999rpx;
-  background: #111827;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 28rpx;
 }
 </style>

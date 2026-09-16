@@ -1888,7 +1888,7 @@ async function saveAddressForm() {
 <style scoped lang="scss">
 .order-detail {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 40rpx;
 }
 
@@ -1905,7 +1905,7 @@ async function saveAddressForm() {
 .loading-text,
 .error-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
   margin-top: 24rpx;
 }
 
@@ -1916,8 +1916,8 @@ async function saveAddressForm() {
 .retry-btn {
   margin-top: 32rpx;
   padding: 16rpx 48rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border-radius: 8rpx;
   font-size: 28rpx;
 }
@@ -1941,27 +1941,27 @@ async function saveAddressForm() {
 .status-text {
   font-size: 48rpx;
   font-weight: bold;
-  color: #fff;
+  color: #f3eddd;
 }
 
 .order-id-text {
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.9);
+  color: #f3eddd;
 }
 
 // 通用区块
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 24rpx 32rpx;
   border-radius: 16rpx;
   padding: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
 }
 
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 24rpx;
 }
 
@@ -1981,7 +1981,7 @@ async function saveAddressForm() {
 .address-meta {
   display: block;
   font-size: 24rpx;
-  color: #8a94a6;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -2000,12 +2000,12 @@ async function saveAddressForm() {
 
 .info-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .info-value {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -2027,7 +2027,7 @@ async function saveAddressForm() {
 .action-link {
   margin-left: 16rpx;
   font-size: 24rpx;
-  color: #1890ff;
+  color: #b08d4f;
 }
 
 .inline-actions {
@@ -2060,7 +2060,7 @@ async function saveAddressForm() {
 .product-name {
   font-size: 30rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .product-specs {
@@ -2071,7 +2071,7 @@ async function saveAddressForm() {
 
 .spec-item {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .usage-summary {
@@ -2083,7 +2083,7 @@ async function saveAddressForm() {
 .usage-stat {
   padding: 18rpx;
   border-radius: 10rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
 }
 
 .usage-label,
@@ -2091,7 +2091,7 @@ async function saveAddressForm() {
 .ingredient-type {
   display: block;
   font-size: 24rpx;
-  color: #667085;
+  color: #6b6653;
   line-height: 1.45;
 }
 
@@ -2099,13 +2099,13 @@ async function saveAddressForm() {
   display: block;
   margin-top: 6rpx;
   font-size: 28rpx;
-  color: #111827;
+  color: #26261f;
   font-weight: 700;
 }
 
 .usage-item {
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #edf0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .mini-inline-btn {
@@ -2113,9 +2113,9 @@ async function saveAddressForm() {
   height: 58rpx;
   margin: 16rpx 0 0;
   border-radius: 8rpx;
-  border: 2rpx solid #d6e8ff;
-  background-color: #fff;
-  color: #1890ff;
+  border: 2rpx solid #e5e8d4;
+  background-color: #fbfcf7;
+  color: #b08d4f;
   font-size: 24rpx;
   display: flex;
   align-items: center;
@@ -2135,7 +2135,7 @@ async function saveAddressForm() {
 .dog-option-name {
   display: block;
   font-size: 28rpx;
-  color: #111827;
+  color: #26261f;
   font-weight: 700;
   line-height: 1.45;
 }
@@ -2143,7 +2143,7 @@ async function saveAddressForm() {
 .ingredient-summary {
   margin-top: 20rpx;
   padding-top: 20rpx;
-  border-top: 1rpx solid #edf0f2;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .ingredient-row {
@@ -2152,7 +2152,7 @@ async function saveAddressForm() {
   gap: 12rpx;
   align-items: center;
   padding: 14rpx 0;
-  border-bottom: 1rpx solid #f2f4f7;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .ingredient-row:last-child {
@@ -2162,13 +2162,13 @@ async function saveAddressForm() {
 .ingredient-name {
   min-width: 0;
   font-size: 25rpx;
-  color: #344054;
+  color: #26261f;
   line-height: 1.45;
 }
 
 .ingredient-amount {
   font-size: 25rpx;
-  color: #111827;
+  color: #26261f;
   font-weight: 700;
   text-align: right;
 }
@@ -2183,7 +2183,7 @@ async function saveAddressForm() {
   width: 100%;
   height: 156rpx;
   border-radius: 10rpx;
-  background-color: #f2f4f7;
+  background-color: #eef2e4;
 }
 
 .photo-share-btn {
@@ -2206,12 +2206,12 @@ async function saveAddressForm() {
   min-height: 180rpx;
   padding: 24rpx;
   box-sizing: border-box;
-  border: 2rpx solid #eef2f6;
+  border: 2rpx solid #eef1e2;
   border-radius: 12rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
   font-size: 28rpx;
   line-height: 1.6;
-  color: #333;
+  color: #26261f;
 }
 
 .remark-meta {
@@ -2224,13 +2224,13 @@ async function saveAddressForm() {
 .remark-hint {
   flex: 1;
   font-size: 24rpx;
-  color: #8a94a6;
+  color: #6b6653;
   line-height: 1.5;
 }
 
 .remark-count {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   white-space: nowrap;
 }
 
@@ -2253,14 +2253,14 @@ async function saveAddressForm() {
 }
 
 .remark-btn.primary {
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
 }
 
 .remark-btn.secondary {
-  background-color: #fff;
-  color: #1890ff;
-  border: 2rpx solid #d6e8ff;
+  background-color: #fbfcf7;
+  color: #b08d4f;
+  border: 2rpx solid #e5e8d4;
 }
 
 .remark-btn[disabled] {
@@ -2287,17 +2287,17 @@ async function saveAddressForm() {
 .recipient-name {
   font-size: 30rpx;
   font-weight: 500;
-  color: #333;
+  color: #26261f;
 }
 
 .recipient-phone {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .address-text {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.6;
 }
 
@@ -2308,7 +2308,7 @@ async function saveAddressForm() {
 .address-empty-text,
 .address-lock-hint {
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .address-actions {
@@ -2329,14 +2329,14 @@ async function saveAddressForm() {
   justify-content: center;
 
   &.primary {
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.secondary {
-    background-color: #fff;
-    color: #1890ff;
-    border: 2rpx solid #d6e8ff;
+    background-color: #fbfcf7;
+    color: #b08d4f;
+    border: 2rpx solid #e5e8d4;
   }
 
   &.full {
@@ -2352,8 +2352,8 @@ async function saveAddressForm() {
 .default-tag {
   padding: 2rpx 10rpx;
   border-radius: 6rpx;
-  background-color: #e6f7ff;
-  color: #1890ff;
+  background-color: #eef2e4;
+  color: #b08d4f;
   font-size: 22rpx;
 }
 
@@ -2370,7 +2370,7 @@ async function saveAddressForm() {
   width: 100%;
   max-height: 82vh;
   overflow-y: auto;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 24rpx 24rpx 0 0;
   padding: 32rpx;
   box-sizing: border-box;
@@ -2390,7 +2390,7 @@ async function saveAddressForm() {
 .modal-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .modal-close {
@@ -2400,7 +2400,7 @@ async function saveAddressForm() {
   align-items: center;
   justify-content: center;
   font-size: 44rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .modal-loading,
@@ -2411,7 +2411,7 @@ async function saveAddressForm() {
   align-items: center;
   justify-content: center;
   gap: 24rpx;
-  color: #999;
+  color: #6b6653;
   font-size: 28rpx;
 }
 
@@ -2429,14 +2429,14 @@ async function saveAddressForm() {
 
 .address-group-title {
   font-size: 25rpx;
-  color: #667085;
+  color: #6b6653;
   font-weight: 700;
 }
 
 .address-select-item {
   padding: 24rpx;
   border-radius: 12rpx;
-  border: 2rpx solid #f0f0f0;
+  border: 2rpx solid #eef1e2;
 }
 
 .dog-option-list {
@@ -2448,20 +2448,20 @@ async function saveAddressForm() {
 .dog-option {
   padding: 22rpx;
   border-radius: 12rpx;
-  border: 2rpx solid #eef2f6;
-  background-color: #fff;
+  border: 2rpx solid #eef1e2;
+  background-color: #fbfcf7;
 }
 
 .dog-option.active {
-  border-color: #1890ff;
-  background-color: #eef6ff;
+  border-color: #1e3a2f;
+  background-color: #eef2e4;
 }
 
 .dog-option-meta {
   display: block;
   margin-top: 6rpx;
   font-size: 24rpx;
-  color: #667085;
+  color: #6b6653;
 }
 
 .package-total-row {
@@ -2483,17 +2483,17 @@ async function saveAddressForm() {
   min-width: 0;
   height: 70rpx;
   padding: 0 18rpx;
-  border: 2rpx solid #eee;
+  border: 2rpx solid #eef1e2;
   border-radius: 10rpx;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   box-sizing: border-box;
 }
 
 .package-separator {
   font-size: 24rpx;
-  color: #667085;
+  color: #6b6653;
 }
 
 .package-remove-btn {
@@ -2501,8 +2501,8 @@ async function saveAddressForm() {
   height: 58rpx;
   padding: 0;
   border-radius: 50%;
-  background-color: #fff1f0;
-  color: #d93026;
+  background-color: #f8e8e2;
+  color: #b4553f;
   font-size: 30rpx;
   display: flex;
   align-items: center;
@@ -2521,7 +2521,7 @@ async function saveAddressForm() {
   display: block;
   margin-bottom: 12rpx;
   font-size: 26rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 500;
 }
 
@@ -2530,11 +2530,11 @@ async function saveAddressForm() {
 .form-textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 2rpx solid #eee;
+  border: 2rpx solid #eef1e2;
   border-radius: 10rpx;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .form-input,
@@ -2556,7 +2556,7 @@ async function saveAddressForm() {
 
 .form-placeholder,
 .picker-arrow {
-  color: #999;
+  color: #6b6653;
 }
 
 .form-switch-row {
@@ -2570,8 +2570,8 @@ async function saveAddressForm() {
   width: 100%;
   height: 82rpx;
   border-radius: 12rpx;
-  background-color: #1890ff;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   font-size: 30rpx;
 
   &::after {
@@ -2593,33 +2593,33 @@ async function saveAddressForm() {
 
   &.total {
     padding-top: 16rpx;
-    border-top: 2rpx solid #f0f0f0;
+    border-top: 2rpx solid #eef1e2;
   }
 }
 
 .fee-label {
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .fee-value {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
 
   .fee-item.total & {
     font-size: 36rpx;
-    color: #ff4d4f;
+    color: #b4553f;
   }
 }
 
 // 操作区块
 .action-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 24rpx 32rpx;
   border-radius: 16rpx;
   padding: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.06);
   display: flex;
   flex-direction: column;
   gap: 16rpx;
@@ -2636,28 +2636,28 @@ async function saveAddressForm() {
   justify-content: center;
 
   &.primary {
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.orange {
-    background-color: #faad14;
-    color: #fff;
+    background-color: #b08d4f;
+    color: #f3eddd;
   }
 
   &.cyan {
-    background-color: #13c2c2;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.green {
-    background-color: #52c41a;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
   }
 
   &.red {
-    background-color: #d93026;
-    color: #fff;
+    background-color: #b4553f;
+    color: #f3eddd;
   }
 
   &::after {

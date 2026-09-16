@@ -493,12 +493,12 @@ const toggleHistory = (batchId: string) => {
 <style scoped lang="scss">
 .production-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 120rpx;
 }
 
 .header {
-  background: linear-gradient(135deg, #a8e6cf 0%, #56ab91 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
@@ -506,14 +506,14 @@ const toggleHistory = (batchId: string) => {
     display: block;
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 8rpx;
   }
 
   .subtitle {
     display: block;
     font-size: 24rpx;
-    color: rgba(51, 51, 51, 0.7);
+    color: rgba(38, 38, 31, 0.6);
   }
 }
 
@@ -524,11 +524,11 @@ const toggleHistory = (batchId: string) => {
 }
 
 .date-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   padding: 24rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .date-picker {
@@ -541,7 +541,7 @@ const toggleHistory = (batchId: string) => {
 .date-label {
   display: block;
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
   margin-bottom: 6rpx;
 }
 
@@ -549,13 +549,13 @@ const toggleHistory = (batchId: string) => {
   display: block;
   font-size: 34rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
 }
 
 .date-arrow {
   font-size: 24rpx;
-  color: #2196f3;
-  background-color: #edf6ff;
+  color: #b08d4f;
+  background-color: #eef2e4;
   border-radius: 8rpx;
   padding: 8rpx 16rpx;
   white-space: nowrap;
@@ -565,45 +565,45 @@ const toggleHistory = (batchId: string) => {
   display: block;
   margin-top: 14rpx;
   font-size: 22rpx;
-  color: #888;
+  color: #6b6653;
 }
 
 .stat-card {
   flex: 1;
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 32rpx 24rpx;
   border-radius: 16rpx;
   text-align: center;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 
   .stat-value {
     display: block;
     font-size: 48rpx;
     font-weight: bold;
-    color: #56ab91;
+    color: #1e3a2f;
     margin-bottom: 8rpx;
   }
 
   .stat-label {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
 .schedule-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   padding: 32rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16rpx;
 
   .schedule-btn {
-    background-color: #56ab91;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border: none;
     border-radius: 12rpx;
     padding: 24rpx 48rpx;
@@ -613,31 +613,31 @@ const toggleHistory = (batchId: string) => {
 
   .schedule-hint {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
     text-align: center;
   }
 
   .schedule-warning {
     font-size: 22rpx;
-    color: #ff9800;
+    color: #8a6b33;
     text-align: center;
   }
 }
 
 .batch-print-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   padding: 32rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16rpx;
 
   .batch-print-btn {
-    background-color: #2196f3;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border: none;
     border-radius: 12rpx;
     padding: 24rpx 48rpx;
@@ -647,7 +647,7 @@ const toggleHistory = (batchId: string) => {
 
   .batch-print-hint {
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
     text-align: center;
   }
 }
@@ -655,18 +655,18 @@ const toggleHistory = (batchId: string) => {
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   padding: 0 32rpx;
   margin-bottom: 16rpx;
 }
 
 .tabs {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   border-radius: 16rpx;
   padding: 8rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .tab-item {
@@ -675,7 +675,7 @@ const toggleHistory = (batchId: string) => {
   padding: 16rpx;
   border-radius: 12rpx;
   font-size: 28rpx;
-  color: #666;
+  color: #26261f;
   transition: all 0.3s;
   display: flex;
   align-items: center;
@@ -684,13 +684,13 @@ const toggleHistory = (batchId: string) => {
   min-height: 44rpx;
 
   &.active {
-    background-color: #56ab91;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     font-weight: bold;
 
     .tab-count {
-      background-color: rgba(255, 255, 255, 0.24);
-      color: #fff;
+      background-color: rgba(251, 252, 247, 0.24);
+      color: #f3eddd;
     }
   }
 
@@ -700,8 +700,8 @@ const toggleHistory = (batchId: string) => {
     line-height: 32rpx;
     padding: 0 8rpx;
     border-radius: 16rpx;
-    background-color: #f0f4f2;
-    color: #56ab91;
+    background-color: #f0f3e9;
+    color: #1e3a2f;
     font-size: 22rpx;
     font-weight: 600;
   }
@@ -723,21 +723,21 @@ const toggleHistory = (batchId: string) => {
 
   .empty-text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
 .task-card {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
   cursor: pointer;
   transition: all 0.2s;
 
   &:active {
-    background-color: #f5f5f5;
+    background-color: #fbfcf7;
     transform: scale(0.98);
   }
 
@@ -760,14 +760,14 @@ const toggleHistory = (batchId: string) => {
     .recipe-name {
       font-size: 30rpx;
       font-weight: bold;
-      color: #333;
+      color: #26261f;
     }
 
     .carryover-badge {
       font-size: 22rpx;
-      color: #d63f3f;
-      background-color: #fff0f0;
-      border: 1rpx solid #ffc6c6;
+      color: #b4553f;
+      background-color: #f8e8e2;
+      border: 1rpx solid #e5e8d4;
       border-radius: 8rpx;
       padding: 4rpx 10rpx;
       line-height: 1.3;
@@ -776,10 +776,10 @@ const toggleHistory = (batchId: string) => {
 
     .pot-info {
       font-size: 24rpx;
-      color: #56ab91;
+      color: #1e3a2f;
       font-weight: bold;
       padding: 4rpx 12rpx;
-      background-color: #e8f5e9;
+      background-color: #eef2e4;
       border-radius: 8rpx;
       white-space: nowrap;
     }
@@ -792,17 +792,17 @@ const toggleHistory = (batchId: string) => {
 
       .label {
         font-size: 26rpx;
-        color: #666;
+        color: #26261f;
         min-width: 180rpx;
       }
 
       .value {
         font-size: 26rpx;
-        color: #333;
+        color: #26261f;
       }
 
       .carryover-text {
-        color: #d63f3f;
+        color: #b4553f;
         font-weight: 600;
       }
     }
@@ -821,13 +821,13 @@ const toggleHistory = (batchId: string) => {
     justify-content: center;
     gap: 8rpx;
     padding: 12rpx 24rpx;
-    background-color: #56ab91;
+    background-color: #1e3a2f;
     border-radius: 8rpx;
     border: none;
     transition: all 0.2s;
 
     &:active {
-      background-color: #459678;
+      background-color: #1e3a2f;
       transform: scale(0.98);
     }
 
@@ -837,7 +837,7 @@ const toggleHistory = (batchId: string) => {
 
     .btn-text {
       font-size: 26rpx;
-      color: #fff;
+      color: #f3eddd;
       font-weight: 500;
     }
   }
@@ -849,13 +849,13 @@ const toggleHistory = (batchId: string) => {
     gap: 8rpx;
     margin-top: 16rpx;
     padding: 12rpx 24rpx;
-    background-color: rgba(255, 77, 79, 0.1);
+    background-color: rgba(180, 85, 63, 0.1);
     border-radius: 8rpx;
-    border: 1rpx solid rgba(255, 77, 79, 0.3);
+    border: 1rpx solid rgba(221, 227, 205, 0.3);
     transition: all 0.2s;
 
     &:active {
-      background-color: rgba(255, 77, 79, 0.2);
+      background-color: rgba(180, 85, 63, 0.2);
       transform: scale(0.98);
     }
 
@@ -865,24 +865,24 @@ const toggleHistory = (batchId: string) => {
 
     .delete-text {
       font-size: 26rpx;
-      color: #ff4d4f;
+      color: #b4553f;
       font-weight: 500;
     }
   }
 }
 
 .history-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   padding: 24rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .history-item {
   margin-bottom: 16rpx;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 
   &:last-child {
     margin-bottom: 0;
@@ -898,17 +898,17 @@ const toggleHistory = (batchId: string) => {
     .history-date {
       font-size: 26rpx;
       font-weight: bold;
-      color: #333;
+      color: #26261f;
     }
 
     .history-count {
       font-size: 24rpx;
-      color: #666;
+      color: #26261f;
     }
 
     .history-toggle {
       font-size: 24rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 
@@ -922,7 +922,7 @@ const toggleHistory = (batchId: string) => {
     justify-content: space-between;
     padding: 8rpx 0;
     font-size: 24rpx;
-    color: #666;
+    color: #26261f;
 
     .history-recipe {
       flex: 1;
@@ -936,7 +936,7 @@ const toggleHistory = (batchId: string) => {
     .history-time {
       min-width: 150rpx;
       text-align: right;
-      color: #999;
+      color: #6b6653;
     }
   }
 }

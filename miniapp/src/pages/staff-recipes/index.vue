@@ -148,27 +148,27 @@ function getStatusClass(status: string): string {
 <style scoped lang="scss">
 .staff-recipes-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
 }
 
 .filter-bar {
   display: flex;
   padding: 24rpx 32rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   gap: 16rpx;
-  border-bottom: 1rpx solid #eee;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .filter-item {
   padding: 12rpx 28rpx;
   border-radius: 32rpx;
   font-size: 26rpx;
-  background-color: #f5f5f5;
-  color: #666;
+  background-color: #fbfcf7;
+  color: #26261f;
 
   &.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
+    background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+    color: #f3eddd;
   }
 }
 
@@ -182,7 +182,7 @@ function getStatusClass(status: string): string {
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .recipe-list {
@@ -194,10 +194,10 @@ function getStatusClass(status: string): string {
 
 .recipe-card {
   display: flex;
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   overflow: hidden;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 
   &:active {
     transform: scale(0.98);
@@ -222,13 +222,13 @@ function getStatusClass(status: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
 }
 
 .placeholder-text {
   font-size: 64rpx;
   font-weight: bold;
-  color: rgba(255, 255, 255, 0.9);
+  color: #f3eddd;
 }
 
 .status-badge {
@@ -240,20 +240,20 @@ function getStatusClass(status: string): string {
 
   .status-text {
     font-size: 20rpx;
-    color: #fff;
+    color: #f3eddd;
   }
 }
 
 .badge-draft {
-  background-color: rgba(158, 158, 158, 0.85);
+  background-color: rgba(242, 244, 234, 0.6);
 }
 
 .badge-public {
-  background-color: rgba(7, 193, 96, 0.85);
+  background-color: rgba(30, 58, 47, 0.6);
 }
 
 .badge-private {
-  background-color: rgba(255, 107, 107, 0.85);
+  background-color: rgba(180, 85, 63, 0.6);
 }
 
 .recipe-info {
@@ -268,7 +268,7 @@ function getStatusClass(status: string): string {
 .recipe-name {
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -288,7 +288,7 @@ function getStatusClass(status: string): string {
 }
 
 .life-stage {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: #eef2e4;
+  color: #b08d4f;
 }
 </style>

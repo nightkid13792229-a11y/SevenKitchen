@@ -1016,12 +1016,12 @@ onShow(() => {
 <style scoped lang="scss">
 .purchasing-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 48rpx;
 }
 
 .header {
-  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 
@@ -1029,14 +1029,14 @@ onShow(() => {
     display: block;
     font-size: 44rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 8rpx;
   }
 
   .subtitle {
     display: block;
     font-size: 24rpx;
-    color: rgba(51, 51, 51, 0.7);
+    color: rgba(38, 38, 31, 0.6);
   }
 }
 
@@ -1050,12 +1050,12 @@ onShow(() => {
   margin: 0 32rpx 24rpx;
   padding: 28rpx;
   border-radius: 24rpx;
-  background: linear-gradient(135deg, #dff6d2 0%, #eefad8 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(73, 160, 120, 0.12);
+  box-shadow: 0 8rpx 24rpx rgba(30, 46, 36, 0.12);
 }
 
 .quick-entry-copy {
@@ -1067,26 +1067,26 @@ onShow(() => {
 .quick-entry-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #1f3b2d;
+  color: #26261f;
 }
 
 .quick-entry-subtitle {
   font-size: 24rpx;
-  color: rgba(31, 59, 45, 0.74);
+  color: rgba(38, 38, 31, 0.6);
   line-height: 1.5;
 }
 
 .quick-entry-arrow {
   font-size: 40rpx;
-  color: rgba(31, 59, 45, 0.42);
+  color: rgba(38, 38, 31, 0.42);
 }
 
 .planning-card,
 .filters {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 24rpx;
   padding: 28rpx;
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8rpx 24rpx rgba(30, 46, 36, 0.04);
 }
 
 .section-heading {
@@ -1099,12 +1099,12 @@ onShow(() => {
 .section-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
 }
 
 .section-subtitle {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   line-height: 1.5;
 }
 
@@ -1118,7 +1118,7 @@ onShow(() => {
   min-height: 152rpx;
   border-radius: 20rpx;
   padding: 24rpx 22rpx;
-  background: #faf7ef;
+  background: #f6efe0;
   border: 2rpx solid transparent;
   display: flex;
   flex-direction: column;
@@ -1127,40 +1127,40 @@ onShow(() => {
   box-sizing: border-box;
 
   &.active {
-    border-color: #f6b93b;
-    background: linear-gradient(135deg, #fff8df 0%, #ffe3a3 100%);
-    box-shadow: 0 10rpx 24rpx rgba(246, 185, 59, 0.18);
+    border-color: #b08d4f;
+    background: linear-gradient(135deg, #f6efe0 0%, #b08d4f 100%);
+    box-shadow: 0 10rpx 24rpx rgba(30, 46, 36, 0.18);
   }
 
   &.muted {
-    background: #f7f7f7;
+    background: #fbfcf7;
   }
 }
 
 .more-date-chip {
-  background: linear-gradient(135deg, #f6f7fb 0%, #eef1f7 100%);
+  background: linear-gradient(135deg, #eef2e4 0%, #e2e8d4 100%);
 }
 
 .chip-label {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .chip-date {
   font-size: 24rpx;
-  color: #666;
+  color: #26261f;
 }
 
 .chip-meta {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
 }
 
 .date-summary-card {
   margin-top: 24rpx;
   border-radius: 24rpx;
-  background: linear-gradient(180deg, #fffdfa 0%, #fff6df 100%);
+  background: linear-gradient(180deg, #f6efe0 0%, #ecdfc6 100%);
   padding: 24rpx;
 }
 
@@ -1181,7 +1181,7 @@ onShow(() => {
 .summary-date {
   font-size: 30rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
 }
 
 .summary-status {
@@ -1192,35 +1192,35 @@ onShow(() => {
   font-weight: 600;
 
   &.generate {
-    background: rgba(250, 173, 20, 0.14);
-    color: #ad6800;
+    background: rgba(176, 141, 79, 0.14);
+    color: #8a6b33;
   }
 
   &.supplement {
-    background: rgba(250, 140, 22, 0.14);
-    color: #ad4e00;
+    background: rgba(176, 141, 79, 0.14);
+    color: #8a6b33;
   }
 
   &.existing {
-    background: rgba(24, 144, 255, 0.12);
-    color: #0958d9;
+    background: rgba(30, 58, 47, 0.12);
+    color: #b08d4f;
   }
 
   &.empty {
     background: rgba(0, 0, 0, 0.06);
-    color: #666;
+    color: #26261f;
   }
 
   &.past {
-    background: rgba(255, 77, 79, 0.12);
-    color: #cf1322;
+    background: rgba(180, 85, 63, 0.12);
+    color: #b4553f;
   }
 }
 
 .summary-tag {
   font-size: 22rpx;
-  color: #a16b00;
-  background: rgba(255, 193, 7, 0.16);
+  color: #8a6b33;
+  background: rgba(176, 141, 79, 0.16);
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
 }
@@ -1230,7 +1230,7 @@ onShow(() => {
 
   text {
     font-size: 26rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
@@ -1242,14 +1242,14 @@ onShow(() => {
 
 .summary-line {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 600;
   line-height: 1.5;
 }
 
 .summary-hint {
   font-size: 24rpx;
-  color: #8c6d1f;
+  color: #8a6b33;
   line-height: 1.6;
 }
 
@@ -1278,20 +1278,20 @@ onShow(() => {
   justify-content: center;
 
   &.secondary {
-    background: #fff;
-    color: #7a5d00;
-    border: 1rpx solid rgba(242, 184, 41, 0.35);
+    background: #fbfcf7;
+    color: #8a6b33;
+    border: 1rpx solid rgba(176, 141, 79, 0.35);
   }
 
   &.primary {
-    background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
-    color: #333;
-    box-shadow: 0 10rpx 24rpx rgba(255, 202, 40, 0.24);
+    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+    color: #26261f;
+    box-shadow: 0 10rpx 24rpx rgba(30, 46, 36, 0.24);
   }
 
   &[disabled] {
-    background: #f0f0f0;
-    color: #999;
+    background: #f0f3e9;
+    color: #6b6653;
     box-shadow: none;
   }
 }
@@ -1310,7 +1310,7 @@ onShow(() => {
 
 .filter-label {
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
   font-weight: 600;
 }
 
@@ -1326,8 +1326,8 @@ onShow(() => {
   height: 64rpx;
   padding: 0 24rpx;
   border-radius: 999rpx;
-  background-color: #f5f5f5;
-  color: #666;
+  background-color: #fbfcf7;
+  color: #26261f;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1339,9 +1339,9 @@ onShow(() => {
   }
 
   &.active {
-    background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
-    color: #333;
-    box-shadow: 0 8rpx 18rpx rgba(255, 202, 40, 0.25);
+    background: linear-gradient(135deg, #b08d4f 0%, #8a6b33 100%);
+    color: #26261f;
+    box-shadow: 0 8rpx 18rpx rgba(30, 46, 36, 0.25);
   }
 }
 
@@ -1359,12 +1359,12 @@ onShow(() => {
   flex-direction: column;
   align-items: center;
   padding: 80rpx 32rpx;
-  background: #fff;
+  background: #fbfcf7;
   border-radius: 24rpx;
 
   text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 
   .empty-icon {
@@ -1374,13 +1374,13 @@ onShow(() => {
 
   .empty-text {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
     margin-bottom: 12rpx;
   }
 
   .empty-hint {
     font-size: 24rpx;
-    color: #999;
+    color: #6b6653;
     text-align: center;
     line-height: 1.6;
   }
@@ -1393,10 +1393,10 @@ onShow(() => {
 }
 
 .list-item {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 20rpx;
   padding: 24rpx;
-  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 6rpx 18rpx rgba(30, 46, 36, 0.04);
 
   .item-header {
     display: flex;
@@ -1404,7 +1404,7 @@ onShow(() => {
     align-items: center;
     margin-bottom: 16rpx;
     padding-bottom: 16rpx;
-    border-bottom: 1rpx solid #f5f5f5;
+    border-bottom: 1rpx solid #eef1e2;
 
     .header-left {
       display: flex;
@@ -1421,7 +1421,7 @@ onShow(() => {
       .target-date {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333;
+        color: #26261f;
       }
 
       .kind-badge {
@@ -1431,19 +1431,19 @@ onShow(() => {
         font-weight: 600;
 
         &.order {
-          background: rgba(255, 202, 40, 0.18);
-          color: #8a5a00;
+          background: rgba(176, 141, 79, 0.18);
+          color: #8a6b33;
         }
 
         &.stock {
-          background: rgba(34, 197, 94, 0.14);
-          color: #15803d;
+          background: rgba(30, 58, 47, 0.14);
+          color: #1e3a2f;
         }
       }
 
       .create-time {
         font-size: 22rpx;
-        color: #999;
+        color: #6b6653;
       }
     }
 
@@ -1454,18 +1454,18 @@ onShow(() => {
       font-weight: bold;
 
       &.draft {
-        background-color: #f0f0f0;
-        color: #666;
+        background-color: #f0f3e9;
+        color: #26261f;
       }
 
       &.pending {
-        background-color: #fff7e6;
-        color: #fa8c16;
+        background-color: #f6efe0;
+        color: #8a6b33;
       }
 
       &.completed {
-        background-color: #f6ffed;
-        color: #52c41a;
+        background-color: #eef2e4;
+        color: #1e3a2f;
       }
     }
   }
@@ -1485,16 +1485,16 @@ onShow(() => {
 
       .label {
         font-size: 26rpx;
-        color: #666;
+        color: #26261f;
       }
 
       .value {
         font-size: 26rpx;
-        color: #333;
+        color: #26261f;
         font-weight: 500;
 
         &.cost {
-          color: #ff6b6b;
+          color: #b4553f;
           font-weight: bold;
         }
       }
@@ -1503,15 +1503,15 @@ onShow(() => {
 
   .item-footer {
     padding-top: 16rpx;
-    border-top: 1rpx solid #f5f5f5;
+    border-top: 1rpx solid #eef1e2;
     display: flex;
     justify-content: flex-end;
     align-items: center;
 
     .delete-list-btn {
       padding: 12rpx 32rpx;
-      background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
-      color: #cf1322;
+      background: linear-gradient(135deg, #f8e8e2 0%, #b4553f 100%);
+      color: #b4553f;
       border-radius: 8rpx;
       font-size: 24rpx;
       font-weight: 500;
@@ -1529,7 +1529,7 @@ onShow(() => {
 
   text {
     font-size: 26rpx;
-    color: #1890ff;
+    color: #b08d4f;
   }
 }
 </style>

@@ -600,7 +600,7 @@ const goBack = () => {
 <style scoped lang="scss">
 .record-form-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 140rpx;
 }
 
@@ -612,7 +612,7 @@ const goBack = () => {
 
   text {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
@@ -621,7 +621,7 @@ const goBack = () => {
 }
 
 .form-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -630,7 +630,7 @@ const goBack = () => {
     display: block;
     font-size: 28rpx;
     font-weight: 500;
-    color: #333;
+    color: #26261f;
     margin-bottom: 16rpx;
 
     &.inline {
@@ -652,7 +652,7 @@ const goBack = () => {
   flex-shrink: 0;
   font-size: 24rpx;
   font-weight: 600;
-  color: #1677ff;
+  color: #b08d4f;
 }
 
 .form-input {
@@ -660,8 +660,8 @@ const goBack = () => {
   height: 80rpx;
   padding: 0 24rpx;
   font-size: 28rpx;
-  color: #333;
-  background-color: #f5f5f5;
+  color: #26261f;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   box-sizing: border-box;
 }
@@ -671,7 +671,7 @@ const goBack = () => {
   align-items: center;
   gap: 12rpx;
   padding-right: 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 }
 
@@ -684,11 +684,11 @@ const goBack = () => {
   flex-shrink: 0;
   font-size: 28rpx;
   font-weight: 600;
-  color: #666;
+  color: #26261f;
 }
 
 .input-placeholder {
-  color: #999;
+  color: #6b6653;
 }
 
 .picker {
@@ -697,22 +697,22 @@ const goBack = () => {
   justify-content: space-between;
   height: 80rpx;
   padding: 0 24rpx;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
 
   .picker-text {
     font-size: 28rpx;
-    color: #333;
+    color: #26261f;
   }
 
   .picker-placeholder {
     font-size: 28rpx;
-    color: #999;
+    color: #6b6653;
   }
 
   .picker-arrow {
     font-size: 40rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
@@ -728,16 +728,16 @@ const goBack = () => {
   justify-content: space-between;
   gap: 20rpx;
   padding: 22rpx 24rpx;
-  border: 2rpx solid #eef0f5;
+  border: 2rpx solid #eef1e2;
   border-radius: 12rpx;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
 
   &.active {
-    border-color: #1677ff;
-    background-color: #f0f7ff;
+    border-color: #1e3a2f;
+    background-color: #eef2e4;
 
     .sku-check {
-      color: #1677ff;
+      color: #b08d4f;
       opacity: 1;
     }
   }
@@ -758,7 +758,7 @@ const goBack = () => {
 .sku-name {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
 }
 
 .sku-badge {
@@ -766,8 +766,8 @@ const goBack = () => {
   padding: 3rpx 10rpx;
   border-radius: 999rpx;
   font-size: 20rpx;
-  color: #1677ff;
-  background-color: #eaf3ff;
+  color: #b08d4f;
+  background-color: #eef2e4;
 }
 
 .sku-meta {
@@ -779,8 +779,8 @@ const goBack = () => {
     padding: 3rpx 8rpx;
     border-radius: 6rpx;
     font-size: 22rpx;
-    color: #666;
-    background-color: #eef0f5;
+    color: #26261f;
+    background-color: #eef2e4;
   }
 }
 
@@ -788,7 +788,7 @@ const goBack = () => {
   flex-shrink: 0;
   font-size: 32rpx;
   font-weight: 700;
-  color: #bbb;
+  color: #968f6d;
   opacity: 0.45;
 }
 
@@ -798,19 +798,19 @@ const goBack = () => {
   gap: 8rpx;
   padding: 24rpx;
   border-radius: 12rpx;
-  background-color: #fff7e8;
+  background-color: #f6efe0;
 }
 
 .empty-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #5f3b00;
+  color: #8a6b33;
 }
 
 .empty-desc {
   font-size: 24rpx;
   line-height: 1.5;
-  color: #8a5a00;
+  color: #8a6b33;
 }
 
 .bottom-actions {
@@ -821,8 +821,8 @@ const goBack = () => {
   display: flex;
   gap: 24rpx;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05);
+  background-color: #fbfcf7;
+  box-shadow: 0 -2rpx 10rpx rgba(30, 46, 36, 0.05);
   box-sizing: border-box;
 }
 
@@ -837,13 +837,13 @@ const goBack = () => {
   border: none;
 
   &.cancel {
-    background-color: #f5f5f5;
-    color: #666;
+    background-color: #fbfcf7;
+    color: #26261f;
   }
 
   &.submit {
-    background-color: #ffd700;
-    color: #333;
+    background-color: #b08d4f;
+    color: #26261f;
   }
 }
 </style>

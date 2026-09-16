@@ -996,7 +996,7 @@ const printLabel = () => {
 <style scoped lang="scss">
 .detail-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   padding-bottom: 120rpx; // 为打印按钮留出空间
 }
 
@@ -1012,7 +1012,7 @@ const printLabel = () => {
   justify-content: center;
   padding: 200rpx 0;
   font-size: 28rpx;
-  color: #999;
+  color: #6b6653;
 
   .error-icon {
     font-size: 100rpx;
@@ -1022,15 +1022,15 @@ const printLabel = () => {
   .retry-btn {
     margin-top: 40rpx;
     padding: 20rpx 48rpx;
-    background-color: #56ab91;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border: none;
     border-radius: 8rpx;
   }
 }
 
 .task-title-section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   padding: 32rpx;
   margin-bottom: 24rpx;
   display: flex;
@@ -1040,12 +1040,12 @@ const printLabel = () => {
   .recipe-name {
     font-size: 36rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .pot-info {
     font-size: 28rpx;
-    color: #56ab91;
+    color: #1e3a2f;
     font-weight: bold;
   }
 
@@ -1057,34 +1057,34 @@ const printLabel = () => {
     font-weight: bold;
 
     &.pending {
-      background-color: #fff3e0;
-      color: #ff9800;
+      background-color: #f6efe0;
+      color: #8a6b33;
     }
 
     &.in_progress {
-      background-color: #e3f2fd;
-      color: #2196f3;
+      background-color: #eef2e4;
+      color: #b08d4f;
     }
 
     &.completed {
-      background-color: #e8f5e9;
-      color: #4caf50;
+      background-color: #eef2e4;
+      color: #1e3a2f;
     }
   }
 }
 
 .section {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 0 32rpx 24rpx;
   padding: 24rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.04);
 }
 
 .section-title {
   font-size: 32rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 24rpx;
   display: flex;
   justify-content: space-between;
@@ -1092,7 +1092,7 @@ const printLabel = () => {
 
   .photo-count {
     font-size: 24rpx;
-    color: #56ab91;
+    color: #1e3a2f;
     font-weight: normal;
   }
 }
@@ -1107,13 +1107,13 @@ const printLabel = () => {
 
   .label {
     font-size: 26rpx;
-    color: #666;
+    color: #26261f;
     min-width: 180rpx;
   }
 
   .value {
     font-size: 26rpx;
-    color: #333;
+    color: #26261f;
     flex: 1;
     min-width: 0;
     word-break: break-word;
@@ -1127,7 +1127,7 @@ const printLabel = () => {
 
 .order-item {
   padding: 16rpx;
-  background-color: #f9f9f9;
+  background-color: #fbfcf7;
   border-radius: 8rpx;
   margin-bottom: 12rpx;
 
@@ -1138,11 +1138,11 @@ const printLabel = () => {
   .order-header {
     margin-bottom: 12rpx;
     padding-bottom: 8rpx;
-    border-bottom: 1rpx solid #e0e0e0;
+    border-bottom: 1rpx solid #e5e8d4;
 
     .order-id {
       font-size: 24rpx;
-      color: #999;
+      color: #6b6653;
     }
   }
 
@@ -1160,9 +1160,9 @@ const printLabel = () => {
 .total-weight {
   margin-top: 16rpx;
   padding-top: 16rpx;
-  border-top: 1rpx dashed #e0e0e0;
+  border-top: 1rpx dashed #e5e8d4;
   font-size: 26rpx;
-  color: #56ab91;
+  color: #1e3a2f;
   font-weight: bold;
   text-align: right;
 }
@@ -1172,32 +1172,32 @@ const printLabel = () => {
 }
 
 .result-panel {
-  border: 2rpx solid #e5e5e5;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   padding: 20rpx;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
   margin-bottom: 20rpx;
 
   &.result-normal {
-    border-color: #d9e8e2;
-    background-color: #f7fbf9;
+    border-color: #e5e8d4;
+    background-color: #eef2e4;
   }
 
   &.result-surplus {
-    border-color: #bfe5ce;
-    background-color: #f1fbf5;
+    border-color: #e5e8d4;
+    background-color: #eef2e4;
 
     .result-delta {
-      color: #2e9f59;
+      color: #1e3a2f;
     }
   }
 
   &.result-shortage {
-    border-color: #ffd3d3;
-    background-color: #fff7f7;
+    border-color: #e5e8d4;
+    background-color: #f8e8e2;
 
     .result-delta {
-      color: #d63f3f;
+      color: #b4553f;
     }
   }
 }
@@ -1213,7 +1213,7 @@ const printLabel = () => {
 .result-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #333;
+  color: #26261f;
 }
 
 .result-delta {
@@ -1225,7 +1225,7 @@ const printLabel = () => {
 .result-photo-title {
   font-size: 26rpx;
   font-weight: 600;
-  color: #666;
+  color: #26261f;
   margin-bottom: 12rpx;
 }
 
@@ -1234,7 +1234,7 @@ const printLabel = () => {
   align-items: center;
   gap: 6rpx;
   padding: 14rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #eef1e2;
 
   &:last-child {
     border-bottom: none;
@@ -1242,20 +1242,20 @@ const printLabel = () => {
 
   .ingredient-type {
     font-size: 22rpx;
-    color: #56ab91;
+    color: #1e3a2f;
     font-weight: bold;
     flex-shrink: 0;
 
     &.type-food {
-      color: #56ab91;  // 绿色
+      color: #1e3a2f;  // 绿色
     }
 
     &.type-supplement {
-      color: #ff9800;  // 橙色
+      color: #8a6b33;  // 橙色
     }
 
     &.type-packaging {
-      color: #2196f3;  // 蓝色
+      color: #b08d4f;  // 蓝色
     }
   }
 
@@ -1269,20 +1269,20 @@ const printLabel = () => {
 
   .ingredient-name {
     font-size: 28rpx;
-    color: #333;
+    color: #26261f;
     font-weight: 500;
     word-break: break-all;
   }
 
   .ingredient-standard-name {
     font-size: 22rpx;
-    color: #999;
+    color: #6b6653;
     word-break: break-all;
   }
 
   .ingredient-method {
     font-size: 22rpx;
-    color: #999;
+    color: #6b6653;
     flex-shrink: 0;
     margin-left: auto;
   }
@@ -1290,15 +1290,15 @@ const printLabel = () => {
 
 .ingredients-note {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
   margin-bottom: 12rpx;
 }
 
 .ingredients-summary {
   padding-top: 12rpx;
-  border-top: 1rpx solid #e0e0e0;
+  border-top: 1rpx solid #e5e8d4;
   font-size: 24rpx;
-  color: #56ab91;
+  color: #1e3a2f;
   font-weight: bold;
 }
 
@@ -1344,7 +1344,7 @@ const printLabel = () => {
     justify-content: center;
 
     .uploading-text {
-      color: #fff;
+      color: #f3eddd;
       font-size: 24rpx;
     }
   }
@@ -1356,7 +1356,7 @@ const printLabel = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(244, 67, 54, 0.9);
+  background-color: #b4553f;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
@@ -1365,7 +1365,7 @@ const printLabel = () => {
   gap: 12rpx;
 
   .error-text {
-    color: #fff;
+    color: #f3eddd;
     font-size: 22rpx;
     text-align: center;
     padding: 0 8rpx;
@@ -1373,11 +1373,11 @@ const printLabel = () => {
 
   .retry-btn {
     padding: 8rpx 24rpx;
-    background-color: #fff;
+    background-color: #fbfcf7;
     border-radius: 8rpx;
 
     text {
-      color: #f44336;
+      color: #b4553f;
       font-size: 22rpx;
       font-weight: bold;
     }
@@ -1390,42 +1390,42 @@ const printLabel = () => {
   right: -8rpx;
   width: 48rpx;
   height: 48rpx;
-  background-color: #f44336;
+  background-color: #b4553f;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #f3eddd;
   font-size: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.2);
 }
 
 .photo-upload {
   width: 200rpx;
   height: 200rpx;
-  border: 2rpx dashed #ddd;
+  border: 2rpx dashed #e5e8d4;
   border-radius: 8rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
 
   .upload-icon {
     font-size: 60rpx;
-    color: #999;
+    color: #6b6653;
     margin-bottom: 8rpx;
   }
 
   .upload-text {
     font-size: 22rpx;
-    color: #999;
+    color: #6b6653;
   }
 }
 
 .photos-hint {
   font-size: 22rpx;
-  color: #999;
+  color: #6b6653;
   text-align: center;
   margin-top: 8rpx;
 }
@@ -1433,7 +1433,7 @@ const printLabel = () => {
 .complete-section {
   margin-top: 24rpx;
   padding-top: 24rpx;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .completion-panel {
@@ -1443,7 +1443,7 @@ const printLabel = () => {
 .completion-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #26261f;
   margin-bottom: 16rpx;
 }
 
@@ -1455,25 +1455,25 @@ const printLabel = () => {
 
 .completion-option {
   height: 72rpx;
-  border: 2rpx solid #d9e8e2;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   display: flex;
   align-items: center;
   justify-content: center;
 
   text {
     font-size: 26rpx;
-    color: #45645a;
+    color: #1e3a2f;
     white-space: nowrap;
   }
 
   &.active {
-    background-color: #56ab91;
-    border-color: #56ab91;
+    background-color: #1e3a2f;
+    border-color: #1e3a2f;
 
     text {
-      color: #fff;
+      color: #f3eddd;
       font-weight: 600;
     }
   }
@@ -1483,16 +1483,16 @@ const printLabel = () => {
   margin-top: 16rpx;
   height: 80rpx;
   padding: 0 20rpx;
-  border: 2rpx solid #e5e5e5;
+  border: 2rpx solid #e5e8d4;
   border-radius: 8rpx;
   display: flex;
   align-items: center;
-  background-color: #fafafa;
+  background-color: #fbfcf7;
 }
 
 .completion-input-label {
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   margin-right: 16rpx;
   flex-shrink: 0;
 }
@@ -1502,18 +1502,18 @@ const printLabel = () => {
   min-width: 0;
   height: 72rpx;
   font-size: 28rpx;
-  color: #333;
+  color: #26261f;
 }
 
 .completion-input-unit {
   font-size: 26rpx;
-  color: #999;
+  color: #6b6653;
   margin-left: 12rpx;
   flex-shrink: 0;
 }
 
 .completion-placeholder {
-  color: #bbb;
+  color: #968f6d;
   font-size: 26rpx;
 }
 
@@ -1521,8 +1521,8 @@ const printLabel = () => {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
-  background-color: #56ab91;
-  color: #fff;
+  background-color: #1e3a2f;
+  color: #f3eddd;
   border: none;
   border-radius: 8rpx;
   font-size: 32rpx;
@@ -1530,8 +1530,8 @@ const printLabel = () => {
   text-align: center;
 
   &[disabled] {
-    background-color: #ccc;
-    color: #999;
+    background-color: #f2f4ea;
+    color: #6b6653;
   }
 }
 
@@ -1543,9 +1543,9 @@ const printLabel = () => {
   display: flex;
   gap: 16rpx;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #eee;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+  background-color: #fbfcf7;
+  border-top: 1rpx solid #eef1e2;
+  box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.05);
   z-index: 999;
 }
 
@@ -1559,21 +1559,21 @@ const printLabel = () => {
   border: none;
 
   &.primary {
-    background-color: #56ab91;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
 
     &:active {
-      background-color: #4a9680;
+      background-color: #1e3a2f;
     }
   }
 
   &.secondary {
-    background-color: #fff;
-    color: #1890ff;
-    border: 2rpx solid #1890ff;
+    background-color: #fbfcf7;
+    color: #b08d4f;
+    border: 2rpx solid #1e3a2f;
 
     &:active {
-      background-color: #f0f9ff;
+      background-color: #eef2e4;
     }
   }
 }

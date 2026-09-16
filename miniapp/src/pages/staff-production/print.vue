@@ -204,7 +204,7 @@ const goBack = () => {
 <style scoped lang="scss">
 .print-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fbfcf7;
   display: flex;
   flex-direction: column;
 }
@@ -220,15 +220,15 @@ const goBack = () => {
   .loading-spinner {
     width: 80rpx;
     height: 80rpx;
-    border: 6rpx solid #f0f0f0;
-    border-top-color: #1890ff;
+    border: 6rpx solid #eef1e2;
+    border-top-color: #1e3a2f;
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
 
   .loading-text {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
   }
 }
 
@@ -250,7 +250,7 @@ const goBack = () => {
   left: 0;
   right: 0;
   width: 100%;
-  background-color: #fff;
+  background-color: #fbfcf7;
   z-index: 999;
 }
 
@@ -262,8 +262,8 @@ const goBack = () => {
   justify-content: space-between;
   align-items: center;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  background-color: #fbfcf7;
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.05);
   z-index: 999;
 
   .back-btn {
@@ -273,13 +273,13 @@ const goBack = () => {
     align-items: center;
     justify-content: center;
     font-size: 40rpx;
-    color: #333;
+    color: #26261f;
   }
 
   .nav-title {
     font-size: 32rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
   }
 
   .placeholder {
@@ -293,13 +293,13 @@ const goBack = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #e5e5e5;
+  background-color: #f0f3e9;
   overflow: hidden;
 
   .print-image {
     width: 100%;
-    background-color: #fff;
-    box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+    background-color: #fbfcf7;
+    box-shadow: 0 8rpx 24rpx rgba(30, 46, 36, 0.1);
   }
 }
 
@@ -307,8 +307,8 @@ const goBack = () => {
   display: flex;
   gap: 24rpx;
   padding: 24rpx 32rpx;
-  background-color: #fff;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+  background-color: #fbfcf7;
+  box-shadow: 0 -2rpx 8rpx rgba(30, 46, 36, 0.05);
 
   .action-btn {
     flex: 1;
@@ -320,13 +320,13 @@ const goBack = () => {
     border: none;
 
     &.secondary {
-      background-color: #f5f5f5;
-      color: #666;
+      background-color: #fbfcf7;
+      color: #26261f;
     }
 
     &.primary {
-      background-color: #1890ff;
-      color: #fff;
+      background-color: #1e3a2f;
+      color: #f3eddd;
     }
 
     &:active {
@@ -336,16 +336,16 @@ const goBack = () => {
 }
 
 .instructions {
-  background-color: #fff;
+  background-color: #fbfcf7;
   margin: 24rpx 32rpx;
   padding: 32rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2rpx 8rpx rgba(30, 46, 36, 0.05);
 
   .instruction-title {
     font-size: 28rpx;
     font-weight: bold;
-    color: #333;
+    color: #26261f;
     margin-bottom: 24rpx;
   }
 
@@ -357,18 +357,18 @@ const goBack = () => {
 
     .step {
       font-size: 26rpx;
-      color: #666;
+      color: #26261f;
       line-height: 1.6;
     }
   }
 
   .instruction-note {
     padding-top: 24rpx;
-    border-top: 1rpx solid #f0f0f0;
+    border-top: 1rpx solid #eef1e2;
 
     text {
       font-size: 24rpx;
-      color: #999;
+      color: #6b6653;
       line-height: 1.6;
     }
   }
@@ -388,14 +388,14 @@ const goBack = () => {
 
   .error-text {
     font-size: 28rpx;
-    color: #666;
+    color: #26261f;
   }
 
   .retry-btn {
     margin-top: 32rpx;
     padding: 20rpx 48rpx;
-    background-color: #1890ff;
-    color: #fff;
+    background-color: #1e3a2f;
+    color: #f3eddd;
     border-radius: 8rpx;
     font-size: 28rpx;
     border: none;

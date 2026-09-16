@@ -140,7 +140,7 @@
 <style scoped>
 .container {
   padding: 30rpx;
-  background-color: #fff;
+  background-color: #fbfcf7;
   min-height: 100vh;
 }
 
@@ -151,14 +151,14 @@
 .title {
   font-size: 40rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   text-align: center;
   margin-bottom: 20rpx;
 }
 
 .update-time {
   font-size: 24rpx;
-  color: #999;
+  color: #6b6653;
   text-align: center;
   margin-bottom: 10rpx;
 }
@@ -171,14 +171,14 @@
   display: block;
   font-size: 30rpx;
   font-weight: bold;
-  color: #333;
+  color: #26261f;
   margin-bottom: 20rpx;
 }
 
 .section-content {
   display: block;
   font-size: 26rpx;
-  color: #666;
+  color: #26261f;
   line-height: 1.8;
   margin-bottom: 16rpx;
 }

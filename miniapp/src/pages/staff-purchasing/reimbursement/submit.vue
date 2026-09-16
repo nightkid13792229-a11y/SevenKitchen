@@ -852,25 +852,25 @@ const formatDate = (dateStr: string) => {
 .submit-reimbursement-page {
   min-height: 100vh;
   padding-bottom: 150rpx;
-  background-color: #f6f7f9;
+  background-color: #fbfcf7;
 }
 
 .page-header {
   padding: 40rpx 32rpx 28rpx;
   background-color: #ffffff;
-  border-bottom: 1rpx solid #eef0f3;
+  border-bottom: 1rpx solid #eef1e2;
 
   .title {
     display: block;
     margin-bottom: 8rpx;
-    color: #20242a;
+    color: #26261f;
     font-size: 40rpx;
     font-weight: 700;
   }
 
   .subtitle {
     display: block;
-    color: #6b7280;
+    color: #6b6653;
     font-size: 24rpx;
   }
 }
@@ -891,17 +891,17 @@ const formatDate = (dateStr: string) => {
   justify-content: center;
   gap: 8rpx;
   border-radius: 8rpx;
-  color: #8a93a3;
-  background-color: #f2f4f7;
+  color: #6b6653;
+  background-color: #eef2e4;
 
   &.active {
-    color: #0f5132;
-    background-color: #dff5e8;
+    color: #1e3a2f;
+    background-color: #1e3a2f;
   }
 
   &.done {
-    color: #1d4ed8;
-    background-color: #e8f0ff;
+    color: #b08d4f;
+    background-color: #eef2e4;
   }
 }
 
@@ -929,7 +929,7 @@ const formatDate = (dateStr: string) => {
 .section-title {
   display: block;
   margin-bottom: 22rpx;
-  color: #20242a;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 700;
 }
@@ -940,7 +940,7 @@ const formatDate = (dateStr: string) => {
 
 .section-total {
   flex-shrink: 0;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 26rpx;
   font-weight: 700;
 }
@@ -959,7 +959,7 @@ const formatDate = (dateStr: string) => {
 .expense-item,
 .summary-block,
 .confirm-row {
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
   background-color: #ffffff;
 }
@@ -973,8 +973,8 @@ const formatDate = (dateStr: string) => {
   padding: 24rpx;
 
   &.selected {
-    border-color: #22c55e;
-    background-color: #f0fdf4;
+    border-color: #1e3a2f;
+    background-color: #eef2e4;
   }
 }
 
@@ -988,7 +988,7 @@ const formatDate = (dateStr: string) => {
 .purchase-date,
 .expense-title {
   display: block;
-  color: #20242a;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -1000,7 +1000,7 @@ const formatDate = (dateStr: string) => {
 .success-desc {
   display: block;
   margin-top: 8rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -1009,7 +1009,7 @@ const formatDate = (dateStr: string) => {
 .select-state {
   flex-shrink: 0;
   min-width: 80rpx;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 24rpx;
   font-weight: 700;
   text-align: right;
@@ -1019,8 +1019,8 @@ const formatDate = (dateStr: string) => {
   margin-top: 22rpx;
   padding: 20rpx;
   border-radius: 8rpx;
-  color: #5f4b16;
-  background-color: #fff7df;
+  color: #8a6b33;
+  background-color: #f6efe0;
   font-size: 24rpx;
   line-height: 1.55;
 }
@@ -1042,13 +1042,13 @@ const formatDate = (dateStr: string) => {
   align-items: center;
   justify-content: center;
   border-radius: 8rpx;
-  color: #4b5563;
-  background-color: #f2f4f7;
+  color: #26261f;
+  background-color: #eef2e4;
   font-size: 24rpx;
 
   &.active {
     color: #ffffff;
-    background-color: #1677ff;
+    background-color: #1e3a2f;
   }
 }
 
@@ -1071,8 +1071,8 @@ const formatDate = (dateStr: string) => {
   flex-shrink: 0;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  color: #0f766e;
-  background-color: #ccfbf1;
+  color: #1e3a2f;
+  background-color: #1e3a2f;
   font-size: 22rpx;
   font-weight: 700;
 }
@@ -1081,12 +1081,12 @@ const formatDate = (dateStr: string) => {
   padding: 56rpx 24rpx;
   text-align: center;
   border-radius: 8rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
 }
 
 .empty-title {
   display: block;
-  color: #4b5563;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -1101,7 +1101,7 @@ const formatDate = (dateStr: string) => {
 .field-label {
   display: block;
   margin-bottom: 10rpx;
-  color: #4b5563;
+  color: #26261f;
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -1111,7 +1111,7 @@ const formatDate = (dateStr: string) => {
   min-height: 78rpx;
   box-sizing: border-box;
   border-radius: 8rpx;
-  background-color: #f8fafc;
+  background-color: #eef2e4;
 }
 
 .money-input {
@@ -1121,7 +1121,7 @@ const formatDate = (dateStr: string) => {
   padding: 0 20rpx;
 
   text {
-    color: #6b7280;
+    color: #6b6653;
     font-size: 26rpx;
   }
 
@@ -1148,7 +1148,7 @@ const formatDate = (dateStr: string) => {
 }
 
 .remove-link {
-  color: #d92d20;
+  color: #b4553f;
   font-size: 24rpx;
 }
 
@@ -1162,13 +1162,13 @@ const formatDate = (dateStr: string) => {
 }
 
 .ghost-btn {
-  color: #374151;
-  background-color: #eef0f3;
+  color: #26261f;
+  background-color: #eef2e4;
 }
 
 .primary-btn {
   color: #ffffff;
-  background-color: #1677ff;
+  background-color: #1e3a2f;
 }
 
 .photo-grid {
@@ -1182,7 +1182,7 @@ const formatDate = (dateStr: string) => {
   aspect-ratio: 1;
   border-radius: 8rpx;
   overflow: hidden;
-  background-color: #f2f4f7;
+  background-color: #eef2e4;
 }
 
 .photo-item {
@@ -1213,9 +1213,9 @@ const formatDate = (dateStr: string) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
-  border: 2rpx dashed #cbd5e1;
+  border: 2rpx dashed #e5e8d4;
 }
 
 .upload-plus {
@@ -1233,25 +1233,25 @@ const formatDate = (dateStr: string) => {
   padding: 10rpx 0;
 
   .label {
-    color: #6b7280;
+    color: #6b6653;
     font-size: 25rpx;
   }
 
   .value {
-    color: #20242a;
+    color: #26261f;
     font-size: 26rpx;
     font-weight: 700;
   }
 
   &.total .value {
-    color: #1677ff;
+    color: #b08d4f;
     font-size: 34rpx;
   }
 }
 
 .confirm-row {
   padding: 18rpx 20rpx;
-  color: #374151;
+  color: #26261f;
   font-size: 24rpx;
 }
 
@@ -1261,7 +1261,7 @@ const formatDate = (dateStr: string) => {
 
 .success-title {
   display: block;
-  color: #16a34a;
+  color: #1e3a2f;
   font-size: 38rpx;
   font-weight: 800;
 }
@@ -1269,7 +1269,7 @@ const formatDate = (dateStr: string) => {
 .success-number {
   display: block;
   margin-top: 16rpx;
-  color: #20242a;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -1277,7 +1277,7 @@ const formatDate = (dateStr: string) => {
 .success-amount {
   display: block;
   margin-top: 18rpx;
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 44rpx;
   font-weight: 800;
 }
@@ -1302,7 +1302,7 @@ const formatDate = (dateStr: string) => {
   gap: 18rpx;
   padding: 20rpx 24rpx 28rpx;
   background-color: #ffffff;
-  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.08);
+  box-shadow: 0 -8rpx 24rpx rgba(30, 46, 36, 0.08);
 
   button {
     flex: 1;

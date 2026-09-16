@@ -135,9 +135,9 @@ function goHome() {
 .cs-product-page {
   min-height: 100vh;
   padding: 24rpx;
-  background: #f4f6f8;
+  background: #eef2e4;
   box-sizing: border-box;
-  color: #1f2933;
+  color: #26261f;
 }
 
 .content {
@@ -150,7 +150,7 @@ function goHome() {
 .section,
 .state-card {
   padding: 24rpx;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
   background: #ffffff;
   box-sizing: border-box;
@@ -165,7 +165,7 @@ function goHome() {
   width: 180rpx;
   height: 180rpx;
   border-radius: 12rpx;
-  background: #f1f5f9;
+  background: #eef2e4;
   flex-shrink: 0;
 }
 
@@ -176,7 +176,7 @@ function goHome() {
 
 .eyebrow {
   display: block;
-  color: #1f7a5a;
+  color: #1e3a2f;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -184,7 +184,7 @@ function goHome() {
 .title {
   display: block;
   margin-top: 8rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 34rpx;
   font-weight: 800;
   line-height: 1.25;
@@ -194,7 +194,7 @@ function goHome() {
 .state-copy {
   display: block;
   margin-top: 10rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -203,7 +203,7 @@ function goHome() {
 .state-title {
   display: block;
   margin-bottom: 18rpx;
-  color: #111827;
+  color: #26261f;
   font-size: 30rpx;
   font-weight: 800;
 }
@@ -213,7 +213,7 @@ function goHome() {
   display: flex;
   gap: 14rpx;
   padding: 14rpx 0;
-  border-bottom: 1rpx solid #edf0f2;
+  border-bottom: 1rpx solid #eef1e2;
 }
 
 .step-row:last-child,
@@ -225,8 +225,8 @@ function goHome() {
   width: 40rpx;
   height: 40rpx;
   border-radius: 20rpx;
-  background: #e8f5ef;
-  color: #157347;
+  background: #eef2e4;
+  color: #1e3a2f;
   text-align: center;
   line-height: 40rpx;
   font-size: 24rpx;
@@ -237,14 +237,14 @@ function goHome() {
 .step-copy,
 .value {
   flex: 1;
-  color: #344054;
+  color: #26261f;
   font-size: 26rpx;
   line-height: 1.5;
 }
 
 .label {
   width: 150rpx;
-  color: #667085;
+  color: #6b6653;
   font-size: 25rpx;
   line-height: 1.5;
   flex-shrink: 0;
@@ -266,15 +266,15 @@ function goHome() {
 }
 
 .primary-btn {
-  background: #1677ff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: #ffffff;
 }
 
 .ghost-btn {
   margin-top: 14rpx;
   background: #ffffff;
-  color: #475467;
-  border: 1rpx solid #d0d5dd;
+  color: #b08d4f;
+  border: 1rpx solid #e5e8d4;
 }
 
 button::after {

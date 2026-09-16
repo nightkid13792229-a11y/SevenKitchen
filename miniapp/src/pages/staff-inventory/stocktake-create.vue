@@ -425,19 +425,19 @@ const submit = async (applyImmediately: boolean) => {
 .stocktake-create-page {
   min-height: 100vh;
   padding-bottom: 240rpx;
-  background: linear-gradient(180deg, #f6fbfa 0%, #f7f7fb 100%);
+  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
 }
 
 .hero {
   padding: 40rpx 32rpx 28rpx;
-  background: linear-gradient(135deg, #d7f4ea 0%, #f5f5d8 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #b08d4f 100%);
 }
 
 .hero-title {
   display: block;
   font-size: 40rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .hero-subtitle {
@@ -445,7 +445,7 @@ const submit = async (applyImmediately: boolean) => {
   margin-top: 10rpx;
   font-size: 24rpx;
   line-height: 1.6;
-  color: rgba(18, 49, 43, 0.72);
+  color: rgba(38, 38, 31, 0.6);
 }
 
 .section {
@@ -453,7 +453,7 @@ const submit = async (applyImmediately: boolean) => {
   padding: 28rpx;
   border-radius: 24rpx;
   background: #ffffff;
-  box-shadow: 0 10rpx 28rpx rgba(18, 49, 43, 0.06);
+  box-shadow: 0 10rpx 28rpx rgba(30, 46, 36, 0.06);
 }
 
 .section-header {
@@ -468,7 +468,7 @@ const submit = async (applyImmediately: boolean) => {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .section-subtitle,
@@ -480,7 +480,7 @@ const submit = async (applyImmediately: boolean) => {
 .summary-pill,
 .delta-text {
   font-size: 24rpx;
-  color: #60756f;
+  color: #26261f;
 }
 
 .section-subtitle,
@@ -494,8 +494,8 @@ const submit = async (applyImmediately: boolean) => {
   width: 100%;
   box-sizing: border-box;
   border-radius: 18rpx;
-  background: #f4f7f6;
-  color: #12312b;
+  background: #fbfcf7;
+  color: #26261f;
   font-size: 26rpx;
 }
 
@@ -528,17 +528,17 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .summary-pill {
-  background: #edf3f2;
+  background: #eef2e4;
 }
 
 .summary-pill.accent {
-  background: #d9f5ef;
-  color: #0f766e;
+  background: #1e3a2f;
+  color: #1e3a2f;
 }
 
 .summary-pill.warning {
-  background: #fff4dd;
-  color: #b45309;
+  background: #f6efe0;
+  color: #8a6b33;
 }
 
 .filter-group {
@@ -546,14 +546,14 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .filter-chip {
-  background: #edf3f2;
-  color: #5d726b;
+  background: #eef2e4;
+  color: #26261f;
   font-size: 24rpx;
 }
 
 .filter-chip.active {
-  background: #d9f5ef;
-  color: #0f766e;
+  background: #1e3a2f;
+  color: #1e3a2f;
   font-weight: 700;
 }
 
@@ -563,11 +563,11 @@ const submit = async (applyImmediately: boolean) => {
   padding: 24rpx;
   border-radius: 22rpx;
   background: #ffffff;
-  box-shadow: 0 8rpx 24rpx rgba(18, 49, 43, 0.05);
+  box-shadow: 0 8rpx 24rpx rgba(30, 46, 36, 0.05);
 }
 
 .state-card.soft {
-  background: #f8fbfa;
+  background: #eef2e4;
   box-shadow: none;
 }
 
@@ -579,11 +579,11 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .ingredient-card.danger {
-  background: linear-gradient(135deg, #fff4f4 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f8e8e2 0%, #ffffff 100%);
 }
 
 .ingredient-card.warning {
-  background: linear-gradient(135deg, #fff9ef 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #f6efe0 0%, #ffffff 100%);
 }
 
 .ingredient-main,
@@ -605,7 +605,7 @@ const submit = async (applyImmediately: boolean) => {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .ingredient-meta,
@@ -622,23 +622,23 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .status-badge.success {
-  background: #dcfce7;
-  color: #15803d;
+  background: #eef2e4;
+  color: #1e3a2f;
 }
 
 .status-badge.warning {
-  background: #fef3c7;
-  color: #b45309;
+  background: #b08d4f;
+  color: #8a6b33;
 }
 
 .status-badge.danger {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: #f8e8e2;
+  color: #b4553f;
 }
 
 .status-badge.neutral {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: #eef2e4;
+  color: #b08d4f;
 }
 
 .add-btn,
@@ -652,15 +652,15 @@ const submit = async (applyImmediately: boolean) => {
   min-width: 156rpx;
   height: 68rpx;
   line-height: 68rpx;
-  background: #0f766e;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: #ffffff;
   font-size: 24rpx;
   font-weight: 600;
 }
 
 .add-btn[disabled] {
-  background: #d7e4e1;
-  color: #7f938d;
+  background: #eef2e4;
+  color: #6b6653;
 }
 
 .field-row {
@@ -677,7 +677,7 @@ const submit = async (applyImmediately: boolean) => {
   align-items: center;
   padding-right: 24rpx;
   border-radius: 18rpx;
-  background: #f4f7f6;
+  background: #fbfcf7;
 }
 
 .field-input {
@@ -689,7 +689,7 @@ const submit = async (applyImmediately: boolean) => {
 
 .input-suffix {
   font-size: 24rpx;
-  color: #60756f;
+  color: #26261f;
 }
 
 .remove-btn,
@@ -697,9 +697,9 @@ const submit = async (applyImmediately: boolean) => {
   flex-shrink: 0;
   padding: 10rpx 18rpx;
   border-radius: 999rpx;
-  background: #edf3f2;
+  background: #eef2e4;
   font-size: 22rpx;
-  color: #12312b;
+  color: #26261f;
 }
 
 .selected-actions {
@@ -708,15 +708,15 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .delta-text.positive {
-  color: #15803d;
+  color: #1e3a2f;
 }
 
 .delta-text.negative {
-  color: #b91c1c;
+  color: #b4553f;
 }
 
 .delta-text.neutral {
-  color: #60756f;
+  color: #26261f;
 }
 
 .bottom-bar {
@@ -728,8 +728,8 @@ const submit = async (applyImmediately: boolean) => {
   align-items: center;
   gap: 16rpx;
   padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -10rpx 30rpx rgba(18, 49, 43, 0.08);
+  background: #fbfcf7;
+  box-shadow: 0 -10rpx 30rpx rgba(30, 46, 36, 0.08);
 }
 
 .bottom-summary {
@@ -741,7 +741,7 @@ const submit = async (applyImmediately: boolean) => {
   margin-top: 6rpx;
   font-size: 28rpx;
   font-weight: 700;
-  color: #12312b;
+  color: #26261f;
 }
 
 .submit-btn {
@@ -753,12 +753,12 @@ const submit = async (applyImmediately: boolean) => {
 }
 
 .submit-btn.secondary {
-  background: #edf3f2;
-  color: #12312b;
+  background: #eef2e4;
+  color: #26261f;
 }
 
 .submit-btn.primary {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
   color: #ffffff;
 }
 

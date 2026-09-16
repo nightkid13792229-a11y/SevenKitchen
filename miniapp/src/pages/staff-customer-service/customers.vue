@@ -191,9 +191,9 @@ function statusText(status?: string) {
 .staff-customer-page {
   min-height: 100vh;
   padding: 24rpx;
-  background: #f4f6f8;
+  background: #eef2e4;
   box-sizing: border-box;
-  color: #1f2933;
+  color: #26261f;
 }
 
 .search-panel,
@@ -201,7 +201,7 @@ function statusText(status?: string) {
 .state-card,
 .modal-panel {
   background: #ffffff;
-  border: 1rpx solid #e5e7eb;
+  border: 1rpx solid #e5e8d4;
   border-radius: 12rpx;
   box-sizing: border-box;
 }
@@ -216,7 +216,7 @@ function statusText(status?: string) {
 .modal-title,
 .state-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 32rpx;
   font-weight: 800;
 }
@@ -231,17 +231,17 @@ function statusText(status?: string) {
   flex: 1;
   height: 76rpx;
   padding: 0 20rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid #e5e8d4;
   border-radius: 8rpx;
   font-size: 28rpx;
-  background: #fff;
+  background: #fbfcf7;
 }
 
 .search-btn,
 .mini-btn {
   border-radius: 8rpx;
-  background: #1677ff;
-  color: #fff;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
   font-size: 26rpx;
 }
 
@@ -258,7 +258,7 @@ function statusText(status?: string) {
 
 .state-card.inline {
   margin: 16rpx 0;
-  background: #f9fafb;
+  background: #fbfcf7;
 }
 
 .state-copy,
@@ -267,7 +267,7 @@ function statusText(status?: string) {
 .history-meta {
   display: block;
   margin-top: 6rpx;
-  color: #6b7280;
+  color: #6b6653;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -288,14 +288,14 @@ function statusText(status?: string) {
 }
 
 .dog-count {
-  color: #157347;
+  color: #1e3a2f;
   font-size: 24rpx;
   font-weight: 700;
 }
 
 .dog-row {
   padding: 20rpx 0;
-  border-top: 1rpx solid #edf0f3;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .dog-main {
@@ -306,7 +306,7 @@ function statusText(status?: string) {
 .dog-name,
 .history-title {
   display: block;
-  color: #111827;
+  color: #26261f;
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -324,8 +324,8 @@ function statusText(status?: string) {
 }
 
 .mini-btn:not(.primary) {
-  background: #f3f4f6;
-  color: #374151;
+  background: #fbfcf7;
+  color: #26261f;
 }
 
 .modal-mask {
@@ -334,7 +334,7 @@ function statusText(status?: string) {
   z-index: 99;
   display: flex;
   align-items: flex-end;
-  background: rgba(17, 24, 39, 0.45);
+  background: rgba(30, 58, 47, 0.45);
 }
 
 .modal-panel {
@@ -346,18 +346,18 @@ function statusText(status?: string) {
 }
 
 .modal-close {
-  color: #1677ff;
+  color: #b08d4f;
   font-size: 26rpx;
 }
 
 .history-row {
   padding: 20rpx 0;
-  border-top: 1rpx solid #edf0f3;
+  border-top: 1rpx solid #eef1e2;
 }
 
 .history-amount {
   flex-shrink: 0;
-  color: #d4380d;
+  color: #b4553f;
   font-size: 28rpx;
   font-weight: 800;
 }

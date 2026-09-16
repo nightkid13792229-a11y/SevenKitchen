@@ -266,4 +266,65 @@ describe('PrismaRecipeRepository', () => {
       }),
     );
   });
+
+  it('filter-options 只返回「可筛选」的健康标签：排除分组标签与 0 关联标签', async () => {
+    const prisma = {
+      recipe: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            applicableLifeStages: ['ADULT', 'SENIOR'],
+            healthTagAssignments: [
+              { healthTagId: 'leaf-cod' },
+              { healthTagId: 'leaf-sweet-potato' },
+              { healthTagId: 'root-low-fat' },
+            ],
+          },
+          {
+            applicableLifeStages: ['ADULT'],
+            healthTagAssignments: [
+              { healthTagId: 'leaf-cod' },
+              { healthTagId: 'root-low-fat' },
+            ],
+          },
+          {
+            applicableLifeStages: ['ADULT'],
+            healthTagAssignments: [{ healthTagId: 'root-low-fat' }],
+          },
+        ]),
+      },
+      recipeHealthTag: {
+        findMany: jest.fn().mockResolvedValue([
+          // 分组标签：有子标签，不应作为筛选项
+          { id: 'group-ingredient', name: '原料事实', parentId: null },
+          // 叶子标签：有食谱关联，应返回
+          { id: 'leaf-cod', name: '含鳕鱼', parentId: 'group-ingredient' },
+          { id: 'leaf-sweet-potato', name: '含红薯', parentId: 'group-ingredient' },
+          // 叶子标签：0 关联，应排除（避免"点了没结果"）
+          { id: 'leaf-venison', name: '含鹿肉', parentId: 'group-ingredient' },
+          // 顶层标签且有食谱关联：必须保留（词表 seed 之前的线上状态就是这种）
+          { id: 'root-low-fat', name: '低脂', parentId: null },
+          // 顶层标签但 0 关联：排除
+          { id: 'root-empty', name: '体重管理', parentId: null },
+        ]),
+      },
+      ingredientTag: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const repository = new PrismaRecipeRepository(prisma as any);
+    (repository as any).buildIngredientGroups = jest.fn().mockResolvedValue([]);
+
+    const options = await repository.getFilterOptions();
+
+    expect(options.healthTags).toEqual([
+      { value: 'leaf-cod', label: '含鳕鱼', count: 2 },
+      { value: 'leaf-sweet-potato', label: '含红薯', count: 1 },
+      { value: 'root-low-fat', label: '低脂', count: 3 },
+    ]);
+    // 生命阶段筛选不受影响
+    expect(options.lifeStages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'ADULT', count: 3 }),
+        expect.objectContaining({ value: 'SENIOR', count: 1 }),
+      ]),
+    );
+  });
 });

@@ -369,6 +369,7 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   detailImages?: string[];
   videoUrl?: string;
   description?: string;
+  sellingPoint?: string;
   designSource?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;

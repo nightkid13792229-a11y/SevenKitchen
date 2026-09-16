@@ -101,7 +101,11 @@
       >
         <view class="life-stage-version-main">
           <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
+          <text v-if="lifeStagePlainHint" class="life-stage-version-plain">{{ lifeStagePlainHint }}</text>
           <text class="life-stage-version-copy">{{ lifeStageVersionCopy }}</text>
+          <text v-if="availableLifeStageSummary" class="life-stage-version-options">
+            {{ availableLifeStageSummary }}
+          </text>
         </view>
         <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
           切换
@@ -350,15 +354,14 @@
       <text class="report-action">查看完整报告</text>
     </view>
 
-    <!-- 用户评价板块 -->
-    <ReviewList ref="reviewListRef" :recipe-id="selectedRecipeIdForActions" />
-
-    <!-- 写评价按钮 -->
-    <view class="write-review-section">
-      <button class="btn-write-review" @tap="openReviewForm">
-        写评价
-      </button>
-    </view>
+    <!-- 用户评价板块（写评价入口收进标题行，提升可见性） -->
+    <ReviewList ref="reviewListRef" :recipe-id="selectedRecipeIdForActions">
+      <template #action>
+        <button class="btn-write-review" @tap="openReviewForm">
+          写评价
+        </button>
+      </template>
+    </ReviewList>
 
     <!-- 评论表单弹窗 -->
     <ReviewForm
@@ -390,14 +393,18 @@
             :class="{ active: isFavorite }"
             @tap="toggleFavorite"
           >
-            <text class="icon">{{ isFavorite ? '★' : '☆' }}</text>
+            <image
+              class="favorite-icon"
+              :src="isFavorite ? '/static/ui-icons/favorite-filled.png' : '/static/ui-icons/favorite-outline.png'"
+              mode="aspectFit"
+            />
             <text class="quick-label">收藏</text>
           </button>
         </view>
 
         <view class="action-buttons">
           <button class="btn-diy" @tap="generateDiySheet">
-            自己制作
+            生成原料清单
           </button>
 
           <button class="btn-order" @tap="goToOrder">
@@ -877,6 +884,34 @@ const lifeStageVersionCopy = computed(() => {
   }
   return '可切换查看该食谱已开放的生命阶段版本。'
 })
+
+// 生命阶段的通俗补充（保留设计器原始标签不变，另加一句人话帮助家长理解）
+const LIFE_STAGE_PLAIN_HINT: Record<string, string> = {
+  PUPPY_UNDER_14_WEEKS: '还没满 14 周的幼犬，肠胃更娇嫩',
+  PUPPY_14_WEEKS_PLUS: '满 14 周以上的幼犬，正在快速长身体',
+  LOW_ACTIVITY_ADULT_OR_SENIOR: '运动量偏少，或年纪偏大的狗狗',
+  HIGH_ACTIVITY_ADULT: '日常活动量正常或偏大的成年犬',
+  REPRODUCTION: '处于繁殖期的狗狗',
+  PUPPY: '处于幼犬阶段',
+  ADULT: '处于成年阶段',
+  SENIOR: '处于老年阶段',
+  PREGNANCY: '处于妊娠期',
+  LACTATION: '处于哺乳期',
+}
+
+const lifeStagePlainHint = computed(() => {
+  const stage = recipe.value.selectedLifeStage || ''
+  return LIFE_STAGE_PLAIN_HINT[stage] || ''
+})
+
+// 可选阶段摘要：让家长不点"切换"也能看到这品有哪些版本
+const availableLifeStageSummary = computed(() => {
+  const versions = recipe.value.availableLifeStageVersions || []
+  if (versions.length <= 1) return ''
+  const labels = versions.map((version) => version.label || getLifeStageLabel(version.lifeStage))
+  return `本品可选：${labels.join(' · ')}`
+})
+
 
 onMounted(async () => {
   const pages = getCurrentPages()
@@ -1676,6 +1711,22 @@ function onReviewSubmitted() {
   line-height: 1.45;
 }
 
+.life-stage-version-plain {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+  line-height: 1.45;
+}
+
+.life-stage-version-options {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #8a6b33;
+  line-height: 1.45;
+}
+
 .life-stage-version-action {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
@@ -2091,27 +2142,22 @@ function onReviewSubmitted() {
   color: #b08d4f;
 }
 
-/* 写评价按钮区域 */
-.write-review-section {
-  padding: 0 20rpx 20rpx;
-}
-
+/* 写评价按钮（位于评价区标题行右侧） */
 .btn-write-review {
-  width: 100%;
-  height: 88rpx;
+  height: 56rpx;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #fbfcf7;
-  color: #1e3a2f;
-  font-size: 30rpx;
-  font-weight: 500;
-  border-radius: 44rpx;
-  border: 2rpx solid #1e3a2f;
-  padding: 0;
-  margin: 0;
+  padding: 0 28rpx;
+  margin: 0 0 0 auto;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  font-size: 24rpx;
+  font-weight: 600;
+  border: none;
+  border-radius: 999rpx;
 }
 
 .btn-write-review::after {
@@ -2373,14 +2419,9 @@ function onReviewSubmitted() {
   border-radius: 0;
 }
 
-.quick-action .icon {
-  height: 48rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40rpx;
-  color: #6b6653;
-  line-height: 1;
+.favorite-icon {
+  width: 44rpx;
+  height: 44rpx;
 }
 
 .btn-favorite.active .icon {

@@ -3,6 +3,7 @@
     <view class="section-header">
       <text class="section-title">食谱评分</text>
       <text v-if="totalCount > 0" class="review-count">({{ totalCount }}条评价)</text>
+      <slot name="action" />
     </view>
 
     <!-- 评分汇总卡 -->

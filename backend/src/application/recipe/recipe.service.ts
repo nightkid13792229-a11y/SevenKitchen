@@ -1142,6 +1142,51 @@ export class RecipeService {
    * Update recipe (creates new version only when ingredients change)
    */
   /**
+   * 「低脂」声称的法规数值门槛校验
+   *
+   * 依据《宠物饲料标签规定》第二十条第（四）项第 4 点（犬用）：
+   * 水分 <20% → 脂肪 ≤9%；水分 20%~65% → 脂肪 ≤7%；水分 >65% → 脂肪 ≤4%（均为湿基）。
+   * 湿基脂肪 = 干物质脂肪% × (1 − 水分%)。
+   *
+   * 目的：防止再次出现已清理过的超标「低脂」声称。
+   */
+  private async assertLowFatClaimThreshold(
+    targetHealthTags: unknown,
+    nutritionDetailedData: unknown,
+  ): Promise<void> {
+    if (!Array.isArray(targetHealthTags) || targetHealthTags.length === 0) {
+      return;
+    }
+
+    const lowFatTag = await this.prisma.recipeHealthTag.findFirst({
+      where: { name: '低脂' },
+      select: { id: true },
+    });
+    if (!lowFatTag || !targetHealthTags.includes(lowFatTag.id)) {
+      return;
+    }
+
+    const detailed = (nutritionDetailedData as any) || {};
+    const nutrition = detailed.summary || detailed;
+    const moisture = Number(nutrition?.moisture_pct);
+    const fatDm = Number(nutrition?.fat_dm_pct);
+    if (!Number.isFinite(moisture) || !Number.isFinite(fatDm) || moisture <= 0) {
+      throw new BadRequestException(
+        '勾选「低脂」前需先完成营养计算：缺少有效的水分与脂肪数据，无法校验法规门槛。',
+      );
+    }
+
+    const fatWet = fatDm * (1 - moisture / 100);
+    const limit = moisture < 20 ? 9 : moisture <= 65 ? 7 : 4;
+    if (fatWet > limit) {
+      throw new BadRequestException(
+        `「低脂」需满足法规门槛：水分 ${moisture.toFixed(1)}% 时脂肪须不超过 ${limit}%（湿基），` +
+          `当前约 ${fatWet.toFixed(2)}%。请调整配方或移除该标签。`,
+      );
+    }
+  }
+
+  /**
    * AI 生成合规卖点与说明（只生成、不落库）
    *
    * 合规边界：
@@ -1249,6 +1294,12 @@ export class RecipeService {
     }
 
     const targetHealthTags = dto.targetHealthTags ?? undefined;
+
+    // 合规校验：「低脂」必须满足法规数值门槛（在写入前拦截，避免产生半成品状态）
+    await this.assertLowFatClaimThreshold(
+      targetHealthTags,
+      (dto as any).nutritionDetailedData ?? existing.nutritionDetailedData,
+    );
 
     await this.validateSupplementAlternativeItems(dto.items);
     const resolvedItems = await this.resolveRecipeItemNutritionFoodIds(
@@ -1405,6 +1456,12 @@ export class RecipeService {
         `Can only publish DRAFT recipes. Current status: ${recipe.status}`,
       );
     }
+
+    // 合规校验：「低脂」声称必须在发布前满足法规数值门槛
+    await this.assertLowFatClaimThreshold(
+      recipe.healthTagAssignments.map((assignment) => assignment.healthTagId),
+      recipe.nutritionDetailedData,
+    );
 
     const publishData: Prisma.RecipeUpdateInput = {
       status: RecipeStatus.PUBLIC,

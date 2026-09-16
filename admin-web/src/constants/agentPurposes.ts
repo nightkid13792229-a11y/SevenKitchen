@@ -20,6 +20,12 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     defaultModel: 'deepseek-v4-flash',
   },
   {
+    purpose: 'RECIPE_COPYWRITING',
+    label: '食谱文案生成',
+    description: '为食谱生成合规的一句话卖点与详细说明，并推荐合规标签',
+    defaultModel: 'deepseek-v4-pro',
+  },
+  {
     purpose: 'RECIPE_DESIGN',
     label: '食谱设计建议',
     description: '为定制食谱生成 AI 设计建议（推荐食材/营养注意等）',

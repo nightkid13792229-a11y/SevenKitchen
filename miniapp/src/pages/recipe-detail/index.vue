@@ -94,7 +94,9 @@
         <view class="life-stage-version-main">
           <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
           <text v-if="lifeStagePlainHint" class="life-stage-version-plain">{{ lifeStagePlainHint }}</text>
-          <text class="life-stage-version-copy">{{ lifeStageVersionCopy }}</text>
+          <text v-if="!showLifeStageFallbackNotice" class="life-stage-version-copy">
+            {{ lifeStageVersionCopy }}
+          </text>
           <text v-if="availableLifeStageSummary" class="life-stage-version-options">
             {{ availableLifeStageSummary }}
           </text>
@@ -102,6 +104,12 @@
         <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
           切换
         </text>
+      </view>
+
+      <!-- 未找到完全匹配版本：整行高亮提醒 -->
+      <view v-if="showLifeStageFallbackNotice" class="life-stage-fallback-notice">
+        <text class="life-stage-fallback-icon">!</text>
+        <text class="life-stage-fallback-text">{{ lifeStageVersionCopy }}</text>
       </view>
 
       <text v-if="recipe.description" class="recipe-description">
@@ -119,7 +127,7 @@
       <!-- 主料表 -->
       <view v-if="foodItems.length > 0" class="ingredient-block">
         <view class="ingredient-block-header">
-          <text class="ingredient-block-title">主料</text>
+          <text class="ingredient-block-title">食材</text>
           <text class="ingredient-block-count">{{ foodItems.length }} 种</text>
         </view>
         <view class="ingredient-table-header">
@@ -134,12 +142,6 @@
         >
           <view class="ingredient-name">
             <text>{{ item.name }}</text>
-            <text
-              v-if="item.ingredientType"
-              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
-            >
-              {{ getIngredientTypeLabel(item.ingredientType) }}
-            </text>
             <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
               {{ item.nutritionStateLabel }}
             </text>
@@ -152,8 +154,8 @@
         </view>
       </view>
 
-      <!-- 营养补充剂表 -->
-      <view v-if="supplementItems.length > 0" class="ingredient-block">
+      <!-- 营养补充剂表（独立底色，与食材表区分） -->
+      <view v-if="supplementItems.length > 0" class="ingredient-block ingredient-block--supplement">
         <view class="ingredient-block-header">
           <text class="ingredient-block-title">营养补充剂</text>
           <text class="ingredient-block-count">{{ supplementItems.length }} 种</text>
@@ -169,12 +171,6 @@
         >
           <view class="ingredient-name">
             <text>{{ item.name }}</text>
-            <text
-              v-if="item.ingredientType"
-              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
-            >
-              {{ getIngredientTypeLabel(item.ingredientType) }}
-            </text>
             <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
               {{ item.nutritionStateLabel }}
             </text>
@@ -206,12 +202,6 @@
         >
           <view class="ingredient-name">
             <text>{{ item.name }}</text>
-            <text
-              v-if="item.ingredientType"
-              :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
-            >
-              {{ getIngredientTypeLabel(item.ingredientType) }}
-            </text>
           </view>
           <view class="preparation-method">
             <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
@@ -862,8 +852,14 @@ const hasResolvedLifeStageMatch = computed(() => {
 
 const lifeStageVersionTitle = computed(() => {
   const label = selectedLifeStageLabel.value || '当前版本'
-  return `${isCurrentLifeStageMatched.value ? '已匹配' : '当前展示'}：${label}`
+  // 未匹配时不加前缀，避免"当前展示"这类冗余表述
+  return isCurrentLifeStageMatched.value ? `已匹配：${label}` : label
 })
+
+// 没有完全匹配狗狗生命阶段的版本：给出更醒目的整行提醒（而不是混在说明文字里）
+const showLifeStageFallbackNotice = computed(
+  () => hasResolvedLifeStageMatch.value && isLifeStageFallbackSelection.value,
+)
 
 const lifeStageVersionCopy = computed(() => {
   if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
@@ -1302,24 +1298,6 @@ function getNutritionStandardLabel(standard: string): string {
   return map[standard] || standard
 }
 
-function getIngredientTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    'FOOD': '食材',
-    'SUPPLEMENT': '补剂',
-    'PACKAGING': '包材',
-  }
-  return map[type] || type
-}
-
-function getIngredientTypeClass(type: string): string {
-  const map: Record<string, string> = {
-    'FOOD': 'type-food',
-    'SUPPLEMENT': 'type-supplement',
-    'PACKAGING': 'type-packaging',
-  }
-  return map[type] || ''
-}
-
 function formatFoodRatio(item: RecipeItem): string {
   if (item.ratio && item.ratio > 0) return `${formatRatio(item.ratio)}%`
   return '-'
@@ -1738,15 +1716,17 @@ function onReviewSubmitted() {
 
 /* 营养数据卡片 */
 /* 营养标准背书卡 */
+/* 营养标准背书卡：作为卖点做金色强调 */
 .standard-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 20rpx;
-  padding: 24rpx 28rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #e5e8d4;
+  padding: 26rpx 28rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
   border-radius: 16rpx;
+  box-shadow: 0 8rpx 22rpx rgba(176, 141, 79, 0.14);
 }
 
 .standard-main {
@@ -1957,14 +1937,6 @@ function onReviewSubmitted() {
   gap: 8rpx;
 }
 
-.ingredient-type-tag {
-  display: inline-block;
-  padding: 2rpx 10rpx;
-  border-radius: 4rpx;
-  font-size: 20rpx;
-  font-weight: normal;
-}
-
 .nutrition-state-tag {
   display: inline-block;
   padding: 2rpx 10rpx;
@@ -1973,21 +1945,6 @@ function onReviewSubmitted() {
   font-weight: normal;
   background-color: #fbfcf7;
   color: #26261f;
-}
-
-.type-food {
-  background-color: #eef2e4;
-  color: #1e3a2f;
-}
-
-.type-supplement {
-  background-color: #f6efe0;
-  color: #8a6b33;
-}
-
-.type-packaging {
-  background-color: #eef2e4;
-  color: #b08d4f;
 }
 
 .preparation-method {
@@ -2030,6 +1987,23 @@ function onReviewSubmitted() {
   font-size: 28rpx;
   font-weight: 700;
   color: #1e3a2f;
+}
+
+/* 食材表与营养补充剂表做底色区分 */
+.ingredient-block--supplement {
+  padding: 20rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+  border-radius: 16rpx;
+}
+
+.ingredient-block--supplement .ingredient-block-title {
+  color: #8a6b33;
+}
+
+.ingredient-block--supplement .ingredient-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .ingredient-block-count {
@@ -2411,13 +2385,16 @@ function onReviewSubmitted() {
   border-right: 1rpx solid #dde3cd;
 }
 
-/* 主转化路径：买成品（金色渐变 + 墨绿字，视觉权重最高） */
+/* 主转化路径：买成品（墨绿渐变 + 米白字 + 金描边，对比度最高） */
 .btn-order {
   flex: 1;
   border-radius: 0 42rpx 42rpx 0;
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 700;
-  background: linear-gradient(150deg, #d8bc85 0%, #b08d4f 100%);
-  color: #1e3a2f;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #f3eddd;
+  border: none;
+  box-shadow: inset 0 0 0 1rpx rgba(216, 188, 133, 0.55);
+  letter-spacing: 1rpx;
 }
 </style>

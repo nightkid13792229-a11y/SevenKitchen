@@ -22,7 +22,24 @@
 
     <!-- 基础信息区 -->
     <view class="info-section">
+      <view v-if="isNonPublicRecipe" class="internal-preview-bar">
+        <text class="internal-preview-text">内部预览版本，尚未对外发布</text>
+      </view>
+
       <text class="recipe-name">{{ recipe.name }}</text>
+
+      <!-- 价格锚点（首屏可见）：有价显示价，无价说明如何获得 -->
+      <view v-if="displayReferencePrice" class="price-anchor">
+        <text class="price-anchor-value">约 ¥{{ formatReferencePrice(displayReferencePrice.amount) }}</text>
+        <text class="price-anchor-unit">/100g</text>
+        <text v-if="displayReferencePrice.isMin" class="price-anchor-from">起</text>
+        <text class="price-anchor-note">
+          {{ displayReferencePrice.isMin ? '按狗狗体重精确计算最终价格 · 已含冷链配送' : '已含冷链配送' }}
+        </text>
+      </view>
+      <view v-else-if="showPriceFallbackCopy" class="price-anchor price-anchor--fallback">
+        <text class="price-anchor-note">价格按狗狗体重计算，进入订购可见</text>
+      </view>
 
       <view v-if="showNoDogHint" class="no-dog-hint">
         <text class="no-dog-hint-text">订购前需先创建狗狗档案，才能按体重精确计算份量与价格</text>
@@ -272,7 +289,9 @@
               displayReferencePrice.isMin ? '起' : ''
             }}
           </text>
-          <text class="reference-price-note">已含冷链配送</text>
+          <text class="reference-price-note">
+            {{ displayReferencePrice.isMin ? '按狗狗体重精确计算最终价格 · 已含冷链配送' : '已含冷链配送' }}
+          </text>
         </view>
       </view>
 
@@ -554,6 +573,7 @@ interface RecipeReferencePriceData {
   minPricePer100g: number
 }
 const referencePriceData = ref<RecipeReferencePriceData | null>(null)
+const referencePriceLoading = ref(true)
 
 // 原料排序（按sortOrder升序）
 const sortedItems = computed(() => {
@@ -574,6 +594,17 @@ const hasStructuredNutritionReport = computed(() => {
 const selectedDog = computed(() => {
   return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
 })
+
+// 非公开食谱（员工预览 / 分享链接）：给内部人员一个低调提示，避免误以为已上线
+const isNonPublicRecipe = computed(() => {
+  const status = recipe.value.status
+  return Boolean(status) && status !== 'PUBLIC'
+})
+
+// 参考价区域：加载中不展示兜底文案，避免闪现；无数据时降级为说明文案
+const showPriceFallbackCopy = computed(
+  () => Boolean(recipe.value.id) && !referencePriceLoading.value && !displayReferencePrice.value,
+)
 
 // 已登录但未建档：在详情页提前预告，避免进入订购配置页才被拦下
 const showNoDogHint = computed(() => dogsLoaded.value && dogs.value.length === 0)
@@ -630,6 +661,8 @@ function formatReferencePrice(amount: number): string {
 async function loadRecipeReferencePrice() {
   if (!recipeId.value) return
 
+  referencePriceLoading.value = true
+
   try {
     const res: any = await request({
       url: `/recipes/${recipeId.value}/reference-price`,
@@ -657,6 +690,8 @@ async function loadRecipeReferencePrice() {
     referencePriceData.value = { lifeStagePrices, minPricePer100g }
   } catch (error) {
     console.warn('[RecipeDetail] Load reference price failed:', error)
+  } finally {
+    referencePriceLoading.value = false
   }
 }
 
@@ -1821,6 +1856,61 @@ function onReviewSubmitted() {
   gap: 16rpx;
 }
 
+/* 首屏价格锚点 */
+.price-anchor {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4rpx;
+  margin-top: 16rpx;
+  padding: 16rpx 24rpx;
+  background-color: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
+  border-radius: 16rpx;
+}
+
+.price-anchor-value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #8a6b33;
+}
+
+.price-anchor-unit {
+  font-size: 24rpx;
+  color: #8a6b33;
+}
+
+.price-anchor-from {
+  font-size: 24rpx;
+  color: #8a6b33;
+}
+
+.price-anchor-note {
+  flex-basis: 100%;
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.price-anchor--fallback {
+  background-color: #f2f4ea;
+  border-color: #e5e8d4;
+}
+
+/* 非公开食谱（内部预览）提示 */
+.internal-preview-bar {
+  margin-bottom: 16rpx;
+  padding: 12rpx 20rpx;
+  background-color: #f2f4ea;
+  border: 1rpx dashed #dde3cd;
+  border-radius: 12rpx;
+}
+
+.internal-preview-text {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
 .reference-price-strip {
   display: flex;
   align-items: center;
@@ -1828,7 +1918,7 @@ function onReviewSubmitted() {
   border-radius: 16rpx;
   padding: 12rpx 20rpx;
   background: #f6efe0;
-  border: 1rpx solid rgba(180, 85, 63, 0.14);
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
 }
 
 .reference-price-copy {

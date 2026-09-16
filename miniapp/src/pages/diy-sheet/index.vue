@@ -25,13 +25,7 @@
           >
             {{ getLifeStageLabel(stage) }}
           </text>
-          <text
-            v-for="tag in recipe.targetHealthTags"
-            :key="'tag-' + tag"
-            class="tag health-tag"
-          >
-            {{ getHealthTagLabel(tag) }}
-          </text>
+          <!-- 健康标签暂不展示：待标签字典合规化后仅展示合规标签 -->
         </view>
 
         <view class="nutrition-summary">

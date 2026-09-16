@@ -1,5 +1,5 @@
 <template>
-  <view class="recipe-detail-page">
+  <view class="recipe-detail-page" :class="{ 'has-reference-price': !!displayReferencePrice }">
     <!-- 封面静态图 -->
     <view class="cover-section">
       <image
@@ -262,7 +262,7 @@
               displayReferencePrice.isMin ? '起' : ''
             }}
           </text>
-          <text class="reference-price-note">价格按狗狗档案精确计算，已含冷链配送</text>
+          <text class="reference-price-note">已含冷链配送</text>
         </view>
       </view>
 
@@ -1164,6 +1164,12 @@ function onReviewSubmitted() {
   padding-bottom: 190rpx;
 }
 
+/* 底部展示参考价条时，为加高的固定底栏预留空间，避免遮挡"写评价"按钮 */
+.recipe-detail-page.has-reference-price {
+  padding-bottom: calc(232rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(232rpx + env(safe-area-inset-bottom));
+}
+
 /* 封面图区 */
 .cover-section {
   width: 100%;
@@ -1720,6 +1726,7 @@ function onReviewSubmitted() {
 .reference-price-strip {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   border-radius: 16rpx;
   padding: 12rpx 20rpx;
   background: #f6efe0;
@@ -1729,6 +1736,8 @@ function onReviewSubmitted() {
 .reference-price-copy {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
   gap: 2rpx;
 }
 

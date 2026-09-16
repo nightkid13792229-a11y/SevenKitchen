@@ -22,13 +22,11 @@
       <view class="action-item" @tap="goToCalculatePortion">
         <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
         <text class="action-text">饭量计算</text>
-        <text class="action-sub">按体重算饭量</text>
       </view>
       <view class="action-divider" aria-hidden="true"></view>
       <view class="action-item" @tap="goToHealthRecords">
         <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
         <text class="action-text">健康管理</text>
-        <text class="action-sub">健康档案与记录</text>
       </view>
     </view>
 
@@ -182,9 +180,9 @@
             </view>
           </view>
 
-          <!-- 参考价 -->
+          <!-- 成品参考价 -->
           <view v-if="referencePriceMap[recipe.id]" class="recipe-order-row">
-            <text class="recipe-price-label">参考价</text>
+            <text class="recipe-price-label">成品参考价</text>
             <text class="recipe-price-text">约¥{{ formatReferencePrice(referencePriceMap[recipe.id].minPricePer100g) }}/100g起</text>
           </view>
 
@@ -1564,11 +1562,6 @@ defineOptions({
   font-weight: 600;
   color: #f3eddd;
   letter-spacing: 1rpx;
-}
-
-.action-sub {
-  font-size: 20rpx;
-  color: rgba(243, 237, 221, 0.6);
 }
 
 .action-divider {

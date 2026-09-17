@@ -84,7 +84,7 @@ describe('recipe-order phase one UI contract', () => {
     const sectionOrder = [
       'recipe-life-stage-picker',
       'dog-profile-context',
-      '配置天数',
+      '饭量设置',
       '>说明<',
       'bottom-bar',
     ];
@@ -154,7 +154,7 @@ describe('recipe-order phase one UI contract', () => {
 
   it('offers a quick switch to the selected dog matched life-stage recipe version from the warning', () => {
     const warningSource = templateSource.match(
-      /<view v-if="!isLifeStageMatch && showWarning"[\s\S]*?<\/view>\s*<\/view>\s*<view class="dog-feeding-grid">/,
+      /<view v-if="!isLifeStageMatch && showWarning"[\s\S]*?<\/view>\s*<\/view>\s*(?:<!--[\s\S]*?-->\s*)?<view class="feeding-note-toggle"/,
     )?.[0] || '';
     const switchSource = source.match(
       /async function switchToRecommendedLifeStage[\s\S]*?\n}\n\nasync function loadDogs/,
@@ -201,7 +201,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('自定义分装');
     expect(source).toContain('isCustomPackagePlan');
     expect(source).toContain('cancelCustomPackagePlan');
-    expect(source).toContain('请先取消自定义分装后再切换配置天数');
+    expect(source).toContain('请先取消自定义分装后再选择天数');
     expect(source).toContain('MIN_PACKAGE_SPEC_G');
     expect(source).toContain('hasInvalidPackageSpec');
     expect(source).toContain('packagePlanValidationMessage');
@@ -585,11 +585,12 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('dogsLoadFailed.value = true');
   });
 
-  it('helps customers choose a package spec: meal conversion hint + custom-plan state hint', () => {
-    expect(source).toContain('function formatPackageSpecMealHint');
-    expect(templateSource).toContain('formatPackageSpecMealHint(row.packageSpecG)');
+  it('keeps the custom-plan state hint but drops the per-package meal conversion', () => {
     // 自定义分装启用时给出常驻状态说明（原来只在点击天数时弹 toast）
     expect(source).toContain('已启用自定义分装，上方天数选择暂不生效');
     expect(templateSource).toContain('v-if="isCustomPackagePlan"');
+    // 每袋餐数换算按产品要求不再展示
+    expect(source).not.toContain('formatPackageSpecMealHint');
+    expect(templateSource).not.toContain('package-spec-meal-hint');
   });
 });

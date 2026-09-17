@@ -57,18 +57,20 @@ describe('customer service page placement regressions', () => {
   it('renders the inline customer service button as text only', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 
-    expect(source).toContain('问Seven爸')
+    expect(source).toContain('咨询客服')
     expect(source).not.toContain('customer-service-inline-icon')
     expect(source).not.toContain('<text class="customer-service-inline-icon">问</text>')
   })
 
-  it('uses a prominent primary style for the inline customer service button', () => {
+  it('uses a prominent secondary (gold) style for the inline customer service button', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 
-    expect(source).toContain('background: #07c160;')
-    expect(source).toContain('color: #ffffff;')
-    expect(source).toContain('box-shadow: 0 8rpx 18rpx rgba(7, 193, 96, 0.22);')
+    // 金色次级样式：醒目但不与底部主按钮（墨绿实心「确认订单」）抢主次
+    expect(source).toContain('background: #f6efe0;')
+    expect(source).toContain('color: #8a6b33;')
+    expect(source).toContain('border: 1rpx solid rgba(176, 141, 79, 0.55);')
     expect(source).toContain('font-size: 26rpx;')
+    expect(source).not.toContain('background: #07c160;')
   })
 
   it('keeps the cart page and its shortcut removed from the mini program', () => {

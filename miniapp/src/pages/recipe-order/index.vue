@@ -96,6 +96,7 @@
         </scroll-view>
 
         <view v-if="selectedDog" class="dog-profile-context">
+          <!-- 六个参数合并一行：年龄 / 性别 / 体重 / 每日餐次 / 每日参考 / 每餐约 -->
           <view class="dog-profile-facts">
             <view
               v-for="fact in dogProfileFacts"
@@ -129,21 +130,6 @@
           </view>
         </view>
 
-        <view class="dog-feeding-grid">
-          <view class="dog-feeding-item daily-intake-item">
-            <text class="feeding-label">每日餐次</text>
-            <text class="feeding-value">{{ mealsPerDayText }}</text>
-          </view>
-          <view class="dog-feeding-item">
-            <text class="feeding-label">每日参考</text>
-            <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
-          </view>
-          <view class="dog-feeding-item">
-            <text class="feeding-label">每餐约</text>
-            <text class="feeding-value">{{ perMealIntakeText }}</text>
-          </view>
-        </view>
-
         <!-- 首单喂食量说明：默认收起，避免挤压主要内容 -->
         <view class="feeding-note-toggle" @tap="toggleFeedingNote">
           <text class="feeding-note-toggle-text">首单起始喂食量说明</text>
@@ -157,7 +143,7 @@
 
     <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">配置天数</text>
+        <text class="title-text">饭量设置</text>
       </view>
 
       <view class="cycle-options">
@@ -206,9 +192,6 @@
               @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
             />
             <text class="package-input-unit">g</text>
-            <text v-if="formatPackageSpecMealHint(row.packageSpecG)" class="package-spec-meal-hint">
-              {{ formatPackageSpecMealHint(row.packageSpecG) }}
-            </text>
           </view>
           <view class="package-input-group">
             <text class="package-input-label">袋数</text>
@@ -432,41 +415,6 @@
               </text>
             </view>
           </template>
-        </view>
-      </view>
-    </view>
-
-    <view class="section price-breakdown-section" v-if="isAdminUser && selectedDog && pricePreview && pricePreview.pricingBreakdown">
-      <view class="section-title clickable" @tap="togglePriceBreakdown">
-        <view class="title-stack">
-          <text class="title-text">价格计算明细</text>
-          <text class="title-subtitle">管理员可见，点击查看成本摘要</text>
-        </view>
-        <text class="toggle-icon">{{ showPriceBreakdown ? '▲' : '▼' }}</text>
-      </view>
-
-      <view v-if="showPriceBreakdown" class="breakdown-content">
-        <view class="breakdown-group">
-          <view class="breakdown-item">
-            <text class="breakdown-label">原料成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costIngredients.toFixed(2) }}</text>
-          </view>
-          <view class="breakdown-item">
-            <text class="breakdown-label">包材成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costPackaging.toFixed(2) }}</text>
-          </view>
-          <view class="breakdown-item">
-            <text class="breakdown-label">人工成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costLabor.toFixed(2) }}</text>
-          </view>
-          <view class="breakdown-item">
-            <text class="breakdown-label">间接成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costOverhead.toFixed(2) }}</text>
-          </view>
-          <view class="breakdown-item total">
-            <text class="breakdown-label">最终金额</text>
-            <text class="breakdown-value final">¥{{ pricePreview.amountTotal.toFixed(2) }}</text>
-          </view>
         </view>
       </view>
     </view>
@@ -762,7 +710,6 @@ const preparationMethod = ref<PreparationMethod | null>('CHOPPED')
 const cookingMethod = ref<CookingMethod | null>('RAW')
 
 // 价格明细展开状态
-const showPriceBreakdown = ref(false)
 
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
@@ -954,47 +901,36 @@ const recommendedLifeStageOption = computed(() => {
 const dogProfileFacts = computed(() => {
   if (!selectedDog.value) return []
 
-  // 餐次已移至喂食区（与「每日参考 / 每餐约」聚合展示）
+  // 六项合并一行展示：档案信息（年龄/性别/体重）+ 喂食参数（餐次/每日量/每餐量）
   return [
     { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
     { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
     { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
+    { label: '每日餐次', value: mealsPerDayText.value },
+    { label: '每日参考', value: dailySuggestedIntakeText.value },
+    { label: '每餐约', value: perMealIntakeText.value },
   ]
 })
 const mealsPerDayText = computed(() => {
   const meals = selectedDog.value?.mealsPerDay
   if (!meals) return '计算中'
-  return `${meals} 餐`
+  return `${meals}餐`
 })
 const dailySuggestedIntakeText = computed(() => {
   if (!displayDailyIntakeG.value) return '计算中'
-  return `${Math.round(displayDailyIntakeG.value)}g/天`
+  return `${Math.round(displayDailyIntakeG.value)}g`
 })
 const perMealIntakeText = computed(() => {
   if (!perMealG.value) return '计算中'
   return `${Math.round(perMealG.value)}g`
 })
-// 每袋克数换算成「约几餐」，帮助顾客选择分装规格（每餐克数已知）
-function formatPackageSpecMealHint(specG: number | undefined | null): string {
-  const perMeal = perMealG.value
-  if (!specG || !perMeal || perMeal <= 0) return ''
-  const meals = specG / perMeal
-  if (!Number.isFinite(meals) || meals <= 0) return ''
-  const text = meals >= 10 ? String(Math.round(meals)) : meals.toFixed(1).replace(/\.0$/, '')
-  return `≈${text}餐`
-}
-
 const packagePlanInlineSummaryText = computed(() => {
   const specs = Array.from(new Set(
     normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
   ))
   const specText = specs.length > 0 ? specs.join('、') : '-'
 
-  const singleSpecHint = isSinglePackageSpec.value
-    ? formatPackageSpecMealHint(normalizedPackagePlan.value[0]?.packageSpecG)
-    : ''
-
-  return `每袋 ${specText}${singleSpecHint ? `（${singleSpecHint}）` : ''} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
+  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
 })
 
 const averagePricePerPackage = computed(() => {
@@ -1674,10 +1610,6 @@ function selectCookingMethod(method: CookingMethod) {
 }
 
 // 切换价格明细显示
-function togglePriceBreakdown() {
-  showPriceBreakdown.value = !showPriceBreakdown.value
-}
-
 // 切换计算说明
 function toggleCalculationDetails() {
   showCalculationDetails.value = !showCalculationDetails.value
@@ -1686,7 +1618,7 @@ function toggleCalculationDetails() {
 function selectCycle(days: number) {
   if (isCustomPackagePlan.value) {
     uni.showToast({
-      title: '请先取消自定义分装后再切换配置天数',
+      title: '请先取消自定义分装后再选择天数',
       icon: 'none',
     })
     return
@@ -2189,64 +2121,6 @@ onShow(() => {
 /* 预估喂食量 */
 .feeding-section {
   border-top: 1rpx solid #e5e8d4;
-}
-
-.feeding-info {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.feeding-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-}
-
-.feeding-label {
-  font-size: 28rpx;
-  color: #26261f;
-}
-
-.feeding-value {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.feeding-value.readonly {
-  color: #6b6653;
-}
-
-.feeding-value-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.feeding-edit-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.feeding-input-small {
-  width: 100rpx;
-  height: 60rpx;
-  text-align: center;
-  border: 2rpx solid #1e3a2f;
-  border-radius: 8rpx;
-  font-size: 28rpx;
-  color: #26261f;
-  background-color: #fbfcf7;
-}
-
-.feeding-unit {
-  font-size: 26rpx;
-  color: #6b6653;
 }
 
 .btn-edit {
@@ -2930,103 +2804,6 @@ onShow(() => {
   color: #b4553f;
 }
 
-/* 价格明细 */
-.price-breakdown-section {
-  background-color: #fbfcf7;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-  border-radius: 16rpx;
-}
-
-.price-breakdown-section .section-title {
-  cursor: pointer;
-}
-
-.title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.toggle-icon {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.subtitle {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.breakdown-content {
-  margin-top: 20rpx;
-}
-
-.breakdown-group {
-  margin-bottom: 24rpx;
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-}
-
-.breakdown-group:last-child {
-  margin-bottom: 0;
-}
-
-.breakdown-group.final {
-  background-color: #f6efe0;
-  border: 2rpx solid #b08d4f;
-}
-
-.breakdown-group-title {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #26261f;
-  margin-bottom: 16rpx;
-  padding-bottom: 12rpx;
-  border-bottom: 1rpx solid #e5e8d4;
-}
-
-.breakdown-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12rpx 0;
-}
-
-.breakdown-item.total {
-  padding-top: 16rpx;
-  margin-top: 8rpx;
-  border-top: 1rpx dashed #e5e8d4;
-}
-
-.breakdown-item.final {
-  padding: 16rpx 0;
-}
-
-.breakdown-label {
-  font-size: 26rpx;
-  color: #26261f;
-}
-
-.breakdown-value {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #26261f;
-}
-
-.breakdown-value.highlight {
-  color: #b4553f;
-}
-
-.breakdown-value.final {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #b4553f;
-}
-
 /* 详细展示样式 */
 .clickable {
   cursor: pointer;
@@ -3411,16 +3188,14 @@ onShow(() => {
 }
 
 .hero-meta-label,
-.summary-label,
-.feeding-label {
+.summary-label {
   font-size: 24rpx;
   color: #6b6653;
 }
 
 .hero-meta-value,
 .recipe-meta-value,
-.summary-value,
-.feeding-value {
+.summary-value {
   font-size: 28rpx;
   color: #26261f;
   font-weight: 700;
@@ -3525,11 +3300,6 @@ onShow(() => {
   line-height: 1.35;
 }
 
-.feeding-grid {
-  display: flex;
-  gap: 12rpx;
-}
-
 .dog-empty-state {
   display: flex;
   flex-direction: column;
@@ -3625,66 +3395,43 @@ onShow(() => {
   border: 1rpx solid #eef1e2;
 }
 
+/* 档案 + 喂食共 6 项，单行 6 列展示 */
 .dog-profile-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6rpx;
 }
 
 .dog-profile-fact {
-  display: inline-flex;
-  align-items: center;
-  gap: 6rpx;
-  max-width: 100%;
-  padding: 4rpx 10rpx;
-  border-radius: 6rpx;
-  background-color: #fbfcf7;
-  color: #26261f;
-  line-height: 1.35;
-}
-
-.dog-profile-fact-label {
-  font-size: 21rpx;
-  color: #6b6653;
-}
-
-.dog-profile-fact-value {
-  min-width: 0;
-  font-size: 23rpx;
-  font-weight: 700;
-  color: #26261f;
-  word-break: keep-all;
-}
-
-.dog-feeding-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
-}
-
-.feeding-item,
-.dog-feeding-item {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  padding: 16rpx 10rpx;
+  gap: 4rpx;
+  min-width: 0;
+  padding: 14rpx 4rpx;
+  border-radius: 12rpx;
   background-color: #fbfcf7;
-  border-radius: 8rpx;
-  text-align: center;
+  line-height: 1.3;
+}
+
+.dog-profile-fact-label {
+  font-size: 20rpx;
+  color: #968f6d;
+  white-space: nowrap;
+}
+
+.dog-profile-fact-value {
+  min-width: 0;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  white-space: nowrap;
 }
 
 .dog-profile-item,
 .daily-intake-item {
   grid-column: span 1;
-}
-
-.dog-feeding-item:nth-child(3),
-.daily-intake-item {
-  background-color: #eef2e4;
 }
 
 .inline-warning-card {
@@ -3834,12 +3581,6 @@ onShow(() => {
   color: #8a6b33;
 }
 
-.package-spec-meal-hint {
-  margin-left: 8rpx;
-  font-size: 22rpx;
-  color: #968f6d;
-}
-
 .package-plan-toolbar {
   display: flex;
   align-items: center;
@@ -3858,19 +3599,20 @@ onShow(() => {
 }
 
 .package-edit-button {
-  min-width: 172rpx;
-  height: 60rpx;
+  flex: 0 0 auto;
+  height: 64rpx;
   line-height: 1;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
-  padding: 0 18rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #1e3a2f;
-  color: #1e3a2f;
-  background-color: #fbfcf7;
-  font-size: 25rpx;
+  padding: 0 26rpx;
+  margin: 0;
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  border-radius: 999rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 600;
 }
 
 .package-plan-preview {

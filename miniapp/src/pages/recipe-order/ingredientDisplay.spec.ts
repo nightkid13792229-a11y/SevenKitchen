@@ -6,18 +6,22 @@ import {
 } from './ingredientDisplay';
 
 describe('recipe-order ingredient display helpers', () => {
-  it('prefers procurement SKU name over standard ingredient name', () => {
+  it('prefers the standard ingredient name over the procurement SKU name', () => {
     expect(buildIngredientDisplayName({
-      name: '牛霖',
-      procurementSkuName: '藏区散养牦牛牛霖',
-    })).toBe('藏区散养牦牛牛霖');
+      name: '土豆',
+      procurementSkuName: '土豆 盒马日日鲜去皮新土豆',
+    })).toBe('土豆');
+    expect(buildIngredientDisplayName({
+      name: '鸡胸',
+      procurementSkuName: '鸡胸 生鲜鸡大胸',
+    })).toBe('鸡胸');
   });
 
-  it('falls back to standard ingredient name when procurement SKU name is missing', () => {
+  it('falls back to procurement SKU name when ingredient name is missing', () => {
     expect(buildIngredientDisplayName({
-      name: '牛霖',
-      procurementSkuName: '',
-    })).toBe('牛霖');
+      name: '',
+      procurementSkuName: '藏区散养牦牛牛霖',
+    })).toBe('藏区散养牦牛牛霖');
   });
 
   it('shows purchase channel and brand as separate display values', () => {

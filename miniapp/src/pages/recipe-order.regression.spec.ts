@@ -193,8 +193,10 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('{{ fact.value }}');
     expect(source).toContain('const dogProfileFacts = computed');
     expect(source).not.toContain('dogProfileSummaryText');
-    expect(templateSource).toContain('主食能量');
+    // 喂食三要素：每天几餐 / 每天多少克 / 每餐多少克（原「主食能量」因过于技术已移除）
+    expect(templateSource).toContain('每日餐次');
     expect(templateSource).toContain('每日参考');
+    expect(templateSource).not.toContain('主食能量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('自定义分装');
     expect(source).toContain('isCustomPackagePlan');
@@ -581,5 +583,13 @@ describe('recipe-order phase one UI contract', () => {
     );
     expect(source).toContain("pageLoadError.value = '食谱信息加载失败，请检查网络后重试'");
     expect(source).toContain('dogsLoadFailed.value = true');
+  });
+
+  it('helps customers choose a package spec: meal conversion hint + custom-plan state hint', () => {
+    expect(source).toContain('function formatPackageSpecMealHint');
+    expect(templateSource).toContain('formatPackageSpecMealHint(row.packageSpecG)');
+    // 自定义分装启用时给出常驻状态说明（原来只在点击天数时弹 toast）
+    expect(source).toContain('已启用自定义分装，上方天数选择暂不生效');
+    expect(templateSource).toContain('v-if="isCustomPackagePlan"');
   });
 });

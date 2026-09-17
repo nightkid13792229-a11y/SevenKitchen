@@ -131,6 +131,10 @@
 
         <view class="dog-feeding-grid">
           <view class="dog-feeding-item daily-intake-item">
+            <text class="feeding-label">每日餐次</text>
+            <text class="feeding-value">{{ mealsPerDayText }}</text>
+          </view>
+          <view class="dog-feeding-item">
             <text class="feeding-label">每日参考</text>
             <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
           </view>
@@ -138,13 +142,14 @@
             <text class="feeding-label">每餐约</text>
             <text class="feeding-value">{{ perMealIntakeText }}</text>
           </view>
-          <view class="dog-feeding-item">
-            <text class="feeding-label">主食能量</text>
-            <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
-          </view>
         </view>
 
-        <text class="section-note feeding-adjustment-note">
+        <!-- 首单喂食量说明：默认收起，避免挤压主要内容 -->
+        <view class="feeding-note-toggle" @tap="toggleFeedingNote">
+          <text class="feeding-note-toggle-text">首单起始喂食量说明</text>
+          <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
+        </view>
+        <text v-if="feedingNoteExpanded" class="section-note feeding-adjustment-note">
           首单起始喂食量：已按国内城市犬的常见活动量保守估算。建议观察2-4周体重、便便和饥饿感，再按5%-10%小幅调整。
         </text>
       </view>
@@ -165,6 +170,10 @@
         >
           <text class="cycle-text">{{ days }}天</text>
         </view>
+      </view>
+
+      <view v-if="isCustomPackagePlan" class="package-plan-mode-hint">
+        <text class="package-plan-mode-hint-text">已启用自定义分装，上方天数选择暂不生效</text>
       </view>
 
       <view class="package-plan-toolbar">
@@ -197,6 +206,9 @@
               @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
             />
             <text class="package-input-unit">g</text>
+            <text v-if="formatPackageSpecMealHint(row.packageSpecG)" class="package-spec-meal-hint">
+              {{ formatPackageSpecMealHint(row.packageSpecG) }}
+            </text>
           </view>
           <view class="package-input-group">
             <text class="package-input-label">袋数</text>
@@ -942,17 +954,17 @@ const recommendedLifeStageOption = computed(() => {
 const dogProfileFacts = computed(() => {
   if (!selectedDog.value) return []
 
+  // 餐次已移至喂食区（与「每日参考 / 每餐约」聚合展示）
   return [
     { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
     { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
     { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
-    { label: '餐次', value: `每日 ${selectedDog.value.mealsPerDay} 餐` },
   ]
 })
-const dailyMainFoodEnergyText = computed(() => {
-  const kcal = dogCalcResult.value?.finalFoodKcal
-  if (!kcal || !Number.isFinite(kcal)) return '计算中'
-  return `${Math.round(kcal)} kcal/天`
+const mealsPerDayText = computed(() => {
+  const meals = selectedDog.value?.mealsPerDay
+  if (!meals) return '计算中'
+  return `${meals} 餐`
 })
 const dailySuggestedIntakeText = computed(() => {
   if (!displayDailyIntakeG.value) return '计算中'
@@ -962,13 +974,27 @@ const perMealIntakeText = computed(() => {
   if (!perMealG.value) return '计算中'
   return `${Math.round(perMealG.value)}g`
 })
+// 每袋克数换算成「约几餐」，帮助顾客选择分装规格（每餐克数已知）
+function formatPackageSpecMealHint(specG: number | undefined | null): string {
+  const perMeal = perMealG.value
+  if (!specG || !perMeal || perMeal <= 0) return ''
+  const meals = specG / perMeal
+  if (!Number.isFinite(meals) || meals <= 0) return ''
+  const text = meals >= 10 ? String(Math.round(meals)) : meals.toFixed(1).replace(/\.0$/, '')
+  return `≈${text}餐`
+}
+
 const packagePlanInlineSummaryText = computed(() => {
   const specs = Array.from(new Set(
     normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
   ))
   const specText = specs.length > 0 ? specs.join('、') : '-'
 
-  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
+  const singleSpecHint = isSinglePackageSpec.value
+    ? formatPackageSpecMealHint(normalizedPackagePlan.value[0]?.packageSpecG)
+    : ''
+
+  return `每袋 ${specText}${singleSpecHint ? `（${singleSpecHint}）` : ''} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
 })
 
 const averagePricePerPackage = computed(() => {
@@ -1428,6 +1454,12 @@ function getDogGenderLabel(gender?: string): string {
     FEMALE: '妹妹',
   }
   return gender ? map[gender] || gender : '性别未知'
+}
+
+const feedingNoteExpanded = ref(false)
+
+function toggleFeedingNote() {
+  feedingNoteExpanded.value = !feedingNoteExpanded.value
 }
 
 function dismissWarning() {
@@ -3664,6 +3696,24 @@ onShow(() => {
   margin-top: 18rpx;
 }
 
+.feeding-note-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14rpx;
+  padding: 12rpx 4rpx;
+}
+
+.feeding-note-toggle-text {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.feeding-note-toggle-action {
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
 .feeding-adjustment-note {
   padding: 16rpx 18rpx;
   border-radius: 8rpx;
@@ -3769,6 +3819,25 @@ onShow(() => {
   font-size: 28rpx;
   color: #26261f;
   font-weight: 700;
+}
+
+.package-plan-mode-hint {
+  margin-top: 14rpx;
+  padding: 12rpx 18rpx;
+  background-color: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
+  border-radius: 12rpx;
+}
+
+.package-plan-mode-hint-text {
+  font-size: 22rpx;
+  color: #8a6b33;
+}
+
+.package-spec-meal-hint {
+  margin-left: 8rpx;
+  font-size: 22rpx;
+  color: #968f6d;
 }
 
 .package-plan-toolbar {

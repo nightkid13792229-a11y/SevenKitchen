@@ -195,7 +195,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('dogProfileSummaryText');
     // 喂食三要素：每天几餐 / 每天多少克 / 每餐多少克（原「主食能量」因过于技术已移除）
     expect(templateSource).toContain('每日餐次');
-    expect(templateSource).toContain('每日参考');
+    expect(source).toContain("label: '每日饭量'");
     expect(templateSource).not.toContain('主食能量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('自定义分装');

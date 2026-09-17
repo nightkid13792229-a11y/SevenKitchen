@@ -81,6 +81,8 @@
       </view>
 
       <view v-else class="dog-feeding-content">
+        <!-- 选项卡与下方参数同属一只狗：同一内嵌面板 + 分隔线，建立视觉归属 -->
+        <view class="dog-context-panel">
         <scroll-view scroll-x class="order-dog-scroll">
           <view
             v-for="dog in dogs"
@@ -96,7 +98,7 @@
         </scroll-view>
 
         <view v-if="selectedDog" class="dog-profile-context">
-          <!-- 六个参数合并一行：年龄 / 性别 / 体重 / 每日餐次 / 每日参考 / 每餐约 -->
+          <!-- 六个参数合并一行：年龄 / 性别 / 体重 / 每日餐次 / 每日饭量 / 每餐约 -->
           <view class="dog-profile-facts">
             <view
               v-for="fact in dogProfileFacts"
@@ -107,6 +109,7 @@
               <text class="dog-profile-fact-value">{{ fact.value }}</text>
             </view>
           </view>
+        </view>
         </view>
 
         <view v-if="!isLifeStageMatch && showWarning" class="warning-card inline-warning-card">
@@ -907,7 +910,7 @@ const dogProfileFacts = computed(() => {
     { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
     { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
     { label: '每日餐次', value: mealsPerDayText.value },
-    { label: '每日参考', value: dailySuggestedIntakeText.value },
+    { label: '每日饭量', value: dailySuggestedIntakeText.value },
     { label: '每餐约', value: perMealIntakeText.value },
   ]
 })
@@ -3388,11 +3391,18 @@ onShow(() => {
   color: #26261f;
 }
 
+/* 选项卡 + 参数行的统一容器，形成视觉归属 */
+.dog-context-panel {
+  padding: 16rpx;
+  border-radius: 16rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+}
+
 .dog-profile-context {
-  padding: 14rpx 16rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #eef1e2;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 /* 档案 + 喂食共 6 项，单行 6 列展示 */

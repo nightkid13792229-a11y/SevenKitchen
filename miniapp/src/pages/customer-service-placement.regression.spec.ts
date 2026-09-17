@@ -54,12 +54,13 @@ describe('customer service page placement regressions', () => {
     expect(templateSource).toContain('title="订单列表咨询"')
   })
 
-  it('renders the inline customer service button as text only', () => {
+  it('renders the inline customer service button with an icon and label', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 
     expect(source).toContain('咨询客服')
-    expect(source).not.toContain('customer-service-inline-icon')
-    expect(source).not.toContain('<text class="customer-service-inline-icon">问</text>')
+    // 图标：金色对话气泡（原为纯文字，按产品要求补充图标）
+    expect(source).toContain('customer-service-inline-icon')
+    expect(source).toContain("src=\"/static/ui-icons/service-chat.png\"")
   })
 
   it('uses a prominent secondary (gold) style for the inline customer service button', () => {

@@ -4,6 +4,11 @@
     class="customer-service-inline-button"
     @tap="handleCustomerServiceTap"
   >
+    <image
+      class="customer-service-inline-icon"
+      src="/static/ui-icons/service-chat.png"
+      mode="aspectFit"
+    />
     <text class="customer-service-inline-text">咨询客服</text>
   </button>
 </template>
@@ -110,6 +115,13 @@ onMounted(async () => {
 
 .customer-service-inline-button::after {
   border: none;
+}
+
+.customer-service-inline-icon {
+  width: 34rpx;
+  height: 34rpx;
+  margin-right: 8rpx;
+  flex-shrink: 0;
 }
 
 .customer-service-inline-text {

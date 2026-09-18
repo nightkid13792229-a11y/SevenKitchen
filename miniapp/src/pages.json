@@ -4,6 +4,9 @@
       "path": "pages/home/index",
       "style": {
         "navigationBarTitleText": "赛文的食堂",
+        "navigationBarBackgroundColor": "#1E3A2F",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#1E3A2F",
         "enablePullDownRefresh": true
       }
     },

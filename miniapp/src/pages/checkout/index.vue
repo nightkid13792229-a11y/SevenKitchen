@@ -235,6 +235,14 @@
       <view class="price-card-note">
         <text class="price-note-text">已含冷链配送费</text>
       </view>
+
+      <!-- 售后保障复述：支付前最后一次安心（与订购页同一口径） -->
+      <view class="checkout-assurance">
+        <text class="checkout-assurance-icon">✓</text>
+        <text class="checkout-assurance-text">
+          收到后如有破损、变质等品质问题，可申请全额退款或免费重做
+        </text>
+      </view>
     </view>
 
     <!-- 底部操作栏 -->
@@ -313,7 +321,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { request } from '../../utils/api';
 import { ensurePhoneBound } from '../../utils/account';
-import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
+import { trackFunnelEvent } from '../../utils/funnel';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -880,6 +889,14 @@ onMounted(() => {
 
 // onShow - 每次页面显示时重新加载地址
 onShow(async () => {
+  // 漏斗：进入结算页（漏斗第 7 步）
+  trackFunnelEvent({
+    eventName: 'checkout_view',
+    step: 'checkout',
+    recipeId: orderConfig.value.recipeId,
+    dogId: orderConfig.value.dogId,
+  });
+
   if (!(await ensurePhoneBound())) {
     return;
   }
@@ -1178,6 +1195,20 @@ async function submitOrder(hasRefreshedSnapshot = false) {
     if (confirmRes.code !== 0) {
       throw new Error(confirmRes.message || '确认订单失败');
     }
+
+    // 漏斗：订单提交成功（漏斗第 8 步）
+    trackFunnelEvent({
+      eventName: 'order_submitted',
+      step: 'order_submitted',
+      recipeId: orderConfig.value.recipeId,
+      dogId: orderConfig.value.dogId,
+      orderId,
+      properties: {
+        amountTotal: totalAmount.value,
+        // 支付前的最后一道：用于验证"绑手机后置到结算"是否真的没有漏人
+        hadAddress: Boolean(selectedAddress.value?.id),
+      },
+    });
 
     uni.hideLoading();
     uni.showToast({
@@ -1787,6 +1818,37 @@ function goToAddAddress() {
 .price-note-text {
   font-size: 22rpx;
   color: #6b6653;
+}
+
+/* 售后保障复述：与订购页同一口径，支付前再讲一次 */
+.checkout-assurance {
+  display: flex;
+  align-items: flex-start;
+  margin: 20rpx 24rpx 0;
+  padding: 18rpx 20rpx;
+  background: #eef3ea;
+  border-radius: 12rpx;
+}
+
+.checkout-assurance-icon {
+  flex: none;
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 14rpx;
+  border-radius: 50%;
+  background: #1e3a2f;
+  color: #f6efe0;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 32rpx;
+}
+
+.checkout-assurance-text {
+  flex: 1;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #1e3a2f;
 }
 
 .price-label {

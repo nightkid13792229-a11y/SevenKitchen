@@ -155,6 +155,20 @@
       }
     },
     {
+      "path": "pages/supplement-order/index",
+      "style": {
+        "navigationBarTitleText": "一键购买补剂",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "pages/supplement-orders/index",
+      "style": {
+        "navigationBarTitleText": "我的补剂订单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/staff-workbench/index",
       "style": {
         "navigationBarTitleText": "工作台"

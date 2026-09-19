@@ -84,7 +84,9 @@ describe('recipe-order phase one UI contract', () => {
     const sectionOrder = [
       'recipe-life-stage-picker',
       'dog-profile-context',
-      '饭量设置',
+      '一次准备几天的量',
+      '原料明细',
+      '交付与保障',
       '>说明<',
       'bottom-bar',
     ];

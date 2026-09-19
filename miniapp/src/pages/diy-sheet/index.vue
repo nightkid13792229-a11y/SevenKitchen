@@ -171,6 +171,21 @@
           </view>
         </view>
 
+        <!-- 一键购买补剂（补剂商城开放时才展示） -->
+        <view
+          v-if="supplementShopEnabled && supplementItemsDetailed.length > 0"
+          class="supplement-buy-card"
+          @tap="handleBuySupplements"
+        >
+          <view class="buy-main">
+            <text class="buy-title">一键购买补剂</text>
+            <text class="buy-desc">
+              {{ supplementItemsDetailed.length }} 种补剂 · 按用量分装成小份 · 独立发货
+            </text>
+          </view>
+          <text class="buy-arrow">›</text>
+        </view>
+
         <!-- 无数据提示 -->
         <view v-if="foodItemsDetailed.length === 0 && supplementItemsDetailed.length === 0" class="no-data">
           <text class="no-data-text">暂无采购数据</text>
@@ -512,6 +527,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import {
+  fetchSupplementShopStatus,
+  saveSupplementPurchaseDraft
+} from '../../api/supplements'
 import { PrintCanvasBuilder, type CanvasImageInfo } from '../../utils/print-canvas'
 import {
   buildLifeStageReminderText,
@@ -557,6 +576,8 @@ const cycleDays = ref(7)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
 const packagePlan = ref<PackagePlanItem[]>([])
+// 补剂商城是否开放（关闭时不展示购买入口）
+const supplementShopEnabled = ref(false)
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -949,6 +970,47 @@ function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
   return primaryRow?.packageSpecG || Math.max(1, Math.round(perMealG.value || 1))
 }
 
+async function loadSupplementShopStatus() {
+  try {
+    const res = await fetchSupplementShopStatus()
+    supplementShopEnabled.value = res.code === 0 && !!(res.data && res.data.enabled)
+  } catch (error) {
+    // 商城未开放或接口异常时静默降级：不展示入口，不影响制作单本身
+    supplementShopEnabled.value = false
+  }
+}
+
+/**
+ * 一键购买补剂：把制作单上的补剂清单交给下单页。
+ * 补剂行带用量，塞不进 URL，因此走本地存储传递。
+ */
+function handleBuySupplements() {
+  const lines = supplementItemsDetailed.value
+    .filter((item: any) => item.ingredientId && Number(item.amount) > 0)
+    .map((item: any) => ({
+      ingredientId: item.ingredientId,
+      amount: Number(item.amount),
+      name: item.name,
+      unit: item.displayUnit || item.unit || 'g'
+    }))
+
+  if (lines.length === 0) {
+    uni.showToast({ title: '暂无可购买的补剂', icon: 'none' })
+    return
+  }
+
+  saveSupplementPurchaseDraft({
+    lines,
+    recipeId: recipeId.value,
+    recipeName: recipe.value && recipe.value.name,
+    dogId: dogId.value,
+    dogName: dog.value && dog.value.name,
+    cycleDays: cycleDays.value
+  })
+
+  uni.navigateTo({ url: '/pages/supplement-order/index' })
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
@@ -966,6 +1028,8 @@ onMounted(() => {
   if (packagePlan.value.length === 0) {
     packagePlan.value = buildLegacyPackagePlan()
   }
+
+  void loadSupplementShopStatus()
 
   if (recipeId.value && dogId.value) {
     loadData()
@@ -2226,6 +2290,39 @@ onShareTimeline(() => {
 }
 
 /* 补剂表格4列布局 */
+.supplement-buy-card {
+  margin-top: 20rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.buy-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.buy-title {
+  font-size: 30rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.buy-desc {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.buy-arrow {
+  font-size: 44rpx;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1;
+}
+
 .supplement-table .product-col {
   flex: 1;
   justify-content: center;

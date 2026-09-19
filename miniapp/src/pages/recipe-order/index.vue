@@ -46,6 +46,18 @@
 
       <view class="recipe-info-body">
         <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
+
+        <!-- 一句话卖点：价值主张要和价格出现在同一个决策页上 -->
+        <view v-if="recipe.sellingPoint" class="recipe-selling-point">
+          <text class="recipe-selling-point-text">{{ recipe.sellingPoint }}</text>
+        </view>
+
+        <!-- 回详情页：解决"最后一步想再看一眼营养/评价却没有入口" -->
+        <view class="recipe-lookback-link" @tap="goToRecipeDetail">
+          <text class="recipe-lookback-text">查看完整介绍 · 营养与评价</text>
+          <text class="recipe-lookback-arrow">›</text>
+        </view>
+
         <!-- 健康标签暂不展示：与食谱详情页保持一致，待标签字典合规化后仅展示合规标签 -->
 
         <!-- 营养标准背书（与食谱详情页同一展示方式） -->
@@ -146,7 +158,7 @@
 
     <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">饭量设置</text>
+        <text class="title-text">一次准备几天的量</text>
       </view>
 
       <view class="cycle-options">
@@ -257,6 +269,37 @@
               <text class="ingredient-meta-label">规格</text>
               {{ ingredient.productModelText }}
             </text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 交付与保障：食物类目最大的下单阻力是"敢不敢买"，
+         这一块集中回答"多久能到"和"出问题怎么办" -->
+    <view class="section after-sale-section">
+      <view class="section-title">
+        <text class="title-text">交付与保障</text>
+      </view>
+      <view class="after-sale-card">
+        <view class="after-sale-item">
+          <text class="after-sale-badge">1</text>
+          <view class="after-sale-copy">
+            <text class="after-sale-title">交付节奏</text>
+            <text class="after-sale-desc">预约制作 → 制作完成后急冻 24 小时 → 顺丰特快 1–2 日送达</text>
+          </view>
+        </view>
+        <view class="after-sale-item">
+          <text class="after-sale-badge">2</text>
+          <view class="after-sale-copy">
+            <text class="after-sale-title">冷链履约</text>
+            <text class="after-sale-desc">顺丰生鲜配送，冷冻包材 + 冰袋随箱</text>
+          </view>
+        </view>
+        <view class="after-sale-item">
+          <text class="after-sale-badge">3</text>
+          <view class="after-sale-copy">
+            <text class="after-sale-title">破损、变质等品质问题</text>
+            <text class="after-sale-desc">可申请全额退款，或免费重做一份</text>
           </view>
         </view>
       </view>
@@ -481,6 +524,7 @@ import {
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
+import { trackFunnelEvent } from '../../utils/funnel'
 
 interface Dog {
   id: string
@@ -500,6 +544,8 @@ interface Dog {
 interface Recipe {
   id: string
   name: string
+  /** 一句话卖点（AI 生成 + 人工确认的合规文案） */
+  sellingPoint?: string
   selectedLifeStage?: string
   selectedLifeStageLabel?: string
   selectedRecipeId?: string
@@ -933,7 +979,14 @@ const packagePlanInlineSummaryText = computed(() => {
   ))
   const specText = specs.length > 0 ? specs.join('、') : '-'
 
-  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
+  const base = `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
+
+  // 默认分装时，总量天然等于顾客选的"天数"，再说一遍"能吃几天"是回声；
+  // 只有自定义分装（总量与整数天不对齐）时，"约可吃 N 天"才是新信息。
+  if (isCustomPackagePlan.value && estimatedFeedDays.value && estimatedFeedDays.value !== '-') {
+    return `${base} / 约可吃 ${estimatedFeedDays.value} 天`
+  }
+  return base
 })
 
 const averagePricePerPackage = computed(() => {
@@ -957,6 +1010,13 @@ const bottomPricePerPackageText = computed(() => {
   if (!minimumOrderMet.value) return `当前 ${Math.round(totalGrams.value)}g，暂不可下单`
   if (pricePreviewError.value) return '请稍后重试或切换分装/采购方案'
   if (!pricePreview.value || totalPackages.value <= 0) return '等待价格生成'
+
+  // 默认分装下「1 袋 = 1 顿」（袋数 = 餐次 × 天数），所以按"每餐"讲比按"每袋"讲更直观，
+  // 也是从首页「¥X/100g」到整单总价之间的那次换算。
+  if (!isCustomPackagePlan.value && isSinglePackageSpec.value) {
+    return `每餐约 ¥${averagePricePerPackage.value.toFixed(2)}`
+  }
+
   if (isSinglePackageSpec.value) {
     return `¥${averagePricePerPackage.value.toFixed(2)}/袋`
   }
@@ -1090,6 +1150,21 @@ onMounted(async () => {
     await loadRecipeDetail()
     await loadDogs()
   }
+
+  // 漏斗：订购页到达（漏斗第 5 步）
+  // 同时记录"是否已有狗狗档案"——这是进入本页后最大的分流点
+  trackFunnelEvent({
+    eventName: 'order_page_view',
+    step: 'order_page',
+    recipeId: recipeId.value,
+    dogId: selectedDogId.value,
+    entrySource: autoConfigParams.value ? 'buy_again' : 'detail',
+    properties: {
+      dogCount: dogs.value.length,
+      hasDogProfile: dogs.value.length > 0,
+      dogsLoadFailed: dogsLoadFailed.value,
+    },
+  })
 })
 
 onUnmounted(() => {
@@ -1700,6 +1775,21 @@ async function loadPricePreview() {
       // ✅ 保存快照ID
       pricingSnapshotId.value = res.data.snapshotId || null
       console.log('[Price Preview] Snapshot ID:', pricingSnapshotId.value)
+
+      // 漏斗：出价成功（漏斗第 6 步，也是本页真正产生说服力的时刻）
+      trackFunnelEvent({
+        eventName: 'price_ready',
+        step: 'price_ready',
+        recipeId: recipeId.value,
+        dogId: selectedDogId.value,
+        properties: {
+          amountTotal: pricePreview.value.amountTotal,
+          totalGrams: Math.round(totalGrams.value),
+          totalPackages: totalPackages.value,
+          cycleDays: selectedCycleDays.value,
+          customPackage: isCustomPackagePlan.value,
+        },
+      })
     } else if (requestSeq === pricingPreviewRequestSeq) {
       pricePreviewError.value = '价格暂未生成'
     }
@@ -1790,6 +1880,15 @@ function goToCreateDog() {
   uni.navigateTo({
     url: `/pages/dog-create/index?redirect=order&recipeId=${encodeURIComponent(recipeId.value)}`
   })
+}
+
+/** 回食谱详情页：看完整营养数据、配方与评价 */
+function goToRecipeDetail() {
+  const query = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+  if (selectedDogId.value) {
+    query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
+  }
+  uni.navigateTo({ url: `/pages/recipe-detail/index?${query.join('&')}` })
 }
 
 // 首次进入时：建档成功后回跳本页，自动加载新狗狗
@@ -3172,6 +3271,94 @@ onShow(() => {
   color: #26261f;
   line-height: 1.3;
   text-align: center;
+}
+
+/* 一句话卖点：与食谱详情页保持同一视觉语言 */
+.recipe-selling-point {
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  background: rgba(176, 141, 79, 0.08);
+  border-left: 6rpx solid #b08d4f;
+  border-radius: 10rpx;
+}
+
+.recipe-selling-point-text {
+  font-size: 26rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+/* 回详情页入口：轻量文字链，不抢主 CTA */
+.recipe-lookback-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16rpx;
+  padding: 10rpx 0;
+}
+
+.recipe-lookback-text {
+  font-size: 24rpx;
+  color: #1e3a2f;
+  text-decoration: underline;
+}
+
+.recipe-lookback-arrow {
+  margin-left: 6rpx;
+  font-size: 24rpx;
+  color: #1e3a2f;
+}
+
+/* 交付与保障板块 */
+.after-sale-card {
+  padding: 8rpx 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid #e3e6d4;
+  border-radius: 16rpx;
+}
+
+.after-sale-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #eef1e2;
+}
+
+.after-sale-item:last-child {
+  border-bottom: none;
+}
+
+.after-sale-badge {
+  flex: none;
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 18rpx;
+  border-radius: 50%;
+  background: #eef3ea;
+  color: #1e3a2f;
+  font-size: 22rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 36rpx;
+}
+
+.after-sale-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.after-sale-title {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.after-sale-desc {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6b6653;
 }
 
 .hero-meta-row,

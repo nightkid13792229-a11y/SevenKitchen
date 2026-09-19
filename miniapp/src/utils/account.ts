@@ -6,6 +6,24 @@ const PHONE_BIND_SKIP_ROUTES = new Set([
   "pages/phone-bind/index",
   "pages/profile-setup/index",
 ]);
+
+/**
+ * 购买链路上"延后绑定手机号"的页面。
+ *
+ * 首单路径修剪（2026-09-18）：登录弹窗里的强制绑手机已移除，
+ * 但 App.onShow 这里还有一道 showCancel:false 的强制弹窗。
+ * 如果它发生在顾客刚进订购页、还没看到价格的时候，就是一次无谓的打断。
+ *
+ * 这些页面属于"顾客正在做购买决策"的过程，手机号在这时并不被需要；
+ * 真正需要它的是结算页——那里由 ensurePhoneBound() 强制，跑不掉。
+ * 因此在这些页面不弹，把这一步后移到结算。
+ */
+const PHONE_BIND_DEFER_ROUTES = new Set([
+  "pages/recipe-detail/index",
+  "pages/recipe-order/index",
+  "pages/recipe-diy/index",
+  "pages/diy-sheet/index",
+]);
 let phoneBindPrompting = false;
 
 export function getCurrentMiniProgramAppId(): string {
@@ -107,6 +125,10 @@ export async function promptPhoneBindingIfNeeded(): Promise<boolean> {
 
   const currentRoute = getCurrentRoute();
   if (PHONE_BIND_SKIP_ROUTES.has(currentRoute)) {
+    return false;
+  }
+  // 购买链路进行中：把绑手机后移到结算页，不在这里打断
+  if (PHONE_BIND_DEFER_ROUTES.has(currentRoute)) {
     return false;
   }
 

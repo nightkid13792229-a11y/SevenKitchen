@@ -8,12 +8,13 @@ describe('private recipe share token regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
-    const diyNavigation = source.slice(
-      source.indexOf('function generateDiySheet()'),
-      source.indexOf('function goToOrder()'),
-    )
+    // 首单路径修剪后，DIY 路由统一由 buildDiyRoute() 组装（登录后靠它直达配置页），
+    // 因此 shareToken 的拼装点从 generateDiySheet() 移到了这里。
+    const diyRouteBuilder = source.match(
+      /function buildDiyRoute\(\)[\s\S]*?\n}\n/,
+    )?.[0] || ''
 
-    expect(diyNavigation).toContain(
+    expect(diyRouteBuilder).toContain(
       'query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)',
     )
   })

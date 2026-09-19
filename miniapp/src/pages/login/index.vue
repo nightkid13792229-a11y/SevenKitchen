@@ -31,7 +31,7 @@
         :disabled="loading || !isAgreed"
         @agreeprivacyauthorization="handlePrivacyAgree"
       >
-        <text v-if="!loading">手机号快捷登录</text>
+        <text v-if="!loading">微信一键登录</text>
         <text v-else>登录中...</text>
       </button>
 
@@ -48,6 +48,8 @@ import { ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { request, setToken, markTokenReady } from "../../utils/api";
 import { getCurrentMiniProgramAppId } from "../../utils/account";
+import { setPendingLoginRedirect, consumePendingLoginRedirect } from "../../utils/login-intent";
+import { trackFunnelEvent } from "../../utils/funnel";
 
 const loading = ref(false);
 const isAgreed = ref(false);
@@ -64,9 +66,11 @@ onLoad((options: any) => {
 });
 
 function goToRedirect() {
-  if (redirectUrl.value) {
+  // 优先用显式传入的 redirect；没有则续上之前"暂不登录"时记下的购买意图
+  const target = redirectUrl.value || consumePendingLoginRedirect();
+  if (target) {
     uni.redirectTo({
-      url: redirectUrl.value,
+      url: target,
       fail: () => uni.switchTab({ url: "/pages/home/index" }),
     });
   } else {
@@ -90,7 +94,11 @@ const navigateToTerms = () => {
 };
 
 // 跳过登录，以游客模式进入首页
+// 若本次是从「买成品 / 自己做」引导过来的，把意图记下来，下次登录自动续上
 const skipLogin = () => {
+  if (redirectUrl.value) {
+    setPendingLoginRedirect(redirectUrl.value);
+  }
   uni.switchTab({ url: "/pages/home/index" });
 };
 
@@ -204,7 +212,13 @@ const handleWechatLogin = async () => {
         }
       }, 200);
 
-      // 4. 检查是否需要设置头像昵称
+      // 4. 登录完成后的去向
+      //
+      // 首单路径修剪（2026-09-18）：
+      //   · 不再在登录时【强制绑定手机号】。手机号在结算页由 ensurePhoneBound() 按需强制，
+      //     那时才真正需要它（订单履约 + 售后），而不是在顾客刚表达购买意愿时就拦一道。
+      //   · 不再在登录时【强制完善头像昵称】。头像昵称与下单无关，
+      //     改为在「我的」页可选引导，不阻断购买链路。
       const needsProfileSetup =
         !user.avatarUrl ||
         user.avatarUrl === "" ||
@@ -212,52 +226,37 @@ const handleWechatLogin = async () => {
         user.nickname === "" ||
         user.nickname === "微信用户";
 
-      console.log("[Login] Needs profile setup:", needsProfileSetup);
+      console.log("[Login] Needs profile setup (non-blocking):", needsProfileSetup);
 
-      if (!user.phone && !user.phoneBound) {
-        const phoneBindRedirect = redirectUrl.value
-          ? encodeURIComponent(redirectUrl.value)
-          : role === "STAFF" || role === "ADMIN"
-            ? "%2Fpages%2Fstaff-workbench%2Findex"
-            : "%2Fpages%2Fhome%2Findex";
-        setTimeout(() => {
-          uni.redirectTo({
-            url: `/pages/phone-bind/index?redirect=${phoneBindRedirect}`,
-          });
-        }, 500);
-        return;
+      // 漏斗：登录完成（漏斗第 4 步）
+      trackFunnelEvent({
+        eventName: "login_done",
+        step: "login_done",
+        entrySource: redirectUrl.value || "direct",
+        properties: {
+          isNewUser: Boolean(isNewUser),
+          role: role || "CUSTOMER",
+          phoneBound: Boolean(user.phone || user.phoneBound),
+        },
+      });
+
+      if (isNewUser) {
+        uni.showToast({
+          title: "欢迎加入赛文的食堂！",
+          icon: "success",
+          duration: 2000,
+        });
+      } else if (role === "STAFF" || role === "ADMIN") {
+        uni.showToast({
+          title: "欢迎回来，" + (role === "ADMIN" ? "管理员" : "员工"),
+          icon: "success",
+          duration: 2000,
+        });
       }
 
-      if (needsProfileSetup) {
-        // 新用户或未设置头像昵称，跳转到完善资料页面
-        const profileRedirect = redirectUrl.value
-          ? `?redirect=${encodeURIComponent(redirectUrl.value)}`
-          : "";
-        setTimeout(() => {
-          uni.redirectTo({
-            url: `/pages/profile-setup/index${profileRedirect}`,
-          });
-        }, 500);
-      } else {
-        // 已设置过头像昵称，直接进入首页
-        if (isNewUser) {
-          uni.showToast({
-            title: "欢迎加入赛文的食堂！",
-            icon: "success",
-            duration: 2000,
-          });
-        } else if (role === "STAFF" || role === "ADMIN") {
-          uni.showToast({
-            title: "欢迎回来，" + (role === "ADMIN" ? "管理员" : "员工"),
-            icon: "success",
-            duration: 2000,
-          });
-        }
-
-        setTimeout(() => {
-          goToRedirect();
-        }, 500);
-      }
+      setTimeout(() => {
+        goToRedirect();
+      }, 500);
     } else {
       throw new Error(response.message || "登录失败");
     }

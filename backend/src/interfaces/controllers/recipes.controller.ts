@@ -696,6 +696,9 @@ export class RecipesController {
           energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
           coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
           coverTitle: recipe.coverTitle || undefined,
+          // 系列级封面角标（合规词表引用，已上移到系列层级）。
+          // 小程序优先用它，为空时才回退到 coverTitle，保证迁移期间不会出现角标消失。
+          coverBadges: recipe.coverBadges || [],
           seriesId: recipe.seriesId || undefined,
           targetHealthTags: targetHealthTags,
           applicableLifeStages: applicableLifeStages,
@@ -1220,6 +1223,26 @@ export class RecipesController {
     };
   }
 
+  /**
+   * 读取系列级封面角标（合规词表词名，按 sortOrder 排序）。
+   *
+   * 角标已上移到系列层级：一次设置，全系列生命阶段版本共用；
+   * 且只允许引用合规词表，从结构上杜绝违规词出现在商品橱窗上。
+   */
+  private async resolveSeriesCoverBadges(
+    seriesId?: string | null,
+  ): Promise<string[]> {
+    if (!seriesId) return [];
+    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+      where: { seriesId },
+      include: { healthTag: { select: { name: true } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows
+      .map((row) => row.healthTag?.name)
+      .filter((name): name is string => Boolean(name));
+  }
+
   private async buildRecipeDetail(
     recipe: Recipe,
     seriesSelection?: {
@@ -1287,6 +1310,10 @@ export class RecipesController {
       recipe.seriesLifeStage ??
       undefined;
 
+    // 系列级封面角标（合规词表词名）。角标已上移到系列层级，
+    // 领域映射不带 series，因此这里单独取一次（按 seriesId 走索引，开销很小）。
+    const coverBadges = await this.resolveSeriesCoverBadges(recipe.seriesId);
+
     return {
       id: recipe.id,
       version: recipe.version,
@@ -1298,6 +1325,7 @@ export class RecipesController {
         'https://',
       ),
       coverTitle: (recipe as any).coverTitle || undefined,
+      coverBadges,
       seriesId: recipe.seriesId || undefined,
       selectedLifeStage,
       selectedLifeStageLabel: this.getSeriesLifeStageLabel(selectedLifeStage),

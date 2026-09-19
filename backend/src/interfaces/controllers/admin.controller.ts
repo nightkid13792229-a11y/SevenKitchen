@@ -109,6 +109,7 @@ import { UseInterceptors } from '@nestjs/common';
 import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin-recipe.dto';
 import type { Ingredient } from '../../domain/ingredient';
 import { resolveOrderProductionPhotos } from './order-production-photos';
+import { scanForbiddenClaims } from '../../application/recipe-designer/recipe-copywriting-compliance';
 
 const CUSTOMER_TEST_USER_ID = 'production-experience-customer-test-user';
 const CUSTOMER_TEST_USER_PHONE = '19900000001';
@@ -4265,6 +4266,11 @@ export class AdminController {
   @ApiResponse({ status: 400, description: 'Invalid input' })
   async createHealthTag(@Body() dto: any): Promise<ApiResponseDto<any>> {
     try {
+      // 词表合规校验：词表一旦被写进违规词，所有引用它的食谱角标都会跟着违规，
+      // 因此这里是整条合规链的最上游，必须拦住（见《宠物饲料标签规定》第二十条（一））。
+      const forbidden = assertHealthTagNameCompliant(dto?.name);
+      if (forbidden) return forbidden;
+
       const healthTag = await this.prisma.recipeHealthTag.create({
         data: {
           name: dto.name,
@@ -4293,6 +4299,12 @@ export class AdminController {
     @Body() dto: any,
   ): Promise<ApiResponseDto<any>> {
     try {
+      // 改名同样是合规链上游：改名会同步影响所有引用该词的封面角标
+      if (dto?.name !== undefined) {
+        const forbidden = assertHealthTagNameCompliant(dto.name);
+        if (forbidden) return forbidden;
+      }
+
       const healthTag = await this.prisma.recipeHealthTag.update({
         where: { id },
         data: {
@@ -4315,6 +4327,98 @@ export class AdminController {
         error.message || 'Failed to update health tag',
       );
     }
+  }
+
+  // ==================== 系列封面角标 ====================
+  //
+  // 角标已从 Recipe（每个生命阶段版本各一份）上移到 RecipeSeries，
+  // 且只允许引用合规词表 recipe_health_tag。
+  // 这样运营**只改一次**即可全系列生效，并且从结构上不可能填入违规词。
+
+  @Get('recipe-series/:seriesId/cover-badges')
+  @ApiOperation({ summary: '获取食谱系列的封面角标' })
+  async getSeriesCoverBadges(
+    @Param('seriesId') seriesId: string,
+  ): Promise<ApiResponseDto<any>> {
+    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+      where: { seriesId },
+      include: { healthTag: { select: { id: true, name: true, parentId: true } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return ApiResponseDto.success({
+      seriesId,
+      badges: rows.map((row) => ({
+        healthTagId: row.healthTagId,
+        name: row.healthTag?.name ?? '',
+        sortOrder: row.sortOrder,
+      })),
+    });
+  }
+
+  @Put('recipe-series/:seriesId/cover-badges')
+  @ApiOperation({
+    summary: '设置食谱系列的封面角标（最多 2 个，仅限合规词表内的词）',
+  })
+  async setSeriesCoverBadges(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: { healthTagIds?: string[] },
+  ): Promise<ApiResponseDto<any>> {
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: { id: true },
+    });
+    if (!series) {
+      return ApiResponseDto.error(404, '食谱系列不存在');
+    }
+
+    const rawIds = Array.isArray(dto?.healthTagIds) ? dto.healthTagIds : [];
+    const healthTagIds = Array.from(
+      new Set(rawIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')),
+    );
+
+    if (healthTagIds.length > MAX_SERIES_COVER_BADGES) {
+      return ApiResponseDto.error(
+        400,
+        `封面角标最多 ${MAX_SERIES_COVER_BADGES} 个（当前 ${healthTagIds.length} 个）`,
+      );
+    }
+
+    if (healthTagIds.length > 0) {
+      const found = await this.prisma.recipeHealthTag.findMany({
+        where: { id: { in: healthTagIds } },
+        select: { id: true, name: true },
+      });
+      if (found.length !== healthTagIds.length) {
+        const foundIds = new Set(found.map((tag) => tag.id));
+        const missing = healthTagIds.filter((id) => !foundIds.has(id));
+        return ApiResponseDto.error(
+          400,
+          `以下标签不在合规词表中，无法作为封面角标：${missing.join('、')}`,
+        );
+      }
+
+      // 双保险：即使词表被历史数据污染，也不允许违规词出现在角标上
+      const violations = found
+        .map((tag) => ({ name: tag.name, hits: scanForbiddenClaims(tag.name) }))
+        .filter((item) => item.hits.length > 0);
+      if (violations.length > 0) {
+        return ApiResponseDto.error(
+          400,
+          `标签「${violations.map((v) => v.name).join('、')}」包含法规禁止的表述，不能作为封面角标`,
+        );
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.recipeSeriesCoverBadge.deleteMany({ where: { seriesId } });
+      for (const [index, healthTagId] of healthTagIds.entries()) {
+        await tx.recipeSeriesCoverBadge.create({
+          data: { seriesId, healthTagId, sortOrder: index },
+        });
+      }
+    });
+
+    return this.getSeriesCoverBadges(seriesId);
   }
 
   @Delete('health-tags/:id')
@@ -4853,3 +4957,33 @@ export class AdminController {
     await this.recommendedProductService.delete(id);
   }
 }
+
+/**
+ * 健康标签（词表）名称合规校验。
+ *
+ * 词表是整条合规链的**最上游**：词表里一旦出现「抗炎」「低敏」「IBD」这类词，
+ * 所有引用它的食谱封面角标都会跟着违规，而且是直接展示在首页商品橱窗上。
+ * 因此新增/改名都必须过一遍《宠物饲料标签规定》第二十条（一）的禁用词校验。
+ *
+ * @returns 命中禁用词时返回可直接抛给前端的错误响应；合规时返回 null
+ */
+function assertHealthTagNameCompliant(
+  name: unknown,
+): { code: number; message: string; data: null } | null {
+  const normalized = typeof name === 'string' ? name.trim() : '';
+  if (!normalized) {
+    return { code: 400, message: '标签名称不能为空', data: null };
+  }
+
+  const hits = scanForbiddenClaims(normalized);
+  if (hits.length === 0) return null;
+
+  return {
+    code: 400,
+    message: `标签名称包含法规禁止的表述（${hits.join('、')}），不能用于宠物饲料的宣传。请改用可举证的成分/工艺表述。`,
+    data: null,
+  };
+}
+
+/** 封面角标上限：超过 2 个在封面上会挤成一团，也与"一眼看懂这袋里有什么"的定位相悖 */
+const MAX_SERIES_COVER_BADGES = 2;

@@ -173,9 +173,18 @@ import { RecommendedProductService } from './application/ingredient/recommended-
 import { ReviewsController } from './interfaces/controllers/reviews.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
 import { DogProfileAnalyticsService } from './application/analytics/dog-profile-analytics.service';
+import { ProductFunnelAnalyticsService } from './application/analytics/product-funnel-analytics.service';
 import { DogProfileAnalyticsController } from './interfaces/controllers/dog-profile-analytics.controller';
+import { ProductFunnelAnalyticsController } from './interfaces/controllers/product-funnel-analytics.controller';
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
+import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
+import { SupplementCatalogService } from './application/supplement-shop/supplement-catalog.service';
+import { SupplementShopConfigService } from './application/supplement-shop/supplement-shop-config.service';
+import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
+import { SupplementOrderService } from './application/supplement-shop/supplement-order.service';
+import { SupplementsController } from './interfaces/controllers/supplements.controller';
+import { SupplementOrdersController } from './interfaces/controllers/supplement-orders.controller';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
 import { IngredientBatchReplaceController } from './interfaces/controllers/ingredient-batch-replace.controller';
@@ -313,6 +322,9 @@ validatePrismaConfig();
     ReviewsController,
     FeedbackController,
     ProcurementSkuController,
+    AdminSupplementShopController,
+    SupplementsController,
+    SupplementOrdersController,
     IngredientSuggestionsController,
     NutritionCalculationController,
     IngredientBatchReplaceController,
@@ -326,7 +338,11 @@ validatePrismaConfig();
     WechatPayController,
     AdminWechatRefundController,
     ...(isPrismaEnabled()
-      ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
+      ? [
+          DogProfileAnalyticsController,
+          AdminDogProfileAnalyticsController,
+          ProductFunnelAnalyticsController,
+        ]
       : []),
   ],
   providers: [
@@ -709,7 +725,12 @@ validatePrismaConfig();
     // Recommended Product Service
     RecommendedProductService,
     DogProfileAnalyticsService,
+    ProductFunnelAnalyticsService,
     ProcurementSkuService,
+    SupplementCatalogService,
+    SupplementShopConfigService,
+    SupplementPricingService,
+    SupplementOrderService,
     NutrientMappingAuditService,
     IngredientReadinessService,
     FediafTargetSelectorService,

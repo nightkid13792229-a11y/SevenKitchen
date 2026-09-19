@@ -48,10 +48,12 @@ describe('recipe detail nutrition report regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('v-if="recipe.coverImageUrl && recipe.coverTitle"')
+    // 角标已上移到系列层级（合规词表引用），因此文案改由 resolveCoverBadgeText 解析：
+    // 优先 coverBadges，为空时回退 coverTitle
+    expect(source).toContain('v-if="recipe.coverImageUrl && resolveCoverBadgeText(recipe)"')
     expect(source).toContain('class="recipe-detail-cover-badge-gradient"')
     expect(source).toContain('class="recipe-detail-cover-title-badge"')
-    expect(source).toContain('{{ recipe.coverTitle }}')
+    expect(source).toContain('{{ resolveCoverBadgeText(recipe) }}')
     expect(source).not.toContain('class="cover-title-overlay"')
     expect(source).not.toContain('.cover-title-overlay')
     expect(source).not.toContain('.cover-title-text')
@@ -314,17 +316,30 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
+    // 首单路径修剪后，两条链路的目标路由分别由 buildDiyRoute() / buildOrderRoute()
+    // 统一组装：既用于"已登录直接跳转"，也用于"登录后直达"，避免意图丢失。
     const diySource = source.match(
-      /function generateDiySheet\(\)[\s\S]*?\n}\n\nfunction goToOrder/,
+      /function buildDiyRoute\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
     const orderSource = source.match(
-      /function goToOrder\(\)[\s\S]*?\n}\n\nfunction selectDogForDetail/,
+      /function buildOrderRoute\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
 
     expect(diySource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
-    expect(diySource).toContain("url: `/pages/recipe-diy/index?${query.join('&')}`")
+    expect(diySource).toContain("return `/pages/recipe-diy/index?${query.join('&')}`")
     expect(orderSource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
     expect(orderSource).toContain('lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}')
+    // 登录后直达：两条链路都必须把目标页作为 redirect 传下去
+    const diyFlow = source.match(
+      /function generateDiySheet\(\)[\s\S]*?\n}\n/,
+    )?.[0] || ''
+    const orderFlow = source.match(
+      /function goToOrder\(\)[\s\S]*?\n}\n/,
+    )?.[0] || ''
+    expect(diyFlow).toContain('promptLoginAndRedirect(')
+    expect(diyFlow).toContain('target')
+    expect(orderFlow).toContain('promptLoginAndRedirect(')
+    expect(orderFlow).toContain('target')
   })
 
   it('uses a non-matched default life stage copy before dog-specific matched copy', () => {

@@ -72,6 +72,46 @@
       <button v-else class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
+    <!-- 个性化推荐（简化版）：只给 3 张卡 + 一行理由 + 一个主动作。
+         刻意不做双分组/星级/匹配分/狗狗切换器——上一版就是因为"太复杂"被下线。 -->
+    <view v-if="isLoggedIn && recommendedDog && recommendedRecipes.length > 0" class="recommend-section">
+      <view class="recommend-header">
+        <view class="section-heading">
+          <view class="section-accent" aria-hidden="true"></view>
+          <text class="section-title">给 {{ recommendedDog.name }} 的推荐</text>
+        </view>
+      </view>
+      <text class="recommend-subtitle">{{ recommendReasonText }}</text>
+      <scroll-view scroll-x class="recommend-scroll">
+        <view
+          v-for="item in recommendedRecipes"
+          :key="item.id"
+          class="recommend-card"
+          hover-class="card-hover"
+          @tap="viewRecipe(item.id, recommendedDog.id)"
+        >
+          <image
+            v-if="item.displayCoverUrl"
+            class="recommend-cover"
+            :src="item.displayCoverUrl"
+            mode="aspectFill"
+            lazy-load
+          />
+          <view v-else class="recommend-cover placeholder">
+            <text class="placeholder-text">{{ (item.name && item.name.charAt(0)) || '?' }}</text>
+          </view>
+          <view class="recommend-body">
+            <text class="recommend-name">{{ item.name }}</text>
+            <text v-if="getRecommendReason(item)" class="recommend-reason">{{ getRecommendReason(item) }}</text>
+            <text v-if="item.dailyIntakeG" class="recommend-intake">约 {{ Math.round(item.dailyIntakeG) }}g/天</text>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="recommend-action" @tap="goToOrderForRecommended">
+        <text class="recommend-action-text">按推荐配一周</text>
+      </view>
+    </view>
+
     <!-- 食谱橱窗标题 -->
     <view class="recipe-showcase-header">
       <view class="section-heading">
@@ -155,10 +195,10 @@
             <text class="placeholder-text">{{ (recipe.name && recipe.name.charAt(0)) || '?' }}</text>
           </view>
           <view
-            v-if="recipe.displayCoverUrl && recipe.coverTitle"
+            v-if="recipe.displayCoverUrl && resolveCoverBadgeText(recipe)"
             class="recipe-cover-badge-gradient"
           >
-            <text class="recipe-cover-title-badge">{{ recipe.coverTitle }}</text>
+            <text class="recipe-cover-title-badge">{{ resolveCoverBadgeText(recipe) }}</text>
           </view>
         </view>
 
@@ -335,12 +375,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { request, getToken } from '../../utils/api'
+import { request, getToken, recipeRecommendationApi } from '../../utils/api'
 import { recipeDesignerApi } from '../../api/recipe-designer'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
+import { trackFunnelEvent } from '../../utils/funnel'
+import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -358,6 +400,8 @@ interface Recipe {
   coverImageUrl?: string
   displayCoverUrl?: string
   coverTitle?: string
+  /** 系列级封面角标（合规词表，最多 2 个） */
+  coverBadges?: string[]
   targetHealthTags: string[]
   applicableLifeStages: string[]
   items: RecipeItem[]
@@ -423,6 +467,15 @@ const STALE_RECIPE_COVER_REVEAL_DELAY_MS = 1500
 const recipeCoverOriginalOnlyMap = ref<Record<string, boolean>>({})
 const hasMountedHome = ref(false)
 const visibleRecipesCount = ref(pageSize)
+
+// 个性化推荐（简化版）：只保留"给谁推荐 / 3 张卡 / 一行理由 / 一个动作"。
+// 上一版（提交 64627ce3 移除）之所以被下线，是因为双分组 + 星级 + 匹配分 + 狗狗切换器太复杂，
+// 不是推荐质量有问题；这里刻意回到最小可用形态。
+const recommendedDog = ref<{ id: string; name: string; currentWeightKg?: number; lifeStage?: string } | null>(null)
+const recommendedRecipes = ref<Recipe[]>([])
+const recommendReasonText = ref('')
+const recommendationRequestSeq = ref(0)
+
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
 let customerServiceRouteHandled = false
@@ -606,6 +659,13 @@ onShow(() => {
   checkLoginStatus()
   loadRecipeDesignerAccess()
 
+  // 漏斗：首页曝光（漏斗第 1 步）
+  trackFunnelEvent({
+    eventName: 'home_view',
+    step: 'home',
+    entrySource: 'tabbar',
+  })
+
   if (!hasMountedHome.value) {
     return
   }
@@ -619,6 +679,9 @@ onShow(() => {
     if (dogs.value.length > 0) {
       dogs.value = []
     }
+    // 推荐同理：登出后不能继续展示上一位用户的个性化内容
+    recommendedDog.value = null
+    recommendedRecipes.value = []
   }
 
   loadHomeHeaderBackground()
@@ -661,6 +724,108 @@ const loadDogList = async () => {
   } catch (err) {
     console.error('加载狗狗列表失败:', err)
   }
+  // 狗狗列表就绪后再拉推荐（推荐必须按某一只具体的狗来算）
+  void loadPersonalizedRecommendations()
+}
+
+// ==================== 个性化推荐（简化版） ====================
+
+/** 首页只认一只主狗：优先上次选中的，否则第一只。不做多狗切换器。 */
+function resolvePrimaryDogForRecommendation() {
+  if (!dogs.value.length) return null
+  const storedDogId = uni.getStorageSync('dogId')
+  return dogs.value.find((dog) => dog.id === storedDogId) || dogs.value[0]
+}
+
+async function loadPersonalizedRecommendations() {
+  const primaryDog = resolvePrimaryDogForRecommendation()
+  if (!primaryDog?.id) {
+    recommendedDog.value = null
+    recommendedRecipes.value = []
+    return
+  }
+
+  const requestSeq = ++recommendationRequestSeq.value
+  try {
+    const data = await recipeRecommendationApi.getForDog(primaryDog.id)
+    // 竞态保护：快速切换登录状态/宠物时，只接受最后一次请求的结果
+    if (requestSeq !== recommendationRequestSeq.value) return
+
+    recommendedDog.value = {
+      id: data.dog?.id || primaryDog.id,
+      name: data.dog?.name || primaryDog.name,
+      currentWeightKg: data.dog?.currentWeightKg ?? primaryDog.currentWeightKg,
+      lifeStage: data.dog?.lifeStage,
+    }
+    // 只取 3 张：横向单行，不占满整屏
+    const merged = [...(data.exclusive || []), ...(data.general || [])]
+    recommendedRecipes.value = merged.slice(0, 3).map((recipe: any) => ({
+      ...recipe,
+      displayCoverUrl: isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)
+        ? ''
+        : getRecipeCoverImageUrl(recipe.coverImageUrl, {
+          skipOptimization: shouldUseOriginalRecipeCover(recipe.coverImageUrl),
+        }),
+    }))
+    recommendReasonText.value = buildRecommendSubtitle()
+  } catch (error) {
+    if (requestSeq !== recommendationRequestSeq.value) return
+    // 推荐属于加分项：失败就静默隐藏，绝不影响橱窗
+    recommendedDog.value = null
+    recommendedRecipes.value = []
+  }
+}
+
+/** 一行理由：只讲"为什么适合它"，不讲抽象评分 */
+function buildRecommendSubtitle(): string {
+  const dog = recommendedDog.value
+  if (!dog) return ''
+  const parts: string[] = []
+  if (dog.lifeStage) parts.push(getLifeStageLabelForRecommend(dog.lifeStage))
+  if (dog.currentWeightKg) parts.push(`${dog.currentWeightKg}kg`)
+  parts.push('已避开档案里的过敏与挑食食材')
+  return `${parts.join(' · ')}`
+}
+
+function getLifeStageLabelForRecommend(lifeStage: string): string {
+  const map: Record<string, string> = {
+    PUPPY: '幼犬期',
+    PUPPY_UNDER_14_WEEKS: '14 周以下幼犬',
+    PUPPY_14_WEEKS_PLUS: '14 周以上幼犬',
+    ADULT: '成犬',
+    SENIOR: '老年犬',
+    PREGNANCY: '妊娠期',
+    LACTATION: '哺乳期',
+    REPRODUCTION: '繁殖期',
+  }
+  return map[lifeStage] || '成犬维持'
+}
+
+/** 每张卡只留一条理由，取后端 matchReasons 的第一条 */
+function getRecommendReason(recipe: Recipe): string {
+  const reason = (recipe.matchReasons || []).find(Boolean)
+  return reason || ''
+}
+
+/** 主动作：直接带着推荐的第一个食谱和狗狗进订购页 */
+function goToOrderForRecommended() {
+  const dog = recommendedDog.value
+  const first = recommendedRecipes.value[0]
+  if (!dog || !first) return
+
+  trackFunnelEvent({
+    eventName: 'tap_recommend_buy',
+    step: 'tap_recommend',
+    recipeId: first.id,
+    dogId: dog.id,
+    entrySource: 'home_recommend',
+  })
+
+  const query = [
+    `recipeId=${encodeURIComponent(first.id)}`,
+    `dogId=${encodeURIComponent(dog.id)}`,
+  ]
+  uni.navigateTo({ url: `/pages/recipe-order/index?${query.join('&')}` })
 }
 
 // ==================== 食谱相关方法 ====================
@@ -1754,6 +1919,107 @@ defineOptions({
 }
 
 /* ---------- 食谱橱窗 ---------- */
+/* ===== 个性化推荐（简化版）：横向 3 张卡，不铺满整屏 ===== */
+.recommend-section {
+  margin: 32rpx 28rpx 0;
+  padding: 28rpx 24rpx 24rpx;
+  background: linear-gradient(160deg, #fbfcf7 0%, #eef3ea 100%);
+  border: 1rpx solid #e3e6d4;
+  border-radius: 28rpx;
+}
+
+.recommend-header {
+  display: flex;
+  align-items: center;
+}
+
+.recommend-section .section-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.recommend-subtitle {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.recommend-scroll {
+  margin-top: 22rpx;
+  white-space: nowrap;
+}
+
+.recommend-card {
+  display: inline-flex;
+  flex-direction: column;
+  width: 300rpx;
+  margin-right: 20rpx;
+  background: #ffffff;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 20rpx;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.recommend-cover {
+  width: 300rpx;
+  height: 180rpx;
+  background: #eef1e2;
+}
+
+.recommend-cover.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recommend-body {
+  display: flex;
+  flex-direction: column;
+  padding: 16rpx 18rpx 20rpx;
+}
+
+.recommend-name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+  white-space: normal;
+}
+
+.recommend-reason {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #6b6653;
+  white-space: normal;
+}
+
+.recommend-intake {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #b08d4f;
+}
+
+.recommend-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24rpx;
+  height: 84rpx;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid #d8bc85;
+  border-radius: 999rpx;
+}
+
+.recommend-action-text {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #f6efe0;
+}
+
 .recipe-showcase-header {
   display: flex;
   justify-content: space-between;

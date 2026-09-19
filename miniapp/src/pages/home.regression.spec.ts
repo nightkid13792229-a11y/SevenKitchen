@@ -147,10 +147,13 @@ describe('home runtime regressions', () => {
     )
 
     expect(source).toContain('coverTitle?: string')
-    expect(source).toContain('v-if="recipe.displayCoverUrl && recipe.coverTitle"')
+    // 角标文案改由 resolveCoverBadgeText 解析：优先系列级 coverBadges（合规词表），
+    // 为空时回退到版本级 coverTitle，保证迁移期间角标不会消失
+    expect(source).toContain('coverBadges?: string[]')
+    expect(source).toContain('v-if="recipe.displayCoverUrl && resolveCoverBadgeText(recipe)"')
     expect(source).toContain('class="recipe-cover-badge-gradient"')
     expect(source).toContain('class="recipe-cover-title-badge"')
-    expect(source).toContain('{{ recipe.coverTitle }}')
+    expect(source).toContain('{{ resolveCoverBadgeText(recipe) }}')
     expect(source).toContain('.recipe-cover-badge-gradient')
     expect(source).toContain('.recipe-cover-title-badge')
     expect(source).not.toContain('class="cover-title-overlay"')
@@ -285,21 +288,33 @@ describe('home runtime regressions', () => {
     expect(source).not.toContain('const calculateAgeText =')
   })
 
-  it('does not render or load personalized recipe recommendations on the home page', () => {
+  it('renders only the simplified personalized recommendation block on the home page', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     )
     const templateSource = source.slice(0, source.indexOf('<script setup'))
 
+    // 2026-09-18：个性化推荐以「简化版」重启。
+    // 下线原因已查明是"上一版太复杂"，因此这里反向锁定：简单形态必须在，
+    // 而上一版那些造成复杂度的元素不允许回来。
+    expect(templateSource).toContain('recommend-section')
+    expect(templateSource).toContain('给 {{ recommendedDog.name }} 的推荐')
+    expect(templateSource).toContain('按推荐配一周')
+    expect(source).toContain('recipeRecommendationApi')
+
+    // 反面清单：不得重新引入双分组 / 星级 / 匹配分 / 多狗切换器
     expect(templateSource).not.toContain('专属食谱推荐')
     expect(templateSource).not.toContain('personalized-section')
+    expect(templateSource).not.toContain('专属优先')
+    expect(templateSource).not.toContain('通用也适合')
     expect(templateSource).not.toContain('selectDogForRecommendations')
+    expect(templateSource).not.toContain('matchStars')
     expect(templateSource).not.toContain('exclusiveRecipes')
     expect(templateSource).not.toContain('generalRecommendedRecipes')
-    expect(source).not.toContain('recipeRecommendationApi')
-    expect(source).not.toContain('loadPersonalizedRecommendations')
-    expect(source).not.toContain('recommendedDog')
+
+    // 最多 3 张卡：简化版的硬约束
+    expect(source).toContain('merged.slice(0, 3)')
   })
 
   it('hides the health tag filter from customers pending tag dictionary compliance', () => {

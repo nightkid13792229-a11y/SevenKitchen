@@ -29,6 +29,18 @@
           <el-icon><Goods /></el-icon>
           <span>原料管理</span>
         </el-menu-item>
+        <el-menu-item index="/supplement-shop/catalog">
+          <el-icon><FirstAidKit /></el-icon>
+          <span>补剂上架清单</span>
+        </el-menu-item>
+        <el-menu-item index="/supplement-shop/orders">
+          <el-icon><Box /></el-icon>
+          <span>补剂订单</span>
+        </el-menu-item>
+        <el-menu-item index="/supplement-shop/config">
+          <el-icon><PriceTag /></el-icon>
+          <span>补剂商城设置</span>
+        </el-menu-item>
         <el-menu-item index="/search-governance">
           <el-icon><Search /></el-icon>
           <span>搜索治理</span>
@@ -257,6 +269,7 @@ import {
   Money,
   DocumentChecked,
   Search,
+  FirstAidKit,
   Lock
 } from '@element-plus/icons-vue'
 

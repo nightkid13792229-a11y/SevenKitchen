@@ -38,10 +38,10 @@
         <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
       </view>
       <view
-        v-if="recipe.coverImageUrl && recipe.coverTitle"
+        v-if="recipe.coverImageUrl && resolveCoverBadgeText(recipe)"
         class="recipe-detail-cover-badge-gradient"
       >
-        <text class="recipe-detail-cover-title-badge">{{ recipe.coverTitle }}</text>
+        <text class="recipe-detail-cover-title-badge">{{ resolveCoverBadgeText(recipe) }}</text>
       </view>
     </view>
 
@@ -501,6 +501,8 @@ import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { trackFunnelEvent } from '../../utils/funnel'
+import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { getNutritionStandardExplain } from '../../utils/label-mapping'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
@@ -565,6 +567,8 @@ interface RecipeDetail {
   status: string
   coverImageUrl?: string
   coverTitle?: string
+  /** 系列级封面角标（合规词表，最多 2 个） */
+  coverBadges?: string[]
   description?: string
   /** 一句话卖点（合规文案，AI 生成 + 人工确认） */
   sellingPoint?: string
@@ -984,6 +988,16 @@ function loadRecipeDetail() {
         checkFavoriteStatus()
       }
 
+      // 漏斗：详情页浏览（漏斗第 2 步）
+      trackFunnelEvent({
+        eventName: 'detail_view',
+        step: 'detail',
+        recipeId: actionRecipeId,
+        dogId: selectedDogId.value,
+        entrySource: initialDogId.value ? 'with_dog' : 'no_dog',
+        properties: { lifeStage: res.data.selectedLifeStage || null },
+      })
+
     }
   }).catch((err: any) => {
     if (currentRequestSeq !== recipeDetailRequestSeq) return
@@ -1140,14 +1154,8 @@ function openNutritionReportPage() {
   })
 }
 
-function generateDiySheet() {
-  // 检查是否登录
-  const token = uni.getStorageSync('token')
-  if (!token) {
-    promptLoginAndRedirect('制作 DIY 食谱单需要登录，登录后继续为你生成')
-    return
-  }
-
+/** DIY 制作单配置页路由（登录后要直达的目标） */
+function buildDiyRoute(): string {
   const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
@@ -1155,21 +1163,11 @@ function generateDiySheet() {
   if (shareToken.value) {
     query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
   }
-
-  // 已登录，直接跳转到DIY配置页面
-  uni.navigateTo({
-    url: `/pages/recipe-diy/index?${query.join('&')}`
-  })
+  return `/pages/recipe-diy/index?${query.join('&')}`
 }
 
-function goToOrder() {
-  // 检查是否登录
-  const token = uni.getStorageSync('token')
-  if (!token) {
-    promptLoginAndRedirect('购买成品需要登录，登录后继续为你配置订单')
-    return
-  }
-
+/** 成品订购配置页路由（登录后要直达的目标） */
+function buildOrderRoute(): string {
   const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
@@ -1177,11 +1175,49 @@ function goToOrder() {
   if (recipe.value.selectedLifeStage) {
     query.push(`lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}`)
   }
+  return `/pages/recipe-order/index?${query.join('&')}`
+}
+
+function generateDiySheet() {
+  const target = buildDiyRoute()
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  trackFunnelEvent({
+    eventName: 'tap_diy',
+    step: 'tap_diy',
+    recipeId: selectedRecipeIdForActions.value,
+    dogId: selectedDogId.value,
+    properties: { loggedIn: Boolean(token) },
+  })
+  if (!token) {
+    // 登录后直达 DIY 配置页，不再退回详情页要求用户重新点击
+    promptLoginAndRedirect('制作 DIY 食谱单需要登录，登录后继续为你生成', target)
+    return
+  }
+
+  // 已登录，直接跳转到DIY配置页面
+  uni.navigateTo({ url: target })
+}
+
+function goToOrder() {
+  const target = buildOrderRoute()
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  trackFunnelEvent({
+    eventName: 'tap_buy',
+    step: 'tap_buy',
+    recipeId: selectedRecipeIdForActions.value,
+    dogId: selectedDogId.value,
+    properties: { loggedIn: Boolean(token) },
+  })
+  if (!token) {
+    // 登录后直达订购配置页，不再退回详情页要求用户重新点击
+    promptLoginAndRedirect('购买成品需要登录，登录后继续为你配置订单', target)
+    return
+  }
 
   // 已登录，跳转到订购配置页面
-  uni.navigateTo({
-    url: `/pages/recipe-order/index?${query.join('&')}`
-  })
+  uni.navigateTo({ url: target })
 }
 
 function selectDogForDetail(nextDogId: string) {
@@ -1199,20 +1235,31 @@ function goCreateDog() {
   })
 }
 
-function promptLoginAndRedirect(message: string) {
+function promptLoginAndRedirect(message: string, redirectTarget?: string) {
   uni.showModal({
     title: '需要登录',
     content: message,
     confirmText: '去登录',
     cancelText: '暂不',
     success: (res) => {
+      // 漏斗：卡点——触发了登录弹窗（用于度量"登录拦截"造成的流失）
+      trackFunnelEvent({
+        eventName: 'login_prompt_shown',
+        step: 'login_required',
+        recipeId: recipeId.value,
+        properties: { confirmed: Boolean(res.confirm), intent: redirectTarget || 'detail' },
+      })
       if (!res.confirm) return
 
-      const params = [`recipeId=${encodeURIComponent(recipeId.value)}`]
-      if (shareToken.value) {
-        params.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+      // 默认回落到当前食谱详情页；购买/DIY 意图由调用方传入目标页，避免登录后丢失意图
+      let redirect = redirectTarget
+      if (!redirect) {
+        const params = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+        if (shareToken.value) {
+          params.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+        }
+        redirect = `/pages/recipe-detail/index?${params.join('&')}`
       }
-      const redirect = `/pages/recipe-detail/index?${params.join('&')}`
       uni.navigateTo({
         url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
       })

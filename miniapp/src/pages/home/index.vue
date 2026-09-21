@@ -56,7 +56,7 @@
         </view>
         <view class="dog-compact-item dog-compact-add" @tap="goToDogCreate">
           <text class="add-icon">+</text>
-          <text class="add-text">添加档案</text>
+          <text class="add-text">添加狗狗</text>
         </view>
       </scroll-view>
     </view>
@@ -69,7 +69,7 @@
       <text class="empty-title">还没有狗狗档案</text>
       <text class="empty-desc">建档后可一键算出你家狗狗的饭量和订单价</text>
       <button v-if="!isLoggedIn" class="create-btn" @tap="goToLogin">立即登录</button>
-      <button v-else class="create-btn" @tap="goToDogCreate">创建档案</button>
+      <button v-else class="create-btn" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
     <!-- 个性化推荐（简化版）：只给 3 张卡 + 一行理由 + 一个主动作。
@@ -382,6 +382,7 @@ import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { trackFunnelEvent } from '../../utils/funnel'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
@@ -1451,9 +1452,9 @@ const goToDogList = () => {
   uni.navigateTo({ url: '/pages/dog-profile-list/index' })
 }
 
-// 跳转到创建狗狗
+// 跳转到创建狗狗（统一入口：带来源埋点，建档成功后回到首页）
 const goToDogCreate = () => {
-  uni.navigateTo({ url: resolveDogProfileEntryRoute() })
+  navigateToDogCreate({ source: 'home' })
 }
 
 // 跳转到狗狗详情

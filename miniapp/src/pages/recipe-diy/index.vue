@@ -325,8 +325,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
@@ -571,6 +573,17 @@ onMounted(async () => {
   }
 
   console.log('========== [RecipeDiy] onMounted 结束 ==========')
+})
+
+/**
+ * 从建档页返回时本页不会重新挂载，之前只靠 onMounted 拉一次列表，
+ * 导致「已建档却仍显示暂无狗狗档案」，用户只能再点一次。
+ */
+onShow(() => {
+  if (!recipeId.value) return
+  if (!dogs.value.length) {
+    void loadDogs()
+  }
 })
 
 
@@ -1067,9 +1080,7 @@ function navigateToSheet() {
 }
 
 function goToCreateDog() {
-  uni.navigateTo({
-    url: '/pages/dog-create/index'
-  })
+  navigateToDogCreate({ source: 'recipe_diy', recipeId: recipeId.value })
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {

@@ -315,7 +315,15 @@ export class DogsController {
   async updateDog(
     @Param('id') id: string,
     @Body() updateDogDto: UpdateDogDto,
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<DogDetailResponseDto>> {
+    // 归属校验：此前这里同样没有校验，任意登录用户可以改别人的档案
+    const existingDog = await this.dogRepository.findById(id);
+    if (!existingDog) {
+      throw new NotFoundException('Dog not found');
+    }
+    this.assertDogAccessible(existingDog.ownerId, user);
+
     const dog = await this.dogService.updateDogProfile(id, updateDogDto);
 
     if (updateDogDto.medicalRecords !== undefined) {
@@ -355,6 +363,23 @@ export class DogsController {
     };
 
     return ApiResponseDto.success(response);
+  }
+
+  /**
+   * 档案归属校验。
+   *
+   * 允许两种身份：
+   *   1. 档案主人本人；
+   *   2. 员工 / 管理员 —— 员工端的「宠物档案」入口需要代客户查看与维护档案
+   *      （staff-orders 会带着 dogId 打开爱犬概览页，而该页依赖 GET /dogs/:id）。
+   *
+   * 不满足时统一抛 404 而不是 403，避免通过错误码探测出「这个 ID 确实存在」。
+   */
+  private assertDogAccessible(ownerId: string, user: RequestUser): void {
+    if (ownerId === user.customerId) return;
+    if (user.role === 'STAFF' || user.role === 'ADMIN') return;
+
+    throw new NotFoundException('Dog not found');
   }
 
   private async replaceMedicalRecords(
@@ -788,11 +813,16 @@ export class DogsController {
   })
   async getDog(
     @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<DogDetailResponseDto> | ApiResponseDto<null>> {
     const dog = await this.dogRepository.findById(id);
     if (!dog) {
       return ApiResponseDto.error(404, 'Dog not found');
     }
+
+    // 归属校验：此前这里只查了「狗存在」，没有校验「是不是你的狗」，
+    // 任意登录用户只要猜到 ID 就能读到别人的档案。
+    this.assertDogAccessible(dog.ownerId, user);
 
     // Load breed to get breed name
     const breed = await this.dogBreedRepository.findById(dog.breedId);

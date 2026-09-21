@@ -65,7 +65,7 @@
 
       <view v-if="showNoDogHint" class="no-dog-hint">
         <text class="no-dog-hint-text">订购前需先创建狗狗档案，才能按体重精确计算份量与价格</text>
-        <button class="no-dog-hint-btn" @tap="goCreateDog">一键建档</button>
+        <button class="no-dog-hint-btn" @tap="goCreateDog">创建狗狗档案</button>
       </view>
 
       <view
@@ -499,10 +499,12 @@ export default {
 <!-- Setup script：业务逻辑 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { trackFunnelEvent } from '../../utils/funnel'
+import { buildDogCreateRoute, navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
 import { getNutritionStandardExplain, getLifeStageLabel } from '../../utils/label-mapping'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
@@ -635,6 +637,8 @@ const shareToken = ref('')
 const dogId = ref<string | null>(null)
 const dogs = ref<any[]>([])
 const dogsLoaded = ref(false)
+// 未登录时也应该看到「订购前需先建档」的预告（原实现只在已登录时才拉列表，导致新用户毫无提示）
+const hasToken = ref(Boolean(uni.getStorageSync('token')))
 const selectedDogId = ref('')
 const initialDogId = ref('')
 const showReviewForm = ref(false)
@@ -712,8 +716,11 @@ const showPriceFallbackCopy = computed(
   () => Boolean(recipe.value.id) && !referencePriceLoading.value && !displayReferencePrice.value,
 )
 
-// 已登录但未建档：在详情页提前预告，避免进入订购配置页才被拦下
-const showNoDogHint = computed(() => dogsLoaded.value && dogs.value.length === 0)
+// 未建档时在详情页提前预告，避免进入订购配置页才被拦下。
+// 2026-09-21：未登录也展示（新用户此前完全看不到任何预告），文案不变。
+const showNoDogHint = computed(() =>
+  hasToken.value ? dogsLoaded.value && dogs.value.length === 0 : true,
+)
 
 // 当前生效的生命阶段版本（对应食谱ID）
 const activeLifeStageVersionRecipeId = computed(() => {
@@ -900,12 +907,27 @@ onMounted(async () => {
   recipeId.value = currentPage.options?.recipeId || currentPage.options?.id || ''
   shareToken.value = currentPage.options?.shareToken || ''
   initialDogId.value = currentPage.options?.dogId || ''
+  hasToken.value = Boolean(uni.getStorageSync('token'))
 
   dogId.value = initialDogId.value || uni.getStorageSync('dogId') || null
 
   if (recipeId.value) {
     loadDogsForDetail()
     loadRecipeDetail()
+  }
+})
+
+/**
+ * 从建档页返回详情页时，本页不会重新挂载（页面实例还在栈里），
+ * 之前只靠 onMounted 拉一次列表，导致「已经建好档了，页面还在说没建档」，
+ * 用户会以为没成功并再建一次。这里在每次显示时补一次刷新。
+ */
+onShow(() => {
+  hasToken.value = Boolean(uni.getStorageSync('token'))
+  if (!recipeId.value) return
+  // 已有狗狗时无需重复请求；为空则重新拉，让预告消失、新狗狗自动选中
+  if (!dogs.value.length) {
+    loadDogsForDetail()
   }
 })
 
@@ -1219,9 +1241,17 @@ function selectDogForDetail(nextDogId: string) {
 }
 
 function goCreateDog() {
-  uni.navigateTo({
-    url: '/pages/dog-create/index',
-  })
+  const token = uni.getStorageSync('token')
+  // 未登录先引导登录，登录后直接进建档页，避免用户登录完还得再点一次
+  if (!token) {
+    promptLoginAndRedirect(
+      '创建狗狗档案需要登录，登录后继续为你建档',
+      buildDogCreateRoute({ source: 'recipe_detail', recipeId: recipeId.value }),
+    )
+    return
+  }
+
+  navigateToDogCreate({ source: 'recipe_detail', recipeId: recipeId.value })
 }
 
 function promptLoginAndRedirect(message: string, redirectTarget?: string) {

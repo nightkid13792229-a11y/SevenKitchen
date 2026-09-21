@@ -1218,6 +1218,14 @@ function toggleSectionEdit(section: Exclude<EditableSection, ''>) {
 
   activeEditSection.value = section
   resetFeedingAssistPanels()
+
+  // 后台「狗档案转化分析」的「打开编辑模块」指标此前恒为 0 —— 前端从未上报过。
+  void trackDogProfileEvent('dog_profile_edit_module_opened', {
+    mode: 'edit',
+    dogId: dogId.value,
+    moduleName: section,
+  })
+
   if ((section === 'basic' || section === 'feeding') && !calcResult.value && canPreview.value) {
     queuePreview(false)
   }

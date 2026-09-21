@@ -11,13 +11,20 @@
         <text class="step-number">1</text>
         <text class="title-text">选择狗狗</text>
       </view>
-      <picker mode="selector" :range="dogOptions" range-key="label" @change="onDogChange">
+      <picker v-if="dogOptions.length > 0" mode="selector" :range="dogOptions" range-key="label" @change="onDogChange">
         <view class="picker-input">
           <text v-if="selectedDog" class="selected-text">{{selectedDog.label}}</text>
           <text v-else class="placeholder">请选择要定制的狗狗</text>
           <text class="arrow">›</text>
         </view>
       </picker>
+
+      <!-- 无档案时的引导：原先只弹一句 toast，页面上没有任何建档入口，提交按钮永久不可用 -->
+      <view v-else class="no-dog-hint">
+        <text class="no-dog-hint-title">还没有狗狗档案</text>
+        <text class="no-dog-hint-desc">专属食谱需要先有狗狗档案，我们才能按它的体重和身体状况来定制。</text>
+        <button class="no-dog-hint-btn" @tap="goToCreateDog">创建狗狗档案</button>
+      </view>
 
       <!-- 狗狗基本信息 -->
       <view v-if="selectedDog" class="dog-info-card">
@@ -194,8 +201,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getBaseUrl } from '@/utils/config';
+import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 
 // 状态定义
 const dogOptions = ref<any[]>([]);
@@ -237,6 +245,21 @@ onLoad(() => {
   loadDogs();
 });
 
+/**
+ * 从建档页返回时本页不会重新挂载，之前 onLoad 只跑一次，
+ * 导致用户自己建好档再回到本页，狗狗列表仍然是空的、提交按钮仍然点不动。
+ */
+onShow(() => {
+  if (!dogOptions.value.length) {
+    void loadDogs();
+  }
+});
+
+// 统一的建档入口（带来源埋点，建档成功后回到本页）
+const goToCreateDog = () => {
+  navigateToDogCreate({ source: 'custom_recipe' });
+};
+
 // 方法
 const loadDogs = async () => {
   console.log('=== 开始加载狗狗列表 ===');
@@ -264,13 +287,7 @@ const loadDogs = async () => {
         ...dog,
       }));
 
-      if (dogs.length === 0) {
-        uni.showToast({
-          title: '暂无狗狗档案，请先创建',
-          icon: 'none',
-          duration: 2000,
-        });
-      }
+      // 无档案时不再弹 toast：页面上已有明确的空态与建档入口，避免重复打扰
     }
   } catch (error) {
     console.error('加载狗狗列表异常:', error);
@@ -514,6 +531,45 @@ const getActivityLabel = (level: string) => {
   padding: 25rpx;
   background: #f8f8f8;
   border-radius: 12rpx;
+}
+
+/* 无档案时的引导 */
+.no-dog-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  padding: 40rpx 25rpx;
+  background: #f8f8f8;
+  border-radius: 12rpx;
+}
+
+.no-dog-hint-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.no-dog-hint-desc {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #888;
+  text-align: center;
+}
+
+.no-dog-hint-btn {
+  margin-top: 10rpx;
+  padding: 0 40rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  font-size: 26rpx;
+  color: #fff;
+  background: #1e3a2f;
+  border-radius: 12rpx;
+}
+
+.no-dog-hint-btn::after {
+  border: none;
 }
 
 .selected-text {

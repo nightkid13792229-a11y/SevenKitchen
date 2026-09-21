@@ -15,6 +15,13 @@
         </view>
       </picker>
 
+      <!-- 无档案时的提前提示：原先页面上没有任何说明，只有点选择器才弹窗 -->
+      <view v-if="dogs.length === 0" class="no-dog-hint">
+        <text class="no-dog-hint-title">还没有狗狗档案</text>
+        <text class="no-dog-hint-desc">建档后就能按体重算出每天该喂多少。</text>
+        <button class="no-dog-hint-btn" @tap="goToCreateDog">创建狗狗档案</button>
+      </view>
+
       <!-- 狗狗信息卡片 -->
       <view v-if="selectedDog" class="dog-info-card">
         <view class="dog-name-row">
@@ -221,7 +228,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 
 interface DogProfile {
   id: string
@@ -330,6 +339,22 @@ onMounted(async () => {
   await loadDogs()
 })
 
+/**
+ * 从建档页返回时本页不会重新挂载，之前只靠 onMounted 拉一次列表，
+ * 导致返回后列表仍为空、再点选择器会重复弹出「是否立即创建」。
+ */
+onShow(() => {
+  if (!getToken()) return
+  if (!dogs.value.length) {
+    void loadDogs()
+  }
+})
+
+// 统一的建档入口（带来源埋点，建档成功后回到本页）
+function goToCreateDog() {
+  navigateToDogCreate({ source: 'calculator' })
+}
+
 // 加载狗狗列表
 async function loadDogs() {
   try {
@@ -364,9 +389,7 @@ function onDogPickerChange(e: any) {
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          uni.navigateTo({
-            url: '/pages/dog-create/index'
-          })
+          goToCreateDog()
         }
       }
     })
@@ -659,6 +682,46 @@ function calculate() {
 .selector-arrow {
   font-size: 24rpx;
   color: #968f6d;
+}
+
+/* 无档案时的提前提示 */
+.no-dog-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+  padding: 32rpx 24rpx;
+  background: #fbfcf7;
+  border: 1px solid #dde3cd;
+  border-radius: 8rpx;
+}
+
+.no-dog-hint-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.no-dog-hint-desc {
+  font-size: 24rpx;
+  color: #6b6653;
+  text-align: center;
+}
+
+.no-dog-hint-btn {
+  margin-top: 8rpx;
+  padding: 0 40rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  font-size: 26rpx;
+  color: #fff;
+  background: #1e3a2f;
+  border-radius: 8rpx;
+}
+
+.no-dog-hint-btn::after {
+  border: none;
 }
 
 /* 狗狗信息卡片 */

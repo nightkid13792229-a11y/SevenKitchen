@@ -27,9 +27,20 @@ export class ProductFunnelAnalyticsController {
   ) {
     // 刻意不使用 AuthGuard：登录前的浏览与点击也必须能采集，
     // 否则漏斗的前半段永远是空的。
+    //
+    // 注意：这里逐字段显式取用，而不是 { customerId, ...dto }。
+    // 后者在全局 ValidationPipe 关闭 whitelist 的前提下，客户端只要在 body 里
+    // 塞一个 customerId 就能覆盖服务端解析出的归属。
     await this.funnelService.track({
       customerId: this.tryResolveCustomerId(request),
-      ...dto,
+      eventName: dto.eventName,
+      step: dto.step ?? null,
+      sessionId: dto.sessionId ?? null,
+      recipeId: dto.recipeId ?? null,
+      dogId: dto.dogId ?? null,
+      orderId: dto.orderId ?? null,
+      entrySource: dto.entrySource ?? null,
+      properties: dto.properties ?? null,
     });
 
     return ApiResponseDto.success({ ok: true });

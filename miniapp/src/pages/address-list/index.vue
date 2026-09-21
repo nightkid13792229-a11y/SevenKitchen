@@ -106,7 +106,7 @@ function loadAddresses() {
 
 function onAddressTap(addressId: string) {
   if (mode.value === 'select') {
-    // Select mode: return to previous page (order-config or checkout)
+    // Select mode: return to previous page (checkout)
     const pages = getCurrentPages()
     const prevPage = pages[pages.length - 2]
     if (prevPage) {

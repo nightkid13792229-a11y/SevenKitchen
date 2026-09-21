@@ -93,7 +93,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
@@ -115,7 +115,7 @@ import {
   shouldDiscardDogHealthProfileResponse,
   writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
-import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 
 interface DogProfileSummary {
   id: string
@@ -208,6 +208,16 @@ const dietReminderStatusText = computed(() => {
 onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
   void loadDogs(typeof value === 'string' ? value : '')
+})
+
+/**
+ * 从建档页返回时本页不会重新挂载：原先 onLoad 只跑一次，
+ * 「还没有狗狗档案」的空态会一直留着，用户看不到刚建好的狗。
+ */
+onShow(() => {
+  if (!dogs.value.length) {
+    void loadDogs()
+  }
 })
 
 async function loadDogs(preferredDogId = '') {
@@ -666,7 +676,10 @@ function goBack() {
 }
 
 function goToDogCreate() {
-  uni.redirectTo({ url: resolveDogProfileEntryRoute() })
+  // 2026-09-21：由 redirectTo 改为 navigateTo。
+  // 原先 redirectTo 会把健康管理页从页面栈里替换掉，建档完成后无法回到这里；
+  // 现在保留本页，建档成功 navigateBack 回来即可直接维护健康记录。
+  navigateToDogCreate({ source: 'health' })
 }
 </script>
 

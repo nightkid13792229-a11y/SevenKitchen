@@ -83,7 +83,7 @@
       <view v-else-if="dogs.length === 0" class="dog-empty-state">
         <text class="dog-empty-title">请先创建狗狗档案</text>
         <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算建议用量。</text>
-        <button class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建档案</button>
+        <button class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
 
       <view v-else class="dog-feeding-content">
@@ -548,6 +548,7 @@ import {
 } from './ingredientDisplay'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import { trackFunnelEvent } from '../../utils/funnel'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 
 interface Dog {
   id: string
@@ -1207,6 +1208,10 @@ const autoConfigParams = ref<{
   perMealG?: number
 }>({})
 const detailHandoffDogId = ref('')
+// 是否从「订单详情 → 再次购买」进入。
+// 注意不能用 autoConfigParams 本身判断：它初始化成 {} 恒为真，
+// 导致 entrySource 一直被记成 'buy_again'，从详情页正常进来的流量全被误标。
+const isBuyAgainEntry = ref(false)
 
 onMounted(async () => {
   const pages = getCurrentPages()
@@ -1220,6 +1225,7 @@ onMounted(async () => {
 
   // 解析自动配置参数
   if (currentPage.options?.autoConfig === 'true') {
+    isBuyAgainEntry.value = true
     autoConfigParams.value = {
       dogId: currentPage.options?.dogId,
       packageCount: currentPage.options?.packageCount ? Number(currentPage.options.packageCount) : undefined,
@@ -1241,7 +1247,7 @@ onMounted(async () => {
     step: 'order_page',
     recipeId: recipeId.value,
     dogId: selectedDogId.value,
-    entrySource: autoConfigParams.value ? 'buy_again' : 'detail',
+    entrySource: isBuyAgainEntry.value ? 'buy_again' : 'detail',
     properties: {
       dogCount: dogs.value.length,
       hasDogProfile: dogs.value.length > 0,
@@ -1934,8 +1940,12 @@ async function continueBuyNow() {
 }
 
 function goToCreateDog() {
-  uni.navigateTo({
-    url: `/pages/dog-create/index?redirect=order&recipeId=${encodeURIComponent(recipeId.value)}`
+  // 从订购流程建档：带回跳信息，建档成功后自动回到本页继续下单
+  navigateToDogCreate({
+    source: 'recipe_order',
+    recipeId: recipeId.value,
+    dogId: selectedDogId.value,
+    redirectToOrder: true,
   })
 }
 

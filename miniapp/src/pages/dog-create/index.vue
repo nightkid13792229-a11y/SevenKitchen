@@ -559,7 +559,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch, reactive } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
@@ -567,6 +567,8 @@ import DogAvatarCropper from '../../components/dog-profile/DogAvatarCropper.vue'
 import { type DogProfileCreateStep } from '../../constants/dog-profile'
 import { dogApi } from '../../api/dogs'
 import { addDogToCache } from '../../utils/dog-cache'
+import { trackFunnelEvent } from '../../utils/funnel'
+import { DOG_CREATE_SOURCES, type DogCreateSource } from '../../utils/dog-profile-entry'
 import {
   clearDogProfileDraft,
   loadDogProfileDraft,
@@ -771,6 +773,13 @@ const backendLifeStageInfo = ref<{
 } | null>(null)
 
 const isLegacyRedirecting = ref(false)
+
+// 建档入口来源（由 utils/dog-profile-entry.ts 统一带上）。
+// 2026-09-21 之前这里被硬编码成 'dog_list'，导致从订购页/详情页来的用户无法区分。
+const entrySource = ref<DogCreateSource>('unknown')
+// 是否已成功建档：用于在用户中途离开时判断这是一次放弃
+const hasCreatedProfile = ref(false)
+const createStartedAt = ref(0)
 
 // 从订购配置页跳转建档：建档成功后回跳订购页继续下单
 const returnToOrderRecipeId = ref('')
@@ -1146,6 +1155,13 @@ onLoad((options: any) => {
     return
   }
 
+  // 入口来源：由各引导点通过 utils/dog-profile-entry.ts 统一带上
+  const sourceParam = Array.isArray(options?.source) ? options.source[0] : options?.source
+  const normalizedSource = String(sourceParam || '')
+  entrySource.value = (DOG_CREATE_SOURCES as readonly string[]).includes(normalizedSource)
+    ? (normalizedSource as DogCreateSource)
+    : 'unknown'
+
   // 从订购配置页进入：记录回跳信息（建档成功后回到订购页继续下单）
   const redirectParam = Array.isArray(options?.redirect) ? options.redirect[0] : options?.redirect
   if (redirectParam === 'order') {
@@ -1154,7 +1170,7 @@ onLoad((options: any) => {
     console.log('[DogCreate] Will return to order after create, recipeId:', returnToOrderRecipeId.value)
   }
 
-  console.log('[DogCreate] Create mode')
+  console.log('[DogCreate] Create mode, entrySource:', entrySource.value)
 })
 
 onMounted(async () => {
@@ -1162,6 +1178,7 @@ onMounted(async () => {
     return
   }
 
+  createStartedAt.value = Date.now()
   await Promise.all([loadBreeds(), loadHotBreeds()])
   console.log('[DogCreate] onMounted: create mode')
   const restoredDraft = restoreCreateDraft()
@@ -1172,11 +1189,35 @@ onMounted(async () => {
 
   void trackDogProfileEvent('dog_profile_create_started', {
     mode: 'create',
-    entrySource: 'dog_list',
+    entrySource: entrySource.value,
     stepName: getCreateAnalyticsStepName(currentCreateStep.value),
     hasDraft: restoredDraft,
   })
+
+  // 漏斗：把「建档」接进成品购买漏斗（原先这条漏斗里没有建档这一步，
+  // 导致「点买成品 → 订购页」之间掉了多少人完全看不到）
+  trackFunnelEvent({
+    eventName: 'dog_profile_started',
+    step: 'dog_profile',
+    entrySource: entrySource.value,
+    properties: { hasDraft: restoredDraft },
+  })
+
   trackCreateStepViewed(currentCreateStep.value)
+})
+
+onUnload(() => {
+  // 漏斗：没能建完就离开了。埋点失败不影响任何业务逻辑。
+  if (hasCreatedProfile.value) return
+  trackFunnelEvent({
+    eventName: 'dog_profile_abandoned',
+    step: 'dog_profile',
+    entrySource: entrySource.value,
+    properties: {
+      stepName: getCreateAnalyticsStepName(currentCreateStep.value),
+      stayedMs: createStartedAt.value ? Date.now() - createStartedAt.value : 0,
+    },
+  })
 })
 
 onUnmounted(() => {
@@ -1250,6 +1291,17 @@ function trackCreateStepCompleted(step: DogProfileCreateStep) {
     mode: 'create',
     stepName: getCreateAnalyticsStepName(step),
   })
+}
+
+/** 建档时是否带了任何健康信息（病史/体检/过敏/饮食提醒） */
+function hasAnyHealthInput() {
+  const form = formData.value
+  const hasRecords = [form.medicalRecords, form.checkupRecords, form.allergyRecords]
+    .some(records => Array.isArray(records) && records.length > 0)
+  const hasNotes = Boolean(
+    String(form.allergyFoods || '').trim() || String(form.pickyFoods || '').trim(),
+  )
+  return hasRecords || hasNotes
 }
 
 async function loadBreeds() {
@@ -2260,6 +2312,29 @@ async function submit() {
         submitStatus: 'success',
       })
 
+      // 后台「狗档案转化分析」的「跳过健康信息」指标此前恒为 0 —— 前端从未上报过。
+      // 建档三步里没有健康信息环节（健康记录在建档后由健康管理页维护），
+      // 所以这里如实记录「建档时没有带任何健康信息」。
+      if (!hasAnyHealthInput()) {
+        void trackDogProfileEvent('dog_profile_health_skipped', {
+          mode: 'create',
+          dogId: resultDogId,
+        })
+      }
+
+      // 漏斗：建档完成。与 dog_profile_started 配对，用于算「建档」这一步的流失。
+      hasCreatedProfile.value = true
+      trackFunnelEvent({
+        eventName: 'dog_profile_created',
+        step: 'dog_profile',
+        dogId: resultDogId,
+        entrySource: entrySource.value,
+        properties: {
+          durationMs: createStartedAt.value ? Date.now() - createStartedAt.value : 0,
+          avatarUploadFailed,
+        },
+      })
+
       uni.setStorageSync('dogId', resultDogId)
       addDogToCache(updatedDog)
       formData.value.avatarTempFilePath = ''
@@ -2272,8 +2347,12 @@ async function submit() {
       })
 
       setTimeout(() => {
+        // 建档成功后的去向（2026-09-21 统一约定）：
+        //   1. 从订购流程进来的 —— 回订购页继续下单；
+        //   2. 其余入口 —— 一律先回「用户原来那一页」，让用户接着做刚才的事
+        //      （来源页自己负责 onShow 刷新，新狗狗会被自动选中）；
+        //   3. 只有页面栈里确实没有上一页时，才回落到爱犬列表。
         if (returnToOrderRecipeId.value) {
-          // 从订购配置页建档：返回订购页继续下单（原订购页实例仍在页面栈中）
           uni.navigateBack({
             delta: 1,
             fail: () => {
@@ -2285,6 +2364,12 @@ async function submit() {
           })
           return
         }
+
+        if (getCurrentPages().length > 1) {
+          uni.navigateBack({ delta: 1 })
+          return
+        }
+
         uni.redirectTo({
           url: '/pages/dog-profile-list/index'
         })

@@ -86,22 +86,30 @@ describe('DogProfileAnalyticsService', () => {
   it('builds funnel counts from a time window', async () => {
     prisma.dogProfileEvent.findMany.mockResolvedValue([
       {
+        id: 'evt-1',
+        customerId: 'customer-a',
         eventName: 'dog_profile_create_started',
         mode: 'create',
         createdAt: new Date('2026-04-03T08:00:00Z'),
       },
       {
+        id: 'evt-2',
+        customerId: 'customer-a',
         eventName: 'dog_profile_step_completed',
         mode: 'create',
         stepName: 'basic_info',
         createdAt: new Date('2026-04-03T08:01:00Z'),
       },
       {
+        id: 'evt-3',
+        customerId: 'customer-a',
         eventName: 'dog_profile_calc_succeeded',
         mode: 'create',
         createdAt: new Date('2026-04-03T08:02:00Z'),
       },
       {
+        id: 'evt-4',
+        customerId: 'customer-a',
         eventName: 'dog_profile_submit_succeeded',
         mode: 'create',
         createdAt: new Date('2026-04-03T08:03:00Z'),
@@ -133,6 +141,44 @@ describe('DogProfileAnalyticsService', () => {
       },
       orderBy: { createdAt: 'asc' },
     });
+  });
+
+  it('counts distinct customers instead of raw events', async () => {
+    // 同一个用户反复进出建档页 3 次，只应算 1 个人；
+    // 原先按事件条数统计会算成 3，漏斗各步比例随之失真。
+    prisma.dogProfileEvent.findMany.mockResolvedValue([
+      { id: 'evt-1', customerId: 'customer-a', eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-2', customerId: 'customer-a', eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-3', customerId: 'customer-a', eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-4', customerId: 'customer-b', eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-5', customerId: 'customer-a', eventName: 'dog_profile_health_skipped', mode: 'create' },
+      { id: 'evt-6', customerId: 'customer-b', eventName: 'dog_profile_health_skipped', mode: 'create' },
+      { id: 'evt-7', customerId: 'customer-a', eventName: 'dog_profile_calc_failed', mode: 'create' },
+    ]);
+
+    const summary = await service.getSummary({
+      from: '2026-04-01T00:00:00.000Z',
+      to: '2026-04-04T00:00:00.000Z',
+    });
+
+    expect(summary.createFunnel.started).toBe(2);
+    expect(summary.riskSignals.healthSkipped).toBe(2);
+    expect(summary.riskSignals.calcFailed).toBe(1);
+  });
+
+  it('ignores event rows without customerId instead of merging them into one person', async () => {
+    prisma.dogProfileEvent.findMany.mockResolvedValue([
+      { id: 'evt-1', customerId: null, eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-2', customerId: null, eventName: 'dog_profile_create_started', mode: 'create' },
+      { id: 'evt-3', customerId: 'customer-a', eventName: 'dog_profile_create_started', mode: 'create' },
+    ]);
+
+    const summary = await service.getSummary({
+      from: '2026-04-01T00:00:00.000Z',
+      to: '2026-04-04T00:00:00.000Z',
+    });
+
+    expect(summary.createFunnel.started).toBe(1);
   });
 
   it('returns an empty summary when analytics table is missing', async () => {

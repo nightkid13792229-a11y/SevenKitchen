@@ -23,18 +23,6 @@
       }
     },
     {
-      "path": "pages/dog-profile-basic/index",
-      "style": {
-        "navigationBarTitleText": "基础信息"
-      }
-    },
-    {
-      "path": "pages/dog-profile-feeding/index",
-      "style": {
-        "navigationBarTitleText": "喂食信息"
-      }
-    },
-    {
       "path": "pages/dog-profile-health/index",
       "style": {
         "navigationBarTitleText": "健康管理"
@@ -68,12 +56,6 @@
       "path": "pages/address-edit/index",
       "style": {
         "navigationBarTitleText": "编辑地址"
-      }
-    },
-    {
-      "path": "pages/order-config/index",
-      "style": {
-        "navigationBarTitleText": "下单配置"
       }
     },
     {

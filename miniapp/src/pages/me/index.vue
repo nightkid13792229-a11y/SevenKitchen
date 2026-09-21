@@ -178,6 +178,16 @@
           <text class="function-count">({{ userInfo.dogCount || 0 }}只)</text>
         </view>
 
+        <!-- 还没有档案时给一个直接入口：原先「我的」页只能先进列表页才能建档 -->
+        <view
+          v-if="!userInfo.dogCount"
+          class="function-item"
+          @tap="goToDogCreate"
+        >
+          <text class="function-text">创建狗狗档案</text>
+          <text class="function-action">去创建 ›</text>
+        </view>
+
         <view class="function-item" @tap="goToOrderList">
           <text class="function-text">我的订单</text>
           <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
@@ -265,6 +275,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
+import { navigateToDogCreate } from '../../utils/dog-profile-entry';
 import {
   applyCustomerTestModeSession,
   getCustomerTestModeState,
@@ -416,6 +427,11 @@ async function goToDogList() {
   uni.navigateTo({
     url: "/pages/dog-profile-list/index",
   });
+}
+
+// 直接建档（统一入口：带来源埋点，建档成功后回到「我的」页）
+function goToDogCreate() {
+  navigateToDogCreate({ source: 'my_page' })
 }
 
 // 跳转订单列表
@@ -1036,6 +1052,12 @@ onShow(() => {
 .function-count {
   font-size: 24rpx;
   color: #968f6d;
+}
+
+.function-action {
+  font-size: 24rpx;
+  color: #0f6b43;
+  font-weight: 600;
 }
 
 .logout-section {

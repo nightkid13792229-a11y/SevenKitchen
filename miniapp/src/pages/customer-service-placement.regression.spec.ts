@@ -23,11 +23,6 @@ describe('customer service page placement regressions', () => {
       title: '售后申请咨询',
       context: 'aftersale submit bar',
     },
-    {
-      path: 'src/pages/order-config/index.vue',
-      title: '订单配置咨询',
-      context: 'legacy order config bottom bar',
-    },
   ]
 
   it('uses a non-floating customer service component on pages with fixed bottom actions', () => {

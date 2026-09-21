@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDogCreatePayload,
   buildDogEditPayload,
-  buildOverviewTaskCards,
   canAdvanceCreateStep,
   getDogHealthValidationError,
   getCreateStepAvailability,
@@ -52,61 +51,6 @@ describe('dog-profile-form', () => {
 
   it('does not redirect normal dog-create links', () => {
     expect(getDogCreateLegacyRedirectRoute()).toBe('')
-  })
-
-  it('marks feeding as stale when the current weight changes', () => {
-    const cards = buildOverviewTaskCards({
-      profile: {
-        currentWeightKg: 11,
-        activityLevel: 'NORMAL',
-        mealsPerDay: 2,
-        treatInputMode: 'ESTIMATE_LEVEL',
-      },
-      dirtyFields: ['currentWeightKg'],
-      healthCount: 0,
-    })
-
-    expect(cards.find(card => card.key === 'feeding')?.status).toBe('stale')
-  })
-
-  it('keeps overview feeding and recommendation incomplete for mixed breed without size class override', () => {
-    const cards = buildOverviewTaskCards({
-      profile: {
-        name: '七七',
-        breedId: MIXED_BREED_VIRTUAL_ID,
-        birthday: '2021-01-01',
-        currentWeightKg: 11,
-        activityLevel: 'NORMAL',
-        mealsPerDay: 2,
-        bcsScore: 5,
-        treatInputMode: 'ESTIMATE_LEVEL',
-      },
-      dirtyFields: [],
-      healthCount: 0,
-    })
-
-    expect(cards.find(card => card.key === 'feeding')?.status).not.toBe('complete')
-    expect(cards.find(card => card.key === 'recommendation')?.status).not.toBe('complete')
-  })
-
-  it('keeps overview feeding and recommendation incomplete for exact kcal without manual kcal', () => {
-    const cards = buildOverviewTaskCards({
-      profile: {
-        name: '七七',
-        breedId: '550e8400-e29b-41d4-a716-446655440000',
-        birthday: '2021-01-01',
-        currentWeightKg: 11,
-        activityLevel: 'NORMAL',
-        mealsPerDay: 2,
-        bcsScore: 5,
-        treatInputMode: 'EXACT_KCAL',
-      },
-      dirtyFields: [],
-      healthCount: 0,
-    })
-
-    expect(cards.find(card => card.key === 'feeding')?.status).not.toBe('complete')
-    expect(cards.find(card => card.key === 'recommendation')?.status).not.toBe('complete')
   })
 
   it('unlocks recommendation after feeding fields are complete', () => {

@@ -10,6 +10,13 @@ import {
 import { UpdateDogDto } from '../../src/interfaces/dto/dogs/update-dog.dto';
 
 describe('DogsController attachment cleanup', () => {
+  /** 档案主人：updateDog / getDog 现在会校验归属，测试统一用它 */
+  const OWNER_USER = {
+    userId: 'owner-1',
+    customerId: 'owner-1',
+    role: 'CUSTOMER',
+  } as any;
+
   function createDog(overrides: Partial<Dog> = {}) {
     return Object.assign(
       new Dog(
@@ -42,7 +49,8 @@ describe('DogsController attachment cleanup', () => {
 
   function createController() {
     const dogRepository = {
-      findById: jest.fn(),
+      // 默认返回一只属于 owner-1 的狗：updateDog 现在会先查归属再更新
+      findById: jest.fn().mockResolvedValue(createDog()),
       save: jest.fn(),
     };
     const dogBreedRepository = {
@@ -202,7 +210,7 @@ describe('DogsController attachment cleanup', () => {
           attachments: ['https://img.sevenkitchen.cloud/medical-records/keep.jpg'],
         },
       ],
-    } as any);
+    } as any, OWNER_USER);
 
     expect(cosService.deleteImage).toHaveBeenCalledWith(
       'medical-records/remove.jpg',
@@ -241,7 +249,7 @@ describe('DogsController attachment cleanup', () => {
             attachments: [],
           },
         ],
-      } as any),
+      } as any, OWNER_USER),
     ).rejects.toThrow('medical create failed');
 
     expect(medicalRecordRepository.delete).not.toHaveBeenCalled();
@@ -300,7 +308,7 @@ describe('DogsController attachment cleanup', () => {
           attachments: [],
         },
       ],
-    } as any);
+    } as any, OWNER_USER);
 
     expect(result.data.profile.medicalRecords).toEqual([
       {
@@ -378,7 +386,7 @@ describe('DogsController attachment cleanup', () => {
     dogService.updateDogProfile.mockResolvedValue(createDog({ id: dogId }));
     dogService.calcPreview.mockResolvedValue(null);
 
-    await controller.updateDog(dogId, dto);
+    await controller.updateDog(dogId, dto, OWNER_USER);
 
     expect(medicalRecordRepository.findByDogId).toHaveBeenCalledTimes(1);
     expect(checkupRecordRepository.findByDogId).toHaveBeenCalledTimes(1);
@@ -391,8 +399,7 @@ describe('DogsController attachment cleanup', () => {
     expect(allergyRecordRepository.create).not.toHaveBeenCalled();
   });
 
-  it('loads allergy records without legacy allergy fields on dog detail', async () => {
-    const {
+  it('loads allergy records without legacy allergy fields on dog detail', async () => {    const {
       controller,
       dogRepository,
       dogBreedRepository,
@@ -413,7 +420,7 @@ describe('DogsController attachment cleanup', () => {
     ]);
     dogService.calcPreview.mockResolvedValue(null);
 
-    const result: any = await controller.getDog(dog.id);
+    const result: any = await controller.getDog(dog.id, OWNER_USER);
 
     expect(result.data.profile.allergyRecords).toEqual([
       {
@@ -423,6 +430,52 @@ describe('DogsController attachment cleanup', () => {
         attachments: [],
       },
     ]);
+  });
+
+  it('rejects reading another customer dog profile', async () => {
+    const { controller, dogRepository } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-1' }));
+
+    await expect(
+      controller.getDog('dog-1', {
+        userId: 'owner-2',
+        customerId: 'owner-2',
+        role: 'CUSTOMER',
+      } as any),
+    ).rejects.toThrow('Dog not found');
+  });
+
+  it('rejects updating another customer dog profile', async () => {
+    const { controller, dogRepository, dogService } = createController();
+    dogRepository.findById.mockResolvedValue(createDog({ ownerId: 'owner-1' }));
+
+    await expect(
+      controller.updateDog(
+        'dog-1',
+        {} as any,
+        {
+          userId: 'owner-2',
+          customerId: 'owner-2',
+          role: 'CUSTOMER',
+        } as any,
+      ),
+    ).rejects.toThrow('Dog not found');
+
+    expect(dogService.updateDogProfile).not.toHaveBeenCalled();
+  });
+
+  it('lets staff open a customer dog profile (员工端「宠物档案」入口)', async () => {
+    const { controller, dogRepository } = createController();
+    const dog = createDog({ ownerId: 'owner-1' });
+    dogRepository.findById.mockResolvedValue(dog);
+
+    const result: any = await controller.getDog('dog-1', {
+      userId: 'staff-1',
+      customerId: 'staff-1',
+      role: 'STAFF',
+    } as any);
+
+    expect(result.data.profile.id).toBe('dog-1');
   });
 
   it('persists the uploaded dog avatar url back onto the dog profile', async () => {

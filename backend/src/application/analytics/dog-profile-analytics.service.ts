@@ -21,6 +21,12 @@ export interface GetDogProfileAnalyticsSummaryInput {
   to: string;
 }
 
+/**
+ * 狗狗档案埋点汇总。
+ *
+ * 注意：2026-09-21 起，所有计数值都是「去重后的客户数」而不是「事件条数」。
+ * 同一个用户反复进出建档页只会被计一次，否则漏斗各步的比例会失真。
+ */
 export interface DogProfileAnalyticsSummary {
   createFunnel: {
     started: number;
@@ -81,6 +87,8 @@ export class DogProfileAnalyticsService {
     to,
   }: GetDogProfileAnalyticsSummaryInput): Promise<DogProfileAnalyticsSummary> {
     let rows: Array<{
+      id: string;
+      customerId: string | null;
       eventName: string;
       mode: string;
       stepName?: string | null;
@@ -107,56 +115,76 @@ export class DogProfileAnalyticsService {
       throw error;
     }
 
+    /**
+     * 统计「人数」而不是「事件条数」。
+     *
+     * 背景（2026-09-21 复盘）：原实现是 rows.filter(...).length，
+     * 同一个用户反复进出建档页 5 次会被算成 5 个「开始建档」，
+     * 漏斗各步的比例因此完全失真。这里改为按 customerId 去重。
+     * 该上报接口本身需要登录，正常不会出现 customerId 为空的行；真有则跳过。
+     */
+    const countDistinctCustomers = (
+      predicate: (row: (typeof rows)[number]) => boolean,
+    ): number => {
+      const customers = new Set<string>();
+      for (const row of rows) {
+        if (!predicate(row)) continue;
+        if (!row.customerId) continue;
+        customers.add(row.customerId);
+      }
+      return customers.size;
+    };
+
     return {
       createFunnel: {
-        started: rows.filter(
+        started: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_create_started',
-        ).length,
-        basicCompleted: rows.filter(
+        ),
+        basicCompleted: countDistinctCustomers(
           (row) =>
             row.eventName === 'dog_profile_step_completed' &&
             row.mode === 'create' &&
             row.stepName === 'basic_info',
-        ).length,
-        recommendationSucceeded: rows.filter(
+        ),
+        recommendationSucceeded: countDistinctCustomers(
           (row) =>
             row.eventName === 'dog_profile_calc_succeeded' &&
             row.mode === 'create',
-        ).length,
-        submitted: rows.filter(
+        ),
+        submitted: countDistinctCustomers(
           (row) =>
             row.eventName === 'dog_profile_submit_succeeded' &&
             row.mode === 'create',
-        ).length,
+        ),
       },
       editFunnel: {
-        moduleOpened: rows.filter(
+        moduleOpened: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_edit_module_opened',
-        ).length,
-        calcSucceeded: rows.filter(
+        ),
+        calcSucceeded: countDistinctCustomers(
           (row) =>
             row.eventName === 'dog_profile_calc_succeeded' &&
             row.mode === 'edit',
-        ).length,
-        saved: rows.filter(
+        ),
+        saved: countDistinctCustomers(
           (row) =>
             row.eventName === 'dog_profile_submit_succeeded' &&
             row.mode === 'edit',
-        ).length,
+        ),
       },
       riskSignals: {
-        draftRestored: rows.filter(
+        draftRestored: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_draft_restored',
-        ).length,
-        calcFailed: rows.filter(
+        ),
+        calcFailed: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_calc_failed',
-        ).length,
-        submitFailed: rows.filter(
+        ),
+        submitFailed: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_submit_failed',
-        ).length,
-        healthSkipped: rows.filter(
+        ),
+        healthSkipped: countDistinctCustomers(
           (row) => row.eventName === 'dog_profile_health_skipped',
-        ).length,
+        ),
       },
     };
   }

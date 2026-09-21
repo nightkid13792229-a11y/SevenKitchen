@@ -25,6 +25,7 @@ import {
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
+  MIXED_BREED_VIRTUAL_ID,
   calculateDogEnergy,
 } from '../../domain';
 import { DogBreed } from '../../domain/dog/dog-breed.entity';
@@ -362,21 +363,37 @@ export class DogService {
       dto.medicalHistory ?? null,
       dto.allergyFoods ?? null,
       dto.pickyFoods ?? null,
-      0, // Will be calculated and updated after save
+      0, // 下面算完再填
     );
 
-    // Save first to get persisted entity
-    const savedDog = await this.dogRepository.save(dog);
+    // 先把「会抛错的部分」全部做完，最后才落库。
+    //
+    // 2026-09-21 复盘：原实现是先 save 再计算。计算一旦失败（最典型的是混血犬
+    // 没有选体型，dog-calc 会直接抛错），用户收到的是「创建失败」，
+    // 但那条狗已经写进数据库了 —— 用户重试就会多出一条重复档案。
+    // 现在任何校验/计算异常都发生在写库之前，失败就是真的什么都没留下。
+    const breed = await this.loadBreedForCalculation(dog.breedId);
+    const calcResult = calculateDogEnergy(dog, undefined, breed);
+    dog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
 
-    // Load breed for calculation
-    const breed = await this.dogBreedRepository.findById(savedDog.breedId);
+    return this.dogRepository.save(dog);
+  }
 
-    // Calculate and update cachedTargetFoodKcal
-    const calcResult = calculateDogEnergy(savedDog, undefined, breed);
-    savedDog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
+  /**
+   * 载入品种用于能量计算。
+   *
+   * 品种必须真实存在 —— 混血犬使用虚拟品种 ID，不查库。
+   * 原先品种查不到时会静默按「中型犬」继续算，档案里的体型判断会悄悄失真；
+   * 这里改为明确报错，让前端提示用户重新选择品种。
+   */
+  private async loadBreedForCalculation(breedId: string): Promise<DogBreed | null> {
+    const breed = await this.dogBreedRepository.findById(breedId);
 
-    // Update with calculated value
-    return this.dogRepository.save(savedDog);
+    if (!breed && breedId !== MIXED_BREED_VIRTUAL_ID) {
+      throw new BadRequestException('品种不存在，请重新选择品种');
+    }
+
+    return breed;
   }
 
   /**
@@ -443,8 +460,10 @@ export class DogService {
     });
 
     if (orderCount > 0) {
+      // 文案与 dogs.controller 里客户可见的删除拦截保持一致（中文），
+      // 避免一旦这个方法被接到对外链路就把英文报错弹给用户。
       throw new BadRequestException(
-        `Cannot delete dog profile: ${orderCount} related order(s) found. Please keep this profile for order history.`,
+        `当前宠物存在 ${orderCount} 条关联订单，档案需保留用于订单记录，暂不支持删除`,
       );
     }
 

@@ -37,8 +37,8 @@
       
       <!-- Empty State: No dogs and not loading -->
       <view v-if="dogs.length === 0 && !isLoading && !loadError" class="empty-state">
-        <text class="empty-text">暂无爱犬信息</text>
-        <button class="btn-empty-action" @tap="createDog">去创建</button>
+        <text class="empty-text">还没有狗狗档案</text>
+        <button class="btn-empty-action" @tap="createDog">创建狗狗档案</button>
       </view>
       
       <!-- Error State: Load failed -->
@@ -49,7 +49,7 @@
     </view>
     
     <view class="bottom-bar">
-      <button class="btn-add" @tap="createDog">＋ 添加爱犬</button>
+      <button class="btn-add" @tap="createDog">＋ 添加狗狗</button>
     </view>
   </view>
 </template>
@@ -60,6 +60,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { request, waitForToken } from '../../utils/api'
 import { getCachedDogs, removeDogFromCache, setCachedDogs } from '../../utils/dog-cache'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 
 interface DogProfile {
   id: string
@@ -138,9 +139,7 @@ function viewDog(dogId: string) {
 }
 
 function createDog() {
-  uni.navigateTo({
-    url: resolveDogProfileEntryRoute()
-  })
+  navigateToDogCreate({ source: 'dog_list' })
 }
 
 function confirmDeleteDog(dog: DogProfile) {
@@ -150,7 +149,8 @@ function confirmDeleteDog(dog: DogProfile) {
 
   uni.showModal({
     title: '删除爱犬档案',
-    content: `确定要删除“${dog.name}”的档案吗？删除后不可恢复。`,
+    // 提前说清「有订单的档案不能删」，避免用户点完删除才被后端拒绝
+    content: `确定要删除“${dog.name}”的档案吗？删除后不可恢复。\n\n若这只狗狗已有订单，档案需要保留用于订单记录，将无法删除。`,
     confirmText: '删除',
     confirmColor: '#fa5151',
     success: (res) => {

@@ -1341,6 +1341,8 @@ export class RecipeDesignerService {
         birthday: true,
         lifeStageOverride: true,
         activityLevel: true,
+        // 生命阶段判定需要体型：混血犬没有品种行，只能靠 sizeClassOverride
+        sizeClassOverride: true,
       },
     });
     if (!dog) {
@@ -1353,6 +1355,8 @@ export class RecipeDesignerService {
           select: {
             adultAgeMonths: true,
             seniorAgeYears: true,
+            // 品种自带的体型分类，是 sizeClassOverride 之外的体型来源
+            sizeCategory: true,
           },
         })
       : null;
@@ -5137,8 +5141,8 @@ export class RecipeDesignerService {
         nutrientTargetValue: this.normalizeComparableNumber(
           item.nutrientTargetValue,
         ),
-        supplementTargets: JSON.stringify(
-          this.normalizeDesignSupplementTargets(item.supplementTargets),
+        supplementTargets: this.buildEffectiveSupplementTargetSignature(
+          item.supplementTargets,
         ),
         sortOrder: item.sortOrder ?? 0,
       }))
@@ -5156,6 +5160,31 @@ export class RecipeDesignerService {
           ].find((result) => result !== 0) ?? 0
         );
       });
+  }
+
+  /**
+   * 补剂目标里「只有字段提示、没有目标值」的条目（targetValue 为空）不会进入发布结果，
+   * 只是编辑器用来提示该补剂对应哪种营养素（例如从名称推断出的「铁」「碘」）。
+   *
+   * 比较「修订是否有变化」时必须忽略这类空条目：
+   * 复制/修订草稿时会给没有显式目标的补剂补上这种占位条目，
+   * 如果参与比较，就会把「内容其实没改」的修订误判成有变更，
+   * 从而绕过「当前修订与已发布版本一致，无需发布新版本」的拦截，
+   * 发布出一个内容完全相同的重复正式版本。
+   */
+  private buildEffectiveSupplementTargetSignature(value: unknown): string {
+    const effectiveTargets = this.normalizeDesignSupplementTargets(
+      value,
+    ).filter((target) => {
+      const targetValue = target.targetValue;
+      return (
+        typeof targetValue === 'number' &&
+        Number.isFinite(targetValue) &&
+        targetValue > 0
+      );
+    });
+
+    return JSON.stringify(effectiveTargets);
   }
 
   private normalizeComparableRecipeName(value: string, baselineName?: string) {

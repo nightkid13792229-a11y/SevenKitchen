@@ -2887,6 +2887,109 @@ describe('RecipeDesignerService', () => {
     expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
+  it('把「只有字段提示、没有目标值」的补剂目标视为无变更（否则会重复发布出一模一样的版本）', () => {
+    const baseline = draft({
+      id: 'design-published',
+      items: [
+        item({
+          id: 'item-source',
+          ingredientId: 'ingredient-iron',
+          nutritionFoodId: 'food-iron',
+          weightG: 20,
+          includeInAssessment: true,
+          preparationMethod: '生',
+          supplementTargets: null,
+          sortOrder: 3,
+        }),
+      ],
+    });
+    const revision = draft({
+      id: 'design-revision',
+      revisionOfDesignRecipeId: 'design-published',
+      revisionBaseRecipeId: 'recipe-chain-1',
+      items: [
+        item({
+          id: 'item-revision',
+          ingredientId: 'ingredient-iron',
+          nutritionFoodId: 'food-iron',
+          weightG: 20,
+          includeInAssessment: true,
+          preparationMethod: '生',
+          // 复制/修订时补上的占位条目：只有字段提示，没有目标值
+          supplementTargets: [
+            {
+              nutrientTargetKey: 'iron',
+              fieldPath: 'minerals.iron',
+              label: '铁',
+              unit: 'mg',
+              targetValue: null,
+            },
+          ],
+          sortOrder: 3,
+        }),
+      ],
+    });
+
+    expect(
+      (service as any).hasSamePublishableRecipeInputs(
+        revision,
+        baseline,
+        baseline.name,
+      ),
+    ).toBe(true);
+  });
+
+  it('补剂目标值真正发生变化时仍判定为有变更', () => {
+    const baseline = draft({
+      id: 'design-published',
+      items: [
+        item({
+          id: 'item-source',
+          ingredientId: 'ingredient-iron',
+          nutritionFoodId: 'food-iron',
+          weightG: 20,
+          includeInAssessment: true,
+          preparationMethod: '生',
+          supplementTargets: null,
+          sortOrder: 3,
+        }),
+      ],
+    });
+    const revision = draft({
+      id: 'design-revision',
+      revisionOfDesignRecipeId: 'design-published',
+      revisionBaseRecipeId: 'recipe-chain-1',
+      items: [
+        item({
+          id: 'item-revision',
+          ingredientId: 'ingredient-iron',
+          nutritionFoodId: 'food-iron',
+          weightG: 20,
+          includeInAssessment: true,
+          preparationMethod: '生',
+          supplementTargets: [
+            {
+              nutrientTargetKey: 'iron',
+              fieldPath: 'minerals.iron',
+              label: '铁',
+              unit: 'mg',
+              targetValue: 22,
+            },
+          ],
+          sortOrder: 3,
+        }),
+      ],
+    });
+
+    expect(
+      (service as any).hasSamePublishableRecipeInputs(
+        revision,
+        baseline,
+        baseline.name,
+      ),
+    ).toBe(false);
+  });
+
   it('rejects revision creation for unpublished design recipes', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -6565,6 +6668,7 @@ describe('RecipeDesignerService', () => {
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,
+          sizeClassOverride: true,
         },
       });
       expect(prisma.dogBreed.findUnique).not.toHaveBeenCalled();
@@ -6609,6 +6713,7 @@ describe('RecipeDesignerService', () => {
         select: {
           adultAgeMonths: true,
           seniorAgeYears: true,
+          sizeCategory: true,
         },
       });
       expect(prisma.recipeSeries.create).toHaveBeenCalledWith({

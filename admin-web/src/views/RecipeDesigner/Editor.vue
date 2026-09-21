@@ -301,6 +301,7 @@ async function confirmRename() {
 const { loadInputs, refreshInputs, loadingInputs: assessmentLoading, inputsError, compute } = useRecipeDesignerAssessment()
 const {
   saveStatus,
+  willAutoRetry,
   enqueue,
   flushNow,
   hasPending,
@@ -404,7 +405,7 @@ const saveStatusText = computed(() => {
     case 'saving':
       return '保存中…'
     case 'error':
-      return '保存失败，自动重试中'
+      return willAutoRetry.value ? '保存失败，自动重试中' : '保存失败，请重试'
     default:
       return '已保存'
   }

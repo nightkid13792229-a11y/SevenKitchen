@@ -101,15 +101,63 @@
             </div>
           </el-form-item>
 
-          <el-form-item label="封面标题">
-            <el-input
-              v-model="form.coverTitle"
-              placeholder="显示在封面左上角，最多20个字符"
-              maxlength="20"
-              show-word-limit
-            />
-            <div style="margin-top: 8px; color: #909399; font-size: 12px">
-              💡 提示：标题会显示在食谱封面图片的左上角，小程序用户可见
+          <el-form-item label="封面角标">
+            <div class="cover-badge-editor">
+              <div class="cover-badge-editor__main">
+                <el-select
+                  v-model="seriesCoverBadgeIds"
+                  multiple
+                  :multiple-limit="MAX_SERIES_COVER_BADGES"
+                  collapse-tags
+                  collapse-tags-tooltip
+                  clearable
+                  filterable
+                  placeholder="从合规词表中选择（最多 2 个）"
+                  style="width: 100%"
+                  :disabled="!currentSeriesId"
+                >
+                  <el-option-group
+                    v-for="group in coverBadgeOptionGroups"
+                    :key="group.label"
+                    :label="group.label"
+                  >
+                    <el-option
+                      v-for="option in group.options"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-option-group>
+                </el-select>
+
+                <div class="cover-badge-editor__hint">
+                  ⓘ 本设置对<b>整个系列</b>生效（全部生命阶段版本共用），改一次即可
+                </div>
+                <div class="cover-badge-editor__hint">
+                  ⓘ 显示位置：<b>封面图片底部</b>的渐变条上（不是左上角）
+                </div>
+                <div class="cover-badge-editor__hint">
+                  ⓘ 只允许从合规词表选择：角标是直接对外展示的宣传内容，自由文本会带来法规风险
+                </div>
+                <div v-if="!currentSeriesId" class="cover-badge-editor__warn">
+                  该食谱尚未归属任何系列，暂时无法设置系列角标
+                </div>
+                <el-button link type="primary" @click="showCoverBadgeTagDialog">
+                  词表里没有想要的词？点这里新增
+                </el-button>
+              </div>
+
+              <!-- 实时预览：位置与小程序一致（封面底部渐变条） -->
+              <div class="cover-badge-preview">
+                <div class="cover-badge-preview__cover">
+                  <img v-if="form.coverImageUrl" :src="form.coverImageUrl" alt="封面预览" />
+                  <div v-else class="cover-badge-preview__placeholder">封面图</div>
+                  <div v-if="seriesCoverBadgeText" class="cover-badge-preview__badge">
+                    {{ seriesCoverBadgeText }}
+                  </div>
+                </div>
+                <div class="cover-badge-preview__caption">小程序实际效果</div>
+              </div>
             </div>
           </el-form-item>
 
@@ -915,28 +963,76 @@
       </template>
     </el-dialog>
 
-    <!-- Health Tag Management Dialog -->
+    <!-- 词表管理弹窗：健康标签与封面角标**共用同一套词表**（单一合规源头） -->
     <el-dialog
       v-model="healthTagDialogVisible"
-      title="管理健康标签"
-      width="600px"
+      :title="healthTagDialogTitle"
+      width="720px"
     >
-      <div style="margin-bottom: 16px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 16px">
+        <template #title>
+          这是<b>全站共用的合规词表</b>：健康标签与封面角标用的是同一套词。
+          在这里新增、改名或删除，会同时影响两处。
+        </template>
+      </el-alert>
+
+      <div class="tag-dialog-add">
+        <el-select
+          v-model="newHealthTagParentId"
+          placeholder="先选分组"
+          style="width: 190px; margin-right: 8px"
+        >
+          <el-option
+            v-for="group in healthTagGroups"
+            :key="group.id"
+            :label="group.name"
+            :value="group.id"
+          />
+        </el-select>
         <el-input
           v-model="newHealthTagName"
-          placeholder="输入新的健康标签名称"
-          style="width: calc(100% - 80px); margin-right: 8px"
+          placeholder="输入新的标签名称（如：含鹌鹑）"
+          style="flex: 1; margin-right: 8px"
           @keyup.enter="addHealthTag"
         />
         <el-button type="primary" @click="addHealthTag">添加</el-button>
       </div>
+      <div class="tag-dialog-hint">
+        ⓘ <b>必须选择分组</b>：标签挂在分组下才会出现在封面角标的下拉选项里。
+        名称会经过法规禁用词校验，含「抗炎 / 低敏 / 疾病名」等表述会被拒绝。
+      </div>
 
-      <el-table :data="healthTags" style="width: 100%" border>
-        <el-table-column prop="name" label="名称" />
-        <el-table-column label="操作" width="150" align="center">
+      <!-- 按分组展示层级：分组 + 其下的词，避免把分组误当成词 -->
+      <el-table
+        :data="healthTagTree"
+        style="width: 100%"
+        border
+        row-key="id"
+        default-expand-all
+        :tree-props="{ children: 'children' }"
+      >
+        <el-table-column prop="name" label="分组 / 标签" min-width="220">
+          <template #default="{ row }">
+            <span :class="{ 'tag-group-name': !row.parentId }">{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="!row.parentId" size="small" type="warning">分组</el-tag>
+            <el-tag v-else size="small" type="info">标签</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" align="center">
           <template #default="{ row }">
             <el-button size="small" @click="editHealthTag(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="deleteHealthTag(row.id)">删除</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              :disabled="!row.parentId && (row.children?.length || 0) > 0"
+              @click="deleteHealthTag(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1009,7 +1105,7 @@ import type { FormInstance, FormRules, UploadProps } from 'element-plus';
 import { Plus, Delete, InfoFilled, WarningFilled } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
-import { recipeHealthTagApi } from '@/api/recipeHealthTags';
+import { recipeHealthTagApi, recipeSeriesCoverBadgeApi } from '@/api/recipeHealthTags';
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
@@ -1561,6 +1657,84 @@ watch(() => ingredientForm.exampleWeight, (newWeight) => {
 const lifeStageOptions = ref<EnumOption[]>([]);
 const healthTagOptions = ref<EnumOption[]>([]);
 
+/** 封面角标上限：与后端保持一致（超过 2 个在封面上会挤成一团） */
+const MAX_SERIES_COVER_BADGES = 2;
+
+/**
+ * 系列封面角标（已选中的词表标签 id）。
+ *
+ * 角标是**系列级**设置：一次修改，全系列生命阶段版本共用，
+ * 因此这里不放进 form（form 提交的是单个版本的食谱数据），而是单独读写。
+ */
+const seriesCoverBadgeIds = ref<string[]>([]);
+
+/** 当前食谱所属系列；没有系列时无法设置系列角标 */
+const currentSeriesId = computed(
+  () => (currentRecipe.value as any)?.seriesId || '',
+);
+
+/** 按词表分组（原料事实 / 工艺特性 / 营养特性 / 适用对象 / 标准背书） */
+const coverBadgeOptionGroups = computed(() => {
+  const tags = (healthTags.value || []) as Array<{
+    id: string;
+    name: string;
+    parentId?: string | null;
+  }>;
+  const groups = tags.filter((tag) => !tag.parentId);
+  const children = tags.filter((tag) => tag.parentId);
+  return groups
+    .map((group) => ({
+      label: group.name,
+      options: children
+        .filter((child) => child.parentId === group.id)
+        .map((child) => ({ value: child.id, label: child.name })),
+    }))
+    .filter((group) => group.options.length > 0);
+});
+
+/** 预览文案：与小程序一致，用 · 连接 */
+const seriesCoverBadgeText = computed(() => {
+  const nameById = new Map(
+    ((healthTags.value || []) as Array<{ id: string; name: string }>).map((tag) => [
+      tag.id,
+      tag.name,
+    ]),
+  );
+  return seriesCoverBadgeIds.value
+    .map((id) => nameById.get(id))
+    .filter((name): name is string => Boolean(name))
+    .join(' · ');
+});
+
+/** 拉取当前系列的角标 */
+const loadSeriesCoverBadges = async () => {
+  seriesCoverBadgeIds.value = [];
+  const seriesId = currentSeriesId.value;
+  if (!seriesId) return;
+  try {
+    const res = await recipeSeriesCoverBadgeApi.get(seriesId);
+    seriesCoverBadgeIds.value = (res?.badges || [])
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((badge) => badge.healthTagId);
+  } catch (error: any) {
+    // 角标属于加分项，读不到不影响食谱本身编辑
+    console.warn('[RecipeForm] 加载系列封面角标失败:', error?.message || error);
+  }
+};
+
+/** 保存系列角标（仅在系列存在时；失败不阻断食谱保存，但会明确提示） */
+const saveSeriesCoverBadges = async () => {
+  const seriesId = currentSeriesId.value;
+  if (!seriesId) return;
+  try {
+    await recipeSeriesCoverBadgeApi.save(seriesId, seriesCoverBadgeIds.value);
+  } catch (error: any) {
+    ElMessage.warning(
+      `食谱已保存，但封面角标未保存成功：${error?.message || '请重试'}`,
+    );
+  }
+};
+
 const RecipeStatusLabels: Record<RecipeStatus, string> = {
   [RecipeStatus.DRAFT]: '草稿',
   [RecipeStatus.PUBLIC]: '已发布',
@@ -1649,15 +1823,45 @@ const designSources = ref<Array<{ id: string; name: string }>>([]);
 const designSourceDialogVisible = ref(false);
 const newDesignSourceName = ref('');
 
-// Health tag management
-const healthTags = ref<Array<{ id: string; name: string }>>([]);
+// Health tag management（词表：健康标签与封面角标共用同一套）
+const healthTags = ref<
+  Array<{ id: string; name: string; parentId?: string | null }>
+>([]);
 const healthTagDialogVisible = ref(false);
 const newHealthTagName = ref('');
+/** 新增标签时归属的分组；不选分组会挂不上角标下拉，因此必填 */
+const newHealthTagParentId = ref<string>('');
+/** 弹窗来源：决定标题文案（从角标入口进来时要说清这是共用词表） */
+const healthTagDialogSource = ref<'healthTag' | 'coverBadge'>('healthTag');
+
+/** 词表里的分组（顶层标签） */
+const healthTagGroups = computed(
+  () => (healthTags.value || []).filter((tag) => !tag.parentId),
+);
+
+/** 按分组展开的层级数据，避免运营把分组误当成普通标签 */
+const healthTagTree = computed(() => {
+  const tags = healthTags.value || [];
+  return tags
+    .filter((tag) => !tag.parentId)
+    .map((group) => ({
+      ...group,
+      children: tags.filter((tag) => tag.parentId === group.id),
+    }));
+});
+
+const healthTagDialogTitle = computed(() =>
+  healthTagDialogSource.value === 'coverBadge'
+    ? '管理封面角标词表'
+    : '管理健康标签',
+);
 
 // Helper function to map health tags to enum options
 const updateHealthTagOptions = (healthTagsData: any[]) => {
-  // Now using UUIDs directly from database, no hardcoded enum mapping
+  // 只把「分组下的标签」当作可选标签：分组本身（原料事实 / 工艺特性 …）是分类，
+  // 不是可以被勾到食谱上的标签，放进来会让运营误勾。
   healthTagOptions.value = (healthTagsData || [])
+    .filter((tag: any) => Boolean(tag.parentId))
     .map((tag: any) => ({
       value: tag.id, // Use UUID directly
       label: tag.name,
@@ -1681,6 +1885,9 @@ const loadRecipeDetail = async () => {
     // Response interceptor already extracts data, so response is the actual recipe data
     const detail = await recipeApi.getDetail(recipeId.value);
     currentRecipe.value = detail;
+
+    // 封面角标是系列级设置，需要等 currentRecipe 就绪后单独拉取
+    await loadSeriesCoverBadges();
 
     Object.assign(form, {
       name: detail.name,
@@ -1913,6 +2120,8 @@ const handleSubmit = async () => {
 
     if (isEdit.value) {
       await recipeApi.update(recipeId.value!, submitData);
+      // 角标是系列级数据，与食谱版本分开保存
+      await saveSeriesCoverBadges();
       ElMessage.success('更新成功');
     } else {
       await recipeApi.create(submitData);
@@ -2071,31 +2280,51 @@ const deleteDesignSource = async (id: string) => {
 };
 
 // Health tag management
-const showHealthTagDialog = async () => {
+const openHealthTagDialog = async (source: 'healthTag' | 'coverBadge') => {
+  healthTagDialogSource.value = source;
   healthTagDialogVisible.value = true;
+  newHealthTagName.value = '';
+  // 从角标入口进来时默认选中第一个分组，减少一次点击
+  newHealthTagParentId.value = healthTagGroups.value[0]?.id || '';
   try {
     const response = await recipeHealthTagApi.list();
     healthTags.value = response || [];
   } catch (error: any) {
-    ElMessage.error(error.message || '加载健康标签列表失败');
+    ElMessage.error(error.message || '加载词表失败');
   }
 };
 
+/** 从「健康标签」区块的「管理」按钮进入 */
+const showHealthTagDialog = () => openHealthTagDialog('healthTag');
+
+/** 从「封面角标」选择器进入：同一套词表，但要说清共用关系 */
+const showCoverBadgeTagDialog = () => openHealthTagDialog('coverBadge');
+
 const addHealthTag = async () => {
+  if (!newHealthTagParentId.value) {
+    ElMessage.warning('请先选择分组');
+    return;
+  }
   if (!newHealthTagName.value.trim()) {
-    ElMessage.warning('请输入健康标签名称');
+    ElMessage.warning('请输入标签名称');
     return;
   }
 
   try {
-    await recipeHealthTagApi.create({ name: newHealthTagName.value.trim() });
+    // 必须带 parentId：不带的话会创建成一个【顶层分组】，
+    // 而封面角标的下拉只列出分组下的词 —— 那样新增的词永远选不到。
+    await recipeHealthTagApi.create({
+      name: newHealthTagName.value.trim(),
+      parentId: newHealthTagParentId.value,
+    });
     ElMessage.success('添加成功');
     newHealthTagName.value = '';
 
-    // Reload health tags
+    // 重新载入词表，并保持刚选的分组
     const healthTagsData = await recipeHealthTagApi.list();
     updateHealthTagOptions(healthTagsData || []);
   } catch (error: any) {
+    // 后端会返回命中的禁用词，直接展示给运营
     ElMessage.error(error.message || '添加失败');
   }
 };
@@ -2124,15 +2353,23 @@ const editHealthTag = async (row: { id: string; name: string }) => {
   }
 };
 
-const deleteHealthTag = async (id: string) => {
+const deleteHealthTag = async (row: { id: string; name: string; children?: unknown[] }) => {
+  if (row.children && row.children.length > 0) {
+    ElMessage.warning('该分组下还有标签，请先删除或移走这些标签');
+    return;
+  }
   try {
-    await ElMessageBox.confirm('确认删除该健康标签？', '提示', {
-      type: 'warning',
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-    });
+    await ElMessageBox.confirm(
+      `确认删除「${row.name}」？删除后引用它的食谱与封面角标会同步失去这个标签。`,
+      '提示',
+      {
+        type: 'warning',
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+      },
+    );
 
-    await recipeHealthTagApi.delete(id);
+    await recipeHealthTagApi.delete(row.id);
     ElMessage.success('删除成功');
 
     // Reload health tags
@@ -2555,6 +2792,104 @@ onMounted(async () => {
 
 .ai-tag {
   cursor: pointer;
+}
+
+/* ===== 词表管理弹窗（健康标签 / 封面角标共用）===== */
+.tag-dialog-add {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.tag-dialog-hint {
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.tag-group-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+/* ===== 封面角标编辑器（系列级 + 合规词表选择 + 实时预览）===== */
+.cover-badge-editor {
+  display: flex;
+  gap: 24px;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.cover-badge-editor__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cover-badge-editor__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.cover-badge-editor__warn {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #e6a23c;
+  line-height: 1.5;
+}
+
+.cover-badge-preview {
+  flex: none;
+  width: 200px;
+}
+
+.cover-badge-preview__cover {
+  position: relative;
+  width: 200px;
+  height: 112px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f7fa;
+  border: 1px solid #dcdfe6;
+}
+
+.cover-badge-preview__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-badge-preview__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+  font-size: 12px;
+}
+
+/* 与小程序一致：角标压在封面底部的渐变条上 */
+.cover-badge-preview__badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 10px 6px;
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.3;
+  background: linear-gradient(180deg, rgba(20, 26, 21, 0) 0%, rgba(20, 26, 21, 0.55) 100%);
+}
+
+.cover-badge-preview__caption {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
 }
 
 .field-hint {

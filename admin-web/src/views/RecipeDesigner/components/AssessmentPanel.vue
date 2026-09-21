@@ -7,7 +7,7 @@
     </div>
 
     <template v-else>
-      <div class="entry-list">
+      <div ref="entryListRef" class="entry-list" @scroll.passive="rememberEntryListScroll">
         <div v-for="group in displayGroups" :key="group.key" class="entry-group">
           <div class="group-head" @click="toggleGroup(group.key)">
             <span class="group-title">{{ group.title }}</span>
@@ -190,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search } from '@element-plus/icons-vue'
 import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessment'
@@ -226,6 +226,42 @@ const expandedGroups = reactive<Record<string, boolean>>({
   FATTY_ACID: true,
   AMINO_ACID: true
 })
+
+/**
+ * 营养评估列表的滚动位置。
+ * 列表内部（.entry-list）才是真正的滚动容器：添加/删除原料后评估会重算，
+ * 内容短暂重排会把滚动位置顶回顶部，而用户此刻正停在刚补齐的那一项营养素上，
+ * 因此这里记录并在下一次评估刷新后恢复。
+ */
+const entryListRef = ref<HTMLElement | null>(null)
+let entryListScrollTop = 0
+let preserveScrollOnNextUpdate = false
+
+function rememberEntryListScroll() {
+  entryListScrollTop = entryListRef.value?.scrollTop ?? entryListScrollTop
+}
+
+/** 由编辑器在「添加/删除原料」前调用：下一次评估刷新后保持滚动位置 */
+function preserveScrollOnNextAssessmentUpdate() {
+  rememberEntryListScroll()
+  preserveScrollOnNextUpdate = true
+}
+
+watch(
+  () => props.assessment,
+  async () => {
+    if (!preserveScrollOnNextUpdate) return
+    preserveScrollOnNextUpdate = false
+    const target = entryListScrollTop
+    await nextTick()
+    const list = entryListRef.value
+    if (list && target > 0 && target <= list.scrollHeight) {
+      list.scrollTop = target
+    }
+  }
+)
+
+defineExpose({ preserveScrollOnNextAssessmentUpdate })
 
 const BASIS_LABELS: Record<string, string> = {
   PER_1000_KCAL_ME: '每1000千卡',

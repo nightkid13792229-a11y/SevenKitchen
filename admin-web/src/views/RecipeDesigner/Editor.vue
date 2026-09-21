@@ -163,6 +163,7 @@
         <div class="pane-title">营养评估</div>
         <div class="assessment-pane">
           <AssessmentPanel
+            ref="assessmentPanelRef"
             :assessment="assessment"
             :loading-inputs="assessmentLoading"
             :scenario="draft?.fediafDogScenario"
@@ -301,6 +302,7 @@ async function confirmRename() {
 const { loadInputs, refreshInputs, loadingInputs: assessmentLoading, inputsError, compute } = useRecipeDesignerAssessment()
 const {
   saveStatus,
+  willAutoRetry,
   enqueue,
   flushNow,
   hasPending,
@@ -316,6 +318,19 @@ const assessment = computed<DesignRecipeAssessmentResult | null>(() => {
   void inputsError.value
   return compute(draft.value.fediafDogScenario, draft.value.id, items.value)
 })
+
+// ---------- 营养评估面板的滚动位置 ----------
+// 列表内部 .entry-list 由 AssessmentPanel 自己持有，这里只负责在刷新评估输入前
+// 通知它「保住当前滚动位置」：添加/删除原料后评估会重算，面板内容重排会把列表顶回顶部，
+// 而用户此刻正停在刚补齐的那一项营养素上。
+const assessmentPanelRef = ref<InstanceType<typeof AssessmentPanel> | null>(null)
+
+/** 添加/删除原料后刷新评估输入，并保持营养评估列表的滚动位置不跳回顶部 */
+async function refreshInputsKeepingScroll() {
+  if (!draft.value) return
+  assessmentPanelRef.value?.preserveScrollOnNextAssessmentUpdate()
+  await refreshInputs(draft.value.id)
+}
 
 const referenceDogId = ref<string | null>(null)
 const aiPanelVisible = ref(false)
@@ -404,7 +419,7 @@ const saveStatusText = computed(() => {
     case 'saving':
       return '保存中…'
     case 'error':
-      return '保存失败，自动重试中'
+      return willAutoRetry.value ? '保存失败，自动重试中' : '保存失败，请重试'
     default:
       return '已保存'
   }
@@ -487,7 +502,7 @@ async function recreateItem(snapshot: DesignerItem) {
     // 旧 id 在服务器上已失效：丢弃指向它的待保存操作，并把历史栈中的 id 换成新 id
     cancelItemOps(oldId)
     remapHistoryItemId(oldId, created.id)
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     ElMessage.error('原料恢复失败，请重试')
     items.value = items.value.filter((item) => item.id !== snapshot.id)
@@ -748,7 +763,7 @@ async function handleAiAddItem(payload: {
     const created = await recipeDesignerApi.addItem(draft.value.id, itemPayload)
     items.value = [...items.value, created]
     recordHistory({ type: 'add', item: created })
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     // 拦截器已提示
   }
@@ -777,7 +792,7 @@ async function handleAddOption(
     const created = await recipeDesignerApi.addItem(draft.value.id, payload)
     items.value = [...items.value, created]
     recordHistory({ type: 'add', item: created })
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     // 拦截器已提示
   }

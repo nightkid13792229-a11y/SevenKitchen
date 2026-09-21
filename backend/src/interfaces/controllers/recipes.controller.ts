@@ -52,8 +52,10 @@ import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RecipeSeriesLifeStage,
   resolveDefaultSeriesLifeStage,
+  selectLatestPublishedSeriesLifeStageVersions,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
+import { resolveDogProfileStage } from '../../domain/dog/dog-stage.service';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { OrderService } from '../../application/order/order.service';
 import {
@@ -63,6 +65,7 @@ import {
 import { FilterOptionsDto } from '../dto/recipes/filter-options.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { AuthGuard, CurrentUser } from '../auth';
+import { LifeStageAcknowledgementDto } from '../dto/recipes/life-stage-acknowledgement.dto';
 import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth/request-user.interface';
 import { JwtAuthService } from '../auth/jwt.service';
@@ -188,20 +191,30 @@ export class RecipesController {
       .filter(Boolean);
   }
 
+  /**
+   * 该狗狗的「档案层」生命阶段（幼犬 / 成犬 / 老年 / 繁殖期）。
+   *
+   * 2026-09-19：原先这里写死了「12 个月成犬、84 个月老年」，**不看品种也不看体型** ——
+   * 于是同一只 8 个月的小型犬，首页推荐判它是幼犬、而按品种算的配餐标准判它是成犬，
+   * 推荐语与实际给的饭对不上。
+   * 现在统一走领域层的权威实现（按品种/体型的成犬与老年阈值）。
+   */
   private resolveDogLifeStage(dog: {
     birthday: Date;
     lifeStageOverride?: string | null;
+    activityLevel?: string | null;
+    sizeClassOverride?: string | null;
+    gender?: string | null;
+    breed?: any;
   }): string {
-    if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
-      return dog.lifeStageOverride;
-    }
-
-    const ageMonths =
-      (Date.now() - new Date(dog.birthday).getTime()) /
-      (1000 * 60 * 60 * 24 * 30.4375);
-    if (ageMonths < 12) return 'PUPPY';
-    if (ageMonths >= 84) return 'SENIOR';
-    return 'ADULT';
+    return resolveDogProfileStage({
+      birthday: dog.birthday,
+      lifeStageOverride: dog.lifeStageOverride as any,
+      activityLevel: dog.activityLevel as any,
+      sizeClassOverride: dog.sizeClassOverride as any,
+      gender: dog.gender as any,
+      breed: dog.breed ?? null,
+    }).effectiveLifeStage;
   }
 
   private resolveRecipeSeriesLifeStage(
@@ -696,6 +709,9 @@ export class RecipesController {
           energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
           coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
           coverTitle: recipe.coverTitle || undefined,
+          // 系列级封面角标（合规词表引用，已上移到系列层级）。
+          // 小程序优先用它，为空时才回退到 coverTitle，保证迁移期间不会出现角标消失。
+          coverBadges: recipe.coverBadges || [],
           seriesId: recipe.seriesId || undefined,
           targetHealthTags: targetHealthTags,
           applicableLifeStages: applicableLifeStages,
@@ -745,12 +761,32 @@ export class RecipesController {
         allergyFoods: true,
         pickyFoods: true,
         avatarUrl: true,
+        // 2026-09-19：生命阶段判定需要品种阈值与体型。
+        // 缺这些字段时权威实现会回落成"中型犬 / 12 个月 / 10 岁"，
+        // 于是首页推荐又会和实际配餐标准对不上。
+        gender: true,
+        sizeClassOverride: true,
+        breedId: true,
       },
     });
 
     if (!dog) {
       return ApiResponseDto.error(404, 'Dog not found');
     }
+
+    // 品种单独查：Dog 模型上没有品种关联字段。
+    // 生命阶段判定需要它的成犬/老年阈值与体型分类。
+    const dogBreed = dog.breedId
+      ? await this.prisma.dogBreed.findUnique({
+          where: { id: dog.breedId },
+          select: {
+            adultAgeMonths: true,
+            seniorAgeYears: true,
+            sizeCategory: true,
+          },
+        })
+      : null;
+    const dogWithBreed = { ...dog, breed: dogBreed };
 
     const recommendationRecipeInclude = {
       items: {
@@ -793,9 +829,9 @@ export class RecipesController {
 
     const recommended = this.selectRecommendationRecipesForDog(
       recommendationCandidates,
-      dog,
+      dogWithBreed,
     )
-      .map((recipe) => this.mapRecommendedRecipe(recipe, dog))
+      .map((recipe) => this.mapRecommendedRecipe(recipe, dogWithBreed))
       .sort((left, right) => {
         return (
           right.matchScore - left.matchScore ||
@@ -818,7 +854,7 @@ export class RecipesController {
         avatarUrl: dog.avatarUrl,
         currentWeightKg: dog.currentWeightKg,
         mealsPerDay: dog.mealsPerDay,
-        lifeStage: this.resolveDogLifeStage(dog),
+        lifeStage: this.resolveDogLifeStage(dogWithBreed),
         targetFoodKcal: dog.cachedTargetFoodKcal || null,
       },
       exclusive,
@@ -963,27 +999,7 @@ export class RecipesController {
   }
 
   private latestPublicVersionBySeriesStage(recipes: any[]): any[] {
-    const latestByStage = new Map<string, any>();
-    for (const recipe of recipes) {
-      const stage = recipe.seriesLifeStage;
-      if (!stage) {
-        continue;
-      }
-      const existing = latestByStage.get(stage);
-      if (!existing || recipe.version > existing.version) {
-        latestByStage.set(stage, recipe);
-      }
-    }
-
-    return Array.from(latestByStage.values()).sort((left, right) => {
-      const leftIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
-        left.seriesLifeStage,
-      );
-      const rightIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
-        right.seriesLifeStage,
-      );
-      return leftIndex - rightIndex;
-    });
+    return selectLatestPublishedSeriesLifeStageVersions(recipes);
   }
 
   private getSeriesLifeStageLabel(
@@ -1028,6 +1044,8 @@ export class RecipesController {
         birthday: true,
         lifeStageOverride: true,
         activityLevel: true,
+        // 生命阶段判定需要体型：混血犬没有品种行，只能靠 sizeClassOverride
+        sizeClassOverride: true,
       },
     });
 
@@ -1041,6 +1059,8 @@ export class RecipesController {
           select: {
             adultAgeMonths: true,
             seniorAgeYears: true,
+            // 品种自带的体型分类，是 sizeClassOverride 之外的体型来源
+            sizeCategory: true,
           },
         })
       : null;
@@ -1220,6 +1240,26 @@ export class RecipesController {
     };
   }
 
+  /**
+   * 读取系列级封面角标（合规词表词名，按 sortOrder 排序）。
+   *
+   * 角标已上移到系列层级：一次设置，全系列生命阶段版本共用；
+   * 且只允许引用合规词表，从结构上杜绝违规词出现在商品橱窗上。
+   */
+  private async resolveSeriesCoverBadges(
+    seriesId?: string | null,
+  ): Promise<string[]> {
+    if (!seriesId) return [];
+    const rows = await this.prisma.recipeSeriesCoverBadge.findMany({
+      where: { seriesId },
+      include: { healthTag: { select: { name: true } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows
+      .map((row) => row.healthTag?.name)
+      .filter((name): name is string => Boolean(name));
+  }
+
   private async buildRecipeDetail(
     recipe: Recipe,
     seriesSelection?: {
@@ -1287,6 +1327,10 @@ export class RecipesController {
       recipe.seriesLifeStage ??
       undefined;
 
+    // 系列级封面角标（合规词表词名）。角标已上移到系列层级，
+    // 领域映射不带 series，因此这里单独取一次（按 seriesId 走索引，开销很小）。
+    const coverBadges = await this.resolveSeriesCoverBadges(recipe.seriesId);
+
     return {
       id: recipe.id,
       version: recipe.version,
@@ -1298,6 +1342,7 @@ export class RecipesController {
         'https://',
       ),
       coverTitle: (recipe as any).coverTitle || undefined,
+      coverBadges,
       seriesId: recipe.seriesId || undefined,
       selectedLifeStage,
       selectedLifeStageLabel: this.getSeriesLifeStageLabel(selectedLifeStage),
@@ -1432,6 +1477,93 @@ export class RecipesController {
     const minPricePer100g = prices.length > 0 ? Math.min(...prices) : null;
 
     return ApiResponseDto.success({ minPricePer100g, lifeStagePrices });
+  }
+
+  /**
+   * 生命阶段匹配结论（按食谱 + 狗狗）
+   *
+   * 小程序的生命阶段提醒统一走这里，不再在客户端自己重算 ——
+   * 客户端重算存在三个问题：
+   *   1) 口径与后端不一致（体型、品种阈值、默认值都不同）；
+   *   2) 认不出混血犬的体型，算不出阶段；
+   *   3) 算不出来时被当成"匹配"，直接静默放行（不提示、不拦截）。
+   *
+   * 复用详情页同一条选择逻辑（resolvePublicSeriesSelection），保证两处结论一致。
+   */
+  /**
+   * 记录顾客「已知晓生命阶段不匹配、仍继续」的确认。
+   *
+   * 留痕的意义：弹出提醒如果不落库，将来狗狗因吃错生命阶段的粮出问题，
+   * 我们拿不出"已经明确告知过顾客"的任何凭据。
+   *
+   * 每次确认都会记一条（不去重）—— 顾客可能多次下单、多次确认，
+   * 每次都是一次独立的告知行为，留全比留一条更有说服力。
+   */
+  @Post(':id/life-stage-acknowledgement')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary: 'Record that the customer acknowledged a life-stage mismatch',
+  })
+  @ApiParam({ name: 'id', description: 'Recipe ID or series ID' })
+  @ApiBody({ type: LifeStageAcknowledgementDto })
+  @ApiResponse({ status: 201, description: 'Acknowledgement recorded' })
+  async recordLifeStageAcknowledgement(
+    @Param('id') id: string,
+    @Body() dto: LifeStageAcknowledgementDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<{ id: string }>> {
+    const record = await this.prisma.lifeStageAcknowledgement.create({
+      data: {
+        customerId: user.customerId,
+        dogId: dto.dogId,
+        recipeId: id,
+        matchType: dto.matchType,
+        dogLifeStage: dto.dogLifeStage ?? null,
+        recipeLifeStage: dto.recipeLifeStage ?? null,
+        source: dto.source,
+      },
+      select: { id: true },
+    });
+
+    return ApiResponseDto.success(record);
+  }
+
+  @Get(':id/life-stage-match')
+  @ApiOperation({ summary: 'Get life stage match verdict for a recipe and a dog' })
+  @ApiParam({ name: 'id', description: 'Recipe ID or series ID' })
+  @ApiQuery({
+    name: 'dogId',
+    required: false,
+    description: 'Dog ID used to resolve the expected life stage',
+  })
+  @ApiQuery({
+    name: 'lifeStage',
+    required: false,
+    description: 'Manually selected series life stage',
+  })
+  @ApiResponse({ status: 200, description: 'Life stage match verdict' })
+  async getLifeStageMatch(
+    @Param('id') id: string,
+    @Query('dogId') dogId?: string,
+    @Query('lifeStage') lifeStage?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<RecipeLifeStageMatchDto>> {
+    const selection = await this.resolvePublicSeriesSelection(
+      id,
+      lifeStage,
+      dogId,
+      req,
+    );
+
+    // 非公开系列 / 没有任何生命阶段版本：结论为 LEGACY，
+    // 前端据此不显示任何生命阶段提醒（本来也只有一个版本）。
+    return ApiResponseDto.success(
+      selection?.lifeStageMatch ?? {
+        matchType: 'LEGACY',
+        selectedLifeStage: '',
+      },
+    );
   }
 
   @Get(':id')

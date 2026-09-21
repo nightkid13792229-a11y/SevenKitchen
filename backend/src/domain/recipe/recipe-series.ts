@@ -96,3 +96,88 @@ export function resolveDefaultSeriesLifeStage(
     null
   );
 }
+
+export type SeriesLifeStageVersionCandidate = {
+  id?: string | null;
+  seriesLifeStage?: string | null;
+  version?: number | null;
+  createdAt?: Date | string | null;
+};
+
+/**
+ * 正式食谱版本的发布时间（毫秒时间戳）。
+ *
+ * 每条正式版本记录都是在「发布」那一刻新建的，所以 createdAt 就是该版本的发布时间。
+ * 不能用 updatedAt：后台的批量维护（封面、角标、媒体等）会刷新 updatedAt，
+ * 会让发布时间失去可比性。
+ */
+export function resolvePublishedVersionTimeMs(
+  recipe: SeriesLifeStageVersionCandidate,
+): number {
+  const raw = recipe.createdAt ?? null;
+  if (raw === null || raw === undefined) {
+    return 0;
+  }
+  const time = raw instanceof Date ? raw.getTime() : new Date(raw).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+/**
+ * 同一系列、同一生命阶段下，哪一条正式版本更新。
+ *
+ * 版本号只在同一条版本链（同一个 recipeId）内单调递增；历史导入的旧食谱可能带着
+ * 很高的版本号（例如导入时整批写成了 v17），后来用设计器重新发布的版本号却更小。
+ * 因此跨链比较版本号会长期选到过期版本，必须按「发布时间」判断新旧，
+ * 版本号只作为同一时刻的稳定排序兜底。
+ */
+export function compareSeriesLifeStageVersionRecency(
+  left: SeriesLifeStageVersionCandidate,
+  right: SeriesLifeStageVersionCandidate,
+): number {
+  const timeDiff =
+    resolvePublishedVersionTimeMs(left) - resolvePublishedVersionTimeMs(right);
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+
+  const versionDiff = (left.version ?? 0) - (right.version ?? 0);
+  if (versionDiff !== 0) {
+    return versionDiff;
+  }
+
+  return String(left.id ?? '').localeCompare(String(right.id ?? ''));
+}
+
+/**
+ * 取每个生命阶段「最近发布」的正式版本，并按产品约定的生命阶段顺序返回。
+ */
+export function selectLatestPublishedSeriesLifeStageVersions<
+  T extends SeriesLifeStageVersionCandidate,
+>(recipes: T[]): T[] {
+  const latestByStage = new Map<string, T>();
+
+  for (const recipe of recipes) {
+    const stage = recipe.seriesLifeStage;
+    if (!stage) {
+      continue;
+    }
+
+    const existing = latestByStage.get(stage);
+    if (
+      !existing ||
+      compareSeriesLifeStageVersionRecency(recipe, existing) > 0
+    ) {
+      latestByStage.set(stage, recipe);
+    }
+  }
+
+  return Array.from(latestByStage.values()).sort((left, right) => {
+    const leftIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
+      left.seriesLifeStage as RecipeSeriesLifeStage,
+    );
+    const rightIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
+      right.seriesLifeStage as RecipeSeriesLifeStage,
+    );
+    return leftIndex - rightIndex;
+  });
+}

@@ -122,6 +122,15 @@ export class PrismaRecipeRepository implements RecipeRepository {
             healthTag: true,
           },
         },
+        // 详情页也需要系列角标（角标已上移到系列层级）
+        series: {
+          include: {
+            coverBadges: {
+              include: { healthTag: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
       },
     });
     return record ? this.mapToDomain(record) : null;
@@ -259,7 +268,8 @@ export class PrismaRecipeRepository implements RecipeRepository {
   }
 
   async findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<{
-    data: Recipe[];
+    /** coverBadges：系列级封面角标（合规词表词名），随领域对象一并带出 */
+    data: Array<Recipe & { coverBadges?: string[] }>;
     total: number;
     page: number;
     pageSize: number;
@@ -304,6 +314,16 @@ export class PrismaRecipeRepository implements RecipeRepository {
         healthTagAssignments: {
           include: {
             healthTag: true,
+          },
+        },
+        // 系列级封面角标：角标已上移到系列层级（一次设置全系列生效），
+        // 列表卡片需要在这里带出来，否则首页拿不到角标。
+        series: {
+          include: {
+            coverBadges: {
+              include: { healthTag: true },
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },
@@ -370,7 +390,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
     const hasMore = skip + take < total;
 
     return {
-      data: paginatedRecipes.map((r) => this.mapToDomain(r)),
+      // mapToDomain 只输出领域字段、不保留 series，
+      // 因此系列级封面角标在这里显式带上，避免首页卡片拿不到角标。
+      data: paginatedRecipes.map((r) => ({
+        ...this.mapToDomain(r),
+        coverBadges: ((r as any).series?.coverBadges || [])
+          .map((badge: any) => badge.healthTag?.name)
+          .filter((name: any): name is string => Boolean(name)),
+      })),
       total,
       page,
       pageSize,

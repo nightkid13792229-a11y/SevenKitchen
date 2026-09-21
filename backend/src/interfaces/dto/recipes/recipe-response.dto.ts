@@ -62,6 +62,14 @@ export class RecipeSummaryDto {
   @ApiPropertyOptional({ example: '皮毛友好【成年犬】' })
   coverTitle?: string;
 
+  @ApiPropertyOptional({
+    example: ['含三文鱼', '符合 FEDIAF 2025'],
+    description:
+      '系列级封面角标（来自合规词表，最多 2 个）。小程序优先展示它，为空时才回退到 coverTitle。',
+    type: [String],
+  })
+  coverBadges?: string[];
+
   @ApiPropertyOptional({ example: 'recipe-series-uuid' })
   seriesId?: string;
 

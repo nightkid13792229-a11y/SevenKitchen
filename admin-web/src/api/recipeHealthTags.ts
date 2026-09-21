@@ -78,3 +78,23 @@ export const recipeHealthTagApi = {
   delete: (id: string): Promise<void> =>
     api.delete(`/admin/health-tags/${id}`),
 }
+
+// ==================== 系列封面角标 ====================
+//
+// 角标已上移到「食谱系列」层级：一次设置，全系列生命阶段版本共用；
+// 并且只允许引用上面的合规词表，从结构上杜绝违规词出现在商品橱窗上。
+
+export interface SeriesCoverBadge {
+  healthTagId: string
+  name: string
+  sortOrder: number
+}
+
+export const recipeSeriesCoverBadgeApi = {
+  get: (seriesId: string): Promise<{ seriesId: string; badges: SeriesCoverBadge[] }> =>
+    api.get(`/admin/recipe-series/${seriesId}/cover-badges`),
+
+  /** 保存即覆盖：传空数组等于清空角标 */
+  save: (seriesId: string, healthTagIds: string[]): Promise<{ seriesId: string; badges: SeriesCoverBadge[] }> =>
+    api.put(`/admin/recipe-series/${seriesId}/cover-badges`, { healthTagIds }),
+}

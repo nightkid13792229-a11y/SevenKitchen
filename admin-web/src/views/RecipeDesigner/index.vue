@@ -173,7 +173,10 @@
           {{ stage.label }}
         </el-radio>
       </el-radio-group>
-      <div class="form-tip">将把来源阶段的全部原料（含用量与排序）复制到「{{ copyTargetStageLabel }}」，随后直接打开该阶段编辑器</div>
+      <div class="form-tip">
+        将把来源阶段的全部原料（含用量与排序）复制到「{{ copyTargetStageLabel }}」，
+        并覆盖该阶段已有的原料；复制后直接打开该阶段编辑器
+      </div>
       <template #footer>
         <el-button @click="copyItemsDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="copyingItems" @click="confirmCopyItems">复制并打开</el-button>
@@ -188,6 +191,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { resolveCopySourceStages } from '@/utils/recipeDesigner/copySourceStages'
 import { dogApi } from '@/api/dogs'
 import type { DogProfile } from '@/types/dog'
 import {
@@ -528,15 +532,10 @@ async function handleStageCommand(
 }
 
 function openCopyItemsDialog(card: RecipeDesignerSeriesCard, targetStage: RecipeDesignerSeriesStage) {
-  // 来源阶段：其他有草稿、且非已发布正式版的阶段
-  const sources = card.stages.filter(
-    (candidate) =>
-      candidate.lifeStage !== targetStage.lifeStage &&
-      Boolean(candidate.draftId) &&
-      !candidate.recipeId
-  )
+  // 来源阶段：其他已经有原料来源的阶段（有草稿或已有正式版本，含已发布的成熟阶段）
+  const sources = resolveCopySourceStages(card.stages, targetStage.lifeStage)
   if (sources.length === 0) {
-    ElMessage.info('暂无可复制的来源阶段（其他阶段还没有草稿/原料）')
+    ElMessage.info('暂无可复制的来源阶段（其他阶段还没有草稿或正式版本）')
     return
   }
   copyTargetCardId.value = card.id
@@ -552,30 +551,25 @@ async function confirmCopyItems() {
   const card = series.value.find((candidate) => candidate.id === copyTargetCardId.value)
   const targetStage = copyTargetStage.value
   const sourceStage = card?.stages.find((s) => s.lifeStage === copySourceLifeStage.value)
-  if (!card || !sourceStage?.draftId || !targetStage) {
+  if (!card || !sourceStage || !targetStage) {
     ElMessage.warning('复制信息不完整，请重试')
     return
   }
   copyingItems.value = true
   try {
-    // 目标阶段没有草稿时先创建（已发布阶段不在此入口处理）
-    let targetDraftId = targetStage.draftId
-    if (!targetDraftId) {
-      const draft = await recipeDesignerApi.createSeriesStageDraft(card.id, {
-        scenario: targetStage.scenario
-      })
-      targetDraftId = draft?.id ?? ''
-    }
-    if (!targetDraftId) {
-      ElMessage.warning('目标阶段草稿创建失败')
-      return
-    }
-    await recipeDesignerApi.copyStageItemsFromDraft(targetDraftId, {
-      sourceDraftId: sourceStage.draftId
-    })
+    // 后端按生命阶段解析来源（优先该阶段草稿，没有草稿时用已发布正式版本），
+    // 目标阶段还没有草稿时会自动创建，并返回更新后的目标草稿。
+    const targetDraft = await recipeDesignerApi.copySeriesStageIngredients(
+      card.id,
+      targetStage.lifeStage,
+      { sourceLifeStage: sourceStage.lifeStage }
+    )
+    const targetDraftId = targetDraft?.id ?? targetStage.draftId ?? ''
     ElMessage.success('已复制原料')
     copyItemsDialogVisible.value = false
-    router.push(`/recipe-designer/series/${card.id}/drafts/${targetDraftId}`)
+    if (targetDraftId) {
+      router.push(`/recipe-designer/series/${card.id}/drafts/${targetDraftId}`)
+    }
   } catch {
     // 拦截器已提示
   } finally {

@@ -95,6 +95,15 @@ describe('RecipesController (e2e)', () => {
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // 系列封面角标（RecipeSeriesCoverBadge）：详情返回 coverBadges 时会查询。
+    // mock 里缺失会让控制器直接 500，必须与真实 Prisma Client 保持同步。
+    recipeSeriesCoverBadge: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipeHealthTag: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+    },
   };
   const mockJwtAuthService = {
     validateToken: jest.fn(),
@@ -885,6 +894,7 @@ describe('RecipesController (e2e)', () => {
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,
+            sizeClassOverride: true,
         },
       });
       expect(response.body.data.id).toBe('senior-recipe-id');
@@ -949,6 +959,9 @@ describe('RecipesController (e2e)', () => {
         select: {
           adultAgeMonths: true,
           seniorAgeYears: true,
+          // 2026-09-19：生命阶段判定需要体型（混血犬靠 sizeClassOverride，
+          // 品种自带体型时靠 sizeCategory），漏查会导致恒判中型犬
+          sizeCategory: true,
         },
       });
       expect(response.body.data.id).toBe('puppy-recipe-id');
@@ -1008,6 +1021,7 @@ describe('RecipesController (e2e)', () => {
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,
+            sizeClassOverride: true,
         },
       });
       expect(response.body.data.id).toBe('puppy-recipe-id');
@@ -1345,6 +1359,7 @@ describe('RecipesController (e2e)', () => {
           birthday: true,
           lifeStageOverride: true,
           activityLevel: true,
+            sizeClassOverride: true,
         },
       });
       expect(response.body.data.id).toBe('adult-recipe-id');

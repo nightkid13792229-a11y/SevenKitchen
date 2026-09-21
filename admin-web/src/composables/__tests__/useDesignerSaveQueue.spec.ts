@@ -87,4 +87,79 @@ describe('useDesignerSaveQueue', () => {
     await flushNow()
     expect(hasPending()).toBe(false)
   })
+
+  it('删除一条已经不存在的原料（404）按成功处理，不再报错', async () => {
+    api.removeItem.mockRejectedValueOnce({
+      response: { status: 404, data: { message: 'Design recipe item x not found' } }
+    })
+    const { enqueue, flushNow, saveStatus, willAutoRetry } = useDesignerSaveQueue()
+    enqueue({ kind: 'removeItem', itemId: 'item-gone' })
+    await flushNow()
+    expect(saveStatus.value).toBe('idle')
+    expect(willAutoRetry.value).toBe(false)
+  })
+
+  it('一批操作里前面成功、后面失败时，重试不会重发已经成功的操作', async () => {
+    api.updateItem.mockResolvedValueOnce({})
+    api.removeItem
+      .mockRejectedValueOnce({ response: { status: 500, data: { message: 'boom' } } })
+      .mockResolvedValueOnce({})
+
+    const { enqueue, flushNow } = useDesignerSaveQueue()
+    enqueue({ kind: 'updateItem', itemId: 'item-1', data: { weightG: 120 } })
+    enqueue({ kind: 'removeItem', itemId: 'item-2' })
+
+    // 第一次 flush：updateItem 成功，removeItem 失败并等待自动重试
+    await flushNow()
+    expect(api.updateItem).toHaveBeenCalledTimes(1)
+    expect(api.removeItem).toHaveBeenCalledTimes(1)
+
+    // 手动再触发一次：只重发失败的删除，权重更新不再重复提交
+    await flushNow()
+    expect(api.updateItem).toHaveBeenCalledTimes(1)
+    expect(api.removeItem).toHaveBeenCalledTimes(2)
+  })
+
+  it('服务端明确拒绝（4xx）的操作会被丢弃，不再阻塞后续操作', async () => {
+    api.removeItem.mockRejectedValueOnce({
+      response: { status: 400, data: { message: '已发布草稿不能编辑' } }
+    })
+    api.updateItem.mockResolvedValue({})
+
+    const { enqueue, flushNow, saveStatus, willAutoRetry, hasPending } = useDesignerSaveQueue()
+    enqueue({ kind: 'removeItem', itemId: 'item-locked' })
+    enqueue({ kind: 'updateItem', itemId: 'item-1', data: { weightG: 130 } })
+
+    await flushNow()
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1)
+    expect(saveStatus.value).toBe('error')
+    expect(willAutoRetry.value).toBe(false)
+    expect(hasPending()).toBe(false)
+  })
+
+  it('网络错误会保留失败操作等待自动重试，并给出重试中状态', async () => {
+    vi.useFakeTimers()
+    try {
+      api.updateItem
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce({})
+
+      const { enqueue, saveStatus, willAutoRetry, hasPending } = useDesignerSaveQueue()
+      enqueue({ kind: 'updateItem', itemId: 'item-1', data: { weightG: 140 } })
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(api.updateItem).toHaveBeenCalledTimes(1)
+      expect(saveStatus.value).toBe('error')
+      expect(willAutoRetry.value).toBe(true)
+      expect(hasPending()).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(api.updateItem).toHaveBeenCalledTimes(2)
+      expect(saveStatus.value).toBe('idle')
+      expect(hasPending()).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

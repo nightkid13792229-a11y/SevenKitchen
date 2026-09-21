@@ -278,7 +278,6 @@ import {
   type RecipeSeriesStageStatus,
 } from '../../api/recipe-designer'
 import { dogApi } from '../../api/dogs'
-import { resolveDogRecipeLifeStage, type DogForLifeStage } from '../../utils/life-stage-match'
 import { getScenarioLabel } from './assessment'
 
 type SeriesListItem = RecipeDesignerSeriesCard | RecipeDesignerCustomerSeriesCard
@@ -618,9 +617,19 @@ function resetCreateSheetState() {
   newDraftScenario.value = 'ADULT_MER_110'
 }
 
-function resolveScenarioForDog(dog: DogForLifeStage | null | undefined): FediafDogScenario {
-  const recipeLifeStage = resolveDogRecipeLifeStage(dog, [])
-  return recipeLifeStage ? scenarioByDogRecipeLifeStage[recipeLifeStage] || 'ADULT_MER_95' : 'ADULT_MER_95'
+/**
+ * 该狗狗对应的默认 FEDIAF 场景。
+ *
+ * 2026-09-19：改用后端在狗狗档案里返回的 recipeLifeStage。
+ * 此前这里调用 resolveDogRecipeLifeStage(dog, []) 并**传入空的品种数组**，
+ * 导致除了有手动覆盖值的狗以外一律算不出阶段、全部兜底成「普通成犬」——
+ * 幼犬/老年的串串会被当成成犬。
+ */
+function resolveScenarioForDog(dog: { recipeLifeStage?: string | null } | null | undefined): FediafDogScenario {
+  const recipeLifeStage = dog?.recipeLifeStage || ''
+  return recipeLifeStage
+    ? scenarioByDogRecipeLifeStage[recipeLifeStage] || 'ADULT_MER_95'
+    : 'ADULT_MER_95'
 }
 
 function buildDefaultRecipeName(dog?: any) {

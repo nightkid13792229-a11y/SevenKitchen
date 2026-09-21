@@ -52,6 +52,7 @@ import {
   ORDERED_RECIPE_SERIES_LIFE_STAGES,
   RecipeSeriesLifeStage,
   resolveDefaultSeriesLifeStage,
+  selectLatestPublishedSeriesLifeStageVersions,
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
@@ -966,27 +967,7 @@ export class RecipesController {
   }
 
   private latestPublicVersionBySeriesStage(recipes: any[]): any[] {
-    const latestByStage = new Map<string, any>();
-    for (const recipe of recipes) {
-      const stage = recipe.seriesLifeStage;
-      if (!stage) {
-        continue;
-      }
-      const existing = latestByStage.get(stage);
-      if (!existing || recipe.version > existing.version) {
-        latestByStage.set(stage, recipe);
-      }
-    }
-
-    return Array.from(latestByStage.values()).sort((left, right) => {
-      const leftIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
-        left.seriesLifeStage,
-      );
-      const rightIndex = ORDERED_RECIPE_SERIES_LIFE_STAGES.indexOf(
-        right.seriesLifeStage,
-      );
-      return leftIndex - rightIndex;
-    });
+    return selectLatestPublishedSeriesLifeStageVersions(recipes);
   }
 
   private getSeriesLifeStageLabel(

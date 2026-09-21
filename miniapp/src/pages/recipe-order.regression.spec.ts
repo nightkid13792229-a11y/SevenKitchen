@@ -81,13 +81,14 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('presents the redesigned purchase decision sections in order', () => {
+    // 2026-09-21：「说明」这一行标题已按需求删除，两张说明卡片直接跟在「交付与保障」之后。
     const sectionOrder = [
       'recipe-life-stage-picker',
       'dog-profile-context',
       '快速选择备餐天数',
       '原料明细',
       '交付与保障',
-      '>说明<',
+      'product-explanation-card',
       'bottom-bar',
     ];
 

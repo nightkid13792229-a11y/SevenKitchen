@@ -366,11 +366,6 @@
     </view>
 
     <view class="section product-explanation-section">
-      <view class="section-title">
-        <view class="section-accent"></view>
-        <text class="title-text">说明</text>
-      </view>
-
       <view class="explanation-card-list">
         <view
           v-for="card in productExplanationCards"
@@ -4411,16 +4406,6 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   gap: 20rpx;
-}
-
-/* 「说明」大标题的品牌金竖条（与首页 section-accent 同一套语言） */
-.section-accent {
-  flex: none;
-  width: 8rpx;
-  height: 34rpx;
-  margin-right: 14rpx;
-  border-radius: 999rpx;
-  background: linear-gradient(180deg, #d8bc85 0%, #b08d4f 100%);
 }
 
 /*

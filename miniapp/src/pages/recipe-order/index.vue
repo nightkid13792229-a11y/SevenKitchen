@@ -367,6 +367,7 @@
 
     <view class="section product-explanation-section">
       <view class="section-title">
+        <view class="section-accent"></view>
         <text class="title-text">说明</text>
       </view>
 
@@ -382,7 +383,10 @@
           }"
         >
           <template v-if="card.mediaKind === 'storage'">
-            <text class="product-explanation-title">{{ card.title }}</text>
+            <view class="product-explanation-title-row">
+              <view class="product-explanation-title-accent"></view>
+              <text class="product-explanation-title">{{ card.title }}</text>
+            </view>
             <text
               v-for="point in card.points"
               :key="point"
@@ -404,16 +408,16 @@
 
             <!-- 最佳食用期：时间信息单独一行，不再和温度挤在同一个格子里 -->
             <view v-if="card.shelfLife" class="product-explanation-shelf-life">
-              <text class="product-explanation-shelf-life-icon">🕐</text>
-              <view class="product-explanation-shelf-life-body">
-                <text class="product-explanation-shelf-life-title">{{ card.shelfLife.title }}</text>
-                <text class="product-explanation-shelf-life-copy">{{ card.shelfLife.copy }}</text>
-              </view>
+              <text class="product-explanation-shelf-life-title">{{ card.shelfLife.title }}</text>
+              <text class="product-explanation-shelf-life-copy">{{ card.shelfLife.copy }}</text>
             </view>
           </template>
 
           <template v-else-if="card.mediaKind === 'cooking'">
-            <text class="product-explanation-title">{{ card.title }}</text>
+            <view class="product-explanation-title-row">
+              <view class="product-explanation-title-accent"></view>
+              <text class="product-explanation-title">{{ card.title }}</text>
+            </view>
             <view class="product-explanation-cooking-list">
               <view
                 v-for="method in card.cookingMethods"
@@ -4406,154 +4410,187 @@ onShow(() => {
 .explanation-card-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 20rpx;
 }
 
+/* 「说明」大标题的品牌金竖条（与首页 section-accent 同一套语言） */
+.section-accent {
+  flex: none;
+  width: 8rpx;
+  height: 34rpx;
+  margin-right: 14rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d8bc85 0%, #b08d4f 100%);
+}
+
+/*
+  说明卡：2026-09-21 视觉重构。
+  原先「外层卡 / 烹饪行 / 标签」三层用的是同一个 #eef2e4，彼此完全糊在一起
+  （标签甚至看不出是标签，烹饪的两行也分不开）。
+  现在建立三层：白卡容器 → 浅绿数据块 → 白底标签。
+*/
 .product-explanation-card {
   display: flex;
   gap: 18rpx;
-  padding: 22rpx;
-  border-radius: 8rpx;
-  background-color: #eef2e4;
-  border: 1rpx solid #e5e8d4;
+  padding: 26rpx 24rpx;
+  border-radius: 16rpx;
+  background-color: #ffffff;
+  border: 1rpx solid rgba(30, 58, 47, 0.08);
+  box-shadow: 0 6rpx 20rpx rgba(30, 46, 36, 0.05);
 }
 
 .product-explanation-storage-card,
 .product-explanation-cooking-card,
 .product-explanation-plain-card {
   flex-direction: column;
-  gap: 14rpx;
+  gap: 18rpx;
+}
+
+/* 卡片标题：竖条 + 标题，给每张卡一个明确的起点 */
+.product-explanation-title-row {
+  display: flex;
+  align-items: center;
+}
+
+.product-explanation-title-accent {
+  flex: none;
+  width: 8rpx;
+  height: 30rpx;
+  margin-right: 14rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d8bc85 0%, #b08d4f 100%);
+}
+
+.product-explanation-title-row .product-explanation-title {
+  flex: 1;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .product-explanation-storage-note {
   display: block;
-  margin-top: -4rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-  line-height: 1.5;
+  margin-top: -6rpx;
+  font-size: 23rpx;
+  color: #8b8574;
+  line-height: 1.55;
 }
 
 .product-explanation-storage-grid {
   display: grid;
   /* 2026-09-21：由 3 列改 2 列 —— 第三格原本放的是「时间」，已拆成下方的食用期提示行 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10rpx;
+  gap: 14rpx;
 }
 
 .product-explanation-storage-item {
   min-width: 0;
-  min-height: 180rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 18rpx 10rpx;
-  border-radius: 8rpx;
-  border: 1rpx solid #e5e8d4;
+  padding: 26rpx 12rpx 22rpx;
+  border-radius: 14rpx;
+  border: 1rpx solid #e2e8d5;
   background-color: #eef2e4;
   text-align: center;
 }
 
 .product-explanation-storage-temp {
   display: block;
-  margin-bottom: 10rpx;
-  font-size: 30rpx;
+  margin-bottom: 12rpx;
+  font-size: 38rpx;
   font-weight: 800;
   color: #1e3a2f;
-  line-height: 1.2;
+  line-height: 1.05;
+  letter-spacing: 1rpx;
 }
 
-/* 最佳食用期：时间信息单独成行（原先是塞在温度格子里的第三格） */
+/* ── 最佳食用期：时间信息单独成行（原先是塞在温度格子里的第三格）── */
 .product-explanation-shelf-life {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-top: 2rpx;
-  padding: 18rpx 20rpx;
-  border-radius: 8rpx;
-  border: 1rpx solid rgba(176, 141, 79, 0.45);
-  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
-}
-
-.product-explanation-shelf-life-icon {
-  flex: none;
-  font-size: 28rpx;
-  line-height: 1;
-}
-
-.product-explanation-shelf-life-body {
-  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8rpx;
+  gap: 10rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 14rpx;
+  border-left: 8rpx solid #b08d4f;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
 }
 
 .product-explanation-shelf-life-title {
-  font-size: 25rpx;
+  font-size: 26rpx;
   font-weight: 800;
   color: #8a6b33;
   line-height: 1.3;
 }
 
 .product-explanation-shelf-life-copy {
-  font-size: 24rpx;
+  font-size: 25rpx;
   color: #6b6653;
   line-height: 1.3;
 }
 
 .product-explanation-storage-title {
   display: block;
-  margin-bottom: 8rpx;
+  margin-bottom: 16rpx;
   font-size: 24rpx;
-  font-weight: 800;
-  color: #26261f;
-  line-height: 1.25;
-}
-
-.product-explanation-storage-copy {
-  display: block;
-  font-size: 21rpx;
+  font-weight: 600;
   color: #6b6653;
-  line-height: 1.45;
+  line-height: 1.3;
 }
 
+/* 可保存多久：做成白色胶囊，从"一句话"变成"可扫读的数据" */
+.product-explanation-storage-copy {
+  display: inline-block;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background-color: #ffffff;
+  color: #1e3a2f;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* ── 烹饪：两行对照 ─────────────────────────────── */
 .product-explanation-cooking-list {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 14rpx;
 }
 
 .product-explanation-cooking-item {
   display: grid;
-  grid-template-columns: 112rpx minmax(0, 1fr);
-  gap: 16rpx;
-  padding: 18rpx;
-  border-radius: 8rpx;
-  border: 1rpx solid #e5e8d4;
-  background-color: #eef2e4;
+  grid-template-columns: 108rpx minmax(0, 1fr);
+  gap: 20rpx;
+  align-items: center;
+  padding: 20rpx;
+  border-radius: 14rpx;
+  border: 1rpx solid #e2e8d5;
+  background-color: #f6f8f0;
 }
 
 .product-explanation-cooking-label {
-  min-height: 102rpx;
+  align-self: stretch;
+  min-height: 96rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8rpx;
-  font-size: 26rpx;
+  border-radius: 10rpx;
+  font-size: 25rpx;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: center;
 }
 
+/* 实心色块：把"建议 / 不建议"从浅底浅字改成满对比，一眼分得清 */
 .product-explanation-cooking-item.recommend .product-explanation-cooking-label {
-  background-color: #eef2e4;
-  color: #1e3a2f;
+  background-color: #1e3a2f;
+  color: #ffffff;
 }
 
 .product-explanation-cooking-item.avoid .product-explanation-cooking-label {
-  background-color: #f8e8e2;
-  color: #b4553f;
+  background-color: #b4553f;
+  color: #ffffff;
 }
 
 .product-explanation-cooking-copy {
@@ -4562,8 +4599,8 @@ onShow(() => {
 
 .product-explanation-cooking-title {
   display: block;
-  margin-bottom: 10rpx;
-  font-size: 27rpx;
+  margin-bottom: 14rpx;
+  font-size: 28rpx;
   font-weight: 800;
   color: #26261f;
   line-height: 1.35;
@@ -4572,37 +4609,37 @@ onShow(() => {
 .product-explanation-cooking-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8rpx;
-  margin-bottom: 10rpx;
+  gap: 10rpx;
 }
 
+/* 标签改白底描边：原先与行底色同为 #eef2e4，等于没有形状 */
 .product-explanation-cooking-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6rpx 12rpx;
-  border-radius: 6rpx;
-  background-color: #eef2e4;
-  color: #26261f;
-  font-size: 22rpx;
-  font-weight: 800;
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  background-color: #ffffff;
+  border: 1rpx solid rgba(30, 58, 47, 0.16);
+  color: #1e3a2f;
+  font-size: 23rpx;
+  font-weight: 700;
   line-height: 1.2;
 }
 
 .product-explanation-cooking-item.avoid .product-explanation-cooking-tag {
-  background-color: #f8e8e2;
+  border-color: rgba(180, 85, 63, 0.32);
   color: #b4553f;
 }
 
 /* 烹饪免责说明：从「建议」正文里挪出来，单独一行小字 */
 .product-explanation-cooking-note {
   display: block;
-  margin-top: 2rpx;
-  padding-top: 14rpx;
-  border-top: 1rpx dashed #e5e8d4;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed #e2e8d5;
   font-size: 22rpx;
   color: #8b8574;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .product-explanation-media {

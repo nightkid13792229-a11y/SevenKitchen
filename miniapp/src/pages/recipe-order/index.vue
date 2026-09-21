@@ -345,17 +345,22 @@
         </view>
       </view>
 
-      <!-- ③ 售后保障（内容不变） -->
+      <!-- ③ 售后保障 -->
+      <!--
+        2026-09-21 精简：承诺提到第一行、条件压到第二行。
+        用户此刻还没下单，他关心的是"赔什么"，不是"去哪儿申请"；
+        「订单详情 → 售后服务」是下单之后才有意义的路径，过早出现只会占地方。
+      -->
       <view class="guarantee-highlight">
         <view class="guarantee-highlight-head">
           <text class="guarantee-highlight-badge">✓</text>
           <text class="guarantee-highlight-title">破损、变质等品质问题</text>
         </view>
-        <text class="guarantee-highlight-line">
-          收货后 7 天内在「订单详情 → 售后服务」申请即可
-        </text>
         <text class="guarantee-highlight-line guarantee-highlight-line--strong">
-          全额退款 · 不用寄回 · 也可免费重做
+          全额退款 · 不用寄回 · 或免费重做
+        </text>
+        <text class="guarantee-highlight-line">
+          收货后 7 天内在订单详情申请即可
         </text>
       </view>
     </view>
@@ -390,11 +395,19 @@
                 v-for="item in card.storageItems"
                 :key="item.title"
                 class="product-explanation-storage-item"
-                :class="{ highlight: item.highlight }"
               >
                 <text class="product-explanation-storage-temp">{{ item.temperature }}</text>
                 <text class="product-explanation-storage-title">{{ item.title }}</text>
                 <text class="product-explanation-storage-copy">{{ item.copy }}</text>
+              </view>
+            </view>
+
+            <!-- 最佳食用期：时间信息单独一行，不再和温度挤在同一个格子里 -->
+            <view v-if="card.shelfLife" class="product-explanation-shelf-life">
+              <text class="product-explanation-shelf-life-icon">🕐</text>
+              <view class="product-explanation-shelf-life-body">
+                <text class="product-explanation-shelf-life-title">{{ card.shelfLife.title }}</text>
+                <text class="product-explanation-shelf-life-copy">{{ card.shelfLife.copy }}</text>
               </view>
             </view>
           </template>
@@ -422,16 +435,14 @@
                       {{ tag }}
                     </text>
                   </view>
-                  <text
-                    v-for="line in method.lines"
-                    :key="line"
-                    class="product-explanation-cooking-line"
-                  >
-                    {{ line }}
-                  </text>
                 </view>
               </view>
             </view>
+
+            <!-- 免责说明：从「建议」正文里挪出来，放卡片底部一行小字 -->
+            <text v-if="card.cookingNote" class="product-explanation-cooking-note">
+              {{ card.cookingNote }}
+            </text>
           </template>
 
           <template v-else-if="card.mediaKind === 'plain'">
@@ -643,15 +654,24 @@ interface ProductExplanationCard {
     temperature: string
     title: string
     copy: string
-    highlight?: boolean
   }>
+  /**
+   * 最佳食用期。
+   * 2026-09-21：从 storageItems 里拆出来单独成行 —— 它是「时间」，与上面两张
+   * 卡片的「温度」不是同一类信息，混在同一视觉位置会被误读成存储条件。
+   */
+  shelfLife?: {
+    title: string
+    copy: string
+  }
   cookingMethods?: Array<{
     label: string
     title: string
     tags: string[]
-    lines: string[]
     tone: 'recommend' | 'avoid'
   }>
+  /** 免责说明：放在烹饪卡片底部一行小字，不再混进「建议」的正文里 */
+  cookingNote?: string
   points: string[]
 }
 
@@ -817,37 +837,33 @@ const productExplanationCards = computed<ProductExplanationCard[]>(() => [
         title: '冷藏保存',
         copy: '可保存 3 天。',
       },
-      {
-        temperature: '1 个月',
-        title: '最佳营养保存期',
-        copy: '建议 1 个月内吃完，不建议囤货。',
-        highlight: true,
-      },
     ],
+    // 2026-09-21：删掉「不建议囤货」—— 本页正在卖 30 天装，
+    // 这句等于在最贵的一档旁边劝用户别买，且与「冷冻可存 6 个月」自相矛盾。
+    shelfLife: {
+      title: '最佳营养保存期',
+      copy: '建议 1 个月内吃完。',
+    },
   },
   {
     title: '烹饪方法',
     mediaKind: 'cooking',
     mediaLabel: '烹饪',
     points: [],
+    cookingNote: '烹饪时间与重量、体积相关，请参考产品标签。',
+    // 2026-09-21：删掉与标签完全重复的正文句（"建议蒸、炖、低温慢煮。"
+    // /"不建议微波、炸、炒、煎"），标签本身已经把答案说完了。
     cookingMethods: [
       {
         label: '建议',
         title: '温和加热',
         tags: ['蒸', '炖', '低温慢煮'],
-        lines: [
-          '建议蒸、炖、低温慢煮。',
-          '烹饪时间与重量和体积相关，请参考产品标签。',
-        ],
         tone: 'recommend',
       },
       {
         label: '不建议',
         title: '高温快速烹饪',
         tags: ['微波', '炸', '炒', '煎'],
-        lines: [
-          '不建议微波、炸、炒、煎等高温烹饪方式。',
-        ],
         tone: 'avoid',
       },
     ],
@@ -4419,7 +4435,8 @@ onShow(() => {
 
 .product-explanation-storage-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 2026-09-21：由 3 列改 2 列 —— 第三格原本放的是「时间」，已拆成下方的食用期提示行 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10rpx;
 }
 
@@ -4437,11 +4454,6 @@ onShow(() => {
   text-align: center;
 }
 
-.product-explanation-storage-item.highlight {
-  border-color: #b08d4f;
-  background-color: #f6efe0;
-}
-
 .product-explanation-storage-temp {
   display: block;
   margin-bottom: 10rpx;
@@ -4451,8 +4463,43 @@ onShow(() => {
   line-height: 1.2;
 }
 
-.product-explanation-storage-item.highlight .product-explanation-storage-temp {
+/* 最佳食用期：时间信息单独成行（原先是塞在温度格子里的第三格） */
+.product-explanation-shelf-life {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 2rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+}
+
+.product-explanation-shelf-life-icon {
+  flex: none;
+  font-size: 28rpx;
+  line-height: 1;
+}
+
+.product-explanation-shelf-life-body {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.product-explanation-shelf-life-title {
+  font-size: 25rpx;
+  font-weight: 800;
   color: #8a6b33;
+  line-height: 1.3;
+}
+
+.product-explanation-shelf-life-copy {
+  font-size: 24rpx;
+  color: #6b6653;
+  line-height: 1.3;
 }
 
 .product-explanation-storage-title {
@@ -4547,12 +4594,15 @@ onShow(() => {
   color: #b4553f;
 }
 
-.product-explanation-cooking-line {
+/* 烹饪免责说明：从「建议」正文里挪出来，单独一行小字 */
+.product-explanation-cooking-note {
   display: block;
-  margin-top: 6rpx;
-  font-size: 24rpx;
-  color: #6b6653;
-  line-height: 1.55;
+  margin-top: 2rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx dashed #e5e8d4;
+  font-size: 22rpx;
+  color: #8b8574;
+  line-height: 1.5;
 }
 
 .product-explanation-media {

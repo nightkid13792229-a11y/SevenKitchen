@@ -78,8 +78,8 @@
           <b>{{ detailRangeText }}</b>
         </div>
         <div v-if="detailPctText" class="detail-row">
-          <span>相对标准下限</span>
-          <b>{{ detailPctText }}</b>
+          <span>与标准对比</span>
+          <b :class="'detail-deviation tone-' + detailPctTone">{{ detailPctText }}</b>
         </div>
         <!-- 含量刻度：三段式柱状条（实线=下限 1/3，虚线=上限 2/3） -->
         <div v-if="detailBar" class="detail-bar-block">
@@ -514,15 +514,19 @@ const detailRangeText = computed(() => {
   return `${range} ${entry.unit || ''}${basis ? '/' + basis : ''}`
 })
 
+const detailPctTone = computed(() =>
+  activeEntry.value ? buildBar(activeEntry.value).deviationTone : 'info',
+)
+
+/** 与列表保持一致：超标/不足直接写「超上限 X%」「低于下限 X%」，达标才展示达成度 */
 const detailPctText = computed(() => {
   const entry = activeEntry.value
   if (!entry || entry.currentValue == null) return ''
-  const min = entry.minValue
-  const max = entry.maxValue
-  const baseline = min != null ? min : max != null ? max : null
-  if (baseline == null || baseline <= 0) return ''
-  const pct = (entry.currentValue / baseline) * 100
-  return `${Math.round(pct)}%（100%=标准${min != null ? '下限' : '上限'}）`
+  const geom = buildBar(entry)
+  if (!geom.deviationText) return ''
+  if (geom.deviationTone !== 'success') return geom.deviationText
+  const baselineLabel = entry.minValue != null ? '标准下限' : '标准上限'
+  return `${geom.deviationText}（100% = ${baselineLabel}）`
 })
 
 const detailTotalG = computed<number | null>(() => {
@@ -1081,6 +1085,15 @@ function openDetail(row: DisplayRow) {
 }
 .bar-pct.tone-success {
   color: #67c23a;
+}
+.detail-deviation.tone-danger {
+  color: #f56c6c;
+}
+.detail-deviation.tone-warning {
+  color: #e6a23c;
+}
+.detail-deviation.tone-success {
+  color: #529b2e;
 }
 /* 超出上限：虚线右侧的斜纹段，一眼看出「超了多少」 */
 .bar-over {

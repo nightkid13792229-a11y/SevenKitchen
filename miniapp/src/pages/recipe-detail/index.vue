@@ -38,10 +38,10 @@
         <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
       </view>
       <view
-        v-if="recipe.coverImageUrl && recipe.coverTitle"
+        v-if="recipe.coverImageUrl && resolveCoverBadgeText(recipe)"
         class="recipe-detail-cover-badge-gradient"
       >
-        <text class="recipe-detail-cover-title-badge">{{ recipe.coverTitle }}</text>
+        <text class="recipe-detail-cover-title-badge">{{ resolveCoverBadgeText(recipe) }}</text>
       </view>
     </view>
 
@@ -91,30 +91,31 @@
         </scroll-view>
       </view>
 
+      <!--
+        生命阶段版本卡。
+        2026-09-19 精简：去掉"通俗补充说明"与"本品可选"两行 ——
+        它们不构成决策依据，只会把这一块撑长、稀释真正重要的"匹配与否"。
+        未匹配时（人工指定错版本 / 无完全匹配版本）整卡转为警示色，
+        用颜色本身承担提示，而不是靠再堆一行文字。
+      -->
       <view
         v-if="recipe.selectedLifeStage || recipe.availableLifeStageVersions?.length"
         class="life-stage-version-card"
+        :class="{ 'life-stage-version-card--mismatch': isLifeStageMismatch }"
         @tap="openLifeStageSelector"
       >
         <view class="life-stage-version-main">
-          <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
-          <text v-if="lifeStagePlainHint" class="life-stage-version-plain">{{ lifeStagePlainHint }}</text>
-          <text v-if="!showLifeStageFallbackNotice" class="life-stage-version-copy">
+          <view class="life-stage-version-head">
+            <text v-if="isLifeStageMismatch" class="life-stage-version-warn">!</text>
+            <text class="life-stage-version-title">{{ lifeStageVersionTitle }}</text>
+          </view>
+          <text class="life-stage-version-copy">
             {{ lifeStageVersionCopy }}
-          </text>
-          <text v-if="availableLifeStageSummary" class="life-stage-version-options">
-            {{ availableLifeStageSummary }}
           </text>
         </view>
         <text v-if="recipe.availableLifeStageVersions?.length" class="life-stage-version-action">
           切换
         </text>
-      </view>
-
-      <!-- 未找到完全匹配版本：整行高亮提醒 -->
-      <view v-if="showLifeStageFallbackNotice" class="life-stage-fallback-notice">
-        <text class="life-stage-fallback-icon">!</text>
-        <text class="life-stage-fallback-text">{{ lifeStageVersionCopy }}</text>
       </view>
 
       <text v-if="recipe.description" class="recipe-description">
@@ -501,7 +502,9 @@ import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
-import { getNutritionStandardExplain } from '../../utils/label-mapping'
+import { trackFunnelEvent } from '../../utils/funnel'
+import { resolveCoverBadgeText } from '../../utils/cover-badge'
+import { getNutritionStandardExplain, getLifeStageLabel } from '../../utils/label-mapping'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
@@ -565,6 +568,8 @@ interface RecipeDetail {
   status: string
   coverImageUrl?: string
   coverTitle?: string
+  /** 系列级封面角标（合规词表，最多 2 个） */
+  coverBadges?: string[]
   description?: string
   /** 一句话卖点（合规文案，AI 生成 + 人工确认） */
   sellingPoint?: string
@@ -838,6 +843,22 @@ const isLifeStageFallbackSelection = computed(() => {
   return matchType === 'FALLBACK_ADULT' || matchType === 'FALLBACK_FIRST'
 })
 
+/**
+ * 当前展示的生命阶段版本是否"与狗狗不匹配"。
+ *
+ * 后端 matchType 取值：MATCHED / MANUAL_MISMATCH / FALLBACK_ADULT / FALLBACK_FIRST / LEGACY。
+ * 其中三种都属于"不匹配"，此前只有 FALLBACK_* 会被提示，
+ * MANUAL_MISMATCH（人工指定了不匹配的版本）完全没有视觉区分 —— 这里统一起来。
+ */
+const isLifeStageMismatch = computed(() => {
+  const matchType = recipe.value.lifeStageMatch?.matchType
+  return (
+    matchType === 'MANUAL_MISMATCH' ||
+    matchType === 'FALLBACK_ADULT' ||
+    matchType === 'FALLBACK_FIRST'
+  )
+})
+
 const hasResolvedLifeStageMatch = computed(() => {
   const match = recipe.value.lifeStageMatch
   return Boolean(
@@ -856,50 +877,22 @@ const lifeStageVersionTitle = computed(() => {
   return isCurrentLifeStageMatched.value ? `已匹配：${label}` : label
 })
 
-// 没有完全匹配狗狗生命阶段的版本：给出更醒目的整行提醒（而不是混在说明文字里）
-const showLifeStageFallbackNotice = computed(
-  () => hasResolvedLifeStageMatch.value && isLifeStageFallbackSelection.value,
-)
-
 const lifeStageVersionCopy = computed(() => {
   if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
-  if (hasResolvedLifeStageMatch.value && isLifeStageFallbackSelection.value) {
-    return '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
+
+  // 不匹配时要说清"为什么"，否则顾客看到警示色却不知道问题出在哪
+  if (isLifeStageMismatch.value) {
+    return isLifeStageFallbackSelection.value
+      ? '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
+      : '当前展示的版本与狗狗的生命阶段不一致，建议切换后再下单。'
   }
+
   const matchedDogName = recipe.value.lifeStageMatch?.dogName || selectedDog.value?.name
   if (isCurrentLifeStageMatched.value && matchedDogName) {
     return `根据${matchedDogName}的档案自动展示该生命阶段版本。`
   }
   return '可切换查看该食谱已开放的生命阶段版本。'
 })
-
-// 生命阶段的通俗补充（保留设计器原始标签不变，另加一句人话帮助家长理解）
-const LIFE_STAGE_PLAIN_HINT: Record<string, string> = {
-  PUPPY_UNDER_14_WEEKS: '还没满 14 周的幼犬，肠胃更娇嫩',
-  PUPPY_14_WEEKS_PLUS: '满 14 周以上的幼犬，正在快速长身体',
-  LOW_ACTIVITY_ADULT_OR_SENIOR: '运动量偏少，或年纪偏大的狗狗',
-  HIGH_ACTIVITY_ADULT: '日常活动量正常或偏大的成年犬',
-  REPRODUCTION: '处于繁殖期的狗狗',
-  PUPPY: '处于幼犬阶段',
-  ADULT: '处于成年阶段',
-  SENIOR: '处于老年阶段',
-  PREGNANCY: '处于妊娠期',
-  LACTATION: '处于哺乳期',
-}
-
-const lifeStagePlainHint = computed(() => {
-  const stage = recipe.value.selectedLifeStage || ''
-  return LIFE_STAGE_PLAIN_HINT[stage] || ''
-})
-
-// 可选阶段摘要：让家长不点"切换"也能看到这品有哪些版本
-const availableLifeStageSummary = computed(() => {
-  const versions = recipe.value.availableLifeStageVersions || []
-  if (versions.length <= 1) return ''
-  const labels = versions.map((version) => version.label || getLifeStageLabel(version.lifeStage))
-  return `本品可选：${labels.join(' · ')}`
-})
-
 
 onMounted(async () => {
   const pages = getCurrentPages()
@@ -983,6 +976,16 @@ function loadRecipeDetail() {
       if (token) {
         checkFavoriteStatus()
       }
+
+      // 漏斗：详情页浏览（漏斗第 2 步）
+      trackFunnelEvent({
+        eventName: 'detail_view',
+        step: 'detail',
+        recipeId: actionRecipeId,
+        dogId: selectedDogId.value,
+        entrySource: initialDogId.value ? 'with_dog' : 'no_dog',
+        properties: { lifeStage: res.data.selectedLifeStage || null },
+      })
 
     }
   }).catch((err: any) => {
@@ -1140,14 +1143,8 @@ function openNutritionReportPage() {
   })
 }
 
-function generateDiySheet() {
-  // 检查是否登录
-  const token = uni.getStorageSync('token')
-  if (!token) {
-    promptLoginAndRedirect('制作 DIY 食谱单需要登录，登录后继续为你生成')
-    return
-  }
-
+/** DIY 制作单配置页路由（登录后要直达的目标） */
+function buildDiyRoute(): string {
   const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
@@ -1155,21 +1152,11 @@ function generateDiySheet() {
   if (shareToken.value) {
     query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
   }
-
-  // 已登录，直接跳转到DIY配置页面
-  uni.navigateTo({
-    url: `/pages/recipe-diy/index?${query.join('&')}`
-  })
+  return `/pages/recipe-diy/index?${query.join('&')}`
 }
 
-function goToOrder() {
-  // 检查是否登录
-  const token = uni.getStorageSync('token')
-  if (!token) {
-    promptLoginAndRedirect('购买成品需要登录，登录后继续为你配置订单')
-    return
-  }
-
+/** 成品订购配置页路由（登录后要直达的目标） */
+function buildOrderRoute(): string {
   const query = [`recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}`]
   if (selectedDogId.value) {
     query.push(`dogId=${encodeURIComponent(selectedDogId.value)}`)
@@ -1177,11 +1164,49 @@ function goToOrder() {
   if (recipe.value.selectedLifeStage) {
     query.push(`lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}`)
   }
+  return `/pages/recipe-order/index?${query.join('&')}`
+}
+
+function generateDiySheet() {
+  const target = buildDiyRoute()
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  trackFunnelEvent({
+    eventName: 'tap_diy',
+    step: 'tap_diy',
+    recipeId: selectedRecipeIdForActions.value,
+    dogId: selectedDogId.value,
+    properties: { loggedIn: Boolean(token) },
+  })
+  if (!token) {
+    // 登录后直达 DIY 配置页，不再退回详情页要求用户重新点击
+    promptLoginAndRedirect('制作 DIY 食谱单需要登录，登录后继续为你生成', target)
+    return
+  }
+
+  // 已登录，直接跳转到DIY配置页面
+  uni.navigateTo({ url: target })
+}
+
+function goToOrder() {
+  const target = buildOrderRoute()
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  trackFunnelEvent({
+    eventName: 'tap_buy',
+    step: 'tap_buy',
+    recipeId: selectedRecipeIdForActions.value,
+    dogId: selectedDogId.value,
+    properties: { loggedIn: Boolean(token) },
+  })
+  if (!token) {
+    // 登录后直达订购配置页，不再退回详情页要求用户重新点击
+    promptLoginAndRedirect('购买成品需要登录，登录后继续为你配置订单', target)
+    return
+  }
 
   // 已登录，跳转到订购配置页面
-  uni.navigateTo({
-    url: `/pages/recipe-order/index?${query.join('&')}`
-  })
+  uni.navigateTo({ url: target })
 }
 
 function selectDogForDetail(nextDogId: string) {
@@ -1199,20 +1224,31 @@ function goCreateDog() {
   })
 }
 
-function promptLoginAndRedirect(message: string) {
+function promptLoginAndRedirect(message: string, redirectTarget?: string) {
   uni.showModal({
     title: '需要登录',
     content: message,
     confirmText: '去登录',
     cancelText: '暂不',
     success: (res) => {
+      // 漏斗：卡点——触发了登录弹窗（用于度量"登录拦截"造成的流失）
+      trackFunnelEvent({
+        eventName: 'login_prompt_shown',
+        step: 'login_required',
+        recipeId: recipeId.value,
+        properties: { confirmed: Boolean(res.confirm), intent: redirectTarget || 'detail' },
+      })
       if (!res.confirm) return
 
-      const params = [`recipeId=${encodeURIComponent(recipeId.value)}`]
-      if (shareToken.value) {
-        params.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+      // 默认回落到当前食谱详情页；购买/DIY 意图由调用方传入目标页，避免登录后丢失意图
+      let redirect = redirectTarget
+      if (!redirect) {
+        const params = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+        if (shareToken.value) {
+          params.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+        }
+        redirect = `/pages/recipe-detail/index?${params.join('&')}`
       }
-      const redirect = `/pages/recipe-detail/index?${params.join('&')}`
       uni.navigateTo({
         url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
       })
@@ -1245,25 +1281,6 @@ function selectLifeStageVersion(version: RecipeLifeStageVersion) {
   loadRecipeDetail()
 }
 
-function getLifeStageLabel(stage: string): string {
-  const map: Record<string, string> = {
-    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
-    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
-    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
-    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
-    'REPRODUCTION': '繁殖期',
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-    'PREGNANCY': '妊娠期',
-    'LACTATION': '哺乳期',
-  }
-  const result = map[stage]
-  if (!result) {
-    console.warn('[RecipeDetail] 未知的生命阶段标签:', stage)
-  }
-  return result || stage
-}
 
 // 营养标准的通俗解释（与订购配置页共用同一份文案，保证两页展示一致）
 const nutritionStandardExplain = computed(() =>
@@ -1649,6 +1666,36 @@ function onReviewSubmitted() {
   min-width: 0;
 }
 
+.life-stage-version-head {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+/* 未匹配：整卡转为警示色，用颜色承担提示，而不是再堆一行文字 */
+.life-stage-version-card--mismatch {
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border-color: var(--sk-danger, #b4553f);
+}
+
+.life-stage-version-warn {
+  flex: none;
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  background-color: var(--sk-danger, #b4553f);
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 30rpx;
+  text-align: center;
+}
+
+.life-stage-version-card--mismatch .life-stage-version-title,
+.life-stage-version-card--mismatch .life-stage-version-copy {
+  color: var(--sk-danger, #b4553f);
+}
+
 .life-stage-version-title,
 .life-stage-version-copy {
   display: block;
@@ -1691,6 +1738,12 @@ function onReviewSubmitted() {
   background-color: #fbfcf7;
   font-size: 24rpx;
   font-weight: 700;
+}
+
+/* 未匹配时「切换」按钮也要跟着变，否则白底按钮压在粉底上很突兀 */
+.life-stage-version-card--mismatch .life-stage-version-action {
+  color: #fff;
+  background-color: var(--sk-danger, #b4553f);
 }
 
 /* 一句话卖点：金色竖条强调，作为核心价值主张 */

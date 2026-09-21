@@ -1455,8 +1455,19 @@ export class OrdersController {
         user.userId,
         adminNote,
         user.role,
+        dto.targetProductionDate
+          ? new Date(`${dto.targetProductionDate}T00:00:00`)
+          : undefined,
       );
-      return ApiResponseDto.success(await this.mapOrderToDto(order));
+
+      // 「安排重做」会新建一张 0 元重做单，单号要回传给后台展示
+      const remakeOrder = (order as any).__remakeOrder;
+      const orderDto: any = await this.mapOrderToDto(order);
+      return ApiResponseDto.success({
+        ...orderDto,
+        remakeOrderId: remakeOrder?.id ?? null,
+        remakeOrderNo: remakeOrder?.orderNo ?? null,
+      });
     } catch (error) {
       if (error instanceof ForbiddenException) {
         return ApiResponseDto.error(403, error.message);

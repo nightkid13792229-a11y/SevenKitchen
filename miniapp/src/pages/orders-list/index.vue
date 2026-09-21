@@ -109,11 +109,11 @@
             查看物流
           </button>
           <button
-            v-if="canApplyAftersale(order.status, order.completedAt)"
+            v-if="getAftersaleEntryLabel(order.status, order.completedAt)"
             class="action-btn secondary"
-            @tap="applyAftersale(order.id)"
+            @tap="applyAftersale(order)"
           >
-            申请售后
+            {{ getAftersaleEntryLabel(order.status, order.completedAt) }}
           </button>
           <button
             v-if="order.status === 'SHIPPED'"
@@ -166,11 +166,13 @@ import {
 } from '../../api/orders';
 import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
-import { ensurePhoneBound } from '../../utils/account';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
   getOrderStatusText,
-  canApplyAftersale,
+  canApplyRefund,
+  canApplyRemake,
+  canCancelOrder,
+  getAftersaleEntryLabel,
 } from '../../utils/order-aftersale';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
@@ -265,9 +267,6 @@ const emptyText = computed(() => {
 });
 
 onMounted(async () => {
-  if (!(await ensurePhoneBound())) {
-    return;
-  }
   loadOrders();
 });
 
@@ -288,9 +287,6 @@ onLoad((options: any) => {
 });
 
 onShow(async () => {
-  if (!(await ensurePhoneBound())) {
-    return;
-  }
   // Refresh orders when page becomes visible (e.g., after creating new order)
   loadOrders();
 });
@@ -514,9 +510,26 @@ async function confirmReceivedFromList(order: Order) {
   });
 }
 
-function applyAftersale(orderId: string) {
+/**
+ * 进入售后申请页。
+ *
+ * 原先写死 type=REFUND，但"已完成且超过 7 天"的订单其实只允许投诉建议，
+ * 顾客会被带到一个默认选中"申请退款"的页面，提交时才被拒绝。
+ * 现在按"当前状态下第一个真正允许的类型"进入。
+ */
+function applyAftersale(order: Order) {
+  const status = String(order.status || '');
+  const completedAt = order.completedAt;
+
+  // 已付款（未采购）→ 取消订单；已发货/已完成 → 售后；其余（锁定期）→ 投诉建议
+  const type = canCancelOrder(status) || canApplyRefund(status, completedAt)
+    ? 'REFUND'
+    : canApplyRemake(status, completedAt)
+      ? 'REMAKE'
+      : 'COMPLAINT';
+
   uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId}&type=REFUND`,
+    url: `/pages/aftersale-apply/index?orderId=${order.id}&type=${type}`,
   });
 }
 

@@ -41,18 +41,26 @@
       </view>
     </view>
 
-    <!-- 生命阶段提醒 -->
-    <view v-if="!isLifeStageMatch && dog && showWarning" class="warning-card">
+    <!--
+      生命阶段提醒（静态）
+      顾客在 DIY 页点「生成制作单」时已经确认过并留痕，这里**不再要求确认**，
+      只把结论留在页面上作为记录 —— 避免同一个提醒反复打断。
+    -->
+    <view v-if="!isLifeStageMatch && dog" class="warning-card">
       <view class="warning-header">
         <text class="warning-title">生命阶段提醒</text>
       </view>
       <text class="warning-text">
         {{ lifeStageReminderText }}
       </text>
-      <button class="btn-continue" @tap="dismissWarning">
-        我已知晓
-      </button>
     </view>
+
+      <!-- 后端结论没取到：不静默放行，给一条中性提示 -->
+      <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
+        <text class="life-stage-unknown-text">
+          暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
+        </text>
+      </view>
 
     <!-- 2. 制作清单 -->
     <view class="section purchase-list-section">
@@ -169,6 +177,21 @@
               </text>
             </view>
           </view>
+        </view>
+
+        <!-- 一键购买补剂（补剂商城开放时才展示） -->
+        <view
+          v-if="supplementShopEnabled && supplementItemsDetailed.length > 0"
+          class="supplement-buy-card"
+          @tap="handleBuySupplements"
+        >
+          <view class="buy-main">
+            <text class="buy-title">一键购买补剂</text>
+            <text class="buy-desc">
+              {{ supplementItemsDetailed.length }} 种补剂 · 按用量分装成小份 · 独立发货
+            </text>
+          </view>
+          <text class="buy-arrow">›</text>
         </view>
 
         <!-- 无数据提示 -->
@@ -512,12 +535,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import {
+  fetchSupplementShopStatus,
+  saveSupplementPurchaseDraft
+} from '../../api/supplements'
 import { PrintCanvasBuilder, type CanvasImageInfo } from '../../utils/print-canvas'
 import {
   buildLifeStageReminderText,
+  fetchLifeStageMatch,
   getLifeStageLabel,
-  isRecipeLifeStageMatch,
-  resolveDogRecipeLifeStage
+  isLifeStageMismatch,
+  type LifeStageMatchVerdict
 } from '../../utils/life-stage-match'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
@@ -557,13 +585,14 @@ const cycleDays = ref(7)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
 const packagePlan = ref<PackagePlanItem[]>([])
+// 补剂商城是否开放（关闭时不展示购买入口）
+const supplementShopEnabled = ref(false)
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
 // 数据
 const dog = ref<any>(null)  // 狗狗信息
-const breeds = ref<any[]>([])
 const recipe = ref<any>({
   id: '',
   name: '',
@@ -614,7 +643,6 @@ const showImagePreview = ref(false)
 const previewImageUrl = ref('')
 const isPageDataLoaded = ref(false)
 const isGeneratingImage = ref(false)
-const showWarning = ref(true)
 
 const PRINT_CANVAS_LOGICAL_WIDTH = 1200
 const PRINT_CANVAS_LOGICAL_HEIGHT = 1697
@@ -699,19 +727,44 @@ const supplementNutrientBaseWeightG = computed(() => {
   return foodItemsTotal.value.theoreticalAmount || totalFoodNetWeightG.value
 })
 
-const selectedDogRecipeLifeStage = computed(() =>
-  resolveDogRecipeLifeStage(dog.value, breeds.value),
+/**
+ * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
+ * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
+ */
+const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
+
+/** 没能拿到后端结论时走中性提示，不静默放行 */
+const lifeStageCheckFailed = ref(false)
+
+const selectedDogRecipeLifeStage = computed(
+  () => lifeStageVerdict.value?.dogLifeStage || '',
 )
 
 const isLifeStageMatch = computed(() => {
-  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogRecipeLifeStage.value)
+  const verdict = lifeStageVerdict.value
+  if (!verdict) return true
+  return !isLifeStageMismatch(verdict.matchType)
 })
 
-const lifeStageReminderText = computed(() => buildLifeStageReminderText({
-  applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogRecipeLifeStage.value,
-  dogName: dog.value?.name,
-}))
+const lifeStageReminderText = computed(() => {
+  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
+  return buildLifeStageReminderText({
+    applicableStages: recipe.value.applicableLifeStages || [],
+    dogLifeStage: selectedDogRecipeLifeStage.value,
+    dogName: dog.value?.name,
+  })
+})
+
+/** 向后端索取生命阶段结论（食谱 × 狗狗） */
+async function checkLifeStageMatch() {
+  if (!recipeId.value || !dogId.value) return
+  const verdict = await fetchLifeStageMatch({
+    recipeId: recipeId.value,
+    dogId: dogId.value,
+  })
+  lifeStageVerdict.value = verdict
+  lifeStageCheckFailed.value = !verdict
+}
 
 // 格式化狗狗年龄
 const dogAgeText = computed(() => {
@@ -949,6 +1002,47 @@ function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
   return primaryRow?.packageSpecG || Math.max(1, Math.round(perMealG.value || 1))
 }
 
+async function loadSupplementShopStatus() {
+  try {
+    const res = await fetchSupplementShopStatus()
+    supplementShopEnabled.value = res.code === 0 && !!(res.data && res.data.enabled)
+  } catch (error) {
+    // 商城未开放或接口异常时静默降级：不展示入口，不影响制作单本身
+    supplementShopEnabled.value = false
+  }
+}
+
+/**
+ * 一键购买补剂：把制作单上的补剂清单交给下单页。
+ * 补剂行带用量，塞不进 URL，因此走本地存储传递。
+ */
+function handleBuySupplements() {
+  const lines = supplementItemsDetailed.value
+    .filter((item: any) => item.ingredientId && Number(item.amount) > 0)
+    .map((item: any) => ({
+      ingredientId: item.ingredientId,
+      amount: Number(item.amount),
+      name: item.name,
+      unit: item.displayUnit || item.unit || 'g'
+    }))
+
+  if (lines.length === 0) {
+    uni.showToast({ title: '暂无可购买的补剂', icon: 'none' })
+    return
+  }
+
+  saveSupplementPurchaseDraft({
+    lines,
+    recipeId: recipeId.value,
+    recipeName: recipe.value && recipe.value.name,
+    dogId: dogId.value,
+    dogName: dog.value && dog.value.name,
+    cycleDays: cycleDays.value
+  })
+
+  uni.navigateTo({ url: '/pages/supplement-order/index' })
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
@@ -966,6 +1060,8 @@ onMounted(() => {
   if (packagePlan.value.length === 0) {
     packagePlan.value = buildLegacyPackagePlan()
   }
+
+  void loadSupplementShopStatus()
 
   if (recipeId.value && dogId.value) {
     loadData()
@@ -990,11 +1086,13 @@ async function loadData() {
     // 并行加载食谱详情、价格预览、狗狗信息和设备推荐
     await Promise.all([
       loadRecipe(),
-      loadBreeds(),
       loadPricePreview(),
       loadDog(),
       loadEquipmentRecommendations()
     ])
+
+    // 生命阶段结论由后端给出（需等食谱与狗狗都就绪）
+    await checkLifeStageMatch()
 
     // 价格预览加载完成后，加载推荐产品（需要 ingredientIds）
     await loadRecommendedProducts()
@@ -1057,20 +1155,6 @@ async function loadRecipe() {
   }
 }
 
-async function loadBreeds() {
-  try {
-    const res = await request({
-      url: '/dogs/breeds',
-      method: 'GET'
-    })
-
-    if (res.code === 0 && Array.isArray(res.data)) {
-      breeds.value = res.data
-    }
-  } catch (error) {
-    console.error('[DIYSheet] Load breeds error:', error)
-  }
-}
 
 async function loadHealthTagMapping() {
   try {
@@ -1584,9 +1668,6 @@ function closeNutritionInfoModal() {
   showNutritionInfo.value = false
 }
 
-function dismissWarning() {
-  showWarning.value = false
-}
 
 // 选择推荐产品（在弹窗中切换）
 function selectRecommendedProduct(ingredientId: string, rpIndex: number | string) {
@@ -1840,6 +1921,21 @@ onShareTimeline(() => {
 </script>
 
 <style scoped>
+/* 后端结论未取到：既不静默放行，也不误报"不匹配" */
+.life-stage-unknown-note {
+  margin: 0 0 20rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  background-color: #f7f8f2;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+.life-stage-unknown-text {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: var(--sk-ink-2, #6b6653);
+}
+
 .diy-sheet-page {
   min-height: 100vh;
   background-color: #fbfcf7;
@@ -2226,6 +2322,39 @@ onShareTimeline(() => {
 }
 
 /* 补剂表格4列布局 */
+.supplement-buy-card {
+  margin-top: 20rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.buy-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.buy-title {
+  font-size: 30rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.buy-desc {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.buy-arrow {
+  font-size: 44rpx;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1;
+}
+
 .supplement-table .product-col {
   flex: 1;
   justify-content: center;

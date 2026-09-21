@@ -46,6 +46,12 @@
 
       <view class="recipe-info-body">
         <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
+
+        <!-- 一句话卖点：价值主张要和价格出现在同一个决策页上 -->
+        <view v-if="recipe.sellingPoint" class="recipe-selling-point">
+          <text class="recipe-selling-point-text">{{ recipe.sellingPoint }}</text>
+        </view>
+
         <!-- 健康标签暂不展示：与食谱详情页保持一致，待标签字典合规化后仅展示合规标签 -->
 
         <!-- 营养标准背书（与食谱详情页同一展示方式） -->
@@ -116,6 +122,13 @@
           <view class="warning-header">
             <text class="warning-title">生命阶段提醒</text>
           </view>
+
+        <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
+        <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
+          <text class="life-stage-unknown-text">
+            暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
+          </text>
+        </view>
           <text class="warning-text">
             {{ lifeStageReminderText }}
           </text>
@@ -135,18 +148,21 @@
 
         <!-- 首单喂食量说明：默认收起，避免挤压主要内容 -->
         <view class="feeding-note-toggle" @tap="toggleFeedingNote">
-          <text class="feeding-note-toggle-text">首单起始喂食量说明</text>
+          <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
           <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
         </view>
-        <text v-if="feedingNoteExpanded" class="section-note feeding-adjustment-note">
-          首单起始喂食量：已按国内城市犬的常见活动量保守估算。建议观察2-4周体重、便便和饥饿感，再按5%-10%小幅调整。
-        </text>
+        <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
+          <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
+          <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
+          <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的克数。</text>
+          <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
+        </view>
       </view>
     </view>
 
     <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">饭量设置</text>
+        <text class="title-text">快速选择备餐天数</text>
       </view>
 
       <view class="cycle-options">
@@ -228,8 +244,21 @@
           <text class="ingredient-list-title-text">原料明细</text>
         </view>
 
+        <!-- 采购标准：把"我们从哪买"讲成一条明确的承诺，而不是让顾客自己从明细里推断 -->
+        <view class="sourcing-standard-card">
+          <view class="sourcing-standard-head">
+            <text class="sourcing-standard-badge">采购标准</text>
+          </view>
+          <text class="sourcing-standard-line">
+            优先采购山姆、盒马、iHerb 等优质渠道的食材与补剂。
+          </text>
+          <text class="sourcing-standard-line sourcing-standard-line--sub">
+            这些渠道买不到的，再向下选择其他可靠来源。
+          </text>
+        </view>
+
         <view
-          v-for="ingredient in displayIngredientRows"
+          v-for="ingredient in visibleIngredientRows"
           :key="ingredient.key"
           class="ingredient-row-compact"
         >
@@ -245,20 +274,89 @@
             </text>
           </view>
           <view class="ingredient-meta-row">
-            <text class="ingredient-meta-item">
+            <view class="ingredient-meta-item">
               <text class="ingredient-meta-label">渠道</text>
-              {{ ingredient.purchaseChannelText }}
-            </text>
-            <text class="ingredient-meta-item">
+              <text class="ingredient-meta-value">{{ ingredient.purchaseChannelText }}</text>
+            </view>
+            <view class="ingredient-meta-item">
               <text class="ingredient-meta-label">品牌</text>
-              {{ ingredient.brandText }}
-            </text>
-            <text class="ingredient-meta-item">
+              <text class="ingredient-meta-value">{{ ingredient.brandText }}</text>
+            </view>
+            <view class="ingredient-meta-item">
               <text class="ingredient-meta-label">规格</text>
-              {{ ingredient.productModelText }}
-            </text>
+              <text class="ingredient-meta-value">{{ ingredient.productModelText }}</text>
+            </view>
           </view>
         </view>
+
+        <!-- 默认只展示用量最大的 5 项，其余按需展开 -->
+        <view
+          v-if="hiddenIngredientCount > 0"
+          class="ingredient-toggle"
+          @tap="toggleAllIngredients"
+        >
+          <text class="ingredient-toggle-text">
+            {{ showAllIngredients ? '收起' : `展开其余 ${hiddenIngredientCount} 项原料` }}
+          </text>
+          <text :class="['ingredient-toggle-arrow', { open: showAllIngredients }]">▼</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 交付与保障：食物类目最大的下单阻力是"敢不敢买"，
+         这一块集中回答"多久能到"和"出问题怎么办" -->
+    <view class="section after-sale-section">
+      <view class="section-title">
+        <text class="title-text">交付与保障</text>
+      </view>
+
+      <!--
+        按「制作 → 配送 → 售后」的时间顺序讲，读起来是一条完整的旅程：
+        我们会怎么做 → 怎么送到你手上 → 万一出问题怎么办。
+      -->
+
+      <!-- ① 预约制作 -->
+      <view class="delivery-step-card">
+        <image
+          class="delivery-step-image"
+          :src="DELIVERY_IMAGE_MAKING"
+          mode="aspectFill"
+        />
+        <view class="delivery-step-body">
+          <text class="delivery-step-title">预约制作</text>
+          <text class="delivery-step-desc">
+            预约制作日期 → 当天采购、当天制作 → 急冻 24 小时
+          </text>
+        </view>
+      </view>
+
+      <!-- ② 冷链履约 -->
+      <view class="delivery-step-card">
+        <image
+          class="delivery-step-image"
+          :src="DELIVERY_IMAGE_COLD_CHAIN"
+          mode="aspectFill"
+        />
+        <view class="delivery-step-body">
+          <text class="delivery-step-title">冷链履约</text>
+          <text class="delivery-step-desc">
+            顺丰生鲜 1–2 日达 → 泡沫箱 + 隔热袋 + 冰袋包装
+          </text>
+        </view>
+      </view>
+
+      <!-- ③ 售后保障（内容不变） -->
+      <view class="guarantee-highlight">
+        <view class="guarantee-highlight-head">
+          <text class="guarantee-highlight-badge">✓</text>
+          <text class="guarantee-highlight-title">破损、变质等品质问题</text>
+        </view>
+        <text class="guarantee-highlight-line">
+          收货后 7 天内在「订单详情 → 售后服务」申请即可
+        </text>
+        <text class="guarantee-highlight-line guarantee-highlight-line--strong">
+          全额退款 · 不用寄回 · 也可免费重做
+        </text>
       </view>
     </view>
 
@@ -273,45 +371,12 @@
           :key="card.title"
           class="product-explanation-card"
           :class="{
-            'product-explanation-logistics-card': card.mediaKind === 'logistics',
             'product-explanation-storage-card': card.mediaKind === 'storage',
             'product-explanation-cooking-card': card.mediaKind === 'cooking',
             'product-explanation-plain-card': card.mediaKind === 'plain',
           }"
         >
-          <template v-if="card.mediaKind === 'logistics'">
-            <text class="product-explanation-title product-explanation-logistics-title">
-              {{ card.title }}
-            </text>
-            <view class="product-explanation-logistics-visual">
-              <view class="product-explanation-package-frame">
-                <image
-                  v-if="card.packageImageUrl"
-                  :src="normalizeImageUrl(card.packageImageUrl)"
-                  class="product-explanation-package-image product-explanation-logistics-package-image"
-                  mode="aspectFit"
-                  @error="handleProductExplanationPackageImageError"
-                />
-              </view>
-              <view v-if="card.shippingLogoUrl" class="product-explanation-shipping-row">
-                <view class="product-explanation-shipping-main">
-                  <image
-                    :src="normalizeImageUrl(card.shippingLogoUrl)"
-                    class="product-explanation-shipping-logo product-explanation-shipping-logo-large"
-                    mode="aspectFit"
-                    @error="handleProductExplanationShippingLogoError"
-                  />
-                  <view class="product-explanation-shipping-copy">
-                    <text class="product-explanation-shipping-title">顺丰生鲜配送</text>
-                    <text class="product-explanation-shipping-subtitle">冷冻包材 + 冰袋随箱</text>
-                  </view>
-                </view>
-                <text class="product-explanation-shipping-pill">冷链配送</text>
-              </view>
-            </view>
-          </template>
-
-          <template v-else-if="card.mediaKind === 'storage'">
+          <template v-if="card.mediaKind === 'storage'">
             <text class="product-explanation-title">{{ card.title }}</text>
             <text
               v-for="point in card.points"
@@ -458,10 +523,11 @@ import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import {
   buildLifeStageReminderText,
+  confirmLifeStageMismatch,
+  fetchLifeStageMatch,
   getLifeStageLabel,
-  isRecipeLifeStageMatch,
-  resolveDogLifeStage,
-  resolveDogRecipeLifeStage,
+  isLifeStageMismatch,
+  type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
@@ -481,6 +547,7 @@ import {
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
+import { trackFunnelEvent } from '../../utils/funnel'
 
 interface Dog {
   id: string
@@ -500,6 +567,8 @@ interface Dog {
 interface Recipe {
   id: string
   name: string
+  /** 一句话卖点（AI 生成 + 人工确认的合规文案） */
+  sellingPoint?: string
   selectedLifeStage?: string
   selectedLifeStageLabel?: string
   selectedRecipeId?: string
@@ -521,12 +590,6 @@ interface RecipeLifeStageVersion {
   selected?: boolean
 }
 
-interface Breed {
-  id: string
-  name: string
-  adultAgeMonths: number
-  seniorAgeYears?: number
-}
 
 interface CalcResult {
   rer?: number
@@ -571,7 +634,7 @@ interface PricePreview {
 
 interface ProductExplanationCard {
   title: string
-  mediaKind: 'plain' | 'image' | 'video' | 'logistics' | 'storage' | 'cooking'
+  mediaKind: 'plain' | 'image' | 'video' | 'storage' | 'cooking'
   mediaLabel?: string
   packageImageUrl?: string
   shippingLogoUrl?: string
@@ -616,6 +679,10 @@ interface IngredientDisplayRow {
   purchaseChannelText: string
   brandText: string
   productModelText: string
+  /** 原料类型，用于排序时把食材与补剂分开（两者单位不同，不混排） */
+  rawType: string
+  /** 排序用的数值：食材是克重，补剂是粒/片/平勺数量 */
+  sortAmount: number
 }
 
 interface PackagingPerPackConsumables {
@@ -683,7 +750,6 @@ const recipe = ref<Recipe>({
 const lifeStageDropdownVisible = ref(false)
 
 const dogs = ref<Dog[]>([])
-const breeds = ref<Breed[]>([])
 const selectedDogId = ref('')
 const selectedCycleDays = ref<number | null>(DEFAULT_ORDER_CYCLE_DAYS)
 const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
@@ -800,15 +866,36 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 const selectedDog = computed(() => {
   return dogs.value.find(d => d.id === selectedDogId.value)
 })
-const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
-const selectedDogRecipeLifeStage = computed(() =>
-  resolveDogRecipeLifeStage(selectedDog.value, breeds.value),
+/**
+ * 生命阶段匹配结论 —— **由后端给出**。
+ *
+ * 2026-09-19：此前这里用 resolveDogRecipeLifeStage 在前端自己算，
+ * 与后端口径不一致（认不出混血犬的体型），算不出时还会被当成"匹配"静默放行。
+ * 现在改为向后端索取结论，前端只负责展示。
+ */
+const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
+
+/**
+ * 是否"没能拿到后端结论"（网络/服务异常）。
+ * 这种情况**绝不能静默放行** —— 那正是本次重构要消灭的问题；
+ * 但也不该误报成"不匹配"，所以单独用一个中性提示。
+ */
+const lifeStageCheckFailed = ref(false)
+
+/** 狗狗需要的食谱生命阶段（后端算出来的），用于推荐"切换到 XX" */
+const selectedDogRecipeLifeStage = computed(
+  () => lifeStageVerdict.value?.dogLifeStage || '',
 )
-const lifeStageReminderText = computed(() => buildLifeStageReminderText({
-  applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogRecipeLifeStage.value,
-  dogName: selectedDog.value?.name,
-}))
+
+const lifeStageReminderText = computed(() => {
+  // 后端给了说明就用后端的（口径一致）
+  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
+  return buildLifeStageReminderText({
+    applicableStages: recipe.value.applicableLifeStages || [],
+    dogLifeStage: selectedDogRecipeLifeStage.value,
+    dogName: selectedDog.value?.name,
+  })
+})
 
 const normalizedPackagePlan = computed(() =>
   packagePlan.value.map(row => normalizePackagePlanRow(row))
@@ -861,7 +948,6 @@ const dogsLoadFailed = ref(false)
 async function retryPageLoad() {
   pageLoadError.value = ''
   dogsLoadFailed.value = false
-  await loadBreeds()
   await loadRecipeDetail()
   await loadDogs()
 }
@@ -933,6 +1019,9 @@ const packagePlanInlineSummaryText = computed(() => {
   ))
   const specText = specs.length > 0 ? specs.join('、') : '-'
 
+  // 只讲这一单的物理规格（每袋多少 / 共几袋 / 总净重），不再重复"可吃几天"：
+  // 默认分装时天数就是顾客刚选的数字，是回声；自定义分装时也没必要再算一遍，
+  // 底栏已经有"每餐约¥X"这个真正对决策有用的数字。
   return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
 })
 
@@ -957,6 +1046,13 @@ const bottomPricePerPackageText = computed(() => {
   if (!minimumOrderMet.value) return `当前 ${Math.round(totalGrams.value)}g，暂不可下单`
   if (pricePreviewError.value) return '请稍后重试或切换分装/采购方案'
   if (!pricePreview.value || totalPackages.value <= 0) return '等待价格生成'
+
+  // 默认分装下「1 袋 = 1 顿」（袋数 = 餐次 × 天数），所以按"每餐"讲比按"每袋"讲更直观，
+  // 也是从首页「¥X/100g」到整单总价之间的那次换算。
+  if (!isCustomPackagePlan.value && isSinglePackageSpec.value) {
+    return `每餐约 ¥${averagePricePerPackage.value.toFixed(2)}`
+  }
+
   if (isSinglePackageSpec.value) {
     return `¥${averagePricePerPackage.value.toFixed(2)}/袋`
   }
@@ -1001,6 +1097,8 @@ const displayIngredients = computed(() => {
 const displayIngredientRows = computed<IngredientDisplayRow[]>(() => {
   return displayIngredients.value.map((ingredient, index) => ({
     key: `ingredient-${index}`,
+    rawType: ingredient.type,
+    sortAmount: ingredient.netAmount ?? ingredient.amount ?? 0,
     typeLabel: getIngredientTypeLabel(ingredient.type),
     typeClass: getIngredientTypeClass(ingredient.type),
     nameText: buildIngredientDisplayName(ingredient),
@@ -1019,6 +1117,52 @@ function getIngredientTypeLabel(type: string): string {
 
 function getIngredientTypeClass(type: string): string {
   return type === 'SUPPLEMENT' ? 'supplement' : 'food'
+}
+
+/**
+ * 原料明细默认折叠到前几项：完整清单可能有 15-20 项（含 10 种以上补剂），
+ * 一次性铺开会把"这一单里有什么"这个主线淹没。默认只看主料，其余按需展开。
+ */
+/**
+ * 「交付与保障」配图。
+ * 当前为 AI 生成的占位图，后续可替换为现场实拍（改这里一处即可）。
+ */
+const DELIVERY_IMAGE_MAKING = '/static/delivery/making.jpg'
+const DELIVERY_IMAGE_COLD_CHAIN = '/static/delivery/cold-chain.jpg'
+
+const INGREDIENT_VISIBLE_COUNT = 5
+const showAllIngredients = ref(false)
+
+/**
+ * 排序：食材在前、按克重从大到小；补剂在后、按数量从大到小。
+ *
+ * 为什么不混在一起排：食材的单位是克、补剂是粒/片/平勺，
+ * 数值直接比较没有意义（2g 的盐不该排在 5 粒胶囊前面）。
+ * 分组后"用量最大"在每个组内都是成立的。
+ */
+const sortedIngredientRows = computed<IngredientDisplayRow[]>(() => {
+  const rows = displayIngredientRows.value
+  const byAmountDesc = (a: IngredientDisplayRow, b: IngredientDisplayRow) =>
+    b.sortAmount - a.sortAmount
+  return [
+    ...rows.filter((row) => row.rawType === 'FOOD').sort(byAmountDesc),
+    ...rows.filter((row) => row.rawType !== 'FOOD').sort(byAmountDesc),
+  ]
+})
+
+const visibleIngredientRows = computed<IngredientDisplayRow[]>(() =>
+  showAllIngredients.value
+    ? sortedIngredientRows.value
+    : sortedIngredientRows.value.slice(0, INGREDIENT_VISIBLE_COUNT),
+)
+
+/** 被折叠起来的项数；为 0 时不显示展开按钮 */
+const hiddenIngredientCount = computed(() =>
+  Math.max(0, sortedIngredientRows.value.length - INGREDIENT_VISIBLE_COUNT),
+)
+
+function toggleAllIngredients() {
+  showAllIngredients.value = !showAllIngredients.value
 }
 
 function formatIngredientAmount(ingredient: IngredientCostItem): string {
@@ -1085,11 +1229,25 @@ onMounted(async () => {
 
   if (recipeId.value) {
     // 必须先加载品种数据，因为狗狗生命阶段计算需要品种信息
-    await loadBreeds()
     await loadHealthTagMapping()  // 加载健康标签映射
     await loadRecipeDetail()
     await loadDogs()
   }
+
+  // 漏斗：订购页到达（漏斗第 5 步）
+  // 同时记录"是否已有狗狗档案"——这是进入本页后最大的分流点
+  trackFunnelEvent({
+    eventName: 'order_page_view',
+    step: 'order_page',
+    recipeId: recipeId.value,
+    dogId: selectedDogId.value,
+    entrySource: autoConfigParams.value ? 'buy_again' : 'detail',
+    properties: {
+      dogCount: dogs.value.length,
+      hasDogProfile: dogs.value.length > 0,
+      dogsLoadFailed: dogsLoadFailed.value,
+    },
+  })
 })
 
 onUnmounted(() => {
@@ -1147,27 +1305,6 @@ function handleProductExplanationShippingLogoError() {
   }
 }
 
-async function loadBreeds() {
-  console.log('[RecipeOrder] loadBreeds 开始')
-
-  try {
-    const res = await request({
-      url: '/dogs/breeds',
-      method: 'GET'
-    })
-
-    console.log('[RecipeOrder] loadBreeds API响应:', res)
-
-    if (res.code === 0 && res.data) {
-      breeds.value = res.data
-      console.log('[RecipeOrder] 品种列表加载成功, 数量:', res.data.length)
-    }
-  } catch (error) {
-    console.error('[RecipeOrder] Load breeds error:', error)
-  }
-
-  console.log('[RecipeOrder] loadBreeds 结束')
-}
 
 async function loadHealthTagMapping() {
   try {
@@ -1246,7 +1383,7 @@ async function selectLifeStageVersion(option: { recipeId?: string; lifeStage: st
   packagePlanDogId.value = null
 
   await loadRecipeDetail()
-  checkLifeStageMatch()
+  void checkLifeStageMatch()
   if (selectedDogId.value) {
     loadDogCalcResult(selectedDogId.value)
   }
@@ -1287,46 +1424,41 @@ async function loadDogs() {
 
 // ========== 生命阶段校验逻辑 ==========
 
-function checkLifeStageMatch() {
-  console.log('[RecipeOrder] checkLifeStageMatch 开始')
-
-  if (!selectedDog.value || !recipe.value) {
-    console.log('[RecipeOrder] 缺少必要数据，跳过校验')
+/**
+ * 生命阶段校验 —— 向后端索取结论，前端不再自己算。
+ *
+ * 请求失败时**不静默放行**：把 isLifeStageMatch 置为 false 会让顾客看到提醒，
+ * 但提示文案会说明是"无法确认"，避免"该提醒时不提醒"。
+ */
+async function checkLifeStageMatch() {
+  const dogId = selectedDog.value?.id
+  if (!dogId || !recipe.value) {
+    lifeStageVerdict.value = null
+    lifeStageCheckFailed.value = false
     isLifeStageMatch.value = true
     return
   }
 
-  const dogLifeStage = selectedDogLifeStage.value
-  const dogRecipeLifeStage = selectedDogRecipeLifeStage.value
-  const applicableStages = recipe.value.applicableLifeStages || []
-
-  // 详细调试日志
-  console.log('[RecipeOrder] 生命阶段校验详情:', {
-    '狗狗名字': selectedDog.value.name,
-    '狗狗生日': selectedDog.value.birthday,
-    '狗狗品种ID': selectedDog.value.breedId,
-    '生命阶段覆盖值': selectedDog.value.lifeStageOverride,
-    '计算的狗狗生命阶段': dogLifeStage,
-    '食谱匹配生命阶段': dogRecipeLifeStage,
-    '食谱适用生命阶段': applicableStages,
-    '食谱名称': recipe.value.name,
-    '检查结果': isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage),
-    'breeds列表长度': breeds.value.length,
-    'breeds列表': breeds.value.map(b => ({ id: b.id, name: b.name, adultAgeMonths: b.adultAgeMonths }))
+  const verdict = await fetchLifeStageMatch({
+    recipeId: recipeId.value,
+    dogId,
+    lifeStage: selectedLifeStage.value || undefined,
   })
 
-  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage)
-  console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
+  lifeStageVerdict.value = verdict
 
+  if (!verdict) {
+    // 拿不到结论：不假装匹配，也不要误报不匹配 → 走中性提示
+    lifeStageCheckFailed.value = true
+    isLifeStageMatch.value = true
+    return
+  }
+
+  lifeStageCheckFailed.value = false
+
+  isLifeStageMatch.value = !isLifeStageMismatch(verdict.matchType)
   // 每次切换狗狗时重置警告状态
   showWarning.value = true
-
-  console.log('[RecipeOrder] 警告卡片显示条件:', {
-    '!isLifeStageMatch': !isLifeStageMatch.value,
-    'selectedDog': !!selectedDog.value,
-    'showWarning': showWarning.value,
-    '应该显示警告': !isLifeStageMatch.value && selectedDog.value && showWarning.value
-  })
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {
@@ -1423,7 +1555,7 @@ function selectDog(dogId: string) {
   pricePreviewError.value = ''
   resetPricePreviewState()
   loadDogCalcResult(dogId)
-  checkLifeStageMatch()  // 校验生命阶段
+  void checkLifeStageMatch()  // 生命阶段结论由后端给出
 }
 
 async function loadDogCalcResult(dogId: string) {
@@ -1700,6 +1832,21 @@ async function loadPricePreview() {
       // ✅ 保存快照ID
       pricingSnapshotId.value = res.data.snapshotId || null
       console.log('[Price Preview] Snapshot ID:', pricingSnapshotId.value)
+
+      // 漏斗：出价成功（漏斗第 6 步，也是本页真正产生说服力的时刻）
+      trackFunnelEvent({
+        eventName: 'price_ready',
+        step: 'price_ready',
+        recipeId: recipeId.value,
+        dogId: selectedDogId.value,
+        properties: {
+          amountTotal: pricePreview.value.amountTotal,
+          totalGrams: Math.round(totalGrams.value),
+          totalPackages: totalPackages.value,
+          cycleDays: selectedCycleDays.value,
+          customPackage: isCustomPackagePlan.value,
+        },
+      })
     } else if (requestSeq === pricingPreviewRequestSeq) {
       pricePreviewError.value = '价格暂未生成'
     }
@@ -1724,21 +1871,21 @@ async function loadPricePreview() {
   }
 }
 
-function buyNow() {
+async function buyNow() {
   if (!canBuyNow.value) return
 
-  if (!isLifeStageMatch.value && showWarning.value) {
-    uni.showModal({
-      title: '生命阶段提醒',
-      content: '当前狗狗生命阶段与食谱适用阶段不一致，仍要继续下单吗？',
-      success: (res) => {
-        if (res.confirm) {
-          showWarning.value = false
-          void continueBuyNow()
-        }
-      }
+  // 生命阶段不匹配：**每次下单都确认一次**，并留痕作为"已明确告知"的凭证。
+  // 不再因为顾客之前点过"我已知晓"就跳过 —— 多提醒一次的成本，
+  // 远低于没提醒到、狗狗吃错粮的风险。
+  if (isLifeStageMismatch(lifeStageVerdict.value?.matchType)) {
+    const confirmed = await confirmLifeStageMismatch({
+      recipeId: recipeId.value,
+      dogId: selectedDog.value?.id || selectedDogId.value || '',
+      verdict: lifeStageVerdict.value,
+      source: 'order',
+      dogName: selectedDog.value?.name,
     })
-    return
+    if (!confirmed) return
   }
 
   void continueBuyNow()
@@ -1805,6 +1952,21 @@ onShow(() => {
 </script>
 
 <style scoped>
+/* 后端结论未取到：既不静默放行，也不误报"不匹配"，给一条中性提示 */
+.life-stage-unknown-note {
+  margin-bottom: 20rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  background-color: #f7f8f2;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+.life-stage-unknown-text {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: var(--sk-ink-2, #6b6653);
+}
+
 /* 营养标准背书卡（与食谱详情页同一展示方式） */
 .standard-card {
   display: flex;
@@ -1984,8 +2146,8 @@ onShow(() => {
 
 /* 警告卡片 */
 .warning-card {
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border: 1rpx solid var(--sk-danger, #b4553f);
   border-radius: 12rpx;
   padding: 20rpx;
   margin-bottom: 20rpx;
@@ -2005,12 +2167,12 @@ onShow(() => {
 .warning-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
 }
 
 .warning-text {
   font-size: 26rpx;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
   line-height: 1.6;
   display: block;
   margin-bottom: 8rpx;
@@ -2020,8 +2182,8 @@ onShow(() => {
   width: 100%;
   margin-top: 16rpx;
   padding: 16rpx;
-  background-color: #b08d4f;
-  color: #f3eddd;
+  background-color: var(--sk-danger, #b4553f);
+  color: #fff;
   border-radius: 8rpx;
   font-size: 28rpx;
   border: none;
@@ -2455,8 +2617,8 @@ onShow(() => {
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 20rpx;
-  background-color: #f6efe0;
-  border: 2rpx solid #b08d4f;
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border: 2rpx solid var(--sk-danger, #b4553f);
   border-radius: 12rpx;
   display: flex;
   align-items: center;
@@ -2469,7 +2631,7 @@ onShow(() => {
 
 .warning-text {
   font-size: 26rpx;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
   line-height: 1.4;
 }
 
@@ -3174,11 +3336,116 @@ onShow(() => {
   text-align: center;
 }
 
+/* 一句话卖点：与食谱详情页保持同一视觉语言 */
+.recipe-selling-point {
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  background: rgba(176, 141, 79, 0.08);
+  border-left: 6rpx solid #b08d4f;
+  border-radius: 10rpx;
+}
+
+.recipe-selling-point-text {
+  font-size: 26rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+/* 交付与保障板块 */
+/* ===== 交付与保障 ===== */
+
+/* 保障：本板块的核心价值，做视觉突出（与"采购标准""营养标准"同一套金色语言） */
+.guarantee-highlight {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4rpx;
+  padding: 22rpx 24rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 14rpx;
+}
+
+.guarantee-highlight-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.guarantee-highlight-badge {
+  flex: none;
+  width: 34rpx;
+  height: 34rpx;
+  margin-right: 14rpx;
+  border-radius: 50%;
+  background: #b08d4f;
+  color: #fdf8ee;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 34rpx;
+}
+
+.guarantee-highlight-title {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.guarantee-highlight-line {
+  padding-left: 48rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.guarantee-highlight-line--strong {
+  margin-top: 4rpx;
+  font-weight: 700;
+  color: #a9843e;
+}
+
+/* 交付流程卡（预约制作 / 冷链履约）：通栏配图 + 图下标题与说明 */
+.delivery-step-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16rpx;
+  padding: 22rpx;
+  border-radius: 14rpx;
+  background-color: #eef2e4;
+  border: 1rpx solid #e5e8d4;
+}
+
+.delivery-step-image {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 10rpx;
+  background-color: #dfe5d0;
+}
+
+.delivery-step-body {
+  display: flex;
+  flex-direction: column;
+  margin-top: 18rpx;
+}
+
+.delivery-step-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.delivery-step-desc {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
 .hero-meta-row,
 .hero-dog-card,
 .package-preview-row,
-.source-plan-card,
-.logistics-item {
+.source-plan-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3227,7 +3494,6 @@ onShow(() => {
 .section-note,
 .ingredient-summary-meta,
 .product-explanation-point,
-.logistics-copy,
 .hero-dog-hint,
 .calc-line {
   font-size: 24rpx;
@@ -3237,8 +3503,7 @@ onShow(() => {
 
 .hero-dog-value,
 .ingredient-summary-title,
-.product-explanation-title,
-.logistics-title {
+.product-explanation-title {
   font-size: 28rpx;
   color: #26261f;
   font-weight: 700;
@@ -3472,6 +3737,8 @@ onShow(() => {
 }
 
 .feeding-adjustment-note {
+  display: flex;
+  flex-direction: column;
   padding: 16rpx 18rpx;
   border-radius: 8rpx;
   background-color: #eef2e4;
@@ -3479,6 +3746,18 @@ onShow(() => {
   font-size: 24rpx;
   line-height: 1.6;
   color: #26261f;
+}
+
+.feeding-adjustment-line {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #26261f;
+}
+
+/* 最后一行是建议，和上面三步的计算说明分开一点 */
+.feeding-adjustment-line--tip {
+  margin-top: 10rpx;
+  color: #6b6653;
 }
 
 .calculation-explanation {
@@ -3669,29 +3948,29 @@ onShow(() => {
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 18rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border: 1rpx solid var(--sk-danger, #b4553f);
   border-radius: 8rpx;
 }
 
 .warning-card {
   margin: 0 0 20rpx;
   padding: 24rpx 28rpx;
-  background-color: #f6efe0;
+  background-color: var(--sk-danger-soft, #f7e9e3);
   border-left: 6rpx solid #b08d4f;
 }
 
 .warning-title {
   font-size: 30rpx;
   font-weight: 800;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
 }
 
 .warning-text {
   display: block;
   margin-bottom: 12rpx;
   font-size: 26rpx;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
   line-height: 1.5;
 }
 
@@ -3719,8 +3998,8 @@ onShow(() => {
 }
 
 .btn-continue {
-  background-color: #b08d4f;
-  color: #f3eddd;
+  background-color: var(--sk-danger, #b4553f);
+  color: #fff;
 }
 
 .btn-secondary-full {
@@ -3984,25 +4263,108 @@ onShow(() => {
   word-break: break-all;
 }
 
+/* ===== 采购标准 Banner ===== */
+.sourcing-standard-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 18rpx;
+  padding: 20rpx 22rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 14rpx;
+}
+
+.sourcing-standard-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.sourcing-standard-badge {
+  padding: 3rpx 12rpx;
+  border-radius: 6rpx;
+  background: #b08d4f;
+  color: #fdf8ee;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.sourcing-standard-line {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6b6653;
+}
+
+.sourcing-standard-line--sub {
+  margin-top: 4rpx;
+  color: #968f6d;
+}
+
+/* ===== 原料明细：展开 / 收起 ===== */
+.ingredient-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  margin-top: 20rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid #eef1e2;
+}
+
+.ingredient-toggle-text {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.ingredient-toggle-arrow {
+  font-size: 20rpx;
+  color: #1e3a2f;
+  transition: transform 0.2s ease;
+}
+
+.ingredient-toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+/*
+ * 原料明细的渠道 / 品牌 / 规格
+ *
+ * 排版逻辑：靠"分块"区分字段，而不是靠字色或字重。
+ *   · 每个字段是一个独立的浅底圆角小块 → 一眼能看出这是三个不同的字段；
+ *   · 块内「字段名 + 内容」用**完全相同的字体、字号、颜色**，读起来是一个整体
+ *     （"渠道 天猫旗舰店"），不制造额外的视觉层级。
+ *   · 内容较长时（如采购规格）块内自然换行，不会把相邻字段挤乱。
+ */
 .ingredient-meta-row {
   display: flex;
   flex-wrap: wrap;
-  column-gap: 18rpx;
-  row-gap: 6rpx;
-  margin-top: 10rpx;
-  color: #6b6653;
-  line-height: 1.42;
+  gap: 10rpx;
+  margin-top: 12rpx;
 }
 
 .ingredient-meta-item {
-  font-size: 23rpx;
-  white-space: normal;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6rpx;
+  max-width: 100%;
+  padding: 5rpx 12rpx;
+  border-radius: 8rpx;
+  background-color: #f4f6ec;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #6b6653;
   word-break: break-all;
 }
 
-.ingredient-meta-label {
-  color: #6b6653;
-  margin-right: 6rpx;
+/* 字段名与内容同款：不靠颜色 / 字号 / 字重区分，避免"标签比内容淡"的老问题 */
+.ingredient-meta-label,
+.ingredient-meta-value {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .ingredient-amount {
@@ -4030,20 +4392,11 @@ onShow(() => {
   border: 1rpx solid #e5e8d4;
 }
 
-.product-explanation-logistics-card {
-  flex-direction: column;
-  gap: 14rpx;
-}
-
 .product-explanation-storage-card,
 .product-explanation-cooking-card,
 .product-explanation-plain-card {
   flex-direction: column;
   gap: 14rpx;
-}
-
-.product-explanation-logistics-title {
-  margin-bottom: 0;
 }
 
 .product-explanation-storage-note {
@@ -4229,92 +4582,6 @@ onShow(() => {
   height: 72rpx;
   border-radius: 8rpx;
   background-color: #eef2e4;
-}
-
-.product-explanation-logistics-visual {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  padding: 16rpx;
-  border-radius: 8rpx;
-  background: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
-}
-
-.product-explanation-package-frame {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #e5e8d4;
-}
-
-.product-explanation-logistics-package-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 8rpx;
-}
-
-.product-explanation-shipping-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 12rpx 14rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #eef1e2;
-}
-
-.product-explanation-shipping-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-}
-
-.product-explanation-shipping-logo-large {
-  width: 112rpx;
-  height: 42rpx;
-  flex: 0 0 112rpx;
-}
-
-.product-explanation-shipping-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.product-explanation-shipping-title,
-.product-explanation-shipping-subtitle {
-  display: block;
-  line-height: 1.35;
-}
-
-.product-explanation-shipping-title {
-  font-size: 26rpx;
-  font-weight: 800;
-  color: #26261f;
-}
-
-.product-explanation-shipping-subtitle {
-  margin-top: 2rpx;
-  font-size: 22rpx;
-  color: #6b6653;
-}
-
-.product-explanation-shipping-pill {
-  margin-left: auto;
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  background-color: #eef2e4;
-  color: #b08d4f;
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
 }
 
 .product-explanation-shipping-company {

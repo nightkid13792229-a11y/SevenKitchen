@@ -653,7 +653,48 @@
         </view>
       </view>
 
-      <!-- 售后服务（付款后到完成前后均可申请） -->
+      <!--
+        ① 取消订单：仅"已付款"（尚未进入采购）阶段。
+        此时我们还没为这一单产生任何成本，顾客可以随时整单取消、全额退款。
+      -->
+      <view
+        class="section cancel-order-section"
+        v-if="canCancelOrder(order.status)"
+      >
+        <view class="section-title">取消订单</view>
+        <text class="section-note">
+          订单尚未进入采购，现在取消不产生任何费用，将全额原路退回。
+        </text>
+        <view class="aftersale-buttons">
+          <button
+            class="btn-aftersale"
+            @tap="applyAftersaleType('REFUND')"
+          >
+            <text class="btn-text">取消订单</text>
+          </button>
+        </view>
+      </view>
+
+      <!--
+        ② 锁定期（采购中/生产中/急冻中）：已开始为这一单投入，
+        不再提供自助取消或退款，改为引导联系客服。
+        投诉建议仍然保留在下方板块里。
+      -->
+      <view
+        class="section aftersale-locked-section"
+        v-else-if="isAftersaleLocked(order.status)"
+      >
+        <view class="section-title">需要修改或取消？</view>
+        <text class="section-note">
+          订单已进入采购与制作，食材按您的预约单独采买，无法自助取消。
+          如有特殊情况请联系客服协助。
+        </text>
+        <button class="btn-aftersale" @tap="contactService">
+          <text class="btn-text">联系客服</text>
+        </button>
+      </view>
+
+      <!-- ③ 售后服务：已发货 / 已完成（破损、变质等品质问题） -->
       <view
         class="section aftersale-section"
         v-if="canApplyAftersale(order.status, order.completedAt)"
@@ -915,20 +956,29 @@
         </button>
       </view>
 
-      <!-- 生产中状态 (合并PAID和IN_PRODUCTION) -->
-      <view
-        v-else-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'"
-        class="action-buttons"
-      >
-        <!-- 移除联系客服按钮 -->
-      </view>
-
-      <!-- 急冻中状态 -->
-      <view v-else-if="order.status === 'FREEZING'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="applyAftersale">
-          申请售后
+      <!-- 已付款（尚未进入采购）：可整单取消、全额退款 -->
+      <view v-else-if="order.status === 'PAID'" class="action-buttons">
+        <button
+          class="btn-action btn-secondary"
+          @tap="applyAftersaleType('REFUND')"
+        >
+          取消订单
         </button>
       </view>
+
+      <!--
+        锁定期（采购中 / 生产中 / 急冻中）：
+        已开始为这一单投入，不提供自助取消或退款。
+        页面中部的「需要修改或取消？」板块会引导顾客联系客服。
+      -->
+      <view
+        v-else-if="
+          order.status === 'PURCHASING' ||
+          order.status === 'IN_PRODUCTION' ||
+          order.status === 'FREEZING'
+        "
+        class="action-buttons"
+      ></view>
 
       <!-- 已发货状态 -->
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
@@ -988,7 +1038,6 @@ import { normalizeImageUrl } from '../../utils/config';
 import { formatDateTime } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
-import { ensurePhoneBound } from '../../utils/account';
 import { openCustomerServiceChat } from '../../utils/customer-service';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
 import {
@@ -997,6 +1046,8 @@ import {
   canApplyRemake,
   canApplyComplaint,
   canApplyAftersale,
+  canCancelOrder,
+  isAftersaleLocked,
 } from '../../utils/order-aftersale';
 import {
   getSourcePlanLabel,
@@ -1673,10 +1724,6 @@ function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
 }
 
 onMounted(async () => {
-  if (!(await ensurePhoneBound())) {
-    return;
-  }
-
   // 注册地址选择监听（仅一次；onUnmounted 时移除，避免重复注册导致多笔订单地址串改）
   uni.$on('address-selected', handleAddressSelected);
 
@@ -4342,6 +4389,20 @@ async function applyRefund() {
 }
 
 /* 售后服务 */
+.cancel-order-section .section-note,
+.aftersale-locked-section .section-note {
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.aftersale-locked-section .btn-aftersale {
+  background-color: #1e3a2f;
+}
+
+.aftersale-locked-section .btn-text {
+  color: #f7faf5;
+}
+
 .aftersale-section {
   margin-bottom: 20rpx;
 }

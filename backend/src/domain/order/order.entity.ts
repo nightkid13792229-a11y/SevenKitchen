@@ -84,6 +84,11 @@ export class Order {
     public adminRemark: string | null = null,
     public shippingAddressSnapshot: ShippingAddressSnapshot | null = null,
     public orderNo: string | null = null,
+    /**
+     * 本单是"某张订单的重做"时，指向原单 id；正常订单为 null。
+     * 与 remakeOrder（原单反向指向重做单）构成一对自关联。
+     */
+    public remakeFromOrderId: string | null = null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -483,7 +488,22 @@ export class Order {
     reason: string,
     photos: string[] = [],
   ): void {
+    // ===== 2026-09-19 售后窗口重新划分（与小程序 utils/order-aftersale.ts 保持一致）=====
+    //
+    //  ① 取消窗口：已付款（尚未生成采购清单）—— 我们还没为这一单花钱，可整单取消
+    //  ② 锁定期  ：采购中 / 生产中 / 急冻中 —— 已开始投入，不支持退款或重做
+    //  ③ 售后窗口：已发货 / 已完成 —— 真正的售后服务（质量问题退款/重做）
+    //
+    // 投诉建议全程保留：与订单进度无关，且关闭该渠道会把顾客推向平台投诉。
+    // PAID 也要允许 REFUND：窗口① 的「取消订单」走的正是这条链路，
+    // 只是对顾客呈现为"取消订单"而非"申请退款"。去掉它会让取消功能直接失效。
     const refundStatuses = [
+      OrderStatus.PAID,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+    ];
+    const remakeStatuses = [OrderStatus.SHIPPED, OrderStatus.COMPLETED];
+    const complaintStatuses = [
       OrderStatus.PAID,
       OrderStatus.PURCHASING,
       OrderStatus.IN_PRODUCTION,
@@ -491,12 +511,6 @@ export class Order {
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
     ];
-    const remakeStatuses = [
-      OrderStatus.FREEZING,
-      OrderStatus.SHIPPED,
-      OrderStatus.COMPLETED,
-    ];
-    const complaintStatuses = refundStatuses;
     const allowedStatuses =
       type === AftersaleType.REMAKE
         ? remakeStatuses
@@ -512,6 +526,27 @@ export class Order {
 
     if (!reason || !reason.trim()) {
       throw new ValidationError('Aftersale reason is required');
+    }
+
+    // 已完成订单的售后时效：收货后 7 天内可申请退款/重做（投诉不受限）。
+    //
+    // 这条规则原先只存在于小程序端（utils/order-aftersale.ts），
+    // 后端没有对应校验 —— 绕过小程序直接调接口即可无限期申请退款。
+    // 现在在领域层补上，保证前后端口径一致、且无法被绕过。
+    if (
+      this.status === OrderStatus.COMPLETED &&
+      type !== AftersaleType.COMPLAINT
+    ) {
+      const completedAtMs = this.completedAt?.getTime();
+      if (
+        typeof completedAtMs === 'number' &&
+        Number.isFinite(completedAtMs) &&
+        Date.now() - completedAtMs > COMPLETED_AFTERSALE_WINDOW_MS
+      ) {
+        throw new ValidationError(
+          '订单确认收货已超过 7 天，无法申请退款或重做；如有问题可提交投诉建议。',
+        );
+      }
     }
 
     this.aftersaleType = type;
@@ -685,3 +720,9 @@ export class Order {
     this.adminRemark = normalized;
   }
 }
+
+/**
+ * 已完成订单的售后时效：收货后 7 天内可申请退款 / 重做。
+ * 与小程序端 `utils/order-aftersale.ts` 的 COMPLETED_AFTERSALE_WINDOW_MS 保持一致。
+ */
+export const COMPLETED_AFTERSALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

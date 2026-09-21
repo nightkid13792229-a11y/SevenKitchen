@@ -7,7 +7,6 @@
 <script setup lang="ts">
 import { onLaunch, onShow } from "@dcloudio/uni-app";
 import { getToken, markTokenReady } from "./utils/api";
-import { promptPhoneBindingIfNeeded } from "./utils/account";
 import { setBaseUrl } from "./utils/config";
 import { migrateLegacyDevBaseUrl } from "./utils/runtime-base-url";
 
@@ -106,9 +105,10 @@ onLaunch(() => {
 onShow(() => {
   navigateCustomerServicePendingTarget();
 
-  setTimeout(() => {
-    promptPhoneBindingIfNeeded();
-  }, 500);
+  // 这里原本会调用 promptPhoneBindingIfNeeded()：任何页面、每次从后台切回小程序，
+  // 都会强制弹出手机号绑定（且不允许取消）。但手机号在下单与支付中都不是必需的
+  // （微信支付靠账号身份取 openid，物流面单用收货地址里的收货人电话），
+  // 因此改为「只在真正需要的那一刻」按需强制，见结算页提交订单时。
 });
 </script>
 

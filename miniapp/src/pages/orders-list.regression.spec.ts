@@ -64,8 +64,9 @@ describe('orders list repurchase action contract', () => {
     expect(mpWeixinConfirmReceiptSource).not.toContain("return { skipped: true, status: 'success' };");
   });
 
-  it('uses the shared aftersale eligibility rule with completedAt for the 7-day lock', () => {
-    expect(source).toContain('canApplyAftersale(order.status, order.completedAt)');
+  it('labels the aftersale entry by stage and keeps using the shared rule with completedAt', () => {
+    // 入口文案随阶段变化：已付款→取消订单 / 已发货·已完成→申请售后 / 锁定期→投诉建议
+    expect(source).toContain('getAftersaleEntryLabel(order.status, order.completedAt)');
     // 列表页不再写死 FREEZING/SHIPPED/COMPLETED，统一走共享规则
     expect(source).not.toContain("return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)");
     // 列表项类型补齐 completedAt，用于"已完成 7 天后退款/重做锁定"

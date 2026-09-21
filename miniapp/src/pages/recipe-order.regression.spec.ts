@@ -84,7 +84,9 @@ describe('recipe-order phase one UI contract', () => {
     const sectionOrder = [
       'recipe-life-stage-picker',
       'dog-profile-context',
-      '饭量设置',
+      '快速选择备餐天数',
+      '原料明细',
+      '交付与保障',
       '>说明<',
       'bottom-bar',
     ];
@@ -318,7 +320,16 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('@tap="showIngredientDetail(ingredient)"');
     expect(templateSource).not.toContain('ingredient-name-button');
     expect(templateSource).not.toContain('ingredient-name-arrow');
-    expect(templateSource).toContain('v-for="ingredient in displayIngredientRows"');
+    // 2026-09-19：默认折叠为用量最大的 5 项，其余按需展开
+    expect(templateSource).toContain('v-for="ingredient in visibleIngredientRows"');
+    expect(source).toContain('const INGREDIENT_VISIBLE_COUNT = 5');
+    expect(source).toContain('const sortedIngredientRows = computed');
+    expect(source).toContain('const visibleIngredientRows = computed');
+    expect(source).toContain('const hiddenIngredientCount = computed');
+    expect(templateSource).toContain('展开其余 ${hiddenIngredientCount} 项原料');
+    // 采购标准 Banner
+    expect(templateSource).toContain('sourcing-standard-card');
+    expect(templateSource).toContain('优先采购山姆、盒马、iHerb 等优质渠道');
     expect(templateSource).toContain('ingredient-type-tag');
     expect(templateSource).toContain('{{ ingredient.typeLabel }}');
     expect(templateSource).toContain('ingredient.typeClass');
@@ -357,89 +368,25 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain("规格：${ingredient.productModel || '-'}");
   });
 
-  it('explains product handling, storage, production, and logistics before checkout', () => {
-    expect(templateSource).toContain('product-explanation-media');
-    expect(templateSource).toContain('product-explanation-media-label');
-    expect(templateSource).toContain('product-explanation-logistics-card');
-    expect(templateSource).toContain('product-explanation-logistics-visual');
-    expect(templateSource).toContain('product-explanation-package-frame');
-    expect(templateSource).toContain('product-explanation-package-image');
-    expect(templateSource).toContain('mode="aspectFit"');
-    expect(templateSource).toContain('product-explanation-shipping-row');
-    expect(templateSource).toContain('product-explanation-shipping-main');
-    expect(templateSource).toContain('product-explanation-shipping-copy');
-    expect(templateSource).toContain('product-explanation-shipping-logo');
-    expect(templateSource).toContain('product-explanation-shipping-title');
-    expect(templateSource).toContain('product-explanation-shipping-subtitle');
-    expect(templateSource).toContain('product-explanation-shipping-pill');
+  it('explains storage and cooking, and keeps the removed logistics card out', () => {
+    // 「说明」板块负责使用与存储；交付/物流已归口到「交付与保障」板块
+    // 卡片标题定义在 productExplanationCards（script 内），类名在模板里
+    expect(source).toContain('保质期与存储方式');
+    expect(templateSource).toContain('product-explanation-storage-grid');
+    expect(templateSource).toContain('product-explanation-storage-item');
+    expect(templateSource).toContain('product-explanation-storage-temp');
+    expect(source).toContain('烹饪方法');
     expect(source).toContain('mediaKind');
     expect(source).toContain('mediaLabel');
-    expect(source).toContain('packageImageUrl');
-    expect(source).toContain('shippingLogoUrl');
-    expect(source).toContain('loadProductExplanationMediaConfig');
-    expect(source).toContain("url: '/global-config'");
-    expect(source).toContain('packageExampleImageUrl');
-    expect(source).toContain('shippingCompanyLogoUrl');
-    expect(source).toContain("const DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL = 'https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg'");
-    expect(source).toContain("const DEFAULT_SHIPPING_COMPANY_LOGO_URL = 'https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png'");
-    expect(source).not.toContain('/static/product-explanation/package-example');
-    expect(source).not.toContain('/static/product-explanation/shipping-logo');
-    expect(source).toContain('https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg');
-    expect(source).toContain('https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png');
-    expect(source).toContain('STALE_PRODUCT_EXPLANATION_MEDIA_URLS');
-    expect(source).toContain('isUsableProductExplanationMediaUrl');
-    expect(source).toContain('isUsableProductExplanationMediaUrl(configuredPackageImageUrl)');
-    expect(source).toContain('isUsableProductExplanationMediaUrl(configuredShippingLogoUrl)');
-    expect(source).toContain('packageImageUrl: DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL');
-    expect(source).toContain('shippingLogoUrl: DEFAULT_SHIPPING_COMPANY_LOGO_URL');
-    const localProductExplanationStaticDir = resolve(process.cwd(), 'src/static/product-explanation');
-    expect(
-      existsSync(localProductExplanationStaticDir)
-        ? readdirSync(localProductExplanationStaticDir)
-        : [],
-    ).toEqual([]);
-    expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg')");
-    expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png')");
-    expect(source).not.toContain("title: '分装与物流'");
-    expect(source).not.toContain("title: '当日采购当日制作'");
-    expect(source).toContain('保质期与存储方式');
-    expect(source).toContain('-18℃');
-    expect(source).toContain('冷冻保存');
-    expect(source).toContain('可保存 6 个月');
-    expect(source).toContain('0-4℃');
-    expect(source).toContain('冷藏保存');
-    expect(source).toContain('可保存 3 天');
-    expect(source).toContain('最佳营养保存期');
-    expect(source).toContain('建议 1 个月内吃完，不建议囤货');
-    expect(source).toContain('烹饪方法');
-    expect(source).toContain('蒸');
-    expect(source).toContain('炖');
-    expect(source).toContain('低温慢煮');
-    expect(source).toContain('烹饪时间与重量和体积相关，请参考产品标签');
-    expect(source).toContain('微波');
-    expect(source).toContain('炸');
-    expect(source).toContain('炒');
-    expect(source).toContain('煎');
-    expect(source).toContain('不建议微波、炸、炒、煎等高温烹饪方式');
-    expect(source).toContain('product-explanation-plain-card');
-    expect(source).not.toContain('制作流程');
-    expect(source).not.toContain('保质期、保存方法、烹饪方法');
-    expect(source).not.toContain('保质期：冷冻保存，建议 3 个月内吃完');
-    expect(source).not.toContain('保存方法：收到后请立即冷冻，单袋解冻后尽快喂完');
-    expect(source).not.toContain('烹饪方法：提前冷藏解冻，可隔水温热后喂食');
-    expect(source).not.toContain('成品形态');
-    expect(source).not.toContain('所有食材会按配方处理后打碎，并充分混匀');
-    expect(source.indexOf('保质期与存储方式')).toBeLessThan(source.indexOf('烹饪方法'));
-    expect(source).not.toContain('为什么要把所有原料打碎？');
-    expect(source).not.toContain('减少挑食，避免只挑肉不吃菜或补剂');
-    expect(source).not.toContain('保存和喂食方法');
-    expect(source).not.toContain('按袋真空分装，每袋贴有信息标签');
-    expect(source).not.toContain('使用冷冻包材和冰袋配送，减少运输温度波动');
-    expect(source).not.toContain('明显完全解冻，请拍照后联系客服');
-    expect(source).not.toContain('冷冻满 24 小时后发货');
-    expect(source).not.toContain('具体制作与发货时间以下单确认页为准');
-    expect(templateSource).not.toContain('<view class="section logistics-section">');
-    expect(templateSource).not.toContain('<text class="title-text">分装及物流说明</text>');
+
+    // ⚠️ 物流卡模板已于 2026-09-19 删除：
+    // 它永远不会被渲染（productExplanationCards 只产出 storage / cooking），
+    // 且其内容与「交付与保障」重复。这里反向锁死，避免有人"修复"它造成信息重复。
+    expect(templateSource).not.toContain('product-explanation-logistics-card');
+    expect(templateSource).not.toContain('product-explanation-logistics-visual');
+    expect(templateSource).not.toContain('product-explanation-shipping-row');
+    expect(templateSource).not.toContain('product-explanation-package-frame');
+    expect(source).not.toContain("'logistics'");
   });
 
   it('uses bag-based bottom pricing states instead of daily pricing', () => {
@@ -545,10 +492,26 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('data: SEVEN_DAD_WECHAT_ID');
   });
 
-  it('explains finished-product calorie recommendations as adjustable starting portions', () => {
-    expect(templateSource).toContain('首单起始喂食量');
-    expect(templateSource).toContain('国内城市犬');
-    expect(templateSource).toContain('5%-10%');
+  it('explains how the daily amount is calculated, in plain language', () => {
+    // 2026-09-19：从"首单喂食量说明"改为正面回答"每日饭量是怎么算的"。
+    // 要求：浅显易懂地讲清算法来源（体重/年龄/活动量 → 热量 → 除以每 100g 热量），
+    // 并且必须保留"这是保守估算、需要观察后微调"的提示，不能只说算法。
+    expect(templateSource).toContain('每日饭量是怎么算的');
+    // 不要口语化的引导句（如"很简单，三步："），直接进内容
+    expect(templateSource).not.toContain('很简单');
+
+    // 只针对这段文案本身做检查（整份模板里 'ORDER_CYCLE_OPTIONS' 之类会误命中 'DER'）
+    const noteStart = templateSource.indexOf('每日饭量是怎么算的');
+    const noteEnd = templateSource.indexOf('这是首次喂食的保守估算');
+    const noteSource = templateSource.slice(noteStart, noteEnd + 120);
+    expect(noteSource).toContain('体重、年龄和每天的活动量');
+    expect(noteSource).toContain('每 100g 含的热量');
+    expect(noteSource).toContain('5%-10%');
+    // 不出现学术 / 内部术语
+    expect(noteSource).not.toContain('RER');
+    expect(noteSource).not.toContain('DER');
+    expect(noteSource).not.toContain('代谢能');
+    expect(noteSource).not.toContain('静息能量');
   });
 
   it('shows customer-facing recipe metadata without internal abbreviations or decimals', () => {

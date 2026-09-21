@@ -13,6 +13,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { OrderService } from '../order/order.service';
 import { OrderStatus } from '../../domain';
 import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
+import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
 
 type RuntimePaymentConfig = {
   enabled: boolean;
@@ -89,6 +90,7 @@ export class WechatPaymentService {
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
     private readonly wechatShippingUploadService: WechatShippingUploadService,
+    private readonly supplementOrderService: SupplementOrderService,
   ) {}
 
   async createJsapiPayment(
@@ -251,6 +253,12 @@ export class WechatPaymentService {
     );
 
     const outTradeNo = String(decrypted.out_trade_no || '');
+
+    // 补剂订单用 SP 前缀的订单号作为商户单号，与鲜食订单（32 位十六进制）不会冲突
+    if (outTradeNo.startsWith('SP')) {
+      return this.handleSupplementNotify(decrypted, outTradeNo);
+    }
+
     const orderId = this.fromOutTradeNo(outTradeNo);
     const tradeState = String(decrypted.trade_state || '');
     const transactionId = String(decrypted.transaction_id || '');
@@ -538,6 +546,12 @@ export class WechatPaymentService {
 
     const outTradeNo = String(decrypted.out_trade_no || '');
     const outRefundNo = String(decrypted.out_refund_no || '');
+
+    // 补剂退款单号带 RFSP 前缀，走独立分支
+    if (outRefundNo.startsWith('RFSP')) {
+      return this.handleSupplementRefundNotify(decrypted, outRefundNo);
+    }
+
     const refundStatus = String(decrypted.refund_status || decrypted.status || '');
     const orderId = this.fromOutTradeNo(outTradeNo);
 
@@ -662,6 +676,371 @@ export class WechatPaymentService {
       paymentTimeoutMinutes: config.paymentTimeoutMinutes,
       paymentAutoCloseEnabled: config.autoCloseUnpaid,
     };
+  }
+
+  // ---------------- 补剂订单 · 微信支付 ----------------
+
+  /**
+   * 补剂订单发起微信支付。
+   * 复用与鲜食订单同一套商户配置与签名逻辑，只把商户单号换成 SP 前缀的补剂订单号，
+   * 回调时据此分流，两边互不干扰。
+   */
+  async createSupplementJsapiPayment(
+    orderId: string,
+    customerId: string,
+  ): Promise<WechatPayParams> {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+      include: { user: true },
+    });
+
+    if (!order || order.userId !== customerId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    const paymentWindow = this.buildPaymentWindow(
+      order.createdAt,
+      config.paymentTimeoutMinutes,
+      config.autoCloseUnpaid,
+    );
+
+    const base = {
+      provider: 'WECHAT_PAY' as const,
+      mode: config.mode,
+      orderId,
+      amountTotal: this.toMoneyNumber(order.amountTotal),
+      ...paymentWindow,
+      paymentTimeoutMinutes: config.paymentTimeoutMinutes,
+      autoCloseUnpaid: config.autoCloseUnpaid,
+    };
+
+    if (order.status === 'PAID') {
+      return { ...base, status: order.status, payParams: null, orderInfo: null };
+    }
+
+    if (order.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('当前补剂订单状态不允许发起支付');
+    }
+
+    if (
+      config.autoCloseUnpaid &&
+      paymentWindow.paymentRemainingSeconds !== null &&
+      paymentWindow.paymentRemainingSeconds <= 0
+    ) {
+      await this.supplementOrderService.cancelOrder(orderId, {
+        reason: '支付超时自动取消',
+      });
+      throw new BadRequestException('补剂订单已超过支付时间，已自动关闭');
+    }
+
+    this.assertConfigReady(config);
+
+    const payerOpenid = await this.resolvePayerOpenid(
+      order.userId,
+      config.appId!,
+      order.user?.phone,
+    );
+    if (!payerOpenid) {
+      throw new BadRequestException(
+        '当前账号缺少当前小程序的微信身份，请先在新版小程序重新登录后再支付',
+      );
+    }
+
+    const outTradeNo = order.orderNo;
+    const totalFen = this.toFen(order.amountTotal);
+    const description = `补剂分装小样 ${order.bagCount} 袋`;
+
+    const response = await this.callWechatPay<{
+      prepay_id?: string;
+      message?: string;
+    }>('POST', '/v3/pay/transactions/jsapi', {
+      appid: config.appId,
+      mchid: config.mchId,
+      description,
+      out_trade_no: outTradeNo,
+      notify_url: config.notifyUrl,
+      amount: { total: totalFen, currency: 'CNY' },
+      detail: {
+        goods_detail: [
+          {
+            merchant_goods_id: outTradeNo,
+            goods_name: description,
+            quantity: 1,
+            unit_price: totalFen,
+          },
+        ],
+      },
+      payer: { openid: payerOpenid },
+    }, config);
+
+    if (!response.prepay_id) {
+      throw new BadRequestException('微信支付预下单失败：未返回 prepay_id');
+    }
+
+    const timeStamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = this.createNonce();
+    const packageValue = `prepay_id=${response.prepay_id}`;
+    const paySign = this.sign(
+      `${config.appId}\n${timeStamp}\n${nonceStr}\n${packageValue}\n`,
+      config.privateKeyPem!,
+    );
+
+    return {
+      ...base,
+      status: order.status,
+      orderInfo: null,
+      payParams: {
+        appId: config.appId!,
+        timeStamp,
+        nonceStr,
+        package: packageValue,
+        signType: 'RSA',
+        paySign,
+      },
+    };
+  }
+
+  /**
+   * 主动查询补剂订单的微信支付结果。
+   * 回调可能丢失或延迟，小程序在 requestPayment 成功后调用它做一次兜底同步。
+   */
+  async syncSupplementPayment(
+    orderId: string,
+    customerId: string,
+  ): Promise<{ status: string; paid: boolean; tradeState: string | null }> {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: orderId },
+    });
+    if (!order || order.userId !== customerId) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+
+    if (order.status !== 'PENDING_PAYMENT') {
+      return { status: order.status, paid: order.paymentStatus === 'SUCCESS', tradeState: null };
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    this.assertConfigReady(config);
+
+    const data = await this.callWechatPay<{
+      trade_state?: string;
+      transaction_id?: string;
+      amount?: { total?: number };
+    }>(
+      'GET',
+      `/v3/pay/transactions/out-trade-no/${order.orderNo}?mchid=${config.mchId}`,
+      null,
+      config,
+    );
+
+    const tradeState = String(data.trade_state || '').toUpperCase();
+    if (tradeState !== 'SUCCESS') {
+      return { status: order.status, paid: false, tradeState: tradeState || null };
+    }
+
+    const expectedFen = this.toFen(order.amountTotal);
+    const actualFen = Number(data.amount?.total);
+    if (Number.isFinite(actualFen) && actualFen !== expectedFen) {
+      this.logger.error(
+        `Supplement payment amount mismatch: order=${order.id}, expected=${expectedFen}, actual=${actualFen}`,
+      );
+      throw new BadRequestException('支付金额与订单金额不一致');
+    }
+
+    const updated = await this.supplementOrderService.confirmPaymentFromWechat(
+      order.id,
+      String(data.transaction_id || ''),
+    );
+    return { status: updated.status, paid: true, tradeState };
+  }
+
+  /** 微信支付回调中的补剂订单分支 */
+  private async handleSupplementNotify(
+    decrypted: Record<string, unknown>,
+    outTradeNo: string,
+  ) {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { orderNo: outTradeNo },
+    });
+    if (!order) {
+      throw new NotFoundException(`补剂订单不存在: ${outTradeNo}`);
+    }
+
+    const wechatOrderTotalFen = Number(
+      (decrypted.amount as { total?: number } | undefined)?.total,
+    );
+    const payerTotalFen = Number(
+      (decrypted.amount as { payer_total?: number } | undefined)?.payer_total ??
+        wechatOrderTotalFen,
+    );
+    const expectedFen = this.toFen(order.amountTotal);
+    const verifiedTotalFen = Number.isFinite(wechatOrderTotalFen)
+      ? wechatOrderTotalFen
+      : payerTotalFen;
+
+    if (verifiedTotalFen !== expectedFen) {
+      this.logger.error(
+        `Wechat supplement notify amount mismatch: order=${order.id}, expected=${expectedFen}, total=${verifiedTotalFen}, payer=${payerTotalFen}`,
+      );
+      throw new BadRequestException('支付金额与订单金额不一致');
+    }
+
+    const tradeState = String(decrypted.trade_state || '');
+    if (tradeState !== 'SUCCESS') {
+      this.logger.warn(
+        `Wechat supplement notify ignored: order=${order.id}, tradeState=${tradeState}`,
+      );
+      return { handled: false, tradeState };
+    }
+
+    await this.supplementOrderService.confirmPaymentFromWechat(
+      order.id,
+      String(decrypted.transaction_id || ''),
+    );
+
+    return { handled: true, tradeState };
+  }
+
+  /**
+   * 补剂订单线上退款（微信原路退回）。
+   * 与鲜食订单共用商户配置；退款单号带 RFSP 前缀，回调时据此分流。
+   */
+  async createSupplementRefund(input: {
+    orderId: string;
+    amount?: number;
+    reason: string;
+    adminId?: string | null;
+  }): Promise<{
+    outRefundNo: string | null;
+    refundId: string | null;
+    status: string;
+    amount: number;
+    reused: boolean;
+  }> {
+    const order = await this.prisma.supplementOrder.findUnique({
+      where: { id: input.orderId },
+    });
+    if (!order) {
+      throw new NotFoundException('补剂订单不存在');
+    }
+
+    // 幂等：已成功或处理中的退款直接返回，避免重复打款
+    const currentStatus = String(order.refundStatus || '').toUpperCase();
+    if (currentStatus === 'SUCCESS' || this.isRefundInFlight(order.refundStatus)) {
+      return {
+        outRefundNo: order.refundOutNo,
+        refundId: order.refundId,
+        status: currentStatus,
+        amount: this.toMoneyNumber(order.refundAmount),
+        reused: true,
+      };
+    }
+
+    const isPaid = order.paymentStatus === 'SUCCESS' || Boolean(order.paidAt);
+    if (!isPaid) {
+      throw new BadRequestException('只有已支付的补剂订单可以退款');
+    }
+    if (order.paymentMethod !== 'WECHAT_PAY') {
+      throw new BadRequestException(
+        '该订单不是微信线上支付，请在微信商户后台手工退款，或改用「仅登记售后」',
+      );
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    this.assertConfigReady(config);
+    if (!config.allowRefund) {
+      throw new BadRequestException('线上退款未启用，请先在后台支付配置中开启');
+    }
+
+    const orderAmount = this.toMoneyNumber(order.amountTotal);
+    const refundAmount =
+      input.amount === undefined ? orderAmount : this.toMoneyNumber(input.amount);
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      throw new BadRequestException('退款金额必须大于 0');
+    }
+    if (refundAmount > orderAmount) {
+      throw new BadRequestException('退款金额不能超过订单金额');
+    }
+
+    const reason = (input.reason || '').trim() || '售后退款';
+    const outRefundNo = this.toSupplementOutRefundNo(order.orderNo);
+
+    const response = await this.callWechatPay<{
+      refund_id?: string;
+      status?: string;
+      message?: string;
+    }>(
+      'POST',
+      '/v3/refund/domestic/refunds',
+      {
+        out_trade_no: order.orderNo,
+        out_refund_no: outRefundNo,
+        reason: reason.slice(0, 80),
+        notify_url: config.refundNotifyUrl || config.notifyUrl,
+        amount: {
+          refund: this.toFen(refundAmount),
+          total: this.toFen(orderAmount),
+          currency: 'CNY',
+        },
+      },
+      config,
+    );
+
+    const status = String(response.status || 'PROCESSING').toUpperCase();
+    await this.supplementOrderService.recordRefundRequest(order.id, {
+      outRefundNo,
+      amount: refundAmount,
+      reason,
+      status,
+    });
+
+    return {
+      outRefundNo,
+      refundId: response.refund_id ?? null,
+      status,
+      amount: refundAmount,
+      reused: false,
+    };
+  }
+
+  /** 微信退款回调中的补剂订单分支 */
+  private async handleSupplementRefundNotify(
+    decrypted: Record<string, unknown>,
+    outRefundNo: string,
+  ) {
+    const order = await this.prisma.supplementOrder.findFirst({
+      where: { refundOutNo: outRefundNo },
+    });
+    if (!order) {
+      this.logger.warn(
+        `Wechat supplement refund notify ignored: order not found, outRefundNo=${outRefundNo}`,
+      );
+      return { handled: false, refundStatus: '' };
+    }
+
+    const refundStatus = String(
+      decrypted.refund_status || decrypted.status || '',
+    ).toUpperCase();
+    const successTime = this.parseWechatTime(decrypted.success_time);
+
+    await this.supplementOrderService.applyRefundResult(order.id, {
+      status: refundStatus,
+      refundId: decrypted.refund_id ? String(decrypted.refund_id) : null,
+      successTime,
+    });
+
+    return { handled: true, refundStatus };
+  }
+
+  private toSupplementOutRefundNo(orderNo: string) {
+    const suffix = new Date()
+      .toISOString()
+      .replace(/\D/g, '')
+      .slice(0, 14);
+    const random = randomBytes(2).toString('hex').toUpperCase();
+    const compact = orderNo.replace(/[^0-9A-Za-z]/g, '');
+    return `RFSP${compact}${suffix}${random}`;
   }
 
   private async getRuntimePaymentConfig(): Promise<RuntimePaymentConfig> {

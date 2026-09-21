@@ -1993,7 +1993,10 @@ export class OrderService {
    * Returns all orders for the given customer
    */
   async listOrdersByCustomerId(customerId: string): Promise<Order[]> {
-    return this.orderRepository.findByCustomerId(customerId);
+    const orders = await this.orderRepository.findByCustomerId(customerId);
+    // 售后「免费重做」会生成一张 0 元的内部重做单，顾客侧不展示：
+    // 顾客关心的是"我那一单"（原单），重做进度由原单承载。
+    return orders.filter((order) => !order.remakeFromOrderId);
   }
 
   /**
@@ -2450,7 +2453,71 @@ export class OrderService {
       metadata,
     );
 
+    // 如果本单是"售后重做单"，它的原单也应随之结案，
+    // 否则顾客的订单列表里会永远挂着一张"售后中"。
+    if (savedOrder.remakeFromOrderId) {
+      await this.completeOriginalOrderOfRemake(
+        savedOrder.remakeFromOrderId,
+        actorId,
+        savedOrder,
+      );
+    }
+
     return savedOrder;
+  }
+
+  /**
+   * 重做单完成时，把对应原单结案。
+   *
+   * 原单在安排重做后一直停留在 AFTERSALE（表示"重做进行中"），
+   * 重做单送达并完成后，原单应当随之变成 COMPLETED。
+   * 失败只记日志，不阻断重做单本身的完成流程。
+   */
+  private async completeOriginalOrderOfRemake(
+    originalOrderId: string,
+    actorId?: string | null,
+    remakeOrder?: Order,
+  ): Promise<void> {
+    try {
+      const original = await this.orderRepository.findById(originalOrderId);
+      if (!original) {
+        this.logger.warn(
+          `[Remake] Original order ${originalOrderId} not found when completing remake ${remakeOrder?.orderNo}`,
+        );
+        return;
+      }
+      if (original.status !== OrderStatus.AFTERSALE) {
+        // 已结案或已被取消，不重复处理
+        return;
+      }
+
+      const fromStatus = original.status;
+      original.markAsCompleted();
+      const savedOriginal = await this.orderRepository.save(original);
+
+      await this.logStatusTransition(
+        savedOriginal,
+        fromStatus,
+        OrderStatus.COMPLETED,
+        'system',
+        actorId ?? null,
+        {
+          source: 'REMAKE_COMPLETED',
+          remakeOrderId: remakeOrder?.id,
+          remakeOrderNo: remakeOrder?.orderNo,
+        },
+      );
+
+      this.logger.log(
+        `[Remake] Original order ${savedOriginal.orderNo} (${savedOriginal.id}) completed after remake ${remakeOrder?.orderNo} completed`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[Remake] Failed to complete original order ${originalOrderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /**
@@ -2977,12 +3044,146 @@ export class OrderService {
    * @param actorId ID of the admin/staff performing the action
    * @param adminNote Optional admin note
    */
+  /**
+   * 售后「免费重做」：为原单创建一张 0 元重做单。
+   *
+   * 为什么必须新建一张单，而不是把原单状态改回可生产的状态：
+   *   1) 采购清单只收 PAID 订单（purchasing.service.ts）；
+   *   2) 生产排产只收 PURCHASING 订单（production.service.ts）；
+   *   3) 排产只分配 production_batch_id 为空的条目，而原单条目还挂在上一批上。
+   *   → 原地改状态只会停在"生产中"，永远不产出（静默失败）。
+   *
+   * 新建 0 元单以后，它就是一张普通的 PAID 订单，采购 → 排产 → 发货全流程自动接手；
+   * 同时原单的批次、成本、结算历史完整保留，重做率也能直接统计。
+   */
+  async createRemakeOrderFrom(
+    originalOrderId: string,
+    actorId: string,
+    targetProductionDate: Date,
+  ): Promise<Order> {
+    const original = await this.orderRepository.findById(originalOrderId);
+    if (!original) {
+      throw new NotFoundException(`Order not found: ${originalOrderId}`);
+    }
+    if (original.status !== OrderStatus.AFTERSALE) {
+      throw new BadRequestException('只有售后中的订单可以安排重做');
+    }
+    if (original.aftersaleType !== AftersaleType.REMAKE) {
+      throw new BadRequestException(
+        '该售后申请的类型不是「重做」，请选择对应的处理方式',
+      );
+    }
+    if (!original.items || original.items.length === 0) {
+      throw new BadRequestException('原订单没有可复制的条目，无法安排重做');
+    }
+
+    // 防重复：数据库唯一索引之外，先给出可读的错误提示
+    const existingRemake = await this.prisma.order.findFirst({
+      where: { remakeFromOrderId: originalOrderId },
+      select: { id: true, orderNo: true },
+    });
+    if (existingRemake) {
+      throw new BadRequestException(
+        `该订单已安排过重做（重做单 ${existingRemake.orderNo || existingRemake.id}），请勿重复操作`,
+      );
+    }
+
+    const now = new Date();
+    const remakeOrderId = randomUUID();
+
+    // 复制条目：新条目的 productionBatchId 天然为空，可被正常分配到新批次。
+    // recipeSnapshot 一并复制 —— 重做的语义是"同样的东西再做一份"，
+    // 即使食谱此后改过版本，也要还原原单当时的那一版。
+    const remakeItems = original.items.map(
+      (item) =>
+        new OrderItem(
+          randomUUID(),
+          remakeOrderId,
+          item.dogId ?? null,
+          item.recipeSnapshot,
+          item.quantityG,
+          item.packageCount,
+          item.packageSpecG,
+          item.customRequirements ?? null,
+          item.dailyIntakeG,
+          item.vacuumBagSpec ?? null,
+          null, // productionBatchId：新条目，可被分配
+          null, // allocatedAt
+          item.packagePlan ?? null,
+          item.ingredientSourcePlan ?? null,
+          item.preparationMethod ?? null,
+          item.cookingMethod ?? null,
+        ),
+    );
+
+    const remakeOrder = new Order(
+      remakeOrderId,
+      original.customerId,
+      OrderStatus.PAID, // 从 PAID 进入，才会被采购清单接手
+      original.type,
+      now,
+      targetProductionDate,
+      targetProductionDate,
+      0, // amountProduct
+      0, // amountShipping
+      0, // amountTotal
+      remakeItems,
+      undefined, // totalAmount
+      undefined, // pricingBreakdownSnapshot
+      original.dogId,
+      original.addressId,
+    );
+
+    // 0 元单：状态要与 PAID 自洽，但不产生真实支付流水
+    remakeOrder.paymentStatus = 'SUCCESS';
+    remakeOrder.paidAt = now;
+    remakeOrder.paymentMethod = null;
+    remakeOrder.shippingAddressSnapshot =
+      original.shippingAddressSnapshot ?? null;
+    remakeOrder.remakeFromOrderId = original.id;
+    remakeOrder.adminRemark = `售后重做单（原单 ${
+      original.orderNo || original.id
+    }）`;
+
+    await this.orderRepository.save(remakeOrder);
+
+    await this.logStatusTransition(
+      remakeOrder,
+      OrderStatus.PAID,
+      OrderStatus.PAID,
+      'admin',
+      actorId,
+      {
+        source: 'AFTERSALE_REMAKE',
+        originalOrderId: original.id,
+        originalOrderNo: original.orderNo,
+      },
+    );
+
+    this.logger.log(
+      `[Remake] Created remake order ${remakeOrder.orderNo} (${remakeOrder.id}) for original ${original.orderNo} (${original.id}), targetProductionDate=${targetProductionDate.toISOString()}`,
+    );
+
+    return remakeOrder;
+  }
+
+  /** 管理员未指定制作日时的兜底：次日 */
+  private resolveDefaultRemakeProductionDate(): Date {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const y = tomorrow.getFullYear();
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const d = String(tomorrow.getDate()).padStart(2, '0');
+    return new Date(`${y}-${m}-${d}T00:00:00`);
+  }
+
   async resolveAftersale(
     orderId: string,
     resolutionType: 'refunded' | 'remade' | 'resolved',
     actorId: string,
     adminNote?: string,
     actorRole?: string,
+    targetProductionDate?: Date,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -2993,15 +3194,39 @@ export class OrderService {
       throw new ForbiddenException('退款申请仅管理员可以审核');
     }
 
-    const aftersaleType = order.aftersaleType;
+    // 「重做」不走"改原单状态"这条路，而是新建一张 0 元重做单。
+    // 原单保持 AFTERSALE（顾客在那里看到"重做进行中"），
+    // 待重做单送达并完成后由 completeOrder 自动把原单结案。
+    if (resolutionType === 'remade') {
+      const remakeOrder = await this.createRemakeOrderFrom(
+        orderId,
+        actorId,
+        targetProductionDate ?? this.resolveDefaultRemakeProductionDate(),
+      );
+
+      await this.logStatusTransition(
+        order,
+        order.status,
+        order.status,
+        'admin',
+        actorId,
+        {
+          resolutionType,
+          adminNote,
+          remakeOrderId: remakeOrder.id,
+          remakeOrderNo: remakeOrder.orderNo,
+        },
+      );
+
+      // 把重做单挂到原单上，便于接口层把单号回传给后台
+      (order as any).__remakeOrder = remakeOrder;
+      return order;
+    }
 
     let targetStatus: OrderStatus;
     switch (resolutionType) {
       case 'refunded':
         targetStatus = OrderStatus.CANCELLED;
-        break;
-      case 'remade':
-        targetStatus = OrderStatus.IN_PRODUCTION;
         break;
       case 'resolved':
         targetStatus =

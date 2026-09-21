@@ -183,6 +183,10 @@
           <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
         </view>
 
+        <view class="function-item" @tap="goToSupplementOrders">
+          <text class="function-text">我的补剂订单</text>
+        </view>
+
         <view class="function-item" @tap="goToAddressList">
           <text class="function-text">收货地址</text>
           <text class="function-count">({{ userInfo.addressCount || 0 }}个)</text>
@@ -261,7 +265,6 @@ import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
-import { ensurePhoneBound } from "../../utils/account";
 import {
   applyCustomerTestModeSession,
   getCustomerTestModeState,
@@ -410,7 +413,6 @@ function goToLogin() {
 
 // 跳转狗狗列表
 async function goToDogList() {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: "/pages/dog-profile-list/index",
   });
@@ -430,9 +432,15 @@ function goToAddressList() {
   })
 }
 
+// 跳转我的补剂订单列表
+async function goToSupplementOrders() {
+  uni.navigateTo({
+    url: "/pages/supplement-orders/index",
+  });
+}
+
 // 跳转我的制作单列表
 async function goToDiySheetList() {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: "/pages/diy-sheet-list/index",
   });
@@ -440,28 +448,24 @@ async function goToDiySheetList() {
 
 // 跳转收藏的食谱列表
 async function goToFavoriteRecipes() {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: "/pages/favorite-recipes/index",
   });
 }
 
 async function goToRecipeDesigner() {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: "/pages/recipe-designer/list",
   });
 }
 
 async function goToFeedback() {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: "/pages/feedback-list/index",
   });
 }
 
 async function goToOrders(status = "ALL") {
-  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: `/pages/orders-list/index?status=${encodeURIComponent(status)}`,
   });

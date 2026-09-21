@@ -88,6 +88,13 @@
         <text class="warning-icon">⚠️</text>
         <text class="warning-title">生命阶段提醒</text>
       </view>
+
+        <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
+        <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
+          <text class="life-stage-unknown-text">
+            暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
+          </text>
+        </view>
       <text class="warning-text">
         {{ lifeStageReminderText }}
       </text>
@@ -323,10 +330,11 @@ import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
 import {
   buildLifeStageReminderText,
+  confirmLifeStageMismatch,
+  fetchLifeStageMatch,
   getLifeStageLabel,
-  isRecipeLifeStageMatch,
-  resolveDogLifeStage,
-  resolveDogRecipeLifeStage,
+  isLifeStageMismatch,
+  type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
@@ -382,12 +390,6 @@ interface RecipeLifeStageVersion {
   selected?: boolean
 }
 
-interface Breed {
-  id: string
-  name: string
-  adultAgeMonths: number
-  seniorAgeYears?: number
-}
 
 const recipeId = ref('')
 const shareToken = ref('')
@@ -420,7 +422,6 @@ const recipeFormulaSoftwareLabel = computed(() =>
 )
 
 const dogs = ref<Dog[]>([])
-const breeds = ref<Breed[]>([])
 const selectedDogId = ref<string | null>(null)
 const selectedDog = ref<Dog | null>(null)
 const isGeneratingSheet = ref(false)
@@ -432,15 +433,32 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 // 生命阶段校验
 const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
-const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
-const selectedDogRecipeLifeStage = computed(() =>
-  resolveDogRecipeLifeStage(selectedDog.value, breeds.value),
+/**
+ * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
+ * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
+ */
+const lifeStageVerdict = ref<LifeStageMatchVerdict | null>(null)
+
+/**
+ * 是否"没能拿到后端结论"（网络/服务异常）。
+ * 这种情况**绝不能静默放行** —— 那正是本次重构要消灭的问题；
+ * 但也不该误报成"不匹配"，所以单独用一个中性提示。
+ */
+const lifeStageCheckFailed = ref(false)
+
+/** 狗狗需要的食谱生命阶段（后端算出来的） */
+const selectedDogRecipeLifeStage = computed(
+  () => lifeStageVerdict.value?.dogLifeStage || '',
 )
-const lifeStageReminderText = computed(() => buildLifeStageReminderText({
-  applicableStages: recipe.value.applicableLifeStages,
-  dogLifeStage: selectedDogRecipeLifeStage.value,
-  dogName: selectedDog.value?.name,
-}))
+
+const lifeStageReminderText = computed(() => {
+  if (lifeStageVerdict.value?.message) return lifeStageVerdict.value.message
+  return buildLifeStageReminderText({
+    applicableStages: recipe.value.applicableLifeStages,
+    dogLifeStage: selectedDogRecipeLifeStage.value,
+    dogName: selectedDog.value?.name,
+  })
+})
 const recommendedLifeStageOption = computed(() => {
   const targetLifeStage = selectedDogRecipeLifeStage.value
   if (!targetLifeStage) return null
@@ -548,7 +566,6 @@ onMounted(async () => {
     // 【修复】先加载健康标签映射
     await loadHealthTagMapping()
     // 【修复】确保品种列表先加载完成，再加载食谱和狗狗数据
-    await loadBreeds()
     await loadRecipe()
     await loadDogs()
   }
@@ -556,27 +573,6 @@ onMounted(async () => {
   console.log('========== [RecipeDiy] onMounted 结束 ==========')
 })
 
-async function loadBreeds() {
-  console.log('[RecipeDiy] loadBreeds 开始')
-
-  try {
-    const res = await request({
-      url: '/dogs/breeds',
-      method: 'GET'
-    })
-
-    console.log('[RecipeDiy] loadBreeds API响应:', res)
-
-    if (res.code === 0 && res.data) {
-      breeds.value = res.data
-      console.log('[RecipeDiy] 品种列表加载成功, 数量:', res.data.length)
-    }
-  } catch (error) {
-    console.error('[RecipeDiy] Load breeds error:', error)
-  }
-
-  console.log('[RecipeDiy] loadBreeds 结束')
-}
 
 async function loadRecipe() {
   console.log('[RecipeDiy] loadRecipe 开始, recipeId:', recipeId.value)
@@ -691,7 +687,7 @@ async function selectDog(dogId: string) {
   resetDiyLifeStageDependentState()
 
   await loadDogCalc(dog.id)
-  checkLifeStageMatch()
+  void checkLifeStageMatch()
 }
 
 async function loadDogCalc(dogId: string) {
@@ -738,41 +734,32 @@ async function loadDogCalc(dogId: string) {
   console.log('========== [RecipeDiy] loadDogCalc 结束 ==========')
 }
 
-function checkLifeStageMatch() {
-  console.log('[RecipeDiy] checkLifeStageMatch 开始')
-
-  if (!selectedDog.value || !recipe.value) {
-    console.log('[RecipeDiy] 缺少必要数据，跳过校验')
+async function checkLifeStageMatch() {
+  const dogId = selectedDog.value?.id
+  if (!dogId || !recipe.value) {
+    lifeStageVerdict.value = null
+    lifeStageCheckFailed.value = false
     isLifeStageMatch.value = true
     return
   }
 
-  const dogLifeStage = selectedDogLifeStage.value
-  const dogRecipeLifeStage = selectedDogRecipeLifeStage.value
-
-  console.log('[RecipeDiy] 生命阶段校验:', {
-    dogLifeStage,
-    dogRecipeLifeStage,
-    applicableStages: recipe.value.applicableLifeStages,
-    dogName: selectedDog.value.name
+  const verdict = await fetchLifeStageMatch({
+    recipeId: recipeId.value,
+    dogId,
+    lifeStage: selectedLifeStage.value || undefined,
   })
 
-  isLifeStageMatch.value = isRecipeLifeStageMatch(recipe.value.applicableLifeStages, dogRecipeLifeStage)
-  console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
+  lifeStageVerdict.value = verdict
+  if (!verdict) {
+    lifeStageCheckFailed.value = true
+    isLifeStageMatch.value = true
+    return
+  }
 
-  // 修复：切换狗狗时重置警告状态
-  // 无论匹配还是不匹配，都应该重置showWarning为true
-  // 这样警告卡片会根据isLifeStageMatch的值自动显示或隐藏
+  lifeStageCheckFailed.value = false
+
+  isLifeStageMatch.value = !isLifeStageMismatch(verdict.matchType)
   showWarning.value = true
-
-  console.log('[RecipeDiy] 警告卡片显示条件:', {
-    '!isLifeStageMatch': !isLifeStageMatch.value,
-    'selectedDog': !!selectedDog.value,
-    'showWarning': showWarning.value,
-    '应该显示警告': !isLifeStageMatch.value && selectedDog.value && showWarning.value
-  })
-
-  console.log('[RecipeDiy] checkLifeStageMatch 结束')
 }
 
 function resetDiyLifeStageDependentState() {
@@ -800,7 +787,7 @@ async function switchToRecommendedLifeStage() {
   if (selectedDogId.value) {
     await loadDogCalc(selectedDogId.value)
   }
-  checkLifeStageMatch()
+  void checkLifeStageMatch()
 }
 
 function dismissWarning() {
@@ -973,7 +960,7 @@ function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
   return primaryRow?.packageSpecG || 1
 }
 
-function generateSheet() {
+async function generateSheet() {
   if (isGeneratingSheet.value) {
     return
   }
@@ -1002,18 +989,16 @@ function generateSheet() {
     return
   }
 
-  if (!isLifeStageMatch.value && showWarning.value) {
-    uni.showModal({
-      title: '生命阶段提醒',
-      content: '当前狗狗生命阶段与食谱适用阶段不一致，仍要生成 DIY 制作单吗？',
-      success: (res) => {
-        if (res.confirm) {
-          showWarning.value = false
-          void generateAndNavigateToSheet()
-        }
-      }
+  // 生命阶段不匹配：**每次生成制作单都确认一次**，并留痕作为凭证
+  if (isLifeStageMismatch(lifeStageVerdict.value?.matchType)) {
+    const confirmed = await confirmLifeStageMismatch({
+      recipeId: recipeId.value,
+      dogId: selectedDog.value?.id || selectedDogId.value || '',
+      verdict: lifeStageVerdict.value,
+      source: 'diy',
+      dogName: selectedDog.value?.name,
     })
-    return
+    if (!confirmed) return
   }
 
   void generateAndNavigateToSheet()
@@ -1121,6 +1106,21 @@ function getNutritionStandardLabel(standard: string): string {
 </script>
 
 <style scoped>
+/* 后端结论未取到：既不静默放行，也不误报"不匹配"，给一条中性提示 */
+.life-stage-unknown-note {
+  margin-bottom: 20rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  background-color: #f7f8f2;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+.life-stage-unknown-text {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: var(--sk-ink-2, #6b6653);
+}
+
 .recipe-diy-page {
   min-height: 100vh;
   background-color: #fbfcf7;
@@ -1393,8 +1393,8 @@ function getNutritionStandardLabel(standard: string): string {
 
 /* 警告卡片 */
 .warning-card {
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border: 1rpx solid var(--sk-danger, #b4553f);
   border-radius: 12rpx;
   padding: 20rpx;
   margin-bottom: 20rpx;
@@ -1414,12 +1414,12 @@ function getNutritionStandardLabel(standard: string): string {
 .warning-title {
   font-size: 30rpx;
   font-weight: bold;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
 }
 
 .warning-text {
   font-size: 26rpx;
-  color: #8a6b33;
+  color: var(--sk-danger, #b4553f);
   line-height: 1.6;
   display: block;
   margin-bottom: 8rpx;
@@ -1447,8 +1447,8 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .btn-continue {
-  background-color: #b08d4f;
-  color: #f3eddd;
+  background-color: var(--sk-danger, #b4553f);
+  color: #fff;
 }
 
 /* 饭量配置 */
@@ -1780,8 +1780,8 @@ function getNutritionStandardLabel(standard: string): string {
 .min-order-warning {
   margin-top: 16rpx;
   padding: 16rpx 18rpx;
-  background-color: #f6efe0;
-  border: 1rpx solid #b08d4f;
+  background-color: var(--sk-danger-soft, #f7e9e3);
+  border: 1rpx solid var(--sk-danger, #b4553f);
   border-radius: 8rpx;
 }
 

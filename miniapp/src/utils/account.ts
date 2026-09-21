@@ -1,12 +1,6 @@
 import { request } from "./api";
 
 const CURRENT_APP_ID_FALLBACK = "wx92924e25093f8f18";
-const PHONE_BIND_SKIP_ROUTES = new Set([
-  "pages/login/index",
-  "pages/phone-bind/index",
-  "pages/profile-setup/index",
-]);
-let phoneBindPrompting = false;
 
 export function getCurrentMiniProgramAppId(): string {
   try {
@@ -35,16 +29,6 @@ export function isStoredPhoneBound(): boolean {
 function isAccountMissingPhone(user: any): boolean {
   if (!user) return false;
   return !user.phone && user.phoneBound !== true;
-}
-
-function getCurrentRoute(): string {
-  try {
-    const pages = getCurrentPages();
-    const current = pages[pages.length - 1] as any;
-    return current?.route || "";
-  } catch (error) {
-    return "";
-  }
 }
 
 export function getCurrentPagePathWithQuery(): string {
@@ -99,67 +83,4 @@ export async function ensurePhoneBound(): Promise<boolean> {
   const redirect = encodeURIComponent(getCurrentPagePathWithQuery());
   uni.navigateTo({ url: `/pages/phone-bind/index?redirect=${redirect}` });
   return false;
-}
-
-export async function promptPhoneBindingIfNeeded(): Promise<boolean> {
-  if (phoneBindPrompting) return false;
-  if (!uni.getStorageSync("token")) return false;
-
-  const currentRoute = getCurrentRoute();
-  if (PHONE_BIND_SKIP_ROUTES.has(currentRoute)) {
-    return false;
-  }
-
-  let user = getStoredUser();
-  if (user && !isAccountMissingPhone(user)) {
-    return false;
-  }
-
-  try {
-    const response = await request({
-      url: "/users/me",
-      method: "GET",
-      quiet: true,
-      suppressErrorToast: true,
-    });
-    if (response.data) {
-      user = response.data;
-      uni.setStorageSync("user", user);
-    }
-  } catch (error) {
-    console.warn(
-      "[Account] Failed to refresh user before phone prompt:",
-      error,
-    );
-    return false;
-  }
-
-  if (!isAccountMissingPhone(user)) {
-    return false;
-  }
-
-  const redirect = encodeURIComponent(getCurrentPagePathWithQuery());
-  phoneBindPrompting = true;
-  uni.showModal({
-    title: "手机号快捷登录",
-    content:
-      "手机号仅用于账号识别、历史资料同步、订单履约和售后服务。完成后可同步旧版资料，并继续使用下单、支付、订单和售后功能。",
-    showCancel: false,
-    confirmText: "继续",
-    success: () => {
-      uni.navigateTo({
-        url: `/pages/phone-bind/index?redirect=${redirect}`,
-        complete: () => {
-          setTimeout(() => {
-            phoneBindPrompting = false;
-          }, 800);
-        },
-      });
-    },
-    fail: () => {
-      phoneBindPrompting = false;
-    },
-  });
-
-  return true;
 }

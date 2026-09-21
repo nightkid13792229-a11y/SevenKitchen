@@ -48,10 +48,12 @@ describe('recipe detail nutrition report regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('v-if="recipe.coverImageUrl && recipe.coverTitle"')
+    // 角标已上移到系列层级（合规词表引用），因此文案改由 resolveCoverBadgeText 解析：
+    // 优先 coverBadges，为空时回退 coverTitle
+    expect(source).toContain('v-if="recipe.coverImageUrl && resolveCoverBadgeText(recipe)"')
     expect(source).toContain('class="recipe-detail-cover-badge-gradient"')
     expect(source).toContain('class="recipe-detail-cover-title-badge"')
-    expect(source).toContain('{{ recipe.coverTitle }}')
+    expect(source).toContain('{{ resolveCoverBadgeText(recipe) }}')
     expect(source).not.toContain('class="cover-title-overlay"')
     expect(source).not.toContain('.cover-title-overlay')
     expect(source).not.toContain('.cover-title-text')
@@ -216,11 +218,20 @@ describe('recipe detail nutrition report regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
-    expect(source).toContain("'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬'")
-    expect(source).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬'")
-    expect(source).toContain("'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬'")
-    expect(source).toContain("'REPRODUCTION': '繁殖期'")
+    // 2026-09-19：中文名统一收敛到 label-mapping，页面里不再自带第二份映射
+    expect(source).toContain("getLifeStageLabel } from '../../utils/label-mapping'")
+    expect(source).not.toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
+
+    // 中文名的唯一来源仍然是 label-mapping，且覆盖设计器的全部阶段
+    const labelMapping = readFileSync(
+      resolve(process.cwd(), 'src/utils/label-mapping.ts'),
+      'utf-8',
+    )
+    expect(labelMapping).toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
+    expect(labelMapping).toContain("'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬'")
+    expect(labelMapping).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬'")
+    expect(labelMapping).toContain("'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬'")
+    expect(labelMapping).toContain("'REPRODUCTION': '繁殖期'")
   })
 
   it('uses backend selected life-stage version metadata instead of the old header tag loop', () => {
@@ -232,6 +243,22 @@ describe('recipe detail nutrition report regressions', () => {
 
     expect(templateSource).not.toContain('v-for="stage in recipe.applicableLifeStages"')
     expect(source).toContain('availableLifeStageVersions')
+    // 2026-09-19 精简：生命阶段卡不再展示"通俗补充说明"与"本品可选"两行
+    expect(source).not.toContain('lifeStagePlainHint');
+    expect(source).not.toContain('LIFE_STAGE_PLAIN_HINT');
+    expect(source).not.toContain('availableLifeStageSummary');
+    expect(templateSource).not.toContain('life-stage-version-plain');
+    expect(templateSource).not.toContain('life-stage-version-options');
+
+    // 未匹配时必须视觉区分：卡上有 mismatch 状态 + 警示色
+    expect(source).toContain('const isLifeStageMismatch = computed');
+    expect(source).toContain("matchType === 'MANUAL_MISMATCH'");
+    expect(source).toContain("matchType === 'FALLBACK_ADULT'");
+    expect(source).toContain("matchType === 'FALLBACK_FIRST'");
+    expect(templateSource).toContain("'life-stage-version-card--mismatch': isLifeStageMismatch");
+    expect(source).toContain('.life-stage-version-card--mismatch');
+    expect(source).toContain('--sk-danger');
+
     expect(source).toContain('lifeStageMatch')
   })
 
@@ -314,17 +341,30 @@ describe('recipe detail nutrition report regressions', () => {
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
+    // 首单路径修剪后，两条链路的目标路由分别由 buildDiyRoute() / buildOrderRoute()
+    // 统一组装：既用于"已登录直接跳转"，也用于"登录后直达"，避免意图丢失。
     const diySource = source.match(
-      /function generateDiySheet\(\)[\s\S]*?\n}\n\nfunction goToOrder/,
+      /function buildDiyRoute\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
     const orderSource = source.match(
-      /function goToOrder\(\)[\s\S]*?\n}\n\nfunction selectDogForDetail/,
+      /function buildOrderRoute\(\)[\s\S]*?\n}\n/,
     )?.[0] || ''
 
     expect(diySource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
-    expect(diySource).toContain("url: `/pages/recipe-diy/index?${query.join('&')}`")
+    expect(diySource).toContain("return `/pages/recipe-diy/index?${query.join('&')}`")
     expect(orderSource).toContain("`dogId=${encodeURIComponent(selectedDogId.value)}`")
     expect(orderSource).toContain('lifeStage=${encodeURIComponent(recipe.value.selectedLifeStage)}')
+    // 登录后直达：两条链路都必须把目标页作为 redirect 传下去
+    const diyFlow = source.match(
+      /function generateDiySheet\(\)[\s\S]*?\n}\n/,
+    )?.[0] || ''
+    const orderFlow = source.match(
+      /function goToOrder\(\)[\s\S]*?\n}\n/,
+    )?.[0] || ''
+    expect(diyFlow).toContain('promptLoginAndRedirect(')
+    expect(diyFlow).toContain('target')
+    expect(orderFlow).toContain('promptLoginAndRedirect(')
+    expect(orderFlow).toContain('target')
   })
 
   it('uses a non-matched default life stage copy before dog-specific matched copy', () => {

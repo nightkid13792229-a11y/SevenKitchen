@@ -220,9 +220,16 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('生命阶段提醒')
     expect(source).toContain('{{ lifeStageReminderText }}')
     expect(source).toContain('../../utils/life-stage-match')
-    expect(source).toContain('resolveDogRecipeLifeStage')
-    expect(source).toContain('selectedDogRecipeLifeStage')
-    expect(source).toContain('isRecipeLifeStageMatch(')
+    // 2026-09-19：结论由后端给出，制作单不再自己算
+    expect(source).toContain('fetchLifeStageMatch')
+    expect(source).toContain('isLifeStageMismatch')
+    expect(source).not.toContain('resolveDogRecipeLifeStage(')
+    expect(source).not.toContain('isRecipeLifeStageMatch(')
+    // 拿不到后端结论时不得静默放行
+    expect(source).toContain('lifeStageCheckFailed')
+    // 制作单是结果页：提醒只作展示，不再要求确认（避免同一个提醒反复打断）
+    expect(source).not.toContain('dismissWarning')
+    expect(source).not.toContain('我已知晓')
   })
 
   it('uses net food weight for supplement nutrient totals and current storage copy', () => {

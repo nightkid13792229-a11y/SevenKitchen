@@ -2104,14 +2104,15 @@ describe('OrderService - Aftersale resolution state restoration', () => {
   });
 
   it('restores a rejected refund to the status before aftersale', async () => {
-    const order = createMockOrder(OrderStatus.PURCHASING);
+    // 售后窗口自 2026-09-19 起收窄为「已发货 / 已完成」，这里用已发货作为申请前状态
+    const order = createMockOrder(OrderStatus.SHIPPED);
     order.applyForAftersale(AftersaleType.REFUND, '想退款', []);
     orderRepository.findById.mockResolvedValue(order);
     statusHistoryRepository.findByOrderId.mockResolvedValue([
       new OrderStatusHistory(
         'history-apply',
         'order-1',
-        OrderStatus.PURCHASING,
+        OrderStatus.SHIPPED,
         OrderStatus.AFTERSALE,
         new Date('2025-01-01T00:00:00Z'),
         'customer',
@@ -2128,12 +2129,12 @@ describe('OrderService - Aftersale resolution state restoration', () => {
       'ADMIN',
     );
 
-    expect(result.status).toBe(OrderStatus.PURCHASING);
+    expect(result.status).toBe(OrderStatus.SHIPPED);
     expect(result.completedAt).toBeFalsy();
     expect(statusHistoryRepository.append).toHaveBeenCalledWith(
       'order-1',
       OrderStatus.AFTERSALE,
-      OrderStatus.PURCHASING,
+      OrderStatus.SHIPPED,
       'admin',
       'admin-1',
       { resolutionType: 'resolved', adminNote: '退款驳回' },
@@ -2178,7 +2179,7 @@ describe('OrderService - Aftersale resolution state restoration', () => {
   });
 
   it('blocks staff from resolving refund requests', async () => {
-    const order = createMockOrder(OrderStatus.PAID);
+    const order = createMockOrder(OrderStatus.SHIPPED);
     order.applyForAftersale(AftersaleType.REFUND, '想退款', []);
     orderRepository.findById.mockResolvedValue(order);
 

@@ -101,8 +101,13 @@
 import { computed, ref, onMounted } from 'vue';
 import { getToken, request } from '../../utils/api';
 import { getBaseUrl } from '../../utils/config';
-import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
+import {
+  canApplyRefund,
+  canApplyRemake,
+  canApplyComplaint,
+  canCancelOrder,
+} from '../../utils/order-aftersale';
 
 const orderId = ref('');
 const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('REFUND');
@@ -112,29 +117,67 @@ const orderInfo = ref<any>(null);
 const submitting = ref(false);
 const loadFailed = ref(false);
 
-const aftersaleTypes = [
-  { value: 'REFUND', label: '申请退款', icon: '💰' },
-  { value: 'REMAKE', label: '申请重做', icon: '🔄' },
-  { value: 'COMPLAINT', label: '投诉建议', icon: '📝' },
+const ALL_AFTERSALE_TYPES = [
+  { value: 'REFUND' as const, label: '申请退款', icon: '💰', cancelLabel: '取消订单' },
+  { value: 'REMAKE' as const, label: '申请重做', icon: '🔄' },
+  { value: 'COMPLAINT' as const, label: '投诉建议', icon: '📝' },
 ];
 
-const pageTitle = computed(() =>
-  selectedType.value === 'REFUND' ? '申请退款' : '申请售后',
+/**
+ * 只展示"当前订单状态下真正允许"的售后类型。
+ *
+ * 原先三个选项永远都在，但订单完成后超过 7 天时退款/重做已不被允许，
+ * 顾客仍能选中并提交，最后被后端拒绝——白填一遍表单。
+ * 订单信息未加载完时先展示全部，避免闪烁。
+ */
+const aftersaleTypes = computed(() => {
+  const order = orderInfo.value;
+  if (!order) return ALL_AFTERSALE_TYPES;
+
+  const status = String(order.status || '');
+  const completedAt = order.completedAt;
+
+  const cancelStage = canCancelOrder(status);
+
+  return ALL_AFTERSALE_TYPES.filter((type) => {
+    if (type.value === 'REFUND') {
+      // 取消阶段（已付款、未采购）走的也是 REFUND 这条链路，只是叫"取消订单"
+      return cancelStage || canApplyRefund(status, completedAt);
+    }
+    if (type.value === 'REMAKE') return canApplyRemake(status, completedAt);
+    return canApplyComplaint(status);
+  }).map((type) => ({
+    ...type,
+    label: cancelStage && type.value === 'REFUND' ? type.cancelLabel : type.label,
+  }));
+});
+
+/**
+ * 是否处于"取消订单"阶段（已付款、尚未进入采购）。
+ * 这一阶段的语义是"我要取消这一单"，不该显示成"申请退款/售后"。
+ */
+const isCancelStage = computed(() =>
+  canCancelOrder(String(orderInfo.value?.status || '')),
 );
-const reasonTitle = computed(() =>
-  selectedType.value === 'REFUND' ? '退款理由' : '详细说明',
-);
-const reasonPlaceholder = computed(() =>
-  selectedType.value === 'REFUND'
+
+const pageTitle = computed(() => {
+  if (isCancelStage.value) return '取消订单';
+  return selectedType.value === 'REFUND' ? '申请退款' : '申请售后';
+});
+const reasonTitle = computed(() => {
+  if (isCancelStage.value) return '取消原因';
+  return selectedType.value === 'REFUND' ? '退款理由' : '详细说明';
+});
+const reasonPlaceholder = computed(() => {
+  if (isCancelStage.value) {
+    return '请填写取消原因（例如：下错了 / 狗狗情况有变化），将全额原路退回。';
+  }
+  return selectedType.value === 'REFUND'
     ? '请填写退款理由，客服/管理员审核后处理。'
-    : '请详细描述您遇到的问题...',
-);
+    : '请详细描述您遇到的问题...';
+});
 
 onMounted(async () => {
-  if (!(await ensurePhoneBound())) {
-    return;
-  }
-
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1] as any;
   orderId.value = currentPage.options?.orderId || '';
@@ -159,6 +202,7 @@ async function loadOrderInfo() {
     });
     if (res.code === 0 && res.data) {
       orderInfo.value = res.data;
+      syncSelectedTypeWithAllowed();
     } else {
       loadFailed.value = true;
     }
@@ -167,6 +211,15 @@ async function loadOrderInfo() {
     loadFailed.value = true;
   } finally {
     uni.hideLoading();
+  }
+}
+
+/** 选中的类型若在当前状态下不被允许，自动切到第一个允许的类型 */
+function syncSelectedTypeWithAllowed() {
+  const allowed = aftersaleTypes.value;
+  if (allowed.length === 0) return;
+  if (!allowed.some((type) => type.value === selectedType.value)) {
+    selectedType.value = allowed[0].value;
   }
 }
 

@@ -46,8 +46,8 @@ export interface CreateRecipeSeriesStageDraftPayload {
   sourceDraftId?: string
 }
 
-export interface CopyRecipeStageItemsPayload {
-  sourceDraftId: string
+export interface CopyRecipeSeriesStageIngredientsPayload {
+  sourceLifeStage: string
 }
 
 export interface DesignRecipeItemPayload {
@@ -122,8 +122,20 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/drafts/${draftId}/revisions`),
   revertDraftToLatestOfficial: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/revert-to-latest-official`),
-  copyStageItemsFromDraft: (draftId: string, data: CopyRecipeStageItemsPayload): Promise<unknown> =>
-    api.post(`/recipe-designer/drafts/${draftId}/copy-items-from-stage`, data),
+  /**
+   * 复制其他生命阶段的原料到目标阶段草稿（会先清空目标草稿的原料）。
+   * 后端按生命阶段解析来源：优先用该阶段的设计草稿，没有草稿时用已发布正式版本。
+   * 返回被更新的目标阶段草稿。
+   */
+  copySeriesStageIngredients: (
+    seriesId: string,
+    lifeStage: string,
+    data: CopyRecipeSeriesStageIngredientsPayload,
+  ): Promise<DesignRecipeDraftDetail> =>
+    api.post(
+      `/recipe-designer/series/${seriesId}/stages/${lifeStage}/copy-ingredients`,
+      data,
+    ),
   assessDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/assess`),
   publishDraft: (draftId: string, data?: PublishDesignRecipePayload): Promise<unknown> =>

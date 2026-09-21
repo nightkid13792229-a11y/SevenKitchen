@@ -52,9 +52,17 @@ model Order {
 
   photoShareTokens PhotoShareToken[]
 
+  /// 本单是"某张订单的重做"：指向原单；为空表示这是一张正常订单。
+  /// @unique 保证一张原单最多被重做一次（数据库级防重复）。
+  remakeFromOrderId            String?                     @unique @map("remake_from_order_id")
+  remakeFromOrder              Order?                      @relation("OrderRemake", fields: [remakeFromOrderId], references: [id], onDelete: SetNull)
+  /// 原单反向指向它的重做单
+  remakeOrder                  Order?                      @relation("OrderRemake")
+
   @@index([customerId])
   @@index([status])
   @@index([aftersaleType])
+  @@index([remakeFromOrderId])
   @@map("order")
 }
 
@@ -187,6 +195,7 @@ model User {
   feedbacks               Feedback[]
   feedbackReplies         FeedbackReply[]
   wechatIdentities        UserWechatIdentity[]
+  supplementOrders        SupplementOrder[]
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -253,6 +262,60 @@ model DogProfileEvent {
   @@index([customerId, createdAt])
   @@index([dogId, createdAt])
   @@map("dog_profile_event")
+}
+
+/// 成品鲜食链路的转化漏斗事件
+/// 与 dog_profile_event 的区别：
+///   1. 允许匿名（登录前的浏览与点击也要能采集），因此 customerId 可空；
+///   2. 面向整条购买链路（首页 → 详情 → 订购 → 结算 → 支付），不是单一档案流程。
+/// 顾客「已知晓生命阶段与食谱不匹配、仍继续下单」的确认记录。
+///
+/// 为什么单独建表而不是只在前端弹个窗：
+///   弹出提醒如果不留痕，将来一旦狗狗因吃错生命阶段的粮出问题，
+///   我们拿不出"已经明确告知过顾客"的任何凭据。这张表就是那份凭据 ——
+///   记录谁、哪只狗、哪张食谱、当时系统给出的结论是什么、什么时候从哪个页面确认的。
+model LifeStageAcknowledgement {
+  id              String   @id @default(uuid()) @map("id")
+  customerId      String   @map("customer_id")
+  dogId           String   @map("dog_id")
+  recipeId        String   @map("recipe_id")
+  /// 确认时后端给出的匹配结论（MANUAL_MISMATCH / FALLBACK_ADULT / FALLBACK_FIRST）
+  matchType       String   @map("match_type")
+  /// 确认时系统算出的狗狗生命阶段
+  dogLifeStage    String?  @map("dog_life_stage")
+  /// 确认时展示的食谱适用生命阶段
+  recipeLifeStage String?  @map("recipe_life_stage")
+  /// 从哪个页面确认的：order / diy / diy_sheet
+  source          String   @map("source")
+  acknowledgedAt  DateTime @default(now()) @map("acknowledged_at")
+
+  @@index([customerId, acknowledgedAt])
+  @@index([dogId, acknowledgedAt])
+  @@index([recipeId, acknowledgedAt])
+  @@map("life_stage_acknowledgement")
+}
+
+model ProductFunnelEvent {
+  id          String   @id @default(uuid()) @map("id")
+  customerId  String?  @map("customer_id")
+  /// 小程序端生成的会话标识，用于把匿名阶段与登录后的行为串成一条漏斗
+  sessionId   String?  @map("session_id")
+  eventName   String   @map("event_name")
+  /// 漏斗步骤名（如 detail_view / tap_buy / login_done），便于按顺序统计流失
+  step        String?  @map("step")
+  recipeId    String?  @map("recipe_id")
+  dogId       String?  @map("dog_id")
+  orderId     String?  @map("order_id")
+  /// 进入页面时的来源，用于区分首页 / 详情 / 分享 / 客服等入口
+  entrySource String?  @map("entry_source")
+  properties  Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([customerId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([recipeId, createdAt])
+  @@map("product_funnel_event")
 }
 
 model Address {
@@ -399,6 +462,7 @@ model RecipeSeries {
   updatedAt      DateTime                   @updatedAt @map("updated_at")
   recipes        Recipe[]
   designs        DesignRecipe[]
+  coverBadges    RecipeSeriesCoverBadge[]
 
   @@index([status])
   @@index([businessStatus])
@@ -472,10 +536,38 @@ model RecipeHealthTag {
   parent      RecipeHealthTag?            @relation("HealthTagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children    RecipeHealthTag[]           @relation("HealthTagHierarchy")
   assignments RecipeHealthTagAssignment[]
+  seriesCoverBadges RecipeSeriesCoverBadge[]
 
   @@index([parentId])
   @@index([sort])
   @@map("recipe_health_tag")
+}
+
+/// 食谱系列的封面角标（系列级，一次设置全系列生效）
+///
+/// 为什么单独建表、不复用 RecipeHealthTagAssignment：
+///   · assignment 表达的是"这个食谱版本有哪些健康标签"（用于筛选与合规记录）；
+///   · 本表表达的是"这个系列在封面角标上展示哪 1~2 个词"（用于展示）。
+///   两者语义不同，混用会导致"勾了筛选标签就自动变成角标"的意外行为。
+///
+/// 存的是**词表引用而非文字**：这样在词表里改一次名，所有角标自动跟着变，
+/// 也从结构上保证角标只能来自合规词表。
+model RecipeSeriesCoverBadge {
+  id          String   @id @default(uuid()) @map("id")
+  seriesId    String   @map("series_id")
+  healthTagId String   @map("health_tag_id")
+  /// 多个角标时的展示顺序
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  series    RecipeSeries    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  healthTag RecipeHealthTag @relation(fields: [healthTagId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, healthTagId])
+  @@index([seriesId])
+  @@index([healthTagId])
+  @@map("recipe_series_cover_badge")
 }
 
 model RecipeHealthTagAssignment {
@@ -595,6 +687,13 @@ model Ingredient {
   safetyStock                   Float?                        @map("safety_stock")
   reorderPoint                  Float?                        @map("reorder_point")
   targetStock                   Float?                        @map("target_stock")
+  physicalForm                  IngredientPhysicalForm?       @map("physical_form")
+  /// 内容物是否油性（鱼油、鱼肝油等）：分装标签效期取更保守的一档
+  isOilBased                    Boolean                       @default(false) @map("is_oil_based")
+  supplementRetailEnabled       Boolean                       @default(false) @map("supplement_retail_enabled")
+  shelfLifeMonths               Int?                          @map("shelf_life_months")
+  storageCondition              String?                       @map("storage_condition") @db.VarChar(200)
+  openedShelfLifeDays           Int?                          @map("opened_shelf_life_days")
   properties                    Json
   createdAt                     DateTime                      @default(now()) @map("created_at")
   updatedAt                     DateTime                      @updatedAt @map("updated_at")
@@ -1716,6 +1815,14 @@ enum IngredientType {
   PACKAGING
 }
 
+/// 原料物理形态：决定补剂分装方案（粉剂需称重；片剂/胶囊数数即可；液体暂不支持分装）
+enum IngredientPhysicalForm {
+  POWDER
+  TABLET
+  CAPSULE
+  LIQUID
+}
+
 enum IngredientProcurementStrategy {
   DAILY_PURCHASE
   STOCK_REPLENISHMENT
@@ -2483,4 +2590,200 @@ model FeedbackReply {
   @@index([userId])
   @@index([createdAt])
   @@map("feedback_reply")
+}
+
+/// 补剂商城配置（单例）
+/// 设计文档：docs/plans/2026-09-18-supplement-shop-design.md
+/// 刻意与鲜食的 GlobalConfig 解耦：补剂的倍率/服务费/运费策略独立可调。
+model SupplementShopConfig {
+  id                        String                       @id @default("singleton") @map("id")
+  enabled                   Boolean                      @default(false) @map("enabled")
+
+  // ---- 定价 ----
+  markupMultiplier          Decimal                      @default(2.0) @map("markup_multiplier") @db.Decimal(6, 2)
+  serviceFeeMode            SupplementServiceFeeMode     @default(PER_ORDER) @map("service_fee_mode")
+  serviceFeeAmount          Decimal                      @default(9.9) @map("service_fee_amount") @db.Decimal(10, 2)
+  packagingFeePerBag        Decimal                      @default(0) @map("packaging_fee_per_bag") @db.Decimal(10, 2)
+  priceRoundingMode         SupplementPriceRoundingMode  @default(CEIL_TO_0_1) @map("price_rounding_mode")
+  minOrderAmount            Decimal                      @default(0) @map("min_order_amount") @db.Decimal(10, 2)
+  roundUpUsage              Boolean                      @default(true) @map("round_up_usage")
+
+  // ---- 运费 ----
+  shippingMode              SupplementShippingMode       @default(FLAT_RATE) @map("shipping_mode")
+  flatShippingFee           Decimal                      @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
+  shippingTemplateId        String?                      @map("shipping_template_id")
+  freeShippingThreshold     Decimal?                     @map("free_shipping_threshold") @db.Decimal(10, 2)
+
+  // ---- 分装有效期 ----
+  powderShelfLifeMonths     Int                          @default(6) @map("powder_shelf_life_months")
+  solidShelfLifeMonths      Int                          @default(9) @map("solid_shelf_life_months")
+  /// 油性软胶囊（鱼油/鱼肝油等）的分装效期，比固体系数更保守
+  oilShelfLifeMonths        Int                          @default(6) @map("oil_shelf_life_months")
+  minRemainingShelfLifeDays Int                          @default(90) @map("min_remaining_shelf_life_days")
+
+  // ---- 售后 ----
+  aftersalePolicy           String?                      @map("aftersale_policy") @db.VarChar(200)
+
+  // ---- 分装标签 ----
+  /// 标签上显示的品牌名（同时作为分装者）
+  labelBrandName            String                       @default("赛文的食堂") @map("label_brand_name") @db.VarChar(100)
+  /// 标签上是否提示「内含干燥剂，请勿食用」
+  labelIncludeDesiccantNotice Boolean                    @default(true) @map("label_include_desiccant_notice")
+
+  createdAt                 DateTime                     @default(now()) @map("created_at")
+  updatedAt                 DateTime                     @updatedAt @map("updated_at")
+
+  @@map("supplement_shop_config")
+}
+
+/// 分装服务费计费方式
+enum SupplementServiceFeeMode {
+  PER_ORDER
+  PER_BAG
+}
+
+/// 补剂商品价格的圆整规则
+enum SupplementPriceRoundingMode {
+  NONE
+  CEIL_TO_0_1
+  CEIL_TO_0_5
+  CEIL_TO_1
+}
+
+/// 补剂运费策略：一口价 / 套用现有按重量运费模板
+enum SupplementShippingMode {
+  FLAT_RATE
+  TEMPLATE
+}
+
+/// 补剂订单状态
+/// PENDING_PAYMENT → PAID → PACKING（分装中）→ PACKED（已分装待发）→ SHIPPED → COMPLETED
+enum SupplementOrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PACKING
+  PACKED
+  SHIPPED
+  COMPLETED
+  CANCELLED
+  AFTERSALE
+}
+
+/// 补剂订单（独立于鲜食订单，见 docs/plans/2026-09-18-supplement-shop-design.md）
+/// 金额与配置在创建时快照，之后不随「补剂商城设置」变化。
+model SupplementOrder {
+  id                        String                @id @default(uuid()) @map("id")
+  orderNo                   String                @unique @map("order_no") @db.VarChar(32)
+  userId                    String                @map("user_id")
+  status                    SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
+  bagCount                  Int                   @map("bag_count")
+
+  // ---- 金额构成（对用户）----
+  amountSupplement          Decimal               @map("amount_supplement") @db.Decimal(10, 2)
+  amountServiceFee          Decimal               @map("amount_service_fee") @db.Decimal(10, 2)
+  amountPackaging           Decimal               @map("amount_packaging") @db.Decimal(10, 2)
+  amountGoods               Decimal               @map("amount_goods") @db.Decimal(10, 2)
+  amountShipping            Decimal               @map("amount_shipping") @db.Decimal(10, 2)
+  amountTotal               Decimal               @map("amount_total") @db.Decimal(10, 2)
+  /// 内部成本，用于毛利分析（用户不可见）
+  supplementCost            Decimal               @map("supplement_cost") @db.Decimal(10, 2)
+  shippingDescription       String?               @map("shipping_description") @db.VarChar(200)
+
+  // ---- 快照 ----
+  /// 下单时的补剂商城配置快照（倍率、服务费、运费策略等），便于事后复盘定价
+  pricingSnapshot           Json?                 @map("pricing_snapshot")
+  /// 收货信息快照
+  shippingAddressSnapshot   Json                  @map("shipping_address_snapshot")
+
+  // ---- 来源（制作单/食谱/狗狗）----
+  recipeId                  String?               @map("recipe_id")
+  recipeName                String?               @map("recipe_name") @db.VarChar(200)
+  dogId                     String?               @map("dog_id")
+  dogName                   String?               @map("dog_name") @db.VarChar(100)
+  diySheetId                String?               @map("diy_sheet_id")
+  cycleDays                 Int?                  @map("cycle_days")
+  remark                    String?               @db.VarChar(500)
+
+  // ---- 支付 ----
+  paymentMethod             String?               @map("payment_method") @db.VarChar(20)
+  paymentStatus             String?               @map("payment_status") @db.VarChar(20)
+  transactionId             String?               @map("transaction_id") @db.VarChar(64)
+  paidAt                    DateTime?             @map("paid_at")
+  cancelledAt               DateTime?             @map("cancelled_at")
+  cancellationReason        String?               @map("cancellation_reason") @db.VarChar(200)
+
+  // ---- 售后（退款 / 免费补发）----
+  aftersaleType             String?               @map("aftersale_type") @db.VarChar(20)
+  aftersaleReason           String?               @map("aftersale_reason") @db.VarChar(200)
+  aftersaleAt               DateTime?             @map("aftersale_at")
+
+  // ---- 线上退款（微信原路退回）----
+  refundStatus              String?               @map("refund_status") @db.VarChar(20)
+  refundAmount              Decimal?              @map("refund_amount") @db.Decimal(10, 2)
+  refundOutNo               String?               @map("refund_out_no") @db.VarChar(64)
+  refundId                  String?               @map("refund_id") @db.VarChar(64)
+  refundReason              String?               @map("refund_reason") @db.VarChar(200)
+  refundRequestedAt         DateTime?             @map("refund_requested_at")
+  refundedAt                DateTime?             @map("refunded_at")
+
+  /// 免费补发单回指的原单号
+  reshipFromOrderNo         String?               @map("reship_from_order_no") @db.VarChar(32)
+
+  // ---- 发货 ----
+  trackingNumber            String?               @map("tracking_number") @db.VarChar(64)
+  carrierCode               String?               @map("carrier_code") @db.VarChar(40)
+  shippedAt                 DateTime?             @map("shipped_at")
+  completedAt               DateTime?             @map("completed_at")
+
+  createdAt                 DateTime              @default(now()) @map("created_at")
+  updatedAt                 DateTime              @updatedAt @map("updated_at")
+
+  user                      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items                     SupplementOrderItem[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("supplement_order")
+}
+
+/// 补剂订单行：一个补剂 = 一袋（按品种分装）
+/// 同时承载分装结果（批号、原瓶到期日、分装后效期、分装时间）
+model SupplementOrderItem {
+  id                String                 @id @default(uuid()) @map("id")
+  orderId           String                 @map("order_id")
+  ingredientId      String                 @map("ingredient_id")
+
+  // ---- 下单时的商品快照 ----
+  name              String                 @map("name") @db.VarChar(200)
+  brand             String?                @db.VarChar(100)
+  productModel      String?                @map("product_model") @db.VarChar(200)
+  physicalForm      IngredientPhysicalForm? @map("physical_form")
+  unit              String                 @map("unit") @db.VarChar(20)
+  /// 制作单上给用户的用量
+  requestedAmount   Float                  @map("requested_amount")
+  /// 实际分装量（向上取整后）
+  packedAmount      Float                  @map("packed_amount")
+  unitCost          Decimal                @map("unit_cost") @db.Decimal(12, 6)
+  cost              Decimal                @db.Decimal(10, 2)
+  price             Decimal                @db.Decimal(10, 2)
+  bags              Int                    @default(1) @map("bags")
+  /// 分装后标示有效期（月）
+  shelfLifeMonths   Int                    @map("shelf_life_months")
+  /// 储存条件快照（标签用）
+  storageCondition  String?                @map("storage_condition") @db.VarChar(200)
+
+  // ---- 分装结果（后台分装工单填写）----
+  batchNo           String?                @map("batch_no") @db.VarChar(40)
+  /// 分装时填写的原瓶到期日
+  sourceExpiryDate  DateTime?              @map("source_expiry_date")
+  /// 实际标签效期 = min(原瓶到期日, 分装日 + shelfLifeMonths)
+  packedExpiryDate  DateTime?              @map("packed_expiry_date")
+  packedAt          DateTime?              @map("packed_at")
+
+  createdAt         DateTime               @default(now()) @map("created_at")
+
+  order             SupplementOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("supplement_order_item")
 }

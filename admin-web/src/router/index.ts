@@ -63,6 +63,30 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料管理" },
       },
       {
+        path: "supplement-shop/catalog",
+        name: "SupplementShopCatalog",
+        component: () => import("@/views/SupplementShop/Catalog.vue"),
+        meta: { title: "补剂上架清单" },
+      },
+      {
+        path: "supplement-shop/config",
+        name: "SupplementShopConfig",
+        component: () => import("@/views/SupplementShop/Config.vue"),
+        meta: { title: "补剂商城设置" },
+      },
+      {
+        path: "supplement-shop/orders",
+        name: "SupplementShopOrders",
+        component: () => import("@/views/SupplementShop/Orders.vue"),
+        meta: { title: "补剂订单" },
+      },
+      {
+        path: "supplement-shop/orders/:id/labels",
+        name: "SupplementShopLabelPrint",
+        component: () => import("@/views/SupplementShop/LabelPrint.vue"),
+        meta: { title: "分装标签" },
+      },
+      {
         path: "nutrition-governance",
         name: "NutritionGovernance",
         redirect: { path: "/ingredients", query: { tab: "nutrition" } },

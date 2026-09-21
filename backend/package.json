@@ -98,7 +98,8 @@
     "verify:recipe": "bash ./scripts/assert_public_recipe.sh",
     "env:dev": "cp .env.development .env && echo 'Switched to development environment'",
     "env:prod": "cp .env.production .env && echo 'Switched to production environment'",
-    "audit:preparation-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-preparation-basis.ts"
+    "audit:preparation-basis": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-preparation-basis.ts",
+    "audit:supplement-shop-catalog": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register scripts/audit-supplement-shop-catalog.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

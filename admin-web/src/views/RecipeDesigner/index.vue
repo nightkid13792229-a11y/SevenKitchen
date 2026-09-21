@@ -173,7 +173,10 @@
           {{ stage.label }}
         </el-radio>
       </el-radio-group>
-      <div class="form-tip">将把来源阶段的全部原料（含用量与排序）复制到「{{ copyTargetStageLabel }}」，随后直接打开该阶段编辑器</div>
+      <div class="form-tip">
+        将把来源阶段的全部原料（含用量与排序）复制到「{{ copyTargetStageLabel }}」，
+        并覆盖该阶段已有的原料；复制后直接打开该阶段编辑器
+      </div>
       <template #footer>
         <el-button @click="copyItemsDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="copyingItems" @click="confirmCopyItems">复制并打开</el-button>

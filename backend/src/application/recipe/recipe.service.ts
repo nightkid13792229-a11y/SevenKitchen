@@ -10,6 +10,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { normalizeImageUrlProtocol } from '../../utils/image-url.util';
 import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
 import {
   RecipeStatus,
@@ -1735,7 +1736,7 @@ export class RecipeService {
       name: recipe.name,
       version: recipe.version,
       status: recipe.status as RecipeStatus,
-      coverImageUrl: recipe.coverImageUrl,
+      coverImageUrl: normalizeImageUrlProtocol(recipe.coverImageUrl),
       coverTitle: recipe.coverTitle || undefined,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
       applicableLifeStages: (recipe.applicableLifeStages as LifeStage[]) || [],

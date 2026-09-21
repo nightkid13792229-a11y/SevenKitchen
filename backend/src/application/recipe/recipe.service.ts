@@ -855,12 +855,13 @@ export class RecipeService {
   }
 
   private buildRecipeSeriesListRow(group: any[]): RecipeSummaryResponseDto {
+    const effectiveGroup = this.dropSupersededDraftRecipes(group);
     const pendingDraft = this.findNewestRecipeByStatus(
-      group,
+      effectiveGroup,
       RecipeStatus.DRAFT,
     );
     const currentPublic = this.findNewestRecipeByStatus(
-      group,
+      effectiveGroup,
       RecipeStatus.PUBLIC,
     );
     const current =
@@ -895,13 +896,14 @@ export class RecipeService {
           this.compareRecipeVersionThenUpdatedAt(right, left),
         )
         .map((recipe) => this.mapToVersionSummaryDto(recipe)),
-      seriesStages: this.buildRecipeSeriesStageSummaries(group),
+      seriesStages: this.buildRecipeSeriesStageSummaries(effectiveGroup),
     };
   }
 
   private buildRecipeSeriesStageSummaries(
-    group: any[],
+    rawGroup: any[],
   ): RecipeSeriesStageSummaryDto[] {
+    const group = this.dropSupersededDraftRecipes(rawGroup)
     return ORDERED_RECIPE_SERIES_LIFE_STAGES.map((lifeStage) => {
       const stageRecipes = group.filter((recipe) => {
         if (recipe.seriesLifeStage) {
@@ -965,6 +967,66 @@ export class RecipeService {
           : undefined,
       };
     });
+  }
+
+  /**
+   * 剔除「已被取代的待发布版本」。
+   *
+   * 设计器每次发布都会为同一(系列,生命阶段)生成一条新的正式版本（状态：待发布），
+   * 只要没在食谱管理里点发布，这条版本就会一直留着。之后如果又改又发一次，
+   * 就会同时存在多条未发布版本：新版本被发布后，更早的那条仍停在「待发布」，
+   * 于是阶段状态一直显示「已提交」、列表行的版本号/时间也停在旧版本上，
+   * 看起来像「发布没生效」；发布弹窗还会把这条旧版本继续列为待发布（有误发布旧内容的风险）。
+   *
+   * 判定：某条待发布版本的创建时间早于该阶段最新已发布版本，说明它已被取代，不再参与选择。
+   * 版本是否更新的比较沿用「按创建时间」的口径（跨历史版本链同样适用）。
+   */
+  private dropSupersededDraftRecipes(recipes: any[]): any[] {
+    if (recipes.length === 0) {
+      return recipes;
+    }
+
+    const newestPublicTimeByStage = new Map<string, number>();
+    for (const recipe of recipes) {
+      if (recipe.status !== RecipeStatus.PUBLIC) {
+        continue;
+      }
+      const stage = this.resolveRecipeSeriesLifeStageKey(recipe);
+      if (!stage) {
+        continue;
+      }
+      const time = this.getRecipeTimestamp(recipe.createdAt);
+      const existing = newestPublicTimeByStage.get(stage);
+      if (existing === undefined || time > existing) {
+        newestPublicTimeByStage.set(stage, time);
+      }
+    }
+
+    if (newestPublicTimeByStage.size === 0) {
+      return recipes;
+    }
+
+    return recipes.filter((recipe) => {
+      if (recipe.status !== RecipeStatus.DRAFT) {
+        return true;
+      }
+      const stage = this.resolveRecipeSeriesLifeStageKey(recipe);
+      if (!stage) {
+        return true;
+      }
+      const newestPublicTime = newestPublicTimeByStage.get(stage);
+      if (newestPublicTime === undefined) {
+        return true;
+      }
+      return this.getRecipeTimestamp(recipe.createdAt) >= newestPublicTime;
+    });
+  }
+
+  private resolveRecipeSeriesLifeStageKey(recipe: any): string | null {
+    if (recipe.seriesLifeStage) {
+      return String(recipe.seriesLifeStage);
+    }
+    return null;
   }
 
   private findNewestRecipeByStatus(

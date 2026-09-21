@@ -879,6 +879,68 @@ describe('RecipeService', () => {
     });
   });
 
+    it('把「比同阶段最新已发布版本更早」的待发布版本视为已被取代（发布后阶段状态不再停在已提交）', async () => {
+      const base = {
+        recipeId: 'recipe-series-1',
+        name: '萝卜绿豆鸭胸猪里脊',
+        energyDensityKcalPerKg: 1482,
+        coverImageUrl: null,
+        coverTitle: null,
+        seriesId: 'series-1',
+        seriesLifeStage: 'REPRODUCTION',
+        applicableLifeStages: ['REPRODUCTION'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+      };
+      // 21:45 从设计器发布的待发布版本（没在列表里点发布）
+      const supersededDraft = {
+        ...base,
+        id: 'repro-v1',
+        version: 1,
+        status: RecipeStatus.DRAFT,
+        createdAt: new Date('2026-09-21T13:45:43.000Z'),
+        updatedAt: new Date('2026-09-21T13:45:43.000Z'),
+      };
+      // 22:02 又改又发一次，并在列表里发布成功
+      const publishedVersion = {
+        ...base,
+        id: 'repro-v2',
+        version: 2,
+        status: RecipeStatus.PUBLIC,
+        createdAt: new Date('2026-09-21T14:02:06.000Z'),
+        updatedAt: new Date('2026-09-21T14:02:19.000Z'),
+      };
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publishedVersion,
+        supersededDraft,
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      expect(result.data).toEqual([
+        expect.objectContaining({
+          id: 'repro-v2',
+          version: 2,
+          status: RecipeStatus.PUBLIC,
+          currentPublicVersion: expect.objectContaining({ id: 'repro-v2' }),
+          pendingDraftVersion: undefined,
+        }),
+      ]);
+      const reproductionStage = (result.data[0] as any).seriesStages.find(
+        (stage: any) => stage.lifeStage === 'REPRODUCTION',
+      );
+      expect(reproductionStage).toEqual(
+        expect.objectContaining({
+          status: 'PUBLISHED',
+          recipeVersionId: 'repro-v2',
+          pendingDraftVersion: undefined,
+        }),
+      );
+    });
+
   describe('getRecipeById', () => {
     it('returns series context and switchable life-stage recipe versions for series recipes', async () => {
       const baseRecipe = {

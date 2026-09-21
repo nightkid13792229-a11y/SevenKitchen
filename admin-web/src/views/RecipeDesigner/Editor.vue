@@ -161,7 +161,7 @@
       <!-- 右：营养评估 -->
       <div class="pane pane-right">
         <div class="pane-title">营养评估</div>
-        <div class="assessment-pane">
+        <div ref="assessmentPaneRef" class="assessment-pane">
           <AssessmentPanel
             :assessment="assessment"
             :loading-inputs="assessmentLoading"
@@ -209,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
@@ -317,6 +317,46 @@ const assessment = computed<DesignRecipeAssessmentResult | null>(() => {
   void inputsError.value
   return compute(draft.value.fediafDogScenario, draft.value.id, items.value)
 })
+
+// ---------- 营养评估面板的滚动位置 ----------
+// 添加/删除原料后评估会重算，面板内容短暂重排会把滚动位置顶回顶部。
+// 用户此刻正停在刚补齐的那一项营养素上，因此这里记住并在重排后恢复滚动位置。
+const assessmentPaneRef = ref<HTMLElement | null>(null)
+let assessmentScrollTop: number | null = null
+
+function rememberAssessmentScroll() {
+  assessmentScrollTop = assessmentPaneRef.value?.scrollTop ?? null
+}
+
+async function restoreAssessmentScroll() {
+  const target = assessmentScrollTop
+  assessmentScrollTop = null
+  if (target === null) return
+
+  const apply = () => {
+    const pane = assessmentPaneRef.value
+    if (pane && target <= pane.scrollHeight) {
+      pane.scrollTop = target
+    }
+  }
+
+  await nextTick()
+  apply()
+  // 评估数据落位后可能还有一次重排，下一帧再补一次
+  await nextTick()
+  apply()
+}
+
+/** 添加/删除原料后刷新评估输入，并保持营养评估面板的滚动位置不跳回顶部 */
+async function refreshInputsKeepingScroll() {
+  if (!draft.value) return
+  rememberAssessmentScroll()
+  try {
+    await refreshInputs(draft.value.id)
+  } finally {
+    await restoreAssessmentScroll()
+  }
+}
 
 const referenceDogId = ref<string | null>(null)
 const aiPanelVisible = ref(false)
@@ -488,7 +528,7 @@ async function recreateItem(snapshot: DesignerItem) {
     // 旧 id 在服务器上已失效：丢弃指向它的待保存操作，并把历史栈中的 id 换成新 id
     cancelItemOps(oldId)
     remapHistoryItemId(oldId, created.id)
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     ElMessage.error('原料恢复失败，请重试')
     items.value = items.value.filter((item) => item.id !== snapshot.id)
@@ -749,7 +789,7 @@ async function handleAiAddItem(payload: {
     const created = await recipeDesignerApi.addItem(draft.value.id, itemPayload)
     items.value = [...items.value, created]
     recordHistory({ type: 'add', item: created })
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     // 拦截器已提示
   }
@@ -778,7 +818,7 @@ async function handleAddOption(
     const created = await recipeDesignerApi.addItem(draft.value.id, payload)
     items.value = [...items.value, created]
     recordHistory({ type: 'add', item: created })
-    await refreshInputs(draft.value.id)
+    await refreshInputsKeepingScroll()
   } catch {
     // 拦截器已提示
   }

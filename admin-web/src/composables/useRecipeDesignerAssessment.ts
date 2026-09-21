@@ -54,10 +54,16 @@ export function useRecipeDesignerAssessment() {
     }
   }
 
-  /** 添加/删除原料后刷新（新原料的档案在服务端归一化） */
+  /**
+   * 添加/删除原料后刷新（新原料的档案在服务端归一化）。
+   *
+   * 注意：这里必须「先取新数据、拿到后再替换缓存」，不能先清空缓存再请求。
+   * 清空会让 compute() 在请求返回前拿不到目标值而返回 null，
+   * 右侧营养评估面板会整块塌成「评估引擎准备中…」，
+   * 滚动位置随之被顶回顶部——用户刚点完「智能添加」就被弹回列表最上面。
+   * 刷新失败时同样保留上一次可用的输入，避免面板变空白。
+   */
   async function refreshInputs(draftId: string): Promise<void> {
-    inputsCache.delete(draftId)
-    targetsCache.delete(draftId)
     loadingInputs.value = true
     inputsError.value = null
     try {

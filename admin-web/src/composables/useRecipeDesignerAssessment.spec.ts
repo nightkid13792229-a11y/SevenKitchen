@@ -57,4 +57,41 @@ describe('useRecipeDesignerAssessment', () => {
     expect(duringRefresh).toBe(true)
     expect(loadingInputs.value).toBe(false)
   })
+
+  it('refreshInputs 期间保留上一次的评估输入，营养评估面板不会闪回空白', async () => {
+    mockGetAssessmentInputs.mockResolvedValue({ targets: [TARGET], items: [] })
+    const { loadInputs, refreshInputs, getTargets, compute } = useRecipeDesignerAssessment()
+
+    await loadInputs('draft-3', 'ADULT_MER_110')
+
+    let release: (value: unknown) => void = () => {}
+    mockGetAssessmentInputs.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        })
+    )
+
+    const pending = refreshInputs('draft-3')
+
+    // 刷新请求还没回来时，目标值仍在、评估结果仍可计算（面板不塌成空白）
+    expect(getTargets('draft-3')).toEqual([TARGET])
+    expect(compute('ADULT_MER_110', 'draft-3', [])).not.toBeNull()
+
+    release({ targets: [TARGET], items: [] })
+    await pending
+    expect(getTargets('draft-3')).toEqual([TARGET])
+  })
+
+  it('refreshInputs 失败时保留上一次可用的评估输入', async () => {
+    mockGetAssessmentInputs.mockResolvedValue({ targets: [TARGET], items: [] })
+    const { loadInputs, refreshInputs, getTargets } = useRecipeDesignerAssessment()
+
+    await loadInputs('draft-4', 'ADULT_MER_110')
+
+    mockGetAssessmentInputs.mockRejectedValue(new Error('网络错误'))
+    await refreshInputs('draft-4')
+
+    expect(getTargets('draft-4')).toEqual([TARGET])
+  })
 })

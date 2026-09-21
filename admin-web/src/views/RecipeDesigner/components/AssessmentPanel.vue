@@ -7,6 +7,12 @@
     </div>
 
     <template v-else>
+      <div class="bar-legend">
+        <span class="legend-item"><i class="legend-line legend-min"></i>标准下限</span>
+        <span class="legend-item"><i class="legend-line legend-max"></i>标准上限</span>
+        <span class="legend-item"><i class="legend-swatch legend-over"></i>超出量</span>
+        <span class="legend-item"><i class="legend-swatch legend-gap"></i>缺口</span>
+      </div>
       <div ref="entryListRef" class="entry-list" @scroll.passive="rememberEntryListScroll">
         <div v-for="group in displayGroups" :key="group.key" class="entry-group">
           <div class="group-head" @click="toggleGroup(group.key)">
@@ -34,11 +40,24 @@
                   </template>
                   <div class="bar-track" :class="{ 'track-zoned': row.hasZones }">
                     <div class="bar-fill" :class="'bar-' + row.barClass" :style="{ width: row.barWidth + '%' }"></div>
+                    <!-- 超上限：虚线右侧的斜纹段＝超出量 -->
+                    <div
+                      v-if="row.overWidthPct > 0"
+                      class="bar-over"
+                      :style="{ left: row.maxLinePct + '%', width: row.overWidthPct + '%' }"
+                    ></div>
+                    <!-- 低于下限：柱尾到实线之间的斜纹段＝还差多少 -->
+                    <div
+                      v-if="row.gapWidthPct > 0"
+                      class="bar-gap"
+                      :style="{ left: row.barWidth + '%', width: row.gapWidthPct + '%' }"
+                    ></div>
                     <div v-if="row.minLinePct != null" class="bar-min-line" :style="{ left: row.minLinePct + '%' }"></div>
                     <div v-if="row.maxLinePct != null" class="bar-max-line" :style="{ left: row.maxLinePct + '%' }"></div>
+                    <div v-if="row.saturated" class="bar-saturated" title="含量已超出本轨道刻度（柱长按刻度截断）">›</div>
                   </div>
                 </el-tooltip>
-                <span class="bar-pct">{{ row.barText }}</span>
+                <span class="bar-pct" :class="'tone-' + row.deviationTone">{{ row.deviationText }}</span>
               </div>
               <div v-else class="bar-line bar-none">{{ row.noneText }}</div>
             </div>
@@ -59,13 +78,23 @@
           <b>{{ detailRangeText }}</b>
         </div>
         <div v-if="detailPctText" class="detail-row">
-          <span>相对标准下限</span>
-          <b>{{ detailPctText }}</b>
+          <span>与标准对比</span>
+          <b :class="'detail-deviation tone-' + detailPctTone">{{ detailPctText }}</b>
         </div>
         <!-- 含量刻度：三段式柱状条（实线=下限 1/3，虚线=上限 2/3） -->
         <div v-if="detailBar" class="detail-bar-block">
           <div class="detail-bar-track" :class="{ 'track-zoned': detailBar.hasZones }">
             <div class="detail-bar-fill" :class="'bar-' + detailBar.barClass" :style="{ width: detailBar.barPos + '%' }"></div>
+            <div
+              v-if="detailBar.overWidthPct > 0"
+              class="bar-over"
+              :style="{ left: detailBar.maxLinePct + '%', width: detailBar.overWidthPct + '%' }"
+            ></div>
+            <div
+              v-if="detailBar.gapWidthPct > 0"
+              class="bar-gap"
+              :style="{ left: detailBar.barPos + '%', width: detailBar.gapWidthPct + '%' }"
+            ></div>
             <div v-if="detailBar.minLinePct != null" class="bar-min-line" :style="{ left: detailBar.minLinePct + '%' }"></div>
             <div v-if="detailBar.maxLinePct != null" class="bar-max-line" :style="{ left: detailBar.maxLinePct + '%' }"></div>
           </div>
@@ -196,6 +225,7 @@ import { ArrowDown, Search } from '@element-plus/icons-vue'
 import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessment'
 import type { AssessmentNutrientContributor } from '@/utils/recipeDesigner/assessmentTypes'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import { buildAssessmentBar } from '@/utils/recipeDesigner/assessmentBar'
 import type {
   FediafDogScenario,
   IngredientNutritionProfileOption,
@@ -297,7 +327,15 @@ interface DisplayRow {
   hasZones: boolean
   barClass: string
   barWidth: number
-  barText: string
+  /** 与标准线的相对差距文案（超上限 / 低于下限 / 达成） */
+  deviationText: string
+  deviationTone: 'success' | 'warning' | 'danger' | 'info'
+  /** 超出上限的斜纹段宽度（轨道百分比） */
+  overWidthPct: number
+  /** 低于下限的缺口段宽度（轨道百分比） */
+  gapWidthPct: number
+  /** 含量超出轨道刻度（柱长被截断） */
+  saturated: boolean
   minLinePct: number | null
   maxLinePct: number | null
   tooltipText: string
@@ -371,90 +409,19 @@ function barStatusClass(status: string): string {
   return status.toLowerCase()
 }
 
-interface BarGeometry {
-  hasBar: boolean
-  contentPct: number | null
-  barPos: number
-  minLinePct: number | null
-  maxLinePct: number | null
-  tooltipText: string
-  noneText: string
-}
-
-const TRACK_THIRD = 100 / 3
-
 /**
- * 每个营养素独立比例尺（三段等分安全区）：
- * - 实线（下限）固定在轨道 1/3 处，虚线（上限）固定在 2/3 处，永远同时可见
- * - 每格代表的真实数值随营养素不同（钠的上限 1500% 就在 2/3 处）
- * - 含量条位置：低于下限落在左段、上下限之间落在中段、超上限落在右段
- * - 只有下限（无上限标准）时：轨道按「0–300% 下限单位」线性显示，下限仍在 1/3（=100%）
+ * 柱状条几何与「超上限 X% / 低于下限 X% / 达成 X%」文案统一在
+ * utils/recipeDesigner/assessmentBar.ts 里实现（带单测）。
  */
-function buildBar(entry: GroupedAssessmentEntry): BarGeometry {
-  const min = entry.minValue
-  const max = entry.maxValue
-  const cur = entry.currentValue
-  const basis = basisLabel(entry)
-  const unitSuffix =
-    entry.expressionBasis === 'RATIO'
-      ? ':1'
-      : `${entry.unit || ''}${basis ? '/' + basis : ''}`
-  /** 悬浮提示数值统一保留两位小数 */
-  const fmtNum = (value: number | null | undefined): string =>
-    value == null ? '—' : Number(value).toFixed(2)
-
-  const tooltipLines = [`当前含量：${fmtNum(cur)} ${unitSuffix}`]
-  tooltipLines.push(min != null ? `标准下限：${fmtNum(min)} ${unitSuffix}` : '标准下限：未设下限')
-  tooltipLines.push(max != null ? `标准上限：${fmtNum(max)} ${unitSuffix}` : '标准上限：无上限')
-
-  if (min == null && max == null) {
-    return {
-      hasBar: false,
-      contentPct: null,
-      barPos: 0,
-      minLinePct: null,
-      maxLinePct: null,
-      tooltipText: tooltipLines.join('\n'),
-      noneText: '参考指标（无标准上下限）'
-    }
-  }
-
-  const baseline = min ?? max ?? 0
-  const contentPct = cur != null && baseline > 0 ? (cur / baseline) * 100 : null
-
-  let barPos = 0
-  if (cur != null && baseline > 0) {
-    if (min != null && max != null) {
-      if (cur < min) {
-        barPos = (cur / min) * TRACK_THIRD
-      } else if (cur <= max) {
-        barPos = TRACK_THIRD + ((cur - min) / (max - min)) * TRACK_THIRD
-      } else {
-        barPos = TRACK_THIRD * 2 + ((cur - max) / max) * TRACK_THIRD
-      }
-      barPos = Math.min(barPos, 100)
-    } else if (min != null) {
-      // 无上限：轨道 0–300% 下限单位，100% 即 1/3 处
-      barPos = Math.min((cur / min) * TRACK_THIRD, 100)
-    } else if (max != null) {
-      if (cur <= max) {
-        barPos = (cur / max) * TRACK_THIRD * 2
-      } else {
-        barPos = TRACK_THIRD * 2 + ((cur - max) / max) * TRACK_THIRD
-      }
-      barPos = Math.min(barPos, 100)
-    }
-  }
-
-  return {
-    hasBar: true,
-    contentPct,
-    barPos,
-    minLinePct: min != null ? TRACK_THIRD : null,
-    maxLinePct: max != null ? TRACK_THIRD * 2 : null,
-    tooltipText: tooltipLines.join('\n'),
-    noneText: ''
-  }
+function buildBar(entry: GroupedAssessmentEntry) {
+  return buildAssessmentBar({
+    minValue: entry.minValue,
+    maxValue: entry.maxValue,
+    currentValue: entry.currentValue,
+    unit: entry.unit,
+    expressionBasis: entry.expressionBasis,
+    basisLabel: basisLabel(entry),
+  })
 }
 
 const displayGroups = computed<DisplayGroup[]>(() => {
@@ -484,7 +451,11 @@ const displayGroups = computed<DisplayGroup[]>(() => {
         hasZones: entry.minValue != null && entry.maxValue != null,
         barClass: barStatusClass(status),
         barWidth: geom.barPos,
-        barText: geom.contentPct != null ? `${Math.round(geom.contentPct)}%` : '—',
+        deviationText: geom.deviationText || '—',
+        deviationTone: geom.deviationTone,
+        overWidthPct: geom.overWidthPct,
+        gapWidthPct: geom.gapWidthPct,
+        saturated: geom.saturated,
         minLinePct: geom.minLinePct,
         maxLinePct: geom.maxLinePct,
         tooltipText: geom.tooltipText,
@@ -543,15 +514,19 @@ const detailRangeText = computed(() => {
   return `${range} ${entry.unit || ''}${basis ? '/' + basis : ''}`
 })
 
+const detailPctTone = computed(() =>
+  activeEntry.value ? buildBar(activeEntry.value).deviationTone : 'info',
+)
+
+/** 与列表保持一致：超标/不足直接写「超上限 X%」「低于下限 X%」，达标才展示达成度 */
 const detailPctText = computed(() => {
   const entry = activeEntry.value
   if (!entry || entry.currentValue == null) return ''
-  const min = entry.minValue
-  const max = entry.maxValue
-  const baseline = min != null ? min : max != null ? max : null
-  if (baseline == null || baseline <= 0) return ''
-  const pct = (entry.currentValue / baseline) * 100
-  return `${Math.round(pct)}%（100%=标准${min != null ? '下限' : '上限'}）`
+  const geom = buildBar(entry)
+  if (!geom.deviationText) return ''
+  if (geom.deviationTone !== 'success') return geom.deviationText
+  const baselineLabel = entry.minValue != null ? '标准下限' : '标准上限'
+  return `${geom.deviationText}（100% = ${baselineLabel}）`
 })
 
 const detailTotalG = computed<number | null>(() => {
@@ -603,6 +578,8 @@ const detailBar = computed(() => {
     barPos: geom.barPos,
     minLinePct: geom.minLinePct,
     maxLinePct: geom.maxLinePct,
+    overWidthPct: geom.overWidthPct,
+    gapWidthPct: geom.gapWidthPct,
     hasZones: entry.minValue != null && entry.maxValue != null,
     barClass: barStatusClass(String(entry.status || '').toUpperCase())
   }
@@ -1095,9 +1072,119 @@ function openDetail(row: DisplayRow) {
   font-size: 11px;
   font-weight: 600;
   color: #606266;
-  width: 46px;
+  width: 76px;
   text-align: right;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.bar-pct.tone-danger {
+  color: #f56c6c;
+}
+.bar-pct.tone-warning {
+  color: #e6a23c;
+}
+.bar-pct.tone-success {
+  color: #67c23a;
+}
+.detail-deviation.tone-danger {
+  color: #f56c6c;
+}
+.detail-deviation.tone-warning {
+  color: #e6a23c;
+}
+.detail-deviation.tone-success {
+  color: #529b2e;
+}
+/* 超出上限：虚线右侧的斜纹段，一眼看出「超了多少」 */
+.bar-over {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 0 6px 6px 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(230, 162, 60, 0.85) 0,
+    rgba(230, 162, 60, 0.85) 3px,
+    rgba(255, 255, 255, 0.55) 3px,
+    rgba(255, 255, 255, 0.55) 6px
+  );
+  z-index: 1;
+}
+/* 低于下限：柱尾到实线之间的缺口段 */
+.bar-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(245, 108, 108, 0.55) 0,
+    rgba(245, 108, 108, 0.55) 3px,
+    rgba(255, 255, 255, 0.35) 3px,
+    rgba(255, 255, 255, 0.35) 6px
+  );
+  border: 1px dashed rgba(245, 108, 108, 0.7);
+  z-index: 0;
+}
+/* 含量超出轨道刻度：柱尾加一个「›」提示已被截断 */
+.bar-saturated {
+  position: absolute;
+  right: -2px;
+  top: -6px;
+  font-size: 12px;
+  line-height: 1;
+  color: #909399;
+  z-index: 3;
+}
+/* 图例 */
+.bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: #909399;
+  border-bottom: 1px solid #f0f2f5;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-line {
+  display: inline-block;
+  width: 2px;
+  height: 10px;
+}
+.legend-min {
+  background: #909399;
+}
+.legend-max {
+  border-left: 2px dashed #b1b3b8;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+  border-radius: 2px;
+}
+.legend-over {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(230, 162, 60, 0.85) 0,
+    rgba(230, 162, 60, 0.85) 3px,
+    rgba(255, 255, 255, 0.55) 3px,
+    rgba(255, 255, 255, 0.55) 6px
+  );
+}
+.legend-gap {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(245, 108, 108, 0.55) 0,
+    rgba(245, 108, 108, 0.55) 3px,
+    rgba(255, 255, 255, 0.35) 3px,
+    rgba(255, 255, 255, 0.35) 6px
+  );
 }
 .bar-tooltip {
   font-size: 12px;

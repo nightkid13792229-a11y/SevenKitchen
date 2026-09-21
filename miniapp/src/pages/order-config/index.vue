@@ -148,7 +148,6 @@ import {
   type WechatPaymentResult,
 } from '../../api/orders';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
-import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue';
 
 const recipeId = ref('');
@@ -216,9 +215,6 @@ const totalGrams = computed(() => {
 });
 
 onMounted(async () => {
-  if (!(await ensurePhoneBound())) {
-    return;
-  }
 
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1] as any;

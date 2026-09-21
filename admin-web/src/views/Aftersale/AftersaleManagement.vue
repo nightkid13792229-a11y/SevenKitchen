@@ -150,6 +150,22 @@
           </el-select>
         </el-form-item>
 
+        <!-- 「安排重做」需要指定制作日期：
+             重做单要进采购清单，没有制作日期就排不进生产 -->
+        <el-form-item v-if="resolveForm.resolutionType === 'remade'" label="重做制作日期" required>
+          <el-date-picker
+            v-model="resolveForm.targetProductionDate"
+            type="date"
+            placeholder="选择制作日期"
+            value-format="YYYY-MM-DD"
+            :disabled-date="(d: Date) => d.getTime() < Date.now() - 24 * 60 * 60 * 1000"
+            style="width: 100%"
+          />
+          <div class="form-hint">
+            系统会新建一张 0 元重做单并从该日期进入采购与排产，原订单保持"售后中"直到重做送达。
+          </div>
+        </el-form-item>
+
         <template v-if="showRefundOptions">
           <el-alert
             class="refund-alert"
@@ -241,6 +257,7 @@ function handleResolve(row: AftersaleOrder) {
 
 function resetResolveForm() {
   resolveForm.resolutionType = ''
+  resolveForm.targetProductionDate = ''
   resolveForm.adminNote = ''
   resolveForm.refundAmount = 0
 }
@@ -284,6 +301,11 @@ async function confirmResolve() {
     return
   }
 
+  if (resolveForm.resolutionType === 'remade' && !resolveForm.targetProductionDate) {
+    ElMessage.warning('请选择重做的制作日期')
+    return
+  }
+
   if (resolveForm.resolutionType === 'refunded' && currentOrder.value.aftersaleType === 'REFUND') {
     try {
       await confirmRefundIrreversible(currentOrder.value)
@@ -294,12 +316,19 @@ async function confirmResolve() {
 
   submitting.value = true
   try {
-    await orderApi.resolveAftersale(currentOrder.value.id, {
+    const resolveResult: any = await orderApi.resolveAftersale(currentOrder.value.id, {
       resolutionType: resolveForm.resolutionType,
-      adminNote: resolveForm.adminNote.trim()
+      adminNote: resolveForm.adminNote.trim(),
+      ...(resolveForm.resolutionType === 'remade'
+        ? { targetProductionDate: resolveForm.targetProductionDate }
+        : {})
     })
 
-    ElMessage.success('售后工单已处理')
+    if (resolveForm.resolutionType === 'remade' && resolveResult?.remakeOrderNo) {
+      ElMessage.success(`已生成重做单 ${resolveResult.remakeOrderNo}，将从选定日期进入采购与排产`)
+    } else {
+      ElMessage.success('售后工单已处理')
+    }
     resolveDialogVisible.value = false
     await loadAftersales()
   } catch (error) {
@@ -566,7 +595,14 @@ function formatAmount(amount?: number | string | null): string {
     border: 1px solid #ebeef5;
   }
 
-  .refund-alert {
+  .form-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #909399;
+}
+
+.refund-alert {
     margin-bottom: 18px;
   }
 }

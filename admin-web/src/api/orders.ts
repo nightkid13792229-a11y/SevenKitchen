@@ -152,8 +152,13 @@ export const orderApi = {
    */
   resolveAftersale: (
     id: string,
-    data: { resolutionType: 'refunded' | 'remade' | 'resolved'; adminNote?: string }
-  ): Promise<Order> => {
+    data: {
+      resolutionType: 'refunded' | 'remade' | 'resolved'
+      adminNote?: string
+      /** 「安排重做」时必填：重做单的制作日期（YYYY-MM-DD） */
+      targetProductionDate?: string
+    }
+  ): Promise<Order & { remakeOrderId?: string | null; remakeOrderNo?: string | null }> => {
     return api.post(`/orders/${id}/aftersale/resolve`, data)
   },
 

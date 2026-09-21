@@ -72,6 +72,7 @@ import {
 } from '../../domain';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { Dog } from '../../domain/dog/dog.entity';
+import { mapDogProfileToSeriesLifeStage } from '../../domain/recipe/recipe-series';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
@@ -715,12 +716,22 @@ export class DogsController {
     // Load all breeds to create breed name map
     const breeds = await this.dogBreedRepository.findAll();
     const breedMap = new Map<string, string>();
+    // 同时保留完整的品种实体：生命阶段判定需要它的体型/成犬月龄/老年岁数
+    const breedEntityMap = new Map<string, (typeof breeds)[number]>();
     breeds.forEach((breed) => {
       breedMap.set(breed.id, breed.name);
+      breedEntityMap.set(breed.id, breed);
     });
 
     const profiles: DogProfileDto[] = dogs.map((dog) =>
-      this.mapDogToProfileDto(dog, breedMap),
+      this.mapDogToProfileDto(
+        dog,
+        breedMap,
+        undefined,
+        undefined,
+        undefined,
+        this.resolveDogRecipeLifeStage(dog, breedEntityMap),
+      ),
     );
 
     return ApiResponseDto.success(profiles);
@@ -995,12 +1006,38 @@ export class DogsController {
     };
   }
 
+  /**
+   * 用后端权威实现解析该狗狗的「食谱生命阶段」。
+   *
+   * 前端曾自己算过一遍，但认不出混血犬的体型（后端靠 sizeClassOverride），
+   * 算不出时会退化成"匹配"静默放行 —— 所以统一由后端给出。
+   */
+  private resolveDogRecipeLifeStage(
+    dog: Dog,
+    breedEntityMap: Map<string, any>,
+  ): string | undefined {
+    try {
+      return mapDogProfileToSeriesLifeStage({
+        birthday: dog.birthday,
+        gender: dog.gender as any,
+        lifeStageOverride: dog.lifeStageOverride as any,
+        activityLevel: dog.activityLevel as any,
+        sizeClassOverride: dog.sizeClassOverride as any,
+        breed: breedEntityMap.get(dog.breedId) ?? null,
+      });
+    } catch (error) {
+      // 解析失败不影响档案列表本身
+      return undefined;
+    }
+  }
+
   private mapDogToProfileDto(
     dog: Dog,
     breedMap?: Map<string, string>,
     medicalRecords?: any[] | null,
     checkupRecords?: any[] | null,
     allergyRecords?: any[] | null,
+    recipeLifeStage?: string,
   ): DogProfileDto {
     // Determine breed name: custom breed name takes priority, then lookup from breed map
     const breedName = dog.customBreedName || breedMap?.get(dog.breedId) || null;
@@ -1012,6 +1049,7 @@ export class DogsController {
       breedId: dog.breedId,
       breedName,
       customBreedName: dog.customBreedName,
+      ...(recipeLifeStage ? { recipeLifeStage } : {}),
       avatarUrl: dog.avatarUrl,
       birthday: dog.birthday.toISOString(),
       gender: dog.gender,

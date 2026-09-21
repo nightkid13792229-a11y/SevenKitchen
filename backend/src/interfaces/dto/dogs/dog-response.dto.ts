@@ -23,6 +23,19 @@ export class DogProfileDto {
   @ApiProperty({ example: '旺财' })
   name!: string;
 
+  /**
+   * 该狗狗需要的「食谱生命阶段」（后端权威实现算出）。
+   *
+   * 小程序不再自己计算生命阶段（前端重算认不出混血犬的体型、
+   * 且算不出时会被当成"匹配"静默放行），一律用这个字段。
+   */
+  @ApiProperty({
+    example: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+    required: false,
+    description: 'Recipe life stage resolved by backend',
+  })
+  recipeLifeStage?: string;
+
   @ApiProperty({ example: 'uuid' })
   breedId!: string;
 

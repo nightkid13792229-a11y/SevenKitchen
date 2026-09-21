@@ -161,8 +161,9 @@
       <!-- 右：营养评估 -->
       <div class="pane pane-right">
         <div class="pane-title">营养评估</div>
-        <div ref="assessmentPaneRef" class="assessment-pane">
+        <div class="assessment-pane">
           <AssessmentPanel
+            ref="assessmentPanelRef"
             :assessment="assessment"
             :loading-inputs="assessmentLoading"
             :scenario="draft?.fediafDogScenario"
@@ -209,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
@@ -319,43 +320,16 @@ const assessment = computed<DesignRecipeAssessmentResult | null>(() => {
 })
 
 // ---------- 营养评估面板的滚动位置 ----------
-// 添加/删除原料后评估会重算，面板内容短暂重排会把滚动位置顶回顶部。
-// 用户此刻正停在刚补齐的那一项营养素上，因此这里记住并在重排后恢复滚动位置。
-const assessmentPaneRef = ref<HTMLElement | null>(null)
-let assessmentScrollTop: number | null = null
+// 列表内部 .entry-list 由 AssessmentPanel 自己持有，这里只负责在刷新评估输入前
+// 通知它「保住当前滚动位置」：添加/删除原料后评估会重算，面板内容重排会把列表顶回顶部，
+// 而用户此刻正停在刚补齐的那一项营养素上。
+const assessmentPanelRef = ref<InstanceType<typeof AssessmentPanel> | null>(null)
 
-function rememberAssessmentScroll() {
-  assessmentScrollTop = assessmentPaneRef.value?.scrollTop ?? null
-}
-
-async function restoreAssessmentScroll() {
-  const target = assessmentScrollTop
-  assessmentScrollTop = null
-  if (target === null) return
-
-  const apply = () => {
-    const pane = assessmentPaneRef.value
-    if (pane && target <= pane.scrollHeight) {
-      pane.scrollTop = target
-    }
-  }
-
-  await nextTick()
-  apply()
-  // 评估数据落位后可能还有一次重排，下一帧再补一次
-  await nextTick()
-  apply()
-}
-
-/** 添加/删除原料后刷新评估输入，并保持营养评估面板的滚动位置不跳回顶部 */
+/** 添加/删除原料后刷新评估输入，并保持营养评估列表的滚动位置不跳回顶部 */
 async function refreshInputsKeepingScroll() {
   if (!draft.value) return
-  rememberAssessmentScroll()
-  try {
-    await refreshInputs(draft.value.id)
-  } finally {
-    await restoreAssessmentScroll()
-  }
+  assessmentPanelRef.value?.preserveScrollOnNextAssessmentUpdate()
+  await refreshInputs(draft.value.id)
 }
 
 const referenceDogId = ref<string | null>(null)

@@ -4179,10 +4179,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const currentDraft = await this.assertDraftEditableByUser(
-      id,
-      context.userId,
-    );
+    const currentDraft = await this.assertDraftEditableByUser(id, context);
     const selectedSeriesLifeStage =
       dto.scenario !== undefined && currentDraft?.seriesId
         ? mapScenarioToSeriesLifeStage(dto.scenario)
@@ -4449,7 +4446,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertDraftEditableByUser(designRecipeId, context.userId);
+    await this.assertDraftEditableByUser(designRecipeId, context);
     const ingredientId = await this.resolveDesignItemIngredientId(dto);
     const preparationMethod = await this.resolveDesignItemPreparationMethod(
       dto.preparationMethod,
@@ -4516,7 +4513,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const draft = await this.assertItemEditableByUser(itemId, context.userId);
+    const draft = await this.assertItemEditableByUser(itemId, context);
     const supplementTargets =
       dto.supplementTargets !== undefined
         ? this.normalizeDesignSupplementTargets(dto.supplementTargets)
@@ -4575,7 +4572,7 @@ export class RecipeDesignerService {
     access: RecipeDesignerAccessInput,
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    await this.assertDraftEditableByUser(designRecipeId, context.userId);
+    await this.assertDraftEditableByUser(designRecipeId, context);
     const items = dto.items ?? [];
     if (items.length === 0) throw new BadRequestException('排序项不能为空');
     const seenItemIds = new Set<string>();
@@ -4637,7 +4634,7 @@ export class RecipeDesignerService {
                 seriesLifeStage: true,
               },
             });
-            this.assertEditableDraft(draft, designRecipeId, context.userId);
+            await this.assertEditableDraft(draft, designRecipeId, context);
 
             if (new Set(itemIds).size !== itemIds.length) {
               throw new BadRequestException('原料排序包含重复项');
@@ -4701,7 +4698,19 @@ export class RecipeDesignerService {
 
   async removeItem(itemId: string, access: RecipeDesignerAccessInput) {
     const context = normalizeRecipeDesignerAccessContext(access);
-    const draft = await this.assertItemEditableByUser(itemId, context.userId);
+
+    // 幂等：这条原料已经不存在时（重复提交、或上一次请求成功但响应丢失后的重试）
+    // 直接按「已删除」返回，不报错。否则前端的重试会把这个已经完成的删除反复打成失败，
+    // 把整个保存队列卡住。
+    const existing = await this.prisma.designRecipeItem.findUnique({
+      where: { id: itemId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return { id: itemId, alreadyRemoved: true };
+    }
+
+    const draft = await this.assertItemEditableByUser(itemId, context);
 
     return this.prisma.$transaction(async (tx) => {
       const deleted = await tx.designRecipeItem.delete({
@@ -6470,7 +6479,38 @@ export class RecipeDesignerService {
     return draft as DesignRecipeWithItems;
   }
 
-  private async assertDraftEditableByUser(id: string, userId: string) {
+  /**
+   * 谁可以编辑一条草稿：
+   * - 草稿作者本人；
+   * - 内部员工（STAFF / ADMIN）可以编辑其他内部员工创建的草稿。
+   *
+   * 为什么内部员工之间要互相可编辑：同一系列的「阶段草稿」在团队里是共享的——
+   * createSeriesStageDraft 会直接复用该阶段已存在的草稿（不区分作者），
+   * getDraft 也允许内部员工查看任意内部草稿。如果写入仍然只认作者，
+   * 后进入编辑器的同事就会「能打开、一保存就报 not found」，把保存队列卡死。
+   * 读取权限与写入权限必须一致。
+   *
+   * 顾客仍然只能编辑自己的草稿，且不能碰内部员工的草稿。
+   */
+  private async canContextEditDraft(
+    draft: { createdBy?: string | null },
+    context: RecipeDesignerAccessContext,
+  ): Promise<boolean> {
+    if (draft.createdBy === context.userId) {
+      return true;
+    }
+
+    if (!isInternalRecipeDesignerRole(context)) {
+      return false;
+    }
+
+    return this.isInternalRecipeDesignerCreatorId(draft.createdBy);
+  }
+
+  private async assertDraftEditableByUser(
+    id: string,
+    context: RecipeDesignerAccessContext,
+  ) {
     const draft = await this.prisma.designRecipe.findUnique({
       where: { id },
       select: {
@@ -6484,11 +6524,14 @@ export class RecipeDesignerService {
       },
     });
 
-    this.assertEditableDraft(draft, id, userId);
+    await this.assertEditableDraft(draft, id, context);
     return draft;
   }
 
-  private async assertItemEditableByUser(itemId: string, userId: string) {
+  private async assertItemEditableByUser(
+    itemId: string,
+    context: RecipeDesignerAccessContext,
+  ) {
     const item = await this.prisma.designRecipeItem.findUnique({
       where: { id: itemId },
       select: {
@@ -6505,21 +6548,28 @@ export class RecipeDesignerService {
       },
     });
 
-    if (!item?.designRecipe || item.designRecipe.createdBy !== userId) {
+    if (!item?.designRecipe) {
       throw new NotFoundException(`Design recipe item ${itemId} not found`);
     }
 
-    this.assertEditableDraft(item.designRecipe, item.designRecipe.id, userId);
+    await this.assertEditableDraft(item.designRecipe, item.designRecipe.id, {
+      ...context,
+      notFoundMessage: `Design recipe item ${itemId} not found`,
+    });
+
     return item.designRecipe;
   }
 
-  private assertEditableDraft(
+  private async assertEditableDraft(
     draft: EditableDesignRecipeRecord | null,
     id: string,
-    userId: string,
+    context: RecipeDesignerAccessContext & { notFoundMessage?: string },
   ) {
-    if (!draft || draft.createdBy !== userId) {
-      throw new NotFoundException(`Design recipe ${id} not found`);
+    const notFoundMessage =
+      context.notFoundMessage ?? `Design recipe ${id} not found`;
+
+    if (!draft || !(await this.canContextEditDraft(draft, context))) {
+      throw new NotFoundException(notFoundMessage);
     }
 
     if (this.isPublishedDraft(draft)) {

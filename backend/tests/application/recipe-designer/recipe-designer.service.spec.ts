@@ -1642,16 +1642,28 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipeItem.create).not.toHaveBeenCalled();
   });
 
-  it('rejects draft metadata edits from another staff user', async () => {
+  it('allows draft metadata edits on another internal staff draft', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-other', createdBy: 'staff-2', status: 'DRAFT' }),
     );
     prisma.designRecipe.update.mockResolvedValue(
-      draft({ id: 'design-other', name: 'stolen' }),
+      draft({ id: 'design-other', name: 'renamed' }),
+    );
+
+    await service.updateDraft('design-other', { name: 'renamed' }, 'staff-1');
+
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'design-other' } }),
+    );
+  });
+
+  it('rejects draft metadata edits on a customer-owned draft', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-customer', createdBy: 'customer-1', status: 'DRAFT' }),
     );
 
     await expect(
-      service.updateDraft('design-other', { name: 'stolen' }, 'staff-1'),
+      service.updateDraft('design-customer', { name: 'stolen' }, 'staff-1'),
     ).rejects.toThrow(NotFoundException);
 
     expect(prisma.designRecipe.update).not.toHaveBeenCalled();
@@ -1868,7 +1880,7 @@ describe('RecipeDesignerService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('rejects adding items to another staff user draft', async () => {
+  it('adds items to another internal staff stage draft', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-other', createdBy: 'staff-2', status: 'DRAFT' }),
     );
@@ -1877,19 +1889,17 @@ describe('RecipeDesignerService', () => {
     });
     prisma.designRecipeItem.create.mockResolvedValue(item());
 
-    await expect(
-      service.addItem(
-        'design-other',
-        {
-          ingredientId: 'ingredient-mussel',
-          nutritionFoodId: 'food-raw',
-          weightG: 100,
-        } as any,
-        'staff-1',
-      ),
-    ).rejects.toThrow(NotFoundException);
+    await service.addItem(
+      'design-other',
+      {
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        weightG: 100,
+      } as any,
+      'staff-1',
+    );
 
-    expect(prisma.designRecipeItem.create).not.toHaveBeenCalled();
+    expect(prisma.designRecipeItem.create).toHaveBeenCalled();
   });
 
   it('does not fetch raw nutrition data when returning an updated design item', async () => {
@@ -1920,7 +1930,7 @@ describe('RecipeDesignerService', () => {
     });
   });
 
-  it('rejects item updates from another staff user', async () => {
+  it('updates items on another internal staff stage draft', async () => {
     prisma.designRecipeItem.findUnique.mockResolvedValue({
       id: 'item-other',
       designRecipe: {
@@ -1935,8 +1945,50 @@ describe('RecipeDesignerService', () => {
       item({ id: 'item-other' }),
     );
 
+    await service.updateItem('item-other', { weightG: 120 }, 'staff-1');
+
+    expect(prisma.designRecipeItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'item-other' } }),
+    );
+  });
+
+  it('rejects item updates on a customer-owned draft', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-customer',
+      designRecipe: {
+        id: 'design-customer',
+        createdBy: 'customer-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+
     await expect(
-      service.updateItem('item-other', { weightG: 120 }, 'staff-1'),
+      service.updateItem('item-customer', { weightG: 120 }, 'staff-1'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects item updates from another customer', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-customer',
+      designRecipe: {
+        id: 'design-customer',
+        createdBy: 'customer-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+
+    await expect(
+      service.updateItem(
+        'item-customer',
+        { weightG: 120 },
+        { userId: 'customer-2', role: 'CUSTOMER' },
+      ),
     ).rejects.toThrow(NotFoundException);
 
     expect(prisma.designRecipeItem.update).not.toHaveBeenCalled();
@@ -1974,7 +2026,7 @@ describe('RecipeDesignerService', () => {
     });
   });
 
-  it('rejects item deletion from another staff user', async () => {
+  it('deletes items from another internal staff stage draft', async () => {
     prisma.designRecipeItem.findUnique.mockResolvedValue({
       id: 'item-other',
       designRecipe: {
@@ -1989,9 +2041,21 @@ describe('RecipeDesignerService', () => {
       item({ id: 'item-other' }),
     );
 
-    await expect(service.removeItem('item-other', 'staff-1')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.removeItem('item-other', 'staff-1'),
+    ).resolves.toEqual(expect.objectContaining({ id: 'item-other' }));
+
+    expect(prisma.designRecipeItem.delete).toHaveBeenCalledWith({
+      where: { id: 'item-other' },
+    });
+  });
+
+  it('treats removing an already deleted item as success (idempotent retry)', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.removeItem('item-gone', 'staff-1'),
+    ).resolves.toEqual({ id: 'item-gone', alreadyRemoved: true });
 
     expect(prisma.designRecipeItem.delete).not.toHaveBeenCalled();
   });

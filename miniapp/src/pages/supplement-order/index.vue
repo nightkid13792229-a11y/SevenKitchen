@@ -369,7 +369,12 @@ async function refreshQuote() {
   }
 }
 
-/** 勾选变化时只重算合计（单价与单项无关，无需重算明细） */
+/**
+ * 勾选变化时只重算合计（单价与单项无关，无需重算明细）
+ *
+ * 2026-09-22：重算失败时原来只是静默保留旧 summary，
+ * 用户会看到一个与当前勾选不符的合计。现在明确提示，避免被误导下单。
+ */
 async function refreshSummaryOnly() {
   const ids = selectedLines.value.map((line) => line.ingredientId)
   if (ids.length === 0) {
@@ -382,9 +387,17 @@ async function refreshSummaryOnly() {
     return { ingredientId: id, amount: line.requestedAmount }
   })
 
-  const res = await quoteSupplements(payload)
-  if (res.code === 0) {
-    summary.value = res.data.quote
+  try {
+    const res = await quoteSupplements(payload)
+    if (res.code === 0) {
+      summary.value = res.data.quote
+      return
+    }
+
+    uni.showToast({ title: res.message || '价格重算失败，请重试', icon: 'none' })
+  } catch (error) {
+    console.error('[SupplementOrder] 价格重算失败:', error)
+    uni.showToast({ title: '价格重算失败，请稍后重试', icon: 'none' })
   }
 }
 

@@ -7,8 +7,16 @@
  *
  * 用法：
  *   npm run smoke:supplement-purchase
- *   SMOKE_BASE_URL=https://api.sevenkitchen.com/api/v1 npm run smoke:supplement-purchase
  *   SMOKE_NO_ORDER=1 npm run smoke:supplement-purchase   # 只报价、不创建订单
+ *
+ * 打生产（注意：2026-09-22 起 X-Customer-Id 兜底已在生产关闭，必须用令牌）：
+ *   SMOKE_BASE_URL=https://api.sevenkitchen.cloud/api/v1 \
+ *   SMOKE_TOKEN=<有效的 JWT> \
+ *   SMOKE_CUSTOMER_ID=<id> SMOKE_DOG_ID=<id> SMOKE_ADDRESS_ID=<id> SMOKE_RECIPE_ID=<id> \
+ *   SMOKE_NO_ORDER=1 npm run smoke:supplement-purchase
+ *
+ * 说明：本地运行时脚本会直接读数据库来挑选测试客户/狗狗/食谱（需要本地库）；
+ *      打生产时请把上面几个 ID 都显式给出，脚本就不再访问数据库。
  *
  * ⚠️ 须知：默认会**创建一条真实的补剂订单**（状态为待付款），用于验证下单与列表。
  *      不想留数据就加 SMOKE_NO_ORDER=1。
@@ -45,19 +53,55 @@ function section(title) {
   console.log(`\n── ${title} ──`);
 }
 
+/**
+ * 请求客户端。
+ * 有 SMOKE_TOKEN 就用 Bearer（打生产必须走这条）；
+ * 否则退回 X-Customer-Id —— 仅本地开发可用，生产已于 2026-09-22 关闭该兜底。
+ */
 function api(customerId) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.SMOKE_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.SMOKE_TOKEN}`;
+  } else {
+    headers['X-Customer-Id'] = customerId;
+  }
+
   return axios.create({
     baseURL: BASE_URL,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Customer-Id': customerId,
-    },
+    headers,
     timeout: 20000,
   });
 }
 
+/** 显式给出了全部 ID 时，不访问数据库（用于打生产） */
+function hasExplicitFixture() {
+  return Boolean(
+    process.env.SMOKE_CUSTOMER_ID &&
+      process.env.SMOKE_DOG_ID &&
+      process.env.SMOKE_ADDRESS_ID,
+  );
+}
+
 /** 找一个「有狗 + 有地址」的客户；找不到就退化为只要求有狗 */
 async function resolveFixture() {
+  // 打生产时：全部 ID 显式给出，完全不访问数据库
+  // （本地数据库和生产不是同一个，用本地库挑出来的 ID 在生产并不存在）
+  if (hasExplicitFixture()) {
+    return {
+      customerId: process.env.SMOKE_CUSTOMER_ID,
+      dog: {
+        id: process.env.SMOKE_DOG_ID,
+        name: process.env.SMOKE_DOG_NAME || '(指定狗狗)',
+        mealsPerDay: Number(process.env.SMOKE_MEALS_PER_DAY || 2),
+      },
+      address: {
+        id: process.env.SMOKE_ADDRESS_ID,
+        recipientName: process.env.SMOKE_ADDRESS_NAME || '(指定地址)',
+      },
+      fromEnv: true,
+    };
+  }
+
   if (process.env.SMOKE_CUSTOMER_ID) {
     const customerId = process.env.SMOKE_CUSTOMER_ID;
     const dog = process.env.SMOKE_DOG_ID
@@ -95,6 +139,16 @@ async function resolveFixture() {
 /** 找一份「带可购补剂」的食谱 */
 async function resolveRecipe() {
   if (process.env.SMOKE_RECIPE_ID) {
+    // 打生产时只认显式给出的食谱 ID，不查本地数据库
+    if (hasExplicitFixture()) {
+      return {
+        id: process.env.SMOKE_RECIPE_ID,
+        name: process.env.SMOKE_RECIPE_NAME || '(指定食谱)',
+        status: '(指定)',
+        supplements: [],
+      };
+    }
+
     const recipe = await prisma.recipe.findUnique({
       where: { id: process.env.SMOKE_RECIPE_ID },
       select: { id: true, name: true, status: true },

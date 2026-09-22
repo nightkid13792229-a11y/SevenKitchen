@@ -22,10 +22,19 @@
 
 ## 1. 阻塞项（必须完成，否则用户用不了）
 
-### 1.1 生产数据库要执行 8 个变更
+### 1.1 生产数据库变更 —— ✅ 已全部就绪（2026-09-22 核实并更正）
 
-全部是「只加不删」，风险低，但**必须在部署新代码之前或同时执行**。
-在服务器后端目录执行：`npx prisma migrate deploy`，然后 `npx prisma migrate status` 确认 `up to date`。
+> **更正**：本清单最初写「8 个补剂变更待上生产」，那是**从本地 git 提交推断**的，没有去生产核实。
+> 实际登录生产服务器查证后确认：**8 个补剂相关迁移早已全部应用**，
+> 生产 135 个迁移、状态 `Database schema is up to date`。
+>
+> 生产相对本地只差 2 个**与补剂无关**的迁移：
+> `20260918100000_add_order_remake_link`、`20260918110000_add_life_stage_acknowledgement`。
+
+所以补剂这条链路**不需要再执行任何数据库变更**。
+
+<details>
+<summary>补剂相关迁移明细（供核对）</summary>
 
 | # | Migration | 做了什么 |
 |---|---|---|
@@ -38,14 +47,15 @@
 | 7 | `20260918060000_add_desiccant_notice` | 配置表加"标签是否印干燥剂提示" |
 | 8 | `20260918070000_add_oil_shelf_life` | `ingredient` 加是否油基、配置表加油品保质期 |
 
-> ⚠️ 这 8 个属于「待上生产」的那一批（共 12 个）。其余 4 个是成品漏斗埋点、封面角标、订单重做、生命阶段留痕。
+</details>
 
-### 1.2 打开后台「补剂商城设置」的总开关
+### 1.2 打开后台「补剂商城设置」的总开关 —— ✅ 已于 2026-09-22 打开
 
 **默认是关的**（数据库默认 `false`）。不开，用户在制作单页看不到「一键购买补剂」入口。
 
 - 位置：管理后台 → 补剂商城设置 → 开关
-- 本地已验证：打开后 `/supplements/shop-status` 返回 `enabled: true`
+- 生产现状（2026-09-22 核实）：`enabled: true`，已上架 **29 条补剂，且全部都有价格**
+- ⚠️ **生产运费配置是 ¥18**（本地是 ¥8），且未设置包邮门槛 —— 与本地不一致，注意核对
 
 ### 1.3 确认支付配置
 
@@ -100,8 +110,18 @@
 cd backend && npm run smoke:supplement-purchase
 ```
 
-- 默认连本地 `http://127.0.0.1:3011/api/v1`；换环境：`SMOKE_BASE_URL=... npm run smoke:supplement-purchase`
-- 默认会**创建一条测试订单**（待付款状态）；只报价不留数据：`SMOKE_NO_ORDER=1`
+- 默认连本地 `http://127.0.0.1:3011/api/v1`；默认会**创建一条测试订单**（待付款状态）；
+  只报价不留数据：`SMOKE_NO_ORDER=1`
+- **打生产**（2026-09-22 起生产已关闭 `X-Customer-Id` 兜底，必须用令牌）：
+
+  ```bash
+  SMOKE_BASE_URL=https://api.sevenkitchen.cloud/api/v1 \
+  SMOKE_TOKEN=<有效的 JWT> \
+  SMOKE_CUSTOMER_ID=<id> SMOKE_DOG_ID=<id> SMOKE_ADDRESS_ID=<id> SMOKE_RECIPE_ID=<id> \
+  SMOKE_NO_ORDER=1 npm run smoke:supplement-purchase
+  ```
+  本地运行会直接读本地数据库挑测试数据；打生产必须把上面几个 ID 都显式给出，
+  否则会拿本地 ID 去问生产（对不上）。
 - **流程与小程序一致**：算每日饭量 → 取计价预览的补剂明细（真实用量）→ 报价 → 下单 → 试支付 → 查订单列表
 - 覆盖 14 项断言：
   - 商城开关（未开会明确提示"用户看不到入口"并提前收尾）

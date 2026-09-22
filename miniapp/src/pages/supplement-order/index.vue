@@ -80,30 +80,31 @@
       </view>
 
       <!-- 金额明细 -->
+      <!--
+        费用：2026-09-22 按需求收敛为「一个最终价格」。
+        原先把「补剂费 + 分装服务费 + 包材费 + 运费」四项摊开给用户看，
+        小额单下费用合计（服务费 9.9 + 运费 8）甚至超过货款本身，
+        等于主动把"不划算"摆到用户面前。现在只给一个总价，费用构成内部消化。
+      -->
       <view class="section" v-if="summary">
         <view class="section-title">
-          <text class="title-text">费用明细</text>
+          <text class="title-text">费用</text>
         </view>
-        <view class="fee-row">
-          <text class="fee-label">补剂费（{{ selectedLines.length }} 种）</text>
-          <text class="fee-value">¥{{ summary.supplementPrice.toFixed(2) }}</text>
+
+        <view class="fee-total">
+          <view class="fee-total-copy">
+            <text class="fee-total-main">{{ selectedLines.length }} 种补剂 · 一价全包</text>
+            <text class="fee-total-sub">已含分装与配送，结算不再额外收费</text>
+          </view>
+          <text class="fee-total-amount">¥{{ summary.total.toFixed(2) }}</text>
         </view>
-        <view class="fee-row">
-          <text class="fee-label">分装服务费</text>
-          <text class="fee-value">¥{{ summary.serviceFee.toFixed(2) }}</text>
-        </view>
-        <view v-if="summary.packagingFee > 0" class="fee-row">
-          <text class="fee-label">包材费</text>
-          <text class="fee-value">¥{{ summary.packagingFee.toFixed(2) }}</text>
-        </view>
-        <view class="fee-row">
-          <text class="fee-label">运费</text>
-          <text class="fee-value">
-            <text v-if="summary.freeShipping" class="fee-free">已包邮</text>
-            <text v-else>¥{{ summary.shippingFee.toFixed(2) }}</text>
+
+        <view class="fee-perk">
+          <text class="fee-perk-icon">🚚</text>
+          <text class="fee-perk-text">
+            {{ summary.freeShipping ? '全国包邮' : '补剂独立发货，随单配送' }}
           </text>
         </view>
-        <text v-if="summary.shippingDescription" class="fee-note">{{ summary.shippingDescription }}</text>
       </view>
 
       <view class="notice">
@@ -620,32 +621,63 @@ async function handleSubmit() {
   padding-left: 20rpx;
 }
 
-.fee-row {
+/* 费用：只给一个最终价格（费用构成内部消化，不再逐项摊开） */
+.fee-total {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 12rpx 0;
+  gap: 20rpx;
+  padding: 26rpx 24rpx;
+  border-radius: 16rpx;
+  background-color: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
 }
 
-.fee-label {
-  font-size: 26rpx;
-  color: #606266;
+.fee-total-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }
 
-.fee-value {
-  font-size: 26rpx;
-  color: #303133;
+.fee-total-main {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #26261f;
+  line-height: 1.3;
 }
 
-.fee-free {
-  color: #67c23a;
-}
-
-.fee-note {
-  display: block;
-  margin-top: 8rpx;
+.fee-total-sub {
   font-size: 22rpx;
-  color: #c0c4cc;
-  line-height: 1.5;
+  color: #8a6b33;
+  line-height: 1.4;
+}
+
+.fee-total-amount {
+  flex: none;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #b4553f;
+  line-height: 1.1;
+}
+
+.fee-perk {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 16rpx;
+}
+
+.fee-perk-icon {
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.fee-perk-text {
+  font-size: 23rpx;
+  color: #6b6653;
+  line-height: 1.4;
 }
 
 .notice {

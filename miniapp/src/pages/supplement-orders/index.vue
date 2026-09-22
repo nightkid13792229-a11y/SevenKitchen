@@ -63,6 +63,20 @@
         <text class="load-more-text">{{ loading ? '加载中…' : '加载更多' }}</text>
       </view>
     </template>
+
+    <!--
+      客服入口：2026-09-22 补齐。
+      补剂是「确认收款后分装发货」，用户等待期会想催单；而成品订单页早就有这个入口，
+      补剂订单页一直没有，属于两个页面之间的不一致。
+    -->
+    <view class="customer-service-bottom-bar">
+      <CustomerServiceInlineButton
+        class="customer-service-bottom-action"
+        source-type="GENERAL"
+        title="补剂订单咨询"
+        path="/pages/supplement-orders/index"
+      />
+    </view>
   </view>
 </template>
 
@@ -75,6 +89,7 @@ import {
   type SupplementOrder
 } from '../../api/supplements'
 import { runSupplementPayment } from '../../utils/supplement-payment'
+import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 
 const orders = ref<SupplementOrder[]>([])
 const loading = ref(false)
@@ -190,7 +205,8 @@ onReachBottom(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f6f8;
-  padding: 24rpx;
+  /* 底部留出客服固定栏的高度，避免最后一张订单卡被盖住 */
+  padding: 24rpx 24rpx calc(160rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
@@ -394,5 +410,22 @@ onReachBottom(() => {
 .load-more-text {
   font-size: 26rpx;
   color: #4a90d9;
+}
+
+/* 客服固定底栏（与成品订单页同一套做法） */
+.customer-service-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom));
+  background-color: #fbfcf7;
+  box-shadow: 0 -8rpx 28rpx rgba(30, 46, 36, 0.08);
+  box-sizing: border-box;
+}
+
+.customer-service-bottom-action {
+  width: 100%;
 }
 </style>

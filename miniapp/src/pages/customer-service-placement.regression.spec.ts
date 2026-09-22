@@ -49,6 +49,19 @@ describe('customer service page placement regressions', () => {
     expect(templateSource).toContain('title="订单列表咨询"')
   })
 
+  it('puts supplement order list customer service in its own fixed bottom bar', () => {
+    // 2026-09-22 补齐：补剂订单页此前没有任何客服入口，
+    // 而成品订单页早就有，属于两页之间的不一致。
+    const source = readPage('src/pages/supplement-orders/index.vue')
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+
+    expect(source).toContain('CustomerServiceInlineButton')
+    expect(source).not.toContain('<CustomerServiceFloatButton')
+    expect(source).not.toContain('import CustomerServiceFloatButton')
+    expect(templateSource).toContain('class="customer-service-bottom-bar"')
+    expect(templateSource).toContain('title="补剂订单咨询"')
+  })
+
   it('renders the inline customer service button with an icon and label', () => {
     const source = readPage('src/components/CustomerServiceInlineButton.vue')
 

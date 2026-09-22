@@ -207,8 +207,9 @@ describe('SupplementPricingService', () => {
       expect(quote.bagCount).toBe(3);
       expect(quote.serviceFee).toBe(9.9);
       expect(quote.goodsSubtotal).toBeCloseTo(1.7 + 12 + 15.2 + 9.9, 2);
-      expect(quote.shippingFee).toBe(8);
-      expect(quote.total).toBeCloseTo(46.8, 2);
+      // 2026-09-22：运费不再向客户收取，total = goodsSubtotal
+      expect(quote.shippingFee).toBe(0);
+      expect(quote.total).toBeCloseTo(38.8, 2);
       expect(quote.warnings).toEqual([]);
     });
 
@@ -223,29 +224,29 @@ describe('SupplementPricingService', () => {
       expect(quote.serviceFee).toBe(9);
     });
 
-    it('达到包邮门槛时免运费，并在说明里写清楚', () => {
-      const quote = service.calculateQuote(
-        buildConfig({ freeShippingThreshold: 30 }),
-        lines,
-        { fee: 8, description: '补剂一口价运费 8.00 元' },
-      );
-
-      expect(quote.goodsSubtotal).toBeGreaterThan(30);
-      expect(quote.freeShipping).toBe(true);
-      expect(quote.shippingFee).toBe(0);
-      expect(quote.shippingDescription).toContain('包邮');
-      expect(quote.total).toBeCloseTo(quote.goodsSubtotal, 2);
-    });
-
-    it('未达包邮门槛时照常收运费', () => {
-      const quote = service.calculateQuote(
+    it('运费一律由加价吸收，不再向客户收取（2026-09-22 定价口径）', () => {
+      // 无论包邮门槛设成多少，客户看到的都是一个包邮价：total = goodsSubtotal。
+      // 运费仍是真实成本（配置不改），只是不再单列向客户收取。
+      const belowThreshold = service.calculateQuote(
         buildConfig({ freeShippingThreshold: 999 }),
         lines,
         { fee: 8, description: '补剂一口价运费 8.00 元' },
       );
 
-      expect(quote.freeShipping).toBe(false);
-      expect(quote.shippingFee).toBe(8);
+      expect(belowThreshold.freeShipping).toBe(true);
+      expect(belowThreshold.shippingFee).toBe(0);
+      expect(belowThreshold.total).toBeCloseTo(belowThreshold.goodsSubtotal, 2);
+      expect(belowThreshold.shippingDescription).toContain('包邮');
+
+      const aboveThreshold = service.calculateQuote(
+        buildConfig({ freeShippingThreshold: 30 }),
+        lines,
+        { fee: 8, description: '补剂一口价运费 8.00 元' },
+      );
+
+      expect(aboveThreshold.freeShipping).toBe(true);
+      expect(aboveThreshold.shippingFee).toBe(0);
+      expect(aboveThreshold.total).toBeCloseTo(aboveThreshold.goodsSubtotal, 2);
     });
 
     it('低于最低起送金额时给出警告', () => {
@@ -322,7 +323,8 @@ describe('SupplementPricingService', () => {
         ],
       });
 
-      expect(quote.shippingFee).toBe(6);
+      // 运费仍按配置算出（成本照记），但不再向客户收取
+      expect(quote.shippingFee).toBe(0);
       expect(mockShippingService.calculateShippingFeePreview).not.toHaveBeenCalled();
     });
 
@@ -350,7 +352,7 @@ describe('SupplementPricingService', () => {
         totalWeightG: 300,
       });
 
-      expect(quote.shippingFee).toBe(12);
+      expect(quote.shippingFee).toBe(0);
       expect(
         mockShippingService.calculateShippingFeePreview,
       ).toHaveBeenCalledWith({

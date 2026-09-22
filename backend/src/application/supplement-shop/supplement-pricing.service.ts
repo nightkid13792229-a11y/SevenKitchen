@@ -256,9 +256,24 @@ export class SupplementPricingService {
       supplementPrice + serviceFee + packagingFee,
     );
 
-    const threshold = config.freeShippingThreshold;
-    const freeShipping = threshold !== null && goodsSubtotal >= threshold;
-    const shippingFee = freeShipping ? 0 : roundPrice(shipping.fee, 'NONE');
+    /**
+     * 2026-09-22 定价口径调整：运费不再向客户单列收取，改由加价空间吸收。
+     *
+     * 背景：3 种补剂的货款只有 ¥15.7，而分装服务费 ¥9.9 + 运费 ¥8 = ¥17.9，
+     * 费用合计比货本身还高，用户看到的是一张"不划算"的账单。
+     *
+     * 决策（已与业务确认，方案 A）：
+     *   - 配置里的 flatShippingFee **保持原值不变** —— 运费仍是真实成本，照常入账；
+     *   - 只是不再作为单独一项向客户收取，客户看到的就是一个「包邮价」；
+     *   - 即 total = goodsSubtotal，运费由 2 倍加价产生的毛利覆盖。
+     *
+     * 实测：示例单合计 ¥33.6 → ¥25.6，客户少付 ¥8，仍有约 ¥9.8 毛利。
+     *
+     * ⚠️ 不要把这里改回"按门槛收运费"，也不要顺手把 flatShippingFee 改成 0：
+     *    前者会让小额单重新暴露费用问题，后者会让运费成本在账上消失。
+     */
+    const shippingFee = 0;
+    const freeShipping = true;
 
     const total = guardFloat(goodsSubtotal + shippingFee);
 
@@ -277,9 +292,7 @@ export class SupplementPricingService {
       packagingFee,
       goodsSubtotal,
       shippingFee,
-      shippingDescription: freeShipping
-        ? `${shipping.description}（已满 ${threshold?.toFixed(2)} 元包邮）`
-        : shipping.description,
+      shippingDescription: '全国包邮（运费已含在价格内）',
       freeShipping,
       total,
       warnings,

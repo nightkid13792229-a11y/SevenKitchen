@@ -187,7 +187,9 @@ describe('SupplementOrderService', () => {
       expect(result.quote.lines[0].unit).toBe('平勺');
       expect(result.quote.lines[0].packedAmount).toBe(23);
       expect(result.quote.lines[0].price).toBe(1.7);
-      expect(result.quote.total).toBeCloseTo(1.7 + 9.9 + 8, 2);
+      // 2026-09-22：运费不再向客户收取（由加价吸收），total = 补剂售价 + 服务费
+      expect(result.quote.shippingFee).toBe(0);
+      expect(result.quote.total).toBeCloseTo(1.7 + 9.9, 2);
     });
 
     it('未上架的补剂进入 unavailable，但其余仍可报价', async () => {

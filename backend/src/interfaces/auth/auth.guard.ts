@@ -1,6 +1,6 @@
 /**
  * Auth Guard
- * Validates JWT Bearer token or X-Customer-Id header and attaches user to request
+ * Validates JWT Bearer token (or, in development only, X-Customer-Id header)
  * Priority: Authorization Bearer token > X-Customer-Id header
  */
 
@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { RequestUser } from './request-user.interface';
 import { JwtAuthService } from './jwt.service';
+import { isDevAuthEnabled } from './dev-auth';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -43,8 +44,12 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    // Priority 2: Fallback to X-Customer-Id header (backward compatibility)
-    if (!userId) {
+    // Priority 2: X-Customer-Id 兜底 —— 仅开发环境可用。
+    //
+    // ⚠️ 这是一条身份后门：不需要任何令牌，只要把请求头填成某个用户的 ID 就能冒充他。
+    // 角色固定为 CUSTOMER（不能提权到管理员），但足以读写该用户的订单、地址、狗狗等数据。
+    // 因此只在显式开启 ALLOW_DEV_AUTH=true 时生效，默认关闭（详见 dev-auth.ts）。
+    if (!userId && isDevAuthEnabled()) {
       const headerCustomerId = request.headers['x-customer-id'];
       if (
         headerCustomerId &&

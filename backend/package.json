@@ -201,6 +201,9 @@
       "^src/(.*)$": "<rootDir>/src/$1"
     },
     "coverageDirectory": "coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup-env.ts"
+    ]
   }
 }

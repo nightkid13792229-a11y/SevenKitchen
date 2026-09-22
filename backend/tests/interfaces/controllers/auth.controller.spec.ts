@@ -89,6 +89,16 @@ describe('AuthController (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/login', () => {
+    // 这个接口是"传 customerId 即签发令牌"的提权后门，只在开发环境开放，
+    // 所以下面这些用例需要先显式打开 ALLOW_DEV_AUTH。
+    beforeEach(() => {
+      process.env.ALLOW_DEV_AUTH = 'true';
+    });
+
+    afterEach(() => {
+      delete process.env.ALLOW_DEV_AUTH;
+    });
+
     it('should return 200 with token for valid customerId', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -162,6 +172,22 @@ describe('AuthController (e2e)', () => {
       const payload = jwtAuthService.validateToken(token);
 
       expect(payload).toHaveProperty('customerId', 'test-customer-123');
+    });
+  });
+
+  describe('POST /api/v1/auth/login（生产环境：后门必须关闭）', () => {
+    it('未开启 ALLOW_DEV_AUTH 时不签发任何令牌，返回 404', async () => {
+      delete process.env.ALLOW_DEV_AUTH;
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ customerId: 'test-customer-123' })
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 404);
+      expect(response.body.data).toBeNull();
+      // 关键：绝不能返回 token
+      expect(JSON.stringify(response.body)).not.toContain('token');
     });
   });
 });

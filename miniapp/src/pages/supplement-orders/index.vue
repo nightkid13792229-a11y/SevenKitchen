@@ -4,9 +4,11 @@
       <text class="loading-text">加载中…</text>
     </view>
 
+    <!-- 空态：补上出口，否则用户到这一页就没有下一步可点 -->
     <view v-else-if="orders.length === 0" class="empty-state">
       <text class="empty-title">还没有补剂订单</text>
-      <text class="empty-desc">在「DIY 制作单」里点「一键购买补剂」就能下单</text>
+      <text class="empty-desc">补剂从 DIY 制作单购买。先在「我的制作单」里打开一份，再点「一键购买补剂」。</text>
+      <button class="empty-action" @tap="goToDiySheetList">去我的制作单</button>
     </view>
 
     <template v-else>
@@ -92,6 +94,11 @@ function statusClass(status: string): string {
   if (status === 'CANCELLED' || status === 'AFTERSALE') return 'status-muted'
   if (status === 'PENDING_PAYMENT') return 'status-pending'
   return 'status-progress'
+}
+
+/** 空态出口：去「我的制作单」挑一份制作单再买补剂 */
+function goToDiySheetList() {
+  uni.navigateTo({ url: '/pages/diy-sheet-list/index' })
 }
 
 function formatAmount(value: number): string {
@@ -217,6 +224,23 @@ onReachBottom(() => {
   color: #909399;
   text-align: center;
   line-height: 1.6;
+}
+
+/* 空态出口 */
+.empty-action {
+  margin-top: 40rpx;
+  padding: 0 56rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #1e3a2f;
+  border-radius: 12rpx;
+}
+
+.empty-action::after {
+  border: none;
 }
 
 .order-card {

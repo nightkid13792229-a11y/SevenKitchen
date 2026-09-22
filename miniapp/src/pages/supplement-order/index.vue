@@ -1,8 +1,13 @@
 <template>
   <view class="page">
+    <!--
+      空态：2026-09-22 补上出口。
+      原先只有两行文字，用户直接打开这页会卡住（比如从订单页返回、或收藏/转发进来）。
+    -->
     <view v-if="!draft" class="empty-state">
       <text class="empty-title">没有待购买的补剂</text>
-      <text class="empty-desc">请先在「DIY 制作单」里配好餐，再点「一键购买补剂」</text>
+      <text class="empty-desc">补剂是从 DIY 制作单带过来的。先在「我的制作单」里打开一份，再点「一键购买补剂」。</text>
+      <button class="empty-action" @tap="goToDiySheetList">去我的制作单</button>
     </view>
 
     <template v-else>
@@ -19,8 +24,16 @@
       <view class="section">
         <view class="section-title">
           <text class="title-text">选择要买的补剂</text>
-          <text class="title-tip">按品种单独分装</text>
+          <!-- 多种补剂时逐个点太累，给一个全选/全不选（不可购买的自动跳过） -->
+          <text
+            v-if="selectableLines.length > 1"
+            class="title-action"
+            @tap="toggleSelectAll"
+          >
+            {{ allSelectableSelected ? '全不选' : '全选' }}
+          </text>
         </view>
+        <text class="section-subtip">按品种单独分装，一袋一种</text>
 
         <view
           v-for="line in displayLines"
@@ -185,6 +198,34 @@ const selectedLines = computed(() =>
     (line) => !line.unavailableReason && selectedIds.value.includes(line.ingredientId)
   )
 )
+
+/** 可勾选的补剂（排除不可购买的） */
+const selectableLines = computed(() =>
+  lines.value.filter((line) => !line.unavailableReason)
+)
+
+const allSelectableSelected = computed(
+  () =>
+    selectableLines.value.length > 0 &&
+    selectableLines.value.every((line) => selectedIds.value.includes(line.ingredientId))
+)
+
+/** 全选 / 全不选（不可购买的自动跳过，不会污染报价） */
+async function toggleSelectAll() {
+  selectedIds.value = allSelectableSelected.value
+    ? []
+    : selectableLines.value.map((line) => line.ingredientId)
+
+  try {
+    await refreshSummaryOnly()
+  } catch (error) {
+    console.error('[SupplementOrder] 全选重算合计失败:', error)
+  }
+}
+
+function goToDiySheetList() {
+  uni.navigateTo({ url: '/pages/diy-sheet-list/index' })
+}
 
 const selectedAddress = computed(
   () => addresses.value.find((item) => item.id === selectedAddressId.value) || null
@@ -457,6 +498,23 @@ async function handleSubmit() {
   line-height: 1.6;
 }
 
+/* 空态出口：给用户一条明确的下一步 */
+.empty-action {
+  margin-top: 40rpx;
+  padding: 0 56rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #1e3a2f;
+  border-radius: 12rpx;
+}
+
+.empty-action::after {
+  border: none;
+}
+
 .section {
   background-color: #ffffff;
   border-radius: 16rpx;
@@ -494,9 +552,19 @@ async function handleSubmit() {
   color: #303133;
 }
 
-.title-tip {
+/* 全选 / 全不选 */
+.title-action {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #0f6b43;
+}
+
+.section-subtip {
+  display: block;
+  margin-bottom: 14rpx;
   font-size: 22rpx;
   color: #c0c4cc;
+  line-height: 1.4;
 }
 
 .line-row {

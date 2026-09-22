@@ -67,6 +67,14 @@ describe('supplement purchase regressions', () => {
       expect(selectableBlock).toContain('!line.unavailableReason')
     })
 
+    it('提交说明对「在线支付可用 / 不可用」两种情况都成立', () => {
+      // 原文只说"会尽快与你确认收款"，在线支付可用时就是错的；
+      // 两种情况的差别在提交前无法预知，所以文案必须中性。
+      expect(template).toContain('提交订单后可在线支付')
+      expect(template).toContain('若在线支付暂不可用')
+      expect(template).not.toContain('提交订单后我们会尽快与你确认收款，随后分装发货')
+    })
+
     it('提交后按支付结果分流，通道不可用时降级人工确认', () => {
       expect(source).toContain('runSupplementPayment')
       expect(source).toContain('showPaidModal')

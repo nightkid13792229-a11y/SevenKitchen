@@ -41,6 +41,17 @@ describe('supplement purchase regressions', () => {
       expect(source).toContain("'/pages/diy-sheet-list/index'")
     })
 
+    it('首次报价期间有加载态，不会显示成空白页', () => {
+      expect(template).toContain('v-else-if="initializing"')
+      expect(template).toContain('正在核对补剂')
+    })
+
+    it('补剂全部不可购买时给出说明与出口，而不是一片灰', () => {
+      expect(template).toContain('selectableLines.length === 0')
+      expect(template).toContain('这些补剂暂时无法购买')
+      expect(template).toContain('返回我的制作单')
+    })
+
     it('多种补剂时提供全选/全不选', () => {
       expect(template).toContain('@tap="toggleSelectAll"')
       expect(template).toContain('allSelectableSelected')

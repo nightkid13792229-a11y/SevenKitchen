@@ -10,6 +10,22 @@
       <button class="empty-action" @tap="goToDiySheetList">去我的制作单</button>
     </view>
 
+    <!-- 首次报价期间：给一个明确的加载态，避免页面看起来是"空的/坏了" -->
+    <view v-else-if="initializing" class="empty-state">
+      <text class="empty-title">正在核对补剂</text>
+      <text class="empty-desc">正在按制作单上的用量计算价格，请稍候…</text>
+    </view>
+
+    <!--
+      制作单上的补剂全都没开放购买时，原先会呈现"一片灰 + 底部 ¥0.00 + 灰按钮"，
+      没有任何解释。这里给一个明确的说明与出口。
+    -->
+    <view v-else-if="lines.length > 0 && selectableLines.length === 0" class="empty-state">
+      <text class="empty-title">这些补剂暂时无法购买</text>
+      <text class="empty-desc">制作单上的补剂目前都没有开放购买，或还没有定好价格。可以稍后再试，或联系客服。</text>
+      <button class="empty-action" @tap="goToDiySheetList">返回我的制作单</button>
+    </view>
+
     <template v-else>
       <!-- 来源制作单 -->
       <view class="section source-card">

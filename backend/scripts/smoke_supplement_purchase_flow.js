@@ -10,12 +10,12 @@
  *   SMOKE_BASE_URL=https://api.sevenkitchen.com/api/v1 npm run smoke:supplement-purchase
  *   SMOKE_NO_ORDER=1 npm run smoke:supplement-purchase   # 只报价、不创建订单
  *
- * ⚠️ 两点须知：
- *   1. 默认会**创建一条真实的补剂订单**（状态为待付款），用于验证下单与列表。
+ * ⚠️ 须知：默认会**创建一条真实的补剂订单**（状态为待付款），用于验证下单与列表。
  *      不想留数据就加 SMOKE_NO_ORDER=1。
- *   2. 补剂用量取的是**代表性数值**（默认 10），不是真实制作单算出来的用量 ——
- *      真实用量来自计价预览接口，链路较长。本脚本验证的是链路可用性与计价口径，
- *      金额不具备业务参考意义。
+ *
+ * 流程与小程序一致：先算每日饭量 → 取计价预览的补剂明细（真实用量）
+ * → 用这些用量报价 → 下单 → 试支付 → 查订单列表。
+ * 所以它同时验证了「一键购买补剂」入口会不会出现（入口条件是补剂明细数 > 0）。
  *
  * 可覆盖的环境变量：
  *   SMOKE_CUSTOMER_ID / SMOKE_DOG_ID / SMOKE_ADDRESS_ID / SMOKE_RECIPE_ID / SMOKE_AMOUNT
@@ -178,11 +178,111 @@ async function main() {
     return;
   }
 
-  // ── 2. 报价（全部补剂）──────────────────────────────────────────
-  section('2. 报价');
-  const allLines = recipe.supplements.map((item) => ({
+  // ── 2. 制作单入口前置条件 ──────────────────────────────────────
+  //
+  // 「一键购买补剂」入口的显示条件是 supplementShopEnabled && 补剂明细数 > 0，
+  // 而补剂明细来自计价预览接口的 pricingBreakdown.ingredientDetails。
+  // 所以这一步同时验证「入口会出现」和「用量是真实的」。
+  section('2. 制作单入口前置条件');
+  const cycleDays = 7;
+
+  let calcRes;
+  try {
+    calcRes = await request.post(`/dogs/${fixture.dog.id}/calc-for-recipe`, {
+      recipeId: recipe.id,
+    });
+  } catch (error) {
+    record(
+      '每日饭量计算 /dogs/:id/calc-for-recipe',
+      false,
+      error.response?.data?.message || error.message,
+    );
+    return;
+  }
+  // 注意：后端会把校验类错误包成 HTTP 200 + { code: 4xx }，
+  // 所以必须显式看 code，否则参数没传够会被当成"明细为空"而误报。
+  if (calcRes.data?.code !== 0) {
+    record(
+      '每日饭量计算 /dogs/:id/calc-for-recipe',
+      false,
+      calcRes.data?.message || `code ${calcRes.data?.code}`,
+    );
+    return;
+  }
+  const dailyIntakeG = Number(calcRes.data?.data?.dailyIntakeG || 0);
+  record(
+    '每日饭量计算 /dogs/:id/calc-for-recipe',
+    dailyIntakeG > 0,
+    `dailyIntakeG = ${Math.round(dailyIntakeG)} g（狗狗「${fixture.dog.name}」× 食谱「${recipe.name}」）`,
+  );
+  if (!(dailyIntakeG > 0)) {
+    record('后续步骤', false, '算不出每日饭量，制作单不会有补剂明细');
+    return;
+  }
+
+  // 制作单按「每餐一袋」分装，这里照搬 App 的口径
+  const mealsPerDay = Number(fixture.dog.mealsPerDay || 2);
+  const packageSpecG = Math.max(1, Math.round(dailyIntakeG / mealsPerDay));
+  const packageCount = cycleDays * mealsPerDay;
+
+  let previewRes;
+  try {
+    previewRes = await request.post('/orders/pricing/preview', {
+      dogId: fixture.dog.id,
+      type: 'FRESH_FOOD',
+      pricingPurpose: 'DIY_SHEET',
+      items: [
+        {
+          recipeId: recipe.id,
+          quantityG: Math.round(dailyIntakeG * cycleDays),
+          packageSpecG,
+          packageCount,
+          cycleDays,
+          dailyIntakeG,
+        },
+      ],
+    });
+  } catch (error) {
+    record(
+      '制作单明细 /orders/pricing/preview',
+      false,
+      error.response?.data?.message || error.message,
+    );
+    return;
+  }
+  if (previewRes.data?.code !== 0) {
+    record(
+      '制作单明细 /orders/pricing/preview',
+      false,
+      previewRes.data?.message || `code ${previewRes.data?.code}`,
+    );
+    return;
+  }
+
+  const ingredientDetails =
+    previewRes.data?.data?.pricingBreakdown?.ingredientDetails || [];
+  const supplementDetails = ingredientDetails.filter(
+    (item) => item.type === 'SUPPLEMENT',
+  );
+  record(
+    '制作单明细含补剂（决定「一键购买补剂」入口是否出现）',
+    supplementDetails.length > 0,
+    `${supplementDetails.length} 种补剂 / 全部明细 ${ingredientDetails.length} 项`,
+  );
+  if (supplementDetails.length === 0) {
+    record(
+      '后续步骤',
+      false,
+      '计价预览没有返回补剂明细，小程序里不会出现「一键购买补剂」入口',
+    );
+    return;
+  }
+
+  // ── 3. 报价（用制作单算出来的真实用量）──────────────────────────
+  section('3. 报价');
+  const allLines = supplementDetails.map((item) => ({
     ingredientId: item.ingredientId,
-    amount: DEFAULT_AMOUNT,
+    amount: Number(item.amount) || DEFAULT_AMOUNT,
   }));
 
   const quoteRes = await request.post('/supplements/quote', { lines: allLines });
@@ -190,8 +290,17 @@ async function main() {
   const quote = quotePayload.quote;
   const unavailable = quotePayload.unavailable || [];
 
+  if (quoteRes.data?.code !== 0) {
+    record(
+      'POST /supplements/quote（用量取自制作单）',
+      false,
+      quoteRes.data?.message || `code ${quoteRes.data?.code}`,
+    );
+    return;
+  }
+
   record(
-    'POST /supplements/quote',
+    'POST /supplements/quote（用量取自制作单）',
     Boolean(quote && quote.lines?.length),
     `${quote?.lines?.length ?? 0} 种可购${
       unavailable.length ? `，${unavailable.length} 种不可购（${unavailable.map((u) => `${u.name}:${u.reason}`).join('、')}）` : ''
@@ -202,8 +311,8 @@ async function main() {
     return;
   }
 
-  // ── 3. 计价口径断言 ────────────────────────────────────────────
-  section('3. 计价口径');
+  // ── 4. 计价口径断言 ────────────────────────────────────────────
+  section('4. 计价口径');
   const expectedGoods =
     Math.round((quote.supplementPrice + quote.serviceFee + quote.packagingFee) * 100) / 100;
 
@@ -229,7 +338,7 @@ async function main() {
   );
 
   // ── 4. 下单 ────────────────────────────────────────────────────
-  section('4. 下单');
+  section('5. 下单');
   if (!fixture.address) {
     record('POST /supplement-orders', false, '测试客户没有收货地址，跳过（请先在「我的 → 收货地址」添加）');
   } else if (!CREATE_ORDER) {
@@ -262,7 +371,7 @@ async function main() {
       );
 
       // ── 5. 支付通道 ────────────────────────────────────────────
-      section('5. 支付');
+      section('6. 支付');
       try {
         const payRes = await request.post(`/supplement-orders/${order.id}/pay`);
         const paid = payRes.data?.data?.status === 'PAID';
@@ -281,7 +390,7 @@ async function main() {
       }
 
       // ── 6. 订单列表 ────────────────────────────────────────────
-      section('6. 订单列表');
+      section('7. 订单列表');
       const listRes = await request.get('/supplement-orders', { params: { page: 1, pageSize: 10 } });
       const list = listRes.data?.data;
       const found = (list?.items || []).some((item) => item.id === order.id);

@@ -41,7 +41,7 @@ import {
   SendSmsResponseDto,
 } from '../dto/auth/phone-login.dto';
 import * as bcrypt from 'bcrypt';
-import { AuthGuard, CurrentUser } from '../auth';
+import { AuthGuard, CurrentUser, isDevAuthEnabled } from '../auth';
 import type { RequestUser } from '../auth';
 import { AdminGuard } from '../guards/role.guard';
 import { randomBytes } from 'crypto';
@@ -150,6 +150,21 @@ export class AuthController {
     description: 'Invalid input - customerId is required',
   })
   async login(@Body() loginRequest: LoginRequestDto): Promise<any> {
+    /**
+     * ⚠️ 提权后门，仅开发环境可用。
+     *
+     * 这个接口只要传 customerId 就会签发该用户的 JWT，而且令牌里带的是数据库中的
+     * **真实角色** —— 拿到管理员 ID 就等于拿到管理员权限。生产必须关闭。
+     *
+     * 判断依据见 dev-auth.ts：只认显式的 ALLOW_DEV_AUTH=true（fail-closed），
+     * 不用 NODE_ENV，因为主生产服务并没有设置 NODE_ENV。
+     *
+     * 关闭时故意返回 404（而不是 403），避免暴露"这里有这么个接口"。
+     */
+    if (!isDevAuthEnabled()) {
+      return ApiResponseDto.error(404, 'Not found');
+    }
+
     // Validate customerId
     if (
       !loginRequest.customerId ||

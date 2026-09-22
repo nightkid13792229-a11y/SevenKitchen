@@ -173,6 +173,9 @@ describe('AuthGuard (e2e)', () => {
   });
 
   afterEach(async () => {
+    // 避免开发后门开关在用例之间串味
+    delete process.env.ALLOW_DEV_AUTH;
+
     if (app) {
       await app.close();
     }
@@ -224,15 +227,33 @@ describe('AuthGuard (e2e)', () => {
     });
   });
 
-  describe('X-Customer-Id header (backward compatibility)', () => {
-    it('should allow access with X-Customer-Id header when no Bearer token', async () => {
+  describe('X-Customer-Id header（开发后门，默认关闭）', () => {
+    it('未开启 ALLOW_DEV_AUTH 时，不能用 X-Customer-Id 冒充用户', async () => {
+      delete process.env.ALLOW_DEV_AUTH;
+
       const response = await request(app.getHttpServer())
         .get('/api/v1/dogs/non-existent-id')
         .set('X-Customer-Id', 'test-customer-123')
         .expect(200);
 
-      // Should get 404 in body (not 401), meaning auth passed
-      expect(response.body).toHaveProperty('code', 404);
+      expect(response.body).toHaveProperty('code', 401);
+      expect(response.body).toHaveProperty('message', 'Unauthorized');
+    });
+
+    it('显式开启 ALLOW_DEV_AUTH=true 后才放行（供本地开发与冒烟脚本使用）', async () => {
+      process.env.ALLOW_DEV_AUTH = 'true';
+
+      try {
+        const response = await request(app.getHttpServer())
+          .get('/api/v1/dogs/non-existent-id')
+          .set('X-Customer-Id', 'test-customer-123')
+          .expect(200);
+
+        // Should get 404 in body (not 401), meaning auth passed
+        expect(response.body).toHaveProperty('code', 404);
+      } finally {
+        delete process.env.ALLOW_DEV_AUTH;
+      }
     });
 
     it('should reject missing X-Customer-Id when no Bearer token', async () => {

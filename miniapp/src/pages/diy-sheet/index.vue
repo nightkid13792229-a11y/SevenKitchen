@@ -687,7 +687,9 @@ const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || 
  */
 const effectiveCycleDays = computed(() => {
   const bags = packagePlanTotal.value.totalPackages
-  const meals = Number(mealsPerDay.value) || 0
+  // 餐数一律从狗狗档案取。这里曾经写成 mealsPerDay.value —— 本文件根本没有这个
+  // 绑定，取值时直接抛 ReferenceError，导致「一键购买补剂」点了没反应。
+  const meals = Number(dog.value?.mealsPerDay) || 0
   if (bags > 0 && meals > 0) {
     const days = Math.round(bags / meals)
     if (days > 0) return days

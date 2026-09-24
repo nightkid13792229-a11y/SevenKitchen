@@ -101,12 +101,19 @@ describe('supplement purchase regressions', () => {
       expect(selectableBlock).toContain('!line.unavailableReason')
     })
 
-    it('提交说明对「在线支付可用 / 不可用」两种情况都成立', () => {
-      // 原文只说"会尽快与你确认收款"，在线支付可用时就是错的；
-      // 两种情况的差别在提交前无法预知，所以文案必须中性。
-      expect(template).toContain('提交订单后可在线支付')
-      expect(template).toContain('若在线支付暂不可用')
-      expect(template).not.toContain('提交订单后我们会尽快与你确认收款，随后分装发货')
+    it('支付成功与降级人工收款，两种弹窗文案各自成立', () => {
+      // 页面上的说明小字已按产品要求撤掉（见下方「页脚上方不放说明小字」那条），
+      // 但提交后的弹窗仍然必须区分两种情况：
+      // 在线支付已经成功，却告诉顾客"我们会尽快与你确认收款"，那就是错的。
+      const paidBlock = source.slice(
+        source.indexOf('function showPaidModal'),
+        source.indexOf('function showManualConfirmModal'),
+      )
+      const manualBlock = source.slice(source.indexOf('function showManualConfirmModal'))
+
+      expect(paidBlock).toContain('我们会尽快分装发货')
+      expect(paidBlock).not.toContain('确认收款')
+      expect(manualBlock).toContain('我们会尽快与你确认收款')
     })
 
     it('价格重算失败会明确提示，不会静默保留旧合计', () => {
@@ -212,10 +219,20 @@ describe('supplement purchase regressions', () => {
       expect(total).toMatch(/font-weight:\s*700/)
     })
 
-    it('分装小样有保质期说明，取代了"总天数硬卡一手"', () => {
-      expect(template).toContain('notice-expiry')
-      expect(template).toContain('有效期至')
-      expect(template).toContain('按需购买')
+    it('页脚上方不放说明小字（2026-09-25 按产品要求撤掉，别再放回来）', () => {
+      // 原先这里有两条：一条讲分装与支付方式，一条讲分装小样的保质期。
+      // 后者要传达的信息（袋上印「有效期至」）在实物标签上本来就直接看得到。
+      // 断言只针对**渲染出来的文本节点**，避免被解释性注释里的同名字样误伤。
+      const renderedText = [...template.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
+        .map((m) => m[1])
+        .join('\n')
+
+      expect(renderedText).not.toContain('有效期至')
+      expect(renderedText).not.toContain('按需购买')
+      expect(renderedText).not.toContain('确认收款后发货')
+      // 样式也一并清掉，别留下没人用的死规则
+      expect(source).not.toContain('.notice-expiry')
+      expect(source).not.toContain('.notice-text')
     })
 
     it('加量卡片紧贴费用明细，顾客看钱的地方就能调整', () => {

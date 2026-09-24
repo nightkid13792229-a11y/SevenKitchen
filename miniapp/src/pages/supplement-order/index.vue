@@ -236,22 +236,12 @@
 
       </view>
 
-      <view class="notice">
-        <text class="notice-text">
-          补剂按品种分装成小样，独立发货。提交订单后可在线支付；若在线支付暂不可用，我们会尽快与你确认收款后发货。
-        </text>
-        <!--
-          效期说明（2026-09-24）
-          原先靠"总天数 ≤ 90 天"硬卡一手，但那个天数本身是按
-          「总袋数 ÷ 每天餐数」估的 —— 一天吃几袋我们无从知道（鲜食+干粮混吃的人
-          可能一天只喂一袋）。拿一个不可靠的估算去硬拦用户会误伤正常订单，
-          所以改为**在页面上说清楚**：分装小样有保质期，袋上印有效期至。
-          顾客在包装上直接看得到，比一句拦截提示更有效。
-        -->
-        <text class="notice-text notice-expiry">
-          分装小样有保质期，每袋标签上都印有「有效期至」，建议按需购买。
-        </text>
-      </view>
+      <!--
+        页脚上方不放任何说明小字（2026-09-25 按产品要求撤掉）。
+        原先这里有两条：一条讲分装与支付方式，一条讲分装小样的保质期。
+        后一条要传达的信息（袋上印有「有效期至」）在实物标签上本来就直接看得到，
+        在页面上再说一遍是重复。不要再加回来。
+      -->
 
       <view class="footer-space"></view>
 
@@ -1167,22 +1157,6 @@ async function handleSubmit() {
   font-size: 26rpx;
   color: #4a90d9;
   padding-left: 20rpx;
-}
-
-.notice {
-  padding: 0 8rpx 20rpx;
-}
-
-.notice-text {
-  font-size: 22rpx;
-  color: #909399;
-  line-height: 1.6;
-}
-
-/* 效期说明：与主说明拉开一点，读起来是两条独立信息 */
-.notice-expiry {
-  margin-top: 8rpx;
-  color: #a97c33;
 }
 
 .footer-space {

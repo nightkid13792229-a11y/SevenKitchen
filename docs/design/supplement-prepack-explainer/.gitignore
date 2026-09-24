@@ -1,0 +1,5 @@
+# 第三方品牌商品照片（NOW / Solgar / Nature's Way 等），仅作 AI 生图与抠图合成的
+# 参考素材，版权不属于本项目，因此不入库。
+# 本地重新跑 generate-poster.mjs / composite-poster.mjs 前需自备同尺寸白底商品图。
+refs/
+refs-focus/

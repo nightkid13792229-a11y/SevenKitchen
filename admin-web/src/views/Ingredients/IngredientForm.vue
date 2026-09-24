@@ -3073,6 +3073,53 @@ const formRules: FormRules = {
   ],
 }
 
+/**
+ * 组装提交给后端的载荷。
+ *
+ * 必须只挑「后端 DTO 认可 + 本表单可编辑」的字段：
+ * formData 会被 props.ingredient（原料详情接口）整体 Object.assign 进来，
+ * 里面带着 nutritionFoodMappings（约 180KB）等只读字段；若直接 {...formData} 提交，
+ * 请求体会到 260KB+，超过服务端 100KB 的 JSON 请求体上限，
+ * 保存固定返回 413（Payload Too Large），表现为「点保存必报错、CFCT 分类改不动」。
+ *
+ * 营养档案（nutritionProfile）在本表单是只读的（由「原料列表 → 营养数据」入口单独维护）：
+ * - 编辑已有原料时不回传，避免把 90KB+ 的只读数据塞进请求（后端会保留原值）；
+ * - 新建 / 复制新增时带上，保证「复制新增」仍能继承源原料的营养档案。
+ */
+function buildSubmitPayload(): IngredientForm {
+  const payload: IngredientForm = {
+    id: formData.id,
+    name: formData.name,
+    type: formData.type,
+    procurementStrategy: formData.procurementStrategy,
+    brand: formData.brand,
+    productModel: formData.productModel,
+    purchaseChannel: formData.purchaseChannel,
+    diyEnabled: formData.diyEnabled,
+    procurementEnabled: formData.procurementEnabled,
+    notes: formData.notes,
+    baseUnit: formData.baseUnit,
+    baseUnitDisplayName: formData.baseUnitDisplayName,
+    weightG: formData.weightG,
+    maxCapacityG: formData.maxCapacityG,
+    properties: formData.properties,
+    tagIds: formData.tagIds,
+    purchaseUnit: formData.purchaseUnit,
+    purchaseToBaseRatio: formData.purchaseToBaseRatio,
+    currentPricePerPurchaseUnit: formData.currentPricePerPurchaseUnit,
+    effectivePricePerPurchaseUnit: formData.effectivePricePerPurchaseUnit,
+    safetyStock: formData.safetyStock,
+    reorderPoint: formData.reorderPoint,
+    targetStock: formData.targetStock,
+  }
+
+  if (!formData.id) {
+    payload.nutritionProfile = formData.nutritionProfile ?? null
+  }
+
+  return payload
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -3161,7 +3208,7 @@ const handleSubmit = async () => {
 
     syncProperties()
     submitting.value = true
-    const payload = { ...formData }
+    const payload = buildSubmitPayload()
     emit('submit', payload)
   } catch (error: any) {
     // Validation failed

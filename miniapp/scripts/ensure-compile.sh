@@ -28,9 +28,24 @@ echo -e "${GREEN}✅ 项目环境检查通过${NC}"
 echo ""
 
 # 停止旧进程
+#
+# ⚠️ 这里原来的写法是 `pkill -f "uni -p mp-weixin"`，**它一个都匹配不到**：
+#    实际命令行是 `.../vite-plugin-uni/bin/uni.js -p mp-weixin`，
+#    "uni" 后面跟的是 ".js" 而不是空格，所以这个模式永远不命中。
+#    后果是旧的 watcher 从来没被杀掉过 —— 实测同一时间堆了 5 个（最老的从 9/18 起），
+#    全都在往 dist/dev/mp-weixin 里写，互相覆盖。之前"app.json 莫名其妙丢了"就是它导致的。
+#    改成匹配真正出现在命令行里的字符串。
 echo -e "${YELLOW}🛑 停止旧的编译进程...${NC}"
-pkill -f "uni -p mp-weixin" || true
+pkill -f "vite-plugin-uni/bin/uni.js" || true
+pkill -f "dev:mp-weixin" || true
 sleep 2
+# 复核：确认真的清干净了，否则后面就是多个 watcher 抢同一个输出目录
+if pgrep -f "vite-plugin-uni/bin/uni.js" > /dev/null; then
+    echo -e "${YELLOW}   ⚠️ 仍有残留进程，强制结束${NC}"
+    pkill -9 -f "vite-plugin-uni/bin/uni.js" || true
+    sleep 1
+fi
+echo -e "${GREEN}   ✅ 旧进程已清空${NC}"
 
 # 清理旧的编译输出
 echo -e "${YELLOW}🧹 清理编译输出...${NC}"
@@ -41,10 +56,24 @@ echo -e "${GREEN}🚀 启动 uni-app 编译服务...${NC}"
 nohup pnpm run dev:mp-weixin > /tmp/uni-compile.log 2>&1 &
 UNI_PID=$!
 
-echo -e "${YELLOW}⏳ 等待编译完成（15秒）...${NC}"
-sleep 15
+echo -e "${YELLOW}⏳ 等待编译完成...${NC}"
 
-# 验证编译输出
+# 原来是 `sleep 15` 然后直接检查 —— 冷编译（刚清空 dist 之后）实测要 35 秒以上，
+# 于是脚本每次都会误报"编译失败: app.json 未生成"，其实只是还没编完。
+# 改成轮询：最多等 120 秒，每 2 秒看一次，编完就走。
+WAIT_MAX=60   # 60 × 2s = 120s
+for i in $(seq 1 $WAIT_MAX); do
+    sleep 2
+    if [ -f "dist/dev/mp-weixin/app.json" ] && [ -f "dist/dev/mp-weixin/app.js" ]; then
+        echo -e "${GREEN}   ✅ 编译完成（约 $((i * 2)) 秒）${NC}"
+        break
+    fi
+    # 编译进程要是已经死了，就别再空等
+    if ! pgrep -f "vite-plugin-uni/bin/uni.js" > /dev/null; then
+        echo -e "${RED}   ❌ 编译进程已退出${NC}"
+        break
+    fi
+done
 echo ""
 echo "📋 验证编译输出..."
 if [ ! -f "dist/dev/mp-weixin/app.json" ]; then

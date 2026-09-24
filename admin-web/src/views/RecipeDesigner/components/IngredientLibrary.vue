@@ -296,7 +296,11 @@ onMounted(load)
 .ingredient-library {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* 作为左侧栏（.pane-library）的弹性子项占满「标题下方」的剩余高度。
+     这里不能用 height: 100%：父容器内还有同级标题栏，100% 会按整个侧栏高度计算，
+     导致列表底部被侧栏的 overflow: hidden 裁掉，最后一个原料和「加载更多」永远露不出来。 */
+  flex: 1;
+  min-height: 0;
   padding: 10px;
   box-sizing: border-box;
 }

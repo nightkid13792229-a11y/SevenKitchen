@@ -61,7 +61,17 @@ function logBootSummary() {
 
 async function bootstrap() {
   logBootSummary();
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // bodyParser: false —— 关闭 Nest 默认注册的 100KB JSON 解析器，
+  // 否则它会先于下面的自定义解析器拦下大请求并返回 413（Payload Too Large）。
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
+
+  // 请求体上限放宽到 2MB：
+  // 标准原料的保存/复制新增会携带营养档案（实测 90–100KB，最大 98KB），
+  // 紧贴默认 100KB 上限；此前保存原料直接 413，且营养档案稍大就会再次失败。
+  app.useBodyParser('json', { limit: '2mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });
 
   // 配置静态文件服务（使用项目根目录）
   app.useStaticAssets(join(process.cwd(), 'public'));

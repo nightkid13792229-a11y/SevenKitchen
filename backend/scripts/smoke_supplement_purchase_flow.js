@@ -366,30 +366,65 @@ async function main() {
   }
 
   // ── 4. 计价口径断言 ────────────────────────────────────────────
+  // 现行口径（2026-09-24 起）：
+  //   商品小计 = 补剂费 + 服务费 + 包材费
+  //   商品小计 ≥ 包邮门槛 → 免运费；否则照收一口价运费
+  //   合计 = 商品小计 + 运费
+  // 早先那版「运费由加价吸收、客户侧永远显示包邮」已被取代，不要再改回去。
   section('4. 计价口径');
-  const expectedGoods =
-    Math.round((quote.supplementPrice + quote.serviceFee + quote.packagingFee) * 100) / 100;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const expectedGoods = round2(quote.supplementPrice + quote.serviceFee + quote.packagingFee);
+  const threshold = Number(quote.freeShippingThreshold) || 0;
+  const shouldBeFree = threshold > 0 && expectedGoods >= threshold;
 
   record(
-    '运费不向客户收取（2026-09-22 定价口径）',
-    quote.shippingFee === 0,
+    `包邮门槛判定（商品小计 ¥${expectedGoods} vs 门槛 ¥${threshold}）`,
+    quote.freeShipping === shouldBeFree,
+    `freeShipping = ${quote.freeShipping}，期望 ${shouldBeFree}`,
+  );
+  record(
+    shouldBeFree ? '达标免运费（shippingFee = 0）' : '未达标照收运费',
+    shouldBeFree ? quote.shippingFee === 0 : quote.shippingFee > 0,
     `shippingFee = ${quote.shippingFee}`,
   );
   record(
-    '客户侧始终显示包邮',
-    quote.freeShipping === true,
-    `freeShipping = ${quote.freeShipping}`,
+    '合计 = 商品小计 + 运费',
+    Math.abs(quote.total - round2(expectedGoods + quote.shippingFee)) < 0.01,
+    `total = ${quote.total}，商品小计 + 运费 = ${round2(expectedGoods + quote.shippingFee)}`,
   );
   record(
-    '合计 = 商品小计（不含单独运费）',
-    Math.abs(quote.total - expectedGoods) < 0.01,
-    `total = ${quote.total}，goodsSubtotal = ${quote.goodsSubtotal}`,
+    '商品小计字段与明细口径一致',
+    Math.abs(quote.goodsSubtotal - expectedGoods) < 0.01,
+    `goodsSubtotal = ${quote.goodsSubtotal}，明细合计 = ${expectedGoods}`,
   );
   record(
     '分装袋数 = 补剂种类数（一袋一种）',
     quote.bagCount === quote.lines.length,
     `bagCount = ${quote.bagCount}，种类 = ${quote.lines.length}`,
   );
+
+  // 门槛的另一侧也要走一遍，否则"包邮门槛"这条规则只被验证了一半。
+  // 上面那一单如果本来就过了门槛，这里就把用量缩小；没过就放大。
+  if (threshold > 0 && expectedGoods > 0) {
+    const scale = shouldBeFree
+      ? Math.max(0.1, Math.floor((threshold * 0.5 * 10) / expectedGoods) / 10)
+      : Math.max(2, Math.ceil((threshold * 1.5) / expectedGoods));
+    const flipLines = allLines.map((line) => ({
+      ...line,
+      amount: round2(Math.max(0.1, line.amount * scale)),
+    }));
+    const flipRes = await request.post('/supplements/quote', { lines: flipLines });
+    const flipQuote = flipRes.data?.data?.quote;
+    const crossed = flipQuote ? flipQuote.goodsSubtotal >= threshold : false;
+
+    record(
+      shouldBeFree ? '把用量缩小到门槛以下应收运费' : '把用量放大越过门槛后应免运费',
+      Boolean(flipQuote) &&
+        flipQuote.freeShipping === crossed &&
+        (crossed ? flipQuote.shippingFee === 0 : flipQuote.shippingFee > 0),
+      `商品小计 ¥${flipQuote?.goodsSubtotal ?? '—'}（门槛 ¥${threshold}），freeShipping = ${flipQuote?.freeShipping}，shippingFee = ${flipQuote?.shippingFee}`,
+    );
+  }
 
   // ── 4. 下单 ────────────────────────────────────────────────────
   section('5. 下单');

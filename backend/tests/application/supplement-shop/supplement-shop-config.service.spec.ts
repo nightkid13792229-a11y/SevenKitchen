@@ -17,6 +17,8 @@ function buildRow(overrides: Record<string, unknown> = {}) {
     priceRoundingMode: 'CEIL_TO_0_1',
     minOrderAmount: 0,
     roundUpUsage: true,
+    maxPortionMultiplier: 3,
+    maxTotalDays: 90,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -121,6 +123,55 @@ describe('SupplementShopConfigService', () => {
     await expect(
       service.updateConfig({ solidShelfLifeMonths: 61 }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('加量字段能读出来并转成 number', async () => {
+    mockPrismaService.supplementShopConfig.findUnique.mockResolvedValue(
+      buildRow({ maxPortionMultiplier: 2, maxTotalDays: 60 }),
+    );
+
+    const config = await service.getConfig();
+
+    expect(config.maxPortionMultiplier).toBe(2);
+    expect(config.maxTotalDays).toBe(60);
+  });
+
+  it('加量字段能写进去', async () => {
+    mockPrismaService.supplementShopConfig.upsert.mockResolvedValue(
+      buildRow({ maxPortionMultiplier: 2, maxTotalDays: 60 }),
+    );
+
+    const updated = await service.updateConfig({
+      maxPortionMultiplier: 2,
+      maxTotalDays: 60,
+    });
+
+    expect(mockPrismaService.supplementShopConfig.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          maxPortionMultiplier: 2,
+          maxTotalDays: 60,
+        }),
+      }),
+    );
+    expect(updated.maxPortionMultiplier).toBe(2);
+    expect(updated.maxTotalDays).toBe(60);
+  });
+
+  it('加量份数上限必须是 1~12 的整数', async () => {
+    for (const bad of [0, -1, 1.5, 13]) {
+      await expect(
+        service.updateConfig({ maxPortionMultiplier: bad as number }),
+      ).rejects.toThrow(/1~12 的整数/);
+    }
+  });
+
+  it('加量总天数上限必须是 1~365 的整数', async () => {
+    for (const bad of [0, -5, 3.3, 400]) {
+      await expect(
+        service.updateConfig({ maxTotalDays: bad as number }),
+      ).rejects.toThrow(/1~365 的整数/);
+    }
   });
 
   it('按重量计费时必须选择运费模板，且模板要存在并已启用', async () => {

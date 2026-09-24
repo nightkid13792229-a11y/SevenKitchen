@@ -35,8 +35,33 @@ export interface SupplementQuote {
   shippingFee: number
   shippingDescription: string
   freeShipping: boolean
+  /** 包邮门槛；null = 没设门槛（一律收运费）。用于显示"再买 X 可包邮" */
+  freeShippingThreshold: number | null
   total: number
   warnings: string[]
+  /** 本次购买几份（1 = 不加量） */
+  portionMultiplier: number
+  /** 本次覆盖的总天数；服务端没拿到 cycleDays 时为 null */
+  totalDays: number | null
+  /** 总价 ÷ 总天数，界面用它讲"多买几份，每天更便宜" */
+  perDayCost: number | null
+  /** 当前这张制作单最多能选几份（受份数上限与效期天数上限双重约束） */
+  maxPortionMultiplier: number
+  /**
+   * 每个可选份数的结果（含总价与是否包邮），服务端已算好。
+   * 界面直接渲染成选项卡片，不做任何乘法。
+   */
+  portionOptions: SupplementPortionOption[]
+}
+
+export interface SupplementPortionOption {
+  multiplier: number
+  totalDays: number | null
+  goodsSubtotal: number
+  shippingFee: number
+  total: number
+  freeShipping: boolean
+  perDayCost: number | null
 }
 
 export interface SupplementUnavailableLine {
@@ -113,6 +138,8 @@ export interface CreateSupplementOrderPayload {
   dogId?: string
   dogName?: string
   cycleDays?: number
+  /** 加量份数，1 = 不加量。服务端会按配置校验上限 */
+  portionMultiplier?: number
   remark?: string
 }
 
@@ -136,12 +163,28 @@ export function fetchSupplementShopStatus() {
   } as any)
 }
 
-/** 按制作单的补剂清单报价 */
-export function quoteSupplements(lines: SupplementQuoteLineInput[]) {
+/**
+ * 按制作单的补剂清单报价。
+ *
+ * @param lines 补剂清单（只给 id 与用量，价格由服务端现算）
+ * @param options.portionMultiplier 加量份数，1 = 不加量
+ * @param options.cycleDays 制作单天数，服务端用它算总天数与每天成本、
+ *        并校验「总天数 ≤ 效期安全线」
+ */
+export function quoteSupplements(
+  lines: SupplementQuoteLineInput[],
+  options: { portionMultiplier?: number; cycleDays?: number } = {}
+) {
   return request<SupplementQuoteResponse>({
     url: '/supplements/quote',
     method: 'POST',
-    data: { lines }
+    data: {
+      lines,
+      ...(options.portionMultiplier !== undefined
+        ? { portionMultiplier: options.portionMultiplier }
+        : {}),
+      ...(options.cycleDays !== undefined ? { cycleDays: options.cycleDays } : {})
+    }
   })
 }
 
@@ -230,6 +273,8 @@ export interface SupplementPurchaseDraftLine {
   /** 仅用于首屏占位展示，价格与最终名称以服务端报价为准 */
   name?: string
   unit?: string
+  /** 品牌 / 规格（如「Now Foods / 100粒」）。报价接口不返回，由制作单带过来 */
+  specText?: string
 }
 
 export interface SupplementPurchaseDraft {

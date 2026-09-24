@@ -7,6 +7,8 @@ import {
 } from '../order/order.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { ShippingFulfillmentService } from '../shipping/shipping-fulfillment.service';
+import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-config.service';
+import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
 
 const WECHAT_ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'];
 
@@ -35,6 +37,8 @@ export class OrderSchedulerService {
     private readonly orderService: OrderService,
     private readonly platformConfigService: PlatformConfigService,
     private readonly shippingFulfillmentService: ShippingFulfillmentService,
+    private readonly supplementShopConfigService: SupplementShopConfigService,
+    private readonly supplementOrderService: SupplementOrderService,
   ) {}
 
   /**
@@ -250,6 +254,79 @@ export class OrderSchedulerService {
     } catch (error) {
       this.logger.error(
         `[OrderScheduler] Error during auto-cancel task: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+    } finally {
+      /**
+       * ⚠️ 补剂订单的处理**必须放在 finally 里**。
+       *
+       * 上面那段鲜食逻辑有多个 `return`（比如"暂无待付款单"就直接 return），
+       * 写在 try/catch 之后会被这些 return 整个跳过 —— 实测踩过：
+       * 定时任务跑了一分钟一次，日志里只有鲜食那句话，补剂单纹丝不动。
+       *
+       * 超时值来自「补剂商城设置」，与鲜食订单解耦。
+       */
+      await this.autoCancelExpiredSupplementOrders();
+    }
+  }
+
+  /**
+   * 自动取消超时未付款的**补剂订单**（2026-09-24 补上）。
+   *
+   * 为什么单独一个方法：补剂订单原先**完全不在自动关单的覆盖范围内** ——
+   * 上面的逻辑只查鲜食订单（`orderRepository.findByStatus`）。
+   * 结果是：用户提交补剂订单后不付款、又不再打开，
+   * 这单会永远挂在「待付款」，而鲜食单 30 分钟就自动取消了。
+   *
+   * 超时值取「补剂商城设置 → 支付超时」，与鲜食各自独立：
+   * 两种生意节奏不同，共用一个值会让调一边影响另一边。
+   * 配成 0 表示不自动关单。
+   */
+  private async autoCancelExpiredSupplementOrders() {
+    try {
+      const shopConfig = await this.supplementShopConfigService.getConfig();
+      const timeoutMinutes = shopConfig.paymentTimeoutMinutes;
+
+      if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+        this.logger.debug(
+          '[OrderScheduler] 补剂订单自动关单已关闭（paymentTimeoutMinutes = 0）',
+        );
+        return;
+      }
+
+      // 查询收敛在 service 里，定时任务不直接碰 Prisma
+      const expired =
+        await this.supplementOrderService.findExpiredUnpaidOrders(timeoutMinutes);
+
+      if (expired.length === 0) return;
+
+      this.logger.log(
+        `[OrderScheduler] 发现 ${expired.length} 张超时未付款的补剂订单（超时 ${timeoutMinutes} 分钟）`,
+      );
+
+      let cancelled = 0;
+      for (const order of expired) {
+        try {
+          await this.supplementOrderService.cancelOrder(order.id, {
+            reason: '支付超时自动取消',
+          });
+          cancelled += 1;
+        } catch (error) {
+          // 单张失败不能拖垮整批：可能是状态刚好被并发改掉了
+          this.logger.warn(
+            `[OrderScheduler] 自动取消失败 ${order.orderNo}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (cancelled > 0) {
+        this.logger.log(
+          `[OrderScheduler] 已自动取消 ${cancelled} 张超时补剂订单`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `[OrderScheduler] 补剂订单自动关单出错: ${(error as Error).message}`,
         (error as Error).stack,
       );
     }

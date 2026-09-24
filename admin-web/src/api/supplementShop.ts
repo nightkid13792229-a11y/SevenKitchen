@@ -130,6 +130,12 @@ export interface SupplementShopConfig {
   priceRoundingMode: SupplementPriceRoundingMode;
   minOrderAmount: number;
   roundUpUsage: boolean;
+  /** 加量：用户一次最多买几份 */
+  maxPortionMultiplier: number;
+  /** 加量：一次购买覆盖的总天数上限（效期安全红线） */
+  maxTotalDays: number;
+  /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
+  paymentTimeoutMinutes: number;
   shippingMode: SupplementShippingMode;
   flatShippingFee: number;
   shippingTemplateId: string | null;

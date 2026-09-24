@@ -32,6 +32,12 @@ export interface SupplementShopConfigDto {
   priceRoundingMode: SupplementPriceRoundingMode;
   minOrderAmount: number;
   roundUpUsage: boolean;
+  /** 加量：用户一次最多买几份 */
+  maxPortionMultiplier: number;
+  /** 加量：一次购买覆盖的总天数上限（效期安全红线） */
+  maxTotalDays: number;
+  /** 补剂订单支付超时（分钟）；0 = 不自动关单。与鲜食订单独立 */
+  paymentTimeoutMinutes: number;
   shippingMode: SupplementShippingMode;
   flatShippingFee: number;
   shippingTemplateId: string | null;
@@ -187,6 +193,33 @@ export class SupplementShopConfigService {
         );
       }
     }
+
+    // ---- 加量 ----
+    if (dto.maxPortionMultiplier !== undefined) {
+      const value = dto.maxPortionMultiplier;
+      // 上限 12 是防呆：真设成 100，用户界面会变成一堆选项，排产也没法预期
+      if (!Number.isInteger(value) || value < 1 || value > 12) {
+        throw new BadRequestException('加量份数上限必须是 1~12 的整数');
+      }
+    }
+
+    if (dto.maxTotalDays !== undefined) {
+      const value = dto.maxTotalDays;
+      if (!Number.isInteger(value) || value < 1 || value > 365) {
+        throw new BadRequestException('加量总天数上限必须是 1~365 的整数（天）');
+      }
+    }
+
+    // ---- 支付超时 ----
+    if (dto.paymentTimeoutMinutes !== undefined) {
+      const value = dto.paymentTimeoutMinutes;
+      // 上限 24 小时：再长就不叫"超时"了，只会让订单一直挂着
+      if (!Number.isInteger(value) || value < 0 || value > 1440) {
+        throw new BadRequestException(
+          '补剂订单支付超时必须是 0~1440 的整数（分钟）；0 表示不自动关单',
+        );
+      }
+    }
   }
 
   private toWriteData(dto: UpdateSupplementShopConfigDto) {
@@ -211,6 +244,15 @@ export class SupplementShopConfigService {
         minOrderAmount: dto.minOrderAmount,
       }),
       ...(dto.roundUpUsage !== undefined && { roundUpUsage: dto.roundUpUsage }),
+      ...(dto.maxPortionMultiplier !== undefined && {
+        maxPortionMultiplier: dto.maxPortionMultiplier,
+      }),
+      ...(dto.maxTotalDays !== undefined && {
+        maxTotalDays: dto.maxTotalDays,
+      }),
+      ...(dto.paymentTimeoutMinutes !== undefined && {
+        paymentTimeoutMinutes: dto.paymentTimeoutMinutes,
+      }),
       ...(dto.shippingMode !== undefined && { shippingMode: dto.shippingMode }),
       ...(dto.flatShippingFee !== undefined && {
         flatShippingFee: dto.flatShippingFee,
@@ -254,6 +296,9 @@ export class SupplementShopConfigService {
     priceRoundingMode: string;
     minOrderAmount: unknown;
     roundUpUsage: boolean;
+    maxPortionMultiplier: number;
+    maxTotalDays: number;
+    paymentTimeoutMinutes: number;
     shippingMode: string;
     flatShippingFee: unknown;
     shippingTemplateId: string | null;
@@ -276,6 +321,9 @@ export class SupplementShopConfigService {
       priceRoundingMode: row.priceRoundingMode as SupplementPriceRoundingMode,
       minOrderAmount: Number(row.minOrderAmount),
       roundUpUsage: row.roundUpUsage,
+      maxPortionMultiplier: Number(row.maxPortionMultiplier),
+      maxTotalDays: Number(row.maxTotalDays),
+      paymentTimeoutMinutes: Number(row.paymentTimeoutMinutes),
       shippingMode: row.shippingMode as SupplementShippingMode,
       flatShippingFee: Number(row.flatShippingFee),
       shippingTemplateId: row.shippingTemplateId,

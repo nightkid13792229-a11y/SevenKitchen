@@ -45,6 +45,13 @@ describe('OrderSchedulerService', () => {
       orderService as any,
       platformConfigService as any,
       shippingFulfillmentService as any,
+      {
+        getConfig: jest.fn().mockResolvedValue({ paymentTimeoutMinutes: 0 }),
+      } as any,
+      {
+        findExpiredUnpaidOrders: jest.fn().mockResolvedValue([]),
+        cancelOrder: jest.fn(),
+      } as any
     );
 
     return {
@@ -191,6 +198,13 @@ describe('OrderSchedulerService', () => {
       orderService as any,
       platformConfigService as any,
       shippingFulfillmentService as any,
+      {
+        getConfig: jest.fn().mockResolvedValue({ paymentTimeoutMinutes: 0 }),
+      } as any,
+      {
+        findExpiredUnpaidOrders: jest.fn().mockResolvedValue([]),
+        cancelOrder: jest.fn(),
+      } as any
     );
 
     await expect(service.handleAutoCompleteOrders()).resolves.toBeUndefined();

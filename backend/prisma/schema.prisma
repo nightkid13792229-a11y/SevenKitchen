@@ -2608,6 +2608,19 @@ model SupplementShopConfig {
   minOrderAmount            Decimal                      @default(0) @map("min_order_amount") @db.Decimal(10, 2)
   roundUpUsage              Boolean                      @default(true) @map("round_up_usage")
 
+  // ---- 加量（2026-09-24）----
+  /// 用户一次最多买几份（每份 = 每个补剂多做一袋同样规格的小袋）
+  maxPortionMultiplier      Int                          @default(3) @map("max_portion_multiplier")
+  /// 一次购买覆盖的总天数上限。效期安全红线：粉剂分装效期 6 个月 = 180 天，
+  /// 默认 90 天正好用一半，留足余量。
+  maxTotalDays              Int                          @default(90) @map("max_total_days")
+
+  // ---- 支付超时（2026-09-24 与鲜食解耦）----
+  /// 补剂订单的支付超时（分钟）。**与鲜食订单各自独立**：
+  /// 两种生意的节奏不一样，共用一个值会让调一边影响另一边。
+  /// 0 表示不自动关单。
+  paymentTimeoutMinutes     Int                          @default(30) @map("payment_timeout_minutes")
+
   // ---- 运费 ----
   shippingMode              SupplementShippingMode       @default(FLAT_RATE) @map("shipping_mode")
   flatShippingFee           Decimal                      @default(8.0) @map("flat_shipping_fee") @db.Decimal(10, 2)
@@ -2677,6 +2690,13 @@ model SupplementOrder {
   userId                    String                @map("user_id")
   status                    SupplementOrderStatus @default(PENDING_PAYMENT) @map("status")
   bagCount                  Int                   @map("bag_count")
+
+  // ---- 加量（2026-09-24）----
+  /// 本单买了几份（1 = 未加量）。加量 = 每个补剂多做几袋同样规格的小袋。
+  portionMultiplier         Int                   @default(1) @map("portion_multiplier")
+  /// 本单覆盖的总天数（= 制作单天数 × 份数）。**下单时快照**，不做派生：
+  /// 这是"卖出去的补剂没有超出分装效期"的凭证，事后改配置不能影响它。
+  totalDays                 Int?                  @map("total_days")
 
   // ---- 金额构成（对用户）----
   amountSupplement          Decimal               @map("amount_supplement") @db.Decimal(10, 2)

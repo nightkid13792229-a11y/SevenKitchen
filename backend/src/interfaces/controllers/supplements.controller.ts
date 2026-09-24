@@ -48,7 +48,11 @@ export class SupplementsController {
   })
   async quote(@Body() dto: SupplementQuoteRequestDto) {
     return ApiResponseDto.success(
-      await this.supplementOrderService.quote({ lines: dto.lines }),
+      await this.supplementOrderService.quote({
+        lines: dto.lines,
+        portionMultiplier: dto.portionMultiplier,
+        cycleDays: dto.cycleDays,
+      }),
     );
   }
 }

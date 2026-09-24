@@ -40,6 +40,35 @@ export class SupplementQuoteRequestDto {
   @ValidateNested({ each: true })
   @Type(() => SupplementQuoteLineDto)
   lines!: SupplementQuoteLineDto[];
+
+  /**
+   * ⚠️ 下面两个字段必须声明在 DTO 上。
+   * 控制器用了 `whitelist: true`，未声明的属性会被**静默丢掉** ——
+   * 那样加量看起来"生效了"，实际份数永远是 1，而且没有任何报错，极难排查。
+   */
+
+  @ApiPropertyOptional({
+    description:
+      '加量份数（1 = 不加量）。每份 = 每个补剂多做一袋同样规格的小袋',
+    default: 1,
+    minimum: 1,
+    maximum: 12,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  // 12 只是防呆上界；真正的上限来自后台配置，由服务端按制作单天数算出
+  @Max(12)
+  portionMultiplier?: number;
+
+  @ApiPropertyOptional({
+    description: '制作单覆盖的天数。加量要靠它算总天数与每天成本',
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  cycleDays?: number;
 }
 
 export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
@@ -74,11 +103,7 @@ export class CreateSupplementOrderDto extends SupplementQuoteRequestDto {
   @IsUUID()
   diySheetId?: string;
 
-  @ApiPropertyOptional({ description: '制作周期（天）' })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  cycleDays?: number;
+  // cycleDays 已上移到 SupplementQuoteRequestDto（报价阶段就需要它算总天数）
 
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()

@@ -9,6 +9,11 @@
         </p>
       </div>
       <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
+      <!--
+        保存失败必须显示出来。之前这里没有 catch，接口报错时用户只看到
+        "按钮转完圈、值没变"，会以为是自己没点保存 —— 实测就是这样踩的坑。
+      -->
+      <span v-if="saveError" class="save-error">{{ saveError }}</span>
     </div>
 
     <el-card shadow="never" v-loading="loading">
@@ -85,6 +90,57 @@
             开启后：片/粒/平勺 向上取整到整数，按克称重的向上取到 0.1（避免分装出现半片、半粒）
           </span>
         </el-form-item>
+
+        <el-divider content-position="left">加量</el-divider>
+
+        <el-form-item label="加量份数上限">
+          <el-input-number
+            v-model="form.maxPortionMultiplier"
+            :min="1"
+            :max="12"
+            :step="1"
+            style="width: 220px"
+          />
+          <span class="form-tip">
+            用户一次最多买几份。每份 = 每个补剂多做一袋同样规格的小袋。
+            建议不超过 3 —— 选项太多不好选，单日分装产能也不好排。
+          </span>
+        </el-form-item>
+
+        <el-form-item label="加量总天数上限">
+          <el-input-number
+            v-model="form.maxTotalDays"
+            :min="1"
+            :max="365"
+            :step="10"
+            style="width: 220px"
+          />
+          <span class="form-tip">
+            一次购买覆盖的总天数上限（份数 × 制作单天数）。这是<b>效期安全红线</b>：
+            粉剂分装效期 6 个月 = 180 天，默认 90 天正好用一半。
+            例：制作单 40 天量时，最多只能买 2 份（3 份就是 120 天，超线）。
+          </span>
+        </el-form-item>
+
+        <el-divider content-position="left">支付超时</el-divider>
+
+        <el-form-item label="补剂订单支付超时">
+          <el-input-number
+            v-model="form.paymentTimeoutMinutes"
+            :min="0"
+            :max="1440"
+            :step="5"
+            style="width: 220px"
+          />
+          <span class="form-tip">
+            单位分钟。<b>0 表示不自动关单</b>；超过此时限仍未付款的补剂订单会被自动取消。
+            <br />
+            这个值和鲜食订单的支付超时<b>各自独立</b> —— 两种生意节奏不同，
+            共用一个值会导致调一边影响另一边。
+          </span>
+        </el-form-item>
+
+        <el-divider content-position="left">起送</el-divider>
 
         <el-form-item label="最低起送金额">
           <el-input-number
@@ -397,6 +453,8 @@ import { shippingTemplateApi, type ShippingTemplate } from '@/api/shippingTempla
 
 const loading = ref(false);
 const saving = ref(false);
+/** 保存失败的原因，直接提示出来，避免静默失败 */
+const saveError = ref('');
 const quoting = ref(false);
 const quoteError = ref('');
 const quote = ref<SupplementQuote | null>(null);
@@ -412,6 +470,9 @@ const form = ref<SupplementShopConfig>({
   priceRoundingMode: 'CEIL_TO_0_1',
   minOrderAmount: 0,
   roundUpUsage: true,
+  maxPortionMultiplier: 3,
+  maxTotalDays: 90,
+  paymentTimeoutMinutes: 30,
   shippingMode: 'FLAT_RATE',
   flatShippingFee: 8,
   shippingTemplateId: null,
@@ -485,6 +546,9 @@ async function handleSave() {
       priceRoundingMode: form.value.priceRoundingMode,
       minOrderAmount: form.value.minOrderAmount,
       roundUpUsage: form.value.roundUpUsage,
+      maxPortionMultiplier: form.value.maxPortionMultiplier,
+      maxTotalDays: form.value.maxTotalDays,
+      paymentTimeoutMinutes: form.value.paymentTimeoutMinutes,
       shippingMode: form.value.shippingMode,
       flatShippingFee: form.value.flatShippingFee,
       shippingTemplateId: form.value.shippingTemplateId,
@@ -498,6 +562,12 @@ async function handleSave() {
       labelIncludeDesiccantNotice: form.value.labelIncludeDesiccantNotice,
     });
     ElMessage.success('补剂商城配置已保存');
+  } catch (error: any) {
+    // ⚠️ 这里原来没有 catch：接口一旦失败，按钮转完圈就恢复原样，
+    // 用户看到的是"保存成功了但值没变"，完全无从排查。实测踩过这个坑
+    // （配置的 updatedAt 一直停在几天前，而界面上没有任何提示）。
+    saveError.value = error?.message || '保存失败，请重试'
+    ElMessage.error(saveError.value)
   } finally {
     saving.value = false;
   }
@@ -584,5 +654,11 @@ onMounted(load);
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
+}
+
+.save-error {
+  margin-left: 12px;
+  color: #c45656;
+  font-size: 13px;
 }
 </style>

@@ -9,6 +9,7 @@ import { WechatPaymentService } from '../../../src/application/payment/wechat-pa
 import { OrderService } from '../../../src/application/order/order.service';
 import { WechatShippingUploadService } from '../../../src/application/shipping/wechat-shipping-upload.service';
 import { SupplementOrderService } from '../../../src/application/supplement-shop/supplement-order.service';
+import { SupplementShopConfigService } from '../../../src/application/supplement-shop/supplement-shop-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 const API_V3_KEY = 'a'.repeat(32); // 必须是 32 字节
@@ -56,6 +57,28 @@ describe('WechatPaymentService · 补剂订单支付', () => {
     user: { phone: '18628258025' },
   };
 
+  /**
+   * 完整的支付配置工厂。
+   * 测试里要改某个字段时用它覆盖，别手写整块 —— 漏一个字段就会撞上
+   * 「支付配置未启用」这种跟当前用例无关的报错，白查半天。
+   */
+  const buildPaymentConfig = (overrides: Record<string, unknown> = {}) => ({
+    enabled: true,
+    provider: 'WECHAT_PAY',
+    mode: 'PRODUCTION',
+    appId: 'wx-test-appid',
+    mchId: '1900000001',
+    merchantSerialNumber: 'SERIAL123',
+    apiV3Key: API_V3_KEY,
+    privateKeyPem: privateKey,
+    notifyUrl: 'https://api.example.com/api/v1/payments/wechat/notify',
+    refundNotifyUrl: null,
+    paymentTimeoutMinutes: 30,
+    autoCloseUnpaid: true,
+    allowRefund: false,
+    ...overrides,
+  });
+
   const mockPrismaService = {
     paymentConfig: { upsert: jest.fn() },
     userWechatIdentity: { findFirst: jest.fn(), update: jest.fn() },
@@ -66,6 +89,14 @@ describe('WechatPaymentService · 补剂订单支付', () => {
   const mockSupplementOrderService = {
     confirmPaymentFromWechat: jest.fn(),
     cancelOrder: jest.fn(),
+  };
+
+  /**
+   * 补剂商城配置：补剂订单的支付超时已与鲜食解耦，改从这张配置读。
+   * 默认 30 分钟，与解耦前的共享值一致。
+   */
+  const mockSupplementShopConfigService = {
+    getConfig: jest.fn().mockResolvedValue({ paymentTimeoutMinutes: 30 }),
   };
 
   beforeEach(async () => {
@@ -79,27 +110,19 @@ describe('WechatPaymentService · 补剂订单支付', () => {
           provide: SupplementOrderService,
           useValue: mockSupplementOrderService,
         },
+        {
+          provide: SupplementShopConfigService,
+          useValue: mockSupplementShopConfigService,
+        },
       ],
     }).compile();
 
     service = module.get(WechatPaymentService);
     jest.clearAllMocks();
 
-    mockPrismaService.paymentConfig.upsert.mockResolvedValue({
-      enabled: true,
-      provider: 'WECHAT_PAY',
-      mode: 'PRODUCTION',
-      appId: 'wx-test-appid',
-      mchId: '1900000001',
-      merchantSerialNumber: 'SERIAL123',
-      apiV3Key: API_V3_KEY,
-      privateKeyPem: privateKey,
-      notifyUrl: 'https://api.example.com/api/v1/payments/wechat/notify',
-      refundNotifyUrl: null,
-      paymentTimeoutMinutes: 30,
-      autoCloseUnpaid: true,
-      allowRefund: false,
-    });
+    mockPrismaService.paymentConfig.upsert.mockResolvedValue(
+      buildPaymentConfig(),
+    );
     mockPrismaService.userWechatIdentity.findFirst.mockResolvedValue({
       openid: 'openid-abc',
     });
@@ -113,6 +136,54 @@ describe('WechatPaymentService · 补剂订单支付', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  describe('支付超时与鲜食解耦（2026-09-24）', () => {
+    it('补剂订单用「补剂商城设置」的超时，不用支付配置里的共享值', async () => {
+      jest.spyOn(global, 'fetch' as never).mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ prepay_id: 'prepay-123' }),
+      } as never);
+
+      // 支付配置（鲜食用的）说 5 分钟，补剂商城说 120 分钟
+      mockPrismaService.paymentConfig.upsert.mockResolvedValue(
+        buildPaymentConfig({ paymentTimeoutMinutes: 5 }),
+      );
+      mockSupplementShopConfigService.getConfig.mockResolvedValue({
+        paymentTimeoutMinutes: 120,
+      });
+
+      const result = await service.createSupplementJsapiPayment(
+        'order-uuid-1',
+        'user-1',
+      );
+
+      // 必须是补剂自己的 120 分钟 —— 共用一个值会让调一边影响另一边。
+      // 剩余秒数用范围断言：订单创建于 60 秒前，跑测试时还会再过几秒，
+      // 写死 119*60 会因为 1 秒的漂移偶发失败。118 分钟足够区分
+      // 120 分钟和支付配置里的 5 分钟。
+      expect(result.paymentTimeoutMinutes).toBe(120);
+      expect(result.paymentRemainingSeconds).toBeGreaterThan(118 * 60);
+    });
+
+    it('超时配成 0 表示不自动关单：不给期限', async () => {
+      jest.spyOn(global, 'fetch' as never).mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ prepay_id: 'prepay-123' }),
+      } as never);
+      mockSupplementShopConfigService.getConfig.mockResolvedValue({
+        paymentTimeoutMinutes: 0,
+      });
+
+      const result = await service.createSupplementJsapiPayment(
+        'order-uuid-1',
+        'user-1',
+      );
+
+      expect(result.autoCloseUnpaid).toBe(false);
+      expect(result.paymentDeadline).toBeNull();
+      expect(result.paymentRemainingSeconds).toBeNull();
+    });
   });
 
   describe('发起支付', () => {

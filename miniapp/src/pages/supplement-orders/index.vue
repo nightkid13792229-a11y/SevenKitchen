@@ -7,7 +7,7 @@
     <!-- 空态：补上出口，否则用户到这一页就没有下一步可点 -->
     <view v-else-if="orders.length === 0" class="empty-state">
       <text class="empty-title">还没有补剂订单</text>
-      <text class="empty-desc">补剂从 DIY 制作单购买。先在「我的制作单」里打开一份，再点「一键购买补剂」。</text>
+      <text class="empty-desc">补剂从 DIY 制作单购买。先在「我的制作单」里打开一份，再点「购买预分装补剂」。</text>
       <button class="empty-action" @tap="goToDiySheetList">去我的制作单</button>
     </view>
 

@@ -23,6 +23,8 @@ function config(
     priceRoundingMode: 'CEIL_TO_0_1',
     minOrderAmount: 0,
     roundUpUsage: true,
+    maxPortionMultiplier: 3,
+    maxTotalDays: 90,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,

@@ -18,6 +18,7 @@ import { TimezoneUtil } from '../../utils/timezone.util';
 import { IngredientType } from '../../domain/ingredient/enums';
 import {
   SupplementPricingService,
+  resolveMaxPortionMultiplier,
   type SupplementQuote,
   type SupplementQuoteLineInput,
 } from './supplement-pricing.service';
@@ -74,6 +75,16 @@ function formatAmount(value: number): string {
 
 export interface SupplementQuoteRequest {
   lines: Array<{ ingredientId: string; amount: number }>;
+  /**
+   * 加量份数（1 = 不加量）。每份 = 每个补剂多做一袋同样规格的小袋。
+   * 服务端会按配置的份数上限与总天数上限校验，越界直接拒绝。
+   */
+  portionMultiplier?: number;
+  /**
+   * 制作单覆盖的天数。加量要靠它算总天数与"每天成本"，
+   * 也是"总天数 ≤ 效期安全线"这条校验的必需输入。
+   */
+  cycleDays?: number;
 }
 
 export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
@@ -83,7 +94,6 @@ export interface CreateSupplementOrderRequest extends SupplementQuoteRequest {
   dogId?: string;
   dogName?: string;
   diySheetId?: string;
-  cycleDays?: number;
   remark?: string;
 }
 
@@ -137,6 +147,10 @@ export interface SupplementOrderView {
   dogId: string | null;
   dogName: string | null;
   cycleDays: number | null;
+  /** 本单买了几份（1 = 未加量） */
+  portionMultiplier: number;
+  /** 本单覆盖的总天数（下单时快照） */
+  totalDays: number | null;
   remark: string | null;
   paymentMethod: string | null;
   paymentStatus: string | null;
@@ -280,6 +294,10 @@ export class SupplementOrderService {
           dogName: request.dogName ?? null,
           diySheetId: request.diySheetId ?? null,
           cycleDays: request.cycleDays ?? null,
+          // 加量信息：份数取报价里已校验收敛过的值，总天数用报价算出来的那个
+          // （它已经把 cycleDays 与份数乘好了，且受效期上限约束）。
+          portionMultiplier: quote.portionMultiplier,
+          totalDays: quote.totalDays,
           remark: request.remark ?? null,
           items: {
             create: quote.lines.map((line) => ({
@@ -615,6 +633,28 @@ export class SupplementOrderService {
   }
 
   /** 取消订单（已发货的不能直接取消，要走售后） */
+  /**
+   * 找出「超过支付时限、仍是待付款」的补剂订单。
+   *
+   * 给定时任务自动关单用。放在 service 里而不是让定时任务直接查库：
+   * 数据访问收敛在一处，超时口径（用哪个字段、算多长时间）也只有这里定义。
+   */
+  async findExpiredUnpaidOrders(
+    timeoutMinutes: number,
+    limit = 200,
+  ): Promise<Array<{ id: string; orderNo: string; createdAt: Date }>> {
+    if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) return [];
+    return this.prisma.supplementOrder.findMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        createdAt: { lt: new Date(Date.now() - timeoutMinutes * 60 * 1000) },
+      },
+      select: { id: true, orderNo: true, createdAt: true },
+      take: limit,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   async cancelOrder(
     orderId: string,
     dto: { reason?: string } = {},
@@ -939,9 +979,46 @@ export class SupplementOrderService {
     }
 
     const config = await this.configService.getConfig();
+
+    /**
+     * 加量份数校验（服务端说了算，不信客户端）。
+     *
+     * 为什么在这里拒绝、而不是让 pricing service 静默收敛：
+     * 客户端只会在响应里拿到 maxPortionMultiplier，然后据此渲染选项；
+     * 如果它仍然传来一个越界值，那是 bug 或篡改 —— 静默改成 3 份会让用户
+     * 看到的金额与实际下单金额不一致。直接报错最清楚。
+     */
+    const cycleDays =
+      Number.isFinite(Number(request.cycleDays)) &&
+      Number(request.cycleDays) > 0
+        ? Math.floor(Number(request.cycleDays))
+        : null;
+    const requestedMultiplier = request.portionMultiplier;
+    if (requestedMultiplier !== undefined && requestedMultiplier !== null) {
+      if (
+        !Number.isInteger(requestedMultiplier) ||
+        requestedMultiplier < 1
+      ) {
+        throw new BadRequestException('加量份数必须是不小于 1 的整数');
+      }
+      const maxPortionMultiplier = resolveMaxPortionMultiplier(
+        config,
+        cycleDays,
+      );
+      if (requestedMultiplier > maxPortionMultiplier) {
+        throw new BadRequestException(
+          cycleDays === null
+            ? `加量份数最多 ${maxPortionMultiplier} 份`
+            : `这张制作单是 ${cycleDays} 天量，最多只能买 ${maxPortionMultiplier} 份（分装效期所限）`,
+        );
+      }
+    }
+
     const quote = await this.pricingService.previewQuote({
       lines: available,
       totalWeightG: this.estimateWeightG(available),
+      portionMultiplier: requestedMultiplier ?? 1,
+      cycleDays,
     });
 
     return { quote, unavailable, config, meta };
@@ -1187,6 +1264,8 @@ export class SupplementOrderService {
     dogId: string | null;
     dogName: string | null;
     cycleDays: number | null;
+    portionMultiplier: number;
+    totalDays: number | null;
     remark: string | null;
     paymentMethod: string | null;
     paymentStatus: string | null;
@@ -1257,6 +1336,8 @@ export class SupplementOrderService {
       dogId: row.dogId,
       dogName: row.dogName,
       cycleDays: row.cycleDays,
+      portionMultiplier: row.portionMultiplier ?? 1,
+      totalDays: row.totalDays ?? null,
       remark: row.remark,
       paymentMethod: row.paymentMethod,
       paymentStatus: row.paymentStatus,

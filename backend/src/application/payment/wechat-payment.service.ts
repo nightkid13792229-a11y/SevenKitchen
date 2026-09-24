@@ -14,6 +14,7 @@ import { OrderService } from '../order/order.service';
 import { OrderStatus } from '../../domain';
 import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
 import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
+import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-config.service';
 
 type RuntimePaymentConfig = {
   enabled: boolean;
@@ -91,6 +92,7 @@ export class WechatPaymentService {
     private readonly orderService: OrderService,
     private readonly wechatShippingUploadService: WechatShippingUploadService,
     private readonly supplementOrderService: SupplementOrderService,
+    private readonly supplementShopConfigService: SupplementShopConfigService,
   ) {}
 
   async createJsapiPayment(
@@ -699,10 +701,19 @@ export class WechatPaymentService {
     }
 
     const config = await this.getRuntimePaymentConfig();
+
+    /**
+     * 支付超时用**补剂商城自己的配置**，不再复用鲜食那套（2026-09-24 解耦）。
+     * 两种生意节奏不同，共用一个值会"调一边影响另一边"。
+     * `paymentTimeoutMinutes = 0` 表示不自动关单 —— 此时不算期限、也不关单。
+     */
+    const shopConfig = await this.supplementShopConfigService.getConfig();
+    const supplementTimeoutMinutes = shopConfig.paymentTimeoutMinutes;
+    const autoCloseUnpaid = supplementTimeoutMinutes > 0;
     const paymentWindow = this.buildPaymentWindow(
       order.createdAt,
-      config.paymentTimeoutMinutes,
-      config.autoCloseUnpaid,
+      supplementTimeoutMinutes,
+      autoCloseUnpaid,
     );
 
     const base = {
@@ -711,8 +722,8 @@ export class WechatPaymentService {
       orderId,
       amountTotal: this.toMoneyNumber(order.amountTotal),
       ...paymentWindow,
-      paymentTimeoutMinutes: config.paymentTimeoutMinutes,
-      autoCloseUnpaid: config.autoCloseUnpaid,
+      paymentTimeoutMinutes: supplementTimeoutMinutes,
+      autoCloseUnpaid,
     };
 
     if (order.status === 'PAID') {
@@ -724,7 +735,7 @@ export class WechatPaymentService {
     }
 
     if (
-      config.autoCloseUnpaid &&
+      autoCloseUnpaid &&
       paymentWindow.paymentRemainingSeconds !== null &&
       paymentWindow.paymentRemainingSeconds <= 0
     ) {

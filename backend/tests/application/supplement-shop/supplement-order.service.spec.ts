@@ -24,6 +24,8 @@ function config(
     priceRoundingMode: 'CEIL_TO_0_1',
     minOrderAmount: 0,
     roundUpUsage: true,
+    maxPortionMultiplier: 3,
+    maxTotalDays: 90,
     shippingMode: 'FLAT_RATE',
     flatShippingFee: 8,
     shippingTemplateId: null,
@@ -187,9 +189,58 @@ describe('SupplementOrderService', () => {
       expect(result.quote.lines[0].unit).toBe('平勺');
       expect(result.quote.lines[0].packedAmount).toBe(23);
       expect(result.quote.lines[0].price).toBe(1.7);
-      // 2026-09-22：运费不再向客户收取（由加价吸收），total = 补剂售价 + 服务费
-      expect(result.quote.shippingFee).toBe(0);
-      expect(result.quote.total).toBeCloseTo(1.7 + 9.9, 2);
+      // 2026-09-24：运费向客户收取并逐项展示。fixture 没设包邮门槛 → 收一口价 8 元
+      expect(result.quote.freeShipping).toBe(false);
+      expect(result.quote.shippingFee).toBe(8);
+      expect(result.quote.total).toBeCloseTo(1.7 + 9.9 + 8, 2);
+    });
+
+    it('加量：份数翻倍，服务费不变，袋数翻倍', async () => {
+      const result = await service.quote({
+        lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+        portionMultiplier: 3,
+        cycleDays: 30,
+      });
+
+      expect(result.quote.portionMultiplier).toBe(3);
+      expect(result.quote.totalDays).toBe(90);
+      // 服务费按单收，加量后仍是 9.9 —— 这正是加量的意义所在
+      expect(result.quote.serviceFee).toBe(9.9);
+      expect(result.quote.bagCount).toBe(3);
+      expect(result.quote.perDayCost).not.toBeNull();
+    });
+
+    it('加量：份数超过天数上限时直接拒绝并说明原因', async () => {
+      // 40 天量 × 3 份 = 120 天，超过 90 天效期安全线
+      await expect(
+        service.quote({
+          lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+          portionMultiplier: 3,
+          cycleDays: 40,
+        }),
+      ).rejects.toThrow(/最多只能买 2 份/);
+    });
+
+    it('加量：份数超过配置上限时直接拒绝', async () => {
+      await expect(
+        service.quote({
+          lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+          portionMultiplier: 5,
+          cycleDays: 7,
+        }),
+      ).rejects.toThrow(/最多只能买 3 份/);
+    });
+
+    it('加量：份数必须是正整数，0 和负数直接拒绝', async () => {
+      for (const bad of [0, -1]) {
+        await expect(
+          service.quote({
+            lines: [{ ingredientId: KELP_ID, amount: 22.7 }],
+            portionMultiplier: bad,
+            cycleDays: 30,
+          }),
+        ).rejects.toThrow(/不小于 1 的整数/);
+      }
     });
 
     it('未上架的补剂进入 unavailable，但其余仍可报价', async () => {
@@ -251,6 +302,41 @@ describe('SupplementOrderService', () => {
     });
   });
 
+  /**
+   * 自动关单的查询（2026-09-24 补的缺口）
+   *
+   * 背景：补剂订单原先**完全不在自动关单的覆盖范围内** —— 定时任务只查鲜食订单。
+   * 用户提交补剂单不付款、又不再打开，就会永远挂在「待付款」。
+   */
+  describe('超时未付款订单查询', () => {
+    it('按超时分钟过滤，只取待付款的', async () => {
+      mockPrismaService.supplementOrder.findMany.mockResolvedValue([]);
+
+      await service.findExpiredUnpaidOrders(30);
+
+      const args = mockPrismaService.supplementOrder.findMany.mock.calls[0][0];
+      expect(args.where.status).toBe('PENDING_PAYMENT');
+      expect(args.where.createdAt.lt).toBeInstanceOf(Date);
+      // 截止时间应该约等于「现在 - 30 分钟」
+      const cutoff = args.where.createdAt.lt.getTime();
+      expect(Math.abs(cutoff - (Date.now() - 30 * 60 * 1000))).toBeLessThan(5000);
+    });
+
+    it('超时配成 0（不自动关单）时不查库，直接返回空', async () => {
+      mockPrismaService.supplementOrder.findMany.mockClear();
+
+      expect(await service.findExpiredUnpaidOrders(0)).toEqual([]);
+      expect(mockPrismaService.supplementOrder.findMany).not.toHaveBeenCalled();
+    });
+
+    it('超时是负数或非法值时不查库', async () => {
+      mockPrismaService.supplementOrder.findMany.mockClear();
+      expect(await service.findExpiredUnpaidOrders(-5)).toEqual([]);
+      expect(await service.findExpiredUnpaidOrders(Number.NaN)).toEqual([]);
+      expect(mockPrismaService.supplementOrder.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('下单', () => {
     const baseRequest = {
       addressId: 'addr-1',
@@ -264,6 +350,25 @@ describe('SupplementOrderService', () => {
       dogName: '拿铁',
       cycleDays: 7,
     };
+
+    it('加量：订单落库记录份数与总天数（总天数是下单时快照，不做派生）', async () => {
+      await service.createOrder('user-1', {
+        ...baseRequest,
+        portionMultiplier: 3,
+      });
+
+      // 7 天量 × 3 份 = 21 天，袋数 = 2 种 × 3 份 = 6
+      expect(createdOrders[0].portionMultiplier).toBe(3);
+      expect(createdOrders[0].totalDays).toBe(21);
+      expect(createdOrders[0].bagCount).toBe(6);
+    });
+
+    it('加量：不加量时份数为 1，总天数等于制作单天数', async () => {
+      await service.createOrder('user-1', baseRequest);
+
+      expect(createdOrders[0].portionMultiplier).toBe(1);
+      expect(createdOrders[0].totalDays).toBe(7);
+    });
 
     it('生成 SP 前缀订单号并写入订单行快照', async () => {
       const order = await service.createOrder('user-1', baseRequest);

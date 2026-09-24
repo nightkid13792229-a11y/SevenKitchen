@@ -8,6 +8,11 @@ export interface PrintCanvasOptions {
   width: number
   height: number
   outputScale?: number
+  /**
+   * 高度自适应模式：调用方会先量内容高度再定画布尺寸。
+   * 此时不做「内容快到底就压缩间距」的兜底 —— 那会让两次绘制的排版不一致。
+   */
+  autoHeight?: boolean
 }
 
 export interface CanvasImageInfo {
@@ -26,6 +31,9 @@ export class PrintCanvasBuilder {
   private outputHeight: number
   private currentY: number = 0
   private pagePadding: number = 40
+  private autoHeight: boolean = false
+  /** 头部高度：信息卡向上叠压它，做出悬浮的海报感 */
+  private heroHeight: number = 0
 
   // 字体大小配置（优化版）
   private readonly FONT_SIZES = {
@@ -41,10 +49,8 @@ export class PrintCanvasBuilder {
   private readonly COLORS = {
     TITLE: '#1a1a1a',
     TEXT: '#4a4a4a',
-    BORDER: '#d0d0d0',
+    BORDER: '#e5e8d4',
     BACKGROUND: '#f5f5f5',
-    HIGHLIGHT: '#1890ff',
-    WARNING: '#faad14',
     WHITE: '#ffffff'
   }
 
@@ -64,6 +70,7 @@ export class PrintCanvasBuilder {
     this.canvasWidth = options.width
     this.canvasHeight = options.height
     this.outputScale = options.outputScale || 1
+    this.autoHeight = options.autoHeight === true
     this.outputWidth = Math.round(this.canvasWidth * this.outputScale)
     this.outputHeight = Math.round(this.canvasHeight * this.outputScale)
 
@@ -83,6 +90,22 @@ export class PrintCanvasBuilder {
     this.drawBackground()
   }
 
+  /** 圆角矩形路径（画完需自行 fill / stroke） */
+  private roundRect(x: number, y: number, w: number, h: number, r: number) {
+    const radius = Math.max(0, Math.min(r, w / 2, h / 2))
+    this.ctx.beginPath()
+    this.ctx.moveTo(x + radius, y)
+    this.ctx.lineTo(x + w - radius, y)
+    this.ctx.arc(x + w - radius, y + radius, radius, -Math.PI / 2, 0)
+    this.ctx.lineTo(x + w, y + h - radius)
+    this.ctx.arc(x + w - radius, y + h - radius, radius, 0, Math.PI / 2)
+    this.ctx.lineTo(x + radius, y + h)
+    this.ctx.arc(x + radius, y + h - radius, radius, Math.PI / 2, Math.PI)
+    this.ctx.lineTo(x, y + radius)
+    this.ctx.arc(x + radius, y + radius, radius, Math.PI, Math.PI * 1.5)
+    this.ctx.closePath()
+  }
+
   /**
    * 绘制白色背景
    */
@@ -95,6 +118,9 @@ export class PrintCanvasBuilder {
    * 检查是否超出画布高度
    */
   private checkOverflow(additionalHeight: number = 0) {
+    // 自适应高度模式下由调用方负责把画布撑够，不做压缩兜底
+    if (this.autoHeight) return
+
     const maxY = this.canvasHeight - 60 // 留出页脚空间
     if (this.currentY + additionalHeight > maxY) {
       console.warn('[PrintCanvas] 内容接近A4纸底部，当前Y:', this.currentY, '额外高度:', additionalHeight)
@@ -111,25 +137,6 @@ export class PrintCanvasBuilder {
   /**
    * 绘制标题（食谱名称）
    */
-  drawTitle(title: string) {
-    // 绘制渐变背景区域
-    const headerHeight = 120
-    const gradient = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
-    gradient.addColorStop(0, '#667eea')
-    gradient.addColorStop(1, '#764ba2')
-    this.ctx.setFillStyle(gradient)
-    this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
-
-    // 绘制标题文字
-    this.ctx.setTextAlign('center')
-    this.ctx.setFillStyle('#ffffff')
-    this.ctx.setFontSize(this.FONT_SIZES.TITLE)
-    this.ctx.fillText(title, this.canvasWidth / 2, 60)
-
-    this.currentY = headerHeight + 20
-
-    console.log('[PrintCanvas] 标题绘制完成:', { title, y: this.currentY })
-  }
 
   /**
    * 绘制分享图品牌头部
@@ -141,45 +148,68 @@ export class PrintCanvasBuilder {
     backgroundImage?: CanvasImageInfo
     title: string
     subtitle?: string
-    stages?: string[]
+    /** 一句话卖点：标题下方的一行金色小字，是这张图最可分享的一句 */
+    sellingPoint?: string
   }) {
-    const headerHeight = 230
+    /**
+     * 海报式头部。纵向按固定栅格排，避免各元素互相挤压 / 遮挡：
+     *   34  ~ 92    品牌徽标胶囊
+     *   150 ~ 226   狗狗头像 + 说明行
+     *   296         主标题基线（在头像下方 24px 处，不再被头像压住）
+     *   336         一句话卖点基线
+     *   356 ~ 361   品牌金短线
+     *   384         头部底边
+     */
+    const headerHeight = 384
+    this.heroHeight = headerHeight
     this.drawBrandHeaderBackground(headerHeight, options)
 
+    // 品牌徽标：白底胶囊 + 墨绿字。原来用半透明白，logo 在照片上几乎没有存在感
     const brandCenterX = this.canvasWidth / 2
-    const logoSize = 58
-    const brandGap = 8
-    const brandTextWidth = Math.max(154, options.brand.length * 20)
-    const brandStartX = brandCenterX - (logoSize + brandGap + brandTextWidth) / 2
-    const brandY = 40
-    const brandBadgeHeight = 66
-    const brandBadgePaddingX = 16
-    const brandBadgeWidth = logoSize + brandGap + brandTextWidth + brandBadgePaddingX * 2
-    const brandBadgeX = brandCenterX - brandBadgeWidth / 2
-    const brandBadgeY = brandY - brandBadgeHeight / 2
+    const logoSize = 42
+    const brandGap = 10
+    const brandTextWidth = Math.max(120, options.brand.length * 17)
+    const badgePadX = 18
+    const badgeHeight = 58
+    const badgeWidth = logoSize + brandGap + brandTextWidth + badgePadX * 2
+    const badgeX = brandCenterX - badgeWidth / 2
+    const badgeY = 34
 
-    this.ctx.setFillStyle('rgba(255,255,255,0.66)')
-    this.ctx.fillRect(brandBadgeX, brandBadgeY, brandBadgeWidth, brandBadgeHeight)
-    this.ctx.setStrokeStyle('rgba(255,255,255,0.66)')
-    this.ctx.setLineWidth(2)
-    this.ctx.strokeRect(brandBadgeX, brandBadgeY, brandBadgeWidth, brandBadgeHeight)
+    this.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight / 2)
+    this.ctx.setFillStyle('rgba(255,255,255,0.95)')
+    this.ctx.fill()
+    this.ctx.setStrokeStyle('rgba(255,255,255,0.85)')
+    this.ctx.setLineWidth(1)
+    this.ctx.stroke()
 
     if (options.logoPath) {
       try {
-        this.ctx.drawImage(options.logoPath, brandStartX, brandY - logoSize / 2, logoSize, logoSize)
+        this.ctx.drawImage(
+          options.logoPath,
+          badgeX + badgePadX,
+          badgeY + (badgeHeight - logoSize) / 2,
+          logoSize,
+          logoSize
+        )
       } catch (error) {
         console.warn('[PrintCanvas] 绘制品牌logo失败，继续生成文字头部:', error)
       }
     }
 
     this.ctx.setTextAlign('left')
-    this.ctx.setFillStyle('#2f3337')
-    this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 8)
-    this.ctx.fillText(options.brand, brandStartX + logoSize + brandGap, brandY + 8)
+    this.ctx.setFillStyle('#1e3a2f')
+    this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 4)
+    this.ctx.fillText(
+      options.brand,
+      badgeX + badgePadX + logoSize + brandGap,
+      badgeY + badgeHeight / 2 + 8
+    )
 
-    const avatarSize = 78
-    const avatarX = this.pagePadding + 42
-    const avatarY = 92
+    // 狗狗头像 + 说明行（同一行，不与标题争位置）
+    const avatarSize = 76
+    const avatarX = this.pagePadding + 24
+    const avatarY = 150
+
     if (options.avatarPath) {
       try {
         this.ctx.drawImage(options.avatarPath, avatarX, avatarY, avatarSize, avatarSize)
@@ -191,58 +221,42 @@ export class PrintCanvasBuilder {
       this.drawAvatarFallbackLogo(options.logoPath, avatarX, avatarY, avatarSize)
     }
 
-    const titleX = avatarX + avatarSize + 28
     this.ctx.setTextAlign('left')
     this.ctx.setFillStyle('rgba(255,255,255,0.88)')
     this.ctx.setFontSize(this.FONT_SIZES.NORMAL)
     if (options.subtitle) {
-      this.ctx.fillText(options.subtitle, titleX, 106)
+      this.ctx.fillText(options.subtitle, avatarX + avatarSize + 20, avatarY + 52)
     }
 
+    // 主标题：整张图最大的一行字，独占一行
     this.ctx.setFillStyle('#ffffff')
-    this.ctx.setFontSize(this.FONT_SIZES.TITLE + 4)
-    this.ctx.fillText(options.title, titleX, 152)
+    this.ctx.setFontSize(this.FONT_SIZES.TITLE + 10)
+    this.ctx.fillText(options.title, avatarX, 296)
 
-    if (options.stages?.length) {
-      const cardWidth = 248
-      const cardHeight = 82
-      const cardX = this.canvasWidth - this.pagePadding - 42 - cardWidth
-      const cardY = 90
-      this.ctx.setFillStyle('rgba(255,255,255,0.16)')
-      this.ctx.fillRect(cardX, cardY, cardWidth, cardHeight)
-      this.ctx.setStrokeStyle('rgba(255,255,255,0.22)')
-      this.ctx.strokeRect(cardX, cardY, cardWidth, cardHeight)
-
-      this.ctx.setTextAlign('left')
-      this.ctx.setFillStyle('rgba(255,255,255,0.82)')
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL - 1)
-      this.ctx.fillText('适用生命阶段', cardX + 14, cardY + 24)
-
-      const tagGap = 8
-      const tagHeight = 24
-      const tagWidth = 66
-      const visibleStages = options.stages.slice(0, 4)
-      let currentX = cardX + 14
-      visibleStages.forEach(stage => {
-        this.ctx.setFillStyle('rgba(255,255,255,0.22)')
-        this.ctx.fillRect(currentX, cardY + 40, tagWidth, tagHeight)
-        this.ctx.setFillStyle('#ffffff')
-        this.ctx.setFontSize(this.FONT_SIZES.SMALL - 1)
-        this.ctx.setTextAlign('center')
-        this.ctx.fillText(stage, currentX + tagWidth / 2, cardY + 57)
-        currentX += tagWidth + tagGap
-      })
+    // 一句话卖点：与标题留出 40px，不与金线相贴
+    if (options.sellingPoint) {
+      this.ctx.setFillStyle('#e6d3a8')
+      this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 2)
+      this.fillWrappedText(
+        options.sellingPoint,
+        avatarX,
+        336,
+        this.canvasWidth - avatarX - this.pagePadding - 24,
+        22,
+        1
+      )
     }
 
-    this.currentY = headerHeight + 24
+    this.ctx.setFillStyle('#d8bc85')
+    this.ctx.fillRect(avatarX, 356, 110, 5)
 
-    console.log('[PrintCanvas] 分享图品牌头部绘制完成:', {
+    console.log('[PrintCanvas] 海报头部绘制完成:', {
       brand: options.brand,
       title: options.title,
-      y: this.currentY
+      heroHeight: headerHeight,
+      hasSellingPoint: Boolean(options.sellingPoint)
     })
   }
-
   private drawBrandHeaderBackground(headerHeight: number, options: { backgroundImage?: CanvasImageInfo }) {
     let usedImage = false
 
@@ -257,28 +271,33 @@ export class PrintCanvasBuilder {
 
     if (!usedImage) {
       const gradient = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
-      gradient.addColorStop(0, '#4eaff7')
-      gradient.addColorStop(0.55, '#4d67d5')
-      gradient.addColorStop(1, '#6c4bbb')
+      gradient.addColorStop(0, '#2b5040')
+      gradient.addColorStop(0.55, '#1e3a2f')
+      gradient.addColorStop(1, '#173026')
       this.ctx.setFillStyle(gradient)
       this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
     }
 
-    const overlayStops = usedImage
-      ? [
-          [0, 'rgba(26, 135, 219, 0.14)'],
-          [0.5, 'rgba(50, 75, 173, 0.10)'],
-          [1, 'rgba(88, 55, 151, 0.16)']
-        ]
-      : [
-          [0, 'rgba(26, 135, 219, 0.52)'],
-          [0.5, 'rgba(50, 75, 173, 0.42)'],
-          [1, 'rgba(88, 55, 151, 0.58)']
-        ]
+    /**
+     * 叠在底图上的压暗层。
+     * ⚠️ 原来这里是蓝紫三层（不透明度 42%~58%），会把品牌墨绿底完全盖住。
+     *    现在改成品牌墨绿，并且**上轻下重**：顶部让封面照片透出来，
+     *    底部压暗保证白色标题与卖点读得清。
+     *    没有底图时不再叠加（底色本身就是品牌渐变）。
+     */
+    if (!usedImage) {
+      return
+    }
+
+    const overlayStops: Array<[number, string]> = [
+      [0, 'rgba(23, 48, 38, 0.16)'],
+      [0.5, 'rgba(23, 48, 38, 0.30)'],
+      [1, 'rgba(20, 40, 32, 0.74)']
+    ]
 
     const overlay = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
     overlayStops.forEach(([offset, color]) => {
-      overlay.addColorStop(offset as number, color as string)
+      overlay.addColorStop(offset, color)
     })
     this.ctx.setFillStyle(overlay)
     this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
@@ -420,56 +439,82 @@ export class PrintCanvasBuilder {
     this.ctx.stroke()
   }
 
-  drawShareSummaryCards(options: {
-    dogInfo: string
-    dogSub?: string
-    cycle: string
-    cycleSub?: string
-    packagePlan: string
-    packageSub?: string
-    formulaStandard: string
-    formulaSource?: string
-  }) {
-    const gap = 12
-    const cardHeight = 94
+
+  /**
+   * 「标签 + 数值」信息卡：区块标题 + 三列网格。
+   * 与制作单页面的「狗狗信息 / 制作信息」同一套视觉（浅绿底格子 + 灰标签 + 墨绿数值）。
+   */
+  drawFactCards(
+    title: string,
+    items: Array<{ label: string; value: string }>,
+    options?: { columns?: number }
+  ) {
+    if (!items || items.length === 0) return
+
+    const cols = options?.columns || 3
+    const gap = 8
     const tableWidth = this.canvasWidth - this.pagePadding * 2
-    const cardWidth = (tableWidth - gap * 3) / 4
-    const cards = [
-      { label: '狗狗信息', value: options.dogInfo, sub: options.dogSub },
-      { label: '制作周期', value: options.cycle, sub: options.cycleSub },
-      { label: '分装规格', value: options.packagePlan, sub: options.packageSub },
-      {
-        label: '配方依据',
-        value: `营养标准 ${options.formulaStandard}`,
-        sub: options.formulaSource ? `设计软件 ${options.formulaSource}` : ''
-      }
-    ]
+    const cellWidth = (tableWidth - gap * (cols - 1)) / cols
+    const cellHeight = 62
+    const rows = Math.ceil(items.length / cols)
+    const cardPadY = 16
+    const cardHeight = rows * cellHeight + (rows - 1) * gap + cardPadY * 2
 
-    cards.forEach((card, index) => {
-      const x = this.pagePadding + index * (cardWidth + gap)
-      const y = this.currentY
-      this.ctx.setFillStyle('#fbfdff')
-      this.ctx.fillRect(x, y, cardWidth, cardHeight)
-      this.ctx.setStrokeStyle('#cfe6fb')
-      this.ctx.strokeRect(x, y, cardWidth, cardHeight)
+    // 海报式处理：白卡向上叠压头部一点点，做出悬浮层次
+    const overlap = 36
+    const cardY = this.heroHeight > 0 ? this.heroHeight - overlap : this.currentY + 6
+    this.heroHeight = 0
 
+    this.roundRect(this.pagePadding, cardY, tableWidth, cardHeight, 20)
+    this.ctx.setFillStyle('#ffffff')
+    this.ctx.fill()
+    this.ctx.setStrokeStyle('#e8ebdb')
+    this.ctx.setLineWidth(1)
+    this.ctx.stroke()
+
+    const gridY = cardY + cardPadY
+
+    if (title) {
       this.ctx.setTextAlign('left')
-      this.ctx.setFillStyle('#6f7a84')
+      this.ctx.setFillStyle('#26261f')
+      this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 5)
+      this.ctx.fillText(title, this.pagePadding + 20, gridY + 16)
+    }
+
+    items.forEach((item, index) => {
+      const row = Math.floor(index / cols)
+      const col = index % cols
+      const x = this.pagePadding + 14 + col * (cellWidth + gap)
+      const y = gridY + row * (cellHeight + gap)
+
+      this.roundRect(x, y, cellWidth - 12, cellHeight, 12)
+      this.ctx.setFillStyle('#f4f7ec')
+      this.ctx.fill()
+
+      this.ctx.setTextAlign('center')
+      this.ctx.setFillStyle('#1e3a2f')
+      this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 4)
+      this.ctx.fillText(item.value, x + (cellWidth - 12) / 2, y + 27)
+
+      this.ctx.setFillStyle('#9aa189')
       this.ctx.setFontSize(this.FONT_SIZES.SMALL - 1)
-      this.ctx.fillText(card.label, x + 14, y + 24)
-
-      this.ctx.setFillStyle('#243746')
-      this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 1)
-      this.fillWrappedText(card.value, x + 14, y + 52, cardWidth - 28, 20, 1)
-
-      if (card.sub) {
-        this.ctx.setFillStyle('#8a939b')
-        this.ctx.setFontSize(this.FONT_SIZES.SMALL - 2)
-        this.fillWrappedText(card.sub, x + 14, y + 78, cardWidth - 28, 16, 1)
-      }
+      this.ctx.fillText(item.label, x + (cellWidth - 12) / 2, y + 49)
     })
 
-    this.currentY += cardHeight + 32
+    this.currentY = cardY + cardHeight + 34
+  }
+  /**
+   * 区块下方的说明小字
+   */
+  drawNote(text: string) {
+    if (!text) return
+
+    this.currentY += 4
+    this.ctx.setTextAlign('left')
+    this.ctx.setFillStyle('#968f6d')
+    this.ctx.setFontSize(this.FONT_SIZES.SMALL - 1)
+    this.fillWrappedText(text, this.pagePadding, this.currentY + 16, this.canvasWidth - this.pagePadding * 2, 20, 2)
+    this.currentY += 30
   }
 
   /**
@@ -479,85 +524,23 @@ export class PrintCanvasBuilder {
     this.currentY += this.SPACING.SECTION_MARGIN
     this.checkOverflow(50)
 
+    this.ctx.setFillStyle('#b08d4f')
+    this.ctx.fillRect(this.pagePadding, this.currentY + 2, 6, 24)
+
     this.ctx.setTextAlign('left')
-    this.ctx.setFillStyle(this.COLORS.HIGHLIGHT)
+    this.ctx.setFillStyle('#1e3a2f')
     this.ctx.setFontSize(this.FONT_SIZES.SECTION_TITLE)
-    this.ctx.fillText(title, this.pagePadding, this.currentY + 20)
+    this.ctx.fillText(title, this.pagePadding + 18, this.currentY + 24)
 
-    this.currentY += 50
+    this.currentY += 54
   }
-
   /**
    * 绘制标签行
    */
-  drawTags(tags: string[]) {
-    if (tags.length === 0) return
-
-    const tagWidth = 130
-    const tagHeight = 30
-    const tagGap = 15
-    const startX = (this.canvasWidth - (Math.min(tags.length, 6) * (tagWidth + tagGap))) / 2
-
-    this.currentY = 85
-    let currentX = startX
-
-    tags.forEach((tag, index) => {
-      if (index >= 6) return // 最多显示6个标签
-
-      // 蓝色标签（适用阶段）或橙色标签（健康标签）
-      const isBlue = index < 3
-      this.ctx.setFillStyle(isBlue ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.15)')
-      this.ctx.fillRect(currentX, this.currentY, tagWidth, tagHeight)
-
-      this.ctx.setFillStyle('#ffffff')
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL)
-      this.ctx.setTextAlign('center')
-      this.ctx.fillText(tag, currentX + tagWidth / 2, this.currentY + 20)
-
-      currentX += tagWidth + tagGap
-    })
-
-    this.currentY = 140
-  }
 
   /**
    * 绘制信息卡片（8列横向布局）
    */
-  drawInfoCard(items: Array<{ label: string; value: string }>, accentColor: string = '#1890ff') {
-    this.currentY += 10
-    this.checkOverflow(100)
-
-    const cardWidth = this.canvasWidth - this.pagePadding * 2
-    const cardHeight = 100
-    const colWidth = cardWidth / 8
-
-    // 背景
-    this.ctx.setFillStyle(accentColor === '#1890ff' ? '#f0f9ff' : '#fff7e6')
-    this.ctx.fillRect(this.pagePadding, this.currentY, cardWidth, cardHeight)
-
-    // 左侧强调线
-    this.ctx.setFillStyle(accentColor)
-    this.ctx.fillRect(this.pagePadding, this.currentY, 4, cardHeight)
-
-    items.forEach((item, index) => {
-      const x = this.pagePadding + 20 + colWidth * index
-      const y = this.currentY
-
-      // 标签
-      this.ctx.setFillStyle('#999999')
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL - 2)
-      this.ctx.setTextAlign('left')
-      this.ctx.fillText(item.label, x, y + 35)
-
-      // 值
-      this.ctx.setFillStyle('#333333')
-      this.ctx.setFontSize(this.FONT_SIZES.NORMAL - 2)
-      this.ctx.setTextAlign('left')
-      this.ctx.fillText(item.value, x, y + 65)
-    })
-
-    this.currentY += cardHeight + 20
-  }
 
   /**
    * 绘制表格
@@ -594,7 +577,7 @@ export class PrintCanvasBuilder {
     this.checkOverflow(headerHeight + baseRowHeight * displayRows.length + 20)
 
     // 绘制表头
-    this.ctx.setFillStyle('#fafafa')
+    this.ctx.setFillStyle('#f2f4ea')
     this.ctx.fillRect(this.pagePadding, this.currentY, tableWidth, headerHeight)
 
     this.ctx.setStrokeStyle(this.COLORS.BORDER)
@@ -603,7 +586,7 @@ export class PrintCanvasBuilder {
 
     let currentX = this.pagePadding
     headers.forEach((header, index) => {
-      this.ctx.setFillStyle('#666666')
+      this.ctx.setFillStyle('#6b6653')
       this.ctx.setFontSize(this.FONT_SIZES.NORMAL - 2)
       this.ctx.setTextAlign('center')
       this.ctx.fillText(header, currentX + colWidths[index] / 2, this.currentY + 26)
@@ -675,10 +658,10 @@ export class PrintCanvasBuilder {
 
     // 绘制合计行（如果有）
     if (options?.totalRow && options.totalRow.length === colWidths.length) {
-      this.ctx.setFillStyle('#fff7e6')
+      this.ctx.setFillStyle('#f6efe0')
       this.ctx.fillRect(this.pagePadding, this.currentY, tableWidth, baseRowHeight)
 
-      this.ctx.setFillStyle(this.COLORS.WARNING)
+      this.ctx.setFillStyle('#a97c33')
       this.ctx.setFontSize(this.FONT_SIZES.TEXT)
 
       currentX = this.pagePadding
@@ -690,10 +673,10 @@ export class PrintCanvasBuilder {
 
       this.currentY += baseRowHeight
     } else if (options?.showTotal && options.totalText && options.totalValue) {
-      this.ctx.setFillStyle('#fff7e6')
+      this.ctx.setFillStyle('#f6efe0')
       this.ctx.fillRect(this.pagePadding, this.currentY, tableWidth, baseRowHeight)
 
-      this.ctx.setFillStyle(this.COLORS.WARNING)
+      this.ctx.setFillStyle('#a97c33')
       this.ctx.setFontSize(this.FONT_SIZES.TEXT)
       this.ctx.setTextAlign('center')
 
@@ -723,129 +706,55 @@ export class PrintCanvasBuilder {
     if (!steps) return
 
     this.currentY += 10
-    const cardHeight = 100
-
-    this.checkOverflow(cardHeight)
-
     const cardWidth = this.canvasWidth - this.pagePadding * 2
-    const lineHeight = this.FONT_SIZES.NORMAL * this.SPACING.LINE_HEIGHT
+    const font = this.FONT_SIZES.NORMAL + 1
+    const lineHeight = font * 1.6
+    const stepGap = 14
+    const maxChars = Math.floor((cardWidth - 96) / (font * 0.62))
 
-    this.ctx.setFillStyle(this.COLORS.BACKGROUND)
-    this.ctx.fillRect(this.pagePadding, this.currentY, cardWidth, cardHeight)
+    // 拆成一条条步骤：优先按换行/序号拆，拆不开就当一段
+    const rawParts = steps
+      .split(/\n+/)
+      .map(part => part.replace(/^[\s①-⑳\d.、)]+/, '').trim())
+      .filter(Boolean)
+    const parts = rawParts.length > 0 ? rawParts : [steps.trim()]
 
-    this.ctx.setFillStyle(this.COLORS.TEXT)
-    this.ctx.setFontSize(this.FONT_SIZES.NORMAL)
-    this.ctx.setTextAlign('left')
+    parts.forEach((part, index) => {
+      const lines = this.wrapText(part, maxChars)
+      const stepHeight = Math.max(52, lines.length * lineHeight + 26)
 
-    // 简单的文本换行处理（每行最多50个字）
-    const lines = this.wrapText(steps, 50)
-    lines.forEach((line, index) => {
-      if (index < 4) { // 最多显示4行
-        this.ctx.fillText(line, this.pagePadding + 20, this.currentY + 30 + index * lineHeight)
-      }
+      this.roundRect(this.pagePadding, this.currentY, cardWidth, stepHeight, 14)
+      this.ctx.setFillStyle(index % 2 === 0 ? '#f7f9f1' : '#ffffff')
+      this.ctx.fill()
+
+      // 编号圆点
+      const dotX = this.pagePadding + 34
+      const dotY = this.currentY + 30
+      this.ctx.beginPath()
+      this.ctx.arc(dotX, dotY, 15, 0, Math.PI * 2)
+      this.ctx.setFillStyle('#1e3a2f')
+      this.ctx.fill()
+      this.ctx.setTextAlign('center')
+      this.ctx.setFillStyle('#d8bc85')
+      this.ctx.setFontSize(this.FONT_SIZES.SMALL + 1)
+      this.ctx.fillText(String(index + 1), dotX, dotY + 6)
+
+      this.ctx.setTextAlign('left')
+      this.ctx.setFillStyle('#3c4a3f')
+      this.ctx.setFontSize(font)
+      lines.forEach((line, lineIndex) => {
+        this.ctx.fillText(line, this.pagePadding + 62, this.currentY + 30 + lineIndex * lineHeight)
+      })
+
+      this.currentY += stepHeight + stepGap
     })
 
-    // 如果有更多行，显示省略号
-    if (lines.length > 4) {
-      this.ctx.fillText('...', this.pagePadding + 20, this.currentY + 30 + 4 * lineHeight)
-    }
-
-    this.currentY += cardHeight + 10
+    this.currentY += 6
   }
-
   /**
    * 绘制提示卡片（3个横向排列）
    */
-  drawTipsCards(tips: Array<{ title: string; content: string[] }>) {
-    this.currentY += 10
 
-    const cardWidth = (this.canvasWidth - this.pagePadding * 2 - 20) / 3
-    const cardHeight = 80
-    const lineHeight = this.FONT_SIZES.SMALL * this.SPACING.LINE_HEIGHT
-
-    tips.forEach((tip, index) => {
-      this.checkOverflow(cardHeight)
-
-      const xPos = this.pagePadding + (cardWidth + 10) * index
-      const yPos = this.currentY
-
-      // 背景
-      this.ctx.setFillStyle(this.COLORS.WHITE)
-      this.ctx.fillRect(xPos, yPos, cardWidth, cardHeight)
-
-      // 边框
-      this.ctx.setStrokeStyle(this.COLORS.BORDER)
-      this.ctx.setLineWidth(1)
-      this.ctx.strokeRect(xPos, yPos, cardWidth, cardHeight)
-
-      // 标题
-      this.ctx.setFillStyle(this.COLORS.HIGHLIGHT)
-      this.ctx.setFontSize(this.FONT_SIZES.NORMAL - 2)
-      this.ctx.setTextAlign('left')
-      this.ctx.fillText(tip.title, xPos + 10, yPos + 22)
-
-      // 内容
-      this.ctx.setFillStyle(this.COLORS.TEXT)
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL)
-      tip.content.forEach((line, lineIndex) => {
-        if (lineIndex < 2) { // 最多显示2行
-          // 简单的自动换行处理
-          const maxWidth = cardWidth - 20
-          const charsPerLine = Math.floor(maxWidth / (this.FONT_SIZES.SMALL * 0.6))
-          let displayLine = line
-          if (line.length > charsPerLine) {
-            displayLine = line.substring(0, charsPerLine - 1)
-          }
-          this.ctx.fillText(displayLine, xPos + 10, yPos + 42 + lineIndex * lineHeight)
-        }
-      })
-    })
-
-    this.currentY += cardHeight + 20
-  }
-
-  drawImportantTipsSection(tips: Array<{ title: string; content: string[] }>) {
-    this.currentY += 28
-    const sectionX = this.pagePadding
-    const sectionWidth = this.canvasWidth - this.pagePadding * 2
-    const sectionHeight = 176
-    const cardGap = 12
-    const cardWidth = (sectionWidth - 40 - cardGap * 2) / 3
-    const cardHeight = 116
-    const cardY = this.currentY + 50
-    const tipContentY = cardY + 44
-    const tipLineHeight = 15
-    const tipMaxLines = [2, 2, 3]
-
-    this.ctx.setFillStyle('#fffaf0')
-    this.ctx.fillRect(sectionX, this.currentY, sectionWidth, sectionHeight)
-    this.ctx.setStrokeStyle('#f2d08c')
-    this.ctx.strokeRect(sectionX, this.currentY, sectionWidth, sectionHeight)
-
-    this.ctx.setTextAlign('left')
-    this.ctx.setFillStyle('#d68218')
-    this.ctx.setFontSize(this.FONT_SIZES.SECTION_TITLE - 3)
-    this.ctx.fillText('重要提示', sectionX + 18, this.currentY + 32)
-
-    tips.forEach((tip, index) => {
-      const xPos = sectionX + 20 + index * (cardWidth + cardGap)
-
-      this.ctx.setFillStyle('#ffffff')
-      this.ctx.fillRect(xPos, cardY, cardWidth, cardHeight)
-      this.ctx.setStrokeStyle('#f1e1c2')
-      this.ctx.strokeRect(xPos, cardY, cardWidth, cardHeight)
-
-      this.ctx.setFillStyle('#38414a')
-      this.ctx.setFontSize(this.FONT_SIZES.NORMAL - 1)
-      this.ctx.fillText(tip.title, xPos + 12, cardY + 24)
-
-      this.ctx.setFillStyle('#6d747b')
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL - 2)
-      this.fillWrappedText(tip.content.join('\n'), xPos + 12, tipContentY, cardWidth - 24, tipLineHeight, tipMaxLines[index] || 2)
-    })
-
-    this.currentY += sectionHeight + 18
-  }
 
   drawSupplementNotice(text: string) {
     this.currentY += 8
@@ -883,16 +792,22 @@ export class PrintCanvasBuilder {
    * 绘制页脚
    */
   drawFooter(text: string) {
-    this.currentY = this.canvasHeight - 40
+    const lineY = this.canvasHeight - 62
+    this.ctx.setStrokeStyle('#e5e8d4')
+    this.ctx.setLineWidth(1)
+    this.ctx.beginPath()
+    this.ctx.moveTo(this.pagePadding, lineY)
+    this.ctx.lineTo(this.canvasWidth - this.pagePadding, lineY)
+    this.ctx.stroke()
 
-    this.ctx.setFillStyle(this.COLORS.TEXT)
+    this.currentY = this.canvasHeight - 34
+    this.ctx.setFillStyle('#9aa189')
     this.ctx.setFontSize(this.FONT_SIZES.FOOTER)
     this.ctx.setTextAlign('center')
     this.ctx.fillText(text, this.canvasWidth / 2, this.currentY)
 
     console.log('[PrintCanvas] 页脚绘制完成:', { text, y: this.currentY })
   }
-
   /**
    * 文本换行处理
    */
@@ -996,6 +911,13 @@ export class PrintCanvasBuilder {
   /**
    * 获取当前Y坐标（用于调试）
    */
+  /**
+   * 内容是否已经超出 A4 高度（canvas 不会自动分页，超出部分会被裁掉）
+   */
+  isContentOverflowing(): boolean {
+    return this.currentY > this.canvasHeight - 40
+  }
+
   getCurrentY(): number {
     return this.currentY
   }

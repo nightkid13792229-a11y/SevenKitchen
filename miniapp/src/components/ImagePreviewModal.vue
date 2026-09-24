@@ -168,7 +168,8 @@ function handleImageTap() {
 .save-btn {
   width: 100%;
   height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* 品牌墨绿，替换原来的蓝紫渐变 */
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
   color: #fff;
   border-radius: 44rpx;
   font-size: 32rpx;

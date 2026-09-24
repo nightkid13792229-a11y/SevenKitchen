@@ -196,7 +196,10 @@ export async function confirmLifeStageMismatch(params: {
     uni.showModal({
       title: '生命阶段提醒',
       content: `${content}\n\n继续表示您已知晓并自行决定；如狗狗有明确诊断或正在遵医嘱饮食，请先咨询执业兽医。`,
-      confirmText: '我已知晓，继续',
+      // ⚠️ 微信限制：confirmText / cancelText 最多 4 个汉字。
+      //    超过 4 字时 showModal 既不显示也不报错，fail 回调把确认当成"未确认"，
+      //    调用方（生成制作单 / 确认订单）会直接 return —— 表现就是「点了没反应」。
+      confirmText: '我已知晓',
       cancelText: '再看看',
       success: (res) => resolve(Boolean(res.confirm)),
       fail: () => resolve(false),

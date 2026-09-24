@@ -2,220 +2,171 @@
   <view class="recipe-diy-page">
     <!-- 食谱信息卡片 -->
     <view class="section recipe-info-section">
-      <view class="recipe-name-wrapper">
-        <text class="recipe-name">{{ recipe.name }}</text>
-      </view>
-
-      <view class="tags-row">
-        <text class="section-label">适用于：</text>
-        <view class="tags-container">
-          <text
-            v-for="stage in recipe.applicableLifeStages"
-            :key="stage"
-            class="tag life-stage-tag"
-          >
-            {{ getLifeStageLabel(stage) }}
-          </text>
-          <!-- 健康标签暂不展示：待标签字典合规化后仅展示合规标签 -->
+      <!--
+        食谱封面：与 DIY 制作单页同一写法（同一套 normalizeImageUrl + 占位态），
+        整幅贴到卡片上边缘，不再被卡片内边距切开。
+      -->
+      <view class="recipe-cover-wrapper">
+        <image
+          v-if="recipe.coverImageUrl"
+          :src="normalizeImageUrl(recipe.coverImageUrl)"
+          class="recipe-cover"
+          mode="aspectFill"
+        />
+        <view v-else class="recipe-cover-placeholder">
+          <text class="placeholder-text">食谱封面</text>
         </view>
       </view>
 
-      <view class="nutrition-summary">
-        <view class="nutrition-item">
-          <text class="label">能量密度</text>
-          <text class="value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
+      <view class="recipe-info-body">
+        <view class="recipe-name-wrapper">
+          <text class="recipe-name">{{ recipe.name }}</text>
         </view>
-        <view class="nutrition-item">
-          <text class="label">营养标准</text>
-          <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
+
+        <!-- 一句话卖点：与食谱详情页 / 成品订购页同一展示方式 -->
+        <view v-if="recipe.sellingPoint" class="recipe-selling-point">
+          <text class="recipe-selling-point-text">{{ recipe.sellingPoint }}</text>
         </view>
-        <view class="nutrition-item">
-          <text class="label">设计软件</text>
-          <text class="value">{{ recipeFormulaSoftwareLabel }}</text>
+
+        <!--
+          营养标准背书卡：原来把营养标准平铺成一行参数，
+          和内部系统名并列，看起来像一张开发参数表。
+          现在改成可点开的背书卡（与食谱详情页 / 成品订购页同一展示方式）。
+        -->
+        <view class="standard-card" @tap="toggleStandardExplain">
+          <view class="standard-main">
+            <text class="standard-badge">✓</text>
+            <view class="standard-copy">
+              <text class="standard-title">符合 {{ recipeNutritionStandardLabel }}</text>
+              <text class="standard-sub">犬营养标准</text>
+            </view>
+          </view>
+          <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
+        </view>
+        <view v-if="standardExplainVisible" class="standard-explain">
+          <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
         </view>
       </view>
     </view>
 
-    <!-- 选择狗狗 -->
+    <!-- 选择爱犬（档案 + 喂食参数合并，对齐成品订购页） -->
     <view class="section dog-section">
       <view class="section-title">
         <text class="title-text">选择爱犬</text>
-        <text class="required">*</text>
       </view>
 
-      <view v-if="dogs.length === 0" class="empty-dogs">
+      <!--
+        加载失败 ≠ 没有档案：失败时若退化成「暂无狗狗档案」，
+        顾客可能因此重复建档。这里给独立失败态 + 重试。
+      -->
+      <view v-if="dogsLoadFailed" class="dogs-load-error">
+        <text class="dogs-load-error-title">狗狗档案加载失败</text>
+        <text class="dogs-load-error-copy">请检查网络后重试，避免重复建档</text>
+        <button
+          class="section-action-button dogs-load-error-btn button-reset"
+          @tap="retryDogsLoad"
+        >
+          重新加载
+        </button>
+      </view>
+
+      <view v-else-if="dogs.length === 0" class="empty-dogs">
         <text class="empty-text">暂无狗狗档案</text>
         <button class="btn-create-dog" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
 
       <view v-else class="dog-feeding-content">
-        <scroll-view scroll-x class="order-dog-scroll">
-          <view
-            v-for="dog in dogs"
-            :key="dog.id"
-            :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
-            @tap="selectDog(dog.id)"
-          >
-            <image class="order-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
-            <view class="order-dog-copy">
-              <text class="order-dog-name">{{ dog.name }}</text>
-            </view>
-          </view>
-        </scroll-view>
-
-        <view v-if="selectedDog" class="dog-profile-context">
-          <view class="dog-profile-facts">
+        <!-- 选项卡与下方参数同属一只狗：同一内嵌面板 + 分隔线，建立视觉归属 -->
+        <view class="dog-context-panel">
+          <scroll-view scroll-x class="order-dog-scroll">
             <view
-              v-for="fact in dogProfileFacts"
-              :key="fact.label"
-              class="dog-profile-fact"
+              v-for="dog in dogs"
+              :key="dog.id"
+              :class="['order-dog-chip', { active: dog.id === selectedDogId }]"
+              @tap="selectDog(dog.id)"
             >
-              <text class="dog-profile-fact-label">{{ fact.label }}</text>
-              <text class="dog-profile-fact-value">{{ fact.value }}</text>
+              <image class="order-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
+              <view class="order-dog-copy">
+                <text class="order-dog-name">{{ dog.name }}</text>
+              </view>
+            </view>
+          </scroll-view>
+
+          <view v-if="selectedDog" class="dog-profile-context">
+            <!-- 档案 + 喂食参数合并一行六项：年龄/性别/体重/每日餐次/每日饭量/每餐约 -->
+            <view class="dog-profile-facts">
+              <view
+                v-for="fact in dogProfileFacts"
+                :key="fact.label"
+                class="dog-profile-fact"
+              >
+                <text class="dog-profile-fact-label">{{ fact.label }}</text>
+                <text class="dog-profile-fact-value">{{ fact.value }}</text>
+              </view>
             </view>
           </view>
         </view>
-      </view>
 
-      <view v-if="!selectedDog" class="picker-hint">
-        提示：请先选择爱犬以计算推荐饭量
-      </view>
-    </view>
+        <view v-if="!selectedDog" class="picker-hint">
+          提示：请先选择爱犬以计算推荐饭量
+        </view>
 
-    <!-- 生命阶段提醒 -->
-    <view v-if="!isLifeStageMatch && selectedDog && showWarning" class="warning-card">
-      <view class="warning-header">
-        <text class="warning-icon">⚠️</text>
-        <text class="warning-title">生命阶段提醒</text>
-      </view>
+        <!-- 生命阶段提醒：紧贴所选狗狗，不再单独占一屏；
+             已确认过的狗狗不再重复提醒（留痕在确认时即写入） -->
+        <view
+          v-if="!isLifeStageMatch && selectedDog && showWarning && !isLifeStageAcknowledged"
+          class="warning-card inline-warning-card"
+        >
+          <view class="warning-header">
+            <text class="warning-icon">⚠️</text>
+            <text class="warning-title">生命阶段提醒</text>
+          </view>
 
-        <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
-        <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
-          <text class="life-stage-unknown-text">
-            暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
+          <!-- 后端结论没取到：不静默放行，给一条中性提示（不是警示色，避免网络抖动吓到顾客） -->
+          <view v-if="lifeStageCheckFailed" class="life-stage-unknown-note">
+            <text class="life-stage-unknown-text">
+              暂时无法确认这份食谱是否适合当前狗狗，建议稍后重试或联系客服。
+            </text>
+          </view>
+          <text class="warning-text">
+            {{ lifeStageReminderText }}
+          </text>
+          <view class="warning-actions">
+            <button
+              v-if="recommendedLifeStageOption"
+              class="btn-switch-stage"
+              @tap="switchToRecommendedLifeStage"
+            >
+              切换到{{ recommendedLifeStageOption.label }}
+            </button>
+            <button class="btn-continue" @tap="dismissWarning">
+              我已知晓
+            </button>
+          </view>
+        </view>
+
+        <!-- 饭量计算失败：给出原因与重试，避免按钮永久灰着 -->
+        <view v-if="dogCalcFailed" class="dog-calc-error" @tap="retryDogCalc">
+          <text class="dog-calc-error-text">
+            饭量计算失败，可能是网络波动。点这里重新计算。
           </text>
         </view>
-      <text class="warning-text">
-        {{ lifeStageReminderText }}
-      </text>
-      <view class="warning-actions">
-        <button
-          v-if="recommendedLifeStageOption"
-          class="btn-switch-stage"
-          @tap="switchToRecommendedLifeStage"
-        >
-          切换到{{ recommendedLifeStageOption.label }}
-        </button>
-        <button class="btn-continue" @tap="dismissWarning">
-          我已知晓
-        </button>
-      </view>
-    </view>
 
-    <!-- 确定饭量 -->
-    <view class="section feeding-section" v-if="selectedDog">
-      <view class="section-title">
-        <text class="title-text">确定饭量</text>
-      </view>
-
-      <view class="dog-feeding-grid">
-        <view class="dog-feeding-item daily-intake-item">
-          <text class="feeding-label">每日参考</text>
-          <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
+        <!--
+          饭量算法：默认收起。
+          原来这里是「饭量计算过程」+ 5 张计算卡（DER / 零食能量 / 鲜食能量 / 每日饭量 / 每餐饭量，
+          带公式与中间值），对顾客做决定帮助很小；
+          现在改成成品订购页同款的 3 条人话 + 一句观察建议。
+        -->
+        <view class="feeding-note-toggle" @tap="toggleFeedingNote">
+          <text class="feeding-note-toggle-text">每日饭量是怎么算的？</text>
+          <text class="feeding-note-toggle-action">{{ feedingNoteExpanded ? '收起' : '展开' }}</text>
         </view>
-        <view class="dog-feeding-item">
-          <text class="feeding-label">每餐约</text>
-          <text class="feeding-value">{{ perMealIntakeText }}</text>
-        </view>
-        <view class="dog-feeding-item">
-          <text class="feeding-label">主食能量</text>
-          <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
-        </view>
-      </view>
-
-      <view class="feeding-adjustment-note">
-        <text class="feeding-adjustment-title">起始喂食建议</text>
-        <text class="feeding-adjustment-copy">
-          当前热量已按国内城市犬的常见活动量保守估算。请连续观察2-4周的体重、便便和饥饿感，再按5%-10%小幅增减。
-        </text>
-      </view>
-
-      <!-- 计算说明 -->
-      <view class="calculation-explanation">
-        <view class="explanation-header" @tap="toggleCalculationDetails">
-          <view class="explanation-title-row">
-            <text class="explanation-title">饭量计算过程</text>
-            <text class="toggle-icon">{{ showCalculationDetails ? '▲' : '▼' }}</text>
-          </view>
-        </view>
-
-        <view v-if="showCalculationDetails && dogCalcResult" class="explanation-content">
-          <!-- 计算卡片 -->
-          <view class="calc-cards">
-
-            <!-- ① 每日能量需求 -->
-            <view class="calc-card">
-              <text class="card-title">每日能量需求 (DER)</text>
-              <view class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.totalDer || 0) }} kcal/天</text>
-              </view>
-            </view>
-
-            <!-- ② 每日零食能量 -->
-            <view class="calc-card">
-              <text class="card-title">每日零食能量</text>
-              <view v-if="dogCalcResult.treatDeduction > 0" class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.treatDeduction) }} kcal/天</text>
-                <text v-if="dogCalcResult.isTreatCapped" class="result-warning">⚠️ 已触发10%安全上限</text>
-              </view>
-              <view v-else class="calc-result">
-                <text class="result-note">未配置零食</text>
-              </view>
-            </view>
-
-            <!-- ③ 每日鲜食能量 -->
-            <view class="calc-card">
-              <text class="card-title">每日鲜食能量</text>
-              <view class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.finalFoodKcal) }} kcal/天</text>
-              </view>
-            </view>
-
-            <!-- ④ 每日饭量 -->
-            <view class="calc-card highlight">
-              <text class="card-title">每日饭量</text>
-              <view class="formula-box">
-                <text class="formula-text">每日饭量 = (鲜食能量 ÷ 食谱能量密度) × 1000</text>
-              </view>
-              <view class="step-data">
-                <view class="data-item">
-                  <text class="data-label">食谱能量密度：</text>
-                  <text class="data-value">{{ displayRecipeEnergyDensity }} kcal/kg</text>
-                </view>
-              </view>
-              <view class="calc-result final">
-                <text class="result-value highlight">{{ Math.round(dogCalcResult.dailyIntakeG) }} g/天</text>
-              </view>
-            </view>
-
-            <!-- ⑤ 每餐饭量 -->
-            <view class="calc-card highlight">
-              <text class="card-title">每餐饭量</text>
-              <view class="formula-box">
-                <text class="formula-text">每餐饭量 = 每日饭量 ÷ 每日餐数</text>
-              </view>
-              <view class="step-data">
-                <view class="data-item">
-                  <text class="data-label">每日餐数：</text>
-                  <text class="data-value">{{ selectedDog.mealsPerDay }} 餐/天</text>
-                </view>
-              </view>
-              <view class="calc-result final">
-                <text class="result-value highlight">{{ Math.round(perMealG) }} g/餐</text>
-              </view>
-            </view>
-
-          </view>
+        <view v-if="feedingNoteExpanded" class="feeding-adjustment-note">
+          <text class="feeding-adjustment-line">① 按它的体重、年龄和每天的活动量，算出它一天大概需要多少热量；</text>
+          <text class="feeding-adjustment-line">② 再根据它是偏胖还是偏瘦、每天吃多少零食，做相应增减；</text>
+          <text class="feeding-adjustment-line">③ 用这个热量除以食谱每 100g 含的热量，就是每天的饭量。</text>
+          <text class="feeding-adjustment-line feeding-adjustment-line--tip">这是首次喂食的保守估算。建议观察 2-4 周，按体重和便便情况增减 5%-10%。</text>
         </view>
       </view>
     </view>
@@ -223,8 +174,8 @@
     <!-- 配置天数与分装 -->
     <view class="section cycle-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">配置天数</text>
-        <text class="required">*</text>
+        <!-- 已有默认值（7 天），不再打红星，避免让人以为必须动它 -->
+        <text class="title-text">快速选择备餐天数</text>
       </view>
 
       <view class="cycle-options">
@@ -237,6 +188,11 @@
         >
           <text class="cycle-text">{{ days }}天</text>
         </view>
+      </view>
+
+      <!-- 互斥条件当场说明：不再等顾客点了变灰的天数才弹提示 -->
+      <view v-if="isCustomPackagePlan" class="package-plan-mode-hint">
+        <text class="package-plan-mode-hint-text">已启用自定义分装，上方天数选择暂不生效</text>
       </view>
 
       <view class="package-plan-toolbar">
@@ -286,32 +242,24 @@
         </view>
         <button class="btn-add-row" @tap="addPackagePlanRow">添加多个分装规格</button>
       </view>
-
-      <!-- 保质期说明 -->
-      <view class="shelf-life-notice">
-        <view class="notice-title" @tap="toggleShelfLife">
-          <text class="notice-title-text">📅 保质期说明</text>
-          <text class="toggle-icon">{{ showShelfLife ? '▲' : '▼' }}</text>
-        </view>
-        <view v-if="showShelfLife" class="notice-content">
-          <view class="notice-item">
-            <text class="notice-dot">🧊</text>
-            <text class="notice-text">-18℃冷冻保存保质期6个月，建议3个月内吃完</text>
-          </view>
-          <view class="notice-item">
-            <text class="notice-dot">❄️</text>
-            <text class="notice-text">0-5℃冷藏保存保质期3天，建议当天吃完</text>
-          </view>
-          <view class="notice-item">
-            <text class="notice-dot">⏱️</text>
-            <text class="notice-text">开袋后，建议3小时内吃完</text>
-          </view>
-        </view>
-      </view>
     </view>
 
     <!-- 底部操作按钮 -->
     <view class="bottom-bar">
+      <!-- 仅在按钮不可用或计算失败时才出小字，平时不显示说明 -->
+      <view v-if="generateBlockReason || dogCalcFailed" class="bottom-bar-hint">
+        <text v-if="generateBlockReason" class="bottom-bar-block-reason">
+          {{ generateBlockReason }}
+        </text>
+        <text
+          v-if="dogCalcFailed"
+          class="bottom-bar-retry"
+          @tap="retryDogCalc"
+        >
+          重新计算
+        </text>
+      </view>
+
       <button
         class="btn-generate"
         :disabled="!canGenerateSheet || isGeneratingSheet"
@@ -327,15 +275,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { normalizeImageUrl } from '../../utils/config'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
-import { formatEnergyDensityKcalPerKg, formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
+import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'
 import {
   buildLifeStageReminderText,
   confirmLifeStageMismatch,
   fetchLifeStageMatch,
   getLifeStageLabel,
   isLifeStageMismatch,
+  recordLifeStageAcknowledgement,
   type LifeStageMatchVerdict,
 } from '../../utils/life-stage-match'
 import {
@@ -374,6 +324,8 @@ interface Recipe {
   selectedLifeStageLabel?: string
   availableLifeStageVersions?: RecipeLifeStageVersion[]
   name: string
+  sellingPoint?: string
+  coverImageUrl?: string
   energyDensityKcalPerKg: number
   nutritionStandard: string
   nutritionDetailedData: {
@@ -411,19 +363,22 @@ const recipe = ref<Recipe>({
   applicableLifeStages: [],
   targetHealthTags: []
 })
-const recipeEnergyDensityKcalPerKg = computed(() => {
-  const directValue = Number(recipe.value.energyDensityKcalPerKg)
-  if (Number.isFinite(directValue) && directValue > 0) return directValue
-  return recipe.value.nutritionDetailedData?.energyDensityKcalPerKg
-})
-const displayRecipeEnergyDensity = computed(() =>
-  formatEnergyDensityKcalPerKg(recipeEnergyDensityKcalPerKg.value)
+// 营养标准背书卡（与食谱详情页 / 成品订购页同一展示方式）
+const recipeNutritionStandardLabel = computed(() =>
+  getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
-const recipeFormulaSoftwareLabel = computed(() =>
-  formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
+const nutritionStandardExplain = computed(() =>
+  getNutritionStandardExplain(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
+const standardExplainVisible = ref(false)
+
+function toggleStandardExplain() {
+  standardExplainVisible.value = !standardExplainVisible.value
+}
 
 const dogs = ref<Dog[]>([])
+// 列表加载失败与「没有档案」是两件事：失败时若显示"暂无档案"会诱导重复建档
+const dogsLoadFailed = ref(false)
 const selectedDogId = ref<string | null>(null)
 const selectedDog = ref<Dog | null>(null)
 const isGeneratingSheet = ref(false)
@@ -435,6 +390,16 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 // 生命阶段校验
 const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
+/**
+ * 本次进入页面已经确认过生命阶段提醒的狗狗。
+ * 卡片上点「我已知晓」即写留痕，之后不再弹同义弹窗（避免"刚确认过又问一遍"）。
+ * 切换狗狗属于新的一只狗，会重新提醒。
+ */
+const acknowledgedLifeStageDogIds = ref<string[]>([])
+const isLifeStageAcknowledged = computed(() => {
+  const dogId = selectedDog.value?.id
+  return Boolean(dogId && acknowledgedLifeStageDogIds.value.includes(dogId))
+})
 /**
  * 生命阶段匹配结论 —— **由后端给出**（2026-09-19 起不再前端自己算）。
  * 前端重算认不出混血犬的体型，算不出时还会被当成"匹配"静默放行。
@@ -476,17 +441,16 @@ const recommendedLifeStageOption = computed(() => {
 const dogProfileFacts = computed(() => {
   if (!selectedDog.value) return []
 
+  // 六项合并一行展示（与成品订购页一致）：
+  // 档案信息（年龄/性别/体重）+ 喂食参数（餐次/每日量/每餐量）
   return [
     { label: '年龄', value: calculateDogAgeText(selectedDog.value) },
     { label: '性别', value: getDogGenderLabel(selectedDog.value.gender) },
     { label: '体重', value: `${selectedDog.value.currentWeightKg}kg` },
-    { label: '餐次', value: `每日 ${selectedDog.value.mealsPerDay} 餐` },
+    { label: '每日餐次', value: selectedDog.value.mealsPerDay ? `${selectedDog.value.mealsPerDay}餐` : '计算中' },
+    { label: '每日饭量', value: dailySuggestedIntakeText.value },
+    { label: '每餐约', value: perMealIntakeText.value },
   ]
-})
-const dailyMainFoodEnergyText = computed(() => {
-  const kcal = dogCalcResult.value?.finalFoodKcal
-  if (!kcal || !Number.isFinite(kcal)) return '计算中'
-  return `${Math.round(kcal)} kcal/天`
 })
 const dailySuggestedIntakeText = computed(() => {
   if (!displayDailyIntakeG.value) return '计算中'
@@ -527,6 +491,34 @@ const canGenerateSheet = computed(() => Boolean(
   && !packagePlanValidationMessage.value
 ))
 
+/**
+ * 「生成制作单」按钮不可点时的真实原因。
+ * 之前按钮只变灰、不说理由（饭量接口失败时还会永久锁死），
+ * 这里把原因显式落在按钮上方，用户不用猜、也不用干等。
+ */
+const generateBlockReason = computed(() => {
+  if (!selectedDogId.value) {
+    return '请先在上方选择要制作的爱犬'
+  }
+  // 正在算饭量时不提示：正常加载过程不该在按钮上方闪一行小字
+  if (isLoadingDogCalc.value) {
+    return ''
+  }
+  if (dogCalcFailed.value) {
+    return '饭量计算失败，请点击重新计算'
+  }
+  if (!(displayDailyIntakeG.value > 0)) {
+    return '还没算出每日饭量，暂时无法生成制作单'
+  }
+  if (!(perMealG.value > 0)) {
+    return '每餐饭量异常，请检查狗狗档案里的体重信息'
+  }
+  if (packagePlanValidationMessage.value) {
+    return packagePlanValidationMessage.value
+  }
+  return ''
+})
+
 // 饭量相关
 const dogCalcResult = ref<any>(null)
 const displayDailyIntakeG = ref(0)
@@ -534,6 +526,9 @@ const perMealG = ref(0)
 const isPerMealModified = ref(false)
 const isEditingPerMeal = ref(false)
 const tempPerMealG = ref(0)
+// 饭量计算状态：失败时必须能被解释、能被重试，否则按钮会永久灰着且没有理由
+const isLoadingDogCalc = ref(false)
+const dogCalcFailed = ref(false)
 
 const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
 const lastSelectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
@@ -542,11 +537,8 @@ const packagePlanDogId = ref<string | null>(null)
 const showPackageEditor = ref(false)
 const isCustomPackagePlan = ref(false)
 
-// 保质期说明展开状态
-const showShelfLife = ref(false)
-
-// 计算说明展开状态
-const showCalculationDetails = ref(false)
+// 「每日饭量是怎么算的？」展开状态
+const feedingNoteExpanded = ref(false)
 const initialDogId = ref('')
 
 onMounted(async () => {
@@ -657,6 +649,8 @@ async function loadHealthTagMapping() {
 async function loadDogs() {
   console.log('[RecipeDiy] loadDogs 开始')
 
+  dogsLoadFailed.value = false
+
   try {
     const res = await request({
       url: '/dogs',
@@ -677,12 +671,23 @@ async function loadDogs() {
 
         await selectDog(preferredDog.id)
       }
+    } else {
+      // 拿到了响应但结论不可用：按失败处理，不能显示成「暂无档案」
+      dogsLoadFailed.value = true
+      dogs.value = []
     }
   } catch (error) {
     console.error('[RecipeDiy] Load dogs error:', error)
+    dogsLoadFailed.value = true
+    dogs.value = []
   }
 
   console.log('[RecipeDiy] loadDogs 结束')
+}
+
+/** 狗狗档案加载失败后的重试入口 */
+async function retryDogsLoad() {
+  await loadDogs()
 }
 
 async function selectDog(dogId: string) {
@@ -706,6 +711,9 @@ async function selectDog(dogId: string) {
 async function loadDogCalc(dogId: string) {
   console.log('========== [RecipeDiy] loadDogCalc 开始 ==========')
   console.log('[调用参数]', { dogId, recipeId: recipeId.value })
+
+  isLoadingDogCalc.value = true
+  dogCalcFailed.value = false
 
   try {
     const res = await request({
@@ -731,6 +739,10 @@ async function loadDogCalc(dogId: string) {
       })
     } else {
       console.error('[API返回错误]', res)
+      dogCalcResult.value = null
+      displayDailyIntakeG.value = 0
+      perMealG.value = 0
+      dogCalcFailed.value = true
       uni.showToast({
         title: res.message || '计算失败',
         icon: 'none'
@@ -738,13 +750,25 @@ async function loadDogCalc(dogId: string) {
     }
   } catch (error) {
     console.error('[API调用异常]', error)
+    dogCalcResult.value = null
+    displayDailyIntakeG.value = 0
+    perMealG.value = 0
+    dogCalcFailed.value = true
     uni.showToast({
       title: '计算失败',
       icon: 'none'
     })
+  } finally {
+    isLoadingDogCalc.value = false
   }
 
   console.log('========== [RecipeDiy] loadDogCalc 结束 ==========')
+}
+
+/** 饭量计算失败后的重试入口（原来失败即永久锁死，只能退出重进） */
+function retryDogCalc() {
+  if (!selectedDogId.value) return
+  void loadDogCalc(selectedDogId.value)
 }
 
 async function checkLifeStageMatch() {
@@ -794,6 +818,8 @@ async function switchToRecommendedLifeStage() {
     recipeId.value = option.recipeId
   }
   showWarning.value = true
+  // 换了生命阶段版本＝换了一份判定依据，之前的「已知晓」不再适用，需要重新提醒
+  acknowledgedLifeStageDogIds.value = []
   resetDiyLifeStageDependentState()
 
   await loadRecipe()
@@ -803,8 +829,35 @@ async function switchToRecommendedLifeStage() {
   void checkLifeStageMatch()
 }
 
-function dismissWarning() {
+/**
+ * 卡片上点「我已知晓」= 完成本次确认。
+ *
+ * 2026-09-22：原来是「卡片确认一次 + 点生成制作单时再弹一次同义弹窗」，
+ * 顾客会觉得"刚确认过又问一遍"，而且弹窗的取消键「再看看」正好是漏斗末端的放弃键。
+ * 现在改为：卡片确认时**立即写留痕**（合规凭证不变），本次不再弹窗；
+ * 换一只狗属于新的一只狗，会重新提醒。
+ */
+async function dismissWarning() {
   showWarning.value = false
+
+  const dogId = selectedDog.value?.id
+  if (!dogId || !isLifeStageMismatch(lifeStageVerdict.value?.matchType)) return
+  if (acknowledgedLifeStageDogIds.value.includes(dogId)) return
+
+  acknowledgedLifeStageDogIds.value = [...acknowledgedLifeStageDogIds.value, dogId]
+
+  try {
+    await recordLifeStageAcknowledgement({
+      recipeId: recipeId.value,
+      dogId,
+      verdict: lifeStageVerdict.value,
+      source: 'diy',
+    })
+  } catch (error) {
+    // 留痕失败不阻断顾客继续操作，但要把这只狗移出已确认集合，下次仍会提醒
+    console.error('[RecipeDiy] 记录生命阶段确认失败:', error)
+    acknowledgedLifeStageDogIds.value = acknowledgedLifeStageDogIds.value.filter((id) => id !== dogId)
+  }
 }
 
 function calculateDogAgeText(dog: Dog): string {
@@ -875,8 +928,8 @@ function resetPerMeal() {
   }
 }
 
-function toggleCalculationDetails() {
-  showCalculationDetails.value = !showCalculationDetails.value
+function toggleFeedingNote() {
+  feedingNoteExpanded.value = !feedingNoteExpanded.value
 }
 
 function selectCycle(days: number) {
@@ -892,10 +945,6 @@ function selectCycle(days: number) {
   lastSelectedCycleDays.value = days
   showPackageEditor.value = false
   rebuildPackagePlan()
-}
-
-function toggleShelfLife() {
-  showShelfLife.value = !showShelfLife.value
 }
 
 function rebuildPackagePlan() {
@@ -921,7 +970,21 @@ function normalizePackageSpecValue(value: string | number | null | undefined): n
 
 function togglePackageEditor() {
   if (isCustomPackagePlan.value) {
-    cancelCustomPackagePlan()
+    // 取消自定义会直接丢掉顾客填的每袋克数与袋数，先确认一次。
+    // ⚠️ confirmText / cancelText 最多 4 个汉字：超出时微信既不显示弹窗也不报错，
+    //    表现就是「点了没反应」（此处踩过一次）。
+    uni.showModal({
+      title: '取消自定义分装',
+      content: '取消后你填写的每袋克数和袋数会恢复为系统默认分装。',
+      confirmText: '仍要取消',
+      cancelText: '继续编辑',
+      success: (res) => {
+        if (res.confirm) {
+          cancelCustomPackagePlan()
+          uni.showToast({ title: '已恢复默认分装', icon: 'none' })
+        }
+      },
+    })
     return
   }
 
@@ -987,8 +1050,9 @@ async function generateSheet() {
   }
 
   if (!canGenerateSheet.value) {
+    // 原来这里一律说「生成中，请稍后」，把计算失败也当成在算，用户会一直等
     uni.showToast({
-      title: '饭量和分装生成中，请稍后',
+      title: generateBlockReason.value || '暂时无法生成制作单',
       icon: 'none'
     })
     return
@@ -1002,16 +1066,25 @@ async function generateSheet() {
     return
   }
 
-  // 生命阶段不匹配：**每次生成制作单都确认一次**，并留痕作为凭证
+  // 生命阶段不匹配：卡片上已确认过的狗狗不再弹窗（留痕在卡片确认时已写入）；
+  // 没确认过（比如直接从生成按钮进入）才走一次弹窗确认，同样留痕作为凭证。
   if (isLifeStageMismatch(lifeStageVerdict.value?.matchType)) {
-    const confirmed = await confirmLifeStageMismatch({
-      recipeId: recipeId.value,
-      dogId: selectedDog.value?.id || selectedDogId.value || '',
-      verdict: lifeStageVerdict.value,
-      source: 'diy',
-      dogName: selectedDog.value?.name,
-    })
-    if (!confirmed) return
+    const dogId = selectedDog.value?.id || selectedDogId.value || ''
+    const alreadyAcknowledged = Boolean(dogId && acknowledgedLifeStageDogIds.value.includes(dogId))
+
+    if (!alreadyAcknowledged) {
+      const confirmed = await confirmLifeStageMismatch({
+        recipeId: recipeId.value,
+        dogId,
+        verdict: lifeStageVerdict.value,
+        source: 'diy',
+        dogName: selectedDog.value?.name,
+      })
+      if (!confirmed) return
+      if (dogId) {
+        acknowledgedLifeStageDogIds.value = [...acknowledgedLifeStageDogIds.value, dogId]
+      }
+    }
   }
 
   void generateAndNavigateToSheet()
@@ -1106,14 +1179,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   return tagOrUuid
 }
 
-function getNutritionStandardLabel(standard: string): string {
-  const map: Record<string, string> = {
-    'FEDIAF_2021': 'FEDIAF 2021',
-    'FEDIAF_2025': 'FEDIAF 2025',
-    'AAFCO_2021': 'AAFCO 2021',
-  }
-  return map[standard] || standard
-}
 </script>
 
 <style scoped>
@@ -1135,7 +1200,7 @@ function getNutritionStandardLabel(standard: string): string {
 .recipe-diy-page {
   min-height: 100vh;
   background-color: #fbfcf7;
-  padding-bottom: 140rpx;
+  padding-bottom: 200rpx;
 }
 
 .section {
@@ -1156,13 +1221,40 @@ function getNutritionStandardLabel(standard: string): string {
   color: #26261f;
 }
 
-.required {
-  color: #b4553f;
-  margin-left: 4rpx;
+/* 食谱信息卡片 */
+/* 封面整幅贴到卡片上边缘，正文内边距交给 .recipe-info-body */
+.recipe-info-section {
+  padding: 0;
+  overflow: hidden;
 }
 
-/* 食谱信息卡片 */
-.recipe-info-section {
+.recipe-cover-wrapper {
+  width: 100%;
+  height: 400rpx;
+  position: relative;
+}
+
+.recipe-cover {
+  width: 100%;
+  height: 100%;
+}
+
+.recipe-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1e3a2f 0%, #173026 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholder-text {
+  font-size: 36rpx;
+  color: #f3eddd;
+  font-weight: bold;
+}
+
+.recipe-info-body {
   padding: 32rpx 24rpx;
 }
 
@@ -1178,55 +1270,9 @@ function getNutritionStandardLabel(standard: string): string {
   display: block;
 }
 
-.tags-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24rpx;
-  flex-wrap: wrap;
-}
-
-.section-label {
-  font-size: 28rpx;
-  color: #26261f;
-  margin-right: 12rpx;
-}
-
-.tags-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-
-.tag {
-  padding: 6rpx 16rpx;
-  border-radius: 6rpx;
-  font-size: 22rpx;
-}
-
-.life-stage-tag {
-  background-color: #eef2e4;
-  color: #b08d4f;
-}
-
 .health-tag {
   background-color: #f6efe0;
   color: #8a6b33;
-}
-
-.nutrition-summary {
-  display: flex;
-  justify-content: space-around;
-  gap: 20rpx;
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-}
-
-.nutrition-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
 }
 
 .nutrition-item .label {
@@ -1365,41 +1411,42 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .dog-profile-context {
-  padding: 14rpx 16rpx;
-  border-radius: 8rpx;
-  background-color: #fbfcf7;
-  border: 1rpx solid #eef1e2;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #e5e8d4;
 }
 
 .dog-profile-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6rpx;
 }
 
 .dog-profile-fact {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6rpx;
-  max-width: 100%;
-  padding: 4rpx 10rpx;
-  border-radius: 6rpx;
+  justify-content: center;
+  gap: 4rpx;
+  min-width: 0;
+  padding: 14rpx 4rpx;
+  border-radius: 12rpx;
   background-color: #fbfcf7;
-  color: #26261f;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .dog-profile-fact-label {
-  font-size: 21rpx;
-  color: #6b6653;
+  font-size: 20rpx;
+  color: #968f6d;
+  white-space: nowrap;
 }
 
 .dog-profile-fact-value {
   min-width: 0;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 700;
-  color: #26261f;
-  word-break: keep-all;
+  color: #1e3a2f;
+  white-space: nowrap;
 }
 
 /* 警告卡片 */
@@ -1475,44 +1522,8 @@ function getNutritionStandardLabel(standard: string): string {
   align-items: center;
 }
 
-.feeding-label {
-  font-size: 28rpx;
-  color: #26261f;
-  font-weight: 500;
-}
-
-.feeding-value {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #b08d4f;
-}
-
 .feeding-value.readonly {
   color: #26261f;
-}
-
-.dog-feeding-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
-}
-
-.dog-feeding-item {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  padding: 16rpx 10rpx;
-  background-color: #fbfcf7;
-  border-radius: 8rpx;
-  text-align: center;
-}
-
-.dog-feeding-item:nth-child(3),
-.daily-intake-item {
-  background-color: #eef2e4;
 }
 
 .feeding-adjustment-note {
@@ -1595,127 +1606,6 @@ function getNutritionStandardLabel(standard: string): string {
   color: #26261f;
 }
 
-/* 计算说明 */
-.calculation-explanation {
-  margin-top: 24rpx;
-  border-top: 1rpx solid #eef1e2;
-  padding-top: 20rpx;
-}
-
-.explanation-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.explanation-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.explanation-title {
-  font-size: 28rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.toggle-icon {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.explanation-content {
-  margin-top: 20rpx;
-}
-
-.calc-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.calc-card {
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-  border-left: 4rpx solid #e5e8d4;
-}
-
-.calc-card.highlight {
-  background-color: #eef2e4;
-  border-left-color: #1e3a2f;
-}
-
-.card-title {
-  font-size: 26rpx;
-  color: #26261f;
-  margin-bottom: 12rpx;
-  display: block;
-}
-
-.calc-result {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.result-value {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #26261f;
-}
-
-.result-value.highlight {
-  color: #b08d4f;
-  font-size: 36rpx;
-}
-
-.result-note {
-  font-size: 26rpx;
-  color: #6b6653;
-}
-
-.result-warning {
-  font-size: 22rpx;
-  color: #8a6b33;
-}
-
-.formula-box {
-  padding: 12rpx;
-  background-color: #fbfcf7;
-  border-radius: 6rpx;
-  margin-bottom: 12rpx;
-}
-
-.formula-text {
-  font-size: 24rpx;
-  color: #26261f;
-  line-height: 1.5;
-}
-
-.step-data {
-  margin-bottom: 8rpx;
-}
-
-.data-item {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8rpx;
-}
-
-.data-label {
-  font-size: 24rpx;
-  color: #6b6653;
-}
-
-.data-value {
-  font-size: 24rpx;
-  color: #26261f;
-  font-weight: 500;
-}
-
 /* 周期选择 */
 .cycle-and-custom-row {
   display: flex;
@@ -1727,7 +1617,6 @@ function getNutritionStandardLabel(standard: string): string {
 .cycle-options {
   display: flex;
   gap: 12rpx;
-  flex: 1;
 }
 
 .cycle-option {
@@ -1773,19 +1662,20 @@ function getNutritionStandardLabel(standard: string): string {
 }
 
 .package-edit-button {
-  min-width: 172rpx;
-  height: 60rpx;
+  flex: 0 0 auto;
+  height: 64rpx;
   line-height: 1;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  box-sizing: border-box;
-  padding: 0 18rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #1e3a2f;
-  color: #1e3a2f;
-  background-color: #fbfcf7;
-  font-size: 25rpx;
+  padding: 0 26rpx;
+  margin: 0;
+  border: 1rpx solid rgba(216, 188, 133, 0.6);
+  border-radius: 999rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 600;
 }
 
 .min-order-warning {
@@ -1928,67 +1818,256 @@ function getNutritionStandardLabel(standard: string): string {
   margin-left: 8rpx;
 }
 
-/* 保质期说明 */
-.shelf-life-notice {
-  margin-top: 20rpx;
-  padding: 20rpx;
-  background-color: #eef2e4;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 12rpx;
-}
-
-.notice-title {
+/* 底部操作栏 */
+/* 营养标准背书卡（与食谱详情页同一展示方式） */
+.standard-card {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  cursor: pointer;
-  user-select: none;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding: 22rpx 24rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 16rpx;
+  box-shadow: 0 8rpx 22rpx rgba(176, 141, 79, 0.14);
 }
 
-.notice-title-text {
+.standard-main {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.standard-badge {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.standard-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.standard-title {
   font-size: 28rpx;
-  font-weight: bold;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.standard-sub {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.standard-toggle {
+  font-size: 24rpx;
   color: #b08d4f;
 }
 
-.notice-content {
-  margin-top: 12rpx;
+.standard-explain {
+  margin-top: 10rpx;
+  padding: 20rpx 24rpx;
+  background-color: #f2f4ea;
+  border-radius: 12rpx;
 }
 
-.notice-item {
+.standard-explain-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b6653;
+}
+
+/* 狗狗档案加载失败（区别于"未建档"空态） */
+.dogs-load-error {
   display: flex;
-  align-items: flex-start;
-  gap: 8rpx;
-  margin-bottom: 10rpx;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 32rpx;
+  text-align: center;
 }
 
-.notice-item:last-child {
-  margin-bottom: 0;
-}
-
-.notice-dot {
-  font-size: 24rpx;
-  flex-shrink: 0;
-  margin-top: 2rpx;
-}
-
-.notice-text {
-  font-size: 24rpx;
+.dogs-load-error-title {
+  font-size: 30rpx;
+  font-weight: 700;
   color: #26261f;
-  line-height: 1.5;
-  flex: 1;
 }
 
-/* 底部操作栏 */
+.dogs-load-error-copy {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #968f6d;
+}
+
+.dogs-load-error-btn {
+  width: 320rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  margin-top: 28rpx;
+}
+
+/* 一句话卖点：与食谱详情页保持同一视觉语言 */
+.recipe-selling-point {
+  margin-top: 16rpx;
+  padding: 16rpx 20rpx;
+  background: rgba(176, 141, 79, 0.08);
+  border-left: 6rpx solid #b08d4f;
+  border-radius: 10rpx;
+}
+
+.recipe-selling-point-text {
+  font-size: 26rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+.hero-dog-action,
+.section-action-button,
+.btn-secondary-full {
+  border-radius: 8rpx;
+  border: 2rpx solid #1e3a2f;
+  color: #1e3a2f;
+  background-color: #fbfcf7;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.section-action-button {
+  min-width: 136rpx;
+  height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 18rpx;
+}
+
+.button-reset {
+  padding: 0;
+}
+
+.dog-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 24rpx;
+  border-radius: 8rpx;
+  background-color: #fbfcf7;
+  border: 1rpx solid #e5e8d4;
+}
+
+/* 选项卡 + 参数行的统一容器，形成视觉归属 */
+.dog-context-panel {
+  padding: 16rpx;
+  border-radius: 16rpx;
+  background-color: #f2f4ea;
+  border: 1rpx solid #e5e8d4;
+}
+
+.inline-warning-card {
+  margin: 0;
+}
+
+.feeding-note-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14rpx;
+  padding: 12rpx 4rpx;
+}
+
+.feeding-note-toggle-text {
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.feeding-note-toggle-action {
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
+.feeding-adjustment-line {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #26261f;
+}
+
+/* 最后一行是建议，和上面三步的计算说明分开一点 */
+.feeding-adjustment-line--tip {
+  margin-top: 10rpx;
+  color: #6b6653;
+}
+
+/* 自定义分装与天数互斥：常驻说明，不再靠点击失败解释 */
+.package-plan-mode-hint {
+  margin-top: 14rpx;
+  padding: 12rpx 18rpx;
+  background-color: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.35);
+  border-radius: 12rpx;
+}
+
+.package-plan-mode-hint-text {
+  font-size: 22rpx;
+  color: #8a6b33;
+}
+
 .bottom-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 16rpx 20rpx;
+  padding: 16rpx 20rpx calc(16rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   background-color: #fbfcf7;
   border-top: 1rpx solid #e5e8d4;
   z-index: 100;
+}
+
+.bottom-bar-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+  padding: 0 8rpx;
+}
+
+.bottom-bar-block-reason {
+  font-size: 21rpx;
+  line-height: 1.4;
+  color: #b23a2f;
+}
+
+.bottom-bar-retry {
+  flex-shrink: 0;
+  font-size: 21rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  text-decoration: underline;
+}
+
+/* 饭量计算失败的提示与重试 */
+.dog-calc-error {
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  background-color: #fdf3f1;
+  border: 1rpx solid #f0d2cc;
+  border-radius: 8rpx;
+}
+
+.dog-calc-error-text {
+  font-size: 23rpx;
+  line-height: 1.5;
+  color: #b23a2f;
 }
 
 .btn-generate {

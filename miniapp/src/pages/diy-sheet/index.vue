@@ -17,26 +17,22 @@
       <view class="recipe-details">
         <text class="recipe-name">{{ recipe.name }}</text>
 
-        <view class="tags-row">
-          <text
-            v-for="stage in recipe.applicableLifeStages"
-            :key="'stage-' + stage"
-            class="tag life-stage-tag"
-          >
-            {{ getLifeStageLabel(stage) }}
-          </text>
-          <!-- 健康标签暂不展示：待标签字典合规化后仅展示合规标签 -->
+        <!--
+          营养标准背书卡：与 DIY 配置页同一展示方式。
+          原来这里是两行平铺的参数（含内部系统名），顾客用不到，现已收敛为一张背书卡。
+        -->
+        <view class="standard-card" @tap="toggleStandardExplain">
+          <view class="standard-main">
+            <text class="standard-badge">✓</text>
+            <view class="standard-copy">
+              <text class="standard-title">符合 {{ recipeNutritionStandardLabel }}</text>
+              <text class="standard-sub">犬营养标准</text>
+            </view>
+          </view>
+          <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
         </view>
-
-        <view class="nutrition-summary">
-          <view class="nutrition-item">
-            <text class="label">营养标准</text>
-            <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
-          </view>
-          <view v-if="displayRecipeFormulaSoftwareLabel" class="nutrition-item">
-            <text class="label">设计来源</text>
-            <text class="value">{{ displayRecipeFormulaSoftwareLabel }}</text>
-          </view>
+        <view v-if="standardExplainVisible" class="standard-explain">
+          <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
         </view>
       </view>
     </view>
@@ -69,27 +65,38 @@
       </view>
 
       <view class="purchase-list-content">
-        <!-- 狗狗信息 -->
-        <view v-if="dog" class="dog-info-summary">
-          <text class="info-text">
-            狗狗：{{ dog.name }} | {{ dogAgeText }} | {{ dog.currentWeightKg }}kg | {{ dog.mealsPerDay }}餐/天
-          </text>
+        <!-- 狗狗信息：标签 + 数值卡片，一眼可读 -->
+        <view v-if="dog" class="purchase-facts">
+          <view class="purchase-facts-head">
+            <text class="purchase-facts-title">狗狗信息</text>
+          </view>
+          <view class="purchase-facts-grid">
+            <view
+              v-for="fact in dogPurchaseFacts"
+              :key="'dog-fact-' + fact.label"
+              class="purchase-fact"
+            >
+              <text class="purchase-fact-label">{{ fact.label }}</text>
+              <text class="purchase-fact-value">{{ fact.value }}</text>
+            </view>
+          </view>
         </view>
 
-        <!-- 制作信息 -->
-        <view class="making-info-summary">
-          <text class="info-text">
-            制作周期：{{ cycleDays }}天 | 每餐：{{ perMealG }}g | 每日：{{ dailyIntakeG }}g
-          </text>
-          <text class="info-text secondary-info-text">
-            分装：{{ packagePlanSummaryText }}
-          </text>
-          <text class="info-text secondary-info-text">
-            {{ packagePlanSubText }}
-          </text>
-          <text v-if="foodItemsTotal.actualAmount > 0" class="info-text secondary-info-text">
-            净食材约 {{ foodItemsTotal.theoreticalAmountStr }} | 采购量约 {{ foodItemsTotal.actualAmountStr }}（含损耗）
-          </text>
+        <!-- 制作信息：标签 + 数值卡片 -->
+        <view class="purchase-facts">
+          <view class="purchase-facts-head">
+            <text class="purchase-facts-title">制作信息</text>
+          </view>
+          <view class="purchase-facts-grid">
+            <view
+              v-for="fact in makingPurchaseFacts"
+              :key="'making-fact-' + fact.label"
+              class="purchase-fact"
+            >
+              <text class="purchase-fact-label">{{ fact.label }}</text>
+              <text class="purchase-fact-value">{{ fact.value }}</text>
+            </view>
+          </view>
         </view>
 
         <!-- 食材 -->
@@ -100,7 +107,7 @@
               <text class="header-item name-col">原料名称</text>
               <text class="header-item recommend-col">{{ DIY_SHEET_FOOD_RECOMMENDATION_LABEL }}</text>
               <text class="header-item method-col">制备方法</text>
-              <text class="header-item actual-col">采购量</text>
+              <text class="header-item actual-col">建议采购量</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
               <text class="row-item name-col">{{ item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName }}</text>
@@ -131,11 +138,17 @@
             </view>
             <!-- 合计行 -->
             <view class="table-row total-row food-table">
-              <text class="row-item name-col total-label">合计</text>
+              <text class="row-item name-col total-label">建议采购合计</text>
               <text class="row-item recommend-col">-</text>
               <text class="row-item method-col">-</text>
               <text class="row-item actual-col total-value highlight">{{ foodItemsTotal.actualAmountStr }}</text>
             </view>
+          </view>
+          <!-- 不给顾客看内部口径的那个百分比，只说明数字已预留余量 -->
+          <view class="purchase-amount-note">
+            <text class="purchase-amount-note-text">
+              建议采购量已计算制作损耗。
+            </text>
           </view>
         </view>
 
@@ -179,19 +192,22 @@
           </view>
         </view>
 
-        <!-- 一键购买补剂（补剂商城开放时才展示） -->
+        <!--
+          补剂入口不可用时的说明；可购买时按钮在底部固定栏（购买预分装补剂）。
+          说明不再静默消失：接口失败可点击重试。
+        -->
         <view
-          v-if="supplementShopEnabled && supplementItemsDetailed.length > 0"
-          class="supplement-buy-card"
-          @tap="handleBuySupplements"
+          v-if="supplementItemsDetailed.length > 0 && supplementShopStatus === 'failed'"
+          class="supplement-unavailable-card"
+          @tap="handleSupplementStatusRetry"
         >
-          <view class="buy-main">
-            <text class="buy-title">一键购买补剂</text>
-            <text class="buy-desc">
-              {{ supplementItemsDetailed.length }} 种补剂 · 按用量分装成小份 · 独立发货
-            </text>
-          </view>
-          <text class="buy-arrow">›</text>
+          <text class="supplement-unavailable-text">{{ supplementUnavailableText }}</text>
+        </view>
+        <view
+          v-else-if="supplementItemsDetailed.length > 0 && supplementShopStatus === 'disabled'"
+          class="supplement-unavailable-card"
+        >
+          <text class="supplement-unavailable-text">{{ supplementUnavailableText }}</text>
         </view>
 
         <!-- 无数据提示 -->
@@ -213,41 +229,6 @@
 
     <!-- 4-8. 固定文案卡片 -->
     <view class="info-cards-grid">
-      <!-- 烹饪建议 -->
-      <view class="info-card">
-        <view class="card-title">
-          <text class="title-text">烹饪建议</text>
-        </view>
-        <view class="card-content multi-line">
-          <text class="content-line">建议蒸、炖、低温慢煮</text>
-          <text class="content-line warning">不建议微波、烤、煎等高温烹饪</text>
-        </view>
-      </view>
-
-      <!-- 分装建议 -->
-      <view class="info-card">
-        <view class="card-title">
-          <text class="title-text">分装建议</text>
-        </view>
-        <view class="card-content multi-line">
-          <text class="content-line">{{ packagePlanSummaryText }}</text>
-          <text class="content-line">{{ packagePlanSubText }}</text>
-          <text class="content-line">建议使用食品真空袋抽真空保存</text>
-        </view>
-      </view>
-
-      <!-- 储存&保质期 -->
-      <view class="info-card">
-        <view class="card-title">
-          <text class="title-text">储存&保质期</text>
-        </view>
-        <view class="card-content multi-line">
-          <text class="content-line">-18℃冷冻保存6个月</text>
-          <text class="content-line">0-4℃冷藏保存3天</text>
-          <text class="content-line">开封后3小时内吃完</text>
-        </view>
-      </view>
-
       <!-- 制作设备推荐 -->
       <view v-if="false" class="info-card equipment-card" @tap="handleShowEquipmentList">
         <view class="card-title">
@@ -275,25 +256,40 @@
       </view>
     </view>
 
-    <!-- 底部操作栏 -->
+    <!--
+      底部固定操作栏：购买补剂 / 保存 / 分享
+      · 原来分开的「出图」与「存档」两个按钮已合并为一个「保存」，
+        点击后由顾客选择「保存为图片」还是「保存到收藏夹」。
+      · 购买预分装补剂的入口从清单里挪到这里，任何滚动位置都能点到。
+    -->
     <view class="bottom-actions">
       <button
-        class="action-btn primary"
-        :disabled="!isPageDataLoaded || isGeneratingImage"
-        @tap="handlePrint"
+        v-if="canBuySupplements"
+        class="action-btn buy"
+        @tap="handleBuySupplements"
       >
-        <text class="btn-text">生成图片</text>
+        <text class="btn-text">购买预分装补剂</text>
       </button>
-      <button class="action-btn success" @tap="handleSave">
-        <text class="btn-text">保存制作单</text>
+
+      <button
+        class="action-btn secondary"
+        :disabled="!isPageDataLoaded || isGeneratingImage"
+        @tap="handleSaveMenu"
+      >
+        <text class="btn-text">{{ isGeneratingImage ? '生成中…' : '保存' }}</text>
       </button>
-      <ShareButton
-        :share-path="sharePath"
-        :share-title="shareTitle"
-        :share-image="normalizeImageUrl(recipe.coverImageUrl)"
-        type="icon-only"
-        size="large"
-      />
+
+      <!--
+        分享按钮重新绘制：不再用字体符号，改成用 CSS 画出的「托盘 + 上箭头」图标，
+        且不再带中文，只保留图标本身。
+      -->
+      <button class="action-btn share" open-type="share" aria-role="button" aria-label="分享">
+        <view class="share-icon">
+          <view class="share-icon-shaft"></view>
+          <view class="share-icon-head"></view>
+          <view class="share-icon-tray"></view>
+        </view>
+      </button>
     </view>
 
     <!-- Canvas用于打印功能（隐藏） - A4竖版: 1200px × 1697px，2倍像素导出 -->
@@ -302,7 +298,7 @@
       id="printCanvas"
       class="print-canvas"
       :width="PRINT_CANVAS_OUTPUT_WIDTH"
-      :height="PRINT_CANVAS_OUTPUT_HEIGHT"
+      :height="printCanvasOutputHeight"
       :style="printCanvasStyle"
     ></canvas>
 
@@ -414,7 +410,7 @@
     <view v-if="showAmountDetail" class="spec-modal" @tap="closeAmountDetailModal">
       <view class="spec-content" @tap.stop>
         <view class="spec-header">
-          <text class="spec-title">采购量详情</text>
+          <text class="spec-title">用量详情</text>
           <text class="btn-close" @tap="closeAmountDetailModal">✕</text>
         </view>
         <view class="spec-body">
@@ -428,16 +424,15 @@
           </view>
           <view class="spec-divider"></view>
           <view class="spec-row">
-            <text class="spec-label">理论用量：</text>
+            <text class="spec-label">净用量：</text>
             <text class="spec-value">{{ currentAmountDetail.theoreticalAmountStr }}</text>
           </view>
-          <view class="spec-row">
-            <text class="spec-label">制作损耗率：</text>
-            <text class="spec-value">{{ currentAmountDetail.lossRateStr }}</text>
-          </view>
           <view class="spec-row highlight-row">
-            <text class="spec-label">实际用量：</text>
+            <text class="spec-label">建议采购量：</text>
             <text class="spec-value highlight-value">{{ currentAmountDetail.actualAmountStr }}</text>
+          </view>
+          <view class="purchase-amount-note">
+            <text class="purchase-amount-note-text">建议采购量已预留烹饪缩水余量。</text>
           </view>
         </view>
       </view>
@@ -532,7 +527,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
@@ -547,12 +542,11 @@ import {
   isLifeStageMismatch,
   type LifeStageMatchVerdict
 } from '../../utils/life-stage-match'
-import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
-import { formatRecipeFormulaSoftwareLabel } from '../../utils/recipe-display'
+import { getNutritionStandardExplain } from '../../utils/label-mapping'
 import {
   formatSupplementTargets,
   getSupplementTargetBreakdowns
@@ -585,8 +579,13 @@ const cycleDays = ref(7)
 const perMealG = ref(0)
 const dailyIntakeG = ref(0)
 const packagePlan = ref<PackagePlanItem[]>([])
-// 补剂商城是否开放（关闭时不展示购买入口）
-const supplementShopEnabled = ref(false)
+// 补剂商城状态：
+//   loading  —— 还在查，什么都不展示，避免闪烁
+//   enabled  —— 开放，展示购买入口
+//   disabled —— 明确关闭，展示中性说明而不是静默隐藏
+//   failed   —— 接口异常，展示可重试的说明
+const supplementShopStatus = ref<'loading' | 'enabled' | 'disabled' | 'failed'>('loading')
+const supplementShopEnabled = computed(() => supplementShopStatus.value === 'enabled')
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -603,12 +602,6 @@ const recipe = ref<any>({
   targetHealthTags: [],
   productionSteps: ''
 })
-const displayRecipeFormulaSoftwareLabel = computed(() =>
-  recipe.value.designSource
-    ? formatRecipeFormulaSoftwareLabel(recipe.value.designSource)
-    : ''
-)
-
 const pricePreview = ref<any>(null)
 
 // 推荐产品映射 { ingredientId: RecommendedProduct[] }
@@ -649,15 +642,63 @@ const PRINT_CANVAS_LOGICAL_HEIGHT = 1697
 const PRINT_CANVAS_OUTPUT_SCALE = 2
 const PRINT_CANVAS_OUTPUT_WIDTH = PRINT_CANVAS_LOGICAL_WIDTH * PRINT_CANVAS_OUTPUT_SCALE
 const PRINT_CANVAS_OUTPUT_HEIGHT = PRINT_CANVAS_LOGICAL_HEIGHT * PRINT_CANVAS_OUTPUT_SCALE
+/** 画布底部为页脚预留的高度 */
+const PRINT_CANVAS_FOOTER_SPACE = 60
+
+/**
+ * 画布高度按内容自适应（不再固定 A4）：
+ * canvas 不会自动分页，内容超出就被裁掉，裁掉的偏偏是最下面的储存提示和页脚。
+ * 所以先画一遍量出内容高度，再决定画布多高、重画一次。
+ */
+const printCanvasLogicalHeight = ref(PRINT_CANVAS_LOGICAL_HEIGHT)
+const printCanvasOutputHeight = computed(
+  () => printCanvasLogicalHeight.value * PRINT_CANVAS_OUTPUT_SCALE
+)
 const printCanvasStyle = computed(() => ({
   width: `${PRINT_CANVAS_OUTPUT_WIDTH}px`,
-  height: `${PRINT_CANVAS_OUTPUT_HEIGHT}px`
+  height: `${printCanvasOutputHeight.value}px`
 }))
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
 const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
 const totalFoodNetWeightG = computed(() => packagePlanTotal.value.totalGrams || dailyIntakeG.value * cycleDays.value)
+
+/**
+ * 这一批实际覆盖多少天（2026-09-24）。
+ *
+ * 为什么不能直接用 cycleDays：
+ *   启用「自定义分装」后，食物总量由**包规**决定，recipe-diy 页也明确提示
+ *   「上方天数选择暂不生效」。此时 cycleDays 只是用户之前选的一个数，
+ *   **跟这批食物没关系**。而补剂用量是按**整批食物总重**配的
+ *   （见 supplementNutrientBaseWeightG），所以天数必须按这批的实际消耗反推，
+ *   否则补剂下单页会显示错误的天量，服务端「总天数 ≤ 效期安全线」也会算错。
+ *
+ * 口径：**总袋数 ÷ 狗狗每天餐数**（默认一餐一袋）。
+ *
+ * ⚠️ 这里踩过一次坑，别再改回「总重 ÷ 每日摄入」：
+ *   那个口径隐含"用户会按配方建议的每餐克数喂"，但自定义分装的意义恰恰是
+ *   用户自己定袋规。实测案例：30 袋 × 100g = 3000g，配方建议 140g/餐（日摄入 280g），
+ *   按总重口径算出 11 天；但用户是按"每天 2 袋"喂的，实际能吃 3000 ÷ 200 = 15 天。
+ *   补剂配的是那 3000g 食物，食物吃多久补剂就吃多久 —— **15 才是对的**。
+ *
+ * 用「袋数 ÷ 餐数」还有一个好处：包规默认每袋 = perMealG，所以默认情况下
+ * 它算出来正好等于用户选的天数，不会凭空变化。
+ */
+const effectiveCycleDays = computed(() => {
+  const bags = packagePlanTotal.value.totalPackages
+  const meals = Number(mealsPerDay.value) || 0
+  if (bags > 0 && meals > 0) {
+    const days = Math.round(bags / meals)
+    if (days > 0) return days
+  }
+
+  // 没有包规（普通模式）：总量就是"每日摄入 × 天数"，反推即天数
+  const intake = Number(dailyIntakeG.value) || 0
+  if (intake <= 0) return cycleDays.value
+  const days = Math.round(totalFoodNetWeightG.value / intake)
+  return days > 0 ? days : cycleDays.value
+})
 const packagePlanSummaryText = computed(() => {
   if (packagePlan.value.length === 0) {
     return `${Math.round(perMealG.value)}g×${Math.max(1, Math.round(totalFoodNetWeightG.value / Math.max(perMealG.value, 1)))}袋`
@@ -673,6 +714,56 @@ const packagePlanSubText = computed(() => {
   if (!totalPackages || !totalGrams) return '按当前饭量生成分装'
   return `共 ${totalPackages}袋 / 总净重 ${Math.round(totalGrams)}g`
 })
+
+// 营养标准背书卡（与 DIY 配置页 / 成品订购页同一展示方式）
+const recipeNutritionStandardLabel = computed(() =>
+  getNutritionStandardLabel(recipe.value.nutritionStandard)
+)
+const nutritionStandardExplain = computed(() =>
+  getNutritionStandardExplain(recipe.value.nutritionStandard || 'FEDIAF_2021')
+)
+const standardExplainVisible = ref(false)
+
+function toggleStandardExplain() {
+  standardExplainVisible.value = !standardExplainVisible.value
+}
+
+/**
+ * 狗狗信息 / 制作信息改成「标签 + 数值」卡片网格。
+ * 原来是一整行用 | 串起来的句子，手机上要逐字读才能对上号。
+ */
+const dogPurchaseFacts = computed(() => {
+  const currentDog = dog.value
+  if (!currentDog) return []
+
+  // 不展示年龄：制作单关心的是"给谁做、做多少"，年龄在这页不做决策
+  return [
+    { label: '名字', value: currentDog.name || '-' },
+    { label: '体重', value: `${currentDog.currentWeightKg}kg` },
+    { label: '餐次', value: `${currentDog.mealsPerDay}餐/天` },
+  ]
+})
+
+/**
+ * 制作信息：只留三个顾客真正要用的数 —— 每餐多重、一共几餐、总共多少克。
+ * 制作周期 / 每日 / 分装规格 / 采购量都不再重复出现在这里。
+ */
+const totalMealCount = computed(() => {
+  const mealsPerDay = Number(dog.value?.mealsPerDay || 0)
+  if (!mealsPerDay || !cycleDays.value) return 0
+  return mealsPerDay * cycleDays.value
+})
+
+const makingPurchaseFacts = computed(() => [
+  { label: '每餐重量', value: `${Math.round(perMealG.value)}g` },
+  { label: '总餐数', value: totalMealCount.value > 0 ? `${totalMealCount.value}餐` : '-' },
+  { label: '总净重', value: `${Math.round(totalFoodNetWeightG.value)}g` },
+])
+
+/** 底部固定栏是否展示「购买预分装补剂」 */
+const canBuySupplements = computed(
+  () => supplementShopEnabled.value && supplementItemsDetailed.value.length > 0
+)
 
 const ingredientDetails = computed(() => {
   return pricePreview.value?.pricingBreakdown?.ingredientDetails || []
@@ -718,7 +809,8 @@ const foodItemsTotal = computed(() => {
   return {
     theoreticalAmount: totalTheoretical,
     actualAmount: totalActual,
-    theoreticalAmountStr: formatAmount(totalTheoretical, true),
+    theoreticalAmountStr: formatNetAmount(totalTheoretical, true),
+    netAmountStr: formatNetAmount(totalTheoretical, true),
     actualAmountStr: formatAmount(totalActual, true)
   }
 })
@@ -904,11 +996,48 @@ const supplementItemsDetailed = computed(() => {
   })
 })
 
+/**
+ * 商城关闭或状态查询失败时的中性说明文案。
+ * 入口不再静默消失，用户至少知道为什么没有「一键购买补剂」。
+ */
+const supplementUnavailableText = computed(() =>
+  supplementShopStatus.value === 'failed'
+    ? '补剂信息暂时获取失败，点击重试'
+    : '补剂商城暂未开放，可联系客服了解'
+)
+
 // 格式化用量显示
+/**
+ * 食材用量取整到「好买的量」。
+ *
+ * 为什么不是精确到 0.1g：顾客去菜场/超市买不到 243.7g 鸡胸，
+ * 给这么精确的数字反而显得外行。一律**向上**取整，宁可多买不可买少。
+ *   · 小于 10g  → 保留 1 位小数（盐、奇亚籽这类微量，取整到 5g 会离谱）
+ *   · 10 ~ 100g → 进位到 1g
+ *   · 100g 以上 → 进位到 5g
+ */
+function formatPurchaseAmount(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return '0g'
+  if (amount < 10) return `${amount.toFixed(1)}g`
+  if (amount < 100) return `${Math.ceil(amount)}g`
+  return `${Math.ceil(amount / 5) * 5}g`
+}
+
+/**
+ * 净重的展示格式：不做「好买的量」进位，保留真实用量，
+ * 好和旁边的建议采购量形成「净重 / 建议采购量」的对照。
+ */
+function formatNetAmount(amount: number, isFood: boolean): string {
+  if (!Number.isFinite(amount) || amount <= 0) return '0g'
+  if (!isFood) return `${amount.toFixed(1)}g`
+  if (amount < 10) return `${amount.toFixed(1)}g`
+  return `${Math.round(amount)}g`
+}
+
 function formatAmount(amount: number, isFood: boolean): string {
   if (isFood) {
-    // 食材类：整数
-    return `${Math.round(amount)}g`
+    // 食材类：按「好买的量」取整
+    return formatPurchaseAmount(amount)
   } else {
     // 补剂类：保留1位小数
     return `${amount.toFixed(1)}g`
@@ -916,20 +1045,19 @@ function formatAmount(amount: number, isFood: boolean): string {
 }
 
 function formatFoodPrepAmountForPrint(amount: number): string {
-  return `${amount.toFixed(1)}g`
+  return formatPurchaseAmount(amount)
 }
 
 function formatFoodPrepTotalForPrint(amount: number): string {
   return `${amount.toFixed(1)}g`
 }
 
-function formatRecipeLossRatePercent(): string {
-  const percent = getRecipeLossRate() * 100
-  return Number.isInteger(percent) ? `${percent.toFixed(0)}%` : `${percent.toFixed(1)}%`
-}
-
+/**
+ * 纸质制作单上这一列给顾客看的是「建议采购量」（含缩水余量）。
+ * 不再写「含 7% 损耗」——损耗率是我们的内部口径，顾客只需要知道该买多少。
+ */
 function getFoodPrepAmountHeaderForPrint(): string {
-  return `备料量（含${formatRecipeLossRatePercent()}损耗）`
+  return '净重/建议采购量'
 }
 
 function formatSupplementTargetForPrint(item: any): string {
@@ -1005,15 +1133,26 @@ function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
 async function loadSupplementShopStatus() {
   try {
     const res = await fetchSupplementShopStatus()
-    supplementShopEnabled.value = res.code === 0 && !!(res.data && res.data.enabled)
+    if (res.code !== 0 || !res.data) {
+      // 拿到了响应但结论不可用，同样按失败处理，允许重试
+      supplementShopStatus.value = 'failed'
+      return
+    }
+    supplementShopStatus.value = res.data.enabled ? 'enabled' : 'disabled'
   } catch (error) {
-    // 商城未开放或接口异常时静默降级：不展示入口，不影响制作单本身
-    supplementShopEnabled.value = false
+    // 不再静默隐藏：标为 failed，页面给可重试的说明
+    supplementShopStatus.value = 'failed'
   }
 }
 
+function handleSupplementStatusRetry() {
+  if (supplementShopStatus.value !== 'failed') return
+  supplementShopStatus.value = 'loading'
+  void loadSupplementShopStatus()
+}
+
 /**
- * 一键购买补剂：把制作单上的补剂清单交给下单页。
+ * 购买预分装补剂：把制作单上的补剂清单交给下单页。
  * 补剂行带用量，塞不进 URL，因此走本地存储传递。
  */
 function handleBuySupplements() {
@@ -1023,7 +1162,11 @@ function handleBuySupplements() {
       ingredientId: item.ingredientId,
       amount: Number(item.amount),
       name: item.name,
-      unit: item.displayUnit || item.unit || 'g'
+      unit: item.displayUnit || item.unit || 'g',
+      // 下单页用小字展示「品牌和规格」，这里一并带过去（报价接口不返回这两个字段）
+      specText: item.selectedProductDisplayText && item.selectedProductDisplayText !== '-'
+        ? item.selectedProductDisplayText
+        : ''
     }))
 
   if (lines.length === 0) {
@@ -1037,7 +1180,8 @@ function handleBuySupplements() {
     recipeName: recipe.value && recipe.value.name,
     dogId: dogId.value,
     dogName: dog.value && dog.value.name,
-    cycleDays: cycleDays.value
+    // 用实际覆盖天数，而不是用户选的天数 —— 自定义分装下两者不一样
+    cycleDays: effectiveCycleDays.value
   })
 
   uni.navigateTo({ url: '/pages/supplement-order/index' })
@@ -1346,136 +1490,174 @@ async function handlePrint() {
   uni.showLoading({ title: '生成中...' })
 
   try {
-    // 1. 创建Canvas构建器（A4纸规格按2倍像素渲染，提升保存后放大清晰度）
     const canvasWidth = PRINT_CANVAS_LOGICAL_WIDTH
-    const canvasHeight = PRINT_CANVAS_LOGICAL_HEIGHT
 
-    console.log('[DIYSheet] 开始生成制作单图片:', {
-      width: canvasWidth,
-      height: canvasHeight,
-      outputScale: PRINT_CANVAS_OUTPUT_SCALE,
-      outputSize: `${PRINT_CANVAS_OUTPUT_WIDTH}x${PRINT_CANVAS_OUTPUT_HEIGHT}`,
-      orientation: canvasHeight > canvasWidth ? '竖版(Portrait)' : '横版(Landscape)'
+    /**
+     * 头部大图：优先用食谱封面照片（食物照最适合分享），
+     * 没有封面时退回后台配置的品牌头图，都没有才用品牌渐变底。
+     * 三张图都只解析一次，两遍绘制复用。
+     */
+    const coverUrl = recipe.value.coverImageUrl
+      ? normalizeImageUrl(recipe.value.coverImageUrl)
+      : ''
+    const headerBackground =
+      (coverUrl ? await resolveCanvasImageInfo(coverUrl) : undefined)
+      || (await resolveCanvasImageInfo(diySheetHeaderBgImageUrl.value))
+
+    console.log('[DIYSheet] 头部大图来源:', {
+      cover: coverUrl || '(无封面)',
+      fallback: diySheetHeaderBgImageUrl.value || '(无配置)',
+      used: headerBackground?.path || '(品牌渐变)'
     })
 
-    const builder = new PrintCanvasBuilder({
+    /**
+     * 把制作单的全部内容画到构建器上，返回内容末端 Y。
+     * 抽成函数是为了「先量后排」两遍绘制能走同一套逻辑。
+     * 页脚不在这里画 —— 它要贴在最终画布的最底部。
+     */
+    const drawSheetContent = (builder: PrintCanvasBuilder): number => {
+      // 1. 品牌头部（封面 + 品牌 + 狗狗头像 + 食谱名）
+      builder.drawBrandHeader({
+        brand: '赛文的食堂',
+        logoPath: '/static/logo.png',
+        avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
+        backgroundImage: headerBackground,
+        title: recipe.value.name,
+        subtitle: dog.value ? `${dog.value.name} 的 ${cycleDays.value} 天鲜食计划` : `${cycleDays.value} 天鲜食计划`,
+        sellingPoint: recipe.value.sellingPoint || ''
+      })
+
+      // 2. 狗狗信息 + 制作信息合并成一行六项，省纵向空间
+      builder.drawFactCards('', [
+        ...dogPurchaseFacts.value,
+        ...makingPurchaseFacts.value
+      ], { columns: 6 })
+
+      // 3. 食材清单
+      if (foodItemsDetailed.value.length > 0) {
+        builder.drawSectionTitle('食材清单')
+
+        const foodRows = foodItemsDetailed.value.map(item => [
+          item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName,
+          item.recommendedPrintText,
+          `${item.netAmountStr} / ${item.actualAmountStr}`,
+          item.preparationMethod || item.nutritionStateLabel || '-'
+        ])
+
+        builder.drawTable(
+          ['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法'],
+          foodRows,
+          {
+            totalRow: [
+              '合计',
+              '-',
+              `${foodItemsTotal.value.netAmountStr} / ${foodItemsTotal.value.actualAmountStr}`,
+              '-'
+            ],
+            colWidths: [200, 290, 240, 390],
+            wrapColumns: [true, true, false, true]
+          }
+        )
+
+        builder.drawNote('建议采购量已计算制作损耗。')
+      }
+
+      // 4. 营养补充剂
+      if (supplementItemsDetailed.value.length > 0) {
+        builder.drawSectionTitle('营养补充剂')
+
+        // 目标补充量 在 添加总量 之前
+        const supplementRows = supplementItemsDetailed.value.map(item => [
+          item.name,
+          item.recommendedSpecPrintText,
+          formatSupplementTargetForPrint(item),
+          item.amountStr
+        ])
+
+        builder.drawTable(
+          ['补剂名称', '已选商品 / 规格', '目标补充量', '添加总量'],
+          supplementRows,
+          {
+            colWidths: [180, 490, 250, 200],
+            wrapColumns: [false, true, false, false]
+          }
+        )
+
+        builder.drawSupplementNotice(
+          '营养补充剂的添加总量与已选商品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
+        )
+      }
+
+      // 5. 制作流程
+      if (recipe.value.productionSteps) {
+        builder.drawSectionTitle('制作流程')
+        builder.drawProductionSteps(recipe.value.productionSteps)
+      }
+
+      // 6. 储存提示（原来是三张建议大卡，页面已删，这里保留必要的一行）
+      builder.drawSectionTitle('储存提示')
+      builder.drawNote('建议蒸、炖、低温慢煮，不建议微波、烤、煎等高温烹饪。')
+      builder.drawNote('分装建议使用食品真空袋抽真空；-18℃ 冷冻保存 6 个月，0-4℃ 冷藏保存 3 天，开封后 3 小时内吃完。')
+
+      return builder.getCurrentY()
+    }
+
+    /** 等画布尺寸在视图层生效 */
+    const waitForCanvasResize = async () => {
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 30))
+    }
+
+    // 第一遍：用基准高度量内容
+    printCanvasLogicalHeight.value = PRINT_CANVAS_LOGICAL_HEIGHT
+    await waitForCanvasResize()
+
+    let builder = new PrintCanvasBuilder({
       canvasId: 'printCanvas',
       width: canvasWidth,
-      height: canvasHeight,
-      outputScale: PRINT_CANVAS_OUTPUT_SCALE
+      height: printCanvasLogicalHeight.value,
+      outputScale: PRINT_CANVAS_OUTPUT_SCALE,
+      autoHeight: true
     })
-    const headerBackground = await resolveCanvasImageInfo(diySheetHeaderBgImageUrl.value)
+    const measuredHeight = drawSheetContent(builder)
+    const neededHeight = Math.ceil(measuredHeight + PRINT_CANVAS_FOOTER_SPACE)
 
-    // 2. 绘制分享图品牌头部
-    builder.drawBrandHeader({
-      brand: '赛文的食堂',
-      logoPath: '/static/logo.png',
-      avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
-      backgroundImage: headerBackground,
-      title: recipe.value.name,
-      subtitle: dog.value ? `${dog.value.name} 的 ${cycleDays.value} 天鲜食计划` : `${cycleDays.value} 天鲜食计划`,
-      stages: recipe.value.applicableLifeStages.map(getLifeStageLabel)
+    console.log('[DIYSheet] 制作单内容高度:', {
+      measuredHeight: Math.round(measuredHeight),
+      neededHeight,
+      baseHeight: PRINT_CANVAS_LOGICAL_HEIGHT
     })
 
-    // 3. 绘制狗狗信息和制作参数合并卡片（8个字段）
-    if (dog.value) {
-      builder.drawShareSummaryCards({
-        dogInfo: `${dogAgeText.value}  /  ${dog.value.currentWeightKg}kg  /  ${dog.value.mealsPerDay}餐/天`,
-        dogSub: `专为 ${dog.value.name} 生成`,
-        cycle: `${cycleDays.value}天`,
-        cycleSub: `每日 ${dailyIntakeG.value}g，每餐 ${perMealG.value}g`,
-        packagePlan: packagePlanSummaryText.value,
-        packageSub: packagePlanSubText.value,
-        formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard),
-        formulaSource: displayRecipeFormulaSoftwareLabel.value
+    // 内容超出基准高度才重画一遍（多数制作单一遍就够）
+    if (neededHeight > PRINT_CANVAS_LOGICAL_HEIGHT) {
+      printCanvasLogicalHeight.value = neededHeight
+      await waitForCanvasResize()
+
+      builder = new PrintCanvasBuilder({
+        canvasId: 'printCanvas',
+        width: canvasWidth,
+        height: printCanvasLogicalHeight.value,
+        outputScale: PRINT_CANVAS_OUTPUT_SCALE,
+        autoHeight: true
       })
+      drawSheetContent(builder)
+      console.log('[DIYSheet] 内容超出基准高度，已把画布撑到:', neededHeight)
     }
 
-    // 4. 绘制食材清单表格
-    if (foodItemsDetailed.value.length > 0) {
-      builder.drawSectionTitle('食材清单')
-
-      const foodRows = foodItemsDetailed.value.map(item => [
-        item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName,
-        item.recommendedPrintText,
-        formatFoodPrepAmountForPrint(item.actualAmount),
-        item.preparationMethod || item.nutritionStateLabel || '-'
-      ])
-
-      builder.drawTable(
-        ['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法'],
-        foodRows,
-        {
-          totalRow: ['备料合计', '-', formatFoodPrepTotalForPrint(foodItemsTotal.value.actualAmount), '-'],
-          colWidths: [210, 300, 210, 400],
-          wrapColumns: [true, true, false, true]
-        }
-      )
-    }
-
-    // 5. 绘制补剂清单表格
-    if (supplementItemsDetailed.value.length > 0) {
-      builder.drawSectionTitle('营养补充剂')
-
-      const supplementRows = supplementItemsDetailed.value.map(item => [
-        item.name,
-        item.recommendedSpecPrintText,
-        item.amountStr,
-        formatSupplementTargetForPrint(item)
-      ])
-
-      builder.drawTable(
-        ['补剂名称', '已选商品 / 规格', '添加总量', '目标补充量'],
-        supplementRows,
-        {
-          colWidths: [180, 520, 170, 250],
-          wrapColumns: [false, true, false, false]
-        }
-      )
-
-      builder.drawSupplementNotice(
-        '营养补充剂的添加总量与已选商品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
-      )
-    }
-
-    // 6. 绘制制作流程
-    if (recipe.value.productionSteps) {
-      builder.drawSectionTitle('制作流程')
-      builder.drawProductionSteps(recipe.value.productionSteps)
-    }
-
-    // 7. 绘制提示卡片（3个横向排列）
-    builder.drawImportantTipsSection([
-      {
-        title: '烹饪建议',
-        content: ['建议蒸、炖、低温慢煮', '不建议微波、烤、煎等高温烹饪']
-      },
-      {
-        title: '分装建议',
-        content: ['建议使用食品真空袋', '抽真空保存']
-      },
-      {
-        title: '储存&保质期',
-        content: ['-18℃冷冻保存6个月', '0-4℃冷藏保存3天', '开封后3小时内吃完']
-      }
-    ])
-
-    // 10. 绘制页脚
+    // 页脚贴最终画布底部
     const dateStr = new Date().toLocaleDateString('zh-CN')
     builder.drawFooter(`赛文的食堂 | ${dateStr}`)
 
-    // 11. 导出为图片
     const imagePath = await builder.toImage()
 
     console.log('[DIYSheet] 图片生成成功:', {
       path: imagePath,
-      expectedSize: `${canvasWidth}x${canvasHeight}`,
-      orientation: canvasHeight > canvasWidth ? '竖版' : '横版'
+      logicalSize: `${canvasWidth}x${printCanvasLogicalHeight.value}`,
+      orientation: '竖版'
     })
 
     safeHideLoading()
 
-    // 12. 显示图片预览弹窗
     previewImageUrl.value = imagePath
     showImagePreview.value = true
   } catch (error) {
@@ -1549,6 +1731,31 @@ function saveImageToPhotosAlbum(filePath: string) {
 }
 
 // 保存制作单
+/**
+ * 保存：合并了原来的「打印」和「保存制作单」。
+ * 由顾客自己选要哪一种，避免底部塞两个含义相近的按钮。
+ */
+function handleSaveMenu() {
+  if (!isPageDataLoaded.value || isGeneratingImage.value) return
+
+  uni.showActionSheet({
+    itemList: ['保存为图片', '保存到收藏夹'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        // 生成制作单图片，走图片预览弹窗，再由顾客保存到相册
+        void handlePrint()
+        return
+      }
+      if (res.tapIndex === 1) {
+        void handleSave()
+      }
+    },
+    fail: () => {
+      // 顾客主动取消，不做任何事
+    },
+  })
+}
+
 async function handleSave() {
   uni.showLoading({ title: '保存中...' })
 
@@ -1576,9 +1783,10 @@ async function handleSave() {
     uni.hideLoading()
 
     if (res.code === 0) {
+      // 告诉顾客去哪儿找：我的 → 我的制作单
       uni.showToast({
-        title: '保存成功',
-        icon: 'success'
+        title: '已保存到我的制作单',
+        icon: 'none'
       })
     } else {
       uni.showToast({
@@ -1773,7 +1981,8 @@ function buildPurchaseListItem(item: any) {
     displayUnit: item.displayUnit || item.unit || 'g',
     nutritionStateLabel: formatNutritionStateForDisplay(item),
     preparationMethod: item.preparationMethod || null,
-    theoreticalAmountStr: formatAmount(theoreticalAmount, isFood),
+    theoreticalAmountStr: formatNetAmount(theoreticalAmount, isFood),
+    netAmountStr: formatNetAmount(theoreticalAmount, isFood),
     actualAmountStr: formatAmount(actualAmount, isFood),
     lossRateStr: `${(lossRate * 100).toFixed(0)}%`,
     calculationProcess: isFood
@@ -2013,44 +2222,9 @@ onShareTimeline(() => {
   text-align: center;
 }
 
-.tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  justify-content: center;
-  margin-bottom: 24rpx;
-}
-
-.tag {
-  padding: 8rpx 20rpx;
-  border-radius: 20rpx;
-  font-size: 24rpx;
-}
-
-.life-stage-tag {
-  background-color: #eef2e4;
-  color: #b08d4f;
-}
-
 .health-tag {
   background-color: #f6efe0;
   color: #8a6b33;
-}
-
-.nutrition-summary {
-  display: flex;
-  justify-content: space-around;
-  gap: 20rpx;
-  padding: 20rpx;
-  background-color: #fbfcf7;
-  border-radius: 12rpx;
-  margin-top: 16rpx;
-}
-
-.nutrition-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
 }
 
 .nutrition-item .label {
@@ -2109,22 +2283,6 @@ onShareTimeline(() => {
   gap: 24rpx;
 }
 
-/* 狗狗信息 */
-.dog-info-summary {
-  padding: 16rpx;
-  background-color: #eef2e4;
-  border-radius: 8rpx;
-  border-left: 4rpx solid #1e3a2f;
-}
-
-/* 制作信息 */
-.making-info-summary {
-  padding: 16rpx;
-  background-color: #eef2e4;
-  border-radius: 8rpx;
-  border-left: 4rpx solid #1e3a2f;
-}
-
 .preview-warning-summary {
   padding: 16rpx 18rpx;
   background-color: #f6efe0;
@@ -2137,18 +2295,6 @@ onShareTimeline(() => {
   font-size: 25rpx;
   color: #8a6b33;
   line-height: 1.5;
-}
-
-.info-text {
-  display: block;
-  font-size: 26rpx;
-  color: #26261f;
-  line-height: 1.5;
-}
-
-.secondary-info-text {
-  margin-top: 6rpx;
-  color: #26261f;
 }
 
 .ingredient-group {
@@ -2321,38 +2467,19 @@ onShareTimeline(() => {
   color: #8a6b33;
 }
 
-/* 补剂表格4列布局 */
-.supplement-buy-card {
+/* 商城关闭或状态查询失败时的中性说明，取代原来的静默隐藏 */
+.supplement-unavailable-card {
   margin-top: 20rpx;
-  padding: 28rpx 24rpx;
+  padding: 20rpx 24rpx;
   border-radius: 16rpx;
-  background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  border: 1rpx dashed #d8d2c4;
+  background: #faf8f2;
 }
 
-.buy-main {
-  display: flex;
-  flex-direction: column;
-}
-
-.buy-title {
-  font-size: 30rpx;
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.buy-desc {
-  margin-top: 8rpx;
+.supplement-unavailable-text {
   font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.buy-arrow {
-  font-size: 44rpx;
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1;
+  line-height: 1.5;
+  color: #8a8375;
 }
 
 .supplement-table .product-col {
@@ -2431,28 +2558,6 @@ onShareTimeline(() => {
   align-items: center;
 }
 
-.card-content {
-  font-size: 26rpx;
-  color: #26261f;
-  line-height: 1.6;
-}
-
-.card-content.multi-line {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.content-line {
-  font-size: 26rpx;
-  color: #26261f;
-  line-height: 1.5;
-}
-
-.content-line.warning {
-  color: #8a6b33;
-}
-
 /* 底部操作栏 */
 .bottom-actions {
   position: fixed;
@@ -2485,9 +2590,11 @@ onShareTimeline(() => {
   color: #f3eddd;
 }
 
-.action-btn.success {
-  background-color: #1e3a2f;
-  color: #f3eddd;
+/* 保存：次级动作，浅绿底 + 墨绿字，与实心的「打印」区分开 */
+.action-btn.secondary {
+  background-color: #eef2e4;
+  color: #1e3a2f;
+  border: 2rpx solid #1e3a2f;
 }
 
 .btn-text {
@@ -3036,27 +3143,222 @@ onShareTimeline(() => {
   width: 100%;
 }
 
+/* 「去购买」是弹窗里的核心动作：实心金底 + 白字，明显强于周围的浅色卡片 */
 .btn-purchase-sm {
-  background: #fbfcf7;
-  color: #b08d4f;
-  border: 2rpx solid #e5e8d4;
-  border-radius: 8rpx;
+  background: linear-gradient(140deg, #c79a55 0%, #a97c33 100%);
+  color: #fffdf7;
+  border: none;
+  border-radius: 999rpx;
   width: 100%;
-  height: 64rpx;
-  line-height: 60rpx;
-  padding: 0 20rpx;
-  font-size: 24rpx;
-  font-weight: 500;
+  height: 68rpx;
+  line-height: 68rpx;
+  padding: 0 24rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
   margin-left: 0;
   box-sizing: border-box;
+  box-shadow: 0 6rpx 16rpx rgba(169, 124, 51, 0.28);
 }
 
 .btn-purchase-sm:active {
-  background: #eef2e4;
+  background: linear-gradient(140deg, #b98d48 0%, #976d28 100%);
+  box-shadow: 0 3rpx 8rpx rgba(169, 124, 51, 0.24);
   opacity: 1;
 }
 
 .btn-purchase-sm::after {
   border: none;
+}
+.standard-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding: 22rpx 24rpx;
+  background: linear-gradient(150deg, #fdf8ee 0%, #f6efe0 100%);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: 16rpx;
+  box-shadow: 0 8rpx 22rpx rgba(176, 141, 79, 0.14);
+}
+
+.standard-main {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.standard-badge {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  color: #d8bc85;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: center;
+  line-height: 40rpx;
+}
+
+.standard-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.standard-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.standard-sub {
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.standard-toggle {
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
+.standard-explain {
+  margin-top: 10rpx;
+  padding: 20rpx 24rpx;
+  background-color: #f2f4ea;
+  border-radius: 12rpx;
+}
+
+.standard-explain-text {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b6653;
+}
+
+/* 制作清单：狗狗信息 / 制作信息 的标签+数值卡片 */
+.purchase-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.purchase-facts-head {
+  display: flex;
+  align-items: center;
+}
+
+.purchase-facts-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.purchase-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8rpx;
+}
+
+.purchase-fact {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  padding: 14rpx 6rpx;
+  border-radius: 12rpx;
+  background-color: #f2f4ea;
+}
+
+.purchase-fact-label {
+  font-size: 20rpx;
+  color: #968f6d;
+  white-space: nowrap;
+}
+
+.purchase-fact-value {
+  min-width: 0;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+  text-align: center;
+}
+
+/* 购买预分装补剂：底部栏里的商业动作，用金色与「去购买」保持同一语义 */
+.action-btn.buy {
+  flex: 1.4;
+  min-width: 0;
+  background: linear-gradient(140deg, #c79a55 0%, #a97c33 100%);
+  color: #fffdf7;
+  font-weight: 700;
+  letter-spacing: 0.5rpx;
+  box-shadow: 0 6rpx 16rpx rgba(169, 124, 51, 0.24);
+}
+
+.action-btn.buy:active {
+  background: linear-gradient(140deg, #b98d48 0%, #976d28 100%);
+}
+
+/* 分享：只剩图标，方形描边按钮，与保存同一行高 */
+.action-btn.share {
+  flex: 0 0 88rpx;
+  width: 88rpx;
+  padding: 0;
+  background-color: #fbfcf7;
+  border: 2rpx solid #1e3a2f;
+}
+
+/* 分享图标：用 CSS 现画的「托盘 + 上箭头」，不依赖字体符号 */
+.share-icon {
+  position: relative;
+  width: 36rpx;
+  height: 36rpx;
+}
+
+.share-icon-tray {
+  position: absolute;
+  left: 3rpx;
+  bottom: 2rpx;
+  width: 30rpx;
+  height: 17rpx;
+  border: 3rpx solid #1e3a2f;
+  border-top: none;
+  border-radius: 0 0 8rpx 8rpx;
+  box-sizing: border-box;
+}
+
+.share-icon-shaft {
+  position: absolute;
+  left: 16rpx;
+  top: 5rpx;
+  width: 3rpx;
+  height: 17rpx;
+  background-color: #1e3a2f;
+}
+
+.share-icon-head {
+  position: absolute;
+  left: 12rpx;
+  top: 4rpx;
+  width: 12rpx;
+  height: 12rpx;
+  border-top: 3rpx solid #1e3a2f;
+  border-left: 3rpx solid #1e3a2f;
+  transform: rotate(45deg);
+  box-sizing: border-box;
+}
+
+
+/* 「建议采购量」的说明：不给顾客看损耗率，只说明已预留余量 */
+.purchase-amount-note {
+  margin-top: 12rpx;
+  padding: 0 4rpx;
+}
+
+.purchase-amount-note-text {
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #968f6d;
 }
 </style>

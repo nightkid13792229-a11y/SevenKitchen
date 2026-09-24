@@ -462,14 +462,19 @@ export class AdminController {
                 displayNameZh: true,
                 dataSource: true,
                 externalId: true,
-              preparationState: true,
-              preparationStateLabel: true,
-              ediblePortionLabel: true,
-              processingLabel: true,
-              nutritionData: true,
+                preparationState: true,
+                preparationStateLabel: true,
+                ediblePortionLabel: true,
+                processingLabel: true,
+                // 注意：这里故意不返回 nutritionData。
+                // 单个档案的 JSON 文本约 20~30KB，而本接口要内嵌全部映射
+                // （实测 162 条原料 / 222 条映射 → 响应 5.82MB，其中 5.2MB
+                // 全是 nutritionData），在现有出口带宽下直接导致原料列表
+                // 加载超时。营养档案弹窗一律按需调用
+                // GET /admin/ingredients/:id 获取完整数据。
+              },
             },
           },
-        },
           orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
         },
         tags: {

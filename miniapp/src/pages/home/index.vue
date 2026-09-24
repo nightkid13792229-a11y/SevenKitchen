@@ -384,6 +384,7 @@ import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
+import { getLifeStageLabel } from '../../utils/label-mapping'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {

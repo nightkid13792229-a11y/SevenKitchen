@@ -72,7 +72,7 @@
                 mode="aspectFit"
               />
             </view>
-            <text class="shortcut-text">制作中</text>
+            <text class="shortcut-text">已付款</text>
           </view>
           <view
             class="mall-shortcut mall-shortcut-payment"
@@ -90,7 +90,7 @@
                 mode="aspectFit"
               />
             </view>
-            <text class="shortcut-text">待付款</text>
+            <text class="shortcut-text">未付款</text>
           </view>
           <view
             class="mall-shortcut mall-shortcut-shipping"
@@ -106,7 +106,7 @@
                 mode="aspectFit"
               />
             </view>
-            <text class="shortcut-text">待收货</text>
+            <text class="shortcut-text">已发货</text>
           </view>
           <view
             class="mall-shortcut mall-shortcut-received"
@@ -122,7 +122,7 @@
                 mode="aspectFit"
               />
             </view>
-            <text class="shortcut-text">已收货</text>
+            <text class="shortcut-text">已完成</text>
           </view>
           <view
             class="mall-shortcut mall-shortcut-aftersale"

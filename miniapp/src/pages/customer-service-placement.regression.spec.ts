@@ -91,6 +91,8 @@ describe('customer service page placement regressions', () => {
     const meTemplateSource = meSource.slice(0, meSource.indexOf('<script setup'))
 
     expect(meTemplateSource).not.toContain('购物车')
-    expect(meTemplateSource).toContain('制作中')
+    // 用商城快捷入口的文案当"这一行还在"的标记；文案随订单页统一改过，
+    // 这里守的是"入口行存在"，不是某个具体叫法
+    expect(meTemplateSource).toContain('已付款')
   })
 })

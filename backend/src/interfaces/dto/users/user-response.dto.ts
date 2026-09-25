@@ -15,7 +15,10 @@ export class UserResponseDto {
 
   // 统计信息
   dogCount!: number;
+  /** 鲜食订单数。账号迁移会拿它判断「有没有需要搬的数据」，语义不要动 */
   orderCount!: number;
+  /** 补剂订单数。与鲜食分开计；「我的订单」展示时两者相加 */
+  supplementOrderCount!: number;
   addressCount!: number;
   diySheetCount!: number;
   favoriteRecipeCount!: number;

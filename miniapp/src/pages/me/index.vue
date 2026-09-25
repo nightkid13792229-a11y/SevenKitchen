@@ -190,7 +190,7 @@
 
         <view class="function-item" @tap="goToOrderList">
           <text class="function-text">我的订单</text>
-          <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
+          <text class="function-count">({{ totalOrderCount }}笔)</text>
         </view>
 
         <view class="function-item" @tap="goToAddressList">
@@ -266,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
@@ -285,7 +285,10 @@ interface UserInfo {
   avatarUrl?: string;
   role: string;
   dogCount: number;
+  /** 鲜食订单数（后端 orderCount 只数鲜食） */
   orderCount: number;
+  /** 补剂订单数；老接口可能没有这个字段 */
+  supplementOrderCount?: number;
   addressCount: number;
   diySheetCount: number;
   favoriteRecipeCount: number;
@@ -298,10 +301,22 @@ const userInfo = ref<UserInfo>({
   role: "CUSTOMER",
   dogCount: 0,
   orderCount: 0,
+  supplementOrderCount: 0,
   addressCount: 0,
   diySheetCount: 0,
   favoriteRecipeCount: 0,
 });
+
+/**
+ * 「我的订单 (N笔)」要数两类订单。
+ *
+ * 后端 orderCount 只数鲜食（它的语义不能动：账号迁移拿它判断"有没有需要搬的
+ * 数据"），所以补剂订单数由 supplementOrderCount 单独给，这里相加。
+ * 不相加的话会出现"写着 3 笔、列表里 5 条"。
+ */
+const totalOrderCount = computed(
+  () => (userInfo.value.orderCount || 0) + (userInfo.value.supplementOrderCount || 0),
+);
 
 const orderCounts = ref({
   pendingPayment: 0,
@@ -651,6 +666,7 @@ function handleLogout() {
           role: "CUSTOMER",
           dogCount: 0,
           orderCount: 0,
+          supplementOrderCount: 0,
           addressCount: 0,
           diySheetCount: 0,
           favoriteRecipeCount: 0,

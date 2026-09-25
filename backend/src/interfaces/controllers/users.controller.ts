@@ -55,6 +55,10 @@ export class UsersController {
           select: {
             dogs: true,
             orders: true,
+            // 补剂订单是独立关系，`orders` 数不到它。这里单独取出来，
+            // 但**不动 orderCount 的语义** —— 账号迁移会拿 orderCount 判断
+            // "有没有需要搬的数据"，而迁移目前并不搬补剂订单（见下方说明）。
+            supplementOrders: true,
             addresses: true,
             diySheets: true,
             favoriteRecipes: true,
@@ -103,6 +107,7 @@ export class UsersController {
       updatedAt: userData.updatedAt,
       dogCount: userData._count.dogs,
       orderCount: userData._count.orders,
+      supplementOrderCount: userData._count.supplementOrders,
       addressCount: userData._count.addresses,
       diySheetCount: userData._count.diySheets,
       favoriteRecipeCount: userData._count.favoriteRecipes,
@@ -159,6 +164,10 @@ export class UsersController {
           select: {
             dogs: true,
             orders: true,
+            // 补剂订单是独立关系，`orders` 数不到它。这里单独取出来，
+            // 但**不动 orderCount 的语义** —— 账号迁移会拿 orderCount 判断
+            // "有没有需要搬的数据"，而迁移目前并不搬补剂订单（见下方说明）。
+            supplementOrders: true,
             addresses: true,
             diySheets: true,
             favoriteRecipes: true,
@@ -178,6 +187,7 @@ export class UsersController {
       updatedAt: updatedUser.updatedAt,
       dogCount: updatedUser._count.dogs,
       orderCount: updatedUser._count.orders,
+      supplementOrderCount: updatedUser._count.supplementOrders,
       addressCount: updatedUser._count.addresses,
       diySheetCount: updatedUser._count.diySheets,
       favoriteRecipeCount: updatedUser._count.favoriteRecipes,

@@ -12,7 +12,12 @@ describe('me page regressions', () => {
 
     expect(templateSource).toContain('我的订单')
     expect(templateSource).toContain('@tap="goToOrderList"')
-    expect(templateSource).toContain('userInfo.orderCount')
+    // 笔数要**数两类订单**：后端 orderCount 只数鲜食（它的语义不能动 ——
+    // 账号迁移拿它判断"有没有需要搬的数据"），补剂另有 supplementOrderCount。
+    // 模板里必须用两者相加的那个，否则会出现"写着 3 笔、列表里 5 条"。
+    expect(templateSource).toContain('totalOrderCount')
+    expect(source).toContain('userInfo.value.orderCount || 0')
+    expect(source).toContain('userInfo.value.supplementOrderCount || 0')
     expect(source).toContain("url: '/pages/orders-list/index'")
   })
 

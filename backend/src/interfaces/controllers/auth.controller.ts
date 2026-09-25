@@ -1410,6 +1410,7 @@ export class AuthController {
         select: {
           dogs: true,
           orders: true,
+          supplementOrders: true,
           addresses: true,
           diySheets: true,
           favoriteRecipes: true,
@@ -1429,6 +1430,7 @@ export class AuthController {
       phoneBound: !!user.phone,
       dogCount: user._count?.dogs || 0,
       orderCount: user._count?.orders || 0,
+      supplementOrderCount: user._count?.supplementOrders || 0,
       addressCount: user._count?.addresses || 0,
       diySheetCount: user._count?.diySheets || 0,
       favoriteRecipeCount: user._count?.favoriteRecipes || 0,

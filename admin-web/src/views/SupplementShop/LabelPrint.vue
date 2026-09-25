@@ -112,6 +112,12 @@ function handlePrint() {
 }
 
 function goBack() {
+  // 从「订单管理 → 补剂订单」标签进来的，要退回那个标签页；
+  // 否则用户会落到另一条菜单路径上，得自己重新找一遍订单。
+  if (route.query.from === 'orders') {
+    router.push({ path: '/orders', query: { tab: 'supplement' } });
+    return;
+  }
   router.push('/supplement-shop/orders');
 }
 

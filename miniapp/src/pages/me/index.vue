@@ -193,10 +193,6 @@
           <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
         </view>
 
-        <view class="function-item" @tap="goToSupplementOrders">
-          <text class="function-text">我的补剂订单</text>
-        </view>
-
         <view class="function-item" @tap="goToAddressList">
           <text class="function-text">收货地址</text>
           <text class="function-count">({{ userInfo.addressCount || 0 }}个)</text>
@@ -446,13 +442,6 @@ function goToAddressList() {
   uni.navigateTo({
     url: '/pages/address-list/index'
   })
-}
-
-// 跳转我的补剂订单列表
-async function goToSupplementOrders() {
-  uni.navigateTo({
-    url: "/pages/supplement-orders/index",
-  });
 }
 
 // 跳转我的制作单列表

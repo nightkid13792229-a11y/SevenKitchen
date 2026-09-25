@@ -361,6 +361,13 @@
             "navigationBarTitleText": "补剂订单详情",
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "labels",
+          "style": {
+            "navigationBarTitleText": "补剂标签",
+            "navigationStyle": "custom"
+          }
         }
       ]
     },

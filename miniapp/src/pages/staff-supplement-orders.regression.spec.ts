@@ -108,3 +108,107 @@ describe('工作台补剂订单 · 视觉规范', () => {
     expect(listSource).not.toContain('http://')
   })
 })
+
+/**
+ * 标签打印页（labels.vue）。
+ *
+ * 锁住三件容易被悄悄改坏的事：
+ *   1. 路由注册 —— 详情页按钮指过来，注册漏了就是白屏
+ *   2. 后端文案透传 —— 「请先完成分装，再打印标签」被吞成「加载失败」= 现场不知道干什么
+ *   3. 一张一张打 —— 每张标签内容不同（第几袋/共几袋），份数必须固定 1
+ */
+describe('工作台补剂订单 · 标签打印页', () => {
+  const labelsSource = readFileSync(
+    resolve(__dirname, 'staff-supplement-orders/labels.vue'),
+    'utf8',
+  )
+  const pagesConfig = JSON.parse(readFileSync(resolve(__dirname, '../pages.json'), 'utf8'))
+  const printUtilSource = readFileSync(
+    resolve(__dirname, '../utils/supplement-label-print.ts'),
+    'utf8',
+  )
+
+  it('在补剂订单分包里注册了 labels 页，标题与自定义导航和同分包其他页一致', () => {
+    const subPackage = pagesConfig.subPackages.find(
+      (item: { root: string }) => item.root === 'pages/staff-supplement-orders',
+    )
+
+    expect(subPackage).toBeTruthy()
+    const labelsRoute = subPackage.pages.find((page: { path: string }) => page.path === 'labels')
+
+    expect(labelsRoute).toBeTruthy()
+    expect(labelsRoute.style.navigationBarTitleText).toBe('补剂标签')
+    expect(labelsRoute.style.navigationStyle).toBe('custom')
+    expect(existsSync(resolve(__dirname, 'staff-supplement-orders/labels.vue'))).toBe(true)
+  })
+
+  it('调用后端标签图片接口，并关掉全局 toast 以免顶掉后端文案', () => {
+    expect(apiSource).toContain('labelImages(orderId: string)')
+    expect(apiSource).toContain('`/admin/supplement-shop/orders/${orderId}/labels/images`')
+    expect(apiSource).toContain('suppressErrorToast: true')
+    expect(apiSource).toContain('imageBase64: string')
+  })
+
+  it('复用鲜食打印页那套能力：隐藏 canvas + 组件代理 + jcPrinter', () => {
+    expect(labelsSource).toContain("import jcPrinter from '../../utils/jcing-printer'")
+    expect(labelsSource).toContain('canvas-id="labelCanvas"')
+    expect(labelsSource).toContain('getCurrentInstance()')
+    expect(labelsSource).toContain('componentProxy')
+    expect(labelsSource).toContain('onReady(')
+    expect(labelsSource).toContain('jcPrinter.autoConnect()')
+    expect(labelsSource).toContain('connectPrinter')
+    // 鲜食那套只读参考，不能反向依赖过去
+    expect(labelsSource).not.toContain('staff-production')
+  })
+
+  it('一张一张打：份数固定 1，打印中带「第几张/共几张」进度', () => {
+    expect(labelsSource).toContain('jcPrinter.printLabelFromImage(')
+    expect(labelsSource).toContain('label.imageBase64, 1, CANVAS_ID, componentProxy.value')
+    expect(labelsSource).toContain('buildPrintProgressTitle')
+    expect(labelsSource).toContain('uni.showLoading({ title: progressTitle')
+    expect(printUtilSource).toContain('打印中 ${index + 1}/${total}')
+  })
+
+  it('全部打印一张张走完，中途失败要停下并说清是哪种失败', () => {
+    expect(labelsSource).toContain('runPrintQueue')
+    expect(labelsSource).toContain('showPrintFailure')
+    // 上一个任务没吐完就发下一个，精臣 SDK 会报"SDK忙"
+    expect(labelsSource).toContain('PRINT_GAP_MS')
+    expect(labelsSource).toContain('describeLabelPrintFailure')
+    // 三类失败各有各的文案：现场要做的事完全不同
+    expect(printUtilSource).toContain('打印机未连接')
+    expect(printUtilSource).toContain('图片生成失败')
+    expect(printUtilSource).toContain('打印超时')
+  })
+
+  it('每张都能单张补打，并标出是第几张', () => {
+    expect(labelsSource).toContain('补打这一张')
+    expect(labelsSource).toContain('handleReprint')
+    expect(labelsSource).toContain('{{ index + 1 }} / {{ labels.length }}')
+    expect(labelsSource).toContain('共 {{ labels.length }} 张标签')
+  })
+
+  it('加载中 / 加载失败可重试 / 未分装时给出回去填分装的出口', () => {
+    expect(labelsSource).toContain('加载中')
+    expect(labelsSource).toContain('@tap="fetchLabels"')
+    expect(labelsSource).toContain('{{ loadError }}')
+    expect(labelsSource).toContain('packRequired')
+    expect(labelsSource).toContain('请先回订单详情填分装结果')
+    expect(labelsSource).toContain('goToOrderDetail')
+  })
+
+  it('预览用后端返回的图片，不新增任何图片资源', () => {
+    expect(labelsSource).toContain('previewSrcs[index]')
+    expect(labelsSource).toContain('mode="widthFix"')
+    expect(labelsSource).not.toContain('/static/')
+  })
+
+  it('沿用补剂分装的墨绿金色配色，不出现废弃的蓝色系', () => {
+    for (const retired of ['#1890ff', '#4a90d9', '#1677ff', '#1989fa', '#40a9ff']) {
+      expect(labelsSource).not.toContain(retired)
+    }
+    expect(labelsSource).toContain('#1e3a2f')
+    expect(labelsSource).toContain('#f7f8f2')
+    expect(labelsSource).toContain('#a97c33')
+  })
+})

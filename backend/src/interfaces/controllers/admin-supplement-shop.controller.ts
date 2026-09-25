@@ -24,6 +24,7 @@ import {
   type SupplementQuoteLineInput,
 } from '../../application/supplement-shop/supplement-pricing.service';
 import { SupplementOrderService } from '../../application/supplement-shop/supplement-order.service';
+import { SupplementLabelService } from '../../label/supplement-label.service';
 import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import {
   CancelSupplementOrderDto,
@@ -55,6 +56,7 @@ export class AdminSupplementShopController {
     private readonly supplementPricingService: SupplementPricingService,
     private readonly supplementOrderService: SupplementOrderService,
     private readonly wechatPaymentService: WechatPaymentService,
+    private readonly supplementLabelService: SupplementLabelService,
   ) {}
 
   // ---------- 上架清单 ----------
@@ -165,6 +167,32 @@ export class AdminSupplementShopController {
     return ApiResponseDto.success(
       await this.supplementOrderService.getOrderLabels(id),
     );
+  }
+
+  @Get('orders/:id/labels/images')
+  @ApiOperation({
+    summary: '分装标签图片（PNG base64，一袋一张）',
+    description:
+      '按袋展开：同一个补剂加量买 3 份就有 3 张标签，labelId 与标签数据接口一一对应。' +
+      '未完成分装时沿用标签数据接口的报错行为。',
+  })
+  async getOrderLabelImages(@Param('id') id: string) {
+    const labelData = await this.supplementOrderService.getOrderLabels(id);
+
+    return ApiResponseDto.success({
+      orderNo: labelData.orderNo,
+      brandName: labelData.brandName,
+      receiverName: labelData.receiverName,
+      // labelId 原样带出去：小程序端拿它做列表 key，缺了会出现「换了一张图但没重绘」
+      labels: labelData.labels.map((label) => ({
+        labelId: label.labelId,
+        imageBase64: this.supplementLabelService.generateLabelImage(
+          label,
+          labelData.orderNo,
+          labelData.brandName,
+        ),
+      })),
+    });
   }
 
   @Post('orders/:id/confirm-payment')

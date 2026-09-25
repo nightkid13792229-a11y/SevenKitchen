@@ -17,15 +17,24 @@
     <view class="order-list">
       <view
         v-for="order in orders"
-        :key="order.id"
+        :key="`${order._orderType}-${order.id}`"
         class="order-item"
-        @tap="viewOrder(order.id)"
+        @tap="handleOrderTap(order)"
       >
         <!-- 订单时间和状态 -->
         <view class="order-header">
-          <text class="order-time">{{
-            formatShortDateTime(order.createdAt)
-          }}</text>
+          <view class="order-header-left">
+            <text class="order-time">{{
+              formatShortDateTime(order.createdAt)
+            }}</text>
+            <!-- 两类订单混在一个列表里，靠这个标签让顾客一眼知道是哪一类 -->
+            <text
+              v-if="order._orderType === 'supplement'"
+              class="order-type-tag"
+            >
+              补剂
+            </text>
+          </view>
           <text
             class="order-status"
             :style="{ color: getStatusColor(order) }"
@@ -34,13 +43,58 @@
           </text>
         </view>
 
-        <!-- 商品数量 -->
-        <view class="order-summary">
+        <!--
+          补剂订单：字段结构与鲜食完全不同，且没有独立详情页，
+          所以把订单号、概要、明细、物流、售后都在卡片里展示全，点卡片不再跳转。
+        -->
+        <template v-if="order._orderType === 'supplement'">
+          <view class="order-summary">
+            <text class="summary-text"
+              >{{ order.orderNo }} · {{ formatSupplementSummary(order) }}</text
+            >
+          </view>
+
+          <view class="order-items">
+            <view
+              v-for="item in order.items || []"
+              :key="item.id"
+              class="supplement-item-row"
+            >
+              <text class="supplement-item-name">{{ item.name }}</text>
+              <text class="supplement-item-amount"
+                >{{ formatSupplementAmount(item.packedAmount)
+                }}{{ item.unit }}</text
+              >
+              <text class="supplement-item-price"
+                >¥{{ formatAmount(item.price) }}</text
+              >
+            </view>
+          </view>
+
+          <view v-if="order.trackingNumber" class="order-address">
+            <text class="address-text"
+              >快递 {{ order.carrierCode ? order.carrierCode + ' ' : ''
+              }}{{ order.trackingNumber }}</text
+            >
+          </view>
+
+          <view v-if="order.aftersaleType" class="order-address">
+            <text class="address-text"
+              >售后 {{ order.aftersaleType === 'REFUND' ? '退款' : '免费补发'
+              }}{{
+                order.aftersaleReason ? ' · ' + order.aftersaleReason : ''
+              }}</text
+            >
+          </view>
+        </template>
+
+        <!-- 商品数量（鲜食口径，补剂用上面的概要行） -->
+        <view v-if="order._orderType === 'food'" class="order-summary">
           <text class="summary-text">{{ order.itemCount || 0 }}件商品</text>
         </view>
 
         <!-- 如果有详细商品信息，显示更多信息 -->
-        <template v-if="order.firstItem">
+        <template v-if="order._orderType === 'food' && order.firstItem">
           <!-- 狗狗信息 -->
           <view class="order-dogs">
             <text class="dogs-text">{{ formatDogInfo(order) }}</text>
@@ -90,45 +144,61 @@
         </view>
 
         <view v-if="hasQuickActions(order)" class="order-actions" @tap.stop>
+          <!-- 补剂：只有未付款需要入口，支付流程与鲜食不同，复用补剂自己的支付封装 -->
           <button
-            v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
+            v-if="
+              order._orderType === 'supplement' &&
+              order.status === 'PENDING_PAYMENT'
+            "
             class="action-btn primary"
-            :disabled="payingOrderId === order.id"
-            @tap="payOrderFromList(order.id)"
+            :disabled="payingSupplementId === order.id"
+            @tap="paySupplementFromList(order)"
           >
-            {{ payingOrderId === order.id ? '调起支付中' : '立即付款' }}
+            {{ payingSupplementId === order.id ? '调起支付中' : '去支付' }}
           </button>
-          <text v-if="isPaymentExpired(order)" class="order-expired-text">
-            支付已超时，订单已关闭
-          </text>
-          <button
-            v-if="order.status === 'SHIPPED'"
-            class="action-btn secondary"
-            @tap="viewLogistics(order)"
-          >
-            查看物流
-          </button>
-          <button
-            v-if="getAftersaleEntryLabel(order.status, order.completedAt)"
-            class="action-btn secondary"
-            @tap="applyAftersale(order)"
-          >
-            {{ getAftersaleEntryLabel(order.status, order.completedAt) }}
-          </button>
-          <button
-            v-if="order.status === 'SHIPPED'"
-            class="action-btn primary"
-            :disabled="receivingOrderId === order.id"
-            @tap="confirmReceivedFromList(order)"
-          >
-            {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
-          </button>
-          <button
-            class="action-btn secondary"
-            @tap="buyAgain(order)"
-          >
-            再次购买
-          </button>
+
+          <!-- 鲜食：下面这套操作沿用原样，只按类型标记收窄适用范围 -->
+          <template v-if="order._orderType === 'food'">
+            <button
+              v-if="order.status === 'PENDING_PAYMENT' && !isPaymentExpired(order)"
+              class="action-btn primary"
+              :disabled="payingOrderId === order.id"
+              @tap="payOrderFromList(order.id)"
+            >
+              {{ payingOrderId === order.id ? '调起支付中' : '立即付款' }}
+            </button>
+            <text v-if="isPaymentExpired(order)" class="order-expired-text">
+              支付已超时，订单已关闭
+            </text>
+            <button
+              v-if="order.status === 'SHIPPED'"
+              class="action-btn secondary"
+              @tap="viewLogistics(order)"
+            >
+              查看物流
+            </button>
+            <button
+              v-if="getAftersaleEntryLabel(order.status, order.completedAt)"
+              class="action-btn secondary"
+              @tap="applyAftersale(order)"
+            >
+              {{ getAftersaleEntryLabel(order.status, order.completedAt) }}
+            </button>
+            <button
+              v-if="order.status === 'SHIPPED'"
+              class="action-btn primary"
+              :disabled="receivingOrderId === order.id"
+              @tap="confirmReceivedFromList(order)"
+            >
+              {{ receivingOrderId === order.id ? '确认中' : '确认收货' }}
+            </button>
+            <button
+              class="action-btn secondary"
+              @tap="buyAgain(order)"
+            >
+              再次购买
+            </button>
+          </template>
         </view>
       </view>
 
@@ -164,6 +234,12 @@ import {
   createWechatPayment,
   type WechatPaymentResult,
 } from '../../api/orders';
+import {
+  fetchSupplementOrders,
+  SUPPLEMENT_ORDER_STATUS_LABELS,
+  type SupplementOrder,
+} from '../../api/supplements';
+import { runSupplementPayment } from '../../utils/supplement-payment';
 import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { confirmWechatReceiptBeforeInternalComplete } from '../../utils/wechat-confirm-receipt';
@@ -178,6 +254,11 @@ import CustomerServiceInlineButton from '../../components/CustomerServiceInlineB
 
 // DEBUG flag for development logging
 const DEBUG = true;
+
+// 补剂订单列表接口有分页（后端每页上限 100）。合并列表要在本地筛选和排序，
+// 所以这里按页拿全；MAX_PAGES 只是防止 total 异常时死循环的兜底。
+const SUPPLEMENT_ORDER_PAGE_SIZE = 100;
+const SUPPLEMENT_ORDER_MAX_PAGES = 20;
 
 interface Order {
   id: string;
@@ -224,24 +305,54 @@ interface Order {
   };
 }
 
+/**
+ * 合并列表的类型标记。
+ *
+ * 两类订单的字段几乎不重叠（鲜食是 firstItem/address，补剂是 items/orderNo），
+ * 用一个下划线前缀的字段挂在订单对象上区分；前缀是为了不和后端返回的字段撞名。
+ */
+type OrderType = 'food' | 'supplement';
+
+type FoodOrderRow = Order & { _orderType: 'food' };
+
+type SupplementOrderRow = SupplementOrder & { _orderType: 'supplement' };
+
+type UnifiedOrder = FoodOrderRow | SupplementOrderRow;
+
 // 状态筛选Tab
 const selectedStatus = ref<string>('ALL');
 
 const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
   { label: '全部', value: 'ALL', count: 0 },
-  { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
-  { label: '已付款/制作中', value: 'IN_PROGRESS', count: 0 },
-  { label: '待收货', value: 'WAIT_RECEIVE', count: 0 },
-  { label: '已收货', value: 'RECEIVED', count: 0 },
+  { label: '未付款', value: 'PENDING_PAYMENT', count: 0 },
+  { label: '已付款', value: 'IN_PROGRESS', count: 0 },
+  { label: '已发货', value: 'WAIT_RECEIVE', count: 0 },
+  { label: '已完成', value: 'RECEIVED', count: 0 },
   { label: '售后中', value: 'AFTERSALE', count: 0 },
-  { label: '已取消/退款', value: 'CANCELLED', count: 0 },
+  { label: '已取消', value: 'CANCELLED', count: 0 },
 ]);
 
-const allOrders = ref<Order[]>([]);
-const orders = ref<Order[]>([]);
+const allOrders = ref<UnifiedOrder[]>([]);
+const orders = ref<UnifiedOrder[]>([]);
 const viewAllOrders = ref(false); // 是否查看所有订单（从工作台进入时为true）
 const payingOrderId = ref('');
 const receivingOrderId = ref('');
+const payingSupplementId = ref('');
+
+/**
+ * 补剂自己的状态分色：金=待办、绿=正常、红=售后、灰=结束。
+ * 刻意不用旧的蓝色系（已废弃），和鲜食卡片保持同一套语义。
+ */
+const SUPPLEMENT_STATUS_COLORS: Record<string, string> = {
+  PENDING_PAYMENT: '#ff9800',
+  PAID: '#52c41a',
+  PACKING: '#faad14',
+  PACKED: '#faad14',
+  SHIPPED: '#52c41a',
+  COMPLETED: '#52c41a',
+  CANCELLED: '#999',
+  AFTERSALE: '#f5222d',
+};
 
 const emptyTitle = computed(() => {
   if (selectedStatus.value === 'ALL') {
@@ -259,7 +370,7 @@ const emptyText = computed(() => {
     PENDING_PAYMENT: '没有需要付款的订单。',
     IN_PROGRESS: '没有已付款或正在制作的订单。',
     WAIT_RECEIVE: '没有等待收货的订单。',
-    RECEIVED: '没有已收货订单。',
+    RECEIVED: '没有已完成订单。',
     AFTERSALE: '没有售后中的订单。',
     CANCELLED: '没有已取消订单。',
   };
@@ -291,7 +402,7 @@ onShow(async () => {
   loadOrders();
 });
 
-function loadOrders() {
+async function loadOrders() {
   if (DEBUG) {
     const token = getToken();
     console.log('[OrdersList] Loading orders', {
@@ -306,43 +417,110 @@ function loadOrders() {
   // viewAll=true 时调用管理员API查看所有订单，否则调用普通API只看自己的订单
   const apiUrl = viewAllOrders.value ? '/admin/orders' : '/orders';
 
-  request({
-    url: apiUrl,
-    method: 'GET',
-  })
-    .then((res: any) => {
-      if (DEBUG) {
-        console.log('[OrdersList] Response:', {
-          code: res.code,
-          orderCount: res.data?.length || 0,
-          viewAllOrders: viewAllOrders.value,
-        });
+  // 管理员视角看的是「全部顾客的鲜食订单」，而补剂列表接口只返回「我自己的」，
+  // 合进来会把管理员本人的补剂订单混进别人的订单里，所以只在顾客视角合并。
+  const supplementPromise: Promise<SupplementOrderRow[]> = viewAllOrders.value
+    ? Promise.resolve([])
+    : fetchAllSupplementOrders().catch((err) => {
+        // 补剂这一路失败不能让鲜食订单一起白屏：降级成「本次没有补剂订单」
+        console.error('[OrdersList] 加载补剂订单失败:', err);
+        return [] as SupplementOrderRow[];
+      });
+
+  try {
+    const [res, supplementOrders] = await Promise.all([
+      request({
+        url: apiUrl,
+        method: 'GET',
+      }),
+      supplementPromise,
+    ]);
+
+    if (DEBUG) {
+      console.log('[OrdersList] Response:', {
+        code: res.code,
+        orderCount: res.data?.length || 0,
+        supplementCount: supplementOrders.length,
+        viewAllOrders: viewAllOrders.value,
+      });
+      console.log(
+        '[OrdersList] Orders Data:',
+        JSON.stringify(res.data, null, 2),
+      );
+      if (res.data && res.data.length > 0) {
         console.log(
-          '[OrdersList] Orders Data:',
-          JSON.stringify(res.data, null, 2),
+          '[OrdersList] First Order:',
+          JSON.stringify(res.data[0], null, 2),
         );
-        if (res.data && res.data.length > 0) {
-          console.log(
-            '[OrdersList] First Order:',
-            JSON.stringify(res.data[0], null, 2),
-          );
-          console.log('[OrdersList] First Order Items:', res.data[0].items);
-        }
+        console.log('[OrdersList] First Order Items:', res.data[0].items);
       }
-      if (res.code === 0 && res.data) {
-        // 管理员API返回的是 { list, total } 结构，普通用户API返回的是数组
-        const orders = Array.isArray(res.data) ? res.data : res.data.list || [];
-        allOrders.value = orders;
-        updateStatusCounts();
-        filterOrders();
-      }
-    })
-    .catch((err: any) => {
-      console.error('Load orders error:', err);
-    })
-    .finally(() => {
-      uni.hideLoading();
+    }
+
+    if (res.code === 0 && res.data) {
+      // 管理员API返回的是 { list, total } 结构，普通用户API返回的是数组
+      const rawOrders = Array.isArray(res.data) ? res.data : res.data.list || [];
+      const foodOrders: FoodOrderRow[] = rawOrders.map((order: Order) => ({
+        ...order,
+        _orderType: 'food' as const,
+      }));
+      allOrders.value = mergeOrdersByCreatedAtDesc(foodOrders, supplementOrders);
+      updateStatusCounts();
+      filterOrders();
+    }
+  } catch (err) {
+    console.error('Load orders error:', err);
+  } finally {
+    uni.hideLoading();
+  }
+}
+
+/**
+ * 把「我的补剂订单」按页拿全。
+ *
+ * 这个接口是分页的（后端每页上限 100），而本页要在本地做筛选和数量统计，
+ * 少拿一页就会出现「筛选里没有、但订单确实存在」和排序断裂。
+ */
+async function fetchAllSupplementOrders(): Promise<SupplementOrderRow[]> {
+  const collected: SupplementOrderRow[] = [];
+  let page = 1;
+
+  while (page <= SUPPLEMENT_ORDER_MAX_PAGES) {
+    const res = await fetchSupplementOrders({
+      page,
+      pageSize: SUPPLEMENT_ORDER_PAGE_SIZE,
     });
+    if (res.code !== 0 || !res.data) break;
+
+    const items = res.data.items || [];
+    collected.push(
+      ...items.map((order) => ({ ...order, _orderType: 'supplement' as const })),
+    );
+
+    if (items.length === 0 || collected.length >= Number(res.data.total || 0)) {
+      break;
+    }
+    page += 1;
+  }
+
+  return collected;
+}
+
+/**
+ * 两类订单混排：按 createdAt 一起倒序，而不是「先鲜食后补剂」。
+ * 时间缺失或非法时按 0 处理，避免 NaN 把整段排序搞乱。
+ */
+function mergeOrdersByCreatedAtDesc(
+  foodOrders: FoodOrderRow[],
+  supplementOrders: SupplementOrderRow[],
+): UnifiedOrder[] {
+  return [...foodOrders, ...supplementOrders].sort(
+    (a, b) => toCreatedAtTime(b.createdAt) - toCreatedAtTime(a.createdAt),
+  );
+}
+
+function toCreatedAtTime(value?: string): number {
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
 }
 
 // 更新各状态订单数量
@@ -360,29 +538,48 @@ function filterOrders() {
   orders.value = getOrdersByTab(selectedStatus.value);
 }
 
-function getStatusesForTab(status: string): string[] | null {
-  const statusGroups: Record<string, string[]> = {
-    PENDING_PAYMENT: ['PENDING_PAYMENT'],
-    IN_PROGRESS: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'],
-    WAIT_RECEIVE: ['SHIPPED'],
-    RECEIVED: ['COMPLETED'],
-    AFTERSALE: ['AFTERSALE'],
-    CANCELLED: ['CANCELLED'],
-  };
+/**
+ * 筛选口径：鲜食这套映射原样保留（后端已经把多个内部状态归并好），
+ * 补剂订单的状态码和鲜食有交集但不完全一样（多了 PACKING / PACKED），
+ * 所以单独一套，避免两边以后各自改动时互相污染。
+ */
+const FOOD_STATUS_GROUPS: Record<string, string[]> = {
+  PENDING_PAYMENT: ['PENDING_PAYMENT'],
+  IN_PROGRESS: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'],
+  WAIT_RECEIVE: ['SHIPPED'],
+  RECEIVED: ['COMPLETED'],
+  AFTERSALE: ['AFTERSALE'],
+  CANCELLED: ['CANCELLED'],
+};
+
+const SUPPLEMENT_STATUS_GROUPS: Record<string, string[]> = {
+  PENDING_PAYMENT: ['PENDING_PAYMENT'],
+  IN_PROGRESS: ['PAID', 'PACKING', 'PACKED'],
+  WAIT_RECEIVE: ['SHIPPED'],
+  RECEIVED: ['COMPLETED'],
+  AFTERSALE: ['AFTERSALE'],
+  CANCELLED: ['CANCELLED'],
+};
+
+function getStatusesForTab(
+  status: string,
+  orderType: OrderType = 'food',
+): string[] | null {
+  const statusGroups =
+    orderType === 'supplement' ? SUPPLEMENT_STATUS_GROUPS : FOOD_STATUS_GROUPS;
   return statusGroups[status] || null;
 }
 
-function getOrdersByTab(status: string): Order[] {
+function getOrdersByTab(status: string): UnifiedOrder[] {
   if (status === 'ALL') {
     return allOrders.value;
   }
 
-  const statuses = getStatusesForTab(status);
-  if (!statuses) {
-    return allOrders.value.filter((order) => order.status === status);
-  }
-
-  return allOrders.value.filter((order) => statuses.includes(order.status));
+  return allOrders.value.filter((order) => {
+    const statuses = getStatusesForTab(status, order._orderType);
+    // 未知筛选值（例如 URL 里传进来的野状态码）退化为精确匹配当前状态
+    return statuses ? statuses.includes(order.status) : order.status === status;
+  });
 }
 
 // 选择状态
@@ -397,13 +594,22 @@ function viewOrder(orderId: string) {
   });
 }
 
+/**
+ * 补剂没有独立详情页，卡片上已经把订单号、状态、明细、物流、售后、金额展示全了。
+ * 所以点补剂卡片不再跳转——跳过去也只能落在一个「不指向这一单」的列表页上。
+ */
+function handleOrderTap(order: UnifiedOrder) {
+  if (order._orderType !== 'food') return;
+  viewOrder(order.id);
+}
+
 function goHome() {
   uni.switchTab({
     url: '/pages/home/index',
   });
 }
 
-function hasQuickActions(order: Order): boolean {
+function hasQuickActions(order: UnifiedOrder): boolean {
   return Boolean(order.id);
 }
 
@@ -446,7 +652,68 @@ async function payOrderFromList(orderId: string) {
   }
 }
 
-function viewLogistics(order: Order) {
+/**
+ * 补剂支付：流程与鲜食不同——支付通道不可用时由 runSupplementPayment
+ * 降级为「人工确认收款」，订单照样保留。
+ * 这里直接复用那个封装（以及补剂订单页的提示口径），不再另写一套支付。
+ */
+async function paySupplementFromList(order: SupplementOrderRow) {
+  if (payingSupplementId.value) return;
+
+  payingSupplementId.value = order.id;
+  try {
+    const outcome = await runSupplementPayment(order.id);
+
+    if (outcome === 'PAID') {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+      await loadOrders();
+      return;
+    }
+
+    if (outcome === 'CANCELLED') {
+      uni.showToast({ title: '已取消支付', icon: 'none' });
+      return;
+    }
+
+    if (outcome === 'MANUAL') {
+      uni.showModal({
+        title: '暂不能在线支付',
+        content: '我们会尽快与你联系确认收款，订单已为你保留。',
+        showCancel: false,
+      });
+      return;
+    }
+
+    uni.showToast({ title: '支付失败，请重试', icon: 'none' });
+  } finally {
+    payingSupplementId.value = '';
+  }
+}
+
+/** 补剂概要：「N 种 · 共 M 袋」，加量时再标出份数 */
+function formatSupplementSummary(order: SupplementOrderRow): string {
+  const parts = [
+    `${(order.items || []).length} 种`,
+    `共 ${order.bagCount || 0} 袋`,
+  ];
+
+  const portions = Number(order.portionMultiplier);
+  if (Number.isFinite(portions) && portions > 1) {
+    parts.push(`加量 ${Math.round(portions)} 份`);
+  }
+
+  return parts.join(' · ');
+}
+
+/** 补剂用量是「12.5 平勺」这类数值，整数不补小数位，与补剂订单页口径一致 */
+function formatSupplementAmount(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return Number.isInteger(value)
+    ? String(value)
+    : String(Math.round(value * 100) / 100);
+}
+
+function viewLogistics(order: FoodOrderRow) {
   if (!order.trackingNumber) {
     uni.showToast({
       title: '暂无物流信息',
@@ -472,7 +739,7 @@ function viewLogistics(order: Order) {
   });
 }
 
-async function confirmReceivedFromList(order: Order) {
+async function confirmReceivedFromList(order: FoodOrderRow) {
   if (receivingOrderId.value) return;
 
   uni.showModal({
@@ -517,7 +784,7 @@ async function confirmReceivedFromList(order: Order) {
  * 顾客会被带到一个默认选中"申请退款"的页面，提交时才被拒绝。
  * 现在按"当前状态下第一个真正允许的类型"进入。
  */
-function applyAftersale(order: Order) {
+function applyAftersale(order: FoodOrderRow) {
   const status = String(order.status || '');
   const completedAt = order.completedAt;
 
@@ -561,7 +828,7 @@ function getRepurchasePackageSpecG(item: Order['firstItem']): number {
   return firstPlanRow ? Math.round(Number(firstPlanRow.packageSpecG)) : 0;
 }
 
-function buildBuyAgainQueryPairs(order: Order, recipeId: string): string[] {
+function buildBuyAgainQueryPairs(order: FoodOrderRow, recipeId: string): string[] {
   const firstItem = order.firstItem;
   const queryPairs = [
     `recipeId=${encodeURIComponent(recipeId)}`,
@@ -586,7 +853,7 @@ function buildBuyAgainQueryPairs(order: Order, recipeId: string): string[] {
   return queryPairs;
 }
 
-async function buyAgain(order: Order) {
+async function buyAgain(order: FoodOrderRow) {
   const recipeId = order.firstItem?.recipeSnapshot?.id;
   if (!recipeId) {
     uni.showToast({
@@ -638,7 +905,7 @@ function formatAmount(amount?: number): string {
 }
 
 // 判断待付款订单是否已支付超时（与详情页逻辑一致）
-function isPaymentExpired(order: Order): boolean {
+function isPaymentExpired(order: FoodOrderRow): boolean {
   if (order.status !== 'PENDING_PAYMENT') return false;
   if (order.paymentAutoCloseEnabled !== true) return false;
   if (order.paymentRemainingSeconds != null) {
@@ -650,13 +917,20 @@ function isPaymentExpired(order: Order): boolean {
   return false;
 }
 
-function getStatusText(orderOrStatus: Order | string): string {
+function getStatusText(orderOrStatus: UnifiedOrder | string): string {
   const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
-  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
-    return '已退款（钱款原路退回）'
-  }
-  if (typeof orderOrStatus !== 'string' && isPaymentExpired(orderOrStatus)) {
-    return '已超时关闭'
+  if (typeof orderOrStatus !== 'string') {
+    // 补剂的 PACKING / PACKED 在鲜食状态表里不存在，若不单独处理会兜底成「处理中」，
+    // 顾客看不出订单卡在哪一步，所以走补剂自己的中文映射。
+    if (orderOrStatus._orderType === 'supplement') {
+      return SUPPLEMENT_ORDER_STATUS_LABELS[status] || getOrderStatusText(status)
+    }
+    if (isRefundedOrder(orderOrStatus)) {
+      return '已退款（钱款原路退回）'
+    }
+    if (isPaymentExpired(orderOrStatus)) {
+      return '已超时关闭'
+    }
   }
   // Phase 9: Simplified status text aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status text
@@ -675,13 +949,18 @@ function getStatusText(orderOrStatus: Order | string): string {
   return statusMap[status] || getOrderStatusText(status);
 }
 
-function getStatusColor(orderOrStatus: Order | string): string {
+function getStatusColor(orderOrStatus: UnifiedOrder | string): string {
   const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
-  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
-    return '#16a34a'
-  }
-  if (typeof orderOrStatus !== 'string' && isPaymentExpired(orderOrStatus)) {
-    return '#999'
+  if (typeof orderOrStatus !== 'string') {
+    if (orderOrStatus._orderType === 'supplement') {
+      return SUPPLEMENT_STATUS_COLORS[status] || '#999'
+    }
+    if (isRefundedOrder(orderOrStatus)) {
+      return '#16a34a'
+    }
+    if (isPaymentExpired(orderOrStatus)) {
+      return '#999'
+    }
   }
   // Phase 9: Simplified status colors aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status colors
@@ -700,7 +979,7 @@ function getStatusColor(orderOrStatus: Order | string): string {
   return colorMap[status] || '#999';
 }
 
-function isRefundedOrder(order: Order): boolean {
+function isRefundedOrder(order: FoodOrderRow): boolean {
   return order.status === 'CANCELLED' && order.refundStatus?.success === true
 }
 
@@ -715,7 +994,7 @@ function getCarrierName(code?: string): string {
   return carrierMap[code || ''] || code || '-';
 }
 
-function formatDogInfo(order: Order): string {
+function formatDogInfo(order: FoodOrderRow): string {
   if (!order.firstItem || !order.firstItem.dog) {
     return '';
   }
@@ -732,28 +1011,28 @@ function formatDogInfo(order: Order): string {
   return parts.join(' · ');
 }
 
-function getRecipeName(order: Order): string {
+function getRecipeName(order: FoodOrderRow): string {
   if (!order.firstItem || !order.firstItem.recipeSnapshot) {
     return '';
   }
   return order.firstItem.recipeSnapshot.name || '';
 }
 
-function getRecipeCoverImage(order: Order): string {
+function getRecipeCoverImage(order: FoodOrderRow): string {
   if (!order.firstItem || !order.firstItem.recipeSnapshot) {
     return '';
   }
   return order.firstItem.recipeSnapshot.coverImageUrl || '';
 }
 
-function getTotalMeals(order: Order): number {
+function getTotalMeals(order: FoodOrderRow): number {
   if (!order.firstItem) {
     return 0;
   }
   return order.firstItem.packageCount || 0;
 }
 
-function getMealWeight(order: Order): number {
+function getMealWeight(order: FoodOrderRow): number {
   if (!order.firstItem) {
     return 0;
   }
@@ -884,6 +1163,56 @@ function formatAddress(address?: { regionText?: string }): string {
 .order-time {
   font-size: 26rpx;
   color: #6b6653;
+}
+
+.order-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+/* 补剂类型标签：暖金底 + 深金字，与「我的」页的次级提示同一套色，不使用旧蓝色系 */
+.order-type-tag {
+  flex-shrink: 0;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  color: #8a6b33;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+/* 补剂明细行：名称占满剩余宽度，用量与金额右对齐（与补剂订单页同一排版逻辑） */
+.supplement-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 6rpx 0;
+}
+
+.supplement-item-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #26261f;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.supplement-item-amount {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.supplement-item-price {
+  flex-shrink: 0;
+  min-width: 120rpx;
+  font-size: 24rpx;
+  color: #b4553f;
+  text-align: right;
 }
 
 .order-status {

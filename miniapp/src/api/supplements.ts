@@ -118,6 +118,14 @@ export interface SupplementOrder {
   dogId: string | null
   dogName: string | null
   cycleDays: number | null
+  /**
+   * 本次购买几份（1 = 不加量）。
+   * 合并订单列表要标出「加量 N 份」，所以这里跟着后端返回一起声明；
+   * 老数据可能没有这个字段，读取时按 1 处理。
+   */
+  portionMultiplier?: number
+  /** 本次覆盖的总天数；服务端没算出来时为 null */
+  totalDays?: number | null
   remark: string | null
   paymentStatus: string | null
   paidAt: string | null

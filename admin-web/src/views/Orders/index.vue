@@ -1,344 +1,362 @@
 <template>
   <div class="orders-page">
-    <!-- 统计卡片区域 -->
-    <!-- Phase 9: Simplified statistics aligned with e-commerce standards -->
-    <el-row :gutter="20" class="stats-row">
-      <el-col :span="4">
-        <order-stat-card
-          label="我的订单"
-          :value="stats.total"
-          type="primary"
-          :icon="Document"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-      <el-col :span="4">
-        <order-stat-card
-          label="已付款"
-          :value="stats.paid"
-          type="success"
-          :icon="CircleCheck"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-      <el-col :span="4">
-        <order-stat-card
-          label="待付款"
-          :value="stats.pendingPayment"
-          type="warning"
-          :icon="Clock"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-      <el-col :span="4">
-        <order-stat-card
-          label="生产中"
-          :value="stats.inProduction"
-          type="warning"
-          :icon="Setting"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-      <el-col :span="4">
-        <order-stat-card
-          label="待收货"
-          :value="stats.shipped"
-          type="success"
-          :icon="Van"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-      <el-col :span="4">
-        <order-stat-card
-          label="已收货"
-          :value="stats.completed"
-          type="success"
-          :icon="CircleCheck"
-          @click="handleStatCardClick"
-        />
-      </el-col>
-    </el-row>
-
-    <!-- 订单列表 -->
-    <el-card class="table-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="title">订单列表</span>
-          <div class="header-actions">
-            <el-badge
-              v-if="wechatShippingPending.pendingCount > 0"
-              :value="wechatShippingPending.pendingCount > 99 ? '99+' : wechatShippingPending.pendingCount"
-            >
-              <el-button
-                type="warning"
-                :icon="RefreshRight"
-                :loading="wechatShippingRetrying"
-                @click="handleRetryPendingWechatShipping"
-              >
-                一键重试微信发货同步
-              </el-button>
-            </el-badge>
-            <el-button
-              v-else
-              type="success"
-              plain
-              :icon="CircleCheck"
-              :loading="wechatShippingLoading"
-              @click="loadWechatShippingPending"
-            >
-              微信发货同步正常
-            </el-button>
-            <el-button type="primary" :icon="Download" @click="handleExport">
-              导出Excel
-            </el-button>
-          </div>
-        </div>
-      </template>
-
-      <div class="order-scope-tabs">
-        <el-radio-group v-model="activeOrderScope" size="large" @change="handleOrderScopeChange">
-          <el-radio-button
-            v-for="item in orderScopeOptions"
-            :key="item.key"
-            :label="item.key"
-          >
-            <span>{{ item.label }}</span>
-            <span class="scope-count">{{ item.count }}</span>
-          </el-radio-button>
-        </el-radio-group>
-      </div>
-
-      <el-alert
-        v-if="wechatShippingPending.pendingCount > 0"
-        class="wechat-shipping-alert"
-        type="warning"
-        show-icon
-        :closable="false"
-      >
-        <template #title>
-          有 {{ wechatShippingPending.pendingCount }} 笔微信支付已发货订单需要同步或重试发货信息
-        </template>
-        <template #default>
-          系统发货时会自动上传；这里仅处理自动上传失败、历史订单未记录等异常情况。
-        </template>
-      </el-alert>
-
-      <!-- 筛选和搜索区域 -->
-      <el-form :inline="true" :model="filterForm" class="filter-form">
-        <el-form-item label="搜索">
-          <el-input
-            v-model="filterForm.keyword"
-            placeholder="订单号/客户/狗狗/地址"
-            clearable
-            style="width: 200px"
-            @clear="handleSearch"
-          >
-            <template #append>
-              <el-button :icon="Search" @click="handleSearch" />
-            </template>
-          </el-input>
-        </el-form-item>
-
-        <el-form-item label="状态">
-          <el-select
-            v-model="filterForm.status"
-            placeholder="全部状态"
-            clearable
-            multiple
-            collapse-tags
-            collapse-tags-tooltip
-            style="width: 200px"
-            @change="handleFilter"
-          >
-            <el-option
-              v-for="item in statusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
+    <!--
+      鲜食与补剂是两条独立的履约链路，操作差异大，所以用标签页分开而不是混在一张表里；
+      默认停在鲜食订单，保持原来的使用习惯不变。
+    -->
+    <el-tabs v-model="activeTab" class="order-type-tabs">
+      <el-tab-pane name="fresh">
+        <template #label><span class="order-type-tab-label">鲜食订单</span></template>
+        <!-- 统计卡片区域 -->
+        <!-- Phase 9: Simplified statistics aligned with e-commerce standards -->
+        <el-row :gutter="20" class="stats-row">
+          <el-col :span="4">
+            <order-stat-card
+              label="我的订单"
+              :value="stats.total"
+              type="primary"
+              :icon="Document"
+              @click="handleStatCardClick"
             />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="订单类型">
-          <el-select
-            v-model="filterForm.type"
-            placeholder="全部类型"
-            clearable
-            style="width: 150px"
-            @change="handleFilter"
-          >
-            <el-option label="鲜食制作" :value="OrderTypeEnum.FRESH_FOOD" />
-            <el-option label="定制服务" :value="OrderTypeEnum.CUSTOM_SERVICE" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="日期范围">
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            value-format="YYYY-MM-DD"
-            style="width: 240px"
-            @change="handleDateChange"
-          />
-        </el-form-item>
-
-        <el-form-item>
-          <el-button type="primary" @click="handleFilter">筛选</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
-      </el-form>
-
-      <!-- 订单表格 -->
-      <el-table
-        ref="tableRef"
-        v-loading="loading"
-        :data="orderList"
-        style="width: 100%"
-        stripe
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-
-        <el-table-column prop="id" label="订单号" width="150" fixed>
-          <template #default="{ row }">
-            <el-link type="primary" @click="handleViewDetail(row.id)">
-              {{ row.id }}
-            </el-link>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="customerName" label="客户" width="100" />
-
-        <el-table-column label="狗狗" width="100">
-          <template #default="{ row }">
-            {{ row.firstItem?.dog?.name || '-' }}
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row)">
-              {{ getStatusText(row) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="type" label="类型" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.type === OrderTypeEnum.FRESH_FOOD ? 'success' : 'warning'" size="small">
-              {{ row.type === OrderTypeEnum.FRESH_FOOD ? '鲜食' : '定制' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="amountTotal" label="总金额" width="100" align="right">
-          <template #default="{ row }">
-            ¥{{ Number(row.amountTotal).toFixed(2) }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="收货地址" width="180" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ row.address?.regionText }} {{ row.address?.detailAddress }}
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="createdAt" label="下单时间" width="160">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createdAt) }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="目标生产日期" width="120">
-          <template #default="{ row }">
-            {{ row.targetProductionDate ? formatDate(row.targetProductionDate) : '-' }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="250" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" @click="handleViewDetail(row.id)">
-              详情
-            </el-button>
-            <el-button
-              v-if="row.status === 'PENDING_PAYMENT'"
+          </el-col>
+          <el-col :span="4">
+            <order-stat-card
+              label="已付款"
+              :value="stats.paid"
               type="success"
-              size="small"
-              @click="handleConfirmPayment(row)"
-            >
-              确认收款
-            </el-button>
-            <el-button
-              v-if="canCancelOrder(row.status)"
-              type="danger"
-              size="small"
-              @click="handleCancel(row)"
-            >
-              取消
-            </el-button>
-            <el-button
-              v-if="canShipOrder(row.status)"
-              type="success"
-              size="small"
-              @click="handleShip(row)"
-            >
-              发货
-            </el-button>
-            <el-button
-              v-if="isWechatShippingPending(row.id)"
+              :icon="CircleCheck"
+              @click="handleStatCardClick"
+            />
+          </el-col>
+          <el-col :span="4">
+            <order-stat-card
+              label="待付款"
+              :value="stats.pendingPayment"
               type="warning"
-              size="small"
-              plain
-              :loading="wechatShippingRetrying"
-              @click="handleRetrySingleWechatShipping(row)"
-            >
-              重试同步
-            </el-button>
+              :icon="Clock"
+              @click="handleStatCardClick"
+            />
+          </el-col>
+          <el-col :span="4">
+            <order-stat-card
+              label="生产中"
+              :value="stats.inProduction"
+              type="warning"
+              :icon="Setting"
+              @click="handleStatCardClick"
+            />
+          </el-col>
+          <el-col :span="4">
+            <order-stat-card
+              label="待收货"
+              :value="stats.shipped"
+              type="success"
+              :icon="Van"
+              @click="handleStatCardClick"
+            />
+          </el-col>
+          <el-col :span="4">
+            <order-stat-card
+              label="已收货"
+              :value="stats.completed"
+              type="success"
+              :icon="CircleCheck"
+              @click="handleStatCardClick"
+            />
+          </el-col>
+        </el-row>
+
+        <!-- 订单列表 -->
+        <el-card class="table-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="title">订单列表</span>
+              <div class="header-actions">
+                <el-badge
+                  v-if="wechatShippingPending.pendingCount > 0"
+                  :value="wechatShippingPending.pendingCount > 99 ? '99+' : wechatShippingPending.pendingCount"
+                >
+                  <el-button
+                    type="warning"
+                    :icon="RefreshRight"
+                    :loading="wechatShippingRetrying"
+                    @click="handleRetryPendingWechatShipping"
+                  >
+                    一键重试微信发货同步
+                  </el-button>
+                </el-badge>
+                <el-button
+                  v-else
+                  type="success"
+                  plain
+                  :icon="CircleCheck"
+                  :loading="wechatShippingLoading"
+                  @click="loadWechatShippingPending"
+                >
+                  微信发货同步正常
+                </el-button>
+                <el-button type="primary" :icon="Download" @click="handleExport">
+                  导出Excel
+                </el-button>
+              </div>
+            </div>
           </template>
-        </el-table-column>
-      </el-table>
 
-      <!-- 分页 -->
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        style="margin-top: 20px; justify-content: flex-end"
-        @size-change="handlePageSizeChange"
-        @current-change="handlePageChange"
-      />
-    </el-card>
+          <div class="order-scope-tabs">
+            <el-radio-group v-model="activeOrderScope" size="large" @change="handleOrderScopeChange">
+              <el-radio-button
+                v-for="item in orderScopeOptions"
+                :key="item.key"
+                :label="item.key"
+              >
+                <span>{{ item.label }}</span>
+                <span class="scope-count">{{ item.count }}</span>
+              </el-radio-button>
+            </el-radio-group>
+          </div>
 
-    <!-- 取消订单对话框 -->
-    <cancel-dialog
-      v-model="cancelDialogVisible"
-      :order-id="currentOrder?.id"
-      @submit="handleCancelSubmit"
-    />
+          <el-alert
+            v-if="wechatShippingPending.pendingCount > 0"
+            class="wechat-shipping-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+          >
+            <template #title>
+              有 {{ wechatShippingPending.pendingCount }} 笔微信支付已发货订单需要同步或重试发货信息
+            </template>
+            <template #default>
+              系统发货时会自动上传；这里仅处理自动上传失败、历史订单未记录等异常情况。
+            </template>
+          </el-alert>
 
-    <!-- 发货对话框 -->
-    <shipping-dialog
-      v-model="shippingDialogVisible"
-      :order-id="currentOrder?.id"
-      @submit="handleShippingSubmit"
-    />
+          <!-- 筛选和搜索区域 -->
+          <el-form :inline="true" :model="filterForm" class="filter-form">
+            <el-form-item label="搜索">
+              <el-input
+                v-model="filterForm.keyword"
+                placeholder="订单号/客户/狗狗/地址"
+                clearable
+                style="width: 200px"
+                @clear="handleSearch"
+              >
+                <template #append>
+                  <el-button :icon="Search" @click="handleSearch" />
+                </template>
+              </el-input>
+            </el-form-item>
 
-    <!-- 确认收款对话框 -->
-    <confirm-payment-dialog
-      v-model="confirmPaymentDialogVisible"
-      :order="currentOrder"
-      @submit="handleConfirmPaymentSubmit"
-    />
+            <el-form-item label="状态">
+              <el-select
+                v-model="filterForm.status"
+                placeholder="全部状态"
+                clearable
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                style="width: 200px"
+                @change="handleFilter"
+              >
+                <el-option
+                  v-for="item in statusOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="订单类型">
+              <el-select
+                v-model="filterForm.type"
+                placeholder="全部类型"
+                clearable
+                style="width: 150px"
+                @change="handleFilter"
+              >
+                <el-option label="鲜食制作" :value="OrderTypeEnum.FRESH_FOOD" />
+                <el-option label="定制服务" :value="OrderTypeEnum.CUSTOM_SERVICE" />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="日期范围">
+              <el-date-picker
+                v-model="dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                style="width: 240px"
+                @change="handleDateChange"
+              />
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" @click="handleFilter">筛选</el-button>
+              <el-button @click="handleReset">重置</el-button>
+            </el-form-item>
+          </el-form>
+
+          <!-- 订单表格 -->
+          <el-table
+            ref="tableRef"
+            v-loading="loading"
+            :data="orderList"
+            style="width: 100%"
+            stripe
+            @selection-change="handleSelectionChange"
+          >
+            <el-table-column type="selection" width="55" />
+
+            <el-table-column prop="id" label="订单号" width="150" fixed>
+              <template #default="{ row }">
+                <el-link type="primary" @click="handleViewDetail(row.id)">
+                  {{ row.id }}
+                </el-link>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="customerName" label="客户" width="100" />
+
+            <el-table-column label="狗狗" width="100">
+              <template #default="{ row }">
+                {{ row.firstItem?.dog?.name || '-' }}
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row)">
+                  {{ getStatusText(row) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="type" label="类型" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.type === OrderTypeEnum.FRESH_FOOD ? 'success' : 'warning'" size="small">
+                  {{ row.type === OrderTypeEnum.FRESH_FOOD ? '鲜食' : '定制' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="amountTotal" label="总金额" width="100" align="right">
+              <template #default="{ row }">
+                ¥{{ Number(row.amountTotal).toFixed(2) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column label="收货地址" width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.address?.regionText }} {{ row.address?.detailAddress }}
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="createdAt" label="下单时间" width="160">
+              <template #default="{ row }">
+                {{ formatDateTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+
+            <el-table-column label="目标生产日期" width="120">
+              <template #default="{ row }">
+                {{ row.targetProductionDate ? formatDate(row.targetProductionDate) : '-' }}
+              </template>
+            </el-table-column>
+
+            <el-table-column label="操作" width="250" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" @click="handleViewDetail(row.id)">
+                  详情
+                </el-button>
+                <el-button
+                  v-if="row.status === 'PENDING_PAYMENT'"
+                  type="success"
+                  size="small"
+                  @click="handleConfirmPayment(row)"
+                >
+                  确认收款
+                </el-button>
+                <el-button
+                  v-if="canCancelOrder(row.status)"
+                  type="danger"
+                  size="small"
+                  @click="handleCancel(row)"
+                >
+                  取消
+                </el-button>
+                <el-button
+                  v-if="canShipOrder(row.status)"
+                  type="success"
+                  size="small"
+                  @click="handleShip(row)"
+                >
+                  发货
+                </el-button>
+                <el-button
+                  v-if="isWechatShippingPending(row.id)"
+                  type="warning"
+                  size="small"
+                  plain
+                  :loading="wechatShippingRetrying"
+                  @click="handleRetrySingleWechatShipping(row)"
+                >
+                  重试同步
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 分页 -->
+          <el-pagination
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="pagination.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            style="margin-top: 20px; justify-content: flex-end"
+            @size-change="handlePageSizeChange"
+            @current-change="handlePageChange"
+          />
+        </el-card>
+
+        <!-- 取消订单对话框 -->
+        <cancel-dialog
+          v-model="cancelDialogVisible"
+          :order-id="currentOrder?.id"
+          @submit="handleCancelSubmit"
+        />
+
+        <!-- 发货对话框 -->
+        <shipping-dialog
+          v-model="shippingDialogVisible"
+          :order-id="currentOrder?.id"
+          @submit="handleShippingSubmit"
+        />
+
+        <!-- 确认收款对话框 -->
+        <confirm-payment-dialog
+          v-model="confirmPaymentDialogVisible"
+          :order="currentOrder"
+          @submit="handleConfirmPaymentSubmit"
+        />
+      </el-tab-pane>
+
+      <!--
+        补剂订单直接复用补剂商城的现成页面组件，避免两处各维护一套补剂订单逻辑；
+        lazy 让它在第一次切到该标签时才加载，不拖慢鲜食订单的打开速度。
+      -->
+      <el-tab-pane name="supplement" lazy>
+        <template #label><span class="order-type-tab-label">补剂订单</span></template>
+        <supplement-orders-panel embedded />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -356,6 +374,7 @@ import OrderStatCard from './components/OrderStatCard.vue'
 import CancelDialog from './components/CancelDialog.vue'
 import ShippingDialog from './components/ShippingDialog.vue'
 import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
+import SupplementOrdersPanel from '@/views/SupplementShop/components/SupplementOrdersPanel.vue'
 import { orderApi } from '@/api/orders'
 import { OrderStatus, OrderType } from '@/types/order'
 import type {
@@ -371,6 +390,38 @@ const OrderTypeEnum = OrderType
 
 const router = useRouter()
 const route = useRoute()
+
+// 顶层标签页：鲜食订单（默认，保持原行为）/ 补剂订单（复用补剂商城组件）
+type OrderBusinessTab = 'fresh' | 'supplement'
+const SUPPLEMENT_TAB: OrderBusinessTab = 'supplement'
+
+const normalizeQueryValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return String(value[0] || '')
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+// 标签状态存进 URL：补剂订单里的「打印标签」是独立路由，返回时组件会重建，
+// 只靠内存状态会掉回鲜食标签，用户会以为自己点错了地方。
+const activeTab = ref<OrderBusinessTab>(
+  normalizeQueryValue(route.query.tab) === SUPPLEMENT_TAB ? SUPPLEMENT_TAB : 'fresh'
+)
+
+watch(activeTab, (tab) => {
+  const nextTabValue = tab === SUPPLEMENT_TAB ? SUPPLEMENT_TAB : ''
+  if (normalizeQueryValue(route.query.tab) === nextTabValue) return
+
+  // 用 replace 而不是 push：切标签不该在浏览器历史里堆出一串记录，
+  // 否则用户在补剂标签里连点几次后会退不出去。
+  const query = { ...route.query }
+  if (nextTabValue) {
+    query.tab = nextTabValue
+  } else {
+    delete query.tab
+  }
+  router.replace({ path: route.path, query })
+})
 
 // 数据
 const loading = ref(false)
@@ -502,13 +553,6 @@ const handleOrderScopeChange = (key: OrderScopeKey) => {
   filterForm.status = option ? [...option.statuses] : []
   pagination.page = 1
   loadOrders()
-}
-
-const normalizeQueryValue = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return String(value[0] || '')
-  }
-  return typeof value === 'string' ? value : ''
 }
 
 const applyRouteFilters = () => {
@@ -878,6 +922,13 @@ onMounted(() => {
 <style scoped>
 .orders-page {
   padding: 0;
+}
+
+/* 补剂标签里还套了一层状态标签，把外层压得更醒目一些，避免两层标签看起来一样重。
+   类名挂在标签文字上而不是用 :deep 命中所有 .el-tabs__item，否则里层那套也会被改粗 */
+.order-type-tab-label {
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .order-scope-tabs {

@@ -345,6 +345,26 @@
       ]
     },
     {
+      "root": "pages/staff-supplement-orders",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "补剂订单",
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "补剂订单详情",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/staff-customer-service",
       "pages": [
         {

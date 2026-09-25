@@ -9,6 +9,11 @@ jest.mock('@prisma/client', () => ({
     PENDING_REVIEW: 'PENDING_REVIEW',
     REQUIRES_RESUBMIT: 'REQUIRES_RESUBMIT',
   },
+  SupplementOrderStatus: {
+    PENDING_PAYMENT: 'PENDING_PAYMENT',
+    PAID: 'PAID',
+    PACKED: 'PACKED',
+  },
 }));
 
 import { StaffWorkbenchController } from '../../../src/interfaces/controllers/staff-workbench.controller';
@@ -28,6 +33,7 @@ describe('StaffWorkbenchController summary', () => {
       packagingUnit: { count: jest.fn().mockResolvedValue(5) },
       reimbursement: { count: jest.fn().mockResolvedValue(1) },
       inventoryStocktake: { count: jest.fn().mockResolvedValue(6) },
+      supplementOrder: { count: jest.fn().mockResolvedValue(4) },
     };
 
     return new StaffWorkbenchController(prisma as any);
@@ -40,17 +46,18 @@ describe('StaffWorkbenchController summary', () => {
       purchasing: 3,
       production: 5,
       orders: 7,
+      supplementOrders: 4,
       reimbursement: 1,
       inventory: 6,
     });
-    expect(response.data.pendingTasks).toBe(22);
+    expect(response.data.pendingTasks).toBe(26);
   });
 
   it('does not expose refund work to staff', async () => {
     const response = await createController().getSummary('staff-1', 'STAFF');
 
     expect(response.data.badges.orders).toBe(5);
-    expect(response.data.pendingTasks).toBe(20);
+    expect(response.data.pendingTasks).toBe(24);
     expect(response.data.badges).not.toHaveProperty('refunds');
   });
 });

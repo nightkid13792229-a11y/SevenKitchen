@@ -8,6 +8,7 @@ const iconNames = [
   'purchasing',
   'production',
   'orders',
+  'supplement-orders',
   'customers',
   'inventory',
   'recipes',
@@ -37,23 +38,54 @@ describe('staff workbench compact icon grid', () => {
     expect(source).not.toContain('shippingCount')
   })
 
-  it('uses the eight approved icon modules in the required order', () => {
+  it('uses the nine approved icon modules in the required order', () => {
     const moduleConfig = source.match(/const workbenchModules[\s\S]*?\n\]\)/)?.[0] || ''
 
+    // 2026-09-25：补剂订单独立成一个入口，紧跟在「订单管理」之后。
+    // 两者的作业方式差别太大（鲜食是生产+冷链，补剂是分装+贴标），
+    // 混在一个列表里现场容易看串，所以是并列而不是合并。
     expect([...moduleConfig.matchAll(/title: '([^']+)'/g)].map((match) => match[1])).toEqual([
       '采购管理',
       '生产管理',
       '订单管理',
+      '补剂订单',
       '客户与狗狗',
       '库存管理',
       '食谱管理',
       '报销管理',
       '食谱设计器',
     ])
-    for (const badgeKey of ['purchasing', 'production', 'orders', 'inventory', 'reimbursement']) {
+    for (const badgeKey of [
+      'purchasing',
+      'production',
+      'orders',
+      'supplementOrders',
+      'inventory',
+      'reimbursement',
+    ]) {
       expect(moduleConfig).toContain(`badgeKey: '${badgeKey}'`)
     }
     expect(source).toContain('badgeCount(module.badgeKey)')
+  })
+
+  it('补剂订单入口指向已注册的页面，且角标键与后端返回一致', () => {
+    const pagesConfig = JSON.parse(
+      readFileSync(resolve(__dirname, '../pages.json'), 'utf8'),
+    )
+
+    expect(source).toContain("url: '/pages/staff-supplement-orders/index'")
+    // 角标来自 /staff/workbench/summary 的 badges 映射，键名必须对得上，
+    // 对不上就是"永远显示 0"这种静默失效
+    expect(source).toContain("badgeKey: 'supplementOrders'")
+
+    // 分包在 pages.json 里是 root + path 分开写的，解析出来断言，别整串匹配
+    const subPackage = pagesConfig.subPackages.find(
+      (item: { root: string }) => item.root === 'pages/staff-supplement-orders',
+    )
+    expect(subPackage).toBeTruthy()
+    expect(subPackage.pages.map((page: { path: string }) => page.path)).toEqual(
+      expect.arrayContaining(['index', 'detail']),
+    )
   })
 
   it('uses bundled image assets instead of the retired header and module UI', () => {

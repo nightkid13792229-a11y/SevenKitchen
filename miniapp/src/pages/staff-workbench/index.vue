@@ -39,6 +39,7 @@ type WorkbenchBadgeKey =
   | 'purchasing'
   | 'production'
   | 'orders'
+  | 'supplementOrders'
   | 'reimbursement'
   | 'inventory'
 type WorkbenchBadges = Record<WorkbenchBadgeKey, number>
@@ -172,6 +173,16 @@ function goToRecipeDesigner() {
   uni.navigateTo({ url: '/pages/recipe-designer/list' })
 }
 
+/**
+ * 补剂订单与鲜食订单分开成两个入口。
+ *
+ * 两者的作业方式差别太大：鲜食是「生产 → 烹饪 → 冷链发货」，补剂是
+ * 「确认收款 → 分装称重 → 贴标签 → 发货」。混在一个列表里，现场很容易看串。
+ */
+function goToSupplementOrders() {
+  uni.navigateTo({ url: '/pages/staff-supplement-orders/index' })
+}
+
 const workbenchModules = computed<WorkbenchModule[]>(() => [
   {
     key: 'purchasing',
@@ -193,6 +204,13 @@ const workbenchModules = computed<WorkbenchModule[]>(() => [
     icon: '/static/ui-icons/orders.png',
     badgeKey: 'orders',
     onTap: viewTodayOrders,
+  },
+  {
+    key: 'supplementOrders',
+    title: '补剂订单',
+    icon: '/static/ui-icons/supplement-orders.png',
+    badgeKey: 'supplementOrders',
+    onTap: goToSupplementOrders,
   },
   {
     key: 'customers',

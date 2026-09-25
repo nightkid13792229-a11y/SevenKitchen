@@ -7,6 +7,7 @@ import {
   PackagingUnitStatus,
   PurchaseListStatus,
   ReimbursementStatus,
+  SupplementOrderStatus,
   type Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -23,6 +24,8 @@ interface StaffWorkbenchSummary {
     purchasing: number;
     production: number;
     orders: number;
+    /** 补剂订单待处理：待确认收款 / 待分装 / 待发货 */
+    supplementOrders: number;
     reimbursement: number;
     inventory: number;
   };
@@ -64,6 +67,7 @@ export class StaffWorkbenchController {
       refundPending,
       reimbursementPending,
       inventoryPending,
+      supplementPending,
     ] = await Promise.all([
       this.prisma.order.count({
         where: {
@@ -101,6 +105,19 @@ export class StaffWorkbenchController {
       this.prisma.inventoryStocktake.count({
         where: { status: InventoryStocktakeStatus.DRAFT },
       }),
+      // 补剂订单待处理：待确认收款 → 待分装 → 待发货，都是需要人去动的状态。
+      // 分装中（PACKING）不算，那是在办、没必要反复提醒。
+      this.prisma.supplementOrder.count({
+        where: {
+          status: {
+            in: [
+              SupplementOrderStatus.PENDING_PAYMENT,
+              SupplementOrderStatus.PAID,
+              SupplementOrderStatus.PACKED,
+            ],
+          },
+        },
+      }),
     ]);
 
     const ordersPending =
@@ -109,6 +126,7 @@ export class StaffWorkbenchController {
       purchasing: purchasePending,
       production: productionPending,
       orders: ordersPending,
+      supplementOrders: supplementPending,
       reimbursement: reimbursementPending,
       inventory: inventoryPending,
     };

@@ -27,10 +27,15 @@
     />
 
     <div v-loading="loading" class="label-sheet">
-      <div v-for="label in data?.labels || []" :key="label.itemId" class="label-card">
+      <div v-for="label in data?.labels || []" :key="label.labelId" class="label-card">
         <div class="label-brand">{{ data?.brandName }}</div>
         <div class="label-name">{{ label.productName }}</div>
-        <div class="label-amount">{{ label.amountText }}</div>
+        <div class="label-amount">
+          {{ label.amountText }}<!--
+            -- 加量后同一补剂会有多袋，标出第几袋，分装时好核对有没有漏贴
+          --><span v-if="label.bagTotal > 1" class="label-bag">
+            {{ label.bagIndex }}/{{ label.bagTotal }}</span>
+        </div>
         <div class="label-divider"></div>
         <div class="label-row">
           <span class="label-key">分装日期</span>
@@ -190,6 +195,13 @@ onMounted(load);
   font-weight: 700;
   line-height: 1.1;
   margin-top: 0.3mm;
+}
+
+/* 加量后标出第几袋 / 共几袋，字号收小以免抢走用量的视觉重心 */
+.label-bag {
+  margin-left: 1mm;
+  font-size: 9pt;
+  font-weight: 400;
 }
 
 .label-divider {

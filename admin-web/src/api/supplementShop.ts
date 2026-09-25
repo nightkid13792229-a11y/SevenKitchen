@@ -333,9 +333,15 @@ export const SUPPLEMENT_ORDER_STATUS_TYPES: Record<
 };
 
 export interface SupplementLabel {
+  /** 标签唯一标识：同一个补剂有多袋时各不相同，列表 key 用它 */
+  labelId: string;
   itemId: string;
   productName: string;
   amountText: string;
+  /** 该补剂的第几袋（从 1 开始） */
+  bagIndex: number;
+  /** 该补剂一共几袋；加量后 > 1，此时每袋都要贴一张 */
+  bagTotal: number;
   packedDate: string;
   expiryDate: string;
   batchNo: string | null;

@@ -172,9 +172,15 @@ export interface SupplementOrderView {
 }
 
 export interface SupplementLabel {
+  /** 标签唯一标识：同一个补剂有多袋时各不相同，列表 key 用它 */
+  labelId: string;
   itemId: string;
   productName: string;
   amountText: string;
+  /** 这是该补剂的第几袋（从 1 开始） */
+  bagIndex: number;
+  /** 该补剂一共几袋。加量后 > 1，此时每袋都要贴一张标签 */
+  bagTotal: number;
   packedDate: string;
   expiryDate: string;
   batchNo: string | null;
@@ -730,22 +736,38 @@ export class SupplementOrderService {
       orderNo: order.orderNo,
       brandName: config.labelBrandName,
       receiverName: this.readReceiverName(order.shippingAddressSnapshot),
-      labels: order.items.map((item) => ({
-        itemId: item.id,
-        productName: item.name,
-        amountText: `${formatAmount(item.packedAmount)}${item.unit}`,
-        packedDate: this.toDateText(item.packedAt),
-        expiryDate: this.toDateText(item.packedExpiryDate),
-        batchNo: item.batchNo,
-        storageCondition: item.storageCondition || DEFAULT_STORAGE_CONDITION,
-        sourceProduct: [item.brand, item.productModel]
-          .filter(Boolean)
-          .join(' · '),
-        sourceExpiryDate: this.toDateText(item.sourceExpiryDate),
-        disclaimer: config.labelIncludeDesiccantNotice
-          ? `${LABEL_DISCLAIMER}；${LABEL_DESICCANT_NOTICE}`
-          : LABEL_DISCLAIMER,
-      })),
+      // 加量的语义是「同一个补剂多做几袋**同样规格**的小袋」，所以一个补剂
+      // 对应 bags 袋、需要 bags 张标签（内容相同，只差第几袋的序号）。
+      // 展开放在这里做，免得每个调用方各自实现一遍、然后有人漏掉 —— 之前
+      // 就是每个补剂只出一条记录，买 3 份的订单会有 2 袋没标签可贴。
+      labels: order.items.flatMap((item) => {
+        const bagTotal = Math.max(1, item.bags ?? 1);
+        const shared = {
+          itemId: item.id,
+          productName: item.name,
+          // packedAmount 是**每袋**的量（加量乘的是成本，不是量），
+          // 所以同一补剂的每一袋标签写同一个数。
+          amountText: `${formatAmount(item.packedAmount)}${item.unit}`,
+          packedDate: this.toDateText(item.packedAt),
+          expiryDate: this.toDateText(item.packedExpiryDate),
+          batchNo: item.batchNo,
+          storageCondition: item.storageCondition || DEFAULT_STORAGE_CONDITION,
+          sourceProduct: [item.brand, item.productModel]
+            .filter(Boolean)
+            .join(' · '),
+          sourceExpiryDate: this.toDateText(item.sourceExpiryDate),
+          disclaimer: config.labelIncludeDesiccantNotice
+            ? `${LABEL_DISCLAIMER}；${LABEL_DESICCANT_NOTICE}`
+            : LABEL_DISCLAIMER,
+        };
+
+        return Array.from({ length: bagTotal }, (_, index) => ({
+          ...shared,
+          labelId: `${item.id}#${index + 1}`,
+          bagIndex: index + 1,
+          bagTotal,
+        }));
+      }),
     };
   }
 

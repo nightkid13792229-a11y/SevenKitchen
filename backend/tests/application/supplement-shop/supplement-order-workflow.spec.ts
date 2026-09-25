@@ -401,7 +401,7 @@ describe('补剂订单 · 分装发货售后', () => {
       );
     });
 
-    it('分装后每个补剂一张标签，含效期、批号与储存条件', async () => {
+    it('分装后每个补剂出标签，含效期、批号与储存条件', async () => {
       store.status = 'PACKED';
       const packedAt = new Date('2026-09-18T02:00:00Z');
       store.items[0].packedAt = packedAt;
@@ -427,6 +427,39 @@ describe('补剂订单 · 分装发货售后', () => {
       expect(kelp.sourceProduct).toContain('NOW FOODS');
       expect(kelp.disclaimer).toContain('非直接食用');
       expect(kelp.disclaimer).toContain('干燥剂');
+    });
+
+    it('加量后按袋展开：买 3 份就出 3 张，并带「第几袋 / 共几袋」', async () => {
+      // 「加量」= 同一个补剂多做几袋**同样规格**的小袋，每袋都要贴一张标签。
+      // 之前每个补剂只出一条记录，买 3 份的订单会有 2 袋没标签可贴 ——
+      // 分装现场会直接卡住。
+      store.status = 'PACKED';
+      const packedAt = new Date('2026-09-18T02:00:00Z');
+      store.items[0].packedAt = packedAt;
+      store.items[0].packedExpiryDate = new Date('2027-03-18T00:00:00Z');
+      store.items[0].bags = 3;
+      store.items[1].packedAt = packedAt;
+      store.items[1].packedExpiryDate = new Date('2027-06-18T00:00:00Z');
+      store.items[1].bags = 1;
+
+      const result = await service.getOrderLabels('order-1');
+
+      // 3 袋 + 1 袋
+      expect(result.labels).toHaveLength(4);
+      // 列表 key 用它，必须唯一
+      expect(new Set(result.labels.map((l) => l.labelId)).size).toBe(4);
+
+      const kelp = result.labels.filter((l) => l.productName === '海藻粉');
+      expect(kelp.map((l) => l.bagIndex)).toEqual([1, 2, 3]);
+      expect(kelp.every((l) => l.bagTotal === 3)).toBe(true);
+      // 每袋用量是同一个数：加量乘的是成本，不是量，袋子规格不变
+      expect(new Set(kelp.map((l) => l.amountText)).size).toBe(1);
+      expect(kelp[0].amountText).toBe('23平勺');
+
+      const choline = result.labels.filter((l) => l.productName === '胆碱片');
+      expect(choline).toHaveLength(1);
+      expect(choline[0].bagIndex).toBe(1);
+      expect(choline[0].bagTotal).toBe(1);
     });
 
     it('订单行没存储存条件时用默认值兜底', async () => {

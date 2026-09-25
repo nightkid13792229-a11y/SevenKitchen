@@ -139,7 +139,10 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, ref } from 'vue'
 import { onLoad, onReady, onUnload } from '@dcloudio/uni-app'
-import jcPrinter from '../../utils/jcing-printer'
+// 用分包内的本地副本，不用主包那份：精臣 SDK 有 180KB+，
+// 它是员工打标签才用得到的能力，不该让每个顾客在首次打开时下载。
+// 鲜食那边（staff-production）也是同样的做法。
+import jcPrinter from './utils/jcing-printer'
 import {
   staffSupplementOrderApi,
   type StaffSupplementLabelImage,

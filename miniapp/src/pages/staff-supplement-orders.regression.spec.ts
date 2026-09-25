@@ -150,15 +150,24 @@ describe('工作台补剂订单 · 标签打印页', () => {
   })
 
   it('复用鲜食打印页那套能力：隐藏 canvas + 组件代理 + jcPrinter', () => {
-    expect(labelsSource).toContain("import jcPrinter from '../../utils/jcing-printer'")
+    // 用**分包内的本地副本**，不是主包那份：精臣 SDK 有 180KB+，
+    // 是员工打标签才用得到的能力，不该让每个顾客首次打开小程序就下载。
+    // （鲜食那边 staff-production 也是同样的做法。）
+    expect(labelsSource).toContain("import jcPrinter from './utils/jcing-printer'")
+    expect(labelsSource).not.toContain("from '../../utils/jcing-printer'")
+    expect(
+      existsSync(resolve(__dirname, 'staff-supplement-orders/utils/jcing-printer.ts')),
+    ).toBe(true)
     expect(labelsSource).toContain('canvas-id="labelCanvas"')
     expect(labelsSource).toContain('getCurrentInstance()')
     expect(labelsSource).toContain('componentProxy')
     expect(labelsSource).toContain('onReady(')
     expect(labelsSource).toContain('jcPrinter.autoConnect()')
     expect(labelsSource).toContain('connectPrinter')
-    // 鲜食那套只读参考，不能反向依赖过去
-    expect(labelsSource).not.toContain('staff-production')
+    // 鲜食那套只读参考，不能反向依赖过去。
+    // 只查 import：注释里提到"staff-production"是说明性文字，不该被判违规
+    // （本会话已经被这种注释污染误伤过好几次了）。
+    expect(labelsSource).not.toMatch(/from\s+['"][^'"]*staff-production/)
   })
 
   it('一张一张打：份数固定 1，打印中带「第几张/共几张」进度', () => {

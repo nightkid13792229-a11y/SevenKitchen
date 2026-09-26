@@ -1408,6 +1408,8 @@ export class AdminController {
             id: order.id,
             status: order.status,
             aftersaleType: order.aftersaleType ?? null,
+            // 免费补发：后台列表要能一眼认出"这是补寄单"，别当成又卖了一单
+            reshipFromOrderId: order.reshipFromOrderId ?? null,
             type: order.type,
             totalAmount: order.totalAmount ?? order.amountTotal,
             amountTotal: order.totalAmount ?? order.amountTotal,

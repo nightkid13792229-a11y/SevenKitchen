@@ -267,6 +267,8 @@ export interface OrderListItem extends Order {
   addressDetail?: string
   addressReceiver?: string
   addressPhone?: string
+  /** 本单是哪张原单的免费补发单；普通订单为 null */
+  reshipFromOrderId?: string | null
 }
 
 /**

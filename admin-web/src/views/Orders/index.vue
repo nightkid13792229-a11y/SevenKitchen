@@ -239,6 +239,15 @@
                 <el-tag :type="orderTypeTagType(row.type)" size="small">
                   {{ orderTypeLabel(row.type, true) }}
                 </el-tag>
+                <!-- 免费补发单：0 元补寄，别被当成"又卖了一单" -->
+                <el-tag
+                  v-if="row.reshipFromOrderId"
+                  type="warning"
+                  size="small"
+                  class="reship-tag"
+                >
+                  补发
+                </el-tag>
               </template>
             </el-table-column>
 
@@ -999,6 +1008,11 @@ onMounted(() => {
 
 /* 补剂标签里还套了一层状态标签，把外层压得更醒目一些，避免两层标签看起来一样重。
    类名挂在标签文字上而不是用 :deep 命中所有 .el-tabs__item，否则里层那套也会被改粗 */
+/* 补发标记：紧跟在类型标签后面，颜色区分开，避免看成同一个标签 */
+.reship-tag {
+  margin-left: 4px;
+}
+
 .order-type-tab-label {
   font-size: 15px;
   font-weight: 600;

@@ -48,6 +48,8 @@ async function main() {
 
   const stamp = Date.now();
   let packId = '';
+  /** 本次验证扣减过的锅次：库存流水不随批次级联删除，必须单独清 */
+  const reservedUnitIds: string[] = [];
   let batchId = '';
   let purchaseListId = '';
   const originalPackEnabled = (await packConfig.getConfig()).enabled;
@@ -167,6 +169,7 @@ async function main() {
     });
 
     const second = units[1];
+    reservedUnitIds.push(target.id, second.id);
     await staffProduction.startProductionTask(second.id);
     await staffProduction.completeProductionTask(second.id, {
       resultStatus: 'NORMAL',
@@ -243,6 +246,16 @@ async function main() {
       );
     }
   } finally {
+    // 库存流水不随生产批次级联删除（它挂在原料上），必须显式清掉 ——
+    // 否则验证会**永久扣掉**这些原料的库存，属于污染真实数据
+    if (reservedUnitIds.length > 0) {
+      const removed = await prisma.inventoryLedgerEntry
+        .deleteMany({ where: { sourceId: { in: reservedUnitIds } } })
+        .catch(() => ({ count: 0 }));
+      if (removed.count > 0) {
+        console.log(`已回滚验证产生的 ${removed.count} 条库存扣减流水`);
+      }
+    }
     if (packId) {
       await prisma.tastingPack.delete({ where: { id: packId } }).catch(() => {});
     }

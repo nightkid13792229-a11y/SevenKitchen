@@ -89,6 +89,13 @@ export class Order {
      * 与 remakeOrder（原单反向指向重做单）构成一对自关联。
      */
     public remakeFromOrderId: string | null = null,
+    /**
+     * 本单是"某张现货订单的免费补发"时，指向原单 id；正常订单为 null。
+     *
+     * 与 remakeFromOrderId 的区别：重做单要走采购→排产→生产，
+     * 补发单是现货，直接从成品库存取货，只需要一张 0 元订单承载发货流程。
+     */
+    public reshipFromOrderId: string | null = null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -143,6 +150,8 @@ export class Order {
       data.adminRemark ?? null,
       data.shippingAddressSnapshot ?? null,
       data.orderNo ?? null,
+      data.remakeFromOrderId ?? null,
+      data.reshipFromOrderId ?? null,
     );
   }
 
@@ -380,6 +389,32 @@ export class Order {
     }
 
     this.completedAt = new Date();
+    this.transitionTo(OrderStatus.COMPLETED);
+  }
+
+  /**
+   * 售后派生单（重做单 / 补发单）送达后，把原单结案。
+   *
+   * 为什么不能复用 markAsCompleted：原单在售后期间不会再走
+   * "SHIPPED → 收货"这条链路 —— 它的履约闭环已经由派生单承载
+   * （重做单重新做一份、补发单从现货再寄一份），
+   * 所以这里必须允许 AFTERSALE → COMPLETED 直接收口。
+   * 否则原单会永远停在"售后中"，顾客的订单列表里一直挂着一张处理不完的单。
+   *
+   * 幂等：已经 COMPLETED 时直接返回，重复调用不会出错。
+   */
+  markAftersaleSettled(): void {
+    if (this.status === OrderStatus.COMPLETED) return;
+    if (this.status !== OrderStatus.AFTERSALE) {
+      throw new InvalidStateTransitionError(
+        `Cannot settle aftersale order from status: ${this.status}. Order must be in AFTERSALE status.`,
+      );
+    }
+
+    this.aftersaleType = AftersaleType.RESOLVED;
+    if (!this.completedAt) {
+      this.completedAt = new Date();
+    }
     this.transitionTo(OrderStatus.COMPLETED);
   }
 

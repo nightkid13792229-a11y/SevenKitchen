@@ -15,6 +15,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -52,6 +53,7 @@ import {
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
 import { CreateAftersaleDto } from '../dto/orders/create-aftersale.dto';
 import { ResolveAftersaleDto } from '../dto/orders/resolve-aftersale.dto';
+import { ReshipOrderDto } from '../dto/orders/reship-order.dto';
 import { PaymentDto } from '../dto/orders/payment-response.dto';
 import {
   PricingPreviewRequestDto,
@@ -1177,6 +1179,9 @@ export class OrdersController {
         ? order.aftersaleSince.toISOString()
         : null,
       aftersalePhotos: order.aftersalePhotos ?? [],
+      // 免费补发：本单是哪张原单的补发单（普通订单为 null）。
+      // 顾客与客服都要能一眼看出"这是一份补寄，不是新买的一单"。
+      reshipFromOrderId: order.reshipFromOrderId ?? null,
       refundStatus,
       refundRecords,
       createdAt: order.createdAt.toISOString(),
@@ -1334,6 +1339,8 @@ export class OrdersController {
       type: order.type,
       cancellationReason: order.cancellationReason ?? null,
       aftersaleType: order.aftersaleType ?? null,
+      // 补发单：顾客列表要能标出"这是免费补寄的一单"，否则会被当成又下了一单
+      reshipFromOrderId: order.reshipFromOrderId ?? null,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),
@@ -1483,15 +1490,29 @@ export class OrdersController {
         dto.targetProductionDate
           ? new Date(`${dto.targetProductionDate}T00:00:00`)
           : undefined,
+        dto.reshipSets,
       );
 
       // 「安排重做」会新建一张 0 元重做单，单号要回传给后台展示
       const remakeOrder = (order as any).__remakeOrder;
+      // 「免费补发」同理，新建的是一张 0 元现货补发单
+      const reshipOrder = (order as any).__reshipOrder;
       const orderDto: any = await this.mapOrderToDto(order);
       return ApiResponseDto.success({
         ...orderDto,
         remakeOrderId: remakeOrder?.id ?? null,
         remakeOrderNo: remakeOrder?.orderNo ?? null,
+        reshipOrderId: reshipOrder?.id ?? null,
+        reshipOrderNo: reshipOrder?.orderNo ?? null,
+        reshipOrder:
+          reshipOrder === undefined
+            ? null
+            : {
+                id: reshipOrder.id,
+                orderNo: reshipOrder.orderNo,
+                amountTotal: Number(reshipOrder.amountTotal ?? 0),
+                status: reshipOrder.status,
+              },
       });
     } catch (error) {
       if (error instanceof ForbiddenException) {
@@ -1522,6 +1543,57 @@ export class OrdersController {
     const orders = await this.orderService.getRefundAftersaleRecords();
     const data = await Promise.all(orders.map((order) => this.mapOrderToDto(order)));
     return ApiResponseDto.success(data);
+  }
+
+  /**
+   * 一键补发（免费补发）
+   *
+   * 试吃装是现货，出了破损/变质/少发时客服直接再寄一份，
+   * 不需要顾客先申请售后，也不需要走采购与排产。
+   * 系统会建一张 0 元补发单，并从试吃装成品库存扣掉对应套数。
+   */
+  @Post(':id/reship')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiOperation({ summary: 'Reship order for free (试吃装一键补发)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({ type: ReshipOrderDto })
+  async reshipOrder(
+    @Param('id') orderId: string,
+    @Body() dto: ReshipOrderDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const reshipOrder = await this.orderService.createReshipOrderFrom(
+        orderId,
+        user.userId,
+        { sets: dto.sets, reason: dto.reason },
+      );
+
+      return ApiResponseDto.success({
+        id: reshipOrder.id,
+        orderNo: reshipOrder.orderNo,
+        status: reshipOrder.status,
+        amountTotal: Number(reshipOrder.amountTotal ?? 0),
+        originalOrderId: orderId,
+      });
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        return ApiResponseDto.error(403, error.message);
+      }
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   /**

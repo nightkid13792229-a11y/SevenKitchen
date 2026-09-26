@@ -497,6 +497,13 @@ export class OrderDto {
     photos: string[];
     uploadedAt: string | null;
   } | null;
+
+  @ApiPropertyOptional({
+    description:
+      '免费补发：本单是哪张原单的补发单（普通订单为 null）。用于顾客与客服识别"这是一份补寄"',
+    nullable: true,
+  })
+  reshipFromOrderId?: string | null;
 }
 
 export class AdminOrderDto extends OrderDto {
@@ -520,6 +527,8 @@ export class OrderSummaryDto {
 
   cancellationReason?: string | null;
   aftersaleType?: string | null;
+  /** 免费补发：本单是哪张原单的补发单；普通订单为 null */
+  reshipFromOrderId?: string | null;
   refundStatus?: OrderRefundStatusResponseDto | null;
 
   @ApiProperty({ example: 299.99 })

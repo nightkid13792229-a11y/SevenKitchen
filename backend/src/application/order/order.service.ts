@@ -2725,10 +2725,21 @@ export class OrderService {
     // 如果本单是"售后重做单"，它的原单也应随之结案，
     // 否则顾客的订单列表里会永远挂着一张"售后中"。
     if (savedOrder.remakeFromOrderId) {
-      await this.completeOriginalOrderOfRemake(
+      await this.completeOriginalOrderOfDerivedOrder(
         savedOrder.remakeFromOrderId,
         actorId,
         savedOrder,
+        'REMAKE_COMPLETED',
+      );
+    }
+
+    // 免费补发单同理：补发送达后，顾客那张"售后中"的原单也该结案
+    if (savedOrder.reshipFromOrderId) {
+      await this.completeOriginalOrderOfDerivedOrder(
+        savedOrder.reshipFromOrderId,
+        actorId,
+        savedOrder,
+        'RESHIP_COMPLETED',
       );
     }
 
@@ -2736,22 +2747,25 @@ export class OrderService {
   }
 
   /**
-   * 重做单完成时，把对应原单结案。
+   * 重做单 / 补发单完成时，把对应原单结案。
    *
-   * 原单在安排重做后一直停留在 AFTERSALE（表示"重做进行中"），
-   * 重做单送达并完成后，原单应当随之变成 COMPLETED。
-   * 失败只记日志，不阻断重做单本身的完成流程。
+   * 原单在安排重做（或补发）后一直停留在 AFTERSALE（表示"售后处理中"），
+   * 派生单送达并完成后，原单应当随之变成 COMPLETED。
+   * 失败只记日志，不阻断派生单本身的完成流程。
    */
-  private async completeOriginalOrderOfRemake(
+  private async completeOriginalOrderOfDerivedOrder(
     originalOrderId: string,
     actorId?: string | null,
-    remakeOrder?: Order,
+    derivedOrder?: Order,
+    source = 'REMAKE_COMPLETED',
   ): Promise<void> {
+    const isReship = source === 'RESHIP_COMPLETED';
+    const tag = isReship ? '[Reship]' : '[Remake]';
     try {
       const original = await this.orderRepository.findById(originalOrderId);
       if (!original) {
         this.logger.warn(
-          `[Remake] Original order ${originalOrderId} not found when completing remake ${remakeOrder?.orderNo}`,
+          `${tag} Original order ${originalOrderId} not found when completing ${derivedOrder?.orderNo}`,
         );
         return;
       }
@@ -2761,7 +2775,7 @@ export class OrderService {
       }
 
       const fromStatus = original.status;
-      original.markAsCompleted();
+      original.markAftersaleSettled();
       const savedOriginal = await this.orderRepository.save(original);
 
       await this.logStatusTransition(
@@ -2771,18 +2785,25 @@ export class OrderService {
         'system',
         actorId ?? null,
         {
-          source: 'REMAKE_COMPLETED',
-          remakeOrderId: remakeOrder?.id,
-          remakeOrderNo: remakeOrder?.orderNo,
+          source,
+          ...(isReship
+            ? {
+                reshipOrderId: derivedOrder?.id,
+                reshipOrderNo: derivedOrder?.orderNo,
+              }
+            : {
+                remakeOrderId: derivedOrder?.id,
+                remakeOrderNo: derivedOrder?.orderNo,
+              }),
         },
       );
 
       this.logger.log(
-        `[Remake] Original order ${savedOriginal.orderNo} (${savedOriginal.id}) completed after remake ${remakeOrder?.orderNo} completed`,
+        `${tag} Original order ${savedOriginal.orderNo} (${savedOriginal.id}) completed after ${derivedOrder?.orderNo} completed`,
       );
     } catch (error) {
       this.logger.error(
-        `[Remake] Failed to complete original order ${originalOrderId}: ${
+        `${tag} Failed to complete original order ${originalOrderId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -3491,13 +3512,261 @@ export class OrderService {
     return new Date(`${y}-${m}-${d}T00:00:00`);
   }
 
+  /**
+   * 售后「免费补发」：为原单创建一张 0 元的现货补发单。
+   *
+   * 为什么必须新建一张单，而不是把原单重新发一次货：
+   *   1) 原单的快递单号、发货时间、结算记录是履约历史，改掉就没法对账；
+   *   2) 仓库需要一张"待发货"的单据才能拣货、打单、填快递单号；
+   *   3) 补发是一次独立的实物出库，必须单独占用/扣减成品库存。
+   *
+   * 与「重做」的区别：重做单从 PAID 进采购 → 排产 → 生产；
+   * 补发单是现货，直接从试吃装成品库存再取 N 套，所以这里要显式扣库存。
+   *
+   * 库存不够时**直接失败**：宁可让客服先去备货，也不能让账面上的货变成负数，
+   * 否则之后每次盘库都会对不上，而且分不清是哪一次超卖造成的。
+   *
+   * @param options.sets   补发套数，默认与原单相同；允许只补一部分（1..原单套数）
+   * @param options.reason 补发原因，记在补发单备注与原单售后说明上
+   */
+  async createReshipOrderFrom(
+    originalOrderId: string,
+    actorId: string,
+    options: { sets?: number; reason?: string } = {},
+  ): Promise<Order> {
+    const original = await this.orderRepository.findById(originalOrderId);
+    if (!original) {
+      throw new NotFoundException(`Order not found: ${originalOrderId}`);
+    }
+    if (original.type !== OrderType.TASTING_PACK) {
+      throw new BadRequestException(
+        '免费补发只适用于试吃装（现货）订单；鲜食订单请使用「安排重做」',
+      );
+    }
+    if (original.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException('已取消的订单不能补发');
+    }
+    if (!original.items || original.items.length === 0) {
+      throw new BadRequestException('原订单没有可补发的条目');
+    }
+
+    const sourceItem = original.items.find(
+      (item) => !!item.tastingPackId,
+    ) as OrderItem | undefined;
+    if (!sourceItem || !sourceItem.tastingPackId) {
+      throw new BadRequestException(
+        '原订单上找不到试吃装商品，无法补发（请检查订单数据）',
+      );
+    }
+
+    const snapshot = (sourceItem.recipeSnapshot ?? {}) as any;
+    const dishCount = Array.isArray(snapshot.dishes) ? snapshot.dishes.length : 0;
+    const bagsPerRecipe = Number(snapshot.bagsPerRecipe);
+    const packSpecG = Number(snapshot.packSpecG);
+    if (
+      dishCount <= 0 ||
+      !Number.isFinite(bagsPerRecipe) ||
+      bagsPerRecipe <= 0 ||
+      !Number.isFinite(packSpecG) ||
+      packSpecG <= 0
+    ) {
+      throw new BadRequestException(
+        '原订单的试吃装快照不完整，无法推算补发数量（请检查订单数据）',
+      );
+    }
+
+    const packsPerSet = dishCount * bagsPerRecipe;
+    const originalSets = Math.round(sourceItem.packageCount / packsPerSet);
+    if (!Number.isInteger(originalSets) || originalSets <= 0) {
+      throw new BadRequestException(
+        '原订单的试吃装数量异常，无法推算补发套数（请检查订单数据）',
+      );
+    }
+
+    const sets = options.sets === undefined ? originalSets : Number(options.sets);
+    if (!Number.isInteger(sets) || sets <= 0) {
+      throw new BadRequestException('补发套数必须是大于 0 的整数');
+    }
+    if (sets > originalSets) {
+      throw new BadRequestException(
+        `补发套数不能超过原单套数（原单 ${originalSets} 套，本次填写 ${sets} 套）`,
+      );
+    }
+
+    // 防重复：数据库的部分唯一索引之外，先给出可读的错误提示。
+    // 只看"还有效"的补发单 —— 取消掉的补发单没寄出去，不该挡着重新补发。
+    const existingReship = await this.prisma.order.findFirst({
+      where: {
+        reshipFromOrderId: originalOrderId,
+        status: { not: OrderStatus.CANCELLED },
+      },
+      select: { id: true, orderNo: true },
+    });
+    if (existingReship) {
+      throw new BadRequestException(
+        `该订单已补发过（补发单 ${
+          existingReship.orderNo || existingReship.id
+        }），请勿重复操作`,
+      );
+    }
+
+    if (!this.tastingPackStockService) {
+      throw new BadRequestException('试吃装库存服务不可用，暂时无法补发');
+    }
+
+    const reasonText = (options.reason ?? '').trim() || '免费补发';
+    const now = new Date();
+    const reshipOrderId = randomUUID();
+
+    // 先占库存 —— 拿不到货就在这里失败，不会留下一张发不出去的补发单
+    const reservation = await this.tastingPackStockService.reserveForOrder({
+      tastingPackId: sourceItem.tastingPackId,
+      sets,
+      orderId: reshipOrderId,
+      operatorId: actorId,
+    });
+
+    try {
+      const totalPacks = packsPerSet * sets;
+      const quantityG = totalPacks * packSpecG;
+
+      const reshipItem = new OrderItem(
+        randomUUID(),
+        reshipOrderId,
+        sourceItem.dogId ?? null,
+        // 快照原样复制：补发的语义是"把当时买到的那一套再寄一次"，
+        // 即使商品此后换过菜、改过名，也要还原顾客当时买到的东西。
+        sourceItem.recipeSnapshot,
+        quantityG,
+        totalPacks,
+        packSpecG,
+        sourceItem.customRequirements ?? null,
+        null, // dailyIntakeG：现货没有"每日饭量"
+        sourceItem.vacuumBagSpec ?? null,
+        null, // productionBatchId：现货不进生产
+        null, // allocatedAt
+        [{ packageSpecG: packSpecG, packageCount: totalPacks }],
+        null, // ingredientSourcePlan
+        null, // preparationMethod
+        null, // cookingMethod
+        sourceItem.tastingPackId,
+      );
+
+      const reshipOrder = new Order(
+        reshipOrderId,
+        original.customerId,
+        OrderStatus.PAID, // 现货、不收款，直接进入待发货
+        OrderType.TASTING_PACK,
+        now,
+        null, // targetProductionDate：现货不排产
+        null,
+        0, // amountProduct
+        0, // amountShipping
+        0, // amountTotal
+        [reshipItem],
+        undefined, // totalAmount
+        undefined, // pricingBreakdownSnapshot：0 元单不产生定价成本口径
+        original.dogId,
+        original.addressId,
+      );
+
+      // 0 元单：状态要与 PAID 自洽，但不产生真实支付流水
+      reshipOrder.paymentStatus = 'SUCCESS';
+      reshipOrder.paidAt = now;
+      reshipOrder.paymentMethod = 'RESHIP';
+      reshipOrder.shippingAddressSnapshot =
+        original.shippingAddressSnapshot ?? null;
+      reshipOrder.reshipFromOrderId = original.id;
+      reshipOrder.adminRemark = `试吃装补发单（原单 ${
+        original.orderNo || original.id
+      }）：${reasonText}`;
+
+      try {
+        await this.orderRepository.save(reshipOrder);
+      } catch (saveError) {
+        // 两个客服同时点补发时，上面那次"查有没有补发过"可能都读到空，
+        // 最终由数据库的部分唯一索引兜住。这里把它翻译成能看懂的话，
+        // 而不是把一个 Prisma 报错抛到后台页面上。
+        if (
+          saveError instanceof Prisma.PrismaClientKnownRequestError &&
+          saveError.code === 'P2002'
+        ) {
+          throw new BadRequestException(
+            '该订单刚刚已被补发过（可能是另一位同事同时操作），请刷新后查看补发单',
+          );
+        }
+        throw saveError;
+      }
+
+      // 原单还在售后中（顾客申请过售后）时，这次补发就是它的处理结果：
+      // 记录处理方式，并让原单继续停在 AFTERSALE，等补发单送达后自动结案。
+      // 原单已经结束（客服主动补发）时不动原单状态，只留补发关系。
+      if (original.status === OrderStatus.AFTERSALE) {
+        const fromStatus = original.status;
+        original.aftersaleType = AftersaleType.RESHIP;
+        original.aftersaleReason = reasonText;
+        await this.orderRepository.save(original);
+        await this.logStatusTransition(
+          original,
+          fromStatus,
+          fromStatus,
+          'admin',
+          actorId,
+          {
+            source: 'AFTERSALE_RESHIP',
+            reshipOrderId: reshipOrder.id,
+            reshipOrderNo: reshipOrder.orderNo,
+            reshipSets: sets,
+          },
+        );
+      }
+
+      await this.logStatusTransition(
+        reshipOrder,
+        OrderStatus.PAID,
+        OrderStatus.PAID,
+        'admin',
+        actorId,
+        {
+          source: 'AFTERSALE_RESHIP',
+          originalOrderId: original.id,
+          originalOrderNo: original.orderNo,
+          sets,
+          reason: reasonText,
+        },
+      );
+
+      this.logger.log(
+        `[Reship] Created tasting-pack reship order ${reshipOrder.orderNo} (${reshipOrder.id}) for original ${original.orderNo} (${original.id}), sets=${sets}, weightedUnitCost=${reservation.weightedUnitCost}`,
+      );
+
+      return reshipOrder;
+    } catch (error) {
+      // 补发单没落库就把库存还回去，否则货被占住了、单子却不存在
+      try {
+        await this.tastingPackStockService.releaseForOrder({
+          orderId: reshipOrderId,
+          note: '补发单创建失败，库存退回',
+          operatorId: 'system',
+        });
+      } catch (releaseError) {
+        this.logger.error(
+          `[Reship] 补发单 ${reshipOrderId} 创建失败后释放库存也失败，需要人工核对`,
+          releaseError as any,
+        );
+      }
+      throw error;
+    }
+  }
+
   async resolveAftersale(
     orderId: string,
-    resolutionType: 'refunded' | 'remade' | 'resolved',
+    resolutionType: 'refunded' | 'remade' | 'reshipped' | 'resolved',
     actorId: string,
     adminNote?: string,
     actorRole?: string,
     targetProductionDate?: Date,
+    reshipSets?: number,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -3534,6 +3803,42 @@ export class OrderService {
 
       // 把重做单挂到原单上，便于接口层把单号回传给后台
       (order as any).__remakeOrder = remakeOrder;
+      return order;
+    }
+
+    // 「免费补发」同理：新建一张 0 元现货补发单，并从成品库存扣掉对应套数。
+    // 与重做的差别只在于补发单是现货，不需要采购与排产。
+    if (resolutionType === 'reshipped') {
+      const reshipOrder = await this.createReshipOrderFrom(orderId, actorId, {
+        sets: reshipSets,
+        reason: adminNote,
+      });
+
+      // createReshipOrderFrom 会把售后中的原单标记成「免费补发」，
+      // 但它读写的是自己从库里取的那份实体副本，手上这份还是处理前的样子。
+      // 不同步过来，接口就会把「申请退款」这种旧类型回给后台，客服会以为没生效。
+      const refreshed = await this.orderRepository.findById(orderId);
+      if (refreshed) {
+        order.aftersaleType = refreshed.aftersaleType;
+        order.aftersaleReason = refreshed.aftersaleReason;
+      }
+
+      await this.logStatusTransition(
+        order,
+        order.status,
+        order.status,
+        'admin',
+        actorId,
+        {
+          resolutionType,
+          adminNote,
+          reshipOrderId: reshipOrder.id,
+          reshipOrderNo: reshipOrder.orderNo,
+        },
+      );
+
+      // 把补发单挂到原单上，便于接口层把单号回传给后台
+      (order as any).__reshipOrder = reshipOrder;
       return order;
     }
 

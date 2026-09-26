@@ -67,11 +67,24 @@ model Order {
   remakeFromOrder              Order?                      @relation("OrderRemake", fields: [remakeFromOrderId], references: [id], onDelete: SetNull)
   /// 原单反向指向它的重做单
   remakeOrder                  Order?                      @relation("OrderRemake")
+  /// 本单是"某张现货订单的免费补发"：指向原单；为空表示这是一张正常订单。
+  /// 与重做单的区别：重做要走采购→排产→生产，补发是直接从成品库存里再拿一套寄出。
+  ///
+  /// ⚠️ 这里刻意**不写 @unique**，关系也写成"一对多"而不是"一对一"：
+  /// 被取消的补发单并没有真的寄出去，原单应当允许重新补发，
+  /// 所以一张原单历史上可以有多张补发单。真正的防重复是数据库里的
+  /// **部分唯一索引**（仅对 status <> 'CANCELLED' 的行生效，见 migration）——
+  /// Prisma schema 表达不了部分索引，只能落在 SQL 里。
+  reshipFromOrderId            String?                     @map("reship_from_order_id")
+  reshipFromOrder              Order?                      @relation("OrderReship", fields: [reshipFromOrderId], references: [id], onDelete: SetNull)
+  /// 原单反向指向它历史上所有的补发单（有效的最多一张）
+  reshipOrders                 Order[]                     @relation("OrderReship")
 
   @@index([customerId])
   @@index([status])
   @@index([aftersaleType])
   @@index([remakeFromOrderId])
+  @@index([reshipFromOrderId])
   @@map("order")
 }
 
@@ -1760,6 +1773,8 @@ enum AftersaleType {
   REMAKE
   COMPLAINT
   RESOLVED
+  /// 免费补发：现货商品（试吃装）出问题时，从成品库存再寄一份，不重新生产
+  RESHIP
 }
 
 enum DogGender {

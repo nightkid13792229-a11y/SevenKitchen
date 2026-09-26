@@ -1,14 +1,22 @@
-import { IsEnum, IsString, IsOptional, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 /**
  * DTO for resolving an aftersale request
  * Phase 9.1: Admin/staff resolves aftersale
  */
 export class ResolveAftersaleDto {
-  @IsEnum(['refunded', 'remade', 'resolved'], {
-    message: 'Resolution type must be one of: refunded, remade, resolved',
+  @IsEnum(['refunded', 'remade', 'reshipped', 'resolved'], {
+    message:
+      'Resolution type must be one of: refunded, remade, reshipped, resolved',
   })
-  resolutionType!: 'refunded' | 'remade' | 'resolved';
+  resolutionType!: 'refunded' | 'remade' | 'reshipped' | 'resolved';
 
   @IsString()
   @IsOptional()
@@ -21,4 +29,13 @@ export class ResolveAftersaleDto {
   @IsDateString()
   @IsOptional()
   targetProductionDate?: string;
+
+  /**
+   * 「免费补发」时的补发套数。不传时按原单套数全额补发。
+   * 只补一部分（例如买 2 套坏了 1 套）时传具体套数。
+   */
+  @IsInt({ message: '补发套数必须是整数' })
+  @Min(1, { message: '补发套数至少为 1' })
+  @IsOptional()
+  reshipSets?: number;
 }

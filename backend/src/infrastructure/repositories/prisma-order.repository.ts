@@ -126,6 +126,8 @@ export class PrismaOrderRepository implements OrderRepository {
             adminRemark: order.adminRemark ?? null,
             // 售后重做：本单指向的原单（正常订单为 null）
             remakeFromOrderId: order.remakeFromOrderId ?? null,
+            // 免费补发：本单指向的原单（正常订单为 null）
+            reshipFromOrderId: order.reshipFromOrderId ?? null,
             // Phase 9.1: Freezing and Aftersale fields
             aftersaleType: order.aftersaleType ?? null,
             freezingSince: order.freezingSince ?? null,
@@ -349,6 +351,7 @@ export class PrismaOrderRepository implements OrderRepository {
       ((record as any).shippingAddressSnapshot as any) ?? null,
       (record as any).orderNo ?? null,
       (record as any).remakeFromOrderId ?? null,
+      (record as any).reshipFromOrderId ?? null,
     );
   }
 

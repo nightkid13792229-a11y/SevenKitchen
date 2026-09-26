@@ -43,6 +43,8 @@ export enum AftersaleType {
   REMAKE = 'REMAKE',
   COMPLAINT = 'COMPLAINT',
   RESOLVED = 'RESOLVED',
+  /** 免费补发：现货商品（试吃装）从成品库存再寄一份，不重新生产 */
+  RESHIP = 'RESHIP',
 }
 
 export enum OrderType {

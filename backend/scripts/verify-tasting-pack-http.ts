@@ -319,10 +319,146 @@ async function main() {
       afterCancel.data?.availableSets === 6,
       `可售 ${afterCancel.data?.availableSets} 套`,
     );
+
+    // ---------- 一键补发（后台按钮真正走的那条接口） ----------
+    //
+    // 前面几条验的是 Service 层；这里验的是后台页面对着的字段名：
+    // 少一个 reshipOrderNo，后台就只能弹一句"处理成功"而说不出补发单号。
+    const quote2 = await call(`/tasting-packs/${packCode}/quote`, {
+      method: 'POST',
+      token: customerToken,
+      body: { sets: 2 },
+    });
+    const order2 = await call('/orders', {
+      method: 'POST',
+      token: customerToken,
+      body: {
+        type: 'TASTING_PACK',
+        snapshotId: quote2.data.snapshotId,
+        addressId: address.id,
+      },
+    });
+    await call(`/orders/${order2.data.id}/confirm`, {
+      method: 'POST',
+      token: customerToken,
+    });
+    await call(`/admin/orders/${order2.data.id}/confirm-payment`, {
+      method: 'POST',
+      token: adminToken,
+      body: {},
+    });
+    await call(`/admin/orders/${order2.data.id}/ship`, {
+      method: 'POST',
+      token: adminToken,
+      body: { carrierCode: 'SF', trackingNumber: 'SF-RESHIP-0001' },
+    });
+
+    const reship = await call(`/orders/${order2.data.id}/reship`, {
+      method: 'POST',
+      token: adminToken,
+      body: { sets: 1, reason: '到货已化冻' },
+    });
+    check(
+      '后台「一键补发」返回补发单号与 0 元金额（页面要展示）',
+      reship.code === 0 &&
+        !!reship.data?.orderNo &&
+        reship.data?.amountTotal === 0 &&
+        reship.data?.originalOrderId === order2.data.id,
+      `补发单 ${reship.data?.orderNo} · ¥${reship.data?.amountTotal}`,
+    );
+
+    const afterReship = await call(`/admin/tasting-pack/stock/${packId}`, {
+      token: adminToken,
+    });
+    check(
+      '补发从成品库存扣掉 1 套（6 - 2 - 1 = 3）',
+      afterReship.data?.availableSets === 3,
+      `可售 ${afterReship.data?.availableSets} 套`,
+    );
+
+    const reshipAgain = await call(`/orders/${order2.data.id}/reship`, {
+      method: 'POST',
+      token: adminToken,
+      body: {},
+    });
+    check(
+      '重复补发被拒绝，并提示已有补发单',
+      reshipAgain.code === 400 &&
+        String(reshipAgain.message).includes('已补发过'),
+      reshipAgain.message,
+    );
+
+    const ordersWithReship = await call('/orders', { token: customerToken });
+    const reshipRow = (ordersWithReship.data ?? []).find(
+      (row: any) => row.id === reship.data.id,
+    );
+    check(
+      '顾客「我的订单」能看到补发单，并带 reshipFromOrderId（顾客才知道这是补寄）',
+      !!reshipRow && reshipRow.reshipFromOrderId === order2.data.id,
+      reshipRow
+        ? `reshipFromOrderId=${reshipRow.reshipFromOrderId}`
+        : '列表里没找到补发单',
+    );
+
+    // ---------- 售后结案式补发：顾客申请过售后，后台选「免费补发」 ----------
+    const quote3 = await call(`/tasting-packs/${packCode}/quote`, {
+      method: 'POST',
+      token: customerToken,
+      body: { sets: 1 },
+    });
+    const order3 = await call('/orders', {
+      method: 'POST',
+      token: customerToken,
+      body: {
+        type: 'TASTING_PACK',
+        snapshotId: quote3.data.snapshotId,
+        addressId: address.id,
+      },
+    });
+    await call(`/orders/${order3.data.id}/confirm`, {
+      method: 'POST',
+      token: customerToken,
+    });
+    await call(`/admin/orders/${order3.data.id}/confirm-payment`, {
+      method: 'POST',
+      token: adminToken,
+      body: {},
+    });
+    await call(`/admin/orders/${order3.data.id}/ship`, {
+      method: 'POST',
+      token: adminToken,
+      body: { carrierCode: 'SF', trackingNumber: 'SF-RESHIP-0002' },
+    });
+    await call(`/orders/${order3.data.id}/aftersale`, {
+      method: 'POST',
+      token: customerToken,
+      body: { type: 'COMPLAINT', reason: '有一袋变质' },
+    });
+
+    const resolved = await call(
+      `/orders/${order3.data.id}/aftersale/resolve`,
+      {
+        method: 'POST',
+        token: adminToken,
+        body: {
+          resolutionType: 'reshipped',
+          adminNote: '核实后免费补发一份',
+          reshipSets: 1,
+        },
+      },
+    );
+    check(
+      '售后处理选「免费补发」会回传补发单号，且原单标记为免费补发',
+      resolved.code === 0 &&
+        !!resolved.data?.reshipOrderNo &&
+        resolved.data?.reshipOrderNo === resolved.data?.reshipOrder?.orderNo &&
+        resolved.data?.aftersaleType === 'RESHIP',
+      `补发单 ${resolved.data?.reshipOrderNo} · 原单 aftersaleType=${resolved.data?.aftersaleType}`,
+    );
   } finally {
     if (customerId) {
       await prisma.order
-        .updateMany({ where: { customerId }, data: { remakeFromOrderId: null } })
+        .updateMany({ where: { customerId }, data: { remakeFromOrderId: null, reshipFromOrderId: null } })
         .catch(() => {});
       await prisma.user.delete({ where: { id: customerId } }).catch(() => {});
     }

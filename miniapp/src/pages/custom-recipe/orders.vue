@@ -268,79 +268,82 @@ const getGoalText = (goal: string) => {
 </script>
 
 <style scoped>
+/* ==========================================================
+   食谱定制 · 我的定制订单
+   视觉规范对齐新版设计（深墨绿 + 金 + 米绿底）
+   ========================================================== */
+
 .orders-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--sk-bg, #f0f3e9);
 }
 
 .page-header {
-  background: #fff;
-  padding: 30rpx;
-  text-align: center;
-  border-bottom: 2rpx solid #eee;
+  padding: 32rpx 28rpx 24rpx;
 }
 
 .page-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
+  letter-spacing: 2rpx;
 }
 
 .orders-list {
-  padding: 20rpx;
-  height: calc(100vh - 120rpx);
+  padding: 0 24rpx 40rpx;
+  height: calc(100vh - 130rpx);
+  box-sizing: border-box;
 }
 
 .order-card {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin-bottom: 20rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .order-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20rpx;
+  justify-content: space-between;
   padding-bottom: 20rpx;
-  border-bottom: 2rpx solid #f0f0f0;
+  margin-bottom: 20rpx;
+  border-bottom: 1rpx solid var(--sk-line, #e3e6d4);
 }
 
 .order-id {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
+  letter-spacing: 1rpx;
 }
 
 .status-badge {
   padding: 8rpx 20rpx;
-  border-radius: 20rpx;
   font-size: 24rpx;
+  border-radius: 999rpx;
 }
 
 .status-badge.pending {
-  background: #fff3cd;
-  color: #856404;
+  color: #8a6d2f;
+  background: var(--sk-gold-soft, #f6efe0);
 }
 
 .status-badge.paid {
-  background: #d1ecf1;
-  color: #0c5460;
+  color: var(--sk-primary, #1e3a2f);
+  background: var(--sk-primary-tint, #eef3ea);
 }
 
 .status-badge.progress {
-  background: #cce5ff;
-  color: #004085;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: var(--sk-primary, #1e3a2f);
 }
 
 .status-badge.delivered {
-  background: #d4edda;
-  color: #155724;
-}
-
-.order-body {
-  margin-bottom: 20rpx;
+  color: var(--sk-ink-2, #6b6653);
+  background: #eceae2;
 }
 
 .info-row {
@@ -354,65 +357,92 @@ const getGoalText = (goal: string) => {
 }
 
 .label {
-  color: #999;
-  width: 120rpx;
+  width: 130rpx;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .value {
-  color: #333;
   flex: 1;
+  color: var(--sk-ink, #26261f);
 }
 
 .value.credit {
-  color: #b08d4f;
   font-weight: 700;
+  color: var(--sk-gold, #b08d4f);
 }
 
 .order-footer {
   display: flex;
-  gap: 15rpx;
+  gap: 16rpx;
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid var(--sk-line, #e3e6d4);
 }
 
 .action-btn {
   flex: 1;
-  height: 70rpx;
-  line-height: 70rpx;
-  text-align: center;
-  background: #fff;
-  border: 2rpx solid #ddd;
-  border-radius: 35rpx;
-  font-size: 26rpx;
-  color: #666;
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  border-radius: 999rpx;
+}
+
+/* 主操作：深墨绿 + 金边（与首页主动作一致） */
+.action-btn {
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+}
+
+.action-btn::after,
+.action-btn.primary::after,
+.action-btn.secondary::after {
+  border: none;
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  border: none;
-  color: #fff;
+  color: var(--sk-ink, #26261f);
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border: 1rpx solid var(--sk-gold, #b08d4f);
+}
+
+.action-btn.secondary {
+  color: var(--sk-ink-2, #6b6653);
+  background: transparent;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+.action-btn[disabled] {
+  opacity: 0.6;
 }
 
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 100rpx 0;
+  gap: 24rpx;
+  padding: 140rpx 40rpx;
 }
 
 .empty-text {
   font-size: 28rpx;
-  color: #999;
-  margin-bottom: 40rpx;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .create-btn {
-  width: 300rpx;
+  padding: 0 52rpx;
   height: 80rpx;
   line-height: 80rpx;
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  color: #fff;
-  font-size: 30rpx;
-  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+  border-radius: 999rpx;
+}
+
+.create-btn::after {
   border: none;
 }
 </style>

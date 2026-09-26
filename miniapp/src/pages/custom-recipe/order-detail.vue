@@ -303,7 +303,7 @@ const goOrders = () => {
 .detail-page {
   min-height: 100vh;
   padding: 24rpx 24rpx 200rpx;
-  background: #f5f5f5;
+  background: var(--sk-bg, #f0f3e9);
 }
 
 .state-block {
@@ -317,12 +317,12 @@ const goOrders = () => {
 .state-title {
   font-size: 32rpx;
   font-weight: 700;
-  color: #333;
+  color: var(--sk-ink, #26261f);
 }
 
 .state-text {
   font-size: 26rpx;
-  color: #999;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .retry-btn {
@@ -331,8 +331,9 @@ const goOrders = () => {
   height: 72rpx;
   line-height: 72rpx;
   font-size: 28rpx;
-  color: #fff;
-  background: #1e3a2f;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
   border-radius: 999rpx;
 }
 
@@ -346,14 +347,16 @@ const goOrders = () => {
   gap: 10rpx;
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
-  background: linear-gradient(135deg, #1e3a2f 0%, #2b5040 100%);
-  border-radius: 20rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 16rpx 44rpx rgba(20, 41, 31, 0.28);
 }
 
 .status-text {
   font-size: 38rpx;
   font-weight: 700;
-  color: #f6efe0;
+  color: var(--sk-gold-soft, #f6efe0);
 }
 
 .status-order-id {
@@ -362,8 +365,10 @@ const goOrders = () => {
 }
 
 .section {
-  background: #fff;
-  border-radius: 16rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
   padding: 32rpx;
   margin-bottom: 24rpx;
 }
@@ -408,7 +413,7 @@ const goOrders = () => {
   margin-top: 20rpx;
   font-size: 24rpx;
   line-height: 1.6;
-  color: #999;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .tag-group {
@@ -435,8 +440,8 @@ const goOrders = () => {
 .tag {
   padding: 8rpx 20rpx;
   font-size: 24rpx;
-  color: #1e3a2f;
-  background: #eef3ea;
+  color: var(--sk-primary, #1e3a2f);
+  background: var(--sk-primary-tint, #eef3ea);
   border-radius: 999rpx;
 }
 
@@ -448,7 +453,7 @@ const goOrders = () => {
   display: block;
   font-size: 26rpx;
   line-height: 1.6;
-  color: #333;
+  color: var(--sk-ink, #26261f);
 }
 
 .recipe-name {
@@ -481,8 +486,9 @@ const goOrders = () => {
   display: flex;
   gap: 20rpx;
   padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: #fff;
-  box-shadow: 0 -2rpx 16rpx rgba(0, 0, 0, 0.06);
+  background: var(--sk-surface, #fbfcf7);
+  border-top: 1rpx solid var(--sk-line, #e3e6d4);
+  box-shadow: 0 -2rpx 16rpx rgba(30, 46, 36, 0.06);
 }
 
 .btn {
@@ -497,12 +503,12 @@ const goOrders = () => {
 
 .btn.primary {
   background: linear-gradient(135deg, #1e3a2f 0%, #2b5040 100%);
-  color: #f6efe0;
+  color: var(--sk-gold-soft, #f6efe0);
 }
 
 .btn.secondary {
-  background: #fff;
-  color: #666;
-  border: 2rpx solid #ddd;
+  background: transparent;
+  color: var(--sk-ink-2, #6b6653);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
 }
 </style>

@@ -97,7 +97,10 @@
           <text class="custom-recipe-title">食谱定制</text>
           <text v-if="customRecipeFeeLabel" class="custom-recipe-fee">{{ customRecipeFeeLabel }}</text>
         </view>
-        <text class="custom-recipe-desc">{{ customRecipeDesc }}</text>
+        <text class="custom-recipe-desc">为毛孩子定制个性化专属食谱</text>
+        <view v-if="customRecipeCreditLabel" class="custom-recipe-credit">
+          <text class="custom-recipe-credit-text">{{ customRecipeCreditLabel }}</text>
+        </view>
       </view>
       <view class="custom-recipe-action">
         <text class="custom-recipe-action-text">去定制</text>
@@ -755,18 +758,17 @@ const customRecipeFeeLabel = computed(() => {
   return config && config.feeAmount > 0 ? `¥${formatAmount(config.feeAmount)}` : ''
 })
 
-const customRecipeDesc = computed(() => {
+/**
+ * 可抵扣金额单独成一行展示。
+ *
+ * 之前把它塞在说明句子里（"…其中 ¥150 可抵扣成品货款"），扫一眼看不到数字；
+ * 现在把它做成醒目的金色徽标，和定制费并列，顾客一眼就知道能省多少。
+ * 后台把可抵扣金额配成 0 时整块不出现（避免"可抵 ¥0"这种废话）。
+ */
+const customRecipeCreditLabel = computed(() => {
   const config = customRecipeConfig.value
-  if (!config) {
-    return '现成食谱不适用？我们按你家狗狗的情况单独设计一道'
-  }
-  if (config.creditAmount <= 0) {
-    return '现成食谱不适用？我们按你家狗狗的情况单独设计一道'
-  }
-  if (config.creditAmount >= config.feeAmount) {
-    return '现成食谱不适用？单独设计一道；定制费可全额抵扣成品货款'
-  }
-  return `现成食谱不适用？单独设计一道；其中 ¥${formatAmount(config.creditAmount)} 可抵扣成品货款`
+  if (!config || config.creditAmount <= 0) return ''
+  return `可抵成品货款 ¥${formatAmount(config.creditAmount)}`
 })
 
 function formatAmount(value: number): string {
@@ -1927,6 +1929,22 @@ defineOptions({
   font-size: 24rpx;
   line-height: 1.5;
   color: #cfe0d5;
+}
+
+/* 可抵扣金额：金色徽标，和定制费一起把"多少钱、能省多少"讲清楚 */
+.custom-recipe-credit {
+  align-self: flex-start;
+  margin-top: 12rpx;
+  padding: 4rpx 14rpx;
+  background: rgba(216, 188, 133, 0.16);
+  border: 1rpx solid rgba(216, 188, 133, 0.55);
+  border-radius: 999rpx;
+}
+
+.custom-recipe-credit-text {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #d8bc85;
 }
 
 .custom-recipe-action {

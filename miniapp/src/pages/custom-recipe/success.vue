@@ -1,8 +1,10 @@
 <template>
   <view class="success-page">
-    <view class="success-icon">✅</view>
-    <text class="success-title">定制需求已提交</text>
-    <text class="success-subtitle">我们收到需求后会尽快与你确认排期</text>
+    <view class="success-hero">
+      <view class="success-icon">✓</view>
+      <text class="success-title">定制需求已提交</text>
+      <text class="success-subtitle">我们收到需求后会尽快与你确认排期</text>
+    </view>
 
     <view v-if="loading" class="state-block">
       <text class="state-text">加载订单信息...</text>
@@ -279,32 +281,52 @@ const goHome = () => {
 </script>
 
 <style scoped>
+/* ==========================================================
+   食谱定制 · 提交成功
+   视觉规范对齐新版设计（深墨绿 + 金 + 米绿底）
+   ========================================================== */
+
 .success-page {
-  padding: 40rpx;
   min-height: 100vh;
-  background: #f5f5f5;
+  padding: 32rpx 24rpx 60rpx;
+  background: var(--sk-bg, #f0f3e9);
+}
+
+.success-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56rpx 32rpx 44rpx;
+  margin-bottom: 24rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 16rpx 44rpx rgba(20, 41, 31, 0.28);
 }
 
 .success-icon {
+  width: 104rpx;
+  height: 104rpx;
+  line-height: 104rpx;
   text-align: center;
-  font-size: 120rpx;
-  margin: 80rpx 0 40rpx;
+  font-size: 56rpx;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
+  border-radius: 999rpx;
+  margin-bottom: 24rpx;
 }
 
 .success-title {
-  display: block;
-  text-align: center;
-  font-size: 40rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 38rpx;
+  font-weight: 700;
+  color: var(--sk-gold-soft, #f6efe0);
+  letter-spacing: 2rpx;
 }
 
 .success-subtitle {
-  display: block;
-  text-align: center;
+  margin-top: 14rpx;
   font-size: 26rpx;
-  color: #999;
-  margin: 16rpx 0 50rpx;
+  color: #cfe0d5;
+  text-align: center;
 }
 
 .state-block {
@@ -314,21 +336,25 @@ const goHome = () => {
 
 .state-text {
   font-size: 28rpx;
-  color: #999;
+  color: var(--sk-ink-3, #968f6d);
 }
 
+/* ---------- 订单信息 ---------- */
 .order-info {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 40rpx;
-  margin-bottom: 30rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .info-row {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 25rpx;
-  font-size: 30rpx;
+  margin-bottom: 22rpx;
+  font-size: 28rpx;
 }
 
 .info-row:last-child {
@@ -336,66 +362,72 @@ const goHome = () => {
 }
 
 .label {
-  color: #666;
+  flex-shrink: 0;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .value {
-  color: #333;
-  font-weight: 500;
-  text-align: right;
   flex: 1;
   margin-left: 20rpx;
+  text-align: right;
+  font-weight: 600;
+  color: var(--sk-ink, #26261f);
 }
 
+/* ---------- 抵扣额度 ---------- */
 .credit-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #1e3a2f 0%, #2b5040 100%);
-  border-radius: 16rpx;
   padding: 36rpx 32rpx;
-  margin-bottom: 30rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-gold-soft, #f6efe0);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: var(--sk-radius-card, 28rpx);
 }
 
 .credit-title {
   font-size: 26rpx;
-  color: #cfe0d5;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .credit-amount {
-  font-size: 56rpx;
-  font-weight: bold;
-  color: #d8bc85;
   margin: 10rpx 0 14rpx;
+  font-size: 56rpx;
+  font-weight: 700;
+  color: var(--sk-gold, #b08d4f);
 }
 
 .credit-desc {
   font-size: 24rpx;
   line-height: 1.6;
-  color: #cfe0d5;
+  color: var(--sk-ink-2, #6b6653);
   text-align: center;
 }
 
+/* ---------- 付款 ---------- */
 .payment-info {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 40rpx;
-  margin-bottom: 30rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .section-title {
   display: block;
+  margin-bottom: 14rpx;
   font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 15rpx;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
 }
 
 .section-desc {
   display: block;
-  font-size: 28rpx;
-  color: #666;
-  margin-bottom: 30rpx;
+  margin-bottom: 28rpx;
+  font-size: 26rpx;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .pay-btn {
@@ -404,56 +436,60 @@ const goHome = () => {
   line-height: 92rpx;
   margin-bottom: 24rpx;
   font-size: 32rpx;
-  font-weight: bold;
-  color: #fff;
-  background: linear-gradient(135deg, #07C160 0%, #0aa350 100%);
-  border: none;
-  border-radius: 46rpx;
+  font-weight: 700;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+  border-radius: 999rpx;
 }
 
 .pay-btn[disabled] {
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
 .wechat-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  padding: 34rpx;
   margin-bottom: 20rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .wechat-label {
-  font-size: 26rpx;
-  color: #999;
   margin-bottom: 10rpx;
+  font-size: 26rpx;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .wechat-id {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #FF6B6B;
   margin-bottom: 20rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--sk-primary, #1e3a2f);
+  letter-spacing: 1rpx;
 }
 
 .copy-btn {
-  padding: 15rpx 40rpx;
-  background: #FF6B6B;
-  color: #fff;
-  border-radius: 30rpx;
+  padding: 14rpx 40rpx;
   font-size: 26rpx;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+  border-radius: 999rpx;
 }
 
 .payment-note {
   display: block;
-  font-size: 26rpx;
-  color: #999;
-  text-align: center;
   margin-bottom: 10rpx;
+  font-size: 24rpx;
+  color: var(--sk-ink-3, #968f6d);
+  text-align: center;
 }
 
+/* ---------- 按钮组 ---------- */
 .button-group {
   display: flex;
   gap: 20rpx;
@@ -463,20 +499,21 @@ const goHome = () => {
   flex: 1;
   height: 90rpx;
   line-height: 90rpx;
-  border-radius: 45rpx;
   font-size: 30rpx;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
+  border-radius: 999rpx;
 }
 
 .btn.secondary {
-  background: #fff;
-  color: #666;
-  border: 2rpx solid #ddd;
+  color: var(--sk-ink-2, #6b6653);
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
 }
 
 .btn.primary {
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  color: #fff;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
 }
 </style>

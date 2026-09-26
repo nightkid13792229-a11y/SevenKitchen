@@ -3,6 +3,7 @@
     <!-- 顶部标题 -->
     <view class="page-header">
       <text class="page-title">专属食谱定制</text>
+      <text class="page-subtitle">告诉我们它的情况，我们来单独设计一道</text>
     </view>
 
     <!-- 第一步：选择狗狗 -->
@@ -526,128 +527,155 @@ const getActivityLabel = (level: string) => {
 </script>
 
 <style scoped>
+/* ==========================================================
+   食谱定制 · 提交需求
+   视觉规范对齐新版设计（深墨绿 + 金 + 米绿底），
+   色值统一取 App.vue 的 --sk-* 变量，不再使用旧版橙红。
+   ========================================================== */
+
 .custom-recipe-page {
-  padding: 20rpx;
-  padding-bottom: 180rpx;
-  background: #f5f5f5;
   min-height: 100vh;
+  padding: 24rpx 24rpx 200rpx;
+  background: var(--sk-bg, #f0f3e9);
 }
 
+/* ---------- 顶部标题 ---------- */
 .page-header {
-  text-align: center;
-  padding: 40rpx 0;
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  border-radius: 20rpx;
-  margin-bottom: 20rpx;
+  position: relative;
+  overflow: hidden;
+  padding: 44rpx 34rpx;
+  margin-bottom: 24rpx;
+  background: linear-gradient(150deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 16rpx 44rpx rgba(20, 41, 31, 0.28);
 }
 
 .page-title {
   display: block;
-  font-size: 48rpx;
-  font-weight: bold;
-  color: #fff;
+  font-size: 42rpx;
+  font-weight: 700;
+  color: var(--sk-gold-soft, #f6efe0);
+  letter-spacing: 2rpx;
 }
 
+.page-subtitle {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #cfe0d5;
+}
+
+/* ---------- 区块 ---------- */
 .section {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin-bottom: 20rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(30, 46, 36, 0.05);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  margin-bottom: 20rpx;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
 }
 
 .step-number {
-  width: 50rpx;
-  height: 50rpx;
-  line-height: 50rpx;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
   text-align: center;
-  background: #FF6B6B;
-  color: #fff;
-  border-radius: 50%;
-  font-size: 28rpx;
-  font-weight: bold;
-  margin-right: 15rpx;
+  background: linear-gradient(135deg, #d8bc85 0%, #b08d4f 100%);
+  color: #1e3a2f;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .title-text {
   font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
+  letter-spacing: 2rpx;
 }
 
+/* ---------- 选择狗狗 ---------- */
 .picker-input {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 25rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  justify-content: space-between;
+  padding: 26rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
-/* 无档案时的引导 */
+.selected-text {
+  font-size: 28rpx;
+  color: var(--sk-ink, #26261f);
+}
+
+.placeholder {
+  font-size: 28rpx;
+  color: var(--sk-ink-3, #968f6d);
+}
+
+.arrow {
+  font-size: 32rpx;
+  color: var(--sk-ink-3, #968f6d);
+}
+
 .no-dog-hint {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
-  padding: 40rpx 25rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  padding: 40rpx 26rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .no-dog-hint-title {
   font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
 }
 
 .no-dog-hint-desc {
   font-size: 24rpx;
   line-height: 1.6;
-  color: #888;
+  color: var(--sk-ink-2, #6b6653);
   text-align: center;
 }
 
 .no-dog-hint-btn {
   margin-top: 10rpx;
-  padding: 0 40rpx;
-  height: 68rpx;
-  line-height: 68rpx;
+  padding: 0 44rpx;
+  height: 72rpx;
+  line-height: 72rpx;
   font-size: 26rpx;
-  color: #fff;
-  background: #1e3a2f;
-  border-radius: 12rpx;
+  font-weight: 600;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+  border-radius: 999rpx;
 }
 
 .no-dog-hint-btn::after {
   border: none;
 }
 
-.selected-text {
-  color: #333;
-  font-size: 28rpx;
-}
-
-.placeholder {
-  color: #999;
-  font-size: 28rpx;
-}
-
-.arrow {
-  color: #999;
-  font-size: 32rpx;
-}
-
 .dog-info-card {
   margin-top: 20rpx;
-  padding: 20rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  padding: 22rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .info-row {
@@ -661,103 +689,111 @@ const getActivityLabel = (level: string) => {
 }
 
 .label {
-  color: #666;
-  width: 150rpx;
+  width: 160rpx;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .value {
-  color: #333;
   flex: 1;
+  color: var(--sk-ink, #26261f);
 }
 
+/* ---------- 定制目标 ---------- */
 .goal-group {
   margin-bottom: 30rpx;
 }
 
 .group-title {
   display: block;
+  margin-bottom: 16rpx;
   font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 15rpx;
+  font-weight: 600;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .radio-group {
   display: flex;
-  gap: 10rpx;
+  gap: 12rpx;
 }
 
 .radio-item {
   flex: 1;
   display: flex;
   align-items: center;
-  padding: 20rpx;
-  border: 2rpx solid #e0e0e0;
-  border-radius: 12rpx;
   justify-content: center;
+  padding: 22rpx 10rpx;
+  background: #ffffff;
+  border: 2rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .radio-item.active {
-  border-color: #FF6B6B;
-  background: #fff5f5;
+  background: var(--sk-gold-soft, #f6efe0);
+  border-color: var(--sk-gold, #b08d4f);
 }
 
 .radio-icon {
   margin-right: 10rpx;
-  font-size: 32rpx;
-  color: #999;
+  font-size: 30rpx;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .radio-item.active .radio-icon {
-  color: #FF6B6B;
+  color: var(--sk-gold, #b08d4f);
 }
 
 .radio-label {
   font-size: 28rpx;
-  color: #333;
+  color: var(--sk-ink, #26261f);
+}
+
+.radio-item.active .radio-label {
+  font-weight: 600;
+  color: var(--sk-primary, #1e3a2f);
 }
 
 .checkbox-wrapper {
-  margin-bottom: 15rpx;
+  margin-bottom: 16rpx;
 }
 
 .checkbox-item {
   display: flex;
   align-items: center;
-  padding: 20rpx;
+  padding: 20rpx 0;
 }
 
 .checkbox-icon {
   width: 40rpx;
   height: 40rpx;
-  border: 2rpx solid #e0e0e0;
-  border-radius: 8rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 15rpx;
+  margin-right: 16rpx;
+  border: 2rpx solid var(--sk-line, #e3e6d4);
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #ffffff;
 }
 
 .checkbox-icon.checked {
-  background: #FF6B6B;
-  border-color: #FF6B6B;
-  color: #fff;
+  background: var(--sk-primary, #1e3a2f);
+  border-color: var(--sk-primary, #1e3a2f);
 }
 
 .checkbox-label {
   font-size: 28rpx;
-  color: #333;
+  color: var(--sk-ink, #26261f);
 }
 
 .health-management-section {
   margin-top: 20rpx;
-  padding: 20rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
+  padding: 22rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .health-item {
-  margin-bottom: 20rpx;
+  margin-bottom: 22rpx;
 }
 
 .health-item:last-child {
@@ -766,92 +802,92 @@ const getActivityLabel = (level: string) => {
 
 .health-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 15rpx;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
 }
 
 .health-title {
   font-size: 28rpx;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: var(--sk-ink, #26261f);
 }
 
 .add-btn,
 .action-btn {
+  padding: 8rpx 20rpx;
   font-size: 24rpx;
-  color: #FF6B6B;
-  padding: 8rpx 16rpx;
-  border: 1rpx solid #FF6B6B;
-  border-radius: 8rpx;
+  color: var(--sk-gold, #b08d4f);
+  background: transparent;
+  border: 1rpx solid var(--sk-gold, #b08d4f);
+  border-radius: 999rpx;
 }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 15rpx;
+  gap: 14rpx;
 }
 
 .tag-item {
   display: flex;
   align-items: center;
-  padding: 12rpx 20rpx;
-  background: #fff;
-  border: 1rpx solid #e0e0e0;
-  border-radius: 20rpx;
+  padding: 12rpx 22rpx;
   font-size: 26rpx;
-  color: #333;
+  color: var(--sk-primary, #1e3a2f);
+  background: #ffffff;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: 999rpx;
 }
 
 .tag-item.editable {
-  background: #f0f0f0;
+  background: var(--sk-gold-soft, #f6efe0);
+  border-color: rgba(176, 141, 79, 0.35);
 }
 
 .remove-btn {
-  margin-left: 10rpx;
-  color: #999;
+  margin-left: 12rpx;
   font-size: 24rpx;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .empty-text {
   font-size: 26rpx;
-  color: #999;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 .add-btn {
   display: inline-block;
-  padding: 12rpx 20rpx;
-  background: #f0f0f0;
-  border-radius: 20rpx;
-  font-size: 26rpx;
-  color: #666;
-  border: none;
 }
 
 .notes-input {
   width: 100%;
   min-height: 150rpx;
-  padding: 20rpx;
-  background: #f8f8f8;
-  border-radius: 12rpx;
-  font-size: 28rpx;
   margin-top: 20rpx;
+  padding: 22rpx;
+  font-size: 28rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-badge, 12rpx);
+  box-sizing: border-box;
 }
 
+/* ---------- 饮食偏好 ---------- */
 .preference-section {
-  margin-bottom: 20rpx;
+  margin-bottom: 24rpx;
 }
 
 .preference-title {
   display: block;
+  margin-bottom: 16rpx;
   font-size: 28rpx;
-  color: #666;
-  margin-bottom: 15rpx;
+  color: var(--sk-ink-2, #6b6653);
 }
 
+/* ---------- 交付与抵扣 ---------- */
 .delivery-section {
-  background: linear-gradient(135deg, #FFE5E5 0%, #FFF0E5 100%);
-  border: 2rpx solid #FF6B6B;
+  background: var(--sk-gold-soft, #f6efe0);
+  border-color: rgba(176, 141, 79, 0.45);
 }
 
 .delivery-info {
@@ -863,24 +899,23 @@ const getActivityLabel = (level: string) => {
 
 .delivery-label {
   font-size: 28rpx;
-  color: #666;
+  color: var(--sk-ink-2, #6b6653);
 }
 
 .delivery-date {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #FF6B6B;
   margin-left: 10rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--sk-gold, #b08d4f);
 }
 
 .delivery-note {
   display: block;
   text-align: center;
   font-size: 24rpx;
-  color: #999;
+  color: var(--sk-ink-3, #968f6d);
 }
 
-/* 成品抵扣说明：只在后台配了可抵扣金额时才出现 */
 .credit-info {
   display: flex;
   align-items: center;
@@ -890,41 +925,46 @@ const getActivityLabel = (level: string) => {
 }
 
 .credit-label {
-  padding: 4rpx 14rpx;
+  padding: 4rpx 16rpx;
   font-size: 22rpx;
-  color: #fff;
-  background: #FF6B6B;
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
   border-radius: 999rpx;
 }
 
 .credit-value {
   font-size: 24rpx;
-  color: #666;
+  color: var(--sk-ink-2, #6b6653);
 }
 
+/* ---------- 底部提交 ---------- */
 .submit-section {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
-  padding: 20rpx;
-  background: #fff;
-  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.1);
+  bottom: 0;
+  padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--sk-surface, #fbfcf7);
+  border-top: 1rpx solid var(--sk-line, #e3e6d4);
+  box-shadow: 0 -2rpx 16rpx rgba(30, 46, 36, 0.06);
 }
 
 .submit-btn {
   width: 100%;
-  height: 90rpx;
-  line-height: 90rpx;
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
-  color: #fff;
+  height: 92rpx;
+  line-height: 92rpx;
   font-size: 32rpx;
-  font-weight: bold;
-  border-radius: 45rpx;
-  border: none;
+  font-weight: 700;
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+  border-radius: 999rpx;
+  letter-spacing: 1rpx;
 }
 
 .submit-btn[disabled] {
-  background: #ccc;
+  color: #cfd4c8;
+  background: #d8dccf;
+  border-color: #d8dccf;
 }
 </style>

@@ -300,7 +300,9 @@ describe('home runtime regressions', () => {
     expect(templateSource).toContain('custom-recipe-section')
     expect(templateSource).toContain('@tap="goToCustomRecipe"')
     expect(templateSource).toContain('食谱定制')
-    expect(templateSource).toContain('customRecipeDesc')
+    expect(templateSource).toContain('customRecipeCreditLabel')
+    // 小字说明是固定文案
+    expect(templateSource).toContain('为毛孩子定制个性化专属食谱')
     expect(source).toContain("url: '/custom-recipe-config'")
     expect(source).toContain("'/pages/custom-recipe/index'")
 

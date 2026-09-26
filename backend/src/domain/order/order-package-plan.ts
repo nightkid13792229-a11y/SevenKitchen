@@ -45,6 +45,35 @@ export function normalizePackagePlan(
   });
 }
 
+/**
+ * 把相同规格的分装行合并成一行。
+ *
+ * 试吃装由多道菜组成，若各道菜规格相同（例如每道都是 2 袋 × 80g），
+ * 合并后包材只按一个规格档去选袋子，而不是按 5 道菜分别选。
+ * 不同规格的行按原有顺序保留。
+ */
+export function mergePackagePlanRows(
+  rows: OrderPackagePlanItem[],
+): OrderPackagePlanItem[] {
+  const merged = new Map<number, number>();
+  const order: number[] = [];
+
+  for (const row of rows) {
+    const existing = merged.get(row.packageSpecG);
+    if (existing === undefined) {
+      merged.set(row.packageSpecG, row.packageCount);
+      order.push(row.packageSpecG);
+      continue;
+    }
+    merged.set(row.packageSpecG, existing + row.packageCount);
+  }
+
+  return order.map((packageSpecG) => ({
+    packageSpecG,
+    packageCount: merged.get(packageSpecG)!,
+  }));
+}
+
 export function summarizePackagePlan(
   packagePlan: OrderPackagePlanItem[],
 ): OrderPackagePlanSummary {

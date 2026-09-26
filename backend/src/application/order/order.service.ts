@@ -71,8 +71,15 @@ import {
   resolvePreparationMethodTokens,
 } from '../recipe/preparation-method-text.util';
 import { OrderSourcePlanService } from './order-source-plan.service';
+import { buildProductionRecipeSnapshot } from '../recipe/production-recipe-snapshot';
 import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-source-plan';
 import { ShippingNotificationService } from '../shipping/shipping-notification.service';
+import { TastingPackService } from '../tasting-pack/tasting-pack.service';
+import { TastingPackStockService } from '../tasting-pack/tasting-pack-stock.service';
+import {
+  buildTastingPackOrderSnapshot,
+  TASTING_PACK_SNAPSHOT_KIND,
+} from '../tasting-pack/tasting-pack-snapshot';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -313,6 +320,10 @@ export class OrderService {
     private readonly searchGovernanceService?: SearchGovernanceService,
     @Optional()
     private readonly shippingNotificationService?: ShippingNotificationService,
+    @Optional()
+    private readonly tastingPackService?: TastingPackService,
+    @Optional()
+    private readonly tastingPackStockService?: TastingPackStockService,
   ) {}
 
   private async loadPreparationMethodNameMap(
@@ -1083,6 +1094,20 @@ export class OrderService {
 
     // ✅ Priority 1: 如果提供 snapshotId，从快照创建（立即购买）
     if (dto.snapshotId) {
+      const snapshot = await this.pricingSnapshotRepository.findById(
+        dto.snapshotId,
+      );
+      // 试吃装是现货：下单只扣成品库存，不采购、不排产、不生产，
+      // 与鲜食订单是两条完全不同的履约路径，因此在这里分流而不是塞进同一个方法
+      if (
+        (snapshot?.requestParams as any)?.kind === TASTING_PACK_SNAPSHOT_KIND
+      ) {
+        return this.createTastingPackOrderFromSnapshot(
+          dto,
+          dto.snapshotId,
+          orderId,
+        );
+      }
       return this.createOrderFromSnapshot(dto, dto.snapshotId, orderId);
     }
 
@@ -1243,65 +1268,13 @@ export class OrderService {
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipeItems.map((item) => item.preparationMethod),
     );
-    const snapshotFoodExampleWeightG = this.getRecipeSnapshotFoodExampleWeightG(
-      recipeItems,
+    // 快照构建抽到共享模块：订单生产与试吃装备货必须产出**同一种形状**，
+    // 否则车间录入实际用量时会因为字段对不上而在现场报错
+    const recipeSnapshot: RecipeSnapshot = buildProductionRecipeSnapshot({
+      recipe,
       ingredientMap,
-    );
-
-    const recipeSnapshot: RecipeSnapshot = {
-      id: recipe.id,
-      version: recipe.version,
-      name: recipe.name,
-      production_loss_rate: recipe.productionLossRate,
-      energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
-      nutrition_standard: 'FEDIAF_2021',
-      nutrition_detailed_data: recipe.nutritionDetailedData, // 添加营养成分详细数据
-      items: recipeItems.map((ri) => {
-        const ingredient = ingredientMap.get(ri.ingredientId);
-
-        // 解析制备方法ID数组并转换为名称数组
-        // preparationMethod存储格式：逗号分隔的UUID字符串
-        const preparationMethodNames = resolvePreparationMethodTokens(
-          ri.preparationMethod,
-          prepMethodMap,
-          { preserveUnresolvedLegacy: false },
-        );
-
-        return {
-          ingredient_id: ingredient?.id || ri.ingredientId,
-          name: ingredient?.name || 'Unknown',
-          ratio: this.resolveRecipeSnapshotItemRatio(
-            ri,
-            ingredient,
-            snapshotFoodExampleWeightG,
-          ),
-          example_weight: ri.exampleWeight ?? undefined,
-          nutrition_food_id: ri.nutritionFoodId ?? undefined,
-          nutrition_food_name: ri.nutritionFood?.name ?? undefined,
-          nutrition_state:
-            ri.nutritionState ?? ri.nutritionFood?.preparationState ?? undefined,
-          nutrition_state_label:
-            ri.nutritionStateLabel ??
-            ri.nutritionFood?.preparationStateLabel ??
-            ri.nutritionFood?.preparationState ??
-            undefined,
-          ingredient_type: ingredient?.type,
-          nutrient_target_key: ri.nutrientTargetKey ?? undefined,
-          nutrient_target_value: ri.nutrientTargetValue ?? undefined,
-          supplement_targets: ri.supplementTargets ?? undefined,
-          nutrition_profile_snapshot:
-            ingredient?.type === 'SUPPLEMENT'
-              ? ingredient?.nutritionProfile ?? null
-              : undefined,
-          properties: ingredient?.properties,
-          preparation_methods:
-            preparationMethodNames.length > 0
-              ? preparationMethodNames
-              : undefined,
-          unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
-        };
-      }),
-    };
+      prepMethodMap,
+    });
 
     // 8. 优先使用快照中的 dailyIntakeG，避免用户改档案后订单明细漂移。
     const dogCalcResult = calculateDogEnergy(
@@ -1407,6 +1380,194 @@ export class OrderService {
 
     return order;
   }
+
+  /**
+   * 从价格快照创建**试吃装（现货）**订单
+   *
+   * 与鲜食订单的区别：
+   *   1. 不绑定狗狗、不选制作日期 —— 现货不排产
+   *   2. 下单**先占成品库存**，占不到就不让下单（不超卖由数据库条件更新保证）
+   *   3. 订单创建失败要把库存还回去，避免出现货被占了但订单不存在
+   *   4. 订单类型是 TASTING_PACK —— 采购与排产会显式排除它
+   */
+  private async createTastingPackOrderFromSnapshot(
+    dto: CreateOrderDraftDto,
+    snapshotId: string,
+    orderId: string,
+  ): Promise<Order> {
+    if (!this.tastingPackService || !this.tastingPackStockService) {
+      throw new BadRequestException('试吃装下单能力未启用');
+    }
+
+    const snapshot = await this.pricingSnapshotRepository.findById(snapshotId);
+    if (!snapshot) {
+      throw new NotFoundException('Pricing snapshot not found or expired');
+    }
+    if (!snapshot.belongsToCustomer(dto.customerId)) {
+      throw new BadRequestException(
+        'Pricing snapshot does not belong to this customer',
+      );
+    }
+    if (!snapshot.canBeUsed()) {
+      if (snapshot.used) {
+        throw new BadRequestException('Pricing snapshot already used');
+      }
+      throw new BadRequestException('Pricing snapshot has expired');
+    }
+
+    const { requestParams, pricingResult } = snapshot as any;
+    const tastingPackId = String(requestParams?.tastingPackId ?? '');
+    const sets = Number(requestParams?.sets);
+    const addressId: string | null =
+      requestParams?.addressId || dto.addressId || null;
+
+    if (!tastingPackId) {
+      throw new BadRequestException('价格快照缺少试吃装商品');
+    }
+    if (!Number.isInteger(sets) || sets <= 0) {
+      throw new BadRequestException('价格快照缺少购买套数');
+    }
+
+    if (addressId) {
+      const address = await this.addressRepository.findById(addressId);
+      if (!address) {
+        throw new NotFoundException('Address not found');
+      }
+      if (address.userId !== dto.customerId) {
+        throw new BadRequestException(
+          'Address does not belong to this customer',
+        );
+      }
+    }
+
+    // 下单这一刻再确认一次：商品仍在架、没超限购、还有货
+    const { pack } = await this.tastingPackService.assertPurchasable({
+      tastingPackId,
+      sets,
+    });
+
+    // 先占库存 —— 抢不到就在这里失败，不会产生付了钱没货的订单
+    await this.tastingPackStockService.reserveForOrder({
+      tastingPackId,
+      sets,
+      orderId,
+      operatorId: dto.customerId,
+    });
+
+    try {
+      const packItems = (pack as any).items ?? [];
+      const bagsPerRecipe = Number((pack as any).bagsPerRecipe);
+      const packSpecG = Number((pack as any).packSpecG);
+      const totalPacks = packItems.length * bagsPerRecipe * sets;
+      const quantityG = totalPacks * packSpecG;
+
+      const recipeSnapshot = buildTastingPackOrderSnapshot({
+        id: tastingPackId,
+        code: (pack as any).code,
+        name: (pack as any).name,
+        bagsPerRecipe,
+        packSpecG,
+        items: packItems,
+      });
+
+      const orderItem = new OrderItem(
+        randomUUID(),
+        orderId,
+        null, // 现货不绑定狗狗
+        recipeSnapshot as any,
+        quantityG,
+        totalPacks,
+        packSpecG,
+        null, // customRequirements
+        null, // dailyIntakeG：现货没有"每日饭量"
+        null, // vacuumBagSpec
+        null, // productionBatchId
+        null, // allocatedAt
+        [{ packageSpecG: packSpecG, packageCount: totalPacks }],
+        null, // ingredientSourcePlan
+        null, // preparationMethod
+        null, // cookingMethod
+        tastingPackId,
+      );
+
+      const amountProduct = this.toNumberOrZero(pricingResult?.amountProduct);
+      const amountShipping = this.toNumberOrZero(pricingResult?.amountShipping);
+      const amountTotal = this.toNumberOrZero(pricingResult?.amountTotal);
+      const costBreakdown = pricingResult?.costBreakdown ?? {};
+
+      const pricingBreakdownSnapshot = new PricingBreakdownSnapshot(
+        this.toNumberOrZero(costBreakdown.costIngredients),
+        this.toNumberOrZero(costBreakdown.costPackaging),
+        this.toNumberOrZero(costBreakdown.costLabor),
+        this.toNumberOrZero(costBreakdown.costOverhead),
+        this.toNumberOrZero(costBreakdown.totalProductCost),
+        amountProduct,
+        amountShipping,
+        amountTotal,
+        null,
+        'tastingPack_costMultiplier',
+        new Date(),
+        null,
+        [], // 现货订单不产生采购需求
+      );
+
+      const order = new Order(
+        orderId,
+        dto.customerId,
+        OrderStatus.INIT,
+        OrderType.TASTING_PACK,
+        new Date(),
+        null, // targetProductionDate：现货不排产
+        null,
+        amountProduct,
+        amountShipping,
+        amountTotal,
+        [orderItem],
+        undefined,
+        pricingBreakdownSnapshot,
+        undefined, // dogId
+        addressId ?? undefined,
+      );
+
+      await this.orderRepository.save(order);
+      await this.pricingSnapshotRepository.markAsUsed(snapshotId);
+
+      await this.logStatusTransition(
+        order,
+        OrderStatus.INIT,
+        OrderStatus.INIT,
+        'customer',
+        dto.customerId,
+        { source: 'tastingPackSnapshot', snapshotId, sets, tastingPackId },
+      );
+
+      this.logger.log(
+        `[TastingPack] 订单 ${orderId} 创建成功，占用 ${sets} 套试吃装`,
+      );
+      return order;
+    } catch (error) {
+      // 订单没落库就把库存还回去，否则顾客没下单成功、货却被占住了
+      try {
+        await this.tastingPackStockService.releaseForOrder({
+          orderId,
+          note: '订单创建失败，库存退回',
+          operatorId: 'system',
+        });
+      } catch (releaseError) {
+        this.logger.error(
+          `[TastingPack] 订单 ${orderId} 创建失败后释放库存也失败，需要人工核对`,
+          releaseError as any,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private toNumberOrZero(value: unknown): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
 
   /**
    * Create order from cart items
@@ -1699,76 +1860,12 @@ export class OrderService {
         dogCalcResult.finalFoodKcal,
         recipe.energyDensityKcalPerKg,
       );
-      const snapshotFoodExampleWeightG =
-        this.getRecipeSnapshotFoodExampleWeightG(recipeItems, ingredientMap);
-
-      // Create RecipeSnapshot from recipe (immutable snapshot)
-      // Phase 8.9: Include energyDensityKcalPerKg in snapshot for immutability
-      const recipeSnapshot: RecipeSnapshot = {
-        id: recipe.id,
-        version: recipe.version,
-        name: recipe.name,
-        production_loss_rate: recipe.productionLossRate,
-        energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg, // CRITICAL: Captured at order time
-        nutrition_standard: 'FEDIAF_2021', // TODO: Get from recipe when interface is complete
-        nutrition_detailed_data: recipe.nutritionDetailedData, // 添加营养成分详细数据
-        items: recipeItems.map((ri) => {
-          const ingredient = ingredientMap.get(ri.ingredientId);
-
-          // 解析制备方法ID数组并转换为名称数组
-          // preparationMethod存储格式：逗号分隔的UUID字符串
-          // 例如："a6409a79-402b-41d1-bfe1-031a67da0876, dd27baa4-36cb-4405-9092-0eb37e6160fa"
-          const preparationMethodNames = resolvePreparationMethodTokens(
-            ri.preparationMethod,
-            prepMethodMap,
-            { preserveUnresolvedLegacy: false },
-          );
-
-          // Debug: log supplement ingredient unit display label
-          if (ingredient?.type === 'SUPPLEMENT') {
-            console.log(
-              `[DEBUG] Supplement: ${ingredient.name}, unitDisplayLabel: ${ingredient.unitDisplayLabel}`,
-            );
-          }
-
-          return {
-            ingredient_id: ingredient?.id || ri.ingredientId,
-            name: ingredient?.name || 'Unknown',
-            ratio: this.resolveRecipeSnapshotItemRatio(
-              ri,
-              ingredient,
-              snapshotFoodExampleWeightG,
-            ),
-            example_weight: ri.exampleWeight ?? undefined,
-            nutrition_food_id: ri.nutritionFoodId ?? undefined,
-            nutrition_food_name: ri.nutritionFood?.name ?? undefined,
-            nutrition_state:
-              ri.nutritionState ??
-              ri.nutritionFood?.preparationState ??
-              undefined,
-            nutrition_state_label:
-              ri.nutritionStateLabel ??
-              ri.nutritionFood?.preparationStateLabel ??
-              ri.nutritionFood?.preparationState ??
-              undefined,
-            ingredient_type: ingredient?.type,
-            nutrient_target_key: ri.nutrientTargetKey ?? undefined,
-            nutrient_target_value: ri.nutrientTargetValue ?? undefined,
-            supplement_targets: ri.supplementTargets ?? undefined,
-            nutrition_profile_snapshot:
-              ingredient?.type === 'SUPPLEMENT'
-                ? ingredient?.nutritionProfile ?? null
-                : undefined,
-            properties: ingredient?.properties,
-            preparation_methods:
-              preparationMethodNames.length > 0
-                ? preparationMethodNames
-                : undefined,
-            sort_order: ri.sortOrder ?? undefined,
-            unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
-          };
-        }),
-      };
+      // 与快照创建走同一份构建器，避免两条下单路径产出不同形状的配方快照
+      const recipeSnapshot: RecipeSnapshot = buildProductionRecipeSnapshot({
+        recipe,
+        ingredientMap,
+        prepMethodMap,
+      });
 
       const itemId = randomUUID();
       // Use normalized package input (already computed above)
@@ -2569,7 +2666,44 @@ export class OrderService {
       },
     );
 
+    // 试吃装是现货：取消/超时要把占用的成品库存还回去，
+    // 否则货被占着却没人买，库存会越用越少
+    await this.releaseTastingPackStockIfNeeded(savedOrder, reason);
+
     return savedOrder;
+  }
+
+  /**
+   * 试吃装订单关闭后释放成品库存。
+   *
+   * 只对试吃装订单生效；释放本身是幂等的（按流水回放），
+   * 因此重复调用（例如后台再点一次取消）不会多还库存。
+   */
+  private async releaseTastingPackStockIfNeeded(
+    order: Order,
+    reason: string,
+  ): Promise<void> {
+    if (order.type !== OrderType.TASTING_PACK) return;
+    if (!this.tastingPackStockService) return;
+
+    try {
+      const result = await this.tastingPackStockService.releaseForOrder({
+        orderId: order.id,
+        note: `订单关闭，库存退回（${reason}）`,
+        operatorId: 'system',
+      });
+      if (result.released > 0) {
+        this.logger.log(
+          `[TastingPack] 订单 ${order.id} 关闭，退回库存 ${result.released} 套`,
+        );
+      }
+    } catch (error) {
+      // 释放失败不能影响关单本身；但也绝不能静默 —— 库存与订单会对不上
+      this.logger.error(
+        `[TastingPack] 订单 ${order.id} 关闭后释放库存失败，需要人工核对库存`,
+        error as any,
+      );
+    }
   }
 
   /**
@@ -2919,6 +3053,14 @@ export class OrderService {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    // 试吃装是现货，货已经在库里冻着，不存在"开始生产"这一步。
+    // 拦住它是为了避免误操作把现货单拖进采购/生产流程。
+    if (order.type === OrderType.TASTING_PACK) {
+      throw new BadRequestException(
+        '试吃装是现货商品，不需要开始生产；请直接发货',
+      );
     }
 
     const fromStatus = order.status;
@@ -3936,41 +4078,6 @@ export class OrderService {
     });
 
     return this.orderRepository.save(order);
-  }
-
-  private getRecipeSnapshotFoodExampleWeightG(
-    recipeItems: RecipeDomainItem[],
-    ingredientMap: Map<string, Ingredient>,
-  ): number {
-    return recipeItems.reduce((sum, item) => {
-      const ingredient = ingredientMap.get(item.ingredientId);
-      if (ingredient?.type !== IngredientType.FOOD) {
-        return sum;
-      }
-
-      const exampleWeight = this.getPositiveNumber(item.exampleWeight);
-      return exampleWeight ? sum + exampleWeight : sum;
-    }, 0);
-  }
-
-  private resolveRecipeSnapshotItemRatio(
-    item: RecipeDomainItem,
-    ingredient: Ingredient | undefined,
-    foodExampleWeightG: number,
-  ): number {
-    if (ingredient?.type !== IngredientType.SUPPLEMENT) {
-      return item.ratioPercent ?? 0;
-    }
-
-    const ratioPercent = this.getPositiveNumber(item.ratioPercent);
-    if (ratioPercent) {
-      return ratioPercent;
-    }
-
-    const exampleWeight = this.getPositiveNumber(item.exampleWeight);
-    return exampleWeight && foodExampleWeightG > 0
-      ? (exampleWeight / foodExampleWeightG) * 100
-      : 0;
   }
 
   private getPositiveNumber(value: unknown): number | null {

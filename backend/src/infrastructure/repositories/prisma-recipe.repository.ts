@@ -94,6 +94,23 @@ export class PrismaRecipeRepository implements RecipeRepository {
     };
   }
 
+
+  /**
+   * 取该食谱**已公开的最新版本**。
+   *
+   * 用于对外售卖的商品（试吃装）：草稿修订版不能拿去展示或算成本 ——
+   * 菜名还带着修订字样，配方也可能没定稿。
+   */
+  async findLatestPublicById(id: string): Promise<Recipe | null> {
+    const latest = await this.prisma.recipe.findFirst({
+      where: { recipeId: id, status: RecipeStatus.PUBLIC },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    if (!latest) return null;
+    return this.findByIdAndVersion(id, latest.version);
+  }
+
   async findById(id: string): Promise<Recipe | null> {
     // Find latest version for the given recipe ID
     const record = await this.prisma.recipe.findFirst({

@@ -75,7 +75,7 @@ export class OrderItemDto {
     description:
       'Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)',
   })
-  dailyIntakeG!: number;
+  dailyIntakeG!: number | null;
 
   @ApiPropertyOptional({
     description: 'Vacuum bag specification (e.g., "12*17cm")',
@@ -538,7 +538,9 @@ export class OrderSummaryDto {
     packageSpecG: number;
     packagePlan?: OrderPackagePlanItemDto[] | null;
     ingredientSourcePlan?: string | null;
-    dailyIntakeG?: number;
+    dailyIntakeG?: number | null;
+    /** 试吃装商品 ID（鲜食为 null），让顾客端能识别这是现货订单 */
+    tastingPackId?: string | null;
   };
 
   address?: {

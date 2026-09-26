@@ -18,6 +18,7 @@ import { ValidationError } from '../common/errors';
 import { PackagingService } from '../packaging';
 import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
 import {
+  mergePackagePlanRows,
   normalizePackagePlan,
   summarizePackagePlan,
   type OrderPackagePlanItem,
@@ -88,6 +89,8 @@ export interface RecipeItem {
 
 export interface Recipe {
   id: string;
+  /** 菜名。定价本身不需要，但试吃装的错误提示与成本归集要用 */
+  name?: string;
   productionLossRate: number;
   batchLaborHours: number;
   items: RecipeItem[];
@@ -114,6 +117,87 @@ export interface PricingCalculationInput {
   discountRate?: number;
   globalConfig: GlobalConfig;
   singlePackSpecG?: number; // Optional: use provided value instead of calculating
+}
+
+/**
+ * 单菜成本计算的输入。
+ *
+ * 这是「算一道菜要多少钱」的最小输入：一道菜 + 这道菜的净重。
+ * 与订单无关，因此可以被试吃装（多道菜合并）复用。
+ */
+export interface RecipeCostInput {
+  recipe: Recipe;
+  /** 这道菜的净食重量（g，不含损耗） */
+  totalNetFoodWeightG: number;
+  globalConfig: GlobalConfig;
+}
+
+/**
+ * 单菜成本计算的输出。
+ *
+ * `rawInputWeightKg` 是投料毛重（含生产损耗），是人工费与制造费用的分摊基数，
+ * 多道菜合并时按加法累加。
+ */
+export interface RecipeCostResult {
+  costIngredients: number;
+  ingredientDetails: IngredientCostItem[];
+  rawInputWeightKg: number;
+  foodRatioTotalPercent: number;
+  recipeFoodExampleWeightG: number;
+}
+
+/**
+ * 试吃装里的一道菜。
+ */
+export interface TastingPackRecipeInput {
+  recipe: Recipe;
+  /** 这道菜在试吃装里装几袋 */
+  packageCount: number;
+  /** 每袋多少克 */
+  packageSpecG: number;
+}
+
+/**
+ * 试吃装合并定价输入。
+ */
+export interface TastingPackPricingInput {
+  recipes: TastingPackRecipeInput[];
+  /** 试吃倍率：成本 → 实收。例如 1.25 */
+  tastingMultiplier: number;
+  globalConfig: GlobalConfig;
+}
+
+/**
+ * 试吃装合并定价结果。
+ *
+ * 一次算两遍：
+ * - `productPrice` = 成本 × 试吃倍率（实收）
+ * - `listPrice`    = 成本 ÷ (1 − 目标利润率)（划线价，即"按正装口径买这么多要多少钱"）
+ */
+export interface TastingPackPricingResult {
+  costIngredients: number;
+  costPackaging: number;
+  costLabor: number;
+  costOverhead: number;
+  totalProductCost: number;
+  productPrice: number;
+  listPrice: number;
+  totalNetFoodWeightG: number;
+  rawInputWeightKg: number;
+  totalPacks: number;
+  ingredientDetails: IngredientCostItem[];
+  packagingDetails: PricingBreakdown['packagingDetails'];
+  weightPackagingG?: number;
+  /** 逐菜的用料与成本归集，用于后台核对 */
+  perRecipe: Array<{
+    recipeId: string;
+    recipeName: string;
+    totalNetFoodWeightG: number;
+    costIngredients: number;
+    rawInputWeightKg: number;
+    packageCount: number;
+    packageSpecG: number;
+  }>;
 }
 
 export interface PricingBreakdown {
@@ -313,12 +397,14 @@ export class PricingService {
     // ==========================================
     // 2. 核心成本计算 (Product Cost)
     // ==========================================
-    let costIngredients = 0;
-    const ingredientDetails: IngredientCostItem[] = [];
-    const foodRatioTotalPercent = sumFoodRatioPercent(recipe.items);
-    const recipeFoodExampleWeightG = this.getRecipeFoodExampleWeightG(
-      recipe.items,
-    );
+    // 单菜成本算法已抽取为 calculateRecipeCost()，供鲜食单菜定价与试吃装多菜合并定价复用。
+    // 抽取保持逐行等价 —— 见 tests/domain/pricing/pricing-characterization.spec.ts
+    const recipeCost = this.calculateRecipeCost({
+      recipe,
+      totalNetFoodWeightG,
+      globalConfig,
+    });
+    const { costIngredients, ingredientDetails } = recipeCost;
 
     console.log('[PricingService] Starting cost calculation:', {
       recipeId: recipe.id,
@@ -328,6 +414,401 @@ export class PricingService {
       totalNetWeightKg: totalNetFoodWeightG / 1000.0,
       rawInputWeightKg,
     });
+
+    // --- C. 人工与制造费用 (Labor & Overhead - Standard Costing) ---
+    // Standard batch output (kg)
+    const standardBatchOutputKg =
+      (globalConfig.defaultBatchCapacityG / 1000.0) *
+      globalConfig.targetBatchUtilization;
+    const standardLaborCostPerKg =
+      (globalConfig.laborHourlyRate * recipe.batchLaborHours) /
+      standardBatchOutputKg;
+
+    const costLabor = rawInputWeightKg * standardLaborCostPerKg;
+
+    // Collect labor cost details
+    const laborDetails = {
+      standardBatchOutputKg,
+      standardLaborCostPerKg,
+      rawInputWeightKg,
+      totalCost: costLabor,
+      calculation: `标准批次产量${standardBatchOutputKg.toFixed(3)}kg，人工成本${(globalConfig.laborHourlyRate * recipe.batchLaborHours).toFixed(2)}元 ÷ ${standardBatchOutputKg.toFixed(3)}kg = ${standardLaborCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costLabor.toFixed(2)}元`,
+    };
+
+    // Manufacturing Overhead
+    const costOverhead = rawInputWeightKg * globalConfig.overheadCostPerKg;
+
+    // Collect overhead cost details
+    const overheadDetails = {
+      overheadCostPerKg: globalConfig.overheadCostPerKg,
+      rawInputWeightKg,
+      totalCost: costOverhead,
+      calculation: `间接成本${globalConfig.overheadCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costOverhead.toFixed(2)}元`,
+    };
+
+    console.log('========== PricingService 步骤3: 人工与制造费用 ==========');
+    console.log('[人工成本]', {
+      defaultBatchCapacityG: globalConfig.defaultBatchCapacityG,
+      targetBatchUtilization: globalConfig.targetBatchUtilization,
+      standardBatchOutputKg,
+      batchLaborHours: recipe.batchLaborHours,
+      laborHourlyRate: globalConfig.laborHourlyRate,
+      standardLaborCostPerKg,
+      rawInputWeightKg,
+      costLabor,
+    });
+    console.log('[间接成本]', {
+      overheadCostPerKg: globalConfig.overheadCostPerKg,
+      rawInputWeightKg,
+      costOverhead,
+    });
+    console.log('==========================================');
+
+    // --- D. 包材成本与重量 (Packaging Cost & Weight) ---
+    // Use PackagingService to calculate packaging costs
+    const packagingResult = packagePlan
+      ? await this.packagingService.calculatePackagingCostForPlan(
+          packagePlan,
+          totalNetFoodWeightG,
+        )
+      : await this.packagingService.calculatePackagingCost(
+          totalPacks,
+          singlePackSpecG,
+          totalNetFoodWeightG,
+        );
+
+    const costPackaging = packagingResult.cost;
+    const weightPackagingG = packagingResult.weightG;
+
+    // Collect packaging cost details from breakdown
+    console.log('[PricingService] PackagingResult breakdown:', {
+      shippingContainersCount:
+        packagingResult.breakdown.shippingContainers.length,
+      shippingContainers: packagingResult.breakdown.shippingContainers.map(
+        (c) => ({
+          boxName: c.boxName,
+          boxSpec: c.boxSpec,
+          cost: c.cost,
+        }),
+      ),
+    });
+
+    const packagingDetails = this.buildPackagingDetails(
+      packagingResult,
+      totalPacks,
+    );
+
+    console.log('========== PricingService 步骤4: 包材成本 ==========');
+    console.log('[包材成本]', {
+      totalPacks,
+      singlePackSpecG,
+      totalNetFoodWeightG,
+      costPackaging,
+      weightPackagingG,
+      breakdown: packagingResult.breakdown,
+    });
+    console.log('==========================================');
+
+    const totalProductCost =
+      costIngredients + costLabor + costOverhead + costPackaging;
+
+    console.log('========== PricingService 步骤5: 成本汇总 ==========');
+    console.log('[成本汇总]', {
+      costIngredients,
+      costLabor,
+      costOverhead,
+      costPackaging,
+      totalProductCost,
+    });
+    console.log('==========================================');
+
+    // ==========================================
+    // 3. 产品定价 (Product Pricing)
+    // ==========================================
+    // Apply margin only to product cost, not shipping
+    const baseProductPrice = totalProductCost / (1 - globalConfig.targetMargin);
+
+    console.log('========== PricingService 步骤6: 毛利应用 ==========');
+    console.log('[价格计算]', {
+      totalProductCost,
+      targetMargin: globalConfig.targetMargin,
+      baseProductPrice,
+    });
+    console.log('==========================================');
+
+    // ==========================================
+    // 4. 运费计算 (Shipping Fee)
+    // ==========================================
+    // For MVP, shipping fee is stubbed to 0 or calculated separately
+    // Per doc: "can return 0 with clear TODO, but keep the interface consistent"
+    const shippingFee = 0; // TODO: Implement shipping fee calculation
+
+    // ==========================================
+    // 5. 最终总价 (Final Total)
+    // ==========================================
+    // Product discount, shipping usually not discounted
+    const finalTotal = baseProductPrice * discountRate + shippingFee;
+
+    console.log('========== PricingService 步骤7: 最终价格 ==========');
+    console.log('[最终返回]', {
+      baseProductPrice,
+      discountRate,
+      shippingFee,
+      finalTotal,
+      productPrice: baseProductPrice * discountRate,
+    });
+    console.log('==========================================');
+
+    return {
+      costIngredients,
+      costPackaging,
+      costLabor,
+      costOverhead,
+      totalProductCost,
+      productPrice: baseProductPrice * discountRate,
+      shippingFee,
+      totalPrice: finalTotal,
+      weightPackagingG,
+      ingredientDetails,
+      packagingDetails,
+      laborDetails,
+      overheadDetails,
+    };
+  }
+
+  /**
+   * 试吃装合并定价（现做现货）
+   *
+   * 与鲜食单菜定价的区别：
+   * 1. **多道菜合并**：原料成本逐菜相加；人工按各菜自己的 batchLaborHours 分别分摊后相加；
+   *    制造费用按总投料毛重算一次；包材把各菜袋规格合并后只算一次（否则会算 5 个冷链箱）。
+   * 2. **豁免起订量**：试吃装本身就是小额尝鲜，不走 minOrderWeightG 校验。
+   * 3. **倍率口径**：实收 = 成本 × 试吃倍率（默认 1.25），而鲜食是 成本 ÷ (1 − 目标利润率)。
+   *    划线价按鲜食口径反算，用于页面上展示"立省多少"。
+   * 4. **不含运费**：与鲜食口径一致 —— 倍率只作用于商品成本，运费另行按重量模板计算。
+   *    （顶层设计文档第五节把运费写进了倍率公式，这里按现有系统的口径修正为"运费另计"。）
+   */
+  async calculateTastingPackPrice(
+    input: TastingPackPricingInput,
+  ): Promise<TastingPackPricingResult> {
+    const { recipes, tastingMultiplier, globalConfig } = input;
+
+    if (!Array.isArray(recipes) || recipes.length === 0) {
+      throw new ValidationError('试吃装至少需要一道菜');
+    }
+
+    if (!Number.isFinite(tastingMultiplier) || tastingMultiplier <= 0) {
+      throw new ValidationError(
+        `试吃倍率必须为正数，当前值: ${tastingMultiplier}`,
+      );
+    }
+
+    const standardBatchOutputKg =
+      (globalConfig.defaultBatchCapacityG / 1000.0) *
+      globalConfig.targetBatchUtilization;
+    if (!Number.isFinite(standardBatchOutputKg) || standardBatchOutputKg <= 0) {
+      throw new ValidationError(
+        `标准批次产量必须为正数，当前值: ${standardBatchOutputKg}`,
+      );
+    }
+
+    const ingredientDetails: IngredientCostItem[] = [];
+    const perRecipe: TastingPackPricingResult['perRecipe'] = [];
+    const rawPackagePlan: OrderPackagePlanItem[] = [];
+
+    let costIngredients = 0;
+    let costLabor = 0;
+    let costOverhead = 0;
+    let rawInputWeightKg = 0;
+    let totalNetFoodWeightG = 0;
+    let totalPacks = 0;
+
+    for (const entry of recipes) {
+      const { recipe, packageCount, packageSpecG } = entry;
+
+      if (
+        !Number.isFinite(packageCount) ||
+        packageCount <= 0 ||
+        !Number.isFinite(packageSpecG) ||
+        packageSpecG <= 0
+      ) {
+        throw new ValidationError(
+          `试吃装分装规格非法：${recipe?.name ?? recipe?.id} ${packageSpecG}g × ${packageCount}袋`,
+        );
+      }
+
+      const recipeNetWeightG = packageCount * packageSpecG;
+
+      const recipeCost = this.calculateRecipeCost({
+        recipe,
+        totalNetFoodWeightG: recipeNetWeightG,
+        globalConfig,
+      });
+
+      // 人工：每道菜按自己的 batchLaborHours 分摊（与单品口径一致）
+      const batchLaborHours = recipe.batchLaborHours ?? 2.0;
+      const standardLaborCostPerKg =
+        (globalConfig.laborHourlyRate * batchLaborHours) /
+        standardBatchOutputKg;
+      const recipeLabor = recipeCost.rawInputWeightKg * standardLaborCostPerKg;
+
+      costIngredients += recipeCost.costIngredients;
+      costLabor += recipeLabor;
+      rawInputWeightKg += recipeCost.rawInputWeightKg;
+      totalNetFoodWeightG += recipeNetWeightG;
+      totalPacks += packageCount;
+      ingredientDetails.push(...recipeCost.ingredientDetails);
+      rawPackagePlan.push({ packageSpecG, packageCount });
+
+      perRecipe.push({
+        recipeId: recipe.id,
+        recipeName: recipe.name ?? recipe.id,
+        totalNetFoodWeightG: recipeNetWeightG,
+        costIngredients: recipeCost.costIngredients,
+        rawInputWeightKg: recipeCost.rawInputWeightKg,
+        packageCount,
+        packageSpecG,
+      });
+    }
+
+    // 制造费用：按总投料毛重算一次
+    costOverhead = rawInputWeightKg * globalConfig.overheadCostPerKg;
+
+    // 包材：各菜袋规格合并后只算一次，冷链箱按整套总净重算一次
+    const mergedPackagePlan = mergePackagePlanRows(rawPackagePlan);
+    const packagingResult =
+      await this.packagingService.calculatePackagingCostForPlan(
+        mergedPackagePlan,
+        totalNetFoodWeightG,
+      );
+    const costPackaging = packagingResult.cost;
+    const weightPackagingG = packagingResult.weightG;
+
+    const totalProductCost =
+      costIngredients + costLabor + costOverhead + costPackaging;
+
+    // 实收：成本 × 试吃倍率
+    const productPrice = totalProductCost * tastingMultiplier;
+
+    // 划线价：按鲜食口径（成本 ÷ (1 − 目标利润率)）反算，用于展示"立省"
+    const listPrice =
+      globalConfig.targetMargin < 1
+        ? totalProductCost / (1 - globalConfig.targetMargin)
+        : totalProductCost;
+
+    return {
+      costIngredients,
+      costPackaging,
+      costLabor,
+      costOverhead,
+      totalProductCost,
+      productPrice,
+      listPrice,
+      totalNetFoodWeightG,
+      rawInputWeightKg,
+      totalPacks,
+      ingredientDetails,
+      packagingDetails: this.buildPackagingDetails(
+        packagingResult,
+        totalPacks,
+      ),
+      weightPackagingG,
+      perRecipe,
+    };
+  }
+
+  /**
+   * 把包材计算结果整理成与鲜食一致的展示结构。
+   * 从 calculateOrderPrice 中抽取，两处共用同一份口径。
+   */
+  private buildPackagingDetails(
+    packagingResult: Awaited<
+      ReturnType<PackagingService['calculatePackagingCostForPlan']>
+    >,
+    totalPacks: number,
+  ): PricingBreakdown['packagingDetails'] {
+    const perPackConsumables = packagingResult.breakdown
+      .perPackConsumables as typeof packagingResult.breakdown.perPackConsumables & {
+      vacuumBagTotalCost?: number;
+      labelTotalCost?: number;
+      totalCost?: number;
+      vacuumBagsCount?: number;
+      labelsCount?: number;
+    };
+
+    const vacuumBagTotalCost =
+      perPackConsumables.vacuumBagTotalCost ??
+      perPackConsumables.vacuumBagCostPerPack * totalPacks;
+    const labelTotalCost =
+      perPackConsumables.labelTotalCost ??
+      perPackConsumables.labelCostPerPack * totalPacks;
+    const totalPerPackConsumablesCost =
+      perPackConsumables.totalCost ??
+      (perPackConsumables.vacuumBagCostPerPack +
+        perPackConsumables.labelCostPerPack) *
+        totalPacks;
+
+    return {
+      perPackConsumables: {
+        vacuumBagName: perPackConsumables.vacuumBagName,
+        vacuumBagSpec: perPackConsumables.vacuumBagSpec,
+        labelName: perPackConsumables.labelName,
+        labelSpec: perPackConsumables.labelSpec,
+        vacuumBagCostPerPack: perPackConsumables.vacuumBagCostPerPack,
+        labelCostPerPack: perPackConsumables.labelCostPerPack,
+        vacuumBagTotalCost,
+        labelTotalCost,
+        totalCost: totalPerPackConsumablesCost,
+        weightPerPack: perPackConsumables.weightPerPack,
+        vacuumBagsCount: perPackConsumables.vacuumBagsCount ?? totalPacks,
+        labelsCount: perPackConsumables.labelsCount ?? totalPacks,
+        calculation:
+          perPackConsumables.calculation ??
+          `每袋¥${perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${totalPerPackConsumablesCost.toFixed(2)}`,
+      },
+      shippingContainers: packagingResult.breakdown.shippingContainers.map(
+        (container) => ({
+          boxName: container.boxName,
+          boxSpec: container.boxSpec,
+          thermalBagName: container.thermalBagName,
+          thermalBagSpec: container.thermalBagSpec,
+          icePacks: container.icePacks,
+          boxCost: container.cost,
+          thermalBagCost: 0, // Included in total cost
+          icePackCost: 0, // Included in total cost
+          totalCost: container.cost,
+          weight: container.weight,
+          boxesCount: 1, // 每个容器1个泡沫箱
+          thermalBagsCount: 1, // 每个容器1个保温袋
+          calculation: `快递包装：${container.boxName} + ${container.thermalBagName} + 冰袋${container.icePacks}个 = ¥${container.cost.toFixed(2)}`,
+        }),
+      ),
+    };
+  }
+
+  /**
+   * 计算「一道菜」的原料成本与投料毛重。
+   *
+   * 从 calculateOrderPrice 中抽取（逐行等价），供两处复用：
+   *   ① calculateOrderPrice —— 现有鲜食单菜定价
+   *   ② calculateTastingPackPrice —— 试吃装多道菜合并定价
+   *
+   * ⚠️ 修改本方法会同时影响鲜食与试吃装两条线的售价。
+   * 改动后必须跑 tests/domain/pricing/pricing-characterization.spec.ts（价格锁死测试）。
+   */
+  calculateRecipeCost(input: RecipeCostInput): RecipeCostResult {
+    const { recipe, totalNetFoodWeightG, globalConfig } = input;
+
+    // 生产投料毛重 (含烹饪损耗)，单位 kg
+    const rawInputWeightKg =
+      (totalNetFoodWeightG / 1000.0) * recipe.productionLossRate;
+
+    let costIngredients = 0;
+    const ingredientDetails: IngredientCostItem[] = [];
+    const foodRatioTotalPercent = sumFoodRatioPercent(recipe.items);
+    const recipeFoodExampleWeightG = this.getRecipeFoodExampleWeightG(
+      recipe.items,
+    );
 
     for (const item of recipe.items) {
       const ingredient = item.ingredient;
@@ -592,219 +1073,14 @@ export class PricingService {
       // Note: PACKAGING is handled separately below
     }
 
-    // --- C. 人工与制造费用 (Labor & Overhead - Standard Costing) ---
-    // Standard batch output (kg)
-    const standardBatchOutputKg =
-      (globalConfig.defaultBatchCapacityG / 1000.0) *
-      globalConfig.targetBatchUtilization;
-    const standardLaborCostPerKg =
-      (globalConfig.laborHourlyRate * recipe.batchLaborHours) /
-      standardBatchOutputKg;
-
-    const costLabor = rawInputWeightKg * standardLaborCostPerKg;
-
-    // Collect labor cost details
-    const laborDetails = {
-      standardBatchOutputKg,
-      standardLaborCostPerKg,
-      rawInputWeightKg,
-      totalCost: costLabor,
-      calculation: `标准批次产量${standardBatchOutputKg.toFixed(3)}kg，人工成本${(globalConfig.laborHourlyRate * recipe.batchLaborHours).toFixed(2)}元 ÷ ${standardBatchOutputKg.toFixed(3)}kg = ${standardLaborCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costLabor.toFixed(2)}元`,
-    };
-
-    // Manufacturing Overhead
-    const costOverhead = rawInputWeightKg * globalConfig.overheadCostPerKg;
-
-    // Collect overhead cost details
-    const overheadDetails = {
-      overheadCostPerKg: globalConfig.overheadCostPerKg,
-      rawInputWeightKg,
-      totalCost: costOverhead,
-      calculation: `间接成本${globalConfig.overheadCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costOverhead.toFixed(2)}元`,
-    };
-
-    console.log('========== PricingService 步骤3: 人工与制造费用 ==========');
-    console.log('[人工成本]', {
-      defaultBatchCapacityG: globalConfig.defaultBatchCapacityG,
-      targetBatchUtilization: globalConfig.targetBatchUtilization,
-      standardBatchOutputKg,
-      batchLaborHours: recipe.batchLaborHours,
-      laborHourlyRate: globalConfig.laborHourlyRate,
-      standardLaborCostPerKg,
-      rawInputWeightKg,
-      costLabor,
-    });
-    console.log('[间接成本]', {
-      overheadCostPerKg: globalConfig.overheadCostPerKg,
-      rawInputWeightKg,
-      costOverhead,
-    });
-    console.log('==========================================');
-
-    // --- D. 包材成本与重量 (Packaging Cost & Weight) ---
-    // Use PackagingService to calculate packaging costs
-    const packagingResult = packagePlan
-      ? await this.packagingService.calculatePackagingCostForPlan(
-          packagePlan,
-          totalNetFoodWeightG,
-        )
-      : await this.packagingService.calculatePackagingCost(
-          totalPacks,
-          singlePackSpecG,
-          totalNetFoodWeightG,
-        );
-
-    const costPackaging = packagingResult.cost;
-    const weightPackagingG = packagingResult.weightG;
-
-    // Collect packaging cost details from breakdown
-    console.log('[PricingService] PackagingResult breakdown:', {
-      shippingContainersCount:
-        packagingResult.breakdown.shippingContainers.length,
-      shippingContainers: packagingResult.breakdown.shippingContainers.map(
-        (c) => ({
-          boxName: c.boxName,
-          boxSpec: c.boxSpec,
-          cost: c.cost,
-        }),
-      ),
-    });
-
-    const perPackConsumables = packagingResult.breakdown
-      .perPackConsumables as typeof packagingResult.breakdown.perPackConsumables & {
-      vacuumBagTotalCost?: number;
-      labelTotalCost?: number;
-      totalCost?: number;
-      vacuumBagsCount?: number;
-      labelsCount?: number;
-      calculation?: string;
-    };
-    const vacuumBagTotalCost =
-      perPackConsumables.vacuumBagTotalCost ??
-      perPackConsumables.vacuumBagCostPerPack * totalPacks;
-    const labelTotalCost =
-      perPackConsumables.labelTotalCost ??
-      perPackConsumables.labelCostPerPack * totalPacks;
-    const totalPerPackConsumablesCost =
-      perPackConsumables.totalCost ??
-      (perPackConsumables.vacuumBagCostPerPack +
-        perPackConsumables.labelCostPerPack) *
-        totalPacks;
-    const packagingDetails = {
-      perPackConsumables: {
-        vacuumBagName: perPackConsumables.vacuumBagName,
-        vacuumBagSpec: perPackConsumables.vacuumBagSpec,
-        labelName: perPackConsumables.labelName,
-        labelSpec: perPackConsumables.labelSpec,
-        vacuumBagCostPerPack: perPackConsumables.vacuumBagCostPerPack,
-        labelCostPerPack: perPackConsumables.labelCostPerPack,
-        vacuumBagTotalCost,
-        labelTotalCost,
-        totalCost: totalPerPackConsumablesCost,
-        weightPerPack: perPackConsumables.weightPerPack,
-        vacuumBagsCount: perPackConsumables.vacuumBagsCount ?? totalPacks, // 真空袋总数量 = 总袋数
-        labelsCount: perPackConsumables.labelsCount ?? totalPacks, // 标签总数量 = 总袋数
-        calculation:
-          perPackConsumables.calculation ??
-          `每袋¥${perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${totalPerPackConsumablesCost.toFixed(2)}`,
-      },
-      shippingContainers: packagingResult.breakdown.shippingContainers.map(
-        (container) => ({
-          boxName: container.boxName,
-          boxSpec: container.boxSpec,
-          thermalBagName: container.thermalBagName,
-          thermalBagSpec: container.thermalBagSpec,
-          icePacks: container.icePacks,
-          boxCost: container.cost,
-          thermalBagCost: 0, // Included in total cost
-          icePackCost: 0, // Included in total cost
-          totalCost: container.cost,
-          weight: container.weight,
-          boxesCount: 1, // 每个容器1个泡沫箱
-          thermalBagsCount: 1, // 每个容器1个保温袋
-          calculation: `快递包装：${container.boxName} + ${container.thermalBagName} + 冰袋${container.icePacks}个 = ¥${container.cost.toFixed(2)}`,
-        }),
-      ),
-    };
-
-    console.log('========== PricingService 步骤4: 包材成本 ==========');
-    console.log('[包材成本]', {
-      totalPacks,
-      singlePackSpecG,
-      totalNetFoodWeightG,
-      costPackaging,
-      weightPackagingG,
-      breakdown: packagingResult.breakdown,
-    });
-    console.log('==========================================');
-
-    const totalProductCost =
-      costIngredients + costLabor + costOverhead + costPackaging;
-
-    console.log('========== PricingService 步骤5: 成本汇总 ==========');
-    console.log('[成本汇总]', {
-      costIngredients,
-      costLabor,
-      costOverhead,
-      costPackaging,
-      totalProductCost,
-    });
-    console.log('==========================================');
-
-    // ==========================================
-    // 3. 产品定价 (Product Pricing)
-    // ==========================================
-    // Apply margin only to product cost, not shipping
-    const baseProductPrice = totalProductCost / (1 - globalConfig.targetMargin);
-
-    console.log('========== PricingService 步骤6: 毛利应用 ==========');
-    console.log('[价格计算]', {
-      totalProductCost,
-      targetMargin: globalConfig.targetMargin,
-      baseProductPrice,
-    });
-    console.log('==========================================');
-
-    // ==========================================
-    // 4. 运费计算 (Shipping Fee)
-    // ==========================================
-    // For MVP, shipping fee is stubbed to 0 or calculated separately
-    // Per doc: "can return 0 with clear TODO, but keep the interface consistent"
-    const shippingFee = 0; // TODO: Implement shipping fee calculation
-
-    // ==========================================
-    // 5. 最终总价 (Final Total)
-    // ==========================================
-    // Product discount, shipping usually not discounted
-    const finalTotal = baseProductPrice * discountRate + shippingFee;
-
-    console.log('========== PricingService 步骤7: 最终价格 ==========');
-    console.log('[最终返回]', {
-      baseProductPrice,
-      discountRate,
-      shippingFee,
-      finalTotal,
-      productPrice: baseProductPrice * discountRate,
-    });
-    console.log('==========================================');
-
     return {
       costIngredients,
-      costPackaging,
-      costLabor,
-      costOverhead,
-      totalProductCost,
-      productPrice: baseProductPrice * discountRate,
-      shippingFee,
-      totalPrice: finalTotal,
-      weightPackagingG,
       ingredientDetails,
-      packagingDetails,
-      laborDetails,
-      overheadDetails,
+      rawInputWeightKg,
+      foodRatioTotalPercent,
+      recipeFoodExampleWeightG,
     };
   }
-
   private getRecipeFoodExampleWeightG(items: RecipeItem[]): number {
     return items.reduce((sum, item) => {
       if (item.ingredient.type !== IngredientType.FOOD) {

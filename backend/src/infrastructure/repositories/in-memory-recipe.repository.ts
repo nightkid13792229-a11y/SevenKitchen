@@ -37,6 +37,20 @@ export class InMemoryRecipeRepository implements RecipeRepository {
     );
   }
 
+  async findLatestPublicById(id: string): Promise<Recipe | null> {
+    const published = Array.from(this.recipes.values()).filter(
+      (r) => r.id === id && r.status === 'PUBLIC',
+    );
+    if (published.length === 0) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(
+      published.reduce((latest, current) =>
+        current.version > latest.version ? current : latest,
+      ),
+    );
+  }
+
   async findByIdAndVersion(
     id: string,
     version: number,

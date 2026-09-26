@@ -180,6 +180,15 @@ import { ProductFunnelAnalyticsController } from './interfaces/controllers/produ
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
+import { TastingPackConfigService } from './application/tasting-pack/tasting-pack-config.service';
+import { TastingPackPricingService } from './application/tasting-pack/tasting-pack-pricing.service';
+import { TastingPackService } from './application/tasting-pack/tasting-pack.service';
+import { TastingPackStockService } from './application/tasting-pack/tasting-pack-stock.service';
+import { TastingPackProductionService, TASTING_PACK_PURCHASING_PORT } from './application/tasting-pack/tasting-pack-production.service';
+import {
+  AdminTastingPackController,
+  PublicTastingPackController,
+} from './interfaces/controllers/tasting-pack.controller';
 import { SupplementCatalogService } from './application/supplement-shop/supplement-catalog.service';
 import { SupplementShopConfigService } from './application/supplement-shop/supplement-shop-config.service';
 import { SupplementPricingService } from './application/supplement-shop/supplement-pricing.service';
@@ -325,6 +334,8 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     AdminSupplementShopController,
+    AdminTastingPackController,
+    PublicTastingPackController,
     SupplementsController,
     SupplementOrdersController,
     IngredientSuggestionsController,
@@ -732,6 +743,16 @@ validatePrismaConfig();
     ProcurementSkuService,
     SupplementCatalogService,
     SupplementShopConfigService,
+    TastingPackConfigService,
+    TastingPackPricingService,
+    TastingPackService,
+    TastingPackStockService,
+    TastingPackProductionService,
+    {
+      // 备货单生成采购清单时复用真实的采购服务（见令牌处的说明）
+      provide: TASTING_PACK_PURCHASING_PORT,
+      useExisting: PurchasingService,
+    },
     SupplementPricingService,
     SupplementOrderService,
     NutrientMappingAuditService,

@@ -154,6 +154,7 @@ export class PrismaOrderRepository implements OrderRepository {
               cookingMethod: item.cookingMethod ?? null,
               customRequirements: item.customRequirements,
               dailyIntakeG: item.dailyIntakeG,
+              tastingPackId: item.tastingPackId ?? null,
               // Phase 8.11: Allocation fields (null on creation, set when allocated to batch)
               productionBatchId: item.productionBatchId ?? null,
               allocatedAt: item.allocatedAt ?? null,
@@ -277,6 +278,7 @@ export class PrismaOrderRepository implements OrderRepository {
           ),
           (i as any).preparationMethod ?? null,
           (i as any).cookingMethod ?? null,
+          (i as any).tastingPackId ?? null,
         ),
     );
 
@@ -498,6 +500,9 @@ export class PrismaOrderRepository implements OrderRepository {
         gte: params.startDate,
         lte: endDate,
       },
+      // 试吃装是现货：它没有制作日期、也不该被拉进采购与排产。
+      // 显式排除而不是靠"日期为空所以查不到"—— 那样一旦将来给它设了日期就会静默出错。
+      type: { not: OrderType.TASTING_PACK },
     };
 
     if (params.status) {
@@ -649,6 +654,7 @@ export class PrismaOrderRepository implements OrderRepository {
       ingredientSourcePlan: (orderItem as any).ingredientSourcePlan ?? null,
       customRequirements: orderItem.customRequirements,
       dailyIntakeG: orderItem.dailyIntakeG,
+      tastingPackId: (orderItem as any).tastingPackId ?? null,
       vacuumBagSpec: orderItem.vacuumBagSpec,
       allocatedAt: orderItem.allocatedAt,
       productionBatchId: orderItem.productionBatchId,

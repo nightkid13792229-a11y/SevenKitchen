@@ -22,6 +22,8 @@ export interface PurchaseListConstructor {
   createdById: string;
   createdBy?: any; // User object with id, nickname, phone
   sourceOrderIds: string[];
+  /** 备货采购单的来源备货生产单（订单采购单为 null） */
+  sourceTastingPackPlanId?: string | null;
   orderDateSnapshot?: Record<
     string,
     { originalDate: string; hasChanged: boolean }
@@ -47,6 +49,7 @@ export class PurchaseList {
   public readonly createdById: string;
   public readonly createdBy?: any; // User object with id, nickname, phone
   public sourceOrderIds: string[]; // 可写，用于动态更新
+  public sourceTastingPackPlanId?: string | null;
   public orderDateSnapshot?: Record<
     string,
     { originalDate: string; hasChanged: boolean }
@@ -70,6 +73,7 @@ export class PurchaseList {
     this.createdById = data.createdById;
     this.createdBy = data.createdBy;
     this.sourceOrderIds = data.sourceOrderIds;
+    this.sourceTastingPackPlanId = data.sourceTastingPackPlanId ?? null;
     this.orderDateSnapshot = data.orderDateSnapshot;
     this.reimbursementId = data.reimbursementId;
     this.createdAt = data.createdAt || new Date();
@@ -101,11 +105,17 @@ export class PurchaseList {
       throw new Error('Item count must be positive');
     }
 
+    // 订单需求采购单必须有来源订单；但**备货采购单**本来就没有顾客订单，
+    // 它的来源是备货生产单（sourceTastingPackPlanId），因此放行这一种情况。
+    // 放开的同时要求两者至少有一个，避免出现既没有订单也没有备货单的孤儿采购单。
     if (
       this.kind === PurchaseListKind.ORDER_DEMAND &&
-      this.sourceOrderIds.length === 0
+      this.sourceOrderIds.length === 0 &&
+      !this.sourceTastingPackPlanId
     ) {
-      throw new Error('Purchase list must have at least one source order');
+      throw new Error(
+        'Purchase list must have at least one source order or a source tasting-pack production plan',
+      );
     }
 
     // 如果已关联报销单，状态必须是COMPLETED
@@ -210,6 +220,7 @@ export class PurchaseList {
       itemCount: this.itemCount,
       createdById: this.createdById,
       sourceOrderIds: this.sourceOrderIds,
+      sourceTastingPackPlanId: this.sourceTastingPackPlanId,
       orderDateSnapshot: this.orderDateSnapshot,
       reimbursementId: this.reimbursementId,
       createdAt: this.createdAt,
@@ -248,6 +259,7 @@ export class PurchaseList {
       createdById: data.createdById,
       createdBy: data.createdBy, // ✅ 包含User对象 {id, nickname, phone}
       sourceOrderIds: data.sourceOrderIds,
+      sourceTastingPackPlanId: data.sourceTastingPackPlanId ?? null,
       orderDateSnapshot: data.orderDateSnapshot,
       reimbursementId: data.reimbursementId,
       createdAt: data.createdAt,

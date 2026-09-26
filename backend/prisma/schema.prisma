@@ -155,6 +155,8 @@ model OrderItem {
   dailyIntakeG         Float?    @map("daily_intake_g")
   allocatedAt          DateTime? @map("allocated_at")
   productionBatchId    String?   @map("production_batch_id")
+  /// 试吃装商品 ID（鲜食订单为 null）。便于按商品统计销量
+  tastingPackId        String?   @map("tasting_pack_id")
   cookingMethod        String?   @map("cooking_method") @db.VarChar(20)
   preparationMethod    String?   @map("preparation_method") @db.VarChar(20)
   dogId                String?   @map("dog_id")
@@ -164,6 +166,7 @@ model OrderItem {
   @@index([orderId])
   @@index([dogId])
   @@index([productionBatchId])
+  @@index([tastingPackId])
   @@map("order_item")
 }
 
@@ -622,6 +625,10 @@ model ProductionBatch {
   id                     String                         @id @default(uuid()) @map("id")
   productionDate         DateTime                       @map("production_date")
   status                 ProductionBatchStatus          @map("status")
+  /// 批次来源：顾客订单履约 / 试吃装备货
+  source                 ProductionBatchSource          @default(ORDER) @map("source")
+  /// 备货生产单 ID（订单批次为 null）
+  tastingPackProductionPlanId String?                  @map("tasting_pack_production_plan_id")
   plannedOutputG         Float?                         @map("planned_output_g")
   actualOutputG          Float?                         @map("actual_output_g")
   surplusG               Float?                         @map("surplus_g")
@@ -635,7 +642,17 @@ model ProductionBatch {
 
   @@index([productionDate])
   @@index([status])
+  @@index([source])
+  @@index([tastingPackProductionPlanId])
   @@map("production_batch")
+}
+
+/// 生产批次来源
+enum ProductionBatchSource {
+  /// 顾客订单履约
+  ORDER
+  /// 试吃装备货
+  STOCK
 }
 
 model PackagingUnit {
@@ -646,6 +663,9 @@ model PackagingUnit {
   sourceOrderItemIds       String[]            @map("source_order_item_ids")
   createdAt                DateTime            @default(now()) @map("created_at")
   ingredientsUsageSnapshot Json?               @map("ingredients_usage_snapshot")
+  /// 备货分装计划（仅备货批次使用）：这批要分多少袋、每袋多少克。
+  /// 订单批次的分装明细来自订单，不需要这个字段
+  stockPortionPlan         Json?               @map("stock_portion_plan")
   photosCooked             String[]            @default([]) @map("photos_cooked")
   photosPortioned          String[]            @default([]) @map("photos_portioned")
   photosRaw                String[]            @default([]) @map("photos_raw")
@@ -1381,6 +1401,8 @@ model PurchaseList {
   itemCount            Int                   @map("item_count")
   createdById          String                @map("created_by_id")
   sourceOrderIds       String[]              @map("source_order_ids")
+  /// 备货采购单来源（订单需求采购单为 null）
+  sourceTastingPackPlanId String?            @map("source_tasting_pack_plan_id")
   reimbursementId      String?               @map("reimbursement_id")
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
@@ -1397,6 +1419,7 @@ model PurchaseList {
   @@index([kind])
   @@index([status])
   @@index([createdById])
+  @@index([sourceTastingPackPlanId])
   @@map("purchase_list")
 }
 
@@ -1716,6 +1739,8 @@ enum OrderStatus {
 enum OrderType {
   FRESH_FOOD
   CUSTOM_SERVICE
+  /// 试吃装（现货）：只扣成品库存，不采购、不排产、不生产
+  TASTING_PACK
 }
 
 enum AftersaleType {
@@ -2694,6 +2719,289 @@ model SupplementShopConfig {
   updatedAt                 DateTime                     @updatedAt @map("updated_at")
 
   @@map("supplement_shop_config")
+}
+
+/// 试吃装设置（单例）
+///
+/// 背景：试吃装是"提前做好、现货发售"的第二条鲜食产品线，
+/// 价格由「5 道菜合并成本 × 试吃倍率」自动算出，而不是人工填价。
+/// 倍率、限购、补货阈值这些会随成本与销量反复调整的参数必须解耦到后台，
+/// 否则每次调价都要改代码发版。
+///
+/// 沿用 supplement_shop_config 的单例模式：id 固定为 'singleton'。
+model TastingPackConfig {
+  id                   String            @id @default("singleton") @map("id")
+  /// 总开关：未开启时小程序不展示试吃装入口
+  enabled              Boolean           @default(false) @map("enabled")
+
+  // ---- 定价 ----
+  /// 试吃倍率：成本 → 实收。默认 1.25（相当于正装口径约 75 折）
+  tastingMultiplier    Decimal           @default(1.25) @map("tasting_multiplier") @db.Decimal(6, 3)
+  /// 售价圆整规则。一律向上取整，避免"算出来 1.0001、实收 1.00"的负毛利
+  priceRoundingMode    PriceRoundingMode @default(CEIL_TO_1) @map("price_rounding_mode")
+  /// 定价用哪个成本基数：今日原料价 or 库存批次成本。默认按今日原料价
+  costBasisMode        TastingPackCostBasis @default(LIVE) @map("cost_basis_mode")
+
+  // ---- 售卖 ----
+  /// 单次限购套数
+  maxSetsPerOrder      Int               @default(5) @map("max_sets_per_order")
+
+  // ---- 备货 ----
+  /// 补货预警阈值：可用套数低于此值时后台提示补货
+  lowStockThreshold    Int               @default(10) @map("low_stock_threshold")
+  /// 一键备货默认套数
+  defaultRestockSets   Int               @default(20) @map("default_restock_sets")
+  /// 成品保质期（月）。入库时据此推算到期日；急冻 -18℃ 口径默认 6 个月
+  shelfLifeMonths      Int               @default(6) @map("shelf_life_months")
+  /// 新建试吃装时的默认袋数（每道菜几袋）
+  defaultBagsPerRecipe Int               @default(2) @map("default_bags_per_recipe")
+  /// 新建试吃装时的默认每袋克重
+  defaultPackSpecG     Int               @default(80) @map("default_pack_spec_g")
+  /// 是否允许强制排产（原料已备齐时跳过"采购清单已完成"检查）。强制排产会记操作日志
+  allowForceSchedule   Boolean           @default(true) @map("allow_force_schedule")
+
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  @@map("tasting_pack_config")
+}
+
+/// 售价圆整规则
+enum PriceRoundingMode {
+  /// 不圆整，保留两位小数
+  NONE
+  /// 向上进位到 0.1 元
+  CEIL_TO_0_1
+  /// 向上进位到 0.5 元
+  CEIL_TO_0_5
+  /// 向上进位到 1 元
+  CEIL_TO_1
+}
+
+/// 试吃装商品
+///
+/// 一套试吃装 = 若干道菜 × 每道若干袋 × 每袋若干克（默认 5 道 × 2 袋 × 80g = 800g）。
+/// 它是**现货**：不做"按单生产"，而是提前做好一批放库存里卖，
+/// 顾客下单只扣库存，不排产。
+model TastingPack {
+  id              String            @id @default(uuid()) @map("id")
+  /// 面客编号：分享链接与后台复制链接都用它，比 uuid 好念好认
+  code            String            @unique @map("code") @db.VarChar(32)
+  name            String            @map("name") @db.VarChar(100)
+  /// 一句话卖点
+  subtitle        String?           @map("subtitle") @db.VarChar(200)
+  coverImageUrl   String?           @map("cover_image_url")
+  detailImages    Json?             @map("detail_images")
+  status          TastingPackStatus @default(DRAFT) @map("status")
+
+  // ---- 规格 ----
+  /// 每道菜几袋
+  bagsPerRecipe   Int               @default(2) @map("bags_per_recipe")
+  /// 每袋多少克
+  packSpecG       Int               @default(80) @map("pack_spec_g")
+
+  // ---- 定价 ----
+  /// 手动定价覆盖（元/套）。为空 = 按「成本 × 试吃倍率」自动算
+  manualPrice     Decimal?          @map("manual_price") @db.Decimal(10, 2)
+  /// 单次限购覆盖。为空 = 用「试吃装设置」里的全局值
+  maxSetsOverride Int?              @map("max_sets_override")
+
+  sortOrder       Int               @default(0) @map("sort_order")
+  createdById     String?           @map("created_by_id")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  items          TastingPackItem[]
+  stockBatches   TastingPackStockBatch[]
+  stockLedger    TastingPackStockLedger[]
+  productionPlans TastingPackProductionPlan[]
+
+  @@index([status])
+  @@index([sortOrder])
+  @@map("tasting_pack")
+}
+
+/// 试吃装包含的菜品
+///
+/// `recipeId` 存的是**业务键**（不是主键），因为定价与生产始终取该菜的
+/// **最新版本** —— 保证用的是当前配方与当前原料价。
+/// `recipeSnapshot` 是**展示快照**（菜名/封面/卖点），
+/// 防止以后改名换图导致老商品页面变成另一个样子。
+model TastingPackItem {
+  id             String      @id @default(uuid()) @map("id")
+  tastingPackId  String      @map("tasting_pack_id")
+  recipeId       String      @map("recipe_id")
+  recipeSnapshot Json        @map("recipe_snapshot")
+  sortOrder      Int         @default(0) @map("sort_order")
+  tastingPack    TastingPack @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
+
+  @@unique([tastingPackId, recipeId])
+  @@index([recipeId])
+  @@map("tasting_pack_item")
+}
+
+/// 试吃装成品库存批次
+///
+/// 一次备货入库 = 一条批次记录。扣减按**先到期先出**，
+/// 每笔进出都写 `tasting_pack_stock_ledger` 流水，可对账可追溯。
+model TastingPackStockBatch {
+  id                String                  @id @default(uuid()) @map("id")
+  batchNo           String                  @unique @map("batch_no") @db.VarChar(32)
+  tastingPackId     String                  @map("tasting_pack_id")
+  /// 生产日期
+  producedAt        DateTime                @map("produced_at")
+  /// 到期日 = 生产日期 + 保质期月数（入库时算好并落库，事后改配置不影响老批次）
+  expiresAt         DateTime                @map("expires_at")
+  /// 入库套数
+  quantityTotal     Int                     @map("quantity_total")
+  /// 剩余套数（含被订单占用但未付款的部分；释放时回补）
+  quantityRemaining Int                     @map("quantity_remaining")
+  /// 入库时锁定的单套成本（元）。现货按批次成本定价与核算毛利，不随原料价波动
+  unitCost          Decimal?                @map("unit_cost") @db.Decimal(10, 2)
+  status            TastingPackStockStatus  @default(AVAILABLE) @map("status")
+  note              String?                 @map("note") @db.VarChar(200)
+  /// 关联的备货生产单（第 4 批接入）
+  productionPlanId  String?                 @map("production_plan_id")
+  createdById       String?                 @map("created_by_id")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  tastingPack TastingPack               @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
+  ledger      TastingPackStockLedger[]
+
+  @@index([tastingPackId, status, expiresAt])
+  @@index([productionPlanId])
+  @@map("tasting_pack_stock_batch")
+}
+
+/// 试吃装库存流水
+///
+/// 只记变动，不记余额；余额看批次上的 `quantityRemaining`。
+/// `reason` 说明这笔变动的业务来源，`orderId` 让"哪一单扣的"可追溯。
+model TastingPackStockLedger {
+  id            String                @id @default(uuid()) @map("id")
+  tastingPackId String                @map("tasting_pack_id")
+  batchId       String?               @map("batch_id")
+  /// 正数=入库，负数=出库
+  delta         Int                   @map("delta")
+  reason        TastingPackStockReason @map("reason")
+  orderId       String?               @map("order_id")
+  note          String?               @map("note") @db.VarChar(200)
+  operatorId    String?               @map("operator_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  tastingPack TastingPack            @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
+  batch       TastingPackStockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([tastingPackId, createdAt])
+  @@index([batchId])
+  @@index([orderId])
+  @@map("tasting_pack_stock_ledger")
+}
+
+/// 试吃装备货生产单
+///
+/// 现货要提前做一批放库存里，但系统原先**只有订单驱动的生产** ——
+/// 没有顾客订单就生成不了生产批次，也生成不了采购清单。
+/// 这张表就是那条"没有订单也能生产"的通路：
+/// 备货生产单 → 原料需求 → 采购清单 → 排产 → 完工 → 入库。
+model TastingPackProductionPlan {
+  id              String                            @id @default(uuid()) @map("id")
+  /// 内部单号，方便车间口头沟通
+  planNo          String                            @unique @map("plan_no") @db.VarChar(32)
+  tastingPackId   String                            @map("tasting_pack_id")
+  /// 计划做几套
+  sets            Int                               @map("sets")
+  /// 计划生产日期（排产后作为生产批次的日期）
+  plannedDate     DateTime                          @map("planned_date")
+  status          TastingPackProductionPlanStatus   @default(PLANNED) @map("status")
+
+  /// 用料快照：与订单的 pricing_breakdown_snapshot.ingredientDetails 同构，
+  /// 这样现有采购清单与原料库存抵扣逻辑可以原样复用。
+  /// 一旦建单就冻结 —— 事后改商品或改配方不影响这张已经在执行的单。
+  ingredientRequirementSnapshot Json                @map("ingredient_requirement_snapshot")
+  /// 每道菜要做多少克、分几袋（车间看的）
+  dishPlanSnapshot              Json                @map("dish_plan_snapshot")
+
+  purchaseListId    String?                         @map("purchase_list_id")
+  productionBatchId String?                         @map("production_batch_id")
+  /// 实际入库套数（可能因为损耗少于计划套数）
+  stockedSets       Int?                            @map("stocked_sets")
+  stockedAt         DateTime?                       @map("stocked_at")
+  cancelledReason   String?                         @map("cancelled_reason") @db.VarChar(200)
+  note              String?                         @map("note") @db.VarChar(200)
+  createdById       String?                         @map("created_by_id")
+  createdAt         DateTime                        @default(now()) @map("created_at")
+  updatedAt         DateTime                        @updatedAt @map("updated_at")
+
+  tastingPack TastingPack @relation(fields: [tastingPackId], references: [id], onDelete: Cascade)
+
+  @@index([tastingPackId, status])
+  @@index([plannedDate])
+  @@index([status])
+  @@map("tasting_pack_production_plan")
+}
+
+/// 备货生产单状态
+enum TastingPackProductionPlanStatus {
+  /// 已建单，还没生成采购清单
+  PLANNED
+  /// 采购清单已生成，等原料到位
+  PURCHASING
+  /// 已排产，车间在做
+  SCHEDULED
+  /// 已完工，待确认入库
+  COMPLETED
+  /// 已入库，流程结束
+  STOCKED
+  CANCELLED
+}
+
+/// 试吃装定价的成本基数
+///
+/// 现货有个绕不开的选择：货是前几天按当时的价格做好的，
+/// 但售价可以按"今天原料多少钱"算，也可以按"这批货实际花了多少钱"算。
+/// 两种都说得通，取决于当下更在意什么，因此做成后台可切换。
+enum TastingPackCostBasis {
+  /// 按今天的原料价实时算（原料涨价，售价跟着涨）
+  LIVE
+  /// 按库存里那批货的实际成本算（原料涨跌不影响已做好的库存）
+  STOCK_BATCH
+}
+
+/// 试吃装商品状态
+enum TastingPackStatus {
+  /// 草稿：后台可见，顾客端不可见
+  DRAFT
+  /// 已上架
+  ACTIVE
+  /// 已下架
+  INACTIVE
+}
+
+/// 库存批次状态
+enum TastingPackStockStatus {
+  AVAILABLE
+  /// 已售罄
+  DEPLETED
+  /// 已过期（不再计入可售）
+  EXPIRED
+  /// 已作废（人工报废/盘亏）
+  VOID
+}
+
+/// 库存变动原因
+enum TastingPackStockReason {
+  /// 备货入库
+  STOCK_IN
+  /// 下单占用（顾客下单即扣，30 分钟未付款由 ORDER_RELEASE 回补）
+  ORDER_RESERVE
+  /// 取消 / 支付超时释放
+  ORDER_RELEASE
+  /// 人工调整（报损、盘点差异）
+  MANUAL_ADJUST
+  /// 过期作废
+  EXPIRE
 }
 
 /// 分装服务费计费方式

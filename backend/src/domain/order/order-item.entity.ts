@@ -19,7 +19,11 @@ export class OrderItem {
     public readonly packageCount: number,
     public readonly packageSpecG: number,
     public readonly customRequirements: string | null,
-    public readonly dailyIntakeG: number, // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
+    /**
+     * 每日饭量（g）。鲜食必填；试吃装是现货、没有"每日饭量"概念，存 null，
+     * 不硬塞一个假数字（数据库列本来也允许为空）。
+     */
+    public readonly dailyIntakeG: number | null, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
     public readonly vacuumBagSpec: string | null = null, // Vacuum bag specification (e.g., "12*17cm")
     public readonly productionBatchId: string | null = null, // Phase 8.11: Allocation lock - prevents duplicate allocation
     public readonly allocatedAt: Date | null = null, // Phase 8.11: Timestamp when item was allocated to a batch
@@ -27,6 +31,8 @@ export class OrderItem {
     public readonly ingredientSourcePlan: IngredientSourcePlanCode | null = null,
     public readonly preparationMethod: PreparationMethod | null = null,
     public readonly cookingMethod: CookingMethod | null = null,
+    /** 试吃装商品 ID；鲜食订单为 null */
+    public readonly tastingPackId: string | null = null,
   ) {
     this.validateInvariants();
   }
@@ -53,9 +59,9 @@ export class OrderItem {
       );
     }
 
-    if (this.dailyIntakeG <= 0) {
+    if (this.dailyIntakeG !== null && this.dailyIntakeG <= 0) {
       throw new ValidationError(
-        `Daily intake must be positive, got: ${this.dailyIntakeG}`,
+        `Daily intake must be positive when provided, got: ${this.dailyIntakeG}`,
       );
     }
 

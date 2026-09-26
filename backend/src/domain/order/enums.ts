@@ -48,6 +48,8 @@ export enum AftersaleType {
 export enum OrderType {
   FRESH_FOOD = 'FRESH_FOOD',
   CUSTOM_SERVICE = 'CUSTOM_SERVICE',
+  /** 试吃装（现货）：只扣成品库存，不采购、不排产、不生产 */
+  TASTING_PACK = 'TASTING_PACK',
 }
 
 export enum ProductionTaskStatus {

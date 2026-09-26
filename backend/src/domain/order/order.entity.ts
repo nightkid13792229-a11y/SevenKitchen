@@ -267,7 +267,21 @@ export class Order {
     };
 
     const allowedNextStates = validTransitions[this.status] || [];
-    return allowedNextStates.includes(newStatus);
+    if (allowedNextStates.includes(newStatus)) {
+      return true;
+    }
+
+    // 试吃装是现货：货已经在库里冻着，付款那一刻就可以直接发货，
+    // 不需要走「采购 → 生产 → 急冻」这三步。其余状态流转仍按通用规则。
+    if (
+      this.type === OrderType.TASTING_PACK &&
+      this.status === OrderStatus.PAID &&
+      newStatus === OrderStatus.SHIPPED
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -327,9 +341,15 @@ export class Order {
    * @param carrierCode Shipping carrier code (e.g., "SF", "YTO", "ZTO")
    */
   markAsShipped(trackingNumber: string, carrierCode: string): void {
-    if (this.status !== OrderStatus.FREEZING) {
+    // 鲜食必须等急冻完成；试吃装是现货，付款即可发货
+    const shippableStatuses =
+      this.type === OrderType.TASTING_PACK
+        ? [OrderStatus.PAID, OrderStatus.FREEZING]
+        : [OrderStatus.FREEZING];
+
+    if (!shippableStatuses.includes(this.status)) {
       throw new InvalidStateTransitionError(
-        `Cannot mark order as shipped from status: ${this.status}. Order must be in FREEZING status.`,
+        `Cannot mark order as shipped from status: ${this.status}. Order must be in ${shippableStatuses.join(' or ')} status.`,
       );
     }
 
@@ -503,6 +523,13 @@ export class Order {
       OrderStatus.COMPLETED,
     ];
     const remakeStatuses = [OrderStatus.SHIPPED, OrderStatus.COMPLETED];
+    // 试吃装是现货，「重做」没有意义（本来就是早做好的存货）——
+    // 出问题走退款，需要补发时由后台另发一单。
+    if (type === AftersaleType.REMAKE && this.type === OrderType.TASTING_PACK) {
+      throw new ValidationError(
+        '试吃装为现货商品，不支持重做。请申请退款，或联系客服补发',
+      );
+    }
     const complaintStatuses = [
       OrderStatus.PAID,
       OrderStatus.PURCHASING,

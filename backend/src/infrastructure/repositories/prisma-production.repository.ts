@@ -147,6 +147,10 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
             actualCost: batch.actualCost,
             costSettlementSnapshot: batch.costSettlementSnapshot as any,
             completedAt: batch.completedAt,
+            // 来源：订单履约 or 试吃装备货。备货批次没有顾客订单
+            source: ((batch as any).source as any) ?? 'ORDER',
+            tastingPackProductionPlanId:
+              ((batch as any).tastingPackProductionPlanId as any) ?? null,
           },
         });
 
@@ -173,6 +177,9 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
               shortageG: unit.shortageG,
               resultPhotoUrls: unit.resultPhotoUrls || [],
               completedAt: unit.completedAt,
+              // 备货批次的分装计划（订单批次为空，看订单明细即可）
+              stockPortionPlan:
+                ((unit as any).stockPortionPlan as any) ?? undefined,
             })),
           });
           this.logger.debug(
@@ -413,7 +420,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       }
     }
 
-    return new PackagingUnit(
+    const unit = new PackagingUnit(
       pu.id,
       pu.productionBatchId,
       pu.recipeSnapshot as unknown as RecipeSnapshot,
@@ -438,7 +445,10 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
         : 0,
       resultPhotoUrls,
       pu.completedAt ? new Date(pu.completedAt) : null,
+      // 备货锅的分装计划（订单锅为 null）
+      pu.stockPortionPlan ?? null,
     );
+    return unit;
   }
 
   private mapToDomain(record: any): ProductionBatch {
@@ -446,7 +456,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       this.mapPackagingUnitToDomain(pu),
     );
 
-    return new ProductionBatch(
+    const batch = new ProductionBatch(
       record.id,
       record.productionDate,
       record.status as ProductionBatchStatus,
@@ -470,6 +480,11 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       record.costSettlementSnapshot ?? null,
       record.completedAt ? new Date(record.completedAt) : null,
     );
+    // 批次来源同样挂载到对象上，供排产/展示区分订单批次与备货批次
+    (batch as any).source = record.source ?? 'ORDER';
+    (batch as any).tastingPackProductionPlanId =
+      record.tastingPackProductionPlanId ?? null;
+    return batch;
   }
 
   /**

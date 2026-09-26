@@ -124,6 +124,15 @@ export interface FilterOptions {
 export interface RecipeRepository {
   findById(id: string): Promise<Recipe | null>;
   findByIdAndVersion(id: string, version: number): Promise<Recipe | null>;
+  /**
+   * 取该食谱**已公开的最新版本**。
+   *
+   * 与 `findById`（取最新版本，可能是尚未发布的修订版）的区别：
+   * 对外售卖的商品必须用顾客今天真正看得到的那个版本 ——
+   * 草稿修订版的菜名还带着"修订"字样、配方也可能没定稿，
+   * 拿它做展示快照或算成本都是错的。
+   */
+  findLatestPublicById(id: string): Promise<Recipe | null>;
   findPublicRecipes(options?: FindRecipesOptions): Promise<Recipe[]>;
   findPublicRecipesPaginated(
     options?: FindRecipesOptions,

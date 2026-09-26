@@ -48,6 +48,16 @@ export class PackagingUnit {
     public shortageG: number = 0,
     public resultPhotoUrls: string[] = [],
     public completedAt: Date | null = null,
+    /**
+     * 备货批次的分装计划（这口锅分多少袋、每袋多少克）。
+     *
+     * 订单批次的分装要求写在订单明细里；备货批次没有订单，
+     * 分装要求就落在这里，同时也是这口锅"为谁做"的凭据。
+     */
+    public stockPortionPlan: {
+      packageSpecG: number;
+      packageCount: number;
+    } | null = null,
   ) {
     this.validateInvariants();
   }
@@ -62,9 +72,13 @@ export class PackagingUnit {
       );
     }
 
-    if (this.sourceOrderItemIds.length === 0) {
+    // 每口锅都要说得清"为谁做的"：
+    //   订单锅 → 有来源订单明细
+    //   备货锅 → 没有订单（试吃装是提前做好的存货），但有分装计划
+    // 两者都没有说明数据不完整，直接拦住。
+    if (this.sourceOrderItemIds.length === 0 && !this.stockPortionPlan) {
       throw new ValidationError(
-        'PackagingUnit must have at least one source OrderItem',
+        'PackagingUnit must have either source OrderItems or a stock portion plan',
       );
     }
 

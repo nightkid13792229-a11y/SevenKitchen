@@ -577,6 +577,131 @@ export class ProductionService {
   }
 
   /**
+   * 创建**备货**生产批次（试吃装）
+   *
+   * 与订单批次的区别：没有顾客订单、没有订单明细可分配，产量由"做几套"直接决定。
+   * 因此单独一条通路，而不是把订单批次硬改造成"也能没有订单"——
+   * 那样会把订单履约里的分组、分锅、订单分配逻辑全部搅浑。
+   *
+   * 分锅用**均分**而不是"装满一锅再装下一锅"：
+   * 备货总量通常远小于产能，装满法会剩下一个小锅（几两肉单独开一口锅），
+   * 均分则每锅重量接近、不浪费人工。
+   */
+  async createStockProductionBatch(params: {
+    planId: string;
+    productionDate: string | Date;
+    dishes: Array<{
+      recipeSnapshot: any;
+      /** 这道菜这批要做多少净重（g） */
+      netWeightG: number;
+      packageSpecG: number;
+      packageCount: number;
+    }>;
+    createdById?: string | null;
+  }): Promise<ProductionBatch> {
+    if (!Array.isArray(params.dishes) || params.dishes.length === 0) {
+      throw new BadRequestException('备货批次至少要包含一道菜');
+    }
+
+    const productionDate =
+      params.productionDate instanceof Date
+        ? DateUtil.getStartOfDay(
+            params.productionDate.toISOString().slice(0, 10),
+          )
+        : DateUtil.getStartOfDay(params.productionDate);
+    if (isNaN(productionDate.getTime())) {
+      throw new BadRequestException(
+        `Invalid production date: ${String(params.productionDate)}`,
+      );
+    }
+
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
+    const maxCapacityG = Number(globalConfig.defaultBatchCapacityG) || 5000;
+
+    const batchId = randomUUID();
+    const packagingUnits: PackagingUnit[] = [];
+    let plannedOutputG = 0;
+
+    for (const dish of params.dishes) {
+      const lossRate = dish.recipeSnapshot?.production_loss_rate || 1.07;
+      const netWeightG = Number(dish.netWeightG);
+      if (!Number.isFinite(netWeightG) || netWeightG <= 0) {
+        throw new BadRequestException(
+          `备货产量必须大于 0：${dish.recipeSnapshot?.name ?? '未知食谱'}`,
+        );
+      }
+      if (dish.packageCount <= 0) {
+        throw new BadRequestException(
+          `分装袋数必须大于 0：${dish.recipeSnapshot?.name ?? '未知食谱'}`,
+        );
+      }
+
+      const totalRawWeightG = netWeightG * lossRate;
+      // 均分到几口锅：每锅都不超过产能（含 5% 溢出容差）
+      const potCapacityRawG = maxCapacityG * 1.05;
+      const potCount = Math.max(1, Math.ceil(totalRawWeightG / potCapacityRawG));
+      const rawPerPot = totalRawWeightG / potCount;
+      const netPerPot = rawPerPot / lossRate;
+
+      // 袋数均分到各锅，余数归最后一锅 —— 保证总数与计划完全一致
+      const basePackages = Math.floor(dish.packageCount / potCount);
+      let remainingPackages = dish.packageCount;
+
+      for (let potIndex = 0; potIndex < potCount; potIndex += 1) {
+        const isLast = potIndex === potCount - 1;
+        const packageCount = isLast
+          ? remainingPackages
+          : Math.min(remainingPackages, basePackages);
+        remainingPackages -= packageCount;
+
+        // 备货锅没有来源订单，分装计划直接交给实体 ——
+        // 它同时也是这口锅"为谁做"的凭据（实体级校验要求两者至少有其一）
+        const unit = new PackagingUnit(
+          randomUUID(),
+          batchId,
+          dish.recipeSnapshot,
+          netPerPot,
+          [], // 备货批次没有来源订单明细
+          new Date(),
+          undefined, // status 用默认 PENDING
+          null, // ingredientsUsageSnapshot
+          [], // photosRaw
+          [], // photosCooked
+          [], // photosPortioned
+          new Date(), // updatedAt
+          null, // resultStatus
+          null, // actualOutputG
+          0, // surplusG
+          0, // shortageG
+          [], // resultPhotoUrls
+          null, // completedAt
+          { packageSpecG: dish.packageSpecG, packageCount },
+        );
+        packagingUnits.push(unit);
+        plannedOutputG += netPerPot;
+      }
+    }
+
+    const batch = new ProductionBatch(
+      batchId,
+      productionDate,
+      ProductionBatchStatus.PLANNED,
+      packagingUnits,
+      new Date(),
+      plannedOutputG,
+    );
+    (batch as any).source = 'STOCK';
+    (batch as any).tastingPackProductionPlanId = params.planId;
+
+    const savedBatch = await this.productionRepository.save(batch);
+    this.logger.log(
+      `[createStockProductionBatch] 备货批次 ${batchId}：${packagingUnits.length} 锅 / 计划净重 ${plannedOutputG.toFixed(0)}g（计划单 ${params.planId}）`,
+    );
+    return savedBatch;
+  }
+
+
+  /**
    * Get production batch by ID with full details
    */
   async getProductionBatchById(id: string): Promise<ProductionBatch | null> {

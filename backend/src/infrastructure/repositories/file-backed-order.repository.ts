@@ -42,7 +42,8 @@ interface OrderData {
     preparationMethod?: string | null;
     cookingMethod?: string | null;
     customRequirements: string | null;
-    dailyIntakeG?: number; // Optional for backward compatibility
+    dailyIntakeG?: number | null; // 试吃装为 null（现货没有"每日饭量"）
+    tastingPackId?: string | null;
     productionBatchId?: string | null; // Phase 8.11: Allocation lock
     allocatedAt?: string | null; // Phase 8.11: ISO timestamp string
   }>;
@@ -278,6 +279,7 @@ export class FileBackedOrderRepository
         cookingMethod: item.cookingMethod ?? null,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
+        tastingPackId: item.tastingPackId ?? null,
         // Phase 8.11: Allocation fields
         productionBatchId: item.productionBatchId ?? null,
         allocatedAt: item.allocatedAt ? item.allocatedAt.toISOString() : null,

@@ -1874,6 +1874,203 @@ export class PurchasingService {
     return insights;
   }
 
+  /**
+   * 为**试吃装备货生产单**生成采购清单
+   *
+   * 与订单采购清单的区别只有一个来源：这里没有顾客订单，
+   * 用料直接来自备货单建单时冻结的快照。
+   * 除此之外**全部复用同一套逻辑** —— 原料库存抵扣、推荐 SKU、
+   * 采购缺口计算、库存占用登记，一行都不另写：
+   * 两套算法早晚会算出两个数，那才是最贵的坑。
+   */
+  async generatePurchaseListFromTastingPackPlan(params: {
+    planId: string;
+    ingredientDetails: Array<Record<string, any>>;
+    targetDate: string;
+    createdById: string;
+  }): Promise<PurchaseList> {
+    const details = params.ingredientDetails || [];
+    if (details.length === 0) {
+      throw new BadRequestException('备货单没有用料需求，无法生成采购清单');
+    }
+
+    const targetDate = new Date(`${params.targetDate}T12:00:00`);
+    if (isNaN(targetDate.getTime())) {
+      throw new BadRequestException(
+        `日期格式无效。期望格式：YYYY-MM-DD，实际值：${params.targetDate}`,
+      );
+    }
+
+    const ingredientIds = Array.from(
+      new Set(details.map((detail) => detail.ingredientId).filter(Boolean)),
+    );
+    const ingredients = await this.ingredientRepository.findByIds(
+      ingredientIds as string[],
+    );
+    const ingredientLookup = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    const requirements = this.buildRequirementsFromIngredientDetails(
+      details,
+      ingredientLookup,
+    );
+    if (requirements.length === 0) {
+      throw new BadRequestException('备货单用料换算后没有任何有效需求');
+    }
+
+    const enriched = await this.enrichRequirementsWithCatalogData(
+      requirements,
+      ingredientLookup,
+    );
+    const purchaseRequirements = await this.applyInventoryAvailability(
+      enriched,
+      ingredientLookup,
+    );
+
+    const totalEstimatedCost = purchaseRequirements.reduce(
+      (sum, requirement) => sum + requirement.estimatedCost,
+      0,
+    );
+
+    const items = purchaseRequirements.map(
+      (req) =>
+        new PurchaseItem({
+          purchaseListId: '',
+          ingredientId: req.ingredientId,
+          procurementSkuId: req.procurementSkuId,
+          procurementSkuName: req.procurementSkuName,
+          suggestedProductId: req.suggestedProductId,
+          suggestedProductName: req.suggestedProductName,
+          ingredientName: req.ingredientName,
+          type: req.type,
+          quantityNeeded: req.quantityNeeded,
+          quantityUnit: req.quantityUnit,
+          estimatedCost: req.estimatedCost,
+          grossQuantityNeeded: req.grossQuantityNeeded,
+          stockDeductedQuantity: req.stockDeductedQuantity,
+          purchaseShortageQuantity: req.purchaseShortageQuantity,
+          onHandQuantity: req.onHandQuantity,
+          allocatedQuantity: req.allocatedQuantity,
+          availableQuantity: req.availableQuantity,
+          usesInventory: req.usesInventory,
+          purchaseChannel: req.purchaseChannel,
+          productModel: req.productModel,
+          displayUnit: req.displayUnit,
+        }),
+    );
+
+    const purchaseList = new PurchaseList({
+      targetDate,
+      kind: PurchaseListKind.ORDER_DEMAND,
+      status: PurchaseListStatus.PENDING,
+      totalEstimatedCost,
+      itemCount: items.length,
+      createdById: params.createdById,
+      sourceOrderIds: [],
+      sourceTastingPackPlanId: params.planId,
+      orderDateSnapshot: {},
+      items,
+    });
+
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    const allocationLines =
+      this.buildInventoryAllocationLines(purchaseRequirements);
+    if (allocationLines.length > 0) {
+      await this.inventoryService.createAllocationForOrderDemand({
+        targetDate,
+        purchaseListId: saved.id,
+        sourceOrderIds: [],
+        createdById: params.createdById,
+        lines: allocationLines,
+      });
+    }
+
+    this.logger.log(
+      `备货采购清单 ${saved.id} 已生成：${items.length} 项，来自备货单 ${params.planId}`,
+    );
+    return saved;
+  }
+
+  /**
+   * 把「用料明细」换算成采购需求。
+   *
+   * 明细形状与订单的 pricing_breakdown_snapshot.ingredientDetails 完全一致，
+   * 所以订单采购与备货采购用的是同一个换算口径。
+   */
+  private buildRequirementsFromIngredientDetails(
+    details: Array<Record<string, any>>,
+    ingredientLookup: Map<string, any>,
+  ): PurchaseRequirement[] {
+    const ingredientMap = new Map<string, PurchaseRequirement>();
+
+    for (const detail of details) {
+      const ingredientId = detail?.ingredientId;
+      if (!ingredientId) continue;
+
+      const type = String(
+        detail.type || ingredientLookup.get(ingredientId)?.type || 'FOOD',
+      ).toUpperCase() as PurchaseRequirement['type'];
+      const purchaseQuantity = this.resolveSnapshotPurchaseQuantity(
+        detail,
+        type,
+      );
+      if (purchaseQuantity <= 0) continue;
+
+      const procurementSkuId = detail.procurementSkuId || undefined;
+      const key = this.buildPurchaseRequirementKey(
+        ingredientId,
+        procurementSkuId,
+      );
+      const totalCost = Number(detail.cost) || 0;
+
+      if (ingredientMap.has(key)) {
+        const existing = ingredientMap.get(key)!;
+        existing.quantityNeeded += purchaseQuantity;
+        existing.estimatedCost += totalCost;
+        continue;
+      }
+
+      const ingredient = ingredientLookup.get(ingredientId);
+      const demandUnit =
+        type === 'SUPPLEMENT'
+          ? ingredient?.unitDisplayLabel ||
+            detail.displayUnit ||
+            detail.unit ||
+            'G'
+          : detail.unit || 'G';
+
+      ingredientMap.set(key, {
+        ingredientId,
+        ingredientName: detail.name,
+        type,
+        quantityNeeded: purchaseQuantity,
+        quantityUnit: demandUnit,
+        estimatedCost: totalCost,
+        purchaseChannel: detail.purchaseChannel,
+        productModel: detail.productModel,
+        displayUnit:
+          type === 'SUPPLEMENT'
+            ? ingredient?.unitDisplayLabel || detail.displayUnit || demandUnit
+            : detail.displayUnit,
+        procurementSkuId,
+        procurementSkuName: detail.procurementSkuName || undefined,
+        ingredientBaseUnit: ingredient?.baseUnit,
+        foodDensityGPerMl:
+          ingredient?.baseUnit === 'ML'
+            ? Number((ingredient.properties as any)?.density_g_per_ml ?? 0) ||
+              null
+            : null,
+      });
+    }
+
+    return Array.from(ingredientMap.values()).sort((a, b) => {
+      const typeOrder = { FOOD: 1, SUPPLEMENT: 2, PACKAGING: 3 };
+      return typeOrder[a.type] - typeOrder[b.type];
+    });
+  }
+
   async createStockPurchaseList(
     dto: CreateStockPurchaseListDto,
     createdById: string,

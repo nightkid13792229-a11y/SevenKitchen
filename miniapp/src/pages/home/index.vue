@@ -95,12 +95,8 @@
         <view class="custom-recipe-heading">
           <view class="section-accent" aria-hidden="true"></view>
           <text class="custom-recipe-title">食谱定制</text>
-          <text v-if="customRecipeFeeLabel" class="custom-recipe-fee">{{ customRecipeFeeLabel }}</text>
         </view>
         <text class="custom-recipe-desc">为毛孩子定制个性化专属食谱</text>
-        <view v-if="customRecipeCreditLabel" class="custom-recipe-credit">
-          <text class="custom-recipe-credit-text">{{ customRecipeCreditLabel }}</text>
-        </view>
       </view>
       <view class="custom-recipe-action">
         <text class="custom-recipe-action-text">去定制</text>
@@ -466,9 +462,6 @@ const recipeCoverOriginalOnlyMap = ref<Record<string, boolean>>({})
 const hasMountedHome = ref(false)
 const visibleRecipesCount = ref(pageSize)
 
-// 食谱定制入口：价格与交付周期都从后台「食谱定制设置」读取（公开接口，未登录可取）。
-// 读不到时入口照常展示，只是不显示价格——入口本身不能因为配置接口失败而消失。
-const customRecipeConfig = ref<{ feeAmount: number; creditAmount: number; deliveryWorkDays: number } | null>(null)
 
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
@@ -608,15 +601,6 @@ onMounted(() => {
   loadRecipeDesignerAccess()
   loadRecipeCoverOriginalOnlyMap()
   loadHomeHeaderBackground()
-  /**
-   * 定制入口的价格必须在这里也读一次。
-   *
-   * ⚠️ 首次进入页面时 onShow 会因为 `hasMountedHome` 还是 false 而提前 return，
-   * 只把加载挂在 onShow 上会导致：第一次打开首页「食谱定制」卡片没有价格，
-   * 切到别的 tab 再回来才出现。实测踩过。
-   */
-  loadCustomRecipeConfig()
-
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')
   const bannerClosedDate = uni.getStorageSync('loginBannerClosedDate')
@@ -687,7 +671,6 @@ onShow(() => {
   }
 
   loadHomeHeaderBackground()
-  loadCustomRecipeConfig()
 
   const recipeStatsDirty = uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
   if (recipeStatsDirty) {
@@ -731,49 +714,13 @@ const loadDogList = async () => {
 
 // ==================== 食谱定制入口 ====================
 
-/** 读取后台「食谱定制设置」的公开部分（定制费 / 可抵扣金额 / 交付周期） */
-async function loadCustomRecipeConfig(): Promise<void> {
-  try {
-    const res = await request({
-      url: '/custom-recipe-config',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    })
-    if (res.code === 0 && res.data) {
-      customRecipeConfig.value = {
-        feeAmount: Number(res.data.feeAmount) || 0,
-        creditAmount: Number(res.data.creditAmount) || 0,
-        deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
-      }
-    }
-  } catch (err) {
-    // 配置读不到不隐藏入口：入口是稳定承诺，价格只是补充信息
-    console.warn('[Home] Load custom recipe config error:', err)
-  }
-}
-
-const customRecipeFeeLabel = computed(() => {
-  const config = customRecipeConfig.value
-  return config && config.feeAmount > 0 ? `¥${formatAmount(config.feeAmount)}` : ''
-})
-
 /**
- * 可抵扣金额单独成一行展示。
+ * 首页入口只负责"把人带过去"，**刻意不展示任何金额**。
  *
- * 之前把它塞在说明句子里（"…其中 ¥150 可抵扣成品货款"），扫一眼看不到数字；
- * 现在把它做成醒目的金色徽标，和定制费并列，顾客一眼就知道能省多少。
- * 后台把可抵扣金额配成 0 时整块不出现（避免"可抵 ¥0"这种废话）。
+ * 定制费与可抵扣金额在定制页里已经有完整交代（提交按钮上的价格、
+ * 交付区里的抵扣说明），入口上再堆一遍数字只会让首屏变吵。
+ * 因此这里既不读配置、也不落任何价格文案。
  */
-const customRecipeCreditLabel = computed(() => {
-  const config = customRecipeConfig.value
-  if (!config || config.creditAmount <= 0) return ''
-  return `可抵成品货款 ¥${formatAmount(config.creditAmount)}`
-})
-
-function formatAmount(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2)
-}
 
 /** 首页定制入口：未登录先登录，登录后进定制页（页面自己再引导建档） */
 function goToCustomRecipe() {
@@ -1915,14 +1862,6 @@ defineOptions({
   letter-spacing: 2rpx;
 }
 
-.custom-recipe-fee {
-  padding: 2rpx 14rpx;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
-  border-radius: 999rpx;
-}
 
 .custom-recipe-desc {
   margin-top: 12rpx;
@@ -1931,21 +1870,6 @@ defineOptions({
   color: #cfe0d5;
 }
 
-/* 可抵扣金额：金色徽标，和定制费一起把"多少钱、能省多少"讲清楚 */
-.custom-recipe-credit {
-  align-self: flex-start;
-  margin-top: 12rpx;
-  padding: 4rpx 14rpx;
-  background: rgba(216, 188, 133, 0.16);
-  border: 1rpx solid rgba(216, 188, 133, 0.55);
-  border-radius: 999rpx;
-}
-
-.custom-recipe-credit-text {
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #d8bc85;
-}
 
 .custom-recipe-action {
   display: flex;

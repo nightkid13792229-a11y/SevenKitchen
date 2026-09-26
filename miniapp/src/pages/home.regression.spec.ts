@@ -296,14 +296,12 @@ describe('home runtime regressions', () => {
     const templateSource = source.slice(0, source.indexOf('<script setup'))
 
     // 2026-09-25：首页「给 XX 的推荐」整块下线，这个位置让给「食谱定制」入口。
-    // 与推荐不同，入口必须**常驻**（含未登录游客），且价格来自后台配置。
+    // 与推荐不同，入口必须**常驻**（含未登录游客）。
     expect(templateSource).toContain('custom-recipe-section')
     expect(templateSource).toContain('@tap="goToCustomRecipe"')
     expect(templateSource).toContain('食谱定制')
-    expect(templateSource).toContain('customRecipeCreditLabel')
     // 小字说明是固定文案
     expect(templateSource).toContain('为毛孩子定制个性化专属食谱')
-    expect(source).toContain("url: '/custom-recipe-config'")
     expect(source).toContain("'/pages/custom-recipe/index'")
 
     // 推荐板块及其依赖不得再回到首页
@@ -321,19 +319,40 @@ describe('home runtime regressions', () => {
     expect(templateSource).not.toContain('matchStars')
   })
 
-  it('loads the custom recipe config on first mount, not only on show', () => {
+  it('keeps the home entry free of any price or credit amount', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),
       'utf-8',
     )
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
 
-    // 首次进入页面时 onShow 会因为 hasMountedHome 还是 false 而提前 return，
-    // 只挂在 onShow 上会让"第一次打开首页没有价格、切 tab 回来才有"。
+    // 2026-09-27：入口只负责"把人带过去"，不展示任何金额
+    // —— 定制费与可抵扣金额在定制页里交代即可，首屏堆数字只会变吵。
+    // 注意：断言要限定在**这张卡片内部**，首页别处本来就有 ¥ 参考价。
+    const cardStart = templateSource.indexOf('custom-recipe-section')
+    expect(cardStart).toBeGreaterThan(-1)
+    const cardBlock = templateSource.slice(cardStart, cardStart + 900)
+
+    expect(cardBlock).not.toContain('custom-recipe-fee')
+    expect(cardBlock).not.toContain('custom-recipe-credit')
+    expect(cardBlock).not.toContain('可抵')
+    expect(cardBlock).not.toContain('¥')
+    // 卡片该有的三样仍在
+    expect(cardBlock).toContain('食谱定制')
+    expect(cardBlock).toContain('为毛孩子定制个性化专属食谱')
+    expect(cardBlock).toContain('去定制')
+
+    // 连配置都不该再拉：入口不再依赖它，白拉一次请求是浪费
+    expect(source).not.toContain("url: '/custom-recipe-config'")
+    expect(source).not.toContain('loadCustomRecipeConfig')
+    expect(source).not.toContain('customRecipeFeeLabel')
+    expect(source).not.toContain('customRecipeCreditLabel')
+    expect(source).not.toContain('customRecipeConfig')
+
+    // 入口本身与头部背景照常工作
     const mountedStart = source.indexOf('onMounted(() => {')
     expect(mountedStart).toBeGreaterThan(-1)
     const mountedBlock = source.slice(mountedStart, mountedStart + 900)
-
-    expect(mountedBlock).toContain('loadCustomRecipeConfig()')
     expect(mountedBlock).toContain('loadHomeHeaderBackground()')
   })
 

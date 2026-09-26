@@ -18,6 +18,7 @@ import type { ProductionBatchRepository } from '../../domain/production/producti
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
+import type { IngredientsUsageSnapshot } from '../../domain/production/packaging-unit.entity';
 import {
   PackagingUnitStatus,
   ProductionBatchStatus,
@@ -39,6 +40,9 @@ import type { PrintTaskDto } from '../../interfaces/dto/production/print-task.dt
 import { DateUtil } from '../../utils/date.util';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { PdfGeneratorService } from '../../infrastructure/services/pdf-generator.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { GlobalConfigService } from '../config/global-config.service';
+import { calculateProductionUsage } from './production-ingredient-usage';
 
 @Injectable()
 export class StaffProductionService {
@@ -55,6 +59,8 @@ export class StaffProductionService {
     private readonly orderRepository: OrderRepository,
     private readonly cosService: TencentCosService,
     private readonly pdfGenerator: PdfGeneratorService,
+    private readonly inventoryService: InventoryService,
+    private readonly globalConfigService: GlobalConfigService,
   ) {}
 
   /**
@@ -120,6 +126,81 @@ export class StaffProductionService {
 
     return batch;
   }
+
+  /**
+   * 按配方算出这一锅的原料应投量。
+   *
+   * 口径与车间界面一致（详见 production-ingredient-usage.ts）：
+   *   食材/包材 = 净产出 × 损耗率 × 配比%
+   *   补剂     = 按营养素目标定量（与成本核算同一个函数）
+   *
+   * 为什么不问车间要实际用量：车间端界面本来就不收集逐样实际重量
+   * （只报"正常/超出/短缺"），所以这里按配方理论用量落账；
+   * 锅级别的实际差异仍然记录在 surplusG / shortageG 上。
+   */
+  private async buildIngredientsUsageSnapshot(unit: PackagingUnit): Promise<{
+    snapshot: IngredientsUsageSnapshot;
+    skipped: Array<{ name: string; reason: string }>;
+  } | null> {
+    const recipeSnapshot = unit.recipeSnapshot as any;
+    if (!recipeSnapshot?.items?.length) {
+      this.logger.warn(
+        `[KitchenService] 锅 ${unit.id} 的配方快照没有配料，无法生成用量快照`,
+      );
+      return null;
+    }
+
+    const config = await this.globalConfigService.getGlobalConfig();
+    const usage = calculateProductionUsage({
+      recipeSnapshot,
+      totalProductionG: unit.totalProductionG,
+      supplementLossRate: config.supplementLossRate,
+    });
+
+    const snapshot: IngredientsUsageSnapshot = {};
+    for (const item of usage.items) {
+      // 车间界面不收集逐样实际重量，因此按理论用量落账；
+      // 实体层要求 required_g > 0，所以 0 的原料在 calculateProductionUsage 里已被排除
+      snapshot[item.ingredientId] = {
+        required_g: item.requiredAmount,
+        actual_g: item.requiredAmount,
+      };
+    }
+
+    return { snapshot, skipped: usage.skipped };
+  }
+
+  /**
+   * 按配方扣减原料库存。
+   *
+   * 由「全局配置 → 完工自动扣减原料库存」控制，**默认关闭**：
+   * 开启前需要先盘点一次把账面对齐实际，否则第一次扣完数字对不上，
+   * 会让人以为系统算错了。
+   *
+   * 快照无论开关是否打开都会生成 —— 这样后台的手工补扣随时可用。
+   */
+  private async deductInventoryIfEnabled(unitId: string): Promise<void> {
+    try {
+      const config = await this.globalConfigService.getGlobalConfig();
+      if (!config.autoDeductInventoryOnProduction) {
+        this.logger.log(
+          `[KitchenService] 锅 ${unitId} 已生成用量快照，但「完工自动扣减原料库存」未开启，暂不扣减`,
+        );
+        return;
+      }
+
+      await this.inventoryService.deductFromKitchenTask(unitId);
+      this.logger.log(`[KitchenService] 锅 ${unitId} 已按配方扣减原料库存`);
+    } catch (error) {
+      // 与既有实现一致：扣减失败不回滚完工状态（可以稍后手工补扣），
+      // 但必须留下明确的错误日志，不能静默
+      this.logger.error(
+        `[KitchenService] 锅 ${unitId} 扣减原料库存失败，可在后台用「库存扣减」手工补扣`,
+        error as any,
+      );
+    }
+  }
+
 
   /**
    * Get packaging units with filtering and pagination
@@ -867,10 +948,30 @@ export class StaffProductionService {
       shortageG: dto.shortageG,
       resultPhotoUrls: dto.resultPhotoUrls,
     });
+
+    // 生成「这一锅用了多少原料」的快照。
+    //
+    // 之前这条路**根本没有这一步**：车间在小程序里完工后，锅上没有用量快照，
+    // 于是一不会扣原料库存、二连后台手工补扣都做不了（补扣要求快照存在）。
+    // 现在按车间界面一致的口径算出来落库 —— 界面显示多少，系统就扣多少。
+    const usage = await this.buildIngredientsUsageSnapshot(unit);
+    if (usage) {
+      unit.ingredientsUsageSnapshot = usage.snapshot;
+      if (usage.skipped.length > 0) {
+        this.logger.warn(
+          `[KitchenService] 锅 ${unitId} 有 ${usage.skipped.length} 种原料算不出应投量，已跳过扣减：` +
+            usage.skipped.map((item) => `${item.name}（${item.reason}）`).join('；'),
+        );
+      }
+    }
+
     unit.transitionTo(PackagingUnitStatus.COMPLETED);
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 
     this.logger.log(`[KitchenService] Completed production task ${unitId}`);
+
+    // 按配方扣减原料库存（默认关闭：开启前需先盘点，避免账面与实际不符时误判）
+    await this.deductInventoryIfEnabled(updated.id);
 
     const batch = await this.productionRepository.findById(
       unit.productionBatchId,

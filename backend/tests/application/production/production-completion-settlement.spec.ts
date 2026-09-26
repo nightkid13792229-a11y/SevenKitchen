@@ -71,6 +71,12 @@ describe('production completion result', () => {
       {} as any,
       {} as any,
       {} as any,
+      {
+        deductFromKitchenTask: jest.fn(),
+      } as any,
+      {
+        getGlobalConfig: jest.fn().mockResolvedValue({ autoDeductInventoryOnProduction: false, supplementLossRate: 1.02 }),
+      } as any,
     );
 
     const result = await (service as any).completeProductionTask('unit-1', {

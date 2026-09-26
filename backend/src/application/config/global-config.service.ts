@@ -43,6 +43,8 @@ export class GlobalConfigService {
         config.targetBatchUtilization.toString(),
       ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
+      autoDeductInventoryOnProduction:
+        (config as any).autoDeductInventoryOnProduction ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -75,6 +77,7 @@ export class GlobalConfigService {
       overheadCostPerKg: number;
       targetBatchUtilization: number;
       supplementLossRate: number;
+      autoDeductInventoryOnProduction: boolean;
       defaultVacuumBagId: string | null;
       defaultProductLabelId: string | null;
       defaultShippingLabelId: string | null;
@@ -101,6 +104,9 @@ export class GlobalConfigService {
       updateData.laborHourlyRate = dto.laborHourlyRate;
     if (dto.minOrderWeightG !== undefined)
       updateData.minOrderWeightG = dto.minOrderWeightG;
+    if (dto.autoDeductInventoryOnProduction !== undefined)
+      updateData.autoDeductInventoryOnProduction =
+        dto.autoDeductInventoryOnProduction;
     if (dto.defaultBatchCapacityG !== undefined)
       updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
     if (dto.minPotWeightG !== undefined)
@@ -177,6 +183,8 @@ export class GlobalConfigService {
         config.targetBatchUtilization.toString(),
       ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
+      autoDeductInventoryOnProduction:
+        (config as any).autoDeductInventoryOnProduction ?? false,
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
       defaultShippingTemplateId: config.defaultShippingTemplateId,
@@ -202,6 +210,7 @@ export class GlobalConfigService {
     return {
       laborHourlyRate: 30.0,
       minOrderWeightG: 1000,
+      autoDeductInventoryOnProduction: false,
       defaultBatchCapacityG: 5000,
       minPotWeightG: 2000,
       targetMargin: 0.4,

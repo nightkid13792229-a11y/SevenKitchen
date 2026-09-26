@@ -105,6 +105,20 @@
           <span class="form-tip">例如: 1.05 表示5%损耗</span>
         </el-form-item>
 
+        <el-divider content-position="left">生产与库存</el-divider>
+
+        <el-form-item label="完工自动扣减原料库存">
+          <el-switch v-model="form.autoDeductInventoryOnProduction" />
+          <div class="form-tip form-tip-block">
+            车间的锅点「完成」时，按配方（含损耗）算出每样原料用了多少并扣减原料库存。
+            <br />
+            <strong>开启前请先盘点一次</strong>：账面本来就与实际不符的话，
+            第一次扣完数字会对不上，容易让人以为系统算错了。
+            <br />
+            关闭时系统仍会记录每锅的原料用量，可在后台手工补扣。
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">订单配置</el-divider>
 
         <el-form-item label="最小订单重量（克）" prop="minOrderWeightG">
@@ -547,6 +561,7 @@ const form = ref<GlobalConfig>({
   id: 'singleton',
   laborHourlyRate: 30.0,
   minOrderWeightG: 1000,
+  autoDeductInventoryOnProduction: false,
   defaultBatchCapacityG: 5000,
   minPotWeightG: 2000,
   targetMargin: 0.4,

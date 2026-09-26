@@ -6,7 +6,11 @@ import api from './index';
 export interface GlobalConfig {
   id: string;
   laborHourlyRate: number;
-  minOrderWeightG: number;
+  minOrderWeightG?: number;
+
+  /** 车间完工时是否自动按配方扣减原料库存（默认关闭，需先盘点） */
+
+  autoDeductInventoryOnProduction?: boolean;
   defaultBatchCapacityG: number;
   minPotWeightG: number;
   targetMargin: number;

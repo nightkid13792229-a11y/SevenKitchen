@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { StaffProductionService } from 'src/application/production/kitchen.service';
+import { InventoryService } from 'src/application/inventory/inventory.service';
+import { GlobalConfigService } from 'src/application/config/global-config.service';
 import { ProductionService } from 'src/application/production/production.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import { PURCHASE_LIST_REPOSITORY } from 'src/application/purchasing/purchasing.service.tokens';
@@ -26,6 +28,13 @@ describe('StaffProductionService', () => {
     purchaseListRepository = { findMany: jest.fn().mockResolvedValue({ list: [] }) },
     cosService = {},
     pdfGenerator = {},
+    inventoryService = { deductFromKitchenTask: jest.fn().mockResolvedValue(undefined) },
+    globalConfigService = {
+      getGlobalConfig: jest.fn().mockResolvedValue({
+        autoDeductInventoryOnProduction: false,
+        supplementLossRate: 1.02,
+      }),
+    },
   }: {
     productionRepository?: Record<string, any>;
     orderRepository?: Record<string, any>;
@@ -33,6 +42,8 @@ describe('StaffProductionService', () => {
     purchaseListRepository?: Record<string, any>;
     cosService?: Record<string, any>;
     pdfGenerator?: Record<string, any>;
+    inventoryService?: Record<string, any>;
+    globalConfigService?: Record<string, any>;
   }) => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -64,6 +75,14 @@ describe('StaffProductionService', () => {
         {
           provide: PdfGeneratorService,
           useValue: pdfGenerator,
+        },
+        {
+          provide: InventoryService,
+          useValue: inventoryService,
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: globalConfigService,
         },
       ],
     }).compile();

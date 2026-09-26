@@ -37,6 +37,8 @@ export interface GlobalConfig {
   overheadCostPerKg: number;
   targetBatchUtilization: number;
   supplementLossRate: number;
+  /** 车间完工时是否自动按配方扣减原料库存（默认关闭，需先盘点） */
+  autoDeductInventoryOnProduction?: boolean;
   defaultProductLabelId: string | null;
   defaultIcePackId: string | null;
   defaultShippingTemplateId: string | null;

@@ -39,6 +39,12 @@ describe('StaffProductionService production scheduling gate', () => {
       {} as any,
       {} as any,
       {} as any,
+      {
+        deductFromKitchenTask: jest.fn(),
+      } as any,
+      {
+        getGlobalConfig: jest.fn().mockResolvedValue({ autoDeductInventoryOnProduction: false, supplementLossRate: 1.02 }),
+      } as any,
     );
 
     return { service, productionService, purchaseListRepository };

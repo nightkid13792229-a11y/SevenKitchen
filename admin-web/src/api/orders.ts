@@ -153,13 +153,46 @@ export const orderApi = {
   resolveAftersale: (
     id: string,
     data: {
-      resolutionType: 'refunded' | 'remade' | 'resolved'
+      resolutionType: 'refunded' | 'remade' | 'reshipped' | 'resolved'
       adminNote?: string
       /** 「安排重做」时必填：重做单的制作日期（YYYY-MM-DD） */
       targetProductionDate?: string
+      /** 「免费补发」时可选：只补一部分时的套数，不传按原单套数全额补发 */
+      reshipSets?: number
     }
-  ): Promise<Order & { remakeOrderId?: string | null; remakeOrderNo?: string | null }> => {
+  ): Promise<
+    Order & {
+      remakeOrderId?: string | null
+      remakeOrderNo?: string | null
+      reshipOrderId?: string | null
+      reshipOrderNo?: string | null
+    }
+  > => {
     return api.post(`/orders/${id}/aftersale/resolve`, data)
+  },
+
+  /**
+   * 一键补发（试吃装现货）
+   *
+   * 顾客没有先走售后流程、客服直接在后台补一份时用这个接口。
+   * 系统会新建一张 0 元补发单，并从试吃装成品库存扣掉对应套数。
+   */
+  reshipOrder: (
+    id: string,
+    data: {
+      /** 补发原因，会写进补发单备注 */
+      reason?: string
+      /** 补发套数，不传按原单套数全额补发 */
+      sets?: number
+    }
+  ): Promise<{
+    id: string
+    orderNo: string
+    status: string
+    amountTotal: number
+    originalOrderId: string
+  }> => {
+    return api.post(`/orders/${id}/reship`, data)
   },
 
   /**

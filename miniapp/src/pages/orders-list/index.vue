@@ -80,11 +80,15 @@
 
           <view v-if="order.aftersaleType" class="order-address">
             <text class="address-text"
-              >售后 {{ order.aftersaleType === 'REFUND' ? '退款' : '免费补发'
-              }}{{
+              >售后 {{ getAftersaleLabel(order.aftersaleType) }}{{
                 order.aftersaleReason ? ' · ' + order.aftersaleReason : ''
               }}</text
             >
+          </view>
+
+          <!-- 补发单：0 元、免费补寄，必须让顾客一眼看出这不是新买的一单 -->
+          <view v-if="order.reshipFromOrderId" class="order-address">
+            <text class="address-text">本单为免费补发，不收任何费用</text>
           </view>
         </template>
 
@@ -272,6 +276,8 @@ interface Order {
   type?: string;
   cancellationReason?: string | null;
   aftersaleType?: string | null;
+  /** 本单是哪张原单的补发单；普通订单为 null */
+  reshipFromOrderId?: string | null;
   refundStatus?: {
     success: boolean;
   } | null;
@@ -999,6 +1005,23 @@ function getCarrierName(code?: string): string {
     EMS: 'EMS',
   };
   return carrierMap[code || ''] || code || '-';
+}
+
+/**
+ * 售后类型的展示文案。
+ *
+ * 原先写成"不是退款就是免费补发"，加了"重做"以后就会把重做也说成补发，
+ * 顾客按这句话去找客服要补寄就会对不上，所以按类型逐项列出。
+ */
+function getAftersaleLabel(type?: string | null): string {
+  const labels: Record<string, string> = {
+    REFUND: '退款',
+    REMAKE: '重做',
+    COMPLAINT: '投诉建议',
+    RESOLVED: '已处理',
+    RESHIP: '免费补发',
+  };
+  return labels[type || ''] || '处理中';
 }
 
 /** 试吃装（现货）订单：不绑狗狗、没有"餐"的概念，展示口径与鲜食不同 */

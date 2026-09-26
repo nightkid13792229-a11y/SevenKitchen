@@ -637,6 +637,7 @@ function aftersaleTypeText(type?: string | null) {
     REMAKE: '重做',
     COMPLAINT: '投诉',
     RESOLVED: '已处理',
+    RESHIP: '免费补发',
   }
   return map[type || ''] || type || '-'
 }

@@ -106,6 +106,33 @@ describe('试吃装 · 我的订单', () => {
   })
 })
 
+describe('试吃装 · 免费补发单的展示', () => {
+  const listSource = read('src/pages/orders-list/index.vue')
+  const detailSource = read('src/pages/order-detail/index.vue')
+
+  it('售后文案按类型逐项列出，别把"重做"也说成"免费补发"', () => {
+    expect(listSource).toContain('getAftersaleLabel')
+    expect(listSource).toContain("REMAKE: '重做'")
+    expect(listSource).toContain("RESHIP: '免费补发'")
+    // 原来的三目会被新类型套错，不能再退回去
+    expect(listSource).not.toContain("=== 'REFUND' ? '退款' : '免费补发'")
+  })
+
+  it('补发单在列表里明确标注"免费补发、不收费"', () => {
+    expect(listSource).toContain('order.reshipFromOrderId')
+    expect(listSource).toContain('本单为免费补发，不收任何费用')
+  })
+
+  it('补发单在详情页说明订单性质，顾客不会以为又下了一单', () => {
+    expect(detailSource).toContain('isReshipOrder')
+    expect(detailSource).toContain('免费补发（不收费）')
+  })
+
+  it('补发单也是一种售后处理结果，文案里要给得出"免费补发"', () => {
+    expect(detailSource).toContain("RESHIP: '免费补发'")
+  })
+})
+
 describe('试吃装 · 页面注册', () => {
   it('放在独立分包里，不撑大主包', () => {
     const pagesJson = JSON.parse(read('src/pages.json'))

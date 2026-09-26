@@ -266,7 +266,7 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="操作" width="250" fixed="right">
+            <el-table-column label="操作" width="300" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" size="small" @click="handleViewDetail(row.id)">
                   详情
@@ -305,6 +305,16 @@
                 >
                   重试同步
                 </el-button>
+                <!-- 试吃装是现货：出问题不用重做，直接从成品库存再寄一份 -->
+                <el-button
+                  v-if="canReshipOrder(row)"
+                  type="warning"
+                  size="small"
+                  plain
+                  @click="handleReship(row)"
+                >
+                  免费补发
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -334,6 +344,14 @@
           v-model="shippingDialogVisible"
           :order-id="currentOrder?.id"
           @submit="handleShippingSubmit"
+        />
+
+        <!-- 免费补发对话框（试吃装现货专用） -->
+        <reship-dialog
+          v-model="reshipDialogVisible"
+          :order-id="currentOrder?.id"
+          :original-sets="reshipOriginalSets"
+          @submit="handleReshipSubmit"
         />
 
         <!-- 确认收款对话框 -->
@@ -380,6 +398,7 @@ import OrderStatCard from './components/OrderStatCard.vue'
 import CancelDialog from './components/CancelDialog.vue'
 import ShippingDialog from './components/ShippingDialog.vue'
 import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
+import ReshipDialog from './components/ReshipDialog.vue'
 import SupplementOrdersPanel from '@/views/SupplementShop/components/SupplementOrdersPanel.vue'
 import { orderApi } from '@/api/orders'
 import { OrderStatus, OrderType } from '@/types/order'
@@ -804,6 +823,54 @@ const handleCancelSubmit = async (reason: string) => {
 const handleShip = (order: OrderListItem) => {
   currentOrder.value = order
   shippingDialogVisible.value = true
+}
+
+// 免费补发（试吃装现货）：只对已付款之后的现货单开放
+const reshipDialogVisible = ref(false)
+const reshipOriginalSets = ref(1)
+
+/**
+ * 原单套数：按"每套袋数 = 菜品数 × 每道菜袋数"反推。
+ * 试吃装订单明细的 recipeSnapshot 里存着这两个值，拿不到时退回 1。
+ */
+const resolveOriginalSets = (order: OrderListItem): number => {
+  const item: any = (order as any).items?.[0]
+  const snapshot = item?.recipeSnapshot
+  const dishCount = Array.isArray(snapshot?.dishes) ? snapshot.dishes.length : 0
+  const bagsPerRecipe = Number(snapshot?.bagsPerRecipe)
+  const packageCount = Number(item?.packageCount)
+  if (dishCount > 0 && bagsPerRecipe > 0 && packageCount > 0) {
+    return Math.max(1, Math.round(packageCount / (dishCount * bagsPerRecipe)))
+  }
+  return 1
+}
+
+const canReshipOrder = (order: OrderListItem): boolean => {
+  if ((order as any).type !== OrderType.TASTING_PACK) return false
+  // 现货付款即可发货，所以 PAID / SHIPPED / COMPLETED 都还能补发；取消的不行
+  return ['PAID', 'SHIPPED', 'COMPLETED'].includes(order.status)
+}
+
+const handleReship = (order: OrderListItem) => {
+  currentOrder.value = order
+  reshipOriginalSets.value = resolveOriginalSets(order)
+  reshipDialogVisible.value = true
+}
+
+const handleReshipSubmit = async (data: { sets: number; reason: string }) => {
+  if (!currentOrder.value) return
+
+  try {
+    const reship = await orderApi.reshipOrder(currentOrder.value.id, data)
+    ElMessage.success(
+      `已生成 0 元补发单 ${reship?.orderNo || ''}，扣减 ${data.sets} 套库存，接下来正常发货即可`
+    )
+    reshipDialogVisible.value = false
+    loadOrders()
+    loadStats()
+  } catch (error: any) {
+    ElMessage.error(error.message || '补发失败')
+  }
 }
 
 // 发货提交

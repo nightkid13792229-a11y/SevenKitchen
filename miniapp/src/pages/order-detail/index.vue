@@ -240,6 +240,11 @@
             <text class="buyer-label">发货方式</text>
             <text class="buyer-value">现货，付款后尽快发出</text>
           </view>
+          <!-- 补发单：0 元补寄，要讲清楚"不用再付钱、也不是又下了一单" -->
+          <view v-if="isReshipOrder" class="buyer-row">
+            <text class="buyer-label">订单性质</text>
+            <text class="buyer-value">免费补发（不收费）</text>
+          </view>
           <view class="buyer-row">
             <text class="buyer-label">预计发货</text>
             <text class="buyer-value">{{
@@ -1202,6 +1207,8 @@ interface Order {
   aftersaleSince?: string;
   aftersaleReason?: string;
   aftersalePhotos?: string[];
+  /** 本单是哪张原单的免费补发单；普通订单为 null */
+  reshipFromOrderId?: string | null;
   // 原料照片
   productionPhotos?: {
     unitId: string;
@@ -1472,6 +1479,9 @@ const ingredientTypeMap: Record<string, string> = {
  * 但要列出"这一套包含哪几道菜"——那才是顾客想知道的内容。
  */
 const isStockOrder = computed(() => order.value?.type === 'TASTING_PACK');
+
+/** 客服补发的 0 元补寄单：不收运费、不重复收费，展示时要说明白 */
+const isReshipOrder = computed(() => !!order.value?.reshipFromOrderId);
 
 const stockDishes = computed(() => {
   const dishes = (order.value?.items?.[0]?.recipeSnapshot as any)?.dishes;
@@ -3204,6 +3214,7 @@ function getAftersaleTypeText(type?: string): string {
     REMAKE: '申请重做',
     COMPLAINT: '投诉建议',
     RESOLVED: '已解决',
+    RESHIP: '免费补发',
   };
   return typeMap[type || ''] || '';
 }

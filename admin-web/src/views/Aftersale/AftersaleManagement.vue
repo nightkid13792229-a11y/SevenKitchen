@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>售后工单</h2>
-        <p>处理小程序用户提交的退款、重做、投诉建议，并可对微信支付订单发起线上退款。</p>
+        <p>处理小程序用户提交的退款、重做、投诉建议，并可对微信支付订单发起线上退款；试吃装（现货）可直接免费补发一份。</p>
       </div>
       <el-button type="primary" :loading="loading" @click="loadAftersales">刷新</el-button>
     </div>
@@ -145,7 +145,9 @@
         <el-form-item label="处理方式" required>
           <el-select v-model="resolveForm.resolutionType" placeholder="请选择处理方式">
             <el-option label="同意退款" value="refunded" />
-            <el-option label="安排重做" value="remade" />
+            <!-- 试吃装是现货，早就做好了，重做没有意义（后端也会拦），只给"免费补发" -->
+            <el-option v-if="!isStockOrder" label="安排重做" value="remade" />
+            <el-option v-if="isStockOrder" label="免费补发（0 元补寄一份）" value="reshipped" />
             <el-option label="已解决" value="resolved" />
           </el-select>
         </el-form-item>
@@ -165,6 +167,30 @@
             系统会新建一张 0 元重做单并从该日期进入采购与排产，原订单保持"售后中"直到重做送达。
           </div>
         </el-form-item>
+
+        <!-- 「免费补发」：从成品库存再取一套寄出，所以要选补发套数 -->
+        <template v-if="resolveForm.resolutionType === 'reshipped'">
+          <el-form-item label="补发套数">
+            <el-input-number
+              v-model="resolveForm.reshipSets"
+              :min="1"
+              :max="originalSets || 1"
+              :step="1"
+              step-strictly
+              style="width: 180px"
+            />
+            <span class="form-hint" style="margin-left: 12px">
+              原单共 {{ originalSets }} 套，默认全额补发
+            </span>
+          </el-form-item>
+          <el-alert
+            class="refund-alert"
+            type="info"
+            :closable="false"
+            show-icon
+            title="系统会新建一张 0 元补发单，并从试吃装成品库存扣掉对应套数。库存不足时会直接失败，请先到「试吃装库存」补货。"
+          />
+        </template>
 
         <template v-if="showRefundOptions">
           <el-alert
@@ -224,7 +250,7 @@ const stats = computed(() => ({
 }))
 
 const resolveForm = reactive({
-  resolutionType: '' as '' | 'refunded' | 'remade' | 'resolved',
+  resolutionType: '' as '' | 'refunded' | 'remade' | 'reshipped' | 'resolved',
   /**
    * 「安排重做」时的制作日期（YYYY-MM-DD）。
    *
@@ -235,11 +261,37 @@ const resolveForm = reactive({
    */
   targetProductionDate: '',
   adminNote: '',
-  refundAmount: 0
+  refundAmount: 0,
+  /**
+   * 「免费补发」时的补发套数。
+   *
+   * 现货是"再寄一份实物"，不是改一笔金额 —— 少补一套顾客拿不到东西，
+   * 多补一套就白送一套还少一套库存，所以必须让处理人明确填。
+   */
+  reshipSets: 1
 })
 
 const showRefundOptions = computed(() => {
   return currentOrder.value?.aftersaleType === 'REFUND' && resolveForm.resolutionType === 'refunded'
+})
+
+/** 试吃装（现货）：补发的对象，也是"重做"的唯一例外 */
+const isStockOrder = computed(() => currentOrder.value?.type === 'TASTING_PACK')
+
+/**
+ * 原单套数：按"每套袋数 = 菜品数 × 每道菜袋数"反推。
+ * 拿不到快照时退回 1，输入框的上限不至于把整张单堵死。
+ */
+const originalSets = computed(() => {
+  const item = currentOrder.value?.items?.[0] as any
+  const snapshot = item?.recipeSnapshot
+  const dishCount = Array.isArray(snapshot?.dishes) ? snapshot.dishes.length : 0
+  const bagsPerRecipe = Number(snapshot?.bagsPerRecipe)
+  const packageCount = Number(item?.packageCount)
+  if (dishCount > 0 && bagsPerRecipe > 0 && packageCount > 0) {
+    return Math.max(1, Math.round(packageCount / (dishCount * bagsPerRecipe)))
+  }
+  return 1
 })
 
 onMounted(() => {
@@ -261,6 +313,7 @@ function handleResolve(row: AftersaleOrder) {
   currentOrder.value = row
   resetResolveForm()
   resolveForm.refundAmount = Number(row.amountTotal || 0)
+  resolveForm.reshipSets = originalSets.value
   resolveDialogVisible.value = true
 }
 
@@ -269,6 +322,7 @@ function resetResolveForm() {
   resolveForm.targetProductionDate = ''
   resolveForm.adminNote = ''
   resolveForm.refundAmount = 0
+  resolveForm.reshipSets = originalSets.value
 }
 
 function viewDetail(row: AftersaleOrder) {
@@ -330,11 +384,18 @@ async function confirmResolve() {
       adminNote: resolveForm.adminNote.trim(),
       ...(resolveForm.resolutionType === 'remade'
         ? { targetProductionDate: resolveForm.targetProductionDate }
+        : {}),
+      ...(resolveForm.resolutionType === 'reshipped'
+        ? { reshipSets: resolveForm.reshipSets }
         : {})
     })
 
     if (resolveForm.resolutionType === 'remade' && resolveResult?.remakeOrderNo) {
       ElMessage.success(`已生成重做单 ${resolveResult.remakeOrderNo}，将从选定日期进入采购与排产`)
+    } else if (resolveForm.resolutionType === 'reshipped') {
+      ElMessage.success(
+        `已生成 0 元补发单 ${resolveResult?.reshipOrderNo || ''}，扣减 ${resolveForm.reshipSets} 套库存，接下来正常发货即可`
+      )
     } else {
       ElMessage.success('售后工单已处理')
     }
@@ -390,7 +451,8 @@ function getAftersaleTypeText(type?: string): string {
     REFUND: '申请退款',
     REMAKE: '申请重做',
     COMPLAINT: '投诉建议',
-    RESOLVED: '已解决'
+    RESOLVED: '已解决',
+    RESHIP: '免费补发'
   }
   return typeMap[type || ''] || '-'
 }
@@ -478,7 +540,8 @@ function getAftersaleTypeTag(type?: string): 'success' | 'warning' | 'info' | 'd
     REFUND: 'danger',
     REMAKE: 'warning',
     COMPLAINT: 'info',
-    RESOLVED: 'success'
+    RESOLVED: 'success',
+    RESHIP: 'success'
   }
   return typeMap[type || ''] || 'info'
 }

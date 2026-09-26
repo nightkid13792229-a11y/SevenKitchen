@@ -605,6 +605,14 @@ onMounted(() => {
   loadRecipeDesignerAccess()
   loadRecipeCoverOriginalOnlyMap()
   loadHomeHeaderBackground()
+  /**
+   * 定制入口的价格必须在这里也读一次。
+   *
+   * ⚠️ 首次进入页面时 onShow 会因为 `hasMountedHome` 还是 false 而提前 return，
+   * 只把加载挂在 onShow 上会导致：第一次打开首页「食谱定制」卡片没有价格，
+   * 切到别的 tab 再回来才出现。实测踩过。
+   */
+  loadCustomRecipeConfig()
 
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')

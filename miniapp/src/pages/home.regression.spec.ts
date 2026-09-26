@@ -319,6 +319,22 @@ describe('home runtime regressions', () => {
     expect(templateSource).not.toContain('matchStars')
   })
 
+  it('loads the custom recipe config on first mount, not only on show', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    // 首次进入页面时 onShow 会因为 hasMountedHome 还是 false 而提前 return，
+    // 只挂在 onShow 上会让"第一次打开首页没有价格、切 tab 回来才有"。
+    const mountedStart = source.indexOf('onMounted(() => {')
+    expect(mountedStart).toBeGreaterThan(-1)
+    const mountedBlock = source.slice(mountedStart, mountedStart + 900)
+
+    expect(mountedBlock).toContain('loadCustomRecipeConfig()')
+    expect(mountedBlock).toContain('loadHomeHeaderBackground()')
+  })
+
   it('hides the health tag filter from customers pending tag dictionary compliance', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

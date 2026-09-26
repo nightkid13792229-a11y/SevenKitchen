@@ -1051,6 +1051,21 @@ export class OrdersController {
       order.items.map((item) => this.mapOrderItemToDto(item, itemTotalPrice)),
     );
 
+    /**
+     * 定制费抵扣明细。
+     *
+     * 这两列不参与订单金额计算（金额已含在净货款里），所以没有进 Order 实体，
+     * 这里按主键单独读一次，给前端展示"这单抵了多少"。
+     */
+    const creditRow = await this.prisma.order.findUnique({
+      where: { id: order.id },
+      select: {
+        creditAmountApplied: true,
+        customRecipeCreditOrderId: true,
+      },
+    });
+    const creditAmountApplied = Number(creditRow?.creditAmountApplied ?? 0);
+
     // Debug logging for amount issue
     console.log('[Order Detail] order.totalAmount:', order.totalAmount);
     console.log('[Order Detail] order.amountTotal:', order.amountTotal);
@@ -1123,6 +1138,16 @@ export class OrdersController {
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
+      // 定制费抵扣：金额已含在净货款里，这里只做展示
+      creditAmountApplied,
+      creditOriginalProductAmount:
+        creditAmountApplied > 0
+          ? Math.round(
+              (order.amountProduct + creditAmountApplied + Number.EPSILON) * 100,
+            ) / 100
+          : order.amountProduct,
+      customRecipeCreditOrderId:
+        creditRow?.customRecipeCreditOrderId ?? null,
       items,
       pricingBreakdown,
       pricingBreakdownSnapshot: order.pricingBreakdownSnapshot, // 新增：完整的定价快照

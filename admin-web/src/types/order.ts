@@ -206,6 +206,12 @@ export interface Order {
   amountProduct: number
   amountShipping: number
   amountTotal: number
+  /** 本单使用的定制费抵扣（元）。金额已含在（净）amountProduct 里，仅用于展示与对账 */
+  creditAmountApplied?: number
+  /** 抵扣前的原始货款（元） */
+  creditOriginalProductAmount?: number
+  /** 抵扣来源的定制订单 id */
+  customRecipeCreditOrderId?: string | null
   items: OrderItem[]
   pricingBreakdownSnapshot?: PricingBreakdown
   dogId?: string

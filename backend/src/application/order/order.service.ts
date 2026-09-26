@@ -80,6 +80,7 @@ import {
   buildTastingPackOrderSnapshot,
   TASTING_PACK_SNAPSHOT_KIND,
 } from '../tasting-pack/tasting-pack-snapshot';
+import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -324,6 +325,13 @@ export class OrderService {
     private readonly tastingPackService?: TastingPackService,
     @Optional()
     private readonly tastingPackStockService?: TastingPackStockService,
+    /**
+     * 定制费抵扣成品货款（产品线 ③）。
+     * 用 @Optional 注入：额度台账缺失时下单照常，只是不做抵扣，
+     * 不让一个可选能力把主下单链路绑死。
+     */
+    @Optional()
+    private readonly customRecipeService?: CustomRecipeService,
   ) {}
 
   private async loadPreparationMethodNameMap(
@@ -794,6 +802,74 @@ export class OrderService {
 
   private roundMoney(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
+  // ==================== 定制费抵扣成品货款 ====================
+
+  /**
+   * 计算这单能用掉多少「定制费抵扣」。
+   *
+   * 已确认的业务口径：
+   *   - **只抵货款，不抵运费**
+   *   - 额度绑定它产出的那道定制食谱（拿别的食谱抵不了）
+   *   - 余额结转：货款不够就只抵剩下的，余额留到下次
+   *   - **货款端直接减**：订单金额校验规则保持 货款+运费=总额 不变，
+   *     因此退款、结算、财务报表都不用改
+   *
+   * 返回 null 表示这单没有可用抵扣。
+   */
+  private async resolveCustomRecipeCredit(params: {
+    customerId?: string;
+    recipeId?: string;
+    amountProduct: number;
+  }): Promise<{
+    customRecipeOrderId: string;
+    applied: number;
+    originalProductAmount: number;
+  } | null> {
+    if (!this.customRecipeService) return null;
+    if (!params.customerId || !params.recipeId) return null;
+    if (!Number.isFinite(params.amountProduct) || params.amountProduct <= 0) {
+      return null;
+    }
+
+    const credit = await this.customRecipeService.findUsableCredit({
+      customerId: params.customerId,
+      recipeId: params.recipeId,
+    });
+    if (!credit || credit.remaining <= 0) return null;
+
+    const applied = this.roundMoney(
+      Math.min(credit.remaining, params.amountProduct),
+    );
+    if (applied <= 0) return null;
+
+    return {
+      customRecipeOrderId: credit.customRecipeOrderId,
+      applied,
+      originalProductAmount: this.roundMoney(params.amountProduct),
+    };
+  }
+
+  /**
+   * 从价格快照里读出**报价时已经算好**的抵扣。
+   *
+   * 下单阶段一律以快照为准、不重新计算：顾客看到多少就付多少，
+   * 也避免"下单瞬间后台改了可抵扣金额"导致页面价与实付价不一致。
+   */
+  private readCustomRecipeCreditFromSnapshot(
+    pricingResult: any,
+  ): { customRecipeOrderId: string; applied: number } | null {
+    const applied = Number(pricingResult?.creditAmountApplied ?? 0);
+    const customRecipeOrderId = pricingResult?.customRecipeCreditOrderId;
+
+    if (!customRecipeOrderId) return null;
+    if (!Number.isFinite(applied) || applied <= 0) return null;
+
+    return {
+      customRecipeOrderId: String(customRecipeOrderId),
+      applied: this.roundMoney(applied),
+    };
   }
 
   /**
@@ -1358,17 +1434,71 @@ export class OrderService {
       addressId, // ✅ 修复：使用从快照中获取的addressId
     );
 
-    // 12. 保存订单
-    await this.orderRepository.save(order);
+    // 12. 扣减定制费抵扣额度
+    //
+    // 顺序刻意是"先扣额度、再落订单"：额度扣不动就不该生成一张打过折的订单，
+    // 否则等于白送。反过来如果落单失败，下面会把额度还回去，不留悬空扣减。
+    const creditFromSnapshot = this.readCustomRecipeCreditFromSnapshot(
+      pricingResult,
+    );
+    let consumedCredit: { consumed: number; remaining: number } | null = null;
 
-    // 13. 标记快照已使用
+    if (creditFromSnapshot && this.customRecipeService) {
+      consumedCredit = await this.customRecipeService.consumeCredit({
+        orderIdOrId: creditFromSnapshot.customRecipeOrderId,
+        amount: creditFromSnapshot.applied,
+      });
+    }
+
+    try {
+      // 13. 保存订单
+      await this.orderRepository.save(order);
+
+      // 13.1 把抵扣明细写到订单上（仅用于展示与审计，不参与金额计算）
+      if (
+        creditFromSnapshot &&
+        consumedCredit &&
+        consumedCredit.consumed > 0
+      ) {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: {
+            creditAmountApplied: consumedCredit.consumed,
+            customRecipeCreditOrderId: creditFromSnapshot.customRecipeOrderId,
+          },
+        });
+      }
+    } catch (error) {
+      // 落单失败：把刚扣掉的额度还回去，别让顾客白丢额度
+      if (
+        creditFromSnapshot &&
+        consumedCredit &&
+        consumedCredit.consumed > 0 &&
+        this.customRecipeService
+      ) {
+        await this.customRecipeService
+          .restoreCredit({
+            orderIdOrId: creditFromSnapshot.customRecipeOrderId,
+            amount: consumedCredit.consumed,
+          })
+          .catch((restoreError) => {
+            console.error(
+              '[CreateOrderFromSnapshot] 落单失败后归还抵扣额度也失败，需人工核对:',
+              restoreError,
+            );
+          });
+      }
+      throw error;
+    }
+
+    // 14. 标记快照已使用
     await this.pricingSnapshotRepository.markAsUsed(snapshotId);
     console.log(
       '[CreateOrderFromSnapshot] Snapshot marked as used:',
       snapshotId,
     );
 
-    // 14. 记录状态转换
+    // 15. 记录状态转换
     await this.logStatusTransition(
       order,
       OrderStatus.INIT,
@@ -2106,6 +2236,12 @@ export class OrderService {
     amountShipping: number;
     amountTotal: number;
     snapshotId?: string; // ✅ 新增：快照ID
+    /** 本单用掉的定制费抵扣（元）。已含在 amountProduct 里 */
+    creditAmountApplied?: number;
+    /** 抵扣前的原始货款（元），用于展示"原价 − 抵扣" */
+    creditOriginalProductAmount?: number;
+    /** 抵扣来源定制单 id */
+    customRecipeCreditOrderId?: string;
     pricingBreakdown?: {
       costIngredients: number;
       costPackaging: number;
@@ -2321,16 +2457,52 @@ export class OrderService {
       pricingPurpose: dto.pricingPurpose ?? 'ORDER',
     });
 
+    /**
+     * 定制费抵扣成品货款。
+     *
+     * DIY 制作单只是免费的算量工具、不产生订单，因此不参与抵扣。
+     * 查询失败一律降级为"本单不抵扣"，绝不让一个可选的优惠动作拦住报价。
+     */
+    const customRecipeCredit = isDiySheetPreview
+      ? null
+      : await this.resolveCustomRecipeCredit({
+          customerId: dto.customerId,
+          recipeId: itemDto.recipeId,
+          amountProduct: pricing.productPrice,
+        }).catch((error) => {
+          console.error(
+            '[PreviewPricing] 定制抵扣查询失败，按不抵扣处理:',
+            error,
+          );
+          return null;
+        });
+
+    // 口径：货款端直接减，运费不参与抵扣
+    const netProductAmount = customRecipeCredit
+      ? this.roundMoney(pricing.productPrice - customRecipeCredit.applied)
+      : pricing.productPrice;
+
     const pricingResult = {
-      amountProduct: pricing.productPrice,
+      amountProduct: netProductAmount,
       amountShipping: shippingFee,
-      amountTotal: pricing.productPrice + shippingFee,
+      amountTotal: this.roundMoney(netProductAmount + shippingFee),
+      // 抵扣元数据：金额本身已经含在（净）货款里，这些只用于展示与审计
+      ...(customRecipeCredit
+        ? {
+            creditAmountApplied: customRecipeCredit.applied,
+            creditOriginalProductAmount:
+              customRecipeCredit.originalProductAmount,
+            customRecipeCreditOrderId: customRecipeCredit.customRecipeOrderId,
+          }
+        : {}),
       pricingBreakdown: {
         costIngredients: pricing.costIngredients,
         costPackaging: pricing.costPackaging,
         costLabor: pricing.costLabor,
         costOverhead: pricing.costOverhead,
         totalProductCost: pricing.totalProductCost,
+        // ⚠️ 这里是**成本口径的原始货款**，不做抵扣：
+        // 成本与毛利的解释必须保持原样，抵扣只是"少收了顾客多少钱"。
         productPrice: pricing.productPrice,
         weightPackagingG: pricing.weightPackagingG,
         ingredientDetails: pricing.ingredientDetails,

@@ -23,6 +23,9 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
     },
+    recipe: {
+      findFirst: jest.fn(),
+    },
   } as any;
 
   beforeEach(async () => {
@@ -42,6 +45,66 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
 
     service = module.get(CustomRecipeService);
     jest.clearAllMocks();
+    // 默认查不到对应食谱：多数用例关心的是定制单侧的匹配逻辑
+    mockPrismaService.recipe.findFirst.mockResolvedValue(null);
+  });
+
+  describe('findUsableCredit · 食谱 ID 归一化', () => {
+    // 下单链路传的是「业务食谱号」（Recipe.recipeId），
+    // 而定制单上存的是「食谱主键」（Recipe.id，因为它有指向 recipe 表的外键）。
+    // 不归一化的话两边永远匹配不上，抵扣会静默失效。
+    it('把业务食谱号解析成主键后再匹配定制单', async () => {
+      mockPrismaService.recipe.findFirst.mockResolvedValue({
+        id: 'recipe-pk-1',
+      });
+      mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
+        id: 'cr-uuid-1',
+        orderId: 'CR1',
+        creditAmount: 300,
+        creditUsed: 0,
+      });
+
+      const result = await service.findUsableCredit({
+        customerId: 'user-1',
+        recipeId: 'recipe-business-1',
+      });
+
+      expect(mockPrismaService.recipe.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { recipeId: 'recipe-business-1' },
+        }),
+      );
+      expect(
+        mockPrismaService.customRecipeOrder.findFirst,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            recipeId: { in: ['recipe-pk-1', 'recipe-business-1'] },
+          }),
+        }),
+      );
+      expect(result?.remaining).toBe(300);
+    });
+
+    it('查不到食谱记录时退回用传入的 ID 匹配（兼容直接传主键）', async () => {
+      mockPrismaService.recipe.findFirst.mockResolvedValue(null);
+      mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue(null);
+
+      await service.findUsableCredit({
+        customerId: 'user-1',
+        recipeId: 'recipe-pk-direct',
+      });
+
+      expect(
+        mockPrismaService.customRecipeOrder.findFirst,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            recipeId: { in: ['recipe-pk-direct'] },
+          }),
+        }),
+      );
+    });
   });
 
   describe('findUsableCredit', () => {
@@ -89,7 +152,8 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             customerId: 'user-1',
-            recipeId: 'recipe-1',
+            // 归一化后是按候选集合匹配（业务食谱号 + 食谱主键）
+            recipeId: { in: ['recipe-1'] },
           }),
         }),
       );

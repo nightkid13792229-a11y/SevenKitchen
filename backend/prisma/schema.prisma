@@ -17,6 +17,15 @@ model Order {
   amountProduct                Decimal                     @map("amount_product")
   amountShipping               Decimal                     @map("amount_shipping")
   amountTotal                  Decimal                     @map("amount_total")
+  /// 本单使用的「定制费抵扣」金额（元）。
+  ///
+  /// 口径：**已含在（净）amount_product 里**，不参与任何算术 ——
+  /// 记录它只是为了展示"这单抵了多少"与审计，订单金额校验规则保持
+  /// `amount_total = amount_product + amount_shipping` 不变。
+  creditAmountApplied          Decimal                     @default(0) @map("credit_amount_applied") @db.Decimal(10, 2)
+  /// 抵扣来源的定制订单（CustomRecipeOrder.id）。
+  /// 刻意**不加唯一约束**：额度支持余额结转，同一张定制单可以抵多张成品单。
+  customRecipeCreditOrderId    String?                     @map("custom_recipe_credit_order_id")
   totalAmount                  Decimal?                    @map("total_amount")
   pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")
   shippingAddressSnapshot      Json?                       @map("shipping_address_snapshot")

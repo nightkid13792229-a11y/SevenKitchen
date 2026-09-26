@@ -246,6 +246,18 @@
         <text class="title-text">订单金额</text>
       </view>
 
+      <!-- 定制费抵扣：只抵货款、不抵运费；金额已含在下面的支付金额里 -->
+      <view v-if="customRecipeCreditApplied > 0" class="price-credit-card">
+        <view class="price-credit-row">
+          <text class="price-credit-label">商品金额</text>
+          <text class="price-credit-original">¥{{ customRecipeCreditOriginal.toFixed(2) }}</text>
+        </view>
+        <view class="price-credit-row">
+          <text class="price-credit-label credit">定制费抵扣</text>
+          <text class="price-credit-value">−¥{{ customRecipeCreditApplied.toFixed(2) }}</text>
+        </view>
+      </view>
+
       <view class="price-card-simple">
         <text class="price-label">支付金额</text>
         <text class="price-value-large">¥{{ totalAmount.toFixed(2) }}</text>
@@ -463,6 +475,9 @@ const directBuyPrice = ref({
   amountProduct: 0,
   amountShipping: 0,
   amountTotal: 0,
+  // 定制费抵扣（元）：金额已含在 amountProduct 里，仅用于展示
+  creditAmountApplied: 0,
+  creditOriginalProductAmount: 0,
 });
 
 // ========== 地址选择器相关 ==========
@@ -529,6 +544,14 @@ const estimatedDeliveryDateRange = computed(() => {
 const totalAmount = computed(() => {
   return directBuyPrice.value.amountTotal;
 });
+
+// 定制费抵扣：金额已经含在（净）货款里，这两个只用来把"省了多少"讲清楚
+const customRecipeCreditApplied = computed(
+  () => directBuyPrice.value.creditAmountApplied || 0,
+);
+const customRecipeCreditOriginal = computed(
+  () => directBuyPrice.value.creditOriginalProductAmount || 0,
+);
 
 const averagePricePerPackage = computed(() => {
   if (orderConfig.value.totalPackages <= 0) return 0;
@@ -765,6 +788,20 @@ function buildDirectBuyPrice(
     amountProduct,
     amountShipping,
     amountTotal: amountTotal > 0 ? amountTotal : amountTotalFallback,
+    creditAmountApplied: Math.max(
+      0,
+      readNumberValue(
+        storedConfig.creditAmountApplied,
+        readNumberValue(options.creditAmountApplied, 0),
+      ),
+    ),
+    creditOriginalProductAmount: Math.max(
+      0,
+      readNumberValue(
+        storedConfig.creditOriginalProductAmount,
+        readNumberValue(options.creditOriginalProductAmount, 0),
+      ),
+    ),
   };
 }
 
@@ -1050,6 +1087,7 @@ function loadDirectBuyItem(options: any) {
       orderConfig.value.perMealG,
     unitPrice: 0,
     totalPrice: directBuyPrice.value.amountTotal,
+    creditAmountApplied: directBuyPrice.value.creditAmountApplied,
     preparationMethod: orderConfig.value.preparationMethod,
     cookingMethod: orderConfig.value.cookingMethod,
   };
@@ -1225,6 +1263,9 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{
       amountProduct: res.data.amountProduct || 0,
       amountShipping: res.data.amountShipping || 0,
       amountTotal: res.data.amountTotal || 0,
+      // 定制费抵扣：金额已含在（净）货款里，只用于展示
+      creditAmountApplied: res.data.creditAmountApplied || 0,
+      creditOriginalProductAmount: res.data.creditOriginalProductAmount || 0,
     };
 
     pricingSnapshotId.value = res.data.snapshotId;
@@ -1237,6 +1278,8 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{
       amountProduct: refreshedPrice.amountProduct,
       amountShipping: refreshedPrice.amountShipping,
       amountTotal: refreshedPrice.amountTotal,
+      creditAmountApplied: refreshedPrice.creditAmountApplied,
+      creditOriginalProductAmount: refreshedPrice.creditOriginalProductAmount,
     });
 
     return {
@@ -1922,6 +1965,46 @@ function goToAddAddress() {
   background-color: #fbfcf7;
   padding: 24rpx;
   margin-bottom: 20rpx;
+}
+
+/* 定制费抵扣明细 */
+.price-credit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+  padding: 20rpx 24rpx;
+  background: #fff8ef;
+  border: 1rpx solid #f0dcb8;
+  border-radius: 16rpx;
+}
+
+.price-credit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.price-credit-label {
+  font-size: 26rpx;
+  color: #8a7b5c;
+}
+
+.price-credit-label.credit {
+  color: #b08d4f;
+  font-weight: 600;
+}
+
+.price-credit-original {
+  font-size: 26rpx;
+  color: #8a7b5c;
+  text-decoration: line-through;
+}
+
+.price-credit-value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #b08d4f;
 }
 
 .price-card-simple {

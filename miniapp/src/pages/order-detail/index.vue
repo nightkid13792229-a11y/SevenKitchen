@@ -185,6 +185,22 @@
             >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
           >
         </view>
+
+        <!-- 定制费抵扣明细：金额已经含在上面的订单金额里，这里只是把省了多少讲清楚 -->
+        <template v-if="Number(order.creditAmountApplied || 0) > 0">
+          <view class="info-row">
+            <text class="label">商品金额:</text>
+            <text class="value credit-original"
+              >¥{{ formatAmount(creditOriginalProductAmount) }}</text
+            >
+          </view>
+          <view class="info-row">
+            <text class="label">定制费抵扣:</text>
+            <text class="value credit-applied"
+              >−¥{{ formatAmount(order.creditAmountApplied) }}</text
+            >
+          </view>
+        </template>
       </view>
 
       <view class="section buyer-section">
@@ -1136,6 +1152,9 @@ interface Order {
   targetProductionDate?: string | null;
   estimatedShippingDate?: string | null;
   amountTotal?: number;
+  /** 定制费抵扣（元）：已含在（净）货款里，只用于展示 */
+  creditAmountApplied?: number;
+  creditOriginalProductAmount?: number;
   totalAmount?: number;
   amountProduct?: number;
   amountShipping?: number;
@@ -1517,6 +1536,16 @@ const orderCenterDescription = computed(() => {
     totalQuantityKg.value > 0 ? `约${totalQuantityKg.value}kg` : '',
   ].filter(Boolean);
   return parts.join(' · ') || '宠物鲜食定制商品';
+});
+
+/**
+ * 抵扣前的原始货款 = 当前（净）货款 + 已抵扣金额。
+ * 两者相加即"这道菜原本多少钱"，用于展示"原价 − 抵扣"。
+ */
+const creditOriginalProductAmount = computed(() => {
+  const applied = Number(order.value?.creditAmountApplied || 0);
+  if (applied <= 0) return 0;
+  return Math.round((Number(order.value?.amountProduct || 0) + applied) * 100) / 100;
 });
 
 const customerDisplayName = computed(() => {
@@ -3750,6 +3779,16 @@ async function applyRefund() {
 
 .status {
   font-weight: 500;
+}
+
+.credit-original {
+  color: #8a7b5c;
+  text-decoration: line-through;
+}
+
+.credit-applied {
+  color: #b08d4f;
+  font-weight: 700;
 }
 
 .amount {

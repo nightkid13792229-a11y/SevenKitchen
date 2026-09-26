@@ -266,6 +266,24 @@
           <el-descriptions-item label="运费">
             ¥{{ order.pricingBreakdownSnapshot.shippingFee.toFixed(2) }}
           </el-descriptions-item>
+          <!--
+            定制费抵扣：金额已经含在（净）货款里，这里只做展示与对账。
+            注意"产品价格"是成本口径的原始货款，所以它 + 抵扣 = 顾客实际看到的价格。
+          -->
+          <el-descriptions-item
+            v-if="Number(order.creditAmountApplied || 0) > 0"
+            label="定制费抵扣"
+          >
+            <span class="credit-applied">
+              −¥{{ Number(order.creditAmountApplied).toFixed(2) }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="Number(order.creditAmountApplied || 0) > 0"
+            label="抵扣来源定制单"
+          >
+            {{ order.customRecipeCreditOrderId || '—' }}
+          </el-descriptions-item>
           <el-descriptions-item label="订单总价">
             <span class="total-price">
               ¥{{ order.pricingBreakdownSnapshot.totalPrice.toFixed(2) }}
@@ -1200,6 +1218,11 @@ onMounted(() => {
 
 .financial-alert {
   margin-bottom: 16px;
+}
+
+.credit-applied {
+  font-weight: bold;
+  color: #b08d4f;
 }
 
 .total-price {

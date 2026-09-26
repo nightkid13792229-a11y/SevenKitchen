@@ -283,6 +283,28 @@ export class OrderDto {
   amountTotal!: number;
 
   @ApiProperty({
+    example: 300,
+    required: false,
+    description:
+      '本单使用的定制费抵扣（元）。金额已含在 amountProduct（净货款）里，仅用于展示',
+  })
+  creditAmountApplied?: number;
+
+  @ApiProperty({
+    example: 430,
+    required: false,
+    description: '抵扣前的原始货款（元），用于展示「原价 − 抵扣」',
+  })
+  creditOriginalProductAmount?: number;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description: '抵扣来源的定制订单 id（CustomRecipeOrder.id）',
+  })
+  customRecipeCreditOrderId?: string | null;
+
+  @ApiProperty({
     description: 'Order creation timestamp',
     example: '2025-01-20T10:30:00.000Z',
   })

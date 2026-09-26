@@ -432,6 +432,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * 额度绑定它产出的那道食谱，避免拿一张定制单去抵别的现成食谱。
    * `CustomRecipeOrder.recipeId` 是唯一的，所以一道食谱最多对应一张定制单。
    *
+   * ⚠️ 两边的「食谱 ID」不是同一个东西，必须归一化，否则永远匹配不上：
+   *   - 下单链路传进来的是**业务食谱号**（`Recipe.recipeId`，形如 13f28dfe-…），
+   *     因为 `recipeRepository.findById` 是按 `recipeId` 查的
+   *   - 定制单上存的是**食谱主键**（`Recipe.id`），因为它有指向 recipe 表的外键
+   * 这里先把业务食谱号解析成主键，两个都带上做匹配，兼容直接传主键的调用方。
+   *
    * 返回 null 表示没有可用额度（没定制过 / 未付款 / 已用完）。
    */
   async findUsableCredit(params: {
@@ -444,10 +450,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   } | null> {
     if (!params.customerId || !params.recipeId) return null;
 
+    const recipeRecord = await this.prisma.recipe.findFirst({
+      where: { recipeId: params.recipeId },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+
+    const candidateRecipeIds = Array.from(
+      new Set(
+        [recipeRecord?.id, params.recipeId].filter((value): value is string =>
+          Boolean(value),
+        ),
+      ),
+    );
+
     const order = await this.prisma.customRecipeOrder.findFirst({
       where: {
         customerId: params.customerId,
-        recipeId: params.recipeId,
+        recipeId: { in: candidateRecipeIds },
         status: { in: CustomRecipeService.CREDIT_USABLE_STATUSES },
       },
       select: {

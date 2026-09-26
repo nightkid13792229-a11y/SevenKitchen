@@ -87,6 +87,30 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "分装标签" },
       },
       {
+        path: "tasting-pack/config",
+        name: "TastingPackConfig",
+        component: () => import("@/views/TastingPack/Config.vue"),
+        meta: { title: "试吃装设置" },
+      },
+      {
+        path: "tasting-pack/packs",
+        name: "TastingPackList",
+        component: () => import("@/views/TastingPack/List.vue"),
+        meta: { title: "试吃装商品" },
+      },
+      {
+        path: "tasting-pack/stock",
+        name: "TastingPackStock",
+        component: () => import("@/views/TastingPack/Stock.vue"),
+        meta: { title: "试吃装库存" },
+      },
+      {
+        path: "tasting-pack/production-plans",
+        name: "TastingPackProductionPlans",
+        component: () => import("@/views/TastingPack/ProductionPlans.vue"),
+        meta: { title: "试吃装备货" },
+      },
+      {
         path: "nutrition-governance",
         name: "NutritionGovernance",
         redirect: { path: "/ingredients", query: { tab: "nutrition" } },

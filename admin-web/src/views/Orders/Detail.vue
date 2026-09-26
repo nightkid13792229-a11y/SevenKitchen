@@ -38,8 +38,8 @@
             {{ order.id }}
           </el-descriptions-item>
           <el-descriptions-item label="订单类型">
-            <el-tag :type="order.type === OrderTypeEnum.FRESH_FOOD ? 'success' : 'warning'">
-              {{ order.type === OrderTypeEnum.FRESH_FOOD ? '鲜食制作' : '定制服务' }}
+            <el-tag :type="orderTypeTagType(order.type)">
+              {{ orderTypeLabel(order.type) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="订单状态">
@@ -596,6 +596,8 @@
 </template>
 
 <script setup lang="ts">
+import { orderTypeLabel, orderTypeTagType } from './orderType';
+
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

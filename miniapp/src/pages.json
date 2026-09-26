@@ -507,6 +507,24 @@
       ]
     },
     {
+      "root": "pages/tasting-pack",
+      "pages": [
+        {
+          "path": "list",
+          "style": {
+            "navigationBarTitleText": "试吃装",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "试吃装详情"
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/order-detail",
       "pages": [
         {

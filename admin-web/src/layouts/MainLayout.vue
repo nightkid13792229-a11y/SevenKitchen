@@ -41,6 +41,22 @@
           <el-icon><PriceTag /></el-icon>
           <span>补剂商城设置</span>
         </el-menu-item>
+        <el-menu-item index="/tasting-pack/config">
+          <el-icon><Dish /></el-icon>
+          <span>试吃装设置</span>
+        </el-menu-item>
+        <el-menu-item index="/tasting-pack/packs">
+          <el-icon><Dish /></el-icon>
+          <span>试吃装商品</span>
+        </el-menu-item>
+        <el-menu-item index="/tasting-pack/stock">
+          <el-icon><Box /></el-icon>
+          <span>试吃装库存</span>
+        </el-menu-item>
+        <el-menu-item index="/tasting-pack/production-plans">
+          <el-icon><Operation /></el-icon>
+          <span>试吃装备货</span>
+        </el-menu-item>
         <el-menu-item index="/search-governance">
           <el-icon><Search /></el-icon>
           <span>搜索治理</span>
@@ -274,6 +290,7 @@ import {
   DocumentChecked,
   Search,
   FirstAidKit,
+  Dish,
   Lock
 } from '@element-plus/icons-vue'
 

@@ -30,6 +30,20 @@
       </view>
     </view>
 
+    <!-- 试吃装入口（现货）：只在开放且确实有货时展示，
+         避免顾客点进去发现是空的 -->
+    <view
+      v-if=tastingPackEntry.visible
+      class="tasting-pack-entry"
+      @tap="goTastingPack"
+    >
+      <view class="tpe-body">
+        <text class="tpe-title">{{ tastingPackEntry.name }}</text>
+        <text class="tpe-desc">{{ tastingPackEntry.desc }}</text>
+      </view>
+      <text class="tpe-btn">去看看</text>
+    </view>
+
     <!-- 狗狗档案预览（紧凑单行） -->
     <view class="section dog-section" v-if="dogs.length > 0">
       <view class="section-header">
@@ -353,6 +367,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { recipeDesignerApi } from '../../api/recipe-designer'
@@ -615,6 +630,9 @@ onMounted(() => {
   ensureHealthTagMappingLoaded().finally(() => {
     loadRecipes()
   })
+
+  // 试吃装入口：失败静默，不影响首页其它内容
+  loadTastingPackEntry()
 })
 
 onUnmounted(() => {
@@ -1334,6 +1352,47 @@ function viewRecipe(recipeId: string, dogId?: string | null) {
 
 // 获取生命阶段标签
 // 拉取食谱参考价（每100g起、已含运费）。接口未就绪或失败时静默降级：不展示价格。
+const tastingPackEntry = ref({
+  visible: false,
+  name: '多种口味试吃装',
+  desc: '一单尝几种，不用凑起订量、只付一次运费',
+  code: '',
+})
+
+/**
+ * 试吃装入口。
+ *
+ * 只在"开放且确实有货"时展示 —— 首页摆一个点进去是空的入口，
+ * 比不摆更伤信任。整段逻辑失败一律静默：首页不该因为一个次要入口而报错。
+ */
+async function loadTastingPackEntry() {
+  try {
+    const res = await fetchTastingPacks()
+    if (res.code !== 0 || !res.data?.enabled) return
+    const available = (res.data.items || []).filter((item) => !item.soldOut)
+    if (available.length === 0) return
+
+    const first = available[0]
+    tastingPackEntry.value = {
+      visible: true,
+      name: first.name,
+      desc: `${first.items.length} 道菜尝鲜 · 现货 ¥${first.unitPrice} 起`,
+      code: first.code,
+    }
+  } catch (error) {
+    // 入口失败不影响首页其它内容
+  }
+}
+
+function goTastingPack() {
+  const code = tastingPackEntry.value.code
+  uni.navigateTo({
+    url: code
+      ? `/pages/tasting-pack/index?packId=${encodeURIComponent(code)}`
+      : '/pages/tasting-pack/list',
+  })
+}
+
 async function loadReferencePrices(recipeIds: string[]) {
   const targetIds = recipeIds.filter((id) => Boolean(id) && !referencePriceMap.value[id])
   if (targetIds.length === 0) return
@@ -2456,5 +2515,44 @@ defineOptions({
 
 .group-body .tag-grid {
   margin-top: 0;
+}
+
+/* 试吃装入口 */
+.tasting-pack-entry {
+  margin: 20rpx 24rpx;
+  padding: 28rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #1e3a2f 0%, #2f5a45 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.tpe-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  flex: 1;
+}
+
+.tpe-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.tpe-desc {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tpe-btn {
+  font-size: 26rpx;
+  color: #1e3a2f;
+  background: #ffffff;
+  border-radius: 30rpx;
+  padding: 12rpx 32rpx;
+  flex-shrink: 0;
 }
 </style>

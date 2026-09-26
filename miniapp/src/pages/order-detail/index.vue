@@ -214,11 +214,15 @@
             <text class="buyer-label">收货地址</text>
             <text class="buyer-value">{{ fullAddressText }}</text>
           </view>
-          <view class="buyer-row">
+          <view v-if="!isStockOrder" class="buyer-row">
             <text class="buyer-label">预计制作</text>
             <text class="buyer-value">{{
               formatDate(order.targetProductionDate)
             }}</text>
+          </view>
+          <view v-else class="buyer-row">
+            <text class="buyer-label">发货方式</text>
+            <text class="buyer-value">现货，付款后尽快发出</text>
           </view>
           <view class="buyer-row">
             <text class="buyer-label">预计发货</text>
@@ -481,8 +485,8 @@
           :key="group.dogId"
           class="dog-group"
         >
-          <!-- 狗狗信息卡片 -->
-          <view class="dog-info-card">
+          <!-- 狗狗信息卡片（现货订单不绑狗狗，整块隐藏） -->
+          <view v-if="!isStockOrder" class="dog-info-card">
             <view class="dog-info">
               <text class="dog-name">{{ group.dogName }}</text>
               <text
@@ -507,7 +511,10 @@
             <!-- 第1层：食谱基本信息 -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
-              <text class="recipe-version"
+              <text v-if="isStockOrder" class="nutrition-standard"
+                >现货 · 试吃装</text
+              >
+              <text v-else class="recipe-version"
                 >v{{ item.recipeSnapshot?.version }}</text
               >
               <text class="nutrition-standard">{{
@@ -515,6 +522,25 @@
               }}</text>
             </view>
 
+            <!-- 试吃装：列出这一套包含哪几道菜 -->
+            <view v-if="isStockOrder && stockDishes.length" class="package-info-card">
+              <view class="package-row">
+                <text class="package-label">包含菜品:</text>
+                <text class="package-value">{{ stockDishes.length }} 道</text>
+              </view>
+              <view
+                v-for="dish in stockDishes"
+                :key="dish.recipeId"
+                class="package-row"
+              >
+                <text class="package-label">·</text>
+                <text class="package-value">{{ dish.name }}</text>
+              </view>
+              <view v-if="stockPackCode" class="package-row">
+                <text class="package-label">商品编号:</text>
+                <text class="package-value">{{ stockPackCode }}</text>
+              </view>
+            </view>
             <!-- 第2层：订购信息 -->
             <view class="package-info-card">
               <view class="package-row">
@@ -1420,6 +1446,22 @@ const ingredientTypeMap: Record<string, string> = {
 };
 
 // 按狗狗分组
+/**
+ * 试吃装（现货）订单。
+ *
+ * 它与鲜食订单的展示差异：不绑狗狗、没有每日饭量、没有原料清单，
+ * 但要列出"这一套包含哪几道菜"——那才是顾客想知道的内容。
+ */
+const isStockOrder = computed(() => order.value?.type === 'TASTING_PACK');
+
+const stockDishes = computed(() => {
+  const dishes = (order.value?.items?.[0]?.recipeSnapshot as any)?.dishes;
+  return Array.isArray(dishes) ? dishes : [];
+});
+
+const stockPackCode = computed(
+  () => (order.value?.items?.[0]?.recipeSnapshot as any)?.tastingPackCode || '',
+);
 const groupedItems = computed(() => {
   if (!order.value?.items) return [];
 

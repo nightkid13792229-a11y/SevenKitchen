@@ -95,8 +95,8 @@
 
         <!-- 如果有详细商品信息，显示更多信息 -->
         <template v-if="order._orderType === 'food' && order.firstItem">
-          <!-- 狗狗信息 -->
-          <view class="order-dogs">
+          <!-- 狗狗信息（现货试吃装不绑狗狗，不显示这一行） -->
+          <view v-if="!isStockOrderRow(order)" class="order-dogs">
             <text class="dogs-text">{{ formatDogInfo(order) }}</text>
           </view>
 
@@ -112,7 +112,12 @@
               <text class="recipe-name">{{ getRecipeName(order) }}</text>
             </view>
             <view class="meal-info">
-              <text class="meal-text">共{{ getTotalMeals(order) }}餐</text>
+              <text v-if="isStockOrderRow(order)" class="meal-text"
+                >{{ getStockSets(order) }}套 · 共{{ getTotalMeals(order) }}袋</text
+              >
+              <text v-else class="meal-text"
+                >共{{ getTotalMeals(order) }}餐</text
+              >
               <text class="meal-separator">·</text>
               <text
                 v-if="
@@ -263,6 +268,8 @@ const SUPPLEMENT_ORDER_MAX_PAGES = 20;
 interface Order {
   id: string;
   status: string;
+  /** 订单类型：FRESH_FOOD / CUSTOM_SERVICE / TASTING_PACK */
+  type?: string;
   cancellationReason?: string | null;
   aftersaleType?: string | null;
   refundStatus?: {
@@ -994,6 +1001,25 @@ function getCarrierName(code?: string): string {
   return carrierMap[code || ''] || code || '-';
 }
 
+/** 试吃装（现货）订单：不绑狗狗、没有"餐"的概念，展示口径与鲜食不同 */
+function isStockOrderRow(order: FoodOrderRow): boolean {
+  return order.type === 'TASTING_PACK';
+}
+
+/**
+ * 现货订单的套数。
+ *
+ * 总袋数 ÷ 每套袋数即可还原买了几个套装；
+ * 拿不到分装明细时退化成总袋数，宁可显示得粗一点，也不要显示 0。
+ */
+function getStockSets(order: FoodOrderRow): number {
+  const firstItem = order.firstItem;
+  if (!firstItem) return 0;
+  const plan = firstItem.packagePlan || [];
+  const perSet = plan.reduce((sum, row) => sum + (row.packageCount || 0), 0);
+  if (perSet <= 0) return firstItem.packageCount || 0;
+  return Math.max(1, Math.round((firstItem.packageCount || 0) / perSet));
+}
 function formatDogInfo(order: FoodOrderRow): string {
   if (!order.firstItem || !order.firstItem.dog) {
     return '';

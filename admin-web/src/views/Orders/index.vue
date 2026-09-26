@@ -176,6 +176,7 @@
               >
                 <el-option label="鲜食制作" :value="OrderTypeEnum.FRESH_FOOD" />
                 <el-option label="定制服务" :value="OrderTypeEnum.CUSTOM_SERVICE" />
+                <el-option label="试吃装" :value="OrderTypeEnum.TASTING_PACK" />
               </el-select>
             </el-form-item>
 
@@ -235,8 +236,8 @@
 
             <el-table-column prop="type" label="类型" width="90">
               <template #default="{ row }">
-                <el-tag :type="row.type === OrderTypeEnum.FRESH_FOOD ? 'success' : 'warning'" size="small">
-                  {{ row.type === OrderTypeEnum.FRESH_FOOD ? '鲜食' : '定制' }}
+                <el-tag :type="orderTypeTagType(row.type)" size="small">
+                  {{ orderTypeLabel(row.type, true) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -356,6 +357,11 @@
 </template>
 
 <script setup lang="ts">
+import {
+  orderTypeLabel,
+  orderTypeTagType,
+} from './orderType';
+
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

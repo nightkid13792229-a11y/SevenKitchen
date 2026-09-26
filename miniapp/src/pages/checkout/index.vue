@@ -42,8 +42,23 @@
       </view>
     </view>
 
-    <!-- 确认日期 -->
-    <view class="section production-date-section">
+    <!-- 现货：不排产，只说明发货节奏 -->
+    <view v-if="isStockOrder" class="section production-date-section">
+      <view class="section-title">
+        <text class="title-text">发货</text>
+      </view>
+      <view class="date-display-button">
+        <text class="date-label">现货商品</text>
+        <text class="date-value">付款后尽快发出</text>
+        <text class="auto-tag">已在库冷冻保存</text>
+      </view>
+      <view class="date-tips">
+        <text class="tip-text">现货为提前做好的冷冻成品，无需等待制作与排产</text>
+      </view>
+    </view>
+
+    <!-- 确认日期（鲜食：需要排产） -->
+    <view v-else class="section production-date-section">
       <view class="section-title">
         <text class="title-text">确认日期</text>
       </view>
@@ -116,8 +131,8 @@
         </view>
       </view>
 
-      <!-- 爱犬信息 -->
-      <view class="info-card dog-info-card">
+      <!-- 爱犬信息（现货不绑定狗狗，整块隐藏） -->
+      <view v-if="!isStockOrder" class="info-card dog-info-card">
         <text class="info-card-title">爱犬信息</text>
         <view class="config-grid">
           <view class="config-item">
@@ -149,7 +164,11 @@
       <view class="info-card order-info-card">
         <text class="info-card-title">订购信息</text>
         <view class="config-grid">
-          <view class="config-item">
+          <view v-if="isStockOrder" class="config-item">
+            <text class="config-label">购买数量</text>
+            <text class="config-value">{{ orderConfig.sets }}套</text>
+          </view>
+          <view v-else class="config-item">
             <text class="config-label">预计可喂</text>
             <text class="config-value"
               >{{ orderConfig.estimatedFeedDays }}天</text
@@ -182,8 +201,8 @@
         </view>
       </view>
 
-      <!-- 制作说明 -->
-      <view class="info-card requirement-card">
+      <!-- 制作说明（现货没有加工要求，整块隐藏） -->
+      <view v-if="!isStockOrder" class="info-card requirement-card">
         <text class="info-card-title">制作说明</text>
         <view class="config-grid">
           <view class="config-item">
@@ -240,7 +259,12 @@
       <view class="checkout-assurance">
         <text class="checkout-assurance-icon">✓</text>
         <text class="checkout-assurance-text">
-          收到后如有破损、变质等品质问题，可申请全额退款或免费重做
+          <template v-if="isStockOrder">
+            收到后如有破损、变质等品质问题，可申请全额退款，或联系客服补发
+          </template>
+          <template v-else>
+            收到后如有破损、变质等品质问题，可申请全额退款或免费重做
+          </template>
         </text>
       </view>
 
@@ -332,7 +356,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import { request } from '../../utils/api';
+import { request } from '../../utils/api'
+import { quoteTastingPack } from '../../api/tastingPack';
 import { ensurePhoneBound } from '../../utils/account';
 import CustomerServiceInlineButton from '../../components/CustomerServiceInlineButton.vue'
 import { trackFunnelEvent } from '../../utils/funnel';
@@ -397,6 +422,12 @@ interface OrderConfig {
   recipeId?: string;
   recipeName: string;
   recipeCoverImage?: string;
+  /** 订单种类：鲜食（默认）或试吃装现货 */
+  orderKind?: 'FRESH_FOOD' | 'TASTING_PACK';
+  /** 试吃装买了几个套装 */
+  sets?: number;
+  /** 试吃装面客编号（现货刷新价格要用） */
+  tastingPackCode?: string;
 }
 
 const cartItems = ref<CartItem[]>([]);
@@ -422,6 +453,9 @@ const orderConfig = ref<OrderConfig>({
   recipeId: '',
   recipeName: '',
   recipeCoverImage: '',
+  orderKind: 'FRESH_FOOD',
+  sets: 0,
+  tastingPackCode: '',
 });
 
 // 立即购买模式的价格显示（从URL参数获取，仅用于显示）
@@ -524,12 +558,16 @@ const bottomPricePerPackageText = computed(() => {
   return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋`;
 });
 
+/** 试吃装现货订单：不选制作日期、不绑狗狗、不显示排产相关说明 */
+const isStockOrder = computed(
+  () => orderConfig.value.orderKind === 'TASTING_PACK',
+);
+
 const canSubmitOrder = computed(() => {
-  return (
-    selectedAddress.value &&
-    pricingSnapshotId.value &&
-    selectedProductionDate.value
-  );
+  if (!selectedAddress.value || !pricingSnapshotId.value) return false;
+  // 现货不排产，没有制作日期这一项
+  if (isStockOrder.value) return true;
+  return !!selectedProductionDate.value;
 });
 
 // ========== 工具函数 ==========
@@ -734,6 +772,10 @@ function buildDirectBuyOrderConfig(
   storedConfig: Record<string, any>,
   options: Record<string, any>,
 ): OrderConfig {
+  // 试吃装是现货：没有狗狗、没有每日饭量、不排产，
+  // 所以这批配置只用来渲染，价格与库存一律以服务端快照为准
+  const orderKind =
+    storedConfig.orderKind === 'TASTING_PACK' ? 'TASTING_PACK' : 'FRESH_FOOD';
   const dogId = readTextValue(storedConfig.dogId, options.dogId);
   const dogName = readTextValue(storedConfig.dogName, options.dogName);
   const breedName = readTextValue(storedConfig.breedName, options.breedName);
@@ -828,6 +870,12 @@ function buildDirectBuyOrderConfig(
     recipeId,
     recipeName,
     recipeCoverImage,
+    orderKind,
+    sets: readPositiveInteger(storedConfig.sets, options.sets) || 0,
+    tastingPackCode: readTextValue(
+      storedConfig.tastingPackCode,
+      options.tastingPackCode,
+    ),
   };
 }
 
@@ -1085,6 +1133,61 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{
   success: boolean;
   priceChanged: boolean;
 }> {
+  // 现货：价格只认服务端的库存批次成本报价，不套用鲜食那套按狗狗算量的预览接口。
+  // 这里重新报价同时也会再校验一次可售量 —— 库存被别人买走时能及时拦住。
+  if (isStockOrder.value) {
+    const code = orderConfig.value.tastingPackCode;
+    if (!code || orderConfig.value.sets <= 0) {
+      uni.showToast({ title: '价格已过期，请返回重新下单', icon: 'none' });
+      return { success: false, priceChanged: false };
+    }
+
+    const previousAmount = directBuyPrice.value.amountTotal;
+    try {
+      uni.showLoading({ title: '更新价格...' });
+      const res = await quoteTastingPack({
+        idOrCode: code,
+        sets: orderConfig.value.sets,
+        addressId: selectedAddress.value?.id,
+      });
+      if (res.code !== 0 || !res.data?.snapshotId) {
+        throw new Error(res.message || '价格刷新失败');
+      }
+
+      pricingSnapshotId.value = res.data.snapshotId;
+      directBuyPrice.value = {
+        amountProduct: res.data.amountProduct,
+        amountShipping: res.data.amountShipping,
+        amountTotal: res.data.amountTotal,
+      };
+
+      const storedConfig = (uni.getStorageSync('direct_buy_order_config') ||
+        {}) as Record<string, any>;
+      uni.setStorageSync('direct_buy_order_config', {
+        ...storedConfig,
+        snapshotId: pricingSnapshotId.value,
+        amountProduct: res.data.amountProduct,
+        amountShipping: res.data.amountShipping,
+        amountTotal: res.data.amountTotal,
+      });
+
+      return {
+        success: true,
+        priceChanged:
+          Math.abs(res.data.amountTotal - previousAmount) >= 0.01,
+      };
+    } catch (error: any) {
+      console.error('Refresh tasting pack quote error:', error);
+      uni.showToast({
+        title: error?.message || '价格已过期，请返回重新下单',
+        icon: 'none',
+      });
+      return { success: false, priceChanged: false };
+    } finally {
+      uni.hideLoading();
+    }
+  }
+
   if (
     !orderConfig.value.dogId ||
     !orderConfig.value.recipeId ||
@@ -1188,10 +1291,15 @@ async function submitOrder(hasRefreshedSnapshot = false) {
       method: 'POST',
       suppressErrorToast: true,
       data: {
-        type: 'FRESH_FOOD',
+        // 现货订单用 TASTING_PACK：服务端据此跳过排产、
+        // 并把成品库存扣掉；鲜食仍走 FRESH_FOOD
+        type: isStockOrder.value ? 'TASTING_PACK' : 'FRESH_FOOD',
         addressId: selectedAddress.value!.id,
         snapshotId: pricingSnapshotId.value,
-        targetProductionDate: selectedProductionDate.value,
+        // 现货不排产，不带制作日期
+        ...(isStockOrder.value
+          ? {}
+          : { targetProductionDate: selectedProductionDate.value }),
       },
     });
 

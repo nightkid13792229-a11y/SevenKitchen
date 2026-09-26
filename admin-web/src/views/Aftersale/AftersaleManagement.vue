@@ -225,6 +225,15 @@ const stats = computed(() => ({
 
 const resolveForm = reactive({
   resolutionType: '' as '' | 'refunded' | 'remade' | 'resolved',
+  /**
+   * 「安排重做」时的制作日期（YYYY-MM-DD）。
+   *
+   * ⚠️ 这个字段原先漏在类型定义里：模板与提交逻辑都在用它，
+   * 运行时因为 resetResolveForm 里赋过值所以功能是好的，
+   * 但 `npm run build` 的类型检查会直接报错、整个后台发不出去。
+   * 少了它，重做单就没有制作日期，进不了采购清单与排产。
+   */
+  targetProductionDate: '',
   adminNote: '',
   refundAmount: 0
 })

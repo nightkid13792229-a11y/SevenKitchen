@@ -12,7 +12,17 @@
         <text class="step-number">1</text>
         <text class="title-text">选择狗狗</text>
       </view>
-      <picker v-if="dogOptions.length > 0" mode="selector" :range="dogOptions" range-key="label" @change="onDogChange">
+      <!-- 未登录：这里要区分"没登录"和"没有狗狗档案"。
+           原先未登录时读不到档案，页面直接落到下面的"还没有狗狗档案"空态，
+           顾客会被引导去建档，建到一半才发现其实还得先登录。
+           这两个状态要分开说，顾客才知道下一步该做什么。 -->
+      <view v-if="needLogin" class="login-hint">
+        <text class="login-hint-title">请先登录</text>
+        <text class="login-hint-desc">登录后我们才能读取毛孩子的档案，按它的体重和身体状况来定制。</text>
+        <button class="login-hint-btn" @tap="goToLogin">去登录</button>
+      </view>
+
+      <picker v-else-if="dogOptions.length > 0" mode="selector" :range="dogOptions" range-key="label" @change="onDogChange">
         <view class="picker-input">
           <text v-if="selectedDog" class="selected-text">{{selectedDog.label}}</text>
           <text v-else class="placeholder">请选择要定制的狗狗</text>
@@ -209,13 +219,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
-import { request } from '@/utils/api';
+import { getToken, request } from '@/utils/api';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 
 // 状态定义
 const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
 const submitting = ref(false);
+/** 未登录标记：与"已登录但还没有狗狗档案"是两个不同的状态，提示语和下一步动作都不一样 */
+const needLogin = ref(false);
 
 const formData = ref({
   dogId: '',
@@ -290,6 +302,27 @@ const goToCreateDog = () => {
   navigateToDogCreate({ source: 'custom_recipe' });
 };
 
+/**
+ * 去登录。登录成功后由登录页跳回本页（沿用全站统一的 redirect 约定），
+ * 本页会重新 onLoad，拿到 token 后再读档案，顾客不用自己找回来。
+ */
+const goToLogin = () => {
+  const redirect = '/pages/custom-recipe/index';
+  uni.navigateTo({
+    url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
+  });
+};
+
+/**
+ * 判断是不是"未登录/登录过期"导致的失败。
+ * request() 对 401 统一 reject 一个 message 为 'Authentication required' 的错误，
+ * 并会顺手清掉本地 token。
+ */
+const isAuthError = (error: any) => {
+  const message = String(error?.message || error || '');
+  return message.includes('Authentication required') || message.includes('401');
+};
+
 // 方法
 
 /**
@@ -318,16 +351,29 @@ const loadRecipeConfig = async () => {
 };
 
 const loadDogs = async () => {
+  // 未登录时不发这次请求：
+  // 1) /dogs 必然 401，页面会同时弹"请先登录"和"网络错误"两条互相打架的提示；
+  // 2) 请求失败会让页面误落到"还没有狗狗档案"空态，把顾客引向建档这条错路。
+  if (!getToken()) {
+    needLogin.value = true;
+    dogOptions.value = [];
+    selectedDog.value = null;
+    return;
+  }
+
   try {
     // 统一走 utils/api 的 request：它按全站统一响应结构 {code,message,data} 解包，
     // 不再自己判断 code，避免"接口返回结构一变就静默失效"。
+    // suppressErrorToast：错误提示由本页按失败原因自己给，避免出现两条重复/矛盾的 toast。
     const res: any = await request({
       url: '/dogs',
       method: 'GET',
       quiet: true,
+      suppressErrorToast: true,
     });
 
     if (res.code === 0 && res.data) {
+      needLogin.value = false;
       const dogs = Array.isArray(res.data) ? res.data : [];
 
       dogOptions.value = dogs.map((dog: any) => ({
@@ -339,6 +385,20 @@ const loadDogs = async () => {
       // 无档案时不再弹 toast：页面上已有明确的空态与建档入口，避免重复打扰
     }
   } catch (error) {
+    // 登录过期：request() 已清掉本地 token，这里把页面切到"请先登录"，
+    // 不能报"网络错误"——那会让顾客以为是自己网络的问题，排查方向完全错了。
+    if (isAuthError(error)) {
+      needLogin.value = true;
+      dogOptions.value = [];
+      selectedDog.value = null;
+      uni.showToast({
+        title: '登录已过期，请重新登录',
+        icon: 'none',
+        duration: 2000,
+      });
+      return;
+    }
+
     console.error('加载狗狗列表异常:', error);
     uni.showToast({
       title: '网络错误，请检查后端服务',
@@ -433,7 +493,8 @@ const removeDislikedIngredient = (index: number) => {
 const submitOrder = async () => {
   if (!canSubmit.value) {
     uni.showToast({
-      title: '请选择狗狗和定制目标',
+      // 未登录时提示"请选择狗狗和定制目标"是误导：顾客根本没得选
+      title: needLogin.value ? '请先登录' : '请选择狗狗和定制目标',
       icon: 'none',
     });
     return;
@@ -630,7 +691,9 @@ const getActivityLabel = (level: string) => {
   color: var(--sk-ink-3, #968f6d);
 }
 
-.no-dog-hint {
+/* "未登录"与"无档案"是两种空态，共用一套视觉，避免两处样式各自漂移 */
+.no-dog-hint,
+.login-hint {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -641,20 +704,23 @@ const getActivityLabel = (level: string) => {
   border-radius: var(--sk-radius-badge, 12rpx);
 }
 
-.no-dog-hint-title {
+.no-dog-hint-title,
+.login-hint-title {
   font-size: 30rpx;
   font-weight: 700;
   color: var(--sk-ink, #26261f);
 }
 
-.no-dog-hint-desc {
+.no-dog-hint-desc,
+.login-hint-desc {
   font-size: 24rpx;
   line-height: 1.6;
   color: var(--sk-ink-2, #6b6653);
   text-align: center;
 }
 
-.no-dog-hint-btn {
+.no-dog-hint-btn,
+.login-hint-btn {
   margin-top: 10rpx;
   padding: 0 44rpx;
   height: 72rpx;
@@ -667,7 +733,8 @@ const getActivityLabel = (level: string) => {
   border-radius: 999rpx;
 }
 
-.no-dog-hint-btn::after {
+.no-dog-hint-btn::after,
+.login-hint-btn::after {
   border: none;
 }
 

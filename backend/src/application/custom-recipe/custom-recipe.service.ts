@@ -880,7 +880,20 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     allergies: string[],
     medicalConditions: string[],
   ): Promise<void> {
-    // Sync allergies
+    /**
+     * 同步过敏史 → 结构化过敏记录。
+     *
+     * ⚠️ 这里曾经写坏了：`AllergyRecord` 只有 `allergen` / `notes` 两个业务字段
+     * （没有严重程度、过敏类型、发现日期、确认方），而代码却写入了那 4 个
+     * 不存在的列 —— Prisma 直接抛 `Unknown argument`，**整个下单事务回滚**。
+     *
+     * 而小程序端的 `syncToHealthProfile` 恒为 true，等于：
+     * **顾客只要填了一个过敏原，就永远提交不了定制单**（已实测复现 500）。
+     *
+     * 现在只写真实存在的字段，并把来源记进 notes 留痕；
+     * 同时不再替顾客臆断"中度过敏 / 食物型 / 主人确认"这类医学判断 ——
+     * 数据模型里本来也没有地方承载它们。
+     */
     for (const allergen of allergies) {
       const existing = await tx.allergyRecord.findFirst({
         where: { dogId, allergen },
@@ -891,10 +904,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           data: {
             dogId,
             allergen,
-            allergenType: 'FOOD',
-            discoveryDate: new Date(),
-            severity: 'MODERATE',
-            confirmedBy: 'OWNER',
+            notes: '顾客提交定制需求时填写',
           },
         });
       }

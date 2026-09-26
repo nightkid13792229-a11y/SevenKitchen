@@ -181,19 +181,25 @@
       </view>
     </view>
 
-    <!-- 交付日期显示 -->
+    <!-- 交付与费用说明
+         改造点：原来这里显示的是一个**本地硬算的假日期**（提交前并不知道真实交付日），
+         现在改为按后台配置的"交付工作日数"说明口径，真实交付日以订单为准。 -->
     <view class="section delivery-section">
       <view class="delivery-info">
-        <text class="delivery-label">预计交付日期：</text>
-        <text class="delivery-date">{{estimatedDeliveryDate}}</text>
+        <text class="delivery-label">预计交付：</text>
+        <text class="delivery-date">{{ deliveryHint }}</text>
       </view>
       <text class="delivery-note">我们会根据排期计算并告知您具体的交付时间</text>
+      <view v-if="creditHint" class="credit-info">
+        <text class="credit-label">成品抵扣</text>
+        <text class="credit-value">{{ creditHint }}</text>
+      </view>
     </view>
 
     <!-- 提交按钮 -->
     <view class="submit-section">
       <button class="submit-btn" @tap="submitOrder" :disabled="!canSubmit">
-        提交定制订单 ¥299
+        提交定制订单 {{ feeLabel }}
       </button>
     </view>
   </view>
@@ -202,12 +208,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
-import { getBaseUrl } from '@/utils/config';
+import { request } from '@/utils/api';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 
 // 状态定义
 const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
+const submitting = ref(false);
 
 const formData = ref({
   dogId: '',
@@ -229,20 +236,42 @@ const weightManagementOptions = [
   { value: 'GAIN_WEIGHT', label: '增重' },
 ];
 
+// 后台「食谱定制设置」的公开部分（定制费 / 可抵扣金额 / 交付工作日数）
+const recipeConfig = ref<{ feeAmount: number; creditAmount: number; deliveryWorkDays: number } | null>(null);
+
 // 计算属性
 const canSubmit = computed(() => {
   return formData.value.dogId && formData.value.targetGoal;
 });
 
-const estimatedDeliveryDate = computed(() => {
-  const date = new Date();
-  date.setDate(date.getDate() + 5);
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+const feeLabel = computed(() => {
+  const fee = recipeConfig.value?.feeAmount;
+  return fee && fee > 0 ? `¥${formatAmount(fee)}` : '';
+});
+
+/** 交付口径用"工作日"，真实交付日以订单为准（后端按排期与公众假期算） */
+const deliveryHint = computed(() => {
+  const days = recipeConfig.value?.deliveryWorkDays;
+  return days && days > 0 ? `约 ${days} 个工作日内` : '按排期确认';
+});
+
+const creditHint = computed(() => {
+  const config = recipeConfig.value;
+  if (!config || config.creditAmount <= 0) return '';
+  if (config.creditAmount >= config.feeAmount) {
+    return `定制费可全额抵扣成品货款（¥${formatAmount(config.creditAmount)}）`;
+  }
+  return `其中 ¥${formatAmount(config.creditAmount)} 可抵扣成品货款`;
 });
 
 // 生命周期
 onLoad(() => {
   loadDogs();
+  loadRecipeConfig();
 });
 
 /**
@@ -261,25 +290,44 @@ const goToCreateDog = () => {
 };
 
 // 方法
-const loadDogs = async () => {
-  console.log('=== 开始加载狗狗列表 ===');
-  console.log('API URL:', `${getBaseUrl()}/dogs`);
 
+/**
+ * 读取后台「食谱定制设置」的公开部分。
+ * 读不到不影响下单：价格由后端在下单时按同一份配置落库，
+ * 前端这里只负责把顾客看到的价格与服务端保持一致。
+ */
+const loadRecipeConfig = async () => {
   try {
-    const res = await uni.request({
-      url: `${getBaseUrl()}/dogs`,
+    const res: any = await request({
+      url: '/custom-recipe-config',
       method: 'GET',
-      header: {
-        'Authorization': `Bearer ${uni.getStorageSync('token')}`,
-      },
+      quiet: true,
+      suppressErrorToast: true,
+    });
+    if (res.code === 0 && res.data) {
+      recipeConfig.value = {
+        feeAmount: Number(res.data.feeAmount) || 0,
+        creditAmount: Number(res.data.creditAmount) || 0,
+        deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
+      };
+    }
+  } catch (error) {
+    console.warn('[CustomRecipe] 读取定制配置失败，按默认口径展示:', error);
+  }
+};
+
+const loadDogs = async () => {
+  try {
+    // 统一走 utils/api 的 request：它按全站统一响应结构 {code,message,data} 解包，
+    // 不再自己判断 code，避免"接口返回结构一变就静默失效"。
+    const res: any = await request({
+      url: '/dogs',
+      method: 'GET',
+      quiet: true,
     });
 
-    console.log('狗狗列表响应状态码:', res.statusCode);
-    console.log('完整响应数据:', res.data);
-
-    if (res.data.code === 0 && res.data.data) {
-      const dogs = res.data.data;
-      console.log('获取到狗狗数量:', dogs.length);
+    if (res.code === 0 && res.data) {
+      const dogs = Array.isArray(res.data) ? res.data : [];
 
       dogOptions.value = dogs.map((dog: any) => ({
         value: dog.id,
@@ -390,6 +438,10 @@ const submitOrder = async () => {
     return;
   }
 
+  // 防重复提交：这单是付费单，重复提交会生成两张待付款订单
+  if (submitting.value) return;
+  submitting.value = true;
+
   try {
     uni.showLoading({ title: '提交中...' });
 
@@ -398,34 +450,38 @@ const submitOrder = async () => {
       targetGoal: formData.value.enableHealthManagement ? 'HEALTH_SUPPORT' : formData.value.targetGoal,
     };
 
-    const res = await uni.request({
-      url: `${getBaseUrl()}/custom-recipe/orders`,
+    // 统一走 request()：只有 code === 0 才会 resolve，
+    // 非 0 会 reject 并带上服务端 message，不会再出现"下单成功却提示网络错误"。
+    const res: any = await request({
+      url: '/custom-recipe/orders',
       method: 'POST',
-      header: {
-        'Authorization': `Bearer ${uni.getStorageSync('token')}`,
-        'Content-Type': 'application/json',
-      },
       data: submitData,
     });
 
     uni.hideLoading();
 
-    if (res.data.code === 200 || res.data.code === 0) {
-      uni.navigateTo({
-        url: '/pages/custom-recipe/success?orderId=' + res.data.data.orderId,
-      });
-    } else {
-      uni.showToast({
-        title: res.data.message || '提交失败',
-        icon: 'none',
-      });
+    const orderId = res?.data?.orderId;
+    if (!orderId) {
+      throw new Error('服务端未返回订单号');
     }
-  } catch (error) {
+
+    const query = [
+      `orderId=${encodeURIComponent(orderId)}`,
+      `amount=${encodeURIComponent(String(res.data.amount ?? ''))}`,
+      `creditAmount=${encodeURIComponent(String(res.data.creditAmount ?? ''))}`,
+      `wechatId=${encodeURIComponent(String(res.data.wechatId ?? ''))}`,
+    ];
+    uni.navigateTo({
+      url: `/pages/custom-recipe/success?${query.join('&')}`,
+    });
+  } catch (error: any) {
     uni.hideLoading();
     uni.showToast({
-      title: '网络错误',
+      title: error?.message || '提交失败，请稍后重试',
       icon: 'none',
     });
+  } finally {
+    submitting.value = false;
   }
 };
 
@@ -822,6 +878,28 @@ const getActivityLabel = (level: string) => {
   text-align: center;
   font-size: 24rpx;
   color: #999;
+}
+
+/* 成品抵扣说明：只在后台配了可抵扣金额时才出现 */
+.credit-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.credit-label {
+  padding: 4rpx 14rpx;
+  font-size: 22rpx;
+  color: #fff;
+  background: #FF6B6B;
+  border-radius: 999rpx;
+}
+
+.credit-value {
+  font-size: 24rpx;
+  color: #666;
 }
 
 .submit-section {

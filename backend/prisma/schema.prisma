@@ -1607,10 +1607,20 @@ model CustomRecipeOrder {
   scheduledDate         DateTime                 @map("scheduled_date") @db.Date
   estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
   amount                Decimal                  @default(299) @db.Decimal(10, 2)
+  /// 提交时快照下来的「可抵扣金额」（元）。
+  /// 后台调价只影响之后的单，已提交的订单按当时快照执行。
+  creditAmount          Decimal                  @default(300) @map("credit_amount") @db.Decimal(10, 2)
+  /// 已经用掉的抵扣额度（元）。剩余额度 = credit_amount - credit_used。
+  creditUsed            Decimal                  @default(0) @map("credit_used") @db.Decimal(10, 2)
   status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
   paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
+  /// 微信支付交易号（对账/客服排查用）
+  paymentTransactionId  String?                  @map("payment_transaction_id")
   inProgressAt          DateTime?                @map("in_progress_at")
   deliveredAt           DateTime?                @map("delivered_at")
+  /// 关单时间与原因（超时自动关单 / 人工关闭）
+  cancelledAt           DateTime?                @map("cancelled_at")
+  cancellationReason    String?                  @map("cancellation_reason")
   recipeId              String?                  @unique @map("recipe_id")
   healthInfoSyncedAt    DateTime?                @map("health_info_synced_at")
   createdAt             DateTime                 @default(now()) @map("created_at")
@@ -1654,6 +1664,40 @@ model CustomRecipeAttachment {
 
   @@index([orderId])
   @@map("custom_recipe_attachment")
+}
+
+/// 食谱定制的可配置项（单例）。
+///
+/// 刻意与鲜食的 GlobalConfig、补剂的 SupplementShopConfig 解耦：
+/// 定制是独立产品线（顶层设计 v4 产品线 ③），它的价格与产能参数
+/// 不该和别的生意共用一个值，否则"调一边影响另一边"。
+///
+/// 关键解耦点：**定制费**与**可抵扣金额**是两个独立参数 ——
+/// 顾客付多少钱、其中多少钱能抵成品货款，由业务在后台分开定。
+model CustomRecipeConfig {
+  id String @id @default("singleton") @map("id")
+
+  /// 定制费（元）：顾客提交定制单时支付的金额
+  feeAmount Decimal @default(300) @map("fee_amount") @db.Decimal(10, 2)
+
+  /// 可抵扣金额（元）：定制费中可用于抵扣成品货款的额度。
+  /// 不得超过定制费（后台校验）；0 表示定制费纯粹是服务费，不抵货款。
+  creditAmount Decimal @default(300) @map("credit_amount") @db.Decimal(10, 2)
+
+  /// 交付周期（工作日）：从预约日起算，遇公众假期顺延
+  deliveryWorkDays Int @default(3) @map("delivery_work_days")
+
+  /// 每日接单上限：同一天约满后不再接受新的预约
+  dailyCapacity Int @default(4) @map("daily_capacity")
+
+  /// 定制订单支付超时（分钟）；0 表示不自动关单。
+  /// 与鲜食（PaymentConfig）、补剂（SupplementShopConfig）各自独立。
+  paymentTimeoutMinutes Int @default(30) @map("payment_timeout_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("custom_recipe_config")
 }
 
 enum OrderStatus {
@@ -1927,6 +1971,9 @@ enum CustomRecipeStatus {
   PAID
   IN_PROGRESS
   DELIVERED
+  /// 未付款超时自动关闭（或人工关闭）。
+  /// 关单时必须把当天占用的排期名额释放掉，否则接单能力会被"僵尸单"吃掉。
+  CANCELLED
 }
 
 enum CustomAttachmentType {

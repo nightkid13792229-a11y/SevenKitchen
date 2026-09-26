@@ -216,6 +216,10 @@
           <text class="function-text">食谱设计</text>
         </view>
 
+        <view class="function-item" @tap="goToCustomRecipeOrders">
+          <text class="function-text">我的定制订单</text>
+        </view>
+
         <view class="function-item" @tap="goToFeedback">
           <text class="function-text">建议反馈</text>
         </view>
@@ -476,6 +480,13 @@ async function goToFavoriteRecipes() {
 async function goToRecipeDesigner() {
   uni.navigateTo({
     url: "/pages/recipe-designer/list",
+  });
+}
+
+// 我的定制订单（食谱定制）
+async function goToCustomRecipeOrders() {
+  uni.navigateTo({
+    url: "/pages/custom-recipe/orders",
   });
 }
 

@@ -311,6 +311,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "定制食谱订单" },
       },
       {
+        path: "custom-recipes/config",
+        name: "CustomRecipeConfig",
+        component: () => import("@/views/CustomRecipes/Config.vue"),
+        meta: { title: "食谱定制设置" },
+      },
+      {
         path: "analytics/dog-profile",
         name: "DogProfileAnalytics",
         component: () => import("@/views/Analytics/DogProfileAnalytics.vue"),

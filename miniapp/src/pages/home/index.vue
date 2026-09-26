@@ -72,43 +72,22 @@
       <button v-else class="create-btn" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
-    <!-- 个性化推荐（简化版）：只给 3 张卡 + 一行理由 + 一个主动作。
-         刻意不做双分组/星级/匹配分/狗狗切换器——上一版就是因为"太复杂"被下线。 -->
-    <view v-if="isLoggedIn && recommendedDog && recommendedRecipes.length > 0" class="recommend-section">
-      <view class="recommend-header">
-        <view class="section-heading">
+    <!-- 食谱定制入口（常驻）
+         原「给 XX 的推荐」板块已整块下线，这个位置改为定制入口。
+         刻意做成**任何人都看得到**（含未登录游客）：推荐只在"已登录 + 有狗狗 +
+         有推荐结果"时才出现，而定制是独立产品线，不该只在登录后才被看见。 -->
+    <view class="custom-recipe-section" hover-class="card-hover" @tap="goToCustomRecipe">
+      <view class="custom-recipe-body">
+        <view class="custom-recipe-heading">
           <view class="section-accent" aria-hidden="true"></view>
-          <text class="section-title">给 {{ recommendedDog.name }} 的推荐</text>
+          <text class="custom-recipe-title">食谱定制</text>
+          <text v-if="customRecipeFeeLabel" class="custom-recipe-fee">{{ customRecipeFeeLabel }}</text>
         </view>
+        <text class="custom-recipe-desc">{{ customRecipeDesc }}</text>
       </view>
-      <text class="recommend-subtitle">{{ recommendReasonText }}</text>
-      <scroll-view scroll-x class="recommend-scroll">
-        <view
-          v-for="item in recommendedRecipes"
-          :key="item.id"
-          class="recommend-card"
-          hover-class="card-hover"
-          @tap="viewRecipe(item.id, recommendedDog.id)"
-        >
-          <image
-            v-if="item.displayCoverUrl"
-            class="recommend-cover"
-            :src="item.displayCoverUrl"
-            mode="aspectFill"
-            lazy-load
-          />
-          <view v-else class="recommend-cover placeholder">
-            <text class="placeholder-text">{{ (item.name && item.name.charAt(0)) || '?' }}</text>
-          </view>
-          <view class="recommend-body">
-            <text class="recommend-name">{{ item.name }}</text>
-            <text v-if="getRecommendReason(item)" class="recommend-reason">{{ getRecommendReason(item) }}</text>
-            <text v-if="item.dailyIntakeG" class="recommend-intake">约 {{ Math.round(item.dailyIntakeG) }}g/天</text>
-          </view>
-        </view>
-      </scroll-view>
-      <view class="recommend-action" @tap="goToOrderForRecommended">
-        <text class="recommend-action-text">按推荐配一周</text>
+      <view class="custom-recipe-action">
+        <text class="custom-recipe-action-text">去定制</text>
+        <text class="custom-recipe-arrow">›</text>
       </view>
     </view>
 
@@ -375,7 +354,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { request, getToken, recipeRecommendationApi } from '../../utils/api'
+import { request, getToken } from '../../utils/api'
 import { recipeDesignerApi } from '../../api/recipe-designer'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
@@ -384,7 +363,6 @@ import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
-import { getLifeStageLabel } from '../../utils/label-mapping'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -470,13 +448,9 @@ const recipeCoverOriginalOnlyMap = ref<Record<string, boolean>>({})
 const hasMountedHome = ref(false)
 const visibleRecipesCount = ref(pageSize)
 
-// 个性化推荐（简化版）：只保留"给谁推荐 / 3 张卡 / 一行理由 / 一个动作"。
-// 上一版（提交 64627ce3 移除）之所以被下线，是因为双分组 + 星级 + 匹配分 + 狗狗切换器太复杂，
-// 不是推荐质量有问题；这里刻意回到最小可用形态。
-const recommendedDog = ref<{ id: string; name: string; currentWeightKg?: number; lifeStage?: string } | null>(null)
-const recommendedRecipes = ref<Recipe[]>([])
-const recommendReasonText = ref('')
-const recommendationRequestSeq = ref(0)
+// 食谱定制入口：价格与交付周期都从后台「食谱定制设置」读取（公开接口，未登录可取）。
+// 读不到时入口照常展示，只是不显示价格——入口本身不能因为配置接口失败而消失。
+const customRecipeConfig = ref<{ feeAmount: number; creditAmount: number; deliveryWorkDays: number } | null>(null)
 
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
@@ -681,12 +655,10 @@ onShow(() => {
     if (dogs.value.length > 0) {
       dogs.value = []
     }
-    // 推荐同理：登出后不能继续展示上一位用户的个性化内容
-    recommendedDog.value = null
-    recommendedRecipes.value = []
   }
 
   loadHomeHeaderBackground()
+  loadCustomRecipeConfig()
 
   const recipeStatsDirty = uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
   if (recipeStatsDirty) {
@@ -726,100 +698,71 @@ const loadDogList = async () => {
   } catch (err) {
     console.error('加载狗狗列表失败:', err)
   }
-  // 狗狗列表就绪后再拉推荐（推荐必须按某一只具体的狗来算）
-  void loadPersonalizedRecommendations()
 }
 
-// ==================== 个性化推荐（简化版） ====================
+// ==================== 食谱定制入口 ====================
 
-/** 首页只认一只主狗：优先上次选中的，否则第一只。不做多狗切换器。 */
-function resolvePrimaryDogForRecommendation() {
-  if (!dogs.value.length) return null
-  const storedDogId = uni.getStorageSync('dogId')
-  return dogs.value.find((dog) => dog.id === storedDogId) || dogs.value[0]
+/** 读取后台「食谱定制设置」的公开部分（定制费 / 可抵扣金额 / 交付周期） */
+async function loadCustomRecipeConfig(): Promise<void> {
+  try {
+    const res = await request({
+      url: '/custom-recipe-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+    if (res.code === 0 && res.data) {
+      customRecipeConfig.value = {
+        feeAmount: Number(res.data.feeAmount) || 0,
+        creditAmount: Number(res.data.creditAmount) || 0,
+        deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
+      }
+    }
+  } catch (err) {
+    // 配置读不到不隐藏入口：入口是稳定承诺，价格只是补充信息
+    console.warn('[Home] Load custom recipe config error:', err)
+  }
 }
 
-async function loadPersonalizedRecommendations() {
-  const primaryDog = resolvePrimaryDogForRecommendation()
-  if (!primaryDog?.id) {
-    recommendedDog.value = null
-    recommendedRecipes.value = []
+const customRecipeFeeLabel = computed(() => {
+  const config = customRecipeConfig.value
+  return config && config.feeAmount > 0 ? `¥${formatAmount(config.feeAmount)}` : ''
+})
+
+const customRecipeDesc = computed(() => {
+  const config = customRecipeConfig.value
+  if (!config) {
+    return '现成食谱不适用？我们按你家狗狗的情况单独设计一道'
+  }
+  if (config.creditAmount <= 0) {
+    return '现成食谱不适用？我们按你家狗狗的情况单独设计一道'
+  }
+  if (config.creditAmount >= config.feeAmount) {
+    return '现成食谱不适用？单独设计一道；定制费可全额抵扣成品货款'
+  }
+  return `现成食谱不适用？单独设计一道；其中 ¥${formatAmount(config.creditAmount)} 可抵扣成品货款`
+})
+
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
+/** 首页定制入口：未登录先登录，登录后进定制页（页面自己再引导建档） */
+function goToCustomRecipe() {
+  trackFunnelEvent({
+    eventName: 'tap_custom_recipe',
+    step: 'tap_custom_recipe',
+    entrySource: 'home_custom_recipe_card',
+  })
+
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/custom-recipe/index')
     return
   }
 
-  const requestSeq = ++recommendationRequestSeq.value
-  try {
-    const data = await recipeRecommendationApi.getForDog(primaryDog.id)
-    // 竞态保护：快速切换登录状态/宠物时，只接受最后一次请求的结果
-    if (requestSeq !== recommendationRequestSeq.value) return
-
-    recommendedDog.value = {
-      id: data.dog?.id || primaryDog.id,
-      name: data.dog?.name || primaryDog.name,
-      currentWeightKg: data.dog?.currentWeightKg ?? primaryDog.currentWeightKg,
-      lifeStage: data.dog?.lifeStage,
-    }
-    // 只取 3 张：横向单行，不占满整屏
-    const merged = [...(data.exclusive || []), ...(data.general || [])]
-    recommendedRecipes.value = merged.slice(0, 3).map((recipe: any) => ({
-      ...recipe,
-      displayCoverUrl: isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)
-        ? ''
-        : getRecipeCoverImageUrl(recipe.coverImageUrl, {
-          skipOptimization: shouldUseOriginalRecipeCover(recipe.coverImageUrl),
-        }),
-    }))
-    recommendReasonText.value = buildRecommendSubtitle()
-  } catch (error) {
-    if (requestSeq !== recommendationRequestSeq.value) return
-    // 推荐属于加分项：失败就静默隐藏，绝不影响橱窗
-    recommendedDog.value = null
-    recommendedRecipes.value = []
-  }
+  uni.navigateTo({ url: '/pages/custom-recipe/index' })
 }
 
-/** 一行理由：只讲"为什么适合它"，不讲抽象评分 */
-function buildRecommendSubtitle(): string {
-  const dog = recommendedDog.value
-  if (!dog) return ''
-  const parts: string[] = []
-  if (dog.lifeStage) parts.push(getLifeStageLabelForRecommend(dog.lifeStage))
-  if (dog.currentWeightKg) parts.push(`${dog.currentWeightKg}kg`)
-  parts.push('已避开档案里的过敏与挑食食材')
-  return `${parts.join(' · ')}`
-}
-
-function getLifeStageLabelForRecommend(lifeStage: string): string {
-  // 中文名统一由 label-mapping 提供；这里只保留推荐语境的兜底词
-  return getLifeStageLabel(lifeStage) || '成犬维持'
-}
-
-/** 每张卡只留一条理由，取后端 matchReasons 的第一条 */
-function getRecommendReason(recipe: Recipe): string {
-  const reason = (recipe.matchReasons || []).find(Boolean)
-  return reason || ''
-}
-
-/** 主动作：直接带着推荐的第一个食谱和狗狗进订购页 */
-function goToOrderForRecommended() {
-  const dog = recommendedDog.value
-  const first = recommendedRecipes.value[0]
-  if (!dog || !first) return
-
-  trackFunnelEvent({
-    eventName: 'tap_recommend_buy',
-    step: 'tap_recommend',
-    recipeId: first.id,
-    dogId: dog.id,
-    entrySource: 'home_recommend',
-  })
-
-  const query = [
-    `recipeId=${encodeURIComponent(first.id)}`,
-    `dogId=${encodeURIComponent(dog.id)}`,
-  ]
-  uni.navigateTo({ url: `/pages/recipe-order/index?${query.join('&')}` })
-}
 
 // ==================== 食谱相关方法 ====================
 
@@ -1504,30 +1447,6 @@ const goToLogin = () => {
   })
 }
 
-// 跳转到食谱定制
-const goToRecipeDIY = () => {
-  console.log('=== 点击了食谱定制按钮 ===')
-  console.log('当前登录状态:', isLoggedIn.value)
-
-  if (!isLoggedIn.value) {
-    console.log('未登录，跳转到登录页')
-    checkLoginAndNavigate('/pages/custom-recipe/index')
-    return
-  }
-
-  const targetUrl = '/pages/custom-recipe/index'
-  console.log('准备跳转到:', targetUrl)
-  uni.navigateTo({
-    url: targetUrl,
-    success: () => {
-      console.log('✅ 跳转成功')
-    },
-    fail: (err: any) => {
-      console.log('❌ 跳转失败:', err)
-    }
-  })
-}
-
 // 检查登录状态并跳转
 const checkLoginAndNavigate = (url: string) => {
   if (!isLoggedIn.value) {
@@ -1893,105 +1812,76 @@ defineOptions({
 }
 
 /* ---------- 食谱橱窗 ---------- */
-/* ===== 个性化推荐（简化版）：横向 3 张卡，不铺满整屏 ===== */
-.recommend-section {
-  margin: 32rpx 28rpx 0;
-  padding: 28rpx 24rpx 24rpx;
-  background: linear-gradient(160deg, #fbfcf7 0%, #eef3ea 100%);
-  border: 1rpx solid #e3e6d4;
-  border-radius: 28rpx;
-}
-
-.recommend-header {
+/* ===== 食谱定制入口卡：常驻，任何登录状态都展示 ===== */
+.custom-recipe-section {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin: 32rpx 28rpx 0;
+  padding: 28rpx 24rpx;
+  background: linear-gradient(155deg, #2b5040 0%, #1e3a2f 100%);
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+  border-radius: 28rpx;
+  box-shadow: 0 14rpx 34rpx rgba(20, 41, 31, 0.24);
 }
 
-.recommend-section .section-title {
+.custom-recipe-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.custom-recipe-heading {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.custom-recipe-title {
   font-size: 34rpx;
   font-weight: 700;
-  color: #26261f;
+  color: #f6efe0;
+  letter-spacing: 2rpx;
 }
 
-.recommend-subtitle {
-  display: block;
-  margin-top: 10rpx;
+.custom-recipe-fee {
+  padding: 2rpx 14rpx;
   font-size: 24rpx;
-  line-height: 1.5;
-  color: #6b6653;
-}
-
-.recommend-scroll {
-  margin-top: 22rpx;
-  white-space: nowrap;
-}
-
-.recommend-card {
-  display: inline-flex;
-  flex-direction: column;
-  width: 300rpx;
-  margin-right: 20rpx;
-  background: #ffffff;
-  border: 1rpx solid #e3e6d4;
-  border-radius: 20rpx;
-  overflow: hidden;
-  vertical-align: top;
-}
-
-.recommend-cover {
-  width: 300rpx;
-  height: 180rpx;
-  background: #eef1e2;
-}
-
-.recommend-cover.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.recommend-body {
-  display: flex;
-  flex-direction: column;
-  padding: 16rpx 18rpx 20rpx;
-}
-
-.recommend-name {
-  font-size: 28rpx;
   font-weight: 700;
-  color: #26261f;
-  white-space: normal;
-}
-
-.recommend-reason {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.45;
-  color: #6b6653;
-  white-space: normal;
-}
-
-.recommend-intake {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #b08d4f;
-}
-
-.recommend-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 24rpx;
-  height: 84rpx;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
-  border: 1rpx solid #d8bc85;
+  color: #1e3a2f;
+  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
   border-radius: 999rpx;
 }
 
-.recommend-action-text {
-  font-size: 30rpx;
+.custom-recipe-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #cfe0d5;
+}
+
+.custom-recipe-action {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  border: 1rpx solid rgba(216, 188, 133, 0.7);
+  border-radius: 999rpx;
+}
+
+.custom-recipe-action-text {
+  font-size: 26rpx;
   font-weight: 700;
-  color: #f6efe0;
+  color: #f3eddd;
+}
+
+.custom-recipe-arrow {
+  font-size: 30rpx;
+  color: #d8bc85;
+  line-height: 1;
 }
 
 .recipe-showcase-header {

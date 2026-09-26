@@ -15,6 +15,8 @@ import { OrderStatus } from '../../domain';
 import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
 import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
 import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-config.service';
+import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
+import { CustomRecipeConfigService } from '../custom-recipe/custom-recipe-config.service';
 
 type RuntimePaymentConfig = {
   enabled: boolean;
@@ -93,6 +95,8 @@ export class WechatPaymentService {
     private readonly wechatShippingUploadService: WechatShippingUploadService,
     private readonly supplementOrderService: SupplementOrderService,
     private readonly supplementShopConfigService: SupplementShopConfigService,
+    private readonly customRecipeService: CustomRecipeService,
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
   ) {}
 
   async createJsapiPayment(
@@ -259,6 +263,11 @@ export class WechatPaymentService {
     // 补剂订单用 SP 前缀的订单号作为商户单号，与鲜食订单（32 位十六进制）不会冲突
     if (outTradeNo.startsWith('SP')) {
       return this.handleSupplementNotify(decrypted, outTradeNo);
+    }
+
+    // 定制食谱订单用 CR 前缀（CR + YYYYMMDD + 4 位随机），同样不冲突
+    if (outTradeNo.startsWith('CR')) {
+      return this.handleCustomRecipeNotify(decrypted, outTradeNo);
     }
 
     const orderId = this.fromOutTradeNo(outTradeNo);
@@ -907,6 +916,247 @@ export class WechatPaymentService {
 
     await this.supplementOrderService.confirmPaymentFromWechat(
       order.id,
+      String(decrypted.transaction_id || ''),
+    );
+
+    return { handled: true, tradeState };
+  }
+
+  // ---------------- 定制食谱订单 · 微信支付 ----------------
+
+  /**
+   * 定制食谱订单发起微信支付。
+   *
+   * 复用与鲜食、补剂同一套商户配置与签名逻辑，只把商户单号换成定制单号
+   * （`CR` 前缀），回调时据此分流，三条业务线互不干扰。
+   *
+   * 支付超时取「食谱定制设置」，与鲜食、补剂各自独立。
+   */
+  async createCustomRecipeJsapiPayment(
+    orderId: string,
+    customerId: string,
+  ): Promise<WechatPayParams> {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId }, { id: orderId }] },
+      include: { customer: true },
+    });
+
+    if (!order || order.customerId !== customerId) {
+      throw new NotFoundException('定制订单不存在');
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    const recipeConfig = await this.customRecipeConfigService.getConfig();
+
+    const timeoutMinutes = recipeConfig.paymentTimeoutMinutes;
+    const autoCloseUnpaid = timeoutMinutes > 0;
+    const paymentWindow = this.buildPaymentWindow(
+      order.createdAt,
+      timeoutMinutes,
+      autoCloseUnpaid,
+    );
+
+    const base = {
+      provider: 'WECHAT_PAY' as const,
+      mode: config.mode,
+      orderId: order.orderId,
+      amountTotal: this.toMoneyNumber(order.amount),
+      ...paymentWindow,
+      paymentTimeoutMinutes: timeoutMinutes,
+      autoCloseUnpaid,
+    };
+
+    if (order.status === 'PAID') {
+      return { ...base, status: order.status, payParams: null, orderInfo: null };
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new BadRequestException('该定制订单已关闭，请重新提交');
+    }
+
+    if (order.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('当前定制订单状态不允许发起支付');
+    }
+
+    if (
+      autoCloseUnpaid &&
+      paymentWindow.paymentRemainingSeconds !== null &&
+      paymentWindow.paymentRemainingSeconds <= 0
+    ) {
+      await this.customRecipeService.cancelOrder(order.orderId, {
+        reason: '支付超时自动取消',
+      });
+      throw new BadRequestException('定制订单已超过支付时间，已自动关闭');
+    }
+
+    this.assertConfigReady(config);
+
+    const payerOpenid = await this.resolvePayerOpenid(
+      order.customerId,
+      config.appId!,
+      order.customer?.phone,
+    );
+    if (!payerOpenid) {
+      throw new BadRequestException(
+        '当前账号缺少当前小程序的微信身份，请先在新版小程序重新登录后再支付',
+      );
+    }
+
+    const outTradeNo = order.orderId;
+    const totalFen = this.toFen(order.amount);
+    const description = '食谱定制服务费';
+
+    const response = await this.callWechatPay<{
+      prepay_id?: string;
+      message?: string;
+    }>(
+      'POST',
+      '/v3/pay/transactions/jsapi',
+      {
+        appid: config.appId,
+        mchid: config.mchId,
+        description,
+        out_trade_no: outTradeNo,
+        notify_url: config.notifyUrl,
+        amount: { total: totalFen, currency: 'CNY' },
+        detail: {
+          goods_detail: [
+            {
+              merchant_goods_id: outTradeNo,
+              goods_name: description,
+              quantity: 1,
+              unit_price: totalFen,
+            },
+          ],
+        },
+        payer: { openid: payerOpenid },
+      },
+      config,
+    );
+
+    if (!response.prepay_id) {
+      throw new BadRequestException('微信支付预下单失败：未返回 prepay_id');
+    }
+
+    const timeStamp = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = this.createNonce();
+    const packageValue = `prepay_id=${response.prepay_id}`;
+    const paySign = this.sign(
+      `${config.appId}\n${timeStamp}\n${nonceStr}\n${packageValue}\n`,
+      config.privateKeyPem!,
+    );
+
+    return {
+      ...base,
+      status: order.status,
+      orderInfo: null,
+      payParams: {
+        appId: config.appId!,
+        timeStamp,
+        nonceStr,
+        package: packageValue,
+        signType: 'RSA',
+        paySign,
+      },
+    };
+  }
+
+  /**
+   * 主动查询定制订单的微信支付结果。
+   * 回调可能丢失或延迟，小程序在 requestPayment 成功后调用它做一次兜底同步。
+   */
+  async syncCustomRecipePayment(
+    orderId: string,
+    customerId: string,
+  ): Promise<{ status: string; paid: boolean; tradeState: string | null }> {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId }, { id: orderId }] },
+    });
+
+    if (!order || order.customerId !== customerId) {
+      throw new NotFoundException('定制订单不存在');
+    }
+
+    if (order.status !== 'PENDING_PAYMENT') {
+      return { status: order.status, paid: order.status === 'PAID', tradeState: null };
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    this.assertConfigReady(config);
+
+    const data = await this.callWechatPay<{
+      trade_state?: string;
+      transaction_id?: string;
+      amount?: { total?: number };
+    }>(
+      'GET',
+      `/v3/pay/transactions/out-trade-no/${order.orderId}?mchid=${config.mchId}`,
+      null,
+      config,
+    );
+
+    const tradeState = String(data.trade_state || '').toUpperCase();
+    if (tradeState !== 'SUCCESS') {
+      return { status: order.status, paid: false, tradeState: tradeState || null };
+    }
+
+    const expectedFen = this.toFen(order.amount);
+    const actualFen = Number(data.amount?.total);
+    if (Number.isFinite(actualFen) && actualFen !== expectedFen) {
+      this.logger.error(
+        `Custom recipe payment amount mismatch: order=${order.orderId}, expected=${expectedFen}, actual=${actualFen}`,
+      );
+      throw new BadRequestException('支付金额与订单金额不一致');
+    }
+
+    const { order: updated } = await this.customRecipeService.confirmPaymentFromWechat(
+      order.orderId,
+      String(data.transaction_id || ''),
+    );
+    return { status: updated?.status || 'PAID', paid: true, tradeState };
+  }
+
+  /** 微信支付回调中的定制食谱订单分支 */
+  private async handleCustomRecipeNotify(
+    decrypted: Record<string, unknown>,
+    outTradeNo: string,
+  ) {
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { orderId: outTradeNo },
+    });
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${outTradeNo}`);
+    }
+
+    const wechatOrderTotalFen = Number(
+      (decrypted.amount as { total?: number } | undefined)?.total,
+    );
+    const payerTotalFen = Number(
+      (decrypted.amount as { payer_total?: number } | undefined)?.payer_total ??
+        wechatOrderTotalFen,
+    );
+    const expectedFen = this.toFen(order.amount);
+    const verifiedTotalFen = Number.isFinite(wechatOrderTotalFen)
+      ? wechatOrderTotalFen
+      : payerTotalFen;
+
+    if (verifiedTotalFen !== expectedFen) {
+      this.logger.error(
+        `Wechat custom recipe notify amount mismatch: order=${order.orderId}, expected=${expectedFen}, total=${verifiedTotalFen}, payer=${payerTotalFen}`,
+      );
+      throw new BadRequestException('支付金额与订单金额不一致');
+    }
+
+    const tradeState = String(decrypted.trade_state || '');
+    if (tradeState !== 'SUCCESS') {
+      this.logger.warn(
+        `Wechat custom recipe notify ignored: order=${order.orderId}, tradeState=${tradeState}`,
+      );
+      return { handled: false, tradeState };
+    }
+
+    await this.customRecipeService.confirmPaymentFromWechat(
+      order.orderId,
       String(decrypted.transaction_id || ''),
     );
 

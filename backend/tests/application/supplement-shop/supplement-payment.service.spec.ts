@@ -10,6 +10,8 @@ import { OrderService } from '../../../src/application/order/order.service';
 import { WechatShippingUploadService } from '../../../src/application/shipping/wechat-shipping-upload.service';
 import { SupplementOrderService } from '../../../src/application/supplement-shop/supplement-order.service';
 import { SupplementShopConfigService } from '../../../src/application/supplement-shop/supplement-shop-config.service';
+import { CustomRecipeService } from '../../../src/application/custom-recipe/custom-recipe.service';
+import { CustomRecipeConfigService } from '../../../src/application/custom-recipe/custom-recipe-config.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 const API_V3_KEY = 'a'.repeat(32); // 必须是 32 字节
@@ -99,6 +101,19 @@ describe('WechatPaymentService · 补剂订单支付', () => {
     getConfig: jest.fn().mockResolvedValue({ paymentTimeoutMinutes: 30 }),
   };
 
+  /**
+   * 定制食谱支付（2026-09-25 接入）也走同一个 WechatPaymentService，
+   * 因此这里必须一并打桩，否则 Nest 依赖注入会直接失败。
+   */
+  const mockCustomRecipeService = {
+    confirmPaymentFromWechat: jest.fn(),
+    cancelOrder: jest.fn(),
+  };
+
+  const mockCustomRecipeConfigService = {
+    getConfig: jest.fn().mockResolvedValue({ paymentTimeoutMinutes: 30 }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -113,6 +128,14 @@ describe('WechatPaymentService · 补剂订单支付', () => {
         {
           provide: SupplementShopConfigService,
           useValue: mockSupplementShopConfigService,
+        },
+        {
+          provide: CustomRecipeService,
+          useValue: mockCustomRecipeService,
+        },
+        {
+          provide: CustomRecipeConfigService,
+          useValue: mockCustomRecipeConfigService,
         },
       ],
     }).compile();

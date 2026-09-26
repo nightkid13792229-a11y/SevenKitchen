@@ -98,6 +98,38 @@
 
         <el-divider />
 
+        <!-- 成品抵扣额度台账：客服在处理退款时按这里的数据决定要不要恢复额度 -->
+        <h3>成品抵扣额度</h3>
+        <div class="info-group">
+          <div class="info-item">
+            <label>额度总额</label>
+            <span>¥{{ Number(order.creditAmount || 0) }}</span>
+          </div>
+          <div class="info-item">
+            <label>已抵扣</label>
+            <span>¥{{ Number(order.creditUsed || 0) }}</span>
+          </div>
+          <div class="info-item">
+            <label>剩余可用</label>
+            <span class="credit-remaining">¥{{ Number(order.creditRemaining || 0) }}</span>
+          </div>
+        </div>
+        <div class="credit-actions">
+          <el-button
+            size="small"
+            :disabled="Number(order.creditUsed || 0) <= 0"
+            :loading="restoringCredit"
+            @click="restoreCredit"
+          >
+            恢复额度
+          </el-button>
+          <span class="credit-tip">
+            顾客用了抵扣后退款时点这里，把已用额度还回去；只影响额度，不改订单金额
+          </span>
+        </div>
+
+        <el-divider />
+
         <h3>健康信息</h3>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="过敏史">
@@ -361,7 +393,7 @@
 import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
-import { legacyApi } from '@/api';
+import { api } from '@/api';
 
 const props = defineProps<{
   orderId: string;
@@ -406,7 +438,7 @@ watch(() => props.orderId, () => {
 const loadOrderDetail = async () => {
   loading.value = true;
   try {
-    order.value = await legacyApi.get(`${API_BASE}/orders/${props.orderId}`);
+    order.value = await api.get(`${API_BASE}/orders/${props.orderId}`);
   } catch (error) {
     ElMessage.error('加载订单详情失败');
     console.error(error);
@@ -419,7 +451,7 @@ const confirmPayment = async () => {
   try {
     await ElMessageBox.confirm('确认该订单已付款？', '确认付款');
 
-    await legacyApi.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
+    await api.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
     ElMessage.success('付款已确认');
     emit('refresh');
     loadOrderDetail();
@@ -434,7 +466,7 @@ const startProcessing = async () => {
   try {
     await ElMessageBox.confirm('开始制作该订单？', '开始制作');
 
-    await legacyApi.patch(
+    await api.patch(
       `${API_BASE}/orders/${order.value.orderId}/status`,
       { status: 'IN_PROGRESS' },
     );
@@ -445,6 +477,51 @@ const startProcessing = async () => {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');
     }
+  }
+};
+
+/**
+ * 恢复成品抵扣额度（人工处理退款时使用）。
+ *
+ * 只把"已用额度"还回去，**不改任何订单金额** ——
+ * 退款金额本身仍然走既有的退款流程。
+ */
+const restoringCredit = ref(false);
+
+const restoreCredit = async () => {
+  const used = Number(order.value.creditUsed || 0);
+  if (used <= 0) return;
+
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `本单已抵扣 ¥${used}。把已用额度全部还回去？（只影响额度，不改订单金额）`,
+      '恢复抵扣额度',
+      {
+        confirmButtonText: '恢复',
+        cancelButtonText: '取消',
+        inputValue: String(used),
+        inputPattern: /^\d+(\.\d{1,2})?$/,
+        inputErrorMessage: '请输入不小于 0 的数字，最多两位小数',
+      },
+    );
+
+    restoringCredit.value = true;
+    const result: any = await api.post(
+      `${API_BASE}/orders/${order.value.orderId}/restore-credit`,
+      { amount: Number(value) },
+    );
+
+    ElMessage.success(
+      `已恢复 ¥${result?.restored ?? 0}，剩余可用 ¥${result?.creditRemaining ?? 0}`,
+    );
+    emit('refresh');
+    await loadOrderDetail();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || '恢复额度失败');
+    }
+  } finally {
+    restoringCredit.value = false;
   }
 };
 
@@ -497,7 +574,7 @@ const submitRecipe = async () => {
       productionSteps: recipeForm.productionSteps,
     };
 
-    await legacyApi.post(
+    await api.post(
       `${API_BASE}/orders/${order.value.orderId}/create-recipe`,
       data,
     );
@@ -541,7 +618,7 @@ const deleteAttachment = async (attachmentId: string) => {
   try {
     await ElMessageBox.confirm('确认删除该附件？', '确认删除');
 
-    await legacyApi.delete(`${API_BASE}/attachments/${attachmentId}`);
+    await api.delete(`${API_BASE}/attachments/${attachmentId}`);
     ElMessage.success('附件已删除');
     loadOrderDetail();
   } catch (error) {
@@ -673,6 +750,24 @@ h3 {
   color: #f56c6c;
   font-weight: bold;
   font-size: 18px;
+}
+
+.info-item .credit-remaining {
+  color: #b08d4f;
+  font-weight: bold;
+}
+
+.credit-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.credit-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.6;
 }
 
 .tags {

@@ -24,11 +24,13 @@ export class SubmitCustomRecipeOrderDTO {
   targetGoal!: TargetGoal;
 
   @ApiPropertyOptional({ description: 'Allergies' })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   allergies?: string[];
 
   @ApiPropertyOptional({ description: 'Medical conditions' })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   medicalConditions?: string[];
@@ -39,16 +41,19 @@ export class SubmitCustomRecipeOrderDTO {
   additionalNotes?: string;
 
   @ApiPropertyOptional({ description: 'Preferred ingredients' })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   preferredIngredients?: string[];
 
   @ApiPropertyOptional({ description: 'Disliked ingredients' })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   dislikedIngredients?: string[];
 
   @ApiPropertyOptional({ description: 'Attachment URLs' })
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   attachmentUrls?: string[];

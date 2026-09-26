@@ -7,12 +7,12 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
   Param,
   Query,
-  Req,
   ParseIntPipe,
   UseGuards,
   UseInterceptors,
@@ -24,23 +24,61 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
 import {
+  CustomRecipeConfigService,
+  type UpdateCustomRecipeConfigDto,
+} from '../../../application/custom-recipe/custom-recipe-config.service';
+import {
   CreateRecipeDTO,
   UpdateScheduleDTO,
 } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AdminGuard } from '../auth/admin.guard';
 import { AuthGuard } from '../../auth/auth.guard';
-import { CustomRecipeStatus, TargetGoal } from '@prisma/client';
+import { CustomRecipeStatus } from '@prisma/client';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
+import { ApiResponseDto } from '../../dto/common/response.dto';
+import {
+  formatDateToYYYYMMDD,
+  getMonthRange,
+  isPublicHoliday,
+} from '../../../utils/date-helpers';
 
 @ApiTags('admin/custom-recipe')
-@Controller('admin/custom-recipe')
+@Controller('api/v1/admin/custom-recipe')
 @UseGuards(AuthGuard, AdminGuard)
 @ApiBearerAuth()
 export class AdminCustomRecipeController {
   constructor(
     private readonly customRecipeService: CustomRecipeService,
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly wechatService: WechatService,
   ) {}
+
+  // ---------- 食谱定制设置 ----------
+
+  /**
+   * 读取食谱定制配置（定制费 / 可抵扣金额 / 交付周期 / 接单上限 / 支付超时）
+   */
+  @Get('config')
+  @ApiOperation({ summary: '读取食谱定制设置' })
+  async getConfig() {
+    return ApiResponseDto.success(
+      await this.customRecipeConfigService.getConfig(),
+    );
+  }
+
+  /**
+   * 更新食谱定制配置
+   *
+   * 只影响**之后提交**的订单：定制费与可抵扣金额在下单时已快照进订单，
+   * 改价不会动到已提交/已付款顾客的额度。
+   */
+  @Put('config')
+  @ApiOperation({ summary: '更新食谱定制设置' })
+  async updateConfig(@Body() dto: UpdateCustomRecipeConfigDto) {
+    return ApiResponseDto.success(
+      await this.customRecipeConfigService.updateConfig(dto),
+    );
+  }
 
   /**
    * Get all custom recipe orders (admin only)
@@ -64,8 +102,17 @@ export class AdminCustomRecipeController {
       pageSize,
     });
 
-    return {
-      orders,
+    return ApiResponseDto.success({
+      orders: orders.map((order) => ({
+        ...order,
+        amount: Number(order.amount),
+        creditAmount: Number(order.creditAmount),
+        creditUsed: Number(order.creditUsed),
+        creditRemaining: Math.max(
+          0,
+          Number(order.creditAmount) - Number(order.creditUsed),
+        ),
+      })),
       total,
       page,
       pageSize,
@@ -73,7 +120,42 @@ export class AdminCustomRecipeController {
         dateFrom: dateFrom ? new Date(dateFrom) : undefined,
         dateTo: dateTo ? new Date(dateTo) : undefined,
       }),
-    };
+    });
+  }
+
+  /**
+   * 恢复抵扣额度（人工处理退款时使用）
+   *
+   * 顾客用了定制费抵扣成品货款之后又退款，已用掉的额度需要还回去。
+   * 本次退款走后台人工，所以这里也是人工按钮，不做自动恢复。
+   * 不传 amount 表示"把已用的全部还回去"。
+   */
+  @Post('orders/:orderId/restore-credit')
+  @ApiOperation({ summary: '恢复定制抵扣额度' })
+  async restoreCredit(
+    @Param('orderId') orderId: string,
+    @Body('amount') amount?: number | string | null,
+  ) {
+    const parsedAmount =
+      amount === undefined || amount === null || amount === ''
+        ? undefined
+        : Number(amount);
+
+    if (parsedAmount !== undefined && !Number.isFinite(parsedAmount)) {
+      throw new BadRequestException('恢复金额必须是数字');
+    }
+
+    const result = await this.customRecipeService.restoreCredit({
+      orderIdOrId: orderId,
+      amount: parsedAmount,
+    });
+
+    const summary = await this.customRecipeService.getCreditSummary(orderId);
+
+    return ApiResponseDto.success({
+      ...summary,
+      restored: result.restored,
+    });
   }
 
   /**
@@ -88,7 +170,16 @@ export class AdminCustomRecipeController {
       throw new NotFoundException('订单不存在');
     }
 
-    return order;
+    return ApiResponseDto.success({
+      ...order,
+      amount: Number(order.amount),
+      creditAmount: Number(order.creditAmount),
+      creditUsed: Number(order.creditUsed),
+      creditRemaining: Math.max(
+        0,
+        Number(order.creditAmount) - Number(order.creditUsed),
+      ),
+    });
   }
 
   /**
@@ -121,14 +212,10 @@ export class AdminCustomRecipeController {
         });
     }
 
-    return {
-      code: 200,
-      message: '付款已确认',
-      data: {
-        status: 'PAID',
-        paymentConfirmedAt: new Date(),
-      },
-    };
+    return ApiResponseDto.success({
+      status: 'PAID',
+      paymentConfirmedAt: new Date(),
+    });
   }
 
   /**
@@ -142,10 +229,7 @@ export class AdminCustomRecipeController {
   ) {
     await this.customRecipeService.updateOrderStatus(orderId, status);
 
-    return {
-      code: 200,
-      message: '订单状态已更新',
-    };
+    return ApiResponseDto.success({ status });
   }
 
   /**
@@ -182,7 +266,7 @@ export class AdminCustomRecipeController {
         nutritionStandard: 'FEDIAF_2021',
         status: 'PUBLIC',
         isCustomRecipe: true,
-        customOrderId: orderId,
+        customOrderId: order.id,
         energyDensityKcalPerKg:
           dto.nutritionTarget?.energy_density_kcal_per_kg || 3200,
         productionLossRate: 1.07,
@@ -224,15 +308,12 @@ export class AdminCustomRecipeController {
         });
     }
 
-    return {
-      code: 200,
-      data: {
-        recipeId: recipe.id,
-        orderId: order.orderId,
-        status: 'DELIVERED',
-        deliveredAt: new Date(),
-      },
-    };
+    return ApiResponseDto.success({
+      recipeId: recipe.id,
+      orderId: order.orderId,
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+    });
   }
 
   /**
@@ -242,21 +323,16 @@ export class AdminCustomRecipeController {
   @ApiOperation({ summary: 'Get schedule' })
   async getSchedule(@Query('month') month: string) {
     const [year, monthNum] = month.split('-').map(Number);
-    const { start, end } = require('../../../utils/date-helpers').getMonthRange(
-      year,
-      monthNum,
-    );
+    const { start, end } = getMonthRange(year, monthNum);
 
     const schedules = await this.customRecipeService.getScheduleRange(
       start,
       end,
     );
 
-    return {
+    return ApiResponseDto.success({
       dates: schedules.map((schedule) => ({
-        date: require('../../../utils/date-helpers').formatDateToYYYYMMDD(
-          schedule.date,
-        ),
+        date: formatDateToYYYYMMDD(schedule.date),
         capacity: schedule.capacity,
         bookedCount: schedule.bookedCount,
         remainingCapacity: Math.max(
@@ -266,7 +342,7 @@ export class AdminCustomRecipeController {
         isAvailable: schedule.isAvailable,
         isPublicHoliday: schedule.isPublicHoliday,
       })),
-    };
+    });
   }
 
   /**
@@ -296,11 +372,8 @@ export class AdminCustomRecipeController {
 
       // Skip public holidays if requested
       if (dto.skipPublicHolidays) {
-        const isHoliday =
-          await require('../../../utils/date-helpers').isPublicHoliday(
-            currentDate,
-          );
-        if (isHoliday) {
+        const holiday = await isPublicHoliday(currentDate);
+        if (holiday) {
           skippedDates++;
           currentDate.setDate(currentDate.getDate() + 1);
           continue;
@@ -318,14 +391,11 @@ export class AdminCustomRecipeController {
 
     const totalCapacitySet = updatedDates * dto.capacity;
 
-    return {
-      code: 200,
-      data: {
-        updatedDates,
-        skippedDates,
-        totalCapacitySet,
-      },
-    };
+    return ApiResponseDto.success({
+      updatedDates,
+      skippedDates,
+      totalCapacitySet,
+    });
   }
 
   /**
@@ -342,10 +412,7 @@ export class AdminCustomRecipeController {
       dateTo: dateTo ? new Date(dateTo) : undefined,
     });
 
-    return {
-      code: 200,
-      data: stats,
-    };
+    return ApiResponseDto.success(stats);
   }
 
   /**
@@ -356,10 +423,7 @@ export class AdminCustomRecipeController {
   async deleteAttachment(@Param('attachmentId') attachmentId: string) {
     await this.customRecipeService.deleteAttachment(attachmentId);
 
-    return {
-      code: 200,
-      message: '附件已删除',
-    };
+    return ApiResponseDto.success({ deleted: true });
   }
 
   /**
@@ -386,9 +450,6 @@ export class AdminCustomRecipeController {
       orderId,
     );
 
-    return {
-      code: 200,
-      data: attachment,
-    };
+    return ApiResponseDto.success(attachment);
   }
 }

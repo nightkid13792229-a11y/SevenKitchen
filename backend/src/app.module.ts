@@ -31,10 +31,11 @@ import { StaffPurchasingController } from './interfaces/controllers/staff-purcha
 import { StaffInventoryController } from './interfaces/controllers/staff-inventory.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
-import { CustomRecipeController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
+import { CustomRecipeController, PublicCustomRecipeConfigController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
+import { CustomRecipeConfigService } from './application/custom-recipe/custom-recipe-config.service';
 import { FinanceAlertService } from './application/finance/finance-alert.service';
 import { ExpenseBillService } from './application/finance/expense-bill.service';
 import { FinanceReportService } from './application/finance/finance-report.service';
@@ -313,6 +314,7 @@ validatePrismaConfig();
     StaffWorkbenchController,
     StaffProductionController,
     CustomRecipeController,
+    PublicCustomRecipeConfigController,
     AdminCustomRecipeController,
     SharedPhotosController,
     NutritionFoodController,
@@ -699,6 +701,7 @@ validatePrismaConfig();
     },
     // Custom Recipe Service
     CustomRecipeService,
+    CustomRecipeConfigService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     SupplementLabelExtractionService,

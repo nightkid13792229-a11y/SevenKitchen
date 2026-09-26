@@ -20,15 +20,25 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
+import { CustomRecipeConfigService } from '../../../application/custom-recipe/custom-recipe-config.service';
+import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { SubmitCustomRecipeOrderDTO } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AuthGuard } from '../../auth/auth.guard';
+import { ApiResponseDto } from '../../dto/common/response.dto';
+import {
+  formatDateToYYYYMMDD,
+  getMonthRange,
+} from '../../../utils/date-helpers';
 
 @ApiTags('custom-recipe')
-@Controller('custom-recipe')
+@Controller('api/v1/custom-recipe')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class CustomRecipeController {
-  constructor(private readonly customRecipeService: CustomRecipeService) {}
+  constructor(
+    private readonly customRecipeService: CustomRecipeService,
+    private readonly wechatPaymentService: WechatPaymentService,
+  ) {}
 
   /**
    * Submit a new custom recipe order
@@ -52,13 +62,14 @@ export class CustomRecipeController {
       syncToHealthProfile: dto.syncToHealthProfile,
     });
 
-    return {
+    return ApiResponseDto.success({
       orderId: order.orderId,
       scheduledDate: order.scheduledDate,
       estimatedDeliveryDate: order.estimatedDeliveryDate,
       wechatId: process.env.WECHAT_CUSTOMER_SERVICE_ID || 'SevenKitchen',
-      amount: order.amount,
-    };
+      amount: Number(order.amount),
+      creditAmount: Number(order.creditAmount),
+    });
   }
 
   /**
@@ -81,22 +92,56 @@ export class CustomRecipeController {
       pageSize,
     });
 
-    return {
+    return ApiResponseDto.success({
       orders: orders.map((order) => ({
         orderId: order.orderId,
-        dogName: order.dog.name,
+        dogName: order.dog?.name ?? '',
         targetGoal: order.targetGoal,
         scheduledDate: order.scheduledDate,
         estimatedDeliveryDate: order.estimatedDeliveryDate,
         status: order.status,
-        amount: order.amount,
+        amount: Number(order.amount),
+        creditAmount: Number(order.creditAmount),
+        creditUsed: Number(order.creditUsed),
+        creditRemaining: Math.max(
+          0,
+          Number(order.creditAmount) - Number(order.creditUsed),
+        ),
         recipeId: order.recipeId,
         createdAt: order.createdAt,
       })),
       total,
       page,
       pageSize,
-    };
+    });
+  }
+
+  /**
+   * 发起微信支付（返回小程序调起支付所需参数）
+   */
+  @Post('orders/:orderId/pay')
+  @ApiOperation({ summary: '发起定制订单微信支付' })
+  async payOrder(@Req() req: any, @Param('orderId') orderId: string) {
+    return ApiResponseDto.success(
+      await this.wechatPaymentService.createCustomRecipeJsapiPayment(
+        orderId,
+        req.user.userId,
+      ),
+    );
+  }
+
+  /**
+   * 主动查询微信支付结果（回调丢失时兜底）
+   */
+  @Post('orders/:orderId/sync-payment')
+  @ApiOperation({ summary: '主动查询定制订单支付结果' })
+  async syncPayment(@Req() req: any, @Param('orderId') orderId: string) {
+    return ApiResponseDto.success(
+      await this.wechatPaymentService.syncCustomRecipePayment(
+        orderId,
+        req.user.userId,
+      ),
+    );
   }
 
   /**
@@ -117,27 +162,35 @@ export class CustomRecipeController {
       throw new BadRequestException('无权访问此订单');
     }
 
-    return {
+    return ApiResponseDto.success({
       orderId: order.orderId,
       dogId: order.dogId,
-      dogName: order.dog.name,
+      dogName: order.dog?.name ?? '',
       targetGoal: order.targetGoal,
       scheduledDate: order.scheduledDate,
       estimatedDeliveryDate: order.estimatedDeliveryDate,
       status: order.status,
-      amount: order.amount,
+      amount: Number(order.amount),
+      creditAmount: Number(order.creditAmount),
+      creditUsed: Number(order.creditUsed),
+      creditRemaining: Math.max(
+        0,
+        Number(order.creditAmount) - Number(order.creditUsed),
+      ),
       recipeId: order.recipeId,
+      recipeName: order.recipe?.name ?? null,
+      recipeCoverImageUrl: order.recipe?.coverImageUrl ?? null,
       allergies: order.allergies,
       medicalConditions: order.medicalConditions,
       preferredIngredients: order.preferredIngredients,
       dislikedIngredients: order.dislikedIngredients,
       additionalNotes: order.additionalNotes,
-      attachments: order.attachments,
+      attachments: order.attachmentsRecords ?? order.attachments ?? [],
       createdAt: order.createdAt,
       paymentConfirmedAt: order.paymentConfirmedAt,
       inProgressAt: order.inProgressAt,
       deliveredAt: order.deliveredAt,
-    };
+    });
   }
 
   /**
@@ -147,21 +200,16 @@ export class CustomRecipeController {
   @ApiOperation({ summary: 'Get available schedule' })
   async getSchedule(@Query('month') month: string) {
     const [year, monthNum] = month.split('-').map(Number);
-    const { start, end } = require('../../../utils/date-helpers').getMonthRange(
-      year,
-      monthNum,
-    );
+    const { start, end } = getMonthRange(year, monthNum);
 
     const schedules = await this.customRecipeService.getScheduleRange(
       start,
       end,
     );
 
-    return {
+    return ApiResponseDto.success({
       dates: schedules.map((schedule) => ({
-        date: require('../../../utils/date-helpers').formatDateToYYYYMMDD(
-          schedule.date,
-        ),
+        date: formatDateToYYYYMMDD(schedule.date),
         isAvailable:
           schedule.isAvailable &&
           !schedule.isPublicHoliday &&
@@ -173,7 +221,7 @@ export class CustomRecipeController {
         ),
         bookedCount: schedule.bookedCount,
       })),
-    };
+    });
   }
 
   /**
@@ -205,13 +253,13 @@ export class CustomRecipeController {
       orderId,
     );
 
-    return {
+    return ApiResponseDto.success({
       fileUrl: attachment.fileUrl,
       fileName: attachment.fileName,
       fileSize: attachment.fileSize,
       fileType: attachment.fileType,
       uploadedAt: attachment.uploadedAt,
-    };
+    });
   }
 
   /**
@@ -233,7 +281,7 @@ export class CustomRecipeController {
 
     const summary = await this.customRecipeService.getDogHealthSummary(dogId);
 
-    return summary;
+    return ApiResponseDto.success(summary);
   }
 
   /**
@@ -256,6 +304,29 @@ export class CustomRecipeController {
     const preferences =
       await this.customRecipeService.analyzeDogPreferences(dogId);
 
-    return preferences;
+    return ApiResponseDto.success(preferences);
+  }
+}
+
+/**
+ * 食谱定制的公开配置（无需登录）
+ *
+ * 首页入口卡与定制页在未登录时就要显示价格，所以这部分必须公开。
+ * 只暴露顾客看得懂的三项：定制费、可抵扣金额、交付周期。
+ * 接单上限等内部产能参数不对外。
+ */
+@ApiTags('custom-recipe')
+@Controller('api/v1/custom-recipe-config')
+export class PublicCustomRecipeConfigController {
+  constructor(
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: '读取食谱定制的公开配置（定制费 / 可抵扣金额 / 交付周期）' })
+  async getPublicConfig() {
+    return ApiResponseDto.success(
+      await this.customRecipeConfigService.getPublicConfig(),
+    );
   }
 }

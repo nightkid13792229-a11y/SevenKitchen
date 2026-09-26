@@ -9,6 +9,8 @@ import { PlatformConfigService } from '../platform-config/platform-config.servic
 import { ShippingFulfillmentService } from '../shipping/shipping-fulfillment.service';
 import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-config.service';
 import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
+import { CustomRecipeConfigService } from '../custom-recipe/custom-recipe-config.service';
+import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 
 const WECHAT_ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'];
 
@@ -39,6 +41,8 @@ export class OrderSchedulerService {
     private readonly shippingFulfillmentService: ShippingFulfillmentService,
     private readonly supplementShopConfigService: SupplementShopConfigService,
     private readonly supplementOrderService: SupplementOrderService,
+    private readonly customRecipeConfigService: CustomRecipeConfigService,
+    private readonly customRecipeService: CustomRecipeService,
   ) {}
 
   /**
@@ -267,6 +271,10 @@ export class OrderSchedulerService {
        * 超时值来自「补剂商城设置」，与鲜食订单解耦。
        */
       await this.autoCancelExpiredSupplementOrders();
+
+      // 定制订单同理：也必须放在 finally 里，
+      // 否则会被上面鲜食逻辑的 return 整个跳过。
+      await this.autoCancelExpiredCustomRecipeOrders();
     }
   }
 
@@ -327,6 +335,67 @@ export class OrderSchedulerService {
     } catch (error) {
       this.logger.error(
         `[OrderScheduler] 补剂订单自动关单出错: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * 自动关闭超时未付款的**定制食谱订单**。
+   *
+   * 为什么必须有：定制单提交后不付款、顾客又关掉小程序，
+   * 这张单会永远挂在「待付款」，而且**当天的排期名额不会释放** ——
+   * booked_count 只增不减，几天后就会"明明没人下单却提示约满"。
+   * 关单时由 CustomRecipeService.cancelOrder 一并把名额还回去。
+   *
+   * 超时值取「食谱定制设置 → 支付超时」，与鲜食、补剂各自独立；
+   * 配成 0 表示不自动关单。
+   */
+  private async autoCancelExpiredCustomRecipeOrders() {
+    try {
+      const recipeConfig = await this.customRecipeConfigService.getConfig();
+      const timeoutMinutes = recipeConfig.paymentTimeoutMinutes;
+
+      if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) {
+        this.logger.debug(
+          '[OrderScheduler] 定制订单自动关单已关闭（paymentTimeoutMinutes = 0）',
+        );
+        return;
+      }
+
+      const expired =
+        await this.customRecipeService.findExpiredUnpaidOrders(timeoutMinutes);
+
+      if (expired.length === 0) return;
+
+      this.logger.log(
+        `[OrderScheduler] 发现 ${expired.length} 张超时未付款的定制订单（超时 ${timeoutMinutes} 分钟）`,
+      );
+
+      let cancelled = 0;
+      for (const order of expired) {
+        try {
+          const result = await this.customRecipeService.cancelOrder(
+            order.orderId,
+            { reason: '支付超时自动取消' },
+          );
+          if (result.cancelled) cancelled += 1;
+        } catch (error) {
+          // 单张失败不能拖垮整批：可能是状态刚好被并发改掉了
+          this.logger.warn(
+            `[OrderScheduler] 定制订单自动取消失败 ${order.orderId}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (cancelled > 0) {
+        this.logger.log(
+          `[OrderScheduler] 已自动取消 ${cancelled} 张超时定制订单`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `[OrderScheduler] 定制订单自动关单出错: ${(error as Error).message}`,
         (error as Error).stack,
       );
     }

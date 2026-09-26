@@ -5,6 +5,15 @@
     </view>
 
     <scroll-view scroll-y class="orders-list">
+      <view v-if="loading && orders.length === 0" class="empty-state">
+        <text class="empty-text">加载中...</text>
+      </view>
+
+      <view v-else-if="loadFailed && orders.length === 0" class="empty-state">
+        <text class="empty-text">订单加载失败，请检查网络</text>
+        <button class="create-btn" @tap="loadOrders">重新加载</button>
+      </view>
+
       <view
         v-for="order in orders"
         :key="order.orderId"
@@ -29,11 +38,15 @@
           </view>
           <view class="info-row">
             <text class="label">预约：</text>
-            <text class="value">{{order.scheduledDate}}</text>
+            <text class="value">{{formatDate(order.scheduledDate)}}</text>
           </view>
           <view class="info-row" v-if="order.status === 'DELIVERED'">
             <text class="label">交付：</text>
-            <text class="value">{{order.estimatedDeliveryDate}}</text>
+            <text class="value">{{formatDate(order.estimatedDeliveryDate)}}</text>
+          </view>
+          <view class="info-row" v-if="creditRemainingOf(order) > 0">
+            <text class="label">可抵扣：</text>
+            <text class="value credit">¥{{creditRemainingOf(order)}}</text>
           </view>
         </view>
 
@@ -41,9 +54,10 @@
           <button
             v-if="order.status === 'PENDING_PAYMENT'"
             class="action-btn"
+            :disabled="payingOrderId === order.orderId"
             @tap.stop="payOrder(order.orderId)"
           >
-            立即付款
+            {{ payingOrderId === order.orderId ? '支付中...' : '立即付款' }}
           </button>
           <button
             v-else-if="order.status === 'DELIVERED'"
@@ -61,7 +75,7 @@
         </view>
       </view>
 
-      <view v-if="orders.length === 0" class="empty-state">
+      <view v-if="!loading && !loadFailed && orders.length === 0" class="empty-state">
         <text class="empty-text">暂无定制订单</text>
         <button class="create-btn" @tap="createOrder">立即定制</button>
       </view>
@@ -71,57 +85,123 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { getBaseUrl } from '@/utils/config';
+import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
+import { request } from '@/utils/api';
+import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 
-const orders = ref<any[]>([]);
+interface CustomRecipeOrderItem {
+  orderId: string;
+  dogName?: string;
+  targetGoal?: string;
+  scheduledDate?: string | null;
+  estimatedDeliveryDate?: string | null;
+  status?: string;
+  amount?: number;
+  creditAmount?: number;
+  creditUsed?: number;
+  creditRemaining?: number;
+  recipeId?: string | null;
+}
+
+const orders = ref<CustomRecipeOrderItem[]>([]);
+const loading = ref(false);
+const loadFailed = ref(false);
+const payingOrderId = ref('');
 
 onLoad(() => {
-  loadOrders();
+  void loadOrders();
+});
+
+// 从详情/提交成功页返回时刷新，避免状态停留在旧值（例如刚付完款仍显示"待付款"）
+onShow(() => {
+  if (orders.value.length) {
+    void loadOrders();
+  }
 });
 
 onPullDownRefresh(() => {
-  loadOrders().then(() => {
+  void loadOrders().finally(() => {
     uni.stopPullDownRefresh();
   });
 });
 
 const loadOrders = async () => {
+  loading.value = true;
+  loadFailed.value = false;
   try {
-    const res = await uni.request({
-      url: `${getBaseUrl()}/custom-recipe/my-orders`,
+    // 统一走 request()：只认全站统一的 {code,message,data} 结构。
+    // 原来按 HTTP 风格的 2xx 判断成功，而后端约定的成功码是 0，列表因此永远为空。
+    const res: any = await request({
+      url: '/custom-recipe/my-orders',
       method: 'GET',
-      header: {
-        'Authorization': `Bearer ${uni.getStorageSync('token')}`,
-      },
+      quiet: true,
+      suppressErrorToast: true,
     });
 
-    if (res.data.code === 200) {
-      orders.value = res.data.data.orders;
+    if (res.code === 0 && res.data) {
+      orders.value = Array.isArray(res.data.orders) ? res.data.orders : [];
+    } else {
+      loadFailed.value = true;
     }
   } catch (error) {
-    uni.showToast({
-      title: '加载失败',
-      icon: 'none',
-    });
+    console.error('[CustomRecipe] 加载定制订单失败:', error);
+    loadFailed.value = true;
+  } finally {
+    loading.value = false;
   }
 };
 
 const viewOrderDetail = (orderId: string) => {
   uni.navigateTo({
-    url: `/pages/custom-recipe/order-detail?orderId=${orderId}`,
+    url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
   });
 };
 
-const payOrder = (orderId: string) => {
-  uni.navigateTo({
-    url: `/pages/custom-recipe/success?orderId=${orderId}`,
-  });
+/**
+ * 待付款订单的付款入口：列表里直接调起微信支付，少一跳。
+ * 支付通道不可用时（MANUAL）再去提交成功页看客服收款方式。
+ */
+const payOrder = async (orderId: string) => {
+  if (payingOrderId.value) return;
+
+  payingOrderId.value = orderId;
+  try {
+    const outcome = await runCustomRecipePayment(orderId);
+
+    if (outcome === 'PAID') {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+      await loadOrders();
+      return;
+    }
+
+    if (outcome === 'CANCELLED') {
+      uni.showToast({ title: '已取消支付，可稍后再付', icon: 'none' });
+      return;
+    }
+
+    if (outcome === 'CLOSED') {
+      uni.showToast({ title: '订单已关闭，请重新提交定制', icon: 'none' });
+      await loadOrders();
+      return;
+    }
+
+    if (outcome === 'MANUAL') {
+      uni.navigateTo({
+        url: `/pages/custom-recipe/success?orderId=${encodeURIComponent(orderId)}`,
+      });
+      return;
+    }
+
+    uni.showToast({ title: '支付未完成，可稍后重试', icon: 'none' });
+  } finally {
+    payingOrderId.value = '';
+  }
 };
 
-const viewRecipe = (recipeId: string) => {
+const viewRecipe = (recipeId: string | null | undefined) => {
+  if (!recipeId) return;
   uni.navigateTo({
-    url: `/pages/recipe-detail/index?id=${recipeId}`,
+    url: `/pages/recipe-detail/index?id=${encodeURIComponent(recipeId)}`,
   });
 };
 
@@ -138,6 +218,23 @@ const createOrder = () => {
     url: '/pages/custom-recipe/index',
   });
 };
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function creditRemainingOf(order: CustomRecipeOrderItem): number {
+  if (order.creditRemaining !== undefined) return Number(order.creditRemaining);
+  return Math.max(
+    0,
+    Number(order.creditAmount || 0) - Number(order.creditUsed || 0),
+  );
+}
 
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
@@ -264,6 +361,11 @@ const getGoalText = (goal: string) => {
 .value {
   color: #333;
   flex: 1;
+}
+
+.value.credit {
+  color: #b08d4f;
+  font-weight: 700;
 }
 
 .order-footer {

@@ -87,12 +87,25 @@ describe('dog-profile-form', () => {
     expect(canAdvanceCreateStep('basic', availability)).toBe(false)
   })
 
-  it('advances feeding to the recommendation step in create mode', () => {
-    expect(getNextCreateStep('feeding')).toBe('recommendation')
+  it('advances feeding to the health step, then health to recommendation', () => {
+    // 2026-09-27：建档新增「健康信息」第 3 步（可跳过），插在喂食信息与结果页之间
+    expect(getNextCreateStep('feeding')).toBe('health')
+    expect(getNextCreateStep('health')).toBe('recommendation')
   })
 
   it('keeps recommendation as the final create step', () => {
     expect(getNextCreateStep('recommendation')).toBe('recommendation')
+  })
+
+  it('健康信息永远可进入（它是可跳过的，不构成门槛）', () => {
+    const blocked = {
+      basic: false,
+      feeding: false,
+      health: true,
+      recommendation: false,
+    }
+
+    expect(canAdvanceCreateStep('health', blocked)).toBe(true)
   })
 
   it('allows recommendation to complete when create prerequisites are complete even without preview state', () => {

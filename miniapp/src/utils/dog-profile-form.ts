@@ -16,6 +16,8 @@ export type DogProfileEditSection = 'basic' | 'feeding' | 'health'
 export interface DogProfileCreateStepAvailability {
   basic: boolean
   feeding: boolean
+  /** 健康信息永远可进入：它是**可跳过**的，不构成门槛 */
+  health: boolean
   recommendation: boolean
 }
 
@@ -227,6 +229,11 @@ export function canAdvanceCreateStep(
     return availability.recommendation
   }
 
+  if (step === 'health') {
+    // 健康信息可跳过：无条件允许进入结果页
+    return true
+  }
+
   if (step === 'recommendation') {
     return availability.recommendation
   }
@@ -258,7 +265,7 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
     (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
 
-  return { basic, feeding, recommendation }
+  return { basic, feeding, health: true, recommendation }
 }
 
 /**

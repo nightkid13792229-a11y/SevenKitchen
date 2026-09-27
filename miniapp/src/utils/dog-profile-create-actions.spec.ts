@@ -38,7 +38,7 @@ describe('dog-profile-create-actions', () => {
     })
   })
 
-  it('keeps feeding step on generate and back actions', () => {
+  it('feeding 步骤的按钮是「下一步」（喂食建议要在最后一页才展示）', () => {
     expect(
       getCreateWizardActionConfig({
         step: 'feeding',
@@ -50,7 +50,27 @@ describe('dog-profile-create-actions', () => {
         calculating: false,
       }),
     ).toEqual({
-      primaryText: '生成喂食建议',
+      primaryText: '下一步',
+      primaryDisabled: false,
+      secondaryText: '返回上一步',
+      secondaryDisabled: false,
+    })
+  })
+
+  it('健康信息步骤可继续且有「返回上一步」（加入该步骤时曾漏配）', () => {
+    expect(
+      getCreateWizardActionConfig({
+        step: 'health',
+        canAdvanceFromBasic: true,
+        canAdvanceFromFeeding: true,
+        canAdvanceFromRecommendation: false,
+        canSubmit: false,
+        recommendationReady: false,
+        calculating: false,
+      }),
+    ).toEqual({
+      primaryText: '下一步',
+      // 健康信息可跳过：即便其它条件都不满足也必须能继续
       primaryDisabled: false,
       secondaryText: '返回上一步',
       secondaryDisabled: false,

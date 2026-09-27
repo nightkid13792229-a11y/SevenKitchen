@@ -441,7 +441,19 @@
               :class="{ 'activity-level-card--active': formData.activityLevel === option.value }"
               @tap="selectActivityLevel(option.value)"
             >
-              <text class="activity-level-card__label">{{ option.label }}</text>
+              <view class="activity-level-card__head">
+                <text class="activity-level-card__label">{{ option.label }}</text>
+                <!-- 可视化强度条：不需要配图就能让顾客一眼看出档位高低。
+                     真实插图需要单独的素材决策，先用这个把"图示"做出来。 -->
+                <view class="activity-intensity" :aria-label="`活动强度 ${option.intensity}/5`">
+                  <view
+                    v-for="step in 5"
+                    :key="step"
+                    class="activity-intensity__bar"
+                    :class="{ 'activity-intensity__bar--on': step <= Number(option.intensity) }"
+                  ></view>
+                </view>
+              </view>
               <text class="activity-level-card__description">{{ option.description }}</text>
             </view>
           </view>
@@ -3131,7 +3143,38 @@ async function submit() {
   background: rgba(30, 58, 47, 0.08);
 }
 
-.wizard-step--feeding .activity-level-card__label {
+.wizard-step--feeding /* 活动量可视化强度条（5 格）：给顾客一个不需要读文字的直观高低感 */
+.activity-level-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.activity-intensity {
+  display: flex;
+  align-items: flex-end;
+  gap: 6rpx;
+  flex: 0 0 auto;
+}
+
+.activity-intensity__bar {
+  width: 10rpx;
+  height: 16rpx;
+  border-radius: 3rpx;
+  background: #e0e5d5;
+}
+
+.activity-intensity__bar:nth-child(2) { height: 22rpx; }
+.activity-intensity__bar:nth-child(3) { height: 28rpx; }
+.activity-intensity__bar:nth-child(4) { height: 34rpx; }
+.activity-intensity__bar:nth-child(5) { height: 40rpx; }
+
+.activity-intensity__bar--on {
+  background: linear-gradient(180deg, #b08d4f 0%, #1e3a2f 100%);
+}
+
+.activity-level-card__label {
   display: block;
   font-size: 24rpx;
   font-weight: 700;

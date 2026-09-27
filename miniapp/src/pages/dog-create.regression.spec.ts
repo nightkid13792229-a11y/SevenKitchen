@@ -310,4 +310,37 @@ describe('dog-create runtime regressions', () => {
       expect(source).toContain('hasCreateAvatarPreview')
     })
   })
+
+  /**
+   * 活动量的可视化强度（2026-09-27，U1 第 5 步）
+   *
+   * 活动量是最影响热量的一项，却只有文字、没有配图（体况评分反而有参考图）。
+   * 真实插图需要单独的素材决策，这里先用**不需要素材**的强度条，
+   * 让顾客一眼看出档位高低。
+   */
+  describe('活动量可视化', () => {
+    it('五个档位都带活动强度', () => {
+      const viewSource = readFileSync(
+        resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
+        'utf-8',
+      )
+      const choices =
+        viewSource.match(/const ACTIVITY_LEVEL_CHOICES = \[[\s\S]*?\n\] as const/)?.[0] || ''
+
+      expect(choices).not.toBe('')
+      for (const level of ['1', '2', '3', '4', '5']) {
+        expect(choices).toContain(`intensity: ${level},`)
+      }
+    })
+
+    it('卡片上渲染强度条，且与档位对应', () => {
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/pages/dog-create/index.vue'),
+        'utf-8',
+      )
+
+      expect(source).toContain('activity-intensity__bar')
+      expect(source).toContain('option.intensity')
+    })
+  })
 })

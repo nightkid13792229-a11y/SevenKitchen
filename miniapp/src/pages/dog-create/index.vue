@@ -97,7 +97,6 @@
                 <input
                   class="input weight-input"
                   type="digit"
-                  :placeholder="weightPlaceholder"
                   :value="weightInputText"
                   @input="onWeightInput"
                 />
@@ -342,7 +341,6 @@
           <view class="feeding-card__header">
             <view>
               <text class="profile-card__section-title">BCS 体态评分</text>
-              <text class="profile-card__section-desc">4到5分是理想体态。请对着下方参考图，选择更贴近的一项。</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('bcs')">热量影响</text>
           </view>
@@ -350,7 +348,7 @@
           <!-- 未选择时如实说明：不阻断流程，但这是定制食谱的必需项。
                原先这里默认选中 5 分，顾客不选也会被当成"标准体态"存进档案。 -->
           <view v-if="!formData.bcsScoreConfirmed" class="feeding-unselected-hint">
-            <text class="feeding-unselected-hint__text">还没选择 —— 不选也能继续建档，但定制食谱需要它。</text>
+            <text class="feeding-unselected-hint__text">还没选择 · 定制食谱需要这一项</text>
           </view>
 
           <view class="bcs-choice-grid">
@@ -364,6 +362,7 @@
               ]"
               @tap="selectBcsScore(option.value)"
             >
+              <text v-if="formData.bcsScore === option.value" class="bcs-choice-card__tick">✓</text>
               <text class="bcs-choice-card__score">{{ option.label }}</text>
               <text class="bcs-choice-card__status">{{ option.status }}</text>
             </view>
@@ -385,7 +384,6 @@
           <view class="feeding-guide-card">
             <view class="feeding-guide-card__header">
               <text class="feeding-guide-card__title">BCS 评分参考图</text>
-              <text class="feeding-guide-card__badge">当前页查看</text>
             </view>
             <image
               v-if="!showBcsFallback"
@@ -443,13 +441,12 @@
           <view class="feeding-card__header">
             <view>
               <text class="profile-card__section-title">活动水平</text>
-              <text class="profile-card__section-desc">选更贴近日常平均状态的一项（这是影响热量最大的一项），系统据此调节总热量需求。</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('activity')">热量影响</text>
           </view>
 
           <view v-if="!formData.activityLevelConfirmed" class="feeding-unselected-hint">
-            <text class="feeding-unselected-hint__text">还没选择 —— 不选也能继续建档，但定制食谱需要它。</text>
+            <text class="feeding-unselected-hint__text">还没选择 · 定制食谱需要这一项</text>
           </view>
 
           <view class="activity-level-container">
@@ -460,19 +457,7 @@
               :class="{ 'activity-level-card--active': formData.activityLevel === option.value }"
               @tap="selectActivityLevel(option.value)"
             >
-              <view class="activity-level-card__head">
-                <text class="activity-level-card__label">{{ option.label }}</text>
-                <!-- 可视化强度条：不需要配图就能让顾客一眼看出档位高低。
-                     真实插图需要单独的素材决策，先用这个把"图示"做出来。 -->
-                <view class="activity-intensity" :aria-label="`活动强度 ${option.intensity}/5`">
-                  <view
-                    v-for="step in 5"
-                    :key="step"
-                    class="activity-intensity__bar"
-                    :class="{ 'activity-intensity__bar--on': step <= Number(option.intensity) }"
-                  ></view>
-                </view>
-              </view>
+              <text class="activity-level-card__label">{{ option.label }}</text>
               <text class="activity-level-card__description">{{ option.description }}</text>
             </view>
           </view>
@@ -482,7 +467,6 @@
           <view class="feeding-guide-card">
             <view class="feeding-guide-card__header">
               <text class="feeding-guide-card__title">活动量参考图</text>
-              <text class="feeding-guide-card__badge">当前页查看</text>
             </view>
             <image
               v-if="!showActivityFallback"
@@ -544,8 +528,6 @@
             >
               <view class="picker">{{ `${formData.mealsPerDay || '2'} 餐/天` }}</view>
             </picker>
-            <!-- 老板定稿文案（U4）：按"影响制作单的生成"表述，不写成价格 -->
-            <text class="hint hint--emphasis">影响制作单的生成，请确认</text>
             <text class="hint">用于计算每餐的饭量。</text>
           </view>
         </view>
@@ -554,7 +536,7 @@
           <view class="feeding-card__header">
             <view>
               <text class="profile-card__section-title">零食评估</text>
-              <text class="profile-card__section-desc">用于预留零食的热量，剔除零食热量后再计算主食热量。</text>
+              <text class="profile-card__section-desc">食谱设计过程中默认会剔除零食的热量。</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('treat')">热量影响</text>
           </view>
@@ -564,7 +546,7 @@
               v-for="level in createTreatChoices"
               :key="level.level"
               class="treat-level-card"
-              :class="{ 'treat-level-card--active': formData.treatLevel === level.level }"
+              :class="{ 'treat-level-card--active': isTreatLevelActive(level.level) }"
               @tap="selectTreatLevel(level.level)"
             >
               <text class="treat-level-card__label">{{ level.label }}</text>
@@ -849,7 +831,6 @@ import {
 } from '../../utils/dog-profile-form'
 import {
   formatWeightForInput,
-  getWeightPlaceholder,
   getWeightRangeHint,
   parseWeightInputToKg,
   type WeightUnit,
@@ -1354,7 +1335,6 @@ const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
 // 输入框里正在编辑的原始文本：单独存一份，避免换算把顾客的按键序列打断
 // （例如输入 "12." 时若直接回写格式化结果，小数点会被吃掉，接着输入就变成 125）。
 const weightInputText = ref('')
-const weightPlaceholder = computed(() => getWeightPlaceholder(weightUnit.value))
 const weightRangeHint = computed(() => getWeightRangeHint(weightUnit.value))
 
 const syncWeightInputFromForm = () => {
@@ -2360,6 +2340,18 @@ function onCreateMealsChange(event: any) {
   invalidateBreedDerivedState()
 }
 
+/**
+ * 某档零食当前是否选中。
+ *
+ * 兼容历史数据：零食档位由 4 档精简为 3 档后，库里仍有 MODERATE（适中）的档案
+ * （生产 1118 只）。把它归到「少量」这一档**展示**，但顾客不动它时
+ * 保存值仍是 MODERATE —— 不会被这次改版悄悄改写掉喂养口径。
+ */
+function isTreatLevelActive(level: string) {
+  if (formData.value.treatLevel === level) return true
+  return level === 'LOW' && formData.value.treatLevel === 'MODERATE'
+}
+
 function toggleFeedingImpact(type: 'bcs' | 'activity' | 'treat') {
   feedingImpactExpanded[type] = !feedingImpactExpanded[type]
 }
@@ -3120,99 +3112,125 @@ async function submit() {
   color: #1e3a2f;
 }
 
+/* BCS 九宫格（2026-09-27 重做）
+   老板指出的三个问题：
+   1) 1-5 分背景色完全一样，看不出"偏瘦 → 理想"的过渡
+      → 改为三色带：偏瘦(青绿) / 理想(品牌绿) / 偏胖(金→橙→红)，逐档加深
+   2) 选中态太弱（只有淡边框+阴影），看不出"能点、已点"
+      → 选中时整卡填充主题色 + 白字 + 右上角勾
+   3) 卡片面积偏大
+      → 降低最小高度与内边距，格子更紧凑
+   三色带对应国际 9 分制的通用读法：1-3 偏瘦、4-5 理想、6-9 偏胖/肥胖。 */
 .wizard-step--feeding .bcs-choice-grid {
-  margin-top: 18rpx;
+  margin-top: 16rpx;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10rpx;
 }
 
 .wizard-step--feeding .bcs-choice-card {
-  --bcs-accent: #6f9480;
-  --bcs-border: rgba(30, 46, 36, 0.1);
-  --bcs-bg: #fbfcf7;
-  min-height: 92rpx;
-  padding: 12rpx 8rpx 8rpx;
-  border-radius: 18rpx;
+  --bcs-accent: #55786a;
+  position: relative;
+  min-height: 74rpx;
+  padding: 10rpx 6rpx 8rpx;
+  border-radius: 16rpx;
   background: var(--bcs-bg);
   border: 1rpx solid var(--bcs-border);
   text-align: center;
 }
 
+/* 选中：整卡填充 + 白字 + 勾，保证一眼看出"已经点了" */
 .wizard-step--feeding .bcs-choice-card--active {
-  border-color: rgba(30, 58, 47, 0.34);
-  box-shadow: 0 0 0 4rpx rgba(30, 46, 36, 0.08);
-  transform: translateY(-2rpx);
+  background: var(--bcs-accent);
+  border-color: var(--bcs-accent);
+  box-shadow: 0 0 0 4rpx rgba(30, 58, 47, 0.14);
+}
+
+.wizard-step--feeding .bcs-choice-card--active .bcs-choice-card__score,
+.wizard-step--feeding .bcs-choice-card--active .bcs-choice-card__status {
+  color: #fbfcf7;
+}
+
+.wizard-step--feeding .bcs-choice-card__tick {
+  position: absolute;
+  top: 4rpx;
+  right: 8rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #fbfcf7;
 }
 
 .wizard-step--feeding .bcs-choice-card__score {
   display: block;
-  font-size: 24rpx;
+  font-size: 25rpx;
   font-weight: 700;
   color: var(--bcs-accent);
 }
 
-.wizard-step--feeding .bcs-choice-card__status,
 .wizard-step--feeding .bcs-choice-card__status {
   display: block;
-  margin-top: 4rpx;
-  font-size: 20rpx;
-  line-height: 1.5;
+  margin-top: 2rpx;
+  font-size: 19rpx;
+  line-height: 1.4;
   color: #6b6653;
 }
 
+/* ── 偏瘦 1-3：冷调青绿，越接近理想越亮 ── */
 .wizard-step--feeding .bcs-choice-card--score-1 {
-  --bcs-accent: #7fa08f;
-  --bcs-border: rgba(127, 160, 143, 0.22);
-  --bcs-bg: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
+  --bcs-accent: #3f6b5c;
+  --bcs-border: rgba(63, 107, 92, 0.28);
+  --bcs-bg: linear-gradient(180deg, #dde8e2 0%, #c6d8cf 100%);
 }
 
 .wizard-step--feeding .bcs-choice-card--score-2 {
-  --bcs-accent: #6f9480;
-  --bcs-border: rgba(111, 148, 128, 0.22);
-  --bcs-bg: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
+  --bcs-accent: #47755f;
+  --bcs-border: rgba(71, 117, 95, 0.28);
+  --bcs-bg: linear-gradient(180deg, #e2ece6 0%, #cddcd3 100%);
 }
 
 .wizard-step--feeding .bcs-choice-card--score-3 {
-  --bcs-accent: #55786a;
-  --bcs-border: rgba(85, 120, 106, 0.22);
-  --bcs-bg: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
+  --bcs-accent: #4f8068;
+  --bcs-border: rgba(79, 128, 104, 0.28);
+  --bcs-bg: linear-gradient(180deg, #e7efe9 0%, #d3e1d8 100%);
 }
 
+/* ── 理想 4-5：品牌绿，正向强调 ── */
 .wizard-step--feeding .bcs-choice-card--score-4 {
-  --bcs-accent: #2b5040;
-  --bcs-border: rgba(30, 58, 47, 0.16);
-  --bcs-bg: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
+  --bcs-accent: #1e3a2f;
+  --bcs-border: rgba(30, 58, 47, 0.3);
+  --bcs-bg: linear-gradient(180deg, #e3efe2 0%, #cce2cb 100%);
 }
 
 .wizard-step--feeding .bcs-choice-card--score-5 {
-  --bcs-accent: #1e3a2f;
-  --bcs-border: rgba(43, 80, 64, 0.24);
-  --bcs-bg: linear-gradient(180deg, #eef2e4 0%, #e2e8d4 100%);
+  --bcs-accent: #16301f;
+  --bcs-border: rgba(22, 48, 31, 0.34);
+  --bcs-bg: linear-gradient(180deg, #dcebd9 0%, #c2dcbf 100%);
 }
 
+/* ── 偏胖 6-8：金 → 橙，逐档加暖 ── */
 .wizard-step--feeding .bcs-choice-card--score-6 {
   --bcs-accent: #8a6b33;
-  --bcs-border: rgba(30, 58, 47, 0.26);
-  --bcs-bg: linear-gradient(180deg, #f6efe0 0%, #ecdfc6 100%);
+  --bcs-border: rgba(138, 107, 51, 0.3);
+  --bcs-bg: linear-gradient(180deg, #f8f1de 0%, #eee0c3 100%);
 }
 
 .wizard-step--feeding .bcs-choice-card--score-7 {
-  --bcs-accent: #b08d4f;
-  --bcs-border: rgba(138, 107, 51, 0.22);
-  --bcs-bg: linear-gradient(180deg, #f6efe0 0%, #ecdfc6 100%);
+  --bcs-accent: #a1742f;
+  --bcs-border: rgba(161, 116, 47, 0.32);
+  --bcs-bg: linear-gradient(180deg, #f7ead0 0%, #ecd6ae 100%);
 }
 
 .wizard-step--feeding .bcs-choice-card--score-8 {
-  --bcs-accent: #c07a4a;
-  --bcs-border: rgba(176, 141, 79, 0.24);
-  --bcs-bg: linear-gradient(180deg, #f6efe0 0%, #ecdfc6 100%);
+  --bcs-accent: #b26a2e;
+  --bcs-border: rgba(178, 106, 46, 0.34);
+  --bcs-bg: linear-gradient(180deg, #f7e2c7 0%, #ebc9a3 100%);
 }
 
+/* ── 肥胖 9：红调，最需要干预 ── */
 .wizard-step--feeding .bcs-choice-card--score-9 {
-  --bcs-accent: #b4553f;
-  --bcs-border: rgba(192, 122, 74, 0.24);
-  --bcs-bg: linear-gradient(180deg, #f8e8e2 0%, #eed7cd 100%);
+  --bcs-accent: #a8452f;
+  --bcs-border: rgba(168, 69, 47, 0.34);
+  --bcs-bg: linear-gradient(180deg, #f7dcd3 0%, #e9bfb2 100%);
 }
 
 .wizard-step--feeding .feeding-impact-panel {
@@ -3279,14 +3297,6 @@ async function submit() {
   color: #26261f;
 }
 
-.wizard-step--feeding .feeding-guide-card__badge {
-  flex-shrink: 0;
-  font-size: 22rpx;
-  line-height: 1.4;
-  font-weight: 600;
-  color: #6b6653;
-}
-
 .wizard-step--feeding .feeding-guide-card__image {
   margin-top: 14rpx;
   width: 100%;
@@ -3312,38 +3322,7 @@ async function submit() {
   background: rgba(30, 58, 47, 0.08);
 }
 
-.wizard-step--feeding /* 活动量可视化强度条（5 格）：给顾客一个不需要读文字的直观高低感 */
-.activity-level-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.activity-intensity {
-  display: flex;
-  align-items: flex-end;
-  gap: 6rpx;
-  flex: 0 0 auto;
-}
-
-.activity-intensity__bar {
-  width: 10rpx;
-  height: 16rpx;
-  border-radius: 3rpx;
-  background: #e0e5d5;
-}
-
-.activity-intensity__bar:nth-child(2) { height: 22rpx; }
-.activity-intensity__bar:nth-child(3) { height: 28rpx; }
-.activity-intensity__bar:nth-child(4) { height: 34rpx; }
-.activity-intensity__bar:nth-child(5) { height: 40rpx; }
-
-.activity-intensity__bar--on {
-  background: linear-gradient(180deg, #b08d4f 0%, #1e3a2f 100%);
-}
-
-.activity-level-card__label {
+.wizard-step--feeding .activity-level-card__label {
   display: block;
   font-size: 24rpx;
   font-weight: 700;
@@ -4500,11 +4479,6 @@ async function submit() {
 
 .health-skip-btn::after {
   border: none;
-}
-
-.hint--emphasis {
-  color: #1e3a2f;
-  font-weight: 600;
 }
 
 /* 「还没选择」的如实说明：不阻断流程，只讲清后果 */

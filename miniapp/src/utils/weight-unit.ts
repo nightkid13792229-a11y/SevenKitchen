@@ -27,17 +27,6 @@ export function getWeightUnitSuffix(unit: WeightUnit): string {
   return unit === 'JIN' ? '斤' : 'kg'
 }
 
-/**
- * 输入框占位文案。
- *
- * 2026-09-27 调整：加了单位切换器之后输入框变窄，原来那句「例如 12.5」
- * 会被切掉一半（灰字显示不全）。单位已经由切换器显式标出，
- * 占位只需要给一个数字示例，越短越好。
- */
-export function getWeightPlaceholder(unit: WeightUnit): string {
-  return unit === 'JIN' ? '25' : '12.5'
-}
-
 /** 校验失败时的提示，按当前单位给出可理解的区间 */
 export function getWeightRangeHint(unit: WeightUnit): string {
   return unit === 'JIN'

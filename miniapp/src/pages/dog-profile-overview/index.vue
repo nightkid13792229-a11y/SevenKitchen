@@ -97,7 +97,6 @@
               <input
                 class="field-input weight-input"
                 type="digit"
-                :placeholder="weightPlaceholder"
                 :value="weightInputText"
                 @input="onWeightInput"
               />
@@ -587,7 +586,6 @@ import {
 } from '../../utils/weight-management'
 import {
   formatWeightForInput,
-  getWeightPlaceholder,
   getWeightRangeHint,
   getWeightUnitLabel,
   parseWeightInputToKg,
@@ -794,7 +792,6 @@ const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
 // 单独存输入框的原始文本，避免换算把顾客正在输入的按键序列打断（如 "12." 丢小数点）
 const weightInputText = ref('')
 const weightUnitLabel = computed(() => getWeightUnitLabel(weightUnit.value))
-const weightPlaceholder = computed(() => getWeightPlaceholder(weightUnit.value))
 const weightRangeHint = computed(() => getWeightRangeHint(weightUnit.value))
 
 const syncWeightInputFromForm = () => {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatWeightForInput,
-  getWeightPlaceholder,
   getWeightRangeHint,
   getWeightUnitLabel,
   parseWeightInputToKg,
@@ -97,9 +96,5 @@ describe('weight unit conversion', () => {
       expect(getWeightRangeHint('JIN')).toContain('400')
     })
 
-    it('占位示例按单位给出更贴近习惯的例子', () => {
-      expect(getWeightPlaceholder('KG')).toContain('12.5')
-      expect(getWeightPlaceholder('JIN')).toContain('25')
-    })
   })
 })

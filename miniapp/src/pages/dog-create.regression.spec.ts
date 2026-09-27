@@ -380,14 +380,23 @@ describe('dog-create runtime regressions', () => {
   })
 
   /**
-   * 活动量的可视化强度（2026-09-27，U1 第 5 步）
+   * 活动量卡片右侧的"信号条"已按老板要求移除（2026-09-27 验收）
    *
-   * 活动量是最影响热量的一项，却只有文字、没有配图（体况评分反而有参考图）。
-   * 真实插图需要单独的素材决策，这里先用**不需要素材**的强度条，
-   * 让顾客一眼看出档位高低。
+   * 之前为满足"活动量加图示"加过 1-5 格的强度条，但老板认为它在视觉上是多余的
+   * 装饰（像手机信号图标），要求删掉。这里锁住"不要再加回来"。
    */
-  describe('活动量可视化', () => {
-    it('五个档位都带活动强度', () => {
+  describe('活动量卡片不再有强度条', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('模板与样式中都没有强度条', () => {
+      const source = readPage()
+
+      expect(source).not.toContain('activity-intensity')
+      expect(source).not.toContain('option.intensity')
+    })
+
+    it('活动量选项里也不再带强度值', () => {
       const viewSource = readFileSync(
         resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
         'utf-8',
@@ -396,21 +405,213 @@ describe('dog-create runtime regressions', () => {
         viewSource.match(/const ACTIVITY_LEVEL_CHOICES = \[[\s\S]*?\n\] as const/)?.[0] || ''
 
       expect(choices).not.toBe('')
-      for (const level of ['1', '2', '3', '4', '5']) {
-        expect(choices).toContain(`intensity: ${level},`)
-      }
+      expect(choices).not.toContain('intensity')
+    })
+  })
+
+  /**
+   * 品种板块的 UX 优化（2026-09-27）
+   *
+   * 背景（生产数据）：手填品种名的狗有 333 只，其中 **70%（234 只）**
+   * 是「田园犬 / 中华田园犬 / 田园 / 串串 / 混血」这一类 ——
+   * 顾客不是在找纯种，而是搜不到只好手打。
+   *
+   * 另一边：「恢复按品种自动匹配」原先是一行纯文字（无底色/无边框），
+   * 看不出能点；而旁边同级的「手动选择」反而有底色，视觉权重反了。
+   */
+  describe('品种与体型的交互优化', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('「没有明确品种」的常见叫法一点即选，不用打字', () => {
+      const source = readPage()
+
+      expect(source).toContain('mixedBreedQuickOptions')
+      expect(source).toContain("'中华田园犬'")
+      expect(source).toContain("'串串'")
+      expect(source).toContain('startQuickMixedBreed')
+      expect(source).toContain('没有明确品种')
     })
 
-    it('卡片上渲染强度条，且与档位对应', () => {
-      const source = readFileSync(
-        resolve(process.cwd(), 'src/pages/dog-create/index.vue'),
+    it('一键选项走的是已有的混血通道，不预判体型', () => {
+      const helper =
+        readPage().match(/function startQuickMixedBreed[\s\S]*?\n\}/)?.[0] || ''
+
+      expect(helper).not.toBe('')
+      // 体型必须由顾客自己选（混血犬无法从品种推算）
+      expect(helper).toContain('customBreedSizeClass.value = null')
+      expect(helper).toContain("showCustomBreedInput.value = true")
+    })
+
+    it('「恢复自动匹配」做成按钮样式，并写明会恢复到哪个体型', () => {
+      const source = readPage()
+
+      expect(source).toContain('restore-auto-btn')
+      expect(source).toContain('autoMatchedSizeLabel')
+      expect(source).toContain('恢复为：')
+      // 不再是那行没有底色、看不出能点的纯文字
+      expect(source).not.toContain('class="restore-auto-link"')
+    })
+
+    it('恢复按钮的样式具备按钮外观（底色 + 边框 + 圆角）', () => {
+      const source = readPage()
+      const style = source.match(/\.restore-auto-btn \{[\s\S]*?\n\}/)?.[0] || ''
+
+      expect(style).not.toBe('')
+      expect(style).toContain('background-color')
+      expect(style).toContain('border')
+      expect(style).toContain('border-radius')
+    })
+  })
+
+  /**
+   * 建档新增「健康信息」第 3 步（2026-09-27，U1 第 6 步）
+   *
+   * 原先建档三步里一个字都没提健康信息，而它只藏在「健康管理」页 ——
+   * 那个入口要去「编辑基础信息」里找。实测 93.6% 的狗狗档案完全没有健康信息
+   * （过敏仅 24 只 / 4544，占 0.5%）。
+   * 建档是顾客注意力最集中的时刻，因此把它做成可跳过的第 3 步，并一点即选。
+   */
+  describe('健康信息步骤', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('步骤顺序为 基础信息 → 喂食信息 → 健康信息 → 结果页', () => {
+      const constants = readFileSync(
+        resolve(process.cwd(), 'src/constants/dog-profile.ts'),
         'utf-8',
       )
 
-      expect(source).toContain('activity-intensity__bar')
-      expect(source).toContain('option.intensity')
+      expect(constants).toContain(
+        "['basic', 'feeding', 'health', 'recommendation']",
+      )
     })
 
+    it('可跳过：不填任何健康信息也能进入结果页', () => {
+      const source = readPage()
+
+      expect(source).toContain('skipHealthStep')
+      expect(source).toContain('暂时跳过')
+      // 健康步骤的推进分支里不得出现必填拦截
+      const healthBranch =
+        source.match(/currentCreateStep\.value === 'health'[\s\S]*?return\n  \}/)?.[0] || ''
+      expect(healthBranch).not.toBe('')
+      expect(healthBranch).not.toContain('showCreateStepBlockedToast')
+    })
+
+    it('常见过敏原一点即选，不用顾客手打', () => {
+      const source = readPage()
+
+      expect(source).toContain('commonAllergens')
+      expect(source).toContain('toggleAllergen')
+      expect(source).toContain('selectedAllergens')
+      // 至少要覆盖最常见的几类
+      for (const allergen of ['鸡肉', '牛肉', '鸡蛋', '牛奶']) {
+        expect(source).toContain(`'${allergen}'`)
+      }
+    })
+
+    it('写进的是顾客真正能维护的那份结构化记录', () => {
+      const source = readPage()
+
+      // 必须写 allergyRecords（结构化表），而不是顾客端没人能维护的旧文本字段
+      expect(source).toContain('formData.value.allergyRecords = [')
+      expect(source).toContain("allergen,")
+    })
+  })
+
+  /**
+   * 上传报告 → AI 自动识别（2026-09-27，M3b）
+   *
+   * 老板批准「先只做过敏原检测报告这一个」。让顾客自由填写的做法实测失败
+   * （生产 4544 只狗只有 24 只填过过敏原），而过敏是定制食谱的安全底线。
+   *
+   * 三条不能退让的约束：
+   *   1. 识别结果只是**候选**，顾客确认后才写入档案（AI 不得直接落库）
+   *   2. 识别失败**降级为手工填写**，不阻断建档（A2）
+   *   3. 不在服务端做诊断
+   */
+  describe('AI 报告识别', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('提供上传入口，并走「上传 → 识别」两步', () => {
+      const source = readPage()
+
+      expect(source).toContain('pickHealthReport')
+      expect(source).toContain('上传报告')
+      expect(source).toContain('dogCreateApi.uploadHealthAttachment(')
+      expect(source).toContain('dogCreateApi.extractHealthReport(')
+    })
+
+    it('识别结果先放进候选区，顾客点了才写进档案', () => {
+      const source = readPage()
+
+      expect(source).toContain('healthReportCandidates')
+      expect(source).toContain('识别到以下过敏原，请确认')
+      // 候选点击走的就是 toggleAllergen（写入 allergyRecords 的唯一路径）
+      const candidateBlock =
+        source.match(/health-candidate-card[\s\S]*?<\/view>/)?.[0] || ''
+      expect(candidateBlock).toContain('toggleAllergen')
+    })
+
+    it('识别失败时降级为手工填写，不阻断建档', () => {
+      const source = readPage()
+
+      expect(source).toContain('手工补充')
+      // 失败路径只提示，不得抛出让流程中断，也不得弹必填拦截
+      const catchBlock =
+        source.match(/catch \(error: any\) \{[\s\S]*?healthReportExtracting.value = false/)?.[0] || ''
+      expect(catchBlock).not.toBe('')
+      expect(catchBlock).not.toContain('showCreateStepBlockedToast')
+    })
+
+    it('顾客取消选图不算失败（静默返回）', () => {
+      const source = readPage()
+
+      expect(source).toContain('顾客取消选图：静默返回，不算失败')
+    })
+
+    it('接口层带上了超时与错误提示抑制（识别要跑 OCR + AI）', () => {
+      const apiSource = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
+
+      expect(apiSource).toContain("url: '/health/extract-report'")
+      expect(apiSource).toContain('suppressErrorToast: true')
+      expect(apiSource).toContain('timeout: 60000')
+    })
+  })
+
+  /**
+   * 头像后置到完成页（2026-09-27，U1 第 3 步）
+   *
+   * 建档第一步顾客最想快点看到喂食建议，此时问"上传头像"是负担；
+   * 头像本来就只是可选装饰，放到结果页更合适。
+   */
+  describe('头像后置', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('第一步不再有头像选择器', () => {
+      const source = readPage()
+      const basicSection =
+        source.match(/showBasicSection[\s\S]*?showFeedingSection/)?.[0] || ''
+
+      expect(basicSection).not.toBe('')
+      expect(basicSection).not.toContain('profile-card__avatar-picker')
+    })
+
+    it('完成页提供可选的头像入口', () => {
+      const source = readPage()
+
+      expect(source).toContain('给它挑个头像吧')
+      expect(source).toContain('avatar-prompt-card')
+      // 复用同一套裁剪与上传流程，不能另起一套
+      expect(source).toContain('handleCreateAvatarTap')
+      expect(source).toContain('hasCreateAvatarPreview')
+    })
+  })
+
+  describe('活动量参考图', () => {
     it('提供活动量参考图，并带加载失败降级', () => {
       const source = readFileSync(
         resolve(process.cwd(), 'src/pages/dog-create/index.vue'),

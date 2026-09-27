@@ -86,12 +86,17 @@ describe('create step boundaries', () => {
       { value: '4', label: '4 餐/天' },
       { value: '5', label: '5 餐/天' },
     ])
-    expect(getCreateTreatChoices()).toMatchObject([
-      { level: 'NONE', label: '不给零食', description: '不为零食额外预留热量，全部热量用于主食' },
-      { level: 'LOW', label: '较少零食', description: '用于预留少量零食的热量，剔除零食热量后再计算主食热量' },
-      { level: 'MODERATE', label: '适中零食', description: '用于预留适中零食的热量，剔除零食热量后再计算主食热量' },
-      { level: 'HIGH', label: '较多零食', description: '用于预留较多零食的热量，剔除零食热量后再计算主食热量' },
+    // 2026-09-27：零食由 4 档精简为 3 档（老板意见：较少/适中/较多 决策成本偏高），
+    // 且各档不再展示长说明（改成标题下一句统一说明）
+    expect(getCreateTreatChoices()).toEqual([
+      { level: 'NONE', label: '不给零食' },
+      { level: 'LOW', label: '较少零食' },
+      { level: 'HIGH', label: '较多零食' },
     ])
+    // 活动量不再带强度值（右侧信号条已按老板要求移除）
+    for (const option of getCreateActivityChoices()) {
+      expect(option).not.toHaveProperty('intensity')
+    }
   })
 
   it('reuses the shared feeding explanation helpers for bcs, activity, and treat', () => {

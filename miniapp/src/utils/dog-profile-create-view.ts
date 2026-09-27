@@ -10,37 +10,41 @@ const TREAT_LEVEL_LABELS: Record<string, string> = {
   MODERATE: '适中零食',
   HIGH: '较多零食',
 }
-const TREAT_LEVEL_CHOICES = ['NONE', 'LOW', 'MODERATE', 'HIGH'] as const
+/**
+ * 零食档位（2026-09-27 由 4 档精简为 3 档）。
+ *
+ * 老板意见：「较少 / 适中 / 较多」三档对顾客来说决策成本偏高。
+ * 生产真实分布也支持精简：较少 2996 / 适中 1118 / 不给 272 / 较多 162 ——
+ * 中间那一档（适中）最不容易区分，故去掉。
+ * 保留「不给」是因为确实有顾客完全不给零食，且它的预留比例是 0%。
+ * 历史数据里已是 MODERATE 的档案不会被改写（见建档页的展示映射）。
+ */
+const TREAT_LEVEL_CHOICES = ['NONE', 'LOW', 'HIGH'] as const
 
 const ACTIVITY_LEVEL_CHOICES = [
   {
     value: 'RESTING',
     label: '休息静养',
-    intensity: 1,
     description: '几乎不运动，主要时间在休息，或遵医嘱控量',
   },
   {
     value: 'LOW',
     label: '城市日常',
-    intensity: 2,
     description: '每天主要在小区遛 1-2 次，合计约 30-45 分钟 —— 多数城市犬属于这一档',
   },
   {
     value: 'NORMAL',
     label: '规律运动',
-    intensity: 3,
     description: '每天有稳定的主动运动，合计约 1 小时（例如固定的跑步、丢球）',
   },
   {
     value: 'HIGH',
     label: '高活动',
-    intensity: 4,
     description: '每天运动 2-4 小时，经常跑步、游泳或长时间玩耍',
   },
   {
     value: 'WORKING',
     label: '工作犬',
-    intensity: 5,
     description: '有实际工作任务或高强度训练（如护卫、搜救、竞赛）',
   },
 ] as const
@@ -273,12 +277,6 @@ export function getCreateTreatChoices() {
   return TREAT_LEVEL_CHOICES.map(level => ({
     level,
     label: TREAT_LEVEL_LABELS[level],
-    description: {
-      NONE: '不为零食额外预留热量，全部热量用于主食',
-      LOW: '用于预留少量零食的热量，剔除零食热量后再计算主食热量',
-      MODERATE: '用于预留适中零食的热量，剔除零食热量后再计算主食热量',
-      HIGH: '用于预留较多零食的热量，剔除零食热量后再计算主食热量',
-    }[level],
   }))
 }
 

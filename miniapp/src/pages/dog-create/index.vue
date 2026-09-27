@@ -575,13 +575,7 @@
            建档是顾客注意力最集中的时刻，这里用「一点即选」的方式低成本问一次。 -->
       <view v-if="showHealthSection" class="wizard-step wizard-step--health">
         <view class="profile-card">
-          <view class="profile-card__section-heading">
-            <text class="profile-card__section-title">有什么要注意的吗</text>
-            <text class="profile-card__section-desc">
-              告诉我们它不能吃什么，我们会在推荐食谱时自动避开。跳过也能用，以后随时可以补。
-            </text>
-          </view>
-
+          <!-- 2026-09-27 老板要求：这一步不要标题与解释性小字，直接进入过敏选择。 -->
           <view class="health-tag-section">
             <text class="health-tag-section__title">对什么过敏（可多选）</text>
             <view class="health-tag-list">
@@ -609,32 +603,6 @@
             <view v-if="selectedAllergens.length > 0" class="health-selected">
               <text class="health-selected__label">已记录：</text>
               <text class="health-selected__value">{{ selectedAllergens.join('、') }}</text>
-            </view>
-          </view>
-
-          <view class="health-tag-section">
-            <text class="health-tag-section__title">喜欢吃的食材（可多选）</text>
-            <view class="health-tag-list">
-              <text
-                v-for="item in commonFoodTags"
-                :key="`pref-${item}`"
-                class="health-tag"
-                :class="{ 'health-tag--active': selectedPreferredFoods.includes(item) }"
-                @tap="toggleFoodTag('preferredFoods', item)"
-              >{{ item }}</text>
-            </view>
-          </view>
-
-          <view class="health-tag-section">
-            <text class="health-tag-section__title">不吃的食材（可多选）</text>
-            <view class="health-tag-list">
-              <text
-                v-for="item in commonFoodTags"
-                :key="`dis-${item}`"
-                class="health-tag"
-                :class="{ 'health-tag--active': selectedDislikedFoods.includes(item) }"
-                @tap="toggleFoodTag('pickyFoods', item)"
-              >{{ item }}</text>
             </view>
           </view>
 
@@ -1441,37 +1409,6 @@ function toggleAllergen(allergen: string) {
   ]
 }
 
-/**
- * 喜欢 / 不吃的食材（决策 7）。
- *
- * 「不吃的食材」复用既有的 pickyFoods —— 它已经被首页推荐做挑食扣分、也被 AI 读；
- * 「喜欢的食材」走 preferredFoods，这一列一直存在、配方设计器与 AI 早就在读，
- * 但顾客端此前完全没有入口，生产里整列为空。
- */
-const commonFoodTags = ['鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉', '三文鱼', '鸡蛋', '南瓜', '胡萝卜', '西兰花', '苹果']
-
-function splitFoodTags(value: unknown): string[] {
-  return String(value || '')
-    .split(/[,，、;；]/)
-    .map(item => item.trim())
-    .filter(Boolean)
-}
-
-const selectedPreferredFoods = computed(() => splitFoodTags(formData.value.preferredFoods))
-const selectedDislikedFoods = computed(() => splitFoodTags(formData.value.pickyFoods))
-
-function toggleFoodTag(field: 'preferredFoods' | 'pickyFoods', item: string) {
-  const current = field === 'preferredFoods'
-    ? selectedPreferredFoods.value
-    : selectedDislikedFoods.value
-
-  const next = current.includes(item)
-    ? current.filter(value => value !== item)
-    : [...current, item]
-
-  formData.value[field] = next.join('、')
-}
-
 /** 顾客手打的其它过敏原（逗号/顿号分隔） */
 const customAllergenInput = ref('')
 
@@ -2126,7 +2063,7 @@ function scheduleCreateAutoPreview(dirtyFields?: string[]) {
 
   clearCreateAutoPreviewTimer()
   createAutoPreviewTimer = setTimeout(() => {
-    previewCalculation({ silent: true })
+    previewCalculation()
   }, 250)
 }
 
@@ -2431,13 +2368,19 @@ function selectTreatLevel(level: string) {
   invalidateBreedDerivedState()
 }
 
-async function previewCalculation(options?: { silent?: boolean }) {
+/**
+ * 预计算（生成喂食建议）。
+ *
+ * 2026-09-27：原先带一个 silent 选项用来决定是否弹「计算完成」。
+ * 但两处调用点现在都是静默的（离开喂食步骤只是去下一步，喂食建议在最后一页展示），
+ * 那个提示已彻底不可达，因此连同选项一起删除。
+ */
+async function previewCalculation() {
   // Only calculate if we have minimum required fields
   // Silently return if not ready - don't show error to user
   if (!canPreview.value) {
-    if (!options?.silent && !hasValidCurrentWeightKg.value) {
-      showInvalidWeightToast()
-    }
+    // 静默返回：此刻「下一步」本来就是灰的，顾客点不到这里。
+    // （原先靠 silent 选项控制，现已简化为始终静默）
     return false
   }
 
@@ -2534,14 +2477,6 @@ async function previewCalculation(options?: { silent?: boolean }) {
         console.log('[DogCreate] Backend life stage info:', backendLifeStageInfo.value)
       }
 
-      if (!options?.silent) {
-        uni.showToast({
-          title: '计算完成',
-          icon: 'success',
-          duration: 1500
-        })
-      }
-
       void trackDogProfileEvent('dog_profile_calc_succeeded', {
         mode: 'create',
         stepName: 'recommendation',
@@ -2559,13 +2494,14 @@ async function previewCalculation(options?: { silent?: boolean }) {
       stepName: getCreateAnalyticsStepName(currentCreateStep.value),
       calcStatus: 'failed',
     })
-    if (!options?.silent) {
-      uni.showToast({
-        title: err?.message || '计算失败，请检查输入',
-        icon: 'none',
-        duration: 2000
-      })
-    }
+    // 2026-09-27：失败提示改为**始终展示**。
+    // 原先两个调用点都传 silent，把这里的提示静默掉了 ——
+    // 于是计算失败时顾客点「下一步」既不跳转也不提示，像按钮坏了。
+    uni.showToast({
+      title: err?.message || '计算失败，请检查输入',
+      icon: 'none',
+      duration: 2000
+    })
     calcResult.value = null
     return false
   } finally {
@@ -2627,6 +2563,9 @@ async function handleCreatePrimaryAction() {
       return
     }
 
+    // 2026-09-27：这一步的按钮已改为「下一步」（先进健康管理页），
+    // 因此不再弹「计算完成」—— 喂食建议要到最后一页才展示，
+    // 此刻提示"计算完成"只会让顾客困惑。计算仍在后台静默完成。
     const previewSucceeded = await previewCalculation()
     if (!previewSucceeded) {
       return
@@ -3014,7 +2953,8 @@ async function submit() {
   margin: 0 -30rpx 8rpx;
   padding: 0 30rpx 12rpx;
   background: #fbfcf7;
-  backdrop-filter: blur(8rpx);
+  /* 2026-09-27 老板要求去掉毛玻璃：它在滚动时会糊住底下的信息。
+     这里的背景本来就是不透明的，去掉模糊不影响观感。 */
 }
 
 .wizard-step {

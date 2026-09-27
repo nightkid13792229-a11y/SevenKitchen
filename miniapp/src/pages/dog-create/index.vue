@@ -13,25 +13,10 @@
 
       <view v-if="showBasicSection" class="wizard-step wizard-step--basic">
         <view class="profile-card">
+          <!-- 头像已后置到完成页（U1 第 3 步）：
+               建档第一步顾客最想快点看到喂食建议，此时问"上传头像"是负担。
+               头像本来就只是可选装饰，放到结果页更合适。 -->
           <view class="profile-card__identity">
-            <view class="profile-card__avatar-picker" @tap="handleCreateAvatarTap">
-              <image
-                v-if="hasCreateAvatarPreview"
-                class="profile-card__avatar-image"
-                :src="createAvatarSrc"
-                mode="aspectFill"
-                @error="onCreateAvatarPreviewError"
-              />
-              <view v-else class="profile-card__avatar-placeholder">
-                <text class="profile-card__avatar-text">{{ createAvatarPlaceholder }}</text>
-              </view>
-              <view class="profile-card__avatar-badge">
-                <text class="profile-card__avatar-badge-text">
-                  {{ hasCreateAvatarPreview ? '更换头像' : '上传头像' }}
-                </text>
-              </view>
-            </view>
-
             <view class="profile-card__identity-fields">
               <view class="profile-card__field">
                 <text class="label">狗狗名字 *</text>
@@ -615,6 +600,29 @@
       </view>
 
       <view v-if="showRecommendationSection" class="wizard-recommendation-section">
+        <!-- 头像：移到完成页，纯可选（U1 第 3 步） -->
+        <view class="avatar-prompt-card">
+          <view class="avatar-prompt-card__text">
+            <text class="avatar-prompt-card__title">给它挑个头像吧</text>
+            <text class="avatar-prompt-card__desc">可选。加上头像，之后在爱犬列表里更好认。</text>
+          </view>
+          <view class="avatar-prompt-card__picker" @tap="handleCreateAvatarTap">
+            <image
+              v-if="hasCreateAvatarPreview"
+              class="avatar-prompt-card__image"
+              :src="createAvatarSrc"
+              mode="aspectFill"
+              @error="onCreateAvatarPreviewError"
+            />
+            <view v-else class="avatar-prompt-card__placeholder">
+              <text class="avatar-prompt-card__placeholder-text">{{ createAvatarPlaceholder }}</text>
+            </view>
+            <text class="avatar-prompt-card__badge">
+              {{ hasCreateAvatarPreview ? '更换' : '上传' }}
+            </text>
+          </view>
+        </view>
+
         <view v-if="calcStaleNotice" class="calc-stale-notice">
           <text class="calc-stale-text">信息已更新，我们会自动刷新最新喂食建议</text>
         </view>
@@ -3502,6 +3510,77 @@ async function submit() {
   flex-shrink: 0;
   font-size: 24rpx;
   color: #1e3a2f;
+}
+
+/* 完成页的头像卡片（可选） */
+.avatar-prompt-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 26rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.avatar-prompt-card__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.avatar-prompt-card__title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.avatar-prompt-card__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+.avatar-prompt-card__picker {
+  position: relative;
+  flex: 0 0 auto;
+  width: 128rpx;
+  height: 128rpx;
+}
+
+.avatar-prompt-card__image,
+.avatar-prompt-card__placeholder {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.avatar-prompt-card__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef3ea;
+  border: 1rpx dashed #cddbbe;
+}
+
+.avatar-prompt-card__placeholder-text {
+  font-size: 44rpx;
+}
+
+.avatar-prompt-card__badge {
+  position: absolute;
+  right: -6rpx;
+  bottom: -6rpx;
+  padding: 4rpx 14rpx;
+  font-size: 20rpx;
+  color: #f6efe0;
+  background: #1e3a2f;
+  border-radius: 999rpx;
 }
 
 .wizard-recommendation-section {

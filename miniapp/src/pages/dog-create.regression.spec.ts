@@ -280,4 +280,34 @@ describe('dog-create runtime regressions', () => {
       expect(apiSource).toContain('timeout: 60000')
     })
   })
+
+  /**
+   * 头像后置到完成页（2026-09-27，U1 第 3 步）
+   *
+   * 建档第一步顾客最想快点看到喂食建议，此时问"上传头像"是负担；
+   * 头像本来就只是可选装饰，放到结果页更合适。
+   */
+  describe('头像后置', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('第一步不再有头像选择器', () => {
+      const source = readPage()
+      const basicSection =
+        source.match(/showBasicSection[\s\S]*?showFeedingSection/)?.[0] || ''
+
+      expect(basicSection).not.toBe('')
+      expect(basicSection).not.toContain('profile-card__avatar-picker')
+    })
+
+    it('完成页提供可选的头像入口', () => {
+      const source = readPage()
+
+      expect(source).toContain('给它挑个头像吧')
+      expect(source).toContain('avatar-prompt-card')
+      // 复用同一套裁剪与上传流程，不能另起一套
+      expect(source).toContain('handleCreateAvatarTap')
+      expect(source).toContain('hasCreateAvatarPreview')
+    })
+  })
 })

@@ -206,3 +206,56 @@ describe('custom recipe activity level labels', () => {
     expect(labelFn).toContain('未评估')
   })
 })
+
+/**
+ * 定制门槛：按「顾客确认过」判定 + 就地补确认（2026-09-27，决策 1 + U3）
+ *
+ * 体况评分、活动量、每日餐数在表单里都有兜底值 —— "有值"不代表顾客选过
+ * （生产 4544 只狗里 3466 只体况评分等于默认值 5）。
+ * 因此门槛必须看确认状态，否则永远拦不住任何人。
+ *
+ * 老档案不追溯：不主动打扰，只在顾客真的要定制时（此刻数据必须准确）要求补确认。
+ */
+describe('custom recipe profile gate', () => {
+  const submit = read(`${PAGE_DIR}/index.vue`)
+
+  it('三项确认状态共同决定门槛', () => {
+    expect(submit).toContain('bcsScoreConfirmed')
+    expect(submit).toContain('activityLevelConfirmed')
+    expect(submit).toContain('mealsPerDayConfirmed')
+    expect(submit).toContain('gateBlocked')
+    expect(submit).toContain('gateUnconfirmed')
+  })
+
+  it('未确认时挡住提交，并就地给出补确认入口', () => {
+    expect(submit).toContain('开始定制前，请确认这几项')
+    expect(submit).toContain('确认并继续')
+    expect(submit).toContain('confirmGate')
+    // canSubmit 必须把门槛算进去
+    const canSubmitSource =
+      submit.match(/const canSubmit = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+    expect(canSubmitSource).toContain('gateBlocked')
+  })
+
+  it('补确认时才带上确认标记（这就是门槛的判据）', () => {
+    const confirmSource =
+      submit.match(/const confirmGate = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(confirmSource).not.toBe('')
+    expect(confirmSource).toContain('bcsScoreConfirmed: true')
+    expect(confirmSource).toContain('activityLevelConfirmed: true')
+    expect(confirmSource).toContain('mealsPerDayConfirmed: true')
+  })
+
+  it('补确认成功后门槛立刻通过，不必退出重进', () => {
+    const confirmSource =
+      submit.match(/const confirmGate = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+
+    expect(confirmSource).toContain('selectedDog.value = {')
+  })
+
+  it('餐数按老板定稿文案说明后果', () => {
+    expect(submit).toContain('每日餐数影响制作单的生成，请确认')
+    // 不得写成"影响价格"
+    expect(submit).not.toMatch(/<text[^>]*>[^<]*影响价格/)
+  })
+})

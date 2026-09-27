@@ -37,6 +37,60 @@
         <button class="no-dog-hint-btn" @tap="goToCreateDog">创建狗狗档案</button>
       </view>
 
+      <!-- 定制门槛：这几项必须由顾客亲自确认过。
+           老档案不追溯，因此在这里就地补确认 —— 只在"真的要用到"的时候问。 -->
+      <view v-if="gateBlocked" class="gate-card">
+        <text class="gate-card__title">开始定制前，请确认这几项</text>
+        <text class="gate-card__desc">
+          体况评分、活动量、每日餐数原先可能是系统按默认值填的，
+          需要你确认一下 —— 它们决定食谱的用量与制作单。
+        </text>
+
+        <view class="gate-row">
+          <text class="gate-row__label">体况评分</text>
+          <picker
+            mode="selector"
+            :range="gateBcsOptions.map(item => item.label)"
+            :value="gateBcsIndex"
+            @change="onGateBcsChange"
+          >
+            <view class="gate-row__value">{{ gateBcsOptions[gateBcsIndex]?.label || '请选择' }}</view>
+          </picker>
+        </view>
+
+        <view class="gate-row">
+          <text class="gate-row__label">活动量</text>
+          <picker
+            mode="selector"
+            :range="gateActivityOptions.map(item => item.label)"
+            :value="gateActivityIndex"
+            @change="onGateActivityChange"
+          >
+            <view class="gate-row__value">{{ gateActivityOptions[gateActivityIndex]?.label || '请选择' }}</view>
+          </picker>
+        </view>
+
+        <view class="gate-row">
+          <text class="gate-row__label">每日餐数</text>
+          <picker
+            mode="selector"
+            :range="gateMealOptions.map(item => `${item} 餐/天`)"
+            :value="gateMealIndex"
+            @change="onGateMealChange"
+          >
+            <view class="gate-row__value">{{ gateDraft.mealsPerDay }} 餐/天</view>
+          </picker>
+        </view>
+        <!-- 老板定稿文案（U4）：餐数说"影响制作单的生成"，不说价格 -->
+        <text class="gate-row__hint">每日餐数影响制作单的生成，请确认</text>
+
+        <button
+          class="gate-confirm-btn"
+          :disabled="gateSaving"
+          @tap="confirmGate"
+        >{{ gateSaving ? '保存中…' : '确认并继续' }}</button>
+      </view>
+
       <!-- 狗狗基本信息 -->
       <view v-if="selectedDog" class="dog-info-card">
         <view class="info-row">
@@ -253,8 +307,131 @@ const weightManagementOptions = [
 const recipeConfig = ref<{ feeAmount: number; creditAmount: number; deliveryWorkDays: number } | null>(null);
 
 // 计算属性
+/**
+ * 定制门槛（老板决策 1 + U3）。
+ *
+ * 这四项在表单里都有兜底值，所以"有值"不代表顾客选过：
+ *   · 体况评分、活动量 —— 原先建档案时被系统预填（生产 76% 等于默认值 5）
+ *   · 每日餐数 —— 直接决定制作单的每包克重与包数
+ * 因此门槛按**顾客是否亲自确认过**判定，而不是"有没有值"。
+ * 未确认的在这里就地补确认（老板决定：老档案不追溯，进定制页时才要求补）。
+ */
+const gateUnconfirmed = computed(() => {
+  const dog = selectedDog.value;
+  if (!dog) return [] as string[];
+
+  const missing: string[] = [];
+  if (!dog.bcsScoreConfirmed) missing.push('体况评分');
+  if (!dog.activityLevelConfirmed) missing.push('活动量');
+  if (!dog.mealsPerDayConfirmed) missing.push('每日餐数');
+  return missing;
+});
+
+const gateBlocked = computed(
+  () => Boolean(selectedDog.value) && gateUnconfirmed.value.length > 0,
+);
+
+/** 补确认用的草稿值：默认沿用档案里的现值，顾客可以直接确认或改动 */
+const gateDraft = ref({ bcsScore: 5, activityLevel: 'LOW', mealsPerDay: '2' });
+const gateSaving = ref(false);
+
+const gateBcsOptions = [
+  { value: 1, label: '1 分 · 很瘦' },
+  { value: 2, label: '2 分 · 偏瘦' },
+  { value: 3, label: '3 分 · 略瘦' },
+  { value: 4, label: '4 分 · 理想偏瘦' },
+  { value: 5, label: '5 分 · 理想' },
+  { value: 6, label: '6 分 · 略胖' },
+  { value: 7, label: '7 分 · 偏胖' },
+  { value: 8, label: '8 分 · 肥胖' },
+  { value: 9, label: '9 分 · 严重肥胖' },
+];
+const gateActivityOptions = [
+  { value: 'RESTING', label: '休息静养' },
+  { value: 'LOW', label: '城市日常（多数城市犬）' },
+  { value: 'NORMAL', label: '规律运动' },
+  { value: 'HIGH', label: '高活动' },
+  { value: 'WORKING', label: '工作犬' },
+];
+const gateMealOptions = ['1', '2', '3', '4', '5'];
+
+const gateBcsIndex = computed(() =>
+  Math.max(0, gateBcsOptions.findIndex((item) => item.value === gateDraft.value.bcsScore)),
+);
+const gateActivityIndex = computed(() =>
+  Math.max(0, gateActivityOptions.findIndex((item) => item.value === gateDraft.value.activityLevel)),
+);
+const gateMealIndex = computed(() =>
+  Math.max(0, gateMealOptions.indexOf(gateDraft.value.mealsPerDay)),
+);
+
+function syncGateDraftFromDog(dog: any) {
+  gateDraft.value = {
+    bcsScore: Number(dog?.bcsScore) || 5,
+    activityLevel: String(dog?.activityLevel || 'LOW'),
+    mealsPerDay: String(dog?.mealsPerDay || '2'),
+  };
+}
+
+function onGateBcsChange(event: any) {
+  gateDraft.value.bcsScore = gateBcsOptions[event.detail.value]?.value ?? 5;
+}
+
+function onGateActivityChange(event: any) {
+  gateDraft.value.activityLevel = gateActivityOptions[event.detail.value]?.value || 'LOW';
+}
+
+function onGateMealChange(event: any) {
+  gateDraft.value.mealsPerDay = gateMealOptions[event.detail.value] || '2';
+}
+
+/**
+ * 提交补确认。
+ *
+ * 只有顾客在这里点了按钮，才会带上 *Confirmed: true —— 这正是门槛的判据。
+ * 只提交这几项，不动档案的其它内容。
+ */
+const confirmGate = async () => {
+  if (!selectedDog.value || gateSaving.value) return;
+  gateSaving.value = true;
+
+  try {
+    uni.showLoading({ title: '保存中...' });
+    const res: any = await request({
+      url: `/dogs/${selectedDog.value.value}`,
+      method: 'PUT',
+      data: {
+        bcsScore: gateDraft.value.bcsScore,
+        activityLevel: gateDraft.value.activityLevel,
+        mealsPerDay: Number(gateDraft.value.mealsPerDay) || 2,
+        bcsScoreConfirmed: true,
+        activityLevelConfirmed: true,
+        mealsPerDayConfirmed: true,
+      },
+    });
+    uni.hideLoading();
+
+    const updated = res?.data?.profile;
+    if (updated) {
+      // 就地更新选中项，让门槛立刻通过，不必退出重进
+      selectedDog.value = {
+        ...selectedDog.value,
+        ...updated,
+        value: selectedDog.value.value,
+      };
+      syncGateDraftFromDog(updated);
+    }
+    uni.showToast({ title: '已确认，可以继续定制', icon: 'none' });
+  } catch (error: any) {
+    uni.hideLoading();
+    uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' });
+  } finally {
+    gateSaving.value = false;
+  }
+};
+
 const canSubmit = computed(() => {
-  return formData.value.dogId && formData.value.targetGoal;
+  return formData.value.dogId && formData.value.targetGoal && !gateBlocked.value;
 });
 
 function formatAmount(value: number): string {
@@ -412,6 +589,8 @@ const onDogChange = (e: any) => {
   const index = e.detail.value;
   selectedDog.value = dogOptions.value[index];
   formData.value.dogId = selectedDog.value.value;
+  // 补确认的草稿值默认沿用档案现值，顾客可以直接确认或改动
+  syncGateDraftFromDog(selectedDog.value);
 };
 
 const selectWeightGoal = (goal: string) => {
@@ -698,6 +877,80 @@ const getActivityLabel = (level: string) => {
 }
 
 /* "未登录"与"无档案"是两种空态，共用一套视觉，避免两处样式各自漂移 */
+/* 定制门槛补确认卡片 */
+.gate-card {
+  margin-top: 20rpx;
+  padding: 26rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+  border-radius: var(--sk-radius-card, 28rpx);
+}
+
+.gate-card__title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.gate-card__desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.7;
+  color: #8a6f3d;
+}
+
+.gate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  padding: 16rpx 20rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 12rpx;
+}
+
+.gate-row__label {
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  color: #6b6653;
+}
+
+.gate-row__value {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.gate-row__hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #8a6f3d;
+}
+
+.gate-confirm-btn {
+  margin-top: 24rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border-radius: 999rpx;
+}
+
+.gate-confirm-btn::after {
+  border: none;
+}
+
+.gate-confirm-btn[disabled] {
+  opacity: 0.6;
+}
+
 .no-dog-hint,
 .login-hint {
   display: flex;

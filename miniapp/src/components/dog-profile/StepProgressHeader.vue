@@ -43,8 +43,6 @@ const props = defineProps<{
 const stepLabelMap: Record<DogProfileCreateStep, string> = {
   basic: '基础信息',
   feeding: '喂食信息',
-  // 2026-09-27 老板要求：这一步的文案用「健康管理」
-  health: '健康管理',
   recommendation: '喂食建议',
 }
 

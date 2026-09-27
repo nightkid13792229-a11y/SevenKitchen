@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DOG_PROFILE_CREATE_STEPS } from '../constants/dog-profile'
 import { getCreateWizardActionConfig } from './dog-profile-create-actions'
 
 describe('dog-profile-create-actions', () => {
@@ -57,24 +58,23 @@ describe('dog-profile-create-actions', () => {
     })
   })
 
-  it('健康信息步骤可继续且有「返回上一步」（加入该步骤时曾漏配）', () => {
-    expect(
-      getCreateWizardActionConfig({
-        step: 'health',
+  it('建档流程只有 3 步，不存在「健康信息」步骤的按钮配置', () => {
+    // 2026-09-27 老板决定：健康信息不在建档流程里收集。
+    // 这里守住"别再加回来"：任何一步都不允许出现只有 3 步之外的步骤名。
+    const configuredSteps = (['basic', 'feeding', 'recommendation', 'health'] as const)
+      .map(step => getCreateWizardActionConfig({
+        step: step as any,
         canAdvanceFromBasic: true,
         canAdvanceFromFeeding: true,
-        canAdvanceFromRecommendation: false,
-        canSubmit: false,
-        recommendationReady: false,
+        canAdvanceFromRecommendation: true,
+        canSubmit: true,
+        recommendationReady: true,
         calculating: false,
-      }),
-    ).toEqual({
-      primaryText: '下一步',
-      // 健康信息可跳过：即便其它条件都不满足也必须能继续
-      primaryDisabled: false,
-      secondaryText: '返回上一步',
-      secondaryDisabled: false,
-    })
+      }).primaryText)
+
+    // 前三步各有各的按钮文案；'health' 已不在步骤类型里，只会落进默认分支
+    expect(configuredSteps.slice(0, 3)).toEqual(['下一步', '下一步', '完成建档'])
+    expect(DOG_PROFILE_CREATE_STEPS).toEqual(['basic', 'feeding', 'recommendation'])
   })
 
   it('lets the recommendation step complete the profile directly', () => {

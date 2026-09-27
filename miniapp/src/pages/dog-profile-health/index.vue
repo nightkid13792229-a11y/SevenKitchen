@@ -3,7 +3,7 @@
     <view class="hero-card">
       <text class="hero-card__eyebrow">健康管理</text>
       <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
-      <text class="hero-card__subtitle">集中维护病史、体检、过敏、饮食提醒和体重记录。</text>
+      <text class="hero-card__subtitle">集中维护病史、体检、过敏、疫苗、体重记录和饮食提醒。</text>
     </view>
 
     <view v-if="loadError" class="state-card">
@@ -19,7 +19,7 @@
 
     <view v-else-if="hasNoDogs" class="state-card">
       <text class="state-card__title">还没有狗狗档案</text>
-      <text class="state-card__desc">创建档案后，即可维护病史、体检、过敏和饮食提醒。</text>
+      <text class="state-card__desc">创建档案后，即可维护过敏、检查报告、疫苗、体重和饮食提醒。</text>
       <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
@@ -51,7 +51,21 @@
           @save-record="saveHealthRecord"
           @delete-record="deleteHealthRecord"
           @dirty-change="hasUnsavedRecordDraft = $event"
-        />
+        >
+          <!-- 过敏是最要紧的一类：一点即选 + 上传检测报告自动识别。
+               建档流程从 2026-09-27 起完全不收集健康信息，这里是它的唯一入口。 -->
+          <template #type-extra>
+            <AllergyQuickAddSection
+              v-if="activeRecordType === 'allergy'"
+              :dog-id="dogId"
+              :recorded-allergens="recordedAllergens"
+              @saved="onAllergenSaved"
+            />
+          </template>
+        </HealthRecordsSection>
+
+        <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
+        <VaccineManagementSection :dog-id="dogId" />
 
         <view class="section-card diet-reminder-card">
           <text class="section-card__title">饮食提醒</text>
@@ -75,7 +89,7 @@
 
       <view v-else class="section-card">
         <text class="section-card__title">先选择狗狗</text>
-        <text class="state-card__desc">选择一只狗狗后，即可维护病史、体检、过敏和饮食提醒。</text>
+        <text class="state-card__desc">选择一只狗狗后，即可维护过敏、检查报告、疫苗、体重和饮食提醒。</text>
         <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
       </view>
     </view>
@@ -95,6 +109,8 @@
 import { computed, reactive, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
+import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
+import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -160,6 +176,25 @@ const isSecondaryActionDisabled = computed(() =>
 const selectedDog = computed(() => (
   selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] || null : null
 ))
+
+/** 档案里已经记过的过敏原：给「快速添加」做去重与"已记"标记 */
+const recordedAllergens = computed(() => (recordsByType.allergy || [])
+  .map(record => String(record?.allergen || '').trim())
+  .filter(Boolean))
+
+/**
+ * 快速添加/报告识别写了一条过敏记录后，把过敏列表拉回来。
+ *
+ * 不在这里手动往数组里塞：接口返回的才是权威数据（含 id 与附件缓存），
+ * 手动塞容易和「未保存草稿」的判定打架。
+ */
+async function onAllergenSaved() {
+  if (!dogId.value) {
+    return
+  }
+
+  await loadHealthRecordList('allergy', dogId.value)
+}
 
 // 体重管理区块需要的档案信息
 const weightSectionDogProfile = computed(() => ({

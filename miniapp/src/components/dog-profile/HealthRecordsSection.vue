@@ -26,6 +26,10 @@
       </button>
     </view>
 
+    <!-- 当前类别的额外入口（2026-09-27）：给「过敏」放"快速添加 + 上传报告自动识别"。
+         放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
+    <slot name="type-extra" />
+
     <view v-if="draftRecords.length === 0" class="records-section__empty">
       <text class="records-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}

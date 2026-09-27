@@ -569,85 +569,6 @@
         </view>
       </view>
 
-      <!-- 第三步：健康信息（可跳过）
-           原先建档三步里一个字都没提健康信息，而它只藏在「健康管理」页 ——
-           那个入口要去「编辑基础信息」里找，实测 93.6% 的档案完全没有健康信息。
-           建档是顾客注意力最集中的时刻，这里用「一点即选」的方式低成本问一次。 -->
-      <view v-if="showHealthSection" class="wizard-step wizard-step--health">
-        <view class="profile-card">
-          <!-- 2026-09-27 老板要求：这一步不要标题与解释性小字，直接进入过敏选择。 -->
-          <view class="health-tag-section">
-            <text class="health-tag-section__title">对什么过敏（可多选）</text>
-            <view class="health-tag-list">
-              <text
-                v-for="item in commonAllergens"
-                :key="item"
-                class="health-tag"
-                :class="{ 'health-tag--active': selectedAllergens.includes(item) }"
-                @tap="toggleAllergen(item)"
-              >{{ item }}</text>
-            </view>
-
-            <view class="health-custom-row">
-              <input
-                class="input health-custom-input"
-                placeholder="其它过敏原（多个用、分隔）"
-                :value="customAllergenInput"
-                @input="e => customAllergenInput = e.detail.value"
-                @blur="commitCustomAllergens"
-                @confirm="commitCustomAllergens"
-              />
-              <text class="health-custom-add" @tap="commitCustomAllergens">添加</text>
-            </view>
-
-            <view v-if="selectedAllergens.length > 0" class="health-selected">
-              <text class="health-selected__label">已记录：</text>
-              <text class="health-selected__value">{{ selectedAllergens.join('、') }}</text>
-            </view>
-          </view>
-
-          <!-- 上传报告，AI 自动识别（老板批准先只做过敏原报告这一个）。
-               识别结果**必须顾客确认后才写入档案** —— 医疗信息不能让 AI 自己定。 -->
-          <view class="health-upload-card">
-            <view class="health-upload-card__text">
-              <text class="health-upload-card__title">有检测报告？可以拍照自动识别</text>
-              <text class="health-upload-card__desc">过敏原检测报告即可。识别结果会先让你确认，再记进档案。</text>
-            </view>
-            <button
-              class="health-upload-card__btn"
-              :disabled="healthReportExtracting"
-              @tap="pickHealthReport"
-            >{{ healthReportExtracting ? '识别中…' : '上传报告' }}</button>
-          </view>
-
-          <!-- 识别结果确认区：候选过敏原都先不选中，由顾客逐项确认 -->
-          <view v-if="healthReportCandidates.length > 0" class="health-candidate-card">
-            <text class="health-candidate-card__title">识别到以下过敏原，请确认</text>
-            <text class="health-candidate-card__hint">我们只是把报告里的字读出来，最终以你确认为准。</text>
-            <view class="health-tag-list">
-              <text
-                v-for="item in healthReportCandidates"
-                :key="item"
-                class="health-tag"
-                :class="{ 'health-tag--active': selectedAllergens.includes(item) }"
-                @tap="toggleAllergen(item)"
-              >{{ item }}</text>
-            </view>
-            <view v-if="healthReportWarnings.length > 0" class="health-report-warning">
-              <text
-                v-for="(warning, index) in healthReportWarnings"
-                :key="index"
-                class="health-report-warning__text"
-              >· {{ warning }}</text>
-            </view>
-          </view>
-
-          <view class="health-step-actions">
-            <button class="health-skip-btn" @tap="skipHealthStep">暂时跳过，以后再说</button>
-          </view>
-        </view>
-      </view>
-
       <view v-if="showRecommendationSection" class="wizard-recommendation-section">
         <!-- 头像：移到完成页，纯可选（U1 第 3 步） -->
         <view class="avatar-prompt-card">
@@ -821,9 +742,6 @@ const dogCreateApi = {
   create: dogApi.create,
   createWeightRecord: dogApi.createWeightRecord,
   uploadAvatar: dogApi.uploadAvatar,
-  // 健康报告识别（AI）：上传复用健康附件通道，识别走 health/extract-report
-  uploadHealthAttachment: dogApi.uploadHealthAttachment,
-  extractHealthReport: dogApi.extractHealthReport,
 }
 
 interface FormData {
@@ -1374,149 +1292,12 @@ const canPreview = computed(() => {
 const createStepAvailability = computed(() => getCreateStepAvailability(formData.value))
 
 /**
- * 健康信息步骤是否展示。
+ * 健康信息（过敏 / 检查报告 / 体重 / 疫苗）**不在建档流程里**。
  *
- * 放在喂食信息之后、结果页之前：此时顾客已经看到"这些参数会算出什么"，
- * 更容易理解为什么要说过敏（会影响推荐与配方）。
+ * 2026-09-27 一度把它做成建档第 3 步（含"常用过敏原一点即选"和"上传报告 AI 识别"），
+ * 老板否掉了：建档只该收集"算喂食方案必须的参数"，健康记录由顾客到「健康管理」补充。
+ * 那两个降低填写成本的做法没有丢，已整体搬到「健康管理」页的过敏区。
  */
-const showHealthSection = computed(() => currentCreateStep.value === 'health')
-
-/**
- * 常见过敏原：做成一点即选，避免顾客手打。
- * 生产数据显示，让顾客"自由填写"的过敏记录只有 24 只狗填过（0.5%），
- * 而常见过敏原高度集中，标签化能显著降低填写成本。
- */
-const commonAllergens = ['鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉', '鸡蛋', '牛奶', '小麦', '玉米', '大豆', '虾']
-
-const selectedAllergens = computed<string[]>(() =>
-  (formData.value.allergyRecords || [])
-    .map((record: any) => String(record?.allergen || '').trim())
-    .filter(Boolean),
-)
-
-function toggleAllergen(allergen: string) {
-  const current = selectedAllergens.value
-  if (current.includes(allergen)) {
-    formData.value.allergyRecords = (formData.value.allergyRecords || []).filter(
-      (record: any) => String(record?.allergen || '').trim() !== allergen,
-    )
-    return
-  }
-
-  formData.value.allergyRecords = [
-    ...(formData.value.allergyRecords || []),
-    { allergen, notes: '', attachments: [] },
-  ]
-}
-
-/** 顾客手打的其它过敏原（逗号/顿号分隔） */
-const customAllergenInput = ref('')
-
-function commitCustomAllergens() {
-  const raw = customAllergenInput.value.trim()
-  if (!raw) return
-
-  const items = raw
-    .split(/[,，、;；\n\r]/)
-    .map(item => item.trim())
-    .filter(Boolean)
-
-  for (const allergen of items) {
-    if (!selectedAllergens.value.includes(allergen)) {
-      formData.value.allergyRecords = [
-        ...(formData.value.allergyRecords || []),
-        { allergen, notes: '', attachments: [] },
-      ]
-    }
-  }
-
-  customAllergenInput.value = ''
-}
-
-/** AI 报告识别的状态 */
-const healthReportExtracting = ref(false)
-/** 识别出来的候选过敏原（未确认前不写入 allergyRecords） */
-const healthReportCandidates = ref<string[]>([])
-const healthReportWarnings = ref<string[]>([])
-
-/**
- * 上传检测报告并让 AI 提取过敏原。
- *
- * 三步：选图 → 上传到 COS → 调识别接口。
- * 任何一步失败都**降级为手工填写**（老板定的 A2）：只提示，不阻断建档。
- * 识别结果只放进"候选"区，顾客点了才算数 —— AI 不得直接写进档案。
- */
-async function pickHealthReport() {
-  if (healthReportExtracting.value) return
-
-  let filePath = ''
-  try {
-    const chosen: any = await new Promise((resolve, reject) => {
-      uni.chooseImage({
-        count: 1,
-        sizeType: ['compressed'],
-        sourceType: ['album', 'camera'],
-        success: resolve,
-        fail: reject,
-      })
-    })
-    filePath = chosen?.tempFilePaths?.[0] || ''
-  } catch {
-    // 顾客取消选图：静默返回，不算失败
-    return
-  }
-
-  if (!filePath) return
-
-  healthReportExtracting.value = true
-  uni.showLoading({ title: '识别中…' })
-
-  try {
-    const uploaded = await dogCreateApi.uploadHealthAttachment('allergy', filePath)
-    const imageUrl = String(uploaded?.url || '').trim()
-    if (!imageUrl) {
-      throw new Error('上传失败，请重试')
-    }
-
-    const res: any = await dogCreateApi.extractHealthReport({ imageUrl })
-    const data = res?.data || {}
-
-    healthReportCandidates.value = Array.isArray(data.allergies)
-      ? data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim())
-      : []
-    healthReportWarnings.value = Array.isArray(data.warnings) ? data.warnings : []
-
-    uni.hideLoading()
-
-    if (healthReportCandidates.value.length === 0) {
-      // 没读出过敏原：明确告知 + 引导手工填写，而不是静默无反应
-      uni.showToast({
-        title: '没识别到过敏原，请用下面的选项手工补充',
-        icon: 'none',
-        duration: 3000,
-      })
-      return
-    }
-
-    uni.showToast({ title: '识别完成，请确认', icon: 'none' })
-  } catch (error: any) {
-    uni.hideLoading()
-    // 降级为手工填写（A2）：识别不可用不能挡住顾客建档
-    uni.showToast({
-      title: error?.message || '识别失败，请改用下面的选项手工填写',
-      icon: 'none',
-      duration: 3000,
-    })
-  } finally {
-    healthReportExtracting.value = false
-  }
-}
-
-/** 顾客选择「暂时跳过」：不做任何标记，直接进入结果页 */
-function skipHealthStep() {
-  trackCreateStepCompleted('health')
-  setCreateStep(getNextCreateStep('health'))
-}
 const showBasicSection = computed(() => currentCreateStep.value === 'basic')
 const showFeedingSection = computed(() => currentCreateStep.value === 'feeding')
 const showRecommendationSection = computed(() => currentCreateStep.value === 'recommendation')
@@ -1731,7 +1512,13 @@ function trackCreateStepCompleted(step: DogProfileCreateStep) {
   })
 }
 
-/** 建档时是否带了任何健康信息（病史/体检/过敏/饮食提醒） */
+/**
+ * 建档时是否带了任何健康信息（病史/体检/过敏/饮食提醒）。
+ *
+ * 建档流程已不含健康信息（2026-09-27 老板决定），这里是**如实记录**而不是判断：
+ * 结果恒为 false，于是每次建档都会上报一次"建档未带健康信息"。
+ * 后台「狗档案转化分析」靠它统计"健康记录有多少来自建档之外"。
+ */
 function hasAnyHealthInput() {
   const form = formData.value
   const hasRecords = [form.medicalRecords, form.checkupRecords, form.allergyRecords]
@@ -1976,10 +1763,6 @@ function setCreateStep(step: DogProfileCreateStep) {
 
 function getPreviousCreateStep(step: DogProfileCreateStep): DogProfileCreateStep {
   if (step === 'recommendation') {
-    return 'health'
-  }
-
-  if (step === 'health') {
     return 'feeding'
   }
 
@@ -2573,13 +2356,6 @@ async function handleCreatePrimaryAction() {
 
     trackCreateStepCompleted('feeding')
     setCreateStep(getNextCreateStep('feeding'))
-    return
-  }
-
-  if (currentCreateStep.value === 'health') {
-    // 健康信息可跳过：这里不做任何必填校验，直接把顾客填的（可能为空）带到结果页
-    trackCreateStepCompleted('health')
-    setCreateStep(getNextCreateStep('health'))
     return
   }
 
@@ -4248,178 +4024,6 @@ async function submit() {
   margin-top: 5rpx;
 }
 
-/* 餐数的后果提示：这是老板定稿的措辞，要让人看见，但不能像警告 */
-/* 健康信息步骤：一点即选，避免手打（让顾客"自由填写"的过敏记录生产里只有 0.5% 的狗填过） */
-.health-tag-section {
-  margin-top: 20rpx;
-}
-
-.health-tag-section__title {
-  display: block;
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-.health-tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-  margin-top: 16rpx;
-}
-
-.health-tag {
-  padding: 14rpx 28rpx;
-  font-size: 26rpx;
-  color: #4a4638;
-  background: #f4f6ec;
-  border: 1rpx solid #e3e6d4;
-  border-radius: 999rpx;
-}
-
-.health-tag--active {
-  color: #f6efe0;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
-  border-color: #d8bc85;
-}
-
-.health-custom-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  margin-top: 20rpx;
-}
-
-.health-custom-input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.health-custom-add {
-  flex: 0 0 auto;
-  font-size: 26rpx;
-  color: #b08d4f;
-}
-
-.health-selected {
-  margin-top: 16rpx;
-  padding: 14rpx 20rpx;
-  background: #f6efe0;
-  border: 1rpx solid #e6d7b8;
-  border-radius: 12rpx;
-}
-
-.health-selected__label {
-  font-size: 24rpx;
-  color: #8a6f3d;
-}
-
-.health-selected__value {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-/* 上传报告（AI 识别）：主入口，做得显眼一些 */
-.health-upload-card {
-  margin-top: 28rpx;
-  padding: 24rpx;
-  background: #f7f9f1;
-  border: 1rpx dashed #cddbbe;
-  border-radius: 16rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.health-upload-card__title {
-  display: block;
-  font-size: 27rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-}
-
-.health-upload-card__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #6b6653;
-}
-
-.health-upload-card__btn {
-  height: 76rpx;
-  line-height: 76rpx;
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #f6efe0;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
-  border-radius: 999rpx;
-}
-
-.health-upload-card__btn::after {
-  border: none;
-}
-
-.health-upload-card__btn[disabled] {
-  opacity: 0.6;
-}
-
-/* 识别结果确认区 */
-.health-candidate-card {
-  margin-top: 24rpx;
-  padding: 24rpx;
-  background: #f6efe0;
-  border: 1rpx solid #e6d7b8;
-  border-radius: 16rpx;
-}
-
-.health-candidate-card__title {
-  display: block;
-  font-size: 27rpx;
-  font-weight: 600;
-  color: #26261f;
-}
-
-.health-candidate-card__hint {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #8a6f3d;
-}
-
-.health-report-warning {
-  margin-top: 16rpx;
-}
-
-.health-report-warning__text {
-  display: block;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #8a6f3d;
-}
-
-.health-step-actions {
-  margin-top: 28rpx;
-  display: flex;
-  justify-content: center;
-}
-
-.health-skip-btn {
-  padding: 0 40rpx;
-  height: 76rpx;
-  line-height: 76rpx;
-  font-size: 26rpx;
-  color: #6b6653;
-  background: #f4f6ec;
-  border: 1rpx solid #e3e6d4;
-  border-radius: 999rpx;
-}
-
-.health-skip-btn::after {
-  border: none;
-}
 
 /* 「还没选择」的如实说明：不阻断流程，只讲清后果 */
 .feeding-unselected-hint {

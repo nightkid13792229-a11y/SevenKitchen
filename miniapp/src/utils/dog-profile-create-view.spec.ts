@@ -172,13 +172,28 @@ describe('create step boundaries', () => {
     expect(normalizeCreateTreatLevel('EXACT_KCAL')).toBe('LOW')
   })
 
-  it('restores health drafts back to recommendation until a fresh result is regenerated', () => {
+  it('把「健康信息」时代的旧草稿恢复到结果页，而不是打回第 1 步', () => {
     expect(resolveCreateDraftStep('health', {
       name: '七七',
       breedId: '550e8400-e29b-41d4-a716-446655440000',
       birthday: '2021-01-01',
       currentWeightKg: '8.6',
       // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+      gender: 'MALE',
+      isNeutered: true,
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: '2',
+      treatLevel: 'LOW',
+    })).toBe('recommendation')
+  })
+
+  it('结果页草稿仍恢复到结果页', () => {
+    expect(resolveCreateDraftStep('recommendation', {
+      name: '七七',
+      breedId: '550e8400-e29b-41d4-a716-446655440000',
+      birthday: '2021-01-01',
+      currentWeightKg: '8.6',
       gender: 'MALE',
       isNeutered: true,
       bcsScore: 5,

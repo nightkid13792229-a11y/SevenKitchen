@@ -67,6 +67,14 @@ type AllergyRecordCreatePayload = {
   attachments?: string[]
 }
 
+type VaccineRecordCreatePayload = {
+  vaccineName: string
+  vaccinationDate: string
+  nextDueDate?: string | null
+  notes?: string | null
+  status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+}
+
 const healthRecordCrud = <
   TCreatePayload,
   TUpdatePayload = Partial<TCreatePayload>,
@@ -96,6 +104,10 @@ export const dogApi = {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),
     allergy: healthRecordCrud<AllergyRecordCreatePayload>('allergies'),
+    // 疫苗记录（2026-09-27 加入「健康管理」板块）：
+    // 后端 /dogs/:dogId/vaccines 早就有了，但顾客端一直没有入口 ——
+    // 生产 4544 只狗里疫苗记录为 0 条。
+    vaccine: healthRecordCrud<VaccineRecordCreatePayload>('vaccines'),
   },
   uploadAvatar: (dogId: string, filePath: string): Promise<string> =>
     new Promise((resolve, reject) => {

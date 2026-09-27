@@ -1,0 +1,806 @@
+<template>
+  <view class="vaccine-section">
+    <view class="vaccine-section__header">
+      <view class="vaccine-section__heading">
+        <text class="vaccine-section__title">疫苗管理</text>
+        <text class="vaccine-section__desc">
+          记录每次接种与下次到期日，到期前这里会提醒你。
+        </text>
+      </view>
+      <text class="vaccine-section__count">{{ records.length }} 条</text>
+    </view>
+
+    <view v-if="dueSummaryText" class="vaccine-section__due-banner">
+      <text class="vaccine-section__due-text">{{ dueSummaryText }}</text>
+    </view>
+
+    <view v-if="loading" class="vaccine-section__empty">
+      <text class="vaccine-section__empty-title">疫苗记录加载中</text>
+    </view>
+
+    <view v-else-if="records.length === 0" class="vaccine-section__empty">
+      <text class="vaccine-section__empty-title">还没有疫苗记录</text>
+      <text class="vaccine-section__empty-desc">
+        记下疫苗名和接种日期，到期日我们会替你算着。
+      </text>
+    </view>
+
+    <view
+      v-for="(record, index) in records"
+      :key="record.id || `draft-${index}`"
+      class="vaccine-card"
+    >
+      <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
+        <view class="vaccine-card__summary">
+          <view class="vaccine-card__title-row">
+            <text class="vaccine-card__name">{{ draftOf(record, index).vaccineName || '未填疫苗名' }}</text>
+            <text class="vaccine-card__status" :class="statusClass(draftOf(record, index))">
+              {{ statusLabel(draftOf(record, index).status) }}
+            </text>
+          </view>
+          <text class="vaccine-card__detail">
+            接种 {{ draftOf(record, index).vaccinationDate || '未填日期' }}
+          </text>
+          <text v-if="dueHint(draftOf(record, index))" class="vaccine-card__due" :class="dueClass(draftOf(record, index))">
+            {{ dueHint(draftOf(record, index)) }}
+          </text>
+        </view>
+        <text class="vaccine-card__toggle">
+          {{ expandedIndex === index ? '收起' : '展开' }}
+        </text>
+      </view>
+
+      <view v-if="expandedIndex === index" class="vaccine-card__body">
+        <view class="field-group">
+          <text class="field-label">疫苗名称</text>
+          <input
+            class="field-input"
+            type="text"
+            placeholder="例如：狂犬疫苗"
+            :value="draftOf(record, index).vaccineName"
+            @input="updateDraft(index, 'vaccineName', $event.detail.value)"
+          />
+          <view class="vaccine-name-tags">
+            <text
+              v-for="name in commonVaccineNames"
+              :key="name"
+              class="vaccine-name-tag"
+              @tap="updateDraft(index, 'vaccineName', name)"
+            >{{ name }}</text>
+          </view>
+        </view>
+
+        <view class="field-group">
+          <text class="field-label">接种日期</text>
+          <picker
+            mode="date"
+            :value="draftOf(record, index).vaccinationDate"
+            @change="updateDraft(index, 'vaccinationDate', $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ draftOf(record, index).vaccinationDate || '请选择接种日期' }}
+            </view>
+          </picker>
+        </view>
+
+        <view class="field-group">
+          <text class="field-label">下次到期日（可选）</text>
+          <picker
+            mode="date"
+            :value="draftOf(record, index).nextDueDate || today"
+            @change="updateDraft(index, 'nextDueDate', $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ draftOf(record, index).nextDueDate || '不填则不提醒' }}
+            </view>
+          </picker>
+          <text
+            v-if="draftOf(record, index).nextDueDate"
+            class="field-inline-action"
+            @tap="updateDraft(index, 'nextDueDate', '')"
+          >清除到期日</text>
+        </view>
+
+        <view class="field-group">
+          <text class="field-label">状态</text>
+          <picker
+            mode="selector"
+            :range="statusOptions"
+            range-key="label"
+            :value="statusIndex(draftOf(record, index).status)"
+            @change="updateDraft(index, 'status', statusValueAt($event.detail.value))"
+          >
+            <view class="field-picker">{{ statusLabel(draftOf(record, index).status) }}</view>
+          </picker>
+        </view>
+
+        <view class="field-group">
+          <text class="field-label">备注（可选）</text>
+          <textarea
+            class="field-textarea"
+            placeholder="例如：接种机构、批号、接种后反应"
+            :value="draftOf(record, index).notes"
+            @input="updateDraft(index, 'notes', $event.detail.value)"
+          />
+        </view>
+
+        <view class="vaccine-card__actions">
+          <button
+            v-if="record.id"
+            class="vaccine-card__action vaccine-card__action--ghost"
+            :disabled="isBusy"
+            @tap="removeRecord(record, index)"
+          >删除</button>
+          <button
+            class="vaccine-card__action vaccine-card__action--primary"
+            :disabled="isBusy"
+            @tap="saveRecord(record, index)"
+          >{{ savingIndex === index ? '保存中…' : '保存' }}</button>
+        </view>
+      </view>
+    </view>
+
+    <button class="vaccine-section__add" :disabled="loading || isBusy" @tap="addRecord">
+      新增疫苗记录
+    </button>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue'
+import { dogApi } from '../../api/dogs'
+
+interface VaccineRecord {
+  id: string
+  vaccineName: string
+  vaccinationDate: string
+  nextDueDate: string
+  notes: string
+  status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+}
+
+interface VaccineDraft {
+  vaccineName: string
+  vaccinationDate: string
+  nextDueDate: string
+  notes: string
+  status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+}
+
+const props = defineProps<{
+  dogId: string
+}>()
+
+/** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
+const commonVaccineNames = [
+  '狂犬疫苗',
+  '犬瘟热',
+  '犬细小病毒',
+  '犬传染性肝炎',
+  '犬副流感',
+  '犬腺病毒',
+  '犬窝咳',
+  '钩端螺旋体',
+]
+
+const STATUS_OPTIONS = [
+  { value: 'COMPLETED', label: '已接种' },
+  { value: 'SCHEDULED', label: '已预约' },
+  { value: 'OVERDUE', label: '已逾期' },
+] as const
+
+const statusOptions = STATUS_OPTIONS.map(option => ({ label: option.label }))
+
+const records = ref<VaccineRecord[]>([])
+const drafts = reactive<Record<string, VaccineDraft>>({})
+const loading = ref(false)
+const expandedIndex = ref(-1)
+const savingIndex = ref(-1)
+const deletingKey = ref('')
+const isBusy = computed(() => savingIndex.value >= 0 || Boolean(deletingKey.value))
+
+const today = getTodayDateString()
+
+function getTodayDateString() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
+  const status = String(record.status || '')
+  return {
+    vaccineName: String(record.vaccineName || ''),
+    vaccinationDate: String(record.vaccinationDate || '').slice(0, 10),
+    nextDueDate: String(record.nextDueDate || '').slice(0, 10),
+    notes: String(record.notes || ''),
+    status: (STATUS_OPTIONS.some(option => option.value === status)
+      ? status
+      : 'COMPLETED') as VaccineDraft['status'],
+  }
+}
+
+function draftKey(record: VaccineRecord, index: number) {
+  return record.id || `draft-${index}`
+}
+
+/**
+ * 记录变化后统一重建草稿（新增 / 载入 / 删除都走这里）。
+ *
+ * 草稿绝不能"边渲染边创建"：那等于在渲染期间改响应式状态，
+ * 索引一旦错位（删了中间一条）就会把 A 的编辑内容写到 B 身上。
+ */
+function ensureDrafts() {
+  for (const key of Object.keys(drafts)) {
+    delete drafts[key]
+  }
+
+  records.value.forEach((record, index) => {
+    drafts[draftKey(record, index)] = toDraft(record)
+  })
+}
+
+function draftOf(record: VaccineRecord, index: number): VaccineDraft {
+  return drafts[draftKey(record, index)] || toDraft(record)
+}
+
+function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+  ;(draft as Record<string, string>)[field] = value
+}
+
+function toggleExpanded(record: VaccineRecord, index: number) {
+  expandedIndex.value = expandedIndex.value === index ? -1 : index
+}
+
+function statusLabel(status: string) {
+  return STATUS_OPTIONS.find(option => option.value === status)?.label || '已接种'
+}
+
+function statusIndex(status: string) {
+  const index = STATUS_OPTIONS.findIndex(option => option.value === status)
+  return index >= 0 ? index : 0
+}
+
+function statusValueAt(index: string | number) {
+  return STATUS_OPTIONS[Number(index)]?.value || 'COMPLETED'
+}
+
+function statusClass(draft: VaccineDraft) {
+  return {
+    'vaccine-card__status--done': draft.status === 'COMPLETED',
+    'vaccine-card__status--scheduled': draft.status === 'SCHEDULED',
+    'vaccine-card__status--overdue': draft.status === 'OVERDUE',
+  }
+}
+
+/** 距下次到期还有几天（负数 = 已过期） */
+function daysUntil(dateText: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    return null
+  }
+
+  const target = new Date(`${dateText}T00:00:00`)
+  const base = new Date(`${getTodayDateString()}T00:00:00`)
+  if (Number.isNaN(target.getTime())) {
+    return null
+  }
+
+  return Math.round((target.getTime() - base.getTime()) / 86400000)
+}
+
+function dueHint(draft: VaccineDraft) {
+  if (!draft.nextDueDate) {
+    return ''
+  }
+
+  const days = daysUntil(draft.nextDueDate)
+  if (days === null) {
+    return ''
+  }
+
+  if (days < 0) {
+    return `已过期 ${Math.abs(days)} 天（到期日 ${draft.nextDueDate}）`
+  }
+
+  if (days === 0) {
+    return `今天到期（${draft.nextDueDate}）`
+  }
+
+  return `还有 ${days} 天到期（${draft.nextDueDate}）`
+}
+
+function dueClass(draft: VaccineDraft) {
+  const days = draft.nextDueDate ? daysUntil(draft.nextDueDate) : null
+  return {
+    'vaccine-card__due--soon': days !== null && days >= 0 && days <= 30,
+    'vaccine-card__due--overdue': days !== null && days < 0,
+  }
+}
+
+/**
+ * 顶部提醒条：只统计"未来 30 天内到期"和"已经过期"的，
+ * 不做推送通知 —— 微信订阅消息需要顾客逐次授权，这里先给页面内的提醒。
+ */
+const dueSummaryText = computed(() => {
+  const overdue: string[] = []
+  const upcoming: string[] = []
+
+  for (const record of records.value) {
+    const draft = toDraft(record)
+    if (!draft.nextDueDate) continue
+    const days = daysUntil(draft.nextDueDate)
+    if (days === null) continue
+
+    if (days < 0) {
+      overdue.push(draft.vaccineName || '未填疫苗名')
+    } else if (days <= 30) {
+      upcoming.push(draft.vaccineName || '未填疫苗名')
+    }
+  }
+
+  const parts: string[] = []
+  if (overdue.length > 0) {
+    parts.push(`${overdue.join('、')} 已过期`)
+  }
+  if (upcoming.length > 0) {
+    parts.push(`${upcoming.join('、')} 30 天内到期`)
+  }
+
+  return parts.join('；')
+})
+
+watch(
+  () => props.dogId,
+  (dogId) => {
+    void loadRecords(dogId)
+  },
+  { immediate: true },
+)
+
+async function loadRecords(dogId = props.dogId) {
+  if (!dogId) {
+    records.value = []
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const res: any = await dogApi.healthRecords.vaccine.list(dogId)
+    if (res?.code !== 0) {
+      throw new Error(res?.message || '加载疫苗记录失败')
+    }
+
+    const list = res?.data?.records
+    records.value = (Array.isArray(list) ? list : [])
+      .map((item: any) => ({
+        id: String(item?.id || ''),
+        vaccineName: String(item?.vaccineName || ''),
+        vaccinationDate: String(item?.vaccinationDate || '').slice(0, 10),
+        nextDueDate: String(item?.nextDueDate || '').slice(0, 10),
+        notes: String(item?.notes || ''),
+        status: toDraft(item).status,
+      }))
+      // 最近接种的排在最前：接口按写入顺序返回，那个顺序对顾客没有意义
+      .sort((a: VaccineRecord, b: VaccineRecord) =>
+        b.vaccinationDate.localeCompare(a.vaccinationDate))
+
+    // 记录刷新后重建草稿，避免留下已被删除记录的编辑态
+    ensureDrafts()
+    if (expandedIndex.value >= records.value.length) {
+      expandedIndex.value = -1
+    }
+  } catch (error: any) {
+    records.value = []
+    ensureDrafts()
+    uni.showToast({ title: error?.message || '加载疫苗记录失败', icon: 'none' })
+  } finally {
+    loading.value = false
+  }
+}
+
+function addRecord() {
+  const draft: VaccineRecord = {
+    id: '',
+    vaccineName: '',
+    vaccinationDate: today,
+    nextDueDate: '',
+    notes: '',
+    status: 'COMPLETED',
+  }
+
+  records.value = [...records.value, draft]
+  ensureDrafts()
+  expandedIndex.value = records.value.length - 1
+}
+
+function buildPayload(draft: VaccineDraft) {
+  const payload: Record<string, any> = {
+    vaccineName: draft.vaccineName.trim(),
+    vaccinationDate: draft.vaccinationDate,
+    status: draft.status,
+    notes: draft.notes.trim() || null,
+  }
+
+  // 空到期日不能传空字符串（后端按日期校验），直接不带这个字段
+  if (draft.nextDueDate) {
+    payload.nextDueDate = draft.nextDueDate
+  }
+
+  return payload
+}
+
+async function saveRecord(record: VaccineRecord, index: number) {
+  if (isBusy.value) return
+
+  const draft = draftOf(record, index)
+  if (!draft.vaccineName.trim()) {
+    uni.showToast({ title: '请填写疫苗名称', icon: 'none' })
+    return
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) {
+    uni.showToast({ title: '请选择接种日期', icon: 'none' })
+    return
+  }
+
+  savingIndex.value = index
+
+  try {
+    const payload = buildPayload(draft)
+    const res: any = record.id
+      ? await dogApi.healthRecords.vaccine.update(props.dogId, record.id, payload)
+      : await dogApi.healthRecords.vaccine.create(props.dogId, payload)
+
+    if (res?.code !== 0) {
+      throw new Error(res?.message || '保存失败')
+    }
+
+    uni.showToast({ title: '已保存', icon: 'success' })
+    expandedIndex.value = -1
+    await loadRecords()
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
+  } finally {
+    savingIndex.value = -1
+  }
+}
+
+function removeRecord(record: VaccineRecord, index: number) {
+  if (isBusy.value) return
+
+  const draft = draftOf(record, index)
+  const name = draft.vaccineName || '这条疫苗记录'
+
+  uni.showModal({
+    title: '删除疫苗记录？',
+    content: `删除后「${name}」的接种与到期信息都会消失，不能恢复。`,
+    confirmText: '删除',
+    cancelText: '保留',
+    success: (result) => {
+      if (result.confirm) {
+        void doRemove(record)
+      }
+    },
+  })
+}
+
+async function doRemove(record: VaccineRecord) {
+  if (!record.id) {
+    records.value = records.value.filter(item => item !== record)
+    ensureDrafts()
+    expandedIndex.value = -1
+    return
+  }
+
+  deletingKey.value = record.id
+
+  try {
+    const res: any = await dogApi.healthRecords.vaccine.delete(props.dogId, record.id)
+    if (res?.code !== 0) {
+      throw new Error(res?.message || '删除失败')
+    }
+
+    uni.showToast({ title: '已删除', icon: 'success' })
+    expandedIndex.value = -1
+    await loadRecords()
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '删除失败，请重试', icon: 'none' })
+  } finally {
+    deletingKey.value = ''
+  }
+}
+</script>
+
+<style scoped>
+.vaccine-section {
+  padding: 30rpx;
+  border-radius: 30rpx;
+  background: #fbfcf7;
+  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.06);
+}
+
+.vaccine-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.vaccine-section__heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vaccine-section__title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.vaccine-section__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+.vaccine-section__count {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #968f6d;
+}
+
+.vaccine-section__due-banner {
+  margin-top: 18rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 18rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+}
+
+.vaccine-section__due-text {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
+}
+
+.vaccine-section__empty {
+  margin-top: 22rpx;
+  padding: 30rpx 0;
+  text-align: center;
+}
+
+.vaccine-section__empty-title {
+  display: block;
+  font-size: 26rpx;
+  color: #6b6653;
+}
+
+.vaccine-section__empty-desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  color: #968f6d;
+}
+
+.vaccine-card {
+  margin-top: 20rpx;
+  padding: 22rpx;
+  border-radius: 22rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e3e6d4;
+}
+
+.vaccine-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.vaccine-card__summary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vaccine-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.vaccine-card__name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #26261f;
+}
+
+.vaccine-card__status {
+  padding: 4rpx 16rpx;
+  font-size: 21rpx;
+  border-radius: 999rpx;
+}
+
+.vaccine-card__status--done {
+  color: #1e3a2f;
+  background: #e6efe1;
+}
+
+.vaccine-card__status--scheduled {
+  color: #8a6f3d;
+  background: #f6efe0;
+}
+
+.vaccine-card__status--overdue {
+  color: #8c4a3a;
+  background: #f7e6e0;
+}
+
+.vaccine-card__detail {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
+.vaccine-card__due {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #6b6653;
+}
+
+.vaccine-card__due--soon {
+  color: #8a6f3d;
+  font-weight: 600;
+}
+
+.vaccine-card__due--overdue {
+  color: #8c4a3a;
+  font-weight: 600;
+}
+
+.vaccine-card__toggle {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #b08d4f;
+}
+
+.vaccine-card__body {
+  margin-top: 22rpx;
+}
+
+.field-group + .field-group {
+  margin-top: 24rpx;
+}
+
+.field-label {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #6b6653;
+}
+
+.field-input {
+  margin-top: 10rpx;
+  width: 100%;
+  height: 84rpx;
+  box-sizing: border-box;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #26261f;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 20rpx;
+}
+
+.field-picker {
+  margin-top: 10rpx;
+  min-height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #26261f;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 20rpx;
+}
+
+.field-textarea {
+  margin-top: 10rpx;
+  width: 100%;
+  min-height: 150rpx;
+  box-sizing: border-box;
+  padding: 20rpx 24rpx;
+  font-size: 28rpx;
+  color: #26261f;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 20rpx;
+}
+
+.field-inline-action {
+  display: inline-block;
+  margin-top: 12rpx;
+  font-size: 23rpx;
+  color: #b08d4f;
+}
+
+.vaccine-name-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.vaccine-name-tag {
+  padding: 10rpx 22rpx;
+  font-size: 23rpx;
+  color: #4a4638;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 999rpx;
+}
+
+.vaccine-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 26rpx;
+}
+
+.vaccine-card__action {
+  margin: 0;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+}
+
+.vaccine-card__action::after {
+  border: none;
+}
+
+.vaccine-card__action--ghost {
+  flex: 0 0 auto;
+  padding: 0 36rpx;
+  color: #6b6653;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+}
+
+.vaccine-card__action--primary {
+  flex: 1 1 auto;
+  font-weight: 600;
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+}
+
+.vaccine-card__action[disabled] {
+  opacity: 0.5;
+}
+
+.vaccine-section__add {
+  margin-top: 24rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  background: #eef2e4;
+  border: 1rpx solid #dde3cd;
+  border-radius: 999rpx;
+}
+
+.vaccine-section__add::after {
+  border: none;
+}
+</style>

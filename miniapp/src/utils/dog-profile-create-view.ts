@@ -289,6 +289,9 @@ export function resolveCreateDraftStep(step: string, form: Record<string, any>) 
     return 'feeding'
   }
 
+  // 旧草稿兼容：`health` 是 2026-09-27 短暂存在过、随后被老板删除的建档步骤。
+  // 删步之后落到这里会一路掉回 'basic' —— 顾客明明填完了却被要求重填第 1 步。
+  // 喂食信息已就绪，就直接恢复到结果页（原健康信息步骤的下一步）。
   if (step === 'health' || step === 'recommendation') {
     return 'recommendation'
   }

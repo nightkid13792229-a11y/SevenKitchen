@@ -233,114 +233,78 @@ describe('dog-create runtime regressions', () => {
   })
 
   /**
-   * 建档新增「健康信息」第 3 步（2026-09-27，U1 第 6 步）
+   * 建档流程**不含**健康信息（2026-09-27 老板决定）
    *
-   * 原先建档三步里一个字都没提健康信息，而它只藏在「健康管理」页 ——
-   * 那个入口要去「编辑基础信息」里找。实测 93.6% 的狗狗档案完全没有健康信息
-   * （过敏仅 24 只 / 4544，占 0.5%）。
-   * 建档是顾客注意力最集中的时刻，因此把它做成可跳过的第 3 步，并一点即选。
+   * 历史：先做过「健康信息」第 3 步（可跳过 + 一点即选 + 上传报告 AI 识别）。
+   * 老板随后否掉了整个做法 —— 建档是顾客只想尽快填完的时刻，
+   * 往里塞健康信息就是在给建档加填写成本。健康记录改由顾客主动去
+   * 「健康管理」板块补充，那两个降低填写成本的做法一并搬了过去。
    */
-  describe('健康信息步骤', () => {
+  describe('建档流程不含健康信息', () => {
     const readPage = () =>
       readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
 
-    it('步骤顺序为 基础信息 → 喂食信息 → 健康管理 → 结果页', () => {
+    it('步骤只有 基础信息 → 喂食信息 → 结果页', () => {
       const constants = readFileSync(
         resolve(process.cwd(), 'src/constants/dog-profile.ts'),
         'utf-8',
       )
 
-      expect(constants).toContain(
-        "['basic', 'feeding', 'health', 'recommendation']",
-      )
+      expect(constants).toContain("['basic', 'feeding', 'recommendation']")
+      expect(constants).not.toContain("'health'")
     })
 
-    it('可跳过：不填任何健康信息也能进入结果页', () => {
+    it('建档页里没有任何健康信息步骤的残留（模板 / 状态 / 样式）', () => {
       const source = readPage()
 
-      expect(source).toContain('skipHealthStep')
-      expect(source).toContain('暂时跳过')
-      // 健康步骤的推进分支里不得出现必填拦截
-      const healthBranch =
-        source.match(/currentCreateStep\.value === 'health'[\s\S]*?return\n  \}/)?.[0] || ''
-      expect(healthBranch).not.toBe('')
-      expect(healthBranch).not.toContain('showCreateStepBlockedToast')
-    })
-
-    it('常见过敏原一点即选，不用顾客手打', () => {
-      const source = readPage()
-
-      expect(source).toContain('commonAllergens')
-      expect(source).toContain('toggleAllergen')
-      expect(source).toContain('selectedAllergens')
-      // 至少要覆盖最常见的几类
-      for (const allergen of ['鸡肉', '牛肉', '鸡蛋', '牛奶']) {
-        expect(source).toContain(`'${allergen}'`)
+      for (const dead of [
+        'showHealthSection',
+        'wizard-step--health',
+        'skipHealthStep',
+        '暂时跳过',
+        '对什么过敏（可多选）',
+        'commonAllergens',
+        'toggleAllergen',
+        'pickHealthReport',
+        'healthReportCandidates',
+        'health-tag-section',
+        'health-skip-btn',
+      ]) {
+        expect(source).not.toContain(dead)
       }
     })
 
-    it('写进的是顾客真正能维护的那份结构化记录', () => {
+    it('建档完成页不推销健康信息（老板：不要提）', () => {
       const source = readPage()
+      const recommendationSection =
+        source.match(/showRecommendationSection[\s\S]*?<StickyActionBar/)?.[0] || ''
 
-      // 必须写 allergyRecords（结构化表），而不是顾客端没人能维护的旧文本字段
-      expect(source).toContain('formData.value.allergyRecords = [')
-      expect(source).toContain("allergen,")
+      expect(recommendationSection).not.toBe('')
+      expect(recommendationSection).not.toContain('健康管理')
+      expect(recommendationSection).not.toContain('过敏')
+    })
+
+    it('AI 报告识别整块搬到了「健康管理」，而不是在建档页留下死代码', () => {
+      const source = readPage()
+      const quickAdd = readFileSync(
+        resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+        'utf-8',
+      )
+
+      // 建档页不再有识别入口
+      expect(source).not.toContain('extractHealthReport')
+      expect(source).not.toContain('uploadHealthAttachment')
+      // 能力没有丢：上传 → 识别 两步搬到了过敏快速添加
+      expect(quickAdd).toContain('dogApi.uploadHealthAttachment(')
+      expect(quickAdd).toContain('dogApi.extractHealthReport(')
     })
   })
 
   /**
-   * 上传报告 → AI 自动识别（2026-09-27，M3b）
-   *
-   * 老板批准「先只做过敏原检测报告这一个」。让顾客自由填写的做法实测失败
-   * （生产 4544 只狗只有 24 只填过过敏原），而过敏是定制食谱的安全底线。
-   *
-   * 三条不能退让的约束：
-   *   1. 识别结果只是**候选**，顾客确认后才写入档案（AI 不得直接落库）
-   *   2. 识别失败**降级为手工填写**，不阻断建档（A2）
-   *   3. 不在服务端做诊断
+   * 接口层：AI 报告识别要跑 OCR + AI，默认 15s 超时不够
    */
-  describe('AI 报告识别', () => {
-    const readPage = () =>
-      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
-
-    it('提供上传入口，并走「上传 → 识别」两步', () => {
-      const source = readPage()
-
-      expect(source).toContain('pickHealthReport')
-      expect(source).toContain('上传报告')
-      expect(source).toContain('dogCreateApi.uploadHealthAttachment(')
-      expect(source).toContain('dogCreateApi.extractHealthReport(')
-    })
-
-    it('识别结果先放进候选区，顾客点了才写进档案', () => {
-      const source = readPage()
-
-      expect(source).toContain('healthReportCandidates')
-      expect(source).toContain('识别到以下过敏原，请确认')
-      // 候选点击走的就是 toggleAllergen（写入 allergyRecords 的唯一路径）
-      const candidateBlock =
-        source.match(/health-candidate-card[\s\S]*?<\/view>/)?.[0] || ''
-      expect(candidateBlock).toContain('toggleAllergen')
-    })
-
-    it('识别失败时降级为手工填写，不阻断建档', () => {
-      const source = readPage()
-
-      expect(source).toContain('手工补充')
-      // 失败路径只提示，不得抛出让流程中断，也不得弹必填拦截
-      const catchBlock =
-        source.match(/catch \(error: any\) \{[\s\S]*?healthReportExtracting.value = false/)?.[0] || ''
-      expect(catchBlock).not.toBe('')
-      expect(catchBlock).not.toContain('showCreateStepBlockedToast')
-    })
-
-    it('顾客取消选图不算失败（静默返回）', () => {
-      const source = readPage()
-
-      expect(source).toContain('顾客取消选图：静默返回，不算失败')
-    })
-
-    it('接口层带上了超时与错误提示抑制（识别要跑 OCR + AI）', () => {
+  describe('健康报告识别接口配置', () => {
+    it('带上了超时与错误提示抑制', () => {
       const apiSource = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
 
       expect(apiSource).toContain("url: '/health/extract-report'")
@@ -470,21 +434,23 @@ describe('dog-create runtime regressions', () => {
    * 老板要求：
    *   1. 步骤文案由「健康信息」改为「健康管理」
    *   2. 标题「有什么要注意的吗」与其说明小字都去掉
-   *   3. **食材偏好不属于健康信息** —— 喜欢/不吃的食材要单独填写，
-   *      不应出现在这一步
+   *   3. **食材偏好不属于健康信息** —— 喜欢/不吃的食材要单独填写
+   *
+   * 后续（同日）：整个健康管理步骤已从建档流程删除，上述要求随之下沉为
+   * 「建档页不出现这些字样」的守卫，真正的承载方是「健康管理」板块。
    */
   describe('健康管理步骤的边界', () => {
     const readPage = () =>
       readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
 
-    it('步骤名是「健康管理」', () => {
+    it('步骤条里不再有健康管理这一步，也不再叫「健康信息」', () => {
       const header = readFileSync(
         resolve(process.cwd(), 'src/components/dog-profile/StepProgressHeader.vue'),
         'utf-8',
       )
 
-      expect(header).toContain("health: '健康管理'")
       expect(header).not.toContain('健康信息')
+      expect(header).not.toContain('健康管理')
     })
 
     it('不再有「有什么要注意的吗」标题与说明小字', () => {
@@ -496,24 +462,16 @@ describe('dog-create runtime regressions', () => {
       )
     })
 
-    it('不包含食材偏好（那不属于健康信息）', () => {
+    it('建档页不含任何食材偏好输入（那不属于喂食参数）', () => {
       const source = readPage()
-      const healthSection =
-        source.match(/wizard-step--health[\s\S]*?health-step-actions/)?.[0] || ''
+      // 只看渲染部分：字段注释里出现"不吃的食材"是允许的
+      const template = source.slice(0, source.indexOf('<script'))
 
-      expect(healthSection).not.toBe('')
-      expect(healthSection).not.toContain('喜欢吃的食材')
-      expect(healthSection).not.toContain('不吃的食材')
+      expect(template).not.toContain('喜欢吃的食材')
+      expect(template).not.toContain('不吃的食材')
       // 辅助代码一并移除，避免留死代码
       expect(source).not.toContain('commonFoodTags')
       expect(source).not.toContain('toggleFoodTag')
-    })
-
-    it('过敏选择仍然是这一步的核心内容', () => {
-      const source = readPage()
-
-      expect(source).toContain('对什么过敏（可多选）')
-      expect(source).toContain('commonAllergens')
     })
   })
 })

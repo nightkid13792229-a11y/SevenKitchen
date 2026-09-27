@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DOG_PROFILE_CREATE_STEPS } from '../constants/dog-profile'
 import {
   buildDogCreatePayload,
   buildDogEditPayload,
@@ -91,25 +92,18 @@ describe('dog-profile-form', () => {
     expect(canAdvanceCreateStep('basic', availability)).toBe(false)
   })
 
-  it('advances feeding to the health step, then health to recommendation', () => {
-    // 2026-09-27：建档新增「健康信息」第 3 步（可跳过），插在喂食信息与结果页之间
-    expect(getNextCreateStep('feeding')).toBe('health')
-    expect(getNextCreateStep('health')).toBe('recommendation')
+  it('advances feeding straight to the result page (建档不含健康信息步骤)', () => {
+    // 2026-09-27 老板决定：健康信息不属于建档流程，`health` 步骤已整步删除。
+    expect([...DOG_PROFILE_CREATE_STEPS]).toEqual(['basic', 'feeding', 'recommendation'])
+    expect(getNextCreateStep('feeding')).toBe('recommendation')
   })
 
   it('keeps recommendation as the final create step', () => {
     expect(getNextCreateStep('recommendation')).toBe('recommendation')
   })
 
-  it('健康信息永远可进入（它是可跳过的，不构成门槛）', () => {
-    const blocked = {
-      basic: false,
-      feeding: false,
-      health: true,
-      recommendation: false,
-    }
-
-    expect(canAdvanceCreateStep('health', blocked)).toBe(true)
+  it('建档流程里不再有任何健康信息步骤', () => {
+    expect(DOG_PROFILE_CREATE_STEPS as readonly string[]).not.toContain('health')
   })
 
   it('allows recommendation to complete when create prerequisites are complete even without preview state', () => {

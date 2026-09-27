@@ -229,11 +229,6 @@ export function canAdvanceCreateStep(
     return availability.recommendation
   }
 
-  if (step === 'health') {
-    // 健康信息可跳过：无条件允许进入结果页
-    return true
-  }
-
   if (step === 'recommendation') {
     return availability.recommendation
   }

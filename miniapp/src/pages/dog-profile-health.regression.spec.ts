@@ -146,4 +146,57 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('dogApi.updateDietReminders')
     expect(source).not.toContain('dogApi.updateHealthRecords')
   })
+
+  /**
+   * 「健康管理」是健康记录的唯一入口（2026-09-27）
+   *
+   * 建档流程删掉健康信息步骤之后，这一页就是顾客补充过敏 / 检查报告 /
+   * 疫苗 / 体重的**唯一**去处，所以入口必须真的挂上、并且能刷新。
+   */
+  it('过敏类别里挂上了快速添加与报告识别入口', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('AllergyQuickAddSection')
+    expect(page).toContain("v-if=\"activeRecordType === 'allergy'\"")
+    expect(page).toContain(':recorded-allergens="recordedAllergens"')
+    expect(page).toContain('@saved="onAllergenSaved"')
+
+    // 快速添加写在过敏列表上方（切到过敏第一眼就能看到）
+    expect(section).toContain('<slot name="type-extra" />')
+    const slotIndex = section.indexOf('<slot name="type-extra" />')
+    const emptyIndex = section.indexOf('records-section__empty')
+    expect(slotIndex).toBeGreaterThan(-1)
+    expect(slotIndex).toBeLessThan(emptyIndex)
+  })
+
+  it('快速添加落库后把过敏列表拉回来，而不是本地硬塞', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('async function onAllergenSaved()')
+    expect(page).toContain("await loadHealthRecordList('allergy', dogId.value)")
+    // 已记过敏原从接口数据派生，保证与列表一致
+    expect(page).toContain('const recordedAllergens = computed(() => (recordsByType.allergy || [])')
+  })
+
+  it('疫苗管理作为独立卡片挂在「健康管理」页里', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain("import VaccineManagementSection from")
+    expect(page).toContain('<VaccineManagementSection :dog-id="dogId" />')
+    // 文案要如实列出这一页能维护什么
+    expect(page).toContain('过敏、检查报告、疫苗、体重和饮食提醒')
+  })
 })

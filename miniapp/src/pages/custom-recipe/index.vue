@@ -24,7 +24,7 @@
 
       <picker v-else-if="dogOptions.length > 0" mode="selector" :range="dogOptions" range-key="label" @change="onDogChange">
         <view class="picker-input">
-          <text v-if="selectedDog" class="selected-text">{{selectedDog.label}}</text>
+          <text v-if="selectedDog" class="selected-text">{{selectedDogLabel}}</text>
           <text v-else class="placeholder">请选择要定制的狗狗</text>
           <text class="arrow">›</text>
         </view>
@@ -279,6 +279,20 @@ import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 // 状态定义
 const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
+
+/**
+ * 选择器里显示的「狗名 - 品种」。
+ *
+ * 必须**每次渲染都重新拼**，不能用 dogOptions 里那份拼好的 label：
+ * 2026-09-28 真实缺陷 —— 确认定制门槛后会把 PUT 响应合并进 selectedDog，
+ * 那份响应当时漏了 breedName，于是品种行变成"未知品种"，
+ * 而选择器用的是早先拼好的字符串、还显示着正确品种，同一屏自相矛盾。
+ * 派生出来的文字不可能和品种行不一致。
+ */
+const selectedDogLabel = computed(() => {
+  if (!selectedDog.value) return '';
+  return `${selectedDog.value.name || ''} - ${selectedDog.value.breedName || '未知品种'}`;
+});
 const submitting = ref(false);
 /** 未登录标记：与"已登录但还没有狗狗档案"是两个不同的状态，提示语和下一步动作都不一样 */
 const needLogin = ref(false);
@@ -413,13 +427,22 @@ const confirmGate = async () => {
 
     const updated = res?.data?.profile;
     if (updated) {
-      // 就地更新选中项，让门槛立刻通过，不必退出重进
+      // 只合并这一颗按钮真的改过的东西（体况评分 / 活动量 / 每日餐数 + 三项确认）。
+      //
+      // 2026-09-28 真实缺陷：这里原先写的是 `{...selectedDog, ...updated}`，
+      // 整体覆盖。服务端 PUT 响应当时漏回 breedName（null），
+      // 于是确认完门槛，品种就从"柯基"变成"未知品种"。
+      // 门槛只碰这三个字段，就不该让响应里其它字段顺手改写页面上的信息。
       selectedDog.value = {
         ...selectedDog.value,
-        ...updated,
-        value: selectedDog.value.value,
+        bcsScore: updated.bcsScore ?? selectedDog.value.bcsScore,
+        activityLevel: updated.activityLevel ?? selectedDog.value.activityLevel,
+        mealsPerDay: updated.mealsPerDay ?? selectedDog.value.mealsPerDay,
+        bcsScoreConfirmed: true,
+        activityLevelConfirmed: true,
+        mealsPerDayConfirmed: true,
       };
-      syncGateDraftFromDog(updated);
+      syncGateDraftFromDog(selectedDog.value);
     }
     uni.showToast({ title: '已确认，可以继续定制', icon: 'none' });
   } catch (error: any) {
@@ -554,9 +577,11 @@ const loadDogs = async () => {
       const dogs = Array.isArray(res.data) ? res.data : [];
 
       dogOptions.value = dogs.map((dog: any) => ({
+        // 先铺开接口数据，再覆盖 value/label —— 顺序反了的话，
+        // 接口哪天回了同名字段就会把选择器的 value/label 覆盖掉
+        ...dog,
         value: dog.id,
         label: `${dog.name} - ${dog.breedName || '未知品种'}`,
-        ...dog,
       }));
 
       // 无档案时不再弹 toast：页面上已有明确的空态与建档入口，避免重复打扰

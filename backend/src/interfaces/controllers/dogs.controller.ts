@@ -285,10 +285,25 @@ export class DogsController {
       }
     }
 
-    const calcResult = await this.dogService.calcPreview(dog.id);
+    // 试算失败不能连累建档：这条狗此时**已经写进库里了**，
+    // 若在这里抛出去，顾客看到的是"创建失败"，实际档案已经存在 ——
+    // 他会再建一次，于是出现重复档案。详情与更新接口早就是「只警告、不失败」，
+    // 这里补齐成同一口径。
+    let calcResult = null;
+    try {
+      calcResult = await this.dogService.calcPreview(dog.id);
+    } catch (error: any) {
+      console.warn(
+        `[DogsController] Failed to calculate preview for created dog ${dog.id}:`,
+        error.message,
+      );
+    }
 
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(
+        dog,
+        await this.resolveBreedNameMap(dog.breedId),
+      ),
       calcResult,
     };
 
@@ -359,7 +374,7 @@ export class DogsController {
     const response: DogDetailResponseDto = {
       profile: this.mapDogToProfileDto(
         dog,
-        undefined,
+        await this.resolveBreedNameMap(dog.breedId),
         healthRecords.medicalRecords,
         healthRecords.checkupRecords,
         healthRecords.allergyRecords,
@@ -830,8 +845,7 @@ export class DogsController {
     this.assertDogAccessible(dog.ownerId, user);
 
     // Load breed to get breed name
-    const breed = await this.dogBreedRepository.findById(dog.breedId);
-    const breedMap = breed ? new Map([[dog.breedId, breed.name]]) : new Map();
+    const breedMap = await this.resolveBreedNameMap(dog.breedId);
 
     const healthRecords = await this.loadDogHealthRecordDtos(id);
 
@@ -1064,6 +1078,24 @@ export class DogsController {
       // 解析失败不影响档案列表本身
       return undefined;
     }
+  }
+
+  /**
+   * 单只狗狗的「品种名」映射。
+   *
+   * 四个返回档案的接口（列表 / 详情 / 建档 / 更新）**必须给出同一份 breedName**。
+   * 2026-09-28 修复的真实缺陷：建档（POST）与更新（PUT）当时直接调用
+   * `mapDogToProfileDto(dog)` / `mapDogToProfileDto(dog, undefined, ...)`，
+   * 没有传 breedMap，于是这两个接口回的 breedName 恒为 null（除非有自定义品种名）。
+   *
+   * 后果：顾客端「食谱定制」页确认门槛后会把 PUT 响应合并回选中的狗，
+   * 品种就从"柯基"变成"未知品种"——而同一屏顶部的选择器仍显示"面包 - 柯基"
+   * （那是列表阶段拼好的字符串），同一屏自相矛盾。
+   */
+  private async resolveBreedNameMap(breedId: string): Promise<Map<string, string>> {
+    const breed = await this.dogBreedRepository.findById(breedId);
+
+    return breed ? new Map([[breedId, breed.name]]) : new Map();
   }
 
   private mapDogToProfileDto(

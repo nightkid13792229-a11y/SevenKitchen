@@ -259,3 +259,54 @@ describe('custom recipe profile gate', () => {
     expect(submit).not.toMatch(/<text[^>]*>[^<]*影响价格/)
   })
 })
+
+/**
+ * 品种名不能因为确认门槛而变成"未知品种"（2026-09-28）
+ *
+ * 真实缺陷：顾客点「确认并继续」后，页面把 `PUT /dogs/:id` 的响应整体合并进
+ * 选中的狗，而那份响应当时漏回了 `breedName`（null）——
+ * 于是品种行显示"未知品种"，而同一屏顶部的选择器还写着"面包 - 柯基"
+ * （选择器用的是列表阶段拼好的字符串）。同一屏自相矛盾。
+ *
+ * 三层都锁住：服务端补齐字段（见 backend 的 dogs.controller.breed-name.spec.ts）、
+ * 选择器文字改为派生、确认时只合并这次真正改动的字段。
+ */
+describe('custom recipe breed display', () => {
+  const submit = read(`${PAGE_DIR}/index.vue`)
+
+  it('选择器显示的文字是派生的，不可能和品种行不一致', () => {
+    expect(submit).toContain('const selectedDogLabel = computed(')
+    expect(submit).toContain('{{selectedDogLabel}}')
+    // 不能再直接用 dogOptions 里拼好的那份 label
+    expect(submit).not.toContain('{{selectedDog.label}}')
+  })
+
+  it('品种行读的就是同一个字段', () => {
+    expect(submit).toContain("{{selectedDog.breedName || '未知品种'}}")
+  })
+
+  it('补充列表项时不让接口字段覆盖 value / label', () => {
+    const optionsSource =
+      submit.match(/dogOptions\.value = dogs\.map\(\(dog: any\) => \(\{[\s\S]*?\}\)\);/)?.[0] || ''
+
+    expect(optionsSource).not.toBe('')
+    // 展开必须在前面，否则接口哪天回了同名字段就会把选择器弄坏
+    expect(optionsSource.indexOf('...dog')).toBeLessThan(optionsSource.indexOf('value: dog.id'))
+  })
+
+  it('确认门槛时只合并这次真的改动的字段，不整体覆盖', () => {
+    const confirmSource =
+      submit.match(/const confirmGate = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+
+    expect(confirmSource).not.toBe('')
+    // 整体合并会把响应里缺失/为 null 的字段（当年就是 breedName）抹到页面上
+    expect(confirmSource).not.toMatch(/\.\.\.updated,/)
+    expect(confirmSource).toContain('bcsScore: updated.bcsScore')
+    expect(confirmSource).toContain('activityLevel: updated.activityLevel')
+    expect(confirmSource).toContain('mealsPerDay: updated.mealsPerDay')
+    // 门槛只碰这三项 + 三项确认
+    expect(confirmSource).toContain('bcsScoreConfirmed: true')
+    expect(confirmSource).toContain('activityLevelConfirmed: true')
+    expect(confirmSource).toContain('mealsPerDayConfirmed: true')
+  })
+})

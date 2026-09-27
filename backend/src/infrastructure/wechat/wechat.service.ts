@@ -732,9 +732,11 @@ export class WechatService {
       thing2: { value: statusText }, // 订单状态
     };
 
-    // 如果是已交付状态，添加食谱ID
+    // 如果是已交付状态，补充交付说明
     if (status === 'DELIVERED' && recipeId) {
-      data.thing3 = { value: '您的定制食谱已 ready' };
+      // thing 类型限 20 字以内；此前这里写的是 '您的定制食谱已 ready'，
+      // 中英混排对顾客不合适，改成中文。
+      data.thing3 = { value: '定制食谱已制作完成' };
     } else {
       data.thing3 = { value: '我们会尽快完成' };
     }

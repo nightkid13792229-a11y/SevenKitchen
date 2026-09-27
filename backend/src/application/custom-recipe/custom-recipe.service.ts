@@ -28,6 +28,7 @@ import {
   isPublicHoliday,
   getPublicHolidaysForYear,
 } from '../../utils/date-helpers';
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 @Injectable()
 export class CustomRecipeService implements ICustomRecipeRepository {
@@ -52,6 +53,29 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 生成一个库中不存在的订单号。
+   *
+   * 日期 + 4 位随机数，当天最多 1 万个组合；而 orderId 是 unique 列，
+   * 原先**没有任何重试** —— 撞号时顾客看到的是数据库唯一约束错误（500）。
+   * 这里先查再返回，最多试 10 次。
+   */
+  private async generateUniqueOrderId(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = this.generateOrderId();
+      const existing = await this.prisma.customRecipeOrder.findUnique({
+        where: { orderId: candidate },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    throw new ConflictException('订单号生成失败，请稍后重试');
+  }
+
+  /**
    * Calculate estimated delivery date (配置的工作日数，遇公众假期顺延)
    */
   private async calculateDeliveryDate(
@@ -62,12 +86,40 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 校验这只狗确实属于当前顾客。
+   *
+   * 2026-09-28 修复的安全问题：提交定制单原先**完全不校验归属** ——
+   * 任何登录顾客只要知道别人的 dogId，就能拿别人的狗下定制单；
+   * 而提交时又会把顾客填的过敏/疾病写回那只狗的档案（syncToHealthProfile），
+   * 等于任何人都能往别人家狗的医疗档案里写过敏和疾病。
+   *
+   * 两个 id 都比对：登录签发的 token 里 customerId 与 userId 取值相同，
+   * 这里仍留出容错，避免以后两者分家时把正常顾客挡在门外。
+   */
+  private async assertDogOwnership(
+    customerId: string,
+    dogId: string,
+  ): Promise<void> {
+    const dog = await this.prisma.dog.findFirst({
+      where: { id: dogId },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!dog || dog.ownerId !== customerId) {
+      throw new BadRequestException('狗狗不存在或无权访问');
+    }
+  }
+
+  /**
    * Create a new custom recipe order
    */
   async createOrder(data: CreateCustomRecipeOrderDTO): Promise<any> {
     // 定制费与可抵扣金额都从后台配置读取，并在下单这一刻**快照进订单**。
     // 之后后台调价只影响新提交的单，已提交的顾客额度不会被改。
     const config = await this.configService.getConfig();
+
+    // 先确认这只狗是他的，再谈别的
+    await this.assertDogOwnership(data.customerId, data.dogId);
 
     return await this.prisma.$transaction(async (tx) => {
       // 1. Check availability
@@ -85,7 +137,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       // 3. Create order
       const order = await tx.customRecipeOrder.create({
         data: {
-          orderId: this.generateOrderId(),
+          orderId: await this.generateUniqueOrderId(),
           customerId: data.customerId,
           dogId: data.dogId,
           targetGoal: data.targetGoal,
@@ -163,8 +215,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           },
         },
         recipe: {
+          // recipeId（业务编号）必须带出来：小程序拿它打开食谱详情页，
+          // 而详情页是按业务编号查的。id（主键）只用于后台关联。
           select: {
             id: true,
+            recipeId: true,
             name: true,
             coverImageUrl: true,
           },
@@ -239,8 +294,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             },
           },
           recipe: {
+            // recipeId（业务编号）必须带出来：小程序拿它打开食谱详情页，
+            // 而详情页是按业务编号查的。id（主键）只用于后台关联。
             select: {
               id: true,
+              recipeId: true,
               name: true,
               coverImageUrl: true,
             },
@@ -279,15 +337,95 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Update order status
    */
+  /**
+   * 允许的状态流转。后台「改状态」此前是一个裸写：任何状态都能改成任何状态。
+   *
+   * 2026-09-28 修复，三件事：
+   *   1. 加了流转合法性校验（例如已交付不能退回待付款）；
+   *   2. 改成「已取消」时**释放当天名额**并记录取消时间/原因 ——
+   *      原先不释放，而每天只有 5 个名额，僵尸单会直接吃掉接单能力；
+   *   3. 「制作中」补记 inProgressAt（这一列此前从来没被写过）。
+   */
+  private static readonly ALLOWED_STATUS_TRANSITIONS: Record<
+    CustomRecipeStatus,
+    CustomRecipeStatus[]
+  > = {
+    [CustomRecipeStatus.PENDING_PAYMENT]: [
+      CustomRecipeStatus.PAID,
+      CustomRecipeStatus.CANCELLED,
+    ],
+    [CustomRecipeStatus.PAID]: [
+      CustomRecipeStatus.IN_PROGRESS,
+      CustomRecipeStatus.DELIVERED,
+      CustomRecipeStatus.CANCELLED,
+    ],
+    [CustomRecipeStatus.IN_PROGRESS]: [
+      CustomRecipeStatus.DELIVERED,
+      CustomRecipeStatus.CANCELLED,
+    ],
+    [CustomRecipeStatus.DELIVERED]: [],
+    [CustomRecipeStatus.CANCELLED]: [],
+  };
+
   async updateOrderStatus(
     orderIdOrId: string,
     status: CustomRecipeStatus,
+    options?: { reason?: string },
   ): Promise<void> {
     const ref = await this.resolveOrderRef(orderIdOrId);
 
-    await this.prisma.customRecipeOrder.update({
+    const order = await this.prisma.customRecipeOrder.findUnique({
       where: { id: ref.id },
-      data: { status },
+      select: { id: true, status: true, scheduledDate: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    if (order.status === status) {
+      return;
+    }
+
+    const allowed =
+      CustomRecipeService.ALLOWED_STATUS_TRANSITIONS[order.status] ?? [];
+
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `订单当前状态（${order.status}）不能改为 ${status}`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customRecipeOrder.update({
+        where: { id: order.id },
+        data: {
+          status,
+          ...(status === CustomRecipeStatus.IN_PROGRESS
+            ? { inProgressAt: new Date() }
+            : {}),
+          ...(status === CustomRecipeStatus.DELIVERED
+            ? { deliveredAt: new Date() }
+            : {}),
+          ...(status === CustomRecipeStatus.PAID
+            ? { paymentConfirmedAt: new Date() }
+            : {}),
+          ...(status === CustomRecipeStatus.CANCELLED
+            ? {
+                cancelledAt: new Date(),
+                cancellationReason: options?.reason || '后台手动取消',
+              }
+            : {}),
+        },
+      });
+
+      // 取消要把名额还回去，否则这一天就白占了（每日上限只有 5 单）
+      if (status === CustomRecipeStatus.CANCELLED) {
+        await tx.customRecipeSchedule.updateMany({
+          where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
+          data: { bookedCount: { decrement: 1 } },
+        });
+      }
     });
   }
 
@@ -450,16 +588,24 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   } | null> {
     if (!params.customerId || !params.recipeId) return null;
 
-    const recipeRecord = await this.prisma.recipe.findFirst({
+    const recipeRecord = await this.prisma.recipe.findMany({
       where: { recipeId: params.recipeId },
-      orderBy: { version: 'desc' },
       select: { id: true },
     });
 
+    /**
+     * 候选主键必须覆盖**这道食谱的所有版本**。
+     *
+     * 2026-09-28 修复：定制订单存的是**交付那一刻**那一版的主键。
+     * 原先这里只取"当前最新版"的主键，于是食谱一旦升到第 2 版
+     * （营养师改一个字就会升版），订单里存的 v1 主键就再也匹配不上，
+     * 顾客那 ¥150 抵扣**静默失效**，客服和顾客都不会知道。
+     * 业务编号本身也一并作为候选，兼容早期没有主键的历史数据。
+     */
     const candidateRecipeIds = Array.from(
       new Set(
-        [recipeRecord?.id, params.recipeId].filter((value): value is string =>
-          Boolean(value),
+        [...recipeRecord.map((row) => row.id), params.recipeId].filter(
+          (value): value is string => Boolean(value),
         ),
       ),
     );
@@ -656,8 +802,23 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       this.prisma.customRecipeOrder.count({
         where: { ...where, status: CustomRecipeStatus.DELIVERED },
       }),
+      /**
+       * 收入口径：**已经收到的钱**。
+       *
+       * 2026-09-28 修复：原先只统计"已交付"，于是已付款/制作中的单不计收入，
+       * 后台金额系统性偏低。定制费是下单即付的，收款发生在前两个状态。
+       */
       this.prisma.customRecipeOrder.findMany({
-        where: { ...where, status: CustomRecipeStatus.DELIVERED },
+        where: {
+          ...where,
+          status: {
+            in: [
+              CustomRecipeStatus.PAID,
+              CustomRecipeStatus.IN_PROGRESS,
+              CustomRecipeStatus.DELIVERED,
+            ],
+          },
+        },
         select: { amount: true },
       }),
     ]);
@@ -746,14 +907,18 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Create schedule
    */
-  async createSchedule(date: Date, capacity: number): Promise<any> {
+  async createSchedule(
+    date: Date,
+    capacity: number,
+    isPublicHoliday = false,
+  ): Promise<any> {
     return await this.prisma.customRecipeSchedule.create({
       data: {
         date,
         capacity,
         bookedCount: 0,
         isAvailable: true,
-        isPublicHoliday: false,
+        isPublicHoliday,
       },
     });
   }
@@ -779,19 +944,52 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * Check availability
    */
   async checkAvailability(date: Date): Promise<boolean> {
+    /**
+     * 2026-09-28 修复（节假日可以被绕过）：
+     *
+     * 原实现是"先落一条默认排期行（isPublicHoliday 一律写 false），再按假期判断返回"。
+     * 于是节假日虽然会被拒，但那行"这不是假期"已经写进库了；
+     * 顾客**再点一次**时走的是"行已存在"分支，而那个分支只看
+     * isAvailable / bookedCount，完全不看 isPublicHoliday —— 节假日就能约上了。
+     *
+     * 现在：先把假期判断做完，落库时写真实的 isPublicHoliday；
+     * 已存在的行也必须尊重它。另外补上"不能约过去的日期"。
+     */
+    const capacity = await this.resolveDailyCapacity();
+    const holiday = await isPublicHoliday(date);
+
+    if (this.isPastDate(date)) {
+      return false;
+    }
+
     const schedule = await this.prisma.customRecipeSchedule.findUnique({
       where: { date },
     });
 
     if (!schedule) {
-      // 首次访问该日期：先落一条默认排期，再按"是否公众假期"决定能否预约
-      const capacity = await this.resolveDailyCapacity();
-      const holiday = await isPublicHoliday(date);
-      await this.createSchedule(date, capacity);
+      // 首次访问该日期：落一条**带真实假期标记**的默认排期
+      await this.createSchedule(date, capacity, holiday);
       return !holiday;
     }
 
-    return schedule.isAvailable && schedule.bookedCount < schedule.capacity;
+    return (
+      !schedule.isPublicHoliday &&
+      schedule.isAvailable &&
+      schedule.bookedCount < schedule.capacity
+    );
+  }
+
+  /**
+   * 排期是按"天"的，早于今天的都不该能约。
+   *
+   * 用**上海日期**比较，不用服务器本地时区：scheduledDate 是按 UTC 零点存的
+   * DATE，用本地 setHours 去截断，一旦服务器时区变了就会整体偏一天。
+   */
+  private isPastDate(date: Date): boolean {
+    const target = TimezoneUtil.toShanghaiDateString(new Date(date));
+    const today = TimezoneUtil.toShanghaiDateString(new Date());
+
+    return target < today;
   }
 
   /**

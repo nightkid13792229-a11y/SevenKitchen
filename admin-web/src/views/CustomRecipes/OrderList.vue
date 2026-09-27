@@ -46,7 +46,11 @@
             <div class="stat-icon revenue">💵</div>
             <div class="stat-info">
               <div class="stat-value">¥{{ statistics.totalRevenue }}</div>
-              <div class="stat-label">本月收入</div>
+              <!-- 口径：已收款（已付款/制作中/已交付）的定制费合计。
+                   选定日期范围时按所选区间统计，不限日期时是累计 —— 所以标签不能再写"本月"。 -->
+              <div class="stat-label">
+                {{ dateRange && dateRange.length === 2 ? '区间收入' : '累计收入' }}
+              </div>
             </div>
           </div>
         </el-card>
@@ -63,6 +67,7 @@
             <el-option label="已付款" value="PAID"></el-option>
             <el-option label="制作中" value="IN_PROGRESS"></el-option>
             <el-option label="已交付" value="DELIVERED"></el-option>
+            <el-option label="已取消" value="CANCELLED"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="日期范围">
@@ -379,6 +384,9 @@ const getStatusText = (status: string) => {
     PAID: '已付款',
     IN_PROGRESS: '制作中',
     DELIVERED: '已交付',
+    // 自动关单/客服取消都会产生这个状态，此前没有文案，
+    // 列表里直接把英文枚举名 CANCELLED 显示给员工看
+    CANCELLED: '已取消',
   };
   return map[status] || status;
 };
@@ -389,6 +397,7 @@ const getStatusType = (status: string) => {
     PAID: '',
     IN_PROGRESS: 'primary',
     DELIVERED: 'success',
+    CANCELLED: 'info',
   };
   return map[status] || 'info';
 };

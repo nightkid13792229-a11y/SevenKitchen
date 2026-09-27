@@ -109,6 +109,18 @@ export class CreateRecipeDTO {
   @IsOptional()
   videoUrl?: string;
 
+  /**
+   * 营养标准。
+   *
+   * 2026-09-28 修复：后台表单里一直有这个下拉框（FEDIAF_2021 / AAFCO_2019 /
+   * GB_T_31216），但它既没进这个 DTO、也没进前端提交的载荷 —— 选了等于没选，
+   * 后端永远写死。这里补上，默认取当前在用的 FEDIAF_2025。
+   */
+  @ApiPropertyOptional({ description: 'Nutrition standard' })
+  @IsString()
+  @IsOptional()
+  nutritionStandard?: string;
+
 }
 
 export class UpdateScheduleDTO {

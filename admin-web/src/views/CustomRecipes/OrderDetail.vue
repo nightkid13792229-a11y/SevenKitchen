@@ -236,6 +236,16 @@
           >
             开始制作
           </el-button>
+          <!-- 取消会释放当天接单名额（每天只有 5 个），所以放到员工能点到的地方。
+               已交付的单不允许取消（后端也会拒绝）。 -->
+          <el-button
+            v-if="order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
+            type="danger"
+            plain
+            @click="cancelOrder"
+          >
+            取消订单
+          </el-button>
           <el-button @click="contactCustomer">联系客户</el-button>
         </div>
       </div>
@@ -259,12 +269,13 @@
           </el-form-item>
 
           <el-form-item label="封面图片">
+            <!-- 走 api 层上传：原来的 action 指向 /api/v1/admin/upload（不存在），
+                 而且成功回调判的是 code === 200，而全站统一成功码是 0 -->
             <el-upload
               class="cover-uploader"
-              action="/api/v1/admin/upload"
-              :headers="uploadHeaders"
               :show-file-list="false"
-              :on-success="handleCoverSuccess"
+              :http-request="handleCoverUpload"
+              accept="image/*"
             >
               <img v-if="recipeForm.coverImageUrl" :src="recipeForm.coverImageUrl" class="cover-image" />
               <el-icon v-else class="cover-uploader-icon"><Plus /></el-icon>
@@ -273,6 +284,7 @@
 
           <el-form-item label="营养标准">
             <el-select v-model="recipeForm.nutritionStandard">
+              <el-option label="FEDIAF 2025" value="FEDIAF_2025" />
               <el-option label="FEDIAF 2021" value="FEDIAF_2021" />
               <el-option label="AAFCO 2019" value="AAFCO_2019" />
               <el-option label="国标 GB/T 31216" value="GB_T_31216" />
@@ -316,11 +328,19 @@
                 :key="index"
                 class="ingredient-item"
               >
-                <el-input
+                <el-select
                   v-model="item.ingredientId"
-                  placeholder="食材ID"
+                  placeholder="选择食材"
+                  filterable
                   style="width: 200px"
-                />
+                >
+                  <el-option
+                    v-for="option in ingredientOptions"
+                    :key="option.id"
+                    :label="option.name"
+                    :value="option.id"
+                  />
+                </el-select>
                 <el-input
                   v-model="item.preparationMethod"
                   placeholder="制备方法"
@@ -394,6 +414,8 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
 import { api } from '@/api';
+import { ingredientApi } from '@/api/ingredients';
+import { recipeApi } from '@/api/recipes';
 
 const props = defineProps<{
   orderId: string;
@@ -402,10 +424,27 @@ const props = defineProps<{
 const emit = defineEmits(['refresh', 'close']);
 
 const API_BASE = '/admin/custom-recipe';
-const uploadHeaders = (() => {
-  const token = localStorage.getItem('admin_token');
-  return token ? { Authorization: `Bearer ${token}` } : { 'X-Customer-Id': 'admin-system' };
-})();
+
+/**
+ * 食材候选列表：给「食材列表」用下拉选择。
+ *
+ * 2026-09-28 修复：原先这里是一个手填「食材ID」的输入框，而那个值是必填外键，
+ * 填错（或留空）会在提交时抛出 Prisma 外键错误（500），营养师完全无从下手。
+ */
+const ingredientOptions = ref<Array<{ id: string; name: string }>>([]);
+
+const loadIngredientOptions = async () => {
+  try {
+    const list: any = await ingredientApi.list();
+    const rows = Array.isArray(list) ? list : list?.data ?? [];
+    ingredientOptions.value = rows
+      .map((row: any) => ({ id: String(row?.id ?? ''), name: String(row?.name ?? '') }))
+      .filter((row: { id: string }) => row.id);
+  } catch (error) {
+    console.error('[CustomRecipe] 加载食材列表失败:', error);
+    ElMessage.error('加载食材列表失败，食材将需要手工填写');
+  }
+};
 
 // 状态
 const loading = ref(false);
@@ -416,7 +455,7 @@ const recipeForm = reactive({
   name: '',
   description: '',
   coverImageUrl: '',
-  nutritionStandard: 'FEDIAF_2021',
+  nutritionStandard: 'FEDIAF_2025',
   proteinPercent: 18,
   fatPercent: 8,
   carbohydratePercent: 45,
@@ -428,6 +467,7 @@ const recipeForm = reactive({
 // 生命周期
 onMounted(() => {
   loadOrderDetail();
+  loadIngredientOptions();
 });
 
 watch(() => props.orderId, () => {
@@ -458,6 +498,44 @@ const confirmPayment = async () => {
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');
+    }
+  }
+};
+
+/**
+ * 取消订单。
+ *
+ * 2026-09-28：后端此前"改状态"是裸写 —— 改成已取消既不释放当天名额、
+ * 也不记录取消时间；每天只有 5 个名额，取消掉的单会把产能白白吃掉。
+ * 现在后端会释放名额并记录原因，这里补上入口。
+ *
+ * 注意：已付款的单需要线下退款，取消前会提示客服。
+ */
+const cancelOrder = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      order.value.status === 'PENDING_PAYMENT'
+        ? '取消该订单？未付款的订单会释放当天名额。'
+        : '取消该订单？该单已收款，请确认已完成退款。取消后会释放当天名额。',
+      '取消订单',
+      {
+        confirmButtonText: '确认取消',
+        cancelButtonText: '再想想',
+        inputPlaceholder: '取消原因（会记录在订单里）',
+        inputValue: '客服取消',
+      },
+    );
+
+    await api.patch(`${API_BASE}/orders/${order.value.orderId}/status`, {
+      status: 'CANCELLED',
+      reason: value || '客服取消',
+    });
+    ElMessage.success('订单已取消');
+    emit('refresh');
+    await loadOrderDetail();
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || '取消失败');
     }
   }
 };
@@ -547,10 +625,26 @@ const removeIngredient = (index: number) => {
   recipeForm.items.splice(index, 1);
 };
 
-const handleCoverSuccess = (response: any) => {
-  if (response.code === 200) {
-    recipeForm.coverImageUrl = response.data.url;
+/**
+ * 封面图上传。
+ *
+ * 2026-09-28 修复：原先用 el-upload 的 action 直传 /api/v1/admin/upload
+ * —— 这个路由**根本不存在**；而且成功回调判的是 code === 200，
+ * 全站统一成功码其实是 0。两处一起修，改走 api 层（会自动带上鉴权与解包）。
+ */
+const handleCoverUpload = async (options: any) => {
+  try {
+    const result: any = await recipeApi.uploadImage(options.file);
+    const url = result?.url || result?.data?.url;
+    if (!url) {
+      throw new Error('上传未返回图片地址');
+    }
+    recipeForm.coverImageUrl = url;
     ElMessage.success('封面上传成功');
+    options.onSuccess?.(result);
+  } catch (error: any) {
+    ElMessage.error(error?.message || '封面上传失败');
+    options.onError?.(error);
   }
 };
 
@@ -564,6 +658,8 @@ const submitRecipe = async () => {
       name: recipeForm.name,
       description: recipeForm.description,
       coverImageUrl: recipeForm.coverImageUrl,
+      // 营养标准此前没进载荷，选了等于没选（后端永远写死）
+      nutritionStandard: recipeForm.nutritionStandard,
       nutritionTarget: {
         protein_percent: recipeForm.proteinPercent,
         fat_percent: recipeForm.fatPercent,
@@ -596,7 +692,7 @@ const resetRecipeForm = () => {
     name: '',
     description: '',
     coverImageUrl: '',
-    nutritionStandard: 'FEDIAF_2021',
+    nutritionStandard: 'FEDIAF_2025',
     proteinPercent: 18,
     fatPercent: 8,
     carbohydratePercent: 45,

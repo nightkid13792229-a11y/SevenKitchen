@@ -107,7 +107,15 @@ export class CustomRecipeController {
           0,
           Number(order.creditAmount) - Number(order.creditUsed),
         ),
-        recipeId: order.recipeId,
+        /**
+         * 交付后的食谱，给小程序的是**业务编号**（Recipe.recipeId）。
+         *
+         * 2026-09-28 修复：这里原先回的是 order.recipeId，那是 Recipe 的主键。
+         * 而小程序打开食谱详情走 GET /recipes/:id，后端按业务编号查
+         * （prisma-recipe.repository.ts 的 where: { recipeId: id }），
+         * 于是"查看定制食谱"必然 404 —— 生产上已交付的那一单就是这么坏的。
+         */
+        recipeId: order.recipe?.recipeId ?? null,
         createdAt: order.createdAt,
       })),
       total,
@@ -177,7 +185,8 @@ export class CustomRecipeController {
         0,
         Number(order.creditAmount) - Number(order.creditUsed),
       ),
-      recipeId: order.recipeId,
+      // 同上：给小程序必须回业务编号，否则"查看定制食谱"打不开
+      recipeId: order.recipe?.recipeId ?? null,
       recipeName: order.recipe?.name ?? null,
       recipeCoverImageUrl: order.recipe?.coverImageUrl ?? null,
       allergies: order.allergies,

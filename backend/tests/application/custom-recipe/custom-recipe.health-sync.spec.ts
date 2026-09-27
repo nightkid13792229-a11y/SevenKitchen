@@ -53,12 +53,19 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
   const medicalCreate = jest.fn();
 
   const mockPrismaService = {
+    // 提交定制单现在会先校验"这只狗是不是你的"
+    dog: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'dog-1', ownerId: 'user-1' }),
+    },
     customRecipeSchedule: {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
     customRecipeOrder: {
+      // 生成订单号时会先查一次是否撞号（撞号要重试，而不是抛唯一约束错误）
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },

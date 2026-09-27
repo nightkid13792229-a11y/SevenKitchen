@@ -194,6 +194,18 @@ export class AdminCustomRecipeController {
       throw new NotFoundException('订单不存在');
     }
 
+    /**
+     * 只有待付款的单才需要"确认收款"。
+     *
+     * 原先这里没有任何前置判断，重复点击或误操作会把**已交付**的单打回已付款，
+     * 而订单上的交付时间/食谱关联还留着 —— 状态和数据就对不上了。
+     */
+    if (order.status !== CustomRecipeStatus.PENDING_PAYMENT) {
+      throw new BadRequestException(
+        `订单当前状态是 ${order.status}，无需确认收款`,
+      );
+    }
+
     await this.customRecipeService.updateOrder(orderId, {
       status: CustomRecipeStatus.PAID,
       paymentConfirmedAt: new Date(),
@@ -226,8 +238,12 @@ export class AdminCustomRecipeController {
   async updateStatus(
     @Param('orderId') orderId: string,
     @Body('status') status: CustomRecipeStatus,
+    @Body('reason') reason?: string,
   ) {
-    await this.customRecipeService.updateOrderStatus(orderId, status);
+    // 流转合法性、取消释放名额、各时间戳都在 service 里统一处理
+    await this.customRecipeService.updateOrderStatus(orderId, status, {
+      reason,
+    });
 
     return ApiResponseDto.success({ status });
   }
@@ -247,8 +263,16 @@ export class AdminCustomRecipeController {
       throw new NotFoundException('订单不存在');
     }
 
-    if (order.status !== CustomRecipeStatus.PAID) {
-      throw new BadRequestException('订单未付款，无法创建食谱');
+    // 「开始制作」之后也要能交付：原来的判断只允许 PAID，
+    // 而工作台的自然动线是 确认付款 → 开始制作 → 填食谱 → 提交，
+    // 于是这条动线必定报错，且报的是一句看不懂的"订单未付款，无法创建食谱"。
+    if (
+      order.status !== CustomRecipeStatus.PAID &&
+      order.status !== CustomRecipeStatus.IN_PROGRESS
+    ) {
+      throw new BadRequestException(
+        `当前状态（${order.status}）无法创建食谱，请先确认收款`,
+      );
     }
 
     // Create recipe
@@ -263,10 +287,22 @@ export class AdminCustomRecipeController {
         productionSteps: dto.productionSteps,
         detailImages: dto.detailImages || [],
         videoUrl: dto.videoUrl,
-        nutritionStandard: 'FEDIAF_2021',
-        status: 'PUBLIC',
+        nutritionStandard: dto.nutritionStandard || 'FEDIAF_2025',
+        /**
+         * 定制食谱**不是公开食谱**。
+         *
+         * 2026-09-28 修复：原先写成 PUBLIC，而公开列表只按 status 过滤、
+         * 不排除定制食谱 —— 等于按某一只狗的病情做的食谱会出现在
+         * 所有顾客的食谱列表里。改成 PRIVATE_CUSTOM 后：
+         *   · 不出现在任何公开列表（buildPublicRecipeWhere 要求 status = PUBLIC）
+         *   · 只有这只狗的主人（customerOwnerId）和员工能打开
+         *     （recipes.controller.ts 的 getAccessibleRecipe 已支持这个判断）
+         * 同时补上 customerOwnerId，否则主人自己也被挡在外面。
+         */
+        status: 'PRIVATE_CUSTOM',
         isCustomRecipe: true,
         customOrderId: order.id,
+        customerOwnerId: order.customerId,
         energyDensityKcalPerKg:
           dto.nutritionTarget?.energy_density_kcal_per_kg || 3200,
         productionLossRate: 1.07,
@@ -301,7 +337,9 @@ export class AdminCustomRecipeController {
           order.customer.wechatOpenid,
           order.orderId,
           'DELIVERED',
-          recipe.id,
+          // 传**业务编号**：通知里点击后跳到 /pages/recipe-detail/index?id=...
+          // 而那个页面按业务编号查食谱。传主键的话顾客点开就是 404。
+          recipe.recipeId,
         )
         .catch((error) => {
           console.error('Failed to send WeChat notification:', error);

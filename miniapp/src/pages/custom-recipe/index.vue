@@ -297,6 +297,20 @@ const submitting = ref(false);
 /** 未登录标记：与"已登录但还没有狗狗档案"是两个不同的状态，提示语和下一步动作都不一样 */
 const needLogin = ref(false);
 
+/**
+ * 今天的日期（本地时区，YYYY-MM-DD）。
+ *
+ * 2026-09-28 修复：这里原先用 `new Date().toISOString().split('T')[0]`，
+ * 那是**UTC 日期**。北京时间凌晨 0 点到 8 点之间，UTC 还停在前一天，
+ * 于是这个时段下的单，预约日期会写成昨天（交付日期也跟着早一天）。
+ */
+function getTodayDateString() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 const formData = ref({
   dogId: '',
   targetGoal: '',
@@ -307,7 +321,7 @@ const formData = ref({
   dislikedIngredients: [] as string[],
   additionalNotes: '',
   attachmentUrls: [] as string[],
-  scheduledDate: new Date().toISOString().split('T')[0],
+  scheduledDate: getTodayDateString(),
   syncToHealthProfile: true,
 });
 

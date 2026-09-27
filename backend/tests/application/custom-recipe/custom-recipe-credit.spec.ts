@@ -24,6 +24,9 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
       updateMany: jest.fn(),
     },
     recipe: {
+      // findUsableCredit 现在要枚举这道食谱的**所有版本**主键
+      // （原先只取最新版，食谱一升版抵扣就静默失效）
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn(),
     },
   } as any;
@@ -54,9 +57,11 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
     // 而定制单上存的是「食谱主键」（Recipe.id，因为它有指向 recipe 表的外键）。
     // 不归一化的话两边永远匹配不上，抵扣会静默失效。
     it('把业务食谱号解析成主键后再匹配定制单', async () => {
-      mockPrismaService.recipe.findFirst.mockResolvedValue({
-        id: 'recipe-pk-1',
-      });
+      // 2026-09-28：改为枚举**所有版本**的主键（原先只取最新版，
+      // 食谱一升版，订单里存的旧版主键就匹配不上，抵扣静默失效）
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        { id: 'recipe-pk-1' },
+      ]);
       mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
         id: 'cr-uuid-1',
         orderId: 'CR1',
@@ -69,7 +74,7 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
         recipeId: 'recipe-business-1',
       });
 
-      expect(mockPrismaService.recipe.findFirst).toHaveBeenCalledWith(
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { recipeId: 'recipe-business-1' },
         }),
@@ -87,6 +92,7 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
     });
 
     it('查不到食谱记录时退回用传入的 ID 匹配（兼容直接传主键）', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
       mockPrismaService.recipe.findFirst.mockResolvedValue(null);
       mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue(null);
 
@@ -139,6 +145,8 @@ describe('CustomRecipeService · 抵扣额度台账', () => {
     });
 
     it('额度必须绑定这一道定制食谱', async () => {
+      // 显式清空版本候选，保证候选集合只有传入的业务编号
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
       mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue(null);
 
       await service.findUsableCredit({

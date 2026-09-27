@@ -73,6 +73,10 @@ export class PrismaRecipeRepository implements RecipeRepository {
     return {
       ...extra,
       status: RecipeStatus.PUBLIC,
+      // 定制食谱（isCustomRecipe）永远不进公开列表：它是按某一只狗的病情做的，
+      // 只应属于那只狗的主人。正常路径已把它写成 PRIVATE_CUSTOM，
+      // 这里再加一道，避免以后有人改回 PUBLIC 就泄露出去。
+      isCustomRecipe: false,
       AND: [...extraAnd, this.buildPublicSeriesVisibilityWhere()],
     };
   }

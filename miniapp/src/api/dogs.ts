@@ -158,6 +158,30 @@ export const dogApi = {
     method: 'PUT',
     data: buildDietRemindersPayload(data),
   }),
+  /**
+   * 过敏原检测报告识别（AI）
+   *
+   * 传入 uploadHealthAttachment('allergy', filePath) 拿到的地址，
+   * 返回候选过敏原与病史 —— **只是候选，必须由顾客确认后才写入档案**。
+   * 识别失败会 reject，调用方应降级为手工填写（不阻断建档）。
+   */
+  extractHealthReport: (data: {
+    imageUrl: string
+    originalFilename?: string
+  }) => request<{
+    allergies: string[]
+    medicalConditions: string[]
+    ocrText: string
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+    warnings: string[]
+  }>({
+    url: '/health/extract-report',
+    method: 'POST',
+    data,
+    // 报告识别要跑 OCR + AI，默认 15s 不够
+    timeout: 60000,
+    suppressErrorToast: true,
+  }),
   uploadHealthAttachment: (
     type: HealthRecordType,
     filePath: string,

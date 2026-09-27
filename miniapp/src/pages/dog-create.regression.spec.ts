@@ -219,4 +219,65 @@ describe('dog-create runtime regressions', () => {
       expect(source).toContain("allergen,")
     })
   })
+
+  /**
+   * 上传报告 → AI 自动识别（2026-09-27，M3b）
+   *
+   * 老板批准「先只做过敏原检测报告这一个」。让顾客自由填写的做法实测失败
+   * （生产 4544 只狗只有 24 只填过过敏原），而过敏是定制食谱的安全底线。
+   *
+   * 三条不能退让的约束：
+   *   1. 识别结果只是**候选**，顾客确认后才写入档案（AI 不得直接落库）
+   *   2. 识别失败**降级为手工填写**，不阻断建档（A2）
+   *   3. 不在服务端做诊断
+   */
+  describe('AI 报告识别', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('提供上传入口，并走「上传 → 识别」两步', () => {
+      const source = readPage()
+
+      expect(source).toContain('pickHealthReport')
+      expect(source).toContain('上传报告')
+      expect(source).toContain('dogCreateApi.uploadHealthAttachment(')
+      expect(source).toContain('dogCreateApi.extractHealthReport(')
+    })
+
+    it('识别结果先放进候选区，顾客点了才写进档案', () => {
+      const source = readPage()
+
+      expect(source).toContain('healthReportCandidates')
+      expect(source).toContain('识别到以下过敏原，请确认')
+      // 候选点击走的就是 toggleAllergen（写入 allergyRecords 的唯一路径）
+      const candidateBlock =
+        source.match(/health-candidate-card[\s\S]*?<\/view>/)?.[0] || ''
+      expect(candidateBlock).toContain('toggleAllergen')
+    })
+
+    it('识别失败时降级为手工填写，不阻断建档', () => {
+      const source = readPage()
+
+      expect(source).toContain('手工补充')
+      // 失败路径只提示，不得抛出让流程中断，也不得弹必填拦截
+      const catchBlock =
+        source.match(/catch \(error: any\) \{[\s\S]*?healthReportExtracting.value = false/)?.[0] || ''
+      expect(catchBlock).not.toBe('')
+      expect(catchBlock).not.toContain('showCreateStepBlockedToast')
+    })
+
+    it('顾客取消选图不算失败（静默返回）', () => {
+      const source = readPage()
+
+      expect(source).toContain('顾客取消选图：静默返回，不算失败')
+    })
+
+    it('接口层带上了超时与错误提示抑制（识别要跑 OCR + AI）', () => {
+      const apiSource = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
+
+      expect(apiSource).toContain("url: '/health/extract-report'")
+      expect(apiSource).toContain('suppressErrorToast: true')
+      expect(apiSource).toContain('timeout: 60000')
+    })
+  })
 })

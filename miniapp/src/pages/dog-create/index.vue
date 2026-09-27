@@ -572,8 +572,41 @@
             </view>
           </view>
 
-          <!-- 「上传报告自动识别」入口与 AI 能力一起做（M3b），
-               本轮不放出半成品的按钮，避免顾客点了没反应。 -->
+          <!-- 上传报告，AI 自动识别（老板批准先只做过敏原报告这一个）。
+               识别结果**必须顾客确认后才写入档案** —— 医疗信息不能让 AI 自己定。 -->
+          <view class="health-upload-card">
+            <view class="health-upload-card__text">
+              <text class="health-upload-card__title">有检测报告？可以拍照自动识别</text>
+              <text class="health-upload-card__desc">过敏原检测报告即可。识别结果会先让你确认，再记进档案。</text>
+            </view>
+            <button
+              class="health-upload-card__btn"
+              :disabled="healthReportExtracting"
+              @tap="pickHealthReport"
+            >{{ healthReportExtracting ? '识别中…' : '上传报告' }}</button>
+          </view>
+
+          <!-- 识别结果确认区：候选过敏原都先不选中，由顾客逐项确认 -->
+          <view v-if="healthReportCandidates.length > 0" class="health-candidate-card">
+            <text class="health-candidate-card__title">识别到以下过敏原，请确认</text>
+            <text class="health-candidate-card__hint">我们只是把报告里的字读出来，最终以你确认为准。</text>
+            <view class="health-tag-list">
+              <text
+                v-for="item in healthReportCandidates"
+                :key="item"
+                class="health-tag"
+                :class="{ 'health-tag--active': selectedAllergens.includes(item) }"
+                @tap="toggleAllergen(item)"
+              >{{ item }}</text>
+            </view>
+            <view v-if="healthReportWarnings.length > 0" class="health-report-warning">
+              <text
+                v-for="(warning, index) in healthReportWarnings"
+                :key="index"
+                class="health-report-warning__text"
+              >· {{ warning }}</text>
+            </view>
+          </view>
 
           <view class="health-step-actions">
             <button class="health-skip-btn" @tap="skipHealthStep">暂时跳过，以后再说</button>
@@ -733,6 +766,9 @@ const dogCreateApi = {
   create: dogApi.create,
   createWeightRecord: dogApi.createWeightRecord,
   uploadAvatar: dogApi.uploadAvatar,
+  // 健康报告识别（AI）：上传复用健康附件通道，识别走 health/extract-report
+  uploadHealthAttachment: dogApi.uploadHealthAttachment,
+  extractHealthReport: dogApi.extractHealthReport,
 }
 
 interface FormData {
@@ -1324,6 +1360,85 @@ function commitCustomAllergens() {
   }
 
   customAllergenInput.value = ''
+}
+
+/** AI 报告识别的状态 */
+const healthReportExtracting = ref(false)
+/** 识别出来的候选过敏原（未确认前不写入 allergyRecords） */
+const healthReportCandidates = ref<string[]>([])
+const healthReportWarnings = ref<string[]>([])
+
+/**
+ * 上传检测报告并让 AI 提取过敏原。
+ *
+ * 三步：选图 → 上传到 COS → 调识别接口。
+ * 任何一步失败都**降级为手工填写**（老板定的 A2）：只提示，不阻断建档。
+ * 识别结果只放进"候选"区，顾客点了才算数 —— AI 不得直接写进档案。
+ */
+async function pickHealthReport() {
+  if (healthReportExtracting.value) return
+
+  let filePath = ''
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: resolve,
+        fail: reject,
+      })
+    })
+    filePath = chosen?.tempFilePaths?.[0] || ''
+  } catch {
+    // 顾客取消选图：静默返回，不算失败
+    return
+  }
+
+  if (!filePath) return
+
+  healthReportExtracting.value = true
+  uni.showLoading({ title: '识别中…' })
+
+  try {
+    const uploaded = await dogCreateApi.uploadHealthAttachment('allergy', filePath)
+    const imageUrl = String(uploaded?.url || '').trim()
+    if (!imageUrl) {
+      throw new Error('上传失败，请重试')
+    }
+
+    const res: any = await dogCreateApi.extractHealthReport({ imageUrl })
+    const data = res?.data || {}
+
+    healthReportCandidates.value = Array.isArray(data.allergies)
+      ? data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim())
+      : []
+    healthReportWarnings.value = Array.isArray(data.warnings) ? data.warnings : []
+
+    uni.hideLoading()
+
+    if (healthReportCandidates.value.length === 0) {
+      // 没读出过敏原：明确告知 + 引导手工填写，而不是静默无反应
+      uni.showToast({
+        title: '没识别到过敏原，请用下面的选项手工补充',
+        icon: 'none',
+        duration: 3000,
+      })
+      return
+    }
+
+    uni.showToast({ title: '识别完成，请确认', icon: 'none' })
+  } catch (error: any) {
+    uni.hideLoading()
+    // 降级为手工填写（A2）：识别不可用不能挡住顾客建档
+    uni.showToast({
+      title: error?.message || '识别失败，请改用下面的选项手工填写',
+      icon: 'none',
+      duration: 3000,
+    })
+  } finally {
+    healthReportExtracting.value = false
+  }
 }
 
 /** 顾客选择「暂时跳过」：不做任何标记，直接进入结果页 */
@@ -3992,6 +4107,86 @@ async function submit() {
   font-size: 24rpx;
   font-weight: 600;
   color: #26261f;
+}
+
+/* 上传报告（AI 识别）：主入口，做得显眼一些 */
+.health-upload-card {
+  margin-top: 28rpx;
+  padding: 24rpx;
+  background: #f7f9f1;
+  border: 1rpx dashed #cddbbe;
+  border-radius: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.health-upload-card__title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.health-upload-card__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+.health-upload-card__btn {
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border-radius: 999rpx;
+}
+
+.health-upload-card__btn::after {
+  border: none;
+}
+
+.health-upload-card__btn[disabled] {
+  opacity: 0.6;
+}
+
+/* 识别结果确认区 */
+.health-candidate-card {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+  border-radius: 16rpx;
+}
+
+.health-candidate-card__title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.health-candidate-card__hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
+}
+
+.health-report-warning {
+  margin-top: 16rpx;
+}
+
+.health-report-warning__text {
+  display: block;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
 }
 
 .health-step-actions {

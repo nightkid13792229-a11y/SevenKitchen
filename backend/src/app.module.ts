@@ -217,6 +217,10 @@ import {
   TencentCloudSupplementLabelOcrProvider,
 } from './application/recipe-designer/supplement-label-extraction.service';
 import {
+  HealthReportExtractionService,
+  HEALTH_REPORT_OCR_PROVIDER,
+} from './application/health/health-report-extraction.service';
+import {
   FEDIAF_TARGET_PROVIDER,
   PrismaFediafTargetProvider,
 } from './application/recipe-designer/fediaf-target-provider';
@@ -722,6 +726,13 @@ validatePrismaConfig();
     RecipeAiWizardService,
     {
       provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
+      useClass: TencentCloudSupplementLabelOcrProvider,
+    },
+    // 过敏原检测报告识别（AI）：OCR 复用与补剂包装识别同一个腾讯云实现
+    // —— 它就是一次通用文字识别，没必要为此再写第二遍密钥与签名逻辑。
+    HealthReportExtractionService,
+    {
+      provide: HEALTH_REPORT_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,
     },
     AgentProviderConfigService,

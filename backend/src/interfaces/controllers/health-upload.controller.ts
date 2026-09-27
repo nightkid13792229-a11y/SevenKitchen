@@ -23,6 +23,9 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import {
+  HealthReportExtractionService,
+} from '../../application/health/health-report-extraction.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth';
 import { resolveHealthUploadErrorMessage } from './health-upload-error';
@@ -64,7 +67,10 @@ function hasAllowedHealthUploadType(file: Express.Multer.File) {
 @Controller('api/v1/health')
 @UseGuards(AuthGuard)
 export class HealthUploadController {
-  constructor(private readonly cosService: TencentCosService) {}
+  constructor(
+    private readonly cosService: TencentCosService,
+    private readonly healthReportExtractionService: HealthReportExtractionService,
+  ) {}
 
   @Post('upload-image')
   @ApiOperation({ summary: 'Upload health record image or PDF' })
@@ -162,5 +168,42 @@ export class HealthUploadController {
       );
       throw new BadRequestException('删除失败，请重试');
     }
+  }
+
+  /**
+   * 过敏原检测报告识别（AI）
+   *
+   * 流程：先调 upload-image 拿到 url，再带上 url 调这里。
+   * 返回的过敏原**只是候选**，必须由顾客确认后才写入档案 ——
+   * 识别结果不得直接落库（与决策 5/9 一致）。
+   *
+   * 失败时的处理：抛错，前端降级为手工填写（老板定的 A2），不阻断建档。
+   */
+  @Post('extract-report')
+  @ApiOperation({ summary: '识别狗狗过敏原检测报告，提取过敏原与病史' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        imageUrl: {
+          type: 'string',
+          description: 'upload-image 返回的文件地址',
+        },
+        originalFilename: { type: 'string' },
+      },
+      required: ['imageUrl'],
+    },
+  })
+  @ApiResponse({ status: 201, description: '识别成功，返回候选过敏原' })
+  async extractHealthReport(
+    @Body() dto: { imageUrl: string; originalFilename?: string },
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.healthReportExtractionService.extractFromReport({
+      imageUrl: dto?.imageUrl,
+      originalFilename: dto?.originalFilename,
+    });
+
+    return ApiResponseDto.success(result);
   }
 }

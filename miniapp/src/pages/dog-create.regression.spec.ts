@@ -342,5 +342,78 @@ describe('dog-create runtime regressions', () => {
       expect(source).toContain('activity-intensity__bar')
       expect(source).toContain('option.intensity')
     })
+
+    it('提供活动量参考图，并带加载失败降级', () => {
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/pages/dog-create/index.vue'),
+        'utf-8',
+      )
+
+      expect(source).toContain('activityGuideImageUrl')
+      expect(source).toContain('img.sevenkitchen.cloud')
+      expect(source).toContain('onActivityImageError')
+      expect(source).toContain('showActivityFallback')
+    })
+  })
+
+  /**
+   * 活动量的「热量影响」说明必须与真实算法一致（2026-09-27）
+   *
+   * 原文案按 5 档列出 ×0.8/×0.9/×1.0/×1.2/×1.5，但实测成年犬只分两档
+   * （休息静养 与 城市日常 同档；规律运动 与 高活动 同档）。
+   * 按原文案提问，顾客会以为自己正在做 5 档精细调节 —— 说明与结果对不上，
+   * 会直接损害对喂食建议的信任。
+   */
+  describe('活动量热量说明与算法一致', () => {
+    it('不再对成年犬宣称 5 档细分乘数', () => {
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/utils/dog-profile-overview.ts'),
+        'utf-8',
+      )
+      // 只取真正渲染给顾客的 items 段，避免把代码注释也算进来
+      const activityBlock =
+        source.match(/activity: \{[\s\S]*?\n    \},/)?.[0] || ''
+      const itemsBlock = activityBlock.match(/items: \[[\s\S]*?\n      \],/)?.[0] || ''
+
+      expect(itemsBlock).not.toBe('')
+      expect(itemsBlock).not.toContain('×0.9')
+      expect(itemsBlock).toContain('只分两档')
+    })
+  })
+
+  /**
+   * 喜欢 / 不吃的食材（2026-09-27，决策 7）
+   *
+   * preferredFoods 这一列一直存在、配方设计器与 AI 早就在读，
+   * 但顾客端完全没有入口 —— 生产 4544 只狗里整列为空。
+   */
+  describe('喜欢与不吃的食材', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('两项都是一点即选，不用顾客手打', () => {
+      const source = readPage()
+
+      expect(source).toContain('喜欢吃的食材')
+      expect(source).toContain('不吃的食材')
+      expect(source).toContain('commonFoodTags')
+      expect(source).toContain('toggleFoodTag')
+    })
+
+    it('分别写入 preferredFoods 与 pickyFoods', () => {
+      const source = readPage()
+
+      expect(source).toContain("toggleFoodTag('preferredFoods', item)")
+      expect(source).toContain("toggleFoodTag('pickyFoods', item)")
+    })
+
+    it('提交 payload 带上 preferredFoods（否则这一列永远为空）', () => {
+      const formSource = readFileSync(
+        resolve(process.cwd(), 'src/utils/dog-profile-form.ts'),
+        'utf-8',
+      )
+
+      expect(formSource).toContain('preferredFoods: normalizeOptionalText(form.preferredFoods)')
+    })
   })
 })

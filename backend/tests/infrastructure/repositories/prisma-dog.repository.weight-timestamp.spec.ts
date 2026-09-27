@@ -90,6 +90,31 @@ describe('PrismaDogRepository 体重更新时间', () => {
     );
   });
 
+  /**
+   * 喜欢的食材（决策 7，2026-09-27）
+   *
+   * 这一列一直存在、配方设计器与 AI 早就在读，但顾客端完全没有入口 ——
+   * 生产 4544 只狗里整列为空。打通写入路径后，顾客在健康信息步骤
+   * 一点即选的标签才会真正落库、并出现在营养师的设计面板上。
+   */
+  it('喜欢的食材会被写入并映射回领域实体', async () => {
+    const { repo, prisma } = createRepository({ id: 'dog-1', currentWeightKg: 6.7 });
+    const dog = buildDog(6.7);
+    dog.preferredFoods = '牛肉、南瓜';
+
+    await repo.save(dog);
+
+    expect(prisma.dog.update.mock.calls[0][0].data.preferredFoods).toBe('牛肉、南瓜');
+  });
+
+  it('未设置时写 null，不会误写成 undefined（避免 Prisma 报错）', async () => {
+    const { repo, prisma } = createRepository({ id: 'dog-1', currentWeightKg: 6.7 });
+
+    await repo.save(buildDog(6.7));
+
+    expect(prisma.dog.update.mock.calls[0][0].data.preferredFoods).toBeNull();
+  });
+
   it('确认状态由实体携带写出（改档案时不会把已有确认清掉）', async () => {
     const { repo, prisma } = createRepository({ id: 'dog-1', currentWeightKg: 6.7 });
     const dog = buildDog(6.7);

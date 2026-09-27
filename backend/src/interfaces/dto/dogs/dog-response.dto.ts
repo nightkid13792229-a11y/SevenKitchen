@@ -104,6 +104,9 @@ export class DogProfileDto {
   @ApiProperty({ description: '顾客是否亲自确认过每日餐数' })
   mealsPerDayConfirmed!: boolean;
 
+  @ApiProperty({ description: '喜欢的食材', nullable: true })
+  preferredFoods!: string | null;
+
   @ApiProperty({ enum: LifeStageOverride })
   lifeStageOverride!: LifeStageOverride;
 

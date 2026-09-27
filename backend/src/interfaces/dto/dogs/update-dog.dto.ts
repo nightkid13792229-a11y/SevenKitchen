@@ -123,6 +123,11 @@ export class UpdateDogDto {
   @IsBoolean()
   mealsPerDayConfirmed?: boolean;
 
+  @ApiPropertyOptional({ description: '喜欢的食材' })
+  @IsOptional()
+  @IsString()
+  preferredFoods?: string | null;
+
   @ApiPropertyOptional({ enum: TreatInputMode })
   @IsOptional()
   @IsEnum(TreatInputMode)

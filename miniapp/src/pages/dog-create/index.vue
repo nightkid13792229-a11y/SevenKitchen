@@ -458,6 +458,48 @@
             </view>
           </view>
 
+          <!-- 活动量参考图：AI 生成，放 CDN（避免主包超限）。
+               加载失败时降级为文字说明 —— 上方每档已有描述与强度条。 -->
+          <view class="feeding-guide-card">
+            <view class="feeding-guide-card__header">
+              <text class="feeding-guide-card__title">活动量参考图</text>
+              <text class="feeding-guide-card__badge">当前页查看</text>
+            </view>
+            <image
+              v-if="!showActivityFallback"
+              class="feeding-guide-card__image"
+              :src="activityGuideImageUrl"
+              mode="widthFix"
+              @load="onActivityImageLoad"
+              @error="onActivityImageError"
+            />
+            <view v-else class="bcs-fallback-content">
+              <view class="bcs-fallback-title">按运动时长对照（每日合计）</view>
+              <view class="bcs-table">
+                <view class="bcs-row">
+                  <view class="bcs-score-group"><text class="bcs-score">1 静养</text></view>
+                  <view class="bcs-desc"><text class="bcs-desc-item">• 几乎不运动，主要时间在休息，或遵医嘱控量</text></view>
+                </view>
+                <view class="bcs-row">
+                  <view class="bcs-score-group"><text class="bcs-score">2 城市日常</text></view>
+                  <view class="bcs-desc"><text class="bcs-desc-item">• 每天遛 1-2 次，合计约 30-45 分钟</text></view>
+                </view>
+                <view class="bcs-row">
+                  <view class="bcs-score-group"><text class="bcs-score">3 规律运动</text></view>
+                  <view class="bcs-desc"><text class="bcs-desc-item">• 每天有稳定的主动运动，合计约 1 小时</text></view>
+                </view>
+                <view class="bcs-row">
+                  <view class="bcs-score-group"><text class="bcs-score">4 高活动</text></view>
+                  <view class="bcs-desc"><text class="bcs-desc-item">• 每天 2-4 小时，经常跑步、游泳</text></view>
+                </view>
+                <view class="bcs-row">
+                  <view class="bcs-score-group"><text class="bcs-score">5 工作犬</text></view>
+                  <view class="bcs-desc"><text class="bcs-desc-item">• 有实际工作任务或高强度训练</text></view>
+                </view>
+              </view>
+            </view>
+          </view>
+
           <view v-if="feedingImpactExpanded.activity" class="feeding-impact-panel">
             <text class="feeding-impact-panel__title">{{ feedingImpactContent.activity.title }}</text>
             <text class="feeding-impact-panel__summary">{{ feedingImpactContent.activity.summary }}</text>
@@ -566,6 +608,32 @@
             <view v-if="selectedAllergens.length > 0" class="health-selected">
               <text class="health-selected__label">已记录：</text>
               <text class="health-selected__value">{{ selectedAllergens.join('、') }}</text>
+            </view>
+          </view>
+
+          <view class="health-tag-section">
+            <text class="health-tag-section__title">喜欢吃的食材（可多选）</text>
+            <view class="health-tag-list">
+              <text
+                v-for="item in commonFoodTags"
+                :key="`pref-${item}`"
+                class="health-tag"
+                :class="{ 'health-tag--active': selectedPreferredFoods.includes(item) }"
+                @tap="toggleFoodTag('preferredFoods', item)"
+              >{{ item }}</text>
+            </view>
+          </view>
+
+          <view class="health-tag-section">
+            <text class="health-tag-section__title">不吃的食材（可多选）</text>
+            <view class="health-tag-list">
+              <text
+                v-for="item in commonFoodTags"
+                :key="`dis-${item}`"
+                class="health-tag"
+                :class="{ 'health-tag--active': selectedDislikedFoods.includes(item) }"
+                @tap="toggleFoodTag('pickyFoods', item)"
+              >{{ item }}</text>
             </view>
           </view>
 
@@ -821,6 +889,8 @@ interface FormData {
   checkupRecords: any[]  // 体检记录列表
   allergyRecords: any[]  // 过敏记录列表
   allergyFoods: string
+  /** 喜欢的食材（决策 7）：与"不吃的食材"成对 */
+  preferredFoods: string
   pickyFoods: string
   /**
    * 顾客是否亲自选过这几项（定制门槛按此判定，不看"有没有值"）。
@@ -856,6 +926,7 @@ const formData = ref<FormData>({
   checkupRecords: [],
   allergyRecords: [],
   allergyFoods: '',
+  preferredFoods: '',
   pickyFoods: '',
   // 默认都未确认：只有顾客真的点了才算
   bcsScoreConfirmed: false,
@@ -990,6 +1061,15 @@ const feedingImpactExpanded = reactive<Record<'bcs' | 'activity' | 'treat', bool
 
 // BCS评分图URL - 使用腾讯云COS CDN加速域名
 const bcsGuideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/BCS-chart.jpg')
+/**
+ * 活动量参考图（2026-09-27 用 AI 生成后上传 CDN）。
+ *
+ * 与 BCS 参考图同样放 CDN 而不是打进小程序包 —— 图片有 143KB，
+ * 放进主包会挤占 2MB 的额度。
+ * 加载失败时降级为文字说明（下面各档已有描述与强度条，不会因此看不懂）。
+ */
+const activityGuideImageUrl = ref('https://img.sevenkitchen.cloud/dog-profile-charts/activity-levels.jpg')
+const showActivityFallback = ref(false)
 const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
 const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开状态
 
@@ -1356,6 +1436,37 @@ function toggleAllergen(allergen: string) {
     ...(formData.value.allergyRecords || []),
     { allergen, notes: '', attachments: [] },
   ]
+}
+
+/**
+ * 喜欢 / 不吃的食材（决策 7）。
+ *
+ * 「不吃的食材」复用既有的 pickyFoods —— 它已经被首页推荐做挑食扣分、也被 AI 读；
+ * 「喜欢的食材」走 preferredFoods，这一列一直存在、配方设计器与 AI 早就在读，
+ * 但顾客端此前完全没有入口，生产里整列为空。
+ */
+const commonFoodTags = ['鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉', '三文鱼', '鸡蛋', '南瓜', '胡萝卜', '西兰花', '苹果']
+
+function splitFoodTags(value: unknown): string[] {
+  return String(value || '')
+    .split(/[,，、;；]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+const selectedPreferredFoods = computed(() => splitFoodTags(formData.value.preferredFoods))
+const selectedDislikedFoods = computed(() => splitFoodTags(formData.value.pickyFoods))
+
+function toggleFoodTag(field: 'preferredFoods' | 'pickyFoods', item: string) {
+  const current = field === 'preferredFoods'
+    ? selectedPreferredFoods.value
+    : selectedDislikedFoods.value
+
+  const next = current.includes(item)
+    ? current.filter(value => value !== item)
+    : [...current, item]
+
+  formData.value[field] = next.join('、')
 }
 
 /** 顾客手打的其它过敏原（逗号/顿号分隔） */
@@ -2203,6 +2314,15 @@ function onCreateMealsChange(event: any) {
 
 function toggleFeedingImpact(type: 'bcs' | 'activity' | 'treat') {
   feedingImpactExpanded[type] = !feedingImpactExpanded[type]
+}
+
+function onActivityImageLoad() {
+  showActivityFallback.value = false
+}
+
+function onActivityImageError() {
+  console.warn('[Activity Guide] 参考图加载失败，降级为文字说明')
+  showActivityFallback.value = true
 }
 
 function onBcsImageLoad() {

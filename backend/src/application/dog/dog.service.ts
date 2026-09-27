@@ -59,6 +59,8 @@ export interface CreateDogProfileDto {
   bcsScoreConfirmed?: boolean;
   activityLevelConfirmed?: boolean;
   mealsPerDayConfirmed?: boolean;
+  /** 喜欢的食材（决策 7）：顾客端可写，配方设计器与 AI 会读 */
+  preferredFoods?: string | null;
 }
 
 export interface UpdateDogProfileDto {
@@ -84,6 +86,7 @@ export interface UpdateDogProfileDto {
   bcsScoreConfirmed?: boolean;
   activityLevelConfirmed?: boolean;
   mealsPerDayConfirmed?: boolean;
+  preferredFoods?: string | null;
 }
 
 export interface CalcPreviewResult {
@@ -382,6 +385,7 @@ export class DogService {
       dto.bcsScoreConfirmed ? new Date() : null,
       dto.activityLevelConfirmed ? new Date() : null,
       dto.mealsPerDayConfirmed ? new Date() : null,
+      dto.preferredFoods ?? null,
     );
 
     // 先把「会抛错的部分」全部做完，最后才落库。

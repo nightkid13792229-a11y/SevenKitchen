@@ -71,6 +71,7 @@ export class PrismaDogRepository implements DogRepository {
       medicalHistory: dog.medicalHistory,
       avatarUrl: dog.avatarUrl,
       allergyFoods: dog.allergyFoods,
+      preferredFoods: dog.preferredFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
       ...(weightChanged ? { weightUpdatedAt: new Date() } : {}),
@@ -129,6 +130,7 @@ export class PrismaDogRepository implements DogRepository {
       record.bcsScoreConfirmedAt ?? null,
       record.activityLevelConfirmedAt ?? null,
       record.mealsPerDayConfirmedAt ?? null,
+      record.preferredFoods ?? null,
     );
   }
 }

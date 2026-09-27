@@ -193,6 +193,7 @@ export class DogsController {
       bcsScoreConfirmed: createDogDto.bcsScoreConfirmed,
       activityLevelConfirmed: createDogDto.activityLevelConfirmed,
       mealsPerDayConfirmed: createDogDto.mealsPerDayConfirmed,
+      preferredFoods: createDogDto.preferredFoods,
     });
 
     // Save medical records if provided
@@ -1111,6 +1112,7 @@ export class DogsController {
       checkupRecords: checkupRecords || null,
       allergyRecords: allergyRecords || null,
       allergyFoods: dog.allergyFoods,
+      preferredFoods: dog.preferredFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
     };

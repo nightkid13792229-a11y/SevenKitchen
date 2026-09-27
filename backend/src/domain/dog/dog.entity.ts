@@ -56,6 +56,16 @@ export class Dog {
     public bcsScoreConfirmedAt: Date | null = null,
     public activityLevelConfirmedAt: Date | null = null,
     public mealsPerDayConfirmedAt: Date | null = null,
+    /**
+     * 喜欢的食材（2026-09-27，决策 7）。
+     *
+     * 该列一直存在，且配方设计器/AI 早就在读它，但**顾客端完全没有人能写** ——
+     * 生产 4544 只狗里这一列为空。老板要求"喜欢的食材和不吃的食材都值得正式记录"，
+     * 因此把顾客端这条写入路径打通（不吃的食材复用既有的 pickyFoods）。
+     *
+     * 追加在参数末尾是为了不打乱已有的位置参数顺序（避免误传）。
+     */
+    public preferredFoods: string | null = null,
   ) {
     this.validateInvariants();
   }
@@ -168,6 +178,9 @@ export class Dog {
     }
     if (updates.allergyFoods !== undefined) {
       this.allergyFoods = updates.allergyFoods;
+    }
+    if (updates.preferredFoods !== undefined) {
+      this.preferredFoods = updates.preferredFoods;
     }
     if (updates.pickyFoods !== undefined) {
       this.pickyFoods = updates.pickyFoods;

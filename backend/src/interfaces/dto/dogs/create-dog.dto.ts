@@ -116,6 +116,15 @@ export class CreateDogDto {
   @IsBoolean()
   mealsPerDayConfirmed?: boolean;
 
+  /**
+   * 喜欢的食材（决策 7）。顾客端可写；配方设计器与 AI 会读它来生成配方。
+   * 与「不吃的食材」（pickyFoods）成对使用。
+   */
+  @ApiPropertyOptional({ description: '喜欢的食材', example: '牛肉、南瓜' })
+  @IsOptional()
+  @IsString()
+  preferredFoods?: string | null;
+
   @ApiPropertyOptional({
     enum: TreatInputMode,
     default: TreatInputMode.ESTIMATE_LEVEL,

@@ -313,6 +313,8 @@ export function buildDogCreatePayload(form: Record<string, any>) {
         : undefined,
     ...healthRecords,
     allergyFoods: normalizeOptionalText(form.allergyFoods),
+    // 喜欢的食材（决策 7）：顾客端此前完全没有入口，这一列一直空着
+    preferredFoods: normalizeOptionalText(form.preferredFoods),
     pickyFoods: normalizeOptionalText(form.pickyFoods),
   })
 }

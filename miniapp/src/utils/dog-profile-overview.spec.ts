@@ -287,17 +287,19 @@ describe('dog-profile-overview', () => {
         { label: '9分 肥胖', detail: '按 ×0.6 计算，会下调约 40% 的热量。' },
       ],
     })
-    expect(getFeedingImpactExplanation('activity')).toEqual({
-      title: '活动水平如何影响热量',
-      summary: '活动水平会通过活动系数影响总能量需求。运动越多，所需热量越高。',
-      items: [
-        { label: '休息', detail: '按 ×0.8 计算，适用于几乎不运动或静养。' },
-        { label: '低活动', detail: '按 ×0.9 计算，适用于偶尔散步、活动量较低。' },
-        { label: '正常活动', detail: '按 ×1.0 计算，作为常规基准。' },
-        { label: '高活动', detail: '按 ×1.2 计算，适用于每天运动较多的狗狗。' },
-        { label: '工作犬', detail: '按 ×1.5 计算，适用于高强度训练或工作场景。' },
-      ],
-    })
+    // 2026-09-27：文案改为与真实算法一致（成年犬实际只分两档），
+    // 不再宣称 5 档细分的乘数，避免"说明与结果对不上"。
+    const activityImpact = getFeedingImpactExplanation('activity')
+    expect(activityImpact.title).toBe('活动水平如何影响热量')
+    expect(activityImpact.items.map(item => item.label)).toEqual([
+      '成年犬（最常见）',
+      '工作犬',
+      '老年犬',
+      '幼犬 / 妊娠哺乳期',
+    ])
+    expect(activityImpact.items[0].detail).toContain('只分两档')
+    // 不得再对成年犬宣称 ×0.9 / ×1.0 这类不存在的档位差异
+    expect(JSON.stringify(activityImpact)).not.toContain('×0.9')
     expect(getFeedingImpactExplanation('treat')).toEqual({
       title: '零食如何影响热量',
       summary: '零食热量会先从每日总能量需求中预留出来，因此零食越多，主食热量越少。',

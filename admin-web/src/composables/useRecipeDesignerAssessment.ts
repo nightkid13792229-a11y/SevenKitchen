@@ -31,13 +31,49 @@ const inputsCache = new Map<string, DraftAssessmentInputs>()
 
 const targetsCache = new Map<string, AssessmentTarget[]>()
 
+/**
+ * 缓存的评估输入是否仍然对得上当前草稿。
+ *
+ * 为什么必须有这道校验：「复制其他阶段原料」「切换阶段」等服务端动作会把目标草稿
+ * 的原料记录整批删掉再重建，原料 id 全部换新；而缓存里的营养档案是按原料 id 索引的。
+ * 只要校验缺失，缓存命中后评估引擎就会拿新原料 id 去旧档案里查，一条都对不上，
+ * 于是「关键比例仪表」全是「—」、「营养评估」整片「缺数据」——而配方明细看起来完全正常。
+ * 所以：情境（决定标准表）不同、或计入评估的原料集合和缓存不一致时，一律重新拉取。
+ */
+function isCachedInputsUsable(
+  cached: DraftAssessmentInputs | undefined,
+  scenario: FediafDogScenario,
+  items?: DesignerItem[]
+): cached is DraftAssessmentInputs {
+  if (!cached) return false
+  if (cached.scenario !== scenario) return false
+  if (!items) return true
+
+  const cachedItemIds = new Set(cached.items.map((item) => item.id))
+  const currentIncludedIds = items
+    .filter((item) => item.includeInAssessment !== false)
+    .map((item) => item.id)
+
+  if (currentIncludedIds.length !== cachedItemIds.size) return false
+  return currentIncludedIds.every((id) => cachedItemIds.has(id))
+}
+
 export function useRecipeDesignerAssessment() {
   const loadingInputs = shallowRef(false)
   const inputsError = shallowRef<string | null>(null)
 
-  async function loadInputs(draftId: string, scenario: FediafDogScenario): Promise<void> {
+  /**
+   * 进入编辑器时加载评估输入。
+   * 传入 items（当前草稿的原料）后，缓存会先和原料 id 比对：
+   * 对得上才复用，对不上（例如刚做过跨阶段复制）就重新拉取，避免面板整片缺数据。
+   */
+  async function loadInputs(
+    draftId: string,
+    scenario: FediafDogScenario,
+    items?: DesignerItem[]
+  ): Promise<void> {
     const cached = inputsCache.get(draftId)
-    if (cached) {
+    if (isCachedInputsUsable(cached, scenario, items)) {
       targetsCache.set(draftId, cached.targets)
       return
     }

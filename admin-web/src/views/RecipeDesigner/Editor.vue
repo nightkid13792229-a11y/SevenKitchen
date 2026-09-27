@@ -663,7 +663,8 @@ async function loadDraft(targetDraftId?: string) {
     }))
     undoStack.value = []
     redoStack.value = []
-    await loadInputs(detail.id, detail.fediafDogScenario)
+    // 带上当前原料：跨阶段复制/切换阶段会换掉原料 id，缓存对不上时会自动重新拉取
+    await loadInputs(detail.id, detail.fediafDogScenario, items.value)
   } catch {
     ElMessage.error('草稿加载失败')
   } finally {
@@ -735,7 +736,7 @@ async function handleRevert() {
     }))
     undoStack.value = []
     redoStack.value = []
-    await loadInputs(reverted.id, reverted.fediafDogScenario)
+    await loadInputs(reverted.id, reverted.fediafDogScenario, items.value)
     ElMessage.success('已恢复正式版')
   } catch {
     // 错误提示由拦截器统一处理

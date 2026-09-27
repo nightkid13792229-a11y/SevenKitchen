@@ -116,7 +116,8 @@ describe('create step boundaries', () => {
       { value: 'MALE', label: '弟弟', symbol: '♂' },
       { value: 'FEMALE', label: '妹妹', symbol: '♀' },
     ])
-    expect(getCreateNeuterHint()).toBe('是否绝育会影响小家伙的热量评估。')
+    // 2026-09-27：原话术与算法不符（绝育只影响成犬+工作犬），已改为如实说明
+    expect(getCreateNeuterHint()).toContain('极少数情况')
   })
 
   it('provides concise manual-breed labels for name input and adult size selection', () => {

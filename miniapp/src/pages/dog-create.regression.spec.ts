@@ -125,4 +125,42 @@ describe('dog-create runtime regressions', () => {
     expect(formSource).toContain('DEFAULT_BCS_SCORE')
     expect(formSource).toContain('DEFAULT_ACTIVITY_LEVEL')
   })
+
+  /**
+   * 性别与是否绝育改成「选填 + 折叠」（2026-09-27，U2）
+   *
+   * 实测：性别不参与任何热量计算（只在繁殖期给个提示），绝育也只在
+   * 「成犬且为工作犬」时才用得到。让顾客在最想快点看到喂食建议的时候
+   * 停下来回答两个不影响结果的问题，代价不值。
+   */
+  describe('性别与绝育收进「更多信息」', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('默认收起，需要顾客主动展开', () => {
+      const source = readPage()
+
+      expect(source).toContain('const showMoreInfo = ref(false)')
+      expect(source).toContain('更多信息（选填）')
+      expect(source).toContain('toggleMoreInfo')
+      expect(source).toContain('v-if="showMoreInfo"')
+    })
+
+    it('两项都还有入口（折叠不等于删掉）', () => {
+      const source = readPage()
+
+      expect(source).toContain('selectGender(')
+      expect(source).toContain('selectNeutered(')
+    })
+
+    it('绝育的话术与真实算法一致（不再宣称"会影响热量评估"）', () => {
+      const viewSource = readFileSync(
+        resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
+        'utf-8',
+      )
+
+      expect(viewSource).not.toContain('是否绝育会影响小家伙的热量评估')
+      expect(viewSource).toContain('极少数情况')
+    })
+  })
 })

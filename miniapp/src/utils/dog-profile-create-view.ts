@@ -16,27 +16,27 @@ const ACTIVITY_LEVEL_CHOICES = [
   {
     value: 'RESTING',
     label: '休息静养',
-    description: '几乎不运动，主要时间休息或医嘱控量',
+    description: '几乎不运动，主要时间在休息，或遵医嘱控量',
   },
   {
     value: 'LOW',
     label: '城市日常',
-    description: '每日散步约30-45分钟，适合多数国内城市犬',
+    description: '每天主要在小区遛 1-2 次，合计约 30-45 分钟 —— 多数城市犬属于这一档',
   },
   {
     value: 'NORMAL',
     label: '规律运动',
-    description: '每日主动运动约1小时，活动量稳定',
+    description: '每天有稳定的主动运动，合计约 1 小时（例如固定的跑步、丢球）',
   },
   {
     value: 'HIGH',
     label: '高活动',
-    description: '每日运动2-4小时，经常跑步或玩耍',
+    description: '每天运动 2-4 小时，经常跑步、游泳或长时间玩耍',
   },
   {
     value: 'WORKING',
     label: '工作犬',
-    description: '高强度训练或工作犬场景',
+    description: '有实际工作任务或高强度训练（如护卫、搜救、竞赛）',
   },
 ] as const
 

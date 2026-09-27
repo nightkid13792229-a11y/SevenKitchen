@@ -73,7 +73,8 @@ describe('create step boundaries', () => {
     expect(getCreateActivityChoices()[1]).toMatchObject({
       value: 'LOW',
       label: '城市日常',
-      description: expect.stringContaining('30-45分钟'),
+      // 2026-09-27：文案改为"对号入座式"，让顾客更容易把自己归到某一档
+      description: expect.stringContaining('30-45 分钟'),
     })
     expect(getCreateMealChoices()).toEqual([
       { value: '1', label: '1 餐/天' },

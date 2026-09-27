@@ -578,12 +578,18 @@ const getBCSText = (bcsScore: number) => {
 };
 
 const getActivityLabel = (level: string) => {
+  // 2026-09-27 修复：原先只映射了 LOW/NORMAL/HIGH，
+  // 而生产里还有 RESTING（静养，245 只）与 WORKING（工作犬，4 只）——
+  // 这两档的顾客会在这里看到英文 "RESTING" / "WORKING"，完全看不懂。
+  // 文案与建档页保持一致，避免同一个概念两个页面两种说法。
   const map: Record<string, string> = {
-    LOW: '低活动量',
-    NORMAL: '正常活动',
-    HIGH: '高活动量',
+    RESTING: '休息静养',
+    LOW: '城市日常',
+    NORMAL: '规律运动',
+    HIGH: '高活动',
+    WORKING: '工作犬',
   };
-  return map[level] || level;
+  return map[level] || '未评估';
 };
 </script>
 

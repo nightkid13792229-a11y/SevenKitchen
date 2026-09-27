@@ -181,3 +181,28 @@ describe('custom recipe auth gate', () => {
     expect(submit).toContain("needLogin.value ? '请先登录'")
   })
 })
+
+/**
+ * 档案摘要里的活动量显示（2026-09-27）
+ *
+ * 定制页会显示所选狗狗的活动量，但映射表只覆盖了 LOW/NORMAL/HIGH ——
+ * 生产里还有 RESTING（静养，245 只）与 WORKING（工作犬，4 只），
+ * 这两档的顾客会看到英文 "RESTING" / "WORKING"，完全看不懂。
+ */
+describe('custom recipe activity level labels', () => {
+  const submit = read(`${PAGE_DIR}/index.vue`)
+
+  it('五个活动量档位都有中文文案', () => {
+    for (const level of ['RESTING', 'LOW', 'NORMAL', 'HIGH', 'WORKING']) {
+      expect(submit).toContain(`${level}:`)
+    }
+  })
+
+  it('不再把原始英文枚举当作兜底展示', () => {
+    // 兜底改成「未评估」，避免任何未知值直接漏成英文给顾客看
+    const labelFn = submit.match(/const getActivityLabel = \([\s\S]*?\n\};/)?.[0] || ''
+    expect(labelFn).not.toBe('')
+    expect(labelFn).not.toContain('return map[level] || level')
+    expect(labelFn).toContain('未评估')
+  })
+})

@@ -92,29 +92,79 @@ const NEW_BREEDS: NewBreedInput[] = [
     basis:
       'FCI 认可，库里缺失。大型犬晚熟，成犬月龄取 18；生产实测 36.5kg（1 只），标准 20–40kg。',
   },
+  // ⚠️ 美国恶霸犬 / 澳洲拉布拉多贵宾 / 可卡布都是**分多种体型**的品种。
+  // 老板指出：不能用一个「折中」条目涵盖，否则体型判断与热量都会错。
+  // 因此参照库里既有的「雪纳瑞（迷你/标准/巨型）」「贵宾犬（玩具/小型/标准/巨型）」
+  // 的做法，一个体型档位一个品种名。
+  // 各档的成年月龄/老年岁数按体型套用既有约定：
+  //   SMALL 10月/11岁、MEDIUM 12月/10岁、LARGE 18月/8岁、GIANT 24月/7岁
+  // 恶霸犬 ABKC 有 Pocket / Classic / Standard / XL 等多个品系，
+  // 其中 Classic 与 Pocket 体重高度重叠，按体重分档意义不大，故只建三档。
   {
-    name: '美国恶霸犬',
+    name: '美国恶霸犬（口袋型）',
     sizeCategory: DogSizeCategory.MEDIUM,
     growthCurveType: GrowthCurveType.STANDARD,
     adultAgeMonths: 12,
     seniorAgeYears: 10,
-    averageAdultWeightKg: 25,
-    aliases: ['恶霸犬', '恶霸', 'American Bully'],
+    averageAdultWeightKg: 16,
+    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬口袋型', '口袋恶霸', 'Pocket Bully'],
+    basis: 'ABKC 口袋型体型最小，体重约 13–18kg → MEDIUM（对标雪纳瑞标准 15.9kg）。',
+  },
+  {
+    name: '美国恶霸犬（标准型）',
+    sizeCategory: DogSizeCategory.LARGE,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 18,
+    seniorAgeYears: 8,
+    averageAdultWeightKg: 38,
+    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬标准型', '标准恶霸', 'Standard Bully', 'Classic Bully', '恶霸犬经典型'],
     basis:
-      'UKC/ABKC 认可、AKC 已纳入 FSS。⚠️ 体型因品系差异极大（Pocket 至 XL），这里取 MEDIUM 作折中，顾客可在档案里手动调整体型。',
+      'ABKC 标准型体重约 30–45kg → LARGE（对标雪纳瑞巨型 34kg）。经典型与口袋型体重重叠，并入本档。',
+  },
+  {
+    name: '美国恶霸犬（XL型）',
+    sizeCategory: DogSizeCategory.GIANT,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 24,
+    seniorAgeYears: 7,
+    averageAdultWeightKg: 52,
+    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬XL型', 'XL恶霸', 'XL Bully', '美国恶霸犬XL'],
+    basis: 'ABKC XL 型约 45–60kg → GIANT（≥24 月成年、7 岁进入老年）。',
   },
 
   // ============ B. 热门杂交犬（犬业联盟不认可；按老板意见单独建库）============
+  // 可卡布同样是分体型的：用玩具贵宾配 → 玩具型，用迷你贵宾配 → 迷你型，用标准贵宾配 → 标准型。
+  // 生产实测跨度 2.3–12.5kg（15 只，5 倍差距），单条折中会让两头的狗都算错。
   {
-    name: '可卡布犬',
+    name: '可卡布犬（玩具）',
+    sizeCategory: DogSizeCategory.SMALL,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 10,
+    seniorAgeYears: 11,
+    averageAdultWeightKg: 4,
+    aliases: ['可卡布', 'Cockapoo', '可卡布玩具型', '玩具可卡布'],
+    basis: '玩具型（玩具贵宾配）约 5.4kg 以下 → SMALL。生产最小的那只 2.3kg 落在此档。',
+  },
+  {
+    name: '可卡布犬（迷你）',
     sizeCategory: DogSizeCategory.SMALL,
     growthCurveType: GrowthCurveType.STANDARD,
     adultAgeMonths: 10,
     seniorAgeYears: 11,
     averageAdultWeightKg: 7,
-    aliases: ['可卡布', 'Cockapoo'],
+    aliases: ['可卡布', 'Cockapoo', '可卡布迷你型', '迷你可卡布'],
     basis:
-      'Cockapoo（可卡犬 × 贵宾犬）。生产实测均重 6.7kg（2.3–12.5，15 只）→ SMALL，对标贵宾犬（小型）10/11、均重 6.8。',
+      '迷你型（迷你贵宾配）约 5.4–9kg → SMALL。生产均重 6.7kg 落在此档（最常见的档位）。',
+  },
+  {
+    name: '可卡布犬（标准）',
+    sizeCategory: DogSizeCategory.MEDIUM,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 12,
+    seniorAgeYears: 10,
+    averageAdultWeightKg: 11,
+    aliases: ['可卡布', 'Cockapoo', '可卡布标准型', '标准可卡布'],
+    basis: '标准型（标准贵宾配）约 9–13.6kg → MEDIUM。生产最大的那只 12.5kg 落在此档。',
   },
   {
     name: '马尔泰犬',
@@ -139,15 +189,34 @@ const NEW_BREEDS: NewBreedInput[] = [
       'Cavapoo（骑士查理王小猎犬 × 贵宾犬）。生产实测 9–11.3kg；对标骑士查理王小猎犬 6–8kg 体系 → SMALL。',
   },
   {
-    name: '澳洲拉布拉多贵宾犬',
+    name: '澳洲拉布拉多贵宾犬（迷你）',
+    sizeCategory: DogSizeCategory.SMALL,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 10,
+    seniorAgeYears: 11,
+    averageAdultWeightKg: 10,
+    aliases: ['澳拉贵', '澳拉贵迷你', '迷你澳拉贵', 'Mini Australian Labradoodle'],
+    basis: 'WALA 标准迷你系约 7–13kg → SMALL。生产实测 8.5–10kg 落在此档。',
+  },
+  {
+    name: '澳洲拉布拉多贵宾犬（中型）',
     sizeCategory: DogSizeCategory.MEDIUM,
     growthCurveType: GrowthCurveType.STANDARD,
     adultAgeMonths: 12,
     seniorAgeYears: 10,
-    averageAdultWeightKg: 15,
-    aliases: ['澳拉贵', '澳洲拉布拉多贵宾', 'Australian Labradoodle', '拉布拉多贵宾'],
-    basis:
-      '唯一有正式品种协会（WALA 等）的多代繁育犬种。它同时存在标准系（20–30kg）与迷你系（7–13kg），这里取 MEDIUM 作折中；生产实测 8.5–10kg。',
+    averageAdultWeightKg: 16,
+    aliases: ['澳拉贵', '澳拉贵中型', '中型澳拉贵', 'Medium Australian Labradoodle'],
+    basis: 'WALA 标准中型系约 13–20kg → MEDIUM。',
+  },
+  {
+    name: '澳洲拉布拉多贵宾犬（标准）',
+    sizeCategory: DogSizeCategory.LARGE,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 18,
+    seniorAgeYears: 8,
+    averageAdultWeightKg: 25,
+    aliases: ['澳拉贵', '澳拉贵标准', '标准澳拉贵', 'Standard Australian Labradoodle'],
+    basis: 'WALA 标准系约 20–30kg → LARGE（对标贵宾犬标准 22.7kg）。',
   },
   {
     name: '泰迪熊犬',

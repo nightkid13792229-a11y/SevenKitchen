@@ -76,13 +76,6 @@ export function getCreateGenderChoices() {
   return [...CREATE_GENDER_CHOICES]
 }
 
-export function getCreateNeuterHint() {
-  // 2026-09-27 更正：原话术是「是否绝育会影响热量评估」，但实测只有
-  // 「成犬 + 活动量为工作犬」这一种情况才用得到绝育状态，其余情况写进去了也不参与计算
-  // （见 dog-calc.service.ts）。按不准确的话术提问会误导顾客，因此改为如实说明。
-  return '用于记录。目前只在极少数情况（成犬且为工作犬）才影响热量评估。'
-}
-
 export function getCreateManualBreedLabels() {
   return {
     nameTitle: '填写品种名称',

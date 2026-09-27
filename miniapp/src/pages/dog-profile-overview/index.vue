@@ -1836,7 +1836,7 @@ function goToHealthProfile() {
 .weight-input-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .weight-input {
@@ -1847,17 +1847,18 @@ function goToHealthProfile() {
 .weight-unit-toggle {
   display: flex;
   flex: 0 0 auto;
-  padding: 4rpx;
+  padding: 3rpx;
   background: #eef3ea;
   border: 1rpx solid #e3e6d4;
   border-radius: 999rpx;
 }
 
 .weight-unit-option {
-  padding: 0 18rpx;
-  height: 56rpx;
-  line-height: 56rpx;
-  font-size: 24rpx;
+  /* 收紧凑一些：切换器越窄，输入框越宽，灰字才不会被切掉 */
+  padding: 0 14rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  font-size: 23rpx;
   color: #6b6653;
   border-radius: 999rpx;
 }

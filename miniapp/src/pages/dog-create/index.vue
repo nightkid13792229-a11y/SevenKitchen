@@ -74,7 +74,6 @@
                     <text class="neuter-label">未绝育</text>
                   </view>
                 </view>
-                <text class="hint">{{ createNeuterHint }}</text>
               </view>
 
             </view>
@@ -789,7 +788,6 @@ import {
   shouldShowCreateMixedBreedSizeSummary,
   getCreateTreatChoices,
   getCreateGenderChoices,
-  getCreateNeuterHint,
   normalizeCreateActivityLevel,
   normalizeCreateBcsScore,
   normalizeCreateMealsPerDay,
@@ -951,7 +949,6 @@ const createMealChoices = getCreateMealChoices()
 const createTreatChoices = getCreateTreatChoices()
 const createAvatarPlaceholder = getCreateAvatarPlaceholder()
 const createGenderChoices = getCreateGenderChoices()
-const createNeuterHint = getCreateNeuterHint()
 const createManualBreedLabels = getCreateManualBreedLabels()
 const showAvatarCropper = ref(false)
 const avatarCropSourcePath = ref('')
@@ -3426,7 +3423,7 @@ async function submit() {
 .weight-input-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .weight-input {
@@ -3437,17 +3434,18 @@ async function submit() {
 .weight-unit-toggle {
   display: flex;
   flex: 0 0 auto;
-  padding: 4rpx;
+  padding: 3rpx;
   background: #eef3ea;
   border: 1rpx solid #e3e6d4;
   border-radius: 999rpx;
 }
 
 .weight-unit-option {
-  padding: 0 18rpx;
-  height: 56rpx;
-  line-height: 56rpx;
-  font-size: 24rpx;
+  /* 收紧凑一些：切换器越窄，输入框越宽，灰字才不会被切掉 */
+  padding: 0 14rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  font-size: 23rpx;
   color: #6b6653;
   border-radius: 999rpx;
 }

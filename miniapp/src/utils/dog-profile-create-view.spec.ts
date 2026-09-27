@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   getCreateAvatarPlaceholder,
   getCreateActivityChoices,
@@ -6,7 +8,6 @@ import {
   getCreateBcsOptions,
   getCreateGenderChoices,
   getCreateManualBreedLabels,
-  getCreateNeuterHint,
   getCreateMixedBreedSizeHint,
   shouldShowCreateMixedBreedSizeSummary,
   getCreateBcsToneClass,
@@ -114,13 +115,20 @@ describe('create step boundaries', () => {
     expect(getCreateAvatarPlaceholder()).toBe('🐶')
   })
 
-  it('exposes friendly gender choices and neuter hint copy for step 1', () => {
+  it('exposes friendly gender choices for step 1', () => {
     expect(getCreateGenderChoices()).toEqual([
       { value: 'MALE', label: '弟弟', symbol: '♂' },
       { value: 'FEMALE', label: '妹妹', symbol: '♀' },
     ])
-    // 2026-09-27：原话术与算法不符（绝育只影响成犬+工作犬），已改为如实说明
-    expect(getCreateNeuterHint()).toContain('极少数情况')
+  })
+
+  it('不再提供绝育说明文案（2026-09-27 老板要求该项下方不展示小字）', () => {
+    // 说明文案与其工具函数一并移除，避免留下无人使用的死代码
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
+      'utf-8',
+    )
+    expect(source).not.toContain('getCreateNeuterHint')
   })
 
   it('provides concise manual-breed labels for name input and adult size selection', () => {

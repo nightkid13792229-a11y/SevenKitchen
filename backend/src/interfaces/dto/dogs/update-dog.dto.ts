@@ -102,6 +102,27 @@ export class UpdateDogDto {
   @Min(1)
   mealsPerDay?: number;
 
+  /**
+   * 「这一项是顾客亲自选的」标记（2026-09-27 新增）。
+   *
+   * 与新增档案同样的语义：只传 true 才记确认时间；
+   * 不传或传 false 都**不会清掉**已有的确认时间（改个名字不该让确认状态失效）。
+   */
+  @ApiPropertyOptional({ description: '顾客是否亲自选择了体况评分' })
+  @IsOptional()
+  @IsBoolean()
+  bcsScoreConfirmed?: boolean;
+
+  @ApiPropertyOptional({ description: '顾客是否亲自选择了活动量' })
+  @IsOptional()
+  @IsBoolean()
+  activityLevelConfirmed?: boolean;
+
+  @ApiPropertyOptional({ description: '顾客是否亲自确认了每日餐数' })
+  @IsOptional()
+  @IsBoolean()
+  mealsPerDayConfirmed?: boolean;
+
   @ApiPropertyOptional({ enum: TreatInputMode })
   @IsOptional()
   @IsEnum(TreatInputMode)

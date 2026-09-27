@@ -88,6 +88,22 @@ export class DogProfileDto {
   @ApiProperty({ enum: ActivityLevel })
   activityLevel!: ActivityLevel;
 
+  /**
+   * 「顾客是否亲自确认过」标记（2026-09-27 新增）。
+   *
+   * 这三项在表单里都有默认值，顾客不选也会被提交 —— 所以"有值"不等于"顾客选过"。
+   * 老板定的定制门槛按**确认状态**判定：只有确认过的档案才算满足定制要求，
+   * 未确认的在进定制页时要求顾客补确认（老档案不追溯）。
+   */
+  @ApiProperty({ description: '顾客是否亲自确认过体况评分' })
+  bcsScoreConfirmed!: boolean;
+
+  @ApiProperty({ description: '顾客是否亲自确认过活动量' })
+  activityLevelConfirmed!: boolean;
+
+  @ApiProperty({ description: '顾客是否亲自确认过每日餐数' })
+  mealsPerDayConfirmed!: boolean;
+
   @ApiProperty({ enum: LifeStageOverride })
   lifeStageOverride!: LifeStageOverride;
 

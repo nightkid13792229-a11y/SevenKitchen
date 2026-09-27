@@ -189,6 +189,10 @@ export class DogsController {
       medicalHistory: createDogDto.medicalHistory,
       allergyFoods: createDogDto.allergyFoods,
       pickyFoods: createDogDto.pickyFoods,
+      // 「顾客是否亲自选过这一项」：定制门槛按确认状态判定，不按"有没有值"
+      bcsScoreConfirmed: createDogDto.bcsScoreConfirmed,
+      activityLevelConfirmed: createDogDto.activityLevelConfirmed,
+      mealsPerDayConfirmed: createDogDto.mealsPerDayConfirmed,
     });
 
     // Save medical records if provided
@@ -1091,6 +1095,11 @@ export class DogsController {
         : null,
       bcsScore: dog.bcsScore,
       activityLevel: dog.activityLevel,
+      // 确认状态：前端据此判断"这份档案是否满足定制门槛"，
+      // 未确认的进入定制页时要求顾客补确认（老档案不追溯）。
+      bcsScoreConfirmed: Boolean(dog.bcsScoreConfirmedAt),
+      activityLevelConfirmed: Boolean(dog.activityLevelConfirmedAt),
+      mealsPerDayConfirmed: Boolean(dog.mealsPerDayConfirmedAt),
       lifeStageOverride: dog.lifeStageOverride,
       sizeClassOverride: dog.sizeClassOverride,
       mealsPerDay: dog.mealsPerDay,

@@ -52,6 +52,13 @@ export interface CreateDogProfileDto {
   medicalHistory?: string | null;
   allergyFoods?: string | null;
   pickyFoods?: string | null;
+  /**
+   * 「这一项是顾客亲自选的」标记。
+   * 体况评分/活动量/每日餐数都有默认值，不区分确认的话定制门槛就形同虚设。
+   */
+  bcsScoreConfirmed?: boolean;
+  activityLevelConfirmed?: boolean;
+  mealsPerDayConfirmed?: boolean;
 }
 
 export interface UpdateDogProfileDto {
@@ -73,6 +80,10 @@ export interface UpdateDogProfileDto {
   medicalHistory?: string | null;
   allergyFoods?: string | null;
   pickyFoods?: string | null;
+  /** 同 CreateDogProfileDto：只认 true，不传/false 都不清掉已有确认时间 */
+  bcsScoreConfirmed?: boolean;
+  activityLevelConfirmed?: boolean;
+  mealsPerDayConfirmed?: boolean;
 }
 
 export interface CalcPreviewResult {
@@ -364,6 +375,13 @@ export class DogService {
       dto.allergyFoods ?? null,
       dto.pickyFoods ?? null,
       0, // 下面算完再填
+      null, // avatarUrl：建档流程不设置头像
+      new Date(), // weightUpdatedAt：建档时的体重就是当下录的
+      // 确认状态：只有前端明确说"顾客点过这一项"才记确认时间。
+      // 体况评分/活动量/每日餐数都有默认值，不区分确认的话，门槛就永远拦不住人。
+      dto.bcsScoreConfirmed ? new Date() : null,
+      dto.activityLevelConfirmed ? new Date() : null,
+      dto.mealsPerDayConfirmed ? new Date() : null,
     );
 
     // 先把「会抛错的部分」全部做完，最后才落库。
@@ -431,6 +449,18 @@ export class DogService {
 
     // Apply updates
     dog.updateProfile(dto as Partial<Dog>);
+
+    // 确认状态：只有顾客这次真的点了那一项，才刷新确认时间。
+    // 只认 true —— 不传或传 false 都不清掉已有确认（改个名字不该让确认状态失效）。
+    if (dto.bcsScoreConfirmed) {
+      dog.bcsScoreConfirmedAt = new Date();
+    }
+    if (dto.activityLevelConfirmed) {
+      dog.activityLevelConfirmedAt = new Date();
+    }
+    if (dto.mealsPerDayConfirmed) {
+      dog.mealsPerDayConfirmedAt = new Date();
+    }
 
     // Recalculate if needed (use updated breedId)
     if (needsRecalc) {

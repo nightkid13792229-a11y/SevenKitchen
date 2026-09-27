@@ -45,6 +45,17 @@ export class Dog {
      * 放在末尾并带默认值，避免影响已有的构造调用点。
      */
     public weightUpdatedAt: Date | null = null,
+    /**
+     * 「顾客是否亲自确认过」的时间戳（2026-09-27 新增）。
+     *
+     * 体况评分、活动量、每日餐数三项目前都有默认值，顾客不选也会被提交，
+     * 因此值的存在不代表顾客选过。老板定的定制门槛按**是否确认过**判定：
+     *   · NULL = 未确认（老档案一律 NULL，因为我们不追溯）
+     *   · 有值 = 顾客在某次建档/改档里亲自点过这一项
+     */
+    public bcsScoreConfirmedAt: Date | null = null,
+    public activityLevelConfirmedAt: Date | null = null,
+    public mealsPerDayConfirmedAt: Date | null = null,
   ) {
     this.validateInvariants();
   }

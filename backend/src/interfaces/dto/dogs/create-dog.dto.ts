@@ -92,6 +92,30 @@ export class CreateDogDto {
   @Min(1)
   mealsPerDay?: number;
 
+  /**
+   * 「这一项是顾客亲自选的」标记（2026-09-27 新增）。
+   *
+   * 体况评分、活动量、每日餐数在表单里都有默认值，顾客不选也会被提交，
+   * 因此必须由前端显式告知"顾客是否真的点过这一项"。
+   * 后端据此记录确认时间：**门槛按"是否确认过"判定，而不是"有没有值"**。
+   *
+   * 不传 = 未确认（不会覆盖已有的确认时间，见 DogService）。
+   */
+  @ApiPropertyOptional({ description: '顾客是否亲自选择了体况评分' })
+  @IsOptional()
+  @IsBoolean()
+  bcsScoreConfirmed?: boolean;
+
+  @ApiPropertyOptional({ description: '顾客是否亲自选择了活动量' })
+  @IsOptional()
+  @IsBoolean()
+  activityLevelConfirmed?: boolean;
+
+  @ApiPropertyOptional({ description: '顾客是否亲自确认了每日餐数' })
+  @IsOptional()
+  @IsBoolean()
+  mealsPerDayConfirmed?: boolean;
+
   @ApiPropertyOptional({
     enum: TreatInputMode,
     default: TreatInputMode.ESTIMATE_LEVEL,

@@ -74,6 +74,12 @@ export class PrismaDogRepository implements DogRepository {
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
       ...(weightChanged ? { weightUpdatedAt: new Date() } : {}),
+      // 确认状态由领域实体携带：
+      // 改档案时会先把已有档案读出来（因此原确认时间会被原样写回），
+      // 只有顾客这次真的点了那一项，服务层才会把它覆盖成当前时间。
+      bcsScoreConfirmedAt: dog.bcsScoreConfirmedAt,
+      activityLevelConfirmedAt: dog.activityLevelConfirmedAt,
+      mealsPerDayConfirmedAt: dog.mealsPerDayConfirmedAt,
     };
 
     if (!existing) {
@@ -120,6 +126,9 @@ export class PrismaDogRepository implements DogRepository {
       record.cachedTargetFoodKcal,
       record.avatarUrl,
       record.weightUpdatedAt ?? null,
+      record.bcsScoreConfirmedAt ?? null,
+      record.activityLevelConfirmedAt ?? null,
+      record.mealsPerDayConfirmedAt ?? null,
     );
   }
 }

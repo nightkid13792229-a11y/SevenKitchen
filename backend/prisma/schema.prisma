@@ -395,6 +395,20 @@ model Dog {
   lifeStageOverride    LifeStageOverride   @map("life_stage_override")
   sizeClassOverride    DogSizeCategory?    @map("size_class_override")
   mealsPerDay          Int                 @default(2) @map("meals_per_day")
+  /// 「顾客是否亲自确认过这一项」的时间戳（2026-09-27 新增）。
+  ///
+  /// 背景：建档表单给体况评分、活动量、每日餐数都预填了默认值并渲染成"已选中"，
+  /// 顾客一路点下一步也会提交 —— 于是数据库里这几个字段**永远有值**，
+  /// 却分不清"顾客真的选过"还是"系统替他选的"（生产里 76% 的体况评分就是默认值 5）。
+  /// 这直接架空了老板定的定制门槛（门槛若只看"有没有值"，永远拦不住任何人）。
+  ///
+  /// 现在把值与该值是否被确认分开记录：
+  ///   · 有值 + 未确认 —— 可以正常下单，但**不算满足定制门槛**，进定制页时要求补确认
+  ///   · 有值 + 已确认 —— 顾客亲自选过
+  /// 老档案不回填（老板决定「不追溯」），因此为 NULL 即"未确认"。
+  bcsScoreConfirmedAt      DateTime? @map("bcs_score_confirmed_at")
+  activityLevelConfirmedAt DateTime? @map("activity_level_confirmed_at")
+  mealsPerDayConfirmedAt   DateTime? @map("meals_per_day_confirmed_at")
   treatInputMode       TreatInputMode      @default(ESTIMATE_LEVEL) @map("treat_input_mode")
   treatLevel           TreatLevel          @default(LOW) @map("treat_level")
   manualTreatKcal      Int?                @map("manual_treat_kcal")

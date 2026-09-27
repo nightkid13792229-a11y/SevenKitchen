@@ -197,6 +197,42 @@ describe('dog profile health page regressions', () => {
     expect(page).toContain("import VaccineManagementSection from")
     expect(page).toContain('<VaccineManagementSection :dog-id="dogId" />')
     // 文案要如实列出这一页能维护什么
-    expect(page).toContain('过敏、检查报告、疫苗、体重和饮食提醒')
+    expect(page).toContain('过敏、检查报告、疫苗、体重和饮食偏好')
+  })
+
+  /**
+   * 喜欢吃的食材（2026-09-27 老板确认）
+   *
+   * 老板决定：食材偏好不改位置，仍留在「健康管理」页的这张卡片里，
+   * 只把顾客端一直缺的「喜欢吃的食材」补上。
+   * 这一列配方设计器与 AI 早就在读，但生产 4544 只狗整列为空。
+   */
+  it('饮食偏好里两个口味字段都在：喜欢吃的 + 不爱吃的', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('喜欢吃的食材')
+    expect(page).toContain('挑食 / 不爱吃的食物')
+    expect(page).toContain('v-model="form.preferredFoods"')
+    expect(page).toContain('v-model="form.pickyFoods"')
+    // 真过敏走「过敏」分类，这张卡只是口味
+    expect(page).toContain('过敏≠不爱吃')
+  })
+
+  it('保存饮食偏好时两个字段一起提交，并一起参与"未保存"判定', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    // 只存一个字段会导致「喜欢吃的」改完被判成"没有未保存修改"，一点返回就白填
+    expect(page).toContain('const savedDietPreferences = reactive({')
+    expect(page).toContain('preferredFoods: form.preferredFoods,')
+    expect(page).toContain('pickyFoods: form.pickyFoods,')
+    expect(page).toContain('hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods)')
+    expect(page).toContain('hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)')
+    expect(page).not.toContain('savedPickyFoods')
   })
 })

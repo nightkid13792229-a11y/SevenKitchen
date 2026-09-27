@@ -506,12 +506,19 @@ export function findPersistedHealthRecordMatch(
 
 export function buildDietRemindersPayload(form: {
   allergyFoods?: unknown
+  preferredFoods?: unknown
   pickyFoods?: unknown
 }) {
   const payload: Record<string, string | null> = {}
 
   if (Object.prototype.hasOwnProperty.call(form, 'allergyFoods')) {
     payload.allergyFoods = normalizeOptionalText(form.allergyFoods)
+  }
+
+  // 喜欢吃的食材（2026-09-27）：这一列配方设计器与 AI 早就在读，
+  // 但顾客端一直没有入口，生产 4544 只狗整列为空。
+  if (Object.prototype.hasOwnProperty.call(form, 'preferredFoods')) {
+    payload.preferredFoods = normalizeOptionalText(form.preferredFoods)
   }
 
   if (Object.prototype.hasOwnProperty.call(form, 'pickyFoods')) {

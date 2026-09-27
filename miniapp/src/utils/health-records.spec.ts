@@ -379,6 +379,30 @@ describe('health-records', () => {
     })
   })
 
+  it('carries preferred foods（喜欢吃的食材）alongside picky foods', () => {
+    // 2026-09-27：这一列配方设计器与 AI 早就在读，但顾客端一直没有入口。
+    expect(
+      buildDietRemindersPayload({
+        preferredFoods: ' 鸡胸肉、南瓜 ',
+        pickyFoods: '胡萝卜',
+      }),
+    ).toEqual({
+      preferredFoods: '鸡胸肉、南瓜',
+      pickyFoods: '胡萝卜',
+    })
+
+    // 只清空喜欢吃的，不影响不爱吃的
+    expect(
+      buildDietRemindersPayload({
+        preferredFoods: '',
+        pickyFoods: '胡萝卜',
+      }),
+    ).toEqual({
+      preferredFoods: null,
+      pickyFoods: '胡萝卜',
+    })
+  })
+
   it('detects unsaved diet reminder changes with trimmed values', () => {
     expect(hasUnsavedDietReminderChange(' 胡萝卜 ', '胡萝卜')).toBe(false)
     expect(hasUnsavedDietReminderChange('胡萝卜、鸡肉', '胡萝卜')).toBe(true)

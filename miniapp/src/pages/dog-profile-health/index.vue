@@ -3,7 +3,7 @@
     <view class="hero-card">
       <text class="hero-card__eyebrow">健康管理</text>
       <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
-      <text class="hero-card__subtitle">集中维护病史、体检、过敏、疫苗、体重记录和饮食提醒。</text>
+      <text class="hero-card__subtitle">集中维护病史、体检、过敏、疫苗、体重记录和饮食偏好。</text>
     </view>
 
     <view v-if="loadError" class="state-card">
@@ -19,7 +19,7 @@
 
     <view v-else-if="hasNoDogs" class="state-card">
       <text class="state-card__title">还没有狗狗档案</text>
-      <text class="state-card__desc">创建档案后，即可维护过敏、检查报告、疫苗、体重和饮食提醒。</text>
+      <text class="state-card__desc">创建档案后，即可维护过敏、检查报告、疫苗、体重和饮食偏好。</text>
       <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
@@ -68,14 +68,27 @@
         <VaccineManagementSection :dog-id="dogId" />
 
         <view class="section-card diet-reminder-card">
-          <text class="section-card__title">饮食提醒</text>
+          <text class="section-card__title">饮食偏好</text>
+          <text class="section-card__desc">
+            喜欢吃什么、不吃什么都会进推荐与配方，填得越具体越准。
+          </text>
+
+          <view class="field-group">
+            <text class="field-label">喜欢吃的食材</text>
+            <textarea
+              class="field-textarea"
+              placeholder="例如：鸡胸肉、南瓜、三文鱼"
+              v-model="form.preferredFoods"
+            />
+          </view>
 
           <view class="field-group">
             <text class="field-label">挑食 / 不爱吃的食物</text>
+            <!-- 过敏≠不爱吃：真过敏走上面的「过敏」分类，这里只是口味 -->
             <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
             <textarea
               class="field-textarea"
-              placeholder="记录口味偏好，方便后续推荐"
+              placeholder="例如：胡萝卜、羊肉"
               v-model="form.pickyFoods"
             />
           </view>
@@ -89,13 +102,13 @@
 
       <view v-else class="section-card">
         <text class="section-card__title">先选择狗狗</text>
-        <text class="state-card__desc">选择一只狗狗后，即可维护过敏、检查报告、疫苗、体重和饮食提醒。</text>
+        <text class="state-card__desc">选择一只狗狗后，即可维护过敏、检查报告、疫苗、体重和饮食偏好。</text>
         <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
       </view>
     </view>
 
     <StickyActionBar
-      primary-text="保存饮食提醒"
+      primary-text="保存饮食偏好"
       secondary-text="返回概览"
       :primary-disabled="isDietReminderActionDisabled"
       :secondary-disabled="isSecondaryActionDisabled"
@@ -165,7 +178,16 @@ const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   checkup: '',
   allergy: '',
 })
-const savedPickyFoods = ref('')
+/**
+ * 饮食偏好（喜欢吃的 / 不爱吃的）上一次保存的值。
+ *
+ * 两个字段一起记：上次只存了"不爱吃"，于是「喜欢吃的食材」改完
+ * 会被判定成"没有未保存修改"，顾客一点返回就白填。
+ */
+const savedDietPreferences = reactive({
+  preferredFoods: '',
+  pickyFoods: '',
+})
 const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
 const isDietReminderActionDisabled = computed(() =>
   !dogId.value || isProfileLoading.value || isSaving.value || isHealthRecordSaving.value,
@@ -202,9 +224,10 @@ const weightSectionDogProfile = computed(() => ({
     ? Number(form.currentWeightKg)
     : null,
 }))
-const hasUnsavedDietReminder = computed(() =>
-  hasUnsavedDietReminderChange(form.pickyFoods, savedPickyFoods.value),
-)
+const hasUnsavedDietReminder = computed(() => (
+  hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods) ||
+  hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)
+))
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -224,6 +247,7 @@ const form = reactive<Record<string, any>>({
   treatInputMode: 'ESTIMATE_LEVEL',
   treatLevel: 'LOW',
   manualTreatKcal: '',
+  preferredFoods: '',
   pickyFoods: '',
 })
 
@@ -232,7 +256,8 @@ const dietReminderStatusText = computed(() => {
     return '已修改，待保存'
   }
 
-  const saved = String(savedPickyFoods.value || '').trim()
+  const saved = String(savedDietPreferences.preferredFoods || '').trim() ||
+    String(savedDietPreferences.pickyFoods || '').trim()
   if (saved) {
     return '已保存'
   }
@@ -400,8 +425,10 @@ function resetHealthForm() {
   form.treatInputMode = 'ESTIMATE_LEVEL'
   form.treatLevel = 'LOW'
   form.manualTreatKcal = ''
+  form.preferredFoods = ''
   form.pickyFoods = ''
-  savedPickyFoods.value = ''
+  savedDietPreferences.preferredFoods = ''
+  savedDietPreferences.pickyFoods = ''
   savingRecordKey.value = ''
   hasUnsavedRecordDraft.value = false
   for (const type of HEALTH_RECORD_TYPES) {
@@ -474,8 +501,10 @@ function populateForm(profile: Record<string, any>) {
   form.treatInputMode = profile.treatInputMode || 'ESTIMATE_LEVEL'
   form.treatLevel = profile.treatLevel || 'LOW'
   form.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
+  form.preferredFoods = typeof profile.preferredFoods === 'string' ? profile.preferredFoods : ''
   form.pickyFoods = typeof profile.pickyFoods === 'string' ? profile.pickyFoods : ''
-  savedPickyFoods.value = form.pickyFoods
+  savedDietPreferences.preferredFoods = form.preferredFoods
+  savedDietPreferences.pickyFoods = form.pickyFoods
 }
 
 function recordApiForType(type: HealthRecordType) {
@@ -653,6 +682,7 @@ async function saveDietReminders() {
     })
     uni.showLoading({ title: '保存中...' })
     const res: any = await dogApi.updateDietReminders(targetDogId, {
+      preferredFoods: form.preferredFoods,
       pickyFoods: form.pickyFoods,
     })
     if (res.code !== 0) {
@@ -662,7 +692,8 @@ async function saveDietReminders() {
     if (targetDogId === dogId.value && res.data?.profile) {
       populateForm(res.data.profile)
     } else if (targetDogId === dogId.value) {
-      savedPickyFoods.value = form.pickyFoods
+      savedDietPreferences.preferredFoods = form.preferredFoods
+      savedDietPreferences.pickyFoods = form.pickyFoods
     }
 
     void trackDogProfileEvent('dog_profile_submit_succeeded', {
@@ -783,6 +814,14 @@ function goToDogCreate() {
   font-size: 32rpx;
   font-weight: 700;
   color: #26261f;
+}
+
+.section-card__desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
 }
 
 .dog-picker-card {

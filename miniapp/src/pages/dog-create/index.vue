@@ -207,16 +207,28 @@
                   </view>
                 </view>
               </view>
+              <!-- 搜不到品种时：先把「没有明确品种」的常见叫法做成一点即选。
+                   生产数据里手填的品种名有 70% 是「田园犬 / 串串 / 混血」这一类 ——
+                   顾客本来就不是在找一个纯种，而是搜不到只好手打。 -->
               <view v-if="filteredBreeds.length === 0" class="search-empty-state">
-                <text class="search-empty-hint">
-                  {{ breedSearchUiState.emptyStateHint }}
-                  <text
-                    v-if="breedSearchUiState.showManualEntryAction"
-                    class="search-fallback-link"
-                    @tap="selectMixedBreed"
-                  >
-                    去手动填写
-                  </text>
+                <text class="search-empty-hint">{{ breedSearchUiState.emptyStateHint }}</text>
+                <view class="mixed-breed-quick">
+                  <text class="mixed-breed-quick__title">如果它没有明确品种，直接选：</text>
+                  <view class="mixed-breed-quick__list">
+                    <view
+                      v-for="item in mixedBreedQuickOptions"
+                      :key="`empty-${item}`"
+                      class="breed-tag breed-tag--mixed"
+                      @tap="startQuickMixedBreed(item)"
+                    >{{ item }}</view>
+                  </view>
+                </view>
+                <text
+                  v-if="breedSearchUiState.showManualEntryAction"
+                  class="search-fallback-link"
+                  @tap="selectMixedBreed"
+                >
+                  其它名字，手动填写
                 </text>
               </view>
             </view>
@@ -245,6 +257,23 @@
                     @tap="selectBreed(breed)"
                   >
                     {{ breed.name }}
+                  </view>
+                </view>
+              </view>
+
+              <!-- 没有明确品种的常见叫法，一点即选，省去打字与"搜不到"的挫败 -->
+              <view class="section">
+                <view class="section-header">
+                  <text class="section-title">没有明确品种？</text>
+                </view>
+                <view class="common-breeds">
+                  <view
+                    v-for="item in mixedBreedQuickOptions"
+                    :key="`quick-${item}`"
+                    class="breed-tag breed-tag--mixed"
+                    @tap="startQuickMixedBreed(item)"
+                  >
+                    {{ item }}
                   </view>
                 </view>
               </view>
@@ -291,13 +320,17 @@
             >
               {{ getSizeClassHint() }}
             </text>
-            <text
+            <!-- 「恢复自动匹配」原先是一行纯文字（无底色/无边框），看不出能点。
+                 改成与旁边「手动选择」同级的 chip，并**写明会恢复到哪个体型**，
+                 避免顾客点之前不知道结果。 -->
+            <view
               v-if="!isMixedBreed && formData.sizeClassOverride"
-              class="restore-auto-link"
+              class="restore-auto-btn"
               @tap="restoreBreedSizeAutoMatch"
             >
-              恢复按品种自动匹配
-            </text>
+              <text class="restore-auto-btn__text">恢复为：{{ autoMatchedSizeLabel }}</text>
+              <text class="restore-auto-btn__hint">按品种自动匹配</text>
+            </view>
           </view>
         </view>
 
@@ -2137,6 +2170,35 @@ function selectBreed(breed: Breed) {
 function isHotBreed(breedId: string) {
   return hotBreedIds.value.has(breedId)
 }
+
+/**
+ * 「没有明确品种」的常见叫法（2026-09-27）。
+ *
+ * 生产数据里手填品种名的狗有 333 只，其中 **70%（234 只）** 是
+ * 「田园犬 / 中华田园犬 / 田园 / 串串 / 混血」这一类 ——
+ * 顾客并不是在找一个纯种，而是搜不到只好手打。
+ * 做成一点即选后：不用打字、不用面对"搜不到"的挫败，
+ * 并且仍然走**已有的混血通道**（体型必须顾客自己选，不预判）。
+ *
+ * 注：这三个名字**不收录为品种别名** —— 它们本质是"没有明确品种"，
+ * 若挂到某个纯种下会把田园犬当成纯种犬去算热量。
+ */
+const mixedBreedQuickOptions = ['中华田园犬', '串串', '混血 / 其他']
+
+/** 点一键选项：预填名称，直接进入"选体型"这一步（名称仍可修改） */
+function startQuickMixedBreed(name: string) {
+  customBreedName.value = name
+  customBreedSizeClass.value = null
+  showBreedSizeOverridePicker.value = false
+  searchKeyword.value = ''
+  showCustomBreedInput.value = true
+}
+
+/** 恢复自动匹配后会用到的体型（取自品种库），用于把"会恢复到什么"说清楚 */
+const autoMatchedSizeLabel = computed(() => {
+  const category = selectedBreed.value?.sizeCategory
+  return category ? getSizeClassLabel(category) : '按品种'
+})
 
 function selectMixedBreed() {
   customBreedName.value = getManualBreedDraftName(searchKeyword.value, customBreedName.value)
@@ -4460,11 +4522,53 @@ async function submit() {
   color: #8a6f3d;
 }
 
-.restore-auto-link {
-  display: inline-block;
-  margin-top: 12rpx;
+/* 「恢复自动匹配」：做成与旁边「手动选择」同级的 chip，并显示将恢复到的体型 */
+.restore-auto-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 14rpx;
+  padding: 12rpx 22rpx;
+  background-color: #eef2e4;
+  border: 1rpx solid #cddbbe;
+  border-radius: 999rpx;
+}
+
+.restore-auto-btn__text {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.restore-auto-btn__hint {
+  font-size: 22rpx;
+  color: #6b6653;
+}
+
+/* 「没有明确品种」的一键选项 */
+.breed-tag--mixed {
+  background-color: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+  color: #8a6f3d;
+}
+
+.mixed-breed-quick {
+  margin-top: 20rpx;
+}
+
+.mixed-breed-quick__title {
+  display: block;
   font-size: 24rpx;
-  color: #b08d4f;
+  color: #6b6653;
+  text-align: center;
+}
+
+.mixed-breed-quick__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14rpx;
+  margin-top: 14rpx;
 }
 
 .size-required {

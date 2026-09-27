@@ -178,6 +178,61 @@ describe('dog-create runtime regressions', () => {
   })
 
   /**
+   * 品种板块的 UX 优化（2026-09-27）
+   *
+   * 背景（生产数据）：手填品种名的狗有 333 只，其中 **70%（234 只）**
+   * 是「田园犬 / 中华田园犬 / 田园 / 串串 / 混血」这一类 ——
+   * 顾客不是在找纯种，而是搜不到只好手打。
+   *
+   * 另一边：「恢复按品种自动匹配」原先是一行纯文字（无底色/无边框），
+   * 看不出能点；而旁边同级的「手动选择」反而有底色，视觉权重反了。
+   */
+  describe('品种与体型的交互优化', () => {
+    const readPage = () =>
+      readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
+
+    it('「没有明确品种」的常见叫法一点即选，不用打字', () => {
+      const source = readPage()
+
+      expect(source).toContain('mixedBreedQuickOptions')
+      expect(source).toContain("'中华田园犬'")
+      expect(source).toContain("'串串'")
+      expect(source).toContain('startQuickMixedBreed')
+      expect(source).toContain('没有明确品种')
+    })
+
+    it('一键选项走的是已有的混血通道，不预判体型', () => {
+      const helper =
+        readPage().match(/function startQuickMixedBreed[\s\S]*?\n\}/)?.[0] || ''
+
+      expect(helper).not.toBe('')
+      // 体型必须由顾客自己选（混血犬无法从品种推算）
+      expect(helper).toContain('customBreedSizeClass.value = null')
+      expect(helper).toContain("showCustomBreedInput.value = true")
+    })
+
+    it('「恢复自动匹配」做成按钮样式，并写明会恢复到哪个体型', () => {
+      const source = readPage()
+
+      expect(source).toContain('restore-auto-btn')
+      expect(source).toContain('autoMatchedSizeLabel')
+      expect(source).toContain('恢复为：')
+      // 不再是那行没有底色、看不出能点的纯文字
+      expect(source).not.toContain('class="restore-auto-link"')
+    })
+
+    it('恢复按钮的样式具备按钮外观（底色 + 边框 + 圆角）', () => {
+      const source = readPage()
+      const style = source.match(/\.restore-auto-btn \{[\s\S]*?\n\}/)?.[0] || ''
+
+      expect(style).not.toBe('')
+      expect(style).toContain('background-color')
+      expect(style).toContain('border')
+      expect(style).toContain('border-radius')
+    })
+  })
+
+  /**
    * 建档新增「健康信息」第 3 步（2026-09-27，U1 第 6 步）
    *
    * 原先建档三步里一个字都没提健康信息，而它只藏在「健康管理」页 ——

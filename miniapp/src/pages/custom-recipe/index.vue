@@ -126,6 +126,12 @@
       <!-- 体重管理 -->
       <view class="goal-group">
         <text class="group-title">体重管理</text>
+
+        <!-- 体况只作为**建议**：老板口径是"减重/维持/增重由顾客自己选，系统不替他决定" -->
+        <view v-if="bcsAdviceText" class="advice-line">
+          <text class="advice-line__text">{{ bcsAdviceText }}</text>
+        </view>
+
         <view class="radio-group">
           <view
             v-for="option in weightManagementOptions"
@@ -140,6 +146,13 @@
             </view>
             <text class="radio-label">{{option.label}}</text>
           </view>
+        </view>
+
+        <!-- 选中目标后立刻把"具体是多少"讲出来（老板问题 1） -->
+        <view v-if="goalTargetSummary" class="target-line">
+          <text class="target-line__title">{{ goalTargetSummary.title }}</text>
+          <text class="target-line__detail">{{ goalTargetSummary.detail }}</text>
+          <text v-if="goalTargetSummary.note" class="target-line__note">{{ goalTargetSummary.note }}</text>
         </view>
       </view>
 
@@ -157,6 +170,8 @@
 
         <!-- 健康档案编辑区域 -->
         <view v-if="formData.enableHealthManagement" class="health-management-section">
+          <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
+
           <!-- 疾病史 -->
           <view class="health-item">
             <view class="health-header">
@@ -194,25 +209,39 @@
               <text v-if="formData.allergies.length === 0" class="empty-text">暂无过敏信息</text>
             </view>
           </view>
+
+          <!-- 只读参考：档案里的体检 / 体重 / 疫苗，营养师也会看这些 -->
+          <view v-if="healthReferenceRows.length > 0" class="health-reference">
+            <text class="health-reference__title">档案里已有的记录（供参考，不会改动）</text>
+            <view
+              v-for="row in healthReferenceRows"
+              :key="row.label"
+              class="health-reference__row"
+            >
+              <text class="health-reference__label">{{ row.label }}</text>
+              <text class="health-reference__value">{{ row.value }}</text>
+            </view>
+          </view>
+
+          <!-- 决策 6：顾客在定制页删掉某项时只影响本单，不删档案 -->
+          <text class="health-keep-note">
+            这里的增删只影响**本次定制**，不会删除你档案里已有的记录。
+          </text>
         </view>
       </view>
-
-      <textarea
-        v-model="formData.additionalNotes"
-        class="notes-input"
-        placeholder="其它需求（可选）"
-        maxlength="500"
-      />
     </view>
 
-    <!-- 第三步：饮食偏好 -->
+    <!-- 第三步：饮食偏好（可选）
+         老板口径：这里是口味，和健康信息无关；两项都可留空。 -->
     <view class="section">
       <view class="section-title">
         <text class="step-number">3</text>
-        <text class="title-text">饮食偏好</text>
+        <text class="title-text">饮食偏好（可选）</text>
       </view>
+      <text v-if="preferencePrefillHint" class="preference-prefill-hint">{{ preferencePrefillHint }}</text>
+
       <view class="preference-section">
-        <text class="preference-title">喜欢的食材</text>
+        <text class="preference-title">喜欢的食材（可选）</text>
         <view class="tag-list">
           <view
             v-for="(ingredient, index) in formData.preferredIngredients"
@@ -229,7 +258,7 @@
       </view>
 
       <view class="preference-section">
-        <text class="preference-title">不吃的食材</text>
+        <text class="preference-title">不吃的食材（可选）</text>
         <view class="tag-list">
           <view
             v-for="(ingredient, index) in formData.dislikedIngredients"
@@ -243,6 +272,45 @@
             <text>+ 添加</text>
           </view>
         </view>
+      </view>
+    </view>
+
+    <!-- 第四步：备注（可选）
+         老板口径：这是给营养师看的备注，不影响价格与热量计算，
+         所以从"定制目标"里独立出来，放在饮食偏好之后。 -->
+    <view class="section">
+      <view class="section-title">
+        <text class="step-number">4</text>
+        <text class="title-text">备注（可选）</text>
+      </view>
+      <text class="notes-hint">营养师会看到这段说明，但它不会改变价格或热量计算。</text>
+      <textarea
+        v-model="formData.additionalNotes"
+        class="notes-input"
+        placeholder="例如：它最近在换粮、吃某种药、不爱嚼硬的，或你有其它想让营养师知道的"
+        maxlength="500"
+      />
+
+      <!-- 附件（可选）：检测报告、化验单、照片等 -->
+      <view class="attachment-section">
+        <view class="attachment-header">
+          <text class="attachment-title">上传资料（可选）</text>
+          <text class="attachment-add" @tap="pickAttachment">
+            {{ attachmentUploading ? '上传中…' : '+ 上传图片或 PDF' }}
+          </text>
+        </view>
+        <view v-if="formData.attachmentUrls.length > 0" class="attachment-list">
+          <view
+            v-for="(url, index) in formData.attachmentUrls"
+            :key="url"
+            class="attachment-item"
+          >
+            <text class="attachment-name">资料 {{ index + 1 }}</text>
+            <text class="attachment-preview" @tap="previewAttachment(url)">预览</text>
+            <text class="attachment-remove" @tap.stop="removeAttachment(index)">删除</text>
+          </view>
+        </view>
+        <text v-else class="attachment-empty">还没有上传资料</text>
       </view>
     </view>
 
@@ -261,6 +329,21 @@
       </view>
     </view>
 
+    <!-- 知情同意（老板拍板的决策 9：提交前必须明确同意把信息记入健康档案） -->
+    <view v-if="willWriteBackToProfile" class="consent-section">
+      <view class="consent-item" @tap="toggleConsent">
+        <view class="consent-icon" :class="{ checked: formData.healthInfoConsent }">
+          <text v-if="formData.healthInfoConsent">✓</text>
+        </view>
+        <text class="consent-text">
+          我同意把本次填写的过敏、疾病信息记入狗狗的健康档案
+        </text>
+      </view>
+      <text class="consent-note">
+        同意后我们才会写入。写入是**只增不删**的：不会删除你档案里已有的记录。
+      </text>
+    </view>
+
     <!-- 提交按钮 -->
     <view class="submit-section">
       <button class="submit-btn" @tap="submitOrder" :disabled="!canSubmit">
@@ -274,6 +357,7 @@
 import { ref, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
+import { dogApi } from '@/api/dogs';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 
 // 状态定义
@@ -322,8 +406,27 @@ const formData = ref({
   additionalNotes: '',
   attachmentUrls: [] as string[],
   scheduledDate: getTodayDateString(),
+  // 写回健康档案：默认开，但必须顾客明确同意才提交（决策 9）
   syncToHealthProfile: true,
+  healthInfoConsent: false,
 });
+
+/**
+ * 档案已有信息（老板拍板的决策 3：定制页是档案的第二个填写入口）。
+ *
+ * 后端早就有一个汇总接口（过敏/疾病/最近体检/体重趋势），2026-09-28 又补上了
+ * 疫苗与口味偏好 —— 但前端此前**从未调用过**，所以顾客每次都要从零手打。
+ */
+const healthSummary = ref<any>(null);
+const healthSummaryLoading = ref(false);
+
+/** 是否真的会写回档案：只有勾了健康管理才有东西可写 */
+const willWriteBackToProfile = computed(
+  () => formData.value.enableHealthManagement,
+);
+
+/** 附件上传中 */
+const attachmentUploading = ref(false);
 
 const weightManagementOptions = [
   { value: 'LOSE_WEIGHT', label: '减重' },
@@ -468,7 +571,124 @@ const confirmGate = async () => {
 };
 
 const canSubmit = computed(() => {
-  return formData.value.dogId && formData.value.targetGoal && !gateBlocked.value;
+  if (!formData.value.dogId || !formData.value.targetGoal) return false;
+  if (gateBlocked.value) return false;
+  // 决策 9：要写回健康档案就必须先明确同意
+  if (willWriteBackToProfile.value && !formData.value.healthInfoConsent) return false;
+  return true;
+});
+
+/** 体况评分 → 建议（**仅供参考**，老板口径：由顾客自己决定目标） */
+const bcsAdviceText = computed(() => {
+  const bcs = Number(selectedDog.value?.bcsScore);
+  if (!Number.isFinite(bcs) || bcs <= 0) return '';
+
+  if (bcs >= 6) {
+    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。这只是建议，最终由你决定。`;
+  }
+  if (bcs <= 3) {
+    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。这只是建议，最终由你决定。`;
+  }
+  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。这只是建议，最终由你决定。`;
+});
+
+const GOAL_LABELS: Record<string, string> = {
+  LOSE_WEIGHT: '减重',
+  MAINTAIN: '维持',
+  GAIN_WEIGHT: '增重',
+};
+
+/**
+ * 选中目标后给出**具体的热量与克数**（老板问题 1）。
+ *
+ * 口径说明：这里显示的是系统当前的实际数值（已经包含按体况评分的自动调整），
+ * 顾客选的目标作为"设计方向"交给营养师与 AI 去落实 —— 我们没有自己发明
+ * "减重就乘 0.8"这类临床系数，那需要兽医营养口径来定。
+ */
+const goalTargetSummary = computed(() => {
+  const goal = formData.value.targetGoal;
+  if (!goal) return null;
+
+  const label = GOAL_LABELS[goal] || '定制';
+  const kcal = Number(selectedDog.value?.targetFoodKcal);
+  const grams = Number(selectedDog.value?.dailyIntakeG);
+
+  if (!Number.isFinite(kcal) || kcal <= 0) {
+    return {
+      title: `你的目标：${label}`,
+      detail: '营养师会在设计时按这个方向调整配比与喂食量。',
+      note: '',
+    };
+  }
+
+  return {
+    title: `你的目标：${label}`,
+    detail: `按它目前的体况，每天需要约 ${Math.round(kcal)} kcal（约 ${Math.round(grams || 0)} 克）`,
+    note: `营养师会按「${label}」方向调整配方与喂食量，最终以交付的定制食谱为准。`,
+  };
+});
+
+/** 档案里已有的体检 / 体重 / 疫苗：只读参考，让顾客知道营养师看得到 */
+const healthReferenceRows = computed(() => {
+  const data = healthSummary.value;
+  if (!data) return [] as Array<{ label: string; value: string }>;
+
+  const rows: Array<{ label: string; value: string }> = [];
+
+  const weightTrend = Array.isArray(data.weightTrend) ? data.weightTrend : [];
+  if (weightTrend.length > 0) {
+    const latest = weightTrend[0];
+    rows.push({
+      label: '最近体重',
+      value: `${latest.weightKg}kg（${String(latest.recordDate || '').slice(0, 10)}）`,
+    });
+  }
+
+  const checkups = Array.isArray(data.recentCheckups) ? data.recentCheckups : [];
+  if (checkups.length > 0) {
+    rows.push({
+      label: '最近体检',
+      value: `${String(checkups[0].checkupDate || '').slice(0, 10)}${
+        checkups[0].findings ? ` · ${checkups[0].findings}` : ''
+      }`,
+    });
+  }
+
+  const vaccines = Array.isArray(data.vaccines) ? data.vaccines : [];
+  if (vaccines.length > 0) {
+    const latest = vaccines[0];
+    rows.push({
+      label: '最近疫苗',
+      value: `${latest.vaccineName}（${String(latest.vaccinationDate || '').slice(0, 10)}）`,
+    });
+  }
+
+  return rows;
+});
+
+/** 告诉顾客"这些是从档案带出来的"，而不是他们上次填的 */
+const healthPrefillHint = computed(() => {
+  if (healthSummaryLoading.value) return '正在读取档案里已有的过敏与疾病记录…';
+  const data = healthSummary.value;
+  if (!data) return '';
+
+  const allergyCount = Array.isArray(data.allergies) ? data.allergies.length : 0;
+  const conditionCount = Array.isArray(data.medicalConditions)
+    ? data.medicalConditions.length
+    : 0;
+
+  if (allergyCount === 0 && conditionCount === 0) {
+    return '档案里还没有过敏或疾病记录，可以在这里补充。';
+  }
+
+  return `已从档案带出 ${allergyCount} 项过敏、${conditionCount} 项疾病记录，你可以增删。`;
+});
+
+const preferencePrefillHint = computed(() => {
+  const preferred = formData.value.preferredIngredients.length;
+  const disliked = formData.value.dislikedIngredients.length;
+  if (preferred === 0 && disliked === 0) return '';
+  return '已从档案带出你上次填过的口味，可以直接修改。两项都可以留空。';
 });
 
 function formatAmount(value: number): string {
@@ -630,6 +850,129 @@ const onDogChange = (e: any) => {
   formData.value.dogId = selectedDog.value.value;
   // 补确认的草稿值默认沿用档案现值，顾客可以直接确认或改动
   syncGateDraftFromDog(selectedDog.value);
+  void loadDogArchiveInfo(selectedDog.value.value);
+};
+
+/** 顿号/逗号分隔的口味文本 → 标签数组 */
+function splitFoodText(raw: unknown): string[] {
+  return String(raw || '')
+    .split(/[,，、;；\n\r]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 带出档案已有信息（决策 3）。
+ *
+ * 只**预填**，不覆盖顾客已经改过的东西：
+ * 重复进入或换狗时以最新一次档案内容为准（顾客此时通常还没开始填）。
+ */
+const loadDogArchiveInfo = async (dogId: string) => {
+  if (!dogId) return;
+
+  healthSummaryLoading.value = true;
+  try {
+    /** 同时取狗狗详情：它带回 calcResult（每日热量与克数），
+     *  列表接口里没有这两个数，而"选了目标要给具体数字"需要它们。 */
+    const [res, detailRes] = await Promise.all([
+      request({
+        url: `/custom-recipe/dogs/${dogId}/health-summary`,
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      }) as any,
+      dogApi.detail(dogId).catch(() => null) as any,
+    ]);
+
+    if (res?.code !== 0 || !res.data) {
+      throw new Error(res?.message || '读取档案失败');
+    }
+
+    const calc = detailRes?.data?.calcResult;
+    if (calc) {
+      selectedDog.value = {
+        ...selectedDog.value,
+        targetFoodKcal: calc.finalFoodKcal,
+        dailyIntakeG: calc.dailyIntakeG,
+      };
+    }
+
+    const data = res.data;
+    healthSummary.value = data;
+
+    formData.value.allergies = Array.isArray(data.allergies)
+      ? [...data.allergies]
+      : [];
+    formData.value.medicalConditions = Array.isArray(data.medicalConditions)
+      ? [...data.medicalConditions]
+      : [];
+    // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
+    formData.value.preferredIngredients = splitFoodText(data.preferredFoods);
+    formData.value.dislikedIngredients = splitFoodText(data.pickyFoods);
+  } catch (error) {
+    // 读不到档案不能挡住定制：留空让顾客自己填
+    console.warn('[CustomRecipe] 读取档案信息失败:', error);
+    healthSummary.value = null;
+  } finally {
+    healthSummaryLoading.value = false;
+  }
+};
+
+/**
+ * 上传资料（可选）。
+ *
+ * 复用健康附件的上传通道（图片/PDF 都能传），拿回来的是 COS 地址，
+ * 直接放进订单的 attachmentUrls —— 营养师在后台订单详情里能看到。
+ */
+const pickAttachment = async () => {
+  if (attachmentUploading.value) return;
+
+  let filePath = '';
+  try {
+    const chosen: any = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: resolve,
+        fail: reject,
+      });
+    });
+    filePath = chosen?.tempFilePaths?.[0] || '';
+  } catch {
+    // 顾客取消选择：静默返回
+    return;
+  }
+
+  if (!filePath) return;
+
+  attachmentUploading.value = true;
+  uni.showLoading({ title: '上传中…' });
+
+  try {
+    const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath);
+    const url = String(uploaded?.url || '').trim();
+    if (!url) {
+      throw new Error('上传失败，请重试');
+    }
+
+    formData.value.attachmentUrls = [...formData.value.attachmentUrls, url];
+    uni.showToast({ title: '已上传', icon: 'none' });
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '上传失败，请重试', icon: 'none' });
+  } finally {
+    attachmentUploading.value = false;
+    uni.hideLoading();
+  }
+};
+
+const removeAttachment = (index: number) => {
+  formData.value.attachmentUrls.splice(index, 1);
+};
+
+const previewAttachment = (url: string) => {
+  if (!url) return;
+  uni.previewImage({ urls: [url] });
 };
 
 const selectWeightGoal = (goal: string) => {
@@ -638,6 +981,10 @@ const selectWeightGoal = (goal: string) => {
 
 const toggleHealthManagement = () => {
   formData.value.enableHealthManagement = !formData.value.enableHealthManagement;
+};
+
+const toggleConsent = () => {
+  formData.value.healthInfoConsent = !formData.value.healthInfoConsent;
 };
 
 const addCondition = () => {
@@ -710,11 +1057,21 @@ const removeDislikedIngredient = (index: number) => {
 
 const submitOrder = async () => {
   if (!canSubmit.value) {
-    uni.showToast({
+    // 提示要说清"还差什么"，不然按钮灰着顾客不知道原因
+    let title = '请选择狗狗和定制目标';
+    if (needLogin.value) {
       // 未登录时提示"请选择狗狗和定制目标"是误导：顾客根本没得选
-      title: needLogin.value ? '请先登录' : '请选择狗狗和定制目标',
-      icon: 'none',
-    });
+      title = '请先登录';
+    } else if (gateBlocked.value) {
+      title = '请先确认上面的体况评分、活动量与每日餐数';
+    } else if (
+      willWriteBackToProfile.value &&
+      !formData.value.healthInfoConsent
+    ) {
+      title = '请先勾选同意，我们才能把信息记入健康档案';
+    }
+
+    uni.showToast({ title, icon: 'none' });
     return;
   }
 
@@ -725,9 +1082,23 @@ const submitOrder = async () => {
   try {
     uni.showLoading({ title: '提交中...' });
 
+    /**
+     * 提交载荷。
+     *
+     * 2026-09-28 修复：原先勾了「需要健康管理」会把 targetGoal **改写成
+     * HEALTH_SUPPORT**，于是「减重 + 需要健康管理」这种组合会把减重目标丢掉。
+     * 老板口径是"减重/维持/增重以顾客选的为准"，所以两者分开传：
+     *   · targetGoal          —— 顾客选的体重目标，原样保留
+     *   · needsHealthManagement —— 是否勾了健康管理
+     *
+     * syncToHealthProfile 与知情同意绑定：不同意就不写回档案（决策 9）。
+     * 没勾健康管理时本来就没有东西要写回。
+     */
     const submitData = {
       ...formData.value,
-      targetGoal: formData.value.enableHealthManagement ? 'HEALTH_SUPPORT' : formData.value.targetGoal,
+      syncToHealthProfile:
+        formData.value.enableHealthManagement && formData.value.healthInfoConsent,
+      needsHealthManagement: formData.value.enableHealthManagement,
     };
 
     // 统一走 request()：只有 code === 0 才会 resolve，
@@ -1155,6 +1526,226 @@ const getActivityLabel = (level: string) => {
   padding: 22rpx;
   background: var(--sk-primary-tint, #eef3ea);
   border-radius: var(--sk-radius-badge, 12rpx);
+}
+
+/* ===== 体况建议（只给建议，由顾客决定） ===== */
+.advice-line {
+  margin-bottom: 16rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 14rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+}
+
+.advice-line__text {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
+}
+
+/* ===== 选中目标后的具体数字（老板问题 1） ===== */
+.target-line {
+  margin-top: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 16rpx;
+  background: #eef2e4;
+  border: 1rpx solid #dde3cd;
+}
+
+.target-line__title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.target-line__detail {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #26261f;
+}
+
+.target-line__note {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+/* ===== 从档案带出的说明 ===== */
+.health-prefill-hint,
+.preference-prefill-hint {
+  display: block;
+  margin-bottom: 16rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+.health-reference {
+  margin-top: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 16rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e3e6d4;
+}
+
+.health-reference__title {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.health-reference__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-top: 8rpx;
+}
+
+.health-reference__label {
+  flex: 0 0 auto;
+  font-size: 23rpx;
+  color: #968f6d;
+}
+
+.health-reference__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 23rpx;
+  color: #26261f;
+}
+
+/* 决策 6：只增不删 */
+.health-keep-note,
+.consent-note {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
+}
+
+/* ===== 备注（可选） ===== */
+.notes-hint {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+/* ===== 附件（可选） ===== */
+.attachment-section {
+  margin-top: 24rpx;
+}
+
+.attachment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.attachment-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.attachment-add {
+  font-size: 25rpx;
+  color: #b08d4f;
+}
+
+.attachment-list {
+  margin-top: 14rpx;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 16rpx 20rpx;
+  margin-top: 10rpx;
+  border-radius: 14rpx;
+  background: #f7f9f1;
+  border: 1rpx solid #e3e6d4;
+}
+
+.attachment-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 25rpx;
+  color: #26261f;
+}
+
+.attachment-preview,
+.attachment-remove {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+}
+
+.attachment-preview {
+  color: #1e3a2f;
+}
+
+.attachment-remove {
+  color: #b08d4f;
+}
+
+.attachment-empty {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 23rpx;
+  color: #968f6d;
+}
+
+/* ===== 知情同意（决策 9） ===== */
+.consent-section {
+  margin: 24rpx 24rpx 0;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+}
+
+.consent-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.consent-icon {
+  flex: 0 0 auto;
+  width: 36rpx;
+  height: 36rpx;
+  margin-top: 2rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #cdb98a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #f6efe0;
+}
+
+.consent-icon.checked {
+  background: #1e3a2f;
+  border-color: #1e3a2f;
+}
+
+.consent-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: #26261f;
 }
 
 .health-item {

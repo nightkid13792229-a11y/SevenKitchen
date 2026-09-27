@@ -1665,6 +1665,11 @@ model CustomRecipeOrder {
   customerId            String                   @map("customer_id")
   dogId                 String                   @map("dog_id")
   targetGoal            TargetGoal               @map("target_goal")
+  /// 顾客是否勾选了「需要健康管理」。
+  /// 2026-09-28 新增：此前这个勾选被折进 targetGoal（改成 HEALTH_SUPPORT），
+  /// 于是"减重 + 需要健康管理"会把减重**丢掉**。老板定的口径是
+  /// 「减重/维持/增重以顾客选的为准」，所以两者必须分开存。
+  needsHealthManagement Boolean                  @default(false) @map("needs_health_management")
   allergies             String[]                 @default([]) @map("allergies")
   medicalConditions     String[]                 @default([]) @map("medical_conditions")
   additionalNotes       String?                  @map("additional_notes")
@@ -1969,6 +1974,10 @@ enum VaccineStatus {
 }
 
 enum MedicalStatus {
+  /// 待确认：信息来自顾客自述（如定制食谱时填写），系统不替顾客/兽医下判断。
+  /// 2026-09-28 新增 —— 此前系统会把顾客自述的疾病直接标成 CHRONIC（慢性），
+  /// 与老板拍板的决策 5「系统不再臆断慢性病，标为待确认/仅留来源」相悖。
+  PENDING_CONFIRMATION
   TREATING
   RECOVERED
   CHRONIC

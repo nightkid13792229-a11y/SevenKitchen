@@ -25,6 +25,8 @@ export interface CreateCustomRecipeOrderDTO {
   attachmentUrls?: string[];
   scheduledDate: Date;
   syncToHealthProfile: boolean;
+  /** 顾客是否勾选了「需要健康管理」（与减重/维持/增重相互独立，2026-09-28） */
+  needsHealthManagement?: boolean;
 }
 
 export interface UpdateCustomRecipeOrderDTO {

@@ -154,6 +154,7 @@ export function createHealthRecordDraft(type: HealthRecordType): HealthRecordSha
       chiefComplaint: '',
       visitDate: '',
       diagnosis: '',
+      status: 'PENDING_CONFIRMATION',
     }
   }
 
@@ -215,10 +216,16 @@ export function buildHealthRecordPayload(
   record: HealthRecordShape,
 ) {
   if (type === 'medical') {
+    const status = String(record.status || '').trim()
+
     return {
       chiefComplaint: normalizeOptionalText(record.chiefComplaint) || '',
       visitDate: normalizeOptionalText(record.visitDate) || '',
       diagnosis: normalizeOptionalText(record.diagnosis) || '',
+      // 缺省是"待确认"，不是后端的默认值"治疗中"
+      status: getMedicalStatusOptions().some(option => option.value === status)
+        ? status
+        : 'PENDING_CONFIRMATION',
       notes: normalizeOptionalText(record.notes),
       attachments: normalizeAttachments(record.attachments),
     }
@@ -927,6 +934,27 @@ export function findHealthRecordFocusIndex(
   return records.findIndex(record => buildHealthRecordFocusIdentity(type, record) === identity)
 }
 
+/**
+ * 疾病状态选项。
+ *
+ * 2026-09-28 新增 PENDING_CONFIRMATION（待确认）：
+ * 顾客自述的疾病（例如在食谱定制页填的）一律先记为"待确认"，
+ * 由顾客/客服在「健康管理」页改成实际情况 —— 系统不替兽医下结论。
+ */
+export function getMedicalStatusOptions(): HealthCheckupTypeOption[] {
+  return [
+    { value: 'PENDING_CONFIRMATION', label: '待确认' },
+    { value: 'TREATING', label: '治疗中' },
+    { value: 'RECOVERED', label: '已康复' },
+    { value: 'CHRONIC', label: '慢性' },
+  ]
+}
+
+export function formatMedicalStatusLabel(status: unknown): string {
+  const normalized = String(status || '').trim()
+  return getMedicalStatusOptions().find(option => option.value === normalized)?.label || ''
+}
+
 export function buildHealthRecordSummary(
   type: HealthRecordType,
   record: Record<string, any>,
@@ -940,6 +968,8 @@ export function buildHealthRecordSummary(
   if (type === 'medical') {
     const title = String(record?.chiefComplaint || '').trim() || '未填写症状'
     const parts = [
+      // 状态放在最前面：顾客自述来的记录要先让人看到"待确认"
+      formatMedicalStatusLabel(record?.status),
       String(record?.visitDate || '').trim(),
       String(record?.diagnosis || '').trim(),
     ].filter(Boolean)

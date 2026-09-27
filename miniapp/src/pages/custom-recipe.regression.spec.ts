@@ -178,7 +178,8 @@ describe('custom recipe auth gate', () => {
 
   it('does not invite a guest to submit an order', () => {
     // 未登录时提交按钮必然是灰的，此时的提示不能是"请选择狗狗和定制目标"
-    expect(submit).toContain("needLogin.value ? '请先登录'")
+    expect(submit).toContain("title = '请先登录'")
+    expect(submit).toContain('needLogin.value')
   })
 })
 
@@ -308,5 +309,124 @@ describe('custom recipe breed display', () => {
     expect(confirmSource).toContain('bcsScoreConfirmed: true')
     expect(confirmSource).toContain('activityLevelConfirmed: true')
     expect(confirmSource).toContain('mealsPerDayConfirmed: true')
+  })
+})
+
+/**
+ * 定制页改造（2026-09-28 老板验收后确认的 6 条）
+ *
+ * 这一组对应老板逐条确认的决定：
+ *   1. 带出档案已有信息（决策 3）
+ *   2. 减重/增重以顾客选的为准，体况只给建议（B1）
+ *   3. 选中目标后要给出具体的热量与克数（老板问题 1）
+ *   4. 其他需求独立成模块、放到饮食偏好之后
+ *   5. 饮食偏好标"可选"并从档案带出
+ *   6. 写回健康档案要补知情同意（决策 9）+ 只增不删声明（决策 6）
+ */
+describe('custom recipe page · 档案带出与目标口径', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('选中狗狗后从档案带出过敏、疾病与口味偏好', () => {
+    expect(page).toContain('loadDogArchiveInfo')
+    expect(page).toContain('/custom-recipe/dogs/${dogId}/health-summary')
+    // 后端这个汇总接口前端此前**从未调用过**
+    expect(page).toContain('formData.value.allergies = Array.isArray(data.allergies)')
+    expect(page).toContain('formData.value.medicalConditions = Array.isArray(data.medicalConditions)')
+    expect(page).toContain('formData.value.preferredIngredients = splitFoodText(data.preferredFoods)')
+    expect(page).toContain('formData.value.dislikedIngredients = splitFoodText(data.pickyFoods)')
+    // 读不到档案不能挡住下单
+    expect(page).toContain('healthSummary.value = null')
+  })
+
+  it('带出的内容要告诉顾客"这是从档案来的"', () => {
+    expect(page).toContain('healthPrefillHint')
+    expect(page).toContain('preferencePrefillHint')
+    expect(page).toContain('已从档案带出')
+  })
+
+  it('档案里的体检/体重/疫苗作为只读参考展示', () => {
+    expect(page).toContain('healthReferenceRows')
+    expect(page).toContain('最近体重')
+    expect(page).toContain('最近体检')
+    expect(page).toContain('最近疫苗')
+    expect(page).toContain('供参考，不会改动')
+  })
+
+  it('体况只给建议，不替顾客定目标', () => {
+    expect(page).toContain('bcsAdviceText')
+    expect(page).toContain('我们建议：减重')
+    expect(page).toContain('这只是建议，最终由你决定')
+  })
+
+  it('选中目标后给出具体热量与克数', () => {
+    expect(page).toContain('goalTargetSummary')
+    expect(page).toContain('kcal（约')
+    expect(page).toContain('finalFoodKcal')
+    expect(page).toContain('dailyIntakeG')
+  })
+
+  it('勾了健康管理不再覆盖顾客选的减重/增重目标', () => {
+    // 原先写的是 targetGoal: enableHealthManagement ? 'HEALTH_SUPPORT' : targetGoal
+    expect(page).not.toContain("'HEALTH_SUPPORT'")
+    expect(page).toContain('needsHealthManagement: formData.value.enableHealthManagement')
+    expect(page).toContain('targetGoal')
+  })
+})
+
+describe('custom recipe page · 结构与知情同意', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('页面顺序：定制目标 → 饮食偏好 → 备注（可选）→ 交付说明', () => {
+    const goalIndex = page.indexOf('定制目标')
+    const preferenceIndex = page.indexOf('饮食偏好（可选）')
+    const notesIndex = page.indexOf('备注（可选）')
+    const deliveryIndex = page.indexOf('class="section delivery-section"')
+
+    expect(goalIndex).toBeGreaterThan(-1)
+    expect(preferenceIndex).toBeGreaterThan(goalIndex)
+    // 备注独立成第 4 步，并且排在饮食偏好之后
+    expect(notesIndex).toBeGreaterThan(preferenceIndex)
+    expect(deliveryIndex).toBeGreaterThan(notesIndex)
+  })
+
+  it('「其他需求」不再留在定制目标卡片里', () => {
+    const goalSection = page.slice(
+      page.indexOf('定制目标'),
+      page.indexOf('饮食偏好（可选）'),
+    )
+
+    expect(goalSection).not.toContain('其它需求')
+    expect(page).toContain('备注（可选）')
+    // 它只是给营养师看的备注，要讲清楚不参与计算
+    expect(page).toContain('不会改变价格或热量计算')
+  })
+
+  it('饮食偏好两项都标了"可选"', () => {
+    expect(page).toContain('喜欢的食材（可选）')
+    expect(page).toContain('不吃的食材（可选）')
+    expect(page).toContain('饮食偏好（可选）')
+  })
+
+  it('写回档案前必须明确同意（决策 9）', () => {
+    expect(page).toContain('healthInfoConsent')
+    expect(page).toContain('我同意把本次填写的过敏、疾病信息记入狗狗的健康档案')
+    // 不同意就不能提交
+    expect(page).toMatch(
+      /willWriteBackToProfile\.value\s*&&\s*!formData\.value\.healthInfoConsent/,
+    )
+    // 而且不同意就不写回档案
+    expect(page).toContain('formData.value.enableHealthManagement && formData.value.healthInfoConsent')
+  })
+
+  it('明确写清"只增不删"（决策 6）', () => {
+    expect(page).toContain('不会删除你档案里已有的记录')
+    expect(page).toContain('这里的增删只影响')
+  })
+
+  it('补上了附件上传入口（此前字段有、界面没有）', () => {
+    expect(page).toContain('pickAttachment')
+    expect(page).toContain('uploadHealthAttachment')
+    expect(page).toContain('formData.value.attachmentUrls')
+    expect(page).toContain('上传图片或 PDF')
   })
 })

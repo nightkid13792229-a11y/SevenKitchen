@@ -65,6 +65,18 @@ export class SubmitCustomRecipeOrderDTO {
   @ApiProperty({ description: 'Sync to health profile' })
   @IsBoolean()
   syncToHealthProfile!: boolean;
+
+  /**
+   * 顾客是否勾选了「需要健康管理」。
+   *
+   * 2026-09-28 新增：此前小程序把这个勾选折进 targetGoal（改写成 HEALTH_SUPPORT），
+   * 于是「减重 + 需要健康管理」会把减重目标**丢掉**。老板口径是
+   * 「减重/维持/增重以顾客选的为准」，所以必须分开传。
+   */
+  @ApiPropertyOptional({ description: 'Needs health management' })
+  @IsOptional()
+  @IsBoolean()
+  needsHealthManagement?: boolean;
 }
 
 export class UpdateOrderStatusDTO {

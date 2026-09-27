@@ -60,6 +60,7 @@ export class CustomRecipeController {
       attachmentUrls: dto.attachmentUrls || [],
       scheduledDate: new Date(dto.scheduledDate),
       syncToHealthProfile: dto.syncToHealthProfile,
+      needsHealthManagement: dto.needsHealthManagement === true,
     });
 
     return ApiResponseDto.success({
@@ -97,6 +98,7 @@ export class CustomRecipeController {
         orderId: order.orderId,
         dogName: order.dog?.name ?? '',
         targetGoal: order.targetGoal,
+        needsHealthManagement: Boolean(order.needsHealthManagement),
         scheduledDate: order.scheduledDate,
         estimatedDeliveryDate: order.estimatedDeliveryDate,
         status: order.status,
@@ -175,6 +177,7 @@ export class CustomRecipeController {
       dogId: order.dogId,
       dogName: order.dog?.name ?? '',
       targetGoal: order.targetGoal,
+      needsHealthManagement: Boolean(order.needsHealthManagement),
       scheduledDate: order.scheduledDate,
       estimatedDeliveryDate: order.estimatedDeliveryDate,
       status: order.status,

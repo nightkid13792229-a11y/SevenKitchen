@@ -161,6 +161,23 @@
           />
         </view>
 
+        <!-- 状态（目前只有病史用）：顾客自述来的记录默认「待确认」，
+             由顾客在这里改成实际情况；系统不替兽医判断是不是慢性病 -->
+        <view v-if="fieldConfig.status" class="field-group">
+          <text class="field-label">{{ fieldConfig.status.label }}</text>
+          <picker
+            mode="selector"
+            :range="fieldOptionLabels(fieldConfig.status.options)"
+            :value="fieldOptionIndex(record, fieldConfig.status.options, fieldConfig.status.key)"
+            :disabled="hasSavingRecord"
+            @change="updateOptionField(index, fieldConfig.status.key, fieldConfig.status.options, $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ readOptionFieldLabel(record, fieldConfig.status.options, fieldConfig.status.key) || `请选择${fieldConfig.status.label}` }}
+            </view>
+          </picker>
+        </view>
+
         <view class="field-group">
           <text class="field-label">{{ fieldConfig.notes.label }}</text>
           <textarea
@@ -263,6 +280,7 @@ import {
   findHealthRecordFocusIndex,
   formatHealthCheckupTypeLabel,
   getHealthCheckupTypeOptions,
+  getMedicalStatusOptions,
   getHealthRecordTypeMeta,
   getHealthRecordValidationError,
   readHealthAttachmentFileSize,
@@ -277,6 +295,14 @@ type FieldConfig = {
   primary: { key: string, label: string, options?: HealthCheckupTypeOption[] }
   date: { key: string, label: string } | null
   secondary: { key: string, label: string } | null
+  /**
+   * 下拉式状态字段（2026-09-28 加入）。
+   *
+   * 病史用它承载「待确认 / 治疗中 / 已康复 / 慢性」——
+   * 顾客自述来的记录先记"待确认"，由顾客在这里改成实际情况，
+   * 系统不替兽医断言是不是慢性病（老板拍板的决策 5）。
+   */
+  status?: { key: string, label: string, options: HealthCheckupTypeOption[] } | null
   notes: { key: string, label: string }
 }
 
@@ -384,6 +410,7 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
       primary: { key: 'chiefComplaint', label: '症状或疾病' },
       date: { key: 'visitDate', label: '发病日期' },
       secondary: { key: 'diagnosis', label: '诊断结果' },
+      status: { key: 'status', label: '状态', options: getMedicalStatusOptions() },
       notes: { key: 'notes', label: '补充说明' },
     }
   }
@@ -393,6 +420,7 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
       primary: { key: 'checkupType', label: '体检类型', options: getHealthCheckupTypeOptions() },
       date: { key: 'checkupDate', label: '体检日期' },
       secondary: null,
+      status: null,
       notes: { key: 'notes', label: '体检说明' },
     }
   }
@@ -401,6 +429,7 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
     primary: { key: 'allergen', label: '过敏原' },
     date: null,
     secondary: null,
+    status: null,
     notes: { key: 'notes', label: '过敏反应/说明' },
   }
 }

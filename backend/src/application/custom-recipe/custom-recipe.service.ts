@@ -141,6 +141,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           customerId: data.customerId,
           dogId: data.dogId,
           targetGoal: data.targetGoal,
+          needsHealthManagement: data.needsHealthManagement === true,
           allergies: data.allergies || [],
           medicalConditions: data.medicalConditions || [],
           additionalNotes: data.additionalNotes,
@@ -1108,7 +1109,16 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       }
     }
 
-    // Sync medical conditions
+    /**
+     * 同步疾病史 → 结构化疾病记录。
+     *
+     * 2026-09-28 修复（老板拍板的决策 5）：这里原先写死 `status: 'CHRONIC'`，
+     * 也就是**系统替顾客/兽医断言"这是慢性病"**。生产上已经真实发生过
+     * （一条"肠胃敏感"被标成慢性）。而"肠胃敏感是不是慢性病"只有兽医能判断。
+     *
+     * 现在一律标为 PENDING_CONFIRMATION（待确认），
+     * 来源写进 chiefComplaint 留痕，由顾客/客服在「健康管理」页确认成实际情况。
+     */
     for (const condition of medicalConditions) {
       const existing = await tx.medicalRecord.findFirst({
         where: { dogId, diagnosis: condition },
@@ -1121,7 +1131,7 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             visitDate: new Date(),
             chiefComplaint: '定制食谱时提供',
             diagnosis: condition,
-            status: 'CHRONIC',
+            status: 'PENDING_CONFIRMATION',
           },
         });
       }
@@ -1162,9 +1172,23 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Get dog health summary
    */
+  /**
+   * 档案已有信息汇总 —— 供定制页"带出档案已有信息"用（老板拍板的决策 3）。
+   *
+   * 2026-09-28 补齐：除过敏/疾病/体检/体重趋势外，再加上
+   *   · vaccines      疫苗记录（"健康管理"板块 2026-09-27 才有的新数据）
+   *   · preferredFoods / pickyFoods  口味偏好（饮食偏好要带出上次填的）
+   *   · bcsScore / currentWeightKg   体况与体重（用于"体况只给建议"的文案）
+   */
   async getDogHealthSummary(dogId: string) {
-    const [allergies, medicalRecords, checkups, weightRecords] =
-      await Promise.all([
+    const [
+      allergies,
+      medicalRecords,
+      checkups,
+      weightRecords,
+      vaccines,
+      dog,
+    ] = await Promise.all([
         this.prisma.allergyRecord.findMany({
           where: { dogId },
           orderBy: { createdAt: 'desc' },
@@ -1184,6 +1208,22 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           orderBy: { recordDate: 'desc' },
           take: 5,
         }),
+        this.prisma.vaccineRecord.findMany({
+          where: { dogId },
+          orderBy: { vaccinationDate: 'desc' },
+          take: 10,
+        }),
+        this.prisma.dog.findUnique({
+          where: { id: dogId },
+          select: {
+            currentWeightKg: true,
+            bcsScore: true,
+            activityLevel: true,
+            preferredFoods: true,
+            pickyFoods: true,
+            allergyFoods: true,
+          },
+        }),
       ]);
 
     return {
@@ -1191,6 +1231,19 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       medicalConditions: medicalRecords.map((m) => m.diagnosis),
       recentCheckups: checkups,
       weightTrend: weightRecords,
+      vaccines: vaccines.map((v) => ({
+        id: v.id,
+        vaccineName: v.vaccineName,
+        vaccinationDate: v.vaccinationDate,
+        nextDueDate: v.nextDueDate,
+        status: v.status,
+      })),
+      currentWeightKg: dog?.currentWeightKg ?? null,
+      bcsScore: dog?.bcsScore ?? null,
+      activityLevel: dog?.activityLevel ?? null,
+      preferredFoods: dog?.preferredFoods ?? null,
+      pickyFoods: dog?.pickyFoods ?? null,
+      allergyFoods: dog?.allergyFoods ?? null,
     };
   }
 

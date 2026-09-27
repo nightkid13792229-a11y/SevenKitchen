@@ -17,7 +17,9 @@ import {
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   formatHealthCheckupTypeLabel,
+  formatMedicalStatusLabel,
   getHealthCheckupTypeOptions,
+  getMedicalStatusOptions,
   getHealthRecordTypeMeta,
   getHealthRecordValidationError,
   hasUnsavedDietReminderChange,
@@ -124,6 +126,8 @@ describe('health-records', () => {
       chiefComplaint: '胃炎',
       visitDate: '2026-04-07',
       diagnosis: '轻度胃炎',
+      // 2026-09-28：疾病状态缺省是「待确认」——系统不替兽医断言是不是慢性病
+      status: 'PENDING_CONFIRMATION',
       notes: '需要复查',
       attachments: ['https://cdn.test/medical-records/a.png'],
     })
@@ -408,6 +412,81 @@ describe('health-records', () => {
     expect(hasUnsavedDietReminderChange('胡萝卜、鸡肉', '胡萝卜')).toBe(true)
   })
 
+  /**
+   * 疾病状态（2026-09-28，落实老板拍板的决策 5）
+   *
+   * 顾客自述的疾病（例如食谱定制页填的）曾被系统直接标成 CHRONIC（慢性），
+   * 生产上真实发生过一次（"肠胃敏感"被标成慢性）。而"是不是慢性病"
+   * 只有兽医能判断 —— 系统不该替他们下结论。
+   */
+  describe('疾病状态', () => {
+    it('缺省是「待确认」，而不是默认的「治疗中」', () => {
+      const payload = buildHealthRecordPayload('medical', {
+        chiefComplaint: '肠胃敏感',
+        visitDate: '2026-09-01',
+        diagnosis: '',
+        notes: '',
+        attachments: [],
+      })
+
+      expect(payload.status).toBe('PENDING_CONFIRMATION')
+    })
+
+    it('顾客自己选过的状态会原样提交', () => {
+      for (const status of ['TREATING', 'RECOVERED', 'CHRONIC']) {
+        const payload = buildHealthRecordPayload('medical', {
+          chiefComplaint: '胃炎',
+          visitDate: '2026-09-01',
+          diagnosis: '',
+          notes: '',
+          attachments: [],
+          status,
+        })
+
+        expect(payload.status).toBe(status)
+      }
+    })
+
+    it('非法状态回落到「待确认」，不会把脏值写给后端', () => {
+      const payload = buildHealthRecordPayload('medical', {
+        chiefComplaint: '胃炎',
+        visitDate: '2026-09-01',
+        diagnosis: '',
+        notes: '',
+        attachments: [],
+        status: 'SOMETHING_ELSE',
+      })
+
+      expect(payload.status).toBe('PENDING_CONFIRMATION')
+    })
+
+    it('新建病史草稿默认「待确认」', () => {
+      expect(createHealthRecordDraft('medical').status).toBe(
+        'PENDING_CONFIRMATION',
+      )
+    })
+
+    it('状态有中文文案，并且会出现在病史卡片摘要里', () => {
+      expect(formatMedicalStatusLabel('PENDING_CONFIRMATION')).toBe('待确认')
+      expect(getMedicalStatusOptions().map(option => option.value)).toEqual([
+        'PENDING_CONFIRMATION',
+        'TREATING',
+        'RECOVERED',
+        'CHRONIC',
+      ])
+
+      const summary = buildHealthRecordSummary('medical', {
+        chiefComplaint: '肠胃敏感',
+        visitDate: '2026-09-01',
+        diagnosis: '',
+        status: 'PENDING_CONFIRMATION',
+        attachments: [],
+      })
+
+      expect(summary.detail).toContain('待确认')
+    })
+  })
+
   it('resolves empty dog selections separately from loading errors', () => {
     expect(resolveDogHealthSelectionState([], 'dog-1')).toEqual({
       hasNoDogs: true,
@@ -459,6 +538,7 @@ describe('health-records', () => {
     ).toEqual({
       medicalRecords: [
         {
+          status: 'PENDING_CONFIRMATION',
           chiefComplaint: '胃炎',
           visitDate: '2026-04-07',
           diagnosis: '轻度胃炎',

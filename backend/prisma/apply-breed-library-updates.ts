@@ -108,7 +108,19 @@ const NEW_BREEDS: NewBreedInput[] = [
     seniorAgeYears: 10,
     averageAdultWeightKg: 16,
     aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬口袋型', '口袋恶霸', 'Pocket Bully'],
-    basis: 'ABKC 口袋型体型最小，体重约 13–18kg → MEDIUM（对标雪纳瑞标准 15.9kg）。',
+    basis: 'ABKC 口袋型体型最小，体重约 13–18kg → MEDIUM（对标雪纳瑞标准 15.9kg）。⚠️ 体重区间待核对权威标准。',
+  },
+  {
+    // 老板更正：经典型是协会划分的独立系列，**不能合并进标准型**，
+    // 也不是标准型的别名 —— 否则用户会问「为什么没有我这个系列？」。
+    name: '美国恶霸犬（经典型）',
+    sizeCategory: DogSizeCategory.MEDIUM,
+    growthCurveType: GrowthCurveType.STANDARD,
+    adultAgeMonths: 12,
+    seniorAgeYears: 10,
+    averageAdultWeightKg: 18,
+    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬经典型', '经典恶霸', 'Classic Bully'],
+    basis: 'ABKC 经典型（Classic）为其独立系列，体重约 13.6–20kg → MEDIUM。⚠️ 体重区间待核对权威标准。',
   },
   {
     name: '美国恶霸犬（标准型）',
@@ -117,9 +129,8 @@ const NEW_BREEDS: NewBreedInput[] = [
     adultAgeMonths: 18,
     seniorAgeYears: 8,
     averageAdultWeightKg: 38,
-    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬标准型', '标准恶霸', 'Standard Bully', 'Classic Bully', '恶霸犬经典型'],
-    basis:
-      'ABKC 标准型体重约 30–45kg → LARGE（对标雪纳瑞巨型 34kg）。经典型与口袋型体重重叠，并入本档。',
+    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬标准型', '标准恶霸', 'Standard Bully'],
+    basis: 'ABKC 标准型体重约 30–45kg → LARGE（对标雪纳瑞巨型 34kg）。⚠️ 体重区间待核对权威标准。',
   },
   {
     name: '美国恶霸犬（XL型）',
@@ -129,42 +140,24 @@ const NEW_BREEDS: NewBreedInput[] = [
     seniorAgeYears: 7,
     averageAdultWeightKg: 52,
     aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬XL型', 'XL恶霸', 'XL Bully', '美国恶霸犬XL'],
-    basis: 'ABKC XL 型约 45–60kg → GIANT（≥24 月成年、7 岁进入老年）。',
+    basis: 'ABKC XL 型约 45–60kg → GIANT（≥24 月成年、7 岁进入老年）。⚠️ 体重区间待核对权威标准。',
   },
 
   // ============ B. 热门杂交犬（犬业联盟不认可；按老板意见单独建库）============
-  // 可卡布同样是分体型的：用玩具贵宾配 → 玩具型，用迷你贵宾配 → 迷你型，用标准贵宾配 → 标准型。
-  // 生产实测跨度 2.3–12.5kg（15 只，5 倍差距），单条折中会让两头的狗都算错。
+  // ⚠️ 可卡布按单一品种建库（2026-09-27 老板更正）：
+  // 犬业联盟并未把可卡布划分为玩具/迷你/标准 —— 既然协会没有这个划分，
+  // 我们也不该擅自拆。它体重跨度确实大（生产 2.3–12.5kg），
+  // 处理方式是：建一个条目 + 顾客可在档案里**手动调整体型**（库里本就有这个能力）。
   {
-    name: '可卡布犬（玩具）',
-    sizeCategory: DogSizeCategory.SMALL,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 10,
-    seniorAgeYears: 11,
-    averageAdultWeightKg: 4,
-    aliases: ['可卡布', 'Cockapoo', '可卡布玩具型', '玩具可卡布'],
-    basis: '玩具型（玩具贵宾配）约 5.4kg 以下 → SMALL。生产最小的那只 2.3kg 落在此档。',
-  },
-  {
-    name: '可卡布犬（迷你）',
+    name: '可卡布犬',
     sizeCategory: DogSizeCategory.SMALL,
     growthCurveType: GrowthCurveType.STANDARD,
     adultAgeMonths: 10,
     seniorAgeYears: 11,
     averageAdultWeightKg: 7,
-    aliases: ['可卡布', 'Cockapoo', '可卡布迷你型', '迷你可卡布'],
+    aliases: ['可卡布', 'Cockapoo'],
     basis:
-      '迷你型（迷你贵宾配）约 5.4–9kg → SMALL。生产均重 6.7kg 落在此档（最常见的档位）。',
-  },
-  {
-    name: '可卡布犬（标准）',
-    sizeCategory: DogSizeCategory.MEDIUM,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 12,
-    seniorAgeYears: 10,
-    averageAdultWeightKg: 11,
-    aliases: ['可卡布', 'Cockapoo', '可卡布标准型', '标准可卡布'],
-    basis: '标准型（标准贵宾配）约 9–13.6kg → MEDIUM。生产最大的那只 12.5kg 落在此档。',
+      'Cockapoo（可卡犬 × 贵宾犬），犬业联盟不承认、也无官方体型划分，故只建一个条目。生产实测均重 6.7kg（2.3–12.5，15 只），取最常见的迷你档 → SMALL。跨度过大的个体由顾客手动调整体型。',
   },
   {
     name: '马尔泰犬',

@@ -112,13 +112,23 @@ describe('weight unit conversion', () => {
     const readSource = (relativePath: string) =>
       readFileSync(resolve(process.cwd(), relativePath), 'utf-8')
 
+    /**
+     * 允许出现换算的**输入口**（2026-09-27：健康页也统一后共 3 处）。
+     * 只有这三处能拿到"顾客可能填斤"的原始输入。
+     */
+    const INPUT_SURFACES = [
+      'src/pages/dog-create/index.vue',
+      'src/pages/dog-profile-overview/index.vue',
+      'src/components/dog-profile/WeightManagementSection.vue',
+    ]
+
     it('换算比例只定义在 weight-unit 里', () => {
       const files = [
         'src/utils/weight-unit.ts',
-        'src/pages/dog-create/index.vue',
-        'src/pages/dog-profile-overview/index.vue',
+        ...INPUT_SURFACES,
         'src/utils/weight-management.ts',
         'src/utils/health-records.ts',
+        'src/utils/dog-profile-form.ts',
       ]
 
       for (const file of files) {
@@ -129,26 +139,30 @@ describe('weight unit conversion', () => {
       }
     })
 
-    it('换算函数只被两个页面的输入框调用，不得出现在计算或数据层', () => {
-      const consumers = [
-        'src/pages/dog-create/index.vue',
-        'src/pages/dog-profile-overview/index.vue',
-      ]
-
-      // 每个页面只应有 2 处**调用**：输入事件 + 切换单位时把旧单位固化成公斤
-      for (const file of consumers) {
+    it('换算函数只出现在三个输入口，且每个 2 处调用', () => {
+      for (const file of INPUT_SURFACES) {
         const source = readSource(file)
         const callCount = (source.match(/parseWeightInputToKg\(/g) || []).length
+        // 输入事件 + 切换单位时把旧单位固化成公斤
         expect(callCount).toBe(2)
       }
+    })
 
-      // 计算层与数据层不得出现这个函数（它们只该见到公斤）
+    it('计算层与数据层不得出现换算函数（它们只该见到公斤）', () => {
       for (const file of [
         'src/utils/weight-management.ts',
         'src/utils/health-records.ts',
         'src/utils/dog-profile-form.ts',
       ]) {
         expect(readSource(file)).not.toContain('parseWeightInputToKg')
+      }
+    })
+
+    it('三个体重输入口都提供了单位切换，行为一致', () => {
+      for (const file of INPUT_SURFACES) {
+        const source = readSource(file)
+        expect(source).toContain('weight-unit-toggle')
+        expect(source).toContain('weightUnitOptions')
       }
     })
   })

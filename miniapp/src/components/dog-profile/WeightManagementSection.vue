@@ -16,13 +16,27 @@
         </view>
 
         <view class="input-item">
-          <text class="input-label">体重（kg）</text>
-          <input
-            class="input-field"
-            type="digit"
-            v-model="formData.weightKg"
-            placeholder="请输入体重"
-          />
+          <!-- 单位必须显式可见并可切换（与建档页、档案总览页保持一致）。
+               2026-09-27 老板要求三处体重输入统一。
+               注意：内部仍**始终存公斤**，斤只存在于输入框这一层。 -->
+          <text class="input-label">体重（{{ weightUnitLabel }}）</text>
+          <view class="weight-input-row">
+            <input
+              class="input-field weight-input"
+              type="digit"
+              :value="weightInputText"
+              @input="onWeightInput"
+            />
+            <view class="weight-unit-toggle">
+              <text
+                v-for="option in weightUnitOptions"
+                :key="option.value"
+                class="weight-unit-option"
+                :class="{ active: weightUnit === option.value }"
+                @tap="onWeightUnitChange(option.value)"
+              >{{ option.label }}</text>
+            </view>
+          </view>
         </view>
 
         <view class="input-item">
@@ -110,6 +124,12 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { request } from '../../utils/api'
 import {
+  formatWeightForInput,
+  getWeightUnitLabel,
+  parseWeightInputToKg,
+  type WeightUnit,
+} from '../../utils/weight-unit'
+import {
   formatWeightChangeText,
   formatWeightRecordDateTick,
   getWeightChartDateTickIndexes,
@@ -138,6 +158,42 @@ const props = defineProps<{
     currentWeightKg?: number | null
   }
 }>()
+
+/**
+ * 体重单位（公斤 / 斤）。
+ *
+ * formData.weightKg 内部**始终是公斤** —— 这一点在三个体重输入处都一样：
+ * 「斤」只存在于输入框那一层，输入事件立刻换算成公斤，下游（体重记录、
+ * 档案当前体重、热量计算）永远只见到公斤。
+ */
+const weightUnit = ref<WeightUnit>('KG')
+const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
+  { value: 'KG', label: '公斤' },
+  { value: 'JIN', label: '斤' },
+]
+/** 输入框正在编辑的原始文本：单独存一份，避免换算打断顾客的按键序列 */
+const weightInputText = ref('')
+const weightUnitLabel = computed(() => getWeightUnitLabel(weightUnit.value))
+
+const onWeightInput = (event: any) => {
+  const raw = String(event?.detail?.value ?? '')
+  weightInputText.value = raw
+  formData.value.weightKg = parseWeightInputToKg(raw, weightUnit.value)
+}
+
+const onWeightUnitChange = (unit: WeightUnit) => {
+  if (unit === weightUnit.value) return
+  // 先把当前输入按旧单位固化成公斤，再按新单位重新展示
+  formData.value.weightKg = parseWeightInputToKg(
+    weightInputText.value,
+    weightUnit.value,
+  )
+  weightUnit.value = unit
+  weightInputText.value = formatWeightForInput(
+    formData.value.weightKg,
+    weightUnit.value,
+  )
+}
 
 const records = ref<WeightRecord[]>([])
 const isSavingRecord = ref(false)
@@ -187,6 +243,7 @@ onMounted(() => {
 function resetForDog() {
   records.value = []
   formData.value.weightKg = ''
+  weightInputText.value = ''
   formData.value.note = ''
   formData.value.recordDate = new Date().toISOString().split('T')[0]
   syncToProfileTouched.value = false
@@ -288,6 +345,7 @@ async function saveRecord() {
 
       await loadRecords()
       formData.value.weightKg = ''
+      weightInputText.value = ''
       formData.value.note = ''
       formData.value.recordDate = new Date().toISOString().split('T')[0]
       syncToProfileTouched.value = false
@@ -578,6 +636,41 @@ function drawChart() {
 
 .input-item:last-child {
   margin-bottom: 0;
+}
+
+/* 体重：输入框 + 单位切换（与建档页、档案总览页同一套样式） */
+.weight-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.weight-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.weight-unit-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 3rpx;
+  background: #eef3ea;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option {
+  padding: 0 14rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  font-size: 23rpx;
+  color: #6b6653;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option.active {
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
 }
 
 .input-label {

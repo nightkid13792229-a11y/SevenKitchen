@@ -127,40 +127,53 @@ describe('dog-create runtime regressions', () => {
   })
 
   /**
-   * 性别与是否绝育改成「选填 + 折叠」（2026-09-27，U2）
+   * 性别与绝育：放在第 1 步姓名下方，且必填（2026-09-27 老板决定）
    *
-   * 实测：性别不参与任何热量计算（只在繁殖期给个提示），绝育也只在
-   * 「成犬且为工作犬」时才用得到。让顾客在最想快点看到喂食建议的时候
-   * 停下来回答两个不影响结果的问题，代价不值。
+   * 背景：这两项一度被改成「选填 + 默认收起」（基于"实测不影响热量计算"）。
+   * 老板判断填写成本对顾客极低，要求放回姓名下方顺手完成，并恢复必填。
+   *
+   * 但**不能因此恢复预选默认值** —— 原先默认「弟弟 / 未绝育」会让顾客
+   * 无意识跳过，母狗被存成公狗（生产里性别分布明显偏向公狗就是证据之一）。
+   * 所以做成：必填 + 不预选。
    */
-  describe('性别与绝育收进「更多信息」', () => {
+  describe('性别与绝育（第 1 步必填）', () => {
     const readPage = () =>
       readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
 
-    it('默认收起，需要顾客主动展开', () => {
+    it('放在第 1 步姓名下方，不再有折叠的「更多信息」', () => {
       const source = readPage()
+      const basicSection =
+        source.match(/showBasicSection[\s\S]*?showFeedingSection/)?.[0] || ''
 
-      expect(source).toContain('const showMoreInfo = ref(false)')
-      expect(source).toContain('更多信息（选填）')
-      expect(source).toContain('toggleMoreInfo')
-      expect(source).toContain('v-if="showMoreInfo"')
+      expect(basicSection).not.toBe('')
+      expect(basicSection).toContain('性别 *')
+      expect(basicSection).toContain('绝育状态 *')
+      // 姓名要在性别之前（"顺手完成"的位置）
+      expect(basicSection.indexOf('狗狗名字')).toBeLessThan(
+        basicSection.indexOf('性别 *'),
+      )
+      expect(source).not.toContain('更多信息（选填）')
+      expect(source).not.toContain('showMoreInfo')
     })
 
-    it('两项都还有入口（折叠不等于删掉）', () => {
+    it('必填但不预选：顾客必须自己选过', () => {
       const source = readPage()
 
-      expect(source).toContain('selectGender(')
-      expect(source).toContain('selectNeutered(')
+      expect(source).toContain("gender: '',")
+      expect(source).toContain('isNeutered: null,')
+      // 不许再写回默认值
+      expect(source).not.toContain("gender: 'MALE',\n  isNeutered")
     })
 
-    it('绝育的话术与真实算法一致（不再宣称"会影响热量评估"）', () => {
+    it('校验要求两者都真的选过（false 也算选过）', () => {
       const viewSource = readFileSync(
         resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
         'utf-8',
       )
 
-      expect(viewSource).not.toContain('是否绝育会影响小家伙的热量评估')
-      expect(viewSource).toContain('极少数情况')
+      expect(viewSource).toContain('hasValue(form.gender)')
+      // 绝育必须用 === true / === false 判断：hasValue(false) 为真，会误判
+      expect(viewSource).toContain('form.isNeutered === true || form.isNeutered === false')
     })
   })
 

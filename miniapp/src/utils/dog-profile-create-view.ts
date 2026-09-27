@@ -257,7 +257,11 @@ export function isCreateBasicStepReady(form: Record<string, any>) {
     hasValue(form.breedId) &&
     hasValue(form.birthday) &&
     hasValidWeight(form.currentWeightKg) &&
-    hasValue(form.isNeutered) &&
+    // 2026-09-27：性别与绝育改为必填。
+    // 注意 hasValue(false) 为真，所以绝育必须用 typeof 判断 ——
+    // 否则 `false`（未绝育）会被当成"没选"，或反过来像以前那样永远通过。
+    hasValue(form.gender) &&
+    (form.isNeutered === true || form.isNeutered === false) &&
     (!needsSizeClassOverride || hasValue(form.sizeClassOverride)),
   )
 }

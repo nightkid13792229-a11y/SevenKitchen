@@ -43,6 +43,8 @@ describe('create step boundaries', () => {
         breedId: '550e8400-e29b-41d4-a716-446655440000',
         birthday: '2021-01-01',
         currentWeightKg: 'abc',
+        // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+        gender: 'MALE',
         isNeutered: false,
       }),
     ).toBe(false)
@@ -162,6 +164,8 @@ describe('create step boundaries', () => {
       breedId: '550e8400-e29b-41d4-a716-446655440000',
       birthday: '2021-01-01',
       currentWeightKg: '8.6',
+      // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+      gender: 'MALE',
       isNeutered: true,
       bcsScore: 5,
       activityLevel: 'NORMAL',

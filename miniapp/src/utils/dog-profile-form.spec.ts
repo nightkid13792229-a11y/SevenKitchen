@@ -63,6 +63,8 @@ describe('dog-profile-form', () => {
       activityLevel: 'NORMAL',
       mealsPerDay: '2',
       treatLevel: 'LOW',
+      // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+      gender: 'MALE',
       isNeutered: false,
     })
 
@@ -80,6 +82,8 @@ describe('dog-profile-form', () => {
       activityLevel: 'NORMAL',
       mealsPerDay: '2',
       treatLevel: 'LOW',
+      // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+      gender: 'MALE',
       isNeutered: false,
     })
 
@@ -122,6 +126,8 @@ describe('dog-profile-form', () => {
           mealsPerDay: '2',
           treatInputMode: 'ESTIMATE_LEVEL',
           treatLevel: 'LOW',
+          // 性别与绝育自 2026-09-27 起为必填，夹具需补齐
+          gender: 'MALE',
           isNeutered: false,
         }),
       ),

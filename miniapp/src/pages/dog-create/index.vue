@@ -28,6 +28,55 @@
                 />
               </view>
 
+              <!-- 性别与绝育：放在姓名正下方，顾客顺手就能完成（老板决定）。
+                   这两项影响健康提醒，也影响工作犬的热量基线；填写成本极低，
+                   因此保持必填。但**刻意不预选** —— 原先默认「弟弟 / 未绝育」
+                   会让顾客无意识跳过，母狗被存成公狗。 -->
+              <view class="profile-card__field">
+                <text class="label">性别 *</text>
+                <view class="gender-selector">
+                  <view
+                    v-for="option in createGenderChoices"
+                    :key="option.value"
+                    class="gender-option"
+                    :class="[
+                      option.value === 'MALE' ? 'gender-option--male' : 'gender-option--female',
+                      { active: formData.gender === option.value },
+                    ]"
+                    @tap="selectGender(option.value)"
+                  >
+                    <text
+                      class="gender-symbol"
+                      :class="option.value === 'MALE' ? 'gender-symbol--male' : 'gender-symbol--female'"
+                    >
+                      {{ option.symbol }}
+                    </text>
+                    <text class="gender-label">{{ option.label }}</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="profile-card__field">
+                <text class="label">绝育状态 *</text>
+                <view class="neuter-selector">
+                  <view
+                    class="neuter-option"
+                    :class="{ active: formData.isNeutered === true }"
+                    @tap="selectNeutered(true)"
+                  >
+                    <text class="neuter-label">已绝育</text>
+                  </view>
+                  <view
+                    class="neuter-option"
+                    :class="{ active: formData.isNeutered === false }"
+                    @tap="selectNeutered(false)"
+                  >
+                    <text class="neuter-label">未绝育</text>
+                  </view>
+                </view>
+                <text class="hint">{{ createNeuterHint }}</text>
+              </view>
+
             </view>
           </view>
         </view>
@@ -253,68 +302,6 @@
           </view>
         </view>
 
-        <!-- 性别与是否绝育改成「选填 + 折叠」（U2）。
-             原因：实测性别不参与任何热量计算（只在繁殖期给个提示），
-             绝育也只在「成犬且为工作犬」时才用得到 —— 让顾客在最想快点看到
-             喂食建议的时候停下来回答两个不影响结果的问题，代价不值。
-             它们仍有默认值（弟弟 / 未绝育），折叠起来不影响提交。 -->
-        <view class="profile-card">
-          <view class="more-info-toggle" @tap="toggleMoreInfo">
-            <view class="more-info-toggle__text">
-              <text class="profile-card__section-title">更多信息（选填）</text>
-              <text class="profile-card__section-desc">性别、是否绝育 —— 对配餐影响很小，可以以后再说。</text>
-            </view>
-            <text class="more-info-toggle__action">{{ showMoreInfo ? '收起' : '展开' }}</text>
-          </view>
-
-          <view v-if="showMoreInfo" class="more-info-body">
-            <view class="profile-card__field">
-              <text class="label">性别</text>
-              <view class="gender-selector">
-                <view
-                  v-for="option in createGenderChoices"
-                  :key="option.value"
-                  class="gender-option"
-                  :class="[
-                    option.value === 'MALE' ? 'gender-option--male' : 'gender-option--female',
-                    { active: formData.gender === option.value },
-                  ]"
-                  @tap="selectGender(option.value)"
-                >
-                  <text
-                    class="gender-symbol"
-                    :class="option.value === 'MALE' ? 'gender-symbol--male' : 'gender-symbol--female'"
-                  >
-                    {{ option.symbol }}
-                  </text>
-                  <text class="gender-label">{{ option.label }}</text>
-                </view>
-              </view>
-              <text class="hint">性别目前不参与热量计算，仅用于必要的健康提醒。</text>
-            </view>
-
-            <view class="profile-card__field">
-              <text class="label">绝育状态</text>
-              <view class="neuter-selector">
-                <view
-                  class="neuter-option"
-                  :class="{ active: formData.isNeutered === true }"
-                  @tap="selectNeutered(true)"
-                >
-                  <text class="neuter-label">已绝育</text>
-                </view>
-                <view
-                  class="neuter-option"
-                  :class="{ active: formData.isNeutered === false }"
-                  @tap="selectNeutered(false)"
-                >
-                  <text class="neuter-label">未绝育</text>
-                </view>
-              </view>
-              <text class="hint">{{ createNeuterHint }}</text>
-            </view>
-          </view>
-        </view>
       </view>
 
       <!-- 身体状态区 -->
@@ -865,8 +852,15 @@ interface FormData {
   customBreedName?: string
   avatarTempFilePath: string
   birthday: string
+  /**
+   * 性别与绝育（2026-09-27 老板决定：放回第 1 步姓名下方，且必填）。
+   *
+   * 空字符串 / null = 顾客还没选。**刻意不预选**：
+   * 原先默认「弟弟 / 未绝育」会让顾客无意识跳过 —— 母狗被存成公狗，
+   * 而未绝育的默认值又会进入 AI 配方提示词。改动成本很低，不值得用默认值换。
+   */
   gender: string
-  isNeutered: boolean
+  isNeutered: boolean | null
   currentWeightKg: string
   /**
    * 体况评分。`null` = 顾客还没选过。
@@ -909,8 +903,9 @@ const formData = ref<FormData>({
   customBreedName: '',
   avatarTempFilePath: '',
   birthday: '',
-  gender: 'MALE',
-  isNeutered: false,
+  // 不预选：顾客必须自己选（填写成本很低，但默认值会造成错误数据）
+  gender: '',
+  isNeutered: null,
   currentWeightKg: '',
   bcsScore: null,
   // 不再预选：顾客点过才算"确认过"。不选也能继续建档（不阻断），
@@ -959,8 +954,6 @@ const createGenderChoices = getCreateGenderChoices()
 const createNeuterHint = getCreateNeuterHint()
 const createManualBreedLabels = getCreateManualBreedLabels()
 const showAvatarCropper = ref(false)
-/** 「更多信息（选填）」的展开状态 —— 性别与绝育默认收起，不占顾客注意力 */
-const showMoreInfo = ref(false)
 const avatarCropSourcePath = ref('')
 const hasCreateAvatarPreview = computed(() => Boolean(String(formData.value.avatarTempFilePath || '').trim()))
 const createAvatarSrc = computed(() => resolveDogAvatarSrc('', formData.value.avatarTempFilePath))
@@ -2276,10 +2269,6 @@ function selectCustomBreedSize(sizeClass: string) {
   customBreedSizeClass.value = sizeClass
 }
 
-function toggleMoreInfo() {
-  showMoreInfo.value = !showMoreInfo.value
-}
-
 // 选择性别
 function selectGender(gender: 'MALE' | 'FEMALE') {
   formData.value.gender = gender
@@ -2415,7 +2404,8 @@ async function previewCalculation(options?: { silent?: boolean }) {
       breedId: formData.value.breedId,
       birthday: new Date(formData.value.birthday).toISOString(),
       gender: formData.value.gender,
-      isNeutered: formData.value.isNeutered,
+      // 未选时用 false 兜底（后端要求布尔）；第 1 步校验保证提交前一定选过
+      isNeutered: formData.value.isNeutered ?? false,
       currentWeightKg: parsedCurrentWeightKg.value,
       // 顾客还没选时用兜底值算预览（不阻断流程），确认状态另行提交
       bcsScore: formData.value.bcsScore ?? FALLBACK_BCS_SCORE,
@@ -4450,34 +4440,6 @@ async function submit() {
 
 .health-skip-btn::after {
   border: none;
-}
-
-/* 「更多信息（选填）」：默认收起，避免不影响结果的必答项占用顾客注意力 */
-.more-info-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.more-info-toggle__text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.more-info-toggle__action {
-  flex: 0 0 auto;
-  font-size: 24rpx;
-  color: #b08d4f;
-}
-
-.more-info-body {
-  margin-top: 24rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #e5e8d4;
-  display: flex;
-  flex-direction: column;
-  gap: 28rpx;
 }
 
 .hint--emphasis {

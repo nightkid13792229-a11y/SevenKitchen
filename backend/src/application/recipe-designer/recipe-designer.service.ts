@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  CustomRecipeStatus,
   DesignRecipeReviewStatus,
   DesignRecipeStatus,
   BaseUnit,
@@ -7503,12 +7504,55 @@ export class RecipeDesignerService {
     const lifeStage = mapDogProfileToSeriesLifeStage(dogForLifeStage);
     const lifeStageLabel = SERIES_LIFE_STAGE_LABELS[lifeStage] ?? null;
 
+    /**
+     * 顾客最近一笔「食谱定制」订单（老板确认的第 4 条）。
+     *
+     * 设计器此前完全看不到它：顾客要减重还是增重、勾没勾健康管理、
+     * 备注说了什么、订单里填的过敏/疾病/喜好，营养师与 AI 一个都读不到。
+     * 已取消的订单不算（顾客都撤了，不该再指导设计）。
+     */
+    const customOrder = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        dogId,
+        status: { not: CustomRecipeStatus.CANCELLED },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        orderId: true,
+        status: true,
+        targetGoal: true,
+        needsHealthManagement: true,
+        additionalNotes: true,
+        allergies: true,
+        medicalConditions: true,
+        preferredIngredients: true,
+        dislikedIngredients: true,
+        createdAt: true,
+      },
+    });
+
     const insight = buildDogDesignInsight({
       dog: dogForLifeStage,
       seriesList,
       orderItems,
       recentEatenOrderItems,
       lifeStageLabel,
+      customRecipeOrder: customOrder
+        ? {
+            orderId: customOrder.orderId,
+            status: customOrder.status,
+            targetGoal: customOrder.targetGoal,
+            needsHealthManagement: Boolean(customOrder.needsHealthManagement),
+            additionalNotes: customOrder.additionalNotes ?? null,
+            allergies: customOrder.allergies ?? [],
+            medicalConditions: customOrder.medicalConditions ?? [],
+            preferredIngredients: customOrder.preferredIngredients ?? [],
+            dislikedIngredients: customOrder.dislikedIngredients ?? [],
+            createdAt: customOrder.createdAt
+              ? customOrder.createdAt.toISOString()
+              : null,
+          }
+        : null,
     });
 
     const aiEnabled =
@@ -8126,8 +8170,37 @@ export class RecipeDesignerService {
     const lifeStage = mapDogProfileToSeriesLifeStage(dogForLifeStage);
     const lifeStageLabel = SERIES_LIFE_STAGE_LABELS[lifeStage] ?? null;
 
+    /**
+     * 顾客最近一笔定制订单（未取消），一并交给 AI。
+     * 否则 AI 不知道顾客要减重还是增重、备注里写了什么。
+     */
+    const customerOrder = await this.prisma.customRecipeOrder.findFirst({
+      where: { dogId, status: { not: CustomRecipeStatus.CANCELLED } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        orderId: true,
+        targetGoal: true,
+        needsHealthManagement: true,
+        additionalNotes: true,
+        preferredIngredients: true,
+        dislikedIngredients: true,
+      },
+    });
+
     return {
       name: dog.name,
+      customOrder: customerOrder
+        ? {
+            orderId: customerOrder.orderId,
+            targetGoal: customerOrder.targetGoal,
+            needsHealthManagement: Boolean(
+              customerOrder.needsHealthManagement,
+            ),
+            additionalNotes: customerOrder.additionalNotes ?? null,
+            preferredIngredients: customerOrder.preferredIngredients ?? [],
+            dislikedIngredients: customerOrder.dislikedIngredients ?? [],
+          }
+        : null,
       breedName: breed?.name ?? dog.customBreedName ?? null,
       gender: dog.gender,
       ageMonths: dog.birthday
@@ -8150,8 +8223,21 @@ export class RecipeDesignerService {
           allergens: dog.allergyRecords.map((record) => record.allergen),
         }),
       ),
-      pickyFoods: dog.pickyFoods,
-      preferredFoods: dog.preferredFoods,
+      /**
+       * 口味偏好：档案里的 + **顾客在定制单里单独填的**，合并后交给 AI。
+       *
+       * 定制单里的喜好/忌口不写回档案（知情同意的范围只有过敏与疾病，
+       * 不能顺手把口味也写进去），但 AI 与设计器必须看得到 ——
+       * 否则顾客在订单里写的"不吃鸡胸"会被彻底忽略。
+       */
+      pickyFoods: mergeFoodText(
+        dog.pickyFoods,
+        customerOrder?.dislikedIngredients ?? [],
+      ),
+      preferredFoods: mergeFoodText(
+        dog.preferredFoods,
+        customerOrder?.preferredIngredients ?? [],
+      ),
       medicalHistory: dog.medicalHistory,
       weightTrend: dog.weightRecords
         .slice()
@@ -8437,6 +8523,27 @@ export class RecipeDesignerService {
     }
     return null;
   }
+}
+
+/** 把档案口味文本与订单里填的食材合并成一段逗号分隔文本（去重、保序） */
+function mergeFoodText(
+  archiveText: string | null | undefined,
+  orderItems: string[],
+): string | null {
+  const merged: string[] = [];
+  const push = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed && !merged.includes(trimmed)) {
+      merged.push(trimmed);
+    }
+  };
+
+  String(archiveText || '')
+    .split(/[,，、;；\n\r]/)
+    .forEach(push);
+  orderItems.forEach(push);
+
+  return merged.length > 0 ? merged.join('、') : null;
 }
 
 // ---------- AI 四步向导辅助函数 ----------

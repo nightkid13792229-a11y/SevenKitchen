@@ -236,6 +236,17 @@
           >
             开始制作
           </el-button>
+          <!-- 一键进食谱设计器（2026-09-28）：带着这只狗进去，
+               设计器里会显示顾客的定制需求（目标/备注/订单里填的过敏与忌口），
+               营养师不必再手工新建系列、自己搜狗。 -->
+          <el-button
+            v-if="order.dog?.id"
+            type="success"
+            plain
+            @click="openInDesigner"
+          >
+            在设计器中设计
+          </el-button>
           <!-- 取消会释放当天接单名额（每天只有 5 个），所以放到员工能点到的地方。
                已交付的单不允许取消（后端也会拒绝）。 -->
           <el-button
@@ -511,6 +522,23 @@ const confirmPayment = async () => {
  *
  * 注意：已付款的单需要线下退款，取消前会提示客服。
  */
+/**
+ * 跳到食谱设计器并带上这只狗。
+ *
+ * 设计器会预填"参考爱犬"并直接打开创建对话框；
+ * 进去之后「爱犬指导」面板会显示这笔定制订单的顾客需求。
+ */
+const openInDesigner = () => {
+  const dogId = order.value?.dog?.id;
+  if (!dogId) {
+    ElMessage.warning('这笔订单没有关联的狗狗档案');
+    return;
+  }
+
+  const url = `/recipe-designer?dogId=${encodeURIComponent(String(dogId))}&openCreate=1`;
+  window.open(url, '_blank');
+};
+
 const cancelOrder = async () => {
   try {
     const { value } = await ElMessageBox.prompt(

@@ -75,6 +75,31 @@ export interface DogDesignInsight {
   };
   designHistory: DogDesignHistorySummary;
   orderSummary: DogOrderSummary;
+  /**
+   * 顾客最近一笔「食谱定制」订单里填的内容。
+   *
+   * 2026-09-28 新增（老板确认的第 4 条）：此前设计器**完全看不到**这笔订单 ——
+   * 顾客选的是减重还是增重、勾没勾健康管理、备注里说了什么、订单里填的
+   * 过敏与疾病、喜好与忌口，营养师和 AI 一个都读不到，
+   * "参考顾客填写的信息来设计"这件事根本不成立。
+   *
+   * 只取最近一笔未取消的订单；`null` 表示这只狗没有定制单。
+   */
+  customRecipeOrder: {
+    orderId: string;
+    status: string;
+    /** 顾客选的体重目标：LOSE_WEIGHT / MAINTAIN / GAIN_WEIGHT / HEALTH_SUPPORT */
+    targetGoal: string;
+    /** 顾客是否勾选了「需要健康管理」 */
+    needsHealthManagement: boolean;
+    /** 顾客填的备注（原样给出，供营养师阅读） */
+    additionalNotes: string | null;
+    allergies: string[];
+    medicalConditions: string[];
+    preferredIngredients: string[];
+    dislikedIngredients: string[];
+    createdAt: string | null;
+  } | null;
 }
 
 interface InsightDesignItemLike {
@@ -368,6 +393,8 @@ export function buildDogDesignInsight(input: {
   /** 已按 90 天窗口与订单状态（≥ FREEZING）过滤的订单，用于「最近吃过的食材」 */
   recentEatenOrderItems?: InsightOrderItemLike[];
   lifeStageLabel: string | null;
+  /** 最近一笔「食谱定制」订单（没有则 null，或省略） */
+  customRecipeOrder?: DogDesignInsight['customRecipeOrder'];
 }): DogDesignInsight {
   const dog = input.dog;
   const breedName = firstString(
@@ -413,5 +440,6 @@ export function buildDogDesignInsight(input: {
       ),
     },
     orderSummary: aggregateDogOrderSummary(input.orderItems),
+    customRecipeOrder: input.customRecipeOrder ?? null,
   };
 }

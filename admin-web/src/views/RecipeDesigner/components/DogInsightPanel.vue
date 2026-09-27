@@ -102,6 +102,8 @@
             </span>
           </div>
         </div>
+
+
         <div class="notes-actions">
           <el-button size="small" text type="primary" @click="editingNotes = !editingNotes">
             {{ editingNotes ? '收起' : '编辑备注' }}
@@ -137,6 +139,60 @@
               保存到爱犬档案
             </el-button>
           </div>
+        </div>
+      </div>
+
+      <!-- 顾客的定制需求（2026-09-28）
+           顾客在「食谱定制」里明确提出的要求。此前设计器完全看不到，
+           营养师只能靠客服转述，"参考顾客填写的信息来设计"并不成立。 -->
+      <div v-if="insight.customRecipeOrder" class="panel-section dog-profile">
+        <div class="section-title">
+          <span>📋 顾客的定制需求</span>
+          <el-tag size="small" type="warning" effect="plain">
+            {{ insight.customRecipeOrder.orderId }}
+          </el-tag>
+        </div>
+        <div class="profile-grid">
+            <div class="profile-item">
+              <span class="label">体重目标</span>
+              <span class="value">{{ goalText(insight.customRecipeOrder.targetGoal) }}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">健康管理</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.needsHealthManagement }">
+                {{ insight.customRecipeOrder.needsHealthManagement ? '需要' : '未勾选' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">订单里填的过敏</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.allergies.length }">
+                {{ insight.customRecipeOrder.allergies.length ? insight.customRecipeOrder.allergies.join('、') : '无' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">订单里填的疾病</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.medicalConditions.length }">
+                {{ insight.customRecipeOrder.medicalConditions.length ? insight.customRecipeOrder.medicalConditions.join('、') : '无' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">订单里填的喜好</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.preferredIngredients.length }">
+                {{ insight.customRecipeOrder.preferredIngredients.length ? insight.customRecipeOrder.preferredIngredients.join('、') : '无' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">订单里填的忌口</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.dislikedIngredients.length }">
+                {{ insight.customRecipeOrder.dislikedIngredients.length ? insight.customRecipeOrder.dislikedIngredients.join('、') : '无' }}
+              </span>
+            </div>
+            <div class="profile-item full">
+              <span class="label">顾客备注</span>
+              <span class="value" :class="{ empty: !insight.customRecipeOrder.additionalNotes }">
+                {{ insight.customRecipeOrder.additionalNotes || '无' }}
+              </span>
+            </div>
         </div>
       </div>
 
@@ -238,6 +294,18 @@ const emit = defineEmits<{
 
 const loading = ref(false)
 const insight = ref<DogDesignInsight | null>(null)
+
+/** 顾客体重目标的中文文案（与顾客端、后台订单页保持一致） */
+const GOAL_LABELS: Record<string, string> = {
+  LOSE_WEIGHT: '减重',
+  MAINTAIN: '维持',
+  GAIN_WEIGHT: '增重',
+  HEALTH_SUPPORT: '健康管理',
+}
+
+function goalText(goal: string) {
+  return GOAL_LABELS[goal] || goal
+}
 const editingNotes = ref(false)
 const savingNotes = ref(false)
 const notesForm = reactive<UpdateDogDesignNotesPayload>({})

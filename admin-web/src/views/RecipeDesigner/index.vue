@@ -187,7 +187,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
@@ -203,6 +203,7 @@ import {
 } from '@/types/recipeDesigner'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -577,9 +578,41 @@ async function confirmCopyItems() {
   }
 }
 
+/**
+ * 从「定制食谱订单」一键进来时（?dogId=xxx&openCreate=1），
+ * 预填参考爱犬并直接打开创建对话框。
+ *
+ * 2026-09-28：此前设计器与定制订单之间**没有任何通路**，
+ * 营养师只能手工新建系列、再自己搜出那只狗，"参考顾客信息设计"无从谈起。
+ */
+async function applyEntryQuery() {
+  const dogId = String(route.query.dogId || '').trim()
+  if (!dogId) return
+
+  createForm.referenceDogId = dogId
+  createDialogVisible.value = true
+
+  await searchDogs('')
+
+  // 目标狗可能不在前 50 条里：单独取一次详情补进选项，
+  // 否则下拉框里会显示成一个没有名字的空选项。
+  if (!dogOptions.value.some((dog) => dog.id === dogId)) {
+    try {
+      const res: any = await dogApi.getDetail(dogId)
+      const profile = res?.data?.profile ?? res?.profile ?? null
+      if (profile?.id) {
+        dogOptions.value = [profile as DogProfile, ...dogOptions.value]
+      }
+    } catch {
+      // 取不到详情也不阻断：referenceDogId 已经填上了
+    }
+  }
+}
+
 onMounted(async () => {
   await loadSeries(true)
   setupSeriesObserver()
+  void applyEntryQuery()
 })
 
 onBeforeUnmount(() => {

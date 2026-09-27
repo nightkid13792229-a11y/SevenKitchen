@@ -22,6 +22,11 @@ describe('RecipeDesignerService', () => {
     dogBreed: {
       findUnique: jest.fn(),
     },
+    // 2026-09-28：设计器与 AI 会读这只狗最近一笔定制单（顾客的目标/备注/喜好）
+    customRecipeOrder: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     orderItem: {
       findMany: jest.fn(),
     },

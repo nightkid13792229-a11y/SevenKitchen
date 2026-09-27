@@ -50,6 +50,24 @@ export interface AiWizardDogProfile {
     medications: string[];
     status: string | null;
   }>;
+  /**
+   * 顾客在「食谱定制」订单里明确提出的要求。
+   *
+   * 2026-09-28 新增：AI 此前**完全不知道**顾客选了减重还是增重、
+   * 备注里说了什么 —— 于是"按顾客要求设计"只能靠营养师手工转述。
+   */
+  customOrder?: {
+    orderId: string;
+    /** 顾客选的体重目标：LOSE_WEIGHT / MAINTAIN / GAIN_WEIGHT */
+    targetGoal: string;
+    /** 顾客是否勾选了「需要健康管理」 */
+    needsHealthManagement: boolean;
+    /** 顾客手写的备注（原样，含口语化要求） */
+    additionalNotes: string | null;
+    /** 顾客在订单里单独填的喜好/忌口（可能比档案更新） */
+    preferredIngredients: string[];
+    dislikedIngredients: string[];
+  } | null;
 }
 
 export interface AiWizardDraftSummary {
@@ -236,6 +254,8 @@ function buildNutritionPlanSystemPrompt(): string {
     '你是一名资深宠物犬鲜食营养师，为宠物鲜食工作室的配方设计提供营养方案。',
     '你会收到一只犬的完整档案（性别、年龄、绝育、BCS、活动量、餐数、零食、目标热量、体重趋势、体检记录、病历等），以及一段「可引用的权威知识条目」。',
     '若提供了 userNotes（用户/营养师对既有方案的修改建议），请把该建议作为优先修订意见，在不违背犬档案与权威知识的基础上，据此优化/调整方案；若 userNotes 为空则按常规生成。',
+    'dog.customOrder 是顾客在「食谱定制」订单里**明确提出的要求**：targetGoal（LOSE_WEIGHT 减重 / MAINTAIN 维持 / GAIN_WEIGHT 增重）、needsHealthManagement（是否要按健康管理思路设计）、additionalNotes（顾客原话）、preferredIngredients / dislikedIngredients。',
+    '生成方案时必须落实 targetGoal：减重 → 在安全前提下把每日热量定在维持所需之下（caloriesBasis 里写清折减依据），并提高蛋白与纤维占比以保瘦体重与饱腹；增重 → 提高能量密度。禁止忽略顾客的目标；不得自行编造临床折减系数，需引用知识条目并标注。',    'additionalNotes 里若有具体忌口或工艺要求，一并落实并写进 precautions。',
     '请基于犬档案与知识条目，生成一份完整营养方案：',
     '- summary: string，1-2 句概括核心营养要点与设计方向。',
     '- caloriesPerDayKcal: number|null，每日目标热量（kcal）。结合体重、体重趋势、活动量、零食热量计算；数据不足时为 null 并说明。',
@@ -259,6 +279,9 @@ function buildIngredientRecommendationSystemPrompt(): string {
   return [
     '你是一名资深宠物犬鲜食营养师，负责在营养方案达成共识后推荐食材。',
     '你会收到：犬档案（含过敏/挑食/偏好）、已认可的营养方案（可能为空）、权威知识条目、历史设计食材汇总、最近90天实际吃过的食材、食谱结构框架模板名、当前配方明细（可能为空）。',
+    '注意 dog.customOrder：这是顾客在「食谱定制」订单里**明确提出的要求**（体重目标 targetGoal、是否需要健康管理 needsHealthManagement、备注 additionalNotes、订单里单独填的喜好与忌口）。',
+    'targetGoal 为 LOSE_WEIGHT / GAIN_WEIGHT 时，能量与配比必须按该方向调整（减重应控制能量密度、保证蛋白与纤维；增重应提高能量密度），并在 notes/warnings 里说明依据。',
+    'additionalNotes 是顾客的原话，若有具体忌口或工艺要求要一并落实。',
     '请输出食材推荐：',
     '- framework: {templateName, covered[], missing[], note?}，按框架模板逐类核对当前配方已覆盖/缺失的类别。默认模板类别：MEAT 肌肉蛋白源、ORGAN 内脏、GRAIN 谷物/薯类、VEGETABLE 蔬菜、FRUIT 水果、OIL 油脂/坚果种子。',
     '- recommendations: [{name, category, categoryLabel, inLibrary, ingredientId?, nutritionFoodId?, suggestedWeightG, reason, avoidRecent?}]，推荐食材 4-12 项。category 用 MEAT/ORGAN/SEAFOOD/VEGETABLE/FRUIT/GRAIN/DAIRY/EGG/OIL/SUPPLEMENT/OTHER；categoryLabel 写中文；inLibrary 表示该食材是否在原料库中（若名称与知识/常见食材一致但你不确定，填 false 并让前端匹配）；suggestedWeightG 为建议用量 g（可 null）；avoidRecent 表示该食材近期吃过、建议间隔使用。',

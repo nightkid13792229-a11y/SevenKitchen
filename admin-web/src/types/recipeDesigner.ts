@@ -249,6 +249,24 @@ export interface DogDesignInsight {
     recipeNames: string[]
     customRecipeCount: number
   }
+  /**
+   * 顾客最近一笔「食谱定制」订单里填的内容（2026-09-28 新增）。
+   *
+   * 营养师在设计时终于能看到：顾客要减重还是增重、勾没勾健康管理、
+   * 备注说了什么、订单里单独填的过敏/疾病/喜好。
+   */
+  customRecipeOrder: {
+    orderId: string
+    status: string
+    targetGoal: string
+    needsHealthManagement: boolean
+    additionalNotes: string | null
+    allergies: string[]
+    medicalConditions: string[]
+    preferredIngredients: string[]
+    dislikedIngredients: string[]
+    createdAt: string | null
+  } | null
   aiEnabled: boolean
 }
 

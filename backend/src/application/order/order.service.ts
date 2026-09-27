@@ -2863,7 +2863,58 @@ export class OrderService {
     // 否则货被占着却没人买，库存会越用越少
     await this.releaseTastingPackStockIfNeeded(savedOrder, reason);
 
+    // 这单如果抵扣过定制费，关单后要把额度还回去
+    await this.restoreCustomRecipeCreditIfNeeded(savedOrder, reason);
+
     return savedOrder;
+  }
+
+  /**
+   * 关单时把用掉的定制费抵扣额度还回去（2026-09-28）。
+   *
+   * 真实缺陷：顾客用定制食谱下成品单时抵扣了定制费，一旦这单取消或退款，
+   * 额度**不会自动回来** —— 只有后台详情页一个手动的「恢复额度」按钮。
+   * 顾客是看不见那个按钮的，等于钱被吞了。
+   *
+   * 幂等性交给 CustomRecipeService.restoreCredit 的 CAS（按 creditUsed 扣减），
+   * 重复调用不会多还。
+   */
+  private async restoreCustomRecipeCreditIfNeeded(
+    order: Order,
+    reason: string,
+  ): Promise<void> {
+    if (!this.customRecipeService) return;
+
+    try {
+      const snapshot = await this.prisma.order.findUnique({
+        where: { id: order.id },
+        select: {
+          creditAmountApplied: true,
+          customRecipeCreditOrderId: true,
+        },
+      });
+
+      const customOrderId = snapshot?.customRecipeCreditOrderId;
+      const applied = Number(snapshot?.creditAmountApplied ?? 0);
+
+      if (!customOrderId || !Number.isFinite(applied) || applied <= 0) {
+        return;
+      }
+
+      const result = await this.customRecipeService.restoreCredit({
+        orderIdOrId: String(customOrderId),
+        amount: applied,
+      });
+
+      this.logger.log(
+        `[CustomRecipeCredit] 订单 ${order.id} 关闭，退回抵扣额度 ${result?.restored ?? 0}`,
+      );
+    } catch (error: any) {
+      // 退回失败不能影响关单，但必须留痕 —— 否则顾客的钱静默消失
+      this.logger.error(
+        `[CustomRecipeCredit] 订单 ${order.id} 关闭时退回抵扣额度失败：${error?.message}`,
+      );
+    }
   }
 
   /**

@@ -435,7 +435,13 @@ const weightManagementOptions = [
 ];
 
 // 后台「食谱定制设置」的公开部分（定制费 / 可抵扣金额 / 交付工作日数）
-const recipeConfig = ref<{ feeAmount: number; creditAmount: number; deliveryWorkDays: number } | null>(null);
+const recipeConfig = ref<{
+  feeAmount: number;
+  creditAmount: number;
+  deliveryWorkDays: number;
+  /** 订阅消息模板 ID；后台未配置时为 null（小程序据此跳过订阅申请） */
+  orderNotifyTemplateId: string | null;
+} | null>(null);
 
 // 计算属性
 /**
@@ -777,6 +783,9 @@ const loadRecipeConfig = async () => {
         feeAmount: Number(res.data.feeAmount) || 0,
         creditAmount: Number(res.data.creditAmount) || 0,
         deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
+        orderNotifyTemplateId: res.data.orderNotifyTemplateId
+          ? String(res.data.orderNotifyTemplateId)
+          : null,
       };
     }
   } catch (error) {
@@ -1055,6 +1064,29 @@ const removeDislikedIngredient = (index: number) => {
   formData.value.dislikedIngredients.splice(index, 1);
 };
 
+/**
+ * 申请"定制订单状态通知"的订阅授权。
+ *
+ * 失败不阻断下单：顾客拒收通知只影响收不收得到提醒，不影响订单本身。
+ */
+const requestOrderNotification = async () => {
+  const templateId = String(recipeConfig.value?.orderNotifyTemplateId || '').trim();
+  if (!templateId) return;
+
+  try {
+    await new Promise<void>((resolve) => {
+      uni.requestSubscribeMessage({
+        tmplIds: [templateId],
+        success: () => resolve(),
+        fail: () => resolve(),
+        complete: () => resolve(),
+      });
+    });
+  } catch {
+    // 忽略：拿不到订阅授权不影响下单
+  }
+};
+
 const submitOrder = async () => {
   if (!canSubmit.value) {
     // 提示要说清"还差什么"，不然按钮灰着顾客不知道原因
@@ -1077,6 +1109,16 @@ const submitOrder = async () => {
 
   // 防重复提交：这单是付费单，重复提交会生成两张待付款订单
   if (submitting.value) return;
+
+  /**
+   * 申请订阅消息（2026-09-28）。
+   *
+   * 微信的一次性订阅消息必须由用户点击触发申请，否则云端发不出去 ——
+   * 所以放在"点提交"这一刻。模板 ID 由后台环境变量配置，
+   * 未配置时（orderNotifyTemplateId 为空）跳过申请，不做无意义的失败调用。
+   */
+  await requestOrderNotification();
+
   submitting.value = true;
 
   try {

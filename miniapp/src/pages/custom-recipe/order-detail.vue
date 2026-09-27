@@ -109,6 +109,17 @@
         >
           立即付款
         </button>
+        <!-- 自助取消（决策 12）：还没开始制作就能取消；
+             已付款的会**全额原路退回微信**，不需要等客服。 -->
+        <button
+          v-if="canSelfCancel"
+          class="btn secondary"
+          :loading="cancelling"
+          :disabled="cancelling || paying"
+          @tap="cancelOrder"
+        >
+          {{ order.status === 'PENDING_PAYMENT' ? '取消订单' : '取消并退款' }}
+        </button>
         <button class="btn secondary" @tap="goOrders">返回定制订单</button>
       </view>
     </template>
@@ -291,6 +302,73 @@ const goPay = async () => {
     uni.showToast({ title: '支付未完成，可稍后重试', icon: 'none' });
   } finally {
     paying.value = false;
+  }
+};
+
+/**
+ * 能否自助取消（老板拍板的决策 12）。
+ *
+ * 只要还没开始制作就能取消 —— 待付款和已付款两个状态。
+ * 制作中/已交付要联系客服（那时已经投入了人工）。
+ */
+const canSelfCancel = computed(() => {
+  const status = String(order.value.status || '');
+  return status === 'PENDING_PAYMENT' || status === 'PAID';
+});
+
+const cancelling = ref(false);
+
+/**
+ * 顾客自助取消订单。
+ *
+ * 已付款的走全额原路退款（后端调微信退款）；退款失败**不会**把订单取消掉，
+ * 避免出现"取消了钱没退"这种最糟的结果 —— 所以要如实告诉顾客。
+ */
+const cancelOrder = async () => {
+  if (cancelling.value) return;
+
+  const paid = order.value.status === 'PAID';
+
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: paid ? '取消并退款？' : '取消订单？',
+      content: paid
+        ? '取消后定制费会全额原路退回微信，到账时间以微信为准。'
+        : '取消后这一天的名额会释放，你可以重新下单。',
+      confirmText: paid ? '取消并退款' : '确认取消',
+      cancelText: '再想想',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+
+  if (!confirmed) return;
+
+  cancelling.value = true;
+  uni.showLoading({ title: paid ? '退款中...' : '取消中...' });
+
+  try {
+    await request({
+      url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}/cancel`,
+      method: 'POST',
+      data: { reason: '顾客取消定制订单' },
+    });
+
+    uni.hideLoading();
+    uni.showToast({
+      title: paid ? '已取消，退款已发起' : '已取消',
+      icon: 'none',
+    });
+    await loadOrderDetail();
+  } catch (error: any) {
+    uni.hideLoading();
+    uni.showToast({
+      title: error?.message || '取消失败，请联系客服',
+      icon: 'none',
+      duration: 3000,
+    });
+  } finally {
+    cancelling.value = false;
   }
 };
 

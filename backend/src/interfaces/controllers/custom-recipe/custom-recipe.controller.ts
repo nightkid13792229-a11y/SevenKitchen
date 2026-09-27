@@ -157,6 +157,37 @@ export class CustomRecipeController {
   /**
    * Get order detail
    */
+  /**
+   * 顾客自助取消（老板拍板的决策 12 + Q2）。
+   *
+   * 还没开始制作就能取消；已付款的全额原路退回微信，不需要客服先确认。
+   */
+  @Post('orders/:orderId/cancel')
+  @ApiOperation({ summary: 'Cancel my custom recipe order and refund if paid' })
+  async cancelMyOrder(
+    @Req() req: any,
+    @Param('orderId') orderId: string,
+    @Body('reason') reason?: string,
+  ) {
+    const userId = req.user.userId;
+
+    const result = await this.customRecipeService.cancelOrderByCustomer(
+      orderId,
+      userId,
+      async (targetOrderId, refundReason) =>
+        this.wechatPaymentService.createCustomRecipeRefund({
+          orderId: targetOrderId,
+          reason: refundReason,
+        }),
+      (reason || '').trim() || undefined,
+    );
+
+    return ApiResponseDto.success({
+      status: 'CANCELLED',
+      refundStatus: result.refundStatus,
+    });
+  }
+
   @Get('orders/:orderId')
   @ApiOperation({ summary: 'Get order detail' })
   async getOrderDetail(@Req() req: any, @Param('orderId') orderId: string) {

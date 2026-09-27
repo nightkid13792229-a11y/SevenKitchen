@@ -8,6 +8,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
@@ -29,6 +30,7 @@ import {
   getPublicHolidaysForYear,
 } from '../../utils/date-helpers';
 import { TimezoneUtil } from '../../utils/timezone.util';
+import { WechatService } from '../../infrastructure/wechat/wechat.service';
 
 @Injectable()
 export class CustomRecipeService implements ICustomRecipeRepository {
@@ -36,6 +38,14 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
     private readonly configService: CustomRecipeConfigService,
+    /**
+     * 微信订阅消息（2026-09-28）。
+     *
+     * 顾客**自己付款**时也要通知他 —— 此前只有客服在后台点「确认收款」才发，
+     * 顾客付完钱什么都没收到。声明为可选，避免影响既有测试的构造签名。
+     */
+    @Optional()
+    private readonly wechatService?: WechatService,
   ) {}
 
   /**
@@ -475,9 +485,34 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     const order = await this.prisma.customRecipeOrder.findUnique({
       where: { id: ref.id },
+      include: {
+        customer: { select: { wechatOpenid: true } },
+      },
     });
 
-    return { order, alreadyPaid: result.count === 0 };
+    const alreadyPaid = result.count === 0;
+
+    /**
+     * 顾客实际付款成功（微信回调走到这里）时也发一条通知。
+     * 只在"这次真的把状态推进了"时发，避免回调重试重复打扰。
+     */
+    if (!alreadyPaid && order?.customer?.wechatOpenid && this.wechatService) {
+      await this.wechatService
+        .sendCustomRecipeOrderNotification(
+          order.customer.wechatOpenid,
+          order.orderId,
+          'PAID',
+        )
+        .catch((error: any) => {
+          // 通知失败不能影响支付结果落库
+          console.error(
+            '[CustomRecipe] 支付成功通知发送失败:',
+            error?.message ?? error,
+          );
+        });
+    }
+
+    return { order, alreadyPaid };
   }
 
   /**
@@ -524,6 +559,84 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     });
 
     return { cancelled: true };
+  }
+
+  /**
+   * 顾客自助取消（老板拍板的决策 12 + Q2）。
+   *
+   * 口径：
+   *   · 只要**还没开始制作**就能取消 —— 即"待付款"和"已付款"两个状态；
+   *   · 已付款的全额原路退回微信，不需要客服先确认；
+   *   · 已开始制作/已交付的不能自助取消（要走客服）；
+   *   · 取消一律释放当天接单名额。
+   *
+   * 退款由调用方（控制器）注入，避免这里直接依赖支付服务形成环。
+   */
+  async cancelOrderByCustomer(
+    orderIdOrId: string,
+    customerId: string,
+    refund: (orderId: string, reason: string) => Promise<{ status: string }>,
+    reason = '顾客取消定制订单',
+  ): Promise<{ cancelled: boolean; refundStatus: string | null }> {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+      select: {
+        id: true,
+        orderId: true,
+        customerId: true,
+        status: true,
+        scheduledDate: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    if (order.customerId !== customerId) {
+      throw new BadRequestException('无权操作此订单');
+    }
+
+    const cancellable: CustomRecipeStatus[] = [
+      CustomRecipeStatus.PENDING_PAYMENT,
+      CustomRecipeStatus.PAID,
+    ];
+
+    if (!cancellable.includes(order.status)) {
+      throw new BadRequestException(
+        order.status === CustomRecipeStatus.IN_PROGRESS
+          ? '订单已开始制作，无法自助取消，请联系客服'
+          : '该订单当前状态无法取消',
+      );
+    }
+
+    // 已付款的先退款：退款失败就不取消，避免"取消了钱没退"这种最糟的结果
+    let refundStatus: string | null = null;
+    if (order.status === CustomRecipeStatus.PAID) {
+      const result = await refund(order.orderId, reason);
+      refundStatus = result?.status ?? null;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customRecipeOrder.update({
+        where: { id: order.id },
+        data: {
+          status: CustomRecipeStatus.CANCELLED,
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+        },
+      });
+
+      // 释放当天名额（每日上限只有 5 单）
+      await tx.customRecipeSchedule.updateMany({
+        where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
+        data: { bookedCount: { decrement: 1 } },
+      });
+    });
+
+    return { cancelled: true, refundStatus };
   }
 
   /**

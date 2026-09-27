@@ -86,6 +86,8 @@ describe('CustomRecipeConfigService', () => {
         feeAmount: 300,
         creditAmount: 200,
         deliveryWorkDays: 3,
+        // 订阅消息模板 ID：未配置环境变量时为 null，小程序据此跳过订阅申请
+        orderNotifyTemplateId: null,
       });
       // 内部产能参数不得对外暴露
       expect(config).not.toHaveProperty('dailyCapacity');

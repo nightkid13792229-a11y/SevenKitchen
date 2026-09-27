@@ -1167,6 +1167,110 @@ export class WechatPaymentService {
    * 补剂订单线上退款（微信原路退回）。
    * 与鲜食订单共用商户配置；退款单号带 RFSP 前缀，回调时据此分流。
    */
+  /**
+   * 定制食谱订单的原路退款（2026-09-28）。
+   *
+   * 老板拍板的决策 12 + Q2：「只要还没开始制作，顾客可取消并**全额原路退回微信**，
+   * 不需要客服先确认」。此前定制订单没有任何退款通道。
+   *
+   * 口径与补剂订单退款保持一致（幂等、只对微信支付、需后台开启线上退款），
+   * 差别是定制单的商户单号用的是 `CustomRecipeOrder.orderId`（CR 开头），
+   * 与下单支付时 `out_trade_no` 完全一致。
+   */
+  async createCustomRecipeRefund(input: {
+    orderId: string;
+    reason: string;
+  }): Promise<{
+    outRefundNo: string | null;
+    refundId: string | null;
+    status: string;
+    amount: number;
+    reused: boolean;
+  }> {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId: input.orderId }, { id: input.orderId }] },
+    });
+    if (!order) {
+      throw new NotFoundException('定制订单不存在');
+    }
+
+    const currentStatus = String(order.refundStatus || '').toUpperCase();
+    if (
+      currentStatus === 'SUCCESS' ||
+      this.isRefundInFlight(order.refundStatus)
+    ) {
+      // 幂等：已成功或处理中的退款直接返回，避免重复打款
+      return {
+        outRefundNo: order.refundOutNo,
+        refundId: order.refundId,
+        status: currentStatus,
+        amount: this.toMoneyNumber(order.refundAmount),
+        reused: true,
+      };
+    }
+
+    if (!order.paymentTransactionId && !order.paymentConfirmedAt) {
+      throw new BadRequestException('该定制订单尚未支付，无需退款');
+    }
+
+    const config = await this.getRuntimePaymentConfig();
+    this.assertConfigReady(config);
+    if (!config.allowRefund) {
+      throw new BadRequestException(
+        '线上退款未启用，请先在后台支付配置中开启；或由客服在微信商户后台手工退款',
+      );
+    }
+
+    const refundAmount = this.toMoneyNumber(order.amount);
+    const reason = (input.reason || '').trim() || '顾客取消定制订单';
+    const outRefundNo = `CRR${Date.now()}${Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0')}`;
+
+    const response = await this.callWechatPay<{
+      refund_id?: string;
+      status?: string;
+      message?: string;
+    }>(
+      'POST',
+      '/v3/refund/domestic/refunds',
+      {
+        out_trade_no: order.orderId,
+        out_refund_no: outRefundNo,
+        reason: reason.slice(0, 80),
+        notify_url: config.refundNotifyUrl || config.notifyUrl,
+        amount: {
+          refund: this.toFen(refundAmount),
+          total: this.toFen(refundAmount),
+          currency: 'CNY',
+        },
+      },
+      config,
+    );
+
+    const status = String(response.status || 'PROCESSING').toUpperCase();
+
+    await this.prisma.customRecipeOrder.update({
+      where: { id: order.id },
+      data: {
+        refundStatus: status,
+        refundAmount: refundAmount,
+        refundOutNo: outRefundNo,
+        refundId: response.refund_id ?? null,
+        refundReason: reason.slice(0, 200),
+        refundedAt: status === 'SUCCESS' ? new Date() : null,
+      },
+    });
+
+    return {
+      outRefundNo,
+      refundId: response.refund_id ?? null,
+      status,
+      amount: refundAmount,
+      reused: false,
+    };
+  }
+
   async createSupplementRefund(input: {
     orderId: string;
     amount?: number;

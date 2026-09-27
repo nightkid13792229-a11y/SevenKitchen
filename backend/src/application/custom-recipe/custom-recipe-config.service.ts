@@ -47,6 +47,8 @@ export interface PublicCustomRecipeConfigDto {
   feeAmount: number;
   creditAmount: number;
   deliveryWorkDays: number;
+  /** 订阅消息模板 ID；未配置时为 null，小程序据此跳过申请 */
+  orderNotifyTemplateId: string | null;
 }
 
 export type UpdateCustomRecipeConfigDto = Partial<
@@ -80,6 +82,15 @@ export class CustomRecipeConfigService {
       feeAmount: config.feeAmount,
       creditAmount: config.creditAmount,
       deliveryWorkDays: config.deliveryWorkDays,
+      /**
+       * 定制订单状态通知的订阅消息模板 ID（2026-09-28）。
+       *
+       * 小程序必须在**用户点击时**调用 wx.requestSubscribeMessage 才能收到
+       * 订阅消息；模板 ID 由环境变量提供。未配置时返回 null，
+       * 小程序就跳过申请（而不是拿空 ID 去调、必然失败）。
+       */
+      orderNotifyTemplateId:
+        process.env.WECHAT_TEMPLATE_CUSTOM_RECIPE_ORDER || null,
     };
   }
 

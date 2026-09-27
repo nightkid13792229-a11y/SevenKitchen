@@ -1695,6 +1695,16 @@ model CustomRecipeOrder {
   cancellationReason    String?                  @map("cancellation_reason")
   recipeId              String?                  @unique @map("recipe_id")
   healthInfoSyncedAt    DateTime?                @map("health_info_synced_at")
+
+  /// 线上退款（顾客自助取消 → 微信原路退回）。2026-09-28 新增：
+  /// 决策 12 要求"还没开始制作就能取消并全额退款"，此前完全没有退款通道。
+  refundStatus          String?                  @map("refund_status") @db.VarChar(20)
+  refundAmount          Decimal?                 @map("refund_amount") @db.Decimal(10, 2)
+  refundOutNo           String?                  @map("refund_out_no") @db.VarChar(64)
+  refundId              String?                  @map("refund_id") @db.VarChar(64)
+  refundReason          String?                  @map("refund_reason") @db.VarChar(200)
+  refundedAt            DateTime?                @map("refunded_at")
+
   createdAt             DateTime                 @default(now()) @map("created_at")
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   attachmentsRecords    CustomRecipeAttachment[]

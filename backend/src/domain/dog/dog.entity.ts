@@ -37,6 +37,14 @@ export class Dog {
     public pickyFoods: string | null,
     public cachedTargetFoodKcal: number, // System calculated, can be updated
     public avatarUrl: string | null = null,
+    /**
+     * 当前体重的最后更新时间（2026-09-27 新增）。
+     *
+     * 用于「体重超过 60 天就提醒顾客更新」（决策 8）。此前 dog 表只有 created_at，
+     * 判断不出档案里这个体重是什么时候录的，这条规则无法落地。
+     * 放在末尾并带默认值，避免影响已有的构造调用点。
+     */
+    public weightUpdatedAt: Date | null = null,
   ) {
     this.validateInvariants();
   }

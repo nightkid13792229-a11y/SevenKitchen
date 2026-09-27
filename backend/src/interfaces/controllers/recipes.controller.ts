@@ -56,6 +56,10 @@ import {
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
 import { resolveDogProfileStage } from '../../domain/dog/dog-stage.service';
+import {
+  collectAllergyKeywords,
+  splitAllergyKeywords,
+} from '../../domain/dog/allergy-keywords';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { OrderService } from '../../application/order/order.service';
 import {
@@ -184,11 +188,9 @@ export class RecipesController {
   }
 
   private normalizeKeywordList(value?: string | null): string[] {
-    if (!value) return [];
-    return value
-      .split(/[,，、;；\n\r]/)
-      .map((item) => item.trim().toLowerCase())
-      .filter(Boolean);
+    // 分词规则统一收敛到 domain/dog/allergy-keywords：
+    // 过敏避雷要用同一套分词，分两处写迟早会漂移。
+    return splitAllergyKeywords(value);
   }
 
   /**
@@ -334,7 +336,16 @@ export class RecipesController {
     const recipeLifeStages = Array.isArray(recipe.applicableLifeStages)
       ? recipe.applicableLifeStages
       : [];
-    const allergyFoods = this.normalizeKeywordList(dog.allergyFoods);
+    // 过敏避雷必须「两边都读」：
+    //   · dog.allergyFoods —— 旧文本字段，顾客端没有入口，只有后台设计备注在写
+    //   · allergy_record   —— 顾客在健康档案/定制单里真正填写的结构化记录
+    // 2026-09-27 之前这里只读旧文本字段，导致顾客填的过敏在推荐里完全不生效（食品安全级缺陷）。
+    const allergyFoods = collectAllergyKeywords({
+      allergyFoods: dog.allergyFoods,
+      allergens: (dog.allergyRecords ?? []).map(
+        (record: { allergen?: string | null }) => record.allergen,
+      ),
+    });
     const pickyFoods = this.normalizeKeywordList(dog.pickyFoods);
     const ingredientNames = (recipe.items || [])
       .map(
@@ -759,6 +770,8 @@ export class RecipesController {
         activityLevel: true,
         cachedTargetFoodKcal: true,
         allergyFoods: true,
+        // 顾客在健康档案里填的结构化过敏记录 —— 推荐打分的过敏避雷要与旧文本字段合并使用
+        allergyRecords: { select: { allergen: true } },
         pickyFoods: true,
         avatarUrl: true,
         // 2026-09-19：生命阶段判定需要品种阈值与体型。

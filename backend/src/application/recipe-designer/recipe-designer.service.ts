@@ -79,6 +79,10 @@ import {
 } from './fediaf-target-provider';
 import { buildDogDesignInsight } from '../../domain/recipe-designer/dog-design-insight';
 import {
+  collectAllergyKeywords,
+  formatAllergyKeywordsForAi,
+} from '../../domain/dog/allergy-keywords';
+import {
   AiDesignSuggestionService,
   type AiDesignSuggestionInput,
 } from './ai-design-suggestion.service';
@@ -7410,6 +7414,12 @@ export class RecipeDesignerService {
 
     const dog = await this.prisma.dog.findUnique({
       where: { id: dogId },
+      // 结构化过敏记录：顾客在健康档案 / 定制单里填的那一份。
+      // 设计面板与 AI 过去只看旧文本字段 allergyFoods（顾客端没有入口），
+      // 于是顾客填的过敏在设计环节完全不可见 —— 2026-09-27 起一并读入。
+      include: {
+        allergyRecords: { select: { allergen: true } },
+      },
     });
     if (!dog) {
       throw new NotFoundException('爱犬不存在');
@@ -7673,7 +7683,14 @@ export class RecipeDesignerService {
         breedName: insight.dog.breedName,
         lifeStageLabel: insight.dog.lifeStageLabel,
         currentWeightKg: insight.dog.currentWeightKg,
-        allergyFoods: insight.dog.allergyFoods,
+        // 过敏：旧文本备注 + 顾客在健康档案里填的结构化记录，两边都送给 AI。
+        // 只送旧字段的话，顾客明确声明的过敏在配方生成里会被忽略。
+        allergyFoods: formatAllergyKeywordsForAi(
+          collectAllergyKeywords({
+            allergyFoods: insight.dog.allergyFoods,
+            allergens: insight.dog.structuredAllergies,
+          }),
+        ),
         pickyFoods: insight.dog.pickyFoods,
         preferredFoods: insight.dog.preferredFoods,
         medicalHistory: insight.dog.medicalHistory,
@@ -8053,6 +8070,13 @@ export class RecipeDesignerService {
     const dog = await this.prisma.dog.findUnique({
       where: { id: dogId },
       include: {
+        // 结构化过敏记录：顾客在健康档案 / 定制单里填的那一份。
+        // 这份 AI 档案过去只带 checkup/medical/weight，漏了过敏记录，
+        // 导致顾客明确声明的过敏进不了配方生成 —— 2026-09-27 起一并带上。
+        allergyRecords: {
+          orderBy: { createdAt: 'desc' },
+          select: { allergen: true, notes: true },
+        },
         checkupRecords: {
           orderBy: { checkupDate: 'desc' },
           take: 8,
@@ -8118,7 +8142,14 @@ export class RecipeDesignerService {
       treatLevel: dog.treatLevel,
       manualTreatKcal: dog.manualTreatKcal,
       targetFoodKcal: dog.cachedTargetFoodKcal,
-      allergyFoods: dog.allergyFoods,
+      // 过敏：旧文本备注 + 顾客填的结构化记录合并后再交给 AI，
+      // 避免「顾客在健康档案里写了过敏、配方却照样用」。
+      allergyFoods: formatAllergyKeywordsForAi(
+        collectAllergyKeywords({
+          allergyFoods: dog.allergyFoods,
+          allergens: dog.allergyRecords.map((record) => record.allergen),
+        }),
+      ),
       pickyFoods: dog.pickyFoods,
       preferredFoods: dog.preferredFoods,
       medicalHistory: dog.medicalHistory,

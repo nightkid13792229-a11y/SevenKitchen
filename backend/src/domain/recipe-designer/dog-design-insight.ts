@@ -1,3 +1,5 @@
+import { collectAllergyKeywords } from '../dog/allergy-keywords';
+
 export interface DogDesignHistoryIngredientRow {
   name: string;
   count: number;
@@ -57,6 +59,16 @@ export interface DogDesignInsight {
     /** 每日目标能量 kcal（档案缓存值） */
     targetFoodKcal: number | null;
     allergyFoods: string | null;
+    /**
+     * 来自 `allergy_record` 的结构化过敏记录（顾客在健康档案 / 定制单里填的）。
+     *
+     * 2026-09-27 新增：`allergyFoods` 是旧文本字段，顾客端没有入口，
+     * 而营养师与 AI 过去只看它 —— 顾客填的过敏在这里完全不可见。
+     * 现在单独暴露一份，**只读**，供设计面板展示与 AI 使用；
+     * 不并进 `allergyFoods`，是为了不干扰设计面板那个可编辑的设计备注表单
+     * （否则一保存就会把顾客的记录复制进旧字段）。
+     */
+    structuredAllergies: string[];
     pickyFoods: string | null;
     preferredFoods: string | null;
     medicalHistory: string | null;
@@ -150,6 +162,8 @@ interface InsightDogLike {
   manualTreatKcal?: number | null;
   cachedTargetFoodKcal?: number | null;
   allergyFoods?: string | null;
+  /** 结构化过敏记录（顾客在健康档案 / 定制单里填的），只取 allergen 字段 */
+  allergyRecords?: Array<{ allergen?: string | null }> | null;
   pickyFoods?: string | null;
   preferredFoods?: string | null;
   medicalHistory?: string | null;
@@ -381,6 +395,13 @@ export function buildDogDesignInsight(input: {
       manualTreatKcal: dog.manualTreatKcal ?? null,
       targetFoodKcal: dog.cachedTargetFoodKcal ?? null,
       allergyFoods: dog.allergyFoods ?? null,
+      // 顾客在健康档案里填的过敏记录：营养师与 AI 过去完全看不到这一份。
+      // 这里归一化成关键词列表，供设计面板展示与 AI 使用（只读，不参与回写）。
+      structuredAllergies: collectAllergyKeywords({
+        allergens: (dog.allergyRecords ?? []).map(
+          (record) => record?.allergen,
+        ),
+      }),
       pickyFoods: dog.pickyFoods ?? null,
       preferredFoods: dog.preferredFoods ?? null,
       medicalHistory: dog.medicalHistory ?? null,

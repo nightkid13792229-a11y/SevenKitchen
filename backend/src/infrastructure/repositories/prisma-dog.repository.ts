@@ -35,8 +35,20 @@ export class PrismaDogRepository implements DogRepository {
   async save(dog: Dog): Promise<Dog> {
     const existing = await this.prisma.dog.findUnique({
       where: { id: dog.id },
-      select: { id: true },
+      select: { id: true, currentWeightKg: true },
     });
+
+    /**
+     * 体重是否发生了变化。
+     *
+     * 2026-09-27：老板定了「体重超过 60 天就提醒顾客更新」（决策 8），
+     * 但 dog 表原先只有 created_at，判断不出"档案里这个体重是什么时候录的"。
+     * 这里在体重真正变化时打时间戳（新建档案也算），供前端算有效期。
+     *
+     * 只在体重变化时刷新：改名字、换头像这类操作不应该让体重"看起来变新了"。
+     */
+    const weightChanged =
+      !existing || existing.currentWeightKg !== dog.currentWeightKg;
 
     const data: Prisma.DogUncheckedCreateInput = {
       id: dog.id,
@@ -61,6 +73,7 @@ export class PrismaDogRepository implements DogRepository {
       allergyFoods: dog.allergyFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
+      ...(weightChanged ? { weightUpdatedAt: new Date() } : {}),
     };
 
     if (!existing) {
@@ -106,6 +119,7 @@ export class PrismaDogRepository implements DogRepository {
       record.pickyFoods,
       record.cachedTargetFoodKcal,
       record.avatarUrl,
+      record.weightUpdatedAt ?? null,
     );
   }
 }

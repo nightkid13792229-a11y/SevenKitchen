@@ -607,6 +607,139 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
+    /**
+     * 过敏避雷必须「两边都读」（2026-09-27）
+     *
+     * 改造前只读 dog.allergyFoods —— 而那是个顾客端没有任何入口的旧文本字段，
+     * 新档案里恒为 null。于是顾客在健康档案里明确写了「对鸡肉过敏」，
+     * 首页推荐照样给他推含鸡肉的食谱。这组测试把「结构化记录也参与避雷」锁住。
+     */
+    function mockDogWithAllergy(overrides: Record<string, unknown>) {
+      return {
+        id: '550e8400-e29b-41d4-a716-446655440051',
+        name: '豆豆',
+        birthday: new Date('2021-01-01T00:00:00.000Z'),
+        currentWeightKg: 5,
+        mealsPerDay: 2,
+        lifeStageOverride: 'NONE',
+        activityLevel: 'NORMAL',
+        cachedTargetFoodKcal: 300,
+        allergyFoods: null,
+        allergyRecords: [],
+        pickyFoods: null,
+        avatarUrl: null,
+        ...overrides,
+      };
+    }
+
+    function chickenRecipe() {
+      return {
+        id: 'row-chicken',
+        recipeId: 'chicken-recipe-id',
+        version: 1,
+        name: '鸡肉燕麦鲜食 成犬',
+        status: 'PUBLIC',
+        seriesId: 'series-chicken',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        energyDensityKcalPerKg: 1200,
+        targetHealthTags: [],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        favoriteCount: 0,
+        diyGenCount: 0,
+        items: [
+          {
+            ratioPercent: 60,
+            ingredient: { name: '鸡肉', nameEn: 'chicken', type: 'FOOD' },
+          },
+        ],
+      };
+    }
+
+    it('顾客在健康档案里填的结构化过敏记录，也会让推荐避开对应食材', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440051';
+      const customerId = '550e8400-e29b-41d4-a716-446655440052';
+
+      // 新档案的真实状态：旧文本字段为空，顾客填的过敏只存在于结构化记录里
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: null,
+          allergyRecords: [{ allergen: '鸡肉' }],
+        }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      expect(cards).toHaveLength(1);
+      expect(cards[0].matchReasons.join('｜')).toContain('含需谨慎原料');
+
+      // 同时锁住查询真的把结构化过敏记录取回来了（否则上面的断言会因数据缺失而失真）
+      expect(mockPrismaService.dog.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            allergyRecords: expect.anything(),
+          }),
+        }),
+      );
+    });
+
+    it('旧文本过敏字段继续生效，不会因为在读结构化记录就丢掉员工维护的备注', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440053';
+      const customerId = '550e8400-e29b-41d4-a716-446655440054';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({ allergyFoods: '鸡肉', allergyRecords: [] }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      expect(cards).toHaveLength(1);
+      expect(cards[0].matchReasons.join('｜')).toContain('含需谨慎原料');
+    });
+
+    it('两边都写了同一过敏原时不会重复提示', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440055';
+      const customerId = '550e8400-e29b-41d4-a716-446655440056';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: '鸡肉',
+          allergyRecords: [{ allergen: '鸡肉' }],
+        }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      const allergyReasons = cards[0].matchReasons.filter((reason: string) =>
+        reason.includes('含需谨慎原料'),
+      );
+      expect(allergyReasons).toHaveLength(1);
+      expect(allergyReasons[0]).toBe('含需谨慎原料：鸡肉');
+    });
+
     it('loads complete public series candidates before choosing the matched recommendation stage', async () => {
       const dogId = '550e8400-e29b-41d4-a716-446655440051';
       const customerId = '550e8400-e29b-41d4-a716-446655440052';

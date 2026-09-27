@@ -72,6 +72,16 @@ export class DogProfileDto {
   @ApiProperty({ example: 10.5 })
   currentWeightKg!: number;
 
+  /**
+   * 当前体重的最后更新时间（ISO 字符串）。
+   *
+   * 供小程序判断"体重是不是有点久了"并给出温和提醒（60 天口径，只提醒不阻断）。
+   * 历史数据已在迁移里回填（取最近一条体重记录日期，缺失则用建档时间），
+   * 因此已有档案也会有值；仅在极端情况下为 null。
+   */
+  @ApiProperty({ example: '2026-09-27T02:00:00.000Z', nullable: true })
+  weightUpdatedAt!: string | null;
+
   @ApiProperty({ example: 5 })
   bcsScore!: number;
 

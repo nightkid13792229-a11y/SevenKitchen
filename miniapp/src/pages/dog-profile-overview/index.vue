@@ -88,17 +88,31 @@
 
           <view class="field-group">
             <view class="field-label-row">
-              <text class="field-label">当前体重（kg）</text>
+              <text class="field-label">当前体重（{{ weightUnitLabel }}）</text>
               <text class="field-link" @tap="goToWeightManagement">健康管理</text>
             </view>
-            <input
-              class="field-input"
-              type="digit"
-              placeholder="请输入体重"
-              v-model="form.currentWeightKg"
-            />
-            <text v-if="form.currentWeightKg && !hasValidCurrentWeightKg" class="field-error">
-              请输入 0 到 200 之间的有效体重
+            <!-- 单位必须显式显示并可切换：内部一律按公斤存，
+                 顾客按「斤」填若不换算，热量会翻倍。 -->
+            <view class="weight-input-row">
+              <input
+                class="field-input weight-input"
+                type="digit"
+                :placeholder="weightPlaceholder"
+                :value="weightInputText"
+                @input="onWeightInput"
+              />
+              <view class="weight-unit-toggle">
+                <text
+                  v-for="option in weightUnitOptions"
+                  :key="option.value"
+                  class="weight-unit-option"
+                  :class="{ active: weightUnit === option.value }"
+                  @tap="onWeightUnitChange(option.value)"
+                >{{ option.label }}</text>
+              </view>
+            </view>
+            <text v-if="weightInputText && !hasValidCurrentWeightKg" class="field-error">
+              {{ weightRangeHint }}
             </text>
           </view>
 
@@ -630,6 +644,14 @@ import {
   buildProfileWeightRecordPayload,
   shouldPersistProfileWeightRecord,
 } from '../../utils/weight-management'
+import {
+  formatWeightForInput,
+  getWeightPlaceholder,
+  getWeightRangeHint,
+  getWeightUnitLabel,
+  parseWeightInputToKg,
+  type WeightUnit,
+} from '../../utils/weight-unit'
 
 type EditableSection = '' | 'basic' | 'feeding' | 'health'
 
@@ -822,6 +844,46 @@ const parsedCurrentWeightKg = computed(() => {
   return Number.isFinite(parsed) && parsed > 0 && parsed <= 200 ? parsed : null
 })
 const hasValidCurrentWeightKg = computed(() => parsedCurrentWeightKg.value !== null)
+
+// ========== 体重单位（公斤 / 斤）==========
+// form.currentWeightKg 内部**始终是公斤**，单位只影响输入框展示。
+// 原先标签写死了「（kg）」但没有换算入口，习惯按斤报体重的顾客会把 25 斤填成 25，
+// 热量与报价直接翻倍。
+const weightUnit = ref<WeightUnit>('KG')
+const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
+  { value: 'KG', label: '公斤' },
+  { value: 'JIN', label: '斤' },
+]
+// 单独存输入框的原始文本，避免换算把顾客正在输入的按键序列打断（如 "12." 丢小数点）
+const weightInputText = ref('')
+const weightUnitLabel = computed(() => getWeightUnitLabel(weightUnit.value))
+const weightPlaceholder = computed(() => getWeightPlaceholder(weightUnit.value))
+const weightRangeHint = computed(() => getWeightRangeHint(weightUnit.value))
+
+const syncWeightInputFromForm = () => {
+  weightInputText.value = formatWeightForInput(
+    form.currentWeightKg,
+    weightUnit.value,
+  )
+}
+
+const onWeightInput = (event: any) => {
+  const raw = String(event?.detail?.value ?? '')
+  weightInputText.value = raw
+  form.currentWeightKg = parseWeightInputToKg(raw, weightUnit.value)
+}
+
+const onWeightUnitChange = (unit: WeightUnit) => {
+  if (unit === weightUnit.value) return
+  // 先把当前输入按旧单位固化成公斤，再按新单位重新展示
+  form.currentWeightKg = parseWeightInputToKg(
+    weightInputText.value,
+    weightUnit.value,
+  )
+  weightUnit.value = unit
+  syncWeightInputFromForm()
+}
+// ========== 体重单位结束 ==========
 const canPreview = computed(() => Boolean(
   form.breedId &&
   form.birthday &&
@@ -949,6 +1011,8 @@ onShow(() => {
         if (Number.isFinite(syncedWeight) && syncedWeight > 0 && syncedWeight <= 200) {
           isHydrating.value = true
           form.currentWeightKg = syncedWeight.toString()
+          // 从「健康管理」页同步回来的体重是公斤，输入框显示文本要按当前单位重建
+          syncWeightInputFromForm()
           if (profile.value) {
             profile.value.currentWeightKg = syncedWeight
           }
@@ -1160,6 +1224,8 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.gender = nextProfile.gender || 'MALE'
   form.isNeutered = nextProfile.isNeutered ?? false
   form.currentWeightKg = nextProfile.currentWeightKg?.toString() || ''
+  // 体重是按公斤回填的，输入框显示文本要按当前单位重建一次
+  syncWeightInputFromForm()
   form.bcsScore = nextProfile.bcsScore ?? 5
   form.activityLevel = nextProfile.activityLevel || 'LOW'
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
@@ -1856,6 +1922,42 @@ function goToWeightManagement() {
   display: flex;
   align-items: center;
   gap: 20rpx;
+}
+
+/* 体重：输入框 + 单位切换（公斤/斤）。
+   内部一律按公斤存，这里只负责让顾客按自己的习惯填、且单位始终可见。 */
+.weight-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.weight-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.weight-unit-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 4rpx;
+  background: #eef3ea;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option {
+  padding: 0 18rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  font-size: 24rpx;
+  color: #6b6653;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option.active {
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
 }
 
 .field-label {

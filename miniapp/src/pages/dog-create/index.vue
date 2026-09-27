@@ -81,14 +81,28 @@
 
             <view class="profile-card__field profile-card__field--half">
               <text class="label">体重 *</text>
-              <input
-                class="input"
-                type="digit"
-                placeholder="例如 12.5"
-                v-model="formData.currentWeightKg"
-              />
-              <text v-if="formData.currentWeightKg && !hasValidCurrentWeightKg" class="hint hint-warning">
-                请输入 0 到 200 之间的有效体重
+              <!-- 单位必须显示出来：国内顾客习惯按「斤」报体重，
+                   原先屏幕上不写单位，填 25 斤会被当成 25 公斤，热量直接翻倍。 -->
+              <view class="weight-input-row">
+                <input
+                  class="input weight-input"
+                  type="digit"
+                  :placeholder="weightPlaceholder"
+                  :value="weightInputText"
+                  @input="onWeightInput"
+                />
+                <view class="weight-unit-toggle">
+                  <text
+                    v-for="option in weightUnitOptions"
+                    :key="option.value"
+                    class="weight-unit-option"
+                    :class="{ active: weightUnit === option.value }"
+                    @tap="onWeightUnitChange(option.value)"
+                  >{{ option.label }}</text>
+                </view>
+              </view>
+              <text v-if="weightInputText && !hasValidCurrentWeightKg" class="hint hint-warning">
+                {{ weightRangeHint }}
               </text>
             </view>
           </view>
@@ -610,6 +624,13 @@ import { getBreedSearchUiState, getManualBreedDraftName } from '../../utils/dog-
 import { scrollPageToTop } from '../../utils/page-scroll'
 import { buildInitialWeightRecordPayload } from '../../utils/weight-management'
 import {
+  formatWeightForInput,
+  getWeightPlaceholder,
+  getWeightRangeHint,
+  parseWeightInputToKg,
+  type WeightUnit,
+} from '../../utils/weight-unit'
+import {
   buildDogHealthStateSnapshot,
   mergeDogHealthStateSnapshot,
   writeDogHealthStateSnapshotCache,
@@ -1056,6 +1077,45 @@ const parsedCurrentWeightKg = computed(() => {
 
 const hasValidCurrentWeightKg = computed(() => parsedCurrentWeightKg.value !== null)
 
+// ========== 体重单位（公斤 / 斤）==========
+// formData.currentWeightKg 内部**始终是公斤**，单位只影响输入框展示，
+// 这样下游的校验、提交、体重记录都不需要改，也不会有「斤」漏进数据库。
+const weightUnit = ref<WeightUnit>('KG')
+const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
+  { value: 'KG', label: '公斤' },
+  { value: 'JIN', label: '斤' },
+]
+// 输入框里正在编辑的原始文本：单独存一份，避免换算把顾客的按键序列打断
+// （例如输入 "12." 时若直接回写格式化结果，小数点会被吃掉，接着输入就变成 125）。
+const weightInputText = ref('')
+const weightPlaceholder = computed(() => getWeightPlaceholder(weightUnit.value))
+const weightRangeHint = computed(() => getWeightRangeHint(weightUnit.value))
+
+const syncWeightInputFromForm = () => {
+  weightInputText.value = formatWeightForInput(
+    formData.value.currentWeightKg,
+    weightUnit.value,
+  )
+}
+
+const onWeightInput = (event: any) => {
+  const raw = String(event?.detail?.value ?? '')
+  weightInputText.value = raw
+  formData.value.currentWeightKg = parseWeightInputToKg(raw, weightUnit.value)
+}
+
+const onWeightUnitChange = (unit: WeightUnit) => {
+  if (unit === weightUnit.value) return
+  // 先把当前输入按「旧单位」固化成公斤，再按新单位重新展示
+  formData.value.currentWeightKg = parseWeightInputToKg(
+    weightInputText.value,
+    weightUnit.value,
+  )
+  weightUnit.value = unit
+  syncWeightInputFromForm()
+}
+// ========== 体重单位结束 ==========
+
 const canSubmit = computed(() => {
   return Boolean(
     formData.value.name &&
@@ -1383,6 +1443,9 @@ function populateFormData(profile: any) {
     console.log('[DogCreate] Loaded allergyRecords:', formData.value.allergyRecords)
     formData.value.allergyFoods = profile.allergyFoods || ''
     formData.value.pickyFoods = profile.pickyFoods || ''
+
+    // 体重是按公斤回填的，输入框显示文本要按当前单位重建一次
+    syncWeightInputFromForm()
 
     // 品种信息
     formData.value.breedId = profile.breedId || ''
@@ -2860,6 +2923,42 @@ async function submit() {
 
 .profile-card__field--half {
   flex: 1 1 280rpx;
+}
+
+/* 体重：输入框 + 单位切换（公斤/斤）。
+   单位必须显式可见 —— 国内顾客常按「斤」报体重，不写单位会直接算错热量。 */
+.weight-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.weight-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.weight-unit-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 4rpx;
+  background: #eef3ea;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option {
+  padding: 0 18rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  font-size: 24rpx;
+  color: #6b6653;
+  border-radius: 999rpx;
+}
+
+.weight-unit-option.active {
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
 }
 
 .profile-card__field--size {

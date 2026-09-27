@@ -214,6 +214,14 @@ export interface DogDesignInsight {
     /** 每日目标能量 kcal */
     targetFoodKcal: number | null
     allergyFoods: string | null
+    /**
+     * 顾客在健康档案 / 定制单里填写的结构化过敏记录（只读）。
+     *
+     * 与 allergyFoods 的区别：allergyFoods 是员工在设计备注里维护的旧文本字段，
+     * 顾客端没有任何入口；这一份才是顾客自己填的。
+     * 2026-09-27 之前设计面板只看 allergyFoods，导致顾客声明的过敏对营养师不可见。
+     */
+    structuredAllergies: string[]
     pickyFoods: string | null
     preferredFoods: string | null
     medicalHistory: string | null

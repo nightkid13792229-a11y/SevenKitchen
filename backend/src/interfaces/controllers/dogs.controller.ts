@@ -1085,6 +1085,10 @@ export class DogsController {
       gender: dog.gender,
       isNeutered: dog.isNeutered,
       currentWeightKg: dog.currentWeightKg,
+      // 体重最后更新时间：小程序据此给出「体重有点久了，要不要更新一下」的提醒（只提醒、不阻断）
+      weightUpdatedAt: dog.weightUpdatedAt
+        ? dog.weightUpdatedAt.toISOString()
+        : null,
       bcsScore: dog.bcsScore,
       activityLevel: dog.activityLevel,
       lifeStageOverride: dog.lifeStageOverride,

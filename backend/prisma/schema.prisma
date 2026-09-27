@@ -385,6 +385,11 @@ model Dog {
   gender               DogGender           @map("gender")
   isNeutered           Boolean             @map("is_neutered")
   currentWeightKg      Float               @map("current_weight_kg")
+  /// 当前体重的最后更新时间。
+  /// 2026-09-27 新增：dog 表原本只有 created_at，无法判断"档案里这个体重是什么时候录的"，
+  /// 于是「体重超过 60 天就提醒顾客更新」这条规则没有数据基础可算。
+  /// 建档时写入；之后每次改档案体重（含从体重记录同步过来）时刷新。
+  weightUpdatedAt      DateTime?           @map("weight_updated_at")
   bcsScore             Int                 @map("bcs_score")
   activityLevel        ActivityLevel       @map("activity_level")
   lifeStageOverride    LifeStageOverride   @map("life_stage_override")

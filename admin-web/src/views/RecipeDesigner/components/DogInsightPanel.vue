@@ -64,6 +64,25 @@
               {{ insight.dog.allergyFoods || '无记录' }}
             </span>
           </div>
+          <!--
+            顾客在健康档案里自己填的过敏记录（只读）。
+            它与上面的「过敏食材」是两个来源：上面那个是员工在设计备注里维护的旧文本字段，
+            顾客端没有入口；这一份才是顾客填的。改造前面板只看上面那个，
+            于是顾客明确声明的过敏对营养师完全不可见。这里必须同时展示，且不可编辑。
+          -->
+          <div class="profile-item full">
+            <span class="label">顾客档案记录的过敏</span>
+            <span
+              class="value"
+              :class="{ empty: !insight.dog.structuredAllergies?.length }"
+            >
+              {{
+                insight.dog.structuredAllergies?.length
+                  ? insight.dog.structuredAllergies.join('、')
+                  : '无记录'
+              }}
+            </span>
+          </div>
           <div class="profile-item full">
             <span class="label">挑食</span>
             <span class="value" :class="{ empty: !insight.dog.pickyFoods }">

@@ -205,6 +205,55 @@ describe('dog-design-insight', () => {
       expect(insight.orderSummary.recipeNames).toEqual(['旺财套餐']);
     });
 
+    /**
+     * 结构化过敏记录必须单独暴露给设计面板（2026-09-27）
+     *
+     * allergyFoods 是员工在设计备注里维护的旧文本字段，顾客端没有入口；
+     * 顾客在健康档案里填的过敏存在 allergy_record 里。
+     * 改造前面板与 AI 只看 allergyFoods，顾客声明的过敏对营养师完全不可见。
+     */
+    it('把顾客填写的结构化过敏记录单独暴露出来，且不污染可编辑的旧文本字段', () => {
+      const insight = buildDogDesignInsight({
+        dog: {
+          id: 'dog-1',
+          name: '旺财',
+          currentWeightKg: 12.5,
+          allergyFoods: '牛肉',
+          allergyRecords: [
+            { allergen: '鸡肉' },
+            { allergen: '鸡肝' },
+            // 顾客可能在一条记录里写多个，需要拆开
+            { allergen: '羊肉、鸭肉' },
+            { allergen: null },
+          ],
+        },
+        seriesList: [],
+        orderItems: [],
+        lifeStageLabel: null,
+      });
+
+      expect(insight.dog.structuredAllergies).toEqual([
+        '鸡肉',
+        '鸡肝',
+        '羊肉',
+        '鸭肉',
+      ]);
+      // 旧文本字段保持原样：设计面板的「编辑备注」表单会原样回写它，
+      // 若把结构化记录并进去，一保存就会把顾客的记录复制成员工备注。
+      expect(insight.dog.allergyFoods).toBe('牛肉');
+    });
+
+    it('没有结构化过敏记录时给出空数组', () => {
+      const insight = buildDogDesignInsight({
+        dog: { id: 'dog-1', name: '旺财' },
+        seriesList: [],
+        orderItems: [],
+        lifeStageLabel: null,
+      });
+
+      expect(insight.dog.structuredAllergies).toEqual([]);
+    });
+
     it('maps the extended dog profile fields for the design profile panel', () => {
       const insight = buildDogDesignInsight({
         dog: {

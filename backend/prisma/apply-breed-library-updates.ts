@@ -4,7 +4,8 @@
  * 背景：生产里 333 只狗是「手填品种名」，逐一对照品种库后发现两类问题：
  *
  *  A. 库里缺了**犬业联盟确实认可**的品种
- *     例：大麦町（Dalmatian）、哈瓦那犬、图莱亚尔棉毛犬、捷克斯洛伐克狼犬、美国恶霸犬
+ *     例：大麦町（Dalmatian）、哈瓦那犬、图莱亚尔棉毛犬、捷克斯洛伐克狼犬
+ *     （美国恶霸犬因权威品系未能核实，本轮暂不建库）
  *     —— 顾客搜不到，只好手填。
  *
  *  B. 热门**杂交犬**（AKC / CKU 等主流犬业联盟**不承认为品种**）
@@ -92,58 +93,16 @@ const NEW_BREEDS: NewBreedInput[] = [
     basis:
       'FCI 认可，库里缺失。大型犬晚熟，成犬月龄取 18；生产实测 36.5kg（1 只），标准 20–40kg。',
   },
-  // ⚠️ 美国恶霸犬 / 澳洲拉布拉多贵宾 / 可卡布都是**分多种体型**的品种。
-  // 老板指出：不能用一个「折中」条目涵盖，否则体型判断与热量都会错。
-  // 因此参照库里既有的「雪纳瑞（迷你/标准/巨型）」「贵宾犬（玩具/小型/标准/巨型）」
-  // 的做法，一个体型档位一个品种名。
-  // 各档的成年月龄/老年岁数按体型套用既有约定：
-  //   SMALL 10月/11岁、MEDIUM 12月/10岁、LARGE 18月/8岁、GIANT 24月/7岁
-  // 恶霸犬 ABKC 有 Pocket / Classic / Standard / XL 等多个品系，
-  // 其中 Classic 与 Pocket 体重高度重叠，按体重分档意义不大，故只建三档。
-  {
-    name: '美国恶霸犬（口袋型）',
-    sizeCategory: DogSizeCategory.MEDIUM,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 12,
-    seniorAgeYears: 10,
-    averageAdultWeightKg: 16,
-    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬口袋型', '口袋恶霸', 'Pocket Bully'],
-    basis: 'ABKC 口袋型体型最小，体重约 13–18kg → MEDIUM（对标雪纳瑞标准 15.9kg）。⚠️ 体重区间待核对权威标准。',
-  },
-  {
-    // 老板更正：经典型是协会划分的独立系列，**不能合并进标准型**，
-    // 也不是标准型的别名 —— 否则用户会问「为什么没有我这个系列？」。
-    name: '美国恶霸犬（经典型）',
-    sizeCategory: DogSizeCategory.MEDIUM,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 12,
-    seniorAgeYears: 10,
-    averageAdultWeightKg: 18,
-    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬经典型', '经典恶霸', 'Classic Bully'],
-    basis: 'ABKC 经典型（Classic）为其独立系列，体重约 13.6–20kg → MEDIUM。⚠️ 体重区间待核对权威标准。',
-  },
-  {
-    name: '美国恶霸犬（标准型）',
-    sizeCategory: DogSizeCategory.LARGE,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 18,
-    seniorAgeYears: 8,
-    averageAdultWeightKg: 38,
-    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬标准型', '标准恶霸', 'Standard Bully'],
-    basis: 'ABKC 标准型体重约 30–45kg → LARGE（对标雪纳瑞巨型 34kg）。⚠️ 体重区间待核对权威标准。',
-  },
-  {
-    name: '美国恶霸犬（XL型）',
-    sizeCategory: DogSizeCategory.GIANT,
-    growthCurveType: GrowthCurveType.STANDARD,
-    adultAgeMonths: 24,
-    seniorAgeYears: 7,
-    averageAdultWeightKg: 52,
-    aliases: ['恶霸犬', '恶霸', 'American Bully', '恶霸犬XL型', 'XL恶霸', 'XL Bully', '美国恶霸犬XL'],
-    basis: 'ABKC XL 型约 45–60kg → GIANT（≥24 月成年、7 岁进入老年）。⚠️ 体重区间待核对权威标准。',
-  },
+  // ⚠️ 「分体型/分系列」的品种要一个系列一个条目，不做折中（老板定的原则）：
+  //   协会划分了系列 → 逐条建库；协会没划分 → 只建一个条目，跨度大的个体
+  //   由顾客在档案里手动调整体型。
+  //
+  // 【美国恶霸犬：暂不建库】
+  //   它按 ABKC/UKC 有 Pocket / Classic / Standard / XL 等品系，
+  //   但本环境无法核实权威原文（akc.org 403、ukcdogs.com 被 Cloudflare 拦），
+  //   且 AKC 品种页当前返回 404 —— 老板决定先跳过，等拿到权威品系与体重再说。
+  //   在补齐之前，恶霸犬仍走"手动填写品种名 + 选体型"的老路径，不影响顾客建档。
 
-  // ============ B. 热门杂交犬（犬业联盟不认可；按老板意见单独建库）============
   // ⚠️ 可卡布按单一品种建库（2026-09-27 老板更正）：
   // 犬业联盟并未把可卡布划分为玩具/迷你/标准 —— 既然协会没有这个划分，
   // 我们也不该擅自拆。它体重跨度确实大（生产 2.3–12.5kg），

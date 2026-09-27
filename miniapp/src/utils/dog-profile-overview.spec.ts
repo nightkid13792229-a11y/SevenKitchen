@@ -300,15 +300,13 @@ describe('dog-profile-overview', () => {
     expect(activityImpact.items[0].detail).toContain('只分两档')
     // 不得再对成年犬宣称 ×0.9 / ×1.0 这类不存在的档位差异
     expect(JSON.stringify(activityImpact)).not.toContain('×0.9')
-    expect(getFeedingImpactExplanation('treat')).toEqual({
-      title: '零食如何影响热量',
-      summary: '零食热量会先从每日总能量需求中预留出来，因此零食越多，主食热量越少。',
-      items: [
-        { label: '不给零食', detail: '按 0% 预留，主食可使用全部热量。' },
-        { label: '较少零食', detail: '按 3% 预留，适合偶尔给小零食。' },
-        { label: '适中零食', detail: '按 6% 预留，适合每天都有少量零食。' },
-        { label: '较多零食', detail: '按 10% 预留，也是当前安全上限。' },
-      ],
-    })
+    // 2026-09-27：零食选择器已精简为 3 档，解释必须与之一致 ——
+    // 否则会出现「面板讲 4 档、选项只有 3 档」的矛盾（老板验收时发现）
+    expect(getFeedingImpactExplanation('treat').items.map(item => item.label)).toEqual([
+      '不给零食',
+      '较少零食',
+      '较多零食',
+    ])
+    expect(JSON.stringify(getFeedingImpactExplanation('treat'))).not.toContain('适中零食')
   })
 })

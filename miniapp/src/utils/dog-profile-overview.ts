@@ -446,10 +446,13 @@ export function getFeedingImpactExplanation(type: FeedingImpactExplanationType):
     treat: {
       title: '零食如何影响热量',
       summary: '零食热量会先从每日总能量需求中预留出来，因此零食越多，主食热量越少。',
-      items: [
+      /**
+       * 2026-09-27：选择器已由 4 档精简为 3 档（去掉中间最难区分的「适中」），
+       * 这里的解释必须同步 —— 否则顾客会看到"面板讲 4 档、选项只有 3 档"的矛盾。
+       * 说明文案也不再逐档重复"剔除零食热量后再计算主食热量"（标题下已统一说明）。
+       */      items: [
         { label: '不给零食', detail: '按 0% 预留，主食可使用全部热量。' },
         { label: '较少零食', detail: '按 3% 预留，适合偶尔给小零食。' },
-        { label: '适中零食', detail: '按 6% 预留，适合每天都有少量零食。' },
         { label: '较多零食', detail: '按 10% 预留，也是当前安全上限。' },
       ],
     },

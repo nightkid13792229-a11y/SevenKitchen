@@ -358,7 +358,7 @@
                 v-for="option in treatLevelOptions"
                 :key="option.value"
                 class="chip"
-                :class="{ 'chip--active': form.treatLevel === option.value }"
+                :class="{ 'chip--active': isTreatLevelActive(option.value) }"
                 @tap="form.treatLevel = option.value"
               >
                 {{ option.label }}
@@ -668,12 +668,27 @@ const activityLevelOptions = [
   { value: 'HIGH', label: '高活动', description: '每日运动2-4小时，经常跑步或玩耍' },
   { value: 'WORKING', label: '工作犬', description: '高强度训练或工作犬场景' },
 ]
+/**
+ * 零食档位（2026-09-27 与建档页同步精简为 3 档）。
+ * 建档页此前已由 4 档改为 3 档，总览页当时漏改，会出现"两个页面选项数不一致"。
+ */
 const treatLevelOptions = [
   { value: 'NONE', label: '不给零食' },
   { value: 'LOW', label: '较少零食' },
-  { value: 'MODERATE', label: '适中零食' },
   { value: 'HIGH', label: '较多零食' },
 ]
+
+/**
+ * 某档零食当前是否选中（兼容历史数据）。
+ *
+ * 库里仍有 MODERATE（适中）的档案，它不属于现有 3 档，
+ * 但把它归到「较少」这一档**展示**，顾客不动它时保存值仍是 MODERATE，
+ * 不会被这次改版悄悄改写喂养口径。
+ */
+function isTreatLevelActive(level: string) {
+  if (form.treatLevel === level) return true
+  return level === 'LOW' && form.treatLevel === 'MODERATE'
+}
 const sizeLabelMap = Object.fromEntries(sizeClassChoices.map(option => [option.value, option.label]))
 const dogId = ref('')
 const profile = ref<DogProfileDetail | null>(null)

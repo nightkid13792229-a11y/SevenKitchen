@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getFeedingImpactExplanation } from './dog-profile-overview'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -185,5 +186,30 @@ describe('create step boundaries', () => {
       mealsPerDay: '2',
       treatLevel: 'LOW',
     })).toBe('recommendation')
+  })
+
+  /**
+   * 选择器与「热量影响」解释必须一致（2026-09-27）
+   *
+   * 老板验收时发现的真实缺陷：把零食选择器由 4 档精简为 3 档后，
+   * 忘了同步「零食如何影响热量」的解释面板 —— 于是出现
+   * 「面板讲 4 档、选项只有 3 档」的矛盾。
+   *
+   * 这类"改了 A 忘了改 B"最容易漏，所以直接用两份数据做一致性断言。
+   */
+  it('零食选择器与热量影响解释的档位保持一致', () => {
+    const choiceLabels = getCreateTreatChoices().map(choice => choice.label)
+    const explanationLabels = getFeedingImpactExplanation('treat').items.map(
+      item => item.label,
+    )
+
+    expect(explanationLabels).toEqual(choiceLabels)
+  })
+
+  it('体况评分与活动量的解释仍覆盖全部档位', () => {
+    // BCS 9 档：解释面板按分数区间归并（1-2/3/4-5/6/7/8/9），条数不必等于 9，
+    // 但必须覆盖到每一档对应的区间描述，避免漏档
+    expect(getFeedingImpactExplanation('bcs').items.length).toBeGreaterThanOrEqual(7)
+    expect(getFeedingImpactExplanation('activity').items.length).toBeGreaterThanOrEqual(3)
   })
 })

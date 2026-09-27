@@ -320,10 +320,16 @@
         <view class="profile-card">
           <view class="feeding-card__header">
             <view>
-              <text class="profile-card__section-title">BCS 体态评分 *</text>
-              <text class="profile-card__section-desc">4到5分是理想体态。</text>
+              <text class="profile-card__section-title">BCS 体态评分</text>
+              <text class="profile-card__section-desc">4到5分是理想体态。请对着下方参考图，选择更贴近的一项。</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('bcs')">热量影响</text>
+          </view>
+
+          <!-- 未选择时如实说明：不阻断流程，但这是定制食谱的必需项。
+               原先这里默认选中 5 分，顾客不选也会被当成"标准体态"存进档案。 -->
+          <view v-if="!formData.bcsScoreConfirmed" class="feeding-unselected-hint">
+            <text class="feeding-unselected-hint__text">还没选择 —— 不选也能继续建档，但定制食谱需要它。</text>
           </view>
 
           <view class="bcs-choice-grid">
@@ -415,10 +421,14 @@
         <view class="profile-card">
           <view class="feeding-card__header">
             <view>
-              <text class="profile-card__section-title">活动水平 *</text>
-              <text class="profile-card__section-desc">选择更贴近日常平均状态的一项，系统会据此调节总热量需求。</text>
+              <text class="profile-card__section-title">活动水平</text>
+              <text class="profile-card__section-desc">选更贴近日常平均状态的一项（这是影响热量最大的一项），系统据此调节总热量需求。</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('activity')">热量影响</text>
+          </view>
+
+          <view v-if="!formData.activityLevelConfirmed" class="feeding-unselected-hint">
+            <text class="feeding-unselected-hint__text">还没选择 —— 不选也能继续建档，但定制食谱需要它。</text>
           </view>
 
           <view class="activity-level-container">
@@ -459,6 +469,8 @@
             >
               <view class="picker">{{ `${formData.mealsPerDay || '2'} 餐/天` }}</view>
             </picker>
+            <!-- 老板定稿文案（U4）：按"影响制作单的生成"表述，不写成价格 -->
+            <text class="hint hint--emphasis">影响制作单的生成，请确认</text>
             <text class="hint">用于计算每餐的饭量。</text>
           </view>
         </view>
@@ -624,6 +636,10 @@ import { getBreedSearchUiState, getManualBreedDraftName } from '../../utils/dog-
 import { scrollPageToTop } from '../../utils/page-scroll'
 import { buildInitialWeightRecordPayload } from '../../utils/weight-management'
 import {
+  DEFAULT_ACTIVITY_LEVEL,
+  DEFAULT_BCS_SCORE,
+} from '../../utils/dog-profile-form'
+import {
   formatWeightForInput,
   getWeightPlaceholder,
   getWeightRangeHint,
@@ -659,7 +675,15 @@ interface FormData {
   gender: string
   isNeutered: boolean
   currentWeightKg: string
-  bcsScore: number
+  /**
+   * 体况评分。`null` = 顾客还没选过。
+   *
+   * 2026-09-27（U1）：原先默认 5 分且渲染成"已选中"，顾客不选也会提交 ——
+   * 数据库里因此永远有值，分不清是顾客选的还是系统替他选的
+   * （生产 4544 只狗里 3466 只等于默认值 5）。现在留空，顾客点过才算数。
+   */
+  bcsScore: number | null
+  /** 活动水平。空字符串 = 顾客还没选过（同上，原先默认 'LOW'） */
   activityLevel: string
   lifeStageOverride: string
   sizeClassOverride: string | null
@@ -673,6 +697,13 @@ interface FormData {
   allergyRecords: any[]  // 过敏记录列表
   allergyFoods: string
   pickyFoods: string
+  /**
+   * 顾客是否亲自选过这几项（定制门槛按此判定，不看"有没有值"）。
+   * 体况评分/活动量/每日餐数都有兜底值，所以必须有独立的确认标记。
+   */
+  bcsScoreConfirmed: boolean
+  activityLevelConfirmed: boolean
+  mealsPerDayConfirmed: boolean
 }
 
 // Constants
@@ -686,8 +717,10 @@ const formData = ref<FormData>({
   gender: 'MALE',
   isNeutered: false,
   currentWeightKg: '',
-  bcsScore: 5,
-  activityLevel: 'LOW',
+  bcsScore: null,
+  // 不再预选：顾客点过才算"确认过"。不选也能继续建档（不阻断），
+  // 但未确认的档案不算满足定制门槛，进定制页时会要求补确认。
+  activityLevel: '',
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
@@ -698,7 +731,11 @@ const formData = ref<FormData>({
   checkupRecords: [],
   allergyRecords: [],
   allergyFoods: '',
-  pickyFoods: ''
+  pickyFoods: '',
+  // 默认都未确认：只有顾客真的点了才算
+  bcsScoreConfirmed: false,
+  activityLevelConfirmed: false,
+  mealsPerDayConfirmed: false
 })
 
 const lifeStageOptions = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
@@ -1061,8 +1098,7 @@ const displayLifeStageDetail = computed(() => {
 
 // ========== 生命阶段计算逻辑结束 ==========
 
-const parsedCurrentWeightKg = computed(() => {
-  if (typeof formData.value.currentWeightKg !== 'string') {
+const parsedCurrentWeightKg = computed(() => {  if (typeof formData.value.currentWeightKg !== 'string') {
     return null
   }
 
@@ -1116,13 +1152,32 @@ const onWeightUnitChange = (unit: WeightUnit) => {
 }
 // ========== 体重单位结束 ==========
 
+// ========== 顾客确认状态（U3/U4）==========
+// 体况评分、活动量、每日餐数都有"兜底值"，顾客不选也能提交。
+// 但老板定的定制门槛按**是否确认过**判定，所以必须单独记住"顾客到底点没点过"。
+// 只认顾客的真实操作：默认值不算确认。
+// 放在 formData 里是为了让提交 payload 构造器能直接带上，不必额外穿参。
+/** 未确认时的兜底值：保持与改造前一致，避免悄悄改变热量口径 */
+const FALLBACK_BCS_SCORE = DEFAULT_BCS_SCORE
+const FALLBACK_ACTIVITY_LEVEL = DEFAULT_ACTIVITY_LEVEL
+
+/** 体况评分/活动量是否已经由顾客亲自选择 */
+const isFeedingConfirmed = computed(
+  () =>
+    formData.value.bcsScoreConfirmed && formData.value.activityLevelConfirmed,
+)
+// ========== 顾客确认状态结束 ==========
+
 const canSubmit = computed(() => {
   return Boolean(
     formData.value.name &&
     formData.value.breedId &&
     formData.value.birthday &&
     hasValidCurrentWeightKg.value &&
-    formData.value.activityLevel &&
+    // 活动量不再列为必填（U3：不强制阻断）。
+    // 没选也能建档，只是不算满足定制门槛 —— 门槛改按"确认过"判定，
+    // 而不是靠"表单必填"硬卡。原先这里要求 activityLevel 有值，
+    // 配合默认值相当于"永远通过"，是没有意义的假校验。
     !calculating.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
   )
@@ -1582,6 +1637,13 @@ function invalidateBreedDerivedState() {
 }
 
 function setCreateStep(step: DogProfileCreateStep) {
+  // 走到「喂食建议」（第 3 步）说明顾客已经看过第 2 步的每日餐数
+  // —— 那一栏默认高亮 2 餐，并写着「影响制作单的生成，请确认」。
+  // 看过后继续，即视为确认；没走到这一步则仍未确认。
+  if (step === 'recommendation') {
+    formData.value.mealsPerDayConfirmed = true
+  }
+
   currentCreateStep.value = step
 
   nextTick(() => {
@@ -1840,17 +1902,22 @@ function selectNeutered(value: boolean) {
 
 function selectBcsScore(score: number) {
   formData.value.bcsScore = score
+  // 顾客亲自点过 = 确认过。这是定制门槛的判据，也是"这份体重建议靠不靠谱"的依据。
+  formData.value.bcsScoreConfirmed = true
   invalidateBreedDerivedState()
 }
 
 // 选择活动水平
 function selectActivityLevel(value: string) {
   formData.value.activityLevel = value
+  formData.value.activityLevelConfirmed = true
   invalidateBreedDerivedState()
 }
 
 function onCreateMealsChange(event: any) {
   formData.value.mealsPerDay = createMealChoices[event.detail.value]?.value || '2'
+  // 顾客动过餐数就算确认（餐数直接影响制作单的每包克重与包数）
+  formData.value.mealsPerDayConfirmed = true
   invalidateBreedDerivedState()
 }
 
@@ -1950,8 +2017,9 @@ async function previewCalculation(options?: { silent?: boolean }) {
       gender: formData.value.gender,
       isNeutered: formData.value.isNeutered,
       currentWeightKg: parsedCurrentWeightKg.value,
-      bcsScore: formData.value.bcsScore,
-      activityLevel: formData.value.activityLevel,
+      // 顾客还没选时用兜底值算预览（不阻断流程），确认状态另行提交
+      bcsScore: formData.value.bcsScore ?? FALLBACK_BCS_SCORE,
+      activityLevel: formData.value.activityLevel || FALLBACK_ACTIVITY_LEVEL,
       lifeStageOverride: formData.value.lifeStageOverride,
       sizeClassOverride: formData.value.sizeClassOverride,
       mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
@@ -3700,6 +3768,27 @@ async function submit() {
   font-size: 24rpx;
   color: #6b6653;
   margin-top: 5rpx;
+}
+
+/* 餐数的后果提示：这是老板定稿的措辞，要让人看见，但不能像警告 */
+.hint--emphasis {
+  color: #1e3a2f;
+  font-weight: 600;
+}
+
+/* 「还没选择」的如实说明：不阻断流程，只讲清后果 */
+.feeding-unselected-hint {
+  margin-top: 16rpx;
+  padding: 14rpx 20rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+  border-radius: 12rpx;
+}
+
+.feeding-unselected-hint__text {
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #8a6f3d;
 }
 
 .restore-auto-link {

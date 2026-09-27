@@ -317,7 +317,7 @@
                 :key="option.value"
                 class="activity-option"
                 :class="{ 'activity-option--active': form.activityLevel === option.value }"
-                @tap="form.activityLevel = option.value"
+                @tap="selectActivityLevel(option.value)"
               >
                 <text class="activity-option__title">{{ option.label }}</text>
                 <text class="activity-option__desc">{{ option.description }}</text>
@@ -728,6 +728,10 @@ const form = reactive<Record<string, any>>({
   checkupRecords: [],
   allergyRecords: [],
   pickyFoods: '',
+  // 顾客是否亲自选过（定制门槛按此判定，不看"有没有值"）
+  bcsScoreConfirmed: false,
+  activityLevelConfirmed: false,
+  mealsPerDayConfirmed: false,
 })
 
 let previousRecommendationSnapshot: Record<string, any> = {}
@@ -1161,6 +1165,10 @@ function populateForm(nextProfile: DogProfileDetail) {
   syncWeightInputFromForm()
   form.bcsScore = nextProfile.bcsScore ?? 5
   form.activityLevel = nextProfile.activityLevel || 'LOW'
+  // 回填已有的确认状态：本次未重新点选时，不能把它当成"刚确认"
+  form.bcsScoreConfirmed = Boolean(nextProfile.bcsScoreConfirmed)
+  form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
+  form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
   form.sizeClassOverride = nextProfile.sizeClassOverride || null
   form.mealsPerDay = (nextProfile.mealsPerDay || 2).toString()
@@ -1392,10 +1400,18 @@ function getSizeLabel(value?: string | null) {
 
 function selectBcsScore(value: number) {
   form.bcsScore = value
+  // 顾客亲自点过 = 确认过（定制门槛的判据）
+  form.bcsScoreConfirmed = true
+}
+
+function selectActivityLevel(value: string) {
+  form.activityLevel = value
+  form.activityLevelConfirmed = true
 }
 
 function onMealsChange(event: any) {
   form.mealsPerDay = mealsOptions[event.detail.value] || '2'
+  form.mealsPerDayConfirmed = true
 }
 
 function toggleFeedingImpactInfo(type: 'bcs' | 'activity' | 'treat') {

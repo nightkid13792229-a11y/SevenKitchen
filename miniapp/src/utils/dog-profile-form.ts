@@ -261,6 +261,19 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
   return { basic, feeding, recommendation }
 }
 
+/**
+ * 体况评分 / 活动量的兜底值（2026-09-27，U3）。
+ *
+ * 建档页不再预选这两项（原先默认 5 分与"低活动"会让顾客无意识地跳过，
+ * 数据库里因此分不清"顾客选过"还是"系统填的"）。
+ * 但老板决定**不强制阻断**：没选也能建档，用这里的兜底值先算出热量，
+ * 同时把"未确认"如实提交上去 —— 定制门槛按确认状态判定，不按有没有值。
+ *
+ * 兜底值刻意保持与改造前一致，避免悄悄改变已上线建议的热量口径。
+ */
+export const DEFAULT_BCS_SCORE = 5
+export const DEFAULT_ACTIVITY_LEVEL = 'LOW'
+
 export function buildDogCreatePayload(form: Record<string, any>) {
   const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
   const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
@@ -276,8 +289,14 @@ export function buildDogCreatePayload(form: Record<string, any>) {
     isNeutered: Boolean(form.isNeutered),
     lifeStageOverride: hasValue(form.lifeStageOverride) ? form.lifeStageOverride : 'NONE',
     sizeClassOverride: form.sizeClassOverride ?? null,
-    bcsScore: parseNonNegativeNumber(form.bcsScore) ?? undefined,
-    activityLevel: hasValue(form.activityLevel) ? form.activityLevel : undefined,
+    bcsScore: parseNonNegativeNumber(form.bcsScore) ?? DEFAULT_BCS_SCORE,
+    activityLevel: hasValue(form.activityLevel)
+      ? form.activityLevel
+      : DEFAULT_ACTIVITY_LEVEL,
+    // 顾客是否亲自选过 —— 门槛按这个判定，不是"有没有值"
+    bcsScoreConfirmed: Boolean(form.bcsScoreConfirmed),
+    activityLevelConfirmed: Boolean(form.activityLevelConfirmed),
+    mealsPerDayConfirmed: Boolean(form.mealsPerDayConfirmed),
     mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
     treatInputMode,
     treatLevel: hasValue(form.treatLevel) ? form.treatLevel : undefined,
@@ -362,6 +381,10 @@ export function buildDogEditPayload(
     return compactPayload({
       bcsScore: bcsScore ?? undefined,
       activityLevel: hasValue(form.activityLevel) ? form.activityLevel : undefined,
+      // 顾客在概览页点了这两项，也算确认过（只认 true，不会清掉已有确认）
+      ...(form.bcsScoreConfirmed ? { bcsScoreConfirmed: true } : {}),
+      ...(form.activityLevelConfirmed ? { activityLevelConfirmed: true } : {}),
+      ...(form.mealsPerDayConfirmed ? { mealsPerDayConfirmed: true } : {}),
       sizeClassOverride: form.sizeClassOverride ?? null,
       mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
       treatInputMode,

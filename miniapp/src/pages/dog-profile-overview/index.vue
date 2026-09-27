@@ -89,7 +89,7 @@
           <view class="field-group">
             <view class="field-label-row">
               <text class="field-label">当前体重（{{ weightUnitLabel }}）</text>
-              <text class="field-link" @tap="goToWeightManagement">健康管理</text>
+              <text class="field-link" @tap="goToHealthProfile">健康管理</text>
             </view>
             <!-- 单位必须显式显示并可切换：内部一律按公斤存，
                  顾客按「斤」填若不换算，热量会翻倍。 -->
@@ -485,106 +485,49 @@
       <view class="section-card">
         <view class="section-card__header">
           <view>
-            <text class="section-card__title">健康记录与饮食提醒</text>
+            <text class="section-card__title">健康档案</text>
             <text class="section-card__desc">{{ healthSummary }}</text>
           </view>
-          <text class="section-link" @tap="toggleSectionEdit('health')">
-            {{ activeEditSection === 'health' ? '取消' : '编辑' }}
-          </text>
         </view>
 
-        <view v-if="activeEditSection === 'health'" class="editor-card editor-card--health">
-          <HealthRecordsSection
-            v-model="form.medicalRecords"
-            :dog-id="dogId"
-            :preferred-expanded-record-identity="healthRecordFocusIdentity.medical"
-            record-type="medical"
-            title="病史记录"
-            description="记录症状、发病日期和诊断结果。"
-            empty-title="还没有病史记录"
-            primary-field-key="chiefComplaint"
-            primary-label="症状或疾病"
-            date-field-key="visitDate"
-            date-label="发病日期"
-            secondary-field-key="diagnosis"
-            secondary-label="诊断结果"
-            notes-label="补充说明"
-            @record-saved="rememberHealthRecordFocus('medical', $event)"
-          />
-
-          <HealthRecordsSection
-            v-model="form.checkupRecords"
-            :dog-id="dogId"
-            :preferred-expanded-record-identity="healthRecordFocusIdentity.checkup"
-            record-type="checkup"
-            title="体检记录"
-            description="更新最近的体检时间和发现。"
-            empty-title="还没有体检记录"
-            primary-field-key="checkupType"
-            primary-label="体检类型"
-            date-field-key="checkupDate"
-            date-label="体检日期"
-            notes-label="体检说明"
-            @record-saved="rememberHealthRecordFocus('checkup', $event)"
-          />
-
-          <HealthRecordsSection
-            v-model="form.allergyRecords"
-            :dog-id="dogId"
-            :preferred-expanded-record-identity="healthRecordFocusIdentity.allergy"
-            record-type="allergy"
-            title="过敏记录"
-            description="记录明确的过敏原和相关备注。"
-            empty-title="还没有过敏记录"
-            primary-field-key="allergen"
-            primary-label="过敏原"
-            notes-label="备注"
-            @record-saved="rememberHealthRecordFocus('allergy', $event)"
-          />
-
-            <view class="section-subcard">
-              <view class="field-group">
-                <text class="field-label">挑食 / 不爱吃的食物</text>
-                <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
-                <textarea
-                  class="field-textarea"
-                  placeholder="记录口味偏好，方便后续推荐"
-                v-model="form.pickyFoods"
-              />
-            </view>
-            <view v-if="isDietReminderDirty" class="editor-actions editor-actions--inline">
-              <button class="action-button action-button--ghost" @tap="resetDietReminderDraft">
-                撤销修改
-              </button>
-              <button
-                class="action-button action-button--primary"
-                :loading="savingSection === 'health'"
-                :disabled="savingSection !== ''"
-                @tap="saveDietReminderSection"
-              >
-                保存挑食提醒
-              </button>
-            </view>
+        <!-- 过敏原明细：只读态必须看得到"对什么过敏"。
+             原先这里只显示"过敏 2 条"这种条数，而唯一能看到明细的编辑态又是坏的
+             （保存不落库），等于顾客根本拿不到这条信息。 -->
+        <view v-if="allergyNames.length > 0" class="allergy-tags">
+          <text class="allergy-tags__label">过敏原</text>
+          <view class="allergy-tags__list">
+            <text
+              v-for="name in allergyNames"
+              :key="name"
+              class="allergy-tags__item"
+            >{{ name }}</text>
           </view>
         </view>
 
-        <view v-else>
-          <view class="fact-list">
-            <view
-              v-for="fact in healthFacts"
-              :key="fact.label"
-              class="fact-list__row"
-            >
-              <text class="fact-list__label">{{ fact.label }}</text>
-              <text class="fact-list__value">{{ fact.value }}</text>
-            </view>
-          </view>
-
-          <view v-if="healthPickyPreview" class="section-subcard health-preview-note">
-            <text class="health-preview-note__label">挑食提醒</text>
-            <text class="health-preview-note__value">{{ healthPickyPreview }}</text>
+        <view class="fact-list">
+          <view
+            v-for="fact in healthFacts"
+            :key="fact.label"
+            class="fact-list__row"
+          >
+            <text class="fact-list__label">{{ fact.label }}</text>
+            <text class="fact-list__value">{{ fact.value }}</text>
           </view>
         </view>
+
+        <view v-if="healthPickyPreview" class="section-subcard health-preview-note">
+          <text class="health-preview-note__label">挑食提醒</text>
+          <text class="health-preview-note__value">{{ healthPickyPreview }}</text>
+        </view>
+
+        <!-- 健康档案的唯一入口。
+             概览页原先内嵌了一个健康记录编辑器，但保存/删除事件从未接线 ——
+             顾客填完点"保存这一条"不入库、不提示、退出即丢（见 2026-09-27 体检报告 H2）。
+             按老板决定移除，统一到真正能保存的「健康管理」页，避免顾客白做工。 -->
+        <button class="health-entry-btn" @tap="goToHealthProfile">
+          管理健康档案
+        </button>
+        <text class="health-entry-hint">过敏、病史、体检、体重都在这里维护</text>
       </view>
     </view>
 
@@ -603,7 +546,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import DogAvatarCropper from '../../components/dog-profile/DogAvatarCropper.vue'
 import { dogApi } from '../../api/dogs'
 import { addDogToCache } from '../../utils/dog-cache'
@@ -618,7 +560,6 @@ import {
   buildDogOverviewEnergySection,
   buildDogOverviewFeedingFacts,
   buildDogOverviewHealthFacts,
-  hasDietReminderChanges,
   getBcsChoiceOptions,
   buildDogOverviewHealthSummary,
   getFeedingImpactExplanation,
@@ -653,7 +594,7 @@ import {
   type WeightUnit,
 } from '../../utils/weight-unit'
 
-type EditableSection = '' | 'basic' | 'feeding' | 'health'
+type EditableSection = '' | 'basic' | 'feeding'
 
 interface DogProfileDetail {
   id: string
@@ -763,11 +704,6 @@ const showSizeOverrideEditor = ref(false)
 const loadedFields = reactive({
   pickyFoods: true,
 })
-const healthRecordFocusIdentity = reactive({
-  medical: '',
-  checkup: '',
-  allergy: '',
-})
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -817,21 +753,18 @@ const feedingFacts = computed(() => buildDogOverviewFeedingFacts(form, calcResul
 const healthFacts = computed(() => buildDogOverviewHealthFacts(form))
 const healthSummary = computed(() => buildDogOverviewHealthSummary(form))
 const healthPickyPreview = computed(() => String(form.pickyFoods || '').trim())
-const isDietReminderDirty = computed(() => hasDietReminderChanges(
-  form.pickyFoods,
-  profile.value?.pickyFoods,
-))
-const dietReminderStatusText = computed(() => {
-  if (isDietReminderDirty.value) {
-    return '已修改，待保存'
-  }
-
-  if (String(profile.value?.pickyFoods || '').trim()) {
-    return '已保存'
-  }
-
-  return ''
-})
+/**
+ * 过敏原明细。
+ *
+ * 只读态过去只显示"过敏 N 条"，顾客看不到到底对什么过敏 ——
+ * 而唯一能看到明细的编辑态保存是坏的（点了不入库），等于这条信息拿不到。
+ * 这里把过敏原名字直接列出来（数据本来就已经在 form 里，不用额外请求）。
+ */
+const allergyNames = computed(() =>
+  (form.allergyRecords || [])
+    .map((record: any) => String(record?.allergen || '').trim())
+    .filter(Boolean),
+)
 const energySection = computed(() => buildDogOverviewEnergySection(form, calcResult.value))
 const isMixedBreed = computed(() => form.breedId === MIXED_BREED_VIRTUAL_ID)
 const parsedCurrentWeightKg = computed(() => {
@@ -1306,14 +1239,6 @@ function cancelSectionEdit() {
   resetFeedingAssistPanels()
 }
 
-function resetDietReminderDraft() {
-  form.pickyFoods = profile.value?.pickyFoods || ''
-}
-
-function rememberHealthRecordFocus(type: 'medical' | 'checkup' | 'allergy', identity: string) {
-  healthRecordFocusIdentity[type] = identity
-}
-
 function selectBreed(breed: DogBreedItem) {
   showManualBreedEntry.value = false
   form.breedId = breed.id
@@ -1610,34 +1535,6 @@ async function saveFeedingSection() {
   await saveSection('feeding')
 }
 
-async function saveDietReminderSection() {
-  if (!dogId.value) {
-    return
-  }
-
-  savingSection.value = 'health'
-
-  try {
-    uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.updateDietReminders(dogId.value, {
-      pickyFoods: form.pickyFoods,
-    })
-
-    if (res.code !== 0 || !res.data?.profile) {
-      throw new Error(res.message || '保存失败')
-    }
-
-    applyServerState(res.data.profile, res.data.calcResult ?? calcResult.value)
-    uni.hideLoading()
-    uni.showToast({ title: '饮食提醒已保存', icon: 'success' })
-  } catch (error: any) {
-    uni.hideLoading()
-    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
-  } finally {
-    savingSection.value = ''
-  }
-}
-
 async function saveSection(section: Exclude<EditableSection, ''>) {
   if (!dogId.value) {
     return
@@ -1658,12 +1555,6 @@ async function saveSection(section: Exclude<EditableSection, ''>) {
       } else {
         payload.sizeClassOverride = hasManualSizeOverride.value ? effectiveSizeClass.value || null : null
         payload.customBreedName = null
-      }
-    }
-
-    if (section === 'health') {
-      if (!loadedFields.pickyFoods && !String(form.pickyFoods || '').trim()) {
-        delete payload.pickyFoods
       }
     }
 
@@ -1706,7 +1597,7 @@ async function saveSection(section: Exclude<EditableSection, ''>) {
   }
 }
 
-function goToWeightManagement() {
+function goToHealthProfile() {
   if (!dogId.value) {
     return
   }
@@ -2529,6 +2420,59 @@ function goToWeightManagement() {
   font-size: 24rpx;
   line-height: 1.7;
   color: #26261f;
+}
+
+/* 过敏原明细：只读态直接列出"对什么过敏"，而不是只给一个条数 */
+.allergy-tags {
+  margin-top: 18rpx;
+}
+
+.allergy-tags__label {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #6b6653;
+}
+
+.allergy-tags__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.allergy-tags__item {
+  padding: 8rpx 20rpx;
+  font-size: 24rpx;
+  color: #8a4b2a;
+  background: #fbeee2;
+  border: 1rpx solid #e8cdb4;
+  border-radius: 999rpx;
+}
+
+/* 健康档案入口：概览页内嵌编辑器已移除，这里是唯一入口，要显眼 */
+.health-entry-btn {
+  margin-top: 24rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #f6efe0;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid #d8bc85;
+  border-radius: 999rpx;
+}
+
+.health-entry-btn::after {
+  border: none;
+}
+
+.health-entry-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #968f6d;
+  text-align: center;
 }
 
 .field-help {

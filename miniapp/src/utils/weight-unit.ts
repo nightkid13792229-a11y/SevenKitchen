@@ -16,8 +16,10 @@ export type WeightUnit = 'KG' | 'JIN'
 /** 1 斤 = 0.5 公斤 */
 export const KG_PER_JIN = 0.5
 
-/** 档案允许的体重上限（公斤），与后端校验保持一致 */
-export const MAX_WEIGHT_KG = 200
+/** 档案允许的体重上限（公斤），与后端 MAX_DOG_WEIGHT_KG 保持一致。
+ *  2026-09-28：从 200 收紧到 130 —— 历史上最重的犬只约 155 kg，
+ *  200 这个上限形同虚设，明显不可能的数值应当直接拦下。 */
+export const MAX_WEIGHT_KG = 130
 
 export function getWeightUnitLabel(unit: WeightUnit): string {
   return unit === 'JIN' ? '斤' : '公斤'
@@ -77,4 +79,33 @@ export function parseWeightInputToKg(
   if (!Number.isFinite(value)) return ''
 
   return trimNumber(unit === 'JIN' ? value * KG_PER_JIN : value)
+}
+
+/**
+ * 双向单位回显：把「内部公斤值」换算成当前**另一个**单位显示出来。
+ *
+ * 例：顾客输入 43、当前单位是公斤 → 显示「= 86 斤」；
+ *     顾客输入 43、当前单位是斤   → 显示「= 21.5 公斤」。
+ *
+ * 这是唯一保留的体重提示（2026-09-28 老板决定）：
+ * **只给客观的单位换算，不做任何「偏大/偏小/是不是填错」的判断**——
+ * 系统无法区分顾客是真的填错了，还是养的就是串串/茶杯犬，
+ * 给出错误提醒比不提醒更伤信任。
+ */
+export function formatWeightEcho(
+  weightKgInput: string | number | null | undefined,
+  currentUnit: WeightUnit,
+): string {
+  const weightKg = Number(weightKgInput)
+  if (!Number.isFinite(weightKg) || weightKg <= 0) {
+    return ''
+  }
+
+  const otherUnit: WeightUnit = currentUnit === 'KG' ? 'JIN' : 'KG'
+  const otherText = formatWeightForInput(weightKg, otherUnit)
+  if (!otherText) {
+    return ''
+  }
+
+  return `= ${otherText} ${otherUnit === 'JIN' ? '斤' : '公斤'}`
 }

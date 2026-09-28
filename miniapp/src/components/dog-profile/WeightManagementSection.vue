@@ -37,6 +37,9 @@
               >{{ option.label }}</text>
             </view>
           </view>
+          <!-- 只显示单位换算回显（= 86 斤）。不做任何合理性判断，
+               避免给出错误提醒（2026-09-28 老板决定）。 -->
+          <text v-if="weightEcho" class="weight-echo">{{ weightEcho }}</text>
         </view>
 
         <view class="input-item">
@@ -128,6 +131,7 @@ import {
   getWeightUnitLabel,
   parseWeightInputToKg,
   type WeightUnit,
+  formatWeightEcho,
 } from '../../utils/weight-unit'
 import {
   formatWeightChangeText,
@@ -194,6 +198,13 @@ const onWeightUnitChange = (unit: WeightUnit) => {
     weightUnit.value,
   )
 }
+
+/** 体重双向单位回显：只做客观换算，不做合理性判断 */
+const weightEcho = computed(() =>
+  formData.value.weightKg
+    ? formatWeightEcho(formData.value.weightKg, weightUnit.value)
+    : '',
+)
 
 const records = ref<WeightRecord[]>([])
 const isSavingRecord = ref(false)
@@ -859,4 +870,12 @@ function drawChart() {
   color: #e74c3c;
   margin-left: auto;
 }
+
+.weight-echo {
+  display: block;
+  margin-top: 8rpx;
+  color: #6b7a70;
+  font-size: 24rpx;
+}
+
 </style>

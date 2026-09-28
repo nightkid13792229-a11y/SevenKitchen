@@ -3,6 +3,7 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { MAX_DOG_WEIGHT_KG } from '../../../domain/dog/constants';
 import {
   IsString,
   IsEnum,
@@ -64,10 +65,15 @@ export class UpdateDogDto {
   @IsBoolean()
   isNeutered?: boolean;
 
-  @ApiPropertyOptional({ description: 'Current weight in kg' })
+  @ApiPropertyOptional({
+    description: 'Current weight in kg',
+    minimum: 0.1,
+    maximum: MAX_DOG_WEIGHT_KG,
+  })
   @IsOptional()
   @IsNumber()
   @Min(0.1)
+  @Max(MAX_DOG_WEIGHT_KG)
   currentWeightKg?: number;
 
   @ApiPropertyOptional({

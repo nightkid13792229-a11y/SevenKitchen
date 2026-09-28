@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
+  MAX_WEIGHT_KG,
+  formatWeightEcho,
   formatWeightForInput,
   getWeightRangeHint,
   getWeightUnitLabel,
@@ -93,9 +95,11 @@ describe('weight unit conversion', () => {
       expect(getWeightUnitLabel('JIN')).toBe('斤')
     })
 
-    it('上限提示按单位换算（200 公斤 = 400 斤）', () => {
-      expect(getWeightRangeHint('KG')).toContain('200')
-      expect(getWeightRangeHint('JIN')).toContain('400')
+    it('上限提示按单位换算（130 公斤 = 260 斤）', () => {
+      // 2026-09-28：上限从 200 收紧到 130（历史上最重的犬只约 155 kg）
+      expect(MAX_WEIGHT_KG).toBe(130)
+      expect(getWeightRangeHint('KG')).toContain('130')
+      expect(getWeightRangeHint('JIN')).toContain('260')
     })
 
   })
@@ -165,5 +169,23 @@ describe('weight unit conversion', () => {
         expect(source).toContain('weightUnitOptions')
       }
     })
+  })
+})
+
+describe('formatWeightEcho（双向单位回显）', () => {
+  // 这是唯一保留的体重提示：只做客观的单位换算，不做任何合理性判断
+  // （2026-09-28 老板决定：不要给错误的提醒）。
+  it('当前显示公斤时回显斤', () => {
+    expect(formatWeightEcho(21.5, 'KG')).toBe('= 43 斤')
+  })
+
+  it('当前显示斤时回显公斤', () => {
+    expect(formatWeightEcho(21.5, 'JIN')).toBe('= 21.5 公斤')
+  })
+
+  it('空值或非法值不显示', () => {
+    expect(formatWeightEcho('', 'KG')).toBe('')
+    expect(formatWeightEcho(null, 'KG')).toBe('')
+    expect(formatWeightEcho(0, 'KG')).toBe('')
   })
 })

@@ -113,6 +113,11 @@
               <text v-if="weightInputText && !hasValidCurrentWeightKg" class="hint hint-warning">
                 {{ weightRangeHint }}
               </text>
+              <!-- 只显示单位换算回显：输入 43 公斤时显示「= 86 斤」，
+                   顾客自己就能发现单位填错。不做任何「偏大/偏小」判断——
+                   系统无法区分填错了还是养的本就是串串/茶杯犬，
+                   错误提醒比不提醒更伤信任（2026-09-28 老板决定）。 -->
+              <text v-else-if="weightEcho" class="hint hint-echo">{{ weightEcho }}</text>
             </view>
           </view>
         </view>
@@ -719,6 +724,7 @@ import {
   DEFAULT_BCS_SCORE,
 } from '../../utils/dog-profile-form'
 import {
+  formatWeightEcho,
   formatWeightForInput,
   getWeightRangeHint,
   parseWeightInputToKg,
@@ -1235,6 +1241,12 @@ const onWeightInput = (event: any) => {
   weightInputText.value = raw
   formData.value.currentWeightKg = parseWeightInputToKg(raw, weightUnit.value)
 }
+
+const weightEcho = computed(() =>
+  hasValidCurrentWeightKg.value
+    ? formatWeightEcho(parsedCurrentWeightKg.value, weightUnit.value)
+    : '',
+)
 
 const onWeightUnitChange = (unit: WeightUnit) => {
   if (unit === weightUnit.value) return
@@ -4097,6 +4109,11 @@ async function submit() {
 .hint-warning {
   color: #b4553f !important;
   font-weight: bold;
+}
+
+/* 体重双向回显（= 86 斤）：弱化显示，只用于让顾客自查单位 */
+.hint-echo {
+  color: #6b7a70 !important;
 }
 
 .btn {

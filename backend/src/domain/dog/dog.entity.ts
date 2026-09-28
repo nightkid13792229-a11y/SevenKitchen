@@ -12,6 +12,7 @@ import {
   TreatLevel,
 } from '../index';
 import { ValidationError } from '../common/errors';
+import { MAX_DOG_WEIGHT_KG } from './constants';
 
 export class Dog {
   constructor(
@@ -82,10 +83,18 @@ export class Dog {
       );
     }
 
-    // Weight must be positive
+    // Weight must be positive and within a biologically possible range.
+    // 只拦生物学上不可能的值（见 constants.ts 的 MAX_DOG_WEIGHT_KG 说明），
+    // **不做「偏大/偏小/是不是填了斤」的判断**——那会给出错误提醒。
     if (this.currentWeightKg <= 0) {
       throw new ValidationError(
         `Weight must be positive, got: ${this.currentWeightKg}`,
+      );
+    }
+
+    if (this.currentWeightKg > MAX_DOG_WEIGHT_KG) {
+      throw new ValidationError(
+        `Weight must not exceed ${MAX_DOG_WEIGHT_KG} kg, got: ${this.currentWeightKg}`,
       );
     }
 

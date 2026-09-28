@@ -113,6 +113,10 @@
             <text v-if="weightInputText && !hasValidCurrentWeightKg" class="field-error">
               {{ weightRangeHint }}
             </text>
+            <!-- 只显示单位换算回显（= 86 斤）。不做任何「偏大/偏小」判断——
+                 系统无法区分填错了还是养的本就是串串/茶杯犬，
+                 错误提醒比不提醒更伤信任（2026-09-28 老板决定）。 -->
+            <text v-else-if="weightEcho" class="weight-echo">{{ weightEcho }}</text>
           </view>
 
           <view class="field-group">
@@ -590,6 +594,7 @@ import {
   getWeightUnitLabel,
   parseWeightInputToKg,
   type WeightUnit,
+  formatWeightEcho,
 } from '../../utils/weight-unit'
 
 type EditableSection = '' | 'basic' | 'feeding'
@@ -832,6 +837,16 @@ const onWeightUnitChange = (unit: WeightUnit) => {
   weightUnit.value = unit
   syncWeightInputFromForm()
 }
+/**
+ * 体重双向单位回显（2026-09-28）：只做客观换算，不做任何合理性判断。
+ * 见 miniapp/src/utils/weight-unit.ts 的 formatWeightEcho 说明。
+ */
+const weightEcho = computed(() =>
+  hasValidCurrentWeightKg.value
+    ? formatWeightEcho(parsedCurrentWeightKg.value, weightUnit.value)
+    : '',
+)
+
 // ========== 体重单位结束 ==========
 const canPreview = computed(() => Boolean(
   form.breedId &&
@@ -1968,6 +1983,11 @@ function goToHealthProfile() {
 }
 
 .field-hint--warning,
+.weight-echo {
+  color: #6b7a70;
+  font-size: 24rpx;
+}
+
 .field-error {
   color: #8a6b33;
 }

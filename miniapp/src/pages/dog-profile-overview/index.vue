@@ -119,6 +119,64 @@
             <text v-else-if="weightEcho" class="weight-echo">{{ weightEcho }}</text>
           </view>
 
+          <!-- 生命阶段（2026-09-29，阶段 A）
+               此前顾客端**只有建档时**能指定生命阶段，编辑页没有入口 ——
+               一只成年犬忽然怀孕，顾客无从切换。这里补上入口与必要的日期字段。 -->
+          <view class="field-group">
+            <text class="field-label">生命阶段</text>
+            <view class="life-stage-grid">
+              <text
+                v-for="option in lifeStageOptions"
+                :key="option.value"
+                class="life-stage-chip"
+                :class="{ active: form.lifeStageOverride === option.value }"
+                @tap="selectLifeStage(option.value)"
+              >{{ option.label }}</text>
+            </view>
+
+            <!-- 妊娠期 -->
+            <template v-if="form.lifeStageOverride === 'PREGNANCY'">
+              <view class="repro-field">
+                <text class="repro-field__label">预产期</text>
+                <picker mode="date" :value="form.expectedDueDate" @change="onExpectedDueDateChange">
+                  <view class="repro-field__value">
+                    {{ form.expectedDueDate || '请选择（兽医告知的更准）' }}
+                  </view>
+                </picker>
+              </view>
+              <view class="repro-field">
+                <text class="repro-field__label">配种日</text>
+                <picker mode="date" :value="form.matingDate" @change="onMatingDateChange">
+                  <view class="repro-field__value">
+                    {{ form.matingDate || '请选择（不知道预产期时填这个）' }}
+                  </view>
+                </picker>
+              </view>
+              <text class="repro-hint">两个填一个就行。犬的孕期约 63 天，系统据此算当前孕周并调整每日能量。</text>
+            </template>
+
+            <!-- 哺乳期 -->
+            <template v-if="form.lifeStageOverride === 'LACTATION'">
+              <view class="repro-field">
+                <text class="repro-field__label">分娩日</text>
+                <picker mode="date" :value="form.deliveryDate" @change="onDeliveryDateChange">
+                  <view class="repro-field__value">{{ form.deliveryDate || '请选择' }}</view>
+                </picker>
+              </view>
+              <view class="repro-field">
+                <text class="repro-field__label">这一窝几只</text>
+                <input
+                  class="repro-field__input"
+                  type="number"
+                  :value="form.litterSize"
+                  placeholder="例如 4"
+                  @input="onLitterSizeInput"
+                />
+              </view>
+              <text class="repro-hint">哺乳期能量随「产后第几周」和「几只小狗」变化很大。</text>
+            </template>
+          </view>
+
           <view class="field-group">
             <text class="field-label">品种</text>
             <view v-if="showBreedSearchInput" class="search-field">
@@ -613,6 +671,10 @@ interface DogProfileDetail {
   bcsScore?: number
   activityLevel?: string
   lifeStageOverride?: string
+  matingDate?: string | null
+  expectedDueDate?: string | null
+  deliveryDate?: string | null
+  litterSize?: number | null
   sizeClassOverride?: string | null
   mealsPerDay?: number
   treatInputMode?: string
@@ -737,6 +799,11 @@ const form = reactive<Record<string, any>>({
   bcsScore: 5,
   activityLevel: 'LOW',
   lifeStageOverride: 'NONE',
+  // 繁殖期信息（2026-09-29，阶段 A）
+  matingDate: '',
+  expectedDueDate: '',
+  deliveryDate: '',
+  litterSize: '',
   sizeClassOverride: null,
   mealsPerDay: '2',
   treatInputMode: 'ESTIMATE_LEVEL',
@@ -848,6 +915,42 @@ const weightEcho = computed(() =>
 )
 
 // ========== 体重单位结束 ==========
+
+// ========== 生命阶段与繁殖期信息（2026-09-29，阶段 A） ==========
+
+const lifeStageOptions = [
+  { value: 'NONE', label: '自动判断' },
+  { value: 'ADULT', label: '成年期' },
+  { value: 'SENIOR', label: '老年期' },
+  { value: 'PREGNANCY', label: '妊娠期' },
+  { value: 'LACTATION', label: '哺乳期' },
+]
+
+function selectLifeStage(stage: string) {
+  form.lifeStageOverride = stage
+}
+
+function toDateInputValue(value?: string | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().split('T')[0]
+}
+
+const onExpectedDueDateChange = (e: any) => {
+  form.expectedDueDate = e.detail.value
+}
+const onMatingDateChange = (e: any) => {
+  form.matingDate = e.detail.value
+}
+const onDeliveryDateChange = (e: any) => {
+  form.deliveryDate = e.detail.value
+}
+const onLitterSizeInput = (e: any) => {
+  form.litterSize = String(e?.detail?.value ?? '')
+}
+
+// ========== 生命阶段与繁殖期信息结束 ==========
 const canPreview = computed(() => Boolean(
   form.breedId &&
   form.birthday &&
@@ -1197,6 +1300,13 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
   form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
+  form.matingDate = toDateInputValue(nextProfile.matingDate)
+  form.expectedDueDate = toDateInputValue(nextProfile.expectedDueDate)
+  form.deliveryDate = toDateInputValue(nextProfile.deliveryDate)
+  form.litterSize =
+    nextProfile.litterSize === null || nextProfile.litterSize === undefined
+      ? ''
+      : String(nextProfile.litterSize)
   form.sizeClassOverride = nextProfile.sizeClassOverride || null
   form.mealsPerDay = (nextProfile.mealsPerDay || 2).toString()
   form.treatInputMode = 'ESTIMATE_LEVEL'
@@ -1232,6 +1342,10 @@ function getRecommendationSnapshot() {
     bcsScore: form.bcsScore,
     activityLevel: form.activityLevel,
     lifeStageOverride: form.lifeStageOverride,
+    matingDate: form.matingDate || null,
+    expectedDueDate: form.expectedDueDate || null,
+    deliveryDate: form.deliveryDate || null,
+    litterSize: form.litterSize ? Number(form.litterSize) : null,
     sizeClassOverride: effectiveSizeClass.value,
     mealsPerDay: form.mealsPerDay,
     treatInputMode: 'ESTIMATE_LEVEL',
@@ -2600,5 +2714,57 @@ function goToHealthProfile() {
 
 .state-card__button::after {
   border: none;
+}
+
+/* ===== 生命阶段与繁殖期信息（2026-09-29，阶段 A） ===== */
+.life-stage-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.life-stage-chip {
+  padding: 12rpx 24rpx;
+  border: 1rpx solid #d8ded2;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #46564d;
+}
+
+.life-stage-chip.active {
+  border-color: #1e3a2f;
+  background-color: #eef4ea;
+  color: #1e3a2f;
+  font-weight: bold;
+}
+
+.repro-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #eef1ea;
+}
+
+.repro-field__label {
+  font-size: 28rpx;
+  color: #33413a;
+}
+
+.repro-field__value,
+.repro-field__input {
+  min-width: 300rpx;
+  text-align: right;
+  font-size: 28rpx;
+  color: #1e3a2f;
+}
+
+.repro-hint {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #6b7a70;
+  line-height: 1.5;
 }
 </style>

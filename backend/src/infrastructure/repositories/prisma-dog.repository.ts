@@ -74,6 +74,11 @@ export class PrismaDogRepository implements DogRepository {
       preferredFoods: dog.preferredFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
+      // 繁殖期信息（2026-09-29，阶段 A）
+      matingDate: dog.matingDate ?? null,
+      expectedDueDate: dog.expectedDueDate ?? null,
+      deliveryDate: dog.deliveryDate ?? null,
+      litterSize: dog.litterSize ?? null,
       ...(weightChanged ? { weightUpdatedAt: new Date() } : {}),
       // 确认状态由领域实体携带：
       // 改档案时会先把已有档案读出来（因此原确认时间会被原样写回），
@@ -131,6 +136,11 @@ export class PrismaDogRepository implements DogRepository {
       record.activityLevelConfirmedAt ?? null,
       record.mealsPerDayConfirmedAt ?? null,
       record.preferredFoods ?? null,
+      // 繁殖期信息（2026-09-29，阶段 A）
+      record.matingDate ?? null,
+      record.expectedDueDate ?? null,
+      record.deliveryDate ?? null,
+      record.litterSize ?? null,
     );
   }
 }

@@ -7,6 +7,10 @@
 import { Dog } from './dog.entity';
 import { DogBreed } from './dog-breed.entity';
 import {
+  calculateDailyEnergyV2ForDog,
+  isEnergyV2Enabled,
+} from './energy-v2';
+import {
   ActivityLevel,
   DogSizeCategory,
   TreatInputMode,
@@ -384,6 +388,67 @@ export function calculateDailyIntakeG(
  * Main calculation function
  * Returns complete DogCalcResult
  */
+/**
+ * v2 算法的兼容适配器（2026-09-28）
+ *
+ * 把 v2 的输出映射回既有的 DogCalcResult 形状，使所有既有调用点无需改动。
+ * 由 calculateDogEnergy 内部按 ENERGY_ALGORITHM 开关调用。
+ *
+ * 口径差异（v2 相对 v1）：
+ *   · rer 按**理想体重**算（v1 按当前体重）
+ *   · der / finalFoodKcal = v2 的每日能量需求
+ *   · bcsMultiplier 恒为 1（v2 不再用体况分打折，改为换算理想体重）
+ */
+export function calculateDogEnergyV2Compat(
+  dog: Dog,
+  recipeEnergyDensityKcalPerKg: number | undefined,
+  breed: DogBreed | null | undefined,
+  includeDetails: boolean,
+): DogCalcResult {
+  const v2 = calculateDailyEnergyV2ForDog(dog, breed ?? null);
+
+  const result: DogCalcResult = {
+    rer: v2.rer,
+    der: v2.dailyEnergyKcal,
+    treatDeduction: v2.treatDeduction,
+    isTreatCapped:
+      v2.treatDeduction >=
+      (v2.dailyEnergyKcal + v2.treatDeduction) * TREAT_LIMITS.CAP_PERCENT - 0.01,
+    finalFoodKcal: v2.dailyEnergyKcal,
+  };
+
+  if (recipeEnergyDensityKcalPerKg !== undefined) {
+    result.dailyIntakeG = calculateDailyIntakeG(
+      v2.dailyEnergyKcal,
+      recipeEnergyDensityKcalPerKg,
+    );
+  }
+
+  if (includeDetails) {
+    result.calcDetails = {
+      weightKg: dog.currentWeightKg,
+      ageMonths: calculateAgeMonths(dog.birthday),
+      sizeClass: determineSizeClass(dog, breed ?? null),
+      lifeStage: v2.stage,
+      stageFactor: v2.stageFactor,
+      bcsMultiplier: 1,
+      isNeutered: dog.isNeutered,
+      activityLevel: dog.activityLevel,
+      energyStage: v2.stage,
+      energyFactorKey: `V2_${v2.baselineKcalPerKg075}`,
+      activityBasis: dog.activityLevel,
+      effectiveLifeStage: v2.stage,
+      isManualLifeStageOverride:
+        dog.lifeStageOverride !== 'NONE' && dog.lifeStageOverride !== undefined,
+      warnings: v2.notes,
+      treatMode: dog.treatInputMode,
+      treatLevel: dog.treatLevel ?? undefined,
+    };
+  }
+
+  return result;
+}
+
 export function calculateDogEnergy(
   dog: Dog,
   recipeEnergyDensityKcalPerKg?: number,
@@ -392,6 +457,17 @@ export function calculateDogEnergy(
 ): DogCalcResult {
   // Validate mixed breed dog has size class override
   validateMixedBreedDog(dog, breed);
+
+  // 算法版本开关（2026-09-28）：默认 v1，线上行为不变。
+  // 只有显式设置 ENERGY_ALGORITHM=v2 才切到按 FEDIAF 2025 重构的新算法。
+  if (isEnergyV2Enabled()) {
+    return calculateDogEnergyV2Compat(
+      dog,
+      recipeEnergyDensityKcalPerKg,
+      breed,
+      includeDetails,
+    );
+  }
 
   const rer = calculateRER(dog.currentWeightKg);
   const needsResult = calculateFreshFoodNeeds(dog, breed);

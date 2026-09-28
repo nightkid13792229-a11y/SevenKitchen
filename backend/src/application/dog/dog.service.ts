@@ -61,6 +61,11 @@ export interface CreateDogProfileDto {
   mealsPerDayConfirmed?: boolean;
   /** 喜欢的食材（决策 7）：顾客端可写，配方设计器与 AI 会读 */
   preferredFoods?: string | null;
+  /** 繁殖期信息（2026-09-29，阶段 A）：切到怀孕/哺乳时填写 */
+  matingDate?: Date | string | null;
+  expectedDueDate?: Date | string | null;
+  deliveryDate?: Date | string | null;
+  litterSize?: number | null;
 }
 
 export interface UpdateDogProfileDto {
@@ -87,6 +92,20 @@ export interface UpdateDogProfileDto {
   activityLevelConfirmed?: boolean;
   mealsPerDayConfirmed?: boolean;
   preferredFoods?: string | null;
+  /** 繁殖期信息（2026-09-29，阶段 A）：切到怀孕/哺乳时填写 */
+  matingDate?: Date | string | null;
+  expectedDueDate?: Date | string | null;
+  deliveryDate?: Date | string | null;
+  litterSize?: number | null;
+}
+
+/** 把 DTO 里的日期字符串转成 Date；空值/非法值一律返回 null */
+function toNullableDate(value: Date | string | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export interface CalcPreviewResult {
@@ -386,6 +405,11 @@ export class DogService {
       dto.activityLevelConfirmed ? new Date() : null,
       dto.mealsPerDayConfirmed ? new Date() : null,
       dto.preferredFoods ?? null,
+      // 繁殖期信息（2026-09-29，阶段 A）
+      toNullableDate(dto.matingDate),
+      toNullableDate(dto.expectedDueDate),
+      toNullableDate(dto.deliveryDate),
+      dto.litterSize ?? null,
     );
 
     // 先把「会抛错的部分」全部做完，最后才落库。
@@ -453,6 +477,22 @@ export class DogService {
 
     // Apply updates
     dog.updateProfile(dto as Partial<Dog>);
+
+    // 繁殖期日期：DTO 传进来是字符串，实体要 Date。
+    // 单独转换而不是依赖 `as Partial<Dog>` —— 那个断言会绕过类型检查，
+    // 字符串直接赋给 Date 字段不会报错，但会在下游悄悄出错。
+    if (dto.matingDate !== undefined) {
+      dog.matingDate = toNullableDate(dto.matingDate);
+    }
+    if (dto.expectedDueDate !== undefined) {
+      dog.expectedDueDate = toNullableDate(dto.expectedDueDate);
+    }
+    if (dto.deliveryDate !== undefined) {
+      dog.deliveryDate = toNullableDate(dto.deliveryDate);
+    }
+    if (dto.litterSize !== undefined) {
+      dog.litterSize = dto.litterSize ?? null;
+    }
 
     // 确认状态：只有顾客这次真的点了那一项，才刷新确认时间。
     // 只认 true —— 不传或传 false 都不清掉已有确认（改个名字不该让确认状态失效）。

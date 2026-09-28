@@ -58,6 +58,32 @@ export class CreateDogDto {
   @IsBoolean()
   isNeutered!: boolean;
 
+  // ===== 繁殖期信息（2026-09-29 新增，阶段 A）=====
+  // 顾客把狗切到「怀孕」或「哺乳」时填写的日期与窝仔数；
+  // 算法据此按 FEDIAF 表 VII-8b 分段计算能量（此前只能给全程定值）。
+
+  @ApiPropertyOptional({ description: '配种日（怀孕期用）' })
+  @IsOptional()
+  @IsDateString()
+  matingDate?: string;
+
+  @ApiPropertyOptional({ description: '预产期（怀孕期用；与配种日同时存在时以本字段为准）' })
+  @IsOptional()
+  @IsDateString()
+  expectedDueDate?: string;
+
+  @ApiPropertyOptional({ description: '分娩日（哺乳期用）' })
+  @IsOptional()
+  @IsDateString()
+  deliveryDate?: string;
+
+  @ApiPropertyOptional({ description: '窝仔数（哺乳期用，1-12）', minimum: 1, maximum: 12 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  litterSize?: number;
+
   @ApiProperty({
     description: 'Current weight in kg',
     example: 10.5,

@@ -665,6 +665,63 @@
       </view>
     </view>
 
+    <!-- 繁殖期信息（2026-09-29，阶段 A）：
+         选了「妊娠期」或「哺乳期」才出现。
+         这两个日期是孕期/哺乳期能量分段的唯一依据 —— 没有它们，
+         系统只能对孕期全程给一个定值（旧算法就是全程 3.0，比 FEDIAF 高约 59%）。 -->
+    <view v-if="needsReproductionInfo" class="profile-card repro-card">
+      <view class="feeding-card__header">
+        <view>
+          <text class="profile-card__section-title">{{ reproductionCardTitle }}</text>
+          <text class="profile-card__section-desc">{{ reproductionCardDesc }}</text>
+        </view>
+      </view>
+
+      <!-- 妊娠期：配种日 / 预产期 -->
+      <template v-if="formData.lifeStageOverride === 'PREGNANCY'">
+        <view class="repro-field">
+          <text class="repro-field__label">预产期</text>
+          <picker mode="date" :value="formData.expectedDueDate" @change="onExpectedDueDateChange">
+            <view class="repro-field__value">
+              {{ formData.expectedDueDate || '请选择（兽医告知的日期更准）' }}
+            </view>
+          </picker>
+        </view>
+        <view class="repro-field">
+          <text class="repro-field__label">配种日</text>
+          <picker mode="date" :value="formData.matingDate" @change="onMatingDateChange">
+            <view class="repro-field__value">
+              {{ formData.matingDate || '请选择（不知道预产期时填这个）' }}
+            </view>
+          </picker>
+        </view>
+        <text class="repro-hint">两个填一个就行。犬的孕期约 63 天，系统会据此算出当前孕周。</text>
+      </template>
+
+      <!-- 哺乳期：分娩日 + 窝仔数 -->
+      <template v-else>
+        <view class="repro-field">
+          <text class="repro-field__label">分娩日</text>
+          <picker mode="date" :value="formData.deliveryDate" @change="onDeliveryDateChange">
+            <view class="repro-field__value">
+              {{ formData.deliveryDate || '请选择' }}
+            </view>
+          </picker>
+        </view>
+        <view class="repro-field">
+          <text class="repro-field__label">这一窝几只</text>
+          <input
+            class="repro-field__input"
+            type="number"
+            :value="formData.litterSize"
+            placeholder="例如 4"
+            @input="onLitterSizeInput"
+          />
+        </view>
+        <text class="repro-hint">哺乳期的能量需求随「产后第几周」和「几只小狗」变化很大，所以要这两个数。</text>
+      </template>
+    </view>
+
   </view>
 </template>
 
@@ -777,6 +834,10 @@ interface FormData {
   /** 活动水平。空字符串 = 顾客还没选过（同上，原先默认 'LOW'） */
   activityLevel: string
   lifeStageOverride: string
+  matingDate: string
+  expectedDueDate: string
+  deliveryDate: string
+  litterSize: string
   sizeClassOverride: string | null
   mealsPerDay: string
   treatInputMode: string
@@ -816,6 +877,11 @@ const formData = ref<FormData>({
   // 但未确认的档案不算满足定制门槛，进定制页时会要求补确认。
   activityLevel: '',
   lifeStageOverride: 'NONE',
+  // 繁殖期信息（2026-09-29，阶段 A）
+  matingDate: '',
+  expectedDueDate: '',
+  deliveryDate: '',
+  litterSize: '',
   sizeClassOverride: null,
   mealsPerDay: '2',
   treatInputMode: 'ESTIMATE_LEVEL',
@@ -2128,6 +2194,42 @@ function closeLifeStageOverride() {
   showLifeStageOverride.value = false
 }
 
+// ========== 繁殖期信息（2026-09-29，阶段 A） ==========
+
+/** 是否需要填写繁殖期信息 */
+const needsReproductionInfo = computed(() =>
+  formData.value.lifeStageOverride === 'PREGNANCY' ||
+  formData.value.lifeStageOverride === 'LACTATION',
+)
+
+const reproductionCardTitle = computed(() =>
+  formData.value.lifeStageOverride === 'PREGNANCY' ? '妊娠期信息' : '哺乳期信息',
+)
+
+const reproductionCardDesc = computed(() =>
+  formData.value.lifeStageOverride === 'PREGNANCY'
+    ? '填了日期，系统才能按孕周调整每日能量。'
+    : '填了分娩日和窝仔数，系统才能按哺乳阶段调整每日能量。',
+)
+
+const onExpectedDueDateChange = (e: any) => {
+  formData.value.expectedDueDate = e.detail.value
+}
+
+const onMatingDateChange = (e: any) => {
+  formData.value.matingDate = e.detail.value
+}
+
+const onDeliveryDateChange = (e: any) => {
+  formData.value.deliveryDate = e.detail.value
+}
+
+const onLitterSizeInput = (e: any) => {
+  formData.value.litterSize = String(e?.detail?.value ?? '')
+}
+
+// ========== 繁殖期信息结束 ==========
+
 /**
  * 选择手动覆盖的生命阶段（选中后自动收起面板）
  */
@@ -2196,6 +2298,21 @@ async function previewCalculation() {
       // 未选时用 false 兜底（后端要求布尔）；第 1 步校验保证提交前一定选过
       isNeutered: formData.value.isNeutered ?? false,
       currentWeightKg: parsedCurrentWeightKg.value,
+      // 繁殖期信息（2026-09-29，阶段 A）：只在妊娠/哺乳时提交
+      ...(formData.value.lifeStageOverride === 'PREGNANCY'
+        ? {
+            expectedDueDate: formData.value.expectedDueDate || null,
+            matingDate: formData.value.matingDate || null,
+          }
+        : {}),
+      ...(formData.value.lifeStageOverride === 'LACTATION'
+        ? {
+            deliveryDate: formData.value.deliveryDate || null,
+            litterSize: formData.value.litterSize
+              ? Number(formData.value.litterSize)
+              : null,
+          }
+        : {}),
       // 顾客还没选时用兜底值算预览（不阻断流程），确认状态另行提交
       bcsScore: formData.value.bcsScore ?? FALLBACK_BCS_SCORE,
       activityLevel: formData.value.activityLevel || FALLBACK_ACTIVITY_LEVEL,
@@ -5338,4 +5455,44 @@ async function submit() {
   color: #6b6653;
 }
 
+
+/* ===== 繁殖期信息卡片（2026-09-29，阶段 A） ===== */
+.repro-card {
+  margin-top: 20rpx;
+}
+
+.repro-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #eef1ea;
+}
+
+.repro-field__label {
+  font-size: 28rpx;
+  color: #33413a;
+}
+
+.repro-field__value {
+  min-width: 300rpx;
+  text-align: right;
+  font-size: 28rpx;
+  color: #1e3a2f;
+}
+
+.repro-field__input {
+  min-width: 300rpx;
+  text-align: right;
+  font-size: 28rpx;
+  color: #1e3a2f;
+}
+
+.repro-hint {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #6b7a70;
+  line-height: 1.5;
+}
 </style>

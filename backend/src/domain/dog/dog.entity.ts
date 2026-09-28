@@ -67,6 +67,22 @@ export class Dog {
      * 追加在参数末尾是为了不打乱已有的位置参数顺序（避免误传）。
      */
     public preferredFoods: string | null = null,
+    /**
+     * ===== 繁殖期信息（2026-09-29 新增，阶段 A）=====
+     *
+     * 原来顾客无法把狗切到怀孕/哺乳，也没有任何日期字段，
+     * 算法只能对孕期给全程平铺的定值（旧值 3.0），而 FEDIAF 表 VII-8b
+     * 是按孕周分段（前 4 周 132、后 5 周 +26×体重）、哺乳按窝仔数与产后周数分段的。
+     *
+     * 同样追加在参数末尾，避免打乱已有的位置参数顺序。
+     */
+    public matingDate: Date | null = null,
+    /** 预产期（兽医 B 超值更准）；与配种日同时存在时以本字段为准 */
+    public expectedDueDate: Date | null = null,
+    /** 分娩日：哺乳期分期的唯一依据 */
+    public deliveryDate: Date | null = null,
+    /** 窝仔数：哺乳期系数随窝仔数变化 */
+    public litterSize: number | null = null,
   ) {
     this.validateInvariants();
   }
@@ -148,6 +164,18 @@ export class Dog {
     }
     if (updates.isNeutered !== undefined) {
       this.isNeutered = updates.isNeutered;
+    }
+    if (updates.matingDate !== undefined) {
+      this.matingDate = updates.matingDate;
+    }
+    if (updates.expectedDueDate !== undefined) {
+      this.expectedDueDate = updates.expectedDueDate;
+    }
+    if (updates.deliveryDate !== undefined) {
+      this.deliveryDate = updates.deliveryDate;
+    }
+    if (updates.litterSize !== undefined) {
+      this.litterSize = updates.litterSize;
     }
     if (updates.currentWeightKg !== undefined) {
       this.currentWeightKg = updates.currentWeightKg;

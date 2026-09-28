@@ -112,6 +112,27 @@ export const LACTATION_LARGE_LITTER_STEP = 12;
 /** 哺乳期周龄系数 L：第 1-4 周 */
 export const LACTATION_WEEK_FACTORS = [0.75, 0.95, 1.1, 1.2];
 
+/**
+ * 哺乳期的有效期（周）。
+ *
+ * 犬通常在 6-8 周断奶，之后就不该再按哺乳期供能了。
+ * **没有这个上限会出严重问题**：算法只认「分娩日 + 窝仔数」，
+ * 顾客如果忘了切回「普通」，一只 10 kg、4 只小狗的母犬在产后第 26 周
+ * 仍会拿到 1967 kcal，而它的成犬档只有 534 kcal —— **3.7 倍**。
+ *
+ * 所以让**算法自带有效期**，而不是依赖定时任务：
+ * 产后超过这个周数 → 自动按成犬档计算，并提示顾客更新档案。
+ */
+export const LACTATION_MAX_WEEKS = 8;
+
+/**
+ * 妊娠期的宽限期（天）。
+ *
+ * 预产期过后这么久仍未改成哺乳期 → 说明顾客没更新档案。
+ * 此时按成犬档计算（宁低勿高）并提示。
+ */
+export const PREGNANCY_OVERDUE_GRACE_DAYS = 14;
+
 /** 零食扣减（不变）：上限 10% */
 export const TREAT_RATIOS = { NONE: 0, LOW: 0.03, MODERATE: 0.06, HIGH: 0.1 } as const;
 export const TREAT_CAP_RATIO = 0.1;
@@ -437,14 +458,55 @@ export function calculateDailyEnergyV2(input: EnergyV2Input): EnergyV2Result {
 
   // ---------- 第 4 步：定生命阶段 ----------
   const override = input.lifeStageOverride ?? LifeStageOverride.NONE;
+  // ---------- 繁殖期有效期：过期的自动失效（见上面两个常量的说明） ----------
+  let pregnancyExpired = false;
+  let lactationExpired = false;
+
+  if (override === LifeStageOverride.PREGNANCY) {
+    const due = input.expectedDueDate;
+    if (due instanceof Date && !Number.isNaN(due.getTime())) {
+      const daysOverdue =
+        (asOf.getTime() - due.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysOverdue > PREGNANCY_OVERDUE_GRACE_DAYS) {
+        pregnancyExpired = true;
+        notes.push(
+          '预产期已过两周以上，妊娠期信息可能已过期，已按成犬计算；' +
+            '如果已经生产，请更新为哺乳期',
+        );
+      }
+    }
+  }
+
+  if (override === LifeStageOverride.LACTATION) {
+    const delivery = input.deliveryDate;
+    if (delivery instanceof Date && !Number.isNaN(delivery.getTime())) {
+      const weeks = weeksBetween(delivery, asOf);
+      if (weeks > LACTATION_MAX_WEEKS) {
+        lactationExpired = true;
+        notes.push(
+          `分娩已超过 ${LACTATION_MAX_WEEKS} 周（通常已断奶），已按成犬计算；` +
+            '请把生命阶段改回「自动判断」或「成年期」',
+        );
+      }
+    } else {
+      // 没填分娩日 → 无法判断是否过期，按成犬保守处理
+      lactationExpired = true;
+      notes.push('缺少分娩日，无法判断哺乳期是否结束，已按成犬保守计算');
+    }
+  }
+
+  // 过期的妊娠/哺乳不再算作「特殊阶段」，让后面的 else 分支按成犬处理
+  const effectiveOverride =
+    pregnancyExpired || lactationExpired ? LifeStageOverride.NONE : override;
+
   const isPuppy =
-    override === LifeStageOverride.PUPPY ||
-    (override !== LifeStageOverride.ADULT &&
-      override !== LifeStageOverride.SENIOR &&
+    effectiveOverride === LifeStageOverride.PUPPY ||
+    (effectiveOverride !== LifeStageOverride.ADULT &&
+      effectiveOverride !== LifeStageOverride.SENIOR &&
       ageMonths < 12);
 
   // 幼犬 / 孕哺用当前体重；成犬用理想体重
-  const rerBasisWeightKg = isPuppy || override === LifeStageOverride.PREGNANCY || override === LifeStageOverride.LACTATION
+  const rerBasisWeightKg = isPuppy || effectiveOverride === LifeStageOverride.PREGNANCY || effectiveOverride === LifeStageOverride.LACTATION
     ? currentWeightKg
     : idealWeightKg;
   const rer = calculateRerV2(rerBasisWeightKg);
@@ -453,7 +515,7 @@ export function calculateDailyEnergyV2(input: EnergyV2Input): EnergyV2Result {
   let stage: EnergyV2Stage;
   let factor: number;
 
-  if (override === LifeStageOverride.PREGNANCY) {
+  if (override === LifeStageOverride.PREGNANCY && !pregnancyExpired) {
     const gestationWeeks = resolveGestationWeeks(input, asOf);
     if (gestationWeeks === null) {
       notes.push('缺少配种日 / 预产期，已按孕早期保守处理');
@@ -464,7 +526,7 @@ export function calculateDailyEnergyV2(input: EnergyV2Input): EnergyV2Result {
     );
     stage = isEarly ? 'PREGNANCY_EARLY' : 'PREGNANCY_LATE';
     factor = totalKcal / rer;
-  } else if (override === LifeStageOverride.LACTATION) {
+  } else if (override === LifeStageOverride.LACTATION && !lactationExpired) {
     const delivery = input.deliveryDate ?? null;
     const postpartumWeeks = delivery ? weeksBetween(delivery, asOf) : null;
     if (input.litterSize === null || input.litterSize === undefined) {

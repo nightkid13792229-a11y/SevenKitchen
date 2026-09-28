@@ -198,9 +198,15 @@ describe('energy-v2：怀孕 / 哺乳（FEDIAF 表 VII-8b）', () => {
   });
 
   it('缺窝仔数时按 2 只保守处理，并给出提示', () => {
+    // 注意：必须给分娩日 —— 没有分娩日会被判定为「无法判断哺乳期是否结束」，
+    // 直接按成犬保守处理（见 energy-v2-reproduction.spec.ts 的过期用例）
     const result = calculateDailyEnergyV2(
-      buildInput({ lifeStageOverride: LifeStageOverride.LACTATION }),
+      buildInput({
+        lifeStageOverride: LifeStageOverride.LACTATION,
+        deliveryDate: new Date(AS_OF.getTime() - 7 * 86400000),
+      }),
     );
+    expect(result.stage).toBe('LACTATION');
     expect(result.notes.join()).toContain('窝仔数');
   });
 });

@@ -110,6 +110,62 @@ describe('繁殖期信息（阶段 A）：对能量的影响', () => {
     expect(large.dailyEnergyKcal).toBeGreaterThan(small.dailyEnergyKcal * 1.5);
   });
 
+  it('哺乳超期（>8 周）自动按成犬档，不再给哺乳期高能量', () => {
+    const nursing = calculateDailyEnergyV2(
+      buildInput({
+        lifeStageOverride: LifeStageOverride.LACTATION,
+        deliveryDate: daysAgo(7 * 4),
+        litterSize: 4,
+      }),
+    );
+    const weaned = calculateDailyEnergyV2(
+      buildInput({
+        lifeStageOverride: LifeStageOverride.LACTATION,
+        deliveryDate: daysAgo(7 * 12),
+        litterSize: 4,
+      }),
+    );
+    const adult = calculateDailyEnergyV2(buildInput());
+
+    // 哺乳第 4 周应明显高于成犬档
+    expect(nursing.dailyEnergyKcal).toBeGreaterThan(adult.dailyEnergyKcal * 2);
+    // 产后 12 周应已回落成成犬档（否则会被长期喂近 4 倍）
+    expect(weaned.dailyEnergyKcal).toBeCloseTo(adult.dailyEnergyKcal, 0);
+    expect(weaned.notes.join()).toContain('断奶');
+  });
+
+  it('哺乳缺分娩日时按成犬保守处理（无法判断是否结束）', () => {
+    const result = calculateDailyEnergyV2(
+      buildInput({
+        lifeStageOverride: LifeStageOverride.LACTATION,
+        litterSize: 4,
+      }),
+    );
+    expect(result.notes.join()).toContain('分娩日');
+  });
+
+  it('预产期过去两周以上仍未更新 → 按成犬计算并提示', () => {
+    const overdue = calculateDailyEnergyV2(
+      buildInput({
+        lifeStageOverride: LifeStageOverride.PREGNANCY,
+        expectedDueDate: daysAgo(30),
+      }),
+    );
+    const adult = calculateDailyEnergyV2(buildInput());
+    expect(overdue.dailyEnergyKcal).toBeCloseTo(adult.dailyEnergyKcal, 0);
+    expect(overdue.notes.join()).toContain('预产期');
+  });
+
+  it('预产期刚过（宽限期内）仍按孕后期计算', () => {
+    const justDue = calculateDailyEnergyV2(
+      buildInput({
+        lifeStageOverride: LifeStageOverride.PREGNANCY,
+        expectedDueDate: daysAgo(3),
+      }),
+    );
+    expect(justDue.stage).toBe('PREGNANCY_LATE');
+  });
+
   it('缺窝仔数时按 2 只保守处理，并给出提示', () => {
     const result = calculateDailyEnergyV2(
       buildInput({

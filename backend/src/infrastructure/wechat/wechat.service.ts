@@ -727,28 +727,78 @@ export class WechatService {
 
     const statusText = statusTextMap[status] || status;
 
-    const data: SubscriptionMessageData = {
-      thing1: { value: orderId.substring(0, 20) }, // 订单号
-      thing2: { value: statusText }, // 订单状态
+    // thing 类型限 20 字以内
+    const note =
+      status === 'DELIVERED' && recipeId
+        ? '定制食谱已制作完成'
+        : '我们会尽快完成';
+
+    const normalizedOrderId = orderId.substring(0, 20);
+
+    /**
+     * 微信按**字段类型**分配 key（事物→thing1，字母数字→character_string1…），
+     * 而模板是从公共模板库选来的，我们无法在代码里预知"订单编号"被归成哪一类。
+     * 所以这里准备好两套候选，先试一套，被微信判为参数不合法时再换另一套。
+     *
+     * 当前模板（「订单完成通知」：订单编号 / 订单状态 / 温馨提示）走的是 A；
+     * B 是兜底，万一以后换成三个"事物"字段的模板也照样能用。
+     */
+    const candidates: Array<Record<string, { value: string }>> = [
+      {
+        character_string1: { value: normalizedOrderId },
+        thing1: { value: statusText },
+        thing2: { value: note },
+      },
+      {
+        thing1: { value: normalizedOrderId },
+        thing2: { value: statusText },
+        thing3: { value: note },
+      },
+    ];
+
+    const page =
+      status === 'DELIVERED' && recipeId
+        ? `pages/recipe-detail/index?id=${recipeId}`
+        : `pages/custom-recipe/orders`;
+
+    let last: { success: boolean; msgid?: string; error?: string } = {
+      success: false,
+      error: 'no candidate payload',
     };
 
-    // 如果是已交付状态，补充交付说明
-    if (status === 'DELIVERED' && recipeId) {
-      // thing 类型限 20 字以内；此前这里写的是 '您的定制食谱已 ready'，
-      // 中英混排对顾客不合适，改成中文。
-      data.thing3 = { value: '定制食谱已制作完成' };
-    } else {
-      data.thing3 = { value: '我们会尽快完成' };
+    for (let i = 0; i < candidates.length; i += 1) {
+      const result = await this.sendSubscriptionMessage({
+        touser: openid,
+        template_id: templateId,
+        page,
+        data: candidates[i] as SubscriptionMessageData,
+      });
+
+      if (result.success) {
+        return result;
+      }
+
+      last = result;
+      const error = String(result.error || '');
+
+      /**
+       * 只有"字段名/参数不合法"才值得换一套再试。
+       * 43101（用户未订阅）之类的错误换 key 也没用，直接返回，避免多余调用。
+       */
+      const looksLikeFieldError =
+        error.includes('47003') ||
+        error.includes('40037') ||
+        error.toLowerCase().includes('data.');
+
+      if (!looksLikeFieldError) {
+        return result;
+      }
+
+      this.logger.warn(
+        `定制订单通知的字段命名不匹配（第 ${i + 1} 套），换下一套重试：${error}`,
+      );
     }
 
-    return this.sendSubscriptionMessage({
-      touser: openid,
-      template_id: templateId,
-      page:
-        status === 'DELIVERED' && recipeId
-          ? `pages/recipe-detail/index?id=${recipeId}`
-          : `pages/custom-recipe/orders`,
-      data,
-    });
+    return last;
   }
 }

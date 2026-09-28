@@ -175,6 +175,13 @@
               </view>
               <text class="repro-hint">哺乳期能量随「产后第几周」和「几只小狗」变化很大。</text>
             </template>
+
+            <!-- 繁殖期信息过期提示（2026-09-29，阶段 A5）
+                 不做微信主动推送（一次授权只能发一条，攒不够），
+                 改为顾客打开档案时就能看到的站内提示。 -->
+            <view v-if="reproductionExpiredHint" class="repro-expired">
+              <text class="repro-expired__text">{{ reproductionExpiredHint }}</text>
+            </view>
           </view>
 
           <view class="field-group">
@@ -936,6 +943,40 @@ function toDateInputValue(value?: string | null): string {
   if (Number.isNaN(d.getTime())) return ''
   return d.toISOString().split('T')[0]
 }
+
+/**
+ * 繁殖期信息过期提示（阶段 A5）
+ *
+ * 与后端 energy-v2 的两个有效期保持一致：
+ *   · 哺乳超过 8 周（犬通常已断奶）→ 后端已自动按成犬计算
+ *   · 预产期过去 14 天以上 → 后端已自动按成犬计算
+ * 这里只负责把事实告诉顾客，推动他更新档案。
+ */
+const reproductionExpiredHint = computed(() => {
+  const today = new Date()
+
+  if (form.lifeStageOverride === 'LACTATION' && form.deliveryDate) {
+    const delivery = new Date(form.deliveryDate)
+    if (!Number.isNaN(delivery.getTime())) {
+      const weeks = (today.getTime() - delivery.getTime()) / (7 * 86400000)
+      if (weeks > 8) {
+        return '分娩已超过 8 周（通常已断奶），系统已改按成犬计算每日能量。建议把生命阶段改回「自动判断」。'
+      }
+    }
+  }
+
+  if (form.lifeStageOverride === 'PREGNANCY' && form.expectedDueDate) {
+    const due = new Date(form.expectedDueDate)
+    if (!Number.isNaN(due.getTime())) {
+      const days = (today.getTime() - due.getTime()) / 86400000
+      if (days > 14) {
+        return '预产期已过两周以上，系统已改按成犬计算每日能量。如果已经生产，请更新为「哺乳期」并填写分娩日与窝仔数。'
+      }
+    }
+  }
+
+  return ''
+})
 
 const onExpectedDueDateChange = (e: any) => {
   form.expectedDueDate = e.detail.value
@@ -2766,5 +2807,18 @@ function goToHealthProfile() {
   font-size: 24rpx;
   color: #6b7a70;
   line-height: 1.5;
+}
+
+.repro-expired {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #fdf3ee;
+}
+
+.repro-expired__text {
+  font-size: 24rpx;
+  color: #b4553f;
+  line-height: 1.6;
 }
 </style>

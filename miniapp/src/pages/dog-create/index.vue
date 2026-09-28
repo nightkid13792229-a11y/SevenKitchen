@@ -720,6 +720,11 @@
         </view>
         <text class="repro-hint">哺乳期的能量需求随「产后第几周」和「几只小狗」变化很大，所以要这两个数。</text>
       </template>
+
+      <!-- 繁殖期信息过期提示（阶段 A5）：与后端有效期一致，站内提示代替微信推送 -->
+      <view v-if="reproductionExpiredHint" class="repro-expired">
+        <text class="repro-expired__text">{{ reproductionExpiredHint }}</text>
+      </view>
     </view>
 
   </view>
@@ -2211,6 +2216,31 @@ const reproductionCardDesc = computed(() =>
     ? '填了日期，系统才能按孕周调整每日能量。'
     : '填了分娩日和窝仔数，系统才能按哺乳阶段调整每日能量。',
 )
+
+/**
+ * 繁殖期信息过期提示（阶段 A5）
+ * 与后端 energy-v2 的两个有效期保持一致：哺乳 >8 周、预产期过 >14 天。
+ */
+const reproductionExpiredHint = computed(() => {
+  const today = new Date()
+  const f = formData.value
+
+  if (f.lifeStageOverride === 'LACTATION' && f.deliveryDate) {
+    const d = new Date(f.deliveryDate)
+    if (!Number.isNaN(d.getTime()) && (today.getTime() - d.getTime()) / (7 * 86400000) > 8) {
+      return '分娩已超过 8 周（通常已断奶），系统会改按成犬计算。建议改回「自动判断」。'
+    }
+  }
+
+  if (f.lifeStageOverride === 'PREGNANCY' && f.expectedDueDate) {
+    const d = new Date(f.expectedDueDate)
+    if (!Number.isNaN(d.getTime()) && (today.getTime() - d.getTime()) / 86400000 > 14) {
+      return '预产期已过两周以上，系统会改按成犬计算。如果已经生产，请改选「哺乳期」。'
+    }
+  }
+
+  return ''
+})
 
 const onExpectedDueDateChange = (e: any) => {
   formData.value.expectedDueDate = e.detail.value
@@ -5494,5 +5524,18 @@ async function submit() {
   font-size: 24rpx;
   color: #6b7a70;
   line-height: 1.5;
+}
+
+.repro-expired {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #fdf3ee;
+}
+
+.repro-expired__text {
+  font-size: 24rpx;
+  color: #b4553f;
+  line-height: 1.6;
 }
 </style>

@@ -356,21 +356,45 @@
             <text class="feeding-unselected-hint__text">还没选择 · 定制食谱需要这一项</text>
           </view>
 
-          <view class="bcs-choice-grid">
-            <view
-              v-for="option in createBcsOptions"
-              :key="option.value"
-              class="bcs-choice-card"
-              :class="[
-                getCreateBcsToneClass(option.value),
-                { 'bcs-choice-card--active': formData.bcsScore === option.value },
-              ]"
-              @tap="selectBcsScore(option.value)"
-            >
-              <text v-if="formData.bcsScore === option.value" class="bcs-choice-card__tick">✓</text>
-              <text class="bcs-choice-card__score">{{ option.label }}</text>
-              <text class="bcs-choice-card__status">{{ option.status }}</text>
+          <!-- 体况引导（2026-09-29，阶段 C）
+               原来给 9 张图让顾客直接选一个分数 —— 顾客看不懂、没有参照，
+               生产库 76.2% 的狗就停在默认的 5 分。
+               改成问 4 个能看懂的动作，系统自己换算成分数。
+               长毛犬（泰迪、比熊、萨摩…）看 不出腰线与腹部，只留「摸」的两题。 -->
+          <view v-if="isLongHaired" class="bcs-longhair-hint">
+            <text class="bcs-longhair-hint__text">长毛狗狗看不出来，所以只问两个「用手摸」的问题。</text>
+          </view>
+
+          <view
+            v-for="question in bcsQuestions"
+            :key="question.key"
+            class="bcs-question"
+          >
+            <text class="bcs-question__title">{{ question.title }}</text>
+            <text class="bcs-question__hint">{{ question.hint }}</text>
+            <view class="bcs-question__options">
+              <view
+                v-for="option in question.options"
+                :key="option.label"
+                class="bcs-question__option"
+                :class="{ active: bcsAnswers[question.key] === option.bcs }"
+                @tap="selectBcsAnswer(question.key, option.bcs)"
+              >{{ option.label }}</view>
             </view>
+          </view>
+
+          <!-- 算出来的结果：给顾客一个明确的反馈 -->
+          <view v-if="bcsResult.bcs !== null" class="bcs-result">
+            <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
+            <text class="bcs-result__note">这是根据你刚才的动作答案算出来的，之后可以随时改。</text>
+          </view>
+          <view v-else-if="bcsResult.missing.length > 0" class="bcs-result bcs-result--pending">
+            <text class="bcs-result__note">还有 {{ bcsResult.missing.length }} 个「用手摸」的问题要答（这两项决定结果，不能跳过）。</text>
+          </view>
+
+          <!-- 演示视频位（阶段 C3）：素材待补，先把位置留出来 -->
+          <view class="bcs-video-slot">
+            <text class="bcs-video-slot__text">不知道怎么摸？看这 20 秒演示 →</text>
           </view>
 
           <view v-if="feedingImpactExpanded.bcs" class="feeding-impact-panel">
@@ -785,6 +809,12 @@ import {
   DEFAULT_ACTIVITY_LEVEL,
   DEFAULT_BCS_SCORE,
 } from '../../utils/dog-profile-form'
+import {
+  getBcsLabel,
+  isLongHairedBreed,
+  resolveBcsFromAnswers,
+  resolveQuestions,
+} from '../../utils/bcs-questionnaire'
 import {
   formatWeightEcho,
   formatWeightForInput,
@@ -1339,6 +1369,49 @@ const onWeightUnitChange = (unit: WeightUnit) => {
 /** 未确认时的兜底值：保持与改造前一致，避免悄悄改变热量口径 */
 const FALLBACK_BCS_SCORE = DEFAULT_BCS_SCORE
 const FALLBACK_ACTIVITY_LEVEL = DEFAULT_ACTIVITY_LEVEL
+
+// ========== 体况引导（2026-09-29，阶段 C） ==========
+const bcsAnswers = ref<Record<string, number>>({})
+
+/** 是否是长毛犬（决定只问题两道「摸」的题） */
+const isLongHaired = computed(() =>
+  isLongHairedBreed(
+    isMixedBreed.value
+      ? formData.value.customBreedName
+      : selectedBreed.value?.name,
+  ),
+)
+
+const bcsQuestions = computed(() =>
+  resolveQuestions({ isLongHaired: isLongHaired.value }),
+)
+
+const bcsResult = computed(() =>
+  resolveBcsFromAnswers({
+    answers: bcsAnswers.value,
+    questions: bcsQuestions.value,
+  }),
+)
+
+const bcsResultLabel = computed(() =>
+  bcsResult.value.bcs === null ? '' : getBcsLabel(bcsResult.value.bcs),
+)
+
+/** 顾客点某一题的某个选项 */
+function selectBcsAnswer(questionKey: string, bcs: number) {
+  bcsAnswers.value = { ...bcsAnswers.value, [questionKey]: bcs }
+  const result = resolveBcsFromAnswers({
+    answers: bcsAnswers.value,
+    questions: bcsQuestions.value,
+  })
+  if (result.bcs !== null) {
+    // 算出来了 → 写进表单并标记「顾客亲自确认过」
+    formData.value.bcsScore = result.bcs
+    formData.value.bcsScoreConfirmed = true
+  }
+}
+
+// ========== 体况引导结束 ==========
 
 /** 体况评分/活动量是否已经由顾客亲自选择 */
 const isFeedingConfirmed = computed(
@@ -5537,5 +5610,100 @@ async function submit() {
   font-size: 24rpx;
   color: #b4553f;
   line-height: 1.6;
+}
+
+/* ===== 体况引导（2026-09-29，阶段 C） ===== */
+.bcs-longhair-hint {
+  margin: 12rpx 0;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background-color: #f3f6f0;
+}
+
+.bcs-longhair-hint__text {
+  font-size: 24rpx;
+  color: #46564d;
+  line-height: 1.5;
+}
+
+.bcs-question {
+  margin-top: 24rpx;
+}
+
+.bcs-question__title {
+  display: block;
+  font-size: 28rpx;
+  color: #1e3a2f;
+  font-weight: bold;
+  line-height: 1.5;
+}
+
+.bcs-question__hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #6b7a70;
+  line-height: 1.5;
+}
+
+.bcs-question__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.bcs-question__option {
+  padding: 14rpx 22rpx;
+  border: 1rpx solid #d8ded2;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #46564d;
+}
+
+.bcs-question__option.active {
+  border-color: #1e3a2f;
+  background-color: #eef4ea;
+  color: #1e3a2f;
+  font-weight: bold;
+}
+
+.bcs-result {
+  margin-top: 24rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #eef4ea;
+}
+
+.bcs-result--pending {
+  background-color: #fdf3ee;
+}
+
+.bcs-result__score {
+  display: block;
+  font-size: 28rpx;
+  color: #1e3a2f;
+  font-weight: bold;
+}
+
+.bcs-result__note {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #6b7a70;
+  line-height: 1.5;
+}
+
+.bcs-video-slot {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border: 1rpx dashed #c9d3c2;
+  border-radius: 12rpx;
+  text-align: center;
+}
+
+.bcs-video-slot__text {
+  font-size: 26rpx;
+  color: #6b7a70;
 }
 </style>

@@ -358,6 +358,7 @@ import { ref, computed } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
+import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 
 // 状态定义
@@ -1064,29 +1065,6 @@ const removeDislikedIngredient = (index: number) => {
   formData.value.dislikedIngredients.splice(index, 1);
 };
 
-/**
- * 申请"定制订单状态通知"的订阅授权。
- *
- * 失败不阻断下单：顾客拒收通知只影响收不收得到提醒，不影响订单本身。
- */
-const requestOrderNotification = async () => {
-  const templateId = String(recipeConfig.value?.orderNotifyTemplateId || '').trim();
-  if (!templateId) return;
-
-  try {
-    await new Promise<void>((resolve) => {
-      uni.requestSubscribeMessage({
-        tmplIds: [templateId],
-        success: () => resolve(),
-        fail: () => resolve(),
-        complete: () => resolve(),
-      });
-    });
-  } catch {
-    // 忽略：拿不到订阅授权不影响下单
-  }
-};
-
 const submitOrder = async () => {
   if (!canSubmit.value) {
     // 提示要说清"还差什么"，不然按钮灰着顾客不知道原因
@@ -1113,11 +1091,11 @@ const submitOrder = async () => {
   /**
    * 申请订阅消息（2026-09-28）。
    *
-   * 微信的一次性订阅消息必须由用户点击触发申请，否则云端发不出去 ——
-   * 所以放在"点提交"这一刻。模板 ID 由后台环境变量配置，
-   * 未配置时（orderNotifyTemplateId 为空）跳过申请，不做无意义的失败调用。
+   * 微信的一次性订阅消息必须由用户点击触发申请，所以放在"点提交"这一刻；
+   * 这次订阅用于「已交付」那条通知（付款那条在点「立即付款」时另申请一次，
+   * 因为订阅一次只能下发一条）。
    */
-  await requestOrderNotification();
+  await requestCustomRecipeOrderSubscription();
 
   submitting.value = true;
 

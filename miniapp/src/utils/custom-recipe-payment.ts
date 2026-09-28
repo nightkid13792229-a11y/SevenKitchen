@@ -51,10 +51,54 @@ export function syncCustomRecipePayment(orderId: string) {
   } as any);
 }
 
+/**
+ * 申请「定制订单状态通知」的订阅授权。
+ *
+ * 为什么要在**两个时刻**各申请一次：
+ * 微信的订阅消息是**订阅一次只能下发一条**。我们会在"顾客付款成功"和
+ * "食谱交付"两个时刻各发一条，所以需要两次订阅 ——
+ *   ① 点「提交订单」时申请 → 用于「已交付」那条
+ *   ② 点「立即付款」时再申请 → 用于「已付款」那条
+ * 只申请一次的话，第二条会被微信以 43101（用户未订阅）拒掉。
+ *
+ * 模板 ID 由后台环境变量配置；未配置时直接跳过，不做无意义的失败调用。
+ * 任何失败都不阻断下单或付款。
+ */
+export async function requestCustomRecipeOrderSubscription(): Promise<void> {
+  try {
+    const res: any = await request({
+      url: '/custom-recipe-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    } as any);
+
+    const templateId = String(
+      res?.data?.orderNotifyTemplateId ?? '',
+    ).trim();
+    if (!templateId) return;
+
+    await new Promise<void>((resolve) => {
+      uni.requestSubscribeMessage({
+        tmplIds: [templateId],
+        success: () => resolve(),
+        fail: () => resolve(),
+        complete: () => resolve(),
+      });
+    });
+  } catch {
+    // 拿不到订阅授权只影响收不收得到提醒，不影响下单/付款本身
+  }
+}
+
 export async function runCustomRecipePayment(
   orderId: string,
 ): Promise<CustomRecipePayOutcome> {
   let payParams: CustomRecipePayParams | null = null;
+
+  // 付款前再申请一次订阅（用于「已付款」那条通知）。
+  // 必须在这个位置：订阅申请要由用户点击触发，而这里正是「立即付款」的点击处理里。
+  await requestCustomRecipeOrderSubscription();
 
   try {
     const payRes = await payCustomRecipeOrder(orderId);

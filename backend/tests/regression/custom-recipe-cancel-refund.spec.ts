@@ -106,11 +106,19 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     // 只有待付款/已付款能取消
     expect(detailPage).toContain("status === 'PENDING_PAYMENT' || status === 'PAID'");
 
-    // 订阅授权（必须由用户点击触发，所以放在提交那一刻）
-    expect(indexPage).toContain('requestOrderNotification');
-    expect(indexPage).toContain('requestSubscribeMessage');
-    expect(indexPage).toContain('orderNotifyTemplateId');
+    /**
+     * 订阅授权要在**两个时刻**各申请一次：
+     * 微信的订阅消息"订阅一次只能下发一条"，而我们会在「已付款」和「已交付」
+     * 两个时刻各发一条。只申请一次的话第二条会被微信以 43101 拒掉。
+     */
+    const paymentUtil = miniapp('src/utils/custom-recipe-payment.ts');
+
+    expect(indexPage).toContain('requestCustomRecipeOrderSubscription');
+    expect(paymentUtil).toContain('export async function requestCustomRecipeOrderSubscription');
+    expect(paymentUtil).toContain('uni.requestSubscribeMessage');
+    // 付款前再申请一次（用户点击「立即付款」的那一刻）
+    expect(paymentUtil).toContain('await requestCustomRecipeOrderSubscription();');
     // 没配模板就不做无意义的失败调用
-    expect(indexPage).toContain('if (!templateId) return;');
+    expect(paymentUtil).toContain('if (!templateId) return;');
   });
 });

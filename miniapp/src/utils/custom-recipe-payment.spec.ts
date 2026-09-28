@@ -5,14 +5,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * 微信与后端都打桩，只验证编排逻辑。
  */
 
+/**
+ * 付款流程会先拉一次公开配置（申请订阅消息授权）。
+ * 为了不让这条请求打乱各用例的响应队列，这里用一个包装器：
+ *   · `/custom-recipe-config` 由包装器直接应答（未配置模板 → 跳过订阅申请）
+ *   · 其它请求转给 innerRequest，测试仍按顺序喂响应
+ */
+const innerRequest = vi.fn()
+
 vi.mock('./api', () => ({
-  request: vi.fn(),
+  request: vi.fn((arg: any) => {
+    if (String(arg?.url ?? '').includes('/custom-recipe-config')) {
+      return Promise.resolve({
+        code: 0,
+        data: { orderNotifyTemplateId: null },
+      })
+    }
+    return innerRequest(arg)
+  }),
 }))
 
 let requestPaymentImpl: (options: any) => void = () => {}
 
 ;(globalThis as any).uni = {
   requestPayment: (options: any) => requestPaymentImpl(options),
+  // 付款前会申请一次订阅授权（订阅一次只能发一条通知，所以付款时补申请）
+  requestSubscribeMessage: (options: any) => options?.complete?.(),
 }
 
 import { request } from './api'
@@ -22,7 +40,11 @@ import {
   syncCustomRecipePayment,
 } from './custom-recipe-payment'
 
-const mockRequest = request as unknown as ReturnType<typeof vi.fn>
+// 断言与喂响应都用 innerRequest：它只收到"支付/同步"这类真正的业务请求
+const mockRequest = innerRequest
+
+// request 本身在这个 spec 里只是被导入以满足模块依赖；断言看 innerRequest
+void request
 
 const payParams = {
   appId: 'wx-appid',

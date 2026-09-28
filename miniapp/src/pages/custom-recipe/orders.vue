@@ -87,6 +87,10 @@
 import { ref } from 'vue';
 import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { request } from '@/utils/api';
+import {
+  getCustomerServiceConfig,
+  openCustomerServiceChat,
+} from '@/utils/customer-service';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 
 interface CustomRecipeOrderItem {
@@ -205,11 +209,18 @@ const viewRecipe = (recipeId: string | null | undefined) => {
   });
 };
 
-const contactService = () => {
-  uni.showModal({
-    title: '联系客服',
-    content: '微信号：SevenKitchen',
-    showCancel: false,
+/**
+ * 联系客服。
+ *
+ * 2026-09-28：小程序已接入**企业微信客服**（后台 corp_id / open_kfid 已配置），
+ * 全站其它入口走的是 wx.openCustomerServiceChat。这里原先弹一个微信号让顾客去加，
+ * 既和别处不一致，也会把"人工收款"这条兜底路径变成手动流程。
+ */
+const contactService = async () => {
+  const config = await getCustomerServiceConfig();
+
+  openCustomerServiceChat(config, {
+    sourceType: 'ORDER',
   });
 };
 

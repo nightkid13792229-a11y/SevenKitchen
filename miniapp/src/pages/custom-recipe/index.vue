@@ -1162,7 +1162,6 @@ const submitOrder = async () => {
       `orderId=${encodeURIComponent(orderId)}`,
       `amount=${encodeURIComponent(String(res.data.amount ?? ''))}`,
       `creditAmount=${encodeURIComponent(String(res.data.creditAmount ?? ''))}`,
-      `wechatId=${encodeURIComponent(String(res.data.wechatId ?? ''))}`,
     ];
     uni.navigateTo({
       url: `/pages/custom-recipe/success?${query.join('&')}`,

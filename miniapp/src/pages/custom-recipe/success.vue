@@ -60,17 +60,23 @@
         </button>
 
         <text class="section-desc">
-          {{ canPayOnline ? '支付遇到问题？也可以加微信客服人工付款' : '请添加微信客服完成付款' }}
+          {{ canPayOnline ? '支付遇到问题？也可以直接找客服人工付款' : '请联系客服完成付款' }}
         </text>
-        <view class="wechat-card">
-          <text class="wechat-label">微信号</text>
-          <text class="wechat-id">{{wechatId}}</text>
-          <view class="copy-btn" @tap="copyWechatId">
-            <text>长按复制微信号</text>
-          </view>
-        </view>
-        <text class="payment-note">付款时请备注订单号：{{orderInfo.orderId || orderId}}</text>
-        <text class="payment-note">付款后请在微信上告知客服，我们会尽快为你排期</text>
+
+        <!-- 2026-09-28：小程序已接入**企业微信客服**（corpId + openKfid 已配置），
+             这里原先却在让顾客"长按复制微信号"去加个人微信 ——
+             既把兜底值 SevenKitchen 当成了真号，也和全站其它入口不一致。
+             改用同一个企微客服通道。 -->
+        <CustomerServiceInlineButton
+          source-type="ORDER"
+          :order-id="orderId"
+          :order-no="orderInfo.orderId || orderId"
+          :title="`定制订单 ${orderInfo.orderId || orderId}`"
+          path="/pages/custom-recipe/index"
+        />
+
+        <text class="payment-note">找客服时请报订单号：{{orderInfo.orderId || orderId}}</text>
+        <text class="payment-note">客服会协助你完成付款，之后我们会尽快排期</text>
       </view>
 
       <view class="button-group">
@@ -86,6 +92,7 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { request } from '@/utils/api';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
+import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 
 interface CustomRecipeOrderDetail {
   orderId?: string;
@@ -102,7 +109,6 @@ interface CustomRecipeOrderDetail {
 }
 
 const orderId = ref('');
-const wechatId = ref('SevenKitchen');
 const loading = ref(true);
 const orderInfo = ref<CustomRecipeOrderDetail>({});
 
@@ -112,7 +118,6 @@ const initialCreditAmount = ref<number | null>(null);
 
 onLoad((options: any) => {
   orderId.value = options.orderId || '';
-  if (options.wechatId) wechatId.value = String(options.wechatId);
   if (options.amount !== undefined && options.amount !== '') {
     const parsed = Number(options.amount);
     if (Number.isFinite(parsed)) initialAmount.value = parsed;
@@ -145,7 +150,6 @@ const loadOrderDetail = async () => {
     });
     if (res.code === 0 && res.data) {
       orderInfo.value = res.data || {};
-      if (res.data.wechatId) wechatId.value = String(res.data.wechatId);
     }
   } catch (error) {
     // 详情失败不影响主流程：订单已提交成功，页面用提交时带回的数据兜底
@@ -201,18 +205,6 @@ const creditAmountText = computed(() => {
   const amount = Number(remaining);
   return amount > 0 ? `¥${formatAmount(amount)}` : '';
 });
-
-const copyWechatId = () => {
-  uni.setClipboardData({
-    data: wechatId.value,
-    success: () => {
-      uni.showToast({
-        title: '已复制',
-        icon: 'success',
-      });
-    },
-  });
-};
 
 // ==================== 支付 ====================
 

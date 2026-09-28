@@ -112,9 +112,15 @@ describe('custom recipe customer flow', () => {
       expect(source).toContain("'MANUAL'")
     }
 
-    // 成功页必须保留客服微信收款卡片
-    expect(success).toContain('微信号')
-    expect(success).toContain('copyWechatId')
+    /**
+     * 2026-09-28：兜底入口从"让顾客加个人微信号"改成**企业微信客服**
+     * （小程序已接入，后台 corp_id / open_kfid 均已配置）。
+     * 降级能力本身必须保留，只是通道换了。
+     */
+    expect(success).toContain('CustomerServiceInlineButton')
+    expect(success).toContain('请联系客服完成付款')
+    // 订单列表页联系客服也走同一条通道
+    expect(orders).toContain('openCustomerServiceChat')
   })
 
   it('treats a closed order as closed instead of pushing manual payment', () => {

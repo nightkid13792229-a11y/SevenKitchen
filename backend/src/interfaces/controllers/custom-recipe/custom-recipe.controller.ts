@@ -67,7 +67,12 @@ export class CustomRecipeController {
       orderId: order.orderId,
       scheduledDate: order.scheduledDate,
       estimatedDeliveryDate: order.estimatedDeliveryDate,
-      wechatId: process.env.WECHAT_CUSTOMER_SERVICE_ID || 'SevenKitchen',
+      /**
+       * 2026-09-28 移除 wechatId：定制链路找客服已改走**企业微信客服**
+       * （wx.openCustomerServiceChat，后台 corp_id / open_kfid 已配置），
+       * 不再需要告诉顾客"加哪个个人微信号"。
+       * 这个字段此前还把环境变量缺失时的兜底值当成真号显示给顾客。
+       */
       amount: Number(order.amount),
       creditAmount: Number(order.creditAmount),
     });

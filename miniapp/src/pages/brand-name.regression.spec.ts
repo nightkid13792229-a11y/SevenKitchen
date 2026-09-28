@@ -35,12 +35,25 @@ describe('brand name unification (赛文的食堂)', () => {
     }
   });
 
-  it('keeps the real WeChat customer-service account id intact', () => {
-    // 微信号 SevenKitchen 是真实客服账号标识，不是品牌名，不能改
+  it('定制链路找客服走企业微信客服，而不是让顾客去加个人微信号', () => {
+    /**
+     * 2026-09-28 变更：此前这两处弹的是一句"微信号：SevenKitchen"，
+     * 让顾客自己去加好友。而小程序**已经接入企业微信客服**
+     * （后台 corp_id / open_kfid 均已配置，全站其它入口都用
+     * wx.openCustomerServiceChat），定制链路却是个例外。
+     * 现在统一走企微客服通道，个人微信号不再需要。
+     */
     expect(read('src/pages/custom-recipe/success.vue')).toContain(
-      "wechatId = ref('SevenKitchen')",
+      'CustomerServiceInlineButton',
     );
     expect(read('src/pages/custom-recipe/orders.vue')).toContain(
+      'openCustomerServiceChat',
+    );
+    // 不应再把个人微信号当作客服入口写死在页面上
+    expect(read('src/pages/custom-recipe/success.vue')).not.toContain(
+      "wechatId = ref('SevenKitchen')",
+    );
+    expect(read('src/pages/custom-recipe/orders.vue')).not.toContain(
       '微信号：SevenKitchen',
     );
   });

@@ -164,6 +164,30 @@ export class WeightGoalPlanService {
     });
   }
 
+  /**
+   * 卡片上「当前体重」该用哪个值。
+   *
+   * 优先取**最近一次称重记录**，而不是档案里的 `currentWeightKg`。
+   *
+   * 原因（2026-09-29 冒烟测出来的真实缺陷）：记体重时「同时更新档案当前体重」
+   * 是个**可选开关**，顾客不同步时档案就还是旧值。于是出现自相矛盾 ——
+   * 计划已经按称重记录转成了维持期，卡片却把旧体重当成当前值，
+   * `goalReached` 也跟着算成 false。
+   *
+   * 状态流转（applyWeighIn）本来就是按称重记录判定的，展示口径必须跟它一致。
+   */
+  private async resolveDisplayWeight(
+    dogId: string,
+    profileWeightKg: number,
+  ): Promise<number> {
+    const latest = await this.prisma.weightRecord.findFirst({
+      where: { dogId },
+      orderBy: { recordDate: 'desc' },
+      select: { weightKg: true },
+    });
+    return latest?.weightKg ?? profileWeightKg;
+  }
+
   // ==================== 系统建议（不落库） ====================
 
   async getSuggestion(
@@ -304,7 +328,7 @@ export class WeightGoalPlanService {
         },
       });
 
-      return this.toView(plan, dog.currentWeightKg, [
+      return this.toView(plan, await this.resolveDisplayWeight(dogId, dog.currentWeightKg), [
         ...suggestion.notes,
         ...manual.notes,
       ]);
@@ -328,7 +352,7 @@ export class WeightGoalPlanService {
     if (!plan) {
       return null;
     }
-    return this.toView(plan, dog.currentWeightKg, []);
+    return this.toView(plan, await this.resolveDisplayWeight(dogId, dog.currentWeightKg), []);
   }
 
   /** 调整历史（供后台与「计划调整记录」展示） */
@@ -410,7 +434,11 @@ export class WeightGoalPlanService {
       });
     });
 
-    return this.toView(updated, dog.currentWeightKg, manual.notes);
+    return this.toView(
+      updated,
+      await this.resolveDisplayWeight(dogId, dog.currentWeightKg),
+      manual.notes,
+    );
   }
 
   // ==================== 改力度（只能更温和） ====================
@@ -456,7 +484,11 @@ export class WeightGoalPlanService {
       });
     });
 
-    return this.toView(updated, dog.currentWeightKg, []);
+    return this.toView(
+      updated,
+      await this.resolveDisplayWeight(dogId, dog.currentWeightKg),
+      [],
+    );
   }
 
   // ==================== 结束 / 取消 / 暂停 / 恢复 ====================
@@ -507,7 +539,7 @@ export class WeightGoalPlanService {
     const plan = await this.requireOpenPlan(dogId);
 
     if (plan.status !== WeightGoalPlanStatus.PAUSED) {
-      return this.toView(plan, dog.currentWeightKg, []);
+      return this.toView(plan, await this.resolveDisplayWeight(dogId, dog.currentWeightKg), []);
     }
 
     const updated = await this.prisma.weightGoalPlan.update({
@@ -523,7 +555,11 @@ export class WeightGoalPlanService {
       },
     });
 
-    return this.toView(updated, dog.currentWeightKg, []);
+    return this.toView(
+      updated,
+      await this.resolveDisplayWeight(dogId, dog.currentWeightKg),
+      [],
+    );
   }
 
   // ==================== 能量接入（B1-4） ====================

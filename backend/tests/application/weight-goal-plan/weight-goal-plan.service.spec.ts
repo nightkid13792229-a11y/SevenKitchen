@@ -543,6 +543,60 @@ describe('WeightGoalPlanService · 称重后自动校正（B1-5）', () => {
   });
 });
 
+describe('WeightGoalPlanService · 展示口径', () => {
+  /**
+   * 真实缺陷（2026-09-29 端到端冒烟测出来的）：
+   *
+   * 记体重时「同时更新档案当前体重」是个**可选开关**，顾客不同步时档案就还是旧值。
+   * 于是出现自相矛盾 —— 计划已经按称重记录转成了维持期，
+   * 卡片上的「当前体重」却还是旧的，`goalReached` 也跟着算成 false。
+   */
+  it('「当前体重」取最近一次称重，而不是档案里的旧值', async () => {
+    const mocks = createMocks();
+    // 档案体重 6.5，但最近一次称重是 5.4
+    mocks.dogRepository.findById.mockResolvedValue(makeDog({ currentWeightKg: 6.5 }));
+    mocks.dogBreedRepository.findById.mockResolvedValue(BREED);
+    mocks.prisma.weightGoalPlan.findFirst.mockResolvedValue({
+      ...basePlan,
+      status: WeightGoalPlanStatus.MAINTENANCE,
+      targetWeightKg: 5.5,
+    });
+    mocks.prisma.weightRecord.findFirst.mockResolvedValue({ weightKg: 5.4 });
+
+    const plan = await build(mocks).getCurrentPlan('customer-1', 'dog-1');
+
+    expect(plan!.currentWeightKg).toBe(5.4);
+    // 状态是维持期，达标判定必须跟着一致
+    expect(plan!.goalReached).toBe(true);
+  });
+
+  it('没有称重记录时退回档案体重', async () => {
+    const mocks = createMocks();
+    mocks.dogRepository.findById.mockResolvedValue(makeDog({ currentWeightKg: 6.5 }));
+    mocks.dogBreedRepository.findById.mockResolvedValue(BREED);
+    mocks.prisma.weightGoalPlan.findFirst.mockResolvedValue(basePlan);
+    mocks.prisma.weightRecord.findFirst.mockResolvedValue(null);
+
+    const plan = await build(mocks).getCurrentPlan('customer-1', 'dog-1');
+
+    expect(plan!.currentWeightKg).toBe(6.5);
+  });
+
+  it('展示用的体重按记录日期倒序取，不按创建时间', async () => {
+    const mocks = createMocks();
+    mocks.dogRepository.findById.mockResolvedValue(makeDog());
+    mocks.dogBreedRepository.findById.mockResolvedValue(BREED);
+    mocks.prisma.weightGoalPlan.findFirst.mockResolvedValue(basePlan);
+    mocks.prisma.weightRecord.findFirst.mockResolvedValue({ weightKg: 19.5 });
+
+    await build(mocks).getCurrentPlan('customer-1', 'dog-1');
+
+    expect(mocks.prisma.weightRecord.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { recordDate: 'desc' } }),
+    );
+  });
+});
+
 describe('WeightGoalPlanService · 孕哺联动（阶段 A）', () => {
   it('计划期间怀孕 → 自动暂停，而不是结束', async () => {
     const mocks = createMocks();

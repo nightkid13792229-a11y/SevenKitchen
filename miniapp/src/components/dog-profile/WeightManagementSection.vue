@@ -76,6 +76,102 @@
       </button>
     </view>
 
+    <!-- ==================== 体重管理计划（阶段 B2-3 / B2-6） ====================
+         老板原话：不只是给用户一个记录体重的工具，而是真真正正能指导用户
+         通过饮食增减重的可执行方案。这张卡片就是那个「方案」的落点。
+
+         没有计划时只给一个入口，不主动推销 —— BCS 4-5 的狗本来就不该建计划。 -->
+    <view v-if="plan" class="section-card plan-card" :class="`plan-card--${plan.status.toLowerCase()}`">
+      <view class="plan-card__head">
+        <text class="section-card__title">
+          {{ plan.direction === 'LOSS' ? '减重计划' : '增重计划' }}
+        </text>
+        <text class="plan-card__badge" :class="`plan-card__badge--${plan.status.toLowerCase()}`">
+          {{ planStatusLabel }}
+        </text>
+      </view>
+
+      <!-- 进度 -->
+      <view class="plan-progress">
+        <view class="plan-progress__numbers">
+          <text class="plan-progress__done">
+            {{ plan.direction === 'LOSS' ? '已减' : '已增' }} {{ Math.abs(plan.changedKg) }} kg
+          </text>
+          <text class="plan-progress__target">目标 {{ plan.targetWeightKg }} kg</text>
+        </view>
+        <view class="plan-progress__bar">
+          <view class="plan-progress__fill" :style="{ width: `${plan.progressPercent}%` }"></view>
+        </view>
+        <text class="plan-progress__hint">
+          当前 {{ plan.currentWeightKg }} kg<template v-if="plan.remainingKg > 0">，还差 {{ plan.remainingKg }} kg</template>
+        </text>
+      </view>
+
+      <view class="plan-facts">
+        <view class="plan-fact">
+          <text class="plan-fact__label">每天能量</text>
+          <text class="plan-fact__value">{{ plan.currentKcal }} kcal</text>
+        </view>
+        <view class="plan-fact">
+          <text class="plan-fact__label">最近速率</text>
+          <text class="plan-fact__value" :class="`plan-fact__value--${rateTone}`">{{ rateText }}</text>
+        </view>
+        <view class="plan-fact">
+          <text class="plan-fact__label">下次称重</text>
+          <text class="plan-fact__value">{{ nextReviewText }}</text>
+        </view>
+      </view>
+
+      <!-- 状态说明：暂停 / 维持期各有各的话要说 -->
+      <view v-if="plan.status === 'PAUSED'" class="plan-note plan-note--paused">
+        <text class="plan-note__text">
+          计划已暂停{{ plan.pausedReason ? `（${plan.pausedReason}）` : '' }}，期间按正常维持量喂。
+          补记一次体重就能恢复。
+        </text>
+      </view>
+
+      <view v-else-if="plan.status === 'MAINTENANCE'" class="plan-note plan-note--maintenance">
+        <text class="plan-note__text">
+          已达标，现在进入维持期 —— **这不是结束**。前 2 周每 2 周复查一次，之后每月一次；
+          维持满 3 个月计划会自动结束。
+        </text>
+      </view>
+
+      <view v-if="plan.notes.length > 0" class="plan-note">
+        <text v-for="(note, i) in plan.notes" :key="i" class="plan-note__text">· {{ note }}</text>
+      </view>
+
+      <view class="plan-actions">
+        <button
+          v-if="plan.status === 'PAUSED'"
+          class="plan-btn plan-btn--primary"
+          @tap="resumePlan"
+        >恢复计划</button>
+        <button
+          v-else
+          class="plan-btn plan-btn--primary"
+          @tap="goToAdjustPlan"
+        >调整计划</button>
+        <button class="plan-btn" @tap="goToAdjustPlan">查看调整记录</button>
+        <button class="plan-btn plan-btn--danger" @tap="confirmEndPlan">结束计划</button>
+      </view>
+    </view>
+
+    <!-- 没有计划时：给入口，但不推销 -->
+    <view v-else-if="canOfferPlan" class="section-card plan-entry-card">
+      <text class="section-card__title">设定体重目标</text>
+      <text class="section-card__desc">
+        根据当前体重和体况，帮你算出每天该喂多少、多久能到位，并按实际减重速度自动调整。
+      </text>
+      <button class="plan-btn plan-btn--primary" @tap="goToCreatePlan">制定计划</button>
+    </view>
+
+    <!-- 缺数据时的引导（B2-7）：没有体重或体况分就算不了，先说清楚缺什么 -->
+    <view v-else-if="planBlockedReason" class="section-card plan-entry-card">
+      <text class="section-card__title">设定体重目标</text>
+      <text class="section-card__desc">{{ planBlockedReason }}</text>
+    </view>
+
     <!-- 体重趋势图 -->
     <view v-if="records.length > 0" class="section-card weight-chart-card">
       <text class="section-card__title">体重趋势（最近10次）</text>
@@ -134,6 +230,14 @@ import {
   formatWeightEcho,
 } from '../../utils/weight-unit'
 import {
+  weightGoalPlanApi,
+  getPlanStatusLabel,
+  formatRate,
+  describeRate,
+  daysUntil,
+  type WeightGoalPlanView,
+} from '../../api/weight-goal-plan'
+import {
   formatWeightChangeText,
   formatWeightRecordDateTick,
   getWeightChartDateTickIndexes,
@@ -160,8 +264,132 @@ const props = defineProps<{
   dogId: string
   dogProfile?: {
     currentWeightKg?: number | null
+    /** 体况分：决定要不要给「制定计划」入口（BCS 4-5 是理想区间，不该建计划） */
+    bcsScore?: number | null
   }
 }>()
+
+// ==================== 体重管理计划（阶段 B2-3 / B2-6 / B2-7） ====================
+
+const plan = ref<WeightGoalPlanView | null>(null)
+const planLoading = ref(false)
+
+const planStatusLabel = computed(() =>
+  plan.value ? getPlanStatusLabel(plan.value.status) : '',
+)
+
+const rateText = computed(() =>
+  plan.value ? formatRate(plan.value.lastRatePercentPerWeek) : '',
+)
+
+const rateTone = computed(() =>
+  plan.value
+    ? describeRate(plan.value.lastRatePercentPerWeek, plan.value.direction).tone
+    : 'unknown',
+)
+
+const nextReviewText = computed(() => {
+  if (!plan.value?.nextReviewDate) return '随时'
+  const days = daysUntil(plan.value.nextReviewDate)
+  if (days === null) return '随时'
+  if (days < 0) return '已到期'
+  if (days === 0) return '今天'
+  return `${days} 天后`
+})
+
+/**
+ * 是否显示「制定计划」入口（B2-7）。
+ *
+ * 三种情况分别处理，而不是一律显示入口再让后端报错：
+ *   · 缺体重或体况分 → 说清楚缺什么，引导去补
+ *   · BCS 4-5（理想区间）→ 不显示入口，本来就不需要计划
+ *   · BCS ≥6 或 ≤3 → 显示入口
+ */
+const planBlockedReason = computed(() => {
+  const weight = props.dogProfile?.currentWeightKg
+  const bcs = props.dogProfile?.bcsScore
+  if (!weight || weight <= 0) {
+    return '档案里还没有当前体重，先补上体重才能算方案。'
+  }
+  if (bcs === null || bcs === undefined || bcs <= 0) {
+    return '还没有确认体况评分，先建档页确认一下，才能判断是偏胖还是偏瘦。'
+  }
+  return ''
+})
+
+const canOfferPlan = computed(() => {
+  const bcs = props.dogProfile?.bcsScore
+  if (planBlockedReason.value) return false
+  // BCS 4-5 是理想区间（FEDIAF：犬应维持 BCS 4-5）——不推销计划
+  return typeof bcs === 'number' && (bcs >= 6 || bcs <= 3)
+})
+
+async function loadPlan() {
+  if (!props.dogId) {
+    plan.value = null
+    return
+  }
+  planLoading.value = true
+  try {
+    const res = await weightGoalPlanApi.current(props.dogId)
+    plan.value = res.code === 0 ? (res.data ?? null) : null
+  } catch {
+    // 计划读不到不该影响体重记录功能本身
+    plan.value = null
+  } finally {
+    planLoading.value = false
+  }
+}
+
+function goToCreatePlan() {
+  uni.navigateTo({
+    url: `/pages/weight-goal-plan/index?dogId=${props.dogId}&mode=create`,
+  })
+}
+
+function goToAdjustPlan() {
+  uni.navigateTo({
+    url: `/pages/weight-goal-plan/index?dogId=${props.dogId}&mode=adjust`,
+  })
+}
+
+function confirmEndPlan() {
+  uni.showModal({
+    title: '结束计划',
+    content: '结束后每日能量会立刻恢复成正常维持量。确定要结束吗？',
+    confirmText: '结束',
+    confirmColor: '#c0392b',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        const result = await weightGoalPlanApi.end(props.dogId)
+        if (result.code === 0) {
+          uni.showToast({ title: '计划已结束', icon: 'none' })
+          await loadPlan()
+        } else {
+          uni.showToast({ title: result.message || '操作失败', icon: 'none' })
+        }
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '操作失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+async function resumePlan() {
+  try {
+    const result = await weightGoalPlanApi.resume(props.dogId)
+    if (result.code === 0) {
+      uni.showToast({ title: '计划已恢复', icon: 'none' })
+      plan.value = result.data ?? null
+    } else {
+      uni.showToast({ title: result.message || '操作失败', icon: 'none' })
+    }
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '操作失败', icon: 'none' })
+  }
+}
+// ==================== 体重管理计划结束 ====================
 
 /**
  * 体重单位（公斤 / 斤）。
@@ -241,6 +469,7 @@ watch(
     if (nextDogId && nextDogId !== prevDogId) {
       resetForDog()
       void loadRecords()
+      void loadPlan()
     }
   },
 )
@@ -248,11 +477,13 @@ watch(
 onMounted(() => {
   if (props.dogId) {
     void loadRecords()
+    void loadPlan()
   }
 })
 
 function resetForDog() {
   records.value = []
+  plan.value = null
   formData.value.weightKg = ''
   weightInputText.value = ''
   formData.value.note = ''
@@ -355,6 +586,9 @@ async function saveRecord() {
       }
 
       await loadRecords()
+      // 阶段 B2-3：记完体重顺带刷新计划卡片 ——
+      // 后端会在这一步按实测速率自动校正力度，卡片上的能量与速率都会变。
+      await loadPlan()
       formData.value.weightKg = ''
       weightInputText.value = ''
       formData.value.note = ''
@@ -876,6 +1110,185 @@ function drawChart() {
   margin-top: 8rpx;
   color: #6b7a70;
   font-size: 24rpx;
+}
+
+/* ==================== 体重管理计划卡片（阶段 B2-3） ==================== */
+
+.plan-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.plan-card__badge {
+  flex: 0 0 auto;
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.plan-card__badge--active {
+  background: #eef4ea;
+  color: #1e3a2f;
+}
+
+.plan-card__badge--maintenance {
+  background: #e8f2ff;
+  color: #1f6feb;
+}
+
+.plan-card__badge--paused {
+  background: #fdf3e3;
+  color: #b8730b;
+}
+
+.plan-progress {
+  margin-top: 20rpx;
+}
+
+.plan-progress__numbers {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.plan-progress__done {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.plan-progress__target {
+  font-size: 24rpx;
+  color: #6b7a70;
+}
+
+.plan-progress__bar {
+  margin-top: 12rpx;
+  height: 14rpx;
+  border-radius: 999rpx;
+  background: #edf0e8;
+  overflow: hidden;
+}
+
+.plan-progress__fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #1e3a2f 0%, #3d7a5f 100%);
+  transition: width 0.3s ease;
+}
+
+.plan-progress__hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  color: #6b7a70;
+}
+
+.plan-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.plan-fact {
+  flex: 1 1 30%;
+  min-width: 180rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f8faf5;
+}
+
+.plan-fact__label {
+  display: block;
+  font-size: 22rpx;
+  color: #8a8375;
+}
+
+.plan-fact__value {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #26261f;
+}
+
+.plan-fact__value--normal {
+  color: #1a7f37;
+}
+
+.plan-fact__value--slow {
+  color: #b8730b;
+}
+
+.plan-fact__value--fast {
+  color: #c05621;
+}
+
+.plan-note {
+  margin-top: 16rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background: #f8faf5;
+}
+
+.plan-note--paused {
+  background: #fdf3e3;
+}
+
+.plan-note--maintenance {
+  background: #e8f2ff;
+}
+
+.plan-note__text {
+  display: block;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #46564d;
+}
+
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 22rpx;
+}
+
+.plan-btn {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0 26rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  background: #f2f5ee;
+  border-radius: 999rpx;
+}
+
+.plan-btn::after {
+  border: none;
+}
+
+.plan-btn--primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+}
+
+.plan-btn--danger {
+  color: #c0392b;
+  background: #fdeceb;
+}
+
+.plan-entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
 </style>

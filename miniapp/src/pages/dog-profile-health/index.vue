@@ -223,6 +223,9 @@ const weightSectionDogProfile = computed(() => ({
   currentWeightKg: form.currentWeightKg
     ? Number(form.currentWeightKg)
     : null,
+  // 阶段 B2-7：体况分决定要不要给「制定计划」入口 ——
+  // BCS 4-5 是理想区间，本来就不需要增减重计划，不该在页面上推销
+  bcsScore: form.bcsScore ? Number(form.bcsScore) : null,
 }))
 const hasUnsavedDietReminder = computed(() => (
   hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods) ||

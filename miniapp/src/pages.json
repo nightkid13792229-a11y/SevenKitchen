@@ -29,6 +29,12 @@
       }
     },
     {
+      "path": "pages/weight-goal-plan/index",
+      "style": {
+        "navigationBarTitleText": "体重管理计划"
+      }
+    },
+    {
       "path": "pages/recipe-detail/index",
       "style": {
         "navigationBarTitleText": "食谱详情"

@@ -835,8 +835,8 @@ const form = reactive<Record<string, any>>({
   checkupRecords: [],
   allergyRecords: [],
   pickyFoods: '',
-  // 顾客是否亲自选过（定制门槛按此判定，不看"有没有值"）
-  bcsScoreConfirmed: false,
+  // 活动量/餐数是否亲自选过（定制门槛按此判定，不看"有没有值"；
+  // 体况的确认状态在上面的「体况确认状态」一组里）
   activityLevelConfirmed: false,
   mealsPerDayConfirmed: false,
 })
@@ -1404,7 +1404,6 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
   form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
-  form.bcsScoreConfirmed = Boolean(nextProfile.bcsScoreConfirmed)
   form.bcsScoreConfirmedAt = nextProfile.bcsScoreConfirmedAt ?? null
   form.bcsConfirmedWeightKg = nextProfile.bcsConfirmedWeightKg ?? null
   form.matingDate = toDateInputValue(nextProfile.matingDate)

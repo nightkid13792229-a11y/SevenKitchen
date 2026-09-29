@@ -26,12 +26,22 @@ export interface BcsQuestion {
   key: string;
   /** 顾客看到的题目 */
   title: string;
-  /** 操作提示（怎么摸、怎么看） */
-  hint: string;
   /** 'touch' = 用手摸（长毛犬也准）；'look' = 用眼看（长毛犬会隐藏） */
   kind: 'touch' | 'look';
   /** 是否必答 */
   required: boolean;
+  /**
+   * 指导图（展示在题目的**上方**）。
+   *
+   * 2026-09-29 加入实拍指导图 —— 文字说明再精简也描述不清"手该放哪"，
+   * 一张图解决。
+   *
+   * 图片放 **CDN** 而不是打进小程序包：主包只有 2MB 额度，
+   * 而包内媒体资源另有 200KB 的额度且已用到 97%，塞不下这两张。
+   * 与「活动量参考图」「BCS 参考图」用同一套做法（`img.sevenkitchen.cloud`）。
+   * 加载失败时该图直接不显示 —— 题目本身是纯文字的，缺图不影响答题。
+   */
+  image?: string;
   options: BcsQuestionOption[];
 }
 
@@ -39,9 +49,9 @@ export const BCS_QUESTIONS: BcsQuestion[] = [
   {
     key: 'ribs',
     title: '用手轻轻按狗狗的胸侧，能摸到肋骨吗？',
-    hint: '站着摸，手指平放在肋骨上轻轻按下去。',
     kind: 'touch',
     required: true,
+    image: 'https://img.sevenkitchen.cloud/bcs-standards/bcs-guide-palpate-ribs.jpg',
     options: [
       { label: '不用按就能摸到', bcs: 1 },
       { label: '轻轻一按就摸到', bcs: 5 },
@@ -52,9 +62,9 @@ export const BCS_QUESTIONS: BcsQuestion[] = [
   {
     key: 'spine',
     title: '摸背上的脊椎和屁股上方那两块骨头',
-    hint: '从脖子往尾巴方向摸，再摸屁股上方凸起的两块骨头。',
     kind: 'touch',
     required: true,
+    image: 'https://img.sevenkitchen.cloud/bcs-standards/bcs-guide-palpate-spine.jpg',
     options: [
       { label: '骨头很明显', bcs: 2 },
       { label: '摸得到，但有一层肉', bcs: 5 },
@@ -65,7 +75,6 @@ export const BCS_QUESTIONS: BcsQuestion[] = [
   {
     key: 'waist',
     title: '从正上方往下看，腰那里有收窄吗？',
-    hint: '让狗狗站直，你站在它正上方往下看。',
     kind: 'look',
     required: false,
     options: [
@@ -78,7 +87,6 @@ export const BCS_QUESTIONS: BcsQuestion[] = [
   {
     key: 'tuck',
     title: '从侧面看，肚子有往上收吗？',
-    hint: '从侧面平视，看肋骨后面到后腿之间那一段。',
     kind: 'look',
     required: false,
     options: [

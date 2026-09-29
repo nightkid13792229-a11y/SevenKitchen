@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { existsSync } from 'node:fs'
 
 describe('dog-create runtime regressions', () => {
   it('keeps a local avatar preview during creation and uploads it after create succeeds', () => {
@@ -96,11 +97,23 @@ describe('dog-create runtime regressions', () => {
       expect(canSubmitSource).not.toContain('formData.value.activityLevel')
     })
 
-    it('未选择时如实说明后果，而不是假装已经选好', () => {
+    it('未选择时不假装已经选好（改成断言机制，不靠页面文案）', () => {
+      // 2026-09-29 调整：老板要求删掉「还没选择 · 定制食谱需要这一项」这类文字提醒
+      // （页面能引导清楚就不需要文字）。
+      // 但**这条测试原本要防的事仍然必须成立** —— 不能默认选中 5 分让顾客
+      // 无意识地跳过。所以改成断言机制，而不是断言那句文案：
       const source = readPage()
 
-      expect(source).toContain('还没选择')
-      expect(source).toContain('不选也能继续建档')
+      // 1) 确认状态默认 false：没选就是没选
+      expect(source).toContain('bcsScoreConfirmed: false')
+      expect(source).toContain('activityLevelConfirmed: false')
+
+      // 2) 提交时如实上报确认状态，不是"有值就算确认"
+      const form = readFileSync(
+        resolve(process.cwd(), 'src/utils/dog-profile-form.ts'),
+        'utf-8',
+      )
+      expect(form).toContain('bcsScoreConfirmed: Boolean(form.bcsScoreConfirmed)')
     })
 
     it('每日餐数按老板定稿文案标注，且不写成"影响价格"', () => {
@@ -473,5 +486,116 @@ describe('dog-create runtime regressions', () => {
       expect(source).not.toContain('commonFoodTags')
       expect(source).not.toContain('toggleFoodTag')
     })
+  })
+})
+
+/**
+ * BCS 体态评分板块的整改（2026-09-29，老板逐条确认的 5 项）
+ *
+ *   1. 挪到「喂食信息」这一步的**最后** —— 它是最重的输入（要摸狗、答四题）
+ *   2. 指导改为两张实拍图，贴在对应问题的**上方**
+ *   3. 之前 AI 生成的指导图（质量太差）不再使用
+ *   4. 删掉「热量影响」入口与面板 —— 太专业
+ *   5. 删掉提醒文案与逐题小字，只留一个轻量 Banner
+ */
+describe('dog-create · BCS 板块整改', () => {
+  const read = () => readFileSync(
+    resolve(process.cwd(), 'src/pages/dog-create/index.vue'),
+    'utf-8',
+  )
+
+  it('两张实拍指导图挂在对应问题上（在题目上方）', () => {
+    const q = readFileSync(
+      resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
+      'utf-8',
+    )
+    // 摸肋骨 / 摸脊椎骨盆，各自贴在自己的问题上
+    expect(q).toContain('bcs-guide-palpate-ribs.jpg')
+    expect(q).toContain('bcs-guide-palpate-spine.jpg')
+
+    // 模板里图片必须在标题**之前**渲染，才是"上方"
+    const page = read()
+    const qBlock = page.match(/v-for="question in bcsQuestions"[\s\S]*?<\/view>\s*<\/view>/)?.[0] || ''
+    expect(qBlock).not.toBe('')
+    expect(qBlock.indexOf('bcs-question__image')).toBeGreaterThan(-1)
+    expect(qBlock.indexOf('bcs-question__image')).toBeLessThan(
+      qBlock.indexOf('bcs-question__title'),
+    )
+  })
+
+  it('两张图走 CDN，不能打进小程序包', () => {
+    const q = readFileSync(
+      resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
+      'utf-8',
+    )
+    // 包内媒体资源只有 200KB 额度、且已用到 97%，塞不下这两张 ——
+    // 必须放 CDN（与「活动量参考图」同一套做法）。
+    const urls = q.match(/image: '([^']+)'/g) || []
+    expect(urls).toHaveLength(2)
+    for (const line of urls) {
+      expect(line).toContain('https://img.sevenkitchen.cloud/')
+      expect(line).not.toContain('/static/')
+    }
+    // 包内不得再留副本（留了就超预算）
+    expect(existsSync(resolve(process.cwd(), 'src/static/bcs-guide'))).toBe(false)
+  })
+
+  it('不再使用之前 AI 生成的指导图', () => {
+    const page = read()
+    expect(page).not.toContain('bcs-how-to-feel.jpg')
+    expect(page).not.toContain('bcs-side-reference.jpg')
+    expect(page).not.toContain('bcs-howto')
+  })
+
+  it('BCS 板块里不再有「热量影响」入口与面板', () => {
+    const page = read()
+    // 活动量与零食的热量影响保留（老板只要求删 BCS 的）
+    expect(page).toContain("toggleFeedingImpact('activity')")
+    expect(page).toContain("toggleFeedingImpact('treat')")
+    expect(page).not.toContain("toggleFeedingImpact('bcs')")
+    expect(page).not.toContain('feedingImpactContent.bcs')
+    expect(page).not.toContain('feedingImpactExpanded.bcs')
+  })
+
+  it('删掉提醒文案与逐题小字，只留一个 Banner', () => {
+    const page = read()
+    expect(page).not.toContain('还没选择 · 定制食谱需要这一项')
+    expect(page).not.toContain('长毛狗狗看不出来')
+    expect(page).not.toContain('bcs-question__hint')
+    expect(page).toContain('回答以下问题，确认狗狗的体态健康！')
+    expect(page).toContain('bcs-banner')
+
+    // 逐题小字连**数据**一并删掉 —— 留着字段迟早又被渲染回界面
+    const q = readFileSync(
+      resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
+      'utf-8',
+    )
+    expect(q).not.toContain('hint')
+  })
+
+  it('BCS 卡片挪到「喂食信息」这一步的最后', () => {
+    const page = read()
+    const feedingStart = page.indexOf('wizard-step--feeding')
+    const recommendStart = page.indexOf('showRecommendationSection')
+    expect(feedingStart).toBeGreaterThan(-1)
+    expect(recommendStart).toBeGreaterThan(feedingStart)
+
+    const feedingBlock = page.slice(feedingStart, recommendStart)
+    const bcsIdx = feedingBlock.indexOf('BCS 体态评分')
+    const activityIdx = feedingBlock.indexOf('活动水平')
+    const treatIdx = feedingBlock.indexOf('零食评估')
+    expect(bcsIdx).toBeGreaterThan(-1)
+    expect(activityIdx).toBeGreaterThan(-1)
+    expect(treatIdx).toBeGreaterThan(-1)
+    // 三张卡片都在，且 BCS 排在最后
+    expect(bcsIdx).toBeGreaterThan(activityIdx)
+    expect(bcsIdx).toBeGreaterThan(treatIdx)
+  })
+
+  it('长毛犬判定逻辑保留（只删提示文案，不删分支）', () => {
+    const page = read()
+    // 长毛犬只问两题 —— 这是算分正确性的一部分，不能跟着提示一起删掉
+    expect(page).toContain('isLongHaired')
+    expect(page).toContain('resolveQuestions({ isLongHaired')
   })
 })

@@ -342,151 +342,6 @@
 
       <!-- 身体状态区 -->
       <view v-if="showFeedingSection" class="wizard-step wizard-step--feeding">
-        <view class="profile-card">
-          <view class="feeding-card__header">
-            <view>
-              <text class="profile-card__section-title">BCS 体态评分</text>
-            </view>
-            <text class="feeding-impact-link" @tap="toggleFeedingImpact('bcs')">热量影响</text>
-          </view>
-
-          <!-- 未选择时如实说明：不阻断流程，但这是定制食谱的必需项。
-               原先这里默认选中 5 分，顾客不选也会被当成"标准体态"存进档案。 -->
-          <view v-if="!formData.bcsScoreConfirmed" class="feeding-unselected-hint">
-            <text class="feeding-unselected-hint__text">还没选择 · 定制食谱需要这一项</text>
-          </view>
-
-          <!-- 体况引导（2026-09-29，阶段 C）
-               原来给 9 张图让顾客直接选一个分数 —— 顾客看不懂、没有参照，
-               生产库 76.2% 的狗就停在默认的 5 分。
-               改成问 4 个能看懂的动作，系统自己换算成分数。
-               长毛犬（泰迪、比熊、萨摩…）看 不出腰线与腹部，只留「摸」的两题。 -->
-          <view v-if="isLongHaired" class="bcs-longhair-hint">
-            <text class="bcs-longhair-hint__text">长毛狗狗看不出来，所以只问两个「用手摸」的问题。</text>
-          </view>
-
-          <!-- 特殊犬种提示（阶段 C9）：不改变算分，只提醒别按常规标准误判 -->
-          <view v-if="specialBreedHint" class="bcs-longhair-hint">
-            <text class="bcs-longhair-hint__text">{{ specialBreedHint }}</text>
-          </view>
-
-          <view
-            v-for="question in bcsQuestions"
-            :key="question.key"
-            class="bcs-question"
-          >
-            <text class="bcs-question__title">{{ question.title }}</text>
-            <text class="bcs-question__hint">{{ question.hint }}</text>
-            <view class="bcs-question__options">
-              <view
-                v-for="option in question.options"
-                :key="option.label"
-                class="bcs-question__option"
-                :class="{ active: bcsAnswers[question.key] === option.bcs }"
-                @tap="selectBcsAnswer(question.key, option.bcs)"
-              >{{ option.label }}</view>
-            </view>
-          </view>
-
-          <!-- 算出来的结果：给顾客一个明确的反馈 -->
-          <view v-if="bcsResult.bcs !== null" class="bcs-result">
-            <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
-            <text class="bcs-result__note">这是根据你刚才的动作答案算出来的，之后可以随时改。</text>
-          </view>
-          <view v-else-if="bcsResult.missing.length > 0" class="bcs-result bcs-result--pending">
-            <text class="bcs-result__note">还有 {{ bcsResult.missing.length }} 个「用手摸」的问题要答（这两项决定结果，不能跳过）。</text>
-          </view>
-
-          <!-- 操作指引图（阶段 C3）：原「演示视频位」改为图文指引。
-               官方教学视频是英文且托管在 YouTube —— 国内打不开、小程序也嵌不了
-               外部视频；AI 生成的「手放在狗身上」手指偏长偏平、手臂与狗背糊在一起，
-               所以改为在狗身上标出「摸哪里」，位置由坐标网格校准，精确且无畸形风险。 -->
-          <view v-if="showBcsHowToImage" class="bcs-howto">
-            <image
-              class="bcs-howto__image"
-              :src="bcsHowToImageUrl"
-              mode="widthFix"
-              @error="onBcsHowToImageError"
-            />
-          </view>
-
-          <view v-if="feedingImpactExpanded.bcs" class="feeding-impact-panel">
-            <text class="feeding-impact-panel__title">{{ feedingImpactContent.bcs.title }}</text>
-            <text class="feeding-impact-panel__summary">{{ feedingImpactContent.bcs.summary }}</text>
-            <view
-              v-for="item in feedingImpactContent.bcs.items"
-              :key="item.label"
-              class="feeding-impact-panel__item"
-            >
-              <text class="feeding-impact-panel__item-label">{{ item.label }}</text>
-              <text class="feeding-impact-panel__item-detail">{{ item.detail }}</text>
-            </view>
-          </view>
-
-          <view class="feeding-guide-card">
-            <view class="feeding-guide-card__header">
-              <text class="feeding-guide-card__title">BCS 评分参考图</text>
-            </view>
-            <image
-              v-if="!showBcsFallback"
-              class="feeding-guide-card__image"
-              :src="bcsGuideImageUrl"
-              mode="widthFix"
-              @load="onBcsImageLoad"
-              @error="onBcsImageError"
-            />
-            <view v-else class="bcs-fallback-content">
-              <view class="bcs-fallback-title">BCS体态评分标准（9分制）</view>
-              <view class="bcs-table">
-                <view class="bcs-row bcs-row-thin">
-                  <view class="bcs-score-group">
-                    <text class="bcs-score">1-3分</text>
-                    <text class="bcs-label">偏瘦</text>
-                  </view>
-                  <view class="bcs-desc">
-                    <text class="bcs-desc-item">• 肋骨：肉眼可见，极易触摸</text>
-                    <text class="bcs-desc-item">• 腰部：明显凹陷</text>
-                    <text class="bcs-desc-item">• 腹部：严重内收</text>
-                  </view>
-                </view>
-                <view class="bcs-row bcs-row-ideal">
-                  <view class="bcs-score-group">
-                    <text class="bcs-score">4-5分</text>
-                    <text class="bcs-label">标准</text>
-                  </view>
-                  <view class="bcs-desc">
-                    <text class="bcs-desc-item">• 肋骨：可触摸但不明显</text>
-                    <text class="bcs-desc-item">• 腰部：从上方可见</text>
-                    <text class="bcs-desc-item">• 腹部：略微抬起</text>
-                  </view>
-                </view>
-                <view class="bcs-row bcs-row-overweight">
-                  <view class="bcs-score-group">
-                    <text class="bcs-score">6-9分</text>
-                    <text class="bcs-label">偏胖/肥胖</text>
-                  </view>
-                  <view class="bcs-desc">
-                    <text class="bcs-desc-item">• 肋骨：难以触摸</text>
-                    <text class="bcs-desc-item">• 腰部：不可见</text>
-                    <text class="bcs-desc-item">• 腹部：明显隆起</text>
-                  </view>
-                </view>
-              </view>
-              <view class="bcs-tip">
-                <text class="bcs-tip-text">建议尽量维持 4-5 分的理想状态，有助于健康和后续喂食稳定。</text>
-              </view>
-            </view>
-            <!-- 侧视四档对照（阶段 C3）：标签直接用问卷第 4 题的选项原文，
-                 与上面的 9 分制总表互补 —— 总表给尺度，这张给「怎么对到自己家狗」。 -->
-            <image
-              v-if="showBcsSideImage"
-              class="feeding-guide-card__image feeding-guide-card__image--sub"
-              :src="bcsSideImageUrl"
-              mode="widthFix"
-              @error="onBcsSideImageError"
-            />
-          </view>
-        </view>
 
         <view class="profile-card">
           <view class="feeding-card__header">
@@ -494,10 +349,6 @@
               <text class="profile-card__section-title">活动水平</text>
             </view>
             <text class="feeding-impact-link" @tap="toggleFeedingImpact('activity')">热量影响</text>
-          </view>
-
-          <view v-if="!formData.activityLevelConfirmed" class="feeding-unselected-hint">
-            <text class="feeding-unselected-hint__text">还没选择 · 定制食谱需要这一项</text>
           </view>
 
           <view class="activity-level-container">
@@ -616,6 +467,51 @@
               <text class="feeding-impact-panel__item-label">{{ item.label }}</text>
               <text class="feeding-impact-panel__item-detail">{{ item.detail }}</text>
             </view>
+          </view>
+        </view>
+        <!-- BCS 体态评分 —— 放在本步（喂食信息）的**最后**。
+             2026-09-29 调整：
+               · 从第 1 张卡片挪到最后。它是本流程里最"重"的输入（要摸狗、答四题），
+                 放最后让顾客先把轻量的信息填完，降低建档的输入成本。
+               · 指导改为两张实拍图（摸肋骨 / 摸脊椎骨盆），贴在对应问题的**上方**。
+                 文字再精简也说不清"手该放哪"，一张图解决。
+               · 删掉「热量影响」入口与逐题小字说明 —— 太专业、字太多。
+               · 全板块只留一个轻量 Banner 说明这一步在做什么。 -->
+        <view class="profile-card">
+          <text class="profile-card__section-title">BCS 体态评分</text>
+          <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
+
+          <!-- 特殊犬种提示（阶段 C9）：不改变算分，只提醒别按常规标准误判 -->
+          <view v-if="specialBreedHint" class="bcs-special-hint">
+            <text class="bcs-special-hint__text">{{ specialBreedHint }}</text>
+          </view>
+
+          <view
+            v-for="question in bcsQuestions"
+            :key="question.key"
+            class="bcs-question"
+          >
+            <image
+              v-if="question.image"
+              class="bcs-question__image"
+              :src="question.image"
+              mode="widthFix"
+            />
+            <text class="bcs-question__title">{{ question.title }}</text>
+            <view class="bcs-question__options">
+              <view
+                v-for="option in question.options"
+                :key="option.label"
+                class="bcs-question__option"
+                :class="{ active: bcsAnswers[question.key] === option.bcs }"
+                @tap="selectBcsAnswer(question.key, option.bcs)"
+              >{{ option.label }}</view>
+            </view>
+          </view>
+
+          <!-- 算出来的结果：给顾客一个明确的反馈 -->
+          <view v-if="bcsResult.bcs !== null" class="bcs-result">
+            <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
           </view>
         </view>
       </view>
@@ -994,7 +890,6 @@ const createMealsIndex = computed(() => {
   return nextIndex >= 0 ? nextIndex : 1
 })
 const feedingImpactContent = {
-  bcs: getCreateFeedingImpact('bcs'),
   activity: getCreateFeedingImpact('activity'),
   treat: getCreateFeedingImpact('treat'),
 }
@@ -1074,36 +969,20 @@ const showCustomBreedInput = ref(false)
 const showBreedSizeOverridePicker = ref(false)
 const customBreedName = ref('')
 const customBreedSizeClass = ref<string | null>(null)
-const feedingImpactExpanded = reactive<Record<'bcs' | 'activity' | 'treat', boolean>>({
-  bcs: false,
+const feedingImpactExpanded = reactive<Record<'activity' | 'treat', boolean>>({
   activity: false,
   treat: false,
 })
 
-// BCS评分图URL - 使用腾讯云COS CDN加速域名
-const bcsGuideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/BCS-chart.jpg')
 /**
  * 活动量参考图（2026-09-27 用 AI 生成后上传 CDN）。
  *
- * 与 BCS 参考图同样放 CDN 而不是打进小程序包 —— 图片有 143KB，
+ * 放 CDN 而不是打进小程序包 —— 图片有 143KB，
  * 放进主包会挤占 2MB 的额度。
  * 加载失败时降级为文字说明（下面各档已有描述与强度条，不会因此看不懂）。
  */
 const activityGuideImageUrl = ref('https://img.sevenkitchen.cloud/dog-profile-charts/activity-levels.jpg')
 const showActivityFallback = ref(false)
-const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
-
-/**
- * 体况引导的两张图（2026-09-29，阶段 C3）。
- *
- * 均放 CDN 而不是打进主包 —— 主包只有 2MB 额度，两张图合计 246KB。
- * 加载失败时直接不显示，不额外加兜底文案：
- * 上方问卷本身是纯文字的，参考图只是辅助，缺了不影响答题。
- */
-const bcsHowToImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/bcs-how-to-feel.jpg')
-const showBcsHowToImage = ref(true)
-const bcsSideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/bcs-side-reference.jpg')
-const showBcsSideImage = ref(true)
 const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开状态
 
 const filteredBreeds = computed(() => {
@@ -2275,7 +2154,7 @@ function isTreatLevelActive(level: string) {
   return level === 'LOW' && formData.value.treatLevel === 'MODERATE'
 }
 
-function toggleFeedingImpact(type: 'bcs' | 'activity' | 'treat') {
+function toggleFeedingImpact(type: 'activity' | 'treat') {
   feedingImpactExpanded[type] = !feedingImpactExpanded[type]
 }
 
@@ -2286,38 +2165,6 @@ function onActivityImageLoad() {
 function onActivityImageError() {
   console.warn('[Activity Guide] 参考图加载失败，降级为文字说明')
   showActivityFallback.value = true
-}
-
-function onBcsImageLoad() {
-  console.log('[BCS Guide] Image loaded successfully')
-  console.log('[BCS Guide] Image URL:', bcsGuideImageUrl.value)
-  showBcsFallback.value = false
-}
-
-function onBcsImageError() {
-  console.error('[BCS Guide] Failed to load BCS guide image')
-  console.error('[BCS Guide] Image URL:', bcsGuideImageUrl.value)
-  console.error('[BCS Guide] Possible causes:')
-  console.error('  1. Domain not in WeChat miniprogram whitelist')
-  console.error('  2. Network connectivity issue')
-  console.error('  3. Image file does not exist or is corrupted')
-  showBcsFallback.value = true // 显示降级内容
-}
-
-/**
- * 体况引导两张辅助图的加载失败处理。
- *
- * 与 BCS-chart 不同：这两张只是辅助，**不做文字兜底**，直接隐藏即可 ——
- * 问卷本身已经是纯文字的，用户不会因为缺图答不了题。
- */
-function onBcsHowToImageError() {
-  console.error('[BCS HowTo] Failed to load:', bcsHowToImageUrl.value)
-  showBcsHowToImage.value = false
-}
-
-function onBcsSideImageError() {
-  console.error('[BCS SideRef] Failed to load:', bcsSideImageUrl.value)
-  showBcsSideImage.value = false
 }
 
 // ========== 生命阶段选择函数 ==========
@@ -4325,21 +4172,6 @@ async function submit() {
 }
 
 
-/* 「还没选择」的如实说明：不阻断流程，只讲清后果 */
-.feeding-unselected-hint {
-  margin-top: 16rpx;
-  padding: 14rpx 20rpx;
-  background: #f6efe0;
-  border: 1rpx solid #e6d7b8;
-  border-radius: 12rpx;
-}
-
-.feeding-unselected-hint__text {
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #8a6f3d;
-}
-
 /* 「恢复自动匹配」：做成与旁边「手动选择」同级的 chip，并显示将恢复到的体型 */
 .restore-auto-btn {
   display: inline-flex;
@@ -5028,21 +4860,6 @@ async function submit() {
   border-left: 6rpx solid #e5e8d4;
 }
 
-.bcs-row-thin {
-  border-left-color: #dde3cd;
-  background-color: #f8e8e2;
-}
-
-.bcs-row-ideal {
-  border-left-color: #1e3a2f;
-  background-color: #eef2e4;
-}
-
-.bcs-row-overweight {
-  border-left-color: #b08d4f;
-  background-color: #f6efe0;
-}
-
 .bcs-score-group {
   display: flex;
   flex-direction: column;
@@ -5071,20 +4888,6 @@ async function submit() {
 .bcs-desc-item {
   font-size: 24rpx;
   color: #26261f;
-  line-height: 1.6;
-}
-
-.bcs-tip {
-  margin-top: 30rpx;
-  padding: 20rpx;
-  background-color: #eef2e4;
-  border-radius: 8rpx;
-  border-left: 4rpx solid #1e3a2f;
-}
-
-.bcs-tip-text {
-  font-size: 24rpx;
-  color: #b08d4f;
   line-height: 1.6;
 }
 
@@ -5681,14 +5484,31 @@ async function submit() {
 }
 
 /* ===== 体况引导（2026-09-29，阶段 C） ===== */
-.bcs-longhair-hint {
-  margin: 12rpx 0;
+/* BCS 板块的轻量 Banner（2026-09-29）：全板块只留这一句说明 */
+.bcs-banner {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #46564d;
+  line-height: 1.6;
+}
+
+/* 题目上方的实拍指导图 —— 文字说不清"手该放哪"，一张图解决 */
+.bcs-question__image {
+  display: block;
+  width: 100%;
+  margin-bottom: 16rpx;
+  border-radius: 16rpx;
+}
+
+/* 特殊犬种提示（深胸细腰型 / 短鼻桶胸型）—— 不改变算分，只防误判 */
+.bcs-special-hint {
+  margin: 16rpx 0 0;
   padding: 16rpx 20rpx;
   border-radius: 12rpx;
   background-color: #f3f6f0;
 }
-
-.bcs-longhair-hint__text {
+.bcs-special-hint__text {
   font-size: 24rpx;
   color: #46564d;
   line-height: 1.5;
@@ -5706,13 +5526,6 @@ async function submit() {
   line-height: 1.5;
 }
 
-.bcs-question__hint {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 24rpx;
-  color: #6b7a70;
-  line-height: 1.5;
-}
 
 .bcs-question__options {
   display: flex;
@@ -5743,9 +5556,6 @@ async function submit() {
   background-color: #eef4ea;
 }
 
-.bcs-result--pending {
-  background-color: #fdf3ee;
-}
 
 .bcs-result__score {
   display: block;
@@ -5754,21 +5564,6 @@ async function submit() {
   font-weight: bold;
 }
 
-.bcs-result__note {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #6b7a70;
-  line-height: 1.5;
-}
 
 /* 操作指引图（阶段 C3）：取代原来的「演示视频位」虚线占位框 */
-.bcs-howto {
-  margin-top: 20rpx;
-}
-
-.bcs-howto__image {
-  width: 100%;
-  border-radius: 12rpx;
-}
 </style>

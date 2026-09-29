@@ -368,11 +368,16 @@ model DogBreed {
   seniorAgeYears       Int             @map("senior_age_years")
   averageAdultWeightKg Float?          @map("average_adult_weight_kg")
   isCommon             Boolean         @default(false) @map("is_common")
-  /// 体况分下限（深胸细腰型犬专用，如灵缇 = 4）。
-  /// 这类犬在理想体态下就能摸到肋骨且几乎没肉，会被体况问卷算成 2-3 分，
-  /// 进而把目标体重定高 33-54%、逼一只正常狗增重。留下限即修正这一点。
-  /// 留空 = 不做任何修正。名单与数值都在这里（数据库），改完即生效，不用发版。
-  bcsScoreFloor        Int?            @map("bcs_score_floor")
+  /// 体况问卷的选项换算表（按选项顺序 5 个分数）；**空数组 = 用标准分 2/3/5/7/9**。
+  /// 用空数组而不是 null：Prisma 的标量列表在客户端类型上不可空。
+  ///
+  /// 深胸细腰型犬（灵缇、惠比特等）用 {4,5,6,7,9}：它们在理想体态下就能摸到
+  /// 肋骨且几乎没肉，按标准分会被算成 2-3 分，进而把目标体重定高 33-54%。
+  /// 名单与换算表都在这里（数据库），改完即生效，不用发版、不用走微信审核。
+  ///
+  /// 注意：这只影响「选项换算成几分」；狗身上存的体况分仍然是 dog.bcs_score
+  /// 同一个字段，所有犬种共用，能量计算不存在"特殊犬种单独取一份"的情况。
+  bcsScoreMap          Int[]           @default([]) @map("bcs_score_map")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 

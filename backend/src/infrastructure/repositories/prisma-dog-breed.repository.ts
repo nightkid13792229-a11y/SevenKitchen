@@ -95,7 +95,7 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
         adultAgeMonths: breed.adultAgeMonths,
         seniorAgeYears: breed.seniorAgeYears,
         averageAdultWeightKg: breed.averageAdultWeightKg,
-        bcsScoreFloor: breed.bcsScoreFloor,
+        bcsScoreMap: breed.bcsScoreMap,
       },
     });
 
@@ -115,7 +115,7 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
           adultAgeMonths: breed.adultAgeMonths,
           seniorAgeYears: breed.seniorAgeYears,
           averageAdultWeightKg: breed.averageAdultWeightKg,
-          bcsScoreFloor: breed.bcsScoreFloor,
+          bcsScoreMap: breed.bcsScoreMap,
         },
       });
 
@@ -177,7 +177,7 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
       record.seniorAgeYears,
       record.averageAdultWeightKg,
       record.isCommon || false,
-      record.bcsScoreFloor ?? null,
+      record.bcsScoreMap ?? [],
     );
   }
 }

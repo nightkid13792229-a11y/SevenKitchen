@@ -54,20 +54,20 @@ export class DogProfileDto {
   customBreedName?: string | null;
 
   /**
-   * 体况分下限（深胸细腰型犬专用，如灵缇 = 4），来自犬种表。
+   * 体况问卷的选项换算表（按选项顺序，如灵缇 = [4,5,6,7,9]），来自犬种表。
    *
-   * 这类犬在理想体态下就能摸到肋骨且几乎没肉，会被体况问卷如实答成 2-3 分，
+   * 深胸细腰型犬在理想体态下就能摸到肋骨且几乎没肉，按标准分会被算成 2-3 分，
    * 进而把目标体重定高 33-54%、逼一只正常狗增重。
-   * 小程序算完体况分后取 `max(分数, 本值)`；留空表示不做修正。
+   * 小程序拿它把顾客选的选项换算成体况分；**空数组表示用标准分** [2,3,5,7,9]。
    *
-   * 名单与数值都放在数据库里，增删犬种或调整下限不用发小程序版本。
+   * 换算表放在数据库里，增删犬种或调整分数不用发小程序版本。
    */
   @ApiPropertyOptional({
-    description: 'Body condition score floor from the breed record',
-    example: 4,
-    nullable: true,
+    description: 'Body condition score map by questionnaire option',
+    example: [4, 5, 6, 7, 9],
+    type: [Number],
   })
-  bcsScoreFloor?: number | null;
+  bcsScoreMap?: number[];
 
   @ApiPropertyOptional({
     description: 'Dog avatar URL',

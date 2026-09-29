@@ -194,17 +194,17 @@ describe('DogsController breedName consistency', () => {
 });
 
 /**
- * 体况分下限（深胸细腰型犬）必须和品种名一样，四个接口给出同一份。
+ * 体况问卷的选项换算表（深胸细腰型犬）必须和品种名一样，四个接口给出同一份。
  *
  * 背景：灵缇、惠比特这类犬在理想体态下就能摸到肋骨且几乎没肉，
- * 体况问卷会如实算出 2-3 分，算法据此把目标体重定高 33-54%、
- * 逼一只正常狗增重。下限设在犬种表里（bcs_score_floor），
- * 由这里随档案下发，小程序做 max(算出的分, 下限)。
+ * 按标准分 2/3/5/7/9 会被算成 2-3 分，算法据此把目标体重定高 33-54%、
+ * 逼一只正常狗增重。换算表设在犬种表里（bcs_score_map），由这里随档案下发，
+ * 小程序拿它把选项换算成体况分。
  *
  * 它和 breedName 走的是同一条链路（breedMap），所以同样有
- * "四个接口必须一致"的要求 —— 否则顾客在某一屏看到 2 分、另一屏看到 4 分。
+ * "四个接口必须一致"的要求 —— 否则顾客在某一屏看到 2 分、另一屏看到 5 分。
  */
-describe('DogsController bcsScoreFloor consistency', () => {
+describe('DogsController bcsScoreMap consistency', () => {
   const OWNER_USER = {
     userId: 'owner-1',
     customerId: 'owner-1',
@@ -278,10 +278,10 @@ describe('DogsController bcsScoreFloor consistency', () => {
   const GREYHOUND = {
     id: 'breed-greyhound',
     name: '灵缇',
-    bcsScoreFloor: 4,
+    bcsScoreMap: [4, 5, 6, 7, 9],
   };
 
-  it('灵缇：四个接口都下发下限 4', async () => {
+  it('灵缇：四个接口都下发换算表 [4,5,6,7,9]', async () => {
     const controller = controllerWith(
       createDogFor('breed-greyhound'),
       GREYHOUND,
@@ -300,14 +300,19 @@ describe('DogsController bcsScoreFloor consistency', () => {
     );
 
     expect([
-      list.data[0].bcsScoreFloor,
-      detail.data.profile.bcsScoreFloor,
-      created.data.profile.bcsScoreFloor,
-      updated.data.profile.bcsScoreFloor,
-    ]).toEqual([4, 4, 4, 4]);
+      list.data[0].bcsScoreMap,
+      detail.data.profile.bcsScoreMap,
+      created.data.profile.bcsScoreMap,
+      updated.data.profile.bcsScoreMap,
+    ]).toEqual([
+      [4, 5, 6, 7, 9],
+      [4, 5, 6, 7, 9],
+      [4, 5, 6, 7, 9],
+      [4, 5, 6, 7, 9],
+    ]);
   })
 
-  it('普通犬种没有下限 → null（不做任何修正）', async () => {
+  it('普通犬种没有换算表 → 空数组（用标准分）', async () => {
     const controller = controllerWith(createDogFor('breed-corgi'), {
       id: 'breed-corgi',
       name: '柯基',
@@ -315,10 +320,10 @@ describe('DogsController bcsScoreFloor consistency', () => {
 
     const detail: any = await (controller as any).getDog('dog-1', OWNER_USER);
 
-    expect(detail.data.profile.bcsScoreFloor).toBeNull();
+    expect(detail.data.profile.bcsScoreMap).toEqual([]);
   })
 
-  it('混血犬（虚拟犬种 ID）没有下限 —— 不能拿自定义名字去猜犬种', async () => {
+  it('混血犬（虚拟犬种 ID）没有换算表 —— 不能拿自定义名字去猜犬种', async () => {
     const controller = controllerWith(
       createDogFor(MIXED_BREED_VIRTUAL_ID, '灵缇串串'),
       GREYHOUND,
@@ -326,12 +331,12 @@ describe('DogsController bcsScoreFloor consistency', () => {
 
     const detail: any = await (controller as any).getDog('dog-1', OWNER_USER);
 
-    // 名字看着像灵缇也不给下限：只认标准犬种记录
+    // 名字看着像灵缇也不给换算表：只认标准犬种记录
     expect(detail.data.profile.breedName).toBe('灵缇串串');
-    expect(detail.data.profile.bcsScoreFloor).toBeNull();
+    expect(detail.data.profile.bcsScoreMap).toEqual([]);
   })
 
-  it('犬种接口（小程序建档页用）也返回下限', async () => {
+  it('犬种接口（小程序建档页用）也返回换算表', async () => {
     const controller = controllerWith(
       createDogFor('breed-greyhound'),
       GREYHOUND,
@@ -340,7 +345,7 @@ describe('DogsController bcsScoreFloor consistency', () => {
     const result: any = await (controller as any).listBreeds();
 
     expect(result.code).toBe(0);
-    expect(result.data[0].bcsScoreFloor).toBe(4);
+    expect(result.data[0].bcsScoreMap).toEqual([4, 5, 6, 7, 9]);
     expect(result.data[0].name).toBe('灵缇');
   })
 });

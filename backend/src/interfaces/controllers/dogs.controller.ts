@@ -119,10 +119,10 @@ function hasAllowedHealthAttachmentType(file: Express.Multer.File) {
   );
 }
 
-/** 档案接口要用的品种信息：品种名 + 体况分下限（深胸细腰型犬专用） */
+/** 档案接口要用的品种信息：品种名 + 体况问卷的选项换算表（深胸细腰型犬专用） */
 interface BreedInfoForProfile {
   name: string;
-  bcsScoreFloor: number | null;
+  bcsScoreMap: number[];
 }
 
 @ApiTags('Dogs')
@@ -774,7 +774,7 @@ export class DogsController {
     breeds.forEach((breed) => {
       breedMap.set(breed.id, {
         name: breed.name,
-        bcsScoreFloor: breed.bcsScoreFloor ?? null,
+        bcsScoreMap: breed.bcsScoreMap ?? [],
       });
       breedEntityMap.set(breed.id, breed);
     });
@@ -1092,10 +1092,10 @@ export class DogsController {
   }
 
   /**
-   * 单只狗狗的「品种信息」映射（品种名 + 体况分下限）。
+   * 单只狗狗的「品种信息」映射（品种名 + 选项换算表）。
    *
    * 四个返回档案的接口（列表 / 详情 / 建档 / 更新）**必须给出同一份 breedName**
-   * 与同一份 bcsScoreFloor**。
+   * 与同一份 bcsScoreMap**。
    * 2026-09-28 修复的真实缺陷：建档（POST）与更新（PUT）当时直接调用
    * `mapDogToProfileDto(dog)` / `mapDogToProfileDto(dog, undefined, ...)`，
    * 没有传 breedMap，于是这两个接口回的 breedName 恒为 null（除非有自定义品种名）。
@@ -1115,7 +1115,7 @@ export class DogsController {
             breedId,
             {
               name: breed.name,
-              bcsScoreFloor: breed.bcsScoreFloor ?? null,
+              bcsScoreMap: breed.bcsScoreMap ?? [],
             },
           ],
         ])
@@ -1134,10 +1134,10 @@ export class DogsController {
     const breedInfo = breedMap?.get(dog.breedId) ?? null;
     const breedName = dog.customBreedName || breedInfo?.name || null;
     /**
-     * 体况分下限只认标准犬种记录 —— 混血犬填的是自定义品种名，
-     * 没有犬种记录也就没有下限（不能拿自定义名字去猜犬种）。
+     * 选项换算表只认标准犬种记录 —— 混血犬填的是自定义品种名，
+     * 没有犬种记录也就没有换算表（不能拿自定义名字去猜犬种）。
      */
-    const bcsScoreFloor = breedInfo?.bcsScoreFloor ?? null;
+    const bcsScoreMap = breedInfo?.bcsScoreMap ?? [];
 
     return {
       id: dog.id,
@@ -1146,7 +1146,7 @@ export class DogsController {
       breedId: dog.breedId,
       breedName,
       customBreedName: dog.customBreedName,
-      bcsScoreFloor,
+      bcsScoreMap,
       ...(recipeLifeStage ? { recipeLifeStage } : {}),
       avatarUrl: dog.avatarUrl,
       birthday: dog.birthday.toISOString(),
@@ -1195,12 +1195,12 @@ export class DogsController {
       averageAdultWeightKg: breed.averageAdultWeightKg,
       isCommon: breed.isCommon,
       /**
-       * 体况分下限（深胸细腰型犬，如灵缇 = 4）；其余犬种为 null。
+       * 体况问卷的选项换算表（按选项顺序，如灵缇 = [4,5,6,7,9]）。
        *
-       * 小程序拿它做 `max(算出的体况分, 本值)`。名单与数值都在数据库，
-       * 增删犬种或调整下限不用发小程序版本、不用走微信审核。
+       * 小程序拿它把顾客选的选项换算成体况分；**空数组表示用标准分**。
+       * 名单与换算表都在数据库，增删犬种或调整分数不用发小程序版本。
        */
-      bcsScoreFloor: breed.bcsScoreFloor ?? null,
+      bcsScoreMap: breed.bcsScoreMap ?? [],
     };
   }
 

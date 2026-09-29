@@ -832,8 +832,8 @@ export class DogService {
       dto.seniorAgeYears,
       dto.averageAdultWeightKg ?? null,
       dto.isCommon ?? false,
-      // 体况分下限（深胸细腰型犬，如灵缇 = 4）；不传则不做修正
-      dto.bcsScoreFloor ?? null,
+      // 体况问卷的选项换算表；不传则用标准分
+      dto.bcsScoreMap ?? [],
     );
 
     return this.dogBreedRepository.save(breed);
@@ -870,9 +870,7 @@ export class DogService {
         ? dto.averageAdultWeightKg
         : existing.averageAdultWeightKg,
       dto.isCommon ?? existing.isCommon,
-      dto.bcsScoreFloor !== undefined
-        ? dto.bcsScoreFloor
-        : existing.bcsScoreFloor,
+      dto.bcsScoreMap !== undefined ? dto.bcsScoreMap : existing.bcsScoreMap,
     );
 
     const result = await this.dogBreedRepository.update(id, updated);
@@ -992,10 +990,10 @@ export interface CreateBreedDto {
   averageAdultWeightKg?: number;
   isCommon?: boolean;
   /**
-   * 体况分下限（深胸细腰型犬，如灵缇 = 4）；其余犬种留空。
-   * 传 null 可清空（例如发现某个犬种不该设下限）。
+   * 体况问卷的选项换算表（按选项顺序 5 个分数）；其余犬种留空数组。
+   * 传空数组可清空（例如发现某个犬种不该特殊处理）。
    */
-  bcsScoreFloor?: number | null;
+  bcsScoreMap?: number[];
 }
 
 export interface UpdateBreedDto {
@@ -1007,6 +1005,6 @@ export interface UpdateBreedDto {
   seniorAgeYears?: number;
   averageAdultWeightKg?: number;
   isCommon?: boolean;
-  /** 体况分下限（深胸细腰型犬，如灵缇 = 4）；传 null 可清空 */
-  bcsScoreFloor?: number | null;
+  /** 体况问卷的选项换算表（按选项顺序）；传空数组可清空、回到标准分 */
+  bcsScoreMap?: number[];
 }

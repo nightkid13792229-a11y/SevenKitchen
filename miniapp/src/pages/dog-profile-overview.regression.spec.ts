@@ -115,3 +115,55 @@ describe('dog-profile-overview runtime regressions', () => {
     })
   })
 })
+
+/**
+ * 体况输入口径统一（2026-09-29）
+ *
+ * 此前三个入口各说各话：建档页/定制页已是「摸一摸」动作问卷，
+ * 总览页却还是 1-9 分九宫格 —— 顾客在那里能直接点一个分数，
+ * 整条引导被绕过，而生产库 76.2% 的狗停在默认 5 分正是这种入口造成的。
+ */
+describe('dog-profile-overview · 体况输入口径统一', () => {
+  const readOverview = () => readFileSync(
+    resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+    'utf-8',
+  )
+
+  it('改用与建档页同一套动作问卷', () => {
+    const source = readOverview()
+
+    expect(source).toContain("from '../../utils/bcs-questionnaire'")
+    for (const fn of ['resolveQuestions', 'resolveBcsFromAnswers', 'getBcsLabel', 'isLongHairedBreed']) {
+      expect(source).toContain(fn)
+    }
+    // 题目与指导图必须真的渲染出来
+    expect(source).toContain('bcs-question__title')
+    expect(source).toContain('bcs-question__image')
+    expect(source).toContain('bcs-question__option')
+  })
+
+  it('九宫格、旧参考图、BCS 热量影响全部下线', () => {
+    const source = readOverview()
+
+    expect(source).not.toContain('bcs-choice')
+    expect(source).not.toContain('getBcsChoiceOptions')
+    expect(source).not.toContain('BCS_GUIDE_IMAGE_URL')
+    expect(source).not.toContain('bcs-guide-image')
+    expect(source).not.toContain("toggleFeedingImpactInfo('bcs')")
+    expect(source).not.toContain("activeFeedingImpactInfo === 'bcs'")
+    // 活动量与零食的热量影响保留
+    expect(source).toContain("toggleFeedingImpactInfo('activity')")
+    expect(source).toContain("toggleFeedingImpactInfo('treat')")
+  })
+
+  it('不替顾客编答案：已有分数只如实显示，不预填选项', () => {
+    const source = readOverview()
+
+    // 「当前 N 分」是把已确认的值显示出来，不是把答案填上
+    expect(source).toContain('bcs-current')
+    expect(source).toContain('bcsStatus.confirmed && bcsResult.bcs === null')
+    // 反向还原会把 6 分塌成 5 分（选项只有 1/5/7/9），已整体移除
+    expect(source).not.toContain('resolveAnswersFromBcs')
+    expect(source).not.toContain('seedBcsAnswersFromForm')
+  })
+})

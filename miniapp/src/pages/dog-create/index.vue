@@ -481,11 +481,6 @@
           <text class="profile-card__section-title">BCS 体态评分</text>
           <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
 
-          <!-- 特殊犬种提示（阶段 C9）：不改变算分，只提醒别按常规标准误判 -->
-          <view v-if="specialBreedHint" class="bcs-special-hint">
-            <text class="bcs-special-hint__text">{{ specialBreedHint }}</text>
-          </view>
-
           <view
             v-for="question in bcsQuestions"
             :key="question.key"
@@ -729,11 +724,9 @@ import {
 } from '../../utils/dog-profile-form'
 import {
   getBcsLabel,
-  getSpecialBreedHint,
   isLongHairedBreed,
   resolveBcsFromAnswers,
   resolveQuestions,
-  resolveSpecialBreedType,
 } from '../../utils/bcs-questionnaire'
 import {
   formatWeightEcho,
@@ -1294,17 +1287,6 @@ const isLongHaired = computed(() =>
     isMixedBreed.value
       ? formData.value.customBreedName
       : selectedBreed.value?.name,
-  ),
-)
-
-/** 特殊犬种判断提示（阶段 C9）：深胸细腰型 / 短鼻桶胸型 */
-const specialBreedHint = computed(() =>
-  getSpecialBreedHint(
-    resolveSpecialBreedType(
-      isMixedBreed.value
-        ? formData.value.customBreedName
-        : selectedBreed.value?.name,
-    ),
   ),
 )
 
@@ -5502,17 +5484,6 @@ async function submit() {
 }
 
 /* 特殊犬种提示（深胸细腰型 / 短鼻桶胸型）—— 不改变算分，只防误判 */
-.bcs-special-hint {
-  margin: 16rpx 0 0;
-  padding: 16rpx 20rpx;
-  border-radius: 12rpx;
-  background-color: #f3f6f0;
-}
-.bcs-special-hint__text {
-  font-size: 24rpx;
-  color: #46564d;
-  line-height: 1.5;
-}
 
 .bcs-question {
   margin-top: 24rpx;

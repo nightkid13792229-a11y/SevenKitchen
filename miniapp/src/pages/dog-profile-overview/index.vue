@@ -331,54 +331,40 @@
 
         <view v-if="activeEditSection === 'feeding'" class="editor-card">
           <view class="field-group">
-            <view class="field-label-row">
-              <text class="field-label">BCS体态评分</text>
-              <view class="field-label-actions">
-                <text class="field-text-link" @tap="toggleFeedingImpactInfo('bcs')">热量影响</text>
-              </view>
-            </view>
-            <view class="bcs-choice-grid">
-              <view
-                v-for="option in bcsChoiceOptions"
-                :key="option.value"
-                class="bcs-choice"
-                :class="{ 'bcs-choice--active': Number(form.bcsScore) === option.value }"
-                @tap="selectBcsScore(option.value)"
-              >
-                <text class="bcs-choice__score">{{ option.label }}</text>
-                <text class="bcs-choice__status">{{ option.status }}</text>
-              </view>
-            </view>
-            <view class="info-panel info-panel--bcs-guide">
+            <text class="field-label">BCS体态评分</text>
+            <!-- 已有确认结果且本次还没作答时，如实显示当前值：
+                 不让顾客以为"我的答案丢了"，也不替他编一组答案 -->
+            <text
+              v-if="bcsStatus.confirmed && bcsResult.bcs === null"
+              class="bcs-current"
+            >当前 {{ form.bcsScore }} 分 · {{ getBcsLabel(Number(form.bcsScore) || 5) }}</text>
+            <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
+
+            <view
+              v-for="question in bcsQuestions"
+              :key="question.key"
+              class="bcs-question"
+            >
               <image
-                v-if="!bcsGuideLoadFailed"
-                class="bcs-guide-image"
-                :src="BCS_GUIDE_IMAGE_URL"
+                v-if="question.image"
+                class="bcs-question__image"
+                :src="question.image"
                 mode="widthFix"
-                @error="onBcsGuideImageError"
               />
-              <view v-else class="bcs-guide-fallback">
-                <text class="bcs-guide-fallback__title">BCS 体态评分参考</text>
-                <text class="bcs-guide-fallback__item">1-3 分：偏瘦，肋骨明显、腰线凹陷明显。</text>
-                <text class="bcs-guide-fallback__item">4-5 分：标准，肋骨可摸到但不明显外露。</text>
-                <text class="bcs-guide-fallback__item">6-7 分：偏胖，腰线不明显，腹部轻度下垂。</text>
-                <text class="bcs-guide-fallback__item">8-9 分：肥胖，肋骨难触及，腹部明显下垂。</text>
+              <text class="bcs-question__title">{{ question.title }}</text>
+              <view class="bcs-question__options">
+                <view
+                  v-for="option in question.options"
+                  :key="option.label"
+                  class="bcs-question__option"
+                  :class="{ active: bcsAnswers[question.key] === option.bcs }"
+                  @tap="selectBcsAnswer(question.key, option.bcs)"
+                >{{ option.label }}</view>
               </view>
             </view>
-            <view v-if="activeFeedingImpactInfo === 'bcs'" class="info-panel">
-              <view class="info-panel__header">
-                <text class="info-panel__title">{{ getFeedingImpactInfo('bcs').title }}</text>
-                <text class="info-panel__close" @tap="toggleFeedingImpactInfo('bcs')">收起说明</text>
-              </view>
-              <text class="info-panel__summary">{{ getFeedingImpactInfo('bcs').summary }}</text>
-              <view
-                v-for="item in getFeedingImpactInfo('bcs').items"
-                :key="item.label"
-                class="info-panel__item"
-              >
-                <text class="info-panel__item-label">{{ item.label }}</text>
-                <text class="info-panel__item-detail">{{ item.detail }}</text>
-              </view>
+
+            <view v-if="bcsResult.bcs !== null" class="bcs-result">
+              <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
             </view>
           </view>
 
@@ -636,7 +622,6 @@ import {
   buildDogOverviewEnergySection,
   buildDogOverviewFeedingFacts,
   buildDogOverviewHealthFacts,
-  getBcsChoiceOptions,
   buildDogOverviewHealthSummary,
   getFeedingImpactExplanation,
   resolveDogBreedLabel,
@@ -645,6 +630,12 @@ import {
 } from '../../utils/dog-profile-overview'
 import { filterBreedsByKeyword, normalizeBreedSearchText } from '../../utils/dog-breed-search'
 import { getBreedSearchUiState } from '../../utils/dog-breed-ui'
+import {
+  getBcsLabel,
+  isLongHairedBreed,
+  resolveBcsFromAnswers,
+  resolveQuestions,
+} from '../../utils/bcs-questionnaire'
 import {
   resolveDogAvatarUploadErrorMessage,
   resolveDogAvatarSrc,
@@ -737,9 +728,7 @@ interface FinishedFoodHistoryItem {
 }
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
-const BCS_GUIDE_IMAGE_URL = 'https://img.sevenkitchen.cloud/bcs-standards/BCS-chart.jpg'
 const mealsOptions = ['1', '2', '3', '4', '5']
-const bcsChoiceOptions = getBcsChoiceOptions()
 const sizeClassChoices = [
   { value: 'SMALL', label: '小型犬' },
   { value: 'MEDIUM', label: '中型犬' },
@@ -794,8 +783,7 @@ const isUploadingAvatar = ref(false)
 const showAvatarCropper = ref(false)
 const avatarCropSourcePath = ref('')
 const avatarLocalPreviewPath = ref('')
-const bcsGuideLoadFailed = ref(false)
-const activeFeedingImpactInfo = ref<'bcs' | 'activity' | 'treat' | ''>('')
+const activeFeedingImpactInfo = ref<'activity' | 'treat' | ''>('')
 const breedSearchKeyword = ref('')
 const showManualBreedEntry = ref(false)
 const showSizeOverrideEditor = ref(false)
@@ -1645,11 +1633,41 @@ function getSizeLabel(value?: string | null) {
   return sizeLabelMap[value] || value
 }
 
-function selectBcsScore(value: number) {
-  form.bcsScore = value
-  // 顾客亲自点过 = 确认过（定制门槛的判据）
-  form.bcsScoreConfirmed = true
+// ========== 体况引导（与建档页同一套动作题库） ==========
+const bcsAnswers = ref<Record<string, number>>({})
+
+/** 是否长毛犬（决定只问两道「摸」的题） */
+const isLongHaired = computed(() =>
+  isLongHairedBreed(isMixedBreed.value ? form.customBreedName : form.breedName),
+)
+
+const bcsQuestions = computed(() =>
+  resolveQuestions({ isLongHaired: isLongHaired.value }),
+)
+
+const bcsResult = computed(() =>
+  resolveBcsFromAnswers({ answers: bcsAnswers.value, questions: bcsQuestions.value }),
+)
+
+const bcsResultLabel = computed(() =>
+  bcsResult.value.bcs === null ? '' : getBcsLabel(bcsResult.value.bcs),
+)
+
+/** 顾客点某一题的某个选项 */
+function selectBcsAnswer(questionKey: string, bcs: number) {
+  bcsAnswers.value = { ...bcsAnswers.value, [questionKey]: bcs }
+  const result = resolveBcsFromAnswers({
+    answers: bcsAnswers.value,
+    questions: bcsQuestions.value,
+  })
+  if (result.bcs !== null) {
+    // 算出来了 → 写进表单并标记「顾客亲自确认过」
+    form.bcsScore = result.bcs
+    form.bcsScoreConfirmed = true
+  }
 }
+
+// ========== 体况引导结束 ==========
 
 function selectActivityLevel(value: string) {
   form.activityLevel = value
@@ -1661,21 +1679,16 @@ function onMealsChange(event: any) {
   form.mealsPerDayConfirmed = true
 }
 
-function toggleFeedingImpactInfo(type: 'bcs' | 'activity' | 'treat') {
+function toggleFeedingImpactInfo(type: 'activity' | 'treat') {
   activeFeedingImpactInfo.value = activeFeedingImpactInfo.value === type ? '' : type
 }
 
 function resetFeedingAssistPanels() {
-  bcsGuideLoadFailed.value = false
   activeFeedingImpactInfo.value = ''
 }
 
-function getFeedingImpactInfo(type: 'bcs' | 'activity' | 'treat') {
+function getFeedingImpactInfo(type: 'activity' | 'treat') {
   return getFeedingImpactExplanation(type)
-}
-
-function onBcsGuideImageError() {
-  bcsGuideLoadFailed.value = true
 }
 
 function queuePreview(silent: boolean) {
@@ -2218,40 +2231,10 @@ function goToHealthProfile() {
   color: #1e3a2f;
 }
 
-.bcs-choice-grid {
-  margin-top: 10rpx;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
-}
 
-.bcs-choice {
-  padding: 18rpx 16rpx;
-  border-radius: 20rpx;
-  background: #fbfcf7;
-  border: 1rpx solid rgba(30, 46, 36, 0.08);
-}
 
-.bcs-choice--active {
-  border-color: rgba(176, 141, 79, 0.28);
-  background: rgba(176, 141, 79, 0.08);
-}
 
-.bcs-choice__score {
-  display: block;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #26261f;
-}
 
-.bcs-choice__status,
-.bcs-choice__detail {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #6b6653;
-}
 
 .info-panel {
   margin-top: 14rpx;
@@ -2261,9 +2244,6 @@ function goToHealthProfile() {
   border: 1rpx solid rgba(15, 122, 77, 0.1);
 }
 
-.info-panel--bcs-guide {
-  background: #fbfcf7;
-}
 
 .info-panel__title {
   display: block;
@@ -2318,25 +2298,8 @@ function goToHealthProfile() {
   color: #6b6653;
 }
 
-.bcs-guide-image {
-  width: 100%;
-  border-radius: 18rpx;
-}
 
-.bcs-guide-fallback__title {
-  display: block;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #26261f;
-}
 
-.bcs-guide-fallback__item {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 22rpx;
-  line-height: 1.7;
-  color: #6b6653;
-}
 
 .chip-row {
   margin-top: 10rpx;
@@ -2888,6 +2851,74 @@ function goToHealthProfile() {
 }
 
 /* ===== 体况确认状态（2026-09-29，阶段 C7/C8） ===== */
+.bcs-current {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 28rpx;
+  color: #1f6b43;
+  font-weight: 600;
+}
+
+.bcs-banner {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #46564d;
+  line-height: 1.6;
+}
+
+.bcs-question {
+  margin-top: 24rpx;
+}
+
+.bcs-question__image {
+  display: block;
+  width: 100%;
+  margin-bottom: 16rpx;
+  border-radius: 16rpx;
+}
+
+.bcs-question__title {
+  display: block;
+  font-size: 28rpx;
+  color: #2f3a34;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.bcs-question__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.bcs-question__option {
+  padding: 14rpx 26rpx;
+  border: 2rpx solid #dfe6e1;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #46564d;
+  background: #ffffff;
+}
+
+.bcs-question__option.active {
+  border-color: #2f8f5b;
+  background: #e8f5ee;
+  color: #1f6b43;
+  font-weight: 600;
+}
+
+.bcs-result {
+  margin-top: 24rpx;
+}
+
+.bcs-result__score {
+  font-size: 28rpx;
+  color: #1f6b43;
+  font-weight: 600;
+}
+
 .bcs-status {
   margin: 16rpx 0;
   padding: 18rpx 20rpx;

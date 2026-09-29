@@ -6,8 +6,6 @@ import {
   resolveBcsFallback,
   resolveBcsFromAnswers,
   resolveQuestions,
-  resolveSpecialBreedType,
-  getSpecialBreedHint,
 } from './bcs-questionnaire'
 
 describe('体况引导：题目集（阶段 C）', () => {
@@ -125,31 +123,6 @@ describe('体况引导：跳过的兜底', () => {
     const fallback = resolveBcsFallback()
     expect(fallback.bcs).toBe(5)
     expect(fallback.confirmed).toBe(false)
-  })
-})
-
-describe('体况引导：特殊犬种提示（阶段 C9）', () => {
-  it('识别深胸细腰型犬种', () => {
-    expect(resolveSpecialBreedType('灵缇')).toBe('SIGHTHOUND')
-    expect(resolveSpecialBreedType('惠比特')).toBe('SIGHTHOUND')
-    expect(resolveSpecialBreedType('Greyhound')).toBe('SIGHTHOUND')
-  })
-
-  it('识别短鼻桶胸型犬种', () => {
-    expect(resolveSpecialBreedType('法国斗牛犬')).toBe('BRACHYCEPHALIC')
-    expect(resolveSpecialBreedType('巴哥犬')).toBe('BRACHYCEPHALIC')
-    expect(resolveSpecialBreedType('Pug')).toBe('BRACHYCEPHALIC')
-  })
-
-  it('普通犬种没有特殊提示', () => {
-    expect(resolveSpecialBreedType('拉布拉多')).toBeNull()
-    expect(resolveSpecialBreedType(null)).toBeNull()
-    expect(getSpecialBreedHint(null)).toBe('')
-  })
-
-  it('两类犬种各有针对性提示（说明「可能是正常的」，避免误判）', () => {
-    expect(getSpecialBreedHint('SIGHTHOUND')).toContain('肋骨')
-    expect(getSpecialBreedHint('BRACHYCEPHALIC')).toContain('摸肋骨')
   })
 })
 

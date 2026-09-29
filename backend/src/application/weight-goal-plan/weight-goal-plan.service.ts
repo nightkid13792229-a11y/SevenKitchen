@@ -114,6 +114,63 @@ export interface WeightGoalSuggestionView {
   notes: string[];
 }
 
+// ==================== 管理后台视图（B3） ====================
+
+export interface AdminWeightGoalPlanListItem {
+  id: string;
+  dogId: string;
+  dogName: string;
+  breedName: string | null;
+  ownerNickname: string | null;
+  ownerPhone: string | null;
+  direction: WeightGoalDirection;
+  status: WeightGoalPlanStatus;
+  startWeightKg: number;
+  /** 与顾客端同一口径：取最近一次称重，没有记录才退回档案值 */
+  currentWeightKg: number;
+  targetWeightKg: number;
+  startBcsScore: number;
+  currentKcal: number;
+  progressPercent: number;
+  goalReached: boolean;
+  targetRatePercentPerWeek: number;
+  lastRatePercentPerWeek: number | null;
+  startDate: string;
+  lastWeighInDate: string | null;
+  nextReviewDate: string | null;
+  createdAt: string;
+}
+
+export interface AdminWeightGoalPlanDetail extends AdminWeightGoalPlanListItem {
+  dog: {
+    id: string;
+    name: string;
+    breedName: string | null;
+    birthday: string | null;
+    bcsScore: number | null;
+    activityLevel: string | null;
+  };
+  owner: { id: string; nickname: string | null; phone: string | null };
+  suggestedTargetWeightKg: number;
+  floorKcal: number;
+  ceilingKcal: number;
+  estimatedGoalDate: string | null;
+  pausedReason: string | null;
+  maintenanceStartedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  adjustments: Array<{
+    id: string;
+    reason: string;
+    energyBefore: number;
+    energyAfter: number;
+    ratePercentPerWeek: number | null;
+    weightKg: number | null;
+    note: string | null;
+    createdAt: string;
+  }>;
+}
+
 @Injectable()
 export class WeightGoalPlanService {
   private readonly logger = new Logger(WeightGoalPlanService.name);
@@ -859,6 +916,269 @@ export class WeightGoalPlanService {
         }`,
       );
     }
+  }
+
+  // ==================== 管理后台（B3） ====================
+
+  /**
+   * 计划列表。
+   *
+   * ⚠️ 两个刻意的实现选择：
+   *   1. `Dog` 模型**没有指向品种的 Prisma 关联**（只有 breedId），
+   *      所以品种要单独批量查一次，不能 include。
+   *   2. 列表里的「当前体重」同样取**最近一次称重**而不是档案值 ——
+   *      与顾客端卡片同一口径（不同步档案是常态）。做法是一次性把涉及的狗的
+   *      体重记录查出来在内存里取最新，避免 N+1。
+   */
+  async listForAdmin(params: {
+    status?: string;
+    direction?: string;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ total: number; items: AdminWeightGoalPlanListItem[] }> {
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
+
+    const where: any = {};
+    if (params.status) {
+      where.status = params.status;
+    }
+    if (params.direction) {
+      where.direction = params.direction;
+    }
+    if (params.keyword && params.keyword.trim()) {
+      const kw = params.keyword.trim();
+      where.dog = {
+        OR: [
+          { name: { contains: kw, mode: 'insensitive' } },
+          { customBreedName: { contains: kw, mode: 'insensitive' } },
+          { owner: { nickname: { contains: kw, mode: 'insensitive' } } },
+          { owner: { phone: { contains: kw } } },
+        ],
+      };
+    }
+
+    const [total, rows] = await Promise.all([
+      this.prisma.weightGoalPlan.count({ where }),
+      this.prisma.weightGoalPlan.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          dog: {
+            select: {
+              id: true,
+              name: true,
+              breedId: true,
+              customBreedName: true,
+              currentWeightKg: true,
+              owner: { select: { nickname: true, phone: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const [breeds, latestWeights] = await Promise.all([
+      this.loadBreedNames(
+        rows.map((r) => r.dog?.breedId).filter(Boolean) as string[],
+      ),
+      this.loadLatestWeights(rows.map((r) => r.dogId)),
+    ]);
+
+    return {
+      total,
+      items: rows.map((row) => this.toAdminListItem(row, breeds, latestWeights)),
+    };
+  }
+
+  /** 计划详情 + 完整调整历史（客服与营养师可见） */
+  async getDetailForAdmin(
+    planId: string,
+  ): Promise<AdminWeightGoalPlanDetail | null> {
+    const row = await this.prisma.weightGoalPlan.findUnique({
+      where: { id: planId },
+      include: {
+        dog: {
+          select: {
+            id: true,
+            name: true,
+            breedId: true,
+            customBreedName: true,
+            birthday: true,
+            currentWeightKg: true,
+            bcsScore: true,
+            activityLevel: true,
+            owner: { select: { id: true, nickname: true, phone: true } },
+          },
+        },
+        adjustments: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (!row) {
+      return null;
+    }
+
+    const breeds = await this.loadBreedNames(
+      row.dog?.breedId ? [row.dog.breedId] : [],
+    );
+    const latestWeights = await this.loadLatestWeights([row.dogId]);
+    const item = this.toAdminListItem(row as any, breeds, latestWeights);
+
+    return {
+      ...item,
+      dog: {
+        id: row.dog?.id ?? row.dogId,
+        name: row.dog?.name ?? '',
+        breedName: this.resolveBreedName(
+          row.dog?.breedId,
+          row.dog?.customBreedName,
+          breeds,
+        ),
+        birthday: row.dog?.birthday ? row.dog.birthday.toISOString() : null,
+        bcsScore: row.dog?.bcsScore ?? null,
+        activityLevel: row.dog?.activityLevel ?? null,
+      },
+      owner: {
+        id: row.dog?.owner?.id ?? '',
+        nickname: row.dog?.owner?.nickname ?? null,
+        phone: row.dog?.owner?.phone ?? null,
+      },
+      suggestedTargetWeightKg: row.suggestedTargetWeightKg,
+      floorKcal: row.floorKcal,
+      ceilingKcal: row.ceilingKcal,
+      estimatedGoalDate: row.estimatedGoalDate
+        ? row.estimatedGoalDate.toISOString()
+        : null,
+      pausedReason: row.pausedReason,
+      maintenanceStartedAt: row.maintenanceStartedAt
+        ? row.maintenanceStartedAt.toISOString()
+        : null,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+      adjustments: row.adjustments.map((a) => ({
+        id: a.id,
+        reason: a.reason,
+        energyBefore: a.energyBefore,
+        energyAfter: a.energyAfter,
+        ratePercentPerWeek: a.ratePercentPerWeek,
+        weightKg: a.weightKg,
+        note: a.note,
+        createdAt: a.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /** 批量取品种名（Dog 没有品种关联，只能单独查） */
+  private async loadBreedNames(
+    breedIds: string[],
+  ): Promise<Map<string, string>> {
+    const unique = Array.from(new Set(breedIds));
+    if (unique.length === 0) {
+      return new Map();
+    }
+    const rows = await this.prisma.dogBreed.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, name: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
+  /** 批量取每只狗最近一次称重的体重（一次查询，避免 N+1） */
+  private async loadLatestWeights(
+    dogIds: string[],
+  ): Promise<Map<string, number>> {
+    const unique = Array.from(new Set(dogIds));
+    if (unique.length === 0) {
+      return new Map();
+    }
+    const rows = await this.prisma.weightRecord.findMany({
+      where: { dogId: { in: unique } },
+      orderBy: { recordDate: 'desc' },
+      select: { dogId: true, weightKg: true },
+    });
+    const map = new Map<string, number>();
+    // 已按日期倒序，第一次出现的即最新的一条
+    for (const row of rows) {
+      if (!map.has(row.dogId)) {
+        map.set(row.dogId, row.weightKg);
+      }
+    }
+    return map;
+  }
+
+  private resolveBreedName(
+    breedId: string | null | undefined,
+    customBreedName: string | null | undefined,
+    breeds: Map<string, string>,
+  ): string | null {
+    if (customBreedName) {
+      return customBreedName;
+    }
+    if (breedId && breeds.has(breedId)) {
+      return breeds.get(breedId)!;
+    }
+    return null;
+  }
+
+  private toAdminListItem(
+    row: any,
+    breeds: Map<string, string>,
+    latestWeights: Map<string, number>,
+  ): AdminWeightGoalPlanListItem {
+    const currentWeightKg =
+      latestWeights.get(row.dogId) ??
+      row.dog?.currentWeightKg ??
+      row.startWeightKg;
+
+    const isLoss = row.direction === WeightGoalDirection.LOSS;
+    const changedKg = isLoss
+      ? row.startWeightKg - currentWeightKg
+      : currentWeightKg - row.startWeightKg;
+    const totalNeeded = Math.abs(row.startWeightKg - row.targetWeightKg);
+    const progressPercent =
+      totalNeeded <= 0
+        ? 100
+        : Math.min(100, Math.max(0, (changedKg / totalNeeded) * 100));
+
+    return {
+      id: row.id,
+      dogId: row.dogId,
+      dogName: row.dog?.name ?? '',
+      breedName: this.resolveBreedName(
+        row.dog?.breedId,
+        row.dog?.customBreedName,
+        breeds,
+      ),
+      ownerNickname: row.dog?.owner?.nickname ?? null,
+      ownerPhone: row.dog?.owner?.phone ?? null,
+      direction: row.direction,
+      status: row.status,
+      startWeightKg: row.startWeightKg,
+      currentWeightKg,
+      targetWeightKg: row.targetWeightKg,
+      startBcsScore: row.startBcsScore,
+      currentKcal: row.currentKcal,
+      progressPercent: Math.round(progressPercent),
+      goalReached: isGoalReached({
+        direction: row.direction as WeightGoalDirection,
+        currentWeightKg,
+        targetWeightKg: row.targetWeightKg,
+      }),
+      targetRatePercentPerWeek: row.targetRatePercentPerWeek,
+      lastRatePercentPerWeek: row.lastRatePercentPerWeek ?? null,
+      startDate: row.startDate.toISOString(),
+      lastWeighInDate: row.lastWeighInDate
+        ? row.lastWeighInDate.toISOString()
+        : null,
+      nextReviewDate: row.nextReviewDate
+        ? row.nextReviewDate.toISOString()
+        : null,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   // ==================== 组装返回 ====================

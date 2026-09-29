@@ -58,6 +58,9 @@ function createMocks() {
   const prisma: any = {
     weightGoalPlan: {
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
       create: jest.fn(),
       update: jest.fn(async ({ data }: any) => ({ ...basePlan, ...data })),
     },
@@ -67,6 +70,10 @@ function createMocks() {
     },
     weightRecord: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    dogBreed: {
+      findMany: jest.fn(),
     },
   };
   /**
@@ -594,6 +601,170 @@ describe('WeightGoalPlanService · 展示口径', () => {
     expect(mocks.prisma.weightRecord.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { recordDate: 'desc' } }),
     );
+  });
+});
+
+describe('WeightGoalPlanService · 管理后台（B3）', () => {
+  const planRow = {
+    ...basePlan,
+    dog: {
+      id: 'dog-1',
+      name: '团子',
+      breedId: 'breed-1',
+      customBreedName: null,
+      currentWeightKg: 20,
+      owner: { nickname: '小王', phone: '13800000000' },
+    },
+  };
+
+  function setupList(mocks: ReturnType<typeof createMocks>) {
+    mocks.prisma.weightGoalPlan.count.mockResolvedValue(1);
+    mocks.prisma.weightGoalPlan.findMany.mockResolvedValue([planRow]);
+    mocks.prisma.dogBreed.findMany.mockResolvedValue([
+      { id: 'breed-1', name: '拉布拉多' },
+    ]);
+    mocks.prisma.weightRecord.findMany.mockResolvedValue([
+      { dogId: 'dog-1', weightKg: 19.2 },
+      { dogId: 'dog-1', weightKg: 19.8 },
+    ]);
+  }
+
+  it('列表带出狗名、品种与主人，而不是只给一堆 id', async () => {
+    const mocks = createMocks();
+    setupList(mocks);
+
+    const result = await build(mocks).listForAdmin({});
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      dogName: '团子',
+      breedName: '拉布拉多',
+      ownerNickname: '小王',
+      ownerPhone: '13800000000',
+    });
+  });
+
+  it('当前体重取最近一次称重（与顾客端同一口径）', async () => {
+    const mocks = createMocks();
+    setupList(mocks);
+
+    const result = await build(mocks).listForAdmin({});
+
+    // 档案写 20，最近称重 19.2 —— 后台看到的必须是 19.2，
+    // 否则「已减多少」会算错，客服照着念就是错的
+    expect(result.items[0].currentWeightKg).toBe(19.2);
+    expect(result.items[0].progressPercent).toBe(20);
+  });
+
+  it('品种单独批量查（Dog 没有品种关联，不能 include）', async () => {
+    const mocks = createMocks();
+    setupList(mocks);
+
+    await build(mocks).listForAdmin({});
+
+    expect(mocks.prisma.dogBreed.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['breed-1'] } } }),
+    );
+  });
+
+  it('自定义品种优先于标准品种', async () => {
+    const mocks = createMocks();
+    mocks.prisma.weightGoalPlan.count.mockResolvedValue(1);
+    mocks.prisma.weightGoalPlan.findMany.mockResolvedValue([
+      { ...planRow, dog: { ...planRow.dog, customBreedName: '中华田园犬' } },
+    ]);
+    mocks.prisma.dogBreed.findMany.mockResolvedValue([]);
+    mocks.prisma.weightRecord.findMany.mockResolvedValue([]);
+
+    const result = await build(mocks).listForAdmin({});
+
+    expect(result.items[0].breedName).toBe('中华田园犬');
+  });
+
+  it('筛选条件真的传到了查询里', async () => {
+    const mocks = createMocks();
+    setupList(mocks);
+
+    await build(mocks).listForAdmin({
+      status: 'ACTIVE',
+      direction: 'LOSS',
+      keyword: '团子',
+      page: 2,
+      pageSize: 10,
+    });
+
+    const args = mocks.prisma.weightGoalPlan.findMany.mock.calls[0][0];
+    expect(args.where.status).toBe('ACTIVE');
+    expect(args.where.direction).toBe('LOSS');
+    expect(args.where.dog.OR).toBeDefined();
+    expect(args.skip).toBe(10);
+    expect(args.take).toBe(10);
+  });
+
+  it('分页参数兜底，防止把库拖垮', async () => {
+    const mocks = createMocks();
+    setupList(mocks);
+
+    await build(mocks).listForAdmin({ page: 0, pageSize: 9999 });
+
+    const args = mocks.prisma.weightGoalPlan.findMany.mock.calls[0][0];
+    expect(args.skip).toBe(0);
+    expect(args.take).toBe(100);
+  });
+
+  it('详情带出完整调整历史（「为什么降热量」要查得到）', async () => {
+    const mocks = createMocks();
+    mocks.prisma.weightGoalPlan.findUnique.mockResolvedValue({
+      ...planRow,
+      suggestedTargetWeightKg: 16,
+      floorKcal: 336,
+      ceilingKcal: 800,
+      pausedReason: null,
+      maintenanceStartedAt: null,
+      completedAt: null,
+      cancelledAt: null,
+      adjustments: [
+        {
+          id: 'adj-1',
+          reason: 'RATE_TOO_SLOW',
+          energyBefore: 560,
+          energyAfter: 476,
+          ratePercentPerWeek: -0.15,
+          weightKg: 19.2,
+          note: '推进速率仅 0.15%/周，低于 0.5%/周，力度加一档',
+          createdAt: new Date('2026-09-29T00:00:00Z'),
+        },
+      ],
+      dog: {
+        ...planRow.dog,
+        birthday: new Date('2021-01-01'),
+        bcsScore: 7,
+        activityLevel: 'NORMAL',
+        owner: { id: 'user-1', nickname: '小王', phone: '13800000000' },
+      },
+    });
+    mocks.prisma.dogBreed.findMany.mockResolvedValue([
+      { id: 'breed-1', name: '拉布拉多' },
+    ]);
+    mocks.prisma.weightRecord.findMany.mockResolvedValue([
+      { dogId: 'dog-1', weightKg: 19.2 },
+    ]);
+
+    const detail = await build(mocks).getDetailForAdmin('plan-1');
+
+    expect(detail).not.toBeNull();
+    expect(detail!.adjustments).toHaveLength(1);
+    expect(detail!.adjustments[0].reason).toBe('RATE_TOO_SLOW');
+    expect(detail!.adjustments[0].note).toContain('力度加一档');
+    expect(detail!.dog.bcsScore).toBe(7);
+    expect(detail!.owner.phone).toBe('13800000000');
+  });
+
+  it('计划不存在时返回 null（由控制器转 404）', async () => {
+    const mocks = createMocks();
+    mocks.prisma.weightGoalPlan.findUnique.mockResolvedValue(null);
+
+    expect(await build(mocks).getDetailForAdmin('missing')).toBeNull();
   });
 });
 

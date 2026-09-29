@@ -346,6 +346,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/Analytics/DogProfileAnalytics.vue"),
         meta: { title: "狗档案转化分析" },
       },
+      {
+        path: "weight-goal-plan",
+        name: "WeightGoalPlan",
+        component: () => import("@/views/WeightGoalPlan/PlanList.vue"),
+        meta: { title: "体重管理计划" },
+      },
     ],
   },
 ];

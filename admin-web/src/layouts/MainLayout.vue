@@ -116,6 +116,10 @@
           <el-icon><DataBoard /></el-icon>
           <span>狗档案转化分析</span>
         </el-menu-item>
+        <el-menu-item index="/weight-goal-plan">
+          <el-icon><TrendCharts /></el-icon>
+          <span>体重管理计划</span>
+        </el-menu-item>
         <el-menu-item index="/inventory">
           <el-icon><Box /></el-icon>
           <span>库存管理</span>
@@ -291,6 +295,7 @@ import {
   Search,
   FirstAidKit,
   Dish,
+  TrendCharts,
   Lock
 } from '@element-plus/icons-vue'
 

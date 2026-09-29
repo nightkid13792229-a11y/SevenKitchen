@@ -396,8 +396,8 @@ export function calculateDailyIntakeG(
  *
  * 口径差异（v2 相对 v1）：
  *   · rer 按**理想体重**算（v1 按当前体重）
- *   · der / finalFoodKcal = v2 的每日能量需求
  *   · bcsMultiplier 恒为 1（v2 不再用体况分打折，改为换算理想体重）
+ *   · **der 是毛值、finalFoodKcal 是净值** —— 与 v1 同一口径（见下方说明）
  */
 export function calculateDogEnergyV2Compat(
   dog: Dog,
@@ -407,9 +407,23 @@ export function calculateDogEnergyV2Compat(
 ): DogCalcResult {
   const v2 = calculateDailyEnergyV2ForDog(dog, breed ?? null);
 
+  /**
+   * ⚠️ `der` 必须是**毛值**（= 净食物能量 + 零食扣减），与 v1 保持一致。
+   *
+   * 2026-09-29 修（v2 打开全量后实测发现）：这里原先直接写成 `v2.dailyEnergyKcal`，
+   * 而 v2 的 dailyEnergyKcal 是**已扣零食的净值**（v1 的 der 是毛值）。
+   * 前端 `dog-recommendation-summary` 会显示「主食热量 = der − 零食能量」，
+   * 它按 v1 的口径假设 der 是毛值 —— 于是 v2 下这条会算成
+   * `737.2 − 22.8 = 714.4`（实际应是 `760.0 − 22.8 = 737.2`）。
+   *
+   * 同一个数字在两个页面还会不一致：建档页读 `POST /dogs/calc-preview`（原始算法，
+   * 拿到净值），档案页读 `GET /dogs/:id`（走 calcPreview 的覆盖逻辑，拿到毛值）。
+   */
+  const grossKcal = v2.dailyEnergyKcal + v2.treatDeduction;
+
   const result: DogCalcResult = {
     rer: v2.rer,
-    der: v2.dailyEnergyKcal,
+    der: grossKcal,
     treatDeduction: v2.treatDeduction,
     isTreatCapped:
       v2.treatDeduction >=

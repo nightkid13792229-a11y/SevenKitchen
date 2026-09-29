@@ -517,12 +517,16 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
     expect(submit).toContain('回答以下问题，确认狗狗的体态健康！')
   })
 
-  it('两道「看」的题带「看不清」，且不再按犬种分类', () => {
-    expect(submit).toContain('question.skippable')
-    expect(submit).toContain('BCS_SKIP')
-    expect(submit).toContain("看不出来")
+  it('单一动作题，且应用犬种分数下限', () => {
+    expect(submit).not.toContain('skippable')
+    expect(submit).not.toContain('BCS_SKIP')
+    expect(submit).not.toContain('看不出来')
     expect(submit).not.toContain('isLongHaired')
     expect(submit).not.toContain('resolveQuestions')
+    // 下限来自狗的档案接口（后端数据库里的犬种表）
+    expect(submit).toContain('applyBcsScoreFloor')
+    expect(submit).toContain('bcsScoreFloor')
+    expect(submit).toContain('gateEffectiveBcs')
   })
 
   it('门槛仍然按「顾客确认过」判定，不看有没有值', () => {

@@ -501,18 +501,12 @@
                 :class="{ active: bcsAnswers[question.key] === option.bcs }"
                 @tap="selectBcsAnswer(question.key, option.bcs)"
               >{{ option.label }}</view>
-              <view
-                v-if="question.skippable"
-                class="bcs-question__option bcs-question__option--skip"
-                :class="{ active: bcsAnswers[question.key] === BCS_SKIP }"
-                @tap="selectBcsAnswer(question.key, BCS_SKIP)"
-              >看不出来</view>
             </view>
           </view>
 
           <!-- 算出来的结果：给顾客一个明确的反馈 -->
-          <view v-if="bcsResult.bcs !== null" class="bcs-result">
-            <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
+          <view v-if="effectiveBcs !== null" class="bcs-result">
+            <text class="bcs-result__score">体况：{{ effectiveBcs }} 分 · {{ bcsResultLabel }}</text>
           </view>
         </view>
       </view>
@@ -731,7 +725,7 @@ import {
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  BCS_SKIP,
+  applyBcsScoreFloor,
   resolveBcsFromAnswers,
 } from '../../utils/bcs-questionnaire'
 import {
@@ -902,6 +896,14 @@ interface Breed {
   seniorAgeYears: number
   averageAdultWeightKg?: number
   isCommon?: boolean
+  /**
+   * 体况分下限（深胸细腰型犬专用，如灵缇 = 4）。
+   *
+   * 名单与数值由数据库犬种表下发，**不在小程序里** ——
+   * 增删犬种或调整下限只需改数据库，不用发新版小程序。
+   * 其余犬种为 null/undefined，表示不做任何修正。
+   */
+  bcsScoreFloor?: number | null
 }
 
 interface CalcResult {
@@ -1296,8 +1298,23 @@ const bcsResult = computed(() =>
   }),
 )
 
+/**
+ * 该犬种的体况分下限（深胸细腰型犬，如灵缇）。
+ *
+ * 名单和数字都**不在小程序里** —— 来自数据库犬种表的 bcs_score_floor，
+ * 随犬种接口下发。混血/自定义品种没有犬种记录，按无下限处理。
+ */
+const bcsScoreFloor = computed(() =>
+  isMixedBreed.value ? null : (selectedBreed.value?.bcsScoreFloor ?? null),
+)
+
+/** 最终生效的体况分 = 算出的分与犬种下限取较大者（展示与保存必须是同一个数） */
+const effectiveBcs = computed(() =>
+  applyBcsScoreFloor(bcsResult.value.bcs, bcsScoreFloor.value),
+)
+
 const bcsResultLabel = computed(() =>
-  bcsResult.value.bcs === null ? '' : getBcsLabel(bcsResult.value.bcs),
+  effectiveBcs.value === null ? '' : getBcsLabel(effectiveBcs.value),
 )
 
 /** 顾客点某一题的某个选项 */
@@ -1308,8 +1325,8 @@ function selectBcsAnswer(questionKey: string, bcs: number) {
     questions: bcsQuestions,
   })
   if (result.bcs !== null) {
-    // 算出来了 → 写进表单并标记「顾客亲自确认过」
-    formData.value.bcsScore = result.bcs
+    // 算出来了 → 按犬种下限修正后写进表单，并标记「顾客亲自确认过」
+    formData.value.bcsScore = applyBcsScoreFloor(result.bcs, bcsScoreFloor.value) ?? result.bcs
     formData.value.bcsScoreConfirmed = true
   }
 }
@@ -5489,21 +5506,6 @@ async function submit() {
   color: #1e3a2f;
   font-weight: bold;
   line-height: 1.5;
-}
-
-
-.bcs-question__option--skip {
-  border-style: dashed;
-  color: #8a938d;
-  background: #fafbfa;
-}
-
-.bcs-question__option--skip.active {
-  border-style: solid;
-  border-color: #8a938d;
-  background: #eef1ef;
-  color: #5d6660;
-  font-weight: 600;
 }
 
 .bcs-question__options {

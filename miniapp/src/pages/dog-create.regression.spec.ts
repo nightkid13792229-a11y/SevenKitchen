@@ -504,14 +504,12 @@ describe('dog-create · BCS 板块整改', () => {
     'utf-8',
   )
 
-  it('两张实拍指导图挂在对应问题上（在题目上方）', () => {
+  it('实拍指导图挂在题干上方', () => {
     const q = readFileSync(
       resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
       'utf-8',
     )
-    // 摸肋骨 / 摸脊椎骨盆，各自贴在自己的问题上
     expect(q).toContain('bcs-guide-palpate-ribs.jpg')
-    expect(q).toContain('bcs-guide-palpate-spine.jpg')
 
     // 模板里图片必须在标题**之前**渲染，才是"上方"
     const page = read()
@@ -523,15 +521,15 @@ describe('dog-create · BCS 板块整改', () => {
     )
   })
 
-  it('两张图走 CDN，不能打进小程序包', () => {
+  it('指导图走 CDN，不能打进小程序包', () => {
     const q = readFileSync(
       resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
       'utf-8',
     )
-    // 包内媒体资源只有 200KB 额度、且已用到 97%，塞不下这两张 ——
+    // 包内媒体资源只有 200KB 额度、且已用到 97%，塞不下 ——
     // 必须放 CDN（与「活动量参考图」同一套做法）。
     const urls = q.match(/image: '([^']+)'/g) || []
-    expect(urls).toHaveLength(2)
+    expect(urls).toHaveLength(1)
     for (const line of urls) {
       expect(line).toContain('https://img.sevenkitchen.cloud/')
       expect(line).not.toContain('/static/')
@@ -592,16 +590,25 @@ describe('dog-create · BCS 板块整改', () => {
     expect(bcsIdx).toBeGreaterThan(treatIdx)
   })
 
-  it('不再按犬种猜是否长毛，改为顾客自己点「看不出来」', () => {
+  it('单一动作题：不需要「看不出来」按钮，也不按犬种分类', () => {
     const page = read()
-    // 按犬种名字猜长毛双向都会错（柴犬被误收、拉萨犬被漏收），
-    // 且错判会改变喂食量 —— 已整体取消，所有狗同一套题。
+    // 摸肋骨这一个动作，任何毛长、任何胸型都答得了 ——
+    // 所以既不需要「看不出来」跳过，也不需要按犬种猜长毛。
     expect(page).not.toContain('isLongHaired')
     expect(page).not.toContain('resolveQuestions')
+    expect(page).not.toContain('skippable')
+    expect(page).not.toContain('BCS_SKIP')
+    expect(page).not.toContain('看不出来')
     expect(page).toContain('BCS_QUESTIONS')
-    // 两道「看」的题各有「看不出来」
-    expect(page).toContain('question.skippable')
-    expect(page).toContain('BCS_SKIP')
-    expect(page).toContain('看不出来')
+  })
+
+  it('应用犬种分数下限，且展示与保存用同一个数', () => {
+    const page = read()
+    // 下限的名单与数值都在后端数据库，小程序只负责应用
+    expect(page).toContain('applyBcsScoreFloor')
+    expect(page).toContain('bcsScoreFloor')
+    // 屏幕显示的分必须就是写进表单的分，否则顾客会看到两个数
+    expect(page).toContain('effectiveBcs')
+    expect(page).toContain('formData.value.bcsScore = applyBcsScoreFloor(')
   })
 })

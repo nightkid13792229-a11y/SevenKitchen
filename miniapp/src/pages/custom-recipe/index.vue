@@ -60,8 +60,8 @@
             <text class="gate-row__label">体况评分</text>
             <text
               class="gate-row__value"
-              :class="{ 'gate-row__value--done': gateBcsResult.bcs !== null }"
-            >{{ gateBcsResult.bcs === null ? '待确认' : `${gateBcsResult.bcs} 分 · ${gateBcsResultLabel}` }}</text>
+              :class="{ 'gate-row__value--done': gateEffectiveBcs !== null }"
+            >{{ gateEffectiveBcs === null ? '待确认' : `${gateEffectiveBcs} 分 · ${gateBcsResultLabel}` }}</text>
           </view>
           <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
 
@@ -85,12 +85,6 @@
                 :class="{ active: gateBcsAnswers[question.key] === option.bcs }"
                 @tap="selectGateBcsAnswer(question.key, option.bcs)"
               >{{ option.label }}</view>
-              <view
-                v-if="question.skippable"
-                class="bcs-question__option bcs-question__option--skip"
-                :class="{ active: gateBcsAnswers[question.key] === BCS_SKIP }"
-                @tap="selectGateBcsAnswer(question.key, BCS_SKIP)"
-              >看不出来</view>
             </view>
           </view>
         </view>
@@ -429,7 +423,7 @@ import {
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  BCS_SKIP,
+  applyBcsScoreFloor,
   resolveBcsFromAnswers,
 } from '@/utils/bcs-questionnaire';
 
@@ -590,11 +584,24 @@ const gateBcsResult = computed(() =>
   }),
 );
 
-const gateBcsResultLabel = computed(() =>
-  gateBcsResult.value.bcs === null ? '' : getBcsLabel(gateBcsResult.value.bcs),
+/**
+ * 该犬种的体况分下限（深胸细腰型犬，如灵缇）。
+ * 名单与数值来自数据库犬种表，随狗的档案接口下发。
+ */
+const gateBcsScoreFloor = computed(
+  () => selectedDog.value?.bcsScoreFloor ?? null,
 );
 
-/** 必答的两道「摸」题还没答完 → 按钮不可用（与建档页同一套判据） */
+/** 最终生效的体况分 = 算出的分与犬种下限取较大者 */
+const gateEffectiveBcs = computed(() =>
+  applyBcsScoreFloor(gateBcsResult.value.bcs, gateBcsScoreFloor.value),
+);
+
+const gateBcsResultLabel = computed(() =>
+  gateEffectiveBcs.value === null ? '' : getBcsLabel(gateEffectiveBcs.value),
+);
+
+/** 必答题还没答完 → 按钮不可用（与建档页同一套判据） */
 const gateBcsPending = computed(
   () => !gateBcsAlreadyConfirmed.value && gateBcsResult.value.bcs === null,
 );
@@ -1544,19 +1551,6 @@ const getActivityLabel = (level: string) => {
   color: #26261f;
   font-weight: 700;
   line-height: 1.5;
-}
-.bcs-question__option--skip {
-  border-style: dashed;
-  color: #8a938d;
-  background: #fafbfa;
-}
-
-.bcs-question__option--skip.active {
-  border-style: solid;
-  border-color: #8a938d;
-  background: #eef1ef;
-  color: #5d6660;
-  font-weight: 600;
 }
 
 .bcs-question__options {

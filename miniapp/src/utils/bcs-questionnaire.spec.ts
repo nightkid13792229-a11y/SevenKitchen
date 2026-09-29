@@ -3,188 +3,153 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   BCS_QUESTIONS,
-  BCS_SKIP,
+  applyBcsScoreFloor,
   getBcsLabel,
   resolveBcsFallback,
   resolveBcsFromAnswers,
 } from './bcs-questionnaire'
 
-describe('体况引导：题目集（阶段 C）', () => {
-  it('共 4 道题，其中 2 道是「摸」、2 道是「看」', () => {
-    expect(BCS_QUESTIONS).toHaveLength(4)
-    expect(BCS_QUESTIONS.filter((q) => q.kind === 'touch')).toHaveLength(2)
-    expect(BCS_QUESTIONS.filter((q) => q.kind === 'look')).toHaveLength(2)
+/**
+ * 体况问卷（2026-09-29 复盘后定稿）
+ *
+ *   1 道题、5 个选项，全部是「手要按多用力」的动作阶梯。
+ *   依据：WSAVA 官方 9 档判据里，肋骨是唯一贯穿 1-9 的检查点；
+ *   腰椎/骨盆属于 MCS（肌肉状况评分）、腰线/腹部是视觉项（桶胸犬答不准），
+ *   三者都已删除。详见 bcs-questionnaire.ts 顶部注释。
+ */
+describe('体况问卷：题目集', () => {
+  it('只有 1 道题、5 个选项 —— 动作阶梯：碰 → 放上去 → 轻轻按 → 用力按 → 摸不到', () => {
+    expect(BCS_QUESTIONS).toHaveLength(1)
+    expect(BCS_QUESTIONS[0].key).toBe('ribs')
+    expect(BCS_QUESTIONS[0].options.map((o) => o.label)).toEqual([
+      '一碰就硌手，几乎没有肉',
+      '手放上去就摸到，不用按',
+      '要轻轻按一下才摸到',
+      '要用力按才摸到',
+      '怎么都摸不到',
+    ])
   })
 
-  it('必答题是两道「摸」的题（不受毛发长度影响）', () => {
-    const required = BCS_QUESTIONS.filter((q) => q.required)
-    expect(required.map((q) => q.key)).toEqual(['ribs', 'spine'])
-    expect(required.every((q) => q.kind === 'touch')).toBe(true)
+  it('选项分数逐条对齐 WSAVA 肋骨判据', () => {
+    expect(BCS_QUESTIONS[0].options.map((o) => o.bcs)).toEqual([2, 3, 5, 7, 9])
   })
 
-  it('每题 4 个选项，选项对应的体况分都在 1-9 之间', () => {
-    for (const q of BCS_QUESTIONS) {
-      expect(q.options).toHaveLength(4)
-      for (const o of q.options) {
-        expect(o.bcs).toBeGreaterThanOrEqual(1)
-        expect(o.bcs).toBeLessThanOrEqual(9)
-      }
-    }
+  it('是必答题（不答就不出分，不猜）', () => {
+    expect(BCS_QUESTIONS[0].required).toBe(true)
   })
 
-  it('标准体重的狗：四题都选中间档 → 5 分', () => {
-    const answers = { ribs: 5, spine: 5, waist: 5, tuck: 5 }
-    expect(resolveBcsFromAnswers({ answers, questions: BCS_QUESTIONS }).bcs).toBe(5)
+  it('带指导图（挂在题干上方）', () => {
+    expect(BCS_QUESTIONS[0].image).toContain('bcs-guide-palpate-ribs.jpg')
   })
-})
 
-describe('体况引导：不再按犬种分类，改用「看不出来」跳过', () => {
-  it('题目模块里不存在任何犬种判断（柴犬这类边界犬种不再有争议）', () => {
+  it('不再问腰线/腹部/腰椎/骨盆 —— 那三项分别是视觉项与 MCS', () => {
+    const keys = BCS_QUESTIONS.map((q) => q.key)
+    expect(keys).not.toContain('waist')
+    expect(keys).not.toContain('tuck')
+    expect(keys).not.toContain('spine')
+
     const source = readFileSync(
       resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
       'utf-8',
     )
-    // 只查代码，不查注释 —— 注释里正解释着为什么把这份名单删掉
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
-    expect(code).not.toContain('isLongHairedBreed')
-    expect(code).not.toContain('resolveQuestions')
-    expect(code).not.toContain('KEYWORDS')
-    expect(code).not.toContain('柴犬')
-    expect(code).not.toContain('泰迪')
-  })
-
-  it('所有狗拿到同一套题（4 道）', () => {
-    expect(BCS_QUESTIONS).toHaveLength(4)
-  })
-
-  it('只有两道「看」的题可以「看不出来」', () => {
-    const skippable = BCS_QUESTIONS.filter((q) => q.skippable)
-    expect(skippable.map((q) => q.key)).toEqual(['waist', 'tuck'])
-    expect(skippable.every((q) => q.kind === 'look')).toBe(true)
-  })
-
-  it('「看不出来」不计入中位数，等价于该题没答', () => {
-    // 直观上像 7 分（腰线平直），但顾客说看不出来，就不该拿它去推高结论
-    const withSkip = resolveBcsFromAnswers({
-      answers: { ribs: 5, spine: 5, waist: BCS_SKIP, tuck: BCS_SKIP },
-      questions: BCS_QUESTIONS,
-    })
-    expect(withSkip.bcs).toBe(5)
-
-    const withGuess = resolveBcsFromAnswers({
-      answers: { ribs: 5, spine: 5, waist: 7, tuck: 7 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(withGuess.bcs).toBe(6)
-  })
-
-  it('必答题不接受「看不出来」（摸得出来，不该跳过）', () => {
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: BCS_SKIP, spine: 5 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBeNull()
-    expect(result.missing).toHaveLength(1)
+    // 只查代码，不查注释 —— 注释里正解释着为什么把这几个删掉
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    expect(code).not.toContain('腰椎')
+    expect(code).not.toContain('骨盆')
+    expect(code).not.toContain('腰部')
+    expect(code).not.toContain('腹部')
   })
 })
 
-describe('体况引导：分数档对齐 WSAVA 官方判据', () => {
-  it('选项分数与官方逐档判据一致', () => {
-    const byKey = Object.fromEntries(
-      BCS_QUESTIONS.map((q) => [q.key, q.options.map((o) => o.bcs)]),
-    )
-    // 官方第 3 档原文即「明顯腰身與腹部凹陷」，所以「看」的题最瘦档是 3 不是 4
-    expect(byKey.ribs).toEqual([1, 5, 7, 9])
-    expect(byKey.spine).toEqual([1, 5, 7, 9])
-    expect(byKey.waist).toEqual([3, 5, 7, 9])
-    expect(byKey.tuck).toEqual([3, 5, 6, 8])
+describe('体况问卷：算分', () => {
+  it('选哪一档就是几分（只有一道题）', () => {
+    for (const option of BCS_QUESTIONS[0].options) {
+      const result = resolveBcsFromAnswers({
+        answers: { ribs: option.bcs },
+        questions: BCS_QUESTIONS,
+      })
+      expect(result.bcs).toBe(option.bcs)
+      expect(result.isComplete).toBe(true)
+    }
   })
 
-  it('极瘦的狗算得出 1-2 分（不再被系统性低估 20%）', () => {
-    const thinnest = Object.fromEntries(
-      BCS_QUESTIONS.map((q) => [q.key, q.options[0].bcs]),
-    )
-    // 四题都答最瘦档 -> 2 分（旧版只能到 3 分）
-    expect(resolveBcsFromAnswers({ answers: thinnest, questions: BCS_QUESTIONS }).bcs).toBe(2)
-
-    // 瘦到骨头明显时，两道「看」的题通常也会看不出来 -> 1 分可达
-    const skipped = { ...thinnest, waist: BCS_SKIP, tuck: BCS_SKIP }
-    expect(resolveBcsFromAnswers({ answers: skipped, questions: BCS_QUESTIONS }).bcs).toBe(1)
+  it('一碰就硌手 → 2 分；怎么都摸不到 → 9 分（两端都可达）', () => {
+    const lowest = resolveBcsFromAnswers({
+      answers: { ribs: 2 },
+      questions: BCS_QUESTIONS,
+    })
+    const highest = resolveBcsFromAnswers({
+      answers: { ribs: 9 },
+      questions: BCS_QUESTIONS,
+    })
+    expect(lowest.bcs).toBe(2)
+    expect(highest.bcs).toBe(9)
   })
 
-  it('最胖的狗仍然算得出 9 分', () => {
-    const fattest = Object.fromEntries(
-      BCS_QUESTIONS.map((q) => [q.key, q.options[q.options.length - 1].bcs]),
-    )
-    expect(resolveBcsFromAnswers({ answers: fattest, questions: BCS_QUESTIONS }).bcs).toBe(9)
-  })
-})
-
-describe('体况引导：算分与必答校验', () => {
-  it('两道必答题没答完 → 不给分（不猜）', () => {
+  it('没答 → 不给分（不猜一个看起来合理的数）', () => {
     const result = resolveBcsFromAnswers({
-      answers: { ribs: 5 },
+      answers: {},
       questions: BCS_QUESTIONS,
     })
     expect(result.bcs).toBeNull()
     expect(result.isComplete).toBe(false)
     expect(result.missing).toHaveLength(1)
   })
+})
 
-  it('只答两道必答题也能出分（选答题可跳过）', () => {
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: 7, spine: 7 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBe(7)
-    expect(result.isComplete).toBe(true)
+describe('体况分数下限（深胸细腰型犬，名单与数值来自数据库）', () => {
+  it('灵缇在理想体态下答出 2 分 → 抬到 4 分（维持现状，不逼它增重）', () => {
+    expect(applyBcsScoreFloor(2, 4)).toBe(4)
+    expect(applyBcsScoreFloor(3, 4)).toBe(4)
   })
 
-  it('中位数对个别看错一项是稳健的', () => {
-    // 三项都指向 5 分，只有一项看错成 9 分 → 仍应得 5 分左右
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: 5, spine: 5, waist: 5, tuck: 9 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBe(5)
+  it('已经高于下限时不动它', () => {
+    expect(applyBcsScoreFloor(5, 4)).toBe(5)
+    expect(applyBcsScoreFloor(7, 4)).toBe(7)
+    expect(applyBcsScoreFloor(9, 4)).toBe(9)
   })
 
-  it('明显偏胖的狗 → 7 分及以上', () => {
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: 7, spine: 7, waist: 7, tuck: 8 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBeGreaterThanOrEqual(7)
+  it('没有下限（其余全部犬种）→ 原样返回', () => {
+    expect(applyBcsScoreFloor(2, null)).toBe(2)
+    expect(applyBcsScoreFloor(2, undefined)).toBe(2)
+    expect(applyBcsScoreFloor(7, null)).toBe(7)
   })
 
-  it('明显偏瘦的狗 → 3 分及以下', () => {
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: 1, spine: 2, waist: 4, tuck: 4 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBeLessThanOrEqual(4)
+  it('没算出分数时保持 null（不能凭空变成一个分）', () => {
+    expect(applyBcsScoreFloor(null, 4)).toBeNull()
+    expect(applyBcsScoreFloor(null, null)).toBeNull()
   })
 
-  it('算出的分数始终落在 1-9 内', () => {
-    const result = resolveBcsFromAnswers({
-      answers: { ribs: 1, spine: 1, waist: 1, tuck: 1 },
-      questions: BCS_QUESTIONS,
-    })
-    expect(result.bcs).toBeGreaterThanOrEqual(1)
-    expect(result.bcs).toBeLessThanOrEqual(9)
+  it('下限可调（存在数据库里，不是写死的 4）', () => {
+    expect(applyBcsScoreFloor(2, 5)).toBe(5)
+    expect(applyBcsScoreFloor(2, 3)).toBe(3)
+  })
+
+  it('小程序里不存在任何犬种名单（名单在后端数据库）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
+      'utf-8',
+    )
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    expect(code).not.toContain('灵缇')
+    expect(code).not.toContain('惠比特')
+    expect(code).not.toContain('KEYWORDS')
   })
 })
 
-describe('体况引导：跳过的兜底', () => {
-  it('顾客仍跳过时按默认 5 分，但**明确标记为未确认**', () => {
+describe('体况问卷：兜底与文案', () => {
+  it('顾客整个跳过体况时：默认 5 分 + 标记未确认', () => {
     const fallback = resolveBcsFallback()
     expect(fallback.bcs).toBe(5)
     expect(fallback.confirmed).toBe(false)
   })
-})
 
-describe('体况引导：结果文案', () => {
   it('各档位都有中文说明', () => {
+    expect(getBcsLabel(2)).toBe('明显偏瘦')
     expect(getBcsLabel(3)).toBe('偏瘦')
     expect(getBcsLabel(5)).toBe('理想体态')
     expect(getBcsLabel(7)).toBe('偏胖')

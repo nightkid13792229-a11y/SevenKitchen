@@ -335,7 +335,7 @@
             <!-- 已有确认结果且本次还没作答时，如实显示当前值：
                  不让顾客以为"我的答案丢了"，也不替他编一组答案 -->
             <text
-              v-if="bcsStatus.confirmed && bcsResult.bcs === null"
+              v-if="bcsStatus.confirmed && effectiveBcs === null"
               class="bcs-current"
             >当前 {{ form.bcsScore }} 分 · {{ getBcsLabel(Number(form.bcsScore) || 5) }}</text>
             <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
@@ -360,17 +360,11 @@
                   :class="{ active: bcsAnswers[question.key] === option.bcs }"
                   @tap="selectBcsAnswer(question.key, option.bcs)"
                 >{{ option.label }}</view>
-                <view
-                  v-if="question.skippable"
-                  class="bcs-question__option bcs-question__option--skip"
-                  :class="{ active: bcsAnswers[question.key] === BCS_SKIP }"
-                  @tap="selectBcsAnswer(question.key, BCS_SKIP)"
-                >看不出来</view>
               </view>
             </view>
 
-            <view v-if="bcsResult.bcs !== null" class="bcs-result">
-              <text class="bcs-result__score">体况：{{ bcsResult.bcs }} 分 · {{ bcsResultLabel }}</text>
+            <view v-if="effectiveBcs !== null" class="bcs-result">
+              <text class="bcs-result__score">体况：{{ effectiveBcs }} 分 · {{ bcsResultLabel }}</text>
             </view>
           </view>
 
@@ -639,7 +633,7 @@ import { getBreedSearchUiState } from '../../utils/dog-breed-ui'
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  BCS_SKIP,
+  applyBcsScoreFloor,
   resolveBcsFromAnswers,
 } from '../../utils/bcs-questionnaire'
 import {
@@ -815,6 +809,11 @@ const form = reactive<Record<string, any>>({
   bcsScoreConfirmed: false,
   bcsScoreConfirmedAt: null as string | null,
   bcsConfirmedWeightKg: null as number | null,
+  /**
+   * 该犬种的体况分下限（深胸细腰型犬，如灵缇 = 4），随狗的档案接口下发。
+   * 名单与数值都在数据库的犬种表里，小程序不维护。
+   */
+  bcsScoreFloor: null as number | null,
   // 繁殖期信息（2026-09-29，阶段 A）
   matingDate: '',
   expectedDueDate: '',
@@ -1398,6 +1397,7 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
   form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
+  form.bcsScoreFloor = nextProfile.bcsScoreFloor ?? null
   form.bcsScoreConfirmedAt = nextProfile.bcsScoreConfirmedAt ?? null
   form.bcsConfirmedWeightKg = nextProfile.bcsConfirmedWeightKg ?? null
   form.matingDate = toDateInputValue(nextProfile.matingDate)
@@ -1648,8 +1648,19 @@ const bcsResult = computed(() =>
   resolveBcsFromAnswers({ answers: bcsAnswers.value, questions: bcsQuestions }),
 )
 
+/**
+ * 该犬种的体况分下限（深胸细腰型犬，如灵缇）。
+ * 名单与数值来自数据库犬种表，随狗的档案接口下发。
+ */
+const bcsScoreFloor = computed(() => form.bcsScoreFloor ?? null)
+
+/** 最终生效的体况分 = 算出的分与犬种下限取较大者（展示与保存必须是同一个数） */
+const effectiveBcs = computed(() =>
+  applyBcsScoreFloor(bcsResult.value.bcs, bcsScoreFloor.value),
+)
+
 const bcsResultLabel = computed(() =>
-  bcsResult.value.bcs === null ? '' : getBcsLabel(bcsResult.value.bcs),
+  effectiveBcs.value === null ? '' : getBcsLabel(effectiveBcs.value),
 )
 
 /** 顾客点某一题的某个选项 */
@@ -1660,8 +1671,8 @@ function selectBcsAnswer(questionKey: string, bcs: number) {
     questions: bcsQuestions,
   })
   if (result.bcs !== null) {
-    // 算出来了 → 写进表单并标记「顾客亲自确认过」
-    form.bcsScore = result.bcs
+    // 算出来了 → 按犬种下限修正后写进表单，并标记「顾客亲自确认过」
+    form.bcsScore = applyBcsScoreFloor(result.bcs, bcsScoreFloor.value) ?? result.bcs
     form.bcsScoreConfirmed = true
   }
 }
@@ -2883,20 +2894,6 @@ function goToHealthProfile() {
   color: #2f3a34;
   font-weight: 600;
   line-height: 1.5;
-}
-
-.bcs-question__option--skip {
-  border-style: dashed;
-  color: #8a938d;
-  background: #fafbfa;
-}
-
-.bcs-question__option--skip.active {
-  border-style: solid;
-  border-color: #8a938d;
-  background: #eef1ef;
-  color: #5d6660;
-  font-weight: 600;
 }
 
 .bcs-question__options {

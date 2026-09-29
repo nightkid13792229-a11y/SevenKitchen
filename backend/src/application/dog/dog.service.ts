@@ -402,6 +402,7 @@ export class DogService {
       // 确认状态：只有前端明确说"顾客点过这一项"才记确认时间。
       // 体况评分/活动量/每日餐数都有默认值，不区分确认的话，门槛就永远拦不住人。
       dto.bcsScoreConfirmed ? new Date() : null,
+      dto.bcsScoreConfirmed ? dto.currentWeightKg : null,
       dto.activityLevelConfirmed ? new Date() : null,
       dto.mealsPerDayConfirmed ? new Date() : null,
       dto.preferredFoods ?? null,
@@ -498,6 +499,8 @@ export class DogService {
     // 只认 true —— 不传或传 false 都不清掉已有确认（改个名字不该让确认状态失效）。
     if (dto.bcsScoreConfirmed) {
       dog.bcsScoreConfirmedAt = new Date();
+      // 阶段 C8：同时记下确认时的体重，供「体重变化 ≥5% 提醒重评」使用
+      dog.bcsConfirmedWeightKg = dog.currentWeightKg;
     }
     if (dto.activityLevelConfirmed) {
       dog.activityLevelConfirmedAt = new Date();

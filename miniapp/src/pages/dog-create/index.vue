@@ -365,6 +365,11 @@
             <text class="bcs-longhair-hint__text">长毛狗狗看不出来，所以只问两个「用手摸」的问题。</text>
           </view>
 
+          <!-- 特殊犬种提示（阶段 C9）：不改变算分，只提醒别按常规标准误判 -->
+          <view v-if="specialBreedHint" class="bcs-longhair-hint">
+            <text class="bcs-longhair-hint__text">{{ specialBreedHint }}</text>
+          </view>
+
           <view
             v-for="question in bcsQuestions"
             :key="question.key"
@@ -811,9 +816,11 @@ import {
 } from '../../utils/dog-profile-form'
 import {
   getBcsLabel,
+  getSpecialBreedHint,
   isLongHairedBreed,
   resolveBcsFromAnswers,
   resolveQuestions,
+  resolveSpecialBreedType,
 } from '../../utils/bcs-questionnaire'
 import {
   formatWeightEcho,
@@ -1379,6 +1386,17 @@ const isLongHaired = computed(() =>
     isMixedBreed.value
       ? formData.value.customBreedName
       : selectedBreed.value?.name,
+  ),
+)
+
+/** 特殊犬种判断提示（阶段 C9）：深胸细腰型 / 短鼻桶胸型 */
+const specialBreedHint = computed(() =>
+  getSpecialBreedHint(
+    resolveSpecialBreedType(
+      isMixedBreed.value
+        ? formData.value.customBreedName
+        : selectedBreed.value?.name,
+    ),
   ),
 )
 

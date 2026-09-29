@@ -424,6 +424,9 @@ model Dog {
   ///   · 有值 + 已确认 —— 顾客亲自选过
   /// 老档案不回填（老板决定「不追溯」），因此为 NULL 即"未确认"。
   bcsScoreConfirmedAt      DateTime? @map("bcs_score_confirmed_at")
+  /// 顾客确认体况分时的体重（2026-09-29，阶段 C8）。
+  /// 「体重变化 ≥5% 就提醒重评体况」需要这个基准值，否则只有确认时间、没有参照体重。
+  bcsConfirmedWeightKg     Float?    @map("bcs_confirmed_weight_kg")
   activityLevelConfirmedAt DateTime? @map("activity_level_confirmed_at")
   mealsPerDayConfirmedAt   DateTime? @map("meals_per_day_confirmed_at")
   treatInputMode       TreatInputMode      @default(ESTIMATE_LEVEL) @map("treat_input_mode")

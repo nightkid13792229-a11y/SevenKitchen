@@ -133,6 +133,7 @@ export class PrismaDogRepository implements DogRepository {
       record.avatarUrl,
       record.weightUpdatedAt ?? null,
       record.bcsScoreConfirmedAt ?? null,
+      record.bcsConfirmedWeightKg ?? null,
       record.activityLevelConfirmedAt ?? null,
       record.mealsPerDayConfirmedAt ?? null,
       record.preferredFoods ?? null,

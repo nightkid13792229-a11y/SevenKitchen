@@ -122,6 +122,14 @@
           <!-- 生命阶段（2026-09-29，阶段 A）
                此前顾客端**只有建档时**能指定生命阶段，编辑页没有入口 ——
                一只成年犬忽然怀孕，顾客无从切换。这里补上入口与必要的日期字段。 -->
+
+          <!-- 体况确认状态与重评提醒（2026-09-29，阶段 C7/C8）
+               新算法让体况分第一次真正起作用；而生产库 99.98% 的档案从未确认过。
+               这里把「确没确认」「该不该重评」直接显示给顾客。 -->
+          <view class="bcs-status" :class="{ 'bcs-status--pending': !bcsStatus.confirmed }">
+            <text class="bcs-status__text">{{ bcsStatus.text }}</text>
+            <text v-if="bcsStatus.reviewHint" class="bcs-status__hint">{{ bcsStatus.reviewHint }}</text>
+          </view>
           <view class="field-group">
             <text class="field-label">生命阶段</text>
             <view class="life-stage-grid">
@@ -678,6 +686,9 @@ interface DogProfileDetail {
   bcsScore?: number
   activityLevel?: string
   lifeStageOverride?: string
+  bcsScoreConfirmed?: boolean
+  bcsScoreConfirmedAt?: string | null
+  bcsConfirmedWeightKg?: number | null
   matingDate?: string | null
   expectedDueDate?: string | null
   deliveryDate?: string | null
@@ -806,6 +817,10 @@ const form = reactive<Record<string, any>>({
   bcsScore: 5,
   activityLevel: 'LOW',
   lifeStageOverride: 'NONE',
+  // 体况确认状态（2026-09-29，阶段 C7/C8）
+  bcsScoreConfirmed: false,
+  bcsScoreConfirmedAt: null as string | null,
+  bcsConfirmedWeightKg: null as number | null,
   // 繁殖期信息（2026-09-29，阶段 A）
   matingDate: '',
   expectedDueDate: '',
@@ -976,6 +991,54 @@ const reproductionExpiredHint = computed(() => {
   }
 
   return ''
+})
+
+/**
+ * 体况确认状态与重评提醒（阶段 C7/C8）
+ *
+ * 两条重评规则（与老板确认的口径一致）：
+ *   1. 距上次确认超过 **3 个月**
+ *   2. 当前体重相对**确认时的体重**变化 **≥5%**
+ * 未确认过 → 提示去确认（新算法靠体况分换算理想体重，未确认会影响准确度）。
+ */
+const bcsStatus = computed(() => {
+  const confirmed = Boolean(form.bcsScoreConfirmed)
+  const confirmedAtRaw = form.bcsScoreConfirmedAt
+  const confirmedWeight = form.bcsConfirmedWeightKg
+  const now = Date.now()
+  const MONTH = 30.4375 * 86400000
+
+  if (!confirmed) {
+    return {
+      confirmed: false,
+      text: `体况分 ${form.bcsScore}（默认值，未确认）`,
+      reviewHint: '还没确认过体况。新算法会用体况分推算目标体重，建议做一次「摸肋骨」确认。',
+    }
+  }
+
+  let reviewHint = ''
+  if (confirmedAtRaw) {
+    const at = new Date(confirmedAtRaw)
+    if (!Number.isNaN(at.getTime()) && now - at.getTime() > 3 * MONTH) {
+      reviewHint = '上次确认体况已经超过 3 个月，建议重新摸一下肋骨确认。'
+    }
+  }
+
+  if (!reviewHint && typeof confirmedWeight === 'number' && confirmedWeight > 0) {
+    const current = Number(form.currentWeightKg)
+    if (Number.isFinite(current) && current > 0) {
+      const change = Math.abs(current - confirmedWeight) / confirmedWeight
+      if (change >= 0.05) {
+        reviewHint = `体重相对上次确认时（${confirmedWeight} kg）变化了 ${Math.round(change * 100)}%，建议重新评估体况。`
+      }
+    }
+  }
+
+  return {
+    confirmed: true,
+    text: `体况分 ${form.bcsScore}（已确认）`,
+    reviewHint,
+  }
 })
 
 const onExpectedDueDateChange = (e: any) => {
@@ -1341,6 +1404,9 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
   form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
+  form.bcsScoreConfirmed = Boolean(nextProfile.bcsScoreConfirmed)
+  form.bcsScoreConfirmedAt = nextProfile.bcsScoreConfirmedAt ?? null
+  form.bcsConfirmedWeightKg = nextProfile.bcsConfirmedWeightKg ?? null
   form.matingDate = toDateInputValue(nextProfile.matingDate)
   form.expectedDueDate = toDateInputValue(nextProfile.expectedDueDate)
   form.deliveryDate = toDateInputValue(nextProfile.deliveryDate)
@@ -2820,5 +2886,32 @@ function goToHealthProfile() {
   font-size: 24rpx;
   color: #b4553f;
   line-height: 1.6;
+}
+
+/* ===== 体况确认状态（2026-09-29，阶段 C7/C8） ===== */
+.bcs-status {
+  margin: 16rpx 0;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background-color: #eef4ea;
+}
+
+.bcs-status--pending {
+  background-color: #fdf3ee;
+}
+
+.bcs-status__text {
+  display: block;
+  font-size: 26rpx;
+  color: #1e3a2f;
+  font-weight: bold;
+}
+
+.bcs-status__hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #6b7a70;
+  line-height: 1.5;
 }
 </style>

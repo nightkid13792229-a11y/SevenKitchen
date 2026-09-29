@@ -55,6 +55,8 @@ export class Dog {
      *   · 有值 = 顾客在某次建档/改档里亲自点过这一项
      */
     public bcsScoreConfirmedAt: Date | null = null,
+    /** 确认体况分时的体重（阶段 C8）：用于「体重变化 ≥5% 就提醒重评」 */
+    public bcsConfirmedWeightKg: number | null = null,
     public activityLevelConfirmedAt: Date | null = null,
     public mealsPerDayConfirmedAt: Date | null = null,
     /**

@@ -98,6 +98,18 @@ export class DogProfileDto {
   @ApiProperty({ description: '顾客是否亲自确认过体况评分' })
   bcsScoreConfirmed!: boolean;
 
+  @ApiProperty({
+    description: '体况分的确认时间（阶段 C7/C8）：档案页显示状态、并按时间提醒重评',
+    required: false,
+  })
+  bcsScoreConfirmedAt?: Date | null;
+
+  @ApiProperty({
+    description: '确认体况分时的体重（阶段 C8）：用于「体重变化 ≥5% 提醒重评」',
+    required: false,
+  })
+  bcsConfirmedWeightKg?: number | null;
+
   @ApiProperty({ description: '顾客是否亲自确认过活动量' })
   activityLevelConfirmed!: boolean;
 

@@ -1131,6 +1131,9 @@ export class DogsController {
       // 确认状态：前端据此判断"这份档案是否满足定制门槛"，
       // 未确认的进入定制页时要求顾客补确认（老档案不追溯）。
       bcsScoreConfirmed: Boolean(dog.bcsScoreConfirmedAt),
+      // 阶段 C7/C8：档案页要显示确认状态，并按「3 个月或体重变化 ≥5%」提醒重评
+      bcsScoreConfirmedAt: dog.bcsScoreConfirmedAt ?? null,
+      bcsConfirmedWeightKg: dog.bcsConfirmedWeightKg ?? null,
       activityLevelConfirmed: Boolean(dog.activityLevelConfirmedAt),
       mealsPerDayConfirmed: Boolean(dog.mealsPerDayConfirmedAt),
       lifeStageOverride: dog.lifeStageOverride,

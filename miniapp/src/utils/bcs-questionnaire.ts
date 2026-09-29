@@ -117,50 +117,6 @@ const LONG_HAIR_BREED_KEYWORDS = [
   'akita', 'shiba',
 ];
 
-/**
- * 需要特殊判断标准的犬种（阶段 C9）。
- *
- * 这两类犬用常规标准会误判：
- *   · 深胸细腰型（灵缇、惠比特等）：**理想体况下就能看到肋骨和腰线**，
- *     按常规标准容易被误判成「偏瘦」
- *   · 短鼻桶胸型（法斗、英斗、巴哥等）：胸廓本身就宽、腰线不明显，
- *     容易被误判成「偏胖」
- * 处理方式：**不改变算分逻辑**（那会引入主观偏差），
- * 而是在题目上方给一句针对该犬种的提示。
- */
-const SIGHTHOUND_KEYWORDS = ['灵缇', '格力', '惠比特', '萨路基', '阿富汗', 'greyhound', 'whippet', 'saluki', 'borzoi'];
-const BRACHYCEPHALIC_KEYWORDS = ['法斗', '法国斗牛', '英斗', '英国斗牛', '巴哥', '八哥', '波士顿', '西施', '北京犬', 'bulldog', 'pug', 'boston', 'french'];
-
-export type BcsSpecialBreedType = 'SIGHTHOUND' | 'BRACHYCEPHALIC' | null;
-
-/** 识别需要特殊判断标准的犬种 */
-export function resolveSpecialBreedType(
-  breedName?: string | null,
-): BcsSpecialBreedType {
-  if (!breedName) {
-    return null;
-  }
-  const name = String(breedName).toLowerCase();
-  if (SIGHTHOUND_KEYWORDS.some((k) => name.includes(k.toLowerCase()))) {
-    return 'SIGHTHOUND';
-  }
-  if (BRACHYCEPHALIC_KEYWORDS.some((k) => name.includes(k.toLowerCase()))) {
-    return 'BRACHYCEPHALIC';
-  }
-  return null;
-}
-
-/** 该犬种的判断提示（没有则返回空串） */
-export function getSpecialBreedHint(type: BcsSpecialBreedType): string {
-  if (type === 'SIGHTHOUND') {
-    return '灵缇、惠比特这类狗，**即使体况理想也能看到肋骨和腰线**。所以「不用按就能摸到肋骨」对它们来说可能仍是正常的，别急着判断成偏瘦。';
-  }
-  if (type === 'BRACHYCEPHALIC') {
-    return '法斗、巴哥这类狗，胸廓天生就宽、腰线不明显。所以「俯视看不到收窄」对它们来说可能仍是正常的，重点看**摸肋骨**的结果。';
-  }
-  return '';
-}
-
 /** 判断是否按「长毛犬」处理（只留摸的两题） */
 export function isLongHairedBreed(breedName?: string | null): boolean {
   if (!breedName) {

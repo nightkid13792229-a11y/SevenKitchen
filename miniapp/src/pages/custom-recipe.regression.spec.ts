@@ -478,8 +478,6 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
       'resolveBcsFromAnswers',
       'getBcsLabel',
       'isLongHairedBreed',
-      'resolveSpecialBreedType',
-      'getSpecialBreedHint',
     ]) {
       expect(submit).toContain(fn)
     }
@@ -513,10 +511,14 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
     expect(syncSource).toContain('gateBcsAnswers.value = {}')
   })
 
-  it('长毛犬与特殊犬种的提示一并带过来', () => {
+  it('长毛犬判断保留，但提醒文案与逐题小字已删（与建档页对齐）', () => {
+    // 判断本身是算分正确性的一部分，不能跟着文案一起删
     expect(submit).toContain('gateIsLongHaired')
-    expect(submit).toContain('gateSpecialBreedHint')
-    expect(submit).toContain('bcs-longhair-hint')
+    // 文案按「能精简就精简」删掉，全板块只留一个轻量 Banner
+    expect(submit).not.toContain('长毛狗狗看不出来')
+    expect(submit).not.toContain('question.hint')
+    expect(submit).not.toContain('gateSpecialBreedHint')
+    expect(submit).toContain('回答以下问题，确认狗狗的体态健康！')
   })
 
   it('门槛仍然按「顾客确认过」判定，不看有没有值', () => {

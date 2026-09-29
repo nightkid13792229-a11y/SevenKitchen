@@ -63,22 +63,20 @@
               :class="{ 'gate-row__value--done': gateBcsResult.bcs !== null }"
             >{{ gateBcsResult.bcs === null ? '待确认' : `${gateBcsResult.bcs} 分 · ${gateBcsResultLabel}` }}</text>
           </view>
-          <text class="gate-bcs__hint">不用估分数，回答下面的动作就行</text>
-
-          <view v-if="gateIsLongHaired" class="bcs-longhair-hint">
-            <text class="bcs-longhair-hint__text">长毛狗狗看不出来，所以只问两个「用手摸」的问题。</text>
-          </view>
-          <view v-if="gateSpecialBreedHint" class="bcs-longhair-hint">
-            <text class="bcs-longhair-hint__text">{{ gateSpecialBreedHint }}</text>
-          </view>
+          <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
 
           <view
             v-for="question in gateBcsQuestions"
             :key="question.key"
             class="bcs-question"
           >
+            <image
+              v-if="question.image"
+              class="bcs-question__image"
+              :src="question.image"
+              mode="widthFix"
+            />
             <text class="bcs-question__title">{{ question.title }}</text>
-            <text class="bcs-question__hint">{{ question.hint }}</text>
             <view class="bcs-question__options">
               <view
                 v-for="option in question.options"
@@ -424,11 +422,9 @@ import {
 } from '@/api/weight-goal-plan';
 import {
   getBcsLabel,
-  getSpecialBreedHint,
   isLongHairedBreed,
   resolveBcsFromAnswers,
   resolveQuestions,
-  resolveSpecialBreedType,
 } from '@/utils/bcs-questionnaire';
 
 // 状态定义
@@ -581,11 +577,6 @@ const gateBcsAlreadyConfirmed = computed(() =>
 
 const gateIsLongHaired = computed(() =>
   isLongHairedBreed(selectedDog.value?.breedName),
-);
-
-/** 特殊犬种判断提示（阶段 C9）：深胸细腰型 / 短鼻桶胸型 */
-const gateSpecialBreedHint = computed(() =>
-  getSpecialBreedHint(resolveSpecialBreedType(selectedDog.value?.breedName)),
 );
 
 const gateBcsQuestions = computed(() =>
@@ -1524,43 +1515,34 @@ const getActivityLabel = (level: string) => {
   background: transparent;
   border: none;
 }
-.gate-bcs__hint {
-  display: block;
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: #8a6f3d;
-}
 .gate-row__value--done {
   color: #1a7f37;
 }
 /* 长毛犬 / 特殊犬种提示 —— 与建档页同一套文案 */
-.bcs-longhair-hint {
-  margin: 16rpx 0 0;
-  padding: 14rpx 18rpx;
-  border-radius: 12rpx;
-  background-color: #f3f6f0;
-}
-.bcs-longhair-hint__text {
-  font-size: 23rpx;
-  color: #46564d;
-  line-height: 1.6;
-}
 /* 4 个动作题 —— 与建档页同一套交互，配色贴合定制页的暖色调 */
 .bcs-question {
   margin-top: 22rpx;
 }
+.bcs-banner {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #46564d;
+  line-height: 1.6;
+}
+
+.bcs-question__image {
+  display: block;
+  width: 100%;
+  margin-bottom: 16rpx;
+  border-radius: 16rpx;
+}
+
 .bcs-question__title {
   display: block;
   font-size: 27rpx;
   color: #26261f;
   font-weight: 700;
-  line-height: 1.5;
-}
-.bcs-question__hint {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 23rpx;
-  color: #8a8375;
   line-height: 1.5;
 }
 .bcs-question__options {

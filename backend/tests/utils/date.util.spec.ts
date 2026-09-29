@@ -63,7 +63,14 @@ describe('DateUtil', () => {
       expect(start.getSeconds()).toBe(0);
 
       // 验证结束时间是明天
-      expect(end.getDate()).toBe(today.getDate() + 1);
+      //
+      // ⚠️ 不能写 `today.getDate() + 1`：getDate() 返回的是「几号」（1-31），
+      // 月末会跨月 —— 例如 9 月 30 日的明天是 10 月 1 日，断言就成了 1 == 31。
+      // 这个写法让本用例在**每个月的最后一天必挂**（2026-09-30 实测复现）。
+      // 正确做法是让 Date 自己推算明天，而不是拿"几号"做加法。
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      expect(end.getDate()).toBe(tomorrow.getDate());
     });
   });
 

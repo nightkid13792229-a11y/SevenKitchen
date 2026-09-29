@@ -53,6 +53,22 @@ export class DogProfileDto {
   })
   customBreedName?: string | null;
 
+  /**
+   * 体况分下限（深胸细腰型犬专用，如灵缇 = 4），来自犬种表。
+   *
+   * 这类犬在理想体态下就能摸到肋骨且几乎没肉，会被体况问卷如实答成 2-3 分，
+   * 进而把目标体重定高 33-54%、逼一只正常狗增重。
+   * 小程序算完体况分后取 `max(分数, 本值)`；留空表示不做修正。
+   *
+   * 名单与数值都放在数据库里，增删犬种或调整下限不用发小程序版本。
+   */
+  @ApiPropertyOptional({
+    description: 'Body condition score floor from the breed record',
+    example: 4,
+    nullable: true,
+  })
+  bcsScoreFloor?: number | null;
+
   @ApiPropertyOptional({
     description: 'Dog avatar URL',
     example: 'https://img.sevenkitchen.cloud/dogs/avatars/123.png',

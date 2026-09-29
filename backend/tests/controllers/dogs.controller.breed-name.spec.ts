@@ -1,4 +1,5 @@
 import { DogsController } from '../../src/interfaces/controllers/dogs.controller';
+import { MIXED_BREED_VIRTUAL_ID } from '../../src/domain/dog/constants';
 import { Dog } from '../../src/domain/dog/dog.entity';
 import {
   ActivityLevel,
@@ -57,10 +58,10 @@ describe('DogsController breedName consistency', () => {
     );
   }
 
-  function createController() {
+  function createController(breed: any = { id: 'breed-corgi', name: '柯基' }) {
     const dog = createDog();
     // 注意：系统品种存在时 findById 命中；品种表里没有的品种才返回 null
-    const CORGI = { id: 'breed-corgi', name: '柯基' };
+    const CORGI = breed;
 
     const dogRepository = {
       findById: jest.fn().mockResolvedValue(dog),
@@ -68,7 +69,9 @@ describe('DogsController breedName consistency', () => {
       save: jest.fn().mockResolvedValue(dog),
     };
     const dogBreedRepository = {
-      findById: jest.fn().mockResolvedValue(CORGI),
+      findById: jest.fn(async (id: string) =>
+        CORGI && id === CORGI.id ? CORGI : null,
+      ),
       findAll: jest.fn().mockResolvedValue([CORGI]),
     };
     const dogService = {
@@ -188,4 +191,156 @@ describe('DogsController breedName consistency', () => {
       updated.data.profile.breedName,
     ]).toEqual(['柯基', '柯基', '柯基', '柯基']);
   });
+});
+
+/**
+ * 体况分下限（深胸细腰型犬）必须和品种名一样，四个接口给出同一份。
+ *
+ * 背景：灵缇、惠比特这类犬在理想体态下就能摸到肋骨且几乎没肉，
+ * 体况问卷会如实算出 2-3 分，算法据此把目标体重定高 33-54%、
+ * 逼一只正常狗增重。下限设在犬种表里（bcs_score_floor），
+ * 由这里随档案下发，小程序做 max(算出的分, 下限)。
+ *
+ * 它和 breedName 走的是同一条链路（breedMap），所以同样有
+ * "四个接口必须一致"的要求 —— 否则顾客在某一屏看到 2 分、另一屏看到 4 分。
+ */
+describe('DogsController bcsScoreFloor consistency', () => {
+  const OWNER_USER = {
+    userId: 'owner-1',
+    customerId: 'owner-1',
+    role: 'CUSTOMER',
+  } as any;
+
+  function createDogFor(breedId: string, customBreedName: string | null = null) {
+    return Object.assign(
+      new Dog(
+        'dog-1',
+        'owner-1',
+        '面包',
+        breedId,
+        customBreedName,
+        new Date('2024-04-09T00:00:00.000Z'),
+        DogGender.MALE,
+        true,
+        15,
+        6,
+        ActivityLevel.NORMAL,
+        LifeStageOverride.NONE,
+        null,
+        2,
+        TreatInputMode.ESTIMATE_LEVEL,
+        TreatLevel.LOW,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+      ),
+      {},
+    );
+  }
+
+  function controllerWith(dog: Dog, breed: any) {
+    const dogRepository = {
+      findById: jest.fn().mockResolvedValue(dog),
+      findByOwnerId: jest.fn().mockResolvedValue([dog]),
+      save: jest.fn().mockResolvedValue(dog),
+    };
+    const dogBreedRepository = {
+      // 必须按 ID 命中：无视 ID 一律返回同一只犬种，会让"混血犬拿不到下限"
+      // 这条规则在测试里假通过（真实仓储 findById 是按主键查的）
+      findById: jest.fn(async (id: string) =>
+        breed && id === breed.id ? breed : null,
+      ),
+      findAll: jest.fn().mockResolvedValue(breed ? [breed] : []),
+    };
+    const dogService = {
+      createDogProfile: jest.fn().mockResolvedValue(dog),
+      updateDogProfile: jest.fn().mockResolvedValue(dog),
+      calcPreview: jest.fn().mockRejectedValue(new Error('skip in test')),
+    };
+    return new DogsController(
+      dogRepository as any,
+      dogBreedRepository as any,
+      {} as any,
+      { findByDogId: jest.fn().mockResolvedValue([]), delete: jest.fn(), create: jest.fn() } as any,
+      { findByDogId: jest.fn().mockResolvedValue([]), delete: jest.fn(), create: jest.fn() } as any,
+      { findByDogId: jest.fn().mockResolvedValue([]), delete: jest.fn(), create: jest.fn() } as any,
+      dogService as any,
+      {} as any,
+      {} as any,
+      { deleteImageByUrl: jest.fn() } as any,
+      {} as any,
+    );
+  }
+
+  const GREYHOUND = {
+    id: 'breed-greyhound',
+    name: '灵缇',
+    bcsScoreFloor: 4,
+  };
+
+  it('灵缇：四个接口都下发下限 4', async () => {
+    const controller = controllerWith(
+      createDogFor('breed-greyhound'),
+      GREYHOUND,
+    );
+
+    const list: any = await (controller as any).listDogs(OWNER_USER);
+    const detail: any = await (controller as any).getDog('dog-1', OWNER_USER);
+    const created: any = await (controller as any).createDog(
+      { name: '面包', breedId: 'breed-greyhound' } as any,
+      OWNER_USER,
+    );
+    const updated: any = await (controller as any).updateDog(
+      'dog-1',
+      { bcsScore: 2, bcsScoreConfirmed: true },
+      OWNER_USER,
+    );
+
+    expect([
+      list.data[0].bcsScoreFloor,
+      detail.data.profile.bcsScoreFloor,
+      created.data.profile.bcsScoreFloor,
+      updated.data.profile.bcsScoreFloor,
+    ]).toEqual([4, 4, 4, 4]);
+  })
+
+  it('普通犬种没有下限 → null（不做任何修正）', async () => {
+    const controller = controllerWith(createDogFor('breed-corgi'), {
+      id: 'breed-corgi',
+      name: '柯基',
+    });
+
+    const detail: any = await (controller as any).getDog('dog-1', OWNER_USER);
+
+    expect(detail.data.profile.bcsScoreFloor).toBeNull();
+  })
+
+  it('混血犬（虚拟犬种 ID）没有下限 —— 不能拿自定义名字去猜犬种', async () => {
+    const controller = controllerWith(
+      createDogFor(MIXED_BREED_VIRTUAL_ID, '灵缇串串'),
+      GREYHOUND,
+    );
+
+    const detail: any = await (controller as any).getDog('dog-1', OWNER_USER);
+
+    // 名字看着像灵缇也不给下限：只认标准犬种记录
+    expect(detail.data.profile.breedName).toBe('灵缇串串');
+    expect(detail.data.profile.bcsScoreFloor).toBeNull();
+  })
+
+  it('犬种接口（小程序建档页用）也返回下限', async () => {
+    const controller = controllerWith(
+      createDogFor('breed-greyhound'),
+      GREYHOUND,
+    );
+
+    const result: any = await (controller as any).listBreeds();
+
+    expect(result.code).toBe(0);
+    expect(result.data[0].bcsScoreFloor).toBe(4);
+    expect(result.data[0].name).toBe('灵缇');
+  })
 });

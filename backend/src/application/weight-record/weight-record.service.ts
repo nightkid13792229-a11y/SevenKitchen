@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
   Inject,
@@ -13,9 +14,12 @@ import { CreateWeightRecordDto } from '../../interfaces/dto/weight-record/create
 import { DOG_REPOSITORY } from '../dog/dog.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { Dog } from '../../domain/dog/dog.entity';
+import { WeightGoalPlanService } from '../weight-goal-plan/weight-goal-plan.service';
 
 @Injectable()
 export class WeightRecordService {
+  private readonly logger = new Logger(WeightRecordService.name);
+
   constructor(
     @Inject('PrismaWeightRecordRepository')
     private readonly weightRecordRepo: PrismaWeightRecordRepository,
@@ -23,6 +27,7 @@ export class WeightRecordService {
     private readonly dogRepo: DogRepository,
     @Inject('PrismaDogRepository')
     private readonly prismaDogRepo: PrismaDogRepository,
+    private readonly weightGoalPlanService: WeightGoalPlanService,
   ) {}
 
   async create(
@@ -41,13 +46,36 @@ export class WeightRecordService {
     await this.ensureDogPersistedInPrisma(dog);
 
     // Create weight record
-    return this.weightRecordRepo.create({
+    const record = await this.weightRecordRepo.create({
       dogId: dto.dogId,
       recordDate: new Date(dto.recordDate),
       weightKg: dto.weightKg,
       note: dto.note,
       syncedToProfile: dto.syncedToProfile ?? false,
     });
+
+    /**
+     * 计划生效时，按这次称重自动校正力度（阶段 B1-5）。
+     *
+     * **双层保护**：applyWeighIn 内部自己有 try/catch，这里再包一层。
+     * 理由 —— 记录体重是顾客手输的数据，丢了没法补；而计划调整只是锦上添花。
+     * 任何情况下都不该让后者把前者的响应变成失败。
+     */
+    try {
+      await this.weightGoalPlanService.applyWeighIn(
+        dto.dogId,
+        dto.weightKg,
+        new Date(dto.recordDate),
+      );
+    } catch (error) {
+      this.logger.error(
+        `称重后触发计划校正失败（dogId=${dto.dogId}）：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
+    return record;
   }
 
   async findByDogId(

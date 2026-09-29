@@ -28,6 +28,7 @@ import {
   ALLERGY_RECORD_REPOSITORY,
 } from 'src/application/health/health.service';
 import { WeightRecordService } from 'src/application/weight-record/weight-record.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 import { OrderService } from 'src/application/order/order.service';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { TencentCosService } from 'src/infrastructure/services/tencent-cos.service';
@@ -86,6 +87,15 @@ describe('AuthGuard (e2e)', () => {
     delete: jest.fn(),
     updateSyncedToProfile: jest.fn(),
   };
+  // 阶段 B：DogsController 新增的依赖。本文件只测鉴权，给个占位即可。
+  const mockWeightGoalPlanService = {
+    applyActivePlanOverride: jest.fn(async (_id: string, gross: number, treat: number) => ({
+      finalFoodKcal: gross - treat,
+      grossKcal: gross,
+      source: 'ALGORITHM' as const,
+      planKcal: null,
+    })),
+  };
   const mockOrderService = {
     listDogFinishedFoodHistory: jest.fn(),
   };
@@ -136,6 +146,10 @@ describe('AuthGuard (e2e)', () => {
         {
           provide: WeightRecordService,
           useValue: mockWeightRecordService,
+        },
+        {
+          provide: WeightGoalPlanService,
+          useValue: mockWeightGoalPlanService,
         },
         {
           provide: OrderService,

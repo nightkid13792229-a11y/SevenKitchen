@@ -448,10 +448,150 @@ model Dog {
   orders               Order[]
   vaccineRecords       VaccineRecord[]
   weightRecords        WeightRecord[]
+  weightGoalPlans      WeightGoalPlan[]
 
   @@index([ownerId])
   @@index([ownerId, createdAt])
   @@map("dog")
+}
+
+/// ===== 体重管理计划（2026-09-29 新增，阶段 B）=====
+///
+/// 老板原话：不只是给用户一个记录体重的工具，而是真真正正能指导用户
+/// **通过饮食增减重的可执行方案**。
+///
+/// 与能量算法的关系：计划生效期间，该狗的每日能量目标**改用计划值**
+/// （`WeightGoalPlan.currentKcal`），而不是算法默认输出；
+/// 计划结束/取消后立即恢复默认维持量。
+enum WeightGoalDirection {
+  /// 减重
+  LOSS
+  /// 增重
+  GAIN
+}
+
+/// 计划状态机（只有 5 个状态）。
+///
+///   ACTIVE ──达标──→ MAINTENANCE ──满 3 个月──→ COMPLETED
+///      │                  ↑
+///      ├─连续 8 周未称重─→ PAUSED（提醒后可恢复）
+///      ├─计划期间怀孕 ───→ PAUSED（阶段 A 联动）
+///      └─顾客中途放弃 ───→ CANCELLED（可重新新建）
+enum WeightGoalPlanStatus {
+  /// 进行中
+  ACTIVE
+  /// 暂停（连续 8 周未称重 / 计划期间怀孕）
+  PAUSED
+  /// 维持期（已达标，防反弹）
+  MAINTENANCE
+  /// 已结束
+  COMPLETED
+  /// 已取消
+  CANCELLED
+}
+
+/// 调整历史的触发原因。
+///
+/// 每一次自动或手动调整都必须记一条 —— 否则「这个月热量为什么降了」
+/// 在后台查不到依据，客服和营养师都没法回答顾客。
+enum WeightGoalAdjustmentReason {
+  /// 速率过慢（朝目标推进慢于 0.5%/周）→ 力度加一档
+  RATE_TOO_SLOW
+  /// 速率过快（快于 2%/周，会掉肌肉）→ 力度退一档
+  RATE_TOO_FAST
+  /// 顾客手动改（目标体重 / 力度）
+  MANUAL
+  /// 达标转维持期（热量上浮 10%）
+  GOAL_REACHED
+  /// 维持期仍继续掉重 → 再加 10%
+  MAINTENANCE_UNDERSHOOT
+  /// 撞到安全下限，不再继续加力度
+  FLOOR_REACHED
+}
+
+model WeightGoalPlan {
+  id                       String               @id @default(uuid()) @map("id")
+  dogId                    String               @map("dog_id")
+  direction                WeightGoalDirection  @map("direction")
+  status                   WeightGoalPlanStatus @map("status")
+
+  /// 建立计划时的体重与体况分（留档：以后体况变了也能回溯当时的判断依据）
+  startWeightKg            Float                @map("start_weight_kg")
+  startBcsScore            Int                  @map("start_bcs_score")
+
+  /// 目标体重 = 理想体重。
+  /// **顾客可自由改、计划期间随时可改**（老板决定：系统算出的目标体重本身有
+  /// 不确定性，权限交还顾客；安全由 floorKcal 与自动校正负责，不靠限制输入）。
+  targetWeightKg           Float                @map("target_weight_kg")
+  /// 系统最初建议的目标体重。留着是为了在顾客把目标改得离建议 >30% 时提示一次。
+  suggestedTargetWeightKg  Float                @map("suggested_target_weight_kg")
+
+  /// 当前每日能量目标（kcal）。计划生效期间就是它参与喂食克数换算。
+  /// ⚠️ 口径是**毛值**（与算法的 gross 同一层，见需求文档 §3.2 的对比表）——
+  /// 零食仍要照常扣减，不能直接当作净食物量。
+  currentKcal              Int                  @map("current_kcal")
+  /// 安全下限：不低于 RER(目标体重) × 0.6
+  /// （知识库原文：「多数犬可耐受低至理想体重 RER 的 60%」）
+  floorKcal                Int                  @map("floor_kcal")
+  /// 安全上限：增重时不超过维持需求 × 1.4；减重时不超过维持量
+  ceilingKcal              Int                  @map("ceiling_kcal")
+  /// 目标速率（%/周）。减重取 0.5-2%/周（SACN5），增重同区间。
+  targetRatePercentPerWeek Float                @map("target_rate_percent_per_week")
+
+  /// ===== 日程 =====
+  startDate                DateTime             @map("start_date")
+  estimatedGoalDate        DateTime?            @map("estimated_goal_date")
+  /// 下次复查日（提醒用）
+  nextReviewDate           DateTime?            @map("next_review_date")
+  /// 最近一次称重日。连续 8 周未称重 → 转 PAUSED。
+  lastWeighInDate          DateTime?            @map("last_weigh_in_date")
+  /// 最近一次算出的速率（%/周）。约定：**按体重变化方向带符号 —— 掉重为负、增重为正**
+  /// （与顾客看到的口径一致：「最近 2 周：−1.1%/周」）。
+  /// 判断「够不够快」时再按 direction 换算成「朝目标推进的速率」，
+  /// 见 `domain/dog/weight-goal-plan.ts` 的 `resolveProgressRate`。
+  lastRatePercentPerWeek   Float?               @map("last_rate_percent_per_week")
+
+  /// ===== 状态流转时间戳 =====
+  pausedAt                 DateTime?            @map("paused_at")
+  /// 暂停原因（孕哺联动 / 长期未称重），恢复时清空
+  pausedReason             String?              @map("paused_reason")
+  maintenanceStartedAt     DateTime?            @map("maintenance_started_at")
+  /// 维持期满 3 个月 → 自动 COMPLETED
+  completedAt              DateTime?            @map("completed_at")
+  cancelledAt              DateTime?            @map("cancelled_at")
+
+  createdAt                DateTime             @default(now()) @map("created_at")
+  updatedAt                DateTime             @updatedAt @map("updated_at")
+
+  dog                      Dog                          @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  adjustments              WeightGoalPlanAdjustment[]
+
+  /// 「一只狗同时只能有一个未结束的计划」用**部分唯一索引**兜底，
+  /// 见 migration.sql —— Prisma schema 表达不了 WHERE 条件。
+  @@index([dogId, status])
+  @@index([status, nextReviewDate])
+  @@map("weight_goal_plan")
+}
+
+/// 计划调整历史。每次自动/手动调整都记一条，客服与营养师在后台可见。
+model WeightGoalPlanAdjustment {
+  id                 String                     @id @default(uuid()) @map("id")
+  planId             String                     @map("plan_id")
+  reason             WeightGoalAdjustmentReason @map("reason")
+  energyBefore       Int                        @map("energy_before")
+  energyAfter        Int                        @map("energy_after")
+  /// 触发时的实测速率（%/周）。手动调整（如只改目标体重）时为 null。
+  ratePercentPerWeek Float?                     @map("rate_percent_per_week")
+  /// 触发时的体重
+  weightKg           Float?                     @map("weight_kg")
+  /// 给后台看的说明
+  note               String?                    @map("note")
+  createdAt          DateTime                   @default(now()) @map("created_at")
+
+  plan               WeightGoalPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, createdAt])
+  @@map("weight_goal_plan_adjustment")
 }
 
 model Recipe {

@@ -178,6 +178,8 @@ import { ProductFunnelAnalyticsService } from './application/analytics/product-f
 import { DogProfileAnalyticsController } from './interfaces/controllers/dog-profile-analytics.controller';
 import { ProductFunnelAnalyticsController } from './interfaces/controllers/product-funnel-analytics.controller';
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
+import { WeightGoalPlanService } from './application/weight-goal-plan/weight-goal-plan.service';
+import { WeightGoalPlanController } from './interfaces/controllers/weight-goal-plan.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { AdminSupplementShopController } from './interfaces/controllers/admin-supplement-shop.controller';
 import { TastingPackConfigService } from './application/tasting-pack/tasting-pack-config.service';
@@ -359,6 +361,7 @@ validatePrismaConfig();
           DogProfileAnalyticsController,
           AdminDogProfileAnalyticsController,
           ProductFunnelAnalyticsController,
+          WeightGoalPlanController,
         ]
       : []),
   ],
@@ -751,6 +754,7 @@ validatePrismaConfig();
     RecommendedProductService,
     DogProfileAnalyticsService,
     ProductFunnelAnalyticsService,
+    WeightGoalPlanService,
     ProcurementSkuService,
     SupplementCatalogService,
     SupplementShopConfigService,

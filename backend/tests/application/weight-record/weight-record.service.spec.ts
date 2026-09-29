@@ -55,6 +55,10 @@ describe('WeightRecordService', () => {
       save: jest.fn(),
       delete: jest.fn(),
     },
+    // 阶段 B1-5：称重后要触发计划的自动校正
+    weightGoalPlanService: {
+      applyWeighIn: jest.fn().mockResolvedValue(undefined),
+    },
   });
 
   beforeEach(() => {
@@ -83,6 +87,7 @@ describe('WeightRecordService', () => {
       mocks.weightRecordRepo as any,
       mocks.dogRepo as any,
       mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
     );
 
     await expect(
@@ -125,6 +130,7 @@ describe('WeightRecordService', () => {
       mocks.weightRecordRepo as any,
       mocks.dogRepo as any,
       mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
     );
 
     await service.create('customer-1', {
@@ -144,6 +150,7 @@ describe('WeightRecordService', () => {
       mocks.weightRecordRepo as any,
       mocks.dogRepo as any,
       mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
     );
 
     await expect(
@@ -187,6 +194,7 @@ describe('WeightRecordService', () => {
       mocks.weightRecordRepo as any,
       mocks.dogRepo as any,
       mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
     );
 
     await expect(
@@ -196,5 +204,81 @@ describe('WeightRecordService', () => {
         weightKg: 6.5,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  // ==================== 称重后自动校正（阶段 B1-5） ====================
+
+  it('记录体重后触发体重管理计划的自动校正', async () => {
+    const mocks = createMocks();
+    const dog = createDog();
+
+    mocks.dogRepo.findById.mockResolvedValue(dog);
+    mocks.prismaDogRepo.findById.mockResolvedValue(dog);
+    mocks.weightRecordRepo.create.mockResolvedValue({
+      id: 'record-1',
+      dogId: dog.id,
+      recordDate: new Date('2026-04-06'),
+      weightKg: 6.5,
+      note: null,
+      syncedToProfile: false,
+      createdAt: new Date('2026-04-06T12:00:00.000Z'),
+    });
+
+    const service = new WeightRecordService(
+      mocks.weightRecordRepo as any,
+      mocks.dogRepo as any,
+      mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
+    );
+
+    await service.create('customer-1', {
+      dogId: dog.id,
+      recordDate: '2026-04-06',
+      weightKg: 6.5,
+    });
+
+    // 校正必须拿到这次称重的狗、体重与日期
+    expect(mocks.weightGoalPlanService.applyWeighIn).toHaveBeenCalledWith(
+      dog.id,
+      6.5,
+      new Date('2026-04-06'),
+    );
+  });
+
+  it('计划调整抛错时不连累体重记录（记录已经写进去了）', async () => {
+    const mocks = createMocks();
+    const dog = createDog();
+    const record = {
+      id: 'record-1',
+      dogId: dog.id,
+      recordDate: new Date('2026-04-06'),
+      weightKg: 6.5,
+      note: null,
+      syncedToProfile: false,
+      createdAt: new Date('2026-04-06T12:00:00.000Z'),
+    };
+
+    mocks.dogRepo.findById.mockResolvedValue(dog);
+    mocks.prismaDogRepo.findById.mockResolvedValue(dog);
+    mocks.weightRecordRepo.create.mockResolvedValue(record);
+    // 真实实现内部会吞掉异常，这里模拟「即便它抛了」也不该冒泡
+    mocks.weightGoalPlanService.applyWeighIn.mockRejectedValueOnce(
+      new Error('plan exploded'),
+    );
+
+    const service = new WeightRecordService(
+      mocks.weightRecordRepo as any,
+      mocks.dogRepo as any,
+      mocks.prismaDogRepo as any,
+      mocks.weightGoalPlanService as any,
+    );
+
+    await expect(
+      service.create('customer-1', {
+        dogId: dog.id,
+        recordDate: '2026-04-06',
+        weightKg: 6.5,
+      }),
+    ).resolves.toEqual(record);
   });
 });

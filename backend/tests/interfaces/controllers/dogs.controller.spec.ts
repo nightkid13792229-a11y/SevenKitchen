@@ -44,6 +44,7 @@ import {
   ALLERGY_RECORD_REPOSITORY,
 } from 'src/application/health/health.service';
 import { WeightRecordService } from 'src/application/weight-record/weight-record.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 import { OrderService } from 'src/application/order/order.service';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { TencentCosService } from 'src/infrastructure/services/tencent-cos.service';
@@ -132,6 +133,20 @@ describe('DogsController (e2e)', () => {
     updateSyncedToProfile: jest.fn(),
   };
 
+  // 阶段 B：默认「没有生效中的计划」，保持既有用例的数值口径不变
+  const mockWeightGoalPlanService = {
+    applyActivePlanOverride: jest.fn(
+      async (_dogId: string, gross: number, treat: number) => ({
+        finalFoodKcal: gross - treat,
+        grossKcal: gross,
+        source: 'ALGORITHM' as const,
+        planKcal: null,
+      }),
+    ),
+    getSuggestion: jest.fn(),
+    getCurrentPlan: jest.fn(),
+  };
+
   const mockOrderService = {
     listDogFinishedFoodHistory: jest.fn(),
   };
@@ -183,6 +198,10 @@ describe('DogsController (e2e)', () => {
         {
           provide: WeightRecordService,
           useValue: mockWeightRecordService,
+        },
+        {
+          provide: WeightGoalPlanService,
+          useValue: mockWeightGoalPlanService,
         },
         {
           provide: OrderService,

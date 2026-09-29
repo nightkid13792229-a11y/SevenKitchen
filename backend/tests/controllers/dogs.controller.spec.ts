@@ -77,6 +77,19 @@ describe('DogsController attachment cleanup', () => {
       calcPreview: jest.fn(),
     };
     const weightRecordService = {};
+    // 阶段 B：DogsController 多了一个依赖（体重管理计划）。
+    // 这里只验证接线；具体规则由 tests/domain/dog/weight-goal-plan.spec.ts 覆盖。
+    // 默认返回「没有生效中的计划」，保持既有用例的数值口径不变。
+    const weightGoalPlanService = {
+      applyActivePlanOverride: jest.fn(
+        async (_dogId: string, gross: number, treat: number) => ({
+          finalFoodKcal: gross - treat,
+          grossKcal: gross,
+          source: 'ALGORITHM' as const,
+          planKcal: null,
+        }),
+      ),
+    };
     const prisma = {};
     const cosService = {
       uploadImage: jest.fn(),
@@ -96,6 +109,7 @@ describe('DogsController attachment cleanup', () => {
       allergyRecordRepository as any,
       dogService as any,
       weightRecordService as any,
+      weightGoalPlanService as any,
       prisma as any,
       cosService as any,
       orderService as any,

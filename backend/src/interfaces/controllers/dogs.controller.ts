@@ -77,6 +77,7 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import { WeightRecordService } from '../../application/weight-record/weight-record.service';
+import { WeightGoalPlanService } from '../../application/weight-goal-plan/weight-goal-plan.service';
 import { OrderService } from '../../application/order/order.service';
 import { CreateWeightRecordDto } from '../dto/weight-record/create-weight-record.dto';
 import {
@@ -137,6 +138,7 @@ export class DogsController {
     private readonly allergyRecordRepository: AllergyRecordRepository,
     private readonly dogService: DogService,
     private readonly weightRecordService: WeightRecordService,
+    private readonly weightGoalPlanService: WeightGoalPlanService,
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
     private readonly orderService?: OrderService,
@@ -1396,11 +1398,23 @@ export class DogsController {
       true, // includeDetails
     );
 
+    // 3.5 计划生效时改用计划值（阶段 B1-4）——
+    //     计划才是顾客当下真正在执行的方案，算法默认输出只是没计划时的兜底。
+    //     两版算法都满足 gross = finalFoodKcal + treatDeduction，据此还原毛值再替换。
+    const override = await this.weightGoalPlanService.applyActivePlanOverride(
+      dogId,
+      calcResult.finalFoodKcal + calcResult.treatDeduction,
+      calcResult.treatDeduction,
+    );
+
     // 4. Build response
     const response = {
       rer: calcResult.rer,
-      der: calcResult.der,
-      finalFoodKcal: calcResult.finalFoodKcal,
+      der: override.grossKcal,
+      finalFoodKcal: override.finalFoodKcal,
+      // 告诉前端这个数字是哪来的，页面才能显示「按减重计划」
+      energySource: override.source,
+      planKcal: override.planKcal,
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
       calcDetails: calcResult.calcDetails || {},

@@ -605,10 +605,10 @@ describe('dog-create · BCS 板块整改', () => {
   it('应用犬种分数下限，且展示与保存用同一个数', () => {
     const page = read()
     // 下限的名单与数值都在后端数据库，小程序只负责应用
-    expect(page).toContain('applyBcsScoreFloor')
-    expect(page).toContain('bcsScoreFloor')
+    expect(page).toContain('applyBcsScoreMap')
+    expect(page).toContain('bcsScoreMap')
     // 屏幕显示的分必须就是写进表单的分，否则顾客会看到两个数
     expect(page).toContain('effectiveBcs')
-    expect(page).toContain('formData.value.bcsScore = applyBcsScoreFloor(')
+    expect(page).toContain('formData.value.bcsScore = applyBcsScoreMap(')
   })
 })

@@ -48,9 +48,9 @@
  *
  * 深胸细腰型犬（灵缇、惠比特等）在**理想体态下就能摸到肋骨且几乎没肉**，
  * 会被算成 2-3 分 → 目标体重定高 33-54%，逼一只正常狗增重。
- * 处理方式**不在这份题库里**：下限值存在数据库的犬种表（`bcs_score_floor`），
- * 由调用方在算完分后应用 `max(分数, 该犬种的下限)`。
- * 好处：想增删犬种或调整下限，改数据库即可，不用发小程序版本。
+ * 处理方式**不在这份题库里**：换算表存在数据库的犬种表（`bcs_score_map`），
+ * 由调用方用 `applyBcsScoreMap` 把选项换算成分数。
+ * 好处：想增删犬种或调整分数，改数据库即可，不用发小程序版本。
  *
  * ⚠️ 与后端的关系：这里只负责「把动作答案换算成分数」，
  *    分数走原有的 bcsScore 字段，后端能量算法不需要改动。
@@ -169,23 +169,44 @@ export function resolveBcsFromAnswers(options: {
 }
 
 /**
- * 应用犬种给出的分数下限（深胸细腰型犬）。
+ * 按犬种给出的换算表，把「选中的选项」换算成体况分（深胸细腰型犬）。
  *
- * 下限值来自数据库的犬种表 `bcs_score_floor`（灵缇、惠比特等填 4，其余留空），
- * 由后端随犬种/档案接口下发。**名单和数字都不在小程序里**，
- * 想增删犬种或调整下限只需改数据库，不用发新版小程序。
+ * 换算表来自数据库的犬种表 `bcs_score_map`（灵缇等填 [4,5,6,7,9]，其余留空），
+ * 由后端随犬种/档案接口下发。**名单和分数都不在小程序里**，
+ * 想增删犬种或调整分数只需改数据库，不用发新版小程序、不用走微信审核。
  *
- * 为什么下限是 4：算法里 **4 分和 5 分的换算系数都是 1.0**
- * （理想区间、不换算）。所以下限 4 = "对这类狗，我们不会判定它偏瘦到需要增重"。
+ * 为什么需要它：深胸细腰型犬在**理想体态下就能摸到肋骨且几乎没肉**，
+ * 按标准分 2/3/5/7/9 会被算成 2-3 分，算法据此把目标体重定高 33-54%、
+ * 逼一只正常狗增重。它们的换算表是 4/5/6/7/9：
+ *
+ *   选项                     标准   深胸细腰   理由
+ *   一碰就硌手，几乎没有肉        2      4    它们的"偏瘦"是常态
+ *   手放上去就摸到，不用按        3      5    它们的理想体态就是这个手感
+ *   要轻轻按一下才摸到           5      6    天生精瘦的犬种要轻按，说明已有脂肪
+ *   要用力按才摸到              7      7    一致
+ *   怎么都摸不到                9      9    一致（肥胖的灵缇同样存在）
+ *
+ * 换算表按**选项顺序**一一对应。长度与选项数不符时**整表忽略、退回标准分** ——
+ * 宁可少一次修正，也不能把顾客的答案换算成一个错位的分数。
  */
-export function applyBcsScoreFloor(
+export function applyBcsScoreMap(
   bcs: number | null,
-  floor?: number | null,
+  map: number[] | null | undefined,
+  options: BcsQuestionOption[],
 ): number | null {
-  if (bcs === null || typeof floor !== 'number' || !Number.isFinite(floor)) {
+  if (bcs === null) {
+    return null;
+  }
+  if (!Array.isArray(map) || map.length !== options.length) {
     return bcs;
   }
-  return Math.max(bcs, floor);
+  // 用选项的默认分反查它在题里的位置，再取该犬种给这一档的分数
+  const index = options.findIndex((option) => option.bcs === bcs);
+  if (index < 0) {
+    return bcs;
+  }
+  const mapped = map[index];
+  return typeof mapped === 'number' && Number.isFinite(mapped) ? mapped : bcs;
 }
 
 /**

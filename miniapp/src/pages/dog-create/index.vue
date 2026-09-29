@@ -725,7 +725,7 @@ import {
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  applyBcsScoreFloor,
+  applyBcsScoreMap,
   resolveBcsFromAnswers,
 } from '../../utils/bcs-questionnaire'
 import {
@@ -903,7 +903,7 @@ interface Breed {
    * 增删犬种或调整下限只需改数据库，不用发新版小程序。
    * 其余犬种为 null/undefined，表示不做任何修正。
    */
-  bcsScoreFloor?: number | null
+  bcsScoreMap?: number | null
 }
 
 interface CalcResult {
@@ -1304,13 +1304,13 @@ const bcsResult = computed(() =>
  * 名单和数字都**不在小程序里** —— 来自数据库犬种表的 bcs_score_floor，
  * 随犬种接口下发。混血/自定义品种没有犬种记录，按无下限处理。
  */
-const bcsScoreFloor = computed(() =>
-  isMixedBreed.value ? null : (selectedBreed.value?.bcsScoreFloor ?? null),
+const bcsScoreMap = computed(() =>
+  isMixedBreed.value ? null : (selectedBreed.value?.bcsScoreMap ?? null),
 )
 
 /** 最终生效的体况分 = 算出的分与犬种下限取较大者（展示与保存必须是同一个数） */
 const effectiveBcs = computed(() =>
-  applyBcsScoreFloor(bcsResult.value.bcs, bcsScoreFloor.value),
+  applyBcsScoreMap(bcsResult.value.bcs, bcsScoreMap.value, bcsQuestions[0].options),
 )
 
 const bcsResultLabel = computed(() =>
@@ -1326,7 +1326,7 @@ function selectBcsAnswer(questionKey: string, bcs: number) {
   })
   if (result.bcs !== null) {
     // 算出来了 → 按犬种下限修正后写进表单，并标记「顾客亲自确认过」
-    formData.value.bcsScore = applyBcsScoreFloor(result.bcs, bcsScoreFloor.value) ?? result.bcs
+    formData.value.bcsScore = applyBcsScoreMap(result.bcs, bcsScoreMap.value, bcsQuestions[0].options) ?? result.bcs
     formData.value.bcsScoreConfirmed = true
   }
 }

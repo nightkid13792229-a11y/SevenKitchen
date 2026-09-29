@@ -524,8 +524,8 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
     expect(submit).not.toContain('isLongHaired')
     expect(submit).not.toContain('resolveQuestions')
     // 下限来自狗的档案接口（后端数据库里的犬种表）
-    expect(submit).toContain('applyBcsScoreFloor')
-    expect(submit).toContain('bcsScoreFloor')
+    expect(submit).toContain('applyBcsScoreMap')
+    expect(submit).toContain('bcsScoreMap')
     expect(submit).toContain('gateEffectiveBcs')
   })
 

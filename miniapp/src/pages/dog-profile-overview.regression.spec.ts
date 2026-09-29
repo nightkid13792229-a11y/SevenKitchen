@@ -141,8 +141,8 @@ describe('dog-profile-overview · 体况输入口径统一', () => {
     expect(source).not.toContain('resolveQuestions')
     expect(source).not.toContain('skippable')
     // 犬种分数下限（名单与数值在后端数据库）
-    expect(source).toContain('applyBcsScoreFloor')
-    expect(source).toContain('bcsScoreFloor')
+    expect(source).toContain('applyBcsScoreMap')
+    expect(source).toContain('bcsScoreMap')
     // 题目与指导图必须真的渲染出来
     expect(source).toContain('bcs-question__title')
     expect(source).toContain('bcs-question__image')

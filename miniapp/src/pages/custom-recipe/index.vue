@@ -423,7 +423,7 @@ import {
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  applyBcsScoreFloor,
+  applyBcsScoreMap,
   resolveBcsFromAnswers,
 } from '@/utils/bcs-questionnaire';
 
@@ -588,13 +588,17 @@ const gateBcsResult = computed(() =>
  * 该犬种的体况分下限（深胸细腰型犬，如灵缇）。
  * 名单与数值来自数据库犬种表，随狗的档案接口下发。
  */
-const gateBcsScoreFloor = computed(
-  () => selectedDog.value?.bcsScoreFloor ?? null,
+const gateBcsScoreMap = computed(
+  () => selectedDog.value?.bcsScoreMap ?? null,
 );
 
 /** 最终生效的体况分 = 算出的分与犬种下限取较大者 */
 const gateEffectiveBcs = computed(() =>
-  applyBcsScoreFloor(gateBcsResult.value.bcs, gateBcsScoreFloor.value),
+  applyBcsScoreMap(
+    gateBcsResult.value.bcs,
+    gateBcsScoreMap.value,
+    gateBcsQuestions[0].options,
+  ),
 );
 
 const gateBcsResultLabel = computed(() =>

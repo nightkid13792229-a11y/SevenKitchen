@@ -633,7 +633,7 @@ import { getBreedSearchUiState } from '../../utils/dog-breed-ui'
 import {
   getBcsLabel,
   BCS_QUESTIONS,
-  applyBcsScoreFloor,
+  applyBcsScoreMap,
   resolveBcsFromAnswers,
 } from '../../utils/bcs-questionnaire'
 import {
@@ -813,7 +813,7 @@ const form = reactive<Record<string, any>>({
    * 该犬种的体况分下限（深胸细腰型犬，如灵缇 = 4），随狗的档案接口下发。
    * 名单与数值都在数据库的犬种表里，小程序不维护。
    */
-  bcsScoreFloor: null as number | null,
+  bcsScoreMap: null as number | null,
   // 繁殖期信息（2026-09-29，阶段 A）
   matingDate: '',
   expectedDueDate: '',
@@ -1397,7 +1397,7 @@ function populateForm(nextProfile: DogProfileDetail) {
   form.activityLevelConfirmed = Boolean(nextProfile.activityLevelConfirmed)
   form.mealsPerDayConfirmed = Boolean(nextProfile.mealsPerDayConfirmed)
   form.lifeStageOverride = nextProfile.lifeStageOverride || 'NONE'
-  form.bcsScoreFloor = nextProfile.bcsScoreFloor ?? null
+  form.bcsScoreMap = nextProfile.bcsScoreMap ?? null
   form.bcsScoreConfirmedAt = nextProfile.bcsScoreConfirmedAt ?? null
   form.bcsConfirmedWeightKg = nextProfile.bcsConfirmedWeightKg ?? null
   form.matingDate = toDateInputValue(nextProfile.matingDate)
@@ -1652,11 +1652,11 @@ const bcsResult = computed(() =>
  * 该犬种的体况分下限（深胸细腰型犬，如灵缇）。
  * 名单与数值来自数据库犬种表，随狗的档案接口下发。
  */
-const bcsScoreFloor = computed(() => form.bcsScoreFloor ?? null)
+const bcsScoreMap = computed(() => form.bcsScoreMap ?? null)
 
 /** 最终生效的体况分 = 算出的分与犬种下限取较大者（展示与保存必须是同一个数） */
 const effectiveBcs = computed(() =>
-  applyBcsScoreFloor(bcsResult.value.bcs, bcsScoreFloor.value),
+  applyBcsScoreMap(bcsResult.value.bcs, bcsScoreMap.value, bcsQuestions[0].options),
 )
 
 const bcsResultLabel = computed(() =>
@@ -1672,7 +1672,7 @@ function selectBcsAnswer(questionKey: string, bcs: number) {
   })
   if (result.bcs !== null) {
     // 算出来了 → 按犬种下限修正后写进表单，并标记「顾客亲自确认过」
-    form.bcsScore = applyBcsScoreFloor(result.bcs, bcsScoreFloor.value) ?? result.bcs
+    form.bcsScore = applyBcsScoreMap(result.bcs, bcsScoreMap.value, bcsQuestions[0].options) ?? result.bcs
     form.bcsScoreConfirmed = true
   }
 }

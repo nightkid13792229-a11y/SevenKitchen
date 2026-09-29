@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   BCS_QUESTIONS,
-  applyBcsScoreFloor,
+  applyBcsScoreMap,
   getBcsLabel,
   resolveBcsFallback,
   resolveBcsFromAnswers,
@@ -99,32 +99,58 @@ describe('体况问卷：算分', () => {
   })
 })
 
-describe('体况分数下限（深胸细腰型犬，名单与数值来自数据库）', () => {
-  it('灵缇在理想体态下答出 2 分 → 抬到 4 分（维持现状，不逼它增重）', () => {
-    expect(applyBcsScoreFloor(2, 4)).toBe(4)
-    expect(applyBcsScoreFloor(3, 4)).toBe(4)
+describe('犬种换算表（深胸细腰型犬，名单与分数来自数据库）', () => {
+  const OPTS = BCS_QUESTIONS[0].options
+  const GREYHOUND = [4, 5, 6, 7, 9]
+
+  it('灵缇的五个选项分别换算成 4/5/6/7/9', () => {
+    // 关键：标准分下「手放上去就摸到」= 3（偏瘦）；灵缇应换算成 5（理想体态）
+    const mapped = OPTS.map((o) => applyBcsScoreMap(o.bcs, GREYHOUND, OPTS))
+    expect(mapped).toEqual([4, 5, 6, 7, 9])
   })
 
-  it('已经高于下限时不动它', () => {
-    expect(applyBcsScoreFloor(5, 4)).toBe(5)
-    expect(applyBcsScoreFloor(7, 4)).toBe(7)
-    expect(applyBcsScoreFloor(9, 4)).toBe(9)
+  it('最瘦的两档不再撞成同一个分数', () => {
+    // 上一版用「下限 4」时，选项 1 和 2 都会被抬到 4，丢了一档分辨率
+    const a = applyBcsScoreMap(OPTS[0].bcs, GREYHOUND, OPTS)
+    const b = applyBcsScoreMap(OPTS[1].bcs, GREYHOUND, OPTS)
+    expect(a).not.toBe(b)
+    expect([a, b]).toEqual([4, 5])
   })
 
-  it('没有下限（其余全部犬种）→ 原样返回', () => {
-    expect(applyBcsScoreFloor(2, null)).toBe(2)
-    expect(applyBcsScoreFloor(2, undefined)).toBe(2)
-    expect(applyBcsScoreFloor(7, null)).toBe(7)
+  it('灵缇在理想体态下的答案落到 5 · 理想体态（而不是被冤枉成偏瘦）', () => {
+    // 「手放上去就摸到，不用按」是这类犬理想体态该有的手感
+    expect(applyBcsScoreMap(OPTS[1].bcs, GREYHOUND, OPTS)).toBe(5)
+    expect(getBcsLabel(5)).toBe('理想体态')
+  })
+
+  it('灵缇永远不会被判成"需要增重"（最低 4 分，换算系数 1.0）', () => {
+    for (const o of OPTS) {
+      const mapped = applyBcsScoreMap(o.bcs, GREYHOUND, OPTS)
+      expect(mapped).toBeGreaterThanOrEqual(4)
+    }
+  })
+
+  it('普通犬种没有换算表 → 用标准分，原样返回', () => {
+    for (const o of OPTS) {
+      expect(applyBcsScoreMap(o.bcs, null, OPTS)).toBe(o.bcs)
+      expect(applyBcsScoreMap(o.bcs, undefined, OPTS)).toBe(o.bcs)
+    }
+  })
+
+  it('换算表长度和选项数不符 → 整表忽略、退回标准分（宁可不修正，也不能错位）', () => {
+    for (const bad of [[4, 5, 6], [4, 5, 6, 7, 9, 9], []]) {
+      expect(applyBcsScoreMap(OPTS[1].bcs, bad, OPTS)).toBe(OPTS[1].bcs)
+    }
   })
 
   it('没算出分数时保持 null（不能凭空变成一个分）', () => {
-    expect(applyBcsScoreFloor(null, 4)).toBeNull()
-    expect(applyBcsScoreFloor(null, null)).toBeNull()
+    expect(applyBcsScoreMap(null, GREYHOUND, OPTS)).toBeNull()
+    expect(applyBcsScoreMap(null, null, OPTS)).toBeNull()
   })
 
-  it('下限可调（存在数据库里，不是写死的 4）', () => {
-    expect(applyBcsScoreFloor(2, 5)).toBe(5)
-    expect(applyBcsScoreFloor(2, 3)).toBe(3)
+  it('换算表可调（存在数据库里，不是写死的）', () => {
+    expect(applyBcsScoreMap(OPTS[0].bcs, [3, 4, 5, 6, 7], OPTS)).toBe(3)
+    expect(applyBcsScoreMap(OPTS[4].bcs, [3, 4, 5, 6, 8], OPTS)).toBe(8)
   })
 
   it('小程序里不存在任何犬种名单（名单在后端数据库）', () => {

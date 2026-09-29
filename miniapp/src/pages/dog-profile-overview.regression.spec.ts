@@ -136,10 +136,13 @@ describe('dog-profile-overview · 体况输入口径统一', () => {
     for (const fn of ['BCS_QUESTIONS', 'resolveBcsFromAnswers', 'getBcsLabel']) {
       expect(source).toContain(fn)
     }
-    // 不再按犬种分类：所有狗同一套题，看不清就跳过
+    // 不再按犬种分类，也不需要「看不出来」：单一动作题人人答得了
     expect(source).not.toContain('isLongHaired')
     expect(source).not.toContain('resolveQuestions')
-    expect(source).toContain('question.skippable')
+    expect(source).not.toContain('skippable')
+    // 犬种分数下限（名单与数值在后端数据库）
+    expect(source).toContain('applyBcsScoreFloor')
+    expect(source).toContain('bcsScoreFloor')
     // 题目与指导图必须真的渲染出来
     expect(source).toContain('bcs-question__title')
     expect(source).toContain('bcs-question__image')
@@ -165,7 +168,7 @@ describe('dog-profile-overview · 体况输入口径统一', () => {
 
     // 「当前 N 分」是把已确认的值显示出来，不是把答案填上
     expect(source).toContain('bcs-current')
-    expect(source).toContain('bcsStatus.confirmed && bcsResult.bcs === null')
+    expect(source).toContain('bcsStatus.confirmed && effectiveBcs === null')
     // 反向还原会把 6 分塌成 5 分（选项只有 1/5/7/9），已整体移除
     expect(source).not.toContain('resolveAnswersFromBcs')
     expect(source).not.toContain('seedBcsAnswersFromForm')

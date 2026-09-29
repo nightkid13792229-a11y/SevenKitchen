@@ -18,6 +18,30 @@
       </div>
     </el-card>
 
+    <!-- 体况确认率（阶段 C10）：本次上线的核心运营指标。
+         阶段 C 之前，生产库 99.98% 的狗从未确认过体况分，而新算法里
+         体况分第一次真正参与能量计算 —— 这个数字直接决定新算法有多少狗
+         是真的按自己体况在算，而不是按默认的 5 分。 -->
+    <el-row :gutter="20" class="stats-grid">
+      <el-col :span="24">
+        <el-card shadow="hover">
+          <div class="bcs-rate">
+            <div class="bcs-rate__head">
+              <span class="bcs-rate__label">体况确认率</span>
+              <span class="bcs-rate__value">{{ summary.bcsConfirmation.rate }}%</span>
+            </div>
+            <div class="bcs-rate__detail">
+              已确认 {{ summary.bcsConfirmation.confirmedDogs }} 只 /
+              共 {{ summary.bcsConfirmation.totalDogs }} 只
+              <span class="bcs-rate__range">
+                · 所选区间内新增 {{ summary.bcsConfirmation.confirmedInRange }} 只
+              </span>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="20" class="stats-grid">
       <el-col :xs="24" :lg="12">
         <el-card shadow="hover">
@@ -91,6 +115,7 @@ const summary = ref<DogProfileAnalyticsSummary>({
   createFunnel: { started: 0, basicCompleted: 0, recommendationSucceeded: 0, submitted: 0 },
   editFunnel: { moduleOpened: 0, calcSucceeded: 0, saved: 0 },
   riskSignals: { draftRestored: 0, calcFailed: 0, submitFailed: 0, healthSkipped: 0 },
+  bcsConfirmation: { totalDogs: 0, confirmedDogs: 0, confirmedInRange: 0, rate: 0 },
 })
 
 function getDefaultRange(): [string, string] {
@@ -183,5 +208,38 @@ onMounted(() => {
   color: #1f2d3d;
   font-size: 28px;
   font-weight: 700;
+}
+
+/* 体况确认率（阶段 C10）：只读展示，不做图表 */
+.bcs-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bcs-rate__head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.bcs-rate__label {
+  color: #6b7785;
+  font-size: 13px;
+}
+
+.bcs-rate__value {
+  color: #1f2d3d;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.bcs-rate__detail {
+  color: #6b7785;
+  font-size: 13px;
+}
+
+.bcs-rate__range {
+  color: #9aa5b1;
 }
 </style>

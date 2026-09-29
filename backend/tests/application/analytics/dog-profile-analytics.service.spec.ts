@@ -7,12 +7,17 @@ describe('DogProfileAnalyticsService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    dog: {
+      count: jest.fn(),
+    },
   } as any;
 
   let service: DogProfileAnalyticsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // 体况确认率的三个 count（全部 / 已确认 / 区间内新增）默认都返回 0
+    prisma.dog.count.mockResolvedValue(0);
     service = new DogProfileAnalyticsService(prisma);
   });
 
@@ -210,6 +215,82 @@ describe('DogProfileAnalyticsService', () => {
         submitFailed: 0,
         healthSkipped: 0,
       },
+      bcsConfirmation: {
+        totalDogs: 0,
+        confirmedDogs: 0,
+        confirmedInRange: 0,
+        rate: 0,
+      },
+    });
+  });
+
+  // ==================== 体况确认率（阶段 C10） ====================
+  //
+  // 阶段 C 上线前，生产库 99.98% 的狗从未确认过体况分，
+  // 而新算法里体况分第一次真正参与能量计算。
+  // 这个指标要看的就是新问卷有没有把存量撬动。
+
+  it('体况确认率读 Dog 表，而不是埋点表', async () => {
+    prisma.dog.count
+      .mockResolvedValueOnce(4556) // 全部档案
+      .mockResolvedValueOnce(31) // 顾客亲自确认过
+      .mockResolvedValueOnce(24); // 区间内新增
+    prisma.dogProfileEvent.findMany.mockResolvedValue([]);
+
+    const summary = await service.getSummary({
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-30T23:59:59.999Z',
+    });
+
+    expect(summary.bcsConfirmation).toEqual({
+      totalDogs: 4556,
+      confirmedDogs: 31,
+      confirmedInRange: 24,
+      rate: 0.7, // 31 / 4556 = 0.68%，保留 1 位小数
+    });
+
+    // 判据必须与顾客端门槛同一个字段：只有顾客亲自确认过才会写上时间
+    expect(prisma.dog.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { bcsScoreConfirmedAt: { not: null } },
+      }),
+    );
+  });
+
+  it('一只狗都没有时不除以零', async () => {
+    prisma.dog.count.mockResolvedValue(0);
+    prisma.dogProfileEvent.findMany.mockResolvedValue([]);
+
+    const summary = await service.getSummary({
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-30T23:59:59.999Z',
+    });
+
+    expect(summary.bcsConfirmation.rate).toBe(0);
+  });
+
+  it('埋点表缺失时体况确认率照常返回', async () => {
+    // 两者数据来源不同：埋点表挂了不该把存量指标一起拖没
+    prisma.dogProfileEvent.findMany.mockRejectedValue({
+      code: 'P2021',
+      meta: { table: 'public.dog_profile_event' },
+    });
+    prisma.dog.count
+      .mockResolvedValueOnce(100)
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(7);
+
+    const summary = await service.getSummary({
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-30T23:59:59.999Z',
+    });
+
+    expect(summary.createFunnel.started).toBe(0);
+    expect(summary.bcsConfirmation).toEqual({
+      totalDogs: 100,
+      confirmedDogs: 7,
+      confirmedInRange: 7,
+      rate: 7,
     });
   });
 });

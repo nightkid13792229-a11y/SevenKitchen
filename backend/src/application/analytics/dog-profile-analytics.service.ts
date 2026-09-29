@@ -27,6 +27,27 @@ export interface GetDogProfileAnalyticsSummaryInput {
  * 注意：2026-09-21 起，所有计数值都是「去重后的客户数」而不是「事件条数」。
  * 同一个用户反复进出建档页只会被计一次，否则漏斗各步的比例会失真。
  */
+/**
+ * 体况确认率（阶段 C10）。
+ *
+ * 与上面几组指标不同，这是**整库快照**而不是区间内的事件计数 ——
+ * 要看的是「新问卷有没有撬动 99.98% 未确认这个存量问题」，
+ * 所以分母是全部档案，分子是顾客亲自确认过的。
+ * `confirmedInRange` 单独给区间新增，用来看趋势。
+ *
+ * 数据直接读 Dog 表，**不依赖埋点表**：埋点表缺失时这几项也要照常返回。
+ */
+export interface BcsConfirmationStats {
+  /** 全部狗狗档案数 */
+  totalDogs: number;
+  /** 已由顾客亲自确认过体况的狗数 */
+  confirmedDogs: number;
+  /** 所选区间内新增的确认数 */
+  confirmedInRange: number;
+  /** 确认率（百分比，保留 1 位小数） */
+  rate: number;
+}
+
 export interface DogProfileAnalyticsSummary {
   createFunnel: {
     started: number;
@@ -45,6 +66,7 @@ export interface DogProfileAnalyticsSummary {
     submitFailed: number;
     healthSkipped: number;
   };
+  bcsConfirmation: BcsConfirmationStats;
 }
 
 @Injectable()
@@ -82,10 +104,51 @@ export class DogProfileAnalyticsService {
     }
   }
 
+  /**
+   * 体况确认率（阶段 C10）。
+   *
+   * 读 Dog 表，与埋点表无关 —— 埋点表缺失（P2021）时也照常返回。
+   * 「确认过」的判据是 `bcsScoreConfirmedAt` 非空，与顾客端门槛用的是同一个字段：
+   * 建档时顾客亲自选过、或在定制页门槛里补确认过，才会写上时间。
+   */
+  async getBcsConfirmationStats({
+    from,
+    to,
+  }: GetDogProfileAnalyticsSummaryInput): Promise<BcsConfirmationStats> {
+    const [totalDogs, confirmedDogs, confirmedInRange] = await Promise.all([
+      this.prisma.dog.count(),
+      this.prisma.dog.count({
+        where: { bcsScoreConfirmedAt: { not: null } },
+      }),
+      this.prisma.dog.count({
+        where: {
+          bcsScoreConfirmedAt: {
+            gte: new Date(from),
+            lte: new Date(to),
+          },
+        },
+      }),
+    ]);
+
+    return {
+      totalDogs,
+      confirmedDogs,
+      confirmedInRange,
+      // 保留 1 位小数：运营看的是「0.02% → 8.3%」这种量级变化
+      rate:
+        totalDogs === 0
+          ? 0
+          : Math.round((confirmedDogs / totalDogs) * 1000) / 10,
+    };
+  }
+
   async getSummary({
     from,
     to,
   }: GetDogProfileAnalyticsSummaryInput): Promise<DogProfileAnalyticsSummary> {
+    // 体况确认率先算：它不依赖埋点表，埋点表挂了也要能出数
+    const bcsConfirmation = await this.getBcsConfirmationStats({ from, to });
+
     let rows: Array<{
       id: string;
       customerId: string | null;
@@ -109,7 +172,7 @@ export class DogProfileAnalyticsService {
         this.logger.warn(
           'dog_profile_event table is missing; returning empty analytics summary until migration is applied',
         );
-        return this.buildEmptySummary();
+        return this.buildEmptySummary(bcsConfirmation);
       }
 
       throw error;
@@ -186,6 +249,7 @@ export class DogProfileAnalyticsService {
           (row) => row.eventName === 'dog_profile_health_skipped',
         ),
       },
+      bcsConfirmation,
     };
   }
 
@@ -207,7 +271,14 @@ export class DogProfileAnalyticsService {
     );
   }
 
-  private buildEmptySummary(): DogProfileAnalyticsSummary {
+  private buildEmptySummary(
+    bcsConfirmation: BcsConfirmationStats = {
+      totalDogs: 0,
+      confirmedDogs: 0,
+      confirmedInRange: 0,
+      rate: 0,
+    },
+  ): DogProfileAnalyticsSummary {
     return {
       createFunnel: {
         started: 0,
@@ -226,6 +297,7 @@ export class DogProfileAnalyticsService {
         submitFailed: 0,
         healthSkipped: 0,
       },
+      bcsConfirmation,
     };
   }
 }

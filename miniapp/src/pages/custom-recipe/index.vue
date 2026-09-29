@@ -46,16 +46,49 @@
           需要你确认一下 —— 它们决定食谱的用量与制作单。
         </text>
 
-        <view class="gate-row">
+        <!-- 体况评分（阶段 C6）：已确认过就只读展示，未确认就地做 4 个动作题。
+             不再让顾客估「几分」—— 与建档页保持同一套判据。 -->
+        <view v-if="gateBcsAlreadyConfirmed" class="gate-row">
           <text class="gate-row__label">体况评分</text>
-          <picker
-            mode="selector"
-            :range="gateBcsOptions.map(item => item.label)"
-            :value="gateBcsIndex"
-            @change="onGateBcsChange"
+          <text class="gate-row__value gate-row__value--done">
+            {{ getBCSText(selectedDog.bcsScore) }} · 已确认
+          </text>
+        </view>
+
+        <view v-else class="gate-bcs">
+          <view class="gate-row">
+            <text class="gate-row__label">体况评分</text>
+            <text
+              class="gate-row__value"
+              :class="{ 'gate-row__value--done': gateBcsResult.bcs !== null }"
+            >{{ gateBcsResult.bcs === null ? '待确认' : `${gateBcsResult.bcs} 分 · ${gateBcsResultLabel}` }}</text>
+          </view>
+          <text class="gate-bcs__hint">不用估分数，回答下面的动作就行</text>
+
+          <view v-if="gateIsLongHaired" class="bcs-longhair-hint">
+            <text class="bcs-longhair-hint__text">长毛狗狗看不出来，所以只问两个「用手摸」的问题。</text>
+          </view>
+          <view v-if="gateSpecialBreedHint" class="bcs-longhair-hint">
+            <text class="bcs-longhair-hint__text">{{ gateSpecialBreedHint }}</text>
+          </view>
+
+          <view
+            v-for="question in gateBcsQuestions"
+            :key="question.key"
+            class="bcs-question"
           >
-            <view class="gate-row__value">{{ gateBcsOptions[gateBcsIndex]?.label || '请选择' }}</view>
-          </picker>
+            <text class="bcs-question__title">{{ question.title }}</text>
+            <text class="bcs-question__hint">{{ question.hint }}</text>
+            <view class="bcs-question__options">
+              <view
+                v-for="option in question.options"
+                :key="option.label"
+                class="bcs-question__option"
+                :class="{ active: gateBcsAnswers[question.key] === option.bcs }"
+                @tap="selectGateBcsAnswer(question.key, option.bcs)"
+              >{{ option.label }}</view>
+            </view>
+          </view>
         </view>
 
         <view class="gate-row">
@@ -86,9 +119,9 @@
 
         <button
           class="gate-confirm-btn"
-          :disabled="gateSaving"
+          :disabled="gateSaving || gateBcsPending"
           @tap="confirmGate"
-        >{{ gateSaving ? '保存中…' : '确认并继续' }}</button>
+        >{{ gateBcsPending ? '请先做完上面的体况问题' : (gateSaving ? '保存中…' : '确认并继续') }}</button>
       </view>
 
       <!-- 狗狗基本信息 -->
@@ -360,6 +393,14 @@ import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
+import {
+  getBcsLabel,
+  getSpecialBreedHint,
+  isLongHairedBreed,
+  resolveBcsFromAnswers,
+  resolveQuestions,
+  resolveSpecialBreedType,
+} from '@/utils/bcs-questionnaire';
 
 // 状态定义
 const dogOptions = ref<any[]>([]);
@@ -470,20 +511,56 @@ const gateBlocked = computed(
 );
 
 /** 补确认用的草稿值：默认沿用档案里的现值，顾客可以直接确认或改动 */
-const gateDraft = ref({ bcsScore: 5, activityLevel: 'LOW', mealsPerDay: '2' });
+const gateDraft = ref({ activityLevel: 'LOW', mealsPerDay: '2' });
 const gateSaving = ref(false);
 
-const gateBcsOptions = [
-  { value: 1, label: '1 分 · 很瘦' },
-  { value: 2, label: '2 分 · 偏瘦' },
-  { value: 3, label: '3 分 · 略瘦' },
-  { value: 4, label: '4 分 · 理想偏瘦' },
-  { value: 5, label: '5 分 · 理想' },
-  { value: 6, label: '6 分 · 略胖' },
-  { value: 7, label: '7 分 · 偏胖' },
-  { value: 8, label: '8 分 · 肥胖' },
-  { value: 9, label: '9 分 · 严重肥胖' },
-];
+// ========== 体况引导（阶段 C6）：与建档页共用同一套 4 动作问卷 ==========
+//
+// 2026-09-29 修正：这里原来是一个「1-9 分」选择器 —— 正是阶段 C1 废掉的做法。
+// C1 改问卷的全部理由是「顾客看不懂 9 选 1，所以生产库 99.98% 从未确认过」，
+// 而定制页恰恰是顾客**第一次真正被问到体况**的地方（老档案不追溯，
+// 进定制页才要求补确认）。两处不一致，等于把废掉的老问题又端了上来。
+const gateBcsAnswers = ref<Record<string, number>>({});
+
+/** 档案里已确认过体况 → 只读展示，不重复问 */
+const gateBcsAlreadyConfirmed = computed(() =>
+  Boolean(selectedDog.value?.bcsScoreConfirmed),
+);
+
+const gateIsLongHaired = computed(() =>
+  isLongHairedBreed(selectedDog.value?.breedName),
+);
+
+/** 特殊犬种判断提示（阶段 C9）：深胸细腰型 / 短鼻桶胸型 */
+const gateSpecialBreedHint = computed(() =>
+  getSpecialBreedHint(resolveSpecialBreedType(selectedDog.value?.breedName)),
+);
+
+const gateBcsQuestions = computed(() =>
+  resolveQuestions({ isLongHaired: gateIsLongHaired.value }),
+);
+
+const gateBcsResult = computed(() =>
+  resolveBcsFromAnswers({
+    answers: gateBcsAnswers.value,
+    questions: gateBcsQuestions.value,
+  }),
+);
+
+const gateBcsResultLabel = computed(() =>
+  gateBcsResult.value.bcs === null ? '' : getBcsLabel(gateBcsResult.value.bcs),
+);
+
+/** 必答的两道「摸」题还没答完 → 按钮不可用（与建档页同一套判据） */
+const gateBcsPending = computed(
+  () => !gateBcsAlreadyConfirmed.value && gateBcsResult.value.bcs === null,
+);
+
+function selectGateBcsAnswer(questionKey: string, bcs: number) {
+  gateBcsAnswers.value = { ...gateBcsAnswers.value, [questionKey]: bcs };
+}
+// ========== 体况引导结束 ==========
+
 const gateActivityOptions = [
   { value: 'RESTING', label: '休息静养' },
   { value: 'LOW', label: '城市日常（多数城市犬）' },
@@ -493,9 +570,6 @@ const gateActivityOptions = [
 ];
 const gateMealOptions = ['1', '2', '3', '4', '5'];
 
-const gateBcsIndex = computed(() =>
-  Math.max(0, gateBcsOptions.findIndex((item) => item.value === gateDraft.value.bcsScore)),
-);
 const gateActivityIndex = computed(() =>
   Math.max(0, gateActivityOptions.findIndex((item) => item.value === gateDraft.value.activityLevel)),
 );
@@ -505,14 +579,11 @@ const gateMealIndex = computed(() =>
 
 function syncGateDraftFromDog(dog: any) {
   gateDraft.value = {
-    bcsScore: Number(dog?.bcsScore) || 5,
     activityLevel: String(dog?.activityLevel || 'LOW'),
     mealsPerDay: String(dog?.mealsPerDay || '2'),
   };
-}
-
-function onGateBcsChange(event: any) {
-  gateDraft.value.bcsScore = gateBcsOptions[event.detail.value]?.value ?? 5;
+  // 换了一只狗就要重答，不能把上一只的答案带过来
+  gateBcsAnswers.value = {};
 }
 
 function onGateActivityChange(event: any) {
@@ -531,6 +602,18 @@ function onGateMealChange(event: any) {
  */
 const confirmGate = async () => {
   if (!selectedDog.value || gateSaving.value) return;
+
+  // 体况分来自 4 个动作题（与建档页同一套换算），不再让顾客自己估分数。
+  // 已确认过的狗沿用档案里的值，不重复问。
+  const bcsScore = gateBcsAlreadyConfirmed.value
+    ? Number(selectedDog.value.bcsScore) || 5
+    : gateBcsResult.value.bcs;
+
+  if (bcsScore === null || bcsScore === undefined) {
+    uni.showToast({ title: '请先做完体况的动作题', icon: 'none' });
+    return;
+  }
+
   gateSaving.value = true;
 
   try {
@@ -539,7 +622,7 @@ const confirmGate = async () => {
       url: `/dogs/${selectedDog.value.value}`,
       method: 'PUT',
       data: {
-        bcsScore: gateDraft.value.bcsScore,
+        bcsScore,
         activityLevel: gateDraft.value.activityLevel,
         mealsPerDay: Number(gateDraft.value.mealsPerDay) || 2,
         bcsScoreConfirmed: true,
@@ -1359,6 +1442,79 @@ const getActivityLabel = (level: string) => {
   margin-top: 12rpx;
   font-size: 22rpx;
   color: #8a6f3d;
+}
+/* 体况评分（阶段 C6）：未确认时就地做 4 个动作题，不再让顾客估分数 */
+.gate-bcs {
+  margin-top: 20rpx;
+  padding: 2rpx 20rpx 20rpx;
+  background: #fbfcf7;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 12rpx;
+}
+.gate-bcs .gate-row {
+  margin-top: 16rpx;
+  padding: 16rpx 0 0;
+  background: transparent;
+  border: none;
+}
+.gate-bcs__hint {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #8a6f3d;
+}
+.gate-row__value--done {
+  color: #1a7f37;
+}
+/* 长毛犬 / 特殊犬种提示 —— 与建档页同一套文案 */
+.bcs-longhair-hint {
+  margin: 16rpx 0 0;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background-color: #f3f6f0;
+}
+.bcs-longhair-hint__text {
+  font-size: 23rpx;
+  color: #46564d;
+  line-height: 1.6;
+}
+/* 4 个动作题 —— 与建档页同一套交互，配色贴合定制页的暖色调 */
+.bcs-question {
+  margin-top: 22rpx;
+}
+.bcs-question__title {
+  display: block;
+  font-size: 27rpx;
+  color: #26261f;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.bcs-question__hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  color: #8a8375;
+  line-height: 1.5;
+}
+.bcs-question__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+.bcs-question__option {
+  padding: 14rpx 22rpx;
+  border: 1rpx solid #e3e6d4;
+  border-radius: 999rpx;
+  font-size: 25rpx;
+  color: #46564d;
+  background: #ffffff;
+}
+.bcs-question__option.active {
+  border-color: #1e3a2f;
+  background-color: #eef4ea;
+  color: #1e3a2f;
+  font-weight: 700;
 }
 
 .gate-confirm-btn {

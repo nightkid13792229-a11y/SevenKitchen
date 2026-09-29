@@ -436,3 +436,77 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).toContain('上传图片或 PDF')
   })
 })
+
+/**
+ * 定制门槛的体况栏改用 4 个动作题（2026-09-29，阶段 C6）
+ *
+ * 真实缺陷：阶段 C1 把建档页的体况从「9 选 1」改成 4 个动作题，理由是
+ * 「顾客看不懂 9 选 1，所以生产库 99.98% 从未确认过」。但定制页的门槛
+ * 仍然挂着 1-9 分的下拉选择器 —— 而定制页恰恰是老档案**第一次真正被问到
+ * 体况**的地方（老档案不追溯，进定制页才要求补确认）。
+ * 等于把 C1 刚废掉的老问题又端到顾客面前。
+ */
+describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6）', () => {
+  const submit = read(`${PAGE_DIR}/index.vue`)
+
+  it('不再出现 1-9 分的体况选择器', () => {
+    expect(submit).not.toContain('gateBcsOptions')
+    expect(submit).not.toContain('onGateBcsChange')
+    expect(submit).not.toContain('gateBcsIndex')
+    // 九档自估文案不得再出现在任何地方
+    expect(submit).not.toContain('严重肥胖')
+    expect(submit).not.toContain('理想偏瘦')
+  })
+
+  it('复用与建档页同一套动作题库', () => {
+    for (const fn of [
+      'resolveQuestions',
+      'resolveBcsFromAnswers',
+      'getBcsLabel',
+      'isLongHairedBreed',
+      'resolveSpecialBreedType',
+      'getSpecialBreedHint',
+    ]) {
+      expect(submit).toContain(fn)
+    }
+    expect(submit).toContain("from '@/utils/bcs-questionnaire'")
+  })
+
+  it('必答的两道「摸」题没答完就不让确认', () => {
+    expect(submit).toContain('gateBcsPending')
+    expect(submit).toMatch(/:disabled="gateSaving \|\| gateBcsPending"/)
+  })
+
+  it('提交的体况分来自动作答案，不是顾客自估', () => {
+    const confirmSource =
+      submit.match(/const confirmGate = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+
+    expect(confirmSource).not.toBe('')
+    expect(confirmSource).toContain('gateBcsResult.value.bcs')
+    expect(confirmSource).not.toContain('gateDraft.value.bcsScore')
+  })
+
+  it('已经确认过的狗不重复问', () => {
+    expect(submit).toContain('gateBcsAlreadyConfirmed')
+    expect(submit).toMatch(/v-if="gateBcsAlreadyConfirmed"/)
+  })
+
+  it('换狗时清空上一只的答案', () => {
+    const syncSource =
+      submit.match(/function syncGateDraftFromDog\([\s\S]*?\n\}/)?.[0] || ''
+
+    expect(syncSource).not.toBe('')
+    expect(syncSource).toContain('gateBcsAnswers.value = {}')
+  })
+
+  it('长毛犬与特殊犬种的提示一并带过来', () => {
+    expect(submit).toContain('gateIsLongHaired')
+    expect(submit).toContain('gateSpecialBreedHint')
+    expect(submit).toContain('bcs-longhair-hint')
+  })
+
+  it('门槛仍然按「顾客确认过」判定，不看有没有值', () => {
+    expect(submit).toContain('gateUnconfirmed')
+    expect(submit).toContain('gateBlocked')
+  })
+})

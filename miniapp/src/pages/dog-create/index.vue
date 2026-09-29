@@ -28,6 +28,29 @@
                 />
               </view>
 
+              <!-- 头像：可选，放在姓名正下方（老板要求回到第一步） -->
+              <view class="profile-card__field">
+                <text class="label">头像</text>
+                <view class="avatar-prompt-card avatar-prompt-card--inline">
+                  <view class="avatar-prompt-card__picker" @tap="handleCreateAvatarTap">
+                    <image
+                      v-if="hasCreateAvatarPreview"
+                      class="avatar-prompt-card__image"
+                      :src="createAvatarSrc"
+                      mode="aspectFill"
+                      @error="onCreateAvatarPreviewError"
+                    />
+                    <view v-else class="avatar-prompt-card__placeholder">
+                      <text class="avatar-prompt-card__placeholder-text">{{ createAvatarPlaceholder }}</text>
+                    </view>
+                    <text class="avatar-prompt-card__badge">
+                      {{ hasCreateAvatarPreview ? '更换' : '上传' }}
+                    </text>
+                  </view>
+                  <text class="avatar-prompt-card__desc">可选。加上头像，之后在爱犬列表里更好认。</text>
+                </view>
+              </view>
+
               <!-- 性别与绝育：放在姓名正下方，顾客顺手就能完成（老板决定）。
                    这两项影响健康提醒，也影响工作犬的热量基线；填写成本极低，
                    因此保持必填。但**刻意不预选** —— 原先默认「弟弟 / 未绝育」
@@ -340,32 +363,50 @@
 
       </view>
 
-      <!-- 身体状态区 -->
+      <!-- 身体状态区（第 2 步：喂食&能量）-->
       <view v-if="showFeedingSection" class="wizard-step wizard-step--feeding">
 
+        <!-- 每日餐数：放在活动水平之前（老板要求） -->
         <view class="profile-card">
-          <view class="feeding-card__header">
-            <view>
-              <text class="profile-card__section-title">活动水平</text>
-            </view>
-            <text class="feeding-impact-link" @tap="toggleFeedingImpact('activity')">热量影响</text>
+          <view class="profile-card__field">
+            <text class="label">每日餐数</text>
+            <picker
+              mode="selector"
+              :range="createMealChoices.map(option => option.label)"
+              :value="createMealsIndex"
+              @change="onCreateMealsChange"
+            >
+              <view class="picker">{{ `${formData.mealsPerDay || '2'} 餐/天` }}</view>
+            </picker>
+            <text class="hint">用于计算每餐的饭量。</text>
           </view>
+        </view>
+
+        <view class="profile-card">
+          <text class="profile-card__section-title">活动水平</text>
 
           <view class="activity-level-container">
             <view
               v-for="option in createActivityChoices"
               :key="option.value"
               class="activity-level-card"
-              :class="{ 'activity-level-card--active': formData.activityLevel === option.value }"
+              :class="{
+                'activity-level-card--active': formData.activityLevel === option.value,
+                'activity-level-card--common': option.isCommon,
+              }"
               @tap="selectActivityLevel(option.value)"
             >
-              <text class="activity-level-card__label">{{ option.label }}</text>
+              <view class="activity-level-card__row">
+                <text class="activity-level-card__label">{{ option.label }}</text>
+                <!-- 多数城市犬都在这一档。未选中时也标出来，省得顾客在五个选项里犹豫 -->
+                <text v-if="option.isCommon" class="activity-level-card__badge">最常见</text>
+              </view>
               <text class="activity-level-card__description">{{ option.description }}</text>
             </view>
           </view>
 
           <!-- 活动量参考图：AI 生成，放 CDN（避免主包超限）。
-               加载失败时降级为文字说明 —— 上方每档已有描述与强度条。 -->
+               加载失败时降级为文字说明 —— 上方每档已有描述。 -->
           <view class="feeding-guide-card">
             <view class="feeding-guide-card__header">
               <text class="feeding-guide-card__title">活动量参考图</text>
@@ -404,44 +445,11 @@
               </view>
             </view>
           </view>
-
-          <view v-if="feedingImpactExpanded.activity" class="feeding-impact-panel">
-            <text class="feeding-impact-panel__title">{{ feedingImpactContent.activity.title }}</text>
-            <text class="feeding-impact-panel__summary">{{ feedingImpactContent.activity.summary }}</text>
-            <view
-              v-for="item in feedingImpactContent.activity.items"
-              :key="item.label"
-              class="feeding-impact-panel__item"
-            >
-              <text class="feeding-impact-panel__item-label">{{ item.label }}</text>
-              <text class="feeding-impact-panel__item-detail">{{ item.detail }}</text>
-            </view>
-          </view>
         </view>
 
         <view class="profile-card">
-          <view class="profile-card__field">
-            <text class="label">每日餐数</text>
-            <picker
-              mode="selector"
-              :range="createMealChoices.map(option => option.label)"
-              :value="createMealsIndex"
-              @change="onCreateMealsChange"
-            >
-              <view class="picker">{{ `${formData.mealsPerDay || '2'} 餐/天` }}</view>
-            </picker>
-            <text class="hint">用于计算每餐的饭量。</text>
-          </view>
-        </view>
-
-        <view class="profile-card">
-          <view class="feeding-card__header">
-            <view>
-              <text class="profile-card__section-title">零食评估</text>
-              <text class="profile-card__section-desc">食谱设计过程中默认会剔除零食的热量。</text>
-            </view>
-            <text class="feeding-impact-link" @tap="toggleFeedingImpact('treat')">热量影响</text>
-          </view>
+          <text class="profile-card__section-title">零食评估</text>
+          <text class="profile-card__section-desc">食谱设计过程中默认会剔除零食的热量。</text>
 
           <view class="treat-level-grid">
             <view
@@ -452,31 +460,16 @@
               @tap="selectTreatLevel(level.level)"
             >
               <text class="treat-level-card__label">{{ level.label }}</text>
-              <text class="treat-level-card__description">{{ level.description }}</text>
-            </view>
-          </view>
-
-          <view v-if="feedingImpactExpanded.treat" class="feeding-impact-panel">
-            <text class="feeding-impact-panel__title">{{ feedingImpactContent.treat.title }}</text>
-            <text class="feeding-impact-panel__summary">{{ feedingImpactContent.treat.summary }}</text>
-            <view
-              v-for="item in feedingImpactContent.treat.items"
-              :key="item.label"
-              class="feeding-impact-panel__item"
-            >
-              <text class="feeding-impact-panel__item-label">{{ item.label }}</text>
-              <text class="feeding-impact-panel__item-detail">{{ item.detail }}</text>
             </view>
           </view>
         </view>
-        <!-- BCS 体态评分 —— 放在本步（喂食信息）的**最后**。
-             2026-09-29 调整：
-               · 从第 1 张卡片挪到最后。它是本流程里最"重"的输入（要摸狗、答四题），
-                 放最后让顾客先把轻量的信息填完，降低建档的输入成本。
-               · 指导改为两张实拍图（摸肋骨 / 摸脊椎骨盆），贴在对应问题的**上方**。
-                 文字再精简也说不清"手该放哪"，一张图解决。
-               · 删掉「热量影响」入口与逐题小字说明 —— 太专业、字太多。
-               · 全板块只留一个轻量 Banner 说明这一步在做什么。 -->
+      </view>
+
+      <!-- 第 3 步：体态评估 -->
+      <view v-if="showRecommendationSection" class="wizard-recommendation-section">
+
+        <!-- BCS 体态评分问卷：本步最上面（老板要求）。
+             本步可以整步跳过 —— 答了就出体况分与能量卡，不答也能直接完成建档。 -->
         <view class="profile-card">
           <text class="profile-card__section-title">BCS 体态评分</text>
           <text class="bcs-banner">回答以下问题，确认狗狗的体态健康！</text>
@@ -509,52 +502,32 @@
             <text class="bcs-result__score">体况：{{ effectiveBcs }} 分 · {{ bcsResultLabel }}</text>
           </view>
         </view>
-      </view>
 
-      <view v-if="showRecommendationSection" class="wizard-recommendation-section">
-        <!-- 头像：移到完成页，纯可选（U1 第 3 步） -->
-        <view class="avatar-prompt-card">
-          <view class="avatar-prompt-card__text">
-            <text class="avatar-prompt-card__title">给它挑个头像吧</text>
-            <text class="avatar-prompt-card__desc">可选。加上头像，之后在爱犬列表里更好认。</text>
+        <!-- 能量信息卡：放本步最下面，且**体况答完之后才展示**（老板要求）。
+             没答体况就整段不出现 —— 这一页的核心动作是体态评估，
+             能量数据是答完之后的"回礼"，不该抢在前面。 -->
+        <template v-if="effectiveBcs !== null">
+          <view v-if="calcStaleNotice" class="calc-stale-notice">
+            <text class="calc-stale-text">信息已更新，我们会自动刷新最新能量数据</text>
           </view>
-          <view class="avatar-prompt-card__picker" @tap="handleCreateAvatarTap">
-            <image
-              v-if="hasCreateAvatarPreview"
-              class="avatar-prompt-card__image"
-              :src="createAvatarSrc"
-              mode="aspectFill"
-              @error="onCreateAvatarPreviewError"
-            />
-            <view v-else class="avatar-prompt-card__placeholder">
-              <text class="avatar-prompt-card__placeholder-text">{{ createAvatarPlaceholder }}</text>
-            </view>
-            <text class="avatar-prompt-card__badge">
-              {{ hasCreateAvatarPreview ? '更换' : '上传' }}
-            </text>
+          <RecommendationSummaryCard
+            v-if="createRecommendationSummary"
+            class="wizard-recommendation-shell"
+            :title="createRecommendationSummary.heading"
+            subtitle=""
+            :summary-meta="createRecommendationSummary.meta"
+            :metrics="createRecommendationMetrics"
+            compact
+          />
+          <view v-if="createRecommendationSummary" class="wizard-recommendation-note">
+            <text class="wizard-recommendation-note-title">{{ createRecommendationSummary.note.title }}</text>
+            <text class="wizard-recommendation-note-body">{{ createRecommendationSummary.note.body }}</text>
           </view>
-        </view>
-
-        <view v-if="calcStaleNotice" class="calc-stale-notice">
-          <text class="calc-stale-text">信息已更新，我们会自动刷新最新喂食建议</text>
-        </view>
-        <RecommendationSummaryCard
-          v-if="createRecommendationSummary"
-          class="wizard-recommendation-shell"
-          :title="createRecommendationSummary.heading"
-          subtitle=""
-          :summary-meta="createRecommendationSummary.meta"
-          :metrics="createRecommendationMetrics"
-          compact
-        />
-        <view v-if="createRecommendationSummary" class="wizard-recommendation-note">
-          <text class="wizard-recommendation-note-title">{{ createRecommendationSummary.note.title }}</text>
-          <text class="wizard-recommendation-note-body">{{ createRecommendationSummary.note.body }}</text>
-        </view>
-        <view v-else class="wizard-recommendation-empty">
-          <text class="wizard-recommendation-empty-title">先生成喂食建议</text>
-          <text class="wizard-recommendation-empty-desc">回到上一步补齐喂食条件后，我们会自动更新建议结果。</text>
-        </view>
+          <view v-else class="wizard-recommendation-empty">
+            <text class="wizard-recommendation-empty-title">正在准备能量数据</text>
+            <text class="wizard-recommendation-empty-desc">补齐前面的信息后，这里会自动显示每日能量与饭量。</text>
+          </view>
+        </template>
       </view>
 
     </view>
@@ -689,7 +662,6 @@ import {
   getCreateAvatarPlaceholder,
   getCreateBcsOptions,
   getCreateBcsToneClass,
-  getCreateFeedingImpact,
   getCreateMealChoices,
   getCreateManualBreedLabels,
   getCreateMixedBreedSizeHint,
@@ -882,11 +854,6 @@ const createMealsIndex = computed(() => {
   const nextIndex = createMealChoices.findIndex(option => option.value === currentValue)
   return nextIndex >= 0 ? nextIndex : 1
 })
-const feedingImpactContent = {
-  activity: getCreateFeedingImpact('activity'),
-  treat: getCreateFeedingImpact('treat'),
-}
-
 interface Breed {
   id: string
   name: string
@@ -970,11 +937,6 @@ const showCustomBreedInput = ref(false)
 const showBreedSizeOverridePicker = ref(false)
 const customBreedName = ref('')
 const customBreedSizeClass = ref<string | null>(null)
-const feedingImpactExpanded = reactive<Record<'activity' | 'treat', boolean>>({
-  activity: false,
-  treat: false,
-})
-
 /**
  * 活动量参考图（2026-09-27 用 AI 生成后上传 CDN）。
  *
@@ -1389,9 +1351,8 @@ const createActionConfig = computed(() => getCreateWizardActionConfig({
   step: currentCreateStep.value,
   canAdvanceFromBasic: canAdvanceFromBasic.value,
   canAdvanceFromFeeding: canAdvanceFromFeeding.value,
-  canAdvanceFromRecommendation: canAdvanceFromRecommendation.value && hasCreateRecommendationResult.value,
+  canAdvanceFromRecommendation: canAdvanceFromRecommendation.value,
   canSubmit: canSubmit.value,
-  recommendationReady: hasCreateRecommendationResult.value,
   calculating: calculating.value,
 }))
 const createRecommendationSummary = computed(() => {
@@ -2148,10 +2109,6 @@ function isTreatLevelActive(level: string) {
   return level === 'LOW' && formData.value.treatLevel === 'MODERATE'
 }
 
-function toggleFeedingImpact(type: 'activity' | 'treat') {
-  feedingImpactExpanded[type] = !feedingImpactExpanded[type]
-}
-
 function onActivityImageLoad() {
   showActivityFallback.value = false
 }
@@ -2346,7 +2303,12 @@ async function previewCalculation() {
         dailyIntakeG: res.data.dailyIntakeG,
         calcDetails: res.data.calcDetails
       }
-      console.log('[DogCreate] Preview calculation result:', calcResult.value)
+      // ⚠️ 不要直接 console.log(calcResult.value)：那是 Vue 的响应式代理，
+      //    微信开发者工具为了在控制台展示它而尝试克隆，会抛
+      //    "An object could not be cloned"，异常顺着 previewCalculation 冒出去，
+      //    被 catch 当成"计算失败" —— 结果是点「下一步」永远进不到第 3 步。
+      //    打可读的字符串即可。
+      console.log('[DogCreate] Preview calculation result:', JSON.stringify(calcResult.value))
       calcStaleNotice.value = false
 
       // 从后端返回的 calcDetails 中提取生命阶段信息
@@ -2355,14 +2317,26 @@ async function previewCalculation() {
         const lifeStage = details.lifeStage
         const ageMonths = details.ageMonths
 
-        // 根据后端返回的 lifeStage 生成显示文本
+        // 根据后端返回的 lifeStage 生成显示文本。
+        //
+        // ⚠️ 能量算法 v2 返回的是**细分档位**（ADULT_YOUNG/MIDDLE/SENIOR、
+        //    PUPPY_GROWTH_CURVE、PREGNANCY_EARLY/LATE），对照表必须一一列全，
+        //    否则查不到就原样显示英文 —— 顾客会在能量卡片上看到 "ADULT_MIDDLE"。
         const labels: Record<string, string> = {
+          // v2 细分档位
+          'PUPPY_GROWTH_CURVE': '幼犬期',
+          'ADULT_YOUNG': '成年期',
+          'ADULT_MIDDLE': '成年期',
+          'ADULT_SENIOR': '老年期',
+          'PREGNANCY_EARLY': '妊娠期',
+          'PREGNANCY_LATE': '妊娠期',
+          'LACTATION': '哺乳期',
+          // v1 档位（老算法仍可能返回）
           'GROWTH': '生长期',
           'PUPPY': '幼犬期',
           'ADULT': '成年期',
           'SENIOR': '老年期',
           'PREGNANCY': '妊娠期',
-          'LACTATION': '哺乳期'
         }
 
         // 生成详细信息文本
@@ -2387,13 +2361,14 @@ async function previewCalculation() {
           }
         }
 
-        backendLifeStageInfo.value = {
+          backendLifeStageInfo.value = {
           stage: lifeStage,
           label: labels[lifeStage] || lifeStage,
           detail: detailText
         }
 
-        console.log('[DogCreate] Backend life stage info:', backendLifeStageInfo.value)
+        // 同上：这里也不能直接打印响应式对象
+        console.log('[DogCreate] Backend life stage info:', JSON.stringify(backendLifeStageInfo.value))
       }
 
       void trackDogProfileEvent('dog_profile_calc_succeeded', {
@@ -2407,7 +2382,13 @@ async function previewCalculation() {
       throw new Error(res.message || 'Calculation failed')
     }
   } catch (err: any) {
-    console.error('[DogCreate] Preview calculation error:', err)
+    // 直接打印 err 在开发者工具里会显示成 {}（Error 对象序列化后为空），
+    // 定位不了问题。把 message 与 stack 一并打出来。
+    console.error(
+      '[DogCreate] Preview calculation error:',
+      err?.message || String(err),
+      err?.stack || '(no stack)',
+    )
     void trackDogProfileEvent('dog_profile_calc_failed', {
       mode: 'create',
       stepName: getCreateAnalyticsStepName(currentCreateStep.value),
@@ -2496,7 +2477,15 @@ async function handleCreatePrimaryAction() {
   }
 
   if (currentCreateStep.value === 'recommendation') {
-    if (!canAdvanceFromRecommendation.value || !hasCreateRecommendationResult.value) {
+    /**
+     * 第 3 步是「体态评估」，**整步可跳过**。
+     *
+     * 原先这里还要求 hasCreateRecommendationResult（能量卡已就绪），
+     * 于是"没答体况"就被拦在"完成建档"外面 —— 与"可跳过"直接矛盾。
+     * 只保留前置步骤的完整性校验；能量卡是答完体况后的附加展示，
+     * 不是完成建档的前提。
+     */
+    if (!canAdvanceFromRecommendation.value) {
       showCreateStepBlockedToast('recommendation')
       return
     }
@@ -2956,14 +2945,6 @@ async function submit() {
   gap: 16rpx;
 }
 
-.wizard-step--feeding .feeding-impact-link {
-  flex-shrink: 0;
-  font-size: 24rpx;
-  line-height: 1.5;
-  font-weight: 600;
-  color: #1e3a2f;
-}
-
 /* BCS 九宫格（2026-09-27 重做）
    老板指出的三个问题：
    1) 1-5 分背景色完全一样，看不出"偏瘦 → 理想"的过渡
@@ -3085,48 +3066,6 @@ async function submit() {
   --bcs-bg: linear-gradient(180deg, #f7dcd3 0%, #e9bfb2 100%);
 }
 
-.wizard-step--feeding .feeding-impact-panel {
-  margin-top: 14rpx;
-  padding: 20rpx;
-  border-radius: 22rpx;
-  background: rgba(30, 58, 47, 0.05);
-  border: 1rpx solid rgba(30, 58, 47, 0.1);
-}
-
-.wizard-step--feeding .feeding-impact-panel__title {
-  display: block;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.wizard-step--feeding .feeding-impact-panel__summary {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.7;
-  color: #6b6653;
-}
-
-.wizard-step--feeding .feeding-impact-panel__item {
-  margin-top: 14rpx;
-}
-
-.wizard-step--feeding .feeding-impact-panel__item-label {
-  display: block;
-  font-size: 22rpx;
-  font-weight: 700;
-  color: #26261f;
-}
-
-.wizard-step--feeding .feeding-impact-panel__item-detail {
-  display: block;
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  line-height: 1.7;
-  color: #6b6653;
-}
-
 .wizard-step--feeding .feeding-guide-card {
   margin-top: 16rpx;
   padding: 20rpx;
@@ -3179,6 +3118,38 @@ async function submit() {
   background: rgba(30, 58, 47, 0.08);
 }
 
+/*
+ * 最常见的档位（城市日常）：**未选中时**也要和另外四档区分开。
+ * 绝大多数城市犬都在这一档，顾客不该在五个选项里犹豫。
+ * 选中时用统一的 active 样式，避免两套高亮打架。
+ */
+.wizard-step--feeding .activity-level-card--common {
+  border-color: rgba(30, 58, 47, 0.22);
+  border-width: 2rpx;
+  background: rgba(30, 58, 47, 0.04);
+}
+
+.wizard-step--feeding .activity-level-card--common.activity-level-card--active {
+  border-color: rgba(30, 58, 47, 0.28);
+  background: rgba(30, 58, 47, 0.08);
+}
+
+.wizard-step--feeding .activity-level-card__row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.wizard-step--feeding .activity-level-card__badge {
+  flex: none;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(30, 58, 47, 0.55);
+}
+
 .wizard-step--feeding .activity-level-card__label {
   display: block;
   font-size: 24rpx;
@@ -3197,15 +3168,21 @@ async function submit() {
 .wizard-step--feeding .treat-level-grid {
   margin-top: 10rpx;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 12rpx;
 }
 
 .wizard-step--feeding .treat-level-card {
-  padding: 18rpx 20rpx;
+  /* 三个选项排同一行：等宽平分，文字居中（老板要求） */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 20rpx 8rpx;
   border-radius: 20rpx;
   background: #ffffff;
   border: 1rpx solid rgba(30, 58, 47, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .wizard-step--feeding .treat-level-card--active {
@@ -3218,6 +3195,7 @@ async function submit() {
   font-size: 24rpx;
   font-weight: 700;
   color: #26261f;
+  text-align: center;
 }
 
 .wizard-step--feeding .treat-level-card__description {
@@ -3562,6 +3540,17 @@ async function submit() {
 }
 
 /* 完成页的头像卡片（可选） */
+.avatar-prompt-card--inline {
+  /* 从第三步移回第一步、放进「姓名」下方：不再自成一张卡，去掉卡片外框与内边距 */
+  margin-top: 12rpx;
+  padding: 0;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
 .avatar-prompt-card {
   display: flex;
   align-items: center;

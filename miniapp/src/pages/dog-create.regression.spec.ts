@@ -327,32 +327,39 @@ describe('dog-create runtime regressions', () => {
   })
 
   /**
-   * 头像后置到完成页（2026-09-27，U1 第 3 步）
+   * 头像位置（2026-09-30 调整）
    *
-   * 建档第一步顾客最想快点看到喂食建议，此时问"上传头像"是负担；
-   * 头像本来就只是可选装饰，放到结果页更合适。
+   * 曾经后置到完成页，老板要求放回第一步 —— 放在「姓名」正下方。
+   * 头像仍然纯可选，不影响建档。
    */
-  describe('头像后置', () => {
+  describe('头像放在第一步姓名的下方', () => {
     const readPage = () =>
       readFileSync(resolve(process.cwd(), 'src/pages/dog-create/index.vue'), 'utf-8')
 
-    it('第一步不再有头像选择器', () => {
-      const source = readPage()
+    it('第一步（姓名之后）有头像入口', () => {
       const basicSection =
-        source.match(/showBasicSection[\s\S]*?showFeedingSection/)?.[0] || ''
+        readPage().match(/showBasicSection[\s\S]*?wizard-step--feeding/)?.[0] || ''
 
       expect(basicSection).not.toBe('')
-      expect(basicSection).not.toContain('profile-card__avatar-picker')
+      expect(basicSection).toContain('handleCreateAvatarTap')
+      expect(basicSection).toContain('avatar-prompt-card')
     })
 
-    it('完成页提供可选的头像入口', () => {
-      const source = readPage()
+    it('头像紧跟在「狗狗名字」字段之后', () => {
+      const basicSection =
+        readPage().match(/showBasicSection[\s\S]*?wizard-step--feeding/)?.[0] || ''
+      const nameIdx = basicSection.indexOf('狗狗名字')
+      const avatarIdx = basicSection.indexOf('handleCreateAvatarTap')
 
-      expect(source).toContain('给它挑个头像吧')
-      expect(source).toContain('avatar-prompt-card')
-      // 复用同一套裁剪与上传流程，不能另起一套
-      expect(source).toContain('handleCreateAvatarTap')
-      expect(source).toContain('hasCreateAvatarPreview')
+      expect(nameIdx).toBeGreaterThan(-1)
+      expect(avatarIdx).toBeGreaterThan(nameIdx)
+    })
+
+    it('第三步不再出现头像入口', () => {
+      const source = readPage()
+      const recommendation = source.match(/showRecommendationSection[\s\S]*$/)?.[0] || ''
+
+      expect(recommendation).not.toContain('给它挑个头像吧')
     })
   })
 
@@ -545,14 +552,14 @@ describe('dog-create · BCS 板块整改', () => {
     expect(page).not.toContain('bcs-howto')
   })
 
-  it('BCS 板块里不再有「热量影响」入口与面板', () => {
+  it('所有板块的「热量影响」入口与说明全部下线', () => {
     const page = read()
-    // 活动量与零食的热量影响保留（老板只要求删 BCS 的）
-    expect(page).toContain("toggleFeedingImpact('activity')")
-    expect(page).toContain("toggleFeedingImpact('treat')")
-    expect(page).not.toContain("toggleFeedingImpact('bcs')")
-    expect(page).not.toContain('feedingImpactContent.bcs')
-    expect(page).not.toContain('feedingImpactExpanded.bcs')
+    // 2026-09-30 老板要求：活动量、零食的也一并删掉（此前只删了 BCS 的）
+    expect(page).not.toContain('热量影响')
+    expect(page).not.toContain('toggleFeedingImpact')
+    expect(page).not.toContain('feedingImpactExpanded')
+    expect(page).not.toContain('feedingImpactContent')
+    expect(page).not.toContain('feeding-impact')
   })
 
   it('删掉提醒文案与逐题小字，只留一个 Banner', () => {
@@ -571,23 +578,44 @@ describe('dog-create · BCS 板块整改', () => {
     expect(q).not.toContain('hint')
   })
 
-  it('BCS 卡片挪到「喂食信息」这一步的最后', () => {
+  it('BCS 问卷挪到第三步「体态评估」的最上面', () => {
     const page = read()
-    const feedingStart = page.indexOf('wizard-step--feeding')
-    const recommendStart = page.indexOf('showRecommendationSection')
-    expect(feedingStart).toBeGreaterThan(-1)
-    expect(recommendStart).toBeGreaterThan(feedingStart)
+    const recIdx = page.indexOf('showRecommendationSection')
+    const feedingIdx = page.indexOf('wizard-step--feeding')
+    const bcsIdx = page.indexOf('BCS 体态评分')
 
-    const feedingBlock = page.slice(feedingStart, recommendStart)
-    const bcsIdx = feedingBlock.indexOf('BCS 体态评分')
-    const activityIdx = feedingBlock.indexOf('活动水平')
-    const treatIdx = feedingBlock.indexOf('零食评估')
+    expect(recIdx).toBeGreaterThan(-1)
+    expect(feedingIdx).toBeGreaterThan(-1)
     expect(bcsIdx).toBeGreaterThan(-1)
-    expect(activityIdx).toBeGreaterThan(-1)
-    expect(treatIdx).toBeGreaterThan(-1)
-    // 三张卡片都在，且 BCS 排在最后
-    expect(bcsIdx).toBeGreaterThan(activityIdx)
-    expect(bcsIdx).toBeGreaterThan(treatIdx)
+
+    // BCS 必须在第三步里，且不再出现在第二步
+    expect(bcsIdx).toBeGreaterThan(recIdx)
+    expect(page.slice(feedingIdx, recIdx)).not.toContain('BCS 体态评分')
+  })
+
+  it('第三步可以整步跳过：按钮不再依赖「能量卡已就绪」', () => {
+    const actions = readFileSync(
+      resolve(process.cwd(), 'src/utils/dog-profile-create-actions.ts'),
+      'utf-8',
+    )
+    const page = read()
+
+    // 原先禁用条件里带 recommendationReady，会让"没答体况"变成
+    // "完成建档点不动"，与"可跳过"直接矛盾
+    expect(actions).not.toContain('!input.recommendationReady')
+    expect(page).not.toContain('recommendationReady:')
+  })
+
+  it('能量卡在第三步最下面，且体况答完才展示', () => {
+    const page = read()
+    const recBlock = page.slice(page.indexOf('showRecommendationSection'))
+
+    expect(recBlock).toContain('v-if="effectiveBcs !== null"')
+    expect(recBlock).toContain('RecommendationSummaryCard')
+    // 顺序：问卷在前、能量卡在后
+    expect(recBlock.indexOf('bcs-question__option')).toBeLessThan(
+      recBlock.indexOf('RecommendationSummaryCard'),
+    )
   })
 
   it('单一动作题：不需要「看不出来」按钮，也不按犬种分类', () => {

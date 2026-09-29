@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getFeedingImpactExplanation } from './dog-profile-overview'
+import { getCreateStepAvailability } from './dog-profile-form'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -226,5 +227,52 @@ describe('create step boundaries', () => {
     // 但必须覆盖到每一档对应的区间描述，避免漏档
     expect(getFeedingImpactExplanation('bcs').items.length).toBeGreaterThanOrEqual(7)
     expect(getFeedingImpactExplanation('activity').items.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+/**
+ * 第 2 步「喂食&能量」与第 3 步「体态评估」的衔接（2026-09-30）
+ *
+ * 体况问答从第 2 步搬到了第 3 步，而第 3 步可以整步跳过。
+ * 如果第 2 步的就绪判定还要求体况分，顾客就会被卡在第 2 步、
+ * 永远走不到第 3 步 —— 实机走查时正是这样复现的。
+ */
+describe('第 2 步不要求体况分（体况问答已挪到第 3 步）', () => {
+  const FEEDING_FORM = {
+    activityLevel: 'LOW',
+    mealsPerDay: '2',
+    treatLevel: 'LOW',
+  }
+
+  it('没答体况（bcsScore 为 null）也能从第 2 步继续', () => {
+    expect(isCreateFeedingStepReady({ ...FEEDING_FORM, bcsScore: null })).toBe(true)
+  })
+
+  it('没答体况也能走到第 3 步并完成建档（availability.recommendation 为真）', () => {
+    const availability = getCreateStepAvailability({
+      // 第 1 步的必填项（性别与绝育也是必填，isNeutered 要用布尔判断）
+      name: '旺财',
+      breedId: 'breed-1',
+      birthday: '2021-06-15',
+      currentWeightKg: 12,
+      gender: 'MALE',
+      isNeutered: true,
+      ...FEEDING_FORM,
+      // 体况没答 —— 第 3 步可跳过，不该拦住完成建档
+      bcsScore: null,
+    })
+
+    expect(availability.feeding).toBe(true)
+    expect(availability.recommendation).toBe(true)
+  })
+
+  it('第 2 步该管的还是要管：活动量 / 餐数 / 零食', () => {
+    expect(isCreateFeedingStepReady({ ...FEEDING_FORM, activityLevel: '' })).toBe(false)
+    expect(isCreateFeedingStepReady({ ...FEEDING_FORM, mealsPerDay: '' })).toBe(false)
+    expect(isCreateFeedingStepReady({ ...FEEDING_FORM, treatLevel: '' })).toBe(false)
+  })
+
+  it('答了体况也只是照常通过（不影响判定）', () => {
+    expect(isCreateFeedingStepReady({ ...FEEDING_FORM, bcsScore: 6 })).toBe(true)
   })
 })

@@ -149,18 +149,21 @@ describe('dog-profile-overview · 体况输入口径统一', () => {
     expect(source).toContain('bcs-question__option')
   })
 
-  it('九宫格、旧参考图、BCS 热量影响全部下线', () => {
+  it('九宫格、旧参考图、热量影响全部下线', () => {
+    // 只查代码，不查注释 —— 注释里正解释着为什么把热量影响删掉
     const source = readOverview()
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
 
     expect(source).not.toContain('bcs-choice')
     expect(source).not.toContain('getBcsChoiceOptions')
     expect(source).not.toContain('BCS_GUIDE_IMAGE_URL')
     expect(source).not.toContain('bcs-guide-image')
-    expect(source).not.toContain("toggleFeedingImpactInfo('bcs')")
-    expect(source).not.toContain("activeFeedingImpactInfo === 'bcs'")
-    // 活动量与零食的热量影响保留
-    expect(source).toContain("toggleFeedingImpactInfo('activity')")
-    expect(source).toContain("toggleFeedingImpactInfo('treat')")
+    // 2026-09-30 老板要求：活动量、零食的热量影响也一并删掉（此前只删了 BCS 的）
+    expect(source).not.toContain('热量影响')
+    expect(source).not.toContain('toggleFeedingImpactInfo')
+    expect(source).not.toContain('activeFeedingImpactInfo')
+    expect(source).not.toContain('getFeedingImpactExplanation')
   })
 
   it('不替顾客编答案：已有分数只如实显示，不预填选项', () => {

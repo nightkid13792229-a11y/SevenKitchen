@@ -331,6 +331,51 @@
 
         <view v-if="activeEditSection === 'feeding'" class="editor-card">
           <view class="field-group">
+            <text class="field-label">每日餐数</text>
+            <picker mode="selector" :range="mealsOptions" :value="mealsIndex" @change="onMealsChange">
+              <view class="field-picker">
+                {{ `${form.mealsPerDay || '2'} 餐/天` }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="field-group">
+            <view class="field-label-row">
+              <text class="field-label">活动水平</text>
+            </view>
+            <view class="activity-list">
+              <view
+                v-for="option in activityLevelOptions"
+                :key="option.value"
+                class="activity-option"
+                :class="{ 'activity-option--active': form.activityLevel === option.value }"
+                @tap="selectActivityLevel(option.value)"
+              >
+                <text class="activity-option__title">{{ option.label }}</text>
+                <text class="activity-option__desc">{{ option.description }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="field-group">
+            <view class="field-label-row">
+              <text class="field-label">零食评估</text>
+            </view>
+            <view class="chip-row chip-row--wrap">
+              <view
+                v-for="option in treatLevelOptions"
+                :key="option.value"
+                class="chip"
+                :class="{ 'chip--active': isTreatLevelActive(option.value) }"
+                @tap="form.treatLevel = option.value"
+              >
+                {{ option.label }}
+              </view>
+            </view>
+            <text class="field-hint">按日常喂零食频率选一个最接近的档位即可。</text>
+          </view>
+
+          <view class="field-group">
             <text class="field-label">BCS体态评分</text>
             <!-- 已有确认结果且本次还没作答时，如实显示当前值：
                  不让顾客以为"我的答案丢了"，也不替他编一组答案 -->
@@ -365,83 +410,6 @@
 
             <view v-if="effectiveBcs !== null" class="bcs-result">
               <text class="bcs-result__score">体况：{{ effectiveBcs }} 分 · {{ bcsResultLabel }}</text>
-            </view>
-          </view>
-
-          <view class="field-group">
-            <view class="field-label-row">
-              <text class="field-label">活动水平</text>
-              <text class="field-text-link" @tap="toggleFeedingImpactInfo('activity')">热量影响</text>
-            </view>
-            <view class="activity-list">
-              <view
-                v-for="option in activityLevelOptions"
-                :key="option.value"
-                class="activity-option"
-                :class="{ 'activity-option--active': form.activityLevel === option.value }"
-                @tap="selectActivityLevel(option.value)"
-              >
-                <text class="activity-option__title">{{ option.label }}</text>
-                <text class="activity-option__desc">{{ option.description }}</text>
-              </view>
-            </view>
-            <view v-if="activeFeedingImpactInfo === 'activity'" class="info-panel">
-              <view class="info-panel__header">
-                <text class="info-panel__title">{{ getFeedingImpactInfo('activity').title }}</text>
-                <text class="info-panel__close" @tap="toggleFeedingImpactInfo('activity')">收起说明</text>
-              </view>
-              <text class="info-panel__summary">{{ getFeedingImpactInfo('activity').summary }}</text>
-              <view
-                v-for="item in getFeedingImpactInfo('activity').items"
-                :key="item.label"
-                class="info-panel__item"
-              >
-                <text class="info-panel__item-label">{{ item.label }}</text>
-                <text class="info-panel__item-detail">{{ item.detail }}</text>
-              </view>
-            </view>
-          </view>
-
-          <view class="field-group">
-            <text class="field-label">每日餐数</text>
-            <picker mode="selector" :range="mealsOptions" :value="mealsIndex" @change="onMealsChange">
-              <view class="field-picker">
-                {{ `${form.mealsPerDay || '2'} 餐/天` }}
-              </view>
-            </picker>
-          </view>
-
-          <view class="field-group">
-            <view class="field-label-row">
-              <text class="field-label">零食评估</text>
-              <text class="field-text-link" @tap="toggleFeedingImpactInfo('treat')">热量影响</text>
-            </view>
-            <view class="chip-row chip-row--wrap">
-              <view
-                v-for="option in treatLevelOptions"
-                :key="option.value"
-                class="chip"
-                :class="{ 'chip--active': isTreatLevelActive(option.value) }"
-                @tap="form.treatLevel = option.value"
-              >
-                {{ option.label }}
-              </view>
-            </view>
-            <text class="field-hint">按日常喂零食频率选一个最接近的档位即可。</text>
-            <view v-if="activeFeedingImpactInfo === 'treat'" class="info-panel">
-              <view class="info-panel__header">
-                <text class="info-panel__title">{{ getFeedingImpactInfo('treat').title }}</text>
-                <text class="info-panel__close" @tap="toggleFeedingImpactInfo('treat')">收起说明</text>
-              </view>
-              <text class="info-panel__summary">{{ getFeedingImpactInfo('treat').summary }}</text>
-              <view
-                v-for="item in getFeedingImpactInfo('treat').items"
-                :key="item.label"
-                class="info-panel__item"
-              >
-                <text class="info-panel__item-label">{{ item.label }}</text>
-                <text class="info-panel__item-detail">{{ item.detail }}</text>
-              </view>
             </view>
           </view>
 
@@ -623,7 +591,6 @@ import {
   buildDogOverviewFeedingFacts,
   buildDogOverviewHealthFacts,
   buildDogOverviewHealthSummary,
-  getFeedingImpactExplanation,
   resolveDogBreedLabel,
   resolveDogBreedName,
   resolveDogOverviewTreatLevel,
@@ -737,7 +704,13 @@ const sizeClassChoices = [
 ]
 const activityLevelOptions = [
   { value: 'RESTING', label: '休息静养', description: '几乎不运动，主要时间休息或医嘱控量' },
-  { value: 'LOW', label: '城市日常', description: '每日散步约30-45分钟，适合多数国内城市犬' },
+  {
+    value: 'LOW',
+    label: '城市日常',
+    description: '每日散步约30-45分钟，适合多数国内城市犬',
+    // 绝大多数城市犬都属于这一档，未选中时也要在视觉上区分（与建档页一致）
+    isCommon: true,
+  },
   { value: 'NORMAL', label: '规律运动', description: '每日主动运动约1小时，活动量稳定' },
   { value: 'HIGH', label: '高活动', description: '每日运动2-4小时，经常跑步或玩耍' },
   { value: 'WORKING', label: '工作犬', description: '高强度训练或工作犬场景' },
@@ -783,7 +756,6 @@ const isUploadingAvatar = ref(false)
 const showAvatarCropper = ref(false)
 const avatarCropSourcePath = ref('')
 const avatarLocalPreviewPath = ref('')
-const activeFeedingImpactInfo = ref<'activity' | 'treat' | ''>('')
 const breedSearchKeyword = ref('')
 const showManualBreedEntry = ref(false)
 const showSizeOverrideEditor = ref(false)
@@ -1689,16 +1661,9 @@ function onMealsChange(event: any) {
   form.mealsPerDayConfirmed = true
 }
 
-function toggleFeedingImpactInfo(type: 'activity' | 'treat') {
-  activeFeedingImpactInfo.value = activeFeedingImpactInfo.value === type ? '' : type
-}
-
 function resetFeedingAssistPanels() {
-  activeFeedingImpactInfo.value = ''
-}
-
-function getFeedingImpactInfo(type: 'activity' | 'treat') {
-  return getFeedingImpactExplanation(type)
+  // 热量影响的折叠面板已下线（老板要求全部删掉），这里暂时没有需要重置的东西。
+  // 保留函数是因为调用点（进入/退出编辑态）未来可能还要清其他辅助状态。
 }
 
 function queuePreview(silent: boolean) {
@@ -2470,6 +2435,32 @@ function goToHealthProfile() {
   border-radius: 20rpx;
   background: #fbfcf7;
   border: 1rpx solid rgba(30, 46, 36, 0.08);
+}
+
+/*
+ * 最常见的档位（城市日常）：未选中时也要和另外四档区分开（与建档页一致）。
+ * 绝大多数城市犬都在这一档，顾客不该在五个选项里犹豫。
+ */
+.activity-option--common {
+  border-color: rgba(30, 46, 36, 0.22);
+  border-width: 2rpx;
+  background: rgba(30, 46, 36, 0.04);
+}
+
+.activity-option__row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.activity-option__badge {
+  flex: none;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(30, 46, 36, 0.55);
 }
 
 .activity-option--active {

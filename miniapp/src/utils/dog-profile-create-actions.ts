@@ -32,9 +32,13 @@ export function getCreateWizardActionConfig(input: CreateWizardActionInput): Cre
   }
 
   if (input.step === 'recommendation') {
+    // 第 3 步是「体态评估」，**整步可以跳过**：
+    // 体况问卷答不答都能建档，答了才在下方多出一张能量卡。
+    // 因此这里不再要求 recommendationReady —— 原先那样会让"没答体况"
+    // 变成"按钮点不动"，与"可跳过"直接矛盾。
     return {
       primaryText: '完成建档',
-      primaryDisabled: !input.canAdvanceFromRecommendation || !input.canSubmit || !input.recommendationReady || input.calculating,
+      primaryDisabled: !input.canAdvanceFromRecommendation || !input.canSubmit || input.calculating,
       secondaryText: '返回上一步',
       secondaryDisabled: false,
     }

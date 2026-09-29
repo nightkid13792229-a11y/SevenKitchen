@@ -96,7 +96,7 @@ describe('dog-profile-create-actions', () => {
     })
   })
 
-  it('disables recommendation actions until a fresh result is ready', () => {
+  it('第三步「体态评估」整步可跳过：能量卡没就绪也能完成建档', () => {
     expect(
       getCreateWizardActionConfig({
         step: 'recommendation',
@@ -109,7 +109,9 @@ describe('dog-profile-create-actions', () => {
       }),
     ).toEqual({
       primaryText: '完成建档',
-      primaryDisabled: true,
+      // 没答体况 → 没有能量卡。这一步可跳过，所以按钮必须仍可点。
+      // 原先这里带 !recommendationReady，等于"没答体况就建不了档"。
+      primaryDisabled: false,
       secondaryText: '返回上一步',
       secondaryDisabled: false,
     })

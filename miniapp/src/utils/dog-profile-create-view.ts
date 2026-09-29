@@ -30,7 +30,12 @@ const ACTIVITY_LEVEL_CHOICES = [
   {
     value: 'LOW',
     label: '城市日常',
-    description: '每天主要在小区遛 1-2 次，合计约 30-45 分钟 —— 多数城市犬属于这一档',
+    description: '每天主要在小区遛 1-2 次，合计约 30-45 分钟',
+    /**
+     * 绝大多数城市犬都属于这一档。未选中时也要在视觉上区分出来，
+     * 否则顾客容易在五个选项里犹豫 —— 大多数人的正确答案就是它。
+     */
+    isCommon: true,
   },
   {
     value: 'NORMAL',
@@ -117,11 +122,6 @@ export function getCreateMealChoices() {
 export function normalizeCreateBcsScore(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value)
   return VALID_BCS_SCORES.has(parsed) ? parsed : 5
-}
-
-function isValidCreateBcsScore(value: unknown) {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  return VALID_BCS_SCORES.has(parsed)
 }
 
 export function normalizeCreateActivityLevel(value: unknown) {
@@ -263,9 +263,18 @@ export function isCreateBasicStepReady(form: Record<string, any>) {
   )
 }
 
+/**
+ * 第 2 步「喂食&能量」是否填写完整。
+ *
+ * ⚠️ **不再要求体况分**（2026-09-30）。体况问答已搬到第 3 步「体态评估」，
+ *    而第 3 步是**可以整步跳过**的。原先这里要求 bcsScore 有效，
+ *    结果是：体况在第 3 步才问，第 2 步的「下一步」却等着它 ——
+ *    顾客被卡在第 2 步，永远走不到第 3 步（实机走查复现）。
+ *
+ * 体况分缺席时，热量计算用 FALLBACK_BCS_SCORE(5) 兜底，不会算不出来。
+ */
 export function isCreateFeedingStepReady(form: Record<string, any>) {
   return Boolean(
-    isValidCreateBcsScore(form.bcsScore) &&
     isValidCreateActivityLevel(form.activityLevel) &&
     hasValidMealsPerDay(form.mealsPerDay) &&
     isValidCreateMealsPerDay(form.mealsPerDay) &&

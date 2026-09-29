@@ -119,6 +119,12 @@ function hasAllowedHealthAttachmentType(file: Express.Multer.File) {
   );
 }
 
+/** 档案接口要用的品种信息：品种名 + 体况分下限（深胸细腰型犬专用） */
+interface BreedInfoForProfile {
+  name: string;
+  bcsScoreFloor: number | null;
+}
+
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
@@ -304,7 +310,7 @@ export class DogsController {
     const response: DogDetailResponseDto = {
       profile: this.mapDogToProfileDto(
         dog,
-        await this.resolveBreedNameMap(dog.breedId),
+        await this.resolveBreedInfoMap(dog.breedId),
       ),
       calcResult,
     };
@@ -376,7 +382,7 @@ export class DogsController {
     const response: DogDetailResponseDto = {
       profile: this.mapDogToProfileDto(
         dog,
-        await this.resolveBreedNameMap(dog.breedId),
+        await this.resolveBreedInfoMap(dog.breedId),
         healthRecords.medicalRecords,
         healthRecords.checkupRecords,
         healthRecords.allergyRecords,
@@ -762,11 +768,14 @@ export class DogsController {
 
     // Load all breeds to create breed name map
     const breeds = await this.dogBreedRepository.findAll();
-    const breedMap = new Map<string, string>();
+    const breedMap = new Map<string, BreedInfoForProfile>();
     // 同时保留完整的品种实体：生命阶段判定需要它的体型/成犬月龄/老年岁数
     const breedEntityMap = new Map<string, (typeof breeds)[number]>();
     breeds.forEach((breed) => {
-      breedMap.set(breed.id, breed.name);
+      breedMap.set(breed.id, {
+        name: breed.name,
+        bcsScoreFloor: breed.bcsScoreFloor ?? null,
+      });
       breedEntityMap.set(breed.id, breed);
     });
 
@@ -847,7 +856,7 @@ export class DogsController {
     this.assertDogAccessible(dog.ownerId, user);
 
     // Load breed to get breed name
-    const breedMap = await this.resolveBreedNameMap(dog.breedId);
+    const breedMap = await this.resolveBreedInfoMap(dog.breedId);
 
     const healthRecords = await this.loadDogHealthRecordDtos(id);
 
@@ -1083,9 +1092,10 @@ export class DogsController {
   }
 
   /**
-   * 单只狗狗的「品种名」映射。
+   * 单只狗狗的「品种信息」映射（品种名 + 体况分下限）。
    *
-   * 四个返回档案的接口（列表 / 详情 / 建档 / 更新）**必须给出同一份 breedName**。
+   * 四个返回档案的接口（列表 / 详情 / 建档 / 更新）**必须给出同一份 breedName**
+   * 与同一份 bcsScoreFloor**。
    * 2026-09-28 修复的真实缺陷：建档（POST）与更新（PUT）当时直接调用
    * `mapDogToProfileDto(dog)` / `mapDogToProfileDto(dog, undefined, ...)`，
    * 没有传 breedMap，于是这两个接口回的 breedName 恒为 null（除非有自定义品种名）。
@@ -1094,22 +1104,40 @@ export class DogsController {
    * 品种就从"柯基"变成"未知品种"——而同一屏顶部的选择器仍显示"面包 - 柯基"
    * （那是列表阶段拼好的字符串），同一屏自相矛盾。
    */
-  private async resolveBreedNameMap(breedId: string): Promise<Map<string, string>> {
+  private async resolveBreedInfoMap(
+    breedId: string,
+  ): Promise<Map<string, BreedInfoForProfile>> {
     const breed = await this.dogBreedRepository.findById(breedId);
 
-    return breed ? new Map([[breedId, breed.name]]) : new Map();
+    return breed
+      ? new Map([
+          [
+            breedId,
+            {
+              name: breed.name,
+              bcsScoreFloor: breed.bcsScoreFloor ?? null,
+            },
+          ],
+        ])
+      : new Map();
   }
 
   private mapDogToProfileDto(
     dog: Dog,
-    breedMap?: Map<string, string>,
+    breedMap?: Map<string, BreedInfoForProfile>,
     medicalRecords?: any[] | null,
     checkupRecords?: any[] | null,
     allergyRecords?: any[] | null,
     recipeLifeStage?: string,
   ): DogProfileDto {
     // Determine breed name: custom breed name takes priority, then lookup from breed map
-    const breedName = dog.customBreedName || breedMap?.get(dog.breedId) || null;
+    const breedInfo = breedMap?.get(dog.breedId) ?? null;
+    const breedName = dog.customBreedName || breedInfo?.name || null;
+    /**
+     * 体况分下限只认标准犬种记录 —— 混血犬填的是自定义品种名，
+     * 没有犬种记录也就没有下限（不能拿自定义名字去猜犬种）。
+     */
+    const bcsScoreFloor = breedInfo?.bcsScoreFloor ?? null;
 
     return {
       id: dog.id,
@@ -1118,6 +1146,7 @@ export class DogsController {
       breedId: dog.breedId,
       breedName,
       customBreedName: dog.customBreedName,
+      bcsScoreFloor,
       ...(recipeLifeStage ? { recipeLifeStage } : {}),
       avatarUrl: dog.avatarUrl,
       birthday: dog.birthday.toISOString(),
@@ -1165,6 +1194,13 @@ export class DogsController {
       seniorAgeYears: breed.seniorAgeYears,
       averageAdultWeightKg: breed.averageAdultWeightKg,
       isCommon: breed.isCommon,
+      /**
+       * 体况分下限（深胸细腰型犬，如灵缇 = 4）；其余犬种为 null。
+       *
+       * 小程序拿它做 `max(算出的体况分, 本值)`。名单与数值都在数据库，
+       * 增删犬种或调整下限不用发小程序版本、不用走微信审核。
+       */
+      bcsScoreFloor: breed.bcsScoreFloor ?? null,
     };
   }
 

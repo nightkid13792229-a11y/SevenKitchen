@@ -22,6 +22,14 @@ export class DogBreed {
     public readonly seniorAgeYears: number,
     public readonly averageAdultWeightKg: number | null,
     public readonly isCommon: boolean = false,
+    /**
+     * 体况分下限（深胸细腰型犬，如灵缇 = 4）；其余犬种为 null。
+     *
+     * 这类犬在理想体态下就能摸到肋骨且几乎没肉，体况问卷会如实算出 2-3 分，
+     * 进而把目标体重定高 33-54%。小程序取 `max(算出的分, 本值)` 修正。
+     * 名单与数值都放在数据库，改完即生效，不用发小程序版本。
+     */
+    public readonly bcsScoreFloor: number | null = null,
   ) {
     this.validateInvariants();
   }
@@ -61,6 +69,18 @@ export class DogBreed {
     // Name must be non-empty
     if (!this.name || this.name.trim().length === 0) {
       throw new ValidationError('Breed name must be non-empty');
+    }
+
+    // Body condition score floor must be a valid BCS value (1-9) if provided
+    if (
+      this.bcsScoreFloor !== null &&
+      (!Number.isInteger(this.bcsScoreFloor) ||
+        this.bcsScoreFloor < 1 ||
+        this.bcsScoreFloor > 9)
+    ) {
+      throw new ValidationError(
+        `BCS score floor must be an integer between 1 and 9, got: ${this.bcsScoreFloor}`,
+      );
     }
 
     const invalidAlias = this.aliases.find(

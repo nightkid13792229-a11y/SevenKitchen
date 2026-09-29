@@ -832,6 +832,8 @@ export class DogService {
       dto.seniorAgeYears,
       dto.averageAdultWeightKg ?? null,
       dto.isCommon ?? false,
+      // 体况分下限（深胸细腰型犬，如灵缇 = 4）；不传则不做修正
+      dto.bcsScoreFloor ?? null,
     );
 
     return this.dogBreedRepository.save(breed);
@@ -868,6 +870,9 @@ export class DogService {
         ? dto.averageAdultWeightKg
         : existing.averageAdultWeightKg,
       dto.isCommon ?? existing.isCommon,
+      dto.bcsScoreFloor !== undefined
+        ? dto.bcsScoreFloor
+        : existing.bcsScoreFloor,
     );
 
     const result = await this.dogBreedRepository.update(id, updated);
@@ -986,6 +991,11 @@ export interface CreateBreedDto {
   seniorAgeYears: number;
   averageAdultWeightKg?: number;
   isCommon?: boolean;
+  /**
+   * 体况分下限（深胸细腰型犬，如灵缇 = 4）；其余犬种留空。
+   * 传 null 可清空（例如发现某个犬种不该设下限）。
+   */
+  bcsScoreFloor?: number | null;
 }
 
 export interface UpdateBreedDto {
@@ -997,4 +1007,6 @@ export interface UpdateBreedDto {
   seniorAgeYears?: number;
   averageAdultWeightKg?: number;
   isCommon?: boolean;
+  /** 体况分下限（深胸细腰型犬，如灵缇 = 4）；传 null 可清空 */
+  bcsScoreFloor?: number | null;
 }

@@ -85,6 +85,12 @@
                 :class="{ active: gateBcsAnswers[question.key] === option.bcs }"
                 @tap="selectGateBcsAnswer(question.key, option.bcs)"
               >{{ option.label }}</view>
+              <view
+                v-if="question.skippable"
+                class="bcs-question__option bcs-question__option--skip"
+                :class="{ active: gateBcsAnswers[question.key] === BCS_SKIP }"
+                @tap="selectGateBcsAnswer(question.key, BCS_SKIP)"
+              >看不清</view>
             </view>
           </view>
         </view>
@@ -422,9 +428,9 @@ import {
 } from '@/api/weight-goal-plan';
 import {
   getBcsLabel,
-  isLongHairedBreed,
+  BCS_QUESTIONS,
+  BCS_SKIP,
   resolveBcsFromAnswers,
-  resolveQuestions,
 } from '@/utils/bcs-questionnaire';
 
 // 状态定义
@@ -575,18 +581,12 @@ const gateBcsAlreadyConfirmed = computed(() =>
   Boolean(selectedDog.value?.bcsScoreConfirmed),
 );
 
-const gateIsLongHaired = computed(() =>
-  isLongHairedBreed(selectedDog.value?.breedName),
-);
-
-const gateBcsQuestions = computed(() =>
-  resolveQuestions({ isLongHaired: gateIsLongHaired.value }),
-);
+const gateBcsQuestions = BCS_QUESTIONS;
 
 const gateBcsResult = computed(() =>
   resolveBcsFromAnswers({
     answers: gateBcsAnswers.value,
-    questions: gateBcsQuestions.value,
+    questions: gateBcsQuestions,
   }),
 );
 
@@ -1545,6 +1545,20 @@ const getActivityLabel = (level: string) => {
   font-weight: 700;
   line-height: 1.5;
 }
+.bcs-question__option--skip {
+  border-style: dashed;
+  color: #8a938d;
+  background: #fafbfa;
+}
+
+.bcs-question__option--skip.active {
+  border-style: solid;
+  border-color: #8a938d;
+  background: #eef1ef;
+  color: #5d6660;
+  font-weight: 600;
+}
+
 .bcs-question__options {
   display: flex;
   flex-wrap: wrap;

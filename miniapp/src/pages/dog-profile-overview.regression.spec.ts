@@ -133,9 +133,13 @@ describe('dog-profile-overview · 体况输入口径统一', () => {
     const source = readOverview()
 
     expect(source).toContain("from '../../utils/bcs-questionnaire'")
-    for (const fn of ['resolveQuestions', 'resolveBcsFromAnswers', 'getBcsLabel', 'isLongHairedBreed']) {
+    for (const fn of ['BCS_QUESTIONS', 'resolveBcsFromAnswers', 'getBcsLabel']) {
       expect(source).toContain(fn)
     }
+    // 不再按犬种分类：所有狗同一套题，看不清就跳过
+    expect(source).not.toContain('isLongHaired')
+    expect(source).not.toContain('resolveQuestions')
+    expect(source).toContain('question.skippable')
     // 题目与指导图必须真的渲染出来
     expect(source).toContain('bcs-question__title')
     expect(source).toContain('bcs-question__image')

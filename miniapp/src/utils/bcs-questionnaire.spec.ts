@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   BCS_QUESTIONS,
+  BCS_SKIP,
   getBcsLabel,
-  isLongHairedBreed,
   resolveBcsFallback,
   resolveBcsFromAnswers,
-  resolveQuestions,
 } from './bcs-questionnaire'
 
 describe('体况引导：题目集（阶段 C）', () => {
@@ -37,29 +38,85 @@ describe('体况引导：题目集（阶段 C）', () => {
   })
 })
 
-describe('体况引导：长毛犬只留「摸」的两题', () => {
-  it('识别常见长毛犬种', () => {
-    expect(isLongHairedBreed('泰迪')).toBe(true)
-    expect(isLongHairedBreed('比熊')).toBe(true)
-    expect(isLongHairedBreed('萨摩耶')).toBe(true)
-    expect(isLongHairedBreed('Poodle')).toBe(true)
+describe('体况引导：不再按犬种分类，改用「看不清」跳过', () => {
+  it('题目模块里不存在任何犬种判断（柴犬这类边界犬种不再有争议）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
+      'utf-8',
+    )
+    // 只查代码，不查注释 —— 注释里正解释着为什么把这份名单删掉
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    expect(code).not.toContain('isLongHairedBreed')
+    expect(code).not.toContain('resolveQuestions')
+    expect(code).not.toContain('KEYWORDS')
+    expect(code).not.toContain('柴犬')
+    expect(code).not.toContain('泰迪')
   })
 
-  it('短毛犬种不误判', () => {
-    expect(isLongHairedBreed('拉布拉多')).toBe(false)
-    expect(isLongHairedBreed('法斗')).toBe(false)
-    expect(isLongHairedBreed('')).toBe(false)
-    expect(isLongHairedBreed(null)).toBe(false)
+  it('所有狗拿到同一套题（4 道）', () => {
+    expect(BCS_QUESTIONS).toHaveLength(4)
   })
 
-  it('长毛犬只返回 2 道题，且都是「摸」', () => {
-    const questions = resolveQuestions({ isLongHaired: true })
-    expect(questions).toHaveLength(2)
-    expect(questions.every((q) => q.kind === 'touch')).toBe(true)
+  it('只有两道「看」的题可以「看不清」', () => {
+    const skippable = BCS_QUESTIONS.filter((q) => q.skippable)
+    expect(skippable.map((q) => q.key)).toEqual(['waist', 'tuck'])
+    expect(skippable.every((q) => q.kind === 'look')).toBe(true)
   })
 
-  it('非长毛犬返回全部 4 道', () => {
-    expect(resolveQuestions({ isLongHaired: false })).toHaveLength(4)
+  it('「看不清」不计入中位数，等价于该题没答', () => {
+    // 直观上像 7 分（腰线平直），但顾客说看不清，就不该拿它去推高结论
+    const withSkip = resolveBcsFromAnswers({
+      answers: { ribs: 5, spine: 5, waist: BCS_SKIP, tuck: BCS_SKIP },
+      questions: BCS_QUESTIONS,
+    })
+    expect(withSkip.bcs).toBe(5)
+
+    const withGuess = resolveBcsFromAnswers({
+      answers: { ribs: 5, spine: 5, waist: 7, tuck: 7 },
+      questions: BCS_QUESTIONS,
+    })
+    expect(withGuess.bcs).toBe(6)
+  })
+
+  it('必答题不接受「看不清」（摸得出来，不该跳过）', () => {
+    const result = resolveBcsFromAnswers({
+      answers: { ribs: BCS_SKIP, spine: 5 },
+      questions: BCS_QUESTIONS,
+    })
+    expect(result.bcs).toBeNull()
+    expect(result.missing).toHaveLength(1)
+  })
+})
+
+describe('体况引导：分数档对齐 WSAVA 官方判据', () => {
+  it('选项分数与官方逐档判据一致', () => {
+    const byKey = Object.fromEntries(
+      BCS_QUESTIONS.map((q) => [q.key, q.options.map((o) => o.bcs)]),
+    )
+    // 官方第 3 档原文即「明顯腰身與腹部凹陷」，所以「看」的题最瘦档是 3 不是 4
+    expect(byKey.ribs).toEqual([1, 5, 7, 9])
+    expect(byKey.spine).toEqual([1, 5, 7, 9])
+    expect(byKey.waist).toEqual([3, 5, 7, 9])
+    expect(byKey.tuck).toEqual([3, 5, 6, 8])
+  })
+
+  it('极瘦的狗算得出 1-2 分（不再被系统性低估 20%）', () => {
+    const thinnest = Object.fromEntries(
+      BCS_QUESTIONS.map((q) => [q.key, q.options[0].bcs]),
+    )
+    // 四题都答最瘦档 -> 2 分（旧版只能到 3 分）
+    expect(resolveBcsFromAnswers({ answers: thinnest, questions: BCS_QUESTIONS }).bcs).toBe(2)
+
+    // 瘦到骨头明显时，两道「看」的题通常也会看不清 -> 1 分可达
+    const skipped = { ...thinnest, waist: BCS_SKIP, tuck: BCS_SKIP }
+    expect(resolveBcsFromAnswers({ answers: skipped, questions: BCS_QUESTIONS }).bcs).toBe(1)
+  })
+
+  it('最胖的狗仍然算得出 9 分', () => {
+    const fattest = Object.fromEntries(
+      BCS_QUESTIONS.map((q) => [q.key, q.options[q.options.length - 1].bcs]),
+    )
+    expect(resolveBcsFromAnswers({ answers: fattest, questions: BCS_QUESTIONS }).bcs).toBe(9)
   })
 })
 

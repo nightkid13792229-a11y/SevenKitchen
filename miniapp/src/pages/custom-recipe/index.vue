@@ -147,6 +147,30 @@
           <text class="value">{{getActivityLabel(selectedDog.activityLevel)}}</text>
         </view>
       </view>
+
+      <!-- 体重管理计划（阶段 D1）：进行中就带出目标与当前能量。
+           计划才是顾客当下真正在执行的方案，定制时必须看得见 ——
+           否则他定的减重计划在定制页完全没有体现，等于白定。 -->
+      <view v-if="selectedPlan" class="plan-banner">
+        <view class="plan-banner__head">
+          <text class="plan-banner__title">
+            {{ selectedPlan.direction === 'LOSS' ? '减重计划' : '增重计划' }}进行中
+          </text>
+          <text class="plan-banner__badge">{{ planStatusLabel }}</text>
+        </view>
+        <view class="plan-banner__rows">
+          <text class="plan-banner__row">
+            目标体重 {{ selectedPlan.targetWeightKg }}kg
+            <template v-if="selectedPlan.remainingKg > 0">（还差 {{ selectedPlan.remainingKg }}kg）</template>
+          </text>
+          <text class="plan-banner__row">
+            当前每日能量 {{ selectedPlan.currentKcal }} kcal
+          </text>
+        </view>
+        <text class="plan-banner__hint">
+          下面的克数已经按这个计划算好了。
+        </text>
+      </view>
     </view>
 
     <!-- 第二步：定制目标 -->
@@ -394,6 +418,11 @@ import { dogApi } from '@/api/dogs';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 import {
+  weightGoalPlanApi,
+  getPlanStatusLabel,
+  type WeightGoalPlanView,
+} from '@/api/weight-goal-plan';
+import {
   getBcsLabel,
   getSpecialBreedHint,
   isLongHairedBreed,
@@ -405,6 +434,29 @@ import {
 // 状态定义
 const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
+
+/**
+ * 当前狗狗的体重管理计划（阶段 D1）。
+ *
+ * 进行中/in 维持期时才带出来 —— 计划才是顾客当下真正在执行的方案，
+ * 定制页必须看得见，否则他定的减重计划在这里完全没有体现。
+ */
+const selectedPlan = ref<WeightGoalPlanView | null>(null);
+const planStatusLabel = computed(() =>
+  selectedPlan.value ? getPlanStatusLabel(selectedPlan.value.status) : '',
+);
+
+async function loadSelectedPlan(dogId: string) {
+  selectedPlan.value = null;
+  if (!dogId) return;
+  try {
+    const res = await weightGoalPlanApi.current(dogId);
+    selectedPlan.value = res.code === 0 ? (res.data ?? null) : null;
+  } catch {
+    // 读不到计划不该挡住定制流程
+    selectedPlan.value = null;
+  }
+}
 
 /**
  * 选择器里显示的「狗名 - 品种」。
@@ -691,9 +743,10 @@ const GOAL_LABELS: Record<string, string> = {
 /**
  * 选中目标后给出**具体的热量与克数**（老板问题 1）。
  *
- * 口径说明：这里显示的是系统当前的实际数值（已经包含按体况评分的自动调整），
- * 顾客选的目标作为"设计方向"交给营养师与 AI 去落实 —— 我们没有自己发明
- * "减重就乘 0.8"这类临床系数，那需要兽医营养口径来定。
+ * 口径说明：这里显示的是系统当前的实际数值 ——
+ * **计划进行中时就是计划值**（后端已按计划覆盖，见阶段 D1/D2），
+ * 否则是算法默认维持量。顾客选的目标作为"设计方向"交给营养师与 AI 去落实 ——
+ * 我们没有自己发明"减重就乘 0.8"这类临床系数，那需要兽医营养口径来定。
  */
 const goalTargetSummary = computed(() => {
   const goal = formData.value.targetGoal;
@@ -701,7 +754,10 @@ const goalTargetSummary = computed(() => {
 
   const label = GOAL_LABELS[goal] || '定制';
   const kcal = Number(selectedDog.value?.targetFoodKcal);
-  const grams = Number(selectedDog.value?.dailyIntakeG);
+  // 没有食谱时后端会给一个按已上架食谱中位数估算的克数（阶段 D2）。
+  // 原先这里读的是 dailyIntakeG —— 那个字段只在选了食谱之后才有值，
+  // 所以定制页一直显示「约 0 克」。
+  const grams = Number(selectedDog.value?.estimatedDailyIntakeG);
 
   if (!Number.isFinite(kcal) || kcal <= 0) {
     return {
@@ -711,9 +767,15 @@ const goalTargetSummary = computed(() => {
     };
   }
 
+  const gramsText =
+    Number.isFinite(grams) && grams > 0 ? `（约 ${Math.round(grams)} 克）` : '';
+  const sourceText = selectedPlan.value
+    ? `按${selectedPlan.value.direction === 'LOSS' ? '减重' : '增重'}计划，`
+    : '按它目前的体况，';
+
   return {
     title: `你的目标：${label}`,
-    detail: `按它目前的体况，每天需要约 ${Math.round(kcal)} kcal（约 ${Math.round(grams || 0)} 克）`,
+    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal${gramsText}`,
     note: `营养师会按「${label}」方向调整配方与喂食量，最终以交付的定制食谱为准。`,
   };
 });
@@ -944,6 +1006,7 @@ const onDogChange = (e: any) => {
   // 补确认的草稿值默认沿用档案现值，顾客可以直接确认或改动
   syncGateDraftFromDog(selectedDog.value);
   void loadDogArchiveInfo(selectedDog.value.value);
+  void loadSelectedPlan(selectedDog.value.value);
 };
 
 /** 顿号/逗号分隔的口味文本 → 标签数组 */
@@ -986,7 +1049,11 @@ const loadDogArchiveInfo = async (dogId: string) => {
       selectedDog.value = {
         ...selectedDog.value,
         targetFoodKcal: calc.finalFoodKcal,
+        // 有计划时后端已按计划能量算好（阶段 D2）；
+        // 没有食谱时还会给一个按已上架食谱中位数估算的克数
+        estimatedDailyIntakeG: calc.estimatedDailyIntakeG,
         dailyIntakeG: calc.dailyIntakeG,
+        energySource: calc.energySource,
       };
     }
 
@@ -2097,5 +2164,54 @@ const getActivityLabel = (level: string) => {
   color: #cfd4c8;
   background: #d8dccf;
   border-color: #d8dccf;
+}
+
+/* ===== 体重管理计划横幅（阶段 D1）===== */
+.plan-banner {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: #eef4ea;
+  border: 1rpx solid #d8e3cf;
+}
+
+.plan-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.plan-banner__title {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.plan-banner__badge {
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  font-weight: 600;
+  background: #ffffff;
+  color: #1e3a2f;
+}
+
+.plan-banner__rows {
+  margin-top: 12rpx;
+}
+
+.plan-banner__row {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #46564d;
+}
+
+.plan-banner__hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #6b7a70;
 }
 </style>

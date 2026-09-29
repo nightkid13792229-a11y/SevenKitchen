@@ -31,6 +31,7 @@ import {
 import { DogBreed } from '../../domain/dog/dog-breed.entity';
 import { GrowthCurveType } from '../../domain/dog/enums';
 import { SearchGovernanceService } from '../search-governance/search-governance.service';
+import { WeightGoalPlanService } from '../weight-goal-plan/weight-goal-plan.service';
 
 export interface CreateDogProfileDto {
   ownerId: string;
@@ -115,6 +116,17 @@ export interface CalcPreviewResult {
   treatDeduction: number;
   isTreatCapped: boolean;
   dailyIntakeG?: number;
+  /** 这个能量是哪来的：计划生效期间为 'PLAN'，否则是算法默认输出（阶段 D1） */
+  energySource?: 'PLAN' | 'ALGORITHM';
+  /** 计划值（仅 energySource === 'PLAN' 时有） */
+  planKcal?: number | null;
+  /**
+   * 没有食谱时用于估算克数的能量密度（已上架食谱的中位数）。
+   * 只作展示，不参与计价或制作单。
+   */
+  estimatedEnergyDensityKcalPerKg?: number;
+  /** 按上面那个密度估算的每日克数（约数，页面要带「约」字） */
+  estimatedDailyIntakeG?: number;
   calcDetails?: Record<string, any>;
 }
 
@@ -129,9 +141,23 @@ export interface CalcForRecipeResult {
   mealsPerDay: number;
 }
 
-export const DOG_REPOSITORY = Symbol('DogRepository');
+/**
+ * 仓储令牌。
+ *
+ * `DOG_REPOSITORY` / `DOG_BREED_REPOSITORY` 定义在 `./repository-tokens`
+ * 而不是这里 —— 本文件要注入 WeightGoalPlanService，而它又要用这两个令牌，
+ * 定义在这里会形成循环 import（详见那个文件的说明）。
+ * 这里 import 后再 re-export，本文件自己能用，既有
+ * `from '../dog/dog.service'` 的写法也继续可用。
+ */
+import {
+  DOG_REPOSITORY,
+  DOG_BREED_REPOSITORY,
+} from './repository-tokens';
+
+export { DOG_REPOSITORY, DOG_BREED_REPOSITORY };
+
 export const RECIPE_REPOSITORY = Symbol('RecipeRepository');
-export const DOG_BREED_REPOSITORY = Symbol('DogBreedRepository');
 export const PRISMA_SERVICE = Symbol('PrismaService');
 const MAX_BREED_SEARCH_EXPANSION_TERMS = 8;
 const BREED_DESCRIPTOR_PATTERN = /(小型|中型|大型|巨型|标准|迷你|玩具|微型)/g;
@@ -155,6 +181,17 @@ export class DogService {
     private readonly recipeRepository: RecipeRepository, // TODO: Will be used for recipe-based calculations
     @Inject(PRISMA_SERVICE)
     private readonly prisma: PrismaService,
+    /**
+     * 体重管理计划（阶段 D1/D2）。
+     *
+     * 注入它是为了让 `calcPreview` 输出的能量**反映计划**——
+     * 计划生效时该狗的每日能量目标就是计划值，而不是算法默认维持量。
+     * 狗狗详情的三个出口都走 calcPreview，改这一处就全覆盖了。
+     *
+     * 不会成环：WeightGoalPlanService 依赖的是 DOG_REPOSITORY 这个**工厂 provider**，
+     * 不是 DogService 本身。
+     */
+    private readonly weightGoalPlanService: WeightGoalPlanService,
     @Optional()
     private readonly searchGovernanceService?: SearchGovernanceService,
   ) {
@@ -563,15 +600,109 @@ export class DogService {
     // Calculate with detailed breakdown for UI display
     const calcResult = calculateDogEnergy(dog, undefined, breed, true);
 
+    /**
+     * 计划生效时改用计划值（阶段 D1/D2）。
+     *
+     * ⚠️ 口径：计划的 currentKcal 是从 RER 推导的**毛值**，与算法的 gross 同一层，
+     * 所以替换的是毛值，**零食仍要照常扣减**。
+     * 两版算法都满足 `gross = finalFoodKcal + treatDeduction`。
+     */
+    const override = await this.weightGoalPlanService.applyActivePlanOverride(
+      dogId,
+      calcResult.finalFoodKcal + calcResult.treatDeduction,
+      calcResult.treatDeduction,
+    );
+
+    const finalFoodKcal = override.finalFoodKcal;
+
+    /**
+     * 克数按同一比例缩放。
+     *
+     * 原来的 `dailyIntakeG / finalFoodKcal` 就是能量密度的倒数，
+     * 所以换了能量之后 `新克数 = 新能量 × 旧克数 ÷ 旧能量`，
+     * 不需要把密度再反解出来。
+     */
+    const dailyIntakeG =
+      calcResult.dailyIntakeG === undefined ||
+      calcResult.finalFoodKcal <= 0
+        ? calcResult.dailyIntakeG
+        : (finalFoodKcal * calcResult.dailyIntakeG) /
+          calcResult.finalFoodKcal;
+
+    /**
+     * 没有食谱时的估算克数（阶段 D2）。
+     *
+     * 定制页在**还没有食谱**的时候就要给顾客一个「每天约多少克」的概念，
+     * 而克数必须要有能量密度。原先这里没有密度，页面显示的是「约 0 克」。
+     *
+     * 用**已上架食谱的中位数**而不是拍一个常数 —— 菜谱结构变了它跟着变，
+     * 不会悄悄失真。明确标成 estimate，页面也带「约」字。
+     */
+    const estimatedDensity = await this.resolveEstimatedEnergyDensity();
+    const estimatedDailyIntakeG =
+      estimatedDensity && estimatedDensity > 0
+        ? (finalFoodKcal / estimatedDensity) * 1000
+        : undefined;
+
     return {
       rer: calcResult.rer,
-      totalDer: calcResult.der,
-      finalFoodKcal: calcResult.finalFoodKcal,
+      totalDer: override.grossKcal,
+      finalFoodKcal,
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
-      dailyIntakeG: calcResult.dailyIntakeG,
+      dailyIntakeG,
+      energySource: override.source,
+      planKcal: override.planKcal,
+      estimatedEnergyDensityKcalPerKg: estimatedDensity ?? undefined,
+      estimatedDailyIntakeG,
       calcDetails: calcResult.calcDetails,
     };
+  }
+
+  /** 估算密度的缓存（食谱目录变动不频繁，5 分钟足够，避免每次详情都聚合一遍） */
+  private estimatedDensityCache: { value: number | null; at: number } | null =
+    null;
+
+  /**
+   * 估算用的能量密度：**已上架食谱的中位数**（kcal/kg）。
+   *
+   * 只用于「还没有食谱时」给顾客一个量级概念，不参与任何计价或制作单。
+   * 没有已上架食谱时返回 null，页面就不显示克数（而不是显示 0）。
+   */
+  private async resolveEstimatedEnergyDensity(): Promise<number | null> {
+    const TTL_MS = 5 * 60 * 1000;
+    if (
+      this.estimatedDensityCache &&
+      Date.now() - this.estimatedDensityCache.at < TTL_MS
+    ) {
+      return this.estimatedDensityCache.value;
+    }
+
+    let value: number | null = null;
+    try {
+      const rows = await this.prisma.recipe.findMany({
+        where: { status: 'PUBLIC' },
+        select: { energyDensityKcalPerKg: true },
+      });
+      const values = rows
+        .map((r) => r.energyDensityKcalPerKg)
+        .filter((v) => typeof v === 'number' && v > 0)
+        .sort((a, b) => a - b);
+
+      if (values.length > 0) {
+        const mid = Math.floor(values.length / 2);
+        value =
+          values.length % 2 === 1
+            ? values[mid]
+            : (values[mid - 1] + values[mid]) / 2;
+      }
+    } catch {
+      // 估算失败不该连累详情接口 —— 克数不显示即可
+      value = null;
+    }
+
+    this.estimatedDensityCache = { value, at: Date.now() };
+    return value;
   }
 
   /**

@@ -85,6 +85,7 @@ import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
 import { RECIPE_REPOSITORY } from '../dog/dog.service';
+import { WeightGoalPlanService } from '../weight-goal-plan/weight-goal-plan.service';
 
 const MAX_ORDER_SEARCH_EXPANSION_TERMS = 8;
 
@@ -332,7 +333,47 @@ export class OrderService {
      */
     @Optional()
     private readonly customRecipeService?: CustomRecipeService,
+    /**
+     * 体重管理计划（阶段 D3）。
+     *
+     * 计划生效时，下单的每日克数要按**计划能量**换算，而不是算法默认维持量 ——
+     * 否则顾客定了减重计划，收到的饭量还是按维持量配的，计划等于没生效。
+     *
+     * 用 @Optional 是为了不把主下单链路绑死在一个可选能力上（与上面几个依赖同一考虑）；
+     * app.module 里始终会提供它，真缺失时会告警而不是静默按错误的热量配餐。
+     */
+    @Optional()
+    private readonly weightGoalPlanService?: WeightGoalPlanService,
   ) {}
+
+  /**
+   * 按计划能量换算每日净食物能量（阶段 D3）。
+   *
+   * 计划生效时换成计划值；没有计划（或服务缺失）时原样返回算法值。
+   *
+   * ⚠️ 口径：计划的 currentKcal 是**毛值**（与算法 gross 同一层），
+   * 所以传进去的必须是毛值、零食照常扣减。两版算法都满足
+   * `gross = finalFoodKcal + treatDeduction`。
+   */
+  private async resolvePlanAwareFinalKcal(
+    dogId: string,
+    dogCalcResult: { finalFoodKcal: number; treatDeduction: number },
+  ): Promise<number> {
+    if (!this.weightGoalPlanService) {
+      console.warn(
+        '[OrderService] WeightGoalPlanService 未注入，本单按算法默认维持量配餐；' +
+          '如果这只狗有进行中的体重管理计划，实际克数会偏离计划。请检查模块注册。',
+      );
+      return dogCalcResult.finalFoodKcal;
+    }
+
+    const override = await this.weightGoalPlanService.applyActivePlanOverride(
+      dogId,
+      dogCalcResult.finalFoodKcal + dogCalcResult.treatDeduction,
+      dogCalcResult.treatDeduction,
+    );
+    return override.finalFoodKcal;
+  }
 
   private async loadPreparationMethodNameMap(
     values: Array<string | null | undefined>,
@@ -1357,12 +1398,14 @@ export class OrderService {
       dog,
       recipe.energyDensityKcalPerKg,
     );
+    // 计划生效时按计划能量换算（阶段 D3）
+    const finalKcal = await this.resolvePlanAwareFinalKcal(
+      dog.id,
+      dogCalcResult,
+    );
     const dailyIntakeG =
       itemParams.dailyIntakeG ??
-      calculateDailyIntakeG(
-        dogCalcResult.finalFoodKcal,
-        recipe.energyDensityKcalPerKg,
-      );
+      calculateDailyIntakeG(finalKcal, recipe.energyDensityKcalPerKg);
 
     // 9. 创建 OrderItem
     console.log(
@@ -1984,10 +2027,16 @@ export class OrderService {
         recipe.energyDensityKcalPerKg,
       );
 
+      // 计划生效时按计划能量换算（阶段 D3）
+      const finalKcal = await this.resolvePlanAwareFinalKcal(
+        dog.id,
+        dogCalcResult,
+      );
+
       // Calculate dailyIntakeG = finalFoodKcal / (energyDensityKcalPerKg / 1000)
       // Formula: dailyIntakeG = (finalFoodKcal / energyDensityKcalPerKg) * 1000
       const dailyIntakeG = calculateDailyIntakeG(
-        dogCalcResult.finalFoodKcal,
+        finalKcal,
         recipe.energyDensityKcalPerKg,
       );
       // 与快照创建走同一份构建器，避免两条下单路径产出不同形状的配方快照

@@ -35,6 +35,7 @@ import {
 } from 'src/domain';
 import { DogBreed } from 'src/domain/dog/dog-breed.entity';
 import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 
 describe('DogService 档案确认状态', () => {
   let service: DogService;
@@ -108,6 +109,21 @@ describe('DogService 档案确认状态', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DogService,
+        {
+          // 阶段 D1/D2：DogService 注入计划服务以让 calcPreview 反映计划。
+          // 这里默认「没有生效中的计划」，保持既有用例的数值口径不变。
+          provide: WeightGoalPlanService,
+          useValue: {
+            applyActivePlanOverride: jest.fn(
+              async (_dogId: string, gross: number, treat: number) => ({
+                finalFoodKcal: gross - treat,
+                grossKcal: gross,
+                source: 'ALGORITHM',
+                planKcal: null,
+              }),
+            ),
+          },
+        },
         { provide: DOG_REPOSITORY, useValue: mockDogRepository },
         { provide: RECIPE_REPOSITORY, useValue: mockRecipeRepository },
         { provide: DOG_BREED_REPOSITORY, useValue: mockDogBreedRepository },

@@ -8,7 +8,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { DOG_BREED_REPOSITORY, DOG_REPOSITORY } from '../dog/dog.service';
+import {
+  DOG_BREED_REPOSITORY,
+  DOG_REPOSITORY,
+  // ⚠️ 必须从 tokens 文件取，不能从 dog.service 取 ——
+  // 那会形成 dog.service ↔ weight-goal-plan.service 的循环 import，
+  // 令牌在求值时为 undefined，Nest 启动直接失败。
+} from '../dog/repository-tokens';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import {

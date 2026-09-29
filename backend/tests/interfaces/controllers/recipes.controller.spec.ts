@@ -35,6 +35,7 @@ import { GrowthCurveType } from 'src/domain/dog/enums';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { OrderService } from 'src/application/order/order.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;
@@ -124,6 +125,21 @@ describe('RecipesController (e2e)', () => {
       providers: [
         DiySheetService,
         DogService,
+        {
+          // 阶段 D1/D2：DogService 注入计划服务以让 calcPreview 反映计划。
+          // 这里默认「没有生效中的计划」，保持既有用例的数值口径不变。
+          provide: WeightGoalPlanService,
+          useValue: {
+            applyActivePlanOverride: jest.fn(
+              async (_dogId: string, gross: number, treat: number) => ({
+                finalFoodKcal: gross - treat,
+                grossKcal: gross,
+                source: 'ALGORITHM',
+                planKcal: null,
+              }),
+            ),
+          },
+        },
         {
           provide: RECIPE_REPOSITORY_TOKEN,
           useValue: sharedRecipeRepo,

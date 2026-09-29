@@ -45,6 +45,7 @@ import { ProcurementSkuService } from 'src/ingredient/procurement-sku.service';
 import { DOG_REPOSITORY } from 'src/dog/dog.service';
 import { ADDRESS_REPOSITORY } from 'src/address/address.service';
 import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 
 describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
   let service: OrderService;
@@ -54,6 +55,22 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
   let searchGovernance: jest.Mocked<
     Pick<SearchGovernanceService, 'expandQuery' | 'recordSearchEvent'>
   >;
+
+
+  /**
+   * 体重管理计划（阶段 D3）。
+   * 默认「没有生效中的计划」，保持既有用例的数值口径不变。
+   */
+  const mockWeightGoalPlanService = {
+    applyActivePlanOverride: jest.fn(
+      async (_dogId: string, gross: number, treat: number) => ({
+        finalFoodKcal: gross - treat,
+        grossKcal: gross,
+        source: 'ALGORITHM',
+        planKcal: null,
+      }),
+    ),
+  };
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
     findById: jest.fn(),
@@ -182,6 +199,10 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
+        {
+          provide: WeightGoalPlanService,
+          useValue: mockWeightGoalPlanService,
+        },
         {
           provide: ORDER_REPOSITORY,
           useValue: mockOrderRepository,
@@ -1708,6 +1729,61 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(savedOrder.items[0].cookingMethod).toBe(CookingMethod.COOKED);
     });
   });
+
+  // ==================== 阶段 D3：下单克数按计划能量 ====================
+
+  describe('计划生效时的每日克数（阶段 D3）', () => {
+    const call = (gross: number, treat: number) =>
+      (service as any).resolvePlanAwareFinalKcal('dog-1', {
+        finalFoodKcal: gross - treat,
+        treatDeduction: treat,
+      });
+
+    it('没有生效中的计划时原样返回算法结果', async () => {
+      const kcal = await call(400, 12);
+
+      expect(mockWeightGoalPlanService.applyActivePlanOverride).toHaveBeenCalled();
+      expect(kcal).toBe(388);
+    });
+
+    it('计划生效时返回计划净能量', async () => {
+      mockWeightGoalPlanService.applyActivePlanOverride.mockResolvedValueOnce({
+        finalFoodKcal: 231.7,
+        grossKcal: 241,
+        source: 'PLAN',
+        planKcal: 241,
+      });
+
+      expect(await call(400, 12)).toBe(231.7);
+    });
+
+    it('传给计划服务的是毛值与零食，不是净能量', async () => {
+      await call(400, 12);
+
+      // 关键：计划的 currentKcal 是毛值，不能把净能量当毛值传进去，
+      // 否则会少扣一次零食
+      const [, gross, treat] =
+        mockWeightGoalPlanService.applyActivePlanOverride.mock.calls.at(-1)!;
+      expect(gross).toBe(400);
+      expect(treat).toBe(12);
+    });
+
+    it('计划服务缺失时降级为算法值，并留下痕迹（不静默配错餐）', async () => {
+      const bare = Object.create(OrderService.prototype) as any;
+      bare.weightGoalPlanService = undefined;
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const kcal = await bare.resolvePlanAwareFinalKcal('dog-1', {
+        finalFoodKcal: 388,
+        treatDeduction: 12,
+      });
+
+      expect(kcal).toBe(388);
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  });
+
 });
 
 describe('OrderService - Phase 8.16: Order Cancellation', () => {

@@ -366,9 +366,23 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 
   it('选中目标后给出具体热量与克数', () => {
     expect(page).toContain('goalTargetSummary')
-    expect(page).toContain('kcal（约')
     expect(page).toContain('finalFoodKcal')
-    expect(page).toContain('dailyIntakeG')
+    expect(page).toContain('kcal${gramsText}')
+    // 阶段 D2：克数改用估算值 —— 原先读的 dailyIntakeG 只在选了食谱后才有值，
+    // 定制页因此一直显示「约 0 克」
+    expect(page).toContain('estimatedDailyIntakeG')
+    expect(page).toContain('约 ${Math.round(grams)} 克')
+  })
+
+  it('计划进行中时带出计划，并说明克数已按计划算', () => {
+    // 阶段 D1：计划才是顾客当下真正在执行的方案，定制页必须看得见
+    expect(page).toContain('selectedPlan')
+    expect(page).toContain('loadSelectedPlan')
+    expect(page).toContain('weightGoalPlanApi.current')
+    expect(page).toContain('进行中')
+    expect(page).toContain('下面的克数已经按这个计划算好了')
+    // 文案要区分「按计划」与「按体况」，否则顾客不知道这个数字怎么来的
+    expect(page).toContain('sourceText')
   })
 
   it('勾了健康管理不再覆盖顾客选的减重/增重目标', () => {

@@ -26,6 +26,7 @@ import {
 } from 'src/domain';
 import { DogBreed } from 'src/domain/dog/dog-breed.entity';
 import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
+import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
 
 describe('DogService', () => {
   let service: DogService;
@@ -98,6 +99,34 @@ describe('DogService', () => {
     order: {
       count: jest.fn(),
     },
+    // 阶段 D2：估算克数要读已上架食谱的密度中位数
+    recipe: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+
+  /**
+   * 计划服务（阶段 D1/D2）。
+   * 默认返回「没有生效中的计划」，个别用例会临时改成有计划。
+   */
+  const mockWeightGoalPlanService = {
+    applyActivePlanOverride: jest.fn(
+      async (
+        _dogId: string,
+        gross: number,
+        treat: number,
+      ): Promise<{
+        finalFoodKcal: number;
+        grossKcal: number;
+        source: 'PLAN' | 'ALGORITHM';
+        planKcal: number | null;
+      }> => ({
+        finalFoodKcal: gross - treat,
+        grossKcal: gross,
+        source: 'ALGORITHM',
+        planKcal: null,
+      }),
+    ),
   };
 
   const createBreed = (
@@ -127,6 +156,12 @@ describe('DogService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DogService,
+        {
+          // 阶段 D1/D2：DogService 注入计划服务以让 calcPreview 反映计划。
+          // 默认「没有生效中的计划」，保持既有用例的数值口径不变。
+          provide: WeightGoalPlanService,
+          useValue: mockWeightGoalPlanService,
+        },
         {
           provide: DOG_REPOSITORY,
           useValue: mockDogRepository,
@@ -328,6 +363,106 @@ describe('DogService', () => {
       await expect(service.calcPreview('non-existent-id')).rejects.toThrow(
         'Dog not found: non-existent-id',
       );
+    });
+
+    // ==================== 阶段 D1/D2：计划接入 ====================
+
+    it('没有计划时标记来源为算法默认输出', async () => {
+      const dog = createMockDog();
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+
+      const result = await service.calcPreview('dog-id-1');
+
+      expect(result.energySource).toBe('ALGORITHM');
+      expect(result.planKcal).toBeNull();
+    });
+
+    it('计划生效时改用计划值，并标出来源是计划', async () => {
+      const dog = createMockDog();
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+      mockWeightGoalPlanService.applyActivePlanOverride.mockResolvedValueOnce({
+        finalFoodKcal: 560,
+        grossKcal: 580,
+        source: 'PLAN',
+        planKcal: 580,
+      });
+
+      const result = await service.calcPreview('dog-id-1');
+
+      expect(result.energySource).toBe('PLAN');
+      expect(result.finalFoodKcal).toBe(560);
+      expect(result.planKcal).toBe(580);
+    });
+
+    it('替换的是毛值、零食照常扣减（不能直接把计划值当净食物量）', async () => {
+      const dog = createMockDog({ treatInputMode: TreatInputMode.EXACT_KCAL, manualTreatKcal: 50 });
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+
+      await service.calcPreview('dog-id-1');
+
+      // 服务必须把 gross = finalFoodKcal + treatDeduction 传下去
+      const [dogId, gross, treat] =
+        mockWeightGoalPlanService.applyActivePlanOverride.mock.calls.at(-1)!;
+      expect(dogId).toBe('dog-id-1');
+      expect(treat).toBeGreaterThan(0);
+      expect(gross).toBeGreaterThan(treat);
+    });
+
+    it('没有已上架食谱时不显示估算克数，而不是显示 0', async () => {
+      const dog = createMockDog();
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+      mockPrismaService.recipe.findMany.mockResolvedValue([]);
+
+      const result = await service.calcPreview('dog-id-1');
+
+      expect(result.estimatedDailyIntakeG).toBeUndefined();
+      expect(result.estimatedEnergyDensityKcalPerKg).toBeUndefined();
+    });
+
+    it('用已上架食谱的中位数密度估算克数（阶段 D2）', async () => {
+      const dog = createMockDog();
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+      // 有效值 [1200, 1500, 1800] → 中位 1500；非法值被过滤掉
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        { energyDensityKcalPerKg: 1200 },
+        { energyDensityKcalPerKg: 1800 },
+        { energyDensityKcalPerKg: 1500 },
+        { energyDensityKcalPerKg: 0 },
+        { energyDensityKcalPerKg: null },
+      ]);
+
+      const result = await service.calcPreview('dog-id-1');
+
+      expect(result.estimatedEnergyDensityKcalPerKg).toBe(1500);
+      expect(result.estimatedDailyIntakeG).toBeGreaterThan(0);
+      // 克数 = kcal / 密度 × 1000
+      expect(result.estimatedDailyIntakeG).toBeCloseTo(
+        (result.finalFoodKcal / 1500) * 1000,
+        5,
+      );
+      // 只统计已上架的食谱
+      expect(mockPrismaService.recipe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'PUBLIC' } }),
+      );
+    });
+
+    it('估算密度失败不连累详情接口', async () => {
+      const dog = createMockDog();
+      dogRepository.findById.mockResolvedValue(dog);
+      dogBreedRepository.findById.mockResolvedValue(null);
+      mockPrismaService.recipe.findMany.mockRejectedValueOnce(
+        new Error('db down'),
+      );
+
+      const result = await service.calcPreview('dog-id-1');
+
+      expect(result.finalFoodKcal).toBeGreaterThan(0);
+      expect(result.estimatedDailyIntakeG).toBeUndefined();
     });
 
     it('should handle boundary case: minimum weight dog (very small)', async () => {

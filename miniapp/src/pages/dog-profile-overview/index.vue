@@ -2438,15 +2438,9 @@ function goToHealthProfile() {
 }
 
 /*
- * 最常见的档位（城市日常）：未选中时也要和另外四档区分开（与建档页一致）。
- * 绝大多数城市犬都在这一档，顾客不该在五个选项里犹豫。
+ * 最常见的档位（城市日常）：**只加角标，不动边框与底色**（与建档页一致）。
+ * 改边框/底色会让它看起来像"已经选中了"，与真正的选中态分不清。
  */
-.activity-option--common {
-  border-color: rgba(30, 46, 36, 0.22);
-  border-width: 2rpx;
-  background: rgba(30, 46, 36, 0.04);
-}
-
 .activity-option__row {
   display: flex;
   align-items: center;

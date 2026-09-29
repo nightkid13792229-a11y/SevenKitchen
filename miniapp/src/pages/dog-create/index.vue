@@ -390,10 +390,7 @@
               v-for="option in createActivityChoices"
               :key="option.value"
               class="activity-level-card"
-              :class="{
-                'activity-level-card--active': formData.activityLevel === option.value,
-                'activity-level-card--common': option.isCommon,
-              }"
+              :class="{ 'activity-level-card--active': formData.activityLevel === option.value }"
               @tap="selectActivityLevel(option.value)"
             >
               <view class="activity-level-card__row">
@@ -2858,6 +2855,23 @@ async function submit() {
      这里的背景本来就是不透明的，去掉模糊不影响观感。 */
 }
 
+/*
+ * 卡片基础外观：**所有步骤共用**。
+ *
+ * 2026-09-30 修：此前只在 .wizard-step--basic / .wizard-step--feeding
+ * 两个作用域里定义，于是**第三步（体态评估）里的卡片完全没有内边距、
+ * 背景和边框** —— 「BCS 体态评分」标题直接贴在卡片顶边，
+ * 紧挨着上方那条不透明的 sticky 步骤条，字母顶部就被盖掉了一截
+ * （顾客看到的是"BCS 有部分被遮挡"）。繁殖期卡片也是同一个毛病。
+ */
+.profile-card {
+  background: linear-gradient(180deg, #ffffff 0%, #eef2e4 100%);
+  border: 2rpx solid #e5e8d4;
+  border-radius: 32rpx;
+  padding: 28rpx;
+  box-shadow: 0 14rpx 40rpx rgba(30, 46, 36, 0.06);
+}
+
 .wizard-step {
   display: flex;
   flex-direction: column;
@@ -2891,14 +2905,6 @@ async function submit() {
   font-size: 24rpx;
   line-height: 1.6;
   color: #6b6653;
-}
-
-.wizard-step--feeding .profile-card {
-  background: linear-gradient(180deg, #ffffff 0%, #eef2e4 100%);
-  border: 2rpx solid #e5e8d4;
-  border-radius: 32rpx;
-  padding: 28rpx;
-  box-shadow: 0 14rpx 40rpx rgba(30, 46, 36, 0.06);
 }
 
 .wizard-step--feeding .label {
@@ -3119,21 +3125,12 @@ async function submit() {
 }
 
 /*
- * 最常见的档位（城市日常）：**未选中时**也要和另外四档区分开。
- * 绝大多数城市犬都在这一档，顾客不该在五个选项里犹豫。
- * 选中时用统一的 active 样式，避免两套高亮打架。
+ * 最常见的档位（城市日常）。
+ *
+ * ⚠️ **只加角标，不动边框与底色**（老板要求）。
+ *    之前给未选中的它加了更重的边框和浅底，看上去像"已经选中了"，
+ *    与真正的选中态（--active）分不清 —— 那比不加标记更糟。
  */
-.wizard-step--feeding .activity-level-card--common {
-  border-color: rgba(30, 58, 47, 0.22);
-  border-width: 2rpx;
-  background: rgba(30, 58, 47, 0.04);
-}
-
-.wizard-step--feeding .activity-level-card--common.activity-level-card--active {
-  border-color: rgba(30, 58, 47, 0.28);
-  background: rgba(30, 58, 47, 0.08);
-}
-
 .wizard-step--feeding .activity-level-card__row {
   display: flex;
   align-items: center;
@@ -3204,14 +3201,6 @@ async function submit() {
   font-size: 22rpx;
   line-height: 1.7;
   color: #6b6653;
-}
-
-.wizard-step--basic .profile-card {
-  background: linear-gradient(180deg, #ffffff 0%, #eef2e4 100%);
-  border: 2rpx solid #e5e8d4;
-  border-radius: 32rpx;
-  padding: 28rpx;
-  box-shadow: 0 14rpx 40rpx rgba(30, 46, 36, 0.06);
 }
 
 .profile-card__identity {

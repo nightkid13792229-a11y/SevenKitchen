@@ -501,6 +501,12 @@
                 :class="{ active: bcsAnswers[question.key] === option.bcs }"
                 @tap="selectBcsAnswer(question.key, option.bcs)"
               >{{ option.label }}</view>
+              <view
+                v-if="question.skippable"
+                class="bcs-question__option bcs-question__option--skip"
+                :class="{ active: bcsAnswers[question.key] === BCS_SKIP }"
+                @tap="selectBcsAnswer(question.key, BCS_SKIP)"
+              >看不清</view>
             </view>
           </view>
 
@@ -724,9 +730,9 @@ import {
 } from '../../utils/dog-profile-form'
 import {
   getBcsLabel,
-  isLongHairedBreed,
+  BCS_QUESTIONS,
+  BCS_SKIP,
   resolveBcsFromAnswers,
-  resolveQuestions,
 } from '../../utils/bcs-questionnaire'
 import {
   formatWeightEcho,
@@ -1281,23 +1287,12 @@ const FALLBACK_ACTIVITY_LEVEL = DEFAULT_ACTIVITY_LEVEL
 // ========== 体况引导（2026-09-29，阶段 C） ==========
 const bcsAnswers = ref<Record<string, number>>({})
 
-/** 是否是长毛犬（决定只问题两道「摸」的题） */
-const isLongHaired = computed(() =>
-  isLongHairedBreed(
-    isMixedBreed.value
-      ? formData.value.customBreedName
-      : selectedBreed.value?.name,
-  ),
-)
-
-const bcsQuestions = computed(() =>
-  resolveQuestions({ isLongHaired: isLongHaired.value }),
-)
+const bcsQuestions = BCS_QUESTIONS
 
 const bcsResult = computed(() =>
   resolveBcsFromAnswers({
     answers: bcsAnswers.value,
-    questions: bcsQuestions.value,
+    questions: bcsQuestions,
   }),
 )
 
@@ -1310,7 +1305,7 @@ function selectBcsAnswer(questionKey: string, bcs: number) {
   bcsAnswers.value = { ...bcsAnswers.value, [questionKey]: bcs }
   const result = resolveBcsFromAnswers({
     answers: bcsAnswers.value,
-    questions: bcsQuestions.value,
+    questions: bcsQuestions,
   })
   if (result.bcs !== null) {
     // 算出来了 → 写进表单并标记「顾客亲自确认过」
@@ -5483,7 +5478,6 @@ async function submit() {
   border-radius: 16rpx;
 }
 
-/* 特殊犬种提示（深胸细腰型 / 短鼻桶胸型）—— 不改变算分，只防误判 */
 
 .bcs-question {
   margin-top: 24rpx;
@@ -5497,6 +5491,20 @@ async function submit() {
   line-height: 1.5;
 }
 
+
+.bcs-question__option--skip {
+  border-style: dashed;
+  color: #8a938d;
+  background: #fafbfa;
+}
+
+.bcs-question__option--skip.active {
+  border-style: solid;
+  border-color: #8a938d;
+  background: #eef1ef;
+  color: #5d6660;
+  font-weight: 600;
+}
 
 .bcs-question__options {
   display: flex;

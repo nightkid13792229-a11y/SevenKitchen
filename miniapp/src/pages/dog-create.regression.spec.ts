@@ -592,10 +592,16 @@ describe('dog-create · BCS 板块整改', () => {
     expect(bcsIdx).toBeGreaterThan(treatIdx)
   })
 
-  it('长毛犬判定逻辑保留（只删提示文案，不删分支）', () => {
+  it('不再按犬种猜是否长毛，改为顾客自己点「看不清」', () => {
     const page = read()
-    // 长毛犬只问两题 —— 这是算分正确性的一部分，不能跟着提示一起删掉
-    expect(page).toContain('isLongHaired')
-    expect(page).toContain('resolveQuestions({ isLongHaired')
+    // 按犬种名字猜长毛双向都会错（柴犬被误收、拉萨犬被漏收），
+    // 且错判会改变喂食量 —— 已整体取消，所有狗同一套题。
+    expect(page).not.toContain('isLongHaired')
+    expect(page).not.toContain('resolveQuestions')
+    expect(page).toContain('BCS_QUESTIONS')
+    // 两道「看」的题各有「看不清」
+    expect(page).toContain('question.skippable')
+    expect(page).toContain('BCS_SKIP')
+    expect(page).toContain('看不清')
   })
 })

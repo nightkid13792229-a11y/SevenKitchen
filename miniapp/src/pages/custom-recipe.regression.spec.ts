@@ -520,7 +520,7 @@ describe('custom recipe BCS gate · 与建档页统一为动作题（阶段 C6�
   it('两道「看」的题带「看不清」，且不再按犬种分类', () => {
     expect(submit).toContain('question.skippable')
     expect(submit).toContain('BCS_SKIP')
-    expect(submit).toContain('看不清')
+    expect(submit).toContain("看不出来")
     expect(submit).not.toContain('isLongHaired')
     expect(submit).not.toContain('resolveQuestions')
   })

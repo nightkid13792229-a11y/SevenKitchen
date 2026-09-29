@@ -592,16 +592,16 @@ describe('dog-create · BCS 板块整改', () => {
     expect(bcsIdx).toBeGreaterThan(treatIdx)
   })
 
-  it('不再按犬种猜是否长毛，改为顾客自己点「看不清」', () => {
+  it('不再按犬种猜是否长毛，改为顾客自己点「看不出来」', () => {
     const page = read()
     // 按犬种名字猜长毛双向都会错（柴犬被误收、拉萨犬被漏收），
     // 且错判会改变喂食量 —— 已整体取消，所有狗同一套题。
     expect(page).not.toContain('isLongHaired')
     expect(page).not.toContain('resolveQuestions')
     expect(page).toContain('BCS_QUESTIONS')
-    // 两道「看」的题各有「看不清」
+    // 两道「看」的题各有「看不出来」
     expect(page).toContain('question.skippable')
     expect(page).toContain('BCS_SKIP')
-    expect(page).toContain('看不清')
+    expect(page).toContain('看不出来')
   })
 })

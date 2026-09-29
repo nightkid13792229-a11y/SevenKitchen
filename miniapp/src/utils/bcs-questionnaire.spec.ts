@@ -38,7 +38,7 @@ describe('体况引导：题目集（阶段 C）', () => {
   })
 })
 
-describe('体况引导：不再按犬种分类，改用「看不清」跳过', () => {
+describe('体况引导：不再按犬种分类，改用「看不出来」跳过', () => {
   it('题目模块里不存在任何犬种判断（柴犬这类边界犬种不再有争议）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/utils/bcs-questionnaire.ts'),
@@ -57,14 +57,14 @@ describe('体况引导：不再按犬种分类，改用「看不清」跳过', (
     expect(BCS_QUESTIONS).toHaveLength(4)
   })
 
-  it('只有两道「看」的题可以「看不清」', () => {
+  it('只有两道「看」的题可以「看不出来」', () => {
     const skippable = BCS_QUESTIONS.filter((q) => q.skippable)
     expect(skippable.map((q) => q.key)).toEqual(['waist', 'tuck'])
     expect(skippable.every((q) => q.kind === 'look')).toBe(true)
   })
 
-  it('「看不清」不计入中位数，等价于该题没答', () => {
-    // 直观上像 7 分（腰线平直），但顾客说看不清，就不该拿它去推高结论
+  it('「看不出来」不计入中位数，等价于该题没答', () => {
+    // 直观上像 7 分（腰线平直），但顾客说看不出来，就不该拿它去推高结论
     const withSkip = resolveBcsFromAnswers({
       answers: { ribs: 5, spine: 5, waist: BCS_SKIP, tuck: BCS_SKIP },
       questions: BCS_QUESTIONS,
@@ -78,7 +78,7 @@ describe('体况引导：不再按犬种分类，改用「看不清」跳过', (
     expect(withGuess.bcs).toBe(6)
   })
 
-  it('必答题不接受「看不清」（摸得出来，不该跳过）', () => {
+  it('必答题不接受「看不出来」（摸得出来，不该跳过）', () => {
     const result = resolveBcsFromAnswers({
       answers: { ribs: BCS_SKIP, spine: 5 },
       questions: BCS_QUESTIONS,
@@ -107,7 +107,7 @@ describe('体况引导：分数档对齐 WSAVA 官方判据', () => {
     // 四题都答最瘦档 -> 2 分（旧版只能到 3 分）
     expect(resolveBcsFromAnswers({ answers: thinnest, questions: BCS_QUESTIONS }).bcs).toBe(2)
 
-    // 瘦到骨头明显时，两道「看」的题通常也会看不清 -> 1 分可达
+    // 瘦到骨头明显时，两道「看」的题通常也会看不出来 -> 1 分可达
     const skipped = { ...thinnest, waist: BCS_SKIP, tuck: BCS_SKIP }
     expect(resolveBcsFromAnswers({ answers: skipped, questions: BCS_QUESTIONS }).bcs).toBe(1)
   })

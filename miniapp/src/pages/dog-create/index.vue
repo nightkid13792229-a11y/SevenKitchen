@@ -506,7 +506,7 @@
                 class="bcs-question__option bcs-question__option--skip"
                 :class="{ active: bcsAnswers[question.key] === BCS_SKIP }"
                 @tap="selectBcsAnswer(question.key, BCS_SKIP)"
-              >看不清</view>
+              >看不出来</view>
             </view>
           </view>
 

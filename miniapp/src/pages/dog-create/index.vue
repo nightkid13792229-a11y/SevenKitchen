@@ -397,9 +397,17 @@
             <text class="bcs-result__note">还有 {{ bcsResult.missing.length }} 个「用手摸」的问题要答（这两项决定结果，不能跳过）。</text>
           </view>
 
-          <!-- 演示视频位（阶段 C3）：素材待补，先把位置留出来 -->
-          <view class="bcs-video-slot">
-            <text class="bcs-video-slot__text">不知道怎么摸？看这 20 秒演示 →</text>
+          <!-- 操作指引图（阶段 C3）：原「演示视频位」改为图文指引。
+               官方教学视频是英文且托管在 YouTube —— 国内打不开、小程序也嵌不了
+               外部视频；AI 生成的「手放在狗身上」手指偏长偏平、手臂与狗背糊在一起，
+               所以改为在狗身上标出「摸哪里」，位置由坐标网格校准，精确且无畸形风险。 -->
+          <view v-if="showBcsHowToImage" class="bcs-howto">
+            <image
+              class="bcs-howto__image"
+              :src="bcsHowToImageUrl"
+              mode="widthFix"
+              @error="onBcsHowToImageError"
+            />
           </view>
 
           <view v-if="feedingImpactExpanded.bcs" class="feeding-impact-panel">
@@ -468,6 +476,15 @@
                 <text class="bcs-tip-text">建议尽量维持 4-5 分的理想状态，有助于健康和后续喂食稳定。</text>
               </view>
             </view>
+            <!-- 侧视四档对照（阶段 C3）：标签直接用问卷第 4 题的选项原文，
+                 与上面的 9 分制总表互补 —— 总表给尺度，这张给「怎么对到自己家狗」。 -->
+            <image
+              v-if="showBcsSideImage"
+              class="feeding-guide-card__image feeding-guide-card__image--sub"
+              :src="bcsSideImageUrl"
+              mode="widthFix"
+              @error="onBcsSideImageError"
+            />
           </view>
         </view>
 
@@ -1075,6 +1092,18 @@ const bcsGuideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/BCS-c
 const activityGuideImageUrl = ref('https://img.sevenkitchen.cloud/dog-profile-charts/activity-levels.jpg')
 const showActivityFallback = ref(false)
 const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
+
+/**
+ * 体况引导的两张图（2026-09-29，阶段 C3）。
+ *
+ * 均放 CDN 而不是打进主包 —— 主包只有 2MB 额度，两张图合计 246KB。
+ * 加载失败时直接不显示，不额外加兜底文案：
+ * 上方问卷本身是纯文字的，参考图只是辅助，缺了不影响答题。
+ */
+const bcsHowToImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/bcs-how-to-feel.jpg')
+const showBcsHowToImage = ref(true)
+const bcsSideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/bcs-side-reference.jpg')
+const showBcsSideImage = ref(true)
 const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开状态
 
 const filteredBreeds = computed(() => {
@@ -2275,6 +2304,22 @@ function onBcsImageError() {
   showBcsFallback.value = true // 显示降级内容
 }
 
+/**
+ * 体况引导两张辅助图的加载失败处理。
+ *
+ * 与 BCS-chart 不同：这两张只是辅助，**不做文字兜底**，直接隐藏即可 ——
+ * 问卷本身已经是纯文字的，用户不会因为缺图答不了题。
+ */
+function onBcsHowToImageError() {
+  console.error('[BCS HowTo] Failed to load:', bcsHowToImageUrl.value)
+  showBcsHowToImage.value = false
+}
+
+function onBcsSideImageError() {
+  console.error('[BCS SideRef] Failed to load:', bcsSideImageUrl.value)
+  showBcsSideImage.value = false
+}
+
 // ========== 生命阶段选择函数 ==========
 
 /**
@@ -3267,6 +3312,11 @@ async function submit() {
   margin-top: 14rpx;
   width: 100%;
   border-radius: 18rpx;
+}
+
+/* 9 分制总表下方的侧视四档对照图，与总表留出间隔 */
+.wizard-step--feeding .feeding-guide-card__image--sub {
+  margin-top: 20rpx;
 }
 
 .wizard-step--feeding .activity-level-container {
@@ -5712,16 +5762,13 @@ async function submit() {
   line-height: 1.5;
 }
 
-.bcs-video-slot {
+/* 操作指引图（阶段 C3）：取代原来的「演示视频位」虚线占位框 */
+.bcs-howto {
   margin-top: 20rpx;
-  padding: 24rpx;
-  border: 1rpx dashed #c9d3c2;
-  border-radius: 12rpx;
-  text-align: center;
 }
 
-.bcs-video-slot__text {
-  font-size: 26rpx;
-  color: #6b7a70;
+.bcs-howto__image {
+  width: 100%;
+  border-radius: 12rpx;
 }
 </style>

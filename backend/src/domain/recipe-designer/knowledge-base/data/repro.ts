@@ -181,7 +181,7 @@ export const REPRO_KNOWLEDGE: KnowledgeEntry[] = [
       '妊娠', '怀孕', '哺乳', '泌乳', '能量', 'FEDIAF 表 VII-8b', '窝仔数',
       'pregnancy', 'lactation', 'energy requirement',
     ],
-    applicableTo: ['pregnancy', 'lactation', 'reproduction'],
+    applicableTo: ['repro', 'pregnant', 'lactating', 'reproduction'],
     summary:
       'FEDIAF 2025 表 VII-8b 给出母犬妊娠与哺乳期的平均能量需求公式：妊娠前 4 周为 132 × 体重kg^0.75 kcal（约 1.89 × RER，与成年维持量接近）；后 5 周在此基础上按体重线性增加（+26 × 体重kg）。哺乳期以 145 × 体重kg^0.75 为基准，再按窝仔数与产后周龄叠加。',
     details: [

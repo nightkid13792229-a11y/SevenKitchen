@@ -8549,7 +8549,7 @@ function mergeFoodText(
 // ---------- AI 四步向导辅助函数 ----------
 
 /** 由犬档案推导知识检索标签与关键词 */
-function deriveKnowledgeTags(profile: {
+export function deriveKnowledgeTags(profile: {
   lifeStageLabel: string | null;
   ageMonths: number | null;
   bcsScore: number | null;
@@ -8717,6 +8717,15 @@ function deriveKnowledgeTags(profile: {
     tags.add('hospitalized');
     keywords.push('危重症', '营养支持', '住院');
   }
+
+  // 食品安全：自制鲜食对每一只狗都适用（存放、复热、生食、霉变），
+  // 因此无条件命中，不做疾病/阶段判断。
+  //
+  // 2026-09-30 修复：此前 SAFE 领域的 7 条知识标签为 safe / food-safety /
+  // foodborne / all，而本函数从不产出这些标签，关键词路径也全部落空——
+  // 结果这 7 条从未进入过任何一次 AI 提示词。现在补上。
+  tags.add('safe');
+  tags.add('food-safety');
 
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (

@@ -23,7 +23,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '肝胆疾病', '肝脏病', '肝病营养', '营养管理目标', '肝功能', '肝',
       'hepatic', 'liver disease', 'hepatobiliary', 'nutrition goals',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'liver-disease'],
+    applicableTo: ['hepatic', 'liver', 'liver-disease'],
     summary:
       '肝胆疾病的营养管理通常针对疾病的临床症状而非特定病因。营养管理目标是：1) 维持正常代谢过程与稳态；2) 避免和管理肝性脑病（HE）；3) 提供底物支持肝细胞修复与再生；4) 减少对受损肝组织的进一步氧化损伤；5) 纠正电解质紊乱。',
     details: [
@@ -49,7 +49,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '肝病能量', '能量密度', '供能', '能量需求', 'kcal', '能量',
       'hepatic energy', 'energy density', 'metabolizable energy', '补充能量',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato'],
+    applicableTo: ['hepatic', 'liver'],
     summary:
       '提供充足的每日能量摄入是肝胆疾病（尤其猫肝脂质沉积）营养管理成功的基石。充足能量可：1) 防止分解氨基酸供能；2) 抑制外周脂解；3) 避免过量能量摄入促进肝甘油三酯蓄积。肝胆疾病食物应提供至少 4.0（犬）/4.2（猫）kcal ME/g 干物质。',
     details: [
@@ -75,7 +75,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '肝病蛋白', '蛋白质', '蛋白限制', '低蛋白', '肝性脑病', '蛋白',
       'hepatic protein', 'protein restriction', 'low protein', 'hepatic encephalopathy',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'hepatic-encephalopathy', 'he'],
+    applicableTo: ['hepatic', 'liver', 'hepatic-encephalopathy'],
     summary:
       '肝病患者的蛋白目标是：提供足够蛋白支持肝再生，同时避免过量蛋白导致或加重肝性脑病（HE）。常规肝胆疾病：犬 15-20% 干物质蛋白、猫 30-35% 干物质。有肝性脑病迹象时，干物质蛋白应短期限制在犬 10-15%、猫 25-30%，直到症状缓解。',
     details: [
@@ -102,7 +102,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '肝性脑病', 'HE', '血氨', '神经症状', '精神行为异常', '氨中毒',
       'hepatic encephalopathy', 'HE', 'ammonia', 'neurologic', '脑病',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepatic-encephalopathy', 'he'],
+    applicableTo: ['hepatic', 'liver', 'hepatic-encephalopathy'],
     summary:
       '肝性脑病（HE）是因肝功能障碍和门体分流导致的神经综合征，氨是主要致病因子。典型表现为精神行为异常（躁狂吠叫/行走无目的/共济失调/嗜睡/意识改变/头抵墙/癫痫等，可呈发作性并与进食或饮食改变相关）。营养管理核心：限制蛋白氮、保证充足能量、提供可消化碳水化合物、纠正低钾与碱中毒。',
     details: [
@@ -183,7 +183,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '钠', '腹水', '门脉高压', '低白蛋白', '钾', '低钾血症', '电解质',
       'sodium', 'ascites', 'portal hypertension', 'potassium', 'hypokalemia',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'ascites', 'edema'],
+    applicableTo: ['hepatic', 'liver', 'ascites', 'edema'],
     summary:
       '有腹水、门脉高压和/或显著低白蛋白的肝胆疾病患者应避免过量钠，钠应限制到肾衰/心衰建议水平（犬 0.08-0.25%、猫 0.07-0.3% DM）。肝病常伴低钾血症（尤其 HE、肝脂质沉积），低钾+碱中毒会延长厌食、加重肝性脑病；需保证钾（猫肝脂质沉积 0.8-1.0% DM）并监测。',
     details: [
@@ -265,7 +265,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '抗氧化', '维生素E', '维生素C', '氧化应激', '自由基', '脂质过氧化',
       'antioxidant', 'vitamin E', 'vitamin C', 'oxidative stress', 'free radical',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'antioxidant'],
+    applicableTo: ['hepatic', 'liver', 'antioxidant'],
     summary:
       '氧化应激是肝损伤的重要机制（铜/铁蓄积、异常胆汁酸、炎症细胞均产生自由基）。维生素 E（细胞膜结合抗氧化剂）和维生素 C（再生氧化型维E）是重要抗氧化支持。肝胆疾病食物应含：犬维E ≥400 IU/kg、猫 ≥500 IU/kg DM；犬维C ≥100 mg/kg、猫 100-200 mg/kg DM。',
     details: [
@@ -292,7 +292,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '碳水', '纤维', '可发酵纤维', '结肠', '肝性脑病', '固氮',
       'carbohydrate', 'fiber', 'fermentable', 'colonic', 'nitrogen',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'he'],
+    applicableTo: ['hepatic', 'liver'],
     summary:
       '肝性脑病患者应获得足够可消化碳水（犬粮可消化碳水 45-55%、猫粮 30-40% 干物质），以利规避脑病症状。增加膳食纤维（总纤维 3-8%、以可溶纤维为主）有助于减少肠道氮源的产生和吸收，并可能结合毒性胆汁酸、改善血糖和结肠酸碱度。精制高消化粮不再被推荐。',
     details: [
@@ -319,7 +319,7 @@ export const HEPATIC_KNOWLEDGE: KnowledgeEntry[] = [
       '维生素K', '凝血', '出血', '水溶性维生素', 'L-肉碱', '胆道梗阻',
       'vitamin K', 'coagulation', 'bleeding', 'water-soluble vitamin', 'L-carnitine',
     ],
-    applicableTo: ['hepatic', 'liver', 'hepato', 'coagulation', 'cholestasis'],
+    applicableTo: ['hepatic', 'liver', 'coagulation', 'cholestasis'],
     summary:
       '凝血异常在肝胆疾病中常见（一项研究 82% 肝病猫、90% 以上肝病犬至少一项凝血异常）。肝储存的维生素 K 有限，胆道梗阻/长期厌食/口服抗生素可致维K缺乏。需关注维K、水溶性维生素补充（腹水用利尿剂、多饮多尿、长期厌食、吃自制粮者），以及猫肝脂质沉积的 L-肉碱补充。',
     details: [

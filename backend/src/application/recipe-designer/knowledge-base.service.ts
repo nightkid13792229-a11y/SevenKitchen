@@ -4,6 +4,10 @@ import type {
   KnowledgeEntry,
 } from '../../domain/recipe-designer/knowledge-base/types';
 import { KNOWLEDGE_DOMAIN_LABELS } from '../../domain/recipe-designer/knowledge-base/types';
+import {
+  isKnownTag,
+  isRetrievalTag,
+} from '../../domain/recipe-designer/knowledge-base/tag-vocabulary';
 import { GENERAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/general';
 import { GROWTH_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/growth';
 import { SENIOR_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/senior';
@@ -132,13 +136,45 @@ export class KnowledgeBaseService {
   }
 
   private validateEntries(): void {
+    const seenIds = new Set<string>();
+    const problems: string[] = [];
+
     for (const entry of this.entries) {
       if (!entry.id || !entry.title) {
-        throw new Error('知识库条目缺少 id 或 title');
+        problems.push('存在缺少 id 或 title 的条目');
+        continue;
       }
+      if (seenIds.has(entry.id)) {
+        problems.push(`条目 id 重复：${entry.id}`);
+      }
+      seenIds.add(entry.id);
+
       if (entry.citations.length === 0) {
-        throw new Error(`知识库条目 ${entry.id} 缺少出处`);
+        problems.push(`条目 ${entry.id} 缺少出处`);
       }
+
+      // 标签必须来自受控词表
+      const unknownTags = entry.applicableTo.filter((tag) => !isKnownTag(tag));
+      if (unknownTags.length > 0) {
+        problems.push(
+          `条目 ${entry.id} 使用了词表外的标签：${unknownTags.join('、')}` +
+            '（新增标签请按 docs/knowledge-base/intake-sop.md 走审核）',
+        );
+      }
+
+      // 必须至少有一个"系统会产出"的检索标签，否则永远检索不到
+      if (!entry.applicableTo.some((tag) => isRetrievalTag(tag))) {
+        problems.push(
+          `条目 ${entry.id} 没有任何检索标签，系统永远检索不到它：` +
+            `[${entry.applicableTo.join('、')}]`,
+        );
+      }
+    }
+
+    if (problems.length > 0) {
+      throw new Error(
+        `知识库校验未通过（${problems.length} 项）：\n- ${problems.join('\n- ')}`,
+      );
     }
   }
 }

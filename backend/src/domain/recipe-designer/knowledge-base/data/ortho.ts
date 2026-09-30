@@ -21,7 +21,7 @@ export const ORTHO_KNOWLEDGE: KnowledgeEntry[] = [
       '骨关节炎', '关节炎', '关节', '退行性关节病', '营养管理', '风险因素',
       'osteoarthritis', 'arthritis', 'joint', 'degenerative joint', 'risk factor',
     ],
-    applicableTo: ['ortho', 'arthritis', 'oain', 'joint', 'osteoarthritis'],
+    applicableTo: ['ortho', 'arthritis', 'pain', 'joint', 'osteoarthritis'],
     summary:
       '骨关节炎（退行性关节病）是慢性进展性疾病，特征是关节软骨退变、蛋白聚糖与胶原丢失、新生骨增生和炎症反应。犬 1 岁以上约 20% 受累。常见危险因素为发育性骨科病、创伤（含十字韧带断裂）和肥胖。营养管理目标是：控制危险因素、控制临床症状、延缓疾病进展。',
     details: [

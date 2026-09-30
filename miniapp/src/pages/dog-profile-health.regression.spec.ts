@@ -396,9 +396,14 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']) {
       expect(compact).toContain(`.health-theme--${theme} .health-tabs__item--active`)
     }
-    // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来
-    expect(page).toContain(":primary-theme=\"activeHealthTab === 'diet' ? 'warm' : 'default'\"")
+    // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
+    // 2026-09-30：扩到六个板块，切到哪块按钮就是哪块的色。
+    expect(page).toContain(':primary-theme="activeHealthTab"')
     expect(bar).toContain('primaryTheme?:')
-    expect(bar).toContain('.sticky-bar__button--primary--warm')
+    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']) {
+      expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)
+    }
+    // 色系要铺到内容区 —— 只给书签文字上色不够（老板指出"色系没划分出来"）
+    expect(compact).toContain('.health-theme--diet .health-panel__body')
   })
 })

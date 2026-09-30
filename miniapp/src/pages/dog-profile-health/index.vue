@@ -153,7 +153,7 @@
       :primary-text="stickyPrimaryText"
       :secondary-text="stickySecondaryText"
       :primary-disabled="stickyPrimaryDisabled"
-      :primary-theme="activeHealthTab === 'diet' ? 'warm' : 'default'"
+      :primary-theme="activeHealthTab"
       :secondary-disabled="isSecondaryActionDisabled"
       @primary="onStickyPrimary"
       @secondary="goBack"
@@ -1078,11 +1078,35 @@ function goToDogCreate() {
  * 六个颜色都取低饱和，和整站的米绿底色放一起不刺眼。
  */
 .health-theme--medical .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--medical .health-panel__body,
+.health-theme--medical .health-tabs__item--active { background: #edf6f1; }
 .health-theme--checkup .health-tabs__item--active { color: #216d9b; border-top-color: #216d9b; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--checkup .health-panel__body,
+.health-theme--checkup .health-tabs__item--active { background: #ecf4f9; }
 .health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-top-color: #ad5b2a; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--allergy .health-panel__body,
+.health-theme--allergy .health-tabs__item--active { background: #fbf1ea; }
 .health-theme--vaccine .health-tabs__item--active { color: #6b5b9b; border-top-color: #6b5b9b; }
-.health-theme--diet    .health-tabs__item--active { color: #b07a1e; border-bottom-color: #b07a1e; }
-.health-theme--weight  .health-tabs__item--active { color: #0e6f78; border-bottom-color: #0e6f78; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--vaccine .health-panel__body,
+.health-theme--vaccine .health-tabs__item--active { background: #f2f0f8; }
+.health-theme--diet .health-tabs__item--active { color: #b07a1e; border-top-color: #b07a1e; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--diet .health-panel__body,
+.health-theme--diet .health-tabs__item--active { background: #faf3e8; }
+.health-theme--weight .health-tabs__item--active { color: #0e6f78; border-top-color: #0e6f78; }
+/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
+   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
+.health-theme--weight .health-panel__body,
+.health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
 
 /*
  * 内容区里的板块不再自己画卡 —— 否则一张卡里套着好几张卡，还是割裂。

@@ -20,7 +20,9 @@
       class="sticky-bar__button sticky-bar__button--primary"
       :class="[
         { 'sticky-bar__button--full': !secondaryText && !tertiaryText },
-        primaryTheme === 'warm' ? 'sticky-bar__button--primary--warm' : '',
+        primaryTheme && primaryTheme !== 'default'
+          ? 'sticky-bar__button--primary--' + primaryTheme
+          : '',
       ]"
       :disabled="primaryDisabled"
       @tap="emit('primary')"
@@ -39,13 +41,16 @@ defineProps<{
   secondaryDisabled?: boolean
   tertiaryDisabled?: boolean
   /**
-   * 主按钮的主题色。默认整站的绿色；「暖色」给那些自己带主题色的页面用
-   * （例如健康管理页的「饮食偏好」书签是琥珀色，保存按钮跟着走）。
+   * 主按钮的主题色。
+   *
+   * 默认整站的绿色；健康管理页的六个板块各有一套色系，保存按钮跟着走 ——
+   * 顾客切到「过敏」看到的是橙色系的保存键，切到「体重」是青色系，
+   * 不会所有板块都是一个绿按钮。
    *
    * ⚠️ 必须做成属性而不是让父页面用 :deep() 覆盖 ——
    *    小程序的自定义组件默认样式隔离，父页面的样式进不来（实测撞到过）。
    */
-  primaryTheme?: 'default' | 'warm'
+  primaryTheme?: 'default' | 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
 }>()
 
 const emit = defineEmits<{
@@ -112,8 +117,26 @@ const emit = defineEmits<{
   flex: 1 1 auto;
 }
 
-/* 暖色主按钮：给自带主题色的页面用（健康管理页的「饮食偏好」是琥珀色） */
-.sticky-bar__button--primary--warm {
+/*
+ * 六个板块的主题色主按钮（健康管理页用）。
+ * 与书签、板块底色同一套色，顾客一眼能对上「我在哪一块」。
+ */
+.sticky-bar__button--primary--medical {
+  background: linear-gradient(135deg, #0c6a3f 0%, #128a54 100%);
+}
+.sticky-bar__button--primary--checkup {
+  background: linear-gradient(135deg, #1c5f88 0%, #2579a8 100%);
+}
+.sticky-bar__button--primary--allergy {
+  background: linear-gradient(135deg, #97501f 0%, #bc6a33 100%);
+}
+.sticky-bar__button--primary--vaccine {
+  background: linear-gradient(135deg, #5b4c88 0%, #7a68ab 100%);
+}
+.sticky-bar__button--primary--diet {
   background: linear-gradient(135deg, #a06a12 0%, #c08a24 100%);
+}
+.sticky-bar__button--primary--weight {
+  background: linear-gradient(135deg, #0b6069 0%, #12808b 100%);
 }
 </style>

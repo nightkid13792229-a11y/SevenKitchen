@@ -42,7 +42,9 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('const isProfileLoading = ref(false)')
     expect(source).toContain('<template v-else-if="dogId">')
     expect(source).toContain('v-if="isProfileLoading"')
-    expect(source).toContain(':primary-disabled="isDietReminderActionDisabled"')
+    // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
+    expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
+    expect(source).toContain('const stickyPrimaryDisabled = computed(() =>')
   })
 
   it('guards dog switching when diet reminders have unsaved changes', () => {
@@ -92,7 +94,9 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain(':records="recordsByType[activeRecordType]"')
     expect(source).toContain(':loading="loadingByType[activeRecordType]"')
     expect(source).toContain(':saving-record-key="savingRecordKey"')
-    expect(source).toContain(':primary-disabled="isDietReminderActionDisabled"')
+    // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
+    expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
+    expect(source).toContain('const stickyPrimaryDisabled = computed(() =>')
     expect(source).toContain(':secondary-disabled="isSecondaryActionDisabled"')
     expect(source).toContain('const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))')
     expect(source).toContain('const isDietReminderActionDisabled = computed(() =>')
@@ -301,5 +305,82 @@ describe('dog-profile-health · 板块书签', () => {
     // 上级已有书签，组件内那套一模一样的标签要关掉，否则重复
     expect(page).toContain('embedded')
     expect(section).toContain('v-if="!embedded" class="record-type-tabs"')
+  })
+})
+
+/**
+ * 底部按钮与书签视觉（2026-09-30，老板反馈）
+ *
+ * 1. 底部「返回概览」在从首页进来时也显示，逻辑说不通 —— 回哪去要跟着入口走。
+ * 2. 「保存饮食偏好」只保存饮食偏好 —— 那就只在饮食偏好书签下出现，
+ *    其余五个板块各自有保存按钮，底部再放一个没人知道它在存什么。
+ * 3. 书签与板块原先各是一张卡、中间还留间距，看着割裂；书签宽度也不一致。
+ */
+describe('dog-profile-health · 底部按钮与书签', () => {
+  const readPage = () =>
+    readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
+
+  it('返回按钮的文案跟着入口走，不再一律写「返回概览」', () => {
+    const page = readPage()
+
+    expect(page).toContain("entrySource.value = from === 'home' || from === 'overview' ? from : 'unknown'")
+    expect(page).toContain('const HEALTH_ENTRY_LABELS')
+    expect(page).toContain('home: \'返回首页\'')
+    expect(page).toContain('overview: \'返回概览\'')
+    // 标签写死「返回概览」是这次的病根，不能再出现
+    expect(page).not.toContain('secondary-text="返回概览"')
+  })
+
+  it('两个入口都带上来源参数', () => {
+    const home = readFileSync(resolve(process.cwd(), 'src/pages/home/index.vue'), 'utf-8')
+    const overview = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+      'utf-8',
+    )
+
+    expect(home).toContain('/pages/dog-profile-health/index?from=home')
+    expect(overview).toContain('&from=overview')
+  })
+
+  it('底部主按钮按书签自适应：只有饮食偏好是「保存」', () => {
+    const page = readPage()
+
+    expect(page).toContain("activeHealthTab.value === 'diet' ? '保存饮食偏好' : HEALTH_ENTRY_LABELS")
+    // 其余书签下「返回」占主按钮位，次按钮必须留空 ——
+    // 否则两个按钮写同一个文案，并排出现两个「返回概览」（实测撞到过）
+    expect(page).toContain('const stickySecondaryText = computed(() =>')
+    expect(page).toContain("activeHealthTab.value === 'diet' ? HEALTH_ENTRY_LABELS[entrySource.value] : ''")
+  })
+
+  it('书签六个等宽，且与板块拼成同一张卡', () => {
+    const page = readPage()
+
+    // 等宽：flex:1 均分（原来靠横向滚动，最后一个会被裁掉）
+    expect(page).toContain('.health-tabs__item {')
+    expect(page).toContain('flex: 1 1 0;')
+    // 同一张卡：书签是卡片头部，内容区不再自己画卡
+    expect(page).toContain('class="health-panel"')
+    expect(page).toContain('health-panel__body')
+    expect(page).toContain('border-radius: 0;')
+    // 书签与板块之间不再留间距（那是"割裂感"的来源）
+    expect(page).not.toContain('margin-bottom: 24rpx;\n  white-space: nowrap;')
+  })
+
+  it('每个板块一套主题色，且保存按钮跟着板块变色', () => {
+    const page = readPage()
+    const bar = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/StickyActionBar.vue'),
+      'utf-8',
+    )
+
+    // 样式里为了对齐加过多余空格，比较前先把连续空白压成一个
+    const compact = page.replace(/\s+/g, ' ')
+    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']) {
+      expect(compact).toContain(`.health-theme--${theme} .health-tabs__item--active`)
+    }
+    // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来
+    expect(page).toContain(":primary-theme=\"activeHealthTab === 'diet' ? 'warm' : 'default'\"")
+    expect(bar).toContain('primaryTheme?:')
+    expect(bar).toContain('.sticky-bar__button--primary--warm')
   })
 })

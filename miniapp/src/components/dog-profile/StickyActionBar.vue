@@ -18,7 +18,10 @@
     </button>
     <button
       class="sticky-bar__button sticky-bar__button--primary"
-      :class="{ 'sticky-bar__button--full': !secondaryText && !tertiaryText }"
+      :class="[
+        { 'sticky-bar__button--full': !secondaryText && !tertiaryText },
+        primaryTheme === 'warm' ? 'sticky-bar__button--primary--warm' : '',
+      ]"
       :disabled="primaryDisabled"
       @tap="emit('primary')"
     >
@@ -35,6 +38,14 @@ defineProps<{
   primaryDisabled?: boolean
   secondaryDisabled?: boolean
   tertiaryDisabled?: boolean
+  /**
+   * 主按钮的主题色。默认整站的绿色；「暖色」给那些自己带主题色的页面用
+   * （例如健康管理页的「饮食偏好」书签是琥珀色，保存按钮跟着走）。
+   *
+   * ⚠️ 必须做成属性而不是让父页面用 :deep() 覆盖 ——
+   *    小程序的自定义组件默认样式隔离，父页面的样式进不来（实测撞到过）。
+   */
+  primaryTheme?: 'default' | 'warm'
 }>()
 
 const emit = defineEmits<{
@@ -99,5 +110,10 @@ const emit = defineEmits<{
 
 .sticky-bar__button--full {
   flex: 1 1 auto;
+}
+
+/* 暖色主按钮：给自带主题色的页面用（健康管理页的「饮食偏好」是琥珀色） */
+.sticky-bar__button--primary--warm {
+  background: linear-gradient(135deg, #a06a12 0%, #c08a24 100%);
 }
 </style>

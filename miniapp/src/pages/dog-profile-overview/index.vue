@@ -1797,7 +1797,7 @@ function goToHealthProfile() {
   }
 
   uni.navigateTo({
-    url: `/pages/dog-profile-health/index?dogId=${encodeURIComponent(dogId.value)}`,
+    url: `/pages/dog-profile-health/index?dogId=${encodeURIComponent(dogId.value)}&from=overview`,
   })
 }
 </script>

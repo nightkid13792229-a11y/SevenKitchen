@@ -46,10 +46,11 @@
       </view>
 
       <template v-else-if="dogId">
-        <!-- 板块书签：六个板块原先全部平铺，显得杂乱（老板要求）。
-             现在一次只显示一个，点书签切换。 -->
-        <scroll-view class="health-tabs" scroll-x :show-scrollbar="false">
-          <view class="health-tabs__inner">
+        <!-- 书签 + 板块拼成**一张卡**（老板要求：两者要有融合感，不能割裂）。
+             书签是这张卡的头部，板块是它的内容区；每个板块一套主题色，
+             高亮的下划线把当前书签和它下面的内容连起来。 -->
+        <view class="health-panel" :class="`health-theme--${activeHealthTab}`">
+          <view class="health-tabs">
             <text
               v-for="tab in HEALTH_TABS"
               :key="tab.key"
@@ -58,8 +59,8 @@
               @tap="selectHealthTab(tab.key)"
             >{{ tab.label }}</text>
           </view>
-        </scroll-view>
 
+          <view class="health-panel__body">
         <HealthRecordsSection
           v-if="isRecordTab"
           :dog-id="dogId"
@@ -121,6 +122,8 @@
           :dog-id="dogId"
           :dog-profile="weightSectionDogProfile"
         />
+          </view>
+        </view>
       </template>
 
       <view v-else class="section-card">
@@ -130,12 +133,19 @@
       </view>
     </view>
 
+    <!-- 底部按钮按当前板块自适应（老板要求）：
+         · 饮食偏好是**页面自己持有数据**的板块，所以由底部按钮保存；
+         · 其余五个板块（病史/体检/过敏/疫苗/体重管理）各自在板块内有保存按钮
+           （每条记录单独保存），底部再放一个"保存"没有意义，只会让人不知道
+           它到底在存什么 —— 所以那些书签下不显示保存按钮。
+         · 返回按钮的文案跟着入口走。 -->
     <StickyActionBar
-      primary-text="保存饮食偏好"
-      secondary-text="返回概览"
-      :primary-disabled="isDietReminderActionDisabled"
+      :primary-text="stickyPrimaryText"
+      :secondary-text="stickySecondaryText"
+      :primary-disabled="stickyPrimaryDisabled"
+      :primary-theme="activeHealthTab === 'diet' ? 'warm' : 'default'"
       :secondary-disabled="isSecondaryActionDisabled"
-      @primary="saveDietReminders"
+      @primary="onStickyPrimary"
       @secondary="goBack"
     />
   </view>
@@ -204,6 +214,23 @@ const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
 ]
 
 const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']
+
+/**
+ * 从哪个入口进来的。
+ *
+ * 首页和爱犬概览页都有健康管理入口，底部按钮不能一律写「返回概览」——
+ * 从首页进来的顾客看到「返回概览」是说不通的（老板指出）。
+ * 有页面栈时 navigateBack 本来就会回到入口页；这里的来源只用于
+ * **按钮文案**，以及页面被 redirect 掉、栈里没有上一页时的兜底返回。
+ */
+type HealthEntrySource = 'home' | 'overview' | 'unknown'
+const entrySource = ref<HealthEntrySource>('unknown')
+
+const HEALTH_ENTRY_LABELS: Record<HealthEntrySource, string> = {
+  home: '返回首页',
+  overview: '返回概览',
+  unknown: '返回',
+}
 
 const activeHealthTab = ref<HealthTabKey>('medical')
 
@@ -328,6 +355,9 @@ const dietReminderStatusText = computed(() => {
 
 onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
+  const from = Array.isArray(options?.from) ? options.from[0] : options?.from
+  // 记住从哪进来的：底部按钮的文案与"兜底返回"都要跟着变（老板要求）
+  entrySource.value = from === 'home' || from === 'overview' ? from : 'unknown'
   void loadDogs(typeof value === 'string' ? value : '')
 })
 
@@ -782,6 +812,37 @@ async function saveDietReminders() {
   }
 }
 
+/**
+ * 底部主按钮：只有饮食偏好书签下才是「保存饮食偏好」，
+ * 其余书签下它就是「返回」——总得给顾客一个退出这一页的办法，
+ * 不能让底部栏空着。文案由 HEALTH_ENTRY_LABELS 决定。
+ */
+const stickyPrimaryText = computed(() =>
+  activeHealthTab.value === 'diet' ? '保存饮食偏好' : HEALTH_ENTRY_LABELS[entrySource.value],
+)
+
+const stickyPrimaryDisabled = computed(() =>
+  activeHealthTab.value === 'diet' ? isDietReminderActionDisabled.value : isSecondaryActionDisabled.value,
+)
+
+/**
+ * 次按钮只在饮食偏好书签下出现。
+ *
+ * 其余书签下"返回"已经占了主按钮的位置 —— 两个按钮写同一个文案
+ * 会并排出现两个「返回概览」，看着像 bug（实测撞到过）。
+ */
+const stickySecondaryText = computed(() =>
+  activeHealthTab.value === 'diet' ? HEALTH_ENTRY_LABELS[entrySource.value] : '',
+)
+
+function onStickyPrimary() {
+  if (activeHealthTab.value === 'diet') {
+    void saveDietReminders()
+    return
+  }
+  goBack()
+}
+
 function goBack() {
   if (isHealthRecordSaving.value) {
     return
@@ -789,6 +850,12 @@ function goBack() {
 
   if (getCurrentPages().length > 1) {
     uni.navigateBack()
+    return
+  }
+
+  // 栈里没有上一页时的兜底：按入口来源回，而不是一律回概览
+  if (entrySource.value === 'home') {
+    uni.redirectTo({ url: '/pages/home/index' })
     return
   }
 
@@ -900,38 +967,73 @@ function goToDogCreate() {
 }
 
 /*
- * 板块书签。
- * 六个板块一次只显示一个，切换靠这条横向书签 —— 比六个板块全平铺清爽得多。
- * 用横向滚动是为了窄屏上「体重管理」这类长标签不被压扁。
+ * 书签 + 板块 = **一张卡**。
+ *
+ * 之前书签是一张独立的胶囊，板块又是一张独立的卡，中间还留着间距 ——
+ * 两者看着是两件事（老板说"有割裂感"）。现在书签是这张卡的头部，
+ * 板块是它的内容区，内部各板块不再自己画卡。
  */
+.health-panel {
+  border-radius: 30rpx;
+  background: #fbfcf7;
+  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.06);
+  overflow: hidden;
+}
+
+/* 六个书签等宽（老板要求）：flex:1 均分，不再靠横向滚动 */
 .health-tabs {
-  margin-bottom: 24rpx;
-  white-space: nowrap;
+  display: flex;
+  border-bottom: 1rpx solid rgba(30, 46, 36, 0.08);
 }
 
-.health-tabs__inner {
-  display: inline-flex;
-  gap: 8rpx;
-  padding: 6rpx;
-  border-radius: 20rpx;
-  background: #ffffff;
-  border: 1rpx solid rgba(30, 46, 36, 0.08);
-}
-
-/* 内边距刻意收紧：六个书签要在 375pt 的屏上一屏放下（实测原先差约 8pt，
-   「体重管理」被裁掉一截，看着像没做完）。窄屏放不下时仍可横向滚动。 */
 .health-tabs__item {
-  flex: none;
-  padding: 14rpx 16rpx;
-  border-radius: 14rpx;
-  font-size: 26rpx;
-  color: #55604f;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 22rpx 0 18rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #6b7566;
+  /* 未选中的下划线留位，避免选中时文字跳动 */
+  border-bottom: 5rpx solid transparent;
 }
 
 .health-tabs__item--active {
-  background: #2f7d4f;
-  color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
+  /* 高亮的下划线正好压在卡片头的底边上，把书签和下面的内容连起来 */
+  margin-bottom: -1rpx;
+}
+
+/*
+ * 每个板块一套主题色。下划线取主题色，选中文字也用主题色。
+ * 六个颜色都取低饱和，和整站的米绿底色放一起不刺眼。
+ */
+.health-theme--medical .health-tabs__item--active { color: #0f7b49; border-bottom-color: #0f7b49; }
+.health-theme--checkup .health-tabs__item--active { color: #216d9b; border-bottom-color: #216d9b; }
+.health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-bottom-color: #ad5b2a; }
+.health-theme--vaccine .health-tabs__item--active { color: #6b5b9b; border-bottom-color: #6b5b9b; }
+.health-theme--diet    .health-tabs__item--active { color: #b07a1e; border-bottom-color: #b07a1e; }
+.health-theme--weight  .health-tabs__item--active { color: #0e6f78; border-bottom-color: #0e6f78; }
+
+/*
+ * 内容区里的板块不再自己画卡 —— 否则一张卡里套着好几张卡，还是割裂。
+ * 只去掉卡片外观（背景/圆角/阴影），内边距留着当内容区的留白。
+ */
+.health-panel__body :deep(.records-section),
+.health-panel__body :deep(.vaccine-section),
+.health-panel__body .diet-reminder-card {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.health-panel__body :deep(.weight-section) {
+  gap: 0;
+}
+
+.health-panel__body :deep(.weight-section > .section-card) {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .state-card__desc {

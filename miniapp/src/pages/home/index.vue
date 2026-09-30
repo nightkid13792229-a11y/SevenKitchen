@@ -1430,7 +1430,7 @@ const goToOrderList = () => {
 // 跳转到健康管理
 const goToHealthRecords = () => {
   if (!isLoggedIn.value) {
-    checkLoginAndNavigate('/pages/dog-profile-health/index')
+    checkLoginAndNavigate('/pages/dog-profile-health/index?from=home')
     return
   }
 
@@ -1440,7 +1440,7 @@ const goToHealthRecords = () => {
     return
   }
 
-  uni.navigateTo({ url: '/pages/dog-profile-health/index' })
+  uni.navigateTo({ url: '/pages/dog-profile-health/index?from=home' })
 }
 
 // 跳转到饭量计算

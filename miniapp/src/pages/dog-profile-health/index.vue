@@ -63,6 +63,7 @@
           <view class="health-panel__body">
         <HealthRecordsSection
           v-if="isRecordTab"
+          ref="recordsSectionRef"
           :dog-id="dogId"
           embedded
           :active-type="activeRecordType"
@@ -88,7 +89,13 @@
         </HealthRecordsSection>
 
         <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
-        <VaccineManagementSection v-else-if="activeHealthTab === 'vaccine'" :dog-id="dogId" />
+        <VaccineManagementSection
+          v-else-if="activeHealthTab === 'vaccine'"
+          ref="vaccineSectionRef"
+          external-save
+          :dog-id="dogId"
+          @dirty-change="hasUnsavedSectionDraft = $event"
+        />
 
         <view v-else-if="activeHealthTab === 'diet'" class="section-card diet-reminder-card">
           <text class="section-card__title">饮食偏好</text>
@@ -119,8 +126,11 @@
 
         <WeightManagementSection
           v-else-if="activeHealthTab === 'weight'"
+          ref="weightSectionRef"
+          external-save
           :dog-id="dogId"
           :dog-profile="weightSectionDogProfile"
+          @dirty-change="hasUnsavedSectionDraft = $event"
         />
           </view>
         </view>
@@ -209,8 +219,8 @@ const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
   { key: 'checkup', label: '体检' },
   { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
-  { key: 'diet', label: '饮食偏好' },
-  { key: 'weight', label: '体重管理' },
+  { key: 'diet', label: '饮食' },
+  { key: 'weight', label: '体重' },
 ]
 
 const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']
@@ -243,6 +253,10 @@ const activeRecordType = computed<HealthRecordType>(() =>
 
 function selectHealthTab(key: HealthTabKey) {
   activeHealthTab.value = key
+  // 各板块的未保存状态是各自汇报的，切换时要清掉上一个板块留下的值，
+  // 否则新板块明明没改动，底部按钮却亮着
+  hasUnsavedSectionDraft.value = false
+  hasUnsavedRecordDraft.value = false
 }
 
 
@@ -813,34 +827,61 @@ async function saveDietReminders() {
 }
 
 /**
- * 底部主按钮：只有饮食偏好书签下才是「保存饮食偏好」，
- * 其余书签下它就是「返回」——总得给顾客一个退出这一页的办法，
- * 不能让底部栏空着。文案由 HEALTH_ENTRY_LABELS 决定。
+ * 底部主按钮：**每个书签都保存它自己的那一块**（老板要求）。
+ *
+ * 文案是「保存 + 当前书签名」，动作调对应板块暴露出来的保存方法 ——
+ * 各板块内部的保存按钮在内嵌模式下已隐藏，顾客只需要认底部这一个位置。
  */
-const stickyPrimaryText = computed(() =>
-  activeHealthTab.value === 'diet' ? '保存饮食偏好' : HEALTH_ENTRY_LABELS[entrySource.value],
+const recordsSectionRef = ref<{ saveAllDirty?: () => Promise<void> } | null>(null)
+const vaccineSectionRef = ref<{ saveAllDirty?: () => Promise<void> } | null>(null)
+const weightSectionRef = ref<{ saveRecord?: () => Promise<void> } | null>(null)
+
+/** 疫苗/体重板块自己的未保存状态（病史/体检/过敏复用 hasUnsavedRecordDraft） */
+const hasUnsavedSectionDraft = ref(false)
+
+const activeTabLabel = computed(
+  () => HEALTH_TABS.find((tab) => tab.key === activeHealthTab.value)?.label || '',
 )
 
-const stickyPrimaryDisabled = computed(() =>
-  activeHealthTab.value === 'diet' ? isDietReminderActionDisabled.value : isSecondaryActionDisabled.value,
+const stickyPrimaryText = computed(() => `保存${activeTabLabel.value}`)
+
+/** 当前书签下有没有待保存的内容 —— 没有就把按钮置灰，别让顾客白点 */
+const hasUnsavedInActiveTab = computed(() => {
+  if (activeHealthTab.value === 'diet') {
+    return !isDietReminderActionDisabled.value
+  }
+  if (isRecordTab.value) {
+    return hasUnsavedRecordDraft.value
+  }
+  return hasUnsavedSectionDraft.value
+})
+
+const stickyPrimaryDisabled = computed(
+  () => isSecondaryActionDisabled.value || !hasUnsavedInActiveTab.value,
 )
 
 /**
- * 次按钮只在饮食偏好书签下出现。
- *
- * 其余书签下"返回"已经占了主按钮的位置 —— 两个按钮写同一个文案
- * 会并排出现两个「返回概览」，看着像 bug（实测撞到过）。
+ * 次按钮就是「返回」。六个板块现在都能从底部保存，主按钮位被占满了，
+ * 所以返回统一放在次按钮上，不再随书签变来变去。
  */
-const stickySecondaryText = computed(() =>
-  activeHealthTab.value === 'diet' ? HEALTH_ENTRY_LABELS[entrySource.value] : '',
-)
+const stickySecondaryText = computed(() => HEALTH_ENTRY_LABELS[entrySource.value])
 
-function onStickyPrimary() {
+async function onStickyPrimary() {
   if (activeHealthTab.value === 'diet') {
-    void saveDietReminders()
+    await saveDietReminders()
     return
   }
-  goBack()
+  if (isRecordTab.value) {
+    await recordsSectionRef.value?.saveAllDirty?.()
+    return
+  }
+  if (activeHealthTab.value === 'vaccine') {
+    await vaccineSectionRef.value?.saveAllDirty?.()
+    return
+  }
+  if (activeHealthTab.value === 'weight') {
+    await weightSectionRef.value?.saveRecord?.()
+  }
 }
 
 function goBack() {
@@ -980,37 +1021,66 @@ function goToDogCreate() {
   overflow: hidden;
 }
 
-/* 六个书签等宽（老板要求）：flex:1 均分，不再靠横向滚动 */
+/*
+ * 书签条：模仿 Chrome 的标签页（老板要求）。
+ *
+ * Chrome 的关键特征，这里逐条对应：
+ *   1. 标签栏底色比内容区**略深**，像浏览器窗口顶部那条
+ *   2. 每个标签是**上圆角**的片，未选中的是浅底 + 彼此之间有细分隔线
+ *   3. **选中的标签与下方内容同色、且没有底边** —— 看着像"长"在内容上
+ *   4. 选中标签顶部一条主题色，起高亮作用
+ *
+ * 第 3 条靠"负外边距 + 用内容底色盖住标签栏的底边"实现：
+ * 这是纯 CSS 里让标签与内容连成一体的经典做法。
+ */
 .health-tabs {
   display: flex;
+  align-items: flex-end;
+  padding: 10rpx 10rpx 0;
+  background: rgba(30, 46, 36, 0.055);
   border-bottom: 1rpx solid rgba(30, 46, 36, 0.08);
 }
 
+/* 六个书签等宽（老板要求） */
 .health-tabs__item {
   flex: 1 1 0;
   min-width: 0;
-  padding: 22rpx 0 18rpx;
+  padding: 16rpx 0 18rpx;
   text-align: center;
   font-size: 24rpx;
   color: #6b7566;
-  /* 未选中的下划线留位，避免选中时文字跳动 */
-  border-bottom: 5rpx solid transparent;
+  background: rgba(30, 46, 36, 0.045);
+  border-radius: 14rpx 14rpx 0 0;
+  /* 未选中标签之间的分隔线（Chrome 也有） */
+  border-right: 1rpx solid rgba(30, 46, 36, 0.07);
+}
+
+.health-tabs__item:last-child {
+  border-right: none;
 }
 
 .health-tabs__item--active {
   font-weight: 700;
-  /* 高亮的下划线正好压在卡片头的底边上，把书签和下面的内容连起来 */
+  /* 与内容区同色 → 连成一体 */
+  background: #fbfcf7;
+  /* 顶部主题色高亮条 */
+  border-top: 5rpx solid transparent;
+  /* 左右分隔线让开，避免把"长在内容上"的观感切断 */
+  border-right-color: transparent;
+  border-left: 1rpx solid rgba(30, 46, 36, 0.07);
+  /* 盖住标签栏的底边 —— 这一步才真正让它和内容连起来 */
   margin-bottom: -1rpx;
+  padding-bottom: 19rpx;
 }
 
 /*
  * 每个板块一套主题色。下划线取主题色，选中文字也用主题色。
  * 六个颜色都取低饱和，和整站的米绿底色放一起不刺眼。
  */
-.health-theme--medical .health-tabs__item--active { color: #0f7b49; border-bottom-color: #0f7b49; }
-.health-theme--checkup .health-tabs__item--active { color: #216d9b; border-bottom-color: #216d9b; }
-.health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-bottom-color: #ad5b2a; }
-.health-theme--vaccine .health-tabs__item--active { color: #6b5b9b; border-bottom-color: #6b5b9b; }
+.health-theme--medical .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
+.health-theme--checkup .health-tabs__item--active { color: #216d9b; border-top-color: #216d9b; }
+.health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-top-color: #ad5b2a; }
+.health-theme--vaccine .health-tabs__item--active { color: #6b5b9b; border-top-color: #6b5b9b; }
 .health-theme--diet    .health-tabs__item--active { color: #b07a1e; border-bottom-color: #b07a1e; }
 .health-theme--weight  .health-tabs__item--active { color: #0e6f78; border-bottom-color: #0e6f78; }
 

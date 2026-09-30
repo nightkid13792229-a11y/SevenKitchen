@@ -131,7 +131,9 @@
             :disabled="isBusy"
             @tap="removeRecord(record, index)"
           >删除</button>
+          <!-- 内嵌到健康管理页时隐藏（改由底部按钮统一保存） -->
           <button
+            v-if="!externalSave"
             class="vaccine-card__action vaccine-card__action--primary"
             :disabled="isBusy"
             @tap="saveRecord(record, index)"
@@ -169,7 +171,67 @@ interface VaccineDraft {
 
 const props = defineProps<{
   dogId: string
+  /**
+   * 内嵌到健康管理页：隐藏每行的「保存」，改由底部那个自适应按钮统一保存。
+   * （顾客不必在每一行里找保存键。）
+   */
+  externalSave?: boolean
 }>()
+
+const emit = defineEmits<{
+  (event: 'dirty-change', value: boolean): void
+}>()
+
+/**
+ * 这一行的草稿是否与原值不同。
+ *
+ * ensureDrafts 会给**每一行**都建草稿，所以"脏"不能只看有没有草稿，
+ * 要逐字段和原值比。
+ */
+function isDirty(record: VaccineRecord, index: number) {
+  const draft = drafts[draftKey(record, index)]
+  if (!draft) return false
+
+  const base = toDraft(record)
+  return (Object.keys(base) as (keyof VaccineDraft)[]).some(
+    (field) => draft[field] !== base[field],
+  )
+}
+
+/** 有没有填了但还没保存的行 —— 决定底部按钮是否可点 */
+const hasPendingDraft = computed(() =>
+  records.value.some((record, index) =>
+    Boolean(String(draftOf(record, index).vaccineName || '').trim()) && isDirty(record, index),
+  ),
+)
+
+watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true })
+
+/**
+ * 保存所有改过的行（供健康管理页的底部按钮调用）。
+ * 顺序执行：并发写同一个列表会互相覆盖。
+ */
+async function saveAllDirty() {
+  if (isBusy.value) {
+    uni.showToast({ title: '保存中，请稍候', icon: 'none' })
+    return
+  }
+
+  const dirtyIndexes = records.value
+    .map((record, index) => (isDirty(record, index) ? index : -1))
+    .filter((index) => index >= 0)
+
+  if (dirtyIndexes.length === 0) {
+    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
+    return
+  }
+
+  for (const index of dirtyIndexes) {
+    await saveRecord(records.value[index], index)
+  }
+}
+
+defineExpose({ saveAllDirty })
 
 /** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
 const commonVaccineNames = [

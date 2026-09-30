@@ -2,7 +2,9 @@
   <view class="records-section" :class="activeTypeMeta.accentClass">
     <view class="records-section__header">
       <view>
-        <text class="records-section__title">健康记录</text>
+        <!-- 内嵌时标题就是**本类型自己的名字**（病史/体检/过敏）。
+             原先三类共用一个「健康记录」标题，看着像一个大板块（老板指出）。 -->
+        <text class="records-section__title">{{ embedded ? activeTypeMeta.label : '健康记录' }}</text>
         <text v-if="!embedded" class="records-section__description">
           按类别整理每一条记录，附件可在展开后上传和预览。
         </text>
@@ -238,12 +240,16 @@
           <button
             v-if="secondaryActionText(record, index)"
             class="record-card__action record-card__action--ghost"
+            :class="{ 'record-card__action--primary-only': embedded }"
             :disabled="hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"
             @tap="cancelRecord(index)"
           >
             {{ secondaryActionText(record, index) }}
           </button>
+          <!-- 内嵌到健康管理页时隐藏逐条「保存」——改由底部那个自适应按钮统一保存。
+               「取消」留着：草稿还是要能丢弃。 -->
           <button
+            v-if="!embedded"
             class="record-card__action record-card__action--primary"
             :class="{
               'record-card__action--primary-only': !secondaryActionText(record, index),
@@ -886,6 +892,36 @@ function recordMatchesSavingKey(record: Record<string, any>, index: number, savi
     buildHealthRecordFocusIdentity(currentType.value, record),
   ].some((value) => value === savingKey)
 }
+
+/**
+ * 保存当前类型下**所有待保存的记录**（供健康管理页的底部按钮调用）。
+ *
+ * 内嵌模式下逐条的「保存」按钮被隐藏，改由底部那个自适应按钮统一保存 ——
+ * 顾客不必在每条记录里找保存键。
+ *
+ * 逐条保存是顺序执行的：并发写同一个列表会让后写的覆盖先写的。
+ */
+async function saveAllDirty() {
+  if (hasSavingRecord.value || hasUploadingRecords.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
+  const dirtyIndexes = draftRecords.value
+    .map((record, index) => (isRecordDirty(record, index) ? index : -1))
+    .filter((index) => index >= 0)
+
+  if (dirtyIndexes.length === 0) {
+    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
+    return
+  }
+
+  for (const index of dirtyIndexes) {
+    await saveRecord(index)
+  }
+}
+
+defineExpose({ saveAllDirty })
 
 function saveRecord(index: number) {
   if (hasSavingRecord.value) {

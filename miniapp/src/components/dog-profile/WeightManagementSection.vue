@@ -66,7 +66,9 @@
         />
       </view>
 
+      <!-- 内嵌到健康管理页时隐藏（改由底部那个自适应按钮统一保存） -->
       <button
+        v-if="!externalSave"
         class="save-btn"
         :loading="isSavingRecord"
         :disabled="isSavingRecord"
@@ -262,6 +264,10 @@ interface FormData {
 
 const props = defineProps<{
   dogId: string
+  /**
+   * 内嵌到健康管理页：隐藏板块内的「保存记录」，改由底部那个自适应按钮统一保存。
+   */
+  externalSave?: boolean
   dogProfile?: {
     currentWeightKg?: number | null
     /** 体况分：决定要不要给「制定计划」入口（BCS 4-5 是理想区间，不该建计划） */
@@ -541,6 +547,19 @@ function resolveDefaultSyncToProfile() {
     latestRecordDate,
   })
 }
+
+const emit = defineEmits<{
+  (event: 'dirty-change', value: boolean): void
+}>()
+
+/** 有没有填了体重但还没保存 —— 决定底部按钮是否可点 */
+const hasPendingWeightInput = computed(() =>
+  Boolean(String(weightInputText.value || '').trim()),
+)
+
+watch(hasPendingWeightInput, (value) => emit('dirty-change', value), { immediate: true })
+
+defineExpose({ saveRecord })
 
 // 保存记录
 async function saveRecord() {

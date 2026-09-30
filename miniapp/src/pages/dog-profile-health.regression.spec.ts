@@ -44,7 +44,7 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('v-if="isProfileLoading"')
     // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
     expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
-    expect(source).toContain('const stickyPrimaryDisabled = computed(() =>')
+    expect(source).toContain('const stickyPrimaryDisabled = computed(')
   })
 
   it('guards dog switching when diet reminders have unsaved changes', () => {
@@ -96,7 +96,7 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain(':saving-record-key="savingRecordKey"')
     // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
     expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
-    expect(source).toContain('const stickyPrimaryDisabled = computed(() =>')
+    expect(source).toContain('const stickyPrimaryDisabled = computed(')
     expect(source).toContain(':secondary-disabled="isSecondaryActionDisabled"')
     expect(source).toContain('const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))')
     expect(source).toContain('const isDietReminderActionDisabled = computed(() =>')
@@ -209,8 +209,11 @@ describe('dog profile health page regressions', () => {
     )
 
     expect(page).toContain("import VaccineManagementSection from")
-    // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染
-    expect(page).toContain('<VaccineManagementSection v-else-if="activeHealthTab === \'vaccine\'" :dog-id="dogId" />')
+    // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染；
+    // 并且改成 external-save（保存按钮由底部自适应按钮统一承担）
+    expect(page).toContain('v-else-if="activeHealthTab === \'vaccine\'"')
+    expect(page).toContain('ref="vaccineSectionRef"')
+    expect(page).toContain('external-save')
     // 文案要如实列出这一页能维护什么
     expect(page).toContain('过敏、检查报告、疫苗、体重和饮食偏好')
   })
@@ -342,14 +345,29 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(overview).toContain('&from=overview')
   })
 
-  it('底部主按钮按书签自适应：只有饮食偏好是「保存」', () => {
+  it('底部主按钮按书签自适应：六个板块都保存自己那一块', () => {
     const page = readPage()
 
-    expect(page).toContain("activeHealthTab.value === 'diet' ? '保存饮食偏好' : HEALTH_ENTRY_LABELS")
-    // 其余书签下「返回」占主按钮位，次按钮必须留空 ——
-    // 否则两个按钮写同一个文案，并排出现两个「返回概览」（实测撞到过）
-    expect(page).toContain('const stickySecondaryText = computed(() =>')
-    expect(page).toContain("activeHealthTab.value === 'diet' ? HEALTH_ENTRY_LABELS[entrySource.value] : ''")
+    // 文案 = 「保存 + 当前书签名」
+    expect(page).toContain('const stickyPrimaryText = computed(() => `保存${activeTabLabel.value}`)')
+    // 动作分派到对应板块暴露出来的保存方法
+    expect(page).toContain('recordsSectionRef.value?.saveAllDirty?.()')
+    expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')
+    expect(page).toContain('weightSectionRef.value?.saveRecord?.()')
+    // 「返回」统一挪到次按钮 —— 主按钮位已经被保存占满了
+    expect(page).toContain('const stickySecondaryText = computed(() => HEALTH_ENTRY_LABELS[entrySource.value])')
+  })
+
+  it('三大记录板块（病史/体检/过敏）各自独立：标题用本类型的名字', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    // 原先三类共用一个「健康记录」标题，看着像一个大板块
+    expect(section).toContain("embedded ? activeTypeMeta.label : '健康记录'")
+    // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存
+    expect(section).toContain('defineExpose({ saveAllDirty })')
   })
 
   it('书签六个等宽，且与板块拼成同一张卡', () => {

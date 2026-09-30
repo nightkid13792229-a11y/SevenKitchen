@@ -17,7 +17,15 @@ describe('dog profile health page regressions', () => {
       'utf-8',
     )
 
-    expect(source).toContain('<picker mode="selector" :range="dogs"')
+    // 2026-09-30：选择器并进 Banner 的名称行（不再单开一张"选择狗狗"卡片）
+    expect(source).toContain('mode="selector"')
+    expect(source).toContain(':range="dogs"')
+    expect(source).toContain('@change="onDogPickerChange"')
+    expect(source).toContain('hero-card__name-row')
+    // 下方那张独立的「选择狗狗」卡片已删除。
+    // 注意别用宽泛的 '选择狗狗' —— 空态里的「先选择狗狗」也含这四个字。
+    expect(source).not.toContain('dog-picker-card')
+    expect(source).not.toContain('class="section-card__title">选择狗狗<')
     expect(source).toContain('const dogs = ref<DogProfileSummary[]>([])')
     expect(source).toContain("async function loadDogs(preferredDogId = '')")
     expect(source).toContain('function selectDogByIndex(index: number)')
@@ -94,7 +102,9 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('@save-record="saveHealthRecord"')
     expect(source).toContain('@delete-record="deleteHealthRecord"')
     expect(source).toContain('@dirty-change="hasUnsavedRecordDraft = $event"')
-    expect(source).toContain('const activeRecordType = ref<HealthRecordType>(\'medical\')')
+    // 2026-09-30：activeRecordType 由顶部书签派生（computed），不再是独立 ref
+    expect(source).toContain('const activeRecordType = computed<HealthRecordType>(')
+    expect(source).toContain('const activeHealthTab = ref<HealthTabKey>(\'medical\')')
     expect(source).toContain('recordsByType = reactive<Record<HealthRecordType, Record<string, any>[]>>')
     expect(source).toContain('loadingByType = reactive<Record<HealthRecordType, boolean>>')
     expect(source).toContain('dogApi.healthRecords.medical.list')
@@ -195,7 +205,8 @@ describe('dog profile health page regressions', () => {
     )
 
     expect(page).toContain("import VaccineManagementSection from")
-    expect(page).toContain('<VaccineManagementSection :dog-id="dogId" />')
+    // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染
+    expect(page).toContain('<VaccineManagementSection v-else-if="activeHealthTab === \'vaccine\'" :dog-id="dogId" />')
     // 文案要如实列出这一页能维护什么
     expect(page).toContain('过敏、检查报告、疫苗、体重和饮食偏好')
   })
@@ -234,5 +245,61 @@ describe('dog profile health page regressions', () => {
     expect(page).toContain('hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods)')
     expect(page).toContain('hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)')
     expect(page).not.toContain('savedPickyFoods')
+  })
+})
+
+/**
+ * 板块书签（2026-09-30，老板要求）
+ *
+ * 六个板块原先全部平铺在一页里，一屏挤着病史、体检、过敏、疫苗、
+ * 饮食偏好、体重管理六套内容，显得杂乱。改成书签：一次只显示一个。
+ */
+describe('dog-profile-health · 板块书签', () => {
+  const readPage = () =>
+    readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
+
+  it('六个书签齐全，顺序与老板给的一致', () => {
+    const page = readPage()
+
+    expect(page).toContain('病史')
+    expect(page).toContain('体检')
+    expect(page).toContain('过敏')
+    expect(page).toContain('疫苗')
+    expect(page).toContain('饮食偏好')
+    expect(page).toContain('体重管理')
+
+    const order = ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']
+    const tabsBlock = page.slice(page.indexOf('const HEALTH_TABS'), page.indexOf('const RECORD_TAB_KEYS'))
+    let cursor = -1
+    for (const key of order) {
+      const idx = tabsBlock.indexOf(`key: '${key}'`)
+      expect(idx).toBeGreaterThan(cursor)
+      cursor = idx
+    }
+  })
+
+  it('一次只显示一个板块：每个板块都挂在书签条件上', () => {
+    const page = readPage()
+
+    // 三类记录共用一个组件
+    expect(page).toContain('v-if="isRecordTab"')
+    // 疫苗 / 饮食偏好 / 体重管理各挂各的书签
+    expect(page).toContain("v-else-if=\"activeHealthTab === 'vaccine'\"")
+    expect(page).toContain("v-else-if=\"activeHealthTab === 'diet'\"")
+    expect(page).toContain("v-else-if=\"activeHealthTab === 'weight'\"")
+  })
+
+  it('记录类板块复用既有的三个类型，并关掉组件自带的重复标签', () => {
+    const page = readPage()
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    // 病史/体检/过敏对应的就是组件已有的三个类型，不新造一套
+    expect(page).toContain("const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']")
+    // 上级已有书签，组件内那套一模一样的标签要关掉，否则重复
+    expect(page).toContain('embedded')
+    expect(section).toContain('v-if="!embedded" class="record-type-tabs"')
   })
 })

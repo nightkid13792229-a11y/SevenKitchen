@@ -2,7 +2,23 @@
   <view class="page">
     <view class="hero-card">
       <text class="hero-card__eyebrow">健康管理</text>
-      <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
+      <!-- 狗狗选择器直接并进名称这一行（老板要求）：
+           名称本来就是顾客最想确认的信息，再在下方单开一张"选择狗狗"卡片
+           纯属占地方。只有多只狗时才可点 —— 一只狗没什么好选的。 -->
+      <picker
+        v-if="dogs.length > 1"
+        mode="selector"
+        :range="dogs"
+        range-key="name"
+        :value="selectedDogIndex"
+        @change="onDogPickerChange"
+      >
+        <view class="hero-card__name-row">
+          <text class="hero-card__title">{{ form.name || '请选择狗狗' }}</text>
+          <text class="hero-card__switch">切换 ▼</text>
+        </view>
+      </picker>
+      <text v-else class="hero-card__title">{{ form.name || '健康档案' }}</text>
       <text class="hero-card__subtitle">集中维护病史、体检、过敏、疫苗、体重记录和饮食偏好。</text>
     </view>
 
@@ -24,24 +40,30 @@
     </view>
 
     <view v-else class="content">
-      <view v-if="dogs.length > 0" class="section-card dog-picker-card">
-        <text class="section-card__title">选择狗狗</text>
-        <picker mode="selector" :range="dogs" range-key="name" :value="selectedDogIndex" @change="onDogPickerChange">
-          <view class="dog-selector">
-            <text class="dog-selector__name">{{ selectedDog ? selectedDog.name : '请选择狗狗' }}</text>
-            <text class="dog-selector__arrow">▼</text>
-          </view>
-        </picker>
-      </view>
-
       <view v-if="isProfileLoading" class="state-card">
         <text class="state-card__title">正在加载健康记录</text>
         <text class="state-card__desc">正在切换到所选狗狗，请稍候。</text>
       </view>
 
       <template v-else-if="dogId">
+        <!-- 板块书签：六个板块原先全部平铺，显得杂乱（老板要求）。
+             现在一次只显示一个，点书签切换。 -->
+        <scroll-view class="health-tabs" scroll-x :show-scrollbar="false">
+          <view class="health-tabs__inner">
+            <text
+              v-for="tab in HEALTH_TABS"
+              :key="tab.key"
+              class="health-tabs__item"
+              :class="{ 'health-tabs__item--active': activeHealthTab === tab.key }"
+              @tap="selectHealthTab(tab.key)"
+            >{{ tab.label }}</text>
+          </view>
+        </scroll-view>
+
         <HealthRecordsSection
+          v-if="isRecordTab"
           :dog-id="dogId"
+          embedded
           :active-type="activeRecordType"
           :records="recordsByType[activeRecordType]"
           :loading="loadingByType[activeRecordType]"
@@ -65,9 +87,9 @@
         </HealthRecordsSection>
 
         <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
-        <VaccineManagementSection :dog-id="dogId" />
+        <VaccineManagementSection v-else-if="activeHealthTab === 'vaccine'" :dog-id="dogId" />
 
-        <view class="section-card diet-reminder-card">
+        <view v-else-if="activeHealthTab === 'diet'" class="section-card diet-reminder-card">
           <text class="section-card__title">饮食偏好</text>
           <text class="section-card__desc">
             喜欢吃什么、不吃什么都会进推荐与配方，填得越具体越准。
@@ -95,6 +117,7 @@
         </view>
 
         <WeightManagementSection
+          v-else-if="activeHealthTab === 'weight'"
           :dog-id="dogId"
           :dog-profile="weightSectionDogProfile"
         />
@@ -160,7 +183,42 @@ const isSaving = ref(false)
 const hasNoDogs = ref(false)
 const loadError = ref('')
 const latestRequestedDogId = ref('')
-const activeRecordType = ref<HealthRecordType>('medical')
+/**
+ * 板块书签（2026-09-30，老板要求）。
+ *
+ * 六个板块原先全部平铺在页面上，一屏里挤着病史、体检、过敏、疫苗、
+ * 饮食偏好、体重管理六套内容，显得杂乱。改成书签：一次只显示一个。
+ *
+ * 病史/体检/过敏复用 HealthRecordsSection（三类记录本来就一次全加载，
+ * 切书签不需要重新请求），疫苗/饮食偏好/体重管理各自是独立板块。
+ */
+type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+
+const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
+  { key: 'medical', label: '病史' },
+  { key: 'checkup', label: '体检' },
+  { key: 'allergy', label: '过敏' },
+  { key: 'vaccine', label: '疫苗' },
+  { key: 'diet', label: '饮食偏好' },
+  { key: 'weight', label: '体重管理' },
+]
+
+const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']
+
+const activeHealthTab = ref<HealthTabKey>('medical')
+
+/** 当前书签是否是「记录类」（病史/体检/过敏）—— 这三个共用同一个组件 */
+const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value as HealthRecordType))
+
+const activeRecordType = computed<HealthRecordType>(() =>
+  isRecordTab.value ? (activeHealthTab.value as HealthRecordType) : 'medical',
+)
+
+function selectHealthTab(key: HealthTabKey) {
+  activeHealthTab.value = key
+}
+
+
 const recordsByType = reactive<Record<HealthRecordType, Record<string, any>[]>>({
   medical: [],
   checkup: [],
@@ -827,39 +885,53 @@ function goToDogCreate() {
   color: #6b6653;
 }
 
-.dog-picker-card {
+/* Banner 的「名称 + 切换」一行：选择器并进名称行后不再单开卡片 */
+.hero-card__name-row {
   display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.dog-selector {
-  min-height: 84rpx;
-  border-radius: 22rpx;
-  padding: 0 24rpx;
-  background: #fbfcf7;
-  border: 1rpx solid rgba(30, 46, 36, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
   gap: 16rpx;
 }
 
-.dog-selector__name {
-  min-width: 0;
-  flex: 1;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #26261f;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.hero-card__switch {
+  flex: none;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.82);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.5);
+}
+
+/*
+ * 板块书签。
+ * 六个板块一次只显示一个，切换靠这条横向书签 —— 比六个板块全平铺清爽得多。
+ * 用横向滚动是为了窄屏上「体重管理」这类长标签不被压扁。
+ */
+.health-tabs {
+  margin-bottom: 24rpx;
   white-space: nowrap;
 }
 
-.dog-selector__arrow {
-  flex-shrink: 0;
-  font-size: 22rpx;
-  color: #6b6653;
+.health-tabs__inner {
+  display: inline-flex;
+  gap: 8rpx;
+  padding: 6rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(30, 46, 36, 0.08);
+}
+
+/* 内边距刻意收紧：六个书签要在 375pt 的屏上一屏放下（实测原先差约 8pt，
+   「体重管理」被裁掉一截，看着像没做完）。窄屏放不下时仍可横向滚动。 */
+.health-tabs__item {
+  flex: none;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  color: #55604f;
+}
+
+.health-tabs__item--active {
+  background: #2f7d4f;
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .state-card__desc {

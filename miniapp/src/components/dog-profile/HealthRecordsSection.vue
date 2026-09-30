@@ -3,14 +3,16 @@
     <view class="records-section__header">
       <view>
         <text class="records-section__title">健康记录</text>
-        <text class="records-section__description">
+        <text v-if="!embedded" class="records-section__description">
           按类别整理每一条记录，附件可在展开后上传和预览。
         </text>
       </view>
       <text class="records-section__count">{{ savedRecordCount }} 条</text>
     </view>
 
-    <view class="record-type-tabs">
+    <!-- 内嵌模式（健康管理页）：上级已经有「病史/体检/过敏」书签页，
+         这里再放一套一模一样的标签就是重复。由 embedded 关掉。 -->
+    <view v-if="!embedded" class="record-type-tabs">
       <button
         v-for="type in HEALTH_RECORD_TYPES"
         :key="type"
@@ -315,6 +317,12 @@ const props = withDefaults(defineProps<{
   preferredExpandedRecordIdentity?: string
   modelValue?: Record<string, any>[]
   recordType?: HealthRecordType
+  /**
+   * 内嵌到上级的标签页里（健康管理页）。
+   * 为真时隐藏组件自带的「病史/体检/过敏」标签与那段说明 ——
+   * 上级已经有同一套书签，留着就是重复。
+   */
+  embedded?: boolean
 }>(), {
   activeType: undefined,
   records: () => [],
@@ -323,6 +331,7 @@ const props = withDefaults(defineProps<{
   preferredExpandedRecordIdentity: '',
   modelValue: () => [],
   recordType: undefined,
+  embedded: false,
 })
 
 const emit = defineEmits<{

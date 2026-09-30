@@ -495,7 +495,7 @@ async function confirmCandidates() {
   font-size: 26rpx;
   font-weight: 600;
   color: #f6efe0;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  background: var(--health-accent, #1e3a2f);
   border-radius: 999rpx;
 }
 

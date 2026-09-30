@@ -1001,7 +1001,7 @@ function drawChart() {
   width: 100%;
   height: 88rpx;
   margin-top: 24rpx;
-  background: linear-gradient(135deg, #0d6b43 0%, #0c8a55 100%);
+  background: var(--health-accent, #0d6b43);
   color: white;
   border: none;
   border-radius: 44rpx;
@@ -1296,7 +1296,7 @@ function drawChart() {
 
 .plan-btn--primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  background: var(--health-accent, #1e3a2f);
 }
 
 .plan-btn--danger {

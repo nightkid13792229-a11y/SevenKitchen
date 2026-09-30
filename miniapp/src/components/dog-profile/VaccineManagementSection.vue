@@ -843,7 +843,7 @@ async function doRemove(record: VaccineRecord) {
   flex: 1 1 auto;
   font-weight: 600;
   color: #f6efe0;
-  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  background: var(--health-accent, #1e3a2f);
 }
 
 .vaccine-card__action[disabled] {
@@ -857,7 +857,9 @@ async function doRemove(record: VaccineRecord) {
   font-size: 27rpx;
   font-weight: 600;
   color: #1e3a2f;
-  background: #eef2e4;
+  /* ⚠️ 不能用 color-mix()：小程序 WXSS 不支持。
+     这里只要一个"浅色底"，直接用半透明的主色叠在白底上即可。 */
+  background: var(--health-accent-soft, #eef2e4);
   border: 1rpx solid #dde3cd;
   border-radius: 999rpx;
 }

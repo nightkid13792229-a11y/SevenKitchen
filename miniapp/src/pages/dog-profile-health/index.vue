@@ -839,11 +839,12 @@ const weightSectionRef = ref<{ saveRecord?: () => Promise<void> } | null>(null)
 /** 疫苗/体重板块自己的未保存状态（病史/体检/过敏复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
 
-const activeTabLabel = computed(
-  () => HEALTH_TABS.find((tab) => tab.key === activeHealthTab.value)?.label || '',
-)
 
-const stickyPrimaryText = computed(() => `保存${activeTabLabel.value}`)
+/**
+ * 底部保存按钮的文案只写「保存」（老板要求）。
+ * 当前在哪个板块由上面的书签和色系表达，按钮不必再重复一遍板块名。
+ */
+const stickyPrimaryText = computed(() => '保存')
 
 /** 当前书签下有没有待保存的内容 —— 没有就把按钮置灰，别让顾客白点 */
 const hasUnsavedInActiveTab = computed(() => {
@@ -1014,6 +1015,22 @@ function goToDogCreate() {
  * 两者看着是两件事（老板说"有割裂感"）。现在书签是这张卡的头部，
  * 板块是它的内容区，内部各板块不再自己画卡。
  */
+/*
+ * 主题色的**单一来源**：板块内所有按钮都取这个变量。
+ *
+ * 子组件（记录/疫苗/过敏/体重）与父页面之间是**样式隔离**的 ——
+ * 父页面的选择器进不去，但 CSS 自定义属性是**继承**的，能穿过组件边界。
+ * 所以这里定义变量、子组件用 var(--health-accent, 原色) 兜底，
+ * 两边都不用互相知道对方的存在。
+ */
+.health-panel { --health-accent: #0f6b43; }
+.health-theme--medical { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
+.health-theme--checkup { --health-accent: #216d9b;  --health-accent-soft: #e5f0f7; }
+.health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
+.health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
+.health-theme--diet { --health-accent: #b07a1e;  --health-accent-soft: #f7eedd; }
+.health-theme--weight { --health-accent: #0e6f78;  --health-accent-soft: #e2f0f2; }
+
 .health-panel {
   border-radius: 30rpx;
   background: #fbfcf7;

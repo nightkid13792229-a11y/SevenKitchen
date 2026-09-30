@@ -348,8 +348,8 @@ describe('dog-profile-health · 底部按钮与书签', () => {
   it('底部主按钮按书签自适应：六个板块都保存自己那一块', () => {
     const page = readPage()
 
-    // 文案 = 「保存 + 当前书签名」
-    expect(page).toContain('const stickyPrimaryText = computed(() => `保存${activeTabLabel.value}`)')
+    // 2026-09-30：文案只写「保存」—— 当前在哪个板块由书签与色系表达
+    expect(page).toContain("const stickyPrimaryText = computed(() => '保存')")
     // 动作分派到对应板块暴露出来的保存方法
     expect(page).toContain('recordsSectionRef.value?.saveAllDirty?.()')
     expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')

@@ -12,7 +12,7 @@
     </view>
 
     <view v-else-if="profile" class="content">
-      <view class="section-card section-card--profile">
+      <view id="overview-section-basic" class="section-card section-card--profile">
         <view class="section-card__header">
           <text class="section-card__eyebrow">基础信息</text>
           <text class="section-link" @tap="toggleSectionEdit('basic')">
@@ -318,11 +318,10 @@
         </view>
       </view>
 
-      <view class="section-card">
+      <view id="overview-section-feeding" class="section-card">
         <view class="section-card__header">
           <view>
-            <text class="section-card__title">喂养参数</text>
-            <text class="section-card__desc">{{ feedingSectionDescription }}</text>
+            <text class="section-card__title">喂养、能量&BCS</text>
           </view>
           <text class="section-link" @tap="toggleSectionEdit('feeding')">
             {{ activeEditSection === 'feeding' ? '取消' : '编辑' }}
@@ -351,7 +350,11 @@
                 :class="{ 'activity-option--active': form.activityLevel === option.value }"
                 @tap="selectActivityLevel(option.value)"
               >
-                <text class="activity-option__title">{{ option.label }}</text>
+                <view class="activity-option__row">
+                  <text class="activity-option__title">{{ option.label }}</text>
+                  <!-- 多数城市犬都在这一档，未选中时也标出来（与建档页一致） -->
+                  <text v-if="option.isCommon" class="activity-option__badge">最常见</text>
+                </view>
                 <text class="activity-option__desc">{{ option.description }}</text>
               </view>
             </view>
@@ -423,7 +426,7 @@
               :disabled="savingSection !== ''"
               @tap="saveFeedingSection"
             >
-              保存喂养参数
+              保存
             </button>
           </view>
         </view>
@@ -441,14 +444,15 @@
       </view>
 
       <view class="section-card">
-        <view class="section-card__header">
+        <view class="section-card__header" @tap="toggleEnergySection">
           <view>
-            <text class="section-card__title">热量建议</text>
+            <text class="section-card__title">热量估算</text>
             <text class="section-card__desc">{{ energySectionDescription }}</text>
           </view>
+          <text class="section-link">{{ energyExpanded ? '收起' : '展开' }}</text>
         </view>
 
-        <view v-if="energySection" class="energy-list">
+        <view v-if="energyExpanded && energySection" class="energy-list">
           <view
             v-for="metric in energySection.metrics"
             :key="metric.label"
@@ -469,7 +473,7 @@
         </view>
 
         <view v-else class="empty-card">
-          <text class="empty-card__title">还没有可用的热量建议</text>
+          <text class="empty-card__title">还没有可用的热量估算</text>
           <text class="empty-card__desc">先补齐基础信息和喂养参数，再自动生成热量估算结果。</text>
         </view>
       </view>
@@ -477,46 +481,7 @@
       <view class="section-card">
         <view class="section-card__header">
           <view>
-            <text class="section-card__title">成品食谱历史</text>
-            <text class="section-card__desc">只展示这只狗狗订购过的成品鲜食记录。</text>
-          </view>
-        </view>
-
-        <view v-if="finishedFoodHistoryLoading" class="empty-card">
-          <text class="empty-card__desc">正在加载成品订购记录...</text>
-        </view>
-
-        <view v-else-if="finishedFoodHistoryItems.length === 0" class="empty-card">
-          <text class="empty-card__title">暂无成品订购记录</text>
-          <text class="empty-card__desc">下单成品鲜食后，会在这里看到历史食谱。</text>
-        </view>
-
-        <view v-else class="finished-history-list">
-          <view
-            v-for="item in finishedFoodHistoryItems"
-            :key="item.orderItemId"
-            class="finished-history-row"
-            @tap="openFinishedFoodOrder(item.orderId)"
-          >
-            <view class="finished-history-row__main">
-              <text class="finished-history-row__title">{{ item.recipeName }}</text>
-              <text class="finished-history-row__meta">
-                {{ formatHistoryDate(item.orderedAt) }} · {{ formatHistoryStatus(item.orderStatus) }}
-              </text>
-              <text class="finished-history-row__meta">
-                {{ item.packageSummary || `${item.packageSpecG}g x ${item.packageCount}包` }}
-              </text>
-            </view>
-            <text class="finished-history-row__amount">¥{{ formatHistoryAmount(item.amountTotal) }}</text>
-          </view>
-        </view>
-      </view>
-
-      <view class="section-card">
-        <view class="section-card__header">
-          <view>
-            <text class="section-card__title">健康档案</text>
-            <text class="section-card__desc">{{ healthSummary }}</text>
+            <text class="section-card__title">健康管理</text>
           </view>
         </view>
 
@@ -555,9 +520,8 @@
              顾客填完点"保存这一条"不入库、不提示、退出即丢（见 2026-09-27 体检报告 H2）。
              按老板决定移除，统一到真正能保存的「健康管理」页，避免顾客白做工。 -->
         <button class="health-entry-btn" @tap="goToHealthProfile">
-          管理健康档案
+          去健康管理
         </button>
-        <text class="health-entry-hint">过敏、病史、体检、体重都在这里维护</text>
       </view>
     </view>
 
@@ -590,7 +554,6 @@ import {
   buildDogOverviewEnergySection,
   buildDogOverviewFeedingFacts,
   buildDogOverviewHealthFacts,
-  buildDogOverviewHealthSummary,
   resolveDogBreedLabel,
   resolveDogBreedName,
   resolveDogOverviewTreatLevel,
@@ -681,18 +644,6 @@ interface DogBreedItem {
   isCommon?: boolean
 }
 
-interface FinishedFoodHistoryItem {
-  orderId: string
-  orderItemId: string
-  orderStatus: string
-  orderedAt: string
-  recipeName: string
-  quantityG: number
-  packageCount: number
-  packageSpecG: number
-  packageSummary?: string
-  amountTotal: number
-}
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 const mealsOptions = ['1', '2', '3', '4', '5']
@@ -746,8 +697,6 @@ const hotBreeds = ref<DogBreedItem[]>([])
 const isLoading = ref(false)
 const loadError = ref('')
 const hasLoadedOnce = ref(false)
-const finishedFoodHistoryLoading = ref(false)
-const finishedFoodHistoryItems = ref<FinishedFoodHistoryItem[]>([])
 const activeEditSection = ref<EditableSection>('')
 const savingSection = ref<EditableSection>('')
 const isHydrating = ref(false)
@@ -827,7 +776,6 @@ const basicFacts = computed(() => buildDogOverviewBasicFacts(
 ))
 const feedingFacts = computed(() => buildDogOverviewFeedingFacts(form, calcResult.value))
 const healthFacts = computed(() => buildDogOverviewHealthFacts(form))
-const healthSummary = computed(() => buildDogOverviewHealthSummary(form))
 const healthPickyPreview = computed(() => String(form.pickyFoods || '').trim())
 /**
  * 过敏原明细。
@@ -1092,11 +1040,18 @@ const showAutoMatchedSizeInfo = computed(() => (
 ))
 const autoMatchedSizeLabel = computed(() => getSizeLabel(derivedBreedSizeCategory.value || ''))
 const hasProfileDirtyRecommendation = computed(() => shouldAutoPreviewRecommendation(profile.value?.dirtyFields || []))
-const feedingSectionDescription = computed(() => (
-  activeEditSection.value === 'feeding' && isPreviewLoading.value
-    ? '正在根据当前参数实时更新热量估算。'
-    : '这些参数决定狗狗当前的热量估算方式。'
-))
+/**
+ * 「热量估算」默认收起（老板要求）。
+ *
+ * 这一页的主线是"看档案、改参数"，热量数值是参考信息 ——
+ * 一进来就铺开三张卡会把页面撑得很长。顾客想看时点一下标题即可。
+ */
+const energyExpanded = ref(false)
+
+function toggleEnergySection() {
+  energyExpanded.value = !energyExpanded.value
+}
+
 const energySectionDescription = computed(() => {
   if (isPreviewLoading.value) {
     return '正在根据当前参数实时更新热量估算。'
@@ -1267,7 +1222,6 @@ async function loadDogProfile() {
     if (res.code === 0 && res.data?.profile) {
       applyServerState(res.data.profile, res.data.calcResult || null)
       hasLoadedOnce.value = true
-      void loadFinishedFoodHistory()
       return
     }
 
@@ -1278,58 +1232,6 @@ async function loadDogProfile() {
     isLoading.value = false
     uni.stopPullDownRefresh?.()
   }
-}
-
-async function loadFinishedFoodHistory() {
-  if (!dogId.value) {
-    finishedFoodHistoryItems.value = []
-    return
-  }
-
-  finishedFoodHistoryLoading.value = true
-  try {
-    const res: any = await dogApi.finishedFoodHistory(dogId.value)
-    finishedFoodHistoryItems.value = res.code === 0 && Array.isArray(res.data)
-      ? res.data
-      : []
-  } catch (error) {
-    console.error('[DogProfileOverview] Failed to load finished food history:', error)
-    finishedFoodHistoryItems.value = []
-  } finally {
-    finishedFoodHistoryLoading.value = false
-  }
-}
-
-function openFinishedFoodOrder(orderId: string) {
-  if (!orderId) return
-  uni.navigateTo({ url: `/pages/order-detail/index?orderId=${orderId}` })
-}
-
-function formatHistoryAmount(value: unknown) {
-  const amount = Number(value || 0)
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
-}
-
-function formatHistoryDate(value?: string | null) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function formatHistoryStatus(status?: string) {
-  const map: Record<string, string> = {
-    INIT: '待提交',
-    PENDING_PAYMENT: '待收款',
-    PAID: '已收款',
-    PURCHASING: '采购中',
-    IN_PRODUCTION: '制作中',
-    FREEZING: '急冻中',
-    SHIPPED: '已发货',
-    COMPLETED: '已完成',
-    AFTERSALE: '售后中',
-  }
-  return map[status || ''] || status || '-'
 }
 
 function applyServerState(nextProfile: DogProfileDetail, nextCalcResult: DogCalcResult | null) {
@@ -1840,12 +1742,53 @@ async function saveSection(section: Exclude<EditableSection, ''>) {
     activeEditSection.value = ''
     uni.hideLoading()
     uni.showToast({ title: successMessage, icon: successMessage === '已保存' ? 'success' : 'none' })
+
+    // 保存后把页面带回刚编辑的那个板块（老板要求）。
+    // 退出编辑态会让内容变矮，浏览器/小程序的滚动位置会漂 ——
+    // 不主动滚回去，顾客会觉得"点完保存页面跳走了"。
+    if (section === 'feeding') {
+      void scrollToSection(SECTION_ANCHORS.feeding)
+    } else if (section === 'basic') {
+      void scrollToSection(SECTION_ANCHORS.basic)
+    }
   } catch (error: any) {
     uni.hideLoading()
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
   } finally {
     savingSection.value = ''
   }
+}
+
+/**
+ * 板块锚点：保存后滚回该板块用。
+ *
+ * 小程序里 `uni.pageScrollTo` 需要绝对 scrollTop，
+ * 所以先量出锚点距文档顶部的距离再滚。
+ */
+const SECTION_ANCHORS = {
+  basic: '#overview-section-basic',
+  feeding: '#overview-section-feeding',
+} as const
+
+function scrollToSection(selector: string) {
+  return new Promise<void>((resolve) => {
+    uni
+      .createSelectorQuery()
+      .select(selector)
+      .boundingClientRect()
+      .selectViewport()
+      .scrollOffset()
+      .exec((res: any[]) => {
+        const rect = res?.[0]
+        const viewport = res?.[1]
+        if (!rect || !viewport) {
+          resolve()
+          return
+        }
+        const top = Math.max(0, (viewport.scrollTop || 0) + (rect.top || 0) - 8)
+        uni.pageScrollTo({ scrollTop: top, duration: 200, complete: () => resolve() })
+      })
+  })
 }
 
 function goToHealthProfile() {
@@ -2578,51 +2521,6 @@ function goToHealthProfile() {
   color: #6b6653;
 }
 
-.finished-history-list {
-  margin-top: 18rpx;
-}
-
-.finished-history-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20rpx;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid rgba(24, 49, 63, 0.06);
-}
-
-.finished-history-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.finished-history-row__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.finished-history-row__title {
-  display: block;
-  color: #26261f;
-  font-size: 28rpx;
-  font-weight: 800;
-}
-
-.finished-history-row__meta {
-  display: block;
-  margin-top: 6rpx;
-  color: #6b6653;
-  font-size: 22rpx;
-  line-height: 1.5;
-}
-
-.finished-history-row__amount {
-  flex-shrink: 0;
-  color: #b4553f;
-  font-size: 28rpx;
-  font-weight: 800;
-}
-
 .section-subcard {
   padding: 24rpx;
   border-radius: 24rpx;
@@ -2692,14 +2590,6 @@ function goToHealthProfile() {
 
 .health-entry-btn::after {
   border: none;
-}
-
-.health-entry-hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 22rpx;
-  color: #968f6d;
-  text-align: center;
 }
 
 .field-help {

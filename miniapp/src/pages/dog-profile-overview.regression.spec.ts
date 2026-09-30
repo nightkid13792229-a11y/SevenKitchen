@@ -38,17 +38,18 @@ describe('dog-profile-overview runtime regressions', () => {
     expect(source).toContain('addDogToCache({')
   })
 
-  it('shows customer-visible finished-food recipe history without DIY records', () => {
+  it('成品食谱历史板块已按老板要求移除（含相关请求与死代码）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('成品食谱历史')
-    expect(source).toContain('finishedFoodHistory')
-    expect(source).toContain('finishedFoodHistoryItems')
-    expect(source).toContain('/pages/order-detail/index?orderId=')
-    expect(source).not.toContain('DIY历史')
+    expect(source).not.toContain('成品食谱历史')
+    // 一并清掉：列表状态、加载函数、格式化函数、跳订单详情的入口
+    expect(source).not.toContain('finishedFoodHistory')
+    expect(source).not.toContain('FinishedFoodHistory')
+    expect(source).not.toContain('formatHistory')
+    expect(source).not.toContain('loadFinishedFoodHistory')
   })
 
   it('orders activity choices from resting through city routine to active levels', () => {
@@ -98,12 +99,16 @@ describe('dog-profile-overview runtime regressions', () => {
       expect(source).not.toContain('@delete-record')
     })
 
-    it('给出显眼的健康档案入口，指向真正能保存的健康管理页', () => {
+    it('给出显眼的健康管理入口，指向真正能保存的健康管理页', () => {
       const source = readOverview()
 
-      expect(source).toContain('管理健康档案')
+      // 2026-09-30：「健康档案」改称「健康管理」，入口按钮同步改名
+      expect(source).toContain('健康管理')
       expect(source).toContain('goToHealthProfile')
       expect(source).toContain('/pages/dog-profile-health/index?dogId=')
+      // 这两段说明文案已按老板要求删除
+      expect(source).not.toContain('查看病史、体检、过敏与挑食信息')
+      expect(source).not.toContain('都在这里维护')
     })
 
     it('只读态直接列出过敏原，而不是只给一个条数', () => {

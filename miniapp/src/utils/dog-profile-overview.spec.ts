@@ -7,7 +7,6 @@ import {
   hasDietReminderChanges,
   getBcsChoiceOptions,
   getFeedingImpactExplanation,
-  buildDogOverviewHealthSummary,
   resolveDogBreedLabel,
   resolveDogBreedName,
 } from './dog-profile-overview'
@@ -170,17 +169,6 @@ describe('dog-profile-overview', () => {
     expect(energySection?.metrics.some(metric => metric.label.includes('饭量'))).toBe(false)
     expect(energySection?.note.title).toBe('喂食建议说明')
     expect(energySection?.badges).toEqual([])
-  })
-
-  it('builds a compact health summary for the secondary entry card', () => {
-    const summary = buildDogOverviewHealthSummary({
-      medicalRecords: [{ chiefComplaint: '腹泻' }],
-      checkupRecords: [{ checkupType: '年度体检' }, { checkupType: '皮肤检查' }],
-      allergyRecords: [],
-      pickyFoods: '西兰花',
-    })
-
-    expect(summary).toBe('病史1条 · 体检2条 · 过敏0条 · 已填写挑食提醒')
   })
 
   it('builds health facts for the overview card without relying on legacy allergyFoods', () => {

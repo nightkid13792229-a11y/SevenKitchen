@@ -1,12 +1,27 @@
 import { buildRecommendationSummary } from './dog-recommendation-summary'
 
+/**
+ * 生命阶段 → 中文。
+ *
+ * ⚠️ 能量算法 v2 返回的是**细分档位**（ADULT_YOUNG/MIDDLE/SENIOR、
+ *    PUPPY_GROWTH_CURVE、PREGNANCY_EARLY/LATE），只列 GROWTH/PUPPY/ADULT…
+ *    这些旧档位的话，查不到就原样显示 —— 顾客会在概览页看到 "ADULT_MIDDLE"。
+ */
 const LIFE_STAGE_LABELS: Record<string, string> = {
+  // v2 细分档位
+  PUPPY_GROWTH_CURVE: '幼犬期',
+  ADULT_YOUNG: '成年期',
+  ADULT_MIDDLE: '成年期',
+  ADULT_SENIOR: '老年期',
+  PREGNANCY_EARLY: '妊娠期',
+  PREGNANCY_LATE: '妊娠期',
+  LACTATION: '哺乳期',
+  // v1 档位（老算法仍可能返回）
   GROWTH: '生长期',
   PUPPY: '幼犬期',
   ADULT: '成年期',
   SENIOR: '老年期',
   PREGNANCY: '妊娠期',
-  LACTATION: '哺乳期',
 }
 
 const SIZE_LABELS: Record<string, string> = {
@@ -281,7 +296,8 @@ function buildAgeDetailFromMonths(ageMonths?: number, lifeStage?: string | null)
     return ''
   }
 
-  if (lifeStage === 'PUPPY' || ageMonths < 12) {
+  // v2 的幼犬档位是 PUPPY_GROWTH_CURVE；不认它会把不到 1 岁的狗显示成"0岁"
+  if (lifeStage === 'PUPPY' || lifeStage === 'PUPPY_GROWTH_CURVE' || lifeStage === 'GROWTH' || ageMonths < 12) {
     return `${ageMonths}个月`
   }
 
@@ -586,32 +602,6 @@ export function buildDogOverviewEnergySection(
   }
 }
 
-export function buildDogOverviewHealthSummary(profile: DogOverviewProfile | null | undefined) {
-  if (!profile) {
-    return '查看病史、体检、过敏与挑食信息'
-  }
-
-  const medicalCount = Array.isArray(profile.medicalRecords) ? profile.medicalRecords.length : 0
-  const checkupCount = Array.isArray(profile.checkupRecords) ? profile.checkupRecords.length : 0
-  const allergyCount = Array.isArray(profile.allergyRecords) ? profile.allergyRecords.length : 0
-  const hasPickyFoods = Boolean(String(profile.pickyFoods || '').trim())
-
-  if (medicalCount === 0 && checkupCount === 0 && allergyCount === 0 && !hasPickyFoods) {
-    return '查看病史、体检、过敏与挑食信息'
-  }
-
-  const parts = [
-    `病史${medicalCount}条`,
-    `体检${checkupCount}条`,
-    `过敏${allergyCount}条`,
-  ]
-
-  if (hasPickyFoods) {
-    parts.push('已填写挑食提醒')
-  }
-
-  return parts.join(' · ')
-}
 
 export function buildDogOverviewHealthFacts(
   profile: DogOverviewProfile | null | undefined,

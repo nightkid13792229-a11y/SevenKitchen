@@ -369,7 +369,6 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fetchTastingPacks } from '../../api/tastingPack'
 import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
-import { recipeDesignerApi } from '../../api/recipe-designer'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -541,23 +540,6 @@ const checkLoginStatus = () => {
   isLoggedIn.value = !!token
 }
 
-// 食谱设计入口可见性：新客户隐藏，有设计记录的老客户保留
-const showRecipeDesignerEntry = ref(false)
-
-const loadRecipeDesignerAccess = async () => {
-  if (!isLoggedIn.value) {
-    showRecipeDesignerEntry.value = false
-    return
-  }
-  try {
-    const res: any = await recipeDesignerApi.getCustomerDesignerAccess()
-    showRecipeDesignerEntry.value = Boolean(res?.data?.hasDesignHistory ?? res?.hasDesignHistory)
-  } catch (error) {
-    console.warn('[Home] Failed to load recipe designer access:', error)
-    showRecipeDesignerEntry.value = false
-  }
-}
-
 // 页面加载
 function getQueryStringValue(value: unknown) {
   if (Array.isArray(value)) return String(value[0] || '')
@@ -598,7 +580,6 @@ onLoad((options = {}) => {
 onMounted(() => {
   hasMountedHome.value = true
   checkLoginStatus()
-  loadRecipeDesignerAccess()
   loadRecipeCoverOriginalOnlyMap()
   loadHomeHeaderBackground()
   // 检查是否已关闭过Banner（当天有效）
@@ -646,7 +627,6 @@ onUnmounted(() => {
 onShow(() => {
   refreshCurrentTabBar()
   checkLoginStatus()
-  loadRecipeDesignerAccess()
 
   // 漏斗：首页曝光（漏斗第 1 步）
   trackFunnelEvent({

@@ -2110,6 +2110,22 @@ export class RecipeDesignerService {
       throw new BadRequestException('请填写系列名称');
     }
 
+    // W2：食谱设计器不再向所有用户开放。
+    //
+    // 已经用设计器建过食谱的老客户可以继续用（存量食谱得能接着编辑），
+    // 但没有设计历史的客户一律拒绝 —— 光把入口藏起来不够，
+    // 有人绕过界面直接调接口照样能建。
+    //
+    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md §5.1
+    if (!isInternalRecipeDesignerRole(context)) {
+      const hasDesignHistory = await this.hasCustomerDesignHistory(context);
+      if (!hasDesignHistory) {
+        throw new BadRequestException(
+          '食谱设计器已不再对所有用户开放。想为狗狗定制食谱，请使用「定制食谱」服务。',
+        );
+      }
+    }
+
     const customerDog = await this.loadCustomerDogForRecipeDesigner(
       dto.dogId,
       context,
@@ -7707,12 +7723,16 @@ export class RecipeDesignerService {
     return { updated: order.length };
   }
 
-  async getCustomerDesignerAccess(access: RecipeDesignerAccessInput) {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (isInternalRecipeDesignerRole(context)) {
-      return { isCustomer: false, hasDesignHistory: true };
-    }
-
+  /**
+   * 这位客户名下还有没有活跃的食谱系列 —— 也就是"用没用过设计器"。
+   *
+   * W2 用它同时决定两件事：**「我的」页面要不要显示设计器入口**、
+   * **能不能继续新建系列**。判定口径必须一致，否则会出现
+   * "看得到入口但建不了"或"看不到入口却能建"。
+   */
+  private async hasCustomerDesignHistory(
+    context: ReturnType<typeof normalizeRecipeDesignerAccessContext>,
+  ): Promise<boolean> {
     const seriesCount = await this.prisma.recipeSeries.count({
       where: {
         status: RecipeSeriesStatus.ACTIVE,
@@ -7720,7 +7740,19 @@ export class RecipeDesignerService {
         createdBy: context.userId,
       },
     });
-    return { isCustomer: true, hasDesignHistory: seriesCount > 0 };
+    return seriesCount > 0;
+  }
+
+  async getCustomerDesignerAccess(access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (isInternalRecipeDesignerRole(context)) {
+      return { isCustomer: false, hasDesignHistory: true };
+    }
+
+    return {
+      isCustomer: true,
+      hasDesignHistory: await this.hasCustomerDesignHistory(context),
+    };
   }
 
   async generateAiDesignSuggestions(

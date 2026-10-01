@@ -67,6 +67,25 @@ describe('拍照录入 · 组件', () => {
 
     expect(scan).toContain('没识别到内容，请换一张更清晰的图片')
   })
+
+  it('一次最多选 9 张（微信上限），逐张识别后合并成一份确认结果', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('count: 9')
+    expect(scan).toContain("sizeType: ['compressed']")
+    // 相册里同一张图选两次没必要识别两次
+    expect(scan).toContain('new Set(paths.filter(Boolean))')
+    expect(scan).toContain('识别中 ${index + 1}/${filePaths.length}…')
+  })
+
+  it('识别出的记录带上顾客拍的原图当附件（识别只是抄字，原图才是凭证）', () => {
+    const scan = readScan()
+
+    // 后端返回的 drafts.attachments 是空数组，图片地址只有上传这一步知道
+    expect(scan).toContain('attachments: [uploaded.url]')
+    // 张数与条数的关系要如实告诉顾客，不能让他以为多页会合并成一条
+    expect(scan).toContain('原图一并存为附件')
+  })
 })
 
 describe('拍照录入 · 接线', () => {

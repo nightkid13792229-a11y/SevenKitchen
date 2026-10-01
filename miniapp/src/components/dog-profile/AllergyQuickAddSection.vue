@@ -132,6 +132,8 @@ const customInput = ref('')
 const candidates = ref<string[]>([])
 const pickedCandidates = ref<string[]>([])
 const warnings = ref<string[]>([])
+/** 本次识别用的报告原图（点选出来的过敏原落库时一起存成附件） */
+const reportImageUrl = ref('')
 const isBusy = computed(() => Boolean(savingAllergen.value) || saving.value || extracting.value)
 
 function isRecorded(allergen: string) {
@@ -149,11 +151,13 @@ function splitAllergenText(raw: string) {
     .filter(Boolean)
 }
 
-async function createAllergyRecord(allergen: string) {
+async function createAllergyRecord(allergen: string, attachmentUrl = '') {
   const res: any = await dogApi.healthRecords.allergy.create(props.dogId, {
     allergen,
     notes: null,
-    attachments: [],
+    // 2026-10-01：从检测报告点选来的过敏原，把报告原图一并留档 ——
+    // 识别只是抄字，报告原件才是凭证（顾客要回看、医生要看原件）。
+    attachments: attachmentUrl ? [attachmentUrl] : [],
   })
 
   if (res?.code !== 0) {
@@ -246,6 +250,7 @@ function resetReportState() {
   candidates.value = []
   pickedCandidates.value = []
   warnings.value = []
+  reportImageUrl.value = ''
 }
 
 function discardCandidates() {
@@ -290,6 +295,7 @@ async function pickHealthReport() {
     if (!imageUrl) {
       throw new Error('上传失败，请重试')
     }
+    reportImageUrl.value = imageUrl
 
     const res: any = await dogApi.extractHealthReport({ imageUrl })
     const data = res?.data || {}
@@ -340,11 +346,13 @@ async function confirmCandidates() {
 
   saving.value = true
   const failed: string[] = []
+  // 报告原图在 resetReportState() 里会被清掉，先取出来，循环里每条都用它当附件
+  const sourceImageUrl = reportImageUrl.value
 
   try {
     for (const allergen of targets) {
       try {
-        await createAllergyRecord(allergen)
+        await createAllergyRecord(allergen, sourceImageUrl)
         emit('saved', allergen)
       } catch {
         failed.push(allergen)

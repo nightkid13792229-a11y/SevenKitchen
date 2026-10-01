@@ -19,6 +19,9 @@
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
       <text v-if="resolvedTypeLabel" class="confirm__type">识别为：{{ resolvedTypeLabel }}</text>
+      <text v-if="scannedImageCount > 1" class="confirm__type">
+        本次共 {{ scannedImageCount }} 张图片，会分成 {{ drafts.length }} 条记录，原图一并存为附件
+      </text>
 
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
@@ -102,6 +105,8 @@ const confidence = ref('LOW')
  * 填表时也按它决定这条记录进"病历"还是"体检"。
  */
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
+/** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
+const scannedImageCount = ref(0)
 
 const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
   MEDICAL_RECORD: '病历',
@@ -202,6 +207,7 @@ async function scanAll(filePaths: string[]) {
   isBusy.value = true
   showConfirm.value = false
   confidence.value = ''
+  scannedImageCount.value = 0
 
   const collectedDrafts: Record<string, any>[] = []
   const collectedWarnings: string[] = []
@@ -236,7 +242,16 @@ async function scanAll(filePaths: string[]) {
 
         const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
         if (list.length > 0) {
-          collectedDrafts.push(...list)
+          // 2026-10-01：把顾客拍的这张原图挂到"这张图识别出来的草稿"上。
+          // 识别结果只是从报告上抄下来的字，报告原件才是凭证（顾客要回看、医生要看原件）。
+          // 后端返回的 drafts 里 attachments 是空数组，图片地址只有这里知道。
+          collectedDrafts.push(
+            ...list.map((draft: Record<string, any>) => ({
+              ...draft,
+              attachments: [uploaded.url],
+            })),
+          )
+          scannedImageCount.value += 1
         } else {
           failed += 1
         }

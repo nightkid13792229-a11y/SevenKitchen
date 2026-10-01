@@ -84,6 +84,19 @@ describe('过敏快速添加', () => {
     expect(source).toContain('都不是')
   })
 
+  it('从报告点选来的过敏原，把报告原图一并留档当附件', () => {
+    const source = readComponent()
+
+    // 识别只是抄字，报告原件才是凭证；此前 attachments 一律写成空数组，原图就丢了
+    expect(source).toContain("const reportImageUrl = ref('')")
+    expect(source).toContain('attachments: attachmentUrl ? [attachmentUrl] : []')
+    expect(source).toContain('await createAllergyRecord(allergen, sourceImageUrl)')
+    // 一点即选 / 手输这两条没有图片的路仍然不带附件
+    expect(source).toContain('await createAllergyRecord(allergen)')
+    // 报告状态复位时一并清掉图片地址，避免下一次误挂上一张
+    expect(source).toContain('reportImageUrl.value = \'\'')
+  })
+
   it('识别失败时降级为手工填写，不阻断顾客做别的事', () => {
     const source = readComponent()
 

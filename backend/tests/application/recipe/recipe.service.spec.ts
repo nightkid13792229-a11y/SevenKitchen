@@ -1618,6 +1618,19 @@ describe('RecipeService', () => {
       );
       expect(result.designSource).toBe('Animal Diet Formulator');
       expect(result.items[0].exampleWeight).toBe(180.5);
+
+      // W4-D 依赖这条保证：复制出来的是**独立食谱** ——
+      // 不挂在原系列下，也不继承客户归属，运营可以在它上面自由发布。
+      const createPayload = (
+        mockPrismaService.recipe.create.mock.calls[0] as unknown[]
+      )[0] as { data: Record<string, unknown> };
+      expect(createPayload.data).not.toHaveProperty('seriesId');
+      expect(createPayload.data).not.toHaveProperty('customerOwnerId');
+      expect(createPayload.data).not.toHaveProperty('customerDogId');
+      expect(createPayload.data).toMatchObject({
+        status: RecipeStatus.DRAFT,
+        version: 1,
+      });
     });
   });
 

@@ -18,6 +18,7 @@
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
+      <text v-if="resolvedTypeLabel" class="confirm__type">识别为：{{ resolvedTypeLabel }}</text>
 
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
@@ -55,7 +56,13 @@ import { dogApi } from '../../api/dogs'
  *   · 任何一步失败都降级为手工填写，绝不挡住顾客。
  *   · 只把 OCR 读到的内容搬进表单，不做任何医学判断。
  */
-type DocumentType = 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
+type ExplicitDocumentType = 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
+/**
+ * `AUTO`（2026-10-01）：由后端判断这是哪一类文档。
+ * 病历/检查板块两个入口合并成一个"从相册选择"就是靠它 ——
+ * 顾客不用先回答"这是病历还是体检报告"，识别结果里会带上判定的类型。
+ */
+type DocumentType = ExplicitDocumentType | 'AUTO'
 
 const props = withDefaults(defineProps<{
   dogId: string
@@ -87,12 +94,35 @@ const showConfirm = ref(false)
 const drafts = ref<Record<string, any>[]>([])
 const warnings = ref<string[]>([])
 const confidence = ref('LOW')
+/**
+ * 后端最终判定的文档类型。
+ *
+ * 传 AUTO 时它会与 props.documentType 不同 —— 确认卡片按它显示字段标签，
+ * 填表时也按它决定这条记录进"病历"还是"体检"。
+ */
+const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
+
+const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
+  MEDICAL_RECORD: '病历',
+  CHECKUP_REPORT: '体检报告',
+  VACCINE_BOOK: '疫苗本',
+  ALLERGY_REPORT: '过敏原检测报告',
+}
+
+const resolvedTypeLabel = computed(() => (
+  TYPE_LABELS[resolvedDocumentType.value as ExplicitDocumentType] || ''
+))
 
 const confidenceLabel = computed(() => {
   if (confidence.value === 'HIGH') return '高'
   if (confidence.value === 'MEDIUM') return '中'
   return '低'
 })
+
+/** 当前应当按哪一类渲染/填表：优先用后端判定出来的类型 */
+const activeDocumentType = computed<DocumentType>(() => (
+  resolvedDocumentType.value || props.documentType
+))
 
 /** 把一条草稿翻译成"标签 + 值"给顾客核对 */
 function describeDraft(draft: Record<string, any>): { label: string; value: string }[] {
@@ -104,7 +134,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     }
   }
 
-  if (props.documentType === 'VACCINE_BOOK') {
+  if (activeDocumentType.value === 'VACCINE_BOOK') {
     push('疫苗', draft.vaccineName)
     push('接种日期', draft.vaccinationDate)
     push('下次到期', draft.nextDueDate)
@@ -112,7 +142,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     return rows
   }
 
-  if (props.documentType === 'CHECKUP_REPORT') {
+  if (activeDocumentType.value === 'CHECKUP_REPORT') {
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
     push('医生建议', draft.recommendations)
@@ -121,7 +151,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     return rows
   }
 
-  if (props.documentType === 'MEDICAL_RECORD') {
+  if (activeDocumentType.value === 'MEDICAL_RECORD') {
     push('就诊日期', draft.visitDate)
     push('症状', draft.chiefComplaint)
     push('诊断结果', draft.diagnosis)
@@ -136,56 +166,114 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
   return rows
 }
 
+/**
+ * 从相册选图（2026-10-01 按老板要求简化）。
+ *
+ *   · **只开相册**：不再写"呼出相机"那条路 —— 少一次微信自己的
+ *     「拍照 / 从相册选择」弹窗（相册里本来就有拍摄入口）。
+ *   · **支持多选**：一次最多 9 张（一本病历或一份体检报告常有好几页），
+ *     逐张识别后合并成一份确认卡片。
+ */
 function pickAndScan() {
   if (isBusy.value) {
     return
   }
 
   uni.chooseImage({
-    count: 1,
+    count: 9,
     sizeType: ['compressed'],
-    sourceType: ['camera', 'album'],
+    sourceType: ['album'],
     success: (res: any) => {
-      const filePath = res?.tempFilePaths?.[0]
-      if (filePath) {
-        void scan(filePath)
+      const paths: string[] = Array.isArray(res?.tempFilePaths) ? res.tempFilePaths : []
+      // 同一张图选两次没必要识别两次
+      const unique = [...new Set(paths.filter(Boolean))]
+      if (unique.length > 0) {
+        void scanAll(unique)
       }
     },
   })
 }
 
-async function scan(filePath: string) {
+const CONFIDENCE_RANK: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+
+/** 多张一起识别：逐张上传 + 识别，最后合并成一份待确认结果 */
+async function scanAll(filePaths: string[]) {
   isBusy.value = true
   showConfirm.value = false
   confidence.value = ''
-  uni.showLoading({ title: '识别中…', mask: true })
+
+  const collectedDrafts: Record<string, any>[] = []
+  const collectedWarnings: string[] = []
+  let worstConfidence = 'HIGH'
+  let detectedType: DocumentType = props.documentType
+  let failed = 0
 
   try {
-    // ① 先传到 COS（与手工上传附件同一条路）
-    const uploaded = await dogApi.uploadHealthAttachment(props.uploadType, filePath)
-    if (!uploaded?.url) {
-      throw new Error('图片上传失败')
+    for (let index = 0; index < filePaths.length; index += 1) {
+      uni.showLoading({
+        title: filePaths.length > 1
+          ? `识别中 ${index + 1}/${filePaths.length}…`
+          : '识别中…',
+        mask: true,
+      })
+
+      try {
+        // ① 先传到 COS（与手工上传附件同一条路）
+        const uploaded = await dogApi.uploadHealthAttachment(props.uploadType, filePaths[index])
+        if (!uploaded?.url) {
+          throw new Error('图片上传失败')
+        }
+
+        // ② 再交给 AI 识别（传 AUTO 时由后端判定这是哪一类文档）
+        const res: any = await dogApi.extractHealthReport({
+          imageUrl: uploaded.url,
+          documentType: props.documentType,
+        })
+        if (res.code !== 0 || !res.data) {
+          throw new Error(res.message || '识别失败')
+        }
+
+        const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
+        if (list.length > 0) {
+          collectedDrafts.push(...list)
+        } else {
+          failed += 1
+        }
+
+        if (Array.isArray(res.data.warnings)) {
+          collectedWarnings.push(...res.data.warnings)
+        }
+
+        const type = String(res.data.documentType || '').toUpperCase()
+        if (type && type !== 'AUTO') {
+          detectedType = type as DocumentType
+        }
+
+        const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
+        if ((CONFIDENCE_RANK[itemConfidence] || 0) < (CONFIDENCE_RANK[worstConfidence] || 0)) {
+          worstConfidence = itemConfidence
+        }
+      } catch (error: any) {
+        // 多张里有一张失败不推翻其它的：先记下来，最后一起告诉顾客
+        failed += 1
+        collectedWarnings.push(error?.message || '有一张没能识别')
+      }
     }
 
-    // ② 再交给 AI 识别
-    const res: any = await dogApi.extractHealthReport({
-      imageUrl: uploaded.url,
-      documentType: props.documentType,
-    })
-    if (res.code !== 0 || !res.data) {
-      throw new Error(res.message || '识别失败')
-    }
-
-    const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
-    if (list.length === 0) {
+    if (collectedDrafts.length === 0) {
       throw new Error(
-        (res.data.warnings || [])[0] || '没识别到内容，请换一张更清晰的图片',
+        collectedWarnings[0] || '没识别到内容，请换一张更清晰的图片',
       )
     }
 
-    drafts.value = list
-    warnings.value = Array.isArray(res.data.warnings) ? res.data.warnings : []
-    confidence.value = String(res.data.confidence || 'LOW')
+    if (failed > 0) {
+      collectedWarnings.push(`有 ${failed} 张没能识别，可以单独再试或手工补充`)
+    }
+
+    drafts.value = collectedDrafts
+    warnings.value = collectedWarnings
+    confidence.value = worstConfidence
+    resolvedDocumentType.value = detectedType
     showConfirm.value = true
   } catch (error: any) {
     uni.showToast({
@@ -200,16 +288,21 @@ async function scan(filePath: string) {
 }
 
 function accept() {
-  emit('scanned', { drafts: drafts.value, documentType: props.documentType })
+  emit('scanned', {
+    drafts: drafts.value,
+    documentType: resolvedDocumentType.value || props.documentType,
+  })
   showConfirm.value = false
   drafts.value = []
   warnings.value = []
 }
 
+/** 「重新拍」：直接再开一次相册（原来只是收起卡片，现在入口在底部按钮上） */
 function discard() {
   showConfirm.value = false
   drafts.value = []
   warnings.value = []
+  pickAndScan()
 }
 </script>
 

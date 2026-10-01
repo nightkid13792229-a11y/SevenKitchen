@@ -39,13 +39,15 @@
          原来这里是「拍病历 / 拍体检报告」两个选择器 + 一个「拍照录入」按钮 +
          下面再一个「新增记录」——三处入口做同一件事。现在统一成底部一个按钮：
          点它选「手动填写 / 拍病历 / 拍体检报告」，这里只保留识别结果的确认卡片。 -->
-    <view v-if="isVisitMode && dogId" class="scan-entry">
+    <!-- 只在真的要识别/有待确认结果时才挂载：空闲时这段完全不占高度
+         （原来是常驻的空容器 + 两层 margin-bottom，书签下方会空出一条）。 -->
+    <view v-if="isVisitMode && dogId && scanActive" class="scan-entry">
       <HealthDocumentScan
         ref="scanRef"
         hide-trigger
         :dog-id="dogId"
-        :document-type="scanDocumentType"
-        :upload-type="scanUploadType"
+        document-type="AUTO"
+        upload-type="medical"
         @scanned="onScanned"
       />
     </view>
@@ -1077,12 +1079,9 @@ function updateTextField(index: number, key: string, value: string) {
  * 识别结果**只填表不保存** —— 老板第 5 条说的是"自动的录入表单"，
  * 不是"自动保存"。顾客填完还能改、还能不存。
  */
-/** 拍摄入口的两种文档类型（点底部「新增记录」后选哪种） */
+/** 识别组件：空闲时不挂载（避免留白条），点「从相册选择」时再挂上并触发 */
 const scanRef = ref<{ startScan?: () => void } | null>(null)
-const scanDocumentType = ref<'MEDICAL_RECORD' | 'CHECKUP_REPORT'>('MEDICAL_RECORD')
-const scanUploadType = computed<'medical' | 'checkup'>(() => (
-  scanDocumentType.value === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
-))
+const scanActive = ref(false)
 
 /**
  * 底部那一个「新增记录」按钮点开后的选择（2026-10-01 老板要求合并入口）。
@@ -1101,27 +1100,46 @@ function openAddRecordChooser() {
   }
 
   uni.showActionSheet({
-    itemList: ['手动填写', '拍病历（拍照或相册）', '拍体检报告（拍照或相册）'],
+    itemList: ['手动填写', '从相册选择（自动识别）'],
     success: (res) => {
       if (res.tapIndex === 0) {
         addRecord()
         return
       }
 
-      startScan(res.tapIndex === 2 ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD')
+      startScan()
     },
   })
 }
 
-/** 按文档类型打开相机/相册（识别组件自带按钮已隐藏，由这里触发） */
-function startScan(documentType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT') {
-  scanDocumentType.value = documentType
+/**
+ * 打开相册开始识别（识别组件自带按钮已隐藏，由这里触发）。
+ *
+ * 不再传文档类型：统一传 `AUTO`，由后端判断这是病历还是体检报告，
+ * 判定结果随识别结果一起回来（老板 2026-10-01：两个选项合并成一个）。
+ */
+function startScan() {
+  scanActive.value = true
   nextTick(() => {
     scanRef.value?.startScan?.()
   })
 }
 
 function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
+  // 这个入口在「病历/检查」板块下。AI 有时会判成别的资料（过敏报告、疫苗本）——
+  // 那些有各自更合适的板块，硬填成病历只会把档案弄乱，所以如实提示并停手。
+  if (payload.documentType === 'ALLERGY_REPORT') {
+    scanActive.value = false
+    uni.showToast({ title: '这看起来是过敏原检测报告，请到「过敏」板块上传', icon: 'none', duration: 3000 })
+    return
+  }
+
+  if (payload.documentType === 'VACCINE_BOOK') {
+    scanActive.value = false
+    uni.showToast({ title: '这看起来是疫苗本，请到「疫苗」板块上传', icon: 'none', duration: 3000 })
+    return
+  }
+
   const kind = payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
 
   for (const draft of payload.drafts) {
@@ -1130,6 +1148,9 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
     record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     draftRecords.value.push(record)
   }
+
+  // 内容已经填进表单，识别结果那块可以收掉了（空闲的容器不占高度）
+  scanActive.value = false
 
   const lastIndex = draftRecords.value.length - 1
   if (lastIndex >= 0) {
@@ -1664,7 +1685,7 @@ function removeAttachment(index: number, attachmentIndex: number) {
 
 /* 拍照录入（第六期） */
 .scan-entry {
-  margin-bottom: 20rpx;
+  /* 不留 margin：这个容器只在识别时出现，间距交给板块的 gap */
 }
 
 .scan-entry__kinds {

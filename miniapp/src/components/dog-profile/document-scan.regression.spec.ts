@@ -68,22 +68,24 @@ describe('拍照录入 · 组件', () => {
 })
 
 describe('拍照录入 · 接线', () => {
-  it('病历与体检报告挂在「病历/检查」板块，入口合并进底部「新增记录」', () => {
+  it('病历与体检报告挂在「病历/检查」板块，入口合并成底部一个「新增记录」', () => {
     const section = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )
 
     expect(section).toContain('<HealthDocumentScan')
-    expect(section).toContain('v-if="isVisitMode && dogId"')
-    // 2026-10-01 老板要求合并入口：不再是顶部两个选择器 + 一个按钮，
-    // 而是底部一个「新增记录」点开选：手动填写 / 拍病历 / 拍体检报告
-    expect(section).toContain("itemList: ['手动填写', '拍病历（拍照或相册）', '拍体检报告（拍照或相册）']")
+    expect(section).toContain('v-if="isVisitMode && dogId && scanActive"')
+    // 2026-10-01 老板要求：三个入口并成一个，且**不再让顾客先选文档类型** ——
+    // 传 AUTO 由后端判断，两个选项就合并成了「从相册选择（自动识别）」
+    expect(section).toContain("itemList: ['手动填写', '从相册选择（自动识别）']")
     expect(section).toContain('function openAddRecordChooser()')
-    expect(section).toContain('function startScan(documentType:')
+    expect(section).toContain('function startScan()')
+    expect(section).toContain('document-type="AUTO"')
     expect(section).toContain('hide-trigger')
-    // 类型仍然分两种（AI 的提示词按类型不同）
-    expect(section).toContain("'MEDICAL_RECORD' | 'CHECKUP_REPORT'")
+    // 判成别的资料（过敏报告 / 疫苗本）时不硬填成病历，提示去对应板块
+    expect(section).toContain('这看起来是过敏原检测报告，请到「过敏」板块上传')
+    expect(section).toContain('这看起来是疫苗本，请到「疫苗」板块上传')
   })
 
   it('疫苗本挂在「疫苗」板块', () => {

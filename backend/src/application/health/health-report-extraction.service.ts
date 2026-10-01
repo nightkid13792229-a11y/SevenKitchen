@@ -51,6 +51,15 @@ export type HealthDocumentType =
   | 'VACCINE_BOOK' // 疫苗本（一次可能读出多条）
   | 'MEDICAL_RECORD'; // 病历
 
+/**
+ * 自动判断（2026-10-01）：「拍病历 / 拍体检报告」两个入口合并成一个「从相册选择」，
+ * 由后端按提示词自己判断这是哪一类文档 —— 顾客不必先选类型。
+ *
+ * 注意它**只是请求侧**的取值：真正落回结果里的永远是解析出的四类之一（不是 'AUTO'），
+ * 前端靠这个真实类型决定这条记录填进「病历」还是「体检」。
+ */
+export type HealthDocumentTypeRequest = HealthDocumentType | 'AUTO';
+
 export const HEALTH_DOCUMENT_TYPES: readonly HealthDocumentType[] = [
   'ALLERGY_REPORT',
   'CHECKUP_REPORT',
@@ -58,12 +67,26 @@ export const HEALTH_DOCUMENT_TYPES: readonly HealthDocumentType[] = [
   'MEDICAL_RECORD',
 ];
 
-export function normalizeDocumentType(value: unknown): HealthDocumentType {
+export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest {
   const key = String(value || '').trim().toUpperCase();
+  if (key === 'AUTO') return 'AUTO';
   return (HEALTH_DOCUMENT_TYPES as readonly string[]).includes(key)
     ? (key as HealthDocumentType)
     : // 缺省沿用旧行为：此前只有过敏报告一条路
       'ALLERGY_REPORT';
+}
+
+/**
+ * 把 AI 回复里的 documentType 解析成真实类型（只在 AUTO 流程里用）。
+ *
+ * 模型不一定照做，也可能只回「体检报告」这种中文说法或干脆不回，
+ * 所以这里做白名单校验：认不出来一律兜底 MEDICAL_RECORD（老板定的默认项）。
+ */
+export function resolveAutoDocumentType(value: unknown): HealthDocumentType {
+  const key = String(value || '').trim().toUpperCase();
+  return (HEALTH_DOCUMENT_TYPES as readonly string[]).includes(key)
+    ? (key as HealthDocumentType)
+    : 'MEDICAL_RECORD';
 }
 
 export interface HealthReportExtractionResult {
@@ -135,86 +158,70 @@ const COMMON_RULES = [
   '   并在 warnings 里说明"未识别到相关内容"。',
   '6. 日期一律输出 YYYY-MM-DD；看不清或没有的日期留空字符串，不要编。',
 ];
+/**
+ * 四种文档类型各自的提示词正文（不含共同铁律）—— **与原实现逐字一致**。
+ *
+ * AUTO 提示词要把四套字段结构原样告诉模型，所以把它抽成常量复用：
+ * 同一份原文，自动判断出来的字段名才不可能和显式指定时走样。
+ * 注意：这四段字符串本身不得改写，否则线上显式指定类型的识别行为就变了。
+ */
+const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
+  VACCINE_BOOK: [
+    '本类型的额外规则：',
+    '· 一本疫苗本通常有**多条**接种记录，全部读出来，按接种日期从早到晚排序。',
+    '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译、不要归类。',
+    '· nextDueDate 只有本子上明确写了才填，没写就留空。',
+    '',
+    '输出 JSON 结构：',
+    '{',
+    '  "drafts": [',
+    '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
+    '  ],',
+    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
+    '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
+    '}',
+  ].join('\n'),
 
-function buildSystemPrompt(documentType: HealthDocumentType): string {
-  if (documentType === 'VACCINE_BOOK') {
-    return [
-      '你是一名宠物助理，负责把「狗狗疫苗本 / 免疫记录」的照片识别文字整理成接种记录。',
-      '',
-      ...COMMON_RULES,
-      '',
-      '本类型的额外规则：',
-      '· 一本疫苗本通常有**多条**接种记录，全部读出来，按接种日期从早到晚排序。',
-      '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译、不要归类。',
-      '· nextDueDate 只有本子上明确写了才填，没写就留空。',
-      '',
-      '输出 JSON 结构：',
-      '{',
-      '  "drafts": [',
-      '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
-      '  ],',
-      '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
-      '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
-      '}',
-    ].join('\n');
-  }
+  CHECKUP_REPORT: [
+    '本类型的额外规则：',
+    '· findings 写报告里的**检查结论**（照抄结论段，不要逐项罗列化验数值）。',
+    '· recommendations 写报告里医生给出的建议；没有就留空。',
+    '· checkupType 从这几个里选最贴近的：ROUTINE 常规体检 / PRE_PURCHASE 购前体检 /',
+    '  SENIOR_WELLNESS 老年健康检查 / PRE_ANESTHESIA 麻醉前检查 / EMERGENCY 急诊检查 / FOLLOW_UP 复查。',
+    '  判断不了就留空字符串。',
+    '',
+    '输出 JSON 结构：',
+    '{',
+    '  "drafts": [',
+    '    { "checkupDate": "2026-08-30", "checkupType": "ROUTINE",',
+    '      "findings": "血常规与生化未见明显异常", "recommendations": "半年后复查",',
+    '      "veterinarian": "", "notes": "" }',
+    '  ],',
+    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
+    '  "warnings": []',
+    '}',
+  ].join('\n'),
 
-  if (documentType === 'CHECKUP_REPORT') {
-    return [
-      '你是一名宠物助理，负责把「狗狗体检报告」的识别文字整理成一条体检记录。',
-      '',
-      ...COMMON_RULES,
-      '',
-      '本类型的额外规则：',
-      '· findings 写报告里的**检查结论**（照抄结论段，不要逐项罗列化验数值）。',
-      '· recommendations 写报告里医生给出的建议；没有就留空。',
-      '· checkupType 从这几个里选最贴近的：ROUTINE 常规体检 / PRE_PURCHASE 购前体检 /',
-      '  SENIOR_WELLNESS 老年健康检查 / PRE_ANESTHESIA 麻醉前检查 / EMERGENCY 急诊检查 / FOLLOW_UP 复查。',
-      '  判断不了就留空字符串。',
-      '',
-      '输出 JSON 结构：',
-      '{',
-      '  "drafts": [',
-      '    { "checkupDate": "2026-08-30", "checkupType": "ROUTINE",',
-      '      "findings": "血常规与生化未见明显异常", "recommendations": "半年后复查",',
-      '      "veterinarian": "", "notes": "" }',
-      '  ],',
-      '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
-      '  "warnings": []',
-      '}',
-    ].join('\n');
-  }
-
-  if (documentType === 'MEDICAL_RECORD') {
-    return [
-      '你是一名宠物助理，负责把「狗狗病历 / 就诊记录」的识别文字整理成一条就诊记录。',
-      '',
-      ...COMMON_RULES,
-      '',
-      '本类型的额外规则：',
-      '· diagnosis 照抄病历上写的诊断结果；没写就留空。',
-      '· chiefComplaint 写主人描述的或医生记录的症状。',
-      '· treatment 写处理方式；medications 是**药名数组**，只照抄药名，不要写剂量与用法。',
-      '',
-      '输出 JSON 结构：',
-      '{',
-      '  "drafts": [',
-      '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
-      '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
-      '      "veterinarian": "", "notes": "" }',
-      '  ],',
-      '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
-      '  "warnings": []',
-      '}',
-    ].join('\n');
-  }
+  MEDICAL_RECORD: [
+    '本类型的额外规则：',
+    '· diagnosis 照抄病历上写的诊断结果；没写就留空。',
+    '· chiefComplaint 写主人描述的或医生记录的症状。',
+    '· treatment 写处理方式；medications 是**药名数组**，只照抄药名，不要写剂量与用法。',
+    '',
+    '输出 JSON 结构：',
+    '{',
+    '  "drafts": [',
+    '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
+    '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
+    '      "veterinarian": "", "notes": "" }',
+    '  ],',
+    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
+    '  "warnings": []',
+    '}',
+  ].join('\n'),
 
   // ALLERGY_REPORT：沿用此前那套（线上已在跑），只把输出扩成 drafts 形状
-  return [
-    '你是一名宠物营养助理，负责把「狗狗过敏原检测报告」的识别文字整理成结构化信息。',
-    '',
-    ...COMMON_RULES,
-    '',
+  ALLERGY_REPORT: [
     '本类型的额外规则：',
     '· 过敏原要归一成常见食物名（例如「鸡胸肉」「鸡肉提取物」都写作「鸡肉」）；',
     '  若文字里是"对 XX 过敏/不耐受/过敏原阳性"这类表述，XX 即为过敏原。',
@@ -229,6 +236,72 @@ function buildSystemPrompt(documentType: HealthDocumentType): string {
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["报告中未注明检测方法"]',
     '}',
+  ].join('\n'),
+};
+
+/** 各类型提示词的开场白 —— 同样与原实现逐字一致 */
+const TYPE_PROMPT_INTROS: Record<HealthDocumentType, string> = {
+  VACCINE_BOOK:
+    '你是一名宠物助理，负责把「狗狗疫苗本 / 免疫记录」的照片识别文字整理成接种记录。',
+  CHECKUP_REPORT:
+    '你是一名宠物助理，负责把「狗狗体检报告」的识别文字整理成一条体检记录。',
+  MEDICAL_RECORD:
+    '你是一名宠物助理，负责把「狗狗病历 / 就诊记录」的识别文字整理成一条就诊记录。',
+  ALLERGY_REPORT:
+    '你是一名宠物营养助理，负责把「狗狗过敏原检测报告」的识别文字整理成结构化信息。',
+};
+
+/**
+ * 自动判断（2026-10-01）：不预设类型，交给模型自己判断。
+ *
+ * 四套字段结构整段嵌进去（见 TYPE_PROMPT_BODIES），模型判断出类型后
+ * 照着对应那套填，字段名与显式指定时完全一致。
+ */
+function buildAutoSystemPrompt(): string {
+  const typeSections: string[] = [];
+  for (const type of HEALTH_DOCUMENT_TYPES) {
+    typeSections.push(`【${type}】`, TYPE_PROMPT_BODIES[type], '');
+  }
+
+  return [
+    '你是一名宠物助理，负责识别主人拍摄的狗狗健康文档照片。',
+    '',
+    '第一步：自动判断这份文档属于下面四类中的哪一类，documentType 只能填这四个英文值之一：',
+    '· MEDICAL_RECORD —— 病历 / 就诊记录 / 处方笺',
+    '· CHECKUP_REPORT —— 体检报告 / 化验单',
+    '· VACCINE_BOOK —— 疫苗本 / 免疫记录',
+    '· ALLERGY_REPORT —— 过敏原检测报告',
+    '判断不了、或这份文档不属于以上任何一类时，documentType 填 MEDICAL_RECORD。',
+    '',
+    '第二步：按判断出的类型输出 drafts —— 字段名必须与该类型下面给出的结构完全一致。',
+    '疫苗本一次读出多条接种记录就输出多条，其余类型只输出一条。',
+    '',
+    ...COMMON_RULES,
+    '',
+    '四类的字段结构（先按第一步定下 documentType，再照对应那套填 drafts）：',
+    '',
+    ...typeSections,
+    '输出 JSON 结构（documentType 必须是你判断出的那一个，不能填 AUTO）：',
+    '{',
+    '  "documentType": "CHECKUP_REPORT",',
+    '  "drafts": [ …按该类型的字段结构填… ],',
+    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
+    '  "warnings": []',
+    '}',
+  ].join('\n');
+}
+
+export function buildSystemPrompt(documentType: HealthDocumentTypeRequest): string {
+  if (documentType === 'AUTO') {
+    return buildAutoSystemPrompt();
+  }
+
+  return [
+    TYPE_PROMPT_INTROS[documentType],
+    '',
+    ...COMMON_RULES,
+    '',
+    TYPE_PROMPT_BODIES[documentType],
   ].join('\n');
 }
 
@@ -370,10 +443,13 @@ export class HealthReportExtractionService {
   async extractFromReport(input: {
     imageUrl: string;
     originalFilename?: string;
-    /** 识别哪类文档（老板第 4 条：从过敏报告扩到体检报告与疫苗本） */
+    /**
+     * 识别哪类文档（老板第 4 条：从过敏报告扩到体检报告与疫苗本）。
+     * 传 'AUTO' 表示由 AI 自己判断类型（2026-10-01 合并拍照入口）。
+     */
     documentType?: string;
   }): Promise<HealthReportExtractionResult> {
-    const documentType = normalizeDocumentType(input.documentType);
+    const requestedDocumentType = normalizeDocumentType(input.documentType);
     if (!input.imageUrl) {
       throw new BadRequestException('请先上传报告图片');
     }
@@ -399,24 +475,35 @@ export class HealthReportExtractionService {
       model: config.model,
       apiKey: config.apiKey,
       requestTimeoutMs: config.requestTimeoutMs,
-      systemPrompt: buildSystemPrompt(documentType),
+      systemPrompt: buildSystemPrompt(requestedDocumentType),
       userPayload: {
         task: 'extract_dog_health_document',
-        documentType,
+        documentType: requestedDocumentType,
         ocrText,
       },
       temperature: 0,
     });
 
-    const drafts = normalizeDrafts(documentType, parsed as Record<string, unknown>);
-    const medicalConditions = normalizeKeywordList(parsed.medicalConditions);
-    const warnings = normalizeWarnings(parsed.warnings);
+    const parsedRecord = parsed as Record<string, unknown>;
+
+    /**
+     * AUTO 时必须**先**从响应里解析出真实类型，再据此归一化 drafts ——
+     * 字段结构是按类型定的，顺序反了就会用错白名单把字段全丢掉。
+     */
+    const documentType =
+      requestedDocumentType === 'AUTO'
+        ? resolveAutoDocumentType(parsedRecord.documentType)
+        : requestedDocumentType;
+
+    const drafts = normalizeDrafts(documentType, parsedRecord);
+    const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
+    const warnings = normalizeWarnings(parsedRecord.warnings);
 
     // 过敏流程沿用旧字段（线上已经在跑），其余类型用 drafts
     const allergies =
       documentType === 'ALLERGY_REPORT'
         ? drafts.map((draft) => String(draft.allergen || '')).filter(Boolean)
-        : normalizeKeywordList(parsed.allergies);
+        : normalizeKeywordList(parsedRecord.allergies);
 
     if (drafts.length === 0 && warnings.length === 0) {
       // 明确告诉顾客"没识别到"，让他改用手工填写，而不是给一个空结果让人以为成功了。

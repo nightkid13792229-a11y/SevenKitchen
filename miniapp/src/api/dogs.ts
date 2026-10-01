@@ -282,13 +282,21 @@ export const dogApi = {
      * 识别哪类文档（2026-10-01 第六期）。
      * 缺省 ALLERGY_REPORT，保持既有调用方行为不变。
      */
+    /**
+     * 识别哪类文档。
+     *
+     * `'AUTO'`（2026-10-01）= 不告诉后端是哪一类，由它自己判断 ——
+     * 病历/检查板块就是这样把"拍病历 / 拍体检报告"两个入口合并成一个的。
+     * 传 AUTO 时，返回的 `documentType` 是**判定结果**，调用方按它决定填哪张表。
+     */
     documentType?:
+      | 'AUTO'
       | 'ALLERGY_REPORT'
       | 'CHECKUP_REPORT'
       | 'VACCINE_BOOK'
       | 'MEDICAL_RECORD'
   }) => request<{
-    /** 本次识别的是哪类文档 */
+    /** 本次识别的是哪类文档（传 AUTO 时这里是后端判定出来的类型） */
     documentType: 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
     /** 可直接填表的草稿；疫苗本可能多条，其余类型一条 */
     drafts: Record<string, any>[]

@@ -22,6 +22,21 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain(':range="dogs"')
     expect(source).toContain('@change="onDogPickerChange"')
     expect(source).toContain('hero-card__name-row')
+
+    // 2026-10-01 老板调整 Banner：
+    //   · 删掉「健康管理」小标题与名字下方那句说明文字
+    //   · 名字左边加头像、右边加年龄/性别/品种/体重四项
+    expect(source).not.toContain('hero-card__eyebrow')
+    expect(source).not.toContain('hero-card__subtitle')
+    expect(source).not.toContain('集中维护病史、体检、过敏、疫苗、体重记录和饮食偏好')
+    expect(source).toContain('class="hero-card__avatar"')
+    expect(source).toContain(':src="dogAvatarSrc"')
+    expect(source).toContain('v-for="fact in heroFacts"')
+    expect(source).toContain("{{ fact.label }}")
+    expect(source).toContain("{{ fact.value }}")
+    expect(source).toContain('buildHealthHeroFacts(form)')
+    expect(source).toContain('resolveDogAvatarSrc(form.avatarUrl)')
+    expect(source).toContain("form.avatarUrl = profile.avatarUrl || ''")
     // 下方那张独立的「选择狗狗」卡片已删除。
     // 注意别用宽泛的 '选择狗狗' —— 空态里的「先选择狗狗」也含这四个字。
     expect(source).not.toContain('dog-picker-card')

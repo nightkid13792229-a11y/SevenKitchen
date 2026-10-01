@@ -1,25 +1,50 @@
 <template>
   <view class="page">
+    <!-- 顶部 Banner（2026-10-01 老板调整）：
+         左侧头像 + 名字（多只狗时可点切换），右侧是这个孩子的基本信息。
+         原来的「健康管理」小标题与那句说明文字已删 —— Banner 是门面，
+         一眼看到"这是谁、多大、什么品种、多重"就够了。 -->
     <view class="hero-card">
-      <text class="hero-card__eyebrow">健康管理</text>
-      <!-- 狗狗选择器直接并进名称这一行（老板要求）：
-           名称本来就是顾客最想确认的信息，再在下方单开一张"选择狗狗"卡片
-           纯属占地方。只有多只狗时才可点 —— 一只狗没什么好选的。 -->
-      <picker
-        v-if="dogs.length > 1"
-        mode="selector"
-        :range="dogs"
-        range-key="name"
-        :value="selectedDogIndex"
-        @change="onDogPickerChange"
-      >
-        <view class="hero-card__name-row">
-          <text class="hero-card__title">{{ form.name || '请选择狗狗' }}</text>
-          <text class="hero-card__switch">切换 ▼</text>
+      <view class="hero-card__row">
+        <picker
+          v-if="dogs.length > 1"
+          class="hero-card__identity"
+          mode="selector"
+          :range="dogs"
+          range-key="name"
+          :value="selectedDogIndex"
+          @change="onDogPickerChange"
+        >
+          <view class="hero-card__identity-inner">
+            <image class="hero-card__avatar" :src="dogAvatarSrc" mode="aspectFill" />
+            <view class="hero-card__name-block">
+              <view class="hero-card__name-row">
+                <text class="hero-card__title">{{ form.name || '请选择狗狗' }}</text>
+                <text class="hero-card__switch">切换 ▼</text>
+              </view>
+            </view>
+          </view>
+        </picker>
+        <view v-else class="hero-card__identity">
+          <view class="hero-card__identity-inner">
+            <image class="hero-card__avatar" :src="dogAvatarSrc" mode="aspectFill" />
+            <view class="hero-card__name-block">
+              <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
+            </view>
+          </view>
         </view>
-      </picker>
-      <text v-else class="hero-card__title">{{ form.name || '健康档案' }}</text>
-      <text class="hero-card__subtitle">集中维护病史、体检、过敏、疫苗、体重记录和饮食偏好。</text>
+
+        <view v-if="heroFacts.length" class="hero-card__facts">
+          <view
+            v-for="fact in heroFacts"
+            :key="fact.label"
+            class="hero-card__fact"
+          >
+            <text class="hero-card__fact-label">{{ fact.label }}</text>
+            <text class="hero-card__fact-value">{{ fact.value }}</text>
+          </view>
+        </view>
+      </view>
     </view>
 
     <view v-if="loadError" class="state-card">
@@ -202,6 +227,8 @@ import DietPreferenceSection from '../../components/dog-profile/DietPreferenceSe
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
+import { buildHealthHeroFacts } from '../../utils/health-hero'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 import {
   HEALTH_RECORD_TYPES,
@@ -402,6 +429,21 @@ const weightSectionDogProfile = computed(() => ({
   // BCS 4-5 是理想区间，本来就不需要增减重计划，不该在页面上推销
   bcsScore: form.bcsScore ? Number(form.bcsScore) : null,
 }))
+/**
+ * Banner 里的头像。
+ *
+ * 用与爱犬概览页同一个解析函数：没上传头像时给统一的默认头像，
+ * 不在这里各写一份兜底逻辑。
+ */
+const dogAvatarSrc = computed(() => resolveDogAvatarSrc(form.avatarUrl))
+
+/**
+ * Banner 右侧的基本信息（年龄 / 性别 / 品种 / 体重）。
+ *
+ * 缺哪项不显示哪项 —— 规则在 utils/health-hero.ts 里，有单元测试。
+ */
+const heroFacts = computed(() => buildHealthHeroFacts(form))
+
 const hasUnsavedDietReminder = computed(() => (
   hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods) ||
   hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)
@@ -410,6 +452,7 @@ const hasUnsavedDietReminder = computed(() => (
 const form = reactive<Record<string, any>>({
   id: '',
   name: '',
+  avatarUrl: '',
   breedId: '',
   breedName: '',
   customBreedName: '',
@@ -667,6 +710,7 @@ async function loadDogProfile(requestedDogId: string) {
 function populateForm(profile: Record<string, any>) {
   form.id = profile.id || ''
   form.name = profile.name || ''
+  form.avatarUrl = profile.avatarUrl || ''
   form.breedId = profile.breedId || ''
   form.breedName = profile.breedName || ''
   form.customBreedName = profile.customBreedName || ''
@@ -1097,27 +1141,77 @@ function goToDogCreate() {
   box-shadow: 0 18rpx 36rpx rgba(27, 92, 64, 0.18);
 }
 
-.hero-card__eyebrow {
-  display: block;
-  font-size: 22rpx;
-  letter-spacing: 0.12em;
-  color: #d8bc85;
-  text-transform: uppercase;
+/* 一行装下：左边头像+名字，右边基本信息 */
+.hero-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.hero-card__identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-card__identity-inner {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.hero-card__avatar {
+  flex: none;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: rgba(243, 237, 221, 0.14);
+  border: 2rpx solid rgba(216, 188, 133, 0.55);
+}
+
+.hero-card__name-block {
+  min-width: 0;
 }
 
 .hero-card__title {
   display: block;
-  margin-top: 16rpx;
   font-size: 42rpx;
   font-weight: 800;
+  /* 名字过长时省略，不要把右边的信息挤没了 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.hero-card__subtitle {
-  display: block;
-  margin-top: 10rpx;
+/* 右侧基本信息：四行"标签 + 值"，右对齐 */
+.hero-card__facts {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  text-align: right;
+}
+
+.hero-card__fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12rpx;
+}
+
+.hero-card__fact-label {
+  font-size: 22rpx;
+  color: rgba(243, 237, 221, 0.62);
+}
+
+.hero-card__fact-value {
+  max-width: 240rpx;
   font-size: 24rpx;
-  line-height: 1.5;
-  color: rgba(243, 237, 221, 0.72);
+  font-weight: 700;
+  color: #f3eddd;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .content,

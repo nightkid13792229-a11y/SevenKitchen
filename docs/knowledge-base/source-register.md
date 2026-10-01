@@ -160,18 +160,38 @@
 | 项 | 结果 |
 |---|---|
 | 本地归档目录 | `~/Documents/SevenKitchen-knowledge-sources/` |
-| 生产服务器目录 | `/opt/sevenkitchen/knowledge-sources/`（权限 `700`，root 属主，**不在任何 nginx 站点根目录下**） |
+| 生产服务器目录 | `/opt/sevenkitchen/knowledge-sources/`（目录 `700`、文件 `600`、root 属主，**不在任何 nginx 站点根目录下**） |
 | 文件数 | 169 个来源文件（+ `README.md`、`manifest.csv`，共 171 个文件） |
 | 体积 | 668 MB |
-| 校验 | 上传后在服务器上逐文件跑 `sha256sum -c`：**169/169 全部 OK，0 个不匹配** |
+| 校验 | 上传后在服务器上逐文件跑 `sha256sum -c`：**169/169 全部 OK，0 个不匹配**（改权限后复查仍 169/169 OK） |
 | 校验清单 | 本地 `manifest.csv`（来源ID / 相对路径 / 字节 / SHA256 / 说明） |
 
 ### 为什么放在那个位置
 
 生产服务器上 nginx 的站点根目录只有三处：`/opt/sevenkitchen/SevenKitchen/admin-web`、
 `/opt/sevenkitchen/SevenKitchen-gray/admin-web-dist`、`/var/www/html`。
-**`/opt/sevenkitchen/knowledge-sources` 不在其中任何一个之下**，因此不会被 HTTP 访问到；
-再加上 `700` 权限，只有 root 能读。
+**`/opt/sevenkitchen/knowledge-sources` 不在其中任何一个之下**，因此不会被 HTTP 访问到。
+
+实测确认（2026-10-01 自查）：`https://sevenkitchen.cloud/knowledge-sources/manifest.csv`
+返回的是**网站单页应用的兜底页**（`content-type: text/html`，455 字节，与访问一个不存在的路径
+返回的内容逐字节相同），不是原文文件本身 —— 也就是说这些资料取不到。
+
+### ⚠️ 一个踩过的坑：`rsync -a` 会把本地权限和属主一起带过去
+
+第一次上传用的是 `rsync -az <本地>/ root@服务器:/opt/sevenkitchen/knowledge-sources/`。
+`-a` 含 `-p -o -g`，于是**服务器上的目录被改成了本机 Mac 的属主（uid 501）与 `755` 权限** ——
+覆盖掉了上传前设好的 `700` + root。后果：服务器上任何本地账号都能读这些版权资料。
+自查时发现并已修正：`chown -R root:root` + `chmod -R go-rwx`，现在目录 `700`、文件 `600`。
+
+**以后重新上传要这样写**（不让它带属主与权限）：
+
+```bash
+rsync -rlptDz --no-owner --no-group --chmod=D700,F600 \
+  ~/Documents/SevenKitchen-knowledge-sources/ \
+  root@1.14.3.2:/opt/sevenkitchen/knowledge-sources/
+```
+
+上传后**必须复查**：`ls -ld` 看属主与权限、`find -type f ! -perm 600` 应为空、再跑一次 `sha256sum -c`。
 
 > ⚠️ 版权：SACN5、NRC 为私有合法持有；WSAVA/AAHA 资料按其公开分发条款使用。
 > 按老板决定上传，**不对公网开放**。将来若要对外开放任何原文内容，需重新评估。

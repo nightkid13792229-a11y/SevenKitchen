@@ -22,7 +22,7 @@ describe('健康知识条目自检', () => {
   const healthEntries = entries.filter((entry) =>
     (HEALTH_ONLY_DOMAINS as readonly string[]).includes(entry.domain),
   );
-  const sample = healthEntries[0] as KnowledgeEntry;
+  const sample = healthEntries[0];
 
   it('只统计健康侧领域', () => {
     const healthTotal = Object.values(result.byDomain).reduce(
@@ -40,7 +40,10 @@ describe('健康知识条目自检', () => {
   });
 
   it('统计口径覆盖风险、紧急程度与证据强度', () => {
-    const riskTotal = Object.values(result.byRisk).reduce((sum, n) => sum + n, 0);
+    const riskTotal = Object.values(result.byRisk).reduce(
+      (sum, n) => sum + n,
+      0,
+    );
     const evidenceTotal = Object.values(result.byEvidence).reduce(
       (sum, n) => sum + n,
       0,
@@ -50,7 +53,7 @@ describe('健康知识条目自检', () => {
     expect(evidenceTotal).toBe(result.total);
     // 分诊类必须写死紧急程度（这条在结构校验里也有，这里再确认统计口径没漏）
     expect(result.byUrgency.IMMEDIATE).toBeGreaterThan(0);
-  })
+  });
 
   it('重复标题会被抓出来', () => {
     const duplicated: KnowledgeEntry[] = [
@@ -83,11 +86,15 @@ describe('健康知识条目自检', () => {
 
     const fake = auditHealthKnowledge(stale, { today: '2026-10-01' });
 
-    expect(fake.problems.some((item) => item.includes('复核日期已过'))).toBe(true);
+    expect(fake.problems.some((item) => item.includes('复核日期已过'))).toBe(
+      true,
+    );
   });
 
   it('健康侧条目被标成已审核会被拦下', () => {
-    const healthDomain = Object.keys(result.byDomain)[0] as KnowledgeEntry['domain'];
+    const healthDomain = Object.keys(
+      result.byDomain,
+    )[0] as KnowledgeEntry['domain'];
     const approved: KnowledgeEntry[] = [
       {
         ...sample,
@@ -113,7 +120,9 @@ describe('健康知识条目自检', () => {
 
     const fake = auditHealthKnowledge(feline, { today: '2026-10-01' });
 
-    expect(fake.warnings.some((item) => item.includes('猫专属表述'))).toBe(true);
+    expect(fake.warnings.some((item) => item.includes('猫专属表述'))).toBe(
+      true,
+    );
   });
 
   it('"犬猫并列共识"的正式标题不算猫专属', () => {
@@ -127,6 +136,8 @@ describe('健康知识条目自检', () => {
 
     const fake = auditHealthKnowledge(parallel, { today: '2026-10-01' });
 
-    expect(fake.warnings.some((item) => item.includes('猫专属表述'))).toBe(false);
+    expect(fake.warnings.some((item) => item.includes('猫专属表述'))).toBe(
+      false,
+    );
   });
 });

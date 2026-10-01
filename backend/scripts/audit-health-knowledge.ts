@@ -86,11 +86,19 @@ export function auditHealthKnowledge(
 
   for (const entry of health) {
     byDomain[entry.domain] = (byDomain[entry.domain] ?? 0) + 1;
-    byUrgency[entry.urgency ?? '（无）'] = (byUrgency[entry.urgency ?? '（无）'] ?? 0) + 1;
-    byRisk[entry.riskLevel ?? '（无）'] = (byRisk[entry.riskLevel ?? '（无）'] ?? 0) + 1;
-    const orgs = new Set((entry.sources ?? []).map((source) => source.sourceId));
+    byUrgency[entry.urgency ?? '（无）'] =
+      (byUrgency[entry.urgency ?? '（无）'] ?? 0) + 1;
+    byRisk[entry.riskLevel ?? '（无）'] =
+      (byRisk[entry.riskLevel ?? '（无）'] ?? 0) + 1;
+    const orgs = new Set(
+      (entry.sources ?? []).map((source) => source.sourceId),
+    );
     const evidenceKey =
-      orgs.size >= 3 ? 'MULTI_SOURCE' : orgs.size === 2 ? 'TWO_SOURCES' : 'SINGLE_SOURCE';
+      orgs.size >= 3
+        ? 'MULTI_SOURCE'
+        : orgs.size === 2
+          ? 'TWO_SOURCES'
+          : 'SINGLE_SOURCE';
     byEvidence[evidenceKey] = (byEvidence[evidenceKey] ?? 0) + 1;
 
     idIndex.set(entry.id, (idIndex.get(entry.id) ?? 0) + 1);
@@ -120,12 +128,16 @@ export function auditHealthKnowledge(
       ...(entry.caveats ?? []),
     ].filter(isFelineOnly);
     if (texts.length > 0) {
-      warnings.push(`条目 ${entry.id} 正文里出现猫专属表述：${texts[0].slice(0, 40)}…`);
+      warnings.push(
+        `条目 ${entry.id} 正文里出现猫专属表述：${texts[0].slice(0, 40)}…`,
+      );
     }
     for (const source of entry.sources ?? []) {
       const locator = `${source.locator ?? ''} ${source.note ?? ''}`;
       if (/猫/.test(locator) && !FELINE_ALLOWLIST.test(locator)) {
-        warnings.push(`条目 ${entry.id} 的出处定位指向猫的资料：${locator.slice(0, 40)}…`);
+        warnings.push(
+          `条目 ${entry.id} 的出处定位指向猫的资料：${locator.slice(0, 40)}…`,
+        );
       }
     }
 
@@ -138,7 +150,9 @@ export function auditHealthKnowledge(
     ]);
     for (const citation of entry.citations) {
       const matched =
-        KNOWLEDGE_SOURCES.some((source) => sharesCore(citation.source, source.name)) ||
+        KNOWLEDGE_SOURCES.some((source) =>
+          sharesCore(citation.source, source.name),
+        ) ||
         ownLocators.some((locator) => sharesCore(citation.source, locator));
       if (!matched) {
         warnings.push(

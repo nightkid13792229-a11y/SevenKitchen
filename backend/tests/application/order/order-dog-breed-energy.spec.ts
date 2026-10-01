@@ -46,7 +46,9 @@ describe('下单链路的犬种参数', () => {
       mealsPerDayConfirmedAt: null,
       createdAt: new Date('2022-01-01'),
       ...overrides,
-    } as Dog;
+      // 这里只造能量计算用得到的那几个字段，Dog 上其余的展示字段与本次无关；
+      // 走 unknown 转换是为了不把"少了几个字段"变成类型错误噪音
+    } as unknown as Dog;
   }
 
   function buildBreed(sizeCategory: string): DogBreed {
@@ -83,7 +85,11 @@ describe('下单链路的犬种参数', () => {
     it('成年犬：传不传犬种结果一样 —— 能量公式不读体型类别', () => {
       const adult = buildDog({ birthday: new Date('2020-01-01') });
       const withoutBreed = calculateDogEnergy(adult, undefined, null);
-      const withBreed = calculateDogEnergy(adult, undefined, buildBreed('SMALL'));
+      const withBreed = calculateDogEnergy(
+        adult,
+        undefined,
+        buildBreed('SMALL'),
+      );
 
       expect(withoutBreed.finalFoodKcal).toBe(withBreed.finalFoodKcal);
     });
@@ -95,11 +101,15 @@ describe('下单链路的犬种参数', () => {
       });
 
       const withoutBreed = calculateDogEnergy(puppy, undefined, null);
-      const withBreed = calculateDogEnergy(puppy, undefined, buildBreed('SMALL'));
+      const withBreed = calculateDogEnergy(
+        puppy,
+        undefined,
+        buildBreed('SMALL'),
+      );
 
       expect(withoutBreed.finalFoodKcal).not.toBe(withBreed.finalFoodKcal);
     });
-  })
+  });
 
   describe('订单服务确实把犬种传下去了', () => {
     it('两处 calculateDogEnergy 调用都带上 loadDogBreed', () => {
@@ -113,7 +123,9 @@ describe('下单链路的犬种参数', () => {
 
     it('确实按 breedId 去查犬种，而不是写死 null', () => {
       expect(orderServiceSource).toContain('this.prisma.dogBreed.findUnique');
-      expect(orderServiceSource).toContain('await this.loadDogBreed(dog.breedId)');
+      expect(orderServiceSource).toContain(
+        'await this.loadDogBreed(dog.breedId)',
+      );
       // 不允许出现"只传两个参数"的旧写法
       expect(orderServiceSource).not.toMatch(
         /calculateDogEnergy\(\s*dog,\s*recipe\.energyDensityKcalPerKg,\s*\)/,
@@ -125,5 +137,5 @@ describe('下单链路的犬种参数', () => {
       expect(orderServiceSource).toContain('if (!record) {');
       expect(orderServiceSource).toContain('return null;');
     });
-  })
-})
+  });
+});

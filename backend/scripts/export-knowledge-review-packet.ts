@@ -65,11 +65,11 @@ export function sourceDisplayName(sourceId: string): string {
   return `${record.name}（${record.version}｜证据级 ${record.tier}）`;
 }
 
-export function healthEntriesOf(service: KnowledgeBaseService): KnowledgeEntry[] {
+export function healthEntriesOf(
+  service: KnowledgeBaseService,
+): KnowledgeEntry[] {
   const healthOnly = new Set<string>(HEALTH_ONLY_DOMAINS);
-  return service
-    .getAll()
-    .filter((entry) => healthOnly.has(entry.domain));
+  return service.getAll().filter((entry) => healthOnly.has(entry.domain));
 }
 
 export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
@@ -88,19 +88,33 @@ export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
   lines.push('');
   lines.push('## 怎么用这份文档');
   lines.push('');
-  lines.push('1. 每条知识后面有四个勾选框：**通过 / 需修改 / 删除 / 拿不准**，请在其中一个上打勾（或写字母）；');
-  lines.push('2. 有意见写在「意见」那一行，写多写少都行，**只要指得出问题就够**；');
-  lines.push('3. 重点看三类条目：**风险等级为高**、**分诊类（要不要去医院）**、**证据强度为单一来源**；');
-  lines.push('4. 审完把这份文档交回，我们按结论改内容，或把条目标为「已审核」。');
+  lines.push(
+    '1. 每条知识后面有四个勾选框：**通过 / 需修改 / 删除 / 拿不准**，请在其中一个上打勾（或写字母）；',
+  );
+  lines.push(
+    '2. 有意见写在「意见」那一行，写多写少都行，**只要指得出问题就够**；',
+  );
+  lines.push(
+    '3. 重点看三类条目：**风险等级为高**、**分诊类（要不要去医院）**、**证据强度为单一来源**；',
+  );
+  lines.push(
+    '4. 审完把这份文档交回，我们按结论改内容，或把条目标为「已审核」。',
+  );
   lines.push('');
-  lines.push('> **边界说明（重要）**：这批条目**目前对顾客完全不可见**（全部是待审核状态）。');
+  lines.push(
+    '> **边界说明（重要）**：这批条目**目前对顾客完全不可见**（全部是待审核状态）。',
+  );
   lines.push('> 只有标注「已审核」的条目才会进入面向顾客的 AI 输出。');
-  lines.push('> 另外：条目不写化验参考区间（区间以顾客手上的报告为准）、不给诊断、不给药名与剂量。');
+  lines.push(
+    '> 另外：条目不写化验参考区间（区间以顾客手上的报告为准）、不给诊断、不给药名与剂量。',
+  );
   lines.push('');
   lines.push('## 审核优先级建议');
   lines.push('');
   const highRisk = entries.filter((entry) => entry.riskLevel === 'HIGH').length;
-  const triage = entries.filter((entry) => entry.questionType === 'TRIAGE').length;
+  const triage = entries.filter(
+    (entry) => entry.questionType === 'TRIAGE',
+  ).length;
   const single = entries.filter(
     (entry) => resolveEvidenceStrength(entry) === 'SINGLE_SOURCE',
   ).length;
@@ -112,18 +126,28 @@ export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
   lines.push('');
 
   for (const [domain, list] of byDomain) {
-    const label = KNOWLEDGE_DOMAIN_LABELS[domain as keyof typeof KNOWLEDGE_DOMAIN_LABELS] ?? domain;
+    const label =
+      KNOWLEDGE_DOMAIN_LABELS[domain as keyof typeof KNOWLEDGE_DOMAIN_LABELS] ??
+      domain;
     lines.push(`## ${label}（${domain}）· ${list.length} 条`);
     lines.push('');
     for (const entry of list) {
-      lines.push(`### ${entry.id}　${entry.title}`);
+      lines.push(`### ${entry.id}	${entry.title}`);
       lines.push('');
-      lines.push(`- **分类**：${KNOWLEDGE_QUESTION_TYPE_LABELS[entry.questionType as keyof typeof KNOWLEDGE_QUESTION_TYPE_LABELS] ?? entry.questionType ?? '—'}`);
-      lines.push(`- **风险等级**：${RISK_LABELS[entry.riskLevel ?? ''] ?? entry.riskLevel ?? '—'}`);
+      lines.push(
+        `- **分类**：${KNOWLEDGE_QUESTION_TYPE_LABELS[entry.questionType as keyof typeof KNOWLEDGE_QUESTION_TYPE_LABELS] ?? entry.questionType ?? '—'}`,
+      );
+      lines.push(
+        `- **风险等级**：${RISK_LABELS[entry.riskLevel ?? ''] ?? entry.riskLevel ?? '—'}`,
+      );
       if (entry.urgency) {
-        lines.push(`- **紧急程度**：${KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency}`);
+        lines.push(
+          `- **紧急程度**：${KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency}`,
+        );
       }
-      lines.push(`- **证据强度**：${EVIDENCE_LABELS[resolveEvidenceStrength(entry)] ?? '—'}`);
+      lines.push(
+        `- **证据强度**：${EVIDENCE_LABELS[resolveEvidenceStrength(entry)] ?? '—'}`,
+      );
       lines.push(`- **适用标签**：${entry.applicableTo.join('、')}`);
       lines.push(`- **检索关键词**：${entry.keywords.join('、')}`);
       lines.push(`- **下次复核**：${entry.reviewBy ?? '—'}`);
@@ -150,7 +174,7 @@ export function buildMarkdown(entries: KnowledgeEntry[], date: string): string {
       lines.push('');
       for (const source of entry.sources ?? []) {
         lines.push(
-          `- ${sourceDisplayName(source.sourceId)}　→ ${source.locator}${
+          `- ${sourceDisplayName(source.sourceId)} → ${source.locator}${
             source.note ? `（${source.note}）` : ''
           }`,
         );
@@ -196,22 +220,24 @@ export function buildCsv(entries: KnowledgeEntry[]): string {
   const rows: string[] = [header.map(csvCell).join(',')];
 
   for (const entry of entries) {
-    const label =
-      KNOWLEDGE_DOMAIN_LABELS[entry.domain as keyof typeof KNOWLEDGE_DOMAIN_LABELS] ??
-      entry.domain;
+    const label = KNOWLEDGE_DOMAIN_LABELS[entry.domain] ?? entry.domain;
     const sources = entry.sources ?? [];
     rows.push(
       [
         label,
         entry.id,
         entry.title,
-        KNOWLEDGE_QUESTION_TYPE_LABELS[entry.questionType as keyof typeof KNOWLEDGE_QUESTION_TYPE_LABELS] ?? entry.questionType ?? '',
+        KNOWLEDGE_QUESTION_TYPE_LABELS[
+          entry.questionType as keyof typeof KNOWLEDGE_QUESTION_TYPE_LABELS
+        ] ??
+          entry.questionType ??
+          '',
         RISK_LABELS[entry.riskLevel ?? ''] ?? entry.riskLevel ?? '',
-        entry.urgency ? KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency : '',
+        entry.urgency
+          ? (KNOWLEDGE_URGENCY_LABELS[entry.urgency] ?? entry.urgency)
+          : '',
         EVIDENCE_LABELS[resolveEvidenceStrength(entry)] ?? '',
-        String(
-          new Set(sources.map((source) => source.sourceId)).size,
-        ),
+        String(new Set(sources.map((source) => source.sourceId)).size),
         sources.map((source) => source.sourceId).join(' / '),
         sources.map((source) => source.locator).join(' / '),
         entry.summary.replace(/\*\*/g, ''),

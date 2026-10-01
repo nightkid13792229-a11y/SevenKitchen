@@ -21,6 +21,8 @@ export interface DogListParams {
   pageSize?: number
   search?: string
   breedId?: string
+  /** 按主人筛选（后台给食谱选「客户 + 狗狗」时用） */
+  ownerId?: string
 }
 
 /**

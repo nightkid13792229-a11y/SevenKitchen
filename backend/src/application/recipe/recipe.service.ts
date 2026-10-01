@@ -1466,6 +1466,23 @@ export class RecipeService {
       );
     }
 
+    // W4-B：设为「私密定制」时必须记清"给哪个客户、哪只狗"。
+    // 业务要求：客户定制食谱必须能追溯到客户与狗狗（生产实测 45 条历史数据没记，
+    // 导致客户自己打不开自己的食谱）——从今往后强制填写。
+    // 存量不做回溯补录，因此只在**状态改为私密定制**时校验。
+    if (
+      dto.status === RecipeStatus.PRIVATE_CUSTOM &&
+      dto.status !== existing.status
+    ) {
+      const ownerId = (dto.customerOwnerId as string | undefined)?.trim();
+      const dogId = (dto.customerDogId as string | undefined)?.trim();
+      if (!ownerId || !dogId) {
+        throw new BadRequestException(
+          '设为「私密定制」时必须选择客户和狗狗 —— 否则将来无法追溯这条食谱是给谁做的。',
+        );
+      }
+    }
+
     // 合规校验：「低脂」必须满足法规数值门槛（在写入前拦截，避免产生半成品状态）
     await this.assertLowFatClaimThreshold(
       targetHealthTags,
@@ -1506,6 +1523,14 @@ export class RecipeService {
         // 不属于系列的独立食谱（历史遗留）保持可改名。
         ...(existing.seriesId ? {} : { name: dto.name as string | undefined }),
         status: dto.status ?? existing.status,
+        // W4-B：写「私密定制」时一并记下客户与狗，并标记为客户定制
+        ...(dto.status === RecipeStatus.PRIVATE_CUSTOM && dto.customerOwnerId
+          ? {
+              isCustomRecipe: true,
+              customerOwnerId: dto.customerOwnerId as string,
+              customerDogId: dto.customerDogId as string,
+            }
+          : {}),
         energyDensityKcalPerKg:
           dto.energyDensityKcalPerKg ?? existing.energyDensityKcalPerKg,
         productionLossRate:
@@ -1967,6 +1992,12 @@ export class RecipeService {
     const methodMap = await this.loadPreparationMethodNameMap(
       (recipe.items || []).map((item: any) => item.preparationMethod),
     );
+    // 类型安全地读取两个客户归属字段（mapToDetailDto 的形参是 any）
+    const customerRefs = recipe as {
+      customerOwnerId?: string | null;
+      customerDogId?: string | null;
+    };
+
     const seriesRecipes = recipe.seriesId
       ? await this.prisma.recipe.findMany({
           where: { seriesId: recipe.seriesId },
@@ -1985,6 +2016,9 @@ export class RecipeService {
       description: recipe.description || undefined,
       sellingPoint: recipe.sellingPoint || undefined,
       designSource: recipe.designSource || undefined,
+      // W4-B：编辑页需要回填"客户 + 狗狗"
+      customerOwnerId: customerRefs.customerOwnerId || undefined,
+      customerDogId: customerRefs.customerDogId || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
       productionSteps: recipe.productionSteps || undefined,

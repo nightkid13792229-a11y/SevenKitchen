@@ -17,7 +17,7 @@
  *   3. 结果必须人工确认后才写入档案（不得直接落库，与决策 5/9 一致）
  */
 
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { callDeepSeekJson } from '../recipe-designer/deepseek-chat';
 
@@ -112,6 +112,34 @@ export interface HealthReportExtractionResult {
   confidence: HealthReportConfidence;
   /** 需要顾客/客服留意的地方（例如"未能确认是否食物过敏"） */
   warnings: string[];
+}
+
+/**
+ * 视觉识别（2026-10-01）。
+ *
+ * 背景：原来这条路是「腾讯云 OCR 认字 → 文本模型整理」，OCR 服务没开通就整条废掉
+ * （老板实测撞到 FailedOperation.UnOpenError）。DeepSeek 上线了多模态实验模型
+ * `deepseek-v4-flash-vision-exp`（图片按 token 计费、单张最多 384 token、与 Flash 同价），
+ * 于是改成**优先让模型直接看图**：少一个外部服务、少一处故障点，
+ * 手写病历与表格的识别通常也更稳。
+ *
+ * 开关与模型名都走环境变量（与 ENERGY_ALGORITHM / HEALTH_ANALYSIS 那套一致）：
+ *   · HEALTH_REPORT_VISION=off   → 回到原来的 OCR 路径
+ *   · HEALTH_REPORT_VISION_MODEL → 换模型时不用改代码
+ * 视觉失败时**自动回退** OCR 路径（并在日志里留痕），不让顾客卡住。
+ */
+export const DEFAULT_VISION_MODEL = 'deepseek-v4-flash-vision-exp';
+
+export function isHealthReportVisionEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return String(env.HEALTH_REPORT_VISION ?? '').trim().toLowerCase() !== 'off';
+}
+
+export function resolveHealthReportVisionModel(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return String(env.HEALTH_REPORT_VISION_MODEL ?? '').trim() || DEFAULT_VISION_MODEL;
 }
 
 const MAX_KEYWORDS = 30;
@@ -252,6 +280,25 @@ const TYPE_PROMPT_INTROS: Record<HealthDocumentType, string> = {
 };
 
 /**
+ * 「让模型直接看图」版的开场白（2026-10-01）。
+ *
+ * 为什么需要单独一份：原开场白写的是"把**识别文字**整理成…"（先 OCR 再整理），
+ * 而这条路是**把照片直接交给视觉模型**，得明确告诉它"自己看图、自己读字"。
+ * 铁律（COMMON_RULES）与四类字段结构（TYPE_PROMPT_BODIES）**原样复用** ——
+ * 两条路抽出来的字段名因此完全一致。
+ */
+const TYPE_PROMPT_IMAGE_INTROS: Record<HealthDocumentType, string> = {
+  VACCINE_BOOK:
+    '你是一名宠物助理。用户会给你一张「狗狗疫苗本 / 免疫记录」的照片，请自己看图读出内容，整理成接种记录。',
+  CHECKUP_REPORT:
+    '你是一名宠物助理。用户会给你一张「狗狗体检报告」的照片，请自己看图读出内容，整理成一条体检记录。',
+  MEDICAL_RECORD:
+    '你是一名宠物助理。用户会给你一张「狗狗病历 / 就诊记录」的照片，请自己看图读出内容，整理成一条就诊记录。',
+  ALLERGY_REPORT:
+    '你是一名宠物营养助理。用户会给你一张「狗狗过敏原检测报告」的照片，请自己看图读出内容，整理成结构化信息。',
+};
+
+/**
  * 自动判断（2026-10-01）：不预设类型，交给模型自己判断。
  *
  * 四套字段结构整段嵌进去（见 TYPE_PROMPT_BODIES），模型判断出类型后
@@ -291,13 +338,27 @@ function buildAutoSystemPrompt(): string {
   ].join('\n');
 }
 
-export function buildSystemPrompt(documentType: HealthDocumentTypeRequest): string {
+/**
+ * 拼系统提示词。
+ *
+ * @param source 'ocr'（默认）= 线上原行为：先 OCR 出文字，再让模型整理；
+ *               'image' = 视觉模型直接看图（2026-10-01 新增）。
+ *               两者只有开场白不同，铁律与字段结构共用同一份常量。
+ */
+export function buildSystemPrompt(
+  documentType: HealthDocumentTypeRequest,
+  source: 'ocr' | 'image' = 'ocr',
+): string {
   if (documentType === 'AUTO') {
     return buildAutoSystemPrompt();
   }
 
+  const intro = source === 'image'
+    ? TYPE_PROMPT_IMAGE_INTROS[documentType]
+    : TYPE_PROMPT_INTROS[documentType];
+
   return [
-    TYPE_PROMPT_INTROS[documentType],
+    intro,
     '',
     ...COMMON_RULES,
     '',
@@ -434,6 +495,8 @@ function normalizeWarnings(value: unknown): string[] {
 
 @Injectable()
 export class HealthReportExtractionService {
+  private readonly logger = new Logger(HealthReportExtractionService.name);
+
   constructor(
     @Inject(HEALTH_REPORT_OCR_PROVIDER)
     private readonly ocrProvider: HealthReportOcrProvider,
@@ -454,15 +517,6 @@ export class HealthReportExtractionService {
       throw new BadRequestException('请先上传报告图片');
     }
 
-    const ocrResult = await this.ocrProvider.recognizeImage({
-      imageUrl: input.imageUrl,
-      originalFilename: input.originalFilename,
-    });
-    const ocrText = normalizeKeyword(ocrResult.text);
-    if (!ocrText) {
-      throw new BadRequestException('未能识别到报告文字，请换一张更清晰的图片');
-    }
-
     const config =
       await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
         purpose: HEALTH_REPORT_EXTRACTION_PURPOSE,
@@ -470,19 +524,66 @@ export class HealthReportExtractionService {
         fallbackToDefault: true,
       });
 
-    const parsed = await callDeepSeekJson({
-      baseUrl: config.baseUrl,
-      model: config.model,
-      apiKey: config.apiKey,
-      requestTimeoutMs: config.requestTimeoutMs,
-      systemPrompt: buildSystemPrompt(requestedDocumentType),
-      userPayload: {
-        task: 'extract_dog_health_document',
-        documentType: requestedDocumentType,
-        ocrText,
-      },
-      temperature: 0,
-    });
+    /**
+     * ① 先试"视觉模型直接看图"（2026-10-01）。
+     *
+     * 图片地址是公开可读的（顾客报告存在自有 COS 域名下），所以直接把 URL 交给模型，
+     * 不用先下载再转 base64 —— 省一次流量、也少一个环节。
+     */
+    let parsed: Record<string, unknown> | null = null;
+    let ocrText = '';
+
+    if (isHealthReportVisionEnabled()) {
+      try {
+        parsed = await callDeepSeekJson({
+          baseUrl: config.baseUrl,
+          model: resolveHealthReportVisionModel(),
+          apiKey: config.apiKey,
+          requestTimeoutMs: config.requestTimeoutMs,
+          systemPrompt: buildSystemPrompt(requestedDocumentType, 'image'),
+          userContent: [
+            {
+              type: 'text',
+              text: '请阅读这张图片，并按系统提示的规则与 JSON 结构输出。',
+            },
+            { type: 'image_url', image_url: { url: input.imageUrl } },
+          ],
+          temperature: 0,
+        });
+      } catch (error) {
+        // 视觉这条路失败不影响顾客：回退到原来的 OCR 路径，并在日志里留痕
+        this.logger.warn(
+          `视觉识别失败，回退 OCR：${error instanceof Error ? error.message : String(error)}`,
+        );
+        parsed = null;
+      }
+    }
+
+    // ② 回退路径：OCR 认字 → 文本模型整理（与改造前完全一致）
+    if (!parsed) {
+      const ocrResult = await this.ocrProvider.recognizeImage({
+        imageUrl: input.imageUrl,
+        originalFilename: input.originalFilename,
+      });
+      ocrText = normalizeKeyword(ocrResult.text);
+      if (!ocrText) {
+        throw new BadRequestException('未能识别到报告文字，请换一张更清晰的图片');
+      }
+
+      parsed = await callDeepSeekJson({
+        baseUrl: config.baseUrl,
+        model: config.model,
+        apiKey: config.apiKey,
+        requestTimeoutMs: config.requestTimeoutMs,
+        systemPrompt: buildSystemPrompt(requestedDocumentType),
+        userPayload: {
+          task: 'extract_dog_health_document',
+          documentType: requestedDocumentType,
+          ocrText,
+        },
+        temperature: 0,
+      });
+    }
 
     const parsedRecord = parsed as Record<string, unknown>;
 

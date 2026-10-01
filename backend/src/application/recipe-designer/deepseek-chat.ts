@@ -9,7 +9,15 @@ export interface DeepSeekChatOptions {
   requestTimeoutMs: number;
   systemPrompt: string;
   /** 用户消息体（会被 JSON 序列化） */
-  userPayload: unknown;
+  userPayload?: unknown;
+  /**
+   * 多模态用户消息（2026-10-01）。
+   *
+   * 传了它就用它当 user 消息的 content（OpenAI 兼容的数组形式，
+   * 例如 [{ type:'text' }, { type:'image_url', image_url:{ url } }]），
+   * 用于"让视觉模型直接看图"；没传则照旧把 userPayload 序列化成文本。
+   */
+  userContent?: unknown[];
   temperature?: number;
   /** 输出 token 上限（推理模型可能把配额耗在推理上，默认给足） */
   maxTokens?: number;
@@ -59,7 +67,12 @@ async function callDeepSeekJsonOnce(
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: options.systemPrompt },
-            { role: 'user', content: JSON.stringify(options.userPayload) },
+            {
+              role: 'user',
+              content: options.userContent
+                ? options.userContent
+                : JSON.stringify(options.userPayload ?? {}),
+            },
           ],
           temperature: options.temperature ?? 0.3,
           max_tokens: options.maxTokens ?? 16384,

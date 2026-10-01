@@ -13,8 +13,10 @@ import {
   HealthReportExtractionService,
   HEALTH_REPORT_OCR_PROVIDER,
   buildSystemPrompt,
+  isHealthReportVisionEnabled,
   normalizeDocumentType,
   resolveAutoDocumentType,
+  resolveHealthReportVisionModel,
 } from 'src/application/health/health-report-extraction.service';
 import { AgentProviderConfigService } from 'src/application/nutrition-governance/agent-provider-config.service';
 
@@ -30,7 +32,14 @@ describe('HealthReportExtractionService', () => {
   let ocrProvider: { recognizeImage: jest.Mock };
   let agentConfig: { getEnabledDeepSeekRuntimeConfig: jest.Mock };
 
+  // 既有用例测的都是「OCR 认字 → 文本模型整理」这条路，
+  // 所以这里默认关掉视觉；视觉那条路单独一组用例打开它测。
+  const originalVision = process.env.HEALTH_REPORT_VISION;
+  const originalVisionModel = process.env.HEALTH_REPORT_VISION_MODEL;
+
   beforeEach(async () => {
+    process.env.HEALTH_REPORT_VISION = 'off';
+    delete process.env.HEALTH_REPORT_VISION_MODEL;
     ocrProvider = { recognizeImage: jest.fn() };
     agentConfig = {
       getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
@@ -57,6 +66,13 @@ describe('HealthReportExtractionService', () => {
     jest.restoreAllMocks();
   });
 
+  afterEach(() => {
+    if (originalVision === undefined) delete process.env.HEALTH_REPORT_VISION;
+    else process.env.HEALTH_REPORT_VISION = originalVision;
+    if (originalVisionModel === undefined) delete process.env.HEALTH_REPORT_VISION_MODEL;
+    else process.env.HEALTH_REPORT_VISION_MODEL = originalVisionModel;
+  });
+
   const setFetchResponse = (payload: Record<string, unknown>) => {
     global.fetch = jest
       .fn()
@@ -71,12 +87,15 @@ describe('HealthReportExtractionService', () => {
 
   it('OCR 读不出文字时抛错（前端据此降级为手工填写）', async () => {
     ocrProvider.recognizeImage.mockResolvedValue({ text: '   ' });
+    // 2026-10-01：现在会先取一次模型配置（视觉优先），所以不能再断言"配置没被读"；
+    // 真正要守的是**别白跑一次模型调用**。
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
 
     await expect(
       service.extractFromReport({ imageUrl: 'https://cdn/x.jpg' }),
     ).rejects.toThrow('未能识别到报告文字');
-    // 不该白跑一次 AI
-    expect(agentConfig.getEnabledDeepSeekRuntimeConfig).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('把 AI 提取的过敏原归一化：去空白、去重（忽略大小写）、限量', async () => {
@@ -433,5 +452,181 @@ describe('HealthReportExtractionService', () => {
       expect(result.documentType).toBe('ALLERGY_REPORT');
       expect(result.warnings.join('')).toContain('手工补充');
     });
+  });
+});
+
+/**
+ * 视觉模型直接看图（2026-10-01）。
+ *
+ * 背景：老板实测上传照片报「服务未开通」——腾讯云 OCR 没开通，整条路废掉。
+ * 改成优先让多模态模型直接看图（deepseek-v4-flash-vision-exp，与 Flash 同价、
+ * 单张图最多 384 token），OCR 退为兜底。这组用例锁住：
+ *   · 默认走视觉：模型收到的是「文本 + 图片」两段，**不再调用 OCR**；
+ *   · 视觉失败自动回退 OCR，顾客不会卡住；
+ *   · HEALTH_REPORT_VISION=off 时回到原路（既有用例即为此）；
+ *   · 看图版提示词明确让模型"自己看图"，且字段结构仍与文本版共用同一份常量。
+ */
+describe('HealthReportExtractionService · 视觉直读', () => {
+  let service: HealthReportExtractionService;
+  let ocrProvider: { recognizeImage: jest.Mock };
+  let agentConfig: { getEnabledDeepSeekRuntimeConfig: jest.Mock };
+
+  beforeEach(async () => {
+    delete process.env.HEALTH_REPORT_VISION;
+    delete process.env.HEALTH_REPORT_VISION_MODEL;
+    ocrProvider = { recognizeImage: jest.fn() };
+    agentConfig = {
+      getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-v4-pro',
+        reviewModel: 'deepseek-v4-pro',
+        apiKey: 'test-key',
+        maxConcurrency: 1,
+        requestTimeoutMs: 5000,
+        retryCount: 0,
+      }),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        HealthReportExtractionService,
+        { provide: HEALTH_REPORT_OCR_PROVIDER, useValue: ocrProvider },
+        { provide: AgentProviderConfigService, useValue: agentConfig },
+      ],
+    }).compile();
+    service = module.get(HealthReportExtractionService);
+    jest.restoreAllMocks();
+  });
+
+  const mockFetchOk = (payload: Record<string, unknown>) => {
+    const spy = jest.fn().mockResolvedValue(okJsonResponse(payload));
+    global.fetch = spy as unknown as typeof fetch;
+    return spy;
+  };
+
+  const requestBodyOf = (spy: jest.Mock) =>
+    JSON.parse(String(spy.mock.calls[0]?.[1]?.body || '{}'));
+
+  it('默认走视觉：模型收到文本 + 图片，且不调用 OCR', async () => {
+    const fetchSpy = mockFetchOk({
+      drafts: [{ checkupDate: '2026-08-30', findings: '血常规未见异常' }],
+      confidence: 'HIGH',
+      warnings: [],
+    });
+
+    const result = await service.extractFromReport({
+      imageUrl: 'https://img.example.com/a.jpg',
+      documentType: 'CHECKUP_REPORT',
+    });
+
+    expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
+    const body = requestBodyOf(fetchSpy);
+    expect(body.model).toBe('deepseek-v4-flash-vision-exp');
+    expect(body.messages[0].content).toContain('自己看图');
+    const userContent = body.messages[1].content;
+    expect(Array.isArray(userContent)).toBe(true);
+    expect(userContent[0].type).toBe('text');
+    expect(userContent[1]).toMatchObject({
+      type: 'image_url',
+      image_url: { url: 'https://img.example.com/a.jpg' },
+    });
+    expect(result.drafts[0].findings).toBe('血常规未见异常');
+  });
+
+  it('AUTO + 视觉：类型判断照旧由模型给出', async () => {
+    mockFetchOk({
+      documentType: 'MEDICAL_RECORD',
+      drafts: [{ diagnosis: '急性胃炎' }],
+      confidence: 'MEDIUM',
+      warnings: [],
+    });
+
+    const result = await service.extractFromReport({
+      imageUrl: 'https://img.example.com/b.jpg',
+      documentType: 'AUTO',
+    });
+
+    expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
+    expect(result.documentType).toBe('MEDICAL_RECORD');
+    expect(result.drafts[0].diagnosis).toBe('急性胃炎');
+  });
+
+  it('视觉失败自动回退 OCR，不让顾客卡住', async () => {
+    let call = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      call += 1;
+      if (call === 1) {
+        // 第一次（视觉）失败
+        return { ok: false, status: 500, json: async () => ({ error: 'vision down' }) };
+      }
+      return okJsonResponse({
+        drafts: [{ diagnosis: '急性胃炎' }],
+        confidence: 'HIGH',
+        warnings: [],
+      });
+    }) as unknown as typeof fetch;
+
+    ocrProvider.recognizeImage.mockResolvedValue({ text: '诊断：急性胃炎' });
+
+    const result = await service.extractFromReport({
+      imageUrl: 'https://img.example.com/c.jpg',
+      documentType: 'MEDICAL_RECORD',
+    });
+
+    expect(ocrProvider.recognizeImage).toHaveBeenCalled();
+    expect(result.drafts[0].diagnosis).toBe('急性胃炎');
+  });
+
+  it('HEALTH_REPORT_VISION=off 时回到 OCR 路径', async () => {
+    process.env.HEALTH_REPORT_VISION = 'off';
+    mockFetchOk({ drafts: [{ diagnosis: 'x' }], confidence: 'HIGH', warnings: [] });
+    ocrProvider.recognizeImage.mockResolvedValue({ text: '诊断：x' });
+
+    await service.extractFromReport({
+      imageUrl: 'https://img.example.com/d.jpg',
+      documentType: 'MEDICAL_RECORD',
+    });
+
+    expect(ocrProvider.recognizeImage).toHaveBeenCalled();
+    delete process.env.HEALTH_REPORT_VISION;
+  });
+
+  describe('开关与模型名', () => {
+    it('默认开启，只有显式 off 才关', () => {
+      expect(isHealthReportVisionEnabled({} as NodeJS.ProcessEnv)).toBe(true);
+      expect(
+        isHealthReportVisionEnabled({ HEALTH_REPORT_VISION: 'off' } as NodeJS.ProcessEnv),
+      ).toBe(false);
+      expect(
+        isHealthReportVisionEnabled({ HEALTH_REPORT_VISION: 'ON' } as NodeJS.ProcessEnv),
+      ).toBe(true);
+    });
+
+    it('模型名可用环境变量替换，缺省用已验证过的那个', () => {
+      expect(resolveHealthReportVisionModel({} as NodeJS.ProcessEnv)).toBe(
+        'deepseek-v4-flash-vision-exp',
+      );
+      expect(
+        resolveHealthReportVisionModel({
+          HEALTH_REPORT_VISION_MODEL: 'some-other-vl',
+        } as NodeJS.ProcessEnv),
+      ).toBe('some-other-vl');
+    });
+  });
+
+  it('看图版提示词让模型自己看图，字段结构与文本版一致', () => {
+    const imagePrompt = buildSystemPrompt('CHECKUP_REPORT', 'image');
+    const ocrPrompt = buildSystemPrompt('CHECKUP_REPORT', 'ocr');
+
+    expect(imagePrompt).toContain('自己看图');
+    // 铁律与字段结构两版共用，逐字一致
+    expect(imagePrompt).toContain('严格规则（任何情况都不得违反）');
+    expect(imagePrompt).toContain('findings');
+    expect(imagePrompt).toContain('checkupType');
+    expect(ocrPrompt).toContain('识别文字');
+    // 四类都有看图版开场白
+    for (const type of ['MEDICAL_RECORD', 'CHECKUP_REPORT', 'VACCINE_BOOK', 'ALLERGY_REPORT'] as const) {
+      expect(buildSystemPrompt(type, 'image')).toContain('自己看图');
+    }
   });
 });

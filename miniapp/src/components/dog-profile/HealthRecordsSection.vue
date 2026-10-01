@@ -38,7 +38,9 @@
       <text class="records-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
       </text>
-      <text class="records-section__empty-desc">先补充一条基础记录，之后可以继续添加。</text>
+      <text class="records-section__empty-desc">
+        {{ isVisitMode ? getHealthVisitEmptyDescription() : '先补充一条基础记录，之后可以继续添加。' }}
+      </text>
     </view>
 
     <view
@@ -64,9 +66,17 @@
           </view>
 
           <view class="record-card__summary">
-            <text class="record-card__summary-title">
-              {{ recordSummary(record, index).title }}
-            </text>
+            <view class="record-card__summary-heading">
+              <!-- 类型徽标：一个列表里混着就诊和体检，得让人一眼看出哪条是哪种 -->
+              <text
+                v-if="fieldConfigForRecord(record).kindSelect"
+                class="record-card__kind-badge"
+                :class="`record-card__kind-badge--${resolveHealthVisitKind(record)}`"
+              >{{ HEALTH_VISIT_KIND_LABELS[resolveHealthVisitKind(record)] }}</text>
+              <text class="record-card__summary-title">
+                {{ recordSummary(record, index).title }}
+              </text>
+            </view>
             <text
               v-if="recordSummary(record, index).detail"
               class="record-card__summary-detail"
@@ -114,18 +124,33 @@
       </view>
 
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
+        <!-- 类型（仅「病例」模式）：就诊 / 体检。换类型等于换一张表，
+             所以会清空重填，由 changeVisitKind 提示后再动。 -->
+        <view v-if="fieldConfigForRecord(record).kindSelect" class="field-group">
+          <text class="field-label">类型</text>
+          <view class="kind-switch">
+            <text
+              v-for="kind in HEALTH_VISIT_KINDS"
+              :key="`${recordKey(record, index)}-kind-${kind}`"
+              class="kind-switch__item"
+              :class="{ 'kind-switch__item--active': resolveHealthVisitKind(record) === kind }"
+              @tap="changeVisitKind(index, kind)"
+            >{{ HEALTH_VISIT_KIND_LABELS[kind] }}</text>
+          </view>
+        </view>
+
         <view class="field-group">
-          <text class="field-label">{{ fieldConfig.primary.label }}</text>
+          <text class="field-label">{{ fieldConfigForRecord(record).primary.label }}</text>
           <picker
-            v-if="fieldConfig.primary.options"
+            v-if="fieldConfigForRecord(record).primary.options"
             mode="selector"
-            :range="fieldOptionLabels(fieldConfig.primary.options)"
-            :value="fieldOptionIndex(record, fieldConfig.primary.options, fieldConfig.primary.key)"
+            :range="fieldOptionLabels(fieldConfigForRecord(record).primary.options)"
+            :value="fieldOptionIndex(record, fieldConfigForRecord(record).primary.options, fieldConfigForRecord(record).primary.key)"
             :disabled="hasSavingRecord"
-            @change="updateOptionField(index, fieldConfig.primary.key, fieldConfig.primary.options, $event.detail.value)"
+            @change="updateOptionField(index, fieldConfigForRecord(record).primary.key, fieldConfigForRecord(record).primary.options, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readOptionFieldLabel(record, fieldConfig.primary.options, fieldConfig.primary.key) || `请选择${fieldConfig.primary.label}` }}
+              {{ readOptionFieldLabel(record, fieldConfigForRecord(record).primary.options, fieldConfigForRecord(record).primary.key) || `请选择${fieldConfigForRecord(record).primary.label}` }}
             </view>
           </picker>
           <input
@@ -133,64 +158,141 @@
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfig.primary.label}`"
-            :value="readField(record, fieldConfig.primary.key)"
-            @input="updateTextField(index, fieldConfig.primary.key, $event.detail.value)"
+            :placeholder="`请输入${fieldConfigForRecord(record).primary.label}`"
+            :value="readField(record, fieldConfigForRecord(record).primary.key)"
+            @input="updateTextField(index, fieldConfigForRecord(record).primary.key, $event.detail.value)"
           />
         </view>
 
-        <view v-if="fieldConfig.date" class="field-group">
-          <text class="field-label">{{ fieldConfig.date.label }}</text>
+        <view v-if="fieldConfigForRecord(record).date" class="field-group">
+          <text class="field-label">{{ fieldConfigForRecord(record).date.label }}</text>
           <picker
             mode="date"
             :disabled="hasSavingRecord"
-            :value="readField(record, fieldConfig.date.key)"
-            @change="updateTextField(index, fieldConfig.date.key, $event.detail.value)"
+            :value="readField(record, fieldConfigForRecord(record).date.key)"
+            @change="updateTextField(index, fieldConfigForRecord(record).date.key, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readField(record, fieldConfig.date.key) || `请选择${fieldConfig.date.label}` }}
+              {{ readField(record, fieldConfigForRecord(record).date.key) || `请选择${fieldConfigForRecord(record).date.label}` }}
             </view>
           </picker>
         </view>
 
-        <view v-if="fieldConfig.secondary" class="field-group">
-          <text class="field-label">{{ fieldConfig.secondary.label }}</text>
+        <view v-if="fieldConfigForRecord(record).secondary" class="field-group">
+          <text class="field-label">{{ fieldConfigForRecord(record).secondary.label }}</text>
           <input
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfig.secondary.label}`"
-            :value="readField(record, fieldConfig.secondary.key)"
-            @input="updateTextField(index, fieldConfig.secondary.key, $event.detail.value)"
+            :placeholder="`请输入${fieldConfigForRecord(record).secondary.label}`"
+            :value="readField(record, fieldConfigForRecord(record).secondary.key)"
+            @input="updateTextField(index, fieldConfigForRecord(record).secondary.key, $event.detail.value)"
           />
         </view>
 
         <!-- 状态（目前只有病史用）：顾客自述来的记录默认「待确认」，
              由顾客在这里改成实际情况；系统不替兽医判断是不是慢性病 -->
-        <view v-if="fieldConfig.status" class="field-group">
-          <text class="field-label">{{ fieldConfig.status.label }}</text>
+        <view v-if="fieldConfigForRecord(record).status" class="field-group">
+          <text class="field-label">{{ fieldConfigForRecord(record).status.label }}</text>
           <picker
             mode="selector"
-            :range="fieldOptionLabels(fieldConfig.status.options)"
-            :value="fieldOptionIndex(record, fieldConfig.status.options, fieldConfig.status.key)"
+            :range="fieldOptionLabels(fieldConfigForRecord(record).status.options)"
+            :value="fieldOptionIndex(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key)"
             :disabled="hasSavingRecord"
-            @change="updateOptionField(index, fieldConfig.status.key, fieldConfig.status.options, $event.detail.value)"
+            @change="updateOptionField(index, fieldConfigForRecord(record).status.key, fieldConfigForRecord(record).status.options, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readOptionFieldLabel(record, fieldConfig.status.options, fieldConfig.status.key) || `请选择${fieldConfig.status.label}` }}
+              {{ readOptionFieldLabel(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key) || `请选择${fieldConfigForRecord(record).status.label}` }}
             </view>
           </picker>
         </view>
 
-        <view class="field-group">
-          <text class="field-label">{{ fieldConfig.notes.label }}</text>
+        <!-- 兽医（两张表都有这个字段，合并后才有入口） -->
+        <view v-if="fieldConfigForRecord(record).veterinarian" class="field-group">
+          <text class="field-label">{{ fieldConfigForRecord(record).veterinarian.label }}</text>
+          <input
+            class="field-input"
+            type="text"
+            :disabled="hasSavingRecord"
+            :placeholder="`请输入${fieldConfigForRecord(record).veterinarian.label}`"
+            :value="readField(record, fieldConfigForRecord(record).veterinarian.key)"
+            @input="updateTextField(index, fieldConfigForRecord(record).veterinarian.key, $event.detail.value)"
+          />
+        </view>
+
+        <!-- 备注：体检表没有 notes 字段，所以体检记录这一栏是空的、不显示 -->
+        <view v-if="fieldConfigForRecord(record).notes" class="field-group">
+          <text class="field-label">{{ fieldConfigForRecord(record).notes.label }}</text>
           <textarea
             class="field-textarea"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfig.notes.label}`"
-            :value="readField(record, fieldConfig.notes.key)"
-            @input="updateTextField(index, fieldConfig.notes.key, $event.detail.value)"
+            :placeholder="`请输入${fieldConfigForRecord(record).notes.label}`"
+            :value="readField(record, fieldConfigForRecord(record).notes.key)"
+            @input="updateTextField(index, fieldConfigForRecord(record).notes.key, $event.detail.value)"
           />
+        </view>
+
+        <!-- 更多：症状描述、体检类型、用药、复查日期。默认收起，
+             不挡着"只填一个诊断结果"的家长。 -->
+        <view v-if="hasExtraFields(record)" class="field-group">
+          <text class="more-toggle" @tap="toggleMore(index)">
+            {{ isMoreExpanded(record, index) ? '收起更多 ▲' : '更多（症状、用药、体检类型…）▼' }}
+          </text>
+
+          <view v-if="isMoreExpanded(record, index)" class="more-fields">
+            <view v-if="fieldConfigForRecord(record).extras?.complaint" class="field-group">
+              <text class="field-label">{{ fieldConfigForRecord(record).extras!.complaint!.label }}</text>
+              <input
+                class="field-input"
+                type="text"
+                :disabled="hasSavingRecord"
+                :placeholder="`请输入${fieldConfigForRecord(record).extras!.complaint!.label}`"
+                :value="readField(record, fieldConfigForRecord(record).extras!.complaint!.key)"
+                @input="updateTextField(index, fieldConfigForRecord(record).extras!.complaint!.key, $event.detail.value)"
+              />
+            </view>
+
+            <view v-if="fieldConfigForRecord(record).extras?.checkupType" class="field-group">
+              <text class="field-label">{{ fieldConfigForRecord(record).extras!.checkupType!.label }}</text>
+              <picker
+                mode="selector"
+                :range="fieldOptionLabels(fieldConfigForRecord(record).extras!.checkupType!.options)"
+                :value="fieldOptionIndex(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key)"
+                :disabled="hasSavingRecord"
+                @change="updateOptionField(index, fieldConfigForRecord(record).extras!.checkupType!.key, fieldConfigForRecord(record).extras!.checkupType!.options, $event.detail.value)"
+              >
+                <view class="field-picker">
+                  {{ readOptionFieldLabel(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key) || `请选择${fieldConfigForRecord(record).extras!.checkupType!.label}` }}
+                </view>
+              </picker>
+            </view>
+
+            <view v-if="fieldConfigForRecord(record).extras?.medications" class="field-group">
+              <text class="field-label">{{ fieldConfigForRecord(record).extras!.medications!.label }}</text>
+              <input
+                class="field-input"
+                type="text"
+                :disabled="hasSavingRecord"
+                placeholder="多个用顿号隔开，例如：速诺、胃复安"
+                :value="readField(record, fieldConfigForRecord(record).extras!.medications!.key)"
+                @input="updateTextField(index, fieldConfigForRecord(record).extras!.medications!.key, $event.detail.value)"
+              />
+            </view>
+
+            <view v-if="fieldConfigForRecord(record).extras?.followUpDate" class="field-group">
+              <text class="field-label">{{ fieldConfigForRecord(record).extras!.followUpDate!.label }}</text>
+              <picker
+                mode="date"
+                :disabled="hasSavingRecord"
+                :value="readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key)"
+                @change="updateTextField(index, fieldConfigForRecord(record).extras!.followUpDate!.key, $event.detail.value)"
+              >
+                <view class="field-picker">
+                  {{ readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key) || '需要复查时才填' }}
+                </view>
+              </picker>
+            </view>
+          </view>
         </view>
 
         <view class="field-group">
@@ -276,17 +378,27 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
   HEALTH_RECORD_TYPES,
+  HEALTH_VISIT_KIND_LABELS,
+  HEALTH_VISIT_KINDS,
   type HealthCheckupTypeOption,
   type HealthRecordType,
+  type HealthVisitKind,
   buildHealthAttachmentDisplayMeta,
   buildHealthAttachmentFieldHint,
   buildHealthRecordFocusIdentity,
   buildHealthRecordSummary,
+  buildHealthVisitPayload,
+  buildHealthVisitSummary,
   createHealthRecordDraft,
+  createHealthVisitDraft,
   doHealthRecordsMatchPersistedPayload,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   formatHealthCheckupTypeLabel,
+  getHealthVisitEmptyDescription,
+  getHealthVisitFieldConfig,
+  getHealthVisitSectionMeta,
+  getHealthVisitValidationError,
   getHealthCheckupTypeOptions,
   getMedicalStatusOptions,
   getHealthRecordTypeMeta,
@@ -297,6 +409,7 @@ import {
   resolveHealthAttachmentSelectionError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  resolveHealthVisitKind,
 } from '../../utils/health-records'
 
 type FieldConfig = {
@@ -311,7 +424,25 @@ type FieldConfig = {
    * 系统不替兽医断言是不是慢性病（老板拍板的决策 5）。
    */
   status?: { key: string, label: string, options: HealthCheckupTypeOption[] } | null
-  notes: { key: string, label: string }
+  /** 备注：体检表没有 notes 字段，所以「病例」模式下体检记录这里是 null */
+  notes: { key: string, label: string } | null
+  /** 接诊兽医（2026-10-01 加入，两张表都有这个字段） */
+  veterinarian?: { key: string, label: string } | null
+  /**
+   * 「病例」模式下才为真：一张表单同时服务就诊与体检，
+   * 顶部多一个「类型」选择，并按类型决定下面显示哪些字段。
+   */
+  kindSelect?: boolean
+  /**
+   * 收进「更多」的次要字段（2026-10-01）。
+   * 老板要求"病史只保留一个诊断结果"，其余一律折叠，不挡着保存。
+   */
+  extras?: {
+    complaint?: { key: string, label: string }
+    checkupType?: { key: string, label: string, options: HealthCheckupTypeOption[] }
+    medications?: { key: string, label: string }
+    followUpDate?: { key: string, label: string }
+  }
 }
 
 const props = withDefaults(defineProps<{
@@ -361,12 +492,28 @@ const recentSavingRecordKey = ref('')
 const attachmentHintText = buildHealthAttachmentFieldHint()
 
 const currentType = computed<HealthRecordType>(() => props.activeType || props.recordType || 'medical')
-const activeTypeMeta = computed(() => getHealthRecordTypeMeta(currentType.value))
+
+/**
+ * 「病例」模式（2026-10-01）：
+ * 一个列表里同时装「就诊」和「体检」两类记录。
+ *
+ * ★ 合并只在界面层：每条记录身上带一个 __visitKind 标记它属于哪张表，
+ *   保存/删除时按这个标记分别调原来的两个接口，数据库两张表原样不动。
+ */
+const isVisitMode = computed(() => (props.activeType as string) === 'visit')
+
+/** 某条记录真正对应哪张表：合并模式下逐条判断，其余模式就是当前类型 */
+function recordKindOf(record: Record<string, any>): HealthRecordType {
+  return isVisitMode.value ? resolveHealthVisitKind(record) : currentType.value
+}
+
+const activeTypeMeta = computed(() => (
+  isVisitMode.value ? getHealthVisitSectionMeta() : getHealthRecordTypeMeta(currentType.value)
+))
 const sourceRecords = computed(() => (
   props.records.length > 0 || !props.modelValue.length ? props.records : props.modelValue
 ))
 const savedRecordCount = computed(() => sourceRecords.value.length)
-const fieldConfig = computed<FieldConfig>(() => getFieldConfig(currentType.value))
 const hasDirtyRecords = computed(() =>
   draftRecords.value.some((record, index) => isRecordDirty(record, index)),
 )
@@ -447,6 +594,47 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
     status: null,
     notes: { key: 'notes', label: '过敏反应/说明' },
   }
+}
+
+/**
+ * 「病例」模式下的表单配置：一条记录一张表单，按它的类型决定字段。
+ *
+ * 对照表（2026-10-01 与老板确认）：
+ *   日期        → 就诊日期 / 体检日期
+ *   诊断结果    → 诊断结果（就诊）/ 检查结论（体检）★ 唯一必填的内容字段
+ *   处理或建议  → 处理方式（就诊）/ 医生建议（体检）
+ *   兽医        → 两张表都有
+ *   备注        → 只有就诊有地方存（体检表没有 notes 字段）
+ *   更多        → 症状描述、体检类型、用药、复查日期
+ */
+function getVisitFieldConfig(record: Record<string, any>): FieldConfig {
+  const kind = resolveHealthVisitKind(record)
+  const visit = getHealthVisitFieldConfig(kind)
+
+  return {
+    primary: { key: visit.primaryKey, label: visit.primaryLabel },
+    date: { key: visit.dateKey, label: visit.dateLabel },
+    secondary: { key: visit.adviceKey, label: visit.adviceLabel },
+    status: visit.showsStatus
+      ? { key: 'status', label: '状态', options: getMedicalStatusOptions() }
+      : null,
+    notes: visit.notesKey ? { key: visit.notesKey, label: visit.notesLabel } : null,
+    veterinarian: { key: 'veterinarian', label: '兽医' },
+    kindSelect: true,
+    extras: {
+      complaint: visit.showsComplaint ? { key: 'chiefComplaint', label: '症状或疾病' } : undefined,
+      checkupType: visit.showsCheckupType
+        ? { key: 'checkupType', label: '体检类型', options: getHealthCheckupTypeOptions() }
+        : undefined,
+      medications: visit.showsMedications ? { key: 'medications', label: '用药' } : undefined,
+      followUpDate: visit.showsFollowUpDate ? { key: 'followUpDate', label: '复查日期' } : undefined,
+    },
+  }
+}
+
+/** 模板里逐条取配置：合并模式按记录类型，其余模式按当前板块 */
+function fieldConfigForRecord(record: Record<string, any>): FieldConfig {
+  return isVisitMode.value ? getVisitFieldConfig(record) : getFieldConfig(currentType.value)
 }
 
 function cloneRecord<T>(value: T): T {
@@ -807,9 +995,82 @@ function addRecord() {
     return
   }
 
-  const nextRecord = createHealthRecordDraft(currentType.value)
+  // 「病例」模式下新增的记录默认是「就诊」——带狗看病是最常见的场景，
+  // 想记体检的人再在表单顶部把类型切过去。
+  const nextRecord = isVisitMode.value
+    ? createHealthVisitDraft('medical')
+    : createHealthRecordDraft(currentType.value)
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null
+}
+
+/**
+ * 「更多」的展开状态（2026-10-01）。
+ *
+ * 老板要求"病史只保留一个诊断结果"，所以症状描述、用药、复查日期这些
+ * 次要字段一律折叠起来，默认不占位置、也不拦着保存。
+ */
+const moreExpandedKeys = ref<Record<string, boolean>>({})
+
+function isMoreExpanded(record: Record<string, any>, index: number) {
+  return Boolean(moreExpandedKeys.value[recordKey(record, index)])
+}
+
+function toggleMore(index: number) {
+  const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
+  const key = recordKey(record, index)
+  moreExpandedKeys.value[key] = !moreExpandedKeys.value[key]
+}
+
+/** 还要不要显示「更多」这一栏：有次要字段才有必要 */
+function hasExtraFields(record: Record<string, any>) {
+  const extras = fieldConfigForRecord(record).extras
+  return Boolean(extras && (extras.complaint || extras.checkupType || extras.medications || extras.followUpDate))
+}
+
+/**
+ * 切换这条记录的类型（就诊 ↔ 体检）。
+ *
+ * 换了类型等于换了一张表，字段对不上：这里**开一条新草稿**，
+ * 而不是把旧字段硬搬过去 —— 免得"体检结论"被当成"诊断结果"存进病史表。
+ * 未保存的修改会提示一次。
+ */
+function changeVisitKind(index: number, kind: HealthVisitKind) {
+  const record = draftRecords.value[index]
+  if (!record || resolveHealthVisitKind(record) === kind) {
+    return
+  }
+
+  const apply = () => {
+    const next = createHealthVisitDraft(kind)
+    if (isSavedRecord(record, index)) {
+      // 已存的记录不能改类型（那是另一张表里的一行），只能新建
+      draftRecords.value.splice(index, 1, next)
+    } else {
+      draftRecords.value.splice(index, 1, next)
+    }
+    moreExpandedKeys.value = {}
+    expandedRecordKey.value = next.__localId || null
+  }
+
+  if (isSavedRecord(record, index) || isRecordDirty(record, index)) {
+    uni.showModal({
+      title: `改成${HEALTH_VISIT_KIND_LABELS[kind]}`,
+      content: '类型不同，已填的内容会清空，需要重新填。确认继续吗？',
+      success: (res) => {
+        if (res.confirm) {
+          apply()
+        }
+      },
+    })
+    return
+  }
+
+  apply()
 }
 
 function isRecordExpanded(record: Record<string, any>, index: number) {
@@ -827,7 +1088,9 @@ function toggleRecordExpanded(index: number) {
 }
 
 function recordSummary(record: Record<string, any>, index: number) {
-  const summary = buildHealthRecordSummary(currentType.value, record)
+  const summary = isVisitMode.value
+    ? buildHealthVisitSummary(resolveHealthVisitKind(record), record)
+    : buildHealthRecordSummary(currentType.value, record)
   if (!isSavedRecord(record, index) && summary.title.startsWith('未填写')) {
     return {
       title: '新记录',
@@ -889,7 +1152,7 @@ function recordMatchesSavingKey(record: Record<string, any>, index: number, savi
   return [
     recordKey(record, index),
     record.id,
-    buildHealthRecordFocusIdentity(currentType.value, record),
+    buildHealthRecordFocusIdentity(recordKindOf(record), record),
   ].some((value) => value === savingKey)
 }
 
@@ -939,14 +1202,17 @@ function saveRecord(index: number) {
     return
   }
 
-  const validationError = getHealthRecordValidationError(currentType.value, record)
+  const type = recordKindOf(record)
+  const validationError = isVisitMode.value
+    ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
+    : getHealthRecordValidationError(currentType.value, record)
   if (validationError) {
     uni.showToast({ title: validationError, icon: 'none' })
     return
   }
 
   const key = recordKey(record, index)
-  emit('save-record', { type: currentType.value, record: stripLocalFields(record), recordKey: key })
+  emit('save-record', { type, record: stripLocalFields(record), recordKey: key })
 }
 
 function cancelRecord(index: number) {
@@ -1017,7 +1283,7 @@ async function removeRecord(index: number) {
     return
   }
 
-  emit('delete-record', { type: currentType.value, record: stripLocalFields(record) })
+  emit('delete-record', { type: recordKindOf(record), record: stripLocalFields(record) })
 }
 
 function isUploading(record: Record<string, any>, index: number) {
@@ -1237,6 +1503,69 @@ function removeAttachment(index: number, attachmentIndex: number) {
 </script>
 
 <style scoped>
+/* ===== 「病例」合并模式（2026-10-01）===== */
+
+/* 类型切换：就诊 / 体检，两个等宽按钮 */
+.kind-switch {
+  display: flex;
+  gap: 16rpx;
+}
+
+.kind-switch__item {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 28rpx;
+  color: #4a5a4a;
+  background: #f2f5ec;
+  border: 2rpx solid transparent;
+  border-radius: 12rpx;
+}
+
+.kind-switch__item--active {
+  color: var(--health-accent, #1e3a2f);
+  background: var(--health-accent-soft, #eef2e4);
+  border-color: var(--health-accent, #1e3a2f);
+  font-weight: 600;
+}
+
+/* 「更多」折叠开关 */
+.more-toggle {
+  font-size: 26rpx;
+  color: var(--health-accent, #1e3a2f);
+  padding: 8rpx 0;
+}
+
+.more-fields {
+  margin-top: 16rpx;
+  padding-left: 16rpx;
+  border-left: 4rpx solid var(--health-accent-soft, #eef2e4);
+}
+
+/* 列表行的类型徽标 */
+.record-card__summary-heading {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.record-card__kind-badge {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  line-height: 1;
+  padding: 8rpx 12rpx;
+  border-radius: 8rpx;
+  color: #fff;
+}
+
+.record-card__kind-badge--medical {
+  background: var(--health-accent, #1e3a2f);
+}
+
+.record-card__kind-badge--checkup {
+  background: #4a7c59;
+}
+
 .records-section {
   padding: 28rpx;
   border-radius: 32rpx;

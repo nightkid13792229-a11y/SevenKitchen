@@ -998,3 +998,330 @@ export function buildHealthRecordSummary(
     detail: joinDetailParts([detail]),
   }
 }
+
+/* ==========================================================================
+ * 「病例」板块：病史 + 体检合并（2026-10-01，老板第 1 条要求）
+ *
+ * 背景：病史和体检在顾客眼里就是一件事——"带狗去看了一次医生"。
+ * 分成两个板块，家长要先想"这算病史还是体检"才能动手记，是负担。
+ *
+ * ★ 合并只发生在界面层：
+ *   · 数据库的 medical_record / checkup_record 两张表原样保留；
+ *   · 保存时按记录的「类型」分别调原来的两个接口；
+ *   · 顾客已经存进去的记录一条都不动、不迁移，将来要拆回来随时可以。
+ * ========================================================================== */
+
+/** 合并板块里一条记录的真实归属：它到底存在哪张表里 */
+export type HealthVisitKind = 'medical' | 'checkup'
+
+/** 健康管理页的五个板块 */
+export type HealthSectionKey = 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+
+export const HEALTH_VISIT_KINDS: HealthVisitKind[] = ['medical', 'checkup']
+
+/** 给顾客看的类型叫法（不叫"病史/体检"，而是他填的时候选的那两个词） */
+export const HEALTH_VISIT_KIND_LABELS: Record<HealthVisitKind, string> = {
+  medical: '就诊',
+  checkup: '体检',
+}
+
+/** 合并列表里挂在每条记录上的归属标记（只在内存里用，不落库） */
+export const HEALTH_VISIT_KIND_FIELD = '__visitKind'
+
+/** 体检类型缺省值：收进「更多」也不会卡住保存 */
+export const HEALTH_VISIT_DEFAULT_CHECKUP_TYPE = 'ROUTINE'
+
+export interface HealthVisitFieldConfig {
+  kind: HealthVisitKind
+  kindLabel: string
+  dateKey: string
+  dateLabel: string
+  /** 就诊=诊断结果；体检=检查结论（体检没有"诊断"，措辞上不能让家长误会） */
+  primaryKey: string
+  primaryLabel: string
+  adviceKey: string
+  adviceLabel: string
+  /** 备注只有就诊有地方存——体检表里没有 notes 字段 */
+  notesKey: string | null
+  notesLabel: string
+  showsComplaint: boolean
+  showsCheckupType: boolean
+  showsMedications: boolean
+  showsStatus: boolean
+  showsFollowUpDate: boolean
+}
+
+const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig> = {
+  medical: {
+    kind: 'medical',
+    kindLabel: HEALTH_VISIT_KIND_LABELS.medical,
+    dateKey: 'visitDate',
+    dateLabel: '就诊日期',
+    primaryKey: 'diagnosis',
+    primaryLabel: '诊断结果',
+    adviceKey: 'treatment',
+    adviceLabel: '处理或建议',
+    notesKey: 'notes',
+    notesLabel: '备注',
+    showsComplaint: true,
+    showsCheckupType: false,
+    showsMedications: true,
+    showsStatus: true,
+    showsFollowUpDate: true,
+  },
+  checkup: {
+    kind: 'checkup',
+    kindLabel: HEALTH_VISIT_KIND_LABELS.checkup,
+    dateKey: 'checkupDate',
+    dateLabel: '体检日期',
+    primaryKey: 'findings',
+    primaryLabel: '检查结论',
+    adviceKey: 'recommendations',
+    adviceLabel: '处理或建议',
+    notesKey: null,
+    notesLabel: '备注',
+    showsComplaint: false,
+    showsCheckupType: true,
+    showsMedications: false,
+    showsStatus: false,
+    showsFollowUpDate: false,
+  },
+}
+
+export function getHealthVisitFieldConfig(kind: HealthVisitKind): HealthVisitFieldConfig {
+  return HEALTH_VISIT_FIELD_CONFIG[kind === 'checkup' ? 'checkup' : 'medical']
+}
+
+/** 从合并列表里的记录反查它属于哪张表 */
+export function resolveHealthVisitKind(record: Record<string, any> | null | undefined): HealthVisitKind {
+  return record?.[HEALTH_VISIT_KIND_FIELD] === 'checkup' ? 'checkup' : 'medical'
+}
+
+export function createHealthVisitDraft(kind: HealthVisitKind): HealthRecordShape {
+  const base: HealthRecordShape = {
+    __localId: `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    [HEALTH_VISIT_KIND_FIELD]: kind,
+    attachments: [],
+  }
+
+  if (kind === 'checkup') {
+    return {
+      ...base,
+      checkupType: HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+      checkupDate: '',
+      findings: '',
+      recommendations: '',
+      veterinarian: '',
+    }
+  }
+
+  return {
+    ...base,
+    visitDate: '',
+    diagnosis: '',
+    treatment: '',
+    veterinarian: '',
+    chiefComplaint: '',
+    medications: '',
+    status: 'PENDING_CONFIRMATION',
+    followUpDate: '',
+    notes: '',
+  }
+}
+
+/** 接口返回的记录 → 合并列表里的一条（补上归属标记，字段名与接口保持一致） */
+export function normalizeHealthVisitRecord(
+  kind: HealthVisitKind,
+  record: Record<string, any> | null | undefined,
+): HealthRecordShape {
+  const source = record && typeof record === 'object' && !Array.isArray(record) && record.record
+    ? record.record
+    : (record || {})
+
+  const base: HealthRecordShape = {
+    ...source,
+    [HEALTH_VISIT_KIND_FIELD]: kind,
+    attachments: normalizeAttachments(source.attachments),
+    veterinarian: source.veterinarian ?? '',
+  }
+
+  if (kind === 'checkup') {
+    return {
+      ...base,
+      checkupType: resolveHealthCheckupTypeValue(source.checkupType) || HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+      checkupDate: source.checkupDate ?? '',
+      findings: source.findings ?? '',
+      recommendations: source.recommendations ?? '',
+    }
+  }
+
+  return {
+    ...base,
+    visitDate: source.visitDate ?? '',
+    diagnosis: source.diagnosis ?? '',
+    treatment: source.treatment ?? '',
+    chiefComplaint: source.chiefComplaint ?? '',
+    // 用药在接口里是数组，表单里按顿号串成一行更好填
+    medications: Array.isArray(source.medications) ? source.medications.join('、') : (source.medications ?? ''),
+    status: source.status || 'PENDING_CONFIRMATION',
+    followUpDate: source.followUpDate ?? '',
+    notes: source.notes ?? '',
+  }
+}
+
+/** 合并列表里这条记录的日期（用于排序与摘要） */
+export function resolveHealthVisitDate(record: Record<string, any> | null | undefined): string {
+  const kind = resolveHealthVisitKind(record)
+  const config = getHealthVisitFieldConfig(kind)
+  return String(record?.[config.dateKey] || '').trim()
+}
+
+/**
+ * 病史 + 体检 → 一条按日期从新到旧的列表。
+ *
+ * 排序规则：日期倒序；同一天**就诊排在体检前面**（先看病、后体检更符合直觉）；
+ * 没填日期的草稿一律排到最前面，免得新建的记录跑到列表底部找不着。
+ */
+export function mergeHealthVisitRecords(
+  medicalRecords: Record<string, any>[] | null | undefined,
+  checkupRecords: Record<string, any>[] | null | undefined,
+): HealthRecordShape[] {
+  const medical = (medicalRecords || []).map((record) => normalizeHealthVisitRecord('medical', record))
+  const checkup = (checkupRecords || []).map((record) => normalizeHealthVisitRecord('checkup', record))
+
+  return [...medical, ...checkup].sort((a, b) => {
+    const dateA = resolveHealthVisitDate(a)
+    const dateB = resolveHealthVisitDate(b)
+
+    if (!dateA && !dateB) return 0
+    if (!dateA) return -1
+    if (!dateB) return 1
+    if (dateA !== dateB) return dateA < dateB ? 1 : -1
+
+    // 同一天：就诊在前
+    const kindA = resolveHealthVisitKind(a) === 'medical' ? 0 : 1
+    const kindB = resolveHealthVisitKind(b) === 'medical' ? 0 : 1
+    return kindA - kindB
+  })
+}
+
+/**
+ * 校验：**只有「诊断结果 / 检查结论」是必填的内容字段**。
+ *
+ * 老板第 3 条明确"病史可以只保留一个诊断结果"——症状描述、用药、状态
+ * 这些一律不拦着保存，家长想记多少记多少。
+ */
+export function getHealthVisitValidationError(
+  kind: HealthVisitKind,
+  record: Record<string, any>,
+): string | null {
+  const config = getHealthVisitFieldConfig(kind)
+
+  if (!normalizeOptionalText(record?.[config.dateKey])) {
+    return `请选择${config.dateLabel}`
+  }
+
+  if (!normalizeOptionalText(record?.[config.primaryKey])) {
+    return `请填写${config.primaryLabel}`
+  }
+
+  return null
+}
+
+/** 表单草稿 → 接口载荷（按类型分别对回两张表的字段） */
+export function buildHealthVisitPayload(
+  kind: HealthVisitKind,
+  record: Record<string, any>,
+): Record<string, unknown> {
+  const config = getHealthVisitFieldConfig(kind)
+  const notes = config.notesKey ? normalizeOptionalText(record?.[config.notesKey]) : null
+
+  if (kind === 'checkup') {
+    return {
+      checkupType: resolveHealthCheckupTypeValue(record?.checkupType) || HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+      checkupDate: normalizeOptionalText(record?.checkupDate) || '',
+      findings: normalizeOptionalText(record?.findings),
+      recommendations: normalizeOptionalText(record?.recommendations),
+      veterinarian: normalizeOptionalText(record?.veterinarian),
+      attachments: normalizeAttachments(record?.attachments),
+    }
+  }
+
+  const status = String(record?.status || '').trim()
+
+  return {
+    visitDate: normalizeOptionalText(record?.visitDate) || '',
+    // chiefComplaint 在后端是必填字符串（@IsString），这里给空串而不是 null：
+    // 家长可能只填了诊断结果，后端本来就允许这一栏是空串。
+    chiefComplaint: normalizeOptionalText(record?.chiefComplaint) || '',
+    diagnosis: normalizeOptionalText(record?.diagnosis) || '',
+    treatment: normalizeOptionalText(record?.treatment),
+    medications: normalizeMedicationList(record?.medications),
+    // 缺省是"待确认"，不是后端的默认值"治疗中"
+    status: getMedicalStatusOptions().some((option) => option.value === status)
+      ? status
+      : 'PENDING_CONFIRMATION',
+    followUpDate: normalizeOptionalText(record?.followUpDate),
+    veterinarian: normalizeOptionalText(record?.veterinarian),
+    notes,
+    attachments: normalizeAttachments(record?.attachments),
+  }
+}
+
+/** 用药：表单里按顿号/逗号/换行填，存库时拆成数组 */
+export function normalizeMedicationList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  const text = typeof value === 'string' ? value : ''
+  return text
+    .split(/[、,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+/** 列表行的标题与摘要 */
+export function buildHealthVisitSummary(
+  kind: HealthVisitKind,
+  record: Record<string, any>,
+): HealthRecordSummary {
+  const config = getHealthVisitFieldConfig(kind)
+  const attachmentCount = normalizeAttachments(record?.attachments).length
+
+  const title = String(record?.[config.primaryKey] || '').trim()
+    || `未填写${config.primaryLabel}`
+
+  const parts = [
+    resolveHealthVisitDate(record),
+    kind === 'checkup'
+      ? formatHealthCheckupTypeLabel(record?.checkupType)
+      : formatMedicalStatusLabel(record?.status),
+    String(record?.[config.adviceKey] || '').trim(),
+    attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
+  ].filter(Boolean)
+
+  return { title, detail: parts.join(' · ') }
+}
+
+/**
+ * 「病例」板块的元信息（标题/按钮/空态文案）。
+ *
+ * 形状与 HealthRecordTypeMeta 保持一致，这样组件里 activeTypeMeta.xxx
+ * 那套写法不用改。空态文案按老板的口径写得具体一点——
+ * "还没有记录"太干，家长不知道该记什么。
+ */
+export function getHealthVisitSectionMeta(): HealthRecordTypeMeta {
+  return {
+    type: 'medical',
+    label: '病例',
+    addLabel: '新增记录',
+    emptyTitle: '还没有病例记录',
+    accentClass: 'health-records--visit',
+  }
+}
+
+/** 空态下面那句引导（六个板块统一都要有一句） */
+export function getHealthVisitEmptyDescription(): string {
+  return '带狗看过病、做过检查，记一条，下次就诊和体检都用得上。'
+}

@@ -37,9 +37,9 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain(':disabled="loading || hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"')
     expect(source).toContain(':disabled="hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"')
     expect(source).toContain('type="text"\n            :disabled="hasSavingRecord"')
-    expect(source).toContain('fieldConfig.primary.options')
-    expect(source).toContain('fieldOptionLabels(fieldConfig.primary.options)')
-    expect(source).toContain('updateOptionField(index, fieldConfig.primary.key, fieldConfig.primary.options, $event.detail.value)')
+    expect(source).toContain('fieldConfigForRecord(record).primary.options')
+    expect(source).toContain('fieldOptionLabels(fieldConfigForRecord(record).primary.options)')
+    expect(source).toContain('updateOptionField(index, fieldConfigForRecord(record).primary.key, fieldConfigForRecord(record).primary.options, $event.detail.value)')
     expect(source).toContain('mode="date"\n            :disabled="hasSavingRecord"')
     expect(source).toContain('class="field-textarea"\n            :disabled="hasSavingRecord"')
     expect(source).toContain('hasUploadingRecords.value ||\n    isUploading(record, index)')
@@ -93,8 +93,37 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain(':disabled="hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"')
   })
 
-  it('renders uploaded attachments as obvious previewable rows', () => {
+  it('「病例」合并模式：一个列表装就诊与体检两类记录', () => {
     const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    // 合并只在界面层：逐条判断记录属于哪张表
+    expect(source).toContain("const isVisitMode = computed(() => (props.activeType as string) === 'visit')")
+    expect(source).toContain('function recordKindOf(record: Record<string, any>): HealthRecordType')
+    expect(source).toContain('resolveHealthVisitKind(record)')
+    expect(source).toContain('getHealthVisitSectionMeta()')
+
+    // 表单按记录类型取配置，而不是按当前板块
+    expect(source).toContain('function fieldConfigForRecord(record: Record<string, any>): FieldConfig')
+
+    // 新增记录默认「就诊」，想记体检的人在表单里切
+    expect(source).toContain("createHealthVisitDraft('medical')")
+
+    // 保存与删除按记录自己的类型走
+    expect(source).toContain('const type = recordKindOf(record)')
+    expect(source).toContain("emit('save-record', { type, record: stripLocalFields(record), recordKey: key })")
+    expect(source).toContain("emit('delete-record', { type: recordKindOf(record), record: stripLocalFields(record) })")
+
+    // 校验用合并板块自己的规则：只有诊断结果是必填的内容字段
+    expect(source).toContain('getHealthVisitValidationError(resolveHealthVisitKind(record), record)')
+
+    // 摘要在合并模式下来自 visit 版本的构建函数
+    expect(source).toContain('buildHealthVisitSummary(resolveHealthVisitKind(record), record)')
+  })
+
+  it('renders uploaded attachments as obvious previewable rows', () => {    const source = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )

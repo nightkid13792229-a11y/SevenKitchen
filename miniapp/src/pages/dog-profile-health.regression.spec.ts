@@ -91,8 +91,8 @@ describe('dog profile health page regressions', () => {
     )
 
     expect(source).toContain(':active-type="activeRecordType"')
-    expect(source).toContain(':records="recordsByType[activeRecordType]"')
-    expect(source).toContain(':loading="loadingByType[activeRecordType]"')
+    expect(source).toContain(':records="activeRecordList"')
+    expect(source).toContain(':loading="activeRecordLoading"')
     expect(source).toContain(':saving-record-key="savingRecordKey"')
     // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
     expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
@@ -107,8 +107,8 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('@delete-record="deleteHealthRecord"')
     expect(source).toContain('@dirty-change="hasUnsavedRecordDraft = $event"')
     // 2026-09-30：activeRecordType 由顶部书签派生（computed），不再是独立 ref
-    expect(source).toContain('const activeRecordType = computed<HealthRecordType>(')
-    expect(source).toContain('const activeHealthTab = ref<HealthTabKey>(\'medical\')')
+    expect(source).toContain("const activeRecordType = computed<HealthRecordType | 'visit'>(")
+    expect(source).toContain("const activeHealthTab = ref<HealthTabKey>('visit')")
     expect(source).toContain('recordsByType = reactive<Record<HealthRecordType, Record<string, any>[]>>')
     expect(source).toContain('loadingByType = reactive<Record<HealthRecordType, boolean>>')
     expect(source).toContain('dogApi.healthRecords.medical.list')
@@ -265,17 +265,16 @@ describe('dog-profile-health · 板块书签', () => {
   const readPage = () =>
     readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
 
-  it('六个书签齐全，顺序与老板给的一致', () => {
+  it('五个书签齐全，顺序与老板给的一致（病史与体检已合并为「病例」）', () => {
     const page = readPage()
 
-    expect(page).toContain('病史')
-    expect(page).toContain('体检')
+    expect(page).toContain('病例')
     expect(page).toContain('过敏')
     expect(page).toContain('疫苗')
     expect(page).toContain('饮食偏好')
     expect(page).toContain('体重管理')
 
-    const order = ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']
+    const order = ['visit', 'allergy', 'vaccine', 'diet', 'weight']
     const tabsBlock = page.slice(page.indexOf('const HEALTH_TABS'), page.indexOf('const RECORD_TAB_KEYS'))
     let cursor = -1
     for (const key of order) {
@@ -303,8 +302,11 @@ describe('dog-profile-health · 板块书签', () => {
       'utf-8',
     )
 
-    // 病史/体检/过敏对应的就是组件已有的三个类型，不新造一套
-    expect(page).toContain("const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']")
+    // 「病例」是合并展示，「过敏」是单一类型 —— 两者共用同一个组件
+    expect(page).toContain("const RECORD_TAB_KEYS: string[] = ['visit', 'allergy']")
+    // 合并列表由 utils 产出，页面只负责取数
+    expect(page).toContain('const visitRecords = computed(() => (')
+    expect(page).toContain('mergeHealthVisitRecords(recordsByType.medical, recordsByType.checkup)')
     // 上级已有书签，组件内那套一模一样的标签要关掉，否则重复
     expect(page).toContain('embedded')
     expect(section).toContain('v-if="!embedded" class="record-type-tabs"')

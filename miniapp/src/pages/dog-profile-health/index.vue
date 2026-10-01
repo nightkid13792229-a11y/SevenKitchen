@@ -67,8 +67,8 @@
           :dog-id="dogId"
           embedded
           :active-type="activeRecordType"
-          :records="recordsByType[activeRecordType]"
-          :loading="loadingByType[activeRecordType]"
+          :records="activeRecordList"
+          :loading="activeRecordLoading"
           :saving-record-key="savingRecordKey"
           :preferred-expanded-record-identity="healthRecordFocusIdentity[activeRecordType]"
           @change-type="activeRecordType = $event"
@@ -174,6 +174,9 @@ import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 import {
   HEALTH_RECORD_TYPES,
   type HealthRecordType,
+  buildHealthVisitPayload,
+  mergeHealthVisitRecords,
+  normalizeHealthVisitRecord,
   buildCrudHealthRecordPayload,
   buildHealthRecordFocusIdentity,
   hasUnsavedDietReminderChange,
@@ -212,18 +215,27 @@ const latestRequestedDogId = ref('')
  * 病史/体检/过敏复用 HealthRecordsSection（三类记录本来就一次全加载，
  * 切书签不需要重新请求），疫苗/饮食偏好/体重管理各自是独立板块。
  */
-type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+/**
+ * 板块书签（2026-10-01 改版）。
+ *
+ * 病史与体检合并成「病例」：在顾客眼里这就是一件事——"带狗去看了一次医生"。
+ * 分成两个板块，家长要先判断"这算病史还是体检"才能动手记，是负担。
+ *
+ * ★ 合并只在界面层：两条记录仍然分别存在 medical_record / checkup_record
+ *   两张表里，保存时按记录自己的类型走原接口。
+ */
+type HealthTabKey = 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
 
 const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
-  { key: 'medical', label: '病史' },
-  { key: 'checkup', label: '体检' },
+  { key: 'visit', label: '病例' },
   { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
   { key: 'diet', label: '饮食' },
   { key: 'weight', label: '体重' },
 ]
 
-const RECORD_TAB_KEYS: HealthRecordType[] = ['medical', 'checkup', 'allergy']
+/** 走 HealthRecordsSection 的板块：「病例」是合并展示，过敏是单一类型 */
+const RECORD_TAB_KEYS: string[] = ['visit', 'allergy']
 
 /**
  * 从哪个入口进来的。
@@ -242,14 +254,32 @@ const HEALTH_ENTRY_LABELS: Record<HealthEntrySource, string> = {
   unknown: '返回',
 }
 
-const activeHealthTab = ref<HealthTabKey>('medical')
+const activeHealthTab = ref<HealthTabKey>('visit')
 
 /** 当前书签是否是「记录类」（病史/体检/过敏）—— 这三个共用同一个组件 */
-const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value as HealthRecordType))
+const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value))
 
-const activeRecordType = computed<HealthRecordType>(() =>
-  isRecordTab.value ? (activeHealthTab.value as HealthRecordType) : 'medical',
+/** 传给 HealthRecordsSection 的板块标识：'visit' 表示就诊+体检合并展示 */
+const activeRecordType = computed<HealthRecordType | 'visit'>(() =>
+  isRecordTab.value ? (activeHealthTab.value as HealthRecordType | 'visit') : 'medical',
 )
+
+/**
+ * 「病例」列表：把病史和体检两类记录合成一条按日期倒序的列表。
+ * 合并逻辑放在 utils 里（有测试覆盖），页面只负责取数。
+ */
+const visitRecords = computed(() => (
+  mergeHealthVisitRecords(recordsByType.medical, recordsByType.checkup)
+))
+const visitLoading = computed(() => loadingByType.medical || loadingByType.checkup)
+
+/** 当前「病例」板块要展示的记录与加载态 */
+const activeRecordList = computed(() => (
+  activeHealthTab.value === 'visit' ? visitRecords.value : recordsByType.allergy
+))
+const activeRecordLoading = computed(() => (
+  activeHealthTab.value === 'visit' ? visitLoading.value : loadingByType.allergy
+))
 
 function selectHealthTab(key: HealthTabKey) {
   activeHealthTab.value = key
@@ -705,7 +735,11 @@ async function saveHealthRecord({
   savingRecordKey.value = nextSavingKey
 
   try {
-    const payload = buildCrudHealthRecordPayload(type, record)
+    // 「病例」合并后，一条记录可能是就诊也可能是体检 —— 组件已经把它的
+    // 真实类型放在 type 里传上来，按类型分别走原来那两个接口。
+    const payload = type === 'allergy'
+      ? buildCrudHealthRecordPayload(type, record)
+      : buildHealthVisitPayload(type, record)
     const res: any = recordId
       ? await recordApiForType(type).update(targetDogId, recordId, payload)
       : await recordApiForType(type).create(targetDogId, payload)
@@ -718,7 +752,9 @@ async function saveHealthRecord({
       return
     }
 
-    const nextRecord = normalizeSavedHealthRecordResponse(res.data, record)
+    const nextRecord = type === 'allergy'
+      ? normalizeSavedHealthRecordResponse(res.data, record)
+      : normalizeHealthVisitRecord(type, res.data)
     writeHealthRecordAttachmentCache(targetDogId, type, nextRecord)
     recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
     healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)

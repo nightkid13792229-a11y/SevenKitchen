@@ -1,14 +1,11 @@
 <template>
   <view class="page">
     <view class="hero">
-      <text class="hero__eyebrow">健康时间线</text>
+      <text class="hero__eyebrow">健康记录</text>
       <text class="hero__title">{{ dogName || '健康记录' }}</text>
       <text class="hero__subtitle">
         {{ total > 0 ? `共 ${total} 条记录，从新到旧` : '还没有记录' }}
       </text>
-      <view class="hero__actions">
-        <text class="hero__action" @tap="openVisitSummary">就诊前摘要 ›</text>
-      </view>
     </view>
 
     <view v-if="loadError" class="state">
@@ -73,7 +70,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { dogApi } from '../../api/dogs'
 
 /**
- * 健康时间线（2026-10-01，第二期 · 老板需求 7）。
+ * 健康记录（时间线页，2026-10-01，第二期 · 老板需求 7）。
  *
  * 老板明确：时间线**放在健康管理页内**，不新开板块标签 ——
  * 所以它是从健康管理页顶部的一个入口进来的独立页面，而不是第六个书签。
@@ -107,7 +104,7 @@ const events = ref<HealthEvent[]>([])
 const isLoading = ref(false)
 const loadError = ref('')
 
-const pageTitle = computed(() => (dogName.value ? `${dogName.value} · 健康时间线` : '健康时间线'))
+const pageTitle = computed(() => (dogName.value ? `${dogName.value} · 健康记录` : '健康记录'))
 
 onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
@@ -128,7 +125,7 @@ async function load() {
   try {
     const res: any = await dogApi.healthTimeline(dogId.value)
     if (res.code !== 0 || !res.data) {
-      throw new Error(res.message || '加载健康时间线失败')
+      throw new Error(res.message || '加载健康记录失败')
     }
 
     dogName.value = String(res.data.dogName || '')
@@ -142,15 +139,6 @@ async function load() {
   } finally {
     isLoading.value = false
   }
-}
-
-function openVisitSummary() {
-  if (!dogId.value) {
-    return
-  }
-  uni.navigateTo({
-    url: `/pages/dog-health/summary?dogId=${encodeURIComponent(dogId.value)}`,
-  })
 }
 
 function goHealth() {
@@ -207,19 +195,6 @@ function formatYear(date: string) {
   margin-top: 8rpx;
   font-size: 24rpx;
   color: rgba(243, 237, 221, 0.72);
-}
-
-.hero__actions {
-  margin-top: 20rpx;
-}
-
-.hero__action {
-  display: inline-block;
-  padding: 14rpx 24rpx;
-  font-size: 26rpx;
-  color: #1e3a2f;
-  background: #d8bc85;
-  border-radius: 999rpx;
 }
 
 .state {

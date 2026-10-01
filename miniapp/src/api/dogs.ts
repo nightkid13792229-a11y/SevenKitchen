@@ -89,19 +89,10 @@ export const dogApi = {
   /**
    * 健康时间线（2026-10-01，第二期）。
    *
-   * 把五类记录一次取回并按日期倒序排好 —— 后端聚合，前端不拼。
-   * 就诊前摘要与时间线共用同一份数据来源。
+   * 把六类记录一次取回并按日期倒序排好 —— 后端聚合，前端不拼。
    */
   healthTimeline: (dogId: string) =>
     request({ url: `/dogs/${dogId}/health/timeline`, method: 'GET' }),
-  /**
-   * 就诊前摘要（2026-10-01，第二期）。
-   *
-   * 老板需求 8："带狗去看病前，我最想看到的是过往病史的摘要。"
-   * 排序按医生问诊的实际顺序：过敏 → 还没好的病 → 最近就诊 → 体检 → 疫苗 → 体重 → 饮食。
-   */
-  healthVisitSummary: (dogId: string) =>
-    request({ url: `/dogs/${dogId}/health/visit-summary`, method: 'GET' }),
   /**
    * 健康信息分享（2026-10-01，第三期）。
    *

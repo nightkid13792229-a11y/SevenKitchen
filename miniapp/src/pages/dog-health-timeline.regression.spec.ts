@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
- * 健康时间线 + 就诊前摘要（2026-10-01，第二期）。
+ * 健康记录（时间线页，2026-10-01，第二期）。
  *
- * 老板需求 7、8：
- *   · 时间线汇总所有健康记录，**放在健康管理页内，不以新的板块标签形式存在**；
- *   · 带狗看病前，最想看到的是过往病史的摘要。
+ * 老板需求 7：汇总所有健康记录，**放在健康管理页内，不以新的板块标签形式存在**。
+ * 2026-10-01 二次调整：
+ *   · 入口名称由「健康时间线」改为「健康记录」；
+ *   · 「就诊前摘要」整块删除（老板：不需要给医生看摘要），页面与入口一并去掉。
  */
-describe('健康时间线', () => {
+describe('健康记录（原健康时间线）', () => {
   function readPage() {
     return readFileSync(
       resolve(process.cwd(), 'src/pages/dog-health/timeline.vue'),
@@ -49,60 +50,6 @@ describe('健康时间线', () => {
   })
 })
 
-describe('就诊前摘要', () => {
-  function readPage() {
-    return readFileSync(
-      resolve(process.cwd(), 'src/pages/dog-health/summary.vue'),
-      'utf-8',
-    )
-  }
-
-  it('排序按医生问诊的顺序：过敏 → 没结束的问题 → 就诊 → 体检 → 疫苗 → 体重 → 饮食', () => {
-    const page = readPage()
-
-    const order = [
-      '过敏',
-      '还没结束的问题',
-      '最近就诊',
-      '最近体检',
-      '疫苗',
-      '体重',
-      '饮食偏好',
-    ]
-    let cursor = -1
-    for (const title of order) {
-      const index = page.indexOf(title)
-      expect(index).toBeGreaterThan(cursor)
-      cursor = index
-    }
-  })
-
-  it('过敏永远排在最前（安全底线）', () => {
-    const page = readPage()
-
-    const allergyIndex = page.indexOf('{{ item.allergen }}')
-    const conditionIndex = page.indexOf('ongoingConditions')
-    expect(allergyIndex).toBeGreaterThan(-1)
-    // 过敏渲染在"还没结束的问题"之前
-    expect(page.indexOf('过敏</text>')).toBeLessThan(page.indexOf('还没结束的问题'))
-    expect(conditionIndex).toBeGreaterThan(-1)
-  })
-
-  it('逾期疫苗给红色提示', () => {
-    const page = readPage()
-
-    expect(page).toContain('hasOverdueVaccine')
-    expect(page).toContain('notice--danger')
-  })
-
-  it('摘要底部有免责声明与生成时间', () => {
-    const page = readPage()
-
-    expect(page).toContain('不构成诊断')
-    expect(page).toContain('生成时间')
-  })
-})
-
 describe('两个页面的注册与入口', () => {
   it('注册在 pages/dog-health 分包里（重页面不进主包）', () => {
     const config = JSON.parse(
@@ -116,13 +63,14 @@ describe('两个页面的注册与入口', () => {
     expect(subPackage.pages.map((page: { path: string }) => page.path).sort()).toEqual([
       'analysis',
       'share',
-      'summary',
       'timeline',
     ])
 
+    // 就诊前摘要整块已删除：分包里不该再有这个页面
+    expect(subPackage.pages.map((page: { path: string }) => page.path)).not.toContain('summary')
+
     const mainPages = config.pages.map((page: { path: string }) => page.path)
     expect(mainPages).not.toContain('pages/dog-health/timeline')
-    expect(mainPages).not.toContain('pages/dog-health/summary')
     expect(mainPages).not.toContain('pages/dog-health/share')
   })
 
@@ -142,8 +90,10 @@ describe('两个页面的注册与入口', () => {
     )
 
     expect(page).toContain('goHealthTimeline')
-    expect(page).toContain('goVisitSummary')
-    expect(page).toContain('health-shortcuts')
+    expect(page).toContain('goHealthAnalysis')
+    // 入口已搬出五个板块那张卡，独立成两块（见 dog-profile-health.regression.spec.ts）
+    expect(page).toContain('health-entries')
+    expect(page).not.toContain('goVisitSummary')
 
     // 老板明确：时间线不以新的板块标签形式存在 —— 书签仍然是五个
     const tabsBlock = page.slice(
@@ -154,10 +104,11 @@ describe('两个页面的注册与入口', () => {
     expect(tabsBlock).not.toContain('timeline')
   })
 
-  it('API 层两个聚合接口都在', () => {
+  it('API 层保留时间线聚合接口，摘要接口随页面一起删掉', () => {
     const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
 
     expect(api).toContain('/dogs/${dogId}/health/timeline')
-    expect(api).toContain('/dogs/${dogId}/health/visit-summary')
+    expect(api).not.toContain('healthVisitSummary')
+    expect(api).not.toContain('/dogs/${dogId}/health/visit-summary')
   })
 })

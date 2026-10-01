@@ -36,6 +36,22 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain("{{ fact.value }}")
     expect(source).toContain('buildHealthHeroFacts(form)')
 
+    // 2026-10-01 二次调整：
+    //   · 「就诊前摘要」整块删除（老板：不需要给医生看摘要）
+    //   · 「健康时间线」入口改名「健康记录」
+    //   · 两个入口（健康记录 / 健康分析）搬到狗狗信息 Banner 下方、
+    //     五个板块那张卡**之外**，并用颜色区分、小字换行在标题下方
+    expect(source).not.toContain('就诊前摘要')
+    expect(source).not.toContain('goVisitSummary')
+    expect(source).not.toContain('health-shortcuts')
+    expect(source).toContain('class="health-entries"')
+    expect(source).toContain('health-entry--records')
+    expect(source).toContain('health-entry--analysis')
+    expect(source).toContain('class="health-entry__title">健康记录<')
+    expect(source).toContain('class="health-entry__title">健康分析<')
+    expect(source).toContain('class="health-entry__hint">{{ visitShortcutHint }}<')
+    expect(source).toContain('7 项初步分析')
+
     // 老板要"一行放两个"：四项排成 2×2（年龄 性别 / 品种 体重）。
     // 用 flex-wrap + 百分比列宽实现（小程序的 WXSS 对 grid 支持不齐），
     // 第一列放 年龄/品种（品种名可能很长），第二列放 性别/体重。

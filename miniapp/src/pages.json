@@ -556,13 +556,7 @@
         {
           "path": "timeline",
           "style": {
-            "navigationBarTitleText": "健康时间线"
-          }
-        },
-        {
-          "path": "summary",
-          "style": {
-            "navigationBarTitleText": "就诊前摘要"
+            "navigationBarTitleText": "健康记录"
           }
         },
         {

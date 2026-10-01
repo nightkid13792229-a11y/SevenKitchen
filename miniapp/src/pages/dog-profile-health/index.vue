@@ -74,6 +74,24 @@
         <!-- 书签 + 板块拼成**一张卡**（老板要求：两者要有融合感，不能割裂）。
              书签是这张卡的头部，板块是它的内容区；每个板块一套主题色，
              高亮的下划线把当前书签和它下面的内容连起来。 -->
+        <!-- 两个独立入口（2026-10-01 老板要求）。
+
+             放在狗狗信息 Banner 下方、五个板块那张卡**之外**：
+             「健康记录」与「健康分析」不是记录类型，跟病例/过敏/疫苗/饮食/体重
+             五个书签不是一类东西，混在一起会让功能区看着像七个板块。
+             两个入口用颜色区分（记录=品牌绿、分析=品牌金），
+             说明小字**换行显示在标题下方**。 -->
+        <view class="health-entries">
+          <view class="health-entry health-entry--records" @tap="goHealthTimeline">
+            <text class="health-entry__title">健康记录</text>
+            <text class="health-entry__hint">{{ visitShortcutHint }}</text>
+          </view>
+          <view class="health-entry health-entry--analysis" @tap="goHealthAnalysis">
+            <text class="health-entry__title">健康分析</text>
+            <text class="health-entry__hint">7 项初步分析</text>
+          </view>
+        </view>
+
         <view class="health-panel" :class="`health-theme--${activeHealthTab}`">
           <view class="health-tabs">
             <text
@@ -86,25 +104,6 @@
           </view>
 
           <view class="health-panel__body">
-        <!-- 时间线与就诊前摘要的入口（2026-10-01，第二期）。
-
-             老板明确：健康时间线**不以新的板块标签形式存在**，放在健康管理页里。
-             所以它们是这一行的两个入口，五个板块下都看得到，也不占书签位。 -->
-        <view class="health-shortcuts">
-          <text class="health-shortcuts__item" @tap="goHealthTimeline">
-            <text class="health-shortcuts__label">健康时间线</text>
-            <text class="health-shortcuts__hint">{{ visitShortcutHint }}</text>
-          </text>
-          <text class="health-shortcuts__item" @tap="goVisitSummary">
-            <text class="health-shortcuts__label">就诊前摘要</text>
-            <text class="health-shortcuts__hint">看医生前先看这个</text>
-          </text>
-          <text class="health-shortcuts__item" @tap="goHealthAnalysis">
-            <text class="health-shortcuts__label">健康分析</text>
-            <text class="health-shortcuts__hint">七项初步分析</text>
-          </text>
-        </view>
-
         <HealthRecordsSection
           v-if="isRecordTab"
           ref="recordsSectionRef"
@@ -1070,9 +1069,9 @@ function goBack() {
 }
 
 /**
- * 健康时间线 / 就诊前摘要的入口（2026-10-01，第二期）。
+ * 「健康记录」入口（2026-10-01，第二期；原名"健康时间线"）。
  *
- * 两个页面都在分包 pages/dog-health 里（重页面不进主包）。
+ * 页面在分包 pages/dog-health 里（重页面不进主包）。
  */
 function goHealthTimeline() {
   if (!dogId.value) {
@@ -1080,15 +1079,6 @@ function goHealthTimeline() {
   }
   uni.navigateTo({
     url: `/pages/dog-health/timeline?dogId=${encodeURIComponent(dogId.value)}`,
-  })
-}
-
-function goVisitSummary() {
-  if (!dogId.value) {
-    return
-  }
-  uni.navigateTo({
-    url: `/pages/dog-health/summary?dogId=${encodeURIComponent(dogId.value)}`,
   })
 }
 
@@ -1393,38 +1383,55 @@ function goToDogCreate() {
 .health-theme--weight .health-panel__body,
 .health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
 
-/* 时间线 / 就诊前摘要的入口：两个等宽小卡 */
 .diet-tab {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
 }
 
-.health-shortcuts {
+/*
+ * 两个独立入口（健康记录 / 健康分析）。
+ *
+ * 与五个板块分开：它们在板块卡**外面**，各自一张小卡、各自一个颜色，
+ * 左侧一道粗色条，一眼能区分"这是入口"而不是"这是记录类型"。
+ */
+.health-entries {
   display: flex;
   gap: 20rpx;
-  margin-bottom: 24rpx;
 }
 
-.health-shortcuts__item {
+.health-entry {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
-  padding: 24rpx;
-  border-radius: 20rpx;
-  background: rgba(255, 255, 255, 0.78);
-  border: 2rpx solid var(--health-accent-soft, #eef2e4);
+  gap: 6rpx;
+  padding: 24rpx 24rpx 24rpx 26rpx;
+  border-radius: 24rpx;
+  border-left: 8rpx solid var(--entry-accent, #2f6b52);
+  box-shadow: 0 10rpx 26rpx rgba(30, 46, 36, 0.06);
 }
 
-.health-shortcuts__label {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--health-accent, #1e3a2f);
+/* 健康记录：品牌绿 */
+.health-entry--records {
+  --entry-accent: #2f6b52;
+  background: #f1f7f2;
 }
 
-.health-shortcuts__hint {
+/* 健康分析：品牌金（与 Banner 上的金色呼应） */
+.health-entry--analysis {
+  --entry-accent: #b08d4f;
+  background: #fdf8ec;
+}
+
+.health-entry__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--entry-accent, #2f6b52);
+}
+
+/* 说明小字：换行显示在标题下方 */
+.health-entry__hint {
   font-size: 22rpx;
   color: #8a968a;
 }

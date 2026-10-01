@@ -221,8 +221,11 @@ describe('dog profile health page regressions', () => {
     expect(page).toContain('@saved="onAllergenSaved"')
 
     // 快速添加写在过敏列表上方（切到过敏第一眼就能看到）
-    expect(section).toContain('<slot name="type-extra" />')
-    const slotIndex = section.indexOf('<slot name="type-extra" />')
+    // 2026-10-01：插槽加了开关 —— 只有过敏板块渲染它，
+    // 否则空容器会作为 flex 子元素占掉一个 gap（书签下方多一条空白）
+    expect(section).toContain('<slot v-if="showTypeExtra" name="type-extra" />')
+    expect(page).toContain(":show-type-extra=\"activeRecordType === 'allergy'\"")
+    const slotIndex = section.indexOf('<slot v-if="showTypeExtra" name="type-extra" />')
     const emptyIndex = section.indexOf('health-section__empty')
     expect(slotIndex).toBeGreaterThan(-1)
     expect(slotIndex).toBeLessThan(emptyIndex)

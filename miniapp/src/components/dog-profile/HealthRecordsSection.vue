@@ -33,7 +33,10 @@
 
     <!-- 当前类别的额外入口（2026-09-27）：给「过敏」放"快速添加 + 上传报告自动识别"。
          放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
-    <slot name="type-extra" />
+    <!-- 只有「过敏」板块会用到这个插槽（快速添加过敏原）。
+         其它板块传进来的是一个空容器：它会作为 flex 子元素占掉一个 gap，
+         书签下方又多一条空白 —— 所以由调用方用 showTypeExtra 显式开关。 -->
+    <slot v-if="showTypeExtra" name="type-extra" />
 
     <!-- 拍照录入（2026-10-01，第六期；同日按老板要求并入底部那一个「新增记录」）。
          原来这里是「拍病历 / 拍体检报告」两个选择器 + 一个「拍照录入」按钮 +
@@ -493,8 +496,16 @@ const props = withDefaults(defineProps<{
    * 上级已经有同一套书签，留着就是重复。
    */
   embedded?: boolean
+  /**
+   * 是否渲染 type-extra 插槽（只有过敏板块会往里放"快速添加过敏原"）。
+   *
+   * 缺省 true 保持既有行为；「病历/检查」板块传 false —— 否则调用方那个空的
+   * 插槽容器会作为 flex 子元素占掉一个 gap，书签下方就多一条空白。
+   */
+  showTypeExtra?: boolean
 }>(), {
   activeType: undefined,
+  showTypeExtra: true,
   records: () => [],
   loading: false,
   savingRecordKey: '',
@@ -1100,7 +1111,7 @@ function openAddRecordChooser() {
   }
 
   uni.showActionSheet({
-    itemList: ['手动填写', '从相册选择（自动识别）'],
+    itemList: ['手动填写', '从相册选择（自动识别检查报告）'],
     success: (res) => {
       if (res.tapIndex === 0) {
         addRecord()
@@ -1827,7 +1838,12 @@ function removeAttachment(index: number, attachmentIndex: number) {
 }
 
 .record-card {
-  margin-top: 24rpx;
+  /*
+   * 这里**不要**写 margin-top（2026-10-01）：
+   * 外层 `.health-section` 是 flex + gap: 24rpx，卡片再自带 24rpx 上边距，
+   * 两者叠加就在书签下方多出一条 48rpx 的空白（老板截图指出）。
+   * 间距统一交给 gap。
+   */
   padding: 24rpx;
   border-radius: 24rpx;
   background: #f8fbf9;

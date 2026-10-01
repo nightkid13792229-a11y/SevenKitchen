@@ -842,6 +842,39 @@ export function parseHealthAttachmentUploadResponse(uploadRes: {
   throw new Error(payload?.message || `上传失败: ${uploadRes.statusCode}`)
 }
 
+/**
+ * 识别失败时给顾客看的文案（2026-10-01）。
+ *
+ * 为什么需要：识别走的是腾讯云 OCR，**它自己的报错会被后端原样抛出来**，
+ * 例如服务没开通时是「服务未开通，请前往控制台开通相应服务」——
+ * 这句话是给运维看的，弹给顾客只会让人一头雾水。
+ * 这里只把"基础设施类"的报错换成顾客能懂、且知道下一步怎么做的话；
+ * 其余后端文案（"没识别到内容，请换一张更清晰的图片"这类）本来就是说给顾客的，照原样显示。
+ */
+export function resolveHealthScanErrorMessage(raw: unknown): string {
+  const text = String(raw ?? '').trim()
+  if (!text) {
+    return '识别失败，可以手工填写'
+  }
+
+  // 腾讯云 OCR：服务未开通 / 密钥没配 / 鉴权失败 —— 都属于"功能还没准备好"
+  if (/未开通|UnOpenError|AuthFailure|密钥未配置|未配置密钥/.test(text)) {
+    return '图片识别功能正在开通中，这次先用「手动填写」吧'
+  }
+
+  // 调用频率或额度超限：让顾客等一会儿再来
+  if (/频率|超限|LimitExceeded|RequestLimitExceeded/.test(text)) {
+    return '识别的人有点多，稍等一会儿再试'
+  }
+
+  if (/超时|timeout/i.test(text)) {
+    return '这次识别超时了，可以再试一次，或直接手工填写'
+  }
+
+  // 后端已经写成顾客能懂的话（"没识别到内容…"等），照原样
+  return text
+}
+
 export function resolveHealthAttachmentUploadErrorMessage(error: unknown): string {
   const rawMessage = error instanceof Error ? error.message.trim() : ''
 

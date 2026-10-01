@@ -48,7 +48,9 @@ describe('拍照录入 · 组件', () => {
 
     expect(scan).toContain('也可以直接手填')
     // 失败时降级提示，不是死路
-    expect(scan).toContain('识别失败，可以手工填写')
+    // 2026-10-01：失败文案统一走 resolveHealthScanErrorMessage ——
+    // 腾讯云自己的报错（如"服务未开通，请前往控制台…"）不能直接弹给顾客
+    expect(scan).toContain('resolveHealthScanErrorMessage(error?.message)')
   })
 
   it('不做医学判断：界面只展示"照抄来的"字段', () => {
@@ -78,7 +80,7 @@ describe('拍照录入 · 接线', () => {
     expect(section).toContain('v-if="isVisitMode && dogId && scanActive"')
     // 2026-10-01 老板要求：三个入口并成一个，且**不再让顾客先选文档类型** ——
     // 传 AUTO 由后端判断，两个选项就合并成了「从相册选择（自动识别）」
-    expect(section).toContain("itemList: ['手动填写', '从相册选择（自动识别）']")
+    expect(section).toContain("itemList: ['手动填写', '从相册选择（自动识别检查报告）']")
     expect(section).toContain('function openAddRecordChooser()')
     expect(section).toContain('function startScan()')
     expect(section).toContain('document-type="AUTO"')

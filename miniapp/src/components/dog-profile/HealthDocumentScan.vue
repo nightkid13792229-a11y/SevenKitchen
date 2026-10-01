@@ -46,6 +46,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import { resolveHealthScanErrorMessage } from '../../utils/health-records'
 
 /**
  * 拍照 → 上传 → 识别 → **确认一次** → 把内容交给上层填表。
@@ -277,7 +278,8 @@ async function scanAll(filePaths: string[]) {
     showConfirm.value = true
   } catch (error: any) {
     uni.showToast({
-      title: error?.message || '识别失败，可以手工填写',
+      // 基础设施类报错（腾讯云"服务未开通"之类）不直接甩给顾客，换成能懂的话
+      title: resolveHealthScanErrorMessage(error?.message),
       icon: 'none',
       duration: 2500,
     })

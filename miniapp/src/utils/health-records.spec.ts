@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  resolveHealthScanErrorMessage,
   buildDogHealthStateSnapshot,
   buildDietRemindersPayload,
   buildHealthRecordFocusIdentity,
@@ -955,5 +956,44 @@ describe('health-records', () => {
       title: '鸡肉',
       detail: '食用后腹泻',
     })
+  })
+})
+
+/**
+ * 识别失败文案（2026-10-01）。
+ *
+ * 病根：识别走腾讯云 OCR，它自己的报错会被后端原样抛出来 ——
+ * 服务没开通时是「服务未开通，请前往控制台开通相应服务」，
+ * 弹给顾客只会让人一头雾水。这里锁住"基础设施类报错必须换成顾客能懂的话"。
+ */
+describe('识别失败文案', () => {
+  it('腾讯云"服务未开通"换成能懂的话，且给出下一步', () => {
+    expect(
+      resolveHealthScanErrorMessage('服务未开通，请前往控制台开通相应服务'),
+    ).toContain('手动填写')
+    expect(resolveHealthScanErrorMessage('FailedOperation.UnOpenError')).toContain('手动填写')
+  })
+
+  it('密钥没配 / 鉴权失败同样归到"功能还没准备好"', () => {
+    expect(resolveHealthScanErrorMessage('腾讯云 OCR 密钥未配置')).toContain('正在开通中')
+    expect(resolveHealthScanErrorMessage('AuthFailure.SignatureFailure')).toContain('正在开通中')
+  })
+
+  it('频率超限让顾客稍后再试', () => {
+    expect(resolveHealthScanErrorMessage('RequestLimitExceeded')).toContain('稍等')
+  })
+
+  it('超时提示可以再试一次', () => {
+    expect(resolveHealthScanErrorMessage('request timeout')).toContain('再试一次')
+  })
+
+  it('后端本来就说给顾客听的话照原样显示', () => {
+    const friendly = '没识别到内容，请换一张更清晰的图片'
+    expect(resolveHealthScanErrorMessage(friendly)).toBe(friendly)
+  })
+
+  it('没有报错信息时给一句兜底，而不是空字符串', () => {
+    expect(resolveHealthScanErrorMessage('')).toContain('手工填写')
+    expect(resolveHealthScanErrorMessage(undefined)).toContain('手工填写')
   })
 })

@@ -139,6 +139,13 @@
         <text class="row__detail">{{ medicalHistory }}</text>
       </view>
 
+      <view class="share-entry">
+        <button class="health-section__action" @tap="goShare">分享给医生</button>
+        <text class="share-entry__hint">
+          生成一张小程序卡片，医生不用登录就能看。随时可以停止分享。
+        </text>
+      </view>
+
       <view class="footer">
         <text class="footer__text">
           本摘要由你自己记录的内容整理而成，仅供就诊时参考，不构成诊断。
@@ -218,6 +225,17 @@ onLoad((options: any) => {
   uni.setNavigationBarTitle({ title: '就诊前摘要' })
   void load()
 })
+
+function goShare() {
+  if (!dogId.value) {
+    return
+  }
+  uni.navigateTo({
+    url:
+      `/pages/dog-health/share?dogId=${encodeURIComponent(dogId.value)}` +
+      `&name=${encodeURIComponent(String(dog.value.name || ''))}`,
+  })
+}
 
 async function load() {
   if (!dogId.value) {
@@ -474,6 +492,19 @@ async function load() {
 .weight__change {
   font-size: 24rpx;
   color: #6b6653;
+}
+
+.share-entry {
+  margin-top: 32rpx;
+}
+
+.share-entry__hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a968a;
+  text-align: center;
 }
 
 .footer {

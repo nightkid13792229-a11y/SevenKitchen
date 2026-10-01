@@ -116,6 +116,28 @@ export const dogApi = {
    */
   healthVisitSummary: (dogId: string) =>
     request({ url: `/dogs/${dogId}/health/visit-summary`, method: 'GET' }),
+  /**
+   * 健康信息分享（2026-10-01，第三期）。
+   *
+   * 内容三选一（摘要 / 报告原件 / 合并），医疗信息默认全给、顾客可逐项取消；
+   * 不设有效期，所以必须能"停止分享"。
+   */
+  createHealthShare: (
+    dogId: string,
+    data: { contentMode?: string; sections?: string[] },
+  ) => request({
+    url: `/dogs/${dogId}/health/shares`,
+    method: 'POST',
+    data,
+    suppressErrorToast: true,
+  }),
+  listHealthShares: (dogId: string) =>
+    request({ url: `/dogs/${dogId}/health/shares`, method: 'GET' }),
+  revokeHealthShare: (dogId: string, token: string) =>
+    request({
+      url: `/dogs/${dogId}/health/shares/${encodeURIComponent(token)}`,
+      method: 'DELETE',
+    }),
   healthRecords: {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),

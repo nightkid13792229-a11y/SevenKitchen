@@ -451,6 +451,7 @@ model Dog {
   allergyFoods         String?             @map("allergy_foods")
   pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]
+  healthShareTokens    DogHealthShareToken[]
   checkupRecords       CheckupRecord[]
   customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
   owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -1269,6 +1270,39 @@ model InventoryStocktakeLine {
   @@index([ingredientId])
   @@index([procurementSkuId])
   @@map("inventory_stocktake_line")
+}
+
+/// 健康信息分享令牌（2026-10-01，第三期）。
+///
+/// 老板需求：分享给换新医生为主、兼顾家人朋友；内容三选一（摘要 / 报告原件 /
+/// 合并）；**不设有效期**；医疗信息默认全给、但顾客可逐项取消；
+/// 形式只要小程序分享卡片，医生免登录打开。
+///
+/// ── 为什么存"快照"而不是实时档案 ──────────────────────────
+///
+///   1. 老板定了"不设有效期"。快照让这个决定可以接受：分享出去的是**当时那一份**，
+///      顾客之后新增的化验单、新诊断不会自动流到医生手里。
+///   2. 顾客可以逐项取消。取消掉的项在快照里**根本不存在**，
+///      不会因为后续代码改动、字段新增而意外漏出去。
+///   3. 「停止分享」只需把 revokedAt 一写，链接立刻失效。
+model DogHealthShareToken {
+  id          String    @id @default(uuid()) @map("id")
+  dogId       String    @map("dog_id")
+  token       String    @unique @map("token") @db.VarChar(32)
+  /// 生成时定稿的快照（JSON）；之后不随档案变化
+  snapshot    Json      @map("snapshot")
+  /// 分享形态：SUMMARY（只要摘要）/ FILES（只要报告原件）/ BOTH（合并）
+  contentMode String    @map("content_mode") @db.VarChar(16)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  createdBy   String    @map("created_by")
+  /// 停止分享的时间；非空即失效
+  revokedAt   DateTime? @map("revoked_at")
+  dog         Dog       @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([dogId])
+  @@index([revokedAt])
+  @@map("dog_health_share_token")
 }
 
 model WeightRecord {

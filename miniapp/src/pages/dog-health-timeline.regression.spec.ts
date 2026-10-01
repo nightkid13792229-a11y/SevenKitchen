@@ -114,6 +114,7 @@ describe('两个页面的注册与入口', () => {
 
     expect(subPackage).toBeTruthy()
     expect(subPackage.pages.map((page: { path: string }) => page.path).sort()).toEqual([
+      'share',
       'summary',
       'timeline',
     ])
@@ -121,6 +122,16 @@ describe('两个页面的注册与入口', () => {
     const mainPages = config.pages.map((page: { path: string }) => page.path)
     expect(mainPages).not.toContain('pages/dog-health/timeline')
     expect(mainPages).not.toContain('pages/dog-health/summary')
+    expect(mainPages).not.toContain('pages/dog-health/share')
+  })
+
+  it('免登录的分享落地页在主包（从分享卡片冷启动不该再等分包下载）', () => {
+    const config = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8'),
+    )
+    const mainPages = config.pages.map((page: { path: string }) => page.path)
+
+    expect(mainPages).toContain('pages/shared-health/index')
   })
 
   it('入口在健康管理页内，且**不是**第六个书签', () => {

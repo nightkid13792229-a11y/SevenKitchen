@@ -29,6 +29,14 @@
       }
     },
     {
+      "path": "pages/shared-health/index",
+      "style": {
+        "navigationBarTitleText": "健康摘要",
+        "navigationBarBackgroundColor": "#1E3A2F",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
       "path": "pages/weight-goal-plan/index",
       "style": {
         "navigationBarTitleText": "体重管理计划"
@@ -555,6 +563,12 @@
           "path": "summary",
           "style": {
             "navigationBarTitleText": "就诊前摘要"
+          }
+        },
+        {
+          "path": "share",
+          "style": {
+            "navigationBarTitleText": "分享健康信息"
           }
         }
       ]

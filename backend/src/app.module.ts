@@ -18,6 +18,8 @@ import { HealthRecordsController } from './interfaces/controllers/health-records
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
 import { HealthTimelineController } from './interfaces/controllers/health-timeline.controller';
+import { HealthShareController } from './interfaces/controllers/health-share.controller';
+import { SharedHealthController } from './interfaces/controllers/shared-health.controller';
 import {
   GlobalConfigController,
   PublicGlobalConfigController,
@@ -134,6 +136,7 @@ import {
   ALLERGY_RECORD_REPOSITORY,
 } from './application/health/health.service';
 import { HealthTimelineService } from './application/health/health-timeline.service';
+import { HealthShareService } from './application/health/health-share.service';
 import {
   PrismaVaccineRecordRepository,
   PrismaCheckupRecordRepository,
@@ -322,6 +325,8 @@ validatePrismaConfig();
     HealthRecordsController,
     HealthNotificationController,
     HealthTimelineController,
+    HealthShareController,
+    SharedHealthController,
     HealthUploadController,
     GlobalConfigController,
     PublicGlobalConfigController,
@@ -613,6 +618,7 @@ validatePrismaConfig();
     // Health Records Service and Repositories
     HealthService,
     HealthTimelineService,
+    HealthShareService,
     {
       provide: VACCINE_RECORD_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

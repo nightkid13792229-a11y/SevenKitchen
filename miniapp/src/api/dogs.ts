@@ -138,6 +138,36 @@ export const dogApi = {
       url: `/dogs/${dogId}/health/shares/${encodeURIComponent(token)}`,
       method: 'DELETE',
     }),
+  /**
+   * 疫苗计划（2026-10-01，第四期）。
+   *
+   * 按免疫程序算出"还需要打哪些、什么时候打"。老板第 16 条要求
+   * **引导顾客自己决策**，所以有 decisions 接口存顾客的选择。
+   *
+   * ⚠️ 顾客侧默认关闭（后端 VACCINE_PLAN=customer 才开）：
+   *    免疫程序尚未经兽医审核。接口会返回 available: false 说明原因。
+   */
+  vaccinePlan: (dogId: string, audience: 'customer' | 'staff' = 'customer') =>
+    request({
+      url: `/dogs/${dogId}/vaccine-plan?audience=${audience}`,
+      method: 'GET',
+      suppressErrorToast: true,
+    }),
+  /** 完整免疫程序表（营养师/管理端审核用，不对顾客开放） */
+  vaccineSchedule: (dogId: string) =>
+    request({ url: `/dogs/${dogId}/vaccine-plan/schedule`, method: 'GET' }),
+  /** 顾客对某一步的决定：ACCEPT 按建议 / DEFER 推迟 / SKIP 不做 */
+  setVaccineDecision: (dogId: string, stepKey: string, decision: string) =>
+    request({
+      url: `/dogs/${dogId}/vaccine-plan/decisions/${encodeURIComponent(stepKey)}`,
+      method: 'PUT',
+      data: { decision },
+    }),
+  clearVaccineDecision: (dogId: string, stepKey: string) =>
+    request({
+      url: `/dogs/${dogId}/vaccine-plan/decisions/${encodeURIComponent(stepKey)}`,
+      method: 'DELETE',
+    }),
   healthRecords: {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),

@@ -452,6 +452,7 @@ model Dog {
   pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]
   healthShareTokens    DogHealthShareToken[]
+  vaccinePlan          DogVaccinePlan?
   checkupRecords       CheckupRecord[]
   customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
   owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -1303,6 +1304,28 @@ model DogHealthShareToken {
   @@index([dogId])
   @@index([revokedAt])
   @@map("dog_health_share_token")
+}
+
+/// 疫苗计划：顾客对建议程序做出的决定（2026-10-01，第四期）。
+///
+/// 老板第 16 条要的是"**引导顾客自己做决策**"，所以必须把顾客的决定存下来：
+///   · ACCEPT 按建议打 / DEFER 推迟 / SKIP 决定不做
+/// 建议本身（哪一步在哪个时间窗）是从出生日期**算出来的**，不落库 ——
+/// 出生日期一改，程序自动跟着变，不会留下算错的历史。
+///
+/// 与 VaccineRecord 的关系：那张表记的是"真的打了什么"，
+/// 这张表记的是"打算怎么打"。两者不一致时由 immunization-schedule 报冲突。
+model DogVaccinePlan {
+  id        String   @id @default(uuid()) @map("id")
+  dogId     String   @unique @map("dog_id")
+  /// 每一步的决定：{ "core-puppy-1": "ACCEPT", "rabies-2": "SKIP" }
+  decisions Json     @default("{}") @map("decisions")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@map("dog_vaccine_plan")
 }
 
 model WeightRecord {

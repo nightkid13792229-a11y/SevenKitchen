@@ -1,0 +1,369 @@
+import {
+  CORE_ADULT_BOOSTER,
+  CORE_PUPPY_SERIES,
+  RABIES_SCHEDULE,
+  buildImmunizationSchedule,
+  buildVaccinePlan,
+  classifyVaccineName,
+  detectConflicts,
+  isVaccinePlanCustomerEnabled,
+  parseDateText,
+  toDateText,
+  weeksBetween,
+  type VaccineRecordLike,
+} from '../../../src/domain/health/immunization-schedule';
+
+/**
+ * 疫苗计划（2026-10-01，第四期）。
+ *
+ * 老板的四条要求：
+ *   15. 按免疫程序提醒还需要打哪些、什么时候打
+ *   16. 首选 WSAVA 指南，结合国内法规；**引导顾客自己决策**
+ *   17. 顾客计划与我们不一致时提醒
+ *   18. 提醒只在小程序内
+ *
+ * 这组测试锁的是**推算逻辑**与**安全边界**：
+ *   · 一只 10 岁的老狗不该被提示"幼犬首免已逾期"
+ *   · 已经打过的针不该被重复提醒
+ *   · 顾客选择"不做"的那一步不再报逾期（尊重决定）
+ *   · 顾客侧默认关闭（未经专业审核不得开放）
+ */
+describe('疫苗计划', () => {
+  const TODAY = new Date('2026-10-01T00:00:00');
+
+  function dog(ageWeeks: number) {
+    const birthday = new Date(TODAY.getTime() - ageWeeks * 7 * 86400000);
+    return toDateText(birthday);
+  }
+
+  function record(id: string, name: string, date: string, nextDueDate?: string): VaccineRecordLike {
+    return { id, vaccineName: name, vaccinationDate: date, nextDueDate: nextDueDate ?? null };
+  }
+
+  describe('疫苗名分类', () => {
+    it('只区分狂犬与其它（名字是自由文本，细分没有可靠依据）', () => {
+      expect(classifyVaccineName('狂犬疫苗')).toBe('rabies');
+      expect(classifyVaccineName('Rabies')).toBe('rabies');
+      expect(classifyVaccineName('rabies vaccine')).toBe('rabies');
+      expect(classifyVaccineName('六联')).toBe('core');
+      expect(classifyVaccineName('卫佳伍')).toBe('core');
+      expect(classifyVaccineName('')).toBe('core');
+    })
+  })
+
+  describe('幼犬：首免程序', () => {
+    it('8 周龄的幼犬，首针正处于应做状态', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        today: TODAY,
+      });
+
+      const first = plan.steps.find((step) => step.key === 'core-puppy-1');
+      expect(first).toBeDefined();
+      expect(['DUE', 'OVERDUE']).toContain(first!.status);
+      expect(plan.nextStep).toBeTruthy();
+    })
+
+    it('首免程序覆盖到 16 周龄（不是打满三针就停）', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      });
+
+      const puppySteps = plan.steps.filter((step) => step.key.startsWith('core-puppy-'));
+      const lastEnd = puppySteps[puppySteps.length - 1].windowEnd
+      // 末针窗口必须落在 16 周龄及以后
+      const birthdayDate = parseDateText(plan.birthday)!
+      expect(weeksBetween(birthdayDate, parseDateText(lastEnd)!)).toBeGreaterThanOrEqual(14)
+    })
+
+    it('每一步都带依据（顾客和审核的人都要能查）', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        today: TODAY,
+      });
+
+      for (const step of plan.steps) {
+        expect(step.basis.length).toBeGreaterThan(10);
+        expect(step.reminder.length).toBeGreaterThan(0);
+      }
+    })
+
+    it('已经打过的针不再提醒（窗口内命中记录即算完成）', () => {
+      const birthday = parseDateText(dog(20))!;
+      const firstDoseDate = toDateText(new Date(birthday.getTime() + 7 * 7 * 86400000));
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [record('v1', '六联', firstDoseDate)],
+        today: TODAY,
+      });
+
+      const first = plan.steps.find((step) => step.key === 'core-puppy-1');
+      expect(first!.status).toBe('DONE');
+      expect(first!.matchedRecordId).toBe('v1');
+    })
+  })
+
+  describe('成年犬', () => {
+    it('10 岁且无任何记录的老狗，不会被提示"幼犬首免已逾期"', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-old',
+        birthday: dog(520),
+        records: [],
+        today: TODAY,
+      });
+
+      const puppyOverdue = plan.steps.filter(
+        (step) => step.key.startsWith('core-puppy-') && step.status === 'OVERDUE',
+      );
+      // 十年前的窗口不是"现在该做的事"
+      expect(puppyOverdue).toEqual([]);
+    })
+
+    it('年幼的狗不会一次列出十几年后的安排', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-puppy',
+        birthday: dog(8),
+        records: [],
+        today: TODAY,
+      });
+
+      // 狂犬一共排了 12 次，但只该看到近期的那几次
+      const rabies = plan.steps.filter((step) => step.kind === 'rabies');
+      expect(rabies.length).toBeLessThan(RABIES_SCHEDULE.maxDoses);
+      expect(plan.steps.length).toBeLessThan(20);
+    })
+
+    it('成年加强按三年一次排（看完整的免疫程序表，不受"计划过滤"影响）', () => {
+      // 计划会过滤掉过期太久与太远的步骤，所以间隔要从**程序表**上看
+      const schedule = buildImmunizationSchedule(parseDateText(dog(20))!);
+      const adult = schedule.filter((item) => item.key.startsWith('core-adult-'));
+      expect(adult.length).toBeGreaterThanOrEqual(CORE_ADULT_BOOSTER.maxBoosters);
+
+      const gapYears =
+        (adult[1].windowStart.getTime() - adult[0].windowStart.getTime()) /
+        (365 * 86400000);
+      expect(Math.round(gapYears)).toBe(CORE_ADULT_BOOSTER.repeatYears);
+    })
+
+    it('免疫程序表包含幼犬首免、成年加强、狂犬三类，且每步都有依据', () => {
+      const schedule = buildImmunizationSchedule(parseDateText(dog(8))!);
+
+      expect(schedule.some((item) => item.key.startsWith('core-puppy-'))).toBe(true);
+      expect(schedule.some((item) => item.key.startsWith('core-adult-'))).toBe(true);
+      expect(schedule.some((item) => item.key.startsWith('rabies-'))).toBe(true);
+      for (const item of schedule) {
+        expect(item.basis.length).toBeGreaterThan(10);
+      }
+    })
+
+    it('汇总数对得上', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        today: TODAY,
+      });
+
+      const { summary, steps } = plan;
+      expect(summary.done + summary.due + summary.overdue + summary.upcoming + summary.skipped)
+        .toBe(steps.length);
+    })
+  })
+
+  describe('引导顾客决策（老板第 16 条）', () => {
+    it('顾客选择"不做"的那一步不再报逾期', () => {
+      const birthday = dog(8);
+      const planWithout = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [],
+        today: TODAY,
+      });
+      const target = planWithout.steps.find((step) => step.status !== 'DONE')!;
+
+      const planWith = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [],
+        decisions: { [target.key]: 'SKIP' },
+        today: TODAY,
+      });
+
+      const after = planWith.steps.find((step) => step.key === target.key);
+      expect(after!.status).toBe('SKIPPED');
+      expect(planWith.summary.skipped).toBeGreaterThan(0);
+    })
+
+    it('决定原样带在结果里（顾客能看出哪些是自己改过的）', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        decisions: { 'core-puppy-2': 'DEFER' },
+        today: TODAY,
+      });
+
+      expect(plan.decisions['core-puppy-2']).toBe('DEFER');
+    })
+
+    it('下一步优先给逾期，其次当前', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(30),
+        records: [],
+        today: TODAY,
+      });
+
+      if (plan.summary.overdue > 0) {
+        expect(plan.nextStep!.status).toBe('OVERDUE');
+      } else {
+        expect(['DUE', 'UPCOMING']).toContain(plan.nextStep!.status);
+      }
+    })
+  })
+
+  describe('冲突提醒（老板第 17 条）', () => {
+    it('幼犬过早接种会被标出来', () => {
+      const birthday = parseDateText(dog(20))!;
+      // 出生后第 2 周就打核心疫苗 —— 早于 6 周龄
+      const tooEarly = toDateText(new Date(birthday.getTime() + 14 * 86400000));
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [record('v1', '六联', tooEarly)],
+        today: TODAY,
+      });
+
+      expect(plan.conflicts.length).toBeGreaterThan(0);
+      expect(plan.conflicts[0].reason).toContain('早');
+    })
+
+    it('狂犬两针间隔不足一年会被标出来', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(200),
+        records: [
+          record('r1', '狂犬疫苗', '2025-01-10'),
+          record('r2', '狂犬疫苗', '2025-06-10'),
+        ],
+        today: TODAY,
+      });
+
+      const rabiesConflict = plan.conflicts.find((item) => item.kind === 'rabies');
+      expect(rabiesConflict).toBeDefined();
+      expect(rabiesConflict!.suggestion).toContain('兽医');
+    })
+
+    it('记录里的"下次到期日"与建议对不上时会提示', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(200),
+        records: [record('v1', '六联', '2026-01-10', '2032-06-01')],
+        today: TODAY,
+      });
+
+      expect(plan.conflicts.some((item) => item.reason.includes('下次到期日'))).toBe(true);
+    })
+
+    it('冲突只是提醒，措辞里不说"必须"', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [record('v1', '六联', toDateText(new Date(parseDateText(dog(20))!.getTime() + 14 * 86400000)))],
+        today: TODAY,
+      });
+
+      for (const conflict of plan.conflicts) {
+        expect(conflict.suggestion).not.toContain('必须');
+        expect(conflict.suggestion).not.toContain('立刻');
+      }
+    })
+
+    it('没有记录时不会凭空造出冲突', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      });
+      expect(plan.conflicts).toEqual([]);
+    })
+  })
+
+  describe('安全边界', () => {
+    it('没有出生日期时返回空计划而不是报错', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: '',
+        records: [],
+        today: TODAY,
+      });
+
+      expect(plan.steps).toEqual([]);
+      expect(plan.nextStep).toBeNull();
+    })
+
+    it('顾客侧默认关闭（未经专业审核不得开放）', () => {
+      expect(isVaccinePlanCustomerEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: '' } as any)).toBe(false);
+      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'off' } as any)).toBe(false);
+    })
+
+    it('审核完成后才可打开', () => {
+      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'customer' } as any)).toBe(true);
+      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'CUSTOMER' } as any)).toBe(true);
+    })
+
+    it('计划自带 reviewed 标记，未审核时可以据此不给顾客看', () => {
+      const unreviewed = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        today: TODAY,
+      });
+      expect(unreviewed.reviewed).toBe(false);
+
+      const reviewed = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(8),
+        records: [],
+        reviewed: true,
+        today: TODAY,
+      });
+      expect(reviewed.reviewed).toBe(true);
+    })
+
+    it('免疫程序的三个来源都能追溯到具体依据', () => {
+      expect(CORE_PUPPY_SERIES.basis).toContain('WSAVA');
+      expect(CORE_ADULT_BOOSTER.basis).toContain('WSAVA');
+      expect(RABIES_SCHEDULE.basis).toContain('国内');
+    })
+  })
+
+  describe('detectConflicts 纯函数', () => {
+    it('没有记录就没有冲突', () => {
+      const seeds: any[] = [];
+      expect(detectConflicts([], seeds, TODAY)).toEqual([]);
+    })
+
+    it('日期格式不对的记录会被跳过，不炸', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [record('bad', '六联', '不是日期')],
+        today: TODAY,
+      });
+      expect(plan.conflicts).toEqual([]);
+    })
+  })
+})

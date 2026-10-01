@@ -104,13 +104,17 @@
         </HealthRecordsSection>
 
         <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
-        <VaccineManagementSection
-          v-else-if="activeHealthTab === 'vaccine'"
-          ref="vaccineSectionRef"
-          external-save
-          :dog-id="dogId"
-          @dirty-change="hasUnsavedSectionDraft = $event"
-        />
+        <template v-else-if="activeHealthTab === 'vaccine'">
+          <!-- 疫苗计划（2026-10-01，第四期）：记录是"打过什么"，
+               计划是"接下来怎么打"，计划放上面先看到。 -->
+          <VaccinePlanSection :dog-id="dogId" />
+          <VaccineManagementSection
+            ref="vaccineSectionRef"
+            external-save
+            :dog-id="dogId"
+            @dirty-change="hasUnsavedSectionDraft = $event"
+          />
+        </template>
 
         <view v-else-if="activeHealthTab === 'diet'" class="health-section diet-reminder-card">
           <text class="health-section__title">饮食偏好</text>
@@ -182,6 +186,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
+import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'

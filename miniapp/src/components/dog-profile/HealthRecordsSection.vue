@@ -1,11 +1,12 @@
 <template>
   <view class="health-section" :class="activeTypeMeta.accentClass">
-    <view class="health-section__header">
+    <!-- 内嵌到健康管理页时不显示这一行（2026-10-01 老板要求）：
+         上面那张卡的书签已经写着「病例 / 过敏」，这里再顶一个同名标题和「N 条」
+         就是重复，还把正文往下推了一行。独立成页时（不内嵌）照旧显示。 -->
+    <view v-if="!embedded" class="health-section__header">
       <view>
-        <!-- 内嵌时标题就是**本类型自己的名字**（病史/体检/过敏）。
-             原先三类共用一个「健康记录」标题，看着像一个大板块（老板指出）。 -->
-        <text class="health-section__title">{{ embedded ? activeTypeMeta.label : '健康记录' }}</text>
-        <text v-if="!embedded" class="health-section__desc">
+        <text class="health-section__title">健康记录</text>
+        <text class="health-section__desc">
           按类别整理每一条记录，附件可在展开后上传和预览。
         </text>
       </view>

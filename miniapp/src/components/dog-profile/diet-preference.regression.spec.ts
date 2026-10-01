@@ -83,7 +83,8 @@ describe('饮食偏好 · 与旧字段并存', () => {
       'utf-8',
     )
 
-    expect(page).toContain('<DietPreferenceSection :dog-id="dogId" />')
+    // 2026-10-01：内嵌进健康管理页时传 embedded（用来隐藏数量那行）
+    expect(page).toContain('<DietPreferenceSection embedded :dog-id="dogId" />')
   })
 
   it('API 层四个接口都在（列 / 加 / 删 / 整理）', () => {

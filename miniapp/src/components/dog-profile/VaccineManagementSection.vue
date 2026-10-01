@@ -1,6 +1,7 @@
 <template>
   <view class="health-section">
-    <view class="health-section__header">
+    <!-- 内嵌到健康管理页时不显示（书签已经写着「疫苗」）—— 老板 2026-10-01 要求 -->
+    <view v-if="!embedded" class="health-section__header">
       <view class="health-section__heading">
         <text class="health-section__title">疫苗管理</text>
         <text class="health-section__desc">
@@ -196,6 +197,11 @@ const props = defineProps<{
    * （顾客不必在每一行里找保存键。）
    */
   externalSave?: boolean
+  /**
+   * 内嵌到健康管理页：同时隐藏板块头（「疫苗管理」+ N 条）——
+   * 上面书签已经写着「疫苗」，重复一遍只会把正文往下推。
+   */
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{

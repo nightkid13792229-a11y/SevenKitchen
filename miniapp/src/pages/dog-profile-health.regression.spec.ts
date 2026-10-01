@@ -398,16 +398,42 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('const stickySecondaryText = computed(() => HEALTH_ENTRY_LABELS[entrySource.value])')
   })
 
-  it('三大记录板块（病史/体检/过敏）各自独立：标题用本类型的名字', () => {
+  it('三大记录板块（病史/体检/过敏）各自独立，内嵌时不再顶一行板块头', () => {
     const section = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )
 
-    // 原先三类共用一个「健康记录」标题，看着像一个大板块
-    expect(section).toContain("embedded ? activeTypeMeta.label : '健康记录'")
+    // 2026-10-01 老板要求：书签已经写着「病例 / 过敏」，
+    // 板块里再顶一个同名标题 + 「N 条」是重复，还占一行。
+    expect(section).toContain('v-if="!embedded" class="health-section__header"')
+    expect(section).toContain('{{ savedRecordCount }} 条')
     // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存
     expect(section).toContain('defineExpose({ saveAllDirty })')
+  })
+
+  it('五个板块在内嵌时都不顶"标题 + 数量"（老板 2026-10-01 要求）', () => {
+    const read = (name: string) =>
+      readFileSync(resolve(process.cwd(), `src/components/dog-profile/${name}.vue`), 'utf-8')
+
+    // 病例 / 过敏
+    expect(read('HealthRecordsSection')).toContain('v-if="!embedded" class="health-section__header"')
+    // 疫苗
+    expect(read('VaccineManagementSection')).toContain('v-if="!embedded" class="health-section__header"')
+    // 体重（首卡那行标题与说明）
+    expect(read('WeightManagementSection')).toContain('<template v-if="!embedded">')
+    // 饮食：两列清单的数量去掉，"爱吃的 / 不吃的"名字保留（否则两列分不清）
+    const diet = read('DietPreferenceSection')
+    expect(diet).toContain('v-if="!embedded" class="health-section__count"')
+    expect(diet).toContain('>爱吃的<')
+    expect(diet).toContain('>不吃的 / 挑食<')
+
+    // 页面确实把这几个组件都标成了内嵌
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+    expect(page).toContain('embedded')
   })
 
   it('五个书签等宽，且与板块拼成同一张卡', () => {

@@ -139,6 +139,7 @@
           <VaccineManagementSection
             ref="vaccineSectionRef"
             external-save
+            embedded
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
           />
@@ -146,7 +147,7 @@
 
         <view v-else-if="activeHealthTab === 'diet'" class="diet-tab">
           <!-- 结构化偏好 + 变更历史（2026-10-01，第五期） -->
-          <DietPreferenceSection :dog-id="dogId" />
+          <DietPreferenceSection embedded :dog-id="dogId" />
 
           <!-- 原来的两个自由文本框**保留**：配方设计仍在用，
                而且顾客已经填过的文字不能凭空消失。 -->
@@ -182,6 +183,7 @@
           v-else-if="activeHealthTab === 'weight'"
           ref="weightSectionRef"
           external-save
+          embedded
           :dog-id="dogId"
           :dog-profile="weightSectionDogProfile"
           @dirty-change="hasUnsavedSectionDraft = $event"

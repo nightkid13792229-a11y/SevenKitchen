@@ -2,8 +2,11 @@
   <view v-if="dogId" class="health-section">
     <!-- 体重记录 -->
     <view class="health-card weight-record-card">
-      <text class="health-section__title">体重记录</text>
-      <text class="health-section__desc">记录每次称重，观察体重趋势，及时调整饭量。</text>
+      <!-- 内嵌到健康管理页时不显示这一行（书签已经写着「体重」）—— 老板 2026-10-01 要求 -->
+      <template v-if="!embedded">
+        <text class="health-section__title">体重记录</text>
+        <text class="health-section__desc">记录每次称重，观察体重趋势，及时调整饭量。</text>
+      </template>
 
       <view class="input-card">
         <view class="input-item">
@@ -268,6 +271,11 @@ const props = defineProps<{
    * 内嵌到健康管理页：隐藏板块内的「保存记录」，改由底部那个自适应按钮统一保存。
    */
   externalSave?: boolean
+  /**
+   * 内嵌到健康管理页：同时隐藏首卡那行「体重记录 + 说明」——
+   * 上面书签已经写着「体重」。
+   */
+  embedded?: boolean
   dogProfile?: {
     currentWeightKg?: number | null
     /** 体况分：决定要不要给「制定计划」入口（BCS 4-5 是理想区间，不该建计划） */

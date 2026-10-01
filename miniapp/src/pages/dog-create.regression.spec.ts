@@ -385,8 +385,10 @@ describe('dog-create runtime regressions', () => {
         resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
         'utf-8',
       )
+      // 声明上可能带类型标注（2026-10-01 起显式写了 readonly ActivityLevelChoice[]），
+      // 所以正则只锚定数组本身，不再假设结尾一定有 `as const`
       const choices =
-        viewSource.match(/const ACTIVITY_LEVEL_CHOICES = \[[\s\S]*?\n\] as const/)?.[0] || ''
+        viewSource.match(/const ACTIVITY_LEVEL_CHOICES(?::[^=]+)? = \[[\s\S]*?\n\]/)?.[0] || ''
 
       expect(choices).not.toBe('')
       expect(choices).not.toContain('intensity')

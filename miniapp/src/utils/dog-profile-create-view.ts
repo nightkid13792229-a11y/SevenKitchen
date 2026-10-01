@@ -21,7 +21,22 @@ const TREAT_LEVEL_LABELS: Record<string, string> = {
  */
 const TREAT_LEVEL_CHOICES = ['NONE', 'LOW', 'HIGH'] as const
 
-const ACTIVITY_LEVEL_CHOICES = [
+/**
+ * 活动量档位。
+ *
+ * 显式写出类型、而不是靠 `as const` 推断：`isCommon` 只有一档有，
+ * 靠推断会得到一个"各成员结构不一致"的联合类型，
+ * 于是模板里读 `option.isCommon` 会被判成"该属性不存在"（建档页与爱犬概览页都踩过这条）。
+ */
+export interface ActivityLevelChoice {
+  value: 'RESTING' | 'LOW' | 'NORMAL' | 'HIGH' | 'WORKING'
+  label: string
+  description: string
+  /** 多数城市犬都在这一档，未选中时也标出来 */
+  isCommon?: boolean
+}
+
+const ACTIVITY_LEVEL_CHOICES: readonly ActivityLevelChoice[] = [
   {
     value: 'RESTING',
     label: '休息静养',

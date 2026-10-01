@@ -65,8 +65,10 @@ describe('dog-profile-overview runtime regressions', () => {
       resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
       'utf-8',
     )
+    // 声明上可能带类型标注（2026-10-01 起显式写了 readonly ActivityLevelChoice[]），
+    // 所以正则只锚定数组本身
     const optionsSource =
-      sharedSource.match(/const ACTIVITY_LEVEL_CHOICES = \[[\s\S]*?\n\]/)?.[0] || ''
+      sharedSource.match(/const ACTIVITY_LEVEL_CHOICES(?::[^=]+)? = \[[\s\S]*?\n\]/)?.[0] || ''
 
     expect(optionsSource.indexOf("value: 'RESTING'")).toBeLessThan(
       optionsSource.indexOf("value: 'LOW'"),

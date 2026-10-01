@@ -122,3 +122,42 @@
 | 1 | 合并后的标签叫**「病历」**？ | 建议「病历」（2 字，与现有标签等长） |
 | 2 | 上面那张**字段对照表**认可吗？ | 尤其是「诊断结果」必填、体检时改叫「检查结论」 |
 | 3 | 主操作按钮统一放**列表底部整行宽** | 现在"新增"按钮已经在底部；保持一致 |
+
+---
+
+## 八、执行记录与一处保留的构建告警（2026-10-01）
+
+### 外壳怎么落地的
+
+统一外壳写在一个共享样式文件里：`miniapp/src/styles/health-section.scss`
+（`.health-section` 与 `__header/__heading/__title/__desc/__count/__empty/__list/__action`，加 `.health-card`、`.health-card--dirty`）。
+各板块（病历/过敏/疫苗/饮食/体重，以及时间线、摘要、分享、营养师端）在**自己的 `<style scoped lang="scss">` 里
+`@import` 这个文件**——不能只靠全局 `app.wxss`，微信自定义组件有样式隔离，全局样式进不去组件内部。
+
+第一期的四项要求对应关系：
+
+| 要求 | 落地 |
+|---|---|
+| 五个板块外壳统一 | `health-section.scss` + 各组件 `@import` |
+| 日期与状态文案格式统一 | 日期一律 `YYYY-MM-DD`；状态文案统一为 已保存 / 未保存 / 保存中 |
+| 主操作按钮位置统一 | 一律列表底部整行宽（`__action`），次要操作走 `__action--ghost` |
+| **清掉组件 wxss 选择器警告** | ✅ 已完成：组件样式里不再使用标签选择器、ID 选择器与**属性选择器**（微信小程序自定义组件只允许 class 选择器） |
+
+### 保留了一处 Sass 弃用告警（刻意不改）
+
+打包时会看到这样的提示（多条，来自每个 `@import` 该文件的组件）：
+
+```
+DEPRECATION WARNING [import]: Sass @import rules are deprecated
+and will be removed in Dart Sass 3.0.0.
+  2 │ @import '../../styles/health-section.scss';
+```
+
+**这是 Sass 自己的 `@import` 弃用告警，不是微信的 wxss 选择器告警**（后者已清零），
+也不影响任何功能与产物。之所以先不改：
+
+1. 换 `@use` 需要给每个组件的引用改名空间写法，属于纯样式重构，**收益只是消掉一条提示**；
+2. Dart Sass 3.0 尚未发布，且真到那天 uni-app 会一起升级编译链；
+3. 现在的写法（SFC 内 `@import` 共享 SCSS）是 Vue + uni-app 里最通用、最不容易踩坑的写法。
+
+所以记在这里：**哪天升级到 Dart Sass 3，这批 `@import` 要一起换掉**，别到时候才发现。

@@ -594,6 +594,38 @@ const publishAllPendingStages = async (row: RecipeSummary) => {
   await publishPendingStages(row, getPendingPublishStages(row));
 };
 
+/**
+ * W4-D：把某条食谱复制成独立食谱（不挂在原系列下），
+ * 供「公开 / 私密定制不能混用」被拦截时使用。
+ */
+const offerCopyAsIndependentRecipe = async (recipeId: string) => {
+  if (!recipeId) return;
+  try {
+    await ElMessageBox.confirm(
+      '这条食谱所在的系列里已经有两种类型的版本，不能直接改。\n\n需要先把它复制成一个独立食谱，再在复制出来的食谱上发布。是否现在复制？',
+      '需要复制为独立食谱',
+      {
+        confirmButtonText: '复制为独立食谱',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
+
+  try {
+    const copied: any = await recipeApi.duplicate(recipeId);
+    ElMessage.success('已复制为独立食谱，请在新食谱上继续');
+    await loadRecipes();
+    if (copied?.id) {
+      router.push(`/recipes/${copied.id}/edit`);
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message || '复制失败');
+  }
+};
+
 const publishPendingStages = async (
   row: RecipeSummary,
   stages: PendingPublishStage[],
@@ -648,6 +680,17 @@ const publishPendingStages = async (
       message,
       duration: 6000,
     });
+
+    // W4-D：如果是「公开 / 私密定制不能混在同一个系列」导致的失败，
+    // 就地给出「复制为独立食谱」的出口，避免运营卡住。
+    const conflictFailure = failures.find(({ message: m }) =>
+      m.includes('不能同时有'),
+    );
+    if (conflictFailure) {
+      await offerCopyAsIndependentRecipe(
+        conflictFailure.stage.publishRecipeId,
+      );
+    }
   } finally {
     publishingRecipeStages.value = false;
     if (publishingRowKey.value === rowKey) {

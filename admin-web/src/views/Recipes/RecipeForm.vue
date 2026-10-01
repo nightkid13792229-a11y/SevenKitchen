@@ -2251,6 +2251,43 @@ const extractCosKeyFromUrl = (url: string): string | null => {
   }
 };
 
+/**
+ * 识别后端「公开 / 私密定制不能混在同一个系列」的拦截（W4-C），
+ * 并就地给出「复制为独立食谱」的出口（W4-D）——
+ * 否则运营遇到拦截会卡住，不知道怎么继续。
+ */
+const isSeriesPublishTypeConflict = (message?: string) =>
+  Boolean(message && message.includes('不能同时有'));
+
+const offerCopyAsIndependentRecipe = async (conflictMessage: string) => {
+  try {
+    await ElMessageBox.confirm(
+      `${conflictMessage}\n\n要继续操作，需要先把它复制成一个独立食谱（不挂在原系列下），再在复制出来的食谱上继续。是否现在复制？`,
+      '需要复制为独立食谱',
+      {
+        confirmButtonText: '复制为独立食谱',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return; // 用户取消
+  }
+
+  if (!recipeId.value) return;
+  try {
+    const copied: any = await recipeApi.duplicate(recipeId.value);
+    ElMessage.success('已复制为独立食谱，请在复制出的食谱上继续操作');
+    if (copied?.id) {
+      router.push(`/recipes/${copied.id}/edit`);
+    } else {
+      router.push('/recipes');
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message || '复制失败');
+  }
+};
+
 const assertPrivateCustomOwnership = (): boolean => {
   if (form.status !== RecipeStatus.PRIVATE_CUSTOM) return true;
   if (form.customerOwnerId && form.customerDogId) return true;
@@ -2287,7 +2324,12 @@ const handleSubmit = async () => {
 
     router.push('/recipes');
   } catch (error: any) {
-    ElMessage.error(error.message || '操作失败');
+    // 后端已通过拦截器提示过错误信息，这里只负责给"复制为独立食谱"的出口
+    if (isSeriesPublishTypeConflict(error?.message)) {
+      await offerCopyAsIndependentRecipe(error.message);
+    } else {
+      ElMessage.error(error.message || '操作失败');
+    }
   } finally {
     submitting.value = false;
   }

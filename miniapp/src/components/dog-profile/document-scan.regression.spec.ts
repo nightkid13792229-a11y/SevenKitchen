@@ -92,8 +92,10 @@ describe('拍照录入 · 组件', () => {
 
     expect(scan).toContain('mergeScannedReportDrafts')
     // 疫苗本一张本子读出多条接种记录，合并会把几针并成一针
-    expect(scan).toContain("detectedType === 'VACCINE_BOOK'")
+    expect(scan).toContain("resolvedType === 'VACCINE_BOOK'")
     expect(scan).toContain('? collectedDrafts')
+    // 类型按"多数页"定：一页被误判不该把整份资料带偏
+    expect(scan).toContain('resolveScannedDocumentType')
   })
 
   it('合成时要如实说明「N 张 → 1 条」，否则顾客以为剩下的没识别成功', () => {

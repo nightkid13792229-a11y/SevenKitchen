@@ -1460,6 +1460,43 @@ export function mergeScannedReportDrafts(
   return [merged]
 }
 
+/**
+ * 多张图各自判了类型 → 按"多数页"定这份资料是哪一类。
+ *
+ * 后端对每一张图独立判定（AUTO 模式），一页被读成"病历"不该把整份
+ * 3 页体检报告带成病历 —— 原来取最后一张的判定，纯看运气。
+ * 票数相同时以**先出现**的那类为准（页码顺序），结果稳定、可解释。
+ * 一张都没判出来时用调用方给的兜底类型。
+ */
+export function resolveScannedDocumentType(
+  votes: (string | null | undefined)[] | null | undefined,
+  fallback: string,
+): string {
+  const counts = new Map<string, number>()
+
+  for (const vote of votes || []) {
+    const key = String(vote || '').trim().toUpperCase()
+    if (!key || key === 'AUTO') {
+      continue
+    }
+
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+
+  let winner = ''
+  let winnerCount = 0
+
+  // Map 按插入顺序遍历：票数相同时先出现的那类胜出
+  for (const [key, count] of counts) {
+    if (count > winnerCount) {
+      winner = key
+      winnerCount = count
+    }
+  }
+
+  return winner || fallback
+}
+
 /** 合并列表里这条记录的日期（用于排序与摘要） */
 export function resolveHealthVisitDate(record: Record<string, any> | null | undefined): string {
   const kind = resolveHealthVisitKind(record)

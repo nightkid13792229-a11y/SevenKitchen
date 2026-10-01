@@ -40,6 +40,7 @@ import {
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
   mergeScannedReportDrafts,
+  resolveScannedDocumentType,
   shouldDiscardDogHealthProfileResponse,
   shouldUseRemoteHealthRecordSync,
   writeHealthRecordAttachmentCache,
@@ -1109,5 +1110,44 @@ describe('多页报告合成一条记录', () => {
     ])
 
     expect(merged[0].status).toBe('PENDING_CONFIRMATION')
+  })
+})
+
+/**
+ * 多张图各自判了类型 → 按"多数页"定这份资料属于哪一类（2026-10-01 第九期）。
+ *
+ * 原来取最后一张的判定：3 页体检报告里只要最后一页被读成"病历"，
+ * 整份资料就变成病历。改成按页投票，结果稳定、也解释得通。
+ */
+describe('多页资料的文档类型（按多数页定）', () => {
+  it('三页里两页判成体检 → 这份是体检', () => {
+    expect(
+      resolveScannedDocumentType(['CHECKUP_REPORT', 'MEDICAL_RECORD', 'CHECKUP_REPORT'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+  })
+
+  it('票数相同时以先出现的那类为准（页码顺序，结果稳定）', () => {
+    expect(
+      resolveScannedDocumentType(['CHECKUP_REPORT', 'MEDICAL_RECORD'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+  })
+
+  it('一张都没判出来时用兜底类型', () => {
+    expect(resolveScannedDocumentType([], 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+    expect(resolveScannedDocumentType(null, 'CHECKUP_REPORT')).toBe('CHECKUP_REPORT')
+    expect(resolveScannedDocumentType(undefined, 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+  })
+
+  it('AUTO、空值、大小写不一的判定都不算票', () => {
+    expect(
+      resolveScannedDocumentType(['AUTO', '', null, undefined, 'checkup_report'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+    expect(resolveScannedDocumentType(['AUTO', '  '], 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+  })
+
+  it('疫苗本占多数时按疫苗本走（前端据此不做合并）', () => {
+    expect(
+      resolveScannedDocumentType(['VACCINE_BOOK', 'VACCINE_BOOK', 'MEDICAL_RECORD'], 'MEDICAL_RECORD'),
+    ).toBe('VACCINE_BOOK')
   })
 })

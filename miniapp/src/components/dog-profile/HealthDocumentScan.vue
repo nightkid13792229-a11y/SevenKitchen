@@ -50,6 +50,7 @@ import { dogApi } from '../../api/dogs'
 import {
   mergeScannedReportDrafts,
   resolveHealthScanErrorMessage,
+  resolveScannedDocumentType,
 } from '../../utils/health-records'
 
 /**
@@ -236,8 +237,9 @@ async function scanAll(filePaths: string[]) {
 
   const collectedDrafts: Record<string, any>[] = []
   const collectedWarnings: string[] = []
+  // 每一张图各自判出来的类型（多张时按"多数页"定这份资料属于哪一类）
+  const detectedTypes: string[] = []
   let worstConfidence = 'HIGH'
-  let detectedType: DocumentType = props.documentType
   let failed = 0
 
   try {
@@ -287,7 +289,7 @@ async function scanAll(filePaths: string[]) {
 
         const type = String(res.data.documentType || '').toUpperCase()
         if (type && type !== 'AUTO') {
-          detectedType = type as DocumentType
+          detectedTypes.push(type)
         }
 
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
@@ -311,15 +313,21 @@ async function scanAll(filePaths: string[]) {
       collectedWarnings.push(`有 ${failed} 张没能识别，可以单独再试或手工补充`)
     }
 
+    // 类型按"多数页"定：一页被误判不该把整份资料带偏
+    const resolvedType = resolveScannedDocumentType(
+      detectedTypes,
+      props.documentType,
+    ) as DocumentType
+
     // 多张图算一份资料（2026-10-01 第九期，老板定的）：
     // 3 页体检报告 = 1 条记录 + 3 张原图，而不是 3 条各说一半的记录。
     // **疫苗本例外** —— 一张本子读出的是多条各自的接种记录，合并会把几针并成一针。
-    drafts.value = detectedType === 'VACCINE_BOOK'
+    drafts.value = resolvedType === 'VACCINE_BOOK'
       ? collectedDrafts
       : mergeScannedReportDrafts(collectedDrafts)
     warnings.value = collectedWarnings
     confidence.value = worstConfidence
-    resolvedDocumentType.value = detectedType
+    resolvedDocumentType.value = resolvedType
     showConfirm.value = true
   } catch (error: any) {
     uni.showToast({

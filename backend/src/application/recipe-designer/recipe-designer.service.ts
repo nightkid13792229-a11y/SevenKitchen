@@ -8727,6 +8727,23 @@ export function deriveKnowledgeTags(profile: {
   tags.add('safe');
   tags.add('food-safety');
 
+  // 健康管理三个新领域的检索标签（2026-10-01）。
+  //
+  // 疫苗、分诊、就医时机对**每一只狗**都成立，所以无条件产出；
+  // 化验解读只在真的有检查记录时才需要。
+  //
+  // 这些标签会让免疫/化验/就医时机三个领域的条目进入检索结果，
+  // 但**食谱设计侧看不到它们** —— buildPromptContext 的 purpose 会把这三个
+  // 领域整体排除（它们对配方没有输入价值，放进去只会占名额）。
+  tags.add('vaccine');
+  tags.add('immune');
+  tags.add('prevention');
+  tags.add('clinical');
+  tags.add('red-flag');
+  if (profile.checkups.length > 0 || profile.medicalRecords.length > 0) {
+    tags.add('lab');
+  }
+
   // 通用成年犬营养维护：无疾病/特殊阶段标签时兜底命中，保证健康成犬也有权威条目可引用
   if (
     ![

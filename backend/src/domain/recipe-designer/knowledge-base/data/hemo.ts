@@ -39,7 +39,8 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '造血相关营养素推荐量（铁/铜/锌/叶酸/钴胺素/维B6等）' },
-      { source: '本知识库 RENAL/HEPATIC/ONCO/CRITICAL 领域', chapter: '相应疾病章节', note: '贫血作为肾病/肝病/肿瘤/重症伴随问题的营养原则' },
+      { source: '小动物临床营养学（第5版）', chapter: '相应疾病章节', note: '贫血作为肾病/肝病/肿瘤/重症伴随问题的营养原则' },
+      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识（2019）', chapter: '诊断分类与贫血类型鉴别', note: '贫血类型鉴别与营养支持边界' },
     ],
     priority: 'HIGH',
   },
@@ -94,7 +95,8 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '铁推荐量 30mg/1000kcal ME' },
-      { source: '本知识库 HEPATIC 领域', chapter: '第68章 肝胆疾病', note: '铁过量与氧化损伤、肝病铁管理' },
+      { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '铁过量与氧化损伤、肝病铁管理' },
+      { source: 'ACVIM 犬猫免疫介导性溶血性贫血诊断共识（2019）', chapter: '缺铁与慢性失血的鉴别要点', note: '缺铁性贫血的鉴别与营养支持' },
     ],
     priority: 'HIGH',
   },
@@ -122,7 +124,8 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '造血营养素推荐量' },
-      { source: '本知识库 RENAL 领域', chapter: '第37章 慢性肾病', note: '肾病贫血、蛋白-能量营养不良、磷与贫血营养管理' },
+      { source: '小动物临床营养学（第5版）', chapter: '第37章 慢性肾病', note: '肾病贫血、蛋白-能量营养不良、磷与贫血营养管理' },
+      { source: 'ACVIM 犬猫免疫介导性溶血性贫血治疗共识（2019）', chapter: '慢性病/炎症性贫血的处理原则', note: '慢性病贫血的营养支持与监测' },
     ],
     priority: 'MEDIUM',
   },
@@ -150,7 +153,7 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '粗蛋白/氨基酸推荐量（造血与免疫合成基础）' },
-      { source: '本知识库 CRITICAL 领域', chapter: '第25章 重症监护营养', note: '蛋白-热量营养不良、白蛋白、再喂养' },
+      { source: '小动物临床营养学（第5版）', chapter: '第25章 重症监护营养', note: '蛋白-热量营养不良、白蛋白、再喂养' },
     ],
     priority: 'MEDIUM',
   },
@@ -178,7 +181,8 @@ export const HEMO_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: 'NRC《犬猫营养需要》(2006)', chapter: '表15-5 成年犬维持营养需要量', note: '铁/铜/锌推荐量安全范围' },
-      { source: '本知识库 HEPATIC 领域', chapter: '第68章 肝胆疾病', note: '铜蓄积病、铁过量氧化损伤' },
+      { source: '小动物临床营养学（第5版）', chapter: '第68章 肝胆疾病', note: '铜蓄积病、铁过量氧化损伤' },
+      { source: 'ACVIM 犬猫免疫性血小板减少症诊断共识（2024）', chapter: '血液学监测与安全边界', note: '营养管理必须配合兽医监测' },
     ],
     priority: 'MEDIUM',
   },

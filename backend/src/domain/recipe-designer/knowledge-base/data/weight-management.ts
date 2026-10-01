@@ -40,7 +40,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 2021 营养与体重管理指南' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: 'WSAVA 犬体况评分（2025）' },
     ],
     priority: 'HIGH',
@@ -68,7 +68,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       '存在内分泌等合并症时理想体重与减重目标应由兽医确认。',
     ],
     citations: [
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
     priority: 'HIGH',
@@ -99,7 +99,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       '合并疾病（糖尿病、肾病、心脏病等）的犬猫能量方案需兽医确认。',
     ],
     citations: [
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 2021 营养与体重管理指南' },
     ],
@@ -129,7 +129,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       '减重中若肌肉状况评分（MCS）下降，应核查蛋白摄入并评估是否存在过快减重或合并症。',
     ],
     citations: [
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
     priority: 'HIGH',
@@ -160,7 +160,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: 'AAHA 2021 营养与体重管理指南' },
     ],
     priority: 'HIGH',
@@ -192,7 +192,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 2021 营养与体重管理指南' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
     ],
     priority: 'MEDIUM',
   },
@@ -221,7 +221,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'AAHA 2021 营养与体重管理指南' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
     ],
     priority: 'HIGH',
   },
@@ -250,7 +250,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
       { source: 'AAHA 2021 营养与体重管理指南' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
     ],
     priority: 'MEDIUM',
   },
@@ -278,7 +278,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: 'AAHA 2021 营养与体重管理指南' },
     ],
     priority: 'HIGH',
@@ -307,7 +307,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: 'AAHA 2021 营养与体重管理指南' },
       { source: 'WSAVA 犬热量需要（2020）' },
     ],
@@ -337,7 +337,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
     citations: [
       { source: 'AAHA 2021 营养与体重管理指南' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
     ],
     priority: 'MEDIUM',
   },
@@ -366,7 +366,7 @@ export const WEIGHT_KNOWLEDGE: KnowledgeEntry[] = [
       '合并糖尿病、肾病、胰腺炎等疾病时，减重方案需兽医确认。',
     ],
     citations: [
-      { source: 'AAHA 2014 体重管理指南' },
+      { source: 'AAHA 2014 体重管理指南（⚠️ 已被 2021 版取代，仅作历史对照）' },
       { source: '小动物临床营养学（第5版）', chapter: '第27章 肥胖' },
     ],
     priority: 'HIGH',

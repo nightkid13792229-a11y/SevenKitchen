@@ -18,6 +18,10 @@
 
 /** 系统在检索时会产出的标签（由 deriveKnowledgeTags 产生） */
 export const RETRIEVAL_TAGS: readonly string[] = [
+  // 2026-10-01 新增：健康管理三个新领域的检索标签。
+  // 由 deriveKnowledgeTags 无条件产出（疫苗、化验、就医时机对每一只狗都成立），
+  // 食谱设计侧靠 buildPromptContext 的 purpose 过滤掉。
+  'vaccine', 'immune', 'lab', 'clinical', 'red-flag', 'prevention',
   'adult', 'anemia', 'arthritis', 'blood',
   'cancer', 'cardiac', 'cardio', 'cds',
   'cie', 'ckd', 'coat', 'cognitive',
@@ -64,15 +68,15 @@ export const DESCRIPTIVE_TAGS: readonly string[] = [
   'nutritional', 'nutritional-anemia', 'obesity', 'older-dog',
   'osteoarthritis', 'otitis', 'oxalate', 'pain',
   'parenteral-nutrition', 'periodontitis', 'ple', 'portosystemic-shunt',
-  'prevention', 'protein', 'proteinuria', 'pruritus',
-  'pss', 'pufa', 'radiation', 'raw',
-  'recovery', 'relapse', 'reproduction', 'risk',
-  'seborrhea', 'sedentary', 'sepsis', 'sibo',
-  'silica', 'small-breed-puppy', 'small-frequent-meals', 'stones',
-  'struvite', 'supplement', 'supplements', 'surgery',
-  'systemic', 'taurine', 'trace-mineral', 'trauma',
-  'urate', 'vitamin-a', 'vitamin-e', 'vomiting',
-  'weaning', 'weight', 'wound-healing', 'zinc',
+  'protein', 'proteinuria', 'pruritus', 'pss',
+  'pufa', 'radiation', 'raw', 'recovery',
+  'relapse', 'reproduction', 'risk', 'seborrhea',
+  'sedentary', 'sepsis', 'sibo', 'silica',
+  'small-breed-puppy', 'small-frequent-meals', 'stones', 'struvite',
+  'supplement', 'supplements', 'surgery', 'systemic',
+  'taurine', 'trace-mineral', 'trauma', 'urate',
+  'vitamin-a', 'vitamin-e', 'vomiting', 'weaning',
+  'weight', 'wound-healing', 'zinc',
 ];
 
 /** 完整受控词表 */

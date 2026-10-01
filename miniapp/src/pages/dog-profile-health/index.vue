@@ -115,6 +115,7 @@
           :saving-record-key="savingRecordKey"
           :preferred-expanded-record-identity="preferredExpandedRecordIdentity"
           :show-type-extra="activeRecordType === 'allergy'"
+          :hide-empty-state="activeRecordType === 'allergy'"
           @change-type="activeRecordType = $event"
           @save-record="saveHealthRecord"
           @delete-record="deleteHealthRecord"

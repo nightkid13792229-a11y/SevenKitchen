@@ -55,7 +55,11 @@
       />
     </view>
 
-    <view v-if="draftRecords.length === 0" class="health-section__empty">
+    <!-- 空态块（2026-10-01）：板块**自带引导卡**时不再显示 ——
+         过敏板块上面那张「快速添加过敏原」卡已经写着"已记 0 项"并给了三种添加方式，
+         再顶一块"还没有过敏记录"的空卡片纯属重复；它还会被底部按钮栏挡住，
+         看着就是一块没内容的空白。 -->
+    <view v-if="draftRecords.length === 0 && !hideEmptyState" class="health-section__empty">
       <text class="health-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
       </text>
@@ -503,9 +507,15 @@ const props = withDefaults(defineProps<{
    * 插槽容器会作为 flex 子元素占掉一个 gap，书签下方就多一条空白。
    */
   showTypeExtra?: boolean
+  /**
+   * 是否隐藏空态块：板块自带引导卡时（过敏的「快速添加过敏原」）传 true，
+   * 否则会在引导卡下面再显示一块内容重复、又容易被底部按钮栏挡住的空卡片。
+   */
+  hideEmptyState?: boolean
 }>(), {
   activeType: undefined,
   showTypeExtra: true,
+  hideEmptyState: false,
   records: () => [],
   loading: false,
   savingRecordKey: '',

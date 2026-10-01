@@ -57,7 +57,16 @@ describe('dog-profile-overview runtime regressions', () => {
       resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
       'utf-8',
     )
-    const optionsSource = source.match(/const activityLevelOptions = \[[\s\S]*?\n\]/)?.[0] || ''
+    // 2026-10-01：概览页不再自己写一份选项，改用与建档页**同一份**共享定义。
+    // （此前两页各写一份，描述已经开始不一致 —— 同一个问题两个页面说法不同。）
+    expect(source).toContain('getCreateActivityChoices()')
+
+    const sharedSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/dog-profile-create-view.ts'),
+      'utf-8',
+    )
+    const optionsSource =
+      sharedSource.match(/const ACTIVITY_LEVEL_CHOICES = \[[\s\S]*?\n\]/)?.[0] || ''
 
     expect(optionsSource.indexOf("value: 'RESTING'")).toBeLessThan(
       optionsSource.indexOf("value: 'LOW'"),
@@ -69,6 +78,9 @@ describe('dog-profile-overview runtime regressions', () => {
       optionsSource.indexOf("value: 'HIGH'"),
     )
     expect(source).toContain("activityLevel: 'LOW'")
+
+    // 前三档起始热量相同这件事要在界面上说清楚，不能让顾客以为算错了
+    expect(source).toContain('activityLevelNote')
   })
 
   /**

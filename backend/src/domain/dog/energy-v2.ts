@@ -91,6 +91,19 @@ export const ADULT_ENERGY_TABLE = {
 
 /** 年龄段界限（月龄 / 年） */
 export const YOUNG_ADULT_END_MONTHS = 24;
+/**
+ * 步入老年的年龄界线（能量分期用）。
+ *
+ * ⚠️ **已知口径不一致（2026-10-01 记录，未改）**：
+ *   犬种表里自带 seniorAgeYears（按体型/品种给，用于生命阶段标签），
+ *   但**能量分期用的是这个固定值 7 岁**，不读犬种。
+ *   也就是说：一只按犬种 10 岁才算老的小型犬，从 7 岁起就按老年档算能量；
+ *   一只按犬种 5-6 岁就该算老的大型犬，7 岁前仍按中年档。
+ *
+ *   之所以没有顺手改成按犬种取：这会直接改变线上**所有 7 岁以上犬**的能量数字，
+ *   进而影响已下单的克数、体重目标的建议值。属于"要单独评估 + 单独灰度"的改动，
+ *   不适合混在健康管理重构里做。改动前需要先出一份差异报表。
+ */
 export const SENIOR_START_YEARS = 7;
 
 /** 犬妊娠期天数（均值；个体约 58-68 天）—— 用于由预产期反推孕周 */
@@ -413,6 +426,11 @@ function resolveTreatRatio(
   if (treatInputMode === TreatInputMode.EXACT_KCAL) {
     return -1; // 由调用方按具体 kcal 扣
   }
+  // 兜底取 LOW（3%）而不是随手取中间值：
+  //   · 前端只给三档（NONE / LOW / HIGH），但历史数据里可能有 MODERATE；
+  //     表里查得到就用表里的值，查不到（脏数据 / 未来的新枚举）
+  //     一律按 LOW 处理 —— 零食算少不算多，对减重管理是安全的一侧。
+  //   · TREAT_RATIOS 里另有 TREAT_CAP_RATIO = 0.1，再高也不会超过 10%。
   return TREAT_RATIOS[treatLevel] ?? TREAT_RATIOS.LOW;
 }
 

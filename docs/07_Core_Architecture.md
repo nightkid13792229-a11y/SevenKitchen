@@ -686,8 +686,46 @@ def apply_adult_modifiers(base_factor, dog, age_months, size_class):
 
     return current_factor
 ```
-##### 3.1.4 医疗模块：BCS 体况评分调整 (Weight Management) - v1.1
-*来源：WSAVA BCS Guidelines. 采用 9 分制标准。*
+##### 3.1.4 医疗模块：BCS 体况评分调整 (Weight Management)
+
+*来源：FEDIAF 2025 表 VII-2（犬）。采用 9 分制标准。*
+
+> **⚠️ 2026-10-01 更新：线上跑的是 v2 算法，本节此前描述的是 v1 的做法，已按现网改写。**
+>
+> | | v1（旧描述） | **v2（线上现行）** |
+> |---|---|---|
+> | 做法 | 直接给总热量打**折扣**：BCS 6/7/8/9 → ×0.9/0.8/0.7/0.6 | 先把当前体重**换算成理想体重**，再用理想体重算 RER |
+> | 依据 | WSAVA BCS 指南 | **FEDIAF 2025 表 VII-2**（直接给出相对 BCS 5 的体重增减百分比） |
+> | 过瘦 | ×1.2 / ×1.4 | 同一套换算表的反向用法 |
+>
+> 切换开关是环境变量 `ENERGY_ALGORITHM=v2`（默认 v1；**生产已开 v2**）。
+> 代码在 `backend/src/domain/dog/energy-v2.ts`，常量 `BCS_TO_IDEAL_WEIGHT_FACTOR`。
+>
+> **换算表（v2 现行）**：
+>
+> ```
+> 理想体重 = 当前体重 ÷ (1 + 增减中值)
+>
+> BCS 1 → ÷0.60   (≥ −40%，取下限)
+> BCS 2 → ÷0.65   (−30~−40%，取中值 −35%)
+> BCS 3 → ÷0.75   (−20~−30%，取中值 −25%)
+> BCS 4 → 不换算   ← 理想区间
+> BCS 5 → 不换算   ← 基准
+> BCS 6 → ÷1.125  (+10~+15%，取中值 +12.5%)
+> BCS 7 → ÷1.25   (+20~+30%，取中值 +25%)
+> BCS 8 → ÷1.375  (+30~+45%，取中值 +37.5%)
+> BCS 9 → ÷1.45   (> +45%，取区间下限)
+> ```
+>
+> **BCS 4 与 5 都不换算**：FEDIAF 原文是"犬应维持 BCS 4–5"，两者同属理想区间。
+> 这一点和 v1 的"4 和 5 都给 ×1.0"结论一致，但 v2 的理由是"不换算"而不是"乘 1"。
+>
+> 另外，**主人可以自己填理想体重**；填了就以它为准（与当前体重相差超过 30% 会给一条确认提示）。
+
+<details>
+<summary>附：v1 的旧做法（保留备查，线上已不用）</summary>
+
+*来源：WSAVA BCS Guidelines。*
 
 ```python
 def get_bcs_adjustment(bcs_score):
@@ -718,6 +756,8 @@ def get_bcs_adjustment(bcs_score):
     
     return 1.0
 ```
+
+</details>
 ##### 3.1.5 终极计算：能量需求汇总 (Final Energy Summary) - v1.2 (Split)
 *设计原则：将“生物学总需求”与“鲜食喂食量”解耦，防止逻辑混淆。*
 

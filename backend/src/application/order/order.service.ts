@@ -41,6 +41,7 @@ import {
   calculateDogEnergy,
   calculateDailyIntakeG,
 } from '../../domain';
+import { DogBreed } from '../../domain/dog/dog-breed.entity';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { ORDER_REPOSITORY } from './order.service.tokens';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
@@ -1394,9 +1395,19 @@ export class OrderService {
     });
 
     // 8. 优先使用快照中的 dailyIntakeG，避免用户改档案后订单明细漂移。
+    // ⚠️ 必须把 breed 传进去（2026-10-01 修复）。
+    //
+    // dog.service 那几处一直有传 breed，只有下单这条链路漏了。
+    //
+    // 影响面（核实过，比"算错能量"要窄）：
+    //   · 成年犬：**不受影响** —— 能量公式不读体型类别
+    //   · 幼犬：生长曲线要用"预期成年体重"，这个值优先取犬种的
+    //     averageAdultWeightKg，取不到才按体型档兜底。漏传 breed 时
+    //     两个都没有，于是按中型档的代表体重算，幼犬的系数就偏了。
     const dogCalcResult = calculateDogEnergy(
       dog,
       recipe.energyDensityKcalPerKg,
+      await this.loadDogBreed(dog.breedId),
     );
     // 计划生效时按计划能量换算（阶段 D3）
     const finalKcal = await this.resolvePlanAwareFinalKcal(
@@ -2022,9 +2033,11 @@ export class OrderService {
 
       // Phase 8.9: Calculate dailyIntakeG from DogCalc + Recipe energy density
       // Get DogCalc result (finalFoodKcal)
+      // 同上：幼犬生长曲线要犬种的预期成年体重
       const dogCalcResult = calculateDogEnergy(
         dog,
         recipe.energyDensityKcalPerKg,
+        await this.loadDogBreed(dog.breedId),
       );
 
       // 计划生效时按计划能量换算（阶段 D3）
@@ -4737,6 +4750,38 @@ export class OrderService {
    * @param userId User ID (for permission check)
    * @param userRole User role (for permission check)
    */
+  /**
+   * 按 breedId 取犬种实体（下单链路算能量要用它的体型类别）。
+   *
+   * 取不到就返回 null —— 混合犬种的 breedId 可能是虚拟 id，不在 dog_breed 表里；
+   * 这时按原有兜底逻辑走"中型"，与修复前行为一致，不会因为查不到而报错。
+   */
+  private async loadDogBreed(breedId: string | null | undefined) {
+    if (!breedId) {
+      return null;
+    }
+    const record = await this.prisma.dogBreed.findUnique({
+      where: { id: breedId },
+    });
+    if (!record) {
+      return null;
+    }
+    return new DogBreed(
+      record.id,
+      record.name,
+      record.aliases ?? [],
+      // Prisma 的枚举与领域枚举是两套类型但取值相同，
+      // 与 prisma-dog-breed.repository 里的做法保持一致
+      record.sizeCategory as any,
+      record.growthCurveType as any,
+      record.adultAgeMonths,
+      record.seniorAgeYears,
+      record.averageAdultWeightKg,
+      record.isCommon,
+      record.bcsScoreMap ?? [],
+    );
+  }
+
   async updateOrderTargetDate(
     orderId: string,
     targetDate: Date,

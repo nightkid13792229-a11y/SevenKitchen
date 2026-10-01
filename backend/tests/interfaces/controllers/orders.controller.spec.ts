@@ -212,6 +212,11 @@ describe('OrdersController (e2e)', () => {
     globalConfig: {
       findUnique: jest.fn().mockResolvedValue(null),
     },
+    // 能量 v2 会按犬种查 dog_breed 决定幼犬成长曲线；
+    // 这里统一返回 null，走"中型犬"兜底，与修复前行为一致
+    dogBreed: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
     order: {
       findUnique: jest.fn(),
       update: jest.fn(),

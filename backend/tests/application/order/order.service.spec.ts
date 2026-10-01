@@ -153,6 +153,11 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     dog: {
       findUnique: jest.fn(),
     },
+    // 下单链路算能量要按 breedId 取犬种（2026-10-01 修复）——
+    // 默认返回 null，与"查不到就按中型兜底"的原有行为一致
+    dogBreed: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
     recipe: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),

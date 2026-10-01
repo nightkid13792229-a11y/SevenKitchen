@@ -358,6 +358,9 @@
                 <text class="activity-option__desc">{{ option.description }}</text>
               </view>
             </view>
+            <!-- 把"这个选择实际影响什么"说清楚（2026-10-01）：
+                 现行算法前三档起始热量相同，与其让顾客以为算错了，不如讲明规则 -->
+            <text class="activity-note">{{ activityLevelNote }}</text>
           </view>
 
           <view class="field-group">
@@ -558,6 +561,10 @@ import {
   resolveDogBreedName,
   resolveDogOverviewTreatLevel,
 } from '../../utils/dog-profile-overview'
+import {
+  ACTIVITY_LEVEL_NOTE,
+  getCreateActivityChoices,
+} from '../../utils/dog-profile-create-view'
 import { filterBreedsByKeyword, normalizeBreedSearchText } from '../../utils/dog-breed-search'
 import { getBreedSearchUiState } from '../../utils/dog-breed-ui'
 import {
@@ -653,19 +660,15 @@ const sizeClassChoices = [
   { value: 'LARGE', label: '大型犬' },
   { value: 'GIANT', label: '巨型犬' },
 ]
-const activityLevelOptions = [
-  { value: 'RESTING', label: '休息静养', description: '几乎不运动，主要时间休息或医嘱控量' },
-  {
-    value: 'LOW',
-    label: '城市日常',
-    description: '每日散步约30-45分钟，适合多数国内城市犬',
-    // 绝大多数城市犬都属于这一档，未选中时也要在视觉上区分（与建档页一致）
-    isCommon: true,
-  },
-  { value: 'NORMAL', label: '规律运动', description: '每日主动运动约1小时，活动量稳定' },
-  { value: 'HIGH', label: '高活动', description: '每日运动2-4小时，经常跑步或玩耍' },
-  { value: 'WORKING', label: '工作犬', description: '高强度训练或工作犬场景' },
-]
+/**
+ * 活动量选项改用与建档页**同一份**共享定义（2026-10-01）。
+ *
+ * 此前概览页自己写了一份，描述已经开始和建档页不一致
+ * （"主要时间休息或医嘱控量" vs "主要时间在休息，或遵医嘱控量"）——
+ * 同一个问题在两个页面说法不同，顾客会以为规则变了。
+ */
+const activityLevelOptions = getCreateActivityChoices()
+const activityLevelNote = ACTIVITY_LEVEL_NOTE
 /**
  * 零食档位（2026-09-27 与建档页同步精简为 3 档）。
  * 建档页此前已由 4 档改为 3 档，总览页当时漏改，会出现"两个页面选项数不一致"。
@@ -2410,6 +2413,14 @@ function goToHealthProfile() {
   font-size: 24rpx;
   font-weight: 700;
   color: #26261f;
+}
+
+.activity-note {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a968a;
 }
 
 .activity-option__desc {

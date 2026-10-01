@@ -55,6 +55,23 @@ const ACTIVITY_LEVEL_CHOICES = [
 ] as const
 
 const MEAL_CHOICES = ['1', '2', '3', '4', '5'] as const
+/**
+ * 活动量的**共同说明**（2026-10-01 补）。
+ *
+ * 为什么必须说这句：顾客会看到五个档位，以为每一档都会算出不同热量。
+ * 实际现行算法（ENERGY_ALGORITHM=v2）只分三档：
+ *   · 工作犬 → 工作档
+ *   · 高活动 → 活跃档
+ *   · 休息静养 / 城市日常 / 规律运动 → **都按"日常档"起步**
+ *（FEDIAF 明确"多数家养犬活动不足，应从较低 MER 起步"。）
+ *
+ * 与其让顾客以为"选了规律运动却和休息静养一个数"是我们算错了，
+ * 不如把规则讲明白：先保守起步，再按实际体况和体重变化调整。
+ * 细分档位仍然有用 —— "休息静养/城市日常"会触发活动不足相关的提示。
+ */
+export const ACTIVITY_LEVEL_NOTE =
+  '我们按"先保守起步、再按体重和体况调整"的原则定热量：休息静养、城市日常、规律运动这三档的起始热量相同，之后会根据实际体重变化往上调；高活动与工作犬从一开始就按更高档算。'
+
 const VALID_ACTIVITY_LEVELS = new Set(ACTIVITY_LEVEL_CHOICES.map(option => option.value))
 const VALID_MEAL_CHOICES = new Set(MEAL_CHOICES)
 const VALID_TREAT_LEVELS = new Set(TREAT_LEVEL_CHOICES)

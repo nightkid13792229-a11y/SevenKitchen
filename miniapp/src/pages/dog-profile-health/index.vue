@@ -1162,8 +1162,8 @@ function goToDogCreate() {
 
 .hero-card__avatar {
   flex: none;
-  width: 96rpx;
-  height: 96rpx;
+  width: 88rpx;
+  height: 88rpx;
   border-radius: 50%;
   background: rgba(243, 237, 221, 0.14);
   border: 2rpx solid rgba(216, 188, 133, 0.55);
@@ -1183,29 +1183,43 @@ function goToDogCreate() {
   text-overflow: ellipsis;
 }
 
-/* 右侧基本信息：四行"标签 + 值"，右对齐 */
+/* 右侧基本信息：**一行两个**（年龄 性别 / 品种 体重），两行排完 */
 .hero-card__facts {
   flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  text-align: right;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 356rpx;
+  row-gap: 10rpx;
 }
 
+/*
+ * 两列的宽度不一样：
+ *   第一列放 年龄 / 品种（品种名可能很长，多给一点），
+ *   第二列放 性别 / 体重（都很短）。
+ * 用 flex + 固定百分比而不是 grid —— 小程序的 WXSS 对 grid 支持不齐，
+ * flex 到处都能跑。
+ */
 .hero-card__fact {
   display: flex;
   align-items: baseline;
-  justify-content: flex-end;
-  gap: 12rpx;
+  gap: 8rpx;
+  width: 56%;
+  min-width: 0;
+}
+
+.hero-card__fact:nth-child(2n) {
+  width: 44%;
 }
 
 .hero-card__fact-label {
+  flex: none;
   font-size: 22rpx;
   color: rgba(243, 237, 221, 0.62);
 }
 
 .hero-card__fact-value {
-  max-width: 240rpx;
+  min-width: 0;
   font-size: 24rpx;
   font-weight: 700;
   color: #f3eddd;
@@ -1249,16 +1263,21 @@ function goToDogCreate() {
   color: #6b6653;
 }
 
-/* Banner 的「名称 + 切换」一行：选择器并进名称行后不再单开卡片 */
+/*
+ * 名称与「切换」**上下排**（2026-10-01）。
+ * 并排的话，多只狗时"名字 + 切换 ▼"要抢同一行的宽度，
+ * 名字稍长就被压成省略号；上下排之后名字独占一行，切换是一行小字提示。
+ */
 .hero-card__name-row {
   display: flex;
-  align-items: baseline;
-  gap: 16rpx;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6rpx;
 }
 
 .hero-card__switch {
   flex: none;
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: rgba(255, 255, 255, 0.82);
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.5);
 }

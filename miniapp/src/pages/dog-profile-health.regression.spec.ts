@@ -35,6 +35,13 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain("{{ fact.label }}")
     expect(source).toContain("{{ fact.value }}")
     expect(source).toContain('buildHealthHeroFacts(form)')
+
+    // 老板要"一行放两个"：四项排成 2×2（年龄 性别 / 品种 体重）。
+    // 用 flex-wrap + 百分比列宽实现（小程序的 WXSS 对 grid 支持不齐），
+    // 第一列放 年龄/品种（品种名可能很长），第二列放 性别/体重。
+    expect(source).toContain('flex-wrap: wrap')
+    expect(source).toContain('width: 56%')
+    expect(source).toContain('.hero-card__fact:nth-child(2n)')
     expect(source).toContain('resolveDogAvatarSrc(form.avatarUrl)')
     expect(source).toContain("form.avatarUrl = profile.avatarUrl || ''")
     // 下方那张独立的「选择狗狗」卡片已删除。

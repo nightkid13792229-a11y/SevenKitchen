@@ -541,6 +541,23 @@
           }
         }
       ]
+    },
+    {
+      "root": "pages/dog-health",
+      "pages": [
+        {
+          "path": "timeline",
+          "style": {
+            "navigationBarTitleText": "健康时间线"
+          }
+        },
+        {
+          "path": "summary",
+          "style": {
+            "navigationBarTitleText": "就诊前摘要"
+          }
+        }
+      ]
     }
   ],
   "permission": {

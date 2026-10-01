@@ -61,6 +61,21 @@
           </view>
 
           <view class="health-panel__body">
+        <!-- 时间线与就诊前摘要的入口（2026-10-01，第二期）。
+
+             老板明确：健康时间线**不以新的板块标签形式存在**，放在健康管理页里。
+             所以它们是这一行的两个入口，五个板块下都看得到，也不占书签位。 -->
+        <view class="health-shortcuts">
+          <text class="health-shortcuts__item" @tap="goHealthTimeline">
+            <text class="health-shortcuts__label">健康时间线</text>
+            <text class="health-shortcuts__hint">{{ visitShortcutHint }}</text>
+          </text>
+          <text class="health-shortcuts__item" @tap="goVisitSummary">
+            <text class="health-shortcuts__label">就诊前摘要</text>
+            <text class="health-shortcuts__hint">看医生前先看这个</text>
+          </text>
+        </view>
+
         <HealthRecordsSection
           v-if="isRecordTab"
           ref="recordsSectionRef"
@@ -947,6 +962,38 @@ function goBack() {
   })
 }
 
+/**
+ * 健康时间线 / 就诊前摘要的入口（2026-10-01，第二期）。
+ *
+ * 两个页面都在分包 pages/dog-health 里（重页面不进主包）。
+ */
+function goHealthTimeline() {
+  if (!dogId.value) {
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/dog-health/timeline?dogId=${encodeURIComponent(dogId.value)}`,
+  })
+}
+
+function goVisitSummary() {
+  if (!dogId.value) {
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/dog-health/summary?dogId=${encodeURIComponent(dogId.value)}`,
+  })
+}
+
+/** 时间线入口上的小字：让顾客知道里面有多少条，不然不会点 */
+const visitShortcutHint = computed(() => {
+  const count =
+    (recordsByType.medical?.length || 0) +
+    (recordsByType.checkup?.length || 0) +
+    (recordsByType.allergy?.length || 0)
+  return count > 0 ? `已记 ${count} 条` : '还没有记录'
+})
+
 function goToDogCreate() {
   // 2026-09-21：由 redirectTo 改为 navigateTo。
   // 原先 redirectTo 会把健康管理页从页面栈里替换掉，建档完成后无法回到这里；
@@ -1155,6 +1202,36 @@ function goToDogCreate() {
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
 .health-theme--weight .health-panel__body,
 .health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
+
+/* 时间线 / 就诊前摘要的入口：两个等宽小卡 */
+.health-shortcuts {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.health-shortcuts__item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.78);
+  border: 2rpx solid var(--health-accent-soft, #eef2e4);
+}
+
+.health-shortcuts__label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--health-accent, #1e3a2f);
+}
+
+.health-shortcuts__hint {
+  font-size: 22rpx;
+  color: #8a968a;
+}
 
 /*
  * 内容区里的板块现在自己是扁平的（见 src/styles/health-section.scss），

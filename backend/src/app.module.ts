@@ -17,6 +17,7 @@ import { StaffShippingController } from './interfaces/controllers/staff-shipping
 import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
+import { HealthTimelineController } from './interfaces/controllers/health-timeline.controller';
 import {
   GlobalConfigController,
   PublicGlobalConfigController,
@@ -132,6 +133,7 @@ import {
   MEDICAL_RECORD_REPOSITORY,
   ALLERGY_RECORD_REPOSITORY,
 } from './application/health/health.service';
+import { HealthTimelineService } from './application/health/health-timeline.service';
 import {
   PrismaVaccineRecordRepository,
   PrismaCheckupRecordRepository,
@@ -319,6 +321,7 @@ validatePrismaConfig();
     UsersController,
     HealthRecordsController,
     HealthNotificationController,
+    HealthTimelineController,
     HealthUploadController,
     GlobalConfigController,
     PublicGlobalConfigController,
@@ -609,6 +612,7 @@ validatePrismaConfig();
     },
     // Health Records Service and Repositories
     HealthService,
+    HealthTimelineService,
     {
       provide: VACCINE_RECORD_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

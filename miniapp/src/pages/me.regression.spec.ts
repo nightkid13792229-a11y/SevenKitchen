@@ -43,4 +43,32 @@ describe('me page regressions', () => {
     expect(homeSource).not.toContain('普通用户测试模式')
     expect(homeSource).not.toContain('/admin/test-identity/customer-mode')
   })
+  it('W2：食谱设计器入口只给用过的用户看，首页不再有入口', () => {
+    const meSource = readFileSync(
+      resolve(process.cwd(), 'src/pages/me/index.vue'),
+      'utf-8',
+    )
+    const homeSource = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const entrySource = readFileSync(
+      resolve(process.cwd(), 'src/utils/recipe-designer-entry.ts'),
+      'utf-8',
+    )
+
+    // 「我的」页面的入口必须带条件
+    expect(meSource).toContain('shouldShowRecipeDesignerEntry')
+    expect(meSource).toContain('useRecipeDesignerEntry')
+    expect(meSource).toMatch(/v-if="shouldShowRecipeDesignerEntry"[\s\S]{0,120}goToRecipeDesigner/)
+
+    // 判定口径统一走 customer-access（前端与后端同一把尺）
+    expect(entrySource).toContain('getCustomerDesignerAccess')
+    expect(entrySource).toContain('hasDesignHistory')
+
+    // 首页不再有食谱设计器入口，也不该留没人用的判断代码
+    expect(homeSource).not.toContain('recipe-designer/list')
+    expect(homeSource).not.toContain('showRecipeDesignerEntry')
+    expect(homeSource).not.toContain('loadRecipeDesignerAccess')
+  })
 })

@@ -6649,8 +6649,63 @@ describe('RecipeDesignerService', () => {
       );
     }
 
+    it('W2：没有设计历史的客户不能再新建系列（设计器已不再对所有用户开放）', async () => {
+      prisma.recipeSeries.count.mockResolvedValue(0);
+
+      await expect(
+        service.createSeries(
+          { name: '新食谱', dogId: 'dog-1' } as any,
+          {
+            userId: 'user-new',
+            customerId: 'customer-new',
+            role: 'CUSTOMER',
+          } as any,
+        ),
+      ).rejects.toThrow(/不再对所有用户开放|定制/);
+
+      // 不能留下半成品：系列与草稿都不该被创建
+      expect(prisma.recipeSeries.create).not.toHaveBeenCalled();
+      expect(prisma.designRecipe.create).not.toHaveBeenCalled();
+    });
+
+    it('W2：已有设计历史的老客户仍然可以继续新建', async () => {
+      prisma.recipeSeries.count.mockResolvedValue(3);
+      prisma.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        ownerId: 'customer-1',
+        name: 'Star',
+        breedId: 'breed-1',
+        birthday: new Date('2021-06-01T00:00:00.000Z'),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'LOW',
+      });
+      prisma.dogBreed.findUnique.mockResolvedValue({
+        adultAgeMonths: 12,
+        seniorAgeYears: 7,
+      });
+      prisma.recipeSeries.create.mockResolvedValue(
+        seriesRecord({ id: 'series-old', customerDogId: 'dog-1' }),
+      );
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({ id: 'design-old', seriesId: 'series-old' }),
+      );
+
+      await service.createSeries(
+        { name: '老客户的新食谱', dogId: 'dog-1' } as any,
+        {
+          userId: 'user-old',
+          customerId: 'customer-1',
+          role: 'CUSTOMER',
+        } as any,
+      );
+
+      expect(prisma.recipeSeries.create).toHaveBeenCalled();
+    });
+
     it('requires ordinary customers to create recipe series for their own dog', async () => {
       prisma.dog.findFirst.mockResolvedValue(null);
+      // W2：先过"有设计历史"那一关，才能测到后面的狗狗归属校验
+      prisma.recipeSeries.count.mockResolvedValue(1);
 
       await expect(
         service.createSeries(
@@ -6707,6 +6762,9 @@ describe('RecipeDesignerService', () => {
           series: { id: 'series-dog', name: 'Star 的鲜食食谱' },
         }),
       );
+
+      // W2：只有已有设计历史的老客户才能继续新建
+      prisma.recipeSeries.count.mockResolvedValue(1);
 
       await service.createSeries(
         { name: 'Star 的鲜食食谱', dogId: 'dog-1' } as any,

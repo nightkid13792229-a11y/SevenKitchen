@@ -2030,9 +2030,6 @@ const loadRecipeDetail = async () => {
     // 封面角标是系列级设置，需要等 currentRecipe 就绪后单独拉取
     await loadSeriesCoverBadges();
 
-    // 私密定制：把"客户 + 狗狗"的当前值带进下拉框（W4-B）
-    await initialiseCustomerContext();
-
     Object.assign(form, {
       customerOwnerId: detail.customerOwnerId,
       customerDogId: detail.customerDogId,
@@ -2073,6 +2070,12 @@ const loadRecipeDetail = async () => {
     if (detail.nutritionDetailedData) {
       Object.assign(nutritionData, detail.nutritionDetailedData);
     }
+
+    // 私密定制：把「客户 + 狗狗」的当前值带进下拉框（W4-B）
+    // ⚠️ 必须放在 Object.assign(form, …) **之后** ——
+    // 它读的是 form.customerOwnerId，放前面会读到空值直接 return，
+    // 导致编辑已有私密定制食谱时两个下拉框都是空的。
+    await initialiseCustomerContext();
   } catch (error: any) {
     currentRecipe.value = null;
     ElMessage.error(error.message || '加载食谱详情失败');

@@ -116,13 +116,21 @@ const DOWNGRADE_TEXT =
  * （知识库的 searchByTags 已按命中数排序，且有条数上限）。
  */
 const SECTION_TAGS: Record<HealthAnalysisSection, string[]> = {
-  overview: ['general', 'adult', 'senior', 'prevention', 'clinical'],
+  overview: [
+    'general',
+    'adult',
+    'senior',
+    'prevention',
+    'clinical',
+    'nursing',
+    'breed-risk',
+  ],
   recordReading: ['lab', 'clinical', 'ckd', 'renal', 'hepatic', 'cardio', 'gi'],
-  watchSignals: ['red-flag', 'clinical', 'triage'],
+  watchSignals: ['red-flag', 'clinical', 'triage', 'behavior'],
   nutritionAdvice: ['general', 'renal', 'hepatic', 'gi', 'skin', 'weight', 'pancreatitis'],
-  followUpAdvice: ['lab', 'followup', 'ckd', 'renal', 'senior'],
+  followUpAdvice: ['lab', 'followup', 'ckd', 'renal', 'senior', 'prevention', 'behavior'],
   vaccineAdvice: ['vaccine', 'immune'],
-  visitPrep: ['clinical', 'prevention', 'lab'],
+  visitPrep: ['clinical', 'prevention', 'lab', 'visit-prep'],
 };
 
 @Injectable()

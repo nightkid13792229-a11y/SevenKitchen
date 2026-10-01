@@ -30,7 +30,12 @@ export type KnowledgeDomain =
   /* ---- 2026-10-01 新增：健康管理专用（食谱设计用不到，见 buildPromptContext 的 purpose） ---- */
   | 'IMMUNE' // 免疫 / 疫苗接种
   | 'LAB' // 检查指标解读
-  | 'CLINICAL'; // 常见病表现与就医时机
+  | 'CLINICAL' // 常见病表现与就医时机
+  | 'PREVENTION' // 预防与体检节奏
+  | 'NURSING' // 日常护理（口腔/耳道/皮肤/被毛/指甲）
+  | 'VISITPREP' // 就诊前准备与摘要
+  | 'BREEDRISK' // 品种遗传风险
+  | 'BEHAVIOR'; // 行为与认知（含老年认知障碍）
 
 export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   GENERAL: '通用成年犬',
@@ -56,6 +61,11 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
   IMMUNE: '免疫/疫苗',
   LAB: '检查指标解读',
   CLINICAL: '常见病与就医时机',
+  PREVENTION: '预防与体检节奏',
+  NURSING: '日常护理',
+  VISITPREP: '就诊前准备',
+  BREEDRISK: '品种遗传风险',
+  BEHAVIOR: '行为与认知',
 };
 
 /**
@@ -63,13 +73,21 @@ export const KNOWLEDGE_DOMAIN_LABELS: Record<KnowledgeDomain, string> = {
  *
  * 食谱设计问的是"该给它吃什么营养"，免疫/化验解读/就医时机对配方没有输入价值 ——
  * 放进配方提示词只会占名额、稀释注意力。所以按**用途**过滤：
- *   · purpose = 'recipe-design'（默认）：排除这三个领域
+ *   · purpose = 'recipe-design'（默认）：排除这些领域
  *   · purpose = 'health'：全都给
+ *
+ * 2026-10-01 第二批（补审计第四章第 4–6、8、9 项缺口）加入：
+ *   预防与体检节奏、日常护理、就诊前准备、品种遗传风险、行为与认知。
  */
 export const HEALTH_ONLY_DOMAINS: readonly KnowledgeDomain[] = [
   'IMMUNE',
   'LAB',
   'CLINICAL',
+  'PREVENTION',
+  'NURSING',
+  'VISITPREP',
+  'BREEDRISK',
+  'BEHAVIOR',
 ];
 
 export interface KnowledgeCitation {

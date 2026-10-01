@@ -5,6 +5,7 @@ import {
 import { deriveKnowledgeTags } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { KNOWLEDGE_SOURCES, isKnownSourceId, sourceOrganization } from '../../../src/domain/recipe-designer/knowledge-base/source-registry';
 import { KNOWLEDGE_TAG_VOCABULARY } from '../../../src/domain/recipe-designer/knowledge-base/tag-vocabulary';
+import { HEALTH_ONLY_DOMAINS } from '../../../src/domain/recipe-designer/knowledge-base/types';
 
 /**
  * 知识库结构升级（2026-10-01）。
@@ -33,6 +34,54 @@ describe('知识库结构升级', () => {
 
     it('全库校验通过（含新增的结构化规则）', () => {
       expect(() => new KnowledgeBaseService()).not.toThrow();
+    })
+  })
+
+  describe('第二批五个领域（预防 / 护理 / 就诊准备 / 品种风险 / 行为）', () => {
+    it('都已注册且有内容', () => {
+      for (const domain of [
+        'PREVENTION',
+        'NURSING',
+        'VISITPREP',
+        'BREEDRISK',
+        'BEHAVIOR',
+      ] as const) {
+        expect(service.getByDomain(domain).length).toBeGreaterThanOrEqual(5);
+      }
+    })
+
+    it('这五个领域的条目都带得上检索标签（否则永远检索不到）', () => {
+      for (const domain of [
+        'PREVENTION',
+        'NURSING',
+        'VISITPREP',
+        'BREEDRISK',
+        'BEHAVIOR',
+      ] as const) {
+        for (const entry of service.getByDomain(domain)) {
+          expect(entry.applicableTo.length).toBeGreaterThan(0);
+        }
+      }
+    })
+
+    it('这五个领域都不进食谱设计的提示词', () => {
+      const recipe = service.buildPromptContext(
+        [
+          'prevention',
+          'nursing',
+          'visit-prep',
+          'breed-risk',
+          'behavior',
+          'lab',
+          'clinical',
+          'adult',
+          'general',
+        ],
+        [],
+        { purpose: 'recipe-design' },
+      )
+
+      expect(recipe).not.toMatch(/\[(prev|nurse|visit|breed|behav)-/)
     })
   })
 
@@ -132,7 +181,7 @@ describe('知识库结构升级', () => {
 
   describe('未审核内容不进顾客侧', () => {
     it('新领域的条目全部是待审核状态', () => {
-      const newDomains = new Set(['IMMUNE', 'LAB', 'CLINICAL'])
+      const newDomains = new Set<string>(HEALTH_ONLY_DOMAINS);
       const approved = service
         .getAll()
         .filter((entry) => newDomains.has(entry.domain))
@@ -286,6 +335,20 @@ describe('知识库结构升级', () => {
       }
     })
 
+    it('第二批新增的检索标签也在词表里', () => {
+      const needed = [
+        'triage',
+        'followup',
+        'nursing',
+        'visit-prep',
+        'breed-risk',
+        'behavior',
+      ]
+      for (const tag of needed) {
+        expect(KNOWLEDGE_TAG_VOCABULARY).toContain(tag)
+      }
+    })
+
     it('系统会产出这些标签（否则条目永远检索不到）', () => {
       const { tags } = deriveKnowledgeTags({
         lifeStageLabel: '成年犬',
@@ -316,6 +379,26 @@ describe('知识库结构升级', () => {
       })
 
       expect(tags).not.toContain('lab')
+    })
+  })
+
+  describe('LAB 领域不写死参考区间（第二批也要守）', () => {
+    it('正文里没有"数值–数值 单位"这类区间写法', () => {
+      // 允许举例（如"上次 2.0 这次 2.3"），但不允许出现带单位的区间，
+      // 一旦出现就会被家长拿去套自己报告上印的区间
+      const rangePattern =
+        /\d+(\.\d+)?\s*[-–~]\s*\d+(\.\d+)?\s*(mg|g\/|mmol|µmol|umol|U\/L|IU|%|fL|pg|ng|mEq|mmol\/L|×10)/i
+
+      const offenders = service
+        .getByDomain('LAB')
+        .filter((entry) =>
+          rangePattern.test(
+            [entry.summary, ...entry.details, ...(entry.caveats || [])].join(' '),
+          ),
+        )
+        .map((entry) => entry.id)
+
+      expect(offenders).toEqual([])
     })
   })
 

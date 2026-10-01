@@ -149,3 +149,36 @@
 
 > ⚠️ 版权：SACN5、NRC 为私有合法持有。按老板 2026-10-01 决定上传生产服务器受保护目录，
 > **不对公网开放，仅营养师/管理员账号可访问**。
+
+---
+
+## 七、生产服务器归档（2026-10-01 完成）
+
+老板 2026-10-01 决定"全部来源下载到本地，并上传生产服务器，不依赖网络实时访问"。
+本地归档与上传已在当天完成，结果如下。
+
+| 项 | 结果 |
+|---|---|
+| 本地归档目录 | `~/Documents/SevenKitchen-knowledge-sources/` |
+| 生产服务器目录 | `/opt/sevenkitchen/knowledge-sources/`（权限 `700`，root 属主，**不在任何 nginx 站点根目录下**） |
+| 文件数 | 169 个来源文件（+ `README.md`、`manifest.csv`，共 171 个文件） |
+| 体积 | 668 MB |
+| 校验 | 上传后在服务器上逐文件跑 `sha256sum -c`：**169/169 全部 OK，0 个不匹配** |
+| 校验清单 | 本地 `manifest.csv`（来源ID / 相对路径 / 字节 / SHA256 / 说明） |
+
+### 为什么放在那个位置
+
+生产服务器上 nginx 的站点根目录只有三处：`/opt/sevenkitchen/SevenKitchen/admin-web`、
+`/opt/sevenkitchen/SevenKitchen-gray/admin-web-dist`、`/var/www/html`。
+**`/opt/sevenkitchen/knowledge-sources` 不在其中任何一个之下**，因此不会被 HTTP 访问到；
+再加上 `700` 权限，只有 root 能读。
+
+> ⚠️ 版权：SACN5、NRC 为私有合法持有；WSAVA/AAHA 资料按其公开分发条款使用。
+> 按老板决定上传，**不对公网开放**。将来若要对外开放任何原文内容，需重新评估。
+
+### 还差什么（原文层的后续步骤）
+
+归档上传只是原文层的**存储**部分。要真正"让 AI 读原文"，还需要：
+解析原文 → 建章节索引 → 建「领域标签 → 章节」映射表 → 数据库建原文表 → 后端检索接口 → 营养师查阅页面。
+这六步**不改动顾客侧任何可见内容**，但工作量不小，见
+`docs/knowledge-base/source-archive-and-retrieval-plan.md` 第四章与第六章。

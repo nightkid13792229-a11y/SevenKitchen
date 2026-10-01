@@ -22,6 +22,10 @@ export const RETRIEVAL_TAGS: readonly string[] = [
   // 由 deriveKnowledgeTags 无条件产出（疫苗、化验、就医时机对每一只狗都成立），
   // 食谱设计侧靠 buildPromptContext 的 purpose 过滤掉。
   'vaccine', 'immune', 'lab', 'clinical', 'red-flag', 'prevention',
+  // 2026-10-01 第二批：补审计第四章第 4–6、8、9 项缺口时新增的检索标签。
+  // 这几个都由健康分析的 SECTION_TAGS 按"这一项要回答什么"产出，
+  // 不是由 deriveKnowledgeTags 无条件产出 —— 避免把护理/行为条目塞进每一次检索。
+  'triage', 'followup', 'nursing', 'visit-prep', 'behavior', 'breed-risk',
   'adult', 'anemia', 'arthritis', 'blood',
   'cancer', 'cardiac', 'cardio', 'cds',
   'cie', 'ckd', 'coat', 'cognitive',
@@ -43,7 +47,7 @@ export const DESCRIPTIVE_TAGS: readonly string[] = [
   'active', 'acute-gastroenteritis', 'acute-pancreatitis', 'all',
   'anorexia', 'antioxidant', 'arginine', 'ascites',
   'assessment', 'atopy', 'bitch', 'brain-aging',
-  'breed', 'breed-risk', 'breeding', 'cachexia',
+  'breed', 'breeding', 'cachexia',
   'calcium-phosphate', 'cardiac-risk', 'cardiovascular', 'caries',
   'cat', 'chemotherapy', 'chf', 'cholestasis',
   'chronic-disease', 'chronic-enteropathy', 'chronic-pancreatitis', 'chylothorax',

@@ -65,6 +65,16 @@ import { HEMO_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data
 import { IMMUNE_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/immune';
 import { LAB_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/lab';
 import { CLINICAL_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/clinical';
+// 2026-10-01 第二批：补审计第四章第 2–6、8、9 项缺口
+import { LAB_CHEMISTRY_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/lab-chemistry';
+import { LAB_URINE_IMAGING_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/lab-urine-imaging';
+import { CLINICAL_REDFLAG_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/clinical-redflag';
+import { CLINICAL_COMMON_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/clinical-common';
+import { PREVENTION_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/prevention';
+import { NURSING_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/nursing';
+import { VISIT_PREP_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/visit-prep';
+import { BREED_RISK_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/breed-risk';
+import { BEHAVIOR_KNOWLEDGE } from '../../domain/recipe-designer/knowledge-base/data/behavior';
 
 const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   GENERAL: GENERAL_KNOWLEDGE,
@@ -88,8 +98,17 @@ const DOMAIN_DATA: Record<KnowledgeDomain, KnowledgeEntry[]> = {
   CRITICAL: CRITICAL_KNOWLEDGE,
   HEMO: HEMO_KNOWLEDGE,
   IMMUNE: IMMUNE_KNOWLEDGE,
-  LAB: LAB_KNOWLEDGE,
-  CLINICAL: CLINICAL_KNOWLEDGE,
+  LAB: [...LAB_KNOWLEDGE, ...LAB_CHEMISTRY_KNOWLEDGE, ...LAB_URINE_IMAGING_KNOWLEDGE],
+  CLINICAL: [
+    ...CLINICAL_KNOWLEDGE,
+    ...CLINICAL_REDFLAG_KNOWLEDGE,
+    ...CLINICAL_COMMON_KNOWLEDGE,
+  ],
+  PREVENTION: PREVENTION_KNOWLEDGE,
+  NURSING: NURSING_KNOWLEDGE,
+  VISITPREP: VISIT_PREP_KNOWLEDGE,
+  BREEDRISK: BREED_RISK_KNOWLEDGE,
+  BEHAVIOR: BEHAVIOR_KNOWLEDGE,
 };
 
 /**

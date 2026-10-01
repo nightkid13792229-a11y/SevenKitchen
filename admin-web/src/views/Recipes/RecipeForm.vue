@@ -2116,6 +2116,9 @@ const handleSubmit = async () => {
       nutritionData,
       {},
       lifeStageOptions.value.map((option) => option.value),
+      // 系列食谱的名称框是只读的、值又是可能过时的版本名 →
+      // 不提交 name，避免把系列名静默改回旧名
+      { omitName: isSeriesRecipe.value },
     );
 
     if (isEdit.value) {
@@ -2147,6 +2150,7 @@ const handleSaveDraft = async () => {
       nutritionData,
       { status: RecipeStatus.DRAFT },
       lifeStageOptions.value.map((option) => option.value),
+      { omitName: isSeriesRecipe.value },
     );
 
     if (isEdit.value) {

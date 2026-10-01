@@ -9373,6 +9373,14 @@ describe('RecipeDesignerService', () => {
         where: { id: 'design-2' },
         data: { name: 'ID的兔肉定制', version: 6 },
       });
+
+      // 正式食谱（recipe 表）也必须一起改名。
+      // 旧实现漏了这一步，导致小程序工作台（读 recipe.name）永远显示旧名，
+      // 而 Web 编辑页又禁止改系列食谱的名字 —— 形成死循环。
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1', name: { not: 'ID的兔肉定制' } },
+        data: { name: 'ID的兔肉定制' },
+      });
     });
 
     it('publishes a series draft under the series name regardless of the requested name', async () => {

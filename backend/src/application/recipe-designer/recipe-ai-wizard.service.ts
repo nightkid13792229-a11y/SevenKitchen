@@ -32,6 +32,11 @@ export interface AiWizardDogProfile {
   pickyFoods: string | null;
   preferredFoods: string | null;
   medicalHistory: string | null;
+  /**
+   * 健康标签的人工修正（2026-10-01，第八期）。
+   * 营养师/管理员在后台纠错：派生标签 − removed + added = 最终标签。
+   */
+  healthTagOverrides?: { added?: string[]; removed?: string[] };
   /** 体重历史（近 6 条：日期 + kg） */
   weightTrend: Array<{ date: string; weightKg: number }>;
   /** 体检记录 */

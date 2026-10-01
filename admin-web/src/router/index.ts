@@ -45,6 +45,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "编辑档案" },
       },
       {
+        // 营养师端 · 健康档案（2026-10-01，第八期）
+        path: "dogs/:id/health",
+        name: "DogHealth",
+        component: () => import("@/views/Dogs/Health.vue"),
+        meta: { title: "健康档案" },
+      },
+      {
         path: "breeds",
         name: "Breeds",
         component: () => import("@/views/Breeds/index.vue"),

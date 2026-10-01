@@ -358,6 +358,20 @@ export class HealthTimelineService {
     }
   }
 
+  /**
+   * 员工用（营养师/管理端）：跳过归属校验。
+   *
+   * 与顾客侧的差别只有一处：顾客侧要验证"这只是你的狗"，
+   * 员工侧由 StaffGuard 在控制器上把关，这里不再要求 customerId。
+   */
+  async getVisitSummaryForStaff(dogId: string) {
+    const dog = await this.prisma.dog.findUnique({ where: { id: dogId } });
+    if (!dog) {
+      throw new NotFoundException('爱犬不存在');
+    }
+    return this.getVisitSummary(dog.ownerId, dogId);
+  }
+
   /** 顾客只能看自己狗的档案 */
   private async requireOwnedDog(customerId: string, dogId: string) {
     const dog = await this.prisma.dog.findUnique({ where: { id: dogId } })

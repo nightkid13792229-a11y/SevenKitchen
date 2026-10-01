@@ -443,6 +443,15 @@ model Dog {
   treatLevel           TreatLevel          @default(LOW) @map("treat_level")
   manualTreatKcal      Int?                @map("manual_treat_kcal")
   medicalHistory       String?             @map("medical_history")
+  /// 健康标签的人工修正（2026-10-01，第八期）。
+  ///
+  /// 系统原本只用关键词从病历自由文本里"猜"领域标签（ckd / pancreatitis…），
+  /// 猜错、漏猜都没人管得了。老板第 24 条要求营养师/管理员能纠错。
+  ///
+  /// 形状：{ "added": ["ckd"], "removed": ["dental"] }
+  ///   · 派生标签 − removed + added = 最终标签
+  ///   · 只存"人工改了什么"，不存最终结果 —— 病历再变时派生部分照样跟着变
+  healthTagOverrides   Json                @default("{}") @map("health_tag_overrides")
   preferredFoods       String?             @map("preferred_foods")
   cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
   createdAt            DateTime            @default(now()) @map("created_at")

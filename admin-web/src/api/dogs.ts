@@ -137,6 +137,28 @@ export const dogApi = {
    */
   delete: (id: string): Promise<void> => {
     return api.delete(`/admin/dogs/${id}`)
+  },
+
+  /* ===== 健康档案（2026-10-01，第八期）=====
+     营养师端：独立页面看某只狗的完整健康分析、报告原件、健康标签纠错，
+     以及"哪些狗的健康信息最近被改过"。 */
+
+  /** 某只狗的完整健康档案（含 AI 分析、报告原件、健康标签） */
+  getHealthOverview: (id: string): Promise<any> => {
+    return api.get(`/admin/dogs/${id}/health-overview`)
+  },
+
+  /** 修正健康标签：派生标签 − removed + added */
+  setHealthTags: (
+    id: string,
+    data: { added?: string[]; removed?: string[] },
+  ): Promise<any> => {
+    return api.put(`/admin/dogs/${id}/health-tags`, data)
+  },
+
+  /** 最近改过健康记录的狗（带进行中的定制单），用于告知营养师 */
+  listHealthUpdates: (days = 7): Promise<any> => {
+    return api.get('/admin/dogs/health-updates', { params: { days } })
   }
 }
 

@@ -23,6 +23,7 @@ import { SharedHealthController } from './interfaces/controllers/shared-health.c
 import { VaccinePlanController } from './interfaces/controllers/vaccine-plan.controller';
 import { DietPreferenceController } from './interfaces/controllers/diet-preference.controller';
 import { HealthAnalysisController } from './interfaces/controllers/health-analysis.controller';
+import { StaffDogHealthController } from './interfaces/controllers/staff-dog-health.controller';
 import {
   GlobalConfigController,
   PublicGlobalConfigController,
@@ -143,6 +144,7 @@ import { HealthShareService } from './application/health/health-share.service';
 import { VaccinePlanService } from './application/health/vaccine-plan.service';
 import { DietPreferenceService } from './application/health/diet-preference.service';
 import { HealthAnalysisService } from './application/health/health-analysis.service';
+import { StaffDogHealthService } from './application/health/staff-dog-health.service';
 import {
   PrismaVaccineRecordRepository,
   PrismaCheckupRecordRepository,
@@ -336,6 +338,7 @@ validatePrismaConfig();
     VaccinePlanController,
     DietPreferenceController,
     HealthAnalysisController,
+    StaffDogHealthController,
     HealthUploadController,
     GlobalConfigController,
     PublicGlobalConfigController,
@@ -631,6 +634,7 @@ validatePrismaConfig();
     VaccinePlanService,
     DietPreferenceService,
     HealthAnalysisService,
+    StaffDogHealthService,
     {
       provide: VACCINE_RECORD_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

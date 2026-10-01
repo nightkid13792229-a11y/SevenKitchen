@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { KnowledgeBaseService } from '../recipe-designer/knowledge-base.service';
 import { callDeepSeekJson } from '../recipe-designer/deepseek-chat';
@@ -232,6 +237,26 @@ export class HealthAnalysisService {
       audience,
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * 员工用（营养师/管理端）：不受顾客侧开关限制。
+   *
+   * 营养师看得懂"这条还没审"，所以未审核条目也放进来 ——
+   * 这正是他们审核知识、判断 AI 说得对不对的依据。
+   */
+  async analyzeForStaff(dogId: string): Promise<HealthAnalysisResult> {
+    const dog = await this.prisma.dog.findUnique({ where: { id: dogId } });
+    if (!dog) {
+      throw new NotFoundException('爱犬不存在');
+    }
+    const result = await this.analyze(dog.ownerId, dogId, 'nutritionist');
+    if ('available' in result) {
+      // 营养师侧不该走到这里（开关只约束顾客侧）；真走到了说明代码有问题，
+      // 与其静默返回一个不可用对象，不如明说。
+      throw new BadRequestException('营养师侧不应受顾客开关限制');
+    }
+    return result;
   }
 
   /**

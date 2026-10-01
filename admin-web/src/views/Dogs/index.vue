@@ -117,7 +117,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="240" fixed="right" align="center">
+      <el-table-column label="操作" width="320" fixed="right" align="center">
         <template #default="{ row }">
           <el-button
             type="primary"
@@ -135,6 +135,16 @@
             @click="handleEdit(row)"
           >
             编辑
+          </el-button>
+          <el-divider direction="vertical" />
+          <!-- 营养师端 · 健康档案（2026-10-01，第八期） -->
+          <el-button
+            type="success"
+            size="small"
+            link
+            @click="handleHealth(row)"
+          >
+            健康档案
           </el-button>
           <el-divider direction="vertical" />
           <el-button
@@ -248,6 +258,11 @@ const handleView = (row: DogProfile) => {
 
 const handleEdit = (row: DogProfile) => {
   router.push(`/dogs/${row.id}/edit`)
+}
+
+/** 营养师端 · 某只狗的完整健康档案（第八期） */
+const handleHealth = (row: DogProfile) => {
+  router.push(`/dogs/${row.id}/health`)
 }
 
 const handleDelete = async (row: DogProfile) => {

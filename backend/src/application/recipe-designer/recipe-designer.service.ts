@@ -8239,6 +8239,7 @@ export class RecipeDesignerService {
         customerOrder?.preferredIngredients ?? [],
       ),
       medicalHistory: dog.medicalHistory,
+      healthTagOverrides: parseHealthTagOverrides(dog.healthTagOverrides),
       weightTrend: dog.weightRecords
         .slice()
         .reverse()
@@ -8556,6 +8557,8 @@ export function deriveKnowledgeTags(profile: {
   currentWeightKg: number;
   weightTrend: Array<{ date: string; weightKg: number }>;
   medicalHistory: string | null;
+  /** 健康标签的人工修正（第八期） */
+  healthTagOverrides?: { added?: string[]; removed?: string[] };
   checkups: Array<{ findings: string | null; recommendations: string | null }>;
   medicalRecords: Array<{
     diagnosis: string | null;
@@ -8791,7 +8794,43 @@ export function deriveKnowledgeTags(profile: {
     keywords.push('成年犬', '维持期');
   }
 
+  // 人工修正（第八期）：营养师发现系统猜错了，可以在后台改。
+  // 放在最后一步，保证"人工改的"覆盖"系统猜的"。
+  const overrides = profile.healthTagOverrides || {};
+  for (const tag of overrides.removed || []) {
+    tags.delete(String(tag).trim().toLowerCase());
+  }
+  for (const tag of overrides.added || []) {
+    const normalized = String(tag).trim().toLowerCase();
+    if (normalized) {
+      tags.add(normalized);
+    }
+  }
+
   return { tags: [...tags], keywords };
+}
+
+/**
+ * 解析数据库里的人工修正 JSON。
+ *
+ * 容错：字段缺失、类型不对、混进非字符串，一律忽略而不是抛错 ——
+ * 这是纠错用的辅助数据，不该因为它长得不对就让配方设计整个失败。
+ */
+export function parseHealthTagOverrides(
+  value: unknown,
+): { added: string[]; removed: string[] } {
+  const source = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const toStringList = (input: unknown): string[] => {
+    if (!Array.isArray(input)) return [];
+    return Array.from(
+      new Set(
+        input
+          .map((item) => String(item ?? '').trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ).slice(0, 40);
+  };
+  return { added: toStringList(source.added), removed: toStringList(source.removed) };
 }
 
 /** 由标签推导食谱结构框架模板名 */

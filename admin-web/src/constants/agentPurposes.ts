@@ -43,6 +43,21 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     description: '从补剂图片提取标签信息',
     defaultModel: 'deepseek-v4-flash',
   },
+  {
+    purpose: 'HEALTH_REPORT_EXTRACTION',
+    label: '健康 · 报告识别（看图）',
+    description:
+      '拍照识别病历 / 体检报告 / 疫苗本 / 过敏报告。必须用**能读图**的模型，' +
+      '默认 deepseek-v4-flash-vision-exp（实测可读中文报告，单张图最多 384 token、与 Flash 同价）',
+    defaultModel: 'deepseek-v4-flash-vision-exp',
+  },
+  {
+    purpose: 'HEALTH_ANALYSIS',
+    label: '健康 · AI 分析（七项）',
+    description:
+      '根据健康记录与知识库生成七项分析（总评 / 记录解读 / 需留意信号 / 营养 / 复查 / 疫苗 / 就诊前准备），用文本模型即可',
+    defaultModel: 'deepseek-v4-pro',
+  },
 ]
 
 export function agentPurposeLabel(purpose?: string | null): string {

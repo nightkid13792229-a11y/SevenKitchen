@@ -34,7 +34,15 @@ export interface HealthReportOcrProvider {
 }
 
 /** 供 AI 使用的用途标识；未单独配置时回退到全局默认配置 */
-const HEALTH_REPORT_EXTRACTION_PURPOSE = 'HEALTH_REPORT_EXTRACTION';
+/**
+ * 这个模块在「AI / Agent 配置」里的用途标识（2026-10-01 补）。
+ *
+ * 后台那条配置就是健康模块**专属**的模型与密钥入口 ——
+ * 老板可以给健康模块单独申请一把 DeepSeek 密钥填在这里，
+ * 用量与账单在 DeepSeek 控制台天然与食谱设计分开。
+ * 没有这一行时按老规矩回退到全局默认（fallbackToDefault）。
+ */
+export const HEALTH_REPORT_EXTRACTION_PURPOSE = 'HEALTH_REPORT_EXTRACTION';
 
 export type HealthReportConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -136,10 +144,26 @@ export function isHealthReportVisionEnabled(
   return String(env.HEALTH_REPORT_VISION ?? '').trim().toLowerCase() !== 'off';
 }
 
+/**
+ * 视觉模型用哪个（优先级从高到低）：
+ *   1. 环境变量 HEALTH_REPORT_VISION_MODEL（临时切换/救火用）
+ *   2. 后台「健康报告识别」那条配置里填的模型 —— 老板在界面上就能换
+ *   3. 内置默认（已用生产密钥实测可读中文报告）
+ *
+ * 注意：这一项**必须**是能读图的模型；填成纯文本模型时识别会失败，
+ * 然后自动回退 OCR 路径（见 extractFromReport）。
+ */
 export function resolveHealthReportVisionModel(
   env: NodeJS.ProcessEnv = process.env,
+  configuredModel?: string | null,
 ): string {
-  return String(env.HEALTH_REPORT_VISION_MODEL ?? '').trim() || DEFAULT_VISION_MODEL;
+  const fromEnv = String(env.HEALTH_REPORT_VISION_MODEL ?? '').trim();
+  if (fromEnv) return fromEnv;
+
+  const fromConfig = String(configuredModel ?? '').trim();
+  if (fromConfig) return fromConfig;
+
+  return DEFAULT_VISION_MODEL;
 }
 
 const MAX_KEYWORDS = 30;
@@ -537,7 +561,14 @@ export class HealthReportExtractionService {
       try {
         parsed = await callDeepSeekJson({
           baseUrl: config.baseUrl,
-          model: resolveHealthReportVisionModel(),
+          // 视觉模型：环境变量 > 该用途**单独配过**的模型 > 内置默认。
+          // 注意不能直接用 config.model —— 那是回退后的结果（可能是全局默认的纯文本模型）
+          model: resolveHealthReportVisionModel(
+            process.env,
+            await this.agentProviderConfigService.getConfiguredPurposeModel(
+              HEALTH_REPORT_EXTRACTION_PURPOSE,
+            ),
+          ),
           apiKey: config.apiKey,
           requestTimeoutMs: config.requestTimeoutMs,
           systemPrompt: buildSystemPrompt(requestedDocumentType, 'image'),

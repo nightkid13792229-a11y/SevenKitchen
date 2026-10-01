@@ -30,7 +30,10 @@ const okJsonResponse = (payload: Record<string, unknown>) => ({
 describe('HealthReportExtractionService', () => {
   let service: HealthReportExtractionService;
   let ocrProvider: { recognizeImage: jest.Mock };
-  let agentConfig: { getEnabledDeepSeekRuntimeConfig: jest.Mock };
+  let agentConfig: {
+    getEnabledDeepSeekRuntimeConfig: jest.Mock;
+    getConfiguredPurposeModel: jest.Mock;
+  };
 
   // 既有用例测的都是「OCR 认字 → 文本模型整理」这条路，
   // 所以这里默认关掉视觉；视觉那条路单独一组用例打开它测。
@@ -52,6 +55,8 @@ describe('HealthReportExtractionService', () => {
         requestTimeoutMs: 5000,
         retryCount: 0,
       }),
+      // 没有单独配「健康 · 报告识别」时返回 null → 用内置默认的视觉模型
+      getConfiguredPurposeModel: jest.fn().mockResolvedValue(null),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -469,7 +474,10 @@ describe('HealthReportExtractionService', () => {
 describe('HealthReportExtractionService · 视觉直读', () => {
   let service: HealthReportExtractionService;
   let ocrProvider: { recognizeImage: jest.Mock };
-  let agentConfig: { getEnabledDeepSeekRuntimeConfig: jest.Mock };
+  let agentConfig: {
+    getEnabledDeepSeekRuntimeConfig: jest.Mock;
+    getConfiguredPurposeModel: jest.Mock;
+  };
 
   beforeEach(async () => {
     delete process.env.HEALTH_REPORT_VISION;
@@ -486,6 +494,8 @@ describe('HealthReportExtractionService · 视觉直读', () => {
         requestTimeoutMs: 5000,
         retryCount: 0,
       }),
+      // 没有单独配「健康 · 报告识别」时返回 null → 用内置默认的视觉模型
+      getConfiguredPurposeModel: jest.fn().mockResolvedValue(null),
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -602,15 +612,40 @@ describe('HealthReportExtractionService · 视觉直读', () => {
       ).toBe(true);
     });
 
-    it('模型名可用环境变量替换，缺省用已验证过的那个', () => {
+    it('模型名的三级来源：环境变量 > 后台配置 > 内置默认', () => {
+      // 都没给 → 内置默认（已用生产密钥实测可读中文报告）
       expect(resolveHealthReportVisionModel({} as NodeJS.ProcessEnv)).toBe(
         'deepseek-v4-flash-vision-exp',
       );
+      // 后台「健康 · 报告识别」那条配置里填的模型
       expect(
-        resolveHealthReportVisionModel({
-          HEALTH_REPORT_VISION_MODEL: 'some-other-vl',
-        } as NodeJS.ProcessEnv),
+        resolveHealthReportVisionModel({} as NodeJS.ProcessEnv, 'glm-4v-flash'),
+      ).toBe('glm-4v-flash');
+      // 环境变量优先级最高（临时救火用）
+      expect(
+        resolveHealthReportVisionModel(
+          { HEALTH_REPORT_VISION_MODEL: 'some-other-vl' } as NodeJS.ProcessEnv,
+          'glm-4v-flash',
+        ),
       ).toBe('some-other-vl');
+    });
+
+    it('后台给「健康 · 报告识别」单独配了模型，识别就用那个模型', async () => {
+      // 只有**确实单独配过**（有自己那一行）才生效；
+      // 没配时不能被全局默认的纯文本模型顶掉 —— 那会让识别直接失败
+      agentConfig.getConfiguredPurposeModel.mockResolvedValue('glm-4v-flash');
+      const fetchSpy = mockFetchOk({
+        drafts: [{ diagnosis: 'x' }],
+        confidence: 'HIGH',
+        warnings: [],
+      });
+
+      await service.extractFromReport({
+        imageUrl: 'https://img.example.com/e.jpg',
+        documentType: 'MEDICAL_RECORD',
+      });
+
+      expect(requestBodyOf(fetchSpy).model).toBe('glm-4v-flash');
     });
   });
 

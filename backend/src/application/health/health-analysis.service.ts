@@ -89,7 +89,11 @@ export interface HealthAnalysisUnavailable {
   enableWith: string;
 }
 
-const HEALTH_ANALYSIS_PURPOSE = 'HEALTH_ANALYSIS';
+/**
+ * 这个模块在「AI / Agent 配置」里的用途标识（2026-10-01 补）。
+ * 与识别那条分开配：分析用文本模型，识别用视觉模型，互不影响。
+ */
+export const HEALTH_ANALYSIS_PURPOSE = 'HEALTH_ANALYSIS';
 
 /**
  * 越界措辞扫描。

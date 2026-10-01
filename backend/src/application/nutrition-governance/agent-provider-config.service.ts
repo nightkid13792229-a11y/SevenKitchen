@@ -191,6 +191,31 @@ export class AgentProviderConfigService {
     };
   }
 
+  /**
+   * 只在该用途**确实单独配过**（有自己的行、且已启用）时返回它的模型。
+   *
+   * 为什么不直接用 getEnabledDeepSeekRuntimeConfig：那个会回退到全局默认，
+   * 而全局默认是**纯文本模型**。健康报告识别这一项必须是能读图的模型，
+   * 一旦被全局默认顶掉，识别会直接失败。所以这里"没单独配 = 用代码里的默认"。
+   */
+  async getConfiguredPurposeModel(purpose: string): Promise<string | null> {
+    if (!purpose || purpose === DEFAULT_AGENT_PURPOSE) {
+      return null;
+    }
+
+    const row = await this.prisma.agentProviderConfig.findUnique({
+      where: {
+        purpose_provider: { purpose, provider: DEEPSEEK_PROVIDER },
+      },
+    });
+
+    if (!row?.enabled) {
+      return null;
+    }
+
+    return String(row.model || '').trim() || null;
+  }
+
   async assertCanRun(): Promise<void> {
     await this.getEnabledDeepSeekRuntimeConfig();
   }

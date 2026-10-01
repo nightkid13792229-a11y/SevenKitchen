@@ -70,7 +70,15 @@ export interface MedicalRecord {
   diagnosis: string;
   treatment: string | null;
   medications: string[];
-  status: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+  /**
+   * 病史状态。
+   *
+   * ⚠️ 必须与 Prisma 的 MedicalStatus 枚举保持一致。
+   * 2026-10-01 修复：PENDING_CONFIRMATION（待确认）早在 2026-09-28 就加进了
+   * 数据库（顾客自述的疾病不再被系统臆断为慢性），但这一行和 DTO 的枚举
+   * 一直没同步 —— 于是"新增一条病史、不动状态下拉直接保存"整条链路都存不进去。
+   */
+  status: 'PENDING_CONFIRMATION' | 'TREATING' | 'RECOVERED' | 'CHRONIC';
   followUpDate: Date | null;
   veterinarian: string | null;
   notes: string | null;

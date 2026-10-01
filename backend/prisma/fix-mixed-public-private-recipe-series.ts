@@ -21,11 +21,16 @@
  *   · design_source = Setar / Animal Diet Formulator（外部工具导入/手工建）
  * 看起来是运营把「私密定制」当成了"这一版先不公开"的开关在用。
  *
- * 处置（已获业务确认）
+ * 处置（已获业务确认 2026-10-01）
  * ────────────────────
+ *   ⚠️ **只处理白名单里点名的系列**（老板只确认了这两个食谱要恢复）：
+ *        · 大米燕麦三文鱼兔里脊
+ *        · 土豆大米鳕鱼火鸡胸
+ *      其它同样是"公开私密混用"的系列**一律跳过并报告**，等业务另行确认。
+ *
  *   1. 这些"不是客户定制"的私密版本 → 改为 `DRAFT`（草稿归档，不删除，需要时可再发布）
  *   2. 所在系列 → 恢复为 `PUBLIC`（因为它确实是公开系列）
- *   3. 11 个被隐藏的公开版本随之恢复可见
+ *   3. 被隐藏的公开版本随之恢复可见
  *
  * 安全边界
  * ────────
@@ -49,6 +54,15 @@ import {
 const prisma = new PrismaClient();
 const shouldApply = process.argv.includes('--apply');
 
+/**
+ * 业务点名的白名单（按系列名匹配）。
+ * 不在这里的系列即使同样"公开私密混用"也不会被动到。
+ */
+const APPROVED_SERIES_NAMES = new Set([
+  '大米燕麦三文鱼兔里脊',
+  '土豆大米鳕鱼火鸡胸',
+]);
+
 interface MixedSeriesPlan {
   seriesId: string;
   seriesName: string;
@@ -70,7 +84,10 @@ interface MixedSeriesPlan {
   publicVersionCount: number;
 }
 
-async function buildPlan(): Promise<MixedSeriesPlan[]> {
+async function buildPlan(): Promise<{
+  plans: MixedSeriesPlan[];
+  skippedNotApproved: string[];
+}> {
   // 活跃且同时含公开版本与私密定制版本的系列
   const series = await prisma.recipeSeries.findMany({
     where: {
@@ -98,6 +115,7 @@ async function buildPlan(): Promise<MixedSeriesPlan[]> {
   });
 
   const plans: MixedSeriesPlan[] = [];
+  const skippedNotApproved: string[] = [];
 
   for (const s of series) {
     const publicVersions = s.recipes.filter(
@@ -140,6 +158,11 @@ async function buildPlan(): Promise<MixedSeriesPlan[]> {
       }
     }
 
+    if (!APPROVED_SERIES_NAMES.has(s.name)) {
+      skippedNotApproved.push(s.name);
+      continue;
+    }
+
     plans.push({
       seriesId: s.id,
       seriesName: s.name,
@@ -150,11 +173,11 @@ async function buildPlan(): Promise<MixedSeriesPlan[]> {
     });
   }
 
-  return plans;
+  return { plans, skippedNotApproved };
 }
 
 async function main() {
-  const plans = await buildPlan();
+  const { plans, skippedNotApproved } = await buildPlan();
 
   console.log('='.repeat(72));
   console.log('修复「公开 / 私密定制 混用系列」');
@@ -201,8 +224,17 @@ async function main() {
     }
   }
 
+  if (skippedNotApproved.length > 0) {
+    console.log(
+      `\nℹ️ 以下 ${skippedNotApproved.length} 个系列同样是"公开 / 私密混用"，但不在本次确认范围内，已跳过：`,
+    );
+    for (const name of skippedNotApproved) {
+      console.log(`    · ${name}`);
+    }
+  }
+
   console.log('\n' + '='.repeat(72));
-  console.log(`合计：${plans.length} 个系列`);
+  console.log(`合计：${plans.length} 个系列（仅白名单）`);
   console.log(`  · 归档私密版本：${willArchive} 个`);
   console.log(`  · 系列恢复公开：${willPublishSeries} 个`);
   if (blocked.length > 0) {

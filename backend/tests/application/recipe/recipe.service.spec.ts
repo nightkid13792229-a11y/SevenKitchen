@@ -17,6 +17,7 @@ describe('RecipeService', () => {
       delete: jest.fn(),
     },
     recipeSeries: {
+      findUnique: jest.fn(),
       update: jest.fn(),
     },
     designRecipe: {
@@ -1177,23 +1178,71 @@ describe('RecipeService', () => {
       };
       mockPrismaService.recipe.findUnique.mockResolvedValue(draftRecipe);
       mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
-      mockPrismaService.recipe.findMany
-        .mockResolvedValueOnce([
-          { status: RecipeStatus.PUBLIC },
-          { status: RecipeStatus.PRIVATE_CUSTOM },
-        ])
-        .mockResolvedValueOnce([updatedRecipe]);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
 
       await service.publishRecipe('adult-draft-row');
 
-      expect(mockPrismaService.recipe.findMany).toHaveBeenNthCalledWith(1, {
-        where: { seriesId: 'series-sync' },
-        select: { status: true },
-      });
+      // 「发布」是显式动作 → 系列状态直接置为公开。
+      // 旧实现会因为系列里存在私密定制版本而把系列拖成私密定制，
+      // 导致刚发布的公开食谱进不了橱窗 —— 那是 bug，这里锁定正确行为。
       expect(mockPrismaService.recipeSeries.update).toHaveBeenCalledWith({
         where: { id: 'series-sync' },
-        data: { businessStatus: 'PRIVATE_CUSTOM' },
+        data: { businessStatus: 'PUBLIC' },
       });
+    });
+
+    it('publishing a public version does NOT drag the series into private custom', async () => {
+      const draftRecipe = {
+        id: 'adult-draft-row',
+        recipeId: 'adult-recipe-id',
+        version: 2,
+        name: '成犬配方',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1373,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        productionSteps: null,
+        seriesId: 'series-sync',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+        healthTagAssignments: [],
+        createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T10:00:00.000Z'),
+      };
+      const updatedRecipe = {
+        ...draftRecipe,
+        status: RecipeStatus.PUBLIC,
+        series: {
+          id: 'series-sync',
+          name: '同步系列',
+          businessStatus: 'PUBLIC',
+        },
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(draftRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+
+      await service.publishRecipe('adult-draft-row');
+
+      const written = mockPrismaService.recipeSeries.update.mock.calls.map(
+        (call: unknown[]) =>
+          (call[0] as { data: { businessStatus: string } }).data.businessStatus,
+      );
+      expect(written).toEqual(['PUBLIC']);
+      expect(written).not.toContain('PRIVATE_CUSTOM');
     });
   });
 
@@ -1240,9 +1289,12 @@ describe('RecipeService', () => {
       };
       mockPrismaService.recipe.findUnique.mockResolvedValue(publicRecipe);
       mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
-      mockPrismaService.recipe.findMany
-        .mockResolvedValueOnce([{ status: RecipeStatus.DRAFT }])
-        .mockResolvedValueOnce([updatedRecipe]);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+      // 系列当前是公开，且下架后已无公开版本
+      mockPrismaService.recipeSeries.findUnique.mockResolvedValue({
+        businessStatus: 'PUBLIC',
+      });
+      mockPrismaService.recipe.findFirst.mockResolvedValue(null);
 
       const result = await service.unpublishRecipe('adult-public-row');
 
@@ -1252,6 +1304,115 @@ describe('RecipeService', () => {
       });
       expect(result.seriesBusinessStatus).toBe('DRAFT');
       expect(result.seriesBusinessStatusLabel).toBe('草稿');
+    });
+
+    it('keeps the series public when it still has another public version', async () => {
+      const publicRecipe = {
+        id: 'adult-public-row',
+        recipeId: 'adult-recipe-id',
+        version: 2,
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1373,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        productionSteps: null,
+        seriesId: 'series-sync',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+        healthTagAssignments: [],
+        createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T10:00:00.000Z'),
+      };
+      const updatedRecipe = {
+        ...publicRecipe,
+        status: RecipeStatus.DRAFT,
+        series: {
+          id: 'series-sync',
+          name: '同步系列',
+          businessStatus: 'PUBLIC',
+        },
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(publicRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+      mockPrismaService.recipeSeries.findUnique.mockResolvedValue({
+        businessStatus: 'PUBLIC',
+      });
+      mockPrismaService.recipe.findFirst.mockResolvedValue({
+        id: 'another-public-row',
+      });
+
+      await service.unpublishRecipe('adult-public-row');
+
+      expect(mockPrismaService.recipeSeries.update).toHaveBeenCalledWith({
+        where: { id: 'series-sync' },
+        data: { businessStatus: 'PUBLIC' },
+      });
+    });
+
+    it('never recomputes a private-custom series back to draft', async () => {
+      const publicRecipe = {
+        id: 'adult-public-row',
+        recipeId: 'adult-recipe-id',
+        version: 2,
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1373,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        productionSteps: null,
+        seriesId: 'series-sync',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+        healthTagAssignments: [],
+        createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T10:00:00.000Z'),
+      };
+      const updatedRecipe = {
+        ...publicRecipe,
+        status: RecipeStatus.DRAFT,
+        series: {
+          id: 'series-sync',
+          name: '同步系列',
+          businessStatus: 'PRIVATE_CUSTOM',
+        },
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(publicRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue(updatedRecipe);
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
+      mockPrismaService.recipeSeries.findUnique.mockResolvedValue({
+        businessStatus: 'PRIVATE_CUSTOM',
+      });
+
+      await service.unpublishRecipe('adult-public-row');
+
+      // 私密定制是人工设定的权威值，下架版本不应把它改回草稿
+      expect(mockPrismaService.recipeSeries.update).not.toHaveBeenCalled();
     });
   });
 
@@ -1271,9 +1432,10 @@ describe('RecipeService', () => {
         status: RecipeStatus.DRAFT,
       });
       mockPrismaService.recipe.delete.mockResolvedValue(recipe);
-      mockPrismaService.recipe.findMany.mockResolvedValue([
-        { status: RecipeStatus.DRAFT },
-      ]);
+      mockPrismaService.recipeSeries.findUnique.mockResolvedValue({
+        businessStatus: 'PUBLIC',
+      });
+      mockPrismaService.recipe.findFirst.mockResolvedValue(null);
 
       await service.deleteRecipe('adult-public-row');
 

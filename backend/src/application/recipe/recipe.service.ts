@@ -1058,25 +1058,72 @@ export class RecipeService {
     return value instanceof Date ? value.getTime() : new Date(value).getTime();
   }
 
-  private async syncSeriesBusinessStatus(
+  /**
+   * 设定系列业务状态（权威值）。
+   *
+   * 「公开」与「私密定制」都是**系列级**属性，只由显式动作决定：
+   *   · 发布公开     → PUBLIC
+   *   · 设为私密定制 → PRIVATE_CUSTOM
+   *
+   * ⚠️ 不再由旗下版本状态反推。旧实现是"系列里只要有**任意一个历史版本**
+   * 是私密定制，就把整个系列永久标记为私密定制"，导致公开橱窗里已经发布的
+   * 食谱凭空消失（生产实测 11 个版本 / 5 个系列）。
+   *
+   * 业务定义见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   */
+  private async setSeriesBusinessStatus(
+    seriesId: string | null | undefined,
+    businessStatus: RecipeSeriesBusinessStatus,
+  ): Promise<RecipeSeriesBusinessStatus | undefined> {
+    if (!seriesId) {
+      return undefined;
+    }
+
+    await this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data: { businessStatus },
+    });
+
+    return businessStatus;
+  }
+
+  /**
+   * 版本被下架 / 删除后重算系列业务状态（只会降级，不会越权提升）。
+   *
+   * 规则：
+   *   · 系列当前是「私密定制」→ **保持不动**（人工设定的权威值，不参与重算）
+   *   · 系列还有公开版本      → PUBLIC
+   *   · 系列已无公开版本      → DRAFT
+   *
+   * 「私密定制」被排除在重算之外，是为了避免又回到"版本状态拖着系列走"的老问题。
+   */
+  private async recomputeSeriesBusinessStatus(
     seriesId?: string | null,
   ): Promise<RecipeSeriesBusinessStatus | undefined> {
     if (!seriesId) {
       return undefined;
     }
 
-    const recipes = await this.prisma.recipe.findMany({
-      where: { seriesId },
-      select: { status: true },
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: { businessStatus: true },
+    });
+    if (!series) {
+      return undefined;
+    }
+
+    if (series.businessStatus === RecipeSeriesBusinessStatus.PRIVATE_CUSTOM) {
+      return series.businessStatus;
+    }
+
+    const publicRecipe = await this.prisma.recipe.findFirst({
+      where: { seriesId, status: RecipeStatus.PUBLIC },
+      select: { id: true },
     });
 
-    const businessStatus = recipes.some(
-      (recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM,
-    )
-      ? RecipeSeriesBusinessStatus.PRIVATE_CUSTOM
-      : recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)
-        ? RecipeSeriesBusinessStatus.PUBLIC
-        : RecipeSeriesBusinessStatus.DRAFT;
+    const businessStatus = publicRecipe
+      ? RecipeSeriesBusinessStatus.PUBLIC
+      : RecipeSeriesBusinessStatus.DRAFT;
 
     await this.prisma.recipeSeries.update({
       where: { id: seriesId },
@@ -1431,12 +1478,23 @@ export class RecipeService {
       });
     }
 
-    const shouldSyncSeriesBusinessStatus =
-      Boolean(existing.seriesId && dto.status) &&
-      (dto.status !== existing.status ||
-        dto.status === RecipeStatus.PRIVATE_CUSTOM);
-    if (shouldSyncSeriesBusinessStatus) {
-      await this.syncSeriesBusinessStatus(existing.seriesId);
+    // 系列状态是权威值，只在显式状态变更时设定：
+    //   设为公开 / 私密定制 → 直接设定系列状态
+    //   改回草稿           → 重算（若无公开版本则系列回草稿；私密定制系列不动）
+    if (existing.seriesId && dto.status && dto.status !== existing.status) {
+      if (dto.status === RecipeStatus.PRIVATE_CUSTOM) {
+        await this.setSeriesBusinessStatus(
+          existing.seriesId,
+          RecipeSeriesBusinessStatus.PRIVATE_CUSTOM,
+        );
+      } else if (dto.status === RecipeStatus.PUBLIC) {
+        await this.setSeriesBusinessStatus(
+          existing.seriesId,
+          RecipeSeriesBusinessStatus.PUBLIC,
+        );
+      } else {
+        await this.recomputeSeriesBusinessStatus(existing.seriesId);
+      }
     }
 
     // Update health tag assignments if provided
@@ -1491,7 +1549,7 @@ export class RecipeService {
       where: { id },
     });
 
-    await this.syncSeriesBusinessStatus(recipe.seriesId);
+    await this.recomputeSeriesBusinessStatus(recipe.seriesId);
   }
 
   /**
@@ -1539,8 +1597,10 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    const businessStatus = await this.syncSeriesBusinessStatus(
+    // 「发布」是显式动作 → 系列状态直接设为公开
+    const businessStatus = await this.setSeriesBusinessStatus(
       updated.seriesId,
+      RecipeSeriesBusinessStatus.PUBLIC,
     );
 
     return await this.mapToDetailDto(
@@ -1580,7 +1640,8 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    const businessStatus = await this.syncSeriesBusinessStatus(
+    // 「下架」后重算：还有公开版本就保持公开，没有就回草稿（私密定制系列不动）
+    const businessStatus = await this.recomputeSeriesBusinessStatus(
       updated.seriesId,
     );
 

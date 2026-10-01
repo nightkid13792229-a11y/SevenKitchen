@@ -472,7 +472,10 @@ export function normalizeDrafts(
           attachments: [],
         };
       })
-      .filter((draft) => draft.checkupDate || draft.findings)
+      // 认内容、不认"只有落款"：日期 / 检查结论 / 医生建议 任一有值就算一条。
+      // 2026-10-01 第九期补上 recommendations —— 多页报告合成一条之后，
+      // 尾页常常只有"医生建议"，按老规则（只要日期或结论）会被整页丢掉。
+      .filter((draft) => draft.checkupDate || draft.findings || draft.recommendations)
       .slice(0, 1);
   }
 
@@ -494,7 +497,16 @@ export function normalizeDrafts(
         status: 'PENDING_CONFIRMATION',
         attachments: [],
       }))
-      .filter((draft) => draft.visitDate || draft.diagnosis || draft.chiefComplaint)
+      // 同理（2026-10-01 第九期）：处理方式 / 用药 也算内容 ——
+      // 一份病历的第二页可能只有处置与药单，那一页不该整页消失。
+      .filter(
+        (draft) =>
+          draft.visitDate ||
+          draft.diagnosis ||
+          draft.chiefComplaint ||
+          draft.treatment ||
+          draft.medications.length > 0,
+      )
       .slice(0, 1);
   }
 

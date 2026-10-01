@@ -42,6 +42,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         nextDueDate: data.nextDueDate,
         notes: data.notes,
         status: data.status as any,
+        attachments: data.attachments,
       },
     });
     return this.mapToDomain(record);
@@ -61,6 +62,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         nextDueDate: data.nextDueDate,
         notes: data.notes,
         status: data.status as any,
+        attachments: data.attachments,
       },
     });
     return this.mapToDomain(record);
@@ -101,6 +103,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       nextDueDate: record.nextDueDate,
       notes: record.notes,
       status: record.status as any,
+      attachments: record.attachments,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

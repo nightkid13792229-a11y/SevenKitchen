@@ -83,8 +83,26 @@ describe('拍照录入 · 组件', () => {
 
     // 后端返回的 drafts.attachments 是空数组，图片地址只有上传这一步知道
     expect(scan).toContain('attachments: [uploaded.url]')
-    // 张数与条数的关系要如实告诉顾客，不能让他以为多页会合并成一条
-    expect(scan).toContain('原图一并存为附件')
+    // 张数与条数的关系要如实告诉顾客
+    expect(scan).toContain('scanCountSummary')
+  })
+
+  it('多张图算一份资料：合成一条记录，疫苗本除外（老板 2026-10-01 定的）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('mergeScannedReportDrafts')
+    // 疫苗本一张本子读出多条接种记录，合并会把几针并成一针
+    expect(scan).toContain("detectedType === 'VACCINE_BOOK'")
+    expect(scan).toContain('? collectedDrafts')
+  })
+
+  it('合成时要如实说明「N 张 → 1 条」，否则顾客以为剩下的没识别成功', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('本次共 ${images} 张图片，合成 1 条记录')
+    expect(scan).toContain('读出 ${records} 条记录')
+    // 选了几张要按"顾客选的总数"算，不是"识别成功的张数"
+    expect(scan).toContain('requestedImageCount.value = filePaths.length')
   })
 })
 

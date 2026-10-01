@@ -1425,6 +1425,12 @@ model VaccineRecord {
   nextDueDate     DateTime?     @map("next_due_date") @db.Date
   notes           String?       @map("notes")
   status          VaccineStatus @default(COMPLETED) @map("status")
+  /// 报告原件（2026-10-01 新增）。
+  /// 拍疫苗本识别出来的记录，把顾客拍的原图一并留档 ——
+  /// 疫苗本是接种凭证，出行、寄养、换医院都可能要看原件，
+  /// 此前只存了 AI 抄下来的文字，原件丢了就无从对证。
+  /// 与 checkup_record / medical_record / allergy_record 同一套存法（URL 数组）。
+  attachments     String[]      @default([]) @map("attachments")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)

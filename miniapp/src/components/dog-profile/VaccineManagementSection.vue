@@ -137,6 +137,28 @@
           />
         </view>
 
+        <!-- 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图。
+             没有原件的记录（手工填写）不显示这一块，不留空位。 -->
+        <view v-if="attachmentList(record).length > 0" class="field-group">
+          <text class="field-label">报告原件</text>
+          <view class="vaccine-attachment-list">
+            <view
+              v-for="(attachment, attachmentIndex) in attachmentList(record)"
+              :key="`${record.id || index}-attachment-${attachmentIndex}`"
+              class="vaccine-attachment"
+              @tap="previewAttachment(attachment)"
+            >
+              <text class="vaccine-attachment__title">
+                {{ attachmentDisplay(attachment, attachmentIndex).title }}
+              </text>
+              <text class="vaccine-attachment__action">预览</text>
+            </view>
+          </view>
+          <text class="vaccine-attachment__hint">
+            这是当初拍疫苗本留下的原图，换医院、出行要用时可以打开给对方看。
+          </text>
+        </view>
+
         <view class="vaccine-card__actions">
           <button
             v-if="record.id"
@@ -171,6 +193,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
+import {
+  buildHealthAttachmentDisplayMeta,
+  normalizeHealthAttachmentList,
+  previewHealthAttachment,
+} from '../../utils/health-records'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 
 interface VaccineRecord {
@@ -180,6 +207,12 @@ interface VaccineRecord {
   nextDueDate: string
   notes: string
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+  /**
+   * 报告原件（2026-10-01 第九期）。
+   * 拍疫苗本识别出来的记录会把顾客拍的原图存在这里，是接种凭证；
+   * 手工填写的记录是空数组。
+   */
+  attachments?: string[]
 }
 
 interface VaccineDraft {
@@ -349,6 +382,24 @@ function toggleExpanded(record: VaccineRecord, index: number) {
   expandedIndex.value = expandedIndex.value === index ? -1 : index
 }
 
+/**
+ * 这条疫苗记录的报告原件（2026-10-01 第九期）。
+ *
+ * 拍疫苗本识别出来的记录带着原图；手工填写的没有 —— 空数组，
+ * 卡片上就不显示「报告原件」这一块，不留空位。
+ */
+function attachmentList(record?: VaccineRecord | Record<string, any> | null): string[] {
+  return normalizeHealthAttachmentList((record as any)?.attachments)
+}
+
+function attachmentDisplay(url: string, index: number) {
+  return buildHealthAttachmentDisplayMeta(url, index)
+}
+
+async function previewAttachment(url: string) {
+  await previewHealthAttachment(url)
+}
+
 function statusLabel(status: string) {
   return STATUS_OPTIONS.find(option => option.value === status)?.label || '已接种'
 }
@@ -511,7 +562,10 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),
       status: 'COMPLETED',
-      attachments: [],
+      // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
+      // 疫苗本是接种凭证，出行/寄养/换医院都可能要看原件。
+      // 一张本子上的多条接种记录共用同一张原图（照片就是那一页）。
+      attachments: attachmentList(draft),
     } as any)
   }
   uni.showToast({
@@ -535,12 +589,18 @@ function addRecord() {
   expandedIndex.value = records.value.length - 1
 }
 
-function buildPayload(draft: VaccineDraft): VaccineRecordCreatePayload {
+function buildPayload(
+  draft: VaccineDraft,
+  record?: VaccineRecord,
+): VaccineRecordCreatePayload {
   const payload: VaccineRecordCreatePayload = {
     vaccineName: draft.vaccineName.trim(),
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,
     notes: draft.notes.trim() || null,
+    // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
+    // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
+    attachments: attachmentList(record),
   }
 
   // 空到期日不能传空字符串（后端按日期校验），直接不带这个字段
@@ -568,7 +628,7 @@ async function saveRecord(record: VaccineRecord, index: number) {
   savingIndex.value = index
 
   try {
-    const payload = buildPayload(draft)
+    const payload = buildPayload(draft, record)
     const res: any = record.id
       ? await dogApi.healthRecords.vaccine.update(props.dogId, record.id, payload)
       : await dogApi.healthRecords.vaccine.create(props.dogId, payload)
@@ -755,6 +815,44 @@ async function doRemove(record: VaccineRecord) {
   font-size: 24rpx;
   font-weight: 600;
   color: #6b6653;
+}
+
+.vaccine-attachment-list {
+  margin-top: 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.vaccine-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: rgba(15, 107, 67, 0.06);
+}
+
+.vaccine-attachment__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.vaccine-attachment__action {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #0f6b43;
+}
+
+.vaccine-attachment__hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8c8574;
 }
 
 .field-input {

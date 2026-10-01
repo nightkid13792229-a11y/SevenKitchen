@@ -12,6 +12,8 @@ export interface VaccineRecord {
   nextDueDate: Date | null;
   notes: string | null;
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+  /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组
+  attachments: string[];
   createdAt: Date;
   updatedAt: Date;
 }

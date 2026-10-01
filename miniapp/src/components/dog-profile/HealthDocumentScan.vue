@@ -19,9 +19,7 @@
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
       <text v-if="resolvedTypeLabel" class="confirm__type">识别为：{{ resolvedTypeLabel }}</text>
-      <text v-if="scannedImageCount > 1" class="confirm__type">
-        本次共 {{ scannedImageCount }} 张图片，会分成 {{ drafts.length }} 条记录，原图一并存为附件
-      </text>
+      <text v-if="scanCountSummary" class="confirm__type">{{ scanCountSummary }}</text>
 
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
@@ -49,7 +47,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
-import { resolveHealthScanErrorMessage } from '../../utils/health-records'
+import {
+  mergeScannedReportDrafts,
+  resolveHealthScanErrorMessage,
+} from '../../utils/health-records'
 
 /**
  * 拍照 → 上传 → 识别 → **确认一次** → 把内容交给上层填表。
@@ -107,6 +108,8 @@ const confidence = ref('LOW')
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
 /** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
 const scannedImageCount = ref(0)
+/** 顾客这次一共选了几张（含没识别成功的，用于如实说明"本次共 N 张"） */
+const requestedImageCount = ref(0)
 
 const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
   MEDICAL_RECORD: '病历',
@@ -123,6 +126,26 @@ const confidenceLabel = computed(() => {
   if (confidence.value === 'HIGH') return '高'
   if (confidence.value === 'MEDIUM') return '中'
   return '低'
+})
+
+/**
+ * 确认卡片上那句"几张图 → 几条记录"。
+ *
+ * 多页合成一条之后，必须如实说明：顾客选了 3 张、只看到 1 条记录，
+ * 若卡片上不说清楚，他会以为两张没识别成功。
+ */
+const scanCountSummary = computed(() => {
+  const images = requestedImageCount.value
+  if (images <= 1) {
+    return ''
+  }
+
+  const records = drafts.value.length
+  if (records <= 1) {
+    return `本次共 ${images} 张图片，合成 1 条记录，${scannedImageCount.value} 张原图都存为附件`
+  }
+
+  return `本次共 ${images} 张图片，读出 ${records} 条记录，原图一并存为附件`
 })
 
 /** 当前应当按哪一类渲染/填表：优先用后端判定出来的类型 */
@@ -177,8 +200,9 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
  *
  *   · **只开相册**：不再写"呼出相机"那条路 —— 少一次微信自己的
  *     「拍照 / 从相册选择」弹窗（相册里本来就有拍摄入口）。
- *   · **支持多选**：一次最多 9 张（一本病历或一份体检报告常有好几页），
- *     逐张识别后合并成一份确认卡片。
+ *   · **支持多选**：一次最多 9 张（微信上限）。一本病历或一份体检报告常有好几页，
+ *     逐张识别后**合成一条记录**（2026-10-01 第九期老板定的），原图都留作附件；
+ *     疫苗本不合并 —— 一张本子读出的是多条各自的接种记录。
  */
 function pickAndScan() {
   if (isBusy.value) {
@@ -208,6 +232,7 @@ async function scanAll(filePaths: string[]) {
   showConfirm.value = false
   confidence.value = ''
   scannedImageCount.value = 0
+  requestedImageCount.value = filePaths.length
 
   const collectedDrafts: Record<string, any>[] = []
   const collectedWarnings: string[] = []
@@ -286,7 +311,12 @@ async function scanAll(filePaths: string[]) {
       collectedWarnings.push(`有 ${failed} 张没能识别，可以单独再试或手工补充`)
     }
 
-    drafts.value = collectedDrafts
+    // 多张图算一份资料（2026-10-01 第九期，老板定的）：
+    // 3 页体检报告 = 1 条记录 + 3 张原图，而不是 3 条各说一半的记录。
+    // **疫苗本例外** —— 一张本子读出的是多条各自的接种记录，合并会把几针并成一针。
+    drafts.value = detectedType === 'VACCINE_BOOK'
+      ? collectedDrafts
+      : mergeScannedReportDrafts(collectedDrafts)
     warnings.value = collectedWarnings
     confidence.value = worstConfidence
     resolvedDocumentType.value = detectedType

@@ -59,6 +59,8 @@ export type VaccineRecordCreatePayload = {
   nextDueDate?: string | null
   notes?: string | null
   status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+  /** 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图 URL */
+  attachments?: string[]
 }
 
 const healthRecordCrud = <

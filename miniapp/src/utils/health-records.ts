@@ -79,6 +79,17 @@ function normalizeOptionalText(value: unknown) {
   return normalized || null
 }
 
+/**
+ * 附件列表归一化（2026-10-01 第九期起对外共用）。
+ *
+ * 后端存的是 URL 字符串数组，但历史数据/中间层有时给的是 { url } 对象，
+ * 两种都认，读不到的一律丢掉（不返回空串、不返回 null）。
+ * 疫苗记录的卡片与病历/检查的记录卡都调它，避免两处各写一套过滤规则。
+ */
+export function normalizeHealthAttachmentList(value: unknown): string[] {
+  return normalizeAttachments(value)
+}
+
 function normalizeAttachments(value: unknown) {
   if (!Array.isArray(value)) {
     return []
@@ -982,6 +993,62 @@ export function resolveHealthAttachmentPreviewType(
   return 'file'
 }
 
+/**
+ * 打开附件（2026-10-01 第九期：从「病历/检查」板块抽出来共用）。
+ *
+ * 原来只有病历/检查的记录卡会预览附件；疫苗记录现在也能留原件了，
+ * 同一段逻辑抄两遍迟早会走偏（一边能看 PDF、一边不能），所以提到这里，
+ * 两个板块都调它。
+ *
+ *   · 图片 → 微信自带的大图预览
+ *   · PDF  → 先下载再交给微信的文档查看器（可转发）
+ *   · 其它 → 老实说"打不开"，不假装成功
+ */
+export async function previewHealthAttachment(url: string): Promise<void> {
+  const previewType = resolveHealthAttachmentPreviewType(url)
+
+  if (previewType === 'image') {
+    uni.previewImage({
+      urls: [url],
+      current: url,
+    })
+    return
+  }
+
+  if (previewType === 'pdf') {
+    try {
+      uni.showLoading({ title: '打开中...' })
+      const downloadRes: any = await new Promise((resolve, reject) => {
+        uni.downloadFile({
+          url,
+          success: resolve,
+          fail: reject,
+        })
+      })
+
+      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
+        throw new Error('文件下载失败')
+      }
+
+      await new Promise((resolve, reject) => {
+        uni.openDocument({
+          filePath: downloadRes.tempFilePath,
+          showMenu: true,
+          success: resolve,
+          fail: reject,
+        })
+      })
+      uni.hideLoading()
+    } catch (error: any) {
+      uni.hideLoading()
+      uni.showToast({ title: error?.message || '暂时无法预览该附件', icon: 'none' })
+    }
+    return
+  }
+
+  uni.showToast({ title: '暂时无法预览该附件', icon: 'none' })
+}
+
 function readHealthAttachmentFileName(value: string) {
   const fileName = extractUrlPathname(value).split('/').filter(Boolean).pop() || ''
   if (!fileName) {
@@ -1292,6 +1359,105 @@ export function normalizeHealthVisitRecord(
     followUpDate: source.followUpDate ?? '',
     notes: source.notes ?? '',
   }
+}
+
+/**
+ * 一次选了多张图 → 合成一条记录（2026-10-01 第九期，老板定的）。
+ *
+ * 老板问"一次能传几张"时确认的规则：**一次选中的多张图当成同一份资料**。
+ * 一份 3 页的体检报告应该是 1 条记录、3 张原图，而不是 3 条各说一半的记录。
+ *
+ * 合并规则（保守，只做"合"不做"猜"）：
+ *   · 日期、类型、兽医这类**只有一个答案**的字段：以第一页为准，后面只补空
+ *   · 结论、建议、症状、诊断、处理、备注这类**一段话**的字段：
+ *     后面的页接着往下写（已经出现过的整段不重复抄）
+ *   · 用药是清单：去重合并
+ *   · 附件：每一页的原图都留下，按页序排列、去重
+ *
+ * ⚠️ 疫苗本不走这里 —— 一张疫苗本读出的是**多条独立的接种记录**，
+ *    合并会把几针并成一针（那是数据错误，不是省事）。
+ */
+const MULTILINE_DRAFT_KEYS = new Set([
+  'findings',
+  'recommendations',
+  'chiefComplaint',
+  'diagnosis',
+  'treatment',
+  'notes',
+])
+
+function isFilledDraftValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+
+  return String(value ?? '').trim() !== ''
+}
+
+export function mergeScannedReportDrafts(
+  drafts: Record<string, any>[] | null | undefined,
+): Record<string, any>[] {
+  const list = Array.isArray(drafts) ? drafts.filter(Boolean) : []
+  if (list.length === 0) {
+    return []
+  }
+
+  const merged: Record<string, any> = { ...list[0] }
+
+  for (const draft of list.slice(1)) {
+    for (const [key, value] of Object.entries(draft)) {
+      // 附件最后统一合并，避免中途把某一页的图覆盖掉
+      if (key === 'attachments') {
+        continue
+      }
+
+      if (!isFilledDraftValue(value)) {
+        continue
+      }
+
+      const current = merged[key]
+
+      // 前面几页没读到的字段，用后面这几页补上
+      if (!isFilledDraftValue(current)) {
+        merged[key] = value
+        continue
+      }
+
+      if (Array.isArray(current)) {
+        merged[key] = Array.from(
+          new Set([
+            ...current.map((item) => String(item ?? '').trim()).filter(Boolean),
+            ...(Array.isArray(value) ? value : [value])
+              .map((item) => String(item ?? '').trim())
+              .filter(Boolean),
+          ]),
+        )
+        continue
+      }
+
+      if (MULTILINE_DRAFT_KEYS.has(key) && typeof current === 'string' && typeof value === 'string') {
+        const next = value.trim()
+        const existing = current.trim()
+        // 两页写着同一句话时不再抄一遍（复印件、双面扫描很常见）
+        if (!next || existing.includes(next)) {
+          continue
+        }
+
+        merged[key] = `${existing}\n${next}`
+      }
+
+      // 其余"只有一个答案"的字段（日期、类型、兽医…）：保留第一页读到的值，
+      // 不猜、不拼接 —— 拼出"2026-09-012026-09-02"这种日期只会更糟
+    }
+  }
+
+  const images = list.flatMap((draft) => (
+    Array.isArray(draft?.attachments) ? draft.attachments : []
+  ))
+  // 一条记录里附件类型是字符串数组；顺序按页走，重复的（同一页被选两次）去掉
+  merged.attachments = Array.from(new Set(normalizeAttachments(images)))
+
+  return [merged]
 }
 
 /** 合并列表里这条记录的日期（用于排序与摘要） */

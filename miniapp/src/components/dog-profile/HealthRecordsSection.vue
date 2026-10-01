@@ -439,7 +439,7 @@ import {
   getHealthRecordValidationError,
   readHealthAttachmentFileSize,
   resolveHealthAttachmentFileSizeError,
-  resolveHealthAttachmentPreviewType,
+  previewHealthAttachment,
   resolveHealthAttachmentSelectionError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
@@ -1626,49 +1626,14 @@ function choosePdfFile() {
   })
 }
 
+/**
+ * 打开附件。
+ *
+ * 2026-10-01 第九期：实现搬到 utils/health-records.ts 的 previewHealthAttachment，
+ * 疫苗记录的卡片也要用同一份（图片走大图预览、PDF 先下载再交给微信文档查看器）。
+ */
 async function previewAttachment(url: string) {
-  const previewType = resolveHealthAttachmentPreviewType(url)
-
-  if (previewType === 'image') {
-    uni.previewImage({
-      urls: [url],
-      current: url,
-    })
-    return
-  }
-
-  if (previewType === 'pdf') {
-    try {
-      uni.showLoading({ title: '打开中...' })
-      const downloadRes: any = await new Promise((resolve, reject) => {
-        uni.downloadFile({
-          url,
-          success: resolve,
-          fail: reject,
-        })
-      })
-
-      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
-        throw new Error('文件下载失败')
-      }
-
-      await new Promise((resolve, reject) => {
-        uni.openDocument({
-          filePath: downloadRes.tempFilePath,
-          showMenu: true,
-          success: resolve,
-          fail: reject,
-        })
-      })
-      uni.hideLoading()
-    } catch (error: any) {
-      uni.hideLoading()
-      uni.showToast({ title: error?.message || '暂时无法预览该附件', icon: 'none' })
-    }
-    return
-  }
-
-  uni.showToast({ title: '暂时无法预览该附件', icon: 'none' })
+  await previewHealthAttachment(url)
 }
 
 function removeAttachment(index: number, attachmentIndex: number) {

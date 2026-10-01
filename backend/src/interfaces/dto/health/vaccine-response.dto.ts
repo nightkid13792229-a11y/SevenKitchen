@@ -31,6 +31,11 @@ export class VaccineRecordResponseDto {
   @Expose()
   status!: string;
 
+  /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组。
+  /// 老记录与手工填写的记录是空数组。
+  @Expose()
+  attachments!: string[];
+
   @Expose()
   createdAt!: string;
 

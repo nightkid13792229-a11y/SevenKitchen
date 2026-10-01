@@ -39,6 +39,7 @@ import {
   resolveHealthAttachmentFileSizeError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  mergeScannedReportDrafts,
   shouldDiscardDogHealthProfileResponse,
   shouldUseRemoteHealthRecordSync,
   writeHealthRecordAttachmentCache,
@@ -995,5 +996,118 @@ describe('识别失败文案', () => {
   it('没有报错信息时给一句兜底，而不是空字符串', () => {
     expect(resolveHealthScanErrorMessage('')).toContain('手工填写')
     expect(resolveHealthScanErrorMessage(undefined)).toContain('手工填写')
+  })
+})
+
+/**
+ * 一次选多张图 → 合成一条记录（2026-10-01 第九期）。
+ *
+ * 老板定的规则：一次选中的多张图当成同一份资料。
+ * 一份 3 页的体检报告 = 1 条记录 + 3 张原图，不是 3 条各说一半的记录。
+ * 疫苗本不走这里（一张本子是好几针，合并会把几针并成一针）。
+ */
+describe('多页报告合成一条记录', () => {
+  const IMG_1 = 'https://img.sevenkitchen.cloud/health/page-1.jpg'
+  const IMG_2 = 'https://img.sevenkitchen.cloud/health/page-2.jpg'
+  const IMG_3 = 'https://img.sevenkitchen.cloud/health/page-3.jpg'
+
+  it('没有草稿时返回空数组，不炸', () => {
+    expect(mergeScannedReportDrafts([])).toEqual([])
+    expect(mergeScannedReportDrafts(null)).toEqual([])
+    expect(mergeScannedReportDrafts(undefined)).toEqual([])
+  })
+
+  it('只有一张时原样返回（也补上 attachments 字段）', () => {
+    const merged = mergeScannedReportDrafts([
+      { checkupDate: '2026-09-01', findings: '未见异常', attachments: [IMG_1] },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].findings).toBe('未见异常')
+    expect(merged[0].attachments).toEqual([IMG_1])
+  })
+
+  it('三页体检报告 → 一条记录，三段内容各归各位', () => {
+    const merged = mergeScannedReportDrafts([
+      { checkupDate: '2026-09-01', checkupType: 'ROUTINE', findings: '血常规正常', attachments: [IMG_1] },
+      { checkupDate: '', checkupType: '', findings: '生化轻度升高', recommendations: '两周后复查', attachments: [IMG_2] },
+      { checkupDate: '', checkupType: '', notes: '医生说注意饮水', attachments: [IMG_3] },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].checkupDate).toBe('2026-09-01')
+    expect(merged[0].checkupType).toBe('ROUTINE')
+    expect(merged[0].findings).toBe('血常规正常\n生化轻度升高')
+    expect(merged[0].recommendations).toBe('两周后复查')
+    expect(merged[0].notes).toBe('医生说注意饮水')
+  })
+
+  it('三页的原图全部留下，按页序、不重复', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: 'A', attachments: [IMG_1] },
+      { findings: 'B', attachments: [IMG_2] },
+      // 同一页被选两次（或两页指向同一张图）只留一份
+      { findings: 'C', attachments: [IMG_2, IMG_3] },
+    ])
+
+    expect(merged[0].attachments).toEqual([IMG_1, IMG_2, IMG_3])
+  })
+
+  it('日期、类型、兽医这类"只有一个答案"的字段以第一页为准，不被后面的页覆盖', () => {
+    const merged = mergeScannedReportDrafts([
+      { visitDate: '2026-09-01', veterinarian: '王医生', diagnosis: '肠胃炎', attachments: [] },
+      { visitDate: '2026-09-02', veterinarian: '李医生', diagnosis: '', attachments: [] },
+    ])
+
+    expect(merged[0].visitDate).toBe('2026-09-01')
+    expect(merged[0].veterinarian).toBe('王医生')
+  })
+
+  it('第一页没读到的字段用后面的页补上', () => {
+    const merged = mergeScannedReportDrafts([
+      { visitDate: '', diagnosis: '', chiefComplaint: '呕吐', attachments: [] },
+      { visitDate: '2026-09-03', diagnosis: '急性胃炎', chiefComplaint: '', attachments: [] },
+    ])
+
+    expect(merged[0].visitDate).toBe('2026-09-03')
+    expect(merged[0].diagnosis).toBe('急性胃炎')
+    expect(merged[0].chiefComplaint).toBe('呕吐')
+  })
+
+  it('两页写着同一句话时不重复抄（双面扫描、复印件很常见）', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: '未见明显异常', attachments: [] },
+      { findings: '未见明显异常', attachments: [] },
+    ])
+
+    expect(merged[0].findings).toBe('未见明显异常')
+  })
+
+  it('用药清单去重合并（数组字段）', () => {
+    const merged = mergeScannedReportDrafts([
+      { medications: ['阿莫西林'], attachments: [] },
+      { medications: ['阿莫西林', '益生菌'], attachments: [] },
+    ])
+
+    expect(merged[0].medications).toEqual(['阿莫西林', '益生菌'])
+  })
+
+  it('不制造空值：缺少的字段留空数组/空串，不返回 undefined', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: 'A', attachments: [] },
+      { findings: 'B', attachments: [] },
+    ])
+
+    expect(Array.isArray(merged[0].attachments)).toBe(true)
+    expect(merged[0].attachments).toEqual([])
+  })
+
+  it('不丢掉身份类字段（状态、本地 key）', () => {
+    const merged = mergeScannedReportDrafts([
+      { status: 'PENDING_CONFIRMATION', findings: 'A', attachments: [] },
+      { findings: 'B', attachments: [] },
+    ])
+
+    expect(merged[0].status).toBe('PENDING_CONFIRMATION')
   })
 })

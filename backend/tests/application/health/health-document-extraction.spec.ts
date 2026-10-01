@@ -116,6 +116,15 @@ describe('AI 录入扩展', () => {
       const drafts = normalizeDrafts('CHECKUP_REPORT', { drafts: [{ veterinarian: '张医生' }] })
       expect(drafts).toEqual([])
     })
+
+    it('只有医生建议的那一页留着（多页报告的尾页常见，2026-10-01 第九期）', () => {
+      const drafts = normalizeDrafts('CHECKUP_REPORT', {
+        drafts: [{ recommendations: '两周后复查血常规' }],
+      })
+
+      expect(drafts).toHaveLength(1)
+      expect(drafts[0].recommendations).toBe('两周后复查血常规')
+    })
   })
 
   describe('病历（一条）', () => {
@@ -143,6 +152,16 @@ describe('AI 录入扩展', () => {
     it('什么都没读出来的病历草稿丢掉', () => {
       const drafts = normalizeDrafts('MEDICAL_RECORD', { drafts: [{ notes: '看不清' }] })
       expect(drafts).toEqual([])
+    })
+
+    it('只有处置与药单的那一页留着（第二页常见，2026-10-01 第九期）', () => {
+      const drafts = normalizeDrafts('MEDICAL_RECORD', {
+        drafts: [{ treatment: '清创缝合', medications: ['速诺'] }],
+      })
+
+      expect(drafts).toHaveLength(1)
+      expect(drafts[0].treatment).toBe('清创缝合')
+      expect(drafts[0].medications).toEqual(['速诺'])
     })
   })
 

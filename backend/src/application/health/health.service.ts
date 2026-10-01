@@ -76,6 +76,7 @@ export class HealthService {
       nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
       notes: dto.notes ?? null,
       status: dto.status || 'COMPLETED',
+      attachments: dto.attachments ?? [],
     });
 
     return this.mapVaccineRecordToDto(record);
@@ -129,6 +130,9 @@ export class HealthService {
       nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
       notes: dto.notes ?? null,
       status: dto.status ?? undefined,
+      // 只有顾客明确传了 attachments 才动它 —— 不传就保持原样，
+      // 免得改个备注顺手把原件清空
+      attachments: dto.attachments ?? undefined,
     });
 
     return this.mapVaccineRecordToDto(updated);
@@ -503,6 +507,7 @@ export class HealthService {
       nextDueDate: record.nextDueDate,
       notes: record.notes,
       status: record.status,
+      attachments: record.attachments ?? [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });

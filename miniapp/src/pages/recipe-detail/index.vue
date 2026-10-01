@@ -387,7 +387,12 @@
             自己做
           </button>
 
-          <button class="btn-order" @tap="goToOrder">
+          <!-- W3：客户自己设计的食谱不显示「买成品」（想要成品要走定制流程） -->
+          <button
+            v-if="canBuyFinishedFood"
+            class="btn-order"
+            @tap="goToOrder"
+          >
             买成品
           </button>
         </view>
@@ -706,6 +711,15 @@ function retryLoadDetail() {
 }
 
 // 非公开食谱（员工预览 / 分享链接）：给内部人员一个低调提示，避免误以为已上线
+/**
+ * W3：能不能买成品。
+ * 后端按"这条食谱所在系列是不是客户自己建的"下发（客户自助食谱为 false）。
+ * 拿不到字段时按"可以"处理，避免老接口把正常食谱的入口也一起藏了。
+ */
+const canBuyFinishedFood = computed(
+  () => (recipe.value as any).canBuyFinishedFood !== false,
+)
+
 const isNonPublicRecipe = computed(() => {
   const status = recipe.value.status
   return Boolean(status) && status !== 'PUBLIC'

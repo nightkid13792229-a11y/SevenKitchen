@@ -2063,7 +2063,12 @@ export class RecipeDesignerService {
         context,
       );
       const items = visibleSeries.map((record) =>
-        this.buildCustomerSeriesCard(record, dogNameById),
+        this.buildCustomerSeriesCard(
+          record,
+          dogNameById,
+          // 客户路径下：系列由这位客户创建 = 客户自助食谱
+          record.createdBy === context.userId,
+        ),
       );
       return usePagination ? { items, page, pageSize, hasMore } : items;
     }
@@ -2180,6 +2185,8 @@ export class RecipeDesignerService {
                 new Map(
                   customerDog ? [[customerDog.id, customerDog.name]] : [],
                 ),
+                // 这位客户刚新建的阶段草稿 —— 属于客户自助
+                true,
               );
             }
 
@@ -2269,12 +2276,17 @@ export class RecipeDesignerService {
             }
 
             if (!isInternalRecipeDesignerRole(context)) {
-              return this.buildCustomerSeriesCard({
-                ...copiedSeries,
-                customerDogId: copiedCustomerDogId,
-                designs: copiedDesigns,
-                recipes: [],
-              } as RecipeSeriesWorkbenchRecord);
+              return this.buildCustomerSeriesCard(
+                {
+                  ...copiedSeries,
+                  customerDogId: copiedCustomerDogId,
+                  designs: copiedDesigns,
+                  recipes: [],
+                } as RecipeSeriesWorkbenchRecord,
+                new Map(),
+                // 这位客户刚复制出来的系列 —— 属于客户自助
+                true,
+              );
             }
 
             return this.buildSeriesWorkbenchCard(
@@ -3603,6 +3615,13 @@ export class RecipeDesignerService {
   private buildCustomerSeriesCard(
     record: RecipeSeriesWorkbenchRecord,
     dogNameById: Map<string, string> = new Map(),
+    /**
+     * 这条系列是不是**客户自己**用设计器做的（W3）。
+     *
+     * 业务规则：客户自助食谱可以出 DIY 制作单，但**永久不能买成品**——
+     * 想要成品必须走定制流程。员工替客户做的定制食谱不受此限。
+     */
+    isCustomerSelfDesigned = false,
   ) {
     const primaryDraft = record.designs[0] as
       | (RecipeSeriesWorkbenchRecord['designs'][number] &
@@ -3637,7 +3656,10 @@ export class RecipeDesignerService {
       updatedAt: primaryDraft?.updatedAt ?? record.updatedAt,
       actionAvailability: {
         canContinueEditing: Boolean(primaryDraft?.id),
-        canOrder: readiness.canCreateSnapshot,
+        // 客户自助食谱：只能出 DIY 单，**不能买成品**。
+        // 两个开关必须分开——旧实现把它们填成了同一个值，
+        // 导致前端"不给买成品"的界面结构形同虚设。
+        canOrder: readiness.canCreateSnapshot && !isCustomerSelfDesigned,
         canGenerateDiy: readiness.canCreateSnapshot,
         disabledReason: readiness.canCreateSnapshot
           ? ''

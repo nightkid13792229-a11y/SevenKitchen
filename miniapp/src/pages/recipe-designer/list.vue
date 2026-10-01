@@ -111,9 +111,13 @@
             >
               {{ isCustomerSnapshotCreating(seriesItem, 'DIY') ? '生成中' : '生成制作单' }}
             </button>
+            <!-- W3：客户自己设计的食谱**不显示**订购成品入口（不是置灰，是直接不给）。
+                 想要成品必须走定制流程。后端 canOrder 已按此规则下发，
+                 这里再用 v-if 兜一层，避免出现"能点但点了报错"的按钮。 -->
             <button
+              v-if="canOrderFromCustomerCard(seriesItem)"
               class="customer-quick-btn customer-quick-order-btn"
-              :disabled="!canOrderFromCustomerCard(seriesItem) || isCustomerSnapshotCreating(seriesItem, 'ORDER')"
+              :disabled="isCustomerSnapshotCreating(seriesItem, 'ORDER')"
               @tap.stop="goToCustomerRecipeTarget(seriesItem, 'ORDER')"
             >
               {{ isCustomerSnapshotCreating(seriesItem, 'ORDER') ? '进入中' : '订购成品' }}

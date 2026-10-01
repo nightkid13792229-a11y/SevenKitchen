@@ -6778,7 +6778,8 @@ describe('RecipeDesignerService', () => {
           customerStatus: 'READY',
           actionAvailability: expect.objectContaining({
             canContinueEditing: true,
-            canOrder: true,
+            // W3：这条系列是客户自己建的 → 只能出 DIY 单，不能买成品
+            canOrder: false,
             canGenerateDiy: true,
           }),
         }),
@@ -6787,6 +6788,53 @@ describe('RecipeDesignerService', () => {
         where: { id: { in: ['dog-1'] }, ownerId: 'customer-1' },
         select: { id: true, name: true },
       });
+    });
+
+    it('客户自助食谱不能买成品，但员工代做的定制食谱可以', async () => {
+      const buildCard = (createdBy: string) => ({
+        id: 'series-1',
+        name: 'Star 控重鸡肉餐',
+        customerDogId: 'dog-1',
+        createdBy,
+        designs: [
+          draft({
+            id: 'design-1',
+            seriesId: 'series-1',
+            seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+            fediafDogScenario: 'ADULT_MER_95',
+            customerDogId: 'dog-1',
+            isCompliant: true,
+            totalWeightG: 100,
+            energyDensityKcalPerKg: 1200,
+            missingDataReport: [],
+            items: [item()],
+          }),
+        ],
+        recipes: [],
+      });
+
+      // 客户自己建的系列 → 不能买成品
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord(buildCard('customer-1')),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-1', name: 'Star' }]);
+      const selfDesigned: any = await service.listSeries({
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      expect(selfDesigned[0].actionAvailability.canOrder).toBe(false);
+      expect(selfDesigned[0].actionAvailability.canGenerateDiy).toBe(true);
+
+      // 员工替这位客户做的系列 → 两个都能用
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord(buildCard('staff-1')),
+      ]);
+      const staffMade: any = await service.listSeries({
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      expect(staffMade[0].actionAvailability.canOrder).toBe(true);
+      expect(staffMade[0].actionAvailability.canGenerateDiy).toBe(true);
     });
 
     it('lists only active customer-owned series for customer users', async () => {

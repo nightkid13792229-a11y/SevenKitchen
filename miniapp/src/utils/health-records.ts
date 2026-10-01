@@ -1078,7 +1078,7 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     primaryLabel: '检查结论',
     adviceKey: 'recommendations',
     adviceLabel: '处理或建议',
-    notesKey: null,
+    notesKey: 'notes',
     notesLabel: '备注',
     showsComplaint: false,
     showsCheckupType: true,
@@ -1152,6 +1152,7 @@ export function normalizeHealthVisitRecord(
       checkupDate: source.checkupDate ?? '',
       findings: source.findings ?? '',
       recommendations: source.recommendations ?? '',
+      notes: source.notes ?? '',
     }
   }
 
@@ -1242,6 +1243,9 @@ export function buildHealthVisitPayload(
       checkupDate: normalizeOptionalText(record?.checkupDate) || '',
       findings: normalizeOptionalText(record?.findings),
       recommendations: normalizeOptionalText(record?.recommendations),
+      // 备注：体检表 2026-10-01（第五期）才加这一列，此前合并表单里
+      // "就诊能写备注、体检不能"说不通，现在补齐。
+      notes: normalizeOptionalText(record?.notes),
       veterinarian: normalizeOptionalText(record?.veterinarian),
       attachments: normalizeAttachments(record?.attachments),
     }

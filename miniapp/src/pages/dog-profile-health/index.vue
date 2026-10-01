@@ -116,30 +116,37 @@
           />
         </template>
 
-        <view v-else-if="activeHealthTab === 'diet'" class="health-section diet-reminder-card">
-          <text class="health-section__title">饮食偏好</text>
-          <text class="health-section__desc">
-            喜欢吃什么、不吃什么都会进推荐与配方，填得越具体越准。
-          </text>
+        <view v-else-if="activeHealthTab === 'diet'" class="diet-tab">
+          <!-- 结构化偏好 + 变更历史（2026-10-01，第五期） -->
+          <DietPreferenceSection :dog-id="dogId" />
 
-          <view class="field-group">
-            <text class="field-label">喜欢吃的食材</text>
-            <textarea
-              class="field-textarea"
-              placeholder="例如：鸡胸肉、南瓜、三文鱼"
-              v-model="form.preferredFoods"
-            />
-          </view>
+          <!-- 原来的两个自由文本框**保留**：配方设计仍在用，
+               而且顾客已经填过的文字不能凭空消失。 -->
+          <view class="health-section health-card diet-reminder-card">
+            <text class="health-section__title">原来的文字描述</text>
+            <text class="health-section__desc">
+              这两栏会继续进推荐与配方。上面的条目整理好之后，这里可以留作补充说明。
+            </text>
 
-          <view class="field-group">
-            <text class="field-label">挑食 / 不爱吃的食物</text>
-            <!-- 过敏≠不爱吃：真过敏走上面的「过敏」分类，这里只是口味 -->
-            <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
-            <textarea
-              class="field-textarea"
-              placeholder="例如：胡萝卜、羊肉"
-              v-model="form.pickyFoods"
-            />
+            <view class="field-group">
+              <text class="field-label">喜欢吃的食材</text>
+              <textarea
+                class="field-textarea"
+                placeholder="例如：鸡胸肉、南瓜、三文鱼"
+                v-model="form.preferredFoods"
+              />
+            </view>
+
+            <view class="field-group">
+              <text class="field-label">挑食 / 不爱吃的食物</text>
+              <!-- 过敏≠不爱吃：真过敏走上面的「过敏」分类，这里只是口味 -->
+              <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
+              <textarea
+                class="field-textarea"
+                placeholder="例如：胡萝卜、羊肉"
+                v-model="form.pickyFoods"
+              />
+            </view>
           </view>
         </view>
 
@@ -187,6 +194,7 @@ import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSect
 import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
 import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
+import DietPreferenceSection from '../../components/dog-profile/DietPreferenceSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -1209,6 +1217,12 @@ function goToDogCreate() {
 .health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
 
 /* 时间线 / 就诊前摘要的入口：两个等宽小卡 */
+.diet-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
 .health-shortcuts {
   display: flex;
   gap: 20rpx;

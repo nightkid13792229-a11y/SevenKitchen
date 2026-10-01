@@ -453,6 +453,8 @@ model Dog {
   allergyRecords       AllergyRecord[]
   healthShareTokens    DogHealthShareToken[]
   vaccinePlan          DogVaccinePlan?
+  dietPreferences      DogDietPreference[]
+  dietPreferenceChanges DogDietPreferenceChange[]
   checkupRecords       CheckupRecord[]
   customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
   owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -1328,6 +1330,70 @@ model DogVaccinePlan {
   @@map("dog_vaccine_plan")
 }
 
+/// 结构化的饮食偏好（2026-10-01，第五期）。
+///
+/// ── 为什么要结构化 ────────────────────────────────────────
+///   原先只有 dog.preferred_foods / dog.picky_foods 两个自由文本框：
+///     · 无法回答"什么时候从爱吃鸡肉变成不吃鸡肉"（老板第 9 条要的正是这个）
+///     · 也无法按食材做推荐与配方匹配
+///
+/// ── 与旧字段的关系（保守做法）────────────────────────────
+///   旧的两个文本框**保留不动**，一个字符都不改：
+///     · 配方设计仍然把旧文本合并进提示词，行为不变
+///     · 新界面展示结构化条目；旧文本还在、结构化表为空时，
+///       提示顾客"整理一下"，由系统给出候选、**顾客确认后**才写入
+///   这样既拿到结构化能力，又不会因为自动分词把顾客原来的话改坏。
+model DogDietPreference {
+  id        String             @id @default(uuid()) @map("id")
+  dogId     String             @map("dog_id")
+  kind      DietPreferenceKind @map("kind")
+  foodName  String             @map("food_name") @db.VarChar(60)
+  /// 顾客手动填写 / 从旧文本整理过来
+  source    String             @default("MANUAL") @map("source") @db.VarChar(16)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  dog       Dog                @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@unique([dogId, kind, foodName])
+  @@index([dogId])
+  @@map("dog_diet_preference")
+}
+
+enum DietPreferenceKind {
+  /// 爱吃的
+  LIKED
+  /// 不吃的 / 挑食
+  DISLIKED
+}
+
+/// 饮食偏好的变更历史（2026-10-01，第五期）。
+///
+/// 老板第 9 条："饮食偏好的变化，最好是能看到历史的变化。"
+///
+/// 只记**变化**（加了什么 / 去掉了什么），不记"当前是什么" ——
+/// 当前状态在 dog_diet_preference 里，这里回答的是"什么时候变的"。
+/// 第五期之前的历史没有数据（当时只有两个文本框，没有变更概念），
+/// 所以这份历史从功能上线那天开始记，界面上要如实说明。
+model DogDietPreferenceChange {
+  id        String               @id @default(uuid()) @map("id")
+  dogId     String               @map("dog_id")
+  kind      DietPreferenceKind   @map("kind")
+  foodName  String               @map("food_name") @db.VarChar(60)
+  action    DietPreferenceAction @map("action")
+  /// 谁改的：顾客自己 / 从订单同步 / 管理员
+  changedBy String               @map("changed_by") @db.VarChar(24)
+  changedAt DateTime             @default(now()) @map("changed_at")
+  dog       Dog                  @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId, changedAt])
+  @@map("dog_diet_preference_change")
+}
+
+enum DietPreferenceAction {
+  ADDED
+  REMOVED
+}
+
 model WeightRecord {
   id              String   @id @default(uuid()) @map("id")
   dogId           String   @map("dog_id")
@@ -1367,6 +1433,10 @@ model CheckupRecord {
   checkupDate     DateTime @map("checkup_date") @db.Date
   findings        String?  @map("findings")
   recommendations String?  @map("recommendations")
+  /// 备注（2026-10-01 第五期新增）。
+  /// 此前「病例」合并表单里体检记录没有备注可填 —— 病史表有 notes、体检表没有，
+  /// 合并之后家长看到的是"就诊能写备注、体检不能"，说不通。
+  notes           String?  @map("notes")
   veterinarian    String?  @map("veterinarian")
   attachments     String[] @default([]) @map("attachments")
   createdAt       DateTime @default(now()) @map("created_at")

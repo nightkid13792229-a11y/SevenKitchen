@@ -25,6 +25,9 @@ export class CheckupRecordResponseDto {
   recommendations!: string | null;
 
   @Expose()
+  notes!: string | null;
+
+  @Expose()
   veterinarian!: string | null;
 
   @Expose()

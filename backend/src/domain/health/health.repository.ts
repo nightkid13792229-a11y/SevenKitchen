@@ -40,6 +40,8 @@ export interface CheckupRecord {
   checkupDate: Date;
   findings: string | null;
   recommendations: string | null;
+  /// 备注；2026-10-01 第五期新增（此前只有病史表有 notes）
+  notes: string | null;
   veterinarian: string | null;
   attachments: string[];
   createdAt: Date;

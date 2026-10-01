@@ -174,6 +174,7 @@ export class HealthService {
       checkupDate: new Date(dto.checkupDate),
       findings: dto.findings ?? null,
       recommendations: dto.recommendations ?? null,
+      notes: dto.notes ?? null,
       veterinarian: dto.veterinarian ?? null,
       attachments: dto.attachments || [],
     });
@@ -226,6 +227,7 @@ export class HealthService {
       checkupDate: dto.checkupDate ? new Date(dto.checkupDate) : undefined,
       findings: dto.findings ?? null,
       recommendations: dto.recommendations ?? null,
+      notes: dto.notes ?? null,
       veterinarian: dto.veterinarian ?? null,
       attachments: dto.attachments ?? undefined,
     });
@@ -518,6 +520,7 @@ export class HealthService {
       temperature: record.temperature,
       findings: record.findings,
       recommendations: record.recommendations,
+      notes: record.notes,
       veterinarian: record.veterinarian,
       attachments: record.attachments,
       createdAt: record.createdAt,

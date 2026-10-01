@@ -79,18 +79,19 @@ describe('health record DTOs', () => {
       expect(validateSync(dto as object, { whitelist: true })).toEqual([]);
     });
 
-    it('检查结论落在 findings 上（小程序内部叫 notes，保存时要改名）', () => {
+    it('检查结论在 findings 上，备注在 notes 上（两个是不同字段）', () => {
       const dto = plainToInstance(CreateCheckupDto, {
         checkupType: 'ROUTINE',
         checkupDate: '2026-10-01',
         findings: '未见异常',
-        notes: '这个字段后端不收',
+        notes: '医生让半年后复查',
       });
       const validated = validateSync(dto as object, { whitelist: true });
       expect(validated).toEqual([]);
-      // whitelist 会把 DTO 里没有的 notes 剥掉
-      expect((dto as Record<string, unknown>).notes).toBeUndefined();
+      // 2026-10-01（第五期）给体检表加了 notes 列：此前只有病史表有备注，
+      // 合并成「病例」表单后"就诊能写备注、体检不能"说不通。
       expect((dto as Record<string, unknown>).findings).toBe('未见异常');
+      expect((dto as Record<string, unknown>).notes).toBe('医生让半年后复查');
     });
   });
 });

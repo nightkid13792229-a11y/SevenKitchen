@@ -179,6 +179,7 @@ export class PrismaCheckupRecordRepository implements CheckupRecordRepository {
       checkupDate: record.checkupDate,
       findings: record.findings,
       recommendations: record.recommendations,
+      notes: record.notes,
       veterinarian: record.veterinarian,
       attachments: record.attachments,
       createdAt: record.createdAt,

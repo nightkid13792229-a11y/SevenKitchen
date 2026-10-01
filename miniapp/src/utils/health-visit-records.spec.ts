@@ -79,7 +79,7 @@ describe('病例合并 · 字段对照表', () => {
     expect(config.notesKey).toBe('notes')
   })
 
-  it('体检：检查结论 / 体检日期 / 医生建议，且没有备注（体检表没有 notes 字段）', () => {
+  it('体检：检查结论 / 体检日期 / 医生建议 / 备注', () => {
     const config = getHealthVisitFieldConfig('checkup')
 
     expect(config.dateKey).toBe('checkupDate')
@@ -87,7 +87,9 @@ describe('病例合并 · 字段对照表', () => {
     // 体检没有"诊断"：措辞上不能让家长以为体检也能下诊断
     expect(config.primaryLabel).toBe('检查结论')
     expect(config.adviceKey).toBe('recommendations')
-    expect(config.notesKey).toBeNull()
+    // 2026-10-01（第五期）给体检表加了 notes 列，
+    // 此前"就诊能写备注、体检不能"说不通
+    expect(config.notesKey).toBe('notes')
   })
 
   it('次要字段按类型分开：症状与用药只给就诊，体检类型只给体检', () => {
@@ -172,8 +174,8 @@ describe('病例合并 · 保存载荷', () => {
       veterinarian: '李医生',
       attachments: ['b.jpg'],
     })
-    // 体检表没有 notes，不能塞进去（后端 whitelist 会剥掉，但别发脏数据）
-    expect(payload).not.toHaveProperty('notes')
+    // 第五期起体检表也有 notes 列，备注照常发
+    expect(payload).toHaveProperty('notes')
   })
 
   it('只填了诊断结果时，chiefComplaint 送空串而不是 null（后端那一栏是必填字符串）', () => {
@@ -215,14 +217,15 @@ describe('病例合并 · 用药与摘要', () => {
     expect(record.medications).toBe('速诺、胃复安')
   })
 
-  it('体检记录归一化时保留 findings，不会当成备注', () => {
+  it('体检记录归一化时 findings 与 notes 各归各位', () => {
     const record = normalizeHealthVisitRecord('checkup', {
       id: 'c1',
       checkupDate: '2026-05-01',
       findings: '未见异常',
+      notes: '医生让半年后复查',
     })
     expect(record.findings).toBe('未见异常')
-    expect(record.notes).toBeUndefined()
+    expect(record.notes).toBe('医生让半年后复查')
   })
 
   it('摘要标题用诊断结果 / 检查结论，明细带日期与类型特征', () => {

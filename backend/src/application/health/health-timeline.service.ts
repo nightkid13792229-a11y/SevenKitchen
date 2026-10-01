@@ -183,10 +183,28 @@ export class HealthTimelineService {
       })),
     ]
 
-    // 饮食偏好**不进时间线**：它是"当前状态"而不是"某天发生的事"，
-    // dog 表上也没有"这项什么时候改的"（只有 createdAt，那是建档时间，
-    // 拿它当偏好变更时间会误导家长）。
-    // 第五期做「饮食偏好结构化 + 变更历史」时，会有真实的变更事件补进来。
+    // 饮食偏好的**变更**进时间线（2026-10-01 第五期补上）。
+    //
+    // 第二期时这里刻意留空：当时只有两个自由文本框，没有"什么时候改的"
+    // 这个事实（dog 表上只有 createdAt，那是建档时间，拿来当变更时间会误导）。
+    // 第五期有了变更历史表，才第一次有真实的饮食事件可放。
+    const dietChanges = await this.prisma.dogDietPreferenceChange.findMany({
+      where: { dogId },
+      orderBy: { changedAt: 'desc' },
+      take: 50,
+    });
+    for (const change of dietChanges) {
+      events.push({
+        id: change.id,
+        type: 'diet',
+        date: toDateText(change.changedAt),
+        title:
+          change.action === 'ADDED'
+            ? `饮食偏好：新增「${change.foodName}」`
+            : `饮食偏好：去掉「${change.foodName}」`,
+        detail: change.kind === 'LIKED' ? '爱吃' : '不吃',
+      });
+    }
 
     events.sort(compareTimelineEvents)
 

@@ -50,6 +50,8 @@ describe('HealthTimelineService', () => {
       allergyRecord: { findMany: jest.fn().mockResolvedValue([]) },
       vaccineRecord: { findMany: jest.fn().mockResolvedValue([]) },
       weightRecord: { findMany: jest.fn().mockResolvedValue([]) },
+      // 第五期起时间线会读饮食偏好的变更历史
+      dogDietPreferenceChange: { findMany: jest.fn().mockResolvedValue([]) },
     } as any
   }
 
@@ -186,7 +188,27 @@ describe('HealthTimelineService', () => {
       expect(result.total).toBe(0)
     })
 
-    it('饮食偏好不进时间线（它是状态不是事件，等第五期有变更历史再补）', async () => {
+    it('饮食偏好的变更进时间线（第五期补上：此前没有"什么时候改的"这个事实）', async () => {
+      const prisma = createPrisma()
+      prisma.dogDietPreferenceChange.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'd1',
+          kind: 'LIKED',
+          foodName: '鸡胸肉',
+          action: 'ADDED',
+          changedAt: new Date('2026-09-20T00:00:00.000Z'),
+        },
+      ])
+      const service = new HealthTimelineService(prisma)
+      const result = await service.getTimeline(CUSTOMER_ID, DOG_ID)
+
+      const dietEvent = result.events.find((event) => event.type === 'diet')
+      expect(dietEvent).toBeDefined()
+      expect(dietEvent!.title).toContain('鸡胸肉')
+      expect(dietEvent!.detail).toBe('爱吃')
+    })
+
+    it('没有饮食变更时时间线里也没有饮食事件', async () => {
       const service = new HealthTimelineService(createPrisma())
       const result = await service.getTimeline(CUSTOMER_ID, DOG_ID)
 

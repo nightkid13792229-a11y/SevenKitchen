@@ -168,6 +168,34 @@ export const dogApi = {
       url: `/dogs/${dogId}/vaccine-plan/decisions/${encodeURIComponent(stepKey)}`,
       method: 'DELETE',
     }),
+  /**
+   * 结构化饮食偏好（2026-10-01，第五期）。
+   *
+   * 老板第 9 条：饮食偏好的变化要能看到历史。
+   * 与旧的两个文本框并存 —— 旧字段不动，配方设计继续用它们。
+   */
+  dietPreferences: (dogId: string) =>
+    request({ url: `/dogs/${dogId}/diet-preferences`, method: 'GET' }),
+  addDietPreference: (dogId: string, kind: 'LIKED' | 'DISLIKED', foodName: string) =>
+    request({
+      url: `/dogs/${dogId}/diet-preferences`,
+      method: 'POST',
+      data: { kind, foodName },
+    }),
+  removeDietPreference: (dogId: string, kind: 'LIKED' | 'DISLIKED', foodName: string) =>
+    request({
+      url: `/dogs/${dogId}/diet-preferences?kind=${kind}&foodName=${encodeURIComponent(foodName)}`,
+      method: 'DELETE',
+    }),
+  /** 把旧文本框里的内容整理成条目（顾客确认后才会真的写库） */
+  importDietPreferences: (
+    dogId: string,
+    data: { liked?: string[]; disliked?: string[] },
+  ) => request({
+    url: `/dogs/${dogId}/diet-preferences/import-legacy`,
+    method: 'POST',
+    data,
+  }),
   healthRecords: {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),

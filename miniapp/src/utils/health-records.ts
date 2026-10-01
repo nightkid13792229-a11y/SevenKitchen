@@ -1,4 +1,14 @@
 export type HealthRecordType = 'medical' | 'checkup' | 'allergy'
+
+/**
+ * 附件上传的类别。
+ *
+ * 比 HealthRecordType 多一个 `vaccine`：疫苗本也要能上传照片，
+ * 而它走的是通用图片上传口（`/health/upload-image`，与过敏同一支）——
+ * 见 buildHealthAttachmentUploadUrl 的兜底分支。
+ * 之前这里的类型比实际支持的范围窄，扫描疫苗本时类型对不上。
+ */
+export type HealthAttachmentUploadType = HealthRecordType | 'vaccine'
 export type HealthAttachmentSelectionType = 'image' | 'pdf'
 export type HealthAttachmentPreviewType = 'image' | 'pdf' | 'file'
 export interface HealthRecordSummary {
@@ -211,10 +221,65 @@ export function getHealthRecordValidationError(
   return null
 }
 
+/** 病史状态（与后端枚举一致） */
+export type MedicalStatusValue =
+  | 'PENDING_CONFIRMATION'
+  | 'TREATING'
+  | 'RECOVERED'
+  | 'CHRONIC'
+
+/**
+ * 三类记录的提交结构（2026-10-01 自查补）。
+ *
+ * 原来这几套结构在 `api/dogs.ts` 里另写了一份，两边字段与可选性对不上：
+ * 类型检查一跑到"按类型分派保存"就报错，实际运行时却没问题。
+ * 现在以这里为唯一来源，接口层直接引用。
+ *
+ * 字段可选性与后端 DTO 对齐：新建时前端一定会带上这些字段，
+ * 但更新接口用的是 `Partial<>`，所以结构上允许缺省。
+ */
+export interface MedicalRecordPayload {
+  chiefComplaint: string
+  visitDate: string
+  diagnosis: string
+  treatment?: string | null
+  medications?: string[]
+  status?: MedicalStatusValue
+  followUpDate?: string | null
+  veterinarian?: string | null
+  notes?: string | null
+  attachments?: string[]
+}
+
+export interface CheckupRecordPayload {
+  checkupType: string
+  checkupDate: string
+  findings?: string | null
+  recommendations?: string | null
+  veterinarian?: string | null
+  attachments?: string[]
+  notes?: string | null
+}
+
+export interface AllergyRecordPayload {
+  allergen: string
+  notes?: string | null
+  attachments?: string[]
+}
+
+export type HealthRecordPayload =
+  | MedicalRecordPayload
+  | CheckupRecordPayload
+  | AllergyRecordPayload
+
+export function buildHealthRecordPayload(type: 'medical', record: HealthRecordShape): MedicalRecordPayload
+export function buildHealthRecordPayload(type: 'checkup', record: HealthRecordShape): CheckupRecordPayload
+export function buildHealthRecordPayload(type: 'allergy', record: HealthRecordShape): AllergyRecordPayload
+export function buildHealthRecordPayload(type: HealthRecordType, record: HealthRecordShape): HealthRecordPayload
 export function buildHealthRecordPayload(
   type: HealthRecordType,
   record: HealthRecordShape,
-) {
+): HealthRecordPayload {
   if (type === 'medical') {
     const status = String(record.status || '').trim()
 
@@ -223,9 +288,10 @@ export function buildHealthRecordPayload(
       visitDate: normalizeOptionalText(record.visitDate) || '',
       diagnosis: normalizeOptionalText(record.diagnosis) || '',
       // 缺省是"待确认"，不是后端的默认值"治疗中"
-      status: getMedicalStatusOptions().some(option => option.value === status)
+      // 上面已按白名单校验过，这里只是把类型收紧到后端枚举
+      status: (getMedicalStatusOptions().some(option => option.value === status)
         ? status
-        : 'PENDING_CONFIRMATION',
+        : 'PENDING_CONFIRMATION') as MedicalStatusValue,
       notes: normalizeOptionalText(record.notes),
       attachments: normalizeAttachments(record.attachments),
     }
@@ -247,10 +313,14 @@ export function buildHealthRecordPayload(
   }
 }
 
+export function buildCrudHealthRecordPayload(type: 'medical', record: HealthRecordShape): MedicalRecordPayload
+export function buildCrudHealthRecordPayload(type: 'checkup', record: HealthRecordShape): CheckupRecordPayload
+export function buildCrudHealthRecordPayload(type: 'allergy', record: HealthRecordShape): AllergyRecordPayload
+export function buildCrudHealthRecordPayload(type: HealthRecordType, record: HealthRecordShape): HealthRecordPayload
 export function buildCrudHealthRecordPayload(
   type: HealthRecordType,
   record: HealthRecordShape,
-) {
+): HealthRecordPayload {
   const payload = buildHealthRecordPayload(type, record)
 
   if (type !== 'checkup') {
@@ -540,7 +610,11 @@ export function hasUnsavedDietReminderChange(current: unknown, saved: unknown) {
 }
 
 export function resolveDogHealthSelectionState(
-  dogs: Array<{ id?: string }>,
+  /**
+   * 只用到 id，但调用方传进来的往往是完整的狗对象（还带 name 等字段），
+   * 所以这里允许额外字段 —— 否则测试与调用方每次都得先裁一遍对象。
+   */
+  dogs: Array<{ id?: string; [key: string]: unknown }>,
   preferredDogId = '',
 ) {
   if (!Array.isArray(dogs) || dogs.length === 0) {
@@ -667,7 +741,7 @@ export function shouldUseRemoteHealthRecordSync(dogId: unknown) {
 
 export function buildHealthAttachmentUploadUrl(
   baseUrl: string,
-  type: HealthRecordType,
+  type: HealthAttachmentUploadType,
 ) {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
 
@@ -694,14 +768,28 @@ export function buildHealthAttachmentDeletePath(type: HealthRecordType) {
   return '/health/attachments'
 }
 
-export function extractHealthAttachmentKey(url: string) {
-  try {
-    const { pathname } = new URL(url)
-    const normalized = pathname.replace(/^\/+/, '')
-    return normalized || null
-  } catch {
-    return null
+/**
+ * 从 URL 里取 pathname —— **不用 `URL` 全局**。
+ *
+ * 为什么不用：`URL` 在小程序基础库里不是必备全局（同一份代码在开发者工具里
+ * 能跑、到真机基础库版本低一点就可能没有），而这里只是取路径，
+ * 正则足够且没有环境依赖。非绝对地址一律返回空串，与改前行为一致
+ * （改前 `new URL('a/b')` 会抛错，被 catch 成空）。
+ */
+function extractUrlPathname(url: string) {
+  const text = String(url || '').trim()
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+    return ''
   }
+
+  return text
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '')
+    .split(/[?#]/)[0] || ''
+}
+
+export function extractHealthAttachmentKey(url: string) {
+  const normalized = extractUrlPathname(url).replace(/^\/+/, '')
+  return normalized || null
 }
 
 function resolveHealthAttachmentUploadParseError(uploadRes: {
@@ -862,12 +950,15 @@ export function resolveHealthAttachmentPreviewType(
 }
 
 function readHealthAttachmentFileName(value: string) {
+  const fileName = extractUrlPathname(value).split('/').filter(Boolean).pop() || ''
+  if (!fileName) {
+    return ''
+  }
+
   try {
-    const { pathname } = new URL(value)
-    const fileName = pathname.split('/').filter(Boolean).pop() || ''
     return decodeURIComponent(fileName)
   } catch {
-    return ''
+    return fileName
   }
 }
 
@@ -1230,10 +1321,12 @@ export function getHealthVisitValidationError(
 }
 
 /** 表单草稿 → 接口载荷（按类型分别对回两张表的字段） */
+export function buildHealthVisitPayload(kind: 'checkup', record: Record<string, any>): CheckupRecordPayload
+export function buildHealthVisitPayload(kind: 'medical', record: Record<string, any>): MedicalRecordPayload
 export function buildHealthVisitPayload(
   kind: HealthVisitKind,
   record: Record<string, any>,
-): Record<string, unknown> {
+): MedicalRecordPayload | CheckupRecordPayload {
   const config = getHealthVisitFieldConfig(kind)
   const notes = config.notesKey ? normalizeOptionalText(record?.[config.notesKey]) : null
 
@@ -1262,9 +1355,10 @@ export function buildHealthVisitPayload(
     treatment: normalizeOptionalText(record?.treatment),
     medications: normalizeMedicationList(record?.medications),
     // 缺省是"待确认"，不是后端的默认值"治疗中"
-    status: getMedicalStatusOptions().some((option) => option.value === status)
+    // （下面已按白名单校验，这里把类型收紧到后端枚举）
+    status: (getMedicalStatusOptions().some((option) => option.value === status)
       ? status
-      : 'PENDING_CONFIRMATION',
+      : 'PENDING_CONFIRMATION') as MedicalStatusValue,
     followUpDate: normalizeOptionalText(record?.followUpDate),
     veterinarian: normalizeOptionalText(record?.veterinarian),
     notes,

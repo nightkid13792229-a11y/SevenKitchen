@@ -169,7 +169,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { dogApi } from '../../api/dogs'
+import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 
 interface VaccineRecord {
@@ -331,7 +331,12 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  ;(draft as Record<string, string>)[field] = value
+  // status 是受限联合类型（下拉框保证取值合法），其余字段都是普通字符串
+  if (field === 'status') {
+    draft.status = value as VaccineDraft['status']
+    return
+  }
+  draft[field] = value
 }
 
 function toggleExpanded(record: VaccineRecord, index: number) {
@@ -524,8 +529,8 @@ function addRecord() {
   expandedIndex.value = records.value.length - 1
 }
 
-function buildPayload(draft: VaccineDraft) {
-  const payload: Record<string, any> = {
+function buildPayload(draft: VaccineDraft): VaccineRecordCreatePayload {
+  const payload: VaccineRecordCreatePayload = {
     vaccineName: draft.vaccineName.trim(),
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,

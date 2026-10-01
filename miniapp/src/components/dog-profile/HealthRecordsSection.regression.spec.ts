@@ -29,7 +29,13 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).not.toContain("emit('record-saved', buildHealthRecordFocusIdentity")
     expect(source).toContain('hasUploadingRecords')
     expect(source).toContain('附件上传中，请稍候')
-    expect(source).toContain('const uploadType = currentType.value')
+    // 2026-10-01：合并模式（'visit'）没有单一类型，附件接口类型集中到 attachmentApiType，
+    // 它把 'visit' 显式映射成 'allergy'（历史上走的就是通用上传口，接口行为不变）
+    expect(source).toContain('const uploadType = attachmentApiType.value')
+    // 附件接口类型：合并模式映射成 'allergy'（历史上走的就是通用上传/删除口）
+    expect(source).toContain(
+      "const attachmentApiType = computed<HealthRecordType>(() => (\n  currentType.value === 'visit' ? 'allergy' : currentType.value\n))",
+    )
     expect(source).toContain('findRecordIndexByKey')
     expect(source).toContain('const targetIndex = findRecordIndexByKey(uploadKey)')
     expect(source).toContain('const targetRecord = draftRecords.value[targetIndex]')
@@ -54,7 +60,9 @@ describe('HealthRecordsSection regressions', () => {
     )).toContain('if (hasSavingRecord.value)')
     expect(source).toContain('function preserveUnsavedDrafts')
     expect(source).toContain('const lastSyncedType = ref<HealthRecordType | null>(null)')
-    expect(source).toContain('lastSyncedType.value === currentType.value')
+    // 2026-10-01：合并模式（activeType='visit'）下没有单一记录类型，
+    // 这组 key/比对用途统一走 baseType（非合并时等于 currentType）
+    expect(source).toContain('lastSyncedType.value === baseType.value')
     expect(source).toContain('function shouldSkipPreservingSavingRecord')
     expect(source).toContain('function replaceIncomingRecordWithDirtyDraft')
     expect(source).toContain('function shouldUseIncomingSavingRecord')
@@ -76,7 +84,7 @@ describe('HealthRecordsSection regressions', () => {
       source,
       'function syncDraftRecords',
       'function recordKey',
-    )).toContain('lastSyncedType.value = currentType.value')
+    )).toContain('lastSyncedType.value = baseType.value')
     expect(functionSource(
       source,
       'function replaceIncomingRecordWithDirtyDraft',

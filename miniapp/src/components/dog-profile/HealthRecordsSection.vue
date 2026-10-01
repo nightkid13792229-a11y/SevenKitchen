@@ -188,70 +188,70 @@
         </view>
 
         <view v-if="fieldConfigForRecord(record).date" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).date.label }}</text>
+          <text class="field-label">{{ dateField(record).label }}</text>
           <picker
             mode="date"
             :disabled="hasSavingRecord"
-            :value="readField(record, fieldConfigForRecord(record).date.key)"
-            @change="updateTextField(index, fieldConfigForRecord(record).date.key, $event.detail.value)"
+            :value="readField(record, dateField(record).key)"
+            @change="updateTextField(index, dateField(record).key, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readField(record, fieldConfigForRecord(record).date.key) || `请选择${fieldConfigForRecord(record).date.label}` }}
+              {{ readField(record, dateField(record).key) || `请选择${dateField(record).label}` }}
             </view>
           </picker>
         </view>
 
         <view v-if="fieldConfigForRecord(record).secondary" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).secondary.label }}</text>
+          <text class="field-label">{{ secondaryField(record).label }}</text>
           <input
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).secondary.label}`"
-            :value="readField(record, fieldConfigForRecord(record).secondary.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).secondary.key, $event.detail.value)"
+            :placeholder="`请输入${secondaryField(record).label}`"
+            :value="readField(record, secondaryField(record).key)"
+            @input="updateTextField(index, secondaryField(record).key, $event.detail.value)"
           />
         </view>
 
         <!-- 状态（目前只有病史用）：顾客自述来的记录默认「待确认」，
              由顾客在这里改成实际情况；系统不替兽医判断是不是慢性病 -->
         <view v-if="fieldConfigForRecord(record).status" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).status.label }}</text>
+          <text class="field-label">{{ statusField(record).label }}</text>
           <picker
             mode="selector"
-            :range="fieldOptionLabels(fieldConfigForRecord(record).status.options)"
-            :value="fieldOptionIndex(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key)"
+            :range="fieldOptionLabels(statusField(record).options)"
+            :value="fieldOptionIndex(record, statusField(record).options, statusField(record).key)"
             :disabled="hasSavingRecord"
-            @change="updateOptionField(index, fieldConfigForRecord(record).status.key, fieldConfigForRecord(record).status.options, $event.detail.value)"
+            @change="updateOptionField(index, statusField(record).key, statusField(record).options, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readOptionFieldLabel(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key) || `请选择${fieldConfigForRecord(record).status.label}` }}
+              {{ readOptionFieldLabel(record, statusField(record).options, statusField(record).key) || `请选择${statusField(record).label}` }}
             </view>
           </picker>
         </view>
 
         <!-- 兽医（两张表都有这个字段，合并后才有入口） -->
         <view v-if="fieldConfigForRecord(record).veterinarian" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).veterinarian.label }}</text>
+          <text class="field-label">{{ vetField(record).label }}</text>
           <input
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).veterinarian.label}`"
-            :value="readField(record, fieldConfigForRecord(record).veterinarian.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).veterinarian.key, $event.detail.value)"
+            :placeholder="`请输入${vetField(record).label}`"
+            :value="readField(record, vetField(record).key)"
+            @input="updateTextField(index, vetField(record).key, $event.detail.value)"
           />
         </view>
 
         <!-- 备注：体检表没有 notes 字段，所以体检记录这一栏是空的、不显示 -->
         <view v-if="fieldConfigForRecord(record).notes" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).notes.label }}</text>
+          <text class="field-label">{{ notesField(record).label }}</text>
           <textarea
             class="field-textarea"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).notes.label}`"
-            :value="readField(record, fieldConfigForRecord(record).notes.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).notes.key, $event.detail.value)"
+            :placeholder="`请输入${notesField(record).label}`"
+            :value="readField(record, notesField(record).key)"
+            @input="updateTextField(index, notesField(record).key, $event.detail.value)"
           />
         </view>
 
@@ -477,7 +477,12 @@ type FieldConfig = {
 
 const props = withDefaults(defineProps<{
   dogId: string
-  activeType?: HealthRecordType
+  /**
+   * 板块标识。`'visit'` 是「病例」合并模式（一个列表同时装就诊与体检），
+   * 由组件内部逐条判断每条记录真正属于哪张表 —— 所以它是合法取值，
+   * 上面的类型漏了它（2026-10-01 自查补）。
+   */
+  activeType?: HealthRecordType | 'visit'
   records?: Record<string, any>[]
   loading?: boolean
   savingRecordKey?: string
@@ -521,7 +526,20 @@ const lastSyncedType = ref<HealthRecordType | null>(null)
 const recentSavingRecordKey = ref('')
 const attachmentHintText = buildHealthAttachmentFieldHint()
 
-const currentType = computed<HealthRecordType>(() => props.activeType || props.recordType || 'medical')
+const currentType = computed<HealthRecordType | 'visit'>(
+  () => props.activeType || props.recordType || 'medical',
+)
+
+/**
+ * 「非合并模式下的当前类型」——只有它不是 'visit'。
+ *
+ * 合并模式没有单一类型，但本地 key、草稿比对、聚焦定位这些**非业务用途**
+ * 仍需要一个稳定的类型前缀，统一取 `'medical'`（合并列表的主类型）。
+ * 业务判断一律走 recordKindOf()，不要用这个。
+ */
+const baseType = computed<HealthRecordType>(() => (
+  currentType.value === 'visit' ? 'medical' : currentType.value
+))
 
 /**
  * 「病例」模式（2026-10-01）：
@@ -532,13 +550,25 @@ const currentType = computed<HealthRecordType>(() => props.activeType || props.r
  */
 const isVisitMode = computed(() => (props.activeType as string) === 'visit')
 
+/**
+ * 附件上传/删除接口用的类型。
+ *
+ * 合并模式（`'visit'`）没有单一记录类型：历史上它落到通用上传口
+ * （`/health/upload-image`）与通用删除口（`/health/attachments`）——
+ * 与过敏同一支。这里把 `'visit'` 显式写成 `'allergy'`：**接口一字不变**，
+ * 只是让类型能对上（2026-10-01 自查）。
+ */
+const attachmentApiType = computed<HealthRecordType>(() => (
+  currentType.value === 'visit' ? 'allergy' : currentType.value
+))
+
 /** 某条记录真正对应哪张表：合并模式下逐条判断，其余模式就是当前类型 */
 function recordKindOf(record: Record<string, any>): HealthRecordType {
-  return isVisitMode.value ? resolveHealthVisitKind(record) : currentType.value
+  return isVisitMode.value ? resolveHealthVisitKind(record) : baseType.value
 }
 
 const activeTypeMeta = computed(() => (
-  isVisitMode.value ? getHealthVisitSectionMeta() : getHealthRecordTypeMeta(currentType.value)
+  isVisitMode.value ? getHealthVisitSectionMeta() : getHealthRecordTypeMeta(baseType.value)
 ))
 const sourceRecords = computed(() => (
   props.records.length > 0 || !props.modelValue.length ? props.records : props.modelValue
@@ -664,7 +694,38 @@ function getVisitFieldConfig(record: Record<string, any>): FieldConfig {
 
 /** 模板里逐条取配置：合并模式按记录类型，其余模式按当前板块 */
 function fieldConfigForRecord(record: Record<string, any>): FieldConfig {
-  return isVisitMode.value ? getVisitFieldConfig(record) : getFieldConfig(currentType.value)
+  return isVisitMode.value ? getVisitFieldConfig(record) : getFieldConfig(baseType.value)
+}
+
+/**
+ * 模板取值器（2026-10-01 自查补）。
+ *
+ * 为什么需要它们：`date` / `secondary` / `status` / `veterinarian` / `notes`
+ * 都是可空字段，而模板里是靠 `v-if="fieldConfigForRecord(record).date"` 先判断、
+ * 再访问 `.date.key` —— **模板里这种"先判空再取属性"对函数调用不生效**，
+ * 类型检查会一路报"对象可能为空"。给它一个兜底的空字段，
+ * 运行时行为完全不变（v-if 为假时这段根本不会渲染）。
+ */
+const EMPTY_FIELD = { key: '', label: '' }
+
+function dateField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).date ?? EMPTY_FIELD
+}
+
+function secondaryField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).secondary ?? EMPTY_FIELD
+}
+
+function statusField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).status ?? { ...EMPTY_FIELD, options: [] as HealthCheckupTypeOption[] }
+}
+
+function vetField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).veterinarian ?? EMPTY_FIELD
+}
+
+function notesField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).notes ?? EMPTY_FIELD
 }
 
 function cloneRecord<T>(value: T): T {
@@ -686,7 +747,7 @@ function createLocalKey(record: Record<string, any>, index: number) {
     return record.id
   }
 
-  return `${currentType.value}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
+  return `${baseType.value}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function normalizeDraftRecord(record: Record<string, any>, localId: string) {
@@ -705,7 +766,7 @@ function hasMatchingIncomingRecord(
 ) {
   const matchingIndex = incomingRecords.findIndex((incomingRecord, index) =>
     !usedIncomingIndexes.has(index) &&
-    doHealthRecordsMatchPersistedPayload(currentType.value, record, incomingRecord),
+    doHealthRecordsMatchPersistedPayload(recordKindOf(record), record, incomingRecord),
   )
 
   if (matchingIndex < 0) {
@@ -813,14 +874,14 @@ function syncDraftRecords(records: Record<string, any>[]) {
     nextSnapshots[localId] = stripLocalFields(draftRecord)
     return draftRecord
   })
-  const shouldPreserveDrafts = lastSyncedType.value === currentType.value
+  const shouldPreserveDrafts = lastSyncedType.value === baseType.value
   const recordsWithPreservedDrafts = shouldPreserveDrafts
     ? preserveUnsavedDrafts(nextDraftRecords, nextSnapshots)
     : nextDraftRecords
 
   draftRecords.value = recordsWithPreservedDrafts
   savedSnapshots.value = nextSnapshots
-  lastSyncedType.value = currentType.value
+  lastSyncedType.value = baseType.value
 
   if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, recordsWithPreservedDrafts)) {
     return
@@ -833,7 +894,7 @@ function syncDraftRecords(records: Record<string, any>[]) {
 }
 
 function recordKey(record: Record<string, any>, index: number) {
-  return record.__localId || record.id || `${currentType.value}-${index}`
+  return record.__localId || record.id || `${baseType.value}-${index}`
 }
 
 function findRecordIndexByKey(key: string) {
@@ -844,7 +905,7 @@ function findRecordIndexByKey(key: string) {
 
 function recordAnchorId(record: Record<string, any>, index: number) {
   const safeKey = String(recordKey(record, index)).replace(/[^A-Za-z0-9_-]/g, '-')
-  return `health-record-${currentType.value}-${safeKey}`
+  return `health-record-${baseType.value}-${safeKey}`
 }
 
 function savedSnapshot(record: Record<string, any>, index: number) {
@@ -860,17 +921,17 @@ function readField(record: Record<string, any>, key: string) {
   return typeof value === 'string' ? value : (value ?? '')
 }
 
-function fieldOptionLabels(options: HealthCheckupTypeOption[]) {
-  return options.map(option => option.label)
+function fieldOptionLabels(options?: HealthCheckupTypeOption[] | null) {
+  return (options ?? []).map(option => option.label)
 }
 
 function fieldOptionIndex(
   record: Record<string, any>,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   key: string,
 ) {
   const currentValue = readField(record, key)
-  const matchedIndex = options.findIndex(option =>
+  const matchedIndex = (options ?? []).findIndex(option =>
     option.value === currentValue || option.label === currentValue,
   )
   return matchedIndex >= 0 ? matchedIndex : 0
@@ -878,11 +939,11 @@ function fieldOptionIndex(
 
 function readOptionFieldLabel(
   record: Record<string, any>,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   key: string,
 ) {
   const currentValue = readField(record, key)
-  const matchedOption = options.find(option =>
+  const matchedOption = (options ?? []).find(option =>
     option.value === currentValue || option.label === currentValue,
   )
   return matchedOption?.label || formatHealthCheckupTypeLabel(currentValue)
@@ -891,11 +952,11 @@ function readOptionFieldLabel(
 function updateOptionField(
   index: number,
   key: string,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   value: string | number,
 ) {
   const optionIndex = Number(value)
-  const option = Number.isInteger(optionIndex) ? options[optionIndex] : null
+  const option = Number.isInteger(optionIndex) ? (options ?? [])[optionIndex] : null
   if (!option) {
     return
   }
@@ -955,7 +1016,7 @@ function focusRecordByIdentity(
   identity: string | null | undefined,
   records: Record<string, any>[] = draftRecords.value,
 ) {
-  const index = findHealthRecordFocusIndex(currentType.value, records, identity)
+  const index = findHealthRecordFocusIndex(baseType.value, records, identity)
   if (index < 0) {
     return false
   }
@@ -1065,7 +1126,7 @@ function addRecord() {
   // 想记体检的人再在表单顶部把类型切过去。
   const nextRecord = isVisitMode.value
     ? createHealthVisitDraft('medical')
-    : createHealthRecordDraft(currentType.value)
+    : createHealthRecordDraft(baseType.value)
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null
 }
@@ -1156,7 +1217,7 @@ function toggleRecordExpanded(index: number) {
 function recordSummary(record: Record<string, any>, index: number) {
   const summary = isVisitMode.value
     ? buildHealthVisitSummary(resolveHealthVisitKind(record), record)
-    : buildHealthRecordSummary(currentType.value, record)
+    : buildHealthRecordSummary(baseType.value, record)
   if (!isSavedRecord(record, index) && summary.title.startsWith('未填写')) {
     return {
       title: '新记录',
@@ -1271,7 +1332,7 @@ function saveRecord(index: number) {
   const type = recordKindOf(record)
   const validationError = isVisitMode.value
     ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
-    : getHealthRecordValidationError(currentType.value, record)
+    : getHealthRecordValidationError(baseType.value, record)
   if (validationError) {
     uni.showToast({ title: validationError, icon: 'none' })
     return
@@ -1368,7 +1429,7 @@ async function chooseAttachment(index: number) {
   }
 
   const key = recordKey(record, index)
-  const uploadType = currentType.value
+  const uploadType = attachmentApiType.value
   const uploadKey = key
   if (uploadingKeys.value[uploadKey]) {
     return
@@ -1411,7 +1472,7 @@ async function chooseAttachment(index: number) {
   try {
     uni.showLoading({ title: '上传中...' })
     const uploaded = await dogApi.uploadHealthAttachment(uploadType, selectedFile.path)
-    if (currentType.value !== uploadType) {
+    if (attachmentApiType.value !== uploadType) {
       uni.hideLoading()
       return
     }
@@ -1563,7 +1624,7 @@ function removeAttachment(index: number, attachmentIndex: number) {
   const savedAttachments = new Set(attachmentList(savedSnapshot(record, index) || {}))
   const removedKey = extractHealthAttachmentKey(removedUrl)
   if (removedKey && !savedAttachments.has(removedUrl)) {
-    void dogApi.deleteHealthAttachment(currentType.value, removedKey).catch(() => {})
+    void dogApi.deleteHealthAttachment(attachmentApiType.value, removedKey).catch(() => {})
   }
 }
 </script>

@@ -89,7 +89,7 @@
           :records="activeRecordList"
           :loading="activeRecordLoading"
           :saving-record-key="savingRecordKey"
-          :preferred-expanded-record-identity="healthRecordFocusIdentity[activeRecordType]"
+          :preferred-expanded-record-identity="preferredExpandedRecordIdentity"
           @change-type="activeRecordType = $event"
           @save-record="saveHealthRecord"
           @delete-record="deleteHealthRecord"
@@ -338,6 +338,20 @@ const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   medical: '',
   checkup: '',
   allergy: '',
+})
+
+/**
+ * 「病例」合并页上一次真正保存/删除的是哪一类记录（就诊还是体检）。
+ *
+ * 合并页本身没有单一类型，但"保存完要把刚存的那条展开"这件事必须知道类型，
+ * 否则展开标识取不到值、保存后列表不会定位到那条记录。
+ */
+const lastVisitRecordType = ref<HealthRecordType>('medical')
+
+/** 传给记录组件的"优先展开标识"：合并页取上一次动过的那一类 */
+const preferredExpandedRecordIdentity = computed(() => {
+  const type = activeRecordType.value
+  return healthRecordFocusIdentity[type === 'visit' ? lastVisitRecordType.value : type]
 })
 /**
  * 饮食偏好（喜欢吃的 / 不爱吃的）上一次保存的值。
@@ -686,6 +700,38 @@ function recordApiForType(type: HealthRecordType) {
   return dogApi.healthRecords.allergy
 }
 
+/**
+ * 按记录类型分派保存（2026-10-01 自查补）。
+ *
+ * 就诊与体检走两张表、两个接口、两套 payload，过敏又是第三套。
+ * 逐个分支写，类型与接口才对得上；运行时行为与原来完全一致。
+ */
+async function saveByRecordType(
+  type: HealthRecordType,
+  targetDogId: string,
+  recordId: string,
+  record: Record<string, any>,
+) {
+  if (type === 'medical') {
+    const payload = buildHealthVisitPayload('medical', record)
+    return recordId
+      ? dogApi.healthRecords.medical.update(targetDogId, recordId, payload)
+      : dogApi.healthRecords.medical.create(targetDogId, payload)
+  }
+
+  if (type === 'checkup') {
+    const payload = buildHealthVisitPayload('checkup', record)
+    return recordId
+      ? dogApi.healthRecords.checkup.update(targetDogId, recordId, payload)
+      : dogApi.healthRecords.checkup.create(targetDogId, payload)
+  }
+
+  const payload = buildCrudHealthRecordPayload('allergy', record)
+  return recordId
+    ? dogApi.healthRecords.allergy.update(targetDogId, recordId, payload)
+    : dogApi.healthRecords.allergy.create(targetDogId, payload)
+}
+
 function recordListApiForType(type: HealthRecordType) {
   if (type === 'medical') {
     return dogApi.healthRecords.medical.list
@@ -769,12 +815,11 @@ async function saveHealthRecord({
   try {
     // 「病例」合并后，一条记录可能是就诊也可能是体检 —— 组件已经把它的
     // 真实类型放在 type 里传上来，按类型分别走原来那两个接口。
-    const payload = type === 'allergy'
-      ? buildCrudHealthRecordPayload(type, record)
-      : buildHealthVisitPayload(type, record)
-    const res: any = recordId
-      ? await recordApiForType(type).update(targetDogId, recordId, payload)
-      : await recordApiForType(type).create(targetDogId, payload)
+    //
+    // 这里按类型逐个分支（而不是先算出 payload 再统一调用）：
+    // 三个接口的 payload 类型各不相同，写成联合类型会被类型检查拦下，
+    // 而"先算 payload 再分派"恰恰丢掉了类型与接口的对应关系。
+    const res: any = await saveByRecordType(type, targetDogId, recordId, record)
 
     if (res.code !== 0 || !res.data) {
       throw new Error(res.message || '保存失败')
@@ -790,6 +835,7 @@ async function saveHealthRecord({
     writeHealthRecordAttachmentCache(targetDogId, type, nextRecord)
     recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
     healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)
+    lastVisitRecordType.value = type
     uni.showToast({ title: '已保存', icon: 'success' })
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })

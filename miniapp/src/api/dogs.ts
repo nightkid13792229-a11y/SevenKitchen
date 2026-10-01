@@ -2,7 +2,11 @@ import { request } from '../utils/api'
 import { getBaseUrl } from '../utils/config'
 import { getToken } from '../utils/api'
 import {
+  type AllergyRecordPayload,
+  type CheckupRecordPayload,
+  type HealthAttachmentUploadType,
   type HealthRecordType,
+  type MedicalRecordPayload,
   buildDietRemindersPayload,
   buildHealthAttachmentDeletePath,
   buildHealthAttachmentUploadUrl,
@@ -39,35 +43,17 @@ export interface DogProfileFormValue {
 
 type MedicalRecordStatus = 'TREATING' | 'RECOVERED' | 'CHRONIC'
 
-type MedicalRecordCreatePayload = {
-  chiefComplaint: string
-  visitDate: string
-  diagnosis: string
-  notes?: string | null
-  treatment?: string | null
-  medications?: string[]
-  status?: MedicalRecordStatus
-  followUpDate?: string | null
-  veterinarian?: string | null
-  attachments?: string[]
-}
+/**
+ * 三类记录的提交结构统一来自 `utils/health-records`（2026-10-01 自查）。
+ *
+ * 原来这里另写了一份，与工具层的结构字段/可选性不一致，
+ * "按类型分派保存"那段就会报类型错，而运行时其实是对的 —— 两份定义本身就是隐患。
+ */
+type MedicalRecordCreatePayload = MedicalRecordPayload
+type CheckupRecordCreatePayload = CheckupRecordPayload
+type AllergyRecordCreatePayload = AllergyRecordPayload
 
-type CheckupRecordCreatePayload = {
-  checkupType: string
-  checkupDate: string
-  findings?: string | null
-  recommendations?: string | null
-  veterinarian?: string | null
-  attachments?: string[]
-}
-
-type AllergyRecordCreatePayload = {
-  allergen: string
-  notes?: string | null
-  attachments?: string[]
-}
-
-type VaccineRecordCreatePayload = {
+export type VaccineRecordCreatePayload = {
   vaccineName: string
   vaccinationDate: string
   nextDueDate?: string | null
@@ -277,9 +263,15 @@ export const dogApi = {
     method: 'PUT',
     data: buildHealthRecordSectionPayload(type, records),
   }),
+  /**
+   * 更新饮食提醒（含"喜欢吃的食材"）。
+   *
+   * `preferredFoods` 这一列配方设计器与 AI 一直在读（见 buildDietRemindersPayload），
+   * 只是类型里漏了它 —— 顾客侧保存时会被类型检查误拦（2026-10-01 自查补）。
+   */
   updateDietReminders: (
     dogId: string,
-    data: { allergyFoods?: unknown; pickyFoods?: unknown },
+    data: { allergyFoods?: unknown; preferredFoods?: unknown; pickyFoods?: unknown },
   ) => request({
     url: `/dogs/${dogId}`,
     method: 'PUT',
@@ -323,7 +315,7 @@ export const dogApi = {
     suppressErrorToast: true,
   }),
   uploadHealthAttachment: (
-    type: HealthRecordType,
+    type: HealthAttachmentUploadType,
     filePath: string,
   ): Promise<{ url: string; key: string | null }> =>
     new Promise((resolve, reject) => {

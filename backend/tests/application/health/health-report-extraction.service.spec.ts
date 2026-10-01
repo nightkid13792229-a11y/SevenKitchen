@@ -649,6 +649,57 @@ describe('HealthReportExtractionService · 视觉直读', () => {
     });
   });
 
+  it('后台模型名写错时，用内置默认再试一次（不让一个错字废掉识别）', async () => {
+    // 后台填了不存在的名字（老板实测过：deepseek-v41-flash）
+    agentConfig.getConfiguredPurposeModel.mockResolvedValue('deepseek-v41-flash');
+
+    const calls: string[] = [];
+    global.fetch = jest.fn().mockImplementation(async (_url: string, init: any) => {
+      const body = JSON.parse(String(init?.body || '{}'));
+      calls.push(body.model);
+      if (body.model === 'deepseek-v41-flash') {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: { message: 'model not supported' } }),
+        };
+      }
+      return okJsonResponse({
+        drafts: [{ diagnosis: '急性胃炎' }],
+        confidence: 'HIGH',
+        warnings: [],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await service.extractFromReport({
+      imageUrl: 'https://img.example.com/f.jpg',
+      documentType: 'MEDICAL_RECORD',
+    });
+
+    // 先试后台填的（失败），再用内置默认（成功），OCR 不该被调用
+    expect(calls).toEqual(['deepseek-v41-flash', 'deepseek-v4-flash-vision-exp']);
+    expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
+    expect(result.drafts[0].diagnosis).toBe('急性胃炎');
+  });
+
+  it('后台填的就是内置默认时，只调一次（不做无谓重试）', async () => {
+    agentConfig.getConfiguredPurposeModel.mockResolvedValue(
+      'deepseek-v4-flash-vision-exp',
+    );
+    const fetchSpy = mockFetchOk({
+      drafts: [{ diagnosis: 'x' }],
+      confidence: 'HIGH',
+      warnings: [],
+    });
+
+    await service.extractFromReport({
+      imageUrl: 'https://img.example.com/g.jpg',
+      documentType: 'MEDICAL_RECORD',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('看图版提示词让模型自己看图，字段结构与文本版一致', () => {
     const imagePrompt = buildSystemPrompt('CHECKUP_REPORT', 'image');
     const ocrPrompt = buildSystemPrompt('CHECKUP_REPORT', 'ocr');

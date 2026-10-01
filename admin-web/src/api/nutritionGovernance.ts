@@ -72,10 +72,26 @@ export const nutritionGovernanceApi = {
       params: purpose ? { purpose } : {}
     }),
 
+  /**
+   * 测试连接（会用配置里的模型真跑一次调用）。
+   *
+   * ⚠️ 请求体必须是 `{}` 而不是 `null`（2026-10-01 修）：axios 会把 `null` 序列化成
+   * 字面量字符串 "null"，而后端的 JSON 解析器在 strict 模式下会直接抛
+   * `Unexpected token 'n', "null" is not valid JSON` —— 那个 400 还没带跨域头，
+   * 浏览器于是报成 "Network Error"，界面上看着像"网络不通"，其实是这个。
+   *
+   * 另外：这一步是**真实模型调用**，可能比普通接口慢得多（配置里超时上限 90s），
+   * 所以单独给它放宽到 120s，避免前端 30s 先超时、误判成"连接失败"。
+   */
   testAgentSettings: (purpose?: string): Promise<AgentSettingsTestResult> =>
-    api.post('/admin/nutrition-governance/agent-settings/test', null, {
-      params: purpose ? { purpose } : {}
-    }),
+    api.post(
+      '/admin/nutrition-governance/agent-settings/test',
+      {},
+      {
+        params: purpose ? { purpose } : {},
+        timeout: 120000,
+      }
+    ),
 
   startBatchAgentReview: (
     data: BatchAgentReviewPayload

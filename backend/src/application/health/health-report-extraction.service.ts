@@ -558,35 +558,51 @@ export class HealthReportExtractionService {
     let ocrText = '';
 
     if (isHealthReportVisionEnabled()) {
-      try {
-        parsed = await callDeepSeekJson({
-          baseUrl: config.baseUrl,
-          // 视觉模型：环境变量 > 该用途**单独配过**的模型 > 内置默认。
-          // 注意不能直接用 config.model —— 那是回退后的结果（可能是全局默认的纯文本模型）
-          model: resolveHealthReportVisionModel(
-            process.env,
-            await this.agentProviderConfigService.getConfiguredPurposeModel(
-              HEALTH_REPORT_EXTRACTION_PURPOSE,
-            ),
-          ),
-          apiKey: config.apiKey,
-          requestTimeoutMs: config.requestTimeoutMs,
-          systemPrompt: buildSystemPrompt(requestedDocumentType, 'image'),
-          userContent: [
-            {
-              type: 'text',
-              text: '请阅读这张图片，并按系统提示的规则与 JSON 结构输出。',
-            },
-            { type: 'image_url', image_url: { url: input.imageUrl } },
-          ],
-          temperature: 0,
-        });
-      } catch (error) {
-        // 视觉这条路失败不影响顾客：回退到原来的 OCR 路径，并在日志里留痕
-        this.logger.warn(
-          `视觉识别失败，回退 OCR：${error instanceof Error ? error.message : String(error)}`,
+      const configuredModel =
+        await this.agentProviderConfigService.getConfiguredPurposeModel(
+          HEALTH_REPORT_EXTRACTION_PURPOSE,
         );
-        parsed = null;
+      const preferredModel = resolveHealthReportVisionModel(
+        process.env,
+        configuredModel,
+      );
+
+      /**
+       * 后台那条配置是**手填**的模型名，写错（多一个字母/少一个点）就会 400。
+       * 所以多留一次机会：后台填的模型失败后，再用内置默认（已实测可读中文报告）
+       * 试一次 —— 而不是直接掉到 OCR（OCR 可能根本没开通）。
+       */
+      const candidateModels = preferredModel === DEFAULT_VISION_MODEL
+        ? [preferredModel]
+        : [preferredModel, DEFAULT_VISION_MODEL];
+
+      for (const model of candidateModels) {
+        try {
+          parsed = await callDeepSeekJson({
+            baseUrl: config.baseUrl,
+            model,
+            apiKey: config.apiKey,
+            requestTimeoutMs: config.requestTimeoutMs,
+            systemPrompt: buildSystemPrompt(requestedDocumentType, 'image'),
+            userContent: [
+              {
+                type: 'text',
+                text: '请阅读这张图片，并按系统提示的规则与 JSON 结构输出。',
+              },
+              { type: 'image_url', image_url: { url: input.imageUrl } },
+            ],
+            temperature: 0,
+          });
+          break;
+        } catch (error) {
+          // 视觉这条路失败不影响顾客：先试下一个模型，最后再回退 OCR，并留日志
+          this.logger.warn(
+            `视觉识别失败（模型 ${model}）：${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          parsed = null;
+        }
       }
     }
 

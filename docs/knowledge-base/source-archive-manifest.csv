@@ -50,7 +50,6 @@ MERCK,merck/肝功能检查.txt,9499,e7c572e233c6522da7b0f06028d97cb26c811241bbb
 MERCK,merck/营养性皮肤病.html,316253,eb4d1e592dd50f6a288ecab5046d74d4ea977b3730ad607bda47452cbedaec93,网页存档（原始 HTML）
 MERCK,merck/营养性皮肤病.txt,8108,b1102f4f04a2137784de6c76fd626f1c8a39f0a8c9e87e8e26b7c77ed9c6ee13,网页正文文本版
 NRC,nrc/NRC-2006-Nutrient-Requirements-Dogs-Cats.epub,20274424,810360be08648ad7f84c4c4b974cb62b94b4d9c041b8595284826f93106a3f6d,
-OTHER,manifest.csv,21927,c539c20b32717c162922dcaedc46b2c40cbc8acbf7fe0d0fdff954ea5718f2bb,
 SACN5,sacn5/chapters/SACN5_1.pdf,7167255,d1a46084d11d494434fd9b2748a1d52275b968a94c415342b54d16d1b5bb7f09,
 SACN5,sacn5/chapters/SACN5_10.pdf,1320186,7abd0d9d1dbb046de340ef8c68c0b7bce5b605bc05347a80cf5147a812099685,
 SACN5,sacn5/chapters/SACN5_11.pdf,3967948,5a05fe19271da6a18b05d03c4be68847237903900f3b79a801d4aa4884d33538,
@@ -163,9 +162,9 @@ WSAVA-RENAL,wsava/renal/Renal-Standardization-Brochure.pdf,2163699,21a3cab0f4570
 WSAVA-REPRO,wsava/reproduction/Executive-Summary.pdf,256777,e5d1c7a8dad586b282ef49b9d7705cca18d46456738e681111066fffeb24116b,
 WSAVA-REPRO,wsava/reproduction/J-of-Small-Animal-Practice-2024-Romagnoli-WSAVA-guidelines-for-the-control-of-reproduction-in-dogs-and-cats.pdf,76706915,73a0df834e6aea92079914966fa27cff1c3ef3afff18445dcc3dd69245944315,
 WSAVA-REPRO,wsava/reproduction/WSAVA犬猫生殖管理指南-中文版.pdf,14185070,7aecb81817dc4950b7018dcb5521c58a91e427e0bd3c69943b9b0d0e9deda109,
-WSAVA-VACC-2024/2015,wsava/vaccination/WSAVA-2015疫苗接种指南-中文.pdf,1493508,6bab332d64839ebcea866e5eace8db0c78d51c0767b74e378217fabe9b5626c3,
-WSAVA-VACC-2024/2015,wsava/vaccination/WSAVA-Vaccination-Guidelines-2015.pdf,377712,70ae3dcbe5973ee8b2837ddff8062af908dac4aae4854c67fb3057fa89b28434,
-WSAVA-VACC-2024/2015,wsava/vaccination/WSAVA-Vaccination-guidelines-2024.pdf,831198,86d26ed4a975ce3cca35b029762228d0f4bae5122f512407362770c7ef7d3653,
+WSAVA-VACC,wsava/vaccination/WSAVA-2015疫苗接种指南-中文.pdf,1493508,6bab332d64839ebcea866e5eace8db0c78d51c0767b74e378217fabe9b5626c3,
+WSAVA-VACC,wsava/vaccination/WSAVA-Vaccination-Guidelines-2015.pdf,377712,70ae3dcbe5973ee8b2837ddff8062af908dac4aae4854c67fb3057fa89b28434,
+WSAVA-VACC,wsava/vaccination/WSAVA-Vaccination-guidelines-2024.pdf,831198,86d26ed4a975ce3cca35b029762228d0f4bae5122f512407362770c7ef7d3653,
 WSAVA-WELFARE,wsava/welfare/PWG-福祉提示.pdf,380078,55444109487751ebb235be9ffb627518d7e302c7e151f3eeaa900e55514325d5,
 WSAVA-WELFARE,wsava/welfare/WSAVA-Animal-Welfare-Guidelines-2018.pdf,1792891,de624fa8e80743fd31bafade5ad350868b0e110f147c70d6820683cc1f001ff7,
 WSAVA-WELFARE,wsava/welfare/WSAVA_Animal_Welfare_Charter_Feb-2020.pdf,3542657,10ffd180878cebb088c5800e7de2d3cdb1baf7ccc0de10777432110098894d1d,

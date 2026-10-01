@@ -1439,7 +1439,11 @@ export class RecipeService {
       where: { id },
       data: {
         version: newVersion,
-        name: dto.name,
+        // 名称一致性：属于系列的食谱，名字由系列名统一管理（见 renameSeries 同步逻辑），
+        // 这里忽略传入的 name。否则编辑页会把"只读"的版本名反写回来，
+        // 造成系列名被静默回滚（生产实测已在 2026-09-30 21:59 触发过一次）。
+        // 不属于系列的独立食谱（历史遗留）保持可改名。
+        ...(existing.seriesId ? {} : { name: dto.name as string | undefined }),
         status: dto.status ?? existing.status,
         energyDensityKcalPerKg:
           dto.energyDensityKcalPerKg ?? existing.energyDensityKcalPerKg,
@@ -1471,12 +1475,15 @@ export class RecipeService {
       },
     });
 
-    if (existing.seriesId && typeof dto.name === 'string' && dto.name.trim()) {
-      await this.prisma.recipeSeries.update({
-        where: { id: existing.seriesId },
-        data: { name: dto.name },
-      });
-    }
+    // ⚠️ 这里**故意不再**把 dto.name 反写回系列名。
+    //
+    // 旧实现是"改食谱名时顺手把系列名也改了"，方向与设计器改名相反，
+    // 而编辑页里那个名称框对系列食谱是只读的、值又是（可能过时的）版本名，
+    // 于是每次保存都会把系列名静默改回旧名 —— 与 renameSeries 形成双向死循环。
+    //
+    // 现在：系列名是唯一权威，只能通过设计器的 renameSeries 修改，
+    // 并会同步到该系列下所有正式食谱版本。
+    // 不属于系列的独立食谱改名不受影响（走上面的 name 字段）。
 
     // 系列状态是权威值，只在显式状态变更时设定：
     //   设为公开 / 私密定制 → 直接设定系列状态

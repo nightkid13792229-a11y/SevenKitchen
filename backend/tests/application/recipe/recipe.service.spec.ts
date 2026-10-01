@@ -1638,7 +1638,7 @@ describe('RecipeService', () => {
   });
 
   describe('updateRecipe', () => {
-    it('renames the whole recipe series when a series recipe is renamed from admin', async () => {
+    it('系列食谱改名不再反写系列名，名称只由设计器统一管理', async () => {
       const existingRecipe = {
         id: 'recipe-row-id',
         recipeId: 'recipe-series-id',
@@ -1682,25 +1682,90 @@ describe('RecipeService', () => {
       mockPrismaService.recipe.findUnique
         .mockResolvedValueOnce(existingRecipe)
         .mockResolvedValueOnce(updatedRecipe);
-      mockPrismaService.recipe.update.mockResolvedValue({
+      const recipeUpdate = mockPrismaService.recipe.update.mockResolvedValue({
         id: 'recipe-row-id',
       });
       mockPrismaService.recipe.findMany.mockResolvedValue([updatedRecipe]);
 
-      const result = await service.updateRecipe('recipe-row-id', {
+      await service.updateRecipe('recipe-row-id', {
         name: '大米燕麦三文鱼兔里脊',
         status: RecipeStatus.PRIVATE_CUSTOM,
       });
 
-      expect(mockPrismaService.recipeSeries.update).toHaveBeenCalledWith({
-        where: { id: 'series-rice-oat-salmon-rabbit' },
-        data: { name: '大米燕麦三文鱼兔里脊' },
-      });
+      // 系列名不能被反写（旧实现会，造成系列名被过时的版本名静默回滚）
+      const seriesNameWrites = mockPrismaService.recipeSeries.update.mock.calls.filter(
+        (call: unknown[]) =>
+          Object.prototype.hasOwnProperty.call(
+            (call[0] as { data: Record<string, unknown> }).data,
+            'name',
+          ),
+      );
+      expect(seriesNameWrites).toEqual([]);
+
+      // 系列食谱的版本名也不写（名字统一跟随系列名）
+      const recipeUpdateData = (
+        recipeUpdate.mock.calls[0] as unknown[]
+      )[0] as { data: Record<string, unknown> };
+      expect(recipeUpdateData.data).not.toHaveProperty('name');
+
+      // 状态变更照常生效
       expect(mockPrismaService.recipeSeries.update).toHaveBeenCalledWith({
         where: { id: 'series-rice-oat-salmon-rabbit' },
         data: { businessStatus: 'PRIVATE_CUSTOM' },
       });
-      expect(result.seriesName).toBe('大米燕麦三文鱼兔里脊');
+    });
+
+    it('不属于系列的独立食谱仍然可以改名', async () => {
+      const standaloneRecipe = {
+        id: 'standalone-row',
+        recipeId: 'standalone-recipe',
+        version: 1,
+        name: '老名字',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1352,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: [],
+        productionSteps: null,
+        seriesId: null,
+        seriesLifeStage: null,
+        items: [],
+      };
+      const updatedStandalone = {
+        ...standaloneRecipe,
+        name: '新名字',
+        series: null,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-06-10T14:18:50.624Z'),
+        updatedAt: new Date('2026-06-10T14:23:57.124Z'),
+        healthTagAssignments: [],
+      };
+      mockPrismaService.recipe.findUnique
+        .mockResolvedValueOnce(standaloneRecipe)
+        .mockResolvedValueOnce(updatedStandalone);
+      const recipeUpdate = mockPrismaService.recipe.update.mockResolvedValue({
+        id: 'standalone-row',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([updatedStandalone]);
+
+      await service.updateRecipe('standalone-row', { name: '新名字' });
+
+      const recipeUpdateData = (
+        recipeUpdate.mock.calls[0] as unknown[]
+      )[0] as { data: Record<string, unknown> };
+      expect(recipeUpdateData.data).toHaveProperty('name', '新名字');
+      expect(mockPrismaService.recipeSeries.update).not.toHaveBeenCalled();
     });
 
     it('does not create a new version when food supplement targets normalize from null to empty', async () => {

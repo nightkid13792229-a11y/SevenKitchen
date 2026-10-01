@@ -3437,6 +3437,13 @@ export class RecipeDesignerService {
     }
 
     // 合并命名模型：系列名是唯一名字，旗下所有草稿名同步跟随
+    //
+    // ⚠️ 正式食谱（recipe 表）也必须一起改。
+    // 旧实现只改了 series + design_recipe，漏掉 recipe，导致：
+    //   · 设计器改完名字，小程序工作台（读 recipe.name）还是旧名
+    //   · 而 Web 编辑页又禁止改系列食谱的名字，形成死循环
+    // 业务定义：「只有一个名字 —— 系列名」，各阶段食谱名必须与系列名一致。
+    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.recipeSeries.update({
         where: { id: seriesId },
@@ -3455,6 +3462,12 @@ export class RecipeDesignerService {
           data: { name, version },
         });
       }
+
+      // 正式食谱：该系列下**所有版本行**一起改名，保持与系列名一致
+      await tx.recipe.updateMany({
+        where: { seriesId, name: { not: name } },
+        data: { name },
+      });
 
       return updated;
     });

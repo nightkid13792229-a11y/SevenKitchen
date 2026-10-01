@@ -212,7 +212,12 @@
           >
         </view>
 
-        <view class="function-item" @tap="goToRecipeDesigner">
+        <!-- W2：只给已经用食谱设计器设计过食谱的用户看 -->
+        <view
+          v-if="shouldShowRecipeDesignerEntry"
+          class="function-item"
+          @tap="goToRecipeDesigner"
+        >
           <text class="function-text">食谱设计</text>
         </view>
 
@@ -276,6 +281,7 @@ import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
 import { refreshCurrentTabBar } from '../../utils/tabbar';
 import { navigateToDogCreate } from '../../utils/dog-profile-entry';
+import { useRecipeDesignerEntry } from '../../utils/recipe-designer-entry';
 import {
   applyCustomerTestModeSession,
   getCustomerTestModeState,
@@ -698,7 +704,11 @@ function handleLogout() {
   });
 }
 
+const { shouldShowRecipeDesignerEntry, loadRecipeDesignerEntry } =
+  useRecipeDesignerEntry();
+
 onShow(() => {
+  void loadRecipeDesignerEntry();
   refreshCurrentTabBar();
   refreshCustomerTestModeState();
 

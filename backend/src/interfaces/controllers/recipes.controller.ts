@@ -1273,6 +1273,49 @@ export class RecipesController {
       .filter((name): name is string => Boolean(name));
   }
 
+  /**
+   * W3：客户自己用设计器做的食谱**不能买成品**（想要成品必须走定制流程）。
+   *
+   * 判定方式与后台一致：**该食谱所在的系列由 CUSTOMER 角色创建**。
+   * 生产实测：221 条客户自建系列 100% 由客户创建，标准公开与员工代做无一是 —— 零误判。
+   */
+  private async resolveCanBuyFinishedFood(recipe: {
+    seriesId?: string | null;
+  }): Promise<boolean> {
+    if (!recipe.seriesId) {
+      return true; // 无系列的独立/历史食谱不受限
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: recipe.seriesId },
+      select: { createdBy: true },
+    });
+    if (!series?.createdBy) {
+      return true;
+    }
+
+    const creator = await this.prisma.user.findUnique({
+      where: { id: series.createdBy },
+      select: { role: true },
+    });
+    return creator?.role !== 'CUSTOMER';
+  }
+
+  /** 组装详情，并附上"能不能买成品"这个开关（W3） */
+  private async buildRecipeDetailWithOrderability(
+    recipe: Recipe,
+    seriesSelection?: {
+      lifeStageMatch: RecipeLifeStageMatchDto;
+      availableLifeStageVersions: RecipeLifeStageVersionDto[];
+    },
+  ): Promise<RecipeDetailDto> {
+    const [detail, canBuyFinishedFood] = await Promise.all([
+      this.buildRecipeDetail(recipe, seriesSelection),
+      this.resolveCanBuyFinishedFood(recipe),
+    ]);
+    return { ...detail, canBuyFinishedFood };
+  }
+
   private async buildRecipeDetail(
     recipe: Recipe,
     seriesSelection?: {
@@ -1617,7 +1660,7 @@ export class RecipesController {
     );
     if (accessibleRecipe && accessibleRecipe.status !== 'PUBLIC') {
       return ApiResponseDto.success(
-        await this.buildRecipeDetail(accessibleRecipe),
+        await this.buildRecipeDetailWithOrderability(accessibleRecipe),
       );
     }
 
@@ -1629,7 +1672,7 @@ export class RecipesController {
     );
     if (seriesSelection) {
       return ApiResponseDto.success(
-        await this.buildRecipeDetail(seriesSelection.recipe, {
+        await this.buildRecipeDetailWithOrderability(seriesSelection.recipe, {
           lifeStageMatch: seriesSelection.lifeStageMatch,
           availableLifeStageVersions:
             seriesSelection.availableLifeStageVersions,
@@ -1651,7 +1694,9 @@ export class RecipesController {
       return ApiResponseDto.error(404, 'Recipe not found');
     }
 
-    return ApiResponseDto.success(await this.buildRecipeDetail(recipe));
+    return ApiResponseDto.success(
+      await this.buildRecipeDetailWithOrderability(recipe),
+    );
   }
 
   @Post(':id/view')

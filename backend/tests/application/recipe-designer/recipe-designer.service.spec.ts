@@ -6649,8 +6649,63 @@ describe('RecipeDesignerService', () => {
       );
     }
 
+    it('W2：没有设计历史的客户不能再新建系列（设计器已不再对所有用户开放）', async () => {
+      prisma.recipeSeries.count.mockResolvedValue(0);
+
+      await expect(
+        service.createSeries(
+          { name: '新食谱', dogId: 'dog-1' } as any,
+          {
+            userId: 'user-new',
+            customerId: 'customer-new',
+            role: 'CUSTOMER',
+          } as any,
+        ),
+      ).rejects.toThrow(/不再对所有用户开放|定制/);
+
+      // 不能留下半成品：系列与草稿都不该被创建
+      expect(prisma.recipeSeries.create).not.toHaveBeenCalled();
+      expect(prisma.designRecipe.create).not.toHaveBeenCalled();
+    });
+
+    it('W2：已有设计历史的老客户仍然可以继续新建', async () => {
+      prisma.recipeSeries.count.mockResolvedValue(3);
+      prisma.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        ownerId: 'customer-1',
+        name: 'Star',
+        breedId: 'breed-1',
+        birthday: new Date('2021-06-01T00:00:00.000Z'),
+        lifeStageOverride: 'NONE',
+        activityLevel: 'LOW',
+      });
+      prisma.dogBreed.findUnique.mockResolvedValue({
+        adultAgeMonths: 12,
+        seniorAgeYears: 7,
+      });
+      prisma.recipeSeries.create.mockResolvedValue(
+        seriesRecord({ id: 'series-old', customerDogId: 'dog-1' }),
+      );
+      prisma.designRecipe.create.mockResolvedValue(
+        draft({ id: 'design-old', seriesId: 'series-old' }),
+      );
+
+      await service.createSeries(
+        { name: '老客户的新食谱', dogId: 'dog-1' } as any,
+        {
+          userId: 'user-old',
+          customerId: 'customer-1',
+          role: 'CUSTOMER',
+        } as any,
+      );
+
+      expect(prisma.recipeSeries.create).toHaveBeenCalled();
+    });
+
     it('requires ordinary customers to create recipe series for their own dog', async () => {
       prisma.dog.findFirst.mockResolvedValue(null);
+      // W2：先过"有设计历史"那一关，才能测到后面的狗狗归属校验
+      prisma.recipeSeries.count.mockResolvedValue(1);
 
       await expect(
         service.createSeries(
@@ -6707,6 +6762,9 @@ describe('RecipeDesignerService', () => {
           series: { id: 'series-dog', name: 'Star 的鲜食食谱' },
         }),
       );
+
+      // W2：只有已有设计历史的老客户才能继续新建
+      prisma.recipeSeries.count.mockResolvedValue(1);
 
       await service.createSeries(
         { name: 'Star 的鲜食食谱', dogId: 'dog-1' } as any,
@@ -6778,7 +6836,8 @@ describe('RecipeDesignerService', () => {
           customerStatus: 'READY',
           actionAvailability: expect.objectContaining({
             canContinueEditing: true,
-            canOrder: true,
+            // W3：这条系列是客户自己建的 → 只能出 DIY 单，不能买成品
+            canOrder: false,
             canGenerateDiy: true,
           }),
         }),
@@ -6787,6 +6846,53 @@ describe('RecipeDesignerService', () => {
         where: { id: { in: ['dog-1'] }, ownerId: 'customer-1' },
         select: { id: true, name: true },
       });
+    });
+
+    it('客户自助食谱不能买成品，但员工代做的定制食谱可以', async () => {
+      const buildCard = (createdBy: string) => ({
+        id: 'series-1',
+        name: 'Star 控重鸡肉餐',
+        customerDogId: 'dog-1',
+        createdBy,
+        designs: [
+          draft({
+            id: 'design-1',
+            seriesId: 'series-1',
+            seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+            fediafDogScenario: 'ADULT_MER_95',
+            customerDogId: 'dog-1',
+            isCompliant: true,
+            totalWeightG: 100,
+            energyDensityKcalPerKg: 1200,
+            missingDataReport: [],
+            items: [item()],
+          }),
+        ],
+        recipes: [],
+      });
+
+      // 客户自己建的系列 → 不能买成品
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord(buildCard('customer-1')),
+      ]);
+      prisma.dog.findMany.mockResolvedValue([{ id: 'dog-1', name: 'Star' }]);
+      const selfDesigned: any = await service.listSeries({
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      expect(selfDesigned[0].actionAvailability.canOrder).toBe(false);
+      expect(selfDesigned[0].actionAvailability.canGenerateDiy).toBe(true);
+
+      // 员工替这位客户做的系列 → 两个都能用
+      prisma.recipeSeries.findMany.mockResolvedValue([
+        seriesRecord(buildCard('staff-1')),
+      ]);
+      const staffMade: any = await service.listSeries({
+        userId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      expect(staffMade[0].actionAvailability.canOrder).toBe(true);
+      expect(staffMade[0].actionAvailability.canGenerateDiy).toBe(true);
     });
 
     it('lists only active customer-owned series for customer users', async () => {
@@ -9372,6 +9478,14 @@ describe('RecipeDesignerService', () => {
       expect(prisma.designRecipe.update).toHaveBeenNthCalledWith(2, {
         where: { id: 'design-2' },
         data: { name: 'ID的兔肉定制', version: 6 },
+      });
+
+      // 正式食谱（recipe 表）也必须一起改名。
+      // 旧实现漏了这一步，导致小程序工作台（读 recipe.name）永远显示旧名，
+      // 而 Web 编辑页又禁止改系列食谱的名字 —— 形成死循环。
+      expect(prisma.recipe.updateMany).toHaveBeenCalledWith({
+        where: { seriesId: 'series-1', name: { not: 'ID的兔肉定制' } },
+        data: { name: 'ID的兔肉定制' },
       });
     });
 

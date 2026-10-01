@@ -124,6 +124,14 @@ export class RecipeDetailDto extends RecipeSummaryDto {
   @ApiProperty({ example: 1.07 })
   productionLossRate!: number;
 
+  /**
+   * W3：能不能按成品鲜食下单。
+   * 客户自己用设计器做的食谱为 false —— 只能出 DIY 制作单，
+   * 想要成品必须走定制流程。前端据此**不显示**「买成品」入口。
+   */
+  @ApiPropertyOptional({ example: true })
+  canBuyFinishedFood?: boolean;
+
   @ApiPropertyOptional({ example: '七厨房' })
   designSource?: string;
 

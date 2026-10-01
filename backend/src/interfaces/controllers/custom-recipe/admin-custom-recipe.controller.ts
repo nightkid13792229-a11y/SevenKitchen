@@ -303,6 +303,12 @@ export class AdminCustomRecipeController {
         isCustomRecipe: true,
         customOrderId: order.id,
         customerOwnerId: order.customerId,
+        /**
+         * W4-B：定制食谱必须记清"给哪个客户、哪只狗"。
+         * 客户和狗在订单上本来就有（order.customerId / order.dogId），
+         * 之前只写了客户、漏了狗 —— 补上。
+         */
+        customerDogId: order.dogId,
         energyDensityKcalPerKg:
           dto.nutritionTarget?.energy_density_kcal_per_kg || 3200,
         productionLossRate: 1.07,

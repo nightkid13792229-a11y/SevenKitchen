@@ -2063,7 +2063,12 @@ export class RecipeDesignerService {
         context,
       );
       const items = visibleSeries.map((record) =>
-        this.buildCustomerSeriesCard(record, dogNameById),
+        this.buildCustomerSeriesCard(
+          record,
+          dogNameById,
+          // 客户路径下：系列由这位客户创建 = 客户自助食谱
+          record.createdBy === context.userId,
+        ),
       );
       return usePagination ? { items, page, pageSize, hasMore } : items;
     }
@@ -2103,6 +2108,22 @@ export class RecipeDesignerService {
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('请填写系列名称');
+    }
+
+    // W2：食谱设计器不再向所有用户开放。
+    //
+    // 已经用设计器建过食谱的老客户可以继续用（存量食谱得能接着编辑），
+    // 但没有设计历史的客户一律拒绝 —— 光把入口藏起来不够，
+    // 有人绕过界面直接调接口照样能建。
+    //
+    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md §5.1
+    if (!isInternalRecipeDesignerRole(context)) {
+      const hasDesignHistory = await this.hasCustomerDesignHistory(context);
+      if (!hasDesignHistory) {
+        throw new BadRequestException(
+          '食谱设计器已不再对所有用户开放。想为狗狗定制食谱，请使用「定制食谱」服务。',
+        );
+      }
     }
 
     const customerDog = await this.loadCustomerDogForRecipeDesigner(
@@ -2180,6 +2201,8 @@ export class RecipeDesignerService {
                 new Map(
                   customerDog ? [[customerDog.id, customerDog.name]] : [],
                 ),
+                // 这位客户刚新建的阶段草稿 —— 属于客户自助
+                true,
               );
             }
 
@@ -2269,12 +2292,17 @@ export class RecipeDesignerService {
             }
 
             if (!isInternalRecipeDesignerRole(context)) {
-              return this.buildCustomerSeriesCard({
-                ...copiedSeries,
-                customerDogId: copiedCustomerDogId,
-                designs: copiedDesigns,
-                recipes: [],
-              } as RecipeSeriesWorkbenchRecord);
+              return this.buildCustomerSeriesCard(
+                {
+                  ...copiedSeries,
+                  customerDogId: copiedCustomerDogId,
+                  designs: copiedDesigns,
+                  recipes: [],
+                } as RecipeSeriesWorkbenchRecord,
+                new Map(),
+                // 这位客户刚复制出来的系列 —— 属于客户自助
+                true,
+              );
             }
 
             return this.buildSeriesWorkbenchCard(
@@ -3437,6 +3465,13 @@ export class RecipeDesignerService {
     }
 
     // 合并命名模型：系列名是唯一名字，旗下所有草稿名同步跟随
+    //
+    // ⚠️ 正式食谱（recipe 表）也必须一起改。
+    // 旧实现只改了 series + design_recipe，漏掉 recipe，导致：
+    //   · 设计器改完名字，小程序工作台（读 recipe.name）还是旧名
+    //   · 而 Web 编辑页又禁止改系列食谱的名字，形成死循环
+    // 业务定义：「只有一个名字 —— 系列名」，各阶段食谱名必须与系列名一致。
+    // 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.recipeSeries.update({
         where: { id: seriesId },
@@ -3455,6 +3490,12 @@ export class RecipeDesignerService {
           data: { name, version },
         });
       }
+
+      // 正式食谱：该系列下**所有版本行**一起改名，保持与系列名一致
+      await tx.recipe.updateMany({
+        where: { seriesId, name: { not: name } },
+        data: { name },
+      });
 
       return updated;
     });
@@ -3590,6 +3631,13 @@ export class RecipeDesignerService {
   private buildCustomerSeriesCard(
     record: RecipeSeriesWorkbenchRecord,
     dogNameById: Map<string, string> = new Map(),
+    /**
+     * 这条系列是不是**客户自己**用设计器做的（W3）。
+     *
+     * 业务规则：客户自助食谱可以出 DIY 制作单，但**永久不能买成品**——
+     * 想要成品必须走定制流程。员工替客户做的定制食谱不受此限。
+     */
+    isCustomerSelfDesigned = false,
   ) {
     const primaryDraft = record.designs[0] as
       | (RecipeSeriesWorkbenchRecord['designs'][number] &
@@ -3624,7 +3672,10 @@ export class RecipeDesignerService {
       updatedAt: primaryDraft?.updatedAt ?? record.updatedAt,
       actionAvailability: {
         canContinueEditing: Boolean(primaryDraft?.id),
-        canOrder: readiness.canCreateSnapshot,
+        // 客户自助食谱：只能出 DIY 单，**不能买成品**。
+        // 两个开关必须分开——旧实现把它们填成了同一个值，
+        // 导致前端"不给买成品"的界面结构形同虚设。
+        canOrder: readiness.canCreateSnapshot && !isCustomerSelfDesigned,
         canGenerateDiy: readiness.canCreateSnapshot,
         disabledReason: readiness.canCreateSnapshot
           ? ''
@@ -7672,12 +7723,16 @@ export class RecipeDesignerService {
     return { updated: order.length };
   }
 
-  async getCustomerDesignerAccess(access: RecipeDesignerAccessInput) {
-    const context = normalizeRecipeDesignerAccessContext(access);
-    if (isInternalRecipeDesignerRole(context)) {
-      return { isCustomer: false, hasDesignHistory: true };
-    }
-
+  /**
+   * 这位客户名下还有没有活跃的食谱系列 —— 也就是"用没用过设计器"。
+   *
+   * W2 用它同时决定两件事：**「我的」页面要不要显示设计器入口**、
+   * **能不能继续新建系列**。判定口径必须一致，否则会出现
+   * "看得到入口但建不了"或"看不到入口却能建"。
+   */
+  private async hasCustomerDesignHistory(
+    context: ReturnType<typeof normalizeRecipeDesignerAccessContext>,
+  ): Promise<boolean> {
     const seriesCount = await this.prisma.recipeSeries.count({
       where: {
         status: RecipeSeriesStatus.ACTIVE,
@@ -7685,7 +7740,19 @@ export class RecipeDesignerService {
         createdBy: context.userId,
       },
     });
-    return { isCustomer: true, hasDesignHistory: seriesCount > 0 };
+    return seriesCount > 0;
+  }
+
+  async getCustomerDesignerAccess(access: RecipeDesignerAccessInput) {
+    const context = normalizeRecipeDesignerAccessContext(access);
+    if (isInternalRecipeDesignerRole(context)) {
+      return { isCustomer: false, hasDesignHistory: true };
+    }
+
+    return {
+      isCustomer: true,
+      hasDesignHistory: await this.hasCustomerDesignHistory(context),
+    };
   }
 
   async generateAiDesignSuggestions(

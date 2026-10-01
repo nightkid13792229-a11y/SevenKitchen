@@ -83,14 +83,29 @@ export function sanitizeRecipeItemsForSubmit(items?: RecipeItem[]): RecipeItem[]
   });
 }
 
+export interface BuildRecipeSubmitOptions {
+  /**
+   * 不提交 name 字段。
+   *
+   * 用于**属于食谱系列的食谱**：名称由系列名统一管理（在设计器里改，会同步到
+   * 该系列下所有版本）。编辑页的名称框对这类食谱是只读的，值又是可能过时的
+   * 版本名 —— 继续提交会让后端有"反写系列名"的机会，造成系列名被静默回滚。
+   *
+   * 见 docs/plans/2026-09-30-recipe-domain-business-definition.md（§三 名称）
+   */
+  omitName?: boolean;
+}
+
 export function buildRecipeSubmitData(
   form: RecipeForm,
   nutritionData: NutritionDetailedData,
   overrides: Partial<RecipeForm> = {},
   availableLifeStages?: string[],
+  options: BuildRecipeSubmitOptions = {},
 ): RecipeForm {
   return stripUndefined({
-    name: form.name,
+    // 系列食谱不提交 name（名称由系列统一管理）；独立食谱照常提交
+    ...(options.omitName ? {} : { name: form.name }),
     coverImageUrl: form.coverImageUrl,
     coverTitle: form.coverTitle,
     detailImages: form.detailImages || [],
@@ -111,5 +126,8 @@ export function buildRecipeSubmitData(
     productionLossRate: form.productionLossRate,
     batchLaborHours: form.batchLaborHours,
     status: overrides.status ?? form.status,
+    // 私密定制：带上"给哪个客户、哪只狗"（W4-B）
+    customerOwnerId: form.customerOwnerId,
+    customerDogId: form.customerDogId,
   }) as RecipeForm;
 }

@@ -1120,6 +1120,39 @@ export class OrderService {
     return text ? text.slice(0, 200) : null;
   }
 
+
+  /**
+   * W3：客户自己用设计器做的食谱**不能买成品** —— 想做成品必须走定制流程。
+   *
+   * 判定方式与后台、小程序一致：**该食谱所在的系列由 CUSTOMER 角色创建**。
+   * 这里是服务端兜底：即使有人绕过界面直接调下单 / 报价接口，也会被挡住。
+   */
+  private async assertRecipeOrderableAsFinishedFood(
+    recipe: { seriesId?: string | null },
+  ): Promise<void> {
+    if (!recipe.seriesId) {
+      return; // 无系列的独立 / 历史食谱不受限
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: recipe.seriesId },
+      select: { createdBy: true },
+    });
+    if (!series?.createdBy) {
+      return;
+    }
+
+    const creator = await this.prisma.user.findUnique({
+      where: { id: series.createdBy },
+      select: { role: true },
+    });
+    if (creator?.role === 'CUSTOMER') {
+      throw new BadRequestException(
+        '这条食谱是你自己设计的，可以先做 DIY 制作单；想要成品鲜食，请走定制流程。',
+      );
+    }
+  }
+
   private resolveOrderItemPackageInput(
     itemDto: CreateOrderItemDto,
   ): ResolvedOrderItemPackageInput {
@@ -1336,6 +1369,7 @@ export class OrderService {
     if (!recipe) {
       throw new NotFoundException(`Recipe not found: ${itemParams.recipeId}`);
     }
+    await this.assertRecipeOrderableAsFinishedFood(recipe);
 
     console.log(
       '[CreateOrderFromSnapshot] Loading dog with ID:',
@@ -1922,6 +1956,7 @@ export class OrderService {
       if (!recipe) {
         throw new NotFoundException(`Recipe not found: ${itemDto.recipeId}`);
       }
+      await this.assertRecipeOrderableAsFinishedFood(recipe);
 
       // Load ingredients for recipe items
       const recipeItems = recipe.items || [];
@@ -2390,6 +2425,7 @@ export class OrderService {
     if (!recipe) {
       throw new NotFoundException(`Recipe not found: ${itemDto.recipeId}`);
     }
+    await this.assertRecipeOrderableAsFinishedFood(recipe);
 
     // Load ingredients for recipe items
     const recipeItems = recipe.items || [];

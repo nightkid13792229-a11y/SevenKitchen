@@ -1058,25 +1058,26 @@ export class RecipeService {
     return value instanceof Date ? value.getTime() : new Date(value).getTime();
   }
 
-  private async syncSeriesBusinessStatus(
-    seriesId?: string | null,
+  /**
+   * 设定系列业务状态（权威值）。
+   *
+   * 「公开」与「私密定制」都是**系列级**属性，只由显式动作决定：
+   *   · 发布公开     → PUBLIC
+   *   · 设为私密定制 → PRIVATE_CUSTOM
+   *
+   * ⚠️ 不再由旗下版本状态反推。旧实现是"系列里只要有**任意一个历史版本**
+   * 是私密定制，就把整个系列永久标记为私密定制"，导致公开橱窗里已经发布的
+   * 食谱凭空消失（生产实测 11 个版本 / 5 个系列）。
+   *
+   * 业务定义见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   */
+  private async setSeriesBusinessStatus(
+    seriesId: string | null | undefined,
+    businessStatus: RecipeSeriesBusinessStatus,
   ): Promise<RecipeSeriesBusinessStatus | undefined> {
     if (!seriesId) {
       return undefined;
     }
-
-    const recipes = await this.prisma.recipe.findMany({
-      where: { seriesId },
-      select: { status: true },
-    });
-
-    const businessStatus = recipes.some(
-      (recipe) => recipe.status === RecipeStatus.PRIVATE_CUSTOM,
-    )
-      ? RecipeSeriesBusinessStatus.PRIVATE_CUSTOM
-      : recipes.some((recipe) => recipe.status === RecipeStatus.PUBLIC)
-        ? RecipeSeriesBusinessStatus.PUBLIC
-        : RecipeSeriesBusinessStatus.DRAFT;
 
     await this.prisma.recipeSeries.update({
       where: { id: seriesId },
@@ -1084,6 +1085,104 @@ export class RecipeService {
     });
 
     return businessStatus;
+  }
+
+  /**
+   * 版本被下架 / 删除后重算系列业务状态（只会降级，不会越权提升）。
+   *
+   * 规则：
+   *   · 系列当前是「私密定制」→ **保持不动**（人工设定的权威值，不参与重算）
+   *   · 系列还有公开版本      → PUBLIC
+   *   · 系列已无公开版本      → DRAFT
+   *
+   * 「私密定制」被排除在重算之外，是为了避免又回到"版本状态拖着系列走"的老问题。
+   */
+  private async recomputeSeriesBusinessStatus(
+    seriesId?: string | null,
+  ): Promise<RecipeSeriesBusinessStatus | undefined> {
+    if (!seriesId) {
+      return undefined;
+    }
+
+    const series = await this.prisma.recipeSeries.findUnique({
+      where: { id: seriesId },
+      select: { businessStatus: true },
+    });
+    if (!series) {
+      return undefined;
+    }
+
+    if (series.businessStatus === RecipeSeriesBusinessStatus.PRIVATE_CUSTOM) {
+      return series.businessStatus;
+    }
+
+    const publicRecipe = await this.prisma.recipe.findFirst({
+      where: { seriesId, status: RecipeStatus.PUBLIC },
+      select: { id: true },
+    });
+
+    const businessStatus = publicRecipe
+      ? RecipeSeriesBusinessStatus.PUBLIC
+      : RecipeSeriesBusinessStatus.DRAFT;
+
+    await this.prisma.recipeSeries.update({
+      where: { id: seriesId },
+      data: { businessStatus },
+    });
+
+    return businessStatus;
+  }
+
+  /**
+   * 阻止「公开」与「私密定制」混在同一个系列里（W4-C）。
+   *
+   * 业务规则：两者都是**系列级**属性，互相独立、互不影响；一个系列只能是其中之一。
+   * 想从一种变成另一种，**不能直接改属性**，只能**复制重发**：
+   * 复制一份出来发布成想要的那种，原系列不受影响。
+   *
+   * 为什么不能直接改：一个系列一旦发布过，订单 / 生产单 / 收藏 / 评价都已经挂在
+   * 它身上。直接改属性会让"同一道菜"的可见范围前后矛盾。
+   *
+   * 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   */
+  private async assertSeriesPublishTypeConsistent(
+    seriesId: string | null | undefined,
+    targetStatus: RecipeStatus,
+  ): Promise<void> {
+    if (!seriesId) {
+      return;
+    }
+    // 草稿不参与判定
+    if (
+      targetStatus !== RecipeStatus.PUBLIC &&
+      targetStatus !== RecipeStatus.PRIVATE_CUSTOM
+    ) {
+      return;
+    }
+
+    const conflictStatus =
+      targetStatus === RecipeStatus.PUBLIC
+        ? RecipeStatus.PRIVATE_CUSTOM
+        : RecipeStatus.PUBLIC;
+
+    const conflict = await this.prisma.recipe.findFirst({
+      where: { seriesId, status: conflictStatus },
+      select: { name: true, version: true },
+    });
+    if (!conflict) {
+      return;
+    }
+
+    const targetLabel =
+      targetStatus === RecipeStatus.PUBLIC ? '公开' : '私密定制';
+    const conflictLabel =
+      conflictStatus === RecipeStatus.PUBLIC ? '公开' : '私密定制';
+
+    throw new BadRequestException(
+      `这个系列里已经有「${conflictLabel}」版本的食谱（v${conflict.version}「${conflict.name}」）。` +
+        `按规则，一个系列不能同时有「公开」和「私密定制」。` +
+        `要把它变成「${targetLabel}」，请先复制为一个独立食谱，再到新食谱上操作。`,
+    );
   }
 
   private withSyncedSeriesBusinessStatus<T extends { series?: any | null }>(
@@ -1358,6 +1457,32 @@ export class RecipeService {
 
     const targetHealthTags = dto.targetHealthTags ?? undefined;
 
+    // 公开 / 私密定制不能混在同一个系列里。
+    // ⚠️ 必须在**写入前**拦截，否则会出现"版本状态已改、系列状态没跟上"的半成品数据。
+    if (existing.seriesId && dto.status && dto.status !== existing.status) {
+      await this.assertSeriesPublishTypeConsistent(
+        existing.seriesId,
+        dto.status as RecipeStatus,
+      );
+    }
+
+    // W4-B：设为「私密定制」时必须记清"给哪个客户、哪只狗"。
+    // 业务要求：客户定制食谱必须能追溯到客户与狗狗（生产实测 45 条历史数据没记，
+    // 导致客户自己打不开自己的食谱）——从今往后强制填写。
+    // 存量不做回溯补录，因此只在**状态改为私密定制**时校验。
+    if (
+      dto.status === RecipeStatus.PRIVATE_CUSTOM &&
+      dto.status !== existing.status
+    ) {
+      const ownerId = (dto.customerOwnerId as string | undefined)?.trim();
+      const dogId = (dto.customerDogId as string | undefined)?.trim();
+      if (!ownerId || !dogId) {
+        throw new BadRequestException(
+          '设为「私密定制」时必须选择客户和狗狗 —— 否则将来无法追溯这条食谱是给谁做的。',
+        );
+      }
+    }
+
     // 合规校验：「低脂」必须满足法规数值门槛（在写入前拦截，避免产生半成品状态）
     await this.assertLowFatClaimThreshold(
       targetHealthTags,
@@ -1392,8 +1517,20 @@ export class RecipeService {
       where: { id },
       data: {
         version: newVersion,
-        name: dto.name,
+        // 名称一致性：属于系列的食谱，名字由系列名统一管理（见 renameSeries 同步逻辑），
+        // 这里忽略传入的 name。否则编辑页会把"只读"的版本名反写回来，
+        // 造成系列名被静默回滚（生产实测已在 2026-09-30 21:59 触发过一次）。
+        // 不属于系列的独立食谱（历史遗留）保持可改名。
+        ...(existing.seriesId ? {} : { name: dto.name as string | undefined }),
         status: dto.status ?? existing.status,
+        // W4-B：写「私密定制」时一并记下客户与狗，并标记为客户定制
+        ...(dto.status === RecipeStatus.PRIVATE_CUSTOM && dto.customerOwnerId
+          ? {
+              isCustomRecipe: true,
+              customerOwnerId: dto.customerOwnerId as string,
+              customerDogId: dto.customerDogId as string,
+            }
+          : {}),
         energyDensityKcalPerKg:
           dto.energyDensityKcalPerKg ?? existing.energyDensityKcalPerKg,
         productionLossRate:
@@ -1424,19 +1561,33 @@ export class RecipeService {
       },
     });
 
-    if (existing.seriesId && typeof dto.name === 'string' && dto.name.trim()) {
-      await this.prisma.recipeSeries.update({
-        where: { id: existing.seriesId },
-        data: { name: dto.name },
-      });
-    }
+    // ⚠️ 这里**故意不再**把 dto.name 反写回系列名。
+    //
+    // 旧实现是"改食谱名时顺手把系列名也改了"，方向与设计器改名相反，
+    // 而编辑页里那个名称框对系列食谱是只读的、值又是（可能过时的）版本名，
+    // 于是每次保存都会把系列名静默改回旧名 —— 与 renameSeries 形成双向死循环。
+    //
+    // 现在：系列名是唯一权威，只能通过设计器的 renameSeries 修改，
+    // 并会同步到该系列下所有正式食谱版本。
+    // 不属于系列的独立食谱改名不受影响（走上面的 name 字段）。
 
-    const shouldSyncSeriesBusinessStatus =
-      Boolean(existing.seriesId && dto.status) &&
-      (dto.status !== existing.status ||
-        dto.status === RecipeStatus.PRIVATE_CUSTOM);
-    if (shouldSyncSeriesBusinessStatus) {
-      await this.syncSeriesBusinessStatus(existing.seriesId);
+    // 系列状态是权威值，只在显式状态变更时设定：
+    //   设为公开 / 私密定制 → 直接设定系列状态
+    //   改回草稿           → 重算（若无公开版本则系列回草稿；私密定制系列不动）
+    if (existing.seriesId && dto.status && dto.status !== existing.status) {
+      if (dto.status === RecipeStatus.PRIVATE_CUSTOM) {
+        await this.setSeriesBusinessStatus(
+          existing.seriesId,
+          RecipeSeriesBusinessStatus.PRIVATE_CUSTOM,
+        );
+      } else if (dto.status === RecipeStatus.PUBLIC) {
+        await this.setSeriesBusinessStatus(
+          existing.seriesId,
+          RecipeSeriesBusinessStatus.PUBLIC,
+        );
+      } else {
+        await this.recomputeSeriesBusinessStatus(existing.seriesId);
+      }
     }
 
     // Update health tag assignments if provided
@@ -1491,7 +1642,7 @@ export class RecipeService {
       where: { id },
     });
 
-    await this.syncSeriesBusinessStatus(recipe.seriesId);
+    await this.recomputeSeriesBusinessStatus(recipe.seriesId);
   }
 
   /**
@@ -1520,6 +1671,12 @@ export class RecipeService {
       );
     }
 
+    // 公开 / 私密定制不能混在同一个系列里（要转换请走复制重发）
+    await this.assertSeriesPublishTypeConsistent(
+      recipe.seriesId,
+      RecipeStatus.PUBLIC,
+    );
+
     // 合规校验：「低脂」声称必须在发布前满足法规数值门槛
     await this.assertLowFatClaimThreshold(
       recipe.healthTagAssignments.map((assignment) => assignment.healthTagId),
@@ -1539,8 +1696,10 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    const businessStatus = await this.syncSeriesBusinessStatus(
+    // 「发布」是显式动作 → 系列状态直接设为公开
+    const businessStatus = await this.setSeriesBusinessStatus(
       updated.seriesId,
+      RecipeSeriesBusinessStatus.PUBLIC,
     );
 
     return await this.mapToDetailDto(
@@ -1580,7 +1739,8 @@ export class RecipeService {
       include: this.recipeDetailInclude,
     });
 
-    const businessStatus = await this.syncSeriesBusinessStatus(
+    // 「下架」后重算：还有公开版本就保持公开，没有就回草稿（私密定制系列不动）
+    const businessStatus = await this.recomputeSeriesBusinessStatus(
       updated.seriesId,
     );
 
@@ -1832,6 +1992,12 @@ export class RecipeService {
     const methodMap = await this.loadPreparationMethodNameMap(
       (recipe.items || []).map((item: any) => item.preparationMethod),
     );
+    // 类型安全地读取两个客户归属字段（mapToDetailDto 的形参是 any）
+    const customerRefs = recipe as {
+      customerOwnerId?: string | null;
+      customerDogId?: string | null;
+    };
+
     const seriesRecipes = recipe.seriesId
       ? await this.prisma.recipe.findMany({
           where: { seriesId: recipe.seriesId },
@@ -1850,6 +2016,9 @@ export class RecipeService {
       description: recipe.description || undefined,
       sellingPoint: recipe.sellingPoint || undefined,
       designSource: recipe.designSource || undefined,
+      // W4-B：编辑页需要回填"客户 + 狗狗"
+      customerOwnerId: customerRefs.customerOwnerId || undefined,
+      customerDogId: customerRefs.customerDogId || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
       productionSteps: recipe.productionSteps || undefined,

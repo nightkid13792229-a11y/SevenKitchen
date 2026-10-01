@@ -276,9 +276,59 @@
               💡 提示：
               <br />• 草稿：仅管理员可见，可继续编辑
               <br />• 公开食谱：所有用户可见，可用于生成订单
-              <br />• 私密定制：仅对特定用户可见的定制食谱
+              <br />• 私密定制：只给某一位客户的专属食谱，不上橱窗
             </div>
           </el-form-item>
+
+          <!-- 私密定制：必须记清是给哪个客户、哪只狗做的（W4-B） -->
+          <template v-if="isPrivateCustom">
+            <el-form-item label="客户" required>
+              <el-select
+                v-model="form.customerOwnerId"
+                filterable
+                remote
+                clearable
+                placeholder="搜索客户（昵称 / 手机号）"
+                :remote-method="searchCustomers"
+                :loading="customerLoading"
+                style="width: 100%"
+                @change="handleCustomerChange"
+              >
+                <el-option
+                  v-for="customer in customerOptions"
+                  :key="customer.id"
+                  :label="customerLabel(customer)"
+                  :value="customer.id"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="狗狗" required>
+              <el-select
+                v-model="form.customerDogId"
+                filterable
+                clearable
+                :disabled="!form.customerOwnerId"
+                :loading="dogLoading"
+                :placeholder="
+                  form.customerOwnerId
+                    ? '选择这位客户的狗狗'
+                    : '请先选择客户'
+                "
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="dog in dogOptions"
+                  :key="dog.id"
+                  :label="dog.name"
+                  :value="dog.id"
+                />
+              </el-select>
+              <div style="margin-top: 8px; color: #909399; font-size: 12px">
+                这条食谱将来要能追溯到"给谁做的"。不填无法保存为私密定制。
+              </div>
+            </el-form-item>
+          </template>
         </div>
 
         <!-- Ingredients -->
@@ -1105,6 +1155,9 @@ import type { FormInstance, FormRules, UploadProps } from 'element-plus';
 import { Plus, Delete, InfoFilled, WarningFilled } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
+import { userApi } from '@/api/users';
+import { UserRole } from '@/types/user';
+import { dogApi } from '@/api/dogs';
 import { recipeHealthTagApi, recipeSeriesCoverBadgeApi } from '@/api/recipeHealthTags';
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
@@ -1804,6 +1857,94 @@ const getRecipeSeriesBusinessStatusTagType = (status?: RecipeSeriesBusinessStatu
 };
 
 const isSeriesRecipe = computed(() => Boolean(currentRecipe.value?.seriesId));
+
+// ── 私密定制：客户 + 狗狗（W4-B）──
+// 业务要求：客户定制食谱必须能追溯"给谁做的"。生产实测有 45 条历史数据没记，
+// 导致客户自己打不开自己的食谱 —— 从今往后设为私密定制时必须填。
+const isPrivateCustom = computed(
+  () => form.status === RecipeStatus.PRIVATE_CUSTOM,
+);
+
+interface CustomerOption {
+  id: string;
+  nickname?: string | null;
+  phone?: string | null;
+}
+const customerOptions = ref<CustomerOption[]>([]);
+const customerLoading = ref(false);
+const dogOptions = ref<Array<{ id: string; name: string }>>([]);
+const dogLoading = ref(false);
+
+const customerLabel = (customer: CustomerOption) =>
+  [customer.nickname || '未命名客户', customer.phone].filter(Boolean).join(' · ');
+
+const searchCustomers = async (keyword: string) => {
+  customerLoading.value = true;
+  try {
+    const res: any = await userApi.list({
+      role: UserRole.CUSTOMER,
+      keyword: keyword || undefined,
+      pageSize: 20,
+    });
+    customerOptions.value = res?.data ?? [];
+  } catch {
+    customerOptions.value = [];
+  } finally {
+    customerLoading.value = false;
+  }
+};
+
+const loadDogsOfCustomer = async (ownerId: string) => {
+  if (!ownerId) {
+    dogOptions.value = [];
+    return;
+  }
+  dogLoading.value = true;
+  try {
+    const res: any = await dogApi.list({ ownerId, pageSize: 100 });
+    dogOptions.value = (res?.data ?? []).map((dog: any) => ({
+      id: dog.id,
+      name: dog.name,
+    }));
+  } catch {
+    dogOptions.value = [];
+  } finally {
+    dogLoading.value = false;
+  }
+};
+
+const handleCustomerChange = (ownerId: string) => {
+  // 换客户时清掉原来选的狗，避免张冠李戴
+  form.customerDogId = undefined;
+  void loadDogsOfCustomer(ownerId);
+};
+
+// 编辑已有私密定制食谱时，把当前客户与狗带出来，避免下拉框显示空白
+const initialiseCustomerContext = async () => {
+  if (!isPrivateCustom.value || !form.customerOwnerId) return;
+
+  // 客户下拉先铺上"当前客户"占位（继续输入可搜索换成真实昵称）
+  if (!customerOptions.value.some((c) => c.id === form.customerOwnerId)) {
+    const id = form.customerOwnerId;
+    customerOptions.value = [
+      { id, nickname: `当前客户（${id.slice(-6)}）` },
+      ...customerOptions.value,
+    ];
+  }
+
+  // 狗的信息可以从狗狗详情取到（含所属客户），保证名称正确
+  const dogId = form.customerDogId;
+  if (!dogId || dogOptions.value.some((d) => d.id === dogId)) return;
+  try {
+    const dog: any = await dogApi.getDetail(dogId);
+    if (dog?.id) {
+      dogOptions.value = [{ id: dog.id, name: dog.name }, ...dogOptions.value];
+    }
+  } catch {
+    // 取不到就退回按客户加载整份列表
+    await loadDogsOfCustomer(form.customerOwnerId);
+  }
+};
 const configuredSeriesStages = computed<RecipeSeriesStageSummary[]>(() =>
   currentRecipe.value?.seriesStages?.filter((stage) => stage.recipeVersionId) ||
   [],
@@ -1890,6 +2031,8 @@ const loadRecipeDetail = async () => {
     await loadSeriesCoverBadges();
 
     Object.assign(form, {
+      customerOwnerId: detail.customerOwnerId,
+      customerDogId: detail.customerDogId,
       name: detail.name,
       coverImageUrl: detail.coverImageUrl,
       coverTitle: detail.coverTitle,
@@ -1927,6 +2070,12 @@ const loadRecipeDetail = async () => {
     if (detail.nutritionDetailedData) {
       Object.assign(nutritionData, detail.nutritionDetailedData);
     }
+
+    // 私密定制：把「客户 + 狗狗」的当前值带进下拉框（W4-B）
+    // ⚠️ 必须放在 Object.assign(form, …) **之后** ——
+    // 它读的是 form.customerOwnerId，放前面会读到空值直接 return，
+    // 导致编辑已有私密定制食谱时两个下拉框都是空的。
+    await initialiseCustomerContext();
   } catch (error: any) {
     currentRecipe.value = null;
     ElMessage.error(error.message || '加载食谱详情失败');
@@ -2105,9 +2254,54 @@ const extractCosKeyFromUrl = (url: string): string | null => {
   }
 };
 
+/**
+ * 识别后端「公开 / 私密定制不能混在同一个系列」的拦截（W4-C），
+ * 并就地给出「复制为独立食谱」的出口（W4-D）——
+ * 否则运营遇到拦截会卡住，不知道怎么继续。
+ */
+const isSeriesPublishTypeConflict = (message?: string) =>
+  Boolean(message && message.includes('不能同时有'));
+
+const offerCopyAsIndependentRecipe = async (conflictMessage: string) => {
+  try {
+    await ElMessageBox.confirm(
+      `${conflictMessage}\n\n要继续操作，需要先把它复制成一个独立食谱（不挂在原系列下），再在复制出来的食谱上继续。是否现在复制？`,
+      '需要复制为独立食谱',
+      {
+        confirmButtonText: '复制为独立食谱',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return; // 用户取消
+  }
+
+  if (!recipeId.value) return;
+  try {
+    const copied: any = await recipeApi.duplicate(recipeId.value);
+    ElMessage.success('已复制为独立食谱，请在复制出的食谱上继续操作');
+    if (copied?.id) {
+      router.push(`/recipes/${copied.id}/edit`);
+    } else {
+      router.push('/recipes');
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message || '复制失败');
+  }
+};
+
+const assertPrivateCustomOwnership = (): boolean => {
+  if (form.status !== RecipeStatus.PRIVATE_CUSTOM) return true;
+  if (form.customerOwnerId && form.customerDogId) return true;
+  ElMessage.warning('设为「私密定制」时必须选择客户和狗狗');
+  return false;
+};
+
 const handleSubmit = async () => {
   if (!(await validateElementForm(formRef.value))) return;
   if (!assertNutritionProfilesSelected()) return;
+  if (!assertPrivateCustomOwnership()) return;
 
   submitting.value = true;
   try {
@@ -2116,6 +2310,9 @@ const handleSubmit = async () => {
       nutritionData,
       {},
       lifeStageOptions.value.map((option) => option.value),
+      // 系列食谱的名称框是只读的、值又是可能过时的版本名 →
+      // 不提交 name，避免把系列名静默改回旧名
+      { omitName: isSeriesRecipe.value },
     );
 
     if (isEdit.value) {
@@ -2130,7 +2327,12 @@ const handleSubmit = async () => {
 
     router.push('/recipes');
   } catch (error: any) {
-    ElMessage.error(error.message || '操作失败');
+    // 后端已通过拦截器提示过错误信息，这里只负责给"复制为独立食谱"的出口
+    if (isSeriesPublishTypeConflict(error?.message)) {
+      await offerCopyAsIndependentRecipe(error.message);
+    } else {
+      ElMessage.error(error.message || '操作失败');
+    }
   } finally {
     submitting.value = false;
   }
@@ -2139,6 +2341,7 @@ const handleSubmit = async () => {
 const handleSaveDraft = async () => {
   if (!(await validateElementForm(formRef.value))) return;
   if (!assertNutritionProfilesSelected()) return;
+  // 保存草稿不强制客户与狗（草稿可以还没定客户）
 
   submitting.value = true;
   try {
@@ -2147,6 +2350,7 @@ const handleSaveDraft = async () => {
       nutritionData,
       { status: RecipeStatus.DRAFT },
       lifeStageOptions.value.map((option) => option.value),
+      { omitName: isSeriesRecipe.value },
     );
 
     if (isEdit.value) {

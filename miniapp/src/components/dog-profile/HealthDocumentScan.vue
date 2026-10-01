@@ -5,7 +5,10 @@
                    确认一次，就把识别出来的内容自动填进表单。
        老板第 6 条：愿意手填的顾客不受影响，这条路是可选的。 -->
   <view class="scan">
-    <view class="scan__row">
+    <!-- 触发按钮（2026-10-01）：病历/检查板块把入口并进了底部那一个「新增记录」，
+         所以它这里只保留"识别结果确认"这一块，按钮由上层调 startScan() 触发的。
+         其它板块（疫苗本、过敏报告）仍用自带按钮。 -->
+    <view v-if="!hideTrigger" class="scan__row">
       <text class="scan__button" :class="{ 'scan__button--busy': isBusy }" @tap="pickAndScan">
         {{ isBusy ? '识别中…' : buttonText }}
       </text>
@@ -58,17 +61,26 @@ const props = withDefaults(defineProps<{
   dogId: string
   documentType: DocumentType
   buttonText?: string
+  /** 隐藏自带按钮（由上层调用 startScan() 触发）—— 病历/检查板块合并入口后用它 */
+  hideTrigger?: boolean
   hintText?: string
   /** 上传时后端需要的记录类别（medical / checkup / vaccine / allergy） */
   uploadType: 'medical' | 'checkup' | 'vaccine' | 'allergy'
 }>(), {
   buttonText: '拍照录入',
   hintText: '拍报告或疫苗本，自动填表；也可以直接手填',
+  hideTrigger: false,
 })
 
 const emit = defineEmits<{
   (event: 'scanned', payload: { drafts: Record<string, any>[]; documentType: DocumentType }): void
 }>()
+
+/**
+ * 供上层外部触发（病历/检查板块把它并进了底部那个「新增记录」）。
+ * 自带按钮隐藏时，就靠这个方法打开相机/相册。
+ */
+defineExpose({ startScan: pickAndScan })
 
 const isBusy = ref(false)
 const showConfirm = ref(false)

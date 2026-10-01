@@ -1412,9 +1412,12 @@ export function buildHealthVisitSummary(
 export function getHealthVisitSectionMeta(): HealthRecordTypeMeta {
   return {
     type: 'medical',
-    label: '病例',
+    // 2026-10-01 老板定稿：原来叫「病例」——它跟「病历」同音、字面意思也不对
+    //（病例 = 一个案例），而且这一块把**就诊和体检**合在了一起，
+    // 所以改成能同时覆盖两边的「病历/检查」。
+    label: '病历/检查',
     addLabel: '新增记录',
-    emptyTitle: '还没有病例记录',
+    emptyTitle: '还没有病历或检查记录',
     accentClass: 'health-records--visit',
   }
 }

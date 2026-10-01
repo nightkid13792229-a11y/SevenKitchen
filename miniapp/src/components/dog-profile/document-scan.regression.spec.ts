@@ -68,16 +68,22 @@ describe('拍照录入 · 组件', () => {
 })
 
 describe('拍照录入 · 接线', () => {
-  it('病历与体检报告挂在「病例」板块，可切换', () => {
+  it('病历与体检报告挂在「病历/检查」板块，入口合并进底部「新增记录」', () => {
     const section = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )
 
     expect(section).toContain('<HealthDocumentScan')
-    expect(section).toContain("label: '拍病历'")
-    expect(section).toContain("label: '拍体检报告'")
     expect(section).toContain('v-if="isVisitMode && dogId"')
+    // 2026-10-01 老板要求合并入口：不再是顶部两个选择器 + 一个按钮，
+    // 而是底部一个「新增记录」点开选：手动填写 / 拍病历 / 拍体检报告
+    expect(section).toContain("itemList: ['手动填写', '拍病历（拍照或相册）', '拍体检报告（拍照或相册）']")
+    expect(section).toContain('function openAddRecordChooser()')
+    expect(section).toContain('function startScan(documentType:')
+    expect(section).toContain('hide-trigger')
+    // 类型仍然分两种（AI 的提示词按类型不同）
+    expect(section).toContain("'MEDICAL_RECORD' | 'CHECKUP_REPORT'")
   })
 
   it('疫苗本挂在「疫苗」板块', () => {

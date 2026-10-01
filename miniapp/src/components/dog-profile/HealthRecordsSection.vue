@@ -35,25 +35,17 @@
          放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
     <slot name="type-extra" />
 
-    <!-- 拍照录入（2026-10-01，第六期）。
-         老板第 4 条：识别扩到体检报告与病历；第 5 条：确认一次就自动填表；
-         第 6 条：愿意手填的顾客不受影响，这条路是可选的。 -->
+    <!-- 拍照录入（2026-10-01，第六期；同日按老板要求并入底部那一个「新增记录」）。
+         原来这里是「拍病历 / 拍体检报告」两个选择器 + 一个「拍照录入」按钮 +
+         下面再一个「新增记录」——三处入口做同一件事。现在统一成底部一个按钮：
+         点它选「手动填写 / 拍病历 / 拍体检报告」，这里只保留识别结果的确认卡片。 -->
     <view v-if="isVisitMode && dogId" class="scan-entry">
-      <view class="scan-entry__kinds">
-        <text
-          v-for="option in SCAN_OPTIONS"
-          :key="option.value"
-          class="scan-entry__kind"
-          :class="{ 'scan-entry__kind--active': scanDocumentType === option.value }"
-          @tap="scanDocumentType = option.value"
-        >{{ option.label }}</text>
-      </view>
       <HealthDocumentScan
+        ref="scanRef"
+        hide-trigger
         :dog-id="dogId"
         :document-type="scanDocumentType"
         :upload-type="scanUploadType"
-        button-text="拍照录入"
-        hint-text="拍报告自动填表；也可以直接在下面手填"
         @scanned="onScanned"
       />
     </view>
@@ -391,7 +383,10 @@
       </view>
     </view>
 
+    <!-- 「新增记录」（2026-10-01）：合并模式下这个入口搬到底部栏那一个按钮里
+         （点它选手动填写或拍照），这里不再重复；过敏等单一类型板块照旧。 -->
     <button
+      v-if="!isVisitMode"
       class="health-section__action"
       :class="{ 'health-section__action--disabled': loading || hasUploadingRecords || hasSavingRecord }"
       :disabled="loading || hasUploadingRecords || hasSavingRecord"
@@ -1082,15 +1077,49 @@ function updateTextField(index: number, key: string, value: string) {
  * 识别结果**只填表不保存** —— 老板第 5 条说的是"自动的录入表单"，
  * 不是"自动保存"。顾客填完还能改、还能不存。
  */
-const SCAN_OPTIONS = [
-  { value: 'MEDICAL_RECORD' as const, label: '拍病历' },
-  { value: 'CHECKUP_REPORT' as const, label: '拍体检报告' },
-]
-
+/** 拍摄入口的两种文档类型（点底部「新增记录」后选哪种） */
+const scanRef = ref<{ startScan?: () => void } | null>(null)
 const scanDocumentType = ref<'MEDICAL_RECORD' | 'CHECKUP_REPORT'>('MEDICAL_RECORD')
 const scanUploadType = computed<'medical' | 'checkup'>(() => (
   scanDocumentType.value === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
 ))
+
+/**
+ * 底部那一个「新增记录」按钮点开后的选择（2026-10-01 老板要求合并入口）。
+ *
+ * 一次覆盖三条路：
+ *   ① 手动填写        → 新增一条空白表单
+ *   ② 拍病历          → 相机/相册 → AI 识别 → 确认一次自动填表
+ *   ③ 拍体检报告      → 同上，按体检报告的字段识别
+ *
+ * 为什么把入口收到这里：原来顶部有「拍病历 / 拍体检报告」两个选择器 +
+ * 一个「拍照录入」按钮，列表底部还有一个「新增记录」，三处做同一件事。
+ */
+function openAddRecordChooser() {
+  if (hasSavingRecord.value || hasUploadingRecords.value) {
+    return
+  }
+
+  uni.showActionSheet({
+    itemList: ['手动填写', '拍病历（拍照或相册）', '拍体检报告（拍照或相册）'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        addRecord()
+        return
+      }
+
+      startScan(res.tapIndex === 2 ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD')
+    },
+  })
+}
+
+/** 按文档类型打开相机/相册（识别组件自带按钮已隐藏，由这里触发） */
+function startScan(documentType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT') {
+  scanDocumentType.value = documentType
+  nextTick(() => {
+    scanRef.value?.startScan?.()
+  })
+}
 
 function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
   const kind = payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
@@ -1312,7 +1341,7 @@ async function saveAllDirty() {
   }
 }
 
-defineExpose({ saveAllDirty })
+defineExpose({ saveAllDirty, openAddRecordChooser, startScan })
 
 function saveRecord(index: number) {
   if (hasSavingRecord.value) {

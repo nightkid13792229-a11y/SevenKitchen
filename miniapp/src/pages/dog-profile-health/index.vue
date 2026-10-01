@@ -212,7 +212,7 @@
       :primary-theme="activeHealthTab"
       :secondary-disabled="isSecondaryActionDisabled"
       @primary="onStickyPrimary"
-      @secondary="goBack"
+      @secondary="onStickySecondary"
     />
   </view>
 </template>
@@ -287,7 +287,7 @@ const latestRequestedDogId = ref('')
 type HealthTabKey = 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
 
 const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
-  { key: 'visit', label: '病例' },
+  { key: 'visit', label: '病历/检查' },
   { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
   { key: 'diet', label: '饮食' },
@@ -991,7 +991,13 @@ async function saveDietReminders() {
  * 文案是「保存 + 当前书签名」，动作调对应板块暴露出来的保存方法 ——
  * 各板块内部的保存按钮在内嵌模式下已隐藏，顾客只需要认底部这一个位置。
  */
-const recordsSectionRef = ref<{ saveAllDirty?: () => Promise<void> } | null>(null)
+const recordsSectionRef = ref<{
+  saveAllDirty?: () => Promise<void>
+  /** 底部「新增记录」按钮点开的选择（手动填写 / 拍病历 / 拍体检报告） */
+  openAddRecordChooser?: () => void
+  /** 直接按文档类型打开相机/相册（目前由上面的选择器调用，留作备用入口） */
+  startScan?: (documentType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT') => void
+} | null>(null)
 const vaccineSectionRef = ref<{ saveAllDirty?: () => Promise<void> } | null>(null)
 const weightSectionRef = ref<{ saveRecord?: () => Promise<void> } | null>(null)
 
@@ -1024,7 +1030,16 @@ const stickyPrimaryDisabled = computed(
  * 次按钮就是「返回」。六个板块现在都能从底部保存，主按钮位被占满了，
  * 所以返回统一放在次按钮上，不再随书签变来变去。
  */
-const stickySecondaryText = computed(() => HEALTH_ENTRY_LABELS[entrySource.value])
+/**
+ * 底部左侧那个按钮的文案。
+ *
+ * 「病历/检查」板块：这里是**新增记录**的入口（点它选：手动填写 / 拍病历 / 拍体检报告）——
+ * 老板 2026-10-01 要求把原来分散的三处入口合并到这一个按钮上，并取消「返回首页」。
+ * 其它板块暂时仍是返回（返回也可以直接用小程序导航栏左上角的返回箭头）。
+ */
+const stickySecondaryText = computed(() => (
+  activeHealthTab.value === 'visit' ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
+))
 
 async function onStickyPrimary() {
   if (activeHealthTab.value === 'diet') {
@@ -1042,6 +1057,18 @@ async function onStickyPrimary() {
   if (activeHealthTab.value === 'weight') {
     await weightSectionRef.value?.saveRecord?.()
   }
+}
+
+/**
+ * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
+ */
+function onStickySecondary() {
+  if (activeHealthTab.value === 'visit') {
+    recordsSectionRef.value?.openAddRecordChooser?.()
+    return
+  }
+
+  goBack()
 }
 
 function goBack() {

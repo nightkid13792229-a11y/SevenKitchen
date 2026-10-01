@@ -394,8 +394,9 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('recordsSectionRef.value?.saveAllDirty?.()')
     expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')
     expect(page).toContain('weightSectionRef.value?.saveRecord?.()')
-    // 「返回」统一挪到次按钮 —— 主按钮位已经被保存占满了
-    expect(page).toContain('const stickySecondaryText = computed(() => HEALTH_ENTRY_LABELS[entrySource.value])')
+    // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
+    expect(page).toContain("activeHealthTab.value === 'visit' ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).toContain('recordsSectionRef.value?.openAddRecordChooser?.()')
   })
 
   it('三大记录板块（病史/体检/过敏）各自独立，内嵌时不再顶一行板块头', () => {
@@ -404,12 +405,13 @@ describe('dog-profile-health · 底部按钮与书签', () => {
       'utf-8',
     )
 
-    // 2026-10-01 老板要求：书签已经写着「病例 / 过敏」，
+    // 2026-10-01 老板要求：书签已经写着「病历/检查 / 过敏」，
     // 板块里再顶一个同名标题 + 「N 条」是重复，还占一行。
     expect(section).toContain('v-if="!embedded" class="health-section__header"')
     expect(section).toContain('{{ savedRecordCount }} 条')
-    // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存
-    expect(section).toContain('defineExpose({ saveAllDirty })')
+    // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存；
+    // 记录入口（手动 / 拍照）也交给底部那一个按钮
+    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan })')
   })
 
   it('五个板块在内嵌时都不顶"标题 + 数量"（老板 2026-10-01 要求）', () => {

@@ -186,6 +186,17 @@ export class HealthUploadController {
     schema: {
       type: 'object',
       properties: {
+        documentType: {
+          type: 'string',
+          enum: [
+            'ALLERGY_REPORT',
+            'CHECKUP_REPORT',
+            'VACCINE_BOOK',
+            'MEDICAL_RECORD',
+          ],
+          description:
+            '识别哪类文档；缺省按过敏报告处理（保持旧行为）。2026-10-01 第六期从过敏报告扩到体检报告与疫苗本，再加病历。',
+        },
         imageUrl: {
           type: 'string',
           description: 'upload-image 返回的文件地址',
@@ -197,11 +208,17 @@ export class HealthUploadController {
   })
   @ApiResponse({ status: 201, description: '识别成功，返回候选过敏原' })
   async extractHealthReport(
-    @Body() dto: { imageUrl: string; originalFilename?: string },
+    @Body()
+    dto: {
+      imageUrl: string;
+      originalFilename?: string;
+      documentType?: string;
+    },
   ): Promise<ApiResponseDto<any>> {
     const result = await this.healthReportExtractionService.extractFromReport({
       imageUrl: dto?.imageUrl,
       originalFilename: dto?.originalFilename,
+      documentType: dto?.documentType,
     });
 
     return ApiResponseDto.success(result);

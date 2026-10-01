@@ -10,6 +10,18 @@
       <text class="health-section__count">{{ records.length }} 条</text>
     </view>
 
+    <!-- 拍疫苗本（2026-10-01，第六期）。
+         一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。 -->
+    <HealthDocumentScan
+      v-if="dogId"
+      :dog-id="dogId"
+      document-type="VACCINE_BOOK"
+      upload-type="vaccine"
+      button-text="拍疫苗本"
+      hint-text="一次能读出本子上的多条记录；也可以直接手填"
+      @scanned="onVaccineBookScanned"
+    />
+
     <view v-if="dueSummaryText" class="vaccine-due-banner">
       <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
@@ -158,6 +170,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
+import HealthDocumentScan from './HealthDocumentScan.vue'
 
 interface VaccineRecord {
   id: string
@@ -470,6 +483,30 @@ async function loadRecords(dogId = props.dogId) {
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * 疫苗本识别结果 → 填进草稿列表（老板第 5 条：确认一次就自动填表）。
+ *
+ * 只填表、不保存 —— 顾客核对后自己按保存。
+ */
+function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
+  for (const draft of payload.drafts) {
+    records.value.push({
+      id: '',
+      __localId: `vaccine-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      vaccineName: String(draft.vaccineName || ''),
+      vaccinationDate: String(draft.vaccinationDate || ''),
+      nextDueDate: String(draft.nextDueDate || ''),
+      notes: String(draft.notes || ''),
+      status: 'COMPLETED',
+      attachments: [],
+    } as any)
+  }
+  uni.showToast({
+    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
+    icon: 'none',
+  })
 }
 
 function addRecord() {

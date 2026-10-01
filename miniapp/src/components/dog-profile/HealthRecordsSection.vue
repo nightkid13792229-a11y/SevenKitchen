@@ -34,6 +34,29 @@
          放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
     <slot name="type-extra" />
 
+    <!-- 拍照录入（2026-10-01，第六期）。
+         老板第 4 条：识别扩到体检报告与病历；第 5 条：确认一次就自动填表；
+         第 6 条：愿意手填的顾客不受影响，这条路是可选的。 -->
+    <view v-if="isVisitMode && dogId" class="scan-entry">
+      <view class="scan-entry__kinds">
+        <text
+          v-for="option in SCAN_OPTIONS"
+          :key="option.value"
+          class="scan-entry__kind"
+          :class="{ 'scan-entry__kind--active': scanDocumentType === option.value }"
+          @tap="scanDocumentType = option.value"
+        >{{ option.label }}</text>
+      </view>
+      <HealthDocumentScan
+        :dog-id="dogId"
+        :document-type="scanDocumentType"
+        :upload-type="scanUploadType"
+        button-text="拍照录入"
+        hint-text="拍报告自动填表；也可以直接在下面手填"
+        @scanned="onScanned"
+      />
+    </view>
+
     <view v-if="draftRecords.length === 0" class="health-section__empty">
       <text class="health-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
@@ -381,6 +404,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
+import HealthDocumentScan from './HealthDocumentScan.vue'
 import {
   HEALTH_RECORD_TYPES,
   HEALTH_VISIT_KIND_LABELS,
@@ -415,6 +439,7 @@ import {
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
   resolveHealthVisitKind,
+  normalizeHealthVisitRecord,
 } from '../../utils/health-records'
 
 type FieldConfig = {
@@ -989,6 +1014,42 @@ function updateTextField(index: number, key: string, value: string) {
   }
 }
 
+/**
+ * 拍照录入（2026-10-01，第六期）。
+ *
+ * 识别结果**只填表不保存** —— 老板第 5 条说的是"自动的录入表单"，
+ * 不是"自动保存"。顾客填完还能改、还能不存。
+ */
+const SCAN_OPTIONS = [
+  { value: 'MEDICAL_RECORD' as const, label: '拍病历' },
+  { value: 'CHECKUP_REPORT' as const, label: '拍体检报告' },
+]
+
+const scanDocumentType = ref<'MEDICAL_RECORD' | 'CHECKUP_REPORT'>('MEDICAL_RECORD')
+const scanUploadType = computed<'medical' | 'checkup'>(() => (
+  scanDocumentType.value === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
+))
+
+function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
+  const kind = payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
+
+  for (const draft of payload.drafts) {
+    const record = normalizeHealthVisitRecord(kind, draft)
+    // 重新给一个本地 key，避免和已有草稿撞
+    record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    draftRecords.value.push(record)
+  }
+
+  const lastIndex = draftRecords.value.length - 1
+  if (lastIndex >= 0) {
+    expandedRecordKey.value = recordKey(draftRecords.value[lastIndex], lastIndex)
+  }
+  uni.showToast({
+    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
+    icon: 'none',
+  })
+}
+
 function addRecord() {
   if (hasSavingRecord.value) {
     uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
@@ -1509,6 +1570,31 @@ function removeAttachment(index: number, attachmentIndex: number) {
 
 <style scoped lang="scss">
 @import '../../styles/health-section.scss';
+
+/* 拍照录入（第六期） */
+.scan-entry {
+  margin-bottom: 20rpx;
+}
+
+.scan-entry__kinds {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 14rpx;
+}
+
+.scan-entry__kind {
+  font-size: 23rpx;
+  color: #6b6653;
+  background: #f2f5ec;
+  padding: 12rpx 20rpx;
+  border-radius: 999rpx;
+}
+
+.scan-entry__kind--active {
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  font-weight: 600;
+}
 
 /* ===== 「病例」合并模式（2026-10-01）===== */
 

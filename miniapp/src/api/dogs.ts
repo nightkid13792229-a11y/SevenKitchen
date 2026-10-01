@@ -276,7 +276,20 @@ export const dogApi = {
   extractHealthReport: (data: {
     imageUrl: string
     originalFilename?: string
+    /**
+     * 识别哪类文档（2026-10-01 第六期）。
+     * 缺省 ALLERGY_REPORT，保持既有调用方行为不变。
+     */
+    documentType?:
+      | 'ALLERGY_REPORT'
+      | 'CHECKUP_REPORT'
+      | 'VACCINE_BOOK'
+      | 'MEDICAL_RECORD'
   }) => request<{
+    /** 本次识别的是哪类文档 */
+    documentType: 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
+    /** 可直接填表的草稿；疫苗本可能多条，其余类型一条 */
+    drafts: Record<string, any>[]
     allergies: string[]
     medicalConditions: string[]
     ocrText: string

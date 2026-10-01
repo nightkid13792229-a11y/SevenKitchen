@@ -1133,6 +1133,58 @@ export class RecipeService {
     return businessStatus;
   }
 
+  /**
+   * 阻止「公开」与「私密定制」混在同一个系列里（W4-C）。
+   *
+   * 业务规则：两者都是**系列级**属性，互相独立、互不影响；一个系列只能是其中之一。
+   * 想从一种变成另一种，**不能直接改属性**，只能**复制重发**：
+   * 复制一份出来发布成想要的那种，原系列不受影响。
+   *
+   * 为什么不能直接改：一个系列一旦发布过，订单 / 生产单 / 收藏 / 评价都已经挂在
+   * 它身上。直接改属性会让"同一道菜"的可见范围前后矛盾。
+   *
+   * 见 docs/plans/2026-09-30-recipe-domain-business-definition.md
+   */
+  private async assertSeriesPublishTypeConsistent(
+    seriesId: string | null | undefined,
+    targetStatus: RecipeStatus,
+  ): Promise<void> {
+    if (!seriesId) {
+      return;
+    }
+    // 草稿不参与判定
+    if (
+      targetStatus !== RecipeStatus.PUBLIC &&
+      targetStatus !== RecipeStatus.PRIVATE_CUSTOM
+    ) {
+      return;
+    }
+
+    const conflictStatus =
+      targetStatus === RecipeStatus.PUBLIC
+        ? RecipeStatus.PRIVATE_CUSTOM
+        : RecipeStatus.PUBLIC;
+
+    const conflict = await this.prisma.recipe.findFirst({
+      where: { seriesId, status: conflictStatus },
+      select: { name: true, version: true },
+    });
+    if (!conflict) {
+      return;
+    }
+
+    const targetLabel =
+      targetStatus === RecipeStatus.PUBLIC ? '公开' : '私密定制';
+    const conflictLabel =
+      conflictStatus === RecipeStatus.PUBLIC ? '公开' : '私密定制';
+
+    throw new BadRequestException(
+      `这个系列里已经有「${conflictLabel}」版本的食谱（v${conflict.version}「${conflict.name}」）。` +
+        `按规则，一个系列不能同时有「公开」和「私密定制」。` +
+        `要把它变成「${targetLabel}」，请先复制为一个独立食谱，再到新食谱上操作。`,
+    );
+  }
+
   private withSyncedSeriesBusinessStatus<T extends { series?: any | null }>(
     recipe: T,
     businessStatus?: RecipeSeriesBusinessStatus,
@@ -1405,6 +1457,15 @@ export class RecipeService {
 
     const targetHealthTags = dto.targetHealthTags ?? undefined;
 
+    // 公开 / 私密定制不能混在同一个系列里。
+    // ⚠️ 必须在**写入前**拦截，否则会出现"版本状态已改、系列状态没跟上"的半成品数据。
+    if (existing.seriesId && dto.status && dto.status !== existing.status) {
+      await this.assertSeriesPublishTypeConsistent(
+        existing.seriesId,
+        dto.status as RecipeStatus,
+      );
+    }
+
     // 合规校验：「低脂」必须满足法规数值门槛（在写入前拦截，避免产生半成品状态）
     await this.assertLowFatClaimThreshold(
       targetHealthTags,
@@ -1584,6 +1645,12 @@ export class RecipeService {
         `Can only publish DRAFT recipes. Current status: ${recipe.status}`,
       );
     }
+
+    // 公开 / 私密定制不能混在同一个系列里（要转换请走复制重发）
+    await this.assertSeriesPublishTypeConsistent(
+      recipe.seriesId,
+      RecipeStatus.PUBLIC,
+    );
 
     // 合规校验：「低脂」声称必须在发布前满足法规数值门槛
     await this.assertLowFatClaimThreshold(

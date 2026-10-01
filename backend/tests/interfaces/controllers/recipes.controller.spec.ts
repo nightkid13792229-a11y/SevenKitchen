@@ -96,6 +96,14 @@ describe('RecipesController (e2e)', () => {
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    // 食谱系列（RecipeSeries）：详情会顺带重算系列的经营状态
+    // （recomputeSeriesBusinessStatus：findUnique → 可能 update）。
+    // mock 里缺失会让控制器直接 500 —— 与下面的封面角标是同一类问题，
+    // 新增任何 prisma 调用都要同步补到这里。
+    recipeSeries: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    },
     // 系列封面角标（RecipeSeriesCoverBadge）：详情返回 coverBadges 时会查询。
     // mock 里缺失会让控制器直接 500，必须与真实 Prisma Client 保持同步。
     recipeSeriesCoverBadge: {

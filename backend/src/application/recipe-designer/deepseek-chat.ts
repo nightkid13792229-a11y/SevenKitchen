@@ -21,6 +21,14 @@ export interface DeepSeekChatOptions {
   temperature?: number;
   /** 输出 token 上限（推理模型可能把配额耗在推理上，默认给足） */
   maxTokens?: number;
+  /**
+   * 额外请求体字段（原样合并进 payload）。
+   *
+   * 目前用于 `thinking`：DeepSeek 新模型**默认开启思考模式**（effort=high），
+   * 结构化抽取类任务开着它只会更慢、还容易把 token 配额耗在思维链上
+   * （实测：9.9s / 出 2000 tokens / 最终 content 为空；关掉后 2.8s / 190 tokens / 正常返回）。
+   */
+  extraBody?: Record<string, unknown>;
 }
 
 /**
@@ -64,6 +72,7 @@ async function callDeepSeekJsonOnce(
         signal: controller.signal,
         body: JSON.stringify({
           model: options.model,
+          ...(options.extraBody || {}),
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: options.systemPrompt },

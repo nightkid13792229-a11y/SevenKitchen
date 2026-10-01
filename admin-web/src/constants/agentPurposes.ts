@@ -17,7 +17,7 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     purpose: 'DEFAULT',
     label: '全局默认',
     description: '所有未单独指定用途的 AI/Agent 使用的兜底配置',
-    defaultModel: 'deepseek-v4-flash',
+    defaultModel: 'deepseek-flash',
   },
   {
     purpose: 'RECIPE_COPYWRITING',
@@ -41,15 +41,16 @@ export const AGENT_PURPOSES: AgentPurposeMeta[] = [
     purpose: 'SUPPLEMENT_LABEL',
     label: '补剂标签识别',
     description: '从补剂图片提取标签信息',
-    defaultModel: 'deepseek-v4-flash',
+    defaultModel: 'deepseek-flash',
   },
   {
     purpose: 'HEALTH_REPORT_EXTRACTION',
     label: '健康 · 报告识别（看图）',
     description:
-      '拍照识别病历 / 体检报告 / 疫苗本 / 过敏报告。必须用**能读图**的模型，' +
-      '默认 deepseek-v4-flash-vision-exp（实测可读中文报告，单张图最多 384 token、与 Flash 同价）',
-    defaultModel: 'deepseek-v4-flash-vision-exp',
+      '拍照识别病历 / 体检报告 / 疫苗本 / 过敏报告。必须用**能读图**的模型 —— ' +
+      '官方支持读图的是 deepseek-flash（模型版本 DeepSeek-V4.1-Flash）；' +
+      'deepseek-v4-pro 不支持读图。旧名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 已下线，别再填',
+    defaultModel: 'deepseek-flash',
   },
   {
     purpose: 'HEALTH_ANALYSIS',

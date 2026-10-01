@@ -29,7 +29,7 @@
         </el-form-item>
 
         <el-form-item label="默认模型">
-          <el-input v-model="form.model" placeholder="deepseek-v4-flash" />
+          <el-input v-model="form.model" placeholder="deepseek-flash" />
           <div class="form-tip">用于批量生成与普通排序，建议 Flash。</div>
         </el-form-item>
 

@@ -123,20 +123,35 @@ export interface HealthReportExtractionResult {
 }
 
 /**
- * 视觉识别（2026-10-01）。
+ * 视觉识别（2026-10-01，模型名 2026-10-02 按官方文档订正）。
  *
  * 背景：原来这条路是「腾讯云 OCR 认字 → 文本模型整理」，OCR 服务没开通就整条废掉
- * （老板实测撞到 FailedOperation.UnOpenError）。DeepSeek 上线了多模态实验模型
- * `deepseek-v4-flash-vision-exp`（图片按 token 计费、单张最多 384 token、与 Flash 同价），
- * 于是改成**优先让模型直接看图**：少一个外部服务、少一处故障点，
- * 手写病历与表格的识别通常也更稳。
+ * （老板实测撞到 FailedOperation.UnOpenError）。现在改成**优先让模型直接看图**：
+ * 少一个外部服务、少一处故障点，手写病历与表格的识别通常也更稳。
+ *
+ * ── 模型名以官方文档为准（api-docs.deepseek.com /models & pricing）──────────
+ *   正式名字是 **`deepseek-flash`**（模型版本 **DeepSeek-V4.1-Flash**），
+ *   **支持图像理解**；`deepseek-v4-pro` 是 DeepSeek-V4-Pro-0813，**不支持读图**。
+ *   官方脚注写明：旧名 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp`
+ *   仍可调用但模型已下线，请求会由 V4.1-Flash 提供服务。
+ *   → 所以这里用正式名，不再用那两个已下线的旧名。
  *
  * 开关与模型名都走环境变量（与 ENERGY_ALGORITHM / HEALTH_ANALYSIS 那套一致）：
  *   · HEALTH_REPORT_VISION=off   → 回到原来的 OCR 路径
  *   · HEALTH_REPORT_VISION_MODEL → 换模型时不用改代码
  * 视觉失败时**自动回退** OCR 路径（并在日志里留痕），不让顾客卡住。
  */
-export const DEFAULT_VISION_MODEL = 'deepseek-v4-flash-vision-exp';
+export const DEFAULT_VISION_MODEL = 'deepseek-flash';
+
+/**
+ * 结构化抽取一律**关掉思考模式**（2026-10-02 实测）。
+ *
+ * 新模型默认开思考（effort=high），对"照着报告抄字段"这种任务只有坏处：
+ *   开着：9.9s、输出 2000 tokens 全耗在思维链上、**最终 content 为空 → 识别失败**
+ *   关掉：2.8s、输出 190 tokens、JSON 正常返回
+ * 另外思考模式下 temperature 不生效（官方文档写明），关掉后行为更可预期。
+ */
+const EXTRACTION_NO_THINKING = { thinking: { type: 'disabled' } };
 
 export function isHealthReportVisionEnabled(
   env: NodeJS.ProcessEnv = process.env,
@@ -581,6 +596,7 @@ export class HealthReportExtractionService {
           parsed = await callDeepSeekJson({
             baseUrl: config.baseUrl,
             model,
+            extraBody: EXTRACTION_NO_THINKING,
             apiKey: config.apiKey,
             requestTimeoutMs: config.requestTimeoutMs,
             systemPrompt: buildSystemPrompt(requestedDocumentType, 'image'),
@@ -620,6 +636,7 @@ export class HealthReportExtractionService {
       parsed = await callDeepSeekJson({
         baseUrl: config.baseUrl,
         model: config.model,
+        extraBody: EXTRACTION_NO_THINKING,
         apiKey: config.apiKey,
         requestTimeoutMs: config.requestTimeoutMs,
         systemPrompt: buildSystemPrompt(requestedDocumentType),

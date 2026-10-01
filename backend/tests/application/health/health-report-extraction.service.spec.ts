@@ -464,7 +464,7 @@ describe('HealthReportExtractionService', () => {
  * 视觉模型直接看图（2026-10-01）。
  *
  * 背景：老板实测上传照片报「服务未开通」——腾讯云 OCR 没开通，整条路废掉。
- * 改成优先让多模态模型直接看图（deepseek-v4-flash-vision-exp，与 Flash 同价、
+ * 改成优先让多模态模型直接看图（正式名 deepseek-flash = DeepSeek-V4.1-Flash，支持读图、
  * 单张图最多 384 token），OCR 退为兜底。这组用例锁住：
  *   · 默认走视觉：模型收到的是「文本 + 图片」两段，**不再调用 OCR**；
  *   · 视觉失败自动回退 OCR，顾客不会卡住；
@@ -531,7 +531,7 @@ describe('HealthReportExtractionService · 视觉直读', () => {
 
     expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
     const body = requestBodyOf(fetchSpy);
-    expect(body.model).toBe('deepseek-v4-flash-vision-exp');
+    expect(body.model).toBe('deepseek-flash');
     expect(body.messages[0].content).toContain('自己看图');
     const userContent = body.messages[1].content;
     expect(Array.isArray(userContent)).toBe(true);
@@ -614,9 +614,7 @@ describe('HealthReportExtractionService · 视觉直读', () => {
 
     it('模型名的三级来源：环境变量 > 后台配置 > 内置默认', () => {
       // 都没给 → 内置默认（已用生产密钥实测可读中文报告）
-      expect(resolveHealthReportVisionModel({} as NodeJS.ProcessEnv)).toBe(
-        'deepseek-v4-flash-vision-exp',
-      );
+      expect(resolveHealthReportVisionModel({} as NodeJS.ProcessEnv)).toBe('deepseek-flash');
       // 后台「健康 · 报告识别」那条配置里填的模型
       expect(
         resolveHealthReportVisionModel({} as NodeJS.ProcessEnv, 'glm-4v-flash'),
@@ -677,15 +675,13 @@ describe('HealthReportExtractionService · 视觉直读', () => {
     });
 
     // 先试后台填的（失败），再用内置默认（成功），OCR 不该被调用
-    expect(calls).toEqual(['deepseek-v41-flash', 'deepseek-v4-flash-vision-exp']);
+    expect(calls).toEqual(['deepseek-v41-flash', 'deepseek-flash']);
     expect(ocrProvider.recognizeImage).not.toHaveBeenCalled();
     expect(result.drafts[0].diagnosis).toBe('急性胃炎');
   });
 
   it('后台填的就是内置默认时，只调一次（不做无谓重试）', async () => {
-    agentConfig.getConfiguredPurposeModel.mockResolvedValue(
-      'deepseek-v4-flash-vision-exp',
-    );
+    agentConfig.getConfiguredPurposeModel.mockResolvedValue('deepseek-flash');
     const fetchSpy = mockFetchOk({
       drafts: [{ diagnosis: 'x' }],
       confidence: 'HIGH',
@@ -698,6 +694,28 @@ describe('HealthReportExtractionService · 视觉直读', () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('结构化抽取一律关掉思考模式（开着会拖慢并可能把 token 配额耗光）', async () => {
+    // 实测：deepseek-flash 默认开思考（effort=high）时，
+    // 9.9s、输出 2000 tokens 全在思维链上、最终 content 为空 → 识别失败；
+    // 关掉后 2.8s、190 tokens 正常返回。
+    const bodies: any[] = [];
+    global.fetch = jest.fn().mockImplementation(async (_url: string, init: any) => {
+      bodies.push(JSON.parse(String(init?.body || '{}')));
+      return okJsonResponse({
+        drafts: [{ diagnosis: 'x' }],
+        confidence: 'HIGH',
+        warnings: [],
+      });
+    }) as unknown as typeof fetch;
+
+    await service.extractFromReport({
+      imageUrl: 'https://img.example.com/h.jpg',
+      documentType: 'MEDICAL_RECORD',
+    });
+
+    expect(bodies[0].thinking).toEqual({ type: 'disabled' });
   });
 
   it('看图版提示词让模型自己看图，字段结构与文本版一致', () => {

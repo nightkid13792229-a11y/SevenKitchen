@@ -22,7 +22,9 @@ describe('AI 用途清单 · 健康模块', () => {
     expect(meta).toBeTruthy()
     expect(meta?.label).toContain('健康')
     expect(meta?.description).toContain('能读图')
-    expect(meta?.defaultModel).toBe('deepseek-v4-flash-vision-exp')
+    // 官方正式名：deepseek-flash = DeepSeek-V4.1-Flash（支持读图）；
+    // 旧名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 已下线
+    expect(meta?.defaultModel).toBe('deepseek-flash')
   })
 
   it('健康分析在清单里，用文本模型', () => {

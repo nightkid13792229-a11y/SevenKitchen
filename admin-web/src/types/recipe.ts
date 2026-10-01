@@ -240,6 +240,10 @@ export interface RecipeDetail extends RecipeSummary {
   productionSteps?: string;
   productionLossRate: number;
   batchLaborHours?: number;
+  /** 私密定制：给哪个客户做的（W4-B） */
+  customerOwnerId?: string;
+  /** 私密定制：给哪只狗做的（W4-B） */
+  customerDogId?: string;
   items: RecipeItem[];
 }
 
@@ -263,6 +267,10 @@ export interface RecipeForm {
   productionLossRate?: number;
   batchLaborHours?: number;
   status?: RecipeStatus;
+  /** 私密定制：这条食谱是给哪个客户做的（W4-B 起必填） */
+  customerOwnerId?: string;
+  /** 私密定制：这条食谱是给哪只狗做的（W4-B 起必填） */
+  customerDogId?: string;
 }
 
 export interface RecipeQuery {

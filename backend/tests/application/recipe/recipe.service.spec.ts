@@ -1730,6 +1730,9 @@ describe('RecipeService', () => {
       await service.updateRecipe('recipe-row-id', {
         name: '大米燕麦三文鱼兔里脊',
         status: RecipeStatus.PRIVATE_CUSTOM,
+        // W4-B：设为私密定制必须带客户与狗
+        customerOwnerId: 'customer-1',
+        customerDogId: 'dog-1',
       });
 
       // 系列名不能被反写（旧实现会，造成系列名被过时的版本名静默回滚）
@@ -1845,6 +1848,100 @@ describe('RecipeService', () => {
         }),
       ).rejects.toThrow(/不能同时有/);
       expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
+
+    it('设为私密定制但没选客户和狗时拒绝保存', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 2,
+        name: '公开配方',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1352,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: [],
+        productionSteps: null,
+        seriesId: null,
+        seriesLifeStage: null,
+        items: [],
+      };
+      mockPrismaService.recipe.findUnique.mockResolvedValue(existingRecipe);
+
+      await expect(
+        service.updateRecipe('recipe-row-id', {
+          status: RecipeStatus.PRIVATE_CUSTOM,
+        }),
+      ).rejects.toThrow(/必须选择客户和狗狗/);
+      expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
+
+    it('设为私密定制时把客户与狗一起写进去并标记为客户定制', async () => {
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-series-id',
+        version: 2,
+        name: '公开配方',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1352,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData: null,
+        applicableLifeStages: [],
+        productionSteps: null,
+        seriesId: null,
+        seriesLifeStage: null,
+        items: [],
+      };
+      const detailRow = {
+        ...existingRecipe,
+        series: null,
+        healthTagAssignments: [],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-06-10T14:18:50.624Z'),
+        updatedAt: new Date('2026-06-10T14:23:57.124Z'),
+      };
+      mockPrismaService.recipe.findUnique
+        .mockResolvedValueOnce(existingRecipe)
+        .mockResolvedValueOnce(detailRow);
+      const recipeUpdate = mockPrismaService.recipe.update.mockResolvedValue({
+        id: 'recipe-row-id',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([detailRow]);
+
+      await service.updateRecipe('recipe-row-id', {
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        customerOwnerId: 'customer-1',
+        customerDogId: 'dog-1',
+      });
+
+      const recipeUpdateData = (recipeUpdate.mock.calls[0] as unknown[])[0] as {
+        data: Record<string, unknown>;
+      };
+      expect(recipeUpdateData.data).toMatchObject({
+        status: RecipeStatus.PRIVATE_CUSTOM,
+        isCustomRecipe: true,
+        customerOwnerId: 'customer-1',
+        customerDogId: 'dog-1',
+      });
     });
 
     it('does not create a new version when food supplement targets normalize from null to empty', async () => {

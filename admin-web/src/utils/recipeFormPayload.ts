@@ -126,5 +126,8 @@ export function buildRecipeSubmitData(
     productionLossRate: form.productionLossRate,
     batchLaborHours: form.batchLaborHours,
     status: overrides.status ?? form.status,
+    // 私密定制：带上"给哪个客户、哪只狗"（W4-B）
+    customerOwnerId: form.customerOwnerId,
+    customerDogId: form.customerDogId,
   }) as RecipeForm;
 }

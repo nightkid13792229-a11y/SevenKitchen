@@ -376,6 +376,10 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   productionSteps?: string;
   productionLossRate: number;
   batchLaborHours?: number;
+  /** 私密定制：给哪个客户做的（W4-B，编辑页需要回填） */
+  customerOwnerId?: string;
+  /** 私密定制：给哪只狗做的（W4-B，编辑页需要回填） */
+  customerDogId?: string;
   items: RecipeItemResponseDto[];
 }
 

@@ -2511,6 +2511,8 @@ export class AdminController {
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('breedId') breedId?: string,
+    /** W4-B：按主人筛选——后台给食谱选"客户 + 狗狗"时需要 */
+    @Query('ownerId') ownerId?: string,
   ): Promise<
     ApiResponseDto<{
       data: any[];
@@ -2526,6 +2528,10 @@ export class AdminController {
 
     if (breedId) {
       where.breedId = breedId;
+    }
+
+    if (ownerId?.trim()) {
+      where.ownerId = ownerId.trim();
     }
 
     if (searchText) {

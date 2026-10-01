@@ -196,6 +196,25 @@ export const dogApi = {
     method: 'POST',
     data,
   }),
+  /**
+   * AI 健康分析与建议（2026-10-01，第七期）。
+   *
+   * 七项产出；严格不做诊断，只做初步分析。
+   *
+   * ⚠️ 顾客侧默认关闭（后端 HEALTH_ANALYSIS=customer 才开）：
+   *    知识库里的免疫/化验/就医时机条目尚未经兽医审核，
+   *    而分析只能引用知识条目 —— 没有已审核条目就给不出有依据的结论。
+   *
+   * ⚠️ 免责声明**不在返回值里**，由界面写死：AI 不该有机会改写它。
+   */
+  healthAnalysis: (dogId: string, audience: 'customer' | 'staff' = 'customer') =>
+    request({
+      url: `/dogs/${dogId}/health-analysis?audience=${audience}`,
+      method: 'GET',
+      // 要跑一次完整的 AI 推理，默认 15s 不够
+      timeout: 60000,
+      suppressErrorToast: true,
+    }),
   healthRecords: {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),

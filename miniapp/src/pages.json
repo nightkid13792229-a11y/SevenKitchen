@@ -570,6 +570,12 @@
           "style": {
             "navigationBarTitleText": "分享健康信息"
           }
+        },
+        {
+          "path": "analysis",
+          "style": {
+            "navigationBarTitleText": "健康分析与建议"
+          }
         }
       ]
     }

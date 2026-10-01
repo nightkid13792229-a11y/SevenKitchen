@@ -114,6 +114,7 @@ describe('两个页面的注册与入口', () => {
 
     expect(subPackage).toBeTruthy()
     expect(subPackage.pages.map((page: { path: string }) => page.path).sort()).toEqual([
+      'analysis',
       'share',
       'summary',
       'timeline',

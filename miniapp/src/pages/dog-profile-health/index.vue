@@ -74,6 +74,10 @@
             <text class="health-shortcuts__label">就诊前摘要</text>
             <text class="health-shortcuts__hint">看医生前先看这个</text>
           </text>
+          <text class="health-shortcuts__item" @tap="goHealthAnalysis">
+            <text class="health-shortcuts__label">健康分析</text>
+            <text class="health-shortcuts__hint">七项初步分析</text>
+          </text>
         </view>
 
         <HealthRecordsSection
@@ -1006,6 +1010,20 @@ const visitShortcutHint = computed(() => {
     (recordsByType.allergy?.length || 0)
   return count > 0 ? `已记 ${count} 条` : '还没有记录'
 })
+
+/**
+ * AI 健康分析（2026-10-01，第七期）。
+ *
+ * 顾客侧默认未开放（知识尚未经专业审核），页面会如实说明原因。
+ */
+function goHealthAnalysis() {
+  if (!dogId.value) {
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/dog-health/analysis?dogId=${encodeURIComponent(dogId.value)}`,
+  })
+}
 
 function goToDogCreate() {
   // 2026-09-21：由 redirectTo 改为 navigateTo。

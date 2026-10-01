@@ -22,6 +22,7 @@ import { HealthShareController } from './interfaces/controllers/health-share.con
 import { SharedHealthController } from './interfaces/controllers/shared-health.controller';
 import { VaccinePlanController } from './interfaces/controllers/vaccine-plan.controller';
 import { DietPreferenceController } from './interfaces/controllers/diet-preference.controller';
+import { HealthAnalysisController } from './interfaces/controllers/health-analysis.controller';
 import {
   GlobalConfigController,
   PublicGlobalConfigController,
@@ -141,6 +142,7 @@ import { HealthTimelineService } from './application/health/health-timeline.serv
 import { HealthShareService } from './application/health/health-share.service';
 import { VaccinePlanService } from './application/health/vaccine-plan.service';
 import { DietPreferenceService } from './application/health/diet-preference.service';
+import { HealthAnalysisService } from './application/health/health-analysis.service';
 import {
   PrismaVaccineRecordRepository,
   PrismaCheckupRecordRepository,
@@ -333,6 +335,7 @@ validatePrismaConfig();
     SharedHealthController,
     VaccinePlanController,
     DietPreferenceController,
+    HealthAnalysisController,
     HealthUploadController,
     GlobalConfigController,
     PublicGlobalConfigController,
@@ -627,6 +630,7 @@ validatePrismaConfig();
     HealthShareService,
     VaccinePlanService,
     DietPreferenceService,
+    HealthAnalysisService,
     {
       provide: VACCINE_RECORD_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

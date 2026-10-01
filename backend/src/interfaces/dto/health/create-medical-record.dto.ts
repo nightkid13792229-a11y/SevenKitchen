@@ -7,7 +7,16 @@ import {
   IsUUID,
 } from 'class-validator';
 
+/**
+ * 病史状态。
+ *
+ * ⚠️ 必须与 Prisma 的 MedicalStatus 枚举保持一致。
+ * 2026-10-01 修复：PENDING_CONFIRMATION 早在 2026-09-28 就加进了数据库
+ * （顾客自述的疾病不再被系统臆断为慢性），但本枚举一直没同步，
+ * 导致家长新增一条病史、不动状态下拉就直接保存时被这里拒掉（400）。
+ */
 export enum MedicalStatus {
+  PENDING_CONFIRMATION = 'PENDING_CONFIRMATION',
   TREATING = 'TREATING',
   RECOVERED = 'RECOVERED',
   CHRONIC = 'CHRONIC',

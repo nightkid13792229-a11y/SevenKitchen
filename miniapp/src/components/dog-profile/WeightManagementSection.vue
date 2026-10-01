@@ -1,9 +1,9 @@
 <template>
-  <view v-if="dogId" class="weight-section">
+  <view v-if="dogId" class="health-section">
     <!-- 体重记录 -->
-    <view class="section-card weight-record-card">
-      <text class="section-card__title">体重记录</text>
-      <text class="section-card__desc">记录每次称重，观察体重趋势，及时调整饭量。</text>
+    <view class="health-card weight-record-card">
+      <text class="health-section__title">体重记录</text>
+      <text class="health-section__desc">记录每次称重，观察体重趋势，及时调整饭量。</text>
 
       <view class="input-card">
         <view class="input-item">
@@ -69,7 +69,7 @@
       <!-- 内嵌到健康管理页时隐藏（改由底部那个自适应按钮统一保存） -->
       <button
         v-if="!externalSave"
-        class="save-btn"
+        class="health-section__action"
         :loading="isSavingRecord"
         :disabled="isSavingRecord"
         @tap="saveRecord"
@@ -83,9 +83,9 @@
          通过饮食增减重的可执行方案。这张卡片就是那个「方案」的落点。
 
          没有计划时只给一个入口，不主动推销 —— BCS 4-5 的狗本来就不该建计划。 -->
-    <view v-if="plan" class="section-card plan-card" :class="`plan-card--${plan.status.toLowerCase()}`">
+    <view v-if="plan" class="health-card plan-card" :class="`plan-card--${plan.status.toLowerCase()}`">
       <view class="plan-card__head">
-        <text class="section-card__title">
+        <text class="health-section__title">
           {{ plan.direction === 'LOSS' ? '减重计划' : '增重计划' }}
         </text>
         <text class="plan-card__badge" :class="`plan-card__badge--${plan.status.toLowerCase()}`">
@@ -160,23 +160,23 @@
     </view>
 
     <!-- 没有计划时：给入口，但不推销 -->
-    <view v-else-if="canOfferPlan" class="section-card plan-entry-card">
-      <text class="section-card__title">设定体重目标</text>
-      <text class="section-card__desc">
+    <view v-else-if="canOfferPlan" class="health-card plan-entry-card">
+      <text class="health-section__title">设定体重目标</text>
+      <text class="health-section__desc">
         根据当前体重和体况，帮你算出每天该喂多少、多久能到位，并按实际减重速度自动调整。
       </text>
       <button class="plan-btn plan-btn--primary" @tap="goToCreatePlan">制定计划</button>
     </view>
 
     <!-- 缺数据时的引导（B2-7）：没有体重或体况分就算不了，先说清楚缺什么 -->
-    <view v-else-if="planBlockedReason" class="section-card plan-entry-card">
-      <text class="section-card__title">设定体重目标</text>
-      <text class="section-card__desc">{{ planBlockedReason }}</text>
+    <view v-else-if="planBlockedReason" class="health-card plan-entry-card">
+      <text class="health-section__title">设定体重目标</text>
+      <text class="health-section__desc">{{ planBlockedReason }}</text>
     </view>
 
     <!-- 体重趋势图 -->
-    <view v-if="records.length > 0" class="section-card weight-chart-card">
-      <text class="section-card__title">体重趋势（最近10次）</text>
+    <view v-if="records.length > 0" class="health-card weight-chart-card">
+      <text class="health-section__title">体重趋势（最近10次）</text>
       <view class="chart-container">
         <canvas
           canvas-id="weightChart"
@@ -188,8 +188,8 @@
     </view>
 
     <!-- 历史记录 -->
-    <view v-if="records.length > 0" class="section-card weight-history-card">
-      <text class="section-card__title">历史记录</text>
+    <view v-if="records.length > 0" class="health-card weight-history-card">
+      <text class="health-section__title">历史记录</text>
 
       <view class="record-list">
         <view
@@ -854,34 +854,12 @@ function drawChart() {
 }
 </script>
 
-<style scoped>
-.weight-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
+<style scoped lang="scss">
+@import '../../styles/health-section.scss';
 
-.section-card {
-  padding: 30rpx;
-  border-radius: 30rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12rpx 32rpx rgba(24, 40, 60, 0.08);
-}
 
-.section-card__title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #17313f;
-}
 
-.section-card__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: #6b7d86;
-}
+
 
 /* 输入卡片 */
 .input-card {
@@ -997,27 +975,8 @@ function drawChart() {
 }
 
 /* 保存按钮 */
-.save-btn {
-  width: 100%;
-  height: 88rpx;
-  margin-top: 24rpx;
-  background: var(--health-accent, #0d6b43);
-  color: white;
-  border: none;
-  border-radius: 44rpx;
-  font-size: 30rpx;
-  font-weight: bold;
-}
 
-.save-btn::after {
-  border: none;
-}
 
-.save-btn[disabled] {
-  opacity: 0.6;
-  color: white;
-  background: linear-gradient(135deg, #0d6b43 0%, #0c8a55 100%);
-}
 
 /* 图表 */
 .chart-container {

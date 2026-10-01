@@ -1,26 +1,26 @@
 <template>
-  <view class="vaccine-section">
-    <view class="vaccine-section__header">
-      <view class="vaccine-section__heading">
-        <text class="vaccine-section__title">疫苗管理</text>
-        <text class="vaccine-section__desc">
+  <view class="health-section">
+    <view class="health-section__header">
+      <view class="health-section__heading">
+        <text class="health-section__title">疫苗管理</text>
+        <text class="health-section__desc">
           记录每次接种与下次到期日，到期前这里会提醒你。
         </text>
       </view>
-      <text class="vaccine-section__count">{{ records.length }} 条</text>
+      <text class="health-section__count">{{ records.length }} 条</text>
     </view>
 
-    <view v-if="dueSummaryText" class="vaccine-section__due-banner">
-      <text class="vaccine-section__due-text">{{ dueSummaryText }}</text>
+    <view v-if="dueSummaryText" class="vaccine-due-banner">
+      <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
 
-    <view v-if="loading" class="vaccine-section__empty">
-      <text class="vaccine-section__empty-title">疫苗记录加载中</text>
+    <view v-if="loading" class="health-section__empty">
+      <text class="health-section__empty-title">疫苗记录加载中</text>
     </view>
 
-    <view v-else-if="records.length === 0" class="vaccine-section__empty">
-      <text class="vaccine-section__empty-title">还没有疫苗记录</text>
-      <text class="vaccine-section__empty-desc">
+    <view v-else-if="records.length === 0" class="health-section__empty">
+      <text class="health-section__empty-title">还没有疫苗记录</text>
+      <text class="health-section__empty-desc">
         记下疫苗名和接种日期，到期日我们会替你算着。
       </text>
     </view>
@@ -28,7 +28,7 @@
     <view
       v-for="(record, index) in records"
       :key="record.id || `draft-${index}`"
-      class="vaccine-card"
+      class="vaccine-card health-card"
     >
       <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
         <view class="vaccine-card__summary">
@@ -128,6 +128,7 @@
           <button
             v-if="record.id"
             class="vaccine-card__action vaccine-card__action--ghost"
+            :class="{ 'vaccine-card__action--disabled': isBusy }"
             :disabled="isBusy"
             @tap="removeRecord(record, index)"
           >删除</button>
@@ -135,6 +136,7 @@
           <button
             v-if="!externalSave"
             class="vaccine-card__action vaccine-card__action--primary"
+            :class="{ 'vaccine-card__action--disabled': isBusy }"
             :disabled="isBusy"
             @tap="saveRecord(record, index)"
           >{{ savingIndex === index ? '保存中…' : '保存' }}</button>
@@ -142,7 +144,12 @@
       </view>
     </view>
 
-    <button class="vaccine-section__add" :disabled="loading || isBusy" @tap="addRecord">
+    <button
+      class="health-section__action"
+      :class="{ 'health-section__action--disabled': loading || isBusy }"
+      :disabled="loading || isBusy"
+      @tap="addRecord"
+    >
       新增疫苗记录
     </button>
   </view>
@@ -578,48 +585,15 @@ async function doRemove(record: VaccineRecord) {
 }
 </script>
 
-<style scoped>
-.vaccine-section {
-  padding: 30rpx;
-  border-radius: 30rpx;
-  background: #fbfcf7;
-  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.06);
-}
+<style scoped lang="scss">
+@import '../../styles/health-section.scss';
 
-.vaccine-section__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16rpx;
-}
 
-.vaccine-section__heading {
-  flex: 1 1 auto;
-  min-width: 0;
-}
 
-.vaccine-section__title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #26261f;
-}
 
-.vaccine-section__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #6b6653;
-}
 
-.vaccine-section__count {
-  flex-shrink: 0;
-  font-size: 22rpx;
-  color: #968f6d;
-}
 
-.vaccine-section__due-banner {
+.vaccine-due-banner {
   margin-top: 18rpx;
   padding: 18rpx 22rpx;
   border-radius: 18rpx;
@@ -627,30 +601,14 @@ async function doRemove(record: VaccineRecord) {
   border: 1rpx solid #e6d7b8;
 }
 
-.vaccine-section__due-text {
+.vaccine-due-text {
   font-size: 24rpx;
   line-height: 1.6;
   color: #8a6f3d;
 }
 
-.vaccine-section__empty {
-  margin-top: 22rpx;
-  padding: 30rpx 0;
-  text-align: center;
-}
 
-.vaccine-section__empty-title {
-  display: block;
-  font-size: 26rpx;
-  color: #6b6653;
-}
 
-.vaccine-section__empty-desc {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 23rpx;
-  color: #968f6d;
-}
 
 .vaccine-card {
   margin-top: 20rpx;
@@ -846,25 +804,9 @@ async function doRemove(record: VaccineRecord) {
   background: var(--health-accent, #1e3a2f);
 }
 
-.vaccine-card__action[disabled] {
+.vaccine-card__action--disabled {
   opacity: 0.5;
 }
 
-.vaccine-section__add {
-  margin-top: 24rpx;
-  height: 84rpx;
-  line-height: 84rpx;
-  font-size: 27rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-  /* ⚠️ 不能用 color-mix()：小程序 WXSS 不支持。
-     这里只要一个"浅色底"，直接用半透明的主色叠在白底上即可。 */
-  background: var(--health-accent-soft, #eef2e4);
-  border: 1rpx solid #dde3cd;
-  border-radius: 999rpx;
-}
 
-.vaccine-section__add::after {
-  border: none;
-}
 </style>

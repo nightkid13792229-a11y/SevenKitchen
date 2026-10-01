@@ -97,9 +97,9 @@
           @dirty-change="hasUnsavedSectionDraft = $event"
         />
 
-        <view v-else-if="activeHealthTab === 'diet'" class="section-card diet-reminder-card">
-          <text class="section-card__title">饮食偏好</text>
-          <text class="section-card__desc">
+        <view v-else-if="activeHealthTab === 'diet'" class="health-section diet-reminder-card">
+          <text class="health-section__title">饮食偏好</text>
+          <text class="health-section__desc">
             喜欢吃什么、不吃什么都会进推荐与配方，填得越具体越准。
           </text>
 
@@ -955,7 +955,8 @@ function goToDogCreate() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '../../styles/health-section.scss';
 .page {
   min-height: 100vh;
   padding: 24rpx 24rpx calc(132rpx + env(safe-area-inset-bottom));
@@ -1060,8 +1061,7 @@ function goToDogCreate() {
  * 两边都不用互相知道对方的存在。
  */
 .health-panel { --health-accent: #0f6b43; }
-.health-theme--medical { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
-.health-theme--checkup { --health-accent: #216d9b;  --health-accent-soft: #e5f0f7; }
+.health-theme--visit { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
 .health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
 .health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
 .health-theme--diet { --health-accent: #b07a1e;  --health-accent-soft: #f7eedd; }
@@ -1130,16 +1130,11 @@ function goToDogCreate() {
  * 每个板块一套主题色。下划线取主题色，选中文字也用主题色。
  * 六个颜色都取低饱和，和整站的米绿底色放一起不刺眼。
  */
-.health-theme--medical .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
+.health-theme--visit .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
-.health-theme--medical .health-panel__body,
-.health-theme--medical .health-tabs__item--active { background: #edf6f1; }
-.health-theme--checkup .health-tabs__item--active { color: #216d9b; border-top-color: #216d9b; }
-/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
-   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
-.health-theme--checkup .health-panel__body,
-.health-theme--checkup .health-tabs__item--active { background: #ecf4f9; }
+.health-theme--visit .health-panel__body,
+.health-theme--visit .health-tabs__item--active { background: #edf6f1; }
 .health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-top-color: #ad5b2a; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
@@ -1162,26 +1157,10 @@ function goToDogCreate() {
 .health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
 
 /*
- * 内容区里的板块不再自己画卡 —— 否则一张卡里套着好几张卡，还是割裂。
- * 只去掉卡片外观（背景/圆角/阴影），内边距留着当内容区的留白。
+ * 内容区里的板块现在自己是扁平的（见 src/styles/health-section.scss），
+ * 不再需要在这里用 :deep() 去掉它们的卡片外观 ——
+ * 而且微信小程序的自定义组件有样式隔离，:deep() 本来也穿不进去。
  */
-.health-panel__body :deep(.records-section),
-.health-panel__body :deep(.vaccine-section),
-.health-panel__body .diet-reminder-card {
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.health-panel__body :deep(.weight-section) {
-  gap: 0;
-}
-
-.health-panel__body :deep(.weight-section > .section-card) {
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
 
 .state-card__desc {
   display: block;

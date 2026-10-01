@@ -185,7 +185,7 @@ describe('dog profile health page regressions', () => {
     // 快速添加写在过敏列表上方（切到过敏第一眼就能看到）
     expect(section).toContain('<slot name="type-extra" />')
     const slotIndex = section.indexOf('<slot name="type-extra" />')
-    const emptyIndex = section.indexOf('records-section__empty')
+    const emptyIndex = section.indexOf('health-section__empty')
     expect(slotIndex).toBeGreaterThan(-1)
     expect(slotIndex).toBeLessThan(emptyIndex)
   })
@@ -372,21 +372,23 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(section).toContain('defineExpose({ saveAllDirty })')
   })
 
-  it('书签六个等宽，且与板块拼成同一张卡', () => {
+  it('五个书签等宽，且与板块拼成同一张卡', () => {
     const page = readPage()
 
     // 等宽：flex:1 均分（原来靠横向滚动，最后一个会被裁掉）
     expect(page).toContain('.health-tabs__item {')
     expect(page).toContain('flex: 1 1 0;')
-    // 同一张卡：书签是卡片头部，内容区不再自己画卡
+    // 同一张卡：书签是卡片头部，内容区不再自己画卡。
+    // 2026-10-01：板块的"不画卡"改成由共用外壳负责（自己是扁平的），
+    // 页面里那套 :deep() 覆盖已删除 —— 小程序组件样式隔离，它本来也穿不进去。
     expect(page).toContain('class="health-panel"')
     expect(page).toContain('health-panel__body')
-    expect(page).toContain('border-radius: 0;')
+    expect(page).toContain("@import '../../styles/health-section.scss';")
     // 书签与板块之间不再留间距（那是"割裂感"的来源）
     expect(page).not.toContain('margin-bottom: 24rpx;\n  white-space: nowrap;')
   })
 
-  it('每个板块一套主题色，且保存按钮跟着板块变色', () => {
+  it('每个板块一套主题色，且保存按钮跟着板块变色（病史体检合并后为五套）', () => {
     const page = readPage()
     const bar = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/StickyActionBar.vue'),
@@ -395,14 +397,17 @@ describe('dog-profile-health · 底部按钮与书签', () => {
 
     // 样式里为了对齐加过多余空格，比较前先把连续空白压成一个
     const compact = page.replace(/\s+/g, ' ')
-    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']) {
+    for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
       expect(compact).toContain(`.health-theme--${theme} .health-tabs__item--active`)
     }
+    // 已停用的旧书签不该留残影
+    expect(compact).not.toContain('.health-theme--medical')
+    expect(compact).not.toContain('.health-theme--checkup')
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
-    // 2026-09-30：扩到六个板块，切到哪块按钮就是哪块的色。
+    // 2026-10-01：病史与体检合并成「病例」后是五个板块，切到哪块按钮就是哪块的色。
     expect(page).toContain(':primary-theme="activeHealthTab"')
     expect(bar).toContain('primaryTheme?:')
-    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'diet', 'weight']) {
+    for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
       expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)
     }
     // 色系要铺到内容区 —— 只给书签文字上色不够（老板指出"色系没划分出来"）

@@ -1,15 +1,15 @@
 <template>
-  <view class="records-section" :class="activeTypeMeta.accentClass">
-    <view class="records-section__header">
+  <view class="health-section" :class="activeTypeMeta.accentClass">
+    <view class="health-section__header">
       <view>
         <!-- 内嵌时标题就是**本类型自己的名字**（病史/体检/过敏）。
              原先三类共用一个「健康记录」标题，看着像一个大板块（老板指出）。 -->
-        <text class="records-section__title">{{ embedded ? activeTypeMeta.label : '健康记录' }}</text>
-        <text v-if="!embedded" class="records-section__description">
+        <text class="health-section__title">{{ embedded ? activeTypeMeta.label : '健康记录' }}</text>
+        <text v-if="!embedded" class="health-section__desc">
           按类别整理每一条记录，附件可在展开后上传和预览。
         </text>
       </view>
-      <text class="records-section__count">{{ savedRecordCount }} 条</text>
+      <text class="health-section__count">{{ savedRecordCount }} 条</text>
     </view>
 
     <!-- 内嵌模式（健康管理页）：上级已经有「病史/体检/过敏」书签页，
@@ -34,11 +34,11 @@
          放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
     <slot name="type-extra" />
 
-    <view v-if="draftRecords.length === 0" class="records-section__empty">
-      <text class="records-section__empty-title">
+    <view v-if="draftRecords.length === 0" class="health-section__empty">
+      <text class="health-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
       </text>
-      <text class="records-section__empty-desc">
+      <text class="health-section__empty-desc">
         {{ isVisitMode ? getHealthVisitEmptyDescription() : '先补充一条基础记录，之后可以继续添加。' }}
       </text>
     </view>
@@ -47,7 +47,7 @@
       v-for="(record, index) in draftRecords"
       :key="recordKey(record, index)"
       :id="recordAnchorId(record, index)"
-      class="record-card"
+      class="record-card health-card"
       :class="{ 'record-card--dirty': isRecordDirty(record, index) }"
     >
       <view class="record-card__header">
@@ -367,7 +367,12 @@
       </view>
     </view>
 
-    <button class="records-section__add" :disabled="loading || hasUploadingRecords || hasSavingRecord" @tap="addRecord">
+    <button
+      class="health-section__action"
+      :class="{ 'health-section__action--disabled': loading || hasUploadingRecords || hasSavingRecord }"
+      :disabled="loading || hasUploadingRecords || hasSavingRecord"
+      @tap="addRecord"
+    >
       {{ activeTypeMeta.addLabel }}
     </button>
   </view>
@@ -1502,7 +1507,9 @@ function removeAttachment(index: number, attachmentIndex: number) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '../../styles/health-section.scss';
+
 /* ===== 「病例」合并模式（2026-10-01）===== */
 
 /* 类型切换：就诊 / 体检，两个等宽按钮 */
@@ -1566,43 +1573,8 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: #4a7c59;
 }
 
-.records-section {
-  padding: 28rpx;
-  border-radius: 32rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12rpx 34rpx rgba(24, 40, 60, 0.08);
-}
 
-.records-section__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 20rpx;
-}
 
-.records-section__title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #17313f;
-}
-
-.records-section__description {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  line-height: 1.7;
-  color: #6c7d86;
-}
-
-.records-section__count {
-  align-self: flex-start;
-  padding: 10rpx 16rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.1);
-}
 
 .record-type-tabs {
   display: grid;
@@ -1630,9 +1602,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
 .attachment-item__remove::after,
 .record-card__action::after,
 .attachment-button::after,
-.records-section__add::after {
-  border: none;
-}
 
 .record-type-tabs__item--active {
   color: #fff;
@@ -1650,34 +1619,13 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: #ad5b2a;
 }
 
-.records-section__empty {
-  margin-top: 24rpx;
-  padding: 24rpx;
-  border-radius: 24rpx;
-  background: rgba(7, 193, 96, 0.06);
-}
 
-.health-records--checkup .records-section__empty {
+.health-records--checkup .health-section__empty {
   background: rgba(33, 109, 155, 0.08);
 }
 
-.health-records--allergy .records-section__empty {
+.health-records--allergy .health-section__empty {
   background: rgba(173, 91, 42, 0.08);
-}
-
-.records-section__empty-title {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #17313f;
-}
-
-.records-section__empty-desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.7;
-  color: #6a7d86;
 }
 
 .record-card {
@@ -1877,9 +1825,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
 .attachment-item__remove,
 .record-card__action,
 .attachment-button,
-.records-section__add {
-  margin: 0;
-}
 
 .record-card__delete,
 .attachment-item__remove {
@@ -2085,24 +2030,14 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(15, 107, 67, 0.12);
 }
 
-.records-section__add {
-  margin-top: 24rpx;
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 22rpx;
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.1);
-}
 
-.health-records--checkup .records-section__add,
+.health-records--checkup .health-section__action,
 .health-records--checkup .attachment-button {
   color: #216d9b;
   background: rgba(33, 109, 155, 0.1);
 }
 
-.health-records--allergy .records-section__add,
+.health-records--allergy .health-section__action,
 .health-records--allergy .attachment-button {
   color: #ad5b2a;
   background: rgba(173, 91, 42, 0.1);

@@ -59,7 +59,8 @@
       <view class="popup-footer">
         <button
           class="btn-submit"
-          :disabled="!canSubmit || submitting"
+          :class="{ 'btn-submit--disabled': !canSubmit || submitting }"
+        :disabled="!canSubmit || submitting"
           @tap="submit"
         >
           {{ submitting ? '提交中...' : '提交评价' }}
@@ -368,7 +369,7 @@ async function submit() {
   border: none;
 }
 
-.btn-submit[disabled] {
+.btn-submit--disabled {
   background-color: #ccc;
   color: #fff;
 }

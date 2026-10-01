@@ -50,7 +50,7 @@ defineProps<{
    * ⚠️ 必须做成属性而不是让父页面用 :deep() 覆盖 ——
    *    小程序的自定义组件默认样式隔离，父页面的样式进不来（实测撞到过）。
    */
-  primaryTheme?: 'default' | 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+  primaryTheme?: 'default' | 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
 }>()
 
 const emit = defineEmits<{
@@ -118,14 +118,11 @@ const emit = defineEmits<{
 }
 
 /*
- * 六个板块的主题色主按钮（健康管理页用）。
+ * 五个板块的主题色主按钮（健康管理页用）。病史与体检已合并为「病例」。
  * 与书签、板块底色同一套色，顾客一眼能对上「我在哪一块」。
  */
-.sticky-bar__button--primary--medical {
+.sticky-bar__button--primary--visit {
   background: linear-gradient(135deg, #0c6a3f 0%, #128a54 100%);
-}
-.sticky-bar__button--primary--checkup {
-  background: linear-gradient(135deg, #1c5f88 0%, #2579a8 100%);
 }
 .sticky-bar__button--primary--allergy {
   background: linear-gradient(135deg, #97501f 0%, #bc6a33 100%);

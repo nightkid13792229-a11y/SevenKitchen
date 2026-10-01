@@ -47,6 +47,7 @@
       </view>
       <button
         class="quick-add__upload-btn"
+        :class="{ 'quick-add__upload-btn--disabled': extracting }"
         :disabled="extracting"
         @tap="pickHealthReport"
       >{{ extracting ? '识别中…' : '上传报告' }}</button>
@@ -83,7 +84,8 @@
         </button>
         <button
           class="candidate-card__confirm"
-          :disabled="saving || pickedCandidates.length === 0"
+          :class="{ 'candidate-card__confirm--disabled': saving || pickedCandidates.length === 0 }"
+        :disabled="saving || pickedCandidates.length === 0"
           @tap="confirmCandidates"
         >{{ saving ? '记录中…' : `确认记入档案（${pickedCandidates.length}）` }}</button>
       </view>
@@ -503,7 +505,7 @@ async function confirmCandidates() {
   border: none;
 }
 
-.quick-add__upload-btn[disabled] {
+.quick-add__upload-btn--disabled {
   opacity: 0.6;
 }
 
@@ -581,7 +583,7 @@ async function confirmCandidates() {
   border: none;
 }
 
-.candidate-card__confirm[disabled] {
+.candidate-card__confirm--disabled {
   opacity: 0.5;
 }
 </style>

@@ -10,7 +10,7 @@
 --
 --   根因不是模型乱放，而是**这个字段没有定义**（提示词只有一句"treatment 写处理方式"）。
 --   定稿的字段口径：
---     treatment = 医嘱（医生交代回家要做的）+ 院内处理（少数情况）
+--     treatment = 医嘱 / 回家注意（医生交代回家要做的）+ 院内处理（少数情况）
 --     exams     = 这次做了哪些检查（彩超 / DR / 血常规 …），一行
 --     vitals    = 体温、体重、BCS 等体征，照抄报告
 --     lab_values= 化验数值（原有）
@@ -31,4 +31,4 @@ COMMENT ON COLUMN "medical_record"."exams" IS
 COMMENT ON COLUMN "medical_record"."vitals" IS
   '体征：体温、体重、BCS 等，照抄报告';
 COMMENT ON COLUMN "medical_record"."treatment" IS
-  '医嘱（2026-10-02 起语义收窄；表单标签「医嘱」）';
+  '医嘱 / 回家注意（2026-10-02 起语义收窄；表单标签「医嘱（回家注意）」）';

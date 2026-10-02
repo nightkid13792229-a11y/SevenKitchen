@@ -178,23 +178,54 @@ describe('病历/检查表单 · 精简版', () => {
     expect(source).toContain('return getFieldConfig(baseType.value)')
   })
 
-  it('字段顺序＝家长填写顺序：日期 → 主要问题 → 医生怎么说 → 用药 → 其它想说的', () => {
+  it('字段顺序＝家长填写顺序：日期 → 症状 → 医生诊断 → 医嘱 → 用药 → 检查 → 化验 → 体征 → 补充说明', () => {
     const source = readSection()
-    const at = (needle: string) => source.indexOf(needle)
+    // 2026-10-02：字段统一由 visitFieldRows() 产出（模板只渲染「标签+编辑+值」三件套），
+    // 所以顺序在函数里锁
+    const rows = source.slice(
+      source.indexOf('function visitFieldRows('),
+      source.indexOf('function visitFieldRows(') + 2400,
+    )
+    const at = (needle: string) => rows.indexOf(needle)
 
-    const date = at("{{ visitConfig(record).dateLabel }}")
-    const complaint = at("{{ visitConfig(record).complaintLabel }}")
-    const primary = at("{{ visitConfig(record).primaryLabel }}")
-    const advice = at("{{ visitConfig(record).adviceLabel }}")
-    const medication = at("{{ visitConfig(record).medicationLabel }}")
-    const notes = at("{{ visitConfig(record).notesLabel }}")
+    const labels = [
+      'config.complaintLabel',
+      'config.primaryLabel',
+      'config.adviceLabel',
+      'config.medicationLabel',
+      'config.examsLabel',
+      'config.labValuesLabel',
+      'config.vitalsLabel',
+      'config.notesLabel',
+    ].map(at)
 
-    expect(date).toBeGreaterThan(-1)
-    expect(complaint).toBeGreaterThan(date)
-    expect(primary).toBeGreaterThan(complaint)
-    expect(advice).toBeGreaterThan(primary)
-    expect(medication).toBeGreaterThan(advice)
-    expect(notes).toBeGreaterThan(medication)
+    expect(labels[0]).toBeGreaterThan(-1)
+    for (let i = 1; i < labels.length; i += 1) {
+      expect(labels[i]).toBeGreaterThan(labels[i - 1])
+    }
+  })
+
+  it('每个板块一个小「编辑」按钮：有内容只读，点编辑才可改（2026-10-02 老板定）', () => {
+    const source = readSection()
+
+    expect(source).toContain('toggleFieldEditing')
+    expect(source).toContain("isFieldEditing(record, index, row.key) ? '完成' : '编辑'")
+    // 有内容 → 只读展示（正常换行）；空字段 → 直接给输入框
+    expect(source).toContain('v-if="hasFieldValue(record, row.key) && !isFieldEditing(record, index, row.key)"')
+    // 光标进入即锁定编辑态：否则空字段打第一个字就变"有内容"，输入框当场消失
+    expect(source).toContain('@focus="markFieldEditing(record, index, row.key)"')
+    expect(source).toContain('function markFieldEditing(')
+    // 就诊/体检这一支里，编辑态一律用可自动增高的多行框
+    // （单行 input 装不下长文本；通用分支那些一格一个短值的字段不受影响）
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
+    expect(visitBranch).toContain('auto-height')
+    expect(visitBranch).not.toContain('class="field-input"')
+    // 化验数据只读时折叠 + 分块排版
+    expect(source).toContain('LabValuesView')
+    expect(source).toContain('collapsible')
   })
 
   it('状态选择器从表单里去掉，改成存好后一键「已经好了」', () => {
@@ -228,10 +259,15 @@ describe('病历/检查表单 · 精简版', () => {
     // 2026-10-02 第二轮：复查日期与兽医也去掉之后，「更多/选填」没有存在意义了
     expect(visitBranch).not.toContain('more-toggle')
     expect(visitBranch).not.toContain('toggleMore')
-    // 该露的字段都在明面上
-    expect(visitBranch).toContain('complaintLabel')
-    expect(visitBranch).toContain('medicationLabel')
-    expect(visitBranch).toContain('notesLabel')
+    // 该露的字段都在明面上（字段清单在 visitFieldRows 里，模板统一渲染）
+    expect(visitBranch).toContain('visitFieldRows(record)')
+    const rows = source.slice(
+      source.indexOf('function visitFieldRows('),
+      source.indexOf('function visitFieldRows(') + 2400,
+    )
+    expect(rows).toContain('config.complaintLabel')
+    expect(rows).toContain('config.medicationLabel')
+    expect(rows).toContain('config.notesLabel')
   })
 
   it('附件格式/大小提示放在上传弹窗里，表单上不再占一行', () => {

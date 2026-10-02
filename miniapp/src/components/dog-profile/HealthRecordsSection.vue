@@ -162,8 +162,11 @@
              「备注」改名「补充说明」并提到明面（它已经接进 AI 分析）；
              只有复查日期、兽医这种少数情况才有的收进「选填」。 -->
         <template v-if="isVisitMode">
+          <!-- 日期：语义特殊（picker），单独一块 -->
           <view class="field-group">
-            <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
+            <view class="field-head">
+              <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
+            </view>
             <picker
               mode="date"
               :disabled="hasSavingRecord"
@@ -176,122 +179,48 @@
             </picker>
           </view>
 
-          <view v-if="visitConfig(record).complaintKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).complaintLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).complaintPlaceholder"
-              :value="readField(record, visitComplaintKey(record))"
-              @input="updateTextField(index, visitComplaintKey(record), $event.detail.value)"
-            />
-          </view>
-
-          <view class="field-group">
-            <text class="field-label">{{ visitConfig(record).primaryLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).primaryPlaceholder"
-              :value="readField(record, visitConfig(record).primaryKey)"
-              @input="updateTextField(index, visitConfig(record).primaryKey, $event.detail.value)"
-            />
-          </view>
-
-          <view class="field-group">
-            <text class="field-label">{{ visitConfig(record).adviceLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).advicePlaceholder"
-              :value="readField(record, visitConfig(record).adviceKey)"
-              @input="updateTextField(index, visitConfig(record).adviceKey, $event.detail.value)"
-            />
-          </view>
-
-          <view v-if="visitConfig(record).medicationKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).medicationLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              placeholder="多个用顿号隔开，例如：速诺、胃复安"
-              :value="readField(record, visitMedicationKey(record))"
-              @input="updateTextField(index, visitMedicationKey(record), $event.detail.value)"
-            />
-          </view>
-
-          <!-- 这次做的检查 / 体征：2026-10-02 老板定稿新增的两栏。
-               原来检查项目清单被塞进「处理与提醒」，和医嘱、其它想说的挤在一起。 -->
-          <view v-if="visitConfig(record).examsKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).examsLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).examsPlaceholder"
-              :value="readField(record, visitConfig(record).examsKey)"
-              @input="updateTextField(index, visitConfig(record).examsKey, $event.detail.value)"
-            />
-          </view>
-
-          <view v-if="visitConfig(record).labValuesKey" class="field-group">
-            <view class="field-label-row">
-              <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
-              <!-- 2026-10-02 老板提的排版问题：几十项数值原来是一堵同样式样的墙，
-                   报告名和数值混在一起。现在默认看**分块排版**（报告名 / 项目 / 数值分层），
-                   要点「修改」才切回输入框自己改。 -->
+          <!-- ── 内容字段：统一「标签 + 小编辑按钮 + 值」三件套（2026-10-02 老板定）──
+               自检发现的三件事：
+                 ① 症状/医嘱这些原来用**单行输入框**，长文本被截成一行、不会换行；
+                 ② 化验数据那栏常常几十行，把别的字段挤到屏幕外；
+                 ③ 可编辑状态不一致：有的字段永远是输入框、有的要按"修改"、有的是
+                    picker，家长看不出哪个能点。
+               现在统一：**有内容的字段默认只读**（正常换行、化验分块折叠），右上角一个小
+               「编辑」；**空字段直接给输入框**（手写不受影响）；编辑中点「完成」收起。
+               编辑态一律用可自动增高的多行框，不再用单行框装长文本。 -->
+          <view v-for="row in visitFieldRows(record)" :key="row.key" class="field-group">
+            <view class="field-head">
+              <text class="field-label">{{ row.label }}</text>
               <text
-                v-if="hasLabValues(record) && !hasSavingRecord"
-                class="field-label__action"
-                @tap="toggleLabEditing(record, index)"
-              >
-                {{ isLabEditing(record, index) ? '完成' : '修改' }}
-              </text>
+                v-if="!hasSavingRecord && (hasFieldValue(record, row.key) || isFieldEditing(record, index, row.key))"
+                class="field-chip"
+                :class="{ 'field-chip--done': isFieldEditing(record, index, row.key) }"
+                @tap="toggleFieldEditing(record, index, row.key)"
+              >{{ isFieldEditing(record, index, row.key) ? '完成' : '编辑' }}</text>
             </view>
-            <LabValuesView
-              v-if="hasLabValues(record) && !isLabEditing(record, index)"
-              :text="readField(record, visitLabValuesKey(record))"
-            />
+
+            <template v-if="hasFieldValue(record, row.key) && !isFieldEditing(record, index, row.key)">
+              <LabValuesView
+                v-if="row.rich === 'lab'"
+                :text="fieldText(record, row.key)"
+                collapsible
+              />
+              <text v-else class="field-value">{{ fieldText(record, row.key) }}</text>
+              <text v-if="row.rich === 'lab'" class="field-note">
+                AI 抄录，请对照原件核对；偏高/偏低是报告自己标的。
+              </text>
+            </template>
+
             <textarea
               v-else
-              class="field-textarea field-textarea--tall"
-              :disabled="hasSavingRecord"
-              placeholder="化验单上的数值，一行一项，例如：肌酐 72.2 umol/L"
-              :value="readField(record, visitLabValuesKey(record))"
-              @input="updateTextField(index, visitLabValuesKey(record), $event.detail.value)"
-            />
-            <text
-              v-if="hasLabValues(record) && !isLabEditing(record, index)"
-              class="field-label__hint"
-            >
-              AI 抄录，请对照原件核对；偏高/偏低是报告自己标的。
-            </text>
-          </view>
-
-          <view v-if="visitConfig(record).vitalsKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).vitalsLabel }}</text>
-            <input
-              class="field-input"
-              type="text"
-              :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).vitalsPlaceholder"
-              :value="readField(record, visitConfig(record).vitalsKey)"
-              @input="updateTextField(index, visitConfig(record).vitalsKey, $event.detail.value)"
-            />
-          </view>
-
-          <view class="field-group">
-            <text class="field-label">{{ visitConfig(record).notesLabel }}</text>
-            <textarea
               class="field-textarea"
+              :class="{ 'field-textarea--tall': row.rich === 'lab' }"
+              auto-height
               :disabled="hasSavingRecord"
-              :placeholder="visitConfig(record).notesPlaceholder"
-              :value="readField(record, visitConfig(record).notesKey)"
-              @input="updateTextField(index, visitConfig(record).notesKey, $event.detail.value)"
+              :placeholder="row.placeholder"
+              :value="fieldText(record, row.key)"
+              @focus="markFieldEditing(record, index, row.key)"
+              @input="updateTextField(index, row.key, $event.detail.value)"
             />
           </view>
 
@@ -1328,24 +1257,127 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
 }
 
 /**
- * 化验数据正在"编辑"的那几条记录（默认是排版后的只读视图）。
- * 用记录 key 而不是下标 —— 保存/删除后下标会变。
+ * 正在"编辑"的字段（2026-10-02 老板定：每个板块一个小编辑按钮）。
+ *
+ * 规则：**有内容的字段默认只读 + 「编辑」；空字段直接给输入框**（手写不受影响）。
+ * 键用 `记录key::字段`，不用下标 —— 保存/删除之后下标会变。
  */
-const labEditingKeys = ref<string[]>([])
+const editingFields = ref<string[]>([])
 
-function hasLabValues(record: Record<string, any>): boolean {
-  return Boolean(String(readField(record, visitLabValuesKey(record)) || '').trim())
+function fieldStateKey(record: Record<string, any>, index: number, key: string) {
+  return `${recordKey(record, index)}::${key}`
 }
 
-function isLabEditing(record: Record<string, any>, index: number): boolean {
-  return labEditingKeys.value.includes(recordKey(record, index))
+function isFieldEditing(record: Record<string, any>, index: number, key: string) {
+  return editingFields.value.includes(fieldStateKey(record, index, key))
 }
 
-function toggleLabEditing(record: Record<string, any>, index: number) {
-  const key = recordKey(record, index)
-  labEditingKeys.value = labEditingKeys.value.includes(key)
-    ? labEditingKeys.value.filter((item) => item !== key)
-    : [...labEditingKeys.value, key]
+/**
+ * 光标进入某个字段 → 把它标成"正在编辑"。
+ *
+ * 为什么必须有这一步：空字段是直接给输入框的，而输入框的显示条件是
+ * "没内容 或 正在编辑"。**刚打第一个字**的瞬间它就变成"有内容"了 ——
+ * 没有这个标记的话，输入框会在打字途中当场消失、换成只读视图（真 bug）。
+ */
+function markFieldEditing(record: Record<string, any>, index: number, key: string) {
+  const stateKey = fieldStateKey(record, index, key)
+  if (!editingFields.value.includes(stateKey)) {
+    editingFields.value = [...editingFields.value, stateKey]
+  }
+}
+
+function toggleFieldEditing(record: Record<string, any>, index: number, key: string) {
+  const stateKey = fieldStateKey(record, index, key)
+  editingFields.value = editingFields.value.includes(stateKey)
+    ? editingFields.value.filter((item) => item !== stateKey)
+    : [...editingFields.value, stateKey]
+}
+
+/** 这一格有没有内容（决定"只读 + 编辑"还是"直接给输入框"） */
+function hasFieldValue(record: Record<string, any>, key: string): boolean {
+  const value = record?.[key]
+  if (Array.isArray(value)) {
+    return value.some((item) => String(item ?? '').trim())
+  }
+  return Boolean(String(value ?? '').trim())
+}
+
+/** 显示/编辑共用的文本：数组（用药）用顿号连起来，其余原样 */
+function fieldText(record: Record<string, any>, key: string): string {
+  const value = record?.[key]
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean).join('、')
+  }
+  return String(value ?? '')
+}
+
+/**
+ * 表单里要渲染的内容字段（顺序＝家长填写顺序）。
+ * 化验数据那一格带 rich 标记 —— 只读时用分块排版（报告名 / 项目 / 数值分层）。
+ */
+function visitFieldRows(record: Record<string, any>) {
+  const config = visitConfig(record)
+  const rows: { key: string; label: string; placeholder: string; rich?: 'lab' }[] = []
+
+  if (config.complaintKey) {
+    rows.push({
+      key: config.complaintKey,
+      label: config.complaintLabel,
+      placeholder: config.complaintPlaceholder,
+    })
+  }
+
+  rows.push({
+    key: config.primaryKey,
+    label: config.primaryLabel,
+    placeholder: config.primaryPlaceholder,
+  })
+  rows.push({
+    key: config.adviceKey,
+    label: config.adviceLabel,
+    placeholder: config.advicePlaceholder,
+  })
+
+  if (config.medicationKey) {
+    rows.push({
+      key: config.medicationKey,
+      label: config.medicationLabel,
+      placeholder: '多个用顿号隔开，例如：速诺 1片/次 每日2次、胃复安',
+    })
+  }
+
+  if (config.examsKey) {
+    rows.push({
+      key: config.examsKey,
+      label: config.examsLabel,
+      placeholder: config.examsPlaceholder,
+    })
+  }
+
+  if (config.labValuesKey) {
+    rows.push({
+      key: config.labValuesKey,
+      label: config.labValuesLabel,
+      placeholder: '化验单上的数值，一行一项，例如：肌酐 72.2 umol/L',
+      rich: 'lab',
+    })
+  }
+
+  if (config.vitalsKey) {
+    rows.push({
+      key: config.vitalsKey,
+      label: config.vitalsLabel,
+      placeholder: config.vitalsPlaceholder,
+    })
+  }
+
+  rows.push({
+    key: config.notesKey,
+    label: config.notesLabel,
+    placeholder: config.notesPlaceholder,
+  })
+
+  return rows
 }
 
 function addRecord() {
@@ -2284,6 +2316,51 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 24rpx;
   font-weight: 600;
   color: #415a65;
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  min-height: 34rpx;
+}
+
+/* 小编辑按钮：不抢眼但点得到 */
+.field-chip {
+  flex-shrink: 0;
+  padding: 4rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #4e6b52;
+  background: #eef3ea;
+  border: 1rpx solid #dbe5d3;
+}
+
+.field-chip--done {
+  color: #ffffff;
+  background: #4e6b52;
+  border-color: #4e6b52;
+}
+
+/* 只读态的值：正常换行，长文本也读得全 */
+.field-value {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #17313f;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.field-note {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #7d8a7d;
 }
 
 .field-label-row {

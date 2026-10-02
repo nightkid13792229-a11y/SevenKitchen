@@ -7,6 +7,7 @@
     <template v-for="(block, blockIndex) in blocks" :key="`${block.title}-${blockIndex}`">
       <view v-if="block.title" class="lab__title">
         <text class="lab__title-text">{{ block.title }}</text>
+        <text class="lab__title-count">{{ blockCount(block) }} 项</text>
       </view>
       <view v-for="(row, rowIndex) in block.rows" :key="`${row.name}-${rowIndex}`" class="lab__row">
         <text class="lab__name">{{ row.name }}</text>
@@ -20,11 +21,20 @@
         </text>
       </view>
     </template>
+
+    <view v-if="canExpand" class="lab__toggle" @tap="expanded = !expanded">
+      <text class="lab__toggle-text">
+        {{ expanded ? '收起' : `展开全部 ${totalRows} 项` }}
+      </text>
+    </view>
+    <text v-else-if="props.collapsible && flaggedCount > 0" class="lab__summary">
+      共 {{ totalRows }} 项，上面是报告标了偏高/偏低的 {{ flaggedCount }} 项
+    </text>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 /**
  * 化验数据排版（2026-10-02）。
@@ -44,7 +54,18 @@ import { computed } from 'vue'
  *
  * 为什么不在文本框里做：这是只读展示，编辑仍然用多行输入框（见父组件）。
  */
-const props = defineProps<{ text?: string | null }>()
+const props = withDefaults(defineProps<{
+  text?: string | null
+  /**
+   * 默认折叠（2026-10-02 老板：化验那一栏 45 行，占的行数太多）。
+   * 折叠时只显示「报告名 + 项数 + 报告标了偏高/偏低的那些行」，
+   * 其余点「展开全部」再看 —— 家长真正要核对的就是异常项。
+   * 识别确认卡片上不折叠（那一步就是逐项核对）。
+   */
+  collapsible?: boolean
+}>(), { collapsible: false })
+
+const expanded = ref(false)
 
 interface LabRow {
   name: string
@@ -84,7 +105,7 @@ function parseRow(line: string): LabRow {
   return { name, value, flag }
 }
 
-const blocks = computed<LabBlock[]>(() => {
+const allBlocks = computed<LabBlock[]>(() => {
   const lines = String(props.text || '')
     .split('\n')
     .map((line) => line.trim())
@@ -110,6 +131,34 @@ const blocks = computed<LabBlock[]>(() => {
 
   return result
 })
+
+/** 每份报告几项 */
+function blockCount(block: LabBlock): number {
+  return block.rows.length
+}
+
+/** 折叠时每份报告里"报告自己标了偏高/偏低"的行 */
+function flaggedRows(block: LabBlock): LabRow[] {
+  return block.rows.filter((row) => row.flag && !['正常', '高', '低'].includes(row.flag))
+}
+
+const totalRows = computed(() =>
+  allBlocks.value.reduce((sum, block) => sum + blockCount(block), 0),
+)
+
+/** 展示用：折叠时只留报告名 + 异常项 */
+const blocks = computed<LabBlock[]>(() => {
+  if (!props.collapsible || expanded.value) {
+    return allBlocks.value
+  }
+  return allBlocks.value.map((block) => ({ title: block.title, rows: flaggedRows(block) }))
+})
+
+const canExpand = computed(() => props.collapsible && totalRows.value > flaggedCount.value)
+
+const flaggedCount = computed(() =>
+  allBlocks.value.reduce((sum, block) => sum + flaggedRows(block).length, 0),
+)
 </script>
 
 <style scoped lang="scss">
@@ -121,6 +170,10 @@ const blocks = computed<LabBlock[]>(() => {
 
 /* 报告名：整行小标题，和项目行明显区分开 */
 .lab__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
   margin-top: 16rpx;
   padding: 8rpx 14rpx;
   border-radius: 10rpx;
@@ -136,6 +189,13 @@ const blocks = computed<LabBlock[]>(() => {
   font-size: 24rpx;
   font-weight: 700;
   color: #3c5641;
+}
+
+.lab__title-count {
+  margin-left: 12rpx;
+  font-size: 21rpx;
+  font-weight: 500;
+  color: #7d8a7d;
 }
 
 .lab__row {
@@ -162,6 +222,27 @@ const blocks = computed<LabBlock[]>(() => {
   line-height: 1.5;
   color: #26261f;
   font-weight: 600;
+}
+
+.lab__toggle {
+  margin-top: 14rpx;
+  padding: 10rpx 0;
+  text-align: center;
+  border-radius: 12rpx;
+  background: #f6f8f2;
+}
+
+.lab__toggle-text {
+  font-size: 23rpx;
+  color: #4e6b52;
+}
+
+.lab__summary {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #7d8a7d;
 }
 
 /* 报告自己标的标记：只有真的偏了才用暖色，"正常"保持中性 —— 我们不做判断，只是照抄 */

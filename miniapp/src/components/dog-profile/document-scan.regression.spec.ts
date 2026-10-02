@@ -370,8 +370,8 @@ describe('动物名提醒与化验数据', () => {
     // 字段表里两类都有这一栏（2026-10-02 老板定：就诊里传的化验单，
     // 数字就落在这条就诊记录里，不再另开一条体检记录）
     expect((utils.match(/labValuesKey: 'labValues'/g) || []).length).toBe(2)
-    // 表单里有输入框
-    expect(section).toContain("visitConfig(record).labValuesLabel")
+    // 表单里有这一格（统一渲染器：标签 + 编辑按钮 + 值/输入框）
+    expect(section).toContain('config.labValuesLabel')
     expect(section).toContain('function visitLabValuesKey')
     // 保存时要提交
     expect(utils).toContain('labValues: normalizeOptionalText(record?.labValues)')

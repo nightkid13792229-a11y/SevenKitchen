@@ -58,8 +58,9 @@ describe('化验数据排版', () => {
 
     expect(scan).toContain('<LabValuesView')
     expect(section).toContain('<LabValuesView')
-    // 表单里默认看排版好的，点「修改」才切输入框
-    expect(section).toContain('toggleLabEditing')
-    expect(section).toContain("isLabEditing(record, index) ? '完成' : '修改'")
+    // 表单里每个板块都是「默认只读 + 小编辑按钮」，化验那一格默认折叠
+    expect(section).toContain('toggleFieldEditing')
+    expect(section).toContain("isFieldEditing(record, index, row.key) ? '完成' : '编辑'")
+    expect(section).toContain('collapsible')
   })
 })

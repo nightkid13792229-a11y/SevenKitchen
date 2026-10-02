@@ -92,6 +92,31 @@ npm run build:mp-weixin
 # 5. 提交审核
 ```
 
+### 2.5 健康档案附件清理（每天自动）
+
+顾客每次传报告都是"先传 COS、再交给 AI 识别"，所以识别失败、没保存就退出、
+记录后来被删，都会在 COS 上留下没人引用的文件（2026-10-02 实测：133 个文件里
+82 个是孤儿，46.6 MB）。
+
+```bash
+# 预览（默认，不删任何东西）
+ssh root@1.14.3.2 'cd /opt/sevenkitchen/SevenKitchen/backend && node scripts/cleanup-orphan-health-attachments.js'
+
+# 真删：只删"没被任何记录引用 且 上传超过 7 天"的文件，只碰四个健康资料目录
+ssh root@1.14.3.2 'cd /opt/sevenkitchen/SevenKitchen/backend && node scripts/cleanup-orphan-health-attachments.js --delete'
+```
+
+生产上已装成 systemd timer，每天 03:07 自动跑一次（保留期 7 天）：
+
+```bash
+systemctl list-timers sevenkitchen-health-cleanup.timer    # 看下次执行时间
+journalctl -u sevenkitchen-health-cleanup.service -n 20    # 看执行日志
+```
+
+单元文件在 `backend/deploy/systemd/`。
+
+---
+
 ### 3. 管理后台部署
 
 ```bash

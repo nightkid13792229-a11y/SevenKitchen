@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SevenKitchen health-attachment cleanup daily
+
+[Timer]
+# 每天凌晨 3:07（避开整点的订单/对账任务）
+OnCalendar=*-*-* 03:07:00
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

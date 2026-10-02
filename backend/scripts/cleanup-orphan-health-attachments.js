@@ -49,9 +49,22 @@ const shouldDelete = args.includes('--delete');
 const daysArg = args.find((item) => item.startsWith('--days='));
 const OLDER_THAN_DAYS = daysArg ? Number(daysArg.split('=')[1]) : 7;
 const prefixArg = args.find((item) => item.startsWith('--prefix='));
+/**
+ * 只碰这些目录 —— 全都是"顾客上传的健康资料"。
+ *
+ * 2026-10-02 实测桶里的顶层目录后确认：健康资料分散在这四个前缀下
+ * （checkup-reports/ 是体检报告上传口用的，容易漏）。
+ * 其余目录（头像、食谱图、订单凭证…）一律不碰。
+ */
+const HEALTH_PREFIXES = [
+  'medical-reports/',
+  'checkup-reports/',
+  'allergy-records/',
+  'vaccine-books/',
+];
 const PREFIXES = prefixArg
   ? prefixArg.split('=')[1].split(',')
-  : ['medical-reports/', 'allergy-records/'];
+  : HEALTH_PREFIXES;
 
 const cos = new COS({
   SecretId: process.env.COS_SECRET_ID,

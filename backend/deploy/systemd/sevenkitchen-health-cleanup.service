@@ -1,0 +1,13 @@
+# 清理健康档案里没人引用的附件（COS 空间），由同名 timer 每天触发。
+# 安装：cp deploy/systemd/sevenkitchen-health-cleanup.* /etc/systemd/system/
+#       systemctl daemon-reload && systemctl enable --now sevenkitchen-health-cleanup.timer
+[Unit]
+Description=SevenKitchen cleanup of orphaned health-record attachments in COS
+Documentation=file:///opt/sevenkitchen/SevenKitchen/backend/scripts/cleanup-orphan-health-attachments.js
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sevenkitchen/SevenKitchen/backend
+ExecStart=/usr/bin/node scripts/cleanup-orphan-health-attachments.js --delete
+StandardOutput=journal
+StandardError=journal

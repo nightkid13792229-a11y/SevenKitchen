@@ -16,6 +16,7 @@ import {
   buildSystemPrompt,
   isHealthReportVisionEnabled,
   normalizeDocumentType,
+  normalizeDrafts,
   resolveAutoDocumentType,
   resolveHealthReportVisionModel,
 } from 'src/application/health/health-report-extraction.service';
@@ -787,3 +788,42 @@ describe('识别 · 不是宠物医疗资料', () => {
     expect(resolveAutoDocumentType('身份证')).toBe('MEDICAL_RECORD')
   })
 })
+
+/**
+ * 影像片（X 光/超声）：属于宠物医疗资料，但**没有文字可抄**（2026-10-02 老板实测）。
+ *
+ * 原来的判定是"不属于四类 → 硬塞成病历"，加了 NOT_MEDICAL 之后又变成
+ * "这张看起来不是宠物的病历或检查报告…换一张" —— 对着一张 X 光片说这话很荒唐，
+ * 而且家长的真实诉求是"把片子存进档案"。现在单列 IMAGING：
+ * 照抄检查日期，不解读片子内容，原件由前端存成附件。
+ */
+describe('识别 · 影像片', () => {
+  it('模型回 IMAGING 时认它（不再算成"不是宠物医疗资料"）', () => {
+    expect(resolveAutoDocumentType('IMAGING')).toBe('IMAGING');
+    expect(resolveAutoDocumentType('imaging')).toBe('IMAGING');
+  })
+
+  it('提示词把影像片单列一类，并明确"不要解读、不要写诊断"', () => {
+    const prompt = buildSystemPrompt('AUTO', 'image');
+
+    expect(prompt).toContain('IMAGING');
+    expect(prompt).toContain('X 光片');
+    expect(prompt).toContain('不要解读影像内容、不要写诊断');
+    // 不能把片子归到"不是宠物医疗资料"那一类
+    expect(prompt).toContain('这类**属于**宠物医疗资料（不要判成 NOT_MEDICAL）');
+  });
+
+  it('影像片照抄日期、给一句"不解读"的说明，草稿里没有诊断', () => {
+    const drafts = normalizeDrafts('CHECKUP_REPORT', {
+      drafts: [{ checkupDate: '2026-02-12', notes: '骨盆正位', patientName: '面包' }],
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].checkupDate).toBe('2026-02-12');
+    expect(drafts[0].notes).toBe('骨盆正位');
+    expect(drafts[0].patientName).toBe('面包');
+    // 没有任何"结论"被编出来
+    expect(drafts[0].findings).toBe('');
+    expect(drafts[0].labValues).toBe('');
+  });
+});

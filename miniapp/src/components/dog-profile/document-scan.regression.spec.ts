@@ -266,7 +266,7 @@ describe('混合资料不能互相吃掉', () => {
     expect(scan).toContain('识别为：${labels.join')
     // 父组件：有自带类型就按它走，不能一律用整批类型
     expect(section).toContain('const draftType = String(draft?.__documentType || \'\').toUpperCase()')
-    expect(section).toContain("draftType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'")
+    expect(section).toContain("draftType === 'CHECKUP_REPORT' || draftType === 'IMAGING'")
   })
 
   it('化验单数值要求逐项一行、以报告名开头（一堵数字墙没人看得下去）', () => {

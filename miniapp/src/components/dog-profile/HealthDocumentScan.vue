@@ -44,7 +44,7 @@
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <!-- 一次传了化验单 + 门诊病历时，每条前面标出它是什么，别让顾客以为混了 -->
         <text v-if="drafts.length > 1" class="confirm__card-kind">
-          {{ draftTypeLabel(draft) }}
+          {{ draftSourceLabel(draft) }}
         </text>
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
           <text class="confirm__label">{{ row.label }}</text>
@@ -198,11 +198,25 @@ const activeDocumentType = computed<DocumentType>(() => (
  */
 function draftDocumentType(draft: Record<string, any>): DocumentType {
   const own = String(draft?.__documentType || '').toUpperCase()
+  if (own === 'IMAGING') {
+    // 影像片按体检那套字段渲染（日期 + 原件），只是名字不同
+    return 'CHECKUP_REPORT'
+  }
+
   if (own && own !== 'AUTO' && own !== 'NOT_MEDICAL') {
     return own as DocumentType
   }
 
   return (resolvedDocumentType.value || props.documentType) as DocumentType
+}
+
+/** 这一条草稿"原本被判成什么"（影像片要单独标出来） */
+function draftSourceLabel(draft: Record<string, any>) {
+  if (String(draft?.__documentType || '').toUpperCase() === 'IMAGING') {
+    return '影像片'
+  }
+
+  return TYPE_LABELS[draftDocumentType(draft) as ExplicitDocumentType] || '资料'
 }
 
 /**
@@ -245,10 +259,8 @@ function draftTypeLabel(draft: Record<string, any>) {
 
 /** 确认卡片顶部那句话：只有一类就说"识别为 X"，混着就都列出来 */
 const resolvedTypeSummary = computed(() => {
-  const types = [...new Set(drafts.value.map((draft) => draftDocumentType(draft)))]
-  const labels = types
-    .map((type) => TYPE_LABELS[type as ExplicitDocumentType] || '')
-    .filter(Boolean)
+  const labels = [...new Set(drafts.value.map((draft) => draftSourceLabel(draft)))]
+    .filter((label) => label && label !== '资料')
 
   if (labels.length === 0) return ''
   return `识别为：${labels.join(' + ')}`
@@ -573,6 +585,16 @@ function discard() {
   border-radius: 16rpx;
   background: var(--health-accent-soft, #eef2e4);
   border: 2rpx solid var(--health-accent, #1e3a2f);
+}
+
+/* 这几行都是 <text>（inline），不加 block 会全部挤在一行里 ——
+   2026-10-02 老板截图里"识别为：病历 + 体检报告本次共 8 张图片…"就是这么来的 */
+.confirm__type {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #4e6b52;
 }
 
 .confirm__title {

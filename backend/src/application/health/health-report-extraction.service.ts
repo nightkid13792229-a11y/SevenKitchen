@@ -92,10 +92,10 @@ export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest
  */
 export function resolveAutoDocumentType(
   value: unknown,
-): HealthDocumentType | 'NOT_MEDICAL' {
+): HealthDocumentType | 'NOT_MEDICAL' | 'IMAGING' {
   const key = String(value || '').trim().toUpperCase();
-  if (key === 'NOT_MEDICAL') {
-    return 'NOT_MEDICAL';
+  if (key === 'NOT_MEDICAL' || key === 'IMAGING') {
+    return key;
   }
 
   return (HEALTH_DOCUMENT_TYPES as readonly string[]).includes(key)
@@ -129,7 +129,7 @@ export interface HealthReportExtractionResult {
    * `NOT_MEDICAL` = 模型判定这根本不是宠物的医疗资料（2026-10-02 新增），
    * 这种情况下 drafts 一定是空的，warnings 里给一句准确的说明。
    */
-  documentType: HealthDocumentType | 'NOT_MEDICAL';
+  documentType: HealthDocumentType | 'NOT_MEDICAL' | 'IMAGING';
   /**
    * 直接可用的表单草稿（老板第 5 条：确认一次就自动录入表单）。
    *   · 疫苗本可能读出多条 → 数组里多项
@@ -393,6 +393,9 @@ function buildAutoSystemPrompt(): string {
     '· CHECKUP_REPORT —— 体检报告 / 化验单',
     '· VACCINE_BOOK —— 疫苗本 / 免疫记录',
     '· ALLERGY_REPORT —— 过敏原检测报告',
+    '· IMAGING —— 影像资料：X 光片、B 超/超声图像、CT 等**只有图像、没有可抄文字**的检查片；',
+    '  这类**属于**宠物医疗资料（不要判成 NOT_MEDICAL）：照抄片子上的检查日期，',
+    '  检查部位/项目写进 notes（例如"骨盆正位""脊柱侧位"），**不要解读影像内容、不要写诊断**。',
     '· NOT_MEDICAL —— 不是宠物的医疗资料：身份证/证件、人脸或自拍、风景、人的病历或处方、',
     '  宠物用品或狗粮包装、与健康无关的照片等',
     '只有确实是狗狗医疗资料时才从那四类里挑一个。**拿不准就别硬猜**：',
@@ -403,7 +406,8 @@ function buildAutoSystemPrompt(): string {
     '',
     ...COMMON_RULES,
     '',
-    '四类的字段结构（先按第一步定下 documentType，再照对应那套填 drafts）：',
+    '四类的字段结构（先按第一步定下 documentType，再照对应那套填 drafts；',
+    '判成 IMAGING 时用 CHECKUP_REPORT 那套结构，只填日期/动物名/notes）：',
     '',
     ...typeSections,
     '输出 JSON 结构（documentType 必须是你判断出的那一个，不能填 AUTO）：',
@@ -726,6 +730,25 @@ export class HealthReportExtractionService {
         ocrText: '',
         confidence: 'LOW',
         warnings: [buildNotMedicalWarning(requestedDocumentType)],
+      };
+    }
+
+    // 影像片（X 光/超声）：只把日期、动物名、检查部位抄下来 ——
+    // **不解读片子内容**（那是兽医的事），原件由前端作为附件存进档案。
+    if (resolvedType === 'IMAGING') {
+      const imageDrafts = normalizeDrafts('CHECKUP_REPORT', parsedRecord);
+
+      return {
+        documentType: 'IMAGING',
+        drafts: imageDrafts,
+        allergies: [],
+        medicalConditions: [],
+        ocrText: '',
+        confidence: normalizeConfidence(parsed.confidence),
+        warnings: [
+          '这是影像片（X 光/超声），AI 不解读片子上的内容；片子原件会一起存进档案',
+          ...normalizeWarnings(parsedRecord.warnings),
+        ],
       };
     }
 

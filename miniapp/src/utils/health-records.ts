@@ -1680,11 +1680,18 @@ export function getHealthVisitValidationError(
     : [config.primaryLabel, config.adviceLabel]
 
   const hasContent = contentKeys.some((key) => normalizeOptionalText(record?.[key]))
-  if (!hasContent) {
-    return `请至少填写「${contentLabels[0]}」或「${contentLabels[1]}」`
+  if (hasContent) {
+    return null
   }
 
-  return null
+  // 只留了原件的记录也放行（2026-10-02）：X 光片、超声图像这类资料没有文字可抄，
+  // 家长的诉求就是"把片子存进档案" —— 有了日期 + 附件，这条记录就是有意义的。
+  const hasAttachment = normalizeAttachments(record?.attachments).length > 0
+  if (hasAttachment) {
+    return null
+  }
+
+  return `请至少填写「${contentLabels[0]}」或「${contentLabels[1]}」，或上传报告原件`
 }
 
 /** 表单草稿 → 接口载荷（按类型分别对回两张表的字段） */

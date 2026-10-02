@@ -131,7 +131,7 @@ describe('病例合并 · 校验', () => {
   it('必填只剩日期 +（症状 或 医生怎么说）至少一个', () => {
     expect(getHealthVisitValidationError('medical', {})).toBe('请选择就诊日期')
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01' }))
-      .toBe('请至少填写「症状」或「医生怎么说」')
+      .toBe('请至少填写「症状」或「医生怎么说」，或上传报告原件')
     // 只填症状（拿不到诊断）也能存
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', chiefComplaint: '呕吐' })).toBeNull()
     // 只填诊断也能存
@@ -140,7 +140,7 @@ describe('病例合并 · 校验', () => {
 
   it('体检也放宽成两个内容字段填一个：检查结论 / 医生建议', () => {
     expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' }))
-      .toBe('请至少填写「检查结论」或「医生建议」')
+      .toBe('请至少填写「检查结论」或「医生建议」，或上传报告原件')
     // 只写了几句医嘱也能存（有的报告只给建议）
     expect(getHealthVisitValidationError('checkup', {
       checkupDate: '2026-05-01',
@@ -156,6 +156,20 @@ describe('病例合并 · 校验', () => {
   it('用药、处理、其它想说的都不拦着保存（想记多少记多少）', () => {
     const record = { visitDate: '2026-05-01', diagnosis: '胃炎' }
     expect(getHealthVisitValidationError('medical', record)).toBeNull()
+  })
+
+  it('没写内容但传了原件（X 光片/超声）也能存 —— 日期 + 附件就是一条合法记录', () => {
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      attachments: ['https://img.sevenkitchen.cloud/medical-reports/temp/x.jpg'],
+    })).toBeNull()
+    expect(getHealthVisitValidationError('medical', {
+      visitDate: '2026-05-01',
+      attachments: ['https://img.sevenkitchen.cloud/medical-reports/temp/y.jpg'],
+    })).toBeNull()
+    // 既没内容又没附件才算缺信息
+    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' }))
+      .toContain('或上传报告原件')
   })
 
   it('新建的就诊草稿带上「待确认」状态', () => {

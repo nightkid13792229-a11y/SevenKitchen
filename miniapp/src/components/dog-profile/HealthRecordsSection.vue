@@ -1275,9 +1275,11 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
   // 否则退回整批的类型。**不能一律用整批类型**：那会把病历的诊断与用药丢掉。
   for (const draft of payload.drafts) {
     const draftType = String(draft?.__documentType || '').toUpperCase()
-    const kind: HealthVisitKind = draftType
-      ? (draftType === 'CHECKUP_REPORT' ? 'checkup' : 'medical')
-      : (payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical')
+    // IMAGING（X 光/超声）也归"检查"这一类：它是一次检查，只是没有文字可抄
+    const isCheckupSide = draftType
+      ? draftType === 'CHECKUP_REPORT' || draftType === 'IMAGING'
+      : payload.documentType === 'CHECKUP_REPORT'
+    const kind: HealthVisitKind = isCheckupSide ? 'checkup' : 'medical'
     const record = normalizeHealthVisitRecord(kind, draft)
     // 重新给一个本地 key，避免和已有草稿撞
     record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

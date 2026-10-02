@@ -41,7 +41,7 @@ export class CreateMedicalRecordDto {
   @IsString()
   labValues?: string;
 
-  /// 医嘱 / 回家注意（2026-10-02 起语义收窄，表单标签「医嘱（回家注意）」）
+  /// 医嘱（2026-10-02 起语义收窄：医生交代回家要做的；表单标签就叫「医嘱」）
   @IsOptional()
   @IsString()
   treatment?: string;

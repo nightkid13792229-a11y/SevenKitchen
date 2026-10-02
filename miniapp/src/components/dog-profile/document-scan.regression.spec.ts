@@ -86,8 +86,8 @@ describe('拍照录入 · 组件', () => {
 
     // 后端返回的 drafts.attachments 是空数组，图片地址只有上传这一步知道
     expect(scan).toContain('attachments: [uploaded.url]')
-    // 张数与条数的关系要如实告诉顾客
-    expect(scan).toContain('scanCountSummary')
+    // 多页合并时附件要跨页汇总（buildSingleScannedRecord 里做，见 scan-record-merge.spec）
+    expect(scan).toContain('buildSingleScannedRecord')
   })
 
   it('多张图按类型分组：同类型合成一条，不同类型各成一条（疫苗本不合并）', () => {
@@ -102,28 +102,33 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain('__documentType: type')
   })
 
-  it('合成时要如实说明「N 张 → 1 条」，否则顾客以为剩下的没识别成功', () => {
+  it('识别结果里不再出现内部状态文字（2026-10-02 老板第二次实测提的）', () => {
     const scan = readScan()
+    // 只看**渲染出来的模板**（注释里提到这些词是允许的）
+    const template = scan
+      .slice(scan.indexOf('<template>'), scan.indexOf('</template>'))
+      .replace(/<!--[\s\S]*?-->/g, '')
 
-    expect(scan).toContain('本次共 ${images} 张图片，合成 1 条记录')
-    expect(scan).toContain('读出 ${records} 条记录')
-    // 选了几张要按"顾客选的总数"算，不是"识别成功的张数"
-    expect(scan).toContain('requestedImageCount.value = filePaths.length')
+    // 老板原话："记到就诊记录 / 识别为病历 / 本次共 5 张图片合成一条 /
+    // 5 张原图会一起存进这条记录 / 报告上的动物名 seven 这些内部信息就不要放了"
+    expect(template).not.toContain('记到：')
+    expect(template).not.toContain('识别为：')
+    expect(template).not.toContain('合成 1 条记录')
+    expect(template).not.toContain('张原图会一起存进这条记录')
+    expect(template).not.toContain('报告上的动物名：')
+    // 但"名字真的对不上"和"有页没能用上"还要说（那两条是家长要做的事）
+    expect(template).toContain('名字对不上')
+    expect(template).toContain('ignoredPagesNote')
   })
 })
 
-  it('确认卡片说清"记到哪"和"原图去哪了"（2026-10-02 老板定稿）', () => {
+  it('化验数据在确认卡片上分块展示（报告名 / 项目 / 数值分层）', () => {
     const scan = readScanFile()
 
-    // 入口决定记录类型 → 卡片上直接写"记到：就诊记录"，不再只写"识别为：病历 + 体检报告"
-    expect(scan).toContain('记到：')
-    expect(scan).toContain('entryRecordSummary')
-    // 原图张数写清楚（原来"原图一并存为附件"会被读成"只存了一张"）
-    expect(scan).toContain('张原图会一起存进这条记录')
-    expect(scan).toContain('attachmentSummary')
-    // 类型与入口不符时说明原因
-    expect(scan).toContain('entryTypeMismatch')
-    expect(scan).toContain('你从「')
+    expect(scan).toContain("import LabValuesView from './LabValuesView.vue'")
+    // 化验那一行走分块组件（push 的第三个参数 = rich 标记）
+    expect(scan).toContain("push('化验数据', draft.labValues, 'lab')")
+    expect(scan).toContain('<LabValuesView')
   })
 
   it('名字核对忽略大小写/空格/标点（seven vs Seven 不再提醒）', () => {
@@ -190,7 +195,7 @@ describe('拍照录入 · 接线', () => {
     expect(block).not.toContain('draft.veterinarian')
     // 表单里叫什么，这里就必须叫什么（2026-10-02 定稿）
     expect(block).toContain("push('医生诊断', draft.diagnosis)")
-    expect(block).toContain("push('医嘱（回家注意）', draft.treatment)")
+    expect(block).toContain("push('医嘱', draft.treatment)")
     expect(block).toContain("push('这次做的检查', draft.exams)")
     expect(block).toContain("push('体征', draft.vitals)")
     expect(block).toContain("push('补充说明', draft.notes)")
@@ -306,7 +311,8 @@ describe('混合资料不能互相吃掉', () => {
 
     expect(scan).toContain('__documentType: type')
     expect(scan).toContain('function draftDocumentType(draft: Record<string, any>)')
-    expect(scan).toContain('识别为：${labels.join')
+    // 卡片不再写"识别为：X"（内部状态），但每条草稿的类型标记仍在
+    expect(scan).toContain('__documentType')
     // 父组件：有自带类型就按它走，不能一律用整批类型
     expect(section).toContain('const draftType = String(draft?.__documentType || \'\').toUpperCase()')
     expect(section).toContain("draftType === 'CHECKUP_REPORT' || draftType === 'IMAGING'")
@@ -341,7 +347,8 @@ describe('动物名提醒与化验数据', () => {
 
     // 读出来、显示出来
     expect(scan).toContain('reportedPatientNames')
-    expect(scan).toContain('报告上的动物名：')
+    // 不一致时的提醒里必须写出"报告上写的是谁"（独立的"报告上的动物名："那行已按老板要求下线）
+    expect(scan).toContain('报告上写的动物名是「')
     // 不一致 → 一块黄色提醒，措辞里写清"由你决定"
     expect(scan).toContain('patientNameMismatch')
     expect(scan).toContain('名字对不上')
@@ -359,7 +366,7 @@ describe('动物名提醒与化验数据', () => {
     )
 
     // 确认卡片里单独一行
-    expect(scan).toContain("push('化验数据', draft.labValues)")
+    expect(scan).toContain("push('化验数据', draft.labValues, 'lab')")
     // 字段表里两类都有这一栏（2026-10-02 老板定：就诊里传的化验单，
     // 数字就落在这条就诊记录里，不再另开一条体检记录）
     expect((utils.match(/labValuesKey: 'labValues'/g) || []).length).toBe(2)

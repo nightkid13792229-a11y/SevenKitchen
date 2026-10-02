@@ -1338,8 +1338,9 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     labValuesLabel: '化验数据',
     adviceKey: 'treatment',
     // 2026-10-02 老板定稿：这一栏收窄成"医生交代回家要做的"，
-    // 检查项目清单挪去 exams（原来三样挤一栏，家长看到的是"无 + 一长串"）
-    adviceLabel: '医嘱（回家注意）',
+    // 检查项目清单挪去 exams（原来三样挤一栏，家长看到的是"无 + 一长串"）。
+    // 老板第二次实测：标签就叫「医嘱」，不要括弧说明
+    adviceLabel: '医嘱',
     advicePlaceholder: '例如：清淡饮食，按时吃药，两周后复查',
     examsKey: 'exams',
     examsLabel: '这次做的检查',
@@ -1542,6 +1543,58 @@ function isFilledDraftValue(value: unknown) {
  *
  *   疫苗本 / 过敏报告不属于这两类：不并进来，单独回报（各自的板块有更合适的表单）。
  */
+/**
+ * 多页合并之后再筛一遍提示（2026-10-02 老板第二次实测提的）。
+ *
+ * 实例：病历第 1 页的"检查结果"表格里 CRP 那一行是空的，模型如实写了一句
+ * 「检查结果表格中 CRP C反应蛋白的结果值未填写，无法读取」—— 单看那一页没错，
+ * 后端也按"页内有没有值"放行了。但 5 页合并成一条记录之后，CRP 的数值就来自
+ * 另一页（CRP 报告单 9.373），家长看到的就成了"明明有值，你还说读不到"。
+ *
+ * 规则：**只要合并后的记录里已经有了这项内容，就不再提示"没读到"**。
+ * 与后端 filterContradictoryWarnings 同一套思路，只是这里比对的是合并结果。
+ */
+export function filterWarningsAgainstRecord(
+  warnings: string[],
+  draft: Record<string, any> | null | undefined,
+): string[] {
+  const list = Array.isArray(warnings) ? warnings.filter(Boolean) : []
+  if (!draft) return list.slice(0, 3)
+
+  const labValues = String(draft.labValues || '')
+  const patientName = String(draft.patientName || '').trim()
+  const date = String(draft.visitDate || draft.checkupDate || '').trim()
+
+  const missingPattern = /(未填写|未写|没法读|无法读取|读不到|未显示|没读到|缺失|空白)/
+  const filtered = list.filter((warning) => {
+    const text = String(warning || '')
+    if (!text) return false
+
+    if (labValues && /(化验|数值|结果值|指标|检查结果|检验)/.test(text) && missingPattern.test(text)) {
+      return false
+    }
+    if (patientName && /(动物名|宠物名|狗名|名字|昵称)/.test(text)) {
+      return false
+    }
+    if (date && /(日期|时间)/.test(text) && missingPattern.test(text)) {
+      return false
+    }
+    // 提到了具体项目（CRP/ALT…）而这行数值其实抄到了 → 也不算数
+    const mentioned = text.match(/[A-Za-z][A-Za-z0-9-]{1,9}/g) || []
+    if (
+      labValues &&
+      mentioned.some((token) => labValues.toUpperCase().includes(token.toUpperCase()))
+    ) {
+      return false
+    }
+
+    return true
+  })
+
+  // 去重 + 限量：一次传 5 张时提示会堆起来，家长看不过来
+  return Array.from(new Set(filtered)).slice(0, 3)
+}
+
 export function buildSingleScannedRecord(
   groups: { type: string; drafts: Record<string, any>[] }[],
   targetType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT',

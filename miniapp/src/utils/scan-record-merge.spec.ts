@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSingleScannedRecord } from './health-records';
+import { buildSingleScannedRecord, filterWarningsAgainstRecord } from './health-records';
 
 /**
  * 一次拍多页纸 → 合成一条记录（2026-10-02 老板定稿）。
@@ -131,6 +131,38 @@ describe('多页识别 · 入口决定记录类型', () => {
     ]);
     expect(draft?.diagnosis).toBe('胆汁淤积');
     expect(JSON.stringify(draft)).not.toContain('犬四联');
+  });
+
+  describe('合并后的提示筛除（老板实测：明明有 CRP，还说读不到）', () => {
+    const merged = {
+      labValues: '生化\nALT 144 U/L（偏高）\nCRP\nCRP 9.373 ug/ml（正常）',
+      patientName: 'seven',
+      visitDate: '2026-02-11',
+    };
+
+    it('某页说"CRP 结果值未填写"，但另一页抄到了 → 撤掉这句', () => {
+      expect(
+        filterWarningsAgainstRecord(
+          ['检查结果表格中 CRP C反应蛋白的结果值未填写，无法读取'],
+          merged,
+        ),
+      ).toEqual([]);
+    });
+
+    it('真的没读到的东西仍要提示', () => {
+      const warnings = ['第三行日期被印章遮挡，未能确认'];
+      // 日期是有的，但"被遮挡"不是"缺失"，属于真的看不清 → 保留
+      expect(filterWarningsAgainstRecord(warnings, merged)).toEqual(warnings);
+    });
+
+    it('去重 + 最多留 3 条（一次传 5 张时提示会堆起来）', () => {
+      const result = filterWarningsAgainstRecord(
+        ['A 模糊', 'A 模糊', 'B 模糊', 'C 模糊', 'D 模糊'],
+        { labValues: 'CRP 9.373' },
+      );
+      expect(result).toHaveLength(3);
+      expect(new Set(result).size).toBe(3);
+    });
   });
 
   it('什么都没读出来时不给草稿（上层据此提示重新上传）', () => {

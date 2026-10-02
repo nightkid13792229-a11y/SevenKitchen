@@ -239,14 +239,37 @@
           </view>
 
           <view v-if="visitConfig(record).labValuesKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
+            <view class="field-label-row">
+              <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
+              <!-- 2026-10-02 老板提的排版问题：几十项数值原来是一堵同样式样的墙，
+                   报告名和数值混在一起。现在默认看**分块排版**（报告名 / 项目 / 数值分层），
+                   要点「修改」才切回输入框自己改。 -->
+              <text
+                v-if="hasLabValues(record) && !hasSavingRecord"
+                class="field-label__action"
+                @tap="toggleLabEditing(record, index)"
+              >
+                {{ isLabEditing(record, index) ? '完成' : '修改' }}
+              </text>
+            </view>
+            <LabValuesView
+              v-if="hasLabValues(record) && !isLabEditing(record, index)"
+              :text="readField(record, visitLabValuesKey(record))"
+            />
             <textarea
+              v-else
               class="field-textarea field-textarea--tall"
               :disabled="hasSavingRecord"
               placeholder="化验单上的数值，一行一项，例如：肌酐 72.2 umol/L"
               :value="readField(record, visitLabValuesKey(record))"
               @input="updateTextField(index, visitLabValuesKey(record), $event.detail.value)"
             />
+            <text
+              v-if="hasLabValues(record) && !isLabEditing(record, index)"
+              class="field-label__hint"
+            >
+              AI 抄录，请对照原件核对；偏高/偏低是报告自己标的。
+            </text>
           </view>
 
           <view v-if="visitConfig(record).vitalsKey" class="field-group">
@@ -462,6 +485,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
+import LabValuesView from './LabValuesView.vue'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 import {
   HEALTH_RECORD_TYPES,
@@ -1301,6 +1325,27 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
     title: `已填入 ${payload.drafts.length} 条，核对后保存`,
     icon: 'none',
   })
+}
+
+/**
+ * 化验数据正在"编辑"的那几条记录（默认是排版后的只读视图）。
+ * 用记录 key 而不是下标 —— 保存/删除后下标会变。
+ */
+const labEditingKeys = ref<string[]>([])
+
+function hasLabValues(record: Record<string, any>): boolean {
+  return Boolean(String(readField(record, visitLabValuesKey(record)) || '').trim())
+}
+
+function isLabEditing(record: Record<string, any>, index: number): boolean {
+  return labEditingKeys.value.includes(recordKey(record, index))
+}
+
+function toggleLabEditing(record: Record<string, any>, index: number) {
+  const key = recordKey(record, index)
+  labEditingKeys.value = labEditingKeys.value.includes(key)
+    ? labEditingKeys.value.filter((item) => item !== key)
+    : [...labEditingKeys.value, key]
 }
 
 function addRecord() {
@@ -2239,6 +2284,19 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 24rpx;
   font-weight: 600;
   color: #415a65;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.field-label__action {
+  font-size: 23rpx;
+  color: #4e6b52;
+  text-decoration: underline;
 }
 
 .field-label__hint {

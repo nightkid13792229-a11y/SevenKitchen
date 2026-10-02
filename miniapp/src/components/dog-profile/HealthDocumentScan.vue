@@ -30,37 +30,28 @@
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
-      <text v-if="entryRecordSummary" class="confirm__type">{{ entryRecordSummary }}</text>
-      <text v-if="resolvedTypeSummary" class="confirm__type">{{ resolvedTypeSummary }}</text>
-      <text v-if="scanCountSummary" class="confirm__type">{{ scanCountSummary }}</text>
-      <text v-if="attachmentSummary" class="confirm__type">{{ attachmentSummary }}</text>
 
-      <!-- 从「就诊」进来、但这几张里一张病历都没有（例如只拍了一张化验单）：
-           如实说明记到哪儿了，别让家长以为记错地方 -->
-      <view v-if="entryTypeMismatch" class="confirm__note">
-        <text class="confirm__note-text">{{ entryTypeMismatchText }}</text>
-      </view>
+      <!-- 2026-10-02 老板："记到就诊记录 / 识别为病历 / 本次共 5 张图片合成 1 条 /
+           5 张原图会一起存进这条记录 / 报告上的动物名 seven 这些内部信息就不要放了"。
+           全部下线：识别对了就是对的，家长要核对的是内容本身，不是我们的中间状态。
+           只剩两种情况还需要说话：**名字真的对不上**（见下）与**有页没能用上**（疫苗本/过敏）。 -->
       <view v-if="ignoredPagesNote" class="confirm__note">
         <text class="confirm__note-text">{{ ignoredPagesNote }}</text>
       </view>
-
-      <text v-if="reportedPatientNames.length > 0" class="confirm__type">
-        报告上的动物名：{{ reportedPatientNames.join('、') }}
-      </text>
       <view v-if="patientNameMismatch" class="confirm__name-warning">
         <text class="confirm__name-warning-title">⚠️ 名字对不上</text>
         <text class="confirm__name-warning-text">{{ patientNameMismatch }}</text>
       </view>
 
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
-        <!-- 一次传了化验单 + 门诊病历时，每条前面标出它是什么，别让顾客以为混了 -->
-        <text v-if="drafts.length > 1" class="confirm__card-kind">
-          {{ draftSourceLabel(draft) }}
-        </text>
-        <view v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
-          <text class="confirm__label">{{ row.label }}</text>
-          <text class="confirm__value">{{ row.value }}</text>
-        </view>
+        <template v-for="row in describeDraft(draft)" :key="row.label">
+          <view class="confirm__row">
+            <text class="confirm__label">{{ row.label }}</text>
+            <!-- 化验数据分块排版：报告名单独一行、项目名与数值左右分栏 -->
+            <LabValuesView v-if="row.rich === 'lab'" :text="row.value" />
+            <text v-else class="confirm__value">{{ row.value }}</text>
+          </view>
+        </template>
       </view>
 
       <view v-if="warnings.length > 0" class="confirm__warnings">
@@ -82,9 +73,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import LabValuesView from './LabValuesView.vue'
 import {
   buildSingleScannedRecord,
   extractHealthAttachmentKey,
+  filterWarningsAgainstRecord,
   mergeScannedReportDrafts,
   resolveHealthScanErrorMessage,
   resolveScannedDocumentType,
@@ -156,8 +149,6 @@ const confidence = ref('LOW')
  * 填表时也按它决定这条记录进"病历"还是"体检"。
  */
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
-/** 这一批里没有"入口那一类"的内容（从就诊进、但一张病历都没有）→ 卡片上说明一句 */
-const entryTypeMismatch = ref(false)
 /** 被排除在外的页（疫苗本/过敏报告）—— 各自板块有更合适的表单 */
 const ignoredPagesNote = ref('')
 /** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
@@ -183,68 +174,9 @@ const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
   ALLERGY_REPORT: '过敏原检测报告',
 }
 
-const resolvedTypeLabel = computed(() => (
-  TYPE_LABELS[resolvedDocumentType.value as ExplicitDocumentType] || ''
-))
-
-/**
- * 确认卡片上那句"几张图 → 几条记录"。
- *
- * 多页合成一条之后，必须如实说明：顾客选了 3 张、只看到 1 条记录，
- * 若卡片上不说清楚，他会以为两张没识别成功。
- */
-const scanCountSummary = computed(() => {
-  const images = requestedImageCount.value
-  if (images <= 1) {
-    return ''
-  }
-
-  const records = drafts.value.length
-  if (records <= 1) {
-    return `本次共 ${images} 张图片，合成 1 条记录`
-  }
-
-  return `本次共 ${images} 张图片，读出 ${records} 条记录`
-})
-
-/**
- * 这一批纸记到哪个标签下（2026-10-02 老板定稿：入口决定记录类型）。
- *
- * 原来卡片只写"识别为：病历 + 体检报告"，家长看到的是"我走的就诊，
- * 怎么冒出个体检报告？"—— 现在直接说清记到哪儿。
- */
-const entryRecordSummary = computed(() => {
-  if (drafts.value.length === 0) return ''
-  const label = props.entryKind === 'checkup' ? '体检记录' : '就诊记录'
-  return `记到：${label}${drafts.value.length > 1 ? `（${drafts.value.length} 条）` : ''}`
-})
-
-/** 原图去哪了：写清"几张、挂在谁名下"，别让家长以为只存了一张 */
-const attachmentSummary = computed(() => {
-  const total = drafts.value.reduce(
-    (sum, draft) => sum + (Array.isArray(draft?.attachments) ? draft.attachments.length : 0),
-    0,
-  )
-  if (total === 0) return ''
-
-  if (drafts.value.length <= 1) {
-    return `${total} 张原图会一起存进这条记录`
-  }
-
-  return `原图会按页分到上面各条记录里（共 ${total} 张）`
-})
-
-/** 识别把握"低"时才说话，而且要说人能做的那件事 */
 const lowConfidenceHint = computed(() => (
   confidence.value === 'LOW' ? '有几处没读准，填完请对着原件核一遍。' : ''
 ))
-
-const entryTypeMismatchText = computed(() => {
-  const entryLabel = props.entryKind === 'checkup' ? '体检' : '就诊'
-  const contentLabel = props.entryKind === 'checkup' ? '病历' : '化验/检查报告'
-  return `这几张里没有${contentLabel}的内容，所以只填了能填的部分 —— ` +
-    `你从「${entryLabel}」进来，就记在${entryLabel}记录下。`
-})
 
 /** 当前应当按哪一类渲染/填表：优先用后端判定出来的类型 */
 const activeDocumentType = computed<DocumentType>(() => (
@@ -267,15 +199,6 @@ function draftDocumentType(draft: Record<string, any>): DocumentType {
   }
 
   return (resolvedDocumentType.value || props.documentType) as DocumentType
-}
-
-/** 这一条草稿"原本被判成什么"（影像片要单独标出来） */
-function draftSourceLabel(draft: Record<string, any>) {
-  if (String(draft?.__documentType || '').toUpperCase() === 'IMAGING') {
-    return '影像片'
-  }
-
-  return TYPE_LABELS[draftDocumentType(draft) as ExplicitDocumentType] || '资料'
 }
 
 /**
@@ -322,27 +245,15 @@ const patientNameMismatch = computed(() => {
   return `报告上写的动物名是「${others.join('」「')}」，和你正在记录的「${current}」不一样。确认没传错再保存；存不存进这份档案由你决定。`
 })
 
-/** 这一条草稿的中文类型名（一次传多类时每条前面标一下） */
-function draftTypeLabel(draft: Record<string, any>) {
-  return TYPE_LABELS[draftDocumentType(draft) as ExplicitDocumentType] || '资料'
-}
-
-/** 确认卡片顶部那句话：只有一类就说"识别为 X"，混着就都列出来 */
-const resolvedTypeSummary = computed(() => {
-  const labels = [...new Set(drafts.value.map((draft) => draftSourceLabel(draft)))]
-    .filter((label) => label && label !== '资料')
-
-  if (labels.length === 0) return ''
-  return `识别为：${labels.join(' + ')}`
-})
-
 /** 把一条草稿翻译成"标签 + 值"给顾客核对 */
-function describeDraft(draft: Record<string, any>): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = []
-  const push = (label: string, value: unknown) => {
+function describeDraft(
+  draft: Record<string, any>,
+): { label: string; value: string; rich?: 'lab' }[] {
+  const rows: { label: string; value: string; rich?: 'lab' }[] = []
+  const push = (label: string, value: unknown, rich?: 'lab') => {
     const text = String(value ?? '').trim()
     if (text) {
-      rows.push({ label, value: text })
+      rows.push({ label, value: text, rich })
     }
   }
 
@@ -364,7 +275,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
     push('医生建议', draft.recommendations)
-    push('化验数据', draft.labValues)
+    push('化验数据', draft.labValues, 'lab')
     push('补充说明', draft.notes)
     return rows
   }
@@ -373,10 +284,10 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     push('就诊日期', draft.visitDate)
     push('症状', draft.chiefComplaint)
     push('医生诊断', draft.diagnosis)
-    push('医嘱（回家注意）', draft.treatment)
+    push('医嘱', draft.treatment)
     push('用药', Array.isArray(draft.medications) ? draft.medications.join('、') : draft.medications)
     push('这次做的检查', draft.exams)
-    push('化验数据', draft.labValues)
+    push('化验数据', draft.labValues, 'lab')
     push('体征', draft.vitals)
     push('补充说明', draft.notes)
     return rows
@@ -427,7 +338,6 @@ async function scanAll(filePaths: string[]) {
   requestedImageCount.value = filePaths.length
   failureNotice.value = ''
   uploadedUrls.value = []
-  entryTypeMismatch.value = false
   ignoredPagesNote.value = ''
 
   const collectedWarnings: string[] = []
@@ -548,7 +458,6 @@ async function scanAll(filePaths: string[]) {
       if (single.draft) {
         merged = [single.draft]
       }
-      entryTypeMismatch.value = Boolean(single.draft) && !single.matchedEntryType
       ignoredPagesNote.value = single.ignored.length
         ? `有 ${single.ignored.reduce((sum, item) => sum + item.count, 0)} 张看起来是` +
           `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') ? '疫苗本' : ''}` +
@@ -565,12 +474,13 @@ async function scanAll(filePaths: string[]) {
           merged.push({ ...draft, __documentType: type })
         }
       }
-      entryTypeMismatch.value = false
       ignoredPagesNote.value = ''
     }
 
     drafts.value = merged
-    warnings.value = collectedWarnings
+    // 合并之后再筛一遍：某一页"没读到"的提示，在另一页已经读到的情况下要撤掉
+    // （老板实测：CRP 数值在 CRP 报告单里，第 1 页的"结果值未填写"就不该再出现）
+    warnings.value = filterWarningsAgainstRecord(collectedWarnings, merged[0])
     confidence.value = worstConfidence
     resolvedDocumentType.value = resolvedType
     showConfirm.value = true

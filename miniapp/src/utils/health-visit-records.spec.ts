@@ -82,7 +82,7 @@ describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
     expect(config.complaintLabel).toBe('症状')
     // 「处理与提醒」收窄成「医嘱（回家注意）」—— 它原来装着治疗意见 + 检查清单 + 医嘱
     expect(config.adviceKey).toBe('treatment')
-    expect(config.adviceLabel).toBe('医嘱（回家注意）')
+    expect(config.adviceLabel).toBe('医嘱')
     expect(config.medicationKey).toBe('medications')
     // 新增两栏：这次做的检查、体征
     expect(config.examsKey).toBe('exams')

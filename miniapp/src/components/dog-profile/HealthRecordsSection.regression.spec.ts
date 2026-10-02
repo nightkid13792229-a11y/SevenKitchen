@@ -113,8 +113,9 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain('resolveHealthVisitKind(record)')
     expect(source).toContain('getHealthVisitSectionMeta()')
 
-    // 表单按记录类型取配置，而不是按当前板块
-    expect(source).toContain('function fieldConfigForRecord(record: Record<string, any>): FieldConfig')
+    // 病历/检查走自己的字段对照表（utils 里那张，有独立测试）
+    expect(source).toContain('function visitConfig(record: Record<string, any>)')
+    expect(source).toContain('getHealthVisitFieldConfig(resolveHealthVisitKind(record))')
 
     // 新增记录默认「就诊」，想记体检的人在表单里切
     expect(source).toContain("createHealthVisitDraft('medical')")
@@ -124,7 +125,7 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain("emit('save-record', { type, record: stripLocalFields(record), recordKey: key })")
     expect(source).toContain("emit('delete-record', { type: recordKindOf(record), record: stripLocalFields(record) })")
 
-    // 校验用合并板块自己的规则：只有诊断结果是必填的内容字段
+    // 校验用合并板块自己的规则：日期 +（主要问题 或 医生怎么说）至少一个
     expect(source).toContain('getHealthVisitValidationError(resolveHealthVisitKind(record), record)')
 
     // 摘要在合并模式下来自 visit 版本的构建函数
@@ -146,5 +147,95 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain('@tap.stop="previewAttachment(attachment)"')
     expect(source).toContain('previewAttachment')
     expect(source).toContain('removeAttachment')
+  })
+})
+
+/**
+ * 病历/检查表单精简（2026-10-02，老板定稿）。
+ *
+ * 老板三句话：
+ *   · 「我们要不先来精简一下表单需要录入的信息？」
+ *   · 「状态这个字段，我觉得可以不要。」
+ *   · 「（备注）保留但改名。」
+ * 加上审计结论：备注零消费者、症状与用药被藏在「更多」里、
+ * 必填的"诊断结果"很多家长根本拿不到。
+ */
+describe('病历/检查表单 · 精简版', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+  it('病历/检查走独立分支，过敏那条路原样包在 v-else 里', () => {
+    const source = readSection()
+
+    expect(source).toContain('<template v-if="isVisitMode">')
+    expect(source).toContain('<template v-else>')
+    // 独立分支之后，通用分支的字段配置只服务过敏
+    expect(source).toContain('function fieldConfigForRecord(_record: Record<string, any>): FieldConfig')
+    expect(source).toContain('return getFieldConfig(baseType.value)')
+  })
+
+  it('字段顺序＝家长填写顺序：日期 → 主要问题 → 医生怎么说 → 用药 → 其它想说的', () => {
+    const source = readSection()
+    const at = (needle: string) => source.indexOf(needle)
+
+    const date = at("{{ visitConfig(record).dateLabel }}")
+    const complaint = at("{{ visitConfig(record).complaintLabel }}")
+    const primary = at("{{ visitConfig(record).primaryLabel }}")
+    const advice = at("{{ visitConfig(record).adviceLabel }}")
+    const medication = at("{{ visitConfig(record).medicationLabel }}")
+    const notes = at("{{ visitConfig(record).notesLabel }}")
+
+    expect(date).toBeGreaterThan(-1)
+    expect(complaint).toBeGreaterThan(date)
+    expect(primary).toBeGreaterThan(complaint)
+    expect(advice).toBeGreaterThan(primary)
+    expect(medication).toBeGreaterThan(advice)
+    expect(notes).toBeGreaterThan(medication)
+  })
+
+  it('状态选择器从表单里去掉，改成存好后一键「已经好了」', () => {
+    const source = readSection()
+
+    // 病历/检查这一支里不再有状态下拉（只留一键「已经好了」）
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
+    expect(visitBranch).not.toContain('statusField(record)')
+    expect(visitBranch).not.toContain('getMedicalStatusOptions()')
+    expect(visitBranch).toContain('status-switch')
+    expect(source).toContain('class="status-switch"')
+    expect(source).toContain('medicalStatusToggle(record)')
+    // 只对已保存的记录显示（未保存的还没资格谈"好了"）
+    expect(source).toContain('isSavedRecord(record, index)')
+    // 只改草稿、由顾客点保存：这里不许直接发请求
+    const toggleBlock = source.match(/function toggleVisitStatus[\s\S]*?\n}/)?.[0] || ''
+    expect(toggleBlock).toContain('record.status = next.status')
+    expect(toggleBlock).not.toContain('dogApi')
+  })
+
+  it('「更多」改成说清里面是什么的「选填」，不再藏症状/用药', () => {
+    const source = readSection()
+
+    expect(source).toContain('还有 ${labels.length} 项选填（${labels.join')
+    // 症状与用药已经提到明面，折叠里只剩复查日期与兽医
+    const optionalBlock = source.match(/function visitOptionalToggleLabel[\s\S]*?\n}/)?.[0] || ''
+    expect(optionalBlock).toContain('config.followUpLabel')
+    expect(optionalBlock).toContain('config.vetLabel')
+    expect(optionalBlock).not.toContain('medicationLabel')
+    expect(optionalBlock).not.toContain('complaintLabel')
+  })
+
+  it('附件说明压成一行（原来把六种格式都列出来）', () => {
+    const source = readSection()
+
+    expect(source).toContain('{{ attachmentHintText }}')
+
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    expect(utils).toContain("'图片或 PDF，单个不超过 10MB'")
+    expect(utils).not.toContain('HEIC、HEIF 或 PDF，单个文件不超过')
   })
 })

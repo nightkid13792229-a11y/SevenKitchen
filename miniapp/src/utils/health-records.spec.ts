@@ -756,7 +756,8 @@ describe('health-records', () => {
 
   it('builds a clearer attachment hint with preview and size guidance', () => {
     expect(buildHealthAttachmentFieldHint()).toBe(
-      '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。',
+      // 2026-10-02 精简：六种格式全列出来是表单上最长的一行字，家长读不完
+      '图片或 PDF，单个不超过 10MB',
     )
   })
 

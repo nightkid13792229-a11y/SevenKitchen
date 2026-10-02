@@ -230,6 +230,8 @@ describe('HealthTimelineService', () => {
           followUpDate: new Date('2026-11-01T00:00:00.000Z'),
           attachments: ['a.jpg'],
           chiefComplaint: '呕吐',
+          medications: ['处方粮', '胃复安'],
+          notes: '换粮后好转',
         },
         {
           id: 'm-done',
@@ -250,6 +252,7 @@ describe('HealthTimelineService', () => {
           checkupType: 'SENIOR_WELLNESS',
           findings: '血常规未见异常',
           recommendations: '半年后复查',
+          notes: '当天没吃饭',
           attachments: ['b.jpg'],
         },
       ])
@@ -300,6 +303,26 @@ describe('HealthTimelineService', () => {
         'm-open',
         'm-done',
       ])
+    })
+
+    it('用药、主要问题、其它想说的都交给 AI（2026-10-02 补的接线）', async () => {
+      const service = new HealthTimelineService(buildSummaryPrisma())
+      const summary = await service.getVisitSummary(CUSTOMER_ID, DOG_ID)
+
+      // 用药：知识库把"在服药物"列为必须做进阶评估的项目，
+      // 顾客一直在填、系统一直在存，此前 AI 从来没拿到过
+      expect(summary.ongoingConditions[0].medications).toEqual(['处方粮', '胃复安'])
+      // 主要问题：原来只有饮食标签派生读它，AI 分析看不到
+      expect(summary.ongoingConditions[0].chiefComplaint).toBe('呕吐')
+      // 其它想说的（原「备注」）：改名之后接进 AI，不再是没人读的字段
+      expect(summary.ongoingConditions[0].notes).toBe('换粮后好转')
+      expect(summary.recentCheckups[0].notes).toBe('当天没吃饭')
+
+      // 最近就诊里同样带齐
+      const visit = summary.recentVisits.find((item) => item.id === 'm-open')
+      expect(visit?.chiefComplaint).toBe('呕吐')
+      expect(visit?.medications).toEqual(['处方粮', '胃复安'])
+      expect(visit?.notes).toBe('换粮后好转')
     })
 
     it('体检类型与附件数带出来，方便医生判断要不要看报告', async () => {

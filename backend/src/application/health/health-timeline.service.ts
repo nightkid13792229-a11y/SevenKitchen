@@ -264,6 +264,15 @@ export class HealthTimelineService {
         id: record.id,
         date: toDateText(record.visitDate),
         diagnosis: record.diagnosis,
+        // 2026-10-02 起把这三项也交给 AI：
+        //   · chiefComplaint（主要问题）—— 家长最常填的一项，也是饮食标签派生的输入；
+        //     此前只有标签派生读它，AI 七项分析看不到，同一份数据两套口径
+        //   · medications（用药）—— 知识库自己把"在服药物"列为必须做进阶评估的项目，
+        //     顾客一直在填、系统一直在存，但 AI 从来没拿到过
+        //   · notes（其它想说的）—— 原来叫"备注"，2026-10-02 改名并接进这里
+        chiefComplaint: record.chiefComplaint || '',
+        medications: record.medications || [],
+        notes: record.notes || '',
         status: formatMedicalStatus(record.status),
         treatment: record.treatment || '',
         followUpDate: record.followUpDate ? toDateText(record.followUpDate) : null,
@@ -299,7 +308,10 @@ export class HealthTimelineService {
         id: record.id,
         date: toDateText(record.visitDate),
         diagnosis: record.diagnosis,
+        chiefComplaint: record.chiefComplaint || '',
         treatment: record.treatment || '',
+        medications: record.medications || [],
+        notes: record.notes || '',
         veterinarian: record.veterinarian || '',
         attachmentCount: record.attachments.length,
       })),
@@ -309,6 +321,8 @@ export class HealthTimelineService {
         checkupType: formatCheckupType(record.checkupType),
         findings: record.findings || '',
         recommendations: record.recommendations || '',
+        // 体检记录里的「其它想说的」（notes，2026-10-02 起接进 AI）
+        notes: record.notes || '',
         attachmentCount: record.attachments.length,
       })),
       vaccines: {

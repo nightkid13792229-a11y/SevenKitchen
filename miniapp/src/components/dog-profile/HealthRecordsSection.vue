@@ -94,7 +94,7 @@
             <view class="record-card__summary-heading">
               <!-- 类型徽标：一个列表里混着就诊和体检，得让人一眼看出哪条是哪种 -->
               <text
-                v-if="fieldConfigForRecord(record).kindSelect"
+                v-if="isVisitMode"
                 class="record-card__kind-badge"
                 :class="`record-card__kind-badge--${resolveHealthVisitKind(record)}`"
               >{{ HEALTH_VISIT_KIND_LABELS[resolveHealthVisitKind(record)] }}</text>
@@ -151,7 +151,7 @@
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
         <!-- 类型（仅「病例」模式）：就诊 / 体检。换类型等于换一张表，
              所以会清空重填，由 changeVisitKind 提示后再动。 -->
-        <view v-if="fieldConfigForRecord(record).kindSelect" class="field-group">
+        <view v-if="isVisitMode" class="field-group">
           <text class="field-label">类型</text>
           <view class="kind-switch">
             <text
@@ -164,6 +164,149 @@
           </view>
         </view>
 
+        <!-- ── 病历/检查：字段顺序＝家长填写顺序（2026-10-02 精简版）────────────
+             必填只有两件：日期 +（主要问题 或 医生怎么说）。
+             「状态」已从表单移除（家长不做系统选择题），改成存好后一键「已经好了」；
+             「备注」改名「其它想说的」并提到明面（它已经接进 AI 分析）；
+             只有复查日期、兽医这种少数情况才有的收进「选填」。 -->
+        <template v-if="isVisitMode">
+          <view class="field-group">
+            <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
+            <picker
+              mode="date"
+              :disabled="hasSavingRecord"
+              :value="readField(record, visitConfig(record).dateKey)"
+              @change="updateTextField(index, visitConfig(record).dateKey, $event.detail.value)"
+            >
+              <view class="field-picker">
+                {{ readField(record, visitConfig(record).dateKey) || `请选择${visitConfig(record).dateLabel}` }}
+              </view>
+            </picker>
+          </view>
+
+          <view v-if="visitConfig(record).complaintKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).complaintLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).complaintPlaceholder"
+              :value="readField(record, visitComplaintKey(record))"
+              @input="updateTextField(index, visitComplaintKey(record), $event.detail.value)"
+            />
+          </view>
+
+          <view class="field-group">
+            <text class="field-label">{{ visitConfig(record).primaryLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).primaryPlaceholder"
+              :value="readField(record, visitConfig(record).primaryKey)"
+              @input="updateTextField(index, visitConfig(record).primaryKey, $event.detail.value)"
+            />
+          </view>
+
+          <view v-if="visitConfig(record).checkupTypeKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).checkupTypeLabel }}</text>
+            <picker
+              mode="selector"
+              :range="fieldOptionLabels(checkupTypeOptions)"
+              :value="fieldOptionIndex(record, checkupTypeOptions, 'checkupType')"
+              :disabled="hasSavingRecord"
+              @change="updateOptionField(index, 'checkupType', checkupTypeOptions, $event.detail.value)"
+            >
+              <view class="field-picker">
+                {{ readOptionFieldLabel(record, checkupTypeOptions, 'checkupType') || '请选择体检类型' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="field-group">
+            <text class="field-label">{{ visitConfig(record).adviceLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).advicePlaceholder"
+              :value="readField(record, visitConfig(record).adviceKey)"
+              @input="updateTextField(index, visitConfig(record).adviceKey, $event.detail.value)"
+            />
+          </view>
+
+          <view v-if="visitConfig(record).medicationKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).medicationLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              placeholder="多个用顿号隔开，例如：速诺、胃复安"
+              :value="readField(record, visitMedicationKey(record))"
+              @input="updateTextField(index, visitMedicationKey(record), $event.detail.value)"
+            />
+          </view>
+
+          <view class="field-group">
+            <text class="field-label">{{ visitConfig(record).notesLabel }}</text>
+            <textarea
+              class="field-textarea"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).notesPlaceholder"
+              :value="readField(record, visitConfig(record).notesKey)"
+              @input="updateTextField(index, visitConfig(record).notesKey, $event.detail.value)"
+            />
+          </view>
+
+          <view class="field-group">
+            <text class="more-toggle" @tap="toggleMore(index)">
+              {{ isMoreExpanded(record, index) ? '收起选填项 ▲' : visitOptionalToggleLabel(record) }}
+            </text>
+
+            <view v-if="isMoreExpanded(record, index)" class="more-fields">
+              <view v-if="visitConfig(record).followUpKey" class="field-group">
+                <text class="field-label">{{ visitConfig(record).followUpLabel }}</text>
+                <picker
+                  mode="date"
+                  :disabled="hasSavingRecord"
+                  :value="readField(record, visitFollowUpKey(record))"
+                  @change="updateTextField(index, visitFollowUpKey(record), $event.detail.value)"
+                >
+                  <view class="field-picker">
+                    {{ readField(record, visitFollowUpKey(record)) || '需要复查时才填' }}
+                  </view>
+                </picker>
+              </view>
+
+              <view class="field-group">
+                <text class="field-label">{{ visitConfig(record).vetLabel }}</text>
+                <input
+                  class="field-input"
+                  type="text"
+                  :disabled="hasSavingRecord"
+                  placeholder="例如：王医生（记不清可以不填）"
+                  :value="readField(record, visitConfig(record).vetKey)"
+                  @input="updateTextField(index, visitConfig(record).vetKey, $event.detail.value)"
+                />
+              </view>
+            </view>
+          </view>
+
+          <!-- 已经好了：只给已保存的就诊记录。状态决定这条还算不算"还没结束的问题"，
+               也就是会不会进 AI 健康分析 —— 但不该在填表时问家长。 -->
+          <view
+            v-if="visitConfig(record).complaintKey && isSavedRecord(record, index)"
+            class="field-group"
+          >
+            <text class="field-label">这条现在的情况</text>
+            <text class="status-switch" @tap="toggleVisitStatus(index)">
+              {{ medicalStatusToggle(record).label }}
+            </text>
+            <text class="field-label__hint">{{ medicalStatusToggle(record).hint }}</text>
+          </view>
+        </template>
+
+        <template v-else>
         <view class="field-group">
           <text class="field-label">{{ fieldConfigForRecord(record).primary.label }}</text>
           <picker
@@ -257,68 +400,7 @@
           />
         </view>
 
-        <!-- 更多：症状描述、体检类型、用药、复查日期。默认收起，
-             不挡着"只填一个诊断结果"的家长。 -->
-        <view v-if="hasExtraFields(record)" class="field-group">
-          <text class="more-toggle" @tap="toggleMore(index)">
-            {{ isMoreExpanded(record, index) ? '收起更多 ▲' : '更多（症状、用药、体检类型…）▼' }}
-          </text>
-
-          <view v-if="isMoreExpanded(record, index)" class="more-fields">
-            <view v-if="fieldConfigForRecord(record).extras?.complaint" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.complaint!.label }}</text>
-              <input
-                class="field-input"
-                type="text"
-                :disabled="hasSavingRecord"
-                :placeholder="`请输入${fieldConfigForRecord(record).extras!.complaint!.label}`"
-                :value="readField(record, fieldConfigForRecord(record).extras!.complaint!.key)"
-                @input="updateTextField(index, fieldConfigForRecord(record).extras!.complaint!.key, $event.detail.value)"
-              />
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.checkupType" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.checkupType!.label }}</text>
-              <picker
-                mode="selector"
-                :range="fieldOptionLabels(fieldConfigForRecord(record).extras!.checkupType!.options)"
-                :value="fieldOptionIndex(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key)"
-                :disabled="hasSavingRecord"
-                @change="updateOptionField(index, fieldConfigForRecord(record).extras!.checkupType!.key, fieldConfigForRecord(record).extras!.checkupType!.options, $event.detail.value)"
-              >
-                <view class="field-picker">
-                  {{ readOptionFieldLabel(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key) || `请选择${fieldConfigForRecord(record).extras!.checkupType!.label}` }}
-                </view>
-              </picker>
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.medications" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.medications!.label }}</text>
-              <input
-                class="field-input"
-                type="text"
-                :disabled="hasSavingRecord"
-                placeholder="多个用顿号隔开，例如：速诺、胃复安"
-                :value="readField(record, fieldConfigForRecord(record).extras!.medications!.key)"
-                @input="updateTextField(index, fieldConfigForRecord(record).extras!.medications!.key, $event.detail.value)"
-              />
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.followUpDate" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.followUpDate!.label }}</text>
-              <picker
-                mode="date"
-                :disabled="hasSavingRecord"
-                :value="readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key)"
-                @change="updateTextField(index, fieldConfigForRecord(record).extras!.followUpDate!.key, $event.detail.value)"
-              >
-                <view class="field-picker">
-                  {{ readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key) || '需要复查时才填' }}
-                </view>
-              </picker>
-            </view>
-          </view>
-        </view>
+        </template>
 
         <view class="field-group">
           <view class="field-label field-label--row">
@@ -431,6 +513,7 @@ import {
   formatHealthCheckupTypeLabel,
   getHealthVisitEmptyDescription,
   getHealthVisitFieldConfig,
+  resolveMedicalStatusToggle,
   getHealthVisitSectionMeta,
   getHealthVisitValidationError,
   getHealthCheckupTypeOptions,
@@ -645,6 +728,13 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 单一类型板块（现在只剩「过敏」）的字段配置。
+ *
+ * 病历/检查早已走 visitConfig（见上）；这里的 medical / checkup 两个分支
+ * 是 2026-10-01 合并之前留下的，页面不会再传这两个值进来，
+ * 保留只为"万一有别的入口传进来也别渲染成空白"。
+ */
 function getFieldConfig(type: HealthRecordType): FieldConfig {
   if (type === 'medical') {
     return {
@@ -676,44 +766,66 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
 }
 
 /**
- * 「病例」模式下的表单配置：一条记录一张表单，按它的类型决定字段。
+ * 病历/检查的表单配置：直接用 utils 里那张字段对照表（2026-10-02 精简版）。
  *
- * 对照表（2026-10-01 与老板确认）：
- *   日期        → 就诊日期 / 体检日期
- *   诊断结果    → 诊断结果（就诊）/ 检查结论（体检）★ 唯一必填的内容字段
- *   处理或建议  → 处理方式（就诊）/ 医生建议（体检）
- *   兽医        → 两张表都有
- *   备注        → 只有就诊有地方存（体检表没有 notes 字段）
- *   更多        → 症状描述、体检类型、用药、复查日期
+ * 这里不再往 FieldConfig 那套通用形状里塞 —— 病历/检查的字段顺序、可见性、
+ * 标签全都跟过敏那种单一记录不一样，硬套一层只会绕。
  */
-function getVisitFieldConfig(record: Record<string, any>): FieldConfig {
-  const kind = resolveHealthVisitKind(record)
-  const visit = getHealthVisitFieldConfig(kind)
-
-  return {
-    primary: { key: visit.primaryKey, label: visit.primaryLabel },
-    date: { key: visit.dateKey, label: visit.dateLabel },
-    secondary: { key: visit.adviceKey, label: visit.adviceLabel },
-    status: visit.showsStatus
-      ? { key: 'status', label: '状态', options: getMedicalStatusOptions() }
-      : null,
-    notes: visit.notesKey ? { key: visit.notesKey, label: visit.notesLabel } : null,
-    veterinarian: { key: 'veterinarian', label: '兽医' },
-    kindSelect: true,
-    extras: {
-      complaint: visit.showsComplaint ? { key: 'chiefComplaint', label: '症状或疾病' } : undefined,
-      checkupType: visit.showsCheckupType
-        ? { key: 'checkupType', label: '体检类型', options: getHealthCheckupTypeOptions() }
-        : undefined,
-      medications: visit.showsMedications ? { key: 'medications', label: '用药' } : undefined,
-      followUpDate: visit.showsFollowUpDate ? { key: 'followUpDate', label: '复查日期' } : undefined,
-    },
-  }
+function visitConfig(record: Record<string, any>) {
+  return getHealthVisitFieldConfig(resolveHealthVisitKind(record))
 }
 
-/** 模板里逐条取配置：合并模式按记录类型，其余模式按当前板块 */
-function fieldConfigForRecord(record: Record<string, any>): FieldConfig {
-  return isVisitMode.value ? getVisitFieldConfig(record) : getFieldConfig(baseType.value)
+/** 可选字段在 TS 类型上是 string | null，模板里取 key 时统一在这里收口 */
+function visitComplaintKey(record: Record<string, any>) {
+  return visitConfig(record).complaintKey || ''
+}
+
+function visitMedicationKey(record: Record<string, any>) {
+  return visitConfig(record).medicationKey || ''
+}
+
+function visitFollowUpKey(record: Record<string, any>) {
+  return visitConfig(record).followUpKey || ''
+}
+
+const checkupTypeOptions = computed(() => getHealthCheckupTypeOptions())
+
+/** 「还有 N 项选填（复查日期、兽医）」——把里面是什么写在按钮上，不藏字段 */
+function visitOptionalToggleLabel(record: Record<string, any>) {
+  const config = visitConfig(record)
+  const labels = [
+    config.followUpKey ? config.followUpLabel : '',
+    config.vetLabel,
+  ].filter(Boolean)
+
+  return `还有 ${labels.length} 项选填（${labels.join('、')}）▼`
+}
+
+/** 一键「已经好了」的文案（状态不再进表单，但库里的 status 仍然决定进不进 AI 分析） */
+function medicalStatusToggle(record: Record<string, any>) {
+  return resolveMedicalStatusToggle(record)
+}
+
+function toggleVisitStatus(index: number) {
+  const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
+  const next = resolveMedicalStatusToggle(record)
+  record.status = next.status
+
+  uni.showToast({
+    title: next.status === 'RECOVERED'
+      ? '已标记「已经好了」，记得点保存'
+      : '已改回「还在治疗中」，记得点保存',
+    icon: 'none',
+  })
+}
+
+/** 其它板块（过敏）的字段配置（病历/检查不再走这里） */
+function fieldConfigForRecord(_record: Record<string, any>): FieldConfig {
+  return getFieldConfig(baseType.value)
 }
 
 /**
@@ -1226,11 +1338,6 @@ function toggleMore(index: number) {
 }
 
 /** 还要不要显示「更多」这一栏：有次要字段才有必要 */
-function hasExtraFields(record: Record<string, any>) {
-  const extras = fieldConfigForRecord(record).extras
-  return Boolean(extras && (extras.complaint || extras.checkupType || extras.medications || extras.followUpDate))
-}
-
 /**
  * 切换这条记录的类型（就诊 ↔ 体检）。
  *
@@ -1725,6 +1832,17 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 26rpx;
   color: var(--health-accent, #1e3a2f);
   padding: 8rpx 0;
+}
+
+/* 「已经好了」一键切换（2026-10-02）：状态不进表单，但好了要能一键标掉 */
+.status-switch {
+  display: inline-block;
+  margin-top: 10rpx;
+  padding: 12rpx 22rpx;
+  font-size: 26rpx;
+  color: var(--health-accent, #1e3a2f);
+  background: rgba(15, 107, 67, 0.08);
+  border-radius: 999rpx;
 }
 
 .more-fields {

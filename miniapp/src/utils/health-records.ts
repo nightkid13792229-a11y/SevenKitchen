@@ -39,8 +39,13 @@ export interface DogHealthStateSnapshot {
 export const HEALTH_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup', 'allergy']
 export const HEALTH_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const HEALTH_ATTACHMENT_MAX_SIZE_LABEL = '10MB'
-export const HEALTH_ATTACHMENT_HINT_TEXT =
-  '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。'
+/**
+ * 附件区的说明（2026-10-02 精简）。
+ *
+ * 原来把六种格式全列出来，是表单上最长的一行字，家长读不完；
+ * 真正有用的信息只有两条：能传什么、多大。格式细节留给出错时的提示。
+ */
+export const HEALTH_ATTACHMENT_HINT_TEXT = '图片或 PDF，单个不超过 10MB'
 const HEALTH_RECORD_ATTACHMENT_CACHE_PREFIX = 'dog-health-record-attachments'
 
 const HEALTH_CHECKUP_TYPE_OPTIONS: HealthCheckupTypeOption[] = [
@@ -1219,27 +1224,63 @@ export const HEALTH_VISIT_KIND_LABELS: Record<HealthVisitKind, string> = {
 /** 合并列表里挂在每条记录上的归属标记（只在内存里用，不落库） */
 export const HEALTH_VISIT_KIND_FIELD = '__visitKind'
 
-/** 体检类型缺省值：收进「更多」也不会卡住保存 */
+/** 体检类型缺省值：默认「常规体检」，家长不用先做选择题 */
 export const HEALTH_VISIT_DEFAULT_CHECKUP_TYPE = 'ROUTINE'
 
+/**
+ * 「病历/检查」表单的字段对照表（2026-10-02 按老板要求精简过一版）。
+ *
+ * 精简的原则（老板定的，也是审计结论）：
+ *   · **状态字段从表单里拿掉** —— 家长填表时不该做"待确认/治疗中/已康复/慢性"
+ *     这种系统选择题。库里仍然有 status（缺省待确认，算作"还没好"进 AI 分析），
+ *     记录存好之后卡片上给一个一键切换「已经好了」。
+ *   · **必填只剩两件**：日期 +（主要问题 或 医生怎么说）至少一条。
+ *     很多家长拿不到明确诊断（医生只说"可能是肠胃炎"），不该被卡住。
+ *   · **备注改名「其它想说的」**（老板：保留但改名）——
+ *     原来的"备注"后端/营养师端/AI 都不读，是个纯废字段；
+ *     改名之后它是"家长还想补充的话"，并且已经接进 AI 分析（第九期）。
+ *   · 体检类型、用药这些"能一眼答上来"的字段从「更多」里提到明面；
+ *     只有复查日期、兽医这种少数情况才有的收进「选填」。
+ *
+ * 每个字段的 key 就是接口/数据库的字段名，不另造一套。
+ */
 export interface HealthVisitFieldConfig {
   kind: HealthVisitKind
   kindLabel: string
   dateKey: string
   dateLabel: string
-  /** 就诊=诊断结果；体检=检查结论（体检没有"诊断"，措辞上不能让家长误会） */
+  /** 主内容字段：就诊=医生怎么说（诊断）；体检=检查结论 */
   primaryKey: string
   primaryLabel: string
+  primaryPlaceholder: string
+  /**
+   * 就诊独有的「主要问题」（症状）。
+   * 它和 primaryKey **至少填一个**：它是饮食标签派生的输入之一，
+   * 也是家长最容易答上来的那一项（体检为 null）。
+   */
+  complaintKey: string | null
+  complaintLabel: string
+  complaintPlaceholder: string
+  /** 处理：就诊=处理与提醒（treatment）；体检=医生建议（recommendations） */
   adviceKey: string
   adviceLabel: string
-  /** 备注只有就诊有地方存——体检表里没有 notes 字段 */
-  notesKey: string | null
+  advicePlaceholder: string
+  /** 用药：只有就诊有这一列（体检表没有） */
+  medicationKey: string | null
+  medicationLabel: string
+  /** 其它想说的（notes，两张表都有；原名「备注」） */
+  notesKey: string
   notesLabel: string
-  showsComplaint: boolean
-  showsCheckupType: boolean
-  showsMedications: boolean
-  showsStatus: boolean
-  showsFollowUpDate: boolean
+  notesPlaceholder: string
+  /** 兽医 */
+  vetKey: string
+  vetLabel: string
+  /** 复查日期：只有就诊有 */
+  followUpKey: string | null
+  followUpLabel: string
+  /** 体检类型：只有体检有 */
+  checkupTypeKey: string | null
+  checkupTypeLabel: string
 }
 
 const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig> = {
@@ -1249,16 +1290,26 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     dateKey: 'visitDate',
     dateLabel: '就诊日期',
     primaryKey: 'diagnosis',
-    primaryLabel: '诊断结果',
+    // 「诊断结果」对家长太专业：他记得住的是"医生怎么说"
+    primaryLabel: '医生怎么说',
+    primaryPlaceholder: '例如：急性肠胃炎，医生说先禁食 12 小时',
+    complaintKey: 'chiefComplaint',
+    complaintLabel: '主要问题',
+    complaintPlaceholder: '例如：呕吐、拉稀、精神差',
     adviceKey: 'treatment',
-    adviceLabel: '处理或建议',
+    adviceLabel: '处理与提醒',
+    advicePlaceholder: '例如：打了止吐针，开了三天药',
+    medicationKey: 'medications',
+    medicationLabel: '用药',
     notesKey: 'notes',
-    notesLabel: '备注',
-    showsComplaint: true,
-    showsCheckupType: false,
-    showsMedications: true,
-    showsStatus: true,
-    showsFollowUpDate: true,
+    notesLabel: '其它想说的',
+    notesPlaceholder: '还有什么是我们该知道的？例如：刚换了狗粮、当天吐了两次',
+    vetKey: 'veterinarian',
+    vetLabel: '兽医',
+    followUpKey: 'followUpDate',
+    followUpLabel: '复查日期',
+    checkupTypeKey: null,
+    checkupTypeLabel: '',
   },
   checkup: {
     kind: 'checkup',
@@ -1266,16 +1317,26 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     dateKey: 'checkupDate',
     dateLabel: '体检日期',
     primaryKey: 'findings',
+    // 体检没有"诊断"：措辞上不能让家长以为体检也能下诊断
     primaryLabel: '检查结论',
+    primaryPlaceholder: '例如：血常规正常，生化轻度升高',
+    complaintKey: null,
+    complaintLabel: '',
+    complaintPlaceholder: '',
     adviceKey: 'recommendations',
-    adviceLabel: '处理或建议',
+    adviceLabel: '医生建议',
+    advicePlaceholder: '例如：两周后复查，注意饮水',
+    medicationKey: null,
+    medicationLabel: '',
     notesKey: 'notes',
-    notesLabel: '备注',
-    showsComplaint: false,
-    showsCheckupType: true,
-    showsMedications: false,
-    showsStatus: false,
-    showsFollowUpDate: false,
+    notesLabel: '其它想说的',
+    notesPlaceholder: '还有什么是我们该知道的？例如：当天没吃饭、紧张',
+    vetKey: 'veterinarian',
+    vetLabel: '兽医',
+    followUpKey: null,
+    followUpLabel: '',
+    checkupTypeKey: 'checkupType',
+    checkupTypeLabel: '体检类型',
   },
 }
 
@@ -1505,6 +1566,36 @@ export function resolveHealthVisitDate(record: Record<string, any> | null | unde
 }
 
 /**
+ * 「已经好了」一键切换（2026-10-02 老板定：状态不进表单）。
+ *
+ * 表单里不再问状态，但库里的 status 仍然决定这条记录算不算"还没结束的问题"
+ * （时间线把它喂给 AI 七项分析）。所以给已保存的就诊记录留一个一键开关：
+ * 好了点一下 → 已康复（不再进 AI）；点错了再点回来 → 治疗中。
+ *
+ * 体检没有这个概念（检查是一次性的事实），所以只有就诊有。
+ */
+export function resolveMedicalStatusToggle(record: Record<string, any> | null | undefined): {
+  status: MedicalStatusValue
+  label: string
+  hint: string
+} {
+  const current = String(record?.status || '').trim()
+  if (current === 'RECOVERED') {
+    return {
+      status: 'TREATING',
+      label: '还在治疗中？点一下改回来',
+      hint: '已标记为"已经好了"，不再算进 AI 分析',
+    }
+  }
+
+  return {
+    status: 'RECOVERED',
+    label: '已经好了',
+    hint: '还没好就别点，没好之前会一直算进 AI 分析',
+  }
+}
+
+/**
  * 病史 + 体检 → 一条按日期从新到旧的列表。
  *
  * 排序规则：日期倒序；同一天**就诊排在体检前面**（先看病、后体检更符合直觉）；
@@ -1534,10 +1625,15 @@ export function mergeHealthVisitRecords(
 }
 
 /**
- * 校验：**只有「诊断结果 / 检查结论」是必填的内容字段**。
+ * 校验：**必填只剩两件**（2026-10-02 老板定的精简版）。
  *
- * 老板第 3 条明确"病史可以只保留一个诊断结果"——症状描述、用药、状态
- * 这些一律不拦着保存，家长想记多少记多少。
+ *   · 日期必填 —— 它是时间线上唯一的时间锚点
+ *   · 就诊：**「主要问题」和「医生怎么说」至少填一个**
+ *     （很多家长拿不到明确诊断，医生只说"可能是肠胃炎"；
+ *      这两项都是饮食标签派生的输入，填哪个都不亏）
+ *   · 体检：检查结论必填（体检的价值就在结论上）
+ *
+ * 用药、处理与提醒、其它想说的、复查日期、兽医一律不拦着保存。
  */
 export function getHealthVisitValidationError(
   kind: HealthVisitKind,
@@ -1547,6 +1643,19 @@ export function getHealthVisitValidationError(
 
   if (!normalizeOptionalText(record?.[config.dateKey])) {
     return `请选择${config.dateLabel}`
+  }
+
+  // 就诊：「主要问题」和「医生怎么说」填一个就能存。
+  // 两项都是饮食标签派生的输入，家长答得上来哪个就填哪个。
+  if (config.complaintKey) {
+    const hasComplaint = Boolean(normalizeOptionalText(record?.[config.complaintKey]))
+    const hasPrimary = Boolean(normalizeOptionalText(record?.[config.primaryKey]))
+
+    if (!hasComplaint && !hasPrimary) {
+      return `请至少填写「${config.complaintLabel}」或「${config.primaryLabel}」`
+    }
+
+    return null
   }
 
   if (!normalizeOptionalText(record?.[config.primaryKey])) {
@@ -1615,7 +1724,20 @@ export function normalizeMedicationList(value: unknown): string[] {
     .filter(Boolean)
 }
 
-/** 列表行的标题与摘要 */
+/**
+ * 列表行的标题与摘要（2026-10-02 改）。
+ *
+ * 标题改成**"有什么就显示什么"**：
+ *   · 就诊：主要问题 → 医生怎么说 → 新记录
+ *   · 体检：体检类型 → 检查结论 → 新记录
+ *
+ * 原来固定用"症状"当标题，可症状藏在「更多」里 ——
+ * 家长只填了诊断+日期，卡片上却写着「未填写症状」；
+ * 定制食谱下单时系统代写的那条记录更是直接显示"定制食谱时提供"。
+ *
+ * 摘要里不再显示状态：状态已经不在表单里问了（老板 2026-10-02 定），
+ * 卡片上摆一个家长改不了的标签只会让人困惑；营养师端照旧能看到。
+ */
 export function buildHealthVisitSummary(
   kind: HealthVisitKind,
   record: Record<string, any>,
@@ -1623,14 +1745,18 @@ export function buildHealthVisitSummary(
   const config = getHealthVisitFieldConfig(kind)
   const attachmentCount = normalizeAttachments(record?.attachments).length
 
-  const title = String(record?.[config.primaryKey] || '').trim()
-    || `未填写${config.primaryLabel}`
+  const candidates = kind === 'checkup'
+    ? [formatHealthCheckupTypeLabel(record?.checkupType), record?.[config.primaryKey]]
+    : [record?.[config.complaintKey as string], record?.[config.primaryKey]]
+
+  const title = candidates
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || '新记录'
 
   const parts = [
-    resolveHealthVisitDate(record),
-    kind === 'checkup'
-      ? formatHealthCheckupTypeLabel(record?.checkupType)
-      : formatMedicalStatusLabel(record?.status),
+    // 用调用方传进来的 kind 取日期字段，而不是再从记录里反查归属 ——
+    // 记录的 __visitKind 标记是界面层贴的，工具函数不该依赖它
+    String(record?.[config.dateKey] || '').trim(),
     String(record?.[config.adviceKey] || '').trim(),
     attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
   ].filter(Boolean)

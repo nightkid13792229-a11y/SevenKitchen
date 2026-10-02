@@ -5,7 +5,6 @@ import type {
 import {
   KNOWLEDGE_DOMAIN_LABELS,
 } from '../../domain/recipe-designer/knowledge-base/types';
-import { isKnowledgeEntryApproved } from '../../domain/recipe-designer/knowledge-base/approvals';
 import {
   isKnownTag,
   isRetrievalTag,
@@ -187,14 +186,13 @@ export class KnowledgeBaseService {
     }
     // 未审核 / 被驳回的一律过滤；缺省（没写 reviewStatus）视为未审核。
     //
-    // 2026-10-02：审核结论以 `knowledge-base/approvals.ts` 里那张**登记表**为准 ——
-    // 它是 scripts/apply-knowledge-review.ts 读合作兽医填好的审核 CSV 生成的，
-    // 带审核人与日期，可追溯。条目自带的 reviewStatus 只表示"作者写的初始状态"，
-    // 所以两边认一个就算通过（老数据里已标 APPROVED 的照旧有效）。
-    return entries.filter(
-      (entry) =>
-        entry.reviewStatus === 'APPROVED' || isKnowledgeEntryApproved(entry.id),
-    );
+    // 2026-10-02：审核结论**直接标在条目自己身上**（`reviewStatus: 'APPROVED'`）。
+    // 原来另外有一张 `knowledge-base/approvals.ts` 登记表，老板说不用留记录，已撤掉 ——
+    // 状态跟着内容走反而更不容易出错：条目被删/改了 id，不会留下"审了个不存在的东西"的孤儿，
+    // 也不会出现"编号被复用、旧审核静默套在新内容上"。
+    // 约定（写在各领域文件表头）：新条目一律先写 `PENDING_REVIEW`；**改内容就退回 PENDING_REVIEW**，
+    // 换了内容就等于没审过，顾客侧立刻看不到。
+    return entries.filter((entry) => entry.reviewStatus === 'APPROVED');
   }
 
   /**

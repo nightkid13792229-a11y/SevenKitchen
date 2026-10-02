@@ -10,7 +10,7 @@
  *   · 复核日期已经过去（= 这条知识其实过期了，但没人发现）
  *
  * 这个脚本把这些**内容层面**的问题一次列出来，供人工判断。
- * 只读、不写库、不改条目；退出码 1 表示有硬问题（重复 id/标题、复核过期、待审核领域里混进已审核）。
+ * 只读、不写库、不改条目；退出码 1 表示有硬问题（重复 id/标题、复核过期）。
  *
  * 用法：
  *   cd backend && npx ts-node -r tsconfig-paths/register scripts/audit-health-knowledge.ts
@@ -21,7 +21,6 @@ import {
   HEALTH_ONLY_DOMAINS,
   type KnowledgeEntry,
 } from '../src/domain/recipe-designer/knowledge-base/types';
-import { isKnowledgeEntryApproved } from '../src/domain/recipe-designer/knowledge-base/approvals';
 import { KNOWLEDGE_SOURCES } from '../src/domain/recipe-designer/knowledge-base/source-registry';
 
 export interface HealthKnowledgeAudit {
@@ -168,16 +167,14 @@ export function auditHealthKnowledge(
       problems.push(`条目 ${entry.id} 的复核日期已过（${entry.reviewBy}）`);
     }
 
-    // 待审核领域里混进 APPROVED：老板定的边界，没人审过不许标已审核。
-    // 2026-10-02：审核结论以 approvals.ts 那张登记表为准（由兽医填的 CSV 回填生成），
-    // 只标了 reviewStatus、登记表里却没有的，仍然算"没有审核记录"。
-    if (
-      entry.reviewStatus === 'APPROVED' &&
-      healthOnly.has(entry.domain) &&
-      !isKnowledgeEntryApproved(entry.id)
-    ) {
-      problems.push(
-        `条目 ${entry.id} 是健康侧条目却标成 APPROVED —— 必须有审核记录才能标已审核`,
+    // 顾客侧开不开放，只看条目自己的 reviewStatus（2026-10-02）：
+    // 原来另有一张 approvals.ts 登记表，老板说不用留记录，已撤掉。
+    // 这里不再判"有没有审核记录"，改成把**还没开放的**健康侧条目列出来 ——
+    // 不是错误，是提醒：写完了却忘了标 APPROVED，顾客那边就永远看不到。
+    if (healthOnly.has(entry.domain) && entry.reviewStatus !== 'APPROVED') {
+      warnings.push(
+        `条目 ${entry.id}（健康侧）还不是 APPROVED，顾客侧看不到` +
+          `（当前状态：${entry.reviewStatus ?? '缺省=未审核'}）`,
       );
     }
 

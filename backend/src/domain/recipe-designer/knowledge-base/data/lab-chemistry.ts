@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *      只写"这个指标反映什么、偏高偏低通常意味着什么、该结合什么一起看、下一步查什么"。
  *   2. **不做诊断**。只能说"提示/需要结合/建议由兽医判断"，不能下结论。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -57,7 +59,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-022',
@@ -98,7 +100,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-023',
@@ -140,7 +142,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-024',
@@ -182,7 +184,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-025',
@@ -223,7 +225,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-026',
@@ -265,7 +267,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-027',
@@ -306,7 +308,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-028',
@@ -348,7 +350,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-029',
@@ -389,7 +391,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-030',
@@ -426,7 +428,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     urgency: 'SOON',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-031',
@@ -468,7 +470,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-032',
@@ -510,7 +512,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-033',
@@ -552,7 +554,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-034',
@@ -595,7 +597,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-035',
@@ -637,7 +639,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-036',
@@ -685,7 +687,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-037',
@@ -726,7 +728,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-038',
@@ -774,7 +776,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-039',
@@ -816,7 +818,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-040',
@@ -857,7 +859,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-041',
@@ -898,7 +900,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-042',
@@ -940,6 +942,6 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

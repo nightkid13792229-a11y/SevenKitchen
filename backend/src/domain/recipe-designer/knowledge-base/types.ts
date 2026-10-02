@@ -248,6 +248,13 @@ export interface KnowledgeEntry {
   conflicts?: KnowledgeConflict[];
   /** 下次复核日期 YYYY-MM-DD（配合复核 SOP） */
   reviewBy?: string;
-  /** 审核状态；**缺省视为未审核**，顾客侧看不到 */
+  /**
+   * 审核状态；**缺省视为未审核**，顾客侧看不到。
+   *
+   * 2026-10-02 起这是顾客侧放行的**唯一凭据**（原来另有一张 approvals.ts 登记表，
+   * 老板说不用留审核记录，已撤掉）。两条纪律：
+   *   · 新条目一律先写 `PENDING_REVIEW`，审核通过才改 `APPROVED`；
+   *   · **改动某条内容就把它退回 `PENDING_REVIEW`** —— 换了内容就等于没审过。
+   */
   reviewStatus?: KnowledgeReviewStatus;
 }

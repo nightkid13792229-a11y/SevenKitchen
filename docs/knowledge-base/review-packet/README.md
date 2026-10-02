@@ -29,17 +29,24 @@ npx ts-node -r tsconfig-paths/register scripts/audit-health-knowledge.ts
 复核日期已过期、健康侧条目被误标成已审核。
 **硬问题（退出码 1）必须清零再送审**；"待人工判断"那部分可以自己先过一眼。
 
-## 审核结论怎么用（2026-10-02 起有工具了）
+## 审核结论怎么用（2026-10-02 简化）
 
-兽医填完 CSV 的「审核结论（请填）」列之后，**一条命令回填**：
+老板当天定了两条：**审核人不用写、审核记录也不用写**。
+所以原来那张 `knowledge-base/approvals.ts` 登记表（带审核人+日期）与生成它的
+`scripts/apply-knowledge-review.ts` 都已撤掉 —— 现在审核结论**直接标在条目自己身上**：
 
-```bash
-cd backend
-# 先预览（默认什么都不写），CSV 路径缺省取 review-packet 里最新那份
-npx ts-node -r tsconfig-paths/register scripts/apply-knowledge-review.ts --reviewer "XX动物医院 王医生"
-# 确认无误再落盘
-npx ts-node -r tsconfig-paths/register scripts/apply-knowledge-review.ts --reviewer "XX动物医院 王医生" --apply
-```
+| 结论 | 怎么落 |
+|---|---|
+| 通过 | 把这批条目的 `reviewStatus` 改成 `APPROVED`（顾客侧立刻可见） |
+| 需修改 | 条目保持 `PENDING_REVIEW`；意见打印出来，我们改完内容后**再走一轮送审** |
+| 删除 | 不自动删（删内容是破坏性操作），列入清单人工处理 |
+| 拿不准 / 未填 | 原样保持 `PENDING_REVIEW` |
+
+⚠️ 两条纪律：
+· **新写的条目一律先写 `PENDING_REVIEW`** —— 别忘了标 `APPROVED`，否则顾客永远看不到；
+· **改动某条内容就要把它退回 `PENDING_REVIEW`** —— 换了内容就等于没审过。
+（这两条已写进各领域文件表头，`scripts/audit-health-knowledge.ts` 会把"还没标 APPROVED
+的健康侧条目"列出来提醒。）
 
 | 结论 | 工具做什么 |
 |---|---|

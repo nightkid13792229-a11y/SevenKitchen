@@ -91,7 +91,7 @@ describe('健康知识条目自检', () => {
     );
   });
 
-  it('健康侧条目被标成已审核会被拦下', () => {
+  it('健康侧条目标成已审核不再算问题（登记表已撤，审核状态就写在条目上）', () => {
     const healthDomain = Object.keys(
       result.byDomain,
     )[0] as KnowledgeEntry['domain'];
@@ -106,7 +106,30 @@ describe('健康知识条目自检', () => {
 
     const fake = auditHealthKnowledge(approved, { today: '2026-10-01' });
 
-    expect(fake.problems.some((item) => item.includes('APPROVED'))).toBe(true);
+    // 2026-10-02：老板要求不留审核记录，approvals.ts 已撤掉，
+    // 所以"健康侧标了 APPROVED"就是正常状态，不该报错。
+    expect(fake.problems.some((item) => item.includes('APPROVED'))).toBe(false);
+  });
+
+  it('健康侧条目还没标 APPROVED 会提示（顾客侧看不到）', () => {
+    const healthDomain = Object.keys(
+      result.byDomain,
+    )[0] as KnowledgeEntry['domain'];
+    const pending: KnowledgeEntry[] = [
+      {
+        ...sample,
+        id: 'pending-1',
+        domain: healthDomain,
+        reviewStatus: 'PENDING_REVIEW',
+      },
+    ];
+
+    const fake = auditHealthKnowledge(pending, { today: '2026-10-01' });
+
+    expect(fake.problems).toEqual([]);
+    expect(
+      fake.warnings.some((item) => item.includes('顾客侧看不到')),
+    ).toBe(true);
   });
 
   it('猫专属正文会被提示（我们只做狗）', () => {

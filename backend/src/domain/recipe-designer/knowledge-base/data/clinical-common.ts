@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *   2. **不做诊断**，只写"看到什么、可能的方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -81,7 +83,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-035',
@@ -140,7 +142,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-036',
@@ -198,7 +200,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-037',
@@ -262,7 +264,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-038',
@@ -311,7 +313,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-039',
@@ -352,7 +354,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-040',
@@ -393,7 +395,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-041',
@@ -443,7 +445,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-042',
@@ -500,7 +502,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-043',
@@ -558,7 +560,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-044',
@@ -599,7 +601,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-045',
@@ -649,7 +651,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-046',
@@ -699,7 +701,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-047',
@@ -749,7 +751,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-048',
@@ -798,7 +800,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-049',
@@ -857,7 +859,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-050',
@@ -916,7 +918,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-051',
@@ -982,6 +984,6 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

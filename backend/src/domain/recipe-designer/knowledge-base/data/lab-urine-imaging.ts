@@ -10,7 +10,9 @@ import type { KnowledgeEntry } from '../types';
  *   1. **不写任何具体数值区间**（血细胞计数、比重、蛋白肌酐比等都一样）。
  *   2. **不做诊断**，只写"反映什么、意味着什么、下一步查什么"。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -47,7 +49,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-044',
@@ -80,7 +82,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-045',
@@ -114,7 +116,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-046',
@@ -147,7 +149,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-047',
@@ -180,7 +182,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-048',
@@ -213,7 +215,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-049',
@@ -247,7 +249,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-050',
@@ -283,7 +285,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-051',
@@ -316,7 +318,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-052',
@@ -350,7 +352,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-053',
@@ -386,7 +388,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-054',
@@ -420,7 +422,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-055',
@@ -454,7 +456,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-056',
@@ -488,7 +490,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-057',
@@ -524,7 +526,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-058',
@@ -559,7 +561,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-059',
@@ -597,7 +599,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-060',
@@ -637,7 +639,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-061',
@@ -675,7 +677,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-062',
@@ -709,6 +711,6 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
     urgency: 'SOON',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

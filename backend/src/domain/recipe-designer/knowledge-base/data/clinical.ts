@@ -16,7 +16,9 @@ import type { KnowledgeEntry } from '../types';
  *
  *   凡是 TRIAGE 类，urgency 必填 —— 这是唯一不让 AI 自由发挥的判断。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -56,7 +58,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-002',
@@ -91,7 +93,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-003',
@@ -124,7 +126,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-004',
@@ -163,7 +165,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-005',
@@ -196,7 +198,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-006',
@@ -229,7 +231,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-007',
@@ -263,7 +265,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-008',
@@ -298,7 +300,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-009',
@@ -330,7 +332,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-010',
@@ -363,7 +365,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-011',
@@ -397,7 +399,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-012',
@@ -430,7 +432,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-013',
@@ -462,7 +464,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-014',
@@ -495,7 +497,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-015',
@@ -525,6 +527,6 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

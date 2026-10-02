@@ -6,7 +6,6 @@ import { deriveKnowledgeTags } from '../../../src/application/recipe-designer/re
 import { KNOWLEDGE_SOURCES, isKnownSourceId, sourceOrganization } from '../../../src/domain/recipe-designer/knowledge-base/source-registry';
 import { KNOWLEDGE_TAG_VOCABULARY } from '../../../src/domain/recipe-designer/knowledge-base/tag-vocabulary';
 import { HEALTH_ONLY_DOMAINS } from '../../../src/domain/recipe-designer/knowledge-base/types';
-import { KNOWLEDGE_APPROVALS } from '../../../src/domain/recipe-designer/knowledge-base/approvals';
 
 /**
  * 知识库结构升级（2026-10-01）。
@@ -181,16 +180,18 @@ describe('知识库结构升级', () => {
   })
 
   describe('未审核内容不进顾客侧', () => {
-    it('新领域的条目全部是待审核状态', () => {
+    it('健康侧条目都是显式标过状态的（不靠缺省蒙混）', () => {
+      // 2026-10-02：审核结论直接标在条目上（reviewStatus），原来的登记表已撤掉。
+      // 缺省不写 = 未审核，所以"漏标"不会误放行；但漏标会让内容白白对顾客不可见，
+      // 这里要求每条都写清楚状态，写没写一眼能看出来。
       const newDomains = new Set<string>(HEALTH_ONLY_DOMAINS);
-      const approved = service
+      const missing = service
         .getAll()
         .filter((entry) => newDomains.has(entry.domain))
-        .filter((entry) => entry.reviewStatus === 'APPROVED')
+        .filter((entry) => !entry.reviewStatus)
         .map((entry) => entry.id)
 
-      // 老板定的边界：没人审过就不能标已审核
-      expect(approved).toEqual([])
+      expect(missing).toEqual([])
     })
 
     it('顾客侧的提示词里**只出现已审核**的条目', () => {
@@ -217,15 +218,21 @@ describe('知识库结构升级', () => {
       const citedIds = [...text.matchAll(/\[([a-z]+-\d+)\]/g)].map((m) => m[1])
       expect(citedIds.length).toBeGreaterThan(0)
 
-      const unapproved = citedIds.filter((id) => !KNOWLEDGE_APPROVALS[id])
+      const byId = new Map(service.getAll().map((entry) => [entry.id, entry]))
+      const unapproved = citedIds.filter(
+        (id) => byId.get(id)?.reviewStatus !== 'APPROVED',
+      )
       expect(unapproved).toEqual([])
     })
 
-    it('未审核的条目（登记表里没有的）确实进不了顾客侧', () => {
+    it('未审核的条目确实进不了顾客侧', () => {
       // 造一条"没审核过"的健康条目，直接问门禁要不要它
       const pending = service
         .getAll()
-        .find((entry) => entry.domain === 'CLINICAL' && !KNOWLEDGE_APPROVALS[entry.id])
+        .find(
+          (entry) =>
+            entry.domain === 'CLINICAL' && entry.reviewStatus !== 'APPROVED',
+        )
       if (!pending) {
         // 当前所有健康条目都审过了 —— 门禁的正确性由 knowledge-customer-gate.spec.ts 覆盖
         return
@@ -256,25 +263,20 @@ describe('知识库结构升级', () => {
     })
   })
 
-  describe('审核登记表与知识库对得上（2026-10-02 补）', () => {
-    it('登记表里的每个编号都必须是真实存在的条目', () => {
-      // 为什么这条要紧：登记表是顾客侧**唯一**的放行凭据，而它只存编号。
-      //   · 条目被删掉 / 改了 id → 登记表会留下一个"审了个不存在的东西"的孤儿，
-      //     白白让「已审核 N 条」这个数虚高；
-      //   · 更危险的是 id 被**复用**：编号不变、内容换成另一条，
-      //     旧审核记录会静默套在新内容上 —— 兽医根本没审过它。
-      // 所以删条目时必须同时处理它的审核记录，这条测试就是那道闸。
-      const existingIds = new Set(service.getAll().map((entry) => entry.id));
-      const orphans = Object.keys(KNOWLEDGE_APPROVALS).filter(
-        (id) => !existingIds.has(id),
-      );
+  describe('审核状态跟着内容走（2026-10-02 撤掉登记表之后）', () => {
+    it('顾客侧放行的条目全部是 APPROVED，且状态就写在条目上', () => {
+      // 原来"通过"记在另一张表里（approvals.ts），老板说不用留记录，已撤掉。
+      // 现在唯一的凭据是条目自己的 reviewStatus —— 好处是条目被删/改 id
+      // 不会再留下"审了个不存在的东西"的孤儿，也不会出现编号被复用后
+      // 旧审核静默套在新内容上。代价是**改内容必须手动退回 PENDING_REVIEW**，
+      // 这条测试至少保证"放行的都是显式标过的"。
+      const customer = (service as any).filterByAudience(
+        service.getAll(),
+        'customer',
+      ) as Array<{ id: string; reviewStatus?: string }>
 
-      expect(orphans).toEqual([]);
-    })
-
-    it('登记表里的编号不重复（同一编号只可能有一条审核记录）', () => {
-      const ids = Object.keys(KNOWLEDGE_APPROVALS);
-      expect(new Set(ids).size).toBe(ids.length);
+      expect(customer.length).toBeGreaterThan(0)
+      expect(customer.every((entry) => entry.reviewStatus === 'APPROVED')).toBe(true)
     })
   })
 

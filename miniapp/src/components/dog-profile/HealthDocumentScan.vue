@@ -30,10 +30,14 @@
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
-      <text v-if="resolvedTypeLabel" class="confirm__type">识别为：{{ resolvedTypeLabel }}</text>
+      <text v-if="resolvedTypeSummary" class="confirm__type">{{ resolvedTypeSummary }}</text>
       <text v-if="scanCountSummary" class="confirm__type">{{ scanCountSummary }}</text>
 
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
+        <!-- 一次传了化验单 + 门诊病历时，每条前面标出它是什么，别让顾客以为混了 -->
+        <text v-if="drafts.length > 1" class="confirm__card-kind">
+          {{ TYPE_LABELS[draftDocumentType(draft)] || '资料' }}
+        </text>
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
           <text class="confirm__label">{{ row.label }}</text>
           <text class="confirm__value">{{ row.value }}</text>
@@ -178,6 +182,30 @@ const activeDocumentType = computed<DocumentType>(() => (
   resolvedDocumentType.value || props.documentType
 ))
 
+/**
+ * 这一条草稿属于哪一类（一次传多张时可能混着化验单和门诊病历，
+ * 每条草稿都贴了自己的类型，见 scanAll 里的 __documentType）。
+ */
+function draftDocumentType(draft: Record<string, any>): DocumentType {
+  const own = String(draft?.__documentType || '').toUpperCase()
+  if (own && own !== 'AUTO' && own !== 'NOT_MEDICAL') {
+    return own as DocumentType
+  }
+
+  return (resolvedDocumentType.value || props.documentType) as DocumentType
+}
+
+/** 确认卡片顶部那句话：只有一类就说"识别为 X"，混着就都列出来 */
+const resolvedTypeSummary = computed(() => {
+  const types = [...new Set(drafts.value.map((draft) => draftDocumentType(draft)))]
+  const labels = types
+    .map((type) => TYPE_LABELS[type as ExplicitDocumentType] || '')
+    .filter(Boolean)
+
+  if (labels.length === 0) return ''
+  return `识别为：${labels.join(' + ')}`
+})
+
 /** 把一条草稿翻译成"标签 + 值"给顾客核对 */
 function describeDraft(draft: Record<string, any>): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = []
@@ -188,7 +216,9 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     }
   }
 
-  if (activeDocumentType.value === 'VACCINE_BOOK') {
+  const documentType = draftDocumentType(draft)
+
+  if (documentType === 'VACCINE_BOOK') {
     push('疫苗', draft.vaccineName)
     push('接种日期', draft.vaccinationDate)
     push('下次到期', draft.nextDueDate)
@@ -200,7 +230,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
   // 顾客核对时看到的，就是他接下来在表单里能改的那些 ——
   // 表单里已经删掉的字段（兽医）不该再出现在这里，
   // 表单里叫「医生怎么说」的，这里也不能写成「诊断结果」。
-  if (activeDocumentType.value === 'CHECKUP_REPORT') {
+  if (documentType === 'CHECKUP_REPORT') {
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
     push('医生建议', draft.recommendations)
@@ -208,7 +238,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     return rows
   }
 
-  if (activeDocumentType.value === 'MEDICAL_RECORD') {
+  if (documentType === 'MEDICAL_RECORD') {
     push('就诊日期', draft.visitDate)
     push('症状', draft.chiefComplaint)
     push('医生怎么说', draft.diagnosis)
@@ -264,10 +294,18 @@ async function scanAll(filePaths: string[]) {
   failureNotice.value = ''
   uploadedUrls.value = []
 
-  const collectedDrafts: Record<string, any>[] = []
   const collectedWarnings: string[] = []
-  // 每一张图各自判出来的类型（多张时按"多数页"定这份资料属于哪一类）
-  const detectedTypes: string[] = []
+  /**
+   * 按"这张图被判成什么"分组收草稿（2026-10-02 修的一个**数据丢失** bug）。
+   *
+   * 原来所有页的草稿都堆在一起、按多数票算成一种类型再合并成一条：
+   * 顾客一次传了「化验单 ×4 + 门诊病历 ×2」，多数票算成体检 →
+   * 保存时只提交体检字段，**病历里的诊断、医嘱、用药被整段丢掉**
+   * （实测：面包那次的"膀胱结石、膀胱炎 + 泌尿系统处方粮"就是这么丢的）。
+   * 现在按类型分组、各组各自合并 → 化验单成一条体检记录，
+   * 门诊病历成一条病历记录，谁也不吃掉谁。
+   */
+  const draftsByType = new Map<string, Record<string, any>[]>()
   let worstConfidence = 'HIGH'
   let failed = 0
 
@@ -302,16 +340,24 @@ async function scanAll(filePaths: string[]) {
         }
 
         const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
+        const type = String(res.data.documentType || '').toUpperCase()
+        // NOT_MEDICAL / AUTO 都不算一种表单类型
+        const imageType = type && type !== 'AUTO' && type !== 'NOT_MEDICAL'
+          ? type
+          : String(props.documentType || 'MEDICAL_RECORD').toUpperCase()
+
         if (list.length > 0) {
           // 2026-10-01：把顾客拍的这张原图挂到"这张图识别出来的草稿"上。
           // 识别结果只是从报告上抄下来的字，报告原件才是凭证（顾客要回看、医生要看原件）。
           // 后端返回的 drafts 里 attachments 是空数组，图片地址只有这里知道。
-          collectedDrafts.push(
+          const bucket = draftsByType.get(imageType) || []
+          bucket.push(
             ...list.map((draft: Record<string, any>) => ({
               ...draft,
               attachments: [uploaded.url],
             })),
           )
+          draftsByType.set(imageType, bucket)
           scannedImageCount.value += 1
         } else {
           // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
@@ -325,11 +371,6 @@ async function scanAll(filePaths: string[]) {
 
         const type = String(res.data.documentType || '').toUpperCase()
         // NOT_MEDICAL = 后端判定"这根本不是宠物的医疗资料"，
-        // 它不属于任何一种表单类型，不参与票选（草稿为空，最后会走到提示那条路）
-        if (type && type !== 'AUTO' && type !== 'NOT_MEDICAL') {
-          detectedTypes.push(type)
-        }
-
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
         if ((CONFIDENCE_RANK[itemConfidence] || 0) < (CONFIDENCE_RANK[worstConfidence] || 0)) {
           worstConfidence = itemConfidence
@@ -352,18 +393,24 @@ async function scanAll(filePaths: string[]) {
       collectedWarnings.push(`有 ${failed} 张没能识别，可以单独再试或手工补充`)
     }
 
-    // 类型按"多数页"定：一页被误判不该把整份资料带偏
+    // 类型按"多数页"定（只用于文案与兜底：真正的类型贴在每条草稿上）
     const resolvedType = resolveScannedDocumentType(
-      detectedTypes,
+      [...draftsByType.keys()],
       props.documentType,
     ) as DocumentType
 
-    // 多张图算一份资料（2026-10-01 第九期，老板定的）：
-    // 3 页体检报告 = 1 条记录 + 3 张原图，而不是 3 条各说一半的记录。
-    // **疫苗本例外** —— 一张本子读出的是多条各自的接种记录，合并会把几针并成一针。
-    drafts.value = resolvedType === 'VACCINE_BOOK'
-      ? collectedDrafts
-      : mergeScannedReportDrafts(collectedDrafts)
+    // 同类型的页合并成一条（3 页体检报告 = 1 条记录 + 3 张原图）；
+    // **疫苗本不合并** —— 一张本子读出的是多条各自的接种记录。
+    // 不同类型的页各自成条：化验单归化验单、门诊病历归病历。
+    const merged: Record<string, any>[] = []
+    for (const [type, list] of draftsByType.entries()) {
+      const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
+      for (const draft of groupDrafts) {
+        merged.push({ ...draft, __documentType: type })
+      }
+    }
+
+    drafts.value = merged
     warnings.value = collectedWarnings
     confidence.value = worstConfidence
     resolvedDocumentType.value = resolvedType
@@ -484,6 +531,14 @@ function discard() {
   font-size: 26rpx;
   font-weight: 600;
   color: #1e3a2f;
+}
+
+.confirm__card-kind {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #6b7a52;
 }
 
 .confirm__card {

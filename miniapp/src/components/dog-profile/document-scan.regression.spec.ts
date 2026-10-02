@@ -87,15 +87,16 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain('scanCountSummary')
   })
 
-  it('多张图算一份资料：合成一条记录，疫苗本除外（老板 2026-10-01 定的）', () => {
+  it('多张图按类型分组：同类型合成一条，不同类型各成一条（疫苗本不合并）', () => {
     const scan = readScan()
 
     expect(scan).toContain('mergeScannedReportDrafts')
+    expect(scan).toContain('draftsByType')
     // 疫苗本一张本子读出多条接种记录，合并会把几针并成一针
-    expect(scan).toContain("resolvedType === 'VACCINE_BOOK'")
-    expect(scan).toContain('? collectedDrafts')
-    // 类型按"多数页"定：一页被误判不该把整份资料带偏
+    expect(scan).toContain("type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)")
+    // 类型按"多数页"定只用于文案，真正的类型贴在每条草稿上
     expect(scan).toContain('resolveScannedDocumentType')
+    expect(scan).toContain('__documentType: type')
   })
 
   it('合成时要如实说明「N 张 → 1 条」，否则顾客以为剩下的没识别成功', () => {
@@ -141,7 +142,7 @@ describe('拍照录入 · 接线', () => {
   it('确认卡片与表单字段一一对应：没有兽医，叫法也一致（2026-10-02 老板提的）', () => {
     const scan = readScanFile()
     const block = scan.slice(
-      scan.indexOf("activeDocumentType.value === 'CHECKUP_REPORT'"),
+      scan.indexOf("documentType === 'CHECKUP_REPORT'"),
       scan.indexOf("push('过敏原'"),
     )
 
@@ -228,5 +229,56 @@ describe('拍照录入 · 接线', () => {
 
     expect(api).toContain('documentType?')
     expect(api).toContain('drafts: Record<string, any>[]')
+  })
+})
+
+/**
+ * 一次传了「化验单 + 门诊病历」时的数据丢失（2026-10-02 老板实测发现）。
+ *
+ * 面包那次：8 张里 6 张成功，其中 4 张化验单判成体检报告、2 张判成病历
+ * （门诊病历里写着"膀胱结石、膀胱炎"和医嘱、用药）。
+ * 原来按多数票算成"体检"，保存时只提交体检字段 —— 诊断、医嘱、用药全丢了。
+ */
+describe('混合资料不能互相吃掉', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('按判定出来的类型分组收集，各组各自合并', () => {
+    const scan = readScan()
+
+    expect(scan).toContain("const draftsByType = new Map<string, Record<string, any>[]>()")
+    expect(scan).toContain('draftsByType.set(imageType, bucket)')
+    expect(scan).toContain('for (const [type, list] of draftsByType.entries())')
+  })
+
+  it('每条草稿带着自己的类型，确认卡片按它渲染、父组件按它建记录', () => {
+    const scan = readScan()
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    expect(scan).toContain('__documentType: type')
+    expect(scan).toContain('function draftDocumentType(draft: Record<string, any>)')
+    expect(scan).toContain('识别为：${labels.join')
+    // 父组件：有自带类型就按它走，不能一律用整批类型
+    expect(section).toContain('const draftType = String(draft?.__documentType || \'\').toUpperCase()')
+    expect(section).toContain("draftType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'")
+  })
+
+  it('化验单数值要求逐项一行、以报告名开头（一堵数字墙没人看得下去）', () => {
+    const service = readFileSync(
+      resolve(
+        process.cwd(),
+        '../backend/src/application/health/health-report-extraction.service.ts',
+      ),
+      'utf-8',
+    )
+
+    expect(service).toContain('逐项一行')
+    expect(service).toContain('不要把几十项用分号串成一行'.replace('不要把', '**不要**把'))
   })
 })

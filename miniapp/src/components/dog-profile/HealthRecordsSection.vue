@@ -1248,9 +1248,14 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
     return
   }
 
-  const kind = payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
-
+  // 每条草稿可能自带类型（一次传了化验单 + 门诊病历时，两类各自成条，
+  // 见 HealthDocumentScan 里的 __documentType）—— 有就按它走，
+  // 否则退回整批的类型。**不能一律用整批类型**：那会把病历的诊断与用药丢掉。
   for (const draft of payload.drafts) {
+    const draftType = String(draft?.__documentType || '').toUpperCase()
+    const kind: HealthVisitKind = draftType
+      ? (draftType === 'CHECKUP_REPORT' ? 'checkup' : 'medical')
+      : (payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical')
     const record = normalizeHealthVisitRecord(kind, draft)
     // 重新给一个本地 key，避免和已有草稿撞
     record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

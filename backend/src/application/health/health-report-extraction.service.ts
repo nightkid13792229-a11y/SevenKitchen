@@ -281,7 +281,11 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
 
   CHECKUP_REPORT: [
     '本类型的额外规则：',
-    '· findings 写报告里的**检查结论**（照抄结论段，不要逐项罗列化验数值）。',
+    '· findings 写报告里的**检查结论**（照抄结论段）。',
+    '· 如果这份报告**只有化验数值、没有结论段**（化验单很常见）：',
+    '  在 findings 里**逐项一行**照抄，每行「项目 数值 单位」；',
+    '  **不要**把几十项用分号串成一行。第一行先写报告名（例如"尿常规""血生化""血常规"）。',
+    '· 一张图里有多份报告（例如同一张纸上有生化 + 血常规）就分段写，每段以报告名开头。',
     '· recommendations 写报告里医生给出的建议；没有就留空。',
     '· checkupType 从这几个里选最贴近的：ROUTINE 常规体检 / PRE_PURCHASE 购前体检 /',
     '  SENIOR_WELLNESS 老年健康检查 / PRE_ANESTHESIA 麻醉前检查 / EMERGENCY 急诊检查 / FOLLOW_UP 复查。',

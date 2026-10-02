@@ -203,6 +203,8 @@ export class HealthAnalysisService {
     const items: HealthAnalysisItem[] = [];
     const insufficientSections: HealthAnalysisSection[] = [];
     const downgradedSections: HealthAnalysisSection[] = [];
+    // 编号 → 标题：顾客侧要显示人话版的出处，不接受 `prev-004` 这种内部编号
+    const titleById = this.loadCitationTitleMap();
 
     for (const section of HEALTH_ANALYSIS_SECTIONS) {
       const raw = (parsed?.[section] || {}) as Record<string, unknown>;
@@ -220,6 +222,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: '现有记录还不足以给出这方面的分析。多记几条之后可以再看。',
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -232,6 +235,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: '这项分析暂时没有可引用的权威依据，先不给结论。',
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -248,6 +252,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: DOWNGRADE_TEXT,
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -257,13 +262,8 @@ export class HealthAnalysisService {
         label: HEALTH_ANALYSIS_SECTION_LABELS[section],
         content,
         citations,
+        citationTitles: resolveCitationTitles(citations, titleById),
       });
-    }
-
-    // 编号 → 标题：顾客侧要显示人话版的出处，不接受 `prev-004` 这种内部编号
-    const titleById = this.loadCitationTitleMap();
-    for (const item of items) {
-      item.citationTitles = resolveCitationTitles(item.citations, titleById);
     }
 
     return {

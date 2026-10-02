@@ -772,7 +772,9 @@ export function buildHealthAttachmentUploadUrl(
   return `${normalizedBaseUrl}/health/upload-image`
 }
 
-export function buildHealthAttachmentDeletePath(type: HealthRecordType) {
+export function buildHealthAttachmentDeletePath(
+  type: HealthRecordType | 'checkup' | 'vaccine',
+) {
   if (type === 'medical') {
     return '/dogs/medical-records/attachments'
   }
@@ -781,6 +783,7 @@ export function buildHealthAttachmentDeletePath(type: HealthRecordType) {
     return '/dogs/checkup-records/attachments'
   }
 
+  // 过敏与疫苗（疫苗本原图，第九期）都走通用删除口
   return '/health/attachments'
 }
 

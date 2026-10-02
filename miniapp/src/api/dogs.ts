@@ -365,7 +365,11 @@ export const dogApi = {
         },
       })
     }),
-  deleteHealthAttachment: (type: HealthRecordType, key: string) =>
+  // 疫苗记录也能留原件之后（第九期），这里的类型跟着上传口一起放宽
+  deleteHealthAttachment: (
+    type: HealthRecordType | 'checkup' | 'vaccine',
+    key: string,
+  ) =>
     request({
       url: buildHealthAttachmentDeletePath(type),
       method: 'DELETE',

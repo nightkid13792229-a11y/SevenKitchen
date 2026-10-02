@@ -168,6 +168,40 @@ describe('拍照录入 · 接线', () => {
     expect(scan).toContain('collectedWarnings[0] ||')
   })
 
+  it('没识别到内容时给一块看得见的提示，不是一闪而过的 toast（2026-10-02 老板提的）', () => {
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+    expect(scan).toContain('class="failure"')
+    expect(scan).toContain('这次没有识别到内容')
+    expect(scan).toContain('{{ failureNotice }}')
+    // 失败路径改成写面板，不再只弹 toast
+    const catchBlock = scan.match(/\} catch \(error: any\) \{[\s\S]*?\} finally \{/)?.[0] || ''
+    expect(catchBlock).toContain('failureNotice.value = resolveHealthScanErrorMessage')
+    expect(catchBlock).not.toContain('uni.showToast')
+  })
+
+  it('没用上的图片立刻从 COS 删掉（老板担心白占空间）', () => {
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+    // 每张图传完就记下来
+    expect(scan).toContain('uploadedUrls.value.push(uploadedUrl)')
+    // 这张没读出内容 → 删
+    expect(scan).toContain('await dropUploadedFile(uploadedUrl)')
+    // 「重新上传」＝整轮结果丢掉 → 传上去的都删
+    const discardBlock = scan.match(/function discard\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(discardBlock).toContain('leftovers.forEach')
+    // 确认填入表单的图不能删（记录保存后还要用）
+    const acceptBlock = scan.match(/function accept\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(acceptBlock).not.toContain('dropUploadedFile')
+    expect(acceptBlock).toContain('uploadedUrls.value = []')
+  })
+
   it('疫苗本挂在「疫苗」板块', () => {
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),

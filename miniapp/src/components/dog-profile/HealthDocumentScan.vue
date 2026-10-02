@@ -15,6 +15,18 @@
       <text class="scan__hint">{{ hintText }}</text>
     </view>
 
+    <!-- 没识别到内容 / 根本不是宠物医疗资料（2026-10-02 老板提的）：
+         原来只弹一句 toast，顾客很容易觉得"点了没反应"。
+         现在留一块看得见的提示，并把这次传上去、又没用的图片从 COS 删掉。 -->
+    <view v-if="failureNotice" class="failure">
+      <text class="failure__title">这次没有识别到内容</text>
+      <text class="failure__message">{{ failureNotice }}</text>
+      <view class="failure__actions">
+        <text class="confirm__discard" @tap="discard">重新上传</text>
+        <text class="confirm__accept" @tap="dismissFailure">知道了</text>
+      </view>
+    </view>
+
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
@@ -48,6 +60,7 @@
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
+  extractHealthAttachmentKey,
   mergeScannedReportDrafts,
   resolveHealthScanErrorMessage,
   resolveScannedDocumentType,
@@ -109,6 +122,17 @@ const confidence = ref('LOW')
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
 /** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
 const scannedImageCount = ref(0)
+/**
+ * 识别失败的提示语（空 = 没失败）。
+ * 用一块看得见的卡片而不是一句 toast —— 2026-10-02 老板传了张不相关的图，
+ * 因为只弹了一句很快就消失的提示，他的感受是"点了根本没有任何反应"。
+ */
+const failureNotice = ref('')
+/**
+ * 这一轮传上去、还没被确认使用的图片地址。
+ * 失败或"重新上传"时把它们从 COS 删掉，别白占空间（老板专门问过这件事）。
+ */
+const uploadedUrls = ref<string[]>([])
 /** 顾客这次一共选了几张（含没识别成功的，用于如实说明"本次共 N 张"） */
 const requestedImageCount = ref(0)
 
@@ -237,6 +261,8 @@ async function scanAll(filePaths: string[]) {
   confidence.value = ''
   scannedImageCount.value = 0
   requestedImageCount.value = filePaths.length
+  failureNotice.value = ''
+  uploadedUrls.value = []
 
   const collectedDrafts: Record<string, any>[] = []
   const collectedWarnings: string[] = []
@@ -254,12 +280,17 @@ async function scanAll(filePaths: string[]) {
         mask: true,
       })
 
+      // 这一张传上去的地址：失败时要把它删掉（见下面的 catch）
+      let uploadedUrl = ''
+
       try {
         // ① 先传到 COS（与手工上传附件同一条路）
         const uploaded = await dogApi.uploadHealthAttachment(props.uploadType, filePaths[index])
         if (!uploaded?.url) {
           throw new Error('图片上传失败')
         }
+        uploadedUrl = String(uploaded.url)
+        uploadedUrls.value.push(uploadedUrl)
 
         // ② 再交给 AI 识别（传 AUTO 时由后端判定这是哪一类文档）
         const res: any = await dogApi.extractHealthReport({
@@ -283,6 +314,8 @@ async function scanAll(filePaths: string[]) {
           )
           scannedImageCount.value += 1
         } else {
+          // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
+          await dropUploadedFile(uploadedUrl)
           failed += 1
         }
 
@@ -303,6 +336,7 @@ async function scanAll(filePaths: string[]) {
         }
       } catch (error: any) {
         // 多张里有一张失败不推翻其它的：先记下来，最后一起告诉顾客
+        await dropUploadedFile(uploadedUrl)
         failed += 1
         collectedWarnings.push(error?.message || '有一张没能识别')
       }
@@ -335,12 +369,9 @@ async function scanAll(filePaths: string[]) {
     resolvedDocumentType.value = resolvedType
     showConfirm.value = true
   } catch (error: any) {
-    uni.showToast({
-      // 基础设施类报错（腾讯云"服务未开通"之类）不直接甩给顾客，换成能懂的话
-      title: resolveHealthScanErrorMessage(error?.message),
-      icon: 'none',
-      duration: 2500,
-    })
+    // 一块看得见的提示，而不是一闪而过的 toast；
+    // 基础设施类报错（腾讯云"服务未开通"之类）也不直接甩给顾客，换成能懂的话
+    failureNotice.value = resolveHealthScanErrorMessage(error?.message)
   } finally {
     isBusy.value = false
     uni.hideLoading()
@@ -355,6 +386,36 @@ function accept() {
   showConfirm.value = false
   drafts.value = []
   warnings.value = []
+  failureNotice.value = ''
+  // 图片交给上层了（跟着记录一起保存），这里不再算"没用上"
+  uploadedUrls.value = []
+}
+
+/**
+ * 把一张没用上的图片从 COS 删掉（失败就算了，服务端还有定期清理兜底）。
+ *
+ * 老板问过"识别了但没保存的附件会不会白占 COS 空间" —— 会，所以这里主动删：
+ *   · 这张图没读出来 / 读挂了
+ *   · 顾客点了「重新上传」把整轮结果丢掉
+ */
+async function dropUploadedFile(url: string) {
+  const key = extractHealthAttachmentKey(String(url || ''))
+  if (!key) {
+    return
+  }
+
+  uploadedUrls.value = uploadedUrls.value.filter((item) => item !== url)
+
+  try {
+    await dogApi.deleteHealthAttachment(props.uploadType, key)
+  } catch {
+    // 静默：删不掉不该影响顾客继续操作
+  }
+}
+
+/** 顾客看清提示后收起这块面板（图已经删了） */
+function dismissFailure() {
+  failureNotice.value = ''
 }
 
 /** 「重新上传」：直接再开一次相册（原来文案叫"重新拍"，但走的是相册，2026-10-02 改） */
@@ -362,6 +423,15 @@ function discard() {
   showConfirm.value = false
   drafts.value = []
   warnings.value = []
+  failureNotice.value = ''
+
+  // 「重新上传」＝这一轮的结果都不要了：把传上去的图一起删掉，别留在 COS 里
+  const leftovers = [...uploadedUrls.value]
+  uploadedUrls.value = []
+  leftovers.forEach((url) => {
+    void dropUploadedFile(url)
+  })
+
   pickAndScan()
 }
 </script>
@@ -441,6 +511,38 @@ function discard() {
 .confirm__value {
   color: #26261f;
   font-weight: 500;
+}
+
+/* 没识别到内容时的提示块（2026-10-02）：要看得见，不能一闪而过 */
+.failure {
+  margin-bottom: 20rpx;
+  padding: 26rpx 24rpx;
+  border-radius: 20rpx;
+  background: #fdf6ec;
+  border: 1rpx solid #f0d9b5;
+}
+
+.failure__title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #8a5a1b;
+}
+
+.failure__message {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #6b5a3e;
+}
+
+.failure__actions {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20rpx;
 }
 
 .confirm__warnings {

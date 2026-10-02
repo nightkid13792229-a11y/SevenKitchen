@@ -741,8 +741,6 @@ function visitMedicationKey(record: Record<string, any>) {
   return visitConfig(record).medicationKey || ''
 }
 
-const checkupTypeOptions = computed(() => getHealthCheckupTypeOptions())
-
 /** 「还有 N 项选填（复查日期、兽医）」——把里面是什么写在按钮上，不藏字段 */
 /**
  * 切换类型之后，另一种类型独有的内容还留在草稿里（2026-10-02 老板要求"保留已填内容"）。

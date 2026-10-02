@@ -85,17 +85,14 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('const stickyPrimaryDisabled = computed(')
   })
 
-  it('guards dog switching when diet reminders have unsaved changes', () => {
+  it('切狗时只看记录草稿（饮食偏好已不在本页）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('const hasUnsavedDietReminder = computed(() =>')
-    expect(source).toContain('hasUnsavedRecordDraft')
-    expect(source).toContain('confirmSwitchDogWithUnsavedChanges')
-    expect(source).toContain('uni.showModal({')
-    expect(source).toContain('selectedDogIndex.value = getCurrentDogIndex()')
+    expect(source).toContain('if (hasUnsavedRecordDraft.value) {')
+    expect(source).not.toContain('hasUnsavedDietReminder')
   })
 
   it('uses requested dog ids to discard stale health profile responses', () => {
@@ -137,7 +134,6 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('const stickyPrimaryDisabled = computed(')
     expect(source).toContain(':secondary-disabled="isSecondaryActionDisabled"')
     expect(source).toContain('const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))')
-    expect(source).toContain('const isDietReminderActionDisabled = computed(() =>')
     expect(source).toContain('const isSecondaryActionDisabled = computed(() =>')
     expect(source).not.toContain(':primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"')
     expect(source).not.toContain(':secondary-disabled="isLoading || isSaving || savingRecordKey"')
@@ -165,16 +161,15 @@ describe('dog profile health page regressions', () => {
       'async function saveHealthRecord',
       'async function deleteHealthRecord',
     )).not.toContain('hasUnsavedRecordDraft.value = false')
+    // 2026-10-02：饮食偏好的保存逻辑已从本页删除，
+    // deleteHealthRecord 之后紧接着是引导入口
     expect(functionSource(
       source,
       'async function deleteHealthRecord',
-      'async function saveDietReminders',
+      'async function pickAddGuide',
     )).not.toContain('uni.showModal')
-    expect(functionSource(
-      source,
-      'async function saveDietReminders',
-      'function goBack',
-    )).toContain('isHealthRecordSaving.value')
+    // 引导入口本身是纯派发（不碰保存状态），保存态由底部按钮的禁用逻辑把关
+    expect(source).toContain('const isSecondaryActionDisabled = computed(() =>')
     expect(functionSource(
       source,
       'function goBack',
@@ -274,19 +269,14 @@ describe('dog profile health page regressions', () => {
    * 这一列配方设计器与 AI 早就在读，但生产 4544 只狗整列为空。
    */
 
-  it('保存饮食偏好时两个字段一起提交，并一起参与"未保存"判定', () => {
-    const page = readFileSync(
+  it('饮食偏好的保存逻辑已从本页移除（只在定制食谱里填）', () => {
+    const source = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    // 只存一个字段会导致「喜欢吃的」改完被判成"没有未保存修改"，一点返回就白填
-    expect(page).toContain('const savedDietPreferences = reactive({')
-    expect(page).toContain('preferredFoods: form.preferredFoods,')
-    expect(page).toContain('pickyFoods: form.pickyFoods,')
-    expect(page).toContain('hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods)')
-    expect(page).toContain('hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)')
-    expect(page).not.toContain('savedPickyFoods')
+    expect(source).not.toContain('async function saveDietReminders')
+    expect(source).not.toContain('updateDietReminders')
   })
 })
 

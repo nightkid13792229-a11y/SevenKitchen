@@ -111,7 +111,8 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain("const isVisitMode = computed(() => (props.activeType as string) === 'visit')")
     expect(source).toContain('function recordKindOf(record: Record<string, any>): HealthRecordType')
     expect(source).toContain('resolveHealthVisitKind(record)')
-    expect(source).toContain('getHealthVisitSectionMeta()')
+    // 2026-10-02：空态文案按标签分（就诊/体检不再共用一句"病历或检查"）
+    expect(source).toContain("getHealthVisitSectionMeta(props.visitKind || 'medical')")
 
     // 病历/检查走自己的字段对照表（utils 里那张，有独立测试）
     expect(source).toContain('function visitConfig(record: Record<string, any>)')

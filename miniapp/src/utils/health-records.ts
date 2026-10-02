@@ -1793,7 +1793,8 @@ export function buildHealthVisitSummary(
     .map((value) => String(value || '').trim())
     .find(Boolean) || (kind === 'checkup' ? '体检记录' : '新记录')
 
-  const labValues = kind === 'checkup' ? String(record?.labValues || '').trim() : ''
+  // 就诊与体检都可能带化验数据（2026-10-02 起病史表也有 lab_values）
+  const labValues = String(record?.labValues || '').trim()
 
   const parts = [
     // 用调用方传进来的 kind 取日期字段，而不是再从记录里反查归属 ——
@@ -1801,6 +1802,7 @@ export function buildHealthVisitSummary(
     String(record?.[config.dateKey] || '').trim(),
     String(record?.[config.adviceKey] || '').trim(),
     // 有化验数据但不适合当标题时，摘要里说一句"这条里有化验数据"
+    // （2026-10-02 起就诊记录也能装化验，所以两类都要显示）
     labValues ? '含化验数据' : '',
     attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
   ].filter(Boolean)
@@ -1815,15 +1817,17 @@ export function buildHealthVisitSummary(
  * 那套写法不用改。空态文案按老板的口径写得具体一点——
  * "还没有记录"太干，家长不知道该记什么。
  */
-export function getHealthVisitSectionMeta(): HealthRecordTypeMeta {
+export function getHealthVisitSectionMeta(
+  kind: HealthVisitKind = 'medical',
+): HealthRecordTypeMeta {
+  // 2026-10-02：就诊与体检**已拆成两个标签**，
+  // 所以空态文案也要跟着分开 —— 原来那句"还没有病历或检查记录"
+  // 会在两个标签下都出现，等于又把两类混在一起说了。
   return {
     type: 'medical',
-    // 2026-10-01 老板定稿：原来叫「病例」——它跟「病历」同音、字面意思也不对
-    //（病例 = 一个案例），而且这一块把**就诊和体检**合在了一起，
-    // 所以改成能同时覆盖两边的「病历/检查」。
-    label: '病历/检查',
+    label: kind === 'checkup' ? '体检' : '就诊',
     addLabel: '新增记录',
-    emptyTitle: '还没有病历或检查记录',
+    emptyTitle: kind === 'checkup' ? '还没有体检记录' : '还没有就诊记录',
     accentClass: 'health-records--visit',
   }
 }

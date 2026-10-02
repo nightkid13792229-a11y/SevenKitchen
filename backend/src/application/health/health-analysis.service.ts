@@ -107,6 +107,16 @@ const DIAGNOSIS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\d+\s*(mg|ml|毫克|毫升)\s*\/?\s*(kg|公斤)?/i, reason: '疑似给剂量' },
   { pattern: /(抗生素|激素|处方药)[^。]{0,10}(吃|服用|注射)/i, reason: '疑似给用药建议' },
   { pattern: /不用去医院|不必就医|在家观察就行|不需要看医生/i, reason: '疑似替代就医' },
+  // 2026-10-02：影像片不做解读，也不能说"片子没问题"——
+  // 我们只归档原件，看片是兽医的事。
+  {
+    pattern: /(片子|影像|X\s*光|B\s*超|超声|CT)[^。，]{0,8}(正常|未见异常|没问题|无异常)/i,
+    reason: '疑似解读影像',
+  },
+  {
+    pattern: /(未见明显异常|一切正常)[^。]{0,6}(片子|影像|X\s*光|B\s*超)/i,
+    reason: '疑似解读影像',
+  },
 ];
 
 /** 命中越界时的降级文案（写死的，不经过 AI） */
@@ -172,7 +182,7 @@ export class HealthAnalysisService {
       };
     }
 
-    // 复用就诊前摘要：它已经把六类记录聚合好了，不用再查一遍
+    // 复用就诊前摘要：它已经把五类记录（就诊/体检/过敏/疫苗/体重）聚合好了，不用再查一遍
     const summary = await this.timelineService.getVisitSummary(customerId, dogId);
 
     const knowledgeContext = this.buildKnowledgeContext(summary, audience);
@@ -374,6 +384,23 @@ export function buildSystemPrompt(audience: 'nutritionist' | 'customer'): string
       ? '· 读者是宠物主人本人。'
       : '· 读者是宠物营养师（专业人士），可以保留必要的专业表述。',
     '',
+    '【给你的记录怎么看】',
+    'healthRecords 里每一项的字段含义（都是主人自己记录或拍照识别来的）：',
+    '· diagnosis / findings = 医生或报告给出的结论；chiefComplaint = 主人描述的症状；',
+    '· treatment = 处理方式；medications = 在服的药名；recommendations = 医生给的建议；',
+    '· **labValues = 化验数据**，逐项一行的"项目 数值 单位"（如"肌酐 72.2 umol/L"）；',
+    '  它来自化验单照片的识别，**通常没有参考区间**，因此：只能说清"做了哪些化验项目、',
+    '  涉及哪些方面、建议把原件带给兽医看"，**不要自行判断某项是高还是低**。',
+    '· status = 这条记录现在的状态（还没结论/治疗中/已经好了/长期老毛病）；',
+    '· notes = 主人额外补充的话；attachmentCount = 这条记录带了几份原件（报告照片）。',
+    '',
+    '【影像片与附件的边界（硬规矩）】',
+    '· 我们**只归档原件、不解读影像**：X 光、B 超/超声、CT 这类只有图像的资料，',
+    '  系统没有读取过片子内容，**你也不许根据它判断病情**。',
+    '· 绝对不要写"片子正常""影像未见异常""X 光没问题"这类话；',
+    '  最多说"档案里留了一次影像检查的原件，需要看片请把原件带给执业兽医"。',
+    '· attachmentOnly 为 true 的记录，就是"只有原件、没有任何文字结论"的那种。',
+    '',
     '【输出七项，只输出 JSON】',
     '{',
     ...HEALTH_ANALYSIS_SECTIONS.map(
@@ -417,10 +444,18 @@ export function deriveProfileTags(summary: any): string[] {
   // 从自由文本里认领域（与食谱设计同思路：关键词命中即加标签）
   const text = [
     summary?.medicalHistory ?? '',
-    ...(summary?.ongoingConditions || []).map((item: any) => item.diagnosis ?? ''),
-    ...(summary?.recentVisits || []).map((item: any) => item.diagnosis ?? ''),
+    // 2026-10-02：把 labValues（化验数值）也拼进来 ——
+    // 肌酐/蛋白尿/甘油三酯这些决定饮食方向的词本来就在化验栏里；
+    // 食谱设计器与营养师端的标签派生早就这么做了，这里对齐口径。
+    ...(summary?.ongoingConditions || []).map(
+      (item: any) => `${item.diagnosis ?? ''} ${item.labValues ?? ''}`,
+    ),
+    ...(summary?.recentVisits || []).map(
+      (item: any) => `${item.diagnosis ?? ''} ${item.labValues ?? ''}`,
+    ),
     ...(summary?.recentCheckups || []).map(
-      (item: any) => `${item.findings ?? ''} ${item.recommendations ?? ''}`,
+      (item: any) =>
+        `${item.findings ?? ''} ${item.labValues ?? ''} ${item.recommendations ?? ''}`,
     ),
   ].join(' ');
 

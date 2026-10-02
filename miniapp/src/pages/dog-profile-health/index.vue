@@ -249,7 +249,6 @@ import {
   normalizeHealthVisitRecord,
   buildCrudHealthRecordPayload,
   buildHealthRecordFocusIdentity,
-  hasUnsavedDietReminderChange,
   mergeHealthRecordListWithCachedAttachments,
   normalizeHealthRecordListResponse,
   normalizeSavedHealthRecordResponse,
@@ -429,12 +428,17 @@ const preferredExpandedRecordIdentity = computed(() => {
  * 两个字段一起记：上次只存了"不爱吃"，于是「喜欢吃的食材」改完
  * 会被判定成"没有未保存修改"，顾客一点返回就白填。
  */
+/**
+ * 档案里"已保存的"饮食偏好原值。
+ *
+ * 2026-10-02 起本页不再编辑饮食偏好（标签已下线），但这两个值仍随档案一起
+ * 读取/复位：定制食谱那边还在写、营养师侧与分析还在读，页面只是不再改它。
+ */
 const savedDietPreferences = reactive({
+  preferredFoods: '',
+  pickyFoods: '',
 })
 const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
-const isDietReminderActionDisabled = computed(() =>
-  !dogId.value || isProfileLoading.value || isSaving.value || isHealthRecordSaving.value,
-)
 const isSecondaryActionDisabled = computed(() =>
   isLoading.value || isSaving.value || isHealthRecordSaving.value,
 )
@@ -485,11 +489,6 @@ const dogAvatarSrc = computed(() => resolveDogAvatarSrc(form.avatarUrl))
  */
 const heroFacts = computed(() => buildHealthHeroFacts(form))
 
-const hasUnsavedDietReminder = computed(() => (
-  hasUnsavedDietReminderChange(form.preferredFoods, savedDietPreferences.preferredFoods) ||
-  hasUnsavedDietReminderChange(form.pickyFoods, savedDietPreferences.pickyFoods)
-))
-
 const form = reactive<Record<string, any>>({
   id: '',
   name: '',
@@ -511,20 +510,6 @@ const form = reactive<Record<string, any>>({
   manualTreatKcal: '',
   preferredFoods: '',
   pickyFoods: '',
-})
-
-const dietReminderStatusText = computed(() => {
-  if (hasUnsavedDietReminder.value) {
-    return '已修改，待保存'
-  }
-
-  const saved = String(savedDietPreferences.preferredFoods || '').trim() ||
-    String(savedDietPreferences.pickyFoods || '').trim()
-  if (saved) {
-    return '已保存'
-  }
-
-  return ''
 })
 
 onLoad((options: any) => {
@@ -600,7 +585,8 @@ function onDogPickerChange(event: any) {
     return
   }
 
-  if (hasUnsavedDietReminder.value || hasUnsavedRecordDraft.value) {
+  // 饮食偏好已不在本页（2026-10-02）→ 只看向"记录草稿"
+  if (hasUnsavedRecordDraft.value) {
     confirmSwitchDogWithUnsavedChanges(index)
     return
   }
@@ -966,62 +952,6 @@ async function deleteHealthRecord({
     if (savingRecordKey.value === nextSavingKey) {
       savingRecordKey.value = ''
     }
-  }
-}
-
-async function saveDietReminders() {
-  if (!dogId.value || isProfileLoading.value || isHealthRecordSaving.value) {
-    return
-  }
-
-  const targetDogId = dogId.value
-  isSaving.value = true
-
-  try {
-    void trackDogProfileEvent('dog_profile_submit_requested', {
-      mode: 'edit',
-      dogId: targetDogId,
-      moduleName: 'health',
-      submitStatus: 'requested',
-    })
-    uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.updateDietReminders(targetDogId, {
-      preferredFoods: form.preferredFoods,
-      pickyFoods: form.pickyFoods,
-    })
-    if (res.code !== 0) {
-      throw new Error(res.message || '保存失败')
-    }
-
-    if (targetDogId === dogId.value && res.data?.profile) {
-      populateForm(res.data.profile)
-    } else if (targetDogId === dogId.value) {
-      savedDietPreferences.preferredFoods = form.preferredFoods
-      savedDietPreferences.pickyFoods = form.pickyFoods
-    }
-
-    void trackDogProfileEvent('dog_profile_submit_succeeded', {
-      mode: 'edit',
-      dogId: targetDogId,
-      moduleName: 'health',
-      submitStatus: 'success',
-    })
-    uni.hideLoading()
-    uni.showToast({ title: '已保存', icon: 'success' })
-    setTimeout(() => {
-      goBack()
-    }, 300)
-  } catch (error: any) {
-    void trackDogProfileEvent('dog_profile_submit_failed', {
-      mode: 'edit',
-      dogId: targetDogId,
-      moduleName: 'health',
-      submitStatus: 'failed',
-    })
-    uni.hideLoading()
-    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
-  } finally {
-    isSaving.value = false
   }
 }
 

@@ -121,7 +121,7 @@ const VACCINE_DUE_SOON_DAYS = 60
 export class HealthTimelineService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 健康时间线：六类记录按日期倒序排成一条线 */
+  /** 健康时间线：五类记录按日期倒序排成一条线 */
   async getTimeline(
     customerId: string,
     dogId: string,
@@ -303,18 +303,31 @@ export class HealthTimelineService {
         veterinarian: record.veterinarian || '',
         attachmentCount: record.attachments.length,
       })),
-      recentCheckups: checkups.slice(0, SUMMARY_RECENT_LIMIT).map((record) => ({
-        id: record.id,
-        date: toDateText(record.checkupDate),
-        checkupType: formatCheckupType(record.checkupType),
-        findings: record.findings || '',
-        // 化验数值单独一栏（2026-10-02）：AI 分析要能用上肌酐、蛋白尿这类数字
-        labValues: record.labValues || '',
-        recommendations: record.recommendations || '',
-        // 体检记录里的「其它想说的」（notes，2026-10-02 起接进 AI）
-        notes: record.notes || '',
-        attachmentCount: record.attachments.length,
-      })),
+      recentCheckups: checkups.slice(0, SUMMARY_RECENT_LIMIT).map((record) => {
+        // 「只有原件、没有任何文字结论」的记录（典型是 X 光/超声片）：
+        // 2026-10-02 打上 attachmentOnly，并且**不再显示成"常规体检"** ——
+        // 否则 AI 会读成"做过一次常规体检、结论为空"，甚至顺手把片子"解读"了。
+        const attachmentOnly =
+          !String(record.findings || '').trim() &&
+          !String(record.labValues || '').trim() &&
+          record.attachments.length > 0
+
+        return {
+          id: record.id,
+          date: toDateText(record.checkupDate),
+          checkupType: attachmentOnly
+            ? '影像/资料留档（原件未解读）'
+            : formatCheckupType(record.checkupType),
+          findings: record.findings || '',
+          // 化验数值单独一栏（2026-10-02）：AI 分析要能用上肌酐、蛋白尿这类数字
+          labValues: record.labValues || '',
+          recommendations: record.recommendations || '',
+          // 体检记录里的「其它想说的」（notes，2026-10-02 起接进 AI）
+          notes: record.notes || '',
+          attachmentCount: record.attachments.length,
+          attachmentOnly,
+        }
+      }),
       vaccines: {
         latest: vaccines.slice(0, SUMMARY_RECENT_LIMIT).map((record) => ({
           id: record.id,

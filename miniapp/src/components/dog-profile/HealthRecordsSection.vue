@@ -629,7 +629,9 @@ function recordKindOf(record: Record<string, any>): HealthRecordType {
 }
 
 const activeTypeMeta = computed(() => (
-  isVisitMode.value ? getHealthVisitSectionMeta() : getHealthRecordTypeMeta(baseType.value)
+  isVisitMode.value
+    ? getHealthVisitSectionMeta(props.visitKind || 'medical')
+    : getHealthRecordTypeMeta(baseType.value)
 ))
 const sourceRecords = computed(() => (
   props.records.length > 0 || !props.modelValue.length ? props.records : props.modelValue

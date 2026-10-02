@@ -1,4 +1,5 @@
 import {
+  buildSystemPrompt,
   normalizeDocumentType,
   normalizeDraftDate,
   normalizeDrafts,
@@ -234,3 +235,37 @@ describe('AI 录入扩展', () => {
     })
   })
 })
+
+/**
+ * 就诊记录也能装化验数据（2026-10-02 老板定）。
+ *
+ * 一次就诊往往包含化验单/检查报告 —— 数字落在这条就诊记录里，
+ * 不再"按资料类型"另开一条体检记录。所以识别白名单里必须有 labValues，
+ * 否则模型抄了也会被丢掉（这正是审查发现的缺口）。
+ */
+describe('就诊草稿 · 化验数据', () => {
+  it('病历草稿保留 labValues（逐项一行）', () => {
+    const drafts = normalizeDrafts('MEDICAL_RECORD', {
+      drafts: [
+        {
+          visitDate: '2026-02-12',
+          chiefComplaint: '尿血',
+          diagnosis: '膀胱结石、膀胱炎',
+          labValues: '血常规\nWBC 10.2 x 10^9/L\nRBC 7.99 x 10^12/L',
+          medications: ['拜瑞斯石粒化液'],
+        },
+      ],
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].labValues).toContain('WBC 10.2');
+    expect(drafts[0].diagnosis).toBe('膀胱结石、膀胱炎');
+  });
+
+  it('提示词里写了"这次就诊做的化验"与"影像片不要解读"', () => {
+    const prompt = buildSystemPrompt('MEDICAL_RECORD', 'image');
+
+    expect(prompt).toContain('labValues 写**化验数据**（这次就诊做的化验）');
+    expect(prompt).toContain('影像片不要解读');
+  });
+});

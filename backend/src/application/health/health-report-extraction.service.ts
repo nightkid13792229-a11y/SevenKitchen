@@ -309,6 +309,10 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '· diagnosis 照抄病历上写的诊断结果；没写就留空。',
     '· chiefComplaint 写主人描述的或医生记录的症状。',
     '· treatment 写处理方式；medications 是**药名数组**，只照抄药名，不要写剂量与用法。',
+    '· labValues 写**化验数据**（这次就诊做的化验）：逐项一行「项目 数值 单位」，',
+    '  **不要**把几十项用分号串成一行；第一行先写报告名（例如"血常规""生化""尿常规"）。',
+    '  这张图不是化验单（例如只有病历文字、处方笺、影像片）就留空；',
+    '  影像片不要解读，只在 notes 里写检查部位（如"骨盆正位"）。',
     '· patientName 照抄报告上写的**动物名字**；没写就留空。',
     '',
     '输出 JSON 结构：',
@@ -316,6 +320,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "drafts": [',
     '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
     '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
+    '      "labValues": "血常规\\nWBC 10.2 x 10^9/L\\nRBC 7.99 x 10^12/L",',
     '      "patientName": "面包", "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
@@ -388,7 +393,7 @@ function buildAutoSystemPrompt(): string {
   return [
     '你是一名宠物助理，负责识别主人拍摄的狗狗健康文档照片。',
     '',
-    '第一步：自动判断这份文档属于下面四类中的哪一类，documentType 只能填这四个英文值之一：',
+    '第一步：自动判断这份文档属于下面五类中的哪一类，documentType 只能填这五个英文值之一：',
     '· MEDICAL_RECORD —— 病历 / 就诊记录 / 处方笺',
     '· CHECKUP_REPORT —— 体检报告 / 化验单',
     '· VACCINE_BOOK —— 疫苗本 / 免疫记录',
@@ -398,7 +403,7 @@ function buildAutoSystemPrompt(): string {
     '  检查部位/项目写进 notes（例如"骨盆正位""脊柱侧位"），**不要解读影像内容、不要写诊断**。',
     '· NOT_MEDICAL —— 不是宠物的医疗资料：身份证/证件、人脸或自拍、风景、人的病历或处方、',
     '  宠物用品或狗粮包装、与健康无关的照片等',
-    '只有确实是狗狗医疗资料时才从那四类里挑一个。**拿不准就别硬猜**：',
+    '只有确实是狗狗医疗资料时才从那几类里挑一个。**拿不准就别硬猜**：',
     '判断不了、或者看起来不是宠物的医疗资料，一律填 NOT_MEDICAL，drafts 留空数组。',
     '',
     '第二步：按判断出的类型输出 drafts —— 字段名必须与该类型下面给出的结构完全一致。',
@@ -406,7 +411,7 @@ function buildAutoSystemPrompt(): string {
     '',
     ...COMMON_RULES,
     '',
-    '四类的字段结构（先按第一步定下 documentType，再照对应那套填 drafts；',
+    '各类的字段结构（先按第一步定下 documentType，再照对应那套填 drafts；',
     '判成 IMAGING 时用 CHECKUP_REPORT 那套结构，只填日期/动物名/notes）：',
     '',
     ...typeSections,
@@ -539,6 +544,9 @@ export function normalizeDrafts(
               .filter(Boolean)
               .slice(0, 20)
           : [],
+        // 2026-10-02：就诊里传的化验单，数字落在这条就诊记录里（老板定的口径），
+        // 所以病历草稿也要有 labValues —— 之前白名单里没有，模型抄了也会被丢掉。
+        labValues: normalizeDraftText(item?.labValues, 4000),
         notes: normalizeDraftText(item?.notes),
         patientName: normalizeDraftText(item?.patientName, 40),
         status: 'PENDING_CONFIRMATION',

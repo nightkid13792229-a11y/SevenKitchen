@@ -256,6 +256,28 @@ describe('知识库结构升级', () => {
     })
   })
 
+  describe('审核登记表与知识库对得上（2026-10-02 补）', () => {
+    it('登记表里的每个编号都必须是真实存在的条目', () => {
+      // 为什么这条要紧：登记表是顾客侧**唯一**的放行凭据，而它只存编号。
+      //   · 条目被删掉 / 改了 id → 登记表会留下一个"审了个不存在的东西"的孤儿，
+      //     白白让「已审核 N 条」这个数虚高；
+      //   · 更危险的是 id 被**复用**：编号不变、内容换成另一条，
+      //     旧审核记录会静默套在新内容上 —— 兽医根本没审过它。
+      // 所以删条目时必须同时处理它的审核记录，这条测试就是那道闸。
+      const existingIds = new Set(service.getAll().map((entry) => entry.id));
+      const orphans = Object.keys(KNOWLEDGE_APPROVALS).filter(
+        (id) => !existingIds.has(id),
+      );
+
+      expect(orphans).toEqual([]);
+    })
+
+    it('登记表里的编号不重复（同一编号只可能有一条审核记录）', () => {
+      const ids = Object.keys(KNOWLEDGE_APPROVALS);
+      expect(new Set(ids).size).toBe(ids.length);
+    })
+  })
+
   describe('提示词条数上限', () => {
     const heavyProfile = {
       lifeStageLabel: '老年犬',

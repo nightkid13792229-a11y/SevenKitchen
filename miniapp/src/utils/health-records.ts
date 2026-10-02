@@ -1088,7 +1088,7 @@ export function resolveHealthRecordSecondaryActionText(
   isDirty: boolean,
 ) {
   if (!isSaved) {
-    return '取消新增'
+    return '取消新增记录'
   }
 
   if (isDirty) {
@@ -1272,10 +1272,13 @@ export interface HealthVisitFieldConfig {
   notesKey: string
   notesLabel: string
   notesPlaceholder: string
-  /** 兽医 */
+  /**
+   * 兽医 / 复查日期：**2026-10-02 老板要求从表单里去掉**，不再有输入框。
+   * key 仍然留着 —— 拍报告识别出来的值照旧存进记录、保存时照旧提交，
+   * 只是不许顾客手填（想补也只能通过识别或以后另开入口）。
+   */
   vetKey: string
   vetLabel: string
-  /** 复查日期：只有就诊有 */
   followUpKey: string | null
   followUpLabel: string
   /** 体检类型：只有体检有 */
@@ -1294,7 +1297,8 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     primaryLabel: '医生怎么说',
     primaryPlaceholder: '例如：急性肠胃炎，医生说先禁食 12 小时',
     complaintKey: 'chiefComplaint',
-    complaintLabel: '主要问题',
+    // 2026-10-02 老板：文案就叫「症状」，家长一眼就懂
+    complaintLabel: '症状',
     complaintPlaceholder: '例如：呕吐、拉稀、精神差',
     adviceKey: 'treatment',
     adviceLabel: '处理与提醒',

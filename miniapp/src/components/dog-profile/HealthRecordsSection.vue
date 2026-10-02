@@ -162,6 +162,10 @@
               @tap="changeVisitKind(index, kind)"
             >{{ HEALTH_VISIT_KIND_LABELS[kind] }}</text>
           </view>
+          <!-- 切过来的草稿里，另一种类型独有的内容还在 —— 说一句，别让家长以为丢了 -->
+          <text v-if="visitCarryOverHint(record)" class="field-label__hint">
+            {{ visitCarryOverHint(record) }}
+          </text>
         </view>
 
         <!-- ── 病历/检查：字段顺序＝家长填写顺序（2026-10-02 精简版）────────────
@@ -256,40 +260,6 @@
               :value="readField(record, visitConfig(record).notesKey)"
               @input="updateTextField(index, visitConfig(record).notesKey, $event.detail.value)"
             />
-          </view>
-
-          <view class="field-group">
-            <text class="more-toggle" @tap="toggleMore(index)">
-              {{ isMoreExpanded(record, index) ? '收起选填项 ▲' : visitOptionalToggleLabel(record) }}
-            </text>
-
-            <view v-if="isMoreExpanded(record, index)" class="more-fields">
-              <view v-if="visitConfig(record).followUpKey" class="field-group">
-                <text class="field-label">{{ visitConfig(record).followUpLabel }}</text>
-                <picker
-                  mode="date"
-                  :disabled="hasSavingRecord"
-                  :value="readField(record, visitFollowUpKey(record))"
-                  @change="updateTextField(index, visitFollowUpKey(record), $event.detail.value)"
-                >
-                  <view class="field-picker">
-                    {{ readField(record, visitFollowUpKey(record)) || '需要复查时才填' }}
-                  </view>
-                </picker>
-              </view>
-
-              <view class="field-group">
-                <text class="field-label">{{ visitConfig(record).vetLabel }}</text>
-                <input
-                  class="field-input"
-                  type="text"
-                  :disabled="hasSavingRecord"
-                  placeholder="例如：王医生（记不清可以不填）"
-                  :value="readField(record, visitConfig(record).vetKey)"
-                  @input="updateTextField(index, visitConfig(record).vetKey, $event.detail.value)"
-                />
-              </view>
-            </view>
           </view>
 
           <!-- 已经好了：只给已保存的就诊记录。状态决定这条还算不算"还没结束的问题"，
@@ -404,8 +374,7 @@
 
         <view class="field-group">
           <view class="field-label field-label--row">
-            <text>附件（点击预览）</text>
-            <text class="field-label__hint">{{ attachmentHintText }}</text>
+            <text>{{ attachmentList(record).length > 0 ? '附件（点击预览）' : '附件' }}</text>
           </view>
 
           <view v-if="attachmentList(record).length > 0" class="attachment-list">
@@ -494,6 +463,8 @@ import { dogApi } from '../../api/dogs'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 import {
   HEALTH_RECORD_TYPES,
+  HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+  HEALTH_VISIT_KIND_FIELD,
   HEALTH_VISIT_KIND_LABELS,
   HEALTH_VISIT_KINDS,
   type HealthCheckupTypeOption,
@@ -526,6 +497,7 @@ import {
   resolveHealthAttachmentSelectionError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  resolveHealthVisitDate,
   resolveHealthVisitKind,
   normalizeHealthVisitRecord,
 } from '../../utils/health-records'
@@ -784,21 +756,25 @@ function visitMedicationKey(record: Record<string, any>) {
   return visitConfig(record).medicationKey || ''
 }
 
-function visitFollowUpKey(record: Record<string, any>) {
-  return visitConfig(record).followUpKey || ''
-}
-
 const checkupTypeOptions = computed(() => getHealthCheckupTypeOptions())
 
 /** 「还有 N 项选填（复查日期、兽医）」——把里面是什么写在按钮上，不藏字段 */
-function visitOptionalToggleLabel(record: Record<string, any>) {
-  const config = visitConfig(record)
-  const labels = [
-    config.followUpKey ? config.followUpLabel : '',
-    config.vetLabel,
+/**
+ * 切换类型之后，另一种类型独有的内容还留在草稿里（2026-10-02 老板要求"保留已填内容"）。
+ * 这一行把它说出来：家长切到体检时看得见"刚填的症状还在"，不会以为白填了。
+ */
+function visitCarryOverHint(record: Record<string, any>) {
+  if (resolveHealthVisitKind(record) === 'medical') {
+    const findings = String(record?.findings || '').trim()
+    return findings ? `切回「体检」还能看到刚填的检查结论：${findings}` : ''
+  }
+
+  const parts = [
+    String(record?.chiefComplaint || '').trim(),
+    String(record?.medications || '').trim(),
   ].filter(Boolean)
 
-  return `还有 ${labels.length} 项选填（${labels.join('、')}）▼`
+  return parts.length > 0 ? `切回「就诊」还能看到刚填的：${parts.join('、')}` : ''
 }
 
 /** 一键「已经好了」的文案（状态不再进表单，但库里的 status 仍然决定进不进 AI 分析） */
@@ -1321,29 +1297,23 @@ function addRecord() {
  * 老板要求"病史只保留一个诊断结果"，所以症状描述、用药、复查日期这些
  * 次要字段一律折叠起来，默认不占位置、也不拦着保存。
  */
-const moreExpandedKeys = ref<Record<string, boolean>>({})
-
-function isMoreExpanded(record: Record<string, any>, index: number) {
-  return Boolean(moreExpandedKeys.value[recordKey(record, index)])
-}
-
-function toggleMore(index: number) {
-  const record = draftRecords.value[index]
-  if (!record) {
-    return
-  }
-
-  const key = recordKey(record, index)
-  moreExpandedKeys.value[key] = !moreExpandedKeys.value[key]
-}
-
 /** 还要不要显示「更多」这一栏：有次要字段才有必要 */
 /**
  * 切换这条记录的类型（就诊 ↔ 体检）。
  *
- * 换了类型等于换了一张表，字段对不上：这里**开一条新草稿**，
- * 而不是把旧字段硬搬过去 —— 免得"体检结论"被当成"诊断结果"存进病史表。
- * 未保存的修改会提示一次。
+ * 2026-10-02 老板两条要求：
+ *   ① 切换时**不再弹"内容会清空"的提醒**
+ *   ② 切换时**保留已经填好的内容**
+ *
+ * 做法：不重开草稿，直接把这条草稿的归属标记改成目标类型，字段原地留着 ——
+ *   · 两张表共用的（日期、其它想说的、附件、兽医）本来就同名，原样带过去；
+ *     日期在两个类型下叫不同字段名（visitDate / checkupDate），这里显式搬一次
+ *   · 只在某一张表里存在的（症状 / 检查结论 / 体检类型 / 用药 / 处理），
+ *     留在草稿里不显示：**切回去还在**；保存时按记录自己的类型提交，
+ *     不属于这张表的字段不会被写进去（见 buildHealthVisitPayload）
+ *
+ * 已保存的记录不允许切换：换个类型就是换一张表，硬换会在库里留下两条，
+ * 这是 2026-10-02 审计时发现的坑（切完卡片变空、刷新后旧记录又冒出来）。
  */
 function changeVisitKind(index: number, kind: HealthVisitKind) {
   const record = draftRecords.value[index]
@@ -1351,32 +1321,35 @@ function changeVisitKind(index: number, kind: HealthVisitKind) {
     return
   }
 
-  const apply = () => {
-    const next = createHealthVisitDraft(kind)
-    if (isSavedRecord(record, index)) {
-      // 已存的记录不能改类型（那是另一张表里的一行），只能新建
-      draftRecords.value.splice(index, 1, next)
-    } else {
-      draftRecords.value.splice(index, 1, next)
-    }
-    moreExpandedKeys.value = {}
-    expandedRecordKey.value = next.__localId || null
-  }
-
-  if (isSavedRecord(record, index) || isRecordDirty(record, index)) {
-    uni.showModal({
-      title: `改成${HEALTH_VISIT_KIND_LABELS[kind]}`,
-      content: '类型不同，已填的内容会清空，需要重新填。确认继续吗？',
-      success: (res) => {
-        if (res.confirm) {
-          apply()
-        }
-      },
+  if (isSavedRecord(record, index)) {
+    uni.showToast({
+      title: '已保存的记录不能改类型，要改请先删掉这条',
+      icon: 'none',
+      duration: 2500,
     })
     return
   }
 
-  apply()
+  const next: Record<string, any> = {
+    ...cloneRecord(record),
+    [HEALTH_VISIT_KIND_FIELD]: kind,
+  }
+
+  // 日期：两个类型下字段名不同，搬一次，别让家长重选
+  const date = resolveHealthVisitDate(record)
+  const targetConfig = getHealthVisitFieldConfig(kind)
+  if (date) {
+    next[targetConfig.dateKey] = date
+  }
+
+  // 切到体检时给个默认类型（后端这一栏必填）
+  if (kind === 'checkup' && !String(next.checkupType || '').trim()) {
+    next.checkupType = HEALTH_VISIT_DEFAULT_CHECKUP_TYPE
+  }
+
+  draftRecords.value.splice(index, 1, next)
+  // 卡片保持展开，接着填就行
+  expandedRecordKey.value = recordKey(next, index)
 }
 
 function isRecordExpanded(record: Record<string, any>, index: number) {
@@ -1614,12 +1587,14 @@ async function chooseAttachment(index: number) {
     return
   }
 
+  // 2026-10-02 老板要求：格式与大小提示搬进这个弹窗，表单里不再占一行
   const tapIndex = await new Promise<number | null>((resolve) => {
     uni.showActionSheet({
       itemList: ['上传图片', '上传 PDF'],
-      success: (res) => resolve(res.tapIndex),
+      alertText: attachmentHintText,
+      success: (res: any) => resolve(res.tapIndex),
       fail: () => resolve(null),
-    })
+    } as any)
   })
 
   if (tapIndex == null) {

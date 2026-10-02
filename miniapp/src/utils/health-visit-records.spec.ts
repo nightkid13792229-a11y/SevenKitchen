@@ -70,7 +70,7 @@ describe('病例合并 · 列表', () => {
 })
 
 describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
-  it('就诊：日期 / 主要问题 / 医生怎么说 / 处理与提醒 / 用药 / 其它想说的', () => {
+  it('就诊：日期 / 症状 / 医生怎么说 / 处理与提醒 / 用药 / 其它想说的', () => {
     const config = getHealthVisitFieldConfig('medical')
 
     expect(config.dateKey).toBe('visitDate')
@@ -78,7 +78,8 @@ describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
     // 「诊断结果」对家长太专业 —— 他记得住的是"医生怎么说"
     expect(config.primaryLabel).toBe('医生怎么说')
     expect(config.complaintKey).toBe('chiefComplaint')
-    expect(config.complaintLabel).toBe('主要问题')
+    // 2026-10-02 老板：文案就叫「症状」
+    expect(config.complaintLabel).toBe('症状')
     expect(config.adviceKey).toBe('treatment')
     expect(config.adviceLabel).toBe('处理与提醒')
     expect(config.medicationKey).toBe('medications')
@@ -127,10 +128,10 @@ describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
 })
 
 describe('病例合并 · 校验', () => {
-  it('必填只剩日期 +（主要问题 或 医生怎么说）至少一个', () => {
+  it('必填只剩日期 +（症状 或 医生怎么说）至少一个', () => {
     expect(getHealthVisitValidationError('medical', {})).toBe('请选择就诊日期')
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01' }))
-      .toBe('请至少填写「主要问题」或「医生怎么说」')
+      .toBe('请至少填写「症状」或「医生怎么说」')
     // 只填症状（拿不到诊断）也能存
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', chiefComplaint: '呕吐' })).toBeNull()
     // 只填诊断也能存

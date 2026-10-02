@@ -804,7 +804,7 @@ describe('health-records', () => {
   })
 
   it('uses clearer reset labels for saved and unsaved records', () => {
-    expect(resolveHealthRecordSecondaryActionText(false, true)).toBe('取消新增')
+    expect(resolveHealthRecordSecondaryActionText(false, true)).toBe('取消新增记录')
     expect(resolveHealthRecordSecondaryActionText(true, true)).toBe('撤销修改')
     expect(resolveHealthRecordSecondaryActionText(true, false)).toBeNull()
   })

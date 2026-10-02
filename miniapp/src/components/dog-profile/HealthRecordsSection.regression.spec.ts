@@ -217,25 +217,95 @@ describe('病历/检查表单 · 精简版', () => {
     expect(toggleBlock).not.toContain('dogApi')
   })
 
-  it('「更多」改成说清里面是什么的「选填」，不再藏症状/用药', () => {
+  it('折叠彻底取消：症状、用药、其它想说的全在明面上', () => {
     const source = readSection()
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
 
-    expect(source).toContain('还有 ${labels.length} 项选填（${labels.join')
-    // 症状与用药已经提到明面，折叠里只剩复查日期与兽医
-    const optionalBlock = source.match(/function visitOptionalToggleLabel[\s\S]*?\n}/)?.[0] || ''
-    expect(optionalBlock).toContain('config.followUpLabel')
-    expect(optionalBlock).toContain('config.vetLabel')
-    expect(optionalBlock).not.toContain('medicationLabel')
-    expect(optionalBlock).not.toContain('complaintLabel')
+    // 2026-10-02 第二轮：复查日期与兽医也去掉之后，「更多/选填」没有存在意义了
+    expect(visitBranch).not.toContain('more-toggle')
+    expect(visitBranch).not.toContain('toggleMore')
+    // 该露的字段都在明面上
+    expect(visitBranch).toContain('complaintLabel')
+    expect(visitBranch).toContain('medicationLabel')
+    expect(visitBranch).toContain('notesLabel')
   })
 
-  it('附件说明压成一行（原来把六种格式都列出来）', () => {
+  it('附件格式/大小提示放在上传弹窗里，表单上不再占一行', () => {
     const source = readSection()
 
-    expect(source).toContain('{{ attachmentHintText }}')
+    // 弹窗（action sheet）里带提示
+    expect(source).toContain('alertText: attachmentHintText')
+    // 表单里不再渲染那行小字
+    expect(source).not.toContain('{{ attachmentHintText }}')
 
     const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
     expect(utils).toContain("'图片或 PDF，单个不超过 10MB'")
     expect(utils).not.toContain('HEIC、HEIF 或 PDF，单个文件不超过')
+  })
+})
+
+/**
+ * 五条收尾（2026-10-02 老板逐条提的）。
+ */
+describe('病历/检查表单 · 五条收尾', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+  it('① 切换就诊/体检：不再弹提醒，已填内容全部保留', () => {
+    const source = readSection()
+    const fn = source.match(/function changeVisitKind[\s\S]*?\n}/)?.[0] || ''
+
+    expect(fn).not.toBe('')
+    // 不再弹"内容会清空"的确认框
+    expect(fn).not.toContain('uni.showModal')
+    expect(source).not.toContain('已填的内容会清空')
+    // 不重开草稿：原地改这条草稿的归属，字段留着
+    expect(fn).toContain('[HEALTH_VISIT_KIND_FIELD]: kind')
+    expect(fn).not.toContain('createHealthVisitDraft(kind)')
+    // 日期在两个类型下字段名不同（visitDate / checkupDate），必须搬一次
+    expect(fn).toContain('next[targetConfig.dateKey] = date')
+    // 切回体检要有默认体检类型（后端这一栏必填）
+    expect(fn).toContain('HEALTH_VISIT_DEFAULT_CHECKUP_TYPE')
+    // 已保存的记录不许换类型：换类型＝换一张表，硬换会在库里留下两条
+    expect(fn).toContain('已保存的记录不能改类型')
+  })
+
+  it('① 切换后明确告诉家长"刚填的还在"，不让人以为白填了', () => {
+    const source = readSection()
+
+    expect(source).toContain('function visitCarryOverHint(record: Record<string, any>)')
+    expect(source).toContain('切回「体检」还能看到刚填的检查结论')
+    expect(source).toContain('切回「就诊」还能看到刚填的')
+  })
+
+  it('③ 复查日期与兽医从表单里去掉，但保存时照旧提交（识别出来的值不能丢）', () => {
+    const source = readSection()
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
+
+    expect(visitBranch).not.toContain('followUpLabel')
+    expect(visitBranch).not.toContain('vetLabel')
+    // 连带整个「还有 N 项选填」折叠一起去掉
+    expect(visitBranch).not.toContain('more-toggle')
+    expect(source).not.toContain('function visitOptionalToggleLabel')
+
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    expect(utils).toContain('veterinarian: normalizeOptionalText(record?.veterinarian)')
+    expect(utils).toContain('followUpDate: normalizeOptionalText(record?.followUpDate)')
+  })
+
+  it('⑤ 「取消新增」按钮文案改成「取消新增记录」', () => {
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+
+    expect(utils).toContain("return '取消新增记录'")
+    expect(utils).not.toContain("return '取消新增'\n")
   })
 })

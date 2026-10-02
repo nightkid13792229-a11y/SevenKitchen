@@ -10,6 +10,16 @@
     </view>
 
     <template v-else-if="loaded">
+      <!-- 档案里一条接种记录都没有时先说明白，否则"已逾期"会被读成"你的狗没打疫苗"。
+           2026-10-02 顾客侧开放当天补：家长明明打过、只是没记，看到逾期会以为系统算错了。 -->
+      <view v-if="noRecordAtAll" class="health-card plan-empty-note">
+        <text class="plan-empty-note__title">档案里还没有接种记录</text>
+        <text class="plan-empty-note__desc">
+          下面是按免疫程序推算的进度。如果其实打过疫苗，把接种记录补上，这里会自动对齐；
+          已经打过的那几针不会再提示。
+        </text>
+      </view>
+
       <!-- ① 下一针：整个板块最重要的一行 -->
       <view v-if="plan.nextStep" class="health-card next-step" :class="`next-step--${plan.nextStep.status}`">
         <text class="next-step__eyebrow">下一步</text>
@@ -107,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
 
 /**
@@ -116,8 +126,9 @@ import { dogApi } from '../../api/dogs'
  * 挂在「疫苗」书签下、紧挨着疫苗记录上方 —— 记录是"打过什么"，
  * 计划是"接下来怎么打"，两者放一起才读得通。
  *
- * ⚠️ 后端默认不开放（VACCINE_PLAN=customer 才开），因为免疫程序尚未经兽医审核。
- *    接口返回 available: false 时这一块显示原因，而不是空白。
+ * ✅ 顾客侧已开放（2026-10-02 老板指示）：生产环境开了 VACCINE_PLAN=customer，
+ *    免疫程序来自 WSAVA 2024，与已审核的免疫类知识条目同源。
+ *    接口返回 available: false 时这一块显示原因，而不是空白（开关关掉就回到那个状态）。
  */
 interface PlanStep {
   key: string
@@ -164,7 +175,21 @@ const plan = ref<{
   steps: PlanStep[]
   conflicts: PlanConflict[]
   decisions: Record<string, string>
+  summary?: { done?: number }
 }>({ nextStep: null, steps: [], conflicts: [], decisions: {} })
+
+/**
+ * 一条接种记录都还没对上（2026-10-02）。
+ *
+ * 为什么需要这个：顾客侧开放当天实测一只 8 个月、没记过疫苗的狗，
+ * 页面直接顶着 5 个「已逾期」—— 家长明明打过、只是没记，会以为系统算错了。
+ * 先说明"档案里还没有记录"，逾期才有上下文。
+ */
+const noRecordAtAll = computed(() => {
+  const done = Number(plan.value.summary?.done ?? 0)
+  const hasMatched = plan.value.steps.some((step) => step.matchedRecordId)
+  return done === 0 && !hasMatched
+})
 
 function statusLabel(status: PlanStep['status']) {
   return STATUS_LABELS[status] || status
@@ -200,6 +225,7 @@ async function load() {
       steps: Array.isArray(res.data.steps) ? res.data.steps : [],
       conflicts: Array.isArray(res.data.conflicts) ? res.data.conflicts : [],
       decisions: res.data.decisions || {},
+      summary: res.data.summary || {},
     }
     loaded.value = true
   } catch (error: any) {
@@ -263,6 +289,27 @@ watch(() => props.dogId, load, { immediate: true })
 
 .plan-locked__desc {
   font-size: 24rpx;
+  line-height: 1.6;
+  color: #6b6653;
+}
+
+/* 一条接种记录都没有时的说明（2026-10-02）：先给"逾期"一个上下文 */
+.plan-empty-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  border-left: 8rpx solid #d8c98a;
+  background: #fdfbf2;
+}
+
+.plan-empty-note__title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #7a6a2f;
+}
+
+.plan-empty-note__desc {
+  font-size: 23rpx;
   line-height: 1.6;
   color: #6b6653;
 }

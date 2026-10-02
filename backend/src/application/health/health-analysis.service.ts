@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { KnowledgeBaseService } from '../recipe-designer/knowledge-base.service';
 import { callDeepSeekJson } from '../recipe-designer/deepseek-chat';
@@ -90,6 +91,13 @@ export interface HealthAnalysisResult {
   /** 未审核知识绝不进入顾客侧 */
   audience: 'nutritionist' | 'customer';
   generatedAt: string;
+  /**
+   * 这次是直接给的上一次结果（记录没变，没重新调模型）。
+   *
+   * 生成时间仍是**上一次真正生成**的时间 —— 不许把它刷成"刚刚"，
+   * 界面上写"生成时间"就得是实话。
+   */
+  fromCache?: boolean;
 }
 
 /** 顾客侧未开放时的返回（与疫苗计划同一套做法） */
@@ -157,9 +165,82 @@ const SECTION_TAGS: Record<HealthAnalysisSection, string[]> = {
   visitPrep: ['clinical', 'prevention', 'lab', 'visit-prep'],
 };
 
+/** 缓存默认存活时间：30 分钟（可用 HEALTH_ANALYSIS_CACHE_TTL_MINUTES 覆盖） */
+export const HEALTH_ANALYSIS_CACHE_TTL_MS = 30 * 60 * 1000;
+/** 同时缓存的份数上限（一台上限 200 份，按插入顺序淘汰最旧的） */
+export const HEALTH_ANALYSIS_CACHE_MAX_ENTRIES = 200;
+
+/**
+ * 分析结果缓存（2026-10-02，老板要求）。
+ *
+ * 为什么要缓存：一次分析要跑三十多秒、调一次模型。家长点进页面看一眼、退出来、
+ * 再点进去，就要再等半分钟、再花一次钱 —— 而记录根本没变，结果必然一模一样。
+ *
+ * 三条设计取舍：
+ *   · **按"记录指纹"失效，不是按时间失效**：指纹来自就诊前摘要（记录条数、各条记录的
+ *     日期与内容、体重、体况、病史、饮食偏好），只要家长新记了一条、改了体重、删了记录，
+ *     指纹就变，缓存立刻作废 —— 不会拿旧结论糊弄人。TTL 只是兜底。
+ *   · **顾客与营养师分开存**：两边可引用的知识不同（顾客只认已审核条目），
+ *     同一只狗的结果本来就不一样，混用等于把未审核内容漏给顾客。
+ *   · **只缓存成功结果**：失败/未开放不缓存，否则一次网络抖动会钉住半小时。
+ */
+export class HealthAnalysisCache {
+  private readonly entries = new Map<
+    string,
+    { fingerprint: string; result: HealthAnalysisResult; expiresAt: number }
+  >();
+
+  constructor(
+    private readonly ttlMs: number = HEALTH_ANALYSIS_CACHE_TTL_MS,
+    private readonly maxEntries: number = HEALTH_ANALYSIS_CACHE_MAX_ENTRIES,
+  ) {}
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /** 命中才返回；指纹不符或过期都当作没有 */
+  get(
+    key: string,
+    fingerprint: string,
+    now: number = Date.now(),
+  ): HealthAnalysisResult | null {
+    const hit = this.entries.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt <= now || hit.fingerprint !== fingerprint) {
+      this.entries.delete(key);
+      return null;
+    }
+    // 命中后挪到队尾：淘汰时先掉最久没用的那份
+    this.entries.delete(key);
+    this.entries.set(key, hit);
+    return hit.result;
+  }
+
+  set(
+    key: string,
+    fingerprint: string,
+    result: HealthAnalysisResult,
+    now: number = Date.now(),
+  ): void {
+    this.entries.delete(key);
+    this.entries.set(key, { fingerprint, result, expiresAt: now + this.ttlMs });
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
 @Injectable()
 export class HealthAnalysisService {
   private readonly logger = new Logger(HealthAnalysisService.name);
+  private readonly cache = new HealthAnalysisCache(resolveCacheTtlMs());
 
   constructor(
     private readonly prisma: PrismaService,
@@ -194,6 +275,16 @@ export class HealthAnalysisService {
 
     // 复用就诊前摘要：它已经把五类记录（就诊/体检/过敏/疫苗/体重）聚合好了，不用再查一遍
     const summary = await this.timelineService.getVisitSummary(customerId, dogId);
+
+    // 记录没变就直接给上一次的结果：省掉三十多秒的等待和一次模型调用。
+    // 指纹取自摘要本身，所以"家长刚记了一条/改了体重"必然命中不了旧缓存。
+    const cacheKey = `${audience}:${customerId}:${dogId}`;
+    const fingerprint = buildAnalysisFingerprint(summary);
+    const cached = this.cache.get(cacheKey, fingerprint);
+    if (cached) {
+      this.logger.log(`[HealthAnalysis] 命中缓存（${audience} · ${dogId}），跳过模型调用`);
+      return { ...cached, fromCache: true };
+    }
 
     const knowledgeContext = this.buildKnowledgeContext(summary, audience);
     const approvedKnowledgeCount = countKnowledgeEntries(knowledgeContext);
@@ -266,7 +357,7 @@ export class HealthAnalysisService {
       });
     }
 
-    return {
+    const result: HealthAnalysisResult = {
       dogId,
       dogName: normalizeText(summary?.dog?.name, 40) || undefined,
       items,
@@ -276,6 +367,10 @@ export class HealthAnalysisService {
       audience,
       generatedAt: new Date().toISOString(),
     };
+
+    this.cache.set(cacheKey, fingerprint, result);
+
+    return result;
   }
 
   /** 知识条目全表 → id/标题 映射；取不到就返回空表（出处退回显示编号） */
@@ -552,4 +647,28 @@ export function resolveCitationTitles(
   titleById: Map<string, string>,
 ): string[] {
   return (citations || []).map((id) => titleById.get(id) || id);
+}
+
+/** 缓存 TTL 可以按环境变量调（分钟）；给不出合法值就用默认 30 分钟 */
+export function resolveCacheTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(String(env.HEALTH_ANALYSIS_CACHE_TTL_MINUTES ?? '').trim());
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return HEALTH_ANALYSIS_CACHE_TTL_MS;
+  }
+  return raw * 60 * 1000;
+}
+
+/**
+ * 记录指纹：摘要内容变了，指纹就变（2026-10-02）。
+ *
+ * 只把 `generatedAt` 摘掉 —— 它每次调用都是新的，留着会让缓存永远命中不了；
+ * 其余字段（五类记录的条数、每条的日期与内容、体重、体况、病史、饮食偏好）
+ * 全部参与，所以任何一次真实的记录变动都会让旧结果作废。
+ */
+export function buildAnalysisFingerprint(summary: unknown): string {
+  if (!summary || typeof summary !== 'object') {
+    return 'empty';
+  }
+  const { generatedAt: _generatedAt, ...stable } = summary as Record<string, unknown>;
+  return createHash('sha1').update(JSON.stringify(stable)).digest('hex');
 }

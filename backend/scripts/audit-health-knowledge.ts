@@ -34,14 +34,68 @@ export interface HealthKnowledgeAudit {
   warnings: string[];
 }
 
-/** 猫专属线索：只做提示，人名/标题里的"犬猫并列共识"由人判断 */
-const FELINE_PATTERN = /(猫|feline|Feline|FELINE)/;
-/** 允许的并列表述（这些不算猫专属内容） */
-const FELINE_ALLOWLIST = /(犬猫|猫和犬|猫与犬|狗和猫)/;
+/**
+ * 猫专属线索：只做提示。
+ *
+ * 2026-10 修订（老板定死「我们只做狗」之后）：
+ *   · 原来这条检查只跑在待审核的健康领域条目上，CARDIO / ORTHO / DENTAL 这类
+ *     食谱设计领域整个漏检 —— `cardio.ts` 里那句「猫的扩张型心肌病自 1987 年…」
+ *     就是这么漏过去的。现在**全领域**都查（正文 + keywords + 出处定位）。
+ *   · 「犬猫」不再整类豁免：我们自己的行文里写「犬猫」要改成只说犬（"心衰犬猫的
+ *     钠限制" → "心衰犬的钠限制"），所以豁免收紧成两类**确实不能改**的东西：
+ *       1) 资料正式标题里的「犬猫」——改了就是误引。例：`AAHA 老年犬猫护理指南 2023`、
+ *          `WSAVA 犬猫生殖管理指南 2024`、`NRC 犬猫营养需要`。这些名字既出现在
+ *          citations/sources 里，也会被正文引用到，所以正文里也要先把它们剥掉再判。
+ *       2) 出处定位里写明"只取犬栏"、或表名本身就叫「猫和犬…」的（我们确实只取了
+ *          犬那一栏，改了就说不清取的是哪一栏）。
+ *     正文里若还有“犬猫都会…”这类并列陈述，属规则 A5「拿不准就保留」的，见
+ *     FELINE_ALLOWLIST —— 它是**例外清单**，不是默认豁免：新写的正文请直接写「犬」。
+ *   · 第三种允许的写法：**刻意写明的物种出处说明**（句子带「物种说明」四个字的），
+ *     例如 endocrine-010「这条依据来自猫的流行病学，不能套到犬身上」。
+ *     只做狗 ≠ 不提猫：把"哪些结论不是狗的证据"讲清楚，比删干净更安全。
+ */
+const FELINE_PATTERN = /(猫|feline|Feline|FELINE|\bcats?\b)/;
+/** 资料正式标题/数据库名里的「犬猫」原文：不得改写（改了就是误引） */
+const FELINE_SOURCE_TITLES = [
+  'AAHA 老年犬猫护理指南 2023',
+  'WSAVA 犬猫生殖管理指南 2024',
+  'WSAVA 犬猫生殖管理指南',
+  'ACVIM 犬猫癫痫持续状态与集群发作管理共识 2024',
+  'ACVIM 犬猫免疫介导性溶血性贫血诊断共识 2019',
+  'FEDIAF 犬猫营养指南',
+  'NRC 犬猫营养需要',
+  '犬猫遗传病（DNA）检测实验室数据库',
+];
+/** 允许的并列表述：仅限"对狗同样成立、且刻意保留"的写法，以及犬栏定位 */
+const FELINE_ALLOWLIST = /(犬猫|猫和犬|猫与犬|猫犬|狗猫)/;
+/** 出处定位里"表名本身是猫和犬"或"只取犬栏"的写法 */
+const FELINE_LOCATOR_ALLOWLIST = /(犬栏|犬猫|猫和犬|猫与犬|猫犬)/;
+
+/**
+ * 允许的"物种出处说明"句子：写明"这条依据来自猫、不要套到犬身上"。
+ *
+ * 为什么留这个口子：我们只做狗，但**把"哪些结论不是狗的证据"讲清楚**，
+ * 比删干净更有价值 —— 营养师最怕的就是拿猫的流行病学去推犬的结论
+ * （endocrine-010 的碘/硒与甲亢就是这么一条）。
+ * 这类句子必须带「物种说明」四个字：标记本身就是刻意留痕，
+ * 不会有人顺手写出来，审计时也能一眼分辨"有意保留"和"漏删"。
+ */
+const FELINE_PROVENANCE_MARKER = '物种说明';
+
+/** 先把"正式标题里的犬猫"剥掉，剩下的「猫」才是我们自己的表述 */
+function withoutSourceTitles(text: string): string {
+  return FELINE_SOURCE_TITLES.reduce(
+    (acc, title) => acc.split(title).join(''),
+    text,
+  );
+}
 
 function isFelineOnly(text: string): boolean {
-  if (!FELINE_PATTERN.test(text)) return false;
-  return !FELINE_ALLOWLIST.test(text);
+  const own = withoutSourceTitles(text);
+  if (!FELINE_PATTERN.test(own)) return false;
+  // 刻意写明的物种出处说明：允许（见 FELINE_PROVENANCE_MARKER）
+  if (own.includes(FELINE_PROVENANCE_MARKER)) return false;
+  return !FELINE_ALLOWLIST.test(own);
 }
 
 /**
@@ -127,27 +181,6 @@ export function auditHealthKnowledge(
       );
     }
 
-    // 猫专属内容（只做警告：需要人判断是不是"犬猫并列共识"的正式标题）
-    const texts = [
-      entry.title,
-      entry.summary,
-      ...entry.details,
-      ...(entry.caveats ?? []),
-    ].filter(isFelineOnly);
-    if (texts.length > 0) {
-      warnings.push(
-        `条目 ${entry.id} 正文里出现猫专属表述：${texts[0].slice(0, 40)}…`,
-      );
-    }
-    for (const source of entry.sources ?? []) {
-      const locator = `${source.locator ?? ''} ${source.note ?? ''}`;
-      if (/猫/.test(locator) && !FELINE_ALLOWLIST.test(locator)) {
-        warnings.push(
-          `条目 ${entry.id} 的出处定位指向猫的资料：${locator.slice(0, 40)}…`,
-        );
-      }
-    }
-
     // citations 里的出处名要能对上号：要么对得上登记表的规范名，
     // 要么对得上**本条自己**的 sources.locator（ACVIM 这类"一套 23 份共识"的
     // 打包来源，规范名比具体共识标题更粗，只能用 locator 比）
@@ -165,6 +198,35 @@ export function auditHealthKnowledge(
         warnings.push(
           `条目 ${entry.id} 的出处名"${citation.source}"既对不上来源登记表，` +
             '也对不上本条 sources 的定位',
+        );
+      }
+    }
+  }
+
+  // 猫专属内容（只做警告：正式标题与犬栏定位已在 isFelineOnly 里豁免）。
+  // 跑**全部**条目——CARDIO/ORTHO/DENTAL 这些食谱设计领域同样必须只讲狗。
+  for (const entry of entries) {
+    const texts = [
+      ['title', entry.title],
+      ['summary', entry.summary],
+      ...entry.details.map((t, i) => [`details[${i}]`, t] as [string, string]),
+      ...(entry.caveats ?? []).map((t, i) => [`caveats[${i}]`, t] as [string, string]),
+      ...(entry.keywords ?? []).map((k, i) => [`keywords[${i}]`, k] as [string, string]),
+    ].filter(([, text]) => isFelineOnly(text));
+    for (const [field, text] of texts) {
+      warnings.push(
+        `条目 ${entry.id} 的 ${field} 里出现猫专属表述：${text.slice(0, 40)}…`,
+      );
+    }
+    for (const source of entry.sources ?? []) {
+      const locator = `${source.locator ?? ''} ${source.note ?? ''}`;
+      if (
+        /猫/.test(locator) &&
+        !FELINE_LOCATOR_ALLOWLIST.test(locator) &&
+        !FELINE_SOURCE_TITLES.some((title) => locator.includes(title))
+      ) {
+        warnings.push(
+          `条目 ${entry.id} 的出处定位指向猫的资料：${locator.slice(0, 40)}…`,
         );
       }
     }

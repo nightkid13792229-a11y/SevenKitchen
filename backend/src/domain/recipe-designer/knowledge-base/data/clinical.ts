@@ -319,11 +319,10 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '不要自行给止咳药 —— 咳嗽是症状，压住它可能掩盖病情。',
     ],
     citations: [
-      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2020 心肌病分类诊断与管理共识 · 心衰相关呼吸道表现' },
       { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2020 肺动脉高压共识 · 呼吸困难的评估' },
     ],
     sources: [
-      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2020 心肌病与肺高压共识', note: '心脏原因导致的咳嗽与呼吸困难' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2020 肺动脉高压共识（犬）', note: '心脏原因导致的咳嗽与呼吸困难' },
       { sourceId: 'MERCK-HEME', locator: '——', note: '咳嗽的鉴别方向（背景与警示）' },
     ],
     priority: 'HIGH',

@@ -55,6 +55,13 @@ npx ts-node -r tsconfig-paths/register scripts/apply-knowledge-review.ts --revie
 > **只有审核登记表才是"通过"的唯一凭据**，而它只由这个脚本生成、不手写。
 | 拿不准 | 保持 `PENDING_REVIEW`，单独列一份问题清单再找人定 |
 
-> **为什么这件事卡着两条产品线**：`HEALTH_ANALYSIS=customer`（AI 健康分析给顾客看）
+> **这件事卡着两条产品线**：`HEALTH_ANALYSIS=customer`（AI 健康分析给顾客看）
 > 与 `VACCINE_PLAN=customer`（疫苗计划给顾客看）两个开关默认是关的，
-> 只有等条目审完才有意义去开。审完之前，这两块只对营养师侧可见。
+> 只有等条目审完才有意义去开。
+>
+> **进度（2026-10-02）**：188 条送审内容全数通过，登记进 `approvals.ts`（审核人栏写的是
+> "合作兽医（老板 2026-10-02 转达：全部通过）"）。
+> · `HEALTH_ANALYSIS=customer` —— **已开**，生产环境 2026-10-02 起顾客侧「健康分析」可见。
+> · `VACCINE_PLAN=customer` —— **还没开**，等老板定。
+> 另外按老板要求，知识库只保留犬相关结论，猫的内容（含猫心肌病共识）已从条目里剔除。
+

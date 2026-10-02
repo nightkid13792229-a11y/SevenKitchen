@@ -6,6 +6,7 @@ import { deriveKnowledgeTags } from '../../../src/application/recipe-designer/re
 import { KNOWLEDGE_SOURCES, isKnownSourceId, sourceOrganization } from '../../../src/domain/recipe-designer/knowledge-base/source-registry';
 import { KNOWLEDGE_TAG_VOCABULARY } from '../../../src/domain/recipe-designer/knowledge-base/tag-vocabulary';
 import { HEALTH_ONLY_DOMAINS } from '../../../src/domain/recipe-designer/knowledge-base/types';
+import { KNOWLEDGE_APPROVALS } from '../../../src/domain/recipe-designer/knowledge-base/approvals';
 
 /**
  * 知识库结构升级（2026-10-01）。
@@ -192,7 +193,11 @@ describe('知识库结构升级', () => {
       expect(approved).toEqual([])
     })
 
-    it('顾客侧的提示词里一条未审核内容都没有', () => {
+    it('顾客侧的提示词里**只出现已审核**的条目', () => {
+      // 2026-10-02：合作兽医对 189 条全部通过之后，
+      // 顾客侧不再是"一条都没有"，而是"只出现审核过的那些"。
+      // 这条哨兵因此从"内容为空"升级成"内容全部有审核记录"——
+      // 未审核/被驳回的条目一旦漏进去，这里会立刻红。
       const { tags } = deriveKnowledgeTags({
         lifeStageLabel: '成年犬',
         ageMonths: 36,
@@ -209,7 +214,25 @@ describe('知识库结构升级', () => {
         audience: 'customer',
       })
 
-      expect(text).not.toMatch(/\[(immune|lab|clinical)-/)
+      const citedIds = [...text.matchAll(/\[([a-z]+-\d+)\]/g)].map((m) => m[1])
+      expect(citedIds.length).toBeGreaterThan(0)
+
+      const unapproved = citedIds.filter((id) => !KNOWLEDGE_APPROVALS[id])
+      expect(unapproved).toEqual([])
+    })
+
+    it('未审核的条目（登记表里没有的）确实进不了顾客侧', () => {
+      // 造一条"没审核过"的健康条目，直接问门禁要不要它
+      const pending = service
+        .getAll()
+        .find((entry) => entry.domain === 'CLINICAL' && !KNOWLEDGE_APPROVALS[entry.id])
+      if (!pending) {
+        // 当前所有健康条目都审过了 —— 门禁的正确性由 knowledge-customer-gate.spec.ts 覆盖
+        return
+      }
+
+      const filtered = (service as any).filterByAudience([pending], 'customer')
+      expect(filtered).toEqual([])
     })
 
     it('营养师侧看得到（他们看得懂"这条还没审"）', () => {

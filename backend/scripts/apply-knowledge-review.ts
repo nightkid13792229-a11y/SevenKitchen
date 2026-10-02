@@ -54,8 +54,19 @@ interface Row {
 function parseArgs() {
   const args = process.argv.slice(2);
   const apply = args.includes('--apply');
-  const reviewerArg = args.find((item) => item.startsWith('--reviewer='));
-  const positional = args.filter((item) => !item.startsWith('--'));
+  // 两种写法都认：--reviewer=名字 与 --reviewer "名字"
+  // （文档里写的是空格写法，所以必须支持，否则审核人会静默记成默认值）
+  const reviewerEq = args.find((item) => item.startsWith('--reviewer='));
+  const reviewerSpaceAt = args.indexOf('--reviewer');
+  const reviewerFromSpace =
+    reviewerSpaceAt >= 0 && args[reviewerSpaceAt + 1] && !args[reviewerSpaceAt + 1].startsWith('--')
+      ? args[reviewerSpaceAt + 1]
+      : '';
+  const positional = args.filter(
+    (item, index) =>
+      !item.startsWith('--') &&
+      index !== reviewerSpaceAt + 1,
+  );
 
   let csvPath = positional[0];
   if (!csvPath) {
@@ -65,13 +76,20 @@ function parseArgs() {
     csvPath = resolve(PACKET_DIR, candidates[candidates.length - 1]);
   }
 
+  const reviewer = reviewerEq
+    ? reviewerEq.split('=').slice(1).join('=')
+    : reviewerFromSpace;
+
+  if (apply && !reviewer) {
+    console.error('缺少审核人：请用 --reviewer "XX动物医院 X医生" 指明（审核记录要留痕）。');
+    process.exitCode = 1;
+  }
+
   return {
     apply,
     csvPath: resolve(csvPath),
     reviewedAt: new Date().toISOString().slice(0, 10),
-    reviewer: reviewerArg
-      ? reviewerArg.split('=')[1]
-      : '合作兽医（见审核意见列）',
+    reviewer,
   };
 }
 

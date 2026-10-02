@@ -75,19 +75,34 @@ const Region = process.env.COS_REGION;
 
 const prisma = new PrismaClient();
 
-/** 数据库里被引用到的所有附件 key（去掉域名与查询串） */
+/**
+ * 数据库里被引用到的所有附件 key（去掉域名与查询串）。
+ *
+ * 除了四张记录表，**必须**把「分享给医生的快照」也算进来（2026-10-02 修）：
+ * 快照是永久的、里面存着图片地址，顾客可能几个月后还在把那个链接发给医生；
+ * 只按记录表判断的话，这些图会在 7 天后被当成"没人引用"删掉、链接变裂图。
+ * 已撤销（revoked_at 非空）的分享不再算引用 —— 那些图可以正常回收。
+ */
 async function collectReferencedKeys() {
   const rows = await prisma.$queryRaw`
     select attachments from medical_record
     union all select attachments from checkup_record
     union all select attachments from allergy_record
     union all select attachments from vaccine_record
+    union all
+    select array_agg(item->>'sourceUrl')
+    from dog_health_share_token t,
+         jsonb_array_elements(t.snapshot->'attachments') as item
+    where t.revoked_at is null
+      and jsonb_array_length(coalesce(t.snapshot->'attachments', '[]'::jsonb)) > 0
   `;
 
   const keys = new Set();
   for (const row of rows) {
     for (const url of row.attachments || []) {
-      keys.add(toObjectKey(String(url)));
+      if (url) {
+        keys.add(toObjectKey(String(url)));
+      }
     }
   }
 

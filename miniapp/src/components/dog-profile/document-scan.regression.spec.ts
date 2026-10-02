@@ -116,7 +116,10 @@ describe('拍照录入 · 接线', () => {
     )
 
     expect(section).toContain('<HealthDocumentScan')
-    expect(section).toContain('v-if="isVisitMode && dogId && scanActive"')
+    // 2026-10-02：扫描组件改成常驻挂载 + display:none 控制显隐
+    // （原来懒挂载 → 第一次点「从相册选择」时 ref 还是空的，点了没反应）
+    expect(section).toContain('v-if="isVisitMode && dogId"')
+    expect(section).toContain("'scan-entry--hidden': !scanActive")
     // 2026-10-01 老板要求：三个入口并成一个，且**不再让顾客先选文档类型** ——
     // 传 AUTO 由后端判断，两个选项就合并成了「从相册选择（自动识别）」
     expect(section).toContain("itemList: ['手动填写', '从相册选择（自动识别检查报告）']")

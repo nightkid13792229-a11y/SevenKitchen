@@ -42,9 +42,18 @@
          原来这里是「拍病历 / 拍体检报告」两个选择器 + 一个「拍照录入」按钮 +
          下面再一个「新增记录」——三处入口做同一件事。现在统一成底部一个按钮：
          点它选「手动填写 / 拍病历 / 拍体检报告」，这里只保留识别结果的确认卡片。 -->
-    <!-- 只在真的要识别/有待确认结果时才挂载：空闲时这段完全不占高度
-         （原来是常驻的空容器 + 两层 margin-bottom，书签下方会空出一条）。 -->
-    <view v-if="isVisitMode && dogId && scanActive" class="scan-entry">
+    <!-- 扫描组件**常驻挂载**、用 class 控制显隐（2026-10-02 修的一个真 bug）。
+         原来写成 v-if="… && scanActive"：第一次点「从相册选择」时才挂载，
+         紧接着 nextTick 就去调它的方法 —— 但小程序里组件挂载要等下一次 setData，
+         那一刻 ref 还是空的，调用被 ?. 静默吞掉，**第一次点击没有任何反应**，
+         第二次才弹出选择器；扫完又 unmount，于是每次都要点两下才灵。
+         改成常驻 + display:none：空闲时不占高度（原来担心的空条不会回来），
+         点一下就能立刻把选择器叫起来。 -->
+    <view
+      v-if="isVisitMode && dogId"
+      class="scan-entry"
+      :class="{ 'scan-entry--hidden': !scanActive }"
+    >
       <HealthDocumentScan
         ref="scanRef"
         hide-trigger
@@ -1211,10 +1220,17 @@ function openAddRecordChooser() {
  * 判定结果随识别结果一起回来（老板 2026-10-01：两个选项合并成一个）。
  */
 function startScan() {
+  // 先把容器亮出来（识别结果的确认卡片要显示在这块里）
   scanActive.value = true
-  nextTick(() => {
-    scanRef.value?.startScan?.()
-  })
+
+  // 组件是常驻挂载的，正常情况下这里一步到位。
+  // 只有首次渲染还没走完、ref 暂时为空时，才补一次下一 tick 兜底。
+  if (scanRef.value) {
+    scanRef.value.startScan?.()
+    return
+  }
+
+  nextTick(() => scanRef.value?.startScan?.())
 }
 
 function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
@@ -1794,6 +1810,11 @@ function removeAttachment(index: number, attachmentIndex: number) {
 /* 拍照录入（第六期） */
 .scan-entry {
   /* 不留 margin：这个容器只在识别时出现，间距交给板块的 gap */
+}
+
+/* 空闲态：组件还挂着（这样 ref 随时可用），但不占任何高度 */
+.scan-entry--hidden {
+  display: none;
 }
 
 .scan-entry__kinds {

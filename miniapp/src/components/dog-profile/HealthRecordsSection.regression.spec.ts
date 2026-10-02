@@ -352,6 +352,24 @@ describe('病历/检查表单 · 第三轮', () => {
     expect(fn).toContain('return false')
   })
 
+  it('点一次「从相册选择」就要弹出选择器（组件提前挂好，不等下一次渲染）', () => {
+    const source = readSection()
+
+    // 2026-10-02 老板报的："每次都要点第二次才弹出文件管理器，第一次没反应"
+    // 根因：扫描组件原来靠 scanActive 懒挂载，第一次点击时 ref 还是空的，
+    // 调用被 ?. 静默吞掉。现在常驻挂载、空闲时 display:none。
+    expect(source).toContain('v-if="isVisitMode && dogId"')
+    expect(source).not.toContain('v-if="isVisitMode && dogId && scanActive"')
+    expect(source).toContain("'scan-entry--hidden': !scanActive")
+    expect(source).toContain('.scan-entry--hidden {')
+
+    const fn = source.match(/function startScan\(\)[\s\S]*?\n}/)?.[0] || ''
+    expect(fn).toContain('scanActive.value = true')
+    // 就绪就直接调，不再无脑等 nextTick
+    expect(fn).toContain('if (scanRef.value) {')
+    expect(fn).toContain('scanRef.value.startScan?.()')
+  })
+
   it('③ 批量保存逐条等存完再下一条（否则第二条开始会被"保存中"挡回来）', () => {
     const source = readSection()
 

@@ -176,6 +176,13 @@ export class CustomRecipeService implements ICustomRecipeRepository {
           data.dogId,
           data.allergies || [],
           data.medicalConditions || [],
+          // 2026-10-02 老板定：饮食偏好只在定制食谱时填 ——
+          // 那这里就必须**回写档案**，否则健康管理里的偏好会一直空着/陈旧，
+          // AI 健康分析与营养师侧读到的口味就是断源的。
+          {
+            preferredIngredients: data.preferredIngredients || [],
+            dislikedIngredients: data.dislikedIngredients || [],
+          },
         );
         await tx.customRecipeOrder.update({
           where: { id: order.id },
@@ -1177,12 +1184,17 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     dogId: string,
     allergies: string[],
     medicalConditions: string[],
+    dietPreferences: {
+      preferredIngredients?: string[];
+      dislikedIngredients?: string[];
+    } = {},
   ): Promise<void> {
     await this.syncToHealthProfileTx(
       this.prisma,
       dogId,
       allergies,
       medicalConditions,
+      dietPreferences,
     );
   }
 
@@ -1191,6 +1203,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     dogId: string,
     allergies: string[],
     medicalConditions: string[],
+    dietPreferences: {
+      preferredIngredients?: string[];
+      dislikedIngredients?: string[];
+    } = {},
   ): Promise<void> {
     /**
      * 同步过敏史 → 结构化过敏记录。
@@ -1245,6 +1261,110 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             chiefComplaint: '定制食谱时提供',
             diagnosis: condition,
             status: 'PENDING_CONFIRMATION',
+          },
+        });
+      }
+    }
+
+    /**
+     * 同步饮食偏好 → 档案（2026-10-02 补）。
+     *
+     * 背景：老板定了"饮食偏好只在定制食谱时填写"，健康管理页的编辑入口已下线。
+     * 但下单时只把偏好存进了订单、**没有回写档案** ——
+     * 于是 AI 健康分析里的"饮食偏好"、营养师侧的标签派生读到的一直是空值，等于断源。
+     * 这里补两条路：
+     *   · dog.preferredFoods / pickyFoods（自由文本，分析与分享在读）
+     *   · dog_diet_preference（结构化「爱吃/不吃」+ 变更历史，营养师端在读）
+     *
+     * 写法是**并入**而不是覆盖：顾客以前填过的、这次没提到的都留着。
+     */
+    await this.mergeDietPreferencesTx(
+      tx,
+      dogId,
+      dietPreferences.preferredIngredients || [],
+      dietPreferences.dislikedIngredients || [],
+    );
+  }
+
+  /** 把这次的饮食偏好并进档案（自由文本 + 结构化表），不覆盖旧内容 */
+  private async mergeDietPreferencesTx(
+    tx: any,
+    dogId: string,
+    preferred: string[],
+    disliked: string[],
+  ): Promise<void> {
+    const clean = (list: string[]) =>
+      Array.from(
+        new Set(
+          (list || []).map((item) => String(item || '').trim()).filter(Boolean),
+        ),
+      );
+
+    const liked = clean(preferred);
+    const notLiked = clean(disliked);
+
+    if (liked.length === 0 && notLiked.length === 0) {
+      return;
+    }
+
+    const dog = await tx.dog.findUnique({
+      where: { id: dogId },
+      select: { preferredFoods: true, pickyFoods: true },
+    });
+
+    const mergeText = (existing: string | null, additions: string[]) => {
+      const parts = String(existing || '')
+        .split(/[、,，\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      for (const item of additions) {
+        if (!parts.includes(item)) {
+          parts.push(item);
+        }
+      }
+
+      return parts.join('、');
+    };
+
+    if (dog) {
+      await tx.dog.update({
+        where: { id: dogId },
+        data: {
+          ...(liked.length > 0
+            ? { preferredFoods: mergeText(dog.preferredFoods, liked) }
+            : {}),
+          ...(notLiked.length > 0
+            ? { pickyFoods: mergeText(dog.pickyFoods, notLiked) }
+            : {}),
+        },
+      });
+    }
+
+    // 结构化偏好：爱吃 = LIKED、不爱吃 = DISLIKED；已存在的不重复加、也不记变更
+    for (const [kind, items] of [
+      ['LIKED', liked],
+      ['DISLIKED', notLiked],
+    ] as const) {
+      for (const foodName of items) {
+        const existing = await tx.dogDietPreference.findUnique({
+          where: { dogId_kind_foodName: { dogId, kind, foodName } },
+        });
+
+        if (existing) {
+          continue;
+        }
+
+        await tx.dogDietPreference.create({
+          data: { dogId, kind, foodName, source: 'CUSTOM_RECIPE' },
+        });
+        await tx.dogDietPreferenceChange.create({
+          data: {
+            dogId,
+            kind,
+            foodName,
+            action: 'ADDED',
+            changedBy: 'CUSTOM_RECIPE',
           },
         });
       }

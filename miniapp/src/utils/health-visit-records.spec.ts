@@ -70,25 +70,32 @@ describe('病例合并 · 列表', () => {
 })
 
 describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
-  it('就诊：日期 / 症状 / 医生怎么说 / 处理与提醒 / 用药 / 其它想说的', () => {
+  it('就诊：日期 / 症状 / 医生诊断 / 医嘱 / 用药 / 这次做的检查 / 化验数据 / 体征 / 补充说明', () => {
     const config = getHealthVisitFieldConfig('medical')
 
     expect(config.dateKey).toBe('visitDate')
     expect(config.primaryKey).toBe('diagnosis')
-    // 「诊断结果」对家长太专业 —— 他记得住的是"医生怎么说"
-    expect(config.primaryLabel).toBe('医生怎么说')
+    // 2026-10-02 老板定稿：「医生怎么说」改回专业说法「医生诊断」
+    expect(config.primaryLabel).toBe('医生诊断')
     expect(config.complaintKey).toBe('chiefComplaint')
     // 2026-10-02 老板：文案就叫「症状」
     expect(config.complaintLabel).toBe('症状')
+    // 「处理与提醒」收窄成「医嘱（回家注意）」—— 它原来装着治疗意见 + 检查清单 + 医嘱
     expect(config.adviceKey).toBe('treatment')
-    expect(config.adviceLabel).toBe('处理与提醒')
+    expect(config.adviceLabel).toBe('医嘱（回家注意）')
     expect(config.medicationKey).toBe('medications')
-    // 「备注」改名「其它想说的」（老板：保留但改名）
+    // 新增两栏：这次做的检查、体征
+    expect(config.examsKey).toBe('exams')
+    expect(config.examsLabel).toBe('这次做的检查')
+    expect(config.vitalsKey).toBe('vitals')
+    expect(config.vitalsLabel).toBe('体征')
+    expect(config.labValuesKey).toBe('labValues')
+    // 「其它想说的」改名「补充说明」（老板：更专业一点）
     expect(config.notesKey).toBe('notes')
-    expect(config.notesLabel).toBe('其它想说的')
+    expect(config.notesLabel).toBe('补充说明')
   })
 
-  it('体检：日期 / 体检类型 / 检查结论 / 医生建议 / 其它想说的', () => {
+  it('体检：日期 / 体检类型 / 检查结论 / 医生建议 / 补充说明', () => {
     const config = getHealthVisitFieldConfig('checkup')
 
     expect(config.dateKey).toBe('checkupDate')
@@ -128,10 +135,10 @@ describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
 })
 
 describe('病例合并 · 校验', () => {
-  it('必填只剩日期 +（症状 或 医生怎么说）至少一个', () => {
+  it('必填只剩日期 +（症状 或 医生诊断）至少一个', () => {
     expect(getHealthVisitValidationError('medical', {})).toBe('请选择就诊日期')
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01' }))
-      .toBe('请至少填写「症状」或「医生怎么说」，或上传报告原件')
+      .toBe('请至少填写「症状」或「医生诊断」，或上传报告原件')
     // 只填症状（拿不到诊断）也能存
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', chiefComplaint: '呕吐' })).toBeNull()
     // 只填诊断也能存
@@ -153,7 +160,7 @@ describe('病例合并 · 校验', () => {
     })).toBeNull()
   })
 
-  it('用药、处理、其它想说的都不拦着保存（想记多少记多少）', () => {
+  it('用药、医嘱、这次做的检查、体征、补充说明都不拦着保存（想记多少记多少）', () => {
     const record = { visitDate: '2026-05-01', diagnosis: '胃炎' }
     expect(getHealthVisitValidationError('medical', record)).toBeNull()
   })

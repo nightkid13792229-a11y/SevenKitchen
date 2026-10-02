@@ -61,6 +61,7 @@
         :dog-name="dogName"
         document-type="AUTO"
         upload-type="medical"
+        :entry-kind="props.visitKind || 'medical'"
         @scanned="onScanned"
       />
     </view>
@@ -156,9 +157,9 @@
 
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
         <!-- ── 病历/检查：字段顺序＝家长填写顺序（2026-10-02 精简版）────────────
-             必填只有两件：日期 +（主要问题 或 医生怎么说）。
+             必填只有两件：日期 +（症状 或 医生诊断）。
              「状态」已从表单移除（家长不做系统选择题），改成存好后一键「已经好了」；
-             「备注」改名「其它想说的」并提到明面（它已经接进 AI 分析）；
+             「备注」改名「补充说明」并提到明面（它已经接进 AI 分析）；
              只有复查日期、兽医这种少数情况才有的收进「选填」。 -->
         <template v-if="isVisitMode">
           <view class="field-group">
@@ -199,17 +200,6 @@
             />
           </view>
 
-          <view v-if="visitConfig(record).labValuesKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
-            <textarea
-              class="field-textarea field-textarea--tall"
-              :disabled="hasSavingRecord"
-              placeholder="化验单上的数值，一行一项，例如：肌酐 72.2 umol/L"
-              :value="readField(record, visitLabValuesKey(record))"
-              @input="updateTextField(index, visitLabValuesKey(record), $event.detail.value)"
-            />
-          </view>
-
           <view class="field-group">
             <text class="field-label">{{ visitConfig(record).adviceLabel }}</text>
             <input
@@ -231,6 +221,43 @@
               placeholder="多个用顿号隔开，例如：速诺、胃复安"
               :value="readField(record, visitMedicationKey(record))"
               @input="updateTextField(index, visitMedicationKey(record), $event.detail.value)"
+            />
+          </view>
+
+          <!-- 这次做的检查 / 体征：2026-10-02 老板定稿新增的两栏。
+               原来检查项目清单被塞进「处理与提醒」，和医嘱、其它想说的挤在一起。 -->
+          <view v-if="visitConfig(record).examsKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).examsLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).examsPlaceholder"
+              :value="readField(record, visitConfig(record).examsKey)"
+              @input="updateTextField(index, visitConfig(record).examsKey, $event.detail.value)"
+            />
+          </view>
+
+          <view v-if="visitConfig(record).labValuesKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
+            <textarea
+              class="field-textarea field-textarea--tall"
+              :disabled="hasSavingRecord"
+              placeholder="化验单上的数值，一行一项，例如：肌酐 72.2 umol/L"
+              :value="readField(record, visitLabValuesKey(record))"
+              @input="updateTextField(index, visitLabValuesKey(record), $event.detail.value)"
+            />
+          </view>
+
+          <view v-if="visitConfig(record).vitalsKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).vitalsLabel }}</text>
+            <input
+              class="field-input"
+              type="text"
+              :disabled="hasSavingRecord"
+              :placeholder="visitConfig(record).vitalsPlaceholder"
+              :value="readField(record, visitConfig(record).vitalsKey)"
+              @input="updateTextField(index, visitConfig(record).vitalsKey, $event.detail.value)"
             />
           </view>
 
@@ -1311,7 +1338,7 @@ function addRecord() {
  *   ② 切换时**保留已经填好的内容**
  *
  * 做法：不重开草稿，直接把这条草稿的归属标记改成目标类型，字段原地留着 ——
- *   · 两张表共用的（日期、其它想说的、附件、兽医）本来就同名，原样带过去；
+ *   · 两张表共用的（日期、补充说明、附件、兽医）本来就同名，原样带过去；
  *     日期在两个类型下叫不同字段名（visitDate / checkupDate），这里显式搬一次
  *   · 只在某一张表里存在的（症状 / 检查结论 / 体检类型 / 用药 / 处理），
  *     留在草稿里不显示：**切回去还在**；保存时按记录自己的类型提交，

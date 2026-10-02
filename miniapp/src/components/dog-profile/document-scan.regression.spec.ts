@@ -40,7 +40,10 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain("emit('scanned'")
     expect(scan).not.toContain('createHealthRecord')
     expect(scan).not.toContain('saveRecord')
-    expect(scan).toContain('填入后你还可以逐项修改')
+    // 识别把握不再给顾客看（2026-10-02 老板定）；只有"低"时给一句能行动的话
+    // （注释里提到这四个字没关系，这里卡的是**渲染出来的那句话**）
+    expect(scan).not.toContain('识别把握：')
+    expect(scan).toContain('填完请对着原件核一遍')
   })
 
   it('第 6 条：明确写着也可以手填，且任何一步失败都不挡人', () => {
@@ -109,6 +112,42 @@ describe('拍照录入 · 组件', () => {
   })
 })
 
+  it('确认卡片说清"记到哪"和"原图去哪了"（2026-10-02 老板定稿）', () => {
+    const scan = readScanFile()
+
+    // 入口决定记录类型 → 卡片上直接写"记到：就诊记录"，不再只写"识别为：病历 + 体检报告"
+    expect(scan).toContain('记到：')
+    expect(scan).toContain('entryRecordSummary')
+    // 原图张数写清楚（原来"原图一并存为附件"会被读成"只存了一张"）
+    expect(scan).toContain('张原图会一起存进这条记录')
+    expect(scan).toContain('attachmentSummary')
+    // 类型与入口不符时说明原因
+    expect(scan).toContain('entryTypeMismatch')
+    expect(scan).toContain('你从「')
+  })
+
+  it('名字核对忽略大小写/空格/标点（seven vs Seven 不再提醒）', () => {
+    const scan = readScanFile()
+
+    expect(scan).toContain('const normalize = (value: string) =>')
+    expect(scan).toContain('.toLowerCase()')
+    // 用归一化后的名字比较，而不是原字符串
+    expect(scan).toContain('normalize(name) !== normalizedCurrent')
+  })
+
+  it('入口类型由 props 传进来，默认就医', () => {
+    const scan = readScanFile()
+    expect(scan).toContain("entryKind?: 'medical' | 'checkup'")
+    expect(scan).toContain("entryKind: 'medical',")
+  })
+
+function readScanFile() {
+  return readFileSync(
+    resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+    'utf-8',
+  )
+}
+
 describe('拍照录入 · 接线', () => {
   it('病历与体检报告挂在「病历/检查」板块，入口合并成底部一个「新增记录」', () => {
     const section = readFileSync(
@@ -149,10 +188,14 @@ describe('拍照录入 · 接线', () => {
     // 表单里已经删掉的字段不该再出现在识别结果里
     expect(block).not.toContain('兽医')
     expect(block).not.toContain('draft.veterinarian')
-    // 表单里叫「医生怎么说」「处理与提醒」「其它想说的」，这里也必须一致
-    expect(block).toContain("push('医生怎么说', draft.diagnosis)")
-    expect(block).toContain("push('处理与提醒', draft.treatment)")
-    expect(block).toContain("push('其它想说的', draft.notes)")
+    // 表单里叫什么，这里就必须叫什么（2026-10-02 定稿）
+    expect(block).toContain("push('医生诊断', draft.diagnosis)")
+    expect(block).toContain("push('医嘱（回家注意）', draft.treatment)")
+    expect(block).toContain("push('这次做的检查', draft.exams)")
+    expect(block).toContain("push('体征', draft.vitals)")
+    expect(block).toContain("push('补充说明', draft.notes)")
+    // 表单里已经删掉的字段不该再出现在卡片上
+    expect(block).not.toContain("push('处理与提醒'")
   })
 
   it('「重新拍」改成「重新上传」（走的本来就是相册，不是相机）', () => {

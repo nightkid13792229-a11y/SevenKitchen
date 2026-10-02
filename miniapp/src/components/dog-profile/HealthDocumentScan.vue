@@ -30,8 +30,19 @@
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
       <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
+      <text v-if="entryRecordSummary" class="confirm__type">{{ entryRecordSummary }}</text>
       <text v-if="resolvedTypeSummary" class="confirm__type">{{ resolvedTypeSummary }}</text>
       <text v-if="scanCountSummary" class="confirm__type">{{ scanCountSummary }}</text>
+      <text v-if="attachmentSummary" class="confirm__type">{{ attachmentSummary }}</text>
+
+      <!-- 从「就诊」进来、但这几张里一张病历都没有（例如只拍了一张化验单）：
+           如实说明记到哪儿了，别让家长以为记错地方 -->
+      <view v-if="entryTypeMismatch" class="confirm__note">
+        <text class="confirm__note-text">{{ entryTypeMismatchText }}</text>
+      </view>
+      <view v-if="ignoredPagesNote" class="confirm__note">
+        <text class="confirm__note-text">{{ ignoredPagesNote }}</text>
+      </view>
 
       <text v-if="reportedPatientNames.length > 0" class="confirm__type">
         报告上的动物名：{{ reportedPatientNames.join('、') }}
@@ -46,19 +57,19 @@
         <text v-if="drafts.length > 1" class="confirm__card-kind">
           {{ draftSourceLabel(draft) }}
         </text>
-        <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
+        <view v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
           <text class="confirm__label">{{ row.label }}</text>
           <text class="confirm__value">{{ row.value }}</text>
-        </text>
+        </view>
       </view>
 
       <view v-if="warnings.length > 0" class="confirm__warnings">
         <text v-for="warning in warnings" :key="warning" class="confirm__warning">· {{ warning }}</text>
       </view>
 
-      <text class="confirm__confidence">
-        识别把握：{{ confidenceLabel }}。填入后你还可以逐项修改。
-      </text>
+      <!-- 识别把握不再给顾客看（2026-10-02 老板定）：模型自评分，顾客据此做不了任何事，
+           显示一个"中"只会让人整份都不敢信。只有"低"时才给一句能行动的话。 -->
+      <text v-if="lowConfidenceHint" class="confirm__confidence">{{ lowConfidenceHint }}</text>
 
       <view class="confirm__actions">
         <text class="confirm__discard" @tap="discard">重新上传</text>
@@ -72,6 +83,7 @@
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
+  buildSingleScannedRecord,
   extractHealthAttachmentKey,
   mergeScannedReportDrafts,
   resolveHealthScanErrorMessage,
@@ -106,10 +118,20 @@ const props = withDefaults(defineProps<{
   uploadType: 'medical' | 'checkup' | 'vaccine' | 'allergy'
   /** 当前这只狗的名字：只用来提醒"报告上的动物名对不上"，不做拦截（2026-10-02） */
   dogName?: string
+  /**
+   * 顾客是从哪个入口点进来的（2026-10-02 老板定稿）。
+   *
+   * 传 AUTO 时**记录类型由它决定**：从「就诊」进 = 这一批合成一条就诊记录，
+   * 从「体检」进 = 合成一条体检记录。AI 判出来的文档类型只决定"字往哪个字段填"，
+   * 不再决定记录落在哪张表 —— 原来化验单会被判成体检类，于是家长从就诊进去
+   * 却凭空多出一条体检记录（老板实测提的）。
+   */
+  entryKind?: 'medical' | 'checkup'
 }>(), {
   buttonText: '拍照录入',
   hintText: '拍报告或疫苗本，自动填表；也可以直接手填',
   hideTrigger: false,
+  entryKind: 'medical',
 })
 
 const emit = defineEmits<{
@@ -134,6 +156,10 @@ const confidence = ref('LOW')
  * 填表时也按它决定这条记录进"病历"还是"体检"。
  */
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
+/** 这一批里没有"入口那一类"的内容（从就诊进、但一张病历都没有）→ 卡片上说明一句 */
+const entryTypeMismatch = ref(false)
+/** 被排除在外的页（疫苗本/过敏报告）—— 各自板块有更合适的表单 */
+const ignoredPagesNote = ref('')
 /** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
 const scannedImageCount = ref(0)
 /**
@@ -161,12 +187,6 @@ const resolvedTypeLabel = computed(() => (
   TYPE_LABELS[resolvedDocumentType.value as ExplicitDocumentType] || ''
 ))
 
-const confidenceLabel = computed(() => {
-  if (confidence.value === 'HIGH') return '高'
-  if (confidence.value === 'MEDIUM') return '中'
-  return '低'
-})
-
 /**
  * 确认卡片上那句"几张图 → 几条记录"。
  *
@@ -181,10 +201,49 @@ const scanCountSummary = computed(() => {
 
   const records = drafts.value.length
   if (records <= 1) {
-    return `本次共 ${images} 张图片，合成 1 条记录，${scannedImageCount.value} 张原图都存为附件`
+    return `本次共 ${images} 张图片，合成 1 条记录`
   }
 
-  return `本次共 ${images} 张图片，读出 ${records} 条记录，原图一并存为附件`
+  return `本次共 ${images} 张图片，读出 ${records} 条记录`
+})
+
+/**
+ * 这一批纸记到哪个标签下（2026-10-02 老板定稿：入口决定记录类型）。
+ *
+ * 原来卡片只写"识别为：病历 + 体检报告"，家长看到的是"我走的就诊，
+ * 怎么冒出个体检报告？"—— 现在直接说清记到哪儿。
+ */
+const entryRecordSummary = computed(() => {
+  if (drafts.value.length === 0) return ''
+  const label = props.entryKind === 'checkup' ? '体检记录' : '就诊记录'
+  return `记到：${label}${drafts.value.length > 1 ? `（${drafts.value.length} 条）` : ''}`
+})
+
+/** 原图去哪了：写清"几张、挂在谁名下"，别让家长以为只存了一张 */
+const attachmentSummary = computed(() => {
+  const total = drafts.value.reduce(
+    (sum, draft) => sum + (Array.isArray(draft?.attachments) ? draft.attachments.length : 0),
+    0,
+  )
+  if (total === 0) return ''
+
+  if (drafts.value.length <= 1) {
+    return `${total} 张原图会一起存进这条记录`
+  }
+
+  return `原图会按页分到上面各条记录里（共 ${total} 张）`
+})
+
+/** 识别把握"低"时才说话，而且要说人能做的那件事 */
+const lowConfidenceHint = computed(() => (
+  confidence.value === 'LOW' ? '有几处没读准，填完请对着原件核一遍。' : ''
+))
+
+const entryTypeMismatchText = computed(() => {
+  const entryLabel = props.entryKind === 'checkup' ? '体检' : '就诊'
+  const contentLabel = props.entryKind === 'checkup' ? '病历' : '化验/检查报告'
+  return `这几张里没有${contentLabel}的内容，所以只填了能填的部分 —— ` +
+    `你从「${entryLabel}」进来，就记在${entryLabel}记录下。`
 })
 
 /** 当前应当按哪一类渲染/填表：优先用后端判定出来的类型 */
@@ -244,7 +303,18 @@ const patientNameMismatch = computed(() => {
     return ''
   }
 
-  const others = reportedPatientNames.value.filter((name) => name !== current)
+  // 2026-10-02 老板实测：报告写「seven」、档案里叫「Seven」也会被提醒 —— 太严了。
+  // 比较前把大小写、空格、中英文标点都抹掉，只剩真正的名字差异才提醒。
+  const normalize = (value: string) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s·.。,，、'"“”‘’()（）\-—_]/g, '')
+
+  const normalizedCurrent = normalize(current)
+  const others = reportedPatientNames.value.filter(
+    (name) => normalize(name) !== normalizedCurrent,
+  )
   if (others.length === 0) {
     return ''
   }
@@ -282,30 +352,33 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     push('疫苗', draft.vaccineName)
     push('接种日期', draft.vaccinationDate)
     push('下次到期', draft.nextDueDate)
-    push('其它想说的', draft.notes)
+    push('补充说明', draft.notes)
     return rows
   }
 
   // 这一块**必须和表单里那套字段、那套叫法一一对应**（2026-10-02 老板提的）：
   // 顾客核对时看到的，就是他接下来在表单里能改的那些 ——
-  // 表单里已经删掉的字段（兽医）不该再出现在这里，
-  // 表单里叫「医生怎么说」的，这里也不能写成「诊断结果」。
+  // 表单里已经删掉的字段（兽医 / 处理与提醒）不该再出现在这里，
+  // 表单里叫「医生诊断」的，这里也不能写成「诊断结果」。
   if (documentType === 'CHECKUP_REPORT') {
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
-    push('化验数据', draft.labValues)
     push('医生建议', draft.recommendations)
-    push('其它想说的', draft.notes)
+    push('化验数据', draft.labValues)
+    push('补充说明', draft.notes)
     return rows
   }
 
   if (documentType === 'MEDICAL_RECORD') {
     push('就诊日期', draft.visitDate)
     push('症状', draft.chiefComplaint)
-    push('医生怎么说', draft.diagnosis)
-    push('处理与提醒', draft.treatment)
+    push('医生诊断', draft.diagnosis)
+    push('医嘱（回家注意）', draft.treatment)
     push('用药', Array.isArray(draft.medications) ? draft.medications.join('、') : draft.medications)
-    push('其它想说的', draft.notes)
+    push('这次做的检查', draft.exams)
+    push('化验数据', draft.labValues)
+    push('体征', draft.vitals)
+    push('补充说明', draft.notes)
     return rows
   }
 
@@ -354,6 +427,8 @@ async function scanAll(filePaths: string[]) {
   requestedImageCount.value = filePaths.length
   failureNotice.value = ''
   uploadedUrls.value = []
+  entryTypeMismatch.value = false
+  ignoredPagesNote.value = ''
 
   const collectedWarnings: string[] = []
   /**
@@ -460,15 +535,38 @@ async function scanAll(filePaths: string[]) {
       props.documentType,
     ) as DocumentType
 
-    // 同类型的页合并成一条（3 页体检报告 = 1 条记录 + 3 张原图）；
-    // **疫苗本不合并** —— 一张本子读出的是多条各自的接种记录。
-    // 不同类型的页各自成条：化验单归化验单、门诊病历归病历。
-    const merged: Record<string, any>[] = []
-    for (const [type, list] of draftsByType.entries()) {
-      const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
-      for (const draft of groupDrafts) {
-        merged.push({ ...draft, __documentType: type })
+    let merged: Record<string, any>[] = []
+
+    if (props.documentType === 'AUTO') {
+      // 就诊 / 体检入口（2026-10-02 老板定稿）：**入口决定记录类型**，
+      // 这一批纸合成一条记录 —— 化验页的数字进「化验数据」、影像页进「检查/附件」，
+      // 不再因为"化验单被判成体检类"而凭空多出一条体检记录。
+      const targetType = props.entryKind === 'checkup' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'
+      const groups = [...draftsByType.entries()].map(([type, list]) => ({ type, drafts: list }))
+      const single = buildSingleScannedRecord(groups, targetType)
+
+      if (single.draft) {
+        merged = [single.draft]
       }
+      entryTypeMismatch.value = Boolean(single.draft) && !single.matchedEntryType
+      ignoredPagesNote.value = single.ignored.length
+        ? `有 ${single.ignored.reduce((sum, item) => sum + item.count, 0)} 张看起来是` +
+          `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') ? '疫苗本' : ''}` +
+          `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') && single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '、' : ''}` +
+          `${single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '过敏原检测报告' : ''}` +
+          `，那些请到对应的板块上传`
+        : ''
+    } else {
+      // 疫苗 / 过敏入口：保持原样 ——
+      // 同类型的页合并成一条，**疫苗本不合并**（一张本子读出的是多条各自的接种记录）。
+      for (const [type, list] of draftsByType.entries()) {
+        const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
+        for (const draft of groupDrafts) {
+          merged.push({ ...draft, __documentType: type })
+        }
+      }
+      entryTypeMismatch.value = false
+      ignoredPagesNote.value = ''
     }
 
     drafts.value = merged
@@ -643,24 +741,52 @@ function discard() {
   background: rgba(255, 255, 255, 0.75);
 }
 
+/* 每条：标签独占一行（小号灰字）+ 内容另起一段（深色正文）+ 细分隔线。
+   2026-10-02 老板提的：原来标签和内容是同一行紧挨着的两段文字，
+   值一长就糊成一片，分不清哪个是标题、哪个是内容。 */
 .confirm__row {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 25rpx;
-  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid #eef1e8;
 }
 
 .confirm__row:first-child {
-  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .confirm__label {
-  color: #6b6653;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #8a968a;
 }
 
 .confirm__value {
+  font-size: 26rpx;
+  line-height: 1.65;
   color: #26261f;
   font-weight: 500;
+  /* 长文本（医嘱、化验数据）保留换行，别挤成一坨 */
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 类型/记录说明（"记到：就诊记录"这类） */
+.confirm__note {
+  margin-top: 10rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f4f7ef;
+  border: 1rpx solid #dde6d4;
+}
+
+.confirm__note-text {
+  display: block;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #4e6b52;
 }
 
 /* 没识别到内容时的提示块（2026-10-02）：要看得见，不能一闪而过 */

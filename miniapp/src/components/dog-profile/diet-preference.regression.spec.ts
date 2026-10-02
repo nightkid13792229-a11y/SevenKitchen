@@ -103,10 +103,8 @@ describe('体检备注（第五期补的字段）', () => {
     )
 
     // 体检配置里的 notesKey 不再是 null
-    const checkupBlock = utils.slice(
-      utils.indexOf("kind: 'checkup',"),
-      utils.indexOf("kind: 'checkup',") + 700,
-    )
+    const checkupStart = utils.indexOf("kind: 'checkup',")
+    const checkupBlock = utils.slice(checkupStart, checkupStart + 1600)
     expect(checkupBlock).toContain("notesKey: 'notes'")
   })
 })

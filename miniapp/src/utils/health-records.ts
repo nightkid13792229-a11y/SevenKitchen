@@ -267,6 +267,10 @@ export interface MedicalRecordPayload {
   attachments?: string[]
   /** 这次就诊做的化验数据（2026-10-02 新增） */
   labValues?: string | null
+  /** 这次做的检查（2026-10-02 新增） */
+  exams?: string | null
+  /** 体征：体温、体重、BCS（2026-10-02 新增） */
+  vitals?: string | null
 }
 
 export interface CheckupRecordPayload {
@@ -1241,9 +1245,9 @@ export const HEALTH_VISIT_DEFAULT_CHECKUP_TYPE = 'ROUTINE'
  *   · **状态字段从表单里拿掉** —— 家长填表时不该做"待确认/治疗中/已康复/慢性"
  *     这种系统选择题。库里仍然有 status（缺省待确认，算作"还没好"进 AI 分析），
  *     记录存好之后卡片上给一个一键切换「已经好了」。
- *   · **必填只剩两件**：日期 +（主要问题 或 医生怎么说）至少一条。
+ *   · **必填只剩两件**：日期 +（症状 或 医生诊断）至少一条。
  *     很多家长拿不到明确诊断（医生只说"可能是肠胃炎"），不该被卡住。
- *   · **备注改名「其它想说的」**（老板：保留但改名）——
+ *   · **备注改名「补充说明」**（2026-10-02 老板要求更专业）——
  *     原来的"备注"后端/营养师端/AI 都不读，是个纯废字段；
  *     改名之后它是"家长还想补充的话"，并且已经接进 AI 分析（第九期）。
  *   · 体检类型、用药这些"能一眼答上来"的字段从「更多」里提到明面；
@@ -1256,7 +1260,7 @@ export interface HealthVisitFieldConfig {
   kindLabel: string
   dateKey: string
   dateLabel: string
-  /** 主内容字段：就诊=医生怎么说（诊断）；体检=检查结论 */
+  /** 主内容字段：就诊=医生诊断；体检=检查结论 */
   primaryKey: string
   primaryLabel: string
   primaryPlaceholder: string
@@ -1274,14 +1278,26 @@ export interface HealthVisitFieldConfig {
    */
   labValuesKey: string | null
   labValuesLabel: string
-  /** 处理：就诊=处理与提醒（treatment）；体检=医生建议（recommendations） */
+  /** 医嘱/建议：就诊=医嘱（回家注意，treatment）；体检=医生建议（recommendations） */
   adviceKey: string
   adviceLabel: string
   advicePlaceholder: string
+  /**
+   * 这次做的检查（exams，只有就诊有，2026-10-02 新增）。
+   * 从处置处方照抄的检查项目清单 —— 原来它被塞进"处理与提醒"，
+   * 和医嘱、其它想说的三样挤在一起（老板实测提的）。
+   */
+  examsKey: string | null
+  examsLabel: string
+  examsPlaceholder: string
+  /** 体征（vitals，只有就诊有，2026-10-02 新增）：体温/体重/BCS */
+  vitalsKey: string | null
+  vitalsLabel: string
+  vitalsPlaceholder: string
   /** 用药：只有就诊有这一列（体检表没有） */
   medicationKey: string | null
   medicationLabel: string
-  /** 其它想说的（notes，两张表都有；原名「备注」） */
+  /** 补充说明（notes，两张表都有；曾用名「备注」「其它想说的」） */
   notesKey: string
   notesLabel: string
   notesPlaceholder: string
@@ -1310,9 +1326,9 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     dateKey: 'visitDate',
     dateLabel: '就诊日期',
     primaryKey: 'diagnosis',
-    // 「诊断结果」对家长太专业：他记得住的是"医生怎么说"
-    primaryLabel: '医生怎么说',
-    primaryPlaceholder: '例如：急性肠胃炎，医生说先禁食 12 小时',
+    // 2026-10-02 老板定稿：「医生怎么说」改回专业说法「医生诊断」
+    primaryLabel: '医生诊断',
+    primaryPlaceholder: '例如：急性肠胃炎、胆汁淤积',
     complaintKey: 'chiefComplaint',
     // 2026-10-02 老板：文案就叫「症状」，家长一眼就懂
     complaintLabel: '症状',
@@ -1321,13 +1337,21 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     labValuesKey: 'labValues',
     labValuesLabel: '化验数据',
     adviceKey: 'treatment',
-    adviceLabel: '处理与提醒',
-    advicePlaceholder: '例如：打了止吐针，开了三天药',
+    // 2026-10-02 老板定稿：这一栏收窄成"医生交代回家要做的"，
+    // 检查项目清单挪去 exams（原来三样挤一栏，家长看到的是"无 + 一长串"）
+    adviceLabel: '医嘱（回家注意）',
+    advicePlaceholder: '例如：清淡饮食，按时吃药，两周后复查',
+    examsKey: 'exams',
+    examsLabel: '这次做的检查',
+    examsPlaceholder: '例如：全腹部彩超、血常规、生化、CRP',
+    vitalsKey: 'vitals',
+    vitalsLabel: '体征',
+    vitalsPlaceholder: '例如：体温 38.4℃、体重 6.7kg、BCS 3',
     medicationKey: 'medications',
     medicationLabel: '用药',
     notesKey: 'notes',
-    notesLabel: '其它想说的',
-    notesPlaceholder: '还有什么是我们该知道的？例如：刚换了狗粮、当天吐了两次',
+    notesLabel: '补充说明',
+    notesPlaceholder: '报告上还有该记下来的？例如：样本存在异常：溶血+',
     vetKey: 'veterinarian',
     vetLabel: '兽医',
     followUpKey: 'followUpDate',
@@ -1352,11 +1376,19 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     adviceKey: 'recommendations',
     adviceLabel: '医生建议',
     advicePlaceholder: '例如：两周后复查，注意饮水',
+    // 检查项目与体征只有就诊表有这两列（2026-10-02）：体检的检查项目由
+    // 体检类型 + 化验数据本身表达，体征写进「补充说明」就够
+    examsKey: null,
+    examsLabel: '',
+    examsPlaceholder: '',
+    vitalsKey: null,
+    vitalsLabel: '',
+    vitalsPlaceholder: '',
     medicationKey: null,
     medicationLabel: '',
     notesKey: 'notes',
-    notesLabel: '其它想说的',
-    notesPlaceholder: '还有什么是我们该知道的？例如：当天没吃饭、紧张',
+    notesLabel: '补充说明',
+    notesPlaceholder: '报告上还有该记下来的？例如：样本存在异常：溶血+',
     vetKey: 'veterinarian',
     vetLabel: '兽医',
     followUpKey: null,
@@ -1471,6 +1503,18 @@ const MULTILINE_DRAFT_KEYS = new Set([
   'diagnosis',
   'treatment',
   'notes',
+  /**
+   * 化验数据必须能跨页拼起来（2026-10-02 修的一个**数据丢失** bug）。
+   *
+   * 一次化验常常是好几张单子：生化一张、血常规一张、CRP 一张。
+   * 它们各自成一页草稿，而这一栏原来不在"可拼接"名单里 ——
+   * 合并时"只有一个答案的字段保留第一页的值"，于是**后面几页的数值全被丢掉**，
+   * 家长看到的是"化验数据只有生化"（老板这次传的 5 张里，血常规与 CRP 就是这么没的）。
+   * 同一份报告的复印件/双面扫描重复时，下面已有的 includes 判断会去重。
+   */
+  'labValues',
+  /** 这次做的检查同理：处置单可能分两页写 */
+  'exams',
 ])
 
 function isFilledDraftValue(value: unknown) {
@@ -1479,6 +1523,126 @@ function isFilledDraftValue(value: unknown) {
   }
 
   return String(value ?? '').trim() !== ''
+}
+
+/**
+ * 把一次拍的多页纸合成**一条记录**：**入口决定记录类型**（2026-10-02 老板定稿）。
+ *
+ * ── 为什么改成这样 ─────────────────────────────────────────
+ *
+ *   老板实测：从「就诊」进去传了 2 页病历 + 3 张化验单，结果裂成两条记录
+ *   （一条就诊、一条体检），他的疑问是"我走的不是就诊吗？为什么识别成体检报告？"
+ *   —— 记录类型原来是由 AI 的**文档类型**决定的，而化验单天然会被判成体检类。
+ *
+ *   现在：**你从哪个入口进，这一批就合成那个入口的一条记录**。
+ *   AI 的判断只用来决定"这页的字往哪个字段填"：
+ *     · 从就诊进：化验页 → 化验数据；影像页 → 检查项/附件；病历页 → 诊断/医嘱/用药…
+ *     · 从体检进：化验页 → 化验数据；病历页的文字 → 归到「补充说明」并标明来源
+ *   目标类型那一类的内容永远优先，另一类的文字**不丢**，而是带前缀并进「补充说明」。
+ *
+ *   疫苗本 / 过敏报告不属于这两类：不并进来，单独回报（各自的板块有更合适的表单）。
+ */
+export function buildSingleScannedRecord(
+  groups: { type: string; drafts: Record<string, any>[] }[],
+  targetType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT',
+): {
+  draft: Record<string, any> | null
+  /** 这一批里有没有"入口那一类"的内容（没有 → 卡片上要说明一句） */
+  matchedEntryType: boolean
+  /** 被排除在外的页（疫苗本 / 过敏报告），用于提示顾客去对应板块 */
+  ignored: { type: string; count: number }[]
+} {
+  const normalized = (value: string) => String(value || '').toUpperCase()
+  const byType = new Map<string, Record<string, any>[]>()
+  for (const group of groups || []) {
+    const key = normalized(group?.type)
+    const list = Array.isArray(group?.drafts) ? group.drafts : []
+    if (!key || list.length === 0) continue
+    byType.set(key, [...(byType.get(key) || []), ...list])
+  }
+
+  const otherType = targetType === 'MEDICAL_RECORD' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'
+  const targetDrafts = byType.get(targetType) || []
+  const otherDrafts = byType.get(otherType) || []
+  const imagingDrafts = byType.get('IMAGING') || []
+
+  const ignored: { type: string; count: number }[] = []
+  for (const type of ['VACCINE_BOOK', 'ALLERGY_REPORT', 'NOT_MEDICAL']) {
+    const list = byType.get(type) || []
+    if (list.length > 0) ignored.push({ type, count: list.length })
+  }
+
+  const base = mergeScannedReportDrafts(targetDrafts)[0] || {}
+  const folded = mergeScannedReportDrafts(otherDrafts)[0]
+  const imaging = mergeScannedReportDrafts(imagingDrafts)[0]
+
+  const draft: Record<string, any> = { ...base }
+  const appendText = (key: string, extra: unknown, prefix = '') => {
+    const text = String(extra ?? '').trim()
+    if (!text) return
+    const line = `${prefix}${text}`
+    const current = String(draft[key] ?? '').trim()
+    draft[key] = current ? `${current}\n${line}` : line
+  }
+
+  if (folded) {
+    const foldedDate = folded.visitDate || folded.checkupDate
+    if (!draft.visitDate && !draft.checkupDate && foldedDate) {
+      draft[targetType === 'MEDICAL_RECORD' ? 'visitDate' : 'checkupDate'] = foldedDate
+    }
+
+    if (targetType === 'MEDICAL_RECORD') {
+      // 化验页的数字进「化验数据」；结论/建议没有对应栏目 → 补充说明（标明来源，不丢）
+      appendText('labValues', folded.labValues)
+      appendText('notes', folded.findings, '检查结论：')
+      appendText('notes', folded.recommendations, '医生建议：')
+    } else {
+      appendText('labValues', folded.labValues)
+      appendText('notes', folded.diagnosis, '医生诊断：')
+      appendText('notes', folded.treatment, '医嘱：')
+      appendText(
+        'notes',
+        Array.isArray(folded.medications) ? folded.medications.join('、') : folded.medications,
+        '用药：',
+      )
+      appendText('notes', folded.chiefComplaint, '症状：')
+    }
+
+    if (!draft.patientName && folded.patientName) {
+      draft.patientName = folded.patientName
+    }
+  }
+
+  if (imaging) {
+    // 影像片只归档、不解读：它的 notes 是"检查部位"，正好属于「这次做的检查」
+    if (targetType === 'MEDICAL_RECORD') {
+      appendText('exams', imaging.notes)
+    } else {
+      appendText('notes', imaging.notes)
+    }
+    if (!draft.patientName && imaging.patientName) {
+      draft.patientName = imaging.patientName
+    }
+  }
+
+  const attachments = [base, folded, imaging]
+    .flatMap((item) => (Array.isArray(item?.attachments) ? item.attachments : []))
+    .map((url) => String(url || '').trim())
+    .filter(Boolean)
+  draft.attachments = Array.from(new Set(attachments))
+  draft.__documentType = targetType
+
+  const hasContent =
+    Object.entries(draft).some(
+      ([key, value]) =>
+        !key.startsWith('__') && key !== 'attachments' && isFilledDraftValue(value),
+    ) || draft.attachments.length > 0
+
+  return {
+    draft: hasContent ? draft : null,
+    matchedEntryType: targetDrafts.length > 0,
+    ignored,
+  }
 }
 
 export function mergeScannedReportDrafts(
@@ -1654,12 +1818,12 @@ export function mergeHealthVisitRecords(
  * 校验：**必填只剩两件**（2026-10-02 老板定的精简版）。
  *
  *   · 日期必填 —— 它是时间线上唯一的时间锚点
- *   · 就诊：**「主要问题」和「医生怎么说」至少填一个**
+ *   · 就诊：**「症状」和「医生诊断」至少填一个**
  *     （很多家长拿不到明确诊断，医生只说"可能是肠胃炎"；
  *      这两项都是饮食标签派生的输入，填哪个都不亏）
  *   · 体检：检查结论必填（体检的价值就在结论上）
  *
- * 用药、处理与提醒、其它想说的、复查日期、兽医一律不拦着保存。
+ * 用药、医嘱、这次做的检查、体征、补充说明、复查日期、兽医一律不拦着保存。
  */
 export function getHealthVisitValidationError(
   kind: HealthVisitKind,
@@ -1672,7 +1836,7 @@ export function getHealthVisitValidationError(
   }
 
   // 内容必填：**两个字段填一个就行**（2026-10-02 复审后统一成同一套规则）
-  //   · 就诊：症状 / 医生怎么说 —— 很多家长拿不到明确诊断
+  //   · 就诊：症状 / 医生诊断 —— 很多家长拿不到明确诊断
   //   · 体检：检查结论 / 医生建议 —— 有的报告只有一堆指标（写在结论里），
   //     有的只写了几句医嘱；两个都是饮食标签派生与 AI 分析的输入，填哪个都不亏
   const contentKeys = config.complaintKey
@@ -1731,7 +1895,10 @@ export function buildHealthVisitPayload(
     chiefComplaint: normalizeOptionalText(record?.chiefComplaint) || '',
     diagnosis: normalizeOptionalText(record?.diagnosis) || '',
     labValues: normalizeOptionalText(record?.labValues),
+    // treatment = 医嘱/回家注意；exams = 这次做的检查；vitals = 体征（2026-10-02）
     treatment: normalizeOptionalText(record?.treatment),
+    exams: normalizeOptionalText(record?.exams),
+    vitals: normalizeOptionalText(record?.vitals),
     medications: normalizeMedicationList(record?.medications),
     // 缺省是"待确认"，不是后端的默认值"治疗中"
     // （下面已按白名单校验，这里把类型收紧到后端枚举）
@@ -1762,7 +1929,7 @@ export function normalizeMedicationList(value: unknown): string[] {
  * 列表行的标题与摘要（2026-10-02 改）。
  *
  * 标题改成**"有什么就显示什么"**：
- *   · 就诊：主要问题 → 医生怎么说 → 新记录
+ *   · 就诊：症状 → 医生诊断 → 新记录
  *   · 体检：体检类型 → 检查结论 → 新记录
  *
  * 原来固定用"症状"当标题，可症状藏在「更多」里 ——

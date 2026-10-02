@@ -25,8 +25,17 @@ export class MedicalRecordResponseDto {
   @Expose()
   labValues!: string | null;
 
+  /// 医嘱 / 回家注意
   @Expose()
   treatment!: string | null;
+
+  /// 这次做的检查
+  @Expose()
+  exams!: string | null;
+
+  /// 体征
+  @Expose()
+  vitals!: string | null;
 
   @Expose()
   medications!: string[];

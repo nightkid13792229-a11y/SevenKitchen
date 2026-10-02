@@ -77,6 +77,10 @@ export interface MedicalRecord {
   /** 化验数据原文（这次就诊做的化验），2026-10-02 新增 */
   labValues: string | null;
   treatment: string | null;
+  /** 这次做的检查（2026-10-02） */
+  exams: string | null;
+  /** 体征：体温、体重、BCS（2026-10-02） */
+  vitals: string | null;
   medications: string[];
   /**
    * 病史状态。

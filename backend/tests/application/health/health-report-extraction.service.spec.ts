@@ -14,6 +14,7 @@ import {
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
   buildSystemPrompt,
+  filterContradictoryWarnings,
   isHealthReportVisionEnabled,
   normalizeDocumentType,
   normalizeDrafts,
@@ -204,6 +205,81 @@ describe('HealthReportExtractionService', () => {
    * 顾客不再先选类型，改由 AI 判断；后端必须按**判断出的类型**归一化 drafts，
    * 并把真实类型回给前端 —— 前端靠它决定这条记录填进「病历」还是「体检」。
    */
+  describe('就诊字段口径（2026-10-02 老板定稿）', () => {
+    it('病历白名单接住医嘱/检查/体征三栏，不再把检查清单塞进医嘱', () => {
+      const drafts = normalizeDrafts('MEDICAL_RECORD', {
+        drafts: [
+          {
+          visitDate: '2026-02-11',
+          chiefComplaint: '在家不够活泼，有点呕吐',
+          diagnosis: '胆汁淤积',
+          treatment: '回家后注意：注意心情调节，清淡饮食，按时吃药，定期复查',
+          exams: '全腹部彩超、血常规、斯玛特16项生化、CRP C反应蛋白、DR×2',
+          vitals: '体温 38.4℃、体重 6.70kg、BCS 3',
+          medications: ['乐妥 1片/次 每日2次 共3天', '肝必康胶囊 1粒/次 每日1次'],
+            labValues: '生化\nALT 144 U/L（偏高）',
+          },
+        ],
+      });
+
+      expect(drafts[0].treatment).toContain('回家后注意');
+      expect(drafts[0].exams).toContain('全腹部彩超');
+      expect(drafts[0].vitals).toContain('体温 38.4');
+      expect(drafts[0].medications).toHaveLength(2);
+    });
+
+    it('只有检查清单/体征的病历页也算有内容（不再整页丢掉）', () => {
+      expect(
+        normalizeDrafts('MEDICAL_RECORD', { drafts: [{ exams: '腹部彩超' }] }),
+      ).toHaveLength(1);
+      expect(
+        normalizeDrafts('MEDICAL_RECORD', { drafts: [{ vitals: '体温 39.1℃' }] }),
+      ).toHaveLength(1);
+    });
+
+    it('提示词写死了三个字段各放什么，并要求连报告自己的高低标记一起抄', () => {
+      const prompt = buildSystemPrompt('MEDICAL_RECORD');
+      expect(prompt).toContain('treatment 写**医嘱/回家注意**');
+      expect(prompt).toContain('exams 写**这次做的检查项目**');
+      expect(prompt).toContain('vitals 写**体征**');
+      expect(prompt).toContain('报告自己标了异常');
+      // 药名 + 用法用量（老板批准的改动）
+      expect(prompt).toContain('照抄药名 + 处方上写的用法用量');
+    });
+
+    it('体检报告的提示词同样要求照抄报告自己的偏高/偏低标记', () => {
+      const prompt = buildSystemPrompt('CHECKUP_REPORT');
+      expect(prompt).toContain('报告自己标了异常');
+      expect(prompt).toContain('不要自己判断');
+    });
+  })
+
+  describe('warnings 不许和已提取的内容打架（2026-10-02 老板实测）', () => {
+    it('抄到了化验数值，就不再显示"化验结果值未在图中显示"', () => {
+      const filtered = filterContradictoryWarnings(
+        ['化验结果值未在图中显示', '第三行日期被印章遮挡'],
+        { labValues: '生化\nALT 144 U/L' },
+      );
+
+      expect(filtered).toEqual(['第三行日期被印章遮挡']);
+    });
+
+    it('读到了动物名，就不再显示"动物名字未在图中显示"', () => {
+      expect(
+        filterContradictoryWarnings(['动物名字未在图中显示'], {
+          patientName: 'seven',
+        }),
+      ).toEqual([]);
+    });
+
+    it('字段真的是空的时，提示照旧保留（不能把有用的提示也吞掉）', () => {
+      const warnings = ['化验结果值未在图中显示'];
+      expect(filterContradictoryWarnings(warnings, { labValues: '' })).toEqual(
+        warnings,
+      );
+    });
+  })
+
   describe('AUTO：由系统判断文档类型', () => {
     const autoRequest = () =>
       service.extractFromReport({

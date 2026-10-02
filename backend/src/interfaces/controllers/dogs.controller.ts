@@ -220,6 +220,8 @@ export class DogsController {
             diagnosis: record.diagnosis || '',
             treatment: null,
             labValues: null,
+            exams: null,
+            vitals: null,
             medications: [],
             status: 'RECOVERED', // Default status for historical records
             followUpDate: null,
@@ -440,6 +442,8 @@ export class DogsController {
           // 化验数据列 2026-10-02 才加，建档/编辑这两条路都不涉及
           labValues: null,
           treatment: null,
+          exams: null,
+          vitals: null,
           medications: [],
           status: 'RECOVERED',
           followUpDate: null,

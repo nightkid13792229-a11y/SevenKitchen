@@ -67,14 +67,24 @@ export interface HealthVisitSummaryResponse {
     date: string
     diagnosis: string
     status: string
+    /** 医嘱 / 回家注意 */
     treatment: string
+    /** 这次做的检查 */
+    exams: string
+    /** 体征 */
+    vitals: string
     followUpDate: string | null
   }[]
   recentVisits: {
     id: string
     date: string
     diagnosis: string
+    /** 医嘱 / 回家注意（2026-10-02 起语义收窄） */
     treatment: string
+    /** 这次做的检查（2026-10-02 新增） */
+    exams: string
+    /** 体征：体温、体重、BCS（2026-10-02 新增） */
+    vitals: string
     veterinarian: string
     attachmentCount: number
   }[]
@@ -261,7 +271,10 @@ export class HealthTimelineService {
         medications: record.medications || [],
         notes: record.notes || '',
         status: formatMedicalStatus(record.status),
+        // treatment = 医嘱/回家注意；exams = 这次做的检查；vitals = 体征（2026-10-02）
         treatment: record.treatment || '',
+        exams: record.exams || '',
+        vitals: record.vitals || '',
         followUpDate: record.followUpDate ? toDateText(record.followUpDate) : null,
       }))
 
@@ -297,6 +310,8 @@ export class HealthTimelineService {
         diagnosis: record.diagnosis,
         chiefComplaint: record.chiefComplaint || '',
         treatment: record.treatment || '',
+        exams: record.exams || '',
+        vitals: record.vitals || '',
         labValues: record.labValues || '',
         medications: record.medications || [],
         notes: record.notes || '',

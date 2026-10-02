@@ -254,6 +254,11 @@ const COMMON_RULES = [
   '5. 识别文字与目标文档无关（例如只是一张普通照片）时，草稿返回空数组，',
   '   并在 warnings 里说明"未识别到相关内容"。',
   '6. 日期一律输出 YYYY-MM-DD；看不清或没有的日期留空字符串，不要编。',
+  '7. warnings 只写**真正看不清、读不准**的地方（例如"第三行日期被印章遮挡"），',
+  '   最多两条，用家长能懂的话。**某个字段没内容不算看不清**：',
+  '   字段没内容就留空字符串，不要在 warnings 里写"未显示""未读到""没写"这类话；',
+  '   更**不许**在已经填好的内容上说自己没读到（例如明明抄了化验数值，',
+  '   却在 warnings 里写"化验结果值未在图中显示"）。',
 ];
 /**
  * 四种文档类型各自的提示词正文（不含共同铁律）—— **与原实现逐字一致**。
@@ -280,13 +285,17 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
   ].join('\n'),
 
   CHECKUP_REPORT: [
-    '本类型的额外规则：',
+    '本类型的额外规则（每个字段只放它自己那一类内容，**不要互相重复**）：',
     '· findings 写**医生给出的检查结论**（照抄结论段；这张报告没写结论就留空）。',
     '· labValues 写**化验数据**：逐项一行「项目 数值 单位」，**不要**把几十项用分号串成一行；',
     '  第一行先写报告名（例如"尿常规""血生化""血常规"）。一张图里有多份报告就分段写，',
     '  每段以报告名开头。这份报告没有化验数值（例如只有一段结论的超声/影像报告）就留空。',
+    '  **报告自己标了异常（箭头 ↑↓、标红、"偏高/偏低"）的，就在该行末尾照抄这个标记**，',
+    '  例如「丙氨酸氨基转移酶(ALT) 144 U/L（偏高）」；**报告没标的一律不要自己判断**。',
     '· patientName 照抄报告上写的**动物名字**；没写就留空。',
     '· recommendations 写报告里医生给出的建议；没有就留空。',
+    '· notes 写**补充说明**：报告上有、但上面字段装不下的原文要点（例如"样本存在异常：溶血+"）；',
+    '  **已经填进上面字段的内容不许在这里再写一遍**；没有就留空。',
     '· checkupType 从这几个里选最贴近的：ROUTINE 常规体检 / PRE_PURCHASE 购前体检 /',
     '  SENIOR_WELLNESS 老年健康检查 / PRE_ANESTHESIA 麻醉前检查 / EMERGENCY 急诊检查 / FOLLOW_UP 复查。',
     '  判断不了就留空字符串。',
@@ -305,21 +314,35 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
   ].join('\n'),
 
   MEDICAL_RECORD: [
-    '本类型的额外规则：',
-    '· diagnosis 照抄病历上写的诊断结果；没写就留空。',
-    '· chiefComplaint 写主人描述的或医生记录的症状。',
-    '· treatment 写处理方式；medications 是**药名数组**，只照抄药名，不要写剂量与用法。',
+    '本类型的额外规则（每个字段只放它自己那一类内容，**不要互相重复**）：',
+    '· chiefComplaint 写主人描述的或医生记录的症状（主诉）。',
+    '· diagnosis 照抄病历上写的诊断结果（诊断栏）；没写就留空。',
+    '· treatment 写**医嘱/回家注意**：医生交代回家要做的（怎么吃药、饮食、护理、',
+    '  什么时候复查、要观察什么），照抄"医嘱/处置/回家后注意"那几段。',
+    '  **不要把检查项目清单写进来**（那是 exams），也不要写"无"。',
+    '· exams 写**这次做的检查项目**，从处置处方/检查单照抄，用"、"分隔，',
+    '  例如"全腹部彩超、血常规、斯玛特16项生化、CRP C反应蛋白、DR×2"；没有就留空。',
+    '· medications 是**处方明细数组**：照抄药名 + 处方上写的用法用量',
+    '  （单次用量、每日几次、共几天），例如 ["乐妥 1片/次 每日2次 共3天", "肝必康胶囊 1粒/次 每日1次"]；',
+    '  **只照抄处方上写了的，不要自己推算、不要补充说明书内容**；处方只写了药名就只写药名。',
+    '· vitals 写**体征**：体温、体重、BCS 等（照抄检查结果栏），例如"体温 38.4℃、体重 6.70kg、BCS 3"。',
     '· labValues 写**化验数据**（这次就诊做的化验）：逐项一行「项目 数值 单位」，',
     '  **不要**把几十项用分号串成一行；第一行先写报告名（例如"血常规""生化""尿常规"）。',
+    '  **报告自己标了异常（箭头 ↑↓、标红、"偏高/偏低"）的，就在该行末尾照抄这个标记**，',
+    '  例如「丙氨酸氨基转移酶(ALT) 144 U/L（偏高）」；**报告没标的一律不要自己判断**。',
     '  这张图不是化验单（例如只有病历文字、处方笺、影像片）就留空；',
     '  影像片不要解读，只在 notes 里写检查部位（如"骨盆正位"）。',
+    '· notes 写**补充说明**：报告上有、但上面这些字段都装不下的原文要点',
+    '  （例如"样本存在异常：溶血+"、异常项编号、"DR 检查 2 次"）；',
+    '  **已经填进上面字段的内容不许在这里再写一遍**；没有就留空。',
     '· patientName 照抄报告上写的**动物名字**；没写就留空。',
     '',
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
     '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
-    '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
+    '      "treatment": "回家后少量多餐，7 天后复查", "medications": ["速诺 1片/次 每日2次 共5天"],',
+    '      "exams": "血常规、生化、腹部彩超", "vitals": "体温 38.4℃、体重 6.70kg、BCS 3",',
     '      "labValues": "血常规\\nWBC 10.2 x 10^9/L\\nRBC 7.99 x 10^12/L",',
     '      "patientName": "面包", "notes": "" }',
     '  ],',
@@ -537,7 +560,11 @@ export function normalizeDrafts(
         visitDate: normalizeDraftDate(item?.visitDate),
         chiefComplaint: normalizeDraftText(item?.chiefComplaint),
         diagnosis: normalizeDraftText(item?.diagnosis),
+        // treatment = 医嘱/回家注意（2026-10-02 语义收窄）；
+        // exams = 这次做的检查；vitals = 体征（体温/体重/BCS）
         treatment: normalizeDraftText(item?.treatment),
+        exams: normalizeDraftText(item?.exams, 600),
+        vitals: normalizeDraftText(item?.vitals, 300),
         medications: Array.isArray(item?.medications)
           ? item.medications
               .map((name: unknown) => normalizeDraftText(name, 60))
@@ -560,6 +587,8 @@ export function normalizeDrafts(
           draft.diagnosis ||
           draft.chiefComplaint ||
           draft.treatment ||
+          draft.exams ||
+          draft.vitals ||
           draft.medications.length > 0,
       )
       .slice(0, 1);
@@ -597,6 +626,48 @@ function normalizeWarnings(value: unknown): string[] {
     .map((item) => normalizeKeyword(item))
     .filter(Boolean)
     .slice(0, 5);
+}
+
+/**
+ * 模型偶尔会在 warnings 里"自相矛盾"（2026-10-02 老板实测）。
+ *
+ * 实例：它明明把 19 项生化数值抄进了 labValues，却在 warnings 里写
+ * 「化验结果值未在图中显示」「动物名字未在图中显示」—— 家长看到只会更困惑。
+ * 提示词已经写死不许这么写（见 COMMON_RULES 第 7 条），但**提示词不等于保证**，
+ * 所以在出口再拦一道：**凡是与已提取内容矛盾的 warning 一律丢掉**。
+ *
+ * 判定用关键词 + 该字段是否真的有值 —— 宁可少显示一条提示，也不给顾客添乱。
+ */
+const CONTRADICTION_RULES: { match: RegExp; hasValue: (draft: any) => boolean }[] = [
+  {
+    match: /(化验|数值|指标|结果值|检验)/,
+    hasValue: (draft) => Boolean(String(draft?.labValues || '').trim()),
+  },
+  {
+    match: /(动物名|宠物名|狗名|名字|昵称)/,
+    hasValue: (draft) => Boolean(String(draft?.patientName || '').trim()),
+  },
+  {
+    match: /(日期|时间)/,
+    hasValue: (draft) =>
+      Boolean(
+        String(draft?.visitDate || draft?.checkupDate || draft?.vaccinationDate || '').trim(),
+      ),
+  },
+];
+
+export function filterContradictoryWarnings(
+  warnings: string[],
+  draft: Record<string, any> | undefined,
+): string[] {
+  if (!draft) return warnings;
+
+  return warnings.filter(
+    (warning) =>
+      !CONTRADICTION_RULES.some(
+        (rule) => rule.match.test(warning) && rule.hasValue(draft),
+      ),
+  );
 }
 
 @Injectable()
@@ -755,7 +826,10 @@ export class HealthReportExtractionService {
         confidence: normalizeConfidence(parsed.confidence),
         warnings: [
           '这是影像片（X 光/超声），AI 不解读片子上的内容；片子原件会一起存进档案',
-          ...normalizeWarnings(parsedRecord.warnings),
+          ...filterContradictoryWarnings(
+            normalizeWarnings(parsedRecord.warnings),
+            imageDrafts[0],
+          ),
         ],
       };
     }
@@ -763,7 +837,11 @@ export class HealthReportExtractionService {
     const documentType = resolvedType;
     const drafts = normalizeDrafts(documentType, parsedRecord);
     const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
-    const warnings = normalizeWarnings(parsedRecord.warnings);
+    // 与已提取内容矛盾的提示直接丢掉（见 filterContradictoryWarnings）
+    const warnings = filterContradictoryWarnings(
+      normalizeWarnings(parsedRecord.warnings),
+      drafts[0],
+    );
 
     // 过敏流程沿用旧字段（线上已经在跑），其余类型用 drafts
     const allergies =

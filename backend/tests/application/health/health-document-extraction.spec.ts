@@ -206,8 +206,18 @@ describe('AI 录入扩展', () => {
       })
 
       expect(Object.keys(drafts[0]).sort()).toEqual(
-        // 2026-10-02：表单删掉了「兽医」，识别也不再产出这一栏
-        ['attachments', 'checkupDate', 'checkupType', 'findings', 'notes', 'recommendations'].sort(),
+        // 2026-10-02：表单删掉了「兽医」，识别也不再产出这一栏；
+        // 同一天新增 labValues（化验数据单独一栏）与 patientName（只用于核对动物名）
+        [
+          'attachments',
+          'checkupDate',
+          'checkupType',
+          'findings',
+          'labValues',
+          'notes',
+          'patientName',
+          'recommendations',
+        ].sort(),
       )
     })
 

@@ -281,11 +281,11 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
 
   CHECKUP_REPORT: [
     '本类型的额外规则：',
-    '· findings 写报告里的**检查结论**（照抄结论段）。',
-    '· 如果这份报告**只有化验数值、没有结论段**（化验单很常见）：',
-    '  在 findings 里**逐项一行**照抄，每行「项目 数值 单位」；',
-    '  **不要**把几十项用分号串成一行。第一行先写报告名（例如"尿常规""血生化""血常规"）。',
-    '· 一张图里有多份报告（例如同一张纸上有生化 + 血常规）就分段写，每段以报告名开头。',
+    '· findings 写**医生给出的检查结论**（照抄结论段；这张报告没写结论就留空）。',
+    '· labValues 写**化验数据**：逐项一行「项目 数值 单位」，**不要**把几十项用分号串成一行；',
+    '  第一行先写报告名（例如"尿常规""血生化""血常规"）。一张图里有多份报告就分段写，',
+    '  每段以报告名开头。这份报告没有化验数值（例如只有一段结论的超声/影像报告）就留空。',
+    '· patientName 照抄报告上写的**动物名字**；没写就留空。',
     '· recommendations 写报告里医生给出的建议；没有就留空。',
     '· checkupType 从这几个里选最贴近的：ROUTINE 常规体检 / PRE_PURCHASE 购前体检 /',
     '  SENIOR_WELLNESS 老年健康检查 / PRE_ANESTHESIA 麻醉前检查 / EMERGENCY 急诊检查 / FOLLOW_UP 复查。',
@@ -295,8 +295,9 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '{',
     '  "drafts": [',
     '    { "checkupDate": "2026-08-30", "checkupType": "ROUTINE",',
-    '      "findings": "血常规与生化未见明显异常", "recommendations": "半年后复查",',
-    '      "notes": "" }',
+    '      "findings": "血常规与生化未见明显异常",',
+    '      "labValues": "血常规\\nWBC 10.2 x 10^9/L\\nRBC 7.99 x 10^12/L",',
+    '      "patientName": "面包", "recommendations": "半年后复查", "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
@@ -308,13 +309,14 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '· diagnosis 照抄病历上写的诊断结果；没写就留空。',
     '· chiefComplaint 写主人描述的或医生记录的症状。',
     '· treatment 写处理方式；medications 是**药名数组**，只照抄药名，不要写剂量与用法。',
+    '· patientName 照抄报告上写的**动物名字**；没写就留空。',
     '',
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
     '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
     '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
-    '      "notes": "" }',
+    '      "patientName": "面包", "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
@@ -503,6 +505,9 @@ export function normalizeDrafts(
           checkupDate: normalizeDraftDate(item?.checkupDate),
           checkupType: CHECKUP_TYPES.has(type) ? type : '',
           findings: normalizeDraftText(item?.findings),
+          // 化验数据与动物名（2026-10-02）：数值单独一栏，名字只用于核对提醒
+          labValues: normalizeDraftText(item?.labValues, 4000),
+          patientName: normalizeDraftText(item?.patientName, 40),
           recommendations: normalizeDraftText(item?.recommendations),
           // 2026-10-02：表单删掉了「兽医」，识别也就不再产出这一栏 ——
           // 留着一个顾客看不到、改不了的字段只会让人困惑（老板提的）
@@ -531,6 +536,7 @@ export function normalizeDrafts(
               .slice(0, 20)
           : [],
         notes: normalizeDraftText(item?.notes),
+        patientName: normalizeDraftText(item?.patientName, 40),
         status: 'PENDING_CONFIRMATION',
         attachments: [],
       }))

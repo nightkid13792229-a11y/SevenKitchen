@@ -282,3 +282,55 @@ describe('混合资料不能互相吃掉', () => {
     expect(service).toContain('不要把几十项用分号串成一行'.replace('不要把', '**不要**把'))
   })
 })
+
+/**
+ * 动物名核对 + 化验数据独立成栏（2026-10-02 老板批准）。
+ */
+describe('动物名提醒与化验数据', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('报告上的动物名与当前狗狗不一致时提醒，但**不拦保存**', () => {
+    const scan = readScan()
+
+    // 读出来、显示出来
+    expect(scan).toContain('reportedPatientNames')
+    expect(scan).toContain('报告上的动物名：')
+    // 不一致 → 一块黄色提醒，措辞里写清"由你决定"
+    expect(scan).toContain('patientNameMismatch')
+    expect(scan).toContain('名字对不上')
+    expect(scan).toContain('存不存进这份档案由你决定')
+    // 只提醒：校验里不许因为名字不同就报错
+    expect(scan).not.toContain('请确认报告属于这只狗后再保存')
+  })
+
+  it('化验数据独立成一栏，不再混进检查结论', () => {
+    const scan = readScan()
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    // 确认卡片里单独一行
+    expect(scan).toContain("push('化验数据', draft.labValues)")
+    // 字段表里：体检有这一栏，就诊没有
+    expect(utils).toContain("labValuesKey: 'labValues'")
+    expect(utils).toContain('labValuesKey: null')
+    // 表单里有输入框
+    expect(section).toContain("visitConfig(record).labValuesLabel")
+    expect(section).toContain('function visitLabValuesKey')
+    // 保存时要提交
+    expect(utils).toContain('labValues: normalizeOptionalText(record?.labValues)')
+  })
+
+  it('卡片标题不再拿数字墙当标题', () => {
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+
+    expect(utils).toContain('findingsText.length <= 24')
+    expect(utils).toContain("'含化验数据'")
+  })
+})

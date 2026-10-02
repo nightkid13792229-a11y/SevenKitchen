@@ -18,6 +18,11 @@ export class UpdateCheckupDto {
   @IsString()
   findings?: string;
 
+  /// 化验数据原文（2026-10-02 新增）
+  @IsOptional()
+  @IsString()
+  labValues?: string;
+
   @IsOptional()
   @IsString()
   recommendations?: string;

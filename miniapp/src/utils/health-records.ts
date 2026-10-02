@@ -271,6 +271,8 @@ export interface CheckupRecordPayload {
   checkupType: string
   checkupDate: string
   findings?: string | null
+  /** 化验数据原文（2026-10-02 从 findings 里拆出来的一栏） */
+  labValues?: string | null
   recommendations?: string | null
   veterinarian?: string | null
   attachments?: string[]
@@ -1264,6 +1266,12 @@ export interface HealthVisitFieldConfig {
   complaintKey: string | null
   complaintLabel: string
   complaintPlaceholder: string
+  /**
+   * 化验数据（只有体检有，2026-10-02 从 findings 里拆出来）。
+   * 一张化验单几十项数值，混在「检查结论」里家长看到的是数字墙。
+   */
+  labValuesKey: string | null
+  labValuesLabel: string
   /** 处理：就诊=处理与提醒（treatment）；体检=医生建议（recommendations） */
   adviceKey: string
   adviceLabel: string
@@ -1307,6 +1315,8 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     // 2026-10-02 老板：文案就叫「症状」，家长一眼就懂
     complaintLabel: '症状',
     complaintPlaceholder: '例如：呕吐、拉稀、精神差',
+    labValuesKey: null,
+    labValuesLabel: '',
     adviceKey: 'treatment',
     adviceLabel: '处理与提醒',
     advicePlaceholder: '例如：打了止吐针，开了三天药',
@@ -1334,6 +1344,8 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     complaintKey: null,
     complaintLabel: '',
     complaintPlaceholder: '',
+    labValuesKey: 'labValues',
+    labValuesLabel: '化验数据',
     adviceKey: 'recommendations',
     adviceLabel: '医生建议',
     advicePlaceholder: '例如：两周后复查，注意饮水',
@@ -1690,6 +1702,7 @@ export function buildHealthVisitPayload(
       checkupType: resolveHealthCheckupTypeValue(record?.checkupType) || HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
       checkupDate: normalizeOptionalText(record?.checkupDate) || '',
       findings: normalizeOptionalText(record?.findings),
+      labValues: normalizeOptionalText(record?.labValues),
       recommendations: normalizeOptionalText(record?.recommendations),
       // 备注：体检表 2026-10-01（第五期）才加这一列，此前合并表单里
       // "就诊能写备注、体检不能"说不通，现在补齐。
@@ -1755,22 +1768,29 @@ export function buildHealthVisitSummary(
   const config = getHealthVisitFieldConfig(kind)
   const attachmentCount = normalizeAttachments(record?.attachments).length
 
-  // 体检：2026-10-02 起表单里不再问「体检类型」（老板要求删掉），
-  // 手工记的一律是缺省「常规体检」—— 拿它当标题等于替家长断言一个他没选过的类型。
-  // 改成"有什么显示什么"：检查结论 → （拍报告识别出来的）体检类型 → 体检记录
+  // 体检的标题：检查结论 → 「体检记录」。
+  // 结论太长（多半是识别出来的化验数据堆在里头的旧记录）就不当标题 ——
+  // 家长在列表里看到的会是一堵数字墙（2026-10-02 老板实测反馈）。
+  const findingsText = kind === 'checkup' ? String(record?.[config.primaryKey] || '').trim() : ''
+  const shortFindings = findingsText && findingsText.length <= 24 ? findingsText : ''
+
   const candidates = kind === 'checkup'
-    ? [record?.[config.primaryKey], formatHealthCheckupTypeLabel(record?.checkupType)]
+    ? [shortFindings, formatHealthCheckupTypeLabel(record?.checkupType)]
     : [record?.[config.complaintKey as string], record?.[config.primaryKey]]
 
   const title = candidates
     .map((value) => String(value || '').trim())
     .find(Boolean) || (kind === 'checkup' ? '体检记录' : '新记录')
 
+  const labValues = kind === 'checkup' ? String(record?.labValues || '').trim() : ''
+
   const parts = [
     // 用调用方传进来的 kind 取日期字段，而不是再从记录里反查归属 ——
     // 记录的 __visitKind 标记是界面层贴的，工具函数不该依赖它
     String(record?.[config.dateKey] || '').trim(),
     String(record?.[config.adviceKey] || '').trim(),
+    // 有化验数据但不适合当标题时，摘要里说一句"这条里有化验数据"
+    labValues ? '含化验数据' : '',
     attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
   ].filter(Boolean)
 

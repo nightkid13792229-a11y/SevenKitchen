@@ -41,6 +41,8 @@ export interface CheckupRecord {
   checkupType: string;
   checkupDate: Date;
   findings: string | null;
+  /** 化验数据原文（逐项一行），2026-10-02 新增 */
+  labValues: string | null;
   recommendations: string | null;
   /// 备注；2026-10-01 第五期新增（此前只有病史表有 notes）
   notes: string | null;

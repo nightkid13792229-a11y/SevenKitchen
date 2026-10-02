@@ -8195,6 +8195,9 @@ export class RecipeDesignerService {
             checkupType: true,
             checkupDate: true,
             findings: true,
+            // 化验数据独立成栏之后，标签派生也要读它 ——
+            // 肾病之类的关键词（肌酐/蛋白尿/SDMA）本来就藏在化验数值里
+            labValues: true,
             recommendations: true,
           },
         },
@@ -8318,6 +8321,7 @@ export class RecipeDesignerService {
         type: record.checkupType,
         date: record.checkupDate.toISOString().slice(0, 10),
         findings: record.findings,
+        labValues: record.labValues,
         recommendations: record.recommendations,
       })),
       medicalRecords: dog.medicalRecords.map((record) => ({
@@ -8626,7 +8630,12 @@ export function deriveKnowledgeTags(profile: {
   medicalHistory: string | null;
   /** 健康标签的人工修正（第八期） */
   healthTagOverrides?: { added?: string[]; removed?: string[] };
-  checkups: Array<{ findings: string | null; recommendations: string | null }>;
+  checkups: Array<{
+    findings: string | null;
+    /** 化验数据（2026-10-02 独立成栏）：肌酐/蛋白尿这类关键词在里面 */
+    labValues?: string | null;
+    recommendations: string | null;
+  }>;
   medicalRecords: Array<{
     diagnosis: string | null;
     chiefComplaint: string | null;
@@ -8676,7 +8685,8 @@ export function deriveKnowledgeTags(profile: {
   const historyText = [
     profile.medicalHistory ?? '',
     ...profile.checkups.map(
-      (item) => `${item.findings ?? ''} ${item.recommendations ?? ''}`,
+      (item) =>
+        `${item.findings ?? ''} ${item.labValues ?? ''} ${item.recommendations ?? ''}`,
     ),
     ...profile.medicalRecords.map(
       (item) => `${item.diagnosis ?? ''} ${item.chiefComplaint ?? ''}`,

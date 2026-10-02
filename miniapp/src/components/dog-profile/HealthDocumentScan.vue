@@ -33,6 +33,14 @@
       <text v-if="resolvedTypeSummary" class="confirm__type">{{ resolvedTypeSummary }}</text>
       <text v-if="scanCountSummary" class="confirm__type">{{ scanCountSummary }}</text>
 
+      <text v-if="reportedPatientNames.length > 0" class="confirm__type">
+        报告上的动物名：{{ reportedPatientNames.join('、') }}
+      </text>
+      <view v-if="patientNameMismatch" class="confirm__name-warning">
+        <text class="confirm__name-warning-title">⚠️ 名字对不上</text>
+        <text class="confirm__name-warning-text">{{ patientNameMismatch }}</text>
+      </view>
+
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <!-- 一次传了化验单 + 门诊病历时，每条前面标出它是什么，别让顾客以为混了 -->
         <text v-if="drafts.length > 1" class="confirm__card-kind">
@@ -96,6 +104,8 @@ const props = withDefaults(defineProps<{
   hintText?: string
   /** 上传时后端需要的记录类别（medical / checkup / vaccine / allergy） */
   uploadType: 'medical' | 'checkup' | 'vaccine' | 'allergy'
+  /** 当前这只狗的名字：只用来提醒"报告上的动物名对不上"，不做拦截（2026-10-02） */
+  dogName?: string
 }>(), {
   buttonText: '拍照录入',
   hintText: '拍报告或疫苗本，自动填表；也可以直接手填',
@@ -195,6 +205,39 @@ function draftDocumentType(draft: Record<string, any>): DocumentType {
   return (resolvedDocumentType.value || props.documentType) as DocumentType
 }
 
+/**
+ * 报告上写的动物名（可能有好几个：一次传了不同狗的报告）。
+ * 只用于核对，不参与保存 —— 报告原件里本来就有，存进字段反而多余。
+ */
+const reportedPatientNames = computed(() => {
+  const names = drafts.value
+    .map((draft) => String(draft?.patientName || '').trim())
+    .filter(Boolean)
+
+  return [...new Set(names)]
+})
+
+/**
+ * 报告上的动物名和当前记录的狗狗对不上 → 提醒一句。
+ *
+ * 老板 2026-10-02 定的口径：**只提醒，不拦截** ——
+ * 要不要把这份报告存进这只狗的档案，由家长自己决定。
+ * （实测踩过：报告上写的是「熊海苔」「葡萄」，而家长存进了「面包」的档案。）
+ */
+const patientNameMismatch = computed(() => {
+  const current = String(props.dogName || '').trim()
+  if (!current || reportedPatientNames.value.length === 0) {
+    return ''
+  }
+
+  const others = reportedPatientNames.value.filter((name) => name !== current)
+  if (others.length === 0) {
+    return ''
+  }
+
+  return `报告上写的动物名是「${others.join('」「')}」，和你正在记录的「${current}」不一样。确认没传错再保存；存不存进这份档案由你决定。`
+})
+
 /** 这一条草稿的中文类型名（一次传多类时每条前面标一下） */
 function draftTypeLabel(draft: Record<string, any>) {
   return TYPE_LABELS[draftDocumentType(draft) as ExplicitDocumentType] || '资料'
@@ -238,6 +281,7 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
   if (documentType === 'CHECKUP_REPORT') {
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
+    push('化验数据', draft.labValues)
     push('医生建议', draft.recommendations)
     push('其它想说的', draft.notes)
     return rows
@@ -536,6 +580,30 @@ function discard() {
   font-size: 26rpx;
   font-weight: 600;
   color: #1e3a2f;
+}
+
+/* 名字对不上时的提醒（只提醒不拦截）*/
+.confirm__name-warning {
+  margin-top: 12rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fef3f2;
+  border: 1rpx solid #f5c6c2;
+}
+
+.confirm__name-warning-title {
+  display: block;
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #b42318;
+}
+
+.confirm__name-warning-text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #7a3b36;
 }
 
 .confirm__card-kind {

@@ -108,6 +108,7 @@
           v-if="isRecordTab"
           ref="recordsSectionRef"
           :dog-id="dogId"
+          :dog-name="form.name"
           embedded
           :active-type="activeRecordType"
           :records="activeRecordList"

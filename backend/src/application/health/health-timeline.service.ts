@@ -320,6 +320,8 @@ export class HealthTimelineService {
         date: toDateText(record.checkupDate),
         checkupType: formatCheckupType(record.checkupType),
         findings: record.findings || '',
+        // 化验数值单独一栏（2026-10-02）：AI 分析要能用上肌酐、蛋白尿这类数字
+        labValues: record.labValues || '',
         recommendations: record.recommendations || '',
         // 体检记录里的「其它想说的」（notes，2026-10-02 起接进 AI）
         notes: record.notes || '',

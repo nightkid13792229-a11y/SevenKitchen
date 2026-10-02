@@ -333,8 +333,9 @@ describe('病历/检查表单 · 第三轮', () => {
     const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
     // 缺省值仍然送给后端（这一栏是必填的）
     expect(utils).toContain('|| HEALTH_VISIT_DEFAULT_CHECKUP_TYPE')
-    // 标题：先看结论，再退回识别出来的类型
-    expect(utils).toContain("? [record?.[config.primaryKey], formatHealthCheckupTypeLabel(record?.checkupType)]")
+    // 标题：短的检查结论优先，太长（数字墙）或没有时退回识别出来的体检类型
+    expect(utils).toContain('const shortFindings = findingsText && findingsText.length <= 24')
+    expect(utils).toContain('? [shortFindings, formatHealthCheckupTypeLabel(record?.checkupType)]')
   })
 
   it('① 上传附件按钮带括弧提示，讲清这个按钮是干什么的', () => {

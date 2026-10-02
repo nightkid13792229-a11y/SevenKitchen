@@ -1447,6 +1447,12 @@ model CheckupRecord {
   checkupType     String   @map("checkup_type")
   checkupDate     DateTime @map("checkup_date") @db.Date
   findings        String?  @map("findings")
+  /// 化验数值原文（2026-10-02 新增）。
+  /// 原来化验单的几十项数值被塞进 findings，家长在卡片上看到的是"一堵数字墙"，
+  /// 营养师端的标签派生也把数字当成"检查结论"在扫。现在分开：
+  ///   findings  = 医生写的结论段
+  ///   labValues = 逐项一行的化验数据（项目 数值 单位）
+  labValues       String?  @map("lab_values")
   recommendations String?  @map("recommendations")
   /// 备注（2026-10-01 第五期新增）。
   /// 此前「病例」合并表单里体检记录没有备注可填 —— 病史表有 notes、体检表没有，

@@ -21,6 +21,10 @@ export class CheckupRecordResponseDto {
   @Expose()
   findings!: string | null;
 
+  /// 化验数据原文（2026-10-02 新增）
+  @Expose()
+  labValues!: string | null;
+
   @Expose()
   recommendations!: string | null;
 

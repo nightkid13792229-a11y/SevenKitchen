@@ -253,7 +253,9 @@ export class DogsController {
             checkupDate: checkupDate,
             checkupType: record.checkupType,
             // 建档表单里的 notes 历史上就是"检查所见"，保持原语义；
-            // 体检专属的备注列 2026-10-01 才加，建档流程不涉及。
+            // 体检专属的备注列 2026-10-01 才加，建档流程不涉及；
+            // 化验数据列 2026-10-02 才加，同样不涉及。
+            labValues: null,
             findings: record.notes || '',
             recommendations: null,
             notes: null,
@@ -475,6 +477,8 @@ export class DogsController {
           dogId,
           checkupDate,
           checkupType: record.checkupType,
+          // 化验数据列 2026-10-02 才加，建档/编辑这两条路都不涉及
+          labValues: null,
           // 同上：建档表单的 notes 是"检查所见"，不是备注
           findings: record.notes || '',
           recommendations: null,

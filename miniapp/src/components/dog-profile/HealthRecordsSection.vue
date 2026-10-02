@@ -58,6 +58,7 @@
         ref="scanRef"
         hide-trigger
         :dog-id="dogId"
+        :dog-name="dogName"
         document-type="AUTO"
         upload-type="medical"
         @scanned="onScanned"
@@ -218,6 +219,17 @@
               :placeholder="visitConfig(record).primaryPlaceholder"
               :value="readField(record, visitConfig(record).primaryKey)"
               @input="updateTextField(index, visitConfig(record).primaryKey, $event.detail.value)"
+            />
+          </view>
+
+          <view v-if="visitConfig(record).labValuesKey" class="field-group">
+            <text class="field-label">{{ visitConfig(record).labValuesLabel }}</text>
+            <textarea
+              class="field-textarea field-textarea--tall"
+              :disabled="hasSavingRecord"
+              placeholder="化验单上的数值，一行一项，例如：肌酐 72.2 umol/L"
+              :value="readField(record, visitLabValuesKey(record))"
+              @input="updateTextField(index, visitLabValuesKey(record), $event.detail.value)"
             />
           </view>
 
@@ -532,6 +544,12 @@ type FieldConfig = {
 const props = withDefaults(defineProps<{
   dogId: string
   /**
+   * 当前这只狗的名字（2026-10-02）。
+   * 只用于核对：报告上写的动物名和它对不上时提醒家长，**不拦着保存** ——
+   * 要不要存进这个档案由家长自己决定（老板定的）。
+   */
+  dogName?: string
+  /**
    * 板块标识。`'visit'` 是「病例」合并模式（一个列表同时装就诊与体检），
    * 由组件内部逐条判断每条记录真正属于哪张表 —— 所以它是合法取值，
    * 上面的类型漏了它（2026-10-01 自查补）。
@@ -744,6 +762,10 @@ function visitConfig(record: Record<string, any>) {
 /** 可选字段在 TS 类型上是 string | null，模板里取 key 时统一在这里收口 */
 function visitComplaintKey(record: Record<string, any>) {
   return visitConfig(record).complaintKey || ''
+}
+
+function visitLabValuesKey(record: Record<string, any>) {
+  return visitConfig(record).labValuesKey || ''
 }
 
 function visitMedicationKey(record: Record<string, any>) {
@@ -2220,6 +2242,11 @@ function removeAttachment(index: number, attachmentIndex: number) {
 
 .field-input,
 .field-picker,
+/* 化验数据那栏要更高：一行一项，十几项起步 */
+.field-textarea--tall {
+  min-height: 320rpx;
+}
+
 .field-textarea {
   display: block;
   margin-top: 10rpx;

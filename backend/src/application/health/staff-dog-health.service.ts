@@ -171,6 +171,7 @@ export class StaffDogHealthService {
       medicalHistory: dog.medicalHistory,
       checkups: dog.checkupRecords.map((item) => ({
         findings: item.findings,
+        labValues: item.labValues,
         recommendations: item.recommendations,
       })),
       medicalRecords: dog.medicalRecords.map((item) => ({

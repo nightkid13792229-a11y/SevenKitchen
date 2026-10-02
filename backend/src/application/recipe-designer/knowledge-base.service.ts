@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import type {
   KnowledgeDomain,
 } from '../../domain/recipe-designer/knowledge-base/types';
-import { KNOWLEDGE_DOMAIN_LABELS } from '../../domain/recipe-designer/knowledge-base/types';
+import {
+  KNOWLEDGE_DOMAIN_LABELS,
+} from '../../domain/recipe-designer/knowledge-base/types';
+import { isKnowledgeEntryApproved } from '../../domain/recipe-designer/knowledge-base/approvals';
 import {
   isKnownTag,
   isRetrievalTag,
@@ -182,8 +185,16 @@ export class KnowledgeBaseService {
     if (audience === 'nutritionist') {
       return entries;
     }
-    // 未审核 / 被驳回的一律过滤；缺省（没写 reviewStatus）视为未审核
-    return entries.filter((entry) => entry.reviewStatus === 'APPROVED');
+    // 未审核 / 被驳回的一律过滤；缺省（没写 reviewStatus）视为未审核。
+    //
+    // 2026-10-02：审核结论以 `knowledge-base/approvals.ts` 里那张**登记表**为准 ——
+    // 它是 scripts/apply-knowledge-review.ts 读合作兽医填好的审核 CSV 生成的，
+    // 带审核人与日期，可追溯。条目自带的 reviewStatus 只表示"作者写的初始状态"，
+    // 所以两边认一个就算通过（老数据里已标 APPROVED 的照旧有效）。
+    return entries.filter(
+      (entry) =>
+        entry.reviewStatus === 'APPROVED' || isKnowledgeEntryApproved(entry.id),
+    );
   }
 
   /**

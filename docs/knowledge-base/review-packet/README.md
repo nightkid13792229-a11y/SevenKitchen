@@ -29,15 +29,30 @@ npx ts-node -r tsconfig-paths/register scripts/audit-health-knowledge.ts
 复核日期已过期、健康侧条目被误标成已审核。
 **硬问题（退出码 1）必须清零再送审**；"待人工判断"那部分可以自己先过一眼。
 
-## 审核结论怎么用
+## 审核结论怎么用（2026-10-02 起有工具了）
 
-兽医给了结论之后，我们按结论改内容，然后：
+兽医填完 CSV 的「审核结论（请填）」列之后，**一条命令回填**：
 
-| 结论 | 我们做什么 |
+```bash
+cd backend
+# 先预览（默认什么都不写），CSV 路径缺省取 review-packet 里最新那份
+npx ts-node -r tsconfig-paths/register scripts/apply-knowledge-review.ts --reviewer "XX动物医院 王医生"
+# 确认无误再落盘
+npx ts-node -r tsconfig-paths/register scripts/apply-knowledge-review.ts --reviewer "XX动物医院 王医生" --apply
+```
+
+| 结论 | 工具做什么 |
 |---|---|
-| 通过 | 把该条 `reviewStatus` 改成 `APPROVED`（同时保留 `reviewBy` 下次复核日期） |
-| 需修改 | 按意见改正文；改完仍是 `PENDING_REVIEW`，下一轮再审 |
-| 删除 | 从数据文件里移除该条（编号不回收，避免别的条目引用到错的内容） |
+| 通过 | 记进 `knowledge-base/approvals.ts` 的**审核登记表**（带审核人 + 日期）→ 顾客侧据此放行 |
+| 需修改 | **不改代码**，条目保持未审核；意见打印出来，我们改内容后下一轮再审 |
+| 删除 | **不自动删**（删内容是破坏性操作），列入清单交人工处理 |
+| 拿不准 / 未填 | 原样保持未审核 |
+
+> **为什么"通过"不直接改条目的 `reviewStatus`**：条目分散在 32 个数据文件里，
+> 一条条改代码块既容易改错、diff 也吵；更要紧的是要**留痕** ——
+> 谁在什么时候把哪条放行的，得一眼查得到。
+> 所以约定：数据文件里的 `reviewStatus` 是作者写的初始状态，
+> **只有审核登记表才是"通过"的唯一凭据**，而它只由这个脚本生成、不手写。
 | 拿不准 | 保持 `PENDING_REVIEW`，单独列一份问题清单再找人定 |
 
 > **为什么这件事卡着两条产品线**：`HEALTH_ANALYSIS=customer`（AI 健康分析给顾客看）

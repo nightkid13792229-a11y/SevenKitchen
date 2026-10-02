@@ -21,6 +21,7 @@ import {
   HEALTH_ONLY_DOMAINS,
   type KnowledgeEntry,
 } from '../src/domain/recipe-designer/knowledge-base/types';
+import { isKnowledgeEntryApproved } from '../src/domain/recipe-designer/knowledge-base/approvals';
 import { KNOWLEDGE_SOURCES } from '../src/domain/recipe-designer/knowledge-base/source-registry';
 
 export interface HealthKnowledgeAudit {
@@ -113,8 +114,14 @@ export function auditHealthKnowledge(
       problems.push(`条目 ${entry.id} 的复核日期已过（${entry.reviewBy}）`);
     }
 
-    // 待审核领域里混进 APPROVED：老板定的边界，没人审过不许标已审核
-    if (entry.reviewStatus === 'APPROVED' && healthOnly.has(entry.domain)) {
+    // 待审核领域里混进 APPROVED：老板定的边界，没人审过不许标已审核。
+    // 2026-10-02：审核结论以 approvals.ts 那张登记表为准（由兽医填的 CSV 回填生成），
+    // 只标了 reviewStatus、登记表里却没有的，仍然算"没有审核记录"。
+    if (
+      entry.reviewStatus === 'APPROVED' &&
+      healthOnly.has(entry.domain) &&
+      !isKnowledgeEntryApproved(entry.id)
+    ) {
       problems.push(
         `条目 ${entry.id} 是健康侧条目却标成 APPROVED —— 必须有审核记录才能标已审核`,
       );

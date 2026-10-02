@@ -132,6 +132,42 @@ describe('拍照录入 · 接线', () => {
     expect(section).toContain('这看起来是疫苗本，请到「疫苗」板块上传')
   })
 
+  const readScanFile = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('确认卡片与表单字段一一对应：没有兽医，叫法也一致（2026-10-02 老板提的）', () => {
+    const scan = readScanFile()
+    const block = scan.slice(
+      scan.indexOf("activeDocumentType.value === 'CHECKUP_REPORT'"),
+      scan.indexOf("push('过敏原'"),
+    )
+
+    // 表单里已经删掉的字段不该再出现在识别结果里
+    expect(block).not.toContain('兽医')
+    expect(block).not.toContain('draft.veterinarian')
+    // 表单里叫「医生怎么说」「处理与提醒」「其它想说的」，这里也必须一致
+    expect(block).toContain("push('医生怎么说', draft.diagnosis)")
+    expect(block).toContain("push('处理与提醒', draft.treatment)")
+    expect(block).toContain("push('其它想说的', draft.notes)")
+  })
+
+  it('「重新拍」改成「重新上传」（走的本来就是相册，不是相机）', () => {
+    const scan = readScanFile()
+
+    expect(scan).toContain('>重新上传</text>')
+    expect(scan).not.toContain('>重新拍</text>')
+  })
+
+  it('后端说"这不是宠物医疗资料"时不参与类型票选，原话直接给顾客看', () => {
+    const scan = readScanFile()
+
+    expect(scan).toContain("type !== 'NOT_MEDICAL'")
+    expect(scan).toContain('collectedWarnings[0] ||')
+  })
+
   it('疫苗本挂在「疫苗」板块', () => {
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),

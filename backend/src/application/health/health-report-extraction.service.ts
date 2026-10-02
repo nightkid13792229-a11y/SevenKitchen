@@ -90,16 +90,46 @@ export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest
  * 模型不一定照做，也可能只回「体检报告」这种中文说法或干脆不回，
  * 所以这里做白名单校验：认不出来一律兜底 MEDICAL_RECORD（老板定的默认项）。
  */
-export function resolveAutoDocumentType(value: unknown): HealthDocumentType {
+export function resolveAutoDocumentType(
+  value: unknown,
+): HealthDocumentType | 'NOT_MEDICAL' {
   const key = String(value || '').trim().toUpperCase();
+  if (key === 'NOT_MEDICAL') {
+    return 'NOT_MEDICAL';
+  }
+
   return (HEALTH_DOCUMENT_TYPES as readonly string[]).includes(key)
     ? (key as HealthDocumentType)
     : 'MEDICAL_RECORD';
 }
 
+/**
+ * 「这根本不是宠物的医疗资料」时给顾客的话（2026-10-02 老板提的：
+ * 传了一张身份证，结果只说"未识别到内容"，太笼统）。
+ *
+ * 按入口分别措辞：顾客在这个板块传图，期待的是一份具体的资料。
+ */
+export function buildNotMedicalWarning(
+  requested: HealthDocumentTypeRequest,
+): string {
+  if (requested === 'VACCINE_BOOK') {
+    return '这张看起来不是疫苗本（比如证件、人脸或其它照片），换一张疫苗本内页的照片试试';
+  }
+
+  if (requested === 'ALLERGY_REPORT') {
+    return '这张看起来不是过敏原检测报告（比如证件、人脸或其它照片），换一张报告的照片试试';
+  }
+
+  return '这张看起来不是宠物的病历或检查报告（比如证件、人脸、风景照），换一张再试';
+}
+
 export interface HealthReportExtractionResult {
-  /** 这次识别的是哪类文档 */
-  documentType: HealthDocumentType;
+  /**
+   * 这次识别的是哪类文档。
+   * `NOT_MEDICAL` = 模型判定这根本不是宠物的医疗资料（2026-10-02 新增），
+   * 这种情况下 drafts 一定是空的，warnings 里给一句准确的说明。
+   */
+  documentType: HealthDocumentType | 'NOT_MEDICAL';
   /**
    * 直接可用的表单草稿（老板第 5 条：确认一次就自动录入表单）。
    *   · 疫苗本可能读出多条 → 数组里多项
@@ -262,7 +292,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "drafts": [',
     '    { "checkupDate": "2026-08-30", "checkupType": "ROUTINE",',
     '      "findings": "血常规与生化未见明显异常", "recommendations": "半年后复查",',
-    '      "veterinarian": "", "notes": "" }',
+    '      "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
@@ -280,7 +310,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "drafts": [',
     '    { "visitDate": "2026-09-12", "chiefComplaint": "呕吐两次", "diagnosis": "急性胃炎",',
     '      "treatment": "禁食 12 小时后少量多餐", "medications": ["速诺"],',
-    '      "veterinarian": "", "notes": "" }',
+    '      "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
@@ -357,7 +387,10 @@ function buildAutoSystemPrompt(): string {
     '· CHECKUP_REPORT —— 体检报告 / 化验单',
     '· VACCINE_BOOK —— 疫苗本 / 免疫记录',
     '· ALLERGY_REPORT —— 过敏原检测报告',
-    '判断不了、或这份文档不属于以上任何一类时，documentType 填 MEDICAL_RECORD。',
+    '· NOT_MEDICAL —— 不是宠物的医疗资料：身份证/证件、人脸或自拍、风景、人的病历或处方、',
+    '  宠物用品或狗粮包装、与健康无关的照片等',
+    '只有确实是狗狗医疗资料时才从那四类里挑一个。**拿不准就别硬猜**：',
+    '判断不了、或者看起来不是宠物的医疗资料，一律填 NOT_MEDICAL，drafts 留空数组。',
     '',
     '第二步：按判断出的类型输出 drafts —— 字段名必须与该类型下面给出的结构完全一致。',
     '疫苗本一次读出多条接种记录就输出多条，其余类型只输出一条。',
@@ -467,7 +500,8 @@ export function normalizeDrafts(
           checkupType: CHECKUP_TYPES.has(type) ? type : '',
           findings: normalizeDraftText(item?.findings),
           recommendations: normalizeDraftText(item?.recommendations),
-          veterinarian: normalizeDraftText(item?.veterinarian, 60),
+          // 2026-10-02：表单删掉了「兽医」，识别也就不再产出这一栏 ——
+          // 留着一个顾客看不到、改不了的字段只会让人困惑（老板提的）
           notes: normalizeDraftText(item?.notes),
           attachments: [],
         };
@@ -492,7 +526,6 @@ export function normalizeDrafts(
               .filter(Boolean)
               .slice(0, 20)
           : [],
-        veterinarian: normalizeDraftText(item?.veterinarian, 60),
         notes: normalizeDraftText(item?.notes),
         status: 'PENDING_CONFIRMATION',
         attachments: [],
@@ -667,11 +700,26 @@ export class HealthReportExtractionService {
      * AUTO 时必须**先**从响应里解析出真实类型，再据此归一化 drafts ——
      * 字段结构是按类型定的，顺序反了就会用错白名单把字段全丢掉。
      */
-    const documentType =
+    const resolvedType =
       requestedDocumentType === 'AUTO'
         ? resolveAutoDocumentType(parsedRecord.documentType)
         : requestedDocumentType;
 
+    // 模型明说"这不是宠物医疗资料"：一条草稿都不产出，
+    // 只回一句准确的话（原来会硬塞成病历再报"未识别到内容"，让顾客以为是照片不清楚）
+    if (resolvedType === 'NOT_MEDICAL') {
+      return {
+        documentType: 'NOT_MEDICAL',
+        drafts: [],
+        allergies: [],
+        medicalConditions: [],
+        ocrText: '',
+        confidence: 'LOW',
+        warnings: [buildNotMedicalWarning(requestedDocumentType)],
+      };
+    }
+
+    const documentType = resolvedType;
     const drafts = normalizeDrafts(documentType, parsedRecord);
     const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
     const warnings = normalizeWarnings(parsedRecord.warnings);

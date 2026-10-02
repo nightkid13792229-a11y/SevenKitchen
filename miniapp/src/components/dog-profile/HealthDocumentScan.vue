@@ -37,7 +37,7 @@
       </text>
 
       <view class="confirm__actions">
-        <text class="confirm__discard" @tap="discard">重新拍</text>
+        <text class="confirm__discard" @tap="discard">重新上传</text>
         <text class="confirm__accept" @tap="accept">确认，填入表单</text>
       </view>
     </view>
@@ -168,26 +168,29 @@ function describeDraft(draft: Record<string, any>): { label: string; value: stri
     push('疫苗', draft.vaccineName)
     push('接种日期', draft.vaccinationDate)
     push('下次到期', draft.nextDueDate)
-    push('备注', draft.notes)
+    push('其它想说的', draft.notes)
     return rows
   }
 
+  // 这一块**必须和表单里那套字段、那套叫法一一对应**（2026-10-02 老板提的）：
+  // 顾客核对时看到的，就是他接下来在表单里能改的那些 ——
+  // 表单里已经删掉的字段（兽医）不该再出现在这里，
+  // 表单里叫「医生怎么说」的，这里也不能写成「诊断结果」。
   if (activeDocumentType.value === 'CHECKUP_REPORT') {
     push('体检日期', draft.checkupDate)
     push('检查结论', draft.findings)
     push('医生建议', draft.recommendations)
-    push('兽医', draft.veterinarian)
-    push('备注', draft.notes)
+    push('其它想说的', draft.notes)
     return rows
   }
 
   if (activeDocumentType.value === 'MEDICAL_RECORD') {
     push('就诊日期', draft.visitDate)
     push('症状', draft.chiefComplaint)
-    push('诊断结果', draft.diagnosis)
-    push('处理方式', draft.treatment)
+    push('医生怎么说', draft.diagnosis)
+    push('处理与提醒', draft.treatment)
     push('用药', Array.isArray(draft.medications) ? draft.medications.join('、') : draft.medications)
-    push('兽医', draft.veterinarian)
+    push('其它想说的', draft.notes)
     return rows
   }
 
@@ -288,7 +291,9 @@ async function scanAll(filePaths: string[]) {
         }
 
         const type = String(res.data.documentType || '').toUpperCase()
-        if (type && type !== 'AUTO') {
+        // NOT_MEDICAL = 后端判定"这根本不是宠物的医疗资料"，
+        // 它不属于任何一种表单类型，不参与票选（草稿为空，最后会走到提示那条路）
+        if (type && type !== 'AUTO' && type !== 'NOT_MEDICAL') {
           detectedTypes.push(type)
         }
 
@@ -352,7 +357,7 @@ function accept() {
   warnings.value = []
 }
 
-/** 「重新拍」：直接再开一次相册（原来只是收起卡片，现在入口在底部按钮上） */
+/** 「重新上传」：直接再开一次相册（原来文案叫"重新拍"，但走的是相册，2026-10-02 改） */
 function discard() {
   showConfirm.value = false
   drafts.value = []

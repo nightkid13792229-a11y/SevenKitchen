@@ -112,8 +112,10 @@ describe('AI 录入扩展', () => {
       expect(drafts[0].checkupType).toBe('')
     })
 
-    it('日期与结论都没有的草稿丢掉', () => {
-      const drafts = normalizeDrafts('CHECKUP_REPORT', { drafts: [{ veterinarian: '张医生' }] })
+    it('日期与结论都没有的草稿丢掉（兽医这类不在白名单里的字段一律不产出）', () => {
+      const drafts = normalizeDrafts('CHECKUP_REPORT', {
+        drafts: [{ veterinarian: '张医生', madeUpField: 'x' }],
+      })
       expect(drafts).toEqual([])
     })
 
@@ -204,7 +206,8 @@ describe('AI 录入扩展', () => {
       })
 
       expect(Object.keys(drafts[0]).sort()).toEqual(
-        ['attachments', 'checkupDate', 'checkupType', 'findings', 'notes', 'recommendations', 'veterinarian'].sort(),
+        // 2026-10-02：表单删掉了「兽医」，识别也不再产出这一栏
+        ['attachments', 'checkupDate', 'checkupType', 'findings', 'notes', 'recommendations'].sort(),
       )
     })
 

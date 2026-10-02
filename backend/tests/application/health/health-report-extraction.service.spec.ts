@@ -12,6 +12,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthReportExtractionService,
   HEALTH_REPORT_OCR_PROVIDER,
+  buildNotMedicalWarning,
   buildSystemPrompt,
   isHealthReportVisionEnabled,
   normalizeDocumentType,
@@ -282,6 +283,24 @@ describe('HealthReportExtractionService', () => {
       expect(result.drafts[0].diagnosis).toBe('急性胃炎');
       expect(result.drafts[0].medications).toEqual(['速诺']);
       expect(result.drafts[0]).not.toHaveProperty('allergen');
+    });
+
+    it('模型回 NOT_MEDICAL（传了张身份证）→ 不给草稿，只说清"这不是宠物医疗资料"', async () => {
+      ocrProvider.recognizeImage.mockResolvedValue({ text: '公民身份号码 …' });
+      setFetchResponse({
+        documentType: 'NOT_MEDICAL',
+        drafts: [],
+        confidence: 'LOW',
+        warnings: [],
+      });
+
+      const result = await autoRequest();
+
+      expect(result.documentType).toBe('NOT_MEDICAL');
+      expect(result.drafts).toEqual([]);
+      // 关键是这句话要准：不能说"照片不清楚"，照片清楚得很，只是不是这类资料
+      expect(result.warnings[0]).toContain('不是宠物的病历或检查报告');
+      expect(result.warnings[0]).not.toContain('未识别到可用内容');
     });
 
     it('模型回白名单外的值 → 按病历归一化并兜底病历，不抛错', async () => {
@@ -734,3 +753,37 @@ describe('HealthReportExtractionService · 视觉直读', () => {
     }
   });
 });
+
+/**
+ * 不是宠物医疗资料时要说人话（2026-10-02 老板提的）。
+ *
+ * 老板传了一张身份证做试验，结果只回一句"未识别到内容" ——
+ * 照片其实很清楚，问题在于它根本不是宠物的医疗资料。
+ * 现在 AUTO 多一类 NOT_MEDICAL：模型拿不准就填它，别硬塞成病历。
+ */
+describe('识别 · 不是宠物医疗资料', () => {
+  it('AUTO 判定 NOT_MEDICAL 时：不给草稿，只给一句准确的话', () => {
+    expect(resolveAutoDocumentType('NOT_MEDICAL')).toBe('NOT_MEDICAL')
+    expect(resolveAutoDocumentType('not_medical')).toBe('NOT_MEDICAL')
+  })
+
+  it('AUTO 提示词里写着"拿不准就别硬猜，填 NOT_MEDICAL"', () => {
+    const prompt = buildSystemPrompt('AUTO', 'image')
+
+    expect(prompt).toContain('NOT_MEDICAL')
+    expect(prompt).toContain('拿不准就别硬猜')
+    expect(prompt).toContain('身份证')
+  })
+
+  it('各入口的提示文案都要说清"这不是什么"', () => {
+    expect(buildNotMedicalWarning('AUTO')).toContain('不是宠物的病历或检查报告')
+    expect(buildNotMedicalWarning('VACCINE_BOOK')).toContain('不是疫苗本')
+    expect(buildNotMedicalWarning('ALLERGY_REPORT')).toContain('不是过敏原检测报告')
+  })
+
+  it('认不出来的取值仍然兜底病历（老行为不变）', () => {
+    expect(resolveAutoDocumentType('')).toBe('MEDICAL_RECORD')
+    expect(resolveAutoDocumentType(undefined)).toBe('MEDICAL_RECORD')
+    expect(resolveAutoDocumentType('身份证')).toBe('MEDICAL_RECORD')
+  })
+})

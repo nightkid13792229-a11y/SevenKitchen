@@ -113,3 +113,37 @@ describe('两个页面的注册与入口', () => {
     expect(api).not.toContain('/dogs/${dogId}/health/visit-summary')
   })
 })
+
+/**
+ * 时间线不再有饮食偏好事件（2026-10-02 老板定）。
+ *
+ * 第五期把"饮食偏好变更"放进健康记录，是因为那时它属于健康管理；
+ * 后来饮食标签下线（只在定制食谱时填），时间线上再混着
+ * "新增/去掉某样食材"就不合逻辑了。变更历史本身仍在库里。
+ */
+describe('健康记录 · 饮食事件已下线', () => {
+  it('时间线页里没有 diet 这个类型（标签、配色都清掉）', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-health/timeline.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain("type HealthEventType = 'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'")
+    expect(page).not.toContain("diet: '饮食'")
+    expect(page).not.toContain('.timeline__dot--diet')
+    expect(page).not.toContain('.timeline__badge--diet')
+  })
+
+  it('后端时间线不再查饮食偏好变更表', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), '../backend/src/application/health/health-timeline.service.ts'),
+      'utf-8',
+    )
+
+    expect(service).not.toContain('dogDietPreferenceChange')
+    expect(service).not.toContain("type: 'diet'")
+    // 事件类型联合与排序表里也没有 diet 了
+    expect(service).not.toContain("| 'diet'")
+    expect(service).not.toContain('diet: 5')
+  })
+})

@@ -188,24 +188,27 @@ describe('HealthTimelineService', () => {
       expect(result.total).toBe(0)
     })
 
-    it('饮食偏好的变更进时间线（第五期补上：此前没有"什么时候改的"这个事实）', async () => {
+    it('饮食偏好的变更**不再**进时间线（2026-10-02：饮食已不属于健康管理）', async () => {
       const prisma = createPrisma()
-      prisma.dogDietPreferenceChange.findMany = jest.fn().mockResolvedValue([
-        {
-          id: 'd1',
-          kind: 'LIKED',
-          foodName: '鸡胸肉',
-          action: 'ADDED',
-          changedAt: new Date('2026-09-20T00:00:00.000Z'),
-        },
-      ])
+      prisma.dogDietPreferenceChange = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'd1',
+            dogId: DOG_ID,
+            kind: 'LIKED',
+            action: 'ADDED',
+            foodName: '南瓜',
+            changedAt: new Date('2026-07-01T00:00:00.000Z'),
+          },
+        ]),
+      }
+
       const service = new HealthTimelineService(prisma)
       const result = await service.getTimeline(CUSTOMER_ID, DOG_ID)
 
-      const dietEvent = result.events.find((event) => event.type === 'diet')
-      expect(dietEvent).toBeDefined()
-      expect(dietEvent!.title).toContain('鸡胸肉')
-      expect(dietEvent!.detail).toBe('爱吃')
+      expect(result.events.some((event) => event.type === ('diet' as never))).toBe(false)
+      // 变更历史本身仍在库里（定制食谱那边在用），只是不再出现在健康记录里
+      expect(result.events.map((event) => event.id)).not.toContain('d1')
     })
 
     it('没有饮食变更时时间线里也没有饮食事件', async () => {

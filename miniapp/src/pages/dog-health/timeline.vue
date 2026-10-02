@@ -77,7 +77,8 @@ import { dogApi } from '../../api/dogs'
  *
  * 数据由后端一次聚合（/dogs/:dogId/health/timeline），前端不拼记录。
  */
-type HealthEventType = 'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight' | 'diet'
+// 2026-10-02：饮食偏好不再属于健康管理，时间线上也不再有 diet 事件
+type HealthEventType = 'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'
 
 interface HealthEvent {
   id: string
@@ -94,7 +95,6 @@ const TYPE_LABELS: Record<HealthEventType, string> = {
   allergy: '过敏',
   vaccine: '疫苗',
   weight: '体重',
-  diet: '饮食',
 }
 
 const dogId = ref('')
@@ -283,7 +283,6 @@ function formatYear(date: string) {
 .timeline__dot--allergy { background: #ad5b2a; }
 .timeline__dot--vaccine { background: #6b5b9b; }
 .timeline__dot--weight { background: #0e6f78; }
-.timeline__dot--diet { background: #b07a1e; }
 
 .timeline__line {
   flex: 1;
@@ -318,7 +317,6 @@ function formatYear(date: string) {
 .timeline__badge--allergy { background: #ad5b2a; }
 .timeline__badge--vaccine { background: #6b5b9b; }
 .timeline__badge--weight { background: #0e6f78; }
-.timeline__badge--diet { background: #b07a1e; }
 
 .timeline__flag {
   font-size: 20rpx;

@@ -550,6 +550,8 @@ describe('dog-profile-health · 引导入口', () => {
     expect(weight).toContain('defineExpose({ saveRecord, focusInput: focusWeightInput })')
     expect(weight).toContain(':focus="weightInputFocused"')
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
-    expect(page).toContain('在这里拍报告或点选过敏原')
+    // 过敏也能直达上传（2026-10-02 补：不再只是切过去提示）
+    expect(page).toContain("{ mode: 'scan', label: '拍检测报告（AI 识别）', primary: true }")
+    expect(page).toContain('allergySectionRef.value?.pickHealthReport?.()')
   })
 })

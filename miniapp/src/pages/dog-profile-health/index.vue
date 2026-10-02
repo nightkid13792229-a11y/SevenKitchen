@@ -128,6 +128,7 @@
           <template #type-extra>
             <AllergyQuickAddSection
               v-if="activeRecordType === 'allergy'"
+              ref="allergySectionRef"
               :dog-id="dogId"
               :recorded-allergens="recordedAllergens"
               @saved="onAllergenSaved"
@@ -1027,13 +1028,23 @@ async function saveDietReminders() {
  */
 const recordsSectionRef = ref<{
   saveAllDirty?: () => Promise<void>
-  /** 底部「新增记录」按钮点开的选择（手动填写 / 拍病历 / 拍体检报告） */
+  /** 旧的二选一选择器（引导面板上线后不再由底部按钮调用） */
   openAddRecordChooser?: () => void
-  /** 直接按文档类型打开相机/相册（目前由上面的选择器调用，留作备用入口） */
-  startScan?: (documentType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT') => void
+  /** 直接调起相册 + AI 识别（按当前标签那一类） */
+  startScan?: () => void
+  /** 新建一条本类空白记录 */
+  addRecord?: () => void
 } | null>(null)
-const vaccineSectionRef = ref<{ saveAllDirty?: () => Promise<void> } | null>(null)
-const weightSectionRef = ref<{ saveRecord?: () => Promise<void> } | null>(null)
+const vaccineSectionRef = ref<{
+  saveAllDirty?: () => Promise<void>
+  startScan?: () => void
+  addRecord?: () => void
+} | null>(null)
+const weightSectionRef = ref<{
+  saveRecord?: () => Promise<void>
+  focusInput?: () => void
+} | null>(null)
+const allergySectionRef = ref<{ pickHealthReport?: () => void } | null>(null)
 
 /** 疫苗/体重板块自己的未保存状态（病史/体检/过敏复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
@@ -1096,7 +1107,10 @@ const ADD_GUIDE_ITEMS: {
     emoji: '🍗',
     title: '过敏',
     desc: '拍过敏原检测报告，勾选确认后入档',
-    actions: [{ mode: 'jump', label: '去上传/添加过敏原', primary: true }],
+    actions: [
+      { mode: 'scan', label: '拍检测报告（AI 识别）', primary: true },
+      { mode: 'jump', label: '点选/手输过敏原' },
+    ],
   },
   {
     key: 'weight',
@@ -1153,8 +1167,19 @@ async function pickAddGuide(
     return
   }
 
-  // 过敏：板块自带"上传报告 / 一点即选"，切过去就能看到
-  uni.showToast({ title: '在这里拍报告或点选过敏原', icon: 'none' })
+  if (key === 'allergy') {
+    if (mode === 'scan') {
+      allergySectionRef.value?.pickHealthReport?.()
+      return
+    }
+
+    // 点选/手输：切过来就能看到板块顶部那张"一点即选"的卡
+    uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
+    return
+  }
+
+  // 兜底：不该走到这里
+  uni.showToast({ title: '这个入口还在做', icon: 'none' })
 }
 
 const stickyPrimaryText = computed(() => '保存')

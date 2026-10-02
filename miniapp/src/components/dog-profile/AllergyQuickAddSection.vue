@@ -371,6 +371,12 @@ async function confirmCandidates() {
   resetReportState()
   uni.showToast({ title: '已记入档案', icon: 'none' })
 }
+/**
+ * 对外入口（2026-10-02 引导流程要用）：直接调起"上传检测报告 + AI 识别"，
+ * 顾客从「记一条 → 过敏」进来就能直接选图，不用自己找按钮。
+ */
+defineExpose({ pickHealthReport })
+
 </script>
 
 <style scoped>

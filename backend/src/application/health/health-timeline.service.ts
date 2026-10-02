@@ -20,10 +20,10 @@ export type HealthTimelineEventType =
   | 'allergy' // 过敏
   | 'vaccine' // 疫苗
   | 'weight' // 体重
-  | 'diet' // 饮食偏好
+  // 2026-10-02：饮食偏好不再属于健康管理，事件类型 'diet' 一并去掉
 
 export interface HealthTimelineEvent {
-  /** 原始记录 id；饮食偏好是虚拟事件，用固定值 */
+  /** 原始记录 id */
   id: string
   type: HealthTimelineEventType
   /** YYYY-MM-DD */
@@ -183,28 +183,13 @@ export class HealthTimelineService {
       })),
     ]
 
-    // 饮食偏好的**变更**进时间线（2026-10-01 第五期补上）。
+    // 2026-10-02：**饮食偏好的变更不再进时间线**。
     //
-    // 第二期时这里刻意留空：当时只有两个自由文本框，没有"什么时候改的"
-    // 这个事实（dog 表上只有 createdAt，那是建档时间，拿来当变更时间会误导）。
-    // 第五期有了变更历史表，才第一次有真实的饮食事件可放。
-    const dietChanges = await this.prisma.dogDietPreferenceChange.findMany({
-      where: { dogId },
-      orderBy: { changedAt: 'desc' },
-      take: 50,
-    });
-    for (const change of dietChanges) {
-      events.push({
-        id: change.id,
-        type: 'diet',
-        date: toDateText(change.changedAt),
-        title:
-          change.action === 'ADDED'
-            ? `饮食偏好：新增「${change.foodName}」`
-            : `饮食偏好：去掉「${change.foodName}」`,
-        detail: change.kind === 'LIKED' ? '爱吃' : '不吃',
-      });
-    }
+    // 第五期把它放进来，是因为那时饮食偏好属于健康管理板块；
+    // 后来老板定了"饮食偏好跟健康管理关系不大，只在定制食谱时填写"，
+    // 健康管理页的饮食标签也下线了 —— 那么"健康记录"这条时间线上
+    // 再混着"新增/去掉某样食材"的事件就不合逻辑了。
+    // 变更历史本身照旧保留（定制食谱那边在用），只是不再出现在这里。
 
     events.sort(compareTimelineEvents)
 
@@ -415,7 +400,6 @@ const TIMELINE_TYPE_ORDER: Record<HealthTimelineEventType, number> = {
   allergy: 2,
   vaccine: 3,
   weight: 4,
-  diet: 5,
 }
 
 export function compareTimelineEvents(

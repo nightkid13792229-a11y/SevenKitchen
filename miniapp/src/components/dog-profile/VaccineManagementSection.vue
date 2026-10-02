@@ -14,6 +14,7 @@
     <!-- 拍疫苗本（2026-10-01，第六期）。
          一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。 -->
     <HealthDocumentScan
+      ref="scanRef"
       v-if="dogId"
       :dog-id="dogId"
       document-type="VACCINE_BOOK"
@@ -281,7 +282,12 @@ async function saveAllDirty() {
   }
 }
 
-defineExpose({ saveAllDirty })
+/**
+ * 对外的两个入口（2026-10-02 引导流程要用）：
+ *   · startScan   → 直接调起"拍疫苗本"（AI 读出多条接种记录）
+ *   · addRecord   → 手动加一条空白疫苗记录
+ */
+defineExpose({ saveAllDirty, startScan: () => scanRef.value?.startScan?.(), addRecord })
 
 /** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
 const commonVaccineNames = [
@@ -303,6 +309,7 @@ const STATUS_OPTIONS = [
 
 const statusOptions = STATUS_OPTIONS.map(option => ({ label: option.label }))
 
+const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
 const drafts = reactive<Record<string, VaccineDraft>>({})
 const loading = ref(false)

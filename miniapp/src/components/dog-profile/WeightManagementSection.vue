@@ -27,6 +27,7 @@
             <input
               class="input-field weight-input"
               type="digit"
+              :focus="weightInputFocused"
               :value="weightInputText"
               @input="onWeightInput"
             />
@@ -419,6 +420,8 @@ const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
 ]
 /** 输入框正在编辑的原始文本：单独存一份，避免换算打断顾客的按键序列 */
 const weightInputText = ref('')
+/** 从引导入口进来时自动聚焦（顾客不用自己找输入框） */
+const weightInputFocused = ref(false)
 const weightUnitLabel = computed(() => getWeightUnitLabel(weightUnit.value))
 
 const onWeightInput = (event: any) => {
@@ -567,7 +570,15 @@ const hasPendingWeightInput = computed(() =>
 
 watch(hasPendingWeightInput, (value) => emit('dirty-change', value), { immediate: true })
 
-defineExpose({ saveRecord })
+/**
+ * 对外入口（2026-10-02 引导流程要用）：focusInput = 把光标送进"今天体重"输入框，
+ * 顾客从引导入口点进来就能直接打字，不用自己找输入框。
+ */
+function focusWeightInput() {
+  weightInputFocused.value = true
+}
+
+defineExpose({ saveRecord, focusInput: focusWeightInput })
 
 // 保存记录
 async function saveRecord() {

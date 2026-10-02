@@ -96,12 +96,12 @@ describe('两个页面的注册与入口', () => {
     expect(page).not.toContain('goVisitSummary')
 
     // 老板明确：时间线不以新的板块标签形式存在
-    // （2026-10-02 就诊与体检拆成两个标签后，书签从 5 个变成 6 个）
+    // （2026-10-02：就诊/体检拆开后是 6 个，随后饮食标签下线 → 5 个）
     const tabsBlock = page.slice(
       page.indexOf('const HEALTH_TABS'),
       page.indexOf('const RECORD_TAB_KEYS'),
     )
-    expect((tabsBlock.match(/key: '/g) || []).length).toBe(6)
+    expect((tabsBlock.match(/key: '/g) || []).length).toBe(5)
     expect(tabsBlock).not.toContain('timeline')
   })
 

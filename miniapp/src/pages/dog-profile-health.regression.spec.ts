@@ -187,16 +187,23 @@ describe('dog profile health page regressions', () => {
     expect(source).not.toContain('writeDogHealthStateSnapshotCache')
   })
 
-  it('keeps diet reminders isolated from health record CRUD', () => {
-    const source = readFileSync(
+  it('饮食偏好已从健康管理页下线（只在定制食谱里填写）', () => {
+    const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('diet-reminder-card')
-    expect(source).toContain('saveDietReminders')
-    expect(source).toContain('dogApi.updateDietReminders')
-    expect(source).not.toContain('dogApi.updateHealthRecords')
+    // 老板 2026-10-02：饮食偏好跟健康管理关系不大，标签删掉
+    expect(page).not.toContain('diet-reminder-card')
+    expect(page).not.toContain('DietPreferenceSection')
+    expect(page).not.toContain("{ key: 'diet'")
+
+    // 但编辑入口没丢：定制食谱流程里有"饮食偏好"那一步
+    const customRecipe = readFileSync(
+      resolve(process.cwd(), 'src/pages/custom-recipe/index.vue'),
+      'utf-8',
+    )
+    expect(customRecipe).toContain('饮食偏好')
   })
 
   /**
@@ -266,19 +273,6 @@ describe('dog profile health page regressions', () => {
    * 只把顾客端一直缺的「喜欢吃的食材」补上。
    * 这一列配方设计器与 AI 早就在读，但生产 4544 只狗整列为空。
    */
-  it('饮食偏好里两个口味字段都在：喜欢吃的 + 不爱吃的', () => {
-    const page = readFileSync(
-      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
-      'utf-8',
-    )
-
-    expect(page).toContain('喜欢吃的食材')
-    expect(page).toContain('挑食 / 不爱吃的食物')
-    expect(page).toContain('v-model="form.preferredFoods"')
-    expect(page).toContain('v-model="form.pickyFoods"')
-    // 真过敏走「过敏」分类，这张卡只是口味
-    expect(page).toContain('过敏≠不爱吃')
-  })
 
   it('保存饮食偏好时两个字段一起提交，并一起参与"未保存"判定', () => {
     const page = readFileSync(
@@ -306,17 +300,18 @@ describe('dog-profile-health · 板块书签', () => {
   const readPage = () =>
     readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
 
-  it('六个书签齐全，顺序与老板给的一致（就诊与体检已拆成两个标签）', () => {
+  it('五个书签齐全，顺序与老板给的一致（就诊与体检分开、饮食已下线）', () => {
     const page = readPage()
 
-    // 2026-10-02 老板定：就诊与体检的字段、材料、录入流程差别很大，拆开更清楚
-    expect(page).toContain("type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'")
+    // 2026-10-02：就诊与体检拆开；饮食偏好跟健康管理关系不大，标签下线
+    //（只在定制食谱时填写，定制流程里本来就有那一步）
+    expect(page).toContain("type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'weight'")
     expect(page).toContain("{ key: 'medical', label: '就诊' }")
     expect(page).toContain("{ key: 'checkup', label: '体检' }")
     expect(page).toContain("{ key: 'allergy', label: '过敏' }")
     expect(page).toContain("{ key: 'vaccine', label: '疫苗' }")
-    expect(page).toContain("{ key: 'diet', label: '饮食' }")
     expect(page).toContain("{ key: 'weight', label: '体重' }")
+    expect(page).not.toContain("{ key: 'diet'")
 
     const medicalAt = page.indexOf("{ key: 'medical'")
     const checkupAt = page.indexOf("{ key: 'checkup'")
@@ -331,10 +326,11 @@ describe('dog-profile-health · 板块书签', () => {
 
     // 三类记录共用一个组件
     expect(page).toContain('v-if="isRecordTab"')
-    // 疫苗 / 饮食偏好 / 体重管理各挂各的书签
+    // 疫苗 / 体重管理各挂各的书签（就诊、体检、过敏走 isRecordTab 那支）
     expect(page).toContain("v-else-if=\"activeHealthTab === 'vaccine'\"")
-    expect(page).toContain("v-else-if=\"activeHealthTab === 'diet'\"")
     expect(page).toContain("v-else-if=\"activeHealthTab === 'weight'\"")
+    // 饮食偏好标签已下线（老板 2026-10-02）
+    expect(page).not.toContain("activeHealthTab === 'diet'")
   })
 
   it('记录类板块复用既有的三个类型，并关掉组件自带的重复标签', () => {
@@ -402,8 +398,9 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')
     expect(page).toContain('weightSectionRef.value?.saveRecord?.()')
     // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
-    expect(page).toContain("isRecordTab.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
-    expect(page).toContain('recordsSectionRef.value?.openAddRecordChooser?.()')
+    expect(page).toContain("selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    // 2026-10-02：新增统一走引导面板（不再直连记录板块的选择器）
+    expect(page).toContain('openAddGuide()')
   })
 
   it('三大记录板块（病史/体检/过敏）各自独立，内嵌时不再顶一行板块头', () => {
@@ -418,7 +415,7 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(section).toContain('{{ savedRecordCount }} 条')
     // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存；
     // 记录入口（手动 / 拍照）也交给底部那一个按钮
-    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan })')
+    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })')
   })
 
   it('五个板块在内嵌时都不顶"标题 + 数量"（老板 2026-10-01 要求）', () => {
@@ -485,5 +482,74 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     }
     // 色系要铺到内容区 —— 只给书签文字上色不够（老板指出"色系没划分出来"）
     expect(compact).toContain('.health-theme--diet .health-panel__body')
+  })
+})
+
+/**
+ * 「记一条」引导入口（2026-10-02 老板定的方向）。
+ *
+ * 老板的原话：标签页就作为"结果呈现或者手动编辑"，
+ * 初次录入给一个入口，从这个入口进去**分类来让用户录入信息**，
+ * 并进入分类引导流程 —— 因为就诊与体检要填的东西差别很大。
+ */
+describe('dog-profile-health · 引导入口', () => {
+  const readPage = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+  it('底部一个入口，任何标签下都是「记一条」', () => {
+    const page = readPage()
+
+    expect(page).toContain('function openAddGuide()')
+    expect(page).toContain("selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    // 点了就开面板，不再直连某一个板块的选择器
+    expect(page).toContain("openAddGuide()")
+    expect(page).toContain('class="add-guide"')
+  })
+
+  it('先分类：五张卡（就诊/体检/疫苗/过敏/体重），各带一句人话说明', () => {
+    const page = readPage()
+
+    expect(page).toContain('你要记什么？')
+    for (const key of ['medical', 'checkup', 'vaccine', 'allergy', 'weight']) {
+      expect(page).toContain(`key: '${key}'`)
+    }
+    expect(page).toContain('症状、医生诊断、医嘱、用药')
+    expect(page).toContain('体检报告、化验单')
+    expect(page).toContain('拍疫苗本，一次读出多条接种记录')
+    // 饮食不再是一张卡（也不再有那个标签）
+    expect(page).not.toContain("key: 'diet'")
+  })
+
+  it('再按类引导：就诊/体检给"传照片识别"与"手动填写"两条路', () => {
+    const page = readPage()
+
+    expect(page).toContain("{ mode: 'scan', label: '传病历/处方（AI 识别）', primary: true }")
+    expect(page).toContain("{ mode: 'scan', label: '传体检报告（AI 识别）', primary: true }")
+    expect(page).toContain("{ mode: 'manual', label: '手动填写' }")
+    // 选完先切标签（看得见落点），再调起对应动作
+    expect(page).toContain('selectHealthTab(key as HealthTabKey)')
+    expect(page).toContain('recordsSectionRef.value?.startScan?.()')
+    expect(page).toContain('recordsSectionRef.value?.addRecord?.()')
+  })
+
+  it('疫苗 / 过敏 / 体重各有落点（拍疫苗本、去过敏板块、直接落光标）', () => {
+    const page = readPage()
+    const vaccine = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+    const weight = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(vaccine).toContain('defineExpose({ saveAllDirty, startScan: () => scanRef.value?.startScan?.(), addRecord })')
+    expect(weight).toContain('defineExpose({ saveRecord, focusInput: focusWeightInput })')
+    expect(weight).toContain(':focus="weightInputFocused"')
+    expect(page).toContain('weightSectionRef.value?.focusInput?.()')
+    expect(page).toContain('在这里拍报告或点选过敏原')
   })
 })

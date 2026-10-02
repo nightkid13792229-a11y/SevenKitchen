@@ -64,27 +64,26 @@ describe('饮食偏好 · 界面', () => {
 })
 
 describe('饮食偏好 · 与旧字段并存', () => {
-  it('旧的两个文本框保留在页面上（配方设计还在用）', () => {
+  it('健康管理页不再承载饮食偏好（2026-10-02 老板：跟健康管理关系不大）', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    expect(page).toContain('v-model="form.preferredFoods"')
-    expect(page).toContain('v-model="form.pickyFoods"')
-    expect(page).toContain('原来的文字描述')
-    // 底部保存按钮仍然保存旧文本框
-    expect(page).toContain('saveDietReminders')
+    // 模板里不再有那两个输入框与结构化板块（字段本身仍随档案读写，
+    // 定制食谱流程还在用）
+    expect(page).not.toContain('diet-reminder-card')
+    expect(page).not.toContain('DietPreferenceSection')
+    expect(page).not.toContain('v-model="form.preferredFoods"')
   })
 
-  it('结构化板块挂在饮食书签下', () => {
-    const page = readFileSync(
-      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+  it('结构化偏好板块如今只出现在定制食谱流程里', () => {
+    const customRecipe = readFileSync(
+      resolve(process.cwd(), 'src/pages/custom-recipe/index.vue'),
       'utf-8',
     )
 
-    // 2026-10-01：内嵌进健康管理页时传 embedded（用来隐藏数量那行）
-    expect(page).toContain('<DietPreferenceSection embedded :dog-id="dogId" />')
+    expect(customRecipe).toContain('饮食偏好')
   })
 
   it('API 层四个接口都在（列 / 加 / 删 / 整理）', () => {

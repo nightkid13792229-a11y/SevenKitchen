@@ -1491,7 +1491,12 @@ async function saveAllDirty() {
   }
 }
 
-defineExpose({ saveAllDirty, openAddRecordChooser, startScan })
+/**
+ * 对外入口（2026-10-02 引导流程要用）：
+ *   · startScan → 直接调起相册 + AI 识别（本标签那一类）
+ *   · addRecord → 新建一条本类空白记录
+ */
+defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })
 
 /**
  * 保存单条记录。

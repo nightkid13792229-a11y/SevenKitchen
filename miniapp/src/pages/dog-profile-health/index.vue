@@ -149,40 +149,6 @@
           />
         </template>
 
-        <view v-else-if="activeHealthTab === 'diet'" class="diet-tab">
-          <!-- 结构化偏好 + 变更历史（2026-10-01，第五期） -->
-          <DietPreferenceSection embedded :dog-id="dogId" />
-
-          <!-- 原来的两个自由文本框**保留**：配方设计仍在用，
-               而且顾客已经填过的文字不能凭空消失。 -->
-          <view class="health-section health-card diet-reminder-card">
-            <text class="health-section__title">原来的文字描述</text>
-            <text class="health-section__desc">
-              这两栏会继续进推荐与配方。上面的条目整理好之后，这里可以留作补充说明。
-            </text>
-
-            <view class="field-group">
-              <text class="field-label">喜欢吃的食材</text>
-              <textarea
-                class="field-textarea"
-                placeholder="例如：鸡胸肉、南瓜、三文鱼"
-                v-model="form.preferredFoods"
-              />
-            </view>
-
-            <view class="field-group">
-              <text class="field-label">挑食 / 不爱吃的食物</text>
-              <!-- 过敏≠不爱吃：真过敏走上面的「过敏」分类，这里只是口味 -->
-              <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
-              <textarea
-                class="field-textarea"
-                placeholder="例如：胡萝卜、羊肉"
-                v-model="form.pickyFoods"
-              />
-            </view>
-          </view>
-        </view>
-
         <WeightManagementSection
           v-else-if="activeHealthTab === 'weight'"
           ref="weightSectionRef"
@@ -209,6 +175,44 @@
            （每条记录单独保存），底部再放一个"保存"没有意义，只会让人不知道
            它到底在存什么 —— 所以那些书签下不显示保存按钮。
          · 返回按钮的文案跟着入口走。 -->
+    <!-- ── 「记一条」引导面板（2026-10-02 老板要的引导流程）─────────────────
+         标签页从此只做"结果呈现 + 手动编辑"，新增统一走这里：
+         先问"你要记什么"，再按类别把人送进对应的录入动作 ——
+         就诊/体检给出"传照片让 AI 识别"和"手动填写"两条路，
+         疫苗/过敏/体重直接落到各自的录入位置。 -->
+    <view v-if="addGuideVisible" class="add-guide" @tap="closeAddGuide">
+      <view class="add-guide__sheet" @tap.stop>
+        <text class="add-guide__title">你要记什么？</text>
+        <text class="add-guide__desc">选一类，我们会只问这一类需要的信息</text>
+
+        <view
+          v-for="item in ADD_GUIDE_ITEMS"
+          :key="item.key"
+          class="add-guide__card"
+        >
+          <view class="add-guide__card-head">
+            <text class="add-guide__emoji">{{ item.emoji }}</text>
+            <view class="add-guide__card-copy">
+              <text class="add-guide__card-title">{{ item.title }}</text>
+              <text class="add-guide__card-desc">{{ item.desc }}</text>
+            </view>
+          </view>
+
+          <view class="add-guide__actions">
+            <text
+              v-for="action in item.actions"
+              :key="action.mode"
+              class="add-guide__action"
+              :class="{ 'add-guide__action--primary': action.primary }"
+              @tap.stop="pickAddGuide(item.key, action.mode)"
+            >{{ action.label }}</text>
+          </view>
+        </view>
+
+        <text class="add-guide__cancel" @tap="closeAddGuide">取消</text>
+      </view>
+    </view>
+
     <StickyActionBar
       :primary-text="stickyPrimaryText"
       :secondary-text="stickySecondaryText"
@@ -222,13 +226,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
 import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
-import DietPreferenceSection from '../../components/dog-profile/DietPreferenceSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -288,7 +291,13 @@ const latestRequestedDogId = ref('')
  *   两张表里，保存时按记录自己的类型走原接口。
  */
 /**
- * 板块书签（2026-10-02 老板定：把「就诊」和「体检」拆成两个标签）。
+ * 板块书签（2026-10-02 老板定）。
+ *
+ * 两个变化：
+ *   · 「就诊」与「体检」拆成两个标签（原来合并成「病历/检查」）
+ *   · **删掉「饮食」标签** —— 老板：饮食偏好跟健康管理关系不大，
+ *     只在定制食谱时让顾客填写（定制流程里本来就有"饮食偏好"那一步）。
+ *     数据与营养师侧用法完全不变，只是不再从健康管理页编辑。
  *
  * 背景：两类的字段、材料、录入流程差别很大（就诊有症状/诊断/医嘱/用药，
  * 体检有检查结论/化验数据/医生建议）；合在一个列表里既要在卡片上打类型徽标，
@@ -296,14 +305,13 @@ const latestRequestedDogId = ref('')
  * 拆开之后：每个标签只显示本类记录、只渲染本类字段，**表单里不再需要切换**；
  * 这次就诊里传的化验单，数字也直接落在这条就诊记录里，不再另开一条体检记录。
  */
-type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'weight'
 
 const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
   { key: 'medical', label: '就诊' },
   { key: 'checkup', label: '体检' },
   { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
-  { key: 'diet', label: '饮食' },
   { key: 'weight', label: '体重' },
 ]
 
@@ -416,8 +424,6 @@ const preferredExpandedRecordIdentity = computed(() => {
  * 会被判定成"没有未保存修改"，顾客一点返回就白填。
  */
 const savedDietPreferences = reactive({
-  preferredFoods: '',
-  pickyFoods: '',
 })
 const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
 const isDietReminderActionDisabled = computed(() =>
@@ -1037,13 +1043,124 @@ const hasUnsavedSectionDraft = ref(false)
  * 底部保存按钮的文案只写「保存」（老板要求）。
  * 当前在哪个板块由上面的书签和色系表达，按钮不必再重复一遍板块名。
  */
+/**
+ * 「记一条」引导面板（2026-10-02）。
+ *
+ * 老板的诉求：标签页只做结果呈现与手动编辑，**新增统一从一个入口进**，
+ * 进去先分类，再按类别引导 —— 因为就诊与体检要填的东西差别很大。
+ *
+ * 每一项的 actions 就是这个类别的录入路径；「传照片」会切到对应标签并
+ * 直接调起相册（AI 识别后填表），「手动填写」则新建一条该类空白记录。
+ */
+const addGuideVisible = ref(false)
+
+const ADD_GUIDE_ITEMS: {
+  key: 'medical' | 'checkup' | 'vaccine' | 'allergy' | 'weight'
+  emoji: string
+  title: string
+  desc: string
+  actions: { mode: string; label: string; primary?: boolean }[]
+}[] = [
+  {
+    key: 'medical',
+    emoji: '🩺',
+    title: '看病就诊',
+    desc: '症状、医生诊断、医嘱、用药；化验单和 X 光片也能一起传',
+    actions: [
+      { mode: 'scan', label: '传病历/处方（AI 识别）', primary: true },
+      { mode: 'manual', label: '手动填写' },
+    ],
+  },
+  {
+    key: 'checkup',
+    emoji: '📋',
+    title: '体检 / 化验',
+    desc: '体检报告、化验单；AI 抄录检查结论与化验数据',
+    actions: [
+      { mode: 'scan', label: '传体检报告（AI 识别）', primary: true },
+      { mode: 'manual', label: '手动填写' },
+    ],
+  },
+  {
+    key: 'vaccine',
+    emoji: '💉',
+    title: '疫苗',
+    desc: '拍疫苗本，一次读出多条接种记录',
+    actions: [
+      { mode: 'scan', label: '拍疫苗本（AI 识别）', primary: true },
+      { mode: 'manual', label: '手动加一条' },
+    ],
+  },
+  {
+    key: 'allergy',
+    emoji: '🍗',
+    title: '过敏',
+    desc: '拍过敏原检测报告，勾选确认后入档',
+    actions: [{ mode: 'jump', label: '去上传/添加过敏原', primary: true }],
+  },
+  {
+    key: 'weight',
+    emoji: '⚖️',
+    title: '体重',
+    desc: '记一个数值，自动画趋势',
+    actions: [{ mode: 'manual', label: '现在称一下', primary: true }],
+  },
+]
+
+function openAddGuide() {
+  addGuideVisible.value = true
+}
+
+function closeAddGuide() {
+  addGuideVisible.value = false
+}
+
+/**
+ * 选了一类之后：先切到对应标签（顾客看得见落点），再调起该类别的录入动作。
+ * 就诊/体检的记录板块是同一个组件，只是类型不同 —— 靠 activeHealthTab 决定。
+ */
+async function pickAddGuide(
+  key: 'medical' | 'checkup' | 'vaccine' | 'allergy' | 'weight',
+  mode: string,
+) {
+  addGuideVisible.value = false
+  selectHealthTab(key as HealthTabKey)
+  await nextTick()
+
+  if (key === 'medical' || key === 'checkup') {
+    if (mode === 'scan') {
+      recordsSectionRef.value?.startScan?.()
+      return
+    }
+
+    recordsSectionRef.value?.addRecord?.()
+    return
+  }
+
+  if (key === 'vaccine') {
+    if (mode === 'scan') {
+      vaccineSectionRef.value?.startScan?.()
+      return
+    }
+
+    vaccineSectionRef.value?.addRecord?.()
+    return
+  }
+
+  if (key === 'weight') {
+    // 直接落到位并把光标送进输入框
+    weightSectionRef.value?.focusInput?.()
+    return
+  }
+
+  // 过敏：板块自带"上传报告 / 一点即选"，切过去就能看到
+  uni.showToast({ title: '在这里拍报告或点选过敏原', icon: 'none' })
+}
+
 const stickyPrimaryText = computed(() => '保存')
 
 /** 当前书签下有没有待保存的内容 —— 没有就把按钮置灰，别让顾客白点 */
 const hasUnsavedInActiveTab = computed(() => {
-  if (activeHealthTab.value === 'diet') {
-    return !isDietReminderActionDisabled.value
-  }
   if (isRecordTab.value) {
     return hasUnsavedRecordDraft.value
   }
@@ -1072,23 +1189,20 @@ const stickyPrimaryDisabled = computed(
  * 而拆标签后「就诊」「体检」都走记录板块 —— 这里统一映射成 'visit'，
  * 视觉与拆标签之前保持一致。
  */
-const stickyPrimaryTheme = computed<'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'>(() => {
+const stickyPrimaryTheme = computed<'visit' | 'allergy' | 'vaccine' | 'weight'>(() => {
   if (isRecordTab.value) {
     return activeHealthTab.value === 'allergy' ? 'allergy' : 'visit'
   }
 
-  return activeHealthTab.value as 'vaccine' | 'diet' | 'weight'
+  return activeHealthTab.value as 'vaccine' | 'weight'
 })
 
 const stickySecondaryText = computed(() => (
-  isRecordTab.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
+  // 2026-10-02：新增统一走引导入口，所以任何标签下都是同一个动作
+  selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]
 ))
 
 async function onStickyPrimary() {
-  if (activeHealthTab.value === 'diet') {
-    await saveDietReminders()
-    return
-  }
   if (isRecordTab.value) {
     await recordsSectionRef.value?.saveAllDirty?.()
     return
@@ -1106,9 +1220,9 @@ async function onStickyPrimary() {
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
  */
 function onStickySecondary() {
-  // 就诊 / 体检 / 过敏三个标签都走"新增记录"（各自的板块组件）
-  if (isRecordTab.value) {
-    recordsSectionRef.value?.openAddRecordChooser?.()
+  // 新增统一从引导入口进（老板 2026-10-02：先分类、再按类引导）
+  if (selectedDog.value) {
+    openAddGuide()
     return
   }
 
@@ -1364,6 +1478,107 @@ function goToDogCreate() {
 .health-theme--visit { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
 .health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
 .health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
+/* ── 「记一条」引导面板 ───────────────────────────────────── */
+.add-guide {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(20, 32, 26, 0.42);
+}
+
+.add-guide__sheet {
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 32rpx 28rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 32rpx 32rpx 0 0;
+  background: #fbfdf8;
+  box-sizing: border-box;
+}
+
+.add-guide__title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #17313f;
+}
+
+.add-guide__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7b8a7f;
+}
+
+.add-guide__card {
+  margin-top: 22rpx;
+  padding: 22rpx 22rpx 18rpx;
+  border-radius: 22rpx;
+  background: #fff;
+  border: 1rpx solid #e6ece0;
+}
+
+.add-guide__card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.add-guide__emoji {
+  font-size: 40rpx;
+  line-height: 1.2;
+}
+
+.add-guide__card-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-guide__card-title {
+  display: block;
+  font-size: 29rpx;
+  font-weight: 700;
+  color: #17313f;
+}
+
+.add-guide__card-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #77867c;
+}
+
+.add-guide__actions {
+  margin-top: 16rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.add-guide__action {
+  padding: 14rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 25rpx;
+  color: #0f6b43;
+  background: rgba(15, 107, 67, 0.08);
+}
+
+.add-guide__action--primary {
+  color: #fff;
+  background: #0f6b43;
+}
+
+.add-guide__cancel {
+  display: block;
+  margin-top: 26rpx;
+  text-align: center;
+  font-size: 27rpx;
+  color: #7b8a7f;
+}
+
 .health-theme--diet { --health-accent: #b07a1e;  --health-accent-soft: #f7eedd; }
 .health-theme--weight { --health-accent: #0e6f78;  --health-accent-soft: #e2f0f2; }
 

@@ -740,8 +740,8 @@ export const BREED_RISK_KNOWLEDGE: KnowledgeEntry[] = [
         note: '成年犬每年、老年犬每 6–12 个月做尿液分析',
       },
       {
-        source: 'ACVIM 犬尿失禁诊断与管理共识 2024',
-        chapter: '影像学评估建议',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2024 犬尿失禁诊断与管理共识 · 影像学评估建议',
         note: '影像学用于排除尿酸盐与胱氨酸结石等机械性梗阻',
       },
     ],

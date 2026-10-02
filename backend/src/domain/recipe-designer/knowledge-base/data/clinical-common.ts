@@ -47,8 +47,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '消化道症状的评估',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估',
       },
       {
         source: '小动物临床营养学（第 5 版）',
@@ -106,8 +106,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '慢性肠道症状的定义与诊断流程',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 慢性肠道症状的定义与诊断流程',
       },
       {
         source: '小动物临床营养学（第 5 版）',
@@ -422,8 +422,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '急性疼痛的识别与评估',
       },
       {
-        source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022',
-        chapter: '神经功能分级与紧急程度',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2022 犬胸腰段椎间盘突出诊断与管理共识 · 神经功能分级与紧急程度',
       },
     ],
     sources: [
@@ -533,8 +533,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第 31 章《食物不良反应》：非季节性瘙痒性皮炎与排除性饮食试验',
       },
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '排除性饮食试验的定位',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 排除性饮食试验的定位',
       },
     ],
     sources: [

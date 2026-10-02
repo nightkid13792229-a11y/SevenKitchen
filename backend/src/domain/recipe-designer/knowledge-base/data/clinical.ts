@@ -113,7 +113,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不给诊断与治疗建议。',
     ],
     citations: [
-      { source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022', chapter: '急诊评估与分级' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2022 犬胸腰段椎间盘突出诊断与管理共识 · 急诊评估与分级' },
     ],
     sources: [
       { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2022 胸腰段 IVDD 共识', note: '神经功能分级与紧急程度' },
@@ -147,8 +147,12 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '怀疑吞了异物（骨头、玩具、绳子）时，即使暂时没症状也应尽快就医。',
     ],
     citations: [
-      { source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026', chapter: '消化道症状的评估' },
-      { source: 'WSAVA 胃肠道指南', chapter: '消化道疾病的评估流程' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病诊断与治疗共识 · 消化道症状的评估' },
+      // 2026-10-02：这里原来还引了一份「WSAVA 胃肠道指南」，但登记表第六节写明
+      // 该指南只拿到 2009 年 JSAP 摘要（Wiley 403）、本地也没有归档，
+      // 登记表自己给的处置就是「ACVIM 慢性肠病共识 2 份可替代」——
+      // 所以改成引已登记的 ACVIM 共识，不保留一份我们手上没有的资料当依据。
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病共识 · 消化道疾病的评估流程' },
     ],
     sources: [
       { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2026 慢性肠病共识', note: '消化道症状的评估思路' },
@@ -315,8 +319,8 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '不要自行给止咳药 —— 咳嗽是症状，压住它可能掩盖病情。',
     ],
     citations: [
-      { source: 'ACVIM 心肌病分类诊断与管理共识 2020', chapter: '心衰相关呼吸道表现' },
-      { source: 'ACVIM 肺动脉高压共识 2020', chapter: '呼吸困难的评估' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2020 心肌病分类诊断与管理共识 · 心衰相关呼吸道表现' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2020 肺动脉高压共识 · 呼吸困难的评估' },
     ],
     sources: [
       { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2020 心肌病与肺高压共识', note: '心脏原因导致的咳嗽与呼吸困难' },

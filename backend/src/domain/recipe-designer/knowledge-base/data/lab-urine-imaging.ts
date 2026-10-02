@@ -589,7 +589,7 @@ export const LAB_URINE_IMAGING_KNOWLEDGE: KnowledgeEntry[] = [
       {
         sourceId: 'ACVIM-CONSENSUS',
         locator: 'ACVIM 2015 心血管-肾脏轴疾病共识 · Biomarkers of CvRD（该声明获良好共识）；ACVIM 2020 肺动脉高压共识 · Monitoring 与辅助诊断检查',
-        note: '犬可用的口径：标志物种类、可能提示心脏病或心肌损伤、灰区与个体/品种差异、肾损伤导致升高、肺动脉高压随访中 NT-proBNP 仅作辅助、超声判读受操作者与摆位影响。另参考同类共识作局限提示：ACVIM 2020 心肌病共识原文对象为猫，不作为犬的结论依据。',
+        note: '犬可用的口径：标志物种类、可能提示心脏病或心肌损伤、灰区与个体/品种差异、肾损伤导致升高、肺动脉高压随访中 NT-proBNP 仅作辅助、超声判读受操作者与摆位影响。',
       },
       { sourceId: 'AAHA-2021-NUTRITION', locator: '心脏病检查段落', note: '犬有心脏病表现时先拍胸部 X 光；怀疑心肌病或有充血性心力衰竭证据时做超声心动图' },
     ],

@@ -36,7 +36,7 @@
       <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <!-- 一次传了化验单 + 门诊病历时，每条前面标出它是什么，别让顾客以为混了 -->
         <text v-if="drafts.length > 1" class="confirm__card-kind">
-          {{ TYPE_LABELS[draftDocumentType(draft)] || '资料' }}
+          {{ draftTypeLabel(draft) }}
         </text>
         <text v-for="row in describeDraft(draft)" :key="row.label" class="confirm__row">
           <text class="confirm__label">{{ row.label }}</text>
@@ -193,6 +193,11 @@ function draftDocumentType(draft: Record<string, any>): DocumentType {
   }
 
   return (resolvedDocumentType.value || props.documentType) as DocumentType
+}
+
+/** 这一条草稿的中文类型名（一次传多类时每条前面标一下） */
+function draftTypeLabel(draft: Record<string, any>) {
+  return TYPE_LABELS[draftDocumentType(draft) as ExplicitDocumentType] || '资料'
 }
 
 /** 确认卡片顶部那句话：只有一类就说"识别为 X"，混着就都列出来 */
@@ -369,8 +374,6 @@ async function scanAll(filePaths: string[]) {
           collectedWarnings.push(...res.data.warnings)
         }
 
-        const type = String(res.data.documentType || '').toUpperCase()
-        // NOT_MEDICAL = 后端判定"这根本不是宠物的医疗资料"，
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
         if ((CONFIDENCE_RANK[itemConfidence] || 0) < (CONFIDENCE_RANK[worstConfidence] || 0)) {
           worstConfidence = itemConfidence
@@ -383,7 +386,9 @@ async function scanAll(filePaths: string[]) {
       }
     }
 
-    if (collectedDrafts.length === 0) {
+    const collectedCount = [...draftsByType.values()]
+      .reduce((sum, list) => sum + list.length, 0)
+    if (collectedCount === 0) {
       throw new Error(
         collectedWarnings[0] || '没识别到内容，请换一张更清晰的图片',
       )

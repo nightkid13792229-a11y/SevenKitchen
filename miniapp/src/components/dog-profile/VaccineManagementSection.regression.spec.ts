@@ -129,6 +129,24 @@ describe('疫苗本原图留档', () => {
     expect(source).toContain('buildHealthAttachmentDisplayMeta')
   })
 
+  it('立即求值的 computed/watch 写在它用到的 ref 之后（否则整个板块崩掉）', () => {
+    const source = readComponent()
+
+    // 2026-10-02 修：hasPendingDraft 的 immediate watcher 原来写在 const records 之前，
+    // setup 期间立刻求值 → records 还是 undefined → 抛
+    // TypeError: Cannot read properties of undefined (reading 'value')，
+    // 「疫苗」板块整块 setup 失败（开发者工具控制台刷满同一条报错）。
+    const recordsAt = source.indexOf('const records = ref')
+    const computedAt = source.indexOf('const hasPendingDraft = computed')
+    const watchAt = source.indexOf('watch(hasPendingDraft')
+
+    expect(recordsAt).toBeGreaterThan(-1)
+    expect(computedAt).toBeGreaterThan(recordsAt)
+    expect(watchAt).toBeGreaterThan(computedAt)
+    // 立即求值是必须的（父页面靠它知道要不要亮保存键），所以只能靠顺序保证安全
+    expect(source).toContain('watch(hasPendingDraft, (value) => emit(\'dirty-change\', value), { immediate: true })')
+  })
+
   it('接口类型带上 attachments 字段', () => {
     const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
 

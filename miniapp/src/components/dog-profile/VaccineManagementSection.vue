@@ -257,15 +257,6 @@ function isDirty(record: VaccineRecord, index: number) {
   )
 }
 
-/** 有没有填了但还没保存的行 —— 决定底部按钮是否可点 */
-const hasPendingDraft = computed(() =>
-  records.value.some((record, index) =>
-    Boolean(String(draftOf(record, index).vaccineName || '').trim()) && isDirty(record, index),
-  ),
-)
-
-watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true })
-
 /**
  * 保存所有改过的行（供健康管理页的底部按钮调用）。
  * 顺序执行：并发写同一个列表会互相覆盖。
@@ -319,6 +310,24 @@ const expandedIndex = ref(-1)
 const savingIndex = ref(-1)
 const deletingKey = ref('')
 const isBusy = computed(() => savingIndex.value >= 0 || Boolean(deletingKey.value))
+
+/**
+ * 有没有填了但还没保存的行 —— 决定底部按钮是否可点。
+ *
+ * ⚠️ 这段**必须留在 records / drafts 声明之后**（2026-10-02 修的一个真 bug）：
+ * 它原来写在文件靠前的位置，而 `records` 声明在后面 ——
+ * `{ immediate: true }` 会在 setup 期间立刻求值，那一刻 `records` 还是 undefined，
+ * 抛 `TypeError: Cannot read properties of undefined (reading 'value')`，
+ * 整个「疫苗」板块的 setup 直接失败（开发者工具控制台刷满同一条报错），
+ * 底部保存按钮的"有未保存内容"状态也从来没被算出来过。
+ */
+const hasPendingDraft = computed(() =>
+  records.value.some((record, index) =>
+    Boolean(String(draftOf(record, index).vaccineName || '').trim()) && isDirty(record, index),
+  ),
+)
+
+watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true })
 
 const today = getTodayDateString()
 

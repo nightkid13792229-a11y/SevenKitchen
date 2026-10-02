@@ -426,17 +426,9 @@
       </view>
     </view>
 
-    <!-- 「新增记录」（2026-10-01）：合并模式下这个入口搬到底部栏那一个按钮里
-         （点它选手动填写或拍照），这里不再重复；过敏等单一类型板块照旧。 -->
-    <button
-      v-if="!isVisitMode"
-      class="health-section__action"
-      :class="{ 'health-section__action--disabled': loading || hasUploadingRecords || hasSavingRecord }"
-      :disabled="loading || hasUploadingRecords || hasSavingRecord"
-      @tap="addRecord"
-    >
-      {{ activeTypeMeta.addLabel }}
-    </button>
+    <!-- 「新增记录」按钮已下线（2026-10-02 老板要求收敛入口）：
+         新增只能从底部「记一条」引导入口进 —— 标签页只做结果呈现与手动编辑。
+         组件仍然暴露 addRecord()，供引导入口在选完类别后调用。 -->
   </view>
 </template>
 

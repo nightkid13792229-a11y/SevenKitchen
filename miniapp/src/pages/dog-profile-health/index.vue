@@ -129,6 +129,7 @@
             <AllergyQuickAddSection
               v-if="activeRecordType === 'allergy'"
               ref="allergySectionRef"
+              :show-add-entry="allergyAddEntryVisible"
               :dog-id="dogId"
               :recorded-allergens="recordedAllergens"
               @saved="onAllergenSaved"
@@ -145,6 +146,7 @@
             ref="vaccineSectionRef"
             external-save
             embedded
+            :show-add-entry="vaccineAddEntryVisible"
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
           />
@@ -155,6 +157,7 @@
           ref="weightSectionRef"
           external-save
           embedded
+          :show-add-entry="weightAddEntryVisible"
           :dog-id="dogId"
           :dog-profile="weightSectionDogProfile"
           @dirty-change="hasUnsavedSectionDraft = $event"
@@ -379,6 +382,8 @@ const activeRecordLoading = computed(() => {
 })
 
 function selectHealthTab(key: HealthTabKey) {
+  // 换标签就把"新增入口"开关复位：它只在引导选完那一刻打开
+  resetAddEntryFlags()
   activeHealthTab.value = key
   // 各板块的未保存状态是各自汇报的，切换时要清掉上一个板块留下的值，
   // 否则新板块明明没改动，底部按钮却亮着
@@ -1121,6 +1126,23 @@ const ADD_GUIDE_ITEMS: {
   },
 ]
 
+/**
+ * 三个板块的"新增入口"开关（2026-10-02 入口收敛）。
+ *
+ * 标签页平时**不显示**任何新增入口，只做结果呈现与手动编辑；
+ * 顾客在「记一条」里选到某一类时，页面把这个开关打开再切过去 ——
+ * 顾客看到的仍然是熟悉的板块界面，但全站只有引导入口这一个新增起点。
+ */
+const vaccineAddEntryVisible = ref(false)
+const allergyAddEntryVisible = ref(false)
+const weightAddEntryVisible = ref(false)
+
+function resetAddEntryFlags() {
+  vaccineAddEntryVisible.value = false
+  allergyAddEntryVisible.value = false
+  weightAddEntryVisible.value = false
+}
+
 function openAddGuide() {
   addGuideVisible.value = true
 }
@@ -1152,6 +1174,7 @@ async function pickAddGuide(
   }
 
   if (key === 'vaccine') {
+    vaccineAddEntryVisible.value = true
     if (mode === 'scan') {
       vaccineSectionRef.value?.startScan?.()
       return
@@ -1162,12 +1185,15 @@ async function pickAddGuide(
   }
 
   if (key === 'weight') {
-    // 直接落到位并把光标送进输入框
+    // 打开新增块 + 把光标送进输入框（顾客直接打字）
+    weightAddEntryVisible.value = true
+    await nextTick()
     weightSectionRef.value?.focusInput?.()
     return
   }
 
   if (key === 'allergy') {
+    allergyAddEntryVisible.value = true
     if (mode === 'scan') {
       allergySectionRef.value?.pickHealthReport?.()
       return

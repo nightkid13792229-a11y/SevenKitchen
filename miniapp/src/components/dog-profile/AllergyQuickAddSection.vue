@@ -1,5 +1,8 @@
 <template>
   <view class="quick-add">
+    <!-- 新增入口（一点即选 / 手输 / 上传报告）只在引导入口选到过敏时显示；
+         候选确认卡不受影响（那是确认环节）。老板 2026-10-02：入口收敛。 -->
+    <template v-if="showAddEntry">
     <view class="quick-add__header">
       <text class="quick-add__title">快速添加过敏原</text>
       <text class="quick-add__count">已记 {{ recordedAllergens.length }} 项</text>
@@ -53,6 +56,8 @@
       >{{ extracting ? '识别中…' : '上传报告' }}</button>
     </view>
 
+    </template>
+
     <view v-if="candidates.length > 0" class="candidate-card">
       <text class="candidate-card__title">识别到以下过敏原，请确认</text>
       <text class="candidate-card__hint">我们只是把报告里的字读出来，最终以你确认为准。</text>
@@ -98,6 +103,14 @@ import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 
 const props = defineProps<{
+  /**
+   * 是否显示"新增"这部分（一点即选 / 手输 / 上传报告）。
+   *
+   * 2026-10-02 老板要求收敛新增入口：标签页只做结果呈现与手动编辑，
+   * 新增一律走底部「记一条」引导 —— 引导选到过敏时页面把它打开。
+   * 识别结果的候选卡不受这个开关影响（那是确认环节，不是入口）。
+   */
+  showAddEntry?: boolean
   dogId: string
   /** 档案里已经记过的过敏原，用于去重与「已记」标记 */
   recordedAllergens?: string[]

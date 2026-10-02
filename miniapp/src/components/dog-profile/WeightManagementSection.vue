@@ -8,7 +8,7 @@
         <text class="health-section__desc">记录每次称重，观察体重趋势，及时调整饭量。</text>
       </template>
 
-      <view class="input-card">
+      <view v-if="showAddEntry" class="input-card">
         <view class="input-item">
           <text class="input-label">记录日期</text>
           <picker mode="date" :value="formData.recordDate" @change="onDateChange">
@@ -57,7 +57,7 @@
         </view>
       </view>
 
-      <view class="sync-option">
+      <view v-if="showAddEntry" class="sync-option">
         <view class="sync-option__copy">
           <text class="sync-option__title">同时更新档案当前体重</text>
           <text class="sync-option__desc">{{ syncOptionDescription }}</text>
@@ -277,6 +277,8 @@ const props = defineProps<{
    * 上面书签已经写着「体重」。
    */
   embedded?: boolean
+  /** 是否显示"新增一条体重"那块（引导入口选到体重时才显示，2026-10-02） */
+  showAddEntry?: boolean
   dogProfile?: {
     currentWeightKg?: number | null
     /** 体况分：决定要不要给「制定计划」入口（BCS 4-5 是理想区间，不该建计划） */

@@ -555,3 +555,65 @@ describe('dog-profile-health · 引导入口', () => {
     expect(page).toContain('allergySectionRef.value?.pickHealthReport?.()')
   })
 })
+
+/**
+ * 新增入口收敛（2026-10-02 老板定）。
+ *
+ * 老板的原话：*"标签页内的零散入口收敛也进行收敛。用户想要新增记录的话，
+ * 只能通过记一条入口来新增。标签页内部只能编辑现有的信息。"*
+ * 做法：三个板块各加一个 showAddEntry 开关（默认关），
+ * 引导入口选到对应类别时页面把它打开 —— 界面还是熟悉的板块界面，
+ * 但全站只有「记一条」一个新增起点。
+ */
+describe('dog-profile-health · 新增入口已收敛', () => {
+  const readPage = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+  it('三个板块的新增块默认不显示，由引导入口打开', () => {
+    const page = readPage()
+
+    expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
+    expect(page).toContain('const allergyAddEntryVisible = ref(false)')
+    expect(page).toContain('const weightAddEntryVisible = ref(false)')
+    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
+    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
+    expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
+    // 换标签就复位，避免开关残留
+    expect(page).toContain('resetAddEntryFlags()')
+  })
+
+  it('记录板块自身的「新增记录」按钮已下线（只有引导能新建）', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    // 按钮本身没了
+    expect(section).not.toContain('{{ activeTypeMeta.addLabel }}')
+    // 但能力留着（引导入口要用）
+    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })')
+  })
+
+  it('疫苗/过敏/体重三个板块的新增部分都挂在 showAddEntry 上', () => {
+    const vaccine = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+    const allergy = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+      'utf-8',
+    )
+    const weight = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(vaccine).toContain(':hide-trigger="!showAddEntry"')
+    expect(vaccine).toContain('v-if="showAddEntry"\n      class="health-section__action"')
+    expect(allergy).toContain('<template v-if="showAddEntry">')
+    expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
+  })
+})

@@ -12,11 +12,13 @@
     </view>
 
     <!-- 拍疫苗本（2026-10-01，第六期）。
-         一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。 -->
+         一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。
+         2026-10-02 起只在「记一条」引导选到疫苗时显示（入口收敛）。 -->
     <HealthDocumentScan
       ref="scanRef"
       v-if="dogId"
       :dog-id="dogId"
+      :hide-trigger="!showAddEntry"
       document-type="VACCINE_BOOK"
       upload-type="vaccine"
       button-text="拍疫苗本"
@@ -181,6 +183,7 @@
     </view>
 
     <button
+      v-if="showAddEntry"
       class="health-section__action"
       :class="{ 'health-section__action--disabled': loading || isBusy }"
       :disabled="loading || isBusy"
@@ -236,6 +239,14 @@ const props = defineProps<{
    * 上面书签已经写着「疫苗」，重复一遍只会把正文往下推。
    */
   embedded?: boolean
+  /**
+   * 是否显示"新增"入口（拍疫苗本 + 手动加一条）。
+   *
+   * 2026-10-02 老板要求收敛新增入口：标签页只做结果呈现与手动编辑，
+   * 新增一律走底部「记一条」引导。引导选到疫苗时页面会把它打开，
+   * 顾客仍然是在这个板块里完成录入；平时不显示，避免出现第二个入口。
+   */
+  showAddEntry?: boolean
 }>()
 
 const emit = defineEmits<{

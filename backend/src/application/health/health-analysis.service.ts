@@ -66,10 +66,20 @@ export interface HealthAnalysisItem {
   content: string;
   /** 引用的知识条目编号（可倒查到出处） */
   citations: string[];
+  /**
+   * 引用条目的标题，与 citations 一一对应（2026-10-02 补）。
+   *
+   * 顾客不该看到 `prev-004` 这种内部编号 —— 那看着像故障，也读不出任何信息。
+   * 「依据：老年犬专项筛查包含哪些系统」才是家长能看懂、也能建立信任的写法。
+   * 编号照旧保留在 citations 里（内部倒查与营养师侧仍用它）。
+   */
+  citationTitles: string[];
 }
 
 export interface HealthAnalysisResult {
   dogId: string;
+  /** 狗狗的名字（界面标题用；取不到就不给，界面自己兜底，别编） */
+  dogName?: string;
   items: HealthAnalysisItem[];
   /** 这次分析用了多少条已审核知识 */
   approvedKnowledgeCount: number;
@@ -250,8 +260,15 @@ export class HealthAnalysisService {
       });
     }
 
+    // 编号 → 标题：顾客侧要显示人话版的出处，不接受 `prev-004` 这种内部编号
+    const titleById = this.loadCitationTitleMap();
+    for (const item of items) {
+      item.citationTitles = resolveCitationTitles(item.citations, titleById);
+    }
+
     return {
       dogId,
+      dogName: normalizeText(summary?.dog?.name, 40) || undefined,
       items,
       approvedKnowledgeCount,
       insufficientSections,
@@ -259,6 +276,19 @@ export class HealthAnalysisService {
       audience,
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  /** 知识条目全表 → id/标题 映射；取不到就返回空表（出处退回显示编号） */
+  private loadCitationTitleMap(): Map<string, string> {
+    try {
+      return buildCitationTitleMap(this.knowledgeBaseService.getAll());
+    } catch (error) {
+      // 标题只是给顾客看的润色，绝不能因为它让整次分析失败
+      this.logger.warn(
+        `[HealthAnalysis] 取知识条目标题失败，出处退回显示编号：${(error as Error)?.message}`,
+      );
+      return new Map<string, string>();
+    }
   }
 
   /**
@@ -493,4 +523,33 @@ export function normalizeCitationList(value: unknown): string[] {
         .filter((item) => /^[a-z]+-\d+$/i.test(item)),
     ),
   ).slice(0, 10);
+}
+
+/**
+ * 知识条目全表 → id/标题 映射（2026-10-02）。
+ *
+ * 顾客侧要显示的是「老年犬专项筛查包含哪些系统」这种标题，
+ * 不是 `prev-004` 这种内部编号 —— 编号给顾客看像故障，也读不出信息。
+ * 没标题或没编号的条目直接跳过：宁可退回显示编号，也不要显示空白出处。
+ */
+export function buildCitationTitleMap(
+  entries: Array<{ id?: string; title?: string }>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of entries || []) {
+    const id = String(entry?.id ?? '').trim();
+    const title = String(entry?.title ?? '').trim();
+    if (id && title) {
+      map.set(id, title);
+    }
+  }
+  return map;
+}
+
+/** 编号列表 → 标题列表；查不到标题的条目退回显示编号 */
+export function resolveCitationTitles(
+  citations: string[],
+  titleById: Map<string, string>,
+): string[] {
+  return (citations || []).map((id) => titleById.get(id) || id);
 }

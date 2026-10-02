@@ -2,7 +2,7 @@
   <view class="page">
     <view class="hero">
       <text class="hero__eyebrow">健康分析与建议</text>
-      <text class="hero__title">{{ dogName || '爱犬' }}</text>
+      <text class="hero__title">{{ dogTitle }}</text>
       <text class="hero__subtitle">基于你自己记录的内容与公开兽医指南整理</text>
     </view>
 
@@ -30,10 +30,10 @@
         <text class="block__title">{{ item.label }}</text>
         <text class="block__content">{{ item.content }}</text>
 
-        <!-- 出处：每句话都能倒查到知识库条目 -->
-        <view v-if="item.citations.length > 0" class="cites">
+        <!-- 出处：每句话都能倒查到知识库条目（显示标题，不显示内部编号） -->
+        <view v-if="citationLabels(item).length > 0" class="cites">
           <text class="cites__label">依据</text>
-          <text v-for="cite in item.citations" :key="cite" class="cites__item">{{ cite }}</text>
+          <text v-for="cite in citationLabels(item)" :key="cite" class="cites__item">{{ cite }}</text>
         </view>
       </view>
 
@@ -66,6 +66,8 @@ import { dogApi } from '../../api/dogs'
  * 界面这一侧的两个职责：
  *   ① 把"依据"露出来 —— 每一项都显示它引用了哪些知识条目，
  *      顾客能看到结论是从哪来的，而不是一段没有出处的漂亮话。
+ *      ⚠️ 显示的是条目**标题**（「老年犬专项筛查包含哪些系统」），
+ *      不是内部编号（`prev-004`）—— 编号给顾客看像故障，也读不出信息。
  *   ② 把免责声明写死 —— 它不来自接口，AI 改不了。
  */
 interface AnalysisItem {
@@ -73,6 +75,8 @@ interface AnalysisItem {
   label: string
   content: string
   citations: string[]
+  /** 与 citations 一一对应的标题；老接口没这个字段时退回显示编号 */
+  citationTitles?: string[]
 }
 
 const dogId = ref('')
@@ -83,10 +87,36 @@ const items = ref<AnalysisItem[]>([])
 const generatedAt = ref('')
 const insufficientCount = ref(0)
 
-const dogName = computed(() => {
-  // 从摘要里带不出来时就不显示名字，不要编
-  return ''
-})
+const dogName = ref('')
+
+/**
+ * 标题里的狗名（2026-10-02 补）。
+ *
+ * 原来这里写死返回空串，页面永远显示"爱犬"—— 后端其实一直知道是哪只狗，
+ * 只是没往返回值里放。现在后端给了 dogName 就用，没给才退回"爱犬"，不编。
+ */
+const dogTitle = computed(() => dogName.value || '爱犬')
+
+/**
+ * 一项分析该显示的出处。
+ *
+ * 优先用后端给的标题；后端没给（老接口/取不到标题）才退回编号 —— 编号虽然难看，
+ * 但总比"依据：无"诚实。
+ *
+ * 标题比编号长得多，一条分析最多可能引用十条，全铺出来会变成一堵字墙、
+ * 把结论本身挤没（老板此前对"数字墙"提过同样的意见）。
+ * 所以最多露 3 条 + 一个「等 N 条」计数：既看得出有据可依，也数得清一共几条。
+ */
+const CITATION_DISPLAY_LIMIT = 3
+
+function citationLabels(item: AnalysisItem): string[] {
+  const titles = Array.isArray(item.citationTitles) ? item.citationTitles.filter(Boolean) : []
+  const all = titles.length > 0 ? titles : item.citations || []
+  if (all.length <= CITATION_DISPLAY_LIMIT) {
+    return all
+  }
+  return [...all.slice(0, CITATION_DISPLAY_LIMIT), `等 ${all.length} 条`]
+}
 
 const generatedAtText = computed(() => {
   const date = new Date(generatedAt.value)
@@ -127,6 +157,7 @@ async function load() {
     }
 
     items.value = Array.isArray(res.data.items) ? res.data.items : []
+    dogName.value = String(res.data.dogName || '').trim()
     generatedAt.value = String(res.data.generatedAt || '')
     insufficientCount.value = Array.isArray(res.data.insufficientSections)
       ? res.data.insufficientSections.length

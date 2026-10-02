@@ -35,6 +35,33 @@ describe('健康分析 · 页面', () => {
     expect(page).toContain('依据')
   })
 
+  it('依据显示条目标题，不把内部编号给顾客看（2026-10-02 修）', () => {
+    const page = readPage()
+
+    // 顾客看到的必须是标题（「老年犬专项筛查包含哪些系统」），
+    // 而不是 `prev-004` —— 编号看着像故障，也读不出任何信息
+    expect(page).toContain('citationTitles')
+    expect(page).toContain('citationLabels(item)')
+    // 取不到标题时才退回编号显示
+    expect(page).toContain('const all = titles.length > 0 ? titles : item.citations')
+  })
+
+  it('出处最多露 3 条，其余折成「等 N 条」，不铺成一堵字墙', () => {
+    const page = readPage()
+
+    expect(page).toContain('const CITATION_DISPLAY_LIMIT = 3')
+    expect(page).toContain('等 ${all.length} 条')
+  })
+
+  it('标题用狗狗的名字，拿不到才退回「爱犬」（2026-10-02 修）', () => {
+    const page = readPage()
+
+    // 原来这里写死空串，页面永远显示"爱犬"
+    expect(page).toContain('res.data.dogName')
+    expect(page).toContain("const dogTitle = computed(() => dogName.value || '爱犬')")
+    expect(page).toContain('{{ dogTitle }}')
+  })
+
   it('记录不足时明说，而不是编一段话', () => {
     const page = readPage()
 

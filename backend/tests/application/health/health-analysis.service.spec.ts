@@ -1,10 +1,12 @@
 import {
   HEALTH_ANALYSIS_SECTIONS,
   HealthAnalysisService,
+  buildCitationTitleMap,
   buildSystemPrompt,
   countKnowledgeEntries,
   deriveProfileTags,
   normalizeCitationList,
+  resolveCitationTitles,
 } from '../../../src/application/health/health-analysis.service';
 
 /**
@@ -53,6 +55,7 @@ describe('HealthAnalysisService', () => {
   function createService(options: {
     modelOutput?: Record<string, any>
     knowledgeContext?: string
+    knowledgeEntries?: Array<{ id: string; title: string }>
   } = {}) {
     const prisma = {} as any;
 
@@ -66,6 +69,13 @@ describe('HealthAnalysisService', () => {
 
     const knowledgeBase = {
       buildPromptContext: jest.fn().mockReturnValue(knowledgeContext),
+      // 顾客侧显示的是条目标题，不是内部编号（2026-10-02）
+      getAll: jest.fn().mockReturnValue(
+        options.knowledgeEntries ?? [
+          { id: 'lab-003', title: '肌酐与尿素：肾功能的两个常用指标' },
+          { id: 'immune-004', title: '幼犬首免的推荐时间表' },
+        ],
+      ),
     } as any;
 
     const agentConfig = {
@@ -177,6 +187,34 @@ describe('HealthAnalysisService', () => {
         '- [immune-004]（领域：免疫）幼犬首免',
       ].join('\n')
       expect(countKnowledgeEntries(context)).toBe(2)
+    })
+
+    it('顾客看到的出处是条目标题，不是内部编号（2026-10-02）', () => {
+      const map = buildCitationTitleMap([
+        { id: 'lab-003', title: '肌酐与尿素：肾功能的两个常用指标' },
+        { id: 'prev-004', title: '老年犬专项筛查包含哪些系统' },
+      ])
+      expect(resolveCitationTitles(['lab-003', 'prev-004'], map)).toEqual([
+        '肌酐与尿素：肾功能的两个常用指标',
+        '老年犬专项筛查包含哪些系统',
+      ])
+    })
+
+    it('查不到标题就退回显示编号，不显示空白出处', () => {
+      const map = buildCitationTitleMap([{ id: 'lab-003', title: '有标题的条目' }])
+      expect(resolveCitationTitles(['lab-003', 'lab-999'], map)).toEqual([
+        '有标题的条目',
+        'lab-999',
+      ])
+    })
+
+    it('没编号、没标题、空白标题的条目都不进映射表', () => {
+      const map = buildCitationTitleMap([
+        { id: '', title: '没有编号' },
+        { id: 'lab-001' },
+        { id: 'lab-002', title: '   ' },
+      ])
+      expect(map.size).toBe(0)
     })
   })
 

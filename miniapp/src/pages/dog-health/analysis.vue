@@ -22,7 +22,7 @@
 
     <view v-else-if="isLoading" class="state">
       <text class="state__title">正在整理</text>
-      <text class="state__desc">把记录与权威指南对照一遍，需要十几秒。</text>
+      <text class="state__desc">把记录与权威指南对照一遍，需要半分钟左右，请不要退出本页。</text>
     </view>
 
     <template v-else>

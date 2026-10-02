@@ -1262,7 +1262,8 @@ const visitShortcutHint = computed(() => {
 /**
  * AI 健康分析（2026-10-01，第七期）。
  *
- * 顾客侧默认未开放（知识尚未经专业审核），页面会如实说明原因。
+ * 顾客侧已开放（2026-10-02：知识库 189 条兽医全数通过，生产开了 HEALTH_ANALYSIS=customer）。
+ * 若后端开关关闭，页面会如实说明原因，不做假入口。
  */
 function goHealthAnalysis() {
   if (!dogId.value) {

@@ -103,11 +103,7 @@
           <view class="record-card__summary">
             <view class="record-card__summary-heading">
               <!-- 类型徽标：一个列表里混着就诊和体检，得让人一眼看出哪条是哪种 -->
-              <text
-                v-if="isVisitMode"
-                class="record-card__kind-badge"
-                :class="`record-card__kind-badge--${resolveHealthVisitKind(record)}`"
-              >{{ HEALTH_VISIT_KIND_LABELS[resolveHealthVisitKind(record)] }}</text>
+
               <text class="record-card__summary-title">
                 {{ recordSummary(record, index).title }}
               </text>
@@ -159,25 +155,6 @@
       </view>
 
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
-        <!-- 类型（仅「病例」模式）：就诊 / 体检。换类型等于换一张表，
-             所以会清空重填，由 changeVisitKind 提示后再动。 -->
-        <view v-if="isVisitMode" class="field-group">
-          <text class="field-label">类型</text>
-          <view class="kind-switch">
-            <text
-              v-for="kind in HEALTH_VISIT_KINDS"
-              :key="`${recordKey(record, index)}-kind-${kind}`"
-              class="kind-switch__item"
-              :class="{ 'kind-switch__item--active': resolveHealthVisitKind(record) === kind }"
-              @tap="changeVisitKind(index, kind)"
-            >{{ HEALTH_VISIT_KIND_LABELS[kind] }}</text>
-          </view>
-          <!-- 切过来的草稿里，另一种类型独有的内容还在 —— 说一句，别让家长以为丢了 -->
-          <text v-if="visitCarryOverHint(record)" class="field-label__hint">
-            {{ visitCarryOverHint(record) }}
-          </text>
-        </view>
-
         <!-- ── 病历/检查：字段顺序＝家长填写顺序（2026-10-02 精简版）────────────
              必填只有两件：日期 +（主要问题 或 医生怎么说）。
              「状态」已从表单移除（家长不做系统选择题），改成存好后一键「已经好了」；
@@ -543,6 +520,12 @@ type FieldConfig = {
 
 const props = withDefaults(defineProps<{
   dogId: string
+  /**
+   * 这条记录属于哪一类（2026-10-02 拆标签后由标签决定）。
+   * 就诊标签传 'medical'、体检标签传 'checkup' ——
+   * 表单里不再有"类型"切换，顾客在入口就选好了。
+   */
+  visitKind?: 'medical' | 'checkup'
   /**
    * 当前这只狗的名字（2026-10-02）。
    * 只用于核对：报告上写的动物名和它对不上时提醒家长，**不拦着保存** ——
@@ -1313,7 +1296,7 @@ function addRecord() {
   // 「病例」模式下新增的记录默认是「就诊」——带狗看病是最常见的场景，
   // 想记体检的人再在表单顶部把类型切过去。
   const nextRecord = isVisitMode.value
-    ? createHealthVisitDraft('medical')
+    ? createHealthVisitDraft(props.visitKind || 'medical')
     : createHealthRecordDraft(baseType.value)
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null

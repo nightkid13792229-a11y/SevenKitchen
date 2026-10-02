@@ -109,6 +109,7 @@
           ref="recordsSectionRef"
           :dog-id="dogId"
           :dog-name="form.name"
+          :visit-kind="activeVisitKind"
           embedded
           :active-type="activeRecordType"
           :records="activeRecordList"
@@ -212,7 +213,7 @@
       :primary-text="stickyPrimaryText"
       :secondary-text="stickySecondaryText"
       :primary-disabled="stickyPrimaryDisabled"
-      :primary-theme="activeHealthTab"
+      :primary-theme="stickyPrimaryTheme"
       :secondary-disabled="isSecondaryActionDisabled"
       @primary="onStickyPrimary"
       @secondary="onStickySecondary"
@@ -238,7 +239,6 @@ import {
   HEALTH_RECORD_TYPES,
   type HealthRecordType,
   buildHealthVisitPayload,
-  mergeHealthVisitRecords,
   normalizeHealthVisitRecord,
   buildCrudHealthRecordPayload,
   buildHealthRecordFocusIdentity,
@@ -287,18 +287,28 @@ const latestRequestedDogId = ref('')
  * ★ 合并只在界面层：两条记录仍然分别存在 medical_record / checkup_record
  *   两张表里，保存时按记录自己的类型走原接口。
  */
-type HealthTabKey = 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+/**
+ * 板块书签（2026-10-02 老板定：把「就诊」和「体检」拆成两个标签）。
+ *
+ * 背景：两类的字段、材料、录入流程差别很大（就诊有症状/诊断/医嘱/用药，
+ * 体检有检查结论/化验数据/医生建议）；合在一个列表里既要在卡片上打类型徽标，
+ * 又要在表单里放"类型"切换 —— 老板实测时切完以为数据丢了。
+ * 拆开之后：每个标签只显示本类记录、只渲染本类字段，**表单里不再需要切换**；
+ * 这次就诊里传的化验单，数字也直接落在这条就诊记录里，不再另开一条体检记录。
+ */
+type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'
 
 const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
-  { key: 'visit', label: '病历/检查' },
+  { key: 'medical', label: '就诊' },
+  { key: 'checkup', label: '体检' },
   { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
   { key: 'diet', label: '饮食' },
   { key: 'weight', label: '体重' },
 ]
 
-/** 走 HealthRecordsSection 的板块：「病例」是合并展示，过敏是单一类型 */
-const RECORD_TAB_KEYS: string[] = ['visit', 'allergy']
+/** 走 HealthRecordsSection 的板块：就诊、体检（各一类）+ 过敏 */
+const RECORD_TAB_KEYS: string[] = ['medical', 'checkup', 'allergy']
 
 /**
  * 从哪个入口进来的。
@@ -317,32 +327,47 @@ const HEALTH_ENTRY_LABELS: Record<HealthEntrySource, string> = {
   unknown: '返回',
 }
 
-const activeHealthTab = ref<HealthTabKey>('visit')
+const activeHealthTab = ref<HealthTabKey>('medical')
 
-/** 当前书签是否是「记录类」（病史/体检/过敏）—— 这三个共用同一个组件 */
+/** 当前书签是否是「记录类」（就诊/体检/过敏）—— 这三个共用同一个组件 */
 const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value))
 
-/** 传给 HealthRecordsSection 的板块标识：'visit' 表示就诊+体检合并展示 */
-const activeRecordType = computed<HealthRecordType | 'visit'>(() =>
-  isRecordTab.value ? (activeHealthTab.value as HealthRecordType | 'visit') : 'medical',
+/**
+ * 交给 HealthRecordsSection 的「这条记录属于哪一类」。
+ * 就诊/体检各自成标签之后，它就是标签本身；过敏走原来的单一类型分支。
+ */
+const activeVisitKind = computed<'medical' | 'checkup'>(() =>
+  activeHealthTab.value === 'checkup' ? 'checkup' : 'medical',
 )
 
-/**
- * 「病例」列表：把病史和体检两类记录合成一条按日期倒序的列表。
- * 合并逻辑放在 utils 里（有测试覆盖），页面只负责取数。
- */
-const visitRecords = computed(() => (
-  mergeHealthVisitRecords(recordsByType.medical, recordsByType.checkup)
-))
-const visitLoading = computed(() => loadingByType.medical || loadingByType.checkup)
+/** 传给 HealthRecordsSection 的板块标识：记录类统一按 visit 模式渲染 */
+const activeRecordType = computed<HealthRecordType | 'visit'>(() =>
+  isRecordTab.value ? 'visit' : 'medical',
+)
 
-/** 当前「病例」板块要展示的记录与加载态 */
-const activeRecordList = computed(() => (
-  activeHealthTab.value === 'visit' ? visitRecords.value : recordsByType.allergy
-))
-const activeRecordLoading = computed(() => (
-  activeHealthTab.value === 'visit' ? visitLoading.value : loadingByType.allergy
-))
+/** 当前标签要展示的记录与加载态（拆标签后：就诊/体检各看各的） */
+const activeRecordList = computed(() => {
+  if (activeHealthTab.value === 'medical') {
+    return recordsByType.medical
+  }
+
+  if (activeHealthTab.value === 'checkup') {
+    return recordsByType.checkup
+  }
+
+  return recordsByType.allergy
+})
+const activeRecordLoading = computed(() => {
+  if (activeHealthTab.value === 'medical') {
+    return loadingByType.medical
+  }
+
+  if (activeHealthTab.value === 'checkup') {
+    return loadingByType.checkup
+  }
+
+  return loadingByType.allergy
+})
 
 function selectHealthTab(key: HealthTabKey) {
   activeHealthTab.value = key
@@ -1040,8 +1065,23 @@ const stickyPrimaryDisabled = computed(
  * 老板 2026-10-01 要求把原来分散的三处入口合并到这一个按钮上，并取消「返回首页」。
  * 其它板块暂时仍是返回（返回也可以直接用小程序导航栏左上角的返回箭头）。
  */
+/**
+ * 底部保存键的配色主题。
+ *
+ * StickyActionBar 只认原来那几个板块值（medical/checkup 不在其中），
+ * 而拆标签后「就诊」「体检」都走记录板块 —— 这里统一映射成 'visit'，
+ * 视觉与拆标签之前保持一致。
+ */
+const stickyPrimaryTheme = computed<'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'>(() => {
+  if (isRecordTab.value) {
+    return activeHealthTab.value === 'allergy' ? 'allergy' : 'visit'
+  }
+
+  return activeHealthTab.value as 'vaccine' | 'diet' | 'weight'
+})
+
 const stickySecondaryText = computed(() => (
-  activeHealthTab.value === 'visit' ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
+  isRecordTab.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
 ))
 
 async function onStickyPrimary() {
@@ -1066,7 +1106,8 @@ async function onStickyPrimary() {
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
  */
 function onStickySecondary() {
-  if (activeHealthTab.value === 'visit') {
+  // 就诊 / 体检 / 过敏三个标签都走"新增记录"（各自的板块组件）
+  if (isRecordTab.value) {
     recordsSectionRef.value?.openAddRecordChooser?.()
     return
   }

@@ -36,6 +36,11 @@ export class CreateMedicalRecordDto {
   @IsString()
   diagnosis!: string;
 
+  /// 化验数据原文（2026-10-02 新增）：这次就诊做的化验，数值单独一栏
+  @IsOptional()
+  @IsString()
+  labValues?: string;
+
   @IsOptional()
   @IsString()
   treatment?: string;

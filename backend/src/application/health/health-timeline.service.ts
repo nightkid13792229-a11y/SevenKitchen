@@ -271,6 +271,8 @@ export class HealthTimelineService {
         //     顾客一直在填、系统一直在存，但 AI 从来没拿到过
         //   · notes（其它想说的）—— 原来叫"备注"，2026-10-02 改名并接进这里
         chiefComplaint: record.chiefComplaint || '',
+        // 这次就诊做的化验（2026-10-02 起病历表也有这一栏）
+        labValues: record.labValues || '',
         medications: record.medications || [],
         notes: record.notes || '',
         status: formatMedicalStatus(record.status),
@@ -310,6 +312,7 @@ export class HealthTimelineService {
         diagnosis: record.diagnosis,
         chiefComplaint: record.chiefComplaint || '',
         treatment: record.treatment || '',
+        labValues: record.labValues || '',
         medications: record.medications || [],
         notes: record.notes || '',
         veterinarian: record.veterinarian || '',

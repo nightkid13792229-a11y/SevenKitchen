@@ -117,8 +117,8 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain('function visitConfig(record: Record<string, any>)')
     expect(source).toContain('getHealthVisitFieldConfig(resolveHealthVisitKind(record))')
 
-    // 新增记录默认「就诊」，想记体检的人在表单里切
-    expect(source).toContain("createHealthVisitDraft('medical')")
+    // 2026-10-02 拆标签后：新增哪一类由标签决定（表单里不再有类型切换）
+    expect(source).toContain("createHealthVisitDraft(props.visitKind || 'medical')")
 
     // 保存与删除按记录自己的类型走
     expect(source).toContain('const type = recordKindOf(record)')

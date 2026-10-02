@@ -1475,6 +1475,11 @@ model MedicalRecord {
   visitDate      DateTime      @map("visit_date") @db.Date
   chiefComplaint String        @map("chief_complaint")
   diagnosis      String        @map("diagnosis")
+  /// 化验数据原文（2026-10-02 新增）。
+  /// 一次就诊往往包含化验单/检查报告 —— 数字落在**这次就诊**里（老板定的口径：
+  /// 就诊传的报告归就诊类、体检的数字归体检类），不再因此另开一条体检记录。
+  /// 与 checkup_record.lab_values 同名同义：逐项一行的化验数据。
+  labValues      String?       @map("lab_values")
   treatment      String?       @map("treatment")
   medications    String[]      @default([]) @map("medications")
   status         MedicalStatus @default(TREATING) @map("status")

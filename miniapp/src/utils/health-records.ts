@@ -265,6 +265,8 @@ export interface MedicalRecordPayload {
   veterinarian?: string | null
   notes?: string | null
   attachments?: string[]
+  /** 这次就诊做的化验数据（2026-10-02 新增） */
+  labValues?: string | null
 }
 
 export interface CheckupRecordPayload {
@@ -1315,8 +1317,9 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     // 2026-10-02 老板：文案就叫「症状」，家长一眼就懂
     complaintLabel: '症状',
     complaintPlaceholder: '例如：呕吐、拉稀、精神差',
-    labValuesKey: null,
-    labValuesLabel: '',
+    // 2026-10-02 老板定：一次就诊里的化验单/检查报告，数字就落在这条就诊记录里
+    labValuesKey: 'labValues',
+    labValuesLabel: '化验数据',
     adviceKey: 'treatment',
     adviceLabel: '处理与提醒',
     advicePlaceholder: '例如：打了止吐针，开了三天药',
@@ -1727,6 +1730,7 @@ export function buildHealthVisitPayload(
     // 家长可能只填了诊断结果，后端本来就允许这一栏是空串。
     chiefComplaint: normalizeOptionalText(record?.chiefComplaint) || '',
     diagnosis: normalizeOptionalText(record?.diagnosis) || '',
+    labValues: normalizeOptionalText(record?.labValues),
     treatment: normalizeOptionalText(record?.treatment),
     medications: normalizeMedicationList(record?.medications),
     // 缺省是"待确认"，不是后端的默认值"治疗中"

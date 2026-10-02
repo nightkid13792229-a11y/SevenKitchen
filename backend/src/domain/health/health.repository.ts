@@ -74,6 +74,8 @@ export interface MedicalRecord {
   visitDate: Date;
   chiefComplaint: string;
   diagnosis: string;
+  /** 化验数据原文（这次就诊做的化验），2026-10-02 新增 */
+  labValues: string | null;
   treatment: string | null;
   medications: string[];
   /**

@@ -177,6 +177,7 @@ export class StaffDogHealthService {
       medicalRecords: dog.medicalRecords.map((item) => ({
         diagnosis: item.diagnosis,
         chiefComplaint: item.chiefComplaint,
+        labValues: item.labValues,
       })),
     }).tags;
     const tagOverrides = parseHealthTagOverrides(dog.healthTagOverrides);

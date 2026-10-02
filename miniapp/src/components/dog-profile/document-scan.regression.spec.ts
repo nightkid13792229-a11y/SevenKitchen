@@ -317,9 +317,9 @@ describe('动物名提醒与化验数据', () => {
 
     // 确认卡片里单独一行
     expect(scan).toContain("push('化验数据', draft.labValues)")
-    // 字段表里：体检有这一栏，就诊没有
-    expect(utils).toContain("labValuesKey: 'labValues'")
-    expect(utils).toContain('labValuesKey: null')
+    // 字段表里两类都有这一栏（2026-10-02 老板定：就诊里传的化验单，
+    // 数字就落在这条就诊记录里，不再另开一条体检记录）
+    expect((utils.match(/labValuesKey: 'labValues'/g) || []).length).toBe(2)
     // 表单里有输入框
     expect(section).toContain("visitConfig(record).labValuesLabel")
     expect(section).toContain('function visitLabValuesKey')

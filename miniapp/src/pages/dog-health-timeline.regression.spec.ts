@@ -83,7 +83,7 @@ describe('两个页面的注册与入口', () => {
     expect(mainPages).toContain('pages/shared-health/index')
   })
 
-  it('入口在健康管理页内，且**不是**第六个书签', () => {
+  it('入口在健康管理页内，且**不占**板块书签的位置', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
@@ -95,12 +95,13 @@ describe('两个页面的注册与入口', () => {
     expect(page).toContain('health-entries')
     expect(page).not.toContain('goVisitSummary')
 
-    // 老板明确：时间线不以新的板块标签形式存在 —— 书签仍然是五个
+    // 老板明确：时间线不以新的板块标签形式存在
+    // （2026-10-02 就诊与体检拆成两个标签后，书签从 5 个变成 6 个）
     const tabsBlock = page.slice(
       page.indexOf('const HEALTH_TABS'),
       page.indexOf('const RECORD_TAB_KEYS'),
     )
-    expect((tabsBlock.match(/key: '/g) || []).length).toBe(5)
+    expect((tabsBlock.match(/key: '/g) || []).length).toBe(6)
     expect(tabsBlock).not.toContain('timeline')
   })
 

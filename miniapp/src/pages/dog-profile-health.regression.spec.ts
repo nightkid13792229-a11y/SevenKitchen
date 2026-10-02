@@ -146,7 +146,7 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('@dirty-change="hasUnsavedRecordDraft = $event"')
     // 2026-09-30：activeRecordType 由顶部书签派生（computed），不再是独立 ref
     expect(source).toContain("const activeRecordType = computed<HealthRecordType | 'visit'>(")
-    expect(source).toContain("const activeHealthTab = ref<HealthTabKey>('visit')")
+    expect(source).toContain("const activeHealthTab = ref<HealthTabKey>('medical')")
     expect(source).toContain('recordsByType = reactive<Record<HealthRecordType, Record<string, any>[]>>')
     expect(source).toContain('loadingByType = reactive<Record<HealthRecordType, boolean>>')
     expect(source).toContain('dogApi.healthRecords.medical.list')
@@ -306,23 +306,24 @@ describe('dog-profile-health · 板块书签', () => {
   const readPage = () =>
     readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
 
-  it('五个书签齐全，顺序与老板给的一致（病史与体检已合并为「病例」）', () => {
+  it('六个书签齐全，顺序与老板给的一致（就诊与体检已拆成两个标签）', () => {
     const page = readPage()
 
-    expect(page).toContain('病例')
-    expect(page).toContain('过敏')
-    expect(page).toContain('疫苗')
-    expect(page).toContain('饮食偏好')
-    expect(page).toContain('体重管理')
+    // 2026-10-02 老板定：就诊与体检的字段、材料、录入流程差别很大，拆开更清楚
+    expect(page).toContain("type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'diet' | 'weight'")
+    expect(page).toContain("{ key: 'medical', label: '就诊' }")
+    expect(page).toContain("{ key: 'checkup', label: '体检' }")
+    expect(page).toContain("{ key: 'allergy', label: '过敏' }")
+    expect(page).toContain("{ key: 'vaccine', label: '疫苗' }")
+    expect(page).toContain("{ key: 'diet', label: '饮食' }")
+    expect(page).toContain("{ key: 'weight', label: '体重' }")
 
-    const order = ['visit', 'allergy', 'vaccine', 'diet', 'weight']
-    const tabsBlock = page.slice(page.indexOf('const HEALTH_TABS'), page.indexOf('const RECORD_TAB_KEYS'))
-    let cursor = -1
-    for (const key of order) {
-      const idx = tabsBlock.indexOf(`key: '${key}'`)
-      expect(idx).toBeGreaterThan(cursor)
-      cursor = idx
-    }
+    const medicalAt = page.indexOf("{ key: 'medical'")
+    const checkupAt = page.indexOf("{ key: 'checkup'")
+    const allergyAt = page.indexOf("{ key: 'allergy'")
+    expect(medicalAt).toBeGreaterThan(-1)
+    expect(checkupAt).toBeGreaterThan(medicalAt)
+    expect(allergyAt).toBeGreaterThan(checkupAt)
   })
 
   it('一次只显示一个板块：每个板块都挂在书签条件上', () => {
@@ -343,11 +344,14 @@ describe('dog-profile-health · 板块书签', () => {
       'utf-8',
     )
 
-    // 「病例」是合并展示，「过敏」是单一类型 —— 两者共用同一个组件
-    expect(page).toContain("const RECORD_TAB_KEYS: string[] = ['visit', 'allergy']")
-    // 合并列表由 utils 产出，页面只负责取数
-    expect(page).toContain('const visitRecords = computed(() => (')
-    expect(page).toContain('mergeHealthVisitRecords(recordsByType.medical, recordsByType.checkup)')
+    // 就诊 / 体检 / 过敏 三者共用同一个组件（记录类）
+    expect(page).toContain("const RECORD_TAB_KEYS: string[] = ['medical', 'checkup', 'allergy']")
+    // 2026-10-02 拆标签后：每个标签只取自己那一类的记录，不再在页面里合并两类
+    expect(page).toContain("if (activeHealthTab.value === 'medical') {")
+    expect(page).toContain('return recordsByType.medical')
+    expect(page).toContain('return recordsByType.checkup')
+    // 类别由标签传给组件（表单里不再有"类型"切换）
+    expect(page).toContain(':visit-kind="activeVisitKind"')
     // 上级已有书签，组件内那套一模一样的标签要关掉，否则重复
     expect(page).toContain('embedded')
     expect(section).toContain('v-if="!embedded" class="record-type-tabs"')
@@ -398,7 +402,7 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')
     expect(page).toContain('weightSectionRef.value?.saveRecord?.()')
     // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
-    expect(page).toContain("activeHealthTab.value === 'visit' ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).toContain("isRecordTab.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
     expect(page).toContain('recordsSectionRef.value?.openAddRecordChooser?.()')
   })
 
@@ -474,7 +478,7 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(compact).not.toContain('.health-theme--checkup')
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
     // 2026-10-01：病史与体检合并成「病例」后是五个板块，切到哪块按钮就是哪块的色。
-    expect(page).toContain(':primary-theme="activeHealthTab"')
+    expect(page).toContain(':primary-theme="stickyPrimaryTheme"')
     expect(bar).toContain('primaryTheme?:')
     for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
       expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)

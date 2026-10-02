@@ -212,21 +212,6 @@
             />
           </view>
 
-          <view v-if="visitConfig(record).checkupTypeKey" class="field-group">
-            <text class="field-label">{{ visitConfig(record).checkupTypeLabel }}</text>
-            <picker
-              mode="selector"
-              :range="fieldOptionLabels(checkupTypeOptions)"
-              :value="fieldOptionIndex(record, checkupTypeOptions, 'checkupType')"
-              :disabled="hasSavingRecord"
-              @change="updateOptionField(index, 'checkupType', checkupTypeOptions, $event.detail.value)"
-            >
-              <view class="field-picker">
-                {{ readOptionFieldLabel(record, checkupTypeOptions, 'checkupType') || '请选择体检类型' }}
-              </view>
-            </picker>
-          </view>
-
           <view class="field-group">
             <text class="field-label">{{ visitConfig(record).adviceLabel }}</text>
             <input
@@ -410,7 +395,7 @@
             :disabled="loading || hasSavingRecord || isUploading(record, index) || isRecordSaving(record, index)"
             @tap="chooseAttachment(index)"
           >
-            上传附件
+            上传附件（检查报告、化验单等）
           </button>
         </view>
 
@@ -1458,27 +1443,50 @@ async function saveAllDirty() {
     return
   }
 
-  for (const index of dirtyIndexes) {
-    await saveRecord(index)
+  for (const [position, index] of dirtyIndexes.entries()) {
+    const submitted = saveRecord(index)
+
+    // 有一条没通过校验（缺必填）就停：已经滚到它跟前了，
+    // 顾客补完再点一次保存，剩下的接着存 —— 不能装作全存好了
+    if (!submitted) {
+      const remaining = dirtyIndexes.length - position - 1
+      if (remaining > 0) {
+        uni.showToast({
+          title: `这条还缺信息，补完再点一次保存（还有 ${remaining} 条待保存）`,
+          icon: 'none',
+          duration: 3000,
+        })
+      }
+      return
+    }
+
+    // 等这条存完再存下一条（顺序执行，避免并发写同一份列表互相覆盖）
+    await waitForPendingSave()
   }
 }
 
 defineExpose({ saveAllDirty, openAddRecordChooser, startScan })
 
-function saveRecord(index: number) {
+/**
+ * 保存单条记录。
+ *
+ * 返回值＝"这条是否已经交给父组件去存"（校验没过、或有别的记录正在存 → false）。
+ * 真正的接口调用在页面里（`@save-record`），所以这里只负责校验与派发。
+ */
+function saveRecord(index: number): boolean {
   if (hasSavingRecord.value) {
     uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
-    return
+    return false
   }
 
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
-    return
+    return false
   }
 
   const record = draftRecords.value[index]
   if (!record) {
-    return
+    return false
   }
 
   const type = recordKindOf(record)
@@ -1486,12 +1494,46 @@ function saveRecord(index: number) {
     ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
     : getHealthRecordValidationError(baseType.value, record)
   if (validationError) {
-    uni.showToast({ title: validationError, icon: 'none' })
-    return
+    // 缺信息时不能只弹一句话就完了（2026-10-02 老板问的"缺信息会不会让顾客接着补"）：
+    // 把这条展开、滚到眼前，顾客抬头就看见要补的那个字段。
+    // AI 识别填进来的草稿走的也是这条路 —— 识别结果从来不直接入库。
+    expandedRecordKey.value = recordKey(record, index)
+    scrollToRecord(index)
+    uni.showToast({ title: validationError, icon: 'none', duration: 2500 })
+    return false
   }
 
   const key = recordKey(record, index)
   emit('save-record', { type, record: stripLocalFields(record), recordKey: key })
+  return true
+}
+
+/**
+ * 等这一条真的存完（父组件把 savingRecordKey 清掉）再存下一条。
+ *
+ * 2026-10-02 修：原来批量保存只是 `await saveRecord()`，而 saveRecord 是同步的 ——
+ * 第一条刚派发出去、父组件就把 savingRecordKey 置上了，第二轮直接被
+ * "记录保存中，请稍候" 挡回来，**两条以上未保存记录只会存下第一条**。
+ * 这里改成等空闲再继续；15 秒兜底，免得父组件万一没清 key 把顾客卡住。
+ */
+function waitForPendingSave(): Promise<void> {
+  if (!hasSavingRecord.value) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    const stop = watch(hasSavingRecord, (value) => {
+      if (!value) {
+        stop()
+        resolve()
+      }
+    })
+
+    setTimeout(() => {
+      stop()
+      resolve()
+    }, 15000)
+  })
 }
 
 function cancelRecord(index: number) {
@@ -1982,6 +2024,12 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 26rpx;
   font-weight: 700;
   color: #17313f;
+  /* 标题现在可能是一段检查结论，最多两行，别把卡片撑成一大块 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .record-card__summary-detail {

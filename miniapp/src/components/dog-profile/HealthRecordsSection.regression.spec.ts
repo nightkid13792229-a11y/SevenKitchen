@@ -50,7 +50,7 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain('class="field-textarea"\n            :disabled="hasSavingRecord"')
     expect(source).toContain('hasUploadingRecords.value ||\n    isUploading(record, index)')
     expect(source).toContain('function addRecord() {\n  if (hasSavingRecord.value)')
-    expect(source).toContain('function saveRecord(index: number) {\n  if (hasSavingRecord.value)')
+    expect(source).toContain('function saveRecord(index: number): boolean {\n  if (hasSavingRecord.value)')
     expect(source).toContain('function cancelRecord(index: number) {\n  if (hasSavingRecord.value)')
     expect(source).toContain('async function removeRecord(index: number) {\n  if (hasSavingRecord.value)')
     expect(functionSource(
@@ -307,5 +307,59 @@ describe('病历/检查表单 · 五条收尾', () => {
 
     expect(utils).toContain("return '取消新增记录'")
     expect(utils).not.toContain("return '取消新增'\n")
+  })
+})
+
+/**
+ * 第三轮收尾（2026-10-02 老板继续提的）。
+ */
+describe('病历/检查表单 · 第三轮', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+  it('① 体检类型从表单里删掉（接口那一栏由缺省值兜底），卡片标题改用检查结论', () => {
+    const source = readSection()
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
+
+    expect(visitBranch).not.toContain('checkupTypeKey')
+    expect(visitBranch).not.toContain('checkupTypeOptions')
+
+    const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
+    // 缺省值仍然送给后端（这一栏是必填的）
+    expect(utils).toContain('|| HEALTH_VISIT_DEFAULT_CHECKUP_TYPE')
+    // 标题：先看结论，再退回识别出来的类型
+    expect(utils).toContain("? [record?.[config.primaryKey], formatHealthCheckupTypeLabel(record?.checkupType)]")
+  })
+
+  it('① 上传附件按钮带括弧提示，讲清这个按钮是干什么的', () => {
+    const source = readSection()
+
+    expect(source).toContain('上传附件（检查报告、化验单等）')
+  })
+
+  it('③ 缺信息时把那条展开并滚到眼前，不是只弹一句话', () => {
+    const source = readSection()
+    const fn = source.match(/function saveRecord\(index: number\): boolean \{[\s\S]*?\n\}/)?.[0] || ''
+
+    expect(fn).toContain('expandedRecordKey.value = recordKey(record, index)')
+    expect(fn).toContain('scrollToRecord(index)')
+    expect(fn).toContain('return false')
+  })
+
+  it('③ 批量保存逐条等存完再下一条（否则第二条开始会被"保存中"挡回来）', () => {
+    const source = readSection()
+
+    expect(source).toContain('function waitForPendingSave(): Promise<void>')
+    expect(source).toContain('await waitForPendingSave()')
+    // 兜底：父组件万一没清 key，15 秒也要放行
+    expect(source).toContain('15000')
+    // 有一条缺信息就停下来，并说清还剩几条
+    expect(source).toContain('还有 ${remaining} 条待保存')
   })
 })

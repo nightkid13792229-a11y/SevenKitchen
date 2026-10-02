@@ -138,8 +138,19 @@ describe('病例合并 · 校验', () => {
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', diagnosis: '胃炎' })).toBeNull()
   })
 
-  it('体检的提示语用「检查结论」而不是「诊断结果」', () => {
-    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' })).toBe('请填写检查结论')
+  it('体检也放宽成两个内容字段填一个：检查结论 / 医生建议', () => {
+    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' }))
+      .toBe('请至少填写「检查结论」或「医生建议」')
+    // 只写了几句医嘱也能存（有的报告只给建议）
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      recommendations: '半年后复查',
+    })).toBeNull()
+    // 只写了结论当然也能存
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      findings: '血常规未见异常',
+    })).toBeNull()
   })
 
   it('用药、处理、其它想说的都不拦着保存（想记多少记多少）', () => {
@@ -253,7 +264,7 @@ describe('病例合并 · 用药与摘要', () => {
     expect(record.notes).toBe('医生让半年后复查')
   })
 
-  it('摘要标题"有什么显示什么"：就诊优先症状、体检优先类型', () => {
+  it('摘要标题"有什么显示什么"：就诊优先症状、体检优先检查结论', () => {
     const medical = buildHealthVisitSummary('medical', {
       visitDate: '2026-05-01',
       chiefComplaint: '呕吐两次',
@@ -268,13 +279,20 @@ describe('病例合并 · 用药与摘要', () => {
       diagnosis: '急性胃炎',
     }).title).toBe('急性胃炎')
 
+    // 体检：表单已经不问类型了，标题改成家长填的检查结论
     const checkup = buildHealthVisitSummary('checkup', {
       checkupDate: '2026-05-02',
       findings: '未见异常',
       checkupType: 'ROUTINE',
     })
-    expect(checkup.title).toBe('常规体检')
+    expect(checkup.title).toBe('未见异常')
     expect(checkup.detail).toContain('2026-05-02')
+
+    // 没填结论时退回"识别出来的体检类型"（例如拍报告识别成老年健康检查）
+    expect(buildHealthVisitSummary('checkup', {
+      checkupDate: '2026-05-02',
+      checkupType: 'SENIOR_WELLNESS',
+    }).title).toBe('老年健康检查')
   })
 
   it('摘要里不再显示状态（状态已不在表单里问，家长也改不了）', () => {
@@ -287,11 +305,9 @@ describe('病例合并 · 用药与摘要', () => {
     expect(medical.detail).not.toContain('待确认')
   })
 
-  it('什么都没填的草稿标题是「新记录」，不写"未填写 XX"', () => {
+  it('什么都没填的草稿标题给个中性占位，不写"未填写 XX"', () => {
     expect(buildHealthVisitSummary('medical', {}).title).toBe('新记录')
-    // 体检即使没填结论，标题也会显示默认的体检类型（它不是空标题）
-    expect(buildHealthVisitSummary('checkup', {}).title).toBe('新记录')
-    expect(buildHealthVisitSummary('checkup', { checkupType: 'ROUTINE' }).title).toBe('常规体检')
+    expect(buildHealthVisitSummary('checkup', {}).title).toBe('体检记录')
   })
 
   it('「已经好了」一键切换：点了变已康复，再点回治疗中', () => {

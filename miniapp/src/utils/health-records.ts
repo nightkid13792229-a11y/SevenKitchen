@@ -1281,7 +1281,11 @@ export interface HealthVisitFieldConfig {
   vetLabel: string
   followUpKey: string | null
   followUpLabel: string
-  /** 体检类型：只有体检有 */
+  /**
+   * 体检类型：**2026-10-02 老板要求从表单里删掉**（家长不该被问这个）。
+   * 手工记的体检记录一律用缺省「常规体检」（接口这一栏必填，由 payload 兜底）；
+   * 拍报告识别出来的类型照旧存进记录。
+   */
   checkupTypeKey: string | null
   checkupTypeLabel: string
 }
@@ -1649,21 +1653,20 @@ export function getHealthVisitValidationError(
     return `请选择${config.dateLabel}`
   }
 
-  // 就诊：「主要问题」和「医生怎么说」填一个就能存。
-  // 两项都是饮食标签派生的输入，家长答得上来哪个就填哪个。
-  if (config.complaintKey) {
-    const hasComplaint = Boolean(normalizeOptionalText(record?.[config.complaintKey]))
-    const hasPrimary = Boolean(normalizeOptionalText(record?.[config.primaryKey]))
+  // 内容必填：**两个字段填一个就行**（2026-10-02 复审后统一成同一套规则）
+  //   · 就诊：症状 / 医生怎么说 —— 很多家长拿不到明确诊断
+  //   · 体检：检查结论 / 医生建议 —— 有的报告只有一堆指标（写在结论里），
+  //     有的只写了几句医嘱；两个都是饮食标签派生与 AI 分析的输入，填哪个都不亏
+  const contentKeys = config.complaintKey
+    ? [config.complaintKey, config.primaryKey]
+    : [config.primaryKey, config.adviceKey]
+  const contentLabels = config.complaintKey
+    ? [config.complaintLabel, config.primaryLabel]
+    : [config.primaryLabel, config.adviceLabel]
 
-    if (!hasComplaint && !hasPrimary) {
-      return `请至少填写「${config.complaintLabel}」或「${config.primaryLabel}」`
-    }
-
-    return null
-  }
-
-  if (!normalizeOptionalText(record?.[config.primaryKey])) {
-    return `请填写${config.primaryLabel}`
+  const hasContent = contentKeys.some((key) => normalizeOptionalText(record?.[key]))
+  if (!hasContent) {
+    return `请至少填写「${contentLabels[0]}」或「${contentLabels[1]}」`
   }
 
   return null
@@ -1749,13 +1752,16 @@ export function buildHealthVisitSummary(
   const config = getHealthVisitFieldConfig(kind)
   const attachmentCount = normalizeAttachments(record?.attachments).length
 
+  // 体检：2026-10-02 起表单里不再问「体检类型」（老板要求删掉），
+  // 手工记的一律是缺省「常规体检」—— 拿它当标题等于替家长断言一个他没选过的类型。
+  // 改成"有什么显示什么"：检查结论 → （拍报告识别出来的）体检类型 → 体检记录
   const candidates = kind === 'checkup'
-    ? [formatHealthCheckupTypeLabel(record?.checkupType), record?.[config.primaryKey]]
+    ? [record?.[config.primaryKey], formatHealthCheckupTypeLabel(record?.checkupType)]
     : [record?.[config.complaintKey as string], record?.[config.primaryKey]]
 
   const title = candidates
     .map((value) => String(value || '').trim())
-    .find(Boolean) || '新记录'
+    .find(Boolean) || (kind === 'checkup' ? '体检记录' : '新记录')
 
   const parts = [
     // 用调用方传进来的 kind 取日期字段，而不是再从记录里反查归属 ——

@@ -921,6 +921,17 @@ export function resolveHealthScanErrorMessage(raw: unknown): string {
     return '这次识别超时了，可以再试一次，或直接手工填写'
   }
 
+  /**
+   * 我们自己代码里的报错（2026-10-04 线上事故）。
+   *
+   * 老板传完 7 张报告，界面上写的是「Cannot read properties of undefined (reading '0')」——
+   * 这是我们程序的 bug，不是顾客做错了什么，更不该把英文堆栈甩到家长脸上。
+   * 这类"程序崩了"的报错统一换成一句能行动的话，真正的原因留在日志里给开发查。
+   */
+  if (/Cannot read propert|is not a function|is not defined|of undefined|of null|Minified React|Script error/i.test(text)) {
+    return '识别时出了点问题，请再传一次；如果还是不行，先用「手动填写」'
+  }
+
   // 后端已经写成顾客能懂的话（"没识别到内容…"等），照原样
   return text
 }

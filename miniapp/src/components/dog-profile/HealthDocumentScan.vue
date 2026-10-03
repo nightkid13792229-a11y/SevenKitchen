@@ -623,10 +623,7 @@ async function scanAll(filePaths: string[]) {
       )
     }
 
-    pageOutcomes.value = pageResults.map(page => ({
-      ...page,
-      warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
-    }))
+    pageOutcomes.value = pageResults
 
     // 类型按"多数页"定（只用于文案与兜底：真正的类型贴在每条草稿上）
     const resolvedType = resolveScannedDocumentType(
@@ -667,6 +664,18 @@ async function scanAll(filePaths: string[]) {
     }
 
     drafts.value = merged
+    /**
+     * 逐张提示也按合并结果筛一遍。
+     *
+     * ⚠️ 这一步**必须在 `merged` 算出来之后**（2026-10-04 的线上事故）：
+     * 原来写在 `merged` 之前，小程序编译成 var 之后 `merged[0]` 读到的是 undefined，
+     * 直接抛 `Cannot read properties of undefined (reading '0')` ——
+     * 老板传完 7 张报告，看到的是一句英文报错。
+     */
+    pageOutcomes.value = pageResults.map(page => ({
+      ...page,
+      warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
+    }))
     // 合并之后再筛一遍：某一页"没读到"的提示，在另一页已经读到的情况下要撤掉
     // （老板实测：CRP 数值在 CRP 报告单里，第 1 页的"结果值未填写"就不该再出现）
     warnings.value = filterWarningsAgainstRecord(
@@ -680,6 +689,18 @@ async function scanAll(filePaths: string[]) {
     // 一块看得见的提示，而不是一闪而过的 toast；
     // 基础设施类报错（腾讯云"服务未开通"之类）也不直接甩给顾客，换成能懂的话
     failureNotice.value = resolveHealthScanErrorMessage(error?.message)
+
+    /**
+     * 这一批图已经没用了，别把它们留在 COS 里当垃圾（2026-10-04）。
+     *
+     * 走到这里说明整批没合成任何记录 —— 家长要么重传、要么手填，这些图永远不会
+     * 被任何记录引用。从前只有点「重新上传」才删，点了「知道了」就留在云上占空间。
+     */
+    const leftovers = [...uploadedUrls.value]
+    uploadedUrls.value = []
+    leftovers.forEach((url) => {
+      void dropUploadedFile(url)
+    })
   } finally {
     isBusy.value = false
     uni.hideLoading()

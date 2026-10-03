@@ -62,3 +62,22 @@ describe('识别入口 · 都走同一条"提清晰度"的路', () => {
     expect(source).not.toContain('prepareScanImages')
   })
 })
+
+describe('识别用照片 · 不放大本来就不宽的原图', () => {
+  const source = () =>
+    readFileSync(resolve(process.cwd(), 'src/utils/scan-image.ts'), 'utf-8')
+
+  it('先量原图宽度，再决定压到多宽（避免"压缩"反而把图放大）', () => {
+    const text = source()
+
+    expect(text).toContain('uni.getImageInfo({ src: path, success: resolve, fail: reject })')
+    expect(text).toContain('sourceWidth < SCAN_IMAGE_MAX_WIDTH')
+    expect(text).toContain('compressedWidth: targetWidth')
+  })
+
+  it('量不到宽度也照样能走（回退到上限宽度）', () => {
+    const text = source()
+
+    expect(text).toContain('return Number.isFinite(width) && width > 0 ? width : 0')
+  })
+})

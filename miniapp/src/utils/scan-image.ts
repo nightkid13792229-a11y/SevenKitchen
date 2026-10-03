@@ -31,6 +31,24 @@ export const SCAN_IMAGE_QUALITY = 88
 export const SCAN_IMAGE_SIZE_TYPE: 'original'[] = ['original']
 
 /**
+ * 读一张本地图片的原始宽度（拿不到就返回 0）。
+ *
+ * 为什么要先问一下：`compressedWidth` 是"目标宽度"，原图比它还小的时候
+ * 微信会把图**放大**——白白涨体积，细节一点没多。所以先量一下再决定压到多宽。
+ */
+async function readImageWidth(path: string): Promise<number> {
+  try {
+    const info: any = await new Promise((resolve, reject) => {
+      uni.getImageInfo({ src: path, success: resolve, fail: reject })
+    })
+    const width = Number(info?.width || 0)
+    return Number.isFinite(width) && width > 0 ? width : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
  * 把一张本地照片准备成"识别用"的版本。
  *
  * @param path chooseImage 返回的本地临时路径
@@ -40,12 +58,19 @@ export async function prepareScanImage(path: string): Promise<string> {
   const source = String(path || '').trim()
   if (!source) return source
 
+  // 原图本来就不宽（截图、小图）就不放大，只按质量重压一遍
+  const sourceWidth = await readImageWidth(source)
+  const targetWidth =
+    sourceWidth > 0 && sourceWidth < SCAN_IMAGE_MAX_WIDTH
+      ? sourceWidth
+      : SCAN_IMAGE_MAX_WIDTH
+
   try {
     const res: any = await new Promise((resolve, reject) => {
       uni.compressImage({
         src: source,
         quality: SCAN_IMAGE_QUALITY,
-        compressedWidth: SCAN_IMAGE_MAX_WIDTH,
+        compressedWidth: targetWidth,
         success: resolve,
         fail: reject,
       })

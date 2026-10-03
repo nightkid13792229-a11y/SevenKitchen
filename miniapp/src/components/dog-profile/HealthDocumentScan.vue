@@ -59,6 +59,18 @@
             </text>
           </view>
         </view>
+        <!-- 每张自己的提示紧跟在这一排缩略图下面（老板 2026-10-04：
+             "红字的提醒放在报告的缩略图下方更合理，更方便观看和对比"）。
+             点这一行就能放大对应的那张原图 —— 一边看图一边核这句话。
+             缩略图只有 150rpx 宽，把整句提示塞进格子里会挤成一团，所以放在这一排的正下方。 -->
+        <view v-if="pageWarnings.length > 0" class="pages__warnings">
+          <text
+            v-for="item in pageWarnings"
+            :key="`w-${item.index}-${item.text}`"
+            class="pages__warning"
+            @tap="previewPage(item.path)"
+          >第 {{ item.index }} 张：{{ item.text }}</text>
+        </view>
         <text v-if="hasFailedPages" class="pages__hint">
           带 ✗ / ！的那几张可以点开看看，单独重传一次，或直接手工补充。
         </text>
@@ -216,6 +228,22 @@ const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
 /** 有没有没识别成功的张（决定要不要多写一句引导） */
 const hasFailedPages = computed(() => (
   pageOutcomes.value.some((page) => page.status !== 'ok')
+))
+
+/**
+ * 逐张的提示，摊平成一行一条（2026-10-04）。
+ *
+ * 摆在缩略图那一排的正下方，每条都带"第 N 张"并能点开对应的原图 ——
+ * 家长一边看那张图一边核这句话，不用来回找。
+ */
+const pageWarnings = computed(() => (
+  pageOutcomes.value.flatMap((page) => (
+    (page.warnings || []).map((text) => ({
+      index: page.index,
+      path: page.path,
+      text,
+    }))
+  ))
 ))
 
 /** 点缩略图放大看原图（本地临时文件，直接给微信预览） */
@@ -429,7 +457,18 @@ async function scanAll(filePaths: string[]) {
     }
   }
 
+  /**
+   * **不属于某一页**的提示（例如"第 1、3 张没能识别"这种总结）。
+   *
+   * 某一张自己的提示不放这里 —— 它贴在那一张的缩略图下面
+   * （老板 2026-10-04："红字的提醒放在报告的缩略图下方更合理，更方便观看和对比"），
+   * 放到卡片底部会让人来回找"这是说哪一张"。只有单张上传时才回到底部。
+   */
   const collectedWarnings: string[] = []
+  /** 只有一张图时没有缩略图可贴，这些提示要回到底部展示 */
+  const singlePageWarnings: string[] = []
+  /** 一张都没读出来时报错要用：第一句能说清原因的话 */
+  let firstReadableWarning = ''
   /**
    * 逐张的识别结果（2026-10-03 老板问"能搞清楚具体是哪一张没被识别吗"）。
    * 每张记：第几张、本地缩略图（可点开看原图）、结果、判定类型、这页自己的提示。
@@ -533,9 +572,12 @@ async function scanAll(filePaths: string[]) {
           if (last && last.index === index + 1) {
             last.warnings = pageWarnings
           }
-          collectedWarnings.push(
-            ...pageWarnings.map((item: string) => `第 ${index + 1} 张：${item}`),
-          )
+          if (!firstReadableWarning && pageWarnings.length > 0) {
+            firstReadableWarning = pageWarnings[0]
+          }
+          if (filePaths.length === 1) {
+            singlePageWarnings.push(...pageWarnings)
+          }
         }
 
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
@@ -554,7 +596,12 @@ async function scanAll(filePaths: string[]) {
           label: '',
           warnings: [reason],
         })
-        collectedWarnings.push(`第 ${index + 1} 张：${reason}`)
+        if (!firstReadableWarning) {
+          firstReadableWarning = reason
+        }
+        if (filePaths.length === 1) {
+          singlePageWarnings.push(reason)
+        }
       }
     }
 
@@ -562,7 +609,7 @@ async function scanAll(filePaths: string[]) {
       .reduce((sum, list) => sum + list.length, 0)
     if (collectedCount === 0) {
       throw new Error(
-        collectedWarnings[0] || '没识别到内容，请换一张更清晰的图片',
+        firstReadableWarning || collectedWarnings[0] || '没识别到内容，请换一张更清晰的图片',
       )
     }
 
@@ -576,7 +623,10 @@ async function scanAll(filePaths: string[]) {
       )
     }
 
-    pageOutcomes.value = pageResults
+    pageOutcomes.value = pageResults.map(page => ({
+      ...page,
+      warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
+    }))
 
     // 类型按"多数页"定（只用于文案与兜底：真正的类型贴在每条草稿上）
     const resolvedType = resolveScannedDocumentType(
@@ -619,7 +669,10 @@ async function scanAll(filePaths: string[]) {
     drafts.value = merged
     // 合并之后再筛一遍：某一页"没读到"的提示，在另一页已经读到的情况下要撤掉
     // （老板实测：CRP 数值在 CRP 报告单里，第 1 页的"结果值未填写"就不该再出现）
-    warnings.value = filterWarningsAgainstRecord(collectedWarnings, merged[0])
+    warnings.value = filterWarningsAgainstRecord(
+      [...collectedWarnings, ...singlePageWarnings],
+      merged[0],
+    )
     confidence.value = worstConfidence
     resolvedDocumentType.value = resolvedType
     showConfirm.value = true
@@ -888,6 +941,24 @@ function discard() {
 .pages__item--empty .pages__status,
 .pages__item--failed .pages__status {
   color: #b26a2f;
+}
+
+/* 逐张的提示：紧跟在缩略图那一排下面（老板 2026-10-04 要求挪到这里） */
+.pages__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  margin-top: 10rpx;
+  padding: 10rpx 14rpx;
+  border-radius: 12rpx;
+  background: #fdf6ec;
+  border-left: 6rpx solid #e0b070;
+}
+
+.pages__warning {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #a8622a;
 }
 
 .pages__hint {

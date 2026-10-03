@@ -237,7 +237,13 @@ describe('识别结果可追溯 · 契约', () => {
   it('提示带上"第 N 张"，家长才知道去核对哪一张', () => {
     const source = scan()
 
-    expect(source).toContain('第 ${index + 1} 张：${item}')
+    // 每张自己的提示都带张号，并且就摆在缩略图那一排的正下方
+    expect(source).toContain('第 {{ item.index }} 张：{{ item.text }}')
+    expect(source).toContain('class="pages__warnings"')
+    expect(source).toContain('const pageWarnings = computed')
+    // 点提示能放大对应的那张原图（一边看图一边核这句话）
+    expect(source).toContain('@tap="previewPage(item.path)"')
+
     expect(source).toContain('没能识别（共 ${failed} 张）')
     // 不再只说"有一张没能识别"
     expect(source).not.toContain('有 ${failed} 张没能识别，可以单独再试或手工补充')

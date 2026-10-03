@@ -149,12 +149,32 @@ export function splitLabValueParts(value: string): LabValuePart[] {
     .filter(part => part.label || part.text)
 }
 
-/** 报告名判定：整行没有数字、也不是"项目 数值"的形状，且不长 */
+/**
+ * 报告名判定。
+ *
+ * 老板 2026-10-04 问："白细胞分类的统计项，为什么总数是 57 项呢？"
+ *
+ * 原因：原来按"整行有数字就不是报告名"来判，于是**名字里带数字的报告名**
+ * （「血液形态学检测报告·九分类52项」「血常规（五分类52项）」）被判成了数值行 ——
+ * 它自己变成一个"项目"，后面那份报告几十项又全并进了上一份报告里，
+ * 于是「白细胞分类」这一块的项数被撑到五六十，两个报告也糊成一块。
+ *
+ * 正确的判据不是"有没有数字"，而是"**有没有一个独立的数值**"：
+ *   · 「血液形态学检测报告·九分类52项」→ 数字长在词里面（52项），没有独立数值 → 报告名
+ *   · 「1.白细胞数(WBC) 8.78 10^9/L」   → 空格后面跟着 8.78        → 数值行
+ */
 export function isLabTitleLine(line: string): boolean {
-  const text = String(line || '')
-  if (text.length > 24) return false
-  // 带数字的几乎都是数值行（10^9/L、0.4 % 之类）
-  return !/\d/.test(text)
+  const text = String(line || '').trim()
+  if (!text) return false
+  if (text.length > 30) return false
+
+  // 空格后面直接跟数字（可带正负号/不等号）：这是"项目 数值"的形状
+  if (/\s(?=[<>≤≥]?[-+]?[\d.])/.test(text)) return false
+
+  // 带数值标签（个数:… / 浓度:… / 参考值 …）的也是数值行
+  if (findLabNameBoundary(text) >= 0) return false
+
+  return true
 }
 
 /** 把「项目 数值 单位（偏高）」拆成一段 */

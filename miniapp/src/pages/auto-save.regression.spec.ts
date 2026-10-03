@@ -28,8 +28,8 @@ describe('实时保存 · 契约', () => {
     expect(source).not.toContain("computed(() => '保存')")
     expect(source).not.toContain('stickyPrimaryDisabled')
     expect(source).toContain(':primary-text="stickySecondaryText"')
-    // 组件在只有一个按钮时自动占满整行
-    expect(source).toContain('primary-theme="visit"')
+    // 组件在只有一个按钮时自动占满整行；颜色跟随当前标签（2026-10-03）
+    expect(source).toContain(':primary-theme="stickyAddTheme"')
   })
 
   it('切标签 / 页面隐藏 / 卸载时立刻落库（自动保存的 1.2 秒延迟不能吃掉最后几个字）', () => {
@@ -107,6 +107,54 @@ describe('实时保存 · 契约', () => {
     // 手动保存按钮下线
     expect(source).not.toContain('>保存</button>')
     expect(source).toContain('vaccine-card__autosave')
+  })
+
+  it('删除附件要先确认（老板：不然很容易误删）', () => {
+    const source = records()
+
+    const remove = source.slice(
+      source.indexOf('async function removeAttachment('),
+      source.indexOf('async function removeAttachment(') + 1200,
+    )
+    expect(remove).toContain('uni.showModal({')
+    expect(remove).toContain("title: '删除这份附件？'")
+    expect(remove).toContain("confirmText: '删除'")
+    expect(remove).toContain("cancelText: '先不删'")
+    // 没确认就直接 return，绝不先删后问
+    expect(remove).toContain('if (!confirmed) {')
+  })
+
+  it('底部「新增记录」按标签换色，且动作跟着标签走（2026-10-03 老板提的）', () => {
+    const source = page()
+
+    expect(source).toContain('const stickyAddTheme = computed<')
+    expect(source).toContain("if (activeHealthTab.value === 'checkup') return 'checkup'")
+    expect(source).toContain("if (activeHealthTab.value === 'allergy') return 'allergy'")
+    expect(source).toContain("if (activeHealthTab.value === 'vaccine') return 'vaccine'")
+    expect(source).toContain("if (activeHealthTab.value === 'weight') return 'weight'")
+    expect(source).toContain(':primary-theme="stickyAddTheme"')
+    // 动作也按标签分派（体检要建体检记录、过敏要拍报告、体重落光标）
+    expect(source).toContain('recordsSectionRef.value?.startScan?.()')
+    expect(source).toContain('allergySectionRef.value?.pickHealthReport?.()')
+    expect(source).toContain('weightSectionRef.value?.focusInput?.()')
+    // 体检那条通道用的是当前标签的类型
+    const recordsSection = records()
+    expect(recordsSection).toContain("createHealthVisitDraft(props.visitKind || 'medical')")
+    expect(recordsSection).toContain(":entry-kind=\"props.visitKind || 'medical'\"")
+  })
+
+  it('「健康记录」是通栏 Banner（整块上色），「健康分析」入口暂时隐藏', () => {
+    const source = page()
+
+    expect(source).toContain('class="health-entry health-entry--records"')
+    expect(source).not.toContain('health-entry--analysis')
+    expect(source).not.toContain('class="health-entries"')
+    // 整块上色：底色渐变 + 白字，不再只靠左边一条色条
+    const styles = source.slice(source.indexOf('.health-entry {'))
+    expect(styles).toContain('background: linear-gradient(135deg, #2f6b52 0%, #3d8464 100%)')
+    expect(styles).not.toContain('border-left: 8rpx solid var(--entry-accent')
+    // 页面/接口都还在，只是入口不露出
+    expect(source).toContain('function goHealthAnalysis()')
   })
 
   it('附件上传一次能选多张（老板实测：原来只能一张一张传）', () => {

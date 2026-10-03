@@ -44,13 +44,15 @@ describe('dog profile health page regressions', () => {
     expect(source).not.toContain('就诊前摘要')
     expect(source).not.toContain('goVisitSummary')
     expect(source).not.toContain('health-shortcuts')
-    expect(source).toContain('class="health-entries"')
+    // 2026-10-03：只留一条通栏 Banner「健康记录」，整块上色；
+    // 「健康分析」入口暂时隐藏（页面/接口仍在）
     expect(source).toContain('health-entry--records')
-    expect(source).toContain('health-entry--analysis')
+    expect(source).not.toContain('health-entry--analysis')
     expect(source).toContain('class="health-entry__title">健康记录<')
-    expect(source).toContain('class="health-entry__title">健康分析<')
-    expect(source).toContain('class="health-entry__hint">{{ visitShortcutHint }}<')
-    expect(source).toContain('7 项初步分析')
+    expect(source).not.toContain('class="health-entry__title">健康分析<')
+    expect(source).toContain('{{ visitShortcutHint }}')
+    // 「健康分析」入口暂时隐藏（2026-10-03）
+    expect(source).not.toContain('7 项初步分析')
 
     // 老板要"一行放两个"：四项排成 2×2（年龄 性别 / 品种 体重）。
     // 用 flex-wrap + 百分比列宽实现（小程序的 WXSS 对 grid 支持不齐），
@@ -475,12 +477,15 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
     // 2026-10-03：底部只剩「记一条」一个按钮（保存键下线），主题固定成 visit；
     // 组件仍保留多套主题能力，板块色系继续由书签与内容区表达。
-    expect(page).toContain('primary-theme="visit"')
+    expect(page).toContain(':primary-theme="stickyAddTheme"')
     expect(page).not.toContain('stickyPrimaryTheme')
     expect(bar).toContain('primaryTheme?:')
-    for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
+    // 2026-10-03：新增记录按钮按标签换色 —— 五个标签五套（含体检的蓝）
+    for (const theme of ['visit', 'checkup', 'allergy', 'vaccine', 'weight']) {
       expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)
     }
+    // 饮食标签早下线 → 它的按钮主题也清掉了
+    expect(bar).not.toContain('.sticky-bar__button--primary--diet')
     // 色系要铺到内容区 —— 只给书签文字上色不够（老板指出"色系没划分出来"）
     expect(compact).toContain('.health-theme--medical .health-panel__body')
     expect(compact).toContain('.health-theme--checkup .health-panel__body')

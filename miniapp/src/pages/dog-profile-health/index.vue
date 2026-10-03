@@ -81,15 +81,16 @@
              五个书签不是一类东西，混在一起会让功能区看着像七个板块。
              两个入口用颜色区分（记录=品牌绿、分析=品牌金），
              说明小字**换行显示在标题下方**。 -->
-        <view class="health-entries">
-          <view class="health-entry health-entry--records" @tap="goHealthTimeline">
+        <!-- 健康记录：**通栏 Banner**（2026-10-03 老板定）。
+             原来两个入口并排、各自左边一道色条；现在只留「健康记录」一条，
+             整块上色（不是只在左边一条边），点它进时间线。
+             「健康分析」入口暂时隐藏（页面与接口都还在，只是不在健康管理页露出）。 -->
+        <view class="health-entry health-entry--records" @tap="goHealthTimeline">
+          <view class="health-entry__copy">
             <text class="health-entry__title">健康记录</text>
-            <text class="health-entry__hint">{{ visitShortcutHint }}</text>
+            <text class="health-entry__hint">{{ visitShortcutHint }} · 就诊、体检、过敏、疫苗、体重都在这里</text>
           </view>
-          <view class="health-entry health-entry--analysis" @tap="goHealthAnalysis">
-            <text class="health-entry__title">健康分析</text>
-            <text class="health-entry__hint">7 项初步分析</text>
-          </view>
+          <text class="health-entry__arrow">›</text>
         </view>
 
         <view class="health-panel" :class="`health-theme--${activeHealthTab}`">
@@ -186,7 +187,7 @@
          原来那个可点/可灰的保存键从此不存在 —— 也就不再有"忘了点保存"。 -->
     <StickyActionBar
       :primary-text="stickySecondaryText"
-      primary-theme="visit"
+      :primary-theme="stickyAddTheme"
       :primary-disabled="isSecondaryActionDisabled"
       @primary="onStickySecondary"
     />
@@ -1062,6 +1063,19 @@ function onAddRecordTap() {
  * （就诊/体检/疫苗/过敏 → 调起相册让 AI 识别；体重 → 打开输入块落光标），
  * 不再先弹"你要记什么"。没有选狗狗时这个位置退化成返回。
  */
+/**
+ * 底部「新增记录」的颜色＝当前标签的颜色（2026-10-03 老板："每个标签页下方的
+ * 新增记录，都应该是该标签页对应的色块"）—— 与书签、内容区底色同一套色，
+ * 顾客一眼能对上"我在哪一块、点下去会记到哪一类"。
+ */
+const stickyAddTheme = computed<'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'>(() => {
+  if (activeHealthTab.value === 'checkup') return 'checkup'
+  if (activeHealthTab.value === 'allergy') return 'allergy'
+  if (activeHealthTab.value === 'vaccine') return 'vaccine'
+  if (activeHealthTab.value === 'weight') return 'weight'
+  return 'visit'
+})
+
 const stickySecondaryText = computed(() => (
   // 2026-10-02：新增统一走引导入口，所以任何标签下都是同一个动作
   selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
@@ -1154,6 +1168,12 @@ const visitShortcutHint = computed(() => {
  *
  * 顾客侧已开放（2026-10-02：知识库 189 条兽医全数通过，生产开了 HEALTH_ANALYSIS=customer）。
  * 若后端开关关闭，页面会如实说明原因，不做假入口。
+ */
+/**
+ * 健康分析（第七期）。
+ *
+ * ⚠️ 入口暂时隐藏（2026-10-03 老板定）：页面、接口、知识库门禁都还在，
+ *    只是健康管理页不再露出入口。要恢复就在 Banner 那块再加一个入口。
  */
 function goHealthAnalysis() {
   if (!dogId.value) {
@@ -1439,45 +1459,41 @@ function goToDogCreate() {
  * 与五个板块分开：它们在板块卡**外面**，各自一张小卡、各自一个颜色，
  * 左侧一道粗色条，一眼能区分"这是入口"而不是"这是记录类型"。
  */
-.health-entries {
+/* 「健康记录」通栏 Banner：整块上色、白字，右边一个箭头表示可点进去 */
+.health-entry {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 20rpx;
+  padding: 26rpx 28rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #2f6b52 0%, #3d8464 100%);
+  box-shadow: 0 12rpx 28rpx rgba(30, 46, 36, 0.16);
 }
 
-.health-entry {
-  flex: 1 1 0;
-  min-width: 0;
+.health-entry__copy {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
-  padding: 24rpx 24rpx 24rpx 26rpx;
-  border-radius: 24rpx;
-  border-left: 8rpx solid var(--entry-accent, #2f6b52);
-  box-shadow: 0 10rpx 26rpx rgba(30, 46, 36, 0.06);
-}
-
-/* 健康记录：品牌绿 */
-.health-entry--records {
-  --entry-accent: #2f6b52;
-  background: #f1f7f2;
-}
-
-/* 健康分析：品牌金（与 Banner 上的金色呼应） */
-.health-entry--analysis {
-  --entry-accent: #b08d4f;
-  background: #fdf8ec;
+  min-width: 0;
 }
 
 .health-entry__title {
   font-size: 30rpx;
   font-weight: 700;
-  color: var(--entry-accent, #2f6b52);
+  color: #f3eddd;
 }
 
-/* 说明小字：换行显示在标题下方 */
 .health-entry__hint {
   font-size: 22rpx;
-  color: #8a968a;
+  color: rgba(243, 237, 221, 0.78);
+}
+
+.health-entry__arrow {
+  flex: none;
+  font-size: 40rpx;
+  line-height: 1;
+  color: rgba(243, 237, 221, 0.7);
 }
 
 /*

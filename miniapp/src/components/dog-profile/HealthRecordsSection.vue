@@ -2090,8 +2090,34 @@ async function previewAttachment(url: string) {
   await previewHealthAttachment(url)
 }
 
-function removeAttachment(index: number, attachmentIndex: number) {
+/**
+ * 删除附件（2026-10-03 老板："点击之后需要给一个弹出的对话框，不然很容易误删"）。
+ * 附件是病历/化验单的原件，误删补不回来 —— 所以先确认再删。
+ */
+async function removeAttachment(index: number, attachmentIndex: number) {
   if (hasSavingRecord.value) {
+    return
+  }
+
+  const target = draftRecords.value[index]
+  if (!target) {
+    return
+  }
+
+  const attachments = attachmentList(target)
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '删除这份附件？',
+      content: '删掉之后要从这里重新上传。原件还在你手机里，但档案里就没有了。',
+      confirmText: '删除',
+      cancelText: '先不删',
+      confirmColor: '#b42318',
+      success: (res: any) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+
+  if (!confirmed) {
     return
   }
 
@@ -2100,12 +2126,10 @@ function removeAttachment(index: number, attachmentIndex: number) {
     return
   }
 
-  const attachments = attachmentList(record)
-  if (attachments.length <= attachmentIndex) {
+  const removedUrl = attachments[attachmentIndex]
+  if (!removedUrl) {
     return
   }
-
-  const removedUrl = attachments[attachmentIndex]
   const nextAttachments = attachments.filter((_, currentIndex) => currentIndex !== attachmentIndex)
   draftRecords.value[index] = {
     ...record,

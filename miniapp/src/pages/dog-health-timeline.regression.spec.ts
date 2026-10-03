@@ -91,8 +91,8 @@ describe('两个页面的注册与入口', () => {
 
     expect(page).toContain('goHealthTimeline')
     expect(page).toContain('goHealthAnalysis')
-    // 入口已搬出五个板块那张卡，独立成两块（见 dog-profile-health.regression.spec.ts）
-    expect(page).toContain('health-entries')
+    // 2026-10-03：入口收成一条通栏 Banner「健康记录」（不再并排两块）
+    expect(page).toContain('health-entry--records')
     expect(page).not.toContain('goVisitSummary')
 
     // 老板明确：时间线不以新的板块标签形式存在

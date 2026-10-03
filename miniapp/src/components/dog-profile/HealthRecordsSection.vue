@@ -407,7 +407,9 @@ import HealthDocumentScan from './HealthDocumentScan.vue'
 import {
   HEALTH_RECORD_TYPES,
   HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+  HEALTH_RECORD_TAB_FIELD,
   HEALTH_VISIT_KIND_FIELD,
+  doesDraftBelongToTab,
   HEALTH_VISIT_KIND_LABELS,
   HEALTH_VISIT_KINDS,
   type HealthCheckupTypeOption,
@@ -498,6 +500,14 @@ const props = withDefaults(defineProps<{
    * 上面的类型漏了它（2026-10-01 自查补）。
    */
   activeType?: HealthRecordType | 'visit'
+  /**
+   * 当前标签到底是哪一类（就诊/体检/过敏），由页面传进来（2026-10-03）。
+   *
+   * ⚠️ 不能拿 activeType 代替：三个记录标签的 activeType 都是 `'visit'`，
+   *    而合并模式下组件内部的 baseType 恒等于 medical —— 这正是
+   *    "在就诊新建的空表单跑到体检/过敏里"那个 bug 的来源。
+   */
+  tabKind?: HealthRecordType
   records?: Record<string, any>[]
   loading?: boolean
   savingRecordKey?: string
@@ -530,6 +540,7 @@ const props = withDefaults(defineProps<{
   hideEmptyState?: boolean
 }>(), {
   activeType: undefined,
+  tabKind: undefined,
   showTypeExtra: true,
   hideEmptyState: false,
   records: () => [],
@@ -585,6 +596,83 @@ const baseType = computed<HealthRecordType>(() => (
  *   保存/删除时按这个标记分别调原来的两个接口，数据库两张表原样不动。
  */
 const isVisitMode = computed(() => (props.activeType as string) === 'visit')
+
+/**
+ * 当前标签（就诊/体检/过敏）。
+ * 页面传 tabKind；万一别的入口没传，退回 baseType（非合并模式下它就是答案）。
+ */
+const activeTabKind = computed<HealthRecordType>(
+  () => props.tabKind || baseType.value,
+)
+
+/**
+ * 切标签时把"不属于当前标签"的未保存草稿**收起来**（2026-10-03 老板报的 bug：
+ * 在就诊新建的空表单跑到体检、过敏里）。
+ *
+ * 为什么不直接丢掉：顾客填到一半切去看别的标签，切回来内容还得在。
+ * 所以按标签分桶暂存，回到那个标签时原样放回来。
+ */
+const stashedDrafts = reactive<
+  Record<HealthRecordType, { key: string, record: Record<string, any>, snapshot: Record<string, any> | null }[]>
+>({ medical: [], checkup: [], allergy: [] })
+
+/** 这条草稿属不属于当前标签 */
+function draftBelongsToCurrentTab(record: Record<string, any>): boolean {
+  return doesDraftBelongToTab(record, {
+    tabKind: activeTabKind.value,
+    visitKind: props.visitKind || 'medical',
+  })
+}
+
+/** 收起草稿（连同它"已保存版本"的快照，回来时才知道脏不脏） */
+function stashDraft(record: Record<string, any>, index: number) {
+  const key = recordKey(record, index)
+  const owner = String(record?.[HEALTH_RECORD_TAB_FIELD] || '').trim()
+  const kind: HealthRecordType = owner === 'checkup' || owner === 'allergy'
+    ? owner
+    : owner === 'medical'
+      ? 'medical'
+      : (String(record?.[HEALTH_VISIT_KIND_FIELD] || '') === 'checkup' ? 'checkup' : 'medical')
+
+  if (stashedDrafts[kind].some((item) => item.key === key)) {
+    return
+  }
+
+  stashedDrafts[kind].push({
+    key,
+    record: normalizeDraftRecord(record, key),
+    snapshot: savedSnapshot(record, index) ?? null,
+  })
+}
+
+/** 把当前标签收着的草稿放回列表（已经是服务端记录的不重复放） */
+function takeStashedDrafts(
+  currentRecords: Record<string, any>[],
+  nextSnapshots: Record<string, Record<string, any>>,
+) {
+  const list = stashedDrafts[activeTabKind.value]
+  if (list.length === 0) {
+    return [] as Record<string, any>[]
+  }
+
+  stashedDrafts[activeTabKind.value] = []
+  const existingIds = new Set(
+    currentRecords.map((record) => String(record?.id || '')).filter(Boolean),
+  )
+
+  const restored: Record<string, any>[] = []
+  for (const item of list) {
+    if (item.record?.id && existingIds.has(String(item.record.id))) {
+      continue
+    }
+    if (item.snapshot) {
+      nextSnapshots[item.key] = item.snapshot
+    }
+    restored.push(item.record)
+  }
+
+  return restored
+}
 
 /**
  * 附件上传/删除接口用的类型。
@@ -882,6 +970,8 @@ function normalizeDraftRecord(record: Record<string, any>, localId: string) {
   return {
     ...cloneRecord(record),
     __localId: localId,
+    // 盖一个"这条属于哪个标签"的章：切标签时靠它判断该留还是该收
+    [HEALTH_RECORD_TAB_FIELD]: String(record?.[HEALTH_RECORD_TAB_FIELD] || activeTabKind.value),
     attachments: attachmentList(record),
   }
 }
@@ -916,6 +1006,13 @@ function preserveUnsavedDrafts(
   draftRecords.value.forEach((record, index) => {
     const key = recordKey(record, index)
     if (!isRecordDirty(record, index)) {
+      return
+    }
+
+    // 不属于当前标签的未保存草稿：收起来，别显示在别人家
+    // （2026-10-03 老板实测：就诊新建的空表单跑到了体检、过敏）
+    if (!draftBelongsToCurrentTab(record)) {
+      stashDraft(record, index)
       return
     }
 
@@ -1146,15 +1243,30 @@ function syncDraftRecords(records: Record<string, any>[]) {
     ? preserveUnsavedDrafts(nextDraftRecords, nextSnapshots)
     : nextDraftRecords
 
-  draftRecords.value = recordsWithPreservedDrafts
+  // 换标签时 preserveUnsavedDrafts 可能没被调用（类型变了就直接换了列表）——
+  // 先把旧标签留下的、不属于新标签的草稿收起来，再放回新标签自己收着的那些
+  if (!shouldPreserveDrafts) {
+    draftRecords.value.forEach((record, index) => {
+      if (isRecordDirty(record, index) && !draftBelongsToCurrentTab(record)) {
+        stashDraft(record, index)
+      }
+    })
+  }
+
+  const restoredDrafts = takeStashedDrafts(recordsWithPreservedDrafts, nextSnapshots)
+  const mergedRecords = restoredDrafts.length > 0
+    ? [...recordsWithPreservedDrafts, ...restoredDrafts]
+    : recordsWithPreservedDrafts
+
+  draftRecords.value = mergedRecords
   savedSnapshots.value = nextSnapshots
   lastSyncedType.value = baseType.value
 
-  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, recordsWithPreservedDrafts)) {
+  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, mergedRecords)) {
     return
   }
 
-  const nextKeys = recordsWithPreservedDrafts.map((record, index) => recordKey(record, index))
+  const nextKeys = mergedRecords.map((record, index) => recordKey(record, index))
   expandedRecordKey.value = nextKeys.includes(expandedRecordKey.value || '')
     ? expandedRecordKey.value
     : null
@@ -1427,6 +1539,7 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
       : payload.documentType === 'CHECKUP_REPORT'
     const kind: HealthVisitKind = isCheckupSide ? 'checkup' : 'medical'
     const record = normalizeHealthVisitRecord(kind, draft)
+    record[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value
     // 重新给一个本地 key，避免和已有草稿撞
     record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     draftRecords.value.push(record)
@@ -1598,6 +1711,7 @@ function addRecord() {
   const nextRecord = isVisitMode.value
     ? createHealthVisitDraft(props.visitKind || 'medical')
     : createHealthRecordDraft(baseType.value)
+  nextRecord[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null
 }

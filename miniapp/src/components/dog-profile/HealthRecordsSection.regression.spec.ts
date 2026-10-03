@@ -218,6 +218,27 @@ describe('病历/检查表单 · 精简版', () => {
     expect(source).not.toContain('field-note')
   })
 
+  it('未保存草稿不跨标签显示：不属于本标签的收起来，切回去再放出来（2026-10-03 老板报的 bug）', () => {
+    const source = readSection()
+
+    // 归属判断用的是"当前标签"，不是合并模式下恒等于 medical 的 baseType
+    expect(source).toContain('const activeTabKind = computed<HealthRecordType>')
+    expect(source).toContain('doesDraftBelongToTab(record, {')
+    // 保留草稿时先看归属：不属于本标签 → 暂存，不显示
+    const preserve = source.slice(
+      source.indexOf('function preserveUnsavedDrafts('),
+      source.indexOf('function replaceIncomingRecordWithDirtyDraft('),
+    )
+    expect(preserve).toContain('if (!draftBelongsToCurrentTab(record)) {')
+    expect(preserve).toContain('stashDraft(record, index)')
+    // 回到那个标签时把草稿放回来
+    expect(source).toContain('const stashedDrafts = reactive<')
+    expect(source).toContain('takeStashedDrafts(recordsWithPreservedDrafts, nextSnapshots)')
+    // 新建/识别进来的草稿当场盖章
+    expect(source).toContain('nextRecord[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value')
+    expect(source).toContain('record[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value')
+  })
+
   it('每个板块一个小「编辑」按钮：有内容只读，点编辑才可改（2026-10-02 老板定）', () => {
     const source = readSection()
 

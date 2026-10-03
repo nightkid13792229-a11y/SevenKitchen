@@ -111,6 +111,7 @@
           :dog-id="dogId"
           :dog-name="form.name"
           :visit-kind="activeVisitKind"
+          :tab-kind="activeHealthTab"
           embedded
           :active-type="activeRecordType"
           :records="activeRecordList"

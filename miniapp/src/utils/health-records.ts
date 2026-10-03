@@ -1404,6 +1404,48 @@ export function getHealthVisitFieldConfig(kind: HealthVisitKind): HealthVisitFie
 }
 
 /** 从合并列表里的记录反查它属于哪张表 */
+/** 记录属于哪个标签（就诊/体检/过敏）——切标签时判断"这条草稿该不该留在这儿" */
+export const HEALTH_RECORD_TAB_FIELD = '__tabKind'
+
+/**
+ * 这条（未保存的）草稿属不属于当前标签（2026-10-03 老板报的 bug）。
+ *
+ * 现象：在「就诊」标签下新建一个空的**手动填写**表单，切到「体检」和「过敏」
+ * 也能看到它。
+ *
+ * 原因：三个记录标签共用一个组件，而组件里"当前类型"在合并模式下**恒等于
+ * medical**（`baseType`），于是"保留未保存草稿"那段逻辑认为体检/过敏列表里
+ * 的草稿也都属于自己，把新建的空草稿原样带了过去 —— 空草稿永远是"未保存"，
+ * 于是一路跟着走。
+ *
+ * 判定顺序：
+ *   ① 有 `__tabKind`（新建/识别/从服务器载入时盖的章）→ 必须与当前标签一致；
+ *   ② 没有标签章但有 `__visitKind`（本地草稿）→ 与当前标签的就诊/体检归属比；
+ *   ③ 两者都没有（服务器来的记录）→ 它本来就只出现在当前标签的列表里，算本标签。
+ */
+export function doesDraftBelongToTab(
+  record: Record<string, any> | null | undefined,
+  options: { tabKind: HealthRecordType; visitKind?: 'medical' | 'checkup' },
+): boolean {
+  const tabKind = options.tabKind
+  const tabMarker = String(record?.[HEALTH_RECORD_TAB_FIELD] || '').trim()
+  if (tabMarker) {
+    return tabMarker === tabKind
+  }
+
+  const visitMarker = String(record?.[HEALTH_VISIT_KIND_FIELD] || '').trim()
+  if (tabKind === 'allergy') {
+    // 过敏标签只装过敏记录：带就诊/体检章的草稿一律不属于它
+    return !visitMarker
+  }
+
+  if (visitMarker) {
+    return visitMarker === (options.visitKind || 'medical')
+  }
+
+  return true
+}
+
 export function resolveHealthVisitKind(record: Record<string, any> | null | undefined): HealthVisitKind {
   return record?.[HEALTH_VISIT_KIND_FIELD] === 'checkup' ? 'checkup' : 'medical'
 }

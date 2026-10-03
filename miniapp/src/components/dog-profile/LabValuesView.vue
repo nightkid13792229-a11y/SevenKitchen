@@ -9,16 +9,36 @@
         <text class="lab__title-text">{{ block.title }}</text>
         <text class="lab__title-count">{{ blockCount(block) }} 项</text>
       </view>
-      <view v-for="(row, rowIndex) in block.rows" :key="`${row.name}-${rowIndex}`" class="lab__row">
-        <text class="lab__name">{{ row.name }}</text>
-        <text class="lab__value">
-          {{ row.value
-          }}<text
-            v-if="row.flag"
-            class="lab__flag"
-            :class="{ 'lab__flag--alert': row.flag === '偏高' || row.flag === '偏低' || row.flag === '高' || row.flag === '低' }"
-          >（{{ row.flag }}）</text>
-        </text>
+      <view
+        v-for="(row, rowIndex) in block.rows"
+        :key="`${row.name}-${rowIndex}`"
+        class="lab__row"
+        :class="{ 'lab__row--stacked': row.parts.length >= 2 }"
+      >
+        <!-- 一行里有好几组「标签 数值」（个数 / 浓度 / 百分比）：
+             项目名单独占一行，下面几组并排，字号统一 ——
+             塞进「左名右值」两栏会被挤成两行、还会把「1.47 x 10^12/L」拆开
+             （2026-10-04 老板提的排版问题）。 -->
+        <template v-if="row.parts.length >= 2">
+          <text class="lab__name lab__name--wide">{{ row.name }}</text>
+          <view class="lab__parts">
+            <text v-for="(part, partIndex) in row.parts" :key="`${part.label}-${partIndex}`" class="lab__part">
+              <text class="lab__part-label">{{ part.label }}</text>
+              <text class="lab__part-value">{{ part.text }}</text>
+            </text>
+          </view>
+        </template>
+        <template v-else>
+          <text class="lab__name">{{ row.name }}</text>
+          <text class="lab__value">
+            {{ row.value
+            }}<text
+              v-if="row.flag"
+              class="lab__flag"
+              :class="{ 'lab__flag--alert': row.flag === '偏高' || row.flag === '偏低' || row.flag === '高' || row.flag === '低' }"
+            >（{{ row.flag }}）</text>
+          </text>
+        </template>
       </view>
     </template>
 
@@ -36,6 +56,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dedupeLabValues } from '../../utils/health-records'
+import { glueLabUnits, splitLabValueParts, type LabValuePart } from '../../utils/lab-values'
 
 /**
  * 化验数据排版（2026-10-02）。
@@ -72,7 +93,10 @@ interface LabRow {
   name: string
   value: string
   flag: string
+  /** 数值被拆成的几组「标签 + 数值」（个数 / 浓度 / 百分比）；只有一组时为空 */
+  parts: LabValuePart[]
 }
+
 interface LabBlock {
   title: string
   rows: LabRow[]
@@ -96,16 +120,16 @@ function parseRow(line: string): LabRow {
   // 项目名与数值之间用空白分隔：第一个"数字/符号开头"的片段起算数值
   const valueMatch = body.match(/\s(?=[<>≤≥]?[-+]?[\d.])/)
   if (!valueMatch || valueMatch.index === undefined) {
-    return { name: '', value: body, flag }
+    return { name: '', value: body, flag, parts: [] }
   }
 
   const name = body.slice(0, valueMatch.index).trim()
   const value = body.slice(valueMatch.index).trim()
   if (!name) {
-    return { name: '', value: body, flag }
+    return { name: '', value: body, flag, parts: [] }
   }
 
-  return { name, value, flag }
+  return { name, value: glueLabUnits(value), flag, parts: splitLabValueParts(value) }
 }
 
 const allBlocks = computed<LabBlock[]>(() => {
@@ -227,11 +251,48 @@ const flaggedCount = computed(() =>
   border-bottom: 1rpx solid #f4f6ef;
 }
 
+/* 多组数值的行：项目名占整行，下面几组并排（老板 2026-10-04 提的排版问题） */
+.lab__row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4rpx;
+}
+
 .lab__name {
   flex: 1;
   font-size: 24rpx;
   line-height: 1.5;
   color: #6b6653;
+}
+
+.lab__name--wide {
+  flex: none;
+}
+
+.lab__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6rpx 18rpx;
+}
+
+/* 每一组「标签 数值」：标签浅、数值深，但**字号完全一致** */
+.lab__part {
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.lab__part-label {
+  font-size: 24rpx;
+  color: #8b9384;
+}
+
+.lab__part-value {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #26261f;
 }
 
 .lab__value {

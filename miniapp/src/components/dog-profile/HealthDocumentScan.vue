@@ -107,6 +107,10 @@ import {
   resolveHealthScanErrorMessage,
   resolveScannedDocumentType,
 } from '../../utils/health-records'
+import {
+  SCAN_IMAGE_SIZE_TYPE,
+  prepareScanImages,
+} from '../../utils/scan-image'
 
 /**
  * 拍照 → 上传 → 识别 → **确认一次** → 把内容交给上层填表。
@@ -361,7 +365,8 @@ function pickAndScan() {
 
   uni.chooseImage({
     count: 9,
-    sizeType: ['compressed'],
+    // 拿原图：识别准不准取决于给模型多少像素（见 utils/scan-image.ts）
+    sizeType: SCAN_IMAGE_SIZE_TYPE,
     sourceType: ['album'],
     success: (res: any) => {
       const paths: string[] = Array.isArray(res?.tempFilePaths) ? res.tempFilePaths : []
@@ -387,6 +392,24 @@ async function scanAll(filePaths: string[]) {
   uploadedUrls.value = []
   ignoredPagesNote.value = ''
   pageOutcomes.value = []
+
+  /**
+   * 先把原图压成"识别用"的尺寸（2026-10-03）。
+   *
+   * 微信选图给的原图动辄 4000 像素宽，直传太慢；但用微信的 compressed
+   * 又只有 1280 宽，化验单上的小数字会读错。这里统一压到 2000 宽 ——
+   * 比 1280 多一倍细节，体积还是几百 KB。
+   */
+  uni.showLoading({ title: '处理中…', mask: true })
+  let preparedPaths: string[] = []
+  try {
+    preparedPaths = await prepareScanImages(filePaths)
+  } finally {
+    uni.hideLoading()
+  }
+  if (preparedPaths.length > 0) {
+    filePaths = preparedPaths
+  }
 
   const collectedWarnings: string[] = []
   /**

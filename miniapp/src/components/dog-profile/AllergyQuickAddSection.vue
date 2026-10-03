@@ -103,6 +103,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import {
+  SCAN_IMAGE_SIZE_TYPE,
+  prepareScanImages,
+} from '../../utils/scan-image'
 
 const props = defineProps<{
   /**
@@ -289,7 +293,8 @@ async function pickHealthReport() {
     const chosen: any = await new Promise((resolve, reject) => {
       uni.chooseImage({
         count: 9,
-        sizeType: ['compressed'],
+        // 拿原图：识别准不准取决于给模型多少像素（见 utils/scan-image.ts）
+        sizeType: SCAN_IMAGE_SIZE_TYPE,
         sourceType: ['album', 'camera'],
         success: resolve,
         fail: reject,
@@ -301,6 +306,15 @@ async function pickHealthReport() {
     return
   }
 
+  if (filePaths.length === 0) return
+
+  // 原图太大，先压到"识别用"的尺寸再上传（2026-10-03）
+  uni.showLoading({ title: '处理中…', mask: true })
+  try {
+    filePaths = await prepareScanImages(filePaths)
+  } finally {
+    uni.hideLoading()
+  }
   if (filePaths.length === 0) return
 
   extracting.value = true

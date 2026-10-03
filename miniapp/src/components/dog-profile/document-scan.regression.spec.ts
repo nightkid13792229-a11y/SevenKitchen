@@ -75,7 +75,11 @@ describe('拍照录入 · 组件', () => {
     const scan = readScan()
 
     expect(scan).toContain('count: 9')
-    expect(scan).toContain("sizeType: ['compressed']")
+    /**
+     * 2026-10-03 改：不再要微信的 compressed（只有 1280 宽，化验数值会读错），
+     * 改成拿原图 + 自己压到 2000 宽再上传。细节见 utils/scan-image.ts。
+     */
+    expect(scan).toContain('sizeType: SCAN_IMAGE_SIZE_TYPE')
     // 相册里同一张图选两次没必要识别两次
     expect(scan).toContain('new Set(paths.filter(Boolean))')
     expect(scan).toContain('识别中 ${index + 1}/${filePaths.length}…')

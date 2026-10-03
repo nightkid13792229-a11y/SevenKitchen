@@ -187,3 +187,34 @@ describe('化验数据 · 项目名该切在哪', () => {
     expect(row.value).toBe('0.25\u00A0×10^9/L')
   })
 })
+
+/**
+ * 用老板那张真实报告的原文锁住排版（2026-10-04）。
+ *
+ * 左边是识别抄下来的原文，右边是解析后每一项该变成什么。
+ * 这三行正是他截图里被排坏的那一块。
+ */
+describe('化验数据 · 真实报告的形状', () => {
+  it('血细胞形态学检查：项目名干净，三组数值并排且单位不被拆', () => {
+    const rows = [
+      parseLabRow('正常红细胞 个数:2292个/56张 浓度:1.47 x 10^12/L 百分比:26.62'),
+      parseLabRow('正常色素性红细胞 个数:8056个/48张 浓度:6.07 x 10^12/L 百分比:95.85'),
+    ]
+
+    expect(rows.map(r => r.name)).toEqual(['正常红细胞', '正常色素性红细胞'])
+    for (const row of rows) {
+      expect(row.parts).toHaveLength(3)
+      expect(row.parts[1].label).toBe('浓度')
+      // 数字与单位之间是不换行空格 —— 不会被折到两行
+      expect(row.parts[1].text).toContain('\u00A0×10^12/L')
+      expect(row.parts[1].text).not.toContain(' ')
+    }
+  })
+
+  it('血细胞分类：个数 / 浓度 / 百分比三组都要在（老板问"为什么只记了浓度"）', () => {
+    const row = parseLabRow('中性杆状核粒细胞 个数:10个/377张 浓度:0.25 x 10^9/L 百分比:2.84')
+
+    expect(row.parts.map(p => p.label)).toEqual(['个数', '浓度', '百分比'])
+    expect(row.parts.map(p => p.text)).toEqual(['10个/377张', '0.25\u00A0×10^9/L', '2.84'])
+  })
+})

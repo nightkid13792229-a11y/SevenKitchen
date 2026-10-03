@@ -208,9 +208,6 @@
                 collapsible
               />
               <text v-else class="field-value">{{ fieldText(record, row.key) }}</text>
-              <text v-if="row.rich === 'lab'" class="field-note">
-                AI 抄录，请对照原件核对；偏高/偏低是报告自己标的。
-              </text>
             </template>
 
             <textarea
@@ -2495,8 +2492,24 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(218, 82, 82, 0.08);
 }
 
+/*
+ * 每个字段各自成块（2026-10-03 老板："每个字段和字段之间要有明确的区隔"）。
+ *
+ * 原来是"标签 + 值"上下紧挨着堆在一起，字段一多就糊成一片，看不出哪里是一个
+ * 字段的结束。现在给每块一层比卡片白底略深的底 + 圆角 + 内边距：
+ * 视觉上"一块一块"，标签和值都在自己那块里，不会串行。
+ */
 .field-group {
-  margin-top: 18rpx;
+  margin-top: 16rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background: #f7f9f2;
+  border: 1rpx solid rgba(30, 46, 36, 0.05);
+}
+
+/* 卡片里第一块不需要上间距（上面已经有分隔线了） */
+.record-card__body .field-group:first-child {
+  margin-top: 0;
 }
 
 .record-card__body {
@@ -2518,6 +2531,9 @@ function removeAttachment(index: number, attachmentIndex: number) {
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+  /* 一行式字段不用那么厚的内边距 */
+  padding-top: 14rpx;
+  padding-bottom: 14rpx;
 }
 
 .field-inline-picker {
@@ -2567,14 +2583,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
   color: #17313f;
   white-space: pre-wrap;
   word-break: break-all;
-}
-
-.field-note {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 22rpx;
-  line-height: 1.6;
-  color: #7d8a7d;
 }
 
 .field-label-row {

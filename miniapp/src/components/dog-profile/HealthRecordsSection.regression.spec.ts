@@ -207,6 +207,17 @@ describe('病历/检查表单 · 精简版', () => {
     }
   })
 
+  it('每个字段各自成块，字段之间有明确区隔（2026-10-03 老板提的排版）', () => {
+    const source = readSection()
+
+    // 一块一块的视觉：浅底 + 圆角 + 内边距
+    expect(source).toContain('background: #f7f9f2')
+    expect(source).toContain('.record-card__body .field-group:first-child')
+    // 并且不再有那句"AI 抄录，请对照原件核对"（老板要求取消）
+    expect(source).not.toContain('AI 抄录')
+    expect(source).not.toContain('field-note')
+  })
+
   it('每个板块一个小「编辑」按钮：有内容只读，点编辑才可改（2026-10-02 老板定）', () => {
     const source = readSection()
 

@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveHealthTabRecordType } from '../utils/health-records'
+import {
+  buildHealthRecordSummary,
+  resolveHealthTabRecordType,
+} from '../utils/health-records'
 
 /**
  * 每个书签用哪套表单模板（2026-10-04 老板实测）。
@@ -79,5 +82,25 @@ describe('过敏书签 · 新增记录的两个入口', () => {
 
     expect(allergyBranch.length).toBeGreaterThan(0)
     expect(allergyBranch).not.toContain('recordsSectionRef')
+  })
+})
+
+describe('过敏记录卡片 · 显示的是过敏自己的内容', () => {
+  it('标题是过敏原，摘要是过敏反应/说明 + 附件数', () => {
+    const summary = buildHealthRecordSummary('allergy', {
+      allergen: '鸡肉',
+      notes: '吃完 2 小时开始挠痒',
+      attachments: ['a.jpg', 'b.jpg'],
+    })
+
+    expect(summary.title).toBe('鸡肉')
+    expect(summary.detail).toContain('吃完 2 小时开始挠痒')
+    expect(summary.detail).toContain('含 2 个附件')
+  })
+
+  it('没填过敏原也说的是过敏的话，不是"未填写症状"', () => {
+    const summary = buildHealthRecordSummary('allergy', { allergen: '' })
+
+    expect(summary.title).toBe('未填写过敏原')
   })
 })

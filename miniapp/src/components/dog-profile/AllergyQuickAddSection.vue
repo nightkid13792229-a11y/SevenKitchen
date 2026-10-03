@@ -282,43 +282,64 @@ function discardCandidates() {
 async function pickHealthReport() {
   if (extracting.value) return
 
-  let filePath = ''
+  // 2026-10-03：一次可选多张（一份报告常常不止一页）。
+  // 每页各自识别，过敏原**并起来去重**给顾客确认；页面报错互不牵连。
+  let filePaths: string[] = []
   try {
     const chosen: any = await new Promise((resolve, reject) => {
       uni.chooseImage({
-        count: 1,
+        count: 9,
         sizeType: ['compressed'],
         sourceType: ['album', 'camera'],
         success: resolve,
         fail: reject,
       })
     })
-    filePath = chosen?.tempFilePaths?.[0] || ''
+    filePaths = (Array.isArray(chosen?.tempFilePaths) ? chosen.tempFilePaths : []).filter(Boolean)
   } catch {
     // 顾客取消选图：静默返回，不算失败
     return
   }
 
-  if (!filePath) return
+  if (filePaths.length === 0) return
 
   extracting.value = true
   uni.showLoading({ title: '识别中…' })
 
   try {
-    const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath)
-    const imageUrl = String(uploaded?.url || '').trim()
-    if (!imageUrl) {
-      throw new Error('上传失败，请重试')
+    const collected: string[] = []
+    const collectedWarnings: string[] = []
+
+    for (const [position, filePath] of filePaths.entries()) {
+      if (filePaths.length > 1) {
+        uni.showLoading({ title: `识别中 ${position + 1}/${filePaths.length}…`, mask: true })
+      }
+
+      const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath)
+      const imageUrl = String(uploaded?.url || '').trim()
+      if (!imageUrl) {
+        throw new Error('上传失败，请重试')
+      }
+      // 保留第一张作为"这份报告"的代表图（确认卡片上显示它）
+      if (position === 0) {
+        reportImageUrl.value = imageUrl
+      }
+
+      const res: any = await dogApi.extractHealthReport({ imageUrl })
+      const data = res?.data || {}
+
+      if (Array.isArray(data.allergies)) {
+        collected.push(
+          ...data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim()),
+        )
+      }
+      if (Array.isArray(data.warnings)) {
+        collectedWarnings.push(...data.warnings)
+      }
     }
-    reportImageUrl.value = imageUrl
 
-    const res: any = await dogApi.extractHealthReport({ imageUrl })
-    const data = res?.data || {}
-
-    candidates.value = Array.isArray(data.allergies)
-      ? data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim())
-      : []
-    warnings.value = Array.isArray(data.warnings) ? data.warnings : []
+    candidates.value = Array.from(new Set(collected.map((item) => String(item).trim()))).filter(Boolean)
+    warnings.value = Array.from(new Set(collectedWarnings))
     // 候选一律先不选中，逐项由顾客点
     pickedCandidates.value = []
 

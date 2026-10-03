@@ -1936,109 +1936,149 @@ async function chooseAttachment(index: number) {
     return
   }
 
-  const selectedFile = tapIndex === 0 ? await chooseImageFile() : await choosePdfFile()
-  if (!selectedFile) {
+  // 2026-10-03 老板：上传图片一次只能选一张太别扭 —— 改成**一次最多 9 张**
+  // （PDF 同样一次可选多个），逐个校验、逐个上传，成功的逐个出现在附件里。
+  const selectedFiles = tapIndex === 0 ? await chooseImageFiles() : await choosePdfFiles()
+  if (selectedFiles.length === 0) {
     return
   }
 
-  const selectionError = resolveHealthAttachmentSelectionError(
-    tapIndex === 0 ? 'image' : 'pdf',
-    selectedFile.name,
-  )
-  if (selectionError) {
-    uni.showToast({ title: selectionError, icon: 'none' })
-    return
+  const fileKind = tapIndex === 0 ? 'image' : 'pdf'
+  const accepted: { path: string, name: string, size: number | null }[] = []
+  const rejected: string[] = []
+
+  for (const file of selectedFiles) {
+    const selectionError = resolveHealthAttachmentSelectionError(fileKind, file.name)
+    const fileSizeError = resolveHealthAttachmentFileSizeError(file.size)
+    if (selectionError || fileSizeError) {
+      // 同一批里不合格的挑出来说一句，合格的照旧上传（不因为一张坏图全丢）
+      rejected.push(`${file.name}：${selectionError || fileSizeError}`)
+      continue
+    }
+    accepted.push(file)
   }
 
-  const fileSizeError = resolveHealthAttachmentFileSizeError(selectedFile.size)
-  if (fileSizeError) {
-    uni.showToast({ title: fileSizeError, icon: 'none' })
+  if (accepted.length === 0) {
+    uni.showToast({ title: rejected[0] || '这些文件都传不了', icon: 'none', duration: 3000 })
     return
   }
 
   uploadingKeys.value[uploadKey] = true
 
   try {
-    uni.showLoading({ title: '上传中...' })
-    const uploaded = await dogApi.uploadHealthAttachment(uploadType, selectedFile.path)
-    if (attachmentApiType.value !== uploadType) {
-      uni.hideLoading()
-      return
+    let added = 0
+    for (const [position, file] of accepted.entries()) {
+      uni.showLoading({
+        title: accepted.length > 1
+          ? `上传中 ${position + 1}/${accepted.length}…`
+          : '上传中...',
+        mask: true,
+      })
+
+      try {
+        const uploaded = await dogApi.uploadHealthAttachment(uploadType, file.path)
+        if (attachmentApiType.value !== uploadType) {
+          return
+        }
+
+        const targetIndex = findRecordIndexByKey(uploadKey)
+        if (targetIndex < 0) {
+          return
+        }
+
+        const targetRecord = draftRecords.value[targetIndex]
+        draftRecords.value[targetIndex] = {
+          ...targetRecord,
+          attachments: [...attachmentList(targetRecord), uploaded.url],
+        }
+        added += 1
+      } catch (error: any) {
+        rejected.push(`${file.name}：${resolveHealthAttachmentUploadErrorMessage(error)}`)
+      }
     }
 
-    const targetIndex = findRecordIndexByKey(uploadKey)
-    if (targetIndex < 0) {
-      uni.hideLoading()
-      return
+    uni.hideLoading()
+
+    if (added > 0) {
+      // 附件一进列表就自动保存（2026-10-03 起不再需要手动点保存）
+      const targetIndex = findRecordIndexByKey(uploadKey)
+      if (targetIndex >= 0) {
+        scheduleAutoSave(draftRecords.value[targetIndex], targetIndex)
+      }
+      uni.showToast({
+        title: added > 1 ? `已添加 ${added} 张，正在保存` : '附件已添加，正在保存',
+        icon: 'none',
+      })
     }
 
-    const targetRecord = draftRecords.value[targetIndex]
-    const attachments = attachmentList(targetRecord)
-    draftRecords.value[targetIndex] = {
-      ...targetRecord,
-      attachments: [...attachments, uploaded.url],
+    if (rejected.length > 0) {
+      // 有没传上的：说清是哪个、为什么（不要静默吞掉）
+      setTimeout(() => {
+        uni.showToast({ title: `有 ${rejected.length} 个没能上传：${rejected[0]}`, icon: 'none', duration: 3500 })
+      }, added > 0 ? 1200 : 0)
     }
-    uni.hideLoading()
-    uni.showToast({ title: '附件已添加，请保存记录', icon: 'none' })
-  } catch (error: any) {
-    uni.hideLoading()
-    uni.showToast({ title: resolveHealthAttachmentUploadErrorMessage(error), icon: 'none' })
   } finally {
+    uni.hideLoading()
     delete uploadingKeys.value[uploadKey]
   }
 }
 
-function chooseImageFile() {
-  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
+/** 一次最多选几个附件（微信相册上限 9；PDF 也给同样的额度） */
+const MAX_ATTACHMENT_PICK = 9
+
+function chooseImageFiles() {
+  return new Promise<{ path: string, name: string, size: number | null }[]>((resolve) => {
     uni.chooseImage({
-      count: 1,
+      count: MAX_ATTACHMENT_PICK,
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],
       success: async (res: any) => {
-        const filePath = res.tempFilePaths?.[0]
-        if (!filePath) {
-          resolve(null)
-          return
-        }
-
-        const reportedFileSize =
-          typeof res.tempFiles?.[0]?.size === 'number' ? res.tempFiles[0].size : null
-        const fileSize = reportedFileSize ?? await readHealthAttachmentFileSize(filePath)
-
-        resolve({
-          path: filePath,
-          name: filePath.split('/').pop() || 'image.jpg',
-          size: fileSize,
-        })
+        const paths: string[] = Array.isArray(res.tempFilePaths) ? res.tempFilePaths : []
+        const files = await Promise.all(
+          paths.filter(Boolean).map(async (filePath: string, position: number) => {
+            const reportedFileSize =
+              typeof res.tempFiles?.[position]?.size === 'number'
+                ? res.tempFiles[position].size
+                : null
+            const size = reportedFileSize ?? await readHealthAttachmentFileSize(filePath)
+            return {
+              path: filePath,
+              name: filePath.split('/').pop() || `image-${position + 1}.jpg`,
+              size,
+            }
+          }),
+        )
+        resolve(files)
       },
-      fail: () => resolve(null),
+      fail: () => resolve([]),
     })
   })
 }
 
-function choosePdfFile() {
-  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
+function choosePdfFiles() {
+  return new Promise<{ path: string, name: string, size: number | null }[]>((resolve) => {
     uni.chooseMessageFile({
-      count: 1,
+      count: MAX_ATTACHMENT_PICK,
       type: 'file',
       extension: ['pdf'],
       success: async (res: any) => {
-        const file = res.tempFiles?.[0]
-        if (!file?.path) {
-          resolve(null)
-          return
-        }
-
-        const reportedFileSize = typeof file.size === 'number' ? file.size : null
-        const fileSize = reportedFileSize ?? await readHealthAttachmentFileSize(file.path)
-
-        resolve({
-          path: file.path,
-          name: file.name || file.path.split('/').pop() || 'document.pdf',
-          size: fileSize,
-        })
+        const list = Array.isArray(res.tempFiles) ? res.tempFiles : []
+        const files = await Promise.all(
+          list
+            .filter((file: any) => file?.path)
+            .map(async (file: any, position: number) => {
+              const reportedFileSize = typeof file.size === 'number' ? file.size : null
+              const size = reportedFileSize ?? await readHealthAttachmentFileSize(file.path)
+              return {
+                path: file.path,
+                name: file.name || file.path.split('/').pop() || `document-${position + 1}.pdf`,
+                size,
+              }
+            }),
+        )
+        resolve(files)
       },
-      fail: () => resolve(null),
+      fail: () => resolve([]),
     })
   })
 }

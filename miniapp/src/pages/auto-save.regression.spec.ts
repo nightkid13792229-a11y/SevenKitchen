@@ -109,6 +109,24 @@ describe('实时保存 · 契约', () => {
     expect(source).toContain('vaccine-card__autosave')
   })
 
+  it('附件上传一次能选多张（老板实测：原来只能一张一张传）', () => {
+    const source = records()
+
+    expect(source).toContain('const MAX_ATTACHMENT_PICK = 9')
+    expect(source).toContain('function chooseImageFiles()')
+    expect(source).toContain('function choosePdfFiles()')
+    // 两个选择器都用多选额度，不再写死 count: 1
+    const pickers = source.slice(
+      source.indexOf('function chooseImageFiles()'),
+      source.indexOf('function previewAttachment('),
+    )
+    expect(pickers).not.toContain('count: 1,')
+    expect(pickers).toContain('count: MAX_ATTACHMENT_PICK')
+    // 逐个上传并显示进度；不合格的挑出来说清原因，不因为一张坏图全丢
+    expect(source).toContain('上传中 ${position + 1}/${accepted.length}')
+    expect(source).toContain('rejected.push')
+  })
+
   it('体重趋势图：画布必须带上组件实例，否则只会剩一块白框（老板实测）', () => {
     const source = weight()
 

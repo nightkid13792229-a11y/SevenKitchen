@@ -1484,6 +1484,32 @@ export function resolveHealthVisitKind(record: Record<string, any> | null | unde
   return record?.[HEALTH_VISIT_KIND_FIELD] === 'checkup' ? 'checkup' : 'medical'
 }
 
+/**
+ * 某个书签该用哪套表单模板（2026-10-04 老板报的 bug）。
+ *
+ * 老板原话："过敏标签分类下，现在用的也是就诊的模板。请修复回过敏分类自身的模板。"
+ *
+ * 原因：就诊与体检共用一个列表（`'visit'` 合并模式），拆标签时图省事，
+ * 把**三个记录类书签全按 `'visit'`** 传给了组件 —— 于是过敏也跟着走
+ * 「日期 / 症状 / 医生诊断 / 医嘱」那套模板，过敏原和过敏反应反而没地方填。
+ *
+ * 规则：
+ *   · 就诊 / 体检 → `'visit'`（两类记录同一个列表，逐条按自己的章渲染）
+ *   · 过敏       → `'allergy'`（单一类型，走它自己的字段：过敏原 + 过敏反应/说明）
+ */
+export function resolveHealthTabRecordType(tab: string): HealthRecordType | 'visit' {
+  if (tab === 'medical' || tab === 'checkup') {
+    return 'visit'
+  }
+
+  if (tab === 'allergy') {
+    return 'allergy'
+  }
+
+  // 疫苗 / 体重不走这个组件；万一传进来也别渲染成空白
+  return 'medical'
+}
+
 export function createHealthVisitDraft(kind: HealthVisitKind): HealthRecordShape {
   const base: HealthRecordShape = {
     __localId: `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

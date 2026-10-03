@@ -222,6 +222,7 @@ import {
   removeHealthRecordFromList,
   replaceHealthRecordInList,
   resolveDogHealthSelectionState,
+  resolveHealthTabRecordType,
   shouldDiscardDogHealthProfileResponse,
   writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
@@ -317,9 +318,16 @@ const activeVisitKind = computed<'medical' | 'checkup'>(() =>
   activeHealthTab.value === 'checkup' ? 'checkup' : 'medical',
 )
 
-/** 传给 HealthRecordsSection 的板块标识：记录类统一按 visit 模式渲染 */
+/**
+ * 传给 HealthRecordsSection 的板块标识（2026-10-04 修正）。
+ *
+ * 就诊 / 体检：两类记录共用同一个列表，走 `'visit'`（合并）模式；
+ * 过敏：**单一类型，走它自己的模板**（过敏原 + 过敏反应/说明）——
+ * 老板实测："过敏标签分类下，现在用的也是就诊的模板"，
+ * 就是这里原来把三个记录类书签一律当成 `'visit'` 传下去了。
+ */
 const activeRecordType = computed<HealthRecordType | 'visit'>(() =>
-  isRecordTab.value ? 'visit' : 'medical',
+  resolveHealthTabRecordType(activeHealthTab.value),
 )
 
 /** 当前标签要展示的记录与加载态（拆标签后：就诊/体检各看各的） */
@@ -1015,12 +1023,33 @@ function onAddRecordTap() {
     return
   }
 
+  /**
+   * 过敏不走"新建一张空记录卡"这条路（2026-10-04）。
+   *
+   * 过敏板块上面那张「快速添加过敏原」卡本身就是最省事的填法
+   * （点选 / 手输 + 拍检测报告自动识别）；而且过敏改回自己的模板之后，
+   * 记录组件里那套"拍照录入"只在就诊/体检模式下挂载，
+   * 再走记录那条分支会**点了没反应**。
+   */
+  if (activeHealthTab.value === 'allergy') {
+    uni.showActionSheet({
+      itemList: ['拍检测报告，AI 识别', '手动点选 / 手输'],
+      success: ({ tapIndex }) => {
+        allergyAddEntryVisible.value = true
+        if (tapIndex === 0) {
+          nextTick(() => allergySectionRef.value?.pickHealthReport?.())
+        } else {
+          uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
+        }
+      },
+    })
+    return
+  }
+
   const isRecord = isRecordTab.value
   const options = isRecord
     ? ['上传图片，AI 识别', '手动填写']
-    : activeHealthTab.value === 'vaccine'
-      ? ['拍疫苗本，AI 识别', '手动加一条']
-      : ['拍检测报告，AI 识别', '手动点选 / 手输']
+    : ['拍疫苗本，AI 识别', '手动加一条']
 
   uni.showActionSheet({
     itemList: options,
@@ -1041,15 +1070,6 @@ function onAddRecordTap() {
         } else {
           vaccineSectionRef.value?.addRecord?.()
         }
-        return
-      }
-
-      // 过敏
-      allergyAddEntryVisible.value = true
-      if (tapIndex === 0) {
-        nextTick(() => allergySectionRef.value?.pickHealthReport?.())
-      } else {
-        uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
       }
     },
   })

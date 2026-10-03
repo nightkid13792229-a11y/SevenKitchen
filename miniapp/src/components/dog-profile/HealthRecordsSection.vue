@@ -79,6 +79,13 @@
       </text>
     </view>
 
+    <!-- 纯手填入口（2026-10-03）：底部「新增记录」直接调起相册做 AI 识别，
+         想自己打字的走这里 —— 一个入口一次点击，两边都不绕 -->
+    <view v-if="isVisitMode && !loading" class="manual-add">
+      <text class="manual-add__action" @tap="addRecord()">手动填写一条</text>
+      <text class="manual-add__hint">不想拍照片时用；填写过程会自动保存</text>
+    </view>
+
     <view
       v-for="(record, index) in draftRecords"
       :key="recordKey(record, index)"
@@ -396,7 +403,8 @@
     </view>
 
     <!-- 「新增记录」按钮已下线（2026-10-02 老板要求收敛入口）：
-         新增只能从底部「记一条」引导入口进 —— 标签页只做结果呈现与手动编辑。
+         2026-10-03 起：底部「新增记录」按当前标签直接调起相册做 AI 识别，
+         纯手填走列表下方的「手动填写一条」；标签页本身只做结果呈现与编辑。
          组件仍然暴露 addRecord()，供引导入口在选完类别后调用。 -->
   </view>
 </template>
@@ -2452,6 +2460,25 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 24rpx;
   color: #a63f3f;
   background: rgba(218, 82, 82, 0.08);
+}
+
+.manual-add {
+  margin-top: 22rpx;
+  padding: 20rpx 0 4rpx;
+  text-align: center;
+}
+
+.manual-add__action {
+  font-size: 25rpx;
+  color: #0f6b43;
+  text-decoration: underline;
+}
+
+.manual-add__hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: #8a968a;
 }
 
 .field-group {

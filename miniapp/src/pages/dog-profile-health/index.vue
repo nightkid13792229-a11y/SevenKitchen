@@ -130,7 +130,7 @@
             <AllergyQuickAddSection
               v-if="activeRecordType === 'allergy'"
               ref="allergySectionRef"
-              :show-add-entry="allergyAddEntryVisible"
+              :show-add-entry="true"
               :dog-id="dogId"
               :recorded-allergens="recordedAllergens"
               @saved="onAllergenSaved"
@@ -147,7 +147,8 @@
             ref="vaccineSectionRef"
             external-save
             embedded
-            :show-add-entry="vaccineAddEntryVisible"
+            :show-add-entry="true"
+            hide-scan-trigger
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
           />
@@ -180,46 +181,8 @@
            （每条记录单独保存），底部再放一个"保存"没有意义，只会让人不知道
            它到底在存什么 —— 所以那些书签下不显示保存按钮。
          · 返回按钮的文案跟着入口走。 -->
-    <!-- ── 「记一条」引导面板（2026-10-02 老板要的引导流程）─────────────────
-         标签页从此只做"结果呈现 + 手动编辑"，新增统一走这里：
-         先问"你要记什么"，再按类别把人送进对应的录入动作 ——
-         就诊/体检给出"传照片让 AI 识别"和"手动填写"两条路，
-         疫苗/过敏/体重直接落到各自的录入位置。 -->
-    <view v-if="addGuideVisible" class="add-guide" @tap="closeAddGuide">
-      <view class="add-guide__sheet" @tap.stop>
-        <text class="add-guide__title">你要记什么？</text>
-        <text class="add-guide__desc">选一类，我们会只问这一类需要的信息</text>
-
-        <view
-          v-for="item in ADD_GUIDE_ITEMS"
-          :key="item.key"
-          class="add-guide__card"
-        >
-          <view class="add-guide__card-head">
-            <text class="add-guide__emoji">{{ item.emoji }}</text>
-            <view class="add-guide__card-copy">
-              <text class="add-guide__card-title">{{ item.title }}</text>
-              <text class="add-guide__card-desc">{{ item.desc }}</text>
-            </view>
-          </view>
-
-          <view class="add-guide__actions">
-            <text
-              v-for="action in item.actions"
-              :key="action.mode"
-              class="add-guide__action"
-              :class="{ 'add-guide__action--primary': action.primary }"
-              @tap.stop="pickAddGuide(item.key, action.mode)"
-            >{{ action.label }}</text>
-          </view>
-        </view>
-
-        <text class="add-guide__cancel" @tap="closeAddGuide">取消</text>
-      </view>
-    </view>
-
     <!-- 2026-10-03 老板定：**删掉底部保存按钮**，六个板块全部改成实时保存。
-         底部只留一个「记一条」（组件在没有其它按钮时自动占满整行）。
+         底部只留一个「新增记录」—— 点它按当前标签直接走那个通道（不弹面板）。
          原来那个可点/可灰的保存键从此不存在 —— 也就不再有"忘了点保存"。 -->
     <StickyActionBar
       :primary-text="stickySecondaryText"
@@ -1015,82 +978,15 @@ const hasUnsavedSectionDraft = ref(false)
 
 
 /**
- * 底部保存按钮的文案只写「保存」（老板要求）。
- * 当前在哪个板块由上面的书签和色系表达，按钮不必再重复一遍板块名。
- */
-/**
- * 「记一条」引导面板（2026-10-02）。
+ * 各板块的"新增块"开关（2026-10-03）。
  *
- * 老板的诉求：标签页只做结果呈现与手动编辑，**新增统一从一个入口进**，
- * 进去先分类，再按类别引导 —— 因为就诊与体检要填的东西差别很大。
- *
- * 每一项的 actions 就是这个类别的录入路径；「传照片」会切到对应标签并
- * 直接调起相册（AI 识别后填表），「手动填写」则新建一条该类空白记录。
- */
-const addGuideVisible = ref(false)
-
-const ADD_GUIDE_ITEMS: {
-  key: 'medical' | 'checkup' | 'vaccine' | 'allergy' | 'weight'
-  emoji: string
-  title: string
-  desc: string
-  actions: { mode: string; label: string; primary?: boolean }[]
-}[] = [
-  {
-    key: 'medical',
-    emoji: '🩺',
-    title: '看病就诊',
-    desc: '症状、医生诊断、医嘱、用药；化验单和 X 光片也能一起传',
-    actions: [
-      { mode: 'scan', label: '传病历/处方（AI 识别）', primary: true },
-      { mode: 'manual', label: '手动填写' },
-    ],
-  },
-  {
-    key: 'checkup',
-    emoji: '📋',
-    title: '体检 / 化验',
-    desc: '体检报告、化验单；AI 抄录检查结论与化验数据',
-    actions: [
-      { mode: 'scan', label: '传体检报告（AI 识别）', primary: true },
-      { mode: 'manual', label: '手动填写' },
-    ],
-  },
-  {
-    key: 'vaccine',
-    emoji: '💉',
-    title: '疫苗',
-    desc: '拍疫苗本，一次读出多条接种记录',
-    actions: [
-      { mode: 'scan', label: '拍疫苗本（AI 识别）', primary: true },
-      { mode: 'manual', label: '手动加一条' },
-    ],
-  },
-  {
-    key: 'allergy',
-    emoji: '🍗',
-    title: '过敏',
-    desc: '拍过敏原检测报告，勾选确认后入档',
-    actions: [
-      { mode: 'scan', label: '拍检测报告（AI 识别）', primary: true },
-      { mode: 'jump', label: '点选/手输过敏原' },
-    ],
-  },
-  {
-    key: 'weight',
-    emoji: '⚖️',
-    title: '体重',
-    desc: '记一个数值，自动画趋势',
-    actions: [{ mode: 'manual', label: '现在称一下', primary: true }],
-  },
-]
-
-/**
- * 三个板块的"新增入口"开关（2026-10-02 入口收敛）。
- *
- * 标签页平时**不显示**任何新增入口，只做结果呈现与手动编辑；
- * 顾客在「记一条」里选到某一类时，页面把这个开关打开再切过去 ——
- * 顾客看到的仍然是熟悉的板块界面，但全站只有引导入口这一个新增起点。
+ * 引导面板下线之后，底部「新增记录」按**当前标签**直接走那个板块的通道：
+ *   · 就诊 / 体检 → 直接调起相册 + AI 识别（不弹面板）
+ *   · 疫苗       → 直接拍疫苗本（AI 认出多条接种记录）
+ *   · 过敏       → 直接拍检测报告（AI，识别结果仍需确认）
+ *   · 体重       → 打开输入块并把光标送进输入框
+ * 纯手填的入口留在各板块里（疫苗的「新增疫苗记录」、过敏的「一点即选」、
+ * 就诊/体检列表下方的「手动填写一条」、体重的输入块），不再需要先选一次类别。
  */
 const vaccineAddEntryVisible = ref(false)
 const allergyAddEntryVisible = ref(false)
@@ -1102,69 +998,37 @@ function resetAddEntryFlags() {
   weightAddEntryVisible.value = false
 }
 
-function openAddGuide() {
-  addGuideVisible.value = true
-}
-
-function closeAddGuide() {
-  addGuideVisible.value = false
-}
-
 /**
- * 选了一类之后：先切到对应标签（顾客看得见落点），再调起该类别的录入动作。
- * 就诊/体检的记录板块是同一个组件，只是类型不同 —— 靠 activeHealthTab 决定。
+ * 底部「新增记录」：按当前标签直接走对应通道（2026-10-03 老板定）。
+ *
+ * 老板原话："既然点击记一条按钮之后，依然走的是每一个标签的功能来让 AI 识别，
+ * 那我们能否把点击之后的弹窗去掉，让它自动识别当前处在哪个标签页下，
+ * 点击就自动走哪一个通道呢？" —— 于是这一步从"先选类别"变成"直接用当前类别"。
  */
-async function pickAddGuide(
-  key: 'medical' | 'checkup' | 'vaccine' | 'allergy' | 'weight',
-  mode: string,
-) {
-  addGuideVisible.value = false
-  selectHealthTab(key as HealthTabKey)
-  await nextTick()
-
-  if (key === 'medical' || key === 'checkup') {
-    if (mode === 'scan') {
-      recordsSectionRef.value?.startScan?.()
-      return
-    }
-
-    recordsSectionRef.value?.addRecord?.()
+function onAddRecordTap() {
+  if (isRecordTab.value) {
+    // 就诊 / 体检：传照片 → AI 识别 → 确认一次 → 自动填表（并实时保存）
+    recordsSectionRef.value?.startScan?.()
     return
   }
 
-  if (key === 'vaccine') {
+  if (activeHealthTab.value === 'vaccine') {
     vaccineAddEntryVisible.value = true
-    if (mode === 'scan') {
-      vaccineSectionRef.value?.startScan?.()
-      return
-    }
-
-    vaccineSectionRef.value?.addRecord?.()
+    nextTick(() => vaccineSectionRef.value?.startScan?.())
     return
   }
 
-  if (key === 'weight') {
-    // 打开新增块 + 把光标送进输入框（顾客直接打字）
-    weightAddEntryVisible.value = true
-    await nextTick()
-    weightSectionRef.value?.focusInput?.()
-    return
-  }
-
-  if (key === 'allergy') {
+  if (activeHealthTab.value === 'allergy') {
     allergyAddEntryVisible.value = true
-    if (mode === 'scan') {
-      allergySectionRef.value?.pickHealthReport?.()
-      return
-    }
-
-    // 点选/手输：切过来就能看到板块顶部那张"一点即选"的卡
-    uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
+    nextTick(() => allergySectionRef.value?.pickHealthReport?.())
     return
   }
 
-  // 兜底：不该走到这里
-  uni.showToast({ title: '这个入口还在做', icon: 'none' })
+  if (activeHealthTab.value === 'weight') {
+    weightAddEntryVisible.value = true
+    nextTick(() => weightSectionRef.value?.focusInput?.())
+    return
+  }
 }
 
 /**
@@ -1174,13 +1038,13 @@ async function pickAddGuide(
 /**
  * 底部左侧那个按钮的文案。
  *
- * 「病历/检查」板块：这里是**新增记录**的入口（点它选：手动填写 / 拍病历 / 拍体检报告）——
- * 老板 2026-10-01 要求把原来分散的三处入口合并到这一个按钮上，并取消「返回首页」。
- * 其它板块暂时仍是返回（返回也可以直接用小程序导航栏左上角的返回箭头）。
+ * 2026-10-03 起**文案就是「新增记录」**，点它按当前标签直接走那个通道
+ * （就诊/体检/疫苗/过敏 → 调起相册让 AI 识别；体重 → 打开输入块落光标），
+ * 不再先弹"你要记什么"。没有选狗狗时这个位置退化成返回。
  */
 const stickySecondaryText = computed(() => (
   // 2026-10-02：新增统一走引导入口，所以任何标签下都是同一个动作
-  selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]
+  selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
 ))
 
 /**
@@ -1207,9 +1071,9 @@ function flushActiveTabAutoSaves() {
 }
 
 function onStickySecondary() {
-  // 新增统一从引导入口进（老板 2026-10-02：先分类、再按类引导）
+  // 2026-10-03：不再弹"你要记什么"，直接按当前标签走那个通道
   if (selectedDog.value) {
-    openAddGuide()
+    onAddRecordTap()
     return
   }
 
@@ -1466,117 +1330,6 @@ function goToDogCreate() {
 .health-theme--visit { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
 .health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
 .health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
-/* ── 「记一条」引导面板 ───────────────────────────────────── */
-.add-guide {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(20, 32, 26, 0.42);
-}
-
-.add-guide__sheet {
-  width: 100%;
-  max-height: 86vh;
-  overflow-y: auto;
-  padding: 32rpx 28rpx calc(32rpx + env(safe-area-inset-bottom));
-  border-radius: 32rpx 32rpx 0 0;
-  background: #fbfdf8;
-  box-sizing: border-box;
-}
-
-.add-guide__title {
-  display: block;
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #17313f;
-}
-
-.add-guide__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #7b8a7f;
-}
-
-.add-guide__card {
-  margin-top: 22rpx;
-  padding: 22rpx 22rpx 18rpx;
-  border-radius: 22rpx;
-  background: #fff;
-  border: 1rpx solid #e6ece0;
-}
-
-.add-guide__card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
-}
-
-.add-guide__emoji {
-  font-size: 40rpx;
-  line-height: 1.2;
-}
-
-.add-guide__card-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.add-guide__card-title {
-  display: block;
-  font-size: 29rpx;
-  font-weight: 700;
-  color: #17313f;
-}
-
-.add-guide__card-desc {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #77867c;
-}
-
-.add-guide__actions {
-  margin-top: 16rpx;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.add-guide__action {
-  padding: 14rpx 24rpx;
-  border-radius: 999rpx;
-  font-size: 25rpx;
-  color: #0f6b43;
-  background: rgba(15, 107, 67, 0.08);
-}
-
-.add-guide__action--primary {
-  color: #fff;
-  background: #0f6b43;
-}
-
-.add-guide__cancel {
-  display: block;
-  margin-top: 26rpx;
-  text-align: center;
-  font-size: 27rpx;
-  color: #7b8a7f;
-}
-
-.health-theme--diet { --health-accent: #b07a1e;  --health-accent-soft: #f7eedd; }
-.health-theme--weight { --health-accent: #0e6f78;  --health-accent-soft: #e2f0f2; }
-
-.health-panel {
-  border-radius: 30rpx;
-  background: #fbfcf7;
-  box-shadow: 0 12rpx 32rpx rgba(30, 46, 36, 0.06);
-  overflow: hidden;
-}
-
 /*
  * 书签条：模仿 Chrome 的标签页（老板要求）。
  *

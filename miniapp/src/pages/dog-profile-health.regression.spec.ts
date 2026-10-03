@@ -166,7 +166,7 @@ describe('dog profile health page regressions', () => {
     expect(functionSource(
       source,
       'async function deleteHealthRecord',
-      'async function pickAddGuide',
+      'function onAddRecordTap',
     )).not.toContain('uni.showModal')
     // 引导入口本身是纯派发（不碰保存状态），保存态由底部按钮的禁用逻辑把关
     expect(source).toContain('const isSecondaryActionDisabled = computed(() =>')
@@ -391,9 +391,9 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('onHide(')
     expect(page).toContain('onUnload(')
     // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
-    expect(page).toContain("selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).toContain("selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
     // 2026-10-02：新增统一走引导面板（不再直连记录板块的选择器）
-    expect(page).toContain('openAddGuide()')
+    expect(page).toContain('onAddRecordTap()')
   })
 
   it('三大记录板块（病史/体检/过敏）各自独立，内嵌时不再顶一行板块头', () => {
@@ -484,76 +484,65 @@ describe('dog-profile-health · 底部按钮与书签', () => {
 })
 
 /**
- * 「记一条」引导入口（2026-10-02 老板定的方向）。
+ * 底部「新增记录」按当前标签直接路由（2026-10-03 老板定）。
  *
- * 老板的原话：标签页就作为"结果呈现或者手动编辑"，
- * 初次录入给一个入口，从这个入口进去**分类来让用户录入信息**，
- * 并进入分类引导流程 —— 因为就诊与体检要填的东西差别很大。
+ * 老板原话："既然点击记一条按钮之后，依然走的是每一个标签的功能来让 AI 识别，
+ * 那我们能否把点击之后的弹窗去掉，让它自动识别当前处在哪个标签页下，
+ * 点击就自动走哪一个通道呢？另外，记一条这个按钮的文案能不能改为新增记录？"
+ *
+ * 所以：面板下线、文案改「新增记录」、点了直接用当前标签的通道。
+ * 纯手填的入口留在各板块内部（不再需要先选一次类别）。
  */
-describe('dog-profile-health · 引导入口', () => {
+describe('dog-profile-health · 新增记录直接路由', () => {
   const readPage = () =>
     readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-  it('底部一个入口，任何标签下都是「记一条」', () => {
+  it('文案改成「新增记录」，引导面板彻底下线', () => {
     const page = readPage()
 
-    expect(page).toContain('function openAddGuide()')
-    expect(page).toContain("selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]")
-    // 点了就开面板，不再直连某一个板块的选择器
-    expect(page).toContain("openAddGuide()")
-    expect(page).toContain('class="add-guide"')
+    expect(page).toContain("selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).not.toContain('addGuideVisible')
+    expect(page).not.toContain('ADD_GUIDE_ITEMS')
+    expect(page).not.toContain('你要记什么？')
+    expect(page).not.toContain('class="add-guide"')
   })
 
-  it('先分类：五张卡（就诊/体检/疫苗/过敏/体重），各带一句人话说明', () => {
+  it('点一下就走当前标签的通道（就诊/体检→AI 识别，疫苗→拍疫苗本，过敏→拍报告，体重→落光标）', () => {
     const page = readPage()
 
-    expect(page).toContain('你要记什么？')
-    for (const key of ['medical', 'checkup', 'vaccine', 'allergy', 'weight']) {
-      expect(page).toContain(`key: '${key}'`)
-    }
-    expect(page).toContain('症状、医生诊断、医嘱、用药')
-    expect(page).toContain('体检报告、化验单')
-    expect(page).toContain('拍疫苗本，一次读出多条接种记录')
-    // 饮食不再是一张卡（也不再有那个标签）
-    expect(page).not.toContain("key: 'diet'")
-  })
-
-  it('再按类引导：就诊/体检给"传照片识别"与"手动填写"两条路', () => {
-    const page = readPage()
-
-    expect(page).toContain("{ mode: 'scan', label: '传病历/处方（AI 识别）', primary: true }")
-    expect(page).toContain("{ mode: 'scan', label: '传体检报告（AI 识别）', primary: true }")
-    expect(page).toContain("{ mode: 'manual', label: '手动填写' }")
-    // 选完先切标签（看得见落点），再调起对应动作
-    expect(page).toContain('selectHealthTab(key as HealthTabKey)')
+    expect(page).toContain('function onAddRecordTap()')
+    // 就诊 / 体检：直接调起相册识别
     expect(page).toContain('recordsSectionRef.value?.startScan?.()')
-    expect(page).toContain('recordsSectionRef.value?.addRecord?.()')
+    // 疫苗：打开新增块并直接拍疫苗本
+    expect(page).toContain('vaccineSectionRef.value?.startScan?.()')
+    // 过敏：直接拍检测报告（识别结果仍需确认）
+    expect(page).toContain('allergySectionRef.value?.pickHealthReport?.()')
+    // 体重：打开输入块 + 光标进输入框
+    expect(page).toContain('weightSectionRef.value?.focusInput?.()')
+    // 不再有"先切标签再执行"那一步
+    expect(page).not.toContain('selectHealthTab(key as HealthTabKey)')
   })
 
-  it('疫苗 / 过敏 / 体重各有落点（拍疫苗本、去过敏板块、直接落光标）', () => {
+  it('板块内部保留纯手填的入口（否则手写就没有入口了）', () => {
     const page = readPage()
+    const records = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
-    const weight = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
-      'utf-8',
-    )
 
-    expect(vaccine).toContain('startScan: () => scanRef.value?.startScan?.()')
-    expect(vaccine).toContain('addRecord')
-    expect(vaccine).toContain('flushAutoSaves')
-    expect(weight).toContain('focusInput: focusWeightInput')
-    expect(weight).toContain('flushAutoSaves')
-    expect(weight).toContain(':focus="weightInputFocused"')
-    expect(page).toContain('weightSectionRef.value?.focusInput?.()')
-    // 过敏也能直达上传（2026-10-02 补：不再只是切过去提示）
-    expect(page).toContain("{ mode: 'scan', label: '拍检测报告（AI 识别）', primary: true }")
-    expect(page).toContain('allergySectionRef.value?.pickHealthReport?.()')
+    // 就诊/体检：列表下方一个「手动填写一条」
+    expect(records).toContain('手动填写一条')
+    expect(records).toContain('@tap="addRecord()"')
+    // 疫苗 / 过敏：各自的 showAddEntry 常开（它们就是手填入口）
+    expect(page).toContain(':show-add-entry="true"')
+    expect(vaccine).toContain('新增疫苗记录')
   })
 })
 
@@ -566,21 +555,21 @@ describe('dog-profile-health · 引导入口', () => {
  * 引导入口选到对应类别时页面把它打开 —— 界面还是熟悉的板块界面，
  * 但全站只有「记一条」一个新增起点。
  */
-describe('dog-profile-health · 新增入口已收敛', () => {
+describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、手填在板块内）', () => {
   const readPage = () =>
     readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-  it('三个板块的新增块默认不显示，由引导入口打开', () => {
+  it('疫苗/过敏的手填块常开，体重仍由「新增记录」打开', () => {
     const page = readPage()
 
-    expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
-    expect(page).toContain('const allergyAddEntryVisible = ref(false)')
+    // 引导面板下线后，"一点即选/手输"（过敏）与"新增疫苗记录"（疫苗）
+    // 就是这两类的手填入口，必须一直看得见
+    expect(page).toContain(':show-add-entry="true"')
+    // 体重的输入块仍由「新增记录」打开 + 落光标
     expect(page).toContain('const weightAddEntryVisible = ref(false)')
-    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
-    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
     expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
     // 换标签就复位，避免开关残留
     expect(page).toContain('resetAddEntryFlags()')
@@ -615,7 +604,8 @@ describe('dog-profile-health · 新增入口已收敛', () => {
       'utf-8',
     )
 
-    expect(vaccine).toContain(':hide-trigger="!showAddEntry"')
+    // 自带的「拍疫苗本」触发行常隐（AI 走底部「新增记录」），但 showAddEntry 仍管着它
+    expect(vaccine).toContain(':hide-trigger="!showAddEntry || hideScanTrigger"')
     expect(vaccine).toContain('v-if="showAddEntry"\n      class="health-section__action"')
     expect(allergy).toContain('<template v-if="showAddEntry">')
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')

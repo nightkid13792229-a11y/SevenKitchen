@@ -2051,5 +2051,5 @@ export function getHealthVisitSectionMeta(
 
 /** 空态下面那句引导（六个板块统一都要有一句） */
 export function getHealthVisitEmptyDescription(): string {
-  return '带狗看过病、做过检查，记一条，下次就诊和体检都用得上。'
+  return '带狗看过病、做过检查，新增一条，下次就诊和体检都用得上。'
 }

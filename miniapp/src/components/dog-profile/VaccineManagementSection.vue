@@ -13,12 +13,12 @@
 
     <!-- 拍疫苗本（2026-10-01，第六期）。
          一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。
-         2026-10-02 起只在「记一条」引导选到疫苗时显示（入口收敛）。 -->
+         2026-10-03 起常开（手填入口）；AI 拍疫苗本由底部「新增记录」调起。 -->
     <HealthDocumentScan
       ref="scanRef"
       v-if="dogId"
       :dog-id="dogId"
-      :hide-trigger="!showAddEntry"
+      :hide-trigger="!showAddEntry || hideScanTrigger"
       document-type="VACCINE_BOOK"
       upload-type="vaccine"
       button-text="拍疫苗本"
@@ -243,10 +243,15 @@ const props = defineProps<{
    * 是否显示"新增"入口（拍疫苗本 + 手动加一条）。
    *
    * 2026-10-02 老板要求收敛新增入口：标签页只做结果呈现与手动编辑，
-   * 新增一律走底部「记一条」引导。引导选到疫苗时页面会把它打开，
+   * 2026-10-03 起常开：AI 拍疫苗本走底部「新增记录」，这里留给手填，
    * 顾客仍然是在这个板块里完成录入；平时不显示，避免出现第二个入口。
    */
   showAddEntry?: boolean
+  /**
+   * 隐藏板块自带的「拍疫苗本」触发行（2026-10-03）。
+   * 底部「新增记录」已经按标签直接调起拍疫苗本了，这里再来一个就是重复。
+   */
+  hideScanTrigger?: boolean
 }>()
 
 const emit = defineEmits<{

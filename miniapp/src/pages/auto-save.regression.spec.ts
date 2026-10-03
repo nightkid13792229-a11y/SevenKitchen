@@ -109,6 +109,29 @@ describe('实时保存 · 契约', () => {
     expect(source).toContain('vaccine-card__autosave')
   })
 
+  it('体重趋势图：画布必须带上组件实例，否则只会剩一块白框（老板实测）', () => {
+    const source = weight()
+
+    // 画布在自定义组件里 → createCanvasContext 少传实例就找不到画布，draw() 静默失败
+    expect(source).toContain('uni.createCanvasContext(\'weightChart\', componentInstance)')
+    expect(source).toContain('const componentInstance = getCurrentInstance()?.proxy')
+    // 节点就绪要等一次渲染：画一次 + 重试
+    expect(source).toContain('function drawChartWithRetry()')
+  })
+
+  it('体重：保存成功后把"刚记下的数值"显出来（输入框会清空，别让人以为丢了）', () => {
+    const source = weight()
+
+    expect(source).toContain('lastSavedText.value = `${newWeight} kg · ${formData.value.recordDate}`')
+    expect(source).toContain('已记下 {{ lastSavedText }}，见下方「历史记录」')
+  })
+
+  it('体重：新增块关闭时不渲染空卡片', () => {
+    const source = weight()
+
+    expect(source).toContain('v-if="!embedded || showAddEntry" class="health-card weight-record-card"')
+  })
+
   it('体重：失焦才算一条，绝不会把打到一半的数字存进去', () => {
     const source = weight()
 

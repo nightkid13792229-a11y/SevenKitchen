@@ -463,12 +463,15 @@ describe('dog-profile-health · 底部按钮与书签', () => {
 
     // 样式里为了对齐加过多余空格，比较前先把连续空白压成一个
     const compact = page.replace(/\s+/g, ' ')
-    for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
+    // 2026-10-03 老板实测：就诊与体检两个标签没有主题色 ——
+    // 因为 activeHealthTab 传的是 medical/checkup，而样式里只写了 visit。
+    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'weight']) {
       expect(compact).toContain(`.health-theme--${theme} .health-tabs__item--active`)
+      expect(compact).toContain(`.health-theme--${theme} .health-panel__body`)
     }
-    // 已停用的旧书签不该留残影
-    expect(compact).not.toContain('.health-theme--medical')
-    expect(compact).not.toContain('.health-theme--checkup')
+    // 饮食板块已下线，主题色不该留残影；中间那个临时的 visit 也一并清掉
+    expect(compact).not.toContain('.health-theme--diet')
+    expect(compact).not.toContain('.health-theme--visit')
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
     // 2026-10-03：底部只剩「记一条」一个按钮（保存键下线），主题固定成 visit；
     // 组件仍保留多套主题能力，板块色系继续由书签与内容区表达。
@@ -479,7 +482,8 @@ describe('dog-profile-health · 底部按钮与书签', () => {
       expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)
     }
     // 色系要铺到内容区 —— 只给书签文字上色不够（老板指出"色系没划分出来"）
-    expect(compact).toContain('.health-theme--diet .health-panel__body')
+    expect(compact).toContain('.health-theme--medical .health-panel__body')
+    expect(compact).toContain('.health-theme--checkup .health-panel__body')
   })
 })
 
@@ -526,23 +530,31 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).not.toContain('selectHealthTab(key as HealthTabKey)')
   })
 
-  it('板块内部保留纯手填的入口（否则手写就没有入口了）', () => {
+  it('点下去先问一句：上传图片 AI 识别 / 自己手动填写', () => {
     const page = readPage()
+
+    expect(page).toContain('uni.showActionSheet({')
+    expect(page).toContain("['上传图片，AI 识别', '手动填写']")
+    expect(page).toContain("['拍疫苗本，AI 识别', '手动加一条']")
+    expect(page).toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
+    // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"
+    expect(page).toContain('recordsSectionRef.value?.addRecord?.()')
+    expect(page).toContain('vaccineSectionRef.value?.addRecord?.()')
+    // 体重没有 AI 这条路 → 不弹选择，直接落光标
+    expect(page).toContain('weightSectionRef.value?.focusInput?.()')
+  })
+
+  it('板块内不再重复放手动填写入口（老板：多余）', () => {
     const records = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )
-    const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
-      'utf-8',
-    )
+    const page = readPage()
 
-    // 就诊/体检：列表下方一个「手动填写一条」
-    expect(records).toContain('手动填写一条')
-    expect(records).toContain('@tap="addRecord()"')
-    // 疫苗 / 过敏：各自的 showAddEntry 常开（它们就是手填入口）
-    expect(page).toContain(':show-add-entry="true"')
-    expect(vaccine).toContain('新增疫苗记录')
+    expect(records).not.toContain('手动填写一条')
+    // 三个板块的新增块都回到"由选择打开"
+    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
+    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
   })
 })
 
@@ -562,17 +574,33 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-  it('疫苗/过敏的手填块常开，体重仍由「新增记录」打开', () => {
+  it('三个板块的新增块默认关闭，由「新增记录」里的选择打开', () => {
     const page = readPage()
 
-    // 引导面板下线后，"一点即选/手输"（过敏）与"新增疫苗记录"（疫苗）
-    // 就是这两类的手填入口，必须一直看得见
-    expect(page).toContain(':show-add-entry="true"')
-    // 体重的输入块仍由「新增记录」打开 + 落光标
+    expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
+    expect(page).toContain('const allergyAddEntryVisible = ref(false)')
     expect(page).toContain('const weightAddEntryVisible = ref(false)')
+    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
+    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
     expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
     // 换标签就复位，避免开关残留
     expect(page).toContain('resetAddEntryFlags()')
+  })
+
+  it('新增块关闭时不渲染空卡片（老板截图里的白框）', () => {
+    const weight = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
+      'utf-8',
+    )
+    const allergy = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+      'utf-8',
+    )
+
+    // 体重：内嵌 + 新增块关闭 → 整张卡片不渲染（否则留下一个空的白卡片）
+    expect(weight).toContain('v-if="!embedded || showAddEntry" class="health-card weight-record-card"')
+    // 过敏：没有待确认候选时也不留空壳
+    expect(allergy).toContain('v-if="showAddEntry || candidates.length > 0" class="quick-add"')
   })
 
   it('记录板块自身的「新增记录」按钮已下线（只有引导能新建）', () => {

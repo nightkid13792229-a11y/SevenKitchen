@@ -1,7 +1,9 @@
 <template>
   <view v-if="dogId" class="health-section">
-    <!-- 体重记录 -->
-    <view class="health-card weight-record-card">
+    <!-- 体重记录（新增块）。
+         2026-10-03：内嵌且新增块关闭时**整张卡片不渲染** —— 否则 card 容器还在，
+         里面什么都没有，页面上就多出一块白框（老板实测截图提的）。 -->
+    <view v-if="!embedded || showAddEntry" class="health-card weight-record-card">
       <!-- 内嵌到健康管理页时不显示这一行（书签已经写着「体重」）—— 老板 2026-10-01 要求 -->
       <template v-if="!embedded">
         <text class="health-section__title">体重记录</text>
@@ -45,6 +47,12 @@
           <!-- 只显示单位换算回显（= 86 斤）。不做任何合理性判断，
                避免给出错误提醒（2026-09-28 老板决定）。 -->
           <text v-if="weightEcho" class="weight-echo">{{ weightEcho }}</text>
+
+          <!-- 刚记下的那一条：输入框会被清空，这行告诉顾客数值去哪儿了
+               （2026-10-03 老板实测："提示成功，但体重栏里的数值消失了"） -->
+          <text v-if="lastSavedText" class="weight-saved">
+            已记下 {{ lastSavedText }}，见下方「历史记录」
+          </text>
         </view>
 
         <view class="input-item">
@@ -228,7 +236,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { getCurrentInstance, ref, computed, watch, onMounted, nextTick } from 'vue'
 import { request } from '../../utils/api'
 import {
   formatWeightForInput,
@@ -424,7 +432,12 @@ const weightUnitOptions: Array<{ value: WeightUnit; label: string }> = [
 ]
 /** 输入框正在编辑的原始文本：单独存一份，避免换算打断顾客的按键序列 */
 const weightInputText = ref('')
+/** 刚记下的那一条（成功提示用；输入框会被清空，用这行文字告诉顾客数值去哪了） */
+const lastSavedText = ref('')
 /** 从引导入口进来时自动聚焦（顾客不用自己找输入框） */
+/** 自定义组件实例：画布 API 需要它才能定位到组件内的 canvas */
+const componentInstance = getCurrentInstance()?.proxy as any
+
 const weightInputFocused = ref(false)
 const weightUnitLabel = computed(() => getWeightUnitLabel(weightUnit.value))
 
@@ -432,6 +445,10 @@ const onWeightInput = (event: any) => {
   const raw = String(event?.detail?.value ?? '')
   weightInputText.value = raw
   formData.value.weightKg = parseWeightInputToKg(raw, weightUnit.value)
+  // 又开始输了 → 收起"刚刚记下 xxx"那行（它只说明上一次保存）
+  if (lastSavedText.value) {
+    lastSavedText.value = ''
+  }
 }
 
 const onWeightUnitChange = (unit: WeightUnit) => {
@@ -529,10 +546,11 @@ async function loadRecords() {
         syncToProfile.value = resolveDefaultSyncToProfile()
       }
 
-      // 绘制图表
+      // 绘制图表：等一次渲染让 canvas 节点真正存在，再补两次重试 ——
+      // 小程序里 nextTick 之后节点偶尔还没就绪，早画一次等于没画（白框）
       if (records.value.length > 0) {
         await nextTick()
-        drawChart()
+        drawChartWithRetry()
       }
     }
   } catch (err) {
@@ -662,6 +680,10 @@ async function saveRecord() {
       syncToProfileTouched.value = false
       syncToProfile.value = resolveDefaultSyncToProfile()
 
+      // 2026-10-03 老板实测："填完提示成功，但体重栏里的数值消失了"。
+      // 数值确实没丢（它进了下面的「历史记录」），但输入框一清空就看不出所以然 ——
+      // 所以这一行留在卡片上，直到下次输入：写清记了多少、去哪儿看。
+      lastSavedText.value = `${newWeight} kg · ${formData.value.recordDate}`
       uni.showToast({
         title: syncRequested
           ? syncedToProfile
@@ -776,9 +798,28 @@ function getChangeClass(record: WeightRecord, index: number): string {
   }
 }
 
+/** 画一次 + 两次重试（间隔递增），确保画布节点就绪 */
+function drawChartWithRetry() {
+  const delays = [0, 220, 600]
+  delays.forEach((delay) => {
+    setTimeout(() => {
+      try {
+        drawChart()
+      } catch (error) {
+        console.error('[WeightManagementSection] 趋势图绘制失败:', error)
+      }
+    }, delay)
+  })
+}
+
 // 绘制图表
+//
+// ⚠️ 2026-10-03 修（老板实测：体重趋势只有一块空白）：
+//   画布在**自定义组件**里时，uni.createCanvasContext 必须带上组件实例，
+//   否则找不到这张画布、draw() 静默什么都不画 —— 页面上就只剩一块白框。
+//   项目里另一处画布（头像裁剪）一直是这么传的，这里漏了。
 function drawChart() {
-  const ctx = uni.createCanvasContext('weightChart')
+  const ctx = uni.createCanvasContext('weightChart', componentInstance)
 
   // 获取系统信息来计算正确的 canvas 尺寸
   // @ts-ignore - getWindowInfo may not exist in all platforms
@@ -1128,6 +1169,14 @@ function drawChart() {
   font-size: 24rpx;
   color: #e74c3c;
   margin-left: auto;
+}
+
+.weight-saved {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #0e6f78;
 }
 
 .weight-echo {

@@ -1,5 +1,7 @@
 <template>
-  <view class="quick-add">
+  <!-- 新增块关闭、也没有待确认的候选时不渲染根容器 ——
+       否则会留一个空壳占掉卡片间距（2026-10-03 与体重同一类问题）。 -->
+  <view v-if="showAddEntry || candidates.length > 0" class="quick-add">
     <!-- 新增入口（一点即选 / 手输 / 上传报告）只在引导入口选到过敏时显示；
          候选确认卡不受影响（那是确认环节）。老板 2026-10-02：入口收敛。 -->
     <template v-if="showAddEntry">

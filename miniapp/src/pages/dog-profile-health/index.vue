@@ -130,7 +130,7 @@
             <AllergyQuickAddSection
               v-if="activeRecordType === 'allergy'"
               ref="allergySectionRef"
-              :show-add-entry="true"
+              :show-add-entry="allergyAddEntryVisible"
               :dog-id="dogId"
               :recorded-allergens="recordedAllergens"
               @saved="onAllergenSaved"
@@ -147,7 +147,7 @@
             ref="vaccineSectionRef"
             external-save
             embedded
-            :show-add-entry="true"
+            :show-add-entry="vaccineAddEntryVisible"
             hide-scan-trigger
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
@@ -980,13 +980,10 @@ const hasUnsavedSectionDraft = ref(false)
 /**
  * 各板块的"新增块"开关（2026-10-03）。
  *
- * 引导面板下线之后，底部「新增记录」按**当前标签**直接走那个板块的通道：
- *   · 就诊 / 体检 → 直接调起相册 + AI 识别（不弹面板）
- *   · 疫苗       → 直接拍疫苗本（AI 认出多条接种记录）
- *   · 过敏       → 直接拍检测报告（AI，识别结果仍需确认）
- *   · 体重       → 打开输入块并把光标送进输入框
- * 纯手填的入口留在各板块里（疫苗的「新增疫苗记录」、过敏的「一点即选」、
- * 就诊/体检列表下方的「手动填写一条」、体重的输入块），不再需要先选一次类别。
+ * 底部「新增记录」会先问一句"传照片还是自己填"，选完再把对应的录入块打开：
+ *   · 就诊 / 体检 / 疫苗 / 过敏 → 两个选项（上传图片 AI 识别 / 手动填写）
+ *   · 体重                       → 没有 AI 识别这回事，直接打开输入块落光标
+ * 所以这些开关只在"选了手动填写"之后才打开 —— 标签页本身仍是"看结果 + 改已有"。
  */
 const vaccineAddEntryVisible = ref(false)
 const allergyAddEntryVisible = ref(false)
@@ -999,36 +996,59 @@ function resetAddEntryFlags() {
 }
 
 /**
- * 底部「新增记录」：按当前标签直接走对应通道（2026-10-03 老板定）。
+ * 底部「新增记录」：先让顾客选"上传图片让 AI 识别"还是"自己手动填写"，
+ * 再走当前标签对应的通道（2026-10-03 老板定）。
  *
- * 老板原话："既然点击记一条按钮之后，依然走的是每一个标签的功能来让 AI 识别，
- * 那我们能否把点击之后的弹窗去掉，让它自动识别当前处在哪个标签页下，
- * 点击就自动走哪一个通道呢？" —— 于是这一步从"先选类别"变成"直接用当前类别"。
+ * 老板原话："板块内的手动填写确实是多余的，应该还是点击新增记录之后，
+ * 让用户自己选择，是上传图片让 AI 识别，还是自己手动填写表单。"
+ * 所以：**不再有 5 个分类的引导面板**（那个多余），只保留这一次二选一。
+ * 体重没有 AI 识别这条路，就直接落光标，不弹选择。
  */
 function onAddRecordTap() {
-  if (isRecordTab.value) {
-    // 就诊 / 体检：传照片 → AI 识别 → 确认一次 → 自动填表（并实时保存）
-    recordsSectionRef.value?.startScan?.()
-    return
-  }
-
-  if (activeHealthTab.value === 'vaccine') {
-    vaccineAddEntryVisible.value = true
-    nextTick(() => vaccineSectionRef.value?.startScan?.())
-    return
-  }
-
-  if (activeHealthTab.value === 'allergy') {
-    allergyAddEntryVisible.value = true
-    nextTick(() => allergySectionRef.value?.pickHealthReport?.())
-    return
-  }
-
   if (activeHealthTab.value === 'weight') {
     weightAddEntryVisible.value = true
     nextTick(() => weightSectionRef.value?.focusInput?.())
     return
   }
+
+  const isRecord = isRecordTab.value
+  const options = isRecord
+    ? ['上传图片，AI 识别', '手动填写']
+    : activeHealthTab.value === 'vaccine'
+      ? ['拍疫苗本，AI 识别', '手动加一条']
+      : ['拍检测报告，AI 识别', '手动点选 / 手输']
+
+  uni.showActionSheet({
+    itemList: options,
+    success: ({ tapIndex }) => {
+      if (isRecord) {
+        if (tapIndex === 0) {
+          recordsSectionRef.value?.startScan?.()
+        } else {
+          recordsSectionRef.value?.addRecord?.()
+        }
+        return
+      }
+
+      if (activeHealthTab.value === 'vaccine') {
+        vaccineAddEntryVisible.value = true
+        if (tapIndex === 0) {
+          nextTick(() => vaccineSectionRef.value?.startScan?.())
+        } else {
+          vaccineSectionRef.value?.addRecord?.()
+        }
+        return
+      }
+
+      // 过敏
+      allergyAddEntryVisible.value = true
+      if (tapIndex === 0) {
+        nextTick(() => allergySectionRef.value?.pickHealthReport?.())
+      } else {
+        uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
+      }
+    },
+  })
 }
 
 /**
@@ -1327,9 +1347,12 @@ function goToDogCreate() {
  * 两边都不用互相知道对方的存在。
  */
 .health-panel { --health-accent: #0f6b43; }
-.health-theme--visit { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
+.health-theme--medical { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
+/* 体检单独一套蓝：和「就诊」的绿区分开，五个书签各有各的色（2026-10-03 老板提的） */
+.health-theme--checkup { --health-accent: #216d9b;  --health-accent-soft: #e6eff6; }
 .health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
 .health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
+.health-theme--weight { --health-accent: #0e6f78;  --health-accent-soft: #e4f1f2; }
 /*
  * 书签条：模仿 Chrome 的标签页（老板要求）。
  *
@@ -1386,11 +1409,14 @@ function goToDogCreate() {
  * 每个板块一套主题色。下划线取主题色，选中文字也用主题色。
  * 六个颜色都取低饱和，和整站的米绿底色放一起不刺眼。
  */
-.health-theme--visit .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
+.health-theme--medical .health-tabs__item--active { color: #0f7b49; border-top-color: #0f7b49; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
-.health-theme--visit .health-panel__body,
-.health-theme--visit .health-tabs__item--active { background: #edf6f1; }
+.health-theme--medical .health-panel__body,
+.health-theme--medical .health-tabs__item--active { background: #edf6f1; }
+.health-theme--checkup .health-tabs__item--active { color: #216d9b; border-top-color: #216d9b; }
+.health-theme--checkup .health-panel__body,
+.health-theme--checkup .health-tabs__item--active { background: #eaf2f8; }
 .health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-top-color: #ad5b2a; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
@@ -1401,22 +1427,11 @@ function goToDogCreate() {
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
 .health-theme--vaccine .health-panel__body,
 .health-theme--vaccine .health-tabs__item--active { background: #f2f0f8; }
-.health-theme--diet .health-tabs__item--active { color: #b07a1e; border-top-color: #b07a1e; }
-/* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
-   选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
-.health-theme--diet .health-panel__body,
-.health-theme--diet .health-tabs__item--active { background: #faf3e8; }
 .health-theme--weight .health-tabs__item--active { color: #0e6f78; border-top-color: #0e6f78; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
 .health-theme--weight .health-panel__body,
 .health-theme--weight .health-tabs__item--active { background: #ebf4f5; }
-
-.diet-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
 
 /*
  * 两个独立入口（健康记录 / 健康分析）。

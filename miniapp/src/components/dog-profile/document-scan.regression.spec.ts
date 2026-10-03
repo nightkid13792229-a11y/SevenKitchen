@@ -380,7 +380,7 @@ describe('动物名提醒与化验数据', () => {
   it('卡片标题不再拿数字墙当标题', () => {
     const utils = readFileSync(resolve(process.cwd(), 'src/utils/health-records.ts'), 'utf-8')
 
-    expect(utils).toContain('findingsText.length <= 24')
+    expect(utils).toContain('shortPrimary')
     expect(utils).toContain("'含化验数据'")
   })
 })

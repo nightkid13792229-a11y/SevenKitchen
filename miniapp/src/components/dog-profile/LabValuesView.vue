@@ -75,6 +75,8 @@ interface LabRow {
 interface LabBlock {
   title: string
   rows: LabRow[]
+  /** 这份报告一共几项（折叠时只显示异常项，但数量要报**总量**） */
+  total: number
 }
 
 /** 报告名判定：整行没有数字、也不是"项目 数值"的形状，且不长 */
@@ -112,29 +114,34 @@ const allBlocks = computed<LabBlock[]>(() => {
     .filter(Boolean)
 
   const result: LabBlock[] = []
-  let current: LabBlock = { title: '', rows: [] }
+  let current: LabBlock = { title: '', rows: [], total: 0 }
 
   for (const line of lines) {
     if (isTitleLine(line)) {
       if (current.title || current.rows.length > 0) {
         result.push(current)
       }
-      current = { title: line, rows: [] }
+      current = { title: line, rows: [], total: 0 }
       continue
     }
     current.rows.push(parseRow(line))
   }
 
   if (current.title || current.rows.length > 0) {
-    result.push(current)
+    result.push({ ...current, total: current.rows.length })
   }
 
   return result
 })
 
-/** 每份报告几项 */
+/**
+ * 每份报告几项。
+ *
+ * ⚠️ 2026-10-02 老板实测：折叠之后这里报的是"精简后还剩几项"（生化 2 项），
+ * 看着像这份报告只有 2 项 —— 数量统计必须报**总量**（生化 19 项）。
+ */
 function blockCount(block: LabBlock): number {
-  return block.rows.length
+  return block.total || block.rows.length
 }
 
 /** 折叠时每份报告里"报告自己标了偏高/偏低"的行 */
@@ -151,7 +158,11 @@ const blocks = computed<LabBlock[]>(() => {
   if (!props.collapsible || expanded.value) {
     return allBlocks.value
   }
-  return allBlocks.value.map((block) => ({ title: block.title, rows: flaggedRows(block) }))
+  return allBlocks.value.map((block) => ({
+    title: block.title,
+    rows: flaggedRows(block),
+    total: block.rows.length,
+  }))
 })
 
 const canExpand = computed(() => props.collapsible && totalRows.value > flaggedCount.value)

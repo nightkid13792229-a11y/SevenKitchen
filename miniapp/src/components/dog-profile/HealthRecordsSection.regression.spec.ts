@@ -228,19 +228,49 @@ describe('病历/检查表单 · 精简版', () => {
     expect(source).toContain('collapsible')
   })
 
+  it('「这条现在的情况」整块从表单里去掉（2026-10-02 老板：信息太多）', () => {
+    const source = readSection()
+    const visitBranch = source.slice(
+      source.indexOf('<template v-if="isVisitMode">'),
+      source.indexOf('<template v-else>'),
+    )
+
+    expect(visitBranch).not.toContain('这条现在的情况')
+    expect(visitBranch).not.toContain('status-switch')
+    // 状态数据本身不动（库里已有记录照旧），只是界面上不再让家长改
+    expect(source).toContain('resolveMedicalStatusToggle')
+  })
+
+  it('卡片头：显示日期，不再显示序号与"已保存"；未保存仍要提示', () => {
+    const source = readSection()
+
+    expect(source).toContain('recordDateText(record, index)')
+    expect(source).not.toContain('class="record-card__index"')
+    expect(source).not.toContain("return isRecordDirty(record, index) ? '待保存' : '已保存'")
+    // 草稿没落库时必须说一声，否则家长退出就白填了
+    expect(source).toContain('record-card__unsaved')
+    expect(source).toContain('未保存')
+  })
+
+  it('就诊日期改成一行（标签 + 可点日期），不再占一整块', () => {
+    const source = readSection()
+
+    expect(source).toContain('field-group--inline')
+    expect(source).toContain('field-inline-value')
+  })
+
   it('状态选择器从表单里去掉，改成存好后一键「已经好了」', () => {
     const source = readSection()
 
-    // 病历/检查这一支里不再有状态下拉（只留一键「已经好了」）
+    // 病历/检查这一支里既没有状态下拉、也没有一键切换了
     const visitBranch = source.slice(
       source.indexOf('<template v-if="isVisitMode">'),
       source.indexOf('<template v-else>'),
     )
     expect(visitBranch).not.toContain('statusField(record)')
     expect(visitBranch).not.toContain('getMedicalStatusOptions()')
-    expect(visitBranch).toContain('status-switch')
-    expect(source).toContain('class="status-switch"')
-    expect(source).toContain('medicalStatusToggle(record)')
+    expect(visitBranch).not.toContain('status-switch')
+    expect(source).toContain('resolveMedicalStatusToggle')
     // 只对已保存的记录显示（未保存的还没资格谈"好了"）
     expect(source).toContain('isSavedRecord(record, index)')
     // 只改草稿、由顾客点保存：这里不许直接发请求
@@ -371,8 +401,8 @@ describe('病历/检查表单 · 第三轮', () => {
     // 缺省值仍然送给后端（这一栏是必填的）
     expect(utils).toContain('|| HEALTH_VISIT_DEFAULT_CHECKUP_TYPE')
     // 标题：短的检查结论优先，太长（数字墙）或没有时退回识别出来的体检类型
-    expect(utils).toContain('const shortFindings = findingsText && findingsText.length <= 24')
-    expect(utils).toContain('? [shortFindings, formatHealthCheckupTypeLabel(record?.checkupType)]')
+    expect(utils).toContain('const shortPrimary = primaryText && primaryText.length <= 24')
+    expect(utils).toContain('? [shortPrimary, formatHealthCheckupTypeLabel(record?.checkupType)]')
   })
 
   it('① 上传附件按钮带括弧提示，讲清这个按钮是干什么的', () => {

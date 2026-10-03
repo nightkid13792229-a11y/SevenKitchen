@@ -88,17 +88,12 @@
     >
       <view class="record-card__header">
         <view class="record-card__header-main" @tap="toggleRecordExpanded(index)">
+          <!-- 卡片头：日期 + （只在没存上时提示一句"未保存"）。
+               2026-10-02 老板：序号与"已保存"都不用显示，那个位置放就诊日期。
+               但**未保存仍然要说** —— 草稿没落库时一声不吭，家长退出就白填了。 -->
           <view class="record-card__meta">
-            <text class="record-card__index">{{ index + 1 }}</text>
-            <text
-              class="record-card__status"
-              :class="{
-                'record-card__status--saved': isSavedRecord(record, index) && !isRecordDirty(record, index),
-                'record-card__status--dirty': isRecordDirty(record, index),
-              }"
-            >
-              {{ recordStatusText(record, index) }}
-            </text>
+            <text class="record-card__date">{{ recordDateText(record, index) }}</text>
+            <text v-if="isRecordDirty(record, index)" class="record-card__unsaved">未保存</text>
           </view>
 
           <view class="record-card__summary">
@@ -162,20 +157,19 @@
              「备注」改名「补充说明」并提到明面（它已经接进 AI 分析）；
              只有复查日期、兽医这种少数情况才有的收进「选填」。 -->
         <template v-if="isVisitMode">
-          <!-- 日期：语义特殊（picker），单独一块 -->
-          <view class="field-group">
-            <view class="field-head">
-              <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
-            </view>
+          <!-- 日期：值短，跟标签同一行就够（2026-10-02 老板：原来那一块占的行数太多） -->
+          <view class="field-group field-group--inline">
+            <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
             <picker
+              class="field-inline-picker"
               mode="date"
               :disabled="hasSavingRecord"
               :value="readField(record, visitConfig(record).dateKey)"
               @change="updateTextField(index, visitConfig(record).dateKey, $event.detail.value)"
             >
-              <view class="field-picker">
-                {{ readField(record, visitConfig(record).dateKey) || `请选择${visitConfig(record).dateLabel}` }}
-              </view>
+              <text class="field-inline-value">
+                {{ readField(record, visitConfig(record).dateKey) || `请选择` }}
+              </text>
             </picker>
           </view>
 
@@ -224,18 +218,6 @@
             />
           </view>
 
-          <!-- 已经好了：只给已保存的就诊记录。状态决定这条还算不算"还没结束的问题"，
-               也就是会不会进 AI 健康分析 —— 但不该在填表时问家长。 -->
-          <view
-            v-if="visitConfig(record).complaintKey && isSavedRecord(record, index)"
-            class="field-group"
-          >
-            <text class="field-label">这条现在的情况</text>
-            <text class="status-switch" @tap="toggleVisitStatus(index)">
-              {{ medicalStatusToggle(record).label }}
-            </text>
-            <text class="field-label__hint">{{ medicalStatusToggle(record).hint }}</text>
-          </view>
         </template>
 
         <template v-else>
@@ -1511,12 +1493,27 @@ function secondaryActionText(record: Record<string, any>, index: number) {
   )
 }
 
-function recordStatusText(record: Record<string, any>, index: number) {
-  if (!isSavedRecord(record, index)) {
-    return '未保存'
+/**
+ * 卡片头上的日期（2026-10-02 老板：序号和"已保存"不用显示，那个位置放日期）。
+ * 还没选日期的草稿就写「未选日期」，不编一个今天。
+ */
+function recordDateText(record: Record<string, any>, index: number): string {
+  const key = isVisitMode.value
+    ? visitConfig(record).dateKey
+    : fieldConfigForRecord(record).primary.key === 'recordDate'
+      ? 'recordDate'
+      : ''
+  const visitDate = isVisitMode.value ? String(record?.[key] || '').trim() : ''
+  if (visitDate) {
+    return visitDate
   }
 
-  return isRecordDirty(record, index) ? '待保存' : '已保存'
+  const fallback = String(record?.recordDate || record?.date || '').trim()
+  if (fallback) {
+    return fallback
+  }
+
+  return isSavedRecord(record, index) ? '未填日期' : '新记录'
 }
 
 function isRecordDirty(record: Record<string, any>, index: number) {
@@ -2122,6 +2119,23 @@ function removeAttachment(index: number, attachmentIndex: number) {
   justify-content: space-between;
 }
 
+/* 卡片头的日期（原来这里是序号 + 已保存） */
+.record-card__date {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #415a65;
+}
+
+/* 只在草稿没落库时出现 */
+.record-card__unsaved {
+  margin-left: 12rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #b26a2f;
+  background: #fdf3e6;
+}
+
 .record-card__header {
   align-items: flex-start;
   gap: 18rpx;
@@ -2243,48 +2257,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(76, 100, 109, 0.08);
 }
 
-.record-card__index {
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 999rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22rpx;
-  font-weight: 700;
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.12);
-}
-
-.health-records--checkup .record-card__index {
-  color: #216d9b;
-  background: rgba(33, 109, 155, 0.12);
-}
-
-.health-records--allergy .record-card__index {
-  color: #ad5b2a;
-  background: rgba(173, 91, 42, 0.12);
-}
-
-.record-card__status {
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #a66d1d;
-  background: rgba(224, 162, 63, 0.12);
-}
-
-.record-card__status--saved {
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.1);
-}
-
-.record-card__status--dirty {
-  color: #a66d1d;
-  background: rgba(224, 162, 63, 0.12);
-}
-
 .record-card__delete,
 .attachment-item__remove,
 .record-card__action,
@@ -2316,6 +2288,26 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 24rpx;
   font-weight: 600;
   color: #415a65;
+}
+
+/* 日期这类"值很短"的字段：标签与值同一行，省掉一整个输入框的高度 */
+.field-group--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.field-inline-picker {
+  flex-shrink: 0;
+}
+
+.field-inline-value {
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #17313f;
+  background: #f2f5ec;
 }
 
 .field-head {

@@ -252,6 +252,8 @@ export class HealthTimelineService {
           : Promise.resolve(null),
       ]);
 
+    // 「还没结束的问题」= 没标注结局的 + 治疗中 + 慢性。
+    // 注意 PENDING_CONFIRMATION 只是"家长没标注"，不代表还在生病（见 MEDICAL_STATUS_LABELS）。
     const ongoingStatuses = ['PENDING_CONFIRMATION', 'TREATING', 'CHRONIC']
     const ongoingConditions = medical
       .filter((record) => ongoingStatuses.includes(String(record.status)))
@@ -507,8 +509,16 @@ export function formatCheckupType(value: string | null | undefined): string {
   return CHECKUP_TYPE_LABELS[key.toUpperCase()] || key
 }
 
+/**
+ * 记录状态的中文（只给 AI 看的那一份）。
+ *
+ * 2026-10-02 老板把「这条现在的情况」从表单里去掉了（信息太多），
+ * 所以**新记录一律停在 PENDING_CONFIRMATION**。原来的措辞「待确认」很容易被
+ * 读成"病情待确认"（= 还在生病），因此改成「未标注结果」——说的只是
+ * "家长没标注这条的结局"，不是临床状态。提示词里也写死了这一层意思。
+ */
 const MEDICAL_STATUS_LABELS: Record<string, string> = {
-  PENDING_CONFIRMATION: '待确认',
+  PENDING_CONFIRMATION: '未标注结果',
   TREATING: '治疗中',
   RECOVERED: '已康复',
   CHRONIC: '慢性',

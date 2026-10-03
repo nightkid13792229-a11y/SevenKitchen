@@ -285,35 +285,51 @@ describe('病例合并 · 用药与摘要', () => {
     expect(record.notes).toBe('医生让半年后复查')
   })
 
-  it('摘要标题"有什么显示什么"：就诊优先症状、体检优先检查结论', () => {
+  it('摘要标题＝医生诊断，日期与医嘱都不再进摘要（2026-10-02 老板第二次实测）', () => {
     const medical = buildHealthVisitSummary('medical', {
       visitDate: '2026-05-01',
-      chiefComplaint: '呕吐两次',
+      chiefComplaint: '感觉在家不够活泼了，肚子有点硬，嘴毛有些变红了',
       diagnosis: '急性胃炎',
+      treatment: '回家后注意：清淡饮食，按时吃药，定期复查',
     })
-    expect(medical.title).toBe('呕吐两次')
-    expect(medical.detail).toContain('2026-05-01')
+    // 标题：诊断（原来放的是主诉，长长一句看不出这条是什么病）
+    expect(medical.title).toBe('急性胃炎')
+    // 摘要行：日期挪去卡片头部了、医嘱不再重复（老板："信息太多"）
+    expect(medical.detail).not.toContain('2026-05-01')
+    expect(medical.detail).not.toContain('清淡饮食')
 
-    // 只填了诊断（没填症状）时用诊断当标题，而不是「未填写症状」
+    // 诊断太长（识别把化验数值堆进旧记录）时退回症状，不当数字墙标题
     expect(buildHealthVisitSummary('medical', {
       visitDate: '2026-05-01',
-      diagnosis: '急性胃炎',
-    }).title).toBe('急性胃炎')
+      chiefComplaint: '呕吐两次',
+      diagnosis: '血常规\nWBC 10.2 x 10^9/L\nRBC 7.99 x 10^12/L',
+    }).title).toBe('呕吐两次')
 
-    // 体检：表单已经不问类型了，标题改成家长填的检查结论
+    // 体检：标题是检查结论
     const checkup = buildHealthVisitSummary('checkup', {
       checkupDate: '2026-05-02',
       findings: '未见异常',
       checkupType: 'ROUTINE',
     })
     expect(checkup.title).toBe('未见异常')
-    expect(checkup.detail).toContain('2026-05-02')
+    expect(checkup.detail).not.toContain('2026-05-02')
 
     // 没填结论时退回"识别出来的体检类型"（例如拍报告识别成老年健康检查）
     expect(buildHealthVisitSummary('checkup', {
       checkupDate: '2026-05-02',
       checkupType: 'SENIOR_WELLNESS',
     }).title).toBe('老年健康检查')
+  })
+
+  it('摘要行只说"这条里有什么"：含化验数据 / 含 N 个附件', () => {
+    const summary = buildHealthVisitSummary('medical', {
+      visitDate: '2026-02-11',
+      diagnosis: '胆汁淤积',
+      labValues: '生化\nALT 144 U/L（偏高）',
+      attachments: ['a.jpg', 'b.jpg'],
+    })
+
+    expect(summary.detail).toBe('含化验数据 · 含 2 个附件')
   })
 
   it('摘要里不再显示状态（状态已不在表单里问，家长也改不了）', () => {
@@ -326,12 +342,14 @@ describe('病例合并 · 用药与摘要', () => {
     expect(medical.detail).not.toContain('待确认')
   })
 
-  it('什么都没填的草稿标题给个中性占位，不写"未填写 XX"', () => {
-    expect(buildHealthVisitSummary('medical', {}).title).toBe('新记录')
+  it('什么都没填的草稿标题给个中性占位（就诊记录 / 体检记录）', () => {
+    expect(buildHealthVisitSummary('medical', {}).title).toBe('就诊记录')
     expect(buildHealthVisitSummary('checkup', {}).title).toBe('体检记录')
   })
 
-  it('「已经好了」一键切换：点了变已康复，再点回治疗中', () => {
+  // 2026-10-02 老板把「这条现在的情况」从表单里去掉了（信息太多），
+  // 但底层能力保留：库里已有的状态不变，只是界面上不再让家长改。
+  it('「已经好了」的底层切换逻辑仍在（表单里已不展示）', () => {
     expect(resolveMedicalStatusToggle({ status: 'PENDING_CONFIRMATION' }).status).toBe('RECOVERED')
     expect(resolveMedicalStatusToggle({ status: 'TREATING' }).status).toBe('RECOVERED')
     expect(resolveMedicalStatusToggle({ status: 'RECOVERED' }).status).toBe('TREATING')

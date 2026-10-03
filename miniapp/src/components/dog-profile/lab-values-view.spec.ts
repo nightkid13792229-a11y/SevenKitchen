@@ -34,6 +34,13 @@ describe('化验数据排版', () => {
     expect(view).toContain('return !/\\d/.test(line)')
   })
 
+  it('折叠时报告项数报**总量**，不是精简后剩几项（老板实测提的）', () => {
+    const view = readView()
+
+    expect(view).toContain('total: block.rows.length')
+    expect(view).toContain('return block.total || block.rows.length')
+  })
+
   it('项目与数值按第一个数字切开，左右分栏', () => {
     const view = readView()
     expect(view).toContain('const valueMatch = body.match')

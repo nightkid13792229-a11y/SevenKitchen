@@ -1999,30 +1999,27 @@ export function buildHealthVisitSummary(
   const config = getHealthVisitFieldConfig(kind)
   const attachmentCount = normalizeAttachments(record?.attachments).length
 
-  // 体检的标题：检查结论 → 「体检记录」。
-  // 结论太长（多半是识别出来的化验数据堆在里头的旧记录）就不当标题 ——
-  // 家长在列表里看到的会是一堵数字墙（2026-10-02 老板实测反馈）。
-  const findingsText = kind === 'checkup' ? String(record?.[config.primaryKey] || '').trim() : ''
-  const shortFindings = findingsText && findingsText.length <= 24 ? findingsText : ''
+  // 标题：**就诊放医生诊断、体检放检查结论**（2026-10-02 老板第二次实测定的）。
+  // 原来就诊的标题是"症状摘要"，家长一眼看到的是长长一句主诉，看不出这条是什么病；
+  // 体检的结论太长（识别把化验数值堆进旧记录的情况）不当标题，避免一堵数字墙。
+  const primaryText = String(record?.[config.primaryKey] || '').trim()
+  const shortPrimary = primaryText && primaryText.length <= 24 ? primaryText : ''
+  const complaintText = config.complaintKey
+    ? String(record?.[config.complaintKey] || '').trim()
+    : ''
+  const shortComplaint = complaintText && complaintText.length <= 24 ? complaintText : ''
 
   const candidates = kind === 'checkup'
-    ? [shortFindings, formatHealthCheckupTypeLabel(record?.checkupType)]
-    : [record?.[config.complaintKey as string], record?.[config.primaryKey]]
+    ? [shortPrimary, formatHealthCheckupTypeLabel(record?.checkupType)]
+    : [shortPrimary, shortComplaint]
 
   const title = candidates
     .map((value) => String(value || '').trim())
-    .find(Boolean) || (kind === 'checkup' ? '体检记录' : '新记录')
+    .find(Boolean) || (kind === 'checkup' ? '体检记录' : '就诊记录')
 
-  // 就诊与体检都可能带化验数据（2026-10-02 起病史表也有 lab_values）
+  // 摘要行只留"这条里有什么"：**日期挪到卡片头部、医嘱不再重复**（老板：信息太多）。
   const labValues = String(record?.labValues || '').trim()
-
   const parts = [
-    // 用调用方传进来的 kind 取日期字段，而不是再从记录里反查归属 ——
-    // 记录的 __visitKind 标记是界面层贴的，工具函数不该依赖它
-    String(record?.[config.dateKey] || '').trim(),
-    String(record?.[config.adviceKey] || '').trim(),
-    // 有化验数据但不适合当标题时，摘要里说一句"这条里有化验数据"
-    // （2026-10-02 起就诊记录也能装化验，所以两类都要显示）
     labValues ? '含化验数据' : '',
     attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
   ].filter(Boolean)

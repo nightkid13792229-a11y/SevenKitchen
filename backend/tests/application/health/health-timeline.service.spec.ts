@@ -395,7 +395,9 @@ describe('HealthTimelineService', () => {
     })
 
     it('病史状态翻成中文', () => {
-      expect(formatMedicalStatus('PENDING_CONFIRMATION')).toBe('待确认')
+      // 2026-10-02：表单不再问状态，新记录都停在 PENDING_CONFIRMATION，
+      // 所以措辞必须说清"只是家长没标注"，不能被读成"病情待确认"（= 还在生病）
+      expect(formatMedicalStatus('PENDING_CONFIRMATION')).toBe('未标注结果')
       expect(formatMedicalStatus('CHRONIC')).toBe('慢性')
     })
 

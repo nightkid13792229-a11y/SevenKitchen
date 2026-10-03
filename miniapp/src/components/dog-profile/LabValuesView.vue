@@ -56,7 +56,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { dedupeLabValues } from '../../utils/health-records'
-import { glueLabUnits, splitLabValueParts, type LabValuePart } from '../../utils/lab-values'
+import {
+  isLabTitleLine,
+  parseLabBlocks,
+  type LabBlock,
+  type LabRow,
+} from '../../utils/lab-values'
 
 /**
  * 化验数据排版（2026-10-02）。
@@ -89,49 +94,6 @@ const props = withDefaults(defineProps<{
 
 const expanded = ref(false)
 
-interface LabRow {
-  name: string
-  value: string
-  flag: string
-  /** 数值被拆成的几组「标签 + 数值」（个数 / 浓度 / 百分比）；只有一组时为空 */
-  parts: LabValuePart[]
-}
-
-interface LabBlock {
-  title: string
-  rows: LabRow[]
-  /** 这份报告一共几项（折叠时只显示异常项，但数量要报**总量**） */
-  total: number
-}
-
-/** 报告名判定：整行没有数字、也不是"项目 数值"的形状，且不长 */
-function isTitleLine(line: string): boolean {
-  if (line.length > 24) return false
-  // 带数字的几乎都是数值行（10^9/L、0.4 % 之类）
-  return !/\d/.test(line)
-}
-
-/** 把「项目 数值 单位（偏高）」拆成三段；拆不出来就整行当数值 */
-function parseRow(line: string): LabRow {
-  const flagMatch = line.match(/[（(](偏高|偏低|高|低|正常)[）)]\s*$/)
-  const flag = flagMatch ? flagMatch[1] : ''
-  const body = flagMatch ? line.slice(0, flagMatch.index).trim() : line
-
-  // 项目名与数值之间用空白分隔：第一个"数字/符号开头"的片段起算数值
-  const valueMatch = body.match(/\s(?=[<>≤≥]?[-+]?[\d.])/)
-  if (!valueMatch || valueMatch.index === undefined) {
-    return { name: '', value: body, flag, parts: [] }
-  }
-
-  const name = body.slice(0, valueMatch.index).trim()
-  const value = body.slice(valueMatch.index).trim()
-  if (!name) {
-    return { name: '', value: body, flag, parts: [] }
-  }
-
-  return { name, value: glueLabUnits(value), flag, parts: splitLabValueParts(value) }
-}
-
 const allBlocks = computed<LabBlock[]>(() => {
   /**
    * 展示前先去重（2026-10-03）。
@@ -141,30 +103,7 @@ const allBlocks = computed<LabBlock[]>(() => {
    * 新记录在合并时就会去重，老记录靠这一步兜底 —— 只影响显示，
    * 不动数据库里的原文；家长在这条记录上任何一次自动保存都会把干净的版本落回去。
    */
-  const lines = dedupeLabValues(String(props.text || ''))
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-  const result: LabBlock[] = []
-  let current: LabBlock = { title: '', rows: [], total: 0 }
-
-  for (const line of lines) {
-    if (isTitleLine(line)) {
-      if (current.title || current.rows.length > 0) {
-        result.push(current)
-      }
-      current = { title: line, rows: [], total: 0 }
-      continue
-    }
-    current.rows.push(parseRow(line))
-  }
-
-  if (current.title || current.rows.length > 0) {
-    result.push({ ...current, total: current.rows.length })
-  }
-
-  return result
+  return parseLabBlocks(dedupeLabValues(String(props.text || '')))
 })
 
 /**

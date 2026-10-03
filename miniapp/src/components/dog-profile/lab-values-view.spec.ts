@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { splitLabValueParts } from '../../utils/lab-values'
+import {
+  isLabTitleLine,
+  parseLabRow,
+  splitLabValueParts,
+} from '../../utils/lab-values'
 
 /**
  * 化验数据的排版（2026-10-02 老板第二次实测提的）。
@@ -31,8 +35,8 @@ describe('化验数据排版', () => {
   })
 
   it('报告名判定：整行没有数字（数值行几乎都带数字）', () => {
-    const view = readView()
-    expect(view).toContain('return !/\\d/.test(line)')
+    expect(isLabTitleLine('血细胞形态学检查')).toBe(true)
+    expect(isLabTitleLine('正常红细胞 个数:2292个/56张')).toBe(false)
   })
 
   it('折叠时报告项数报**总量**，不是精简后剩几项（老板实测提的）', () => {
@@ -42,16 +46,19 @@ describe('化验数据排版', () => {
     expect(view).toContain('return block.total || block.rows.length')
   })
 
-  it('项目与数值按第一个数字切开，左右分栏', () => {
-    const view = readView()
-    expect(view).toContain('const valueMatch = body.match')
-    expect(view).toContain('justify-content: space-between')
+  it('项目与数值切开、左右分栏（单值行仍然这样排）', () => {
+    const row = parseLabRow('总胆红素(TBIL) 7 umol/L')
+
+    expect(row.name).toBe('总胆红素(TBIL)')
+    expect(row.value).toBe('7 umol/L')
+    expect(readView()).toContain('justify-content: space-between')
   })
 
   it('偏高/偏低单独着色，但不做任何判断（只显示报告自己标的）', () => {
-    const view = readView()
-    expect(view).toContain('(偏高|偏低|高|低|正常)')
-    expect(view).toContain('lab__flag')
+    // 只认报告自己写的标记；没写就留空，绝不自己判断
+    expect(parseLabRow('丙氨酸氨基转移酶(ALT) 144 U/L（偏高）').flag).toBe('偏高')
+    expect(parseLabRow('丙氨酸氨基转移酶(ALT) 144 U/L').flag).toBe('')
+    expect(readView()).toContain('lab__flag')
   })
 
   it('确认卡片与表单都用它（一处排版，两处一致）', () => {
@@ -129,5 +136,54 @@ describe('化验数据 · 一行多组数值的排版', () => {
     const found = sizes.map(s => Number(s.match(/font-size:\s*(\d+)rpx/)![1]))
     expect(found.length).toBeGreaterThanOrEqual(3)
     expect(new Set(found).size).toBe(1)
+  })
+})
+
+/**
+ * 切分位置本身（2026-10-04 老板截图里的真正元凶）。
+ *
+ * 原来按"第一个数字前面就是项目名"来切，于是切在了 `10^12/L` 前面：
+ *   项目名 = `正常红细胞 个数:2292个/56张 浓度:1.47 x`
+ *   数值   = `10^12/L 百分比:26.62`
+ * 塞进左右两栏，就成了老板看到的"强行分割成两列 + 浓度一拆为二"。
+ */
+describe('化验数据 · 项目名该切在哪', () => {
+  it('一行三组数时，项目名只留项目名', () => {
+    const row = parseLabRow('正常红细胞 个数:2292个/56张 浓度:1.47 x 10^12/L 百分比:26.62')
+
+    expect(row.name).toBe('正常红细胞')
+    expect(row.parts.map(p => p.label)).toEqual(['个数', '浓度', '百分比'])
+    expect(row.parts.map(p => p.text)).toEqual(['2292个/56张', '1.47\u00A0×10^12/L', '26.62'])
+  })
+
+  it('项目名里带"百分比"三个字不算数值标签（二、五分类报告很常见）', () => {
+    const row = parseLabRow('1-2.中性粒细胞百分比(NEU%) 71.1 %')
+
+    expect(row.name).toBe('1-2.中性粒细胞百分比(NEU%)')
+    expect(row.value).toBe('71.1 %')
+    expect(row.parts).toEqual([])
+  })
+
+  it('空格分隔的写法也认（个数 17个/HPF 参考值 3.4-9.7）', () => {
+    const row = parseLabRow('白细胞 个数 17个/HPF 参考值 3.4-9.7×10^9/L')
+
+    expect(row.name).toBe('白细胞')
+    expect(row.parts.map(p => p.label)).toEqual(['个数', '参考值'])
+  })
+
+  it('普通一行一项的报告不受影响', () => {
+    const row = parseLabRow('丙氨酸氨基转移酶(ALT) 144 U/L（偏高）')
+
+    expect(row.name).toBe('丙氨酸氨基转移酶(ALT)')
+    expect(row.value).toBe('144 U/L')
+    expect(row.flag).toBe('偏高')
+    expect(row.parts).toEqual([])
+  })
+
+  it('`10^9/L` 不会被当成数值的起点（老路也要防这一刀）', () => {
+    const row = parseLabRow('中性杆状核粒细胞 0.25 x 10^9/L')
+
+    expect(row.name).toBe('中性杆状核粒细胞')
+    expect(row.value).toBe('0.25\u00A0×10^9/L')
   })
 })

@@ -70,7 +70,7 @@
          过敏板块上面那张「快速添加过敏原」卡已经写着"已记 0 项"并给了三种添加方式，
          再顶一块"还没有过敏记录"的空卡片纯属重复；它还会被底部按钮栏挡住，
          看着就是一块没内容的空白。 -->
-    <view v-if="draftRecords.length === 0 && !hideEmptyState" class="health-section__empty">
+    <view v-if="visibleRecords.length === 0 && !hideEmptyState" class="health-section__empty">
       <text class="health-section__empty-title">
         {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
       </text>
@@ -79,9 +79,12 @@
       </text>
     </view>
 
+    <!-- v-for 仍遍历**完整**列表，只是把不属于本标签的草稿藏起来：
+         数组不动 → 下标不变 → 各处理函数照旧按下标工作；
+         服务器来的记录没有标签章，一律算本标签。 -->
+    <template v-for="(record, index) in draftRecords" :key="recordKey(record, index)">
     <view
-      v-for="(record, index) in draftRecords"
-      :key="recordKey(record, index)"
+      v-if="recordBelongsToCurrentTab(record)"
       :id="recordAnchorId(record, index)"
       class="record-card health-card"
       :class="{ 'record-card--dirty': isRecordDirty(record, index) }"
@@ -391,6 +394,7 @@
         </view>
       </view>
     </view>
+    </template>
 
     <!-- 「新增记录」按钮已下线（2026-10-02 老板要求收敛入口）：
          2026-10-03 起：底部「新增记录」按当前标签直接调起相册做 AI 识别，
@@ -606,73 +610,28 @@ const activeTabKind = computed<HealthRecordType>(
 )
 
 /**
- * 切标签时把"不属于当前标签"的未保存草稿**收起来**（2026-10-03 老板报的 bug：
- * 在就诊新建的空表单跑到体检、过敏里）。
+ * 这条草稿该不该在**当前标签**里显示（2026-10-03）。
  *
- * 为什么不直接丢掉：顾客填到一半切去看别的标签，切回来内容还得在。
- * 所以按标签分桶暂存，回到那个标签时原样放回来。
+ * 老板先报"在就诊新建的空表单跑到体检、过敏"，随后又报"连之前保存的就诊记录
+ * 也看不到了" —— 后者是我第一版修法的副作用：把不属于当前标签的草稿从列表里
+ * **摘掉**（挪进"暂存区"），一旦判断有偏差记录就真的不见了、而且放不回来。
+ *
+ * 现在改成**只在渲染时按归属过滤**：数组不动、下标不变、各处理函数照旧按下标
+ * 工作，切回原标签自动又出现。判定只认草稿身上"新建/识别时盖的标签章"
+ * （`__tabKind`）与就诊/体检章；**服务器来的记录两个章都没有 → 一律算本标签**
+ * （它本来就只出现在当前标签的列表里）—— 已保存记录在结构上不可能被藏起来。
  */
-const stashedDrafts = reactive<
-  Record<HealthRecordType, { key: string, record: Record<string, any>, snapshot: Record<string, any> | null }[]>
->({ medical: [], checkup: [], allergy: [] })
-
-/** 这条草稿属不属于当前标签 */
-function draftBelongsToCurrentTab(record: Record<string, any>): boolean {
+function recordBelongsToCurrentTab(record: Record<string, any>): boolean {
   return doesDraftBelongToTab(record, {
     tabKind: activeTabKind.value,
     visitKind: props.visitKind || 'medical',
   })
 }
 
-/** 收起草稿（连同它"已保存版本"的快照，回来时才知道脏不脏） */
-function stashDraft(record: Record<string, any>, index: number) {
-  const key = recordKey(record, index)
-  const owner = String(record?.[HEALTH_RECORD_TAB_FIELD] || '').trim()
-  const kind: HealthRecordType = owner === 'checkup' || owner === 'allergy'
-    ? owner
-    : owner === 'medical'
-      ? 'medical'
-      : (String(record?.[HEALTH_VISIT_KIND_FIELD] || '') === 'checkup' ? 'checkup' : 'medical')
-
-  if (stashedDrafts[kind].some((item) => item.key === key)) {
-    return
-  }
-
-  stashedDrafts[kind].push({
-    key,
-    record: normalizeDraftRecord(record, key),
-    snapshot: savedSnapshot(record, index) ?? null,
-  })
-}
-
-/** 把当前标签收着的草稿放回列表（已经是服务端记录的不重复放） */
-function takeStashedDrafts(
-  currentRecords: Record<string, any>[],
-  nextSnapshots: Record<string, Record<string, any>>,
-) {
-  const list = stashedDrafts[activeTabKind.value]
-  if (list.length === 0) {
-    return [] as Record<string, any>[]
-  }
-
-  stashedDrafts[activeTabKind.value] = []
-  const existingIds = new Set(
-    currentRecords.map((record) => String(record?.id || '')).filter(Boolean),
-  )
-
-  const restored: Record<string, any>[] = []
-  for (const item of list) {
-    if (item.record?.id && existingIds.has(String(item.record.id))) {
-      continue
-    }
-    if (item.snapshot) {
-      nextSnapshots[item.key] = item.snapshot
-    }
-    restored.push(item.record)
-  }
-
-  return restored
-}
+/** 当前标签下真正会渲染出来的记录（空态判断也用它） */
+const visibleRecords = computed(() => (
+  draftRecords.value.filter((record) => recordBelongsToCurrentTab(record))
+))
 
 /**
  * 附件上传/删除接口用的类型。
@@ -970,8 +929,9 @@ function normalizeDraftRecord(record: Record<string, any>, localId: string) {
   return {
     ...cloneRecord(record),
     __localId: localId,
-    // 盖一个"这条属于哪个标签"的章：切标签时靠它判断该留还是该收
-    [HEALTH_RECORD_TAB_FIELD]: String(record?.[HEALTH_RECORD_TAB_FIELD] || activeTabKind.value),
+    // ⚠️ 这里**故意不盖"标签章"**：服务器来的记录两个章都没有 → 一律算本标签，
+    //    已保存记录因此不可能被渲染过滤藏起来（老板实测踩过"记录不见了"）。
+    //    标签章只在本地新建（addRecord）与识别填入（onScanned）时盖。
     attachments: attachmentList(record),
   }
 }
@@ -1009,12 +969,6 @@ function preserveUnsavedDrafts(
       return
     }
 
-    // 不属于当前标签的未保存草稿：收起来，别显示在别人家
-    // （2026-10-03 老板实测：就诊新建的空表单跑到了体检、过敏）
-    if (!draftBelongsToCurrentTab(record)) {
-      stashDraft(record, index)
-      return
-    }
 
     if (replaceIncomingRecordWithDirtyDraft(record, index, key, incomingRecords, nextSnapshots)) {
       return
@@ -1243,30 +1197,15 @@ function syncDraftRecords(records: Record<string, any>[]) {
     ? preserveUnsavedDrafts(nextDraftRecords, nextSnapshots)
     : nextDraftRecords
 
-  // 换标签时 preserveUnsavedDrafts 可能没被调用（类型变了就直接换了列表）——
-  // 先把旧标签留下的、不属于新标签的草稿收起来，再放回新标签自己收着的那些
-  if (!shouldPreserveDrafts) {
-    draftRecords.value.forEach((record, index) => {
-      if (isRecordDirty(record, index) && !draftBelongsToCurrentTab(record)) {
-        stashDraft(record, index)
-      }
-    })
-  }
-
-  const restoredDrafts = takeStashedDrafts(recordsWithPreservedDrafts, nextSnapshots)
-  const mergedRecords = restoredDrafts.length > 0
-    ? [...recordsWithPreservedDrafts, ...restoredDrafts]
-    : recordsWithPreservedDrafts
-
-  draftRecords.value = mergedRecords
+  draftRecords.value = recordsWithPreservedDrafts
   savedSnapshots.value = nextSnapshots
   lastSyncedType.value = baseType.value
 
-  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, mergedRecords)) {
+  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, recordsWithPreservedDrafts)) {
     return
   }
 
-  const nextKeys = mergedRecords.map((record, index) => recordKey(record, index))
+  const nextKeys = recordsWithPreservedDrafts.map((record, index) => recordKey(record, index))
   expandedRecordKey.value = nextKeys.includes(expandedRecordKey.value || '')
     ? expandedRecordKey.value
     : null

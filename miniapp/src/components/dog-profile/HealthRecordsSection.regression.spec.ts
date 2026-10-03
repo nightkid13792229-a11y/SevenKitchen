@@ -218,25 +218,34 @@ describe('病历/检查表单 · 精简版', () => {
     expect(source).not.toContain('field-note')
   })
 
-  it('未保存草稿不跨标签显示：不属于本标签的收起来，切回去再放出来（2026-10-03 老板报的 bug）', () => {
+  it('未保存草稿不跨标签显示：渲染时按归属过滤，绝不把记录从列表里摘掉（2026-10-03 老板报的 bug）', () => {
     const source = readSection()
 
     // 归属判断用的是"当前标签"，不是合并模式下恒等于 medical 的 baseType
     expect(source).toContain('const activeTabKind = computed<HealthRecordType>')
     expect(source).toContain('doesDraftBelongToTab(record, {')
-    // 保留草稿时先看归属：不属于本标签 → 暂存，不显示
-    const preserve = source.slice(
-      source.indexOf('function preserveUnsavedDrafts('),
-      source.indexOf('function replaceIncomingRecordWithDirtyDraft('),
-    )
-    expect(preserve).toContain('if (!draftBelongsToCurrentTab(record)) {')
-    expect(preserve).toContain('stashDraft(record, index)')
-    // 回到那个标签时把草稿放回来
-    expect(source).toContain('const stashedDrafts = reactive<')
-    expect(source).toContain('takeStashedDrafts(recordsWithPreservedDrafts, nextSnapshots)')
-    // 新建/识别进来的草稿当场盖章
+    // **只在渲染时过滤**：v-for 仍遍历完整列表（下标不变，各处理函数照旧）
+    expect(source).toContain('v-for="(record, index) in draftRecords"')
+    expect(source).toContain('v-if="recordBelongsToCurrentTab(record)"')
+    expect(source).toContain('const visibleRecords = computed(')
+    // 空态按可见条数判断
+    expect(source).toContain('v-if="visibleRecords.length === 0 && !hideEmptyState"')
+    // ⚠️ 曾经的错误做法：把草稿"暂存"起来 → 记录会真的消失且放不回来
+    expect(source).not.toContain('stashedDrafts')
+    expect(source).not.toContain('stashDraft(')
+    // 新建/识别进来的草稿当场盖标签章（只给本地草稿盖，服务器记录不盖）
     expect(source).toContain('nextRecord[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value')
     expect(source).toContain('record[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value')
+  })
+
+  it('服务器来的记录不盖标签章 —— 已保存记录在结构上不可能被藏起来', () => {
+    const source = readSection()
+    const normalize = source.slice(
+      source.indexOf('function normalizeDraftRecord('),
+      source.indexOf('function hasMatchingIncomingRecord('),
+    )
+
+    expect(normalize).not.toContain('HEALTH_RECORD_TAB_FIELD')
   })
 
   it('每个板块一个小「编辑」按钮：有内容只读，点编辑才可改（2026-10-02 老板定）', () => {

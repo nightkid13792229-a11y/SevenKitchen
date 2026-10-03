@@ -248,6 +248,27 @@ describe('病历/检查表单 · 精简版', () => {
     expect(normalize).not.toContain('HEALTH_RECORD_TAB_FIELD')
   })
 
+  it('空态只有一句「还没有 XX 记录」，按标签取，且不再跟小字（2026-10-03 老板提的）', () => {
+    const source = readSection()
+    const vaccine = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+    const weight = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
+      'utf-8',
+    )
+
+    // 病例三兄弟：按当前标签取文案（过敏标签下 visitKind 是 medical，不能用它）
+    expect(source).toContain('getHealthTabEmptyTitle(activeTabKind)')
+    expect(source).not.toContain('getHealthVisitEmptyDescription')
+    // 空态里不再有第二行小字
+    expect(source).not.toContain('health-section__empty-desc')
+    expect(vaccine).not.toContain('health-section__empty-desc')
+    // 体重板块补上"还没有体重记录"（原来空着）
+    expect(weight).toContain('还没有体重记录')
+  })
+
   it('每个板块一个小「编辑」按钮：有内容只读，点编辑才可改（2026-10-02 老板定）', () => {
     const source = readSection()
 

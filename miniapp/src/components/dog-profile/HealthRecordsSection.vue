@@ -71,11 +71,10 @@
          再顶一块"还没有过敏记录"的空卡片纯属重复；它还会被底部按钮栏挡住，
          看着就是一块没内容的空白。 -->
     <view v-if="visibleRecords.length === 0 && !hideEmptyState" class="health-section__empty">
+      <!-- 只有一句：按**当前标签**说名字（2026-10-03 老板：没有记录就写没有记录即可，
+           不用下面那行小字；顺带修掉"过敏标签显示还没有就诊记录"） -->
       <text class="health-section__empty-title">
-        {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
-      </text>
-      <text class="health-section__empty-desc">
-        {{ isVisitMode ? getHealthVisitEmptyDescription() : '先补充一条基础记录，之后可以继续添加。' }}
+        {{ loading ? '记录加载中' : getHealthTabEmptyTitle(activeTabKind) }}
       </text>
     </view>
 
@@ -431,7 +430,7 @@ import {
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   formatHealthCheckupTypeLabel,
-  getHealthVisitEmptyDescription,
+  getHealthTabEmptyTitle,
   getHealthVisitFieldConfig,
   resolveMedicalStatusToggle,
   getHealthVisitSectionMeta,

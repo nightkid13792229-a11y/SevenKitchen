@@ -35,10 +35,8 @@
     </view>
 
     <view v-else-if="records.length === 0" class="health-section__empty">
+      <!-- 只有一句（2026-10-03 老板：没有记录就写没有记录即可，不用下面那行小字） -->
       <text class="health-section__empty-title">还没有疫苗记录</text>
-      <text class="health-section__empty-desc">
-        记下疫苗名和接种日期，到期日我们会替你算着。
-      </text>
     </view>
 
     <view

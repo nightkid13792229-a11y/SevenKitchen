@@ -2091,7 +2091,20 @@ export function getHealthVisitSectionMeta(
   }
 }
 
-/** 空态下面那句引导（六个板块统一都要有一句） */
-export function getHealthVisitEmptyDescription(): string {
-  return '带狗看过病、做过检查，新增一条，下次就诊和体检都用得上。'
+/**
+ * 空态文案：**按当前标签取**（2026-10-03 老板报的 bug 修）。
+ *
+ * 原来这里是 `getHealthVisitSectionMeta(props.visitKind)`，而页面在「过敏」标签下
+ * visitKind 传的是 `medical`（合并模式的遗留）—— 于是过敏标签的空态显示成
+ * 「还没有就诊记录」，跟标签对不上（老板实测发现）。
+ *
+ * 现在一律按标签取，五类各自说自己的名字：
+ *   就诊 → 还没有就诊记录 / 体检 → 还没有体检记录 / 过敏 → 还没有过敏记录
+ *
+ * 只有这一句，**下面不再跟小字说明**（老板：没有记录就写没有记录即可）。
+ */
+export function getHealthTabEmptyTitle(tabKind: HealthRecordType): string {
+  if (tabKind === 'checkup') return '还没有体检记录'
+  if (tabKind === 'allergy') return '还没有过敏记录'
+  return '还没有就诊记录'
 }

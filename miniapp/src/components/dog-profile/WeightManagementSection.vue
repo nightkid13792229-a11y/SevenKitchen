@@ -201,6 +201,12 @@
       </view>
     </view>
 
+    <!-- 一条记录都没有：只写一句"还没有体重记录"（2026-10-03 老板：各板块空态统一成这一句）
+         原来这里什么都没有，体重标签下空着也不知道是没记录还是没加载出来。 -->
+    <view v-if="recordsLoaded && records.length === 0" class="health-section__empty">
+      <text class="health-section__empty-title">还没有体重记录</text>
+    </view>
+
     <!-- 历史记录 -->
     <view v-if="records.length > 0" class="health-card weight-history-card">
       <text class="health-section__title">历史记录</text>
@@ -473,6 +479,8 @@ const weightEcho = computed(() =>
 )
 
 const records = ref<WeightRecord[]>([])
+/** 首次加载中：空态要等加载完再判断，否则会先闪一下"还没有体重记录" */
+const recordsLoaded = ref(false)
 const isSavingRecord = ref(false)
 const syncToProfile = ref(false)
 const syncToProfileTouched = ref(false)
@@ -555,6 +563,9 @@ async function loadRecords() {
     }
   } catch (err) {
     console.error('[WeightManagementSection] Failed to load records:', err)
+  } finally {
+    // 成功失败都算"加载过"：失败时空态照旧显示，不要卡在空白
+    recordsLoaded.value = true
   }
 }
 

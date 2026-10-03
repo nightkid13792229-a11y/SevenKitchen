@@ -53,11 +53,13 @@ describe('HealthRecordsSection regressions', () => {
     expect(source).toContain('function saveRecord(index: number): boolean {\n  if (hasSavingRecord.value)')
     expect(source).toContain('function cancelRecord(index: number) {\n  if (hasSavingRecord.value)')
     expect(source).toContain('async function removeRecord(index: number) {\n  if (hasSavingRecord.value)')
+    // 2026-10-03：字段改动不再被"保存中"挡住（自动保存期间照样能接着改，
+    // 存完由 watch(hasSavingRecord) 接着存最新内容），改为排一次自动保存
     expect(functionSource(
       source,
       'function updateTextField',
       'function addRecord',
-    )).toContain('if (hasSavingRecord.value)')
+    )).toContain('scheduleAutoSave(')
     expect(source).toContain('function preserveUnsavedDrafts')
     expect(source).toContain('const lastSyncedType = ref<HealthRecordType | null>(null)')
     // 2026-10-01：合并模式（activeType='visit'）下没有单一记录类型，
@@ -438,14 +440,14 @@ describe('病历/检查表单 · 第三轮', () => {
     expect(fn).toContain('scanRef.value.startScan?.()')
   })
 
-  it('③ 批量保存逐条等存完再下一条（否则第二条开始会被"保存中"挡回来）', () => {
+  it('③ 一次只存一条，且"存的过程中又改了"会在存完后接着存（2026-10-03 自动保存）', () => {
     const source = readSection()
 
-    expect(source).toContain('function waitForPendingSave(): Promise<void>')
-    expect(source).toContain('await waitForPendingSave()')
-    // 兜底：父组件万一没清 key，15 秒也要放行
-    expect(source).toContain('15000')
-    // 有一条缺信息就停下来，并说清还剩几条
-    expect(source).toContain('还有 ${remaining} 条待保存')
+    // 并发写同一份列表会互相覆盖：正在存就排队，存完接着来
+    expect(source).toContain('autoSaveQueue.add(key)')
+    expect(source).toContain('if (autoSaveQueue.size > 0)')
+    expect(source).toContain('for (const key of queued)')
+    // 同步完列表后仍脏（存的过程中被改过）→ 再排一次
+    expect(source).toContain('if (isRecordDirty(record, index) && !isRecordSaving(record, index))')
   })
 })

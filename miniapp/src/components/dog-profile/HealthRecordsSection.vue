@@ -93,7 +93,15 @@
                但**未保存仍然要说** —— 草稿没落库时一声不吭，家长退出就白填了。 -->
           <view class="record-card__meta">
             <text class="record-card__date">{{ recordDateText(record, index) }}</text>
-            <text v-if="isRecordDirty(record, index)" class="record-card__unsaved">未保存</text>
+            <!-- 自动保存的状态（2026-10-03）：正常时**什么都不显示**；
+                 只有两种情况要说话 —— 缺内容还没存上、保存失败（可点重试）。 -->
+            <text
+              v-if="autoSaveNotice(record, index)"
+              class="record-card__unsaved"
+              :class="{ 'record-card__unsaved--failed': autoSaveNoticeFailed(record, index) }"
+              @tap.stop="onAutoSaveNoticeTap(record, index)"
+            >{{ autoSaveNotice(record, index) }}</text>
+            <text v-else-if="isRecordSaving(record, index)" class="record-card__saving">保存中…</text>
           </view>
 
           <view class="record-card__summary">
@@ -495,6 +503,12 @@ const props = withDefaults(defineProps<{
   records?: Record<string, any>[]
   loading?: boolean
   savingRecordKey?: string
+  /**
+   * 最近一次保存的结果（2026-10-03 自动保存）。
+   * 失败时卡片上写「保存失败，点重试」—— 没有按钮可点的情况下，
+   * 这是唯一能说清"这条没存上"的地方。
+   */
+  lastSaveResult?: { key: string; ok: boolean; message: string; at: number } | null
   preferredExpandedRecordIdentity?: string
   modelValue?: Record<string, any>[]
   recordType?: HealthRecordType
@@ -523,6 +537,7 @@ const props = withDefaults(defineProps<{
   records: () => [],
   loading: false,
   savingRecordKey: '',
+  lastSaveResult: null,
   preferredExpandedRecordIdentity: '',
   modelValue: () => [],
   recordType: undefined,
@@ -605,12 +620,42 @@ const hasDirtyRecords = computed(() =>
 const hasUploadingRecords = computed(() => Object.values(uploadingKeys.value).some(Boolean))
 const hasSavingRecord = computed(() => Boolean(props.savingRecordKey))
 
+/* ── 自动保存（2026-10-03 老板定：删掉底部保存按钮，改成实时保存）────────────
+ *
+ * 规则：
+ *   · 改动后**延迟 1.2 秒**落库（打字停顿即保存），连续输入不会被切成很多次请求；
+ *   · 到边界立刻落库：点「完成」收起某个字段、收起这张卡片、切标签、离开页面；
+ *   · **缺信息的草稿不会硬存**（日期 + 至少一项内容/附件）——
+ *     卡片上明确写"还差什么"，填完自动保存，绝不静默丢掉；
+ *   · 保存失败时卡片上写「保存失败，点重试」，点一下就再存一次。
+ */
+const AUTO_SAVE_DELAY_MS = 1200
+/** 每张卡片一个定时器（键＝记录 key） */
+const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+/** 正在保存时又被改动的记录，存完接着存 */
+const autoSaveQueue = new Set<string>()
+/** 每条记录的提示：'' = 正常；否则是给家长看的一句话 */
+const autoSaveNotices = ref<Record<string, string>>({})
+/** 提示是不是"保存失败"（失败可以点重试；缺信息点了就滚到那条） */
+const autoSaveFailedKeys = ref<string[]>([])
+
 watch(
   () => props.savingRecordKey,
   (nextKey, previousKey) => {
     if (nextKey) {
       recentSavingRecordKey.value = nextKey
       return
+    }
+
+    // 一次保存结束（不管成功失败）：把排队等着的、以及"存的过程中又被改过"的接着存
+    if (autoSaveQueue.size > 0) {
+      const queued = Array.from(autoSaveQueue)
+      autoSaveQueue.clear()
+      nextTick(() => {
+        for (const key of queued) {
+          void runAutoSave(key)
+        }
+      })
     }
 
     if (previousKey) {
@@ -628,8 +673,33 @@ watch(
   () => [currentType.value, sourceRecords.value] as const,
   () => {
     syncDraftRecords(sourceRecords.value)
+
+    // 保存回来之后如果这条还是脏的（存的过程中家长又改了），接着存
+    nextTick(() => {
+      draftRecords.value.forEach((record, index) => {
+        if (isRecordDirty(record, index) && !isRecordSaving(record, index)) {
+          scheduleAutoSave(record, index)
+        }
+      })
+    })
   },
   { immediate: true, deep: true },
+)
+
+watch(
+  () => props.lastSaveResult,
+  (result) => {
+    if (!result?.key) {
+      return
+    }
+
+    if (result.ok) {
+      clearAutoSaveNotice(result.key)
+      return
+    }
+
+    setAutoSaveNotice(result.key, '保存失败，点重试', true)
+  },
 )
 
 watch(
@@ -926,6 +996,145 @@ function consumeRecentSavingRecordKey(record: Record<string, any>, index: number
   }
 }
 
+/**
+ * 这张卡片的校验错误（缺什么），没有就是 null。
+ * 与 saveRecord 用同一套规则 —— 自动保存不能比手动保存更宽松。
+ */
+function recordValidationError(record: Record<string, any>, index: number): string | null {
+  return isVisitMode.value
+    ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
+    : getHealthRecordValidationError(baseType.value, record)
+}
+
+function clearAutoSaveNotice(key: string) {
+  if (autoSaveNotices.value[key]) {
+    const next = { ...autoSaveNotices.value }
+    delete next[key]
+    autoSaveNotices.value = next
+  }
+  if (autoSaveFailedKeys.value.includes(key)) {
+    autoSaveFailedKeys.value = autoSaveFailedKeys.value.filter((item) => item !== key)
+  }
+}
+
+function setAutoSaveNotice(key: string, message: string, failed = false) {
+  autoSaveNotices.value = { ...autoSaveNotices.value, [key]: message }
+  autoSaveFailedKeys.value = failed
+    ? Array.from(new Set([...autoSaveFailedKeys.value, key]))
+    : autoSaveFailedKeys.value.filter((item) => item !== key)
+}
+
+/**
+ * 排一次自动保存。immediate = 立刻存（点「完成」、收起卡片、切标签这些边界）。
+ * 记录被删掉时对应的定时器由 runAutoSave 自己发现并清掉。
+ */
+function scheduleAutoSave(
+  record: Record<string, any>,
+  index: number,
+  options: { immediate?: boolean } = {},
+) {
+  const key = recordKey(record, index)
+  const pending = autoSaveTimers.get(key)
+  if (pending) {
+    clearTimeout(pending)
+    autoSaveTimers.delete(key)
+  }
+
+  if (options.immediate) {
+    void runAutoSave(key)
+    return
+  }
+
+  autoSaveTimers.set(
+    key,
+    setTimeout(() => {
+      autoSaveTimers.delete(key)
+      void runAutoSave(key)
+    }, AUTO_SAVE_DELAY_MS),
+  )
+}
+
+/** 真正存一条：缺信息 → 只写提示；否则派发给父组件保存 */
+async function runAutoSave(key: string) {
+  const index = findRecordIndexByKey(key)
+  if (index < 0) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  const record = draftRecords.value[index]
+  if (!record) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  // 已经和服务器一致（刚存完没再改）→ 不用存，把提示清掉
+  if (!isRecordDirty(record, index)) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  // 附件还在上传：等它传完再存，否则存下去的是没有附件的版本
+  if (hasUploadingRecords.value) {
+    scheduleAutoSave(record, index)
+    return
+  }
+
+  const validationError = recordValidationError(record, index)
+  if (validationError) {
+    setAutoSaveNotice(key, '还差内容，填完自动保存')
+    return
+  }
+
+  // 上一次还没存完：排队，等空闲了接着存（并发写同一份列表会互相覆盖）
+  if (hasSavingRecord.value || isRecordSaving(record, index)) {
+    autoSaveQueue.add(key)
+    return
+  }
+
+  clearAutoSaveNotice(key)
+  emit('save-record', {
+    type: recordKindOf(record),
+    record: stripLocalFields(record),
+    recordKey: key,
+    // 自动保存：成功不弹 toast（每改一格弹一次会把人烦死），
+    // 失败由页面回传 lastSaveResult，卡片上写「保存失败，点重试」
+    auto: true,
+  })
+}
+
+/** 把等待中的自动保存全部立刻执行（切标签、离开页面、收起卡片时用） */
+function flushAutoSaves() {
+  for (const [key, timer] of Array.from(autoSaveTimers.entries())) {
+    clearTimeout(timer)
+    autoSaveTimers.delete(key)
+    void runAutoSave(key)
+  }
+}
+
+/** 这张卡片现在该显示什么提示（正常时什么都不显示） */
+function autoSaveNotice(record: Record<string, any>, index: number): string {
+  return autoSaveNotices.value[recordKey(record, index)] || ''
+}
+
+function autoSaveNoticeFailed(record: Record<string, any>, index: number): boolean {
+  return autoSaveFailedKeys.value.includes(recordKey(record, index))
+}
+
+/** 点提示：失败就重试；缺信息就展开滚到那条并说清缺什么 */
+function onAutoSaveNoticeTap(record: Record<string, any>, index: number) {
+  const key = recordKey(record, index)
+  if (autoSaveFailedKeys.value.includes(key)) {
+    void runAutoSave(key)
+    return
+  }
+
+  const error = recordValidationError(record, index)
+  expandedRecordKey.value = key
+  scrollToRecord(index)
+  uni.showToast({ title: error || '填完会自动保存', icon: 'none', duration: 2500 })
+}
+
 function syncDraftRecords(records: Record<string, any>[]) {
   const nextSnapshots: Record<string, Record<string, any>> = {}
   const nextDraftRecords = records.map((record, index) => {
@@ -1120,10 +1329,6 @@ async function requestTypeChange(type: HealthRecordType) {
 }
 
 function updateTextField(index: number, key: string, value: string) {
-  if (hasSavingRecord.value) {
-    return
-  }
-
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -1133,6 +1338,10 @@ function updateTextField(index: number, key: string, value: string) {
     ...record,
     [key]: value,
   }
+
+  // 实时保存（2026-10-03）：改完停一下手就落库；正存着也照样改，
+  // 存完由 watch(hasSavingRecord) 接着存最新内容 —— 不再"保存中不许改"
+  scheduleAutoSave(draftRecords.value[index], index)
 }
 
 /**
@@ -1232,8 +1441,15 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType: strin
   if (lastIndex >= 0) {
     expandedRecordKey.value = recordKey(draftRecords.value[lastIndex], lastIndex)
   }
+
+  // 实时保存（2026-10-03）：识别结果经顾客确认后**直接落库**，不用再点保存。
+  // 落库之后原件、字段都能立刻看到；要改要删随时，"取消新增记录"也还在。
+  for (const [index, record] of draftRecords.value.entries()) {
+    scheduleAutoSave(record, index, { immediate: true })
+  }
+
   uni.showToast({
-    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
+    title: `已填入 ${payload.drafts.length} 条，正在保存…`,
     icon: 'none',
   })
 }
@@ -1270,9 +1486,15 @@ function markFieldEditing(record: Record<string, any>, index: number, key: strin
 
 function toggleFieldEditing(record: Record<string, any>, index: number, key: string) {
   const stateKey = fieldStateKey(record, index, key)
-  editingFields.value = editingFields.value.includes(stateKey)
+  const wasEditing = editingFields.value.includes(stateKey)
+  editingFields.value = wasEditing
     ? editingFields.value.filter((item) => item !== stateKey)
     : [...editingFields.value, stateKey]
+
+  // 点「完成」＝这一格填完了 → 立刻落库，不等那 1.2 秒
+  if (wasEditing) {
+    scheduleAutoSave(record, index, { immediate: true })
+  }
 }
 
 /** 这一格有没有内容（决定"只读 + 编辑"还是"直接给输入框"） */
@@ -1448,6 +1670,15 @@ function isRecordExpanded(record: Record<string, any>, index: number) {
 }
 
 function toggleRecordExpanded(index: number) {
+  // 收起这张卡片＝这一轮填完了 → 立刻落库（不等那 1.2 秒）
+  const collapsing = isRecordExpanded(index)
+  if (collapsing) {
+    const record = draftRecords.value[index]
+    if (record) {
+      scheduleAutoSave(record, index, { immediate: true })
+    }
+  }
+
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -1541,57 +1772,19 @@ function recordMatchesSavingKey(record: Record<string, any>, index: number, savi
   ].some((value) => value === savingKey)
 }
 
-/**
- * 保存当前类型下**所有待保存的记录**（供健康管理页的底部按钮调用）。
- *
- * 内嵌模式下逐条的「保存」按钮被隐藏，改由底部那个自适应按钮统一保存 ——
- * 顾客不必在每条记录里找保存键。
- *
- * 逐条保存是顺序执行的：并发写同一个列表会让后写的覆盖先写的。
- */
-async function saveAllDirty() {
-  if (hasSavingRecord.value || hasUploadingRecords.value) {
-    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
-    return
-  }
-
-  const dirtyIndexes = draftRecords.value
-    .map((record, index) => (isRecordDirty(record, index) ? index : -1))
-    .filter((index) => index >= 0)
-
-  if (dirtyIndexes.length === 0) {
-    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
-    return
-  }
-
-  for (const [position, index] of dirtyIndexes.entries()) {
-    const submitted = saveRecord(index)
-
-    // 有一条没通过校验（缺必填）就停：已经滚到它跟前了，
-    // 顾客补完再点一次保存，剩下的接着存 —— 不能装作全存好了
-    if (!submitted) {
-      const remaining = dirtyIndexes.length - position - 1
-      if (remaining > 0) {
-        uni.showToast({
-          title: `这条还缺信息，补完再点一次保存（还有 ${remaining} 条待保存）`,
-          icon: 'none',
-          duration: 3000,
-        })
-      }
-      return
-    }
-
-    // 等这条存完再存下一条（顺序执行，避免并发写同一份列表互相覆盖）
-    await waitForPendingSave()
-  }
-}
 
 /**
  * 对外入口（2026-10-02 引导流程要用）：
  *   · startScan → 直接调起相册 + AI 识别（本标签那一类）
  *   · addRecord → 新建一条本类空白记录
  */
-defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })
+defineExpose({
+  openAddRecordChooser,
+  startScan,
+  addRecord,
+  /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
+  flushAutoSaves,
+})
 
 /**
  * 保存单条记录。
@@ -1634,33 +1827,6 @@ function saveRecord(index: number): boolean {
   return true
 }
 
-/**
- * 等这一条真的存完（父组件把 savingRecordKey 清掉）再存下一条。
- *
- * 2026-10-02 修：原来批量保存只是 `await saveRecord()`，而 saveRecord 是同步的 ——
- * 第一条刚派发出去、父组件就把 savingRecordKey 置上了，第二轮直接被
- * "记录保存中，请稍候" 挡回来，**两条以上未保存记录只会存下第一条**。
- * 这里改成等空闲再继续；15 秒兜底，免得父组件万一没清 key 把顾客卡住。
- */
-function waitForPendingSave(): Promise<void> {
-  if (!hasSavingRecord.value) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    const stop = watch(hasSavingRecord, (value) => {
-      if (!value) {
-        stop()
-        resolve()
-      }
-    })
-
-    setTimeout(() => {
-      stop()
-      resolve()
-    }, 15000)
-  })
-}
 
 function cancelRecord(index: number) {
   if (hasSavingRecord.value) {
@@ -1907,6 +2073,8 @@ function removeAttachment(index: number, attachmentIndex: number) {
     ...record,
     attachments: nextAttachments,
   }
+  // 附件变化同样实时保存（删掉最后一项内容时由校验挡下：会提示"还差内容"）
+  scheduleAutoSave(draftRecords.value[index], index)
 
   const savedAttachments = new Set(attachmentList(savedSnapshot(record, index) || {}))
   const removedKey = extractHealthAttachmentKey(removedUrl)
@@ -2126,7 +2294,20 @@ function removeAttachment(index: number, attachmentIndex: number) {
   color: #415a65;
 }
 
-/* 只在草稿没落库时出现 */
+/* 保存失败：点一下重试 */
+.record-card__unsaved--failed {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+/* 正常保存中（一闪而过） */
+.record-card__saving {
+  margin-left: 12rpx;
+  font-size: 20rpx;
+  color: #8a968a;
+}
+
+/* 缺内容/失败时才出现 */
 .record-card__unsaved {
   margin-left: 12rpx;
   padding: 2rpx 12rpx;

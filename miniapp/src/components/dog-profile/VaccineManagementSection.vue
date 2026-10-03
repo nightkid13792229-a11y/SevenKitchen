@@ -170,14 +170,14 @@
             :disabled="isBusy"
             @tap="removeRecord(record, index)"
           >删除</button>
-          <!-- 内嵌到健康管理页时隐藏（改由底部按钮统一保存） -->
-          <button
-            v-if="!externalSave"
-            class="vaccine-card__action vaccine-card__action--primary"
-            :class="{ 'vaccine-card__action--disabled': isBusy }"
-            :disabled="isBusy"
-            @tap="saveRecord(record, index)"
-          >{{ savingIndex === index ? '保存中…' : '保存' }}</button>
+          <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
+               正常时什么都不显示；只有"还差必填"和"保存中"要说话。 -->
+          <text v-if="autoSaveNotice(index)" class="vaccine-card__autosave">
+            {{ autoSaveNotice(index) }}
+          </text>
+          <text v-else-if="savingIndex === index || isDirty(record, index)" class="vaccine-card__autosave vaccine-card__autosave--quiet">
+            {{ savingIndex === index ? '保存中…' : '' }}
+          </text>
         </view>
       </view>
     </view>
@@ -269,36 +269,18 @@ function isDirty(record: VaccineRecord, index: number) {
   )
 }
 
-/**
- * 保存所有改过的行（供健康管理页的底部按钮调用）。
- * 顺序执行：并发写同一个列表会互相覆盖。
- */
-async function saveAllDirty() {
-  if (isBusy.value) {
-    uni.showToast({ title: '保存中，请稍候', icon: 'none' })
-    return
-  }
-
-  const dirtyIndexes = records.value
-    .map((record, index) => (isDirty(record, index) ? index : -1))
-    .filter((index) => index >= 0)
-
-  if (dirtyIndexes.length === 0) {
-    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
-    return
-  }
-
-  for (const index of dirtyIndexes) {
-    await saveRecord(records.value[index], index)
-  }
-}
 
 /**
  * 对外的两个入口（2026-10-02 引导流程要用）：
  *   · startScan   → 直接调起"拍疫苗本"（AI 读出多条接种记录）
  *   · addRecord   → 手动加一条空白疫苗记录
  */
-defineExpose({ saveAllDirty, startScan: () => scanRef.value?.startScan?.(), addRecord })
+defineExpose({
+  startScan: () => scanRef.value?.startScan?.(),
+  addRecord,
+  /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
+  flushAutoSaves,
+})
 
 /** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
 const commonVaccineNames = [
@@ -400,9 +382,101 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   // status 是受限联合类型（下拉框保证取值合法），其余字段都是普通字符串
   if (field === 'status') {
     draft.status = value as VaccineDraft['status']
+  } else {
+    draft[field] = value
+  }
+
+  // 实时保存（2026-10-03 老板定：底部保存键下线）。
+  // 日期/状态这类"点一下就有值"的改动立刻存；文本输入停顿 1.2 秒再存。
+  const immediate = field !== 'vaccineName' && field !== 'notes'
+  scheduleAutoSave(record, index, { immediate })
+}
+
+/* ── 自动保存（2026-10-03）────────────────────────────────────────────
+ * 一条疫苗记录＝疫苗名 + 接种日期（后端必填）。所以：
+ *   · 两样都齐了才存，缺任何一样只在卡片上提示「填完自动保存」；
+ *   · 文本输入停顿 1.2 秒存，日期/状态一改就存；
+ *   · 切标签/离开页面时由 flushAutoSaves 立刻落库。
+ */
+const AUTO_SAVE_DELAY_MS = 1200
+const autoSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
+const autoSaveNotices = ref<Record<number, string>>({})
+
+/** 这条能不能存（与 saveRecord 的校验同一套规则） */
+function autoSaveBlockReason(record: VaccineRecord, index: number): string {
+  const draft = draftOf(record, index)
+  if (!draft.vaccineName.trim()) return '还差疫苗名称，填完自动保存'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
+  return ''
+}
+
+function scheduleAutoSave(
+  record: VaccineRecord,
+  index: number,
+  options: { immediate?: boolean } = {},
+) {
+  const pending = autoSaveTimers.get(index)
+  if (pending) {
+    clearTimeout(pending)
+    autoSaveTimers.delete(index)
+  }
+
+  if (options.immediate) {
+    void runAutoSave(record, index)
     return
   }
-  draft[field] = value
+
+  autoSaveTimers.set(
+    index,
+    setTimeout(() => {
+      autoSaveTimers.delete(index)
+      void runAutoSave(record, index)
+    }, AUTO_SAVE_DELAY_MS),
+  )
+}
+
+async function runAutoSave(record: VaccineRecord, index: number) {
+  if (!isDirty(record, index)) {
+    clearNotice(index)
+    return
+  }
+
+  const reason = autoSaveBlockReason(record, index)
+  if (reason) {
+    autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }
+    return
+  }
+
+  if (isBusy.value) {
+    // 上一次还在存：稍后再来（不排队也安全，改完这次还会再排一次）
+    scheduleAutoSave(record, index)
+    return
+  }
+
+  clearNotice(index)
+  await saveRecord(record, index)
+}
+
+function clearNotice(index: number) {
+  if (autoSaveNotices.value[index]) {
+    const next = { ...autoSaveNotices.value }
+    delete next[index]
+    autoSaveNotices.value = next
+  }
+}
+
+/** 把等待中的自动保存立刻执行（切标签、离开页面、收起卡片时用） */
+function flushAutoSaves() {
+  for (const [index, timer] of Array.from(autoSaveTimers.entries())) {
+    clearTimeout(timer)
+    autoSaveTimers.delete(index)
+    const record = records.value[index]
+    if (record) void runAutoSave(record, index)
+  }
+}
+
+function autoSaveNotice(index: number): string {
+  return autoSaveNotices.value[index] || ''
 }
 
 function toggleExpanded(record: VaccineRecord, index: number) {
@@ -948,6 +1022,17 @@ async function doRemove(record: VaccineRecord) {
   align-items: center;
   gap: 16rpx;
   margin-top: 26rpx;
+}
+
+.vaccine-card__autosave {
+  align-self: center;
+  margin-left: auto;
+  font-size: 21rpx;
+  color: #b26a2f;
+}
+
+.vaccine-card__autosave--quiet {
+  color: #8a968a;
 }
 
 .vaccine-card__action {

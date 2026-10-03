@@ -115,6 +115,7 @@
           :records="activeRecordList"
           :loading="activeRecordLoading"
           :saving-record-key="savingRecordKey"
+          :last-save-result="lastSaveResult"
           :preferred-expanded-record-identity="preferredExpandedRecordIdentity"
           :show-type-extra="activeRecordType === 'allergy'"
           :hide-empty-state="activeRecordType === 'allergy'"
@@ -217,21 +218,21 @@
       </view>
     </view>
 
+    <!-- 2026-10-03 老板定：**删掉底部保存按钮**，六个板块全部改成实时保存。
+         底部只留一个「记一条」（组件在没有其它按钮时自动占满整行）。
+         原来那个可点/可灰的保存键从此不存在 —— 也就不再有"忘了点保存"。 -->
     <StickyActionBar
-      :primary-text="stickyPrimaryText"
-      :secondary-text="stickySecondaryText"
-      :primary-disabled="stickyPrimaryDisabled"
-      :primary-theme="stickyPrimaryTheme"
-      :secondary-disabled="isSecondaryActionDisabled"
-      @primary="onStickyPrimary"
-      @secondary="onStickySecondary"
+      :primary-text="stickySecondaryText"
+      primary-theme="visit"
+      :primary-disabled="isSecondaryActionDisabled"
+      @primary="onStickySecondary"
     />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
@@ -381,6 +382,11 @@ const activeRecordLoading = computed(() => {
 })
 
 function selectHealthTab(key: HealthTabKey) {
+  // 切走之前先把等待中的自动保存落库（2026-10-03：底部保存键已下线）
+  if (key !== activeHealthTab.value) {
+    flushActiveTabAutoSaves()
+  }
+
   // 换标签就把"新增入口"开关复位：它只在引导选完那一刻打开
   resetAddEntryFlags()
   activeHealthTab.value = key
@@ -402,6 +408,12 @@ const loadingByType = reactive<Record<HealthRecordType, boolean>>({
   allergy: false,
 })
 const savingRecordKey = ref('')
+/**
+ * 最近一次保存的结果，回传给记录板块（2026-10-03 自动保存）。
+ * 自动保存没有按钮可以点，失败必须落在卡片上看得见、点一下能重试 ——
+ * 光靠一句两秒就消失的 toast 等于没提示。
+ */
+const lastSaveResult = ref<{ key: string; ok: boolean; message: string; at: number } | null>(null)
 const hasUnsavedRecordDraft = ref(false)
 const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   medical: '',
@@ -528,6 +540,16 @@ onShow(() => {
   if (!dogs.value.length) {
     void loadDogs()
   }
+})
+
+// 离开这个页面（切后台、返回、跳走）之前，把等待中的自动保存立刻发出去。
+// 自动保存有 1.2 秒延迟，不 flush 的话"改完马上返回"会丢掉最后几个字。
+onHide(() => {
+  flushActiveTabAutoSaves()
+})
+
+onUnload(() => {
+  flushActiveTabAutoSaves()
 })
 
 async function loadDogs(preferredDogId = '') {
@@ -869,10 +891,13 @@ async function saveHealthRecord({
   type,
   record,
   recordKey,
+  auto = false,
 }: {
   type: HealthRecordType
   record: Record<string, any>
   recordKey: string
+  /** 自动保存：成功不弹提示（否则每改一格都弹一次） */
+  auto?: boolean
 }) {
   if (!dogId.value) {
     return
@@ -907,9 +932,15 @@ async function saveHealthRecord({
     recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
     healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)
     lastVisitRecordType.value = type
-    uni.showToast({ title: '已保存', icon: 'success' })
+    lastSaveResult.value = { key: nextSavingKey, ok: true, message: '', at: Date.now() }
+    // 自动保存成功不打扰（卡片上的"保存中…"消失就是反馈）
+    if (!auto) {
+      uni.showToast({ title: '已保存', icon: 'success' })
+    }
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
+    const message = error?.message || '保存失败'
+    lastSaveResult.value = { key: nextSavingKey, ok: false, message, at: Date.now() }
+    uni.showToast({ title: message, icon: 'none' })
   } finally {
     if (savingRecordKey.value === nextSavingKey) {
       savingRecordKey.value = ''
@@ -962,7 +993,6 @@ async function deleteHealthRecord({
  * 各板块内部的保存按钮在内嵌模式下已隐藏，顾客只需要认底部这一个位置。
  */
 const recordsSectionRef = ref<{
-  saveAllDirty?: () => Promise<void>
   /** 旧的二选一选择器（引导面板上线后不再由底部按钮调用） */
   openAddRecordChooser?: () => void
   /** 直接调起相册 + AI 识别（按当前标签那一类） */
@@ -971,7 +1001,6 @@ const recordsSectionRef = ref<{
   addRecord?: () => void
 } | null>(null)
 const vaccineSectionRef = ref<{
-  saveAllDirty?: () => Promise<void>
   startScan?: () => void
   addRecord?: () => void
 } | null>(null)
@@ -1138,20 +1167,6 @@ async function pickAddGuide(
   uni.showToast({ title: '这个入口还在做', icon: 'none' })
 }
 
-const stickyPrimaryText = computed(() => '保存')
-
-/** 当前书签下有没有待保存的内容 —— 没有就把按钮置灰，别让顾客白点 */
-const hasUnsavedInActiveTab = computed(() => {
-  if (isRecordTab.value) {
-    return hasUnsavedRecordDraft.value
-  }
-  return hasUnsavedSectionDraft.value
-})
-
-const stickyPrimaryDisabled = computed(
-  () => isSecondaryActionDisabled.value || !hasUnsavedInActiveTab.value,
-)
-
 /**
  * 次按钮就是「返回」。六个板块现在都能从底部保存，主按钮位被占满了，
  * 所以返回统一放在次按钮上，不再随书签变来变去。
@@ -1163,43 +1178,34 @@ const stickyPrimaryDisabled = computed(
  * 老板 2026-10-01 要求把原来分散的三处入口合并到这一个按钮上，并取消「返回首页」。
  * 其它板块暂时仍是返回（返回也可以直接用小程序导航栏左上角的返回箭头）。
  */
-/**
- * 底部保存键的配色主题。
- *
- * StickyActionBar 只认原来那几个板块值（medical/checkup 不在其中），
- * 而拆标签后「就诊」「体检」都走记录板块 —— 这里统一映射成 'visit'，
- * 视觉与拆标签之前保持一致。
- */
-const stickyPrimaryTheme = computed<'visit' | 'allergy' | 'vaccine' | 'weight'>(() => {
-  if (isRecordTab.value) {
-    return activeHealthTab.value === 'allergy' ? 'allergy' : 'visit'
-  }
-
-  return activeHealthTab.value as 'vaccine' | 'weight'
-})
-
 const stickySecondaryText = computed(() => (
   // 2026-10-02：新增统一走引导入口，所以任何标签下都是同一个动作
   selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]
 ))
 
-async function onStickyPrimary() {
-  if (isRecordTab.value) {
-    await recordsSectionRef.value?.saveAllDirty?.()
-    return
-  }
-  if (activeHealthTab.value === 'vaccine') {
-    await vaccineSectionRef.value?.saveAllDirty?.()
-    return
-  }
-  if (activeHealthTab.value === 'weight') {
-    await weightSectionRef.value?.saveRecord?.()
-  }
-}
-
 /**
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
  */
+/**
+ * 把当前板块里等待中的自动保存立刻执行（2026-10-03）。
+ *
+ * 触发点：切标签、页面隐藏/卸载。自动保存本身有 1.2 秒延迟，
+ * 这些边界必须立刻落库，否则"改完马上切走"会丢掉最后几个字。
+ */
+function flushActiveTabAutoSaves() {
+  if (isRecordTab.value) {
+    recordsSectionRef.value?.flushAutoSaves?.()
+    return
+  }
+  if (activeHealthTab.value === 'vaccine') {
+    vaccineSectionRef.value?.flushAutoSaves?.()
+    return
+  }
+  if (activeHealthTab.value === 'weight') {
+    weightSectionRef.value?.flushAutoSaves?.()
+  }
+}
+
 function onStickySecondary() {
   // 新增统一从引导入口进（老板 2026-10-02：先分类、再按类引导）
   if (selectedDog.value) {

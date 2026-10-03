@@ -30,6 +30,7 @@
               :focus="weightInputFocused"
               :value="weightInputText"
               @input="onWeightInput"
+              @blur="onWeightInputBlur"
             />
             <view class="weight-unit-toggle">
               <text
@@ -53,6 +54,7 @@
             type="text"
             v-model="formData.note"
             placeholder="如：饭后测量、运动后等"
+            @blur="onWeightInputBlur"
           />
         </view>
       </view>
@@ -580,9 +582,33 @@ function focusWeightInput() {
   weightInputFocused.value = true
 }
 
-defineExpose({ saveRecord, focusInput: focusWeightInput })
+defineExpose({ saveRecord, focusInput: focusWeightInput, flushAutoSaves })
 
 // 保存记录
+/**
+ * 体重输入失焦 → 立刻记下（2026-10-03 老板定：删掉底部保存按钮，改实时保存）。
+ *
+ * 为什么是"失焦"而不是"停顿 1 秒"：体重是数字，打到一半（"6"）停下来
+ * 不该被当成 6kg 存进去 —— 打完点别处/切走才算一条。
+ * 没有有效体重（空着、或 0）就什么都不做，绝不会存半截数据。
+ */
+function onWeightInputBlur() {
+  void flushAutoSaves()
+}
+
+/** 把等待中的体重输入落库（失焦、切标签、离开页面时调用） */
+async function flushAutoSaves() {
+  if (!String(weightInputText.value || '').trim()) {
+    return
+  }
+
+  if (isSavingRecord.value || !props.showAddEntry) {
+    return
+  }
+
+  await saveRecord()
+}
+
 async function saveRecord() {
   if (!props.dogId) {
     uni.showToast({

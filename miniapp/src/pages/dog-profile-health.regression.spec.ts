@@ -81,8 +81,10 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('<template v-else-if="dogId">')
     expect(source).toContain('v-if="isProfileLoading"')
     // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
-    expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
-    expect(source).toContain('const stickyPrimaryDisabled = computed(')
+    // 2026-10-03：底部保存键下线，改实时保存（这里锁"它真的没了 + 自动落库接上了"）
+    expect(source).not.toContain('stickyPrimaryDisabled')
+    expect(source).not.toContain("const stickyPrimaryText = computed(() => '保存')")
+    expect(source).toContain('flushActiveTabAutoSaves')
   })
 
   it('切狗时只看记录草稿（饮食偏好已不在本页）', () => {
@@ -130,9 +132,7 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain(':loading="activeRecordLoading"')
     expect(source).toContain(':saving-record-key="savingRecordKey"')
     // 2026-09-30：底部主按钮改为按书签自适应，禁用条件也跟着走
-    expect(source).toContain(':primary-disabled="stickyPrimaryDisabled"')
-    expect(source).toContain('const stickyPrimaryDisabled = computed(')
-    expect(source).toContain(':secondary-disabled="isSecondaryActionDisabled"')
+    expect(source).toContain(':primary-disabled="isSecondaryActionDisabled"')
     expect(source).toContain('const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))')
     expect(source).toContain('const isSecondaryActionDisabled = computed(() =>')
     expect(source).not.toContain(':primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"')
@@ -381,12 +381,15 @@ describe('dog-profile-health · 底部按钮与书签', () => {
   it('底部主按钮按书签自适应：六个板块都保存自己那一块', () => {
     const page = readPage()
 
-    // 2026-09-30：文案只写「保存」—— 当前在哪个板块由书签与色系表达
-    expect(page).toContain("const stickyPrimaryText = computed(() => '保存')")
-    // 动作分派到对应板块暴露出来的保存方法
-    expect(page).toContain('recordsSectionRef.value?.saveAllDirty?.()')
-    expect(page).toContain('vaccineSectionRef.value?.saveAllDirty?.()')
-    expect(page).toContain('weightSectionRef.value?.saveRecord?.()')
+    // 2026-10-03 老板定：底部不再有保存键，六个板块全部实时保存；
+    // 底部只剩「记一条」，边界（切标签/隐藏/卸载）把等待中的保存立刻发出去
+    expect(page).not.toContain("computed(() => '保存')")
+    expect(page).toContain('flushActiveTabAutoSaves')
+    expect(page).toContain('recordsSectionRef.value?.flushAutoSaves?.()')
+    expect(page).toContain('vaccineSectionRef.value?.flushAutoSaves?.()')
+    expect(page).toContain('weightSectionRef.value?.flushAutoSaves?.()')
+    expect(page).toContain('onHide(')
+    expect(page).toContain('onUnload(')
     // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
     expect(page).toContain("selectedDog.value ? '记一条' : HEALTH_ENTRY_LABELS[entrySource.value]")
     // 2026-10-02：新增统一走引导面板（不再直连记录板块的选择器）
@@ -405,7 +408,10 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(section).toContain('{{ savedRecordCount }} 条')
     // 逐条保存按钮在内嵌模式下隐藏，改由底部统一保存；
     // 记录入口（手动 / 拍照）也交给底部那一个按钮
-    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })')
+    // 2026-10-03：底部保存按钮下线，板块改为自动保存；对外仍暴露这几个入口
+    expect(section).toContain('openAddRecordChooser')
+    expect(section).toContain('startScan')
+    expect(section).toContain('flushAutoSaves')
   })
 
   it('五个板块在内嵌时都不顶"标题 + 数量"（老板 2026-10-01 要求）', () => {
@@ -448,7 +454,7 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).not.toContain('margin-bottom: 24rpx;\n  white-space: nowrap;')
   })
 
-  it('每个板块一套主题色，且保存按钮跟着板块变色（病史体检合并后为五套）', () => {
+  it('每个板块一套主题色（病史体检合并后为五套；保存键 2026-10-03 已下线）', () => {
     const page = readPage()
     const bar = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/StickyActionBar.vue'),
@@ -464,8 +470,10 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(compact).not.toContain('.health-theme--medical')
     expect(compact).not.toContain('.health-theme--checkup')
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
-    // 2026-10-01：病史与体检合并成「病例」后是五个板块，切到哪块按钮就是哪块的色。
-    expect(page).toContain(':primary-theme="stickyPrimaryTheme"')
+    // 2026-10-03：底部只剩「记一条」一个按钮（保存键下线），主题固定成 visit；
+    // 组件仍保留多套主题能力，板块色系继续由书签与内容区表达。
+    expect(page).toContain('primary-theme="visit"')
+    expect(page).not.toContain('stickyPrimaryTheme')
     expect(bar).toContain('primaryTheme?:')
     for (const theme of ['visit', 'allergy', 'vaccine', 'diet', 'weight']) {
       expect(bar).toContain(`.sticky-bar__button--primary--${theme}`)
@@ -536,8 +544,11 @@ describe('dog-profile-health · 引导入口', () => {
       'utf-8',
     )
 
-    expect(vaccine).toContain('defineExpose({ saveAllDirty, startScan: () => scanRef.value?.startScan?.(), addRecord })')
-    expect(weight).toContain('defineExpose({ saveRecord, focusInput: focusWeightInput })')
+    expect(vaccine).toContain('startScan: () => scanRef.value?.startScan?.()')
+    expect(vaccine).toContain('addRecord')
+    expect(vaccine).toContain('flushAutoSaves')
+    expect(weight).toContain('focusInput: focusWeightInput')
+    expect(weight).toContain('flushAutoSaves')
     expect(weight).toContain(':focus="weightInputFocused"')
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
     // 过敏也能直达上传（2026-10-02 补：不再只是切过去提示）
@@ -584,7 +595,10 @@ describe('dog-profile-health · 新增入口已收敛', () => {
     // 按钮本身没了
     expect(section).not.toContain('{{ activeTypeMeta.addLabel }}')
     // 但能力留着（引导入口要用）
-    expect(section).toContain('defineExpose({ saveAllDirty, openAddRecordChooser, startScan, addRecord })')
+    // 2026-10-03：底部保存按钮下线，板块改为自动保存；对外仍暴露这几个入口
+    expect(section).toContain('openAddRecordChooser')
+    expect(section).toContain('startScan')
+    expect(section).toContain('flushAutoSaves')
   })
 
   it('疫苗/过敏/体重三个板块的新增部分都挂在 showAddEntry 上', () => {

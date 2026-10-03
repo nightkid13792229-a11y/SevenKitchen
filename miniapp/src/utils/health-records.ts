@@ -1637,6 +1637,104 @@ export function filterWarningsAgainstRecord(
   return Array.from(new Set(filtered)).slice(0, 3)
 }
 
+/**
+ * 化验数据行去重（2026-10-03 老板实测：8 张报告合并后"看着很多项都不准"）。
+ *
+ * 实测里两种重复：
+ *   · **同一份报告被拍了两张**（生化 0715-1 拍了两次）→ 同一段数值抄两遍；
+ *   · **两份报告测了同一个项目**（血涂片形态学 vs 血常规九分类都写了
+ *     "中性杆状核粒细胞 0.25"）→ 同一件事在列表里出现两次，
+ *     家长看到的就是"重复、对不上"。
+ *
+ * 规则（保守，只删**看起来就是同一件事**的行）：
+ *   ① 同一段（同一个报告名）里，**项目名归一后相同** → 只留第一次出现的；
+ *   ② 跨段时，**项目名 + 数值都相同**才删（数值不同的必须都留 ——
+ *      那可能是两次不同时间的检查，是真信息）。
+ * 归一：去掉编号前缀（"1-2."）、括号里的英文缩写、单位大小写与空格差异，
+ * 只用于**比较**，不改动抄下来的原文。
+ */
+export function dedupeLabValues(text: string): string {
+  const lines = String(text || '').split('\n')
+  const normalizeName = (value: string) => String(value || '')
+    .replace(/^[\d\-.]+\.?\s*/, '')          // 去掉 "1-2." 这类编号
+    .replace(/[（(][^）)]*[）)]/g, '')            // 去掉括号（多为英文缩写）
+    .replace(/\s+/g, '')
+    .toLowerCase()
+  const normalizeValue = (value: string) => String(value || '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/（(偏高|偏低|正常)）/g, '')
+
+  /** 把一行拆成 项目名 / 数值+单位 */
+  const splitRow = (line: string): { name: string; value: string } | null => {
+    const match = line.match(/\s(?=[<>≤≥]?[-+]?[\d.])/)
+    if (!match || match.index === undefined) {
+      return null
+    }
+    const name = line.slice(0, match.index).trim()
+    const value = line.slice(match.index).trim()
+    return name ? { name, value } : null
+  }
+
+  const result: string[] = []
+  const seenInBlock = new Set<string>()
+  const seenNameValue = new Set<string>()
+  /** 上一段的报告名 —— 用来识别"同一份报告被拍了两次"（连着出现同名报告） */
+  let lastTitle = ''
+  /** 这一段是不是上一段的重复（连着同名报告）→ 只按"项目名+数值"去重，避免误删 */
+  let continuation = false
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) {
+      continue
+    }
+
+    // 报告名那一行（没有数字、也不长）→ 换段
+    const isTitle = !/\d/.test(line) && line.length <= 24
+    if (isTitle) {
+      if (line === lastTitle) {
+        // 同一份报告拍了两张：不再重复写报告名，按"接着上一段"处理
+        // （只去重完全相同的行 —— 万一是两次抽血，数值不同就都留着）
+        continuation = true
+        continue
+      }
+      result.push(raw)
+      seenInBlock.clear()
+      lastTitle = line
+      continuation = false
+      continue
+    }
+
+    const row = splitRow(line)
+    if (!row) {
+      result.push(raw)
+      continue
+    }
+
+    const nameKey = normalizeName(row.name)
+    const valueKey = normalizeValue(row.value)
+    // 非重复段：同一段里项目名相同就只留一次（同一份报告不该出现两次同一项）
+    if (nameKey && !continuation && seenInBlock.has(nameKey)) {
+      continue
+    }
+    const globalKey = `${nameKey}|${valueKey}`
+    if (nameKey && valueKey && seenNameValue.has(globalKey)) {
+      continue
+    }
+
+    if (nameKey) {
+      seenInBlock.add(nameKey)
+    }
+    if (nameKey && valueKey) {
+      seenNameValue.add(globalKey)
+    }
+    result.push(raw)
+  }
+
+  return result.join('\n')
+}
+
 export function buildSingleScannedRecord(
   groups: { type: string; drafts: Record<string, any>[] }[],
   targetType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT',
@@ -1718,6 +1816,11 @@ export function buildSingleScannedRecord(
     if (!draft.patientName && imaging.patientName) {
       draft.patientName = imaging.patientName
     }
+  }
+
+  // 多页合并出来的化验数据去重（同一份报告拍两张、两份报告测同一项目）
+  if (draft.labValues) {
+    draft.labValues = dedupeLabValues(String(draft.labValues))
   }
 
   const attachments = [base, folded, imaging]

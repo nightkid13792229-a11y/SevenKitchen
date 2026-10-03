@@ -38,6 +38,31 @@
       <view v-if="ignoredPagesNote" class="confirm__note">
         <text class="confirm__note-text">{{ ignoredPagesNote }}</text>
       </view>
+
+      <!-- 逐张状态（2026-10-03 老板问"能搞清楚是哪一张没被识别吗"）：
+           一眼看到每张的结果 —— ✓ 已读出（标出读成什么）、✗ 没读到内容、！失败了。
+           点缩略图可以放大看原图。 -->
+      <view v-if="pageOutcomes.length > 1" class="pages">
+        <text class="pages__title">这几张的结果</text>
+        <view class="pages__row">
+          <view
+            v-for="page in pageOutcomes"
+            :key="page.index"
+            class="pages__item"
+            :class="`pages__item--${page.status}`"
+            @tap="previewPage(page.path)"
+          >
+            <image class="pages__thumb" :src="page.path" mode="aspectFill" />
+            <text class="pages__index">{{ page.index }}</text>
+            <text class="pages__status">
+              {{ page.status === 'ok' ? `✓ ${page.label}` : page.status === 'empty' ? '✗ 没读到内容' : '！没识别成功' }}
+            </text>
+          </view>
+        </view>
+        <text v-if="hasFailedPages" class="pages__hint">
+          带 ✗ / ！的那几张可以点开看看，单独重传一次，或直接手工补充。
+        </text>
+      </view>
       <view v-if="patientNameMismatch" class="confirm__name-warning">
         <text class="confirm__name-warning-title">⚠️ 名字对不上</text>
         <text class="confirm__name-warning-text">{{ patientNameMismatch }}</text>
@@ -151,6 +176,14 @@ const confidence = ref('LOW')
 const resolvedDocumentType = ref<DocumentType>('MEDICAL_RECORD')
 /** 被排除在外的页（疫苗本/过敏报告）—— 各自板块有更合适的表单 */
 const ignoredPagesNote = ref('')
+/** 逐张识别结果（确认卡片上那排缩略图 + 状态） */
+const pageOutcomes = ref<{
+  index: number
+  path: string
+  status: 'ok' | 'empty' | 'failed'
+  label: string
+  warnings: string[]
+}[]>([])
 /** 本次识别成功了几张原图（用于在确认卡片上说明"几张 → 几条记录"） */
 const scannedImageCount = ref(0)
 /**
@@ -172,6 +205,20 @@ const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
   CHECKUP_REPORT: '体检报告',
   VACCINE_BOOK: '疫苗本',
   ALLERGY_REPORT: '过敏原检测报告',
+}
+
+/** 有没有没识别成功的张（决定要不要多写一句引导） */
+const hasFailedPages = computed(() => (
+  pageOutcomes.value.some((page) => page.status !== 'ok')
+))
+
+/** 点缩略图放大看原图（本地临时文件，直接给微信预览） */
+function previewPage(path: string) {
+  const urls = pageOutcomes.value.map((page) => page.path).filter(Boolean)
+  if (urls.length === 0) {
+    return
+  }
+  uni.previewImage({ urls, current: path })
 }
 
 const lowConfidenceHint = computed(() => (
@@ -339,8 +386,21 @@ async function scanAll(filePaths: string[]) {
   failureNotice.value = ''
   uploadedUrls.value = []
   ignoredPagesNote.value = ''
+  pageOutcomes.value = []
 
   const collectedWarnings: string[] = []
+  /**
+   * 逐张的识别结果（2026-10-03 老板问"能搞清楚具体是哪一张没被识别吗"）。
+   * 每张记：第几张、本地缩略图（可点开看原图）、结果、判定类型、这页自己的提示。
+   * 结果 = ok（读出内容）/ empty（读了但没内容）/ failed（这一步就失败了）。
+   */
+  const pageResults: {
+    index: number
+    path: string
+    status: 'ok' | 'empty' | 'failed'
+    label: string
+    warnings: string[]
+  }[] = []
   /**
    * 按"这张图被判成什么"分组收草稿（2026-10-02 修的一个**数据丢失** bug）。
    *
@@ -405,14 +465,36 @@ async function scanAll(filePaths: string[]) {
           )
           draftsByType.set(imageType, bucket)
           scannedImageCount.value += 1
+          pageResults.push({
+            index: index + 1,
+            path: filePaths[index],
+            status: 'ok',
+            label: TYPE_LABELS[imageType as ExplicitDocumentType] || '资料',
+            warnings: [],
+          })
         } else {
           // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
           await dropUploadedFile(uploadedUrl)
           failed += 1
+          pageResults.push({
+            index: index + 1,
+            path: filePaths[index],
+            status: 'empty',
+            label: '',
+            warnings: [],
+          })
         }
 
-        if (Array.isArray(res.data.warnings)) {
-          collectedWarnings.push(...res.data.warnings)
+        // 这页自己的提示带上"第几张"，家长才知道该去核对哪一张
+        if (Array.isArray(res.data.warnings) && res.data.warnings.length > 0) {
+          const pageWarnings = res.data.warnings.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+          const last = pageResults[pageResults.length - 1]
+          if (last && last.index === index + 1) {
+            last.warnings = pageWarnings
+          }
+          collectedWarnings.push(
+            ...pageWarnings.map((item: string) => `第 ${index + 1} 张：${item}`),
+          )
         }
 
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
@@ -423,7 +505,15 @@ async function scanAll(filePaths: string[]) {
         // 多张里有一张失败不推翻其它的：先记下来，最后一起告诉顾客
         await dropUploadedFile(uploadedUrl)
         failed += 1
-        collectedWarnings.push(error?.message || '有一张没能识别')
+        const reason = error?.message || '没能识别'
+        pageResults.push({
+          index: index + 1,
+          path: filePaths[index],
+          status: 'failed',
+          label: '',
+          warnings: [reason],
+        })
+        collectedWarnings.push(`第 ${index + 1} 张：${reason}`)
       }
     }
 
@@ -436,8 +526,16 @@ async function scanAll(filePaths: string[]) {
     }
 
     if (failed > 0) {
-      collectedWarnings.push(`有 ${failed} 张没能识别，可以单独再试或手工补充`)
+      const failedIndexes = pageResults
+        .filter((item) => item.status !== 'ok')
+        .map((item) => `第 ${item.index} 张`)
+        .join('、')
+      collectedWarnings.push(
+        `${failedIndexes} 没能识别（共 ${failed} 张），可以单独再试或手工补充`,
+      )
     }
+
+    pageOutcomes.value = pageResults
 
     // 类型按"多数页"定（只用于文案与兜底：真正的类型贴在每条草稿上）
     const resolvedType = resolveScannedDocumentType(
@@ -684,6 +782,81 @@ function discard() {
 }
 
 /* 类型/记录说明（"记到：就诊记录"这类） */
+/* 逐张状态：横排小缩略图 + 结果 */
+.pages {
+  margin-top: 14rpx;
+}
+
+.pages__title {
+  display: block;
+  font-size: 22rpx;
+  color: #8a968a;
+}
+
+.pages__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 10rpx;
+}
+
+.pages__item {
+  position: relative;
+  width: 150rpx;
+  padding: 8rpx;
+  border-radius: 14rpx;
+  background: #f7f9f2;
+  border: 1rpx solid #e4e9dc;
+}
+
+.pages__item--empty,
+.pages__item--failed {
+  background: #fdf6ec;
+  border-color: #f0d9b5;
+}
+
+.pages__thumb {
+  width: 134rpx;
+  height: 134rpx;
+  border-radius: 10rpx;
+  background: #eef1e8;
+}
+
+.pages__index {
+  position: absolute;
+  top: 14rpx;
+  left: 14rpx;
+  min-width: 32rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  line-height: 30rpx;
+  text-align: center;
+  color: #fff;
+  background: rgba(30, 46, 36, 0.6);
+}
+
+.pages__status {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  line-height: 1.35;
+  color: #4e6b52;
+}
+
+.pages__item--empty .pages__status,
+.pages__item--failed .pages__status {
+  color: #b26a2f;
+}
+
+.pages__hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #8a968a;
+}
+
 .confirm__note {
   margin-top: 10rpx;
   padding: 16rpx 18rpx;

@@ -207,3 +207,52 @@ describe('实时保存 · 契约', () => {
     expect(source).toContain("if (!String(weightInputText.value || '').trim()) {")
   })
 })
+
+/**
+ * 识别结果的"可追溯"（2026-10-03 老板的两个问题）。
+ *
+ * 老板："我们能搞清楚具体是哪一张图片未被识别吗？可以搞清楚到底是哪些项目名称被遮挡吗？"
+ * 答：前者靠逐张状态（缩略图 + ✓/✗/！），后者靠"提示里点名到具体项目/行 + 页号前缀"。
+ */
+describe('识别结果可追溯 · 契约', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('逐张记录识别结果，并在确认卡片上露出来（哪张没识别一眼看到）', () => {
+    const source = scan()
+
+    expect(source).toContain("status: 'ok' | 'empty' | 'failed'")
+    expect(source).toContain('pageOutcomes.value = pageResults')
+    expect(source).toContain('v-for="page in pageOutcomes"')
+    // 三态文案
+    expect(source).toContain('✗ 没读到内容')
+    expect(source).toContain('！没识别成功')
+    // 点缩略图能放大看原图
+    expect(source).toContain('uni.previewImage({ urls, current: path })')
+  })
+
+  it('提示带上"第 N 张"，家长才知道去核对哪一张', () => {
+    const source = scan()
+
+    expect(source).toContain('第 ${index + 1} 张：${item}')
+    expect(source).toContain('没能识别（共 ${failed} 张）')
+    // 不再只说"有一张没能识别"
+    expect(source).not.toContain('有 ${failed} 张没能识别，可以单独再试或手工补充')
+  })
+
+  it('提示词要求点名到具体项目/行，不许写笼统的"部分项目被遮挡"', () => {
+    const prompt = readFileSync(
+      resolve(process.cwd(), '../backend/src/application/health/health-report-extraction.service.ts'),
+      'utf-8',
+    )
+
+    expect(prompt).toContain('必须点名到具体项目/行与位置')
+    expect(prompt).toContain('不许写"有部分项目名称被遮挡"这种笼统说法')
+    // 漏行也要防（老板这次那张血涂片就漏了一行）
+    expect(prompt).toContain('逐行读完，不许漏行')
+    expect(prompt).toContain('正常色素性红细胞')
+  })
+})

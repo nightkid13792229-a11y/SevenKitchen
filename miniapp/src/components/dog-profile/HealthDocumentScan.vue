@@ -109,6 +109,8 @@ import {
 } from '../../utils/health-records'
 import {
   SCAN_IMAGE_SIZE_TYPE,
+  confirmBlurryScanImages,
+  findBlurryScanImages,
   prepareScanImages,
 } from '../../utils/scan-image'
 
@@ -409,6 +411,22 @@ async function scanAll(filePaths: string[]) {
   }
   if (preparedPaths.length > 0) {
     filePaths = preparedPaths
+  }
+
+  /**
+   * 图太小就先拦一下（2026-10-03）。
+   *
+   * 图糊的时候模型不会说"看不清"，它会**编一个看起来合理的数字**
+   * （实测 540 像素宽的化验单被读出根本不存在的参考范围）。
+   * 与其让家长把编出来的数值当成真的，不如先问一句。
+   */
+  const blurry = await findBlurryScanImages(filePaths)
+  if (blurry.length > 0) {
+    const goOn = await confirmBlurryScanImages(blurry)
+    if (!goOn) {
+      isBusy.value = false
+      return
+    }
   }
 
   const collectedWarnings: string[] = []

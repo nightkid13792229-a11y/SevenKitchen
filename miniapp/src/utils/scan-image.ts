@@ -31,6 +31,87 @@ export const SCAN_IMAGE_QUALITY = 88
 export const SCAN_IMAGE_SIZE_TYPE: 'original'[] = ['original']
 
 /**
+ * 低于这个宽度就认为"读不准"（约等于手机截屏/被转发过一道的图）。
+ *
+ * ── 为什么要有这条线（2026-10-03 实测）──────────────────────────
+ *
+ * 老板那条体检记录里的化验数据之所以离谱，是因为 7 张图上传时只有 **640 像素宽**：
+ * 化验表"参考范围"和"检测结果"两栏糊成一团，模型分不清哪一栏是结果 ——
+ * 老记录里因此出现一整块"生化"，数值全是参考范围那一栏。
+ *
+ * 更要命的是：**图太糊时模型不会说"我看不清"，它会编。**
+ * 拿那张 540×960 的原图直接问，它给出「GLU 6.7 mmol/L 参考范围 3.7-7.1」——
+ * 这行数字和参考范围在纸上根本不存在，但看起来完全合理，家长会当成真的。
+ * 提示词里写"看不清宁可留空不许猜"也拦不住（实测仍然编）。
+ * 所以只能在这一步拦住：**先告诉家长这张图太小，让他自己决定要不要重拍。**
+ */
+export const SCAN_IMAGE_MIN_WIDTH = 900
+
+export interface ScanImageSize {
+  path: string
+  width: number
+  height: number
+}
+
+/** 量一张图的像素尺寸（拿不到就当"没意见"，不拦人）。 */
+export async function inspectScanImage(path: string): Promise<ScanImageSize> {
+  try {
+    const info: any = await new Promise((resolve, reject) => {
+      uni.getImageInfo({ src: path, success: resolve, fail: reject })
+    })
+    return {
+      path,
+      width: Number(info?.width || 0) || 0,
+      height: Number(info?.height || 0) || 0,
+    }
+  } catch {
+    return { path, width: 0, height: 0 }
+  }
+}
+
+/** 挑出"太小、读不准"的那些图 */
+export async function findBlurryScanImages(paths: string[]): Promise<ScanImageSize[]> {
+  const list = Array.isArray(paths) ? paths.filter(Boolean) : []
+  const sizes = await Promise.all(list.map(path => inspectScanImage(path)))
+  return sizes.filter(item => item.width > 0 && item.width < SCAN_IMAGE_MIN_WIDTH)
+}
+
+/**
+ * 图太小就先问一句，别让家长把编出来的数字当真。
+ *
+ * @returns true = 继续识别；false = 回去重选
+ */
+export async function confirmBlurryScanImages(blurry: ScanImageSize[]): Promise<boolean> {
+  if (!Array.isArray(blurry) || blurry.length === 0) return true
+
+  const sample = blurry[0]
+  const sizeText = sample.width > 0
+    ? `${sample.width}×${sample.height}`
+    : '尺寸很小'
+  const countText = blurry.length === 1
+    ? '有 1 张照片太模糊'
+    : `有 ${blurry.length} 张照片太模糊`
+
+  try {
+    const res: any = await new Promise((resolve, reject) => {
+      uni.showModal({
+        title: '这张照片太小了',
+        content:
+          `${countText}（例如 ${sizeText}），报告上的小数字很可能认错。` +
+          '建议重新拍一张，或从相册里选**原图**。要继续识别吗？',
+        confirmText: '继续识别',
+        cancelText: '重新选',
+        success: resolve,
+        fail: reject,
+      })
+    })
+    return Boolean(res?.confirm)
+  } catch {
+    return true
+  }
+}
+
+/**
  * 读一张本地图片的原始宽度（拿不到就返回 0）。
  *
  * 为什么要先问一下：`compressedWidth` 是"目标宽度"，原图比它还小的时候

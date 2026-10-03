@@ -830,7 +830,9 @@ async function loadHealthRecordList(type: HealthRecordType, targetDogId = dogId.
     recordsByType[type] = mergeHealthRecordListWithCachedAttachments(
       targetDogId,
       type,
-      normalizeHealthRecordListResponse(res),
+      // 把"这张表"告诉每条记录：就诊/体检共用一个列表，
+      // 没有这个章，体检记录会按就诊记录的样子渲染（2026-10-03 老板实测发现）
+      normalizeHealthRecordListResponse(res, type),
     )
   } catch (error: any) {
     if (shouldDiscardHealthRecordListResponse(targetDogId)) {

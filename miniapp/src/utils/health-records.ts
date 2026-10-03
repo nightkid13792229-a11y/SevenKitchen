@@ -358,16 +358,36 @@ export function buildCrudHealthRecordPayload(
   }
 }
 
-export function normalizeHealthRecordResponse(record: HealthRecordShape) {
+/**
+ * 把服务器返回的一条记录整理成界面能直接用的形状。
+ *
+ * @param recordType 这条记录是从哪张表读出来的（medical / checkup / allergy）。
+ *   **必须传**：就诊与体检在界面上是同一个列表（合并模式），一条记录该按
+ *   "就诊"还是"体检"渲染，全靠 `__visitKind` 这个章 —— 而服务器记录没有章。
+ *   不盖章的后果（2026-10-03 老板实测发现）：
+ *   体检记录被当成就诊记录渲染，卡片标题写「就诊记录」、字段是症状/医生诊断/医嘱，
+ *   日期读的是 visitDate（体检存的是 checkupDate）→ 明明存过日期却显示「未填日期」。
+ */
+export function normalizeHealthRecordResponse(
+  record: HealthRecordShape,
+  recordType?: HealthRecordType,
+) {
   const source = record && typeof record === 'object' && !Array.isArray(record) && record.record
     ? record.record
     : record
 
-  return {
+  const normalized = {
     ...source,
     notes: source?.notes ?? source?.findings ?? '',
     attachments: normalizeAttachments(source?.attachments),
   }
+
+  // 记录自己的归属章：就诊/体检各盖各的；过敏与其它类型不参与这个合并列表
+  if (recordType === 'medical' || recordType === 'checkup') {
+    return { ...normalized, [HEALTH_VISIT_KIND_FIELD]: recordType }
+  }
+
+  return normalized
 }
 
 export function normalizeSavedHealthRecordResponse(
@@ -387,13 +407,16 @@ export function normalizeSavedHealthRecordResponse(
   }
 }
 
-export function normalizeHealthRecordListResponse(response: Record<string, any> | null | undefined) {
+export function normalizeHealthRecordListResponse(
+  response: Record<string, any> | null | undefined,
+  recordType?: HealthRecordType,
+) {
   const records = response?.data?.records
   if (!Array.isArray(records)) {
     return []
   }
 
-  return records.map(record => normalizeHealthRecordResponse(record))
+  return records.map(record => normalizeHealthRecordResponse(record, recordType))
 }
 
 export function replaceHealthRecordInList(

@@ -35,6 +35,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { dedupeLabValues } from '../../utils/health-records'
 
 /**
  * 化验数据排版（2026-10-02）。
@@ -108,7 +109,15 @@ function parseRow(line: string): LabRow {
 }
 
 const allBlocks = computed<LabBlock[]>(() => {
-  const lines = String(props.text || '')
+  /**
+   * 展示前先去重（2026-10-03）。
+   *
+   * 老板截图里同一份「生化」列了三遍：那是**去重上线之前**存下来的记录，
+   * 同一张报告拍了两张照片，两份内容被并排堆在一起。
+   * 新记录在合并时就会去重，老记录靠这一步兜底 —— 只影响显示，
+   * 不动数据库里的原文；家长在这条记录上任何一次自动保存都会把干净的版本落回去。
+   */
+  const lines = dedupeLabValues(String(props.text || ''))
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)

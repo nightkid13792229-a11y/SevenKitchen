@@ -105,6 +105,8 @@ import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
   SCAN_IMAGE_SIZE_TYPE,
+  confirmBlurryScanImages,
+  findBlurryScanImages,
   prepareScanImages,
 } from '../../utils/scan-image'
 
@@ -316,6 +318,13 @@ async function pickHealthReport() {
     uni.hideLoading()
   }
   if (filePaths.length === 0) return
+
+  // 图太小就先拦一下：图糊的时候模型会编一个"看起来合理"的数字（见 utils/scan-image.ts）
+  const blurry = await findBlurryScanImages(filePaths)
+  if (blurry.length > 0) {
+    const goOn = await confirmBlurryScanImages(blurry)
+    if (!goOn) return
+  }
 
   extracting.value = true
   uni.showLoading({ title: '识别中…' })

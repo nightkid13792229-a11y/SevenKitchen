@@ -171,8 +171,8 @@ const props = withDefaults(defineProps<{
    */
   entryKind?: 'medical' | 'checkup'
 }>(), {
-  buttonText: '拍照录入',
-  hintText: '拍报告或疫苗本，自动填表；也可以直接手填',
+  buttonText: '上传图片',
+  hintText: '上传报告或疫苗本的照片，自动填表；也可以直接手填',
   hideTrigger: false,
   entryKind: 'medical',
 })

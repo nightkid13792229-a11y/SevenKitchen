@@ -547,7 +547,13 @@ describe('dog-profile-health · 新增记录直接路由', () => {
 
     expect(page).toContain('uni.showActionSheet({')
     expect(page).toContain("['上传图片，AI 识别', '手动填写']")
-    expect(page).toContain("['拍疫苗本，AI 识别', '手动加一条']")
+    // 2026-10-04 老板："它其实进入的是相册，所以文案上应该要改一下。
+    // 我们不需要调起相机功能实拍，只需要上传图片即可。"
+    // 查过 pickAndScan 用的就是 sourceType: ['album'] —— 确实只开相册，
+    // 所以文案不能写"拍"。疫苗这条跟着就诊/体检统一成"上传…图片"。
+    expect(page).toContain("['上传疫苗本图片，AI 识别', '手动加一条']")
+    expect(page).not.toContain('拍疫苗本')
+    expect(page).not.toContain('拍照')
     // 过敏已不在这个页面
     expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
     // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"
@@ -555,6 +561,19 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('vaccineSectionRef.value?.addRecord?.()')
     // 体重没有 AI 这条路 → 不弹选择，直接落光标
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
+  })
+
+  it('识别走的是相册，不调相机（文案说"上传"就是这个原因）', () => {
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+    // sourceType 只有 album。老板 2026-10-04 明确：不要相机实拍，只上传图片。
+    expect(scan).toContain("sourceType: ['album']")
+    expect(scan).not.toContain("'camera'")
+    // 默认文案也不能再写"拍照"
+    expect(scan).toContain("buttonText: '上传图片'")
   })
 
   it('板块内不再重复放手动填写入口（老板：多余）', () => {

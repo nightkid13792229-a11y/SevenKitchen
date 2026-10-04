@@ -1057,7 +1057,7 @@ function onAddRecordTap() {
   const isRecord = isRecordTab.value
   const options = isRecord
     ? ['上传图片，AI 识别', '手动填写']
-    : ['拍疫苗本，AI 识别', '手动加一条']
+    : ['上传疫苗本图片，AI 识别', '手动加一条']
 
   uni.showActionSheet({
     itemList: options,
@@ -1073,7 +1073,7 @@ function onAddRecordTap() {
 
       if (activeHealthTab.value === 'vaccine') {
         // 不再打开板块内的新增按钮（那个按钮已下线）——
-        // 直接调起拍照识别或手动加一条。
+        // 直接调起图片识别或手动加一条。
         if (tapIndex === 0) {
           nextTick(() => vaccineSectionRef.value?.startScan?.())
         } else {
@@ -1117,7 +1117,7 @@ const stickySecondaryText = computed(() => {
 })
 
 /**
- * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
+ * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 上传图片）；其它板块 → 返回。
  */
 /**
  * 把当前板块里等待中的自动保存立刻执行（2026-10-03）。

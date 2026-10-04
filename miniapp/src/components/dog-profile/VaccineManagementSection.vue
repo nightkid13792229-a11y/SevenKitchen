@@ -11,9 +11,9 @@
       <text class="health-section__count">{{ records.length }} 条</text>
     </view>
 
-    <!-- 拍疫苗本（2026-10-01，第六期）。
+    <!-- 上传疫苗本图片（2026-10-01，第六期）。
          一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。
-         2026-10-03 起常开（手填入口）；AI 拍疫苗本由底部「新增记录」调起。 -->
+         2026-10-03 起常开（手填入口）；AI 识别由底部「新增记录」调起。 -->
     <HealthDocumentScan
       ref="scanRef"
       v-if="dogId"
@@ -21,7 +21,7 @@
       :hide-trigger="!showAddEntry || hideScanTrigger"
       document-type="VACCINE_BOOK"
       upload-type="vaccine"
-      button-text="拍疫苗本"
+      button-text="上传疫苗本图片"
       hint-text="一次能读出本子上的多条记录；也可以直接手填"
       @scanned="onVaccineBookScanned"
     />
@@ -169,7 +169,7 @@
           />
         </view>
 
-        <!-- 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图。
+        <!-- 报告原件（2026-10-01 第九期）：上传疫苗本留下的原图。
              没有原件的记录（手工填写）不显示这一块，不留空位。 -->
         <view v-if="attachmentList(record).length > 0" class="field-group">
           <text class="field-label">报告原件</text>
@@ -187,7 +187,7 @@
             </view>
           </view>
           <text class="vaccine-attachment__hint">
-            这是当初拍疫苗本留下的原图，换医院、出行要用时可以打开给对方看。
+            这是当初上传的疫苗本原图，换医院、出行要用时可以打开给对方看。
           </text>
         </view>
 
@@ -211,7 +211,7 @@
     <!-- 板块内那个新增按钮已下线（2026-10-04 老板提问后改）。
          老板："在记录板块中有一个新增按钮，在最下方还有一个新增记录的
          按钮呢？不是重复了吗？" —— 是重复。底部那个是常驻的，而且功能更全
-         （会先问"拍疫苗本 AI 识别"还是"手动加一条"）。
+         （会先问"上传疫苗本图片 AI 识别"还是"手动加一条"）。
          板块内再放一个，等于同一件事两个入口，还长得不一样。
          `addRecord()` 仍然由底部那个按钮通过 ref 调起，功能没少。 -->
   </view>
@@ -549,6 +549,31 @@ function toggleExpanded(record: VaccineRecord, index: number) {
  */
 function statusLabel(status: string) {
   return STATUS_LABELS[status] || '已接种'
+}
+
+/**
+ * 这条疫苗记录的报告原件（2026-10-01 第九期）。
+ *
+ * 拍疫苗本识别出来的记录带着原图；手工填写的没有 —— 空数组，
+ * 卡片上就不显示「报告原件」这一块，不留空位。
+ *
+ * ⚠️ 2026-10-04 补回：上一轮"去掉状态选择器"时，我用脚本按位置删函数，
+ * 结果把这三个跟状态无关的函数一起删掉了（脚本找到的是**别的函数的注释**，
+ * 于是从那里一路删到这里）。后果很隐蔽 —— 构建不报错、源码 grep 测试也照过，
+ * 但**一有新记录卡片要渲染就抛 `attachmentList is not a function`**，
+ * 整个组件重渲染失败，表现就是老板看到的"点手动加一条没有任何反应"。
+ * 教训：源码手术要用精确替换，不能按位置找。
+ */
+function attachmentList(record?: VaccineRecord | Record<string, any> | null): string[] {
+  return normalizeHealthAttachmentList((record as any)?.attachments)
+}
+
+function attachmentDisplay(url: string, index: number) {
+  return buildHealthAttachmentDisplayMeta(url, index)
+}
+
+async function previewAttachment(url: string) {
+  await previewHealthAttachment(url)
 }
 
 function statusClass(draft: VaccineDraft) {

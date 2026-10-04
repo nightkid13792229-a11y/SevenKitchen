@@ -945,3 +945,48 @@ describe('home custom recipe entry · 游客登录后回到定制页', () => {
     expect(home).toContain("typeof redirect === 'string'")
   })
 })
+
+/**
+ * 方向跟随计划（老板 2026-10-04 甲方案）。
+ *
+ * 原先：上面横幅写着"减重计划进行中、还差 0.8kg"，下面又让顾客选一次方向，
+ * 可以选出"增重"这种自相矛盾的组合，而两个值都会交给营养师。
+ */
+describe('定制页 · 方向跟随体重管理计划', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('计划生效时方向跟随并锁住，顾客不能选反方向', () => {
+    expect(page).toContain('planGoalLockText')
+    expect(page).toContain('isGoalLockedByPlan')
+    expect(page).toContain('syncGoalWithPlan')
+    // 拦截点击：锁住时直接返回，不改方向
+    expect(page).toMatch(/if \(isGoalLockedByPlan\.value\) return/)
+  })
+
+  it('说明文案按方向写清楚，且给顾客看的句子不含专业术语', () => {
+    /**
+     * 老板 2026-10-04 的要求：面向普通狗家长，尽量不用专业术语。
+     *
+     * 这里**逐个锁定给顾客看的那三句原文**，而不是断言整份源码不含某些词 ——
+     * 源码注释里出现领域术语是正常的（这条测试第一版就误伤了自己的注释）。
+     */
+    const customerFacingCopy = [
+      '方向已跟随你正在进行的减重计划，不用再选。',
+      '方向已跟随你正在进行的增重计划，不用再选。',
+      '你已进入维持期，方向按「维持」处理。',
+    ]
+
+    for (const copy of customerFacingCopy) {
+      expect(page).toContain(copy)
+      expect(copy).not.toContain('体况')
+      expect(copy).not.toContain('理想体重')
+      expect(copy).not.toContain('BCS')
+    }
+  })
+
+  it('锁定时整组选项压暗，但仍显示当前选中的方向', () => {
+    expect(page).toContain('radio-group--locked')
+    // 选中态还是按 formData.targetGoal 判断，锁住后仍能看到选中哪一项
+    expect(page).toMatch(/:class="\{ active: formData\.targetGoal === option\.value \}"/)
+  })
+})

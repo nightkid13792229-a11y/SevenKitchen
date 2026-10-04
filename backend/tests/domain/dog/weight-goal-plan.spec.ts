@@ -4,9 +4,11 @@ import {
 } from 'src/domain/dog/enums';
 import {
   GAIN_CEILING_FACTOR,
+  GAIN_INTENSITY_LEVELS,
   GAIN_START_FACTOR,
   INACTIVITY_PAUSE_WEEKS,
   LOSS_FLOOR_RER_FACTOR,
+  LOSS_INTENSITY_LEVELS,
   MAINTENANCE_DURATION_MONTHS,
   MAINTENANCE_UPLIFT_FACTOR,
   TARGET_RATE_MAX_PERCENT_PER_WEEK,
@@ -16,8 +18,10 @@ import {
   calculateRerForWeight,
   evaluateWeightGainScreening,
   isGoalReached,
+  resolveAdjustableIntensities,
   resolveCorrection,
   resolveEstimatedGoalDate,
+  resolveIntensityLevels,
   resolveNextReviewDate,
   resolvePlanEnergy,
   resolvePlanSafeguards,
@@ -355,6 +359,28 @@ describe('体重管理计划 · 顾客手动改目标体重', () => {
     expect(result!.notes.join('')).toContain('相差超过 30%');
   });
 
+  it('与系统建议相差 >10% 时提示一次，且不用专业词（2026-10-04 补）', () => {
+    // 系统建议 16kg、顾客填 13kg → 相差 18.75%
+    const result = applyManualTargetWeight({ ...base, newTargetWeightKg: 13 });
+
+    const note = result!.notes.find((n) =>
+      n.includes('系统按它现在的体形建议目标'),
+    );
+    expect(note).toBeTruthy();
+    // 老板要求：面向狗家长的界面不用专业词
+    expect(note).not.toContain('体况');
+    expect(note).not.toContain('理想体重');
+  });
+
+  it('与系统建议接近时不提示', () => {
+    // 16kg 的建议、填 15.5kg → 相差 3%
+    const result = applyManualTargetWeight({ ...base, newTargetWeightKg: 15.5 });
+
+    expect(
+      result!.notes.some((n) => n.includes('系统按它现在的体形建议目标')),
+    ).toBe(false);
+  });
+
   it('改目标后能量按同一口径重算', () => {
     const result = applyManualTargetWeight({ ...base, newTargetWeightKg: 15 });
 
@@ -505,5 +531,92 @@ describe('常量口径', () => {
       maintenanceKcal: 800,
     });
     expect(loss).toBe(560);
+  });
+});
+
+/**
+ * 力度档位的命名（2026-10-04 修正）。
+ *
+ * 背景：增重方向原先沿用减重的档位名「标准 / 温和 / 更温和」——
+ * 但增重时系数越大 = 热量越多 = **长肉越快**，叫"更温和"会让人
+ * 以为最保守、实际选到最快的一档。这里把命名钉住。
+ */
+describe('体重管理计划 · 力度档位命名', () => {
+  it('增重档位按「越快」命名，与"系数越大 = 长肉越快"一致', () => {
+    expect(GAIN_INTENSITY_LEVELS.map((l) => l.label)).toEqual([
+      '标准',
+      '加快',
+      '更快',
+    ]);
+  });
+
+  it('增重系数递增：1.1 / 1.2 / 1.3', () => {
+    expect(GAIN_INTENSITY_LEVELS.map((l) => l.factor)).toEqual([1.1, 1.2, 1.3]);
+  });
+
+  it('减重档位仍是「越温和」命名（系数越大 = 掉秤越慢）', () => {
+    expect(LOSS_INTENSITY_LEVELS.map((l) => l.label)).toEqual([
+      '标准',
+      '温和',
+      '更温和',
+    ]);
+  });
+});
+
+/**
+ * 可调力度档位的"只能往更安全方向调"规则（2026-10-04 修正）。
+ *
+ * 原先两种情况都判 `kcal ≥ 当前`，增重计划里"允许"的恰好是更激进的档位 ——
+ * 与"更激进留给系统自动校正"的原则相反。这里把两个方向都钉住。
+ */
+describe('体重管理计划 · 可调力度档位', () => {
+  const levelsFor = (direction: 'LOSS' | 'GAIN') =>
+    resolveIntensityLevels(direction as WeightGoalDirection).map((level) => ({
+      level,
+      // 减重：系数越大热量越多；增重同理（都相对各自的基准）
+      kcal: Math.round(1000 * level.factor),
+    }));
+
+  it('减重：只能往更温和调（热量不低于当前值）', () => {
+    const { available, currentLevel } = resolveAdjustableIntensities({
+      direction: 'LOSS' as WeightGoalDirection,
+      levelKcal: levelsFor('LOSS'),
+      currentKcal: 1000,
+    });
+
+    expect(available.map((l) => l.allowed)).toEqual([true, true, true]);
+    expect(currentLevel.key).toBe('STANDARD');
+
+    const higher = resolveAdjustableIntensities({
+      direction: 'LOSS' as WeightGoalDirection,
+      levelKcal: levelsFor('LOSS'),
+      currentKcal: 1100,
+    });
+    // 当前已在 ×1.1：只有不更激进的档位（≥1100）可选
+    expect(higher.available.map((l) => l.allowed)).toEqual([false, true, true]);
+    expect(higher.currentLevel.key).toBe('GENTLE');
+  });
+
+  it('⚠️ 增重：只能往更保守调（热量不高于当前值）—— 这是被修掉的反向 bug', () => {
+    const { available, currentLevel } = resolveAdjustableIntensities({
+      direction: 'GAIN' as WeightGoalDirection,
+      levelKcal: levelsFor('GAIN'),
+      currentKcal: 1200,
+    });
+
+    // 当前是 ×1.2：只能选 ≤1200 的档位（标准 1.1），不能选更快的 ×1.3
+    expect(available.map((l) => l.allowed)).toEqual([true, true, false]);
+    expect(currentLevel.key).toBe('GENTLE');
+  });
+
+  it('增重：当前已在最低档时，更快的那两档都不可选', () => {
+    const { available, currentLevel } = resolveAdjustableIntensities({
+      direction: 'GAIN' as WeightGoalDirection,
+      levelKcal: levelsFor('GAIN'),
+      currentKcal: 1100,
+    });
+
+    expect(available.map((l) => l.allowed)).toEqual([true, false, false]);
+    expect(currentLevel.key).toBe('STANDARD');
   });
 });

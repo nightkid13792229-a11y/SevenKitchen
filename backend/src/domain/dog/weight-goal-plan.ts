@@ -70,11 +70,16 @@ export const LOSS_INTENSITY_LEVELS = [
  *
  * ⚠️ 同样没有权威依据（知识库明确「增重方案超出 AAHA 指南范围」），
  * 三档都偏保守，宁可 2 周后由自动校正上调。
+ *
+ * 2026-10-04 修正档位命名：原先三档叫「标准 / 温和 / 更温和」——
+ * 那是**减重方向**的语义（系数越大、热量越多、掉秤越慢，才叫"更温和"）。
+ * 增重方向恰好相反：系数越大 = 热量越多 = **长肉越快**，叫"更温和"会让人
+ * 选到最快的档还以为最保守。现在改成「标准 / 加快 / 更快」，与效果一致。
  */
 export const GAIN_INTENSITY_LEVELS = [
   { key: 'STANDARD', label: '标准', factor: 1.1 },
-  { key: 'GENTLE', label: '温和', factor: 1.2 },
-  { key: 'GENTLER', label: '更温和', factor: 1.3 },
+  { key: 'GENTLE', label: '加快', factor: 1.2 },
+  { key: 'GENTLER', label: '更快', factor: 1.3 },
 ] as const;
 
 export type WeightGoalIntensityKey = 'STANDARD' | 'GENTLE' | 'GENTLER';
@@ -91,6 +96,53 @@ export function resolveIntensityLevels(
   return direction === WeightGoalDirection.LOSS
     ? LOSS_INTENSITY_LEVELS
     : GAIN_INTENSITY_LEVELS;
+}
+
+/**
+ * 顾客可调的力度档位 —— **只能往更安全的方向调**（2026-10-04 修正）。
+ *
+ *   · 减重：只能更温和 = 热量不低于当前值（kcal ≥ 当前）
+ *   · 增重：只能更保守 = 热量不高于当前值（kcal ≤ 当前）
+ *
+ * 原先两种情况都判 `kcal ≥ 当前`，于是增重计划里"允许"的档位恰好是**更激进**
+ * 的那几档 —— 与"更激进留给系统按实测速度自动校正"的原则正好相反。
+ *
+ * 抽成纯函数是为了能直接测：这段逻辑原先埋在服务里，没有任何测试。
+ */
+export function resolveAdjustableIntensities(input: {
+  direction: WeightGoalDirection;
+  /** 每一档及其按计划口径算好的热量 */
+  levelKcal: ReadonlyArray<{ level: WeightGoalIntensityLevel; kcal: number }>;
+  /** 计划当前的能量 */
+  currentKcal: number;
+}): {
+  available: Array<{
+    key: string;
+    label: string;
+    kcal: number;
+    allowed: boolean;
+  }>;
+  /** 展示用的"当前档位"：取不更激进的一档里，离当前值最近的那个 */
+  currentLevel: WeightGoalIntensityLevel;
+} {
+  const isLoss = input.direction === WeightGoalDirection.LOSS;
+  const isAllowed = (kcal: number) =>
+    isLoss ? kcal >= input.currentKcal : kcal <= input.currentKcal;
+
+  const available = input.levelKcal.map(({ level, kcal }) => ({
+    key: level.key,
+    label: level.label,
+    kcal,
+    allowed: isAllowed(kcal),
+  }));
+
+  const within = input.levelKcal.filter((item) => isAllowed(item.kcal));
+  const picked = isLoss
+    ? (within[0] ?? input.levelKcal[0])
+    : (within[within.length - 1] ??
+      input.levelKcal[input.levelKcal.length - 1]);
+
+  return { available, currentLevel: picked.level };
 }
 
 /** 按档位算能量。未知档位按 STANDARD 保守处理。 */
@@ -124,6 +176,14 @@ export const FAST_ADJUST_RATIO = 0.1;
 export const MIN_GOAL_CHANGE_RATIO = 0.05;
 /** 目标体重与系统建议相差 >30% → 提示一次「偏离较大」。不拦。 */
 export const TARGET_DEVIATION_WARN_RATIO = 0.3;
+/**
+ * 手动目标与**系统建议目标**相差超过 10% → 提示一次（2026-10-04 老板要求）。
+ *
+ * 原先只比较「目标 vs 当前体重」，比不出"和系统建议不一致"这件事：
+ * 例如系统按体形建议长到 9.3kg、顾客填 8kg，两者差 14%，原先毫无提示。
+ * 提示语刻意不用专业词（体况评分 / 理想体重），只说"系统建议"。
+ */
+export const SUGGESTED_TARGET_WARN_RATIO = 0.1;
 
 /** 连续未称重多久转暂停 */
 export const INACTIVITY_PAUSE_WEEKS = 8;
@@ -548,6 +608,20 @@ export function applyManualTargetWeight(input: {
     }
     if (diff < MIN_GOAL_CHANGE_RATIO) {
       notes.push('这个目标与当前体重只差不到 5%，变化太小、难以有效监测');
+    }
+
+    /**
+     * 与**系统建议的目标**对比（2026-10-04 补）。
+     * 上面两条比的都是"当前体重"，比不出"跟系统建议的方向不一致"。
+     */
+    const suggestedDiff =
+      Math.abs(targetWeightKg - suggestedTargetWeightKg) /
+      suggestedTargetWeightKg;
+    if (suggestedDiff > SUGGESTED_TARGET_WARN_RATIO) {
+      notes.push(
+        `系统按它现在的体形建议目标是 ${round(suggestedTargetWeightKg, 1)}kg，` +
+          `你填的是 ${targetWeightKg}kg，相差较多，建议确认一下`,
+      );
     }
   }
 

@@ -111,7 +111,13 @@
                 <text class="intensity-option__kcal">{{ level.kcal }} kcal</text>
               </view>
             </view>
-            <text class="field__hint">越温和，掉秤越慢但越不容易掉肌肉。起步就是最温和的档位。</text>
+            <!-- 2026-10-04：文案按方向分开。原先只有减重那套说法，
+                 增重计划也会显示"掉秤越慢"，方向不对 -->
+            <text class="field__hint">{{
+              isLossDirection
+                ? '越温和，掉秤越慢但越不容易掉肌肉。起步就是最温和的档位。'
+                : '档位越高，长肉越快。起步偏保守，两周后系统会按实际增重速度自动调整。'
+            }}</text>
           </view>
         </view>
 
@@ -199,7 +205,11 @@
 
         <view class="card">
           <text class="card__title">力度</text>
-          <text class="card__desc">只能往更温和方向调。想更激进的话，等系统按实际减重速度自动调整。</text>
+          <text class="card__desc">{{
+            plan.direction === 'LOSS'
+              ? '只能往更温和方向调。想更激进的话，等系统按实际减重速度自动调整。'
+              : '只能往更保守方向调。想更快的话，等系统按实际增重速度自动调整。'
+          }}</text>
 
           <view class="intensity-options">
             <view
@@ -336,13 +346,18 @@ const estimatedText = computed(() => {
   return formatDate(date)
 })
 
+/** 当前建议是减重还是增重（模板里用来选对的文案） */
+const isLossDirection = computed(() => suggestion.value?.direction === 'LOSS')
+
 /** 新建时可选的力度档位（起步档 + 更温和的两档） */
 const suggestionIntensities = computed(() => {
   if (!suggestion.value) return []
   const isLoss = suggestion.value.direction === 'LOSS'
-  const base = suggestion.value.targetWeightKg
   // ⚠️ 这里只是把后端会用到的**档位名**列出来给顾客选，
   //     kcal 是按后端同一套口径粗算的展示值，最终以后端返回为准
+  //
+  // 2026-10-04 修正增重方向的档位命名：增重时系数越大 = 热量越多 = **长肉越快**，
+  // 沿用减重的"温和 / 更温和"会让人以为最保守，实际选到了最快的一档。
   return isLoss
     ? [
         { key: 'STANDARD', label: '标准', kcal: suggestion.value.currentKcal },
@@ -351,8 +366,8 @@ const suggestionIntensities = computed(() => {
       ]
     : [
         { key: 'STANDARD', label: '标准', kcal: suggestion.value.currentKcal },
-        { key: 'GENTLE', label: '温和', kcal: Math.round(suggestion.value.currentKcal * 1.09) },
-        { key: 'GENTLER', label: '更温和', kcal: Math.round(suggestion.value.currentKcal * 1.18) },
+        { key: 'GENTLE', label: '加快', kcal: Math.round(suggestion.value.currentKcal * 1.09) },
+        { key: 'GENTLER', label: '更快', kcal: Math.round(suggestion.value.currentKcal * 1.18) },
       ]
 })
 

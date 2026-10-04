@@ -95,10 +95,10 @@ describe('疫苗计划 · 界面', () => {
     expect(conflictsAt).toBeLessThan(expandAt)
   })
 
-  it('一条记录都没有时不报"已完成 N 项"（那是假进度）', () => {
+  it('一条都对不上号时不报"已完成 N 项"（那是假进度）', () => {
     const section = readSection()
 
-    expect(section).toContain('if (noRecordAtAll.value) {')
+    expect(section).toContain('if (noEvidence.value) {')
   })
 
   it('结尾有"仍在专业审核"的说明', () => {
@@ -123,7 +123,7 @@ describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧�
     // 家长明明打过、只是没记，会以为系统算错了
     expect(section).toContain('noRecordAtAll')
     expect(section).toContain('档案里还没有接种记录')
-    expect(section).toContain('把接种记录补上，这里会自动对齐')
+    expect(section).toContain('拍一下疫苗本')
   })
 
   it('判定条件来自后端的 summary.done 与 matchedRecordId，不自己猜', () => {
@@ -131,6 +131,68 @@ describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧�
 
     expect(section).toContain('plan.value.summary?.done')
     expect(section).toContain('step.matchedRecordId')
+  })
+})
+
+/**
+ * 零记录时**不显示计划**（2026-10-04 老板提问后改）。
+ *
+ * 老板：「狗狗在没有任何疫苗信息记录的时候，为什么还会显示下一步和接种计划呢？
+ * 这是不是不合理呢？」—— 是不合理，而且比他看到的更严重。
+ *
+ * 实测（面包，2023-09-23 生、0 条记录）修复前看到的是：
+ *     下一步：狂犬疫苗 第 3 次
+ *     建议时间：2025-11-16 ~ 2026-03-16
+ * 两处都不成立：
+ *   · "第 3 次"是程序表里的序号，顾客会读成"我家狗打过两次"—— 我们一条记录都没有；
+ *   · 那个窗口早就过去了，它既不是"计划"，也不是这只狗的历史。
+ *
+ * 根子：步骤过滤只保留"对现在还有意义"的（窗口过期一年内的），
+ * 于是零记录的老狗看到的是一段**被截断的假定历史的中段**。
+ * 计划是"接下来怎么打"，没有记录就没有"接下来"可言。
+ */
+describe('疫苗计划 · 零记录时不显示计划（2026-10-04 老板定）', () => {
+  function readSection() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+  }
+
+  it('零记录时整块藏掉"下一步 / 不一致提醒 / 接种计划"，只留说明卡', () => {
+    const section = readSection()
+
+    // 说明卡是 v-if="noRecordAtAll"，计划整块在 v-else 里
+    expect(section).toContain('v-if="noRecordAtAll"')
+    expect(section).toContain('<template v-else>')
+    // 下一步必须在 v-else 之后（也就是被藏起来的那一支里）
+    const elseAt = section.indexOf('<template v-else>')
+    const nextStepAt = section.indexOf('① 下一针')
+    expect(elseAt).toBeGreaterThan(-1)
+    expect(nextStepAt).toBeGreaterThan(elseAt)
+  })
+
+  it('说明卡不再承诺"下面是……进度"（下面已经没有东西了）', () => {
+    const section = readSection()
+
+    expect(section).not.toContain('下面是按免疫程序推算的进度')
+    expect(section).not.toContain('已经打过的那几针不会再提示')
+    // 改成一句话 + 指向下面的录入区
+    expect(section).toContain('这里就会显示下一针什么时候打')
+  })
+
+  it('措辞软硬用 noEvidence，显不显示计划用 noRecordAtAll —— 两个概念分开', () => {
+    const section = readSection()
+
+    // 后端原来用一个字段兼两件事：算的是"没有任何一步对上号"，
+    // 名字和文案说的却是"一条记录都没有"。只录一条钩端螺旋体（非核心苗）
+    // 的人会被这张卡告知"档案里还没有接种记录"。
+    expect(section).toContain('const noEvidence = computed')
+    expect(section).toContain('const noRecordAtAll = computed')
+    expect(section).toContain('plan.value.noEvidence')
+    expect(section).toContain('plan.value.noRecordAtAll')
+    // 状态标签走 noEvidence
+    expect(section).toContain('if (noEvidence.value && (status === \'OVERDUE\' || status === \'DUE\'))')
   })
 })
 

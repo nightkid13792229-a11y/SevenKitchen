@@ -690,12 +690,19 @@ describe('健康管理 · 疫苗书签角标（2026-10-04）', () => {
     expect(page).toContain('loadVaccineBadge(requestedDogId)')
   })
 
-  it('一条接种记录都没有时说"待补记录"，不说"该打了"', () => {
+  it('一条接种记录都没有时**不挂角标**（2026-10-04 老板提问后改）', () => {
     const page = readPage()
 
-    // 跟计划板块里不显示"已逾期"是同一条道理：我们没有任何证据说他没打
+    // 原来显示"待补记录"。三处不对：
+    //   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于每个用户永远看到这个角标，
+    //      一个永远亮着的角标就不是信号了；
+    //   2. 它跟"有 N 针该打了"用同一套视觉，把真正的提醒一起贬值；
+    //   3. 读起来像在说"你欠我们一条记录"。
+    // 没有记录时计划板块本来就有一张说明卡把话讲清楚，那里说就够了。
     expect(page).toContain('noRecordAtAll === true')
-    expect(page).toContain("vaccineBadgeText.value = '待补记录'")
+    expect(page).not.toContain('待补记录')
+    expect(page).toContain("if (res.data.noRecordAtAll === true) {")
+    expect(page).toContain("vaccineBadgeText.value = ''")
   })
 
   it('计划没开或拉失败时不挂角标（不在书签上写"加载失败"）', () => {

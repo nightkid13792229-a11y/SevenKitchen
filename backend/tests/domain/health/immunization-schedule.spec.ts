@@ -459,6 +459,101 @@ describe('疫苗计划', () => {
   })
 
   /**
+   * `noRecordAtAll` 与 `noEvidence` 是两个概念（2026-10-04 拆开）。
+   *
+   * 起因是老板看到"档案里还没有接种记录"这张卡，追问零记录时为什么还显示
+   * 下一步和接种计划。查下来发现字段本身就名不副实：
+   *
+   *   · 注释写的是"这只狗**一条接种记录都没有**"；
+   *   · 代码算的却是 `!hasAnyEvidence`（没有任何一步被匹配上）。
+   *
+   * 两件事在多数情况下重合，但确实会分开。最典型的一种：
+   * 顾客录了一条**打在 8 周龄的狂犬疫苗** ——
+   * 记录是真的（有些地方确实这么打），但它落在狂犬首针窗口（12 周起）之外，
+   * 于是"一条都没对上号"。这时界面不能说他"还没有接种记录"。
+   */
+  describe('noRecordAtAll vs noEvidence（2026-10-04 拆开）', () => {
+    it('一条记录都没有：两个都为真', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      })
+
+      expect(plan.noRecordAtAll).toBe(true)
+      expect(plan.noEvidence).toBe(true)
+    })
+
+    it('有记录但一条都没对上号：noRecordAtAll 假、noEvidence 真', () => {
+      // 一只 20 周龄的狗，唯一一条记录是 8 周龄打的狂犬 ——
+      // 记录是真的，但落在狂犬首针窗口（12 周起）之外，一条都对不上号。
+      const birthday = dog(20)
+      const earlyRabies = addWeeks(new Date(birthday + 'T00:00:00'), 8)
+        .toISOString()
+        .slice(0, 10)
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [record('r1', '狂犬疫苗', earlyRabies)],
+        today: TODAY,
+      })
+
+      // 人家明明录了一条 —— 界面不能说他"还没有接种记录"
+      expect(plan.noRecordAtAll).toBe(false)
+      // 但确实一条都没对上号，措辞还是要软
+      expect(plan.noEvidence).toBe(true)
+
+      const actionable = plan.steps.filter(
+        (step) => step.status === 'OVERDUE' || step.status === 'DUE',
+      )
+      expect(actionable.length).toBeGreaterThan(0)
+      for (const step of actionable) {
+        expect(step.reminder).toContain('档案里还没有这一针的记录')
+        expect(step.reminder).not.toContain('已经过了建议时间')
+      }
+    })
+
+    it('记录对得上号：两个都为假', () => {
+      const birthday = dog(30)
+      const firstDose = addWeeks(new Date(birthday + 'T00:00:00'), 10)
+        .toISOString()
+        .slice(0, 10)
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [record('r1', '六联', firstDose)],
+        today: TODAY,
+      })
+
+      expect(plan.noRecordAtAll).toBe(false)
+      expect(plan.noEvidence).toBe(false)
+    })
+
+    it('没有出生日期时两个字段也都在（前端要靠它决定显示什么）', () => {
+      const empty = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: '',
+        records: [],
+        today: TODAY,
+      })
+      expect(empty.noRecordAtAll).toBe(true)
+      expect(empty.noEvidence).toBe(true)
+
+      const withRecord = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: '',
+        records: [record('r1', '狂犬疫苗', '2026-09-01')],
+        today: TODAY,
+      })
+      expect(withRecord.noRecordAtAll).toBe(false)
+      expect(withRecord.noEvidence).toBe(false)
+    })
+  })
+
+  /**
    * 免疫程序表的四处修正（2026-10-04，读 WSAVA 2024 正本后）
    *
    * 这四条都是照着指南原文改的，每条都能翻到页码。

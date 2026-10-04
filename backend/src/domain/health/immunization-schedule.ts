@@ -91,7 +91,26 @@ export interface VaccinePlanResult {
    * 界面用它决定口径：没有记录时不说"已逾期"，
    * 只说"档案里还没有这一针的记录" —— 我们没证据说他没打。
    */
+  /**
+   * 这只狗**一条接种记录都没有**（`records.length === 0`）。
+   *
+   * 用来决定：要不要显示"档案里还没有接种记录"这张卡，
+   * 以及要不要**整块藏掉**计划与"下一步"。
+   *
+   * ⚠️ 2026-10-04 修正：这里原来算的是 `!hasAnyEvidence`（没有任何一步
+   * 被匹配上），但字段名、界面文案、注释说的都是"一条记录都没有"。
+   * 后果很具体：顾客只录了一条"钩端螺旋体"（它是非核心苗，程序表里没有
+   * 对应步骤），界面就对着他说"档案里还没有接种记录" —— 人家刚录完。
+   * 所以拆成两个字段。
+   */
   noRecordAtAll: boolean;
+  /**
+   * 我们**没有任何一条能对上号的证据**（一条记录都没有，或有记录但一条都没匹配上）。
+   *
+   * 只用来决定**措辞软硬**：为真时不出现"已过期""尽快安排"这种口气。
+   * 不用它决定显不显示计划 —— 那件事归 `noRecordAtAll`。
+   */
+  noEvidence: boolean;
   /** 计划是否有专业审核背书 —— 未审核时顾客侧不展示 */
   reviewed: boolean;
   generatedAt: string;
@@ -200,6 +219,18 @@ export const RABIES_SCHEDULE = {
  *
  * 为什么只分两类：疫苗名是自由文本，细分成"六联/八联/卫佳"没有可靠依据；
  * 而狂犬在国内是强制免疫、按年接种，周期与核心疫苗完全不同，必须分开。
+ *
+ * ⚠️ 已知局限（2026-10-04 查产品清单时发现，**待产品清单审核后修**）：
+ *
+ * 现在**所有非狂犬苗都归为 core**，于是"一针单独的钩端螺旋体疫苗"
+ * （宠必威乐必妥就是单苗）只要落在首免窗口里，就会被算成**完成了一针核心苗**。
+ * 两种情形会出错：
+ *   · 单苗（钩端螺旋体、犬窝咳、冠状病毒）被当成核心联苗；
+ *   · 卫佳捌那种"核心 + 钩端 + 冠状"的组合苗，反而没法表达它多防了什么。
+ *
+ * 不能靠加关键词解决 —— 正确做法是给每个产品存一份"**防哪些病**"，
+ * 也就是 `docs/plans/2026-10-04-vaccine-product-list-review.md` 那份清单的用途之一。
+ * 那份清单经兽医审核后，这里改成按**抗原清单**匹配，而不是按名字。
  */
 export function classifyVaccineName(name: string): VaccineKind {
   const text = String(name || '').toLowerCase();
@@ -435,7 +466,8 @@ function resolveStatus(
 /**
  * 提醒文案。
  *
- * `noRecordAtAll` = 这只狗**一条接种记录都没有**。
+ * `noEvidence` = 我们手上**没有任何一条能对上号的证据**
+ * （一条记录都没有，或者有记录但一条都没匹配上程序里的步骤）。
  *
  * 这是 2026-10-04 老板定的口径：「没有记录，我们不去说已过期」。
  * 原因很实在：家长明明每年都带狗去打，只是没在小程序里记，
@@ -443,13 +475,17 @@ function resolveStatus(
  * 第一反应是"我是不是漏打了"，第二反应是"这系统不准"。
  *
  * 我们**没有证据**说他没打，就不该用"逾期"这种口气。
+ *
+ * ⚠️ 2026-10-04 改：这个参数原来叫 `noRecordAtAll`，但传进来的是
+ * "没有一条匹配上" —— 跟字段名说的"一条记录都没有"是两回事。
+ * 见 `noRecordAtAll` / `noEvidence` 两个字段的注释。
  */
 function buildReminder(
   status: VaccineStepStatus,
   label: string,
-  noRecordAtAll = false,
+  noEvidence = false,
 ): string {
-  if (noRecordAtAll && (status === 'DUE' || status === 'OVERDUE')) {
+  if (noEvidence && (status === 'DUE' || status === 'OVERDUE')) {
     return `${label}：档案里还没有这一针的记录`;
   }
 
@@ -623,6 +659,7 @@ export function buildVaccinePlan(
       summary: { done: 0, due: 0, overdue: 0, upcoming: 0, skipped: 0 },
       decisions,
       noRecordAtAll: input.records.length === 0,
+      noEvidence: input.records.length === 0,
       reviewed: Boolean(input.reviewed),
       generatedAt: new Date().toISOString(),
     };
@@ -639,11 +676,13 @@ export function buildVaccinePlan(
       Boolean(item.date),
     );
 
-  // 一条"已完成"的都没有 = 我们手上没有任何证据
-  const hasAnyEvidence = seeds.some((seed) =>
-    Boolean(findMatchingRecord(seed, parsed)),
-  );
-  const noRecordAtAll = !hasAnyEvidence;
+  // ⚠️ 这两个**不是一回事**（2026-10-04 拆开）：
+  //   · noRecordAtAll → 顾客一条都没录（决定界面说什么、藏什么）
+  //   · noEvidence    → 一条都没对上号（只决定措辞软硬）
+  // 之前用一个字段兼两件事，于是"只录了一条非核心苗"的人
+  // 会被界面告知"档案里还没有接种记录"。
+  const noRecordAtAll = input.records.length === 0;
+  const noEvidence = !seeds.some((seed) => Boolean(findMatchingRecord(seed, parsed)));
 
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {
@@ -665,7 +704,7 @@ export function buildVaccinePlan(
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(status, seed.label, noRecordAtAll),
+        reminder: buildReminder(status, seed.label, noEvidence),
       };
     })
     // 只留下"对现在还有意义"的步骤。
@@ -723,6 +762,7 @@ export function buildVaccinePlan(
     summary,
     decisions,
     noRecordAtAll,
+    noEvidence,
     reviewed: Boolean(input.reviewed),
     generatedAt: new Date().toISOString(),
   };

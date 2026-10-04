@@ -8,16 +8,27 @@
        也没说什么时候会有的功能，只会以为是坏的。开了才出现，才讲得通。 -->
   <view v-if="!planHidden" class="health-section vaccine-plan">
     <template v-if="loaded">
-      <!-- 档案里一条接种记录都没有时先说明白，否则"已逾期"会被读成"你的狗没打疫苗"。
-           2026-10-02 顾客侧开放当天补：家长明明打过、只是没记，看到逾期会以为系统算错了。 -->
+      <!-- 一条接种记录都没有时：**只说明情况，不显示任何计划**（2026-10-04 老板定）。
+
+           原来这里会顶着"下一步：狂犬疫苗 第 3 次 / 建议时间 2025-11-16 ~ 2026-03-16"。
+           两处都不成立：
+             · "第 3 次"是程序表里的序号，可顾客会读成"我家狗打过两次"——
+               我们手上一条记录都没有，凭什么这么说；
+             · 那个窗口早就过去了，它既不是"计划"，也不是这只狗的历史。
+           根子是：步骤过滤只保留"对现在还有意义"的（窗口过期一年内的），
+           于是零记录的老狗看到的是一段**被截断的假定历史的中段**。
+           计划是"接下来怎么打"，没有记录就没有"接下来"可言。
+
+           所以零记录时只留这张卡，把话说清楚，并指向下面的录入区
+           （"拍疫苗本"和"添加记录"就在这一屏下面）。 -->
       <view v-if="noRecordAtAll" class="health-card plan-empty-note">
         <text class="plan-empty-note__title">档案里还没有接种记录</text>
         <text class="plan-empty-note__desc">
-          下面是按免疫程序推算的进度。如果其实打过疫苗，把接种记录补上，这里会自动对齐；
-          已经打过的那几针不会再提示。
+          在下面拍一下疫苗本、或者手动加一条，这里就会显示下一针什么时候打。
         </text>
       </view>
 
+      <template v-else>
       <!-- ① 下一针：整个板块最重要的一行 -->
       <view v-if="plan.nextStep" class="health-card next-step" :class="`next-step--${plan.nextStep.status}`">
         <text class="next-step__eyebrow">下一步</text>
@@ -112,6 +123,7 @@
           ? '本计划依据 WSAVA 2024 疫苗指南与国内规定起草，已经专业审核。是否接种、何时接种，请以执业兽医的意见为准。'
           : '本计划仍在做专业审核，暂不对顾客开放。是否接种、何时接种，请以执业兽医的意见为准。' }}
       </text>
+      </template>
     </template>
 
     <view v-else-if="loadError" class="health-card">
@@ -196,36 +208,68 @@ const plan = ref<{
    * 文案会自己跟着变，不用再改一次前端。
    */
   reviewed?: boolean
-  /** 一条接种记录都没有（后端下发，2026-10-04） */
+  /**
+   * 一条接种记录都没有（后端下发）。
+   *
+   * ⚠️ 2026-10-04 修正口径：它现在**真的**表示"一条记录都没有"
+   * （`records.length === 0`）。原来后端算的是"没有任何一步被匹配上"，
+   * 于是只录了一条"钩端螺旋体"（非核心苗，程序表里没有对应步骤）的人，
+   * 会被这张卡告知"档案里还没有接种记录"。
+   */
   noRecordAtAll?: boolean
+  /**
+   * 有没有任何一条能对上号的证据（后端下发）。
+   *
+   * **只用来决定措辞软硬** —— 为假时不出现"已过期""尽快安排"这种口气。
+   * 不用它决定显不显示计划，那件事归 noRecordAtAll。
+   */
+  noEvidence?: boolean
 }>({ nextStep: null, steps: [], conflicts: [], decisions: {} })
 
 /**
- * 一条接种记录都还没对上（2026-10-02）。
+ * 一条接种记录都没有（后端下发，优先用）。
  *
- * 为什么需要这个：顾客侧开放当天实测一只 8 个月、没记过疫苗的狗，
- * 页面直接顶着 5 个「已逾期」—— 家长明明打过、只是没记，会以为系统算错了。
- * 先说明"档案里还没有记录"，逾期才有上下文。
+ * 决定：显示"档案里还没有接种记录"这张卡，并**整块藏掉计划与"下一步"**。
+ *
+ * ⚠️ 2026-10-04 口径修正：它以前兼着"没有任何一步对上号"的意思，
+ * 现在两个概念分开了 —— 见 noEvidence。
  */
 const noRecordAtAll = computed(() => {
-  // 后端已经判好了（2026-10-04），优先用它 —— 前后端两套口径迟早会不一致
   if (typeof plan.value.noRecordAtAll === 'boolean') {
     return plan.value.noRecordAtAll
   }
+  // 兜底（后端没下发时）：没有已完成、也没有任何一步被匹配上
   const done = Number(plan.value.summary?.done ?? 0)
   const hasMatched = plan.value.steps.some((step) => step.matchedRecordId)
   return done === 0 && !hasMatched
 })
 
 /**
+ * 有没有任何一条能对上号的证据（2026-10-02 的原始意图）。
+ *
+ * 为什么需要这个：顾客侧开放当天实测一只 8 个月、没记过疫苗的狗，
+ * 页面直接顶着 5 个「已逾期」—— 家长明明打过、只是没记，会以为系统算错了。
+ * 一条都对不上时，措辞要软：不说"已逾期"，改说"还没记录"—— 这是陈述事实，不是指责。
+ */
+const noEvidence = computed(() => {
+  if (typeof plan.value.noEvidence === 'boolean') {
+    return plan.value.noEvidence
+  }
+  return noRecordAtAll.value
+})
+
+/**
  * 状态标签（2026-10-04 老板定）。
  *
- * 一条接种记录都没有时，**不说"已逾期"** —— 我们没有任何证据说他没打，
+ * **没有任何证据**时不出现"已逾期" —— 我们没有任何证据说他没打，
  * 家长明明年年带狗去打、只是没在小程序里记，看到"已逾期"会以为系统算错了。
  * 改成"还没记录"，这是一个事实陈述，不是指责。
+ *
+ * 注意判据是 noEvidence 而不是 noRecordAtAll：只录了一条钩端螺旋体
+ * （非核心苗）的人，也属于"一条都没对上号"，措辞一样要软。
  */
 function statusLabel(status: PlanStep['status']) {
-  if (noRecordAtAll.value && (status === 'OVERDUE' || status === 'DUE')) {
+  if (noEvidence.value && (status === 'OVERDUE' || status === 'DUE')) {
     return '还没记录'
   }
   return STATUS_LABELS[status] || status
@@ -246,7 +290,7 @@ const planListExpanded = ref(false)
  */
 const planListHint = computed(() => {
   const total = plan.value.steps.length
-  if (noRecordAtAll.value) {
+  if (noEvidence.value) {
     return `共 ${total} 项，按免疫程序推算`
   }
   const done = plan.value.steps.filter((step) => step.status === 'DONE').length
@@ -286,6 +330,7 @@ async function load() {
       summary: res.data.summary || {},
       reviewed: res.data.reviewed === true,
       noRecordAtAll: res.data.noRecordAtAll === true,
+      noEvidence: res.data.noEvidence === true,
     }
     loaded.value = true
   } catch (error: any) {

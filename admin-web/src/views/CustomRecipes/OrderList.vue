@@ -2,7 +2,18 @@
   <div class="custom-recipe-orders">
     <div class="page-header">
       <h1>定制食谱订单</h1>
-      <el-button @click="goToConfig">食谱定制设置</el-button>
+      <!-- 口径 2：改定制费/产能只允许管理员。菜单对所有登录者可见，
+           所以入口不消失而是置灰并说明原因，客服才不会以为是系统坏了 -->
+      <el-tooltip
+        v-if="isAdmin"
+        content="定制费 / 可抵扣金额 / 交付周期 / 接单上限"
+        placement="bottom"
+      >
+        <el-button @click="goToConfig">食谱定制设置</el-button>
+      </el-tooltip>
+      <el-tooltip v-else :content="`${ADMIN_ONLY_TIP}：食谱定制设置`" placement="bottom">
+        <span><el-button disabled>食谱定制设置</el-button></span>
+      </el-tooltip>
     </div>
 
     <!-- 统计卡片 -->
@@ -123,10 +134,33 @@
             {{ formatDate(row.scheduledDate) }}
           </template>
         </el-table-column>
+        <!-- 预计交付要能扫一眼看出"哪些已经晚了"：只有日期的话，
+             员工得逐单心算，超期的单就沉在列表里没人催 -->
+        <el-table-column label="预计交付" width="160">
+          <template #default="{ row }">
+            <div class="delivery-cell">
+              <span :class="{ 'overdue-text': getDeliveryInfo(row).overdue }">
+                {{ getDeliveryInfo(row).dateText || '未测算' }}
+              </span>
+              <el-tag
+                v-if="getDeliveryInfo(row).overdue"
+                type="danger"
+                size="small"
+              >
+                {{ getDeliveryInfo(row).text }}
+              </el-tag>
+              <span v-else-if="getDeliveryInfo(row).text" class="countdown-text">
+                {{ getDeliveryInfo(row).text }}
+              </span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
+            <!-- 状态文案与详情页共用一份字典（constants/customRecipeOrder）：
+                 两处各写一份的结果就是详情页漏了「已取消」，显示成英文 CANCELLED -->
+            <el-tag :type="getCustomRecipeStatusTagType(row.status)">
+              {{ getCustomRecipeStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -215,21 +249,34 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { api } from '@/api';
+import OrderDetail from './OrderDetail.vue';
+import { customRecipeApi } from '@/api/customRecipe';
+import type {
+  CustomRecipeOrderDetail,
+  CustomRecipeStatistics,
+} from '@/api/customRecipe';
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
+import {
+  getCustomRecipeStatusTagType,
+  getCustomRecipeStatusText,
+} from '@/constants/customRecipeOrder';
+import { getEstimatedDeliveryInfo } from '@/utils/customRecipe';
+import { getApiErrorMessage, isUserCancel } from '@/utils/apiError';
 
 const router = useRouter();
+
+/** 口径 2：只有管理员能改食谱定制设置，入口对客服置灰 */
+const isAdmin = useIsAdmin();
 
 /** 跳到独立的「食谱定制设置」页（定制费 / 可抵扣金额 / 交付周期 / 接单上限） */
 const goToConfig = () => {
   router.push('/custom-recipes/config');
 };
 
-const API_BASE = '/admin/custom-recipe';
-
 // 状态
 const loading = ref(false);
-const orders = ref<any[]>([]);
-const statistics = ref({
+const orders = ref<CustomRecipeOrderDetail[]>([]);
+const statistics = ref<CustomRecipeStatistics>({
   pendingPayment: 0,
   inProgress: 0,
   delivered: 0,
@@ -274,11 +321,11 @@ const loadOrders = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    const data: any = await api.get(`${API_BASE}/orders`, { params });
-    orders.value = data.orders || [];
-    pagination.total = data.total || 0;
+    const data = await customRecipeApi.listOrders(params);
+    orders.value = data?.orders || [];
+    pagination.total = data?.total || 0;
   } catch (error) {
-    ElMessage.error('加载订单失败');
+    ElMessage.error(getApiErrorMessage(error, '加载订单列表失败'));
     console.error(error);
   } finally {
     loading.value = false;
@@ -293,7 +340,7 @@ const loadStatistics = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    statistics.value = await api.get(`${API_BASE}/statistics`, { params });
+    statistics.value = await customRecipeApi.getStatistics(params);
   } catch (error) {
     console.error('加载统计失败', error);
   }
@@ -319,38 +366,39 @@ const viewDetail = (orderId: string) => {
   detailDrawerVisible.value = true;
 };
 
-const confirmPayment = async (order: any) => {
+const confirmPayment = async (order: CustomRecipeOrderDetail) => {
   try {
     await ElMessageBox.confirm(`确认订单 ${order.orderId} 已付款？`, '确认付款');
 
-    await api.patch(`${API_BASE}/orders/${order.orderId}/confirm-payment`);
+    await customRecipeApi.confirmPayment(order.orderId);
     ElMessage.success('付款已确认');
     loadOrders();
     loadStatistics();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '确认付款失败'));
     }
   }
 };
 
-const startProcessing = async (order: any) => {
+const startProcessing = async (order: CustomRecipeOrderDetail) => {
   try {
     await ElMessageBox.confirm(`开始制作订单 ${order.orderId}？`, '开始制作');
 
-    await api.patch(
-      `${API_BASE}/orders/${order.orderId}/status`,
-      { status: 'IN_PROGRESS' },
-    );
+    await customRecipeApi.updateStatus(order.orderId, 'IN_PROGRESS');
     ElMessage.success('已开始制作');
     loadOrders();
     loadStatistics();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '开始制作失败'));
     }
   }
 };
+
+/** 列表行 -> 预计交付倒计时（超期高亮；已交付/已取消的不再标红） */
+const getDeliveryInfo = (order: CustomRecipeOrderDetail) =>
+  getEstimatedDeliveryInfo(order.estimatedDeliveryDate, order.status);
 
 const viewRecipe = (recipeId: string) => {
   window.open(`/recipes/${recipeId}`, '_blank');
@@ -376,30 +424,6 @@ const getGoalText = (goal: string) => {
     HEALTH_SUPPORT: '健康管理',
   };
   return map[goal] || goal;
-};
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_PAYMENT: '待付款',
-    PAID: '已付款',
-    IN_PROGRESS: '制作中',
-    DELIVERED: '已交付',
-    // 自动关单/客服取消都会产生这个状态，此前没有文案，
-    // 列表里直接把英文枚举名 CANCELLED 显示给员工看
-    CANCELLED: '已取消',
-  };
-  return map[status] || status;
-};
-
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_PAYMENT: 'warning',
-    PAID: '',
-    IN_PROGRESS: 'primary',
-    DELIVERED: 'success',
-    CANCELLED: 'info',
-  };
-  return map[status] || 'info';
 };
 </script>
 
@@ -493,14 +517,23 @@ const getStatusType = (status: string) => {
   margin-top: 20px;
   text-align: right;
 }
+
+/* 预计交付：超期的日期本身就要红，不能只靠一个小标签 */
+.delivery-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.overdue-text {
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+.countdown-text {
+  font-size: 12px;
+  color: #909399;
+}
 </style>
 
-<script lang="ts">
-import OrderDetail from './OrderDetail.vue';
-
-export default {
-  components: {
-    OrderDetail,
-  },
-};
-</script>

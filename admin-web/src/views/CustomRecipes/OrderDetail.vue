@@ -12,8 +12,11 @@
           </div>
           <div class="info-item">
             <label>状态</label>
-            <el-tag :type="getStatusType(order.status)">
-              {{ getStatusText(order.status) }}
+            <!-- 状态文案走 constants/customRecipeOrder，与列表页同一份字典：
+                 此前详情页自己写了一份且漏了「已取消」，同一张单在列表里是
+                 "已取消"、点进来却显示英文 CANCELLED -->
+            <el-tag :type="statusTagType">
+              {{ statusText }}
             </el-tag>
           </div>
           <div class="info-item">
@@ -24,11 +27,53 @@
             <label>付款确认</label>
             <span>{{ formatDateTime(order.paymentConfirmedAt) }}</span>
           </div>
+          <div class="info-item" v-if="order.paymentTransactionId">
+            <label>支付流水号</label>
+            <span class="mono">{{ order.paymentTransactionId }}</span>
+          </div>
+          <div class="info-item" v-if="order.inProgressAt">
+            <label>开始制作</label>
+            <span>{{ formatDateTime(order.inProgressAt) }}</span>
+          </div>
           <div class="info-item" v-if="order.deliveredAt">
             <label>交付时间</label>
             <span>{{ formatDateTime(order.deliveredAt) }}</span>
           </div>
+          <div class="info-item" v-if="order.cancelledAt">
+            <label>取消时间</label>
+            <span>{{ formatDateTime(order.cancelledAt) }}</span>
+          </div>
+          <div class="info-item" v-if="order.cancellationReason">
+            <label>取消原因</label>
+            <span>{{ order.cancellationReason }}</span>
+          </div>
         </div>
+
+        <!-- 退款：线上退款（顾客自助取消 / 后台取消已付款单）会写回这里。
+             客服必须先看清"钱到底退没退"再答复顾客，所以单独成块并列全。 -->
+        <template v-if="hasRefundInfo">
+          <el-divider />
+          <h3>退款</h3>
+          <div class="info-group">
+            <div class="info-item">
+              <label>退款状态</label>
+              <el-tag :type="refundSucceeded ? 'success' : 'warning'" size="small">
+                {{ refundStatusText || '未发起退款' }}
+              </el-tag>
+            </div>
+            <div class="info-item" v-if="order.refundAmount !== null && order.refundAmount !== undefined">
+              <label>退款金额</label>
+              <span class="amount">¥{{ Number(order.refundAmount) }}</span>
+            </div>
+            <div class="info-item" v-if="order.refundedAt">
+              <label>退款到账</label>
+              <span>{{ formatDateTime(order.refundedAt) }}</span>
+            </div>
+          </div>
+          <p v-if="!refundSucceeded" class="refund-tip">
+            退款尚未确认成功，请到微信商户平台核实后再答复顾客。
+          </p>
+        </template>
 
         <el-divider />
 
@@ -86,9 +131,17 @@
             <label>预约日期</label>
             <span>{{ formatDate(order.scheduledDate) }}</span>
           </div>
-          <div class="info-item" v-if="order.estimatedDeliveryDate">
+          <div class="info-item">
+            <!-- 预计交付日要能一眼看出"还来得及 / 已经晚了"：
+                 只给一个日期，员工得自己算，超期的单就沉在列表里没人催 -->
             <label>预计交付</label>
-            <span>{{ formatDate(order.estimatedDeliveryDate) }}</span>
+            <span>
+              {{ deliveryInfo.dateText || '未测算' }}
+              <el-tag v-if="deliveryInfo.overdue" type="danger" size="small" class="overdue-tag">
+                {{ deliveryInfo.text }}
+              </el-tag>
+              <span v-else-if="deliveryInfo.text" class="countdown-text">{{ deliveryInfo.text }}</span>
+            </span>
           </div>
           <div class="info-item">
             <label>金额</label>
@@ -115,7 +168,10 @@
           </div>
         </div>
         <div class="credit-actions">
+          <!-- 恢复额度等于把顾客的钱还回去，口径 2 定为仅管理员；
+               客服看不到按钮，但要知道"这事不归我点"，所以留一句说明 -->
           <el-button
+            v-if="isAdmin"
             size="small"
             :disabled="Number(order.creditUsed || 0) <= 0"
             :loading="restoringCredit"
@@ -123,6 +179,7 @@
           >
             恢复额度
           </el-button>
+          <span v-else class="admin-only-tip">{{ ADMIN_ONLY_TIP }}：恢复抵扣额度</span>
           <span class="credit-tip">
             顾客用了抵扣后退款时点这里，把已用额度还回去；只影响额度，不改订单金额
           </span>
@@ -131,8 +188,38 @@
         <el-divider />
 
         <h3>健康信息</h3>
+
+        <!-- 下单后顾客在健康档案里补了过敏，订单上的快照不会跟着变；
+             不提示的话营养师会照着旧信息设计 -->
+        <el-alert
+          v-if="allergyComparison.changed"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="profile-updated-alert"
+          title="下单后档案有更新，请按最新信息设计"
+          :description="allergyUpdateDetail"
+        />
+
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="过敏史">
+          <el-descriptions-item label="过敏（档案最新）">
+            <template v-if="order.dog?.allergyRecords?.length">
+              <el-tag
+                v-for="(record, index) in order.dog.allergyRecords"
+                :key="`record-${index}`"
+                :type="getAllergyCertaintyTagType(record.certainty)"
+                size="small"
+                style="margin-right: 5px;"
+              >
+                {{ record.allergen }} · {{ getAllergyCertaintyText(record.certainty) }}
+              </el-tag>
+            </template>
+            <span v-else-if="!order.dog?.allergyFoods" class="empty-text">档案里没有过敏记录</span>
+            <div v-if="order.dog?.allergyFoods" class="source-note">
+              设计备注里记录的过敏：{{ order.dog.allergyFoods }}
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="过敏史（下单时填写）">
             <el-tag
               v-for="(allergen, index) in order.allergies"
               :key="index"
@@ -142,9 +229,9 @@
             >
               {{ allergen }}
             </el-tag>
-            <span v-if="order.allergies.length === 0" class="empty-text">无</span>
+            <span v-if="!order.allergies || order.allergies.length === 0" class="empty-text">无</span>
           </el-descriptions-item>
-          <el-descriptions-item label="疾病史">
+          <el-descriptions-item label="疾病史（下单时填写）">
             <el-tag
               v-for="(condition, index) in order.medicalConditions"
               :key="index"
@@ -154,9 +241,13 @@
             >
               {{ condition }}
             </el-tag>
-            <span v-if="order.medicalConditions.length === 0" class="empty-text">无</span>
+            <span v-if="!order.medicalConditions || order.medicalConditions.length === 0" class="empty-text">无</span>
           </el-descriptions-item>
         </el-descriptions>
+        <p class="source-hint">
+          「档案最新」来自顾客的健康档案与设计备注，顾客之后改了这里会跟着变；
+          「下单时填写」是下单当天的快照，不会变。两者不一致时以上面提示为准。
+        </p>
 
         <div v-if="order.additionalNotes" class="notes-section">
           <label>补充说明</label>
@@ -177,7 +268,7 @@
               >
                 {{ item }}
               </el-tag>
-              <span v-if="order.preferredIngredients.length === 0" class="empty-text">无特殊偏好</span>
+              <span v-if="!order.preferredIngredients || order.preferredIngredients.length === 0" class="empty-text">无特殊偏好</span>
             </div>
           </div>
           <div class="info-item full-width">
@@ -190,7 +281,7 @@
               >
                 {{ item }}
               </el-tag>
-              <span v-if="order.dislikedIngredients.length === 0" class="empty-text">无</span>
+              <span v-if="!order.dislikedIngredients || order.dislikedIngredients.length === 0" class="empty-text">无</span>
             </div>
           </div>
         </div>
@@ -247,149 +338,233 @@
           >
             在设计器中设计
           </el-button>
-          <!-- 取消会释放当天接单名额（每天只有 5 个），所以放到员工能点到的地方。
+          <!-- 取消会退款、会释放当天接单名额（每天只有 5 个），口径 2 定为仅管理员。
                已交付的单不允许取消（后端也会拒绝）。 -->
           <el-button
-            v-if="order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
+            v-if="isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
             type="danger"
             plain
             @click="cancelOrder"
           >
             取消订单
           </el-button>
+          <span
+            v-else-if="!isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED'"
+            class="admin-only-tip"
+          >
+            {{ ADMIN_ONLY_TIP }}：取消订单
+          </span>
           <el-button @click="contactCustomer">联系客户</el-button>
         </div>
       </div>
 
-      <!-- 右侧：创建食谱 -->
-      <div class="recipe-creation-section" v-if="order.status === 'PAID' || order.status === 'IN_PROGRESS'">
-        <h3>创建定制食谱</h3>
+      <!-- 右侧：交付已设计好的食谱 / 手工创建 -->
+      <div class="recipe-creation-section" v-if="canDeliver">
+        <!-- 一键交付（2026-10-04 第 1、2 条）：
+             设计器里做好的食谱直接挂到订单上，不必把名称、营养、食材、步骤
+             手工重抄进下面结构完全不同的表单里。 -->
+        <div class="recipe-delivery-block">
+          <h3>{{ isRedelivery ? '重新交付食谱' : '从已设计好的食谱交付' }}</h3>
+          <p class="section-desc">
+            这里只列出「{{ order.dog?.name || '这只狗' }}」的私密定制食谱（该顾客 + 该狗狗）。
+            选中一条点交付即可，顾客会收到通知。
+          </p>
 
-        <el-form :model="recipeForm" label-width="120px">
-          <el-form-item label="食谱名称">
-            <el-input v-model="recipeForm.name" placeholder="为狗狗专属定制的食谱" />
-          </el-form-item>
-
-          <el-form-item label="描述">
-            <el-input
-              v-model="recipeForm.description"
-              type="textarea"
-              :rows="3"
-              placeholder="食谱描述"
-            />
-          </el-form-item>
-
-          <el-form-item label="封面图片">
-            <!-- 走 api 层上传：原来的 action 指向 /api/v1/admin/upload（不存在），
-                 而且成功回调判的是 code === 200，而全站统一成功码是 0 -->
-            <el-upload
-              class="cover-uploader"
-              :show-file-list="false"
-              :http-request="handleCoverUpload"
-              accept="image/*"
+          <div v-loading="candidatesLoading" class="candidate-list">
+            <el-radio-group
+              v-if="candidates.length"
+              v-model="selectedCandidateId"
+              class="candidate-group"
             >
-              <img v-if="recipeForm.coverImageUrl" :src="recipeForm.coverImageUrl" class="cover-image" />
-              <el-icon v-else class="cover-uploader-icon"><Plus /></el-icon>
-            </el-upload>
-          </el-form-item>
-
-          <el-form-item label="营养标准">
-            <el-select v-model="recipeForm.nutritionStandard">
-              <el-option label="FEDIAF 2025" value="FEDIAF_2025" />
-              <el-option label="FEDIAF 2021" value="FEDIAF_2021" />
-              <el-option label="AAFCO 2019" value="AAFCO_2019" />
-              <el-option label="国标 GB/T 31216" value="GB_T_31216" />
-            </el-select>
-          </el-form-item>
-
-          <el-divider content-position="left">营养目标</el-divider>
-
-          <el-form-item label="蛋白质">
-            <el-input-number v-model="recipeForm.proteinPercent" :min="0" :max="50" />
-            <span style="margin-left: 10px">%</span>
-          </el-form-item>
-
-          <el-form-item label="脂肪">
-            <el-input-number v-model="recipeForm.fatPercent" :min="0" :max="30" />
-            <span style="margin-left: 10px">%</span>
-          </el-form-item>
-
-          <el-form-item label="碳水">
-            <el-input-number v-model="recipeForm.carbohydratePercent" :min="0" :max="80" />
-            <span style="margin-left: 10px">%</span>
-          </el-form-item>
-
-          <el-form-item label="能量密度">
-            <el-input-number v-model="recipeForm.energyDensityKcalPerKg" :min="0" :max="10000" />
-            <span style="margin-left: 10px">kcal/kg</span>
-          </el-form-item>
-
-          <el-divider content-position="left">配方设计</el-divider>
-
-          <el-form-item>
-            <template #label>
-              <span>食材列表</span>
-              <el-button size="small" @click="addIngredient" style="margin-left: 10px">
-                + 添加食材
-              </el-button>
-            </template>
-            <div class="ingredients-list">
-              <div
-                v-for="(item, index) in recipeForm.items"
-                :key="index"
-                class="ingredient-item"
+              <el-radio
+                v-for="candidate in candidates"
+                :key="candidate.recipeId"
+                :value="candidate.recipeId"
+                class="candidate-item"
               >
-                <el-select
-                  v-model="item.ingredientId"
-                  placeholder="选择食材"
-                  filterable
-                  style="width: 200px"
-                >
-                  <el-option
-                    v-for="option in ingredientOptions"
-                    :key="option.id"
-                    :label="option.name"
-                    :value="option.id"
-                  />
-                </el-select>
-                <el-input
-                  v-model="item.preparationMethod"
-                  placeholder="制备方法"
-                  style="width: 150px"
-                />
-                <el-input-number
-                  v-model="item.ratioPercent"
-                  :min="0"
-                  :max="100"
-                  :precision="1"
-                  style="width: 120px"
-                />
-                <span>%</span>
-                <el-button type="danger" link @click="removeIngredient(index)">
-                  删除
-                </el-button>
-              </div>
-            </div>
-          </el-form-item>
+                <span class="candidate-name">{{ candidate.name }}</span>
+                <span class="candidate-meta">
+                  v{{ candidate.version }} · 更新于 {{ formatDateTime(candidate.updatedAt) }}
+                </span>
+                <el-tag v-if="candidate.linkedToThisOrder" type="success" size="small">
+                  当前已挂
+                </el-tag>
+              </el-radio>
+            </el-radio-group>
 
-          <el-divider content-position="left">制作说明</el-divider>
+            <!-- 空态要说清"下一步做什么"，只显示"暂无数据"员工只能来问开发 -->
+            <el-empty
+              v-else-if="!candidatesLoading"
+              :image-size="70"
+              description="这只狗还没有已发布的定制食谱，请先在设计器里设计并发布"
+            >
+              <el-button v-if="order.dog?.id" type="success" plain @click="openInDesigner">
+                在设计器中设计
+              </el-button>
+            </el-empty>
+          </div>
 
-          <el-form-item label="制作步骤">
-            <el-input
-              v-model="recipeForm.productionSteps"
-              type="textarea"
-              :rows="5"
-              placeholder="详细的制作步骤说明"
-            />
-          </el-form-item>
-
-          <el-form-item>
-            <el-button type="primary" @click="submitRecipe" :loading="submitting">
-              提交食谱并交付
+          <div class="delivery-actions">
+            <el-button
+              v-if="isAdmin"
+              type="primary"
+              :disabled="!selectedCandidateId"
+              :loading="delivering"
+              @click="deliverSelectedRecipe"
+            >
+              {{ isRedelivery ? '重新交付' : '交付到订单' }}
             </el-button>
-            <el-button @click="resetRecipeForm">重置</el-button>
-          </el-form-item>
-        </el-form>
+            <span v-else class="admin-only-tip">
+              {{ ADMIN_ONLY_TIP }}：交付食谱（含重新交付）会给顾客发通知，只有管理员能做
+            </span>
+          </div>
+          <p v-if="isRedelivery" class="delivery-warning">
+            重新交付会替换当前交付的食谱，并再次给顾客发送通知。
+          </p>
+        </div>
+
+        <el-divider />
+
+        <!-- 手工创建：正常动线走上面的一键交付，这里只作兜底 -->
+        <template v-if="order.status === 'PAID' || order.status === 'IN_PROGRESS'">
+          <h3>手工创建定制食谱</h3>
+          <p class="section-desc">
+            没有对应设计稿时才用这里。带 * 的为必填 ——
+            空名称或缺食材的食谱交付出去，顾客收到的通知里什么也没有。
+          </p>
+
+          <el-form
+            ref="recipeFormRef"
+            :model="recipeForm"
+            :rules="recipeFormRules"
+            label-width="120px"
+          >
+            <el-form-item label="食谱名称" prop="name">
+              <el-input v-model="recipeForm.name" placeholder="为狗狗专属定制的食谱" />
+            </el-form-item>
+
+            <el-form-item label="描述">
+              <el-input
+                v-model="recipeForm.description"
+                type="textarea"
+                :rows="3"
+                placeholder="食谱描述"
+              />
+            </el-form-item>
+
+            <el-form-item label="封面图片">
+              <!-- 走 api 层上传：原来的 action 指向 /api/v1/admin/upload（不存在），
+                   而且成功回调判的是 code === 200，而全站统一成功码是 0 -->
+              <el-upload
+                class="cover-uploader"
+                :show-file-list="false"
+                :http-request="handleCoverUpload"
+                accept="image/*"
+              >
+                <img v-if="recipeForm.coverImageUrl" :src="recipeForm.coverImageUrl" class="cover-image" />
+                <el-icon v-else class="cover-uploader-icon"><Plus /></el-icon>
+              </el-upload>
+            </el-form-item>
+
+            <el-form-item label="营养标准">
+              <el-select v-model="recipeForm.nutritionStandard">
+                <el-option label="FEDIAF 2025" value="FEDIAF_2025" />
+                <el-option label="FEDIAF 2021" value="FEDIAF_2021" />
+                <el-option label="AAFCO 2019" value="AAFCO_2019" />
+                <el-option label="国标 GB/T 31216" value="GB_T_31216" />
+              </el-select>
+            </el-form-item>
+
+            <el-divider content-position="left">营养目标</el-divider>
+
+            <el-form-item label="蛋白质">
+              <el-input-number v-model="recipeForm.proteinPercent" :min="0" :max="50" />
+              <span style="margin-left: 10px">%</span>
+            </el-form-item>
+
+            <el-form-item label="脂肪">
+              <el-input-number v-model="recipeForm.fatPercent" :min="0" :max="30" />
+              <span style="margin-left: 10px">%</span>
+            </el-form-item>
+
+            <el-form-item label="碳水">
+              <el-input-number v-model="recipeForm.carbohydratePercent" :min="0" :max="80" />
+              <span style="margin-left: 10px">%</span>
+            </el-form-item>
+
+            <el-form-item label="能量密度" prop="energyDensityKcalPerKg">
+              <el-input-number v-model="recipeForm.energyDensityKcalPerKg" :min="0" :max="10000" />
+              <span style="margin-left: 10px">kcal/kg</span>
+            </el-form-item>
+
+            <el-divider content-position="left">配方设计</el-divider>
+
+            <!-- prop="items" 让校验器能挂在这一整块上：至少一个食材、每行都得选食材 -->
+            <el-form-item prop="items">
+              <template #label>
+                <span>食材列表 *</span>
+                <el-button size="small" @click="addIngredient" style="margin-left: 10px">
+                  + 添加食材
+                </el-button>
+              </template>
+              <div class="ingredients-list">
+                <div
+                  v-for="(item, index) in recipeForm.items"
+                  :key="index"
+                  class="ingredient-item"
+                >
+                  <el-select
+                    v-model="item.ingredientId"
+                    placeholder="选择食材"
+                    filterable
+                    style="width: 200px"
+                  >
+                    <el-option
+                      v-for="option in ingredientOptions"
+                      :key="option.id"
+                      :label="option.name"
+                      :value="option.id"
+                    />
+                  </el-select>
+                  <el-input
+                    v-model="item.preparationMethod"
+                    placeholder="制备方法"
+                    style="width: 150px"
+                  />
+                  <el-input-number
+                    v-model="item.ratioPercent"
+                    :min="0"
+                    :max="100"
+                    :precision="1"
+                    style="width: 120px"
+                  />
+                  <span>%</span>
+                  <el-button type="danger" link @click="removeIngredient(index)">
+                    删除
+                  </el-button>
+                </div>
+              </div>
+            </el-form-item>
+
+            <el-divider content-position="left">制作说明</el-divider>
+
+            <el-form-item label="制作步骤">
+              <el-input
+                v-model="recipeForm.productionSteps"
+                type="textarea"
+                :rows="5"
+                placeholder="详细的制作步骤说明"
+              />
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" @click="submitRecipe" :loading="submitting">
+                提交食谱并交付
+              </el-button>
+              <el-button @click="resetRecipeForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </template>
       </div>
 
       <!-- 已完成的食谱信息 -->
@@ -402,10 +577,11 @@
           <el-descriptions-item label="状态">
             <el-tag type="success">已交付</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="营养标准">
+          <!-- 营养标准与能量密度明细接口没返回，为空时不占一行空位 -->
+          <el-descriptions-item v-if="order.recipe.nutritionStandard" label="营养标准">
             {{ order.recipe.nutritionStandard }}
           </el-descriptions-item>
-          <el-descriptions-item label="能量密度">
+          <el-descriptions-item v-if="order.recipe.energyDensityKcalPerKg" label="能量密度">
             {{ order.recipe.energyDensityKcalPerKg }} kcal/kg
           </el-descriptions-item>
         </el-descriptions>
@@ -421,12 +597,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue';
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import type { FormInstance, FormRules } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
-import { api } from '@/api';
+import { customRecipeApi } from '@/api/customRecipe';
+import type {
+  CustomRecipeAttachment,
+  CustomRecipeCandidate,
+  CustomRecipeOrderDetail,
+} from '@/api/customRecipe';
 import { ingredientApi } from '@/api/ingredients';
 import { recipeApi } from '@/api/recipes';
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
+import {
+  canDeliverCustomRecipe,
+  getCustomRecipeRefundStatusText,
+  getCustomRecipeStatusTagType,
+  getCustomRecipeStatusText,
+  isCustomRecipeRedelivery,
+  isCustomRecipeRefundSucceeded,
+} from '@/constants/customRecipeOrder';
+import {
+  compareDogProfileAllergies,
+  getAllergyCertaintyTagType,
+  getAllergyCertaintyText,
+  getEstimatedDeliveryInfo,
+} from '@/utils/customRecipe';
+import { getApiErrorMessage, isUserCancel } from '@/utils/apiError';
+import { validateElementForm } from '@/utils/elementFormValidation';
 
 const props = defineProps<{
   orderId: string;
@@ -434,7 +633,8 @@ const props = defineProps<{
 
 const emit = defineEmits(['refresh', 'close']);
 
-const API_BASE = '/admin/custom-recipe';
+/** 口径 2：交付 / 取消 / 恢复额度只允许管理员，前端按角色隐藏敏感按钮 */
+const isAdmin = useIsAdmin();
 
 /**
  * 食材候选列表：给「食材列表」用下拉选择。
@@ -460,7 +660,153 @@ const loadIngredientOptions = async () => {
 // 状态
 const loading = ref(false);
 const submitting = ref(false);
-const order = ref<any>(null);
+const restoringCredit = ref(false);
+const order = ref<CustomRecipeOrderDetail | null>(null);
+
+// ---------- 面板上的派生展示 ----------
+
+const statusText = computed(() => getCustomRecipeStatusText(order.value?.status));
+const statusTagType = computed(() => getCustomRecipeStatusTagType(order.value?.status));
+
+/** 预计交付倒计时：超期的单要标红，已交付/已取消的不再催 */
+const deliveryInfo = computed(() =>
+  getEstimatedDeliveryInfo(order.value?.estimatedDeliveryDate, order.value?.status),
+);
+
+const refundStatusText = computed(() =>
+  getCustomRecipeRefundStatusText(order.value?.refundStatus),
+);
+const refundSucceeded = computed(() =>
+  isCustomRecipeRefundSucceeded(order.value?.refundStatus),
+);
+const hasRefundInfo = computed(
+  () =>
+    Boolean(order.value?.refundStatus) ||
+    (order.value?.refundAmount !== null && order.value?.refundAmount !== undefined),
+);
+
+/** 下单时填写的过敏 vs 档案最新：两份口径不同，必须分开显示并提示差异 */
+const allergyComparison = computed(() =>
+  compareDogProfileAllergies(order.value?.dog, order.value?.allergies),
+);
+
+const allergyUpdateDetail = computed(() => {
+  const { added, removed } = allergyComparison.value;
+  const parts: string[] = [];
+  if (added.length > 0) parts.push(`档案里有、下单时没写：${added.join('、')}`);
+  if (removed.length > 0) parts.push(`下单时写了、档案里没有：${removed.join('、')}`);
+  return parts.join('；');
+});
+
+// ---------- 一键交付 ----------
+
+const candidates = ref<CustomRecipeCandidate[]>([]);
+const candidatesLoading = ref(false);
+const selectedCandidateId = ref('');
+const delivering = ref(false);
+
+/** 已付款 / 制作中 / 已交付 都能交付（已交付 = 重新交付，口径 4） */
+const canDeliver = computed(() => canDeliverCustomRecipe(order.value?.status));
+const isRedelivery = computed(() => isCustomRecipeRedelivery(order.value?.status));
+const selectedCandidate = computed(
+  () =>
+    candidates.value.find((item) => item.recipeId === selectedCandidateId.value) ||
+    null,
+);
+
+const loadRecipeCandidates = async () => {
+  if (!props.orderId) return;
+  candidatesLoading.value = true;
+  try {
+    const list = await customRecipeApi.listRecipeCandidates(props.orderId);
+    candidates.value = Array.isArray(list) ? list : [];
+
+    // 选中的那条不在新列表里时重新决定默认值：
+    // 首次交付默认选最新的一条（少点一次）；重新交付默认不预选 ——
+    // 换掉顾客手里那份食谱必须是有意识的选择，不能靠默认值滑过去。
+    const stillThere = candidates.value.some(
+      (item) => item.recipeId === selectedCandidateId.value,
+    );
+    if (!stillThere) {
+      selectedCandidateId.value = isRedelivery.value
+        ? ''
+        : candidates.value[0]?.recipeId || '';
+    }
+  } catch (error) {
+    candidates.value = [];
+    ElMessage.error(getApiErrorMessage(error, '加载可交付的食谱失败'));
+  } finally {
+    candidatesLoading.value = false;
+  }
+};
+
+const deliverSelectedRecipe = async () => {
+  const candidate = selectedCandidate.value;
+  const orderId = order.value?.orderId;
+  if (!orderId) return;
+  if (!candidate) {
+    ElMessage.warning('请先选择要交付的食谱');
+    return;
+  }
+
+  const dogName = order.value?.dog?.name || '这只狗';
+  const amount = Number(order.value?.amount || 0);
+
+  try {
+    if (isRedelivery.value) {
+      // 口径 4：重新交付会覆盖原来挂的食谱并再次打扰顾客，必须说清这两件事
+      await ElMessageBox.confirm(
+        h('div', [
+          h(
+            'p',
+            `将用所选食谱《${candidate.name}》替换订单 ${orderId} 当前交付的食谱，并再次给顾客发送通知。`,
+          ),
+          h('p', `狗狗：${dogName}　金额：¥${amount}`),
+        ]),
+        '确认重新交付',
+        {
+          confirmButtonText: '确认重新交付',
+          cancelButtonText: '再想想',
+          type: 'warning',
+        },
+      );
+    } else {
+      await ElMessageBox.confirm(
+        h('div', [
+          h('p', `把《${candidate.name}》交付给「${dogName}」？`),
+          h('p', `订单号：${orderId}　金额：¥${amount}`),
+          h('p', '交付后会给顾客发送通知，订单转为「已交付」。'),
+        ]),
+        '确认交付',
+        { confirmButtonText: '确认交付', cancelButtonText: '再想想' },
+      );
+    }
+
+    delivering.value = true;
+    const result = await customRecipeApi.deliverRecipe(orderId, candidate.recipeId);
+
+    ElMessage.success(
+      result?.redelivered
+        ? `已重新交付《${result.recipeName || candidate.name}》，顾客会收到新通知`
+        : `已交付《${result.recipeName || candidate.name}》到订单`,
+    );
+
+    await loadOrderDetail();
+    emit('refresh');
+  } catch (error) {
+    if (!isUserCancel(error)) {
+      // 后端的拒绝理由（"该订单还没确认收款，不能交付""这道食谱不属于该订单的顾客 / 狗狗"）
+      // 必须原样显示，不能让员工猜
+      ElMessage.error(getApiErrorMessage(error, '交付失败'));
+    }
+  } finally {
+    delivering.value = false;
+  }
+};
+
+// ---------- 手工创建食谱 ----------
+
+const recipeFormRef = ref<FormInstance>();
 
 const recipeForm = reactive({
   name: '',
@@ -475,23 +821,93 @@ const recipeForm = reactive({
   productionSteps: '',
 });
 
+/**
+ * 必填校验。
+ *
+ * 此前这张表单没有任何校验，空名称、没有食材也能提交并给顾客发通知；
+ * 食材那一项还是必填外键，留空会直接抛 500。
+ * 这里按字段的实际含义拦在提交之前。
+ */
+const recipeFormRules: FormRules = {
+  name: [
+    {
+      validator: (_rule: any, value: any, callback: any) => {
+        if (!String(value || '').trim()) {
+          callback(new Error('请填写食谱名称，顾客收到的通知里会显示它'));
+          return;
+        }
+        callback();
+      },
+      trigger: 'blur',
+    },
+  ],
+  energyDensityKcalPerKg: [
+    {
+      validator: (_rule: any, value: any, callback: any) => {
+        const num = Number(value);
+        if (!Number.isFinite(num) || num <= 0) {
+          callback(new Error('请填写能量密度（kcal/kg），它决定每天喂多少克'));
+          return;
+        }
+        callback();
+      },
+      trigger: 'change',
+    },
+  ],
+  items: [
+    {
+      validator: (_rule: any, _value: any, callback: any) => {
+        const rows = recipeForm.items || [];
+        if (rows.length === 0) {
+          callback(new Error('至少添加一个食材，否则这不算一份食谱'));
+          return;
+        }
+        const emptyRow = rows.findIndex(
+          (row) => !String(row?.ingredientId || '').trim(),
+        );
+        if (emptyRow >= 0) {
+          callback(new Error(`第 ${emptyRow + 1} 行还没选食材`));
+          return;
+        }
+        const badRatio = rows.findIndex((row) => !(Number(row?.ratioPercent) > 0));
+        if (badRatio >= 0) {
+          callback(new Error(`第 ${badRatio + 1} 行的占比必须大于 0`));
+          return;
+        }
+        callback();
+      },
+      trigger: 'change',
+    },
+  ],
+};
+
 // 生命周期
 onMounted(() => {
   loadOrderDetail();
   loadIngredientOptions();
 });
 
-watch(() => props.orderId, () => {
-  loadOrderDetail();
-});
+watch(
+  () => props.orderId,
+  () => {
+    loadOrderDetail();
+  },
+);
 
 // 方法
 const loadOrderDetail = async () => {
   loading.value = true;
   try {
-    order.value = await api.get(`${API_BASE}/orders/${props.orderId}`);
+    order.value = await customRecipeApi.getOrderDetail(props.orderId);
+    // 状态决定能不能交付（已付款/制作中/已交付），详情到手后再拉候选
+    if (canDeliverCustomRecipe(order.value?.status)) {
+      await loadRecipeCandidates();
+    } else {
+      candidates.value = [];
+      selectedCandidateId.value = '';
+    }
   } catch (error) {
-    ElMessage.error('加载订单详情失败');
+    ElMessage.error(getApiErrorMessage(error, '加载订单详情失败'));
     console.error(error);
   } finally {
     loading.value = false;
@@ -502,26 +918,17 @@ const confirmPayment = async () => {
   try {
     await ElMessageBox.confirm('确认该订单已付款？', '确认付款');
 
-    await api.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
+    await customRecipeApi.confirmPayment(order.value!.orderId);
     ElMessage.success('付款已确认');
     emit('refresh');
-    loadOrderDetail();
+    await loadOrderDetail();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '确认付款失败'));
     }
   }
 };
 
-/**
- * 取消订单。
- *
- * 2026-09-28：后端此前"改状态"是裸写 —— 改成已取消既不释放当天名额、
- * 也不记录取消时间；每天只有 5 个名额，取消掉的单会把产能白白吃掉。
- * 现在后端会释放名额并记录原因，这里补上入口。
- *
- * 注意：已付款的单需要线下退款，取消前会提示客服。
- */
 /**
  * 跳到食谱设计器并带上这只狗。
  *
@@ -539,12 +946,23 @@ const openInDesigner = () => {
   window.open(url, '_blank');
 };
 
+/**
+ * 取消订单。
+ *
+ * 2026-09-28：后端此前"改状态"是裸写 —— 改成已取消既不释放当天名额、
+ * 也不记录取消时间；每天只有 5 个名额，取消掉的单会把产能白白吃掉。
+ * 现在后端会释放名额并记录原因，这里补上入口。
+ *
+ * 2026-10-04（口径 3）：取消**已付款**的单，后端会先走微信原路退款，
+ * 退款失败就不取消 —— 所以提示要说清"点下去钱就退了"。
+ * 该动作仅管理员（口径 2）。
+ */
 const cancelOrder = async () => {
   try {
     const { value } = await ElMessageBox.prompt(
-      order.value.status === 'PENDING_PAYMENT'
+      order.value!.status === 'PENDING_PAYMENT'
         ? '取消该订单？未付款的订单会释放当天名额。'
-        : '取消该订单？该单已收款，请确认已完成退款。取消后会释放当天名额。',
+        : '取消该订单？系统会立即发起微信原路退款（退款失败则不会取消），并释放当天名额。',
       '取消订单',
       {
         confirmButtonText: '确认取消',
@@ -554,16 +972,13 @@ const cancelOrder = async () => {
       },
     );
 
-    await api.patch(`${API_BASE}/orders/${order.value.orderId}/status`, {
-      status: 'CANCELLED',
-      reason: value || '客服取消',
-    });
+    await customRecipeApi.updateStatus(order.value!.orderId, 'CANCELLED', value || '客服取消');
     ElMessage.success('订单已取消');
     emit('refresh');
     await loadOrderDetail();
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error?.message || '取消失败');
+  } catch (error) {
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '取消失败'));
     }
   }
 };
@@ -572,30 +987,25 @@ const startProcessing = async () => {
   try {
     await ElMessageBox.confirm('开始制作该订单？', '开始制作');
 
-    await api.patch(
-      `${API_BASE}/orders/${order.value.orderId}/status`,
-      { status: 'IN_PROGRESS' },
-    );
+    await customRecipeApi.updateStatus(order.value!.orderId, 'IN_PROGRESS');
     ElMessage.success('已开始制作');
     emit('refresh');
-    loadOrderDetail();
+    await loadOrderDetail();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('操作失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '开始制作失败'));
     }
   }
 };
 
 /**
- * 恢复成品抵扣额度（人工处理退款时使用）。
+ * 恢复成品抵扣额度（人工处理退款时使用，仅管理员）。
  *
  * 只把"已用额度"还回去，**不改任何订单金额** ——
  * 退款金额本身仍然走既有的退款流程。
  */
-const restoringCredit = ref(false);
-
 const restoreCredit = async () => {
-  const used = Number(order.value.creditUsed || 0);
+  const used = Number(order.value?.creditUsed || 0);
   if (used <= 0) return;
 
   try {
@@ -612,9 +1022,9 @@ const restoreCredit = async () => {
     );
 
     restoringCredit.value = true;
-    const result: any = await api.post(
-      `${API_BASE}/orders/${order.value.orderId}/restore-credit`,
-      { amount: Number(value) },
+    const result: any = await customRecipeApi.restoreCredit(
+      order.value!.orderId,
+      Number(value),
     );
 
     ElMessage.success(
@@ -622,9 +1032,9 @@ const restoreCredit = async () => {
     );
     emit('refresh');
     await loadOrderDetail();
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error?.message || '恢复额度失败');
+  } catch (error) {
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '恢复额度失败'));
     }
   } finally {
     restoringCredit.value = false;
@@ -632,8 +1042,8 @@ const restoreCredit = async () => {
 };
 
 const contactCustomer = () => {
-  const wechat = order.value.customer?.wechatOpenid;
-  const phone = order.value.customer?.phone;
+  const wechat = order.value?.customer?.wechatOpenid;
+  const phone = order.value?.customer?.phone;
 
   ElMessageBox.alert(
     `微信：${wechat || '未绑定'}\n手机：${phone || '未填写'}`,
@@ -670,20 +1080,39 @@ const handleCoverUpload = async (options: any) => {
     recipeForm.coverImageUrl = url;
     ElMessage.success('封面上传成功');
     options.onSuccess?.(result);
-  } catch (error: any) {
-    ElMessage.error(error?.message || '封面上传失败');
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, '封面上传失败'));
     options.onError?.(error);
   }
 };
 
 const submitRecipe = async () => {
+  if (!(await validateElementForm(recipeFormRef.value))) {
+    ElMessage.warning('请先补全：食谱名称、能量密度、至少一个食材');
+    return;
+  }
+
+  const dogName = order.value?.dog?.name || '这只狗';
+  const orderNo = order.value?.orderId || '';
+  const amount = Number(order.value?.amount || 0);
+
   try {
-    await ElMessageBox.confirm('确认提交食谱并标记为已交付？', '提交确认');
+    // 确认框必须带狗名 / 订单号 / 金额：同名顾客或同一顾客多只狗时，
+    // 只写订单号很容易把食谱交付到错误的那张单上
+    await ElMessageBox.confirm(
+      h('div', [
+        h('p', `把手工填写的《${recipeForm.name.trim()}》交付给「${dogName}」？`),
+        h('p', `订单号：${orderNo}　金额：¥${amount}`),
+        h('p', '提交后会立即给顾客发送通知，订单转为「已交付」。'),
+      ]),
+      '提交食谱并交付',
+      { confirmButtonText: '确认提交', cancelButtonText: '再检查一下' },
+    );
 
     submitting.value = true;
 
     const data = {
-      name: recipeForm.name,
+      name: recipeForm.name.trim(),
       description: recipeForm.description,
       coverImageUrl: recipeForm.coverImageUrl,
       // 营养标准此前没进载荷，选了等于没选（后端永远写死）
@@ -694,20 +1123,22 @@ const submitRecipe = async () => {
         carbohydrate_percent: recipeForm.carbohydratePercent,
         energy_density_kcal_per_kg: recipeForm.energyDensityKcalPerKg,
       },
-      items: recipeForm.items,
+      items: recipeForm.items.map((item, index) => ({
+        ingredientId: item.ingredientId,
+        preparationMethod: item.preparationMethod,
+        ratioPercent: item.ratioPercent,
+        sortOrder: index,
+      })),
       productionSteps: recipeForm.productionSteps,
     };
 
-    await api.post(
-      `${API_BASE}/orders/${order.value.orderId}/create-recipe`,
-      data,
-    );
+    await customRecipeApi.createRecipe(order.value!.orderId, data);
     ElMessage.success('食谱已创建并交付');
     emit('refresh');
     emit('close');
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('提交失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '提交失败'));
       console.error(error);
     }
   } finally {
@@ -728,13 +1159,14 @@ const resetRecipeForm = () => {
     items: [],
     productionSteps: '',
   });
+  recipeFormRef.value?.clearValidate();
 };
 
 const viewRecipeFull = () => {
-  window.open(`/recipes/${order.value.recipeId}`, '_blank');
+  window.open(`/recipes/${order.value?.recipeId}`, '_blank');
 };
 
-const downloadFile = (attachment: any) => {
+const downloadFile = (attachment: CustomRecipeAttachment) => {
   window.open(attachment.fileUrl, '_blank');
 };
 
@@ -742,30 +1174,30 @@ const deleteAttachment = async (attachmentId: string) => {
   try {
     await ElMessageBox.confirm('确认删除该附件？', '确认删除');
 
-    await api.delete(`${API_BASE}/attachments/${attachmentId}`);
+    await customRecipeApi.deleteAttachment(attachmentId);
     ElMessage.success('附件已删除');
     loadOrderDetail();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败');
+    if (!isUserCancel(error)) {
+      ElMessage.error(getApiErrorMessage(error, '删除失败'));
     }
   }
 };
 
 // 工具函数
-const formatDate = (date: string) => {
+const formatDate = (date?: string | null) => {
   if (!date) return '-';
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const formatDateTime = (date: string) => {
+const formatDateTime = (date?: string | null) => {
   if (!date) return '-';
   const d = new Date(date);
   return `${formatDate(date)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-const calculateAge = (birthday: string) => {
+const calculateAge = (birthday?: string) => {
   if (!birthday) return '-';
   const birth = new Date(birthday);
   const now = new Date();
@@ -777,7 +1209,7 @@ const calculateAge = (birthday: string) => {
   return age;
 };
 
-const getActivityLevelText = (level: string) => {
+const getActivityLevelText = (level?: string) => {
   const map: Record<string, string> = {
     RESTING: '休息期',
     LOW: '低活动',
@@ -785,37 +1217,17 @@ const getActivityLevelText = (level: string) => {
     HIGH: '高活动',
     WORKING: '工作犬',
   };
-  return map[level] || level;
+  return level ? map[level] || level : '-';
 };
 
-const getGoalText = (goal: string) => {
+const getGoalText = (goal?: string) => {
   const map: Record<string, string> = {
     MAINTAIN: '维持体重',
     GAIN_WEIGHT: '增重',
     LOSE_WEIGHT: '减重',
     HEALTH_SUPPORT: '健康管理',
   };
-  return map[goal] || goal;
-};
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_PAYMENT: '待付款',
-    PAID: '已付款',
-    IN_PROGRESS: '制作中',
-    DELIVERED: '已交付',
-  };
-  return map[status] || status;
-};
-
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_PAYMENT: 'warning',
-    PAID: '',
-    IN_PROGRESS: 'primary',
-    DELIVERED: 'success',
-  };
-  return map[status] || 'info';
+  return goal ? map[goal] || goal : '-';
 };
 </script>
 
@@ -874,6 +1286,13 @@ h3 {
   color: #f56c6c;
   font-weight: bold;
   font-size: 18px;
+}
+
+.info-item .mono {
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-all;
+  text-align: right;
 }
 
 .info-item .credit-remaining {
@@ -947,6 +1366,8 @@ h3 {
   display: flex;
   gap: 10px;
   margin-top: 20px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .ingredients-list {
@@ -985,5 +1406,111 @@ h3 {
 
 .recipe-actions {
   margin-top: 20px;
+}
+
+/* ---------- 一键交付 ---------- */
+
+.section-desc {
+  margin: -8px 0 16px;
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+.candidate-list {
+  min-height: 60px;
+  margin-bottom: 16px;
+}
+
+.candidate-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.candidate-group :deep(.el-radio) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: auto;
+  margin-right: 0;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.candidate-group :deep(.el-radio__label) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.candidate-name {
+  font-weight: 500;
+}
+
+.candidate-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.delivery-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.delivery-warning {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #e6a23c;
+  line-height: 1.6;
+}
+
+.admin-only-tip {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+/* ---------- 档案更新提示与时效 ---------- */
+
+.profile-updated-alert {
+  margin-bottom: 12px;
+}
+
+.source-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+.source-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+.overdue-tag {
+  margin-left: 8px;
+}
+
+.countdown-text {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.refund-tip {
+  margin: 0;
+  font-size: 13px;
+  color: #e6a23c;
+  line-height: 1.6;
 }
 </style>

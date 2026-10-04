@@ -36,10 +36,8 @@
         class="quick-add__input"
         placeholder="其它过敏原（多个用、分隔）"
         :value="customInput"
-        :focus="customFocused"
         :disabled="isBusy"
         @input="onCustomInput"
-        @blur="customFocused = false"
         @confirm="commitCustomAllergens"
       />
       <text
@@ -242,8 +240,6 @@ const savingAllergen = ref('')
 const saving = ref(false)
 const extracting = ref(false)
 const customInput = ref('')
-/** 手输框的聚焦开关（底部固定栏叫起它时置 true） */
-const customFocused = ref(false)
 const candidates = ref<string[]>([])
 const pickedCandidates = ref<string[]>([])
 const warnings = ref<string[]>([])
@@ -717,19 +713,12 @@ async function confirmCandidates() {
  * 底部「新增记录」在过敏标签下会直接调起它，不用顾客自己找按钮。
  */
 /**
- * 让手输框自动聚焦（2026-10-04）。
+ * 只暴露"拍报告"这一个动作。
  *
- * 底部固定栏的「添加过敏原」把它叫起来：滚到这张卡 + 光标直接落在输入框里，
- * 家长不用再找"我要在哪打字"。1 秒后自动复位，方便再点一次还能生效。
+ * （2026-10-04 曾短暂暴露过 focusInput 给底部按钮用，但底部那个重复的
+ *   「添加过敏原」按钮已被老板否掉 —— 卡本身默认展开，光标不需要别人叫。）
  */
-function focusInput() {
-  customFocused.value = true
-  setTimeout(() => {
-    customFocused.value = false
-  }, 1000)
-}
-
-defineExpose({ pickHealthReport, focusInput })
+defineExpose({ pickHealthReport })
 
 </script>
 

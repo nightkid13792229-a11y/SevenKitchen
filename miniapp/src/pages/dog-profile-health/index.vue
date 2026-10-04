@@ -144,16 +144,13 @@
           <!-- 过敏是最要紧的一类：一点即选 + 上传检测报告自动识别。
                建档流程从 2026-09-27 起完全不收集健康信息，这里是它的唯一入口。 -->
           <template #type-extra>
-            <!-- 底部固定栏的「添加过敏原」滚到这块 -->
-            <view v-if="activeRecordType === 'allergy'" id="allergy-add">
-              <AllergyQuickAddSection
-                ref="allergySectionRef"
-                :show-add-entry="true"
-                :dog-id="dogId"
-                :recorded-allergens="recordedAllergens"
-                @saved="onAllergenSaved"
-              />
-            </view>
+            <AllergyQuickAddSection
+              v-if="activeRecordType === 'allergy'"
+              :show-add-entry="true"
+              :dog-id="dogId"
+              :recorded-allergens="recordedAllergens"
+              @saved="onAllergenSaved"
+            />
           </template>
         </HealthRecordsSection>
 
@@ -229,9 +226,7 @@
       :primary-text="stickySecondaryText"
       :primary-theme="stickyAddTheme"
       :primary-disabled="isSecondaryActionDisabled"
-      :secondary-text="stickyAllergyPlanText"
       @primary="onStickySecondary"
-      @secondary="onStickyAllergyPlan"
     />
   </view>
 </template>
@@ -1057,7 +1052,6 @@ const weightSectionRef = ref<{
   saveRecord?: () => Promise<void>
   focusInput?: () => void
 } | null>(null)
-const allergySectionRef = ref<{ pickHealthReport?: () => void } | null>(null)
 
 /** 疫苗/体重板块自己的未保存状态（病史/体检/过敏复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
@@ -1096,19 +1090,16 @@ function onAddRecordTap() {
   }
 
   /**
-   * 过敏自己一条路（2026-10-04 老板："看不懂该如何添加过敏原"）。
+   * 过敏（2026-10-04 两次收敛后的最终样子）。
    *
-   * 原来绕了两层：点「新增记录」→ 再选「手动点选 / 手输」→ 只弹一句
-   * "在上面点选或手输过敏原"，而那张卡当时**默认还是收起的** ——
-   * 家长看到的是一片空白。
-   *
-   * 现在：底部主按钮直接叫「添加过敏原」，点一下滚到那张卡、光标落在输入框；
-   * 想拍报告，卡上就有「上传报告」。也不再走"新建一张空记录卡"那条分支 ——
-   * 记录组件里那套拍照录入只在就诊/体检模式下挂载，走那条会点了没反应。
+   * 老板第一条："看不懂该如何添加过敏原" → 那张卡**默认展开**放在页面最上面，
+   * 点选 / 手输 / 传报告都在卡上，不需要任何按钮带路。
+   * 老板第二条："既然已经默认展开……为什么还要在最下方再加一个添加过敏原的按钮？"
+   * → 底部这个按钮不再重复"添加"，改成这页唯一藏在下面、需要带路的事：
+   * **排查计划**。
    */
   if (activeHealthTab.value === 'allergy') {
-    scrollPageToSelector('#allergy-add')
-    nextTick(() => allergySectionRef.value?.focusInput?.())
+    scrollPageToSelector('#allergy-trial')
     return
   }
 
@@ -1166,11 +1157,15 @@ const stickyAddTheme = computed<'visit' | 'checkup' | 'allergy' | 'vaccine' | 'w
 })
 
 /**
- * 底部固定栏的**主按钮**文案。
+ * 底部固定栏主按钮的文案。
  *
- * 2026-10-04 起，过敏标签下它是「添加过敏原」而不是笼统的「新增记录」——
- * 老板："我实在是看不懂你这个过敏标签该如何添加过敏原。"
- * 笼统的"新增记录"没说清点了会发生什么；直接写家长要做的那件事。
+ * 2026-10-04 老板："添加过敏原板块，既然已经是默认展开的，可以选择，
+ * 也可以手动输入的窗口，为什么还要在最下方增加一个添加过敏原的按钮？"
+ *
+ * 说得对，那是我上一版加重复了 —— **添加过敏原的东西就在页面最上面那张卡里**
+ * （默认展开、可点选、可手输、可传报告），底部再来一个同名按钮纯属多余。
+ *
+ * 过敏标签下这个按钮改成「**排查计划**」：它才是这页唯一"藏在下面、需要带路"的事。
  */
 const stickySecondaryText = computed(() => {
   if (!selectedDog.value) {
@@ -1178,27 +1173,12 @@ const stickySecondaryText = computed(() => {
   }
 
   if (activeHealthTab.value === 'allergy') {
-    return '添加过敏原'
+    return '排查计划'
   }
 
   // 2026-10-02：其它标签下新增统一走引导入口，所以是同一个动作
   return '新增记录'
 })
-
-/**
- * 底部固定栏的**次按钮**：只有过敏标签有第二个出口。
- *
- * 过敏这页家长要干的事其实是两件：**记下不能吃什么** 和 **查清楚到底对什么过敏**。
- * 从前两件事都藏在页面下面（一个要点"新增记录"再选、一个要往下滑），
- * 所以给排查计划一个常驻的位置（老板建议改底部固定栏）。
- */
-const stickyAllergyPlanText = computed(() => (
-  selectedDog.value && activeHealthTab.value === 'allergy' ? '排查计划' : ''
-))
-
-function onStickyAllergyPlan() {
-  scrollPageToSelector('#allergy-trial')
-}
 
 /**
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。

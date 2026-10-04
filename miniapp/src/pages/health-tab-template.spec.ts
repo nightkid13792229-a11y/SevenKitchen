@@ -68,12 +68,8 @@ describe('过敏书签 · 新增记录的两个入口', () => {
     const source = page()
 
     expect(source).toContain("if (activeHealthTab.value === 'allergy')")
-    // 底部主按钮直接叫「添加过敏原」，点一下滚到那张卡 + 光标落在输入框
-    expect(source).toContain("return '添加过敏原'")
-    expect(source).toContain("scrollPageToSelector('#allergy-add')")
-    expect(source).toContain('allergySectionRef.value?.focusInput?.()')
-    // 次按钮给排查计划一个常驻位置
-    expect(source).toContain("stickyAllergyPlanText")
+    // 底部按钮在过敏下是「排查计划」：添加过敏原就在最上面那张常开的卡里
+    expect(source).toContain("return '排查计划'")
     expect(source).toContain("scrollPageToSelector('#allergy-trial')")
   })
 

@@ -82,7 +82,9 @@ import { buildDogDesignInsight } from '../../domain/recipe-designer/dog-design-i
 import {
   collectAllergyKeywords,
   formatAllergyKeywordsForAi,
+  splitAllergyKeywords,
 } from '../../domain/dog/allergy-keywords';
+import { AllergenVocabularyService } from '../health/allergen-vocabulary.service';
 import {
   AiDesignSuggestionService,
   type AiDesignSuggestionInput,
@@ -509,6 +511,24 @@ type RemovableSupplementWarning = {
   message: string;
 };
 
+/**
+ * 配方里命中了这只狗的过敏原（2026-10-04 第一期）。
+ *
+ * 改造前营养评估**完全不读过敏** —— 一份含鸡肉的配方可以被判"完全合格"。
+ * 现在评估会带上这一项，但它只是**提示**，不拦保存：
+ * 过敏信息可能过期，营养师可能有正当理由（顾客已确认可以吃），
+ * 所以给确认入口而不是硬拦 —— 这与"系统自动推荐时一律拒绝"是两回事。
+ */
+type DraftAllergenWarning = {
+  itemId: string;
+  itemName: string;
+  /** 命中的过敏原标准名（走词表）或顾客原文（文字兜底） */
+  allergen: string;
+  /** CONFIRMED = 确诊，WARNING = 可疑/待排查 */
+  level: 'CONFIRMED' | 'WARNING';
+  message: string;
+};
+
 type PublishedRecipePresentationMedia = {
   coverImageUrl: string | null;
   coverTitle: string | null;
@@ -549,6 +569,8 @@ type ClientDesignRecipeAssessmentResult = Omit<
   'entries'
 > & {
   removableSupplementWarnings: RemovableSupplementWarning[];
+  /** 配方命中的过敏原（2026-10-04 第一期）。空数组 = 没命中。 */
+  allergenWarnings: DraftAllergenWarning[];
 };
 
 type RecipeSeriesWorkbenchRecord = {
@@ -1256,6 +1278,16 @@ export class RecipeDesignerService {
     private readonly aiDesignSuggestionService?: AiDesignSuggestionService,
     @Optional()
     private readonly recipeAiWizardService?: RecipeAiWizardService,
+    /**
+     * 过敏原词表（2026-10-04 第一期）。营养评估要靠它判断
+     * 配方里的食材有没有命中这只狗的过敏原 —— 改造前评估完全不读过敏。
+     *
+     * 放在参数表**最后**并且 @Optional：既有测试里有
+     * `new RecipeDesignerService(prisma, target, governance, ai, wizard)`
+     * 这样的按位置调用，插在中间会让它们全部错位。
+     */
+    @Optional()
+    private readonly allergenVocabulary?: AllergenVocabularyService,
   ) {}
 
   private async listInternalRecipeDesignerUserIds() {
@@ -4797,9 +4829,14 @@ export class RecipeDesignerService {
       draft,
       targets,
     );
+    const allergenWarnings = await this.buildDraftAllergenWarnings(draft);
 
     if (this.isPublishedDraft(draft)) {
-      return this.toClientAssessmentResult(result, removableSupplementWarnings);
+      return this.toClientAssessmentResult(
+        result,
+        removableSupplementWarnings,
+        allergenWarnings,
+      );
     }
 
     const assessmentData = this.buildAssessmentUpdateData(result);
@@ -4808,7 +4845,99 @@ export class RecipeDesignerService {
       data: assessmentData,
     });
 
-    return this.toClientAssessmentResult(result, removableSupplementWarnings);
+    return this.toClientAssessmentResult(
+      result,
+      removableSupplementWarnings,
+      allergenWarnings,
+    );
+  }
+
+  /**
+   * 配方里有没有这只狗过敏的食材（2026-10-04 第一期）。
+   *
+   * 改造前营养评估**完全不读过敏** —— 一份含鸡肉的配方
+   * 在系统里可以被判"完全合格"，营养师只能自己肉眼看。
+   *
+   * 现在评估会带上这一项。注意它是**提示、不拦保存**：
+   * 过敏信息可能过期，营养师也可能有正当理由（顾客已确认可以吃），
+   * 硬拦只会逼员工绕过系统。这与"系统自动推荐时确诊过敏一律拒绝"
+   * 是两个不同的场景 —— 前者是人做判断，后者是机器做判断。
+   *
+   * 只对有 customerDogId 的定制草稿生效：通用食谱没有"某只狗"。
+   */
+  private async buildDraftAllergenWarnings(
+    draft: DesignRecipeWithItems,
+  ): Promise<DraftAllergenWarning[]> {
+    const dogId = (draft as { customerDogId?: string | null }).customerDogId;
+    if (!dogId || !this.allergenVocabulary) {
+      return [];
+    }
+
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: {
+        allergyFoods: true,
+        allergyRecords: { select: { allergen: true, certainty: true } },
+      },
+    });
+    if (!dog) {
+      return [];
+    }
+
+    const blocking: string[] = [];
+    const warning: string[] = [];
+    for (const record of dog.allergyRecords ?? []) {
+      const certainty = String(record.certainty || 'SUSPECTED').toUpperCase();
+      if (certainty === 'RULED_OUT') continue;
+      const terms = splitAllergyKeywords(record.allergen);
+      if (certainty === 'CONFIRMED') {
+        blocking.push(...terms);
+      } else {
+        warning.push(...terms);
+      }
+    }
+    warning.push(...splitAllergyKeywords(dog.allergyFoods));
+
+    const blockingSet = new Set(blocking);
+    const blockingTerms = Array.from(new Set(blocking.filter(Boolean)));
+    const warningTerms = Array.from(
+      new Set(warning.filter((term) => term && !blockingSet.has(term))),
+    );
+
+    if (blockingTerms.length === 0 && warningTerms.length === 0) {
+      return [];
+    }
+
+    const warnings: DraftAllergenWarning[] = [];
+
+    for (const item of draft.items) {
+      const itemName = this.resolveIngredientDisplayName(item);
+      if (!itemName) continue;
+
+      for (const [level, terms] of [
+        ['CONFIRMED', blockingTerms],
+        ['WARNING', warningTerms],
+      ] as const) {
+        const hits = await this.allergenVocabulary.matchIngredients({
+          dogAllergens: terms,
+          ingredientNames: [itemName],
+        });
+        for (const hit of hits) {
+          warnings.push({
+            itemId: item.id,
+            itemName,
+            allergen: hit.allergen,
+            level,
+            message:
+              level === 'CONFIRMED'
+                ? `「${itemName}」含确诊过敏原「${hit.allergen}」，请确认是否保留`
+                : `「${itemName}」含需注意的过敏原「${hit.allergen}」（可疑/待排查），请与顾客确认`,
+          });
+        }
+      }
+    }
+
+    return warnings;
   }
 
   async createPrivateRecipeSnapshot(
@@ -6818,12 +6947,14 @@ export class RecipeDesignerService {
   private toClientAssessmentResult(
     result: DesignRecipeAssessmentResult,
     removableSupplementWarnings: RemovableSupplementWarning[] = [],
+    allergenWarnings: DraftAllergenWarning[] = [],
   ): ClientDesignRecipeAssessmentResult {
     const clientResult: Partial<DesignRecipeAssessmentResult> = { ...result };
     delete clientResult.entries;
     return {
       ...clientResult,
       removableSupplementWarnings,
+      allergenWarnings,
     } as ClientDesignRecipeAssessmentResult;
   }
 
@@ -7029,6 +7160,73 @@ export class RecipeDesignerService {
           null,
       })),
     } as T;
+  }
+
+  /**
+   * 用代码核对 AI 推荐的食材里有没有这只狗的过敏原（2026-10-04 第一期）。
+   *
+   * 提示词里那句「过敏食材必须硬性避开」只是**请求**，不是**保证**。
+   * 这里把它变成保证：命中的食材从 recommendations 里摘掉，
+   * 改记到 avoidIngredients，并写一条 warning 让人看得见发生过什么。
+   *
+   * 保守方向：命中的一律摘掉（不分确诊/可疑）——
+   * 这是**机器在自动推荐**，宁可少推一个，也不能推错一个。
+   * 营养师手动加食材是另一条路（那边是提示 + 人工确认，不硬拦）。
+   */
+  private async screenAiRecommendationsAgainstAllergens(
+    result: IngredientRecommendationResult,
+    profile: AiWizardDogProfile,
+  ): Promise<IngredientRecommendationResult> {
+    const dogAllergens = splitAllergyKeywords(profile.allergyFoods);
+    if (dogAllergens.length === 0 || !this.allergenVocabulary) {
+      return result;
+    }
+
+    const kept: typeof result.recommendations = [];
+    const blocked: Array<{ name: string; reason: string }> = [];
+
+    for (const recommendation of result.recommendations) {
+      const hits = await this.allergenVocabulary.matchIngredients({
+        dogAllergens,
+        ingredientNames: [recommendation.name],
+      });
+
+      if (hits.length === 0) {
+        kept.push(recommendation);
+        continue;
+      }
+
+      const names = Array.from(new Set(hits.map((hit) => hit.allergen)));
+      blocked.push({
+        name: recommendation.name,
+        reason: `命中档案里的过敏原：${names.join('、')}`,
+      });
+    }
+
+    if (blocked.length === 0) {
+      return result;
+    }
+
+    // 已经因为别的原因（疾病禁忌、挑食）被列进 avoidIngredients 的不要重复
+    const existingAvoid = new Set(
+      result.avoidIngredients.map((item) => item.name),
+    );
+    const mergedAvoid = [
+      ...result.avoidIngredients,
+      ...blocked.filter((item) => !existingAvoid.has(item.name)),
+    ];
+
+    return {
+      ...result,
+      recommendations: kept,
+      avoidIngredients: mergedAvoid,
+      warnings: [
+        ...result.warnings,
+        `系统已拦下 ${blocked.length} 项含过敏原的 AI 推荐：${blocked
+          .map((item) => item.name)
+          .join('、')}`,
+      ],
+    };
   }
 
   private resolveIngredientDisplayName(item: DesignRecipeItemWithFood) {
@@ -7470,7 +7668,11 @@ export class RecipeDesignerService {
       // 设计面板与 AI 过去只看旧文本字段 allergyFoods（顾客端没有入口），
       // 于是顾客填的过敏在设计环节完全不可见 —— 2026-09-27 起一并读入。
       include: {
-        allergyRecords: { select: { allergen: true } },
+        // certainty / source 一并取出（2026-10-04 第四期）：
+        // 营养师要能分清"报告确诊"与"顾客随手记的"。
+        allergyRecords: {
+          select: { allergen: true, certainty: true, source: true },
+        },
       },
     });
     if (!dog) {
@@ -8049,8 +8251,22 @@ export class RecipeDesignerService {
         currentDraft: await this.buildAiWizardDraftSummary(draftId, access),
       });
 
+    // ── 代码复核 AI 的产出（2026-10-04 第一期）──────────────────
+    //
+    // 改造前：提示词里写了"过敏食材必须硬性避开"，但 AI 返回的食材清单
+    // **代码从不校验**。它到底避没避开，系统不知道，也没人能查。
+    // 大模型有可能凭常识避开，但那是"有可能"，不是"一定"，
+    // 而且不可验证、不可追责 —— 安全底线不能建立在大模型的常识上。
+    //
+    // 现在：拿这只狗的过敏原把 AI 推荐的食材**再核一遍**，
+    // 命中的直接从推荐里摘掉、改记到 avoidIngredients 里。
+    const screened = await this.screenAiRecommendationsAgainstAllergens(
+      result,
+      profile,
+    );
+
     // 把 AI 推荐的食材名称与原料库/营养食材库匹配，填充 ID 以便一键添加
-    const enriched = await this.enrichRecommendationWithLibrary(result);
+    const enriched = await this.enrichRecommendationWithLibrary(screened);
 
     await this.prisma.designRecipeAiDesignData.upsert({
       where: { designRecipeId: draftId },
@@ -8624,6 +8840,22 @@ export function deriveKnowledgeTags(profile: {
   currentWeightKg: number;
   weightTrend: Array<{ date: string; weightKg: number }>;
   medicalHistory: string | null;
+  /**
+   * 过敏原（2026-10-04 第四期补）。
+   *
+   * 改造前这里**完全没有读过敏** —— historyText 只拼了
+   * medicalHistory + checkups + medicalRecords 三样。
+   * 后果：一只**只有**"对鸡肉过敏"这一条健康信息的狗，
+   * 在配方生成时不会产生 food-allergy 标签，
+   * 于是知识库里那三条最关键的过敏知识永远不会被引用：
+   *   skin-003 饮食排除试验：诊断食物不良反应的金标准方法
+   *   skin-004 排除试验期间的严格管理：零食、药物与饮食日记
+   *   skin-005 犬猫常见致敏食物成分
+   *
+   * 对照：AI 健康分析（第七期）早就读了过敏
+   * （health-analysis.service.ts 的 408-409 行），只有配方这一路漏了。
+   */
+  allergyFoods?: string | null;
   /** 健康标签的人工修正（第八期） */
   healthTagOverrides?: { added?: string[]; removed?: string[] };
   checkups: Array<{ findings: string | null; recommendations: string | null }>;
@@ -8670,6 +8902,22 @@ export function deriveKnowledgeTags(profile: {
         keywords.push('体重上升');
       }
     }
+  }
+
+  // ── 过敏原 → food-allergy 标签（2026-10-04 第四期补）──────────
+  //
+  // 必须**单独判**，不能塞进下面的 historyText 正则里：
+  // 那只狗的健康信息可能只有"对鸡肉过敏"这一条，
+  // 而 historyText 里根本没有它。
+  //
+  // 有了这个标签，知识库的 skin-003 / skin-004 / skin-005
+  // （排除性饮食试验、试验期严格管理、常见致敏成分）才会被 AI 引用。
+  const allergyTerms = splitAllergyKeywords(profile.allergyFoods);
+  if (allergyTerms.length > 0) {
+    tags.add('food-allergy');
+    tags.add('skin');
+    // 把过敏原本身也作为检索关键词，让知识库能按具体食材命中
+    keywords.push('食物过敏', '排除性饮食试验', ...allergyTerms.slice(0, 8));
   }
 
   // 病史 / 体检 / 病历关键词

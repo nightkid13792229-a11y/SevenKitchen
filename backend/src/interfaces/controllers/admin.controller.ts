@@ -2626,6 +2626,32 @@ export class AdminController {
     // Get calc result
     const calcResult = await this.dogService.calcPreview(dogRecord.id);
 
+    /**
+     * 过敏字段（2026-10-04 第四期补）。
+     *
+     * 改造前这个接口**完全不返回过敏相关字段**，于是后台狗狗档案页的
+     * "过敏食物"框永远是空的 —— 而且填完点保存也不落库（H7）。
+     * 净效果是客服看到一个空框、据此答复顾客。
+     *
+     * 这里同时返回两个来源，与食谱设计器侧栏的口径保持一致：
+     *   · allergyFoods   旧文本字段（员工在设计备注里维护的）
+     *   · allergyRecords 结构化记录（顾客在健康档案里填的，只读）
+     */
+    const allergyRecords = await this.prisma.allergyRecord.findMany({
+      where: { dogId: id },
+      orderBy: [{ certainty: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        allergen: true,
+        notes: true,
+        certainty: true,
+        source: true,
+        observedAt: true,
+        reportId: true,
+        attachments: true,
+      },
+    });
+
     // Map profile
     const profile = {
       id: dogRecord.id,
@@ -2648,6 +2674,21 @@ export class AdminController {
       manualTreatKcal: dogRecord.manualTreatKcal,
       medicalHistory: dogRecord.medicalHistory,
       cachedTargetFoodKcal: dogRecord.cachedTargetFoodKcal,
+      /** 过敏：旧文本字段 + 结构化记录（2026-10-04 第四期） */
+      allergyFoods: dogRecord.allergyFoods,
+      pickyFoods: dogRecord.pickyFoods,
+      allergyRecords: allergyRecords.map((record) => ({
+        id: record.id,
+        allergen: record.allergen,
+        notes: record.notes,
+        certainty: record.certainty,
+        source: record.source,
+        observedAt: record.observedAt
+          ? record.observedAt.toISOString().slice(0, 10)
+          : null,
+        reportId: record.reportId,
+        attachments: record.attachments ?? [],
+      })),
       createdAt: dogRecord.createdAt
         ? dogRecord.createdAt.toISOString()
         : undefined,

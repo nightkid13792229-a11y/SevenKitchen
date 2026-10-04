@@ -72,9 +72,11 @@
                 WORKING
 
         bcs_score（1–9 体况评分）
-        allergies[]
-        dislikes[]
-        medical_history[]
+        allergy_foods / picky_foods（旧文本字段，各一段文字）
+        allergy_records[]（结构化过敏记录：过敏原 + 可信度 + 来源报告）
+            可信度四档：确诊 / 可疑 / 待排查 / 已排除。
+            「确诊」会让含该食材的食谱**彻底不进推荐**（2026-10-04）。
+        medical_history
 
         treat_input_mode
             枚举：

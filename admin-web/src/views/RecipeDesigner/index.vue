@@ -10,6 +10,44 @@
       </div>
     </div>
 
+    <!--
+      顾客改了健康信息 → 告知营养师（2026-10-04 第四期接线）。
+
+      老板第 25 条："顾客改了健康信息，要实时告知正在为该狗设计食谱的营养师。"
+
+      ⚠️ 这块的后端接口**早就实现好了**（staff-dog-health.controller.ts 的
+      /admin/dogs/health-updates，前端 api 也封装好了），
+      但**全 admin-web 没有任何页面调用它** —— 属于"能力已建、UI 从未接线"。
+      过敏信息直接影响配方能不能用，这条提醒必须真的出现在营养师眼前。
+    -->
+    <el-alert
+      v-if="healthUpdates.length > 0"
+      class="health-update-alert"
+      type="warning"
+      :closable="false"
+      show-icon
+    >
+      <template #title>
+        最近 {{ HEALTH_UPDATE_DAYS }} 天有 {{ healthUpdates.length }} 只正在设计的狗狗改了健康信息
+      </template>
+      <div class="health-update-list">
+        <div
+          v-for="item in healthUpdates"
+          :key="item.dogId"
+          class="health-update-item"
+        >
+          <span class="health-update-item__name">{{ item.dogName || '未命名' }}</span>
+          <span class="health-update-item__time">{{ formatUpdateTime(item.updatedAt) }}</span>
+          <el-button link type="primary" size="small" @click="openDogHealth(item.dogId)">
+            看健康档案
+          </el-button>
+        </div>
+      </div>
+      <div class="health-update-note">
+        过敏信息变了会直接影响配方能不能用，建议先核对再继续设计。
+      </div>
+    </el-alert>
+
     <el-card shadow="never" class="list-card">
       <template #header>
         <div class="card-header">
@@ -609,19 +647,92 @@ async function applyEntryQuery() {
   }
 }
 
+/**
+ * 健康信息变更提醒（2026-10-04 第四期）。
+ *
+ * 老板第 25 条："顾客改了健康信息，要实时告知正在为该狗设计食谱的营养师。"
+ *
+ * 后端接口（/admin/dogs/health-updates）与前端 api 封装**早就有了**，
+ * 但全 admin-web 没有任何页面调用它 —— 能力建好了、UI 从未接线。
+ * 它返回的是"最近改过健康记录、且带进行中定制单"的狗，
+ * 也就是营养师此刻真正需要重新核对的那些。
+ */
+const HEALTH_UPDATE_DAYS = 7
+const healthUpdates = ref<
+  Array<{ dogId: string; dogName: string; updatedAt: string }>
+>([])
+
+async function loadHealthUpdates() {
+  try {
+    const res: any = await dogApi.listHealthUpdates(HEALTH_UPDATE_DAYS)
+    const items = res?.data?.items
+    healthUpdates.value = Array.isArray(items) ? items : []
+  } catch {
+    // 提醒拉不到不影响设计系列列表本身
+    healthUpdates.value = []
+  }
+}
+
+/** 相对时间：营养师要的是"多久之前改的"，不是具体时间戳 */
+function formatUpdateTime(value: string) {
+  const at = new Date(value).getTime()
+  if (!Number.isFinite(at)) return ''
+  const diffMinutes = Math.floor((Date.now() - at) / 60000)
+  if (diffMinutes < 1) return '刚刚'
+  if (diffMinutes < 60) return `${diffMinutes} 分钟前`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} 小时前`
+  return `${Math.floor(diffHours / 24)} 天前`
+}
+
+function openDogHealth(dogId: string) {
+  router.push(`/dogs/${dogId}/health`)
+}
+
 onMounted(async () => {
   await loadSeries(true)
   setupSeriesObserver()
   void applyEntryQuery()
+  // 健康信息变更提醒（2026-10-04 第四期）。
+  // 不 await：它是辅助信息，不该拖慢设计系列列表的首屏。
+  void loadHealthUpdates()
 })
 
 onBeforeUnmount(() => {
   teardownSeriesObserver()
   if (searchTimer) clearTimeout(searchTimer)
-})
-</script>
+})</script>
 
 <style scoped>
+/* 健康信息变更提醒（2026-10-04 第四期） */
+.health-update-alert {
+  margin-bottom: 16px;
+}
+.health-update-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.health-update-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.health-update-item__name {
+  font-weight: 600;
+}
+.health-update-item__time {
+  color: #909399;
+  font-size: 12px;
+}
+.health-update-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
 .recipe-designer-list {
   padding: 20px;
 }

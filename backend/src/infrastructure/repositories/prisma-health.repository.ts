@@ -318,6 +318,8 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
         dogId: data.dogId,
         allergen: data.allergen,
         notes: data.notes,
+        certainty: data.certainty,
+        source: data.source,
         attachments: data.attachments,
       },
     });
@@ -335,6 +337,8 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       data: {
         allergen: data.allergen,
         notes: data.notes,
+        certainty: data.certainty,
+        source: data.source,
         attachments: data.attachments,
       },
     });
@@ -355,6 +359,8 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       dogId: record.dogId,
       allergen: record.allergen,
       notes: record.notes,
+      certainty: record.certainty,
+      source: record.source,
       attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

@@ -1,16 +1,38 @@
-# 过敏记录API测试指南
+# 过敏记录 API 指南
 
-> **版本**: v1.0.0
-> **日期**: 2025-01-25
-> **功能**: 狗狗过敏记录管理
+> ⚠️ **本文档已过时，2026-10-04 重写。**
+>
+> 原始版本（v1.0.0 / 2025-01-25）描述的是**一套已经不存在的字段**：
+> `allergenType` / `discoveryDate` / `symptoms` / `severity` /
+> `confirmedBy` / `treatment` 六个字段在 2026-01-25 的迁移
+> `20260125225305_remove_allergy_record_fields` 里被**主动删除**
+> （当时过敏只是表单里的一栏，没人填，字段越多顾客越不想填）。
+> 那六个字段的数据**已经彻底丢失**（是删列，不是归档），无法恢复。
+>
+> 完整的最新方案见 `docs/plans/2026-10-04-allergy-module-refactor-design.md`。
+
+> **版本**: v2.0.0
+> **日期**: 2026-10-04（过敏板块重构后重写）
+> **功能**: 狗狗过敏记录 + 检测报告 + 排查计划
 
 ## 📋 功能概述
 
-过敏记录功能允许用户为狗狗记录和管理过敏信息，包括：
-- 过敏原信息（过敏原、类型、发现日期、症状等）
-- 严重程度和确认方
-- 治疗方案和备注
-- 附件上传（检测报告图片或PDF）
+过敏板块在 2026-10-04 做过一次重构，现在是三层结构：
+
+| 层 | 是什么 | 接口 |
+|---|---|---|
+| **结论** | 这只狗**不能吃什么**（带可信度） | `GET /dogs/:dogId/allergen-profile` |
+| **报告** | 结论的依据：检测日期 / 方式 / 原件 | `/dogs/:dogId/allergy-reports` |
+| **排查计划** | 排除性饮食试验的执行过程 | `/dogs/:dogId/allergy-trial` |
+
+记录本身仍是 CRUD：`/dogs/:dogId/allergies`。
+
+### 三条不可动摇的设计
+
+1. **过敏 ≠ 不爱吃** —— 真过敏走过敏板块，挑食走饮食偏好，永久分开。
+2. **AI 只把纸上的字搬进表单** —— 不判断疾病名称、严重程度、过敏类型。
+   识别结果**必须顾客确认**才落库。
+3. **排除试验必须由兽医设计与监督** —— 系统只帮执行、记录、汇总。
 
 ## 🗄️ 数据模型
 
@@ -18,22 +40,61 @@
 
 ```prisma
 model AllergyRecord {
-  id            String       @id @default(uuid())
-  dogId         String
-  allergen      String       // 过敏原
-  allergenType  AllergenType // 过敏原类型: FOOD/ENVIRONMENTAL/MEDICATION
-  discoveryDate DateTime     @db.Date // 发现日期
-  symptoms      String       // 症状
-  severity      Severity     @default(MILD) // 严重程度: MILD/MODERATE/SEVERE
-  confirmedBy   ConfirmedBy  @default(VET) // 确认方: VET/OWNER
-  treatment     String?      // 治疗方案
-  notes         String?      // 备注
-  attachments   String[]     @default([]) // 附件URL数组
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  dog           Dog          @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  id          String           @id @default(uuid())
+  dogId       String
+  allergen    String           // 过敏原（标准名或顾客原文）
+  notes       String?
+  certainty   AllergyCertainty @default(SUSPECTED) // 确诊/可疑/待排查/已排除
+  source      String           @default("OWNER")    // REPORT/OWNER/STAFF/ORDER/PLAN
+  reportId    String?          // 来自哪份检测报告（可空）
+  observedAt  DateTime?        @db.Date
+  attachments String[]         @default([])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  dog         Dog              @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  report      AllergyReport?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@unique([dogId, allergen])   // 同一只狗 + 同一过敏原只能有一条
+  @@map("allergy_record")
+}
+
+// 检测报告（2026-10-04 第二期）：检测日期 / 方式 / 机构 / 原件
+model AllergyReport {
+  id          String
+  dogId       String
+  testDate    DateTime?         @db.Date
+  testMethod  AllergyTestMethod @default(UNKNOWN) // SERUM/INTRADERMAL/ELIMINATION/OTHER/UNKNOWN
+  institution String?
+  summary     String?
+  attachments String[]          @default([])  // 报告原件，改造前传完就丢
+  ocrText     String?
+  // ...
 }
 ```
+
+### certainty 的四档含义（2026-10-04 第一期）
+
+| 值 | 含义 | 对食谱推荐的影响 |
+|---|---|---|
+| `CONFIRMED` | 确诊：报告明确阳性，或排查计划已确认 | **含该食材的食谱彻底不进推荐** |
+| `SUSPECTED` | 可疑：报告写弱阳性/疑似，或排查进行中 | 保留但重罚并标注 |
+| `TO_VERIFY` | 待排查：主人自己怀疑，还没验证 | 同「可疑」 |
+| `RULED_OUT` | 已排除：排查计划验证过，不过敏 | 不再避开 |
+
+### 过敏原词表（2026-10-04 第一期）
+
+推荐与配方的避雷**不再用文字包含**判断，而是查表：
+
+- `allergen_tag` —— 过敏原受控词表（标准名 + 别名 + 类别 + 常见度）
+- `ingredient_allergen_tag` —— 食材 ↔ 过敏原的**显式**关联
+
+原因：顾客点「鸡肉」，原料库叫「鸡胸」「鸡腿肉」「鸡心」「鸡肝」「鸡胗」，
+而 `"鸡胸".includes("鸡肉") === false`。实测 12 个常见标签里
+**8 个匹配不到任何真实食材**，避雷基本没生效。
+
+初始化：`npm run seed:allergen-vocabulary:apply`
+（先跑不带 `:apply` 的预演版看报告）。
+
 
 ## 🔌 API端点
 

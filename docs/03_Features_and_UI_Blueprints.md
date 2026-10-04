@@ -129,8 +129,9 @@ API：
 
     3. 健康与禁忌区（DogHealthPanel）
         - health_tags[]
-        - allergies[]
-        - dislikes[]
+        - allergy_records[]（过敏原 + 可信度；「确诊」的会让含该食材的食谱
+          彻底不进推荐 —— 2026-10-04 重构）
+        - picky_foods（挑食；注意：过敏 ≠ 不爱吃，两者永久分开）
         - medical_history[]（例如：心脏病、胰腺炎等）
 
     4. 活动水平 & 零食配置区（TreatConfigPanel）

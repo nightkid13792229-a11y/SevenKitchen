@@ -57,32 +57,94 @@
           <span v-if="energyPerDayG" class="energy-detail">≈ {{ energyPerDayG }} g/天</span>
         </div>
         <div class="profile-divider">饮食与健康</div>
-        <div class="profile-grid">
-          <div class="profile-item full">
-            <span class="label">过敏食材</span>
-            <span class="value" :class="{ empty: !insight.dog.allergyFoods }">
-              {{ insight.dog.allergyFoods || '无记录' }}
-            </span>
-          </div>
-          <!--
-            顾客在健康档案里自己填的过敏记录（只读）。
-            它与上面的「过敏食材」是两个来源：上面那个是员工在设计备注里维护的旧文本字段，
-            顾客端没有入口；这一份才是顾客填的。改造前面板只看上面那个，
-            于是顾客明确声明的过敏对营养师完全不可见。这里必须同时展示，且不可编辑。
-          -->
-          <div class="profile-item full">
-            <span class="label">顾客档案记录的过敏</span>
-            <span
-              class="value"
-              :class="{ empty: !insight.dog.structuredAllergies?.length }"
+
+        <!--
+          过敏与忌口（2026-10-04 第四期重做）。
+          老板原话："我在食谱设计器中，如果要为某只狗狗设计食谱的话，
+          我需要了解这只狗狗对哪些食物过敏。"
+
+          改造前这里只有两行文字（旧文本字段 + 结构化记录的名字列表），
+          营养师看不出"这条是报告确诊的、还是顾客随手记的"——
+          而这两者处理方式完全不同：确诊必须完全避开，
+          可疑要先和顾客确认。现在按可信度分三档，
+          并把"配方里有没有踩到"直接在标签上标出来。
+        -->
+        <div class="allergy-panel">
+          <div class="allergy-panel__head">
+            <span class="allergy-panel__title">过敏与忌口</span>
+            <el-tag
+              v-if="allergenWarningLevel"
+              size="small"
+              :type="allergenWarningLevel === 'CONFIRMED' ? 'danger' : 'warning'"
+              effect="dark"
             >
-              {{
-                insight.dog.structuredAllergies?.length
-                  ? insight.dog.structuredAllergies.join('、')
-                  : '无记录'
-              }}
-            </span>
+              {{ allergenWarningLevel === 'CONFIRMED' ? '配方命中确诊过敏原' : '配方含可疑过敏原' }}
+            </el-tag>
           </div>
+
+          <div v-if="allergyGroups.confirmed.length" class="allergy-tier allergy-tier--confirmed">
+            <div class="allergy-tier__head">
+              <span class="allergy-tier__label">确诊过敏 · 配方必须完全避开</span>
+            </div>
+            <div class="allergy-tier__tags">
+              <el-tag
+                v-for="item in allergyGroups.confirmed"
+                :key="item.allergen"
+                size="small"
+                type="danger"
+                :effect="isAllergenInRecipe(item) ? 'dark' : 'light'"
+              >
+                {{ item.allergen }}{{ isAllergenInRecipe(item) ? '（配方里有）' : '' }}
+              </el-tag>
+            </div>
+          </div>
+
+          <div v-if="allergyGroups.cautioned.length" class="allergy-tier allergy-tier--cautioned">
+            <div class="allergy-tier__head">
+              <span class="allergy-tier__label">可疑 / 待排查 · 建议避开，请与顾客确认</span>
+            </div>
+            <div class="allergy-tier__tags">
+              <el-tag
+                v-for="item in allergyGroups.cautioned"
+                :key="item.allergen"
+                size="small"
+                type="warning"
+                :effect="isAllergenInRecipe(item) ? 'dark' : 'light'"
+              >
+                {{ item.allergen }}{{ isAllergenInRecipe(item) ? '（配方里有）' : '' }}
+              </el-tag>
+            </div>
+          </div>
+
+          <div v-if="allergyGroups.ruledOut.length" class="allergy-tier allergy-tier--ruled-out">
+            <div class="allergy-tier__head">
+              <span class="allergy-tier__label">已排除 · 排查过，不过敏</span>
+            </div>
+            <div class="allergy-tier__tags">
+              <el-tag
+                v-for="item in allergyGroups.ruledOut"
+                :key="item.allergen"
+                size="small"
+                type="success"
+                effect="plain"
+              >{{ item.allergen }}</el-tag>
+            </div>
+          </div>
+
+          <div class="allergy-tier allergy-tier--note">
+            <div class="allergy-tier__head">
+              <span class="allergy-tier__label">员工备注 · 会与上面的记录合并生效</span>
+            </div>
+            <div class="allergy-tier__text">{{ insight.dog.allergyFoods || '无' }}</div>
+          </div>
+
+          <div v-if="!hasAnyAllergy" class="allergy-panel__empty">
+            这只狗没有记录任何过敏。有过敏史的话，让顾客在小程序
+            「健康管理 → 过敏」里记一条，或在下方的员工备注里补充。
+          </div>
+        </div>
+
+        <div class="profile-grid">
           <div class="profile-item full">
             <span class="label">挑食</span>
             <span class="value" :class="{ empty: !insight.dog.pickyFoods }">
@@ -286,6 +348,15 @@ const props = defineProps<{
   energyDensityKcalPerKg?: number | null
   /** 当前配方已使用的标准原料 ID（食材类），用于与历史食材对比提醒 */
   currentIngredientIds?: string[]
+  /**
+   * 当前配方已使用食材的**名称**（2026-10-04 第四期）。
+   *
+   * 用于在过敏面板上标出"配方里有"。
+   * 注意这只是**提示**：真正的拦截在后端的避雷闸门
+   * （那边走过敏原词表查表，能识别「鸡胸」属于「鸡肉」，
+   *   这里的字符串比对做不到）。所以这里漏报不会漏掉保护。
+   */
+  currentIngredientNames?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -409,6 +480,73 @@ const collisionIds = computed(
         .map((row) => row.ingredientId)
     )
 )
+
+/**
+ * 过敏分档（2026-10-04 第四期）。
+ *
+ * 老板原话："我在食谱设计器中，如果要为某只狗狗设计食谱的话，
+ * 我需要了解这只狗狗对哪些食物过敏。"
+ *
+ * 分档不是装饰 —— 三档的处理方式完全不同：
+ *   确诊   → 配方必须完全避开
+ *   可疑   → 建议避开，先和顾客确认
+ *   已排除 → 排查过、不过敏，可以正常用（这条以前根本看不到）
+ * 外加员工备注那一份（会与顾客记录合并生效）。
+ */
+const allergyGroups = computed(() => {
+  const detail = insight.value?.dog?.allergyDetail ?? []
+
+  // 后端没返回明细时退回只有名字的列表，界面不空着
+  const fallback = (insight.value?.dog?.structuredAllergies ?? []).map(
+    (allergen) => ({ allergen, certainty: 'SUSPECTED', source: 'OWNER' })
+  )
+  const source = detail.length > 0 ? detail : fallback
+
+  const bucket = (keys: string[]) =>
+    source.filter((item) =>
+      keys.includes(String(item.certainty || 'SUSPECTED').toUpperCase())
+    )
+
+  return {
+    confirmed: bucket(['CONFIRMED']),
+    cautioned: bucket(['SUSPECTED', 'TO_VERIFY']),
+    ruledOut: bucket(['RULED_OUT']),
+  }
+})
+
+const hasAnyAllergy = computed(
+  () =>
+    allergyGroups.value.confirmed.length > 0 ||
+    allergyGroups.value.cautioned.length > 0 ||
+    allergyGroups.value.ruledOut.length > 0 ||
+    Boolean(insight.value?.dog?.allergyFoods)
+)
+
+/**
+ * 配方里有没有踩到这条过敏原。
+ *
+ * 用**名字包含**做提示，只用于面板高亮 ——
+ * 真正的拦截在后端（推荐/配方的避雷闸门走过敏原词表查表，
+ * 那一层能识别「鸡胸」属于「鸡肉」，这里的字符串比对做不到）。
+ * 所以这里漏报不会漏掉保护，只是少一处视觉提示；
+ * 反过来多报也只是一次人工确认，方向是安全的。
+ */
+function isAllergenInRecipe(item: { allergen: string }): boolean {
+  const names = props.currentIngredientNames ?? []
+  if (names.length === 0) return false
+  const keyword = String(item.allergen || '').replace(/\s+/g, '')
+  if (!keyword) return false
+  return names.some((name) =>
+    String(name || '').replace(/\s+/g, '').includes(keyword)
+  )
+}
+
+/** 配方命中的最严重那一档（给面板顶部的红条用） */
+const allergenWarningLevel = computed(() => {
+  if (allergyGroups.value.confirmed.some(isAllergenInRecipe)) return 'CONFIRMED'
+  if (allergyGroups.value.cautioned.some(isAllergenInRecipe)) return 'SUSPECTED'
+  return ''
+})
 
 const collisionCount = computed(() => collisionIds.value.size)
 
@@ -598,6 +736,57 @@ defineExpose({ loadInsight })
 .profile-actions .el-button {
   padding: 0;
   height: auto;
+}
+/* 过敏与忌口面板（2026-10-04 第四期） */
+.allergy-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.allergy-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.allergy-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+.allergy-panel__empty {
+  font-size: 12px;
+  color: #c0c4cc;
+  line-height: 1.6;
+}
+.allergy-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.allergy-tier__label {
+  font-size: 11px;
+  color: #909399;
+}
+.allergy-tier--confirmed .allergy-tier__label {
+  color: #f56c6c;
+}
+.allergy-tier--cautioned .allergy-tier__label {
+  color: #e6a23c;
+}
+.allergy-tier__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.allergy-tier__text {
+  font-size: 12px;
+  color: #606266;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 .profile-grid {
   display: grid;

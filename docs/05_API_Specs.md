@@ -562,6 +562,72 @@
 
 
 ============================================================
+# 4.5 过敏板块（2026-10-04 重构后新增）
+============================================================
+
+>>> 【过敏原词表】GET /allergens/common
+    - 描述：常见食物过敏原的受控词表
+    - 认证：不需要
+    - 返回：{ allergens: [{ code, name, aliases, commonRank }] }
+    - 顺序依据知识库 skin-005（SACN5 第 31 章）的循证常见度：
+      牛肉 / 乳制品 / 小麦合计约 69%，其次羊肉、鸡蛋、鸡肉、大豆约 25%
+    - 小程序「一点即选」读这个接口，不再硬编码在小程序里
+
+>>> 【过敏档案】GET /dogs/:dogId/allergen-profile
+    - 描述：这只狗的过敏档案（结论 + 会命中的食材）
+    - 认证：X-Customer-Id
+    - 返回：
+        allergens[]               过敏原（带 certainty / source / 是否收录于词表）
+        avoidedIngredientNames[]  原料库里会被命中的食材名（确诊 + 可疑/待排查）
+        confirmedIngredientNames[]其中属于「确诊」的
+        hasAnyAllergen
+    - 用途：小程序首页「挑食/过敏」筛选默认带出、健康页「不能吃的」、
+            后台营养师面板 —— 三处共用同一份口径
+
+>>> 【过敏记录】/dogs/:dogId/allergies
+    - GET / POST / GET :id / PUT :id / DELETE :id（2025 年就有，2026-10-04 收紧）
+    - 收紧点：
+        · 同一只狗 + 同一过敏原唯一（数据库唯一约束 + 接口友好报错）
+        · 过敏原不允许空白、限长 40（此前只校验「是个字符串」）
+        · PUT 不再「没传 notes 就清空」（此前只改名称会悄悄抹掉备注）
+        · 支持 certainty（确诊/可疑/待排查/已排除）与 source
+
+>>> 【检测报告】/dogs/:dogId/allergy-reports
+    - GET  /                        列出报告（含每份的结论）
+    - POST /                        新建报告 + 结论（结论会做词表归一）
+    - GET  /:reportId               报告详情
+    - GET  /:reportId/impact        这份报告让原料库里哪些食材要避开
+    - PUT  /:reportId               修改
+    - DELETE /:reportId             删除报告（**不级联删除过敏记录**）
+    - 结论等级 level（照抄报告，不做医学判断）：
+        POSITIVE 阳性 → 记成「确诊」；WEAK_POSITIVE/SUSPECTED → 「可疑」；
+        NEGATIVE 阴性 → **不记成过敏**；UNKNOWN → 「可疑」（宁可多避）
+    - 检测方式 testMethod：SERUM / INTRADERMAL / ELIMINATION / OTHER / UNKNOWN
+    - **原件留得住**：改造前顾客上传的识别用图片传完就丢
+
+>>> 【排查计划】/dogs/:dogId/allergy-trials
+    - GET  /dogs/:dogId/allergy-trial         当前进行中的计划 + 规则表
+    - GET  /dogs/:dogId/allergy-trials/history 历史计划
+    - POST /dogs/:dogId/allergy-trials        新建（一只狗同时只能有一个进行中）
+    - PUT  /:trialId                          修改（含开始排除期、勾选必守清单）
+    - POST /:trialId/logs                     每日打卡（按日期 upsert）
+    - POST /:trialId/challenges               开始再挑战
+    - PUT  /:trialId/challenges/:allergen     记录结论 → **回写过敏记录可信度**
+    - POST /:trialId/conclude                 结束 / 中途放弃
+    - 规则表（建议时长 / 必守清单 / 再挑战窗口 / 兽医边界提示）由后端下发：
+      那些数字都带出处（SACN5 第 31 章），不该散落在客户端
+    - ⚠️ 定位：**帮你执行，不替兽医开方案**。试验必须由兽医设计与监督。
+
+>>> 【识别】POST /health/extract-report
+    - 2026-10-04 第五期扩展：过敏报告额外读出
+        reportMeta.testMethod  检测方式（照抄报告）
+        reportMeta.testDate    检测日期（照抄报告）
+        drafts[].level         每一项的结论等级（照抄报告）
+    - 边界不变：AI 只把纸上的字搬进表单，**不判断疾病名称、严重程度、
+      过敏类型**；识别结果必须顾客确认才落库
+
+
+============================================================
 # 5. Error Handling（错误处理）
 ============================================================
 

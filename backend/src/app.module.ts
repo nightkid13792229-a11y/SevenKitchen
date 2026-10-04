@@ -22,6 +22,9 @@ import { HealthShareController } from './interfaces/controllers/health-share.con
 import { SharedHealthController } from './interfaces/controllers/shared-health.controller';
 import { VaccinePlanController } from './interfaces/controllers/vaccine-plan.controller';
 import { DietPreferenceController } from './interfaces/controllers/diet-preference.controller';
+import { AllergenVocabularyController } from './interfaces/controllers/allergen-vocabulary.controller';
+import { AllergyReportController } from './interfaces/controllers/allergy-report.controller';
+import { AllergyTrialController } from './interfaces/controllers/allergy-trial.controller';
 import { HealthAnalysisController } from './interfaces/controllers/health-analysis.controller';
 import { StaffDogHealthController } from './interfaces/controllers/staff-dog-health.controller';
 import {
@@ -143,6 +146,9 @@ import { HealthTimelineService } from './application/health/health-timeline.serv
 import { HealthShareService } from './application/health/health-share.service';
 import { VaccinePlanService } from './application/health/vaccine-plan.service';
 import { DietPreferenceService } from './application/health/diet-preference.service';
+import { AllergenVocabularyService } from './application/health/allergen-vocabulary.service';
+import { AllergyReportService } from './application/health/allergy-report.service';
+import { AllergyTrialService } from './application/health/allergy-trial.service';
 import { HealthAnalysisService } from './application/health/health-analysis.service';
 import { StaffDogHealthService } from './application/health/staff-dog-health.service';
 import {
@@ -337,6 +343,9 @@ validatePrismaConfig();
     SharedHealthController,
     VaccinePlanController,
     DietPreferenceController,
+    AllergenVocabularyController,
+    AllergyReportController,
+    AllergyTrialController,
     HealthAnalysisController,
     StaffDogHealthController,
     HealthUploadController,
@@ -633,6 +642,9 @@ validatePrismaConfig();
     HealthShareService,
     VaccinePlanService,
     DietPreferenceService,
+    AllergenVocabularyService,
+    AllergyReportService,
+    AllergyTrialService,
     HealthAnalysisService,
     StaffDogHealthService,
     {

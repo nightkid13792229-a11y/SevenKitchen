@@ -460,6 +460,8 @@ model Dog {
   allergyFoods         String?             @map("allergy_foods")
   pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]
+  allergyReports       AllergyReport[]
+  allergyTrials        AllergyTrial[]
   healthShareTokens    DogHealthShareToken[]
   vaccinePlan          DogVaccinePlan?
   dietPreferences      DogDietPreference[]
@@ -956,6 +958,7 @@ model Ingredient {
   inventoryAllocationLines      InventoryAllocationLine[]
   procurementSkus               ProcurementSku[]
   procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
+  allergenTags                  IngredientAllergenTag[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -1480,18 +1483,310 @@ model MedicalRecord {
   @@map("medical_record")
 }
 
-model AllergyRecord {
-  id          String   @id @default(uuid()) @map("id")
-  dogId       String   @map("dog_id")
-  allergen    String   @map("allergen")
-  notes       String?  @map("notes")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  attachments String[] @default([]) @map("attachments")
-  dog         Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+/// ===== 过敏原词表（2026-10-04 新增，过敏重构第一期）=====
+///
+/// 为什么需要这张表：
+///   在此之前"过敏原"只是 allergy_record.allergen 里的一段自由文字，
+///   与原料库的食材名（鸡胸 / 鸡腿肉 / 鸡心…）对不上。
+///   推荐与配方的避雷用的是**纯文字包含**（`ingredientSearchText.includes('鸡肉')`），
+///   而 "鸡胸".includes("鸡肉") === false ——
+///   实测 12 个常见过敏标签里有 8 个匹配不到任何真实食材，避雷基本没生效。
+///
+/// 这张表把过敏原做成**受控词表**：标准名 + 别名 + 类别，
+/// 再由 ingredient_allergen_tag 把每个食材显式挂到过敏原上。
+/// 之后判断"这个食材能不能给这只狗吃"不再靠猜名字，而是查表。
+model AllergenTag {
+  id         String   @id @default(uuid()) @map("id")
+  /// 内部标识（chicken / beef / dairy …），给代码与日志用，展示一律用 name
+  code       String   @unique @db.VarChar(40)
+  /// 标准名：鸡肉
+  name       String   @unique @db.VarChar(40)
+  /// 别名：鸡、鸡胸、鸡腿、鸡肝、鸡心、鸡胗、chicken
+  /// 用于给新食材**自动推荐**关联，以及兜底匹配顾客手写的自由文本
+  aliases    String[] @default([]) @map("aliases")
+  /// 类别：MEAT / POULTRY / SEAFOOD / DAIRY / EGG / GRAIN / LEGUME / VEGETABLE / OTHER
+  category   String   @default("OTHER") @map("category") @db.VarChar(20)
+  /// 常见度排序。依据知识库 skin-005（SACN5 第 31 章）：
+  /// 牛肉 / 乳制品 / 小麦合计约 69%，其次羊肉、鸡蛋、鸡肉、大豆约 25%。
+  /// 数字越小越常见，小程序「一点即选」按这个顺序排。
+  commonRank Int      @default(100) @map("common_rank")
+  /// 是否启用（下线某个过敏原时置 false，不物理删除，免得历史关联悬空）
+  enabled    Boolean  @default(true) @map("enabled")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
+  ingredientLinks IngredientAllergenTag[]
+
+  @@index([enabled, commonRank])
+  @@index([category])
+  @@map("allergen_tag")
+}
+
+/// 食材 ↔ 过敏原 的显式关联（2026-10-04 新增，过敏重构第一期）。
+///
+/// 为什么必须显式关联、而不是继续做名字匹配：
+///   · 「鸡胸」里没有"鸡肉"两个字，但它是鸡肉；
+///   · 「希腊酸奶」是乳制品，名字里只有个"奶"字；
+///   · 「鸡蛋壳粉」是蛋类；「营养酵母」是酵母。
+/// 一次性把原料库里的食材标一遍（每个 0~2 个过敏原），
+/// 之后 100% 可靠、可审计、营养师也能自己改。
+model IngredientAllergenTag {
+  id            String      @id @default(uuid()) @map("id")
+  ingredientId  String      @map("ingredient_id")
+  allergenTagId String      @map("allergen_tag_id")
+  /// 标注来源：SEED 初始化脚本 / AUTO 别名自动推荐后人工确认 / MANUAL 人工标注
+  source        String      @default("MANUAL") @map("source") @db.VarChar(16)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  ingredient    Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  allergenTag   AllergenTag @relation(fields: [allergenTagId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, allergenTagId])
+  @@index([ingredientId])
+  @@index([allergenTagId])
+  @@map("ingredient_allergen_tag")
+}
+
+model AllergyRecord {
+  id          String           @id @default(uuid()) @map("id")
+  dogId       String           @map("dog_id")
+  allergen    String           @map("allergen")
+  notes       String?          @map("notes")
+  /// 可信度（2026-10-04 第一期）。见下方 AllergyCertainty 的注释。
+  certainty   AllergyCertainty @default(SUSPECTED) @map("certainty")
+  /// 来源（2026-10-04 第一期）：REPORT / OWNER / STAFF / ORDER / PLAN
+  source      String           @default("OWNER") @map("source") @db.VarChar(16)
+  /// 来自哪份检测报告（2026-10-04 第二期）。为空 = 没有报告依据。
+  reportId    String?          @map("report_id")
+  /// 主人观察到异常的时间（2026-10-04 第二期）。
+  /// 与报告的 testDate 不同：这是"我什么时候发现它吃了这个会挠"。
+  observedAt  DateTime?        @map("observed_at") @db.Date
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  attachments String[]         @default([]) @map("attachments")
+  dog         Dog              @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  report      AllergyReport?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@unique([dogId, allergen])
   @@index([dogId])
+  @@index([dogId, certainty])
+  @@index([reportId])
   @@map("allergy_record")
+}
+
+/// 过敏检测报告（2026-10-04 第二期）。
+///
+/// 老板第 1 条要求："可以记录自己狗狗的过敏检查报告，
+/// 特别是报告中**有哪些需要注意的、可疑的**过敏原食物"。
+///
+/// 改造前系统里没有"报告"这个概念，只有一行行散装的过敏原：
+///   · 一份写了 12 项结果的报告存进来 = 12 条互不相干的记录
+///   · 记录里**没有检测日期**，健康时间线只能拿"录入时间"冒充
+///     （一份 2023 年的报告今天录进去，会显示成"今天"）
+///   · **顾客上传的报告原件传完就丢** —— 识别完附件填空数组，
+///     顾客再也看不到自己传的报告
+///
+/// 一份报告 = 检测日期 + 方式 + 机构 + 原件 + 该报告得出的多条结论
+/// （allergy_record.reportId 指回来）。
+model AllergyReport {
+  id          String            @id @default(uuid()) @map("id")
+  dogId       String            @map("dog_id")
+  /// 检测日期。此前完全缺失，是"记录报告"这条要求的最大缺口。
+  testDate    DateTime?         @map("test_date") @db.Date
+  /// 检测方式，**照抄报告上写的**，不做可信度判断
+  testMethod  AllergyTestMethod @default(UNKNOWN) @map("test_method")
+  institution String?           @map("institution") @db.VarChar(120)
+  /// 报告结论摘要 / 备注（自由文本）
+  summary     String?           @map("summary")
+  /// 报告原件（照片 / PDF）。2026-10-04 之前这里传完就丢。
+  attachments String[]          @default([]) @map("attachments")
+  /// 识别出的原文，便于客服核对识别是否可靠
+  ocrText     String?           @map("ocr_text")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  dog         Dog               @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  results     AllergyRecord[]
+
+  @@index([dogId, testDate])
+  @@map("allergy_report")
+}
+
+/// 过敏检测方式（2026-10-04 第二期）。
+///
+/// 知识库 skin-003 明确：皮试、血清 IgE/RAST/ELISA 对食物不良反应
+/// **既不适用于筛查、也不能确诊**，只有排除性饮食试验能确诊。
+///
+/// 但"这份报告是什么方法"是**报告上写的事实**，照抄即可。
+/// 系统不做任何"这个结果可不可信"的判断 —— 那是兽医的事。
+/// 界面会如实标注方法并给出引导，但不会替顾客否定他手里的报告。
+enum AllergyTestMethod {
+  /// 血清 / IgE 检测
+  SERUM
+  /// 皮内试验
+  INTRADERMAL
+  /// 排除性饮食试验
+  ELIMINATION
+  /// 其它
+  OTHER
+  /// 报告上没写 / 看不清
+  UNKNOWN
+}
+
+/// 过敏可信度（2026-10-04 第一期）。
+///
+/// 为什么需要它：老板确认「确诊过敏的食谱从推荐里彻底拿掉」，
+/// 而"拿掉"要有依据 —— 系统必须分得清"报告明确写了阳性"
+/// 与"顾客随手记的一条"。
+///
+/// 这不是推翻 2026-01-25 那次简化（迁移 20260125225305 删掉了
+/// allergenType / discoveryDate / symptoms / severity / confirmedBy / treatment）——
+/// 那次删掉的是**让顾客自己填**的"严重程度、确认方"，顾客判断不了、也没人填。
+/// 这次的可信度是**系统按来源推出来的**：
+///   · 报告里写了阳性       → CONFIRMED
+///   · 顾客自己说"我怀疑"   → TO_VERIFY
+///   · 排查计划做完给出结论 → CONFIRMED / RULED_OUT
+///
+/// 那 6 个字段的历史值已经**彻底丢失**（是删列，不是归档），
+/// 本方案不包含恢复它们。
+enum AllergyCertainty {
+  /// 确诊：报告明确阳性，或排查计划已确认
+  CONFIRMED
+  /// 可疑：报告写弱阳性/疑似，或排查进行中
+  SUSPECTED
+  /// 待排查：主人自己怀疑，还没验证
+  TO_VERIFY
+  /// 已排除：排查计划验证过，不过敏
+  RULED_OUT
+}
+
+/// 过敏原排查计划（2026-10-04 第三期）。
+///
+/// 老板第 2 条："对于很多需要做过敏排查的用户来说，可以创建过敏原的排查计划。"
+///
+/// 而"排除性饮食试验"是国内外指南**唯一认可**的食物过敏确诊路径
+/// （知识库 skin-003；ACVIM 2026 慢性肠病共识明确建议用它，
+/// 而不是血清过敏原检测）。
+///
+/// ── 产品定位：帮你执行，不替兽医开方案 ──────────────────────
+///
+/// skin-003 / skin-004 都写明"必须由兽医设计并监督"。
+/// 所以这张表只承载三件事：
+///   · 计划本身（排查目标 / 方向 / 起止 / 建议时长）
+///   · 每日打卡（见 AllergyTrialLog）
+///   · 再挑战与结论（见 AllergyTrialChallenge）
+/// **不存用药建议、不存系统给出的诊断。**
+model AllergyTrial {
+  id              String                @id @default(uuid()) @map("id")
+  dogId           String                @map("dog_id")
+  status          AllergyTrialStatus    @default(DRAFT) @map("status")
+  /// 表现方向，决定建议排除期长度
+  direction       AllergyTrialDirection @default(SKIN) @map("direction")
+  /// 这次要排查的过敏原（一般是 1~3 个"怀疑对象"）
+  focusAllergens  String[]              @default([]) @map("focus_allergens")
+  startDate       DateTime?             @map("start_date") @db.Date
+  plannedEndDate  DateTime?             @map("planned_end_date") @db.Date
+  /// 建议时长（天）。按方向算出来，但允许兽医/顾客调整
+  plannedDays     Int                   @default(42) @map("planned_days")
+  /// 排除期在喂什么（自由记录：自家某个食谱、或处方粮）
+  currentFoodNote String?               @map("current_food_note")
+  /// 必守清单的勾选状态：{ noTreats: true, ... }
+  strictRules     Json                  @default("{}") @map("strict_rules")
+  notes           String?               @map("notes")
+  concludedAt     DateTime?             @map("concluded_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  dog             Dog                   @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  logs            AllergyTrialLog[]
+  challenges      AllergyTrialChallenge[]
+
+  @@index([dogId, createdAt])
+  @@map("allergy_trial")
+}
+
+/// 排查计划的每日打卡（2026-10-04 第三期）。
+///
+/// 指南建议连续数周记饮食日记 —— skin-004 原文说，
+/// 日记常能发现与复诊时陈述不同的情况。
+///
+/// 打卡刻意做得很轻：痒不痒、大便怎么样、有没有破戒，三个动作，
+/// 十几秒能完成。太重的话顾客坚持不到 6 周，计划就废了。
+model AllergyTrialLog {
+  id           String       @id @default(uuid()) @map("id")
+  trialId      String       @map("trial_id")
+  logDate      DateTime     @map("log_date") @db.Date
+  /// 0 = 不痒，3 = 很痒；null = 当天没记这一项
+  itchScore    Int?         @map("itch_score")
+  /// 0 = 正常，3 = 拉稀；null = 当天没记这一项
+  stoolScore   Int?         @map("stool_score")
+  /// 今天有没有破戒（偷吃 / 有人喂了别的）
+  brokeStrict  Boolean      @default(false) @map("broke_strict")
+  note         String?      @map("note")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  trial        AllergyTrial @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@unique([trialId, logDate])
+  @@index([trialId, logDate])
+  @@map("allergy_trial_log")
+}
+
+/// 再挑战（激发试验，2026-10-04 第三期）。
+///
+/// 指南：**不做再挑战会导致食物敏感性被明显过度诊断**（skin-003）——
+/// 所以它是结论的必要一步，不是可选项。
+///
+/// 结论由顾客/兽医给，系统只负责把它回写到 allergy_record.certainty，
+/// 于是"排查完"这件事立刻反映到推荐与配方上。
+model AllergyTrialChallenge {
+  id           String                  @id @default(uuid()) @map("id")
+  trialId      String                  @map("trial_id")
+  allergen     String                  @map("allergen")
+  startedAt    DateTime?               @map("started_at") @db.Date
+  endedAt      DateTime?               @map("ended_at") @db.Date
+  outcome      AllergyChallengeOutcome @default(PENDING) @map("outcome")
+  /// 复发时记下时间与表现，方便给兽医看
+  reactionNote String?                 @map("reaction_note")
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+  trial        AllergyTrial            @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@unique([trialId, allergen])
+  @@index([trialId])
+  @@map("allergy_trial_challenge")
+}
+
+enum AllergyTrialStatus {
+  /// 准备中：还没开始排除期
+  DRAFT
+  /// 排除期：严格忌口
+  ELIMINATION
+  /// 再挑战期：单独加回某一种观察
+  CHALLENGE
+  /// 已结束
+  COMPLETED
+  /// 中途放弃（如实记录，不假装没发生过）
+  ABANDONED
+}
+
+enum AllergyTrialDirection {
+  /// 以皮肤表现为主
+  SKIN
+  /// 以胃肠道表现为主
+  GI
+  /// 两者都有
+  BOTH
+  /// 反复耳道发炎
+  OTITIS
+}
+
+enum AllergyChallengeOutcome {
+  /// 观察中
+  PENDING
+  /// 复发了 → 确诊过敏
+  REACTED
+  /// 没反应 → 排除
+  NO_REACTION
+  /// 还是不确定
+  UNCERTAIN
 }
 
 model OrderPricingSnapshot {

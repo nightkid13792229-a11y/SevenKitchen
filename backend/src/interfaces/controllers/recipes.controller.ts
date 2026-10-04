@@ -56,10 +56,12 @@ import {
   SERIES_LIFE_STAGE_LABELS,
 } from '../../domain/recipe/recipe-series';
 import { resolveDogProfileStage } from '../../domain/dog/dog-stage.service';
+import { splitAllergyKeywords } from '../../domain/dog/allergy-keywords';
 import {
-  collectAllergyKeywords,
-  splitAllergyKeywords,
-} from '../../domain/dog/allergy-keywords';
+  collectHitAllergenNames,
+  type AllergenHit,
+} from '../../domain/dog/allergen-vocabulary';
+import { AllergenVocabularyService } from '../../application/health/allergen-vocabulary.service';
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { OrderService } from '../../application/order/order.service';
 import {
@@ -114,6 +116,7 @@ export class RecipesController {
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
     private readonly orderService: OrderService,
+    private readonly allergenVocabulary: AllergenVocabularyService,
   ) {}
 
   private buildPublicRecipeWhere(
@@ -266,6 +269,103 @@ export class RecipesController {
     return `recipe:${recipe.recipeId || recipe.id}`;
   }
 
+  /**
+   * 这只狗的过敏档案，按"要不要硬拦"分成两档。
+   *
+   * 老板 2026-10-04 确认：「确诊过敏的食谱从推荐里彻底拿掉」。
+   *
+   *   · CONFIRMED（确诊）          → **直接不进推荐候选**（blocking）
+   *   · SUSPECTED / TO_VERIFY      → 保留，但重罚并标注（warning）
+   *   · RULED_OUT（已排除）        → 不再避开
+   *
+   * 旧文本字段 `dog.allergyFoods` 没有可信度信息（它是员工在设计备注里
+   * 手写的），按"可疑"处理 —— 不做硬拦，但会被重罚。
+   */
+  private buildDogAllergenProfile(dog: any): {
+    blocking: string[];
+    warning: string[];
+    all: string[];
+  } {
+    const records: Array<{ allergen?: string | null; certainty?: string | null }> =
+      Array.isArray(dog?.allergyRecords) ? dog.allergyRecords : [];
+
+    const blockingTerms: string[] = [];
+    const warningTerms: string[] = [];
+
+    for (const record of records) {
+      const certainty = String(record?.certainty || 'SUSPECTED').toUpperCase();
+      if (certainty === 'RULED_OUT') {
+        continue;
+      }
+      const terms = splitAllergyKeywords(record?.allergen);
+      if (certainty === 'CONFIRMED') {
+        blockingTerms.push(...terms);
+      } else {
+        warningTerms.push(...terms);
+      }
+    }
+
+    // 旧文本字段：员工手写的，没有可信度信息 → 按可疑处理
+    warningTerms.push(...splitAllergyKeywords(dog?.allergyFoods));
+
+    const blocking = Array.from(new Set(blockingTerms.filter(Boolean)));
+    const blockingSet = new Set(blocking);
+    const warning = Array.from(
+      new Set(warningTerms.filter((term) => term && !blockingSet.has(term))),
+    );
+
+    return { blocking, warning, all: [...blocking, ...warning] };
+  }
+
+  /** 一份食谱用到的全部食材名 */
+  private getRecipeIngredientNames(recipe: any): string[] {
+    return (recipe?.items || [])
+      .map(
+        (item: any) =>
+          item?.ingredient?.name || item?.ingredient?.nameEn || '',
+      )
+      .map((name: string) => String(name || '').trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * 预先算出每份食谱命中了哪些过敏原。
+   *
+   * 必须**在挑代表之前**算好 —— 改造前是先在每个系列里按生命阶段挑一个、
+   * 再拿去打分，于是同一个系列里"不含过敏原"的那个版本
+   * 在过敏信息被读到之前就已经被丢掉了。
+   */
+  private async evaluateRecipeAllergens(
+    recipes: any[],
+    profile: { blocking: string[]; warning: string[]; all: string[] },
+  ): Promise<Map<string, { blocking: AllergenHit[]; warning: AllergenHit[] }>> {
+    const result = new Map<
+      string,
+      { blocking: AllergenHit[]; warning: AllergenHit[] }
+    >();
+
+    if (profile.all.length === 0) {
+      return result;
+    }
+
+    for (const recipe of recipes) {
+      const ingredientNames = this.getRecipeIngredientNames(recipe);
+      const [blocking, warning] = await Promise.all([
+        this.allergenVocabulary.matchIngredients({
+          dogAllergens: profile.blocking,
+          ingredientNames,
+        }),
+        this.allergenVocabulary.matchIngredients({
+          dogAllergens: profile.warning,
+          ingredientNames,
+        }),
+      ]);
+      result.set(this.getRecommendationRecipeKey(recipe), { blocking, warning });
+    }
+
+    return result;
+  }
+
   private chooseRecommendedRecipeForDog(recipes: any[], dog: any): any {
     const dogSeriesLifeStage = mapDogProfileToSeriesLifeStage(dog);
     const configuredStages = recipes
@@ -288,9 +388,33 @@ export class RecipesController {
     );
   }
 
-  private selectRecommendationRecipesForDog(recipes: any[], dog: any): any[] {
+  private selectRecommendationRecipesForDog(
+    recipes: any[],
+    dog: any,
+    allergyByRecipeKey?: Map<
+      string,
+      { blocking: AllergenHit[]; warning: AllergenHit[] }
+    >,
+  ): any[] {
+    // ── 过敏闸门（2026-10-04 第一期）──────────────────────────
+    //
+    // 「确诊过敏」的版本在这里就被剔除，**在按生命阶段挑代表之前**。
+    // 顺序很关键：改造前是先挑代表再打分，同一系列里
+    // 不含过敏原的那个版本会在打分之前被丢掉，于是
+    // "扣 40 分"这个惩罚根本轮不到生效。
+    const eligible = allergyByRecipeKey
+      ? recipes.filter((recipe) => {
+          const hits = allergyByRecipeKey.get(
+            this.getRecommendationRecipeKey(recipe),
+          );
+          return !hits || hits.blocking.length === 0;
+        })
+      : recipes;
+
+    // 全被挡住了（例如整个系列都含鸡肉）时，退回原集合会让确诊过敏原漏出去，
+    // 所以宁可返回空 —— 页面那边会给出"可选食谱较少"的提示。
     const groupedRecipes = new Map<string, any[]>();
-    for (const recipe of recipes) {
+    for (const recipe of eligible) {
       const key = this.getRecommendationGroupKey(recipe);
       const group = groupedRecipes.get(key) ?? [];
       group.push(recipe);
@@ -323,12 +447,15 @@ export class RecipesController {
   private scoreRecipeForDog(
     recipe: any,
     dog: any,
+    allergyHits?: { blocking: AllergenHit[]; warning: AllergenHit[] },
   ): {
     matchScore: number;
     matchStars: number;
     matchReasons: string[];
     dailyIntakeG: number | null;
     section: 'exclusive' | 'general';
+    containsAllergen: boolean;
+    allergenNames: string[];
   } {
     const dogLifeStage = this.resolveDogLifeStage(dog);
     const dogSeriesLifeStage = mapDogProfileToSeriesLifeStage(dog);
@@ -336,22 +463,8 @@ export class RecipesController {
     const recipeLifeStages = Array.isArray(recipe.applicableLifeStages)
       ? recipe.applicableLifeStages
       : [];
-    // 过敏避雷必须「两边都读」：
-    //   · dog.allergyFoods —— 旧文本字段，顾客端没有入口，只有后台设计备注在写
-    //   · allergy_record   —— 顾客在健康档案/定制单里真正填写的结构化记录
-    // 2026-09-27 之前这里只读旧文本字段，导致顾客填的过敏在推荐里完全不生效（食品安全级缺陷）。
-    const allergyFoods = collectAllergyKeywords({
-      allergyFoods: dog.allergyFoods,
-      allergens: (dog.allergyRecords ?? []).map(
-        (record: { allergen?: string | null }) => record.allergen,
-      ),
-    });
     const pickyFoods = this.normalizeKeywordList(dog.pickyFoods);
-    const ingredientNames = (recipe.items || [])
-      .map(
-        (item: any) => item.ingredient?.name || item.ingredient?.nameEn || '',
-      )
-      .filter(Boolean);
+    const ingredientNames = this.getRecipeIngredientNames(recipe);
     const ingredientSearchText = ingredientNames.join(' ').toLowerCase();
 
     let score = 50;
@@ -384,12 +497,30 @@ export class RecipesController {
       }
     }
 
-    const allergyHits = allergyFoods.filter((keyword) =>
-      ingredientSearchText.includes(keyword),
-    );
-    if (allergyHits.length > 0) {
-      score -= 40;
-      matchReasons.push(`含需谨慎原料：${allergyHits.slice(0, 2).join('、')}`);
+    // ── 过敏避雷（2026-10-04 第一期改造）────────────────────
+    //
+    // 改造前这里是**纯文字包含**：
+    //     allergyFoods.filter((k) => ingredientSearchText.includes(k))
+    // 而顾客填的过敏原与原料库里的食材名不是一套词：
+    //     顾客点「鸡肉」 → 原料库叫「鸡胸」「鸡腿肉」「鸡心」「鸡肝」「鸡胗」
+    //     "鸡胸".includes("鸡肉") === false
+    // 实测 12 个常见标签里 8 个匹配不到任何真实食材。
+    //
+    // 现在改为走**过敏原词表**（allergen_tag × ingredient_allergen_tag），
+    // 查表而不是猜名字；词表没收录的词仍然退回文字包含兜底。
+    //
+    // 确诊（CONFIRMED）的命中在 selectRecommendationRecipesForDog 里
+    // 就已经被整条剔除了，正常走不到这里；这里再罚一次是兜底，
+    // 防止将来有人绕过筛选直接调用打分。
+    const blockingNames = collectHitAllergenNames(allergyHits?.blocking ?? []);
+    const warningNames = collectHitAllergenNames(allergyHits?.warning ?? []);
+
+    if (blockingNames.length > 0) {
+      score -= 100;
+      matchReasons.push(`含确诊过敏原：${blockingNames.slice(0, 2).join('、')}`);
+    } else if (warningNames.length > 0) {
+      score -= 60;
+      matchReasons.push(`含需谨慎原料：${warningNames.slice(0, 2).join('、')}`);
     }
 
     const pickyHits = pickyFoods.filter((keyword) =>
@@ -421,6 +552,8 @@ export class RecipesController {
           )
         : null;
 
+    const allergenNames = [...blockingNames, ...warningNames];
+
     return {
       matchScore: boundedScore,
       matchStars,
@@ -429,11 +562,17 @@ export class RecipesController {
         : ['适合作为日常鲜食候选'],
       dailyIntakeG,
       section: boundedScore >= 70 ? 'exclusive' : 'general',
+      containsAllergen: allergenNames.length > 0,
+      allergenNames,
     };
   }
 
-  private mapRecommendedRecipe(recipe: any, dog: any) {
-    const score = this.scoreRecipeForDog(recipe, dog);
+  private mapRecommendedRecipe(
+    recipe: any,
+    dog: any,
+    allergyHits?: { blocking: AllergenHit[]; warning: AllergenHit[] },
+  ) {
+    const score = this.scoreRecipeForDog(recipe, dog, allergyHits);
     const seriesLifeStage = this.resolveRecipeSeriesLifeStage(recipe);
     const topIngredients = (recipe.items || [])
       .filter(
@@ -770,8 +909,10 @@ export class RecipesController {
         activityLevel: true,
         cachedTargetFoodKcal: true,
         allergyFoods: true,
-        // 顾客在健康档案里填的结构化过敏记录 —— 推荐打分的过敏避雷要与旧文本字段合并使用
-        allergyRecords: { select: { allergen: true } },
+        // 顾客在健康档案里填的结构化过敏记录 —— 推荐打分的过敏避雷要与旧文本字段合并使用。
+        // 2026-10-04 起还要带上 certainty：确诊的食谱直接不进推荐，
+        // 可疑/待排查的保留但重罚（见 buildDogAllergenProfile）。
+        allergyRecords: { select: { allergen: true, certainty: true } },
         pickyFoods: true,
         avatarUrl: true,
         // 2026-09-19：生命阶段判定需要品种阈值与体型。
@@ -840,11 +981,24 @@ export class RecipesController {
       seriesRecipes,
     );
 
-    const recommended = this.selectRecommendationRecipesForDog(
+    const allergenProfile = this.buildDogAllergenProfile(dogWithBreed);
+    const allergyByRecipeKey = await this.evaluateRecipeAllergens(
+      recommendationCandidates,
+      allergenProfile,
+    );
+
+    const ranked = this.selectRecommendationRecipesForDog(
       recommendationCandidates,
       dogWithBreed,
+      allergyByRecipeKey,
     )
-      .map((recipe) => this.mapRecommendedRecipe(recipe, dogWithBreed))
+      .map((recipe) =>
+        this.mapRecommendedRecipe(
+          recipe,
+          dogWithBreed,
+          allergyByRecipeKey.get(this.getRecommendationRecipeKey(recipe)),
+        ),
+      )
       .sort((left, right) => {
         return (
           right.matchScore - left.matchScore ||
@@ -852,11 +1006,11 @@ export class RecipesController {
         );
       });
 
-    const exclusive = recommended
+    const exclusive = ranked
       .filter((recipe) => recipe.section === 'exclusive')
       .slice(0, 12);
     const exclusiveIds = new Set(exclusive.map((recipe) => recipe.id));
-    const general = recommended
+    const general = ranked
       .filter((recipe) => !exclusiveIds.has(recipe.id))
       .slice(0, 12);
 
@@ -872,6 +1026,24 @@ export class RecipesController {
       },
       exclusive,
       general,
+      /**
+       * 过敏信息回给页面，让顾客看得见"系统按什么在避开"。
+       *
+       * 2026-10-04 第一期新增：老板确认「确诊过敏的食谱从推荐里彻底拿掉」，
+       * 拿掉之后页面上必须**说清楚为什么少了**——
+       * 否则顾客只会以为食谱变少了，而不是"系统在保护我的狗"。
+       */
+      allergyPolicy: {
+        /** 确诊：含这些的食谱已从推荐中移除 */
+        excluded: allergenProfile.blocking,
+        /** 可疑 / 待排查：保留但已标注 */
+        cautioned: allergenProfile.warning,
+        /** 避开之后还剩多少可选 */
+        remainingCount: ranked.length,
+        /** 避到没有可选时，页面要给安抚与出口，而不是一个空列表 */
+        emptyAfterExclusion:
+          ranked.length === 0 && allergenProfile.all.length > 0,
+      },
     });
   }
 

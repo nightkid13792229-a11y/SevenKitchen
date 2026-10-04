@@ -183,6 +183,7 @@
             :series-id="seriesId"
             :energy-density-kcal-per-kg="assessment?.energyDensityKcalPerKg ?? null"
             :current-ingredient-ids="currentIngredientIds"
+            :current-ingredient-names="currentIngredientNames"
             @dog-changed="(dogId: string | null) => (referenceDogId = dogId)"
           />
         </div>
@@ -624,6 +625,28 @@ const currentIngredientIds = computed(() => {
     if (id) ids.add(id)
   }
   return Array.from(ids)
+})
+
+/**
+ * 当前配方已使用食材的名称（2026-10-04 第四期）。
+ *
+ * 过敏面板用它标出「配方里有」。
+ * 只是视觉提示 —— 真正的拦截在后端的避雷闸门
+ * （那边走过敏原词表查表，能识别「鸡胸」属于「鸡肉」，
+ *   这里的字符串比对做不到；所以这里漏报不会漏掉保护）。
+ */
+const currentIngredientNames = computed(() => {
+  const names = new Set<string>()
+  for (const item of items.value) {
+    if (isSupplementItem(item)) continue
+    const name =
+      item.ingredient?.name ||
+      item.nutritionFood?.displayNameZh ||
+      item.nutritionFood?.name ||
+      ''
+    if (name) names.add(String(name))
+  }
+  return Array.from(names)
 })
 
 async function loadDraft(targetDraftId?: string) {

@@ -131,7 +131,13 @@ export class HealthTimelineService {
     const [medical, checkups, allergies, vaccines, weights] = await Promise.all([
       this.prisma.medicalRecord.findMany({ where: { dogId } }),
       this.prisma.checkupRecord.findMany({ where: { dogId } }),
-      this.prisma.allergyRecord.findMany({ where: { dogId } }),
+      this.prisma.allergyRecord.findMany({
+        where: { dogId },
+        // 2026-10-04 第二期：报告要带上，才能用**检测日期**排序，
+        // 而不是拿"录入时间"冒充（一份 2023 年的报告今天录进去
+        // 会被排成"今天"，时间线就失去意义了）。
+        include: { report: { select: { testDate: true, testMethod: true } } },
+      }),
       this.prisma.vaccineRecord.findMany({ where: { dogId } }),
       this.prisma.weightRecord.findMany({ where: { dogId } }),
     ]);
@@ -158,7 +164,12 @@ export class HealthTimelineService {
       ...allergies.map((record) => ({
         id: record.id,
         type: 'allergy' as const,
-        date: toDateText(record.createdAt),
+        /**
+         * 日期优先级（2026-10-04 第二期）：
+         *   检测日期 → 观察日期 → 录入日期（兜底）
+         * 改造前一律用 createdAt，一份旧报告今天录进去会显示成"今天"。
+         */
+        date: resolveAllergyDate(record),
         title: `过敏：${record.allergen}`,
         detail: record.notes || '',
       })),
@@ -241,6 +252,9 @@ export class HealthTimelineService {
         }),
         this.prisma.allergyRecord.findMany({
           where: { dogId },
+          // 与时间线同样带上报告：摘要里的日期也要用检测日期，
+          // 否则医生看到的是"录入日期"，会误判这份结论有多新。
+          include: { report: { select: { testDate: true, testMethod: true } } },
           orderBy: { createdAt: 'desc' },
         }),
         this.prisma.vaccineRecord.findMany({
@@ -292,7 +306,8 @@ export class HealthTimelineService {
       allergies: allergies.map((record) => ({
         allergen: record.allergen,
         notes: record.notes || '',
-        date: toDateText(record.createdAt),
+        // 2026-10-04 第二期：检测日期优先，其次观察日期，最后才退回录入日期
+        date: resolveAllergyDate(record),
       })),
       ongoingConditions,
       recentVisits: medical.slice(0, SUMMARY_RECENT_LIMIT).map((record) => ({
@@ -524,4 +539,27 @@ export function formatAgeText(
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10
+}
+
+/**
+ * 过敏记录在时间线/摘要里的日期（2026-10-04，过敏重构第二期）。
+ *
+ * 优先级：检测日期 → 观察日期 → 录入日期（兜底）。
+ *
+ * 改造前一律用 createdAt。后果：一份 2023 年的检测报告今天录进系统，
+ * 在时间线上会显示成"今天"—— 医生看到的时间线是错的，
+ * 而这恰恰是"就诊前摘要"最不能出错的地方。
+ */
+export function resolveAllergyDate(record: {
+  createdAt: Date;
+  observedAt?: Date | null;
+  report?: { testDate?: Date | null } | null;
+}): string {
+  if (record.report?.testDate) {
+    return toDateText(record.report.testDate);
+  }
+  if (record.observedAt) {
+    return toDateText(record.observedAt);
+  }
+  return toDateText(record.createdAt);
 }

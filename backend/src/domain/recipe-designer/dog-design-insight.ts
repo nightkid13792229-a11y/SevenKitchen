@@ -69,6 +69,19 @@ export interface DogDesignInsight {
      * （否则一保存就会把顾客的记录复制进旧字段）。
      */
     structuredAllergies: string[];
+    /**
+     * 带可信度的过敏明细（2026-10-04 第四期）。
+     *
+     * `structuredAllergies` 只有名字，营养师看不出"这条是报告确诊的、
+     * 还是顾客随手记的"。而这两者处理方式完全不同：
+     *   确诊 → 配方必须完全避开；可疑 → 建议避开并和顾客确认。
+     * 所以单独给一份带 certainty 的。
+     */
+    allergyDetail: Array<{
+      allergen: string;
+      certainty: string;
+      source: string;
+    }>;
     pickyFoods: string | null;
     preferredFoods: string | null;
     medicalHistory: string | null;
@@ -188,7 +201,11 @@ interface InsightDogLike {
   cachedTargetFoodKcal?: number | null;
   allergyFoods?: string | null;
   /** 结构化过敏记录（顾客在健康档案 / 定制单里填的），只取 allergen 字段 */
-  allergyRecords?: Array<{ allergen?: string | null }> | null;
+  allergyRecords?: Array<{
+    allergen?: string | null;
+    certainty?: string | null;
+    source?: string | null;
+  }> | null;
   pickyFoods?: string | null;
   preferredFoods?: string | null;
   medicalHistory?: string | null;
@@ -429,6 +446,14 @@ export function buildDogDesignInsight(input: {
           (record) => record?.allergen,
         ),
       }),
+      // 带可信度的明细：营养师要能分清"报告确诊"与"顾客随手记的"
+      allergyDetail: (dog.allergyRecords ?? [])
+        .map((record) => ({
+          allergen: String(record?.allergen ?? '').trim(),
+          certainty: String(record?.certainty || 'SUSPECTED').toUpperCase(),
+          source: String(record?.source || 'OWNER').toUpperCase(),
+        }))
+        .filter((item) => Boolean(item.allergen)),
       pickyFoods: dog.pickyFoods ?? null,
       preferredFoods: dog.preferredFoods ?? null,
       medicalHistory: dog.medicalHistory ?? null,

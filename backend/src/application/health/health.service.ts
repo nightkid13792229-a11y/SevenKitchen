@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -389,10 +391,30 @@ export class HealthService {
   ): Promise<AllergyRecordResponseDto> {
     await this.verifyDogOwnership(dto.dogId, customerId);
 
+    // 过敏原去空白后再校验 —— 数据库上有 CHECK (btrim(allergen) <> '')
+    // 与 UNIQUE(dog_id, allergen) 两道约束，这里先给出可读的错误信息，
+    // 而不是把 23505 / 23514 这种数据库错误抛给顾客。
+    const allergen = String(dto.allergen ?? '').trim();
+    if (!allergen) {
+      throw new BadRequestException('请填写过敏原');
+    }
+
+    const existing = await this.allergyRecordRepo.findByDogId(dto.dogId);
+    if (
+      existing.some(
+        (record: { allergen?: string | null }) =>
+          String(record?.allergen ?? '').trim() === allergen,
+      )
+    ) {
+      throw new ConflictException(`档案里已经有「${allergen}」这一条了`);
+    }
+
     const record = await this.allergyRecordRepo.create({
       dogId: dto.dogId,
-      allergen: dto.allergen,
+      allergen,
       notes: dto.notes ?? null,
+      certainty: dto.certainty ?? 'SUSPECTED',
+      source: dto.source ?? 'OWNER',
       attachments: dto.attachments ?? [],
     });
 
@@ -439,9 +461,32 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
+    let allergen = dto.allergen !== undefined ? String(dto.allergen).trim() : undefined;
+    if (allergen !== undefined) {
+      if (!allergen) {
+        throw new BadRequestException('请填写过敏原');
+      }
+      // 改名时要避开同一只狗下已存在的同名记录（数据库上有唯一约束）
+      const siblings = await this.allergyRecordRepo.findByDogId(record.dogId);
+      const clash = siblings.some(
+        (item: { id: string; allergen?: string | null }) =>
+          item.id !== id && String(item?.allergen ?? '').trim() === allergen,
+      );
+      if (clash) {
+        throw new ConflictException(`档案里已经有「${allergen}」这一条了`);
+      }
+    }
+
     const updated = await this.allergyRecordRepo.update(id, {
-      allergen: dto.allergen ?? undefined,
-      notes: dto.notes ?? null,
+      allergen,
+      // ── 2026-10-04 修复 ────────────────────────────────────
+      // 改造前这里是 `notes: dto.notes ?? null`：
+      // 只改过敏原名称（没传 notes）会把原来的说明**悄悄抹掉**。
+      // 现在与其它字段一致，用 `?? undefined` 表示"没传就不动"。
+      // 想把备注清空，显式传 null / 空串即可。
+      notes: dto.notes ?? undefined,
+      certainty: dto.certainty ?? undefined,
+      source: dto.source ?? undefined,
       attachments: dto.attachments ?? undefined,
     });
 
@@ -492,6 +537,17 @@ export class HealthService {
     if (dog.ownerId !== customerId) {
       throw new ForbiddenException('Access denied');
     }
+  }
+
+  /**
+   * 归属校验的公开入口（2026-10-04 第一期）。
+   *
+   * 新加的只读接口（如过敏档案）需要同一套校验，
+   * 与其各写一遍，不如暴露同一个实现 ——
+   * 校验逻辑只有一份，就不会出现"某个接口忘了校验"的漏子。
+   */
+  async assertDogOwnership(dogId: string, customerId: string): Promise<void> {
+    await this.verifyDogOwnership(dogId, customerId);
   }
 
   private mapVaccineRecordToDto(record: any): VaccineRecordResponseDto {
@@ -553,6 +609,8 @@ export class HealthService {
       dogId: record.dogId,
       allergen: record.allergen,
       notes: record.notes,
+      certainty: record.certainty ?? 'SUSPECTED',
+      source: record.source ?? 'OWNER',
       attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

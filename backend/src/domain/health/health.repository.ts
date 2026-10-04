@@ -3,6 +3,8 @@
  * Domain layer repository interfaces (no Prisma dependency)
  */
 
+import type { AllergyCertainty } from '@prisma/client';
+
 // Vaccine Record
 export interface VaccineRecord {
   id: string;
@@ -111,6 +113,14 @@ export interface AllergyRecord {
   dogId: string;
   allergen: string;
   notes: string | null;
+  /**
+   * 可信度（2026-10-04 第一期）。
+   * 确诊（CONFIRMED）的过敏原会让含它的食谱**直接不进推荐**；
+   * 可疑 / 待排查保留但重罚；已排除（RULED_OUT）不再避开。
+   */
+  certainty: AllergyCertainty;
+  /** 来源：REPORT / OWNER / STAFF / ORDER / PLAN */
+  source: string;
   attachments: string[];
   createdAt: Date;
   updatedAt: Date;

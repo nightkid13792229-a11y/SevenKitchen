@@ -116,6 +116,25 @@ export interface DogProfile {
   medicalHistory: string | null
   allergyFoods: string | null
   pickyFoods: string | null
+  /**
+   * 顾客在健康档案 / 小程序里填的结构化过敏记录（2026-10-04 第四期，只读）。
+   *
+   * 与 allergyFoods 是两个来源：allergyFoods 是员工在设计备注里维护的旧文本字段，
+   * 顾客端没有入口；这一份才是顾客自己填的。
+   *
+   * certainty 决定处理方式：确诊的会让含该食材的食谱**彻底不进推荐**，
+   * 可疑 / 待排查会标注并排在后面，已排除的不再避开。
+   */
+  allergyRecords?: Array<{
+    id: string
+    allergen: string
+    notes?: string | null
+    certainty?: string
+    source?: string
+    observedAt?: string | null
+    reportId?: string | null
+    attachments?: string[]
+  }>
   cachedTargetFoodKcal: number
   createdAt?: string
 }

@@ -105,7 +105,9 @@
       </view>
 
       <text class="plan-note">
-        本计划仍在做专业审核，暂不对顾客开放。是否接种、何时接种，请以执业兽医的意见为准。
+        {{ plan.reviewed
+          ? '本计划依据 WSAVA 2024 疫苗指南与国内规定起草，已经专业审核。是否接种、何时接种，请以执业兽医的意见为准。'
+          : '本计划仍在做专业审核，暂不对顾客开放。是否接种、何时接种，请以执业兽医的意见为准。' }}
       </text>
     </template>
 
@@ -176,6 +178,18 @@ const plan = ref<{
   conflicts: PlanConflict[]
   decisions: Record<string, string>
   summary?: { done?: number }
+  /**
+   * 这套免疫程序表是否已经过专业审核（2026-10-04）。
+   *
+   * 后端一直在传这个字段，注释也写着"顾客侧即便开放，也要如实标记"，
+   * 但界面**从来没有读过它** —— 于是卡片底部永远写着
+   * "本计划仍在做专业审核，暂不对顾客开放"，
+   * 而线上开关是开着的：文案在说反话。
+   *
+   * 现在按它决定底部那句话。等兽医审完、后端把 reviewed 打开，
+   * 文案会自己跟着变，不用再改一次前端。
+   */
+  reviewed?: boolean
 }>({ nextStep: null, steps: [], conflicts: [], decisions: {} })
 
 /**
@@ -226,6 +240,7 @@ async function load() {
       conflicts: Array.isArray(res.data.conflicts) ? res.data.conflicts : [],
       decisions: res.data.decisions || {},
       summary: res.data.summary || {},
+      reviewed: res.data.reviewed === true,
     }
     loaded.value = true
   } catch (error: any) {

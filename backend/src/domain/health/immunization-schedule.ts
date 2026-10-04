@@ -121,31 +121,78 @@ export const CORE_PUPPY_SERIES = {
   intervalWeeksMax: 4,
   /** 打到 16 周龄或更大 */
   finishWeeksMin: 16,
-  /** WSAVA 2024 讨论的 26 周龄以上补强（可选） */
-  optionalBoosterWeeks: 26,
+  /**
+   * 26 周龄以上的补强（2026-10-04 改）。
+   *
+   * 原文（p3 / p14）："Revaccination at or after 26 weeks of age (rather than
+   * waiting until 12 to 16 months of age) is advised"；
+   * 并明确说这条**取代**了旧的"12~16 月龄第一次加强"。
+   * 所以它不是"可选"，而是**推荐做法**；不想打这一针的话，
+   * 替代方案是 20 周龄以后做抗体检测。
+   */
+  boosterWeeks: 26,
+  /**
+   * 最低接种月龄（2026-10-04 新增，用于判断"接种过早"）。
+   *
+   * 指南 FAQ（p29）："Should I vaccinate puppies that are less than 4 weeks of age?
+   * A. In general, no."；Table 1 另有一支 CPV 重组苗"4 周龄起可打一针"。
+   * 所以 **4 周才是红线**，不是 6 周 —— 之前我们把 5 周龄以下都判成"过早"，
+   * 会把那支正规的 4 周龄产品误报成错误。
+   */
+  earliestWeeks: 4,
   basis: 'WSAVA 2024：6–8 周龄起，每 2–4 周一次，直到 16 周龄或更大',
+  /** 末针的依据单独写：这一针是全程序里最重要的一针 */
+  finalDoseBasis:
+    'WSAVA 2024：16 周龄或更大时接种的那一针最重要 —— 此时绝大多数幼犬的母源抗体已消退，' +
+    '「finishing no earlier than 16 weeks」',
 } as const;
 
 /** 成年加强（WSAVA 2024） */
 export const CORE_ADULT_BOOSTER = {
-  /** 首免完成后 1 年做第一次加强 */
-  firstBoosterYears: 1,
-  /** 之后每 3 年（免疫力可维持多年，远超 3 年） */
+  /**
+   * 加强间隔：3 年。
+   *
+   * ⚠️ 2026-10-04 改动：**去掉了原来的 "首免完成后 1 年做第一次"**。
+   *
+   * 指南 p14 原文：
+   *   "This recommendation … **replaces an earlier recommendation for a
+   *    'first annual booster' with core vaccines at 12 to 16 months of age.**"
+   * 新的口径是：16 周龄那一针之后，**26 周龄或稍后再补一针**，
+   * 然后才是三年一次。我们原来那个"16周 + 1年 ≈ 15.5 月龄"的第一针，
+   * 正好就是被取代掉的旧做法。
+   */
   repeatYears: 3,
   /** 看多少次加强（够覆盖绝大多数狗的寿命） */
   maxBoosters: 5,
-  basis: 'WSAVA 2024：成年加强可三年一次或更少频次；首免完成后 1 年做第一次',
+  basis:
+    'WSAVA 2024：成年加强三年一次或更少频次；' +
+    '16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）',
 } as const;
 
 /** 狂犬病（国内） */
 export const RABIES_SCHEDULE = {
-  /** 首针：一般 12 周龄以上（各地规定不同） */
+  /**
+   * 首针默认月龄：12 周。
+   *
+   * ⚠️ 这个数字的来源要说清楚（2026-10-04 查证）：
+   *   · **不是 WSAVA 的规定** —— Table 1（p12）狂犬那一行三列写的都是
+   *     "Follow any local laws or regulations as a priority. Follow the product
+   *      leaflets of locally manufactured vaccines."，
+   *     "In some countries, the first dose is generally not given before 12 weeks"
+   *     是**描述**，不是推荐；
+   *   · **也不是中国法规的规定** ——《狂犬病防治技术规范》5.1 只写
+   *     "对所有犬实行强制性免疫，每年一次"，没有首针月龄；
+   *   · 所以 12 周大概率来自**国内狂犬疫苗说明书**（多数国产苗写 3 月龄以上）。
+   * 保持 12 周作为默认起点是合理的，但**依据必须如实写成"常见做法，
+   * 以疫苗说明书与当地规定为准"**，不能写成指南要求。
+   */
   firstDoseWeeksMin: 12,
-  /** 之后每年一次 */
+  /** 之后每年一次（国内法规口径） */
   repeatYears: 1,
   maxDoses: 12,
   basis:
-    '国内狂犬病属强制免疫病种，通常每年一次；具体月龄与登记要求以当地规定为准',
+    '国内狂犬属强制免疫病种，每年一次（《狂犬病防治技术规范》5.1）；' +
+    '首针月龄以所用疫苗的说明书与当地规定为准，这里默认按 12 周龄起',
 } as const;
 
 /**
@@ -249,7 +296,8 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
 
   let doseIndex = 0;
   let cursor = firstStart;
-  while (cursor.getTime() <= finish.getTime() && doseIndex < 8) {
+  // 先排到 16 周龄之前的那几针
+  while (cursor.getTime() < finish.getTime() && doseIndex < 8) {
     const windowEnd = laterOf(
       earlierOf(addWeeks(cursor, CORE_PUPPY_SERIES.intervalWeeksMax), finish),
       cursor,
@@ -266,25 +314,51 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
     doseIndex += 1;
   }
 
+  // ── 关键：必须再有一针落在 16 周龄及以后（2026-10-04 修）────────
+  //
+  // 改造前是 "打到 16 周就停"，于是从 6 周龄起排出来的是 6/10/14 三针，
+  // **最后一针的窗口是 14~16 周** —— 一只 14 周龄接种的幼犬会被判"首免完成"。
+  // 而指南反复强调的恰恰是这一针：
+  //   p11 "The most important of these early vaccine doses is the one
+  //        administered at 16 weeks of age or older."
+  //   p14 "continues to recommend finishing no earlier than 16 weeks."
+  //
+  // 所以这里**强制补一针**，窗口起点不早于 16 周龄。
+  // 从 6 周起排出来是 6/10/14/18（4 针）；从 8 周起是 8/12/16（3 针）。
+  const finalStart = laterOf(cursor, finish);
+  seeds.push({
+    key: `core-puppy-${doseIndex + 1}`,
+    kind: 'core',
+    label: `幼犬首免 第 ${doseIndex + 1} 针`,
+    windowStart: finalStart,
+    windowEnd: addWeeks(finalStart, CORE_PUPPY_SERIES.intervalWeeksMax),
+    basis: CORE_PUPPY_SERIES.finalDoseBasis,
+  });
+  doseIndex += 1;
+
   // 第一针的窗口其实从 6 到 8 周都行，把它放宽（上面用的是最紧的排法）
   if (seeds.length > 0) {
     seeds[0].windowEnd = laterOf(seeds[0].windowEnd, firstEnd);
   }
 
-  // ── 26 周龄以上的可选补强（WSAVA 2024 的讨论） ──
-  const optional = addWeeks(birthday, CORE_PUPPY_SERIES.optionalBoosterWeeks);
+  // ── 26 周龄以上的补强（WSAVA 2024 推荐，不是"可选"）──────────
+  //
+  // 指南 p14：这条**取代**了旧的"12~16 月龄第一次加强"。
+  // 不想打这一针的话，替代方案是 20 周龄以后做抗体检测。
+  const booster26w = addWeeks(birthday, CORE_PUPPY_SERIES.boosterWeeks);
   seeds.push({
-    key: 'core-optional-26w',
+    key: 'core-26w',
     kind: 'core',
-    label: '首免后补强（可选）',
-    windowStart: optional,
-    windowEnd: addWeeks(optional, 4),
+    label: '首免后补强（26 周龄）',
+    windowStart: booster26w,
+    windowEnd: addWeeks(booster26w, 4),
     basis:
-      'WSAVA 2024 讨论了在 26 周龄以上再补一针核心疫苗，而不是等到 12–16 月龄；是否补由兽医判断',
+      'WSAVA 2024：26 周龄或稍后再补一针核心疫苗（而不是等到 12~16 月龄）；' +
+      '若已在 20 周龄后做过抗体检测且显示有保护，则不需要这一针',
   });
 
-  // ── 成年加强：首免完成后 1 年做第一次，之后每 3 年 ──
-  let booster = addYears(finish, CORE_ADULT_BOOSTER.firstBoosterYears);
+  // ── 成年加强：从 26 周龄那一针之后 3 年开始，之后每 3 年 ──
+  let booster = addYears(booster26w, CORE_ADULT_BOOSTER.repeatYears);
   for (let index = 0; index < CORE_ADULT_BOOSTER.maxBoosters; index += 1) {
     seeds.push({
       key: `core-adult-${index + 1}`,
@@ -305,7 +379,11 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
       key: `rabies-${index + 1}`,
       kind: 'rabies',
       label: index === 0 ? '狂犬疫苗 首针' : `狂犬疫苗 第 ${index + 1} 次`,
-      windowStart: addDays(rabies, -30),
+      // 首针**不往前放宽**（2026-10-04 修）：
+      // 之前所有年接种窗口统一 -30 天，把首针窗口拉到了 12周−30天 ≈ 7.7 周龄，
+      // 于是"8 周龄打狂犬"也会被判成已完成 —— 而 12 周是说明书上的最低月龄，
+      // 往下放宽没有任何依据。后续每年的针保留 -30 天（提前一个月打是常规做法）。
+      windowStart: index === 0 ? rabies : addDays(rabies, -30),
       windowEnd: addDays(rabies, 90),
       basis: RABIES_SCHEDULE.basis,
     });
@@ -414,7 +492,17 @@ export function detectConflicts(
     )
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // ① 早于建议窗口的核心疫苗：幼犬首免过早，可能被母源抗体中和
+  // ① 早于最低月龄的核心疫苗（2026-10-04 调整判据）
+  //
+  // 原来的判据是"早于首针窗口起点 7 天"（＝约 5 周龄），
+  // 但这会**误伤**指南 Table 1 里那支正规产品：
+  //   "Canine parvovirus-2 (recombinant)+canine distemper virus (MLV)
+  //    — Administer a single dose **from 4 weeks of age** before commencing
+  //      routine primary vaccinations"
+  // 家长按兽医建议在 4 周龄打了这一针，回来记录却被我们标成"接种过早"。
+  //
+  // 真正的红线是 4 周（FAQ p29："Should I vaccinate puppies that are less than
+  // 4 weeks of age? A. In general, no."），所以改用 4 周龄作判据。
   const coreSeeds = seeds.filter((seed) => seed.kind === 'core');
   const earliestCoreStart = coreSeeds.length
     ? coreSeeds.reduce(
@@ -424,17 +512,24 @@ export function detectConflicts(
     : null;
 
   if (earliestCoreStart) {
+    // earliestCoreStart = 出生 + 6 周；再往前 2 周就是 4 周龄
+    const minimumAgeLine = addWeeks(
+      earliestCoreStart,
+      CORE_PUPPY_SERIES.earliestWeeks - CORE_PUPPY_SERIES.startWeeksMin,
+    );
+
     for (const item of parsed) {
       if (item.kind !== 'core') continue;
-      if (item.date.getTime() < addDays(earliestCoreStart, -7).getTime()) {
+      if (item.date.getTime() < minimumAgeLine.getTime()) {
         conflicts.push({
           kind: 'core',
           recordId: item.record.id,
           recordDate: toDateText(item.date),
           vaccineName: item.record.vaccineName,
-          reason: '这一针比建议的首免起始时间早得比较多',
+          reason: '这一针打在 4 周龄之前',
           suggestion:
-            '幼犬过早接种可能被母源抗体中和。建议把这次记录带给兽医看，由他判断这一针是否计数、后续怎么排。',
+            '指南不建议给 4 周龄以下幼犬接种（母源抗体会中和疫苗，注射用活苗还可能有害）。' +
+            '建议把这次记录带给兽医看，由他判断这一针是否计数、后续怎么排。',
         });
       }
     }

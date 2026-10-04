@@ -233,9 +233,9 @@ describe('疫苗计划', () => {
   })
 
   describe('冲突提醒（老板第 17 条）', () => {
-    it('幼犬过早接种会被标出来', () => {
+    it('4 周龄以下接种会被标出来', () => {
       const birthday = parseDateText(dog(20))!;
-      // 出生后第 2 周就打核心疫苗 —— 早于 6 周龄
+      // 出生后第 2 周就打核心疫苗 —— 早于 4 周龄这条红线
       const tooEarly = toDateText(new Date(birthday.getTime() + 14 * 86400000));
 
       const plan = buildVaccinePlan({
@@ -246,7 +246,28 @@ describe('疫苗计划', () => {
       });
 
       expect(plan.conflicts.length).toBeGreaterThan(0);
-      expect(plan.conflicts[0].reason).toContain('早');
+      expect(plan.conflicts[0].reason).toContain('4 周龄之前');
+    })
+
+    it('4 周龄的那一针不报"过早" —— 那是指南里的正规产品', () => {
+      // Table 1："Canine parvovirus-2 (recombinant)+canine distemper virus (MLV)
+      //          — Administer a single dose from 4 weeks of age"
+      // 家长按兽医建议在 4 周龄打了这一针，回来记录不该被我们标成错误。
+      const birthday = parseDateText(dog(20))!;
+      const atFourWeeks = toDateText(
+        new Date(birthday.getTime() + 28 * 86400000),
+      );
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [record('v1', '幼犬保', atFourWeeks)],
+        today: TODAY,
+      });
+
+      expect(
+        plan.conflicts.filter((item) => item.reason.includes('4 周龄之前')),
+      ).toEqual([]);
     })
 
     it('狂犬两针间隔不足一年会被标出来', () => {
@@ -266,10 +287,12 @@ describe('疫苗计划', () => {
     })
 
     it('记录里的"下次到期日"与建议对不上时会提示', () => {
+      // 2026-10-01 的 200 周龄狗，核心加强窗口在 2026-06 附近；
+      // 填一个 8 年后的到期日，明显在按另一套程序走。
       const plan = buildVaccinePlan({
         dogId: 'dog-1',
         birthday: dog(200),
-        records: [record('v1', '六联', '2026-01-10', '2032-06-01')],
+        records: [record('v1', '六联', '2026-01-10', '2034-09-01')],
         today: TODAY,
       });
 
@@ -432,6 +455,75 @@ describe('疫苗计划', () => {
         today: TODAY,
       })
       expect(plan.steps).toEqual([])
+    })
+  })
+
+  /**
+   * 免疫程序表的四处修正（2026-10-04，读 WSAVA 2024 正本后）
+   *
+   * 这四条都是照着指南原文改的，每条都能翻到页码。
+   */
+  describe('程序表修正（2026-10-04）', () => {
+    it('🔴 首免最后一针不早于 16 周龄 —— 不能 14 周就收尾', () => {
+      // p11 "The most important of these early vaccine doses is the one
+      //      administered at 16 weeks of age or older."
+      // p14 "continues to recommend finishing no earlier than 16 weeks."
+      const birthdayDate = parseDateText(dog(30))!;
+      const schedule = buildImmunizationSchedule(birthdayDate);
+      const puppy = schedule.filter((item) => item.key.startsWith('core-puppy-'));
+
+      const lastStartWeeks = weeksBetween(
+        birthdayDate,
+        puppy[puppy.length - 1].windowStart,
+      );
+      expect(lastStartWeeks).toBeGreaterThanOrEqual(16);
+      // 从 6 周龄起排是 6/10/14/18 —— 4 针，不是 3 针
+      expect(puppy.length).toBe(4);
+    })
+
+    it('🔴 狂犬首针窗口不从 12 周往前放宽', () => {
+      // 之前所有年接种窗口统一 -30 天，把首针拉到 ≈7.7 周龄，
+      // 于是"8 周龄打狂犬"也会被判成已完成 —— 12 周是说明书上的最低月龄，
+      // 往下放宽没有任何依据。
+      const birthdayDate = parseDateText(dog(30))!;
+      const schedule = buildImmunizationSchedule(birthdayDate);
+      const firstRabies = schedule.find((item) => item.key === 'rabies-1')!;
+
+      expect(weeksBetween(birthdayDate, firstRabies.windowStart)).toBeGreaterThanOrEqual(12);
+    })
+
+    it('🟠 26 周龄那一针是"推荐"，不叫"可选"', () => {
+      // p14："Revaccination at or after 26 weeks of age … is advised"
+      // 且明确说这条取代了旧的"12~16 月龄第一次加强"。
+      const schedule = buildImmunizationSchedule(parseDateText(dog(30))!);
+      const booster = schedule.find((item) => item.key === 'core-26w')!;
+
+      expect(booster).toBeDefined();
+      expect(booster.label).not.toContain('可选');
+      expect(booster.basis).toContain('26 周龄');
+    })
+
+    it('🔴 成年加强从 26 周龄那一针起算（不是"16 周 + 1 年"）', () => {
+      const birthdayDate = parseDateText(dog(30))!;
+      const schedule = buildImmunizationSchedule(birthdayDate);
+      const booster26w = schedule.find((item) => item.key === 'core-26w')!;
+      const firstAdult = schedule.find((item) => item.key === 'core-adult-1')!;
+
+      const gapYears =
+        (firstAdult.windowStart.getTime() - booster26w.windowStart.getTime()) /
+        (365 * 86400000);
+      expect(gapYears).toBeGreaterThan(2.9);
+      expect(gapYears).toBeLessThan(3.1);
+    })
+
+    it('每一条依据都写明出处（顾客和审核的人都要能查）', () => {
+      const schedule = buildImmunizationSchedule(parseDateText(dog(30))!);
+      for (const item of schedule) {
+        expect(item.basis.length).toBeGreaterThan(10);
+      }
+      // 狂犬的依据要如实说明"以说明书与当地规定为准"，不能写成指南要求
+      const rabies = schedule.find((item) => item.kind === 'rabies')!;
+      expect(rabies.basis).toContain('说明书');
     })
   })
 })

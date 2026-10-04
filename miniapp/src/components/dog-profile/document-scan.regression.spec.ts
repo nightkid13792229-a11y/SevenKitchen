@@ -40,10 +40,12 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain("emit('scanned'")
     expect(scan).not.toContain('createHealthRecord')
     expect(scan).not.toContain('saveRecord')
-    // 识别把握不再给顾客看（2026-10-02 老板定）；只有"低"时给一句能行动的话
-    // （注释里提到这四个字没关系，这里卡的是**渲染出来的那句话**）
+    // 识别把握**一个字都不给顾客看**：
+    // 2026-10-02 去掉"中/高"，2026-10-04 老板拍板连"低"的那句也不要
     expect(scan).not.toContain('识别把握：')
-    expect(scan).toContain('填完请对着原件核一遍')
+    expect(scan).not.toContain('填完请对着原件核一遍')
+    expect(scan).not.toContain('lowConfidenceHint')
+    expect(scan).not.toContain('confirm__confidence')
   })
 
   it('第 6 条：明确写着也可以手填，且任何一步失败都不挡人', () => {

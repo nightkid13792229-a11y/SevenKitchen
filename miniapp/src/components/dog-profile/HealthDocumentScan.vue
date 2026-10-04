@@ -95,9 +95,9 @@
         <text v-for="warning in warnings" :key="warning" class="confirm__warning">· {{ warning }}</text>
       </view>
 
-      <!-- 识别把握不再给顾客看（2026-10-02 老板定）：模型自评分，顾客据此做不了任何事，
-           显示一个"中"只会让人整份都不敢信。只有"低"时才给一句能行动的话。 -->
-      <text v-if="lowConfidenceHint" class="confirm__confidence">{{ lowConfidenceHint }}</text>
+      <!-- 识别把握**一个字都不显示**（2026-10-02 先去掉"中/高"，2026-10-04 老板拍板
+           连"低"的那句也不要）：模型自评分，顾客据此做不了任何事，
+           只会让整份结果都不敢信。真正要提醒的地方已经**点名到具体行**了。 -->
 
       <view class="confirm__actions">
         <text class="confirm__discard" @tap="discard">重新上传</text>
@@ -184,6 +184,12 @@ const isBusy = ref(false)
 const showConfirm = ref(false)
 const drafts = ref<Record<string, any>[]>([])
 const warnings = ref<string[]>([])
+/**
+ * 模型自评的识别把握。
+ *
+ * ⚠️ **一个字都不给顾客看**（2026-10-02 去掉"中/高"，2026-10-04 老板拍板连"低"也不要）。
+ * 留着它只为排查问题时能对照，不参与任何界面逻辑。
+ */
 const confidence = ref('LOW')
 /**
  * 后端最终判定的文档类型。
@@ -254,10 +260,6 @@ function previewPage(path: string) {
   }
   uni.previewImage({ urls, current: path })
 }
-
-const lowConfidenceHint = computed(() => (
-  confidence.value === 'LOW' ? '有几处没读准，填完请对着原件核一遍。' : ''
-))
 
 /** 当前应当按哪一类渲染/填表：优先用后端判定出来的类型 */
 const activeDocumentType = computed<DocumentType>(() => (
@@ -1046,13 +1048,6 @@ function discard() {
   font-size: 21rpx;
   line-height: 1.6;
   color: #a5311f;
-}
-
-.confirm__confidence {
-  display: block;
-  margin-top: 14rpx;
-  font-size: 21rpx;
-  color: #8a968a;
 }
 
 .confirm__actions {

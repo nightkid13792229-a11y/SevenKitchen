@@ -144,26 +144,31 @@
           <!-- 过敏是最要紧的一类：一点即选 + 上传检测报告自动识别。
                建档流程从 2026-09-27 起完全不收集健康信息，这里是它的唯一入口。 -->
           <template #type-extra>
-            <AllergyQuickAddSection
-              v-if="activeRecordType === 'allergy'"
-              ref="allergySectionRef"
-              :show-add-entry="true"
-              :dog-id="dogId"
-              :recorded-allergens="recordedAllergens"
-              @saved="onAllergenSaved"
-            />
+            <!-- 底部固定栏的「添加过敏原」滚到这块 -->
+            <view v-if="activeRecordType === 'allergy'" id="allergy-add">
+              <AllergyQuickAddSection
+                ref="allergySectionRef"
+                :show-add-entry="true"
+                :dog-id="dogId"
+                :recorded-allergens="recordedAllergens"
+                @saved="onAllergenSaved"
+              />
+            </view>
           </template>
         </HealthRecordsSection>
 
         <!-- 过敏「排查计划」（2026-10-04，过敏重构第三期）。
              老板第 2 条要求。定位是"帮你执行、帮你记录"，
              不替兽医开方案 —— 试验必须由兽医设计与监督。 -->
-        <AllergyTrialSection
-          v-if="activeHealthTab === 'allergy'"
-          :dog-id="dogId"
-          :recorded-allergens="recordedAllergens"
-          @changed="onAllergenSaved"
-        />
+        <!-- 底部固定栏的「排查计划」滚到这块（2026-10-04）。
+             包一层只为给锚点 id —— 组件根节点上加 id 在小程序里不可靠。 -->
+        <view v-if="activeHealthTab === 'allergy'" id="allergy-trial">
+          <AllergyTrialSection
+            :dog-id="dogId"
+            :recorded-allergens="recordedAllergens"
+            @changed="onAllergenSaved"
+          />
+        </view>
 
         <!-- 过敏「依据」区：报告原件与来源。
              改造前顾客上传的报告**传完就丢**，再也看不到。 -->
@@ -224,7 +229,9 @@
       :primary-text="stickySecondaryText"
       :primary-theme="stickyAddTheme"
       :primary-disabled="isSecondaryActionDisabled"
+      :secondary-text="stickyAllergyPlanText"
       @primary="onStickySecondary"
+      @secondary="onStickyAllergyPlan"
     />
   </view>
 </template>
@@ -264,7 +271,7 @@ import {
   writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
-import { scrollPageToTop } from '../../utils/page-scroll'
+import { scrollPageToSelector } from '../../utils/page-scroll'
 
 interface DogProfileSummary {
   id: string
@@ -1089,26 +1096,19 @@ function onAddRecordTap() {
   }
 
   /**
-   * 过敏不走"新建一张空记录卡"这条路（2026-10-04）。
+   * 过敏自己一条路（2026-10-04 老板："看不懂该如何添加过敏原"）。
    *
-   * 过敏板块上面那张「快速添加过敏原」卡本身就是最省事的填法
-   * （点选 / 手输 + 拍检测报告自动识别）；而且过敏改回自己的模板之后，
-   * 记录组件里那套"拍照录入"只在就诊/体检模式下挂载，
-   * 再走记录那条分支会**点了没反应**。
+   * 原来绕了两层：点「新增记录」→ 再选「手动点选 / 手输」→ 只弹一句
+   * "在上面点选或手输过敏原"，而那张卡当时**默认还是收起的** ——
+   * 家长看到的是一片空白。
+   *
+   * 现在：底部主按钮直接叫「添加过敏原」，点一下滚到那张卡、光标落在输入框；
+   * 想拍报告，卡上就有「上传报告」。也不再走"新建一张空记录卡"那条分支 ——
+   * 记录组件里那套拍照录入只在就诊/体检模式下挂载，走那条会点了没反应。
    */
   if (activeHealthTab.value === 'allergy') {
-    uni.showActionSheet({
-      itemList: ['拍检测报告，AI 识别', '手动点选 / 手输'],
-      success: ({ tapIndex }) => {
-        // 那张「添加过敏原」卡就在本标签最上面、一直是展开的
-        // （2026-10-04：从前它默认是收起的，点「手动点选」只弹一句"在上面点"，
-        //   家长看到的是一片空白 —— 这就是"看不懂怎么加过敏原"的原因）
-        scrollPageToTop(200)
-        if (tapIndex === 0) {
-          nextTick(() => allergySectionRef.value?.pickHealthReport?.())
-        }
-      },
-    })
+    scrollPageToSelector('#allergy-add')
+    nextTick(() => allergySectionRef.value?.focusInput?.())
     return
   }
 
@@ -1165,10 +1165,40 @@ const stickyAddTheme = computed<'visit' | 'checkup' | 'allergy' | 'vaccine' | 'w
   return 'visit'
 })
 
-const stickySecondaryText = computed(() => (
-  // 2026-10-02：新增统一走引导入口，所以任何标签下都是同一个动作
-  selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]
+/**
+ * 底部固定栏的**主按钮**文案。
+ *
+ * 2026-10-04 起，过敏标签下它是「添加过敏原」而不是笼统的「新增记录」——
+ * 老板："我实在是看不懂你这个过敏标签该如何添加过敏原。"
+ * 笼统的"新增记录"没说清点了会发生什么；直接写家长要做的那件事。
+ */
+const stickySecondaryText = computed(() => {
+  if (!selectedDog.value) {
+    return HEALTH_ENTRY_LABELS[entrySource.value]
+  }
+
+  if (activeHealthTab.value === 'allergy') {
+    return '添加过敏原'
+  }
+
+  // 2026-10-02：其它标签下新增统一走引导入口，所以是同一个动作
+  return '新增记录'
+})
+
+/**
+ * 底部固定栏的**次按钮**：只有过敏标签有第二个出口。
+ *
+ * 过敏这页家长要干的事其实是两件：**记下不能吃什么** 和 **查清楚到底对什么过敏**。
+ * 从前两件事都藏在页面下面（一个要点"新增记录"再选、一个要往下滑），
+ * 所以给排查计划一个常驻的位置（老板建议改底部固定栏）。
+ */
+const stickyAllergyPlanText = computed(() => (
+  selectedDog.value && activeHealthTab.value === 'allergy' ? '排查计划' : ''
 ))
+
+function onStickyAllergyPlan() {
+  scrollPageToSelector('#allergy-trial')
+}
 
 /**
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。

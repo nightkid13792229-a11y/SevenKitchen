@@ -392,8 +392,10 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('weightSectionRef.value?.flushAutoSaves?.()')
     expect(page).toContain('onHide(')
     expect(page).toContain('onUnload(')
-    // 次按钮：病历/检查板块是「新增记录」（入口合并到这里），其它板块仍是返回
-    expect(page).toContain("selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    // 主按钮：发病史/检查是「新增记录」，过敏是「添加过敏原」，没选狗时是返回
+    expect(page).toContain("return HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).toContain("return '添加过敏原'")
+    expect(page).toContain("return '新增记录'")
     // 2026-10-02：新增统一走引导面板（不再直连记录板块的选择器）
     expect(page).toContain('onAddRecordTap()')
   })
@@ -512,14 +514,14 @@ describe('dog-profile-health · 新增记录直接路由', () => {
   it('文案改成「新增记录」，引导面板彻底下线', () => {
     const page = readPage()
 
-    expect(page).toContain("selectedDog.value ? '新增记录' : HEALTH_ENTRY_LABELS[entrySource.value]")
+    expect(page).toContain("return '新增记录'")
     expect(page).not.toContain('addGuideVisible')
     expect(page).not.toContain('ADD_GUIDE_ITEMS')
     expect(page).not.toContain('你要记什么？')
     expect(page).not.toContain('class="add-guide"')
   })
 
-  it('点一下就走当前标签的通道（就诊/体检→AI 识别，疫苗→拍疫苗本，过敏→拍报告，体重→落光标）', () => {
+  it('点一下就走当前标签的通道（就诊/体检→AI 识别，疫苗→拍疫苗本，过敏→滚到添加卡，体重→落光标）', () => {
     const page = readPage()
 
     expect(page).toContain('function onAddRecordTap()')
@@ -527,21 +529,23 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('recordsSectionRef.value?.startScan?.()')
     // 疫苗：打开新增块并直接拍疫苗本
     expect(page).toContain('vaccineSectionRef.value?.startScan?.()')
-    // 过敏：直接拍检测报告（识别结果仍需确认）
-    expect(page).toContain('allergySectionRef.value?.pickHealthReport?.()')
+    // 过敏：滚到那张「添加过敏原」卡并聚焦输入框（2026-10-04 改，见下一条）
+    expect(page).toContain('allergySectionRef.value?.focusInput?.()')
     // 体重：打开输入块 + 光标进输入框
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
     // 不再有"先切标签再执行"那一步
     expect(page).not.toContain('selectHealthTab(key as HealthTabKey)')
   })
 
-  it('点下去先问一句：上传图片 AI 识别 / 自己手动填写', () => {
+  it('点下去先问一句：上传图片 AI 识别 / 自己手动填写（过敏除外）', () => {
     const page = readPage()
 
     expect(page).toContain('uni.showActionSheet({')
     expect(page).toContain("['上传图片，AI 识别', '手动填写']")
     expect(page).toContain("['拍疫苗本，AI 识别', '手动加一条']")
-    expect(page).toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
+    // 过敏不再弹面板：底部按钮已经写明「添加过敏原」，点一下就到那张卡
+    expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
+    expect(page).toContain("scrollPageToSelector('#allergy-add')")
     // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"
     expect(page).toContain('recordsSectionRef.value?.addRecord?.()')
     expect(page).toContain('vaccineSectionRef.value?.addRecord?.()')

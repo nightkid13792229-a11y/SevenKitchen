@@ -68,10 +68,13 @@ describe('过敏书签 · 新增记录的两个入口', () => {
     const source = page()
 
     expect(source).toContain("if (activeHealthTab.value === 'allergy')")
-    expect(source).toContain("itemList: ['拍检测报告，AI 识别', '手动点选 / 手输']")
-    expect(source).toContain('allergySectionRef.value?.pickHealthReport?.()')
-    // 「手动点选 / 手输」不再只弹一句"在上面点"，而是把家长送到那张卡上
-    expect(source).toContain('scrollPageToTop(200)')
+    // 底部主按钮直接叫「添加过敏原」，点一下滚到那张卡 + 光标落在输入框
+    expect(source).toContain("return '添加过敏原'")
+    expect(source).toContain("scrollPageToSelector('#allergy-add')")
+    expect(source).toContain('allergySectionRef.value?.focusInput?.()')
+    // 次按钮给排查计划一个常驻位置
+    expect(source).toContain("stickyAllergyPlanText")
+    expect(source).toContain("scrollPageToSelector('#allergy-trial')")
   })
 
   it('过敏不再走"新建空记录卡"那条记录分支', () => {

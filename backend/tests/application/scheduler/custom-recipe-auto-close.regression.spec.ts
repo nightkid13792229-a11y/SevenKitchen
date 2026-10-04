@@ -61,9 +61,29 @@ describe('定制食谱订单自动关单', () => {
     const start = source.indexOf(
       'private async autoCancelExpiredCustomRecipeOrders',
     );
-    const fn = source.slice(start, start + 1600);
+    // 2026-10-04：函数里新增了"关单前先核查微信支付结果"，断言窗口随之加长
+    const fn = source.slice(start, start + 3200);
 
     expect(fn).toContain('customRecipeService.cancelOrder');
     expect(fn).not.toContain('this.prisma');
+  });
+
+  it('⚠️ 关单前必须先向微信核查支付结果，避免"钱收了、单却被关掉"', () => {
+    const start = source.indexOf(
+      'private async autoCancelExpiredCustomRecipeOrders',
+    );
+    const fn = source.slice(start, start + 3200);
+
+    const verifyIdx = fn.indexOf('syncCustomRecipePaymentForScheduler');
+    const cancelIdx = fn.indexOf('customRecipeService.cancelOrder');
+
+    expect(verifyIdx).toBeGreaterThan(-1);
+    expect(cancelIdx).toBeGreaterThan(-1);
+    // 核查必须发生在关单之前：顾客可能刚付完款、回调还没到
+    expect(verifyIdx).toBeLessThan(cancelIdx);
+    // 核查失败（微信不可达等）时宁可本轮不关，也不能关掉一张可能已付款的单
+    expect(fn).toMatch(/核查失败[\s\S]{0,200}continue;/);
+    // 查到已支付就直接跳过这张单
+    expect(fn).toMatch(/verified\.paid[\s\S]{0,200}continue;/);
   });
 });

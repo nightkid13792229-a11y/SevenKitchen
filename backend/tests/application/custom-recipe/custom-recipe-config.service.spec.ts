@@ -86,12 +86,17 @@ describe('CustomRecipeConfigService', () => {
         feeAmount: 300,
         creditAmount: 200,
         deliveryWorkDays: 3,
+        /**
+         * 2026-10-04：支付时限改为**对外公开**。
+         * 订单超时会被自动取消，但此前这个值只存在于后台，
+         * 小程序无法提示"请在 X 分钟内支付"，顾客被关单时一头雾水。
+         */
+        paymentTimeoutMinutes: 30,
         // 订阅消息模板 ID：未配置环境变量时为 null，小程序据此跳过订阅申请
         orderNotifyTemplateId: null,
       });
       // 内部产能参数不得对外暴露
       expect(config).not.toHaveProperty('dailyCapacity');
-      expect(config).not.toHaveProperty('paymentTimeoutMinutes');
     });
   });
 

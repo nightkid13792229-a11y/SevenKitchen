@@ -9,10 +9,29 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
+        <!-- 口径 2：改定制费/产能只允许管理员。客服点下去只会吃 403，
+             按钮直接说明"需要管理员权限"，不让人白点一次 -->
+        <el-tooltip
+          v-if="!isAdmin"
+          :content="`${ADMIN_ONLY_TIP}：修改食谱定制设置`"
+          placement="bottom"
+        >
+          <span><el-button type="primary" disabled>保存配置</el-button></span>
+        </el-tooltip>
+        <el-button v-else type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
         <span v-if="saveError" class="save-error">{{ saveError }}</span>
       </div>
     </div>
+
+    <el-alert
+      v-if="!isAdmin"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="snapshot-alert"
+      title="需要管理员权限"
+      description="食谱定制设置（定制费 / 可抵扣金额 / 交付周期 / 接单上限）只允许管理员修改，当前账号只能查看。"
+    />
 
     <el-alert
       type="info"
@@ -24,7 +43,7 @@
     />
 
     <el-card shadow="never" v-loading="loading">
-      <el-form :model="form" label-width="200px">
+      <el-form :model="form" label-width="200px" :disabled="!isAdmin">
         <el-divider content-position="left">价格</el-divider>
 
         <el-form-item label="定制费（元）">
@@ -106,9 +125,12 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { api } from '@/api';
+import { customRecipeApi } from '@/api/customRecipe';
+import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
+import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 
-const API_BASE = '/admin/custom-recipe';
+/** 口径 2：这套参数（单价与产能）只允许管理员改，客服可以看 */
+const isAdmin = useIsAdmin();
 
 const loading = ref(false);
 const saving = ref(false);
@@ -139,7 +161,7 @@ const loadConfig = async () => {
   loading.value = true;
   saveError.value = '';
   try {
-    const data: any = await api.get(`${API_BASE}/config`);
+    const data = await customRecipeApi.getConfig();
     form.feeAmount = Number(data?.feeAmount ?? 300);
     form.creditAmount = Number(data?.creditAmount ?? 300);
     form.deliveryWorkDays = Number(data?.deliveryWorkDays ?? 3);
@@ -149,7 +171,8 @@ const loadConfig = async () => {
       ? new Date(data.updatedAt).toLocaleString()
       : '';
   } catch (error) {
-    saveError.value = '读取配置失败，请刷新重试';
+    // 具体原因（没登录过期 / 后端拒绝）比"读取配置失败"有用得多
+    saveError.value = getApiErrorMessage(error, '读取配置失败，请刷新重试');
     console.error(error);
   } finally {
     loading.value = false;
@@ -159,6 +182,12 @@ const loadConfig = async () => {
 const handleSave = async () => {
   saveError.value = '';
 
+  if (!isAdmin.value) {
+    // 后端 AdminGuard 也会拦，这里先给出人话
+    saveError.value = `${ADMIN_ONLY_TIP}：修改食谱定制设置`;
+    return;
+  }
+
   if (form.creditAmount > form.feeAmount) {
     saveError.value = '可抵扣金额不能超过定制费';
     return;
@@ -166,15 +195,16 @@ const handleSave = async () => {
 
   saving.value = true;
   try {
-    const data: any = await api.put(`${API_BASE}/config`, { ...form });
+    const data = await customRecipeApi.updateConfig({ ...form });
     ElMessage.success('配置已保存，新提交的订单立即生效');
     updatedAt.value = data?.updatedAt
       ? new Date(data.updatedAt).toLocaleString()
       : '';
-  } catch (error: any) {
-    // 保存失败必须显式显示：否则用户只看到按钮转圈、值没变，以为是自己没点保存
-    saveError.value = error?.message || '保存失败，请重试';
-    ElMessage.error(saveError.value);
+  } catch (error) {
+    // 保存失败必须在按钮旁显式显示：否则用户只看到按钮转圈、值没变，
+    // 以为是自己没点保存。toastApiError 负责"后端原因优先、不重复弹同一句"。
+    saveError.value = getApiErrorMessage(error, '保存失败，请重试');
+    toastApiError(error, '保存失败，请重试', (message) => ElMessage.error(message));
   } finally {
     saving.value = false;
   }

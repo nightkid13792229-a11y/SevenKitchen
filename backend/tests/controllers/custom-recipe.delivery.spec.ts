@@ -46,19 +46,40 @@ describe('CustomRecipeController · 交付与编号口径', () => {
         success: true,
       }),
     };
+    /**
+     * 2026-10-04：后台取消"已付款"订单要先原路退款（老板口径 3），
+     * 所以控制器多了支付服务这个依赖。
+     */
+    const wechatPaymentService = {
+      createCustomRecipeRefund: jest.fn().mockResolvedValue({
+        status: 'PROCESSING',
+      }),
+    };
 
     const controller = new AdminCustomRecipeController(
       customRecipeService as any,
       {} as any,
       wechatService as any,
+      wechatPaymentService as any,
     );
 
-    return { controller, recipeCreate, customRecipeService, wechatService };
+    return {
+      controller,
+      recipeCreate,
+      customRecipeService,
+      wechatService,
+      wechatPaymentService,
+    };
   }
 
+  /**
+   * 口径 2（2026-10-04）：改状态接口开始按角色区分 ——
+   * 「开始制作」客服可以做，「取消订单」只有管理员能做，所以测试要带上身份。
+   */
+  const adminReq = { user: { userId: 'admin-1', role: 'ADMIN' } } as any;
+
   const dto = {
-    name: '专属鲜食',
-    description: '按档案定制',
+    name: '专属鲜食',    description: '按档案定制',
     nutritionStandard: 'FEDIAF_2025',
     nutritionTarget: { energy_density_kcal_per_kg: 3600 },
     items: [],
@@ -134,6 +155,7 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     const { controller, customRecipeService } = createAdminController();
 
     await controller.updateStatus(
+      adminReq,
       'CR202609280001',
       CustomRecipeStatus.CANCELLED,
       '顾客改主意',
@@ -144,6 +166,84 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       CustomRecipeStatus.CANCELLED,
       { reason: '顾客改主意' },
     );
+  });
+
+  // ---------- 2026-10-04：后台取消已付款单必须先退款（老板口径 3） ----------
+
+  it('取消一张已付款的订单会先原路退款，再改状态', async () => {
+    const { controller, wechatPaymentService, customRecipeService } =
+      createAdminController();
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+      '顾客要求取消',
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'CR202609280001' }),
+    );
+    expect(customRecipeService.updateOrderStatus).toHaveBeenCalledWith(
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED,
+      { reason: '顾客要求取消' },
+    );
+  });
+
+  it('取消一张待付款的订单不触发退款（本来就没收到钱）', async () => {
+    const { controller, wechatPaymentService } = createAdminController({
+      status: CustomRecipeStatus.PENDING_PAYMENT,
+    });
+
+    await controller.updateStatus(
+      adminReq,
+      'CR202609280001',
+      CustomRecipeStatus.CANCELLED as any,
+    );
+
+    expect(wechatPaymentService.createCustomRecipeRefund).not.toHaveBeenCalled();
+  });
+
+  it('非法状态值返回业务错误（400），而不是透传给数据库变成 500', async () => {
+    const { controller, customRecipeService } = createAdminController();
+
+    await expect(
+      controller.updateStatus(adminReq, 'CR202609280001', 'NOT_A_STATUS' as any),
+    ).rejects.toThrow('状态值不合法');
+
+    expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('口径 2：客服可以开始制作，但取消订单会被拒绝（仅管理员）', async () => {
+    const staffReq = { user: { userId: 'staff-1', role: 'STAFF' } } as any;
+
+    const start = createAdminController({
+      status: CustomRecipeStatus.PAID,
+    });
+    await start.controller.updateStatus(
+      staffReq,
+      'CR202609280001',
+      CustomRecipeStatus.IN_PROGRESS as any,
+    );
+    expect(start.customRecipeService.updateOrderStatus).toHaveBeenCalledWith(
+      'CR202609280001',
+      CustomRecipeStatus.IN_PROGRESS,
+      expect.anything(),
+    );
+
+    const cancel = createAdminController();
+    await expect(
+      cancel.controller.updateStatus(
+        staffReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('取消订单需要管理员权限');
+    expect(cancel.customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+    expect(
+      cancel.wechatPaymentService.createCustomRecipeRefund,
+    ).not.toHaveBeenCalled();
   });
 });
 
@@ -168,6 +268,11 @@ describe('CustomRecipeController · 顾客端编号口径', () => {
         ],
         total: 1,
       }),
+      /**
+       * 2026-10-04：订单列表/详情新增"支付截止时间"，
+       * 控制器要向 service 取一次支付时限才能算出来。
+       */
+      getPaymentTimeoutMinutes: jest.fn().mockResolvedValue(30),
       getOrderByOrderId: jest.fn().mockResolvedValue({
         orderId: 'CR202609280001',
         customerId: 'user-1',

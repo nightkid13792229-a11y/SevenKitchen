@@ -18,7 +18,9 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -32,9 +34,11 @@ import {
   UpdateScheduleDTO,
 } from '../../../application/custom-recipe/dto/custom-recipe.dto';
 import { AdminGuard } from '../auth/admin.guard';
+import { StaffGuard } from '../../guards/role.guard';
 import { AuthGuard } from '../../auth/auth.guard';
 import { CustomRecipeStatus } from '@prisma/client';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
+import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { ApiResponseDto } from '../../dto/common/response.dto';
 import {
   formatDateToYYYYMMDD,
@@ -44,13 +48,28 @@ import {
 
 @ApiTags('admin/custom-recipe')
 @Controller('api/v1/admin/custom-recipe')
-@UseGuards(AuthGuard, AdminGuard)
+/**
+ * 权限口径（老板 2026-10-04 口径 2）：
+ *   · **客服/员工**可以做日常：看订单、确认收款、开始制作、上传附件；
+ *   · **仅管理员**：食谱定制设置、恢复抵扣额度、交付食谱（含重新交付）、取消订单、排期批量设置。
+ *
+ * 此前整个控制器只放开 ADMIN，而后台菜单对所有登录者可见 ——
+ * 员工看得见菜单、点进去任何操作都 403，只能找管理员。
+ * 敏感动作在各自路由上单独挂 AdminGuard。
+ */
+@UseGuards(AuthGuard, StaffGuard)
 @ApiBearerAuth()
 export class AdminCustomRecipeController {
   constructor(
     private readonly customRecipeService: CustomRecipeService,
     private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly wechatService: WechatService,
+    /**
+     * 后台取消"已付款"订单时要先原路退款（2026-10-04 老板口径 3），
+     * 所以这里需要支付服务。注入方向是 controller → payment → custom-recipe，
+     * 不构成循环依赖。
+     */
+    private readonly wechatPaymentService: WechatPaymentService,
   ) {}
 
   // ---------- 食谱定制设置 ----------
@@ -59,6 +78,8 @@ export class AdminCustomRecipeController {
    * 读取食谱定制配置（定制费 / 可抵扣金额 / 交付周期 / 接单上限 / 支付超时）
    */
   @Get('config')
+  /** 设置类接口保持仅管理员：单价与产能参数不该由客服改（口径 2） */
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '读取食谱定制设置' })
   async getConfig() {
     return ApiResponseDto.success(
@@ -73,6 +94,8 @@ export class AdminCustomRecipeController {
    * 改价不会动到已提交/已付款顾客的额度。
    */
   @Put('config')
+  /** 改价格与产能只允许管理员（口径 2） */
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '更新食谱定制设置' })
   async updateConfig(@Body() dto: UpdateCustomRecipeConfigDto) {
     return ApiResponseDto.success(
@@ -131,6 +154,8 @@ export class AdminCustomRecipeController {
    * 不传 amount 表示"把已用的全部还回去"。
    */
   @Post('orders/:orderId/restore-credit')
+  /** 恢复抵扣额度等于把顾客的钱还回去，仅管理员（口径 2） */
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: '恢复定制抵扣额度' })
   async restoreCredit(
     @Param('orderId') orderId: string,
@@ -236,10 +261,54 @@ export class AdminCustomRecipeController {
   @Patch('orders/:orderId/status')
   @ApiOperation({ summary: 'Update order status' })
   async updateStatus(
+    @Req() req: any,
     @Param('orderId') orderId: string,
     @Body('status') status: CustomRecipeStatus,
     @Body('reason') reason?: string,
   ) {
+    /**
+     * 2026-10-04 补校验：原来 status 直接透传给 Prisma，
+     * 写错一个字母就变成 500（Prisma 枚举错误），提示也看不懂。
+     */
+    if (!Object.values(CustomRecipeStatus).includes(status)) {
+      throw new BadRequestException(
+        `状态值不合法，可选：${Object.values(CustomRecipeStatus).join(' / ')}`,
+      );
+    }
+
+    /**
+     * 口径 2：「开始制作」是日常操作（客服可做），但**取消订单只允许管理员**。
+     * 取消会退款、会释放当天名额、还会通知顾客，是不可逆动作。
+     */
+    if (
+      status === CustomRecipeStatus.CANCELLED &&
+      req?.user?.role !== 'ADMIN'
+    ) {
+      throw new ForbiddenException('取消订单需要管理员权限');
+    }
+
+    /**
+     * 取消一张**已付款**的定制单要先原路退款（老板 2026-10-04 口径 3）。
+     *
+     * 此前后台取消只释放当天名额、既不退款也不提示，钱留在我们账上，
+     * 往往要等顾客来问才发现。退款失败就不取消 ——
+     * 宁可保持原状，也不要出现"取消了钱没退"。
+     */
+    if (status === CustomRecipeStatus.CANCELLED) {
+      const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+      if (!order) {
+        throw new NotFoundException('订单不存在');
+      }
+
+      if (order.status === CustomRecipeStatus.PAID) {
+        await this.wechatPaymentService.createCustomRecipeRefund({
+          orderId: order.orderId,
+          reason: (reason || '').trim() || '后台取消定制订单',
+        });
+      }
+    }
+
     // 流转合法性、取消释放名额、各时间戳都在 service 里统一处理
     await this.customRecipeService.updateOrderStatus(orderId, status, {
       reason,
@@ -252,6 +321,8 @@ export class AdminCustomRecipeController {
    * Create recipe and deliver
    */
   @Post('orders/:orderId/create-recipe')
+  /** 交付食谱只允许管理员（口径 2）：交付即终态，且会给顾客发通知 */
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Create recipe and deliver' })
   async createRecipe(
     @Param('orderId') orderId: string,
@@ -361,11 +432,79 @@ export class AdminCustomRecipeController {
   }
 
   /**
+   * 列出可以交付到这张定制单的食谱（2026-10-04）。
+   *
+   * 员工在设计器里做完食谱后，回到订单页从这里选一下就能交付，
+   * 不必再把数值、食材、步骤手工重抄进「创建定制食谱」表单。
+   */
+  @Get('orders/:orderId/recipe-candidates')
+  @ApiOperation({ summary: 'List recipes that can be delivered to this order' })
+  async getRecipeCandidates(@Param('orderId') orderId: string) {
+    return ApiResponseDto.success(
+      await this.customRecipeService.listDeliverableRecipes(orderId),
+    );
+  }
+
+  /**
+   * 把已设计好的食谱交付到订单（含口径 4 的「重新交付」）。
+   *
+   * 与手工交付共用同一套结果口径：订单转已交付 + 给顾客发订阅消息（带业务编号）。
+   */
+  @Post('orders/:orderId/deliver-recipe')
+  /** 交付（含重新交付）只允许管理员（口径 2） */
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Deliver an existing custom recipe to the order' })
+  async deliverRecipe(
+    @Param('orderId') orderId: string,
+    @Body('recipeId') recipeId: string,
+  ) {
+    const target = (recipeId || '').trim();
+    if (!target) {
+      throw new BadRequestException('请选择要交付的食谱');
+    }
+
+    const result = await this.customRecipeService.deliverExistingRecipe(
+      orderId,
+      target,
+    );
+
+    /**
+     * 重新交付也要发通知：顾客手里那份已经换了，不通知他会一直按旧食谱看。
+     * 通知失败不影响交付结果（订单已经改好了）。
+     */
+    const order = await this.customRecipeService.getOrderByOrderId(orderId);
+    if (order?.customer?.wechatOpenid && this.wechatService) {
+      await this.wechatService
+        .sendCustomRecipeOrderNotification(
+          order.customer.wechatOpenid,
+          order.orderId,
+          'DELIVERED',
+          // 传业务编号：通知里点开的是 /pages/recipe-detail/index?id=...
+          result.recipeBizId,
+        )
+        .catch((error) => {
+          console.error('[CustomRecipe] 交付通知发送失败:', error);
+        });
+    }
+
+    return ApiResponseDto.success({
+      ...result,
+      status: 'DELIVERED',
+      deliveredAt: new Date(),
+    });
+  }
+
+  /**
    * Get schedule (admin)
    */
   @Get('schedule')
   @ApiOperation({ summary: 'Get schedule' })
   async getSchedule(@Query('month') month: string) {
+    // 2026-10-04：缺 month 时原来会 `undefined.split` 崩成 500，这里回 400
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('month 参数格式应为 YYYY-MM');
+    }
+
     const [year, monthNum] = month.split('-').map(Number);
     const { start, end } = getMonthRange(year, monthNum);
 
@@ -393,6 +532,8 @@ export class AdminCustomRecipeController {
    * Batch update schedule
    */
   @Post('schedule/batch-set')
+  /** 批量改产能与可约状态只允许管理员（口径 2） */
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Batch update schedule' })
   async batchSetSchedule(@Body() dto: UpdateScheduleDTO) {
     const dateFrom = new Date(dto.dateFrom);

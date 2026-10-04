@@ -61,6 +61,12 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      /**
+       * 2026-10-04：下单改成"系统自动排期 + CAS 抢名额"，
+       * 排期行会先 createMany（skipDuplicates），再条件式 updateMany 占位。
+       */
+      createMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     customRecipeOrder: {
       // 生成订单号时会先查一次是否撞号（撞号要重试，而不是抛唯一约束错误）
@@ -112,6 +118,13 @@ describe('CustomRecipeService · 同步到狗狗健康档案', () => {
       isAvailable: true,
       bookedCount: 0,
       capacity: 4,
+    });
+    // CAS 占位成功（count: 1 才算抢到）
+    mockPrismaService.customRecipeSchedule.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    mockPrismaService.customRecipeSchedule.createMany.mockResolvedValue({
+      count: 0,
     });
     mockPrismaService.customRecipeOrder.create.mockResolvedValue({
       id: 'cr-uuid-1',

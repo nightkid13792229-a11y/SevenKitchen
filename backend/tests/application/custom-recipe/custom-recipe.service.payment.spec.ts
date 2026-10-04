@@ -108,7 +108,7 @@ describe('CustomRecipeService · 支付与关单', () => {
   });
 
   describe('cancelOrder', () => {
-    it('关单时同时释放当天的排期名额', async () => {
+    it('关单时同时释放当天的排期名额，且只能关「仍是待付款」的单', async () => {
       mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
         id: 'uuid-1',
         orderId: 'CR1',
@@ -119,6 +119,14 @@ describe('CustomRecipeService · 支付与关单', () => {
         scheduledDate: new Date('2026-10-12'),
       });
       mockPrismaService.customRecipeOrder.update.mockResolvedValue({});
+      /**
+       * 2026-10-04：关单改成 CAS（条件更新）。
+       * 原来按 id 无条件改写，若支付回调在这几毫秒内把订单推成 PAID，
+       * 就会被覆盖成已取消 —— 钱收了、单没了、还不退款。
+       */
+      mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({
+        count: 1,
+      });
       mockPrismaService.customRecipeSchedule.updateMany.mockResolvedValue({
         count: 1,
       });
@@ -128,6 +136,13 @@ describe('CustomRecipeService · 支付与关单', () => {
       });
 
       expect(result.cancelled).toBe(true);
+      expect(
+        mockPrismaService.customRecipeOrder.updateMany,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'uuid-1', status: 'PENDING_PAYMENT' },
+        }),
+      );
       expect(mockPrismaService.customRecipeSchedule.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -138,6 +153,31 @@ describe('CustomRecipeService · 支付与关单', () => {
           data: { bookedCount: { decrement: 1 } },
         }),
       );
+    });
+
+    it('⚠️ 抢不过支付回调时不关单，也不释放名额', async () => {
+      mockPrismaService.customRecipeOrder.findFirst.mockResolvedValue({
+        id: 'uuid-1',
+        orderId: 'CR1',
+      });
+      // 读到的是"待付款"，但真正动手时条件已不成立（回调先一步落了 PAID）
+      mockPrismaService.customRecipeOrder.findUnique.mockResolvedValue({
+        id: 'uuid-1',
+        status: 'PENDING_PAYMENT',
+        scheduledDate: new Date('2026-10-12'),
+      });
+      mockPrismaService.customRecipeOrder.updateMany.mockResolvedValue({
+        count: 0,
+      });
+
+      const result = await service.cancelOrder('CR1', {
+        reason: '支付超时自动取消',
+      });
+
+      expect(result.cancelled).toBe(false);
+      expect(
+        mockPrismaService.customRecipeSchedule.updateMany,
+      ).not.toHaveBeenCalled();
     });
 
     it('已付款的订单不允许被自动关单改掉', async () => {
@@ -154,7 +194,9 @@ describe('CustomRecipeService · 支付与关单', () => {
       const result = await service.cancelOrder('CR1', { reason: '超时' });
 
       expect(result.cancelled).toBe(false);
-      expect(mockPrismaService.customRecipeOrder.update).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.customRecipeOrder.updateMany,
+      ).not.toHaveBeenCalled();
       expect(
         mockPrismaService.customRecipeSchedule.updateMany,
       ).not.toHaveBeenCalled();

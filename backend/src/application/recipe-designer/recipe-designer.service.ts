@@ -4940,6 +4940,39 @@ export class RecipeDesignerService {
     return warnings;
   }
 
+  /**
+   * 找出这只狗**正在等食谱**的定制单（2026-10-04）。
+   *
+   * 背景（后台最大的效率黑洞）：设计器发布私有定制食谱时**不写定制单号**，
+   * 全后端只有后台那个手工表单会写（admin-custom-recipe.controller 的
+   * create-recipe）。于是员工在设计器里做完的食谱挂不到订单上 ——
+   * 必须回订单页把数值、食材、步骤**手工重抄一遍**，而且两处表单字段结构不同，
+   * 抄错就得重来；抄完订单的 recipeId 仍是空，顾客那边看不到、也不会收到通知。
+   *
+   * 现在发布时就自动挂上订单，后台订单页可以直接「一键交付」。
+   *
+   * 只认 PAID / IN_PROGRESS：这两种状态才代表"钱已收、食谱还没交"。
+   * 已交付的单要走后台的「重新交付」显式指定，避免把新版食谱悄悄挂到老单上。
+   */
+  private async resolveCustomRecipeOrderIdForDog(
+    customerDogId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!customerDogId) return null;
+
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: {
+        dogId: customerDogId,
+        status: {
+          in: [CustomRecipeStatus.PAID, CustomRecipeStatus.IN_PROGRESS],
+        },
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return order?.id ?? null;
+  }
+
   async createPrivateRecipeSnapshot(
     id: string,
     dto: CreatePrivateRecipeSnapshotDto,
@@ -4963,6 +4996,13 @@ export class RecipeDesignerService {
     const customerOwnerId = isInternalRecipeDesignerRole(context)
       ? draft.createdBy
       : getRecipeDesignerCustomerOwnerId(context);
+    /**
+     * 2026-10-04：发布时就把这只狗"正在等食谱"的定制单挂上，
+     * 后台订单页因此能直接一键交付 —— 员工不用再手工重抄一遍。
+     */
+    const customOrderId = await this.resolveCustomRecipeOrderIdForDog(
+      draft.customerDogId,
+    );
     const baseData = {
       name: this.resolvePrivateRecipeSnapshotDisplayName(draft),
       status: RecipeStatus.PRIVATE_CUSTOM,
@@ -4978,6 +5018,8 @@ export class RecipeDesignerService {
       description: draft.notes,
       designSource: RECIPE_DESIGNER_PUBLISHED_SOURCE,
       isCustomRecipe: true,
+      // 挂不上订单就不写，保留原有链路（老食谱的挂单关系也不会被清掉）
+      ...(customOrderId ? { customOrderId } : {}),
       ...(draft.seriesId ? { seriesId: draft.seriesId } : {}),
       ...(draft.seriesLifeStage
         ? { seriesLifeStage: draft.seriesLifeStage }

@@ -47,6 +47,13 @@ export interface PublicCustomRecipeConfigDto {
   feeAmount: number;
   creditAmount: number;
   deliveryWorkDays: number;
+  /**
+   * 支付超时（分钟）；0 = 不自动关单。
+   *
+   * 2026-10-04 加入公开配置：订单超时会被自动取消，但此前这个值只存在于后台，
+   * 小程序从不提示，顾客付款前完全不知道有时限，被关单后一头雾水。
+   */
+  paymentTimeoutMinutes: number;
   /** 订阅消息模板 ID；未配置时为 null，小程序据此跳过申请 */
   orderNotifyTemplateId: string | null;
 }
@@ -82,6 +89,11 @@ export class CustomRecipeConfigService {
       feeAmount: config.feeAmount,
       creditAmount: config.creditAmount,
       deliveryWorkDays: config.deliveryWorkDays,
+      /**
+       * 支付时限要给到小程序（2026-10-04）：顾客必须知道"多久不付会被自动取消"，
+       * 否则订单被关掉时他会以为是系统出故障。
+       */
+      paymentTimeoutMinutes: config.paymentTimeoutMinutes,
       /**
        * 定制订单状态通知的订阅消息模板 ID（2026-09-28）。
        *
@@ -136,6 +148,23 @@ export class CustomRecipeConfigService {
 
     const nextFee = dto.feeAmount ?? current.feeAmount;
     const nextCredit = dto.creditAmount ?? current.creditAmount;
+
+    /**
+     * 2026-10-04：定制费为 0 时**顾客根本付不了款** ——
+     * 微信下单接口要求金额 ≥ 1 分，订单只会卡在"待付款"，30 分钟后被自动取消。
+     * 与其让顾客撞上这个死路，不如不让后台保存这个值。
+     * 真要做"定制免费"，把可抵扣金额调到与定制费相同即可。
+     *
+     * 这里判的是 nextFee（含库里已有的历史值），所以即使某天线上已经是 0，
+     * 下一次保存也必须先把它改回正数才能过。
+     */
+    if (nextFee === 0) {
+      throw new BadRequestException(
+        '定制费不能为 0：为 0 时顾客无法发起微信支付，订单只会超时被取消。' +
+          '若要做活动，请把「可抵扣金额」调到与定制费相同（等于定制免费）',
+      );
+    }
+
     if (nextCredit > nextFee) {
       throw new BadRequestException(
         `可抵扣金额（¥${nextCredit}）不能超过定制费（¥${nextFee}）；` +

@@ -11,6 +11,7 @@ import { SupplementShopConfigService } from '../supplement-shop/supplement-shop-
 import { SupplementOrderService } from '../supplement-shop/supplement-order.service';
 import { CustomRecipeConfigService } from '../custom-recipe/custom-recipe-config.service';
 import { CustomRecipeService } from '../custom-recipe/custom-recipe.service';
+import { WechatPaymentService } from '../payment/wechat-payment.service';
 
 const WECHAT_ONLINE_PAYMENT_METHODS = ['WECHAT_PAY', 'WECHAT'];
 
@@ -43,6 +44,12 @@ export class OrderSchedulerService {
     private readonly supplementOrderService: SupplementOrderService,
     private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly customRecipeService: CustomRecipeService,
+    /**
+     * 关单前要先向微信查一次支付结果（2026-10-04），所以定时任务也要拿到支付服务。
+     * 依赖方向是 scheduler → payment → custom-recipe，payment 不反向依赖 scheduler，
+     * 因此不会形成循环。
+     */
+    private readonly wechatPaymentService: WechatPaymentService,
   ) {}
 
   /**
@@ -374,6 +381,34 @@ export class OrderSchedulerService {
 
       let cancelled = 0;
       for (const order of expired) {
+        try {
+          /**
+           * 关单前先向微信查一次真实支付结果（2026-10-04）。
+           *
+           * 为什么不能省：顾客可能刚好在时限的最后一刻付了款、回调还没到达，
+           * 直接关单就会变成"钱收了、单却是已取消"。查到已支付就顺势确认收款。
+           *
+           * 查单本身失败（网络/微信异常）时**跳过这张单**：宁可下一轮再关，
+           * 也不能把一张可能已付款的单关掉。
+           */
+          const verified =
+            await this.wechatPaymentService.syncCustomRecipePaymentForScheduler(
+              order.orderId,
+            );
+
+          if (verified.paid) {
+            this.logger.log(
+              `[OrderScheduler] 定制订单 ${order.orderId} 实际已支付，已确认收款并跳过自动关单`,
+            );
+            continue;
+          }
+        } catch (error) {
+          this.logger.warn(
+            `[OrderScheduler] 定制订单 ${order.orderId} 支付结果核查失败，本轮跳过关单: ${(error as Error).message}`,
+          );
+          continue;
+        }
+
         try {
           const result = await this.customRecipeService.cancelOrder(
             order.orderId,

@@ -58,9 +58,17 @@ export class SubmitCustomRecipeOrderDTO {
   @IsString({ each: true })
   attachmentUrls?: string[];
 
-  @ApiProperty({ description: 'Scheduled date (YYYY-MM-DD)' })
+  /**
+   * 预约（开工）日期。
+   *
+   * 2026-10-04 起**由系统自动排期**（老板口径 1）：顾客不再选日期，
+   * 服务端从今天起找最近的可接单工作日，当天满/遇公众假期就顺延。
+   * 老版本小程序仍会带这个字段，因此保留为可选，但值不再采信。
+   */
+  @ApiPropertyOptional({ description: '预约日期（已废弃：由系统自动排期）' })
+  @IsOptional()
   @IsDateString()
-  scheduledDate!: string;
+  scheduledDate?: string;
 
   @ApiProperty({ description: 'Sync to health profile' })
   @IsBoolean()

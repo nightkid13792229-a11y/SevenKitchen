@@ -23,7 +23,14 @@ export interface CreateCustomRecipeOrderDTO {
   preferredIngredients: string[];
   dislikedIngredients: string[];
   attachmentUrls?: string[];
-  scheduledDate: Date;
+  /**
+   * 预约（开工）日期。
+   *
+   * 2026-10-04 起**由系统排**（老板口径 1）：顾客不再自己选日期，
+   * 服务端从今天起找最近的可接单工作日并自动占位。
+   * 字段保留只为兼容既有调用方，传入的值一律不采信。
+   */
+  scheduledDate?: Date;
   syncToHealthProfile: boolean;
   /** 顾客是否勾选了「需要健康管理」（与减重/维持/增重相互独立，2026-09-28） */
   needsHealthManagement?: boolean;

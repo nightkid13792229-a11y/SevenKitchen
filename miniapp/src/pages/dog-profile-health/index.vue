@@ -132,7 +132,7 @@
             <AllergyQuickAddSection
               v-if="activeRecordType === 'allergy'"
               ref="allergySectionRef"
-              :show-add-entry="allergyAddEntryVisible"
+              :show-add-entry="true"
               :dog-id="dogId"
               :recorded-allergens="recordedAllergens"
               @saved="onAllergenSaved"
@@ -227,6 +227,7 @@ import {
   writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
+import { scrollPageToTop } from '../../utils/page-scroll'
 
 interface DogProfileSummary {
   id: string
@@ -998,12 +999,10 @@ const hasUnsavedSectionDraft = ref(false)
  * 所以这些开关只在"选了手动填写"之后才打开 —— 标签页本身仍是"看结果 + 改已有"。
  */
 const vaccineAddEntryVisible = ref(false)
-const allergyAddEntryVisible = ref(false)
 const weightAddEntryVisible = ref(false)
 
 function resetAddEntryFlags() {
   vaccineAddEntryVisible.value = false
-  allergyAddEntryVisible.value = false
   weightAddEntryVisible.value = false
 }
 
@@ -1035,11 +1034,12 @@ function onAddRecordTap() {
     uni.showActionSheet({
       itemList: ['拍检测报告，AI 识别', '手动点选 / 手输'],
       success: ({ tapIndex }) => {
-        allergyAddEntryVisible.value = true
+        // 那张「添加过敏原」卡就在本标签最上面、一直是展开的
+        // （2026-10-04：从前它默认是收起的，点「手动点选」只弹一句"在上面点"，
+        //   家长看到的是一片空白 —— 这就是"看不懂怎么加过敏原"的原因）
+        scrollPageToTop(200)
         if (tapIndex === 0) {
           nextTick(() => allergySectionRef.value?.pickHealthReport?.())
-        } else {
-          uni.showToast({ title: '在上面点选或手输过敏原', icon: 'none' })
         }
       },
     })

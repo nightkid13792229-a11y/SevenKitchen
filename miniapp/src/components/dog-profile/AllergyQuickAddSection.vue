@@ -6,12 +6,16 @@
          候选确认卡不受影响（那是确认环节）。老板 2026-10-02：入口收敛。 -->
     <template v-if="showAddEntry">
     <view class="quick-add__header">
-      <text class="quick-add__title">快速添加过敏原</text>
+      <text class="quick-add__title">添加过敏原</text>
       <text class="quick-add__count">已记 {{ recordedAllergens.length }} 项</text>
     </view>
 
+    <!-- 文案按家长视角重写（2026-10-04）：先说"确定的怎么加"，
+         再说"不确定的去哪找答案"，最后才是"为什么要记"。
+         从前的"点一下就记进档案，不用逐条手打"只在解释交互，
+         没告诉家长"我要是不知道它过敏怎么办"。 -->
     <text class="quick-add__hint">
-      点一下就记进档案，不用逐条手打。过敏原会影响食谱推荐与配方，会喂之前先记下来。
+      已经知道的，点下面一下就记下；不确定的，翻出检测报告拍一张，我们读出来给你确认。
     </text>
 
     <view class="quick-add__tags">

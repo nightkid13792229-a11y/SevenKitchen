@@ -70,7 +70,8 @@ describe('过敏书签 · 新增记录的两个入口', () => {
     expect(source).toContain("if (activeHealthTab.value === 'allergy')")
     expect(source).toContain("itemList: ['拍检测报告，AI 识别', '手动点选 / 手输']")
     expect(source).toContain('allergySectionRef.value?.pickHealthReport?.()')
-    expect(source).toContain("'在上面点选或手输过敏原'")
+    // 「手动点选 / 手输」不再只弹一句"在上面点"，而是把家长送到那张卡上
+    expect(source).toContain('scrollPageToTop(200)')
   })
 
   it('过敏不再走"新建空记录卡"那条记录分支', () => {

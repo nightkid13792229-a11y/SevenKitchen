@@ -557,9 +557,11 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     const page = readPage()
 
     expect(records).not.toContain('手动填写一条')
-    // 三个板块的新增块都回到"由选择打开"
-    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
+    // 疫苗的新增块仍由「新增记录」里的选择打开
     expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
+    // **过敏是例外**：那张「添加过敏原」卡常开（2026-10-04）——
+    // 它默认收起时，家长打开过敏标签看到的是一片空白（老板："看不懂该如何添加过敏原"）
+    expect(page).toContain(':show-add-entry="true"')
   })
 })
 
@@ -579,17 +581,22 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-  it('三个板块的新增块默认关闭，由「新增记录」里的选择打开', () => {
+  it('疫苗 / 体重的新增块默认关闭，由「新增记录」里的选择打开', () => {
     const page = readPage()
 
     expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
-    expect(page).toContain('const allergyAddEntryVisible = ref(false)')
     expect(page).toContain('const weightAddEntryVisible = ref(false)')
     expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
-    expect(page).toContain(':show-add-entry="allergyAddEntryVisible"')
     expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
     // 换标签就复位，避免开关残留
     expect(page).toContain('resetAddEntryFlags()')
+  })
+
+  it('过敏那张卡常开：家长一进过敏标签就能看见怎么加（2026-10-04）', () => {
+    const page = readPage()
+
+    expect(page).toContain(':show-add-entry="true"')
+    expect(page).not.toContain('allergyAddEntryVisible')
   })
 
   it('新增块关闭时不渲染空卡片（老板截图里的白框）', () => {

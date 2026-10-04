@@ -488,18 +488,34 @@
           </view>
         </view>
 
-        <!-- 过敏原明细：只读态必须看得到"对什么过敏"。
-             原先这里只显示"过敏 2 条"这种条数，而唯一能看到明细的编辑态又是坏的
-             （保存不落库），等于顾客根本拿不到这条信息。 -->
-        <view v-if="allergyNames.length > 0" class="allergy-tags">
-          <text class="allergy-tags__label">过敏原</text>
-          <view class="allergy-tags__list">
-            <text
-              v-for="name in allergyNames"
+        <!-- 过敏原明细：**能看也能改**（2026-10-04 老板定）。
+             健康管理里的「过敏」标签已经下线，过敏录入统一在定制食谱流程；
+             这里承担"回头看一眼、顺手补一条/删一条"的职责 ——
+             "我的狗到底不能吃什么"是家长最常来确认的一件事。
+
+             注意：过敏是**独立的记录**（有自己的 id），不能只改数组了事 ——
+             增删都直接调过敏记录接口，再重新拉一遍，保证与服务端一致。 -->
+        <view class="allergy-tags">
+          <view class="allergy-tags__head">
+            <text class="allergy-tags__label">过敏原</text>
+            <text class="allergy-tags__add" @tap="addAllergyFromOverview">+ 添加</text>
+          </view>
+          <view v-if="allergyNames.length > 0" class="allergy-tags__list">
+            <view
+              v-for="(name, index) in allergyNames"
               :key="name"
               class="allergy-tags__item"
-            >{{ name }}</text>
+            >
+              <text>{{ name }}</text>
+              <text
+                class="allergy-tags__remove"
+                @tap.stop="removeAllergyFromOverview(index)"
+              >×</text>
+            </view>
           </view>
+          <text v-else class="allergy-tags__empty">
+            还没记过敏原。知道对什么过敏就在这里加一条；也可以在定制食谱里拍检测报告自动读。
+          </text>
         </view>
 
         <view class="fact-list">
@@ -792,6 +808,95 @@ const allergyNames = computed(() =>
     .map((record: any) => String(record?.allergen || '').trim())
     .filter(Boolean),
 )
+/**
+ * 过敏原的增删（2026-10-04）。
+ *
+ * 为什么直接调接口而不是改 form 等保存：
+ * 过敏是**独立记录**（每条有自己的 id），概览页的"保存"提交的是狗狗档案字段，
+ * 不含过敏记录 —— 只改数组的话点了保存也不会落库（这正是过去那个"编辑态是坏的"）。
+ */
+async function reloadAllergyRecords() {
+  if (!dogId.value) return
+  try {
+    const res: any = await dogApi.healthRecords.allergy.list(dogId.value)
+    const records = Array.isArray(res?.data?.records) ? res.data.records : []
+    form.allergyRecords = records
+  } catch {
+    // 拉不到就保持原样，不弹错打断家长
+  }
+}
+
+function addAllergyFromOverview() {
+  if (!dogId.value) return
+
+  uni.showModal({
+    title: '添加过敏原',
+    editable: true,
+    placeholderText: '例如：鸡肉',
+    success: async (res: any) => {
+      if (!res?.confirm) return
+      const allergen = String(res.content || '').trim()
+      if (!allergen) {
+        uni.showToast({ title: '请填写过敏原', icon: 'none' })
+        return
+      }
+      if (allergyNames.value.includes(allergen)) {
+        uni.showToast({ title: '这一条已经有了', icon: 'none' })
+        return
+      }
+
+      uni.showLoading({ title: '保存中…', mask: true })
+      try {
+        const created: any = await dogApi.healthRecords.allergy.create(dogId.value, {
+          allergen,
+          notes: '',
+          attachments: [],
+        })
+        if (created?.code !== 0) {
+          throw new Error(created?.message || '添加失败')
+        }
+        await reloadAllergyRecords()
+        uni.showToast({ title: `已记下「${allergen}」`, icon: 'none' })
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '添加失败，请重试', icon: 'none' })
+      } finally {
+        uni.hideLoading()
+      }
+    },
+  })
+}
+
+function removeAllergyFromOverview(index: number) {
+  const record = (form.allergyRecords || [])[index]
+  const allergen = String(record?.allergen || '').trim()
+  if (!dogId.value || !record?.id) return
+
+  uni.showModal({
+    title: '删除这条过敏原？',
+    content: `删除后档案里就不再有「${allergen}」，食谱推荐也不会再据此避雷。`,
+    confirmText: '删除',
+    cancelText: '先不删',
+    confirmColor: '#b42318',
+    success: async (res: any) => {
+      if (!res?.confirm) return
+
+      uni.showLoading({ title: '删除中…', mask: true })
+      try {
+        const removed: any = await dogApi.healthRecords.allergy.delete(dogId.value, record.id)
+        if (removed?.code !== 0) {
+          throw new Error(removed?.message || '删除失败')
+        }
+        await reloadAllergyRecords()
+        uni.showToast({ title: '已删除', icon: 'success' })
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '删除失败，请重试', icon: 'none' })
+      } finally {
+        uni.hideLoading()
+      }
+    },
+  })
+}
+
 const energySection = computed(() => buildDogOverviewEnergySection(form, calcResult.value))
 const isMixedBreed = computed(() => form.breedId === MIXED_BREED_VIRTUAL_ID)
 const parsedCurrentWeightKg = computed(() => {
@@ -2569,11 +2674,37 @@ function goToHealthProfile() {
   margin-top: 18rpx;
 }
 
+/* 标签行 + 右侧「+ 添加」（2026-10-04：从只读改成能增删） */
+.allergy-tags__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .allergy-tags__label {
   display: block;
   font-size: 24rpx;
   font-weight: 600;
   color: #6b6653;
+}
+
+.allergy-tags__add {
+  font-size: 24rpx;
+  color: #0f6b43;
+}
+
+.allergy-tags__empty {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a8f83;
+}
+
+.allergy-tags__remove {
+  margin-left: 10rpx;
+  font-size: 24rpx;
+  color: #a8622a;
 }
 
 .allergy-tags__list {
@@ -2584,6 +2715,8 @@ function goToHealthProfile() {
 }
 
 .allergy-tags__item {
+  display: flex;
+  align-items: center;
   padding: 8rpx 20rpx;
   font-size: 24rpx;
   color: #8a4b2a;

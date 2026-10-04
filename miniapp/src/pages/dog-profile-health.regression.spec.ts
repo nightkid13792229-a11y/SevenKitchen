@@ -656,3 +656,72 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
   })
 })
+
+/**
+ * 疫苗书签角标（2026-10-04）。
+ *
+ * 老板定：提醒保持"时间窗口"不细化到某一天；A 层做到疫苗种类提醒。
+ * 但提醒只有落在顾客**看得见的地方**才算数 —— 疫苗计划藏在疫苗书签里，
+ * 顾客不点进去永远不知道有针要打。
+ */
+describe('健康管理 · 疫苗书签角标（2026-10-04）', () => {
+  function readPage() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+  }
+
+  it('有针要打时，书签上直接写出数量', () => {
+    const page = readPage()
+
+    expect(page).toContain('vaccineBadgeText')
+    expect(page).toContain('有 ${dueCount} 针该打了')
+    expect(page).toContain('.health-tabs__badge')
+    expect(page).toContain("tab.key === 'vaccine' && vaccineBadgeText")
+  })
+
+  it('角标由页面自己拉，不能等 VaccinePlanSection 报 —— 那个组件点进去才挂载', () => {
+    const page = readPage()
+
+    expect(page).toContain('async function loadVaccineBadge(')
+    expect(page).toContain('await dogApi.vaccinePlan(requestedDogId)')
+    // 角标的全部意义就是"还没点进去时"提醒，所以必须挂在页面上
+    expect(page).toContain('loadVaccineBadge(requestedDogId)')
+  })
+
+  it('一条接种记录都没有时说"待补记录"，不说"该打了"', () => {
+    const page = readPage()
+
+    // 跟计划板块里不显示"已逾期"是同一条道理：我们没有任何证据说他没打
+    expect(page).toContain('noRecordAtAll === true')
+    expect(page).toContain("vaccineBadgeText.value = '待补记录'")
+  })
+
+  it('计划没开或拉失败时不挂角标（不在书签上写"加载失败"）', () => {
+    const page = readPage()
+
+    expect(page).toContain('res.data.available === false')
+    // 静默清空，不抛也不弹 toast
+    expect(page).toContain("vaccineBadgeText.value = ''")
+  })
+
+  it('书签里的文字 vs 主题色：color 留在 .health-tabs__item 上', () => {
+    const page = readPage()
+
+    // 书签从 <text> 变成纵向 flex 的 <view>（要放角标），
+    // 但是主题色是按 .health-tabs__item--active 给的 ——
+    // 文字元素自己写 color 会把主题色盖掉，四套主题色就全废了。
+    expect(page).toContain('.health-tabs__label {')
+    const itemBlock = page.slice(
+      page.indexOf('.health-tabs__item {'),
+      page.indexOf('.health-tabs__label {'),
+    )
+    expect(itemBlock).toContain('color: #6b7566;')
+    const labelBlock = page.slice(
+      page.indexOf('.health-tabs__label {'),
+      page.indexOf('}', page.indexOf('.health-tabs__label {')),
+    )
+    expect(labelBlock).not.toContain('color:')
+  })
+})

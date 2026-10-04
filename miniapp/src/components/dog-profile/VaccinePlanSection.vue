@@ -1,15 +1,13 @@
 <template>
   <!-- 疫苗计划（2026-10-01，第四期）。
        老板第 15–18 条：按免疫程序提醒还需要打哪些、什么时候打；
-       引导顾客自己决策；顾客计划与我们不一致时提醒；提醒只在小程序内。 -->
-  <view class="health-section vaccine-plan">
-    <!-- 未开放：如实说明原因，不假装没这个功能 -->
-    <view v-if="unavailable" class="health-card plan-locked">
-      <text class="plan-locked__title">疫苗计划待开放</text>
-      <text class="plan-locked__desc">{{ unavailable.message }}</text>
-    </view>
+       引导顾客自己决策；顾客计划与我们不一致时提醒；提醒只在小程序内。
 
-    <template v-else-if="loaded">
+       2026-10-04 老板定：**计划没开的时候整块不出现**。
+       原来会显示一张写着"待开放"的卡片 —— 顾客看到的是一个还不存在、
+       也没说什么时候会有的功能，只会以为是坏的。开了才出现，才讲得通。 -->
+  <view v-if="!planHidden" class="health-section vaccine-plan">
+    <template v-if="loaded">
       <!-- 档案里一条接种记录都没有时先说明白，否则"已逾期"会被读成"你的狗没打疫苗"。
            2026-10-02 顾客侧开放当天补：家长明明打过、只是没记，看到逾期会以为系统算错了。 -->
       <view v-if="noRecordAtAll" class="health-card plan-empty-note">
@@ -64,44 +62,49 @@
         </text>
       </view>
 
-      <!-- ③ 完整计划 -->
-      <view class="health-card">
-        <view class="health-section__header">
-          <view class="health-section__heading">
+      <!-- ③ 完整计划：**一行标题，点开才铺开**（2026-10-04 老板定）。
+           顾客来这一页是看"下一针什么时候打"，不是来读免疫程序表的。
+           一屏里直接铺 9 项，反而把上面那行"下一步"淹掉了 ——
+           重点被自己的细节盖住。 -->
+      <view class="health-card plan-list">
+        <view class="plan-list__head" @tap="planListExpanded = !planListExpanded">
+          <view class="plan-list__copy">
             <text class="health-section__title">接种计划</text>
-            <text class="health-section__desc">
-              按 WSAVA 2024 与国内法规推算，可在每一项上标明你的决定。
-            </text>
+            <text class="plan-list__hint">{{ planListHint }}</text>
           </view>
-          <text class="health-section__count">{{ plan.steps.length }} 项</text>
-        </view>
-
-        <view
-          v-for="step in plan.steps"
-          :key="step.key"
-          class="step"
-          :class="`step--${step.status}`"
-        >
-          <view class="step__head">
-            <text class="step__status">{{ statusLabel(step.status) }}</text>
-            <text class="step__label">{{ step.label }}</text>
-          </view>
-          <text class="step__window">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
-          <text v-if="step.matchedRecordDate" class="step__matched">
-            已记录：{{ step.matchedRecordDate }}
+          <text class="plan-list__toggle">
+            {{ planListExpanded ? '收起' : `展开 ${plan.steps.length} 项` }}
           </text>
-          <text class="step__basis">依据：{{ step.basis }}</text>
-
-          <view class="decisions decisions--compact">
-            <text
-              v-for="option in DECISION_OPTIONS"
-              :key="`${step.key}-${option.value}`"
-              class="decisions__item"
-              :class="{ 'decisions__item--active': plan.decisions[step.key] === option.value }"
-              @tap="decide(step.key, option.value)"
-            >{{ option.label }}</text>
-          </view>
         </view>
+
+        <template v-if="planListExpanded">
+          <view
+            v-for="step in plan.steps"
+            :key="step.key"
+            class="step"
+            :class="`step--${step.status}`"
+          >
+            <view class="step__head">
+              <text class="step__status">{{ statusLabel(step.status) }}</text>
+              <text class="step__label">{{ step.label }}</text>
+            </view>
+            <text class="step__window">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
+            <text v-if="step.matchedRecordDate" class="step__matched">
+              已记录：{{ step.matchedRecordDate }}
+            </text>
+            <text class="step__basis">依据：{{ step.basis }}</text>
+
+            <view class="decisions decisions--compact">
+              <text
+                v-for="option in DECISION_OPTIONS"
+                :key="`${step.key}-${option.value}`"
+                class="decisions__item"
+                :class="{ 'decisions__item--active': plan.decisions[step.key] === option.value }"
+                @tap="decide(step.key, option.value)"
+              >{{ option.label }}</text>
+            </view>
+          </view>
+        </template>
       </view>
 
       <text class="plan-note">
@@ -172,6 +175,9 @@ const STATUS_LABELS: Record<PlanStep['status'], string> = {
 const loaded = ref(false)
 const loadError = ref('')
 const unavailable = ref<{ message: string } | null>(null)
+
+/** 计划没开（接口说 available:false）→ 整块不出现，不是显示一张"待开放"的卡 */
+const planHidden = computed(() => unavailable.value !== null)
 const plan = ref<{
   nextStep: PlanStep | null
   steps: PlanStep[]
@@ -224,6 +230,28 @@ function statusLabel(status: PlanStep['status']) {
   }
   return STATUS_LABELS[status] || status
 }
+
+/**
+ * 完整计划默认收起（2026-10-04）。
+ * 冲突提醒不折叠 —— 那是"你的记录跟建议打架了"，是要紧事，藏在折叠里等于没说。
+ */
+const planListExpanded = ref(false)
+
+/**
+ * 收起那行写什么。
+ *
+ * 不写"按 WSAVA 2024 与国内法规推算"这种来源说明 —— 那句话在展开后的
+ * 每一项下面都有（"依据：…"），收起来时更需要的是"进行到哪了"。
+ * 一条记录都没有时不报"已完成 N 项"：那是假进度。
+ */
+const planListHint = computed(() => {
+  const total = plan.value.steps.length
+  if (noRecordAtAll.value) {
+    return `共 ${total} 项，按免疫程序推算`
+  }
+  const done = plan.value.steps.filter((step) => step.status === 'DONE').length
+  return `已完成 ${done} / ${total} 项`
+})
 
 function decisionLabel(value: string) {
   return DECISION_OPTIONS.find((item) => item.value === value)?.label || value
@@ -305,12 +333,6 @@ watch(() => props.dogId, load, { immediate: true })
 
 .vaccine-plan {
   margin-bottom: 24rpx;
-}
-
-.plan-locked {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
 }
 
 .plan-locked__title {
@@ -485,6 +507,36 @@ watch(() => props.dogId, load, { immediate: true })
   margin-top: 18rpx;
   font-size: 21rpx;
   color: #8a968a;
+}
+
+/* 完整计划：收起时只占一行（2026-10-04） */
+.plan-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.plan-list__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.plan-list__hint {
+  font-size: 23rpx;
+  color: #6b6653;
+}
+
+.plan-list__toggle {
+  flex-shrink: 0;
+  padding: 10rpx 20rpx;
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  background: #eef2e6;
+  border-radius: 999rpx;
 }
 
 /* 计划列表 */

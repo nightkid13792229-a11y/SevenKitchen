@@ -119,10 +119,16 @@
           <text class="field-label">状态</text>
           <picker
             mode="selector"
-            :range="statusOptions"
+            :range="statusPickList(draftOf(record, index).status)"
             range-key="label"
             :value="statusIndex(draftOf(record, index).status)"
-            @change="updateDraft(index, 'status', statusValueAt($event.detail.value))"
+            @change="
+              updateDraft(
+                index,
+                'status',
+                statusValueAt($event.detail.value, draftOf(record, index).status)
+              )
+            "
           >
             <view class="field-picker">{{ statusLabel(draftOf(record, index).status) }}</view>
           </picker>
@@ -285,14 +291,32 @@ defineExpose({
   flushAutoSaves,
 })
 
-/** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
+/**
+ * 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路）。
+ *
+ * ⚠️ 2026-10-04 改：**原来 8 个全是"病名"**（犬瘟热、犬细小病毒…），
+ * 但顾客疫苗本上印的是**产品名/联数**（犬四联、卫佳伍、英特威）。
+ * 两边对不上 —— 顾客拿着本子找不到自己那个词，只能手打或随便点一个。
+ *
+ * 现在按"本子上真会写的写法"排：
+ *   · 联数名（犬二联/四联/八联）—— 国产进口都这么叫
+ *   · 疫苗种类（狂犬疫苗）
+ *   · 病名（有些本子确实按病名写）
+ *
+ * 品牌名（卫佳伍、英特威…）等产品清单核实完再加进来 —— 那份清单要对着
+ * 国家兽药基础数据库和说明书核，不能凭印象写。
+ */
 const commonVaccineNames = [
+  // 本子上最常出现的联数写法
   '狂犬疫苗',
+  '犬二联',
+  '犬四联',
+  '犬八联',
+  // 按病名写的本子
   '犬瘟热',
   '犬细小病毒',
   '犬传染性肝炎',
   '犬副流感',
-  '犬腺病毒',
   '犬窝咳',
   '钩端螺旋体',
 ]
@@ -300,10 +324,23 @@ const commonVaccineNames = [
 const STATUS_OPTIONS = [
   { value: 'COMPLETED', label: '已接种' },
   { value: 'SCHEDULED', label: '已预约' },
-  { value: 'OVERDUE', label: '已逾期' },
-] as const
+]
 
-const statusOptions = STATUS_OPTIONS.map(option => ({ label: option.label }))
+/**
+ * 状态的中文名（**仅供显示**）。
+ *
+ * 「已逾期」**不再让顾客选**（2026-10-04 老板定）：
+ * 三个取值原来全是顾客手选的，可"逾期"是"今天 vs 到期日"的事实，
+ * 不是顾客的属性 —— 而且跟我们刚定的"没有记录就不说已过期"自相矛盾。
+ * 逾期该由系统按 nextDueDate 算，页面上的 dueHint 已经在做这件事。
+ *
+ * 这里保留 OVERDUE 的映射，是为了老记录不显示成空白。
+ */
+const STATUS_LABELS: Record<string, string> = {
+  COMPLETED: '已接种',
+  SCHEDULED: '已预约',
+  OVERDUE: '已逾期',
+} as const
 
 const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
@@ -348,9 +385,9 @@ function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
     vaccinationDate: String(record.vaccinationDate || '').slice(0, 10),
     nextDueDate: String(record.nextDueDate || '').slice(0, 10),
     notes: String(record.notes || ''),
-    status: (STATUS_OPTIONS.some(option => option.value === status)
-      ? status
-      : 'COMPLETED') as VaccineDraft['status'],
+    // 认的是"显示名表"（含退休的 OVERDUE），不是"可选项表" ——
+    // 老记录是 OVERDUE 就原样带着，别因为选项里没有了就悄悄改成已接种。
+    status: (STATUS_LABELS[status] ? status : 'COMPLETED') as VaccineDraft['status'],
   }
 }
 
@@ -505,16 +542,33 @@ async function previewAttachment(url: string) {
 }
 
 function statusLabel(status: string) {
-  return STATUS_OPTIONS.find(option => option.value === status)?.label || '已接种'
+  return STATUS_LABELS[status] || '已接种'
+}
+
+/**
+ * 选择器里显示哪几项。
+ * 老记录里存着 OVERDUE 的，临时把「已逾期」补在最后一项 ——
+ * 不然 picker 会显示成「已接种」，跟卡片上那行字对不上，顾客会以为我们改了状态。
+ * 新记录构造不出 OVERDUE，所以这一项平时不出现。
+ */
+function statusPickList(status: string) {
+  const list = STATUS_OPTIONS.map(option => ({ label: option.label }))
+  if (status && !STATUS_OPTIONS.some(option => option.value === status) && STATUS_LABELS[status]) {
+    list.push({ label: STATUS_LABELS[status] })
+  }
+  return list
 }
 
 function statusIndex(status: string) {
   const index = STATUS_OPTIONS.findIndex(option => option.value === status)
-  return index >= 0 ? index : 0
+  return index >= 0 ? index : STATUS_OPTIONS.length
 }
 
-function statusValueAt(index: string | number) {
-  return STATUS_OPTIONS[Number(index)]?.value || 'COMPLETED'
+/** 老记录选了补在末尾的那一项 = 保持原样，不动 */
+function statusValueAt(index: string | number, currentStatus: string) {
+  const position = Number(index)
+  if (position >= STATUS_OPTIONS.length) return currentStatus || 'COMPLETED'
+  return STATUS_OPTIONS[position]?.value || 'COMPLETED'
 }
 
 function statusClass(draft: VaccineDraft) {

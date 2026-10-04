@@ -34,7 +34,23 @@ describe('疫苗管理', () => {
 
     expect(source).toContain("label: '已接种'")
     expect(source).toContain("label: '已预约'")
-    expect(source).toContain("label: '已逾期'")
+  })
+
+  it('「已逾期」不让顾客自己选（2026-10-04）', () => {
+    const source = readComponent()
+
+    // 逾期是"今天 vs 到期日"算出来的事实，不是顾客的属性；而且跟
+    // "没有记录就不说已过期"的规则冲突。选择器里只留两个可选项。
+    const options = source.slice(
+      source.indexOf('const STATUS_OPTIONS'),
+      source.indexOf(']', source.indexOf('const STATUS_OPTIONS')),
+    )
+    expect(options).not.toContain('已逾期')
+
+    // 但老记录存着 OVERDUE 的，显示名和取值都要留着 —— 不能悄悄改成"已接种"
+    expect(source).toContain('const STATUS_LABELS')
+    expect(source).toContain("OVERDUE: '已逾期'")
+    expect(source).toContain('function statusPickList')
   })
 
   it('常见疫苗名一点即选，不用顾客手打', () => {
@@ -44,6 +60,16 @@ describe('疫苗管理', () => {
     expect(source).toContain('狂犬疫苗')
     expect(source).toContain('犬瘟热')
     expect(source).toContain('犬细小病毒')
+  })
+
+  it('标签用"本子上真会写的写法"：联数名 + 病名（2026-10-04）', () => {
+    const source = readComponent()
+
+    // 顾客疫苗本印的是"犬四联""卫佳伍"这种产品/联数写法，
+    // 原来 8 个标签全是病名（犬瘟热、犬细小病毒），两边对不上。
+    expect(source).toContain("'犬二联'")
+    expect(source).toContain("'犬四联'")
+    expect(source).toContain("'犬八联'")
   })
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {

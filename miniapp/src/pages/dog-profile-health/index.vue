@@ -95,13 +95,21 @@
 
         <view class="health-panel" :class="`health-theme--${activeHealthTab}`">
           <view class="health-tabs">
-            <text
+            <view
               v-for="tab in HEALTH_TABS"
               :key="tab.key"
               class="health-tabs__item"
               :class="{ 'health-tabs__item--active': activeHealthTab === tab.key }"
               @tap="selectHealthTab(tab.key)"
-            >{{ tab.label }}</text>
+            >
+              <text class="health-tabs__label">{{ tab.label }}</text>
+              <!-- 疫苗书签挂角标（2026-10-04）：让顾客在**没点进疫苗书签之前**
+                   就知道有针要打了。点进去才看得到的提醒，等于没提醒。 -->
+              <text
+                v-if="tab.key === 'vaccine' && vaccineBadgeText"
+                class="health-tabs__badge"
+              >{{ vaccineBadgeText }}</text>
+            </view>
           </view>
 
           <view class="health-panel__body">
@@ -219,6 +227,15 @@ interface DogProfileSummary {
 }
 
 const dogId = ref('')
+/**
+ * 疫苗书签上的角标文字，空串 = 不显示（2026-10-04）。
+ *
+ * 为什么由**页面**去拉，而不是让 VaccinePlanSection 报上来：
+ * 那个组件只在"疫苗"书签被选中时才挂载 —— 而角标的全部意义恰恰是
+ * 在顾客**还没点进疫苗书签**时告诉他"有针要打了"。
+ * 点进去才看得到的提醒，等于没提醒。
+ */
+const vaccineBadgeText = ref('')
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
 const isLoading = ref(false)
@@ -341,6 +358,10 @@ function selectHealthTab(key: HealthTabKey) {
   // 否则新板块明明没改动，底部按钮却亮着
   hasUnsavedSectionDraft.value = false
   hasUnsavedRecordDraft.value = false
+
+  // 切标签时顺手刷新角标：顾客刚在别处补了接种记录，数字要跟着变。
+  // 不 await，切标签不能等网络。
+  loadVaccineBadge()
 }
 
 
@@ -638,6 +659,43 @@ function resetHealthForm() {
   }
 }
 
+async function loadVaccineBadge(requestedDogId = dogId.value) {
+  if (!requestedDogId) {
+    vaccineBadgeText.value = ''
+    return
+  }
+
+  try {
+    const res: any = await dogApi.vaccinePlan(requestedDogId)
+    // 计划没开 / 拉失败 → 不显示角标。角标是加分项，
+    // 拉不到就安静地不出现，不在书签上挂个"加载失败"。
+    if (res?.code !== 0 || !res?.data || res.data.available === false) {
+      vaccineBadgeText.value = ''
+      return
+    }
+
+    const steps = Array.isArray(res.data.steps) ? res.data.steps : []
+    const dueCount = steps.filter(
+      (step: any) => step?.status === 'DUE' || step?.status === 'OVERDUE',
+    ).length
+
+    /*
+     * 一条接种记录都没有时**不说"该打了"** —— 跟计划板块里不显示"已逾期"
+     * 是同一条道理：我们没有任何证据说他没打，家长明明年年带狗去打、
+     * 只是没在小程序里记。改成"待补记录"：一样是把人叫进来，但不说假话。
+     * 而"把已注射的信息录进来"正是老板当前最想要的一件事。
+     */
+    if (res.data.noRecordAtAll === true) {
+      vaccineBadgeText.value = '待补记录'
+      return
+    }
+
+    vaccineBadgeText.value = dueCount > 0 ? `有 ${dueCount} 针该打了` : ''
+  } catch {
+    vaccineBadgeText.value = ''
+  }
+}
+
 async function loadDogProfile(requestedDogId: string) {
   if (!requestedDogId) {
     return
@@ -663,6 +721,8 @@ async function loadDogProfile(requestedDogId: string) {
 
     dogId.value = requestedDogId
     populateForm(res.data.profile)
+    // 档案换了，角标要跟着换狗；不 await —— 角标晚几十毫秒出现不影响什么
+    loadVaccineBadge(requestedDogId)
   } catch (error: any) {
     if (shouldDiscardDogHealthProfileResponse({
       requestedDogId,
@@ -672,6 +732,7 @@ async function loadDogProfile(requestedDogId: string) {
     }
 
     dogId.value = ''
+    vaccineBadgeText.value = ''
     loadError.value = error?.message || '加载狗狗档案失败，请稍后重试。'
   } finally {
     if (!shouldDiscardDogHealthProfileResponse({
@@ -1361,13 +1422,38 @@ function goToDogCreate() {
   flex: 1 1 0;
   min-width: 0;
   padding: 16rpx 0 18rpx;
-  text-align: center;
+  /* 2026-10-04 起书签里除了文字还要放角标，所以是纵向 flex。
+     color 留在这一层 —— 主题色是按 .health-tabs__item--active 给的，
+     文字的子元素自己设 color 会把它盖掉。 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
   font-size: 24rpx;
   color: #6b7566;
   background: rgba(30, 46, 36, 0.045);
   border-radius: 14rpx 14rpx 0 0;
   /* 未选中标签之间的分隔线（Chrome 也有） */
   border-right: 1rpx solid rgba(30, 46, 36, 0.07);
+}
+
+.health-tabs__label {
+  font-size: 24rpx;
+  text-align: center;
+}
+
+/*
+ * 书签上的角标（2026-10-04）：疫苗有针要打时出现。
+ * 用主题紫的实心小药丸，不闪不动 —— 这是家庭工具，不是待办清单。
+ */
+.health-tabs__badge {
+  font-size: 19rpx;
+  line-height: 1;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  color: #ffffff;
+  background: #6b5b9b;
+  white-space: nowrap;
 }
 
 .health-tabs__item:last-child {

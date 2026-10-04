@@ -63,11 +63,42 @@ describe('疫苗计划 · 界面', () => {
     expect(section).not.toContain('立刻去打')
   })
 
-  it('未开放时如实说明原因，不显示空白', () => {
+  it('计划没开时整块不出现（2026-10-04 改，原来显示"待开放"卡）', () => {
     const section = readSection()
 
     expect(section).toContain('available === false')
-    expect(section).toContain('疫苗计划待开放')
+    // 一张写着"疫苗计划待开放"的卡片，告诉顾客一个还不存在、也没说什么时候
+    // 会有的功能 —— 只会被读成"坏了"。开了才出现。
+    expect(section).not.toContain('疫苗计划待开放')
+    expect(section).toContain('planHidden')
+    expect(section).toContain('v-if="!planHidden"')
+  })
+
+  it('完整计划收成一行，点开才铺开（2026-10-04）', () => {
+    const section = readSection()
+
+    // 顾客来这一页是看"下一针什么时候打"，不是来读免疫程序表的。
+    // 一屏直接铺 9 项，把上面那行"下一步"淹掉了。
+    expect(section).toContain('planListExpanded')
+    expect(section).toContain('@tap="planListExpanded = !planListExpanded"')
+    expect(section).toContain('planListHint')
+  })
+
+  it('但"记录与建议不一致"不折叠 —— 藏起来等于没说', () => {
+    const section = readSection()
+
+    // conflicts 必须在折叠之外
+    const expandAt = section.indexOf('<template v-if="planListExpanded">')
+    const conflictsAt = section.indexOf('plan.conflicts')
+    expect(expandAt).toBeGreaterThan(-1)
+    expect(conflictsAt).toBeGreaterThan(-1)
+    expect(conflictsAt).toBeLessThan(expandAt)
+  })
+
+  it('一条记录都没有时不报"已完成 N 项"（那是假进度）', () => {
+    const section = readSection()
+
+    expect(section).toContain('if (noRecordAtAll.value) {')
   })
 
   it('结尾有"仍在专业审核"的说明', () => {

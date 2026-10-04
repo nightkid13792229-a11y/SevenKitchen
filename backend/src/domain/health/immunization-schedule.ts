@@ -1,3 +1,8 @@
+import {
+  findProductsInName,
+  recommendProductsForStep,
+} from './vaccine-products';
+
 /**
  * 免疫程序表与疫苗计划推算（2026-10-01，第四期）。
  *
@@ -24,8 +29,19 @@
  *      所以下面没有任何"必须""应该立刻"的措辞，只有时间窗与偏差提示。
  */
 
-/** 免疫程序的类别 */
-export type VaccineKind = 'core' | 'rabies';
+/**
+ * 免疫程序的类别。
+ *
+ * ⚠️ 2026-10-04 兽医审核后从两类扩成"按疫苗种类单独设置"。
+ * 审核意见第 3 条：
+ *   "免疫程序表的每 3 年加强没有问题，但是个别疫苗它可能需要每年接种一次，
+ *    比如钩端螺旋体。这个我们可能需要分疫苗种类来单独设置。"
+ *
+ * 之前只有 core / rabies 两类，是因为"疫苗名是自由文本、细分没依据"。
+ * 现在细分有了依据 —— 每种疫苗的复种间隔来自**它自己的说明书**，
+ * 见下面 `NON_CORE_SCHEDULES`。
+ */
+export type VaccineKind = 'core' | 'rabies' | 'lepto';
 
 /** 一步在计划里的状态 */
 export type VaccineStepStatus =
@@ -53,6 +69,17 @@ export interface VaccinePlanStep {
   basis: string;
   /** 提醒文案（小程序内展示，不用订阅消息） */
   reminder: string;
+  /**
+   * 这一步常见的产品（兽医审核意见第 6 条：每个种类最多 3 个）。
+   *
+   * ⚠️ 措辞是「**常见的有**」，不是「建议打」。
+   *    各医院进的货不一样，推荐了顾客也未必买得到；
+   *    而且"打哪个商品"已经挨着诊疗，不是我们该拍板的。
+   *
+   * 只列进口苗 —— 老板 2026-10-04 审核意见第 5 条：
+   * "所有国产疫苗都不推荐"。
+   */
+  commonProducts: string[];
 }
 
 /** 顾客与建议不一致的地方 */
@@ -91,7 +118,26 @@ export interface VaccinePlanResult {
    * 界面用它决定口径：没有记录时不说"已逾期"，
    * 只说"档案里还没有这一针的记录" —— 我们没证据说他没打。
    */
+  /**
+   * 这只狗**一条接种记录都没有**（`records.length === 0`）。
+   *
+   * 用来决定：要不要显示"档案里还没有接种记录"这张卡，
+   * 以及要不要**整块藏掉**计划与"下一步"。
+   *
+   * ⚠️ 2026-10-04 修正：这里原来算的是 `!hasAnyEvidence`（没有任何一步
+   * 被匹配上），但字段名、界面文案、注释说的都是"一条记录都没有"。
+   * 后果很具体：顾客只录了一条"钩端螺旋体"（它是非核心苗，程序表里没有
+   * 对应步骤），界面就对着他说"档案里还没有接种记录" —— 人家刚录完。
+   * 所以拆成两个字段。
+   */
   noRecordAtAll: boolean;
+  /**
+   * 我们**没有任何一条能对上号的证据**（一条记录都没有，或有记录但一条都没匹配上）。
+   *
+   * 只用来决定**措辞软硬**：为真时不出现"已过期""尽快安排"这种口气。
+   * 不用它决定显不显示计划 —— 那件事归 `noRecordAtAll`。
+   */
+  noEvidence: boolean;
   /** 计划是否有专业审核背书 —— 未审核时顾客侧不展示 */
   reviewed: boolean;
   generatedAt: string;
@@ -169,6 +215,52 @@ export const CORE_ADULT_BOOSTER = {
     '16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）',
 } as const;
 
+/**
+ * 非核心苗：按疫苗种类单独设置（2026-10-04，兽医审核意见第 3 条）。
+ *
+ * ── 为什么非核心苗要"有记录才出现" ──────────────────────────
+ *
+ * WSAVA 把疫苗分成核心与非核心，非核心苗（钩端螺旋体、犬副流感、
+ * 博德特氏菌…）**要结合每只狗的生活方式与当地疫情逐只评估**，
+ * 不是默认全打 —— 我们自己已审核的知识条目 `immune-001` 就是这么写的。
+ * 所以这些步骤**不能默认推给每一只狗**，否则跟已审核的内容自相矛盾。
+ *
+ * 做法：**这只狗已经有这类苗的记录时，才把它纳入计划**
+ * （说明它和它的兽医已经决定要打这一类），之后按年提醒。
+ * 没打过的不出现 —— 要不要开始，是它和兽医的事，不是我们该推的。
+ *
+ * ── 每一类的参数从哪来 ────────────────────────────────────
+ *   `basis` 必须写清是哪支产品的说明书，顾客和复鞫的人都要能查到。
+ */
+export const NON_CORE_SCHEDULES = {
+  lepto: {
+    label: '钩端螺旋体',
+    /**
+     * 认哪些写法。
+     *
+     * ⚠️ 故意**不含"犬八联"**：这个叫法各家含义不一样，
+     * 国产苗与进口苗防的病并不相同，拿它当"含钩端"会误判。
+     * 只认明确的病名，以及我们**核过成分、确定含钩端**的商品名。
+     */
+    namePattern: /钩端螺旋体|钩端|lepto|卫佳捌|优乐康|乐必妥/i,
+    /** 说明书：幼犬首免应在 8 周龄后 */
+    startWeeksMin: 8,
+    /** 说明书：间隔 2~4 周第二次 */
+    intervalWeeksMin: 2,
+    intervalWeeksMax: 4,
+    /** 说明书：共 2 针 */
+    doses: 2,
+    /** 说明书：以后每年 1 次 */
+    repeatYears: 1,
+    maxRepeats: 12,
+    basis:
+      '宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）说明书：' +
+      '幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次',
+  },
+} as const;
+
+export type NonCoreKind = keyof typeof NON_CORE_SCHEDULES;
+
 /** 狂犬病（国内） */
 export const RABIES_SCHEDULE = {
   /**
@@ -200,10 +292,66 @@ export const RABIES_SCHEDULE = {
  *
  * 为什么只分两类：疫苗名是自由文本，细分成"六联/八联/卫佳"没有可靠依据；
  * 而狂犬在国内是强制免疫、按年接种，周期与核心疫苗完全不同，必须分开。
+ *
+ * ⚠️ 已知局限（2026-10-04 查产品清单时发现，**待产品清单审核后修**）：
+ *
+ * 现在**所有非狂犬苗都归为 core**，于是"一针单独的钩端螺旋体疫苗"
+ * （宠必威乐必妥就是单苗）只要落在首免窗口里，就会被算成**完成了一针核心苗**。
+ * 两种情形会出错：
+ *   · 单苗（钩端螺旋体、犬窝咳、冠状病毒）被当成核心联苗；
+ *   · 卫佳捌那种"核心 + 钩端 + 冠状"的组合苗，反而没法表达它多防了什么。
+ *
+ * 不能靠加关键词解决 —— 正确做法是给每个产品存一份"**防哪些病**"，
+ * 也就是 `docs/plans/2026-10-04-vaccine-product-list-review.md` 那份清单的用途之一。
+ * 那份清单经兽医审核后，这里改成按**抗原清单**匹配，而不是按名字。
  */
 export function classifyVaccineName(name: string): VaccineKind {
+  // 保留旧签名（还有调用方在用）：返回"最主要的那一类"
+  const kinds = classifyVaccineKinds(name);
+  return kinds.includes('core') ? 'core' : kinds[0]
+}
+
+/**
+ * 一条记录能算作哪几类（2026-10-04）。
+ *
+ * 必须返回数组：**一支组合苗可以同时顶好几个种类**。
+ * 典型是硕腾卫佳捌 —— 它既是核心苗（犬瘟热+腺病毒+副流感+细小），
+ * 又含钩端螺旋体；顾客打了它，核心苗那一步和钩端螺旋体那一步都该算完成。
+ *
+ * 以前的写法是"不是狂犬就算核心"，于是**一针单独的钩端螺旋体疫苗
+ * 会被算成完成了一针核心苗** —— 那是错的，而且会让计划少算一针。
+ */
+export function classifyVaccineKinds(name: string): VaccineKind[] {
   const text = String(name || '').toLowerCase();
-  return /狂犬|rabies/.test(text) ? 'rabies' : 'core';
+  const kinds = new Set<VaccineKind>();
+
+  // ① 已审核的产品目录里查得到的，按**它真实的成分**算。
+  //    这一步才能正确处理组合苗 —— 卫佳捌既是核心苗、又含钩端螺旋体，
+  //    顾客打了它，核心苗那一步和钩端那一步都该算完成。
+  for (const product of findProductsInName(text)) {
+    for (const kind of product.kinds) {
+      kinds.add(kind);
+    }
+  }
+
+  // ② 目录里没有的（顾客手写"狂犬疫苗""六联"这类自由文本），退回按病名判。
+  if (/狂犬|rabies/.test(text)) {
+    kinds.add('rabies');
+  }
+  for (const [kind, config] of Object.entries(NON_CORE_SCHEDULES)) {
+    if (config.namePattern.test(text)) {
+      kinds.add(kind as VaccineKind);
+    }
+  }
+
+  // ③ 什么都没认出来的，当核心苗。
+  //    以前这里是"不是狂犬就算核心"，于是一针**单独的钩端螺旋体**
+  //    会被算成完成了一针核心苗 —— 加了 ② 之后就不会了。
+  if (kinds.size === 0) {
+    kinds.add('core');
+  }
+
+  return [...kinds];
 }
 
 /* ===========================================================================
@@ -286,10 +434,26 @@ type StepSeed = ImmunizationScheduleItem;
  * 中间的狗（首免没做完就已经长大）会同时拿到"补完首免"与后续步骤，
  * 由时间窗自然处理，不特殊分支。
  */
-export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleItem[] {
+export function buildImmunizationSchedule(
+  birthday: Date,
+  /**
+   * 这次要排哪几类。
+   *
+   * 默认只排 core + rabies（标准程序）。非核心苗由调用方按
+   * "这只狗有没有这类苗的记录"决定要不要加进来 —— 见 NON_CORE_SCHEDULES
+   * 上面那段注释：非核心苗不默认推给每一只狗。
+   * 营养师看整套程序表时把 `ALL_VACCINE_KINDS` 传进来。
+   */
+  options: { kinds?: readonly VaccineKind[] } = {},
+): ImmunizationScheduleItem[] {
+  const kinds = options.kinds ?? DEFAULT_PLAN_KINDS;
   const seeds: StepSeed[] = [];
 
+  const wantsCore = kinds.includes('core')
+  const wantsRabies = kinds.includes('rabies')
+
   // ── 幼犬首免：从 startWeeksMin 起，按最大间隔排，直到 finishWeeksMin ──
+  if (wantsCore) {
   const firstStart = addWeeks(birthday, CORE_PUPPY_SERIES.startWeeksMin);
   const firstEnd = addWeeks(birthday, CORE_PUPPY_SERIES.startWeeksMax);
   const finish = addWeeks(birthday, CORE_PUPPY_SERIES.finishWeeksMin);
@@ -371,8 +535,21 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
     });
     booster = addYears(booster, CORE_ADULT_BOOSTER.repeatYears);
   }
+  } // wantsCore
+
+  // ── 非核心苗：按疫苗种类各自排（2026-10-04，兽医审核意见第 3 条）──
+  //
+  // 每一类的参数来自**它自己的说明书**（见 NON_CORE_SCHEDULES），
+  // 所以间隔可以是每年，而不是核心苗的每 3 年。
+  for (const kind of kinds) {
+    if (kind === 'core' || kind === 'rabies') continue
+    const config = NON_CORE_SCHEDULES[kind as NonCoreKind]
+    if (!config) continue
+    seeds.push(...buildNonCoreSeeds(birthday, kind, config))
+  }
 
   // ── 狂犬：首针 12 周龄起，之后每年一次 ──
+  if (wantsRabies) {
   let rabies = addWeeks(birthday, RABIES_SCHEDULE.firstDoseWeeksMin);
   for (let index = 0; index < RABIES_SCHEDULE.maxDoses; index += 1) {
     seeds.push({
@@ -389,6 +566,67 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
     });
     rabies = addYears(rabies, RABIES_SCHEDULE.repeatYears);
   }
+  } // wantsRabies
+
+  // 按窗口起点排序：顾客看到的顺序应该是时间顺序，
+  // 而加了非核心苗之后，各类是分段 push 的，顺序会乱。
+  return seeds.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
+}
+
+/** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
+export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];
+
+/** 全部类别 —— 营养师看整套程序表时用 */
+export const ALL_VACCINE_KINDS: readonly VaccineKind[] = [
+  'core',
+  'rabies',
+  ...(Object.keys(NON_CORE_SCHEDULES) as NonCoreKind[]),
+];
+
+/**
+ * 排某一类非核心苗的步骤。
+ *
+ * 跟核心苗不一样的地方：**间隔来自这一类的说明书**，不是核心苗那套
+ * "首免到 16 周 + 三年一次"。钩端螺旋体是首免 2 针、之后每年 1 次。
+ */
+function buildNonCoreSeeds(
+  birthday: Date,
+  kind: VaccineKind,
+  config: (typeof NON_CORE_SCHEDULES)[NonCoreKind],
+): StepSeed[] {
+  const seeds: StepSeed[] = [];
+  const windowTailDays = 30;
+
+  // 首免几针
+  let cursor = addWeeks(birthday, config.startWeeksMin);
+  for (let index = 0; index < config.doses; index += 1) {
+    seeds.push({
+      key: `${kind}-primary-${index + 1}`,
+      kind,
+      label:
+        config.doses > 1
+          ? `${config.label} 第 ${index + 1} 针`
+          : config.label,
+      windowStart: cursor,
+      windowEnd: addWeeks(cursor, config.intervalWeeksMax),
+      basis: config.basis,
+    });
+    cursor = addWeeks(cursor, config.intervalWeeksMax);
+  }
+
+  // 之后按这一类的复种间隔重复（钩端螺旋体：每年 1 次）
+  let repeat = addYears(cursor, config.repeatYears);
+  for (let index = 0; index < config.maxRepeats; index += 1) {
+    seeds.push({
+      key: `${kind}-repeat-${index + 1}`,
+      kind,
+      label: `${config.label} 每年 1 次（第 ${index + 1} 次）`,
+      windowStart: addDays(repeat, -windowTailDays),
+      windowEnd: addDays(repeat, 90),
+      basis: config.basis,
+    });
+    repeat = addYears(repeat, config.repeatYears);
+  }
 
   return seeds;
 }
@@ -396,11 +634,12 @@ export function buildImmunizationSchedule(birthday: Date): ImmunizationScheduleI
 /** 这一步的时间窗里有没有对应类型的记录 */
 function findMatchingRecord(
   seed: StepSeed,
-  records: { record: VaccineRecordLike; kind: VaccineKind; date: Date }[],
+  records: { record: VaccineRecordLike; kinds: VaccineKind[]; date: Date }[],
 ): { record: VaccineRecordLike; date: Date } | null {
   const inWindow = records.filter(
     (item) =>
-      item.kind === seed.kind &&
+      // 一支组合苗能顶好几类，所以看的是"包含"而不是"等于"
+      item.kinds.includes(seed.kind) &&
       item.date.getTime() >= seed.windowStart.getTime() &&
       item.date.getTime() <= seed.windowEnd.getTime(),
   );
@@ -435,7 +674,8 @@ function resolveStatus(
 /**
  * 提醒文案。
  *
- * `noRecordAtAll` = 这只狗**一条接种记录都没有**。
+ * `noEvidence` = 我们手上**没有任何一条能对上号的证据**
+ * （一条记录都没有，或者有记录但一条都没匹配上程序里的步骤）。
  *
  * 这是 2026-10-04 老板定的口径：「没有记录，我们不去说已过期」。
  * 原因很实在：家长明明每年都带狗去打，只是没在小程序里记，
@@ -443,13 +683,17 @@ function resolveStatus(
  * 第一反应是"我是不是漏打了"，第二反应是"这系统不准"。
  *
  * 我们**没有证据**说他没打，就不该用"逾期"这种口气。
+ *
+ * ⚠️ 2026-10-04 改：这个参数原来叫 `noRecordAtAll`，但传进来的是
+ * "没有一条匹配上" —— 跟字段名说的"一条记录都没有"是两回事。
+ * 见 `noRecordAtAll` / `noEvidence` 两个字段的注释。
  */
 function buildReminder(
   status: VaccineStepStatus,
   label: string,
-  noRecordAtAll = false,
+  noEvidence = false,
 ): string {
-  if (noRecordAtAll && (status === 'DUE' || status === 'OVERDUE')) {
+  if (noEvidence && (status === 'DUE' || status === 'OVERDUE')) {
     return `${label}：档案里还没有这一针的记录`;
   }
 
@@ -484,10 +728,10 @@ export function detectConflicts(
   const parsed = records
     .map((record) => ({
       record,
-      kind: classifyVaccineName(record.vaccineName),
+      kinds: classifyVaccineKinds(record.vaccineName),
       date: parseDateText(record.vaccinationDate),
     }))
-    .filter((item): item is { record: VaccineRecordLike; kind: VaccineKind; date: Date } =>
+    .filter((item): item is { record: VaccineRecordLike; kinds: VaccineKind[]; date: Date } =>
       Boolean(item.date),
     )
     .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -519,7 +763,7 @@ export function detectConflicts(
     );
 
     for (const item of parsed) {
-      if (item.kind !== 'core') continue;
+      if (!item.kinds.includes('core')) continue;
       if (item.date.getTime() < minimumAgeLine.getTime()) {
         conflicts.push({
           kind: 'core',
@@ -536,7 +780,7 @@ export function detectConflicts(
   }
 
   // ② 狂犬间隔不足一年
-  const rabiesDoses = parsed.filter((item) => item.kind === 'rabies');
+  const rabiesDoses = parsed.filter((item) => item.kinds.includes('rabies'));
   for (let index = 1; index < rabiesDoses.length; index += 1) {
     const previous = rabiesDoses[index - 1];
     const current = rabiesDoses[index];
@@ -556,11 +800,15 @@ export function detectConflicts(
   }
 
   // ③ 记录里填的"下次到期日"与建议窗口差得远
+  //
+  // 一条记录可能同时属于好几类（卫佳捌既是核心苗又含钩端），
+  // 所以逐类都比一遍；只要**有一类对得上**就不算冲突 ——
+  // 顾客手上的方案跟哪一类一致都说明他在按某套程序走。
   for (const item of parsed) {
     const nextDue = parseDateText(item.record.nextDueDate || '');
     if (!nextDue) continue;
 
-    const candidates = seeds.filter((seed) => seed.kind === item.kind);
+    const candidates = seeds.filter((seed) => item.kinds.includes(seed.kind));
     if (candidates.length === 0) continue;
 
     const nearest = candidates.reduce((best, seed) => {
@@ -573,7 +821,7 @@ export function detectConflicts(
       Math.abs(nearest.windowStart.getTime() - nextDue.getTime()) / DAY_MS;
     if (gapDays > 180) {
       conflicts.push({
-        kind: item.kind,
+        kind: nearest.kind,
         recordId: item.record.id,
         recordDate: toDateText(item.date),
         vaccineName: item.record.vaccineName,
@@ -623,27 +871,45 @@ export function buildVaccinePlan(
       summary: { done: 0, due: 0, overdue: 0, upcoming: 0, skipped: 0 },
       decisions,
       noRecordAtAll: input.records.length === 0,
+      noEvidence: input.records.length === 0,
       reviewed: Boolean(input.reviewed),
       generatedAt: new Date().toISOString(),
     };
   }
 
-  const seeds = buildImmunizationSchedule(birthday);
   const parsed = input.records
     .map((record) => ({
       record,
-      kind: classifyVaccineName(record.vaccineName),
+      kinds: classifyVaccineKinds(record.vaccineName),
       date: parseDateText(record.vaccinationDate),
     }))
-    .filter((item): item is { record: VaccineRecordLike; kind: VaccineKind; date: Date } =>
+    .filter((item): item is { record: VaccineRecordLike; kinds: VaccineKind[]; date: Date } =>
       Boolean(item.date),
     );
 
-  // 一条"已完成"的都没有 = 我们手上没有任何证据
-  const hasAnyEvidence = seeds.some((seed) =>
-    Boolean(findMatchingRecord(seed, parsed)),
-  );
-  const noRecordAtAll = !hasAnyEvidence;
+  // 非核心苗"有记录才纳入计划"（2026-10-04，见 NON_CORE_SCHEDULES 的注释）：
+  // 这只狗已经在打钩端螺旋体了，才按年提醒它；没打过的不出现 ——
+  // 要不要开始打这一类，是它和兽医的事，不是我们该推的。
+  const kindsInRecords = new Set<VaccineKind>()
+  for (const item of parsed) {
+    for (const kind of item.kinds) kindsInRecords.add(kind)
+  }
+  const planKinds = [
+    ...DEFAULT_PLAN_KINDS,
+    ...ALL_VACCINE_KINDS.filter(
+      (kind) => !DEFAULT_PLAN_KINDS.includes(kind) && kindsInRecords.has(kind),
+    ),
+  ]
+
+  const seeds = buildImmunizationSchedule(birthday, { kinds: planKinds });
+
+  // ⚠️ 这两个**不是一回事**（2026-10-04 拆开）：
+  //   · noRecordAtAll → 顾客一条都没录（决定界面说什么、藏什么）
+  //   · noEvidence    → 一条都没对上号（只决定措辞软硬）
+  // 之前用一个字段兼两件事，于是"只录了一条非核心苗"的人
+  // 会被界面告知"档案里还没有接种记录"。
+  const noRecordAtAll = input.records.length === 0;
+  const noEvidence = !seeds.some((seed) => Boolean(findMatchingRecord(seed, parsed)));
 
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {
@@ -665,7 +931,12 @@ export function buildVaccinePlan(
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(status, seed.label, noRecordAtAll),
+        reminder: buildReminder(status, seed.label, noEvidence),
+        // 这一步大概在几周龄 → 决定哪些产品顶得上（最低首免周龄不能晚于它）
+        commonProducts: recommendProductsForStep(
+          seed.kind,
+          weeksBetween(birthday, seed.windowStart),
+        ).map((product) => product.name),
       };
     })
     // 只留下"对现在还有意义"的步骤。
@@ -723,6 +994,7 @@ export function buildVaccinePlan(
     summary,
     decisions,
     noRecordAtAll,
+    noEvidence,
     reviewed: Boolean(input.reviewed),
     generatedAt: new Date().toISOString(),
   };

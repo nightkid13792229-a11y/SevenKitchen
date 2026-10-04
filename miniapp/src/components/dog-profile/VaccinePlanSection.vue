@@ -6,18 +6,22 @@
        2026-10-04 老板定：**计划没开的时候整块不出现**。
        原来会显示一张写着"待开放"的卡片 —— 顾客看到的是一个还不存在、
        也没说什么时候会有的功能，只会以为是坏的。开了才出现，才讲得通。 -->
-  <view v-if="!planHidden" class="health-section vaccine-plan">
+  <view v-if="!sectionHidden" class="health-section vaccine-plan">
     <template v-if="loaded">
-      <!-- 档案里一条接种记录都没有时先说明白，否则"已逾期"会被读成"你的狗没打疫苗"。
-           2026-10-02 顾客侧开放当天补：家长明明打过、只是没记，看到逾期会以为系统算错了。 -->
-      <view v-if="noRecordAtAll" class="health-card plan-empty-note">
-        <text class="plan-empty-note__title">档案里还没有接种记录</text>
-        <text class="plan-empty-note__desc">
-          下面是按免疫程序推算的进度。如果其实打过疫苗，把接种记录补上，这里会自动对齐；
-          已经打过的那几针不会再提示。
-        </text>
-      </view>
+      <!-- 一条接种记录都没有时：**这一块整个不渲染**（2026-10-04 老板第二次提问后改）。
 
+           前一轮我在计划板块里放了一张"还没有接种记录"的说明卡，
+           结果下面记录板块的空态又写了一遍"还没有疫苗记录"——
+           老板："为什么会提醒了一次，没有接种记录。在下方又进行了一次
+           没有疫苗记录的提醒呢。" 同一件事说了两遍。
+           （另外，零记录时显示"下一步：狂犬疫苗 第 3 次 / 建议时间 2025-11-16"
+             也不成立：那个"第 3 次"是程序表里的序号，顾客会读成"我家狗打过两次"，
+             而我们一条记录都没有；窗口还是过去的。
+             计划是"接下来怎么打"，没有记录就没有"接下来"可言。）
+
+           所以这句提醒交给**记录板块的空态**去说 —— 它就长在记录列表该在的地方，
+           而且计划开关关掉时也照样说得到（那边不依赖计划接口）。 -->
+      <template v-if="!noRecordAtAll">
       <!-- ① 下一针：整个板块最重要的一行 -->
       <view v-if="plan.nextStep" class="health-card next-step" :class="`next-step--${plan.nextStep.status}`">
         <text class="next-step__eyebrow">下一步</text>
@@ -26,6 +30,12 @@
           建议时间：{{ plan.nextStep.windowStart }} ~ {{ plan.nextStep.windowEnd }}
         </text>
         <text class="next-step__reminder">{{ plan.nextStep.reminder }}</text>
+        <text
+          v-if="(plan.nextStep.commonProducts || []).length > 0"
+          class="next-step__products"
+        >
+          常见的有：{{ (plan.nextStep.commonProducts || []).join('、') }}
+        </text>
         <text class="next-step__basis">依据：{{ plan.nextStep.basis }}</text>
 
         <view class="decisions">
@@ -92,6 +102,12 @@
             <text v-if="step.matchedRecordDate" class="step__matched">
               已记录：{{ step.matchedRecordDate }}
             </text>
+            <text
+              v-if="(step.commonProducts || []).length > 0"
+              class="step__products"
+            >
+              常见的有：{{ (step.commonProducts || []).join('、') }}
+            </text>
             <text class="step__basis">依据：{{ step.basis }}</text>
 
             <view class="decisions decisions--compact">
@@ -112,6 +128,7 @@
           ? '本计划依据 WSAVA 2024 疫苗指南与国内规定起草，已经专业审核。是否接种、何时接种，请以执业兽医的意见为准。'
           : '本计划仍在做专业审核，暂不对顾客开放。是否接种、何时接种，请以执业兽医的意见为准。' }}
       </text>
+      </template>
     </template>
 
     <view v-else-if="loadError" class="health-card">
@@ -146,6 +163,16 @@ interface PlanStep {
   matchedRecordDate: string | null
   basis: string
   reminder: string
+  /**
+   * 这一步常见的产品（2026-10-04 兽医审核通过）。
+   *
+   * ⚠️ 只列进口苗（老板审核意见第 5 条："所有国产疫苗都不推荐"），
+   *    每个种类最多 3 个（第 6 条）。
+   * ⚠️ 措辞是「常见的有」，**不是「建议打」** ——
+   *    各医院进的货不一样，推荐了顾客也未必买得到；
+   *    而且"打哪个商品"已经挨着诊疗，不是我们该拍板的。
+   */
+  commonProducts?: string[]
 }
 
 interface PlanConflict {
@@ -178,6 +205,19 @@ const unavailable = ref<{ message: string } | null>(null)
 
 /** 计划没开（接口说 available:false）→ 整块不出现，不是显示一张"待开放"的卡 */
 const planHidden = computed(() => unavailable.value !== null)
+
+/**
+ * 整块要不要渲染（2026-10-05）。
+ *
+ * ⚠️ 零记录时**连根节点都不能留**。上一轮我只把里面的内容藏了，
+ * 根 `<view class="health-section vaccine-plan">` 还在 ——
+ * 它带着 `.vaccine-plan { margin-bottom: 24rpx }`，于是在书签和
+ * 记录板块那张空态卡之间留了一条 24rpx 的紫色空白。
+ * 老板看出来了："疫苗板块为什么还是有紫色的空白区域呢？"
+ */
+const sectionHidden = computed(
+  () => planHidden.value || (loaded.value && noRecordAtAll.value),
+)
 const plan = ref<{
   nextStep: PlanStep | null
   steps: PlanStep[]
@@ -196,36 +236,69 @@ const plan = ref<{
    * 文案会自己跟着变，不用再改一次前端。
    */
   reviewed?: boolean
-  /** 一条接种记录都没有（后端下发，2026-10-04） */
+  /**
+   * 一条接种记录都没有（后端下发）。
+   *
+   * ⚠️ 2026-10-04 修正口径：它现在**真的**表示"一条记录都没有"
+   * （`records.length === 0`）。原来后端算的是"没有任何一步被匹配上"，
+   * 于是只录了一条"钩端螺旋体"（非核心苗，程序表里没有对应步骤）的人，
+   * 会被误判成"一条记录都没有"。
+   */
   noRecordAtAll?: boolean
+  /**
+   * 有没有任何一条能对上号的证据（后端下发）。
+   *
+   * **只用来决定措辞软硬** —— 为假时不出现"已过期""尽快安排"这种口气。
+   * 不用它决定显不显示计划，那件事归 noRecordAtAll。
+   */
+  noEvidence?: boolean
 }>({ nextStep: null, steps: [], conflicts: [], decisions: {} })
 
 /**
- * 一条接种记录都还没对上（2026-10-02）。
+ * 一条接种记录都没有（后端下发，优先用）。
  *
- * 为什么需要这个：顾客侧开放当天实测一只 8 个月、没记过疫苗的狗，
- * 页面直接顶着 5 个「已逾期」—— 家长明明打过、只是没记，会以为系统算错了。
- * 先说明"档案里还没有记录"，逾期才有上下文。
+ * 决定：**整块藏掉计划与"下一步"**（零记录时计划本来也无从谈起）。
+ * 那句空态提醒由记录板块去说，这里不重复。
+ *
+ * ⚠️ 2026-10-04 口径修正：它以前兼着"没有任何一步对上号"的意思，
+ * 现在两个概念分开了 —— 见 noEvidence。
  */
 const noRecordAtAll = computed(() => {
-  // 后端已经判好了（2026-10-04），优先用它 —— 前后端两套口径迟早会不一致
   if (typeof plan.value.noRecordAtAll === 'boolean') {
     return plan.value.noRecordAtAll
   }
+  // 兜底（后端没下发时）：没有已完成、也没有任何一步被匹配上
   const done = Number(plan.value.summary?.done ?? 0)
   const hasMatched = plan.value.steps.some((step) => step.matchedRecordId)
   return done === 0 && !hasMatched
 })
 
 /**
+ * 有没有任何一条能对上号的证据（2026-10-02 的原始意图）。
+ *
+ * 为什么需要这个：顾客侧开放当天实测一只 8 个月、没记过疫苗的狗，
+ * 页面直接顶着 5 个「已逾期」—— 家长明明打过、只是没记，会以为系统算错了。
+ * 一条都对不上时，措辞要软：不说"已逾期"，改说"还没记录"—— 这是陈述事实，不是指责。
+ */
+const noEvidence = computed(() => {
+  if (typeof plan.value.noEvidence === 'boolean') {
+    return plan.value.noEvidence
+  }
+  return noRecordAtAll.value
+})
+
+/**
  * 状态标签（2026-10-04 老板定）。
  *
- * 一条接种记录都没有时，**不说"已逾期"** —— 我们没有任何证据说他没打，
+ * **没有任何证据**时不出现"已逾期" —— 我们没有任何证据说他没打，
  * 家长明明年年带狗去打、只是没在小程序里记，看到"已逾期"会以为系统算错了。
  * 改成"还没记录"，这是一个事实陈述，不是指责。
+ *
+ * 注意判据是 noEvidence 而不是 noRecordAtAll：只录了一条钩端螺旋体
+ * （非核心苗）的人，也属于"一条都没对上号"，措辞一样要软。
  */
 function statusLabel(status: PlanStep['status']) {
-  if (noRecordAtAll.value && (status === 'OVERDUE' || status === 'DUE')) {
+  if (noEvidence.value && (status === 'OVERDUE' || status === 'DUE')) {
     return '还没记录'
   }
   return STATUS_LABELS[status] || status
@@ -246,7 +319,7 @@ const planListExpanded = ref(false)
  */
 const planListHint = computed(() => {
   const total = plan.value.steps.length
-  if (noRecordAtAll.value) {
+  if (noEvidence.value) {
     return `共 ${total} 项，按免疫程序推算`
   }
   const done = plan.value.steps.filter((step) => step.status === 'DONE').length
@@ -279,6 +352,7 @@ async function load() {
     }
 
     plan.value = {
+      // 后端已经把 commonProducts 放在每一步里了，整条透传
       nextStep: res.data.nextStep || null,
       steps: Array.isArray(res.data.steps) ? res.data.steps : [],
       conflicts: Array.isArray(res.data.conflicts) ? res.data.conflicts : [],
@@ -286,6 +360,7 @@ async function load() {
       summary: res.data.summary || {},
       reviewed: res.data.reviewed === true,
       noRecordAtAll: res.data.noRecordAtAll === true,
+      noEvidence: res.data.noEvidence === true,
     }
     loaded.value = true
   } catch (error: any) {
@@ -347,27 +422,6 @@ watch(() => props.dogId, load, { immediate: true })
   color: #6b6653;
 }
 
-/* 一条接种记录都没有时的说明（2026-10-02）：先给"逾期"一个上下文 */
-.plan-empty-note {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  border-left: 8rpx solid #d8c98a;
-  background: #fdfbf2;
-}
-
-.plan-empty-note__title {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #7a6a2f;
-}
-
-.plan-empty-note__desc {
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #6b6653;
-}
-
 /* 下一针：整个板块最醒目的一行 */
 .next-step {
   border-left: 8rpx solid #8a968a;
@@ -416,6 +470,23 @@ watch(() => props.dogId, load, { immediate: true })
   font-size: 24rpx;
   line-height: 1.6;
   color: #6b6653;
+}
+
+/* 常见产品（2026-10-04）：比"依据"显眼一点，比正文轻一点 */
+.next-step__products {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #4a5a4a;
+}
+
+.step__products {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #4a5a4a;
 }
 
 .next-step__basis {

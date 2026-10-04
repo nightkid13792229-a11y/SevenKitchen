@@ -4,7 +4,14 @@
        老板第 5 条：识别之后**不需要顾客一条一条确认** ——
                    确认一次，就把识别出来的内容自动填进表单。
        老板第 6 条：愿意手填的顾客不受影响，这条路是可选的。 -->
-  <view class="scan">
+  <!-- ⚠️ 根节点必须带条件（2026-10-04 老板提问后改）。
+       原来它是无条件渲染的，于是"隐藏触发按钮、又没有识别结果"时，
+       页面上留着一个**空的 <view class="scan">**，光占着
+       `.scan { margin-bottom: 20rpx }` 这条外边距。
+       疫苗标签下它正好夹在两张卡中间，就是老板看到的那块淡紫色空白：
+         计划板块 margin-bottom 24 + 板块 gap 24 + .scan margin 20 + 板块 gap 24 ≈ 92rpx。
+       组件实例还在（ref 照样能调 startScan），只是没东西可显示时不占位。 -->
+  <view class="scan" v-if="!hideTrigger || failureNotice || showConfirm">
     <!-- 触发按钮（2026-10-01）：病历/检查板块把入口并进了底部那一个「新增记录」，
          所以它这里只保留"识别结果确认"这一块，按钮由上层调 startScan() 触发的。
          其它板块（疫苗本、过敏报告）仍用自带按钮。 -->
@@ -164,8 +171,8 @@ const props = withDefaults(defineProps<{
    */
   entryKind?: 'medical' | 'checkup'
 }>(), {
-  buttonText: '拍照录入',
-  hintText: '拍报告或疫苗本，自动填表；也可以直接手填',
+  buttonText: '上传图片',
+  hintText: '上传报告或疫苗本的照片，自动填表；也可以直接手填',
   hideTrigger: false,
   entryKind: 'medical',
 })

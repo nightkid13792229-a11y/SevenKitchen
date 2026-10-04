@@ -5,15 +5,15 @@
       <view class="health-section__heading">
         <text class="health-section__title">疫苗管理</text>
         <text class="health-section__desc">
-          记录每次接种与下次到期日，到期前这里会提醒你。
+          记录每次接种，接下来该打什么由免疫程序自动算。
         </text>
       </view>
       <text class="health-section__count">{{ records.length }} 条</text>
     </view>
 
-    <!-- 拍疫苗本（2026-10-01，第六期）。
+    <!-- 上传疫苗本图片（2026-10-01，第六期）。
          一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。
-         2026-10-03 起常开（手填入口）；AI 拍疫苗本由底部「新增记录」调起。 -->
+         2026-10-03 起常开（手填入口）；AI 识别由底部「新增记录」调起。 -->
     <HealthDocumentScan
       ref="scanRef"
       v-if="dogId"
@@ -21,7 +21,7 @@
       :hide-trigger="!showAddEntry || hideScanTrigger"
       document-type="VACCINE_BOOK"
       upload-type="vaccine"
-      button-text="拍疫苗本"
+      button-text="上传疫苗本图片"
       hint-text="一次能读出本子上的多条记录；也可以直接手填"
       @scanned="onVaccineBookScanned"
     />
@@ -34,15 +34,25 @@
       <text class="health-section__empty-title">疫苗记录加载中</text>
     </view>
 
+    <!-- 空态（2026-10-04 老板提问后改）。
+         原来这里只有干巴巴一句"还没有记录"，而上面的疫苗计划板块还会单独弹一张
+         "档案里还没有接种记录"—— **同一件事说了两遍**。
+         现在合成一处：计划板块在零记录时整块不渲染，这句话由这里说。
+         位置也更对：它就长在记录列表该在的地方。 -->
     <view v-else-if="records.length === 0" class="health-section__empty">
-      <!-- 只有一句（2026-10-03 老板：没有记录就写没有记录即可，不用下面那行小字） -->
-      <text class="health-section__empty-title">还没有疫苗记录</text>
+      <!-- 只有一句。
+           2026-10-03 老板就定过："没有记录就写没有记录即可，不用下面那行小字"；
+           2026-10-04 又问"为什么会提醒了一次……在下方又进行了一次提醒呢"——
+           所以不是加话，而是**把重复的那处删掉、只留这里一句**。
+           该做什么，底部那个常驻的「新增记录」已经写着了。 -->
+      <text class="health-section__empty-title">档案里还没有接种记录</text>
     </view>
 
     <view
       v-for="(record, index) in records"
       :key="record.id || `draft-${index}`"
       class="vaccine-card health-card"
+      :class="{ [`vaccine-card--focus-${index}`]: true }"
     >
       <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
         <view class="vaccine-card__summary">
@@ -59,9 +69,26 @@
             {{ dueHint(draftOf(record, index)) }}
           </text>
         </view>
-        <text class="vaccine-card__toggle">
-          {{ expandedIndex === index ? '收起' : '展开' }}
-        </text>
+        <!-- 删除 + 展开（2026-10-04 老板提问后改）。
+             原来"删除"藏在展开后的表单最底下 —— 老板的原话是
+             "为什么不能像就诊记录一样，提供一个删除按钮和删除弹窗提醒呢？"
+             其实弹窗一直都有（删除疫苗记录？/ 删除 / 保留），只是入口藏太深，
+             没人找得到。现在挪到卡片脸上，跟就诊记录一致。
+             @tap.stop 是必须的：不然点删除会顺带把卡片展开/收起。 -->
+        <view class="vaccine-card__header-actions">
+          <!-- 删除按钮**不再要求 record.id**（2026-10-05）。
+               原来草稿（尤其是"拍疫苗本"识别出来、还没保存的那几条）看不到删除键，
+               可 removeRecord 本来就支持删草稿（本地列表里摘掉）。
+               结果就是：识别错了想删掉某一条，找不到入口。 -->
+          <text
+            class="vaccine-card__delete"
+            :class="{ 'vaccine-card__delete--disabled': isBusy }"
+            @tap.stop="removeRecord(record, index)"
+          >删除</text>
+          <text class="vaccine-card__toggle" @tap.stop="toggleExpanded(record, index)">
+            {{ expandedIndex === index ? '收起' : '展开' }}
+          </text>
+        </view>
       </view>
 
       <view v-if="expandedIndex === index" class="vaccine-card__body">
@@ -72,7 +99,9 @@
             type="text"
             placeholder="例如：狂犬疫苗"
             :value="draftOf(record, index).vaccineName"
+            :focus="focusIndex === index"
             @input="updateDraft(index, 'vaccineName', $event.detail.value)"
+            @blur="clearFocus(index)"
           />
           <view class="vaccine-name-tags">
             <text
@@ -97,43 +126,16 @@
           </picker>
         </view>
 
-        <view class="field-group">
-          <text class="field-label">下次到期日（可选）</text>
-          <picker
-            mode="date"
-            :value="draftOf(record, index).nextDueDate || today"
-            @change="updateDraft(index, 'nextDueDate', $event.detail.value)"
-          >
-            <view class="field-picker">
-              {{ draftOf(record, index).nextDueDate || '不填则不提醒' }}
-            </view>
-          </picker>
-          <text
-            v-if="draftOf(record, index).nextDueDate"
-            class="field-inline-action"
-            @tap="updateDraft(index, 'nextDueDate', '')"
-          >清除到期日</text>
-        </view>
+        <!-- 「下次接种」字段已删除（2026-10-05 老板："请把这个字段删掉"）。
+             前一轮只是改了措辞、想说明白"核心疫苗和狂犬是自动算的"，
+             但老板的判断更干脆：**这个字段本身就不该存在**。
+             提醒本来就该由系统按免疫程序算出来，让顾客手填一个日期，
+             等于把"该不该提醒"的责任推给他 —— 而且他多半不知道该填什么。
 
-        <view class="field-group">
-          <text class="field-label">状态</text>
-          <picker
-            mode="selector"
-            :range="statusPickList(draftOf(record, index).status)"
-            range-key="label"
-            :value="statusIndex(draftOf(record, index).status)"
-            @change="
-              updateDraft(
-                index,
-                'status',
-                statusValueAt($event.detail.value, draftOf(record, index).status)
-              )
-            "
-          >
-            <view class="field-picker">{{ statusLabel(draftOf(record, index).status) }}</view>
-          </picker>
-        </view>
-
+             ⚠️ 后端字段 nextDueDate **保留不动**（additive，老记录里可能存着值）：
+               · 记录卡片上若老数据有值，仍然显示"还有 N 天到期"；
+               · buildPayload 仍会把草稿里原有的值原样带上，不会被清掉。
+             只是顾客端不再有输入口。 -->
         <view class="field-group">
           <text class="field-label">备注（可选）</text>
           <textarea
@@ -144,7 +146,7 @@
           />
         </view>
 
-        <!-- 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图。
+        <!-- 报告原件（2026-10-01 第九期）：上传疫苗本留下的原图。
              没有原件的记录（手工填写）不显示这一块，不留空位。 -->
         <view v-if="attachmentList(record).length > 0" class="field-group">
           <text class="field-label">报告原件</text>
@@ -162,44 +164,39 @@
             </view>
           </view>
           <text class="vaccine-attachment__hint">
-            这是当初拍疫苗本留下的原图，换医院、出行要用时可以打开给对方看。
+            这是当初上传的疫苗本原图，换医院、出行要用时可以打开给对方看。
           </text>
         </view>
 
         <view class="vaccine-card__actions">
-          <button
-            v-if="record.id"
-            class="vaccine-card__action vaccine-card__action--ghost"
-            :class="{ 'vaccine-card__action--disabled': isBusy }"
-            :disabled="isBusy"
-            @tap="removeRecord(record, index)"
-          >删除</button>
           <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
-               正常时什么都不显示；只有"还差必填"和"保存中"要说话。 -->
-          <text v-if="autoSaveNotice(index)" class="vaccine-card__autosave">
+               正常时什么都不显示；只有"还差必填"和"保存中"要说话。
+               2026-10-04：删除按钮已挪到卡片头部，这里只剩保存状态。 -->
+          <text v-if="savingIndex === index" class="vaccine-card__autosave vaccine-card__autosave--quiet">
+            保存中…
+          </text>
+          <text v-else-if="autoSaveNotice(index)" class="vaccine-card__autosave">
             {{ autoSaveNotice(index) }}
           </text>
-          <text v-else-if="savingIndex === index || isDirty(record, index)" class="vaccine-card__autosave vaccine-card__autosave--quiet">
-            {{ savingIndex === index ? '保存中…' : '' }}
+          <text v-else-if="isJustSaved(index)" class="vaccine-card__autosave vaccine-card__autosave--quiet">
+            已保存
           </text>
         </view>
       </view>
     </view>
 
-    <button
-      v-if="showAddEntry"
-      class="health-section__action"
-      :class="{ 'health-section__action--disabled': loading || isBusy }"
-      :disabled="loading || isBusy"
-      @tap="addRecord"
-    >
-      新增疫苗记录
-    </button>
+    <!-- 板块内那个新增按钮已下线（2026-10-04 老板提问后改）。
+         老板："在记录板块中有一个新增按钮，在最下方还有一个新增记录的
+         按钮呢？不是重复了吗？" —— 是重复。底部那个是常驻的，而且功能更全
+         （会先问"上传疫苗本图片 AI 识别"还是"手动加一条"）。
+         板块内再放一个，等于同一件事两个入口，还长得不一样。
+         `addRecord()` 仍然由底部那个按钮通过 ref 调起，功能没少。 -->
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { scrollPageToSelector } from '../../utils/page-scroll'
 import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
 import {
   buildHealthAttachmentDisplayMeta,
@@ -278,7 +275,6 @@ function isDirty(record: VaccineRecord, index: number) {
   )
 }
 
-
 /**
  * 对外的两个入口（2026-10-02 引导流程要用）：
  *   · startScan   → 直接调起"拍疫苗本"（AI 读出多条接种记录）
@@ -321,26 +317,18 @@ const commonVaccineNames = [
   '钩端螺旋体',
 ]
 
-const STATUS_OPTIONS = [
-  { value: 'COMPLETED', label: '已接种' },
-  { value: 'SCHEDULED', label: '已预约' },
-]
-
 /**
- * 状态的中文名（**仅供显示**）。
+ * 状态取值（**选项已下线，只留显示**，2026-10-04 老板提问后改）。
  *
- * 「已逾期」**不再让顾客选**（2026-10-04 老板定）：
- * 三个取值原来全是顾客手选的，可"逾期"是"今天 vs 到期日"的事实，
- * 不是顾客的属性 —— 而且跟我们刚定的"没有记录就不说已过期"自相矛盾。
- * 逾期该由系统按 nextDueDate 算，页面上的 dueHint 已经在做这件事。
- *
- * 这里保留 OVERDUE 的映射，是为了老记录不显示成空白。
+ * 顾客端不再让用户选状态 —— 一条接种记录记的就是"已经打过"，
+ * 没有第二种可能。这里保留常量只为一件事：老记录里可能存着别的值，
+ * 卡片上要照旧显示，不能变成空白。
  */
 const STATUS_LABELS: Record<string, string> = {
   COMPLETED: '已接种',
   SCHEDULED: '已预约',
   OVERDUE: '已逾期',
-} as const
+}
 
 const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
@@ -426,8 +414,15 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     draft[field] = value
   }
 
+  // 又改了 —— "已保存"那行小字先撤掉，免得它跟"保存中…"打架
+  if (savedNotices.value[index]) {
+    const next = { ...savedNotices.value }
+    delete next[index]
+    savedNotices.value = next
+  }
+
   // 实时保存（2026-10-03 老板定：底部保存键下线）。
-  // 日期/状态这类"点一下就有值"的改动立刻存；文本输入停顿 1.2 秒再存。
+  // 日期这类"点一下就有值"的改动立刻存；文本输入停顿 1.2 秒再存。
   const immediate = field !== 'vaccineName' && field !== 'notes'
   scheduleAutoSave(record, index, { immediate })
 }
@@ -519,8 +514,26 @@ function autoSaveNotice(index: number): string {
   return autoSaveNotices.value[index] || ''
 }
 
+/** 失焦之后把自动聚焦标记清掉 —— 否则这一行会一直被"要求聚焦" */
+function clearFocus(index: number) {
+  if (focusIndex.value === index) {
+    focusIndex.value = -1
+  }
+}
+
 function toggleExpanded(record: VaccineRecord, index: number) {
   expandedIndex.value = expandedIndex.value === index ? -1 : index
+}
+
+/**
+ * 状态的中文名（**只用于显示**）。
+ *
+ * 顾客端已经没有状态选择器了（见上面 STATUS_LABELS 的注释）——
+ * 这个函数存在的唯一理由是：老记录里可能存着「已预约」「已逾期」，
+ * 卡片上要照旧显示出来，不能变成空白或错显示成"已接种"。
+ */
+function statusLabel(status: string) {
+  return STATUS_LABELS[status] || '已接种'
 }
 
 /**
@@ -528,6 +541,13 @@ function toggleExpanded(record: VaccineRecord, index: number) {
  *
  * 拍疫苗本识别出来的记录带着原图；手工填写的没有 —— 空数组，
  * 卡片上就不显示「报告原件」这一块，不留空位。
+ *
+ * ⚠️ 2026-10-04 补回：上一轮"去掉状态选择器"时，我用脚本按位置删函数，
+ * 结果把这三个跟状态无关的函数一起删掉了（脚本找到的是**别的函数的注释**，
+ * 于是从那里一路删到这里）。后果很隐蔽 —— 构建不报错、源码 grep 测试也照过，
+ * 但**一有新记录卡片要渲染就抛 `attachmentList is not a function`**，
+ * 整个组件重渲染失败，表现就是老板看到的"点手动加一条没有任何反应"。
+ * 教训：源码手术要用精确替换，不能按位置找。
  */
 function attachmentList(record?: VaccineRecord | Record<string, any> | null): string[] {
   return normalizeHealthAttachmentList((record as any)?.attachments)
@@ -539,36 +559,6 @@ function attachmentDisplay(url: string, index: number) {
 
 async function previewAttachment(url: string) {
   await previewHealthAttachment(url)
-}
-
-function statusLabel(status: string) {
-  return STATUS_LABELS[status] || '已接种'
-}
-
-/**
- * 选择器里显示哪几项。
- * 老记录里存着 OVERDUE 的，临时把「已逾期」补在最后一项 ——
- * 不然 picker 会显示成「已接种」，跟卡片上那行字对不上，顾客会以为我们改了状态。
- * 新记录构造不出 OVERDUE，所以这一项平时不出现。
- */
-function statusPickList(status: string) {
-  const list = STATUS_OPTIONS.map(option => ({ label: option.label }))
-  if (status && !STATUS_OPTIONS.some(option => option.value === status) && STATUS_LABELS[status]) {
-    list.push({ label: STATUS_LABELS[status] })
-  }
-  return list
-}
-
-function statusIndex(status: string) {
-  const index = STATUS_OPTIONS.findIndex(option => option.value === status)
-  return index >= 0 ? index : STATUS_OPTIONS.length
-}
-
-/** 老记录选了补在末尾的那一项 = 保持原样，不动 */
-function statusValueAt(index: string | number, currentStatus: string) {
-  const position = Number(index)
-  if (position >= STATUS_OPTIONS.length) return currentStatus || 'COMPLETED'
-  return STATUS_OPTIONS[position]?.value || 'COMPLETED'
 }
 
 function statusClass(draft: VaccineDraft) {
@@ -726,12 +716,43 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       attachments: attachmentList(draft),
     } as any)
   }
-  uni.showToast({
-    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
-    icon: 'none',
+  /*
+   * 识别完**直接存**（2026-10-05 修的一个洞）。
+   *
+   * 原来这里只"填表"，提示"核对后保存"—— 可是手动保存键在 2026-10-03
+   * 就随着"改实时保存"一起下线了，**根本没有保存键可按**。
+   * 后果：识别出来的记录看着像已经存好的（卡片长得一模一样），
+   * 实际 `id` 是空的，于是：
+   *   · 删除键不显示（那时它是 v-if="record.id"）；
+   *   · 后端一条都没有 → 疫苗计划那边认为"还没有接种记录"，整块不显示。
+   * 老板这两个疑问（"为什么没有删除按钮""计划在哪"）根子都是它。
+   *
+   * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
+   */
+  const scanned = payload.drafts.length
+  uni.showToast({ title: `已识别 ${scanned} 条，正在保存…`, icon: 'none' })
+
+  records.value.forEach((record, index) => {
+    if (record.id) return
+    if (autoSaveBlockReason(record, index)) return
+    void runAutoSave(record, index)
   })
 }
 
+/**
+ * 新增一条空白记录（底部「新增记录」→「手动加一条」调这里）。
+ *
+ * ⚠️ 2026-10-05 补了两件事（老板："在选择手动加一条之后，为什么没有定位到
+ * 编辑窗口呢？"）：
+ *
+ *   1. **滚到新卡片**。新记录是**追加在列表末尾**的，前面已经有几条时
+ *      它落在屏幕外 —— 顾客点完"手动加一条"看到的还是原来那一屏，
+ *      自然觉得"没反应"。
+ *   2. **把光标落进"疫苗名称"**。这是第一个要填的字段，直接给键盘，
+ *      顾客不用再点一次。
+ *
+ * 两件事都必须在 DOM 更新之后做，所以放在 nextTick 里。
+ */
 function addRecord() {
   const draft: VaccineRecord = {
     id: '',
@@ -744,7 +765,22 @@ function addRecord() {
 
   records.value = [...records.value, draft]
   ensureDrafts()
-  expandedIndex.value = records.value.length - 1
+  const target = records.value.length - 1
+  expandedIndex.value = target
+  focusIndex.value = target
+
+  // 等这一屏渲染出来再滚、再落光标；拿不到元素就静默跳过，不挡主流程
+  nextTick(() => {
+    scrollToRecordCard(target)
+  })
+}
+
+/** "疫苗名称"输入框是否要自动聚焦（新增一条时打开，避免一直弹键盘） */
+const focusIndex = ref(-1)
+
+/** 把某一条记录滚进可视区。用小程序的 pageScrollTo + 唯一 class。 */
+function scrollToRecordCard(index: number) {
+  scrollPageToSelector(`.vaccine-card--focus-${index}`, 260)
 }
 
 function buildPayload(
@@ -769,6 +805,24 @@ function buildPayload(
   return payload
 }
 
+/**
+ * 保存一条疫苗记录。
+ *
+ * ⚠️ 2026-10-04 两处改动（老板提问："为什么在我选择了疫苗名称之后，
+ * 它就会提醒已保存，并帮我收起了疫苗记录呢？"）：
+ *
+ *   1. **不再收起卡片。** 原来存完一律 `expandedIndex = -1`。
+ *      而新增一条时接种日期默认是今天，所以顾客一点"犬瘟热"这个标签，
+ *      两个必填就齐了 → 立刻自动保存 → 卡片当场收起来，
+ *      后面想补"下次接种""备注"都没得填，得再点一次展开。
+ *   2. **不再弹"已保存"toast。** 实时保存是**每一次改动**都会发生的，
+ *      每改一下弹一次，既吵又会盖住页面。改成卡片上一行小字"已保存"，
+ *      下一次改动就消失。
+ *
+ * 顺带修了一个原来被"收起"掩盖掉的问题：**展开的是哪一条不能按下标记**。
+ * 存完 `loadRecords()` 会按接种日期重排，新增的那条会从末尾挪到前面，
+ * 同一个下标就指到别的记录身上了。所以这里存完按**id 重新定位**。
+ */
 async function saveRecord(record: VaccineRecord, index: number) {
   if (isBusy.value) return
 
@@ -787,6 +841,7 @@ async function saveRecord(record: VaccineRecord, index: number) {
 
   try {
     const payload = buildPayload(draft, record)
+    const savedId = String(record.id || '')
     const res: any = record.id
       ? await dogApi.healthRecords.vaccine.update(props.dogId, record.id, payload)
       : await dogApi.healthRecords.vaccine.create(props.dogId, payload)
@@ -795,14 +850,52 @@ async function saveRecord(record: VaccineRecord, index: number) {
       throw new Error(res?.message || '保存失败')
     }
 
-    uni.showToast({ title: '已保存', icon: 'success' })
-    expandedIndex.value = -1
+    // 新增时后端才给 id —— 拿到它，重排之后才能把展开状态跟回同一条
+    const newId = String(res?.data?.id || savedId || '')
     await loadRecords()
+
+    if (newId) {
+      const relocated = records.value.findIndex((item) => item.id === newId)
+      if (relocated >= 0) {
+        expandedIndex.value = relocated
+        markSaved(relocated)
+      }
+    }
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
   } finally {
     savingIndex.value = -1
   }
+}
+
+/**
+ * 卡片上的"已保存"小字。
+ *
+ * 自动保存不弹 toast（太吵、会盖住页面），改成卡片内一行字，
+ * 下一次改动就清掉 —— 顾客要的只是"知道它存进去了"。
+ */
+const savedNotices = ref<Record<number, boolean>>({})
+const savedNoticeTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function markSaved(index: number) {
+  savedNotices.value = { ...savedNotices.value, [index]: true }
+
+  const pending = savedNoticeTimers.get(index)
+  if (pending) clearTimeout(pending)
+  savedNoticeTimers.set(
+    index,
+    setTimeout(() => {
+      savedNoticeTimers.delete(index)
+      if (!savedNotices.value[index]) return
+      const next = { ...savedNotices.value }
+      delete next[index]
+      savedNotices.value = next
+    }, 2000),
+  )
+}
+
+function isJustSaved(index: number): boolean {
+  return Boolean(savedNotices.value[index])
 }
 
 function removeRecord(record: VaccineRecord, index: number) {
@@ -854,11 +947,6 @@ async function doRemove(record: VaccineRecord) {
 <style scoped lang="scss">
 @import '../../styles/health-section.scss';
 
-
-
-
-
-
 .vaccine-due-banner {
   margin-top: 18rpx;
   padding: 18rpx 22rpx;
@@ -872,9 +960,6 @@ async function doRemove(record: VaccineRecord) {
   line-height: 1.6;
   color: #8a6f3d;
 }
-
-
-
 
 .vaccine-card {
   margin-top: 20rpx;
@@ -952,6 +1037,41 @@ async function doRemove(record: VaccineRecord) {
 .vaccine-card__due--overdue {
   color: #8c4a3a;
   font-weight: 600;
+}
+
+/* 卡片头部右侧：删除 + 展开（2026-10-04 从展开区挪上来的） */
+.vaccine-card__header-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+/*
+ * 删除按钮：与就诊记录同一套观感（淡红底、红字、圆角），
+ * 免得两个板块的删除长得不一样，顾客以为是两回事。
+ */
+.vaccine-card__delete {
+  padding: 0 18rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 18rpx;
+  font-size: 24rpx;
+  color: #a63f3f;
+  background: rgba(218, 82, 82, 0.08);
+}
+
+.vaccine-card__delete--disabled {
+  opacity: 0.5;
+}
+
+/* 字段下面的一句说明（例如"核心疫苗和狂犬的时间系统会自动算"） */
+.field-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #8a968a;
 }
 
 .vaccine-card__toggle {
@@ -1122,6 +1242,5 @@ async function doRemove(record: VaccineRecord) {
 .vaccine-card__action--disabled {
   opacity: 0.5;
 }
-
 
 </style>

@@ -547,7 +547,13 @@ describe('dog-profile-health · 新增记录直接路由', () => {
 
     expect(page).toContain('uni.showActionSheet({')
     expect(page).toContain("['上传图片，AI 识别', '手动填写']")
-    expect(page).toContain("['拍疫苗本，AI 识别', '手动加一条']")
+    // 2026-10-04 老板："它其实进入的是相册，所以文案上应该要改一下。
+    // 我们不需要调起相机功能实拍，只需要上传图片即可。"
+    // 查过 pickAndScan 用的就是 sourceType: ['album'] —— 确实只开相册，
+    // 所以文案不能写"拍"。疫苗这条跟着就诊/体检统一成"上传…图片"。
+    expect(page).toContain("['上传疫苗本图片，AI 识别', '手动加一条']")
+    expect(page).not.toContain('拍疫苗本')
+    expect(page).not.toContain('拍照')
     // 过敏已不在这个页面
     expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
     // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"
@@ -555,6 +561,19 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('vaccineSectionRef.value?.addRecord?.()')
     // 体重没有 AI 这条路 → 不弹选择，直接落光标
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
+  })
+
+  it('识别走的是相册，不调相机（文案说"上传"就是这个原因）', () => {
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+    // sourceType 只有 album。老板 2026-10-04 明确：不要相机实拍，只上传图片。
+    expect(scan).toContain("sourceType: ['album']")
+    expect(scan).not.toContain("'camera'")
+    // 默认文案也不能再写"拍照"
+    expect(scan).toContain("buttonText: '上传图片'")
   })
 
   it('板块内不再重复放手动填写入口（老板：多余）', () => {
@@ -565,8 +584,10 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     const page = readPage()
 
     expect(records).not.toContain('手动填写一条')
-    // 疫苗的新增块仍由「新增记录」里的选择打开
-    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
+    // 2026-10-04：疫苗板块内那个新增按钮也下线了 —— 老板提问
+    // "在记录板块中有一个新增按钮，在最下方还有一个新增记录的按钮呢？
+    // 不是重复了吗？"。现在点底部「新增记录」直接调起板块的 addRecord()。
+    expect(page).not.toContain('show-add-entry="vaccineAddEntryVisible"')
     // 过敏已移出本页（搬去定制食谱），这里不该再出现它的入口
     expect(page).not.toContain(':show-add-entry="true"')
   })
@@ -588,12 +609,13 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-  it('疫苗 / 体重的新增块默认关闭，由「新增记录」里的选择打开', () => {
+  it('体重的新增块默认关闭，由「新增记录」里的选择打开', () => {
     const page = readPage()
 
-    expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
+    // 疫苗板块的开关已删除（2026-10-04，板块内按钮下线）；
+    // 体重还留着 —— 它的输入块由页面自己持有，需要这个开关。
+    expect(page).not.toContain('vaccineAddEntryVisible')
     expect(page).toContain('const weightAddEntryVisible = ref(false)')
-    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
     expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
     // 换标签就复位，避免开关残留
     expect(page).toContain('resetAddEntryFlags()')
@@ -640,7 +662,7 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     expect(section).toContain('flushAutoSaves')
   })
 
-  it('疫苗/体重两个板块的新增部分都挂在 showAddEntry 上（过敏已移出本页）', () => {
+  it('体重板块的新增部分仍挂在 showAddEntry 上（疫苗与过敏都已不在）', () => {
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
@@ -650,9 +672,12 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-    // 自带的「拍疫苗本」触发行常隐（AI 走底部「新增记录」），但 showAddEntry 仍管着它
-    expect(vaccine).toContain(':hide-trigger="!showAddEntry || hideScanTrigger"')
-    expect(vaccine).toContain('v-if="showAddEntry"\n      class="health-section__action"')
+    // 疫苗板块：板块内的新增按钮已下线（老板说重复），
+    // 「拍疫苗本」的触发行本来就常隐（AI 走底部「新增记录」）。
+    expect(vaccine).not.toContain('health-section__action')
+    // 「拍疫苗本」触发行仍常隐（AI 走底部「新增记录」）
+    expect(vaccine).toContain('hideScanTrigger?: boolean')
+    // 体重板块不变：它的输入块仍由这个开关控制
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
   })
 })
@@ -690,12 +715,19 @@ describe('健康管理 · 疫苗书签角标（2026-10-04）', () => {
     expect(page).toContain('loadVaccineBadge(requestedDogId)')
   })
 
-  it('一条接种记录都没有时说"待补记录"，不说"该打了"', () => {
+  it('一条接种记录都没有时**不挂角标**（2026-10-04 老板提问后改）', () => {
     const page = readPage()
 
-    // 跟计划板块里不显示"已逾期"是同一条道理：我们没有任何证据说他没打
+    // 原来显示"待补记录"。三处不对：
+    //   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于每个用户永远看到这个角标，
+    //      一个永远亮着的角标就不是信号了；
+    //   2. 它跟"有 N 针该打了"用同一套视觉，把真正的提醒一起贬值；
+    //   3. 读起来像在说"你欠我们一条记录"。
+    // 没有记录时计划板块本来就有一张说明卡把话讲清楚，那里说就够了。
     expect(page).toContain('noRecordAtAll === true')
-    expect(page).toContain("vaccineBadgeText.value = '待补记录'")
+    expect(page).not.toContain('待补记录')
+    expect(page).toContain("if (res.data.noRecordAtAll === true) {")
+    expect(page).toContain("vaccineBadgeText.value = ''")
   })
 
   it('计划没开或拉失败时不挂角标（不在书签上写"加载失败"）', () => {

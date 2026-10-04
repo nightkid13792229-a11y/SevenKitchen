@@ -142,7 +142,6 @@
             ref="vaccineSectionRef"
             external-save
             embedded
-            :show-add-entry="vaccineAddEntryVisible"
             hide-scan-trigger
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
@@ -680,13 +679,19 @@ async function loadVaccineBadge(requestedDogId = dogId.value) {
     ).length
 
     /*
-     * 一条接种记录都没有时**不说"该打了"** —— 跟计划板块里不显示"已逾期"
-     * 是同一条道理：我们没有任何证据说他没打，家长明明年年带狗去打、
-     * 只是没在小程序里记。改成"待补记录"：一样是把人叫进来，但不说假话。
-     * 而"把已注射的信息录进来"正是老板当前最想要的一件事。
+     * 一条接种记录都没有 → **不挂角标**（2026-10-04 老板提问后改）。
+     *
+     * 原来这里会挂一个角标，提示"资料还没补"。三处不对：
+     *   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于**每个用户永远看到这个角标**，
+     *      一个永远亮着的角标就不是信号了；
+     *   2. 它跟"有 N 针该打了"用同一套视觉，把真正的提醒也一起贬值了；
+     *   3. 读起来像在说"你欠我们一条记录"。
+     *
+     * 没有记录时，计划板块本来就会显示一张说明卡把话讲清楚 ——
+     * 那里说就够了，不必在书签上再喊一遍。
      */
     if (res.data.noRecordAtAll === true) {
-      vaccineBadgeText.value = '待补记录'
+      vaccineBadgeText.value = ''
       return
     }
 
@@ -1021,11 +1026,15 @@ const hasUnsavedSectionDraft = ref(false)
  *   · 体重                       → 没有 AI 识别这回事，直接打开输入块落光标
  * 所以这些开关只在"选了手动填写"之后才打开 —— 标签页本身仍是"看结果 + 改已有"。
  */
-const vaccineAddEntryVisible = ref(false)
+// 疫苗板块那个"新增开关"已删除（2026-10-04）。
+// 它原来的唯一作用，是让疫苗板块内的新增按钮在顾客选完"手动加一条"之后出现。
+// 那个按钮已经下线了 —— 老板提问："在记录板块中有一个新增按钮，在最下方
+// 还有一个新增记录的按钮呢？不是重复了吗？" 是重复。现在点底部「新增记录」
+// 直接调起板块的 addRecord()，不需要中间开关。
+// 体重板块还留着这个开关（它的输入块由页面自己持有）。
 const weightAddEntryVisible = ref(false)
 
 function resetAddEntryFlags() {
-  vaccineAddEntryVisible.value = false
   weightAddEntryVisible.value = false
 }
 
@@ -1048,7 +1057,7 @@ function onAddRecordTap() {
   const isRecord = isRecordTab.value
   const options = isRecord
     ? ['上传图片，AI 识别', '手动填写']
-    : ['拍疫苗本，AI 识别', '手动加一条']
+    : ['上传疫苗本图片，AI 识别', '手动加一条']
 
   uni.showActionSheet({
     itemList: options,
@@ -1063,7 +1072,8 @@ function onAddRecordTap() {
       }
 
       if (activeHealthTab.value === 'vaccine') {
-        vaccineAddEntryVisible.value = true
+        // 不再打开板块内的新增按钮（那个按钮已下线）——
+        // 直接调起图片识别或手动加一条。
         if (tapIndex === 0) {
           nextTick(() => vaccineSectionRef.value?.startScan?.())
         } else {
@@ -1107,7 +1117,7 @@ const stickySecondaryText = computed(() => {
 })
 
 /**
- * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 拍照）；其它板块 → 返回。
+ * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 上传图片）；其它板块 → 返回。
  */
 /**
  * 把当前板块里等待中的自动保存立刻执行（2026-10-03）。

@@ -700,6 +700,29 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
     const redelivered = order.status === CustomRecipeStatus.DELIVERED;
 
+    /**
+     * 一道定制食谱只能挂在**一张**定制单上（`custom_recipe_order.recipe_id` 是唯一约束）。
+     *
+     * 为什么必须在这里拦：回头客第二次给同一只狗定制时，候选列表里会包含
+     * 上一单已经交付过的那道食谱。员工点下去，数据库会直接抛唯一约束错误 ——
+     * 表现成 500 加一句看不懂的话。这里提前给出能照着做的说明。
+     *
+     * 业务上也不该复用：每一单定制费对应它自己产出的那道食谱，
+     * ¥150 抵扣额度是绑在那道食谱上的（复用等于两次定制共用一份产出）。
+     */
+    const occupied = await this.prisma.customRecipeOrder.findFirst({
+      where: { recipeId: recipe.id, id: { not: order.id } },
+      select: { orderId: true },
+    });
+
+    if (occupied) {
+      throw new BadRequestException(
+        `这道食谱已经交付给另一张定制单（${occupied.orderId}），` +
+          '一道定制食谱只能对应一张定制单。请在设计器里另存一版再交付，' +
+          '或直接到那张单上做「重新交付」',
+      );
+    }
+
     await this.prisma.customRecipeOrder.update({
       where: { id: order.id },
       data: {

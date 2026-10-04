@@ -274,9 +274,14 @@ describe('CustomRecipeService · 一键交付已设计好的食谱', () => {
     service = module.get(CustomRecipeService);
     jest.clearAllMocks();
 
-    orderFindFirst.mockResolvedValue({
-      id: baseOrder.id,
-      orderId: baseOrder.orderId,
+    /**
+     * findFirst 会被两处用到，靠 where 的形状区分：
+     *   · resolveOrderRef：按业务编号/主键查订单
+     *   · 交付前的占用检查：按 recipeId 查"这道食谱是不是已经被别的单占了"
+     */
+    orderFindFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.recipeId !== undefined) return null;
+      return { id: baseOrder.id, orderId: baseOrder.orderId };
     });
     orderFindUnique.mockResolvedValue({ ...baseOrder });
     orderUpdate.mockResolvedValue({});
@@ -354,8 +359,7 @@ describe('CustomRecipeService · 一键交付已设计好的食谱', () => {
     expect(orderUpdate).not.toHaveBeenCalled();
   });
 
-  it('口径 4：已交付的订单可以重新交付，并且标明是重交', async () => {
-    orderFindUnique.mockResolvedValue({
+  it('口径 4：已交付的订单可以重新交付，并且标明是重交', async () => {    orderFindUnique.mockResolvedValue({
       ...baseOrder,
       status: 'DELIVERED',
       recipeId: 'recipe-pk-OLD',
@@ -368,6 +372,23 @@ describe('CustomRecipeService · 一键交付已设计好的食谱', () => {
 
     expect(result.redelivered).toBe(true);
     expect(orderUpdate).toHaveBeenCalled();
+  });
+
+  it('⚠️ 同一道食谱不能交付给第二张单（回头客场景），给出能照做的提示', async () => {
+    // 这道食谱已经挂在另一张定制单上（custom_recipe_order.recipe_id 是唯一约束）
+    orderFindFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.recipeId !== undefined) {
+        return { orderId: 'CR202609010001' };
+      }
+      return { id: baseOrder.id, orderId: baseOrder.orderId };
+    });
+
+    await expect(
+      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
+    ).rejects.toThrow(/已经交付给另一张定制单/);
+
+    // 关键：不能真的去写库，否则数据库会抛唯一约束错误（表现成 500）
+    expect(orderUpdate).not.toHaveBeenCalled();
   });
 
   it('候选列表只给"这位顾客 + 这只狗"的定制食谱，并标出当前已挂的那道', async () => {

@@ -6,7 +6,7 @@
        2026-10-04 老板定：**计划没开的时候整块不出现**。
        原来会显示一张写着"待开放"的卡片 —— 顾客看到的是一个还不存在、
        也没说什么时候会有的功能，只会以为是坏的。开了才出现，才讲得通。 -->
-  <view v-if="!planHidden" class="health-section vaccine-plan">
+  <view v-if="!sectionHidden" class="health-section vaccine-plan">
     <template v-if="loaded">
       <!-- 一条接种记录都没有时：**这一块整个不渲染**（2026-10-04 老板第二次提问后改）。
 
@@ -205,6 +205,19 @@ const unavailable = ref<{ message: string } | null>(null)
 
 /** 计划没开（接口说 available:false）→ 整块不出现，不是显示一张"待开放"的卡 */
 const planHidden = computed(() => unavailable.value !== null)
+
+/**
+ * 整块要不要渲染（2026-10-05）。
+ *
+ * ⚠️ 零记录时**连根节点都不能留**。上一轮我只把里面的内容藏了，
+ * 根 `<view class="health-section vaccine-plan">` 还在 ——
+ * 它带着 `.vaccine-plan { margin-bottom: 24rpx }`，于是在书签和
+ * 记录板块那张空态卡之间留了一条 24rpx 的紫色空白。
+ * 老板看出来了："疫苗板块为什么还是有紫色的空白区域呢？"
+ */
+const sectionHidden = computed(
+  () => planHidden.value || (loaded.value && noRecordAtAll.value),
+)
 const plan = ref<{
   nextStep: PlanStep | null
   steps: PlanStep[]

@@ -5,7 +5,7 @@
       <view class="health-section__heading">
         <text class="health-section__title">疫苗管理</text>
         <text class="health-section__desc">
-          记录每次接种与下次到期日，到期前这里会提醒你。
+          记录每次接种，接下来该打什么由免疫程序自动算。
         </text>
       </view>
       <text class="health-section__count">{{ records.length }} 条</text>
@@ -52,6 +52,7 @@
       v-for="(record, index) in records"
       :key="record.id || `draft-${index}`"
       class="vaccine-card health-card"
+      :class="{ [`vaccine-card--focus-${index}`]: true }"
     >
       <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
         <view class="vaccine-card__summary">
@@ -75,8 +76,11 @@
              没人找得到。现在挪到卡片脸上，跟就诊记录一致。
              @tap.stop 是必须的：不然点删除会顺带把卡片展开/收起。 -->
         <view class="vaccine-card__header-actions">
+          <!-- 删除按钮**不再要求 record.id**（2026-10-05）。
+               原来草稿（尤其是"拍疫苗本"识别出来、还没保存的那几条）看不到删除键，
+               可 removeRecord 本来就支持删草稿（本地列表里摘掉）。
+               结果就是：识别错了想删掉某一条，找不到入口。 -->
           <text
-            v-if="record.id"
             class="vaccine-card__delete"
             :class="{ 'vaccine-card__delete--disabled': isBusy }"
             @tap.stop="removeRecord(record, index)"
@@ -95,7 +99,9 @@
             type="text"
             placeholder="例如：狂犬疫苗"
             :value="draftOf(record, index).vaccineName"
+            :focus="focusIndex === index"
             @input="updateDraft(index, 'vaccineName', $event.detail.value)"
+            @blur="clearFocus(index)"
           />
           <view class="vaccine-name-tags">
             <text
@@ -120,45 +126,16 @@
           </picker>
         </view>
 
-        <!-- 下次接种日期（2026-10-04 老板提问后改）。
-             老板："为什么需要选择提醒时间呢？不是应该自动提醒吗？"
-             —— 核心疫苗和狂犬的到期时间**确实是自动算的**（按免疫程序），
-             不需要顾客填。这个框只留一个用途：**医生另外交代的时间**。
-             所以标签从"下次到期日"改成"下次接种"，并在下面说清分工，
-             免得顾客以为"不填就没人提醒我"。
-             （等疫苗产品清单过审后，非核心苗的间隔也能按产品自动算，
-               到时候这一框可以进一步弱化甚至去掉。） -->
-        <view class="field-group">
-          <text class="field-label">下次接种（可选）</text>
-          <picker
-            mode="date"
-            :value="draftOf(record, index).nextDueDate || today"
-            @change="updateDraft(index, 'nextDueDate', $event.detail.value)"
-          >
-            <view class="field-picker">
-              {{ draftOf(record, index).nextDueDate || '医生另外交代了时间才填' }}
-            </view>
-          </picker>
-          <text class="field-hint">
-            核心疫苗和狂犬的接种时间，系统会按免疫程序自动算，不用你填。
-          </text>
-          <text
-            v-if="draftOf(record, index).nextDueDate"
-            class="field-inline-action"
-            @tap="updateDraft(index, 'nextDueDate', '')"
-          >清除</text>
-        </view>
+        <!-- 「下次接种」字段已删除（2026-10-05 老板："请把这个字段删掉"）。
+             前一轮只是改了措辞、想说明白"核心疫苗和狂犬是自动算的"，
+             但老板的判断更干脆：**这个字段本身就不该存在**。
+             提醒本来就该由系统按免疫程序算出来，让顾客手填一个日期，
+             等于把"该不该提醒"的责任推给他 —— 而且他多半不知道该填什么。
 
-        <!-- 「状态」选择器已下线（2026-10-04 老板提问后改）。
-             老板："用户如果手动记录了疫苗信息的话，就意味着这一针已经打了呀，
-             为什么还会让用户选择接种状态呢？"
-             —— 对。一条接种记录记的就是**已经发生的事**，状态没有第二种可能。
-             "已预约"是"还没发生"，那是计划的事，不是记录的事。
-
-             另外后端**没有任何逻辑读这个字段**（查过：仓储层只存取、不判断），
-             它此前纯粹是个显示标签。所以新记录一律按已接种存，
-             老记录里已经存了别的值的，卡片上照旧显示那个标签，不悄悄改。 -->
-
+             ⚠️ 后端字段 nextDueDate **保留不动**（additive，老记录里可能存着值）：
+               · 记录卡片上若老数据有值，仍然显示"还有 N 天到期"；
+               · buildPayload 仍会把草稿里原有的值原样带上，不会被清掉。
+             只是顾客端不再有输入口。 -->
         <view class="field-group">
           <text class="field-label">备注（可选）</text>
           <textarea
@@ -218,7 +195,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { scrollPageToSelector } from '../../utils/page-scroll'
 import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
 import {
   buildHealthAttachmentDisplayMeta,
@@ -536,6 +514,13 @@ function autoSaveNotice(index: number): string {
   return autoSaveNotices.value[index] || ''
 }
 
+/** 失焦之后把自动聚焦标记清掉 —— 否则这一行会一直被"要求聚焦" */
+function clearFocus(index: number) {
+  if (focusIndex.value === index) {
+    focusIndex.value = -1
+  }
+}
+
 function toggleExpanded(record: VaccineRecord, index: number) {
   expandedIndex.value = expandedIndex.value === index ? -1 : index
 }
@@ -731,12 +716,43 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       attachments: attachmentList(draft),
     } as any)
   }
-  uni.showToast({
-    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
-    icon: 'none',
+  /*
+   * 识别完**直接存**（2026-10-05 修的一个洞）。
+   *
+   * 原来这里只"填表"，提示"核对后保存"—— 可是手动保存键在 2026-10-03
+   * 就随着"改实时保存"一起下线了，**根本没有保存键可按**。
+   * 后果：识别出来的记录看着像已经存好的（卡片长得一模一样），
+   * 实际 `id` 是空的，于是：
+   *   · 删除键不显示（那时它是 v-if="record.id"）；
+   *   · 后端一条都没有 → 疫苗计划那边认为"还没有接种记录"，整块不显示。
+   * 老板这两个疑问（"为什么没有删除按钮""计划在哪"）根子都是它。
+   *
+   * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
+   */
+  const scanned = payload.drafts.length
+  uni.showToast({ title: `已识别 ${scanned} 条，正在保存…`, icon: 'none' })
+
+  records.value.forEach((record, index) => {
+    if (record.id) return
+    if (autoSaveBlockReason(record, index)) return
+    void runAutoSave(record, index)
   })
 }
 
+/**
+ * 新增一条空白记录（底部「新增记录」→「手动加一条」调这里）。
+ *
+ * ⚠️ 2026-10-05 补了两件事（老板："在选择手动加一条之后，为什么没有定位到
+ * 编辑窗口呢？"）：
+ *
+ *   1. **滚到新卡片**。新记录是**追加在列表末尾**的，前面已经有几条时
+ *      它落在屏幕外 —— 顾客点完"手动加一条"看到的还是原来那一屏，
+ *      自然觉得"没反应"。
+ *   2. **把光标落进"疫苗名称"**。这是第一个要填的字段，直接给键盘，
+ *      顾客不用再点一次。
+ *
+ * 两件事都必须在 DOM 更新之后做，所以放在 nextTick 里。
+ */
 function addRecord() {
   const draft: VaccineRecord = {
     id: '',
@@ -749,7 +765,22 @@ function addRecord() {
 
   records.value = [...records.value, draft]
   ensureDrafts()
-  expandedIndex.value = records.value.length - 1
+  const target = records.value.length - 1
+  expandedIndex.value = target
+  focusIndex.value = target
+
+  // 等这一屏渲染出来再滚、再落光标；拿不到元素就静默跳过，不挡主流程
+  nextTick(() => {
+    scrollToRecordCard(target)
+  })
+}
+
+/** "疫苗名称"输入框是否要自动聚焦（新增一条时打开，避免一直弹键盘） */
+const focusIndex = ref(-1)
+
+/** 把某一条记录滚进可视区。用小程序的 pageScrollTo + 唯一 class。 */
+function scrollToRecordCard(index: number) {
+  scrollPageToSelector(`.vaccine-card--focus-${index}`, 260)
 }
 
 function buildPayload(

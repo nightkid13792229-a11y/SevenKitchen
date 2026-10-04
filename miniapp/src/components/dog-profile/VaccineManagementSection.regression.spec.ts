@@ -51,6 +51,52 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
+  it('草稿（还没保存的）也要能删（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："疫苗记录为什么没有删除的按钮呢？"
+    // 根因是删除键带 v-if="record.id" —— 识别出来还没保存的那几条没有 id，
+    // 于是看不到删除键；可 removeRecord 本来就支持删草稿。
+    expect(source).not.toContain('v-if="record.id"\n            class="vaccine-card__delete"')
+    expect(source).toContain('vaccine-card__delete')
+    // 草稿走"从本地列表里摘掉"那条路
+    expect(source).toContain('records.value = records.value.filter')
+  })
+
+  it('「下次接种」字段已删除（2026-10-05 老板要求）', () => {
+    const source = readComponent()
+
+    // 老板："为什么还是有下次接种时间这个字段呢？请把这个字段删掉。"
+    // 提醒该由系统按免疫程序算，让顾客手填等于把责任推给他。
+    expect(source).not.toContain('下次接种（可选）')
+    expect(source).not.toContain("updateDraft(index, 'nextDueDate'")
+    // 但后端字段保留：老记录里的值仍要显示、也要原样带回去，别清掉
+    expect(source).toContain('nextDueDate')
+    expect(source).toContain('if (draft.nextDueDate) {')
+  })
+
+  it('新增一条之后滚到它、并把光标落进疫苗名称（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："在选择手动加一条之后，为什么没有定位到编辑窗口呢？"
+    // 新记录追加在列表末尾，前面有几条时它落在屏幕外 —— 看着就像"没反应"。
+    expect(source).toContain('scrollPageToSelector')
+    expect(source).toContain(':focus="focusIndex === index"')
+    expect(source).toContain('focusIndex.value = target')
+    // 必须在 DOM 更新之后做
+    expect(source).toContain('nextTick(() => {')
+  })
+
+  it('识别出来的记录直接存掉（不然它们永远只是草稿）', () => {
+    const source = readComponent()
+
+    // 手动保存键 2026-10-03 就下线了，可识别这条路一直只"填表"，
+    // 于是识别出来的记录看着像存好的、其实 id 是空的 ——
+    // 删除键不显示、后端也一条都没有（疫苗计划那边因此整块不显示）。
+    expect(source).toContain("`已识别 ${scanned} 条，正在保存…`")
+    expect(source).toContain('void runAutoSave(record, index)')
+  })
+
   it('删除按钮在卡片脸上，不用先展开（像就诊记录一样）', () => {
     const source = readComponent()
 

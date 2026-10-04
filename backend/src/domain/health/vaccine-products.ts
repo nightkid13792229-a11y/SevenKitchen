@@ -265,8 +265,13 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
 export const MAX_RECOMMENDED_PRODUCTS = 3;
 
 /** 按商品名 / 别名找产品（大小写、空格不敏感） */
+/** 去掉所有空白再比 —— 顾客本子上、AI 识别结果里"宠必威 幼犬保"这种带空格的写法很常见 */
+function normalizeProductText(value: string): string {
+  return String(value || '').replace(/\s+/g, '').toLowerCase();
+}
+
 export function findProductsInName(name: string): VaccineProduct[] {
-  const text = String(name || '').trim().toLowerCase();
+  const text = normalizeProductText(name);
   if (!text) {
     return [];
   }
@@ -274,7 +279,7 @@ export function findProductsInName(name: string): VaccineProduct[] {
   return VACCINE_PRODUCTS.filter((product) => {
     const candidates = [product.name, ...product.aliases];
     return candidates.some((candidate) => {
-      const key = candidate.trim().toLowerCase();
+      const key = normalizeProductText(candidate);
       return key.length > 0 && text.includes(key);
     });
   });

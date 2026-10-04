@@ -71,7 +71,8 @@ describe('疫苗计划 · 界面', () => {
     // 会有的功能 —— 只会被读成"坏了"。开了才出现。
     expect(section).not.toContain('疫苗计划待开放')
     expect(section).toContain('planHidden')
-    expect(section).toContain('v-if="!planHidden"')
+    // 根节点条件已升级成 !sectionHidden（它也管"零记录时不渲染"）
+    expect(section).toContain('v-if="!sectionHidden"')
   })
 
   it('完整计划收成一行，点开才铺开（2026-10-04）', () => {
@@ -125,6 +126,7 @@ describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧�
     // 2026-10-04 老板第二次提问：计划板块和记录板块的空态说了同一件事。
     // 现在这句话只在记录板块说（那里的空态文案是"档案里还没有接种记录"）。
     expect(section).not.toContain('档案里还没有接种记录')
+    // 内容那一层挂 v-if="!noRecordAtAll"，根节点那一层挂 !sectionHidden
     expect(section).toContain('v-if="!noRecordAtAll"')
   })
 
@@ -160,6 +162,17 @@ describe('疫苗计划 · 零记录时不显示计划（2026-10-04 老板定）'
       'utf-8',
     )
   }
+
+  it('零记录时**连根节点都不渲染**（否则留一条 24rpx 的紫色空白）', () => {
+    const section = readSection()
+
+    // 老板 2026-10-05："疫苗板块为什么还是有紫色的空白区域呢？"
+    // 上一轮只藏了里面的内容，根 <view class="health-section vaccine-plan">
+    // 还在，它带着 .vaccine-plan { margin-bottom: 24rpx } —— 空白就是它。
+    expect(section).toContain('const sectionHidden = computed')
+    expect(section).toContain('v-if="!sectionHidden"')
+    expect(section).toContain('planHidden.value || (loaded.value && noRecordAtAll.value)')
+  })
 
   it('零记录时整块藏掉"下一步 / 不一致提醒 / 接种计划"', () => {
     const section = readSection()

@@ -477,6 +477,15 @@ describe('疫苗计划', () => {
       expect(classifyVaccineKinds('六联')).toEqual(['core']);
     })
 
+    it('商品名里带空格也认得出（"宠必威 幼犬保"）', () => {
+      // 顾客本子上、AI 识别结果里带空格的写法很常见。
+      // 归一化之前 "宠必威 幼犬保".includes("宠必威幼犬保") 是 false，
+      // 会一路掉到"默认当核心苗"—— 碰巧这次答案对，但"卫佳 捌"就会漏掉钩端那一类。
+      expect(classifyVaccineKinds('卫佳 捌').sort()).toEqual(['core', 'lepto']);
+      expect(classifyVaccineKinds('宠必威 乐必妥')).toEqual(['lepto']);
+      expect(classifyVaccineKinds('Vanguard Plus 5-CVL').sort()).toEqual(['core', 'lepto']);
+    })
+
     it('单独的钩端螺旋体**不再**被算成核心苗', () => {
       // 以前 classifyVaccineName 是"不是狂犬就算 core"，
       // 一针单苗会被当成完成了一针核心疫苗。

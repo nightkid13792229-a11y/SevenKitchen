@@ -199,3 +199,36 @@
 | `POST /api/v1/custom-recipe/orders` | `scheduledDate` 改为**系统自动排的最近可用工作日**；返回体新增 `paymentDeadlineAt` |
 | `GET /api/v1/custom-recipe/orders/:id`、`GET /my-orders` | 新增 `paymentDeadlineAt`、`refundStatus`、`refundAmount`、`refundedAt` |
 | `POST /api/v1/custom-recipe/upload-attachment` | 增加订单归属校验；订单非法/非本人返回业务错误而非 500 |
+
+---
+
+## 七、第一批执行记录
+
+### 7.1 后端（档一）· 已完成并提交 `e1fa8225`
+
+| 事项 | 落地方式 |
+|---|---|
+| 钱付了单被关掉 | 关单改 **CAS**：`updateMany({ where: { id, status: PENDING_PAYMENT } })`，抢不过回调就放弃关单 |
+| 同上 · 最后一道防线 | 支付回调遇到"订单已关闭但钱到账"：补记流水 → **自动原路退回**，并打 error 日志 |
+| 同上 · 事前预防 | 定时关单**前先向微信核查支付结果**，查到已付就确认收款；核查失败本轮跳过（宁可晚关，不可错关） |
+| 排期超卖 | 占位改事务内 CAS（按读到的 `bookedCount` 原值条件更新），抢不到换下一天重试，最多 5 次 |
+| 口径 1 · 自动排期 | 服务端从今天起找最近可接单工作日，节假日/满员顺延；`scheduledDate` 不再采信顾客传值 |
+| 退款断链 | 微信退款回调补 **CRR 分支**，写入 `refundStatus` / `refundedAt` / `refundId` |
+| 口径 3 · 后台取消退款 | 取消已付款单先原路退款，退款失败就不取消 |
+| 越权上传 | 新增 `assertOrderOwnership`，订单不存在返回业务错误 |
+| 参数校验 | 后台状态枚举、排期 `month` 校验；定制费为 0 不允许保存；发起支付前兜一道金额校验 |
+| 新契约 | 公开配置加 `paymentTimeoutMinutes`；订单加 `paymentDeadlineAt` / 退款三字段 / 取消两字段 |
+
+**验证**：后端全量 **289 套 / 2892 项全绿**（基线 287 套 / 2875 项）；`nest build` 通过。
+新增守卫测试：`custom-recipe-order-guard.spec.ts`（自动排期 / 超卖 / 归属）、`custom-recipe-refund-notify.spec.ts`（退款回调 / 迟到付款）。
+
+### 7.2 小程序（档三）· 进行中
+
+已派专项改动，范围：首屏加载态、预约日期与付款时限文案、防连点、待付款单提醒、换狗隔离医疗数据、
+「已取消」与退款状态文案、附件文案一致性、401 提示与登录回跳、状态文案抽公共模块。
+
+### 7.3 移入第二批
+
+- **口径 2 · 后台权限细分**（客服/员工可做日常，交付与取消仅管理员）：要同时改后端守卫与后台菜单/按钮，
+  与档二的后台改动一起做，避免同一处权限逻辑改两遍。
+

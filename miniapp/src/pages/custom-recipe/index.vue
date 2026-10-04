@@ -6,6 +6,27 @@
       <text class="page-subtitle">告诉我们它的情况，我们来单独设计一道</text>
     </view>
 
+    <!-- 待付款单提醒（2026-10-04 新增）。
+         口径是**不限制下单张数**（顾客养多只狗可以分别定制），所以这里只提醒
+         "别忘了付这一单"，绝不做成"先付完才能再下单"的阻断。 -->
+    <view v-if="pendingOrder" class="pending-banner">
+      <view class="pending-banner__head">
+        <text class="pending-banner__title">你有一张待付款的定制单</text>
+        <text v-if="pendingOrderRemainingText" class="pending-banner__time">{{ pendingOrderRemainingText }}</text>
+      </view>
+      <text class="pending-banner__desc">
+        超时未支付，订单会自动取消。定制张数不限，你也可以继续提交新的定制单。
+      </text>
+      <view class="pending-banner__actions">
+        <button
+          class="pending-banner__btn primary"
+          :disabled="pendingPaying"
+          @tap="continuePayPending"
+        >{{ pendingPaying ? '处理中…' : '继续支付' }}</button>
+        <button class="pending-banner__btn" @tap="viewPendingOrder">查看订单</button>
+      </view>
+    </view>
+
     <!-- 第一步：选择狗狗 -->
     <view class="section">
       <view class="section-title">
@@ -29,6 +50,13 @@
           <text class="arrow">›</text>
         </view>
       </picker>
+
+      <!-- 正在读取档案：档案是异步读的，请求还没回来就先说"还没有狗狗档案"是误报 ——
+           一位明明有 3 只狗的顾客会被这句话引导去重复建档。加载态与空态必须分开。 -->
+      <view v-else-if="dogsLoading" class="no-dog-hint">
+        <text class="no-dog-hint-title">正在读取狗狗档案…</text>
+        <text class="no-dog-hint-desc">马上就好，读完就能选要定制的狗狗了。</text>
+      </view>
 
       <!-- 无档案时的引导：原先只弹一句 toast，页面上没有任何建档入口，提交按钮永久不可用 -->
       <view v-else class="no-dog-hint">
@@ -283,9 +311,12 @@
             </view>
 
             <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
-                 老板："将过敏源的记录放到定制食谱流程中。" -->
+                 老板："将过敏源的记录放到定制食谱流程中。"
+                 :key 绑狗 ID：换狗时必须整个重挂载，否则"上一只狗扫描出来的
+                 候选过敏原"会留在新狗的单子上等着被确认。 -->
             <AllergyScanBlock
               v-if="formData.dogId"
+              :key="formData.dogId"
               :dog-id="formData.dogId"
               @scanned="onAllergensScanned"
             />
@@ -388,14 +419,20 @@
         maxlength="500"
       />
 
-      <!-- 附件（可选）：检测报告、化验单、照片等 -->
+      <!-- 附件（可选）：检测报告、化验单的照片 -->
       <view class="attachment-section">
         <view class="attachment-header">
           <text class="attachment-title">上传资料（可选）</text>
-          <text class="attachment-add" @tap="pickAttachment">
-            {{ attachmentUploading ? '上传中…' : '+ 上传图片或 PDF' }}
+          <text v-if="canAddAttachment" class="attachment-add" @tap="pickAttachment">
+            {{ attachmentUploading ? '上传中…' : '+ 上传照片' }}
           </text>
+          <text v-else class="attachment-limit">已传满 {{ maxAttachmentCount }} 张</text>
         </view>
+        <!-- 文案与能力必须一致：这里只能选照片（选文件通道打不开，PDF 预览也打不开），
+             所以文案只承诺照片，并把张数一次说清。 -->
+        <text class="attachment-hint">
+          照片形式上传，最多 {{ maxAttachmentCount }} 张（已传 {{ formData.attachmentUrls.length }} 张）。检测报告、化验单拍清楚即可。
+        </text>
         <view v-if="formData.attachmentUrls.length > 0" class="attachment-list">
           <view
             v-for="(url, index) in formData.attachmentUrls"
@@ -412,17 +449,25 @@
     </view>
 
     <!-- 交付与费用说明
-         改造点：原来这里显示的是一个**本地硬算的假日期**（提交前并不知道真实交付日），
-         现在改为按后台配置的"交付工作日数"说明口径，真实交付日以订单为准。 -->
+         口径（2026-10-04 拍板）：**顾客不选日期**，提交后由系统自动排"最近可接单的
+         工作日"（当天约满或遇节假日则顺延）。所以这里只能给一个量级正确的参考日，
+         并写明以订单为准 —— 真正权威的日期由后端在下单响应与订单接口里给。 -->
     <view class="section delivery-section">
       <view class="delivery-info">
         <text class="delivery-label">预计交付：</text>
         <text class="delivery-date">{{ deliveryHint }}</text>
       </view>
-      <text class="delivery-note">我们会根据排期计算并告知您具体的交付时间</text>
+      <text class="delivery-note">{{ deliveryNote }}</text>
       <view v-if="creditHint" class="credit-info">
         <text class="credit-label">成品抵扣</text>
         <text class="credit-value">{{ creditHint }}</text>
+      </view>
+
+      <!-- 下一步还要付款：此前这里只讲交付与抵扣，按钮又写"提交定制订单 ¥300"，
+           顾客很容易以为点下去钱就已经付掉了。 -->
+      <view class="pay-next-info">
+        <text class="pay-next-title">下一步：支付 {{ feeLabel || '定制费' }}</text>
+        <text class="pay-next-desc">提交后请在提交成功页（或"我的定制订单"）完成支付。</text>
       </view>
     </view>
 
@@ -441,11 +486,18 @@
       </text>
     </view>
 
-    <!-- 提交按钮 -->
+    <!-- 提交按钮
+         disabled 必须带上 submitting：按钮文案是"下一步：支付 ¥300"，
+         点一次就进入订阅弹窗，这期间再点一次会生成第二张待付款单。 -->
     <view class="submit-section">
-      <button class="submit-btn" @tap="submitOrder" :disabled="!canSubmit">
-        提交定制订单 {{ feeLabel }}
+      <button
+        class="submit-btn"
+        @tap="submitOrder"
+        :disabled="!canSubmit || submitting"
+      >
+        {{ submitting ? '提交中…' : submitButtonText }}
       </button>
+      <text v-if="paymentHint" class="submit-note">{{ paymentHint }}</text>
     </view>
   </view>
 </template>
@@ -456,7 +508,18 @@ import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
 import AllergyScanBlock from '@/components/custom-recipe/AllergyScanBlock.vue';
-import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
+import {
+  requestCustomRecipeOrderSubscription,
+  runCustomRecipePayment,
+} from '@/utils/custom-recipe-payment';
+import {
+  buildPaymentTimeoutHint,
+  estimateDeliveryDate,
+  formatAmount,
+  formatMonthDay,
+  formatRemainingMinutes,
+  resolvePaymentDeadlineAt,
+} from '@/utils/custom-recipe-order';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 import {
   weightGoalPlanApi,
@@ -475,6 +538,14 @@ const dogOptions = ref<any[]>([]);
 const selectedDog = ref<any>(null);
 
 /**
+ * 狗狗档案是否还在读。
+ *
+ * 初始为 true：请求还没回来之前页面必须先说"正在读取"，
+ * 而不是先亮出"还没有狗狗档案"这个空态。
+ */
+const dogsLoading = ref(true);
+
+/**
  * 当前狗狗的体重管理计划（阶段 D1）。
  *
  * 进行中/in 维持期时才带出来 —— 计划才是顾客当下真正在执行的方案，
@@ -490,6 +561,9 @@ async function loadSelectedPlan(dogId: string) {
   if (!dogId) return;
   try {
     const res = await weightGoalPlanApi.current(dogId);
+    // 慢响应保护：连点切换狗狗时，上一只的响应可能后到，
+    // 不能让它把当前这只狗的计划覆盖掉（医疗/用量信息串狗是安全事件）
+    if (formData.value.dogId !== dogId) return;
     selectedPlan.value = res.code === 0 ? (res.data ?? null) : null;
   } catch {
     // 读不到计划不该挡住定制流程
@@ -515,19 +589,14 @@ const submitting = ref(false);
 const needLogin = ref(false);
 
 /**
- * 今天的日期（本地时区，YYYY-MM-DD）。
+ * 排期口径（2026-10-04 拍板）：顾客**不选日期**，前端也不传日期。
  *
- * 2026-09-28 修复：这里原先用 `new Date().toISOString().split('T')[0]`，
- * 那是**UTC 日期**。北京时间凌晨 0 点到 8 点之间，UTC 还停在前一天，
- * 于是这个时段下的单，预约日期会写成昨天（交付日期也跟着早一天）。
+ * 排期由后端"从今天起找最近的可接单工作日"（当天约满或遇公众假期顺延）决定，
+ * 下单响应与订单接口会带回 scheduledDate / estimatedDeliveryDate。
+ * 这里原先有一个取"今天"的函数，把当天当作顾客选的预约日期塞进 scheduledDate ——
+ * 后端的 CreateOrderDTO 已把它改为「可选且不再采信」，所以整块删掉：
+ * 前端不猜日期，顾客看到的日期一律来自后端。
  */
-function getTodayDateString() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
 const formData = ref({
   dogId: '',
   targetGoal: '',
@@ -538,7 +607,6 @@ const formData = ref({
   dislikedIngredients: [] as string[],
   additionalNotes: '',
   attachmentUrls: [] as string[],
-  scheduledDate: getTodayDateString(),
   // 写回健康档案：默认开，但必须顾客明确同意才提交（决策 9）
   syncToHealthProfile: true,
   healthInfoConsent: false,
@@ -561,6 +629,20 @@ const willWriteBackToProfile = computed(
 /** 附件上传中 */
 const attachmentUploading = ref(false);
 
+/**
+ * 附件最多张数。
+ *
+ * 后端一个订单能存多条 COS 地址，但顾客一次上传一堆照片也没人看得完，
+ * 而且"最多几张"必须提前说清 —— 传满才知道传不进去是最差的体验。
+ */
+const maxAttachmentCount = 9;
+
+const canAddAttachment = computed(
+  () =>
+    !attachmentUploading.value &&
+    formData.value.attachmentUrls.length < maxAttachmentCount,
+);
+
 const weightManagementOptions = [
   { value: 'LOSE_WEIGHT', label: '减重' },
   { value: 'MAINTAIN', label: '维持' },
@@ -572,6 +654,14 @@ const recipeConfig = ref<{
   feeAmount: number;
   creditAmount: number;
   deliveryWorkDays: number;
+  /**
+   * 支付超时分钟数（0 = 不自动关单）。
+   *
+   * 口径来自后台「食谱定制设置」，公开配置接口下发；
+   * 接口还没下发这个字段时按 0 处理 —— 此时页面不显示任何时限文案，
+   * 绝不自己编一个默认超时。
+   */
+  paymentTimeoutMinutes: number;
   /** 订阅消息模板 ID；后台未配置时为 null（小程序据此跳过订阅申请） */
   orderNotifyTemplateId: string | null;
 } | null>(null);
@@ -888,19 +978,57 @@ const preferencePrefillHint = computed(() => {
   return '已从档案带出你上次填过的口味，可以直接修改。两项都可以留空。';
 });
 
-function formatAmount(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
-}
-
 const feeLabel = computed(() => {
   const fee = recipeConfig.value?.feeAmount;
   return fee && fee > 0 ? `¥${formatAmount(fee)}` : '';
 });
 
-/** 交付口径用"工作日"，真实交付日以订单为准（后端按排期与公众假期算） */
+/**
+ * 按钮只讲"下一步要付多少钱"。
+ *
+ * 原来写「提交定制订单 ¥300」：金额出现在"提交"这个词后面，顾客很容易理解成
+ * "点下去就是付 300"。改成「下一步：支付 ¥300」，把"提交"和"付款"分成两步说清。
+ */
+const submitButtonText = computed(() =>
+  feeLabel.value ? `下一步：支付 ${feeLabel.value}` : '下一步：支付定制费',
+);
+
+/**
+ * 支付时限提示。
+ *
+ * 金额与分钟数都来自后台配置（GET /custom-recipe-config）；
+ * 配置里没有支付超时（0 = 不自动关单）时返回空串，页面不显示时限。
+ */
+const paymentHint = computed(() =>
+  buildPaymentTimeoutHint({
+    paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
+  }),
+);
+
+/**
+ * 交付口径。
+ *
+ * 2026-10-04 口径变更：顾客不再选日期，由后端自动排"最近可接单的工作日"。
+ * 提交前拿不到权威日期，这里按后台配置的"交付工作日数"给一个**参考日**
+ * （含周末顺延），并明确写"以订单为准" —— 比只写"约 N 个工作日内"更清楚，
+ * 又不会让顾客以为这就是最终日期。
+ */
 const deliveryHint = computed(() => {
   const days = recipeConfig.value?.deliveryWorkDays;
-  return days && days > 0 ? `约 ${days} 个工作日内` : '按排期确认';
+  if (!days || days <= 0) return '以系统排期为准';
+
+  const estimated = estimateDeliveryDate(days);
+  if (!estimated) return `约 ${days} 个工作日内`;
+
+  return `${formatMonthDay(estimated)}（约 ${days} 个工作日）`;
+});
+
+const deliveryNote = computed(() => {
+  const days = recipeConfig.value?.deliveryWorkDays;
+  if (!days || days <= 0) {
+    return '提交后系统会自动排最近可接单的工作日，确切交付日期以订单为准。';
+  }
+  return `提交后系统自动排最近可接单的工作日（当天约满或遇节假日顺延），确切日期以订单为准。`;
 });
 
 const creditHint = computed(() => {
@@ -912,20 +1040,140 @@ const creditHint = computed(() => {
   return `其中 ¥${formatAmount(config.creditAmount)} 可抵扣成品货款`;
 });
 
+// ==================== 待付款单提醒 ====================
+
+/**
+ * 已有的待付款单（只用于提醒，不阻断下单）。
+ *
+ * 口径：不限制下单张数 —— 顾客养多只狗可以分别定制，所以这里**不能**做成
+ * "先付完这一单才能再下单"。只提示"别忘了付"并给两个入口。
+ */
+const pendingOrder = ref<{ orderId: string; deadlineAt: number | null } | null>(
+  null,
+);
+const pendingPaying = ref(false);
+
+/** 剩余时间文案；拿不到截止时间就整段不显示，不猜 */
+const pendingOrderRemainingText = computed(() => {
+  const deadlineAt = pendingOrder.value?.deadlineAt;
+  if (!deadlineAt) return '';
+  const remaining = formatRemainingMinutes(deadlineAt, Date.now());
+  return remaining ? `还剩 ${remaining}` : '已超过支付时限';
+});
+
+/**
+ * 配置只读一次：待付款提醒要用配置里的支付超时估算剩余时间，
+ * 用同一个 promise 兜住，避免 onLoad 与 onShow 各打一次请求。
+ */
+let recipeConfigPromise: Promise<void> | null = null;
+function ensureRecipeConfig(): Promise<void> {
+  if (!recipeConfigPromise) {
+    recipeConfigPromise = loadRecipeConfig();
+  }
+  return recipeConfigPromise;
+}
+
+const loadPendingOrder = async () => {
+  // 未登录时 /my-orders 必然 401，静默跳过即可
+  if (!getToken()) {
+    pendingOrder.value = null;
+    return;
+  }
+
+  await ensureRecipeConfig();
+
+  try {
+    const res: any = await request({
+      url: '/custom-recipe/my-orders',
+      method: 'GET',
+      data: { status: 'PENDING_PAYMENT', page: 1, pageSize: 1 },
+      quiet: true,
+      suppressErrorToast: true,
+    });
+
+    const first = Array.isArray(res?.data?.orders) ? res.data.orders[0] : null;
+    if (res?.code !== 0 || !first?.orderId) {
+      pendingOrder.value = null;
+      return;
+    }
+
+    pendingOrder.value = {
+      orderId: String(first.orderId),
+      // 优先用后端下发的 paymentDeadlineAt，没有才用下单时间 + 配置超时估算
+      deadlineAt: resolvePaymentDeadlineAt({
+        paymentDeadlineAt: first.paymentDeadlineAt ?? null,
+        createdAt: first.createdAt ?? null,
+        paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
+      }),
+    };
+  } catch (error) {
+    // 提醒读不到不影响下单：不打扰顾客，也不弹错
+    console.warn('[CustomRecipe] 读取待付款订单失败:', error);
+    pendingOrder.value = null;
+  }
+};
+
+/** 继续支付：与订单列表页保持同一条路径（在线支付优先，通道不可用再转人工） */
+const continuePayPending = async () => {
+  const orderId = pendingOrder.value?.orderId;
+  if (!orderId || pendingPaying.value) return;
+
+  pendingPaying.value = true;
+  try {
+    const outcome = await runCustomRecipePayment(orderId);
+
+    if (outcome === 'PAID') {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+      await loadPendingOrder();
+      return;
+    }
+    if (outcome === 'CANCELLED') {
+      uni.showToast({ title: '已取消支付，可稍后再付', icon: 'none' });
+      return;
+    }
+    if (outcome === 'CLOSED') {
+      uni.showToast({ title: '订单已关闭，请重新提交定制', icon: 'none' });
+      await loadPendingOrder();
+      return;
+    }
+    if (outcome === 'MANUAL') {
+      // 支付通道不可用：去提交成功页看客服收款方式，保证这单能被付掉
+      uni.navigateTo({
+        url: `/pages/custom-recipe/success?orderId=${encodeURIComponent(orderId)}`,
+      });
+      return;
+    }
+    uni.showToast({ title: '支付未完成，可稍后重试', icon: 'none' });
+  } finally {
+    pendingPaying.value = false;
+  }
+};
+
+const viewPendingOrder = () => {
+  const orderId = pendingOrder.value?.orderId;
+  if (!orderId) return;
+  uni.navigateTo({
+    url: `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId)}`,
+  });
+};
+
 // 生命周期
 onLoad(() => {
   loadDogs();
-  loadRecipeConfig();
+  void ensureRecipeConfig();
 });
 
 /**
  * 从建档页返回时本页不会重新挂载，之前 onLoad 只跑一次，
  * 导致用户自己建好档再回到本页，狗狗列表仍然是空的、提交按钮仍然点不动。
+ *
+ * 待付款提醒也在这里重查：付完款或取消订单后返回本页，提示要立刻消失。
  */
 onShow(() => {
   if (!dogOptions.value.length) {
     void loadDogs();
   }
+  void loadPendingOrder();
 });
 
 // 统一的建档入口（带来源埋点，建档成功后回到本页）
@@ -974,6 +1222,9 @@ const loadRecipeConfig = async () => {
         feeAmount: Number(res.data.feeAmount) || 0,
         creditAmount: Number(res.data.creditAmount) || 0,
         deliveryWorkDays: Number(res.data.deliveryWorkDays) || 0,
+        // 支付超时（0 = 不自动关单）。接口还没下发时按 0 处理：
+        // 页面会跳过时限文案，而不是自己编一个默认超时出来。
+        paymentTimeoutMinutes: Number(res.data.paymentTimeoutMinutes) || 0,
         orderNotifyTemplateId: res.data.orderNotifyTemplateId
           ? String(res.data.orderNotifyTemplateId)
           : null,
@@ -992,8 +1243,13 @@ const loadDogs = async () => {
     needLogin.value = true;
     dogOptions.value = [];
     selectedDog.value = null;
+    dogsLoading.value = false;
     return;
   }
+
+  // 每次读档案都先回到加载态：否则从建档页返回重新拉取时，
+  // 列表还没回来又会先闪一下"还没有狗狗档案"
+  dogsLoading.value = true;
 
   try {
     // 统一走 utils/api 的 request：它按全站统一响应结构 {code,message,data} 解包，
@@ -1041,6 +1297,9 @@ const loadDogs = async () => {
       icon: 'none',
       duration: 2000,
     });
+  } finally {
+    // 无论成功失败都要退出加载态：卡在"正在读取"上，顾客没有任何重试入口
+    dogsLoading.value = false;
   }
 };
 
@@ -1069,9 +1328,24 @@ function splitFoodText(raw: unknown): string[] {
  *
  * 只**预填**，不覆盖顾客已经改过的东西：
  * 重复进入或换狗时以最新一次档案内容为准（顾客此时通常还没开始填）。
+ *
+ * 2026-10-04 数据安全修复（换狗隔离）：
+ * 原先这几项只在读取**成功后**才赋值，读取失败时只清了 healthSummary ——
+ * 于是上一只狗的过敏与疾病会留在新狗的单子上，勾了"记入健康档案"还会被写回
+ * **新狗的档案**。过敏与疾病是医疗信息，串狗可能直接导致喂错东西。
+ * 现在改成"先清空，再按新狗档案填充"：读失败就保持为空，宁可让顾客重填一遍。
  */
 const loadDogArchiveInfo = async (dogId: string) => {
   if (!dogId) return;
+
+  // ① 先清空上一只狗带出来的一切（含扫描出来的候选过敏原所在的报告列表）
+  formData.value.allergies = [];
+  formData.value.medicalConditions = [];
+  // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
+  formData.value.preferredIngredients = [];
+  formData.value.dislikedIngredients = [];
+  healthSummary.value = null;
+  allergyReports.value = [];
 
   healthSummaryLoading.value = true;
   try {
@@ -1090,6 +1364,10 @@ const loadDogArchiveInfo = async (dogId: string) => {
     if (res?.code !== 0 || !res.data) {
       throw new Error(res?.message || '读取档案失败');
     }
+
+    // ② 慢响应保护：等待期间顾客又换了狗，这份档案就不再是当前这只的，
+    //    直接丢弃 —— 否则 A 狗的过敏会被填到 B 狗的单子上
+    if (formData.value.dogId !== dogId) return;
 
     const calc = detailRes?.data?.calcResult;
     if (calc) {
@@ -1117,7 +1395,7 @@ const loadDogArchiveInfo = async (dogId: string) => {
     formData.value.preferredIngredients = splitFoodText(data.preferredFoods);
     formData.value.dislikedIngredients = splitFoodText(data.pickyFoods);
   } catch (error) {
-    // 读不到档案不能挡住定制：留空让顾客自己填
+    // 读不到档案不能挡住定制：保持上面清空后的空状态，让顾客自己填
     console.warn('[CustomRecipe] 读取档案信息失败:', error);
     healthSummary.value = null;
   } finally {
@@ -1128,11 +1406,22 @@ const loadDogArchiveInfo = async (dogId: string) => {
 /**
  * 上传资料（可选）。
  *
- * 复用健康附件的上传通道（图片/PDF 都能传），拿回来的是 COS 地址，
- * 直接放进订单的 attachmentUrls —— 营养师在后台订单详情里能看到。
+ * 能力边界要说实话：这里走的是**相册/拍照**通道（uni.chooseImage），
+ * 拿回来的 COS 地址放进订单的 attachmentUrls，营养师在后台订单详情里能看到。
+ * 上传用的后端通道本身也收 PDF，但小程序端只能选图片、预览也只认图片
+ * （uni.previewImage 打不开 PDF），所以页面上**只承诺照片** ——
+ * 原来那句文案是在承诺一个这里做不到的能力。
  */
 const pickAttachment = async () => {
   if (attachmentUploading.value) return;
+
+  if (formData.value.attachmentUrls.length >= maxAttachmentCount) {
+    uni.showToast({
+      title: `最多上传 ${maxAttachmentCount} 张照片`,
+      icon: 'none',
+    });
+    return;
+  }
 
   let filePath = '';
   try {
@@ -1177,6 +1466,7 @@ const removeAttachment = (index: number) => {
   formData.value.attachmentUrls.splice(index, 1);
 };
 
+/** 预览：只可能是图片（选择通道就是相册/拍照），所以直接用 previewImage */
 const previewAttachment = (url: string) => {
   if (!url) return;
   uni.previewImage({ urls: [url] });
@@ -1390,21 +1680,29 @@ const submitOrder = async () => {
     return;
   }
 
-  // 防重复提交：这单是付费单，重复提交会生成两张待付款订单
-  if (submitting.value) return;
-
   /**
-   * 申请订阅消息（2026-09-28）。
+   * 防重复提交（2026-10-04 修复）。
    *
-   * 微信的一次性订阅消息必须由用户点击触发申请，所以放在"点提交"这一刻；
-   * 这次订阅用于「已交付」那条通知（付款那条在点「立即付款」时另申请一次，
-   * 因为订阅一次只能下发一条）。
+   * 这单是付费单，重复提交会生成两张待付款订单。
+   * 关键点是 submitting **必须在任何 await 之前置位**：原先它放在
+   * `await requestCustomRecipeOrderSubscription()` **之后**，而订阅授权会弹微信
+   * 系统弹窗，顾客等得不耐烦时再点一次，两次都会越过那道判断各下一单。
+   * 按钮的 :disabled 也一起带上 submitting，双击在界面层就被挡住。
    */
-  await requestCustomRecipeOrderSubscription();
-
+  if (submitting.value) return;
   submitting.value = true;
 
   try {
+    /**
+     * 申请订阅消息（2026-09-28）。
+     *
+     * 微信的一次性订阅消息必须由用户点击触发申请，所以放在"点提交"这一刻；
+     * 这次订阅用于「已交付」那条通知（付款那条在点「立即付款」时另申请一次，
+     * 因为订阅一次只能下发一条）。
+     * 它自己吞掉所有失败，不会挡住下单。
+     */
+    await requestCustomRecipeOrderSubscription();
+
     uni.showLoading({ title: '提交中...' });
 
     /**
@@ -1418,6 +1716,8 @@ const submitOrder = async () => {
      *
      * syncToHealthProfile 与知情同意绑定：不同意就不写回档案（决策 9）。
      * 没勾健康管理时本来就没有东西要写回。
+     *
+     * 载荷里**不含 scheduledDate**：排期由后端自动定，前端不传日期（2026-10-04）。
      */
     const submitData = {
       ...formData.value,
@@ -1446,7 +1746,14 @@ const submitOrder = async () => {
       `amount=${encodeURIComponent(String(res.data.amount ?? ''))}`,
       `creditAmount=${encodeURIComponent(String(res.data.creditAmount ?? ''))}`,
     ];
-    uni.navigateTo({
+    /**
+     * 用 redirectTo 而不是 navigateTo（2026-10-04）。
+     *
+     * 下单已经成功，这一页的表单就必须作废：navigateTo 会把定制页留在栈里，
+     * 顾客返回一次就又能点一次提交，等于白白多出一张待付款单。
+     * redirectTo 用成功页替换掉本页，返回键回到首页，表单不可能被重复提交。
+     */
+    uni.redirectTo({
       url: `/pages/custom-recipe/success?${query.join('&')}`,
     });
   } catch (error: any) {
@@ -1456,6 +1763,7 @@ const submitOrder = async () => {
       icon: 'none',
     });
   } finally {
+    // 失败要复位，否则顾客改完内容再也提交不了
     submitting.value = false;
   }
 };
@@ -2052,6 +2360,21 @@ const getActivityLabel = (level: string) => {
   color: #b08d4f;
 }
 
+/* 传满时的占位文案：比让按钮消失更好，顾客知道"是满了"而不是"坏了" */
+.attachment-limit {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  color: var(--sk-ink-3, #968f6d);
+}
+
+.attachment-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-3, #968f6d);
+}
+
 .attachment-list {
   margin-top: 14rpx;
 }
@@ -2334,6 +2657,90 @@ const getActivityLabel = (level: string) => {
   color: var(--sk-ink-2, #6b6653);
 }
 
+/* "下一步还要付款"：和交付说明同一张卡，但用分隔线明确是另一件事 */
+.pay-next-info {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx dashed rgba(176, 141, 79, 0.5);
+}
+
+.pay-next-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--sk-primary, #1e3a2f);
+}
+
+.pay-next-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-2, #6b6653);
+}
+
+/* ---------- 待付款单提醒（首页顶部） ---------- */
+.pending-banner {
+  padding: 26rpx 28rpx;
+  margin-bottom: 24rpx;
+  background: #f6efe0;
+  border: 1rpx solid rgba(176, 141, 79, 0.55);
+  border-radius: var(--sk-radius-card, 28rpx);
+  box-shadow: 0 8rpx 28rpx rgba(176, 141, 79, 0.16);
+}
+
+.pending-banner__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.pending-banner__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #8a6d2f;
+}
+
+.pending-banner__time {
+  flex: 0 0 auto;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #b03a2e;
+}
+
+.pending-banner__desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-2, #6b6653);
+}
+
+.pending-banner__actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.pending-banner__btn {
+  flex: 1;
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: var(--sk-ink-2, #6b6653);
+  background: transparent;
+  border: 1rpx solid rgba(176, 141, 79, 0.6);
+  border-radius: 999rpx;
+}
+
+.pending-banner__btn.primary {
+  color: var(--sk-gold-soft, #f6efe0);
+  background: linear-gradient(135deg, #1e3a2f 0%, #24493a 100%);
+  border: 1rpx solid var(--sk-gold-bright, #d8bc85);
+}
+
 /* ---------- 底部提交 ---------- */
 .submit-section {
   position: fixed;
@@ -2363,6 +2770,16 @@ const getActivityLabel = (level: string) => {
   color: #cfd4c8;
   background: #d8dccf;
   border-color: #d8dccf;
+}
+
+/* 时限说明放在按钮下方：顾客读完"下一步要付钱"立刻知道还剩多久 */
+.submit-note {
+  display: block;
+  margin-top: 12rpx;
+  text-align: center;
+  font-size: 23rpx;
+  line-height: 1.5;
+  color: var(--sk-ink-3, #968f6d);
 }
 
 /* ===== 体重管理计划横幅（阶段 D1）===== */

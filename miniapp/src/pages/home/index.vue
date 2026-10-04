@@ -1571,10 +1571,19 @@ const closeBanner = () => {
   uni.setStorageSync('loginBannerClosedDate', today)
 }
 
-// 跳转登录页
-const goToLogin = () => {
+/**
+ * 跳转登录页。
+ *
+ * redirect 由调用方给（例如首页的定制卡）：游客点"食谱定制"，如果登录完落回首页，
+ * 他刚点的那件事就丢了，还得自己再找一遍入口。
+ * 参数只认字符串 —— 模板里 `@tap="goToLogin"` 会把事件对象当第一个参数传进来。
+ */
+const goToLogin = (redirect?: unknown) => {
+  const target = typeof redirect === 'string' ? redirect.trim() : ''
   uni.navigateTo({
-    url: '/pages/login/index'
+    url: target
+      ? `/pages/login/index?redirect=${encodeURIComponent(target)}`
+      : '/pages/login/index'
   })
 }
 
@@ -1586,7 +1595,8 @@ const checkLoginAndNavigate = (url: string) => {
       content: '该功能需要登录后使用，是否立即登录？',
       success: (res) => {
         if (res.confirm) {
-          goToLogin()
+          // 带上目标页：登录后直接回到顾客刚点的地方（与定制页同一套 redirect 约定）
+          goToLogin(url)
         }
       }
     })

@@ -4,6 +4,12 @@
       <text class="state-text">加载中...</text>
     </view>
 
+    <view v-else-if="needLogin" class="state-block">
+      <text class="state-title">登录已过期</text>
+      <text class="state-text">请重新登录后再查看这张定制订单</text>
+      <button class="retry-btn" @tap="goToLogin">去登录</button>
+    </view>
+
     <view v-else-if="loadFailed" class="state-block">
       <text class="state-title">订单加载失败</text>
       <text class="state-text">请检查网络后重试</text>
@@ -14,6 +20,20 @@
       <view class="status-card">
         <text class="status-text">{{ statusText }}</text>
         <text class="status-order-id">订单号 {{ order.orderId }}</text>
+        <!-- 待付款时限：直接决定这单会不会被自动取消 -->
+        <text v-if="paymentHint" class="status-deadline">{{ paymentHint }}</text>
+      </view>
+
+      <!-- 退款进度：顾客自助取消后钱去哪了，不能让他自己去猜 -->
+      <view v-if="refund" class="refund-card" :class="`refund-card--${refund.tone}`">
+        <text class="refund-card__title">退款</text>
+        <text class="refund-card__text">{{ refund.text }}</text>
+        <text v-if="refund.tone === 'processing'" class="refund-card__note">
+          退款由微信原路退回，到账时间以微信为准，通常 1-3 个工作日。
+        </text>
+        <text v-if="refund.tone === 'failed'" class="refund-card__note">
+          这笔钱还没有退回。请联系客服，我们会人工处理。
+        </text>
       </view>
 
       <view class="section" v-if="creditRemaining > 0 || creditTotal > 0">
@@ -47,17 +67,14 @@
           <text class="label">定制费</text>
           <text class="value">¥{{ formatAmount(order.amount) }}</text>
         </view>
-        <view class="info-row">
-          <text class="label">预约日期</text>
-          <text class="value">{{ formatDate(order.scheduledDate) || '—' }}</text>
-        </view>
+        <!-- 排期由系统自动定（顾客不选日期），这里只展示后端排好的结果 -->
         <view class="info-row">
           <text class="label">预计交付</text>
-          <text class="value">{{ formatDate(order.estimatedDeliveryDate) || '—' }}</text>
+          <text class="value">{{ formatDate(order.estimatedDeliveryDate, '排期中') }}</text>
         </view>
         <view class="info-row">
           <text class="label">提交时间</text>
-          <text class="value">{{ formatDate(order.createdAt) || '—' }}</text>
+          <text class="value">{{ formatDate(order.createdAt, '—') }}</text>
         </view>
       </view>
 
@@ -129,8 +146,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { request } from '@/utils/api';
+import { getToken, request } from '@/utils/api';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
+import {
+  buildPaymentTimeoutHint,
+  customRecipeGoalText,
+  customRecipeStatusText,
+  describeCustomRecipeRefund,
+  formatAmount,
+  formatDate,
+} from '@/utils/custom-recipe-order';
 
 interface CustomRecipeOrderDetail {
   orderId?: string;
@@ -151,21 +176,12 @@ interface CustomRecipeOrderDetail {
   dislikedIngredients?: string[];
   additionalNotes?: string | null;
   createdAt?: string | null;
+  /** 后端新增：支付截止时间与退款进度 */
+  paymentDeadlineAt?: string | null;
+  refundStatus?: string | null;
+  refundAmount?: number | null;
+  refundedAt?: string | null;
 }
-
-const ORDER_STATUS_TEXT: Record<string, string> = {
-  PENDING_PAYMENT: '待付款',
-  PAID: '已付款 · 等待制作',
-  IN_PROGRESS: '制作中',
-  DELIVERED: '已交付',
-};
-
-const GOAL_TEXT: Record<string, string> = {
-  MAINTAIN: '维持体重',
-  GAIN_WEIGHT: '增重',
-  LOSE_WEIGHT: '减重',
-  HEALTH_SUPPORT: '健康管理',
-};
 
 const orderId = ref('');
 const loading = ref(true);
@@ -173,14 +189,43 @@ const loadFailed = ref(false);
 const paying = ref(false);
 const order = ref<CustomRecipeOrderDetail>({});
 
+/** 登录已过期（401）：与"网络错误"分开表达，并给一个去登录的入口 */
+const needLogin = ref(false);
+
+/** 支付超时分钟数（0 = 不自动关单），来自后台公开配置 */
+const paymentTimeoutMinutes = ref(0);
+
 onLoad((options: any) => {
   orderId.value = options.orderId || '';
   void loadOrderDetail();
+  void loadPaymentTimeoutConfig();
 });
 
 onPullDownRefresh(() => {
   void loadOrderDetail().finally(() => uni.stopPullDownRefresh());
 });
+
+/**
+ * 读支付超时配置。
+ *
+ * 订单接口若还没下发 paymentDeadlineAt，就用它 + createdAt 估算剩余时间；
+ * 读不到就不显示时限文案（不猜）。
+ */
+const loadPaymentTimeoutConfig = async () => {
+  try {
+    const res: any = await request({
+      url: '/custom-recipe-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    });
+    if (res?.code === 0 && res.data) {
+      paymentTimeoutMinutes.value = Number(res.data.paymentTimeoutMinutes) || 0;
+    }
+  } catch (error) {
+    console.warn('[CustomRecipe] 读取支付超时配置失败:', error);
+  }
+};
 
 const loadOrderDetail = async () => {
   if (!orderId.value) {
@@ -189,8 +234,16 @@ const loadOrderDetail = async () => {
     return;
   }
 
+  // 未登录时直接切到"登录已过期"，不去打一次必然 401 的请求
+  if (!getToken()) {
+    loading.value = false;
+    needLogin.value = true;
+    return;
+  }
+
   loading.value = true;
   loadFailed.value = false;
+  needLogin.value = false;
   try {
     const res: any = await request({
       url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}`,
@@ -204,6 +257,16 @@ const loadOrderDetail = async () => {
       loadFailed.value = true;
     }
   } catch (error) {
+    // 401 不能报成"网络错误"：那会让顾客去查自己的网络，方向完全错了
+    if (isAuthError(error)) {
+      needLogin.value = true;
+      uni.showToast({
+        title: '登录已过期，请重新登录',
+        icon: 'none',
+        duration: 2000,
+      });
+      return;
+    }
     console.error('[CustomRecipe] 读取订单详情失败:', error);
     loadFailed.value = true;
   } finally {
@@ -211,13 +274,42 @@ const loadOrderDetail = async () => {
   }
 };
 
-const statusText = computed(
-  () => ORDER_STATUS_TEXT[order.value.status || ''] || '定制订单',
+/**
+ * 判断是不是"未登录/登录过期"。
+ * request() 对 401 统一 reject 一个 message 为 'Authentication required' 的错误。
+ */
+const isAuthError = (error: any) => {
+  const message = String(error?.message || error || '');
+  return message.includes('Authentication required') || message.includes('401');
+};
+
+/** 去登录，登录后回到本页（沿用全站统一的 redirect 约定） */
+const goToLogin = () => {
+  const redirect = `/pages/custom-recipe/order-detail?orderId=${encodeURIComponent(orderId.value)}`;
+  uni.navigateTo({
+    url: `/pages/login/index?redirect=${encodeURIComponent(redirect)}`,
+  });
+};
+
+/** 状态文案走公共模块（原来这里单独抄了一份，缺 CANCELLED 就降级成"定制订单"） */
+const statusText = computed(() => customRecipeStatusText(order.value.status));
+
+const goalText = computed(() =>
+  customRecipeGoalText(order.value.targetGoal, '—'),
 );
 
-const goalText = computed(
-  () => GOAL_TEXT[order.value.targetGoal || ''] || '—',
-);
+/** 退款进度：识别不出来就整块不显示（退款不能靠猜） */
+const refund = computed(() => describeCustomRecipeRefund(order.value));
+
+/** 支付时限：只在待付款时有意义 */
+const paymentHint = computed(() => {
+  if (order.value.status !== 'PENDING_PAYMENT') return '';
+  return buildPaymentTimeoutHint({
+    paymentDeadlineAt: order.value.paymentDeadlineAt ?? null,
+    createdAt: order.value.createdAt ?? null,
+    paymentTimeoutMinutes: paymentTimeoutMinutes.value,
+  });
+});
 
 const creditTotal = computed(() => Number(order.value.creditAmount || 0));
 const creditUsed = computed(() => Number(order.value.creditUsed || 0));
@@ -238,20 +330,6 @@ const hasRequirements = computed(() => {
       value.additionalNotes,
   );
 });
-
-function formatAmount(value?: number): string {
-  const amount = Number(value || 0);
-  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
 
 const viewRecipe = () => {
   if (!order.value.recipeId) return;
@@ -348,17 +426,40 @@ const cancelOrder = async () => {
   uni.showLoading({ title: paid ? '退款中...' : '取消中...' });
 
   try {
-    await request({
+    const res: any = await request({
       url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}/cancel`,
       method: 'POST',
       data: { reason: '顾客取消定制订单' },
     });
 
     uni.hideLoading();
-    uni.showToast({
-      title: paid ? '已取消，退款已发起' : '已取消',
-      icon: 'none',
+
+    /**
+     * 退款结果当场就说，不等详情接口。
+     *
+     * 退款是钱的事：后端在取消响应里已经回了 refundStatus（PROCESSING/FAILED…），
+     * 如果只统一提示"退款已发起"，退款失败时顾客会以为钱在路上，
+     * 一直到他自己去翻订单才发现 —— 那可能是几天后了。
+     */
+    const refundOutcome = describeCustomRecipeRefund({
+      refundStatus: res?.data?.refundStatus ?? null,
     });
+
+    if (refundOutcome?.tone === 'failed') {
+      uni.showToast({
+        title: '已取消，但退款未成功，请联系客服',
+        icon: 'none',
+        duration: 3000,
+      });
+    } else if (refundOutcome?.tone === 'done') {
+      uni.showToast({ title: '已取消，退款已原路退回', icon: 'none' });
+    } else {
+      uni.showToast({
+        title: paid ? '已取消，退款已发起' : '已取消',
+        icon: 'none',
+      });
+    }
+
     await loadOrderDetail();
   } catch (error: any) {
     uni.hideLoading();
@@ -440,6 +541,69 @@ const goOrders = () => {
 .status-order-id {
   font-size: 24rpx;
   color: #cfe0d5;
+}
+
+/* 待付款时限：决定这单会不会被自动取消，放在状态卡里最显眼处 */
+.status-deadline {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #f0d9a8;
+}
+
+/* ---------- 退款进度 ---------- */
+.refund-card {
+  padding: 28rpx 32rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-surface, #fbfcf7);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: var(--sk-radius-card, 28rpx);
+}
+
+.refund-card__title {
+  display: block;
+  font-size: 26rpx;
+  color: var(--sk-ink-2, #6b6653);
+}
+
+.refund-card__text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--sk-ink, #26261f);
+}
+
+.refund-card__note {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-3, #968f6d);
+}
+
+/* 退款到账：墨绿（好消息）；退款中：金色（还在路上） */
+.refund-card--done .refund-card__text {
+  color: var(--sk-primary, #1e3a2f);
+}
+
+.refund-card--processing {
+  background: var(--sk-gold-soft, #f6efe0);
+  border-color: rgba(176, 141, 79, 0.45);
+}
+
+.refund-card--processing .refund-card__text {
+  color: var(--sk-gold, #b08d4f);
+}
+
+/* 退款未成功：必须一眼看到，并给出"找客服"的下一步 */
+.refund-card--failed {
+  background: #fdf1ef;
+  border-color: rgba(176, 58, 46, 0.4);
+}
+
+.refund-card--failed .refund-card__text {
+  color: #b03a2e;
 }
 
 .section {

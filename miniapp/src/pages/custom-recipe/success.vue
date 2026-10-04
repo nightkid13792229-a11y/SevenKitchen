@@ -3,7 +3,8 @@
     <view class="success-hero">
       <view class="success-icon">✓</view>
       <text class="success-title">定制需求已提交</text>
-      <text class="success-subtitle">我们收到需求后会尽快与你确认排期</text>
+      <!-- 提交≠付款：这一步必须说清，否则顾客以为钱已经付掉了 -->
+      <text class="success-subtitle">还差最后一步：完成支付，我们才会开始排期设计</text>
     </view>
 
     <view v-if="loading" class="state-block">
@@ -11,6 +12,20 @@
     </view>
 
     <template v-else>
+      <!-- 交付日期放在最前面。
+           口径（2026-10-04 拍板）：顾客**不选日期**，由系统自动排"最近可接单的
+           工作日"（当天约满或遇节假日顺延），日期只认后端返回的 estimatedDeliveryDate。
+           原先这里那一栏写的是顾客自己挑的日子，看起来像他选过日期。 -->
+      <view class="delivery-card">
+        <text class="delivery-card__label">预计交付</text>
+        <text class="delivery-card__value">{{ deliveryDateText || '排期中' }}</text>
+        <text class="delivery-card__note">
+          {{ deliveryDateText
+            ? '已按系统排期排好（最近可接单的工作日），遇节假日或当天约满会顺延'
+            : '排期确认中，确定后可在"我的定制订单"里看到' }}
+        </text>
+      </view>
+
       <view class="order-info">
         <view class="info-row">
           <text class="label">订单编号</text>
@@ -23,14 +38,6 @@
         <view class="info-row">
           <text class="label">定制费</text>
           <text class="value">{{amountLabel}}</text>
-        </view>
-        <view class="info-row" v-if="scheduledDateText">
-          <text class="label">预约日期</text>
-          <text class="value">{{scheduledDateText}}</text>
-        </view>
-        <view class="info-row" v-if="deliveryDateText">
-          <text class="label">预计交付</text>
-          <text class="value">{{deliveryDateText}}</text>
         </view>
         <view class="info-row" v-if="statusText">
           <text class="label">当前状态</text>
@@ -46,7 +53,12 @@
       </view>
 
       <view class="payment-info">
-        <text class="section-title">💳 付款方式</text>
+        <!-- 标题按订单状态变：待付款才说"下一步：支付"，金额仍来自后台配置；
+             已付款/已取消还说"下一步：支付"会让顾客以为要再付一次 -->
+        <text class="section-title">{{ paymentSectionTitle }}</text>
+        <!-- 支付时限：有 paymentDeadlineAt 用真实截止时间，没有才用配置的超时估算；
+             两者都没有就整段不显示，不猜 -->
+        <text v-if="paymentHint" class="payment-deadline">{{ paymentHint }}</text>
 
         <!-- 在线支付是主路径；人工收款是兜底（支付通道未配置/缺少微信身份时） -->
         <button
@@ -60,7 +72,7 @@
         </button>
 
         <text class="section-desc">
-          {{ canPayOnline ? '支付遇到问题？也可以直接找客服人工付款' : '请联系客服完成付款' }}
+          {{ paymentSectionDesc }}
         </text>
 
         <!-- 2026-09-28：小程序已接入**企业微信客服**（corpId + openKfid 已配置），
@@ -92,6 +104,12 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { request } from '@/utils/api';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
+import {
+  buildPaymentTimeoutHint,
+  customRecipeStatusText,
+  formatAmount,
+  formatDate,
+} from '@/utils/custom-recipe-order';
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 
 interface CustomRecipeOrderDetail {
@@ -106,6 +124,9 @@ interface CustomRecipeOrderDetail {
   creditUsed?: number;
   creditRemaining?: number;
   recipeId?: string | null;
+  createdAt?: string | null;
+  /** 后端新增：支付截止时间（ISO，可能为 null） */
+  paymentDeadlineAt?: string | null;
 }
 
 const orderId = ref('');
@@ -115,6 +136,14 @@ const orderInfo = ref<CustomRecipeOrderDetail>({});
 // 提交页带过来的金额，作为详情接口返回前的兜底展示
 const initialAmount = ref<number | null>(null);
 const initialCreditAmount = ref<number | null>(null);
+
+/**
+ * 支付超时分钟数（0 = 不自动关单）。
+ *
+ * 优先用订单上的 paymentDeadlineAt；没有它才用这个配置值估算。
+ * 接口还没下发这个字段时保持 0 —— 页面就不显示时限文案，绝不自己编一个默认超时。
+ */
+const paymentTimeoutMinutes = ref(0);
 
 onLoad((options: any) => {
   orderId.value = options.orderId || '';
@@ -128,7 +157,31 @@ onLoad((options: any) => {
   }
 
   void loadOrderDetail();
+  void loadPaymentTimeoutConfig();
 });
+
+/**
+ * 读后台配置里的支付超时。
+ *
+ * 独立于订单详情：订单接口万一还没下发 paymentDeadlineAt，
+ * 只要有配置就能给出"请在 X 分钟内完成支付"这条顾客最需要知道的信息。
+ * 读不到就当没配置，不影响页面其它内容。
+ */
+const loadPaymentTimeoutConfig = async () => {
+  try {
+    const res: any = await request({
+      url: '/custom-recipe-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    });
+    if (res?.code === 0 && res.data) {
+      paymentTimeoutMinutes.value = Number(res.data.paymentTimeoutMinutes) || 0;
+    }
+  } catch (error) {
+    console.warn('[CustomRecipe] 读取支付超时配置失败:', error);
+  }
+};
 
 /**
  * 读真实订单信息。
@@ -159,41 +212,29 @@ const loadOrderDetail = async () => {
   }
 };
 
-function formatAmount(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
 const amountLabel = computed(() => {
   const amount = orderInfo.value.amount ?? initialAmount.value;
   return amount === null || amount === undefined ? '以订单为准' : `¥${formatAmount(Number(amount))}`;
 });
 
-const scheduledDateText = computed(() =>
-  formatDate(orderInfo.value.scheduledDate),
-);
-
+/** 预计交付日：只用后端返回的值，前端不再自己算日期 */
 const deliveryDateText = computed(() =>
-  formatDate(orderInfo.value.estimatedDeliveryDate),
+  formatDate(orderInfo.value.estimatedDeliveryDate, ''),
 );
 
-const statusText = computed(() => {
-  const map: Record<string, string> = {
-    PENDING_PAYMENT: '待付款',
-    PAID: '已付款',
-    IN_PROGRESS: '制作中',
-    DELIVERED: '已交付',
-  };
-  return map[orderInfo.value.status || ''] || '';
-});
+/** 状态文案走公共模块：这里原来单独抄了一份，后端加 CANCELLED 时就没跟上 */
+const statusText = computed(() =>
+  orderInfo.value.status ? customRecipeStatusText(orderInfo.value.status) : '',
+);
+
+/** 支付时限：有截止时间用截止时间，没有就用配置估算，都没有则不显示 */
+const paymentHint = computed(() =>
+  buildPaymentTimeoutHint({
+    paymentDeadlineAt: orderInfo.value.paymentDeadlineAt ?? null,
+    createdAt: orderInfo.value.createdAt ?? null,
+    paymentTimeoutMinutes: paymentTimeoutMinutes.value,
+  }),
+);
 
 const creditAmountText = computed(() => {
   const remaining =
@@ -214,6 +255,27 @@ const paying = ref(false);
 const canPayOnline = computed(() => {
   const status = orderInfo.value.status;
   return !status || status === 'PENDING_PAYMENT';
+});
+
+/**
+ * 付款区标题/说明按订单状态说人话。
+ *
+ * 原来只有"付款方式"一个死标题，改文案时不能顺手把它写成"下一步：支付" ——
+ * 已付款甚至已取消的订单还让人"下一步支付"，等于让顾客再付一次钱。
+ */
+const paymentSectionTitle = computed(() =>
+  canPayOnline.value ? `💳 下一步：支付 ${amountLabel.value}` : '💳 付款信息',
+);
+
+const paymentSectionDesc = computed(() => {
+  if (canPayOnline.value) return '支付遇到问题？也可以直接找客服人工付款';
+
+  const status = String(orderInfo.value.status || '');
+  if (status === 'PAID') return '定制费已支付，我们会尽快排期设计';
+  if (status === 'CANCELLED') {
+    return '订单已取消；如已付款会原路退回，有问题请联系客服';
+  }
+  return '请联系客服完成付款';
 });
 
 const handlePay = async () => {
@@ -331,6 +393,38 @@ const goHome = () => {
   color: var(--sk-ink-3, #968f6d);
 }
 
+/* ---------- 预计交付 ----------
+   顾客提交后最想知道的就是"哪天能拿到"，所以单独做成一张卡放在最上面 */
+.delivery-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  background: var(--sk-gold-soft, #f6efe0);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: var(--sk-radius-card, 28rpx);
+}
+
+.delivery-card__label {
+  font-size: 26rpx;
+  color: var(--sk-ink-2, #6b6653);
+}
+
+.delivery-card__value {
+  margin: 8rpx 0 12rpx;
+  font-size: 48rpx;
+  font-weight: 700;
+  color: var(--sk-gold, #b08d4f);
+}
+
+.delivery-card__note {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-2, #6b6653);
+  text-align: center;
+}
+
 /* ---------- 订单信息 ---------- */
 .order-info {
   padding: 32rpx;
@@ -420,6 +514,19 @@ const goHome = () => {
   margin-bottom: 28rpx;
   font-size: 26rpx;
   color: var(--sk-ink-2, #6b6653);
+}
+
+/* 支付时限：这是"会不会被自动取消"的关键信息，用醒目的颜色单独一行 */
+.payment-deadline {
+  display: block;
+  padding: 18rpx 22rpx;
+  margin-bottom: 24rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: #8a6d2f;
+  background: var(--sk-gold-soft, #f6efe0);
+  border: 1rpx solid rgba(176, 141, 79, 0.45);
+  border-radius: var(--sk-radius-badge, 12rpx);
 }
 
 .pay-btn {

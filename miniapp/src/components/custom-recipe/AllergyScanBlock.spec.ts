@@ -21,8 +21,10 @@ describe('定制食谱 · 过敏录入', () => {
   it('四条路都在：点选 / 手输 / 拍报告 / 看已传报告', () => {
     const source = page()
 
-    // 点选（常见过敏原）
-    expect(source).toContain('addAllergenByName(name)')
+    // 点选（常见过敏原）。2026-10-04 起标签是 toggle：点一下选中、再点一下取消，
+    // 所以这里锁的是 toggle 那条路，判定是否选中仍走 isAllergenAdded。
+    expect(source).toContain('toggleAllergenByName(name)')
+    expect(source).toContain('isAllergenAdded(name)')
     // 手输
     expect(source).toContain('addAllergen')
     // 拍报告识别

@@ -166,9 +166,10 @@ describe('custom recipe auth gate', () => {
     expect(submit).toContain('needLogin')
     expect(submit).toContain('请先登录')
     expect(submit).toContain('goToLogin')
-    // 未登录空态与无档案空态是互斥的两个分支
+    // 未登录空态与无档案空态是互斥的两个分支（选狗器已并入 Banner，
+    // 所以"有档案"这一支不再由 picker 表达，而是由空态条件排除）
     expect(submit).toContain('v-if="needLogin"')
-    expect(submit).toContain('v-else-if="dogOptions.length > 0"')
+    expect(submit).toContain('v-else-if="dogOptions.length === 0"')
     // 沿用全站统一的登录跳转约定，登录后回到本页
     expect(submit).toContain('/pages/login/index?redirect=')
     expect(submit).toContain("'/pages/custom-recipe/index'")
@@ -281,15 +282,24 @@ describe('custom recipe profile gate', () => {
 describe('custom recipe breed display', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
-  it('选择器显示的文字是派生的，不可能和品种行不一致', () => {
-    expect(submit).toContain('const selectedDogLabel = computed(')
-    expect(submit).toContain('{{selectedDogLabel}}')
+  it('Banner 那一行小字是派生的，不可能和狗狗信息卡不一致', () => {
+    // 2026-10-04：选狗器并入 Banner，原来"选择器文字 vs 品种行"两处打架的隐患
+    // 变成"Banner 小字 vs 信息卡"——守住的仍然是「同一份数据只派生一次」
+    expect(submit).toContain('const dogHeroLine = computed(')
+    expect(submit).toContain('{{ dogHeroLine }}')
+    // 品种必须与后端同一套口径解析（自定义品种优先），不在这里另写一份兜底
+    expect(submit).toContain('resolveDogBreedName(')
     // 不能再直接用 dogOptions 里拼好的那份 label
     expect(submit).not.toContain('{{selectedDog.label}}')
   })
 
   it('品种行读的就是同一个字段', () => {
-    expect(submit).toContain("{{selectedDog.breedName || '未知品种'}}")
+    // Banner 小字 = 品种 · 月龄 · 体重，三项都来自同一个 selectedDog
+    expect(submit).toContain('calculateDogAgeText(dog.birthday)')
+    expect(submit).toContain('formatHeroWeight(dog.currentWeightKg)')
+    expect(submit).toContain('dogHeroLine')
+    // 信息卡里删掉了重复的"品种 / 当前体重"两行，不再各写一份格式化
+    expect(submit).not.toContain("{{selectedDog.breedName || '未知品种'}}")
   })
 
   it('补充列表项时不让接口字段覆盖 value / label', () => {
@@ -332,16 +342,21 @@ describe('custom recipe breed display', () => {
 describe('custom recipe page · 档案带出与目标口径', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('选中狗狗后从档案带出过敏、疾病与口味偏好', () => {
+  it('选中狗狗后从档案带出过敏与口味偏好', () => {
     expect(page).toContain('loadDogArchiveInfo')
     expect(page).toContain('/custom-recipe/dogs/${dogId}/health-summary')
     // 后端这个汇总接口前端此前**从未调用过**
     expect(page).toContain('formData.value.allergies = Array.isArray(data.allergies)')
-    expect(page).toContain('formData.value.medicalConditions = Array.isArray(data.medicalConditions)')
     expect(page).toContain('formData.value.preferredIngredients = splitFoodText(data.preferredFoods)')
     expect(page).toContain('formData.value.dislikedIngredients = splitFoodText(data.pickyFoods)')
     // 读不到档案不能挡住下单
     expect(page).toContain('healthSummary.value = null')
+    /**
+     * 2026-10-04 老板要求删掉「疾病史」块 = 定制页不再录入疾病史，
+     * 所以档案汇总里的 medicalConditions 也不再往表单里带。
+     * 字段本身查询接口还会返回，只是这里不再采信（否则会跟着写回档案）。
+     */
+    expect(page).not.toContain('formData.value.medicalConditions')
   })
 
   it('带出的内容要告诉顾客"这是从档案来的"', () => {
@@ -350,20 +365,23 @@ describe('custom recipe page · 档案带出与目标口径', () => {
     expect(page).toContain('已从档案带出')
   })
 
-  it('档案里的体检/体重/疫苗作为只读参考展示', () => {
-    expect(page).toContain('healthReferenceRows')
-    expect(page).toContain('最近体重')
-    expect(page).toContain('最近体检')
-    expect(page).toContain('最近疫苗')
-    expect(page).toContain('供参考，不会改动')
+  it('只读参考块随「健康管理」板块一起删除（含体检/体重/疫苗）', () => {
+    // 2026-10-04 老板要求删掉「档案里已有的记录（供参考，不会改动）」整块。
+    // 这些记录在健康管理页仍然看得到，定制页不再重复一份 —— 删除的是展示，
+    // 不是数据能力（health-summary 接口照旧调用，过敏与口味仍从它带出）。
+    expect(page).not.toContain('healthReferenceRows')
+    expect(page).not.toContain('供参考，不会改动')
   })
 
-  it('体况只给建议，不替顾客定目标', () => {
+  it('体况结论就是对客展示的方向，不再让顾客自选', () => {
     expect(page).toContain('bcsAdviceText')
     expect(page).toContain('我们建议：减重')
     // 2026-10-04 老板要求：删掉句尾那句"这只是建议，最终由你决定。"
-    // —— 建议本身就是参考性质，下面三个选项也由顾客自己点
     expect(page).not.toContain('这只是建议，最终由你决定')
+    // 现在方向由系统定，这句话同时也就是提交给营养师的方向，
+    // 页面上不能再出现可点的三个方向选项
+    expect(page).not.toContain('weightManagementOptions')
+    expect(page).not.toContain('@tap="selectWeightGoal')
   })
 
   it('选中目标后给出具体热量（按老板要求不再显示克数）', () => {
@@ -389,10 +407,12 @@ describe('custom recipe page · 档案带出与目标口径', () => {
     expect(page).toContain('sourceText')
   })
 
-  it('勾了健康管理不再覆盖顾客选的减重/增重目标', () => {
+  it('页面不再有「需要健康管理」勾选，也不再由它改写顾客的目标', () => {
     // 原先写的是 targetGoal: enableHealthManagement ? 'HEALTH_SUPPORT' : targetGoal
     expect(page).not.toContain("'HEALTH_SUPPORT'")
-    expect(page).toContain('needsHealthManagement: formData.value.enableHealthManagement')
+    expect(page).not.toContain('enableHealthManagement')
+    expect(page).not.toContain('toggleHealthManagement')
+    // 目标字段仍然要传给后端（现在由系统按「计划 > 体况」推导）
     expect(page).toContain('targetGoal')
   })
 })
@@ -400,14 +420,18 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 describe('custom recipe page · 结构与知情同意', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('页面顺序：定制目标 → 饮食偏好 → 备注（可选）→ 交付说明', () => {
+  it('页面顺序：定制目标 → 过敏信息 → 饮食偏好 → 备注（可选）→ 交付说明', () => {
     const goalIndex = page.indexOf('定制目标')
+    const allergyIndex = page.indexOf('过敏信息')
     const preferenceIndex = page.indexOf('饮食偏好（可选）')
     const notesIndex = page.indexOf('备注（可选）')
     const deliveryIndex = page.indexOf('class="section delivery-section"')
 
     expect(goalIndex).toBeGreaterThan(-1)
-    expect(preferenceIndex).toBeGreaterThan(goalIndex)
+    // 2026-10-04：原「1 选择狗狗」取消，其余步骤依次前移，
+    // 过敏信息独立成第 2 步（原来嵌在健康管理勾选里）
+    expect(allergyIndex).toBeGreaterThan(goalIndex)
+    expect(preferenceIndex).toBeGreaterThan(allergyIndex)
     // 备注独立成第 4 步，并且排在饮食偏好之后
     expect(notesIndex).toBeGreaterThan(preferenceIndex)
     expect(deliveryIndex).toBeGreaterThan(notesIndex)
@@ -431,22 +455,6 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).toContain('饮食偏好（可选）')
   })
 
-  it('写回档案前必须明确同意（决策 9）', () => {
-    expect(page).toContain('healthInfoConsent')
-    expect(page).toContain('我同意把本次填写的过敏、疾病信息记入狗狗的健康档案')
-    // 不同意就不能提交
-    expect(page).toMatch(
-      /willWriteBackToProfile\.value\s*&&\s*!formData\.value\.healthInfoConsent/,
-    )
-    // 而且不同意就不写回档案
-    expect(page).toContain('formData.value.enableHealthManagement && formData.value.healthInfoConsent')
-  })
-
-  it('明确写清"只增不删"（决策 6）', () => {
-    expect(page).toContain('不会删除你档案里已有的记录')
-    expect(page).toContain('这里的增删只影响')
-  })
-
   it('补上了附件上传入口（此前字段有、界面没有）', () => {
     expect(page).toContain('pickAttachment')
     expect(page).toContain('uploadHealthAttachment')
@@ -460,6 +468,62 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).not.toContain('上传图片或 PDF')
     expect(page).toContain('maxAttachmentCount')
     expect(page).toContain('最多 {{ maxAttachmentCount }} 张')
+  })
+})
+
+/**
+ * 过敏一定要存档 + 知情同意块彻底下线（2026-10-04 老板拍板）
+ *
+ * 老板原话口径：过敏信息"一定要存档"，所以 syncToHealthProfile 恒为 true，
+ * 不再受任何勾选控制（后端写入是只增不删，不会删掉档案里已有的记录）。
+ *
+ * 知情同意块（原决策 9）是在老板被告知"这是你自己定的决策"之后，
+ * 仍决定彻底去掉的 —— 所以这里不仅断言界面没有，也断言**相关字段与拦截
+ * 一并删干净**，避免哪天又有人"顺手"加回一句告知文案。
+ */
+describe('定制页 · 过敏存档与知情同意下线', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('syncToHealthProfile 恒为 true，不再受任何勾选控制', () => {
+    const submitSource =
+      page.match(/const submitData = \{[\s\S]*?\n    \};/)?.[0] || ''
+
+    expect(submitSource).not.toBe('')
+    expect(submitSource).toContain('syncToHealthProfile: true')
+    // 不得再出现"要写回先看同意 / 先看有没有勾健康管理"这类条件
+    expect(submitSource).not.toContain('healthInfoConsent')
+    expect(submitSource).not.toContain('enableHealthManagement')
+    // 表单初值也是恒 true（提交前就有值，不会被中途改掉）
+    expect(page).toMatch(/syncToHealthProfile: true,/)
+  })
+
+  it('needsHealthManagement 按"这一单有没有填过敏"推导', () => {
+    expect(page).toContain('needsHealthManagement: formData.value.allergies.length > 0')
+    // 疾病史已不再录入，不能拿它当依据
+    expect(page).not.toContain('medicalConditions')
+  })
+
+  it('同意块与相关字段已彻底不存在', () => {
+    for (const gone of [
+      'consent-section',
+      'toggleConsent',
+      'healthInfoConsent',
+      'willWriteBackToProfile',
+      '我同意把本次填写的过敏、疾病信息记入狗狗的健康档案',
+      '请先勾选同意',
+    ]) {
+      expect(page).not.toContain(gone)
+    }
+  })
+
+  it('canSubmit 里没有同意判断，但仍按门槛判定', () => {
+    const canSubmitSource =
+      page.match(/const canSubmit = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+
+    expect(canSubmitSource).not.toBe('')
+    expect(canSubmitSource).toContain('gateBlocked')
+    expect(canSubmitSource).not.toContain('healthInfoConsent')
+    expect(canSubmitSource).not.toContain('willWriteBackToProfile')
   })
 })
 
@@ -560,18 +624,20 @@ describe('custom recipe first paint · 首屏加载态', () => {
   it('请求未回来之前显示"正在读取"，不显示"还没有狗狗档案"', () => {
     expect(submit).toContain('dogsLoading')
     expect(submit).toContain('正在读取狗狗档案')
-    // 三个分支互斥且顺序正确：未登录 → 有档案 → 加载中 → 空态。
+    // 三个分支互斥且顺序正确：未登录 → 加载中 → 空态。
+    // 2026-10-04：选狗器搬进 Banner 之后，这一组状态卡里不再有 picker 分支，
+    // 所以判据从"未登录 → 有档案 → 加载中 → 空态"变成上面这三支。
     // 空态用带 </text> 的实际元素定位，避免命中注释里提到的同一句话。
     const needLoginIndex = submit.indexOf('v-if="needLogin"')
-    const pickerIndex = submit.indexOf('v-else-if="dogOptions.length > 0"')
     const loadingIndex = submit.indexOf('v-else-if="dogsLoading"')
     const emptyIndex = submit.indexOf('还没有狗狗档案</text>')
 
     expect(needLoginIndex).toBeGreaterThan(-1)
-    expect(pickerIndex).toBeGreaterThan(needLoginIndex)
-    expect(loadingIndex).toBeGreaterThan(pickerIndex)
-    // 空态文案排在加载分支之后（v-else 分支）
+    expect(loadingIndex).toBeGreaterThan(needLoginIndex)
+    // 空态文案排在加载分支之后（v-else-if 分支）
     expect(emptyIndex).toBeGreaterThan(loadingIndex)
+    // Banner 里的选狗器也必须在（三种状态卡之外的唯一选狗入口）
+    expect(submit).toContain('v-if="dogOptions.length > 1"')
   })
 
   it('初始就是加载态，且无论成功失败都会退出加载态', () => {
@@ -629,8 +695,18 @@ describe('custom recipe scheduling · 系统自动排期', () => {
     expect(submit).toContain("url: '/custom-recipe-config'")
     expect(submit).toContain('deliveryWorkDays')
     expect(submit).toContain('estimateDeliveryDate')
-    // 提交前拿不到权威日期，必须写明以订单为准（不能冒充确切日期）
-    expect(submit).toContain('以订单为准')
+    /**
+     * 2026-10-04 老板要求把交付小字精简成一句（原句里的"确切日期以订单为准"删掉）：
+     * 上面那一行已经给了参考日期，小字只讲排期规则。原来锁"以订单为准"这句话的
+     * 断言随之去掉，改锁精简后的原文 + 提交载荷里确实没有日期字段。
+     *
+     * 文案按代码里的原文定位，不按注释 —— 注释里会提到"原来那句写了什么"。
+     */
+    expect(submit).toContain("const deliveryNote = computed(() => '自动排最近可接单的工作日，遇节假日顺延。');")
+    const deliveryNoteSource =
+      submit.match(/const deliveryNote = computed\(\(\) => [^\n]*\n/)?.[0] || ''
+    expect(deliveryNoteSource).not.toBe('')
+    expect(deliveryNoteSource).not.toContain('以订单为准')
     // 前端不再把"当天"当成顾客选的预约日期塞给后端（CreateOrderDTO 已不采信该字段）
     expect(submit).not.toContain('getTodayDateString')
     expect(submit).not.toContain('scheduledDate:')
@@ -654,8 +730,14 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
     expect(submit).toContain('feeAmount')
   })
 
-  it('提交前就说明"下一步要付款"和支付时限', () => {
-    expect(submit).toContain('pay-next-info')
+  it('提交前就说明支付时限，但不再重复一块"下一步：支付"', () => {
+    /**
+     * 2026-10-04 老板要求：删掉 pay-next-info 整块。
+     * 底部固定栏已经有支付按钮和金额，"提交后请去成功页付款"这句话是重复的。
+     * 支付时限（paymentHint）留着 —— 它讲的是"多久不付会被取消"，不是重复信息。
+     */
+    expect(submit).not.toContain('pay-next-info')
+    expect(submit).not.toContain('提交后请在提交成功页')
     expect(submit).toContain('buildPaymentTimeoutHint')
     expect(submit).toContain('paymentHint')
   })
@@ -786,16 +868,12 @@ describe('custom recipe dog switch isolation · 换狗隔离医疗数据', () =>
     expect(archiveSource).not.toBe('')
 
     const clearAllergies = archiveSource.indexOf('formData.value.allergies = []')
-    const clearConditions = archiveSource.indexOf(
-      'formData.value.medicalConditions = []',
-    )
+    // 疾病史不再录入（2026-10-04 老板要求删掉那一块），所以这里只清过敏
     const firstAwait = archiveSource.indexOf('await ')
 
     expect(clearAllergies).toBeGreaterThan(-1)
-    expect(clearConditions).toBeGreaterThan(-1)
     expect(firstAwait).toBeGreaterThan(-1)
     expect(clearAllergies).toBeLessThan(firstAwait)
-    expect(clearConditions).toBeLessThan(firstAwait)
   })
 
   it('读取失败时保持为空，绝不把上一只狗的数据留在表单里', () => {
@@ -803,7 +881,6 @@ describe('custom recipe dog switch isolation · 换狗隔离医疗数据', () =>
     const catchSource = archiveSource.match(/catch \(error\) \{[\s\S]*?\n  \}/)?.[0] || ''
     expect(catchSource).not.toBe('')
     expect(catchSource).not.toContain('allergies')
-    expect(catchSource).not.toContain('medicalConditions')
     // 摘要也要清掉，否则"已从档案带出 N 项过敏"会和空表单自相矛盾
     expect(catchSource).toContain('healthSummary.value = null')
   })
@@ -947,33 +1024,127 @@ describe('home custom recipe entry · 游客登录后回到定制页', () => {
 })
 
 /**
- * 方向跟随计划（老板 2026-10-04 甲方案）。
+ * 方向改成"系统定 + 只读展示"（老板 2026-10-04 拍板）。
  *
  * 原先：上面横幅写着"减重计划进行中、还差 0.8kg"，下面又让顾客选一次方向，
- * 可以选出"增重"这种自相矛盾的组合，而两个值都会交给营养师。
+ * 可以选出"增重"这种自相矛盾的组合，而两个值都会交给营养师；
+ * 而且顾客还能在自己没有计划时随手选一个与体况相反的方向。
+ *
+ * 现在三个单选框整组删掉，方向由系统按「计划 > 体况」定：
+ *   ① 计划进行中 → 减重计划给 LOSE_WEIGHT，增重计划给 GAIN_WEIGHT
+ *   ② 维持期 → MAINTAIN
+ *   ③ 没有计划 → BCS ≥ 6 减重、≤ 3 增重、其余维持
+ *      （与后端 resolveSuggestedPlan 同一套判据：6/7/9 减重、1/2/3 增重、4-5 不建议）
  */
-describe('定制页 · 方向跟随体重管理计划', () => {
+describe('定制页 · 体重管理引导进计划页', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('计划生效时方向跟随并锁住，顾客不能选反方向', () => {
-    expect(page).toContain('planGoalLockText')
-    expect(page).toContain('isGoalLockedByPlan')
-    expect(page).toContain('syncGoalWithPlan')
-    // 拦截点击：锁住时直接返回，不改方向
-    expect(page).toMatch(/if \(isGoalLockedByPlan\.value\) return/)
+  it('不再有减重/维持/增重三个单选', () => {
+    expect(page).not.toContain('weightManagementOptions')
+    expect(page).not.toContain('@tap="selectWeightGoal')
+    expect(page).not.toContain('radio-group')
+    expect(page).not.toContain('radio-item')
+    // 顾客选不了方向，原来那套"锁住不让点"的界面逻辑也一并删掉
+    expect(page).not.toContain('isGoalLockedByPlan')
+    expect(page).not.toContain('planGoalLockText')
   })
 
-  it('说明文案按方向写清楚，且给顾客看的句子不含专业术语', () => {
+  it('有按钮跳体重管理计划页，参数名用该页真正接收的 dogId', () => {
+    expect(page).toContain('goToWeightGoalPlan')
+    expect(page).toContain('planEntryButtonText')
+    expect(page).toContain('/pages/weight-goal-plan/index?')
+    expect(page).toContain('dogId=${encodeURIComponent(dogId)}')
+    // 该页 onLoad 读的就是 options.dogId（见 weight-goal-plan/index.vue）
+    const planPage = read('src/pages/weight-goal-plan/index.vue')
+    expect(planPage).toContain('options?.dogId')
+  })
+
+  it('有计划时带 mode=adjust，避免撞上"已经有一个进行中的计划"', () => {
+    /**
+     * 该页 mode 不传就是 create；有计划的狗再走 create，
+     * 后端 createPlan 会直接抛「这只狗狗已经有一个进行中的计划了」——
+     * 顾客点了「查看体重管理计划」只会看到一句报错。
+     */
+    expect(page).toContain("query.push('mode=adjust')")
+    const goSource =
+      page.match(/const goToWeightGoalPlan = \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(goSource).not.toBe('')
+    expect(goSource).toContain('hasOpenPlan.value')
+    // 该页只认 'adjust' 这一个 mode 值
+    expect(read('src/pages/weight-goal-plan/index.vue')).toContain(
+      "options?.mode === 'adjust' ? 'adjust' : 'create'",
+    )
+  })
+
+  it('按钮文案区分"有计划"与"没有计划"', () => {
+    expect(page).toContain('查看体重管理计划')
+    expect(page).toContain('去制定体重管理计划')
+    // 有计划才说"查看"，没计划才说"去制定"。
+    // 后端 getCurrentPlan 只回 ACTIVE / PAUSED / MAINTENANCE 三种，
+    // 已暂停的计划也算"还在"，说"去制定"会让顾客以为计划没了。
+    const openPlanSource =
+      page.match(/const hasOpenPlan = computed\(\(\) => \{[\s\S]*?\n\}\);/)?.[0] || ''
+    expect(openPlanSource).not.toBe('')
+    expect(openPlanSource).toContain("'ACTIVE'")
+    expect(openPlanSource).toContain("'PAUSED'")
+    expect(openPlanSource).toContain("'MAINTENANCE'")
+    expect(page).toMatch(
+      /planEntryButtonText = computed\(\(\) =>\s*hasOpenPlan\.value/,
+    )
+  })
+
+  it('方向按「计划 > 体况」推导，且顾客改不了', () => {
+    expect(page).toContain('function resolveTargetGoal')
+    expect(page).toContain('syncGoalWithPlan')
+
+    const resolveSource =
+      page.match(/function resolveTargetGoal\(\): string \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(resolveSource).not.toBe('')
+
+    // ① 计划进行中：减重计划 / 增重计划
+    expect(resolveSource).toContain("plan.direction === 'LOSS' ? 'LOSE_WEIGHT' : 'GAIN_WEIGHT'")
+    // ② 维持期
+    expect(resolveSource).toContain("plan.status === 'MAINTENANCE'")
+    // ③ 没有计划：按体况给（阈值与后端同一套）
+    expect(resolveSource).toContain('bcs >= BCS_LOSS_THRESHOLD')
+    expect(resolveSource).toContain('bcs <= BCS_GAIN_THRESHOLD')
+    expect(page).toContain('const BCS_LOSS_THRESHOLD = 6')
+    expect(page).toContain('const BCS_GAIN_THRESHOLD = 3')
+    // 方向上没有任何"顾客选择"的入口
+    expect(page).not.toContain('formData.value.targetGoal = goal')
+  })
+
+  it('计划读到/读不到、换狗、补确认体况之后都要重算方向', () => {
+    // 换狗时先按新狗体况定一次，计划读回来再对齐（避免页面短暂显示上一只狗的方向）
+    const onDogChangeSource =
+      page.match(/const onDogChange = \(e: any\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(onDogChangeSource).not.toBe('')
+    expect(onDogChangeSource).toContain('syncGoalWithPlan()')
+
+    // 补确认改过体况，方向必须跟着变
+    const confirmSource =
+      page.match(/const confirmGate = async \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(confirmSource).not.toBe('')
+    expect(confirmSource).toContain('syncGoalWithPlan()')
+
+    // 计划请求失败也要落回体况那一层，不能把方向留成空
+    const planSource =
+      page.match(/async function loadSelectedPlan\(dogId: string\) \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(planSource).not.toBe('')
+    expect(planSource).toContain('syncGoalWithPlan()')
+  })
+
+  it('给顾客看的文案不含专业术语（体况评分 / 理想体重 / BCS）', () => {
     /**
      * 老板 2026-10-04 的要求：面向普通狗家长，尽量不用专业术语。
      *
-     * 这里**逐个锁定给顾客看的那三句原文**，而不是断言整份源码不含某些词 ——
+     * 这里**逐个锁定给顾客看的新原文**，而不是断言整份源码不含某些词 ——
      * 源码注释里出现领域术语是正常的（这条测试第一版就误伤了自己的注释）。
      */
     const customerFacingCopy = [
-      '方向已跟随你正在进行的减重计划，不用再选。',
-      '方向已跟随你正在进行的增重计划，不用再选。',
-      '你已进入维持期，方向按「维持」处理。',
+      '查看体重管理计划',
+      '去制定体重管理计划',
+      '自动排最近可接单的工作日，遇节假日顺延。',
     ]
 
     for (const copy of customerFacingCopy) {
@@ -983,10 +1154,161 @@ describe('定制页 · 方向跟随体重管理计划', () => {
       expect(copy).not.toContain('BCS')
     }
   })
+})
 
-  it('锁定时整组选项压暗，但仍显示当前选中的方向', () => {
-    expect(page).toContain('radio-group--locked')
-    // 选中态还是按 formData.targetGoal 判断，锁住后仍能看到选中哪一项
-    expect(page).toMatch(/:class="\{ active: formData\.targetGoal === option\.value \}"/)
+/**
+ * 过敏快速选择改成 toggle（2026-10-04）。
+ *
+ * 改前标签只能"加"：点错了得跑到下面的过敏列表里找到那一条再点「删除」，
+ * 同一个标签要管两处；而且下面还挂着一句"点一下就加，不用打字："的提示，
+ * 标签本身看不出能不能取消。
+ */
+describe('定制页 · 过敏快速选择是开关', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  /**
+   * 去掉 HTML 与 JS 注释后的源码。
+   *
+   * 这一组要断言的是"页面上真的没有这些东西了"。源码注释里出现历史背景
+   * （"原先嵌在「需要健康管理」勾选里"、"2026-09-28 修复……"）是好事，
+   * 不该被当成还在页面上；所以先把注释剔掉再断言。
+   */
+  const liveSource = page
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//'))
+    .join('\n')
+
+  it('再点一下取消：同一个函数既加也删', () => {
+    expect(page).toContain('const toggleAllergenByName = (name: string) => {')
+    expect(page).toContain('@tap="toggleAllergenByName(name)"')
+    // 手输走 addAllergenByName（手输的那条档案里没有，不该一点就把已有记录删掉）
+    expect(page).toContain('const addAllergenByName = (name: string) => {')
+
+    const toggleSource =
+      page.match(/const toggleAllergenByName = \(name: string\) => \{[\s\S]*?\n\};/)?.[0] || ''
+    expect(toggleSource).not.toBe('')
+    // 已选中 → splice 掉
+    expect(toggleSource).toContain('formData.value.allergies.splice(index, 1)')
+    // 未选中 → push 进去
+    expect(toggleSource).toContain('formData.value.allergies.push(value)')
+    // 选中态只认一个判据，不会出现"看着选中其实没选中"
+    expect(page).toContain('isAllergenAdded(name)')
+  })
+
+  it('删掉"点一下就加，不用打字"这句提示', () => {
+    expect(page).not.toContain('点一下就加')
+    expect(page).not.toContain('allergen-quick-add__hint')
+  })
+
+  it('过敏信息常驻显示，不需要先勾选才能出现', () => {
+    // 界面上与代码里都不能再有这个勾选（注释里提历史背景不算）
+    expect(liveSource).not.toContain('enableHealthManagement')
+    expect(liveSource).not.toContain('需要健康管理')
+    expect(liveSource).not.toContain('toggleHealthManagement')
+    // 过敏板块的标题与手输、扫描、已传报告都在
+    expect(page).toContain('过敏信息')
+    expect(page).toContain('addAllergen')
+    expect(page).toContain('<AllergyScanBlock')
+    expect(page).toContain('已上传的检测报告')
+  })
+
+  it('疾病史与只读参考块彻底不在定制页', () => {
+    for (const gone of [
+      '疾病史',
+      'addCondition',
+      'removeCondition',
+      'medicalConditions',
+      'healthReferenceRows',
+      '档案里已有的记录',
+      '这里的增删只影响',
+    ]) {
+      expect(liveSource).not.toContain(gone)
+    }
+  })
+})
+
+/**
+ * Banner 融入狗狗选择器（2026-10-04 老板要求）。
+ *
+ * 原来的 page-header（"专属食谱定制"标题块）与「1 选择狗狗」卡片合成了
+ * 一个身份 Banner：参考健康管理页的 hero-card，头像 + 名字 + 「切换 ▼」，
+ * 多只狗时整块用 <picker> 包住。
+ */
+describe('定制页 · Banner 融入选狗器', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  const template = page.slice(0, page.indexOf('<script'))
+
+  it('用 hero-card 替换了原来的标题块', () => {
+    expect(template).toContain('class="hero-card"')
+    expect(page).toContain('.hero-card__avatar')
+    expect(page).toContain('.hero-card__identity-inner')
+    // 旧标题块彻底删掉（不只是隐藏）
+    expect(template).not.toContain('page-header')
+    expect(template).not.toContain('page-title')
+    expect(template).not.toContain('专属食谱定制')
+  })
+
+  it('多只狗时整块身份区用 picker 包住，点"切换 ▼"能换狗', () => {
+    expect(template).toMatch(/<picker[\s\S]*?mode="selector"[\s\S]*?<\/picker>/)
+    expect(template).toContain(':range="dogOptions"')
+    expect(template).toContain('range-key="name"')
+    expect(template).toContain(':value="dogPickerIndex"')
+    expect(template).toContain('@change="onDogChange"')
+    expect(template).toContain('切换 ▼')
+    expect(page).toContain('const dogPickerIndex = computed(')
+  })
+
+  it('Banner 里带一行 品种 · 月龄 · 体重，并保留定位文案', () => {
+    expect(template).toContain('{{ dogHeroLine }}')
+    expect(page).toContain('const dogHeroLine = computed(')
+    expect(template).toContain('告诉我们它的情况，我们来单独设计一道')
+    // 头像与健康管理页同一套兜底（没上传就用默认头像）
+    expect(page).toContain('resolveDogAvatarSrc')
+    expect(template).toContain(':src="dogAvatarSrc"')
+  })
+
+  it('未登录 / 正在读取 / 没有档案三个状态卡都还在 Banner 下方', () => {
+    const heroIndex = template.indexOf('class="hero-card"')
+    const needLoginIndex = template.indexOf('v-if="needLogin"')
+    const loadingIndex = template.indexOf('v-else-if="dogsLoading"')
+    const emptyIndex = template.indexOf('v-else-if="dogOptions.length === 0"')
+
+    expect(heroIndex).toBeGreaterThan(-1)
+    expect(needLoginIndex).toBeGreaterThan(heroIndex)
+    expect(loadingIndex).toBeGreaterThan(needLoginIndex)
+    expect(emptyIndex).toBeGreaterThan(loadingIndex)
+    // 三个状态卡各自的下一步动作也都在（去登录 / 创建档案）
+    expect(template).toContain('@tap="goToLogin"')
+    expect(template).toContain('@tap="goToCreateDog"')
+  })
+})
+
+/**
+ * 交付文案精简 + 删掉重复的支付块（2026-10-04 老板要求）。
+ */
+describe('定制页 · 交付说明与支付块', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('交付小字就是精简后的那一句', () => {
+    expect(page).toContain('const deliveryNote = computed(() => \'自动排最近可接单的工作日，遇节假日顺延。\');')
+    // 原长句不再出现
+    expect(page).not.toContain('当天约满或遇节假日顺延），确切日期以订单为准')
+    expect(page).not.toContain('提交后系统会自动排最近可接单的工作日，确切交付日期以订单为准')
+  })
+
+  it('pay-next-info 整块已删，credit-info 仍在', () => {
+    expect(page).not.toContain('pay-next-info')
+    expect(page).not.toContain('pay-next-title')
+    expect(page).not.toContain('pay-next-desc')
+    expect(page).not.toContain('提交后请在提交成功页')
+    // 「成品抵扣 ¥150」是卖点，必须留着
+    expect(page).toContain('class="credit-info"')
+    expect(page).toContain('成品抵扣')
+    expect(page).toContain('creditHint')
+    // 底部固定栏的支付按钮与金额也还在
+    expect(page).toContain('submitButtonText')
+    expect(page).toContain('下一步：支付')
   })
 })

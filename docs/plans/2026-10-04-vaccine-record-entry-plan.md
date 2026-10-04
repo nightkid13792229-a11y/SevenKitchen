@@ -226,3 +226,38 @@
 
 **第五节「还没查到的」也一并留给兽医看** —— 其中两条不是我们没查，
 是**说明书原文里就没有**（宠必威优免康没写首免周龄），不能从同类产品外推。
+
+### 7.5 ⚠️ 生产开关：**临时打开了，必须关回**
+
+2026-10-04 21:43，老板要求打开生产开关以便在**体验版**里验收
+「计划降为一行」和「书签角标」这两项 —— 这两项在开关关着时看不到。
+
+| 项 | 值 |
+|---|---|
+| 改动 | `/opt/sevenkitchen/SevenKitchen/backend/.env` 第 48 行去注释 → `VACCINE_PLAN=customer` |
+| 备份 | 同目录 `.env.bak-20261004-214329` |
+| 生效方式 | 应用用 `ConfigModule.forRoot({ envFilePath: '.env' })` 在**运行时**读，
+所以改完必须 `systemctl restart sevenkitchen-backend`（已重启，`active`） |
+| 验证 | 用生产上的真实产物跑 `isVaccinePlanCustomerEnabled()` → **true**；
+路由 `/dogs/:id/vaccine-plan` 返回 401（活着，不是 500） |
+
+**为什么现在可以开**：小程序**没有发布正式版**，只有体验版 ——
+非体验成员看不到。顾客侧不受影响。
+
+**🔴 什么时候必须关回**：兽医审完 `2026-10-04-immunization-schedule-review.md`
+和 `2026-10-04-vaccine-product-list-review.md`、程序表定稿之后**立即**关回，
+把第 48 行改回注释并重启。**未经专业审核的兽医内容不得对顾客开放 —— 这是老板定的边界。**
+
+关回命令（照抄）：
+
+```bash
+ssh -i ~/.ssh/claude_deploy root@1.14.3.2
+cd /opt/sevenkitchen/SevenKitchen/backend
+# 把第 48 行 VACCINE_PLAN=customer 前面加回 "# "
+systemctl restart sevenkitchen-backend
+```
+
+> 顺带核对了生产上的程序表产物（出生 2026-01-05 的幼犬）：
+> 幼犬首免 **6/10/14/18 周四针**（最后一针 ≥16 周龄）、
+> **首免后补强（26 周龄）**、成年加强 26 周 + 3 年之后每 3 年、
+> **狂犬首针窗口 2026-03-30 = 出生 + 12 周**（不再是 7.7 周）。四项修正都生效了。

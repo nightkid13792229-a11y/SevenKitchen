@@ -18,6 +18,10 @@ import {
   VaccineRecordListResponseDto,
 } from '../../interfaces/dto/health/vaccine-response.dto';
 import {
+  VACCINE_KIND_LABELS,
+  classifyVaccineKinds,
+} from '../../domain/health/immunization-schedule';
+import {
   CheckupRecordResponseDto,
   CheckupRecordListResponseDto,
 } from '../../interfaces/dto/health/checkup-response.dto';
@@ -604,6 +608,12 @@ export class HealthService {
       notes: record.notes,
       status: record.status,
       attachments: record.attachments ?? [],
+      // 归类结果（2026-10-05）：界面要显示"这条算哪一类"。
+      // 分类逻辑在 domain 层，这里只做映射 —— 别在前端重写一套。
+      kinds: classifyVaccineKinds(record.vaccineName),
+      kindLabels: classifyVaccineKinds(record.vaccineName).map(
+        (kind) => VACCINE_KIND_LABELS[kind] || kind,
+      ),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });

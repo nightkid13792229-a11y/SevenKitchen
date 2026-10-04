@@ -573,6 +573,18 @@ export function buildImmunizationSchedule(
   return seeds.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
 }
 
+/**
+ * 类别的中文名（2026-10-05）。
+ *
+ * 界面要显示"这条记录算哪一类"，所以放在 domain 里跟分类逻辑挨着，
+ * 避免前端各写一份、迟早对不上。
+ */
+export const VACCINE_KIND_LABELS: Record<VaccineKind, string> = {
+  core: '核心疫苗',
+  rabies: '狂犬疫苗',
+  lepto: '钩端螺旋体',
+};
+
 /** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
 export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];
 

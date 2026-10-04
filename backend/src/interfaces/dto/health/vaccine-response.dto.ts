@@ -36,6 +36,24 @@ export class VaccineRecordResponseDto {
   @Expose()
   attachments!: string[];
 
+  /**
+   * 这条记录被归成哪几类（2026-10-05）。
+   *
+   * 老板问："系统是如何将其归类的呢？因为每一个种类的疫苗，它的接种窗口、
+   * 间隔时间，这些都不一样。我们是否需要将其归类之后才能匹配呢？"
+   * —— 是的，必须先归类；这一页把归的结果**显示给顾客看**，
+   * 免得他改完疫苗名之后不知道"到底算哪一类、会不会影响提醒"。
+   *
+   * 取值：core（核心疫苗）/ rabies（狂犬）/ lepto（钩端螺旋体）。
+   * 一支组合苗可能同时属于好几类 —— 卫佳捌既是 core 又含 lepto。
+   */
+  @Expose()
+  kinds!: string[];
+
+  /** 归类的中文名，直接给界面用（顺序与 kinds 一致） */
+  @Expose()
+  kindLabels!: string[];
+
   @Expose()
   createdAt!: string;
 

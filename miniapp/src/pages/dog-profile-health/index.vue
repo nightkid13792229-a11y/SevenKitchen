@@ -137,7 +137,8 @@
         <template v-else-if="activeHealthTab === 'vaccine'">
           <!-- 疫苗计划（2026-10-01，第四期）：记录是"打过什么"，
                计划是"接下来怎么打"，计划放上面先看到。 -->
-          <VaccinePlanSection :dog-id="dogId" />
+          <!-- data-version：记录一变就重算计划（2026-10-05） -->
+          <VaccinePlanSection :dog-id="dogId" :data-version="vaccineDataVersion" />
           <VaccineManagementSection
             ref="vaccineSectionRef"
             external-save
@@ -145,6 +146,7 @@
             hide-scan-trigger
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
+            @records-changed="onVaccineRecordsChanged"
           />
         </template>
 
@@ -235,6 +237,21 @@ const dogId = ref('')
  * 点进去才看得到的提醒，等于没提醒。
  */
 const vaccineBadgeText = ref('')
+
+/**
+ * 疫苗数据版本号（2026-10-05）。
+ *
+ * 记录一保存/删除就 +1，计划板块 watch 它重新加载。
+ * 以前计划只在"换狗"时加载，顾客原地录完几条，计划那边毫无察觉 ——
+ * 老板看到的"录了 3 条却没有提醒/计划"就是这个。
+ * 角标同理（"有 N 针该打了"也要跟着变）。
+ */
+const vaccineDataVersion = ref(0)
+
+function onVaccineRecordsChanged() {
+  vaccineDataVersion.value += 1
+  loadVaccineBadge()
+}
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
 const isLoading = ref(false)

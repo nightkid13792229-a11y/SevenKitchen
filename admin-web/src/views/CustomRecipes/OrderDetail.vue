@@ -794,7 +794,7 @@ const deliverSelectedRecipe = async () => {
     await loadOrderDetail();
     emit('refresh');
   } catch (error) {
-        // 后端的拒绝理由（"该订单还没确认收款，不能交付""这道食谱不属于该订单的顾客 / 狗狗"）
+    // 后端的拒绝理由（"该订单还没确认收款，不能交付""这道食谱不属于该订单的顾客 / 狗狗"）
     // 必须原样显示，不能让员工猜
     toastApiError(error, '交付失败', (message) => ElMessage.error(message));
   } finally {

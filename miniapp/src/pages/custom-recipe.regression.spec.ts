@@ -361,26 +361,30 @@ describe('custom recipe page · 档案带出与目标口径', () => {
   it('体况只给建议，不替顾客定目标', () => {
     expect(page).toContain('bcsAdviceText')
     expect(page).toContain('我们建议：减重')
-    expect(page).toContain('这只是建议，最终由你决定')
+    // 2026-10-04 老板要求：删掉句尾那句"这只是建议，最终由你决定。"
+    // —— 建议本身就是参考性质，下面三个选项也由顾客自己点
+    expect(page).not.toContain('这只是建议，最终由你决定')
   })
 
-  it('选中目标后给出具体热量与克数', () => {
+  it('选中目标后给出具体热量（按老板要求不再显示克数）', () => {
     expect(page).toContain('goalTargetSummary')
     expect(page).toContain('finalFoodKcal')
-    expect(page).toContain('kcal${gramsText}')
-    // 阶段 D2：克数改用估算值 —— 原先读的 dailyIntakeG 只在选了食谱后才有值，
-    // 定制页因此一直显示「约 0 克」
-    expect(page).toContain('estimatedDailyIntakeG')
-    expect(page).toContain('约 ${Math.round(grams)} 克')
+    expect(page).toContain('每天需要约 ${Math.round(kcal)} kcal')
+    /**
+     * 2026-10-04 老板要求：体重管理板块**不显示饭量（克数）**。
+     * 克数依赖最终用哪道食谱的能量密度，食谱还没设计出来之前只能按中位数估算，
+     * 写出来容易被顾客当成承诺。
+     */
+    expect(page).not.toContain('约 ${Math.round(grams)} 克')
   })
 
-  it('计划进行中时带出计划，并说明克数已按计划算', () => {
+  it('计划进行中时带出计划，并说明能量已按计划算', () => {
     // 阶段 D1：计划才是顾客当下真正在执行的方案，定制页必须看得见
     expect(page).toContain('selectedPlan')
     expect(page).toContain('loadSelectedPlan')
     expect(page).toContain('weightGoalPlanApi.current')
     expect(page).toContain('进行中')
-    expect(page).toContain('下面的克数已经按这个计划算好了')
+    expect(page).toContain('下面的每日能量已经按这个计划算好了')
     // 文案要区分「按计划」与「按体况」，否则顾客不知道这个数字怎么来的
     expect(page).toContain('sourceText')
   })
@@ -939,5 +943,50 @@ describe('home custom recipe entry · 游客登录后回到定制页', () => {
   it('goToLogin 只认字符串参数，模板直接绑定时不会被事件对象污染', () => {
     expect(home).toMatch(/const goToLogin = \(redirect\?: unknown\) => \{/)
     expect(home).toContain("typeof redirect === 'string'")
+  })
+})
+
+/**
+ * 方向跟随计划（老板 2026-10-04 甲方案）。
+ *
+ * 原先：上面横幅写着"减重计划进行中、还差 0.8kg"，下面又让顾客选一次方向，
+ * 可以选出"增重"这种自相矛盾的组合，而两个值都会交给营养师。
+ */
+describe('定制页 · 方向跟随体重管理计划', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+
+  it('计划生效时方向跟随并锁住，顾客不能选反方向', () => {
+    expect(page).toContain('planGoalLockText')
+    expect(page).toContain('isGoalLockedByPlan')
+    expect(page).toContain('syncGoalWithPlan')
+    // 拦截点击：锁住时直接返回，不改方向
+    expect(page).toMatch(/if \(isGoalLockedByPlan\.value\) return/)
+  })
+
+  it('说明文案按方向写清楚，且给顾客看的句子不含专业术语', () => {
+    /**
+     * 老板 2026-10-04 的要求：面向普通狗家长，尽量不用专业术语。
+     *
+     * 这里**逐个锁定给顾客看的那三句原文**，而不是断言整份源码不含某些词 ——
+     * 源码注释里出现领域术语是正常的（这条测试第一版就误伤了自己的注释）。
+     */
+    const customerFacingCopy = [
+      '方向已跟随你正在进行的减重计划，不用再选。',
+      '方向已跟随你正在进行的增重计划，不用再选。',
+      '你已进入维持期，方向按「维持」处理。',
+    ]
+
+    for (const copy of customerFacingCopy) {
+      expect(page).toContain(copy)
+      expect(copy).not.toContain('体况')
+      expect(copy).not.toContain('理想体重')
+      expect(copy).not.toContain('BCS')
+    }
+  })
+
+  it('锁定时整组选项压暗，但仍显示当前选中的方向', () => {
+    expect(page).toContain('radio-group--locked')
+    // 选中态还是按 formData.targetGoal 判断，锁住后仍能看到选中哪一项
+    expect(page).toMatch(/:class="\{ active: formData\.targetGoal === option\.value \}"/)
   })
 })

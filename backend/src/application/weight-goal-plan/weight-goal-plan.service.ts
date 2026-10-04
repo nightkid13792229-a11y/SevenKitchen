@@ -29,6 +29,7 @@ import {
   calculateRerForWeight,
   evaluateWeightGainScreening,
   isGoalReached,
+  resolveAdjustableIntensities,
   resolveCorrection,
   resolveEstimatedGoalDate,
   resolveIntensityKcal,
@@ -1221,32 +1222,25 @@ export class WeightGoalPlanService {
     // 反推维持量的基准：减重时是上限、增重时是下限（两者都是「维持需求」）
     const maintenanceKcal = isLoss ? plan.ceilingKcal : plan.floorKcal;
 
-    const availableIntensities = levels.map((level) => {
-      const kcal = resolveIntensityKcal({
+    const kcalOf = (level: { key: string }) =>
+      resolveIntensityKcal({
         direction,
         intensity: level.key,
         targetWeightKg: plan.targetWeightKg,
         maintenanceKcal,
       }).kcal;
-      return {
-        key: level.key,
-        label: level.label,
-        kcal,
-        // 只能往更温和方向调
-        allowed: kcal >= plan.currentKcal,
-      };
-    });
 
-    const currentLevel =
-      levels.find((l) => {
-        const kcal = resolveIntensityKcal({
-          direction,
-          intensity: l.key,
-          targetWeightKg: plan.targetWeightKg,
-          maintenanceKcal,
-        }).kcal;
-        return kcal >= plan.currentKcal;
-      }) ?? levels[0];
+    /**
+     * 顾客可调的档位与"当前档位"（2026-10-04 修正）。
+     * 规则本身在 domain 的 resolveAdjustableIntensities 里，有单测兜底：
+     * 减重只能更温和、增重只能更保守，更激进的方向留给自动校正。
+     */
+    const { available: availableIntensities, currentLevel } =
+      resolveAdjustableIntensities({
+        direction,
+        levelKcal: levels.map((level) => ({ level, kcal: kcalOf(level) })),
+        currentKcal: plan.currentKcal,
+      });
 
     return {
       id: plan.id,

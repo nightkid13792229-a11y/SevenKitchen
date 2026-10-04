@@ -194,7 +194,7 @@
           </text>
         </view>
         <text class="plan-banner__hint">
-          下面的克数已经按这个计划算好了。
+          下面的每日能量已经按这个计划算好了。
         </text>
       </view>
     </view>
@@ -215,7 +215,7 @@
           <text class="advice-line__text">{{ bcsAdviceText }}</text>
         </view>
 
-        <view class="radio-group">
+        <view class="radio-group" :class="{ 'radio-group--locked': isGoalLockedByPlan }">
           <view
             v-for="option in weightManagementOptions"
             :key="option.value"
@@ -229,6 +229,12 @@
             </view>
             <text class="radio-label">{{option.label}}</text>
           </view>
+        </view>
+
+        <!-- 有计划在生效时方向跟随计划（老板 2026-10-04 甲方案）：
+             避免"上面写着减重计划进行中、下面却选了增重"的自相矛盾 -->
+        <view v-if="planGoalLockText" class="goal-lock-line">
+          <text class="goal-lock-line__text">{{ planGoalLockText }}</text>
         </view>
 
         <!-- 选中目标后立刻把"具体是多少"讲出来（老板问题 1） -->
@@ -556,6 +562,42 @@ const planStatusLabel = computed(() =>
   selectedPlan.value ? getPlanStatusLabel(selectedPlan.value.status) : '',
 );
 
+/**
+ * 有计划在生效时，定制方向**跟随计划并锁住**（老板 2026-10-04 甲方案）。
+ *
+ * 为什么：上面横幅写着"减重计划进行中、还差 0.8kg"，下面却让顾客再选一次方向，
+ * 两处可以互相矛盾（选了增重），而两个值都会交给营养师。
+ *
+ * 文案刻意不用专业词（体况评分 / 理想体重），只说"计划"。
+ */
+const planGoalLockText = computed(() => {
+  const plan = selectedPlan.value;
+  if (!plan) return '';
+  if (plan.status === 'ACTIVE') {
+    return plan.direction === 'LOSS'
+      ? '方向已跟随你正在进行的减重计划，不用再选。'
+      : '方向已跟随你正在进行的增重计划，不用再选。';
+  }
+  if (plan.status === 'MAINTENANCE') {
+    return '你已进入维持期，方向按「维持」处理。';
+  }
+  return '';
+});
+
+const isGoalLockedByPlan = computed(() => planGoalLockText.value !== '');
+
+/** 把表单里的方向对齐到计划（仅在计划生效/维持期时） */
+function syncGoalWithPlan() {
+  const plan = selectedPlan.value;
+  if (!plan) return;
+  if (plan.status === 'ACTIVE') {
+    formData.value.targetGoal =
+      plan.direction === 'LOSS' ? 'LOSE_WEIGHT' : 'GAIN_WEIGHT';
+  } else if (plan.status === 'MAINTENANCE') {
+    formData.value.targetGoal = 'MAINTAIN';
+  }
+}
+
 async function loadSelectedPlan(dogId: string) {
   selectedPlan.value = null;
   if (!dogId) return;
@@ -565,6 +607,8 @@ async function loadSelectedPlan(dogId: string) {
     // 不能让它把当前这只狗的计划覆盖掉（医疗/用量信息串狗是安全事件）
     if (formData.value.dogId !== dogId) return;
     selectedPlan.value = res.code === 0 ? (res.data ?? null) : null;
+    // 计划在生效时方向跟随计划（甲方案），放在赋值之后、慢响应保护之内
+    syncGoalWithPlan();
   } catch {
     // 读不到计划不该挡住定制流程
     selectedPlan.value = null;
@@ -860,13 +904,18 @@ const bcsAdviceText = computed(() => {
   const bcs = Number(selectedDog.value?.bcsScore);
   if (!Number.isFinite(bcs) || bcs <= 0) return '';
 
+  /**
+   * 2026-10-04 老板要求：删掉句尾那句免责话术（"建议仅供参考、由你决定"）。
+   * 建议本身就是参考性质，下面三个选项也由顾客自己点，
+   * 再补一句免责反而显得啰嗦、像是在推卸。
+   */
   if (bcs >= 6) {
-    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。这只是建议，最终由你决定。`;
+    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。`;
   }
   if (bcs <= 3) {
-    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。这只是建议，最终由你决定。`;
+    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。`;
   }
-  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。这只是建议，最终由你决定。`;
+  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。`;
 });
 
 const GOAL_LABELS: Record<string, string> = {
@@ -889,10 +938,6 @@ const goalTargetSummary = computed(() => {
 
   const label = GOAL_LABELS[goal] || '定制';
   const kcal = Number(selectedDog.value?.targetFoodKcal);
-  // 没有食谱时后端会给一个按已上架食谱中位数估算的克数（阶段 D2）。
-  // 原先这里读的是 dailyIntakeG —— 那个字段只在选了食谱之后才有值，
-  // 所以定制页一直显示「约 0 克」。
-  const grams = Number(selectedDog.value?.estimatedDailyIntakeG);
 
   if (!Number.isFinite(kcal) || kcal <= 0) {
     return {
@@ -902,15 +947,20 @@ const goalTargetSummary = computed(() => {
     };
   }
 
-  const gramsText =
-    Number.isFinite(grams) && grams > 0 ? `（约 ${Math.round(grams)} 克）` : '';
+  /**
+   * 2026-10-04 老板要求：体重管理这里**不显示饭量（克数）**。
+   *
+   * 热量是营养学口径，顾客看得懂、也便于和档案里的数字对照；
+   * 克数依赖"最终用哪道食谱的能量密度"，在食谱还没设计出来之前只能按
+   * 已上架食谱的中位数估算 —— 写出来容易被顾客当成承诺。
+   */
   const sourceText = selectedPlan.value
     ? `按${selectedPlan.value.direction === 'LOSS' ? '减重' : '增重'}计划，`
     : '按它目前的体况，';
 
   return {
     title: `你的目标：${label}`,
-    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal${gramsText}`,
+    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal`,
     note: `营养师会按「${label}」方向调整配方与喂食量，最终以交付的定制食谱为准。`,
   };
 });
@@ -1473,6 +1523,11 @@ const previewAttachment = (url: string) => {
 };
 
 const selectWeightGoal = (goal: string) => {
+  /**
+   * 有计划在生效时方向已跟随计划，顾客不能选反方向（老板 2026-10-04 甲方案）。
+   * 界面上整组选项已压暗并给出说明，这里再拦一道，避免误触改掉方向。
+   */
+  if (isGoalLockedByPlan.value) return;
   formData.value.targetGoal = goal;
 };
 
@@ -2147,6 +2202,21 @@ const getActivityLabel = (level: string) => {
 .radio-group {
   display: flex;
   gap: 12rpx;
+}
+
+/* 方向被计划锁定时，整组选项压暗表示"不用选" */
+.radio-group--locked {
+  opacity: 0.55;
+}
+
+.goal-lock-line {
+  margin-top: 12rpx;
+}
+
+.goal-lock-line__text {
+  font-size: 24rpx;
+  color: var(--sk-ink-soft, #6b6b60);
+  line-height: 1.5;
 }
 
 .radio-item {

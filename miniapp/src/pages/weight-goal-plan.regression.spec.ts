@@ -118,6 +118,27 @@ describe('体重管理计划 · 老板定的护栏', () => {
     expect(page).toContain('level.allowed')
   })
 
+  /**
+   * 2026-10-04 修正：增重方向的档位命名原先是「标准 / 温和 / 更温和」——
+   * 那是减重的语义（系数越大掉秤越慢才叫更温和）。增重恰好相反：
+   * 系数越大 = 热量越多 = 长肉越快，叫"更温和"会让人选到最快的一档。
+   */
+  it('增重档位命名与效果一致：标准 / 加快 / 更快', () => {
+    const page = read(PAGE)
+    expect(page).toContain("label: '加快'")
+    expect(page).toContain("label: '更快'")
+    // 减重方向仍保留"温和"的语义
+    expect(page).toContain("label: '温和'")
+    expect(page).toContain("label: '更温和'")
+  })
+
+  it('力度说明按方向分开写，不再把"掉秤"的文案套给增重', () => {
+    const page = read(PAGE)
+    expect(page).toContain('isLossDirection')
+    expect(page).toContain('档位越高，长肉越快')
+    expect(page).toContain('只能往更保守方向调')
+  })
+
   it('目标体重完全自由，偏离 >30% 只提示不拦', () => {
     const page = read(PAGE)
     expect(page).toContain('targetHint')

@@ -35,15 +35,29 @@ describe('定制订单 · 取消退款与通知守卫', () => {
       'src/application/custom-recipe/custom-recipe.service.ts',
     );
 
-    expect(service).toContain('退款失败就不取消');
-    // 退款必须在写 CANCELLED 之前
-    const refundCall = service.indexOf('const result = await refund(');
-    const cancelWrite = service.indexOf(
-      'status: CustomRecipeStatus.CANCELLED',
-      refundCall,
+    /**
+     * 2026-10-04 起实现顺序变了，但保证更强：
+     * 先 CAS 认领取消（并发下只有一方能释放名额），再退款；
+     * **退款抛错时把取消回滚**（状态改回 PAID + 名额重新占上），
+     * 所以"取消了钱没退"依然不可能发生。
+     */
+    const claimIdx = service.indexOf(
+      'const claimed = await this.prisma.$transaction',
     );
-    expect(refundCall).toBeGreaterThan(-1);
-    expect(cancelWrite).toBeGreaterThan(refundCall);
+    const refundIdx = service.indexOf('const result = await refund(');
+    const rollbackIdx = service.indexOf(
+      'status: CustomRecipeStatus.PAID,',
+      refundIdx,
+    );
+
+    expect(claimIdx).toBeGreaterThan(-1);
+    expect(refundIdx).toBeGreaterThan(claimIdx);
+    expect(rollbackIdx).toBeGreaterThan(refundIdx);
+    expect(service).toContain('把取消回滚');
+    // 回滚要把名额重新占上，否则"取消了又回滚"会白吃一个名额
+    expect(service).toMatch(
+      /把取消回滚[\s\S]{0,2000}bookedCount: \{ increment: 1 \}/,
+    );
   });
 
   it('定制订单有独立的退款记录字段', () => {

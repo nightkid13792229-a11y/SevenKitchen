@@ -58,15 +58,22 @@ export class CustomRecipeController {
       preferredIngredients: dto.preferredIngredients || [],
       dislikedIngredients: dto.dislikedIngredients || [],
       attachmentUrls: dto.attachmentUrls || [],
-      scheduledDate: new Date(dto.scheduledDate),
       syncToHealthProfile: dto.syncToHealthProfile,
       needsHealthManagement: dto.needsHealthManagement === true,
     });
 
     return ApiResponseDto.success({
       orderId: order.orderId,
+      /**
+       * 2026-10-04：scheduledDate / estimatedDeliveryDate 现在都**由服务端排期**得出
+       * （顾客不再选日期），小程序必须用这里返回的值展示，不能再自己假定"今天"。
+       */
       scheduledDate: order.scheduledDate,
       estimatedDeliveryDate: order.estimatedDeliveryDate,
+      paymentDeadlineAt: this.resolvePaymentDeadline(
+        order,
+        await this.customRecipeService.getPaymentTimeoutMinutes(),
+      ),
       /**
        * 2026-09-28 移除 wechatId：定制链路找客服已改走**企业微信客服**
        * （wx.openCustomerServiceChat，后台 corp_id / open_kfid 已配置），
@@ -98,6 +105,9 @@ export class CustomRecipeController {
       pageSize,
     });
 
+    const paymentTimeoutMinutes =
+      await this.customRecipeService.getPaymentTimeoutMinutes();
+
     return ApiResponseDto.success({
       orders: orders.map((order) => ({
         orderId: order.orderId,
@@ -123,6 +133,18 @@ export class CustomRecipeController {
          * 于是"查看定制食谱"必然 404 —— 生产上已交付的那一单就是这么坏的。
          */
         recipeId: order.recipe?.recipeId ?? null,
+        /**
+         * 支付时限与退款进展（2026-10-04）。
+         * 小程序据此显示"请在 X 分钟内支付"和"退款中 / 已退款 ¥XX"。
+         * 此前这两件事顾客完全看不到，超时被关单、退款成没成都只能来问客服。
+         */
+        paymentDeadlineAt: this.resolvePaymentDeadline(
+          order,
+          paymentTimeoutMinutes,
+        ),
+        refundStatus: order.refundStatus ?? null,
+        refundAmount: this.toNullableNumber(order.refundAmount),
+        refundedAt: order.refundedAt ?? null,
         createdAt: order.createdAt,
       })),
       total,
@@ -235,6 +257,20 @@ export class CustomRecipeController {
       additionalNotes: order.additionalNotes,
       attachments: order.attachmentsRecords ?? order.attachments ?? [],
       createdAt: order.createdAt,
+      /**
+       * 支付时限 + 退款/取消进展（2026-10-04）。
+       * 顾客要能看懂"为什么这单被取消了""钱退到哪一步了"，
+       * 而不是只看到一个冷冰冰的"已取消"。
+       */
+      paymentDeadlineAt: this.resolvePaymentDeadline(
+        order,
+        await this.customRecipeService.getPaymentTimeoutMinutes(),
+      ),
+      refundStatus: order.refundStatus ?? null,
+      refundAmount: this.toNullableNumber(order.refundAmount),
+      refundedAt: order.refundedAt ?? null,
+      cancelledAt: order.cancelledAt ?? null,
+      cancellationReason: order.cancellationReason ?? null,
       paymentConfirmedAt: order.paymentConfirmedAt,
       inProgressAt: order.inProgressAt,
       deliveredAt: order.deliveredAt,
@@ -247,6 +283,14 @@ export class CustomRecipeController {
   @Get('schedule')
   @ApiOperation({ summary: 'Get available schedule' })
   async getSchedule(@Query('month') month: string) {
+    /**
+     * 2026-10-04：原来没校验 month，缺参数时 `undefined.split` 直接崩成 500。
+     * 参数缺失属于调用方问题，应该回 400 而不是服务器错误。
+     */
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('month 参数格式应为 YYYY-MM');
+    }
+
     const [year, monthNum] = month.split('-').map(Number);
     const { start, end } = getMonthRange(year, monthNum);
 
@@ -295,6 +339,18 @@ export class CustomRecipeController {
     if (!orderId) {
       throw new BadRequestException('缺少订单ID');
     }
+
+    /**
+     * 归属校验（2026-10-04 修复越权）。
+     *
+     * 此前这里只检查"有没有传订单号"，于是任何登录顾客都能把文件挂到
+     * **别人**的定制单上；订单号不存在时还会因外键失败打成 500。
+     * 现在先确认这张单确实是本人的，订单不存在则返回业务错误。
+     */
+    await this.customRecipeService.assertOrderOwnership(
+      req.user.userId,
+      orderId,
+    );
 
     const attachment = await this.customRecipeService.uploadAttachment(
       file,
@@ -353,6 +409,32 @@ export class CustomRecipeController {
       await this.customRecipeService.analyzeDogPreferences(dogId);
 
     return ApiResponseDto.success(preferences);
+  }
+
+  /**
+   * 待付款订单的支付截止时间（2026-10-04）。
+   *
+   * 小程序据此显示"还剩 X 分钟"，避免顾客在毫不知情的情况下被自动关单。
+   * 非待付款单、或后台把支付超时配成 0（不自动关单）时返回 null，
+   * 小程序拿到 null 就不显示时限文案。
+   */
+  private resolvePaymentDeadline(
+    order: { status: string; createdAt: Date },
+    timeoutMinutes: number,
+  ): string | null {
+    if (order.status !== 'PENDING_PAYMENT') return null;
+    if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) return null;
+
+    return new Date(
+      new Date(order.createdAt).getTime() + timeoutMinutes * 60 * 1000,
+    ).toISOString();
+  }
+
+  /** Decimal / null 统一成 number | null，避免小程序收到字符串金额 */
+  private toNullableNumber(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }
 

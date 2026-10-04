@@ -28,6 +28,7 @@ import {
   addWorkDays,
   isPublicHoliday,
   getPublicHolidaysForYear,
+  parseYYYYMMDD,
 } from '../../utils/date-helpers';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
@@ -47,6 +48,15 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     @Optional()
     private readonly wechatService?: WechatService,
   ) {}
+
+  /**
+   * 自动排期的防呆上限（2026-10-04）：连续这么多天都排不上就明确报错，
+   * 而不是无声地一直往后找。正常 1~2 天内必然有空位。
+   */
+  private static readonly MAX_SCHEDULE_LOOKAHEAD_DAYS = 45;
+
+  /** 并发抢名额的重试次数：抢输一次就换下一天，最多换这么多天 */
+  private static readonly SLOT_BOOKING_MAX_ATTEMPTS = 5;
 
   /**
    * Generate a unique order ID in format CRYYYYMMDDXXXX
@@ -121,7 +131,43 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 校验这张定制单确实属于当前顾客。
+   *
+   * 2026-10-04 修复越权：附件上传接口此前只校验"订单号非空"，
+   * 任何登录顾客都能把文件挂到别人的定制单上；订单号不存在时还会打成 500。
+   * 现在统一走这里 —— 顺带把"订单不存在"变成业务错误（resolveOrderRef 负责）。
+   */
+  async assertOrderOwnership(
+    customerId: string,
+    orderIdOrId: string,
+  ): Promise<void> {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+      select: { customerId: true },
+    });
+
+    if (!order || order.customerId !== customerId) {
+      throw new BadRequestException('定制订单不存在或无权操作');
+    }
+  }
+
+  /**
    * Create a new custom recipe order
+   */
+  /**
+   * 提交定制单。
+   *
+   * 2026-10-04 两处结构性调整（老板拍板口径 1 + 修复超卖）：
+   *
+   * ① **日期改由系统排**：顾客传来的 scheduledDate 一律忽略（老版本小程序
+   *    仍会带这个字段，留着兼容但不采信）。原来前端把它写死成"今天"，
+   *    后端一旦回"该日期已约满，请选择其他日期"，顾客根本无处可选 —— 直接流失。
+   *    现在从今天起找最近的空位，满了/遇假期就顺延。
+   *
+   * ② **抢名额改 CAS**：原来先在事务外读余量、再无条件 booked_count + 1，
+   *    两个并发请求会同时看到空位、同时 +1，每日上限形同虚设。
    */
   async createOrder(data: CreateCustomRecipeOrderDTO): Promise<any> {
     // 定制费与可抵扣金额都从后台配置读取，并在下单这一刻**快照进订单**。
@@ -131,67 +177,99 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     // 先确认这只狗是他的，再谈别的
     await this.assertDogOwnership(data.customerId, data.dogId);
 
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Check availability
-      const available = await this.checkAvailability(data.scheduledDate);
-      if (!available) {
-        throw new ConflictException('该日期已约满，请选择其他日期');
-      }
+    const capacity = config.dailyCapacity;
+    /** 抢输的日子记下来跳过，避免反复撞同一天 */
+    const takenDays = new Set<string>();
 
-      // 2. Calculate estimated delivery date
-      const estimatedDeliveryDate = await this.calculateDeliveryDate(
-        data.scheduledDate,
-        config.deliveryWorkDays,
+    for (
+      let attempt = 0;
+      attempt < CustomRecipeService.SLOT_BOOKING_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      const scheduledDate = await this.findNextAvailableDate(
+        capacity,
+        takenDays,
       );
 
-      // 3. Create order
-      const order = await tx.customRecipeOrder.create({
-        data: {
-          orderId: await this.generateUniqueOrderId(),
-          customerId: data.customerId,
-          dogId: data.dogId,
-          targetGoal: data.targetGoal,
-          needsHealthManagement: data.needsHealthManagement === true,
-          allergies: data.allergies || [],
-          medicalConditions: data.medicalConditions || [],
-          additionalNotes: data.additionalNotes,
-          preferredIngredients: data.preferredIngredients || [],
-          dislikedIngredients: data.dislikedIngredients || [],
-          attachments: data.attachmentUrls || [],
-          scheduledDate: data.scheduledDate,
-          estimatedDeliveryDate,
-          amount: config.feeAmount,
-          creditAmount: config.creditAmount,
-          status: CustomRecipeStatus.PENDING_PAYMENT,
-        },
-      });
+      // 连续这么多天都排不上：明确报错，不让顾客对着转圈猜
+      if (!scheduledDate) break;
 
-      // 4. Book the slot
-      await this.bookSlotTx(tx, data.scheduledDate);
+      const created = await this.prisma.$transaction(async (tx) => {
+        const booked = await this.tryBookSlotTx(tx, scheduledDate, capacity);
 
-      // 5. Sync to health profile if requested
-      if (data.syncToHealthProfile) {
-        await this.syncToHealthProfileTx(
-          tx,
-          data.dogId,
-          data.allergies || [],
-          data.medicalConditions || [],
-          // 2026-10-02 老板定：饮食偏好只在定制食谱时填 ——
-          // 那这里就必须**回写档案**，否则健康管理里的偏好会一直空着/陈旧，
-          // AI 健康分析与营养师侧读到的口味就是断源的。
-          {
+        // 并发下名额被别人抢走了：本次不写任何订单，交给外层换一天重试
+        if (!booked) return null;
+
+        const estimatedDeliveryDate = await this.calculateDeliveryDate(
+          scheduledDate,
+          config.deliveryWorkDays,
+        );
+
+        const order = await tx.customRecipeOrder.create({
+          data: {
+            orderId: await this.generateUniqueOrderId(),
+            customerId: data.customerId,
+            dogId: data.dogId,
+            targetGoal: data.targetGoal,
+            needsHealthManagement: data.needsHealthManagement === true,
+            allergies: data.allergies || [],
+            medicalConditions: data.medicalConditions || [],
+            additionalNotes: data.additionalNotes,
             preferredIngredients: data.preferredIngredients || [],
             dislikedIngredients: data.dislikedIngredients || [],
+            attachments: data.attachmentUrls || [],
+            scheduledDate,
+            estimatedDeliveryDate,
+            amount: config.feeAmount,
+            creditAmount: config.creditAmount,
+            status: CustomRecipeStatus.PENDING_PAYMENT,
           },
-        );
-        await tx.customRecipeOrder.update({
-          where: { id: order.id },
-          data: { healthInfoSyncedAt: new Date() },
         });
-      }
 
-      return order;
-    });
+        // Sync to health profile if requested
+        if (data.syncToHealthProfile) {
+          await this.syncToHealthProfileTx(
+            tx,
+            data.dogId,
+            data.allergies || [],
+            data.medicalConditions || [],
+            // 2026-10-02 老板定：饮食偏好只在定制食谱时填 ——
+            // 那这里就必须**回写档案**，否则健康管理里的偏好会一直空着/陈旧，
+            // AI 健康分析与营养师侧读到的口味就是断源的。
+            {
+              preferredIngredients: data.preferredIngredients || [],
+              dislikedIngredients: data.dislikedIngredients || [],
+            },
+          );
+          await tx.customRecipeOrder.update({
+            where: { id: order.id },
+            data: { healthInfoSyncedAt: new Date() },
+          });
+        }
+
+        return order;
+      });
+
+      if (created) return created;
+
+      takenDays.add(TimezoneUtil.toShanghaiDateString(scheduledDate));
+    }
+
+    throw new ConflictException('近期定制名额已满，请稍后再试或联系客服');
+  }
+
+  /**
+   * 支付时限（分钟），0 = 不自动关单。
+   *
+   * 2026-10-04：小程序要告诉顾客"请在 X 分钟内完成支付"，
+   * 但此前这个值只存在于后台配置里，顾客完全不知道，
+   * 订单被自动关掉时只会以为系统坏了。
+   */
+  async getPaymentTimeoutMinutes(): Promise<number> {
+    const config = await this.configService.getConfig();
+    return Number.isFinite(config.paymentTimeoutMinutes)
+      ? config.paymentTimeoutMinutes
+      : 0;
   }
 
   /**
@@ -562,9 +640,17 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return { cancelled: false };
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.customRecipeOrder.update({
-        where: { id: order.id },
+    const result = await this.prisma.$transaction(async (tx) => {
+      /**
+       * 条件更新，而不是按 id 无条件改写（2026-10-04 修复"钱收了单被关"）。
+       *
+       * 原写法：函数开头读到"待付款"就认定可以关，事务里直接按 id 改写状态。
+       * 若微信支付回调恰好在这几毫秒内把订单推成 PAID，就会被这里覆盖回 CANCELLED ——
+       * 顾客钱付了、单没了、还不会退款。现在只有"此刻仍是待付款"才关得掉，
+       * 抢不过回调就放弃关单（返回 cancelled: false）。
+       */
+      const updated = await tx.customRecipeOrder.updateMany({
+        where: { id: order.id, status: CustomRecipeStatus.PENDING_PAYMENT },
         data: {
           status: CustomRecipeStatus.CANCELLED,
           cancelledAt: new Date(),
@@ -572,14 +658,21 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
       });
 
-      // 名额下限保护：并发回调/重复关单不能让 booked_count 变成负数
+      // 没抢到 = 订单已被支付回调或别的流程改走，绝不能顺手把名额还掉
+      if (updated.count === 0) {
+        return { cancelled: false };
+      }
+
+      // 名额下限保护：重复关单不能让 booked_count 变成负数
       await tx.customRecipeSchedule.updateMany({
         where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
         data: { bookedCount: { decrement: 1 } },
       });
+
+      return { cancelled: true };
     });
 
-    return { cancelled: true };
+    return result;
   }
 
   /**
@@ -633,16 +726,21 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       );
     }
 
-    // 已付款的先退款：退款失败就不取消，避免"取消了钱没退"这种最糟的结果
     let refundStatus: string | null = null;
-    if (order.status === CustomRecipeStatus.PAID) {
-      const result = await refund(order.orderId, reason);
-      refundStatus = result?.status ?? null;
-    }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.customRecipeOrder.update({
-        where: { id: order.id },
+    /**
+     * ① 先**认领**这次取消（CAS），拿到的一方才有权动名额与退款。
+     *
+     * 2026-10-04 修复两件事：原写法在事务里按 id 无条件改写状态，于是
+     *   · "顾客连点两次取消"或"顾客取消 + 定时关单同时到"会把名额**重复释放**，
+     *     每日上限被悄悄放大；
+     *   · 若订单在被读成 PAID 之后、改写之前被后台推进到"制作中"，
+     *     这一刀会把制作中的订单覆盖成已取消。
+     * 现在只有抢到状态迁移的那一方继续往下走。
+     */
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.customRecipeOrder.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: CustomRecipeStatus.CANCELLED,
           cancelledAt: new Date(),
@@ -650,12 +748,61 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         },
       });
 
+      if (updated.count === 0) return false;
+
       // 释放当天名额（每日上限只有 5 单）
       await tx.customRecipeSchedule.updateMany({
         where: { date: order.scheduledDate, bookedCount: { gt: 0 } },
         data: { bookedCount: { decrement: 1 } },
       });
+
+      return true;
     });
+
+    if (!claimed) {
+      // 抢输说明它已被别处取消（定时关单/重复点击）：名额与退款都不能再动一次
+      const latest = await this.prisma.customRecipeOrder.findUnique({
+        where: { id: order.id },
+        select: { status: true },
+      });
+
+      return {
+        cancelled: latest?.status === CustomRecipeStatus.CANCELLED,
+        refundStatus: null,
+      };
+    }
+
+    /**
+     * ② 已付款的再退款。退款失败就**把取消回滚**，
+     * 避免"取消了钱没退"这种最糟的结果。
+     *
+     * 回滚是安全的：CANCELLED 是终态，我们刚认领成功，期间不会有别的流程改动它。
+     */
+    if (order.status === CustomRecipeStatus.PAID) {
+      try {
+        const result = await refund(order.orderId, reason);
+        refundStatus = result?.status ?? null;
+      } catch (error) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.customRecipeOrder.updateMany({
+            where: { id: order.id, status: CustomRecipeStatus.CANCELLED },
+            data: {
+              status: CustomRecipeStatus.PAID,
+              cancelledAt: null,
+              cancellationReason: null,
+            },
+          });
+
+          // 名额也还回去：取消时释放了，回滚就得重新占上
+          await tx.customRecipeSchedule.updateMany({
+            where: { date: order.scheduledDate },
+            data: { bookedCount: { increment: 1 } },
+          });
+        });
+
+        throw error;
+      }
+    }
 
     return { cancelled: true, refundStatus };
   }
@@ -1139,13 +1286,128 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     });
   }
 
-  private async bookSlotTx(tx: any, date: Date): Promise<void> {
-    await tx.customRecipeSchedule.update({
+  /**
+   * 自动排期的起点：上海时区的"今天"，且按 DATE 列的存储口径（UTC 零点）。
+   *
+   * 必须走 TimezoneUtil + parseYYYYMMDD：直接用 new Date() 会带上当前时刻，
+   * 服务器时区一变就会整体偏一天（历史上就踩过 0-8 点下单写成昨天）。
+   */
+  private getScheduleStartDate(): Date {
+    return parseYYYYMMDD(TimezoneUtil.toShanghaiDateString(new Date()));
+  }
+
+  /** 日期游标 +1 天（按 UTC 毫秒推进，避开夏令时/时区把日期挪走） */
+  private addOneDay(date: Date): Date {
+    return new Date(date.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * 找出下一个能接单的日子（2026-10-04 拍板的口径 1）。
+   *
+   * 老板决定：**日期由系统排，顾客不选**。从今天起往后找第一个
+   * "不是公众假期、且没被约满"的日子，满了就顺延到下一天。
+   *
+   * excludeDays 用于跳过"刚在并发里抢输"的日子，避免反复撞同一天。
+   * 这里只做"读"筛选，真正的占位由 tryBookSlotTx 的 CAS 决定胜负。
+   */
+  private async findNextAvailableDate(
+    capacity: number,
+    excludeDays: Set<string> = new Set(),
+  ): Promise<Date | null> {
+    const todayKey = TimezoneUtil.toShanghaiDateString(new Date());
+    let cursor = this.getScheduleStartDate();
+
+    for (
+      let i = 0;
+      i < CustomRecipeService.MAX_SCHEDULE_LOOKAHEAD_DAYS;
+      i += 1
+    ) {
+      const key = TimezoneUtil.toShanghaiDateString(cursor);
+
+      if (key >= todayKey && !excludeDays.has(key)) {
+        const holiday = await isPublicHoliday(cursor);
+
+        if (!holiday) {
+          const schedule = await this.prisma.customRecipeSchedule.findUnique({
+            where: { date: cursor },
+          });
+
+          // 还没有排期行 = 这天没人碰过，按"空着"算
+          const bookable = schedule
+            ? schedule.isAvailable && !schedule.isPublicHoliday
+            : true;
+          const hasRoom = schedule
+            ? schedule.bookedCount < (schedule.capacity ?? capacity)
+            : true;
+
+          if (bookable && hasRoom) {
+            return cursor;
+          }
+        }
+      }
+
+      cursor = this.addOneDay(cursor);
+    }
+
+    return null;
+  }
+
+  /**
+   * 事务内**条件式**抢一个排期名额（CAS）。
+   *
+   * 抢得到返回 true，抢不到返回 false（调用方换一天重试）。
+   * 关键在最后那步 updateMany 带着"读到的 bookedCount 原值"做条件 ——
+   * 两个并发请求里只有一个能把原值改成原值 +1，另一个 count 为 0 自然落败。
+   */
+  private async tryBookSlotTx(
+    tx: any,
+    date: Date,
+    capacity: number,
+  ): Promise<boolean> {
+    const existing = await tx.customRecipeSchedule.findUnique({
       where: { date },
-      data: {
-        bookedCount: { increment: 1 },
-      },
     });
+
+    if (!existing) {
+      // 首次访问该日期：落一条**带真实假期标记**的排期行。
+      // skipDuplicates 兜住"两个请求同时首次访问"的唯一约束冲突。
+      await tx.customRecipeSchedule.createMany({
+        data: [
+          {
+            date,
+            capacity,
+            bookedCount: 0,
+            isAvailable: true,
+            isPublicHoliday: await isPublicHoliday(date),
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
+
+    const schedule = await tx.customRecipeSchedule.findUnique({
+      where: { date },
+    });
+
+    if (!schedule || !schedule.isAvailable || schedule.isPublicHoliday) {
+      return false;
+    }
+
+    if (schedule.bookedCount >= (schedule.capacity ?? capacity)) {
+      return false;
+    }
+
+    const updated = await tx.customRecipeSchedule.updateMany({
+      where: {
+        date,
+        bookedCount: schedule.bookedCount,
+        isAvailable: true,
+        isPublicHoliday: false,
+      },
+      data: { bookedCount: { increment: 1 } },
+    });
+
+    return updated.count === 1;
   }
 
   /**

@@ -563,6 +563,18 @@ export class WechatPaymentService {
       return this.handleSupplementRefundNotify(decrypted, outRefundNo);
     }
 
+    /**
+     * 定制食谱退款单号带 CRR 前缀（由 createCustomRecipeRefund 生成），走独立分支。
+     *
+     * 2026-10-04 补上：此前没有这条分支，CRR 退款单既不在 orderRefundRecord、
+     * 也不在 orderSettlementAdjustment 里，于是被当成"陌生退款单"直接忽略，
+     * custom_recipe_order.refund_status 永远停在 PROCESSING ——
+     * 顾客和后台都看不到到底退没退成功。
+     */
+    if (outRefundNo.startsWith('CRR')) {
+      return this.handleCustomRecipeRefundNotify(decrypted, outRefundNo);
+    }
+
     const refundStatus = String(decrypted.refund_status || decrypted.status || '');
     const orderId = this.fromOutTradeNo(outTradeNo);
 
@@ -1006,6 +1018,18 @@ export class WechatPaymentService {
     const totalFen = this.toFen(order.amount);
     const description = '食谱定制服务费';
 
+    /**
+     * 金额为 0 时不要往微信发请求（2026-10-04）。
+     * 微信下单接口要求金额 ≥ 1 分，发过去必然被拒，顾客只会看到一句
+     * 看不懂的失败；这里提前把原因说清楚。
+     * 后台已不允许把定制费保存成 0，这道是兜住历史数据/异常单。
+     */
+    if (!Number.isFinite(totalFen) || totalFen <= 0) {
+      throw new BadRequestException(
+        '该定制订单金额为 0，无法发起微信支付，请联系客服处理',
+      );
+    }
+
     const response = await this.callWechatPay<{
       prepay_id?: string;
       message?: string;
@@ -1062,7 +1086,7 @@ export class WechatPaymentService {
   }
 
   /**
-   * 主动查询定制订单的微信支付结果。
+   * 主动查询定制订单的微信支付结果（顾客侧入口）。
    * 回调可能丢失或延迟，小程序在 requestPayment 成功后调用它做一次兜底同步。
    */
   async syncCustomRecipePayment(
@@ -1077,6 +1101,40 @@ export class WechatPaymentService {
       throw new NotFoundException('定制订单不存在');
     }
 
+    return this.queryWechatAndConfirmCustomRecipe(order);
+  }
+
+  /**
+   * 供**定时任务**使用：按订单查一次微信支付结果（无归属校验，仅服务端内部调用）。
+   *
+   * 2026-10-04 新增：自动关单前必须先查这一次。
+   * 顾客可能刚刚付完款、微信回调还没到达，此时直接关单就会变成
+   * "钱收了、单是已取消、还不退款"。查单是权威结论 ——
+   * 查到已支付就顺势确认收款，不再关单。
+   */
+  async syncCustomRecipePaymentForScheduler(
+    orderIdOrId: string,
+  ): Promise<{ status: string; paid: boolean; tradeState: string | null }> {
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { OR: [{ orderId: orderIdOrId }, { id: orderIdOrId }] },
+    });
+
+    if (!order) {
+      return { status: 'UNKNOWN', paid: false, tradeState: null };
+    }
+
+    return this.queryWechatAndConfirmCustomRecipe(order);
+  }
+
+  /**
+   * 查单 + 金额核对 + 确认收款的公共部分。
+   * 顾客兜底同步与定时关单前核查**必须同一口径**，所以只留这一份实现。
+   */
+  private async queryWechatAndConfirmCustomRecipe(order: {
+    orderId: string;
+    status: string;
+    amount: unknown;
+  }): Promise<{ status: string; paid: boolean; tradeState: string | null }> {
     if (order.status !== 'PENDING_PAYMENT') {
       return { status: order.status, paid: order.status === 'PAID', tradeState: null };
     }
@@ -1155,12 +1213,134 @@ export class WechatPaymentService {
       return { handled: false, tradeState };
     }
 
+    /**
+     * 订单已被关闭、却收到"支付成功"（2026-10-04 补）。
+     *
+     * 常见来路：顾客在支付时限的最后一刻付了款，而定时关单刚好先一步执行。
+     * 此前的处理是 confirmPaymentFromWechat 的条件更新失败 → 被当成
+     * "回调重试/已处理过"静默丢弃，结果是**钱收了、单是已取消、也没有退款**，
+     * 只能等顾客来投诉才发现。
+     *
+     * 现在：补记支付流水后**自动原路退回**，并把订单号打进错误日志。
+     * 同时定时关单前会先查一次微信（syncCustomRecipePaymentForScheduler），
+     * 正常情况下根本走不到这里 —— 这是最后一道防线。
+     */
+    if (order.status === 'CANCELLED') {
+      return this.refundLatePaymentForCancelledCustomRecipe(
+        order,
+        String(decrypted.transaction_id || ''),
+      );
+    }
+
     await this.customRecipeService.confirmPaymentFromWechat(
       order.orderId,
       String(decrypted.transaction_id || ''),
     );
 
     return { handled: true, tradeState };
+  }
+
+  /**
+   * 定制食谱退款结果回调（2026-10-04）。
+   *
+   * 只做一件事：把 custom_recipe_order 的退款状态从"处理中"改成微信给出的最终结果，
+   * 让顾客（小程序）和员工（后台）都能看到退款到底成没成。
+   */
+  private async handleCustomRecipeRefundNotify(
+    decrypted: Record<string, unknown>,
+    outRefundNo: string,
+  ) {
+    const refundStatus = String(
+      decrypted.refund_status || decrypted.status || '',
+    ).toUpperCase();
+    const successTime = this.parseWechatTime(decrypted.success_time);
+
+    const order = await this.prisma.customRecipeOrder.findFirst({
+      where: { refundOutNo: outRefundNo },
+    });
+
+    if (!order) {
+      this.logger.warn(
+        `Custom recipe refund notify ignored: order not found, outRefundNo=${outRefundNo}`,
+      );
+      return { handled: false, refundStatus };
+    }
+
+    const succeeded = refundStatus === 'SUCCESS';
+
+    await this.prisma.customRecipeOrder.update({
+      where: { id: order.id },
+      data: {
+        refundStatus: refundStatus || order.refundStatus,
+        refundId: (decrypted.refund_id as string) ?? order.refundId,
+        // 只有成功才写退款到账时间；失败/关闭时保留原值，便于人工跟进
+        refundedAt: succeeded ? (successTime ?? new Date()) : order.refundedAt,
+      },
+    });
+
+    if (succeeded) {
+      this.logger.log(
+        `Custom recipe refund succeeded: order=${order.orderId}, outRefundNo=${outRefundNo}`,
+      );
+    } else {
+      this.logger.error(
+        `Custom recipe refund NOT successful: order=${order.orderId}, outRefundNo=${outRefundNo}, status=${refundStatus}`,
+      );
+    }
+
+    return { handled: true, refundStatus };
+  }
+
+  /**
+   * "订单已关闭但钱到账了"的兜底：补记流水 + 自动原路退回。
+   *
+   * 退款本身是幂等的（createCustomRecipeRefund 内部判断已成功/处理中直接返回），
+   * 微信重复回调不会重复打款。
+   */
+  private async refundLatePaymentForCancelledCustomRecipe(
+    order: {
+      id: string;
+      orderId: string;
+      paymentTransactionId: string | null;
+      paymentConfirmedAt: Date | null;
+    },
+    transactionId: string,
+  ) {
+    this.logger.error(
+      `Custom recipe paid AFTER cancelled: order=${order.orderId}, transactionId=${transactionId}`,
+    );
+
+    try {
+      /**
+       * 先补记支付流水：createCustomRecipeRefund 要求
+       * paymentTransactionId / paymentConfirmedAt 至少有一个，
+       * 否则会以"该订单尚未支付"为由拒绝退款 —— 那就正好把这条路径堵死了。
+       */
+      await this.prisma.customRecipeOrder.update({
+        where: { id: order.id },
+        data: {
+          paymentTransactionId: transactionId || order.paymentTransactionId,
+          paymentConfirmedAt: order.paymentConfirmedAt ?? new Date(),
+        },
+      });
+
+      const refund = await this.createCustomRecipeRefund({
+        orderId: order.orderId,
+        reason: '订单已关闭但收到付款，自动原路退回',
+      });
+
+      this.logger.warn(
+        `Custom recipe late payment refunded: order=${order.orderId}, refundStatus=${refund.status}`,
+      );
+
+      return { handled: true, latePayment: true, refundStatus: refund.status };
+    } catch (error) {
+      // 退款发起失败：钱还在我们账上，必须留下明确记录等人工处理
+      this.logger.error(
+        `Custom recipe late payment refund FAILED: order=${order.orderId}: ${(error as Error).message}`,
+      );
+      return { handled: false, latePayment: true, refundStatus: null };
+    }
   }
 
   /**

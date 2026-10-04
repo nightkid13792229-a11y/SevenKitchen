@@ -35,6 +35,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { AuthGuard } from '../../auth/auth.guard';
 import { CustomRecipeStatus } from '@prisma/client';
 import { WechatService } from '../../../infrastructure/wechat/wechat.service';
+import { WechatPaymentService } from '../../../application/payment/wechat-payment.service';
 import { ApiResponseDto } from '../../dto/common/response.dto';
 import {
   formatDateToYYYYMMDD,
@@ -51,6 +52,12 @@ export class AdminCustomRecipeController {
     private readonly customRecipeService: CustomRecipeService,
     private readonly customRecipeConfigService: CustomRecipeConfigService,
     private readonly wechatService: WechatService,
+    /**
+     * 后台取消"已付款"订单时要先原路退款（2026-10-04 老板口径 3），
+     * 所以这里需要支付服务。注入方向是 controller → payment → custom-recipe，
+     * 不构成循环依赖。
+     */
+    private readonly wechatPaymentService: WechatPaymentService,
   ) {}
 
   // ---------- 食谱定制设置 ----------
@@ -240,6 +247,38 @@ export class AdminCustomRecipeController {
     @Body('status') status: CustomRecipeStatus,
     @Body('reason') reason?: string,
   ) {
+    /**
+     * 2026-10-04 补校验：原来 status 直接透传给 Prisma，
+     * 写错一个字母就变成 500（Prisma 枚举错误），提示也看不懂。
+     */
+    if (!Object.values(CustomRecipeStatus).includes(status)) {
+      throw new BadRequestException(
+        `状态值不合法，可选：${Object.values(CustomRecipeStatus).join(' / ')}`,
+      );
+    }
+
+    /**
+     * 取消一张**已付款**的定制单要先原路退款（老板 2026-10-04 口径 3）。
+     *
+     * 此前后台取消只释放当天名额、既不退款也不提示，钱留在我们账上，
+     * 往往要等顾客来问才发现。退款失败就不取消 ——
+     * 宁可保持原状，也不要出现"取消了钱没退"。
+     */
+    if (status === CustomRecipeStatus.CANCELLED) {
+      const order = await this.customRecipeService.getOrderByOrderId(orderId);
+
+      if (!order) {
+        throw new NotFoundException('订单不存在');
+      }
+
+      if (order.status === CustomRecipeStatus.PAID) {
+        await this.wechatPaymentService.createCustomRecipeRefund({
+          orderId: order.orderId,
+          reason: (reason || '').trim() || '后台取消定制订单',
+        });
+      }
+    }
+
     // 流转合法性、取消释放名额、各时间戳都在 service 里统一处理
     await this.customRecipeService.updateOrderStatus(orderId, status, {
       reason,
@@ -366,6 +405,11 @@ export class AdminCustomRecipeController {
   @Get('schedule')
   @ApiOperation({ summary: 'Get schedule' })
   async getSchedule(@Query('month') month: string) {
+    // 2026-10-04：缺 month 时原来会 `undefined.split` 崩成 500，这里回 400
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('month 参数格式应为 YYYY-MM');
+    }
+
     const [year, monthNum] = month.split('-').map(Number);
     const { start, end } = getMonthRange(year, monthNum);
 

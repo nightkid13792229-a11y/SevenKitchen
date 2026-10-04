@@ -127,7 +127,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { customRecipeApi } from '@/api/customRecipe';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
-import { getApiErrorMessage } from '@/utils/apiError';
+import { getApiErrorMessage, toastApiError } from '@/utils/apiError';
 
 /** 口径 2：这套参数（单价与产能）只允许管理员改，客服可以看 */
 const isAdmin = useIsAdmin();
@@ -201,9 +201,10 @@ const handleSave = async () => {
       ? new Date(data.updatedAt).toLocaleString()
       : '';
   } catch (error) {
-    // 保存失败必须显式显示：否则用户只看到按钮转圈、值没变，以为是自己没点保存
+    // 保存失败必须在按钮旁显式显示：否则用户只看到按钮转圈、值没变，
+    // 以为是自己没点保存。toastApiError 负责"后端原因优先、不重复弹同一句"。
     saveError.value = getApiErrorMessage(error, '保存失败，请重试');
-    ElMessage.error(saveError.value);
+    toastApiError(error, '保存失败，请重试', (message) => ElMessage.error(message));
   } finally {
     saving.value = false;
   }

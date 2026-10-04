@@ -261,7 +261,7 @@ import {
   getCustomRecipeStatusText,
 } from '@/constants/customRecipeOrder';
 import { getEstimatedDeliveryInfo } from '@/utils/customRecipe';
-import { getApiErrorMessage, isUserCancel } from '@/utils/apiError';
+import { toastApiError } from '@/utils/apiError';
 
 const router = useRouter();
 
@@ -325,7 +325,7 @@ const loadOrders = async () => {
     orders.value = data?.orders || [];
     pagination.total = data?.total || 0;
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '加载订单列表失败'));
+    toastApiError(error, '加载订单列表失败', (message) => ElMessage.error(message));
     console.error(error);
   } finally {
     loading.value = false;
@@ -375,9 +375,7 @@ const confirmPayment = async (order: CustomRecipeOrderDetail) => {
     loadOrders();
     loadStatistics();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '确认付款失败'));
-    }
+    toastApiError(error, '确认付款失败', (message) => ElMessage.error(message));
   }
 };
 
@@ -390,9 +388,7 @@ const startProcessing = async (order: CustomRecipeOrderDetail) => {
     loadOrders();
     loadStatistics();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '开始制作失败'));
-    }
+    toastApiError(error, '开始制作失败', (message) => ElMessage.error(message));
   }
 };
 

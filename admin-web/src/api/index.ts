@@ -75,7 +75,11 @@ http.interceptors.response.use(
       return res.data
     } else {
       ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const businessError = new Error(res.message || '请求失败')
+      // 标记"拦截器已经弹过提示"：页面 catch 里据此避免同一句话弹两遍
+      // （后端给的原因以拦截器这条为准）
+      ;(businessError as any).__apiErrorToasted = true
+      return Promise.reject(businessError)
     }
   },
   (error) => {
@@ -89,6 +93,9 @@ http.interceptors.response.use(
       localStorage.removeItem('admin_token')
       window.location.href = '/login'
     }
+
+    // 同上：这条错误已经提示过一次了
+    error.__apiErrorToasted = true
 
     return Promise.reject(error)
   }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { getApiErrorMessage, isUserCancel } from '../apiError'
+import {
+  getApiErrorMessage,
+  isUserCancel,
+  shouldToastApiError,
+  toastApiError,
+  wasApiErrorToasted,
+} from '../apiError'
 
 /**
  * 报错文案的回归（2026-10-04 第 8 条）。
@@ -61,5 +67,47 @@ describe('区分"用户点了取消"与"真的失败"', () => {
   it('接口错误不算取消（否则失败会被静默吞掉）', () => {
     expect(isUserCancel(new Error('boom'))).toBe(false)
     expect(isUserCancel(undefined)).toBe(false)
+  })
+})
+
+describe('同一句话不弹两遍（拦截器弹过就不再弹）', () => {
+  const toasted = (error: any) => {
+    error.__apiErrorToasted = true
+    return error
+  }
+
+  it('拦截器已经用后端原话弹过 → 页面不再重复弹', () => {
+    const error = toasted({
+      response: { data: { message: '该订单还没确认收款，不能交付' } },
+    })
+    expect(wasApiErrorToasted(error)).toBe(true)
+    expect(shouldToastApiError(error, '交付失败')).toBe(false)
+  })
+
+  it('拦截器弹过但后端没给原因（断网 / 500 通用话术）→ 页面补一条带场景的', () => {
+    const error = toasted({ message: 'Network Error' })
+    expect(shouldToastApiError(error, '加载订单详情失败')).toBe(true)
+  })
+
+  it('不是接口错误（本地抛的）→ 页面必须自己弹，否则用户什么都看不到', () => {
+    expect(shouldToastApiError(new Error('上传未返回图片地址'), '封面上传失败')).toBe(true)
+  })
+
+  it('用户点取消 → 什么都不弹', () => {
+    expect(shouldToastApiError('cancel', '交付失败')).toBe(false)
+  })
+
+  it('toastApiError 用后端原因调用提示函数', () => {
+    const shown: string[] = []
+    toastApiError(new Error('这道食谱不属于该订单的顾客 / 狗狗，不能交付到这张定制单'), '交付失败', (m) => shown.push(m))
+    expect(shown).toEqual(['这道食谱不属于该订单的顾客 / 狗狗，不能交付到这张定制单'])
+  })
+
+  it('toastApiError 对拦截器已提示过的后端原因保持安静', () => {
+    const shown: string[] = []
+    const error: any = new Error('该订单已取消，不能交付')
+    error.__apiErrorToasted = true
+    toastApiError(error, '交付失败', (m) => shown.push(m))
+    expect(shown).toEqual([])
   })
 })

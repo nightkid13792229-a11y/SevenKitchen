@@ -69,3 +69,42 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 export function isUserCancel(error: unknown): boolean {
   return error === 'cancel' || error === 'close'
 }
+
+/**
+ * axios 拦截器是否已经弹过这条错误的提示。
+ *
+ * 拦截器对所有失败请求都会 `ElMessage.error`（后端有 message 就用后端原话），
+ * 页面 catch 再弹一次就是同一句话出现两遍。`api/index.ts` 在 reject 前打了标记。
+ */
+export function wasApiErrorToasted(error: unknown): boolean {
+  return Boolean((error as { __apiErrorToasted?: boolean } | null)?.__apiErrorToasted)
+}
+
+/**
+ * 判断页面还要不要再补一条提示。
+ *
+ *   · 不是接口错误（本地抛的错、上传返回体异常）→ 要补，否则用户什么都看不到；
+ *   · 接口错误但**后端没给原因**（断网、500 通用话术）→ 要补，
+ *     这时页面的"加载订单详情失败"比 "Network Error" 有用；
+ *   · 接口错误且后端给了具体原因 → 不补，拦截器已经原话提示过了。
+ */
+export function shouldToastApiError(error: unknown, fallback: string): boolean {
+  if (isUserCancel(error)) return false
+  if (!wasApiErrorToasted(error)) return true
+  return getApiErrorMessage(error, fallback) === fallback
+}
+
+/**
+ * 页面统一的失败提示：显示后端返回的具体原因，且不重复弹同一句话。
+ *
+ * 调用姿势：
+ *   catch (error) { toastApiError(error, '交付失败') }
+ */
+export function toastApiError(
+  error: unknown,
+  fallback: string,
+  toast: (message: string) => void,
+): void {
+  if (!shouldToastApiError(error, fallback)) return
+  toast(getApiErrorMessage(error, fallback))
+}

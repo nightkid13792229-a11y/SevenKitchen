@@ -624,7 +624,7 @@ import {
   getAllergyCertaintyText,
   getEstimatedDeliveryInfo,
 } from '@/utils/customRecipe';
-import { getApiErrorMessage, isUserCancel } from '@/utils/apiError';
+import { toastApiError } from '@/utils/apiError';
 import { validateElementForm } from '@/utils/elementFormValidation';
 
 const props = defineProps<{
@@ -734,7 +734,7 @@ const loadRecipeCandidates = async () => {
     }
   } catch (error) {
     candidates.value = [];
-    ElMessage.error(getApiErrorMessage(error, '加载可交付的食谱失败'));
+    toastApiError(error, '加载可交付的食谱失败', (message) => ElMessage.error(message));
   } finally {
     candidatesLoading.value = false;
   }
@@ -794,11 +794,9 @@ const deliverSelectedRecipe = async () => {
     await loadOrderDetail();
     emit('refresh');
   } catch (error) {
-    if (!isUserCancel(error)) {
-      // 后端的拒绝理由（"该订单还没确认收款，不能交付""这道食谱不属于该订单的顾客 / 狗狗"）
-      // 必须原样显示，不能让员工猜
-      ElMessage.error(getApiErrorMessage(error, '交付失败'));
-    }
+        // 后端的拒绝理由（"该订单还没确认收款，不能交付""这道食谱不属于该订单的顾客 / 狗狗"）
+    // 必须原样显示，不能让员工猜
+    toastApiError(error, '交付失败', (message) => ElMessage.error(message));
   } finally {
     delivering.value = false;
   }
@@ -907,7 +905,7 @@ const loadOrderDetail = async () => {
       selectedCandidateId.value = '';
     }
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '加载订单详情失败'));
+    toastApiError(error, '加载订单详情失败', (message) => ElMessage.error(message));
     console.error(error);
   } finally {
     loading.value = false;
@@ -923,9 +921,7 @@ const confirmPayment = async () => {
     emit('refresh');
     await loadOrderDetail();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '确认付款失败'));
-    }
+    toastApiError(error, '确认付款失败', (message) => ElMessage.error(message));
   }
 };
 
@@ -977,9 +973,7 @@ const cancelOrder = async () => {
     emit('refresh');
     await loadOrderDetail();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '取消失败'));
-    }
+    toastApiError(error, '取消失败', (message) => ElMessage.error(message));
   }
 };
 
@@ -992,9 +986,7 @@ const startProcessing = async () => {
     emit('refresh');
     await loadOrderDetail();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '开始制作失败'));
-    }
+    toastApiError(error, '开始制作失败', (message) => ElMessage.error(message));
   }
 };
 
@@ -1033,9 +1025,7 @@ const restoreCredit = async () => {
     emit('refresh');
     await loadOrderDetail();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '恢复额度失败'));
-    }
+    toastApiError(error, '恢复额度失败', (message) => ElMessage.error(message));
   } finally {
     restoringCredit.value = false;
   }
@@ -1081,7 +1071,7 @@ const handleCoverUpload = async (options: any) => {
     ElMessage.success('封面上传成功');
     options.onSuccess?.(result);
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '封面上传失败'));
+    toastApiError(error, '封面上传失败', (message) => ElMessage.error(message));
     options.onError?.(error);
   }
 };
@@ -1137,10 +1127,8 @@ const submitRecipe = async () => {
     emit('refresh');
     emit('close');
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '提交失败'));
-      console.error(error);
-    }
+    toastApiError(error, '提交失败', (message) => ElMessage.error(message));
+    console.error(error);
   } finally {
     submitting.value = false;
   }
@@ -1178,9 +1166,7 @@ const deleteAttachment = async (attachmentId: string) => {
     ElMessage.success('附件已删除');
     loadOrderDetail();
   } catch (error) {
-    if (!isUserCancel(error)) {
-      ElMessage.error(getApiErrorMessage(error, '删除失败'));
-    }
+    toastApiError(error, '删除失败', (message) => ElMessage.error(message));
   }
 };
 

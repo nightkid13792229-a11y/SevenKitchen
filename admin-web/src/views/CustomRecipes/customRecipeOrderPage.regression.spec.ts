@@ -163,17 +163,18 @@ describe('敏感按钮按角色显示（口径 2，第 7 条）', () => {
 
 describe('报错要具体（第 8 条）', () => {
   it('三个页面都取后端返回的原因，不再只有"操作失败"', () => {
-    expect(orderDetail).toContain("getApiErrorMessage(error, '交付失败')")
-    expect(orderDetail).toContain("getApiErrorMessage(error, '加载订单详情失败')")
-    expect(orderList).toContain("getApiErrorMessage(error, '加载订单列表失败')")
+    expect(orderDetail).toContain("toastApiError(error, '交付失败', (message) => ElMessage.error(message))")
+    expect(orderDetail).toContain("toastApiError(error, '加载订单详情失败', (message) => ElMessage.error(message))")
+    expect(orderList).toContain("toastApiError(error, '加载订单列表失败', (message) => ElMessage.error(message))")
     expect(config).toContain("getApiErrorMessage(error, '保存失败，请重试')")
+    expect(config).toContain("toastApiError(error, '保存失败，请重试', (message) => ElMessage.error(message))")
     expect(orderDetail).not.toContain("ElMessage.error('操作失败')")
     expect(orderDetail).not.toContain("ElMessage.error('提交失败')")
   })
 
-  it('用户点"取消"不算失败，不会弹红色报错', () => {
-    expect(orderDetail).toContain('if (!isUserCancel(error)) {')
-    expect(orderList).toContain('if (!isUserCancel(error)) {')
+  it('用户点"取消"不算失败：取消提示交给 toastApiError 内部判断，不弹红色报错', () => {
+    expect(orderDetail).not.toContain("if (error !== 'cancel')")
+    expect(orderList).not.toContain("if (error !== 'cancel')")
   })
 })
 

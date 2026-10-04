@@ -194,7 +194,7 @@
           </text>
         </view>
         <text class="plan-banner__hint">
-          下面的克数已经按这个计划算好了。
+          下面的每日能量已经按这个计划算好了。
         </text>
       </view>
     </view>
@@ -860,13 +860,18 @@ const bcsAdviceText = computed(() => {
   const bcs = Number(selectedDog.value?.bcsScore);
   if (!Number.isFinite(bcs) || bcs <= 0) return '';
 
+  /**
+   * 2026-10-04 老板要求：删掉句尾那句免责话术（"建议仅供参考、由你决定"）。
+   * 建议本身就是参考性质，下面三个选项也由顾客自己点，
+   * 再补一句免责反而显得啰嗦、像是在推卸。
+   */
   if (bcs >= 6) {
-    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。这只是建议，最终由你决定。`;
+    return `按它目前的体况评分 ${bcs}/9（偏胖），我们建议：减重。`;
   }
   if (bcs <= 3) {
-    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。这只是建议，最终由你决定。`;
+    return `按它目前的体况评分 ${bcs}/9（偏瘦），我们建议：增重。`;
   }
-  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。这只是建议，最终由你决定。`;
+  return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。`;
 });
 
 const GOAL_LABELS: Record<string, string> = {
@@ -889,10 +894,6 @@ const goalTargetSummary = computed(() => {
 
   const label = GOAL_LABELS[goal] || '定制';
   const kcal = Number(selectedDog.value?.targetFoodKcal);
-  // 没有食谱时后端会给一个按已上架食谱中位数估算的克数（阶段 D2）。
-  // 原先这里读的是 dailyIntakeG —— 那个字段只在选了食谱之后才有值，
-  // 所以定制页一直显示「约 0 克」。
-  const grams = Number(selectedDog.value?.estimatedDailyIntakeG);
 
   if (!Number.isFinite(kcal) || kcal <= 0) {
     return {
@@ -902,15 +903,20 @@ const goalTargetSummary = computed(() => {
     };
   }
 
-  const gramsText =
-    Number.isFinite(grams) && grams > 0 ? `（约 ${Math.round(grams)} 克）` : '';
+  /**
+   * 2026-10-04 老板要求：体重管理这里**不显示饭量（克数）**。
+   *
+   * 热量是营养学口径，顾客看得懂、也便于和档案里的数字对照；
+   * 克数依赖"最终用哪道食谱的能量密度"，在食谱还没设计出来之前只能按
+   * 已上架食谱的中位数估算 —— 写出来容易被顾客当成承诺。
+   */
   const sourceText = selectedPlan.value
     ? `按${selectedPlan.value.direction === 'LOSS' ? '减重' : '增重'}计划，`
     : '按它目前的体况，';
 
   return {
     title: `你的目标：${label}`,
-    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal${gramsText}`,
+    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal`,
     note: `营养师会按「${label}」方向调整配方与喂食量，最终以交付的定制食谱为准。`,
   };
 });

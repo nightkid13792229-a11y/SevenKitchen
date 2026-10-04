@@ -361,26 +361,30 @@ describe('custom recipe page · 档案带出与目标口径', () => {
   it('体况只给建议，不替顾客定目标', () => {
     expect(page).toContain('bcsAdviceText')
     expect(page).toContain('我们建议：减重')
-    expect(page).toContain('这只是建议，最终由你决定')
+    // 2026-10-04 老板要求：删掉句尾那句"这只是建议，最终由你决定。"
+    // —— 建议本身就是参考性质，下面三个选项也由顾客自己点
+    expect(page).not.toContain('这只是建议，最终由你决定')
   })
 
-  it('选中目标后给出具体热量与克数', () => {
+  it('选中目标后给出具体热量（按老板要求不再显示克数）', () => {
     expect(page).toContain('goalTargetSummary')
     expect(page).toContain('finalFoodKcal')
-    expect(page).toContain('kcal${gramsText}')
-    // 阶段 D2：克数改用估算值 —— 原先读的 dailyIntakeG 只在选了食谱后才有值，
-    // 定制页因此一直显示「约 0 克」
-    expect(page).toContain('estimatedDailyIntakeG')
-    expect(page).toContain('约 ${Math.round(grams)} 克')
+    expect(page).toContain('每天需要约 ${Math.round(kcal)} kcal')
+    /**
+     * 2026-10-04 老板要求：体重管理板块**不显示饭量（克数）**。
+     * 克数依赖最终用哪道食谱的能量密度，食谱还没设计出来之前只能按中位数估算，
+     * 写出来容易被顾客当成承诺。
+     */
+    expect(page).not.toContain('约 ${Math.round(grams)} 克')
   })
 
-  it('计划进行中时带出计划，并说明克数已按计划算', () => {
+  it('计划进行中时带出计划，并说明能量已按计划算', () => {
     // 阶段 D1：计划才是顾客当下真正在执行的方案，定制页必须看得见
     expect(page).toContain('selectedPlan')
     expect(page).toContain('loadSelectedPlan')
     expect(page).toContain('weightGoalPlanApi.current')
     expect(page).toContain('进行中')
-    expect(page).toContain('下面的克数已经按这个计划算好了')
+    expect(page).toContain('下面的每日能量已经按这个计划算好了')
     // 文案要区分「按计划」与「按体况」，否则顾客不知道这个数字怎么来的
     expect(page).toContain('sourceText')
   })

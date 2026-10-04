@@ -13,7 +13,9 @@ import type { KnowledgeEntry } from '../types';
  *      居家能怎么配合、什么时候该看医生（行为专科或全科）"。
  *   3. 涉及疼痛/感官退化引起的行为改变，要与 WSAVA 疼痛指南口径一致。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -84,7 +86,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'DEFINITION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-002',
@@ -95,7 +97,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     summary:
       '把行为变化归因于"老了就这样"，是老年犬最常被错过的一类问题：家长往往已经注意到了变化，却没有告诉兽医，于是一拖再拖。AAHA 2023 老年护理指南摘要明确"old age is not a disease（老年不是疾病）"，并把"老年宠物必然出现身体、精神与行为的衰退"列为需要纠正的家长认知；SACN5 同样提醒不应接受"健康不佳与年老同义"的观念。',
     details: [
-      'AAHA 2023 老年护理指南摘要：兽医专业人员被教导要认识到"old age is not a disease"，但家长可能认为老年犬猫不可避免地出现身体、精神与行为衰退；兽医团队的任务之一，就是支持与教育家长、纠正这类对衰老过程的误解。',
+      'AAHA 2023 老年护理指南摘要：兽医专业人员被教导要认识到"old age is not a disease"，但家长可能认为老年犬不可避免地出现身体、精神与行为衰退；兽医团队的任务之一，就是支持与教育家长、纠正这类对衰老过程的误解。',
       'SACN5 第14章：不应接受"poor health and old age are synonymous（健康不佳与年老同义）"的观念——通过营养管理等方式，有机会改善老年犬的生活质量，甚至延长寿命。',
       'SACN5 第35章：很多老年犬的主人其实注意到了行为变化，但不向兽医报告，因为他们认为这是正常衰老的一部分；原因之一是这些变化常常起病细微、间歇发生、只在诊室外才看得出来。',
       '误区的代价：犬的行为异常报告频率在 11 岁左右明显增加，并可能逐步加重。一项随访研究中，起初没有异常的老犬在 12–18 个月后有 22% 出现至少一项 CDS 征象；起初已有一项行为异常的犬中，48% 发展到两个及以上类别。',
@@ -154,7 +156,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'DEFINITION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-003',
@@ -249,7 +251,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-004',
@@ -319,7 +321,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-005',
@@ -389,7 +391,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-006',
@@ -448,7 +450,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-007',
@@ -521,7 +523,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-008',
@@ -600,7 +602,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-009',
@@ -679,7 +681,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-010',
@@ -770,7 +772,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-011',
@@ -829,7 +831,7 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'behav-012',
@@ -891,6 +893,6 @@ export const BEHAVIOR_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
- * 健康时间线 + 就诊前摘要（2026-10-01，第二期）。
+ * 健康记录（时间线页，2026-10-01，第二期）。
  *
- * 老板需求 7、8：
- *   · 时间线汇总所有健康记录，**放在健康管理页内，不以新的板块标签形式存在**；
- *   · 带狗看病前，最想看到的是过往病史的摘要。
+ * 老板需求 7：汇总所有健康记录，**放在健康管理页内，不以新的板块标签形式存在**。
+ * 2026-10-01 二次调整：
+ *   · 入口名称由「健康时间线」改为「健康记录」；
+ *   · 「就诊前摘要」整块删除（老板：不需要给医生看摘要），页面与入口一并去掉。
  */
-describe('健康时间线', () => {
+describe('健康记录（原健康时间线）', () => {
   function readPage() {
     return readFileSync(
       resolve(process.cwd(), 'src/pages/dog-health/timeline.vue'),
@@ -49,60 +50,6 @@ describe('健康时间线', () => {
   })
 })
 
-describe('就诊前摘要', () => {
-  function readPage() {
-    return readFileSync(
-      resolve(process.cwd(), 'src/pages/dog-health/summary.vue'),
-      'utf-8',
-    )
-  }
-
-  it('排序按医生问诊的顺序：过敏 → 没结束的问题 → 就诊 → 体检 → 疫苗 → 体重 → 饮食', () => {
-    const page = readPage()
-
-    const order = [
-      '过敏',
-      '还没结束的问题',
-      '最近就诊',
-      '最近体检',
-      '疫苗',
-      '体重',
-      '饮食偏好',
-    ]
-    let cursor = -1
-    for (const title of order) {
-      const index = page.indexOf(title)
-      expect(index).toBeGreaterThan(cursor)
-      cursor = index
-    }
-  })
-
-  it('过敏永远排在最前（安全底线）', () => {
-    const page = readPage()
-
-    const allergyIndex = page.indexOf('{{ item.allergen }}')
-    const conditionIndex = page.indexOf('ongoingConditions')
-    expect(allergyIndex).toBeGreaterThan(-1)
-    // 过敏渲染在"还没结束的问题"之前
-    expect(page.indexOf('过敏</text>')).toBeLessThan(page.indexOf('还没结束的问题'))
-    expect(conditionIndex).toBeGreaterThan(-1)
-  })
-
-  it('逾期疫苗给红色提示', () => {
-    const page = readPage()
-
-    expect(page).toContain('hasOverdueVaccine')
-    expect(page).toContain('notice--danger')
-  })
-
-  it('摘要底部有免责声明与生成时间', () => {
-    const page = readPage()
-
-    expect(page).toContain('不构成诊断')
-    expect(page).toContain('生成时间')
-  })
-})
-
 describe('两个页面的注册与入口', () => {
   it('注册在 pages/dog-health 分包里（重页面不进主包）', () => {
     const config = JSON.parse(
@@ -116,13 +63,14 @@ describe('两个页面的注册与入口', () => {
     expect(subPackage.pages.map((page: { path: string }) => page.path).sort()).toEqual([
       'analysis',
       'share',
-      'summary',
       'timeline',
     ])
 
+    // 就诊前摘要整块已删除：分包里不该再有这个页面
+    expect(subPackage.pages.map((page: { path: string }) => page.path)).not.toContain('summary')
+
     const mainPages = config.pages.map((page: { path: string }) => page.path)
     expect(mainPages).not.toContain('pages/dog-health/timeline')
-    expect(mainPages).not.toContain('pages/dog-health/summary')
     expect(mainPages).not.toContain('pages/dog-health/share')
   })
 
@@ -135,17 +83,20 @@ describe('两个页面的注册与入口', () => {
     expect(mainPages).toContain('pages/shared-health/index')
   })
 
-  it('入口在健康管理页内，且**不是**第六个书签', () => {
+  it('入口在健康管理页内，且**不占**板块书签的位置', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
     expect(page).toContain('goHealthTimeline')
-    expect(page).toContain('goVisitSummary')
-    expect(page).toContain('health-shortcuts')
+    expect(page).toContain('goHealthAnalysis')
+    // 2026-10-03：入口收成一条通栏 Banner「健康记录」（不再并排两块）
+    expect(page).toContain('health-entry--records')
+    expect(page).not.toContain('goVisitSummary')
 
-    // 老板明确：时间线不以新的板块标签形式存在 —— 书签仍然是五个
+    // 老板明确：时间线不以新的板块标签形式存在
+    // （2026-10-02：就诊/体检拆开后是 6 个，随后饮食标签下线 → 5 个）
     const tabsBlock = page.slice(
       page.indexOf('const HEALTH_TABS'),
       page.indexOf('const RECORD_TAB_KEYS'),
@@ -154,10 +105,45 @@ describe('两个页面的注册与入口', () => {
     expect(tabsBlock).not.toContain('timeline')
   })
 
-  it('API 层两个聚合接口都在', () => {
+  it('API 层保留时间线聚合接口，摘要接口随页面一起删掉', () => {
     const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
 
     expect(api).toContain('/dogs/${dogId}/health/timeline')
-    expect(api).toContain('/dogs/${dogId}/health/visit-summary')
+    expect(api).not.toContain('healthVisitSummary')
+    expect(api).not.toContain('/dogs/${dogId}/health/visit-summary')
+  })
+})
+
+/**
+ * 时间线不再有饮食偏好事件（2026-10-02 老板定）。
+ *
+ * 第五期把"饮食偏好变更"放进健康记录，是因为那时它属于健康管理；
+ * 后来饮食标签下线（只在定制食谱时填），时间线上再混着
+ * "新增/去掉某样食材"就不合逻辑了。变更历史本身仍在库里。
+ */
+describe('健康记录 · 饮食事件已下线', () => {
+  it('时间线页里没有 diet 这个类型（标签、配色都清掉）', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-health/timeline.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain("type HealthEventType = 'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'")
+    expect(page).not.toContain("diet: '饮食'")
+    expect(page).not.toContain('.timeline__dot--diet')
+    expect(page).not.toContain('.timeline__badge--diet')
+  })
+
+  it('后端时间线不再查饮食偏好变更表', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), '../backend/src/application/health/health-timeline.service.ts'),
+      'utf-8',
+    )
+
+    expect(service).not.toContain('dogDietPreferenceChange')
+    expect(service).not.toContain("type: 'diet'")
+    // 事件类型联合与排序表里也没有 diet 了
+    expect(service).not.toContain("| 'diet'")
+    expect(service).not.toContain('diet: 5')
   })
 })

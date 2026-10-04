@@ -6,6 +6,7 @@ import {
   createHealthVisitDraft,
   getHealthVisitFieldConfig,
   getHealthVisitValidationError,
+  resolveMedicalStatusToggle,
   mergeHealthVisitRecords,
   normalizeHealthVisitRecord,
   normalizeMedicationList,
@@ -68,18 +69,33 @@ describe('病例合并 · 列表', () => {
   })
 })
 
-describe('病例合并 · 字段对照表', () => {
-  it('就诊：诊断结果 / 就诊日期 / 处理方式，有备注', () => {
+describe('病例合并 · 字段对照表（2026-10-02 精简版）', () => {
+  it('就诊：日期 / 症状 / 医生诊断 / 医嘱 / 用药 / 这次做的检查 / 化验数据 / 体征 / 补充说明', () => {
     const config = getHealthVisitFieldConfig('medical')
 
     expect(config.dateKey).toBe('visitDate')
     expect(config.primaryKey).toBe('diagnosis')
-    expect(config.primaryLabel).toBe('诊断结果')
+    // 2026-10-02 老板定稿：「医生怎么说」改回专业说法「医生诊断」
+    expect(config.primaryLabel).toBe('医生诊断')
+    expect(config.complaintKey).toBe('chiefComplaint')
+    // 2026-10-02 老板：文案就叫「症状」
+    expect(config.complaintLabel).toBe('症状')
+    // 「处理与提醒」收窄成「医嘱（回家注意）」—— 它原来装着治疗意见 + 检查清单 + 医嘱
     expect(config.adviceKey).toBe('treatment')
+    expect(config.adviceLabel).toBe('医嘱')
+    expect(config.medicationKey).toBe('medications')
+    // 新增两栏：这次做的检查、体征
+    expect(config.examsKey).toBe('exams')
+    expect(config.examsLabel).toBe('这次做的检查')
+    expect(config.vitalsKey).toBe('vitals')
+    expect(config.vitalsLabel).toBe('体征')
+    expect(config.labValuesKey).toBe('labValues')
+    // 「其它想说的」改名「补充说明」（老板：更专业一点）
     expect(config.notesKey).toBe('notes')
+    expect(config.notesLabel).toBe('补充说明')
   })
 
-  it('体检：检查结论 / 体检日期 / 医生建议 / 备注', () => {
+  it('体检：日期 / 体检类型 / 检查结论 / 医生建议 / 补充说明', () => {
     const config = getHealthVisitFieldConfig('checkup')
 
     expect(config.dateKey).toBe('checkupDate')
@@ -87,39 +103,80 @@ describe('病例合并 · 字段对照表', () => {
     // 体检没有"诊断"：措辞上不能让家长以为体检也能下诊断
     expect(config.primaryLabel).toBe('检查结论')
     expect(config.adviceKey).toBe('recommendations')
+    expect(config.adviceLabel).toBe('医生建议')
     // 2026-10-01（第五期）给体检表加了 notes 列，
     // 此前"就诊能写备注、体检不能"说不通
     expect(config.notesKey).toBe('notes')
+    // 体检类型从「更多」里提出来（它同时是卡片标题，藏在折叠里会显示错）
+    expect(config.checkupTypeKey).toBe('checkupType')
   })
 
-  it('次要字段按类型分开：症状与用药只给就诊，体检类型只给体检', () => {
+  it('类型独有的字段用 null 表达：症状与用药只给就诊，体检类型只给体检', () => {
     const medical = getHealthVisitFieldConfig('medical')
     const checkup = getHealthVisitFieldConfig('checkup')
 
-    expect(medical.showsComplaint).toBe(true)
-    expect(medical.showsMedications).toBe(true)
-    expect(medical.showsCheckupType).toBe(false)
+    expect(medical.complaintKey).toBe('chiefComplaint')
+    expect(medical.medicationKey).toBe('medications')
+    expect(medical.checkupTypeKey).toBeNull()
+    expect(medical.followUpKey).toBe('followUpDate')
 
-    expect(checkup.showsComplaint).toBe(false)
-    expect(checkup.showsMedications).toBe(false)
-    expect(checkup.showsCheckupType).toBe(true)
+    expect(checkup.complaintKey).toBeNull()
+    expect(checkup.medicationKey).toBeNull()
+    expect(checkup.checkupTypeKey).toBe('checkupType')
+    expect(checkup.followUpKey).toBeNull()
+  })
+
+  it('状态不再出现在字段对照表里（老板 2026-10-02：这个字段不要了）', () => {
+    const config = getHealthVisitFieldConfig('medical') as Record<string, unknown>
+
+    expect('showsStatus' in config).toBe(false)
+    expect(Object.values(config)).not.toContain('status')
   })
 })
 
 describe('病例合并 · 校验', () => {
-  it('只有「日期」和「诊断结果」是必填的内容字段', () => {
+  it('必填只剩日期 +（症状 或 医生诊断）至少一个', () => {
     expect(getHealthVisitValidationError('medical', {})).toBe('请选择就诊日期')
-    expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01' })).toBe('请填写诊断结果')
+    expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01' }))
+      .toBe('请至少填写「症状」或「医生诊断」，或上传报告原件')
+    // 只填症状（拿不到诊断）也能存
+    expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', chiefComplaint: '呕吐' })).toBeNull()
+    // 只填诊断也能存
     expect(getHealthVisitValidationError('medical', { visitDate: '2026-05-01', diagnosis: '胃炎' })).toBeNull()
   })
 
-  it('体检的提示语用「检查结论」而不是「诊断结果」', () => {
-    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' })).toBe('请填写检查结论')
+  it('体检也放宽成两个内容字段填一个：检查结论 / 医生建议', () => {
+    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' }))
+      .toBe('请至少填写「检查结论」或「医生建议」，或上传报告原件')
+    // 只写了几句医嘱也能存（有的报告只给建议）
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      recommendations: '半年后复查',
+    })).toBeNull()
+    // 只写了结论当然也能存
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      findings: '血常规未见异常',
+    })).toBeNull()
   })
 
-  it('症状、用药、状态都不拦着保存（老板第 3 条：病史只保留一个诊断结果）', () => {
+  it('用药、医嘱、这次做的检查、体征、补充说明都不拦着保存（想记多少记多少）', () => {
     const record = { visitDate: '2026-05-01', diagnosis: '胃炎' }
     expect(getHealthVisitValidationError('medical', record)).toBeNull()
+  })
+
+  it('没写内容但传了原件（X 光片/超声）也能存 —— 日期 + 附件就是一条合法记录', () => {
+    expect(getHealthVisitValidationError('checkup', {
+      checkupDate: '2026-05-01',
+      attachments: ['https://img.sevenkitchen.cloud/medical-reports/temp/x.jpg'],
+    })).toBeNull()
+    expect(getHealthVisitValidationError('medical', {
+      visitDate: '2026-05-01',
+      attachments: ['https://img.sevenkitchen.cloud/medical-reports/temp/y.jpg'],
+    })).toBeNull()
+    // 既没内容又没附件才算缺信息
+    expect(getHealthVisitValidationError('checkup', { checkupDate: '2026-05-01' }))
+      .toContain('或上传报告原件')
   })
 
   it('新建的就诊草稿带上「待确认」状态', () => {
@@ -228,27 +285,78 @@ describe('病例合并 · 用药与摘要', () => {
     expect(record.notes).toBe('医生让半年后复查')
   })
 
-  it('摘要标题用诊断结果 / 检查结论，明细带日期与类型特征', () => {
+  it('摘要标题＝医生诊断，日期与医嘱都不再进摘要（2026-10-02 老板第二次实测）', () => {
     const medical = buildHealthVisitSummary('medical', {
       visitDate: '2026-05-01',
+      chiefComplaint: '感觉在家不够活泼了，肚子有点硬，嘴毛有些变红了',
       diagnosis: '急性胃炎',
-      status: 'PENDING_CONFIRMATION',
+      treatment: '回家后注意：清淡饮食，按时吃药，定期复查',
     })
+    // 标题：诊断（原来放的是主诉，长长一句看不出这条是什么病）
     expect(medical.title).toBe('急性胃炎')
-    expect(medical.detail).toContain('2026-05-01')
+    // 摘要行：日期挪去卡片头部了、医嘱不再重复（老板："信息太多"）
+    expect(medical.detail).not.toContain('2026-05-01')
+    expect(medical.detail).not.toContain('清淡饮食')
 
+    // 诊断太长（识别把化验数值堆进旧记录）时退回症状，不当数字墙标题
+    expect(buildHealthVisitSummary('medical', {
+      visitDate: '2026-05-01',
+      chiefComplaint: '呕吐两次',
+      diagnosis: '血常规\nWBC 10.2 x 10^9/L\nRBC 7.99 x 10^12/L',
+    }).title).toBe('呕吐两次')
+
+    // 体检：标题是检查结论
     const checkup = buildHealthVisitSummary('checkup', {
       checkupDate: '2026-05-02',
       findings: '未见异常',
       checkupType: 'ROUTINE',
     })
     expect(checkup.title).toBe('未见异常')
-    expect(checkup.detail).toContain('常规体检')
+    expect(checkup.detail).not.toContain('2026-05-02')
+
+    // 没填结论时退回"识别出来的体检类型"（例如拍报告识别成老年健康检查）
+    expect(buildHealthVisitSummary('checkup', {
+      checkupDate: '2026-05-02',
+      checkupType: 'SENIOR_WELLNESS',
+    }).title).toBe('老年健康检查')
   })
 
-  it('没填结论时标题给个明确的占位', () => {
-    expect(buildHealthVisitSummary('medical', {}).title).toBe('未填写诊断结果')
-    expect(buildHealthVisitSummary('checkup', {}).title).toBe('未填写检查结论')
+  it('摘要行只说"这条里有什么"：含化验数据 / 含 N 个附件', () => {
+    const summary = buildHealthVisitSummary('medical', {
+      visitDate: '2026-02-11',
+      diagnosis: '胆汁淤积',
+      labValues: '生化\nALT 144 U/L（偏高）',
+      attachments: ['a.jpg', 'b.jpg'],
+    })
+
+    expect(summary.detail).toBe('含化验数据 · 含 2 个附件')
+  })
+
+  it('摘要里不再显示状态（状态已不在表单里问，家长也改不了）', () => {
+    const medical = buildHealthVisitSummary('medical', {
+      visitDate: '2026-05-01',
+      chiefComplaint: '呕吐',
+      status: 'PENDING_CONFIRMATION',
+    })
+
+    expect(medical.detail).not.toContain('待确认')
+  })
+
+  it('什么都没填的草稿标题给个中性占位（就诊记录 / 体检记录）', () => {
+    expect(buildHealthVisitSummary('medical', {}).title).toBe('就诊记录')
+    expect(buildHealthVisitSummary('checkup', {}).title).toBe('体检记录')
+  })
+
+  // 2026-10-02 老板把「这条现在的情况」从表单里去掉了（信息太多），
+  // 但底层能力保留：库里已有的状态不变，只是界面上不再让家长改。
+  it('「已经好了」的底层切换逻辑仍在（表单里已不展示）', () => {
+    expect(resolveMedicalStatusToggle({ status: 'PENDING_CONFIRMATION' }).status).toBe('RECOVERED')
+    expect(resolveMedicalStatusToggle({ status: 'TREATING' }).status).toBe('RECOVERED')
+    expect(resolveMedicalStatusToggle({ status: 'RECOVERED' }).status).toBe('TREATING')
+    expect(resolveMedicalStatusToggle(null).status).toBe('RECOVERED')
+    // 两句话都要说清后果，不能只写个"已康复"
+    expect(resolveMedicalStatusToggle({}).hint).toContain('AI 分析')
+    expect(resolveMedicalStatusToggle({ status: 'RECOVERED' }).hint).toContain('不再算进')
   })
 
   it('日期取值跟着类型走', () => {

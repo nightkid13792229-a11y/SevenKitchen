@@ -189,13 +189,14 @@ export class HealthUploadController {
         documentType: {
           type: 'string',
           enum: [
+            'AUTO',
             'ALLERGY_REPORT',
             'CHECKUP_REPORT',
             'VACCINE_BOOK',
             'MEDICAL_RECORD',
           ],
           description:
-            '识别哪类文档；缺省按过敏报告处理（保持旧行为）。2026-10-01 第六期从过敏报告扩到体检报告与疫苗本，再加病历。',
+            '识别哪类文档；缺省按过敏报告处理（保持旧行为）。2026-10-01 第六期从过敏报告扩到体检报告与疫苗本，再加病历。AUTO = 由系统判断文档类型（2026-10-01）：不指定类型，由 AI 判断后按对应字段结构返回，返回结果里的 documentType 是判断出的真实类型。',
         },
         imageUrl: {
           type: 'string',

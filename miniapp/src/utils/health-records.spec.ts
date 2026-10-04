@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  resolveHealthScanErrorMessage,
   buildDogHealthStateSnapshot,
   buildDietRemindersPayload,
   buildHealthRecordFocusIdentity,
@@ -38,6 +39,8 @@ import {
   resolveHealthAttachmentFileSizeError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  mergeScannedReportDrafts,
+  resolveScannedDocumentType,
   shouldDiscardDogHealthProfileResponse,
   shouldUseRemoteHealthRecordSync,
   writeHealthRecordAttachmentCache,
@@ -753,7 +756,8 @@ describe('health-records', () => {
 
   it('builds a clearer attachment hint with preview and size guidance', () => {
     expect(buildHealthAttachmentFieldHint()).toBe(
-      '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。',
+      // 2026-10-02 精简：六种格式全列出来是表单上最长的一行字，家长读不完
+      '图片或 PDF，单个不超过 10MB',
     )
   })
 
@@ -800,7 +804,7 @@ describe('health-records', () => {
   })
 
   it('uses clearer reset labels for saved and unsaved records', () => {
-    expect(resolveHealthRecordSecondaryActionText(false, true)).toBe('取消新增')
+    expect(resolveHealthRecordSecondaryActionText(false, true)).toBe('取消新增记录')
     expect(resolveHealthRecordSecondaryActionText(true, true)).toBe('撤销修改')
     expect(resolveHealthRecordSecondaryActionText(true, false)).toBeNull()
   })
@@ -955,5 +959,196 @@ describe('health-records', () => {
       title: '鸡肉',
       detail: '食用后腹泻',
     })
+  })
+})
+
+/**
+ * 识别失败文案（2026-10-01）。
+ *
+ * 病根：识别走腾讯云 OCR，它自己的报错会被后端原样抛出来 ——
+ * 服务没开通时是「服务未开通，请前往控制台开通相应服务」，
+ * 弹给顾客只会让人一头雾水。这里锁住"基础设施类报错必须换成顾客能懂的话"。
+ */
+describe('识别失败文案', () => {
+  it('腾讯云"服务未开通"换成能懂的话，且给出下一步', () => {
+    expect(
+      resolveHealthScanErrorMessage('服务未开通，请前往控制台开通相应服务'),
+    ).toContain('手动填写')
+    expect(resolveHealthScanErrorMessage('FailedOperation.UnOpenError')).toContain('手动填写')
+  })
+
+  it('密钥没配 / 鉴权失败同样归到"功能还没准备好"', () => {
+    expect(resolveHealthScanErrorMessage('腾讯云 OCR 密钥未配置')).toContain('正在开通中')
+    expect(resolveHealthScanErrorMessage('AuthFailure.SignatureFailure')).toContain('正在开通中')
+  })
+
+  it('频率超限让顾客稍后再试', () => {
+    expect(resolveHealthScanErrorMessage('RequestLimitExceeded')).toContain('稍等')
+  })
+
+  it('超时提示可以再试一次', () => {
+    expect(resolveHealthScanErrorMessage('request timeout')).toContain('再试一次')
+  })
+
+  it('后端本来就说给顾客听的话照原样显示', () => {
+    const friendly = '没识别到内容，请换一张更清晰的图片'
+    expect(resolveHealthScanErrorMessage(friendly)).toBe(friendly)
+  })
+
+  it('没有报错信息时给一句兜底，而不是空字符串', () => {
+    expect(resolveHealthScanErrorMessage('')).toContain('手工填写')
+    expect(resolveHealthScanErrorMessage(undefined)).toContain('手工填写')
+  })
+})
+
+/**
+ * 一次选多张图 → 合成一条记录（2026-10-01 第九期）。
+ *
+ * 老板定的规则：一次选中的多张图当成同一份资料。
+ * 一份 3 页的体检报告 = 1 条记录 + 3 张原图，不是 3 条各说一半的记录。
+ * 疫苗本不走这里（一张本子是好几针，合并会把几针并成一针）。
+ */
+describe('多页报告合成一条记录', () => {
+  const IMG_1 = 'https://img.sevenkitchen.cloud/health/page-1.jpg'
+  const IMG_2 = 'https://img.sevenkitchen.cloud/health/page-2.jpg'
+  const IMG_3 = 'https://img.sevenkitchen.cloud/health/page-3.jpg'
+
+  it('没有草稿时返回空数组，不炸', () => {
+    expect(mergeScannedReportDrafts([])).toEqual([])
+    expect(mergeScannedReportDrafts(null)).toEqual([])
+    expect(mergeScannedReportDrafts(undefined)).toEqual([])
+  })
+
+  it('只有一张时原样返回（也补上 attachments 字段）', () => {
+    const merged = mergeScannedReportDrafts([
+      { checkupDate: '2026-09-01', findings: '未见异常', attachments: [IMG_1] },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].findings).toBe('未见异常')
+    expect(merged[0].attachments).toEqual([IMG_1])
+  })
+
+  it('三页体检报告 → 一条记录，三段内容各归各位', () => {
+    const merged = mergeScannedReportDrafts([
+      { checkupDate: '2026-09-01', checkupType: 'ROUTINE', findings: '血常规正常', attachments: [IMG_1] },
+      { checkupDate: '', checkupType: '', findings: '生化轻度升高', recommendations: '两周后复查', attachments: [IMG_2] },
+      { checkupDate: '', checkupType: '', notes: '医生说注意饮水', attachments: [IMG_3] },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].checkupDate).toBe('2026-09-01')
+    expect(merged[0].checkupType).toBe('ROUTINE')
+    expect(merged[0].findings).toBe('血常规正常\n生化轻度升高')
+    expect(merged[0].recommendations).toBe('两周后复查')
+    expect(merged[0].notes).toBe('医生说注意饮水')
+  })
+
+  it('三页的原图全部留下，按页序、不重复', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: 'A', attachments: [IMG_1] },
+      { findings: 'B', attachments: [IMG_2] },
+      // 同一页被选两次（或两页指向同一张图）只留一份
+      { findings: 'C', attachments: [IMG_2, IMG_3] },
+    ])
+
+    expect(merged[0].attachments).toEqual([IMG_1, IMG_2, IMG_3])
+  })
+
+  it('日期、类型、兽医这类"只有一个答案"的字段以第一页为准，不被后面的页覆盖', () => {
+    const merged = mergeScannedReportDrafts([
+      { visitDate: '2026-09-01', veterinarian: '王医生', diagnosis: '肠胃炎', attachments: [] },
+      { visitDate: '2026-09-02', veterinarian: '李医生', diagnosis: '', attachments: [] },
+    ])
+
+    expect(merged[0].visitDate).toBe('2026-09-01')
+    expect(merged[0].veterinarian).toBe('王医生')
+  })
+
+  it('第一页没读到的字段用后面的页补上', () => {
+    const merged = mergeScannedReportDrafts([
+      { visitDate: '', diagnosis: '', chiefComplaint: '呕吐', attachments: [] },
+      { visitDate: '2026-09-03', diagnosis: '急性胃炎', chiefComplaint: '', attachments: [] },
+    ])
+
+    expect(merged[0].visitDate).toBe('2026-09-03')
+    expect(merged[0].diagnosis).toBe('急性胃炎')
+    expect(merged[0].chiefComplaint).toBe('呕吐')
+  })
+
+  it('两页写着同一句话时不重复抄（双面扫描、复印件很常见）', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: '未见明显异常', attachments: [] },
+      { findings: '未见明显异常', attachments: [] },
+    ])
+
+    expect(merged[0].findings).toBe('未见明显异常')
+  })
+
+  it('用药清单去重合并（数组字段）', () => {
+    const merged = mergeScannedReportDrafts([
+      { medications: ['阿莫西林'], attachments: [] },
+      { medications: ['阿莫西林', '益生菌'], attachments: [] },
+    ])
+
+    expect(merged[0].medications).toEqual(['阿莫西林', '益生菌'])
+  })
+
+  it('不制造空值：缺少的字段留空数组/空串，不返回 undefined', () => {
+    const merged = mergeScannedReportDrafts([
+      { findings: 'A', attachments: [] },
+      { findings: 'B', attachments: [] },
+    ])
+
+    expect(Array.isArray(merged[0].attachments)).toBe(true)
+    expect(merged[0].attachments).toEqual([])
+  })
+
+  it('不丢掉身份类字段（状态、本地 key）', () => {
+    const merged = mergeScannedReportDrafts([
+      { status: 'PENDING_CONFIRMATION', findings: 'A', attachments: [] },
+      { findings: 'B', attachments: [] },
+    ])
+
+    expect(merged[0].status).toBe('PENDING_CONFIRMATION')
+  })
+})
+
+/**
+ * 多张图各自判了类型 → 按"多数页"定这份资料属于哪一类（2026-10-01 第九期）。
+ *
+ * 原来取最后一张的判定：3 页体检报告里只要最后一页被读成"病历"，
+ * 整份资料就变成病历。改成按页投票，结果稳定、也解释得通。
+ */
+describe('多页资料的文档类型（按多数页定）', () => {
+  it('三页里两页判成体检 → 这份是体检', () => {
+    expect(
+      resolveScannedDocumentType(['CHECKUP_REPORT', 'MEDICAL_RECORD', 'CHECKUP_REPORT'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+  })
+
+  it('票数相同时以先出现的那类为准（页码顺序，结果稳定）', () => {
+    expect(
+      resolveScannedDocumentType(['CHECKUP_REPORT', 'MEDICAL_RECORD'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+  })
+
+  it('一张都没判出来时用兜底类型', () => {
+    expect(resolveScannedDocumentType([], 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+    expect(resolveScannedDocumentType(null, 'CHECKUP_REPORT')).toBe('CHECKUP_REPORT')
+    expect(resolveScannedDocumentType(undefined, 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+  })
+
+  it('AUTO、空值、大小写不一的判定都不算票', () => {
+    expect(
+      resolveScannedDocumentType(['AUTO', '', null, undefined, 'checkup_report'], 'MEDICAL_RECORD'),
+    ).toBe('CHECKUP_REPORT')
+    expect(resolveScannedDocumentType(['AUTO', '  '], 'MEDICAL_RECORD')).toBe('MEDICAL_RECORD')
+  })
+
+  it('疫苗本占多数时按疫苗本走（前端据此不做合并）', () => {
+    expect(
+      resolveScannedDocumentType(['VACCINE_BOOK', 'VACCINE_BOOK', 'MEDICAL_RECORD'], 'MEDICAL_RECORD'),
+    ).toBe('VACCINE_BOOK')
   })
 })

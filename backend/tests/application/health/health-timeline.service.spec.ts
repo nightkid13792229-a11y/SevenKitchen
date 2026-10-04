@@ -188,24 +188,27 @@ describe('HealthTimelineService', () => {
       expect(result.total).toBe(0)
     })
 
-    it('饮食偏好的变更进时间线（第五期补上：此前没有"什么时候改的"这个事实）', async () => {
+    it('饮食偏好的变更**不再**进时间线（2026-10-02：饮食已不属于健康管理）', async () => {
       const prisma = createPrisma()
-      prisma.dogDietPreferenceChange.findMany = jest.fn().mockResolvedValue([
-        {
-          id: 'd1',
-          kind: 'LIKED',
-          foodName: '鸡胸肉',
-          action: 'ADDED',
-          changedAt: new Date('2026-09-20T00:00:00.000Z'),
-        },
-      ])
+      prisma.dogDietPreferenceChange = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'd1',
+            dogId: DOG_ID,
+            kind: 'LIKED',
+            action: 'ADDED',
+            foodName: '南瓜',
+            changedAt: new Date('2026-07-01T00:00:00.000Z'),
+          },
+        ]),
+      }
+
       const service = new HealthTimelineService(prisma)
       const result = await service.getTimeline(CUSTOMER_ID, DOG_ID)
 
-      const dietEvent = result.events.find((event) => event.type === 'diet')
-      expect(dietEvent).toBeDefined()
-      expect(dietEvent!.title).toContain('鸡胸肉')
-      expect(dietEvent!.detail).toBe('爱吃')
+      expect(result.events.some((event) => event.type === ('diet' as never))).toBe(false)
+      // 变更历史本身仍在库里（定制食谱那边在用），只是不再出现在健康记录里
+      expect(result.events.map((event) => event.id)).not.toContain('d1')
     })
 
     it('没有饮食变更时时间线里也没有饮食事件', async () => {
@@ -230,6 +233,8 @@ describe('HealthTimelineService', () => {
           followUpDate: new Date('2026-11-01T00:00:00.000Z'),
           attachments: ['a.jpg'],
           chiefComplaint: '呕吐',
+          medications: ['处方粮', '胃复安'],
+          notes: '换粮后好转',
         },
         {
           id: 'm-done',
@@ -250,6 +255,7 @@ describe('HealthTimelineService', () => {
           checkupType: 'SENIOR_WELLNESS',
           findings: '血常规未见异常',
           recommendations: '半年后复查',
+          notes: '当天没吃饭',
           attachments: ['b.jpg'],
         },
       ])
@@ -300,6 +306,26 @@ describe('HealthTimelineService', () => {
         'm-open',
         'm-done',
       ])
+    })
+
+    it('用药、主要问题、其它想说的都交给 AI（2026-10-02 补的接线）', async () => {
+      const service = new HealthTimelineService(buildSummaryPrisma())
+      const summary = await service.getVisitSummary(CUSTOMER_ID, DOG_ID)
+
+      // 用药：知识库把"在服药物"列为必须做进阶评估的项目，
+      // 顾客一直在填、系统一直在存，此前 AI 从来没拿到过
+      expect(summary.ongoingConditions[0].medications).toEqual(['处方粮', '胃复安'])
+      // 主要问题：原来只有饮食标签派生读它，AI 分析看不到
+      expect(summary.ongoingConditions[0].chiefComplaint).toBe('呕吐')
+      // 其它想说的（原「备注」）：改名之后接进 AI，不再是没人读的字段
+      expect(summary.ongoingConditions[0].notes).toBe('换粮后好转')
+      expect(summary.recentCheckups[0].notes).toBe('当天没吃饭')
+
+      // 最近就诊里同样带齐
+      const visit = summary.recentVisits.find((item) => item.id === 'm-open')
+      expect(visit?.chiefComplaint).toBe('呕吐')
+      expect(visit?.medications).toEqual(['处方粮', '胃复安'])
+      expect(visit?.notes).toBe('换粮后好转')
     })
 
     it('体检类型与附件数带出来，方便医生判断要不要看报告', async () => {
@@ -369,7 +395,9 @@ describe('HealthTimelineService', () => {
     })
 
     it('病史状态翻成中文', () => {
-      expect(formatMedicalStatus('PENDING_CONFIRMATION')).toBe('待确认')
+      // 2026-10-02：表单不再问状态，新记录都停在 PENDING_CONFIRMATION，
+      // 所以措辞必须说清"只是家长没标注"，不能被读成"病情待确认"（= 还在生病）
+      expect(formatMedicalStatus('PENDING_CONFIRMATION')).toBe('未标注结果')
       expect(formatMedicalStatus('CHRONIC')).toBe('慢性')
     })
 

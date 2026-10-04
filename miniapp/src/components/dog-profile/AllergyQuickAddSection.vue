@@ -1,5 +1,10 @@
 <template>
-  <view class="quick-add">
+  <!-- 新增块关闭、也没有待确认的候选时不渲染根容器 ——
+       否则会留一个空壳占掉卡片间距（2026-10-03 与体重同一类问题）。 -->
+  <view v-if="showAddEntry || candidates.length > 0" class="quick-add">
+    <!-- 新增入口（一点即选 / 手输 / 上传报告）只在引导入口选到过敏时显示；
+         候选确认卡不受影响（那是确认环节）。老板 2026-10-02：入口收敛。 -->
+    <template v-if="showAddEntry">
     <view class="quick-add__header">
       <text class="quick-add__title">快速添加过敏原</text>
       <text class="quick-add__count">已记 {{ recordedAllergens.length }} 项</text>
@@ -52,6 +57,8 @@
         @tap="pickHealthReport"
       >{{ extracting ? '识别中…' : '上传报告' }}</button>
     </view>
+
+    </template>
 
     <view v-if="candidates.length > 0" class="candidate-card">
       <text class="candidate-card__title">识别到以下过敏原，请确认</text>
@@ -145,8 +152,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
+import {
+  SCAN_IMAGE_SIZE_TYPE,
+  confirmBlurryScanImages,
+  findBlurryScanImages,
+  prepareScanImages,
+} from '../../utils/scan-image'
 
 const props = defineProps<{
+  /**
+   * 是否显示"新增"这部分（一点即选 / 手输 / 上传报告）。
+   *
+   * 2026-10-02 老板要求收敛新增入口：标签页只做结果呈现与手动编辑，
+   * 2026-10-03 起常开：底部「新增记录」直接调起 AI 识别，这张卡就是手填入口。
+   * 识别结果的候选卡不受这个开关影响（那是确认环节，不是入口）。
+   */
+  showAddEntry?: boolean
   dogId: string
   /** 档案里已经记过的过敏原，用于去重与「已记」标记 */
   recordedAllergens?: string[]
@@ -220,13 +241,24 @@ const pickedCandidates = ref<string[]>([])
 const warnings = ref<string[]>([])
 
 /**
- * 报告上下文（2026-10-04 第二期）。
+ * 报告上下文（2026-10-04 第二期 + 第五期）。
  *
  * 改造前这几样东西**一样都没留**：图片上传完只取 url 去识别，
  * 识别完连 url 都丢掉，记录里 attachments 填空数组 ——
- * 顾客拍的报告再也找不回来。现在把它们留住，确认时落成一份报告。
+ * 顾客拍的报告再也找不回来。
+ *
+ * 现在：上传的原图全部留住（一份报告常常不止一页），
+ * 确认时落成一份 AllergyReport；识别出的检测方式 / 日期 / 各项等级
+ * 作为这份报告的属性一起存下来。
  */
 const reportImageUrl = ref('')
+/**
+ * 这份报告的**全部原图**（2026-10-04 多页支持）。
+ *
+ * main 在 2026-10-03 把识别扩到了 9 张，但只保留第一张当附件 ——
+ * 一份三页的报告，第二三页传完就丢。这里改成全部留住。
+ */
+const reportImageUrls = ref<string[]>([])
 const reportOcrText = ref('')
 const reportTestDate = ref('')
 const reportTestMethod = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN')
@@ -235,7 +267,7 @@ const reportTestMethod = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' |
  * 报告上写的结论等级，顾客选一次、整批套用。
  *
  * 为什么让顾客选、而不是让 AI 判断：
- *   知识库 COMMON_RULES 明令 AI **不得判断疾病名称、严重程度、
+ *   COMMON_RULES 明令 AI **不得判断疾病名称、严重程度、
  *   过敏类型或是否需要治疗**。AI 只负责"把纸上的字搬进表单"。
  *   "这些是不是阳性"是报告上的事实，由看得见报告的顾客来确认。
  */
@@ -245,7 +277,7 @@ const reportLevel = ref<'POSITIVE' | 'WEAK_POSITIVE' | 'UNKNOWN'>('UNKNOWN')
  * 每一项候选各自的结论等级（2026-10-04 第五期）。
  *
  * 报告上不同食物常常等级不同（鸡肉阳性、小麦弱阳性），
- * AI 读出来就存在这里；顾客在确认卡片上看到的默认选择来自它。
+ * AI 读出来就存在这里；整批等级一致时选择器会预选上，
  * 顾客改过之后以顾客的选择为准 —— 他手上拿着报告，比 AI 更可信。
  */
 const candidateLevels = ref<Record<string, string>>({})
@@ -287,11 +319,13 @@ function splitAllergenText(raw: string) {
     .filter(Boolean)
 }
 
-async function createAllergyRecord(allergen: string) {
+async function createAllergyRecord(allergen: string, attachmentUrl = '') {
   const res: any = await dogApi.healthRecords.allergy.create(props.dogId, {
     allergen,
     notes: null,
-    attachments: [],
+    // 2026-10-01：从检测报告点选来的过敏原，把报告原图一并留档 ——
+    // 识别只是抄字，报告原件才是凭证（顾客要回看、医生要看原件）。
+    attachments: attachmentUrl ? [attachmentUrl] : [],
   })
 
   if (res?.code !== 0) {
@@ -387,6 +421,7 @@ function resetReportState() {
   candidateLevels.value = {}
   // 报告上下文一并清掉（原件地址留着会误挂到下一批候选上）
   reportImageUrl.value = ''
+  reportImageUrls.value = []
   reportOcrText.value = ''
   reportTestDate.value = ''
   reportTestMethod.value = 'UNKNOWN'
@@ -411,79 +446,145 @@ function onReportDateChange(event: any) {
 async function pickHealthReport() {
   if (extracting.value) return
 
-  let filePath = ''
+  // 2026-10-03：一次可选多张（一份报告常常不止一页）。
+  // 每页各自识别，过敏原**并起来去重**给顾客确认；页面报错互不牵连。
+  let filePaths: string[] = []
   try {
     const chosen: any = await new Promise((resolve, reject) => {
       uni.chooseImage({
-        count: 1,
-        sizeType: ['compressed'],
+        count: 9,
+        // 拿原图：识别准不准取决于给模型多少像素（见 utils/scan-image.ts）
+        sizeType: SCAN_IMAGE_SIZE_TYPE,
         sourceType: ['album', 'camera'],
         success: resolve,
         fail: reject,
       })
     })
-    filePath = chosen?.tempFilePaths?.[0] || ''
+    filePaths = (Array.isArray(chosen?.tempFilePaths) ? chosen.tempFilePaths : []).filter(Boolean)
   } catch {
     // 顾客取消选图：静默返回，不算失败
     return
   }
 
-  if (!filePath) return
+  if (filePaths.length === 0) return
+
+  // 原图太大，先压到"识别用"的尺寸再上传（2026-10-03）
+  uni.showLoading({ title: '处理中…', mask: true })
+  try {
+    filePaths = await prepareScanImages(filePaths)
+  } finally {
+    uni.hideLoading()
+  }
+  if (filePaths.length === 0) return
+
+  // 图太小就先拦一下：图糊的时候模型会编一个"看起来合理"的数字（见 utils/scan-image.ts）
+  const blurry = await findBlurryScanImages(filePaths)
+  if (blurry.length > 0) {
+    const goOn = await confirmBlurryScanImages(blurry)
+    if (!goOn) return
+  }
 
   extracting.value = true
   uni.showLoading({ title: '识别中…' })
 
   try {
-    const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath)
-    const imageUrl = String(uploaded?.url || '').trim()
-    if (!imageUrl) {
-      throw new Error('上传失败，请重试')
+    const collected: string[] = []
+    const collectedWarnings: string[] = []
+    // 2026-10-04：跨页合并的额外信息 —— 等级 / 检测方式 / 日期 / 识别原文
+    const collectedLevels: Record<string, string> = {}
+    const collectedOcr: string[] = []
+    const collectedImageUrls: string[] = []
+    let collectedMethod: 'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN' = 'UNKNOWN'
+    let collectedTestDate = ''
+
+    for (const [position, filePath] of filePaths.entries()) {
+      if (filePaths.length > 1) {
+        uni.showLoading({ title: `识别中 ${position + 1}/${filePaths.length}…`, mask: true })
+      }
+
+      const uploaded = await dogApi.uploadHealthAttachment('allergy', filePath)
+      const imageUrl = String(uploaded?.url || '').trim()
+      if (!imageUrl) {
+        throw new Error('上传失败，请重试')
+      }
+
+      // 每一页原图都留住（一份报告常常不止一页）。
+      // main 在 2026-10-03 扩到 9 张时只保留了第一张当附件，
+      // 第二页之后传完就丢 —— 这里改成全部留下。
+      collectedImageUrls.push(imageUrl)
+      if (position === 0) {
+        reportImageUrl.value = imageUrl
+      }
+
+      const res: any = await dogApi.extractHealthReport({ imageUrl })
+      const data = res?.data || {}
+
+      // 优先用 drafts（带每项结论等级）；退回旧的 allergies 数组。
+      // 提示词换了不代表模型一定照做，两条路都得接住 —— 丢数据的代价太大。
+      const drafts = Array.isArray(data.drafts) ? data.drafts : []
+      const fromDrafts = drafts
+        .map((item: any) => ({
+          allergen: String(item?.allergen || '').trim(),
+          level: String(item?.level || '').toUpperCase(),
+        }))
+        .filter((item: any) => Boolean(item.allergen))
+
+      if (fromDrafts.length > 0) {
+        for (const item of fromDrafts) {
+          collected.push(item.allergen)
+          // 跨页同名时保留"更明确"的那个等级（UNKNOWN 不覆盖已知等级）
+          const existing = collectedLevels[item.allergen]
+          if (!existing || (existing === 'UNKNOWN' && item.level !== 'UNKNOWN')) {
+            collectedLevels[item.allergen] = item.level
+          }
+        }
+      } else if (Array.isArray(data.allergies)) {
+        collected.push(
+          ...data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim()),
+        )
+      }
+
+      if (Array.isArray(data.warnings)) {
+        collectedWarnings.push(...data.warnings)
+      }
+
+      // 检测方式 / 日期：照抄报告上写的，取第一个"读出来的"值
+      const meta = data.reportMeta || {}
+      const method = normalizeTestMethod(meta.testMethod)
+      if (collectedMethod === 'UNKNOWN' && method !== 'UNKNOWN') {
+        collectedMethod = method
+      }
+      const detectedDate = String(meta.testDate || '').trim()
+      if (!collectedTestDate && /^\d{4}-\d{2}-\d{2}$/.test(detectedDate)) {
+        collectedTestDate = detectedDate
+      }
+
+      const ocrText = String(data.ocrText || '').trim()
+      if (ocrText) {
+        collectedOcr.push(ocrText)
+      }
     }
 
-    const res: any = await dogApi.extractHealthReport({ imageUrl })
-    const data = res?.data || {}
+    // 把跨页收集到的东西写回报告上下文
+    reportImageUrls.value = collectedImageUrls
+    reportTestMethod.value = collectedMethod
+    reportTestDate.value = collectedTestDate
+    reportOcrText.value = collectedOcr.join('\n\n').slice(0, 20000)
 
-    // 2026-10-04 第二期：把原件地址留住（改造前这里直接丢掉了，
-    // 顾客拍的报告再也找不回来）。识别原文也留着，便于客服核对。
-    reportImageUrl.value = imageUrl
-    reportOcrText.value = String(data.ocrText || '')
+    candidates.value = Array.from(new Set(collected.map((item) => String(item).trim()))).filter(Boolean)
+    warnings.value = Array.from(new Set(collectedWarnings))
+    candidateLevels.value = collectedLevels
 
-    // 2026-10-04 第五期：报告上写的检测方式与日期也读出来，
-    // 先填进表单让顾客确认。**只是照抄**，系统不做可信度判断。
-    const meta = data.reportMeta || {}
-    reportTestMethod.value = normalizeTestMethod(meta.testMethod)
-    const detectedDate = String(meta.testDate || '').trim()
-    reportTestDate.value = /^\d{4}-\d{2}-\d{2}$/.test(detectedDate) ? detectedDate : ''
+    // 整批等级一致时把选择器预选上，顾客少点一次；
+    // 等级不齐就留 UNKNOWN，让顾客对着报告自己选 —— 不替他猜。
+    const levels = Array.from(
+      new Set(candidates.value.map((name) => collectedLevels[name] || 'UNKNOWN')),
+    )
+    reportLevel.value =
+      levels.length === 1 && REPORT_LEVEL_VALUES.includes(levels[0])
+        ? (levels[0] as typeof reportLevel.value)
+        : 'UNKNOWN'
 
-    // 候选：优先用 drafts（带每项的结论等级），退回旧的 allergies 数组。
-    // 提示词换了不代表模型一定照做，两条路都得接住 —— 丢数据的代价太大。
-    const drafts = Array.isArray(data.drafts) ? data.drafts : []
-    const fromDrafts = drafts
-      .map((item: any) => ({
-        allergen: String(item?.allergen || '').trim(),
-        level: String(item?.level || '').toUpperCase(),
-      }))
-      .filter((item: any) => Boolean(item.allergen))
-
-    if (fromDrafts.length > 0) {
-      candidates.value = fromDrafts.map((item: any) => item.allergen)
-      candidateLevels.value = Object.fromEntries(
-        fromDrafts.map((item: any) => [item.allergen, item.level]),
-      )
-      // 整批等级一致时直接把选择器也预选上，顾客少点一次
-      const levels = Array.from(new Set(fromDrafts.map((item: any) => item.level)))
-      reportLevel.value =
-        levels.length === 1 && REPORT_LEVEL_VALUES.includes(levels[0])
-          ? (levels[0] as typeof reportLevel.value)
-          : 'UNKNOWN'
-    } else {
-      candidates.value = Array.isArray(data.allergies)
-        ? data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim())
-        : []
-      candidateLevels.value = {}
-    }
-
-    warnings.value = Array.isArray(data.warnings) ? data.warnings : []
     // 候选一律先不选中，逐项由顾客点
     pickedCandidates.value = []
 
@@ -540,6 +641,8 @@ async function confirmCandidates() {
 
   saving.value = true
   let savedAsReport = false
+  // 原图在 resetReportState() 里会被清掉，先取出来 —— 报告实体要用全部页面
+  const sourceImageUrls = [...reportImageUrls.value]
 
   try {
     // 有原件才建报告；没有原件（理论上不会）就走下面的逐条兜底
@@ -548,11 +651,16 @@ async function confirmCandidates() {
         const res: any = await dogApi.allergyReports.create(props.dogId, {
           testDate: reportTestDate.value || null,
           testMethod: reportTestMethod.value,
-          attachments: [reportImageUrl.value],
+          // 一份报告常常不止一页，**全部原图**都留住
+          attachments: sourceImageUrls.length > 0 ? sourceImageUrls : undefined,
           ocrText: reportOcrText.value || null,
           results: targets.map(allergen => ({
             allergen,
-            level: reportLevel.value,
+            // 顾客在确认卡片上选的等级优先；
+            // 他没改的话用 AI 从报告里读出来的那一项
+            level: reportLevel.value !== 'UNKNOWN'
+              ? reportLevel.value
+              : (candidateLevels.value[allergen] || 'UNKNOWN'),
           })),
         })
         if (res?.code === 0) {
@@ -596,6 +704,12 @@ async function confirmCandidates() {
     duration: 2500,
   })
 }
+/**
+ * 对外入口（2026-10-02 引导流程要用）：直接调起"上传检测报告 + AI 识别"，
+ * 底部「新增记录」在过敏标签下会直接调起它，不用顾客自己找按钮。
+ */
+defineExpose({ pickHealthReport })
+
 </script>
 
 <style scoped>

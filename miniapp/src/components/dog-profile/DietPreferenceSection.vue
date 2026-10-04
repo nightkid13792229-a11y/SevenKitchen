@@ -53,7 +53,7 @@
           <text class="health-section__title">爱吃的</text>
           <text class="health-section__desc">会进推荐与配方，越具体越准。</text>
         </view>
-        <text class="health-section__count">{{ liked.length }} 项</text>
+        <text v-if="!embedded" class="health-section__count">{{ liked.length }} 项</text>
       </view>
 
       <view v-if="liked.length === 0" class="empty-line">
@@ -90,7 +90,7 @@
             这里只是口味。真正的过敏请记在「过敏」板块 —— 那是安全底线，两件事不能混。
           </text>
         </view>
-        <text class="health-section__count">{{ disliked.length }} 项</text>
+        <text v-if="!embedded" class="health-section__count">{{ disliked.length }} 项</text>
       </view>
 
       <view v-if="disliked.length === 0" class="empty-line">
@@ -171,7 +171,16 @@ interface HistoryItem {
   changedAt: string
 }
 
-const props = defineProps<{ dogId: string }>()
+const props = defineProps<{
+  dogId: string
+  /**
+   * 内嵌到健康管理页：隐藏两列清单右上角的数量（「4 项」）。
+   *
+   * 标题「爱吃的 / 不吃的」**保留** —— 这是两列不同的清单，
+   * 去掉名字顾客就分不清哪列是哪列了；数量是纯冗余，去掉。
+   */
+  embedded?: boolean
+}>()
 
 const liked = ref<PreferenceItem[]>([])
 const disliked = ref<PreferenceItem[]>([])

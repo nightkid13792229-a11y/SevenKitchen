@@ -277,3 +277,96 @@ describe('DietPreferenceService', () => {
     })
   })
 })
+
+/**
+ * 定制下单 → 回写饮食偏好到档案（2026-10-02 老板定）。
+ *
+ * 老板定了"饮食偏好只在定制食谱时填写"，健康管理页的编辑入口下线。
+ * 但下单时原来只把偏好存进订单、没有回写档案 ——
+ * AI 健康分析与营养师侧读到的口味就断源了。
+ */
+describe('定制下单 · 饮食偏好回写档案', () => {
+  const DOG_ID = 'dog-1';
+
+  function buildService() {
+    const prisma: any = {
+      dog: {
+        findUnique: jest.fn().mockResolvedValue({
+          preferredFoods: '鸡胸肉、南瓜',
+          pickyFoods: '胡萝卜',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      allergyRecord: { findFirst: jest.fn().mockResolvedValue({ id: 'a1' }) },
+      medicalRecord: { findFirst: jest.fn().mockResolvedValue({ id: 'm1' }) },
+      dogDietPreference: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      dogDietPreferenceChange: { create: jest.fn().mockResolvedValue({}) },
+    };
+
+    const service: any = Object.create(
+      require('../../../src/application/custom-recipe/custom-recipe.service')
+        .CustomRecipeService.prototype,
+    );
+    service.prisma = prisma;
+
+    return { service, prisma };
+  }
+
+  it('把订单里填的偏好并入档案（自由文本不覆盖旧内容）', async () => {
+    const { service, prisma } = buildService();
+
+    await service.syncToHealthProfile(DOG_ID, [], [], {
+      preferredIngredients: ['三文鱼', '鸡胸肉'],
+      dislikedIngredients: ['羊肉'],
+    });
+
+    const patch = prisma.dog.update.mock.calls[0][0].data;
+    // 已有的"鸡胸肉、南瓜"留着，新提的"三文鱼"接上，重复的"鸡胸肉"不重复写
+    expect(patch.preferredFoods).toBe('鸡胸肉、南瓜、三文鱼');
+    expect(patch.pickyFoods).toBe('胡萝卜、羊肉');
+  });
+
+  it('同时写结构化偏好 + 变更历史（营养师端在读）', async () => {
+    const { service, prisma } = buildService();
+
+    await service.syncToHealthProfile(DOG_ID, [], [], {
+      preferredIngredients: ['三文鱼'],
+      dislikedIngredients: ['羊肉'],
+    });
+
+    expect(prisma.dogDietPreference.create).toHaveBeenCalledTimes(2);
+    expect(prisma.dogDietPreference.create).toHaveBeenCalledWith({
+      data: {
+        dogId: DOG_ID,
+        kind: 'LIKED',
+        foodName: '三文鱼',
+        source: 'CUSTOM_RECIPE',
+      },
+    });
+    expect(prisma.dogDietPreferenceChange.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('已存在的偏好不重复加、也不记变更', async () => {
+    const { service, prisma } = buildService();
+    prisma.dogDietPreference.findUnique.mockResolvedValue({ id: 'p1' });
+
+    await service.syncToHealthProfile(DOG_ID, [], [], {
+      preferredIngredients: ['三文鱼'],
+    });
+
+    expect(prisma.dogDietPreference.create).not.toHaveBeenCalled();
+    expect(prisma.dogDietPreferenceChange.create).not.toHaveBeenCalled();
+  });
+
+  it('没填偏好时什么都不动（不动档案、不写表）', async () => {
+    const { service, prisma } = buildService();
+
+    await service.syncToHealthProfile(DOG_ID, [], [], {});
+
+    expect(prisma.dog.update).not.toHaveBeenCalled();
+    expect(prisma.dogDietPreference.create).not.toHaveBeenCalled();
+  });
+});

@@ -2,7 +2,11 @@ import { request } from '../utils/api'
 import { getBaseUrl } from '../utils/config'
 import { getToken } from '../utils/api'
 import {
+  type AllergyRecordPayload,
+  type CheckupRecordPayload,
+  type HealthAttachmentUploadType,
   type HealthRecordType,
+  type MedicalRecordPayload,
   buildDietRemindersPayload,
   buildHealthAttachmentDeletePath,
   buildHealthAttachmentUploadUrl,
@@ -39,18 +43,15 @@ export interface DogProfileFormValue {
 
 type MedicalRecordStatus = 'TREATING' | 'RECOVERED' | 'CHRONIC'
 
-type MedicalRecordCreatePayload = {
-  chiefComplaint: string
-  visitDate: string
-  diagnosis: string
-  notes?: string | null
-  treatment?: string | null
-  medications?: string[]
-  status?: MedicalRecordStatus
-  followUpDate?: string | null
-  veterinarian?: string | null
-  attachments?: string[]
-}
+/**
+ * 三类记录的提交结构统一来自 `utils/health-records`（2026-10-01 自查）。
+ *
+ * 原来这里另写了一份，与工具层的结构字段/可选性不一致，
+ * "按类型分派保存"那段就会报类型错，而运行时其实是对的 —— 两份定义本身就是隐患。
+ */
+type MedicalRecordCreatePayload = MedicalRecordPayload
+type CheckupRecordCreatePayload = CheckupRecordPayload
+type AllergyRecordCreatePayload = AllergyRecordPayload
 
 type CheckupRecordCreatePayload = {
   checkupType: string
@@ -103,6 +104,8 @@ type VaccineRecordCreatePayload = {
   nextDueDate?: string | null
   notes?: string | null
   status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+  /** 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图 URL */
+  attachments?: string[]
 }
 
 const healthRecordCrud = <
@@ -133,19 +136,10 @@ export const dogApi = {
   /**
    * 健康时间线（2026-10-01，第二期）。
    *
-   * 把五类记录一次取回并按日期倒序排好 —— 后端聚合，前端不拼。
-   * 就诊前摘要与时间线共用同一份数据来源。
+   * 把六类记录一次取回并按日期倒序排好 —— 后端聚合，前端不拼。
    */
   healthTimeline: (dogId: string) =>
     request({ url: `/dogs/${dogId}/health/timeline`, method: 'GET' }),
-  /**
-   * 就诊前摘要（2026-10-01，第二期）。
-   *
-   * 老板需求 8："带狗去看病前，我最想看到的是过往病史的摘要。"
-   * 排序按医生问诊的实际顺序：过敏 → 还没好的病 → 最近就诊 → 体检 → 疫苗 → 体重 → 饮食。
-   */
-  healthVisitSummary: (dogId: string) =>
-    request({ url: `/dogs/${dogId}/health/visit-summary`, method: 'GET' }),
   /**
    * 过敏档案（2026-10-04，过敏重构第一期）。
    *
@@ -261,9 +255,10 @@ export const dogApi = {
    *
    * 七项产出；严格不做诊断，只做初步分析。
    *
-   * ⚠️ 顾客侧默认关闭（后端 HEALTH_ANALYSIS=customer 才开）：
-   *    知识库里的免疫/化验/就医时机条目尚未经兽医审核，
-   *    而分析只能引用知识条目 —— 没有已审核条目就给不出有依据的结论。
+   * ✅ 顾客侧已开放（2026-10-02 起）：
+   *    知识库 189 条已由合作兽医全数审核通过，生产环境后端开了 HEALTH_ANALYSIS=customer。
+   *    分析只引用已审核条目，未审核的条目顾客侧拿不到。
+   *    （若哪天把开关关掉，后端会返回 available=false，页面会如实说明原因。）
    *
    * ⚠️ 免责声明**不在返回值里**，由界面写死：AI 不该有机会改写它。
    */
@@ -469,9 +464,15 @@ export const dogApi = {
     method: 'PUT',
     data: buildHealthRecordSectionPayload(type, records),
   }),
+  /**
+   * 更新饮食提醒（含"喜欢吃的食材"）。
+   *
+   * `preferredFoods` 这一列配方设计器与 AI 一直在读（见 buildDietRemindersPayload），
+   * 只是类型里漏了它 —— 顾客侧保存时会被类型检查误拦（2026-10-01 自查补）。
+   */
   updateDietReminders: (
     dogId: string,
-    data: { allergyFoods?: unknown; pickyFoods?: unknown },
+    data: { allergyFoods?: unknown; preferredFoods?: unknown; pickyFoods?: unknown },
   ) => request({
     url: `/dogs/${dogId}`,
     method: 'PUT',
@@ -491,13 +492,21 @@ export const dogApi = {
      * 识别哪类文档（2026-10-01 第六期）。
      * 缺省 ALLERGY_REPORT，保持既有调用方行为不变。
      */
+    /**
+     * 识别哪类文档。
+     *
+     * `'AUTO'`（2026-10-01）= 不告诉后端是哪一类，由它自己判断 ——
+     * 病历/检查板块就是这样把"拍病历 / 拍体检报告"两个入口合并成一个的。
+     * 传 AUTO 时，返回的 `documentType` 是**判定结果**，调用方按它决定填哪张表。
+     */
     documentType?:
+      | 'AUTO'
       | 'ALLERGY_REPORT'
       | 'CHECKUP_REPORT'
       | 'VACCINE_BOOK'
       | 'MEDICAL_RECORD'
   }) => request<{
-    /** 本次识别的是哪类文档 */
+    /** 本次识别的是哪类文档（传 AUTO 时这里是后端判定出来的类型） */
     documentType: 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
     /** 可直接填表的草稿；疫苗本可能多条，其余类型一条 */
     drafts: Record<string, any>[]
@@ -515,7 +524,7 @@ export const dogApi = {
     suppressErrorToast: true,
   }),
   uploadHealthAttachment: (
-    type: HealthRecordType,
+    type: HealthAttachmentUploadType,
     filePath: string,
   ): Promise<{ url: string; key: string | null }> =>
     new Promise((resolve, reject) => {
@@ -564,7 +573,11 @@ export const dogApi = {
         },
       })
     }),
-  deleteHealthAttachment: (type: HealthRecordType, key: string) =>
+  // 疫苗记录也能留原件之后（第九期），这里的类型跟着上传口一起放宽
+  deleteHealthAttachment: (
+    type: HealthRecordType | 'checkup' | 'vaccine',
+    key: string,
+  ) =>
     request({
       url: buildHealthAttachmentDeletePath(type),
       method: 'DELETE',

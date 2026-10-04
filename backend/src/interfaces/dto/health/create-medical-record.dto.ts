@@ -36,9 +36,25 @@ export class CreateMedicalRecordDto {
   @IsString()
   diagnosis!: string;
 
+  /// 化验数据原文（2026-10-02 新增）：这次就诊做的化验，数值单独一栏
+  @IsOptional()
+  @IsString()
+  labValues?: string;
+
+  /// 医嘱（2026-10-02 起语义收窄：医生交代回家要做的；表单标签就叫「医嘱」）
   @IsOptional()
   @IsString()
   treatment?: string;
+
+  /// 这次做的检查（2026-10-02 新增）
+  @IsOptional()
+  @IsString()
+  exams?: string;
+
+  /// 体征：体温、体重、BCS 等（2026-10-02 新增）
+  @IsOptional()
+  @IsString()
+  vitals?: string;
 
   @IsOptional()
   @IsArray()

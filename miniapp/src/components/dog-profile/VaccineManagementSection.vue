@@ -1,6 +1,7 @@
 <template>
   <view class="health-section">
-    <view class="health-section__header">
+    <!-- 内嵌到健康管理页时不显示（书签已经写着「疫苗」）—— 老板 2026-10-01 要求 -->
+    <view v-if="!embedded" class="health-section__header">
       <view class="health-section__heading">
         <text class="health-section__title">疫苗管理</text>
         <text class="health-section__desc">
@@ -11,10 +12,13 @@
     </view>
 
     <!-- 拍疫苗本（2026-10-01，第六期）。
-         一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。 -->
+         一本疫苗本通常有**多条**记录，识别后一起填进来，顾客确认一次即可。
+         2026-10-03 起常开（手填入口）；AI 拍疫苗本由底部「新增记录」调起。 -->
     <HealthDocumentScan
+      ref="scanRef"
       v-if="dogId"
       :dog-id="dogId"
+      :hide-trigger="!showAddEntry || hideScanTrigger"
       document-type="VACCINE_BOOK"
       upload-type="vaccine"
       button-text="拍疫苗本"
@@ -31,10 +35,8 @@
     </view>
 
     <view v-else-if="records.length === 0" class="health-section__empty">
+      <!-- 只有一句（2026-10-03 老板：没有记录就写没有记录即可，不用下面那行小字） -->
       <text class="health-section__empty-title">还没有疫苗记录</text>
-      <text class="health-section__empty-desc">
-        记下疫苗名和接种日期，到期日我们会替你算着。
-      </text>
     </view>
 
     <view
@@ -136,6 +138,28 @@
           />
         </view>
 
+        <!-- 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图。
+             没有原件的记录（手工填写）不显示这一块，不留空位。 -->
+        <view v-if="attachmentList(record).length > 0" class="field-group">
+          <text class="field-label">报告原件</text>
+          <view class="vaccine-attachment-list">
+            <view
+              v-for="(attachment, attachmentIndex) in attachmentList(record)"
+              :key="`${record.id || index}-attachment-${attachmentIndex}`"
+              class="vaccine-attachment"
+              @tap="previewAttachment(attachment)"
+            >
+              <text class="vaccine-attachment__title">
+                {{ attachmentDisplay(attachment, attachmentIndex).title }}
+              </text>
+              <text class="vaccine-attachment__action">预览</text>
+            </view>
+          </view>
+          <text class="vaccine-attachment__hint">
+            这是当初拍疫苗本留下的原图，换医院、出行要用时可以打开给对方看。
+          </text>
+        </view>
+
         <view class="vaccine-card__actions">
           <button
             v-if="record.id"
@@ -144,19 +168,20 @@
             :disabled="isBusy"
             @tap="removeRecord(record, index)"
           >删除</button>
-          <!-- 内嵌到健康管理页时隐藏（改由底部按钮统一保存） -->
-          <button
-            v-if="!externalSave"
-            class="vaccine-card__action vaccine-card__action--primary"
-            :class="{ 'vaccine-card__action--disabled': isBusy }"
-            :disabled="isBusy"
-            @tap="saveRecord(record, index)"
-          >{{ savingIndex === index ? '保存中…' : '保存' }}</button>
+          <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
+               正常时什么都不显示；只有"还差必填"和"保存中"要说话。 -->
+          <text v-if="autoSaveNotice(index)" class="vaccine-card__autosave">
+            {{ autoSaveNotice(index) }}
+          </text>
+          <text v-else-if="savingIndex === index || isDirty(record, index)" class="vaccine-card__autosave vaccine-card__autosave--quiet">
+            {{ savingIndex === index ? '保存中…' : '' }}
+          </text>
         </view>
       </view>
     </view>
 
     <button
+      v-if="showAddEntry"
       class="health-section__action"
       :class="{ 'health-section__action--disabled': loading || isBusy }"
       :disabled="loading || isBusy"
@@ -169,7 +194,12 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { dogApi } from '../../api/dogs'
+import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
+import {
+  buildHealthAttachmentDisplayMeta,
+  normalizeHealthAttachmentList,
+  previewHealthAttachment,
+} from '../../utils/health-records'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 
 interface VaccineRecord {
@@ -179,6 +209,12 @@ interface VaccineRecord {
   nextDueDate: string
   notes: string
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+  /**
+   * 报告原件（2026-10-01 第九期）。
+   * 拍疫苗本识别出来的记录会把顾客拍的原图存在这里，是接种凭证；
+   * 手工填写的记录是空数组。
+   */
+  attachments?: string[]
 }
 
 interface VaccineDraft {
@@ -196,6 +232,24 @@ const props = defineProps<{
    * （顾客不必在每一行里找保存键。）
    */
   externalSave?: boolean
+  /**
+   * 内嵌到健康管理页：同时隐藏板块头（「疫苗管理」+ N 条）——
+   * 上面书签已经写着「疫苗」，重复一遍只会把正文往下推。
+   */
+  embedded?: boolean
+  /**
+   * 是否显示"新增"入口（拍疫苗本 + 手动加一条）。
+   *
+   * 2026-10-02 老板要求收敛新增入口：标签页只做结果呈现与手动编辑，
+   * 2026-10-03 起常开：AI 拍疫苗本走底部「新增记录」，这里留给手填，
+   * 顾客仍然是在这个板块里完成录入；平时不显示，避免出现第二个入口。
+   */
+  showAddEntry?: boolean
+  /**
+   * 隐藏板块自带的「拍疫苗本」触发行（2026-10-03）。
+   * 底部「新增记录」已经按标签直接调起拍疫苗本了，这里再来一个就是重复。
+   */
+  hideScanTrigger?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -218,40 +272,18 @@ function isDirty(record: VaccineRecord, index: number) {
   )
 }
 
-/** 有没有填了但还没保存的行 —— 决定底部按钮是否可点 */
-const hasPendingDraft = computed(() =>
-  records.value.some((record, index) =>
-    Boolean(String(draftOf(record, index).vaccineName || '').trim()) && isDirty(record, index),
-  ),
-)
-
-watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true })
 
 /**
- * 保存所有改过的行（供健康管理页的底部按钮调用）。
- * 顺序执行：并发写同一个列表会互相覆盖。
+ * 对外的两个入口（2026-10-02 引导流程要用）：
+ *   · startScan   → 直接调起"拍疫苗本"（AI 读出多条接种记录）
+ *   · addRecord   → 手动加一条空白疫苗记录
  */
-async function saveAllDirty() {
-  if (isBusy.value) {
-    uni.showToast({ title: '保存中，请稍候', icon: 'none' })
-    return
-  }
-
-  const dirtyIndexes = records.value
-    .map((record, index) => (isDirty(record, index) ? index : -1))
-    .filter((index) => index >= 0)
-
-  if (dirtyIndexes.length === 0) {
-    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
-    return
-  }
-
-  for (const index of dirtyIndexes) {
-    await saveRecord(records.value[index], index)
-  }
-}
-
-defineExpose({ saveAllDirty })
+defineExpose({
+  startScan: () => scanRef.value?.startScan?.(),
+  addRecord,
+  /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
+  flushAutoSaves,
+})
 
 /** 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路） */
 const commonVaccineNames = [
@@ -273,6 +305,7 @@ const STATUS_OPTIONS = [
 
 const statusOptions = STATUS_OPTIONS.map(option => ({ label: option.label }))
 
+const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
 const drafts = reactive<Record<string, VaccineDraft>>({})
 const loading = ref(false)
@@ -280,6 +313,24 @@ const expandedIndex = ref(-1)
 const savingIndex = ref(-1)
 const deletingKey = ref('')
 const isBusy = computed(() => savingIndex.value >= 0 || Boolean(deletingKey.value))
+
+/**
+ * 有没有填了但还没保存的行 —— 决定底部按钮是否可点。
+ *
+ * ⚠️ 这段**必须留在 records / drafts 声明之后**（2026-10-02 修的一个真 bug）：
+ * 它原来写在文件靠前的位置，而 `records` 声明在后面 ——
+ * `{ immediate: true }` 会在 setup 期间立刻求值，那一刻 `records` 还是 undefined，
+ * 抛 `TypeError: Cannot read properties of undefined (reading 'value')`，
+ * 整个「疫苗」板块的 setup 直接失败（开发者工具控制台刷满同一条报错），
+ * 底部保存按钮的"有未保存内容"状态也从来没被算出来过。
+ */
+const hasPendingDraft = computed(() =>
+  records.value.some((record, index) =>
+    Boolean(String(draftOf(record, index).vaccineName || '').trim()) && isDirty(record, index),
+  ),
+)
+
+watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true })
 
 const today = getTodayDateString()
 
@@ -331,11 +382,126 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  ;(draft as Record<string, string>)[field] = value
+  // status 是受限联合类型（下拉框保证取值合法），其余字段都是普通字符串
+  if (field === 'status') {
+    draft.status = value as VaccineDraft['status']
+  } else {
+    draft[field] = value
+  }
+
+  // 实时保存（2026-10-03 老板定：底部保存键下线）。
+  // 日期/状态这类"点一下就有值"的改动立刻存；文本输入停顿 1.2 秒再存。
+  const immediate = field !== 'vaccineName' && field !== 'notes'
+  scheduleAutoSave(record, index, { immediate })
+}
+
+/* ── 自动保存（2026-10-03）────────────────────────────────────────────
+ * 一条疫苗记录＝疫苗名 + 接种日期（后端必填）。所以：
+ *   · 两样都齐了才存，缺任何一样只在卡片上提示「填完自动保存」；
+ *   · 文本输入停顿 1.2 秒存，日期/状态一改就存；
+ *   · 切标签/离开页面时由 flushAutoSaves 立刻落库。
+ */
+const AUTO_SAVE_DELAY_MS = 1200
+const autoSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
+const autoSaveNotices = ref<Record<number, string>>({})
+
+/** 这条能不能存（与 saveRecord 的校验同一套规则） */
+function autoSaveBlockReason(record: VaccineRecord, index: number): string {
+  const draft = draftOf(record, index)
+  if (!draft.vaccineName.trim()) return '还差疫苗名称，填完自动保存'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
+  return ''
+}
+
+function scheduleAutoSave(
+  record: VaccineRecord,
+  index: number,
+  options: { immediate?: boolean } = {},
+) {
+  const pending = autoSaveTimers.get(index)
+  if (pending) {
+    clearTimeout(pending)
+    autoSaveTimers.delete(index)
+  }
+
+  if (options.immediate) {
+    void runAutoSave(record, index)
+    return
+  }
+
+  autoSaveTimers.set(
+    index,
+    setTimeout(() => {
+      autoSaveTimers.delete(index)
+      void runAutoSave(record, index)
+    }, AUTO_SAVE_DELAY_MS),
+  )
+}
+
+async function runAutoSave(record: VaccineRecord, index: number) {
+  if (!isDirty(record, index)) {
+    clearNotice(index)
+    return
+  }
+
+  const reason = autoSaveBlockReason(record, index)
+  if (reason) {
+    autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }
+    return
+  }
+
+  if (isBusy.value) {
+    // 上一次还在存：稍后再来（不排队也安全，改完这次还会再排一次）
+    scheduleAutoSave(record, index)
+    return
+  }
+
+  clearNotice(index)
+  await saveRecord(record, index)
+}
+
+function clearNotice(index: number) {
+  if (autoSaveNotices.value[index]) {
+    const next = { ...autoSaveNotices.value }
+    delete next[index]
+    autoSaveNotices.value = next
+  }
+}
+
+/** 把等待中的自动保存立刻执行（切标签、离开页面、收起卡片时用） */
+function flushAutoSaves() {
+  for (const [index, timer] of Array.from(autoSaveTimers.entries())) {
+    clearTimeout(timer)
+    autoSaveTimers.delete(index)
+    const record = records.value[index]
+    if (record) void runAutoSave(record, index)
+  }
+}
+
+function autoSaveNotice(index: number): string {
+  return autoSaveNotices.value[index] || ''
 }
 
 function toggleExpanded(record: VaccineRecord, index: number) {
   expandedIndex.value = expandedIndex.value === index ? -1 : index
+}
+
+/**
+ * 这条疫苗记录的报告原件（2026-10-01 第九期）。
+ *
+ * 拍疫苗本识别出来的记录带着原图；手工填写的没有 —— 空数组，
+ * 卡片上就不显示「报告原件」这一块，不留空位。
+ */
+function attachmentList(record?: VaccineRecord | Record<string, any> | null): string[] {
+  return normalizeHealthAttachmentList((record as any)?.attachments)
+}
+
+function attachmentDisplay(url: string, index: number) {
+  return buildHealthAttachmentDisplayMeta(url, index)
+}
+
+async function previewAttachment(url: string) {
+  await previewHealthAttachment(url)
 }
 
 function statusLabel(status: string) {
@@ -500,7 +666,10 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),
       status: 'COMPLETED',
-      attachments: [],
+      // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
+      // 疫苗本是接种凭证，出行/寄养/换医院都可能要看原件。
+      // 一张本子上的多条接种记录共用同一张原图（照片就是那一页）。
+      attachments: attachmentList(draft),
     } as any)
   }
   uni.showToast({
@@ -524,12 +693,18 @@ function addRecord() {
   expandedIndex.value = records.value.length - 1
 }
 
-function buildPayload(draft: VaccineDraft) {
-  const payload: Record<string, any> = {
+function buildPayload(
+  draft: VaccineDraft,
+  record?: VaccineRecord,
+): VaccineRecordCreatePayload {
+  const payload: VaccineRecordCreatePayload = {
     vaccineName: draft.vaccineName.trim(),
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,
     notes: draft.notes.trim() || null,
+    // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
+    // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
+    attachments: attachmentList(record),
   }
 
   // 空到期日不能传空字符串（后端按日期校验），直接不带这个字段
@@ -557,7 +732,7 @@ async function saveRecord(record: VaccineRecord, index: number) {
   savingIndex.value = index
 
   try {
-    const payload = buildPayload(draft)
+    const payload = buildPayload(draft, record)
     const res: any = record.id
       ? await dogApi.healthRecords.vaccine.update(props.dogId, record.id, payload)
       : await dogApi.healthRecords.vaccine.create(props.dogId, payload)
@@ -746,6 +921,44 @@ async function doRemove(record: VaccineRecord) {
   color: #6b6653;
 }
 
+.vaccine-attachment-list {
+  margin-top: 12rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.vaccine-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: rgba(15, 107, 67, 0.06);
+}
+
+.vaccine-attachment__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #26261f;
+}
+
+.vaccine-attachment__action {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #0f6b43;
+}
+
+.vaccine-attachment__hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8c8574;
+}
+
 .field-input {
   margin-top: 10rpx;
   width: 100%;
@@ -812,6 +1025,17 @@ async function doRemove(record: VaccineRecord) {
   align-items: center;
   gap: 16rpx;
   margin-top: 26rpx;
+}
+
+.vaccine-card__autosave {
+  align-self: center;
+  margin-left: auto;
+  font-size: 21rpx;
+  color: #b26a2f;
+}
+
+.vaccine-card__autosave--quiet {
+  color: #8a968a;
 }
 
 .vaccine-card__action {

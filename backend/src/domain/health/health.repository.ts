@@ -14,6 +14,8 @@ export interface VaccineRecord {
   nextDueDate: Date | null;
   notes: string | null;
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+  /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组
+  attachments: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +43,8 @@ export interface CheckupRecord {
   checkupType: string;
   checkupDate: Date;
   findings: string | null;
+  /** 化验数据原文（逐项一行），2026-10-02 新增 */
+  labValues: string | null;
   recommendations: string | null;
   /// 备注；2026-10-01 第五期新增（此前只有病史表有 notes）
   notes: string | null;
@@ -72,7 +76,13 @@ export interface MedicalRecord {
   visitDate: Date;
   chiefComplaint: string;
   diagnosis: string;
+  /** 化验数据原文（这次就诊做的化验），2026-10-02 新增 */
+  labValues: string | null;
   treatment: string | null;
+  /** 这次做的检查（2026-10-02） */
+  exams: string | null;
+  /** 体征：体温、体重、BCS（2026-10-02） */
+  vitals: string | null;
   medications: string[];
   /**
    * 病史状态。

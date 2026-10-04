@@ -1,4 +1,14 @@
 export type HealthRecordType = 'medical' | 'checkup' | 'allergy'
+
+/**
+ * 附件上传的类别。
+ *
+ * 比 HealthRecordType 多一个 `vaccine`：疫苗本也要能上传照片，
+ * 而它走的是通用图片上传口（`/health/upload-image`，与过敏同一支）——
+ * 见 buildHealthAttachmentUploadUrl 的兜底分支。
+ * 之前这里的类型比实际支持的范围窄，扫描疫苗本时类型对不上。
+ */
+export type HealthAttachmentUploadType = HealthRecordType | 'vaccine'
 export type HealthAttachmentSelectionType = 'image' | 'pdf'
 export type HealthAttachmentPreviewType = 'image' | 'pdf' | 'file'
 export interface HealthRecordSummary {
@@ -29,8 +39,13 @@ export interface DogHealthStateSnapshot {
 export const HEALTH_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup', 'allergy']
 export const HEALTH_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const HEALTH_ATTACHMENT_MAX_SIZE_LABEL = '10MB'
-export const HEALTH_ATTACHMENT_HINT_TEXT =
-  '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。'
+/**
+ * 附件区的说明（2026-10-02 精简）。
+ *
+ * 原来把六种格式全列出来，是表单上最长的一行字，家长读不完；
+ * 真正有用的信息只有两条：能传什么、多大。格式细节留给出错时的提示。
+ */
+export const HEALTH_ATTACHMENT_HINT_TEXT = '图片或 PDF，单个不超过 10MB'
 const HEALTH_RECORD_ATTACHMENT_CACHE_PREFIX = 'dog-health-record-attachments'
 
 const HEALTH_CHECKUP_TYPE_OPTIONS: HealthCheckupTypeOption[] = [
@@ -67,6 +82,17 @@ type HealthRecordShape = Record<string, any>
 function normalizeOptionalText(value: unknown) {
   const normalized = typeof value === 'string' ? value.trim() : ''
   return normalized || null
+}
+
+/**
+ * 附件列表归一化（2026-10-01 第九期起对外共用）。
+ *
+ * 后端存的是 URL 字符串数组，但历史数据/中间层有时给的是 { url } 对象，
+ * 两种都认，读不到的一律丢掉（不返回空串、不返回 null）。
+ * 疫苗记录的卡片与病历/检查的记录卡都调它，避免两处各写一套过滤规则。
+ */
+export function normalizeHealthAttachmentList(value: unknown): string[] {
+  return normalizeAttachments(value)
 }
 
 function normalizeAttachments(value: unknown) {
@@ -211,10 +237,73 @@ export function getHealthRecordValidationError(
   return null
 }
 
+/** 病史状态（与后端枚举一致） */
+export type MedicalStatusValue =
+  | 'PENDING_CONFIRMATION'
+  | 'TREATING'
+  | 'RECOVERED'
+  | 'CHRONIC'
+
+/**
+ * 三类记录的提交结构（2026-10-01 自查补）。
+ *
+ * 原来这几套结构在 `api/dogs.ts` 里另写了一份，两边字段与可选性对不上：
+ * 类型检查一跑到"按类型分派保存"就报错，实际运行时却没问题。
+ * 现在以这里为唯一来源，接口层直接引用。
+ *
+ * 字段可选性与后端 DTO 对齐：新建时前端一定会带上这些字段，
+ * 但更新接口用的是 `Partial<>`，所以结构上允许缺省。
+ */
+export interface MedicalRecordPayload {
+  chiefComplaint: string
+  visitDate: string
+  diagnosis: string
+  treatment?: string | null
+  medications?: string[]
+  status?: MedicalStatusValue
+  followUpDate?: string | null
+  veterinarian?: string | null
+  notes?: string | null
+  attachments?: string[]
+  /** 这次就诊做的化验数据（2026-10-02 新增） */
+  labValues?: string | null
+  /** 这次做的检查（2026-10-02 新增） */
+  exams?: string | null
+  /** 体征：体温、体重、BCS（2026-10-02 新增） */
+  vitals?: string | null
+}
+
+export interface CheckupRecordPayload {
+  checkupType: string
+  checkupDate: string
+  findings?: string | null
+  /** 化验数据原文（2026-10-02 从 findings 里拆出来的一栏） */
+  labValues?: string | null
+  recommendations?: string | null
+  veterinarian?: string | null
+  attachments?: string[]
+  notes?: string | null
+}
+
+export interface AllergyRecordPayload {
+  allergen: string
+  notes?: string | null
+  attachments?: string[]
+}
+
+export type HealthRecordPayload =
+  | MedicalRecordPayload
+  | CheckupRecordPayload
+  | AllergyRecordPayload
+
+export function buildHealthRecordPayload(type: 'medical', record: HealthRecordShape): MedicalRecordPayload
+export function buildHealthRecordPayload(type: 'checkup', record: HealthRecordShape): CheckupRecordPayload
+export function buildHealthRecordPayload(type: 'allergy', record: HealthRecordShape): AllergyRecordPayload
+export function buildHealthRecordPayload(type: HealthRecordType, record: HealthRecordShape): HealthRecordPayload
 export function buildHealthRecordPayload(
   type: HealthRecordType,
   record: HealthRecordShape,
-) {
+): HealthRecordPayload {
   if (type === 'medical') {
     const status = String(record.status || '').trim()
 
@@ -223,9 +312,10 @@ export function buildHealthRecordPayload(
       visitDate: normalizeOptionalText(record.visitDate) || '',
       diagnosis: normalizeOptionalText(record.diagnosis) || '',
       // 缺省是"待确认"，不是后端的默认值"治疗中"
-      status: getMedicalStatusOptions().some(option => option.value === status)
+      // 上面已按白名单校验过，这里只是把类型收紧到后端枚举
+      status: (getMedicalStatusOptions().some(option => option.value === status)
         ? status
-        : 'PENDING_CONFIRMATION',
+        : 'PENDING_CONFIRMATION') as MedicalStatusValue,
       notes: normalizeOptionalText(record.notes),
       attachments: normalizeAttachments(record.attachments),
     }
@@ -247,10 +337,14 @@ export function buildHealthRecordPayload(
   }
 }
 
+export function buildCrudHealthRecordPayload(type: 'medical', record: HealthRecordShape): MedicalRecordPayload
+export function buildCrudHealthRecordPayload(type: 'checkup', record: HealthRecordShape): CheckupRecordPayload
+export function buildCrudHealthRecordPayload(type: 'allergy', record: HealthRecordShape): AllergyRecordPayload
+export function buildCrudHealthRecordPayload(type: HealthRecordType, record: HealthRecordShape): HealthRecordPayload
 export function buildCrudHealthRecordPayload(
   type: HealthRecordType,
   record: HealthRecordShape,
-) {
+): HealthRecordPayload {
   const payload = buildHealthRecordPayload(type, record)
 
   if (type !== 'checkup') {
@@ -264,16 +358,36 @@ export function buildCrudHealthRecordPayload(
   }
 }
 
-export function normalizeHealthRecordResponse(record: HealthRecordShape) {
+/**
+ * 把服务器返回的一条记录整理成界面能直接用的形状。
+ *
+ * @param recordType 这条记录是从哪张表读出来的（medical / checkup / allergy）。
+ *   **必须传**：就诊与体检在界面上是同一个列表（合并模式），一条记录该按
+ *   "就诊"还是"体检"渲染，全靠 `__visitKind` 这个章 —— 而服务器记录没有章。
+ *   不盖章的后果（2026-10-03 老板实测发现）：
+ *   体检记录被当成就诊记录渲染，卡片标题写「就诊记录」、字段是症状/医生诊断/医嘱，
+ *   日期读的是 visitDate（体检存的是 checkupDate）→ 明明存过日期却显示「未填日期」。
+ */
+export function normalizeHealthRecordResponse(
+  record: HealthRecordShape,
+  recordType?: HealthRecordType,
+) {
   const source = record && typeof record === 'object' && !Array.isArray(record) && record.record
     ? record.record
     : record
 
-  return {
+  const normalized = {
     ...source,
     notes: source?.notes ?? source?.findings ?? '',
     attachments: normalizeAttachments(source?.attachments),
   }
+
+  // 记录自己的归属章：就诊/体检各盖各的；过敏与其它类型不参与这个合并列表
+  if (recordType === 'medical' || recordType === 'checkup') {
+    return { ...normalized, [HEALTH_VISIT_KIND_FIELD]: recordType }
+  }
+
+  return normalized
 }
 
 export function normalizeSavedHealthRecordResponse(
@@ -293,13 +407,16 @@ export function normalizeSavedHealthRecordResponse(
   }
 }
 
-export function normalizeHealthRecordListResponse(response: Record<string, any> | null | undefined) {
+export function normalizeHealthRecordListResponse(
+  response: Record<string, any> | null | undefined,
+  recordType?: HealthRecordType,
+) {
   const records = response?.data?.records
   if (!Array.isArray(records)) {
     return []
   }
 
-  return records.map(record => normalizeHealthRecordResponse(record))
+  return records.map(record => normalizeHealthRecordResponse(record, recordType))
 }
 
 export function replaceHealthRecordInList(
@@ -540,7 +657,11 @@ export function hasUnsavedDietReminderChange(current: unknown, saved: unknown) {
 }
 
 export function resolveDogHealthSelectionState(
-  dogs: Array<{ id?: string }>,
+  /**
+   * 只用到 id，但调用方传进来的往往是完整的狗对象（还带 name 等字段），
+   * 所以这里允许额外字段 —— 否则测试与调用方每次都得先裁一遍对象。
+   */
+  dogs: Array<{ id?: string; [key: string]: unknown }>,
   preferredDogId = '',
 ) {
   if (!Array.isArray(dogs) || dogs.length === 0) {
@@ -667,7 +788,7 @@ export function shouldUseRemoteHealthRecordSync(dogId: unknown) {
 
 export function buildHealthAttachmentUploadUrl(
   baseUrl: string,
-  type: HealthRecordType,
+  type: HealthAttachmentUploadType,
 ) {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
 
@@ -682,7 +803,9 @@ export function buildHealthAttachmentUploadUrl(
   return `${normalizedBaseUrl}/health/upload-image`
 }
 
-export function buildHealthAttachmentDeletePath(type: HealthRecordType) {
+export function buildHealthAttachmentDeletePath(
+  type: HealthRecordType | 'checkup' | 'vaccine',
+) {
   if (type === 'medical') {
     return '/dogs/medical-records/attachments'
   }
@@ -691,17 +814,32 @@ export function buildHealthAttachmentDeletePath(type: HealthRecordType) {
     return '/dogs/checkup-records/attachments'
   }
 
+  // 过敏与疫苗（疫苗本原图，第九期）都走通用删除口
   return '/health/attachments'
 }
 
-export function extractHealthAttachmentKey(url: string) {
-  try {
-    const { pathname } = new URL(url)
-    const normalized = pathname.replace(/^\/+/, '')
-    return normalized || null
-  } catch {
-    return null
+/**
+ * 从 URL 里取 pathname —— **不用 `URL` 全局**。
+ *
+ * 为什么不用：`URL` 在小程序基础库里不是必备全局（同一份代码在开发者工具里
+ * 能跑、到真机基础库版本低一点就可能没有），而这里只是取路径，
+ * 正则足够且没有环境依赖。非绝对地址一律返回空串，与改前行为一致
+ * （改前 `new URL('a/b')` 会抛错，被 catch 成空）。
+ */
+function extractUrlPathname(url: string) {
+  const text = String(url || '').trim()
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+    return ''
   }
+
+  return text
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '')
+    .split(/[?#]/)[0] || ''
+}
+
+export function extractHealthAttachmentKey(url: string) {
+  const normalized = extractUrlPathname(url).replace(/^\/+/, '')
+  return normalized || null
 }
 
 function resolveHealthAttachmentUploadParseError(uploadRes: {
@@ -752,6 +890,50 @@ export function parseHealthAttachmentUploadResponse(uploadRes: {
   }
 
   throw new Error(payload?.message || `上传失败: ${uploadRes.statusCode}`)
+}
+
+/**
+ * 识别失败时给顾客看的文案（2026-10-01）。
+ *
+ * 为什么需要：识别走的是腾讯云 OCR，**它自己的报错会被后端原样抛出来**，
+ * 例如服务没开通时是「服务未开通，请前往控制台开通相应服务」——
+ * 这句话是给运维看的，弹给顾客只会让人一头雾水。
+ * 这里只把"基础设施类"的报错换成顾客能懂、且知道下一步怎么做的话；
+ * 其余后端文案（"没识别到内容，请换一张更清晰的图片"这类）本来就是说给顾客的，照原样显示。
+ */
+export function resolveHealthScanErrorMessage(raw: unknown): string {
+  const text = String(raw ?? '').trim()
+  if (!text) {
+    return '识别失败，可以手工填写'
+  }
+
+  // 腾讯云 OCR：服务未开通 / 密钥没配 / 鉴权失败 —— 都属于"功能还没准备好"
+  if (/未开通|UnOpenError|AuthFailure|密钥未配置|未配置密钥/.test(text)) {
+    return '图片识别功能正在开通中，这次先用「手动填写」吧'
+  }
+
+  // 调用频率或额度超限：让顾客等一会儿再来
+  if (/频率|超限|LimitExceeded|RequestLimitExceeded/.test(text)) {
+    return '识别的人有点多，稍等一会儿再试'
+  }
+
+  if (/超时|timeout/i.test(text)) {
+    return '这次识别超时了，可以再试一次，或直接手工填写'
+  }
+
+  /**
+   * 我们自己代码里的报错（2026-10-04 线上事故）。
+   *
+   * 老板传完 7 张报告，界面上写的是「Cannot read properties of undefined (reading '0')」——
+   * 这是我们程序的 bug，不是顾客做错了什么，更不该把英文堆栈甩到家长脸上。
+   * 这类"程序崩了"的报错统一换成一句能行动的话，真正的原因留在日志里给开发查。
+   */
+  if (/Cannot read propert|is not a function|is not defined|of undefined|of null|Minified React|Script error/i.test(text)) {
+    return '识别时出了点问题，请再传一次；如果还是不行，先用「手动填写」'
+  }
+
+  // 后端已经写成顾客能懂的话（"没识别到内容…"等），照原样
+  return text
 }
 
 export function resolveHealthAttachmentUploadErrorMessage(error: unknown): string {
@@ -861,13 +1043,72 @@ export function resolveHealthAttachmentPreviewType(
   return 'file'
 }
 
+/**
+ * 打开附件（2026-10-01 第九期：从「病历/检查」板块抽出来共用）。
+ *
+ * 原来只有病历/检查的记录卡会预览附件；疫苗记录现在也能留原件了，
+ * 同一段逻辑抄两遍迟早会走偏（一边能看 PDF、一边不能），所以提到这里，
+ * 两个板块都调它。
+ *
+ *   · 图片 → 微信自带的大图预览
+ *   · PDF  → 先下载再交给微信的文档查看器（可转发）
+ *   · 其它 → 老实说"打不开"，不假装成功
+ */
+export async function previewHealthAttachment(url: string): Promise<void> {
+  const previewType = resolveHealthAttachmentPreviewType(url)
+
+  if (previewType === 'image') {
+    uni.previewImage({
+      urls: [url],
+      current: url,
+    })
+    return
+  }
+
+  if (previewType === 'pdf') {
+    try {
+      uni.showLoading({ title: '打开中...' })
+      const downloadRes: any = await new Promise((resolve, reject) => {
+        uni.downloadFile({
+          url,
+          success: resolve,
+          fail: reject,
+        })
+      })
+
+      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
+        throw new Error('文件下载失败')
+      }
+
+      await new Promise((resolve, reject) => {
+        uni.openDocument({
+          filePath: downloadRes.tempFilePath,
+          showMenu: true,
+          success: resolve,
+          fail: reject,
+        })
+      })
+      uni.hideLoading()
+    } catch (error: any) {
+      uni.hideLoading()
+      uni.showToast({ title: error?.message || '暂时无法预览该附件', icon: 'none' })
+    }
+    return
+  }
+
+  uni.showToast({ title: '暂时无法预览该附件', icon: 'none' })
+}
+
 function readHealthAttachmentFileName(value: string) {
+  const fileName = extractUrlPathname(value).split('/').filter(Boolean).pop() || ''
+  if (!fileName) {
+    return ''
+  }
+
   try {
-    const { pathname } = new URL(value)
-    const fileName = pathname.split('/').filter(Boolean).pop() || ''
     return decodeURIComponent(fileName)
   } catch {
-    return ''
+    return fileName
   }
 }
 
@@ -892,7 +1133,7 @@ export function resolveHealthRecordSecondaryActionText(
   isDirty: boolean,
 ) {
   if (!isSaved) {
-    return '取消新增'
+    return '取消新增记录'
   }
 
   if (isDirty) {
@@ -1028,27 +1269,88 @@ export const HEALTH_VISIT_KIND_LABELS: Record<HealthVisitKind, string> = {
 /** 合并列表里挂在每条记录上的归属标记（只在内存里用，不落库） */
 export const HEALTH_VISIT_KIND_FIELD = '__visitKind'
 
-/** 体检类型缺省值：收进「更多」也不会卡住保存 */
+/** 体检类型缺省值：默认「常规体检」，家长不用先做选择题 */
 export const HEALTH_VISIT_DEFAULT_CHECKUP_TYPE = 'ROUTINE'
 
+/**
+ * 「病历/检查」表单的字段对照表（2026-10-02 按老板要求精简过一版）。
+ *
+ * 精简的原则（老板定的，也是审计结论）：
+ *   · **状态字段从表单里拿掉** —— 家长填表时不该做"待确认/治疗中/已康复/慢性"
+ *     这种系统选择题。库里仍然有 status（缺省待确认，算作"还没好"进 AI 分析），
+ *     记录存好之后卡片上给一个一键切换「已经好了」。
+ *   · **必填只剩两件**：日期 +（症状 或 医生诊断）至少一条。
+ *     很多家长拿不到明确诊断（医生只说"可能是肠胃炎"），不该被卡住。
+ *   · **备注改名「补充说明」**（2026-10-02 老板要求更专业）——
+ *     原来的"备注"后端/营养师端/AI 都不读，是个纯废字段；
+ *     改名之后它是"家长还想补充的话"，并且已经接进 AI 分析（第九期）。
+ *   · 体检类型、用药这些"能一眼答上来"的字段从「更多」里提到明面；
+ *     只有复查日期、兽医这种少数情况才有的收进「选填」。
+ *
+ * 每个字段的 key 就是接口/数据库的字段名，不另造一套。
+ */
 export interface HealthVisitFieldConfig {
   kind: HealthVisitKind
   kindLabel: string
   dateKey: string
   dateLabel: string
-  /** 就诊=诊断结果；体检=检查结论（体检没有"诊断"，措辞上不能让家长误会） */
+  /** 主内容字段：就诊=医生诊断；体检=检查结论 */
   primaryKey: string
   primaryLabel: string
+  primaryPlaceholder: string
+  /**
+   * 就诊独有的「主要问题」（症状）。
+   * 它和 primaryKey **至少填一个**：它是饮食标签派生的输入之一，
+   * 也是家长最容易答上来的那一项（体检为 null）。
+   */
+  complaintKey: string | null
+  complaintLabel: string
+  complaintPlaceholder: string
+  /**
+   * 化验数据（只有体检有，2026-10-02 从 findings 里拆出来）。
+   * 一张化验单几十项数值，混在「检查结论」里家长看到的是数字墙。
+   */
+  labValuesKey: string | null
+  labValuesLabel: string
+  /** 医嘱/建议：就诊=医嘱（回家注意，treatment）；体检=医生建议（recommendations） */
   adviceKey: string
   adviceLabel: string
-  /** 备注只有就诊有地方存——体检表里没有 notes 字段 */
-  notesKey: string | null
+  advicePlaceholder: string
+  /**
+   * 这次做的检查（exams，只有就诊有，2026-10-02 新增）。
+   * 从处置处方照抄的检查项目清单 —— 原来它被塞进"处理与提醒"，
+   * 和医嘱、其它想说的三样挤在一起（老板实测提的）。
+   */
+  examsKey: string | null
+  examsLabel: string
+  examsPlaceholder: string
+  /** 体征（vitals，只有就诊有，2026-10-02 新增）：体温/体重/BCS */
+  vitalsKey: string | null
+  vitalsLabel: string
+  vitalsPlaceholder: string
+  /** 用药：只有就诊有这一列（体检表没有） */
+  medicationKey: string | null
+  medicationLabel: string
+  /** 补充说明（notes，两张表都有；曾用名「备注」「其它想说的」） */
+  notesKey: string
   notesLabel: string
-  showsComplaint: boolean
-  showsCheckupType: boolean
-  showsMedications: boolean
-  showsStatus: boolean
-  showsFollowUpDate: boolean
+  notesPlaceholder: string
+  /**
+   * 兽医 / 复查日期：**2026-10-02 老板要求从表单里去掉**，不再有输入框。
+   * key 仍然留着 —— 拍报告识别出来的值照旧存进记录、保存时照旧提交，
+   * 只是不许顾客手填（想补也只能通过识别或以后另开入口）。
+   */
+  vetKey: string
+  vetLabel: string
+  followUpKey: string | null
+  followUpLabel: string
+  /**
+   * 体检类型：**2026-10-02 老板要求从表单里删掉**（家长不该被问这个）。
+   * 手工记的体检记录一律用缺省「常规体检」（接口这一栏必填，由 payload 兜底）；
+   * 拍报告识别出来的类型照旧存进记录。
+   */
+  checkupTypeKey: string | null
+  checkupTypeLabel: string
 }
 
 const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig> = {
@@ -1058,16 +1360,39 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     dateKey: 'visitDate',
     dateLabel: '就诊日期',
     primaryKey: 'diagnosis',
-    primaryLabel: '诊断结果',
+    // 2026-10-02 老板定稿：「医生怎么说」改回专业说法「医生诊断」
+    primaryLabel: '医生诊断',
+    primaryPlaceholder: '例如：急性肠胃炎、胆汁淤积',
+    complaintKey: 'chiefComplaint',
+    // 2026-10-02 老板：文案就叫「症状」，家长一眼就懂
+    complaintLabel: '症状',
+    complaintPlaceholder: '例如：呕吐、拉稀、精神差',
+    // 2026-10-02 老板定：一次就诊里的化验单/检查报告，数字就落在这条就诊记录里
+    labValuesKey: 'labValues',
+    labValuesLabel: '化验数据',
     adviceKey: 'treatment',
-    adviceLabel: '处理或建议',
+    // 2026-10-02 老板定稿：这一栏收窄成"医生交代回家要做的"，
+    // 检查项目清单挪去 exams（原来三样挤一栏，家长看到的是"无 + 一长串"）。
+    // 老板第二次实测：标签就叫「医嘱」，不要括弧说明
+    adviceLabel: '医嘱',
+    advicePlaceholder: '例如：清淡饮食，按时吃药，两周后复查',
+    examsKey: 'exams',
+    examsLabel: '这次做的检查',
+    examsPlaceholder: '例如：全腹部彩超、血常规、生化、CRP',
+    vitalsKey: 'vitals',
+    vitalsLabel: '体征',
+    vitalsPlaceholder: '例如：体温 38.4℃、体重 6.7kg、BCS 3',
+    medicationKey: 'medications',
+    medicationLabel: '用药',
     notesKey: 'notes',
-    notesLabel: '备注',
-    showsComplaint: true,
-    showsCheckupType: false,
-    showsMedications: true,
-    showsStatus: true,
-    showsFollowUpDate: true,
+    notesLabel: '补充说明',
+    notesPlaceholder: '报告上还有该记下来的？例如：样本存在异常：溶血+',
+    vetKey: 'veterinarian',
+    vetLabel: '兽医',
+    followUpKey: 'followUpDate',
+    followUpLabel: '复查日期',
+    checkupTypeKey: null,
+    checkupTypeLabel: '',
   },
   checkup: {
     kind: 'checkup',
@@ -1075,16 +1400,36 @@ const HEALTH_VISIT_FIELD_CONFIG: Record<HealthVisitKind, HealthVisitFieldConfig>
     dateKey: 'checkupDate',
     dateLabel: '体检日期',
     primaryKey: 'findings',
+    // 体检没有"诊断"：措辞上不能让家长以为体检也能下诊断
     primaryLabel: '检查结论',
+    primaryPlaceholder: '例如：血常规正常，生化轻度升高',
+    complaintKey: null,
+    complaintLabel: '',
+    complaintPlaceholder: '',
+    labValuesKey: 'labValues',
+    labValuesLabel: '化验数据',
     adviceKey: 'recommendations',
-    adviceLabel: '处理或建议',
+    adviceLabel: '医生建议',
+    advicePlaceholder: '例如：两周后复查，注意饮水',
+    // 检查项目与体征只有就诊表有这两列（2026-10-02）：体检的检查项目由
+    // 体检类型 + 化验数据本身表达，体征写进「补充说明」就够
+    examsKey: null,
+    examsLabel: '',
+    examsPlaceholder: '',
+    vitalsKey: null,
+    vitalsLabel: '',
+    vitalsPlaceholder: '',
+    medicationKey: null,
+    medicationLabel: '',
     notesKey: 'notes',
-    notesLabel: '备注',
-    showsComplaint: false,
-    showsCheckupType: true,
-    showsMedications: false,
-    showsStatus: false,
-    showsFollowUpDate: false,
+    notesLabel: '补充说明',
+    notesPlaceholder: '报告上还有该记下来的？例如：样本存在异常：溶血+',
+    vetKey: 'veterinarian',
+    vetLabel: '兽医',
+    followUpKey: null,
+    followUpLabel: '',
+    checkupTypeKey: 'checkupType',
+    checkupTypeLabel: '体检类型',
   },
 }
 
@@ -1093,8 +1438,76 @@ export function getHealthVisitFieldConfig(kind: HealthVisitKind): HealthVisitFie
 }
 
 /** 从合并列表里的记录反查它属于哪张表 */
+/** 记录属于哪个标签（就诊/体检/过敏）——切标签时判断"这条草稿该不该留在这儿" */
+export const HEALTH_RECORD_TAB_FIELD = '__tabKind'
+
+/**
+ * 这条（未保存的）草稿属不属于当前标签（2026-10-03 老板报的 bug）。
+ *
+ * 现象：在「就诊」标签下新建一个空的**手动填写**表单，切到「体检」和「过敏」
+ * 也能看到它。
+ *
+ * 原因：三个记录标签共用一个组件，而组件里"当前类型"在合并模式下**恒等于
+ * medical**（`baseType`），于是"保留未保存草稿"那段逻辑认为体检/过敏列表里
+ * 的草稿也都属于自己，把新建的空草稿原样带了过去 —— 空草稿永远是"未保存"，
+ * 于是一路跟着走。
+ *
+ * 判定顺序：
+ *   ① 有 `__tabKind`（新建/识别/从服务器载入时盖的章）→ 必须与当前标签一致；
+ *   ② 没有标签章但有 `__visitKind`（本地草稿）→ 与当前标签的就诊/体检归属比；
+ *   ③ 两者都没有（服务器来的记录）→ 它本来就只出现在当前标签的列表里，算本标签。
+ */
+export function doesDraftBelongToTab(
+  record: Record<string, any> | null | undefined,
+  options: { tabKind: HealthRecordType; visitKind?: 'medical' | 'checkup' },
+): boolean {
+  const tabKind = options.tabKind
+  const tabMarker = String(record?.[HEALTH_RECORD_TAB_FIELD] || '').trim()
+  if (tabMarker) {
+    return tabMarker === tabKind
+  }
+
+  const visitMarker = String(record?.[HEALTH_VISIT_KIND_FIELD] || '').trim()
+  if (tabKind === 'allergy') {
+    // 过敏标签只装过敏记录：带就诊/体检章的草稿一律不属于它
+    return !visitMarker
+  }
+
+  if (visitMarker) {
+    return visitMarker === (options.visitKind || 'medical')
+  }
+
+  return true
+}
+
 export function resolveHealthVisitKind(record: Record<string, any> | null | undefined): HealthVisitKind {
   return record?.[HEALTH_VISIT_KIND_FIELD] === 'checkup' ? 'checkup' : 'medical'
+}
+
+/**
+ * 某个书签该用哪套表单模板（2026-10-04 老板报的 bug）。
+ *
+ * 老板原话："过敏标签分类下，现在用的也是就诊的模板。请修复回过敏分类自身的模板。"
+ *
+ * 原因：就诊与体检共用一个列表（`'visit'` 合并模式），拆标签时图省事，
+ * 把**三个记录类书签全按 `'visit'`** 传给了组件 —— 于是过敏也跟着走
+ * 「日期 / 症状 / 医生诊断 / 医嘱」那套模板，过敏原和过敏反应反而没地方填。
+ *
+ * 规则：
+ *   · 就诊 / 体检 → `'visit'`（两类记录同一个列表，逐条按自己的章渲染）
+ *   · 过敏       → `'allergy'`（单一类型，走它自己的字段：过敏原 + 过敏反应/说明）
+ */
+export function resolveHealthTabRecordType(tab: string): HealthRecordType | 'visit' {
+  if (tab === 'medical' || tab === 'checkup') {
+    return 'visit'
+  }
+
+  if (tab === 'allergy') {
+    return 'allergy'
+  }
+
+  // 疫苗 / 体重不走这个组件；万一传进来也别渲染成空白
+  return 'medical'
 }
 
 export function createHealthVisitDraft(kind: HealthVisitKind): HealthRecordShape {
@@ -1170,11 +1583,464 @@ export function normalizeHealthVisitRecord(
   }
 }
 
+/**
+ * 一次选了多张图 → 合成一条记录（2026-10-01 第九期，老板定的）。
+ *
+ * 老板问"一次能传几张"时确认的规则：**一次选中的多张图当成同一份资料**。
+ * 一份 3 页的体检报告应该是 1 条记录、3 张原图，而不是 3 条各说一半的记录。
+ *
+ * 合并规则（保守，只做"合"不做"猜"）：
+ *   · 日期、类型、兽医这类**只有一个答案**的字段：以第一页为准，后面只补空
+ *   · 结论、建议、症状、诊断、处理、备注这类**一段话**的字段：
+ *     后面的页接着往下写（已经出现过的整段不重复抄）
+ *   · 用药是清单：去重合并
+ *   · 附件：每一页的原图都留下，按页序排列、去重
+ *
+ * ⚠️ 疫苗本不走这里 —— 一张疫苗本读出的是**多条独立的接种记录**，
+ *    合并会把几针并成一针（那是数据错误，不是省事）。
+ */
+const MULTILINE_DRAFT_KEYS = new Set([
+  'findings',
+  'recommendations',
+  'chiefComplaint',
+  'diagnosis',
+  'treatment',
+  'notes',
+  /**
+   * 化验数据必须能跨页拼起来（2026-10-02 修的一个**数据丢失** bug）。
+   *
+   * 一次化验常常是好几张单子：生化一张、血常规一张、CRP 一张。
+   * 它们各自成一页草稿，而这一栏原来不在"可拼接"名单里 ——
+   * 合并时"只有一个答案的字段保留第一页的值"，于是**后面几页的数值全被丢掉**，
+   * 家长看到的是"化验数据只有生化"（老板这次传的 5 张里，血常规与 CRP 就是这么没的）。
+   * 同一份报告的复印件/双面扫描重复时，下面已有的 includes 判断会去重。
+   */
+  'labValues',
+  /** 这次做的检查同理：处置单可能分两页写 */
+  'exams',
+])
+
+function isFilledDraftValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+
+  return String(value ?? '').trim() !== ''
+}
+
+/**
+ * 把一次拍的多页纸合成**一条记录**：**入口决定记录类型**（2026-10-02 老板定稿）。
+ *
+ * ── 为什么改成这样 ─────────────────────────────────────────
+ *
+ *   老板实测：从「就诊」进去传了 2 页病历 + 3 张化验单，结果裂成两条记录
+ *   （一条就诊、一条体检），他的疑问是"我走的不是就诊吗？为什么识别成体检报告？"
+ *   —— 记录类型原来是由 AI 的**文档类型**决定的，而化验单天然会被判成体检类。
+ *
+ *   现在：**你从哪个入口进，这一批就合成那个入口的一条记录**。
+ *   AI 的判断只用来决定"这页的字往哪个字段填"：
+ *     · 从就诊进：化验页 → 化验数据；影像页 → 检查项/附件；病历页 → 诊断/医嘱/用药…
+ *     · 从体检进：化验页 → 化验数据；病历页的文字 → 归到「补充说明」并标明来源
+ *   目标类型那一类的内容永远优先，另一类的文字**不丢**，而是带前缀并进「补充说明」。
+ *
+ *   疫苗本 / 过敏报告不属于这两类：不并进来，单独回报（各自的板块有更合适的表单）。
+ */
+/**
+ * 多页合并之后再筛一遍提示（2026-10-02 老板第二次实测提的）。
+ *
+ * 实例：病历第 1 页的"检查结果"表格里 CRP 那一行是空的，模型如实写了一句
+ * 「检查结果表格中 CRP C反应蛋白的结果值未填写，无法读取」—— 单看那一页没错，
+ * 后端也按"页内有没有值"放行了。但 5 页合并成一条记录之后，CRP 的数值就来自
+ * 另一页（CRP 报告单 9.373），家长看到的就成了"明明有值，你还说读不到"。
+ *
+ * 规则：**只要合并后的记录里已经有了这项内容，就不再提示"没读到"**。
+ * 与后端 filterContradictoryWarnings 同一套思路，只是这里比对的是合并结果。
+ */
+export function filterWarningsAgainstRecord(
+  warnings: string[],
+  draft: Record<string, any> | null | undefined,
+): string[] {
+  const list = Array.isArray(warnings) ? warnings.filter(Boolean) : []
+  if (!draft) return list.slice(0, 3)
+
+  const labValues = String(draft.labValues || '')
+  const patientName = String(draft.patientName || '').trim()
+  const date = String(draft.visitDate || draft.checkupDate || '').trim()
+
+  const missingPattern = /(未填写|未写|没法读|无法读取|读不到|未显示|没读到|缺失|空白)/
+  const filtered = list.filter((warning) => {
+    const text = String(warning || '')
+    if (!text) return false
+
+    if (labValues && /(化验|数值|结果值|指标|检查结果|检验)/.test(text) && missingPattern.test(text)) {
+      return false
+    }
+    if (patientName && /(动物名|宠物名|狗名|名字|昵称)/.test(text)) {
+      return false
+    }
+    if (date && /(日期|时间)/.test(text) && missingPattern.test(text)) {
+      return false
+    }
+    // 提到了具体项目（CRP/ALT…）而这行数值其实抄到了 → 也不算数
+    const mentioned = text.match(/[A-Za-z][A-Za-z0-9-]{1,9}/g) || []
+    if (
+      labValues &&
+      mentioned.some((token) => labValues.toUpperCase().includes(token.toUpperCase()))
+    ) {
+      return false
+    }
+
+    return true
+  })
+
+  // 去重 + 限量：一次传 5 张时提示会堆起来，家长看不过来
+  return Array.from(new Set(filtered)).slice(0, 3)
+}
+
+/**
+ * 化验数据行去重（2026-10-03 老板实测：8 张报告合并后"看着很多项都不准"）。
+ *
+ * 实测里两种重复：
+ *   · **同一份报告被拍了两张**（生化 0715-1 拍了两次）→ 同一段数值抄两遍；
+ *   · **两份报告测了同一个项目**（血涂片形态学 vs 血常规九分类都写了
+ *     "中性杆状核粒细胞 0.25"）→ 同一件事在列表里出现两次，
+ *     家长看到的就是"重复、对不上"。
+ *
+ * 规则（保守，只删**看起来就是同一件事**的行）：
+ *   ① 同一段（同一个报告名）里，**项目名归一后相同** → 只留第一次出现的；
+ *   ② 跨段时，**项目名 + 数值都相同**才删（数值不同的必须都留 ——
+ *      那可能是两次不同时间的检查，是真信息）。
+ * 归一：去掉编号前缀（"1-2."）、括号里的英文缩写、单位大小写与空格差异，
+ * 只用于**比较**，不改动抄下来的原文。
+ */
+export function dedupeLabValues(text: string): string {
+  const lines = String(text || '').split('\n')
+  const normalizeName = (value: string) => String(value || '')
+    .replace(/^[\d\-.]+\.?\s*/, '')          // 去掉 "1-2." 这类编号
+    .replace(/[（(][^）)]*[）)]/g, '')            // 去掉括号（多为英文缩写）
+    .replace(/\s+/g, '')
+    .toLowerCase()
+  const normalizeValue = (value: string) => String(value || '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/（(偏高|偏低|正常)）/g, '')
+
+  /** 把一行拆成 项目名 / 数值+单位 */
+  const splitRow = (line: string): { name: string; value: string } | null => {
+    const match = line.match(/\s(?=[<>≤≥]?[-+]?[\d.])/)
+    if (!match || match.index === undefined) {
+      return null
+    }
+    const name = line.slice(0, match.index).trim()
+    const value = line.slice(match.index).trim()
+    return name ? { name, value } : null
+  }
+
+  const result: string[] = []
+  const seenInBlock = new Set<string>()
+  const seenNameValue = new Set<string>()
+  /** 上一段的报告名 —— 用来识别"同一份报告被拍了两次"（连着出现同名报告） */
+  let lastTitle = ''
+  /** 这一段是不是上一段的重复（连着同名报告）→ 只按"项目名+数值"去重，避免误删 */
+  let continuation = false
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) {
+      continue
+    }
+
+    // 报告名那一行（没有数字、也不长）→ 换段
+    const isTitle = !/\d/.test(line) && line.length <= 24
+    if (isTitle) {
+      if (line === lastTitle) {
+        // 同一份报告拍了两张：不再重复写报告名，按"接着上一段"处理
+        // （只去重完全相同的行 —— 万一是两次抽血，数值不同就都留着）
+        continuation = true
+        continue
+      }
+      result.push(raw)
+      seenInBlock.clear()
+      lastTitle = line
+      continuation = false
+      continue
+    }
+
+    const row = splitRow(line)
+    if (!row) {
+      result.push(raw)
+      continue
+    }
+
+    const nameKey = normalizeName(row.name)
+    const valueKey = normalizeValue(row.value)
+    // 非重复段：同一段里项目名相同就只留一次（同一份报告不该出现两次同一项）
+    if (nameKey && !continuation && seenInBlock.has(nameKey)) {
+      continue
+    }
+    const globalKey = `${nameKey}|${valueKey}`
+    if (nameKey && valueKey && seenNameValue.has(globalKey)) {
+      continue
+    }
+
+    if (nameKey) {
+      seenInBlock.add(nameKey)
+    }
+    if (nameKey && valueKey) {
+      seenNameValue.add(globalKey)
+    }
+    result.push(raw)
+  }
+
+  return result.join('\n')
+}
+
+export function buildSingleScannedRecord(
+  groups: { type: string; drafts: Record<string, any>[] }[],
+  targetType: 'MEDICAL_RECORD' | 'CHECKUP_REPORT',
+): {
+  draft: Record<string, any> | null
+  /** 这一批里有没有"入口那一类"的内容（没有 → 卡片上要说明一句） */
+  matchedEntryType: boolean
+  /** 被排除在外的页（疫苗本 / 过敏报告），用于提示顾客去对应板块 */
+  ignored: { type: string; count: number }[]
+} {
+  const normalized = (value: string) => String(value || '').toUpperCase()
+  const byType = new Map<string, Record<string, any>[]>()
+  for (const group of groups || []) {
+    const key = normalized(group?.type)
+    const list = Array.isArray(group?.drafts) ? group.drafts : []
+    if (!key || list.length === 0) continue
+    byType.set(key, [...(byType.get(key) || []), ...list])
+  }
+
+  const otherType = targetType === 'MEDICAL_RECORD' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'
+  const targetDrafts = byType.get(targetType) || []
+  const otherDrafts = byType.get(otherType) || []
+  const imagingDrafts = byType.get('IMAGING') || []
+
+  const ignored: { type: string; count: number }[] = []
+  for (const type of ['VACCINE_BOOK', 'ALLERGY_REPORT', 'NOT_MEDICAL']) {
+    const list = byType.get(type) || []
+    if (list.length > 0) ignored.push({ type, count: list.length })
+  }
+
+  const base = mergeScannedReportDrafts(targetDrafts)[0] || {}
+  const folded = mergeScannedReportDrafts(otherDrafts)[0]
+  const imaging = mergeScannedReportDrafts(imagingDrafts)[0]
+
+  const draft: Record<string, any> = { ...base }
+  const appendText = (key: string, extra: unknown, prefix = '') => {
+    const text = String(extra ?? '').trim()
+    if (!text) return
+    const line = `${prefix}${text}`
+    const current = String(draft[key] ?? '').trim()
+    draft[key] = current ? `${current}\n${line}` : line
+  }
+
+  if (folded) {
+    const foldedDate = folded.visitDate || folded.checkupDate
+    if (!draft.visitDate && !draft.checkupDate && foldedDate) {
+      draft[targetType === 'MEDICAL_RECORD' ? 'visitDate' : 'checkupDate'] = foldedDate
+    }
+
+    if (targetType === 'MEDICAL_RECORD') {
+      // 化验页的数字进「化验数据」；结论/建议没有对应栏目 → 补充说明（标明来源，不丢）
+      appendText('labValues', folded.labValues)
+      appendText('notes', folded.findings, '检查结论：')
+      appendText('notes', folded.recommendations, '医生建议：')
+    } else {
+      appendText('labValues', folded.labValues)
+      appendText('notes', folded.diagnosis, '医生诊断：')
+      appendText('notes', folded.treatment, '医嘱：')
+      appendText(
+        'notes',
+        Array.isArray(folded.medications) ? folded.medications.join('、') : folded.medications,
+        '用药：',
+      )
+      appendText('notes', folded.chiefComplaint, '症状：')
+    }
+
+    if (!draft.patientName && folded.patientName) {
+      draft.patientName = folded.patientName
+    }
+  }
+
+  if (imaging) {
+    // 影像片只归档、不解读：它的 notes 是"检查部位"，正好属于「这次做的检查」
+    if (targetType === 'MEDICAL_RECORD') {
+      appendText('exams', imaging.notes)
+    } else {
+      appendText('notes', imaging.notes)
+    }
+    if (!draft.patientName && imaging.patientName) {
+      draft.patientName = imaging.patientName
+    }
+  }
+
+  // 多页合并出来的化验数据去重（同一份报告拍两张、两份报告测同一项目）
+  if (draft.labValues) {
+    draft.labValues = dedupeLabValues(String(draft.labValues))
+  }
+
+  const attachments = [base, folded, imaging]
+    .flatMap((item) => (Array.isArray(item?.attachments) ? item.attachments : []))
+    .map((url) => String(url || '').trim())
+    .filter(Boolean)
+  draft.attachments = Array.from(new Set(attachments))
+  draft.__documentType = targetType
+
+  const hasContent =
+    Object.entries(draft).some(
+      ([key, value]) =>
+        !key.startsWith('__') && key !== 'attachments' && isFilledDraftValue(value),
+    ) || draft.attachments.length > 0
+
+  return {
+    draft: hasContent ? draft : null,
+    matchedEntryType: targetDrafts.length > 0,
+    ignored,
+  }
+}
+
+export function mergeScannedReportDrafts(
+  drafts: Record<string, any>[] | null | undefined,
+): Record<string, any>[] {
+  const list = Array.isArray(drafts) ? drafts.filter(Boolean) : []
+  if (list.length === 0) {
+    return []
+  }
+
+  const merged: Record<string, any> = { ...list[0] }
+
+  for (const draft of list.slice(1)) {
+    for (const [key, value] of Object.entries(draft)) {
+      // 附件最后统一合并，避免中途把某一页的图覆盖掉
+      if (key === 'attachments') {
+        continue
+      }
+
+      if (!isFilledDraftValue(value)) {
+        continue
+      }
+
+      const current = merged[key]
+
+      // 前面几页没读到的字段，用后面这几页补上
+      if (!isFilledDraftValue(current)) {
+        merged[key] = value
+        continue
+      }
+
+      if (Array.isArray(current)) {
+        merged[key] = Array.from(
+          new Set([
+            ...current.map((item) => String(item ?? '').trim()).filter(Boolean),
+            ...(Array.isArray(value) ? value : [value])
+              .map((item) => String(item ?? '').trim())
+              .filter(Boolean),
+          ]),
+        )
+        continue
+      }
+
+      if (MULTILINE_DRAFT_KEYS.has(key) && typeof current === 'string' && typeof value === 'string') {
+        const next = value.trim()
+        const existing = current.trim()
+        // 两页写着同一句话时不再抄一遍（复印件、双面扫描很常见）
+        if (!next || existing.includes(next)) {
+          continue
+        }
+
+        merged[key] = `${existing}\n${next}`
+      }
+
+      // 其余"只有一个答案"的字段（日期、类型、兽医…）：保留第一页读到的值，
+      // 不猜、不拼接 —— 拼出"2026-09-012026-09-02"这种日期只会更糟
+    }
+  }
+
+  const images = list.flatMap((draft) => (
+    Array.isArray(draft?.attachments) ? draft.attachments : []
+  ))
+  // 一条记录里附件类型是字符串数组；顺序按页走，重复的（同一页被选两次）去掉
+  merged.attachments = Array.from(new Set(normalizeAttachments(images)))
+
+  return [merged]
+}
+
+/**
+ * 多张图各自判了类型 → 按"多数页"定这份资料是哪一类。
+ *
+ * 后端对每一张图独立判定（AUTO 模式），一页被读成"病历"不该把整份
+ * 3 页体检报告带成病历 —— 原来取最后一张的判定，纯看运气。
+ * 票数相同时以**先出现**的那类为准（页码顺序），结果稳定、可解释。
+ * 一张都没判出来时用调用方给的兜底类型。
+ */
+export function resolveScannedDocumentType(
+  votes: (string | null | undefined)[] | null | undefined,
+  fallback: string,
+): string {
+  const counts = new Map<string, number>()
+
+  for (const vote of votes || []) {
+    const key = String(vote || '').trim().toUpperCase()
+    if (!key || key === 'AUTO') {
+      continue
+    }
+
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+
+  let winner = ''
+  let winnerCount = 0
+
+  // Map 按插入顺序遍历：票数相同时先出现的那类胜出
+  for (const [key, count] of counts) {
+    if (count > winnerCount) {
+      winner = key
+      winnerCount = count
+    }
+  }
+
+  return winner || fallback
+}
+
 /** 合并列表里这条记录的日期（用于排序与摘要） */
 export function resolveHealthVisitDate(record: Record<string, any> | null | undefined): string {
   const kind = resolveHealthVisitKind(record)
   const config = getHealthVisitFieldConfig(kind)
   return String(record?.[config.dateKey] || '').trim()
+}
+
+/**
+ * 「已经好了」一键切换（2026-10-02 老板定：状态不进表单）。
+ *
+ * 表单里不再问状态，但库里的 status 仍然决定这条记录算不算"还没结束的问题"
+ * （时间线把它喂给 AI 七项分析）。所以给已保存的就诊记录留一个一键开关：
+ * 好了点一下 → 已康复（不再进 AI）；点错了再点回来 → 治疗中。
+ *
+ * 体检没有这个概念（检查是一次性的事实），所以只有就诊有。
+ */
+export function resolveMedicalStatusToggle(record: Record<string, any> | null | undefined): {
+  status: MedicalStatusValue
+  label: string
+  hint: string
+} {
+  const current = String(record?.status || '').trim()
+  if (current === 'RECOVERED') {
+    return {
+      status: 'TREATING',
+      label: '还在治疗中？点一下改回来',
+      hint: '已标记为"已经好了"，不再算进 AI 分析',
+    }
+  }
+
+  return {
+    status: 'RECOVERED',
+    label: '已经好了',
+    hint: '还没好就别点，没好之前会一直算进 AI 分析',
+  }
 }
 
 /**
@@ -1207,10 +2073,15 @@ export function mergeHealthVisitRecords(
 }
 
 /**
- * 校验：**只有「诊断结果 / 检查结论」是必填的内容字段**。
+ * 校验：**必填只剩两件**（2026-10-02 老板定的精简版）。
  *
- * 老板第 3 条明确"病史可以只保留一个诊断结果"——症状描述、用药、状态
- * 这些一律不拦着保存，家长想记多少记多少。
+ *   · 日期必填 —— 它是时间线上唯一的时间锚点
+ *   · 就诊：**「症状」和「医生诊断」至少填一个**
+ *     （很多家长拿不到明确诊断，医生只说"可能是肠胃炎"；
+ *      这两项都是饮食标签派生的输入，填哪个都不亏）
+ *   · 体检：检查结论必填（体检的价值就在结论上）
+ *
+ * 用药、医嘱、这次做的检查、体征、补充说明、复查日期、兽医一律不拦着保存。
  */
 export function getHealthVisitValidationError(
   kind: HealthVisitKind,
@@ -1222,18 +2093,39 @@ export function getHealthVisitValidationError(
     return `请选择${config.dateLabel}`
   }
 
-  if (!normalizeOptionalText(record?.[config.primaryKey])) {
-    return `请填写${config.primaryLabel}`
+  // 内容必填：**两个字段填一个就行**（2026-10-02 复审后统一成同一套规则）
+  //   · 就诊：症状 / 医生诊断 —— 很多家长拿不到明确诊断
+  //   · 体检：检查结论 / 医生建议 —— 有的报告只有一堆指标（写在结论里），
+  //     有的只写了几句医嘱；两个都是饮食标签派生与 AI 分析的输入，填哪个都不亏
+  const contentKeys = config.complaintKey
+    ? [config.complaintKey, config.primaryKey]
+    : [config.primaryKey, config.adviceKey]
+  const contentLabels = config.complaintKey
+    ? [config.complaintLabel, config.primaryLabel]
+    : [config.primaryLabel, config.adviceLabel]
+
+  const hasContent = contentKeys.some((key) => normalizeOptionalText(record?.[key]))
+  if (hasContent) {
+    return null
   }
 
-  return null
+  // 只留了原件的记录也放行（2026-10-02）：X 光片、超声图像这类资料没有文字可抄，
+  // 家长的诉求就是"把片子存进档案" —— 有了日期 + 附件，这条记录就是有意义的。
+  const hasAttachment = normalizeAttachments(record?.attachments).length > 0
+  if (hasAttachment) {
+    return null
+  }
+
+  return `请至少填写「${contentLabels[0]}」或「${contentLabels[1]}」，或上传报告原件`
 }
 
 /** 表单草稿 → 接口载荷（按类型分别对回两张表的字段） */
+export function buildHealthVisitPayload(kind: 'checkup', record: Record<string, any>): CheckupRecordPayload
+export function buildHealthVisitPayload(kind: 'medical', record: Record<string, any>): MedicalRecordPayload
 export function buildHealthVisitPayload(
   kind: HealthVisitKind,
   record: Record<string, any>,
-): Record<string, unknown> {
+): MedicalRecordPayload | CheckupRecordPayload {
   const config = getHealthVisitFieldConfig(kind)
   const notes = config.notesKey ? normalizeOptionalText(record?.[config.notesKey]) : null
 
@@ -1242,6 +2134,7 @@ export function buildHealthVisitPayload(
       checkupType: resolveHealthCheckupTypeValue(record?.checkupType) || HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
       checkupDate: normalizeOptionalText(record?.checkupDate) || '',
       findings: normalizeOptionalText(record?.findings),
+      labValues: normalizeOptionalText(record?.labValues),
       recommendations: normalizeOptionalText(record?.recommendations),
       // 备注：体检表 2026-10-01（第五期）才加这一列，此前合并表单里
       // "就诊能写备注、体检不能"说不通，现在补齐。
@@ -1259,12 +2152,17 @@ export function buildHealthVisitPayload(
     // 家长可能只填了诊断结果，后端本来就允许这一栏是空串。
     chiefComplaint: normalizeOptionalText(record?.chiefComplaint) || '',
     diagnosis: normalizeOptionalText(record?.diagnosis) || '',
+    labValues: normalizeOptionalText(record?.labValues),
+    // treatment = 医嘱/回家注意；exams = 这次做的检查；vitals = 体征（2026-10-02）
     treatment: normalizeOptionalText(record?.treatment),
+    exams: normalizeOptionalText(record?.exams),
+    vitals: normalizeOptionalText(record?.vitals),
     medications: normalizeMedicationList(record?.medications),
     // 缺省是"待确认"，不是后端的默认值"治疗中"
-    status: getMedicalStatusOptions().some((option) => option.value === status)
+    // （下面已按白名单校验，这里把类型收紧到后端枚举）
+    status: (getMedicalStatusOptions().some((option) => option.value === status)
       ? status
-      : 'PENDING_CONFIRMATION',
+      : 'PENDING_CONFIRMATION') as MedicalStatusValue,
     followUpDate: normalizeOptionalText(record?.followUpDate),
     veterinarian: normalizeOptionalText(record?.veterinarian),
     notes,
@@ -1285,7 +2183,20 @@ export function normalizeMedicationList(value: unknown): string[] {
     .filter(Boolean)
 }
 
-/** 列表行的标题与摘要 */
+/**
+ * 列表行的标题与摘要（2026-10-02 改）。
+ *
+ * 标题改成**"有什么就显示什么"**：
+ *   · 就诊：症状 → 医生诊断 → 新记录
+ *   · 体检：体检类型 → 检查结论 → 新记录
+ *
+ * 原来固定用"症状"当标题，可症状藏在「更多」里 ——
+ * 家长只填了诊断+日期，卡片上却写着「未填写症状」；
+ * 定制食谱下单时系统代写的那条记录更是直接显示"定制食谱时提供"。
+ *
+ * 摘要里不再显示状态：状态已经不在表单里问了（老板 2026-10-02 定），
+ * 卡片上摆一个家长改不了的标签只会让人困惑；营养师端照旧能看到。
+ */
 export function buildHealthVisitSummary(
   kind: HealthVisitKind,
   record: Record<string, any>,
@@ -1293,15 +2204,28 @@ export function buildHealthVisitSummary(
   const config = getHealthVisitFieldConfig(kind)
   const attachmentCount = normalizeAttachments(record?.attachments).length
 
-  const title = String(record?.[config.primaryKey] || '').trim()
-    || `未填写${config.primaryLabel}`
+  // 标题：**就诊放医生诊断、体检放检查结论**（2026-10-02 老板第二次实测定的）。
+  // 原来就诊的标题是"症状摘要"，家长一眼看到的是长长一句主诉，看不出这条是什么病；
+  // 体检的结论太长（识别把化验数值堆进旧记录的情况）不当标题，避免一堵数字墙。
+  const primaryText = String(record?.[config.primaryKey] || '').trim()
+  const shortPrimary = primaryText && primaryText.length <= 24 ? primaryText : ''
+  const complaintText = config.complaintKey
+    ? String(record?.[config.complaintKey] || '').trim()
+    : ''
+  const shortComplaint = complaintText && complaintText.length <= 24 ? complaintText : ''
 
+  const candidates = kind === 'checkup'
+    ? [shortPrimary, formatHealthCheckupTypeLabel(record?.checkupType)]
+    : [shortPrimary, shortComplaint]
+
+  const title = candidates
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || (kind === 'checkup' ? '体检记录' : '就诊记录')
+
+  // 摘要行只留"这条里有什么"：**日期挪到卡片头部、医嘱不再重复**（老板：信息太多）。
+  const labValues = String(record?.labValues || '').trim()
   const parts = [
-    resolveHealthVisitDate(record),
-    kind === 'checkup'
-      ? formatHealthCheckupTypeLabel(record?.checkupType)
-      : formatMedicalStatusLabel(record?.status),
-    String(record?.[config.adviceKey] || '').trim(),
+    labValues ? '含化验数据' : '',
     attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : '',
   ].filter(Boolean)
 
@@ -1315,17 +2239,35 @@ export function buildHealthVisitSummary(
  * 那套写法不用改。空态文案按老板的口径写得具体一点——
  * "还没有记录"太干，家长不知道该记什么。
  */
-export function getHealthVisitSectionMeta(): HealthRecordTypeMeta {
+export function getHealthVisitSectionMeta(
+  kind: HealthVisitKind = 'medical',
+): HealthRecordTypeMeta {
+  // 2026-10-02：就诊与体检**已拆成两个标签**，
+  // 所以空态文案也要跟着分开 —— 原来那句"还没有病历或检查记录"
+  // 会在两个标签下都出现，等于又把两类混在一起说了。
   return {
     type: 'medical',
-    label: '病例',
+    label: kind === 'checkup' ? '体检' : '就诊',
     addLabel: '新增记录',
-    emptyTitle: '还没有病例记录',
+    emptyTitle: kind === 'checkup' ? '还没有体检记录' : '还没有就诊记录',
     accentClass: 'health-records--visit',
   }
 }
 
-/** 空态下面那句引导（六个板块统一都要有一句） */
-export function getHealthVisitEmptyDescription(): string {
-  return '带狗看过病、做过检查，记一条，下次就诊和体检都用得上。'
+/**
+ * 空态文案：**按当前标签取**（2026-10-03 老板报的 bug 修）。
+ *
+ * 原来这里是 `getHealthVisitSectionMeta(props.visitKind)`，而页面在「过敏」标签下
+ * visitKind 传的是 `medical`（合并模式的遗留）—— 于是过敏标签的空态显示成
+ * 「还没有就诊记录」，跟标签对不上（老板实测发现）。
+ *
+ * 现在一律按标签取，五类各自说自己的名字：
+ *   就诊 → 还没有就诊记录 / 体检 → 还没有体检记录 / 过敏 → 还没有过敏记录
+ *
+ * 只有这一句，**下面不再跟小字说明**（老板：没有记录就写没有记录即可）。
+ */
+export function getHealthTabEmptyTitle(tabKind: HealthRecordType): string {
+  if (tabKind === 'checkup') return '还没有体检记录'
+  if (tabKind === 'allergy') return '还没有过敏记录'
+  return '还没有就诊记录'
 }

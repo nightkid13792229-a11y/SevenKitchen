@@ -57,8 +57,11 @@ describe('过敏板块重构 · 报告实体化（第二期）', () => {
     expect(quickAdd).toContain('reportImageUrl.value = imageUrl');
     // 确认时以**报告**的形式落库，而不是散装过敏原
     expect(quickAdd).toContain('dogApi.allergyReports.create');
-    // 原件挂在报告上
-    expect(quickAdd).toContain('attachments: [reportImageUrl.value]');
+    // 原件挂在报告上；一份报告常常不止一页，**全部原图**都要留住
+    expect(quickAdd).toContain('collectedImageUrls.push(imageUrl)');
+    expect(quickAdd).toContain(
+      'attachments: sourceImageUrls.length > 0 ? sourceImageUrls : undefined',
+    );
   });
 
   it('报告落库失败时退回逐条记录 —— 不能让顾客白拍一张照', () => {

@@ -13,7 +13,9 @@ import type { KnowledgeEntry } from '../types';
  *      不写治疗手段、不写用药剂量。
  *   3. 涉及产品/器械的，只写原理与选择要点，不推荐具体品牌。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -69,7 +71,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-002',
@@ -80,7 +82,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     summary:
       '唯一真正重要的工具是牙刷，按体型与配合度选：小型犬可用软毛儿童牙刷，玩具犬和幼犬用婴儿牙刷常常比大号宠物牙刷更好用。**不要用人用牙膏** —— 通常含清洁剂、氟化物与小苏打，被吞下可能引起胃部不适或氟中毒；宠物专用牙膏主要作用是提高接受度，真正去除牙菌斑的是牙刷的机械动作。',
     details: [
-      '牙刷：唯一重要的工具是牙刷，按病患体型选择。市面上的动物牙刷（双面、3D、不同刷头角度）都有效；也可用软毛尼龙人用牙刷替代，小型犬选儿童牙刷，玩具犬、猫与幼年动物用婴儿牙刷可能更合适。',
+      '牙刷：唯一重要的工具是牙刷，按病患体型选择。市面上的动物牙刷（双面、3D、不同刷头角度）都有效；也可用软毛尼龙人用牙刷替代，小型犬选儿童牙刷，玩具犬与幼年动物用婴儿牙刷可能更合适。',
       '不推荐纱布和毛巾：它们无法清洁牙龈线以下的区域。',
       '机械（电动）牙刷在人的研究中优于手动牙刷，但振动对动物是异常感觉、可能造成恐惧，只适合耐受性高的犬。',
       '牙膏：宠物牙膏可以大幅提高接受度，部分含钙螯合剂、有助减少牙结石沉积；但牙结石本身基本不致病，牙膏对减少牙菌斑和牙龈炎并不是关键贡献者 —— 关键是牙刷移动带来的机械清除。',
@@ -113,7 +115,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-003',
@@ -163,7 +165,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-004',
@@ -221,7 +223,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-005',
@@ -279,7 +281,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-006',
@@ -323,7 +325,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-007',
@@ -381,7 +383,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-008',
@@ -430,7 +432,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-009',
@@ -479,7 +481,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-010',
@@ -528,7 +530,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-011',
@@ -577,7 +579,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-012',
@@ -626,7 +628,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-013',
@@ -684,7 +686,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-014',
@@ -734,7 +736,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-015',
@@ -783,7 +785,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-016',
@@ -836,7 +838,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-017',
@@ -889,7 +891,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-018',
@@ -947,7 +949,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-019',
@@ -1005,7 +1007,7 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'nurse-020',
@@ -1055,6 +1057,6 @@ export const NURSING_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

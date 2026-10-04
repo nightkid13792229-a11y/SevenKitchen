@@ -20,10 +20,10 @@ export type HealthTimelineEventType =
   | 'allergy' // 过敏
   | 'vaccine' // 疫苗
   | 'weight' // 体重
-  | 'diet' // 饮食偏好
+  // 2026-10-02：饮食偏好不再属于健康管理，事件类型 'diet' 一并去掉
 
 export interface HealthTimelineEvent {
-  /** 原始记录 id；饮食偏好是虚拟事件，用固定值 */
+  /** 原始记录 id */
   id: string
   type: HealthTimelineEventType
   /** YYYY-MM-DD */
@@ -67,14 +67,24 @@ export interface HealthVisitSummaryResponse {
     date: string
     diagnosis: string
     status: string
+    /** 医嘱 / 回家注意 */
     treatment: string
+    /** 这次做的检查 */
+    exams: string
+    /** 体征 */
+    vitals: string
     followUpDate: string | null
   }[]
   recentVisits: {
     id: string
     date: string
     diagnosis: string
+    /** 医嘱 / 回家注意（2026-10-02 起语义收窄） */
     treatment: string
+    /** 这次做的检查（2026-10-02 新增） */
+    exams: string
+    /** 体征：体温、体重、BCS（2026-10-02 新增） */
+    vitals: string
     veterinarian: string
     attachmentCount: number
   }[]
@@ -121,7 +131,7 @@ const VACCINE_DUE_SOON_DAYS = 60
 export class HealthTimelineService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 健康时间线：六类记录按日期倒序排成一条线 */
+  /** 健康时间线：五类记录按日期倒序排成一条线 */
   async getTimeline(
     customerId: string,
     dogId: string,
@@ -194,28 +204,13 @@ export class HealthTimelineService {
       })),
     ]
 
-    // 饮食偏好的**变更**进时间线（2026-10-01 第五期补上）。
+    // 2026-10-02：**饮食偏好的变更不再进时间线**。
     //
-    // 第二期时这里刻意留空：当时只有两个自由文本框，没有"什么时候改的"
-    // 这个事实（dog 表上只有 createdAt，那是建档时间，拿来当变更时间会误导）。
-    // 第五期有了变更历史表，才第一次有真实的饮食事件可放。
-    const dietChanges = await this.prisma.dogDietPreferenceChange.findMany({
-      where: { dogId },
-      orderBy: { changedAt: 'desc' },
-      take: 50,
-    });
-    for (const change of dietChanges) {
-      events.push({
-        id: change.id,
-        type: 'diet',
-        date: toDateText(change.changedAt),
-        title:
-          change.action === 'ADDED'
-            ? `饮食偏好：新增「${change.foodName}」`
-            : `饮食偏好：去掉「${change.foodName}」`,
-        detail: change.kind === 'LIKED' ? '爱吃' : '不吃',
-      });
-    }
+    // 第五期把它放进来，是因为那时饮食偏好属于健康管理板块；
+    // 后来老板定了"饮食偏好跟健康管理关系不大，只在定制食谱时填写"，
+    // 健康管理页的饮食标签也下线了 —— 那么"健康记录"这条时间线上
+    // 再混着"新增/去掉某样食材"的事件就不合逻辑了。
+    // 变更历史本身照旧保留（定制食谱那边在用），只是不再出现在这里。
 
     events.sort(compareTimelineEvents)
 
@@ -271,6 +266,8 @@ export class HealthTimelineService {
           : Promise.resolve(null),
       ]);
 
+    // 「还没结束的问题」= 没标注结局的 + 治疗中 + 慢性。
+    // 注意 PENDING_CONFIRMATION 只是"家长没标注"，不代表还在生病（见 MEDICAL_STATUS_LABELS）。
     const ongoingStatuses = ['PENDING_CONFIRMATION', 'TREATING', 'CHRONIC']
     const ongoingConditions = medical
       .filter((record) => ongoingStatuses.includes(String(record.status)))
@@ -278,8 +275,22 @@ export class HealthTimelineService {
         id: record.id,
         date: toDateText(record.visitDate),
         diagnosis: record.diagnosis,
+        // 2026-10-02 起把这三项也交给 AI：
+        //   · chiefComplaint（主要问题）—— 家长最常填的一项，也是饮食标签派生的输入；
+        //     此前只有标签派生读它，AI 七项分析看不到，同一份数据两套口径
+        //   · medications（用药）—— 知识库自己把"在服药物"列为必须做进阶评估的项目，
+        //     顾客一直在填、系统一直在存，但 AI 从来没拿到过
+        //   · notes（其它想说的）—— 原来叫"备注"，2026-10-02 改名并接进这里
+        chiefComplaint: record.chiefComplaint || '',
+        // 这次就诊做的化验（2026-10-02 起病历表也有这一栏）
+        labValues: record.labValues || '',
+        medications: record.medications || [],
+        notes: record.notes || '',
         status: formatMedicalStatus(record.status),
+        // treatment = 医嘱/回家注意；exams = 这次做的检查；vitals = 体征（2026-10-02）
         treatment: record.treatment || '',
+        exams: record.exams || '',
+        vitals: record.vitals || '',
         followUpDate: record.followUpDate ? toDateText(record.followUpDate) : null,
       }))
 
@@ -314,18 +325,41 @@ export class HealthTimelineService {
         id: record.id,
         date: toDateText(record.visitDate),
         diagnosis: record.diagnosis,
+        chiefComplaint: record.chiefComplaint || '',
         treatment: record.treatment || '',
+        exams: record.exams || '',
+        vitals: record.vitals || '',
+        labValues: record.labValues || '',
+        medications: record.medications || [],
+        notes: record.notes || '',
         veterinarian: record.veterinarian || '',
         attachmentCount: record.attachments.length,
       })),
-      recentCheckups: checkups.slice(0, SUMMARY_RECENT_LIMIT).map((record) => ({
-        id: record.id,
-        date: toDateText(record.checkupDate),
-        checkupType: formatCheckupType(record.checkupType),
-        findings: record.findings || '',
-        recommendations: record.recommendations || '',
-        attachmentCount: record.attachments.length,
-      })),
+      recentCheckups: checkups.slice(0, SUMMARY_RECENT_LIMIT).map((record) => {
+        // 「只有原件、没有任何文字结论」的记录（典型是 X 光/超声片）：
+        // 2026-10-02 打上 attachmentOnly，并且**不再显示成"常规体检"** ——
+        // 否则 AI 会读成"做过一次常规体检、结论为空"，甚至顺手把片子"解读"了。
+        const attachmentOnly =
+          !String(record.findings || '').trim() &&
+          !String(record.labValues || '').trim() &&
+          record.attachments.length > 0
+
+        return {
+          id: record.id,
+          date: toDateText(record.checkupDate),
+          checkupType: attachmentOnly
+            ? '影像/资料留档（原件未解读）'
+            : formatCheckupType(record.checkupType),
+          findings: record.findings || '',
+          // 化验数值单独一栏（2026-10-02）：AI 分析要能用上肌酐、蛋白尿这类数字
+          labValues: record.labValues || '',
+          recommendations: record.recommendations || '',
+          // 体检记录里的「其它想说的」（notes，2026-10-02 起接进 AI）
+          notes: record.notes || '',
+          attachmentCount: record.attachments.length,
+          attachmentOnly,
+        }
+      }),
       vaccines: {
         latest: vaccines.slice(0, SUMMARY_RECENT_LIMIT).map((record) => ({
           id: record.id,
@@ -411,7 +445,6 @@ const TIMELINE_TYPE_ORDER: Record<HealthTimelineEventType, number> = {
   allergy: 2,
   vaccine: 3,
   weight: 4,
-  diet: 5,
 }
 
 export function compareTimelineEvents(
@@ -491,8 +524,16 @@ export function formatCheckupType(value: string | null | undefined): string {
   return CHECKUP_TYPE_LABELS[key.toUpperCase()] || key
 }
 
+/**
+ * 记录状态的中文（只给 AI 看的那一份）。
+ *
+ * 2026-10-02 老板把「这条现在的情况」从表单里去掉了（信息太多），
+ * 所以**新记录一律停在 PENDING_CONFIRMATION**。原来的措辞「待确认」很容易被
+ * 读成"病情待确认"（= 还在生病），因此改成「未标注结果」——说的只是
+ * "家长没标注这条的结局"，不是临床状态。提示词里也写死了这一层意思。
+ */
 const MEDICAL_STATUS_LABELS: Record<string, string> = {
-  PENDING_CONFIRMATION: '待确认',
+  PENDING_CONFIRMATION: '未标注结果',
   TREATING: '治疗中',
   RECOVERED: '已康复',
   CHRONIC: '慢性',

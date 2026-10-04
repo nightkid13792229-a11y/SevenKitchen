@@ -89,3 +89,67 @@ describe('疫苗管理', () => {
     expect(source).toContain('草稿绝不能"边渲染边创建"')
   })
 })
+
+/**
+ * 疫苗本原图留档（2026-10-01，健康管理第九期）。
+ *
+ * 老板：拍疫苗本上传的图片，原图也要留档（像病历/检查那样）。
+ * 疫苗本是接种凭证 —— 出行、寄养、换医院都可能要看原件。
+ */
+describe('疫苗本原图留档', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('识别出的接种记录带着当页原图（不再是写死的空数组）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('attachments: attachmentList(draft)')
+    expect(source).not.toContain('attachments: [],')
+  })
+
+  it('保存时把原图一起提交给后端', () => {
+    const source = readComponent()
+
+    expect(source).toContain('attachments: attachmentList(record)')
+    // 保存那条路要把记录本身传进 buildPayload，否则拿不到附件
+    expect(source).toContain('buildPayload(draft, record)')
+  })
+
+  it('卡片上能看原图：有原件才显示「报告原件」，点开可预览', () => {
+    const source = readComponent()
+
+    expect(source).toContain('v-if="attachmentList(record).length > 0"')
+    expect(source).toContain('报告原件')
+    expect(source).toContain('@tap="previewAttachment(attachment)"')
+    // 图片/PDF 的打开逻辑与病历卡片共用一份，不各写一套
+    expect(source).toContain('previewHealthAttachment')
+    expect(source).toContain('buildHealthAttachmentDisplayMeta')
+  })
+
+  it('立即求值的 computed/watch 写在它用到的 ref 之后（否则整个板块崩掉）', () => {
+    const source = readComponent()
+
+    // 2026-10-02 修：hasPendingDraft 的 immediate watcher 原来写在 const records 之前，
+    // setup 期间立刻求值 → records 还是 undefined → 抛
+    // TypeError: Cannot read properties of undefined (reading 'value')，
+    // 「疫苗」板块整块 setup 失败（开发者工具控制台刷满同一条报错）。
+    const recordsAt = source.indexOf('const records = ref')
+    const computedAt = source.indexOf('const hasPendingDraft = computed')
+    const watchAt = source.indexOf('watch(hasPendingDraft')
+
+    expect(recordsAt).toBeGreaterThan(-1)
+    expect(computedAt).toBeGreaterThan(recordsAt)
+    expect(watchAt).toBeGreaterThan(computedAt)
+    // 立即求值是必须的（父页面靠它知道要不要亮保存键），所以只能靠顺序保证安全
+    expect(source).toContain('watch(hasPendingDraft, (value) => emit(\'dirty-change\', value), { immediate: true })')
+  })
+
+  it('接口类型带上 attachments 字段', () => {
+    const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
+
+    expect(api).toContain('attachments?: string[]')
+  })
+})

@@ -16,7 +16,9 @@ import type { KnowledgeEntry } from '../types';
  *
  *   凡是 TRIAGE 类，urgency 必填 —— 这是唯一不让 AI 自由发挥的判断。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -56,7 +58,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-002',
@@ -91,7 +93,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-003',
@@ -113,7 +115,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不给诊断与治疗建议。',
     ],
     citations: [
-      { source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022', chapter: '急诊评估与分级' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2022 犬胸腰段椎间盘突出诊断与管理共识 · 急诊评估与分级' },
     ],
     sources: [
       { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2022 胸腰段 IVDD 共识', note: '神经功能分级与紧急程度' },
@@ -124,7 +126,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-004',
@@ -147,8 +149,12 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '怀疑吞了异物（骨头、玩具、绳子）时，即使暂时没症状也应尽快就医。',
     ],
     citations: [
-      { source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026', chapter: '消化道症状的评估' },
-      { source: 'WSAVA 胃肠道指南', chapter: '消化道疾病的评估流程' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病诊断与治疗共识 · 消化道症状的评估' },
+      // 2026-10-02：这里原来还引了一份「WSAVA 胃肠道指南」，但登记表第六节写明
+      // 该指南只拿到 2009 年 JSAP 摘要（Wiley 403）、本地也没有归档，
+      // 登记表自己给的处置就是「ACVIM 慢性肠病共识 2 份可替代」——
+      // 所以改成引已登记的 ACVIM 共识，不保留一份我们手上没有的资料当依据。
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病共识 · 消化道疾病的评估流程' },
     ],
     sources: [
       { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2026 慢性肠病共识', note: '消化道症状的评估思路' },
@@ -159,7 +165,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-005',
@@ -192,7 +198,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-006',
@@ -225,7 +231,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-007',
@@ -259,7 +265,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-008',
@@ -294,7 +300,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-009',
@@ -315,11 +321,10 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
       '不要自行给止咳药 —— 咳嗽是症状，压住它可能掩盖病情。',
     ],
     citations: [
-      { source: 'ACVIM 心肌病分类诊断与管理共识 2020', chapter: '心衰相关呼吸道表现' },
-      { source: 'ACVIM 肺动脉高压共识 2020', chapter: '呼吸困难的评估' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2020 肺动脉高压共识 · 呼吸困难的评估' },
     ],
     sources: [
-      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2020 心肌病与肺高压共识', note: '心脏原因导致的咳嗽与呼吸困难' },
+      { sourceId: 'ACVIM-CONSENSUS', locator: 'ACVIM 2020 肺动脉高压共识（犬）', note: '心脏原因导致的咳嗽与呼吸困难' },
       { sourceId: 'MERCK-HEME', locator: '——', note: '咳嗽的鉴别方向（背景与警示）' },
     ],
     priority: 'HIGH',
@@ -327,7 +332,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-010',
@@ -360,7 +365,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-011',
@@ -394,7 +399,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-012',
@@ -427,7 +432,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-013',
@@ -459,7 +464,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-014',
@@ -492,7 +497,7 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-015',
@@ -522,6 +527,6 @@ export const CLINICAL_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

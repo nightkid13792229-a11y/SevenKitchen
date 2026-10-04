@@ -77,6 +77,32 @@ describe('疫苗计划 · 界面', () => {
   })
 })
 
+describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧开放当天补）', () => {
+  function readSection() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+  }
+
+  it('先说明"档案里还没有接种记录"，再谈逾期', () => {
+    const section = readSection()
+
+    // 实测：8 个月、没记过疫苗的狗，页面直接顶着 5 个「已逾期」——
+    // 家长明明打过、只是没记，会以为系统算错了
+    expect(section).toContain('noRecordAtAll')
+    expect(section).toContain('档案里还没有接种记录')
+    expect(section).toContain('把接种记录补上，这里会自动对齐')
+  })
+
+  it('判定条件来自后端的 summary.done 与 matchedRecordId，不自己猜', () => {
+    const section = readSection()
+
+    expect(section).toContain('plan.value.summary?.done')
+    expect(section).toContain('step.matchedRecordId')
+  })
+})
+
 describe('疫苗计划 · 接线', () => {
   it('挂在疫苗书签下，且排在疫苗记录上方', () => {
     const page = readFileSync(

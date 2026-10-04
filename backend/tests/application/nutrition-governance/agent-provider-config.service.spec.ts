@@ -230,3 +230,57 @@ describe('AgentProviderConfigService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+/**
+ * 「只在该用途确实单独配过时才返回模型」（2026-10-01）。
+ *
+ * 为什么需要它：健康报告识别必须用**能读图**的模型，
+ * 而 getEnabledDeepSeekRuntimeConfig 会回退到全局默认（纯文本模型）——
+ * 一旦被顶掉，识别会直接失败。所以视觉模型只认"单独配过的那一行"。
+ */
+describe('AgentProviderConfigService · 单独配过的用途模型', () => {
+  const makeService = (row: unknown) => {
+    const prisma = {
+      agentProviderConfig: { findUnique: jest.fn().mockResolvedValue(row) },
+    };
+    const service = new AgentProviderConfigService(prisma as any);
+    return { service, prisma };
+  };
+
+  it('没单独配过 → 返回 null（由调用方用自己的默认）', async () => {
+    const { service } = makeService(null);
+    await expect(
+      service.getConfiguredPurposeModel('HEALTH_REPORT_EXTRACTION'),
+    ).resolves.toBeNull();
+  });
+
+  it('单独配过且启用 → 返回它填的模型', async () => {
+    const { service } = makeService({
+      purpose: 'HEALTH_REPORT_EXTRACTION',
+      provider: 'DEEPSEEK',
+      enabled: true,
+      model: 'deepseek-v4-flash-vision-exp',
+    });
+    await expect(
+      service.getConfiguredPurposeModel('HEALTH_REPORT_EXTRACTION'),
+    ).resolves.toBe('deepseek-v4-flash-vision-exp');
+  });
+
+  it('配过但没启用 → 也算没配（不能让停用的配置生效）', async () => {
+    const { service } = makeService({
+      purpose: 'HEALTH_REPORT_EXTRACTION',
+      provider: 'DEEPSEEK',
+      enabled: false,
+      model: 'deepseek-v4-flash-vision-exp',
+    });
+    await expect(
+      service.getConfiguredPurposeModel('HEALTH_REPORT_EXTRACTION'),
+    ).resolves.toBeNull();
+  });
+
+  it('全局默认这个用途不走这条路（它本来就是兜底）', async () => {
+    const { service, prisma } = makeService({ enabled: true, model: 'x' });
+    await expect(service.getConfiguredPurposeModel('DEFAULT')).resolves.toBeNull();
+    expect(prisma.agentProviderConfig.findUnique).not.toHaveBeenCalled();
+  });
+});

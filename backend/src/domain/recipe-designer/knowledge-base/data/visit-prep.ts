@@ -11,7 +11,9 @@ import type { KnowledgeEntry } from '../types';
  *   2. 这一块是"沟通方法"，不是医学结论；但仍然要写清依据出处。
  *   3. 不承诺任何诊疗结果，不替医生排优先级（可以说"医生通常会先问 X"）。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -56,7 +58,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '家长在家监测项：食物摄取量与食欲、体况与体重、胃肠道病征、整体外观与活动力',
       },
       {
-        source: 'AAHA 老年犬护理工具包 2023',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips for Senior Pets（家长手册）',
         note: '发作类表现建议记录持续时长与频率，并拍视频给兽医看',
       },
@@ -82,7 +84,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-002',
@@ -130,7 +132,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '面诊时应询问当前使用的药物、补充剂、营养保健品与草药',
       },
       {
-        source: 'AAHA 老年犬护理工具包 2023',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips for Senior Pets（家长手册）',
         note: '发作与异常表现建议记录时长与频率，拍视频给兽医看',
       },
@@ -161,7 +163,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-003',
@@ -222,7 +224,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-004',
@@ -253,7 +255,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '进食量变化、咀嚼、吞咽、恶心、呕吐、反流；原因不明的体重改变',
       },
       {
-        source: 'AAHA 老年犬护理工具包 2023',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Home Monitoring Tips for Senior Pets（家长手册）',
         note: '饮水与排尿变化、食欲下降、排便异常、体重变化等居家观察项',
       },
@@ -284,7 +286,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'SAFETY',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-005',
@@ -326,7 +328,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
         note: '到院前应做准备，到院时由前台／分诊人员先行判断',
       },
       {
-        source: 'AAHA 老年犬护理工具包 2023',
+        source: 'AAHA 老年犬猫护理指南 2023',
         chapter: 'Seek immediate veterinary care 清单（家长手册）',
         note: '呼吸与牙龈颜色、无法起立、腹部膨大等属于需立即就医的表现',
       },
@@ -353,7 +355,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-006',
@@ -420,7 +422,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-007',
@@ -482,7 +484,7 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'visit-008',
@@ -544,6 +546,6 @@ export const VISIT_PREP_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

@@ -1428,6 +1428,12 @@ model VaccineRecord {
   nextDueDate     DateTime?     @map("next_due_date") @db.Date
   notes           String?       @map("notes")
   status          VaccineStatus @default(COMPLETED) @map("status")
+  /// 报告原件（2026-10-01 新增）。
+  /// 拍疫苗本识别出来的记录，把顾客拍的原图一并留档 ——
+  /// 疫苗本是接种凭证，出行、寄养、换医院都可能要看原件，
+  /// 此前只存了 AI 抄下来的文字，原件丢了就无从对证。
+  /// 与 checkup_record / medical_record / allergy_record 同一套存法（URL 数组）。
+  attachments     String[]      @default([]) @map("attachments")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
@@ -1444,6 +1450,12 @@ model CheckupRecord {
   checkupType     String   @map("checkup_type")
   checkupDate     DateTime @map("checkup_date") @db.Date
   findings        String?  @map("findings")
+  /// 化验数值原文（2026-10-02 新增）。
+  /// 原来化验单的几十项数值被塞进 findings，家长在卡片上看到的是"一堵数字墙"，
+  /// 营养师端的标签派生也把数字当成"检查结论"在扫。现在分开：
+  ///   findings  = 医生写的结论段
+  ///   labValues = 逐项一行的化验数据（项目 数值 单位）
+  labValues       String?  @map("lab_values")
   recommendations String?  @map("recommendations")
   /// 备注（2026-10-01 第五期新增）。
   /// 此前「病例」合并表单里体检记录没有备注可填 —— 病史表有 notes、体检表没有，
@@ -1466,7 +1478,24 @@ model MedicalRecord {
   visitDate      DateTime      @map("visit_date") @db.Date
   chiefComplaint String        @map("chief_complaint")
   diagnosis      String        @map("diagnosis")
+  /// 化验数据原文（2026-10-02 新增）。
+  /// 一次就诊往往包含化验单/检查报告 —— 数字落在**这次就诊**里（老板定的口径：
+  /// 就诊传的报告归就诊类、体检的数字归体检类），不再因此另开一条体检记录。
+  /// 与 checkup_record.lab_values 同名同义：逐项一行的化验数据。
+  labValues      String?       @map("lab_values")
+  /// 医嘱 / 回家注意（2026-10-02 语义收窄）。
+  /// 这一栏原来叫"处理方式"，实际被塞进了治疗意见 + 处置处方 + 医嘱三样东西，
+  /// 家长在卡片上看到的是"无"后面跟着一长串检查项目 —— 一团糊。
+  /// 现在拆开：treatment = 医生交代回家要做的（怎么吃药、饮食、何时复查、观察什么）；
+  ///          exams     = 这次做了哪些检查（彩超 / DR / 血常规 …）；
+  ///          vitals    = 体温、体重、BCS 等体征。
+  /// 表单上它的标签是「医嘱」，DB 列名保持 treatment 不动
+  /// （改列名要牵动食谱设计器等其它模块，收益不值当）。
   treatment      String?       @map("treatment")
+  /// 这次做的检查（2026-10-02 新增）：从处置处方 / 检查单照抄的项目清单
+  exams          String?       @map("exams")
+  /// 体征（2026-10-02 新增）：体温、体重、BCS 等，照抄报告
+  vitals         String?       @map("vitals")
   medications    String[]      @default([]) @map("medications")
   status         MedicalStatus @default(TREATING) @map("status")
   followUpDate   DateTime?     @map("follow_up_date") @db.Date

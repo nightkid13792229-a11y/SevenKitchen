@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *   2. **不做诊断**，只写"看到什么、最可能是什么方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源（校验会拦）。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -58,7 +60,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-017',
@@ -101,7 +103,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-018',
@@ -145,7 +147,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-019',
@@ -169,8 +171,8 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '本条目只做分诊提示，不判断出血原因，也不给用药建议。',
     ],
     citations: [
-      { source: 'ACVIM 犬猫免疫性血小板减少症诊断共识 2024', chapter: '出血表现与预后' },
-      { source: 'ACVIM 犬免疫介导性溶血性贫血治疗共识 2019', chapter: '输血与组织供氧不足的临床判断' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2024 免疫性血小板减少症诊断共识 · 出血表现与预后' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2019 免疫介导性溶血性贫血治疗共识 · 输血与组织供氧不足的临床判断' },
       { source: 'Merck 兽医手册 · 临床血液学', chapter: '贫血的分类与失血' },
     ],
     sources: [
@@ -190,7 +192,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-020',
@@ -234,7 +236,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-021',
@@ -277,7 +279,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-022',
@@ -320,7 +322,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-023',
@@ -364,7 +366,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-024',
@@ -387,7 +389,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '**不要**限制饮水来"减少尿量"，除非兽医明确要求。',
     ],
     citations: [
-      { source: 'ACVIM 犬尿失禁诊断与管理共识 2024', chapter: '排尿障碍的体格检查与影像评估' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2024 犬尿失禁诊断与管理共识 · 排尿障碍的体格检查与影像评估' },
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '急性疼痛的行为线索' },
     ],
     sources: [
@@ -407,7 +409,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-025',
@@ -431,7 +433,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '**不要**用"灌水"的方式硬补液体 —— 呕吐时容易呛入气道。',
     ],
     citations: [
-      { source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026', chapter: '消化道症状的评估' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估' },
       { source: 'WSAVA 营养评估指南 2011', chapter: '营养筛查与再评估的时机' },
     ],
     sources: [
@@ -451,7 +453,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-026',
@@ -475,7 +477,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '家中如有其他犬只，在医生排除传染病前先做好隔离与消毒。',
     ],
     citations: [
-      { source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026', chapter: '消化道症状的评估与感染性病因排查' },
+      { source: 'ACVIM 共识 / 背书声明', chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估与感染性病因排查' },
       { source: 'WSAVA 疫苗接种指南 2024', chapter: '幼犬免疫窗口与传染病风险' },
     ],
     sources: [
@@ -495,7 +497,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-027',
@@ -538,7 +540,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-028',
@@ -581,7 +583,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-029',
@@ -625,7 +627,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-030',
@@ -668,7 +670,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-031',
@@ -712,7 +714,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-032',
@@ -736,7 +738,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '**不要**在它虚弱时让它站立行走或爬楼梯，减少搬动、用平托方式尽快到院。',
     ],
     citations: [
-      { source: 'WSAVA 营养评估指南 2011', chapter: '五项生命体征：体温、脉搏、呼吸、疼痛、营养' },
+      { source: 'WSAVA 营养指南与工具包', chapter: 'WSAVA 营养评估指南（2011）· 五项生命体征：体温、脉搏、呼吸、疼痛、营养' },
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '生命体征与痛苦识别' },
       { source: 'Merck 兽医手册 · 临床血液学', chapter: '贫血：失血的临床表现' },
     ],
@@ -762,7 +764,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-033',
@@ -786,7 +788,7 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
       '**不要**因为"它看起来没事"就等到明天 —— 尤其是老鼠药与葡萄，这是最常见的延误原因。',
     ],
     citations: [
-      { source: 'WSAVA 犬零食指南 2025', chapter: '对犬有毒的食物成分清单' },
+      { source: 'WSAVA 营养指南与工具包', chapter: 'WSAVA 犬零食指南（2025）· 对犬有毒的食物成分清单' },
       { source: 'ACVIM 犬钩端螺旋体病更新共识 2023', chapter: '疫苗相关的急性不良反应（过敏样反应）' },
       { source: 'Merck 兽医手册 · 临床生化', chapter: '中毒的初步识别（背景与警示）' },
     ],
@@ -812,6 +814,6 @@ export const CLINICAL_REDFLAG_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

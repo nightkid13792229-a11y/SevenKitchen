@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *   2. **不做诊断**，只写"看到什么、可能的方向、该多快去"。
  *   3. 高风险结论必须有 ≥2 个不同机构的来源。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -47,8 +49,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '消化道症状的评估',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 消化道症状的评估',
       },
       {
         source: '小动物临床营养学（第 5 版）',
@@ -81,7 +83,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-035',
@@ -106,8 +108,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     citations: [
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '慢性肠道症状的定义与诊断流程',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 慢性肠道症状的定义与诊断流程',
       },
       {
         source: '小动物临床营养学（第 5 版）',
@@ -140,7 +142,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-036',
@@ -198,7 +200,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-037',
@@ -262,7 +264,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-038',
@@ -311,7 +313,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-039',
@@ -352,7 +354,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-040',
@@ -393,7 +395,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'OBSERVE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-041',
@@ -422,8 +424,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '急性疼痛的识别与评估',
       },
       {
-        source: 'ACVIM 犬胸腰段椎间盘突出诊断与管理共识 2022',
-        chapter: '神经功能分级与紧急程度',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2022 犬胸腰段椎间盘突出诊断与管理共识 · 神经功能分级与紧急程度',
       },
     ],
     sources: [
@@ -443,7 +445,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-042',
@@ -500,7 +502,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-043',
@@ -512,7 +514,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
       '皮肤问题先分两条主线：**以痒为主**（反复抓挠、舔咬、蹭地、抓到影响睡眠）和**以掉毛为主**（不太痒但毛变稀、成片或对称性脱毛）。两条线要查的方向不同，"痒不痒、掉哪儿、有没有季节性"是家长能提供的最有用信息。',
     details: [
       '痒的程度尽量描述清楚：偶尔抓几下、频繁抓、抓到醒、抓破皮、反复舔前爪舔到发红脱毛 —— 程度不同，方向不同。',
-      '**食物不良反应的典型表现是非季节性的瘙痒性皮炎，有时还伴随胃肠症状**（SACN5 指出：有皮肤表现的食物过敏犬猫中，出现胃肠症状的比例可以达到一半左右），所以"皮肤 + 肠胃"同时出问题要一起告诉兽医。',
+      '**食物不良反应的典型表现是非季节性的瘙痒性皮炎，有时还伴随胃肠症状**（SACN5 指出：有皮肤表现的食物过敏犬中，出现胃肠症状的比例可以达到一半左右），所以"皮肤 + 肠胃"同时出问题要一起告诉兽医。',
       '可能的方向包括体表寄生虫、过敏类问题（含食物不良反应）、皮肤感染、内分泌与代谢问题、以及营养相关因素；SACN5 也指出，在现代均衡日粮下真正的营养性皮肤病并不常见，所以"缺营养"不是首选解释，需要兽医逐步排查。',
       '掉毛的分布也有信息量：局部成片、还是左右对称；伴随皮肤发红、结痂、油腻或异味。**不痒的对称性脱毛**常需要结合血液检查。',
       '时间线很重要：什么时候开始、和换粮／换季／换环境／洗澡频率有没有关系、有没有同时出现耳道问题或胃肠症状。',
@@ -533,8 +535,8 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
         chapter: '第 31 章《食物不良反应》：非季节性瘙痒性皮炎与排除性饮食试验',
       },
       {
-        source: 'ACVIM 犬慢性肠病诊断与治疗共识 2026',
-        chapter: '排除性饮食试验的定位',
+        source: 'ACVIM 共识 / 背书声明',
+        chapter: 'ACVIM 2026 慢性肠病共识 · 排除性饮食试验的定位',
       },
     ],
     sources: [
@@ -558,7 +560,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-044',
@@ -599,7 +601,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-045',
@@ -649,7 +651,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-046',
@@ -699,7 +701,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-047',
@@ -749,7 +751,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'MEDIUM',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-048',
@@ -798,7 +800,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-049',
@@ -857,7 +859,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-050',
@@ -916,7 +918,7 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'clinical-051',
@@ -982,6 +984,6 @@ export const CLINICAL_COMMON_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

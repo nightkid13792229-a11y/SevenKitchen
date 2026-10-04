@@ -171,11 +171,13 @@ export class StaffDogHealthService {
       medicalHistory: dog.medicalHistory,
       checkups: dog.checkupRecords.map((item) => ({
         findings: item.findings,
+        labValues: item.labValues,
         recommendations: item.recommendations,
       })),
       medicalRecords: dog.medicalRecords.map((item) => ({
         diagnosis: item.diagnosis,
         chiefComplaint: item.chiefComplaint,
+        labValues: item.labValues,
       })),
     }).tags;
     const tagOverrides = parseHealthTagOverrides(dog.healthTagOverrides);

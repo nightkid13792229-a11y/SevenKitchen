@@ -39,6 +39,7 @@ import { CreateAllergyDto } from '../../interfaces/dto/health/create-allergy.dto
 import { UpdateAllergyDto } from '../../interfaces/dto/health/update-allergy.dto';
 import { PrismaDogRepository } from '../../infrastructure/repositories/prisma-dog.repository';
 import { DOG_REPOSITORY } from '../dog/dog.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
 // Repository tokens
@@ -61,7 +62,87 @@ export class HealthService {
     @Inject(DOG_REPOSITORY)
     private readonly dogRepo: PrismaDogRepository,
     private readonly cosService: TencentCosService,
+    /**
+     * 只用于"删记录时这张图还有没有别人引用"的检查（2026-10-02）。
+     * 分享给医生的快照是**永久**的、里面也存着图片地址，
+     * 不看一眼就删会把医生那边的报告原件删成裂图。
+     */
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * 把 COS 地址转成对象 key（去掉域名与查询串，保留完整路径）。
+   *
+   * 2026-10-02 修：原来用 `split('/').slice(-2)` 只取最后两段 ——
+   * 对 `medical-reports/temp/x.jpg` 碰巧对，再深一层（`a/b/c.jpg`）就取错 key，
+   * 删除静默失败、文件留在 COS 里。
+   */
+  private toCosKey(url: string): string {
+    const withoutQuery = String(url || '').split('?')[0];
+    const withoutHost = withoutQuery.replace(/^https?:\/\/[^/]+\//, '');
+
+    try {
+      return decodeURIComponent(withoutHost);
+    } catch {
+      return withoutHost;
+    }
+  }
+
+  /**
+   * 这个附件还被别处引用着吗？
+   *
+   * 三种"别处"：
+   *   · 另外三条记录表的 attachments
+   *   · 其它狗的记录（同一张图理论上可能被重复挂）
+   *   · **未撤销的分享快照**（永久链接，删了图医生那边就裂了）
+   */
+  private async isAttachmentStillReferenced(url: string): Promise<boolean> {
+    const [medical, checkup, allergy, vaccine, shares] = await Promise.all([
+      this.prisma.medicalRecord.count({ where: { attachments: { has: url } } }),
+      this.prisma.checkupRecord.count({ where: { attachments: { has: url } } }),
+      this.prisma.allergyRecord.count({ where: { attachments: { has: url } } }),
+      this.prisma.vaccineRecord.count({ where: { attachments: { has: url } } }),
+      this.prisma.dogHealthShareToken.count({
+        where: {
+          revokedAt: null,
+          // 快照里的 attachments: [{ label, name, sourceUrl }]
+          snapshot: { path: ['attachments'], array_contains: [{ sourceUrl: url }] },
+        },
+      }),
+    ]);
+
+    return medical + checkup + allergy + vaccine + shares > 0;
+  }
+
+  /**
+   * 删记录时把它带的附件一并从 COS 清掉（还在被引用的除外）。
+   *
+   * 删不掉/还被人引用都不该影响"记录已删除"这个结果，所以一律静默处理。
+   */
+  private async purgeRecordAttachments(
+    attachments: string[] | null | undefined,
+  ): Promise<void> {
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return;
+    }
+
+    for (const fileUrl of attachments) {
+      try {
+        if (await this.isAttachmentStillReferenced(fileUrl)) {
+          console.log(
+            `[HealthService] 附件仍被引用，保留 COS 文件: ${fileUrl}`,
+          );
+          continue;
+        }
+
+        await this.cosService.deleteImage(this.toCosKey(fileUrl));
+        console.log(`[HealthService] Deleted COS file: ${this.toCosKey(fileUrl)}`);
+      } catch (error) {
+        // 删不掉不该影响记录删除；服务端还有每日清理任务兜底
+        console.error('[HealthService] Failed to delete COS file:', error);
+      }
+    }
+  }
 
   // ==================== Vaccine Records ====================
 
@@ -78,6 +159,7 @@ export class HealthService {
       nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
       notes: dto.notes ?? null,
       status: dto.status || 'COMPLETED',
+      attachments: dto.attachments ?? [],
     });
 
     return this.mapVaccineRecordToDto(record);
@@ -131,6 +213,9 @@ export class HealthService {
       nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
       notes: dto.notes ?? null,
       status: dto.status ?? undefined,
+      // 只有顾客明确传了 attachments 才动它 —— 不传就保持原样，
+      // 免得改个备注顺手把原件清空
+      attachments: dto.attachments ?? undefined,
     });
 
     return this.mapVaccineRecordToDto(updated);
@@ -143,6 +228,10 @@ export class HealthService {
     }
 
     await this.verifyDogOwnership(record.dogId, customerId);
+
+    // 2026-10-02 补：第九期给疫苗记录加了"报告原件"，
+    // 但删除逻辑还停在之前 —— 疫苗本原图会一直留在 COS 上。
+    await this.purgeRecordAttachments(record.attachments);
 
     await this.vaccineRecordRepo.delete(id);
   }
@@ -175,6 +264,7 @@ export class HealthService {
       checkupType: dto.checkupType,
       checkupDate: new Date(dto.checkupDate),
       findings: dto.findings ?? null,
+      labValues: dto.labValues ?? null,
       recommendations: dto.recommendations ?? null,
       notes: dto.notes ?? null,
       veterinarian: dto.veterinarian ?? null,
@@ -228,6 +318,7 @@ export class HealthService {
       checkupType: dto.checkupType ?? undefined,
       checkupDate: dto.checkupDate ? new Date(dto.checkupDate) : undefined,
       findings: dto.findings ?? null,
+      labValues: dto.labValues ?? null,
       recommendations: dto.recommendations ?? null,
       notes: dto.notes ?? null,
       veterinarian: dto.veterinarian ?? null,
@@ -245,25 +336,7 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
-    // Delete COS files if any
-    if (record.attachments && Array.isArray(record.attachments)) {
-      for (const fileUrl of record.attachments) {
-        try {
-          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
-          const urlParts = fileUrl.split('/');
-          const key = urlParts.slice(-2).join('/'); // Get folder/key or just key
-
-          await this.cosService.deleteImage(key);
-          console.log(`[HealthService] Deleted COS file: ${key}`);
-        } catch (error) {
-          console.error(
-            `[HealthService] Failed to delete COS file ${fileUrl}:`,
-            error,
-          );
-          // Continue deleting other files even if one fails
-        }
-      }
-    }
+    await this.purgeRecordAttachments(record.attachments);
 
     await this.checkupRecordRepo.delete(id);
   }
@@ -280,8 +353,11 @@ export class HealthService {
       dogId: dto.dogId,
       visitDate: new Date(dto.visitDate),
       chiefComplaint: dto.chiefComplaint,
+      labValues: dto.labValues ?? null,
       diagnosis: dto.diagnosis,
       treatment: dto.treatment ?? null,
+      exams: dto.exams ?? null,
+      vitals: dto.vitals ?? null,
       medications: dto.medications || [],
       status: dto.status || 'TREATING',
       followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : null,
@@ -340,7 +416,11 @@ export class HealthService {
       visitDate: dto.visitDate ? new Date(dto.visitDate) : undefined,
       chiefComplaint: dto.chiefComplaint ?? undefined,
       diagnosis: dto.diagnosis ?? undefined,
+      // 2026-10-02 修：原来漏了 labValues —— 家长在表单里改化验数据，保存后永远不变
+      labValues: dto.labValues ?? null,
       treatment: dto.treatment ?? null,
+      exams: dto.exams ?? null,
+      vitals: dto.vitals ?? null,
       medications: dto.medications ?? undefined,
       status: dto.status ?? undefined,
       followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : null,
@@ -360,25 +440,7 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
-    // Delete COS files if any
-    if (record.attachments && Array.isArray(record.attachments)) {
-      for (const fileUrl of record.attachments) {
-        try {
-          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
-          const urlParts = fileUrl.split('/');
-          const key = urlParts.slice(-2).join('/'); // Get folder/key or just key
-
-          await this.cosService.deleteImage(key);
-          console.log(`[HealthService] Deleted COS file: ${key}`);
-        } catch (error) {
-          console.error(
-            `[HealthService] Failed to delete COS file ${fileUrl}:`,
-            error,
-          );
-          // Continue deleting other files even if one fails
-        }
-      }
-    }
+    await this.purgeRecordAttachments(record.attachments);
 
     await this.medicalRecordRepo.delete(id);
   }
@@ -501,25 +563,7 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
-    // Delete COS files if any
-    if (record.attachments && Array.isArray(record.attachments)) {
-      for (const fileUrl of record.attachments) {
-        try {
-          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
-          const urlParts = fileUrl.split('/');
-          const key = urlParts.slice(-2).join('/'); // Get folder/key or just key
-
-          await this.cosService.deleteImage(key);
-          console.log(`[HealthService] Deleted COS file: ${key}`);
-        } catch (error) {
-          console.error(
-            `[HealthService] Failed to delete COS file ${fileUrl}:`,
-            error,
-          );
-          // Continue deleting other files even if one fails
-        }
-      }
-    }
+    await this.purgeRecordAttachments(record.attachments);
 
     await this.allergyRecordRepo.delete(id);
   }
@@ -559,6 +603,7 @@ export class HealthService {
       nextDueDate: record.nextDueDate,
       notes: record.notes,
       status: record.status,
+      attachments: record.attachments ?? [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
@@ -575,6 +620,7 @@ export class HealthService {
       heartRate: record.heartRate,
       temperature: record.temperature,
       findings: record.findings,
+      labValues: record.labValues,
       recommendations: record.recommendations,
       notes: record.notes,
       veterinarian: record.veterinarian,
@@ -590,8 +636,11 @@ export class HealthService {
       dogId: record.dogId,
       visitDate: record.visitDate,
       chiefComplaint: record.chiefComplaint,
+      labValues: record.labValues,
       diagnosis: record.diagnosis,
       treatment: record.treatment,
+      exams: record.exams,
+      vitals: record.vitals,
       medications: record.medications,
       status: record.status,
       followUpDate: record.followUpDate,

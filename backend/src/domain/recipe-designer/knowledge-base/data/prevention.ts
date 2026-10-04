@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *   2. 只写"该做什么、多久一次、为什么"，不写具体数值区间（区间归 LAB 领域）。
  *   3. 涉及"多久一次"的结论要注明来源，不要凭印象写。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -50,7 +52,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-002',
@@ -87,7 +89,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-003',
@@ -126,7 +128,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-004',
@@ -161,7 +163,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-005',
@@ -198,7 +200,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-006',
@@ -211,7 +213,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     details: [
       '筛查节奏来自生命阶段指南：成熟成年犬尿检每年一次，老年犬每 6–12 个月一次；生化最低组合包含肌酐，若有 SDMA 则一并检测。IRIS 指南本身不给"健康犬多久筛查一次肾病"的建议，这一点不要混引。',
       '为什么要查尿：尿检提供血检给不了的信息——浓缩能力（尿比重）与尿蛋白。IRIS 明确指出常规尿试纸对蛋白"不够敏感"，建议改用更可靠的定量方法（如 UPC 或物种特异的白蛋白检测）。',
-      'UPC 的前提与"确认持续"：IRIS 要求"在没有泌尿道炎症或出血证据、且常规血浆蛋白检测已排除异常蛋白血症"的前提下才测 UPC，目的是确认蛋白尿确实来自肾脏本身，而不是肾后性或肾前性原因；而且蛋白尿要确认持续才算数——亚分期至少取 2 个尿样、间隔至少 2 周，持续处于临界蛋白尿的犬猫应在 2 个月内复查并重新分级。',
+      'UPC 的前提与"确认持续"：IRIS 要求"在没有泌尿道炎症或出血证据、且常规血浆蛋白检测已排除异常蛋白血症"的前提下才测 UPC，目的是确认蛋白尿确实来自肾脏本身，而不是肾后性或肾前性原因；而且蛋白尿要确认持续才算数——亚分期至少取 2 个尿样、间隔至少 2 周，持续处于临界蛋白尿的犬应在 2 个月内复查并重新分级。',
       '血压为什么要测：IRIS 在确诊肾病后各期的监测清单里都包含"测血压与 UPC"；血压不能凭一次测量判定，需在不同就诊日多次测量（同一就诊内两次测定之间至少间隔 2 小时），持续性的判定窗口从 1–2 周到 2–4 周不等。',
       'SDMA 与肌酐，以及"单次异常不能确诊"：IRIS 认为 SDMA 是更敏感的早期指标、受肌肉量丢失影响更小，但检测方法尚未标准化（现有建议基于特定厂商的方法学）；肌酐作为筛查试验不够敏感，接近参考区间上限的犬可能已经有排泄功能下降。IRIS 同时明确写"血肌酐或 SDMA 升高本身并不等于 CKD"——分期要在补水、稳定状态下至少两次测定，有肾前性因素（如脱水）时要先纠正再判断。',
       'IRIS 给出明确数字的复查环节：高血压犬在治疗稳定后至少每 3 个月监测一次；血钙、血磷每 4–6 周监测至稳定、之后每 12 周。',
@@ -233,7 +235,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-007',
@@ -268,7 +270,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-008',
@@ -303,7 +305,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-009',
@@ -338,7 +340,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-010',
@@ -373,7 +375,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-011',
@@ -410,7 +412,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-012',
@@ -443,7 +445,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-013',
@@ -478,7 +480,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-014',
@@ -491,14 +493,14 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     details: [
       '频率：AAHA 生命阶段指南把疼痛列为五项生命征评估之一（体温、脉搏、呼吸、疼痛、营养），并要求把疼痛评分纳入体检；结果要用标准化评分系统记录，以便沟通、趋势监测与连续性照护。',
       '骨关节炎要"教、问、查"三件事一起做：指南要求教育家长识别早期骨科疾病与骨关节炎的信号、收集家长在家观察到的活动与行动情况，并在体检中评估骨关节炎的有无与分期。',
-      '为什么要"定期"而不是"一次"：WSAVA 疼痛指南明确说疼痛评估需要反复测量，而不是只看某一次的数字评分；评估以行为表现为主——心率、血压、皮质醇等客观指标虽然与急性疼痛相关，但并不可靠。指南推荐使用经过验证的评估工具（例如犬的格拉斯哥复合疼痛量表 Glasgow CMPS-SF，猫另有面部疼痛量表等），并指出镇静与麻醉药物会干扰疼痛评估，最好等到动物可以唤醒、表现出正常反应之后再评估。',
+      '为什么要"定期"而不是"一次"：WSAVA 疼痛指南明确说疼痛评估需要反复测量，而不是只看某一次的数字评分；评估以行为表现为主——心率、血压、皮质醇等客观指标虽然与急性疼痛相关，但并不可靠。指南推荐使用经过验证的评估工具（例如犬的格拉斯哥复合疼痛量表 Glasgow CMPS-SF），并指出镇静与麻醉药物会干扰疼痛评估，最好等到动物可以唤醒、表现出正常反应之后再评估。',
       '为什么容易被漏掉、家里能看什么：WSAVA 指南用图示说明，不熟悉犬疼痛行为的人会把疼痛姿势误认为"在休息"（"安静疼痛"）；AAHA 老年护理工具包也提醒皮肤问题可能同时存在疼痛成分，并给出一份在家观察的清单——活动方式变化、上下楼困难、躺下前长时间转圈、拖后脚、不愿做日常活动、跛行僵硬、不像以前那样梳理自己、情绪变得易怒，同时建议就疼痛管理与兽医讨论。另一个易漏点是：AAHA 生命阶段指南要求对老年犬常规评估认知变化与认知功能障碍并记录在病历里，因为"行为变慢"既可能是疼痛，也可能是认知问题。',
       '老年犬的另一个易漏点：AAHA 生命阶段指南要求对老年犬常规评估认知变化与认知功能障碍，并把变化记录在病历里——因为"行为变慢"既可能是疼痛，也可能是认知问题。',
     ],
     caveats: [
       '疼痛评分是兽医的评估工具；家长不要自行给狗"打分"或据此调整用药，用药一律遵医嘱。本知识库不提供镇痛药物名称或剂量。',
       '如果出现突然无法站立、持续哀叫、呼吸急促、腹部膨大或明显拒绝触碰，属于急症，应立即就医。',
-      '"看起来还能走"不等于没有疼痛：犬猫很擅长隐藏疼痛，慢性骨关节炎尤其如此。',
+      '"看起来还能走"不等于没有疼痛：犬很擅长隐藏疼痛，慢性骨关节炎尤其如此。',
     ],
     citations: [
       { source: 'WSAVA 疼痛识别、评估与治疗指南 2022', chapter: '疼痛的识别与评估（图 7、表 4、表 5）、急性疼痛的识别与评估（图 11–12）' },
@@ -506,7 +508,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
       { source: 'AAHA 老年犬猫护理指南 2023', chapter: '工具包 Table 2（皮肤系统需评估疼痛）、Your Senior Pet Booklet（p.11）' },
     ],
     sources: [
-      { sourceId: 'WSAVA-PAIN-2022', locator: '第一部分「疼痛的识别与评估」及「急性疼痛的识别与评估」（中文版 p.11–16）：表 4（犬猫急性疼痛评估工具与量表名）、表 5（犬/猫疼痛相关行为变化）、图 7（猫面部疼痛量表）、图 11–12（疼痛姿势与"安静疼痛"易被误认）', note: '疼痛评估要反复测量而非一次评分；以行为为主、客观指标不可靠；验证过的量表名；不熟悉疼痛行为会漏诊' },
+      { sourceId: 'WSAVA-PAIN-2022', locator: '第一部分「疼痛的识别与评估」及「急性疼痛的识别与评估」（中文版 p.11–16）：表 4（犬猫急性疼痛评估工具与量表名）、表 5（犬/猫疼痛相关行为变化）、图 11–12（疼痛姿势与"安静疼痛"易被误认）', note: '疼痛评估要反复测量而非一次评分；以行为为主、客观指标不可靠；验证过的量表名；不熟悉疼痛行为会漏诊' },
       { sourceId: 'AAHA-LIFE-STAGE-2019', locator: 'journal p.269（五项生命征评估、疼痛评分、标准化评分记录）；Table 2 General 行（骨关节炎教育、家长观察、体检中评估 OA 分期）；Table 2 Behavior 行 senior 列（认知变化常规评估）', note: '疼痛每次体检评估并记录趋势；骨关节炎的教/问/查；老年认知评估' },
       { sourceId: 'AAHA-SENIOR-2023', locator: '工具包 Table 2 Integument 行（"Evaluate for pain"）；Your Senior Pet Booklet p.11（肌肉关节与骨骼的家庭观察清单、与兽医讨论疼痛管理）', note: '老年犬疼痛可能被漏掉；家庭可观察的行为信号' },
     ],
@@ -514,7 +516,7 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'prev-015',
@@ -551,6 +553,6 @@ export const PREVENTION_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'FOLLOWUP',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

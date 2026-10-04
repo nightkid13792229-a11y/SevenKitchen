@@ -1,4 +1,9 @@
-node_modules/
+# 注意：这里**不能带斜杠**。
+# `node_modules/`（带斜杠）只匹配目录，匹配不到"指向别处的软链"——
+# 本项目为了共用依赖，`miniapp/node_modules` 正是一条软链，
+# 于是它曾被误提交进仓库，后来专门用一个提交删掉（f561f6d0）。
+# backend/ 与 admin-web/ 的 .gitignore 写的是不带斜杠的形式，这里与其保持一致。
+node_modules
 dist/
 .DS_Store
 *.log

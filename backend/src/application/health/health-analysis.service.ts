@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { KnowledgeBaseService } from '../recipe-designer/knowledge-base.service';
 import { callDeepSeekJson } from '../recipe-designer/deepseek-chat';
@@ -66,10 +67,20 @@ export interface HealthAnalysisItem {
   content: string;
   /** 引用的知识条目编号（可倒查到出处） */
   citations: string[];
+  /**
+   * 引用条目的标题，与 citations 一一对应（2026-10-02 补）。
+   *
+   * 顾客不该看到 `prev-004` 这种内部编号 —— 那看着像故障，也读不出任何信息。
+   * 「依据：老年犬专项筛查包含哪些系统」才是家长能看懂、也能建立信任的写法。
+   * 编号照旧保留在 citations 里（内部倒查与营养师侧仍用它）。
+   */
+  citationTitles: string[];
 }
 
 export interface HealthAnalysisResult {
   dogId: string;
+  /** 狗狗的名字（界面标题用；取不到就不给，界面自己兜底，别编） */
+  dogName?: string;
   items: HealthAnalysisItem[];
   /** 这次分析用了多少条已审核知识 */
   approvedKnowledgeCount: number;
@@ -80,6 +91,13 @@ export interface HealthAnalysisResult {
   /** 未审核知识绝不进入顾客侧 */
   audience: 'nutritionist' | 'customer';
   generatedAt: string;
+  /**
+   * 这次是直接给的上一次结果（记录没变，没重新调模型）。
+   *
+   * 生成时间仍是**上一次真正生成**的时间 —— 不许把它刷成"刚刚"，
+   * 界面上写"生成时间"就得是实话。
+   */
+  fromCache?: boolean;
 }
 
 /** 顾客侧未开放时的返回（与疫苗计划同一套做法） */
@@ -89,7 +107,11 @@ export interface HealthAnalysisUnavailable {
   enableWith: string;
 }
 
-const HEALTH_ANALYSIS_PURPOSE = 'HEALTH_ANALYSIS';
+/**
+ * 这个模块在「AI / Agent 配置」里的用途标识（2026-10-01 补）。
+ * 与识别那条分开配：分析用文本模型，识别用视觉模型，互不影响。
+ */
+export const HEALTH_ANALYSIS_PURPOSE = 'HEALTH_ANALYSIS';
 
 /**
  * 越界措辞扫描。
@@ -103,6 +125,16 @@ const DIAGNOSIS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\d+\s*(mg|ml|毫克|毫升)\s*\/?\s*(kg|公斤)?/i, reason: '疑似给剂量' },
   { pattern: /(抗生素|激素|处方药)[^。]{0,10}(吃|服用|注射)/i, reason: '疑似给用药建议' },
   { pattern: /不用去医院|不必就医|在家观察就行|不需要看医生/i, reason: '疑似替代就医' },
+  // 2026-10-02：影像片不做解读，也不能说"片子没问题"——
+  // 我们只归档原件，看片是兽医的事。
+  {
+    pattern: /(片子|影像|X\s*光|B\s*超|超声|CT)[^。，]{0,8}(正常|未见异常|没问题|无异常)/i,
+    reason: '疑似解读影像',
+  },
+  {
+    pattern: /(未见明显异常|一切正常)[^。]{0,6}(片子|影像|X\s*光|B\s*超)/i,
+    reason: '疑似解读影像',
+  },
 ];
 
 /** 命中越界时的降级文案（写死的，不经过 AI） */
@@ -133,9 +165,82 @@ const SECTION_TAGS: Record<HealthAnalysisSection, string[]> = {
   visitPrep: ['clinical', 'prevention', 'lab', 'visit-prep'],
 };
 
+/** 缓存默认存活时间：30 分钟（可用 HEALTH_ANALYSIS_CACHE_TTL_MINUTES 覆盖） */
+export const HEALTH_ANALYSIS_CACHE_TTL_MS = 30 * 60 * 1000;
+/** 同时缓存的份数上限（一台上限 200 份，按插入顺序淘汰最旧的） */
+export const HEALTH_ANALYSIS_CACHE_MAX_ENTRIES = 200;
+
+/**
+ * 分析结果缓存（2026-10-02，老板要求）。
+ *
+ * 为什么要缓存：一次分析要跑三十多秒、调一次模型。家长点进页面看一眼、退出来、
+ * 再点进去，就要再等半分钟、再花一次钱 —— 而记录根本没变，结果必然一模一样。
+ *
+ * 三条设计取舍：
+ *   · **按"记录指纹"失效，不是按时间失效**：指纹来自就诊前摘要（记录条数、各条记录的
+ *     日期与内容、体重、体况、病史、饮食偏好），只要家长新记了一条、改了体重、删了记录，
+ *     指纹就变，缓存立刻作废 —— 不会拿旧结论糊弄人。TTL 只是兜底。
+ *   · **顾客与营养师分开存**：两边可引用的知识不同（顾客只认已审核条目），
+ *     同一只狗的结果本来就不一样，混用等于把未审核内容漏给顾客。
+ *   · **只缓存成功结果**：失败/未开放不缓存，否则一次网络抖动会钉住半小时。
+ */
+export class HealthAnalysisCache {
+  private readonly entries = new Map<
+    string,
+    { fingerprint: string; result: HealthAnalysisResult; expiresAt: number }
+  >();
+
+  constructor(
+    private readonly ttlMs: number = HEALTH_ANALYSIS_CACHE_TTL_MS,
+    private readonly maxEntries: number = HEALTH_ANALYSIS_CACHE_MAX_ENTRIES,
+  ) {}
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /** 命中才返回；指纹不符或过期都当作没有 */
+  get(
+    key: string,
+    fingerprint: string,
+    now: number = Date.now(),
+  ): HealthAnalysisResult | null {
+    const hit = this.entries.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt <= now || hit.fingerprint !== fingerprint) {
+      this.entries.delete(key);
+      return null;
+    }
+    // 命中后挪到队尾：淘汰时先掉最久没用的那份
+    this.entries.delete(key);
+    this.entries.set(key, hit);
+    return hit.result;
+  }
+
+  set(
+    key: string,
+    fingerprint: string,
+    result: HealthAnalysisResult,
+    now: number = Date.now(),
+  ): void {
+    this.entries.delete(key);
+    this.entries.set(key, { fingerprint, result, expiresAt: now + this.ttlMs });
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
 @Injectable()
 export class HealthAnalysisService {
   private readonly logger = new Logger(HealthAnalysisService.name);
+  private readonly cache = new HealthAnalysisCache(resolveCacheTtlMs());
 
   constructor(
     private readonly prisma: PrismaService,
@@ -168,8 +273,18 @@ export class HealthAnalysisService {
       };
     }
 
-    // 复用就诊前摘要：它已经把六类记录聚合好了，不用再查一遍
+    // 复用就诊前摘要：它已经把五类记录（就诊/体检/过敏/疫苗/体重）聚合好了，不用再查一遍
     const summary = await this.timelineService.getVisitSummary(customerId, dogId);
+
+    // 记录没变就直接给上一次的结果：省掉三十多秒的等待和一次模型调用。
+    // 指纹取自摘要本身，所以"家长刚记了一条/改了体重"必然命中不了旧缓存。
+    const cacheKey = `${audience}:${customerId}:${dogId}`;
+    const fingerprint = buildAnalysisFingerprint(summary);
+    const cached = this.cache.get(cacheKey, fingerprint);
+    if (cached) {
+      this.logger.log(`[HealthAnalysis] 命中缓存（${audience} · ${dogId}），跳过模型调用`);
+      return { ...cached, fromCache: true };
+    }
 
     const knowledgeContext = this.buildKnowledgeContext(summary, audience);
     const approvedKnowledgeCount = countKnowledgeEntries(knowledgeContext);
@@ -179,6 +294,8 @@ export class HealthAnalysisService {
     const items: HealthAnalysisItem[] = [];
     const insufficientSections: HealthAnalysisSection[] = [];
     const downgradedSections: HealthAnalysisSection[] = [];
+    // 编号 → 标题：顾客侧要显示人话版的出处，不接受 `prev-004` 这种内部编号
+    const titleById = this.loadCitationTitleMap();
 
     for (const section of HEALTH_ANALYSIS_SECTIONS) {
       const raw = (parsed?.[section] || {}) as Record<string, unknown>;
@@ -196,6 +313,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: '现有记录还不足以给出这方面的分析。多记几条之后可以再看。',
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -208,6 +326,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: '这项分析暂时没有可引用的权威依据，先不给结论。',
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -224,6 +343,7 @@ export class HealthAnalysisService {
           label: HEALTH_ANALYSIS_SECTION_LABELS[section],
           content: DOWNGRADE_TEXT,
           citations: [],
+          citationTitles: [],
         });
         continue;
       }
@@ -233,11 +353,13 @@ export class HealthAnalysisService {
         label: HEALTH_ANALYSIS_SECTION_LABELS[section],
         content,
         citations,
+        citationTitles: resolveCitationTitles(citations, titleById),
       });
     }
 
-    return {
+    const result: HealthAnalysisResult = {
       dogId,
+      dogName: normalizeText(summary?.dog?.name, 40) || undefined,
       items,
       approvedKnowledgeCount,
       insufficientSections,
@@ -245,6 +367,23 @@ export class HealthAnalysisService {
       audience,
       generatedAt: new Date().toISOString(),
     };
+
+    this.cache.set(cacheKey, fingerprint, result);
+
+    return result;
+  }
+
+  /** 知识条目全表 → id/标题 映射；取不到就返回空表（出处退回显示编号） */
+  private loadCitationTitleMap(): Map<string, string> {
+    try {
+      return buildCitationTitleMap(this.knowledgeBaseService.getAll());
+    } catch (error) {
+      // 标题只是给顾客看的润色，绝不能因为它让整次分析失败
+      this.logger.warn(
+        `[HealthAnalysis] 取知识条目标题失败，出处退回显示编号：${(error as Error)?.message}`,
+      );
+      return new Map<string, string>();
+    }
   }
 
   /**
@@ -370,6 +509,30 @@ export function buildSystemPrompt(audience: 'nutritionist' | 'customer'): string
       ? '· 读者是宠物主人本人。'
       : '· 读者是宠物营养师（专业人士），可以保留必要的专业表述。',
     '',
+    '【给你的记录怎么看】',
+    'healthRecords 里每一项的字段含义（都是主人自己记录或拍照识别来的）：',
+    '· diagnosis / findings = 医生或报告给出的结论；chiefComplaint = 主人描述的症状；',
+    '· treatment = **医嘱/回家注意**（医生交代回家要做的）；medications = 处方上的药与用法；',
+    '  recommendations = 报告里医生给的建议；exams = 这次做了哪些检查（2026-10-02 新增）；',
+    '  vitals = 体征（体温、体重、BCS）；',
+    '· **labValues = 化验数据**，逐项一行的"项目 数值 单位"（如"肌酐 72.2 umol/L"）；',
+    '  它来自化验单照片的识别，**通常没有参考区间**，因此：只能说清"做了哪些化验项目、',
+    '  涉及哪些方面、建议把原件带给兽医看"，**不要自行判断某项是高还是低**。',
+    '  例外：**报告自己标了"偏高/偏低"的**（行尾带这个标记），可以照说"报告标为偏高"，',
+    '  但仍然不许据此下结论、不许建议用药。',
+    '· status = 这条记录现在的状态。**「未标注结果」只是说家长没有标注这条的结局，',
+    '  不代表现在还在生病** —— 不要据此写"正在患病/还没好/仍在治疗"；',
+    '  只有明确写着「治疗中」「慢性」的才算还没结束的问题（2026-10-02 起表单里不再问状态，',
+    '  所以绝大多数记录都会是"未标注结果"）；',
+    '· notes = 主人额外补充的话；attachmentCount = 这条记录带了几份原件（报告照片）。',
+    '',
+    '【影像片与附件的边界（硬规矩）】',
+    '· 我们**只归档原件、不解读影像**：X 光、B 超/超声、CT 这类只有图像的资料，',
+    '  系统没有读取过片子内容，**你也不许根据它判断病情**。',
+    '· 绝对不要写"片子正常""影像未见异常""X 光没问题"这类话；',
+    '  最多说"档案里留了一次影像检查的原件，需要看片请把原件带给执业兽医"。',
+    '· attachmentOnly 为 true 的记录，就是"只有原件、没有任何文字结论"的那种。',
+    '',
     '【输出七项，只输出 JSON】',
     '{',
     ...HEALTH_ANALYSIS_SECTIONS.map(
@@ -413,10 +576,18 @@ export function deriveProfileTags(summary: any): string[] {
   // 从自由文本里认领域（与食谱设计同思路：关键词命中即加标签）
   const text = [
     summary?.medicalHistory ?? '',
-    ...(summary?.ongoingConditions || []).map((item: any) => item.diagnosis ?? ''),
-    ...(summary?.recentVisits || []).map((item: any) => item.diagnosis ?? ''),
+    // 2026-10-02：把 labValues（化验数值）也拼进来 ——
+    // 肌酐/蛋白尿/甘油三酯这些决定饮食方向的词本来就在化验栏里；
+    // 食谱设计器与营养师端的标签派生早就这么做了，这里对齐口径。
+    ...(summary?.ongoingConditions || []).map(
+      (item: any) => `${item.diagnosis ?? ''} ${item.labValues ?? ''}`,
+    ),
+    ...(summary?.recentVisits || []).map(
+      (item: any) => `${item.diagnosis ?? ''} ${item.labValues ?? ''}`,
+    ),
     ...(summary?.recentCheckups || []).map(
-      (item: any) => `${item.findings ?? ''} ${item.recommendations ?? ''}`,
+      (item: any) =>
+        `${item.findings ?? ''} ${item.labValues ?? ''} ${item.recommendations ?? ''}`,
     ),
   ].join(' ');
 
@@ -454,4 +625,57 @@ export function normalizeCitationList(value: unknown): string[] {
         .filter((item) => /^[a-z]+-\d+$/i.test(item)),
     ),
   ).slice(0, 10);
+}
+
+/**
+ * 知识条目全表 → id/标题 映射（2026-10-02）。
+ *
+ * 顾客侧要显示的是「老年犬专项筛查包含哪些系统」这种标题，
+ * 不是 `prev-004` 这种内部编号 —— 编号给顾客看像故障，也读不出信息。
+ * 没标题或没编号的条目直接跳过：宁可退回显示编号，也不要显示空白出处。
+ */
+export function buildCitationTitleMap(
+  entries: Array<{ id?: string; title?: string }>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of entries || []) {
+    const id = String(entry?.id ?? '').trim();
+    const title = String(entry?.title ?? '').trim();
+    if (id && title) {
+      map.set(id, title);
+    }
+  }
+  return map;
+}
+
+/** 编号列表 → 标题列表；查不到标题的条目退回显示编号 */
+export function resolveCitationTitles(
+  citations: string[],
+  titleById: Map<string, string>,
+): string[] {
+  return (citations || []).map((id) => titleById.get(id) || id);
+}
+
+/** 缓存 TTL 可以按环境变量调（分钟）；给不出合法值就用默认 30 分钟 */
+export function resolveCacheTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(String(env.HEALTH_ANALYSIS_CACHE_TTL_MINUTES ?? '').trim());
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return HEALTH_ANALYSIS_CACHE_TTL_MS;
+  }
+  return raw * 60 * 1000;
+}
+
+/**
+ * 记录指纹：摘要内容变了，指纹就变（2026-10-02）。
+ *
+ * 只把 `generatedAt` 摘掉 —— 它每次调用都是新的，留着会让缓存永远命中不了；
+ * 其余字段（五类记录的条数、每条的日期与内容、体重、体况、病史、饮食偏好）
+ * 全部参与，所以任何一次真实的记录变动都会让旧结果作废。
+ */
+export function buildAnalysisFingerprint(summary: unknown): string {
+  if (!summary || typeof summary !== 'object') {
+    return 'empty';
+  }
+  const { generatedAt: _generatedAt, ...stable } = summary as Record<string, unknown>;
+  return createHash('sha1').update(JSON.stringify(stable)).digest('hex');
 }

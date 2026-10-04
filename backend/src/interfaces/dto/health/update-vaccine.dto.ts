@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -31,4 +32,10 @@ export class UpdateVaccineDto {
   @IsOptional()
   @IsEnum(VaccineStatus)
   status?: VaccineStatus;
+
+  /// 报告原件（2026-10-01 新增）：顾客可以补传/删掉疫苗本的照片
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[];
 }

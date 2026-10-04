@@ -12,7 +12,9 @@ import type { KnowledgeEntry } from '../types';
  *      只写"这个指标反映什么、偏高偏低通常意味着什么、该结合什么一起看、下一步查什么"。
  *   2. **不做诊断**。只能说"提示/需要结合/建议由兽医判断"，不能下结论。
  *
- * 全部标 `reviewStatus: 'PENDING_REVIEW'`：未经专业审核，顾客侧看不到。
+ * 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过，老板同意对顾客开放）。
+ * ⚠️ 以后**新写的条目一律先写 `PENDING_REVIEW`**：顾客侧只放 APPROVED。
+ *    改动某条内容时也要把它退回 PENDING_REVIEW —— 换了内容就等于没审过。
  *
  * 建立日期：2026-10-01
  */
@@ -26,9 +28,9 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     summary:
       'ALT 与 AST 是"肝细胞受损"的提示指标，**不是肝功能指标**。它们升高只说明肝细胞受到刺激或损伤，不能说明肝脏还能不能干活；判断肝功能要看白蛋白、胆红素、胆汁酸、血糖与凝血。',
     details: [
-      'ALT 主要存在于肝细胞胞质与线粒体中，肝细胞受损时释放入血，是犬猫评估肝细胞损伤的常用指标。',
+      'ALT 主要存在于肝细胞胞质与线粒体中，肝细胞受损时释放入血，是犬评估肝细胞损伤的常用指标。',
       'ALT 的半衰期较短：升高快、回落也相对快，所以更适合用来跟踪"损伤是不是还在进行"。',
-      'AST 在肌肉与肝脏都大量存在，**肝脏特异性不如 ALT**；犬猫把它当作肝指标读时价值有限。',
+      'AST 在肌肉与肝脏都大量存在，**肝脏特异性不如 ALT**；犬把它当作肝指标读时价值有限。',
       'ALT 可因肌肉损伤、甲状腺功能亢进等因素出现轻度升高，不一定都来自肝脏。',
       '真正回答"肝脏功能还行不行"的，是白蛋白、胆红素、胆汁酸、血糖与凝血功能这一组指标。',
     ],
@@ -57,7 +59,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-022',
@@ -98,7 +100,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-023',
@@ -140,7 +142,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-024',
@@ -182,7 +184,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-025',
@@ -223,7 +225,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-026',
@@ -265,7 +267,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-027',
@@ -306,7 +308,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-028',
@@ -348,7 +350,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-029',
@@ -389,7 +391,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-030',
@@ -426,7 +428,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     urgency: 'SOON',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-031',
@@ -437,7 +439,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     summary:
       '去医院紧张、采血时挣扎，都可能让血糖一过性升高；**持续的空腹高血糖加上尿糖，才是提示糖尿病的模式**。单次血糖升高需要结合症状与复查来判断。',
     details: [
-      '应激、兴奋、剧烈运动、采血操作本身都可能让血糖升高，这在犬猫都很常见。',
+      '应激、兴奋、剧烈运动、采血操作本身都可能让血糖升高，这在犬都很常见。',
       '高碳水的餐食、糖皮质激素类药物也会影响血糖。',
       '判断糖尿病看的是模式：**持续**的高血糖 + 尿糖，并常伴随多饮多尿、体重下降等表现。',
       '家用血糖仪是给人设计的，用在动物身上准确性有限，需要兽医确认；如果测出低血糖更要尽快复测确认。',
@@ -468,7 +470,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-032',
@@ -510,7 +512,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-033',
@@ -552,7 +554,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-034',
@@ -595,7 +597,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-035',
@@ -637,7 +639,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-036',
@@ -651,7 +653,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
       'CK 是经典的肌肉酶，在横纹肌溶解、血栓栓塞时明显升高；轻微肌肉损伤（例如磕碰、肌肉注射）就能让它升高。',
       'cTnI 是心肌损伤标志物，心肌受伤时释放入血，但它提示的是"心肌受过伤"，不指明原因。',
       'NT-proBNP 与心脏壁受到牵张、压力负荷增加有关，常用于辅助区分"呼吸急促是心脏问题还是其他原因"。',
-      '在犬猫，如果不是在查特定的肌肉疾病，CK 的轻度升高常常没有临床意义，但需要用其他指标排除肌肉病变。',
+      '在犬，如果不是在查特定的肌肉疾病，CK 的轻度升高常常没有临床意义，但需要用其他指标排除肌肉病变。',
       '心脏标志物与影像学结合时价值最大：心脏结构变化、心腔大小、收缩功能要靠超声心动图看。',
     ],
     caveats: [
@@ -685,7 +687,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-037',
@@ -726,7 +728,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-038',
@@ -774,7 +776,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-039',
@@ -816,7 +818,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-040',
@@ -857,7 +859,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-041',
@@ -898,7 +900,7 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'INTERPRET',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'lab-042',
@@ -940,6 +942,6 @@ export const LAB_CHEMISTRY_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'LOW',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

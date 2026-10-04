@@ -21,8 +21,21 @@ export class MedicalRecordResponseDto {
   @Expose()
   diagnosis!: string;
 
+  /// 化验数据原文（2026-10-02 新增）
+  @Expose()
+  labValues!: string | null;
+
+  /// 医嘱 / 回家注意
   @Expose()
   treatment!: string | null;
+
+  /// 这次做的检查
+  @Expose()
+  exams!: string | null;
+
+  /// 体征
+  @Expose()
+  vitals!: string | null;
 
   @Expose()
   medications!: string[];

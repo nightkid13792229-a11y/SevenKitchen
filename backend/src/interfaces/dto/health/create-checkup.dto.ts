@@ -21,6 +21,12 @@ export class CreateCheckupDto {
   @IsString()
   findings?: string;
 
+  /// 化验数据原文（2026-10-02 新增）：化验单上的逐项数值，
+  /// 与"医生写的结论"分开存，家长/营养师各看各的。
+  @IsOptional()
+  @IsString()
+  labValues?: string;
+
   @IsOptional()
   @IsString()
   recommendations?: string;

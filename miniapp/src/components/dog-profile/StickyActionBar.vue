@@ -50,7 +50,7 @@ defineProps<{
    * ⚠️ 必须做成属性而不是让父页面用 :deep() 覆盖 ——
    *    小程序的自定义组件默认样式隔离，父页面的样式进不来（实测撞到过）。
    */
-  primaryTheme?: 'default' | 'visit' | 'allergy' | 'vaccine' | 'diet' | 'weight'
+  primaryTheme?: 'default' | 'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'
 }>()
 
 const emit = defineEmits<{
@@ -124,14 +124,15 @@ const emit = defineEmits<{
 .sticky-bar__button--primary--visit {
   background: linear-gradient(135deg, #0c6a3f 0%, #128a54 100%);
 }
+/* 体检单独一套蓝（与「就诊」的绿区分开，和书签、内容区同色） */
+.sticky-bar__button--primary--checkup {
+  background: linear-gradient(135deg, #1c5f87 0%, #2a86bb 100%);
+}
 .sticky-bar__button--primary--allergy {
   background: linear-gradient(135deg, #97501f 0%, #bc6a33 100%);
 }
 .sticky-bar__button--primary--vaccine {
   background: linear-gradient(135deg, #5b4c88 0%, #7a68ab 100%);
-}
-.sticky-bar__button--primary--diet {
-  background: linear-gradient(135deg, #a06a12 0%, #c08a24 100%);
 }
 .sticky-bar__button--primary--weight {
   background: linear-gradient(135deg, #0b6069 0%, #12808b 100%);

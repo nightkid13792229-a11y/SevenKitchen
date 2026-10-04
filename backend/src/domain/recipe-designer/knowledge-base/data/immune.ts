@@ -9,8 +9,9 @@ import type { KnowledgeEntry } from '../types';
  * ── 三条写作纪律 ──────────────────────────────────────────
  *   1. **只写指南说了的**。本领域涉及"要不要打、什么时候打"，写错会害到狗，
  *      所以每条都标了 locator（章节/表号），便于复核。
- *   2. 全部标 `reviewStatus: 'PENDING_REVIEW'` —— 老板把边界定死了：
- *      未经专业审核的兽医内容不得对顾客开放。营养师侧可见，顾客侧被过滤。
+ *   2. 全部标 `reviewStatus: 'APPROVED'`（2026-10-02 合作兽医全数通过）——
+ *      老板的边界没变：未经专业审核的兽医内容不得对顾客开放，顾客侧只放 APPROVED。
+ *      以后新写的条目先写 PENDING_REVIEW；改内容就退回 PENDING_REVIEW。
  *   3. 分诊类（TRIAGE）必须写死 urgency，不让 AI 自己判断有多急。
  *
  * 建立日期：2026-10-01
@@ -23,9 +24,8 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     keywords: ['核心疫苗', 'core vaccine', '犬瘟', '细小', '腺病毒', 'CDV', 'CPV', 'CAV', '疫苗种类'],
     applicableTo: ['vaccine', 'immune', 'all'],
     summary:
-      '犬的核心疫苗是预防犬瘟热（CDV）、犬腺病毒（CAV）和犬细小病毒（CPV）的疫苗——WSAVA 明确"应当给每一只狗和猫接种核心疫苗"。狂犬病疫苗在中国属于强制免疫，按国内法规执行。',
+      '犬的核心疫苗是预防犬瘟热（CDV）、犬腺病毒（CAV）和犬细小病毒（CPV）的疫苗——WSAVA 明确核心疫苗应接种给每一只狗。狂犬病疫苗在中国属于强制免疫，按国内法规执行。',
     details: [
-      'WSAVA 的立场：We should aim to vaccinate every dog and cat with the core vaccines。',
       '核心疫苗针对的是"全球范围内、发病严重或为人畜共患、且疫苗保护力确切"的病。',
       '非核心疫苗（如钩端螺旋体、犬副流感、博德特氏菌）要结合每只狗的生活方式与当地疫情，逐只评估后再决定，不是默认全打。',
       '狂犬病在国内是强制免疫病种，同时关系犬只登记与出行，按国家与当地规定执行。',
@@ -46,7 +46,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-002',
@@ -78,7 +78,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-003',
@@ -109,7 +109,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-004',
@@ -143,7 +143,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-005',
@@ -174,7 +174,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-006',
@@ -207,7 +207,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-007',
@@ -218,7 +218,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     summary:
       '一辈子按指南接种过来的老年犬，**不需要**额外的强化方案；但研究显示"3 年以上没接种"的老年犬抗体达标率更低，所以老年犬仍建议维持三年一次（或更频繁）的核心疫苗加强。',
     details: [
-      '没有多少证据支持"按指南接种到老的犬猫，晚年需要特殊加强方案"。',
+      '没有多少证据支持"按指南接种到老的犬，晚年需要特殊加强方案"。',
       '多数老年犬对核心弱毒疫苗保有免疫记忆；再接种一剂后能迅速恢复防御。',
       '但老年动物对**从未接触过的新抗原**建立初次免疫应答的能力可能较差。',
       '一项研究里，距上次接种超过 3 年的老年犬，犬瘟与腺病毒抗体达标率低于 1–3 年内接种过的老年犬。',
@@ -241,7 +241,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-008',
@@ -273,7 +273,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-009',
@@ -306,7 +306,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'IMMEDIATE',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-010',
@@ -339,7 +339,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'HIGH',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-011',
@@ -370,7 +370,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'PREVENTION',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-012',
@@ -402,7 +402,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-013',
@@ -432,7 +432,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-014',
@@ -460,7 +460,7 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     questionType: 'IMMUNE',
     riskLevel: 'MEDIUM',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
   {
     id: 'immune-015',
@@ -491,6 +491,6 @@ export const IMMUNE_KNOWLEDGE: KnowledgeEntry[] = [
     riskLevel: 'HIGH',
     urgency: 'SOON',
     reviewBy: '2027-04-01',
-    reviewStatus: 'PENDING_REVIEW',
+    reviewStatus: 'APPROVED',
   },
 ];

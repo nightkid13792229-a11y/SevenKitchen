@@ -9,10 +9,26 @@ export interface DeepSeekChatOptions {
   requestTimeoutMs: number;
   systemPrompt: string;
   /** 用户消息体（会被 JSON 序列化） */
-  userPayload: unknown;
+  userPayload?: unknown;
+  /**
+   * 多模态用户消息（2026-10-01）。
+   *
+   * 传了它就用它当 user 消息的 content（OpenAI 兼容的数组形式，
+   * 例如 [{ type:'text' }, { type:'image_url', image_url:{ url } }]），
+   * 用于"让视觉模型直接看图"；没传则照旧把 userPayload 序列化成文本。
+   */
+  userContent?: unknown[];
   temperature?: number;
   /** 输出 token 上限（推理模型可能把配额耗在推理上，默认给足） */
   maxTokens?: number;
+  /**
+   * 额外请求体字段（原样合并进 payload）。
+   *
+   * 目前用于 `thinking`：DeepSeek 新模型**默认开启思考模式**（effort=high），
+   * 结构化抽取类任务开着它只会更慢、还容易把 token 配额耗在思维链上
+   * （实测：9.9s / 出 2000 tokens / 最终 content 为空；关掉后 2.8s / 190 tokens / 正常返回）。
+   */
+  extraBody?: Record<string, unknown>;
 }
 
 /**
@@ -56,10 +72,16 @@ async function callDeepSeekJsonOnce(
         signal: controller.signal,
         body: JSON.stringify({
           model: options.model,
+          ...(options.extraBody || {}),
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: options.systemPrompt },
-            { role: 'user', content: JSON.stringify(options.userPayload) },
+            {
+              role: 'user',
+              content: options.userContent
+                ? options.userContent
+                : JSON.stringify(options.userPayload ?? {}),
+            },
           ],
           temperature: options.temperature ?? 0.3,
           max_tokens: options.maxTokens ?? 16384,

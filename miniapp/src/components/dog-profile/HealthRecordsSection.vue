@@ -1,11 +1,12 @@
 <template>
   <view class="health-section" :class="activeTypeMeta.accentClass">
-    <view class="health-section__header">
+    <!-- 内嵌到健康管理页时不显示这一行（2026-10-01 老板要求）：
+         上面那张卡的书签已经写着「病例 / 过敏」，这里再顶一个同名标题和「N 条」
+         就是重复，还把正文往下推了一行。独立成页时（不内嵌）照旧显示。 -->
+    <view v-if="!embedded" class="health-section__header">
       <view>
-        <!-- 内嵌时标题就是**本类型自己的名字**（病史/体检/过敏）。
-             原先三类共用一个「健康记录」标题，看着像一个大板块（老板指出）。 -->
-        <text class="health-section__title">{{ embedded ? activeTypeMeta.label : '健康记录' }}</text>
-        <text v-if="!embedded" class="health-section__desc">
+        <text class="health-section__title">健康记录</text>
+        <text class="health-section__desc">
           按类别整理每一条记录，附件可在展开后上传和预览。
         </text>
       </view>
@@ -32,70 +33,83 @@
 
     <!-- 当前类别的额外入口（2026-09-27）：给「过敏」放"快速添加 + 上传报告自动识别"。
          放在标签页下方、记录列表上方 —— 顾客切到过敏时第一眼就能看到最省事的填法。 -->
-    <slot name="type-extra" />
+    <!-- 只有「过敏」板块会用到这个插槽（快速添加过敏原）。
+         其它板块传进来的是一个空容器：它会作为 flex 子元素占掉一个 gap，
+         书签下方又多一条空白 —— 所以由调用方用 showTypeExtra 显式开关。 -->
+    <slot v-if="showTypeExtra" name="type-extra" />
 
-    <!-- 拍照录入（2026-10-01，第六期）。
-         老板第 4 条：识别扩到体检报告与病历；第 5 条：确认一次就自动填表；
-         第 6 条：愿意手填的顾客不受影响，这条路是可选的。 -->
-    <view v-if="isVisitMode && dogId" class="scan-entry">
-      <view class="scan-entry__kinds">
-        <text
-          v-for="option in SCAN_OPTIONS"
-          :key="option.value"
-          class="scan-entry__kind"
-          :class="{ 'scan-entry__kind--active': scanDocumentType === option.value }"
-          @tap="scanDocumentType = option.value"
-        >{{ option.label }}</text>
-      </view>
+    <!-- 拍照录入（2026-10-01，第六期；同日按老板要求并入底部那一个「新增记录」）。
+         原来这里是「拍病历 / 拍体检报告」两个选择器 + 一个「拍照录入」按钮 +
+         下面再一个「新增记录」——三处入口做同一件事。现在统一成底部一个按钮：
+         点它选「手动填写 / 拍病历 / 拍体检报告」，这里只保留识别结果的确认卡片。 -->
+    <!-- 扫描组件**常驻挂载**、用 class 控制显隐（2026-10-02 修的一个真 bug）。
+         原来写成 v-if="… && scanActive"：第一次点「从相册选择」时才挂载，
+         紧接着 nextTick 就去调它的方法 —— 但小程序里组件挂载要等下一次 setData，
+         那一刻 ref 还是空的，调用被 ?. 静默吞掉，**第一次点击没有任何反应**，
+         第二次才弹出选择器；扫完又 unmount，于是每次都要点两下才灵。
+         改成常驻 + display:none：空闲时不占高度（原来担心的空条不会回来），
+         点一下就能立刻把选择器叫起来。 -->
+    <view
+      v-if="isVisitMode && dogId"
+      class="scan-entry"
+      :class="{ 'scan-entry--hidden': !scanActive }"
+    >
       <HealthDocumentScan
+        ref="scanRef"
+        hide-trigger
         :dog-id="dogId"
-        :document-type="scanDocumentType"
-        :upload-type="scanUploadType"
-        button-text="拍照录入"
-        hint-text="拍报告自动填表；也可以直接在下面手填"
+        :dog-name="dogName"
+        document-type="AUTO"
+        upload-type="medical"
+        :entry-kind="props.visitKind || 'medical'"
         @scanned="onScanned"
       />
     </view>
 
-    <view v-if="draftRecords.length === 0" class="health-section__empty">
+    <!-- 空态块（2026-10-01）：板块**自带引导卡**时不再显示 ——
+         过敏板块上面那张「快速添加过敏原」卡已经写着"已记 0 项"并给了三种添加方式，
+         再顶一块"还没有过敏记录"的空卡片纯属重复；它还会被底部按钮栏挡住，
+         看着就是一块没内容的空白。 -->
+    <view v-if="visibleRecords.length === 0 && !hideEmptyState" class="health-section__empty">
+      <!-- 只有一句：按**当前标签**说名字（2026-10-03 老板：没有记录就写没有记录即可，
+           不用下面那行小字；顺带修掉"过敏标签显示还没有就诊记录"） -->
       <text class="health-section__empty-title">
-        {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
-      </text>
-      <text class="health-section__empty-desc">
-        {{ isVisitMode ? getHealthVisitEmptyDescription() : '先补充一条基础记录，之后可以继续添加。' }}
+        {{ loading ? '记录加载中' : getHealthTabEmptyTitle(activeTabKind) }}
       </text>
     </view>
 
+    <!-- v-for 仍遍历**完整**列表，只是把不属于本标签的草稿藏起来：
+         数组不动 → 下标不变 → 各处理函数照旧按下标工作；
+         服务器来的记录没有标签章，一律算本标签。 -->
+    <template v-for="(record, index) in draftRecords" :key="recordKey(record, index)">
     <view
-      v-for="(record, index) in draftRecords"
-      :key="recordKey(record, index)"
+      v-if="recordBelongsToCurrentTab(record)"
       :id="recordAnchorId(record, index)"
       class="record-card health-card"
       :class="{ 'record-card--dirty': isRecordDirty(record, index) }"
     >
       <view class="record-card__header">
         <view class="record-card__header-main" @tap="toggleRecordExpanded(index)">
+          <!-- 卡片头：日期 + （只在没存上时提示一句"未保存"）。
+               2026-10-02 老板：序号与"已保存"都不用显示，那个位置放就诊日期。
+               但**未保存仍然要说** —— 草稿没落库时一声不吭，家长退出就白填了。 -->
           <view class="record-card__meta">
-            <text class="record-card__index">{{ index + 1 }}</text>
+            <text class="record-card__date">{{ recordDateText(record, index) }}</text>
+            <!-- 自动保存的状态（2026-10-03）：正常时**什么都不显示**；
+                 只有两种情况要说话 —— 缺内容还没存上、保存失败（可点重试）。 -->
             <text
-              class="record-card__status"
-              :class="{
-                'record-card__status--saved': isSavedRecord(record, index) && !isRecordDirty(record, index),
-                'record-card__status--dirty': isRecordDirty(record, index),
-              }"
-            >
-              {{ recordStatusText(record, index) }}
-            </text>
+              v-if="autoSaveNotice(record, index)"
+              class="record-card__unsaved"
+              :class="{ 'record-card__unsaved--failed': autoSaveNoticeFailed(record, index) }"
+              @tap.stop="onAutoSaveNoticeTap(record, index)"
+            >{{ autoSaveNotice(record, index) }}</text>
+            <text v-else-if="isRecordSaving(record, index)" class="record-card__saving">保存中…</text>
           </view>
 
           <view class="record-card__summary">
             <view class="record-card__summary-heading">
               <!-- 类型徽标：一个列表里混着就诊和体检，得让人一眼看出哪条是哪种 -->
-              <text
-                v-if="fieldConfigForRecord(record).kindSelect"
-                class="record-card__kind-badge"
-                :class="`record-card__kind-badge--${resolveHealthVisitKind(record)}`"
-              >{{ HEALTH_VISIT_KIND_LABELS[resolveHealthVisitKind(record)] }}</text>
+
               <text class="record-card__summary-title">
                 {{ recordSummary(record, index).title }}
               </text>
@@ -147,21 +161,73 @@
       </view>
 
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
-        <!-- 类型（仅「病例」模式）：就诊 / 体检。换类型等于换一张表，
-             所以会清空重填，由 changeVisitKind 提示后再动。 -->
-        <view v-if="fieldConfigForRecord(record).kindSelect" class="field-group">
-          <text class="field-label">类型</text>
-          <view class="kind-switch">
-            <text
-              v-for="kind in HEALTH_VISIT_KINDS"
-              :key="`${recordKey(record, index)}-kind-${kind}`"
-              class="kind-switch__item"
-              :class="{ 'kind-switch__item--active': resolveHealthVisitKind(record) === kind }"
-              @tap="changeVisitKind(index, kind)"
-            >{{ HEALTH_VISIT_KIND_LABELS[kind] }}</text>
+        <!-- ── 病历/检查：字段顺序＝家长填写顺序（2026-10-02 精简版）────────────
+             必填只有两件：日期 +（症状 或 医生诊断）。
+             「状态」已从表单移除（家长不做系统选择题），改成存好后一键「已经好了」；
+             「备注」改名「补充说明」并提到明面（它已经接进 AI 分析）；
+             只有复查日期、兽医这种少数情况才有的收进「选填」。 -->
+        <template v-if="isVisitMode">
+          <!-- 日期：值短，跟标签同一行就够（2026-10-02 老板：原来那一块占的行数太多） -->
+          <view class="field-group field-group--inline">
+            <text class="field-label">{{ visitConfig(record).dateLabel }}</text>
+            <picker
+              class="field-inline-picker"
+              mode="date"
+              :disabled="hasSavingRecord"
+              :value="readField(record, visitConfig(record).dateKey)"
+              @change="updateTextField(index, visitConfig(record).dateKey, $event.detail.value)"
+            >
+              <text class="field-inline-value">
+                {{ readField(record, visitConfig(record).dateKey) || `请选择` }}
+              </text>
+            </picker>
           </view>
-        </view>
 
+          <!-- ── 内容字段：统一「标签 + 小编辑按钮 + 值」三件套（2026-10-02 老板定）──
+               自检发现的三件事：
+                 ① 症状/医嘱这些原来用**单行输入框**，长文本被截成一行、不会换行；
+                 ② 化验数据那栏常常几十行，把别的字段挤到屏幕外；
+                 ③ 可编辑状态不一致：有的字段永远是输入框、有的要按"修改"、有的是
+                    picker，家长看不出哪个能点。
+               现在统一：**有内容的字段默认只读**（正常换行、化验分块折叠），右上角一个小
+               「编辑」；**空字段直接给输入框**（手写不受影响）；编辑中点「完成」收起。
+               编辑态一律用可自动增高的多行框，不再用单行框装长文本。 -->
+          <view v-for="row in visitFieldRows(record)" :key="row.key" class="field-group">
+            <view class="field-head">
+              <text class="field-label">{{ row.label }}</text>
+              <text
+                v-if="!hasSavingRecord && (hasFieldValue(record, row.key) || isFieldEditing(record, index, row.key))"
+                class="field-chip"
+                :class="{ 'field-chip--done': isFieldEditing(record, index, row.key) }"
+                @tap="toggleFieldEditing(record, index, row.key)"
+              >{{ isFieldEditing(record, index, row.key) ? '完成' : '编辑' }}</text>
+            </view>
+
+            <template v-if="hasFieldValue(record, row.key) && !isFieldEditing(record, index, row.key)">
+              <LabValuesView
+                v-if="row.rich === 'lab'"
+                :text="fieldText(record, row.key)"
+                collapsible
+              />
+              <text v-else class="field-value">{{ fieldText(record, row.key) }}</text>
+            </template>
+
+            <textarea
+              v-else
+              class="field-textarea"
+              :class="{ 'field-textarea--tall': row.rich === 'lab' }"
+              auto-height
+              :disabled="hasSavingRecord"
+              :placeholder="row.placeholder"
+              :value="fieldText(record, row.key)"
+              @focus="markFieldEditing(record, index, row.key)"
+              @input="updateTextField(index, row.key, $event.detail.value)"
+            />
+          </view>
+
+        </template>
+
+        <template v-else>
         <view class="field-group">
           <text class="field-label">{{ fieldConfigForRecord(record).primary.label }}</text>
           <picker
@@ -188,140 +254,78 @@
         </view>
 
         <view v-if="fieldConfigForRecord(record).date" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).date.label }}</text>
+          <text class="field-label">{{ dateField(record).label }}</text>
           <picker
             mode="date"
             :disabled="hasSavingRecord"
-            :value="readField(record, fieldConfigForRecord(record).date.key)"
-            @change="updateTextField(index, fieldConfigForRecord(record).date.key, $event.detail.value)"
+            :value="readField(record, dateField(record).key)"
+            @change="updateTextField(index, dateField(record).key, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readField(record, fieldConfigForRecord(record).date.key) || `请选择${fieldConfigForRecord(record).date.label}` }}
+              {{ readField(record, dateField(record).key) || `请选择${dateField(record).label}` }}
             </view>
           </picker>
         </view>
 
         <view v-if="fieldConfigForRecord(record).secondary" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).secondary.label }}</text>
+          <text class="field-label">{{ secondaryField(record).label }}</text>
           <input
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).secondary.label}`"
-            :value="readField(record, fieldConfigForRecord(record).secondary.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).secondary.key, $event.detail.value)"
+            :placeholder="`请输入${secondaryField(record).label}`"
+            :value="readField(record, secondaryField(record).key)"
+            @input="updateTextField(index, secondaryField(record).key, $event.detail.value)"
           />
         </view>
 
         <!-- 状态（目前只有病史用）：顾客自述来的记录默认「待确认」，
              由顾客在这里改成实际情况；系统不替兽医判断是不是慢性病 -->
         <view v-if="fieldConfigForRecord(record).status" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).status.label }}</text>
+          <text class="field-label">{{ statusField(record).label }}</text>
           <picker
             mode="selector"
-            :range="fieldOptionLabels(fieldConfigForRecord(record).status.options)"
-            :value="fieldOptionIndex(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key)"
+            :range="fieldOptionLabels(statusField(record).options)"
+            :value="fieldOptionIndex(record, statusField(record).options, statusField(record).key)"
             :disabled="hasSavingRecord"
-            @change="updateOptionField(index, fieldConfigForRecord(record).status.key, fieldConfigForRecord(record).status.options, $event.detail.value)"
+            @change="updateOptionField(index, statusField(record).key, statusField(record).options, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readOptionFieldLabel(record, fieldConfigForRecord(record).status.options, fieldConfigForRecord(record).status.key) || `请选择${fieldConfigForRecord(record).status.label}` }}
+              {{ readOptionFieldLabel(record, statusField(record).options, statusField(record).key) || `请选择${statusField(record).label}` }}
             </view>
           </picker>
         </view>
 
         <!-- 兽医（两张表都有这个字段，合并后才有入口） -->
         <view v-if="fieldConfigForRecord(record).veterinarian" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).veterinarian.label }}</text>
+          <text class="field-label">{{ vetField(record).label }}</text>
           <input
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).veterinarian.label}`"
-            :value="readField(record, fieldConfigForRecord(record).veterinarian.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).veterinarian.key, $event.detail.value)"
+            :placeholder="`请输入${vetField(record).label}`"
+            :value="readField(record, vetField(record).key)"
+            @input="updateTextField(index, vetField(record).key, $event.detail.value)"
           />
         </view>
 
         <!-- 备注：体检表没有 notes 字段，所以体检记录这一栏是空的、不显示 -->
         <view v-if="fieldConfigForRecord(record).notes" class="field-group">
-          <text class="field-label">{{ fieldConfigForRecord(record).notes.label }}</text>
+          <text class="field-label">{{ notesField(record).label }}</text>
           <textarea
             class="field-textarea"
             :disabled="hasSavingRecord"
-            :placeholder="`请输入${fieldConfigForRecord(record).notes.label}`"
-            :value="readField(record, fieldConfigForRecord(record).notes.key)"
-            @input="updateTextField(index, fieldConfigForRecord(record).notes.key, $event.detail.value)"
+            :placeholder="`请输入${notesField(record).label}`"
+            :value="readField(record, notesField(record).key)"
+            @input="updateTextField(index, notesField(record).key, $event.detail.value)"
           />
         </view>
 
-        <!-- 更多：症状描述、体检类型、用药、复查日期。默认收起，
-             不挡着"只填一个诊断结果"的家长。 -->
-        <view v-if="hasExtraFields(record)" class="field-group">
-          <text class="more-toggle" @tap="toggleMore(index)">
-            {{ isMoreExpanded(record, index) ? '收起更多 ▲' : '更多（症状、用药、体检类型…）▼' }}
-          </text>
-
-          <view v-if="isMoreExpanded(record, index)" class="more-fields">
-            <view v-if="fieldConfigForRecord(record).extras?.complaint" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.complaint!.label }}</text>
-              <input
-                class="field-input"
-                type="text"
-                :disabled="hasSavingRecord"
-                :placeholder="`请输入${fieldConfigForRecord(record).extras!.complaint!.label}`"
-                :value="readField(record, fieldConfigForRecord(record).extras!.complaint!.key)"
-                @input="updateTextField(index, fieldConfigForRecord(record).extras!.complaint!.key, $event.detail.value)"
-              />
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.checkupType" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.checkupType!.label }}</text>
-              <picker
-                mode="selector"
-                :range="fieldOptionLabels(fieldConfigForRecord(record).extras!.checkupType!.options)"
-                :value="fieldOptionIndex(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key)"
-                :disabled="hasSavingRecord"
-                @change="updateOptionField(index, fieldConfigForRecord(record).extras!.checkupType!.key, fieldConfigForRecord(record).extras!.checkupType!.options, $event.detail.value)"
-              >
-                <view class="field-picker">
-                  {{ readOptionFieldLabel(record, fieldConfigForRecord(record).extras!.checkupType!.options, fieldConfigForRecord(record).extras!.checkupType!.key) || `请选择${fieldConfigForRecord(record).extras!.checkupType!.label}` }}
-                </view>
-              </picker>
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.medications" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.medications!.label }}</text>
-              <input
-                class="field-input"
-                type="text"
-                :disabled="hasSavingRecord"
-                placeholder="多个用顿号隔开，例如：速诺、胃复安"
-                :value="readField(record, fieldConfigForRecord(record).extras!.medications!.key)"
-                @input="updateTextField(index, fieldConfigForRecord(record).extras!.medications!.key, $event.detail.value)"
-              />
-            </view>
-
-            <view v-if="fieldConfigForRecord(record).extras?.followUpDate" class="field-group">
-              <text class="field-label">{{ fieldConfigForRecord(record).extras!.followUpDate!.label }}</text>
-              <picker
-                mode="date"
-                :disabled="hasSavingRecord"
-                :value="readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key)"
-                @change="updateTextField(index, fieldConfigForRecord(record).extras!.followUpDate!.key, $event.detail.value)"
-              >
-                <view class="field-picker">
-                  {{ readField(record, fieldConfigForRecord(record).extras!.followUpDate!.key) || '需要复查时才填' }}
-                </view>
-              </picker>
-            </view>
-          </view>
-        </view>
+        </template>
 
         <view class="field-group">
           <view class="field-label field-label--row">
-            <text>附件（点击预览）</text>
-            <text class="field-label__hint">{{ attachmentHintText }}</text>
+            <text>{{ attachmentList(record).length > 0 ? '附件（点击预览）' : '附件' }}</text>
           </view>
 
           <view v-if="attachmentList(record).length > 0" class="attachment-list">
@@ -357,7 +361,7 @@
             :disabled="loading || hasSavingRecord || isUploading(record, index) || isRecordSaving(record, index)"
             @tap="chooseAttachment(index)"
           >
-            上传附件
+            上传附件（检查报告、化验单等）
           </button>
         </view>
 
@@ -389,24 +393,26 @@
         </view>
       </view>
     </view>
+    </template>
 
-    <button
-      class="health-section__action"
-      :class="{ 'health-section__action--disabled': loading || hasUploadingRecords || hasSavingRecord }"
-      :disabled="loading || hasUploadingRecords || hasSavingRecord"
-      @tap="addRecord"
-    >
-      {{ activeTypeMeta.addLabel }}
-    </button>
+    <!-- 「新增记录」按钮已下线（2026-10-02 老板要求收敛入口）：
+         2026-10-03 起：底部「新增记录」按当前标签直接调起相册做 AI 识别，
+         纯手填由底部「新增记录」里的「手动填写」选项新建一条；标签页只做结果呈现与编辑。
+         组件仍然暴露 addRecord()，供引导入口在选完类别后调用。 -->
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
+import LabValuesView from './LabValuesView.vue'
 import HealthDocumentScan from './HealthDocumentScan.vue'
 import {
   HEALTH_RECORD_TYPES,
+  HEALTH_VISIT_DEFAULT_CHECKUP_TYPE,
+  HEALTH_RECORD_TAB_FIELD,
+  HEALTH_VISIT_KIND_FIELD,
+  doesDraftBelongToTab,
   HEALTH_VISIT_KIND_LABELS,
   HEALTH_VISIT_KINDS,
   type HealthCheckupTypeOption,
@@ -424,8 +430,9 @@ import {
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   formatHealthCheckupTypeLabel,
-  getHealthVisitEmptyDescription,
+  getHealthTabEmptyTitle,
   getHealthVisitFieldConfig,
+  resolveMedicalStatusToggle,
   getHealthVisitSectionMeta,
   getHealthVisitValidationError,
   getHealthCheckupTypeOptions,
@@ -434,10 +441,11 @@ import {
   getHealthRecordValidationError,
   readHealthAttachmentFileSize,
   resolveHealthAttachmentFileSizeError,
-  resolveHealthAttachmentPreviewType,
+  previewHealthAttachment,
   resolveHealthAttachmentSelectionError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  resolveHealthVisitDate,
   resolveHealthVisitKind,
   normalizeHealthVisitRecord,
 } from '../../utils/health-records'
@@ -477,10 +485,41 @@ type FieldConfig = {
 
 const props = withDefaults(defineProps<{
   dogId: string
-  activeType?: HealthRecordType
+  /**
+   * 这条记录属于哪一类（2026-10-02 拆标签后由标签决定）。
+   * 就诊标签传 'medical'、体检标签传 'checkup' ——
+   * 表单里不再有"类型"切换，顾客在入口就选好了。
+   */
+  visitKind?: 'medical' | 'checkup'
+  /**
+   * 当前这只狗的名字（2026-10-02）。
+   * 只用于核对：报告上写的动物名和它对不上时提醒家长，**不拦着保存** ——
+   * 要不要存进这个档案由家长自己决定（老板定的）。
+   */
+  dogName?: string
+  /**
+   * 板块标识。`'visit'` 是「病例」合并模式（一个列表同时装就诊与体检），
+   * 由组件内部逐条判断每条记录真正属于哪张表 —— 所以它是合法取值，
+   * 上面的类型漏了它（2026-10-01 自查补）。
+   */
+  activeType?: HealthRecordType | 'visit'
+  /**
+   * 当前标签到底是哪一类（就诊/体检/过敏），由页面传进来（2026-10-03）。
+   *
+   * ⚠️ 不能拿 activeType 代替：三个记录标签的 activeType 都是 `'visit'`，
+   *    而合并模式下组件内部的 baseType 恒等于 medical —— 这正是
+   *    "在就诊新建的空表单跑到体检/过敏里"那个 bug 的来源。
+   */
+  tabKind?: HealthRecordType
   records?: Record<string, any>[]
   loading?: boolean
   savingRecordKey?: string
+  /**
+   * 最近一次保存的结果（2026-10-03 自动保存）。
+   * 失败时卡片上写「保存失败，点重试」—— 没有按钮可点的情况下，
+   * 这是唯一能说清"这条没存上"的地方。
+   */
+  lastSaveResult?: { key: string; ok: boolean; message: string; at: number } | null
   preferredExpandedRecordIdentity?: string
   modelValue?: Record<string, any>[]
   recordType?: HealthRecordType
@@ -490,11 +529,27 @@ const props = withDefaults(defineProps<{
    * 上级已经有同一套书签，留着就是重复。
    */
   embedded?: boolean
+  /**
+   * 是否渲染 type-extra 插槽（只有过敏板块会往里放"快速添加过敏原"）。
+   *
+   * 缺省 true 保持既有行为；「病历/检查」板块传 false —— 否则调用方那个空的
+   * 插槽容器会作为 flex 子元素占掉一个 gap，书签下方就多一条空白。
+   */
+  showTypeExtra?: boolean
+  /**
+   * 是否隐藏空态块：板块自带引导卡时（过敏的「快速添加过敏原」）传 true，
+   * 否则会在引导卡下面再显示一块内容重复、又容易被底部按钮栏挡住的空卡片。
+   */
+  hideEmptyState?: boolean
 }>(), {
   activeType: undefined,
+  tabKind: undefined,
+  showTypeExtra: true,
+  hideEmptyState: false,
   records: () => [],
   loading: false,
   savingRecordKey: '',
+  lastSaveResult: null,
   preferredExpandedRecordIdentity: '',
   modelValue: () => [],
   recordType: undefined,
@@ -521,7 +576,20 @@ const lastSyncedType = ref<HealthRecordType | null>(null)
 const recentSavingRecordKey = ref('')
 const attachmentHintText = buildHealthAttachmentFieldHint()
 
-const currentType = computed<HealthRecordType>(() => props.activeType || props.recordType || 'medical')
+const currentType = computed<HealthRecordType | 'visit'>(
+  () => props.activeType || props.recordType || 'medical',
+)
+
+/**
+ * 「非合并模式下的当前类型」——只有它不是 'visit'。
+ *
+ * 合并模式没有单一类型，但本地 key、草稿比对、聚焦定位这些**非业务用途**
+ * 仍需要一个稳定的类型前缀，统一取 `'medical'`（合并列表的主类型）。
+ * 业务判断一律走 recordKindOf()，不要用这个。
+ */
+const baseType = computed<HealthRecordType>(() => (
+  currentType.value === 'visit' ? 'medical' : currentType.value
+))
 
 /**
  * 「病例」模式（2026-10-01）：
@@ -532,13 +600,59 @@ const currentType = computed<HealthRecordType>(() => props.activeType || props.r
  */
 const isVisitMode = computed(() => (props.activeType as string) === 'visit')
 
+/**
+ * 当前标签（就诊/体检/过敏）。
+ * 页面传 tabKind；万一别的入口没传，退回 baseType（非合并模式下它就是答案）。
+ */
+const activeTabKind = computed<HealthRecordType>(
+  () => props.tabKind || baseType.value,
+)
+
+/**
+ * 这条草稿该不该在**当前标签**里显示（2026-10-03）。
+ *
+ * 老板先报"在就诊新建的空表单跑到体检、过敏"，随后又报"连之前保存的就诊记录
+ * 也看不到了" —— 后者是我第一版修法的副作用：把不属于当前标签的草稿从列表里
+ * **摘掉**（挪进"暂存区"），一旦判断有偏差记录就真的不见了、而且放不回来。
+ *
+ * 现在改成**只在渲染时按归属过滤**：数组不动、下标不变、各处理函数照旧按下标
+ * 工作，切回原标签自动又出现。判定只认草稿身上"新建/识别时盖的标签章"
+ * （`__tabKind`）与就诊/体检章；**服务器来的记录两个章都没有 → 一律算本标签**
+ * （它本来就只出现在当前标签的列表里）—— 已保存记录在结构上不可能被藏起来。
+ */
+function recordBelongsToCurrentTab(record: Record<string, any>): boolean {
+  return doesDraftBelongToTab(record, {
+    tabKind: activeTabKind.value,
+    visitKind: props.visitKind || 'medical',
+  })
+}
+
+/** 当前标签下真正会渲染出来的记录（空态判断也用它） */
+const visibleRecords = computed(() => (
+  draftRecords.value.filter((record) => recordBelongsToCurrentTab(record))
+))
+
+/**
+ * 附件上传/删除接口用的类型。
+ *
+ * 合并模式（`'visit'`）没有单一记录类型：历史上它落到通用上传口
+ * （`/health/upload-image`）与通用删除口（`/health/attachments`）——
+ * 与过敏同一支。这里把 `'visit'` 显式写成 `'allergy'`：**接口一字不变**，
+ * 只是让类型能对上（2026-10-01 自查）。
+ */
+const attachmentApiType = computed<HealthRecordType>(() => (
+  currentType.value === 'visit' ? 'allergy' : currentType.value
+))
+
 /** 某条记录真正对应哪张表：合并模式下逐条判断，其余模式就是当前类型 */
 function recordKindOf(record: Record<string, any>): HealthRecordType {
-  return isVisitMode.value ? resolveHealthVisitKind(record) : currentType.value
+  return isVisitMode.value ? resolveHealthVisitKind(record) : baseType.value
 }
 
 const activeTypeMeta = computed(() => (
-  isVisitMode.value ? getHealthVisitSectionMeta() : getHealthRecordTypeMeta(currentType.value)
+  isVisitMode.value
+    ? getHealthVisitSectionMeta(props.visitKind || 'medical')
+    : getHealthRecordTypeMeta(baseType.value)
 ))
 const sourceRecords = computed(() => (
   props.records.length > 0 || !props.modelValue.length ? props.records : props.modelValue
@@ -550,12 +664,42 @@ const hasDirtyRecords = computed(() =>
 const hasUploadingRecords = computed(() => Object.values(uploadingKeys.value).some(Boolean))
 const hasSavingRecord = computed(() => Boolean(props.savingRecordKey))
 
+/* ── 自动保存（2026-10-03 老板定：删掉底部保存按钮，改成实时保存）────────────
+ *
+ * 规则：
+ *   · 改动后**延迟 1.2 秒**落库（打字停顿即保存），连续输入不会被切成很多次请求；
+ *   · 到边界立刻落库：点「完成」收起某个字段、收起这张卡片、切标签、离开页面；
+ *   · **缺信息的草稿不会硬存**（日期 + 至少一项内容/附件）——
+ *     卡片上明确写"还差什么"，填完自动保存，绝不静默丢掉；
+ *   · 保存失败时卡片上写「保存失败，点重试」，点一下就再存一次。
+ */
+const AUTO_SAVE_DELAY_MS = 1200
+/** 每张卡片一个定时器（键＝记录 key） */
+const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+/** 正在保存时又被改动的记录，存完接着存 */
+const autoSaveQueue = new Set<string>()
+/** 每条记录的提示：'' = 正常；否则是给家长看的一句话 */
+const autoSaveNotices = ref<Record<string, string>>({})
+/** 提示是不是"保存失败"（失败可以点重试；缺信息点了就滚到那条） */
+const autoSaveFailedKeys = ref<string[]>([])
+
 watch(
   () => props.savingRecordKey,
   (nextKey, previousKey) => {
     if (nextKey) {
       recentSavingRecordKey.value = nextKey
       return
+    }
+
+    // 一次保存结束（不管成功失败）：把排队等着的、以及"存的过程中又被改过"的接着存
+    if (autoSaveQueue.size > 0) {
+      const queued = Array.from(autoSaveQueue)
+      autoSaveQueue.clear()
+      nextTick(() => {
+        for (const key of queued) {
+          void runAutoSave(key)
+        }
+      })
     }
 
     if (previousKey) {
@@ -573,8 +717,33 @@ watch(
   () => [currentType.value, sourceRecords.value] as const,
   () => {
     syncDraftRecords(sourceRecords.value)
+
+    // 保存回来之后如果这条还是脏的（存的过程中家长又改了），接着存
+    nextTick(() => {
+      draftRecords.value.forEach((record, index) => {
+        if (isRecordDirty(record, index) && !isRecordSaving(record, index)) {
+          scheduleAutoSave(record, index)
+        }
+      })
+    })
   },
   { immediate: true, deep: true },
+)
+
+watch(
+  () => props.lastSaveResult,
+  (result) => {
+    if (!result?.key) {
+      return
+    }
+
+    if (result.ok) {
+      clearAutoSaveNotice(result.key)
+      return
+    }
+
+    setAutoSaveNotice(result.key, '保存失败，点重试', true)
+  },
 )
 
 watch(
@@ -596,6 +765,13 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 单一类型板块（现在只剩「过敏」）的字段配置。
+ *
+ * 病历/检查早已走 visitConfig（见上）；这里的 medical / checkup 两个分支
+ * 是 2026-10-01 合并之前留下的，页面不会再传这两个值进来，
+ * 保留只为"万一有别的入口传进来也别渲染成空白"。
+ */
 function getFieldConfig(type: HealthRecordType): FieldConfig {
   if (type === 'medical') {
     return {
@@ -627,44 +803,103 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
 }
 
 /**
- * 「病例」模式下的表单配置：一条记录一张表单，按它的类型决定字段。
+ * 病历/检查的表单配置：直接用 utils 里那张字段对照表（2026-10-02 精简版）。
  *
- * 对照表（2026-10-01 与老板确认）：
- *   日期        → 就诊日期 / 体检日期
- *   诊断结果    → 诊断结果（就诊）/ 检查结论（体检）★ 唯一必填的内容字段
- *   处理或建议  → 处理方式（就诊）/ 医生建议（体检）
- *   兽医        → 两张表都有
- *   备注        → 只有就诊有地方存（体检表没有 notes 字段）
- *   更多        → 症状描述、体检类型、用药、复查日期
+ * 这里不再往 FieldConfig 那套通用形状里塞 —— 病历/检查的字段顺序、可见性、
+ * 标签全都跟过敏那种单一记录不一样，硬套一层只会绕。
  */
-function getVisitFieldConfig(record: Record<string, any>): FieldConfig {
-  const kind = resolveHealthVisitKind(record)
-  const visit = getHealthVisitFieldConfig(kind)
-
-  return {
-    primary: { key: visit.primaryKey, label: visit.primaryLabel },
-    date: { key: visit.dateKey, label: visit.dateLabel },
-    secondary: { key: visit.adviceKey, label: visit.adviceLabel },
-    status: visit.showsStatus
-      ? { key: 'status', label: '状态', options: getMedicalStatusOptions() }
-      : null,
-    notes: visit.notesKey ? { key: visit.notesKey, label: visit.notesLabel } : null,
-    veterinarian: { key: 'veterinarian', label: '兽医' },
-    kindSelect: true,
-    extras: {
-      complaint: visit.showsComplaint ? { key: 'chiefComplaint', label: '症状或疾病' } : undefined,
-      checkupType: visit.showsCheckupType
-        ? { key: 'checkupType', label: '体检类型', options: getHealthCheckupTypeOptions() }
-        : undefined,
-      medications: visit.showsMedications ? { key: 'medications', label: '用药' } : undefined,
-      followUpDate: visit.showsFollowUpDate ? { key: 'followUpDate', label: '复查日期' } : undefined,
-    },
-  }
+function visitConfig(record: Record<string, any>) {
+  return getHealthVisitFieldConfig(resolveHealthVisitKind(record))
 }
 
-/** 模板里逐条取配置：合并模式按记录类型，其余模式按当前板块 */
-function fieldConfigForRecord(record: Record<string, any>): FieldConfig {
-  return isVisitMode.value ? getVisitFieldConfig(record) : getFieldConfig(currentType.value)
+/** 可选字段在 TS 类型上是 string | null，模板里取 key 时统一在这里收口 */
+function visitComplaintKey(record: Record<string, any>) {
+  return visitConfig(record).complaintKey || ''
+}
+
+function visitLabValuesKey(record: Record<string, any>) {
+  return visitConfig(record).labValuesKey || ''
+}
+
+function visitMedicationKey(record: Record<string, any>) {
+  return visitConfig(record).medicationKey || ''
+}
+
+/** 「还有 N 项选填（复查日期、兽医）」——把里面是什么写在按钮上，不藏字段 */
+/**
+ * 切换类型之后，另一种类型独有的内容还留在草稿里（2026-10-02 老板要求"保留已填内容"）。
+ * 这一行把它说出来：家长切到体检时看得见"刚填的症状还在"，不会以为白填了。
+ */
+function visitCarryOverHint(record: Record<string, any>) {
+  if (resolveHealthVisitKind(record) === 'medical') {
+    const findings = String(record?.findings || '').trim()
+    return findings ? `切回「体检」还能看到刚填的检查结论：${findings}` : ''
+  }
+
+  const parts = [
+    String(record?.chiefComplaint || '').trim(),
+    String(record?.medications || '').trim(),
+  ].filter(Boolean)
+
+  return parts.length > 0 ? `切回「就诊」还能看到刚填的：${parts.join('、')}` : ''
+}
+
+/** 一键「已经好了」的文案（状态不再进表单，但库里的 status 仍然决定进不进 AI 分析） */
+function medicalStatusToggle(record: Record<string, any>) {
+  return resolveMedicalStatusToggle(record)
+}
+
+function toggleVisitStatus(index: number) {
+  const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
+  const next = resolveMedicalStatusToggle(record)
+  record.status = next.status
+
+  uni.showToast({
+    title: next.status === 'RECOVERED'
+      ? '已标记「已经好了」，记得点保存'
+      : '已改回「还在治疗中」，记得点保存',
+    icon: 'none',
+  })
+}
+
+/** 其它板块（过敏）的字段配置（病历/检查不再走这里） */
+function fieldConfigForRecord(_record: Record<string, any>): FieldConfig {
+  return getFieldConfig(baseType.value)
+}
+
+/**
+ * 模板取值器（2026-10-01 自查补）。
+ *
+ * 为什么需要它们：`date` / `secondary` / `status` / `veterinarian` / `notes`
+ * 都是可空字段，而模板里是靠 `v-if="fieldConfigForRecord(record).date"` 先判断、
+ * 再访问 `.date.key` —— **模板里这种"先判空再取属性"对函数调用不生效**，
+ * 类型检查会一路报"对象可能为空"。给它一个兜底的空字段，
+ * 运行时行为完全不变（v-if 为假时这段根本不会渲染）。
+ */
+const EMPTY_FIELD = { key: '', label: '' }
+
+function dateField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).date ?? EMPTY_FIELD
+}
+
+function secondaryField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).secondary ?? EMPTY_FIELD
+}
+
+function statusField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).status ?? { ...EMPTY_FIELD, options: [] as HealthCheckupTypeOption[] }
+}
+
+function vetField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).veterinarian ?? EMPTY_FIELD
+}
+
+function notesField(record: Record<string, any>) {
+  return fieldConfigForRecord(record).notes ?? EMPTY_FIELD
 }
 
 function cloneRecord<T>(value: T): T {
@@ -686,13 +921,16 @@ function createLocalKey(record: Record<string, any>, index: number) {
     return record.id
   }
 
-  return `${currentType.value}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
+  return `${baseType.value}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function normalizeDraftRecord(record: Record<string, any>, localId: string) {
   return {
     ...cloneRecord(record),
     __localId: localId,
+    // ⚠️ 这里**故意不盖"标签章"**：服务器来的记录两个章都没有 → 一律算本标签，
+    //    已保存记录因此不可能被渲染过滤藏起来（老板实测踩过"记录不见了"）。
+    //    标签章只在本地新建（addRecord）与识别填入（onScanned）时盖。
     attachments: attachmentList(record),
   }
 }
@@ -705,7 +943,7 @@ function hasMatchingIncomingRecord(
 ) {
   const matchingIndex = incomingRecords.findIndex((incomingRecord, index) =>
     !usedIncomingIndexes.has(index) &&
-    doHealthRecordsMatchPersistedPayload(currentType.value, record, incomingRecord),
+    doHealthRecordsMatchPersistedPayload(recordKindOf(record), record, incomingRecord),
   )
 
   if (matchingIndex < 0) {
@@ -729,6 +967,7 @@ function preserveUnsavedDrafts(
     if (!isRecordDirty(record, index)) {
       return
     }
+
 
     if (replaceIncomingRecordWithDirtyDraft(record, index, key, incomingRecords, nextSnapshots)) {
       return
@@ -805,6 +1044,145 @@ function consumeRecentSavingRecordKey(record: Record<string, any>, index: number
   }
 }
 
+/**
+ * 这张卡片的校验错误（缺什么），没有就是 null。
+ * 与 saveRecord 用同一套规则 —— 自动保存不能比手动保存更宽松。
+ */
+function recordValidationError(record: Record<string, any>, index: number): string | null {
+  return isVisitMode.value
+    ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
+    : getHealthRecordValidationError(baseType.value, record)
+}
+
+function clearAutoSaveNotice(key: string) {
+  if (autoSaveNotices.value[key]) {
+    const next = { ...autoSaveNotices.value }
+    delete next[key]
+    autoSaveNotices.value = next
+  }
+  if (autoSaveFailedKeys.value.includes(key)) {
+    autoSaveFailedKeys.value = autoSaveFailedKeys.value.filter((item) => item !== key)
+  }
+}
+
+function setAutoSaveNotice(key: string, message: string, failed = false) {
+  autoSaveNotices.value = { ...autoSaveNotices.value, [key]: message }
+  autoSaveFailedKeys.value = failed
+    ? Array.from(new Set([...autoSaveFailedKeys.value, key]))
+    : autoSaveFailedKeys.value.filter((item) => item !== key)
+}
+
+/**
+ * 排一次自动保存。immediate = 立刻存（点「完成」、收起卡片、切标签这些边界）。
+ * 记录被删掉时对应的定时器由 runAutoSave 自己发现并清掉。
+ */
+function scheduleAutoSave(
+  record: Record<string, any>,
+  index: number,
+  options: { immediate?: boolean } = {},
+) {
+  const key = recordKey(record, index)
+  const pending = autoSaveTimers.get(key)
+  if (pending) {
+    clearTimeout(pending)
+    autoSaveTimers.delete(key)
+  }
+
+  if (options.immediate) {
+    void runAutoSave(key)
+    return
+  }
+
+  autoSaveTimers.set(
+    key,
+    setTimeout(() => {
+      autoSaveTimers.delete(key)
+      void runAutoSave(key)
+    }, AUTO_SAVE_DELAY_MS),
+  )
+}
+
+/** 真正存一条：缺信息 → 只写提示；否则派发给父组件保存 */
+async function runAutoSave(key: string) {
+  const index = findRecordIndexByKey(key)
+  if (index < 0) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  const record = draftRecords.value[index]
+  if (!record) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  // 已经和服务器一致（刚存完没再改）→ 不用存，把提示清掉
+  if (!isRecordDirty(record, index)) {
+    clearAutoSaveNotice(key)
+    return
+  }
+
+  // 附件还在上传：等它传完再存，否则存下去的是没有附件的版本
+  if (hasUploadingRecords.value) {
+    scheduleAutoSave(record, index)
+    return
+  }
+
+  const validationError = recordValidationError(record, index)
+  if (validationError) {
+    setAutoSaveNotice(key, '还差内容，填完自动保存')
+    return
+  }
+
+  // 上一次还没存完：排队，等空闲了接着存（并发写同一份列表会互相覆盖）
+  if (hasSavingRecord.value || isRecordSaving(record, index)) {
+    autoSaveQueue.add(key)
+    return
+  }
+
+  clearAutoSaveNotice(key)
+  emit('save-record', {
+    type: recordKindOf(record),
+    record: stripLocalFields(record),
+    recordKey: key,
+    // 自动保存：成功不弹 toast（每改一格弹一次会把人烦死），
+    // 失败由页面回传 lastSaveResult，卡片上写「保存失败，点重试」
+    auto: true,
+  })
+}
+
+/** 把等待中的自动保存全部立刻执行（切标签、离开页面、收起卡片时用） */
+function flushAutoSaves() {
+  for (const [key, timer] of Array.from(autoSaveTimers.entries())) {
+    clearTimeout(timer)
+    autoSaveTimers.delete(key)
+    void runAutoSave(key)
+  }
+}
+
+/** 这张卡片现在该显示什么提示（正常时什么都不显示） */
+function autoSaveNotice(record: Record<string, any>, index: number): string {
+  return autoSaveNotices.value[recordKey(record, index)] || ''
+}
+
+function autoSaveNoticeFailed(record: Record<string, any>, index: number): boolean {
+  return autoSaveFailedKeys.value.includes(recordKey(record, index))
+}
+
+/** 点提示：失败就重试；缺信息就展开滚到那条并说清缺什么 */
+function onAutoSaveNoticeTap(record: Record<string, any>, index: number) {
+  const key = recordKey(record, index)
+  if (autoSaveFailedKeys.value.includes(key)) {
+    void runAutoSave(key)
+    return
+  }
+
+  const error = recordValidationError(record, index)
+  expandedRecordKey.value = key
+  scrollToRecord(index)
+  uni.showToast({ title: error || '填完会自动保存', icon: 'none', duration: 2500 })
+}
+
 function syncDraftRecords(records: Record<string, any>[]) {
   const nextSnapshots: Record<string, Record<string, any>> = {}
   const nextDraftRecords = records.map((record, index) => {
@@ -813,14 +1191,14 @@ function syncDraftRecords(records: Record<string, any>[]) {
     nextSnapshots[localId] = stripLocalFields(draftRecord)
     return draftRecord
   })
-  const shouldPreserveDrafts = lastSyncedType.value === currentType.value
+  const shouldPreserveDrafts = lastSyncedType.value === baseType.value
   const recordsWithPreservedDrafts = shouldPreserveDrafts
     ? preserveUnsavedDrafts(nextDraftRecords, nextSnapshots)
     : nextDraftRecords
 
   draftRecords.value = recordsWithPreservedDrafts
   savedSnapshots.value = nextSnapshots
-  lastSyncedType.value = currentType.value
+  lastSyncedType.value = baseType.value
 
   if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, recordsWithPreservedDrafts)) {
     return
@@ -833,7 +1211,7 @@ function syncDraftRecords(records: Record<string, any>[]) {
 }
 
 function recordKey(record: Record<string, any>, index: number) {
-  return record.__localId || record.id || `${currentType.value}-${index}`
+  return record.__localId || record.id || `${baseType.value}-${index}`
 }
 
 function findRecordIndexByKey(key: string) {
@@ -844,7 +1222,7 @@ function findRecordIndexByKey(key: string) {
 
 function recordAnchorId(record: Record<string, any>, index: number) {
   const safeKey = String(recordKey(record, index)).replace(/[^A-Za-z0-9_-]/g, '-')
-  return `health-record-${currentType.value}-${safeKey}`
+  return `health-record-${baseType.value}-${safeKey}`
 }
 
 function savedSnapshot(record: Record<string, any>, index: number) {
@@ -860,17 +1238,17 @@ function readField(record: Record<string, any>, key: string) {
   return typeof value === 'string' ? value : (value ?? '')
 }
 
-function fieldOptionLabels(options: HealthCheckupTypeOption[]) {
-  return options.map(option => option.label)
+function fieldOptionLabels(options?: HealthCheckupTypeOption[] | null) {
+  return (options ?? []).map(option => option.label)
 }
 
 function fieldOptionIndex(
   record: Record<string, any>,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   key: string,
 ) {
   const currentValue = readField(record, key)
-  const matchedIndex = options.findIndex(option =>
+  const matchedIndex = (options ?? []).findIndex(option =>
     option.value === currentValue || option.label === currentValue,
   )
   return matchedIndex >= 0 ? matchedIndex : 0
@@ -878,11 +1256,11 @@ function fieldOptionIndex(
 
 function readOptionFieldLabel(
   record: Record<string, any>,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   key: string,
 ) {
   const currentValue = readField(record, key)
-  const matchedOption = options.find(option =>
+  const matchedOption = (options ?? []).find(option =>
     option.value === currentValue || option.label === currentValue,
   )
   return matchedOption?.label || formatHealthCheckupTypeLabel(currentValue)
@@ -891,11 +1269,11 @@ function readOptionFieldLabel(
 function updateOptionField(
   index: number,
   key: string,
-  options: HealthCheckupTypeOption[],
+  options: HealthCheckupTypeOption[] | null | undefined,
   value: string | number,
 ) {
   const optionIndex = Number(value)
-  const option = Number.isInteger(optionIndex) ? options[optionIndex] : null
+  const option = Number.isInteger(optionIndex) ? (options ?? [])[optionIndex] : null
   if (!option) {
     return
   }
@@ -955,7 +1333,7 @@ function focusRecordByIdentity(
   identity: string | null | undefined,
   records: Record<string, any>[] = draftRecords.value,
 ) {
-  const index = findHealthRecordFocusIndex(currentType.value, records, identity)
+  const index = findHealthRecordFocusIndex(baseType.value, records, identity)
   if (index < 0) {
     return false
   }
@@ -999,10 +1377,6 @@ async function requestTypeChange(type: HealthRecordType) {
 }
 
 function updateTextField(index: number, key: string, value: string) {
-  if (hasSavingRecord.value) {
-    return
-  }
-
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -1012,6 +1386,10 @@ function updateTextField(index: number, key: string, value: string) {
     ...record,
     [key]: value,
   }
+
+  // 实时保存（2026-10-03）：改完停一下手就落库；正存着也照样改，
+  // 存完由 watch(hasSavingRecord) 接着存最新内容 —— 不再"保存中不许改"
+  scheduleAutoSave(draftRecords.value[index], index)
 }
 
 /**
@@ -1020,34 +1398,239 @@ function updateTextField(index: number, key: string, value: string) {
  * 识别结果**只填表不保存** —— 老板第 5 条说的是"自动的录入表单"，
  * 不是"自动保存"。顾客填完还能改、还能不存。
  */
-const SCAN_OPTIONS = [
-  { value: 'MEDICAL_RECORD' as const, label: '拍病历' },
-  { value: 'CHECKUP_REPORT' as const, label: '拍体检报告' },
-]
+/** 识别组件：空闲时不挂载（避免留白条），点「从相册选择」时再挂上并触发 */
+const scanRef = ref<{ startScan?: () => void } | null>(null)
+const scanActive = ref(false)
 
-const scanDocumentType = ref<'MEDICAL_RECORD' | 'CHECKUP_REPORT'>('MEDICAL_RECORD')
-const scanUploadType = computed<'medical' | 'checkup'>(() => (
-  scanDocumentType.value === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
-))
+/**
+ * 底部那一个「新增记录」按钮点开后的选择（2026-10-01 老板要求合并入口）。
+ *
+ * 一次覆盖三条路：
+ *   ① 手动填写        → 新增一条空白表单
+ *   ② 拍病历          → 相机/相册 → AI 识别 → 确认一次自动填表
+ *   ③ 拍体检报告      → 同上，按体检报告的字段识别
+ *
+ * 为什么把入口收到这里：原来顶部有「拍病历 / 拍体检报告」两个选择器 +
+ * 一个「拍照录入」按钮，列表底部还有一个「新增记录」，三处做同一件事。
+ */
+function openAddRecordChooser() {
+  if (hasSavingRecord.value || hasUploadingRecords.value) {
+    return
+  }
+
+  uni.showActionSheet({
+    itemList: ['手动填写', '从相册选择（自动识别检查报告）'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        addRecord()
+        return
+      }
+
+      startScan()
+    },
+  })
+}
+
+/**
+ * 打开相册开始识别（识别组件自带按钮已隐藏，由这里触发）。
+ *
+ * 不再传文档类型：统一传 `AUTO`，由后端判断这是病历还是体检报告，
+ * 判定结果随识别结果一起回来（老板 2026-10-01：两个选项合并成一个）。
+ */
+function startScan() {
+  // 先把容器亮出来（识别结果的确认卡片要显示在这块里）
+  scanActive.value = true
+
+  // 组件是常驻挂载的，正常情况下这里一步到位。
+  // 只有首次渲染还没走完、ref 暂时为空时，才补一次下一 tick 兜底。
+  if (scanRef.value) {
+    scanRef.value.startScan?.()
+    return
+  }
+
+  nextTick(() => scanRef.value?.startScan?.())
+}
 
 function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
-  const kind = payload.documentType === 'CHECKUP_REPORT' ? 'checkup' : 'medical'
+  // 这个入口在「病历/检查」板块下。AI 有时会判成别的资料（过敏报告、疫苗本）——
+  // 那些有各自更合适的板块，硬填成病历只会把档案弄乱，所以如实提示并停手。
+  if (payload.documentType === 'ALLERGY_REPORT') {
+    scanActive.value = false
+    uni.showToast({ title: '这看起来是过敏原检测报告，请到「过敏」板块上传', icon: 'none', duration: 3000 })
+    return
+  }
 
+  if (payload.documentType === 'VACCINE_BOOK') {
+    scanActive.value = false
+    uni.showToast({ title: '这看起来是疫苗本，请到「疫苗」板块上传', icon: 'none', duration: 3000 })
+    return
+  }
+
+  // 每条草稿可能自带类型（一次传了化验单 + 门诊病历时，两类各自成条，
+  // 见 HealthDocumentScan 里的 __documentType）—— 有就按它走，
+  // 否则退回整批的类型。**不能一律用整批类型**：那会把病历的诊断与用药丢掉。
   for (const draft of payload.drafts) {
+    const draftType = String(draft?.__documentType || '').toUpperCase()
+    // IMAGING（X 光/超声）也归"检查"这一类：它是一次检查，只是没有文字可抄
+    const isCheckupSide = draftType
+      ? draftType === 'CHECKUP_REPORT' || draftType === 'IMAGING'
+      : payload.documentType === 'CHECKUP_REPORT'
+    const kind: HealthVisitKind = isCheckupSide ? 'checkup' : 'medical'
     const record = normalizeHealthVisitRecord(kind, draft)
+    record[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value
     // 重新给一个本地 key，避免和已有草稿撞
     record.__localId = `visit-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     draftRecords.value.push(record)
   }
 
+  // 内容已经填进表单，识别结果那块可以收掉了（空闲的容器不占高度）
+  scanActive.value = false
+
   const lastIndex = draftRecords.value.length - 1
   if (lastIndex >= 0) {
     expandedRecordKey.value = recordKey(draftRecords.value[lastIndex], lastIndex)
   }
+
+  // 实时保存（2026-10-03）：识别结果经顾客确认后**直接落库**，不用再点保存。
+  // 落库之后原件、字段都能立刻看到；要改要删随时，"取消新增记录"也还在。
+  for (const [index, record] of draftRecords.value.entries()) {
+    scheduleAutoSave(record, index, { immediate: true })
+  }
+
   uni.showToast({
-    title: `已填入 ${payload.drafts.length} 条，核对后保存`,
+    title: `已填入 ${payload.drafts.length} 条，正在保存…`,
     icon: 'none',
   })
+}
+
+/**
+ * 正在"编辑"的字段（2026-10-02 老板定：每个板块一个小编辑按钮）。
+ *
+ * 规则：**有内容的字段默认只读 + 「编辑」；空字段直接给输入框**（手写不受影响）。
+ * 键用 `记录key::字段`，不用下标 —— 保存/删除之后下标会变。
+ */
+const editingFields = ref<string[]>([])
+
+function fieldStateKey(record: Record<string, any>, index: number, key: string) {
+  return `${recordKey(record, index)}::${key}`
+}
+
+function isFieldEditing(record: Record<string, any>, index: number, key: string) {
+  return editingFields.value.includes(fieldStateKey(record, index, key))
+}
+
+/**
+ * 光标进入某个字段 → 把它标成"正在编辑"。
+ *
+ * 为什么必须有这一步：空字段是直接给输入框的，而输入框的显示条件是
+ * "没内容 或 正在编辑"。**刚打第一个字**的瞬间它就变成"有内容"了 ——
+ * 没有这个标记的话，输入框会在打字途中当场消失、换成只读视图（真 bug）。
+ */
+function markFieldEditing(record: Record<string, any>, index: number, key: string) {
+  const stateKey = fieldStateKey(record, index, key)
+  if (!editingFields.value.includes(stateKey)) {
+    editingFields.value = [...editingFields.value, stateKey]
+  }
+}
+
+function toggleFieldEditing(record: Record<string, any>, index: number, key: string) {
+  const stateKey = fieldStateKey(record, index, key)
+  const wasEditing = editingFields.value.includes(stateKey)
+  editingFields.value = wasEditing
+    ? editingFields.value.filter((item) => item !== stateKey)
+    : [...editingFields.value, stateKey]
+
+  // 点「完成」＝这一格填完了 → 立刻落库，不等那 1.2 秒
+  if (wasEditing) {
+    scheduleAutoSave(record, index, { immediate: true })
+  }
+}
+
+/** 这一格有没有内容（决定"只读 + 编辑"还是"直接给输入框"） */
+function hasFieldValue(record: Record<string, any>, key: string): boolean {
+  const value = record?.[key]
+  if (Array.isArray(value)) {
+    return value.some((item) => String(item ?? '').trim())
+  }
+  return Boolean(String(value ?? '').trim())
+}
+
+/** 显示/编辑共用的文本：数组（用药）用顿号连起来，其余原样 */
+function fieldText(record: Record<string, any>, key: string): string {
+  const value = record?.[key]
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean).join('、')
+  }
+  return String(value ?? '')
+}
+
+/**
+ * 表单里要渲染的内容字段（顺序＝家长填写顺序）。
+ * 化验数据那一格带 rich 标记 —— 只读时用分块排版（报告名 / 项目 / 数值分层）。
+ */
+function visitFieldRows(record: Record<string, any>) {
+  const config = visitConfig(record)
+  const rows: { key: string; label: string; placeholder: string; rich?: 'lab' }[] = []
+
+  if (config.complaintKey) {
+    rows.push({
+      key: config.complaintKey,
+      label: config.complaintLabel,
+      placeholder: config.complaintPlaceholder,
+    })
+  }
+
+  rows.push({
+    key: config.primaryKey,
+    label: config.primaryLabel,
+    placeholder: config.primaryPlaceholder,
+  })
+  rows.push({
+    key: config.adviceKey,
+    label: config.adviceLabel,
+    placeholder: config.advicePlaceholder,
+  })
+
+  if (config.medicationKey) {
+    rows.push({
+      key: config.medicationKey,
+      label: config.medicationLabel,
+      placeholder: '多个用顿号隔开，例如：速诺 1片/次 每日2次、胃复安',
+    })
+  }
+
+  if (config.examsKey) {
+    rows.push({
+      key: config.examsKey,
+      label: config.examsLabel,
+      placeholder: config.examsPlaceholder,
+    })
+  }
+
+  if (config.labValuesKey) {
+    rows.push({
+      key: config.labValuesKey,
+      label: config.labValuesLabel,
+      placeholder: '化验单上的数值，一行一项，例如：肌酐 72.2 umol/L',
+      rich: 'lab',
+    })
+  }
+
+  if (config.vitalsKey) {
+    rows.push({
+      key: config.vitalsKey,
+      label: config.vitalsLabel,
+      placeholder: config.vitalsPlaceholder,
+    })
+  }
+
+  rows.push({
+    key: config.notesKey,
+    label: config.notesLabel,
+    placeholder: config.notesPlaceholder,
+  })
+
+  return rows
 }
 
 function addRecord() {
@@ -1064,8 +1647,9 @@ function addRecord() {
   // 「病例」模式下新增的记录默认是「就诊」——带狗看病是最常见的场景，
   // 想记体检的人再在表单顶部把类型切过去。
   const nextRecord = isVisitMode.value
-    ? createHealthVisitDraft('medical')
-    : createHealthRecordDraft(currentType.value)
+    ? createHealthVisitDraft(props.visitKind || 'medical')
+    : createHealthRecordDraft(baseType.value)
+  nextRecord[HEALTH_RECORD_TAB_FIELD] = activeTabKind.value
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null
 }
@@ -1076,34 +1660,23 @@ function addRecord() {
  * 老板要求"病史只保留一个诊断结果"，所以症状描述、用药、复查日期这些
  * 次要字段一律折叠起来，默认不占位置、也不拦着保存。
  */
-const moreExpandedKeys = ref<Record<string, boolean>>({})
-
-function isMoreExpanded(record: Record<string, any>, index: number) {
-  return Boolean(moreExpandedKeys.value[recordKey(record, index)])
-}
-
-function toggleMore(index: number) {
-  const record = draftRecords.value[index]
-  if (!record) {
-    return
-  }
-
-  const key = recordKey(record, index)
-  moreExpandedKeys.value[key] = !moreExpandedKeys.value[key]
-}
-
 /** 还要不要显示「更多」这一栏：有次要字段才有必要 */
-function hasExtraFields(record: Record<string, any>) {
-  const extras = fieldConfigForRecord(record).extras
-  return Boolean(extras && (extras.complaint || extras.checkupType || extras.medications || extras.followUpDate))
-}
-
 /**
  * 切换这条记录的类型（就诊 ↔ 体检）。
  *
- * 换了类型等于换了一张表，字段对不上：这里**开一条新草稿**，
- * 而不是把旧字段硬搬过去 —— 免得"体检结论"被当成"诊断结果"存进病史表。
- * 未保存的修改会提示一次。
+ * 2026-10-02 老板两条要求：
+ *   ① 切换时**不再弹"内容会清空"的提醒**
+ *   ② 切换时**保留已经填好的内容**
+ *
+ * 做法：不重开草稿，直接把这条草稿的归属标记改成目标类型，字段原地留着 ——
+ *   · 两张表共用的（日期、补充说明、附件、兽医）本来就同名，原样带过去；
+ *     日期在两个类型下叫不同字段名（visitDate / checkupDate），这里显式搬一次
+ *   · 只在某一张表里存在的（症状 / 检查结论 / 体检类型 / 用药 / 处理），
+ *     留在草稿里不显示：**切回去还在**；保存时按记录自己的类型提交，
+ *     不属于这张表的字段不会被写进去（见 buildHealthVisitPayload）
+ *
+ * 已保存的记录不允许切换：换个类型就是换一张表，硬换会在库里留下两条，
+ * 这是 2026-10-02 审计时发现的坑（切完卡片变空、刷新后旧记录又冒出来）。
  */
 function changeVisitKind(index: number, kind: HealthVisitKind) {
   const record = draftRecords.value[index]
@@ -1111,32 +1684,35 @@ function changeVisitKind(index: number, kind: HealthVisitKind) {
     return
   }
 
-  const apply = () => {
-    const next = createHealthVisitDraft(kind)
-    if (isSavedRecord(record, index)) {
-      // 已存的记录不能改类型（那是另一张表里的一行），只能新建
-      draftRecords.value.splice(index, 1, next)
-    } else {
-      draftRecords.value.splice(index, 1, next)
-    }
-    moreExpandedKeys.value = {}
-    expandedRecordKey.value = next.__localId || null
-  }
-
-  if (isSavedRecord(record, index) || isRecordDirty(record, index)) {
-    uni.showModal({
-      title: `改成${HEALTH_VISIT_KIND_LABELS[kind]}`,
-      content: '类型不同，已填的内容会清空，需要重新填。确认继续吗？',
-      success: (res) => {
-        if (res.confirm) {
-          apply()
-        }
-      },
+  if (isSavedRecord(record, index)) {
+    uni.showToast({
+      title: '已保存的记录不能改类型，要改请先删掉这条',
+      icon: 'none',
+      duration: 2500,
     })
     return
   }
 
-  apply()
+  const next: Record<string, any> = {
+    ...cloneRecord(record),
+    [HEALTH_VISIT_KIND_FIELD]: kind,
+  }
+
+  // 日期：两个类型下字段名不同，搬一次，别让家长重选
+  const date = resolveHealthVisitDate(record)
+  const targetConfig = getHealthVisitFieldConfig(kind)
+  if (date) {
+    next[targetConfig.dateKey] = date
+  }
+
+  // 切到体检时给个默认类型（后端这一栏必填）
+  if (kind === 'checkup' && !String(next.checkupType || '').trim()) {
+    next.checkupType = HEALTH_VISIT_DEFAULT_CHECKUP_TYPE
+  }
+
+  draftRecords.value.splice(index, 1, next)
+  // 卡片保持展开，接着填就行
+  expandedRecordKey.value = recordKey(next, index)
 }
 
 function isRecordExpanded(record: Record<string, any>, index: number) {
@@ -1144,6 +1720,15 @@ function isRecordExpanded(record: Record<string, any>, index: number) {
 }
 
 function toggleRecordExpanded(index: number) {
+  // 收起这张卡片＝这一轮填完了 → 立刻落库（不等那 1.2 秒）
+  const collapsing = isRecordExpanded(index)
+  if (collapsing) {
+    const record = draftRecords.value[index]
+    if (record) {
+      scheduleAutoSave(record, index, { immediate: true })
+    }
+  }
+
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -1156,7 +1741,7 @@ function toggleRecordExpanded(index: number) {
 function recordSummary(record: Record<string, any>, index: number) {
   const summary = isVisitMode.value
     ? buildHealthVisitSummary(resolveHealthVisitKind(record), record)
-    : buildHealthRecordSummary(currentType.value, record)
+    : buildHealthRecordSummary(baseType.value, record)
   if (!isSavedRecord(record, index) && summary.title.startsWith('未填写')) {
     return {
       title: '新记录',
@@ -1189,12 +1774,27 @@ function secondaryActionText(record: Record<string, any>, index: number) {
   )
 }
 
-function recordStatusText(record: Record<string, any>, index: number) {
-  if (!isSavedRecord(record, index)) {
-    return '未保存'
+/**
+ * 卡片头上的日期（2026-10-02 老板：序号和"已保存"不用显示，那个位置放日期）。
+ * 还没选日期的草稿就写「未选日期」，不编一个今天。
+ */
+function recordDateText(record: Record<string, any>, index: number): string {
+  const key = isVisitMode.value
+    ? visitConfig(record).dateKey
+    : fieldConfigForRecord(record).primary.key === 'recordDate'
+      ? 'recordDate'
+      : ''
+  const visitDate = isVisitMode.value ? String(record?.[key] || '').trim() : ''
+  if (visitDate) {
+    return visitDate
   }
 
-  return isRecordDirty(record, index) ? '待保存' : '已保存'
+  const fallback = String(record?.recordDate || record?.date || '').trim()
+  if (fallback) {
+    return fallback
+  }
+
+  return isSavedRecord(record, index) ? '未填日期' : '新记录'
 }
 
 function isRecordDirty(record: Record<string, any>, index: number) {
@@ -1222,64 +1822,61 @@ function recordMatchesSavingKey(record: Record<string, any>, index: number, savi
   ].some((value) => value === savingKey)
 }
 
+
 /**
- * 保存当前类型下**所有待保存的记录**（供健康管理页的底部按钮调用）。
- *
- * 内嵌模式下逐条的「保存」按钮被隐藏，改由底部那个自适应按钮统一保存 ——
- * 顾客不必在每条记录里找保存键。
- *
- * 逐条保存是顺序执行的：并发写同一个列表会让后写的覆盖先写的。
+ * 对外入口（2026-10-02 引导流程要用）：
+ *   · startScan → 直接调起相册 + AI 识别（本标签那一类）
+ *   · addRecord → 新建一条本类空白记录
  */
-async function saveAllDirty() {
-  if (hasSavingRecord.value || hasUploadingRecords.value) {
-    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
-    return
-  }
+defineExpose({
+  openAddRecordChooser,
+  startScan,
+  addRecord,
+  /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
+  flushAutoSaves,
+})
 
-  const dirtyIndexes = draftRecords.value
-    .map((record, index) => (isRecordDirty(record, index) ? index : -1))
-    .filter((index) => index >= 0)
-
-  if (dirtyIndexes.length === 0) {
-    uni.showToast({ title: '没有需要保存的内容', icon: 'none' })
-    return
-  }
-
-  for (const index of dirtyIndexes) {
-    await saveRecord(index)
-  }
-}
-
-defineExpose({ saveAllDirty })
-
-function saveRecord(index: number) {
+/**
+ * 保存单条记录。
+ *
+ * 返回值＝"这条是否已经交给父组件去存"（校验没过、或有别的记录正在存 → false）。
+ * 真正的接口调用在页面里（`@save-record`），所以这里只负责校验与派发。
+ */
+function saveRecord(index: number): boolean {
   if (hasSavingRecord.value) {
     uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
-    return
+    return false
   }
 
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
-    return
+    return false
   }
 
   const record = draftRecords.value[index]
   if (!record) {
-    return
+    return false
   }
 
   const type = recordKindOf(record)
   const validationError = isVisitMode.value
     ? getHealthVisitValidationError(resolveHealthVisitKind(record), record)
-    : getHealthRecordValidationError(currentType.value, record)
+    : getHealthRecordValidationError(baseType.value, record)
   if (validationError) {
-    uni.showToast({ title: validationError, icon: 'none' })
-    return
+    // 缺信息时不能只弹一句话就完了（2026-10-02 老板问的"缺信息会不会让顾客接着补"）：
+    // 把这条展开、滚到眼前，顾客抬头就看见要补的那个字段。
+    // AI 识别填进来的草稿走的也是这条路 —— 识别结果从来不直接入库。
+    expandedRecordKey.value = recordKey(record, index)
+    scrollToRecord(index)
+    uni.showToast({ title: validationError, icon: 'none', duration: 2500 })
+    return false
   }
 
   const key = recordKey(record, index)
   emit('save-record', { type, record: stripLocalFields(record), recordKey: key })
+  return true
 }
+
 
 function cancelRecord(index: number) {
   if (hasSavingRecord.value) {
@@ -1368,178 +1965,211 @@ async function chooseAttachment(index: number) {
   }
 
   const key = recordKey(record, index)
-  const uploadType = currentType.value
+  const uploadType = attachmentApiType.value
   const uploadKey = key
   if (uploadingKeys.value[uploadKey]) {
     return
   }
 
+  // 2026-10-02 老板要求：格式与大小提示搬进这个弹窗，表单里不再占一行
   const tapIndex = await new Promise<number | null>((resolve) => {
     uni.showActionSheet({
       itemList: ['上传图片', '上传 PDF'],
-      success: (res) => resolve(res.tapIndex),
+      alertText: attachmentHintText,
+      success: (res: any) => resolve(res.tapIndex),
       fail: () => resolve(null),
-    })
+    } as any)
   })
 
   if (tapIndex == null) {
     return
   }
 
-  const selectedFile = tapIndex === 0 ? await chooseImageFile() : await choosePdfFile()
-  if (!selectedFile) {
+  // 2026-10-03 老板：上传图片一次只能选一张太别扭 —— 改成**一次最多 9 张**
+  // （PDF 同样一次可选多个），逐个校验、逐个上传，成功的逐个出现在附件里。
+  const selectedFiles = tapIndex === 0 ? await chooseImageFiles() : await choosePdfFiles()
+  if (selectedFiles.length === 0) {
     return
   }
 
-  const selectionError = resolveHealthAttachmentSelectionError(
-    tapIndex === 0 ? 'image' : 'pdf',
-    selectedFile.name,
-  )
-  if (selectionError) {
-    uni.showToast({ title: selectionError, icon: 'none' })
-    return
+  const fileKind = tapIndex === 0 ? 'image' : 'pdf'
+  const accepted: { path: string, name: string, size: number | null }[] = []
+  const rejected: string[] = []
+
+  for (const file of selectedFiles) {
+    const selectionError = resolveHealthAttachmentSelectionError(fileKind, file.name)
+    const fileSizeError = resolveHealthAttachmentFileSizeError(file.size)
+    if (selectionError || fileSizeError) {
+      // 同一批里不合格的挑出来说一句，合格的照旧上传（不因为一张坏图全丢）
+      rejected.push(`${file.name}：${selectionError || fileSizeError}`)
+      continue
+    }
+    accepted.push(file)
   }
 
-  const fileSizeError = resolveHealthAttachmentFileSizeError(selectedFile.size)
-  if (fileSizeError) {
-    uni.showToast({ title: fileSizeError, icon: 'none' })
+  if (accepted.length === 0) {
+    uni.showToast({ title: rejected[0] || '这些文件都传不了', icon: 'none', duration: 3000 })
     return
   }
 
   uploadingKeys.value[uploadKey] = true
 
   try {
-    uni.showLoading({ title: '上传中...' })
-    const uploaded = await dogApi.uploadHealthAttachment(uploadType, selectedFile.path)
-    if (currentType.value !== uploadType) {
-      uni.hideLoading()
-      return
+    let added = 0
+    for (const [position, file] of accepted.entries()) {
+      uni.showLoading({
+        title: accepted.length > 1
+          ? `上传中 ${position + 1}/${accepted.length}…`
+          : '上传中...',
+        mask: true,
+      })
+
+      try {
+        const uploaded = await dogApi.uploadHealthAttachment(uploadType, file.path)
+        if (attachmentApiType.value !== uploadType) {
+          return
+        }
+
+        const targetIndex = findRecordIndexByKey(uploadKey)
+        if (targetIndex < 0) {
+          return
+        }
+
+        const targetRecord = draftRecords.value[targetIndex]
+        draftRecords.value[targetIndex] = {
+          ...targetRecord,
+          attachments: [...attachmentList(targetRecord), uploaded.url],
+        }
+        added += 1
+      } catch (error: any) {
+        rejected.push(`${file.name}：${resolveHealthAttachmentUploadErrorMessage(error)}`)
+      }
     }
 
-    const targetIndex = findRecordIndexByKey(uploadKey)
-    if (targetIndex < 0) {
-      uni.hideLoading()
-      return
+    uni.hideLoading()
+
+    if (added > 0) {
+      // 附件一进列表就自动保存（2026-10-03 起不再需要手动点保存）
+      const targetIndex = findRecordIndexByKey(uploadKey)
+      if (targetIndex >= 0) {
+        scheduleAutoSave(draftRecords.value[targetIndex], targetIndex)
+      }
+      uni.showToast({
+        title: added > 1 ? `已添加 ${added} 张，正在保存` : '附件已添加，正在保存',
+        icon: 'none',
+      })
     }
 
-    const targetRecord = draftRecords.value[targetIndex]
-    const attachments = attachmentList(targetRecord)
-    draftRecords.value[targetIndex] = {
-      ...targetRecord,
-      attachments: [...attachments, uploaded.url],
+    if (rejected.length > 0) {
+      // 有没传上的：说清是哪个、为什么（不要静默吞掉）
+      setTimeout(() => {
+        uni.showToast({ title: `有 ${rejected.length} 个没能上传：${rejected[0]}`, icon: 'none', duration: 3500 })
+      }, added > 0 ? 1200 : 0)
     }
-    uni.hideLoading()
-    uni.showToast({ title: '附件已添加，请保存记录', icon: 'none' })
-  } catch (error: any) {
-    uni.hideLoading()
-    uni.showToast({ title: resolveHealthAttachmentUploadErrorMessage(error), icon: 'none' })
   } finally {
+    uni.hideLoading()
     delete uploadingKeys.value[uploadKey]
   }
 }
 
-function chooseImageFile() {
-  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
+/** 一次最多选几个附件（微信相册上限 9；PDF 也给同样的额度） */
+const MAX_ATTACHMENT_PICK = 9
+
+function chooseImageFiles() {
+  return new Promise<{ path: string, name: string, size: number | null }[]>((resolve) => {
     uni.chooseImage({
-      count: 1,
+      count: MAX_ATTACHMENT_PICK,
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],
       success: async (res: any) => {
-        const filePath = res.tempFilePaths?.[0]
-        if (!filePath) {
-          resolve(null)
-          return
-        }
-
-        const reportedFileSize =
-          typeof res.tempFiles?.[0]?.size === 'number' ? res.tempFiles[0].size : null
-        const fileSize = reportedFileSize ?? await readHealthAttachmentFileSize(filePath)
-
-        resolve({
-          path: filePath,
-          name: filePath.split('/').pop() || 'image.jpg',
-          size: fileSize,
-        })
+        const paths: string[] = Array.isArray(res.tempFilePaths) ? res.tempFilePaths : []
+        const files = await Promise.all(
+          paths.filter(Boolean).map(async (filePath: string, position: number) => {
+            const reportedFileSize =
+              typeof res.tempFiles?.[position]?.size === 'number'
+                ? res.tempFiles[position].size
+                : null
+            const size = reportedFileSize ?? await readHealthAttachmentFileSize(filePath)
+            return {
+              path: filePath,
+              name: filePath.split('/').pop() || `image-${position + 1}.jpg`,
+              size,
+            }
+          }),
+        )
+        resolve(files)
       },
-      fail: () => resolve(null),
+      fail: () => resolve([]),
     })
   })
 }
 
-function choosePdfFile() {
-  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
+function choosePdfFiles() {
+  return new Promise<{ path: string, name: string, size: number | null }[]>((resolve) => {
     uni.chooseMessageFile({
-      count: 1,
+      count: MAX_ATTACHMENT_PICK,
       type: 'file',
       extension: ['pdf'],
       success: async (res: any) => {
-        const file = res.tempFiles?.[0]
-        if (!file?.path) {
-          resolve(null)
-          return
-        }
-
-        const reportedFileSize = typeof file.size === 'number' ? file.size : null
-        const fileSize = reportedFileSize ?? await readHealthAttachmentFileSize(file.path)
-
-        resolve({
-          path: file.path,
-          name: file.name || file.path.split('/').pop() || 'document.pdf',
-          size: fileSize,
-        })
+        const list = Array.isArray(res.tempFiles) ? res.tempFiles : []
+        const files = await Promise.all(
+          list
+            .filter((file: any) => file?.path)
+            .map(async (file: any, position: number) => {
+              const reportedFileSize = typeof file.size === 'number' ? file.size : null
+              const size = reportedFileSize ?? await readHealthAttachmentFileSize(file.path)
+              return {
+                path: file.path,
+                name: file.name || file.path.split('/').pop() || `document-${position + 1}.pdf`,
+                size,
+              }
+            }),
+        )
+        resolve(files)
       },
-      fail: () => resolve(null),
+      fail: () => resolve([]),
     })
   })
 }
 
+/**
+ * 打开附件。
+ *
+ * 2026-10-01 第九期：实现搬到 utils/health-records.ts 的 previewHealthAttachment，
+ * 疫苗记录的卡片也要用同一份（图片走大图预览、PDF 先下载再交给微信文档查看器）。
+ */
 async function previewAttachment(url: string) {
-  const previewType = resolveHealthAttachmentPreviewType(url)
-
-  if (previewType === 'image') {
-    uni.previewImage({
-      urls: [url],
-      current: url,
-    })
-    return
-  }
-
-  if (previewType === 'pdf') {
-    try {
-      uni.showLoading({ title: '打开中...' })
-      const downloadRes: any = await new Promise((resolve, reject) => {
-        uni.downloadFile({
-          url,
-          success: resolve,
-          fail: reject,
-        })
-      })
-
-      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
-        throw new Error('文件下载失败')
-      }
-
-      await new Promise((resolve, reject) => {
-        uni.openDocument({
-          filePath: downloadRes.tempFilePath,
-          showMenu: true,
-          success: resolve,
-          fail: reject,
-        })
-      })
-      uni.hideLoading()
-    } catch (error: any) {
-      uni.hideLoading()
-      uni.showToast({ title: error?.message || '暂时无法预览该附件', icon: 'none' })
-    }
-    return
-  }
-
-  uni.showToast({ title: '暂时无法预览该附件', icon: 'none' })
+  await previewHealthAttachment(url)
 }
 
-function removeAttachment(index: number, attachmentIndex: number) {
+/**
+ * 删除附件（2026-10-03 老板："点击之后需要给一个弹出的对话框，不然很容易误删"）。
+ * 附件是病历/化验单的原件，误删补不回来 —— 所以先确认再删。
+ */
+async function removeAttachment(index: number, attachmentIndex: number) {
   if (hasSavingRecord.value) {
+    return
+  }
+
+  const target = draftRecords.value[index]
+  if (!target) {
+    return
+  }
+
+  const attachments = attachmentList(target)
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '删除这份附件？',
+      content: '删掉之后要从这里重新上传。原件还在你手机里，但档案里就没有了。',
+      confirmText: '删除',
+      cancelText: '先不删',
+      confirmColor: '#b42318',
+      success: (res: any) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    })
+  })
+
+  if (!confirmed) {
     return
   }
 
@@ -1548,22 +2178,22 @@ function removeAttachment(index: number, attachmentIndex: number) {
     return
   }
 
-  const attachments = attachmentList(record)
-  if (attachments.length <= attachmentIndex) {
+  const removedUrl = attachments[attachmentIndex]
+  if (!removedUrl) {
     return
   }
-
-  const removedUrl = attachments[attachmentIndex]
   const nextAttachments = attachments.filter((_, currentIndex) => currentIndex !== attachmentIndex)
   draftRecords.value[index] = {
     ...record,
     attachments: nextAttachments,
   }
+  // 附件变化同样实时保存（删掉最后一项内容时由校验挡下：会提示"还差内容"）
+  scheduleAutoSave(draftRecords.value[index], index)
 
   const savedAttachments = new Set(attachmentList(savedSnapshot(record, index) || {}))
   const removedKey = extractHealthAttachmentKey(removedUrl)
   if (removedKey && !savedAttachments.has(removedUrl)) {
-    void dogApi.deleteHealthAttachment(currentType.value, removedKey).catch(() => {})
+    void dogApi.deleteHealthAttachment(attachmentApiType.value, removedKey).catch(() => {})
   }
 }
 </script>
@@ -1573,7 +2203,12 @@ function removeAttachment(index: number, attachmentIndex: number) {
 
 /* 拍照录入（第六期） */
 .scan-entry {
-  margin-bottom: 20rpx;
+  /* 不留 margin：这个容器只在识别时出现，间距交给板块的 gap */
+}
+
+/* 空闲态：组件还挂着（这样 ref 随时可用），但不占任何高度 */
+.scan-entry--hidden {
+  display: none;
 }
 
 .scan-entry__kinds {
@@ -1627,6 +2262,17 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 26rpx;
   color: var(--health-accent, #1e3a2f);
   padding: 8rpx 0;
+}
+
+/* 「已经好了」一键切换（2026-10-02）：状态不进表单，但好了要能一键标掉 */
+.status-switch {
+  display: inline-block;
+  margin-top: 10rpx;
+  padding: 12rpx 22rpx;
+  font-size: 26rpx;
+  color: var(--health-accent, #1e3a2f);
+  background: rgba(15, 107, 67, 0.08);
+  border-radius: 999rpx;
 }
 
 .more-fields {
@@ -1715,7 +2361,12 @@ function removeAttachment(index: number, attachmentIndex: number) {
 }
 
 .record-card {
-  margin-top: 24rpx;
+  /*
+   * 这里**不要**写 margin-top（2026-10-01）：
+   * 外层 `.health-section` 是 flex + gap: 24rpx，卡片再自带 24rpx 上边距，
+   * 两者叠加就在书签下方多出一条 48rpx 的空白（老板截图指出）。
+   * 间距统一交给 gap。
+   */
   padding: 24rpx;
   border-radius: 24rpx;
   background: #f8fbf9;
@@ -1748,6 +2399,36 @@ function removeAttachment(index: number, attachmentIndex: number) {
 .record-card__actions,
 .attachment-item {
   justify-content: space-between;
+}
+
+/* 卡片头的日期（原来这里是序号 + 已保存） */
+.record-card__date {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #415a65;
+}
+
+/* 保存失败：点一下重试 */
+.record-card__unsaved--failed {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+/* 正常保存中（一闪而过） */
+.record-card__saving {
+  margin-left: 12rpx;
+  font-size: 20rpx;
+  color: #8a968a;
+}
+
+/* 缺内容/失败时才出现 */
+.record-card__unsaved {
+  margin-left: 12rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #b26a2f;
+  background: #fdf3e6;
 }
 
 .record-card__header {
@@ -1786,6 +2467,12 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 26rpx;
   font-weight: 700;
   color: #17313f;
+  /* 标题现在可能是一段检查结论，最多两行，别把卡片撑成一大块 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .record-card__summary-detail {
@@ -1865,48 +2552,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(76, 100, 109, 0.08);
 }
 
-.record-card__index {
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 999rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22rpx;
-  font-weight: 700;
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.12);
-}
-
-.health-records--checkup .record-card__index {
-  color: #216d9b;
-  background: rgba(33, 109, 155, 0.12);
-}
-
-.health-records--allergy .record-card__index {
-  color: #ad5b2a;
-  background: rgba(173, 91, 42, 0.12);
-}
-
-.record-card__status {
-  padding: 6rpx 14rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #a66d1d;
-  background: rgba(224, 162, 63, 0.12);
-}
-
-.record-card__status--saved {
-  color: #0f6b43;
-  background: rgba(7, 193, 96, 0.1);
-}
-
-.record-card__status--dirty {
-  color: #a66d1d;
-  background: rgba(224, 162, 63, 0.12);
-}
-
 .record-card__delete,
 .attachment-item__remove,
 .record-card__action,
@@ -1923,8 +2568,24 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(218, 82, 82, 0.08);
 }
 
+/*
+ * 每个字段各自成块（2026-10-03 老板："每个字段和字段之间要有明确的区隔"）。
+ *
+ * 原来是"标签 + 值"上下紧挨着堆在一起，字段一多就糊成一片，看不出哪里是一个
+ * 字段的结束。现在给每块一层比卡片白底略深的底 + 圆角 + 内边距：
+ * 视觉上"一块一块"，标签和值都在自己那块里，不会串行。
+ */
 .field-group {
-  margin-top: 18rpx;
+  margin-top: 16rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background: #f7f9f2;
+  border: 1rpx solid rgba(30, 46, 36, 0.05);
+}
+
+/* 卡片里第一块不需要上间距（上面已经有分隔线了） */
+.record-card__body .field-group:first-child {
+  margin-top: 0;
 }
 
 .record-card__body {
@@ -1940,6 +2601,79 @@ function removeAttachment(index: number, attachmentIndex: number) {
   color: #415a65;
 }
 
+/* 日期这类"值很短"的字段：标签与值同一行，省掉一整个输入框的高度 */
+.field-group--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  /* 一行式字段不用那么厚的内边距 */
+  padding-top: 14rpx;
+  padding-bottom: 14rpx;
+}
+
+.field-inline-picker {
+  flex-shrink: 0;
+}
+
+.field-inline-value {
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #17313f;
+  background: #f2f5ec;
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  min-height: 34rpx;
+}
+
+/* 小编辑按钮：不抢眼但点得到 */
+.field-chip {
+  flex-shrink: 0;
+  padding: 4rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  line-height: 1.6;
+  color: #4e6b52;
+  background: #eef3ea;
+  border: 1rpx solid #dbe5d3;
+}
+
+.field-chip--done {
+  color: #ffffff;
+  background: #4e6b52;
+  border-color: #4e6b52;
+}
+
+/* 只读态的值：正常换行，长文本也读得全 */
+.field-value {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #17313f;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.field-label__action {
+  font-size: 23rpx;
+  color: #4e6b52;
+  text-decoration: underline;
+}
+
 .field-label__hint {
   display: block;
   max-width: 420rpx;
@@ -1952,6 +2686,11 @@ function removeAttachment(index: number, attachmentIndex: number) {
 
 .field-input,
 .field-picker,
+/* 化验数据那栏要更高：一行一项，十几项起步 */
+.field-textarea--tall {
+  min-height: 320rpx;
+}
+
 .field-textarea {
   display: block;
   margin-top: 10rpx;

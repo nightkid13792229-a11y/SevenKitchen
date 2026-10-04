@@ -237,6 +237,16 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { dogApi } from "@/api/dogs";
+import {
+  applyAddHealthTag,
+  applyRemoveAddedHealthTag,
+  applyRemoveHealthTag,
+  buildEffectiveHealthTags,
+  cloneHealthTagOverrides,
+  formatHealthUpdatedAt,
+  listAddableHealthTags,
+  type HealthTagOverrides,
+} from "@/utils/dogHealthTags";
 
 /**
  * 营养师端 · 某只狗的完整健康档案（2026-10-01，第八期）。
@@ -255,7 +265,7 @@ const loading = ref(false);
 const savingTags = ref(false);
 const overview = ref<any>(null);
 
-const overrides = ref<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
+const overrides = ref<HealthTagOverrides>({ added: [], removed: [] });
 const tagToAdd = ref("");
 
 const attachmentUrls = computed(() =>
@@ -263,38 +273,28 @@ const attachmentUrls = computed(() =>
 );
 
 /** 可加的标签：词表里已有、且当前派生结果里没有的 */
-const addableTags = computed(() => {
-  const derived = new Set<string>([
-    ...(overview.value?.derivedTags || []),
-    ...overrides.value.added,
-  ]);
-  return (overview.value?.vocabulary || []).filter((tag: string) => !derived.has(tag));
-});
+const addableTags = computed(() =>
+  listAddableHealthTags(
+    overview.value?.vocabulary || [],
+    overview.value?.derivedTags || [],
+    overrides.value,
+  ),
+);
 
-const effectiveTags = computed(() => {
-  const set = new Set<string>((overview.value?.derivedTags || []).map((t: string) => t.toLowerCase()));
-  overrides.value.removed.forEach((tag) => set.delete(tag.toLowerCase()));
-  overrides.value.added.forEach((tag) => set.add(tag.toLowerCase()));
-  return [...set].sort();
-});
+/** 最终用于检索的标签（派生 − 人工删除 + 人工添加） */
+const effectiveTags = computed(() =>
+  buildEffectiveHealthTags(overview.value?.derivedTags || [], overrides.value),
+);
 
-function formatTime(value?: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (input: number) => String(input).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+/** 顶部"健康信息最近更新"的展示格式；算法在 utils/dogHealthTags 里（有测试） */
+const formatTime = formatHealthUpdatedAt;
 
 async function load() {
   if (!dogId.value) return;
   loading.value = true;
   try {
     overview.value = await dogApi.getHealthOverview(dogId.value);
-    overrides.value = {
-      added: [...(overview.value?.tagOverrides?.added || [])],
-      removed: [...(overview.value?.tagOverrides?.removed || [])],
-    };
+    overrides.value = cloneHealthTagOverrides(overview.value?.tagOverrides);
   } catch (error: any) {
     ElMessage.error(error?.message || "加载健康档案失败");
   } finally {
@@ -303,32 +303,25 @@ async function load() {
 }
 
 function removeTag(tag: string) {
-  if (!overrides.value.removed.includes(tag)) {
-    overrides.value.removed.push(tag);
-  }
-  // 如果这个标签是人工加的，删掉它等于撤销那次人工添加
-  overrides.value.added = overrides.value.added.filter((item) => item !== tag);
+  // 派生标签 → 记入"人工删除"；人工加的标签 → 撤销那次添加
+  overrides.value = applyRemoveHealthTag(overrides.value, tag);
 }
 
 function removeAddedTag(tag: string) {
-  overrides.value.added = overrides.value.added.filter((item) => item !== tag);
+  overrides.value = applyRemoveAddedHealthTag(overrides.value, tag);
 }
 
 function addTag() {
-  const tag = tagToAdd.value.trim().toLowerCase();
-  if (!tag) return;
-  if (!overrides.value.added.includes(tag)) {
-    overrides.value.added.push(tag);
+  // 空输入不处理（与原来的行为一致）：没选标签时点"加上"不该清掉选择框
+  if (!tagToAdd.value.trim()) {
+    return;
   }
-  overrides.value.removed = overrides.value.removed.filter((item) => item !== tag);
+  overrides.value = applyAddHealthTag(overrides.value, tagToAdd.value);
   tagToAdd.value = "";
 }
 
 function resetTags() {
-  overrides.value = {
-    added: [...(overview.value?.tagOverrides?.added || [])],
-    removed: [...(overview.value?.tagOverrides?.removed || [])],
-  };
+  overrides.value = cloneHealthTagOverrides(overview.value?.tagOverrides);
 }
 
 async function saveTags() {
@@ -338,10 +331,7 @@ async function saveTags() {
       added: overrides.value.added,
       removed: overrides.value.removed,
     });
-    overrides.value = {
-      added: [...(result?.overrides?.added || [])],
-      removed: [...(result?.overrides?.removed || [])],
-    };
+    overrides.value = cloneHealthTagOverrides(result?.overrides);
     ElMessage.success("已保存，下次生成配方会按新标签检索");
   } catch (error: any) {
     ElMessage.error(error?.message || "保存失败");

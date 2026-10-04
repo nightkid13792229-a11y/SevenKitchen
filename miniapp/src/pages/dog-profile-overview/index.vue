@@ -553,6 +553,7 @@ import {
   shouldAutoPreviewRecommendation,
 } from '../../utils/dog-profile-form'
 import {
+  type DogOverviewCalcResult,
   buildDogOverviewBasicFacts,
   buildDogOverviewEnergySection,
   buildDogOverviewFeedingFacts,
@@ -634,14 +635,13 @@ interface DogProfileDetail {
   [key: string]: any
 }
 
-interface DogCalcResult {
-  rer?: number
-  totalDer?: number
-  finalFoodKcal?: number
-  treatDeduction?: number
-  isTreatCapped?: boolean
-  calcDetails?: Record<string, any> | null
-}
+// 能量计算结果的类型直接用工具层那一份。
+//
+// 这里原先自己又写了一份 `DogCalcResult`：字段虽少几个，但 `calcDetails`
+// 写成了 `Record<string, any>`，而工具层要的是有必填字段的
+// `DogOverviewCalcDetails` —— 于是"把结果传给工具函数"处处报类型错。
+// 两份定义迟早会漂移，索性只留一份。
+type DogCalcResult = DogOverviewCalcResult
 
 interface DogBreedItem {
   id: string
@@ -1487,6 +1487,9 @@ async function uploadDogAvatar(filePath: string) {
       profile.value.avatarUrl = avatarUrl
       addDogToCache({
         ...profile.value,
+        // 缓存结构要求 name 是字符串（列表要显示它）；详情里 name 是可选的，
+        // 给个空串兜底，避免"改了头像反而把这只狗从缓存里挤掉"
+        name: profile.value.name || '',
         avatarUrl,
       })
     }
@@ -1780,7 +1783,10 @@ function scrollToSection(selector: string) {
       .select(selector)
       .boundingClientRect()
       .selectViewport()
-      .scrollOffset()
+      // uni 的类型声明把 scrollOffset 的回调写成必填（同样用法的 boundingClientRect
+      // 却是可选），而"链式 + exec"的写法是官方支持的。显式传 undefined 与不传
+      // 参数在运行时完全等价，这样既不改行为，也不用给整条链加断言。
+      .scrollOffset(undefined as unknown as (result: unknown) => void)
       .exec((res: any[]) => {
         const rect = res?.[0]
         const viewport = res?.[1]

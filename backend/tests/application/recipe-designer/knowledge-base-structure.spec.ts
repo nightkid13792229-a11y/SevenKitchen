@@ -180,19 +180,25 @@ describe('知识库结构升级', () => {
   })
 
   describe('未审核内容不进顾客侧', () => {
-    it('新领域的条目全部是待审核状态', () => {
+    it('健康侧条目都是显式标过状态的（不靠缺省蒙混）', () => {
+      // 2026-10-02：审核结论直接标在条目上（reviewStatus），原来的登记表已撤掉。
+      // 缺省不写 = 未审核，所以"漏标"不会误放行；但漏标会让内容白白对顾客不可见，
+      // 这里要求每条都写清楚状态，写没写一眼能看出来。
       const newDomains = new Set<string>(HEALTH_ONLY_DOMAINS);
-      const approved = service
+      const missing = service
         .getAll()
         .filter((entry) => newDomains.has(entry.domain))
-        .filter((entry) => entry.reviewStatus === 'APPROVED')
+        .filter((entry) => !entry.reviewStatus)
         .map((entry) => entry.id)
 
-      // 老板定的边界：没人审过就不能标已审核
-      expect(approved).toEqual([])
+      expect(missing).toEqual([])
     })
 
-    it('顾客侧的提示词里一条未审核内容都没有', () => {
+    it('顾客侧的提示词里**只出现已审核**的条目', () => {
+      // 2026-10-02：合作兽医对 189 条全部通过之后，
+      // 顾客侧不再是"一条都没有"，而是"只出现审核过的那些"。
+      // 这条哨兵因此从"内容为空"升级成"内容全部有审核记录"——
+      // 未审核/被驳回的条目一旦漏进去，这里会立刻红。
       const { tags } = deriveKnowledgeTags({
         lifeStageLabel: '成年犬',
         ageMonths: 36,
@@ -209,7 +215,31 @@ describe('知识库结构升级', () => {
         audience: 'customer',
       })
 
-      expect(text).not.toMatch(/\[(immune|lab|clinical)-/)
+      const citedIds = [...text.matchAll(/\[([a-z]+-\d+)\]/g)].map((m) => m[1])
+      expect(citedIds.length).toBeGreaterThan(0)
+
+      const byId = new Map(service.getAll().map((entry) => [entry.id, entry]))
+      const unapproved = citedIds.filter(
+        (id) => byId.get(id)?.reviewStatus !== 'APPROVED',
+      )
+      expect(unapproved).toEqual([])
+    })
+
+    it('未审核的条目确实进不了顾客侧', () => {
+      // 造一条"没审核过"的健康条目，直接问门禁要不要它
+      const pending = service
+        .getAll()
+        .find(
+          (entry) =>
+            entry.domain === 'CLINICAL' && entry.reviewStatus !== 'APPROVED',
+        )
+      if (!pending) {
+        // 当前所有健康条目都审过了 —— 门禁的正确性由 knowledge-customer-gate.spec.ts 覆盖
+        return
+      }
+
+      const filtered = (service as any).filterByAudience([pending], 'customer')
+      expect(filtered).toEqual([])
     })
 
     it('营养师侧看得到（他们看得懂"这条还没审"）', () => {
@@ -230,6 +260,23 @@ describe('知识库结构升级', () => {
       })
 
       expect(text).toMatch(/\[(immune|lab|clinical)-/)
+    })
+  })
+
+  describe('审核状态跟着内容走（2026-10-02 撤掉登记表之后）', () => {
+    it('顾客侧放行的条目全部是 APPROVED，且状态就写在条目上', () => {
+      // 原来"通过"记在另一张表里（approvals.ts），老板说不用留记录，已撤掉。
+      // 现在唯一的凭据是条目自己的 reviewStatus —— 好处是条目被删/改 id
+      // 不会再留下"审了个不存在的东西"的孤儿，也不会出现编号被复用后
+      // 旧审核静默套在新内容上。代价是**改内容必须手动退回 PENDING_REVIEW**，
+      // 这条测试至少保证"放行的都是显式标过的"。
+      const customer = (service as any).filterByAudience(
+        service.getAll(),
+        'customer',
+      ) as Array<{ id: string; reviewStatus?: string }>
+
+      expect(customer.length).toBeGreaterThan(0)
+      expect(customer.every((entry) => entry.reviewStatus === 'APPROVED')).toBe(true)
     })
   })
 

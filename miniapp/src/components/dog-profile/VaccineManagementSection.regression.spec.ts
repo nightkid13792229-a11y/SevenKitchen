@@ -51,6 +51,46 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
+  it('卡片上显示"归类"，名称照旧可改（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："记录卡片的标题已经体现出疫苗的名称了，那我们在疫苗卡片中还有必要
+    // 保留疫苗名称这个字段吗？我们可以直接把疫苗名称这个字段换成识别出的疫苗类型吗？"
+    // → "显示归类"这个方向对，但输入框不能去掉：识别会认错、顾客也想改。
+    //   两个都留：上面能改名字，下面显示系统把它归成了哪一类。
+    expect(source).toContain('field-label">归类<')
+    expect(source).toContain('vaccine-kind__tag')
+    expect(source).toContain('function kindLabelsOf')
+    // 名称输入框仍在（否则识别错了没法纠正）
+    expect(source).toContain('updateDraft(index, \'vaccineName\', $event.detail.value)')
+  })
+
+  it('归类只信后端：名字一改就作废旧标签，不拿过期结果糊弄', () => {
+    const source = readComponent()
+
+    // 分类逻辑在后端 domain 层（按已审核的产品目录判成分），
+    // 前端不重写一套 —— 否则两边迟早对不上。
+    expect(source).toContain('function vaccineNameChanged')
+    expect(source).toContain('名称改了，保存后会自动更新归类。')
+    // 归类来自接口，不是前端自己算的
+    expect(source).toContain('kindLabels')
+    // 前端不许自带一份产品目录（那是后端的 domain 数据）
+    expect(source).not.toContain('VACCINE_PRODUCTS')
+    expect(source).not.toContain('classifyVaccineKinds')
+  })
+
+  it('记录一变就通知外面重算（计划与角标否则会一直停在旧状态）', () => {
+    const source = readComponent()
+
+    // 老板："自动识别并录入 3 条疫苗接种信息之后，并没有弹出或者展示出
+    // 疫苗提醒或者计划呀。" —— 计划板块只在"换狗"时加载一次，
+    // 顾客在原地录完，它完全不知道。
+    expect(source).toContain("(event: 'records-changed'): void")
+    expect(source).toContain('function notifyRecordsChanged')
+    // 用"已保存记录的指纹"挡掉重复通知
+    expect(source).toContain('savedRecordsSignature')
+  })
+
   it('草稿（还没保存的）也要能删（2026-10-05）', () => {
     const source = readComponent()
 

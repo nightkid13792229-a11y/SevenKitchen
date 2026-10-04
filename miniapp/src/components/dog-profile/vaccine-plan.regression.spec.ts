@@ -215,7 +215,11 @@ describe('疫苗计划 · 接线', () => {
       'utf-8',
     )
 
-    expect(page).toContain('<VaccinePlanSection :dog-id="dogId" />')
+    expect(page).toContain('<VaccinePlanSection :dog-id="dogId" :data-version="vaccineDataVersion" />')
+    // 记录一变就重算计划（2026-10-05）—— 否则顾客原地录完几条，
+    // 计划还停在"没有记录"的状态、整块不显示
+    expect(page).toContain('@records-changed="onVaccineRecordsChanged"')
+    expect(page).toContain('vaccineDataVersion.value += 1')
     const planIndex = page.indexOf('<VaccinePlanSection')
     const recordsIndex = page.indexOf('<VaccineManagementSection')
     expect(planIndex).toBeGreaterThan(-1)

@@ -183,7 +183,16 @@ interface PlanConflict {
   suggestion: string
 }
 
-const props = defineProps<{ dogId: string }>()
+const props = defineProps<{
+  dogId: string
+  /**
+   * 已保存记录变化时由页面递增（2026-10-05）。
+   *
+   * 计划板块原来只在"换狗"时加载一次，顾客在原地录完几条它也不知道，
+   * 于是停在"还没有记录"的状态、整块不显示。
+   */
+  dataVersion?: number
+}>()
 
 const DECISION_OPTIONS = [
   { value: 'ACCEPT', label: '按建议' },
@@ -400,7 +409,8 @@ async function decide(stepKey: string, decision: string) {
   }
 }
 
-watch(() => props.dogId, load, { immediate: true })
+// 换狗 or 记录变了都要重新算 —— 计划的每一步都依赖"有没有对上号的记录"
+watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
 </script>
 
 <style scoped lang="scss">

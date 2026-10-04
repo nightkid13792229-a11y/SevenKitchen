@@ -113,6 +113,34 @@
           </view>
         </view>
 
+        <!-- 归类（2026-10-05）。
+             老板问："记录卡片的标题已经体现出疫苗的名称了，那我们在疫苗卡片中
+             还有必要保留疫苗名称这个字段吗？我们可以直接把疫苗名称这个字段
+             换成识别出的疫苗类型吗？"
+             —— "显示类型"这个方向对，但**输入框不能去掉**：识别会认错、
+             顾客也会想改，去掉就没法纠正了。所以两个都留：
+             上面照旧能改名字，下面把"系统把它归成了哪一类"如实告诉他 ——
+             归类直接决定它算哪一步、多久打一次，顾客看得见才敢改。 -->
+        <view class="field-group">
+          <text class="field-label">归类</text>
+          <view v-if="kindLabelsOf(record, index).length > 0" class="vaccine-kind">
+            <text
+              v-for="label in kindLabelsOf(record, index)"
+              :key="label"
+              class="vaccine-kind__tag"
+            >{{ label }}</text>
+          </view>
+          <text v-else-if="vaccineNameChanged(record, index)" class="field-hint">
+            名称改了，保存后会自动更新归类。
+          </text>
+          <text v-else class="field-hint">
+            填好疫苗名称后，系统会按它的成分归到对应的接种程序里。
+          </text>
+          <text class="field-hint">
+            归类决定这一针算哪一步、隔多久再打。
+          </text>
+        </view>
+
         <view class="field-group">
           <text class="field-label">接种日期</text>
           <picker
@@ -218,6 +246,16 @@ interface VaccineRecord {
    * 手工填写的记录是空数组。
    */
   attachments?: string[]
+  /**
+   * 后端把这条归成了哪几类（2026-10-05）。
+   *
+   * 取值 core / rabies / lepto。一支组合苗可能同时属于好几类 ——
+   * 卫佳捌既是核心疫苗又含钩端螺旋体。
+   * 分类逻辑在后端 domain 层，前端只显示，不重写一套。
+   */
+  kinds?: string[]
+  /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"） */
+  kindLabels?: string[]
 }
 
 interface VaccineDraft {
@@ -257,6 +295,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'dirty-change', value: boolean): void
+  /**
+   * 已保存的接种记录变了（2026-10-05）。
+   *
+   * 为什么需要：疫苗计划板块只在"换狗"时加载一次。顾客在原地录完几条，
+   * 计划那边**没人告诉它**，于是还停在"一条记录都没有"的状态、整块不显示 ——
+   * 老板遇到的就是这个："自动识别并录入 3 条之后，并没有弹出疫苗提醒或者计划"。
+   * 顺带页面顶部那个"有 N 针该打了"角标也是同样的毛病。
+   */
+  (event: 'records-changed'): void
 }>()
 
 /**
@@ -521,6 +568,26 @@ function clearFocus(index: number) {
   }
 }
 
+/** 疫苗名跟已保存的不一样了（改过名字） */
+function vaccineNameChanged(record: VaccineRecord, index: number): boolean {
+  return (
+    draftOf(record, index).vaccineName.trim() !==
+    String(record.vaccineName || '').trim()
+  )
+}
+
+/**
+ * 这条记录当前的归类标签（**只对这种已保存的名字权威**）。
+ *
+ * 分类逻辑只有后端一份（靠已审核的产品目录判成分），前端不重写一套 ——
+ * 否则两边迟早对不上。所以名字一改，旧标签就作废，宁可显示
+ * "保存后会自动更新归类"，也不拿过期的结果糊弄顾客。
+ * 自动保存 1.2 秒后落库，标签随即刷新。
+ */
+function kindLabelsOf(record: VaccineRecord, index: number): string[] {
+  return vaccineNameChanged(record, index) ? [] : record.kindLabels || []
+}
+
 function toggleExpanded(record: VaccineRecord, index: number) {
   expandedIndex.value = expandedIndex.value === index ? -1 : index
 }
@@ -653,6 +720,27 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 已保存记录的"指纹"（只用有 id 的，草稿不算）。
+ *
+ * 用它挡掉重复通知：加载会触发通知，但只有**真正变了**才需要往上喊，
+ * 否则每次进页面都会让计划板块白重载一次。
+ */
+const savedRecordsSignature = ref('')
+
+function notifyRecordsChanged() {
+  const signature = records.value
+    .filter((record) => record.id)
+    .map((record) => record.id)
+    .join('|')
+
+  if (signature === savedRecordsSignature.value) {
+    return
+  }
+  savedRecordsSignature.value = signature
+  emit('records-changed')
+}
+
 async function loadRecords(dogId = props.dogId) {
   if (!dogId) {
     records.value = []
@@ -676,6 +764,10 @@ async function loadRecords(dogId = props.dogId) {
         nextDueDate: String(item?.nextDueDate || '').slice(0, 10),
         notes: String(item?.notes || ''),
         status: toDraft(item).status,
+        kinds: Array.isArray(item?.kinds) ? item.kinds.map(String) : [],
+        kindLabels: Array.isArray(item?.kindLabels)
+          ? item.kindLabels.map(String)
+          : [],
       }))
       // 最近接种的排在最前：接口按写入顺序返回，那个顺序对顾客没有意义
       .sort((a: VaccineRecord, b: VaccineRecord) =>
@@ -686,6 +778,8 @@ async function loadRecords(dogId = props.dogId) {
     if (expandedIndex.value >= records.value.length) {
       expandedIndex.value = -1
     }
+    // 存/删/识别都会经过这里 —— 一处通知，疫苗计划与角标跟着更新
+    notifyRecordsChanged()
   } catch (error: any) {
     records.value = []
     ensureDrafts()
@@ -1063,6 +1157,22 @@ async function doRemove(record: VaccineRecord) {
 
 .vaccine-card__delete--disabled {
   opacity: 0.5;
+}
+
+/* 归类标签（2026-10-05） */
+.vaccine-kind {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.vaccine-kind__tag {
+  font-size: 24rpx;
+  line-height: 1;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  color: #1e3a2f;
+  background: #e8f0e4;
 }
 
 /* 字段下面的一句说明（例如"核心疫苗和狂犬的时间系统会自动算"） */

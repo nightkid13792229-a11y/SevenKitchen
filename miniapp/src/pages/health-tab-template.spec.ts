@@ -57,31 +57,27 @@ describe('健康管理 · 书签对应的表单模板', () => {
  * 原来那条"记录类"分支在过敏下已经没有组件可调 ——
  * 点「上传图片，AI 识别」会静默什么都不发生。
  */
-describe('过敏书签 · 新增记录的两个入口', () => {
+describe('过敏已移出健康管理（2026-10-04 老板决定）', () => {
   const page = () =>
     readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-  it('过敏单独分支：拍检测报告 / 手动点选，都落在上面那张快速添加卡上', () => {
+  it('页面里没有任何过敏分支或过敏板块', () => {
     const source = page()
 
-    expect(source).toContain("if (activeHealthTab.value === 'allergy')")
-    // 底部按钮在过敏下是「排查计划」：添加过敏原就在最上面那张常开的卡里
-    expect(source).toContain("return '排查计划'")
-    expect(source).toContain("scrollPageToSelector('#allergy-trial')")
+    expect(source).not.toContain("activeHealthTab.value === 'allergy'")
+    expect(source).not.toContain('Allergy')
+    expect(source).not.toContain('allergyReports')
+    expect(source).not.toContain('recordedAllergens')
   })
 
-  it('过敏不再走"新建空记录卡"那条记录分支', () => {
+  it('加载白名单只含就诊/体检两张表', () => {
     const source = page()
-    const allergyBranch = source.slice(
-      source.indexOf("if (activeHealthTab.value === 'allergy')"),
-      source.indexOf('const isRecord = isRecordTab.value'),
-    )
 
-    expect(allergyBranch.length).toBeGreaterThan(0)
-    expect(allergyBranch).not.toContain('recordsSectionRef')
+    expect(source).toContain("const HEALTH_PAGE_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup']")
+    expect(source).not.toContain("loadHealthRecordList('allergy'")
   })
 })
 

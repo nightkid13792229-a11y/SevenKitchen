@@ -24,7 +24,8 @@ describe('健康记录（原健康时间线）', () => {
     // 数据来自后端聚合接口，前端不自己拼
     expect(page).toContain('dogApi.healthTimeline(dogId.value)')
     expect(page).not.toContain('mergeHealth')
-    for (const label of ['就诊', '体检', '过敏', '疫苗', '体重']) {
+    // 2026-10-04：过敏标签移出健康管理
+    for (const label of ['就诊', '体检', '疫苗', '体重']) {
       expect(page).toContain(label)
     }
   })
@@ -96,12 +97,12 @@ describe('两个页面的注册与入口', () => {
     expect(page).not.toContain('goVisitSummary')
 
     // 老板明确：时间线不以新的板块标签形式存在
-    // （2026-10-02：就诊/体检拆开后是 6 个，随后饮食标签下线 → 5 个）
+    // （2026-10-04：饮食下线、过敏移出健康管理 → 4 个书签）
     const tabsBlock = page.slice(
       page.indexOf('const HEALTH_TABS'),
       page.indexOf('const RECORD_TAB_KEYS'),
     )
-    expect((tabsBlock.match(/key: '/g) || []).length).toBe(5)
+    expect((tabsBlock.match(/key: '/g) || []).length).toBe(4)
     expect(tabsBlock).not.toContain('timeline')
   })
 

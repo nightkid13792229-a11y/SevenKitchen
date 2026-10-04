@@ -129,13 +129,12 @@ describe('实时保存 · 契约', () => {
 
     expect(source).toContain('const stickyAddTheme = computed<')
     expect(source).toContain("if (activeHealthTab.value === 'checkup') return 'checkup'")
-    expect(source).toContain("if (activeHealthTab.value === 'allergy') return 'allergy'")
     expect(source).toContain("if (activeHealthTab.value === 'vaccine') return 'vaccine'")
     expect(source).toContain("if (activeHealthTab.value === 'weight') return 'weight'")
     expect(source).toContain(':primary-theme="stickyAddTheme"')
-    // 动作也按标签分派（体检要建体检记录、过敏带路去排查计划、体重落光标）
+    // 动作也按标签分派（体检要建体检记录、疫苗拍疫苗本、体重落光标）
     expect(source).toContain('recordsSectionRef.value?.startScan?.()')
-    expect(source).toContain("scrollPageToSelector('#allergy-trial')")
+    expect(source).toContain('vaccineSectionRef.value?.startScan?.()')
     expect(source).toContain('weightSectionRef.value?.focusInput?.()')
     // 体检那条通道用的是当前标签的类型
     const recordsSection = records()

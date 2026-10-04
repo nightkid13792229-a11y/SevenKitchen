@@ -60,7 +60,7 @@
 
     <view v-else-if="hasNoDogs" class="state-card">
       <text class="state-card__title">还没有狗狗档案</text>
-      <text class="state-card__desc">创建档案后，即可维护过敏、检查报告、疫苗、体重和饮食偏好。</text>
+      <text class="state-card__desc">创建档案后，即可维护就诊记录、体检报告、疫苗和体重。</text>
       <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
@@ -77,7 +77,7 @@
         <!-- 两个独立入口（2026-10-01 老板要求）。
 
              放在狗狗信息 Banner 下方、五个板块那张卡**之外**：
-             「健康记录」与「健康分析」不是记录类型，跟病例/过敏/疫苗/饮食/体重
+             「健康记录」与「健康分析」不是记录类型，跟就诊/体检/疫苗/体重
              五个书签不是一类东西，混在一起会让功能区看着像七个板块。
              两个入口用颜色区分（记录=品牌绿、分析=品牌金），
              说明小字**换行显示在标题下方**。 -->
@@ -88,7 +88,7 @@
         <view class="health-entry health-entry--records" @tap="goHealthTimeline">
           <view class="health-entry__copy">
             <text class="health-entry__title">健康记录</text>
-            <text class="health-entry__hint">{{ visitShortcutHint }} · 就诊、体检、过敏、疫苗、体重都在这里</text>
+            <text class="health-entry__hint">{{ visitShortcutHint }} · 就诊、体检、疫苗、体重都在这里</text>
           </view>
           <text class="health-entry__arrow">›</text>
         </view>
@@ -105,21 +105,6 @@
           </view>
 
           <view class="health-panel__body">
-        <!-- 过敏「结论」区（2026-10-04，过敏重构第二期）。
-             老板确认：过敏页改成「结论 / 依据」两段式。
-
-             为什么结论要排在记录列表**上面**：
-               改造前这个页面是一堆原始记录，顾客要自己读完十几条
-               才能回答"我的狗到底不能吃什么"。而"不能吃什么"
-               才是他每次来真正要的那一个答案。 -->
-        <AllergyConclusionSection
-          v-if="activeHealthTab === 'allergy'"
-          :dog-id="dogId"
-          :records="recordsByType.allergy"
-          @changed="onAllergenSaved"
-        />
-
-
         <HealthRecordsSection
           v-if="isRecordTab"
           ref="recordsSectionRef"
@@ -134,46 +119,10 @@
           :saving-record-key="savingRecordKey"
           :last-save-result="lastSaveResult"
           :preferred-expanded-record-identity="preferredExpandedRecordIdentity"
-          :show-type-extra="activeRecordType === 'allergy'"
-          :hide-empty-state="activeRecordType === 'allergy'"
           @change-type="activeRecordType = $event"
           @save-record="saveHealthRecord"
           @delete-record="deleteHealthRecord"
           @dirty-change="hasUnsavedRecordDraft = $event"
-        >
-          <!-- 过敏是最要紧的一类：一点即选 + 上传检测报告自动识别。
-               建档流程从 2026-09-27 起完全不收集健康信息，这里是它的唯一入口。 -->
-          <template #type-extra>
-            <AllergyQuickAddSection
-              v-if="activeRecordType === 'allergy'"
-              :show-add-entry="true"
-              :dog-id="dogId"
-              :recorded-allergens="recordedAllergens"
-              @saved="onAllergenSaved"
-            />
-          </template>
-        </HealthRecordsSection>
-
-        <!-- 过敏「排查计划」（2026-10-04，过敏重构第三期）。
-             老板第 2 条要求。定位是"帮你执行、帮你记录"，
-             不替兽医开方案 —— 试验必须由兽医设计与监督。 -->
-        <!-- 底部固定栏的「排查计划」滚到这块（2026-10-04）。
-             包一层只为给锚点 id —— 组件根节点上加 id 在小程序里不可靠。 -->
-        <view v-if="activeHealthTab === 'allergy'" id="allergy-trial">
-          <AllergyTrialSection
-            :dog-id="dogId"
-            :recorded-allergens="recordedAllergens"
-            @changed="onAllergenSaved"
-          />
-        </view>
-
-        <!-- 过敏「依据」区：报告原件与来源。
-             改造前顾客上传的报告**传完就丢**，再也看不到。 -->
-        <AllergyReportSection
-          v-if="activeHealthTab === 'allergy'"
-          :dog-id="dogId"
-          :reports="allergyReports"
-          @changed="onAllergenSaved"
         />
 
         <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
@@ -208,14 +157,14 @@
 
       <view v-else class="section-card">
         <text class="section-card__title">先选择狗狗</text>
-        <text class="state-card__desc">选择一只狗狗后，即可维护过敏、检查报告、疫苗、体重和饮食偏好。</text>
+        <text class="state-card__desc">选择一只狗狗后，即可维护就诊记录、体检报告、疫苗和体重。</text>
         <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
       </view>
     </view>
 
     <!-- 底部按钮按当前板块自适应（老板要求）：
          · 饮食偏好是**页面自己持有数据**的板块，所以由底部按钮保存；
-         · 其余五个板块（病史/体检/过敏/疫苗/体重管理）各自在板块内有保存按钮
+         · 其余板块（就诊/体检/疫苗/体重管理）各自在板块内有保存按钮
            （每条记录单独保存），底部再放一个"保存"没有意义，只会让人不知道
            它到底在存什么 —— 所以那些书签下不显示保存按钮。
          · 返回按钮的文案跟着入口走。 -->
@@ -235,10 +184,6 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
-import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
-import AllergyConclusionSection from '../../components/dog-profile/AllergyConclusionSection.vue'
-import AllergyReportSection from '../../components/dog-profile/AllergyReportSection.vue'
-import AllergyTrialSection from '../../components/dog-profile/AllergyTrialSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
 import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
@@ -285,10 +230,10 @@ const latestRequestedDogId = ref('')
 /**
  * 板块书签（2026-09-30，老板要求）。
  *
- * 六个板块原先全部平铺在页面上，一屏里挤着病史、体检、过敏、疫苗、
+ * 板块原先全部平铺在页面上，一屏里挤着病史、体检、疫苗、
  * 饮食偏好、体重管理六套内容，显得杂乱。改成书签：一次只显示一个。
  *
- * 病史/体检/过敏复用 HealthRecordsSection（三类记录本来就一次全加载，
+ * 病史/体检复用 HealthRecordsSection（两类记录本来就一次全加载，
  * 切书签不需要重新请求），疫苗/饮食偏好/体重管理各自是独立板块。
  */
 /**
@@ -315,18 +260,25 @@ const latestRequestedDogId = ref('')
  * 拆开之后：每个标签只显示本类记录、只渲染本类字段，**表单里不再需要切换**；
  * 这次就诊里传的化验单，数字也直接落在这条就诊记录里，不再另开一条体检记录。
  */
-type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'weight'
+type HealthTabKey = 'medical' | 'checkup' | 'vaccine' | 'weight'
 
+/**
+ * 健康管理的书签。
+ *
+ * 2026-10-04 老板："把过敏标签及相关的板块内容，从健康管理中全部删除掉，
+ * 我们不做过敏计划，也将过敏源的记录放到定制食谱流程中。"
+ * → 「过敏」不再是一个书签；过敏录入搬去定制食谱（点选 / 手输 / 拍报告识别），
+ *   想回看已记的过敏原，爱犬概览里有。
+ */
 const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
   { key: 'medical', label: '就诊' },
   { key: 'checkup', label: '体检' },
-  { key: 'allergy', label: '过敏' },
   { key: 'vaccine', label: '疫苗' },
   { key: 'weight', label: '体重' },
 ]
 
-/** 走 HealthRecordsSection 的板块：就诊、体检（各一类）+ 过敏 */
-const RECORD_TAB_KEYS: string[] = ['medical', 'checkup', 'allergy']
+/** 走 HealthRecordsSection 的板块：只有就诊与体检 */
+const RECORD_TAB_KEYS: string[] = ['medical', 'checkup']
 
 /**
  * 从哪个入口进来的。
@@ -347,52 +299,34 @@ const HEALTH_ENTRY_LABELS: Record<HealthEntrySource, string> = {
 
 const activeHealthTab = ref<HealthTabKey>('medical')
 
-/** 当前书签是否是「记录类」（就诊/体检/过敏）—— 这三个共用同一个组件 */
+/** 当前书签是否是「记录类」（就诊 / 体检）—— 这两个共用同一个组件 */
 const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value))
 
 /**
  * 交给 HealthRecordsSection 的「这条记录属于哪一类」。
- * 就诊/体检各自成标签之后，它就是标签本身；过敏走原来的单一类型分支。
+ * 就诊/体检各自成标签之后，它就是标签本身。
  */
 const activeVisitKind = computed<'medical' | 'checkup'>(() =>
   activeHealthTab.value === 'checkup' ? 'checkup' : 'medical',
 )
 
 /**
- * 传给 HealthRecordsSection 的板块标识（2026-10-04 修正）。
+ * 传给 HealthRecordsSection 的板块标识。
  *
- * 就诊 / 体检：两类记录共用同一个列表，走 `'visit'`（合并）模式；
- * 过敏：**单一类型，走它自己的模板**（过敏原 + 过敏反应/说明）——
- * 老板实测："过敏标签分类下，现在用的也是就诊的模板"，
- * 就是这里原来把三个记录类书签一律当成 `'visit'` 传下去了。
+ * 就诊与体检共用同一个列表，走 `'visit'`（合并）模式，逐条按自己的章渲染。
+ * （2026-10-04 起过敏已不在这个页面 —— 搬去定制食谱流程。）
  */
 const activeRecordType = computed<HealthRecordType | 'visit'>(() =>
   resolveHealthTabRecordType(activeHealthTab.value),
 )
 
-/** 当前标签要展示的记录与加载态（拆标签后：就诊/体检各看各的） */
-const activeRecordList = computed(() => {
-  if (activeHealthTab.value === 'medical') {
-    return recordsByType.medical
-  }
-
-  if (activeHealthTab.value === 'checkup') {
-    return recordsByType.checkup
-  }
-
-  return recordsByType.allergy
-})
-const activeRecordLoading = computed(() => {
-  if (activeHealthTab.value === 'medical') {
-    return loadingByType.medical
-  }
-
-  if (activeHealthTab.value === 'checkup') {
-    return loadingByType.checkup
-  }
-
-  return loadingByType.allergy
-})
+/** 当前标签要展示的记录与加载态（就诊/体检各看各的） */
+const activeRecordList = computed(() => (
+  activeHealthTab.value === 'medical' ? recordsByType.medical : recordsByType.checkup
+))
+const activeRecordLoading = computed(() => (
+  activeHealthTab.value === 'medical' ? loadingByType.medical : loadingByType.checkup
+))
 
 function selectHealthTab(key: HealthTabKey) {
   // 切走之前先把等待中的自动保存落库（2026-10-03：底部保存键已下线）
@@ -470,52 +404,6 @@ const isSecondaryActionDisabled = computed(() =>
 const selectedDog = computed(() => (
   selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] || null : null
 ))
-
-/** 档案里已经记过的过敏原：给「快速添加」做去重与"已记"标记 */
-const recordedAllergens = computed(() => (recordsByType.allergy || [])
-  .map(record => String(record?.allergen || '').trim())
-  .filter(Boolean))
-
-/**
- * 快速添加/报告识别写了一条过敏记录后，把过敏列表拉回来。
- *
- * 不在这里手动往数组里塞：接口返回的才是权威数据（含 id 与附件缓存），
- * 手动塞容易和「未保存草稿」的判定打架。
- */
-async function onAllergenSaved() {
-  if (!dogId.value) {
-    return
-  }
-
-  await loadHealthRecordList('allergy', dogId.value)
-  // 报告区也要跟着刷新：识别报告时会同时写入报告与结论，
-  // 只刷其中一个会让两边对不上（"结论有了、依据没有"）。
-  await loadAllergyReports()
-}
-
-/**
- * 过敏检测报告（2026-10-04，过敏重构第二期）。
- *
- * 报告是有独立实体的：检测日期 / 方式 / 机构 / 原件 / 识别原文，
- * 结论挂在报告下面。改造前没有这一层，顾客上传的原件传完就丢。
- */
-const allergyReports = ref<Array<Record<string, any>>>([])
-
-async function loadAllergyReports() {
-  if (!dogId.value) {
-    allergyReports.value = []
-    return
-  }
-  try {
-    const res: any = await dogApi.allergyReports.list(dogId.value)
-    if (res?.code !== 0) return
-    const list = Array.isArray(res?.data?.reports) ? res.data.reports : []
-    allergyReports.value = list
-  } catch {
-    // 报告读不到不能挡住整个健康页 —— 结论区与记录列表仍然可用
-    allergyReports.value = []
-  }
-}
 
 // 体重管理区块需要的档案信息
 const weightSectionDogProfile = computed(() => ({
@@ -923,12 +811,19 @@ async function loadHealthRecordList(type: HealthRecordType, targetDogId = dogId.
   }
 }
 
+/**
+ * 健康管理只加载**就诊 / 体检**两张表。
+ *
+ * 2026-10-04 起过敏不在这个页面了（搬去定制食谱），
+ * 所以不能再拿 HEALTH_RECORD_TYPES 一把梭 —— 那个常量还包含 allergy，
+ * 会白发一次请求、还可能把过敏记录塞进这个页面。
+ */
+const HEALTH_PAGE_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup']
+
 async function loadAllHealthRecordLists(targetDogId: string) {
-  await Promise.all([
-    ...HEALTH_RECORD_TYPES.map(type => loadHealthRecordList(type, targetDogId)),
-    // 过敏报告与过敏结论一起拉，避免出现"结论有了、依据没有"的错位
-    loadAllergyReports(),
-  ])
+  await Promise.all(
+    HEALTH_PAGE_RECORD_TYPES.map(type => loadHealthRecordList(type, targetDogId)),
+  )
 }
 
 async function saveHealthRecord({
@@ -1053,7 +948,7 @@ const weightSectionRef = ref<{
   focusInput?: () => void
 } | null>(null)
 
-/** 疫苗/体重板块自己的未保存状态（病史/体检/过敏复用 hasUnsavedRecordDraft） */
+/** 疫苗/体重板块自己的未保存状态（就诊/体检复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
 
 
@@ -1061,7 +956,7 @@ const hasUnsavedSectionDraft = ref(false)
  * 各板块的"新增块"开关（2026-10-03）。
  *
  * 底部「新增记录」会先问一句"传照片还是自己填"，选完再把对应的录入块打开：
- *   · 就诊 / 体检 / 疫苗 / 过敏 → 两个选项（上传图片 AI 识别 / 手动填写）
+ *   · 就诊 / 体检 → 两个选项（上传图片 AI 识别 / 手动填写）
  *   · 体重                       → 没有 AI 识别这回事，直接打开输入块落光标
  * 所以这些开关只在"选了手动填写"之后才打开 —— 标签页本身仍是"看结果 + 改已有"。
  */
@@ -1086,20 +981,6 @@ function onAddRecordTap() {
   if (activeHealthTab.value === 'weight') {
     weightAddEntryVisible.value = true
     nextTick(() => weightSectionRef.value?.focusInput?.())
-    return
-  }
-
-  /**
-   * 过敏（2026-10-04 两次收敛后的最终样子）。
-   *
-   * 老板第一条："看不懂该如何添加过敏原" → 那张卡**默认展开**放在页面最上面，
-   * 点选 / 手输 / 传报告都在卡上，不需要任何按钮带路。
-   * 老板第二条："既然已经默认展开……为什么还要在最下方再加一个添加过敏原的按钮？"
-   * → 底部这个按钮不再重复"添加"，改成这页唯一藏在下面、需要带路的事：
-   * **排查计划**。
-   */
-  if (activeHealthTab.value === 'allergy') {
-    scrollPageToSelector('#allergy-trial')
     return
   }
 
@@ -1140,7 +1021,7 @@ function onAddRecordTap() {
  * 底部左侧那个按钮的文案。
  *
  * 2026-10-03 起**文案就是「新增记录」**，点它按当前标签直接走那个通道
- * （就诊/体检/疫苗/过敏 → 调起相册让 AI 识别；体重 → 打开输入块落光标），
+ * （就诊/体检/疫苗 → 调起相册让 AI 识别；体重 → 打开输入块落光标），
  * 不再先弹"你要记什么"。没有选狗狗时这个位置退化成返回。
  */
 /**
@@ -1148,35 +1029,19 @@ function onAddRecordTap() {
  * 新增记录，都应该是该标签页对应的色块"）—— 与书签、内容区底色同一套色，
  * 顾客一眼能对上"我在哪一块、点下去会记到哪一类"。
  */
-const stickyAddTheme = computed<'visit' | 'checkup' | 'allergy' | 'vaccine' | 'weight'>(() => {
+const stickyAddTheme = computed<'visit' | 'checkup' | 'vaccine' | 'weight'>(() => {
   if (activeHealthTab.value === 'checkup') return 'checkup'
-  if (activeHealthTab.value === 'allergy') return 'allergy'
   if (activeHealthTab.value === 'vaccine') return 'vaccine'
   if (activeHealthTab.value === 'weight') return 'weight'
   return 'visit'
 })
 
-/**
- * 底部固定栏主按钮的文案。
- *
- * 2026-10-04 老板："添加过敏原板块，既然已经是默认展开的，可以选择，
- * 也可以手动输入的窗口，为什么还要在最下方增加一个添加过敏原的按钮？"
- *
- * 说得对，那是我上一版加重复了 —— **添加过敏原的东西就在页面最上面那张卡里**
- * （默认展开、可点选、可手输、可传报告），底部再来一个同名按钮纯属多余。
- *
- * 过敏标签下这个按钮改成「**排查计划**」：它才是这页唯一"藏在下面、需要带路"的事。
- */
+/** 底部固定栏主按钮的文案：选了狗就是「新增记录」，没选狗就是返回。 */
 const stickySecondaryText = computed(() => {
   if (!selectedDog.value) {
     return HEALTH_ENTRY_LABELS[entrySource.value]
   }
 
-  if (activeHealthTab.value === 'allergy') {
-    return '排查计划'
-  }
-
-  // 2026-10-02：其它标签下新增统一走引导入口，所以是同一个动作
   return '新增记录'
 })
 
@@ -1469,7 +1334,6 @@ function goToDogCreate() {
 .health-theme--medical { --health-accent: #0f7b49;  --health-accent-soft: #e6f2ea; }
 /* 体检单独一套蓝：和「就诊」的绿区分开，五个书签各有各的色（2026-10-03 老板提的） */
 .health-theme--checkup { --health-accent: #216d9b;  --health-accent-soft: #e6eff6; }
-.health-theme--allergy { --health-accent: #ad5b2a;  --health-accent-soft: #f7e9e0; }
 .health-theme--vaccine { --health-accent: #6b5b9b;  --health-accent-soft: #ece9f5; }
 .health-theme--weight { --health-accent: #0e6f78;  --health-accent-soft: #e4f1f2; }
 /*
@@ -1536,11 +1400,8 @@ function goToDogCreate() {
 .health-theme--checkup .health-tabs__item--active { color: #216d9b; border-top-color: #216d9b; }
 .health-theme--checkup .health-panel__body,
 .health-theme--checkup .health-tabs__item--active { background: #eaf2f8; }
-.health-theme--allergy .health-tabs__item--active { color: #ad5b2a; border-top-color: #ad5b2a; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */
-.health-theme--allergy .health-panel__body,
-.health-theme--allergy .health-tabs__item--active { background: #fbf1ea; }
 .health-theme--vaccine .health-tabs__item--active { color: #6b5b9b; border-top-color: #6b5b9b; }
 /* 内容区一层极浅的主题底色 —— 让色系看得出来，又不盖过内容。
    选中书签用同一个底色，Chrome 那种「标签长在内容上」的观感才不会被破坏。 */

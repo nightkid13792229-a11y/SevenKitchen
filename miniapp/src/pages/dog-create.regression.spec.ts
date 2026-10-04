@@ -297,19 +297,20 @@ describe('dog-create runtime regressions', () => {
       expect(recommendationSection).not.toContain('过敏')
     })
 
-    it('AI 报告识别整块搬到了「健康管理」，而不是在建档页留下死代码', () => {
+    it('AI 报告识别不在建档页，能力搬去了定制食谱的过敏录入', () => {
       const source = readPage()
-      const quickAdd = readFileSync(
-        resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+      const scanBlock = readFileSync(
+        resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
         'utf-8',
       )
 
       // 建档页不再有识别入口
       expect(source).not.toContain('extractHealthReport')
       expect(source).not.toContain('uploadHealthAttachment')
-      // 能力没有丢：上传 → 识别 两步搬到了过敏快速添加
-      expect(quickAdd).toContain('dogApi.uploadHealthAttachment(')
-      expect(quickAdd).toContain('dogApi.extractHealthReport(')
+      // 能力没有丢：上传 → 识别 两步在定制食谱的过敏录入块里
+      // （2026-10-04 起过敏录入统一在定制食谱流程）
+      expect(scanBlock).toContain('dogApi.uploadHealthAttachment(')
+      expect(scanBlock).toContain('dogApi.extractHealthReport(')
     })
   })
 

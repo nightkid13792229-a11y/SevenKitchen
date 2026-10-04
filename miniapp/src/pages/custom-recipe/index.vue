@@ -281,6 +281,30 @@
               </view>
               <text v-if="formData.allergies.length === 0" class="empty-text">暂无过敏信息</text>
             </view>
+
+            <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
+                 老板："将过敏源的记录放到定制食谱流程中。" -->
+            <AllergyScanBlock
+              v-if="formData.dogId"
+              :dog-id="formData.dogId"
+              @scanned="onAllergensScanned"
+            />
+
+            <!-- 已传过的检测报告：家长随时翻得出来（原件不再"读完就丢"） -->
+            <view v-if="allergyReports.length > 0" class="allergy-reports">
+              <text class="allergy-reports__title">已上传的检测报告（{{ allergyReports.length }} 份）</text>
+              <view
+                v-for="report in allergyReports"
+                :key="report.id"
+                class="allergy-reports__item"
+                @tap="previewAllergyReport(report)"
+              >
+                <text class="allergy-reports__name">
+                  {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+                </text>
+                <text class="allergy-reports__action">查看</text>
+              </view>
+            </view>
           </view>
 
           <!-- 只读参考：档案里的体检 / 体重 / 疫苗，营养师也会看这些 -->
@@ -431,6 +455,7 @@ import { ref, computed, onMounted } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
+import AllergyScanBlock from '@/components/custom-recipe/AllergyScanBlock.vue';
 import { requestCustomRecipeOrderSubscription } from '@/utils/custom-recipe-payment';
 import { navigateToDogCreate } from '@/utils/dog-profile-entry';
 import {
@@ -1027,6 +1052,8 @@ const onDogChange = (e: any) => {
   syncGateDraftFromDog(selectedDog.value);
   void loadDogArchiveInfo(selectedDog.value.value);
   void loadSelectedPlan(selectedDog.value.value);
+  // 过敏信息块要显示"已上传的检测报告"（2026-10-04 从健康管理搬来）
+  void loadAllergyReports(selectedDog.value.value);
 };
 
 /** 顿号/逗号分隔的口味文本 → 标签数组 */
@@ -1239,6 +1266,71 @@ const addAllergenByName = (name: string) => {
 
 const isAllergenAdded = (name: string) =>
   formData.value.allergies.includes(String(name || '').trim());
+
+/**
+ * 过敏原检测报告（2026-10-04 从健康管理搬来）。
+ *
+ * 报告是独立实体：检测日期 / 方式 / 原件 / 识别原文。
+ * 这里只做"翻得出来" —— 原件挂在报告上，家长随时点开看。
+ */
+const allergyReports = ref<Array<Record<string, any>>>([]);
+
+async function loadAllergyReports(dogId: string) {
+  if (!dogId) {
+    allergyReports.value = [];
+    return;
+  }
+  try {
+    const res: any = await dogApi.allergyReports.list(dogId);
+    if (res?.code !== 0) return;
+    allergyReports.value = Array.isArray(res?.data?.reports) ? res.data.reports : [];
+  } catch {
+    // 报告读不到不能挡住下单 —— 过敏信息与其余步骤都还能用
+    allergyReports.value = [];
+  }
+}
+
+/** 扫描确认后的过敏原并进这一单（去重，已记的跳过） */
+function onAllergensScanned(payload: { allergens?: string[] }) {
+  const list = Array.isArray(payload?.allergens) ? payload.allergens : [];
+  let added = 0;
+  for (const name of list) {
+    const value = String(name || '').trim();
+    if (!value || formData.value.allergies.includes(value)) continue;
+    formData.value.allergies.push(value);
+    added += 1;
+  }
+  uni.showToast({
+    title: added > 0 ? `已加入 ${added} 项过敏原` : '这几项档案里已经有了',
+    icon: 'none',
+  });
+  // 报告存好了，列表刷新一下（"已上传的检测报告"要立刻看得到）
+  void loadAllergyReports(formData.value.dogId);
+}
+
+const ALLERGY_TEST_METHOD_LABELS: Record<string, string> = {
+  SERUM: '血清检测',
+  INTRADERMAL: '皮内试验',
+  ELIMINATION: '排除性饮食',
+  OTHER: '其它方式',
+  UNKNOWN: '检测方式未记录',
+};
+
+function reportTestMethodLabel(value: unknown) {
+  return ALLERGY_TEST_METHOD_LABELS[String(value || 'UNKNOWN').toUpperCase()] || '检测方式未记录';
+}
+
+/** 点开报告：预览原件（多页时一起给，可左右翻） */
+function previewAllergyReport(report: Record<string, any>) {
+  const urls = (Array.isArray(report?.attachments) ? report.attachments : [])
+    .map((item: unknown) => String(item || '').trim())
+    .filter(Boolean);
+  if (urls.length === 0) {
+    uni.showToast({ title: '这份报告没有留存原件', icon: 'none' });
+    return;
+  }
+  uni.previewImage({ urls, current: urls[0] });
+}
 
 const removeAllergen = (index: number) => {
   formData.value.allergies.splice(index, 1);
@@ -2094,6 +2186,40 @@ const getActivityLabel = (level: string) => {
 }
 
 /* 常见过敏原一点即选（2026-10-04 第六期统一） */
+/* 已上传的检测报告（2026-10-04 从健康管理搬来） */
+.allergy-reports {
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx dashed #e6e1d7;
+}
+
+.allergy-reports__title {
+  display: block;
+  font-size: 24rpx;
+  color: #8a7a63;
+}
+
+.allergy-reports__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #faf8f4;
+}
+
+.allergy-reports__name {
+  font-size: 24rpx;
+  color: #4a4235;
+}
+
+.allergy-reports__action {
+  flex: none;
+  font-size: 24rpx;
+  color: #8a6b3f;
+}
+
 .allergen-quick-add {
   margin-bottom: 16rpx;
 }

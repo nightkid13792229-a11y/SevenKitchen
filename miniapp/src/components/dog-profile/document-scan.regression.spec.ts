@@ -268,9 +268,9 @@ describe('拍照录入 · 接线', () => {
     expect(vaccine).toContain('拍疫苗本')
   })
 
-  it('过敏报告那条老路没被动过', () => {
+  it('过敏报告那条路搬去了定制食谱，仍然走同一个识别接口', () => {
     const allergy = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+      resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
       'utf-8',
     )
 

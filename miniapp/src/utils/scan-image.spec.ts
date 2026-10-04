@@ -49,8 +49,8 @@ describe('识别入口 · 都走同一条"提清晰度"的路', () => {
     expect(source).toContain('await prepareScanImages(filePaths)')
   })
 
-  it('过敏报告扫描入口同样处理', () => {
-    const source = read('src/components/dog-profile/AllergyQuickAddSection.vue')
+  it('过敏报告扫描入口同样处理（2026-10-04 搬去定制食谱）', () => {
+    const source = read('src/components/custom-recipe/AllergyScanBlock.vue')
 
     expect(source).toContain('sizeType: SCAN_IMAGE_SIZE_TYPE')
     expect(source).toContain('await prepareScanImages(filePaths)')
@@ -119,7 +119,7 @@ describe('识别用照片 · 太糊就先问一句', () => {
   it('两个识别入口都在识别前问这一句，选"重新选"就真的不动手', () => {
     for (const file of [
       'src/components/dog-profile/HealthDocumentScan.vue',
-      'src/components/dog-profile/AllergyQuickAddSection.vue',
+      'src/components/custom-recipe/AllergyScanBlock.vue',
     ]) {
       const text = readFileSync(resolve(process.cwd(), file), 'utf-8')
       expect(text).toContain('await findBlurryScanImages(filePaths)')

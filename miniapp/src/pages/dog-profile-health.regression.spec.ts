@@ -209,7 +209,7 @@ describe('dog profile health page regressions', () => {
    * 建档流程删掉健康信息步骤之后，这一页就是顾客补充过敏 / 检查报告 /
    * 疫苗 / 体重的**唯一**去处，所以入口必须真的挂上、并且能刷新。
    */
-  it('过敏类别里挂上了快速添加与报告识别入口', () => {
+  it('过敏已从健康管理移除（2026-10-04 老板：全部删除掉，搬去定制食谱）', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
@@ -219,32 +219,35 @@ describe('dog profile health page regressions', () => {
       'utf-8',
     )
 
-    expect(page).toContain('AllergyQuickAddSection')
-    expect(page).toContain("v-if=\"activeRecordType === 'allergy'\"")
-    expect(page).toContain(':recorded-allergens="recordedAllergens"')
-    expect(page).toContain('@saved="onAllergenSaved"')
+    // 四个过敏板块与它们的接线全部下线
+    for (const gone of [
+      'AllergyQuickAddSection',
+      'AllergyConclusionSection',
+      'AllergyReportSection',
+      'AllergyTrialSection',
+      'recordedAllergens',
+      'allergyReports',
+      'onAllergenSaved',
+    ]) {
+      expect(page).not.toContain(gone)
+    }
 
-    // 快速添加写在过敏列表上方（切到过敏第一眼就能看到）
-    // 2026-10-01：插槽加了开关 —— 只有过敏板块渲染它，
-    // 否则空容器会作为 flex 子元素占掉一个 gap（书签下方多一条空白）
+    // 组件里那个插槽还在（其它板块以后可能用），但本页不再往里塞东西
     expect(section).toContain('<slot v-if="showTypeExtra" name="type-extra" />')
-    expect(page).toContain(":show-type-extra=\"activeRecordType === 'allergy'\"")
-    const slotIndex = section.indexOf('<slot v-if="showTypeExtra" name="type-extra" />')
-    const emptyIndex = section.indexOf('health-section__empty')
-    expect(slotIndex).toBeGreaterThan(-1)
-    expect(slotIndex).toBeLessThan(emptyIndex)
+    expect(page).not.toContain('show-type-extra')
   })
 
-  it('快速添加落库后把过敏列表拉回来，而不是本地硬塞', () => {
+  it('页面里不再有任何过敏板块或过敏接口调用', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    expect(page).toContain('async function onAllergenSaved()')
-    expect(page).toContain("await loadHealthRecordList('allergy', dogId.value)")
-    // 已记过敏原从接口数据派生，保证与列表一致
-    expect(page).toContain('const recordedAllergens = computed(() => (recordsByType.allergy || [])')
+    // 不再单独加载过敏表（那个常量还包含 allergy，所以页面自己列了白名单）
+    expect(page).not.toContain("loadHealthRecordList('allergy'")
+    expect(page).toContain("const HEALTH_PAGE_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup']")
+    // 过敏报告接口也不在本页调
+    expect(page).not.toContain('allergyReports.list')
   })
 
   it('疫苗管理作为独立卡片挂在「健康管理」页里', () => {
@@ -260,7 +263,7 @@ describe('dog profile health page regressions', () => {
     expect(page).toContain('ref="vaccineSectionRef"')
     expect(page).toContain('external-save')
     // 文案要如实列出这一页能维护什么
-    expect(page).toContain('过敏、检查报告、疫苗、体重和饮食偏好')
+    expect(page).toContain('就诊记录、体检报告、疫苗和体重')
   })
 
   /**
@@ -292,52 +295,53 @@ describe('dog-profile-health · 板块书签', () => {
   const readPage = () =>
     readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8')
 
-  it('五个书签齐全，顺序与老板给的一致（就诊与体检分开、饮食已下线）', () => {
+  it('四个书签，顺序与老板给的一致（2026-10-04 起「过敏」已移出健康管理）', () => {
     const page = readPage()
 
-    // 2026-10-02：就诊与体检拆开；饮食偏好跟健康管理关系不大，标签下线
-    //（只在定制食谱时填写，定制流程里本来就有那一步）
-    expect(page).toContain("type HealthTabKey = 'medical' | 'checkup' | 'allergy' | 'vaccine' | 'weight'")
+    // 2026-10-02：就诊与体检拆开；饮食偏好标签下线（只在定制食谱里填）
+    // 2026-10-04 老板："把过敏标签及相关的板块内容，从健康管理中全部删除掉"
+    expect(page).toContain("type HealthTabKey = 'medical' | 'checkup' | 'vaccine' | 'weight'")
     expect(page).toContain("{ key: 'medical', label: '就诊' }")
     expect(page).toContain("{ key: 'checkup', label: '体检' }")
-    expect(page).toContain("{ key: 'allergy', label: '过敏' }")
     expect(page).toContain("{ key: 'vaccine', label: '疫苗' }")
     expect(page).toContain("{ key: 'weight', label: '体重' }")
     expect(page).not.toContain("{ key: 'diet'")
+    // 过敏不再是书签
+    expect(page).not.toContain("{ key: 'allergy'")
 
     const medicalAt = page.indexOf("{ key: 'medical'")
     const checkupAt = page.indexOf("{ key: 'checkup'")
-    const allergyAt = page.indexOf("{ key: 'allergy'")
+    const vaccineAt = page.indexOf("{ key: 'vaccine'")
     expect(medicalAt).toBeGreaterThan(-1)
     expect(checkupAt).toBeGreaterThan(medicalAt)
-    expect(allergyAt).toBeGreaterThan(checkupAt)
+    expect(vaccineAt).toBeGreaterThan(checkupAt)
   })
 
   it('一次只显示一个板块：每个板块都挂在书签条件上', () => {
     const page = readPage()
 
-    // 三类记录共用一个组件
+    // 就诊与体检共用一个组件
     expect(page).toContain('v-if="isRecordTab"')
-    // 疫苗 / 体重管理各挂各的书签（就诊、体检、过敏走 isRecordTab 那支）
+    // 疫苗 / 体重管理各挂各的书签（就诊、体检走 isRecordTab 那支）
     expect(page).toContain("v-else-if=\"activeHealthTab === 'vaccine'\"")
     expect(page).toContain("v-else-if=\"activeHealthTab === 'weight'\"")
     // 饮食偏好标签已下线（老板 2026-10-02）
     expect(page).not.toContain("activeHealthTab === 'diet'")
   })
 
-  it('记录类板块复用既有的三个类型，并关掉组件自带的重复标签', () => {
+  it('记录类板块复用既有的类型，并关掉组件自带的重复标签', () => {
     const page = readPage()
     const section = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
       'utf-8',
     )
 
-    // 就诊 / 体检 / 过敏 三者共用同一个组件（记录类）
-    expect(page).toContain("const RECORD_TAB_KEYS: string[] = ['medical', 'checkup', 'allergy']")
-    // 2026-10-02 拆标签后：每个标签只取自己那一类的记录，不再在页面里合并两类
-    expect(page).toContain("if (activeHealthTab.value === 'medical') {")
-    expect(page).toContain('return recordsByType.medical')
-    expect(page).toContain('return recordsByType.checkup')
+    // 就诊 / 体检 两者共用同一个组件（记录类）
+    expect(page).toContain("const RECORD_TAB_KEYS: string[] = ['medical', 'checkup']")
+    // 每个标签只取自己那一类的记录，不在页面里合并两类
+    expect(page).toContain("activeHealthTab.value === 'medical' ? recordsByType.medical : recordsByType.checkup")
+    expect(page).toContain('recordsByType.medical')
+    expect(page).toContain('recordsByType.checkup')
     // 类别由标签传给组件（表单里不再有"类型"切换）
     expect(page).toContain(':visit-kind="activeVisitKind"')
     // 上级已有书签，组件内那套一模一样的标签要关掉，否则重复
@@ -392,9 +396,8 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).toContain('weightSectionRef.value?.flushAutoSaves?.()')
     expect(page).toContain('onHide(')
     expect(page).toContain('onUnload(')
-    // 主按钮：发病史/检查是「新增记录」，过敏是「添加过敏原」，没选狗时是返回
+    // 主按钮：选了狗是「新增记录」，没选狗是返回
     expect(page).toContain("return HEALTH_ENTRY_LABELS[entrySource.value]")
-    expect(page).toContain("return '排查计划'")
     expect(page).toContain("return '新增记录'")
     // 2026-10-02：新增统一走引导面板（不再直连记录板块的选择器）
     expect(page).toContain('onAddRecordTap()')
@@ -458,7 +461,7 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).not.toContain('margin-bottom: 24rpx;\n  white-space: nowrap;')
   })
 
-  it('每个板块一套主题色（病史体检合并后为五套；保存键 2026-10-03 已下线）', () => {
+  it('每个板块一套主题色（2026-10-04 起四套：就诊/体检/疫苗/体重）', () => {
     const page = readPage()
     const bar = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/StickyActionBar.vue'),
@@ -469,13 +472,15 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     const compact = page.replace(/\s+/g, ' ')
     // 2026-10-03 老板实测：就诊与体检两个标签没有主题色 ——
     // 因为 activeHealthTab 传的是 medical/checkup，而样式里只写了 visit。
-    for (const theme of ['medical', 'checkup', 'allergy', 'vaccine', 'weight']) {
+    for (const theme of ['medical', 'checkup', 'vaccine', 'weight']) {
       expect(compact).toContain(`.health-theme--${theme} .health-tabs__item--active`)
       expect(compact).toContain(`.health-theme--${theme} .health-panel__body`)
     }
     // 饮食板块已下线，主题色不该留残影；中间那个临时的 visit 也一并清掉
     expect(compact).not.toContain('.health-theme--diet')
     expect(compact).not.toContain('.health-theme--visit')
+    // 2026-10-04：过敏标签移出健康管理，主题色一并下线
+    expect(compact).not.toContain('.health-theme--allergy')
     // 按钮主题做成属性 —— 小程序组件样式隔离，父页面 :deep() 进不来。
     // 2026-10-03：底部只剩「记一条」一个按钮（保存键下线），主题固定成 visit；
     // 组件仍保留多套主题能力，板块色系继续由书签与内容区表达。
@@ -529,8 +534,8 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('recordsSectionRef.value?.startScan?.()')
     // 疫苗：打开新增块并直接拍疫苗本
     expect(page).toContain('vaccineSectionRef.value?.startScan?.()')
-    // 过敏：滚到"排查计划"那一块 —— 添加过敏原就在最上面那张卡里，不需要按钮
-    expect(page).toContain("scrollPageToSelector('#allergy-trial')")
+    // 过敏已不在这个页面
+    expect(page).not.toContain("activeHealthTab.value === 'allergy'")
     // 体重：打开输入块 + 光标进输入框
     expect(page).toContain('weightSectionRef.value?.focusInput?.()')
     // 不再有"先切标签再执行"那一步
@@ -543,9 +548,8 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('uni.showActionSheet({')
     expect(page).toContain("['上传图片，AI 识别', '手动填写']")
     expect(page).toContain("['拍疫苗本，AI 识别', '手动加一条']")
-    // 过敏不再弹面板：添加就在最上面那张常开的卡里，底部按钮改成带路去排查计划
+    // 过敏已不在这个页面
     expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
-    expect(page).toContain("scrollPageToSelector('#allergy-trial')")
     // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"
     expect(page).toContain('recordsSectionRef.value?.addRecord?.()')
     expect(page).toContain('vaccineSectionRef.value?.addRecord?.()')
@@ -563,9 +567,8 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(records).not.toContain('手动填写一条')
     // 疫苗的新增块仍由「新增记录」里的选择打开
     expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
-    // **过敏是例外**：那张「添加过敏原」卡常开（2026-10-04）——
-    // 它默认收起时，家长打开过敏标签看到的是一片空白（老板："看不懂该如何添加过敏原"）
-    expect(page).toContain(':show-add-entry="true"')
+    // 过敏已移出本页（搬去定制食谱），这里不该再出现它的入口
+    expect(page).not.toContain(':show-add-entry="true"')
   })
 })
 
@@ -596,11 +599,14 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     expect(page).toContain('resetAddEntryFlags()')
   })
 
-  it('过敏那张卡常开：家长一进过敏标签就能看见怎么加（2026-10-04）', () => {
+  it('过敏已移出健康管理（2026-10-04）', () => {
     const page = readPage()
 
-    expect(page).toContain(':show-add-entry="true"')
     expect(page).not.toContain('allergyAddEntryVisible')
+    expect(page).not.toContain('AllergyQuickAddSection')
+    expect(page).not.toContain('AllergyTrialSection')
+    expect(page).not.toContain('AllergyReportSection')
+    expect(page).not.toContain('AllergyConclusionSection')
   })
 
   it('新增块关闭时不渲染空卡片（老板截图里的白框）', () => {
@@ -608,15 +614,15 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
       'utf-8',
     )
-    const allergy = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
       'utf-8',
     )
 
     // 体重：内嵌 + 新增块关闭 → 整张卡片不渲染（否则留下一个空的白卡片）
     expect(weight).toContain('v-if="!embedded || showAddEntry" class="health-card weight-record-card"')
-    // 过敏：没有待确认候选时也不留空壳
-    expect(allergy).toContain('v-if="showAddEntry || candidates.length > 0" class="quick-add"')
+    // 过敏扫描块：没有待确认候选时不显示候选区（只留入口本身）
+    expect(scan).toContain('v-if="candidates.length > 0" class="allergy-scan__candidates"')
   })
 
   it('记录板块自身的「新增记录」按钮已下线（只有引导能新建）', () => {
@@ -634,13 +640,9 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     expect(section).toContain('flushAutoSaves')
   })
 
-  it('疫苗/过敏/体重三个板块的新增部分都挂在 showAddEntry 上', () => {
+  it('疫苗/体重两个板块的新增部分都挂在 showAddEntry 上（过敏已移出本页）', () => {
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
-      'utf-8',
-    )
-    const allergy = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/AllergyQuickAddSection.vue'),
       'utf-8',
     )
     const weight = readFileSync(
@@ -651,7 +653,6 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     // 自带的「拍疫苗本」触发行常隐（AI 走底部「新增记录」），但 showAddEntry 仍管着它
     expect(vaccine).toContain(':hide-trigger="!showAddEntry || hideScanTrigger"')
     expect(vaccine).toContain('v-if="showAddEntry"\n      class="health-section__action"')
-    expect(allergy).toContain('<template v-if="showAddEntry">')
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
   })
 })

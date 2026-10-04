@@ -79,7 +79,6 @@ describe('自定义组件的 wxss 选择器限制', () => {
       'HealthRecordsSection',
       'VaccineManagementSection',
       'WeightManagementSection',
-      'AllergyQuickAddSection',
       'StickyActionBar',
     ]
 

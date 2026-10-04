@@ -25,32 +25,83 @@ describe('疫苗管理', () => {
     expect(source).toContain('dogApi.healthRecords.vaccine.delete')
   })
 
-  it('五项信息齐全：疫苗名 / 接种日期 / 下次到期 / 状态 / 备注', () => {
+  it('四项信息齐全：疫苗名 / 接种日期 / 下次接种 / 备注', () => {
     const source = readComponent()
 
-    for (const field of ['vaccineName', 'vaccinationDate', 'nextDueDate', 'status', 'notes']) {
+    for (const field of ['vaccineName', 'vaccinationDate', 'nextDueDate', 'notes']) {
       expect(source).toContain(field)
     }
-
-    expect(source).toContain("label: '已接种'")
-    expect(source).toContain("label: '已预约'")
   })
 
-  it('「已逾期」不让顾客自己选（2026-10-04）', () => {
+  it('「状态」不再让顾客选（2026-10-04 老板提问后改）', () => {
     const source = readComponent()
 
-    // 逾期是"今天 vs 到期日"算出来的事实，不是顾客的属性；而且跟
-    // "没有记录就不说已过期"的规则冲突。选择器里只留两个可选项。
-    const options = source.slice(
-      source.indexOf('const STATUS_OPTIONS'),
-      source.indexOf(']', source.indexOf('const STATUS_OPTIONS')),
-    )
-    expect(options).not.toContain('已逾期')
+    // 老板："用户如果手动记录了疫苗信息的话，就意味着这一针已经打了呀，
+    // 为什么还会让用户选择接种状态呢？" —— 对。一条接种记录记的就是
+    // 已经发生的事，没有第二种可能。
+    // 另外查过后端：**没有任何逻辑读这个字段**，它此前纯粹是个显示标签。
+    expect(source).not.toContain('const STATUS_OPTIONS')
+    expect(source).not.toContain('statusPickList')
+    expect(source).not.toContain("mode=\"selector\"")
 
-    // 但老记录存着 OVERDUE 的，显示名和取值都要留着 —— 不能悄悄改成"已接种"
+    // 但老记录存着别的值时，卡片上要照旧显示出来，不能变空白
     expect(source).toContain('const STATUS_LABELS')
     expect(source).toContain("OVERDUE: '已逾期'")
-    expect(source).toContain('function statusPickList')
+    expect(source).toContain("SCHEDULED: '已预约'")
+    expect(source).toContain('function statusLabel')
+  })
+
+  it('删除按钮在卡片脸上，不用先展开（像就诊记录一样）', () => {
+    const source = readComponent()
+
+    // 老板："为什么不能像就诊记录一样，提供一个删除按钮和删除弹窗提醒呢？"
+    // 弹窗一直都有（删除疫苗记录？/ 删除 / 保留），只是入口藏在展开后的表单最底下。
+    expect(source).toContain('vaccine-card__header-actions')
+    expect(source).toContain('@tap.stop="removeRecord(record, index)"')
+
+    // 删除必须在头部那一块里，而不是展开区里
+    const headerAt = source.indexOf('vaccine-card__header-actions')
+    const bodyAt = source.indexOf('vaccine-card__body"')
+    expect(headerAt).toBeGreaterThan(-1)
+    expect(bodyAt).toBeGreaterThan(headerAt)
+    const headerBlock = source.slice(source.lastIndexOf('<view class="vaccine-card__header"', headerAt), bodyAt)
+    expect(headerBlock).toContain('vaccine-card__delete')
+  })
+
+  it('自动保存不收起卡片、不弹 toast（2026-10-04）', () => {
+    const source = readComponent()
+
+    // 老板："为什么在我选择了疫苗名称之后，它就会提醒已保存，
+    // 并帮我收起了疫苗记录呢？"
+    // 新增时接种日期默认今天，所以一点疫苗名标签两个必填就齐了 →
+    // 立刻自动保存 → 卡片当场收起，后面想补字段都没得填。
+    expect(source).not.toContain("uni.showToast({ title: '已保存', icon: 'success' })")
+
+    // 存完不能无条件收起；要按 id 把展开状态跟回同一条
+    // （loadRecords 会按接种日期重排，新增的那条会从末尾挪到前面）
+    expect(source).toContain('const relocated = records.value.findIndex((item) => item.id === newId)')
+    expect(source).toContain('expandedIndex.value = relocated')
+    expect(source).toContain('function markSaved(index: number)')
+  })
+
+  it('板块内不再有「新增疫苗记录」按钮（底部那个已经在做同一件事）', () => {
+    const source = readComponent()
+
+    // 老板："在记录板块中有一个新增疫苗记录的按钮，在最下方还有一个新增记录的
+    // 按钮呢？不是重复了吗？"
+    expect(source).not.toContain('新增疫苗记录')
+    // addRecord 仍由底部按钮通过 ref 调起
+    expect(source).toContain('function addRecord()')
+  })
+
+  it('空态只说一次「档案里还没有接种记录」', () => {
+    const source = readComponent()
+
+    // 老板："为什么会提醒了一次，没有接种记录。在下方又进行了一次
+    // 没有疫苗记录的提醒呢。" —— 计划板块那张卡和这里的空态说的是同一件事。
+    // 现在计划板块零记录时整块不渲染，这句话只在这里说。
+    expect(source).toContain('档案里还没有接种记录')
+    expect(source).not.toContain('还没有疫苗记录')
   })
 
   it('常见疫苗名一点即选，不用顾客手打', () => {

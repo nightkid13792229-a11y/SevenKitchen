@@ -565,8 +565,10 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     const page = readPage()
 
     expect(records).not.toContain('手动填写一条')
-    // 疫苗的新增块仍由「新增记录」里的选择打开
-    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
+    // 2026-10-04：疫苗板块内那个新增按钮也下线了 —— 老板提问
+    // "在记录板块中有一个新增按钮，在最下方还有一个新增记录的按钮呢？
+    // 不是重复了吗？"。现在点底部「新增记录」直接调起板块的 addRecord()。
+    expect(page).not.toContain('show-add-entry="vaccineAddEntryVisible"')
     // 过敏已移出本页（搬去定制食谱），这里不该再出现它的入口
     expect(page).not.toContain(':show-add-entry="true"')
   })
@@ -588,12 +590,13 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-  it('疫苗 / 体重的新增块默认关闭，由「新增记录」里的选择打开', () => {
+  it('体重的新增块默认关闭，由「新增记录」里的选择打开', () => {
     const page = readPage()
 
-    expect(page).toContain('const vaccineAddEntryVisible = ref(false)')
+    // 疫苗板块的开关已删除（2026-10-04，板块内按钮下线）；
+    // 体重还留着 —— 它的输入块由页面自己持有，需要这个开关。
+    expect(page).not.toContain('vaccineAddEntryVisible')
     expect(page).toContain('const weightAddEntryVisible = ref(false)')
-    expect(page).toContain(':show-add-entry="vaccineAddEntryVisible"')
     expect(page).toContain(':show-add-entry="weightAddEntryVisible"')
     // 换标签就复位，避免开关残留
     expect(page).toContain('resetAddEntryFlags()')
@@ -640,7 +643,7 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     expect(section).toContain('flushAutoSaves')
   })
 
-  it('疫苗/体重两个板块的新增部分都挂在 showAddEntry 上（过敏已移出本页）', () => {
+  it('体重板块的新增部分仍挂在 showAddEntry 上（疫苗与过敏都已不在）', () => {
     const vaccine = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
@@ -650,9 +653,12 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-    // 自带的「拍疫苗本」触发行常隐（AI 走底部「新增记录」），但 showAddEntry 仍管着它
-    expect(vaccine).toContain(':hide-trigger="!showAddEntry || hideScanTrigger"')
-    expect(vaccine).toContain('v-if="showAddEntry"\n      class="health-section__action"')
+    // 疫苗板块：板块内的新增按钮已下线（老板说重复），
+    // 「拍疫苗本」的触发行本来就常隐（AI 走底部「新增记录」）。
+    expect(vaccine).not.toContain('health-section__action')
+    // 「拍疫苗本」触发行仍常隐（AI 走底部「新增记录」）
+    expect(vaccine).toContain('hideScanTrigger?: boolean')
+    // 体重板块不变：它的输入块仍由这个开关控制
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
   })
 })

@@ -142,7 +142,6 @@
             ref="vaccineSectionRef"
             external-save
             embedded
-            :show-add-entry="vaccineAddEntryVisible"
             hide-scan-trigger
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
@@ -1027,11 +1026,15 @@ const hasUnsavedSectionDraft = ref(false)
  *   · 体重                       → 没有 AI 识别这回事，直接打开输入块落光标
  * 所以这些开关只在"选了手动填写"之后才打开 —— 标签页本身仍是"看结果 + 改已有"。
  */
-const vaccineAddEntryVisible = ref(false)
+// 疫苗板块那个"新增开关"已删除（2026-10-04）。
+// 它原来的唯一作用，是让疫苗板块内的新增按钮在顾客选完"手动加一条"之后出现。
+// 那个按钮已经下线了 —— 老板提问："在记录板块中有一个新增按钮，在最下方
+// 还有一个新增记录的按钮呢？不是重复了吗？" 是重复。现在点底部「新增记录」
+// 直接调起板块的 addRecord()，不需要中间开关。
+// 体重板块还留着这个开关（它的输入块由页面自己持有）。
 const weightAddEntryVisible = ref(false)
 
 function resetAddEntryFlags() {
-  vaccineAddEntryVisible.value = false
   weightAddEntryVisible.value = false
 }
 
@@ -1069,7 +1072,8 @@ function onAddRecordTap() {
       }
 
       if (activeHealthTab.value === 'vaccine') {
-        vaccineAddEntryVisible.value = true
+        // 不再打开板块内的新增按钮（那个按钮已下线）——
+        // 直接调起拍照识别或手动加一条。
         if (tapIndex === 0) {
           nextTick(() => vaccineSectionRef.value?.startScan?.())
         } else {

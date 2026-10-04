@@ -116,14 +116,16 @@ describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧�
     )
   }
 
-  it('先说明"档案里还没有接种记录"，再谈逾期', () => {
+  it('零记录时这一块整个不渲染，把话让给记录板块的空态去说', () => {
     const section = readSection()
 
     // 实测：8 个月、没记过疫苗的狗，页面直接顶着 5 个「已逾期」——
     // 家长明明打过、只是没记，会以为系统算错了
     expect(section).toContain('noRecordAtAll')
-    expect(section).toContain('档案里还没有接种记录')
-    expect(section).toContain('拍一下疫苗本')
+    // 2026-10-04 老板第二次提问：计划板块和记录板块的空态说了同一件事。
+    // 现在这句话只在记录板块说（那里的空态文案是"档案里还没有接种记录"）。
+    expect(section).not.toContain('档案里还没有接种记录')
+    expect(section).toContain('v-if="!noRecordAtAll"')
   })
 
   it('判定条件来自后端的 summary.done 与 matchedRecordId，不自己猜', () => {
@@ -159,26 +161,23 @@ describe('疫苗计划 · 零记录时不显示计划（2026-10-04 老板定）'
     )
   }
 
-  it('零记录时整块藏掉"下一步 / 不一致提醒 / 接种计划"，只留说明卡', () => {
+  it('零记录时整块藏掉"下一步 / 不一致提醒 / 接种计划"', () => {
     const section = readSection()
 
-    // 说明卡是 v-if="noRecordAtAll"，计划整块在 v-else 里
-    expect(section).toContain('v-if="noRecordAtAll"')
-    expect(section).toContain('<template v-else>')
-    // 下一步必须在 v-else 之后（也就是被藏起来的那一支里）
-    const elseAt = section.indexOf('<template v-else>')
+    // 计划整块挂在 v-if="!noRecordAtAll" 里
+    const guardAt = section.indexOf('<template v-if="!noRecordAtAll">')
     const nextStepAt = section.indexOf('① 下一针')
-    expect(elseAt).toBeGreaterThan(-1)
-    expect(nextStepAt).toBeGreaterThan(elseAt)
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(nextStepAt).toBeGreaterThan(guardAt)
   })
 
-  it('说明卡不再承诺"下面是……进度"（下面已经没有东西了）', () => {
+  it('文案里不再出现任何"零记录专属"的说明卡残留', () => {
     const section = readSection()
 
+    // 前一轮那张卡已经把话说完就删了（跟记录板块空态重复），
+    // 连样式一起清掉，免得后人以为还有这个 UI
+    expect(section).not.toContain('plan-empty-note')
     expect(section).not.toContain('下面是按免疫程序推算的进度')
-    expect(section).not.toContain('已经打过的那几针不会再提示')
-    // 改成一句话 + 指向下面的录入区
-    expect(section).toContain('这里就会显示下一针什么时候打')
   })
 
   it('措辞软硬用 noEvidence，显不显示计划用 noRecordAtAll —— 两个概念分开', () => {

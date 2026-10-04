@@ -32,6 +32,12 @@ export interface CustomRecipeDogProfile {
    */
   allergyFoods?: string | null
   allergyRecords?: CustomRecipeDogAllergyRecord[]
+  /**
+   * 档案里的疾病史文本。
+   * 与订单上的 `medicalConditions` **不是一回事**：那份是顾客下单当时填的，
+   * 顾客之后在健康档案里改过，档案这份才是最新的（2026-10-04 后端补取）。
+   */
+  medicalHistory?: string | null
 }
 
 export interface CustomRecipeAttachment {

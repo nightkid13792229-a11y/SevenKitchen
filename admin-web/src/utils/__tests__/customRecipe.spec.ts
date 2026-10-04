@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDogProfileAllergens,
   compareDogProfileAllergies,
+  compareDogProfileMedicalConditions,
   diffCalendarDays,
   formatCalendarDate,
   getAllergyCertaintyTagType,
@@ -170,5 +171,50 @@ describe('预计交付倒计时与超期', () => {
     expect(info.dateText).toBe('')
     expect(info.overdue).toBe(false)
     expect(info.text).toBe('')
+  })
+})
+
+/**
+ * 疾病史比对（2026-10-04 补）。
+ *
+ * 与过敏同一类风险：订单上那份是下单快照，顾客之后在健康档案里补的疾病
+ * 不会同步过来 —— 漏一条就可能照着旧信息设计。
+ */
+describe('疾病史比对（档案最新 vs 下单时填写）', () => {
+  it('档案里有、下单时没写的，要能挑出来并标记"有更新"', () => {
+    const result = compareDogProfileMedicalConditions(
+      { medicalHistory: '胰腺炎、慢性肾衰' } as any,
+      ['皮肤病'],
+    )
+
+    expect(result.profileConditions).toEqual(['胰腺炎', '慢性肾衰'])
+    expect(result.added).toEqual(['胰腺炎', '慢性肾衰'])
+    expect(result.removed).toEqual(['皮肤病'])
+    expect(result.changed).toBe(true)
+  })
+
+  it('两份内容一致（含分隔符与空格差异）时不误报', () => {
+    const result = compareDogProfileMedicalConditions(
+      { medicalHistory: '胰腺炎， 慢性肾衰' } as any,
+      ['胰腺炎', '慢性肾衰'],
+    )
+
+    expect(result.changed).toBe(false)
+  })
+
+  it('档案里没有疾病史时不报错，也不谎报有更新', () => {
+    const result = compareDogProfileMedicalConditions({} as any, ['胰腺炎'])
+
+    expect(result.profileConditions).toEqual([])
+    expect(result.changed).toBe(true) // 只在"下单写了、档案没有"这一侧有差异
+    expect(result.removed).toEqual(['胰腺炎'])
+  })
+
+  it('两边都空时不算"有更新"', () => {
+    const result = compareDogProfileMedicalConditions(null, [])
+
+    expect(result.changed).toBe(false)
+    expect(result.added).toEqual([])
+    expect(result.removed).toEqual([])
   })
 })

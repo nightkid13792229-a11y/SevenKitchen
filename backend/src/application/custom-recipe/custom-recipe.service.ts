@@ -314,6 +314,14 @@ export class CustomRecipeService implements ICustomRecipeRepository {
               select: { allergen: true, certainty: true, source: true },
               orderBy: { createdAt: 'asc' },
             },
+            /**
+             * 疾病史（2026-10-04 补）。
+             *
+             * 与过敏同理：订单上那份 `medicalConditions` 是顾客**下单当时**填的，
+             * 顾客之后在健康档案里改了，后台订单页仍显示旧文本 ——
+             * 员工可能按过期信息设计食谱。字段本来就在狗档案上，只是没取出来。
+             */
+            medicalHistory: true,
           },
         },
         customer: {

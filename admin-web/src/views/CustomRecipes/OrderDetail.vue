@@ -192,13 +192,13 @@
         <!-- 下单后顾客在健康档案里补了过敏，订单上的快照不会跟着变；
              不提示的话营养师会照着旧信息设计 -->
         <el-alert
-          v-if="allergyComparison.changed"
+          v-if="allergyComparison.changed || medicalComparison.changed"
           type="warning"
           :closable="false"
           show-icon
           class="profile-updated-alert"
           title="下单后档案有更新，请按最新信息设计"
-          :description="allergyUpdateDetail"
+          :description="profileUpdateDetail"
         />
 
         <el-descriptions :column="1" border>
@@ -231,6 +231,21 @@
             </el-tag>
             <span v-if="!order.allergies || order.allergies.length === 0" class="empty-text">无</span>
           </el-descriptions-item>
+          <el-descriptions-item label="疾病史（档案最新）">
+            <el-tag
+              v-for="(condition, index) in medicalComparison.profileConditions"
+              :key="`profile-medical-${index}`"
+              type="warning"
+              size="small"
+              style="margin-right: 5px;"
+            >
+              {{ condition }}
+            </el-tag>
+            <span
+              v-if="medicalComparison.profileConditions.length === 0"
+              class="empty-text"
+            >档案里没有疾病史记录</span>
+          </el-descriptions-item>
           <el-descriptions-item label="疾病史（下单时填写）">
             <el-tag
               v-for="(condition, index) in order.medicalConditions"
@@ -248,7 +263,6 @@
           「档案最新」来自顾客的健康档案与设计备注，顾客之后改了这里会跟着变；
           「下单时填写」是下单当天的快照，不会变。两者不一致时以上面提示为准。
         </p>
-
         <div v-if="order.additionalNotes" class="notes-section">
           <label>补充说明</label>
           <p>{{ order.additionalNotes }}</p>
@@ -620,6 +634,7 @@ import {
 } from '@/constants/customRecipeOrder';
 import {
   compareDogProfileAllergies,
+  compareDogProfileMedicalConditions,
   getAllergyCertaintyTagType,
   getAllergyCertaintyText,
   getEstimatedDeliveryInfo,
@@ -690,11 +705,39 @@ const allergyComparison = computed(() =>
   compareDogProfileAllergies(order.value?.dog, order.value?.allergies),
 );
 
-const allergyUpdateDetail = computed(() => {
-  const { added, removed } = allergyComparison.value;
+/**
+ * 疾病史同理（2026-10-04 补）。
+ *
+ * 订单上的 `medicalConditions` 是下单当天的快照；顾客之后在健康档案里
+ * 补了疾病（例如确诊胰腺炎），快照不会跟着变 —— 不提示的话员工会照旧信息设计。
+ */
+const medicalComparison = computed(() =>
+  compareDogProfileMedicalConditions(
+    order.value?.dog,
+    order.value?.medicalConditions,
+  ),
+);
+
+/** 档案与下单快照有出入时，把"差在哪一条"直接写出来，别让员工自己比对 */
+const profileUpdateDetail = computed(() => {
   const parts: string[] = [];
-  if (added.length > 0) parts.push(`档案里有、下单时没写：${added.join('、')}`);
-  if (removed.length > 0) parts.push(`下单时写了、档案里没有：${removed.join('、')}`);
+
+  const describe = (label: string, added: string[], removed: string[]) => {
+    if (added.length > 0) {
+      parts.push(`${label}——档案里有、下单时没写：${added.join('、')}`);
+    }
+    if (removed.length > 0) {
+      parts.push(`${label}——下单时写了、档案里没有：${removed.join('、')}`);
+    }
+  };
+
+  describe('过敏', allergyComparison.value.added, allergyComparison.value.removed);
+  describe(
+    '疾病史',
+    medicalComparison.value.added,
+    medicalComparison.value.removed,
+  );
+
   return parts.join('；');
 });
 

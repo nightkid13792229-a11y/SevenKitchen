@@ -142,6 +142,59 @@ export function compareDogProfileAllergies(
   }
 }
 
+// ==================== 疾病史：档案最新 vs 下单时填写 ====================
+
+export interface MedicalComparison {
+  /** 档案最新（狗档案上的疾病史文本） */
+  profileConditions: string[]
+  /** 下单当时顾客手填的那份 */
+  orderConditions: string[]
+  /** 档案里有、下单时没写的（最需要看的一类） */
+  added: string[]
+  /** 下单时写了、档案里没有的 */
+  removed: string[]
+  /** 两份内容是否一致 */
+  changed: boolean
+}
+
+/**
+ * 比对「下单时填写」与「档案最新」的疾病史。
+ *
+ * 2026-10-04 补：此前订单页只有下单当时手填的那份，顾客之后在健康档案里
+ * 补了疾病（例如确诊胰腺炎），订单上的快照不会跟着变，
+ * 员工照旧信息设计就可能给出不合适的配方。
+ *
+ * 疾病史是狗档案上的自由文本，手填习惯与过敏那份一致，
+ * 所以直接复用 parseAllergyText 的切分规则与归一化。
+ */
+export function compareDogProfileMedicalConditions(
+  dog: CustomRecipeDogProfile | null | undefined,
+  orderConditions?: string[] | null,
+): MedicalComparison {
+  const profileConditions = parseAllergyText(dog?.medicalHistory)
+  const orderConditionList = (orderConditions || [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+
+  const profileKeys = new Set(profileConditions.map(normalizeAllergen))
+  const orderKeys = new Set(orderConditionList.map(normalizeAllergen))
+
+  const added = profileConditions.filter(
+    (item) => !orderKeys.has(normalizeAllergen(item)),
+  )
+  const removed = orderConditionList.filter(
+    (item) => !profileKeys.has(normalizeAllergen(item)),
+  )
+
+  return {
+    profileConditions,
+    orderConditions: orderConditionList,
+    added,
+    removed,
+    changed: added.length > 0 || removed.length > 0,
+  }
+}
+
 // ==================== 预计交付：倒计时与超期 ====================
 
 export interface DeliveryCountdown {

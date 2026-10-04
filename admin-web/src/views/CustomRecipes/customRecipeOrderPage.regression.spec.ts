@@ -95,8 +95,17 @@ describe('档案最新信息与来源标注（第 4 条）', () => {
 
   it('两份不一致时提示"下单后档案有更新，请按最新信息设计"', () => {
     expect(orderDetail).toContain('compareDogProfileAllergies(order.value?.dog, order.value?.allergies)')
-    expect(orderDetail).toContain('v-if="allergyComparison.changed"')
+    // 2026-10-04：疾病史也纳入同一条提示，任一不一致就提醒
+    expect(orderDetail).toContain('v-if="allergyComparison.changed || medicalComparison.changed"')
     expect(orderDetail).toContain('title="下单后档案有更新，请按最新信息设计"')
+    // 提示里要写清差在哪一条，不能只给一个笼统警告
+    expect(orderDetail).toContain('profileUpdateDetail')
+  })
+
+  it('疾病史同样分「档案最新」与「下单时填写」两份（2026-10-04 补）', () => {
+    expect(orderDetail).toContain('疾病史（档案最新）')
+    expect(orderDetail).toContain('compareDogProfileMedicalConditions(')
+    expect(orderDetail).toContain('medicalComparison.profileConditions')
   })
 })
 

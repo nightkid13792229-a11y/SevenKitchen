@@ -30,6 +30,12 @@
           建议时间：{{ plan.nextStep.windowStart }} ~ {{ plan.nextStep.windowEnd }}
         </text>
         <text class="next-step__reminder">{{ plan.nextStep.reminder }}</text>
+        <text
+          v-if="(plan.nextStep.commonProducts || []).length > 0"
+          class="next-step__products"
+        >
+          常见的有：{{ (plan.nextStep.commonProducts || []).join('、') }}
+        </text>
         <text class="next-step__basis">依据：{{ plan.nextStep.basis }}</text>
 
         <view class="decisions">
@@ -96,6 +102,12 @@
             <text v-if="step.matchedRecordDate" class="step__matched">
               已记录：{{ step.matchedRecordDate }}
             </text>
+            <text
+              v-if="(step.commonProducts || []).length > 0"
+              class="step__products"
+            >
+              常见的有：{{ (step.commonProducts || []).join('、') }}
+            </text>
             <text class="step__basis">依据：{{ step.basis }}</text>
 
             <view class="decisions decisions--compact">
@@ -151,6 +163,16 @@ interface PlanStep {
   matchedRecordDate: string | null
   basis: string
   reminder: string
+  /**
+   * 这一步常见的产品（2026-10-04 兽医审核通过）。
+   *
+   * ⚠️ 只列进口苗（老板审核意见第 5 条："所有国产疫苗都不推荐"），
+   *    每个种类最多 3 个（第 6 条）。
+   * ⚠️ 措辞是「常见的有」，**不是「建议打」** ——
+   *    各医院进的货不一样，推荐了顾客也未必买得到；
+   *    而且"打哪个商品"已经挨着诊疗，不是我们该拍板的。
+   */
+  commonProducts?: string[]
 }
 
 interface PlanConflict {
@@ -317,6 +339,7 @@ async function load() {
     }
 
     plan.value = {
+      // 后端已经把 commonProducts 放在每一步里了，整条透传
       nextStep: res.data.nextStep || null,
       steps: Array.isArray(res.data.steps) ? res.data.steps : [],
       conflicts: Array.isArray(res.data.conflicts) ? res.data.conflicts : [],
@@ -434,6 +457,23 @@ watch(() => props.dogId, load, { immediate: true })
   font-size: 24rpx;
   line-height: 1.6;
   color: #6b6653;
+}
+
+/* 常见产品（2026-10-04）：比"依据"显眼一点，比正文轻一点 */
+.next-step__products {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #4a5a4a;
+}
+
+.step__products {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #4a5a4a;
 }
 
 .next-step__basis {

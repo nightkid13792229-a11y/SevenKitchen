@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  ALL_VACCINE_KINDS,
   buildImmunizationSchedule,
   buildVaccinePlan,
   isVaccinePlanCustomerEnabled,
@@ -101,7 +102,11 @@ export class VaccinePlanService {
    */
   async getSchedule(customerId: string, dogId: string) {
     const dog = await this.requireOwnedDog(customerId, dogId);
-    const schedule = buildImmunizationSchedule(dog.birthday);
+    // 营养师/管理端要看**整套**程序表（含非核心苗），
+    // 顾客侧则只排 core + rabies + "这只狗已经在打的"非核心苗。
+    const schedule = buildImmunizationSchedule(dog.birthday, {
+      kinds: ALL_VACCINE_KINDS,
+    });
 
     return {
       dogId,

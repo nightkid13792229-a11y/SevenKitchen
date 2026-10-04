@@ -1,4 +1,5 @@
 import {
+  ALL_VACCINE_KINDS,
   CORE_ADULT_BOOSTER,
   addWeeks,
   CORE_PUPPY_SERIES,
@@ -6,6 +7,7 @@ import {
   buildImmunizationSchedule,
   buildVaccinePlan,
   classifyVaccineName,
+  classifyVaccineKinds,
   detectConflicts,
   isVaccinePlanCustomerEnabled,
   parseDateText,
@@ -455,6 +457,192 @@ describe('疫苗计划', () => {
         today: TODAY,
       })
       expect(plan.steps).toEqual([])
+    })
+  })
+
+  /**
+   * 按疫苗种类单独设置（2026-10-04 兽医审核意见第 3 条）。
+   *
+   * 审核原话：
+   *   "免疫程序表的每 3 年加强没有问题，但是个别疫苗它可能需要每年接种一次，
+   *    比如钩端螺旋体。这个我们可能需要分疫苗种类来单独设置。"
+   *
+   * 顺带修掉一个错：以前是"不是狂犬就算核心苗"，于是一针**单独的钩端螺旋体**
+   * 会被算成完成了一针核心苗，计划会少算一针。
+   */
+  describe('按疫苗种类单独设置间隔（钩端螺旋体：每年）', () => {
+    it('一条记录可以同时算好几类 —— 卫佳捌既是核心苗又含钩端', () => {
+      expect(classifyVaccineKinds('卫佳捌').sort()).toEqual(['core', 'lepto']);
+      expect(classifyVaccineKinds('狂犬疫苗')).toEqual(['rabies']);
+      expect(classifyVaccineKinds('六联')).toEqual(['core']);
+    })
+
+    it('单独的钩端螺旋体**不再**被算成核心苗', () => {
+      // 以前 classifyVaccineName 是"不是狂犬就算 core"，
+      // 一针单苗会被当成完成了一针核心疫苗。
+      expect(classifyVaccineKinds('钩端螺旋体')).toEqual(['lepto']);
+      expect(classifyVaccineKinds('宠必威乐必妥')).toEqual(['lepto']);
+    })
+
+    it('没打过钩端的狗，计划里不出现钩端 —— 非核心苗不默认推给每一只狗', () => {
+      // WSAVA 与已审核的 immune-001 都写着：非核心苗要按生活方式逐只评估，
+      // 不是默认全打。所以没记录就不出现，要不要开始是它和兽医的事。
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(80),
+        records: [],
+        today: TODAY,
+      })
+
+      expect(plan.steps.some((step) => step.kind === 'lepto')).toBe(false)
+    })
+
+    it('已经在打钩端的狗，按**每年**提醒（不是核心苗那套三年）', () => {
+      const birthday = dog(80)
+      const firstLepto = addWeeks(new Date(birthday + 'T00:00:00'), 9)
+        .toISOString()
+        .slice(0, 10)
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [record('r1', '钩端螺旋体', firstLepto)],
+        today: TODAY,
+      })
+
+      const lepto = plan.steps.filter((step) => step.kind === 'lepto')
+      expect(lepto.length).toBeGreaterThan(0)
+
+      // 每年一次 → 相邻两步的间隔约一年；核心苗那套是三年，这里必须区分开
+      const repeats = lepto.filter((step) => step.key.includes('-repeat-'))
+      expect(repeats.length).toBeGreaterThan(1)
+      const firstRepeat = new Date(`${repeats[0].windowStart}T00:00:00`)
+      const secondRepeat = new Date(`${repeats[1].windowStart}T00:00:00`)
+      const yearsApart =
+        (secondRepeat.getTime() - firstRepeat.getTime()) / (365 * 86400000)
+      expect(yearsApart).toBeGreaterThan(0.9)
+      expect(yearsApart).toBeLessThan(1.1)
+    })
+
+    it('每一类非核心苗的依据都要写清是哪支产品的说明书', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(80),
+        records: [record('r1', '钩端螺旋体', '2026-06-01')],
+        today: TODAY,
+      })
+
+      for (const step of plan.steps.filter((item) => item.kind === 'lepto')) {
+        // 顾客和复鞫的人都要能查到这句话是从哪来的
+        expect(step.basis).toContain('说明书')
+      }
+    })
+
+    it('整套程序表（营养师看的）包含全部类别', () => {
+      const all = buildImmunizationSchedule(new Date(`${dog(80)}T00:00:00`), {
+        kinds: ALL_VACCINE_KINDS,
+      })
+      const kinds = new Set(all.map((item) => item.kind))
+      expect(kinds.has('core')).toBe(true)
+      expect(kinds.has('rabies')).toBe(true)
+      expect(kinds.has('lepto')).toBe(true)
+    })
+
+    it('默认只排核心苗与狂犬（非核心苗要按记录加）', () => {
+      const standard = buildImmunizationSchedule(new Date(`${dog(80)}T00:00:00`))
+      const kinds = new Set(standard.map((item) => item.kind))
+      expect(kinds.has('lepto')).toBe(false)
+    })
+  })
+
+  /**
+   * 提醒里推荐具体产品（2026-10-04 兽医审核意见第 5、6 条）。
+   *
+   *   ⑤ "我们不推荐国产疫苗，所有国产疫苗都不推荐。"
+   *   ⑥ "提醒里面写最多 3 个产品，每个疫苗种类最多 3 个，可以，没问题。"
+   */
+  describe('常见产品（只列进口苗，每类最多 3 个）', () => {
+    it('每一步都给出常见产品，且不超过 3 个', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      })
+
+      expect(plan.steps.length).toBeGreaterThan(0)
+      for (const step of plan.steps) {
+        expect(Array.isArray(step.commonProducts)).toBe(true)
+        expect(step.commonProducts.length).toBeLessThanOrEqual(3)
+      }
+    })
+
+    it('核心里排在最前的是批签发批数最多的那几支', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      })
+
+      const core = plan.steps.find((step) => step.kind === 'core')
+      expect(core).toBeDefined()
+      // 批签发：卫佳捌 41 批 > 宠必威优免康 32 批 > 卫佳伍 14 批
+      expect(core!.commonProducts[0]).toBe('卫佳捌')
+    })
+
+    it('🔴 一个国产苗都不出现', () => {
+      // 老板审核意见第 5 条。这里是硬约束：清单里不能有国产。
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(80),
+        records: [
+          record('r1', '钩端螺旋体', '2026-06-01'),
+          record('r2', '狂犬疫苗', '2026-03-01'),
+        ],
+        today: TODAY,
+      })
+
+      const all = plan.steps.flatMap((step) => step.commonProducts).join(' ')
+      for (const domestic of [
+        '中牧', '科前', '科旺', '五星', '宠安士佳', '金宇', '犬康',
+        '犬力康', '犬泰', '贝倍旺', '国药', '华南农大', '普莱柯', '惠中',
+        '佑本', '爱宠', '齐鲁', '瑞普', '和元', '易邦', '同泰', '正业',
+        '西诺', '怡安', '博莱得利',
+      ]) {
+        expect(all).not.toContain(domestic)
+      }
+    })
+
+    it('狂犬那一步只推狂犬苗', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      })
+
+      const rabies = plan.steps.find((step) => step.kind === 'rabies')
+      expect(rabies!.commonProducts.length).toBeGreaterThan(0)
+      // 这几支是狂犬苗；反过来核心苗不该出现在这里
+      expect(rabies!.commonProducts).toContain('宠必威锐必威')
+      expect(rabies!.commonProducts).not.toContain('卫佳伍')
+    })
+
+    it('钩端那一步推的苗必须真的含钩端（卫佳捌算，卫佳伍不算）', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(80),
+        records: [record('r1', '钩端螺旋体', '2026-06-01')],
+        today: TODAY,
+      })
+
+      const lepto = plan.steps.find((step) => step.kind === 'lepto')
+      expect(lepto).toBeDefined()
+      expect(lepto!.commonProducts).toContain('卫佳捌')
+      expect(lepto!.commonProducts).toContain('宠必威乐必妥')
+      // 卫佳伍不含钩端，绝不能出现在钩端那一步
+      expect(lepto!.commonProducts).not.toContain('卫佳伍')
     })
   })
 

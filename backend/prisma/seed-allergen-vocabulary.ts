@@ -298,6 +298,10 @@ export const ALLERGEN_SEEDS: readonly AllergenSeed[] = [
 export const INGREDIENT_ALLERGEN_MAP: Readonly<Record<string, readonly string[]>> = {
   // ── 禽肉 ──
   '鸡胸': ['chicken', 'poultry'],
+  // 生产库里真实存在的有机 SKU（2026-10-04 上线预演时抓到）：
+  // 漏掉它，"鸡肉过敏"的狗就会吃到这份有机鸡胸 ——
+  // 而且因为名字对不上，系统一声不响。这是预演抓到的唯一一处真实漏标。
+  '鸡胸【有机】': ['chicken', 'poultry'],
   '鸡腿肉': ['chicken', 'poultry'],
   '鸡心': ['chicken', 'poultry'],
   '鸡肝': ['chicken', 'poultry'],
@@ -469,6 +473,40 @@ async function upsertAllergenTags() {
 }
 
 /**
+ * 已人工复核、确认**不需要**标过敏原的食材。
+ *
+ * 为什么要有这份清单：
+ *   上线预演时抓到生产库里有一个 `鸡胸【有机】` —— 名字对不上映射表，
+ *   于是"鸡肉过敏"的狗会吃到它，而且系统一声不响。
+ *   光靠"打印一份未标注清单让人看"是不够的：没人看就等于没有。
+ *
+ *   所以改成白名单制：**未标注的食材必须在这份清单里**，
+ *   否则脚本直接失败。新增 SKU（比如「鸭胸【有机】」）时会立刻报错，
+ *   逼人来确认一次 —— 而不是悄悄放过去。
+ *
+ * 复核口径：蔬菜、水果、菌菇、油脂、种子、香辛料、盐。
+ * 它们不是犬食物不良反应的常见致敏成分（SACN5 第 31 章列出的
+ * 常见致敏成分是牛肉/乳制品/小麦/羊肉/鸡蛋/鸡肉/大豆/鱼），
+ * 全标上会让几乎每一份配方都被判"含过敏原"。
+ */
+export const REVIEWED_NON_ALLERGEN_INGREDIENTS: readonly string[] = [
+  // 蔬菜
+  '上海青', '冬瓜', '卷心菜', '娃娃菜', '小白菜', '山药', '生菜', '白萝卜',
+  '秋葵', '紫甘蓝', '红甜椒', '羽衣甘蓝', '胡萝卜', '芋头', '芦笋', '花椰菜',
+  '芹菜', '苋菜', '茄子', '菠菜', '西兰花', '西红柿', '西芹', '西葫芦', '黄瓜',
+  // 水果
+  '木瓜', '树莓', '梨（鲜）', '苹果', '菠萝', '蓝莓', '香蕉',
+  // 菌菇
+  '白蘑菇', '羊肚菌（鲜）', '舞茸', '金针菇', '鲜香菇', '黑木耳',
+  // 油脂 / 种子
+  '亚麻籽', '亚麻籽油', '奇亚籽', '橄榄油', '火麻籽', '生葵花籽仁', '葵花籽油',
+  // 薯类
+  '土豆',
+  // 香辛料 / 调料
+  '丁香粉', '咖喱粉', '姜粉', '姜黄粉', '肉桂粉', '食用盐', '香菜',
+];
+
+/**
  * 给"映射表里没有"的食材按别名自动推荐过敏原。
  *
  * **只推荐、不写库。** 名字匹配正是这次要修掉的东西，
@@ -523,6 +561,8 @@ async function linkIngredients() {
   let linked = 0;
   const unmapped: string[] = [];
   const unknownCodes = new Set<string>();
+  let unreviewedIngredients: string[] = [];
+  let unreviewed: string[] = [];
 
   for (const ingredient of ingredients) {
     const codes = INGREDIENT_ALLERGEN_MAP[ingredient.name];
@@ -602,9 +642,31 @@ async function linkIngredients() {
     if (plain.length > 0) {
       log(`  其余（名字上看不出含常见过敏原）：${plain.join('、')}`);
     }
+
+    // ── 白名单把关（2026-10-04 上线预演后加）────────────────
+    //
+    // 未标注的食材**必须**在已复核清单里。不在就说明原料库进了新东西，
+    // 而它可能是「鸡胸【有机】」这种漏标 —— 光打印一份清单没人看
+    // 就等于没有，所以这里直接让脚本失败，逼人确认一次。
+    const reviewed = new Set(REVIEWED_NON_ALLERGEN_INGREDIENTS);
+    const unreviewed = unmapped.filter((name) => !reviewed.has(name));
+
+    if (unreviewed.length > 0) {
+      log('');
+      log('❌ 以下食材既没有标过敏原、也不在「已人工复核」清单里：');
+      log(`   ${unreviewed.join('、')}`);
+      log('');
+      log('   请二选一：');
+      log('     · 它含常见过敏原（肉 / 蛋奶 / 谷物 / 豆类 / 鱼虾）→ 补进 INGREDIENT_ALLERGEN_MAP');
+      log('     · 它是蔬菜 / 水果 / 菌菇 / 油脂 / 种子 / 香辛料 → 补进 REVIEWED_NON_ALLERGEN_INGREDIENTS');
+      log('');
+      log('   ⚠️ 这一步不能省：漏标的食材对过敏犬是**无声的**——');
+      log('      名字对不上，系统不会报任何错，狗却吃到了。');
+      unreviewedIngredients = unreviewed;
+    }
   }
 
-  return { unknownCodes: unknownCodes.size };
+  return { unknownCodes: unknownCodes.size, unreviewed };
 }
 
 /**
@@ -660,11 +722,11 @@ async function main() {
   log('');
 
   await upsertAllergenTags();
-  const { unknownCodes } = await linkIngredients();
+  const { unknownCodes, unreviewed } = await linkIngredients();
   const missingQuickAdd = await verifyQuickAddTags();
 
   log('');
-  if (unknownCodes > 0 || missingQuickAdd > 0) {
+  if (unknownCodes > 0 || missingQuickAdd > 0 || unreviewed.length > 0) {
     process.exitCode = 1;
     log('存在需要修正的问题（见上），未完成。');
     return;

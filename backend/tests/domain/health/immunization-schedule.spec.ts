@@ -1,5 +1,6 @@
 import {
   CORE_ADULT_BOOSTER,
+  addWeeks,
   CORE_PUPPY_SERIES,
   RABIES_SCHEDULE,
   buildImmunizationSchedule,
@@ -364,6 +365,73 @@ describe('疫苗计划', () => {
         today: TODAY,
       });
       expect(plan.conflicts).toEqual([]);
+    })
+  })
+
+  /**
+   * 没有记录时不说"已逾期"（2026-10-04 老板定的口径）
+   *
+   * 家长明明年年带狗去打、只是没在小程序里记，打开却看到一串
+   * "已经过了建议时间，建议尽快安排" —— 第一反应是"我是不是漏打了"，
+   * 第二反应是"这系统不准"。
+   *
+   * 我们**没有证据**说他没打，就不该用"逾期"这种口气。
+   */
+  describe('没有接种记录时的文案口径', () => {
+    it('一条记录都没有时，逾期/该打的提醒不说"已过建议时间"', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(20),
+        records: [],
+        today: TODAY,
+      })
+
+      expect(plan.noRecordAtAll).toBe(true)
+
+      const actionable = plan.steps.filter(
+        (step) => step.status === 'OVERDUE' || step.status === 'DUE',
+      )
+      expect(actionable.length).toBeGreaterThan(0)
+      for (const step of actionable) {
+        expect(step.reminder).toContain('档案里还没有这一针的记录')
+        expect(step.reminder).not.toContain('已经过了建议时间')
+        expect(step.reminder).not.toContain('尽快安排')
+      }
+    })
+
+    it('有记录时该说逾期还是要说 —— 口径只对"完全没记录"生效', () => {
+      // 幼犬期打过一针（落在首免窗口内），但后面几针确实没打 ——
+      // 这时提示逾期是**准确的**，不该被软化。
+      const birthday = dog(30);
+      const firstDose = addWeeks(new Date(birthday + 'T00:00:00'), 10)
+        .toISOString()
+        .slice(0, 10);
+
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday,
+        records: [record('r1', '六联', firstDose)],
+        today: TODAY,
+      })
+
+      // 这一针被认出来了 → 我们手上是有证据的
+      expect(plan.noRecordAtAll).toBe(false)
+
+      const overdue = plan.steps.filter((step) => step.status === 'OVERDUE')
+      expect(overdue.length).toBeGreaterThan(0)
+      expect(
+        overdue.some((step) => step.reminder.includes('已经过了建议时间')),
+      ).toBe(true)
+    })
+
+    it('没有出生日期时也不炸，noRecordAtAll 按"没有记录"算', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: '',
+        records: [],
+        today: TODAY,
+      })
+      expect(plan.steps).toEqual([])
     })
   })
 })

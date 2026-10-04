@@ -190,6 +190,8 @@ const plan = ref<{
    * 文案会自己跟着变，不用再改一次前端。
    */
   reviewed?: boolean
+  /** 一条接种记录都没有（后端下发，2026-10-04） */
+  noRecordAtAll?: boolean
 }>({ nextStep: null, steps: [], conflicts: [], decisions: {} })
 
 /**
@@ -200,12 +202,26 @@ const plan = ref<{
  * 先说明"档案里还没有记录"，逾期才有上下文。
  */
 const noRecordAtAll = computed(() => {
+  // 后端已经判好了（2026-10-04），优先用它 —— 前后端两套口径迟早会不一致
+  if (typeof plan.value.noRecordAtAll === 'boolean') {
+    return plan.value.noRecordAtAll
+  }
   const done = Number(plan.value.summary?.done ?? 0)
   const hasMatched = plan.value.steps.some((step) => step.matchedRecordId)
   return done === 0 && !hasMatched
 })
 
+/**
+ * 状态标签（2026-10-04 老板定）。
+ *
+ * 一条接种记录都没有时，**不说"已逾期"** —— 我们没有任何证据说他没打，
+ * 家长明明年年带狗去打、只是没在小程序里记，看到"已逾期"会以为系统算错了。
+ * 改成"还没记录"，这是一个事实陈述，不是指责。
+ */
 function statusLabel(status: PlanStep['status']) {
+  if (noRecordAtAll.value && (status === 'OVERDUE' || status === 'DUE')) {
+    return '还没记录'
+  }
   return STATUS_LABELS[status] || status
 }
 
@@ -241,6 +257,7 @@ async function load() {
       decisions: res.data.decisions || {},
       summary: res.data.summary || {},
       reviewed: res.data.reviewed === true,
+      noRecordAtAll: res.data.noRecordAtAll === true,
     }
     loaded.value = true
   } catch (error: any) {

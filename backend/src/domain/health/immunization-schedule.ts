@@ -85,6 +85,13 @@ export interface VaccinePlanResult {
   };
   /** 顾客对每一步的决定 */
   decisions: Record<string, VaccineDecision>;
+  /**
+   * 这只狗**一条接种记录都没有**（2026-10-04）。
+   *
+   * 界面用它决定口径：没有记录时不说"已逾期"，
+   * 只说"档案里还没有这一针的记录" —— 我们没证据说他没打。
+   */
+  noRecordAtAll: boolean;
   /** 计划是否有专业审核背书 —— 未审核时顾客侧不展示 */
   reviewed: boolean;
   generatedAt: string;
@@ -347,7 +354,27 @@ function resolveStatus(
   return 'OVERDUE';
 }
 
-function buildReminder(status: VaccineStepStatus, label: string): string {
+/**
+ * 提醒文案。
+ *
+ * `noRecordAtAll` = 这只狗**一条接种记录都没有**。
+ *
+ * 这是 2026-10-04 老板定的口径：「没有记录，我们不去说已过期」。
+ * 原因很实在：家长明明每年都带狗去打，只是没在小程序里记，
+ * 打开却看到一串"已经过了建议时间，建议尽快安排"——
+ * 第一反应是"我是不是漏打了"，第二反应是"这系统不准"。
+ *
+ * 我们**没有证据**说他没打，就不该用"逾期"这种口气。
+ */
+function buildReminder(
+  status: VaccineStepStatus,
+  label: string,
+  noRecordAtAll = false,
+): string {
+  if (noRecordAtAll && (status === 'DUE' || status === 'OVERDUE')) {
+    return `${label}：档案里还没有这一针的记录`;
+  }
+
   switch (status) {
     case 'DUE':
       return `${label}：现在正是接种时间`;
@@ -500,6 +527,7 @@ export function buildVaccinePlan(
       nextStep: null,
       summary: { done: 0, due: 0, overdue: 0, upcoming: 0, skipped: 0 },
       decisions,
+      noRecordAtAll: input.records.length === 0,
       reviewed: Boolean(input.reviewed),
       generatedAt: new Date().toISOString(),
     };
@@ -515,6 +543,12 @@ export function buildVaccinePlan(
     .filter((item): item is { record: VaccineRecordLike; kind: VaccineKind; date: Date } =>
       Boolean(item.date),
     );
+
+  // 一条"已完成"的都没有 = 我们手上没有任何证据
+  const hasAnyEvidence = seeds.some((seed) =>
+    Boolean(findMatchingRecord(seed, parsed)),
+  );
+  const noRecordAtAll = !hasAnyEvidence;
 
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {
@@ -536,7 +570,7 @@ export function buildVaccinePlan(
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(status, seed.label),
+        reminder: buildReminder(status, seed.label, noRecordAtAll),
       };
     })
     // 只留下"对现在还有意义"的步骤。
@@ -593,6 +627,7 @@ export function buildVaccinePlan(
     nextStep,
     summary,
     decisions,
+    noRecordAtAll,
     reviewed: Boolean(input.reviewed),
     generatedAt: new Date().toISOString(),
   };

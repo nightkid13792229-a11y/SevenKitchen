@@ -105,6 +105,21 @@
           </view>
 
           <view class="health-panel__body">
+        <!-- 过敏「结论」区（2026-10-04，过敏重构第二期）。
+             老板确认：过敏页改成「结论 / 依据」两段式。
+
+             为什么结论要排在记录列表**上面**：
+               改造前这个页面是一堆原始记录，顾客要自己读完十几条
+               才能回答"我的狗到底不能吃什么"。而"不能吃什么"
+               才是他每次来真正要的那一个答案。 -->
+        <AllergyConclusionSection
+          v-if="activeHealthTab === 'allergy'"
+          :dog-id="dogId"
+          :records="recordsByType.allergy"
+          @changed="onAllergenSaved"
+        />
+
+
         <HealthRecordsSection
           v-if="isRecordTab"
           ref="recordsSectionRef"
@@ -139,6 +154,25 @@
             />
           </template>
         </HealthRecordsSection>
+
+        <!-- 过敏「排查计划」（2026-10-04，过敏重构第三期）。
+             老板第 2 条要求。定位是"帮你执行、帮你记录"，
+             不替兽医开方案 —— 试验必须由兽医设计与监督。 -->
+        <AllergyTrialSection
+          v-if="activeHealthTab === 'allergy'"
+          :dog-id="dogId"
+          :recorded-allergens="recordedAllergens"
+          @changed="onAllergenSaved"
+        />
+
+        <!-- 过敏「依据」区：报告原件与来源。
+             改造前顾客上传的报告**传完就丢**，再也看不到。 -->
+        <AllergyReportSection
+          v-if="activeHealthTab === 'allergy'"
+          :dog-id="dogId"
+          :reports="allergyReports"
+          @changed="onAllergenSaved"
+        />
 
         <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
         <template v-else-if="activeHealthTab === 'vaccine'">
@@ -200,6 +234,9 @@ import { computed, nextTick, reactive, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import AllergyQuickAddSection from '../../components/dog-profile/AllergyQuickAddSection.vue'
+import AllergyConclusionSection from '../../components/dog-profile/AllergyConclusionSection.vue'
+import AllergyReportSection from '../../components/dog-profile/AllergyReportSection.vue'
+import AllergyTrialSection from '../../components/dog-profile/AllergyTrialSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
 import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
@@ -449,6 +486,33 @@ async function onAllergenSaved() {
   }
 
   await loadHealthRecordList('allergy', dogId.value)
+  // 报告区也要跟着刷新：识别报告时会同时写入报告与结论，
+  // 只刷其中一个会让两边对不上（"结论有了、依据没有"）。
+  await loadAllergyReports()
+}
+
+/**
+ * 过敏检测报告（2026-10-04，过敏重构第二期）。
+ *
+ * 报告是有独立实体的：检测日期 / 方式 / 机构 / 原件 / 识别原文，
+ * 结论挂在报告下面。改造前没有这一层，顾客上传的原件传完就丢。
+ */
+const allergyReports = ref<Array<Record<string, any>>>([])
+
+async function loadAllergyReports() {
+  if (!dogId.value) {
+    allergyReports.value = []
+    return
+  }
+  try {
+    const res: any = await dogApi.allergyReports.list(dogId.value)
+    if (res?.code !== 0) return
+    const list = Array.isArray(res?.data?.reports) ? res.data.reports : []
+    allergyReports.value = list
+  } catch {
+    // 报告读不到不能挡住整个健康页 —— 结论区与记录列表仍然可用
+    allergyReports.value = []
+  }
 }
 
 // 体重管理区块需要的档案信息
@@ -858,9 +922,11 @@ async function loadHealthRecordList(type: HealthRecordType, targetDogId = dogId.
 }
 
 async function loadAllHealthRecordLists(targetDogId: string) {
-  await Promise.all(
-    HEALTH_RECORD_TYPES.map(type => loadHealthRecordList(type, targetDogId)),
-  )
+  await Promise.all([
+    ...HEALTH_RECORD_TYPES.map(type => loadHealthRecordList(type, targetDogId)),
+    // 过敏报告与过敏结论一起拉，避免出现"结论有了、依据没有"的错位
+    loadAllergyReports(),
+  ])
 }
 
 async function saveHealthRecord({

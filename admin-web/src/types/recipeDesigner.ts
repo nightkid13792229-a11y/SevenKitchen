@@ -222,6 +222,18 @@ export interface DogDesignInsight {
      * 2026-09-27 之前设计面板只看 allergyFoods，导致顾客声明的过敏对营养师不可见。
      */
     structuredAllergies: string[]
+    /**
+     * 带可信度的过敏明细（2026-10-04 第四期）。
+     *
+     * `structuredAllergies` 只有名字，营养师看不出"这条是报告确诊的、
+     * 还是顾客随手记的"。而这两者处理方式完全不同：
+     *   确诊 → 配方必须完全避开；可疑 → 建议避开并和顾客确认。
+     */
+    allergyDetail?: Array<{
+      allergen: string
+      certainty: string
+      source: string
+    }>
     pickyFoods: string | null
     preferredFoods: string | null
     medicalHistory: string | null

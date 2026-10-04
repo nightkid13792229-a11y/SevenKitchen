@@ -281,16 +281,27 @@ export class DogsController {
     // Save allergy records if provided
     if (createDogDto.allergyRecords && createDogDto.allergyRecords.length > 0) {
       try {
+        // 同一只狗 + 同一过敏原只能有一条（数据库上有唯一约束），
+        // 建档表单里若重复提交同一个词，这里先去掉重复项，
+        // 否则会撞约束、被下面的 catch 吞掉、整批都存不进去。
+        const seen = new Set<string>();
         for (const record of createDogDto.allergyRecords) {
+          const allergen = String(record.allergen ?? '').trim();
+          if (!allergen || seen.has(allergen)) {
+            continue;
+          }
+          seen.add(allergen);
           await this.allergyRecordRepository.create({
             dogId: dog.id,
-            allergen: record.allergen,
+            allergen,
             notes: record.notes || null,
+            certainty: 'SUSPECTED',
+            source: 'OWNER',
             attachments: record.attachments || [],
           });
         }
         console.log(
-          `[DogsController] Created ${createDogDto.allergyRecords.length} allergy records for dog ${dog.id}`,
+          `[DogsController] Created ${seen.size} allergy records for dog ${dog.id}`,
         );
       } catch (error: any) {
         console.error(
@@ -507,36 +518,95 @@ export class DogsController {
     await this.cleanupRemovedAttachments('checkup', removedAttachmentKeys);
   }
 
+  /**
+   * 按条同步过敏记录（2026-10-04 第一期改造）。
+   *
+   * ── 改造前是什么样 ──────────────────────────────────────────
+   *   "先把这只狗所有过敏记录删光，再把提交的插进去"。
+   *   两个后果：
+   *     1. 在"客户端读取"与"客户端提交"之间新增的记录
+   *        （顾客在健康管理页点了一个标签、定制单同步进来的一条）
+   *        **会被静默删除** —— 没有任何提示，顾客的记录就没了；
+   *     2. 每次保存都会换一批新 id，附件清理只能靠比对 COS key，
+   *        行的身份完全丢失。
+   *
+   * ── 现在怎么做 ──────────────────────────────────────────────
+   *   按"过敏原名称"做差集，只增、只删真正没了的：
+   *     · 提交里有、库里没有      → 新增
+   *     · 库里也有、提交里也有    → 更新（保留 id 与可信度）
+   *     · 库里没有、提交里有      → 删除，并清理它的 COS 附件
+   *   这样并发写入的记录不会再被误删。
+   *
+   * 注意：这个接口仍然保留"提交即为全量"的语义 ——
+   * 它被建档/改档表单使用，表单里就是要表达"这只狗的过敏就是这些"。
+   * 单条增删请走 /dogs/:dogId/allergies。
+   */
   private async replaceAllergyRecords(
     dogId: string,
     allergyRecords: UpdateDogDto['allergyRecords'],
   ): Promise<void> {
     const existingAllergies = await this.allergyRecordRepository.findByDogId(dogId);
-    const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
-      existingAllergies,
-      allergyRecords,
+    const submitted = Array.isArray(allergyRecords) ? allergyRecords : [];
+
+    const keyOf = (value: unknown) => String(value ?? '').trim();
+    const existingByAllergen = new Map<string, (typeof existingAllergies)[number]>();
+    for (const record of existingAllergies) {
+      const key = keyOf((record as { allergen?: string }).allergen);
+      if (key && !existingByAllergen.has(key)) {
+        existingByAllergen.set(key, record);
+      }
+    }
+
+    let created = 0;
+    let updated = 0;
+    const keptIds = new Set<string>();
+
+    for (const record of submitted) {
+      const allergen = keyOf(record?.allergen);
+      if (!allergen) {
+        continue;
+      }
+
+      const existing = existingByAllergen.get(allergen);
+      if (existing) {
+        keptIds.add(existing.id);
+        await this.allergyRecordRepository.update(existing.id, {
+          notes: record.notes ?? null,
+          attachments: record.attachments ?? [],
+        });
+        updated += 1;
+        continue;
+      }
+
+      await this.allergyRecordRepository.create({
+        dogId,
+        allergen,
+        notes: record.notes || null,
+        certainty: 'SUSPECTED',
+        source: 'OWNER',
+        attachments: record.attachments || [],
+      });
+      created += 1;
+    }
+
+    // 只删"这次提交里确实没有"的，并且要清理它们的云端附件
+    const removed = existingAllergies.filter(
+      (record: { id: string }) => !keptIds.has(record.id),
+    );
+    const removedAttachmentKeys = removed.flatMap(
+      (record: { attachments?: string[] }) =>
+        Array.isArray(record.attachments) ? record.attachments : [],
     );
 
-    if (allergyRecords && allergyRecords.length > 0) {
-      for (const record of allergyRecords) {
-        await this.allergyRecordRepository.create({
-          dogId,
-          allergen: record.allergen,
-          notes: record.notes || null,
-          attachments: record.attachments || [],
-        });
-      }
-      console.log(
-        `[DogsController] Updated ${allergyRecords.length} allergy records for dog ${dogId}`,
-      );
-    } else {
-      console.log(`[DogsController] Cleared all allergy records for dog ${dogId}`);
-    }
-
-    for (const allergy of existingAllergies) {
-      await this.allergyRecordRepository.delete(allergy.id);
+    for (const record of removed) {
+      await this.allergyRecordRepository.delete(record.id);
     }
     await this.cleanupRemovedAttachments('allergy', removedAttachmentKeys);
+
+    console.log(
+      `[DogsController] Allergy records synced for dog ${dogId}: ` +
+        `+${created} ~${updated} -${removed.length}`,
+    );
   }
 
   private async loadDogHealthRecordDtos(id: string): Promise<{

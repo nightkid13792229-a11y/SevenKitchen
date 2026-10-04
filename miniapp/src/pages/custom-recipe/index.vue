@@ -252,6 +252,24 @@
               <text class="health-title">过敏信息</text>
               <text class="add-btn" @tap="addAllergen">+ 添加</text>
             </view>
+
+            <!-- 常见过敏原一点即选（2026-10-04 第六期统一）。
+                 改造前这个页面**只能手打**：同样是"记过敏"，
+                 健康管理页有点选 + 拍照识别，定制页却只有一个空白输入框，
+                 顾客在这里得重新回忆、重新拼写一遍。 -->
+            <view class="allergen-quick-add">
+              <text class="allergen-quick-add__hint">点一下就加，不用打字：</text>
+              <view class="tag-list">
+                <view
+                  v-for="name in commonAllergens"
+                  :key="name"
+                  class="tag-item allergen-quick-tag"
+                  :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
+                  @tap="addAllergenByName(name)"
+                >{{ name }}{{ isAllergenAdded(name) ? ' ✓' : '' }}</view>
+              </view>
+            </view>
+
             <view class="tag-list">
               <view
                 v-for="(allergen, index) in formData.allergies"
@@ -409,7 +427,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
@@ -1173,11 +1191,54 @@ const addAllergen = () => {
     placeholderText: '请输入过敏原',
     success: (res) => {
       if (res.confirm && res.content) {
-        formData.value.allergies.push(res.content);
+        addAllergenByName(res.content);
       }
     },
   });
 };
+
+/**
+ * 常见过敏原标签（2026-10-04 第六期统一）。
+ *
+ * 与「健康管理 → 过敏」的「一点即选」同一份清单、同一个口径。
+ * 改造前定制页只能手打 —— 顾客在档案里点过的过敏原，
+ * 到这里得重新回忆、重新拼写一遍。
+ */
+const commonAllergens = ref<string[]>([
+  '鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉',
+  '鸡蛋', '牛奶', '小麦', '玉米', '大豆', '虾',
+]);
+
+/** 标签清单优先用后端词表（后台可维护、按循证常见度排），失败就用上面的兜底 */
+onMounted(async () => {
+  try {
+    const res: any = await dogApi.commonAllergens();
+    if (res?.code !== 0) return;
+    const list = Array.isArray(res?.data?.allergens) ? res.data.allergens : [];
+    const names = list
+      .map((item: any) => String(item?.name || '').trim())
+      .filter(Boolean);
+    if (names.length > 0) {
+      commonAllergens.value = names;
+    }
+  } catch {
+    // 读不到词表不是错误 —— 用兜底清单继续
+  }
+});
+
+/** 点选一个常见过敏原（去重，不制造重复项） */
+const addAllergenByName = (name: string) => {
+  const value = String(name || '').trim();
+  if (!value) return;
+  if (formData.value.allergies.includes(value)) {
+    uni.showToast({ title: '已经加过这一条了', icon: 'none' });
+    return;
+  }
+  formData.value.allergies.push(value);
+};
+
+const isAllergenAdded = (name: string) =>
+  formData.value.allergies.includes(String(name || '').trim());
 
 const removeAllergen = (index: number) => {
   formData.value.allergies.splice(index, 1);
@@ -2032,6 +2093,24 @@ const getActivityLabel = (level: string) => {
   border-radius: 999rpx;
 }
 
+/* 常见过敏原一点即选（2026-10-04 第六期统一） */
+.allergen-quick-add {
+  margin-bottom: 16rpx;
+}
+.allergen-quick-add__hint {
+  display: block;
+  font-size: 22rpx;
+  color: var(--sk-ink-3, #968f6d);
+  margin-bottom: 10rpx;
+}
+.allergen-quick-tag {
+  background: var(--sk-primary-tint, #eef3ea);
+}
+.allergen-quick-tag--added {
+  color: #ffffff;
+  background: var(--sk-primary, #1e3a2f);
+  border-color: var(--sk-primary, #1e3a2f);
+}
 .tag-item.editable {
   background: var(--sk-gold-soft, #f6efe0);
   border-color: rgba(176, 141, 79, 0.35);

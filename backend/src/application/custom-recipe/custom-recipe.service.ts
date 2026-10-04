@@ -222,6 +222,20 @@ export class CustomRecipeService implements ICustomRecipeRepository {
             currentWeightKg: true,
             bcsScore: true,
             activityLevel: true,
+            /**
+             * 过敏（2026-10-04 第四期补）。
+             *
+             * 改造前这里只取了 6 个字段，订单页**看不到狗档案里的过敏**，
+             * 只有顾客下单当时手填的那一份 —— 顾客后来在健康档案里
+             * 更新过过敏，定制单页仍显示旧文本。
+             *
+             * 两个来源都带上，与设计器侧栏、健康页口径一致。
+             */
+            allergyFoods: true,
+            allergyRecords: {
+              select: { allergen: true, certainty: true, source: true },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
         customer: {

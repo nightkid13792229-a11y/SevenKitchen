@@ -150,6 +150,17 @@ export interface HealthReportExtractionResult {
   confidence: HealthReportConfidence;
   /** 需要顾客/客服留意的地方（例如"未能确认是否食物过敏"） */
   warnings: string[];
+  /**
+   * 报告层面的信息（2026-10-04 第五期，仅过敏报告有）。
+   *
+   * 检测方式 / 检测日期 / 机构，全部**照抄报告上写的**。
+   * 有了这些，识别结果才能落成一份 AllergyReport 而不是散装的过敏原。
+   */
+  reportMeta?: {
+    testMethod: string;
+    testDate: string;
+    institution: string;
+  } | null;
 }
 
 /**
@@ -380,11 +391,36 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  若文字里是"对 XX 过敏/不耐受/过敏原阳性"这类表述，XX 即为过敏原。',
     '· 报告里若写明"未见异常""阴性""无过敏"，则 drafts 返回空数组，',
     '  并把这一点写进 warnings，不要编造过敏原。',
+    // ── 2026-10-04 第五期新增：多读两样**报告上写着的事实** ──
+    //   ① 检测方式（血清 / 皮内试验 / 排除性饮食试验 / 没写）
+    //   ② 每一项的结论等级（阳性 / 弱阳性 / 疑似 / 阴性 / 没写）
+    //
+    // 为什么要读等级：老板第 1 条要的是"报告里**有哪些需要注意的、
+    // 可疑的**过敏原食物"。只读出食物名的话，报告上写的"弱阳性"
+    // 就丢了 —— 而顾客真正需要区分的就是这个。
+    //
+    // ⚠️ 边界不变：**只照抄报告上写的字**，不做任何医学判断。
+    // COMMON_RULES 明令不得判断疾病名称、严重程度、过敏类型。
+    // "阳性"不是系统算出来的结论，是报告上印着的字。
+    '· level **照抄报告上写的结论**，只能从这五个里选：',
+    '  POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 / SUSPECTED 疑似或可疑 /',
+    '  NEGATIVE 阴性 / UNKNOWN 报告没写或看不清。',
+    '  **不要根据数值大小自己推断等级**，报告没写就填 UNKNOWN。',
+    '· testMethod 照抄报告上写的检测方式，只能从这五个里选：',
+    '  SERUM 血清或 IgE 检测 / INTRADERMAL 皮内试验 / ELIMINATION 排除性饮食试验 /',
+    '  OTHER 其它 / UNKNOWN 没写或看不清。不要根据常识猜。',
+    '· testDate 只填报告上写明的采样或报告日期，看不清就留空字符串。',
     '· medicalConditions 照抄报告里提到的既往病症名称，不做判断。',
     '',
     '输出 JSON 结构：',
     '{',
-    '  "drafts": [ { "allergen": "鸡肉", "notes": "" } ],',
+    '  "drafts": [',
+    '    { "allergen": "鸡肉", "level": "POSITIVE", "notes": "" },',
+    '    { "allergen": "小麦", "level": "WEAK_POSITIVE", "notes": "报告标注为弱阳性" }',
+    '  ],',
+    '  "testMethod": "SERUM",',
+    '  "testDate": "2026-03-12",',
+    '  "institution": "",',
     '  "medicalConditions": ["胰腺炎"],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["报告中未注明检测方法"]',
@@ -617,11 +653,17 @@ export function normalizeDrafts(
   }
 
   // ALLERGY_REPORT：优先用 drafts；模型若仍按旧形状只返回 allergies，
-  // 这里兜底接住 —— 提示词换了不代表模型一定照做，丢数据的代价太大。
+  // 这里兜底接住 —— 提示词换了不代表模型一定照算，丢数据的代价太大。
+  //
+  // 2026-10-04 第五期：多带一个 level（结论等级）。
+  // 模型没给就填 UNKNOWN —— **不猜**。猜错的代价是
+  // "把弱阳性当成确诊"（少给顾客几个食谱）或反过来（漏掉一条真过敏），
+  // 两个方向都不该由系统替顾客决定。
   const fromDrafts = raw
     .map((item: any) => ({
       allergen: normalizeDraftText(item?.allergen, 40),
       notes: normalizeDraftText(item?.notes, 200),
+      level: normalizeAllergyLevel(item?.level),
     }))
     .filter((draft) => draft.allergen)
     .slice(0, MAX_KEYWORDS);
@@ -633,7 +675,40 @@ export function normalizeDrafts(
   return normalizeKeywordList(parsed.allergies).map((allergen) => ({
     allergen,
     notes: '',
+    level: 'UNKNOWN' as const,
   }));
+}
+
+/** 报告结论等级：只认报告上写的那五种，其余一律 UNKNOWN（不猜） */
+export function normalizeAllergyLevel(
+  value: unknown,
+): 'POSITIVE' | 'WEAK_POSITIVE' | 'SUSPECTED' | 'NEGATIVE' | 'UNKNOWN' {
+  const key = String(value ?? '').trim().toUpperCase();
+  if (
+    key === 'POSITIVE' ||
+    key === 'WEAK_POSITIVE' ||
+    key === 'SUSPECTED' ||
+    key === 'NEGATIVE'
+  ) {
+    return key;
+  }
+  return 'UNKNOWN';
+}
+
+/** 检测方式：只认报告上写的那五种，其余一律 UNKNOWN（不猜） */
+export function normalizeAllergyTestMethod(
+  value: unknown,
+): 'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN' {
+  const key = String(value ?? '').trim().toUpperCase();
+  if (
+    key === 'SERUM' ||
+    key === 'INTRADERMAL' ||
+    key === 'ELIMINATION' ||
+    key === 'OTHER'
+  ) {
+    return key;
+  }
+  return 'UNKNOWN';
 }
 
 function normalizeConfidence(value: unknown): HealthReportConfidence {
@@ -889,6 +964,28 @@ export class HealthReportExtractionService {
       ocrText,
       confidence: normalizeConfidence(parsed.confidence),
       warnings,
+      /**
+       * 报告层面的信息（2026-10-04 第五期）。
+       *
+       * 只对过敏报告有意义 —— 它们要落成一份 AllergyReport，
+       * 而不是散成十几条互不相干的过敏原。
+       * 检测方式与日期都是**照抄报告上写的**，系统不做任何可信度判断。
+       */
+      reportMeta:
+        documentType === 'ALLERGY_REPORT'
+          ? {
+              testMethod: normalizeAllergyTestMethod(
+                (parsed as Record<string, unknown>).testMethod,
+              ),
+              testDate: normalizeDraftDate(
+                (parsed as Record<string, unknown>).testDate,
+              ),
+              institution: normalizeDraftText(
+                (parsed as Record<string, unknown>).institution,
+                120,
+              ),
+            }
+          : null,
     };
   }
 }

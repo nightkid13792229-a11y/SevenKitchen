@@ -20,7 +20,7 @@
 
     <view class="quick-add__tags">
       <text
-        v-for="item in commonAllergens"
+        v-for="item in allergenTags"
         :key="item"
         class="quick-tag"
         :class="{
@@ -89,6 +89,55 @@
         >· {{ warning }}</text>
       </view>
 
+      <!-- 报告写的是什么（2026-10-04 第二期）。
+           由看得见报告的顾客来选，不让 AI 判断 ——
+           知识库规则明令 AI 不得判断严重程度与过敏类型。
+           选"阳性"的会被标成「确诊」，含它的食谱**彻底不进推荐**。 -->
+      <view class="report-meta">
+        <view class="report-meta__row">
+          <text class="report-meta__label">报告上写的是</text>
+          <view class="report-meta__options">
+            <text
+              v-for="option in REPORT_LEVEL_OPTIONS"
+              :key="option.value"
+              class="report-meta__option"
+              :class="{ 'report-meta__option--active': reportLevel === option.value }"
+              @tap="reportLevel = option.value"
+            >{{ option.label }}</text>
+          </view>
+        </view>
+
+        <view class="report-meta__row">
+          <text class="report-meta__label">检测方式</text>
+          <view class="report-meta__options">
+            <text
+              v-for="option in REPORT_METHOD_OPTIONS"
+              :key="option.value"
+              class="report-meta__option"
+              :class="{ 'report-meta__option--active': reportTestMethod === option.value }"
+              @tap="reportTestMethod = option.value"
+            >{{ option.label }}</text>
+          </view>
+        </view>
+
+        <view class="report-meta__row">
+          <text class="report-meta__label">检测日期</text>
+          <picker
+            mode="date"
+            :value="reportTestDate"
+            @change="onReportDateChange"
+          >
+            <text class="report-meta__date">
+              {{ reportTestDate || '选填，点这里选' }}
+            </text>
+          </picker>
+        </view>
+
+        <text class="report-meta__hint">
+          报告原件会保存在下面的「检测报告与记录」里，之后随时能翻出来给医生看。
+        </text>
+      </view>
+
       <view class="candidate-card__actions">
         <button class="candidate-card__discard" :disabled="saving" @tap="discardCandidates">
           都不是
@@ -105,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
   SCAN_IMAGE_SIZE_TYPE,
@@ -133,15 +182,52 @@ const emit = defineEmits<{
 }>()
 
 /**
- * 常见过敏原：做成一点即选，避免顾客手打。
+ * 常见过敏原的**离线兜底**清单。
  *
- * 生产数据显示，让顾客"自由填写"的过敏记录只有 24 只狗填过（0.5%），
- * 而常见过敏原高度集中，标签化能显著降低填写成本。
+ * 正常情况下标签从后端词表读（见下面 fetchedCommonAllergens）——
+ * 那样营养师能在后台维护，顺序也按证据排。
+ * 这一份只在接口不可用时顶上，保证顾客永远不会面对一片空白。
+ *
+ * 保留这几个具体的词（鸡肉 / 牛肉 / 鸡蛋 / 牛奶）是有意的：
+ * 它们是顾客口语里最常用的说法，也是词表里的标准名或别名。
  */
 const commonAllergens = [
   '鸡肉', '牛肉', '羊肉', '猪肉', '鸭肉', '鱼肉',
   '鸡蛋', '牛奶', '小麦', '玉米', '大豆', '虾',
 ]
+
+/**
+ * 从后端词表读到的标签（2026-10-04，过敏重构第一期）。
+ *
+ * 改造前这 12 个标签是**写死在小程序里**的，后台改不了，
+ * 而且实测有 8 个匹配不到任何真实食材（"鸡肉"对不上"鸡胸"）——
+ * 匹配问题已经在后端修好了，这里顺带把清单本身也交给后端，
+ * 顺序按知识库 skin-005 的循证常见度排（牛肉 → 乳制品 → 小麦 → …）。
+ */
+const fetchedCommonAllergens = ref<string[]>([])
+
+const allergenTags = computed(() =>
+  fetchedCommonAllergens.value.length > 0
+    ? fetchedCommonAllergens.value
+    : commonAllergens,
+)
+
+onMounted(async () => {
+  try {
+    const res: any = await dogApi.commonAllergens()
+    if (res?.code !== 0) return
+    const list = Array.isArray(res?.data?.allergens) ? res.data.allergens : []
+    const names = list
+      .map((item: any) => String(item?.name || '').trim())
+      .filter(Boolean)
+    // 接口返回空（词表还没初始化）时保留兜底清单，不要给顾客一个空标签区
+    if (names.length > 0) {
+      fetchedCommonAllergens.value = names
+    }
+  } catch {
+    // 读不到词表不是错误 —— 用兜底清单继续
+  }
+})
 
 const recordedAllergens = computed(() => {
   const raw = Array.isArray(props.recordedAllergens) ? props.recordedAllergens : []
@@ -157,8 +243,69 @@ const customInput = ref('')
 const candidates = ref<string[]>([])
 const pickedCandidates = ref<string[]>([])
 const warnings = ref<string[]>([])
-/** 本次识别用的报告原图（点选出来的过敏原落库时一起存成附件） */
+
+/**
+ * 报告上下文（2026-10-04 第二期 + 第五期）。
+ *
+ * 改造前这几样东西**一样都没留**：图片上传完只取 url 去识别，
+ * 识别完连 url 都丢掉，记录里 attachments 填空数组 ——
+ * 顾客拍的报告再也找不回来。
+ *
+ * 现在：上传的原图全部留住（一份报告常常不止一页），
+ * 确认时落成一份 AllergyReport；识别出的检测方式 / 日期 / 各项等级
+ * 作为这份报告的属性一起存下来。
+ */
 const reportImageUrl = ref('')
+/**
+ * 这份报告的**全部原图**（2026-10-04 多页支持）。
+ *
+ * main 在 2026-10-03 把识别扩到了 9 张，但只保留第一张当附件 ——
+ * 一份三页的报告，第二三页传完就丢。这里改成全部留住。
+ */
+const reportImageUrls = ref<string[]>([])
+const reportOcrText = ref('')
+const reportTestDate = ref('')
+const reportTestMethod = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN')
+
+/**
+ * 报告上写的结论等级，顾客选一次、整批套用。
+ *
+ * 为什么让顾客选、而不是让 AI 判断：
+ *   COMMON_RULES 明令 AI **不得判断疾病名称、严重程度、
+ *   过敏类型或是否需要治疗**。AI 只负责"把纸上的字搬进表单"。
+ *   "这些是不是阳性"是报告上的事实，由看得见报告的顾客来确认。
+ */
+const reportLevel = ref<'POSITIVE' | 'WEAK_POSITIVE' | 'UNKNOWN'>('UNKNOWN')
+
+/**
+ * 每一项候选各自的结论等级（2026-10-04 第五期）。
+ *
+ * 报告上不同食物常常等级不同（鸡肉阳性、小麦弱阳性），
+ * AI 读出来就存在这里；整批等级一致时选择器会预选上，
+ * 顾客改过之后以顾客的选择为准 —— 他手上拿着报告，比 AI 更可信。
+ */
+const candidateLevels = ref<Record<string, string>>({})
+
+const REPORT_LEVEL_VALUES = ['POSITIVE', 'WEAK_POSITIVE', 'UNKNOWN']
+
+/** 把接口返回的检测方式收敛到选择器支持的三个值 */
+function normalizeTestMethod(value: unknown): 'SERUM' | 'INTRADERMAL' | 'UNKNOWN' {
+  const key = String(value || '').trim().toUpperCase()
+  if (key === 'SERUM' || key === 'INTRADERMAL') return key
+  return 'UNKNOWN'
+}
+
+const REPORT_LEVEL_OPTIONS = [
+  { value: 'POSITIVE', label: '都是阳性' },
+  { value: 'WEAK_POSITIVE', label: '弱阳性 / 疑似' },
+  { value: 'UNKNOWN', label: '报告没写 / 看不清' },
+] as const
+
+const REPORT_METHOD_OPTIONS = [
+  { value: 'SERUM', label: '血清检测' },
+  { value: 'INTRADERMAL', label: '皮内试验' },
+  { value: 'UNKNOWN', label: '没写 / 不清楚' },
+] as const
 const isBusy = computed(() => Boolean(savingAllergen.value) || saving.value || extracting.value)
 
 function isRecorded(allergen: string) {
@@ -275,11 +422,22 @@ function resetReportState() {
   candidates.value = []
   pickedCandidates.value = []
   warnings.value = []
+  candidateLevels.value = {}
+  // 报告上下文一并清掉（原件地址留着会误挂到下一批候选上）
   reportImageUrl.value = ''
+  reportImageUrls.value = []
+  reportOcrText.value = ''
+  reportTestDate.value = ''
+  reportTestMethod.value = 'UNKNOWN'
+  reportLevel.value = 'UNKNOWN'
 }
 
 function discardCandidates() {
   resetReportState()
+}
+
+function onReportDateChange(event: any) {
+  reportTestDate.value = String(event?.detail?.value || '')
 }
 
 /**
@@ -336,6 +494,12 @@ async function pickHealthReport() {
   try {
     const collected: string[] = []
     const collectedWarnings: string[] = []
+    // 2026-10-04：跨页合并的额外信息 —— 等级 / 检测方式 / 日期 / 识别原文
+    const collectedLevels: Record<string, string> = {}
+    const collectedOcr: string[] = []
+    const collectedImageUrls: string[] = []
+    let collectedMethod: 'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN' = 'UNKNOWN'
+    let collectedTestDate = ''
 
     for (const [position, filePath] of filePaths.entries()) {
       if (filePaths.length > 1) {
@@ -347,7 +511,11 @@ async function pickHealthReport() {
       if (!imageUrl) {
         throw new Error('上传失败，请重试')
       }
-      // 保留第一张作为"这份报告"的代表图（确认卡片上显示它）
+
+      // 每一页原图都留住（一份报告常常不止一页）。
+      // main 在 2026-10-03 扩到 9 张时只保留了第一张当附件，
+      // 第二页之后传完就丢 —— 这里改成全部留下。
+      collectedImageUrls.push(imageUrl)
       if (position === 0) {
         reportImageUrl.value = imageUrl
       }
@@ -355,18 +523,72 @@ async function pickHealthReport() {
       const res: any = await dogApi.extractHealthReport({ imageUrl })
       const data = res?.data || {}
 
-      if (Array.isArray(data.allergies)) {
+      // 优先用 drafts（带每项结论等级）；退回旧的 allergies 数组。
+      // 提示词换了不代表模型一定照做，两条路都得接住 —— 丢数据的代价太大。
+      const drafts = Array.isArray(data.drafts) ? data.drafts : []
+      const fromDrafts = drafts
+        .map((item: any) => ({
+          allergen: String(item?.allergen || '').trim(),
+          level: String(item?.level || '').toUpperCase(),
+        }))
+        .filter((item: any) => Boolean(item.allergen))
+
+      if (fromDrafts.length > 0) {
+        for (const item of fromDrafts) {
+          collected.push(item.allergen)
+          // 跨页同名时保留"更明确"的那个等级（UNKNOWN 不覆盖已知等级）
+          const existing = collectedLevels[item.allergen]
+          if (!existing || (existing === 'UNKNOWN' && item.level !== 'UNKNOWN')) {
+            collectedLevels[item.allergen] = item.level
+          }
+        }
+      } else if (Array.isArray(data.allergies)) {
         collected.push(
           ...data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim()),
         )
       }
+
       if (Array.isArray(data.warnings)) {
         collectedWarnings.push(...data.warnings)
       }
+
+      // 检测方式 / 日期：照抄报告上写的，取第一个"读出来的"值
+      const meta = data.reportMeta || {}
+      const method = normalizeTestMethod(meta.testMethod)
+      if (collectedMethod === 'UNKNOWN' && method !== 'UNKNOWN') {
+        collectedMethod = method
+      }
+      const detectedDate = String(meta.testDate || '').trim()
+      if (!collectedTestDate && /^\d{4}-\d{2}-\d{2}$/.test(detectedDate)) {
+        collectedTestDate = detectedDate
+      }
+
+      const ocrText = String(data.ocrText || '').trim()
+      if (ocrText) {
+        collectedOcr.push(ocrText)
+      }
     }
+
+    // 把跨页收集到的东西写回报告上下文
+    reportImageUrls.value = collectedImageUrls
+    reportTestMethod.value = collectedMethod
+    reportTestDate.value = collectedTestDate
+    reportOcrText.value = collectedOcr.join('\n\n').slice(0, 20000)
 
     candidates.value = Array.from(new Set(collected.map((item) => String(item).trim()))).filter(Boolean)
     warnings.value = Array.from(new Set(collectedWarnings))
+    candidateLevels.value = collectedLevels
+
+    // 整批等级一致时把选择器预选上，顾客少点一次；
+    // 等级不齐就留 UNKNOWN，让顾客对着报告自己选 —— 不替他猜。
+    const levels = Array.from(
+      new Set(candidates.value.map((name) => collectedLevels[name] || 'UNKNOWN')),
+    )
+    reportLevel.value =
+      levels.length === 1 && REPORT_LEVEL_VALUES.includes(levels[0])
+        ? (levels[0] as typeof reportLevel.value)
+        : 'UNKNOWN'
+
     // 候选一律先不选中，逐项由顾客点
     pickedCandidates.value = []
 
@@ -396,7 +618,21 @@ async function pickHealthReport() {
   }
 }
 
-/** 顾客确认后的候选过敏原逐条落库 */
+/**
+ * 顾客确认后的候选过敏原落库（2026-10-04 第二期改造）。
+ *
+ * ── 改造前 ──────────────────────────────────────────────────
+ *   逐条调 `allergy.create`，而且 `attachments: []` ——
+ *   顾客刚上传的那张报告照片**传完就被丢掉了**，
+ *   之后再也没法回看。识别报告这件事等于"读完就扔"。
+ *
+ * ── 现在 ────────────────────────────────────────────────────
+ *   改成建一份**检测报告**：原件挂在报告上，
+ *   识别出的过敏原作为这份报告的结论（带上顾客选的阳性等级）。
+ *   这样"记录过敏检查报告"才真的成立 —— 报告留得住、查得到。
+ *
+ * 任一步失败都退回逐条落库，**不让顾客白拍一张照**。
+ */
 async function confirmCandidates() {
   if (saving.value || pickedCandidates.value.length === 0) return
 
@@ -408,31 +644,69 @@ async function confirmCandidates() {
   }
 
   saving.value = true
-  const failed: string[] = []
-  // 报告原图在 resetReportState() 里会被清掉，先取出来，循环里每条都用它当附件
-  const sourceImageUrl = reportImageUrl.value
+  let savedAsReport = false
+  // 原图在 resetReportState() 里会被清掉，先取出来 —— 报告实体要用全部页面
+  const sourceImageUrls = [...reportImageUrls.value]
 
   try {
-    for (const allergen of targets) {
+    // 有原件才建报告；没有原件（理论上不会）就走下面的逐条兜底
+    if (reportImageUrl.value) {
       try {
-        await createAllergyRecord(allergen, sourceImageUrl)
-        emit('saved', allergen)
+        const res: any = await dogApi.allergyReports.create(props.dogId, {
+          testDate: reportTestDate.value || null,
+          testMethod: reportTestMethod.value,
+          // 一份报告常常不止一页，**全部原图**都留住
+          attachments: sourceImageUrls.length > 0 ? sourceImageUrls : undefined,
+          ocrText: reportOcrText.value || null,
+          results: targets.map(allergen => ({
+            allergen,
+            // 顾客在确认卡片上选的等级优先；
+            // 他没改的话用 AI 从报告里读出来的那一项
+            level: reportLevel.value !== 'UNKNOWN'
+              ? reportLevel.value
+              : (candidateLevels.value[allergen] || 'UNKNOWN'),
+          })),
+        })
+        if (res?.code === 0) {
+          savedAsReport = true
+          targets.forEach(allergen => emit('saved', allergen))
+        }
       } catch {
-        failed.push(allergen)
+        savedAsReport = false
+      }
+    }
+
+    if (!savedAsReport) {
+      // 兜底：报告没存成也要把过敏原记下来，不能让顾客白忙一场
+      const failed: string[] = []
+      for (const allergen of targets) {
+        try {
+          await createAllergyRecord(allergen)
+          emit('saved', allergen)
+        } catch {
+          failed.push(allergen)
+        }
+      }
+      if (failed.length > 0) {
+        saving.value = false
+        pickedCandidates.value = failed
+        uni.showToast({ title: `${failed.join('、')} 记录失败，请重试`, icon: 'none' })
+        return
       }
     }
   } finally {
     saving.value = false
   }
 
-  if (failed.length > 0) {
-    pickedCandidates.value = failed
-    uni.showToast({ title: `${failed.join('、')} 记录失败，请重试`, icon: 'none' })
-    return
-  }
-
+  const isPositive = reportLevel.value === 'POSITIVE'
   resetReportState()
-  uni.showToast({ title: '已记入档案', icon: 'none' })
+  uni.showToast({
+    title: isPositive
+      ? '已记为「确诊」，食谱会彻底避开'
+      : '已记入档案，可在上面改成「确诊」',
+    icon: 'none',
+    duration: 2500,
+  })
 }
 /**
  * 对外入口（2026-10-02 引导流程要用）：直接调起"上传检测报告 + AI 识别"，
@@ -611,6 +885,61 @@ defineExpose({ pickHealthReport })
 
 .candidate-card__warnings {
   margin-top: 16rpx;
+}
+
+/* 报告写的是什么（2026-10-04 第二期） */
+.report-meta {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx dashed #e3e6d4;
+}
+
+.report-meta__row {
+  margin-bottom: 18rpx;
+}
+
+.report-meta__label {
+  display: block;
+  font-size: 24rpx;
+  color: #6b6653;
+  margin-bottom: 12rpx;
+}
+
+.report-meta__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.report-meta__option {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  color: #6b6653;
+  background: #f4f6f2;
+  border: 2rpx solid #e3e6d4;
+}
+
+.report-meta__option--active {
+  color: #ffffff;
+  background: #ad5b2a;
+  border-color: #ad5b2a;
+}
+
+.report-meta__date {
+  font-size: 26rpx;
+  color: #26261f;
+  padding: 12rpx 24rpx;
+  border-radius: 12rpx;
+  background: #f4f6f2;
+  display: inline-block;
+}
+
+.report-meta__hint {
+  display: block;
+  font-size: 22rpx;
+  color: #968f6d;
+  line-height: 1.6;
 }
 
 .candidate-card__warning {

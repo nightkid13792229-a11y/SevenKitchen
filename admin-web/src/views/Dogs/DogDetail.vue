@@ -276,6 +276,40 @@
             :rows="2"
             placeholder="记录过敏的食材，如：鸡肉、牛肉、大豆等"
           />
+          <div class="field-hint">
+            这一栏是**员工备注**，会与顾客在健康档案里填的过敏记录合并后一起生效。
+          </div>
+        </el-form-item>
+
+        <!-- 顾客在健康档案 / 小程序里填的结构化过敏记录（2026-10-04 第四期新增）。
+             改造前后台完全看不到它们 —— 客服只能看到上面那个员工备注框，
+             而顾客真正填的那份在另一个数据源里，两边是平行的。
+             这里按可信度分档展示，与食谱设计器侧栏口径一致。 -->
+        <el-form-item v-if="structuredAllergies.length > 0" label="顾客记录的过敏">
+          <div class="allergy-certainty">
+            <div
+              v-for="group in structuredAllergyGroups"
+              :key="group.key"
+              class="allergy-certainty__group"
+            >
+              <span class="allergy-certainty__label" :class="`allergy-certainty__label--${group.key}`">
+                {{ group.label }}
+              </span>
+              <el-tag
+                v-for="item in group.items"
+                :key="item.id"
+                size="small"
+                :type="group.tagType"
+                class="allergy-certainty__tag"
+              >
+                {{ item.allergen }}
+              </el-tag>
+            </div>
+            <div class="field-hint">
+              确诊的会让含该食材的食谱**彻底不进推荐**；可疑 / 待排查会标注并排在后面；
+              已排除的不再避开。顾客可在小程序「健康管理 → 过敏」里修改。
+            </div>
+          </div>
         </el-form-item>
 
         <el-form-item label="挑食食物" prop="pickyFoods">
@@ -467,6 +501,46 @@ const formData = ref({
   pickyFoods: ''
 })
 
+/**
+ * 顾客在健康档案 / 小程序里填的结构化过敏记录（2026-10-04 第四期，只读）。
+ *
+ * 改造前后台完全看不到它们 —— 客服只能看到上面那个"员工备注"框，
+ * 而顾客真正填的那份在 allergy_record 表里，两边是平行的。
+ */
+const structuredAllergies = ref<
+  Array<{
+    id: string
+    allergen: string
+    certainty?: string
+    source?: string
+    notes?: string | null
+  }>
+>([])
+
+/**
+ * 按可信度分档 —— 与小程序「不能吃的」、食谱设计器侧栏同一套口径。
+ *
+ * 分档不是装饰：确诊的会让含该食材的食谱**彻底不进推荐**，
+ * 客服必须一眼看出哪些是确凿的、哪些只是顾客自己怀疑的。
+ */
+const structuredAllergyGroups = computed(() => {
+  const order = [
+    { key: 'confirmed', label: '确诊', certainty: 'CONFIRMED', tagType: 'danger' as const },
+    { key: 'suspected', label: '可疑', certainty: 'SUSPECTED', tagType: 'warning' as const },
+    { key: 'verify', label: '待排查', certainty: 'TO_VERIFY', tagType: 'info' as const },
+    { key: 'ruled-out', label: '已排除', certainty: 'RULED_OUT', tagType: 'success' as const },
+  ]
+
+  return order
+    .map((group) => ({
+      ...group,
+      items: structuredAllergies.value.filter(
+        (item) => String(item.certainty || 'SUSPECTED').toUpperCase() === group.certainty,
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+})
+
 const formRules: FormRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   breedId: [{ required: true, message: '请选择品种', trigger: 'change' }],
@@ -506,6 +580,11 @@ const loadDogDetail = async () => {
       allergyFoods: profile.allergyFoods || '',
       pickyFoods: profile.pickyFoods || ''
     }
+
+    // 顾客在健康档案 / 小程序里填的结构化过敏记录（2026-10-04 第四期）
+    structuredAllergies.value = Array.isArray(profile.allergyRecords)
+      ? profile.allergyRecords
+      : []
 
     calcResult.value = response.calcResult
 
@@ -667,7 +746,18 @@ const handleSubmit = async () => {
         treatInputMode: formData.value.treatInputMode,
         treatLevel: formData.value.treatLevel,
         manualTreatKcal: formData.value.manualTreatKcal,
-        medicalHistory: formData.value.medicalHistory || null
+        medicalHistory: formData.value.medicalHistory || null,
+        /**
+         * 过敏 / 挑食食物（2026-10-04 第四期修复 H7）。
+         *
+         * 改造前这两个字段**根本没有出现在提交体里** ——
+         * 客服在档案页填完点保存，界面提示"保存成功"，
+         * 但内容悄悄丢了；配合后台档案接口原本也不返回这两个字段，
+         * 客服看到的是一个永远空白的框，然后据此答复顾客。
+         * 这是"看见错误信息并据此答复"的双重故障。
+         */
+        allergyFoods: formData.value.allergyFoods || null,
+        pickyFoods: formData.value.pickyFoods || null
       }
 
       await dogApi.update(dogId.value, updateData)
@@ -701,6 +791,54 @@ onMounted(() => {
 </script>
 
 <style scoped>
+
+/* 过敏字段的说明与分档（2026-10-04 第四期） */
+.field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+}
+
+.allergy-certainty {
+  width: 100%;
+}
+
+.allergy-certainty__group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.allergy-certainty__label {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  background: #909399;
+}
+
+.allergy-certainty__label--confirmed {
+  background: #f56c6c;
+}
+
+.allergy-certainty__label--suspected {
+  background: #e6a23c;
+}
+
+.allergy-certainty__label--verify {
+  background: #909399;
+}
+
+.allergy-certainty__label--ruled-out {
+  background: #67c23a;
+}
+
+.allergy-certainty__tag {
+  margin-right: 0;
+}
 .dog-detail-page {
   padding: 20px;
 }

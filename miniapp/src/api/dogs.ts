@@ -53,7 +53,52 @@ type MedicalRecordCreatePayload = MedicalRecordPayload
 type CheckupRecordCreatePayload = CheckupRecordPayload
 type AllergyRecordCreatePayload = AllergyRecordPayload
 
-export type VaccineRecordCreatePayload = {
+type CheckupRecordCreatePayload = {
+  checkupType: string
+  checkupDate: string
+  findings?: string | null
+  recommendations?: string | null
+  veterinarian?: string | null
+  attachments?: string[]
+}
+
+type AllergyRecordCreatePayload = {
+  allergen: string
+  notes?: string | null
+  attachments?: string[]
+  /**
+   * 可信度（2026-10-04 第一期）：
+   * CONFIRMED 确诊 / SUSPECTED 可疑 / TO_VERIFY 待排查 / RULED_OUT 已排除。
+   * 确诊的会让含它的食谱**彻底不进推荐**。
+   */
+  certainty?: 'CONFIRMED' | 'SUSPECTED' | 'TO_VERIFY' | 'RULED_OUT'
+  /** 来源：REPORT / OWNER / STAFF / ORDER / PLAN */
+  source?: string
+}
+
+/**
+ * 过敏检测报告（2026-10-04，第二期）。
+ *
+ * level 照抄报告原文的语义：
+ *   POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 / SUSPECTED 疑似 /
+ *   NEGATIVE 阴性 / UNKNOWN 报告没写
+ * 系统不做医学判断 —— 阳性记成"确诊"，其余记成"可疑"，阴性**不记成过敏**。
+ */
+export type AllergyReportPayload = {
+  testDate?: string | null
+  testMethod?: 'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'
+  institution?: string | null
+  summary?: string | null
+  ocrText?: string | null
+  attachments?: string[]
+  results?: Array<{
+    allergen: string
+    level?: string
+    notes?: string | null
+  }>
+}
+
+type VaccineRecordCreatePayload = {
   vaccineName: string
   vaccinationDate: string
   nextDueDate?: string | null
@@ -95,6 +140,36 @@ export const dogApi = {
    */
   healthTimeline: (dogId: string) =>
     request({ url: `/dogs/${dogId}/health/timeline`, method: 'GET' }),
+  /**
+   * 过敏档案（2026-10-04，过敏重构第一期）。
+   *
+   * 返回这只狗的过敏原清单 + **原料库里会被这些过敏原命中的食材名**。
+   *
+   * 为什么要这个接口：首页那个「挑食/过敏」筛选过去**完全不读档案里的过敏**，
+   * 顾客得自己再挑一遍 —— 于是"填了过敏 → 首页自动避开"这件事，
+   * 在最显眼的那个入口上是断的。现在首页用它把已记录的过敏默认带出来。
+   */
+  allergenProfile: (dogId: string) =>
+    request({
+      url: `/dogs/${dogId}/allergen-profile`,
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    }),
+  /**
+   * 常见过敏原词表（2026-10-04）。
+   *
+   * 改造前那 12 个标签是**硬编码在小程序里**的，后台无法维护，
+   * 而且实测有 8 个匹配不到任何真实食材。现在改成读后端词表，
+   * 顺序按知识库 skin-005 的循证常见度排。
+   */
+  commonAllergens: () =>
+    request({
+      url: '/allergens/common',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    }),
   /**
    * 健康信息分享（2026-10-01，第三期）。
    *
@@ -203,6 +278,138 @@ export const dogApi = {
     // 后端 /dogs/:dogId/vaccines 早就有了，但顾客端一直没有入口 ——
     // 生产 4544 只狗里疫苗记录为 0 条。
     vaccine: healthRecordCrud<VaccineRecordCreatePayload>('vaccines'),
+  },
+  /**
+   * 过敏原排查计划（2026-10-04，过敏重构第三期）。
+   *
+   * 老板第 2 条："可以创建过敏原的排查计划。"
+   * 「排除性饮食试验」是国内外指南唯一认可的食物过敏确诊路径。
+   *
+   * `getActive` 会一并下发规则表（建议时长 / 必守清单 / 再挑战窗口 /
+   * 兽医边界提示）—— 那些数字都带出处，不该散落在客户端。
+   */
+  allergyTrial: {
+    getActive: (dogId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trial`,
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      }),
+    history: (dogId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/history`,
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      }),
+    create: (dogId: string, data: Record<string, any>) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials`,
+        method: 'POST',
+        data,
+        suppressErrorToast: true,
+      }),
+    update: (dogId: string, trialId: string, data: Record<string, any>) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/${trialId}`,
+        method: 'PUT',
+        data,
+        suppressErrorToast: true,
+      }),
+    logDay: (dogId: string, trialId: string, data: Record<string, any>) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/${trialId}/logs`,
+        method: 'POST',
+        data,
+        suppressErrorToast: true,
+      }),
+    startChallenge: (dogId: string, trialId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/${trialId}/challenges`,
+        method: 'POST',
+        suppressErrorToast: true,
+      }),
+    /**
+     * 记录再挑战结论 —— 会**回写过敏记录的可信度**：
+     * 复发了 → 确诊（食谱彻底避开）；没反应 → 已排除（不再避开）。
+     */
+    concludeChallenge: (
+      dogId: string,
+      trialId: string,
+      allergen: string,
+      data: { outcome: string; reactionNote?: string },
+    ) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/${trialId}/challenges/${encodeURIComponent(allergen)}`,
+        method: 'PUT',
+        data,
+        suppressErrorToast: true,
+      }),
+    conclude: (dogId: string, trialId: string, data: Record<string, any>) =>
+      request({
+        url: `/dogs/${dogId}/allergy-trials/${trialId}/conclude`,
+        method: 'POST',
+        data,
+        suppressErrorToast: true,
+      }),
+  },
+  /**
+   * 过敏检测报告（2026-10-04，过敏重构第二期）。
+   *
+   * 老板第 1 条："可以记录自己狗狗的过敏检查报告。"
+   *
+   * 改造前系统里没有"报告"这个概念，只有一行行散装的过敏原：
+   *   · 一份写了 12 项结果的报告 = 12 条互不相干的记录
+   *   · 记录里没有检测日期，时间线只能拿"录入时间"冒充
+   *   · **顾客上传的报告原件传完就丢**，再也看不到
+   *
+   * 现在报告成为实体：检测日期 / 方式 / 机构 / 原件 / 识别原文，
+   * 每条结论挂在报告下面。
+   */
+  allergyReports: {
+    list: (dogId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports`,
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      }),
+    create: (dogId: string, data: AllergyReportPayload) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports`,
+        method: 'POST',
+        data,
+        suppressErrorToast: true,
+      }),
+    get: (dogId: string, reportId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports/${reportId}`,
+        method: 'GET',
+        suppressErrorToast: true,
+      }),
+    update: (dogId: string, reportId: string, data: AllergyReportPayload) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports/${reportId}`,
+        method: 'PUT',
+        data,
+        suppressErrorToast: true,
+      }),
+    /** 删除报告**不会**连带删掉过敏记录 —— 依据没了，结论仍然成立 */
+    remove: (dogId: string, reportId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports/${reportId}`,
+        method: 'DELETE',
+        suppressErrorToast: true,
+      }),
+    /** 这份报告让原料库里哪些食材要避开（给顾客看"报告真的被用上了"） */
+    impact: (dogId: string, reportId: string) =>
+      request({
+        url: `/dogs/${dogId}/allergy-reports/${reportId}/impact`,
+        method: 'GET',
+        quiet: true,
+        suppressErrorToast: true,
+      }),
   },
   uploadAvatar: (dogId: string, filePath: string): Promise<string> =>
     new Promise((resolve, reject) => {

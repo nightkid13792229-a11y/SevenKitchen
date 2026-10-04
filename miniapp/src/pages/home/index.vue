@@ -316,6 +316,22 @@
         <scroll-view class="drawer-body" scroll-y>
           <view class="drawer-desc">选择要排除的食材，包含该食材的食谱将不会显示</view>
 
+          <!-- 档案里记的过敏（2026-10-04，第一期）。
+               改造前这里完全不读档案 —— 顾客在健康管理里点了"鸡肉过敏"，
+               到这里还得自己再挑一遍。现在把结论直接摆出来，
+               让他看得见"系统记住了"，也随时能取消。 -->
+          <view v-if="allergenSuggestion" class="allergen-hint">
+            <text class="allergen-hint__title">
+              「{{ allergenSuggestion.dogName }}」的健康档案里记了过敏
+            </text>
+            <text class="allergen-hint__list">
+              {{ allergenSuggestion.allergenNames.join('、') || '（已记录）' }}
+            </text>
+            <view class="allergen-hint__action" @tap="applyAllergenSuggestion()">
+              一键避开这些食材
+            </view>
+          </view>
+
           <!-- 已选排除食材标签 -->
           <view v-if="getDraftExcludedIngredientNames().length > 0" class="excluded-tags">
             <text class="excluded-label">已排除：</text>
@@ -376,6 +392,7 @@ import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
+import { dogApi } from '../../api/dogs'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -496,6 +513,28 @@ const expandedGroups = ref<Set<string>>(new Set())
 const ingredientNameMap = ref<Record<string, string>>({})
 // 食材名称→所有IDs映射（用于排除）
 const ingredientNameToIds = ref<Record<string, string[]>>({})
+
+/**
+ * 档案里记录的过敏（2026-10-04，过敏重构第一期）。
+ *
+ * 改造前首页这个「挑食/过敏」筛选**完全不读档案** ——
+ * 顾客在健康管理里认真点了"鸡肉过敏"，到这里还得自己再挑一遍。
+ * 于是"填了过敏 → 首页自动避开"这件事，在最显眼的那个入口上是断的。
+ *
+ * 现在读取这只狗的过敏档案，把**原料库里会被命中的食材**带出来：
+ *   · 只有一只狗 → 直接默认排除（点开筛选能看到「已排除：鸡胸」）
+ *   · 有多只狗   → 不默认排除（不知道说的是哪只），
+ *                  但在抽屉里给一行「按 XX 的档案避开」一键应用
+ * 两种情况都让顾客**看得见**系统记住了什么，也随时能取消。
+ */
+const allergenSuggestion = ref<{
+  dogId: string
+  dogName: string
+  allergenNames: string[]
+  ingredientNames: string[]
+} | null>(null)
+/** 顾客自己动过排除项之后就不再自动套用，免得把他的选择冲掉 */
+const excludedFilterTouchedByUser = ref(false)
 
 // 健康类型筛选开关：标签字典尚未完成合规化（生产库存在疾病名/功效类标签），
 // 因此暂不对顾客展示该筛选项。字典清理完成后改回 true 即可恢复。
@@ -895,11 +934,104 @@ function loadFilterOptions(): Promise<void> {
       }
       ingredientNameMap.value = nameMap
       ingredientNameToIds.value = nameToIds
+
+      // 筛选项（含食材名→ID 映射）就绪后才能把过敏档案套进来
+      void loadAllergenSuggestion()
     }
   }).catch((err: any) => {
     healthTagMappingLoaded.value = false
     console.error('[Home] Load filter options error:', err)
   })
+}
+
+/**
+ * 读取档案里的过敏，生成首页筛选的默认排除项（2026-10-04，第一期）。
+ *
+ * 只取第一只有过敏记录的狗：
+ *   · 只有一只狗 → 自动套用
+ *   · 多只狗    → 只给建议，抽屉里一键应用
+ *                 （不知道顾客说的是哪只，静默套用别的狗的过敏会让人莫名其妙）
+ */
+async function loadAllergenSuggestion(): Promise<void> {
+  if (!isLoggedIn.value || dogs.value.length === 0) {
+    allergenSuggestion.value = null
+    return
+  }
+
+  for (const dog of dogs.value) {
+    const dogId = String(dog?.id || '')
+    if (!dogId) continue
+
+    let profile: any = null
+    try {
+      const res: any = await dogApi.allergenProfile(dogId)
+      if (res?.code !== 0) continue
+      profile = res?.data || null
+    } catch {
+      // 过敏档案读不到不能挡住首页 —— 静默跳过
+      continue
+    }
+
+    const ingredientNames = Array.isArray(profile?.avoidedIngredientNames)
+      ? profile.avoidedIngredientNames.filter(
+          (item: unknown) => typeof item === 'string' && item,
+        )
+      : []
+    if (ingredientNames.length === 0) continue
+
+    const allergenNames: string[] = Array.from(
+      new Set<string>(
+        (Array.isArray(profile?.allergens) ? profile.allergens : [])
+          .map((item: any) => String(item?.allergen || '').trim())
+          .filter(Boolean),
+      ),
+    )
+
+    allergenSuggestion.value = {
+      dogId,
+      dogName: String(dog?.name || '这只狗'),
+      allergenNames,
+      ingredientNames,
+    }
+
+    // 只有一只狗时直接默认排除：顾客自己填过的过敏，不该让他再挑一遍
+    if (dogs.value.length === 1 && !excludedFilterTouchedByUser.value) {
+      applyAllergenSuggestion(false)
+    }
+    return
+  }
+
+  allergenSuggestion.value = null
+}
+
+/**
+ * 把档案里的过敏套用到排除筛选。
+ *
+ * @param refresh 是否立刻重新拉食谱（自动套用时首页尚未加载完，不必重复拉）
+ */
+function applyAllergenSuggestion(refresh = true) {
+  const suggestion = allergenSuggestion.value
+  if (!suggestion) return
+
+  const ids: string[] = []
+  for (const name of suggestion.ingredientNames) {
+    const matched = ingredientNameToIds.value[name]
+    if (Array.isArray(matched)) ids.push(...matched)
+  }
+
+  if (ids.length === 0) {
+    // 原料库里没有对应食材（例如顾客写的是"海鲜"而库里没有可筛选的水产）——
+    // 不算失败，只是这次没有可排除的项
+    return
+  }
+
+  const merged = new Set([...filterState.value.excludedIngredients, ...ids])
+  filterState.value.excludedIngredients = Array.from(merged)
+  draftFilterState.value.excludedIngredients = Array.from(merged)
+
+  if (refresh) {
+    refreshRecipesWithFilters()
+  }
 }
 
 // 加载食谱
@@ -1152,6 +1284,8 @@ function applyHealthTagsFilter() {
 
 // 切换排除食材（按名称，一次性排除所有同名ID）
 function toggleExcludedIngredient(ingredientName: string) {
+  // 顾客自己动过之后就不再自动套用档案里的过敏，免得把他的选择冲掉
+  excludedFilterTouchedByUser.value = true
   const allIds = ingredientNameToIds.value[ingredientName] || []
   // Check if already excluded (check by any id)
   const isExcluded = allIds.some(id => draftFilterState.value.excludedIngredients.includes(id))
@@ -1240,6 +1374,7 @@ function cancelExcludedTagsDrawer() {
 }
 
 function resetExcludedTagsDraft() {
+  excludedFilterTouchedByUser.value = true
   draftFilterState.value.excludedIngredients = []
 }
 
@@ -2306,6 +2441,42 @@ defineOptions({
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
+}
+
+/* 档案里记的过敏（2026-10-04，第一期） */
+.allergen-hint {
+  margin-bottom: 24rpx;
+  padding: 20rpx 24rpx;
+  background: #fdf3ec;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #ad5b2a;
+  box-sizing: border-box;
+}
+
+.allergen-hint__title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #8a4520;
+  margin-bottom: 8rpx;
+}
+
+.allergen-hint__list {
+  display: block;
+  font-size: 24rpx;
+  color: #a3623a;
+  margin-bottom: 16rpx;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.allergen-hint__action {
+  display: inline-block;
+  padding: 10rpx 28rpx;
+  font-size: 24rpx;
+  color: #ffffff;
+  background: #ad5b2a;
+  border-radius: 999rpx;
 }
 
 .tag-grid {

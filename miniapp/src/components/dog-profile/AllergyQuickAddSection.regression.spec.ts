@@ -87,14 +87,25 @@ describe('过敏快速添加', () => {
   it('从报告点选来的过敏原，把报告原图一并留档当附件', () => {
     const source = readComponent()
 
-    // 识别只是抄字，报告原件才是凭证；此前 attachments 一律写成空数组，原图就丢了
-    expect(source).toContain("const reportImageUrl = ref('')")
-    expect(source).toContain('attachments: attachmentUrl ? [attachmentUrl] : []')
-    expect(source).toContain('await createAllergyRecord(allergen, sourceImageUrl)')
+    // 识别只是抄字，报告原件才是凭证；此前 attachments 一律写成空数组，原图就丢了。
+    //
+    // 2026-10-04 第二期把这条路升级成"存一份检测报告"：
+    // 原图挂在 AllergyReport 上（还带检测日期 / 方式 / 识别原文），
+    // 而不是在每条过敏记录上各挂一份 —— 一份 12 项的报告
+    // 原来会变成 12 条记录各带同一张图，既没有日期、也看不出是同一份报告。
+    expect(source).toContain('const reportImageUrls = ref<string[]>([])')
+    // 每一页原图都留住（一份报告常常不止一页）
+    expect(source).toContain('collectedImageUrls.push(imageUrl)')
+    expect(source).toContain('dogApi.allergyReports.create(props.dogId, {')
+    expect(source).toContain(
+      'attachments: sourceImageUrls.length > 0 ? sourceImageUrls : undefined',
+    )
+    // 报告存不成时退回逐条落库，不能让顾客白拍一张照
+    expect(source).toContain('if (!savedAsReport)')
     // 一点即选 / 手输这两条没有图片的路仍然不带附件
     expect(source).toContain('await createAllergyRecord(allergen)')
     // 报告状态复位时一并清掉图片地址，避免下一次误挂上一张
-    expect(source).toContain('reportImageUrl.value = \'\'')
+    expect(source).toContain('reportImageUrls.value = []')
   })
 
   it('识别失败时降级为手工填写，不阻断顾客做别的事', () => {

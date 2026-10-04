@@ -36,6 +36,7 @@ import { PrismaService } from 'src/infrastructure/prisma.service';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { OrderService } from 'src/application/order/order.service';
 import { WeightGoalPlanService } from 'src/application/weight-goal-plan/weight-goal-plan.service';
+import { AllergenVocabularyService } from 'src/application/health/allergen-vocabulary.service';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;
@@ -179,6 +180,45 @@ describe('RecipesController (e2e)', () => {
         {
           provide: OrderService,
           useValue: mockOrderService,
+        },
+        {
+          // 过敏原词表（2026-10-04 第一期）。
+          //
+          // 这里给一个"按名字包含"的最小实现，让既有用例的行为保持可预期
+          // （改造前推荐打分就是文字包含，所以旧断言仍然成立）。
+          // 真正的词表匹配由 tests/domain/dog/allergen-vocabulary.spec.ts 覆盖。
+          provide: AllergenVocabularyService,
+          useValue: {
+            matchIngredients: jest.fn(
+              async (params: {
+                dogAllergens: readonly string[];
+                ingredientNames: readonly string[];
+              }) => {
+                const hits: Array<{
+                  allergen: string;
+                  allergenCode: string | null;
+                  ingredientName: string;
+                  via: 'VOCABULARY' | 'TEXT';
+                }> = [];
+                for (const allergen of params.dogAllergens) {
+                  const keyword = String(allergen || '')
+                    .replace(/\s+/g, '')
+                    .toLowerCase();
+                  if (!keyword) continue;
+                  for (const name of params.ingredientNames) {
+                    if (!String(name).toLowerCase().includes(keyword)) continue;
+                    hits.push({
+                      allergen,
+                      allergenCode: null,
+                      ingredientName: String(name),
+                      via: 'TEXT',
+                    });
+                  }
+                }
+                return hits;
+              },
+            ),
+          },
         },
       ],
     }).compile();
@@ -762,6 +802,144 @@ describe('RecipesController (e2e)', () => {
       );
       expect(allergyReasons).toHaveLength(1);
       expect(allergyReasons[0]).toBe('含需谨慎原料：鸡肉');
+    });
+
+    /**
+     * 确诊过敏 → 从推荐里彻底拿掉（2026-10-04 第一期，老板已确认）
+     *
+     * 改造前有两处让过敏食谱照样漏出去：
+     *   ① 命中过敏原只是**扣 40 分**，不是排除 —— 含过敏原的食谱照样出现；
+     *   ② 挑食谱的那一步（每个系列按生命阶段挑一个代表）**排在打分之前**，
+     *      同系列里"不含过敏原"的版本在过敏信息被读到之前就已经被丢掉了。
+     * 这组测试把「确诊的直接不进候选」和「先筛后挑」这个顺序锁住。
+     */
+    function duckRecipeSameSeries() {
+      return {
+        ...chickenRecipe(),
+        id: 'row-duck',
+        recipeId: 'duck-recipe-id',
+        name: '鸭肉燕麦鲜食 成犬',
+        items: [
+          {
+            ratioPercent: 60,
+            ingredient: { name: '鸭胸', nameEn: 'duck', type: 'FOOD' },
+          },
+        ],
+      };
+    }
+
+    it('🔴 确诊过敏的食谱不进推荐，同系列的安全版本会被选中', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440061';
+      const customerId = '550e8400-e29b-41d4-a716-446655440062';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: null,
+          allergyRecords: [{ allergen: '鸡肉', certainty: 'CONFIRMED' }],
+        }),
+      );
+      // 两条食谱在**同一个系列**、同一个生命阶段，
+      // 只有食材不同 —— 改造前会先按生命阶段挑中第一条（含鸡肉的那条）。
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        chickenRecipe(),
+        duckRecipeSameSeries(),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      expect(cards.map((card: { id: string }) => card.id)).toEqual([
+        'duck-recipe-id',
+      ]);
+      // 页面要能说清楚"为什么少了"，否则顾客只以为食谱变少了
+      expect(response.body.data.allergyPolicy.excluded).toEqual(['鸡肉']);
+      expect(response.body.data.allergyPolicy.emptyAfterExclusion).toBe(false);
+    });
+
+    it('已排除（RULED_OUT）的过敏原不再让推荐避开', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440063';
+      const customerId = '550e8400-e29b-41d4-a716-446655440064';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: null,
+          allergyRecords: [{ allergen: '鸡肉', certainty: 'RULED_OUT' }],
+        }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      expect(cards).toHaveLength(1);
+      expect(cards[0].id).toBe('chicken-recipe-id');
+      expect(cards[0].matchReasons.join('｜')).not.toContain('过敏');
+      expect(response.body.data.allergyPolicy.excluded).toEqual([]);
+    });
+
+    it('可疑（SUSPECTED）仍然保留，但会被重罚并标注', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440065';
+      const customerId = '550e8400-e29b-41d4-a716-446655440066';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: null,
+          allergyRecords: [{ allergen: '鸡肉', certainty: 'SUSPECTED' }],
+        }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      const cards = [
+        ...(response.body.data.exclusive ?? []),
+        ...(response.body.data.general ?? []),
+      ];
+      // 不静默隐藏 —— 顾客必须看得见"这条有风险"
+      expect(cards).toHaveLength(1);
+      expect(cards[0].containsAllergen).toBe(true);
+      expect(cards[0].matchReasons.join('｜')).toContain('含需谨慎原料');
+      expect(response.body.data.allergyPolicy.cautioned).toEqual(['鸡肉']);
+      expect(response.body.data.allergyPolicy.excluded).toEqual([]);
+    });
+
+    it('确诊的过敏原把候选清空时，明确告诉页面"避开后没有可选"', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440067';
+      const customerId = '550e8400-e29b-41d4-a716-446655440068';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue(
+        mockDogWithAllergy({
+          allergyFoods: null,
+          allergyRecords: [{ allergen: '鸡肉', certainty: 'CONFIRMED' }],
+        }),
+      );
+      mockPrismaService.recipe.findMany.mockResolvedValue([chickenRecipe()]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body.data.exclusive).toEqual([]);
+      expect(response.body.data.general).toEqual([]);
+      // 页面要给安抚与出口，而不是一个空列表
+      expect(response.body.data.allergyPolicy.emptyAfterExclusion).toBe(true);
+      expect(response.body.data.allergyPolicy.remainingCount).toBe(0);
     });
 
     it('loads complete public series candidates before choosing the matched recommendation stage', async () => {

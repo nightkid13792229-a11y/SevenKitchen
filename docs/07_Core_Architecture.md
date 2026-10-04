@@ -82,8 +82,9 @@
 - `treat_input_mode`: Enum { ESTIMATE_LEVEL, EXACT_KCAL } @default(ESTIMATE_LEVEL)
 - `treat_level`: Enum { NONE, LOW, MODERATE, HIGH } @default(LOW)
 - `manual_treat_kcal`: Int?
-- `allergies`: Relation -> IngredientTag[]
-- `dislikes`: Relation -> IngredientTag[]  // 不爱吃/挑食
+- `allergy_foods`: Text?   // 过敏食物（旧文本字段，员工设计备注在维护）
+- `picky_foods`: Text?     // 不爱吃/挑食
+- `allergy_records`: Relation -> AllergyRecord[]  // 结构化过敏记录（顾客填的那份）
 - `medical_history`: Text
 - `cached_target_food_kcal`: Int (System Calculated)
 

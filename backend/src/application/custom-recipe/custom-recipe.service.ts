@@ -558,6 +558,165 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     return record;
   }
 
+  // ==================== 交付 ====================
+
+  /**
+   * 列出可以交付给这张定制单的食谱（后台「选择已设计好的食谱」用）。
+   *
+   * 2026-10-04：只列**这位顾客、这只狗**的私密定制食谱。设计器发布时会自动
+   * 挂上订单号，所以最常见的候选就是"刚在设计器里做完的那一道"。
+   */
+  async listDeliverableRecipes(orderIdOrId: string): Promise<
+    Array<{
+      recipeId: string;
+      name: string;
+      version: number;
+      updatedAt: Date;
+      linkedToThisOrder: boolean;
+    }>
+  > {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+      select: { id: true, customerId: true, dogId: true, recipeId: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    const recipes = await this.prisma.recipe.findMany({
+      where: {
+        isCustomRecipe: true,
+        customerOwnerId: order.customerId,
+        customerDogId: order.dogId,
+      },
+      select: {
+        id: true,
+        recipeId: true,
+        name: true,
+        version: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
+    return recipes.map((recipe) => ({
+      recipeId: recipe.recipeId,
+      name: recipe.name,
+      version: recipe.version,
+      updatedAt: recipe.updatedAt,
+      linkedToThisOrder: recipe.id === order.recipeId,
+    }));
+  }
+
+  /**
+   * 把一道**已经设计好**的定制食谱交付到订单（2026-10-04，口径 4）。
+   *
+   * 为什么需要它：后台原来只有一个交付入口 —— 在订单页手工填一张表单
+   * （名称/营养/食材/步骤），而设计器里其实已经算好了全部内容，
+   * 两处字段结构还不一样，员工只能**手工重抄一遍**，抄错就得重来。
+   *
+   * 现在设计器发布时会把订单号挂在食谱上（recipe-designer.service 的
+   * createPrivateRecipeSnapshot），后台订单页点一下就能交付。
+   *
+   * 口径 4：允许**重新交付** —— 已交付的单可以换一道食谱，覆盖挂接关系并再次通知顾客。
+   */
+  async deliverExistingRecipe(
+    orderIdOrId: string,
+    recipeIdOrBizId: string,
+  ): Promise<{
+    orderId: string;
+    recipeBizId: string;
+    recipeName: string;
+    redelivered: boolean;
+  }> {
+    const ref = await this.resolveOrderRef(orderIdOrId);
+
+    const order = await this.prisma.customRecipeOrder.findUnique({
+      where: { id: ref.id },
+      select: {
+        id: true,
+        orderId: true,
+        customerId: true,
+        dogId: true,
+        status: true,
+        recipeId: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
+    }
+
+    const deliverable: CustomRecipeStatus[] = [
+      CustomRecipeStatus.PAID,
+      CustomRecipeStatus.IN_PROGRESS,
+      CustomRecipeStatus.DELIVERED,
+    ];
+
+    if (!deliverable.includes(order.status as CustomRecipeStatus)) {
+      throw new BadRequestException(
+        order.status === CustomRecipeStatus.PENDING_PAYMENT
+          ? '该订单还没确认收款，不能交付'
+          : '该订单已取消，不能交付',
+      );
+    }
+
+    // 业务编号（CR…）与主键都认：后台有的地方传业务号、有的传主键
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { OR: [{ recipeId: recipeIdOrBizId }, { id: recipeIdOrBizId }] },
+      select: {
+        id: true,
+        recipeId: true,
+        name: true,
+        isCustomRecipe: true,
+        customerOwnerId: true,
+        customerDogId: true,
+      },
+    });
+
+    if (!recipe) {
+      throw new NotFoundException('食谱不存在');
+    }
+
+    /**
+     * 只能交付「这位顾客 + 这只狗」的私密定制食谱。
+     *
+     * 少了这一步，员工在下拉里选错一条，就会把别人家狗的定制食谱交付出去；
+     * 而这条隐私边界正是 2026-09-28 专门修过的（定制食谱必须是 PRIVATE_CUSTOM）。
+     */
+    if (
+      !recipe.isCustomRecipe ||
+      recipe.customerOwnerId !== order.customerId ||
+      recipe.customerDogId !== order.dogId
+    ) {
+      throw new BadRequestException(
+        '这道食谱不属于该订单的顾客 / 狗狗，不能交付到这张定制单',
+      );
+    }
+
+    const redelivered = order.status === CustomRecipeStatus.DELIVERED;
+
+    await this.prisma.customRecipeOrder.update({
+      where: { id: order.id },
+      data: {
+        recipeId: recipe.id,
+        status: CustomRecipeStatus.DELIVERED,
+        deliveredAt: new Date(),
+      },
+    });
+
+    return {
+      orderId: order.orderId,
+      recipeBizId: recipe.recipeId,
+      recipeName: recipe.name,
+      redelivered,
+    };
+  }
+
   // ==================== 支付相关 ====================
 
   /**

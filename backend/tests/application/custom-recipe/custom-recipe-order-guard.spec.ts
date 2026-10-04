@@ -222,6 +222,192 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
   });
 });
 
+describe('CustomRecipeService · 一键交付已设计好的食谱', () => {
+  let service: CustomRecipeService;
+
+  const orderFindFirst = jest.fn();
+  const orderFindUnique = jest.fn();
+  const orderUpdate = jest.fn();
+  const recipeFindFirst = jest.fn();
+  const recipeFindMany = jest.fn();
+
+  const mockPrismaService = {
+    customRecipeOrder: {
+      findFirst: orderFindFirst,
+      findUnique: orderFindUnique,
+      update: orderUpdate,
+    },
+    recipe: {
+      findFirst: recipeFindFirst,
+      findMany: recipeFindMany,
+    },
+  } as any;
+
+  const baseOrder = {
+    id: 'cr-uuid-1',
+    orderId: 'CR202610040001',
+    customerId: 'user-1',
+    dogId: 'dog-1',
+    status: 'PAID',
+    recipeId: null,
+  };
+
+  const baseRecipe = {
+    id: 'recipe-pk-1',
+    recipeId: 'CR1759000000000',
+    name: '专属鲜食',
+    isCustomRecipe: true,
+    customerOwnerId: 'user-1',
+    customerDogId: 'dog-1',
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CustomRecipeService,
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: TencentCosService, useValue: {} },
+        { provide: CustomRecipeConfigService, useValue: { getConfig: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get(CustomRecipeService);
+    jest.clearAllMocks();
+
+    orderFindFirst.mockResolvedValue({
+      id: baseOrder.id,
+      orderId: baseOrder.orderId,
+    });
+    orderFindUnique.mockResolvedValue({ ...baseOrder });
+    orderUpdate.mockResolvedValue({});
+    recipeFindFirst.mockResolvedValue({ ...baseRecipe });
+  });
+
+  it('把设计器做好的食谱交付到订单：订单挂上食谱并转已交付', async () => {
+    const result = await service.deliverExistingRecipe(
+      'CR202610040001',
+      'CR1759000000000',
+    );
+
+    expect(orderUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cr-uuid-1' },
+        data: expect.objectContaining({
+          recipeId: 'recipe-pk-1',
+          status: 'DELIVERED',
+        }),
+      }),
+    );
+    expect(result.recipeBizId).toBe('CR1759000000000');
+    expect(result.redelivered).toBe(false);
+  });
+
+  it('主键和业务编号都能用来指定食谱', async () => {
+    await service.deliverExistingRecipe('CR202610040001', 'recipe-pk-1');
+
+    expect(recipeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ recipeId: 'recipe-pk-1' }, { id: 'recipe-pk-1' }] },
+      }),
+    );
+  });
+
+  it('⚠️ 不能交付别人家狗的食谱（这条隐私边界 2026-09-28 专门修过）', async () => {
+    recipeFindFirst.mockResolvedValue({
+      ...baseRecipe,
+      customerDogId: 'dog-OTHER',
+    });
+
+    await expect(
+      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
+    ).rejects.toThrow('不属于该订单的顾客 / 狗狗');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('不能交付非定制食谱（防止把公开食谱挂到定制单上）', async () => {
+    recipeFindFirst.mockResolvedValue({ ...baseRecipe, isCustomRecipe: false });
+
+    await expect(
+      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
+    ).rejects.toThrow('不属于该订单的顾客 / 狗狗');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('待付款的订单不能交付（还没收到钱）', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...baseOrder,
+      status: 'PENDING_PAYMENT',
+    });
+
+    await expect(
+      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
+    ).rejects.toThrow('还没确认收款');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('已取消的订单不能交付', async () => {
+    orderFindUnique.mockResolvedValue({ ...baseOrder, status: 'CANCELLED' });
+
+    await expect(
+      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
+    ).rejects.toThrow('已取消');
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('口径 4：已交付的订单可以重新交付，并且标明是重交', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...baseOrder,
+      status: 'DELIVERED',
+      recipeId: 'recipe-pk-OLD',
+    });
+
+    const result = await service.deliverExistingRecipe(
+      'CR202610040001',
+      'CR1759000000000',
+    );
+
+    expect(result.redelivered).toBe(true);
+    expect(orderUpdate).toHaveBeenCalled();
+  });
+
+  it('候选列表只给"这位顾客 + 这只狗"的定制食谱，并标出当前已挂的那道', async () => {
+    orderFindUnique.mockResolvedValue({
+      ...baseOrder,
+      recipeId: 'recipe-pk-1',
+    });
+    recipeFindMany.mockResolvedValue([
+      {
+        id: 'recipe-pk-1',
+        recipeId: 'CR1759000000000',
+        name: '专属鲜食',
+        version: 1,
+        updatedAt: new Date('2026-10-04'),
+      },
+      {
+        id: 'recipe-pk-2',
+        recipeId: 'CR1759000000001',
+        name: '专属鲜食 v2',
+        version: 2,
+        updatedAt: new Date('2026-10-03'),
+      },
+    ]);
+
+    const list = await service.listDeliverableRecipes('CR202610040001');
+
+    expect(recipeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isCustomRecipe: true,
+          customerOwnerId: 'user-1',
+          customerDogId: 'dog-1',
+        },
+      }),
+    );
+    expect(list[0].linkedToThisOrder).toBe(true);
+    expect(list[1].linkedToThisOrder).toBe(false);
+  });
+});
+
 describe('CustomRecipeService · 附件归属校验', () => {
   let service: CustomRecipeService;
 

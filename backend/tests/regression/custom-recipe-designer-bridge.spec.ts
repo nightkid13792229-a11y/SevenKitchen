@@ -104,4 +104,44 @@ describe('定制订单 → 设计器 / AI 通路', () => {
     expect(types).toContain('customRecipeOrder: {');
     expect(types).toContain('needsHealthManagement: boolean');
   });
+
+  /**
+   * 2026-10-04：补上**反方向**的通路 —— 设计器做好的食谱要能挂回订单。
+   *
+   * 此前这条是断的：设计器发布私有定制食谱时不写定制单号，全后端只有后台那个
+   * 手工表单会写，于是员工必须回订单页把数值/食材/步骤**手工重抄一遍**。
+   */
+  it('设计器发布的定制食谱会挂上"正在等食谱"的订单（员工不用再手抄）', () => {
+    const source = backend(
+      'src/application/recipe-designer/recipe-designer.service.ts',
+    );
+
+    expect(source).toContain('resolveCustomRecipeOrderIdForDog');
+    // 挂单：有订单才写，挂不上就保留原链路
+    expect(source).toMatch(/customOrderId \? \{ customOrderId \} : \{\}/);
+    // 只认"钱已收、食谱未交"的两种状态
+    expect(source).toMatch(
+      /CustomRecipeStatus\.PAID,\s*CustomRecipeStatus\.IN_PROGRESS/,
+    );
+
+    // 后台必须有一条不依赖手工重抄的交付通路
+    const controller = backend(
+      'src/interfaces/controllers/custom-recipe/admin-custom-recipe.controller.ts',
+    );
+    expect(controller).toContain('orders/:orderId/recipe-candidates');
+    expect(controller).toContain('orders/:orderId/deliver-recipe');
+    expect(controller).toContain('deliverExistingRecipe');
+  });
+
+  it('一键交付会校验"这道食谱属于该顾客与该狗"（隐私边界不能被绕过）', () => {
+    const service = backend(
+      'src/application/custom-recipe/custom-recipe.service.ts',
+    );
+
+    expect(service).toContain('async deliverExistingRecipe');
+    expect(service).toContain('recipe.customerOwnerId !== order.customerId');
+    expect(service).toContain('recipe.customerDogId !== order.dogId');
+    // 口径 4：已交付的单可以重新交付，并如实告诉调用方这是重交
+    expect(service).toContain('redelivered');
+  });
 });

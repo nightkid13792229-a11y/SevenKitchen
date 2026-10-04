@@ -72,9 +72,14 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     };
   }
 
+  /**
+   * 口径 2（2026-10-04）：改状态接口开始按角色区分 ——
+   * 「开始制作」客服可以做，「取消订单」只有管理员能做，所以测试要带上身份。
+   */
+  const adminReq = { user: { userId: 'admin-1', role: 'ADMIN' } } as any;
+
   const dto = {
-    name: '专属鲜食',
-    description: '按档案定制',
+    name: '专属鲜食',    description: '按档案定制',
     nutritionStandard: 'FEDIAF_2025',
     nutritionTarget: { energy_density_kcal_per_kg: 3600 },
     items: [],
@@ -150,6 +155,7 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     const { controller, customRecipeService } = createAdminController();
 
     await controller.updateStatus(
+      adminReq,
       'CR202609280001',
       CustomRecipeStatus.CANCELLED,
       '顾客改主意',
@@ -169,6 +175,7 @@ describe('CustomRecipeController · 交付与编号口径', () => {
       createAdminController();
 
     await controller.updateStatus(
+      adminReq,
       'CR202609280001',
       CustomRecipeStatus.CANCELLED as any,
       '顾客要求取消',
@@ -190,6 +197,7 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     });
 
     await controller.updateStatus(
+      adminReq,
       'CR202609280001',
       CustomRecipeStatus.CANCELLED as any,
     );
@@ -201,10 +209,41 @@ describe('CustomRecipeController · 交付与编号口径', () => {
     const { controller, customRecipeService } = createAdminController();
 
     await expect(
-      controller.updateStatus('CR202609280001', 'NOT_A_STATUS' as any),
+      controller.updateStatus(adminReq, 'CR202609280001', 'NOT_A_STATUS' as any),
     ).rejects.toThrow('状态值不合法');
 
     expect(customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('口径 2：客服可以开始制作，但取消订单会被拒绝（仅管理员）', async () => {
+    const staffReq = { user: { userId: 'staff-1', role: 'STAFF' } } as any;
+
+    const start = createAdminController({
+      status: CustomRecipeStatus.PAID,
+    });
+    await start.controller.updateStatus(
+      staffReq,
+      'CR202609280001',
+      CustomRecipeStatus.IN_PROGRESS as any,
+    );
+    expect(start.customRecipeService.updateOrderStatus).toHaveBeenCalledWith(
+      'CR202609280001',
+      CustomRecipeStatus.IN_PROGRESS,
+      expect.anything(),
+    );
+
+    const cancel = createAdminController();
+    await expect(
+      cancel.controller.updateStatus(
+        staffReq,
+        'CR202609280001',
+        CustomRecipeStatus.CANCELLED as any,
+      ),
+    ).rejects.toThrow('取消订单需要管理员权限');
+    expect(cancel.customRecipeService.updateOrderStatus).not.toHaveBeenCalled();
+    expect(
+      cancel.wechatPaymentService.createCustomRecipeRefund,
+    ).not.toHaveBeenCalled();
   });
 });
 

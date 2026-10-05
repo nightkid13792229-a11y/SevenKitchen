@@ -208,21 +208,22 @@ export class HealthRecordsController {
     const text = String(name || '').trim();
 
     /*
-     * 三级判定（2026-10-05 定的分工）：
+     * 三级判定（2026-10-05 按老板的规格）：
      *
-     *   ① 查表 —— **产品表定类别**。确定、瞬间、可追溯。
+     *   ① 查表 —— **产品表定分类**。确定、瞬间、可追溯。
      *      「卫佳伍」「宠必威® 幼犬保」「犬四联」都在这步出来。
-     *   ② 问 AI —— 查不到才走这里。**AI 只负责认写法**
-     *      （错别字「卫加伍」、只写品牌「英特威」、口语），
-     *      认出来之后再回表定类别 —— 分类永远只有一份。
-     *   ③ 都认不出 —— 如实返回空数组。界面会说"没认出来"，
-     *      让顾客手动填。**绝不猜。**
+     *   ② 问 AI —— 查不到才走这里。**AI 的任务是认到具体产品**
+     *      （错别字「卫加伍」、只写厂家「英特威」、口语），
+     *      认出来之后**再由产品带出分类** —— AI 不直接给分类，
+     *      分类永远只有我们那张表一份。
+     *   ③ 都认不出 —— 如实返回空数组。界面会**老实承认**，
+     *      并把顾客转到手动录入（弹分类选择器）。**绝不猜。**
      */
     let kinds = classifyVaccineKinds(text);
     let via: 'table' | 'ai' | 'unknown' = 'table';
 
     if (kinds.length === 0 && text) {
-      kinds = await this.healthReportExtractionService.classifyVaccineNameByName(text);
+      kinds = await this.healthReportExtractionService.matchVaccineProductByName(text);
       via = kinds.length > 0 ? 'ai' : 'unknown';
     } else if (kinds.length === 0) {
       via = 'unknown';

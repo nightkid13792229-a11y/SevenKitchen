@@ -62,6 +62,36 @@ const PRESET_NAMES: string[] = [
   '犬冠状病毒',
 ];
 
+/**
+ * 给 AI 看的「产品名 → 分类」清单（2026-10-05）。
+ *
+ * 老板定的做法：
+ *   "AI 先完成一项图片的信息提取，将疫苗产品名称提取出来……
+ *    再由 AI 去匹配这个产品名称在我们的产品库中是哪一个产品。
+ *    另外，我们在产品库中要对每一个产品进行分类，分类好之后，
+ *    AI 匹配到的产品就会自动的匹配到该分类。"
+ *
+ * 所以 AI 的任务是**认到具体产品**，分类由产品带出来 ——
+ * 不是让 AI 直接判分类。这样分类永远只有一份（我们这张表），
+ * AI 只负责"认写法"这件它擅长的事。
+ */
+export function buildProductMatchReference(): string {
+  return VACCINE_PRODUCTS.map((product) => {
+    const aliases = (product.aliases || []).length
+      ? `（也叫 ${(product.aliases || []).join('、')}）`
+      : '';
+    return `· ${product.name}${aliases} —— ${product.kinds
+      .map((kind) => VACCINE_KIND_LABELS[kind])
+      .join(' + ')}`;
+  }).join('\n');
+}
+
+/** 产品名 → 分类（AI 匹配到产品后由这里带出，AI 不直接给分类） */
+export function kindsOfProductName(name: string): VaccineKind[] {
+  const hit = VACCINE_PRODUCTS.find((product) => product.name === name);
+  return hit ? [...hit.kinds] : [];
+}
+
 export function buildVaccineCatalog() {
   const presets: VaccineCatalogPreset[] = PRESET_NAMES.map((name) => ({
     name,

@@ -151,11 +151,16 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     aliases: [],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     diseases: ['犬瘟热', '犬细小病毒病'],
-    kinds: ['core'],
+    // ⚠️ 单独一类，不能跟普通核心苗混（2026-10-05）：
+    //    它 4 周龄起 1 针，之后仍要走 6~8 周起的正常首免 —— 周期完全不同。
+    //    混进 core 的话，系统拿"6~8 周起"的窗口去套它，这一针排不进计划。
+    kinds: ['core_early'],
     minWeeks: 4,
     registration: '（2018）外兽药证字02号',
-    booster: '4~6 周龄基础接种',
-    note: '说明书"建议 4~6 周龄基础接种"—— 这就是指南里"4 周龄起抢跑一针"那类产品。',
+    booster: '4~6 周龄基础接种（1 针，之后仍走常规首免）',
+    note:
+      '说明书"建议 4~6 周龄基础接种"—— 就是指南里"4 周龄起抢跑一针"那类产品。' +
+      '老板 2026-10-05 特意点名它需要单独分类，否则没法排期。',
   },
   {
     name: '优乐康',
@@ -354,6 +359,11 @@ export function recommendProductsForStep(
  * （中牧江西那支犬四联 64 批+，比所有进口苗都多）。产品库里没有它们，
  * 顾客打了国产苗就无处可记 —— 只能乱选一个，那比不做产品库更糟。
  *
+ * 2026-10-05 审计：对照国家兽药基础数据库核过一次，补录了 4 个此前漏收的
+ * 国产狂犬批准文号（惠中 / 佑本 / 爱宠 / 齐鲁）。
+ * **佑达康**（北京科牧丰，兽药生字010726044）批准文号**已于 2025-11-04 过期**，
+ * 是否续展未查到 —— 不收，免得推荐一个可能已经停产的。
+ *
  * ⚠️ 数据来源：国家兽药基础数据库的兽药产品批准文号 / 批签发数据
  *    （见 docs/plans/2026-10-04-vaccine-product-list-review.md 附录）。
  *    这里只用到"商品名 / 企业 / 批准文号 / 防狂犬还是联苗"这些**核对过的**字段；
@@ -546,6 +556,51 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     minWeeks: null,
     registration: '兽药生字031417512',
     booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '惠中犬狂犬',
+    aliases: ['洛阳惠中狂犬'],
+    manufacturer: '洛阳惠中生物技术有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字163006658',
+    booster: '未查到',
+    note: '2026-10-05 审计补录（对照国家兽药基础数据库的批准文号，此前漏收）。',
+    recommendable: false,
+  },
+  {
+    name: '佑本犬狂犬',
+    manufacturer: '杭州佑本动物疫苗有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字110546048',
+    booster: '未查到',
+    note: '2026-10-05 审计补录。',
+    recommendable: false,
+  },
+  {
+    name: '爱宠犬狂犬',
+    manufacturer: '广西爱宠生物科技有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字200766048',
+    booster: '未查到',
+    note: '2026-10-05 审计补录。',
+    recommendable: false,
+  },
+  {
+    name: '齐鲁犬狂犬',
+    manufacturer: '齐鲁动物保健品有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字150257517',
+    booster: '未查到',
+    note: '2026-10-05 审计补录。',
     recommendable: false,
   },
   {

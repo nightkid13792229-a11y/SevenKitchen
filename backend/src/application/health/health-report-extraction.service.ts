@@ -58,6 +58,10 @@ import {
   VACCINE_KINDS,
   type VaccineKind,
 } from '../../domain/health/immunization-schedule';
+import {
+  buildProductMatchReference,
+  kindsOfProductName,
+} from '../../domain/health/vaccine-catalog';
 
 export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
@@ -983,16 +987,20 @@ export class HealthReportExtractionService {
   ) {}
 
   /**
-   * 按名字**认这支苗是什么**（2026-10-05）。
+   * 按名字**匹配到产品库里的哪一个产品**（2026-10-05 按老板的规格改）。
    *
-   * 分工：**AI 负责认写法，产品表负责定类别**。
-   * 查表查不到的（错别字「卫加伍」、只写品牌「英特威」、口语写法）走这里，
-   * 让 AI 认出它指的是哪支苗，再由我们那张审过的表定类别 —— 分类永远只有一份。
+   * 老板原话：
+   *   "顾客手动的输入产品名称。点击确认之后，再来完成 AI 的匹配。
+   *    包括产品匹配和分类匹配。如果用户手动输入的产品名称，
+   *    也没有办法完成产品匹配和分类匹配，那就需要弹出分类的选择器，
+   *    让顾客手动的录入。"
    *
-   * ⚠️ 只在查表失败时调用（罕见），所以这点延迟和成本可以接受。
-   *    AI 也认不出就返回空数组，界面会如实说"没认出来"并让顾客手动填。
+   * 所以 AI 的任务是**认到具体产品**；分类由产品带出来，AI 不直接给分类 ——
+   * 这样分类永远只有我们那张表一份。
+   *
+   * 认不出来返回空数组，界面会**老实承认**并让顾客手动填。
    */
-  async classifyVaccineNameByName(name: string): Promise<VaccineKind[]> {
+  async matchVaccineProductByName(name: string): Promise<VaccineKind[]> {
     const text = String(name || '').trim();
     if (!text) {
       return [];
@@ -1015,33 +1023,36 @@ export class HealthReportExtractionService {
         temperature: 0,
         systemPrompt: [
           '你是宠物疫苗助手。用户会给你一个疫苗本上的写法（可能是商品名、联数、俗称，',
-          '也可能有错别字或多余符号），请判断它指的是哪一类犬用疫苗。',
+          '也可能有错别字、多余符号、或者只写了厂家），',
+          '请你判断它指的是**下面产品库里的哪一个产品**。',
           '',
-          '只能从这四类里选（闭集）：',
-          '· core   核心疫苗：犬瘟热 / 犬细小 / 犬腺病毒 / 犬副流感，以及各类联苗',
-          '· rabies 狂犬疫苗',
-          '· lepto  钩端螺旋体（含钩端的联苗要同时给 core 和 lepto）',
-          '· other  以上都不是（非核心苗、驱虫药、保健品、看不懂的写法）',
+          '产品库（商品名 —— 它属于哪一类）：',
+          buildProductMatchReference(),
           '',
           '规则：',
-          '1. 联苗可以同时占好几类（例如「卫佳捌」= ["core","lepto"]）。',
-          '2. **拿不准就填 ["other"]** —— 绝对不许猜成 core。',
-          '   猜成 core 会让系统以为核心疫苗的某一针已经打完、从此不再提醒家长，',
-          '   比标成 other 严重得多。',
-          '3. 看完就回 JSON，不要解释。',
+          '1. **只认产品库里的产品**，把匹配到的商品名原样填进 productName。',
+          '2. 写法有出入很正常（「卫加伍」→ 卫佳伍、「宠必威® 幼犬保」→ 宠必威幼犬保、',
+          '   「英特威四联」→ 宠必威优免康），按意思认，不要按字面。',
+          '3. **认不出、或拿不准是哪一个产品，就填 null** —— 绝对不许猜。',
+          '   猜错的后果是系统给这只狗排错接种周期，比认不出严重得多。',
+          '   只写了厂家、或者写的是驱虫药/保健品，一律 null。',
+          '4. 看完就回 JSON，不要解释。',
           '',
-          '输出：{ "kinds": ["core"] }',
+          '输出：{ "productName": "卫佳伍" }  或  { "productName": null }',
         ].join('\n'),
         userPayload: { vaccineName: text },
       });
 
-      return normalizeKinds(
-        (parsed as Record<string, unknown>)?.kinds,
-      ) as VaccineKind[];
+      // AI 只给产品名；**分类由产品表带出来**（分类永远只有一份）
+      const matchedProduct = String(
+        (parsed as Record<string, unknown>)?.productName || '',
+      ).trim();
+
+      return kindsOfProductName(matchedProduct);
     } catch (error) {
-      // 认不出来不影响顾客：返回空数组，界面会让他自己填
+      // 认不出来不影响顾客：返回空数组，界面会老实承认并让他手动填
       this.logger.warn(
-        `按名字认疫苗失败（${text}）：${
+        `按名字匹配疫苗产品失败（${text}）：${
           error instanceof Error ? error.message : String(error)
         }`,
       );

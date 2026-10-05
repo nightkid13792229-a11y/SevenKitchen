@@ -126,7 +126,7 @@
             </view>
           </picker>
 
-          <text class="field-hint">产品库里没有？直接在下面写名字，系统会自动判归类。</text>
+          <text class="field-hint">产品库里没有？直接在下面写名字，写完整点。</text>
           <input
             class="field-input"
             type="text"
@@ -136,6 +136,14 @@
             @input="updateDraft(index, 'vaccineName', $event.detail.value)"
             @blur="clearFocus(index)"
           />
+          <!-- 「确认」之后才开始匹配产品与分类（2026-10-05 老板的规格）。
+               不在打字过程中判 —— 一来一回问后端会卡手，
+               而且顾客往往写到一半就被判了个错的。 -->
+          <text
+            class="vaccine-confirm"
+            :class="{ 'vaccine-confirm--busy': matchingIndex === index }"
+            @tap="confirmVaccineName(index)"
+          >{{ matchingIndex === index ? '匹配中…' : '确认' }}</text>
         </view>
 
         <!-- 归类（2026-10-05）。
@@ -178,11 +186,20 @@
 
           <!-- 认不出来：如实说，并让顾客填 -->
           <template v-else>
-            <view v-if="draftOf(record, index).kinds.length === 0" class="vaccine-kind__unknown">
-              <text class="vaccine-kind__unknown-title">这支苗系统没认出来</text>
+            <view v-if="matchingIndex === index" class="vaccine-kind__unknown">
+              <text class="vaccine-kind__unknown-title">正在匹配产品…</text>
               <text class="vaccine-kind__unknown-desc">
-                照本子上的写法再核一遍；确实没有的话，下面选一个 ——
-                分类决定这一针算哪一步、隔多久再打。
+                先从产品库里找，找不到再让 AI 认一次写法。
+              </text>
+            </view>
+            <view
+              v-else-if="draftOf(record, index).kinds.length === 0"
+              class="vaccine-kind__unknown"
+            >
+              <text class="vaccine-kind__unknown-title">这支苗没匹配到</text>
+              <text class="vaccine-kind__unknown-desc">
+                产品库和 AI 都没认出它。照本子上的写法再核一遍，
+                或者下面手动选一个分类 —— 分类决定这一针算哪一步、隔多久再打。
               </text>
             </view>
             <view class="vaccine-name-tags">
@@ -462,57 +479,59 @@ async function loadVaccineCatalog() {
 }
 
 /**
- * 边打字边判归类（2026-10-05）。
+ * 「确认」之后再匹配产品（2026-10-05 按老板的规格改）。
  *
- * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
- * —— 对。名字一填就该判出来，认不出来才让顾客选。
+ * 老板原话：
+ *   "顾客手动的输入产品名称。**点击确认之后**，再来完成 AI 的匹配。
+ *    包括产品匹配和分类匹配。如果用户手动输入的产品名称，
+ *    也没有办法完成产品匹配和分类匹配，那就需要**弹出分类的选择器**，
+ *    让顾客手动的录入。"
  *
- * 分类逻辑只有后端一份（按已审核的产品目录判成分），所以这里停顿 400ms
- * 问一次后端。顾客**自己点过**归类（kindsManual）就不再覆盖他的选择。
+ * 所以不再是"边打字边判"——**顾客点确认才开始匹配**：
+ *   ① 后端先查表（确定、瞬间）
+ *   ② 查不到再让 AI 认到具体产品
+ *   ③ 都认不出 → 老实承认 + 展开分类选择器让顾客填
+ *
+ * 匹配期间卡片上显示"匹配中…"，匹配完把结果显示出来。
  */
-const classifyTimers = new Map<number, ReturnType<typeof setTimeout>>()
-const CLASSIFY_DELAY_MS = 400
+const matchingIndex = ref(-1)
 
-function scheduleClassify(index: number) {
-  const pending = classifyTimers.get(index)
-  if (pending) clearTimeout(pending)
-
-  classifyTimers.set(
-    index,
-    setTimeout(() => {
-      classifyTimers.delete(index)
-      void runClassify(index)
-    }, CLASSIFY_DELAY_MS),
-  )
-}
-
-async function runClassify(index: number) {
+async function confirmVaccineName(index: number) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  if (draft.kindsManual) return
-
   const name = draft.vaccineName.trim()
+
   if (!name) {
-    draft.kinds = []
+    uni.showToast({ title: '请先填写疫苗名称', icon: 'none' })
     return
   }
 
+  matchingIndex.value = index
   try {
     const res: any = await dogApi.classifyVaccineName(name)
-    if (res?.code !== 0 || !res?.data) return
-    // 等回来的时候名字可能又变了 —— 只认当前这个名字的结果
+    // 等回来时名字可能又变了 —— 只认当前这个名字的结果
     if (draftOf(record, index).vaccineName.trim() !== name) return
-    if (draft.kindsManual) return
+    if (res?.code !== 0 || !res?.data) {
+      uni.showToast({ title: '匹配失败，请重试', icon: 'none' })
+      return
+    }
+
     draft.kinds = Array.isArray(res.data.kinds) ? res.data.kinds.map(String) : []
-    // 判出来了就收起选择器（顾客不用做我们的活）；
-    // 判不出来就展开，让他自己填
+    draft.kindsManual = false
+    // 匹配上了就收起选择器（顾客不用做我们的活）；
+    // 没匹配上就**如实承认**并展开，让他自己填
     kindPickerOpen[index] = draft.kinds.length === 0
-    // 判出来了（或仍判不出来）都要重排一次自动保存 ——
-    // 分类是必填，判出来之前存不了
+    if (draft.kinds.length === 0) {
+      uni.showToast({ title: '没匹配到，请手动选一个分类', icon: 'none' })
+    }
     scheduleAutoSave(record, index, { immediate: true })
-  } catch {
-    // 判定失败就留着让顾客自己选，不挡流程
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '匹配失败，请重试', icon: 'none' })
+  } finally {
+    if (matchingIndex.value === index) {
+      matchingIndex.value = -1
+    }
   }
 }
 
@@ -680,11 +699,11 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   }
 
   // 名字变了 → 重新自动判一次归类（顾客之前手点的作废：名字都换了）
+  // 名字改了 → 之前的匹配结果作废，等顾客点「确认」重新匹配
   if (field === 'vaccineName') {
     draft.kindsManual = false
     draft.kinds = []
     kindPickerOpen[index] = false
-    scheduleClassify(index)
   }
 
   // 实时保存（2026-10-03 老板定：底部保存键下线）。
@@ -1403,6 +1422,23 @@ async function doRemove(record: VaccineRecord) {
 
 .vaccine-card__delete--disabled {
   opacity: 0.5;
+}
+
+/* 名称输入框下面的「确认」：匹配产品与分类的起点 */
+.vaccine-confirm {
+  display: block;
+  margin-top: 16rpx;
+  padding: 16rpx 0;
+  text-align: center;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+}
+
+.vaccine-confirm--busy {
+  opacity: 0.6;
 }
 
 /* 认不出来时的说明（2026-10-05）：不装懂，把话说清楚再让顾客填 */

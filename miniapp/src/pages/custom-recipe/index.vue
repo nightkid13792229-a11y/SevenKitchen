@@ -36,9 +36,23 @@
         </view>
       </view>
 
-      <!-- 定位文案：Banner 换成身份块之后这句话要留着，
-           它是顾客理解"这一页在做什么"的唯一说明 -->
-      <text class="hero-card__slogan">告诉我们它的情况，我们来单独设计一道</text>
+      <!-- 生命阶段 / 体况评分 / 活动量（2026-10-05 老板要求挪进 Banner）：
+           这三项直接决定这单食谱的用量，顾客要在一眼之内核对完，
+           原先它们各占信息卡的一行，现在并进身份块下面。 -->
+      <view v-if="selectedDog" class="hero-card__facts">
+        <view class="hero-card__fact">
+          <text class="hero-card__fact-label">生命阶段</text>
+          <text class="hero-card__fact-value">{{ getDogLifeStageLabel(selectedDog) }}</text>
+        </view>
+        <view class="hero-card__fact">
+          <text class="hero-card__fact-label">体况评分</text>
+          <text class="hero-card__fact-value">{{ getBCSText(selectedDog.bcsScore) }}</text>
+        </view>
+        <view class="hero-card__fact">
+          <text class="hero-card__fact-label">活动量</text>
+          <text class="hero-card__fact-value">{{ getActivityLabel(selectedDog.activityLevel) }}</text>
+        </view>
+      </view>
     </view>
 
     <!-- 待付款单提醒（2026-10-04 新增）。
@@ -176,23 +190,6 @@
         >{{ gateBcsPending ? '请先做完上面的体况问题' : (gateSaving ? '保存中…' : '确认并继续') }}</button>
       </view>
 
-      <!-- 狗狗基本信息：体况与活动量是这单食谱用量的依据，顾客要能核对。
-           品种与体重已在 Banner 里出现过，这里不重复第二遍。 -->
-      <view v-if="selectedDog" class="dog-info-card">
-        <view class="info-row">
-          <text class="label">生命阶段：</text>
-          <text class="value">{{getDogLifeStageLabel(selectedDog)}}</text>
-        </view>
-        <view class="info-row">
-          <text class="label">体况评分：</text>
-          <text class="value">{{getBCSText(selectedDog.bcsScore)}}</text>
-        </view>
-        <view class="info-row">
-          <text class="label">活动量：</text>
-          <text class="value">{{getActivityLabel(selectedDog.activityLevel)}}</text>
-        </view>
-      </view>
-
       <!-- 未登录：这里要区分"没登录"和"没有狗狗档案"。
            原先未登录时读不到档案，页面直接落到下面的"还没有狗狗档案"空态，
            顾客会被引导去建档，建到一半才发现其实还得先登录。
@@ -218,29 +215,25 @@
       </view>
     </view>
 
-    <!-- 第一步：定制目标 -->
+    <!-- 第一步：体重管理（2026-10-05 老板要求：标题由"定制目标"改为"体重管理"，
+         并删掉标题下方重复的"体重管理"四个字） -->
     <view class="section">
       <view class="section-title">
         <text class="step-number">1</text>
-        <text class="title-text">定制目标</text>
+        <text class="title-text">体重管理</text>
       </view>
 
-      <!-- 体重管理：这里**不再让顾客选方向**（老板 2026-10-04 拍板）。
+      <!-- 这一块**不再让顾客选方向**（老板 2026-10-04 拍板）。
            方向改由「体重管理计划」决定，没有计划就按体况给，
            所以这一块变成"看结论 + 去计划页"的引导入口。
            为什么不让顾客在这里选：同一只狗的方向在两个地方能选出相反值，
-           而两个值都会交给营养师。 -->
-      <view class="goal-group">
-        <text class="group-title">体重管理</text>
+           而两个值都会交给营养师。
 
+           2026-10-05 老板要求：**只保留最上方的提醒**（体况结论），
+           下面那组"你的目标 / 每天需要约 X kcal"整块删掉。 -->
+      <view class="goal-group">
         <view v-if="bcsAdviceText" class="advice-line">
           <text class="advice-line__text">{{ bcsAdviceText }}</text>
-        </view>
-
-        <view v-if="goalTargetSummary" class="target-line">
-          <text class="target-line__title">{{ goalTargetSummary.title }}</text>
-          <text class="target-line__detail">{{ goalTargetSummary.detail }}</text>
-          <text v-if="goalTargetSummary.note" class="target-line__note">{{ goalTargetSummary.note }}</text>
         </view>
 
         <button class="plan-entry-btn" @tap="goToWeightGoalPlan">{{ planEntryButtonText }}</button>
@@ -262,13 +255,17 @@
         <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
 
         <view class="health-header">
-          <text class="health-title">它不能吃的东西</text>
+          <!-- 2026-10-05 老板要求：删掉"它不能吃的东西"这个重复标题
+               （板块标题已经是"过敏信息"），只留手动添加入口 -->
           <text class="add-btn" @tap="addAllergen">+ 添加</text>
         </view>
 
         <!-- 常见过敏原：点一下选中、再点一下取消（2026-10-04）。
              原先只能"加"，加错了得跑到下面的列表里找那条点「删除」，
-             同一个标签要管两处。现在标签自己就是开关。 -->
+             同一个标签要管两处。现在标签自己就是开关。
+
+             2026-10-05 老板要求：选中态**不加 ✓**，靠高亮表示；
+             并且选中的不再在下方重复列一遍 —— 标签自己就是状态的唯一展示。 -->
         <view class="allergen-quick-add">
           <view class="tag-list">
             <view
@@ -277,20 +274,22 @@
               class="tag-item allergen-quick-tag"
               :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
               @tap="toggleAllergenByName(name)"
-            >{{ name }}{{ isAllergenAdded(name) ? ' ✓' : '' }}</view>
+            >{{ name }}</view>
           </view>
         </view>
 
-        <view class="tag-list">
+        <!-- 下方只列**手动录入**的过敏原（快选里没有的那些）。
+             它们没有对应的标签可以点掉，必须留一个能看到、能删的地方；
+             快选项不在这里重复出现。 -->
+        <view v-if="customAllergens.length > 0" class="tag-list">
           <view
-            v-for="(allergen, index) in formData.allergies"
-            :key="index"
+            v-for="(allergen, index) in customAllergens"
+            :key="allergen"
             class="tag-item editable"
           >
             <text>{{allergen}}</text>
-            <text class="remove-btn" @tap.stop="removeAllergen(index)">删除</text>
+            <text class="remove-btn" @tap.stop="removeCustomAllergen(allergen)">删除</text>
           </view>
-          <text v-if="formData.allergies.length === 0" class="empty-text">暂无过敏信息</text>
         </view>
 
         <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
@@ -332,7 +331,7 @@
       <text v-if="preferencePrefillHint" class="preference-prefill-hint">{{ preferencePrefillHint }}</text>
 
       <view class="preference-section">
-        <text class="preference-title">喜欢的食材（可选）</text>
+        <text class="preference-title">爱吃的食材（可选）</text>
         <view class="tag-list">
           <view
             v-for="(ingredient, index) in formData.preferredIngredients"
@@ -349,7 +348,7 @@
       </view>
 
       <view class="preference-section">
-        <text class="preference-title">不吃的食材（可选）</text>
+        <text class="preference-title">忌口的食材（可选）</text>
         <view class="tag-list">
           <view
             v-for="(ingredient, index) in formData.dislikedIngredients"
@@ -374,7 +373,6 @@
         <text class="step-number">4</text>
         <text class="title-text">备注（可选）</text>
       </view>
-      <text class="notes-hint">营养师会看到这段说明，但它不会改变价格或热量计算。</text>
       <textarea
         v-model="formData.additionalNotes"
         class="notes-input"
@@ -385,17 +383,12 @@
       <!-- 附件（可选）：检测报告、化验单的照片 -->
       <view class="attachment-section">
         <view class="attachment-header">
-          <text class="attachment-title">上传资料（可选）</text>
           <text v-if="canAddAttachment" class="attachment-add" @tap="pickAttachment">
-            {{ attachmentUploading ? '上传中…' : '+ 上传照片' }}
+            {{ attachmentUploading ? '上传中…' : '上传资料（可选）' }}
           </text>
           <text v-else class="attachment-limit">已传满 {{ maxAttachmentCount }} 张</text>
         </view>
-        <!-- 文案与能力必须一致：这里只能选照片（选文件通道打不开，PDF 预览也打不开），
-             所以文案只承诺照片，并把张数一次说清。 -->
-        <text class="attachment-hint">
-          照片形式上传，最多 {{ maxAttachmentCount }} 张（已传 {{ formData.attachmentUrls.length }} 张）。检测报告、化验单拍清楚即可。
-        </text>
+        <text class="attachment-hint">每次最多 {{ maxAttachmentCount }} 张</text>
         <view v-if="formData.attachmentUrls.length > 0" class="attachment-list">
           <view
             v-for="(url, index) in formData.attachmentUrls"
@@ -407,7 +400,6 @@
             <text class="attachment-remove" @tap.stop="removeAttachment(index)">删除</text>
           </view>
         </view>
-        <text v-else class="attachment-empty">还没有上传资料</text>
       </view>
     </view>
 
@@ -913,6 +905,8 @@ const canSubmit = computed(() => {
  * 2026-10-04 起这句话不只是"建议"：顾客那一组单选删掉之后，
  * 没有体重管理计划时方向就按这里同一套判据定（见 resolveTargetGoal），
  * 所以话里说的"建议减重/增重/维持"就是系统真正会提交的方向，不会自相矛盾。
+ *
+ * 2026-10-05 老板要求：体重管理卡片只保留这句提醒（下方热量块整块删掉）。
  */
 const bcsAdviceText = computed(() => {
   const bcs = Number(selectedDog.value?.bcsScore);
@@ -927,68 +921,6 @@ const bcsAdviceText = computed(() => {
   return `按它目前的体况评分 ${bcs}/9（理想），我们建议：维持。`;
 });
 
-const GOAL_LABELS: Record<string, string> = {
-  LOSE_WEIGHT: '减重',
-  MAINTAIN: '维持',
-  GAIN_WEIGHT: '增重',
-};
-
-/**
- * 把"系统定的方向具体是多少"讲出来（老板问题 1）。
- *
- * 口径说明：这里显示的是系统当前的实际数值 ——
- * **计划进行中时就是计划值**（后端已按计划覆盖，见阶段 D1/D2），
- * 否则是算法默认维持量。方向作为"设计方向"交给营养师与 AI 去落实 ——
- * 我们没有自己发明"减重就乘 0.8"这类临床系数，那需要兽医营养口径来定。
- */
-const goalTargetSummary = computed(() => {
-  const goal = formData.value.targetGoal;
-  if (!goal) return null;
-
-  const label = GOAL_LABELS[goal] || '定制';
-  const kcal = Number(selectedDog.value?.targetFoodKcal);
-
-  if (!Number.isFinite(kcal) || kcal <= 0) {
-    return {
-      title: `你的目标：${label}`,
-      detail: '营养师会在设计时按这个方向调整配比与喂食量。',
-      note: '',
-    };
-  }
-
-  /**
-   * 2026-10-04 老板要求：体重管理这里**不显示饭量（克数）**。
-   *
-   * 热量是营养学口径，顾客看得懂、也便于和档案里的数字对照；
-   * 克数依赖"最终用哪道食谱的能量密度"，在食谱还没设计出来之前只能按
-   * 已上架食谱的中位数估算 —— 写出来容易被顾客当成承诺。
-   */
-  const sourceText = selectedPlan.value
-    ? `按${selectedPlan.value.direction === 'LOSS' ? '减重' : '增重'}计划，`
-    : '按它目前的体况，';
-
-  return {
-    title: `你的目标：${label}`,
-    detail: `${sourceText}每天需要约 ${Math.round(kcal)} kcal`,
-    note: `营养师会按「${label}」方向调整配方与喂食量，最终以交付的定制食谱为准。`,
-  };
-});
-
-/** 告诉顾客"这些是从档案带出来的"，而不是他们上次填的 */
-const healthPrefillHint = computed(() => {
-  if (healthSummaryLoading.value) return '正在读取档案里已有的过敏记录…';
-  const data = healthSummary.value;
-  if (!data) return '';
-
-  const allergyCount = Array.isArray(data.allergies) ? data.allergies.length : 0;
-
-  if (allergyCount === 0) {
-    return '档案里还没有过敏记录，可以在这里补充。';
-  }
-
-  return `已从档案带出 ${allergyCount} 项过敏记录，你可以增删。`;
-});
-
 const preferencePrefillHint = computed(() => {
   const preferred = formData.value.preferredIngredients.length;
   const disliked = formData.value.dislikedIngredients.length;
@@ -996,10 +928,6 @@ const preferencePrefillHint = computed(() => {
   return '已从档案带出你上次填过的口味，可以直接修改。两项都可以留空。';
 });
 
-const feeLabel = computed(() => {
-  const fee = recipeConfig.value?.feeAmount;
-  return fee && fee > 0 ? `¥${formatAmount(fee)}` : '';
-});
 
 /**
  * 按钮只讲"下一步要付多少钱"。
@@ -1007,9 +935,7 @@ const feeLabel = computed(() => {
  * 原来写「提交定制订单 ¥300」：金额出现在"提交"这个词后面，顾客很容易理解成
  * "点下去就是付 300"。改成「下一步：支付 ¥300」，把"提交"和"付款"分成两步说清。
  */
-const submitButtonText = computed(() =>
-  feeLabel.value ? `下一步：支付 ${feeLabel.value}` : '下一步：支付定制费',
-);
+const submitButtonText = '确认定制';
 
 /**
  * 支付时限提示。
@@ -1052,10 +978,15 @@ const deliveryNote = computed(() => '自动排最近可接单的工作日，遇�
 const creditHint = computed(() => {
   const config = recipeConfig.value;
   if (!config || config.creditAmount <= 0) return '';
+  /**
+   * 2026-10-05 老板要求：文案统一说清"这笔钱抵的是**这道食谱**的鲜食成品费用"
+   * —— 原先只说"成品货款"，顾客不知道能抵哪一道。
+   * 全额抵扣与部分抵扣只差开头几个字。
+   */
   if (config.creditAmount >= config.feeAmount) {
-    return `定制费可全额抵扣成品货款（¥${formatAmount(config.creditAmount)}）`;
+    return `定制费可全额用作抵扣该食谱的鲜食成品费用（¥${formatAmount(config.creditAmount)}）`;
   }
-  return `其中 ¥${formatAmount(config.creditAmount)} 可抵扣成品货款`;
+  return `其中 ¥${formatAmount(config.creditAmount)} 可用作抵扣该食谱的鲜食成品费用`;
 });
 
 // ==================== 待付款单提醒 ====================
@@ -1460,7 +1391,11 @@ const pickAttachment = async () => {
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
-        sourceType: ['album', 'camera'],
+        /**
+         * 只从相册选（2026-10-05 老板要求：与过敏报告上传一致）。
+         * 只给一个来源时微信不再弹"拍照 / 从相册选择"的选择器。
+         */
+        sourceType: ['album'],
         success: resolve,
         fail: reject,
       });
@@ -1580,6 +1515,25 @@ const isAllergenAdded = (name: string) =>
   formData.value.allergies.includes(String(name || '').trim());
 
 /**
+ * 下方列表只列**手动录入**的过敏原（快选标签里没有的那些）。
+ *
+ * 2026-10-05 老板要求：快选选中的不在下方重复展示（标签自己就是状态）。
+ * 但手动录入的（特别是 AI 从报告里读出来的）没有标签可点，
+ * 必须留一个能看到、能删的地方，否则加错了没法撤销。
+ */
+const customAllergens = computed(() =>
+  formData.value.allergies.filter(
+    (item) => !commonAllergens.value.includes(String(item || '').trim()),
+  ),
+);
+
+/** 删掉一条手动录入的过敏原（按值删，位置由 customAllergens 决定） */
+const removeCustomAllergen = (allergen: string) => {
+  const index = formData.value.allergies.indexOf(allergen);
+  if (index >= 0) formData.value.allergies.splice(index, 1);
+};
+
+/**
  * 过敏原检测报告（2026-10-04 从健康管理搬来）。
  *
  * 报告是独立实体：检测日期 / 方式 / 原件 / 识别原文。
@@ -1644,9 +1598,6 @@ function previewAllergyReport(report: Record<string, any>) {
   uni.previewImage({ urls, current: urls[0] });
 }
 
-const removeAllergen = (index: number) => {
-  formData.value.allergies.splice(index, 1);
-};
 
 const addPreferredIngredient = () => {
   uni.showModal({
@@ -1858,6 +1809,32 @@ const getActivityLabel = (level: string) => {
   display: block;
 }
 
+/* 生命阶段 / 体况评分 / 活动量：深色 Banner 里横排三格（2026-10-05 从信息卡挪来） */
+.hero-card__facts {
+  display: flex;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(243, 237, 221, 0.18);
+}
+
+.hero-card__fact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.hero-card__fact-label {
+  font-size: 22rpx;
+  color: rgba(243, 237, 221, 0.62);
+}
+
+.hero-card__fact-value {
+  font-size: 26rpx;
+  color: #f3eddd;
+}
+
 .hero-card__identity-inner {
   display: flex;
   align-items: center;
@@ -1905,13 +1882,6 @@ const getActivityLabel = (level: string) => {
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.5);
 }
 
-.hero-card__slogan {
-  display: block;
-  margin-top: 20rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: #cfe0d5;
-}
 
 /* ---------- 区块 ---------- */
 .section {
@@ -2168,13 +2138,6 @@ const getActivityLabel = (level: string) => {
   margin-bottom: 30rpx;
 }
 
-.group-title {
-  display: block;
-  margin-bottom: 16rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--sk-ink-2, #6b6653);
-}
 
 /* 方向由系统定，页面上只展示结论 + 一个去计划页的按钮 */
 .plan-entry-btn {
@@ -2208,36 +2171,9 @@ const getActivityLabel = (level: string) => {
 }
 
 /* ===== 选中目标后的具体数字（老板问题 1） ===== */
-.target-line {
-  margin-top: 20rpx;
-  padding: 20rpx 22rpx;
-  border-radius: 16rpx;
-  background: #eef2e4;
-  border: 1rpx solid #dde3cd;
-}
 
-.target-line__title {
-  display: block;
-  font-size: 27rpx;
-  font-weight: 600;
-  color: #1e3a2f;
-}
 
-.target-line__detail {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: #26261f;
-}
 
-.target-line__note {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.6;
-  color: #6b6653;
-}
 
 /* ===== 从档案带出的说明 ===== */
 .health-prefill-hint,
@@ -2250,13 +2186,6 @@ const getActivityLabel = (level: string) => {
 }
 
 /* ===== 备注（可选） ===== */
-.notes-hint {
-  display: block;
-  margin-bottom: 12rpx;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #6b6653;
-}
 
 /* ===== 附件（可选） ===== */
 .attachment-section {
@@ -2270,11 +2199,6 @@ const getActivityLabel = (level: string) => {
   gap: 16rpx;
 }
 
-.attachment-title {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #26261f;
-}
 
 .attachment-add {
   font-size: 25rpx;

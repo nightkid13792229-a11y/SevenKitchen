@@ -5,18 +5,14 @@
        为什么留一个"确认"步骤：AI 只负责把报告上的字读出来，
        记不记、记哪几项由家长定 —— 医疗信息不能让 AI 自己定（决策 5/9）。 -->
   <view class="allergy-scan">
-    <view class="allergy-scan__head">
-      <text class="allergy-scan__title">有检测报告？拍一下自动读</text>
-      <text class="allergy-scan__desc">
-        过敏原检测报告即可。读出来先给你确认，确认后才加进这一单。
-      </text>
-    </view>
-
+    <!-- 2026-10-05 老板要求：删掉按钮上方的标题与说明（含"拍一下自动读"），
+         并把按钮文案改成「上传过敏检测报告」；同时**只支持从相册选照片**，
+         不调相机、也不弹"拍照/相册"选择器。 -->
     <button
       class="allergy-scan__button"
       :disabled="extracting"
       @tap="pickReport"
-    >{{ extracting ? '识别中…' : '上传/拍摄检测报告' }}</button>
+    >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
 
     <!-- 候选确认卡：默认一个都不选，逐项由家长点 -->
     <view v-if="candidates.length > 0" class="allergy-scan__candidates">
@@ -105,7 +101,12 @@ async function pickReport() {
         count: 9,
         // 拿原图：识别准不准取决于给模型多少像素（见 utils/scan-image.ts）
         sizeType: SCAN_IMAGE_SIZE_TYPE,
-        sourceType: ['album', 'camera'],
+        /**
+         * 只从相册选（2026-10-05 老板要求）。
+         * 只给一个来源时微信不再弹"拍照 / 从相册选择"的选择器，
+         * 直接进相册 —— 顾客不用多答一道选择题。
+         */
+        sourceType: ['album'],
         success: resolve,
         fail: reject,
       })

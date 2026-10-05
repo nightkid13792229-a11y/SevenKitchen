@@ -7,8 +7,11 @@
 const HOLIDAY_FETCH_TIMEOUT_MS = 3000;
 
 /**
- * Add work days to a date (excluding public holidays)
- * Note: Weekends are included as per requirements
+ * Add work days to a date (excluding weekends and public holidays)
+ *
+ * 2026-10-05 老板拍板：**周末也跳过**（此前只跳公众假期，周末照算）。
+ * 起因：定制页写着"约 3 个工作日"，算出来的交付日却可能落在周六 ——
+ * 与"工作日"的叫法自相矛盾，生产端周末也不出货。
  *
  * ⚠️ 必须是 async 且 `await isPublicHoliday(...)`。
  * 历史上这里漏了 await：`!isPublicHoliday(result)` 里 isPublicHoliday 返回的是
@@ -29,13 +32,20 @@ export async function addWorkDays(
   while (daysAdded < workDays && iterations < maxIterations) {
     iterations++;
     result.setDate(result.getDate() + 1);
-    // Only skip public holidays, not weekends
-    if (!(await isPublicHoliday(result))) {
-      daysAdded++;
-    }
+    // 周六 / 周日不算工作日
+    if (isWeekend(result)) continue;
+    // 公众假期也不算
+    if (await isPublicHoliday(result)) continue;
+    daysAdded++;
   }
 
   return result;
+}
+
+/** 周六或周日（按服务器本地日历，与 setDate 的推进口径一致） */
+function isWeekend(date: Date): boolean {
+  const day = date.getDay();
+  return day === 0 || day === 6;
 }
 
 /**

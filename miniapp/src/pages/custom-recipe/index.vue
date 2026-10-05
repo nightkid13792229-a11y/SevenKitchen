@@ -403,23 +403,14 @@
       </view>
     </view>
 
-    <!-- 交付与费用说明
-         口径（2026-10-04 拍板）：**顾客不选日期**，提交后由系统自动排"最近可接单的
-         工作日"（当天约满或遇节假日则顺延）。所以这里只能给一个量级正确的参考日 ——
-         真正权威的日期由后端在下单响应与订单接口里给，不进提交载荷。 -->
-    <view class="section delivery-section">
-      <view class="delivery-info">
-        <text class="delivery-label">预计交付：</text>
-        <text class="delivery-date">{{ deliveryHint }}</text>
-      </view>
-      <text class="delivery-note">{{ deliveryNote }}</text>
-      <!-- 「成品抵扣」是卖点，必须留着；付款金额与按钮在底部固定栏，
-           这里不再重复一块"下一步：支付"（老板 2026-10-04：重复了）。 -->
-      <view v-if="creditHint" class="credit-info">
-        <text class="credit-label">成品抵扣</text>
-        <text class="credit-value">{{ creditHint }}</text>
-      </view>
-    </view>
+    <!-- 交付与抵扣这一整块**已删除**（老板 2026-10-05 拍板）。
+         两个原因：
+           ① 提交前这里显示的"预计交付"是前端按"今天 + N 个工作日"估的参考值，
+              **不含节假日**，国庆期间必然偏早（实测页面显示 10/8，后端实际排到 10/10）
+              —— 与确认页给的权威日期打架，不如不显示；
+           ② 确认页（提交成功页）已经完整显示「预计交付」与「成品抵扣额度 + 说明」，
+              这一块本来就是重复的。
+         权威日期与抵扣，顾客提交后在确认页看到。 -->
 
     <!-- 提交按钮
          disabled 必须带上 submitting：按钮文案是"下一步：支付 ¥300"，
@@ -449,9 +440,7 @@ import {
 } from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
-  estimateDeliveryDate,
   formatAmount,
-  formatMonthDay,
   formatRemainingMinutes,
   resolvePaymentDeadlineAt,
 } from '@/utils/custom-recipe-order';
@@ -948,46 +937,6 @@ const paymentHint = computed(() =>
     paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
   }),
 );
-
-/**
- * 交付口径。
- *
- * 2026-10-04 口径变更：顾客不再选日期，由后端自动排"最近可接单的工作日"。
- * 提交前拿不到权威日期，这里按后台配置的"交付工作日数"给一个**参考日**
- * （含周末顺延），真正的日期以下面的小字说明为准（遇约满/节假日顺延）。
- */
-const deliveryHint = computed(() => {
-  const days = recipeConfig.value?.deliveryWorkDays;
-  if (!days || days <= 0) return '下单后自动排期';
-
-  const estimated = estimateDeliveryDate(days);
-  if (!estimated) return `约 ${days} 个工作日内`;
-
-  return `${formatMonthDay(estimated)}（约 ${days} 个工作日）`;
-});
-
-/**
- * 交付小字（2026-10-04 老板要求精简成一句）。
- *
- * 原来是一整句"提交后系统自动排最近可接单的工作日 / 当天约满或遇节假日顺延 /
- * 确切日期以订单为准"，信息没错但太长；参考日期本来就在上面那一行里给，
- * 这里只留排期规则本身。是否配了交付工作日数都不影响这句话。
- */
-const deliveryNote = computed(() => '自动排最近可接单的工作日，遇节假日顺延。');
-
-const creditHint = computed(() => {
-  const config = recipeConfig.value;
-  if (!config || config.creditAmount <= 0) return '';
-  /**
-   * 2026-10-05 老板要求：文案统一说清"这笔钱抵的是**这道食谱**的鲜食成品费用"
-   * —— 原先只说"成品货款"，顾客不知道能抵哪一道。
-   * 全额抵扣与部分抵扣只差开头几个字。
-   */
-  if (config.creditAmount >= config.feeAmount) {
-    return `定制费可全额用作抵扣该食谱的鲜食成品费用（¥${formatAmount(config.creditAmount)}）`;
-  }
-  return `其中 ¥${formatAmount(config.creditAmount)} 可用作抵扣该食谱的鲜食成品费用`;
-});
 
 // ==================== 待付款单提醒 ====================
 
@@ -2401,57 +2350,13 @@ const getActivityLabel = (level: string) => {
 }
 
 /* ---------- 交付与抵扣 ---------- */
-.delivery-section {
-  background: var(--sk-gold-soft, #f6efe0);
-  border-color: rgba(176, 141, 79, 0.45);
-}
 
-.delivery-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10rpx;
-}
 
-.delivery-label {
-  font-size: 28rpx;
-  color: var(--sk-ink-2, #6b6653);
-}
 
-.delivery-date {
-  margin-left: 10rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--sk-gold, #b08d4f);
-}
 
-.delivery-note {
-  display: block;
-  text-align: center;
-  font-size: 24rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
 
-.credit-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  margin-top: 16rpx;
-}
 
-.credit-label {
-  padding: 4rpx 16rpx;
-  font-size: 22rpx;
-  color: #1e3a2f;
-  background: linear-gradient(135deg, #e7d3a5 0%, #d8bc85 100%);
-  border-radius: 999rpx;
-}
 
-.credit-value {
-  font-size: 24rpx;
-  color: var(--sk-ink-2, #6b6653);
-}
 
 /* ---------- 待付款单提醒（首页顶部） ---------- */
 .pending-banner {

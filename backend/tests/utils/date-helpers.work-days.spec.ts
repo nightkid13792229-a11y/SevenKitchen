@@ -108,3 +108,41 @@ describe('date-helpers.isPublicHoliday', () => {
     ).resolves.toBe(false);
   });
 });
+
+/**
+ * 周末也要跳过（老板 2026-10-05 拍板）。
+ *
+ * 原口径是"只跳公众假期、周末照算"，于是"3 个工作日"可能落在周六 ——
+ * 与"工作日"的叫法自相矛盾，生产端周末也不出货。
+ */
+describe('date-helpers.addWorkDays · 跳过周末', () => {
+  const realFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = realFetch;
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('周五 + 1 个工作日 = 下周一（跳过周六周日）', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ holiday: {} }),
+    }) as any;
+
+    // 2026-10-16 是周五
+    const result = await addWorkDays(new Date('2026-10-16T00:00:00.000Z'), 1);
+
+    expect(result.toISOString().slice(0, 10)).toBe('2026-10-19');
+  });
+
+  it('周末本身不会被算作工作日起点', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ holiday: {} }),
+    }) as any;
+
+    // 2026-10-17 是周六：+2 个工作日 = 周二 10-20（周一算第 1 天）
+    const result = await addWorkDays(new Date('2026-10-17T00:00:00.000Z'), 2);
+
+    expect(result.toISOString().slice(0, 10)).toBe('2026-10-20');
+  });
+});

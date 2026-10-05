@@ -431,12 +431,11 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 describe('custom recipe page · 结构与知情同意', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('页面顺序：定制目标 → 过敏信息 → 饮食偏好 → 备注（可选）→ 交付说明', () => {
-    const goalIndex = page.indexOf('定制目标')
+  it('页面顺序：体重管理 → 过敏信息 → 饮食偏好 → 备注（可选）', () => {
+    const goalIndex = page.indexOf('体重管理')
     const allergyIndex = page.indexOf('过敏信息')
     const preferenceIndex = page.indexOf('饮食偏好（可选）')
     const notesIndex = page.indexOf('备注（可选）')
-    const deliveryIndex = page.indexOf('class="section delivery-section"')
 
     expect(goalIndex).toBeGreaterThan(-1)
     // 2026-10-04：原「1 选择狗狗」取消，其余步骤依次前移，
@@ -445,7 +444,11 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(preferenceIndex).toBeGreaterThan(allergyIndex)
     // 备注独立成第 4 步，并且排在饮食偏好之后
     expect(notesIndex).toBeGreaterThan(preferenceIndex)
-    expect(deliveryIndex).toBeGreaterThan(notesIndex)
+    /**
+     * 2026-10-05 老板要求：交付/抵扣整块删掉（确认页已有），
+     * 所以它不再参与页面顺序。
+     */
+    expect(page).not.toContain('delivery-section')
   })
 
   it('「其他需求」不再留在体重管理卡片里', () => {
@@ -707,19 +710,18 @@ describe('custom recipe scheduling · 系统自动排期', () => {
     // 工作日数仍然只能来自 GET /custom-recipe-config
     expect(submit).toContain("url: '/custom-recipe-config'")
     expect(submit).toContain('deliveryWorkDays')
-    expect(submit).toContain('estimateDeliveryDate')
     /**
      * 2026-10-04 老板要求把交付小字精简成一句（原句里的"确切日期以订单为准"删掉）：
      * 上面那一行已经给了参考日期，小字只讲排期规则。原来锁"以订单为准"这句话的
      * 断言随之去掉，改锁精简后的原文 + 提交载荷里确实没有日期字段。
      *
      * 文案按代码里的原文定位，不按注释 —— 注释里会提到"原来那句写了什么"。
+     *
+     * 2026-10-05 更新：交付/抵扣整块已删，前端**不再自己估算交付日**
+     * （那个估算不含节假日，国庆期间与后端权威日期打架）。
      */
-    expect(submit).toContain("const deliveryNote = computed(() => '自动排最近可接单的工作日，遇节假日顺延。');")
-    const deliveryNoteSource =
-      submit.match(/const deliveryNote = computed\(\(\) => [^\n]*\n/)?.[0] || ''
-    expect(deliveryNoteSource).not.toBe('')
-    expect(deliveryNoteSource).not.toContain('以订单为准')
+    expect(submit).not.toContain('const deliveryNote')
+    expect(submit).not.toContain('estimateDeliveryDate')
     // 前端不再把"当天"当成顾客选的预约日期塞给后端（CreateOrderDTO 已不采信该字段）
     expect(submit).not.toContain('getTodayDateString')
     expect(submit).not.toContain('scheduledDate:')
@@ -1157,7 +1159,6 @@ describe('定制页 · 体重管理引导进计划页', () => {
     const customerFacingCopy = [
       '查看体重管理计划',
       '去制定体重管理计划',
-      '自动排最近可接单的工作日，遇节假日顺延。',
     ]
 
     for (const copy of customerFacingCopy) {
@@ -1309,25 +1310,31 @@ describe('定制页 · Banner 融入选狗器', () => {
 describe('定制页 · 交付说明与支付块', () => {
   const page = read(`${PAGE_DIR}/index.vue`)
 
-  it('交付小字就是精简后的那一句', () => {
-    expect(page).toContain('const deliveryNote = computed(() => \'自动排最近可接单的工作日，遇节假日顺延。\');')
-    // 原长句不再出现
-    expect(page).not.toContain('当天约满或遇节假日顺延），确切日期以订单为准')
-    expect(page).not.toContain('提交后系统会自动排最近可接单的工作日，确切交付日期以订单为准')
+  it('交付与抵扣整块已删（改由确认页展示）', () => {
+    /**
+     * 2026-10-05 老板决定：定制页不再显示"预计交付 + 成品抵扣"。
+     * 两个理由：① 提交前那个日期是前端估的、不含节假日，会与后端权威日期打架；
+     * ② 确认页（提交成功页）本来就完整显示这两项。
+     */
+    expect(page).not.toContain('deliveryHint')
+    expect(page).not.toContain('deliveryNote')
+    expect(page).not.toContain('creditHint')
+    // 文案断言要用去注释后的源码（删块说明的注释里会提到这两项）
+    expect(stripComments(page)).not.toContain('预计交付')
+    expect(stripComments(page)).not.toContain('成品抵扣')
+    // 确认页确实还在展示这两项（否则顾客就再也看不到了）
+    const success = read(`${PAGE_DIR}/success.vue`)
+    expect(success).toContain('预计交付')
+    expect(success).toContain('成品抵扣额度')
   })
 
-  it('pay-next-info 整块已删，credit-info 仍在', () => {
+  it('pay-next-info 整块已删，底部固定栏保留', () => {
     expect(page).not.toContain('pay-next-info')
     expect(page).not.toContain('pay-next-title')
     expect(page).not.toContain('pay-next-desc')
     expect(page).not.toContain('提交后请在提交成功页')
-    // 「成品抵扣 ¥150」是卖点，必须留着
-    expect(page).toContain('class="credit-info"')
-    expect(page).toContain('成品抵扣')
-    expect(page).toContain('creditHint')
-    // 底部固定栏的支付按钮与金额也还在
+    // 底部固定栏的按钮仍在（文案已改为"确认定制"）
     expect(page).toContain('submitButtonText')
-    expect(page).toContain('下一步：支付')
   })
 })
 
@@ -1395,9 +1402,14 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(scan).not.toContain("'camera'")
   })
 
-  it('成品抵扣说明写明"抵的是这道食谱的鲜食成品费用"', () => {
-    expect(page).toContain('可用作抵扣该食谱的鲜食成品费用')
-    expect(code).not.toContain('可抵扣成品货款')
+  it('成品抵扣说明已随整块移出定制页（第 12 项与第 14 项冲突，以第 14 项为准）', () => {
+    /**
+     * 老板 2026-10-05 先要求改抵扣文案（第 12 项），随后又问"整块能不能删"（第 14 项）
+     * 并选定**整块删掉**。所以定制页不再有这句文案，
+     * 抵扣由确认页展示（那里有额度 + 完整说明）。
+     */
+    expect(page).not.toContain('可用作抵扣该食谱的鲜食成品费用')
+    expect(read(`${PAGE_DIR}/success.vue`)).toContain('成品抵扣额度')
   })
 
   it('提交按钮改为「确认定制」（它不做支付，只下单+订阅授权+跳下一步）', () => {

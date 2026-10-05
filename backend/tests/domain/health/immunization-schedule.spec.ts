@@ -15,6 +15,7 @@ import {
   detectConflicts,
   isVaccinePlanCustomerEnabled,
   parseDateText,
+  recordCoversStep,
   toDateText,
   weeksBetween,
   type VaccineRecordLike,
@@ -1154,5 +1155,112 @@ describe('排期规则：同品牌优先 + 不同分类不同天', () => {
     for (const step of plan.steps) {
       expect(step.basis.length).toBeGreaterThan(8)
     }
+  })
+})
+
+/**
+ * 老板第 2 问与第 4 问引出的两条规则（2026-10-05）。
+ */
+describe('单联苗顶不上 + 多联苗别重复（老板四问的收尾）', () => {
+  const TODAY2 = new Date('2026-10-01T00:00:00');
+
+  function dogAt(ageWeeks: number) {
+    return toDateText(new Date(TODAY2.getTime() - ageWeeks * 7 * 86400000));
+  }
+  function rec(id: string, name: string, date: string): VaccineRecordLike {
+    return { id, vaccineName: name, vaccinationDate: date, nextDueDate: null };
+  }
+
+  it('🔴 单联苗/二联苗**顶不上**核心首免 —— 记了也当没打过', () => {
+    // 老板第 2 问："像卫佳细这种单联疫苗……即便顾客记录接种了这一类的疫苗，
+    // 也当做没有接种过。核心疫苗需要重新开始免疫流程呢？"
+    // 实质正确。卫佳细只防细小、犬二联只防两种，都顶不上要求防四种的核心首免。
+    expect(recordCoversStep('卫佳细', 'core')).toBe(false)
+    expect(recordCoversStep('犬二联', 'core')).toBe(false)
+    expect(recordCoversStep('犬三联', 'core')).toBe(false)
+    // 四联及以上才顶得上
+    expect(recordCoversStep('卫佳伍', 'core')).toBe(true)
+    expect(recordCoversStep('犬四联', 'core')).toBe(true)
+    expect(recordCoversStep('卫佳捌', 'core')).toBe(true)
+  })
+
+  it('记了一条犬二联，核心首免那几针**不算完成**（继续提醒）', () => {
+    const birthday = dogAt(30)
+    // 10 周龄打了一针犬二联 —— 正好落在首免第 2 针的窗口里
+    const date = addWeeks(new Date(birthday + 'T00:00:00'), 10)
+      .toISOString()
+      .slice(0, 10)
+
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday,
+      records: [rec('r1', '犬二联', date)],
+      today: TODAY2,
+    })
+
+    // 一条都不能算完成 —— 宁可多提醒
+    const coreSteps = plan.steps.filter((step) => step.kind === 'core')
+    expect(coreSteps.length).toBeGreaterThan(0)
+    expect(coreSteps.some((step) => step.status === 'DONE')).toBe(false)
+  })
+
+  it('🔴 刚打过核心苗之后，钩端那一步只推**钩端单苗**，不再推多联苗', () => {
+    // 老板第 4 问："如果一只幼犬在 16 周后打了一针卫佳八……
+    // 它的下一针是要再打一针卫佳八，还是单独隔 2~4 周打一针钩端螺旋体呢？"
+    // 答案：**隔 2~4 周单独打一针钩端单苗** ——
+    // 再来一针卫佳捌等于核心苗在 2~4 周内又打了一次，而核心该等到 26 周。
+    // 用**固定日期**，不要用 toISOString 算 —— 跨时区会差一天，
+    // 结果核心苗没落在窗口里，规则就不触发了（第一版测试就是这么假失败的）。
+    // 生日 2026-01-05：6/10/14/18 周分别是下面这四天。
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: [
+        rec('r1', '卫佳伍', '2026-02-16'),
+        rec('r2', '卫佳伍', '2026-03-16'),
+        rec('r3', '卫佳伍', '2026-04-13'),
+        // 18 周那一针是**卫佳捌**（核心 + 钩端）
+        rec('r4', '卫佳捌', '2026-05-11'),
+      ],
+      // 站在 21 周看
+      today: new Date('2026-06-01T00:00:00'),
+    })
+
+    const lepto = plan.steps.filter((step) => step.kind === 'lepto')
+    expect(lepto.length).toBeGreaterThan(0)
+    for (const step of lepto) {
+      // 只推单苗 —— 卫佳捌/优乐康这类"核心+钩端"的组合苗不许出现
+      expect(step.commonProducts).not.toContain('卫佳捌')
+      expect(step.commonProducts).not.toContain('优乐康')
+      expect(step.commonProducts).toContain('宠必威乐必妥')
+    }
+  })
+
+  it('没打过钩端的狗，26 周补强照常推多联苗（不误伤常见做法）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dogAt(26),
+      records: [],
+      today: TODAY2,
+    })
+
+    const booster = plan.steps.find((step) => step.key === 'core-26w')
+    expect(booster).toBeDefined()
+    // 钩端从来就没"刚打过"，所以卫佳捌照推 —— 这是医院的常见做法
+    expect(booster!.commonProducts).toContain('卫佳捌')
+  })
+
+  it('过期批准文号的疫苗不收录（佑达康）', () => {
+    // 老板第 3 条："批准文号已过期的疫苗产品不收录。"
+    // 佑达康（北京科牧丰，兽药生字010726044）有效期至 2025-11-04，已过期。
+    const names = VACCINE_PRODUCTS.map((product) => product.name).join(' ')
+    expect(names).not.toContain('佑达康')
+    expect(names).not.toContain('科牧丰')
+  })
+
+  it('瑞比克归属勃林格（老板确认）', () => {
+    const product = VACCINE_PRODUCTS.find((item) => item.name === '瑞比克')
+    expect(product).toBeDefined()
+    expect(product!.brand).toBe('勃林格')
   })
 })

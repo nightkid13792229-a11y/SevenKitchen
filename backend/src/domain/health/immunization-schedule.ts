@@ -1,5 +1,6 @@
 import {
   findProductsInName,
+  productCoversKind,
   recommendProductsForStep,
   resolvePreferredBrand,
 } from './vaccine-products';
@@ -857,6 +858,46 @@ function buildNonCoreSeeds(
   return seeds;
 }
 
+/**
+ * 这条记录**顶不顶得上**这一类（2026-10-05）。
+ *
+ * 产品库里有这支苗 → 用它核过的成分判（`productCoversKind`）。
+ * 库里没有的（顾客手写"犬四联"这种）→ 按写法判：
+ *   · 核心：要写得出**四种都防**的迹象（四联及以上的联数）
+ *     —— 这正是不让"犬二联"顶核心首免的地方。
+ *   · 早期核心：二联/幼犬保这类"防犬瘟+细小"的
+ *   · 狂犬 / 钩端：写出病名即可
+ */
+export function recordCoversStep(vaccineName: string, kind: VaccineKind): boolean {
+  const text = String(vaccineName || '').toLowerCase();
+
+  const products = findProductsInName(text);
+  if (products.length > 0) {
+    return products.some((product) => productCoversKind(product, kind));
+  }
+
+  // 产品库里没有的手写写法，按字面判
+  if (kind === 'rabies') return /狂犬|rabies/.test(text);
+  if (kind === 'lepto') return /钩端|lepto/i.test(text);
+  if (kind === 'core') {
+    // 「四联」及以上，或者四种病名都写全了 —— 才算顶得上核心首免
+    return (
+      /[四五六七八九]联/.test(text) ||
+      (/犬瘟|distemper/.test(text) &&
+        /细小|parvo/.test(text) &&
+        /腺病毒|传染性肝炎/.test(text) &&
+        /副流感/.test(text))
+    );
+  }
+  if (kind === 'core_early') {
+    return (
+      /幼犬保|早期苗|抢跑/.test(text) ||
+      (/犬瘟|distemper/.test(text) && /细小|parvo/.test(text))
+    );
+  }
+  return true;
+}
+
 /** 这一步的时间窗里有没有对应类型的记录 */
 function findMatchingRecord(
   seed: StepSeed,
@@ -866,6 +907,11 @@ function findMatchingRecord(
     (item) =>
       // 一支组合苗能顶好几类，所以看的是"包含"而不是"等于"
       item.kinds.includes(seed.kind) &&
+      // ⚠️ 光"归到这一类"还不够，还得**顶得上**（2026-10-05）：
+      //    卫佳细、犬二联都归"核心疫苗"，但一个只防细小、一个只防两种，
+      //    顶不上要求防四种病的核心首免。顶不上就继续提醒 ——
+      //    多提醒无害，漏提醒有害。
+      recordCoversStep(item.record.vaccineName, seed.kind) &&
       item.date.getTime() >= seed.windowStart.getTime() &&
       item.date.getTime() <= seed.windowEnd.getTime(),
   );
@@ -1164,12 +1210,9 @@ export function buildVaccinePlan(
         basis: seed.basis,
         reminder: buildReminder(status, seed.label, noEvidence),
         // 这一步大概在几周龄 → 决定哪些产品顶得上（最低首免周龄不能晚于它）
-        commonProducts: recommendProductsForStep(
-          seed.kind,
-          weeksBetween(birthday, seed.windowStart),
-          { preferredBrand },
-        ).map((product) => product.name),
-        // 先占位，下面算完"跟别的分类有没有撞车"再填
+        // 先占位：推荐产品要等**所有步骤的状态都出来**才能算
+        // （见下面"多联苗该不该推"那一段），间距提醒同理。
+        commonProducts: [],
         spacingNote: '',
       };
     })
@@ -1202,6 +1245,57 @@ export function buildVaccinePlan(
       // UPCOMING / SKIPPED：看它是不是在近期将来
       return start.getTime() <= addDays(today, 540).getTime() && recentEnough;
     });
+
+  /*
+   * 多联苗该不该推（2026-10-05 老板第 4 问）。
+   *
+   * 老板举的例子：幼犬 16 周后打了一针卫佳捌（核心+钩端），
+   * 那钩端第 2 针（2~4 周后）该推什么？
+   *   · 再推一针卫佳捌 → **核心苗在 2~4 周内又打了一次**，
+   *     可核心这时候该等到 26 周才补强 —— 重复了，不该推。
+   *   · 推一支钩端单苗（宠必威乐必妥）→ 正好。
+   *
+   * 判据（比"窗口重叠"精确）：
+   *   某个**别的**分类，如果它**刚打过（90 天内完成过一步）**、
+   *   而且**现在没有该打的步骤**（没在待办里），
+   *   那么这一步就只推"单一分类"的苗 —— 别顺带把那个分类再打一遍。
+   *
+   * 反例（不能误伤）：26 周龄的核心补强，狗没打过钩端 ——
+   *   钩端从来就没"刚打过"，所以卫佳捌照常推。这是常见做法。
+   */
+  const recentlyDoneKinds = new Set(
+    steps
+      .filter((step) => {
+        if (step.status !== 'DONE') return false;
+        const end = parseDateText(step.windowEnd);
+        return Boolean(end) && end!.getTime() >= addDays(today, -90).getTime();
+      })
+      .map((step) => step.kind),
+  );
+  /*
+   * "现在真的要打"的分类 —— **只算该打了 / 已逾期**。
+   *
+   * ⚠️ 不能把 UPCOMING 也算进来：那样"26 周那个还很远的补强"会让 core
+   *    一直留在待办里，于是"刚打过核心"这件事永远不算数，多联苗永远被放行。
+   *    实测就是这么翻车的：18 周打完卫佳捌之后，钩端那一步还在推卫佳捌。
+   */
+  const pendingNowKinds = new Set(
+    steps
+      .filter((step) => step.status === 'DUE' || step.status === 'OVERDUE')
+      .map((step) => step.kind),
+  );
+
+  for (const step of steps) {
+    const blockedKind = [...recentlyDoneKinds].some(
+      (kind) => kind !== step.kind && !pendingNowKinds.has(kind),
+    );
+
+    step.commonProducts = recommendProductsForStep(
+      step.kind,
+      weeksBetween(birthday, parseDateText(step.windowStart) || birthday),
+      { preferredBrand, allowCombo: !blockedKind },
+    ).map((product) => product.name);
+  }
 
   /*
    * 不同分类的针别撞在一起（老板规则二）。

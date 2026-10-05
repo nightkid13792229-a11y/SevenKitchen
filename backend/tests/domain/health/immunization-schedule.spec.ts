@@ -1,3 +1,4 @@
+import { buildVaccineCatalog } from '../../../src/domain/health/vaccine-catalog';
 import {
   ALL_VACCINE_KINDS,
   CORE_ADULT_BOOSTER,
@@ -44,13 +45,33 @@ describe('疫苗计划', () => {
   }
 
   describe('疫苗名分类', () => {
-    it('只区分狂犬与其它（名字是自由文本，细分没有可靠依据）', () => {
+    it('认得出的按真实成分归类', () => {
       expect(classifyVaccineName('狂犬疫苗')).toBe('rabies');
       expect(classifyVaccineName('Rabies')).toBe('rabies');
-      expect(classifyVaccineName('rabies vaccine')).toBe('rabies');
-      expect(classifyVaccineName('六联')).toBe('core');
       expect(classifyVaccineName('卫佳伍')).toBe('core');
-      expect(classifyVaccineName('')).toBe('core');
+      // 联数写法也要认 —— 产品目录只收进口苗，"六联"是顾客的常态写法
+      expect(classifyVaccineName('六联')).toBe('core');
+      expect(classifyVaccineName('犬四联')).toBe('core');
+      expect(classifyVaccineName('犬瘟热')).toBe('core');
+    })
+
+    it('🔴 认不出来的一律**不猜**（2026-10-05）', () => {
+      // 以前这里是"不认识就当核心苗"，后果很严重：
+      // 一针驱虫药、一支非核心的犬窝咳，只要日期落在窗口里，
+      // 就会把核心苗的某一针标记成**已完成** —— 我们从此不再提醒，
+      // 而且没人看得出来为什么。
+      expect(classifyVaccineName('随便写点什么')).toBe('other');
+      expect(classifyVaccineName('')).toBe('other');
+      expect(classifyVaccineKinds('随便写点什么')).toEqual([]);
+      expect(classifyVaccineKinds('拜宠清')).toEqual([]); // 那是驱虫药，不是疫苗
+    })
+
+    it('非核心、而且我们没有程序的 → other，不参与计划', () => {
+      // WSAVA 里犬窝咳、冠状病毒都属于"按生活方式逐只评估"的非核心苗。
+      // 记下来是对的，能顶掉核心苗的某一针是错的。
+      expect(classifyVaccineKinds('犬窝咳')).toEqual(['other']);
+      expect(classifyVaccineKinds('犬冠状病毒')).toEqual(['other']);
+      expect(classifyVaccineKinds('莱姆病')).toEqual(['other']);
     })
   })
 
@@ -817,5 +838,70 @@ describe('疫苗计划', () => {
       const rabies = schedule.find((item) => item.kind === 'rabies')!;
       expect(rabies.basis).toContain('说明书');
     })
+  })
+})
+
+/**
+ * 疫苗名称库 + 归类闭集（2026-10-05）。
+ *
+ * 老板："怎么保障用户填写正确的、可以被识别并归类的产品名称？"
+ * 这份目录就是答案的载体：一点即选的名字都带已知归类；
+ * 产品库进口国产都能选，但只有进口能进"常见的有…"那一行。
+ */
+describe('疫苗目录（名称库 + 归类闭集）', () => {
+  it('归类闭集就是四类，other 不参与计划', () => {
+    const catalog = buildVaccineCatalog();
+
+    expect(catalog.kinds.map((k) => k.value)).toEqual([
+      'core',
+      'rabies',
+      'lepto',
+      'other',
+    ]);
+    expect(catalog.kinds.find((k) => k.value === 'other')!.affectsPlan).toBe(false);
+    expect(catalog.kinds.find((k) => k.value === 'core')!.affectsPlan).toBe(true);
+  })
+
+  it('一点即选的名字**每一个都带得出归类**（点一下就不会错）', () => {
+    const catalog = buildVaccineCatalog();
+
+    expect(catalog.presets.length).toBeGreaterThan(5);
+    for (const preset of catalog.presets) {
+      expect(preset.kinds.length).toBeGreaterThan(0)
+    }
+    // 抽查几个容易错的
+    const byName = Object.fromEntries(catalog.presets.map((p) => [p.name, p.kinds]))
+    expect(byName['狂犬疫苗']).toEqual(['rabies'])
+    expect(byName['犬四联']).toEqual(['core'])
+    expect(byName['钩端螺旋体']).toEqual(['lepto'])
+    // 犬窝咳是**非核心**，绝不能落进核心苗
+    expect(byName['犬窝咳']).toEqual(['other'])
+    expect(byName['犬冠状病毒']).toEqual(['other'])
+  })
+
+  it('产品库：国产能选，但不可推荐', () => {
+    const catalog = buildVaccineCatalog();
+
+    const domestic = catalog.products.filter((p) => p.recommendable === false)
+    const imported = catalog.products.filter((p) => p.recommendable !== false)
+
+    // 审核意见第 5 条"不推荐国产" + 2026-10-05"产品库允许选国产"
+    expect(domestic.length).toBeGreaterThan(5)
+    expect(imported.length).toBeGreaterThan(5)
+
+    // 国产苗确实在库里（顾客打了国产苗得有地方记）
+    expect(domestic.some((p) => p.name.includes('犬康') || p.name.includes('犬力康'))).toBe(true)
+  })
+
+  it('产品库每一项的归类都在闭集里', () => {
+    const catalog = buildVaccineCatalog();
+    const allowed = new Set(catalog.kinds.map((k) => k.value));
+
+    for (const product of catalog.products) {
+      expect(product.kinds.length).toBeGreaterThan(0)
+      for (const kind of product.kinds) {
+        expect(allowed.has(kind)).toBe(true)
+      }
+    }
   })
 })

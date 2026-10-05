@@ -92,8 +92,38 @@
       </view>
 
       <view v-if="expandedIndex === index" class="vaccine-card__body">
+        <!-- 疫苗名称（2026-10-05 改成"先选、选不到再写"）。
+             老板："怎么保障用户填写正确的、可以被识别并归类的产品名称？"
+             三条路，越靠前越不会错：
+               ① 一点即选的名字（每个都带已知归类）
+               ② 产品库（进口 + 国产都能选，选完归类自动带出来）
+               ③ 手填兜底（库里确实没有的），但归类必须自己指定
+             不管走哪条，**归类一定有值** —— 系统再也不猜。 -->
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
+          <view class="vaccine-name-tags">
+            <text
+              v-for="preset in presetNames"
+              :key="preset.name"
+              class="vaccine-name-tag"
+              @tap="applyNamePreset(index, preset)"
+            >{{ preset.name }}</text>
+          </view>
+
+          <picker
+            v-if="catalogProducts.length > 0"
+            mode="selector"
+            :range="catalogProducts"
+            range-key="name"
+            :value="productIndex(draftOf(record, index).vaccineName)"
+            @change="applyCatalogProduct(index, $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ productPickerLabel(draftOf(record, index).vaccineName) }}
+            </view>
+          </picker>
+
+          <text class="field-hint">产品库里没有？直接在下面写名字，归类自己选。</text>
           <input
             class="field-input"
             type="text"
@@ -103,14 +133,6 @@
             @input="updateDraft(index, 'vaccineName', $event.detail.value)"
             @blur="clearFocus(index)"
           />
-          <view class="vaccine-name-tags">
-            <text
-              v-for="name in commonVaccineNames"
-              :key="name"
-              class="vaccine-name-tag"
-              @tap="updateDraft(index, 'vaccineName', name)"
-            >{{ name }}</text>
-          </view>
         </view>
 
         <!-- 归类（2026-10-05）。
@@ -121,23 +143,22 @@
              顾客也会想改，去掉就没法纠正了。所以两个都留：
              上面照旧能改名字，下面把"系统把它归成了哪一类"如实告诉他 ——
              归类直接决定它算哪一步、多久打一次，顾客看得见才敢改。 -->
+        <!-- 归类：**必填**（2026-10-05 老板："允许用户自行填写疫苗产品名称，
+             但是类型还是必填项"）。点标签或选产品都会自动带出来，
+             只有手填才需要自己点一下。 -->
         <view class="field-group">
-          <text class="field-label">归类</text>
-          <view v-if="kindLabelsOf(record, index).length > 0" class="vaccine-kind">
+          <text class="field-label">归类（必填）</text>
+          <view class="vaccine-name-tags">
             <text
-              v-for="label in kindLabelsOf(record, index)"
-              :key="label"
-              class="vaccine-kind__tag"
-            >{{ label }}</text>
+              v-for="option in kindOptions"
+              :key="option.value"
+              class="vaccine-name-tag"
+              :class="{ 'vaccine-name-tag--active': draftOf(record, index).kinds.includes(option.value) }"
+              @tap="toggleKind(index, option.value)"
+            >{{ option.label }}</text>
           </view>
-          <text v-else-if="vaccineNameChanged(record, index)" class="field-hint">
-            名称改了，保存后会自动更新归类。
-          </text>
-          <text v-else class="field-hint">
-            填好疫苗名称后，系统会按它的成分归到对应的接种程序里。
-          </text>
           <text class="field-hint">
-            归类决定这一针算哪一步、隔多久再打。
+            归类决定这一针算哪一步、隔多久再打。「其他（非核心）」只记录、不影响提醒。
           </text>
         </view>
 
@@ -223,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { scrollPageToSelector } from '../../utils/page-scroll'
 import { dogApi, type VaccineRecordCreatePayload } from '../../api/dogs'
 import {
@@ -264,6 +285,14 @@ interface VaccineDraft {
   nextDueDate: string
   notes: string
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
+  /**
+   * 归类（2026-10-05）：core / rabies / lepto / other。
+   *
+   * **顾客必须明确指定**（点标签、选产品、或自己选）——
+   * 系统再也不猜。以前认不出来默认当核心苗，一针驱虫药也能把
+   * 核心苗的某一针标记成已完成，我们从此不再提醒。
+   */
+  kinds: string[]
 }
 
 const props = defineProps<{
@@ -334,35 +363,69 @@ defineExpose({
   flushAutoSaves,
 })
 
-/**
- * 常见疫苗名：一点即选，避免顾客手打（与过敏原标签同一思路）。
- *
- * ⚠️ 2026-10-04 改：**原来 8 个全是"病名"**（犬瘟热、犬细小病毒…），
- * 但顾客疫苗本上印的是**产品名/联数**（犬四联、卫佳伍、英特威）。
- * 两边对不上 —— 顾客拿着本子找不到自己那个词，只能手打或随便点一个。
- *
- * 现在按"本子上真会写的写法"排：
- *   · 联数名（犬二联/四联/八联）—— 国产进口都这么叫
- *   · 疫苗种类（狂犬疫苗）
- *   · 病名（有些本子确实按病名写）
- *
- * 品牌名（卫佳伍、英特威…）等产品清单核实完再加进来 —— 那份清单要对着
- * 国家兽药基础数据库和说明书核，不能凭印象写。
+/* ── 疫苗目录（2026-10-05）────────────────────────────────────────────
+ * 名称库、归类闭集、产品库都由后端下发 —— 分类与产品是后端的 domain 知识，
+ * 前端复制一份迟早对不上（这个项目以前就吃过亏）。
+ * 拉不到时页面照旧能用（只是少了产品库），点标签仍然带得出归类。
  */
-const commonVaccineNames = [
-  // 本子上最常出现的联数写法
-  '狂犬疫苗',
-  '犬二联',
-  '犬四联',
-  '犬八联',
-  // 按病名写的本子
-  '犬瘟热',
-  '犬细小病毒',
-  '犬传染性肝炎',
-  '犬副流感',
-  '犬窝咳',
-  '钩端螺旋体',
-]
+const presetNames = ref<{ name: string; kinds: string[] }[]>([])
+const kindOptions = ref<{ value: string; label: string; affectsPlan?: boolean }[]>([])
+const catalogProducts = ref<{ name: string; manufacturer: string; kinds: string[] }[]>([])
+
+async function loadVaccineCatalog() {
+  try {
+    const res: any = await dogApi.vaccineCatalog()
+    if (res?.code !== 0 || !res?.data) return
+    presetNames.value = Array.isArray(res.data.presets) ? res.data.presets : []
+    kindOptions.value = Array.isArray(res.data.kinds) ? res.data.kinds : []
+    catalogProducts.value = Array.isArray(res.data.products) ? res.data.products : []
+  } catch {
+    // 目录是加分项：拉不到就退回"点标签 + 自己选归类"，不挡主流程
+  }
+}
+
+/** 点一个预设名 → 名字和归类一起定下来 */
+function applyNamePreset(index: number, preset: { name: string; kinds: string[] }) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+  draft.vaccineName = preset.name
+  draft.kinds = [...preset.kinds]
+  scheduleAutoSave(record, index, { immediate: true })
+}
+
+/** 从产品库选 → 名字、归类一起带出来（厂商/批准文号后端有，界面只显示名） */
+function applyCatalogProduct(index: number, value: string | number) {
+  const record = records.value[index]
+  const product = catalogProducts.value[Number(value)]
+  if (!record || !product) return
+  const draft = draftOf(record, index)
+  draft.vaccineName = product.name
+  draft.kinds = [...product.kinds]
+  scheduleAutoSave(record, index, { immediate: true })
+}
+
+function productIndex(name: string): number {
+  const found = catalogProducts.value.findIndex((item) => item.name === name)
+  return found >= 0 ? found : 0
+}
+
+function productPickerLabel(name: string): string {
+  return name && catalogProducts.value.some((item) => item.name === name)
+    ? name
+    : '从产品库选择（进口 / 国产都有）'
+}
+
+/** 归类是多选：组合苗本来就同时属于好几类（卫佳捌 = 核心 + 钩端） */
+function toggleKind(index: number, kind: string) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+  draft.kinds = draft.kinds.includes(kind)
+    ? draft.kinds.filter((item) => item !== kind)
+    : [...draft.kinds, kind]
+  scheduleAutoSave(record, index, { immediate: true })
+}
 
 /**
  * 状态取值（**选项已下线，只留显示**，2026-10-04 老板提问后改）。
@@ -423,6 +486,8 @@ function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
     // 认的是"显示名表"（含退休的 OVERDUE），不是"可选项表" ——
     // 老记录是 OVERDUE 就原样带着，别因为选项里没有了就悄悄改成已接种。
     status: (STATUS_LABELS[status] ? status : 'COMPLETED') as VaccineDraft['status'],
+    // 记录自己存的归类；老记录是空的，由界面提示顾客补选
+    kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
   }
 }
 
@@ -489,6 +554,9 @@ function autoSaveBlockReason(record: VaccineRecord, index: number): string {
   const draft = draftOf(record, index)
   if (!draft.vaccineName.trim()) return '还差疫苗名称，填完自动保存'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
+  // 归类必填（2026-10-05 老板：手填时"类型还是必填项"）。
+  // 没有归类这一条记录就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
+  if (draft.kinds.length === 0) return '还差归类，选一个自动保存'
   return ''
 }
 
@@ -720,6 +788,11 @@ watch(
   { immediate: true },
 )
 
+// 疫苗目录只在进页面时拉一次（静态数据，不随狗变）
+onMounted(() => {
+  void loadVaccineCatalog()
+})
+
 /**
  * 已保存记录的"指纹"（只用有 id 的，草稿不算）。
  *
@@ -804,6 +877,9 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),
       status: 'COMPLETED',
+      // AI 判的归类（2026-10-05）。后端已经过了一遍闭集校验：
+      // 认不出来的会是空数组，界面会请顾客自己选一下 —— 不让它悄悄变成核心苗。
+      kinds: Array.isArray(draft.kinds) ? draft.kinds.map(String) : [],
       // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
       // 疫苗本是接种凭证，出行/寄养/换医院都可能要看原件。
       // 一张本子上的多条接种记录共用同一张原图（照片就是那一页）。
@@ -855,6 +931,7 @@ function addRecord() {
     nextDueDate: '',
     notes: '',
     status: 'COMPLETED',
+    kinds: [],
   }
 
   records.value = [...records.value, draft]
@@ -886,6 +963,8 @@ function buildPayload(
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,
     notes: draft.notes.trim() || null,
+    // 归类（2026-10-05）：显式带上。空数组 = 顾客还没选 —— 界面会挡住不让存
+    kinds: draft.kinds,
     // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
     // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
     attachments: attachmentList(record),
@@ -1293,6 +1372,12 @@ async function doRemove(record: VaccineRecord) {
   flex-wrap: wrap;
   gap: 12rpx;
   margin-top: 14rpx;
+}
+
+.vaccine-name-tag--active {
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  border-color: var(--health-accent, #1e3a2f);
 }
 
 .vaccine-name-tag {

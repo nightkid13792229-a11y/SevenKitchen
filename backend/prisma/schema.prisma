@@ -1434,6 +1434,17 @@ model VaccineRecord {
   /// 此前只存了 AI 抄下来的文字，原件丢了就无从对证。
   /// 与 checkup_record / medical_record / allergy_record 同一套存法（URL 数组）。
   attachments     String[]      @default([]) @map("attachments")
+  /// 这条记录被归成的疫苗类别（2026-10-05）。
+  ///
+  /// 取值 core / rabies / lepto / other，**可多值** —— 一支组合苗能同时属于
+  /// 好几类（卫佳捌 = core + lepto，打它两步都算完成）。
+  ///
+  /// 为什么必须存下来、而不是读的时候拿名字现推：以前推不出来就默认当核心苗，
+  /// 于是一针驱虫药「拜宠清」也能把核心苗的某一针标记成已完成 ——
+  /// 我们从此不再提醒，而且没人看得出来为什么。
+  ///
+  /// 空数组 = 老记录（这一列是后加的），读时按名字兼容推导一次。
+  kinds           String[]      @default([]) @map("kinds")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)

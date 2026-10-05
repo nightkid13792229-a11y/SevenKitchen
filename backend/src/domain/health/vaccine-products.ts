@@ -42,7 +42,7 @@ export interface VaccineProduct {
    * 只放**含义确定**的写法。故意不放"犬八联"这种：
    * 各家含义不一样，拿它当"含钩端"会误判。
    */
-  aliases: string[];
+  aliases?: string[];
   /** 厂商（仅展示，不参与匹配） */
   manufacturer: string;
   /** 防哪些病 */
@@ -67,6 +67,15 @@ export interface VaccineProduct {
   booster: string;
   /** 审核时特别记下的话，展示给内部看 */
   note?: string;
+  /**
+   * 能不能出现在"常见的有…"那一行里（2026-10-05）。
+   *
+   * ⚠️ 国产苗一律 `false` —— 老板审核意见第 5 条："所有国产疫苗都不推荐"。
+   *    但**可以出现在产品库里让顾客自己选**（老板 2026-10-05 补充：
+   *    "推荐的时候不可以推荐国产品牌，但是产品库里面允许用户自己选择国产品牌"）。
+   *    两个概念别混：**推荐 ≠ 可选**。
+   */
+  recommendable?: boolean;
 }
 
 /**
@@ -76,6 +85,7 @@ export interface VaccineProduct {
  * 批数多的说明现在真在卖，顾客在医院更可能见到）。
  */
 export const VACCINE_PRODUCTS: VaccineProduct[] = [
+  /* ── 进口苗（可推荐；顺序 = 推荐顺序，按批签发批数） ── */
   /* ── 核心苗 ─────────────────────────────────────────────── */
   {
     name: '卫佳捌',
@@ -277,7 +287,7 @@ export function findProductsInName(name: string): VaccineProduct[] {
   }
 
   return VACCINE_PRODUCTS.filter((product) => {
-    const candidates = [product.name, ...product.aliases];
+    const candidates = [product.name, ...(product.aliases || [])];
     return candidates.some((candidate) => {
       const key = normalizeProductText(candidate);
       return key.length > 0 && text.includes(key);
@@ -301,6 +311,10 @@ export function recommendProductsForStep(
   stepWeeks: number | null,
 ): VaccineProduct[] {
   return VACCINE_PRODUCTS.filter((product) => {
+    // 不推荐的（国产）直接排除 —— 它们只在产品库里可选
+    if (product.recommendable === false) {
+      return false
+    }
     if (!product.kinds.includes(kind)) {
       return false
     }
@@ -310,3 +324,224 @@ export function recommendProductsForStep(
     return product.minWeeks <= stepWeeks
   }).slice(0, MAX_RECOMMENDED_PRODUCTS)
 }
+
+/* ===========================================================================
+ * 国产苗：**只在产品库里可选，永远不参与推荐**（2026-10-05）
+ *
+ * 老板审核意见第 5 条定了"所有国产疫苗都不推荐"；
+ * 2026-10-05 又补了一句把两件事分清楚：
+ *   "推荐的时候不可以推荐国产品牌，但是产品库里面允许用户自己选择国产品牌。"
+ *
+ * 为什么必须有这一段：国产苗在本地医院的实际可得性**通常高于进口苗**
+ * （中牧江西那支犬四联 64 批+，比所有进口苗都多）。产品库里没有它们，
+ * 顾客打了国产苗就无处可记 —— 只能乱选一个，那比不做产品库更糟。
+ *
+ * ⚠️ 数据来源：国家兽药基础数据库的兽药产品批准文号 / 批签发数据
+ *    （见 docs/plans/2026-10-04-vaccine-product-list-review.md 附录）。
+ *    这里只用到"商品名 / 企业 / 批准文号 / 防狂犬还是联苗"这些**核对过的**字段；
+ *    说明书里的首免周龄多数没查到，一律 `minWeeks: null`，不编。
+ */
+const DOMESTIC_PRODUCTS: VaccineProduct[] = [
+  /* ── 国产联苗（核心） ── */
+  {
+    name: '犬四联（中牧江西）',
+    aliases: ['中牧犬四联'],
+    manufacturer: '中牧实业股份有限公司江西生物药厂',
+    diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: null,
+    registration: '兽药生字140406047',
+    booster: '说明书：断奶幼犬连打 3 次、间隔 21 天；成犬每年 2 次',
+    note: '国产犬四联里批签发最多的一支（64 批+）。说明书用"断奶幼犬"表述，不给周龄。',
+    recommendable: false,
+  },
+  {
+    name: '科旺福',
+    aliases: ['科前犬四联'],
+    manufacturer: '武汉科前生物股份有限公司',
+    diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: null,
+    registration: '兽药生字170046047',
+    booster: '同上（同一新兽药核准说明书）',
+    recommendable: false,
+  },
+  {
+    name: '宠安士佳',
+    aliases: ['五星犬四联'],
+    manufacturer: '吉林省五星动物保健有限公司',
+    diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: null,
+    registration: '兽药生字070416047',
+    booster: '同上（同一新兽药核准说明书）',
+    recommendable: false,
+  },
+  {
+    name: '犬特威',
+    manufacturer: '吉林特研生物技术有限责任公司',
+    diseases: ['犬瘟热', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: null,
+    registration: '兽药生字070296044',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '汪幼保',
+    manufacturer: '洛阳惠中生物技术有限公司',
+    diseases: ['犬瘟热', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: 6,
+    registration: '兽药生字163006096',
+    booster: '说明书：6 周龄以上犬注射 1.0ml，1 头份',
+    recommendable: false,
+  },
+  {
+    name: '金倍安',
+    manufacturer: '金宇保灵生物药品有限公司',
+    diseases: ['犬瘟热', '犬细小病毒病'],
+    kinds: ['core'],
+    minWeeks: null,
+    registration: '兽药生字050156044',
+    booster: '未查到',
+    recommendable: false,
+  },
+
+  /* ── 国产狂犬苗 ── */
+  {
+    name: '犬康',
+    manufacturer: '金宇益康生物技术（辽宁）股份有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字060137524',
+    booster: '未查到',
+    note: '国产狂犬里批签发最多的一支（17 批）。',
+    recommendable: false,
+  },
+  {
+    name: '贝倍旺',
+    manufacturer: '中牧实业股份有限公司江西生物药厂',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字140406048',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '犬力康',
+    manufacturer: '国药集团动物保健股份有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字170266040',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '科旺优',
+    manufacturer: '武汉科前生物股份有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字170047523',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '犬泰',
+    manufacturer: '广州市华南农大生物药品有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字190916040',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '福犬',
+    manufacturer: '吉林和元生物工程股份有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字070187514',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '宠易佳',
+    manufacturer: '青岛易邦生物工程有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字150136658',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '诺瑞贝',
+    manufacturer: '常州同泰生物药业有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字100657523',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '多倍美',
+    manufacturer: '天津瑞普生物技术股份有限公司空港分公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字020307517',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '贝乐美',
+    manufacturer: '吉林正业生物制品股份有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字070227517',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '诺维瑞',
+    manufacturer: '长春西诺生物科技有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字070386088',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '瑞倍尔安',
+    manufacturer: '唐山怡安生物工程有限公司',
+    diseases: ['狂犬病'],
+    kinds: ['rabies'],
+    minWeeks: null,
+    registration: '兽药生字031417512',
+    booster: '未查到',
+    recommendable: false,
+  },
+  {
+    name: '汪倍护',
+    manufacturer: '泰州博莱得利生物科技有限公司',
+    diseases: ['犬瘟热', '犬细小病毒病', '狂犬病'],
+    kinds: ['core', 'rabies'],
+    minWeeks: null,
+    registration: '兽药生字101846066',
+    booster: '未查到',
+    note: '二联活疫苗 + 狂犬灭活的组合装，所以两类都算。',
+    recommendable: false,
+  },
+];
+
+// 国产苗并进同一个目录：产品库要能看到它们，推荐那一步再按 recommendable 过滤
+VACCINE_PRODUCTS.push(...DOMESTIC_PRODUCTS);

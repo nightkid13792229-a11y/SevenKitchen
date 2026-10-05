@@ -3,6 +3,7 @@
  * Handles vaccine, checkup, medical record, and allergy related endpoints
  */
 
+import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
 import {
   Controller,
   Post,
@@ -141,6 +142,27 @@ export class HealthRecordsController {
       user.customerId,
     );
     return ApiResponseDto.success(records);
+  }
+
+  /**
+   * 疫苗名称库 + 归类闭集（2026-10-05）。
+   *
+   * 界面靠它渲染三样东西：
+   *   · 归类必选项（四类，闭集）；
+   *   · 一点即选的名字（每个都带已知归类）；
+   *   · 产品库（含国产 —— 可**选**但不**推荐**，两个概念别混）。
+   *
+   * 为什么不写在前端：分类与产品数据是后端的 domain 知识，
+   * 前端复制一份迟早对不上（以前就吃过这个亏）。
+   */
+  @Get('vaccine-catalog')
+  @ApiOperation({ summary: 'Vaccine name catalog (kinds + presets + products)' })
+  getVaccineCatalog() {
+    return {
+      code: 0,
+      message: 'success',
+      data: buildVaccineCatalog(),
+    };
   }
 
   @Get(':dogId/vaccines/upcoming')

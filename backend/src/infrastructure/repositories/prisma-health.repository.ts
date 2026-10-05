@@ -43,6 +43,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         notes: data.notes,
         status: data.status as any,
         attachments: data.attachments,
+        kinds: data.kinds,
       },
     });
     return this.mapToDomain(record);
@@ -63,6 +64,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         notes: data.notes,
         status: data.status as any,
         attachments: data.attachments,
+        kinds: data.kinds,
       },
     });
     return this.mapToDomain(record);
@@ -104,6 +106,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       notes: record.notes,
       status: record.status as any,
       attachments: record.attachments,
+      kinds: record.kinds,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

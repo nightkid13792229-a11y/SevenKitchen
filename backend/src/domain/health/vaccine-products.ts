@@ -267,10 +267,11 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
   {
     name: '瑞比克',
     aliases: ['rabvac'],
-    // 三方文件挂的厂商名不一致，只写现行证号，不写厂商归属（清单 2.5）
-    manufacturer: '（厂商归属三份文件不一致，见清单 2.5）',
-    // 归属不明就不参与"同品牌优先"的匹配 —— 宁可不当自己人，也别认错门
-    brand: '',
+    // 归属按老板 2026-10-05 确认：归勃林格。
+    // （此前三份文件挂的厂家不一致：硕腾官网列在自家、说明书载勃林格、
+    //   注册数据登记人为礼蓝 —— 老板拍板归勃林格，品牌匹配据此生效。）
+    brand: '勃林格',
+    manufacturer: '勃林格殷格翰（美国）',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -324,6 +325,42 @@ export function coversCoreSeries(product: VaccineProduct): boolean {
     /腺病毒|传染性肝炎/.test(text) &&
     /副流感/.test(text)
   );
+}
+
+/**
+ * 这支苗**能不能顶上某一类**（2026-10-05）。
+ *
+ * 这是老板第 2 问引出来的规则：
+ *   "像卫佳细这种单联疫苗……即便顾客记录接种了这一类的疫苗，
+ *    也当做没有接种过。核心疫苗需要重新开始免疫流程呢？"
+ *
+ * 实质是：**记了算记录，但顶不上就该继续提醒**。
+ * 光看"分类"不够 —— 卫佳细和卫佳伍都归"核心疫苗"，可卫佳细只防细小一种，
+ * 顶不上要求防四种病的核心首免。
+ *
+ * ⚠️ 宁严勿松：顶不上就继续提醒（多提醒无害，漏提醒有害）。
+ */
+export function productCoversKind(
+  product: VaccineProduct,
+  kind: VaccineKind,
+): boolean {
+  if (!product.kinds.includes(kind)) {
+    return false
+  }
+
+  const text = product.diseases.join(' ')
+
+  if (kind === 'rabies') return /狂犬/.test(text)
+  if (kind === 'lepto') return /钩端/.test(text)
+  // 核心苗那几步要求**四种都防**（犬瘟热 + 腺病毒/传染性肝炎 + 细小 + 副流感）——
+  // 卫佳细（只防细小）、犬二联（只防两种）因此都顶不上。
+  if (kind === 'core') return coversCoreSeries(product)
+  // 早期核心疫苗：防犬瘟 + 细小，且**不是**完整四联（完整四联走 core 那一步）
+  if (kind === 'core_early') {
+    return /犬瘟/.test(text) && /细小/.test(text) && !coversCoreSeries(product)
+  }
+
+  return true
 }
 
 /**
@@ -399,9 +436,11 @@ export function findProductsInName(name: string): VaccineProduct[] {
 export function recommendProductsForStep(
   kind: VaccineKind,
   stepWeeks: number | null,
-  options: { preferredBrand?: string } = {},
+  options: { preferredBrand?: string; allowCombo?: boolean } = {},
 ): VaccineProduct[] {
   const preferredBrand = String(options.preferredBrand || '').trim();
+  // allowCombo 默认 true；只有"这一步不该顺带重复别的分类"时才传 false
+  const allowCombo = options.allowCombo !== false;
 
   const eligible = VACCINE_PRODUCTS.filter((product) => {
     // 不推荐的（国产）直接排除 —— 它们只在产品库里可选
@@ -409,6 +448,23 @@ export function recommendProductsForStep(
       return false
     }
     if (!product.kinds.includes(kind)) {
+      return false
+    }
+    /*
+     * 别推"会顺带重复另一个分类"的多联苗（2026-10-05 老板第 4 问）。
+     *
+     * 老板举的例子：幼犬 16 周后打了一针卫佳捌（核心+钩端），
+     * 那钩端第 2 针（2~4 周后）该推什么？
+     *   · 再推一针卫佳捌 → 等于**核心苗在 2~4 周内又打了一次**，
+     *     而核心苗这时候应该等到 26 周才补强 —— 重复了。
+     *   · 推一支**钩端单苗**（宠必威乐必妥）→ 正好。
+     *
+     * 所以：这一步如果**不需要**顺带打另一个分类（allowCombo = false），
+     * 就只推"单一分类"的苗。什么时候 allowCombo 为真？
+     * 见 buildVaccinePlan：这段时间**本来就有另一类该打**的时候 ——
+     * 那时候多联苗一次搞定反而更好。
+     */
+    if (!allowCombo && product.kinds.length > 1) {
       return false
     }
     // 核心苗那几步必须**真的顶得上**：细小单苗不能拿来顶常规首免

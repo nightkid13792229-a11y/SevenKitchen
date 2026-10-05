@@ -236,3 +236,45 @@ describe('疫苗计划 · 接线', () => {
     expect(api).toContain('method: \'DELETE\'')
   })
 })
+
+/**
+ * 两条新的排期规则（2026-10-05 老板加）。
+ */
+describe('疫苗计划 · 新增的两条排期规则', () => {
+  function readSection() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+  }
+
+  it('「别同一天打」的提醒显示在「下一步」卡片里', () => {
+    const section = readSection()
+
+    // 老板："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
+    // 比如狂犬疫苗、核心疫苗和钩端螺旋体要分开打。"
+    expect(section).toContain('spacingNote')
+    expect(section).toContain('spacing-note__text')
+    // 紧跟提醒语，因为家长最容易犯的错就是"两针一起去打"
+    const reminderAt = section.indexOf('next-step__reminder')
+    const spacingAt = section.indexOf('spacing-note__text')
+    expect(spacingAt).toBeGreaterThan(reminderAt)
+  })
+
+  it('展开的完整计划里每一项也带这条提醒', () => {
+    const section = readSection()
+
+    expect(section).toContain('step__spacing')
+    expect(section).toContain('{{ step.spacingNote }}')
+  })
+
+  it('同品牌优先的结果直接用后端的（前端不自己排）', () => {
+    const section = readSection()
+
+    // 推荐顺序（同品牌优先、批签发排序、核心苗要覆盖四病）全在后端算，
+    // 前端只显示 —— 否则两边迟早不一致
+    expect(section).toContain('commonProducts')
+    expect(section).not.toContain('coversCoreSeries')
+    expect(section).not.toContain('VACCINE_PRODUCTS')
+  })
+})

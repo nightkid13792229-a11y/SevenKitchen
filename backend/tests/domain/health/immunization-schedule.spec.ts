@@ -19,7 +19,10 @@ import {
   weeksBetween,
   type VaccineRecordLike,
 } from '../../../src/domain/health/immunization-schedule';
-import { VACCINE_PRODUCTS } from '../../../src/domain/health/vaccine-products';
+import {
+  VACCINE_PRODUCTS,
+  findProductsInName,
+} from '../../../src/domain/health/vaccine-products';
 
 /**
  * 疫苗计划（2026-10-01，第四期）。
@@ -997,5 +1000,159 @@ describe('产品库 / 分类 / 周期 三项审计', () => {
     // 而且它**不能**顶替核心苗首免：core 的那几针照旧从 6 周起
     const core = all.filter((item) => item.kind === 'core')
     expect(core.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * 老板 2026-10-05 加的两条排期规则。
+ */
+describe('排期规则：同品牌优先 + 不同分类不同天', () => {
+  // helper 在上一层 describe 里，这里自己来一份
+  const TODAY = new Date('2026-10-01T00:00:00');
+
+  function dog(ageWeeks: number) {
+    const birthday = new Date(TODAY.getTime() - ageWeeks * 7 * 86400000);
+    return toDateText(birthday);
+  }
+
+  function record(
+    id: string,
+    name: string,
+    date: string,
+    nextDueDate?: string,
+  ): VaccineRecordLike {
+    return {
+      id,
+      vaccineName: name,
+      vaccinationDate: date,
+      nextDueDate: nextDueDate ?? null,
+    };
+  }
+
+  it('🔴 打过宠必威幼犬保之后，续针优先同品牌的四联 —— 不是继续推幼犬保', () => {
+    // 老板原话："早期的核心疫苗，比如宠必威的幼犬保，第一针打完之后，
+    // 从第二针 6~8 周起，就应该打同品牌的 4 联疫苗了，
+    // 而不是继续打幼犬保这种二联疫苗。"
+    const birthday = dog(30);
+    const puppyEarly = addWeeks(new Date(birthday + 'T00:00:00'), 5)
+      .toISOString()
+      .slice(0, 10);
+
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday,
+      records: [record('r1', '宠必威幼犬保', puppyEarly)],
+      today: TODAY,
+    });
+
+    // ① 幼犬保自己那一类（早期核心疫苗）里推它没问题
+    const early = plan.steps.find((step) => step.kind === 'core_early');
+    expect(early!.commonProducts).toContain('宠必威幼犬保');
+
+    // ② 但**常规首免**那几步里，幼犬保绝不能出现（它只防犬瘟+细小）
+    const core = plan.steps.filter((step) => step.kind === 'core');
+    expect(core.length).toBeGreaterThan(0);
+    for (const step of core) {
+      expect(step.commonProducts).not.toContain('宠必威幼犬保');
+    }
+
+    // ③ 而且优先推同品牌（英特威）的四联 —— 宠必威优免康排第一
+    expect(core[0].commonProducts[0]).toBe('宠必威优免康');
+  })
+
+  it('没打过任何苗的狗，按默认顺序推（批签发批数多的在前）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(30),
+      records: [],
+      today: TODAY,
+    })
+
+    const core = plan.steps.find((step) => step.kind === 'core')
+    // 没有品牌偏好时按默认顺序：卫佳捌 41 批 > 宠必威优免康 32 批
+    expect(core!.commonProducts[0]).toBe('卫佳捌')
+  })
+
+  it('细小单苗（卫佳细）不能拿来顶常规首免 —— 它只防细小', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(30),
+      records: [],
+      today: TODAY,
+    })
+
+    // 卫佳细是 core 类，但只防犬瘟…不，它只防细小一种病。
+    // 推荐的产品必须**真的顶得上这一步**（老板规则一背后的要求）。
+    for (const step of plan.steps.filter((item) => item.kind === 'core')) {
+      expect(step.commonProducts).not.toContain('卫佳细')
+    }
+    // 但它在产品库里照样能选 —— 只是不该被"推荐"去顶常规首免
+    expect(findProductsInName('卫佳细').length).toBe(1)
+  })
+
+  it('🔴 不同分类的针撞在同一段时间时，提醒别同一天打', () => {
+    // 老板原话："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
+    // 比如狂犬疫苗、核心疫苗和钩端螺旋体要分开打。"
+    const birthday = dog(80)
+    // 让它有钩端记录 → 计划里才有 lepto 这一类
+    const leptoAt = addWeeks(new Date(birthday + 'T00:00:00'), 9)
+      .toISOString()
+      .slice(0, 10)
+
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday,
+      records: [record('r1', '钩端螺旋体', leptoAt)],
+      today: TODAY,
+    })
+
+    const withNote = plan.steps.filter((step) => step.spacingNote)
+    expect(withNote.length).toBeGreaterThan(0)
+    expect(withNote[0].spacingNote).toContain('不要同一天打')
+    // 提醒里要说清是跟哪一类错开
+    expect(withNote.some((step) => /核心疫苗|狂犬疫苗|钩端螺旋体/.test(step.spacingNote))).toBe(true)
+  })
+
+  it('对面那针还没到窗口时**不提醒** —— 否则每步都挂，人就不看了', () => {
+    // 核心苗窗口横跨 6~18 周、狂犬从 12 周起，两边几乎永远重叠。
+    // 不加这道门槛的话，实测 5 步里 4 步都挂着"别和狂犬同一天打"。
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(7), // 7 周龄：狂犬窗口（12 周）还没开
+      records: [],
+      today: TODAY,
+    })
+
+    const first = plan.steps.find((step) => step.kind === 'core')
+    expect(first).toBeDefined()
+    expect(first!.spacingNote).toBe('')
+  })
+
+  it('同一类内部的针不互相提醒错开（本来就是同一套程序）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(80),
+      records: [],
+      today: TODAY,
+    })
+
+    // 只有 core + rabies 时，core 的几针之间不该互相报"别同一天"
+    const coreSteps = plan.steps.filter((step) => step.kind === 'core')
+    for (const step of coreSteps) {
+      expect(step.spacingNote).not.toContain('核心疫苗」要打')
+    }
+  })
+
+  it('每一条排期规则都给得出依据（顾客和审核的人要能查）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(80),
+      records: [record('r1', '钩端螺旋体', '2026-06-01')],
+      today: TODAY,
+    })
+
+    for (const step of plan.steps) {
+      expect(step.basis.length).toBeGreaterThan(8)
+    }
   })
 })

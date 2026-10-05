@@ -1,6 +1,7 @@
 import {
   findProductsInName,
   recommendProductsForStep,
+  resolvePreferredBrand,
 } from './vaccine-products';
 
 /**
@@ -134,6 +135,13 @@ export interface VaccinePlanStep {
    * "所有国产疫苗都不推荐"。
    */
   commonProducts: string[];
+  /**
+   * 「这一针别和别的针同一天打」的提醒（2026-10-05）。
+   *
+   * 只有**窗口跟另一分类的针重叠、而且两边都还没做**时才出现。
+   * 空字符串 = 这段时间没有别的针要打，不用提。
+   */
+  spacingNote: string;
 }
 
 /** 顾客与建议不一致的地方 */
@@ -359,6 +367,24 @@ export const NON_CORE_SCHEDULES = {
 } as const;
 
 export type NonCoreKind = keyof typeof NON_CORE_SCHEDULES;
+
+/**
+ * 不同分类的疫苗**不要同一天打**（2026-10-05 老板的第二条规则）。
+ *
+ * 老板原话："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
+ * 比如狂犬疫苗、核心疫苗和钩端螺旋体要分开打。"
+ *
+ * ⚠️ 说明出处：这是**我们自己定的接种间隔规则**，比 WSAVA 更保守 ——
+ *    指南只要求"不同疫苗不要混在同一支注射器里"，
+ *    并没有规定必须隔几天。所以文案里不写"指南要求"，
+ *    只写"我们建议错开"，免得专业人士一眼看出引用不实。
+ */
+export const VACCINE_SPACING = {
+  /** 最少隔几天 */
+  minGapDays: 2,
+  /** 建议隔几天 */
+  recommendedGapDays: 3,
+} as const;
 
 /** 狂犬病（国内） */
 export const RABIES_SCHEDULE = {
@@ -1101,6 +1127,11 @@ export function buildVaccinePlan(
     ),
   ]
 
+  // 这只狗现在用什么牌子 → 续针优先推同一个牌子（老板规则一）
+  const preferredBrand = resolvePreferredBrand(
+    input.records.map((record) => record.vaccineName),
+  );
+
   const seeds = buildImmunizationSchedule(birthday, { kinds: planKinds });
 
   // ⚠️ 这两个**不是一回事**（2026-10-04 拆开）：
@@ -1136,7 +1167,10 @@ export function buildVaccinePlan(
         commonProducts: recommendProductsForStep(
           seed.kind,
           weeksBetween(birthday, seed.windowStart),
+          { preferredBrand },
         ).map((product) => product.name),
+        // 先占位，下面算完"跟别的分类有没有撞车"再填
+        spacingNote: '',
       };
     })
     // 只留下"对现在还有意义"的步骤。
@@ -1168,6 +1202,67 @@ export function buildVaccinePlan(
       // UPCOMING / SKIPPED：看它是不是在近期将来
       return start.getTime() <= addDays(today, 540).getTime() && recentEnough;
     });
+
+  /*
+   * 不同分类的针别撞在一起（老板规则二）。
+   *
+   * 判据：**两针窗口有重叠**、分类不同、而且两边都还没做
+   * （DONE / SKIPPED 的不算 —— 已经打过或明确不做，没什么可错开的）。
+   */
+  const pending = steps.filter(
+    (step) =>
+      step.status === 'DUE' ||
+      step.status === 'OVERDUE' ||
+      step.status === 'UPCOMING',
+  );
+
+  for (const step of steps) {
+    if (!pending.includes(step)) {
+      continue;
+    }
+
+    const start = parseDateText(step.windowStart);
+    const end = parseDateText(step.windowEnd);
+    if (!start || !end) {
+      continue;
+    }
+
+    const overlapping = pending.filter((other) => {
+      if (other === step || other.kind === step.kind) return false;
+      const otherStart = parseDateText(other.windowStart);
+      const otherEnd = parseDateText(other.windowEnd);
+      if (!otherStart || !otherEnd) return false;
+
+      const windowsOverlap =
+        otherStart.getTime() <= end.getTime() &&
+        start.getTime() <= otherEnd.getTime();
+      if (!windowsOverlap) {
+        return false;
+      }
+
+      /*
+       * ⚠️ 再加一道「**对面那针现在也已经能打了**」的门槛。
+       *
+       * 不加会变成噪音：核心苗的窗口横跨 6~18 周，狂犬从 12 周起每年一次 ——
+       * 两边窗口几乎永远重叠，于是**每一步都挂着"别和狂犬同一天打"**。
+       * 实测过：5 步里 4 步带提醒。挂多了人就不看了，等于没提醒。
+       *
+       * 现在只在"对面那针的窗口也开了（或 7 天内就开）"时才说 ——
+       * 那才是顾客真会把两针凑到一起的时候。
+       */
+      return otherStart.getTime() <= addDays(today, 7).getTime();
+    });
+
+    const labels = overlapping
+      .map((item) => VACCINE_KIND_LABELS[item.kind])
+      .filter((label, i, arr) => arr.indexOf(label) === i);
+
+    step.spacingNote =
+      labels.length > 0
+        ? `这段时间还有「${labels.join('、')}」要打 —— 不同类的疫苗不要同一天打，` +
+          `前后错开 ${VACCINE_SPACING.minGapDays}~${VACCINE_SPACING.recommendedGapDays} 天。`
+        : '';
+  }
 
   const summary = {
     done: steps.filter((step) => step.status === 'DONE').length,

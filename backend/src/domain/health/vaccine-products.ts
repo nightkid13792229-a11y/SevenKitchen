@@ -43,7 +43,19 @@ export interface VaccineProduct {
    * 各家含义不一样，拿它当"含钩端"会误判。
    */
   aliases?: string[];
-  /** 厂商（仅展示，不参与匹配） */
+  /**
+   * 品牌 / 厂商（2026-10-05 新增，参与推荐排序）。
+   *
+   * 老板的规则："在疫苗产品推荐的时候，优先推荐同厂商或者同品牌的产品。
+   * 早期的核心疫苗，比如宠必威的幼犬保，第一针打完之后，从第二针 6~8 周起，
+   * 就应该打同品牌的 4 联疫苗了，而不是继续打幼犬保这种二联疫苗。"
+   *
+   * 所以同一家的产品要能**归到一起**：硕腾的卫佳伍/卫佳捌/卫佳细/迪安适
+   * 是一个 brand，英特威的宠必威系列是另一个。
+   * 同一家的苗免疫程序一致、衔接得上，混着打对孩子和家长都是麻烦。
+   */
+  brand: string;
+  /** 厂商全称（展示用） */
   manufacturer: string;
   /** 防哪些病 */
   diseases: string[];
@@ -91,6 +103,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '卫佳捌',
     aliases: ['vanguard plus 5-cvl', '卫佳8'],
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
+    brand: '硕腾',
     diseases: [
       '犬瘟热',
       '犬腺病毒1型传染性肝炎',
@@ -111,6 +124,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '宠必威优免康',
     aliases: ['intervet 四联'],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
+    brand: '英特威（默沙东）',
     diseases: ['犬瘟热', '犬传染性肝炎', '犬细小病毒病', '犬副流感'],
     kinds: ['core'],
     minWeeks: null,
@@ -122,6 +136,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '卫佳伍',
     aliases: ['vanguard plus 5', '卫佳5'],
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
+    brand: '硕腾',
     diseases: [
       '犬瘟热',
       '犬腺病毒1型传染性肝炎',
@@ -139,6 +154,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '卫佳细',
     aliases: ['vanguard plus cpv'],
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
+    brand: '硕腾',
     diseases: ['犬细小病毒肠炎'],
     kinds: ['core'],
     minWeeks: 6,
@@ -150,6 +166,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '宠必威幼犬保',
     aliases: [],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
+    brand: '英特威（默沙东）',
     diseases: ['犬瘟热', '犬细小病毒病'],
     // ⚠️ 单独一类，不能跟普通核心苗混（2026-10-05）：
     //    它 4 周龄起 1 针，之后仍要走 6~8 周起的正常首免 —— 周期完全不同。
@@ -166,6 +183,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '优乐康',
     aliases: [],
     manufacturer: '勃林格殷格翰（法国厂）',
+    brand: '勃林格',
     diseases: [
       '犬瘟热',
       '犬腺病毒病',
@@ -184,6 +202,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '宠必威乐必妥',
     aliases: ['乐必妥'],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
+    brand: '英特威（默沙东）',
     diseases: ['犬钩端螺旋体病（犬型）', '黄疸出血型钩端螺旋体病'],
     kinds: ['lepto'],
     minWeeks: 8,
@@ -195,6 +214,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '海博莱犬四联加钩端',
     aliases: ['hipra 四联', '海博莱四联'],
     manufacturer: '西班牙海博莱 HIPRA',
+    brand: '海博莱',
     diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
     kinds: ['core', 'lepto'],
     minWeeks: null,
@@ -206,6 +226,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '维克犬四联加钩端',
     aliases: ['virbac 四联'],
     manufacturer: '法国维克 VIRBAC',
+    brand: '维克',
     diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
     kinds: ['core', 'lepto'],
     minWeeks: null,
@@ -219,6 +240,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '宠必威锐必威',
     aliases: ['锐必威'],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
+    brand: '英特威（默沙东）',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -232,6 +254,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '瑞贝康',
     aliases: [],
     manufacturer: '勃林格殷格翰（法国厂）',
+    brand: '勃林格',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -246,6 +269,8 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     aliases: ['rabvac'],
     // 三方文件挂的厂商名不一致，只写现行证号，不写厂商归属（清单 2.5）
     manufacturer: '（厂商归属三份文件不一致，见清单 2.5）',
+    // 归属不明就不参与"同品牌优先"的匹配 —— 宁可不当自己人，也别认错门
+    brand: '',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -257,6 +282,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '迪安适',
     aliases: [],
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
+    brand: '硕腾',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -268,6 +294,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     name: '维克狂犬',
     aliases: ['virbac 狂犬', 'vp12'],
     manufacturer: '法国维克 VIRBAC',
+    brand: '维克',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: 12,
@@ -278,6 +305,46 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
 
 /** 提醒里每个疫苗种类最多列几个产品（兽医审核意见第 6 条） */
 export const MAX_RECOMMENDED_PRODUCTS = 3;
+
+/**
+ * 这支苗覆不覆盖**核心四病**（2026-10-05）。
+ *
+ * 老板的规则里藏着一个要求：推荐的产品得**真的顶得上这一步**。
+ * 他举的例子是"幼犬保打完之后该打同品牌的 4 联，而不是继续打二联"——
+ * 同理，**细小单苗（卫佳细）也不能拿来顶常规首免**：
+ * 它只防细小，不防犬瘟热、腺病毒、副流感。
+ *
+ * 判据用产品自己的 `diseases`（我们核过成分的数据），不是猜名字。
+ */
+export function coversCoreSeries(product: VaccineProduct): boolean {
+  const text = product.diseases.join(' ');
+  return (
+    /犬瘟/.test(text) &&
+    /细小/.test(text) &&
+    /腺病毒|传染性肝炎/.test(text) &&
+    /副流感/.test(text)
+  );
+}
+
+/**
+ * 这只狗现在用的是哪个品牌（2026-10-05）。
+ *
+ * 老板："优先推荐同厂商或者同品牌的产品……其他的续接种也尽量优先同品牌的产品。"
+ * 从**它已经打过的记录**里认：最近的几条记录里，能匹配到产品库的那个品牌。
+ * 认不出来就没偏好，按默认顺序（批签发批数）推。
+ */
+export function resolvePreferredBrand(names: string[]): string {
+  // 从最近往早看：最近一次用什么牌子，接着用同一个最顺
+  for (let index = names.length - 1; index >= 0; index -= 1) {
+    const hits = findProductsInName(String(names[index] || ''));
+    for (const hit of hits) {
+      if (hit.brand) {
+        return hit.brand;
+      }
+    }
+  }
+  return '';
+}
 
 /** 按商品名 / 别名找产品（大小写、空格不敏感） */
 /**
@@ -332,8 +399,11 @@ export function findProductsInName(name: string): VaccineProduct[] {
 export function recommendProductsForStep(
   kind: VaccineKind,
   stepWeeks: number | null,
+  options: { preferredBrand?: string } = {},
 ): VaccineProduct[] {
-  return VACCINE_PRODUCTS.filter((product) => {
+  const preferredBrand = String(options.preferredBrand || '').trim();
+
+  const eligible = VACCINE_PRODUCTS.filter((product) => {
     // 不推荐的（国产）直接排除 —— 它们只在产品库里可选
     if (product.recommendable === false) {
       return false
@@ -341,11 +411,26 @@ export function recommendProductsForStep(
     if (!product.kinds.includes(kind)) {
       return false
     }
+    // 核心苗那几步必须**真的顶得上**：细小单苗不能拿来顶常规首免
+    if (kind === 'core' && !coversCoreSeries(product)) {
+      return false
+    }
     if (stepWeeks === null || product.minWeeks === null) {
       return true
     }
     return product.minWeeks <= stepWeeks
-  }).slice(0, MAX_RECOMMENDED_PRODUCTS)
+  })
+
+  // **同品牌优先**（老板规则一）：这只狗现在用什么牌子，续针就接着推那个牌子 ——
+  // 同厂的免疫程序衔接得上，家长也不用记两套。
+  // 同品牌内部仍按批签发批数排（批数多 = 现在真在卖）。
+  if (preferredBrand) {
+    const sameBrand = eligible.filter((p) => p.brand === preferredBrand)
+    const others = eligible.filter((p) => p.brand !== preferredBrand)
+    return [...sameBrand, ...others].slice(0, MAX_RECOMMENDED_PRODUCTS)
+  }
+
+  return eligible.slice(0, MAX_RECOMMENDED_PRODUCTS)
 }
 
 /* ===========================================================================
@@ -375,6 +460,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     name: '犬四联（中牧江西）',
     aliases: ['中牧犬四联'],
     manufacturer: '中牧实业股份有限公司江西生物药厂',
+    brand: '中牧',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: null,
@@ -387,6 +473,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     name: '科旺福',
     aliases: ['科前犬四联'],
     manufacturer: '武汉科前生物股份有限公司',
+    brand: '科前',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: null,
@@ -398,6 +485,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     name: '宠安士佳',
     aliases: ['五星犬四联'],
     manufacturer: '吉林省五星动物保健有限公司',
+    brand: '五星',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: null,
@@ -408,6 +496,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '犬特威',
     manufacturer: '吉林特研生物技术有限责任公司',
+    brand: '吉林特研',
     diseases: ['犬瘟热', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: null,
@@ -418,6 +507,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '汪幼保',
     manufacturer: '洛阳惠中生物技术有限公司',
+    brand: '洛阳惠中',
     diseases: ['犬瘟热', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: 6,
@@ -428,6 +518,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '金倍安',
     manufacturer: '金宇保灵生物药品有限公司',
+    brand: '金宇保灵',
     diseases: ['犬瘟热', '犬细小病毒病'],
     kinds: ['core'],
     minWeeks: null,
@@ -440,6 +531,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '犬康',
     manufacturer: '金宇益康生物技术（辽宁）股份有限公司',
+    brand: '金宇益康',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -451,6 +543,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '贝倍旺',
     manufacturer: '中牧实业股份有限公司江西生物药厂',
+    brand: '中牧',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -461,6 +554,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '犬力康',
     manufacturer: '国药集团动物保健股份有限公司',
+    brand: '国药动保',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -471,6 +565,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '科旺优',
     manufacturer: '武汉科前生物股份有限公司',
+    brand: '科前',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -481,6 +576,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '犬泰',
     manufacturer: '广州市华南农大生物药品有限公司',
+    brand: '华南农大',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -491,6 +587,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '福犬',
     manufacturer: '吉林和元生物工程股份有限公司',
+    brand: '吉林和元',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -501,6 +598,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '宠易佳',
     manufacturer: '青岛易邦生物工程有限公司',
+    brand: '青岛易邦',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -511,6 +609,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '诺瑞贝',
     manufacturer: '常州同泰生物药业有限公司',
+    brand: '常州同泰',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -521,6 +620,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '多倍美',
     manufacturer: '天津瑞普生物技术股份有限公司空港分公司',
+    brand: '天津瑞普',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -531,6 +631,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '贝乐美',
     manufacturer: '吉林正业生物制品股份有限公司',
+    brand: '吉林正业',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -541,6 +642,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '诺维瑞',
     manufacturer: '长春西诺生物科技有限公司',
+    brand: '长春西诺',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -551,6 +653,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '瑞倍尔安',
     manufacturer: '唐山怡安生物工程有限公司',
+    brand: '唐山怡安',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -562,6 +665,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     name: '惠中犬狂犬',
     aliases: ['洛阳惠中狂犬'],
     manufacturer: '洛阳惠中生物技术有限公司',
+    brand: '洛阳惠中',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -573,6 +677,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '佑本犬狂犬',
     manufacturer: '杭州佑本动物疫苗有限公司',
+    brand: '杭州佑本',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -584,6 +689,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '爱宠犬狂犬',
     manufacturer: '广西爱宠生物科技有限公司',
+    brand: '广西爱宠',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -595,6 +701,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '齐鲁犬狂犬',
     manufacturer: '齐鲁动物保健品有限公司',
+    brand: '齐鲁',
     diseases: ['狂犬病'],
     kinds: ['rabies'],
     minWeeks: null,
@@ -606,6 +713,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
   {
     name: '汪倍护',
     manufacturer: '泰州博莱得利生物科技有限公司',
+    brand: '泰州博莱得利',
     diseases: ['犬瘟热', '犬细小病毒病', '狂犬病'],
     kinds: ['core', 'rabies'],
     minWeeks: null,

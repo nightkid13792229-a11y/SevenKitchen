@@ -95,13 +95,21 @@ export interface WeightGoalScreeningQuestion {
 }
 
 export const weightGoalPlanApi = {
-  /** 系统建议（不落库）＋ 增重排查的问题清单 */
-  suggestion: (dogId: string) =>
+  /**
+   * 系统建议（不落库）＋ 增重排查的问题清单。
+   *
+   * `direction` 是**顾客坚持要的方向**（定制页「我还是想增重/减重」）：
+   * 只在体况理想、系统本来不给建议时才生效 —— 偏胖/偏瘦的狗仍按系统方向走，
+   * 免得给偏胖的狗建出增重计划（后端 domain 里有这条边界）。
+   */
+  suggestion: (dogId: string, direction?: 'LOSS' | 'GAIN') =>
     request<{
       suggestion: WeightGoalSuggestionView | null
       screeningQuestions: WeightGoalScreeningQuestion[]
     }>({
-      url: `/dogs/${dogId}/weight-goal-plan/suggestion`,
+      url:
+        `/dogs/${dogId}/weight-goal-plan/suggestion` +
+        (direction ? `?direction=${direction}` : ''),
       method: 'GET',
     }),
 

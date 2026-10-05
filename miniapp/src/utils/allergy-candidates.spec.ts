@@ -124,3 +124,42 @@ describe('过敏报告 · 候选整理', () => {
     expect(merged[0].group).toBe('FOOD')
   })
 })
+
+/**
+ * 强阳性要单独显示（2026-10-05 老板反馈"强阳性的过敏原并未被识别出来"）。
+ *
+ * 报告把结论分成弱阳性 / 阳性 / 强阳性三档，老板最需要一眼看到的就是
+ * 强阳性那几条 —— 它们同时也是后端落成"确诊"的那种。
+ */
+describe('过敏报告 · 强阳性', () => {
+  const item = (name: string, level = 'UNKNOWN', group = 'FOOD'): ScannedAllergen => ({
+    name,
+    level,
+    group,
+  })
+
+  it('强阳性有自己的标签，不再被并进"阳性"', () => {
+    expect(candidateLabel(item('花生', 'STRONG_POSITIVE'))).toBe('花生 · 强阳性')
+    expect(candidateLabel(item('海带', 'POSITIVE'))).toBe('海带 · 阳性')
+  })
+
+  it('强阳性照旧算候选、默认会被记上（不是被过滤掉）', () => {
+    expect(isFoodCandidate(item('花生', 'STRONG_POSITIVE'))).toBe(true)
+  })
+
+  it('中文"强阳性"也能归一（模型偶尔照抄报告中文）', () => {
+    expect(normalizeLevel('STRONG_POSITIVE')).toBe('STRONG_POSITIVE')
+    expect(normalizeLevel('strong_positive')).toBe('STRONG_POSITIVE')
+    // 中文由后端归一（那里有别名表），前端只认英文，认不出就是不显示
+    expect(normalizeLevel('强阳性')).toBe('UNKNOWN')
+  })
+
+  it('判定页写的强阳性不会被别页的"阳性"盖掉', () => {
+    const merged = mergeAllergyCandidates([
+      { items: [item('花生', 'POSITIVE')], hasVerdict: false },
+      { items: [item('花生', 'STRONG_POSITIVE')], hasVerdict: true },
+    ])
+
+    expect(merged[0].level).toBe('STRONG_POSITIVE')
+  })
+})

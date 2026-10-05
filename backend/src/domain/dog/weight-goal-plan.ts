@@ -223,6 +223,19 @@ export interface SuggestedPlanInput {
   maintenanceKcal: number;
   /** 建立日期，默认今天 */
   asOf?: Date;
+  /**
+   * 顾客坚持要的方向（2026-10-05 老板要求）。
+   *
+   * 背景：体况在理想区间（BCS 4-5）时系统**不给**增减重建议，
+   * 定制页那个「去制定体重管理计划」按钮点进去只会看到一句
+   * "当前体况属于理想区间，不需要增减重计划" —— 老板认为该给坚持的家长一条路：
+   * 在我们建议维持的文案后面放一个「我还是想增重/减重」。
+   *
+   * 边界（重要）：**只在系统本来没有建议时才听顾客的**。
+   * 已经算得出方向（偏胖该减、偏瘦该增）时，顾客填什么都改不了方向 ——
+   * 给偏胖的狗按增重方向建计划不是自由，是危险。
+   */
+  forcedDirection?: WeightGoalDirection | null;
 }
 
 export interface SuggestedPlan {
@@ -262,11 +275,19 @@ export function resolveSuggestedPlan(
   }
 
   const rounded = Math.round(bcsScore);
+  const forced =
+    input.forcedDirection === WeightGoalDirection.LOSS ||
+    input.forcedDirection === WeightGoalDirection.GAIN
+      ? input.forcedDirection
+      : null;
   let direction: WeightGoalDirection;
   if (rounded >= 6) {
     direction = WeightGoalDirection.LOSS;
   } else if (rounded <= 3) {
     direction = WeightGoalDirection.GAIN;
+  } else if (forced) {
+    // 体况理想（BCS 4-5）：系统本来不给建议，顾客坚持才按他说的方向给
+    direction = forced;
   } else {
     // BCS 4-5 是理想区间（FEDIAF：犬应维持 BCS 4-5），不该建增减重计划
     return null;
@@ -285,6 +306,13 @@ export function resolveSuggestedPlan(
   );
 
   const notes: string[] = [];
+  // 顾客坚持的方向：把"系统原本不建议"写在最前面，营养师与家长都看得到
+  if (forced && rounded >= 4 && rounded <= 5) {
+    notes.push(
+      `它现在的体况属于理想区间（${rounded}/9），系统原本建议维持；` +
+        `这一版是按你要求的「${forced === WeightGoalDirection.LOSS ? '减重' : '增重'}」方向给的。`,
+    );
+  }
   const changeRatio = Math.abs(currentWeightKg - targetWeightKg) / currentWeightKg;
   if (changeRatio < MIN_GOAL_CHANGE_RATIO) {
     notes.push(

@@ -1082,7 +1082,7 @@ describe('定制页 · 体重管理引导进计划页', () => {
      */
     expect(page).toContain("query.push('mode=adjust')")
     const goSource =
-      page.match(/const goToWeightGoalPlan = \(\) => \{[\s\S]*?\n\};/)?.[0] || ''
+      page.match(/const goToWeightGoalPlan = \([\s\S]*?\n\};/)?.[0] || ''
     expect(goSource).not.toBe('')
     expect(goSource).toContain('hasOpenPlan.value')
     // 该页只认 'adjust' 这一个 mode 值
@@ -1525,5 +1525,98 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(style).not.toContain('height: 72rpx')
     // 不被 flex 拉满整行
     expect(scan).toMatch(/\.allergy-scan__head \{[^}]*align-items: flex-start/)
+  })
+})
+
+/**
+ * 2026-10-05 第三批（老板第二次看体验版提的 4 条）。
+ *
+ * 这一批有一半是"流程上自相矛盾"的问题（按钮能点、点进去说不需要；
+ * 报告传了两张只显示一份；最严重的过敏原反而没读出来），
+ * 所以断言落在**规则与顺序**上，而不只是文案在不在。
+ */
+describe('定制页 · 2026-10-05 第三批（4 条）', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  const code = stripComments(page)
+  const template = code.slice(0, code.indexOf('<script setup'))
+
+  it('① 体况理想时计划入口置灰，不再让人白点一次', () => {
+    expect(template).toContain('v-if="!isIdealBcs"')
+    expect(template).toContain('plan-entry-btn plan-entry-btn--disabled')
+    // 置灰那一个**不带点击事件**（能看不能点）
+    const disabled = template.slice(
+      template.indexOf('plan-entry-btn--disabled'),
+      template.indexOf('plan-manual'),
+    )
+    expect(disabled).not.toContain('@tap')
+
+    const ideal = code.match(/const isIdealBcs = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(ideal).toContain('BCS_GAIN_THRESHOLD')
+    expect(ideal).toContain('BCS_LOSS_THRESHOLD')
+    // 4-5 是理想区间（与后端 resolveSuggestedPlan 同一套判据）
+    expect(ideal).toContain('bcs > BCS_GAIN_THRESHOLD && bcs < BCS_LOSS_THRESHOLD')
+  })
+
+  it('① 建议维持后面给"我还是想减重 / 我还是想增重"两个文字入口', () => {
+    expect(template).toContain('我还是想减重')
+    expect(template).toContain('我还是想增重')
+    expect(template).toContain("goToWeightGoalPlan('LOSS')")
+    expect(template).toContain("goToWeightGoalPlan('GAIN')")
+    // 只在"体况理想 + 没有进行中的计划"时出现
+    const when = code.match(/const showManualPlanLinks = computed\([\s\S]*?\n\);/)?.[0] || ''
+    expect(when).toContain('isIdealBcs.value')
+    expect(when).toContain('!hasOpenPlan.value')
+
+    // 方向要真的带到计划页，并由该页原样传给后端
+    const go = code.match(/const goToWeightGoalPlan = \([\s\S]*?\n\};/)?.[0] || ''
+    expect(go).toContain('direction=${direction}')
+    const planPage = read('src/pages/weight-goal-plan/index.vue')
+    expect(planPage).toContain('requestedDirection.value')
+    expect(planPage).toContain("options?.direction")
+  })
+
+  it('② 第二步标题带「（可选）」', () => {
+    expect(template).toMatch(/title-text">过敏信息（可选）<\/text>/)
+  })
+
+  it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过整块录入', () => {
+    expect(template).toContain('小家伙是否对部分食物过敏？')
+    expect(template).toContain('@tap="answerFoodAllergy(true)"')
+    expect(template).toContain('@tap="answerFoodAllergy(false)"')
+    // 录入界面整块收在"有过敏"分支里（快选、手输、扫描、已上传报告）
+    const editor = template.slice(
+      template.indexOf('v-if="hasFoodAllergy === true"'),
+      template.indexOf('v-else-if="hasFoodAllergy === false"'),
+    )
+    expect(editor).toContain('allergen-quick-add')
+    expect(editor).toContain('addAllergen')
+    expect(editor).toContain('<AllergyScanBlock')
+    expect(editor).toContain('allergyReports')
+    // 没作答不能提交（否则"跳过"这件事只做了一半）
+    expect(code).toContain('const hasFoodAllergy = ref<boolean | null>(null)')
+    expect(code).toContain('请先回答：小家伙是否对部分食物过敏')
+  })
+
+  it('③ 答"没有"不抹掉档案里的过敏：说明里要写明仍会避开哪些', () => {
+    const note = code.match(/const noFoodAllergyNote = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(note).toContain('formData.value.allergies')
+    expect(note).toContain('仍会避开')
+    // 档案里有过敏时默认答"有"（让家长再答一遍是多余的）
+    expect(code).toContain('if (formData.value.allergies.length > 0) {')
+    expect(code).toContain('hasFoodAllergy.value = true;')
+    // 换狗要重新问（上一只狗的答案不能替新狗作答）
+    expect(code).toContain('hasFoodAllergy.value = null;')
+  })
+
+  it('④ 已上传报告同时报"份数 / 张数"，并说明多页合并规则', () => {
+    expect(template).toContain('{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张')
+    expect(template).toContain('同一份报告的多页照片会合并成一份')
+    expect(template).toContain('allergyReportPageText(report)')
+
+    const count = code.match(/const allergyReportPageCount = computed\([\s\S]*?\n\);/)?.[0] || ''
+    expect(count).toContain('report.attachments')
+    // 每份报告后面要能看到结论条数（家长用它核对识别全不全）
+    const text = code.match(/function allergyReportPageText[\s\S]*?\n\}/)?.[0] || ''
+    expect(text).toContain('resultCount')
   })
 })

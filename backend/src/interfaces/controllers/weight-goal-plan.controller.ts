@@ -6,9 +6,18 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import { WeightGoalPlanService } from '../../application/weight-goal-plan/weight-goal-plan.service';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -20,7 +29,21 @@ import type {
   UpdateWeightGoalIntensityDto,
   UpdateWeightGoalTargetDto,
 } from '../dto/weight-goal-plan/weight-goal-plan.dto';
+import { WeightGoalDirection } from '../../domain/dog/enums';
 import { WEIGHT_GAIN_SCREENING_QUESTIONS } from '../../domain/dog/weight-goal-plan';
+
+/**
+ * 只认 LOSS / GAIN 两个值（大小学都收），别的当没传 ——
+ * 认不出来的取值不该悄悄变成"按减重给"。
+ */
+function normalizeForcedDirection(
+  value: unknown,
+): WeightGoalDirection | null {
+  const key = String(value ?? '').trim().toUpperCase();
+  if (key === 'LOSS') return WeightGoalDirection.LOSS;
+  if (key === 'GAIN') return WeightGoalDirection.GAIN;
+  return null;
+}
 
 /**
  * 体重管理计划（阶段 B）
@@ -39,11 +62,24 @@ export class WeightGoalPlanController {
   @Get('suggestion')
   @ApiOperation({ summary: '系统建议方案（不落库，供「新建计划」第 1 步展示）' })
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiQuery({
+    name: 'direction',
+    required: false,
+    enum: ['LOSS', 'GAIN'],
+    description:
+      '顾客坚持要的方向（可选）。只在体况理想、系统本来不给建议时生效；' +
+      '偏胖/偏瘦的狗仍按系统方向走，避免给偏胖的狗建增重计划。',
+  })
   async getSuggestion(
     @Param('dogId') dogId: string,
     @CurrentUser() user: RequestUser,
+    @Query('direction') direction?: string,
   ) {
-    const suggestion = await this.planService.getSuggestion(user.customerId, dogId);
+    const suggestion = await this.planService.getSuggestion(
+      user.customerId,
+      dogId,
+      normalizeForcedDirection(direction),
+    );
 
     return ApiResponseDto.success({
       suggestion,

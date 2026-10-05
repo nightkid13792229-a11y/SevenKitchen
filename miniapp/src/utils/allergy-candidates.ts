@@ -26,14 +26,26 @@ export interface ScannedAllergenPage {
   hasVerdict: boolean
 }
 
-/** 报告上写的结论等级 → 给家长看的中文（认不出来就不显示，不编） */
+/**
+ * 报告上写的结论等级 → 给家长看的中文（认不出来就不显示，不编）。
+ *
+ * 强阳性与阳性**分开显示**（2026-10-05 老板要求）：报告就是把它们分成两档的，
+ * 而强阳性那几条恰恰是家长最需要一眼看到的（后端两档都落成"确诊"）。
+ */
 export const LEVEL_LABELS: Record<string, string> = {
+  STRONG_POSITIVE: '强阳性',
   POSITIVE: '阳性',
   WEAK_POSITIVE: '弱阳性',
   SUSPECTED: '疑似',
 }
 
-const LEVELS = ['POSITIVE', 'WEAK_POSITIVE', 'SUSPECTED', 'NEGATIVE']
+const LEVELS = [
+  'STRONG_POSITIVE',
+  'POSITIVE',
+  'WEAK_POSITIVE',
+  'SUSPECTED',
+  'NEGATIVE',
+]
 const GROUPS = ['FOOD', 'ENVIRONMENT', 'OTHER']
 
 export function normalizeLevel(value: unknown): string {

@@ -257,6 +257,7 @@ export class WeightGoalPlanService {
   async getSuggestion(
     customerId: string,
     dogId: string,
+    forcedDirection?: WeightGoalDirection | null,
   ): Promise<WeightGoalSuggestionView | null> {
     const { dog, maintenanceKcal } = await this.loadDog(dogId, customerId);
 
@@ -265,6 +266,9 @@ export class WeightGoalPlanService {
       bcsScore: dog.bcsScore,
       ownerIdealWeightKg: null,
       maintenanceKcal,
+      // 顾客坚持的方向（定制页「我还是想增重/减重」）：只在体况理想、
+      // 系统本来不给建议时生效，见 resolveSuggestedPlan 里的边界说明
+      forcedDirection: forcedDirection ?? null,
     });
 
     if (!suggestion) {

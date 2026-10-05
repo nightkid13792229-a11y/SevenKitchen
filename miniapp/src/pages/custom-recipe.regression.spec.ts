@@ -1108,7 +1108,7 @@ describe('定制页 · 体重管理引导进计划页', () => {
     )
   })
 
-  it('方向按「计划 > 体况」推导，且顾客改不了', () => {
+  it('方向按「计划 > 顾客选的方向」推导', () => {
     expect(page).toContain('function resolveTargetGoal')
     expect(page).toContain('syncGoalWithPlan')
 
@@ -1116,17 +1116,18 @@ describe('定制页 · 体重管理引导进计划页', () => {
       page.match(/function resolveTargetGoal\(\): string \{[\s\S]*?\n\}/)?.[0] || ''
     expect(resolveSource).not.toBe('')
 
-    // ① 计划进行中：减重计划 / 增重计划
+    // ① 计划进行中：减重计划 / 增重计划（计划优先，顾客选的那个不生效）
     expect(resolveSource).toContain("plan.direction === 'LOSS' ? 'LOSE_WEIGHT' : 'GAIN_WEIGHT'")
     // ② 维持期
     expect(resolveSource).toContain("plan.status === 'MAINTENANCE'")
-    // ③ 没有计划：按体况给（阈值与后端同一套）
-    expect(resolveSource).toContain('bcs >= BCS_LOSS_THRESHOLD')
-    expect(resolveSource).toContain('bcs <= BCS_GAIN_THRESHOLD')
-    expect(page).toContain('const BCS_LOSS_THRESHOLD = 6')
-    expect(page).toContain('const BCS_GAIN_THRESHOLD = 3')
-    // 方向上没有任何"顾客选择"的入口
-    expect(page).not.toContain('formData.value.targetGoal = goal')
+    // ③ 没有计划：按顾客自己选的方向（2026-10-05 第三批改成三选一）
+    expect(resolveSource).toContain("weightGoalChoice.value === 'LOSS'")
+    expect(resolveSource).toContain("weightGoalChoice.value === 'GAIN'")
+    expect(resolveSource).toContain("weightGoalChoice.value === 'MAINTAIN'")
+    // 计划判断在前：有计划的狗必须听计划的
+    expect(resolveSource.indexOf('const plan = selectedPlan.value')).toBeLessThan(
+      resolveSource.indexOf("weightGoalChoice.value === 'LOSS'"),
+    )
   })
 
   it('计划读到/读不到、换狗、补确认体况之后都要重算方向', () => {
@@ -1457,36 +1458,82 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     }
   })
 
-  it('② 第一步先问「需要给它做体重管理吗？」，答需要才展开计划入口', () => {
-    expect(template).toContain('需要给它做体重管理吗？')
-    expect(template).toContain('@tap="answerWeightManagement(true)"')
-    expect(template).toContain('@tap="answerWeightManagement(false)"')
-    // 问句在前，建议与入口在 v-if 里面
-    expect(template.indexOf('goal-ask')).toBeLessThan(template.indexOf('plan-entry-btn'))
-    expect(template).toContain('v-if="showWeightPlanEntry"')
+  it('② 第一步改成三个方向（减重 / 维持 / 增重），未选不能提交', () => {
+    /**
+     * 2026-10-05 第三批：老板把上一版的「需要 / 不需要」两个按钮
+     * 改成三个方向按钮，方向从此由顾客自己选。
+     */
+    expect(template).toContain('想帮它减重、维持，还是增重？')
+    expect(template).toContain('v-for="option in weightGoalOptions"')
+    expect(template).toContain('@tap="chooseWeightGoal(option.value)"')
+    expect(code).toContain("{ value: 'LOSS', label: '减重' }")
+    expect(code).toContain("{ value: 'MAINTAIN', label: '维持' }")
+    expect(code).toContain("{ value: 'GAIN', label: '增重' }")
+    // 顺序：体况建议 → 三选一 → 计划入口（有计划时那个"查看计划"按钮不算，
+    // 它属于"方向已由计划定"的另一条分支）
+    expect(template.indexOf('advice-line')).toBeLessThan(template.indexOf('goal-ask'))
+    expect(template.indexOf('goal-ask')).toBeLessThan(
+      template.indexOf('@tap="openWeightGoalPlan()"'),
+    )
 
-    // 有计划时不再问（计划本身就是答案），入口照样展开
-    const entry = code.match(/const showWeightPlanEntry = computed\([\s\S]*?\n\);/)?.[0] || ''
-    expect(entry).toContain('hasOpenPlan.value')
-    expect(entry).toContain('wantsWeightManagement.value === true')
-
-    // 未作答不能提交（灰按钮的原因要说清）
-    expect(code).toContain('const wantsWeightManagement = ref<boolean | null>(null)')
-    expect(code).toContain('请先回答：是否需要体重管理')
+    // 未选不能提交（灰按钮的原因要说清）
+    expect(code).toContain('const weightGoalChoice = ref<WeightGoalChoice | null>(null)')
+    expect(code).toContain('请先选择：减重、维持还是增重')
+    // 上一版那两个按钮与"我还是想…"整段已删
+    expect(code).not.toContain('answerWeightManagement')
+    expect(code).not.toContain('我还是想减重')
+    expect(code).not.toContain('还是想给它定个目标')
   })
 
-  it('② 答「不需要」→ 这一单按维持给（老板选定），计划仍优先', () => {
+  it('② 选「维持」→ 计划入口置灰；选减重/增重 → 带着方向进计划页', () => {
+    const enabled = code.match(/const planEntryEnabled = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(enabled).not.toBe('')
+    expect(enabled).toContain("weightGoalChoice.value === 'LOSS'")
+    expect(enabled).toContain("weightGoalChoice.value === 'GAIN'")
+    // 有计划时入口照旧可用（点进去是改目标）
+    expect(enabled).toContain('if (hasOpenPlan.value) return true;')
+
+    const open = code.match(/function openWeightGoalPlan\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(open).toContain('if (!planEntryEnabled.value) return;')
+    expect(open).toContain('goToWeightGoalPlan(weightGoalChoice.value)')
+
+    // 灰按钮下面必须说明为什么点不了
+    expect(template).toContain('planEntryHintText')
+    const hint = code.match(/const planEntryHintText = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(hint).toContain('选「维持」就不需要制定增减重计划了。')
+    expect(hint).toContain('先在上面选一个方向')
+  })
+
+  it('② 体况与方向打架时挡住：偏胖不给选增重、偏瘦不给选减重', () => {
+    /**
+     * 老板没要求这一条，但必须挡：方向会原样交给营养师，
+     * 给偏胖的狗出增重食谱、给偏瘦的狗出减重食谱都是反的。
+     * 与计划页后端"只在系统本来没建议时才听顾客"同一套口径。
+     */
+    const blocked =
+      code.match(/const blockedWeightGoalChoice = computed<WeightGoalChoice \| ''>\([\s\S]*?\n\}\);/)?.[0] ||
+      ''
+    expect(blocked).not.toBe('')
+    expect(blocked).toContain("if (bcs >= BCS_LOSS_THRESHOLD) return 'GAIN';")
+    expect(blocked).toContain("if (bcs <= BCS_GAIN_THRESHOLD) return 'LOSS';")
+
+    // 点被挡掉的那一项要说明原因（不静默失败）
+    const choose = code.match(/function chooseWeightGoal\(value: WeightGoalChoice\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(choose).toContain('uni.showToast')
+    expect(choose).toContain('blockedWeightGoalReason.value')
+    // 被挡的那一项在界面上就是"不可选"的样子
+    expect(template).toContain("'goal-ask__option--off'")
+  })
+
+  it('② 答完方向立刻重算交给营养师的目标', () => {
+    const choose = code.match(/function chooseWeightGoal\(value: WeightGoalChoice\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(choose).toContain('syncGoalWithPlan()')
+    // 没计划时按顾客选的方向给，有计划时仍以计划为准
     const resolve = code.match(/function resolveTargetGoal\(\): string \{[\s\S]*?\n\}/)?.[0] || ''
-    expect(resolve).not.toBe('')
-    // 没计划 + 答"不需要" → 维持；有计划时计划优先（所以要先判 hasOpenPlan）
-    expect(resolve).toContain('!hasOpenPlan.value && wantsWeightManagement.value === false')
-    expect(resolve.indexOf('wantsWeightManagement.value === false')).toBeLessThan(
-      resolve.indexOf('const plan = selectedPlan.value'),
-    )
+    expect(resolve).toContain("return 'LOSE_WEIGHT';")
+    expect(resolve).toContain("return 'GAIN_WEIGHT';")
     expect(resolve).toContain('return BCS_MAINTAIN_GOAL;')
-    // 答完要重算方向（否则还是按体况算出来的减重/增重）
-    const answer = code.match(/function answerWeightManagement[\s\S]*?\n\}/)?.[0] || ''
-    expect(answer).toContain('syncGoalWithPlan()')
+    expect(resolve).toContain("return '';")
   })
 
   it('③ 「+ 添加」夹在快选标签与手动清单之间', () => {
@@ -1540,34 +1587,52 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
   const code = stripComments(page)
   const template = code.slice(0, code.indexOf('<script setup'))
 
-  it('① 体况理想时计划入口置灰，不再让人白点一次', () => {
-    expect(template).toContain('v-if="!isIdealBcs"')
-    expect(template).toContain('plan-entry-btn plan-entry-btn--disabled')
-    // 置灰那一个**不带点击事件**（能看不能点）
-    const disabled = template.slice(
-      template.indexOf('plan-entry-btn--disabled'),
-      template.indexOf('plan-manual'),
+  it('① 狗狗一选定就先给出体况评分与建议（不等顾客先答什么）', () => {
+    /**
+     * 2026-10-05 第三批第 2 条：狗狗一选定，体况评分与我们的建议就要摆出来。
+     * 所以建议那行在 v-if="hasSelectedDog" 的板块里**不挂在任何问答分支下**，
+     * 位置也在三选一之前。
+     */
+    const section = template.slice(
+      template.indexOf('<text class="title-text">体重管理</text>'),
+      template.indexOf('<text class="title-text">过敏信息（可选）</text>'),
     )
-    expect(disabled).not.toContain('@tap')
-
-    const ideal = code.match(/const isIdealBcs = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(ideal).toContain('BCS_GAIN_THRESHOLD')
-    expect(ideal).toContain('BCS_LOSS_THRESHOLD')
-    // 4-5 是理想区间（与后端 resolveSuggestedPlan 同一套判据）
-    expect(ideal).toContain('bcs > BCS_GAIN_THRESHOLD && bcs < BCS_LOSS_THRESHOLD')
+    expect(section).toContain('bcsAdviceText')
+    expect(section.indexOf('advice-line')).toBeLessThan(section.indexOf('goal-ask'))
+    // 那句话里必须有体况评分本身（老板要"把他的体况评分和我们的建议给出来"）
+    const advice = code.match(/const bcsAdviceText = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(advice).toContain('体况评分')
+    expect(advice).toContain('我们建议')
+    // 建议那一行的显示条件只有"这句话有没有内容"——
+    // 不挂"有没有计划""选没选方向"，狗狗一选定就能看到
+    expect(section).toContain('<view v-if="bcsAdviceText" class="advice-line">')
   })
 
-  it('① 建议维持后面给"我还是想减重 / 我还是想增重"两个文字入口', () => {
-    expect(template).toContain('我还是想减重')
-    expect(template).toContain('我还是想增重')
-    expect(template).toContain("goToWeightGoalPlan('LOSS')")
-    expect(template).toContain("goToWeightGoalPlan('GAIN')")
-    // 只在"体况理想 + 没有进行中的计划"时出现
-    const when = code.match(/const showManualPlanLinks = computed\([\s\S]*?\n\);/)?.[0] || ''
-    expect(when).toContain('isIdealBcs.value')
-    expect(when).toContain('!hasOpenPlan.value')
+  it('① 没有选定狗狗时，四个板块与提交按钮都不展示', () => {
+    const sections = [
+      '<text class="title-text">体重管理</text>',
+      '<text class="title-text">过敏信息（可选）</text>',
+      '<text class="title-text">饮食偏好（可选）</text>',
+      '<text class="title-text">备注（可选）</text>',
+    ]
+    for (const title of sections) {
+      const index = template.indexOf(title)
+      expect(index).toBeGreaterThan(-1)
+      // 往前找最近的 section 容器，它的开标签必须带 v-if="hasSelectedDog"
+      const openTag = template.lastIndexOf('class="section"', index)
+      expect(openTag).toBeGreaterThan(-1)
+      const tagStart = template.lastIndexOf('<view', openTag)
+      expect(template.slice(tagStart, openTag)).toContain('v-if="hasSelectedDog"')
+    }
+    // 提交按钮同理：没有狗可提交，留着只会点出一句"请选择狗狗"
+    const submitTag = template.lastIndexOf('<view', template.indexOf('class="submit-section"'))
+    expect(template.slice(submitTag, template.indexOf('class="submit-section"'))).toContain(
+      'v-if="hasSelectedDog"',
+    )
+    expect(code).toContain('const hasSelectedDog = computed(')
+  })
 
-    // 方向要真的带到计划页，并由该页原样传给后端
+  it('① 方向真的带到计划页，并由该页原样传给后端', () => {
     const go = code.match(/const goToWeightGoalPlan = \([\s\S]*?\n\};/)?.[0] || ''
     expect(go).toContain('direction=${direction}')
     const planPage = read('src/pages/weight-goal-plan/index.vue')
@@ -1618,5 +1683,54 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     // 每份报告后面要能看到结论条数（家长用它核对识别全不全）
     const text = code.match(/function allergyReportPageText[\s\S]*?\n\}/)?.[0] || ''
     expect(text).toContain('resultCount')
+  })
+})
+
+/**
+ * 2026-10-05 第四批（老板第三次看体验版提的 3 条）。
+ *
+ * 这一批把第一步重做了：狗狗一选定先给体况与建议，然后由顾客**自己选**
+ * 减重 / 维持 / 增重（取代上一版的"需要 / 不需要"）。
+ */
+describe('定制页 · 2026-10-05 第四批（3 条）', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  const code = stripComments(page)
+  const template = code.slice(0, code.indexOf('<script setup'))
+
+  it('① 没选狗狗时四个板块收起，但给一句"先选狗狗"的引导', () => {
+    // 四个板块 + 提交按钮都要 v-if="hasSelectedDog"
+    expect(template.match(/v-if="hasSelectedDog"/g)?.length || 0).toBeGreaterThanOrEqual(5)
+    // 多只狗的家长不会被留在"只有一张 Banner"的空页面上
+    expect(template).toContain('v-if="!hasSelectedDog && dogOptions.length > 0"')
+    expect(template).toContain('先选一下要给哪只狗狗定制')
+    expect(template).toContain('点上面的头像可以切换')
+  })
+
+  it('② 体况评分与建议在狗狗一选定时就给出', () => {
+    const section = template.slice(
+      template.indexOf('<text class="title-text">体重管理</text>'),
+      template.indexOf('<text class="title-text">过敏信息（可选）</text>'),
+    )
+    expect(section).toContain('<view v-if="bcsAdviceText" class="advice-line">')
+    // 建议排在三个方向按钮之前
+    expect(section.indexOf('advice-line')).toBeLessThan(section.indexOf('goal-ask'))
+  })
+
+  it('③ 三个方向取代"需要 / 不需要"，维持置灰、减重/增重进对应路径', () => {
+    expect(template).not.toContain('需要给它做体重管理吗？')
+    expect(template).toContain('想帮它减重、维持，还是增重？')
+    expect(code).toContain("label: '减重'")
+    expect(code).toContain("label: '维持'")
+    expect(code).toContain("label: '增重'")
+    // 上一版那行"还是想给它定个目标…"整段删掉（方向已经由顾客自己选）
+    expect(code).not.toContain('还是想给它定个目标')
+    expect(code).not.toContain('plan-manual')
+
+    // 维持 → 灰；减重/增重 → 带方向进计划页
+    const enabled = code.match(/const planEntryEnabled = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(enabled).toContain("weightGoalChoice.value === 'LOSS'")
+    expect(enabled).toContain("weightGoalChoice.value === 'GAIN'")
+    const open = code.match(/function openWeightGoalPlan\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(open).toContain('goToWeightGoalPlan(weightGoalChoice.value)')
   })
 })

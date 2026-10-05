@@ -38,9 +38,35 @@ describe('定制食谱 · 过敏录入', () => {
   it('识别结果要家长确认才生效，不是 AI 自己写进档案', () => {
     const source = block()
 
-    expect(source).toContain('读到这些，确认要记的：')
-    expect(source).toContain('候选一律先不选中，逐项由家长点')
+    expect(source).toContain('读到这些食物过敏原，已默认记上，不对的点掉：')
+    // 2026-10-05 老板选定：读到的食物过敏原默认全部记上（原先一个都不勾，
+    // 「加入这一单（0）」是灰的，家长以为坏了），仍然逐项可点掉
+    expect(source).toContain('picked.value = foodCandidates.value.map((item) => item.name)')
     expect(source).toContain("emit('scanned', { allergens: [...picked.value] })")
+  })
+
+  it('环境类过敏原不记进过敏信息，但要告诉家长读到了（老板第 5 条）', () => {
+    const source = block()
+
+    expect(source).toContain("item.group !== 'ENVIRONMENT'")
+    expect(source).toContain('与吃的东西无关，没有记进过敏信息')
+    // 整份报告只有环境项时也要说一句，别让家长以为识别失败
+    expect(source).toContain('报告里读到的是环境类过敏原')
+  })
+
+  it('报告写的结论等级要照抄进报告实体，不能写死 UNKNOWN（老板第 4 条）', () => {
+    const source = block()
+
+    /**
+     * 老版本这里写死 `level: 'UNKNOWN'`。后果不是"少一个标签"：
+     * 后端按 level 定可信度 —— 阳性 → 确诊（食谱彻底避开）、其余 → 可疑，
+     * 写死 UNKNOWN 等于把报告上写着"阳性"的确诊过敏降级成"可疑"。
+     */
+    expect(source).not.toContain("level: 'UNKNOWN' })")
+    expect(source).toContain('results: chosen.map((item) => ({ allergen: item.name, level: item.level }))')
+    // 报告上写的阳性/弱阳性要显示出来，家长才知道哪几项最要紧
+    expect(source).toContain('POSITIVE:')
+    expect(source).toContain('function candidateLabel')
   })
 
   it('报告原件存成实体，家长以后翻得出来（不再"读完就丢"）', () => {

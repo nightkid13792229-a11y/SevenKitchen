@@ -7,25 +7,41 @@
   <view class="allergy-scan">
     <!-- 2026-10-05 老板要求：删掉按钮上方的标题与说明（含"拍一下自动读"），
          并把按钮文案改成「上传过敏检测报告」；同时**只支持从相册选照片**，
-         不调相机、也不弹"拍照/相册"选择器。 -->
-    <button
-      class="allergy-scan__button"
-      :disabled="extracting"
-      @tap="pickReport"
-    >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
+         不调相机、也不弹"拍照/相册"选择器。
+         同日再要求：这个按钮**改小** —— 它原先是占满一整行的大按钮，
+         在一张表单里比"确认定制"还显眼；现在收成一个小圆角按钮靠左放。 -->
+    <view class="allergy-scan__head">
+      <button
+        class="allergy-scan__button"
+        :disabled="extracting"
+        @tap="pickReport"
+      >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
+    </view>
 
-    <!-- 候选确认卡：默认一个都不选，逐项由家长点 -->
-    <view v-if="candidates.length > 0" class="allergy-scan__candidates">
-      <text class="allergy-scan__candidates-title">读到这些，确认要记的：</text>
+    <!-- 候选确认卡（2026-10-05 改口径）：
+         · 只列**食物类**过敏原 —— 报告里常同时有环境组（尘螨/花粉/霉菌），
+           食谱只关心吃进去的东西（老板第 5 条）
+         · 读到的食物过敏原**默认全部记上**（老板第 5 条选定）：
+           原先一个都不勾，「加入这一单」是灰的，家长以为坏了；
+           现在读完就是"已默认记上，不对的点掉"
+         · 每项后面带上报告写的结论（阳性/弱阳性/…），报告上写的
+           "阴性/阳性"不再被丢掉（老板第 4 条） -->
+    <view v-if="foodCandidates.length > 0" class="allergy-scan__candidates">
+      <text class="allergy-scan__candidates-title">读到这些食物过敏原，已默认记上，不对的点掉：</text>
       <view class="allergy-scan__tags">
         <text
-          v-for="item in candidates"
-          :key="item"
+          v-for="item in foodCandidates"
+          :key="item.name"
           class="allergy-scan__tag"
-          :class="{ 'allergy-scan__tag--picked': picked.includes(item) }"
-          @tap="toggle(item)"
-        >{{ item }}</text>
+          :class="{ 'allergy-scan__tag--picked': isPicked(item.name) }"
+          @tap="toggle(item.name)"
+        >{{ candidateLabel(item) }}</text>
       </view>
+
+      <text v-if="skipped.length > 0" class="allergy-scan__skipped">
+        · 报告里还有 {{ skipped.length }} 项环境类（{{ skippedNames }}），
+        与吃的东西无关，没有记进过敏信息。
+      </text>
 
       <text
         v-for="(warning, index) in warnings"
@@ -42,11 +58,22 @@
         >加入这一单（{{ picked.length }}）</text>
       </view>
     </view>
+
+    <!-- 整份报告只读到环境类：也要说一句，否则家长以为识别失败了 -->
+    <view v-else-if="skipped.length > 0" class="allergy-scan__candidates">
+      <text class="allergy-scan__candidates-title">
+        报告里读到的是环境类过敏原（{{ skippedNames }}），与吃的东西无关；
+        食物过敏原可以在上面手工添加。
+      </text>
+      <view class="allergy-scan__actions">
+        <text class="allergy-scan__discard" @tap="discard">知道了</text>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
   SCAN_IMAGE_SIZE_TYPE,
@@ -74,8 +101,15 @@ const emit = defineEmits<{
   (event: 'scanned', value: { allergens: string[] }): void
 }>()
 
+/** 报告里读到的一项：名字 + 报告写的结论等级 + 报告写的分组 */
+interface ScannedAllergen {
+  name: string
+  level: string
+  group: string
+}
+
 const extracting = ref(false)
-const candidates = ref<string[]>([])
+const candidates = ref<ScannedAllergen[]>([])
 const picked = ref<string[]>([])
 const warnings = ref<string[]>([])
 /** 这一份报告的原始图片地址（可能多页），确认时一起存进报告 */
@@ -83,6 +117,54 @@ const imageUrls = ref<string[]>([])
 const testDate = ref('')
 const method = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN')
 const ocrText = ref('')
+
+/** 报告上写的结论等级 → 给家长看的中文（认不出来就不显示，不编） */
+const LEVEL_LABELS: Record<string, string> = {
+  POSITIVE: '阳性',
+  WEAK_POSITIVE: '弱阳性',
+  SUSPECTED: '疑似',
+}
+
+function normalizeLevel(value: unknown): string {
+  const text = String(value || '').toUpperCase()
+  return ['POSITIVE', 'WEAK_POSITIVE', 'SUSPECTED', 'NEGATIVE'].includes(text) ? text : 'UNKNOWN'
+}
+
+function normalizeGroup(value: unknown): string {
+  const text = String(value || '').toUpperCase()
+  return ['FOOD', 'ENVIRONMENT', 'OTHER'].includes(text) ? text : 'UNKNOWN'
+}
+
+/**
+ * 只列食物类：环境类（尘螨/花粉/霉菌…）与吃的东西无关（老板第 5 条）。
+ *
+ * 阴性项也一并挡在外面 —— 阴性恰恰说明不过敏，记进"过敏信息"是反的。
+ * 后端已经把这两类过滤/分级过了，这里再挡一道：前端不该依赖服务端一定守规矩。
+ */
+const foodCandidates = computed(() =>
+  candidates.value.filter((item) => item.group !== 'ENVIRONMENT' && item.level !== 'NEGATIVE'),
+)
+
+/** 报告里的环境类：告诉家长"读到了但这些不影响食谱"，而不是默默吞掉 */
+const skipped = computed(() =>
+  candidates.value.filter((item) => item.group === 'ENVIRONMENT' || item.level === 'NEGATIVE'),
+)
+
+const skippedNames = computed(() =>
+  skipped.value
+    .slice(0, 3)
+    .map((item) => item.name)
+    .join('、'),
+)
+
+function candidateLabel(item: ScannedAllergen): string {
+  const label = LEVEL_LABELS[item.level]
+  return label ? `${item.name} · ${label}` : item.name
+}
+
+function isPicked(name: string): boolean {
+  return picked.value.includes(name)
+}
 
 function normalizeMethod(value: unknown): typeof method.value {
   const text = String(value || '').toUpperCase()
@@ -138,7 +220,7 @@ async function pickReport() {
   uni.showLoading({ title: '识别中…', mask: true })
 
   try {
-    const collected: string[] = []
+    const collected: ScannedAllergen[] = []
     const collectedWarnings: string[] = []
     const urls: string[] = []
     let detectedDate = ''
@@ -160,18 +242,24 @@ async function pickReport() {
       const res: any = await dogApi.extractHealthReport({ imageUrl })
       const data = res?.data || {}
 
-      // 优先用 drafts（带每项结论等级），退回旧的 allergies 数组 ——
+      // 优先用 drafts（带每项结论等级与分组），退回旧的 allergies 数组 ——
       // 提示词换了不代表模型一定照做，两条路都得接住
       const drafts = Array.isArray(data.drafts) ? data.drafts : []
       const fromDrafts = drafts
-        .map((item: any) => String(item?.allergen || '').trim())
-        .filter(Boolean)
+        .map((item: any) => ({
+          name: String(item?.allergen || '').trim(),
+          level: normalizeLevel(item?.level),
+          group: normalizeGroup(item?.group),
+        }))
+        .filter((item: ScannedAllergen) => item.name)
 
       if (fromDrafts.length > 0) {
         collected.push(...fromDrafts)
       } else if (Array.isArray(data.allergies)) {
         collected.push(
-          ...data.allergies.filter((item: unknown) => typeof item === 'string' && item.trim()),
+          ...data.allergies
+            .filter((item: unknown) => typeof item === 'string' && item.trim())
+            .map((item: string) => ({ name: item.trim(), level: 'UNKNOWN', group: 'UNKNOWN' })),
         )
       }
 
@@ -196,16 +284,20 @@ async function pickReport() {
     testDate.value = detectedDate
     method.value = detectedMethod
     ocrText.value = texts.join('\n\n').slice(0, 20000)
-    candidates.value = Array.from(new Set(collected.filter(Boolean)))
+    candidates.value = mergeCandidates(collected)
     warnings.value = Array.from(new Set(collectedWarnings.filter(Boolean)))
-    // 候选一律先不选中，逐项由家长点
-    picked.value = []
+    // 读到的食物过敏原**默认全部记上**（老板 2026-10-05 选定）：
+    // 原先一个都不勾，家长看到「加入这一单（0）」是灰的，以为识别坏了
+    picked.value = foodCandidates.value.map((item) => item.name)
 
     uni.hideLoading()
 
-    if (candidates.value.length === 0) {
+    if (foodCandidates.value.length === 0) {
       uni.showToast({
-        title: '没识别到过敏原，请在下面手工添加',
+        title:
+          skipped.value.length > 0
+            ? '报告里只有环境类过敏原，请手工添加食物过敏原'
+            : '没识别到过敏原，请在下面手工添加',
         icon: 'none',
         duration: 3000,
       })
@@ -226,6 +318,31 @@ async function pickReport() {
   }
 }
 
+/**
+ * 多页报告的名字合并。
+ *
+ * 同一项可能两页都出现：名字相同只留一条，但**等级与分组取更"有信息"的那个**
+ * （第一页只读到数值、第二页才写到判定区，是很常见的情况）。
+ */
+function mergeCandidates(items: ScannedAllergen[]): ScannedAllergen[] {
+  const merged = new Map<string, ScannedAllergen>()
+  for (const item of items) {
+    if (!item.name) continue
+    const existing = merged.get(item.name)
+    if (!existing) {
+      merged.set(item.name, item)
+      continue
+    }
+    if (existing.level === 'UNKNOWN' && item.level !== 'UNKNOWN') {
+      existing.level = item.level
+    }
+    if (existing.group === 'UNKNOWN' && item.group !== 'UNKNOWN') {
+      existing.group = item.group
+    }
+  }
+  return Array.from(merged.values())
+}
+
 function toggle(name: string) {
   const index = picked.value.indexOf(name)
   if (index >= 0) {
@@ -244,6 +361,9 @@ function discard() {
 async function confirm() {
   if (picked.value.length === 0) return
 
+  // 选中的这一批（带报告写的结论等级）
+  const chosen = foodCandidates.value.filter((item) => isPicked(item.name))
+
   // ① 报告原件存成一份检测报告实体（家长以后翻得出来）
   if (props.dogId && imageUrls.value.length > 0) {
     try {
@@ -252,7 +372,19 @@ async function confirm() {
         testMethod: method.value,
         attachments: imageUrls.value,
         ocrText: ocrText.value || null,
-        results: picked.value.map(allergen => ({ allergen, level: 'UNKNOWN' })),
+        /**
+         * level 必须**照抄报告上写的**（2026-10-05 修复）。
+         *
+         * 老版本这里写死 'UNKNOWN'，后果不是"少一个标签"：
+         * 后端按 level 定可信度 —— 阳性 → 确诊（食谱彻底避开）、
+         * 其余 → 可疑。写死 UNKNOWN 等于把报告上写着"阳性"的确诊过敏
+         * 一律降级成"可疑"，食谱就不会严格避开它。老板第 4 条问的正是这个。
+         */
+        results: chosen.map((item) => ({ allergen: item.name, level: item.level })),
+        // 环境项写进报告摘要：原件里有，但不记成"过敏"
+        summary: skipped.value.length
+          ? `报告另有环境类过敏原 ${skipped.value.length} 项（${skippedNames.value}），与食谱无关，未记入过敏信息。`
+          : null,
       })
     } catch {
       // 报告存不下不影响这一单 —— 名字照样加进过敏信息
@@ -276,28 +408,25 @@ async function confirm() {
 
 .allergy-scan__head {
   display: flex;
-  flex-direction: column;
-  gap: 6rpx;
+  /* 小按钮靠左，不被 flex 拉满整行（老板 2026-10-05 要求改小） */
+  align-items: flex-start;
 }
 
-.allergy-scan__title {
-  font-size: 26rpx;
-  font-weight: 700;
+.allergy-scan__candidates-title {
+  display: block;
+  font-size: 24rpx;
   color: #5b4a33;
 }
 
-.allergy-scan__desc {
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #8a7a63;
-}
-
 .allergy-scan__button {
-  margin-top: 14rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  border-radius: 16rpx;
-  font-size: 26rpx;
+  /* 小按钮（2026-10-05 老板要求改小）：不再占满整行，跟着文字宽度走 */
+  display: inline-block;
+  margin: 0;
+  padding: 0 24rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
   color: #fff;
   background: #8a6b3f;
 }
@@ -306,15 +435,18 @@ async function confirm() {
   border: none;
 }
 
+.allergy-scan__skipped {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a7a63;
+}
+
 .allergy-scan__candidates {
   margin-top: 18rpx;
   padding-top: 16rpx;
   border-top: 1rpx dashed rgba(120, 90, 50, 0.2);
-}
-
-.allergy-scan__candidates-title {
-  font-size: 24rpx;
-  color: #5b4a33;
 }
 
 .allergy-scan__tags {

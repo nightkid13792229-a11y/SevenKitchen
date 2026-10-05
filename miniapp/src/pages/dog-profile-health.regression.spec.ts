@@ -644,7 +644,10 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
     // 体重：内嵌 + 新增块关闭 → 整张卡片不渲染（否则留下一个空的白卡片）
     expect(weight).toContain('v-if="!embedded || showAddEntry" class="health-card weight-record-card"')
     // 过敏扫描块：没有待确认候选时不显示候选区（只留入口本身）
-    expect(scan).toContain('v-if="candidates.length > 0" class="allergy-scan__candidates"')
+    // 2026-10-05：候选区改成只列**食物类**（foodCandidates），环境类那一段
+    // 单独判 skipped —— 两条都不成立时仍然不会留下空卡片
+    expect(scan).toContain('v-if="foodCandidates.length > 0" class="allergy-scan__candidates"')
+    expect(scan).toContain('v-else-if="skipped.length > 0" class="allergy-scan__candidates"')
   })
 
   it('记录板块自身的「新增记录」按钮已下线（只有引导能新建）', () => {

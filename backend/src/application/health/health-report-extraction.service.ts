@@ -294,7 +294,8 @@ function normalizeKeywordList(value: unknown): string[] {
 const COMMON_RULES = [
   '严格规则（任何情况都不得违反）：',
   '1. 只提取文字里**明确写出**的内容，不得推断、不得补充医学常识、不得猜测。',
-  '2. 不得判断疾病名称、严重程度、过敏类型（食物/环境）或是否需要治疗 —— 这些都不属于你的任务。',
+  '2. 不得判断疾病名称、严重程度、过敏类型或是否需要治疗 —— 这些都不属于你的任务；',
+  '   但报告上**印着的**分组与结论等级属于"照抄"，不叫判断（过敏报告的 group / level 就是照抄）。',
   '3. 不得给出任何用药建议、剂量、诊断结论。',
   '4. 只输出 JSON，不要输出任何解释性文字。',
   '5. 识别文字与目标文档无关（例如只是一张普通照片）时，草稿返回空数组，',
@@ -459,10 +460,32 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     // ⚠️ 边界不变：**只照抄报告上写的字**，不做任何医学判断。
     // COMMON_RULES 明令不得判断疾病名称、严重程度、过敏类型。
     // "阳性"不是系统算出来的结论，是报告上印着的字。
+    //
+    // ── 2026-10-05 第十一期：老板拿真实报告（中农董军实验室）问出来的三个问题 ──
+    //   ① 报告上明明有「过敏原结果判定」那一段（逐条写着阴性/阳性/强阳性），
+    //      线上却整份读成 UNKNOWN。两个原因：判定区在数值表格**之外**，要专门去找；
+    //      而且判定区里写的"强阳性"不在允许的五个值里，模型不敢映射就退成 UNKNOWN。
+    //      → 明确写出"先找判定区"与"强阳性算 POSITIVE"。
+    //   ② 报告里的"组胺（阳性对照）"是试剂对照，不是过敏原 —— 必须丢掉，
+    //      否则会被当成一条真过敏记进档案（记进去就会被严格避开）。
+    //   ③ 分组列（食物组 / 环境组）要照抄：食谱只关心吃进去的东西，
+    //      粉尘螨、花粉这类环境项不该混进"这单不能用的食材"里。
+    '★ 第一步：**先找报告上的「结果判定 / 结论 / 判读」那一段**。',
+    '  这类报告常常在数值表格之外单独有一段判定区，逐条写着"阴性 / 阳性 / 弱阳性 / 强阳性"。',
+    '  **每一条的 level 以那一段为准**；表格里只有数值（如 1.2 kU/L）或颜色条、色块**不算**写了结论，',
+    '  判定区没提到的项目，level 填 UNKNOWN。数值大小一律不作为判断依据。',
     '· level **照抄报告上写的结论**，只能从这五个里选：',
-    '  POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 / SUSPECTED 疑似或可疑 /',
-    '  NEGATIVE 阴性 / UNKNOWN 报告没写或看不清。',
-    '  **不要根据数值大小自己推断等级**，报告没写就填 UNKNOWN。',
+    '  POSITIVE 阳性（报告写"阳性""强阳性""++""+++""＋"都算阳性）/',
+    '  WEAK_POSITIVE 弱阳性（写"弱阳性""±""+-"）/ SUSPECTED 疑似或可疑 /',
+    '  NEGATIVE 阴性（写"阴性""－""-"）/ UNKNOWN 报告没写或看不清。',
+    '· **阴性的项目不要放进 drafts** —— 它们恰恰说明不过敏，放进去只会挡住真正要注意的那几项。',
+    '  （整份报告都是阴性时才按上面那条返回空数组 + warnings。）',
+    '· group 照抄报告上的分组，只能从这四个里选：',
+    '  FOOD 食物组（肉、谷物、蛋奶、鱼虾、果蔬等吃进去的）/',
+    '  ENVIRONMENT 环境组（尘螨、花粉、霉菌、皮屑、昆虫等吸入或接触的；',
+    '  有的报告写作"吸入组""接触组"）/ OTHER 报告上另有分组名 / UNKNOWN 报告没写分组。',
+    '  **只许照抄**：报告上写了分组列或分组小节就照抄，没写就填 UNKNOWN，不要自己分类。',
+    '· **"组胺""阳性对照""阴性对照"这类对照项不是过敏原，一律不要放进 drafts。**',
     '· testMethod 照抄报告上写的检测方式，只能从这五个里选：',
     '  SERUM 血清或 IgE 检测 / INTRADERMAL 皮内试验 / ELIMINATION 排除性饮食试验 /',
     '  OTHER 其它 / UNKNOWN 没写或看不清。不要根据常识猜。',
@@ -472,8 +495,9 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
-    '    { "allergen": "鸡肉", "level": "POSITIVE", "notes": "" },',
-    '    { "allergen": "小麦", "level": "WEAK_POSITIVE", "notes": "报告标注为弱阳性" }',
+    '    { "allergen": "鸡肉", "level": "POSITIVE", "group": "FOOD", "notes": "" },',
+    '    { "allergen": "小麦", "level": "WEAK_POSITIVE", "group": "FOOD", "notes": "报告标注为弱阳性" },',
+    '    { "allergen": "粉尘螨", "level": "POSITIVE", "group": "ENVIRONMENT", "notes": "" }',
     '  ],',
     '  "testMethod": "SERUM",',
     '  "testDate": "2026-03-12",',
@@ -726,19 +750,27 @@ export function normalizeDrafts(
       allergen: normalizeDraftText(item?.allergen, 40),
       notes: normalizeDraftText(item?.notes, 200),
       level: normalizeAllergyLevel(item?.level),
+      // 分组（2026-10-05）：照抄报告上的分组列；报告没写时按名字兜底判一下
+      // —— 定制食谱只该看见吃进去的东西（见 normalizeAllergyGroup）
+      group: normalizeAllergyGroup(item?.group, item?.allergen),
     }))
-    .filter((draft) => draft.allergen)
+    // 对照项（组胺/阳性对照/阴性对照）不是过敏原：丢掉，
+    // 否则它会被当成一条真过敏记进档案，从此被严格避开
+    .filter((draft) => draft.allergen && !isControlAllergenName(draft.allergen))
     .slice(0, MAX_KEYWORDS);
 
   if (fromDrafts.length > 0) {
     return fromDrafts;
   }
 
-  return normalizeKeywordList(parsed.allergies).map((allergen) => ({
-    allergen,
-    notes: '',
-    level: 'UNKNOWN' as const,
-  }));
+  return normalizeKeywordList(parsed.allergies)
+    .filter((allergen) => !isControlAllergenName(allergen))
+    .map((allergen) => ({
+      allergen,
+      notes: '',
+      level: 'UNKNOWN' as const,
+      group: normalizeAllergyGroup(null, allergen),
+    }));
 }
 
 /** 报告结论等级：只认报告上写的那五种，其余一律 UNKNOWN（不猜） */
@@ -754,6 +786,117 @@ export function normalizeAllergyLevel(
   ) {
     return key;
   }
+  return 'UNKNOWN';
+}
+
+/**
+ * 报告里的分组（2026-10-05，老板第 5 条要求）。
+ *
+ * 为什么要有这个字段：过敏原报告一页里常常同时有"食物组"和"环境组"
+ * （粉尘螨、花粉、霉菌…）。定制食谱只关心**吃进去的东西**，
+ * 环境项混进"这单不能用的食材"里既没用又让家长以为漏看了什么。
+ *
+ * 取值优先级：
+ *   ① 报告上写的分组 —— 模型照抄，认不出来就当没写（不猜）；
+ *   ② 报告没写分组时，用名字兜底判一下（见 isEnvironmentAllergenName）。
+ * 兜底这一层是**系统行为、不交给模型**：名字里带"螨/花粉/皮屑"的东西
+ * 不可能是食材，这个判断不需要医学知识。
+ */
+export type AllergyGroup = 'FOOD' | 'ENVIRONMENT' | 'OTHER' | 'UNKNOWN';
+
+/**
+ * 环境类过敏原的关键词。
+ *
+ * 只放**不可能是食材**的词 —— 这一层宁可漏判（环境项留在列表里，家长点掉即可），
+ * 也不能误判（把真食物过敏原藏起来，家长就再也看不到它了）。
+ * 所以不收"松""柳""棉"这种单字：它们同样出现在食材名里。
+ */
+const ENVIRONMENT_ALLERGEN_KEYWORDS = [
+  '螨',
+  '粉尘',
+  '尘土',
+  '灰尘',
+  '屋尘',
+  '花粉',
+  '艾蒿',
+  '蒿草',
+  '豚草',
+  '蒲公英',
+  '车前草',
+  '藜草',
+  '苋草',
+  '荨麻',
+  '梧桐',
+  '桦木',
+  '杨树',
+  '柳树',
+  '松树',
+  '柏树',
+  '桑树',
+  '槐树',
+  '霉菌',
+  '真菌',
+  '曲霉',
+  '青霉',
+  '链格孢',
+  '念珠菌',
+  '孢子',
+  '皮屑',
+  '上皮',
+  '羽毛',
+  '羊毛',
+  '马毛',
+  '猫毛',
+  '狗毛',
+  '棉絮',
+  '棉花',
+  '黄麻',
+  '蚕丝',
+  '蟑螂',
+  '蚊子',
+  '跳蚤',
+  '蚂蚁',
+  '苍蝇',
+  '飞蛾',
+  '蟋蟀',
+  '昆虫',
+  '烟草',
+  '乳胶',
+  '木棉',
+];
+
+/**
+ * 对照项不是过敏原。
+ *
+ * 报告开头常有一行"组胺（阳性对照）"用来证明试剂有效 ——
+ * 它的值必然是阳性，但那不是这只狗对组胺过敏。
+ * 老版本会把它当成一条真过敏记进档案，从此被食谱严格避开（老板实测）。
+ */
+export function isControlAllergenName(name: unknown): boolean {
+  const text = String(name ?? '').trim();
+  if (!text) return false;
+  return /对照|组胺|histamine/i.test(text);
+}
+
+/** 名字一看就不可能是食材（环境类）—— 报告没写分组时的兜底 */
+export function isEnvironmentAllergenName(name: unknown): boolean {
+  const text = String(name ?? '').trim();
+  if (!text) return false;
+  return ENVIRONMENT_ALLERGEN_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+/** 分组：先认报告上照抄来的值，认不出来再按名字兜底 */
+export function normalizeAllergyGroup(
+  value: unknown,
+  allergen?: unknown,
+): AllergyGroup {
+  const key = String(value ?? '').trim().toUpperCase();
+  if (key === 'FOOD' || key === 'ENVIRONMENT' || key === 'OTHER') {
+    return key;
+  }
+  // 没写分组（或写了个认不出来的值）：按名字兜底。
+  // **不覆盖报告自己写的 FOOD** —— 宁可多留一项，也不能把真食物过敏原藏起来。
+  if (isEnvironmentAllergenName(allergen)) return 'ENVIRONMENT';
   return 'UNKNOWN';
 }
 

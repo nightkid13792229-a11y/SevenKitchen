@@ -96,8 +96,33 @@ results: picked.value.map(allergen => ({ allergen, level: 'UNKNOWN' }))
   阴性项不进 drafts（它们恰恰说明不过敏）
 - 小程序：等级照抄进报告实体（`level: item.level`），并在候选标签上显示出来
   （「鸡肉 · 阳性」「小麦 · 弱阳性」），家长一眼看到报告上写了什么
-- 多页报告同一项只留一条，等级/分组**取信息更全的那一页**（第一页只有数值、
-  第二页才写判定，是很常见的情况）
+
+### 用老板那份真实报告在生产上实测，又抓出两个问题（同日修完）
+
+拿真实报告（中农董军，2 页）跑了一次真实识别，结果是：
+
+| | 第 1 页（只有数值 + 颜色条） | 第 2 页（有「过敏原结果判定」） |
+|---|---|---|
+| 识别条数 | 52 项（食物 26 / 环境 26） | 53 项（食物 24 / 环境 29） |
+| 等级 | **全部读成"阳性"**（照颜色条猜的） | 正确分出阳性 / 弱阳性（小麦·弱阳性、花生·阳性） |
+| 模型自报"这页有没有判定区" | `false`（它知道没有） | `true` |
+
+两个问题：
+
+1. **颜色条不是报告写的字。** 第 1 页没有判定区，模型照颜色条把一批"弱阳性"
+   读成了"阳性" —— 一旦被当成权威等级，后端会落成"确诊"，食谱把小麦彻底避开。
+2. **两页打架时听谁的。** 同一项在两页都出现时，必须听**有判定区那一页**的。
+
+修法（两层，缺一不可）：
+
+- 提示词新增 `hasVerdict`：这一张图上有没有判定区；没有就一律填 UNKNOWN
+- 小程序新增 `src/utils/allergy-candidates.ts`（纯函数，10 条单测）：
+  **没有判定区那一页的等级一律不当真**（记 UNKNOWN），名字与分组照收；
+  同一项再出现时，**判定页的等级说了算**，与上传顺序无关
+
+> 实测确认：模型能正确回答 `hasVerdict`（第 1 页 false、第 2 页 true），
+> 但"没有判定区就填 UNKNOWN"这条它不照做 —— 所以这一层必须由系统自己兜住，
+> 不能只靠提示词。
 
 ---
 
@@ -148,20 +173,25 @@ results: picked.value.map(allergen => ({ allergen, level: 'UNKNOWN' }))
 |---|---|
 | `miniapp/src/pages/custom-recipe/index.vue` | 状态区按内容出现、体重管理先问一句、添加按钮挪位、上传资料改小 |
 | `miniapp/src/components/custom-recipe/AllergyScanBlock.vue` | 候选带等级、默认全选、环境类分离、等级照抄进报告、按钮改小 |
-| `backend/src/application/health/health-report-extraction.service.ts` | 判定区与强阳性、分组字段、对照项过滤、环境关键词兜底 |
+| `miniapp/src/utils/allergy-candidates.ts` | **新增**：候选过滤 / 等级中文化 / 多页合并（纯函数，可单测） |
+| `backend/src/application/health/health-report-extraction.service.ts` | 判定区与强阳性、分组字段、对照项过滤、环境关键词兜底、`hasVerdict` |
 | `miniapp/src/pages/custom-recipe.regression.spec.ts` | 本批 6 条的顺序与口径断言 |
-| `miniapp/src/components/custom-recipe/AllergyScanBlock.spec.ts` | 等级照抄、环境过滤、默认全选断言 |
-| `backend/tests/application/health/health-report-extraction.service.spec.ts` | 判定区/分组/对照项 7 条新断言 |
+| `miniapp/src/components/custom-recipe/AllergyScanBlock.spec.ts` | 等级照抄、环境过滤、默认全选、多页合并断言 |
+| `miniapp/src/utils/allergy-candidates.spec.ts` | **新增** 10 条（含"颜色条猜错被判定页纠正"那一次） |
+| `backend/tests/application/health/health-report-extraction.service.spec.ts` | 判定区/分组/对照项/hasVerdict 断言 |
 
 ---
 
 ## 八、验证
 
-- 小程序：`vitest run` 116 个文件 / 1465 条全过；`npm run build:mp-weixin` 成功
+- 小程序：`vitest run` 117 个文件 / 1475 条全过；`npm run build:mp-weixin` 成功
   （目录 `miniapp/dist/build/mp-weixin`）
-- 后端：`tsc -p tsconfig.build.json` 通过；`jest` 全量通过；本批新增 7 条断言全过
-- 真实报告复读：判定区被读到后，`POSITIVE` 会落成"确诊"过敏（食谱彻底避开），
-  弱阳性落成"可疑"（强提示 + 排在最后）
+- 后端：`tsc -p tsconfig.build.json` 通过；`jest` 全量通过
+- **真实报告实测（生产环境、生产配置、生产提示词）**：老板那份 2 页报告，
+  第 2 页 53 项正确分出食物 24 / 环境 29，等级读出阳性与弱阳性，
+  检测机构与报告日期（2025-10-20）也读对；第 1 页的"颜色条猜测"按上面的规则被拦掉
+- 真实报告复读后的落库效果：`POSITIVE` 会落成"确诊"过敏（食谱彻底避开），
+  弱阳性落成"可疑"（强提示 + 排在最后），没读到判定区的落成"可疑"而非"确诊"
 
 ---
 

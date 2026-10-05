@@ -65,11 +65,12 @@ export function candidateLabel(item: ScannedAllergen): string {
  * 多页结果合并。
  *
  * 规则（按页顺序过一遍）：
+ *   · **没有判定区的那一页，等级一律不当真**（记 UNKNOWN）—— 生产实测：
+ *     只有数值和颜色条的页上，模型会照颜色把"弱阳性"读成"阳性"；
+ *     颜色条不是报告写的字。名字与分组照收（分组是表格里的一列）。
  *   · 同一项第一次出现 → 收下
- *   · 再次出现：**有判定的那一页可以覆盖没判定的那一页的等级**（这是关键，
- *     见 ScannedAllergenPage.hasVerdict 的说明）
- *   · 其余情况只补空：新的一页读到了等级/分组而旧的是 UNKNOWN 时补上，
- *     不拿 UNKNOWN 去盖掉已经读到的值
+ *   · 再次出现：**有判定的那一页说了算**（可以覆盖没判定那页的等级）
+ *   · 都是判定页时只补空：新的读到等级/分组就补，不拿 UNKNOWN 盖掉已读到的值
  */
 export function mergeAllergyCandidates(
   pages: ScannedAllergenPage[],
@@ -77,8 +78,15 @@ export function mergeAllergyCandidates(
   const merged = new Map<string, { item: ScannedAllergen; fromVerdict: boolean }>()
 
   for (const page of pages) {
-    for (const item of page.items) {
-      if (!item.name) continue
+    for (const raw of page.items) {
+      if (!raw.name) continue
+
+      // 非判定页的等级不可信：只留名字与分组
+      const item: ScannedAllergen = {
+        name: raw.name,
+        level: page.hasVerdict ? raw.level : 'UNKNOWN',
+        group: raw.group,
+      }
 
       const existing = merged.get(item.name)
       if (!existing) {
@@ -88,7 +96,7 @@ export function mergeAllergyCandidates(
 
       // 判定页的等级更可信：覆盖掉"照颜色条猜"的那一份
       if (page.hasVerdict && !existing.fromVerdict) {
-        if (item.level !== 'UNKNOWN') existing.item.level = item.level
+        existing.item.level = item.level
         if (item.group !== 'UNKNOWN') existing.item.group = item.group
         existing.fromVerdict = true
         continue

@@ -65,6 +65,27 @@ describe('过敏报告 · 候选整理', () => {
     expect(merged.find((entry) => entry.name === '花生')?.level).toBe('POSITIVE')
   })
 
+  it('没有判定区那一页的等级一律不当真：颜色条不是报告写的字', () => {
+    /**
+     * 生产实测：只有数值与颜色条的那一页，模型会把一批"弱阳性"读成"阳性"。
+     * 名字与分组照收（分组是表格里的一列），但等级不能当真 ——
+     * 当真了就会把"弱阳性"记成"阳性"（后端按阳性落成确诊，食谱彻底避开）。
+     */
+    const merged = mergeAllergyCandidates([
+      { items: [item('豌豆', 'POSITIVE', 'FOOD'), item('西瓜', 'POSITIVE', 'FOOD')], hasVerdict: false },
+      { items: [item('小麦', 'WEAK_POSITIVE', 'FOOD')], hasVerdict: true },
+    ])
+
+    expect(merged.find((entry) => entry.name === '豌豆')).toEqual({
+      name: '豌豆',
+      level: 'UNKNOWN',
+      group: 'FOOD',
+    })
+    expect(merged.find((entry) => entry.name === '西瓜')?.level).toBe('UNKNOWN')
+    // 判定页读到的照旧
+    expect(merged.find((entry) => entry.name === '小麦')?.level).toBe('WEAK_POSITIVE')
+  })
+
   it('反过来不许被盖掉：判定页先读到时，后面的猜测页改不动它', () => {
     const merged = mergeAllergyCandidates([
       { items: [item('小麦', 'WEAK_POSITIVE', 'FOOD')], hasVerdict: true },
@@ -74,11 +95,11 @@ describe('过敏报告 · 候选整理', () => {
     expect(merged[0].level).toBe('WEAK_POSITIVE')
   })
 
-  it('只补空：后面读到等级/分组就补上，UNKNOWN 不会盖掉已读到的值', () => {
+  it('都是判定页时只补空：后面读到等级/分组就补上，UNKNOWN 不会盖掉已读到的值', () => {
     const merged = mergeAllergyCandidates([
-      { items: [item('鸡肉')], hasVerdict: false },
-      { items: [item('鸡肉', 'WEAK_POSITIVE', 'FOOD')], hasVerdict: false },
-      { items: [item('鸡肉')], hasVerdict: false },
+      { items: [item('鸡肉')], hasVerdict: true },
+      { items: [item('鸡肉', 'WEAK_POSITIVE', 'FOOD')], hasVerdict: true },
+      { items: [item('鸡肉')], hasVerdict: true },
     ])
 
     expect(merged[0]).toEqual({ name: '鸡肉', level: 'WEAK_POSITIVE', group: 'FOOD' })

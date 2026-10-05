@@ -294,6 +294,20 @@ export const dogApi = {
    */
   vaccineCatalog: () =>
     request({ url: '/dogs/vaccines/catalog', method: 'GET', suppressErrorToast: true }),
+
+  /**
+   * 边打字边判归类（2026-10-05）。
+   *
+   * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+   * 分类逻辑只有后端一份，所以输入停顿一下来问一次。
+   * 返回空数组 = 认不出来，界面要求顾客自己指定 —— 不猜。
+   */
+  classifyVaccineName: (name: string) =>
+    request({
+      url: `/dogs/vaccines/classify?name=${encodeURIComponent(name)}`,
+      method: 'GET',
+      suppressErrorToast: true,
+    }),
   /**
    * 过敏原排查计划（2026-10-04，过敏重构第三期）。
    *

@@ -5,6 +5,10 @@
 
 import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
 import {
+  VACCINE_KIND_LABELS,
+  classifyVaccineKinds,
+} from '../../domain/health/immunization-schedule';
+import {
   Controller,
   Post,
   Get,
@@ -180,6 +184,34 @@ export class HealthRecordsController {
       code: 0,
       message: 'success',
       data: buildVaccineCatalog(),
+    };
+  }
+
+  /**
+   * 边打字边判归类（2026-10-05）。
+   *
+   * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+   * —— 对，名字一填就该自动判出来，只有**认不出来**的时候才需要顾客自己选。
+   *
+   * 分类逻辑只有后端一份（按已审核的产品目录判成分），所以这里开个轻接口，
+   * 界面输入停顿一下来问一次。也刻意做成**两段路径**，理由同 catalog。
+   *
+   * 返回 kinds 为空数组 = 认不出来 —— 界面会要求顾客自己指定，不猜。
+   */
+  @Get('vaccines/classify')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Classify a vaccine name into kinds' })
+  @ApiSecurity('X-Customer-Id')
+  classifyVaccineName(@Query('name') name: string) {
+    const kinds = classifyVaccineKinds(String(name || ''));
+    return {
+      code: 0,
+      message: 'success',
+      data: {
+        name: String(name || ''),
+        kinds,
+        kindLabels: kinds.map((kind) => VACCINE_KIND_LABELS[kind] || kind),
+      },
     };
   }
 

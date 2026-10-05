@@ -362,11 +362,43 @@ const activeRecordLoading = computed(() => (
 ))
 
 function selectHealthTab(key: HealthTabKey) {
-  // 切走之前先把等待中的自动保存落库（2026-10-03：底部保存键已下线）
-  if (key !== activeHealthTab.value) {
-    flushActiveTabAutoSaves()
+  if (key === activeHealthTab.value) {
+    return
   }
 
+  // 切走之前先把等待中的自动保存落库（2026-10-03：底部保存键已下线）
+  flushActiveTabAutoSaves()
+
+  /*
+   * 有"填不完、存不了"的疫苗记录时先拦一下（2026-10-05）。
+   *
+   * 切标签会把疫苗板块整个销毁，这些草稿跟着没 ——
+   * 老板就遇到过："录入的疫苗信息记录，在切换到其他标签，再切回疫苗标签时，
+   * 显示档案里还没有接种记录。"（那次的根因是保存被挡住，
+   * 但**没有提示就丢内容**本身就是个问题。）
+   * 现在把话说清楚，让顾客自己决定留下还是放弃。
+   */
+  const unsaveable = vaccineSectionRef.value?.countUnsaveableDrafts?.() || 0
+  if (activeHealthTab.value === 'vaccine' && unsaveable > 0) {
+    uni.showModal({
+      title: '还有记录没填完',
+      content: `有 ${unsaveable} 条疫苗记录还差必填项，没保存。现在切走就会丢掉。`,
+      confirmText: '留下',
+      cancelText: '切走',
+      success: ({ confirm }) => {
+        if (!confirm) {
+          switchHealthTab(key)
+        }
+      },
+    })
+    return
+  }
+
+  switchHealthTab(key)
+}
+
+/** 真正切标签（上面的检查通过之后才走这里） */
+function switchHealthTab(key: HealthTabKey) {
   // 换标签就把"新增入口"开关复位：它只在引导选完那一刻打开
   resetAddEntryFlags()
   activeHealthTab.value = key
@@ -1025,6 +1057,8 @@ const recordsSectionRef = ref<{
 const vaccineSectionRef = ref<{
   startScan?: () => void
   addRecord?: () => void
+  /** 有几条填不完、存不了的疫苗草稿（切标签前拦一下用） */
+  countUnsaveableDrafts?: () => number
 } | null>(null)
 const weightSectionRef = ref<{
   saveRecord?: () => Promise<void>

@@ -65,17 +65,43 @@ describe('疫苗管理', () => {
     expect(source).toContain('kinds: draft.kinds,')
   })
 
-  it('三条录入路径：点标签 / 选产品库 / 手填兜底（2026-10-05）', () => {
+  it('录入只留两条路：选产品库 / 手填（2026-10-05 简化）', () => {
     const source = readComponent()
 
-    // ① 一点即选的名字，每个都带已知归类
-    expect(source).toContain('function applyNamePreset')
-    expect(source).toContain('draft.kinds = [...preset.kinds]')
-    // ② 产品库（进口 + 国产都能选），选完归类自动带出来
+    // 老板："为什么还会显示狂犬疫苗、犬二联这种疫苗名称的选择器？
+    // 这个疫苗名称字段，它的作用是什么呢？"
+    // 原来有三个控件做同一件事（12 个预设标签 + 产品库 + 输入框）。
+    // 现在两条，职责清楚：
     expect(source).toContain('function applyCatalogProduct')
     expect(source).toContain('catalogProducts')
-    // ③ 手填兜底：输入框还在（识别会认错、库里也会没有）
     expect(source).toContain("updateDraft(index, 'vaccineName', $event.detail.value)")
+    // 预设标签下线 —— 它们的唯一价值是"带着归类"，而现在打字也自动判
+    expect(source).not.toContain('applyNamePreset')
+    expect(source).not.toContain('presetNames')
+  })
+
+  it('输入疫苗名称后**自动判归类**，不用顾客手选（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+    // 分类逻辑只有后端一份，所以打字停顿一下问后端。
+    expect(source).toContain('dogApi.classifyVaccineName')
+    expect(source).toContain('function scheduleClassify')
+    expect(source).toContain('CLASSIFY_DELAY_MS')
+    // 名字一变就重新判（顾客之前手点的作废 —— 名字都换了）
+    expect(source).toContain('draft.kindsManual = false')
+    expect(source).toContain('scheduleClassify(index)')
+    // 顾客自己点过归类就不再覆盖他
+    expect(source).toContain('if (draft.kindsManual) return')
+  })
+
+  it('扫描出来的记录缺东西时**必须说出来**，不许静默跳过', () => {
+    const source = readComponent()
+
+    // 2026-10-05 的 bug：识别完提示"已识别 N 条"，实际一条都没存 ——
+    // 缺归类时静默 return，顾客以为存好了，切个标签记录就凭空消失。
+    expect(source).toContain("autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }")
+    expect(source).not.toContain('if (autoSaveBlockReason(record, index)) return')
   })
 
   it('目录由后端下发，前端不自带一份', () => {
@@ -199,15 +225,16 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('还没有疫苗记录')
   })
 
-  it('一点即选的名字改由后端下发（不再硬编码在前端）', () => {
+  it('名称与归类的知识都不硬编码在前端', () => {
     const source = readComponent()
 
-    // 2026-10-05：硬编码的 commonVaccineNames 退休了。
-    // 现在标签来自后端疫苗目录，每个都带**已知归类** ——
-    // 硬编码在前端的话，加一个名字就得同时在前端补一份归类，迟早对不上。
+    // 硬编码的 commonVaccineNames 已退休，预设标签也下线了。
+    // 现在前端只做两件事：把名字发给后端判、把结果显示出来。
     expect(source).not.toContain('commonVaccineNames')
-    expect(source).toContain('presetNames')
-    expect(source).toContain('preset.kinds')
+    expect(source).not.toContain('presetNames')
+    // 产品库与归类选项仍由后端下发（拉不到时归类有本地兜底）
+    expect(source).toContain('dogApi.vaccineCatalog()')
+    expect(source).toContain('FALLBACK_KIND_OPTIONS')
   })
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {

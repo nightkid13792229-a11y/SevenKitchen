@@ -99,16 +99,19 @@
                ② 产品库（进口 + 国产都能选，选完归类自动带出来）
                ③ 手填兜底（库里确实没有的），但归类必须自己指定
              不管走哪条，**归类一定有值** —— 系统再也不猜。 -->
+        <!-- 疫苗名称：这个字段是**这条记录的主体** —— 打了什么。
+             它同时决定归类，归类决定这一针算哪一步、隔多久再打。
+
+             ⚠️ 2026-10-05 简化：原来这里有**三个**控件（12 个预设标签 +
+             产品库选择器 + 输入框），老板问"为什么还会显示狂犬疫苗、犬二联
+             这种选择器？这个字段的作用是什么？" —— 三个入口做同一件事，
+             确实说不清。现在只留两条，各自职责清楚：
+               ① 产品库选择 —— 知道品牌的走这条，归类自动带出来
+               ② 直接写名字 —— 库里的没有的（犬四联、国产苗、老本子写法）
+             ②一旦开打就**自动判归类**（问后端），所以原来那排预设标签
+             就多余了 —— 它们的唯一价值就是"带着归类"，而现在打字也带。 -->
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
-          <view class="vaccine-name-tags">
-            <text
-              v-for="preset in presetNames"
-              :key="preset.name"
-              class="vaccine-name-tag"
-              @tap="applyNamePreset(index, preset)"
-            >{{ preset.name }}</text>
-          </view>
 
           <picker
             v-if="catalogProducts.length > 0"
@@ -123,11 +126,11 @@
             </view>
           </picker>
 
-          <text class="field-hint">产品库里没有？直接在下面写名字，归类自己选。</text>
+          <text class="field-hint">产品库里没有？直接在下面写名字，系统会自动判归类。</text>
           <input
             class="field-input"
             type="text"
-            placeholder="例如：狂犬疫苗"
+            placeholder="例如：犬四联"
             :value="draftOf(record, index).vaccineName"
             :focus="focusIndex === index"
             @input="updateDraft(index, 'vaccineName', $event.detail.value)"
@@ -157,8 +160,17 @@
               @tap="toggleKind(index, option.value)"
             >{{ option.label }}</text>
           </view>
+          <text v-if="draftOf(record, index).kindsManual" class="field-hint">
+            你自己指定的。改疫苗名称会重新自动判一次。
+          </text>
+          <text v-else-if="draftOf(record, index).kinds.length > 0" class="field-hint">
+            系统按疫苗名称自动判的，可以点上面的标签改。
+          </text>
+          <text v-else class="field-hint">
+            这个名字系统认不出来，请点上面选一个 —— 归类决定这一针算哪一步。
+          </text>
           <text class="field-hint">
-            归类决定这一针算哪一步、隔多久再打。「其他（非核心）」只记录、不影响提醒。
+            「其他（非核心）」只记录、不影响提醒。
           </text>
         </view>
 
@@ -288,11 +300,18 @@ interface VaccineDraft {
   /**
    * 归类（2026-10-05）：core / rabies / lepto / other。
    *
-   * **顾客必须明确指定**（点标签、选产品、或自己选）——
-   * 系统再也不猜。以前认不出来默认当核心苗，一针驱虫药也能把
-   * 核心苗的某一针标记成已完成，我们从此不再提醒。
+   * 来源：选产品库 / 系统按名字自动判 / 顾客自己点。**必须有值**才能存 ——
+   * 系统再也不猜（以前认不出来默认当核心苗，一针驱虫药也能把
+   * 核心苗的某一针标记成已完成，我们从此不再提醒）。
    */
   kinds: string[]
+  /**
+   * 归类是**顾客自己点的**（不是系统判的）。
+   *
+   * 为真时不再用自动判定覆盖他的选择；改了疫苗名称会重置成 false ——
+   * 名字变了就该重新判一次，这是符合直觉的。
+   */
+  kindsManual: boolean
 }
 
 const props = defineProps<{
@@ -361,6 +380,15 @@ defineExpose({
   addRecord,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,
+  /**
+   * 有几条**填不完、存不了**的记录（2026-10-05）。
+   *
+   * 切标签会把组件销毁，这些草稿就没了 —— 页面拿这个数拦一下，
+   * 别让顾客在毫无提示的情况下丢掉刚填的内容。
+   */
+  countUnsaveableDrafts: () =>
+    records.value.filter((record, index) => !record.id && autoSaveBlockReason(record, index))
+      .length,
 })
 
 /* ── 疫苗目录（2026-10-05）────────────────────────────────────────────
@@ -368,7 +396,8 @@ defineExpose({
  * 前端复制一份迟早对不上（这个项目以前就吃过亏）。
  * 拉不到时页面照旧能用（只是少了产品库），点标签仍然带得出归类。
  */
-const presetNames = ref<{ name: string; kinds: string[] }[]>([])
+/* 预设标签已下线（2026-10-05）：它们的唯一价值是"带着归类"，
+   而现在**打字就自动判归类**，所以多余了。产品库 + 手填两条路就够。 */
 /**
  * 归类选项。
  *
@@ -395,7 +424,6 @@ async function loadVaccineCatalog() {
   try {
     const res: any = await dogApi.vaccineCatalog()
     if (res?.code !== 0 || !res?.data) return
-    presetNames.value = Array.isArray(res.data.presets) ? res.data.presets : []
     // 只在下发的内容非空时才覆盖本地兜底 —— 后端万一返回空数组，
     // 也不能把顾客选归类的路堵死
     if (Array.isArray(res.data.kinds) && res.data.kinds.length > 0) {
@@ -407,14 +435,56 @@ async function loadVaccineCatalog() {
   }
 }
 
-/** 点一个预设名 → 名字和归类一起定下来 */
-function applyNamePreset(index: number, preset: { name: string; kinds: string[] }) {
+/**
+ * 边打字边判归类（2026-10-05）。
+ *
+ * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+ * —— 对。名字一填就该判出来，认不出来才让顾客选。
+ *
+ * 分类逻辑只有后端一份（按已审核的产品目录判成分），所以这里停顿 400ms
+ * 问一次后端。顾客**自己点过**归类（kindsManual）就不再覆盖他的选择。
+ */
+const classifyTimers = new Map<number, ReturnType<typeof setTimeout>>()
+const CLASSIFY_DELAY_MS = 400
+
+function scheduleClassify(index: number) {
+  const pending = classifyTimers.get(index)
+  if (pending) clearTimeout(pending)
+
+  classifyTimers.set(
+    index,
+    setTimeout(() => {
+      classifyTimers.delete(index)
+      void runClassify(index)
+    }, CLASSIFY_DELAY_MS),
+  )
+}
+
+async function runClassify(index: number) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  draft.vaccineName = preset.name
-  draft.kinds = [...preset.kinds]
-  scheduleAutoSave(record, index, { immediate: true })
+  if (draft.kindsManual) return
+
+  const name = draft.vaccineName.trim()
+  if (!name) {
+    draft.kinds = []
+    return
+  }
+
+  try {
+    const res: any = await dogApi.classifyVaccineName(name)
+    if (res?.code !== 0 || !res?.data) return
+    // 等回来的时候名字可能又变了 —— 只认当前这个名字的结果
+    if (draftOf(record, index).vaccineName.trim() !== name) return
+    if (draft.kindsManual) return
+    draft.kinds = Array.isArray(res.data.kinds) ? res.data.kinds.map(String) : []
+    // 判出来了（或仍判不出来）都要重排一次自动保存 ——
+    // 归类是必填，判出来之前存不了
+    scheduleAutoSave(record, index, { immediate: true })
+  } catch {
+    // 判定失败就留着让顾客自己选，不挡流程
+  }
 }
 
 /** 从产品库选 → 名字、归类一起带出来（厂商/批准文号后端有，界面只显示名） */
@@ -425,6 +495,8 @@ function applyCatalogProduct(index: number, value: string | number) {
   const draft = draftOf(record, index)
   draft.vaccineName = product.name
   draft.kinds = [...product.kinds]
+  // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
+  draft.kindsManual = false
   scheduleAutoSave(record, index, { immediate: true })
 }
 
@@ -447,6 +519,8 @@ function toggleKind(index: number, kind: string) {
   draft.kinds = draft.kinds.includes(kind)
     ? draft.kinds.filter((item) => item !== kind)
     : [...draft.kinds, kind]
+  // 顾客自己点过就不再用自动判定覆盖他
+  draft.kindsManual = true
   scheduleAutoSave(record, index, { immediate: true })
 }
 
@@ -509,8 +583,10 @@ function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
     // 认的是"显示名表"（含退休的 OVERDUE），不是"可选项表" ——
     // 老记录是 OVERDUE 就原样带着，别因为选项里没有了就悄悄改成已接种。
     status: (STATUS_LABELS[status] ? status : 'COMPLETED') as VaccineDraft['status'],
-    // 记录自己存的归类；老记录是空的，由界面提示顾客补选
+    // 记录自己存的归类；老记录是空的，由界面提示顾客补选。
+    // 已保存的记录一律算"人工指定过" —— 别因为我们自动判一次就改掉库里存的。
     kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
+    kindsManual: Array.isArray(record.kinds) && record.kinds.length > 0,
   }
 }
 
@@ -554,6 +630,12 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     const next = { ...savedNotices.value }
     delete next[index]
     savedNotices.value = next
+  }
+
+  // 名字变了 → 重新自动判一次归类（顾客之前手点的作废：名字都换了）
+  if (field === 'vaccineName') {
+    draft.kindsManual = false
+    scheduleClassify(index)
   }
 
   // 实时保存（2026-10-03 老板定：底部保存键下线）。
@@ -903,6 +985,8 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       // AI 判的归类（2026-10-05）。后端已经过了一遍闭集校验：
       // 认不出来的会是空数组，界面会请顾客自己选一下 —— 不让它悄悄变成核心苗。
       kinds: Array.isArray(draft.kinds) ? draft.kinds.map(String) : [],
+      // AI 判的也算"已指定"，但标成自动 —— 顾客仍可改
+      kindsManual: false,
       // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
       // 疫苗本是接种凭证，出行/寄养/换医院都可能要看原件。
       // 一张本子上的多条接种记录共用同一张原图（照片就是那一页）。
@@ -927,7 +1011,17 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
 
   records.value.forEach((record, index) => {
     if (record.id) return
-    if (autoSaveBlockReason(record, index)) return
+
+    // ⚠️ 这里以前是"缺什么就静默 return"（2026-10-05 修的）——
+    // 顾客看到的是"识别成功"的提示，实际上一条都没存，
+    // 切个标签记录就凭空消失（组件销毁、草稿没了）。
+    // 现在缺什么就把话说出来，并且照样排一次自动保存，
+    // 等他补齐（比如选个归类）立刻就能存下去。
+    const reason = autoSaveBlockReason(record, index)
+    if (reason) {
+      autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }
+      return
+    }
     void runAutoSave(record, index)
   })
 }
@@ -955,6 +1049,7 @@ function addRecord() {
     notes: '',
     status: 'COMPLETED',
     kinds: [],
+    kindsManual: false,
   }
 
   records.value = [...records.value, draft]

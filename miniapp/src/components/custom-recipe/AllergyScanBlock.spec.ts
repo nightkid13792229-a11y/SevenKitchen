@@ -47,8 +47,14 @@ describe('定制食谱 · 过敏录入', () => {
 
   it('环境类过敏原不记进过敏信息，但要告诉家长读到了（老板第 5 条）', () => {
     const source = block()
+    const util = readFileSync(
+      resolve(process.cwd(), 'src/utils/allergy-candidates.ts'),
+      'utf-8',
+    )
 
-    expect(source).toContain("item.group !== 'ENVIRONMENT'")
+    // 规则落在 utils/allergy-candidates.ts（纯函数、可单测），组件只是调用
+    expect(source).toContain('candidates.value.filter(isFoodCandidate)')
+    expect(util).toContain("item.group !== 'ENVIRONMENT'")
     expect(source).toContain('与吃的东西无关，没有记进过敏信息')
     // 整份报告只有环境项时也要说一句，别让家长以为识别失败
     expect(source).toContain('报告里读到的是环境类过敏原')
@@ -56,6 +62,10 @@ describe('定制食谱 · 过敏录入', () => {
 
   it('报告写的结论等级要照抄进报告实体，不能写死 UNKNOWN（老板第 4 条）', () => {
     const source = block()
+    const util = readFileSync(
+      resolve(process.cwd(), 'src/utils/allergy-candidates.ts'),
+      'utf-8',
+    )
 
     /**
      * 老版本这里写死 `level: 'UNKNOWN'`。后果不是"少一个标签"：
@@ -65,8 +75,16 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).not.toContain("level: 'UNKNOWN' })")
     expect(source).toContain('results: chosen.map((item) => ({ allergen: item.name, level: item.level }))')
     // 报告上写的阳性/弱阳性要显示出来，家长才知道哪几项最要紧
-    expect(source).toContain('POSITIVE:')
-    expect(source).toContain('function candidateLabel')
+    expect(source).toContain('candidateLabel(item)')
+    expect(util).toContain("POSITIVE: '阳性'")
+  })
+
+  it('多页报告：有判定区的那一页说了算（生产实测：颜色条会把弱阳性猜成阳性）', () => {
+    const source = block()
+
+    expect(source).toContain('mergeAllergyCandidates(pages)')
+    expect(source).toContain("hasVerdict: meta.hasVerdict === true")
+    expect(source).toContain('pages.push(')
   })
 
   it('报告原件存成实体，家长以后翻得出来（不再"读完就丢"）', () => {

@@ -172,6 +172,47 @@ describe('HealthReportExtractionService', () => {
       expect(prompt).toContain('只许照抄');
     });
 
+    it('提示词要求回答"这一张图有没有判定区"，没有就一律 UNKNOWN', () => {
+      /**
+       * 生产实测（老板那份两页报告）：第 1 页只有数值和颜色条，模型照颜色
+       * 把一批"弱阳性"猜成了"阳性"；第 2 页才是真正的判定区。
+       * 前端要把多页合起来，就必须知道哪一页的等级是报告写的。
+       */
+      const prompt = buildSystemPrompt('ALLERGY_REPORT');
+      expect(prompt).toContain('hasVerdict');
+      expect(prompt).toContain('没有判定区时，所有 level 一律填 UNKNOWN');
+    });
+
+    it('报告层面回传 hasVerdict（模型说是才有），前端据此定权威等级', async () => {
+      ocrProvider.recognizeImage.mockResolvedValue({ text: '过敏原检测报告…' });
+      setFetchResponse({
+        drafts: [{ allergen: '小麦', level: 'WEAK_POSITIVE', group: 'FOOD' }],
+        hasVerdict: true,
+        testMethod: 'SERUM',
+        testDate: '2025-10-20',
+        warnings: [],
+      });
+
+      const withVerdict = await service.extractFromReport({
+        imageUrl: 'https://cdn/x.jpg',
+      });
+      expect(withVerdict.reportMeta).toMatchObject({
+        hasVerdict: true,
+        testDate: '2025-10-20',
+      });
+
+      // 模型没说（或说了个别的值）→ 一律当"没有判定区"，不猜
+      setFetchResponse({
+        drafts: [{ allergen: '小麦', level: 'POSITIVE', group: 'FOOD' }],
+        hasVerdict: 'yes',
+        warnings: [],
+      });
+      const withoutVerdict = await service.extractFromReport({
+        imageUrl: 'https://cdn/x.jpg',
+      });
+      expect(withoutVerdict.reportMeta.hasVerdict).toBe(false);
+    });
+
     it('等级 / 分组 / 说明一起回给前端（前端靠它决定怎么记）', () => {
       const drafts = normalizeDrafts('ALLERGY_REPORT', {
         drafts: [

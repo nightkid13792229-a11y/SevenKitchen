@@ -81,6 +81,15 @@ import {
   findBlurryScanImages,
   prepareScanImages,
 } from '../../utils/scan-image'
+import {
+  candidateLabel,
+  isFoodCandidate,
+  mergeAllergyCandidates,
+  normalizeGroup,
+  normalizeLevel,
+  type ScannedAllergen,
+  type ScannedAllergenPage,
+} from '../../utils/allergy-candidates'
 
 /**
  * 扫一份过敏原检测报告，把读到的过敏原名字交给父页面。
@@ -101,13 +110,6 @@ const emit = defineEmits<{
   (event: 'scanned', value: { allergens: string[] }): void
 }>()
 
-/** 报告里读到的一项：名字 + 报告写的结论等级 + 报告写的分组 */
-interface ScannedAllergen {
-  name: string
-  level: string
-  group: string
-}
-
 const extracting = ref(false)
 const candidates = ref<ScannedAllergen[]>([])
 const picked = ref<string[]>([])
@@ -118,36 +120,12 @@ const testDate = ref('')
 const method = ref<'SERUM' | 'INTRADERMAL' | 'ELIMINATION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN')
 const ocrText = ref('')
 
-/** 报告上写的结论等级 → 给家长看的中文（认不出来就不显示，不编） */
-const LEVEL_LABELS: Record<string, string> = {
-  POSITIVE: '阳性',
-  WEAK_POSITIVE: '弱阳性',
-  SUSPECTED: '疑似',
-}
-
-function normalizeLevel(value: unknown): string {
-  const text = String(value || '').toUpperCase()
-  return ['POSITIVE', 'WEAK_POSITIVE', 'SUSPECTED', 'NEGATIVE'].includes(text) ? text : 'UNKNOWN'
-}
-
-function normalizeGroup(value: unknown): string {
-  const text = String(value || '').toUpperCase()
-  return ['FOOD', 'ENVIRONMENT', 'OTHER'].includes(text) ? text : 'UNKNOWN'
-}
-
-/**
- * 只列食物类：环境类（尘螨/花粉/霉菌…）与吃的东西无关（老板第 5 条）。
- *
- * 阴性项也一并挡在外面 —— 阴性恰恰说明不过敏，记进"过敏信息"是反的。
- * 后端已经把这两类过滤/分级过了，这里再挡一道：前端不该依赖服务端一定守规矩。
- */
-const foodCandidates = computed(() =>
-  candidates.value.filter((item) => item.group !== 'ENVIRONMENT' && item.level !== 'NEGATIVE'),
-)
+/** 只列食物类（环境类与阴性项挡在外面）—— 规则在 utils/allergy-candidates.ts 里 */
+const foodCandidates = computed(() => candidates.value.filter(isFoodCandidate))
 
 /** 报告里的环境类：告诉家长"读到了但这些不影响食谱"，而不是默默吞掉 */
 const skipped = computed(() =>
-  candidates.value.filter((item) => item.group === 'ENVIRONMENT' || item.level === 'NEGATIVE'),
+  candidates.value.filter((item) => !isFoodCandidate(item)),
 )
 
 const skippedNames = computed(() =>
@@ -157,14 +135,7 @@ const skippedNames = computed(() =>
     .join('、'),
 )
 
-function candidateLabel(item: ScannedAllergen): string {
-  const label = LEVEL_LABELS[item.level]
-  return label ? `${item.name} · ${label}` : item.name
-}
-
-function isPicked(name: string): boolean {
-  return picked.value.includes(name)
-}
+const isPicked = (name: string) => picked.value.includes(name)
 
 function normalizeMethod(value: unknown): typeof method.value {
   const text = String(value || '').toUpperCase()
@@ -220,9 +191,10 @@ async function pickReport() {
   uni.showLoading({ title: '识别中…', mask: true })
 
   try {
-    const collected: ScannedAllergen[] = []
     const collectedWarnings: string[] = []
     const urls: string[] = []
+    /** 每一页的结果分开留：合并时要知道哪一页有判定区（见 allergy-candidates.ts） */
+    const pages: ScannedAllergenPage[] = []
     let detectedDate = ''
     let detectedMethod: typeof method.value = 'UNKNOWN'
     const texts: string[] = []
@@ -245,7 +217,7 @@ async function pickReport() {
       // 优先用 drafts（带每项结论等级与分组），退回旧的 allergies 数组 ——
       // 提示词换了不代表模型一定照做，两条路都得接住
       const drafts = Array.isArray(data.drafts) ? data.drafts : []
-      const fromDrafts = drafts
+      const pageItems: ScannedAllergen[] = drafts
         .map((item: any) => ({
           name: String(item?.allergen || '').trim(),
           level: normalizeLevel(item?.level),
@@ -253,21 +225,22 @@ async function pickReport() {
         }))
         .filter((item: ScannedAllergen) => item.name)
 
-      if (fromDrafts.length > 0) {
-        collected.push(...fromDrafts)
-      } else if (Array.isArray(data.allergies)) {
-        collected.push(
+      if (pageItems.length === 0 && Array.isArray(data.allergies)) {
+        pageItems.push(
           ...data.allergies
             .filter((item: unknown) => typeof item === 'string' && item.trim())
             .map((item: string) => ({ name: item.trim(), level: 'UNKNOWN', group: 'UNKNOWN' })),
         )
       }
 
+      const meta = data.reportMeta || {}
+      // 这一页有没有判定区：合并时判定页的等级说了算（见 allergy-candidates.ts）
+      pages.push({ items: pageItems, hasVerdict: meta.hasVerdict === true })
+
       if (Array.isArray(data.warnings)) {
         collectedWarnings.push(...data.warnings.map((item: unknown) => String(item || '').trim()))
       }
 
-      const meta = data.reportMeta || {}
       const pageMethod = normalizeMethod(meta.testMethod)
       if (detectedMethod === 'UNKNOWN' && pageMethod !== 'UNKNOWN') {
         detectedMethod = pageMethod
@@ -284,7 +257,7 @@ async function pickReport() {
     testDate.value = detectedDate
     method.value = detectedMethod
     ocrText.value = texts.join('\n\n').slice(0, 20000)
-    candidates.value = mergeCandidates(collected)
+    candidates.value = mergeAllergyCandidates(pages)
     warnings.value = Array.from(new Set(collectedWarnings.filter(Boolean)))
     // 读到的食物过敏原**默认全部记上**（老板 2026-10-05 选定）：
     // 原先一个都不勾，家长看到「加入这一单（0）」是灰的，以为识别坏了
@@ -316,31 +289,6 @@ async function pickReport() {
   } finally {
     extracting.value = false
   }
-}
-
-/**
- * 多页报告的名字合并。
- *
- * 同一项可能两页都出现：名字相同只留一条，但**等级与分组取更"有信息"的那个**
- * （第一页只读到数值、第二页才写到判定区，是很常见的情况）。
- */
-function mergeCandidates(items: ScannedAllergen[]): ScannedAllergen[] {
-  const merged = new Map<string, ScannedAllergen>()
-  for (const item of items) {
-    if (!item.name) continue
-    const existing = merged.get(item.name)
-    if (!existing) {
-      merged.set(item.name, item)
-      continue
-    }
-    if (existing.level === 'UNKNOWN' && item.level !== 'UNKNOWN') {
-      existing.level = item.level
-    }
-    if (existing.group === 'UNKNOWN' && item.group !== 'UNKNOWN') {
-      existing.group = item.group
-    }
-  }
-  return Array.from(merged.values())
 }
 
 function toggle(name: string) {

@@ -42,7 +42,9 @@ describe('疫苗管理', () => {
     // 另外查过后端：**没有任何逻辑读这个字段**，它此前纯粹是个显示标签。
     expect(source).not.toContain('const STATUS_OPTIONS')
     expect(source).not.toContain('statusPickList')
-    expect(source).not.toContain("mode=\"selector\"")
+    // 状态选择器没了（产品库那个 selector 是选疫苗名的，不是选状态）
+    expect(source).not.toContain('statusValueAt')
+    expect(source).not.toContain('statusIndex')
 
     // 但老记录存着别的值时，卡片上要照旧显示出来，不能变空白
     expect(source).toContain('const STATUS_LABELS')
@@ -51,30 +53,63 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
-  it('卡片上显示"归类"，名称照旧可改（2026-10-05）', () => {
+  it('归类是**必填项**，顾客必须明确指定（2026-10-05）', () => {
     const source = readComponent()
 
-    // 老板："记录卡片的标题已经体现出疫苗的名称了，那我们在疫苗卡片中还有必要
-    // 保留疫苗名称这个字段吗？我们可以直接把疫苗名称这个字段换成识别出的疫苗类型吗？"
-    // → "显示归类"这个方向对，但输入框不能去掉：识别会认错、顾客也想改。
-    //   两个都留：上面能改名字，下面显示系统把它归成了哪一类。
-    expect(source).toContain('field-label">归类<')
-    expect(source).toContain('vaccine-kind__tag')
-    expect(source).toContain('function kindLabelsOf')
-    // 名称输入框仍在（否则识别错了没法纠正）
-    expect(source).toContain('updateDraft(index, \'vaccineName\', $event.detail.value)')
+    // 老板："允许用户自行填写疫苗产品名称，但是类型还是必填项。"
+    // 没有归类这一条就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
+    expect(source).toContain('field-label">归类（必填）<')
+    expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
+    expect(source).toContain('function toggleKind')
+    // 归类随记录一起提交
+    expect(source).toContain('kinds: draft.kinds,')
   })
 
-  it('归类只信后端：名字一改就作废旧标签，不拿过期结果糊弄', () => {
+  it('录入只留两条路：选产品库 / 手填（2026-10-05 简化）', () => {
     const source = readComponent()
 
-    // 分类逻辑在后端 domain 层（按已审核的产品目录判成分），
-    // 前端不重写一套 —— 否则两边迟早对不上。
-    expect(source).toContain('function vaccineNameChanged')
-    expect(source).toContain('名称改了，保存后会自动更新归类。')
-    // 归类来自接口，不是前端自己算的
-    expect(source).toContain('kindLabels')
-    // 前端不许自带一份产品目录（那是后端的 domain 数据）
+    // 老板："为什么还会显示狂犬疫苗、犬二联这种疫苗名称的选择器？
+    // 这个疫苗名称字段，它的作用是什么呢？"
+    // 原来有三个控件做同一件事（12 个预设标签 + 产品库 + 输入框）。
+    // 现在两条，职责清楚：
+    expect(source).toContain('function applyCatalogProduct')
+    expect(source).toContain('catalogProducts')
+    expect(source).toContain("updateDraft(index, 'vaccineName', $event.detail.value)")
+    // 预设标签下线 —— 它们的唯一价值是"带着归类"，而现在打字也自动判
+    expect(source).not.toContain('applyNamePreset')
+    expect(source).not.toContain('presetNames')
+  })
+
+  it('输入疫苗名称后**自动判归类**，不用顾客手选（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+    // 分类逻辑只有后端一份，所以打字停顿一下问后端。
+    expect(source).toContain('dogApi.classifyVaccineName')
+    expect(source).toContain('function scheduleClassify')
+    expect(source).toContain('CLASSIFY_DELAY_MS')
+    // 名字一变就重新判（顾客之前手点的作废 —— 名字都换了）
+    expect(source).toContain('draft.kindsManual = false')
+    expect(source).toContain('scheduleClassify(index)')
+    // 顾客自己点过归类就不再覆盖他
+    expect(source).toContain('if (draft.kindsManual) return')
+  })
+
+  it('扫描出来的记录缺东西时**必须说出来**，不许静默跳过', () => {
+    const source = readComponent()
+
+    // 2026-10-05 的 bug：识别完提示"已识别 N 条"，实际一条都没存 ——
+    // 缺归类时静默 return，顾客以为存好了，切个标签记录就凭空消失。
+    expect(source).toContain("autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }")
+    expect(source).not.toContain('if (autoSaveBlockReason(record, index)) return')
+  })
+
+  it('目录由后端下发，前端不自带一份', () => {
+    const source = readComponent()
+
+    // 分类与产品是后端的 domain 知识，前端复制一份迟早对不上
+    expect(source).toContain('dogApi.vaccineCatalog()')
+    expect(source).toContain('function loadVaccineCatalog')
     expect(source).not.toContain('VACCINE_PRODUCTS')
     expect(source).not.toContain('classifyVaccineKinds')
   })
@@ -190,23 +225,16 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('还没有疫苗记录')
   })
 
-  it('常见疫苗名一点即选，不用顾客手打', () => {
+  it('名称与归类的知识都不硬编码在前端', () => {
     const source = readComponent()
 
-    expect(source).toContain('commonVaccineNames')
-    expect(source).toContain('狂犬疫苗')
-    expect(source).toContain('犬瘟热')
-    expect(source).toContain('犬细小病毒')
-  })
-
-  it('标签用"本子上真会写的写法"：联数名 + 病名（2026-10-04）', () => {
-    const source = readComponent()
-
-    // 顾客疫苗本印的是"犬四联""卫佳伍"这种产品/联数写法，
-    // 原来 8 个标签全是病名（犬瘟热、犬细小病毒），两边对不上。
-    expect(source).toContain("'犬二联'")
-    expect(source).toContain("'犬四联'")
-    expect(source).toContain("'犬八联'")
+    // 硬编码的 commonVaccineNames 已退休，预设标签也下线了。
+    // 现在前端只做两件事：把名字发给后端判、把结果显示出来。
+    expect(source).not.toContain('commonVaccineNames')
+    expect(source).not.toContain('presetNames')
+    // 产品库与归类选项仍由后端下发（拉不到时归类有本地兜底）
+    expect(source).toContain('dogApi.vaccineCatalog()')
+    expect(source).toContain('FALLBACK_KIND_OPTIONS')
   })
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {

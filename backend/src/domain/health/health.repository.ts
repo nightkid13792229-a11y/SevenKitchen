@@ -16,6 +16,9 @@ export interface VaccineRecord {
   status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
   /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组
   attachments: string[];
+  /// 归成的疫苗类别（2026-10-05）：core / rabies / lepto / other，可多值。
+  /// 空数组 = 老记录，读时按名字兼容推导。
+  kinds: string[];
   createdAt: Date;
   updatedAt: Date;
 }

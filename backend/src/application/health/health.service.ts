@@ -20,6 +20,9 @@ import {
 import {
   VACCINE_KIND_LABELS,
   classifyVaccineKinds,
+  normalizeVaccineKind,
+  resolveRecordKinds,
+  type VaccineKind,
 } from '../../domain/health/immunization-schedule';
 import {
   CheckupRecordResponseDto,
@@ -164,6 +167,7 @@ export class HealthService {
       notes: dto.notes ?? null,
       status: dto.status || 'COMPLETED',
       attachments: dto.attachments ?? [],
+      kinds: this.resolveKinds(dto.kinds, dto.vaccineName),
     });
 
     return this.mapVaccineRecordToDto(record);
@@ -598,7 +602,33 @@ export class HealthService {
     await this.verifyDogOwnership(dogId, customerId);
   }
 
+  /**
+   * 一条记录的归类从哪来（2026-10-05）。
+   *
+   * 优先级：
+   *   ① 调用方显式传的（界面选的、AI 判的）—— 过滤掉非法值；
+   *   ② 没传就按名字推一次（老客户端兼容）；
+   *   ③ 推不出来就是**未归类**（空数组），**绝不硬塞成核心苗**。
+   *
+   * 第 ③ 条是这次的关键：以前推不出来默认当核心苗，一针驱虫药
+   * 「拜宠清」也能把核心苗的某一针标记成已完成，我们从此不再提醒。
+   */
+  private resolveKinds(explicit: unknown, vaccineName: string): string[] {
+    const given = Array.isArray(explicit)
+      ? explicit
+          .map((item) => normalizeVaccineKind(item))
+          .filter((item): item is VaccineKind => item !== null)
+      : [];
+
+    if (given.length > 0) {
+      return given;
+    }
+
+    return classifyVaccineKinds(vaccineName);
+  }
+
   private mapVaccineRecordToDto(record: any): VaccineRecordResponseDto {
+    const resolvedKinds = resolveRecordKinds(record);
     return plainToInstance(VaccineRecordResponseDto, {
       id: record.id,
       dogId: record.dogId,
@@ -609,9 +639,10 @@ export class HealthService {
       status: record.status,
       attachments: record.attachments ?? [],
       // 归类结果（2026-10-05）：界面要显示"这条算哪一类"。
+      // 优先用**记录自己存的**（顾客选的 / AI 判的）；老记录没存过才按名字推。
       // 分类逻辑在 domain 层，这里只做映射 —— 别在前端重写一套。
-      kinds: classifyVaccineKinds(record.vaccineName),
-      kindLabels: classifyVaccineKinds(record.vaccineName).map(
+      kinds: resolvedKinds,
+      kindLabels: resolvedKinds.map(
         (kind) => VACCINE_KIND_LABELS[kind] || kind,
       ),
       createdAt: record.createdAt,

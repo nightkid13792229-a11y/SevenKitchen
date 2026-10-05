@@ -41,7 +41,35 @@ import {
  * 现在细分有了依据 —— 每种疫苗的复种间隔来自**它自己的说明书**，
  * 见下面 `NON_CORE_SCHEDULES`。
  */
-export type VaccineKind = 'core' | 'rabies' | 'lepto';
+export type VaccineKind = 'core' | 'rabies' | 'lepto' | 'other';
+
+/**
+ * 顾客能选的归类（**闭集**，2026-10-05）。
+ *
+ * 老板拍板："AI 可以扫出名字，并且判断归类……匹配分类这件事情交给 AI 来做"。
+ * 但 AI 只能在**这四类**里选 —— 它没法自创类别，只能套用我们维护的映射。
+ *
+ * 为什么要闭集：以前"不认识就当核心苗"，于是一针**驱虫药「拜宠清」**
+ * 只要日期落在窗口里，就会把幼犬首免的某一针标记成已完成 ——
+ * 我们从此不再提醒，而且没人看得出来为什么。这是最坏的一类 bug。
+ *
+ * `other` = 我们没有接种程序的非核心苗（犬窝咳、冠状病毒、莱姆病…）：
+ * 如实记下来，但**不参与计划** —— 不会让任何一针"算完成"。
+ */
+export const VACCINE_KINDS: readonly VaccineKind[] = [
+  'core',
+  'rabies',
+  'lepto',
+  'other',
+];
+
+/** 校验一个值是不是我们认的类别（来自 AI 或顾客时都要过这一关） */
+export function normalizeVaccineKind(value: unknown): VaccineKind | null {
+  const key = String(value || '').trim().toLowerCase();
+  return (VACCINE_KINDS as readonly string[]).includes(key)
+    ? (key as VaccineKind)
+    : null;
+}
 
 /** 一步在计划里的状态 */
 export type VaccineStepStatus =
@@ -148,6 +176,13 @@ export interface VaccineRecordLike {
   vaccineName: string;
   vaccinationDate: string; // YYYY-MM-DD
   nextDueDate?: string | null;
+  /**
+   * 这条记录存的归类（2026-10-05）：core / rabies / lepto / other。
+   *
+   * 顾客选的或 AI 判的，都已在写入时定好。老记录是空数组 ——
+   * 那时按名字推一次（`resolveRecordKinds`），行为与以前一致。
+   */
+  kinds?: string[];
 }
 
 /* ===========================================================================
@@ -306,9 +341,12 @@ export const RABIES_SCHEDULE = {
  * 那份清单经兽医审核后，这里改成按**抗原清单**匹配，而不是按名字。
  */
 export function classifyVaccineName(name: string): VaccineKind {
-  // 保留旧签名（还有调用方在用）：返回"最主要的那一类"
+  // 保留旧签名：返回"最主要的那一类"。
+  // ⚠️ 认不出来时返回 **'other'**，不再冒充 'core'（2026-10-05）——
+  //    理由见 classifyVaccineKinds 第 ③ 步。
   const kinds = classifyVaccineKinds(name);
-  return kinds.includes('core') ? 'core' : kinds[0]
+  if (kinds.includes('core')) return 'core';
+  return kinds[0] ?? 'other';
 }
 
 /**
@@ -334,7 +372,7 @@ export function classifyVaccineKinds(name: string): VaccineKind[] {
     }
   }
 
-  // ② 目录里没有的（顾客手写"狂犬疫苗""六联"这类自由文本），退回按病名判。
+  // ② 目录里没有的（顾客手写"六联""犬瘟热"这类自由文本），退回按病名/联数判。
   if (/狂犬|rabies/.test(text)) {
     kinds.add('rabies');
   }
@@ -344,14 +382,51 @@ export function classifyVaccineKinds(name: string): VaccineKind[] {
     }
   }
 
-  // ③ 什么都没认出来的，当核心苗。
-  //    以前这里是"不是狂犬就算核心"，于是一针**单独的钩端螺旋体**
-  //    会被算成完成了一针核心苗 —— 加了 ② 之后就不会了。
-  if (kinds.size === 0) {
+  // 核心苗的常见写法：联数（"四联""八联"）与病名。
+  // 少了这一步，"六联"会掉成"未归类"—— 那是把好好的记录挡在计划外面。
+  if (CORE_NAME_PATTERN.test(text)) {
     kinds.add('core');
   }
 
+  // 非核心、而且我们**没有**接种程序的（犬窝咳、冠状病毒、莱姆病…）→ other。
+  // 如实记下来，但**不参与计划** —— 绝不能让它们把核心苗的某一针"算完成"。
+  if (OTHER_NAME_PATTERN.test(text)) {
+    kinds.add('other');
+  }
+
+  // ③ **不再兜底猜"核心苗"**（2026-10-05）。
+  //
+  //    以前这里是"什么都没认出来就当核心苗"，后果很严重：
+  //    一针驱虫药「拜宠清」、一支非核心的「犬窝咳」，
+  //    只要日期落在某个窗口里，就会把那一针标记成**已完成** ——
+  //    我们从此不再提醒顾客打疫苗，而且没人看得出来为什么。
+  //
+  //    返回空数组 = **未归类**。调用方（计划）对未归类的记录一律不匹配任何步骤，
+  //    界面上也会要求顾客自己指定归类。宁可空着，也不猜。
   return [...kinds];
+}
+
+/**
+ * 一条记录最终算哪几类（2026-10-05）。
+ *
+ * 优先用**记录自己存的**（顾客手选 / AI 判的，都是明确指定过的）；
+ * 老记录没存过才退回按名字推 —— 那是历史数据的兼容路径，不是主路径。
+ */
+export function resolveRecordKinds(record: {
+  kinds?: unknown;
+  vaccineName?: string;
+}): VaccineKind[] {
+  const stored = Array.isArray(record?.kinds)
+    ? record.kinds
+        .map((item) => normalizeVaccineKind(item))
+        .filter((item): item is VaccineKind => item !== null)
+    : [];
+
+  if (stored.length > 0) {
+    return stored;
+  }
+
+  return classifyVaccineKinds(String(record?.vaccineName || ''));
 }
 
 /* ===========================================================================
@@ -583,7 +658,27 @@ export const VACCINE_KIND_LABELS: Record<VaccineKind, string> = {
   core: '核心疫苗',
   rabies: '狂犬疫苗',
   lepto: '钩端螺旋体',
+  other: '其他（非核心）',
 };
+
+/**
+ * 核心苗的常见写法（联数 + 病名）。
+ *
+ * 必须有这一步：产品目录只收进口苗，顾客写"六联""犬热"是常态；
+ * 少了它这些记录会掉成"未归类"，被挡在计划外面。
+ */
+const CORE_NAME_PATTERN =
+  /犬瘟|细小|腺病毒|副流感|传染性肝炎|distemper|parvo|adenovirus|[二三四五六七八九]联/i;
+
+/**
+ * 非核心、而且我们**没有**接种程序的（2026-10-05）。
+ *
+ * 这些以前会被当成"核心苗"，从而能顶掉核心苗的某一针 —— 是错的。
+ * WSAVA 里它们都属于"按生活方式逐只评估"的非核心苗。
+ * 记下来是对的，影响计划是不对的。
+ */
+const OTHER_NAME_PATTERN =
+  /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|bordetella|kennel\s*cough/i;
 
 /** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
 export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];
@@ -740,7 +835,7 @@ export function detectConflicts(
   const parsed = records
     .map((record) => ({
       record,
-      kinds: classifyVaccineKinds(record.vaccineName),
+      kinds: resolveRecordKinds(record),
       date: parseDateText(record.vaccinationDate),
     }))
     .filter((item): item is { record: VaccineRecordLike; kinds: VaccineKind[]; date: Date } =>
@@ -892,7 +987,7 @@ export function buildVaccinePlan(
   const parsed = input.records
     .map((record) => ({
       record,
-      kinds: classifyVaccineKinds(record.vaccineName),
+      kinds: resolveRecordKinds(record),
       date: parseDateText(record.vaccinationDate),
     }))
     .filter((item): item is { record: VaccineRecordLike; kinds: VaccineKind[]; date: Date } =>

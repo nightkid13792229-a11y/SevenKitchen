@@ -87,6 +87,9 @@ export class VaccinePlanService {
         vaccineName: record.vaccineName,
         vaccinationDate: toDateText(record.vaccinationDate),
         nextDueDate: record.nextDueDate ? toDateText(record.nextDueDate) : null,
+        // 记录自己存的归类（顾客选的 / AI 判的）；老记录是空数组，
+        // buildVaccinePlan 会退回按名字推一次。
+        kinds: record.kinds,
       })),
       decisions: (plan?.decisions || {}) as Record<string, VaccineDecision>,
       // 程序表尚未经兽医审核 —— 顾客侧即便开放，也要如实标记

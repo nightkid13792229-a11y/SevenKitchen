@@ -280,6 +280,35 @@ export const dogApi = {
     vaccine: healthRecordCrud<VaccineRecordCreatePayload>('vaccines'),
   },
   /**
+   * 疫苗名称库 + 归类闭集（2026-10-05）。
+   *
+   * 界面靠它渲染：归类必选项（四类）、一点即选的名字（每个带已知归类）、
+   * 产品库（含国产 —— 可选但不可推荐）。
+   *
+   * 为什么不写在前端：分类与产品是后端的 domain 知识，
+   * 前端复制一份迟早对不上。
+   */
+  /**
+   * ⚠️ 路径是 `vaccines/catalog`（**两段**），别改成一段的 `vaccine-catalog` ——
+   * 那会被 DogsController 的 `@Get(':id')` 当成 dogId 吃掉（踩过一次）。
+   */
+  vaccineCatalog: () =>
+    request({ url: '/dogs/vaccines/catalog', method: 'GET', suppressErrorToast: true }),
+
+  /**
+   * 边打字边判归类（2026-10-05）。
+   *
+   * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+   * 分类逻辑只有后端一份，所以输入停顿一下来问一次。
+   * 返回空数组 = 认不出来，界面要求顾客自己指定 —— 不猜。
+   */
+  classifyVaccineName: (name: string) =>
+    request({
+      url: `/dogs/vaccines/classify?name=${encodeURIComponent(name)}`,
+      method: 'GET',
+      suppressErrorToast: true,
+    }),
+  /**
    * 过敏原排查计划（2026-10-04，过敏重构第三期）。
    *
    * 老板第 2 条："可以创建过敏原的排查计划。"

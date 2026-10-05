@@ -53,6 +53,11 @@ export type HealthReportConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
  * （第 6 期又加上病历，凑齐四类）。
  * 老板第 5 条：识别之后**不需要逐条确认**，让顾客确认一次就能自动录入表单。
  */
+import {
+  VACCINE_KIND_LABELS,
+  VACCINE_KINDS,
+} from '../../domain/health/immunization-schedule';
+
 export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
   | 'CHECKUP_REPORT' // 体检报告
@@ -74,6 +79,35 @@ export const HEALTH_DOCUMENT_TYPES: readonly HealthDocumentType[] = [
   'VACCINE_BOOK',
   'MEDICAL_RECORD',
 ];
+
+/**
+ * 把 AI 给的归类过一遍闭集（2026-10-05）。
+ *
+ * 只认 core / rabies / lepto / other 四个英文小写值（也容忍大写、空格、
+ * 以及模型偶尔回的中文标签 —— 认得出就转，认不出就丢）。
+ * 返回空数组时，调用方（或界面）会让顾客自己指定 —— **绝不猜**。
+ */
+export function normalizeKinds(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : value ? [value] : [];
+  const out: string[] = [];
+
+  for (const item of raw) {
+    const key = String(item ?? '').trim().toLowerCase();
+    const mapped =
+      VACCINE_KINDS.includes(key as any)
+        ? key
+        : // 中文说法也认一下 —— 模型有时会直接回中文
+          Object.entries(VACCINE_KIND_LABELS).find(
+            ([, label]) => label === String(item ?? '').trim(),
+          )?.[0] || '';
+
+    if (mapped && !out.includes(mapped)) {
+      out.push(mapped);
+    }
+  }
+
+  return out;
+}
 
 export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest {
   const key = String(value || '').trim().toUpperCase();
@@ -284,13 +318,35 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
   VACCINE_BOOK: [
     '本类型的额外规则：',
     '· 一本疫苗本通常有**多条**接种记录，全部读出来，按接种日期从早到晚排序。',
-    '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译、不要归类。',
+    '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译。',
     '· nextDueDate 只有本子上明确写了才填，没写就留空。',
+    '',
+    '★ 归类（kinds 字段）—— 2026-10-05 老板拍板：**由你来判**。',
+    '',
+    '为什么交给你判：本子上的写法五花八门（「宠必威® 幼犬保」「卫佳 5」「犬八联」…），',
+    '靠字面匹配我们的产品库必然对不上（多音字、空格、® 这类符号），',
+    '而写一套模糊匹配是无底洞。你看得懂这些写法指的是什么，所以这一步交给你。',
+    '',
+    '但你**只能在下面四类里选**（闭集，不许自创）：',
+    '· core   —— 核心疫苗：犬瘟热 / 犬细小 / 犬腺病毒 / 犬副流感，以及各类联苗',
+    '            （二联、四联、六联、八联、卫佳伍、卫佳捌、宠必威优免康、优乐康…）',
+    '· rabies —— 狂犬疫苗（狂犬、瑞比克、宠必威锐必威、犬康、犬力康…）',
+    '· lepto  —— 钩端螺旋体（钩端、乐必妥，以及明确含钩端的联苗）',
+    '· other  —— 上面三类都不是的非核心苗：犬窝咳、冠状病毒、莱姆病 等',
+    '',
+    '判定规则（按顺序）：',
+    '1. 先看这是不是**联苗**：联苗能同时占好几类 —— 「卫佳捌」既是 core 又含 lepto，',
+    '   所以它的 kinds 是 ["core","lepto"]；「汪倍护」（二联+狂犬）是 ["core","rabies"]。',
+    '2. 单独一支狂犬苗只填 ["rabies"]。',
+    '3. **认不出来就填 ["other"]** —— 这一条最重要。',
+    '   宁可标成"其他（非核心）"，也**绝对不许**猜成 core：',
+    '   标成 core 会让系统认为核心疫苗的某一针已经打完，从此不再提醒家长 ——',
+    '   比标错严重得多。（例如驱虫药「拜宠清」根本不是疫苗，应该 ["other"]。）',
     '',
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
-    '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
+    '    { "vaccineName": "犬四联", "kinds": ["core"], "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
@@ -578,6 +634,11 @@ export function normalizeDrafts(
     return raw
       .map((item: any) => ({
         vaccineName: normalizeDraftText(item?.vaccineName, 100),
+        // AI 判的归类（2026-10-05）：**过一遍闭集校验**。
+        // 模型可能不照做（编个别的词、或者给个中文），认不出来的直接丢掉 ——
+        // 宁可这条记录暂时"未归类"、界面提示顾客选一下，
+        // 也不能让一个非法值悄悄影响免疫计划。
+        kinds: normalizeKinds(item?.kinds),
         vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
         nextDueDate: normalizeDraftDate(item?.nextDueDate),
         notes: normalizeDraftText(item?.notes, 200),

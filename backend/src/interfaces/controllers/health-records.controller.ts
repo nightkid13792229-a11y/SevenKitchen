@@ -3,6 +3,11 @@
  * Handles vaccine, checkup, medical record, and allergy related endpoints
  */
 
+import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
+import {
+  VACCINE_KIND_LABELS,
+  classifyVaccineKinds,
+} from '../../domain/health/immunization-schedule';
 import {
   Controller,
   Post,
@@ -141,6 +146,73 @@ export class HealthRecordsController {
       user.customerId,
     );
     return ApiResponseDto.success(records);
+  }
+
+  /**
+   * 疫苗名称库 + 归类闭集（2026-10-05）。
+   *
+   * 界面靠它渲染三样东西：
+   *   · 归类必选项（四类，闭集）；
+   *   · 一点即选的名字（每个都带已知归类）；
+   *   · 产品库（含国产 —— 可**选**但不**推荐**，两个概念别混）。
+   *
+   * 为什么不写在前端：分类与产品数据是后端的 domain 知识，
+   * 前端复制一份迟早对不上（以前就吃过这个亏）。
+   */
+  /*
+   * ⚠️ 路径必须是**两段**（`vaccines/catalog`），不能写成一段的 `vaccine-catalog`。
+   *
+   * 踩过的坑（2026-10-05）：DogsController 比本控制器先注册，而它有 `@Get(':id')`，
+   * 于是 `/dogs/vaccine-catalog` 被它当成 `id = "vaccine-catalog"` 吃掉了 ——
+   * 本路由**永远不会被命中**，而且返回的是"狗狗不存在"，看起来像别的问题。
+   *
+   * 两段就安全：一段的 `:id` 匹配不了两段路径；而 `:dogId/vaccines` 要求第二段
+   * 正好是 `vaccines`，这里是 `catalog`，也不冲突。
+   *
+   * ⚠️ 以后往 `/dogs/` 下加**全局**接口（不带 dogId 的）都要注意这件事，
+   *    最好干脆别放在这个前缀下。
+   */
+  @Get('vaccines/catalog')
+  // 跟同控制器其它路由保持一致都要鉴权。
+  // 内容是静态参考数据、不含任何用户信息，但**没理由开个例外** ——
+  // 少一个口子少一份要交代的东西。
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Vaccine name catalog (kinds + presets + products)' })
+  @ApiSecurity('X-Customer-Id')
+  getVaccineCatalog() {
+    return {
+      code: 0,
+      message: 'success',
+      data: buildVaccineCatalog(),
+    };
+  }
+
+  /**
+   * 边打字边判归类（2026-10-05）。
+   *
+   * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
+   * —— 对，名字一填就该自动判出来，只有**认不出来**的时候才需要顾客自己选。
+   *
+   * 分类逻辑只有后端一份（按已审核的产品目录判成分），所以这里开个轻接口，
+   * 界面输入停顿一下来问一次。也刻意做成**两段路径**，理由同 catalog。
+   *
+   * 返回 kinds 为空数组 = 认不出来 —— 界面会要求顾客自己指定，不猜。
+   */
+  @Get('vaccines/classify')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Classify a vaccine name into kinds' })
+  @ApiSecurity('X-Customer-Id')
+  classifyVaccineName(@Query('name') name: string) {
+    const kinds = classifyVaccineKinds(String(name || ''));
+    return {
+      code: 0,
+      message: 'success',
+      data: {
+        name: String(name || ''),
+        kinds,
+        kindLabels: kinds.map((kind) => VACCINE_KIND_LABELS[kind] || kind),
+      },
+    };
   }
 
   @Get(':dogId/vaccines/upcoming')

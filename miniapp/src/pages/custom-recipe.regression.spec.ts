@@ -5,6 +5,19 @@ import { resolve } from 'node:path'
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf-8')
 
+/**
+ * 去掉注释后的源码。
+ *
+ * 断言"某句文案已经不存在"时**必须用它**，不能用原始源码 ——
+ * 注释里为了说明"删掉了什么"往往会把那句话原样写进去，于是断言误伤自己
+ * （2026-10-05 一天之内踩了三次，所以固化成公共辅助）。
+ */
+const stripComments = (src: string) =>
+  src
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
 const PAGE_DIR = 'src/pages/custom-recipe'
 
 /**
@@ -384,27 +397,25 @@ describe('custom recipe page · 档案带出与目标口径', () => {
     expect(page).not.toContain('@tap="selectWeightGoal')
   })
 
-  it('选中目标后给出具体热量（按老板要求不再显示克数）', () => {
-    expect(page).toContain('goalTargetSummary')
-    expect(page).toContain('finalFoodKcal')
-    expect(page).toContain('每天需要约 ${Math.round(kcal)} kcal')
+  it('体重管理卡片不再展示目标热量（2026-10-05 只保留最上方的提醒）', () => {
     /**
-     * 2026-10-04 老板要求：体重管理板块**不显示饭量（克数）**。
-     * 克数依赖最终用哪道食谱的能量密度，食谱还没设计出来之前只能按中位数估算，
-     * 写出来容易被顾客当成承诺。
+     * 演进：先是不显示克数（2026-10-04），
+     * 后按老板要求把"你的目标 / 每天需要约 X kcal"整块删掉（2026-10-05），
+     * 只留体况结论 + 去计划页的入口。
      */
+    expect(page).not.toContain('goalTargetSummary')
+    // 用去注释后的源码断言"文案已消失"（注释里提到它不算）
+    expect(stripComments(page)).not.toContain('每天需要约')
     expect(page).not.toContain('约 ${Math.round(grams)} 克')
   })
 
-  it('计划进行中时带出计划，并说明能量已按计划算', () => {
+  it('计划进行中时带出计划', () => {
     // 阶段 D1：计划才是顾客当下真正在执行的方案，定制页必须看得见
     expect(page).toContain('selectedPlan')
     expect(page).toContain('loadSelectedPlan')
     expect(page).toContain('weightGoalPlanApi.current')
     expect(page).toContain('进行中')
     expect(page).toContain('下面的每日能量已经按这个计划算好了')
-    // 文案要区分「按计划」与「按体况」，否则顾客不知道这个数字怎么来的
-    expect(page).toContain('sourceText')
   })
 
   it('页面不再有「需要健康管理」勾选，也不再由它改写顾客的目标', () => {
@@ -437,21 +448,21 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(deliveryIndex).toBeGreaterThan(notesIndex)
   })
 
-  it('「其他需求」不再留在定制目标卡片里', () => {
+  it('「其他需求」不再留在体重管理卡片里', () => {
     const goalSection = page.slice(
-      page.indexOf('定制目标'),
+      page.indexOf('体重管理'),
       page.indexOf('饮食偏好（可选）'),
     )
 
     expect(goalSection).not.toContain('其它需求')
     expect(page).toContain('备注（可选）')
-    // 它只是给营养师看的备注，要讲清楚不参与计算
-    expect(page).toContain('不会改变价格或热量计算')
+    // 2026-10-05：那句"不会改变价格或热量计算"的提示按老板要求删掉了
+    expect(page).not.toContain('不会改变价格或热量计算')
   })
 
-  it('饮食偏好两项都标了"可选"', () => {
-    expect(page).toContain('喜欢的食材（可选）')
-    expect(page).toContain('不吃的食材（可选）')
+  it('饮食偏好两项都标了"可选"（2026-10-05 改为爱吃 / 忌口）', () => {
+    expect(page).toContain('爱吃的食材（可选）')
+    expect(page).toContain('忌口的食材（可选）')
     expect(page).toContain('饮食偏好（可选）')
   })
 
@@ -460,14 +471,16 @@ describe('custom recipe page · 结构与知情同意', () => {
     expect(page).toContain('uploadHealthAttachment')
     expect(page).toContain('formData.value.attachmentUrls')
     /**
-     * 2026-10-04：文案必须与能力一致 ——
-     * 选择通道是 uni.chooseImage（只能相册/拍照），预览走 previewImage（打不开 PDF），
-     * 所以页面只承诺照片，并把最多张数一次说清。
+     * 2026-10-05 老板要求：删掉"上传资料（可选）"独立标题并进按钮文案、
+     * 提示精简成"每次最多 N 张"、去掉"还没有上传资料"空态。
+     * 同时取图只走相册（不弹"拍照/相册"选择器）。
      */
-    expect(page).toContain('+ 上传照片')
-    expect(page).not.toContain('上传图片或 PDF')
-    expect(page).toContain('maxAttachmentCount')
-    expect(page).toContain('最多 {{ maxAttachmentCount }} 张')
+    expect(page).toContain("'上传资料（可选）'")
+    expect(page).not.toContain('+ 上传照片')
+    expect(page).not.toContain('还没有上传资料')
+    expect(page).not.toContain('检测报告、化验单拍清楚即可')
+    expect(page).toContain('每次最多 {{ maxAttachmentCount }} 张')
+    expect(page).toMatch(/count: 1,[\s\S]{0,200}sourceType: \['album'\]/)
   })
 })
 
@@ -1260,10 +1273,15 @@ describe('定制页 · Banner 融入选狗器', () => {
     expect(page).toContain('const dogPickerIndex = computed(')
   })
 
-  it('Banner 里带一行 品种 · 月龄 · 体重，并保留定位文案', () => {
+  it('Banner 里带一行 品种 · 月龄 · 体重，并含三项档案事实', () => {
     expect(template).toContain('{{ dogHeroLine }}')
     expect(page).toContain('const dogHeroLine = computed(')
-    expect(template).toContain('告诉我们它的情况，我们来单独设计一道')
+    // 2026-10-05 老板要求：删掉定位文案，并把生命阶段/体况评分/活动量挪进 Banner
+    expect(template).not.toContain('告诉我们它的情况，我们来单独设计一道')
+    expect(template).toContain('hero-card__facts')
+    expect(template).toContain('生命阶段')
+    expect(template).toContain('体况评分')
+    expect(template).toContain('活动量')
     // 头像与健康管理页同一套兜底（没上传就用默认头像）
     expect(page).toContain('resolveDogAvatarSrc')
     expect(template).toContain(':src="dogAvatarSrc"')
@@ -1310,5 +1328,83 @@ describe('定制页 · 交付说明与支付块', () => {
     // 底部固定栏的支付按钮与金额也还在
     expect(page).toContain('submitButtonText')
     expect(page).toContain('下一步：支付')
+  })
+})
+
+/**
+ * 定制页第二轮精简（老板 2026-10-05，附体验版截图 14 条）。
+ *
+ * 这一组把"删了什么、改成了什么"逐条钉住 —— 删文案最容易在后续迭代里
+ * 被人顺手加回来，所以删除项也要有断言。
+ */
+describe('定制页 · 第二轮精简（2026-10-05）', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  /**
+   * 去掉注释后的源码。
+   *
+   * 断言"某句文案已经不存在"时**不能用原始源码** —— 注释里为了说明"删掉了什么"
+   * 往往会把那句话写进去，于是断言误伤自己（这个坑今天踩了三次）。
+   */
+  const stripComments = (src: string) =>
+    src
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+  const code = stripComments(page)
+  const template = code.slice(0, code.indexOf('<script setup'))
+
+  it('第一步标题改为「体重管理」，且不再有重复的分组标题', () => {
+    expect(template).toMatch(/step-number">1<\/text>\s*<text class="title-text">体重管理<\/text>/)
+    expect(code).not.toContain('定制目标')
+    expect(code).not.toContain('group-title')
+  })
+
+  it('体重管理卡片只保留最上方的提醒 + 计划入口', () => {
+    // 用真实标记定位（去注释后就没有"第一步：…"这类锚点了）
+    const section = template.slice(
+      template.indexOf('<text class="title-text">体重管理</text>'),
+      template.indexOf('<text class="title-text">过敏信息</text>'),
+    )
+    expect(section).toContain('bcsAdviceText')
+    expect(section).toContain('plan-entry-btn')
+    // "你的目标 / 每天需要约 X kcal"那一整块按老板要求删掉
+    expect(section).not.toContain('goalTargetSummary')
+    expect(section).not.toContain('每天需要约')
+  })
+
+  it('过敏板块：删掉"它不能吃的东西"标题与档案空态提示', () => {
+    expect(code).not.toContain('它不能吃的东西')
+    expect(code).not.toContain('档案里还没有过敏记录')
+    expect(template).toContain('过敏信息')
+  })
+
+  it('过敏快速选择：选中不加勾、也不在下方重复列一遍', () => {
+    expect(code).not.toContain("isAllergenAdded(name) ? ' ✓' : ''")
+    expect(code).toContain('const customAllergens = computed(')
+    expect(template).toContain('customAllergens')
+    expect(template).not.toContain('v-for="(allergen, index) in formData.allergies"')
+    expect(code).not.toContain('暂无过敏信息')
+  })
+
+  it('检测报告按钮：无标题说明、文案改为上传过敏检测报告、只走相册', () => {
+    const scan = read('src/components/custom-recipe/AllergyScanBlock.vue')
+    expect(scan).not.toContain('有检测报告？拍一下自动读')
+    expect(scan).not.toContain('过敏原检测报告即可')
+    expect(scan).toContain("'上传过敏检测报告'")
+    expect(scan).toMatch(/sourceType: \['album'\]/)
+    expect(scan).not.toContain("'camera'")
+  })
+
+  it('成品抵扣说明写明"抵的是这道食谱的鲜食成品费用"', () => {
+    expect(page).toContain('可用作抵扣该食谱的鲜食成品费用')
+    expect(code).not.toContain('可抵扣成品货款')
+  })
+
+  it('提交按钮改为「确认定制」（它不做支付，只下单+订阅授权+跳下一步）', () => {
+    expect(code).toContain("const submitButtonText = '确认定制'")
+    expect(code).not.toContain('下一步：支付')
+    // 支付确实在后面那一步：提交里不能出现 requestPayment
+    const submit = code.slice(code.indexOf('const submitOrder'))
+    expect(submit.slice(0, submit.indexOf('uni.redirectTo'))).not.toContain('requestPayment')
   })
 })

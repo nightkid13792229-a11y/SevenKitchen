@@ -2,8 +2,8 @@
   <view class="container">
     <view class="content">
       <view class="title">隐私政策</view>
-      <view class="update-time">更新日期：2026年5月21日</view>
-      <view class="update-time">生效日期：2026年5月21日</view>
+      <view class="update-time">更新日期：2026年10月5日</view>
+      <view class="update-time">生效日期：2026年10月5日</view>
 
       <view class="section">
         <text class="section-title">引言</text>
@@ -40,6 +40,10 @@
           >5.
           订单信息：包括您订购的商品信息、支付金额、下单时间等交易记录。</text
         >
+        <text class="section-content"
+          >6.
+          宠物健康与饮食信息：当您使用食谱定制、健康管理等功能时，您可以选择性地提供宠物的过敏原（含您上传的过敏检测报告）、疾病史、饮食偏好、体重目标等信息。这些信息仅在您主动填写或上传时收集，不填写不影响您浏览和购买商品。</text
+        >
       </view>
 
       <view class="section">
@@ -55,7 +59,14 @@
           使用手机号帮助您识别并同步历史订单、宠物资料、收货地址、售后记录等资料；</text
         >
         <text class="section-content">5. 改进我们的产品和服务；</text>
-        <text class="section-content">6. 遵守法律法规的要求。</text>
+        <text class="section-content">6. 遵守法律法规的要求；</text>
+        <text class="section-content"
+          >7.
+          您提交的过敏、饮食偏好等信息会用于食谱设计、健康档案留存与推荐过滤
+          —— 例如在推荐与食谱设计中避开您填写的过敏原，并按您填写的健康与饮食信息
+          计算用量。这些信息仅供我们的营养师在为您设计食谱时查阅，
+          不会用于与宠物饮食无关的用途。</text
+        >
       </view>
 
       <view class="section">

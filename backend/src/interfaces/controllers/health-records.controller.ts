@@ -169,7 +169,12 @@ export class HealthRecordsController {
    *    最好干脆别放在这个前缀下。
    */
   @Get('vaccines/catalog')
+  // 跟同控制器其它路由保持一致都要鉴权。
+  // 内容是静态参考数据、不含任何用户信息，但**没理由开个例外** ——
+  // 少一个口子少一份要交代的东西。
+  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Vaccine name catalog (kinds + presets + products)' })
+  @ApiSecurity('X-Customer-Id')
   getVaccineCatalog() {
     return {
       code: 0,

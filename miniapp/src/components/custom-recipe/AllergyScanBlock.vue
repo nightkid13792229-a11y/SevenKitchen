@@ -16,6 +16,14 @@
         :disabled="extracting"
         @tap="pickReport"
       >{{ extracting ? '识别中…' : '上传过敏检测报告' }}</button>
+      <!-- 一键清空这一单的过敏原（2026-10-05 老板要求）：
+           报告常常一次读出二三十项，想重来一遍时不该让家长逐个点掉。
+           清的是**这一单的选择**，档案里的记录不动（后端也是只增不删）。 -->
+      <text
+        v-if="showClearAll"
+        class="allergy-scan__clear"
+        @tap="requestClearAll"
+      >一键清除所有过敏原</text>
     </view>
 
     <!-- 候选确认卡（2026-10-05 改口径）：
@@ -49,13 +57,14 @@
         class="allergy-scan__warning"
       >· {{ warning }}</text>
 
+      <!-- 按钮文案（2026-10-05 老板要求）：确认 / 取消 -->
       <view class="allergy-scan__actions">
-        <text class="allergy-scan__discard" @tap="discard">都不是</text>
+        <text class="allergy-scan__discard" @tap="discard">取消</text>
         <text
           class="allergy-scan__confirm"
           :class="{ 'allergy-scan__confirm--disabled': picked.length === 0 }"
           @tap="confirm"
-        >加入这一单（{{ picked.length }}）</text>
+        >确认</text>
       </view>
     </view>
 
@@ -66,7 +75,7 @@
         食物过敏原可以在上面手工添加。
       </text>
       <view class="allergy-scan__actions">
-        <text class="allergy-scan__discard" @tap="discard">知道了</text>
+        <text class="allergy-scan__discard" @tap="discard">取消</text>
       </view>
     </view>
   </view>
@@ -104,11 +113,29 @@ import {
  */
 const props = defineProps<{
   dogId: string
+  /** 现在这一单有没有过敏原 —— 没有就不显示"一键清除"（清空按钮点了也没意义） */
+  hasAllergens?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'scanned', value: { allergens: string[] }): void
+  /** 一键清除这一单的过敏原（由父页面清，它才是过敏原的主人） */
+  (event: 'clearAll'): void
 }>()
+
+const showClearAll = computed(() => props.hasAllergens === true)
+
+/** 清空是不可撤销的批量动作：先问一句再清 */
+function requestClearAll() {
+  uni.showModal({
+    title: '清除所有过敏原？',
+    content: '会清空这一单里已经选好的过敏原（档案里的记录不受影响）。',
+    confirmText: '清除',
+    success: (res) => {
+      if (res.confirm) emit('clearAll')
+    },
+  })
+}
 
 const extracting = ref(false)
 const candidates = ref<ScannedAllergen[]>([])
@@ -356,8 +383,9 @@ async function confirm() {
 
 .allergy-scan__head {
   display: flex;
-  /* 小按钮靠左，不被 flex 拉满整行（老板 2026-10-05 要求改小） */
-  align-items: flex-start;
+  /* 上传按钮靠左，右边跟"一键清除"（老板 2026-10-05 要求改小） */
+  align-items: center;
+  gap: 16rpx;
 }
 
 .allergy-scan__candidates-title {
@@ -381,6 +409,18 @@ async function confirm() {
 
 .allergy-scan__button::after {
   border: none;
+}
+
+/* 一键清除：跟上传按钮同一行的次要动作，做成小文字链 */
+.allergy-scan__clear {
+  flex: 0 0 auto;
+  padding: 0 20rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  font-size: 23rpx;
+  color: #a8622a;
+  border: 1rpx solid rgba(168, 98, 42, 0.45);
+  border-radius: 999rpx;
 }
 
 .allergy-scan__skipped {

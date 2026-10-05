@@ -222,89 +222,79 @@
 
     <!-- 第一步：体重管理（2026-10-05 老板要求：标题由"定制目标"改为"体重管理"，
          并删掉标题下方重复的"体重管理"四个字） -->
-    <view class="section">
+    <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">1</text>
         <text class="title-text">体重管理</text>
       </view>
 
-      <!-- 这一块**不再让顾客选方向**（老板 2026-10-04 拍板）。
-           方向改由「体重管理计划」决定，没有计划就按体况给，
-           所以这一块变成"看结论 + 去计划页"的引导入口。
-           为什么不让顾客在这里选：同一只狗的方向在两个地方能选出相反值，
-           而两个值都会交给营养师。
-
-           2026-10-05 老板要求：**只保留最上方的提醒**（体况结论），
-           下面那组"你的目标 / 每天需要约 X kcal"整块删掉。
-
-           2026-10-05 老板又要求：先问一句「需要给它做体重管理吗？」，
-           答"需要"才展开建议与计划入口。原来一进来就摆一个
-           「去制定体重管理计划」按钮 —— 多数家长只是想定制一单鲜食，
-           会被这个按钮拦住以为必须先做计划。 -->
+      <!-- 老板 2026-10-05（第三批）的要求：
+           ① 狗狗一选定就把**体况评分与我们的建议**摆出来，不等顾客先答什么
+           ② 「需要 / 不需要」两个按钮改成**三个方向**：减重 / 维持 / 增重
+           ③ 选「维持」→ 计划入口按钮置灰不可点；选「减重 / 增重」→
+              那个按钮带着方向进计划页
+           ④ 因此上一版那行"还是想给它定个目标？我还是想减重/增重"整段删掉
+              （方向已经由顾客自己选，不需要再绕一条"坚持"的路） -->
       <view class="goal-group">
-        <!-- 已经有进行中的计划时不再问：顾客本来就在管理体重，
-             再问一遍等于否定他自己定过的东西（方向也仍以计划为准）。 -->
-        <view v-if="!hasOpenPlan" class="goal-ask">
-          <text class="goal-ask__question">需要给它做体重管理吗？</text>
-          <view class="goal-ask__options">
-            <text
-              class="goal-ask__option"
-              :class="{ 'goal-ask__option--on': wantsWeightManagement === true }"
-              @tap="answerWeightManagement(true)"
-            >需要</text>
-            <text
-              class="goal-ask__option"
-              :class="{ 'goal-ask__option--on': wantsWeightManagement === false }"
-              @tap="answerWeightManagement(false)"
-            >不需要</text>
-          </view>
+        <!-- ① 体况结论：狗狗一选定就显示（体况评分 + 我们建议的方向） -->
+        <view v-if="bcsAdviceText" class="advice-line">
+          <text class="advice-line__text">{{ bcsAdviceText }}</text>
         </view>
 
-        <template v-if="showWeightPlanEntry">
-          <view v-if="bcsAdviceText" class="advice-line">
-            <text class="advice-line__text">{{ bcsAdviceText }}</text>
+        <!-- 已经有进行中的计划：方向以计划为准，不再问三选一
+             （顾客本来就在管理体重，再让他选一遍等于否定他自己定过的东西） -->
+        <button
+          v-if="hasOpenPlan"
+          class="plan-entry-btn"
+          @tap="goToWeightGoalPlan()"
+        >{{ planEntryButtonText }}</button>
+
+        <template v-else>
+          <!-- ② 三个方向 -->
+          <view class="goal-ask">
+            <text class="goal-ask__question">想帮它减重、维持，还是增重？</text>
+            <view class="goal-ask__options">
+              <text
+                v-for="option in weightGoalOptions"
+                :key="option.value"
+                class="goal-ask__option"
+                :class="{
+                  'goal-ask__option--on': weightGoalChoice === option.value,
+                  'goal-ask__option--off': blockedWeightGoalChoice === option.value,
+                }"
+                @tap="chooseWeightGoal(option.value)"
+              >{{ option.label }}</text>
+            </view>
+            <!-- 体况与方向打架时说明白：偏胖不给选增重、偏瘦不给选减重 -->
+            <text v-if="blockedWeightGoalReason" class="goal-ask__blocked">
+              {{ blockedWeightGoalReason }}
+            </text>
           </view>
 
-          <!-- 体况在理想区间时**按钮直接置灰**（老板 2026-10-05 要求）。
-               原先按钮照旧可点，点进去只看到一句"当前体况属于理想区间，
-               不需要增减重计划" —— 白跑一趟。想坚持的家长走下面两个文字入口，
-               它们是唯一能越过系统建议的通道（后端也只在"系统本来没建议"时才听）。 -->
-          <button
-            v-if="!isIdealBcs"
+          <!-- ③ 计划入口：**只有选了减重/增重才出现**（2026-10-05 老板第三批要求）。
+               选"维持"时不显示这个按钮 —— 没有目标就没有计划可定，
+               与其摆一个点不了的灰按钮，不如不占版面；也不再写那句解释。 -->
+          <view
+            v-if="showPlanEntryButton"
             class="plan-entry-btn"
-            @tap="goToWeightGoalPlan()"
-          >{{ planEntryButtonText }}</button>
-          <view v-else class="plan-entry-btn plan-entry-btn--disabled">
-            去制定体重管理计划
-          </view>
-
-          <view v-if="showManualPlanLinks" class="plan-manual">
-            <text class="plan-manual__hint">还是想给它定个目标？</text>
-            <text class="plan-manual__link" @tap="goToWeightGoalPlan('LOSS')">我还是想减重</text>
-            <text class="plan-manual__link" @tap="goToWeightGoalPlan('GAIN')">我还是想增重</text>
-          </view>
+            @tap="openWeightGoalPlan()"
+          >{{ planEntryButtonText }}</view>
         </template>
-
-        <!-- 答"不需要"：这一单按维持给，说明白免得家长以为系统还会自己改方向 -->
-        <text v-else-if="wantsWeightManagement === false" class="goal-ask__note">
-          {{ declineWeightManagementNote }}
-        </text>
       </view>
     </view>
 
-    <!-- 第二步：过敏信息（可选）
+    <!-- 第二步：过敏信息
          这一块原来嵌在「需要健康管理」勾选里，现在常驻显示：
          过敏是定制食谱的硬信息（喂错可能出事），不该等顾客先勾一个框才出现。
          疾病史不再在定制页录入 —— 健康管理页才是它的入口。
 
-         2026-10-05 老板要求：
-           · 标题加「（可选）」
-           · 先问一句「小家伙是否对部分食物过敏？」—— 不过敏的狗狗家长直接跳过，
-             不必面对一整块用不上的录入界面 -->
-    <view class="section">
+         2026-10-05 老板要求：先问一句「小家伙是否对部分食物过敏？」——
+         不过敏的狗狗家长直接跳过，不必面对一整块用不上的录入界面。
+         （标题上的「（可选）」后来按老板要求去掉了；答"没有"下面也不再多写说明。） -->
+    <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">2</text>
-        <text class="title-text">过敏信息（可选）</text>
+        <text class="title-text">过敏信息</text>
       </view>
 
       <view class="health-item">
@@ -376,47 +366,55 @@
             v-if="formData.dogId"
             :key="formData.dogId"
             :dog-id="formData.dogId"
+            :has-allergens="formData.allergies.length > 0"
             @scanned="onAllergensScanned"
+            @clear-all="clearAllAllergies"
           />
 
-          <!-- 已传过的检测报告：家长随时翻得出来（原件不再"读完就丢"）。
-               2026-10-05 老板反馈"传了两份只显示一份"：一次选的多张照片
-               是**同一份报告的多页**，存成一份、多张附件 —— 所以这里把
-               份数与张数都写出来，不然家长会以为另一张丢了。 -->
+          <!-- 已传过的检测报告：原件不再"读完就丢"，这里给**小预览窗口**
+               （2026-10-05 老板要求：上传之后在上传按钮下方能看到报告照片）。
+               一次选的多张照片是同一份报告的多页 → 存成一份、多张附件，
+               所以份数与张数都写出来，不然家长会以为另一张丢了。
+               点图片看大图；删除要弹窗确认（删的是报告原件，
+               已经记下的过敏信息不受影响 —— 后端也是这个语义）。 -->
           <view v-if="allergyReports.length > 0" class="allergy-reports">
             <text class="allergy-reports__title">
               已上传的检测报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
             </text>
-            <text class="allergy-reports__hint">同一份报告的多页照片会合并成一份，点「查看」可以翻页</text>
             <view
               v-for="report in allergyReports"
               :key="report.id"
               class="allergy-reports__item"
-              @tap="previewAllergyReport(report)"
             >
-              <view class="allergy-reports__main">
-                <text class="allergy-reports__name">
-                  {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
-                </text>
-                <text class="allergy-reports__meta">
-                  {{ allergyReportPageText(report) }}
-                </text>
+              <view class="allergy-reports__thumbs">
+                <image
+                  v-for="url in report.attachments"
+                  :key="url"
+                  class="allergy-reports__thumb"
+                  :src="url"
+                  mode="aspectFill"
+                  @tap="previewAllergyReport(report)"
+                />
               </view>
-              <text class="allergy-reports__action">查看</text>
+              <view class="allergy-reports__row">
+                <view class="allergy-reports__main">
+                  <text class="allergy-reports__name">
+                    {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+                  </text>
+                  <text class="allergy-reports__meta">{{ allergyReportPageText(report) }}</text>
+                </view>
+                <text class="allergy-reports__remove" @tap.stop="removeAllergyReport(report)">删除</text>
+              </view>
             </view>
           </view>
         </template>
 
-        <!-- 答"没有过敏"：说清这一单会怎么走，免得家长以为档案里的记录也没了 -->
-        <text v-else-if="hasFoodAllergy === false" class="goal-ask__note">
-          {{ noFoodAllergyNote }}
-        </text>
       </view>
     </view>
 
     <!-- 第三步：饮食偏好（可选）
          老板口径：这里是口味，和健康信息无关；两项都可留空。 -->
-    <view class="section">
+    <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">3</text>
         <text class="title-text">饮食偏好（可选）</text>
@@ -461,7 +459,7 @@
     <!-- 第四步：备注（可选）
          老板口径：这是给营养师看的备注，不影响价格与热量计算，
          所以从"定制目标"里独立出来，放在饮食偏好之后。 -->
-    <view class="section">
+    <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">4</text>
         <text class="title-text">备注（可选）</text>
@@ -511,7 +509,7 @@
     <!-- 提交按钮
          disabled 必须带上 submitting：按钮文案是"下一步：支付 ¥300"，
          点一次就进入订阅弹窗，这期间再点一次会生成第二张待付款单。 -->
-    <view class="submit-section">
+    <view v-if="hasSelectedDog" class="submit-section">
       <button
         class="submit-btn"
         @tap="submitOrder"
@@ -519,7 +517,6 @@
       >
         {{ submitting ? '提交中…' : submitButtonText }}
       </button>
-      <text v-if="paymentHint" class="submit-note">{{ paymentHint }}</text>
     </view>
   </view>
 </template>
@@ -535,7 +532,6 @@ import {
   runCustomRecipePayment,
 } from '@/utils/custom-recipe-payment';
 import {
-  buildPaymentTimeoutHint,
   formatAmount,
   formatRemainingMinutes,
   resolvePaymentDeadlineAt,
@@ -582,19 +578,95 @@ const planStatusLabel = computed(() =>
 );
 
 /**
- * 第一步先问的那一句：需要给它做体重管理吗？（2026-10-05 老板要求）
+ * 第一步的方向选择：减重 / 维持 / 增重（2026-10-05 老板第三批要求）。
  *
- * 三态：null = 还没答（按钮不可提交）、true = 需要、false = 不需要。
- * 原先这里直接摆一个「去制定体重管理计划」按钮，多数家长只想定制一单鲜食，
- * 会被这个按钮拦住以为必须先做计划 —— 所以先把问题问出来。
+ * 取代了上一版的「需要 / 不需要」两问：
+ *   · 选**维持** → 「去制定体重管理计划」置灰不可点（没有目标就没有计划可定）
+ *   · 选**减重 / 增重** → 那个按钮带着方向进计划页
+ *   · null = 还没选（提交按钮为灰）
+ *
+ * 为什么方向交回给顾客：老板明确要求"一个是减重，一个是维持，一个是增重"。
+ * 与 2026-10-04"方向由系统定"的差别在于：那时顾客只看见结论、看不出自己能改，
+ * 现在三个方向都摆在明面上，而**体况与方向打架时系统会挡住**
+ * （偏胖不给选增重、偏瘦不给选减重，见 blockedWeightGoalChoice）。
  */
-const wantsWeightManagement = ref<boolean | null>(null);
+type WeightGoalChoice = 'LOSS' | 'MAINTAIN' | 'GAIN';
 
-/** 答题。答"不需要"时方向按维持给（老板 2026-10-05 选定） */
-function answerWeightManagement(needed: boolean) {
-  wantsWeightManagement.value = needed;
+const weightGoalChoice = ref<WeightGoalChoice | null>(null);
+
+const weightGoalOptions: Array<{ value: WeightGoalChoice; label: string }> = [
+  { value: 'LOSS', label: '减重' },
+  { value: 'MAINTAIN', label: '维持' },
+  { value: 'GAIN', label: '增重' },
+];
+
+/**
+ * 体况与方向打架的那一项：偏胖不给选增重、偏瘦不给选减重。
+ *
+ * 为什么加这道挡（老板没要求，但必须挡）：这个方向会原样交给营养师，
+ * 而给偏胖的狗出增重食谱、给偏瘦的狗出减重食谱都是反的。
+ * 计划页那边的后端也只在"系统本来没建议"时才听顾客的方向，两边同一套口径。
+ * 维持永远可选 —— 不想增减重是顾客的自由。
+ */
+const blockedWeightGoalChoice = computed<WeightGoalChoice | ''>(() => {
+  const bcs = Number(selectedDog.value?.bcsScore);
+  if (!Number.isFinite(bcs) || bcs <= 0) return '';
+  if (bcs >= BCS_LOSS_THRESHOLD) return 'GAIN';
+  if (bcs <= BCS_GAIN_THRESHOLD) return 'LOSS';
+  return '';
+});
+
+const blockedWeightGoalReason = computed(() => {
+  if (blockedWeightGoalChoice.value === 'GAIN') {
+    return '它现在的体况偏胖，增重这一项先不给选；想增重请先咨询兽医。';
+  }
+  if (blockedWeightGoalChoice.value === 'LOSS') {
+    return '它现在的体况偏瘦，减重这一项先不给选；想减重请先咨询兽医。';
+  }
+  return '';
+});
+
+/** 选方向。选到被体况挡掉的那一项时就地说明，不静默失败 */
+function chooseWeightGoal(value: WeightGoalChoice) {
+  if (value === blockedWeightGoalChoice.value) {
+    uni.showToast({ title: blockedWeightGoalReason.value, icon: 'none', duration: 3000 });
+    return;
+  }
+  weightGoalChoice.value = value;
   syncGoalWithPlan();
 }
+
+/**
+ * 计划入口什么时候出现：**选了减重/增重**，或本来就有进行中的计划
+ * （那时按钮是「查看体重管理计划」）。
+ *
+ * 选"维持"时不显示（2026-10-05 老板要求）：没有目标就没有计划可定，
+ * 摆一个点不了的灰按钮 + 一句解释都是多余的版面。
+ * 还没选方向时也不显示 —— 三个按钮就在上面，先选一个。
+ */
+const showPlanEntryButton = computed(() => {
+  if (hasOpenPlan.value) return true;
+  return weightGoalChoice.value === 'LOSS' || weightGoalChoice.value === 'GAIN';
+});
+
+/** 计划入口：选了减重/增重就把方向带进计划页；有计划则进改目标那一版 */
+function openWeightGoalPlan() {
+  if (!showPlanEntryButton.value) return;
+  if (hasOpenPlan.value) {
+    goToWeightGoalPlan();
+    return;
+  }
+  if (weightGoalChoice.value === 'LOSS' || weightGoalChoice.value === 'GAIN') {
+    goToWeightGoalPlan(weightGoalChoice.value);
+  }
+}
+
+/**
+ * 狗狗选定了没有。没选定时四个板块整块不展示（2026-10-05 老板第三批第 1 条）：
+ * 未登录 / 还没有档案 / 档案还在读的时候，表单是空的，摆出来只会让人以为要填。
+ * 提交按钮同理 —— 没有狗可提交，留着只会点出一句"请选择狗狗"。
+ */
+const hasSelectedDog = computed(() => Boolean(formData.value.dogId));
 
 /**
  * 第二步先问的那一句：小家伙是否对部分食物过敏？（2026-10-05 老板要求）
@@ -611,21 +683,6 @@ function answerFoodAllergy(hasAllergy: boolean) {
 }
 
 /**
- * 答"没有过敏"时的那句话。
- *
- * 必须把"仍会避开的那些"说清楚：答"没有"只是**这一单不再新增**，
- * 档案里已经记着的（以及从档案带出来预填的）仍会被食谱避开。
- * 不说的话，家长会以为答一句"没有"就把以前查出来的过敏清掉了。
- */
-const noFoodAllergyNote = computed(() => {
-  const list = formData.value.allergies.filter(Boolean);
-  if (list.length === 0) {
-    return '好的，这一单不填过敏信息；它按常规食材来。';
-  }
-  return `好的，这一单不再新增过敏信息；下面这些仍会避开：${list.join('、')}。`;
-});
-
-/**
  * 已上传报告的"张数"。
  *
  * 一次选的多张照片属于**同一份报告的多页**（存成一份、多张附件），
@@ -639,6 +696,47 @@ const allergyReportPageCount = computed(() =>
   ),
 );
 
+/**
+ * 一键清除这一单的过敏原（2026-10-05 老板要求）。
+ *
+ * 清的是**这一单**：档案里的过敏记录一条都不动
+ * （后端写档案是"只增不删"，这里也不会去调删除接口）。
+ * 弹窗确认在组件那边（那是不可撤销的批量动作）。
+ */
+function clearAllAllergies() {
+  formData.value.allergies = [];
+  uni.showToast({ title: '已清除这一单的过敏原', icon: 'none' });
+}
+
+/**
+ * 删除一份检测报告（2026-10-05 老板要求：预览窗口可以删，但要弹窗确认）。
+ *
+ * 弹窗里必须写清"过敏信息不受影响"：后端删报告**不会**连带删过敏记录
+ * （依据没了，结论仍然成立），家长最怕的就是"删了照片，过敏也没了"。
+ */
+function removeAllergyReport(report: Record<string, any>) {
+  const dogId = formData.value.dogId;
+  if (!dogId) return;
+  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+
+  uni.showModal({
+    title: '删除这份检测报告？',
+    content: `报告原件（${pages} 张照片）会一起删掉。已经记下的过敏信息不受影响。`,
+    confirmText: '删除',
+    confirmColor: '#a8622a',
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        await dogApi.allergyReports.remove(dogId, report.id);
+        allergyReports.value = allergyReports.value.filter((item) => item.id !== report.id);
+        uni.showToast({ title: '已删除', icon: 'none' });
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '删除失败，请重试', icon: 'none' });
+      }
+    },
+  });
+}
+
 function allergyReportPageText(report: Record<string, any>): string {
   const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
   const results = Number(report.resultCount || 0);
@@ -648,41 +746,19 @@ function allergyReportPageText(report: Record<string, any>): string {
 }
 
 /**
- * 已有进行中的计划时不再问这一句（顾客本来就在管理体重），
- * 计划入口与建议直接展开，方向仍以计划为准。
- */
-const showWeightPlanEntry = computed(
-  () => hasOpenPlan.value || wantsWeightManagement.value === true,
-);
-
-/**
- * 答"不需要"时的那句话。
- *
- * 体况偏胖/偏瘦时加一句"想…随时可以回来制定计划"：这一单按维持给是家长的
- * 选择，但我们不建议把体况结论藏起来 —— 家长以后想起来还能找到入口。
- */
-const declineWeightManagementNote = computed(() => {
-  const bcs = Number(selectedDog.value?.bcsScore);
-  if (Number.isFinite(bcs) && bcs >= 6) {
-    return '好的，这一单按它平时的用量给。以后想减重，随时可以回来制定体重管理计划。';
-  }
-  if (Number.isFinite(bcs) && bcs > 0 && bcs <= 3) {
-    return '好的，这一单按它平时的用量给。以后想增重，随时可以回来制定体重管理计划。';
-  }
-  return '好的，这一单按它平时的用量给。';
-});
-
-/**
  * 定制方向**由系统定，顾客不能选**（老板 2026-10-04 拍板）。
  *
  * 为什么把顾客那三个单选删掉：同一只狗的方向可以在这里被选成"增重"，
  * 而上面横幅还写着"减重计划进行中、还差 0.8kg"，两个值都会交给营养师。
- * 取值顺序固定为「计划 > 体况」：
- *   ① 计划进行中 → 减重计划给 LOSE_WEIGHT，增重计划给 GAIN_WEIGHT
- *   ② 维持期 → MAINTAIN
- *   ③ 没有计划 → 按体况给：偏胖减重、偏瘦增重、其余维持
- * 第 ③ 条与后端 resolveSuggestedPlan 同一套判据（BCS ≥ 6 减重、≤ 3 增重、
- * 4-5 不建议增减重），这样页面上写"建议减重"、后端算出来也是减重。
+ * 取值顺序固定为「计划 > 顾客选的方向」：
+ *   ① 有计划（进行中/维持期）→ 计划说了算：减重计划 → LOSE_WEIGHT，
+ *      增重计划 → GAIN_WEIGHT，维持期 → MAINTAIN
+ *   ② 没有计划 → 按顾客在上面选的那一个方向（减重 / 维持 / 增重）
+ *   ③ 还没选 → 空字符串（提交按钮为灰，见 canSubmit）
+ *
+ * 2026-10-05 第三批的变化：方向从"系统按体况推"改成"顾客自己选"（老板要求
+ * 摆出减重/维持/增重三个按钮）。体况与方向打架的那些组合在下单前就被挡住
+ * （blockedWeightGoalChoice），计划页那边的后端也只在"系统本来没建议"时听顾客。
  */
 const BCS_LOSS_THRESHOLD = 6;
 const BCS_GAIN_THRESHOLD = 3;
@@ -690,12 +766,6 @@ const BCS_GAIN_THRESHOLD = 3;
 const BCS_MAINTAIN_GOAL = 'MAINTAIN';
 
 function resolveTargetGoal(): string {
-  // 家长明确答了"不需要体重管理"→ 这一单按维持给（老板 2026-10-05 选定）。
-  // 有计划时以计划为准：顾客本来就在执行那个计划，这一问也就不会问。
-  if (!hasOpenPlan.value && wantsWeightManagement.value === false) {
-    return BCS_MAINTAIN_GOAL;
-  }
-
   const plan = selectedPlan.value;
   if (plan) {
     if (plan.status === 'ACTIVE') {
@@ -704,11 +774,11 @@ function resolveTargetGoal(): string {
     if (plan.status === 'MAINTENANCE') return BCS_MAINTAIN_GOAL;
   }
 
-  const bcs = Number(selectedDog.value?.bcsScore);
-  if (!Number.isFinite(bcs) || bcs <= 0) return BCS_MAINTAIN_GOAL;
-  if (bcs >= BCS_LOSS_THRESHOLD) return 'LOSE_WEIGHT';
-  if (bcs <= BCS_GAIN_THRESHOLD) return 'GAIN_WEIGHT';
-  return BCS_MAINTAIN_GOAL;
+  if (weightGoalChoice.value === 'LOSS') return 'LOSE_WEIGHT';
+  if (weightGoalChoice.value === 'GAIN') return 'GAIN_WEIGHT';
+  if (weightGoalChoice.value === 'MAINTAIN') return BCS_MAINTAIN_GOAL;
+  // 还没选：不给方向（canSubmit 会挡住提交，并提示先选一个）
+  return '';
 }
 
 /**
@@ -796,29 +866,6 @@ const hasOpenPlan = computed(() => {
 const planEntryButtonText = computed(() =>
   hasOpenPlan.value ? '查看体重管理计划' : '去制定体重管理计划',
 );
-
-/**
- * 体况是不是落在理想区间（4-5）。
- *
- * 后端 resolveSuggestedPlan 在 BCS 4-5 时**不给**任何增减重建议
- * （FEDIAF：犬应维持 BCS 4-5），定制页那个按钮点进去只会看到
- * "当前体况属于理想区间，不需要增减重计划"。
- * 老板 2026-10-05 要求：这种情况按钮直接置灰，不再让顾客白跑一趟。
- */
-const isIdealBcs = computed(() => {
-  const bcs = Number(selectedDog.value?.bcsScore);
-  if (!Number.isFinite(bcs) || bcs <= 0) return false;
-  return bcs > BCS_GAIN_THRESHOLD && bcs < BCS_LOSS_THRESHOLD;
-});
-
-/**
- * 「我还是想减重 / 增重」这两个文字入口什么时候出现。
- *
- * 只在"体况理想 + 没有进行中的计划"时给：
- * 有计划时按钮本身就是「查看体重管理计划」（点进去是改目标），
- * 不需要再来一条绕开系统建议的路。
- */
-const showManualPlanLinks = computed(() => isIdealBcs.value && !hasOpenPlan.value);
 
 /**
  * 体重管理计划页（已存在，参数名就是它 onLoad 里读的 dogId）。
@@ -1108,8 +1155,8 @@ const confirmGate = async () => {
 const canSubmit = computed(() => {
   if (!formData.value.dogId || !formData.value.targetGoal) return false;
   if (gateBlocked.value) return false;
-  // 第一步那一问必须答（有计划时不用问，等价于已答）
-  if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) return false;
+  // 第一步那个方向必须选（有计划时不用选，方向由计划定）
+  if (!hasOpenPlan.value && weightGoalChoice.value === null) return false;
   // 第二步那一问必须答：答"没有"才能跳过录入界面，所以不能默认成没答
   if (hasFoodAllergy.value === null) return false;
   return true;
@@ -1169,18 +1216,6 @@ const preferencePrefillHint = computed(() => {
  * "点下去就是付 300"。改成「下一步：支付 ¥300」，把"提交"和"付款"分成两步说清。
  */
 const submitButtonText = '确认定制';
-
-/**
- * 支付时限提示。
- *
- * 金额与分钟数都来自后台配置（GET /custom-recipe-config）；
- * 配置里没有支付超时（0 = 不自动关单）时返回空串，页面不显示时限。
- */
-const paymentHint = computed(() =>
-  buildPaymentTimeoutHint({
-    paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
-  }),
-);
 
 // ==================== 待付款单提醒 ====================
 
@@ -1843,9 +1878,9 @@ const submitOrder = async () => {
       title = '请先登录';
     } else if (gateBlocked.value) {
       title = '请先确认上面的体况评分、活动量与每日餐数';
-    } else if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) {
-      // 第一步那一问没答：按钮灰着要说清差哪一步
-      title = '请先回答：是否需要体重管理';
+    } else if (!hasOpenPlan.value && weightGoalChoice.value === null) {
+      // 第一步那个方向没选：按钮灰着要说清差哪一步
+      title = '请先选择：减重、维持还是增重';
     } else if (hasFoodAllergy.value === null) {
       title = '请先回答：小家伙是否对部分食物过敏';
     }
@@ -2350,6 +2385,9 @@ const getActivityLabel = (level: string) => {
   margin-top: 20rpx;
   height: 80rpx;
   line-height: 80rpx;
+  /* 有进行中的计划时它是 <button>、没计划时是 <view> ——
+     view 默认左对齐，文案会贴到最左边（老板截图反馈），所以这里统一居中 */
+  text-align: center;
   font-size: 27rpx;
   font-weight: 600;
   color: #f6efe0;
@@ -2361,33 +2399,21 @@ const getActivityLabel = (level: string) => {
   border: none;
 }
 
-/* 体况理想时的置灰态（老板 2026-10-05 要求）：
-   不给点，但**留着**——顾客看得见"这里本来有个入口"，
-   想坚持就走下面的两个文字入口，而不是以为功能坏了 */
-.plan-entry-btn--disabled {
-  text-align: center;
-  color: rgba(246, 239, 224, 0.55);
-  background: linear-gradient(135deg, #6b7a71 0%, #5c6a62 100%);
+/* 体况与方向打架时被挡掉的那一项：看着就是"不可选"，
+   点它会有 toast 说明原因（不静默失败） */
+.goal-ask__option--off {
+  color: #b9b3a3;
+  background: #f2f1ec;
+  border-color: #e6e3d8;
 }
 
-/* 「我还是想减重 / 我还是想增重」：绕开系统建议的通道，做成一行的文字链 */
-.plan-manual {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 20rpx;
-  margin-top: 16rpx;
-}
-
-.plan-manual__hint {
-  font-size: 23rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
-
-.plan-manual__link {
-  font-size: 24rpx;
-  color: var(--sk-gold, #b08d4f);
-  border-bottom: 1rpx solid rgba(176, 141, 79, 0.5);
+/* 体况结论与三选一打架时的说明（偏胖不给选增重 / 偏瘦不给选减重） */
+.goal-ask__blocked {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #a8622a;
 }
 
 /* ===== 体重管理那一问（2026-10-05 老板要求先问一句） ===== */
@@ -2608,6 +2634,38 @@ const getActivityLabel = (level: string) => {
   color: #a09a7d;
 }
 
+/* 报告的小预览窗口（2026-10-05 老板要求）：点开看大图，右侧可删（弹窗确认） */
+.allergy-reports__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.allergy-reports__thumb {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.allergy-reports__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
+.allergy-reports__remove {
+  flex: 0 0 auto;
+  padding: 6rpx 18rpx;
+  font-size: 22rpx;
+  color: #a8622a;
+  border: 1rpx solid rgba(168, 98, 42, 0.45);
+  border-radius: 999rpx;
+}
+
 .allergy-reports__main {
   min-width: 0;
 }
@@ -2620,11 +2678,13 @@ const getActivityLabel = (level: string) => {
 }
 
 .allergy-reports__item {
+  /* 上下两段：上面是原件缩略图，下面是日期/结论数与删除
+     （左右分栏的话两张缩略图就把文字挤没了） */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12rpx;
-  padding: 16rpx 18rpx;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 14rpx;
+  padding: 18rpx;
   border-radius: 14rpx;
   background: #faf8f4;
 }
@@ -2647,6 +2707,8 @@ const getActivityLabel = (level: string) => {
 }
 
 .allergen-quick-add {
+  /* 与上面"是否有过敏"那个带边框的选择器拉开距离（老板反馈挨得太近） */
+  margin-top: 24rpx;
   margin-bottom: 16rpx;
 }
 .allergen-quick-tag {
@@ -2801,16 +2863,6 @@ const getActivityLabel = (level: string) => {
   color: #cfd4c8;
   background: #d8dccf;
   border-color: #d8dccf;
-}
-
-/* 时限说明放在按钮下方：顾客读完"下一步要付钱"立刻知道还剩多久 */
-.submit-note {
-  display: block;
-  margin-top: 12rpx;
-  text-align: center;
-  font-size: 23rpx;
-  line-height: 1.5;
-  color: var(--sk-ink-3, #968f6d);
 }
 
 /* ===== 体重管理计划横幅（阶段 D1）===== */

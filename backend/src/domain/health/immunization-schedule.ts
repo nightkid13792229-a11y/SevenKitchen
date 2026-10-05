@@ -1232,10 +1232,25 @@ export function buildVaccinePlan(
       const otherStart = parseDateText(other.windowStart);
       const otherEnd = parseDateText(other.windowEnd);
       if (!otherStart || !otherEnd) return false;
-      return (
+
+      const windowsOverlap =
         otherStart.getTime() <= end.getTime() &&
-        start.getTime() <= otherEnd.getTime()
-      );
+        start.getTime() <= otherEnd.getTime();
+      if (!windowsOverlap) {
+        return false;
+      }
+
+      /*
+       * ⚠️ 再加一道「**对面那针现在也已经能打了**」的门槛。
+       *
+       * 不加会变成噪音：核心苗的窗口横跨 6~18 周，狂犬从 12 周起每年一次 ——
+       * 两边窗口几乎永远重叠，于是**每一步都挂着"别和狂犬同一天打"**。
+       * 实测过：5 步里 4 步带提醒。挂多了人就不看了，等于没提醒。
+       *
+       * 现在只在"对面那针的窗口也开了（或 7 天内就开）"时才说 ——
+       * 那才是顾客真会把两针凑到一起的时候。
+       */
+      return otherStart.getTime() <= addDays(today, 7).getTime();
     });
 
     const labels = overlapping

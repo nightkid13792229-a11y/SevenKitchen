@@ -1113,6 +1113,21 @@ describe('排期规则：同品牌优先 + 不同分类不同天', () => {
     expect(withNote.some((step) => /核心疫苗|狂犬疫苗|钩端螺旋体/.test(step.spacingNote))).toBe(true)
   })
 
+  it('对面那针还没到窗口时**不提醒** —— 否则每步都挂，人就不看了', () => {
+    // 核心苗窗口横跨 6~18 周、狂犬从 12 周起，两边几乎永远重叠。
+    // 不加这道门槛的话，实测 5 步里 4 步都挂着"别和狂犬同一天打"。
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: dog(7), // 7 周龄：狂犬窗口（12 周）还没开
+      records: [],
+      today: TODAY,
+    })
+
+    const first = plan.steps.find((step) => step.kind === 'core')
+    expect(first).toBeDefined()
+    expect(first!.spacingNote).toBe('')
+  })
+
   it('同一类内部的针不互相提醒错开（本来就是同一套程序）', () => {
     const plan = buildVaccinePlan({
       dogId: 'dog-1',

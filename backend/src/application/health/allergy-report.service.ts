@@ -66,14 +66,22 @@ const TEST_METHODS = new Set([
   'UNKNOWN',
 ]);
 
-const LEVELS = new Set([
+/**
+ * 结论等级的**唯一来源**（2026-10-05）。
+ *
+ * DTO 的 @IsIn 与这里的归一化共用这一份 —— 曾经两处各写一份，
+ * 识别侧加了 STRONG_POSITIVE 而 DTO 没跟上，带强阳性的报告保存时直接 400。
+ */
+export const ALLERGY_RESULT_LEVELS = [
   'STRONG_POSITIVE',
   'POSITIVE',
   'WEAK_POSITIVE',
   'SUSPECTED',
   'NEGATIVE',
   'UNKNOWN',
-]);
+] as const;
+
+const LEVELS = new Set<string>(ALLERGY_RESULT_LEVELS);
 
 /**
  * 报告结论等级 → 过敏记录可信度。

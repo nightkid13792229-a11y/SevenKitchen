@@ -1,4 +1,5 @@
 import {
+  ALLERGY_RESULT_LEVELS,
   canonicalizeAllergen,
   isNegativeLevel,
   mapLevelToCertainty,
@@ -175,5 +176,62 @@ describe('allergy report', () => {
       expect(parseDate('2026-13-45')).toBeNull();
       expect(parseDate('1899-01-01')).toBeNull();
     });
+  });
+});
+
+
+/**
+ * 等级白名单只有一份（2026-10-05 真实事故）。
+ *
+ * 识别侧新增了 STRONG_POSITIVE，而控制器 DTO 的 @IsIn 还是老的五个值 ——
+ * 于是**带强阳性的报告在保存时被 400 挡下**：报告原件没存成，
+ * 家长在页面上只看到"缩略图一直没出现"，完全没有线索。
+ *
+ * 这里锁两件事：
+ *   ① DTO 允许的取值 == 服务端归一化的取值（同一份常量）
+ *   ② 识别侧能产出的每个等级都在白名单里（含中文别名表里的每一种写法）
+ */
+describe('过敏报告 · 等级白名单只有一份', () => {
+  it('服务端归一化产出的等级都在白名单里', () => {
+    const inputs = [
+      'STRONG_POSITIVE',
+      'POSITIVE',
+      'WEAK_POSITIVE',
+      'SUSPECTED',
+      'NEGATIVE',
+      'UNKNOWN',
+      // 中文/符号写法（模型经常照抄报告）
+      '强阳性',
+      '阳性',
+      '弱阳性',
+      '±',
+      '+-',
+      '+++',
+      '可疑',
+      '阴性',
+      '看不清',
+    ];
+
+    for (const input of inputs) {
+      expect(ALLERGY_RESULT_LEVELS).toContain(normalizeLevel(input));
+    }
+  });
+
+  it('控制器 DTO 的 @IsIn 用的是同一份常量（不许另抄一份）', () => {
+    const source = require('node:fs').readFileSync(
+      'src/interfaces/controllers/allergy-report.controller.ts',
+      'utf-8',
+    );
+
+    expect(source).toContain('@IsIn(ALLERGY_RESULT_LEVELS)');
+    // 老写法（手抄一张表）不许再出现
+    expect(source).not.toContain(
+      "@IsIn(['POSITIVE', 'WEAK_POSITIVE', 'SUSPECTED', 'NEGATIVE', 'UNKNOWN'])",
+    );
+  });
+
+  it('强阳性与阳性都算确诊', () => {
+    expect(mapLevelToCertainty('STRONG_POSITIVE')).toBe('CONFIRMED');
+    expect(mapLevelToCertainty('POSITIVE')).toBe('CONFIRMED');
   });
 });

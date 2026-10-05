@@ -498,6 +498,16 @@ describe('疫苗计划', () => {
       expect(classifyVaccineKinds('六联')).toEqual(['core']);
     })
 
+    it('🔴 商标符号 ® 也认得出 —— 老板记录里就是「宠必威® 幼犬保」', () => {
+      // 实测翻车：本子上印「宠必威® 幼犬保」，库里存「宠必威幼犬保」，
+      // 中间一个 ® 就让 includes 匹配不上，三条记录全判不出来。
+      expect(classifyVaccineKinds('宠必威® 幼犬保')).toEqual(['core']);
+      expect(classifyVaccineKinds('宠必威®锐必威')).toEqual(['rabies']);
+      expect(classifyVaccineKinds('卫佳®伍')).toEqual(['core']);
+      expect(classifyVaccineKinds('卫佳®捌').sort()).toEqual(['core', 'lepto']);
+      expect(classifyVaccineKinds('瑞比克®')).toEqual(['rabies']);
+    })
+
     it('商品名里带空格也认得出（"宠必威 幼犬保"）', () => {
       // 顾客本子上、AI 识别结果里带空格的写法很常见。
       // 归一化之前 "宠必威 幼犬保".includes("宠必威幼犬保") 是 false，

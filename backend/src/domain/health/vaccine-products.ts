@@ -275,9 +275,27 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
 export const MAX_RECOMMENDED_PRODUCTS = 3;
 
 /** 按商品名 / 别名找产品（大小写、空格不敏感） */
-/** 去掉所有空白再比 —— 顾客本子上、AI 识别结果里"宠必威 幼犬保"这种带空格的写法很常见 */
+/**
+ * 比对前把"写法噪音"抹掉（2026-10-05）。
+ *
+ * 本子上印的是「宠必威® 幼犬保」，我们库里存的是「宠必威幼犬保」——
+ * 中间一个 ® 就让 includes 匹配不上。实测就是这么翻车的：
+ * 老板记录里那三条「宠必威® 幼犬保」全都判不出来。
+ *
+ * 抹掉的东西：
+ *   · 空白（半角/全角）
+ *   · 商标符号 ® ™ ©
+ *   · 常见分隔符 · ・ - _ / \ 、，。．和括号
+ *
+ * ⚠️ 只抹**写法噪音**，不抹有含义的字。像"犬八联"这种各家含义不一样的
+ *    叫法仍然不认 —— 那是靠人（或 AI）判的，不是靠字符串。
+ */
 function normalizeProductText(value: string): string {
-  return String(value || '').replace(/\s+/g, '').toLowerCase();
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[®™©]/g, '')
+    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '');
 }
 
 export function findProductsInName(name: string): VaccineProduct[] {

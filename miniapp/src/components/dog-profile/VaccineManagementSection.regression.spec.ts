@@ -190,14 +190,28 @@ describe('疫苗管理', () => {
     expect(source).toContain('nextTick(() => {')
   })
 
-  it('识别出来的记录直接存掉（不然它们永远只是草稿）', () => {
+  it('🔴 识别出来的记录真的会存下去（老板反复遇到的那个 bug）', () => {
     const source = readComponent()
 
-    // 手动保存键 2026-10-03 就下线了，可识别这条路一直只"填表"，
-    // 于是识别出来的记录看着像存好的、其实 id 是空的 ——
-    // 删除键不显示、后端也一条都没有（疫苗计划那边因此整块不显示）。
-    expect(source).toContain("`已识别 ${scanned} 条，正在保存…`")
-    expect(source).toContain('void runAutoSave(record, index)')
+    // 手动保存键 2026-10-03 就下线了，可识别这条路一直只"填表"。
+    // 2026-10-05 挖到最后一个根因：识别完**没有重建草稿**，
+    // 于是 isDirty 取不到草稿 → 判定"没有改动" → 自动保存直接返回、
+    // **不报错也不保存**。生产库里 vaccine_record 一直是 0 条。
+    expect(source).toContain('ensureDrafts()')
+    expect(source).toContain('function saveScannedRecords')
+    expect(source).toContain('void saveScannedRecords()')
+    // 不许并发（saveRecord 有 isBusy 守卫，同时发只存第一条）
+    expect(source).toContain('await saveRecord(record, index)')
+    expect(source).not.toContain('void runAutoSave(record, index)\n  })')
+  })
+
+  it('没保存过的记录（没有 id）只要填了名字就算"待保存"', () => {
+    const source = readComponent()
+
+    // isDirty 原来只比"草稿 vs 记录"，可识别出来的记录值本来就在记录里，
+    // 两边一样 → 判不出"待保存"。没有 id 就说明从来没存过。
+    expect(source).toContain('if (!record.id) {')
+    expect(source).toContain('return Boolean(draftOf(record, index).vaccineName.trim())')
   })
 
   it('删除按钮在卡片脸上，不用先展开（像就诊记录一样）', () => {

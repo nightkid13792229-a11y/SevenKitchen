@@ -404,6 +404,24 @@ const emit = defineEmits<{
  * 要逐字段和原值比。
  */
 function isDirty(record: VaccineRecord, index: number) {
+  /*
+   * ⚠️ **没有 id = 从来没保存过**，只要填了名字就是"待保存"（2026-10-05 修）。
+   *
+   * 这条是识别那条路的救命稻草。原来只比"草稿 vs 记录"：
+   * 而识别出来的记录，值**本来就在记录里**（扫描结果直接建成记录），
+   * 草稿只是它的副本 —— 两边一模一样，于是判定"没有改动"，
+   * 自动保存**直接返回、什么都不做**。
+   *
+   * 表现就是老板反复遇到的：识别完看着加上了，切个标签记录就没了，
+   * 而且**一句报错都没有**。
+   *
+   * 判据用"填了名字"而不是"填了日期"：新增一条空白记录时日期默认是今天，
+   * 用日期会把空白记录也当成待保存。
+   */
+  if (!record.id) {
+    return Boolean(draftOf(record, index).vaccineName.trim())
+  }
+
   const draft = drafts[draftKey(record, index)]
   if (!draft) return false
 
@@ -1077,21 +1095,60 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
   const scanned = payload.drafts.length
   uni.showToast({ title: `已识别 ${scanned} 条，正在保存…`, icon: 'none' })
 
-  records.value.forEach((record, index) => {
-    if (record.id) return
+  // ⚠️ **必须重建草稿**：不重建的话 drafts 里没有这几条，
+  // isDirty 取不到草稿、后面编辑也会写进一个临时对象里丢掉。
+  ensureDrafts()
 
-    // ⚠️ 这里以前是"缺什么就静默 return"（2026-10-05 修的）——
-    // 顾客看到的是"识别成功"的提示，实际上一条都没存，
-    // 切个标签记录就凭空消失（组件销毁、草稿没了）。
-    // 现在缺什么就把话说出来，并且照样排一次自动保存，
-    // 等他补齐（比如选个归类）立刻就能存下去。
+  void saveScannedRecords()
+}
+
+/**
+ * 把识别出来的记录一条条存下去（2026-10-05）。
+ *
+ * 两个坑都踩过，写在这里免得再犯：
+ *
+ * 1. **不能并发**。`saveRecord` 里有 `if (isBusy.value) return`，
+ *    同时发起只会存第一条、其余静默丢掉（以前就是"存了一条"）。
+ * 2. **不能按下标循环**。`saveRecord` 存完会 `loadRecords()` 整表重载，
+ *    排序也变了，下标全作废 —— 所以每次都按"名称 + 日期"重新找那一条。
+ */
+async function saveScannedRecords() {
+  const pending = records.value
+    .filter((record) => !record.id)
+    .map((record) => ({
+      name: record.vaccineName,
+      date: record.vaccinationDate,
+    }))
+
+  for (const want of pending) {
+    const index = records.value.findIndex(
+      (record) =>
+        !record.id &&
+        record.vaccineName === want.name &&
+        record.vaccinationDate === want.date,
+    )
+    // 找不到了 = 那一条已经存好（重载后拿到 id 了）
+    if (index < 0) continue
+
+    const record = records.value[index]
     const reason = autoSaveBlockReason(record, index)
     if (reason) {
+      // 缺什么就把话说出来（以前是静默 return，顾客以为存好了）
       autoSaveNotices.value = { ...autoSaveNotices.value, [index]: reason }
-      return
+      continue
     }
-    void runAutoSave(record, index)
+
+    await saveRecord(record, index)
+  }
+
+  // 存完重刷一遍提示：重载之后下标变了，把还没存上的重新标出来
+  const stillUnsaveable: Record<number, string> = {}
+  records.value.forEach((record, index) => {
+    if (record.id) return
+    const reason = autoSaveBlockReason(record, index)
+    if (reason) stillUnsaveable[index] = reason
   })
+  autoSaveNotices.value = stillUnsaveable
 }
 
 /**

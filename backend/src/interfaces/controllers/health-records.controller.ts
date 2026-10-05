@@ -155,7 +155,20 @@ export class HealthRecordsController {
    * 为什么不写在前端：分类与产品数据是后端的 domain 知识，
    * 前端复制一份迟早对不上（以前就吃过这个亏）。
    */
-  @Get('vaccine-catalog')
+  /*
+   * ⚠️ 路径必须是**两段**（`vaccines/catalog`），不能写成一段的 `vaccine-catalog`。
+   *
+   * 踩过的坑（2026-10-05）：DogsController 比本控制器先注册，而它有 `@Get(':id')`，
+   * 于是 `/dogs/vaccine-catalog` 被它当成 `id = "vaccine-catalog"` 吃掉了 ——
+   * 本路由**永远不会被命中**，而且返回的是"狗狗不存在"，看起来像别的问题。
+   *
+   * 两段就安全：一段的 `:id` 匹配不了两段路径；而 `:dogId/vaccines` 要求第二段
+   * 正好是 `vaccines`，这里是 `catalog`，也不冲突。
+   *
+   * ⚠️ 以后往 `/dogs/` 下加**全局**接口（不带 dogId 的）都要注意这件事，
+   *    最好干脆别放在这个前缀下。
+   */
+  @Get('vaccines/catalog')
   @ApiOperation({ summary: 'Vaccine name catalog (kinds + presets + products)' })
   getVaccineCatalog() {
     return {

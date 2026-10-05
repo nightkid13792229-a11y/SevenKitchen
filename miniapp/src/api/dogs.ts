@@ -288,8 +288,12 @@ export const dogApi = {
    * 为什么不写在前端：分类与产品是后端的 domain 知识，
    * 前端复制一份迟早对不上。
    */
+  /**
+   * ⚠️ 路径是 `vaccines/catalog`（**两段**），别改成一段的 `vaccine-catalog` ——
+   * 那会被 DogsController 的 `@Get(':id')` 当成 dogId 吃掉（踩过一次）。
+   */
   vaccineCatalog: () =>
-    request({ url: '/dogs/vaccine-catalog', method: 'GET', suppressErrorToast: true }),
+    request({ url: '/dogs/vaccines/catalog', method: 'GET', suppressErrorToast: true }),
   /**
    * 过敏原排查计划（2026-10-04，过敏重构第三期）。
    *

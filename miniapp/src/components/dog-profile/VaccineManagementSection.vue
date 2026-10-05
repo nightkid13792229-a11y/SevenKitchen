@@ -369,7 +369,26 @@ defineExpose({
  * 拉不到时页面照旧能用（只是少了产品库），点标签仍然带得出归类。
  */
 const presetNames = ref<{ name: string; kinds: string[] }[]>([])
-const kindOptions = ref<{ value: string; label: string; affectsPlan?: boolean }[]>([])
+/**
+ * 归类选项。
+ *
+ * ⚠️ **必须有本地兜底**（2026-10-05 踩过）：归类是必填项，
+ * 万一目录接口拉不到（比如路由被吃掉那次），选项就是空的 ——
+ * 顾客**一个字都存不进去**，还只看到"还差归类，选一个自动保存"，
+ * 却没有任何东西可选。必填项依赖的选项不能只靠网络。
+ *
+ * 这四类是**闭集**，极少变；后端下发优先，拿不到就用这份。
+ */
+const FALLBACK_KIND_OPTIONS = [
+  { value: 'core', label: '核心疫苗', affectsPlan: true },
+  { value: 'rabies', label: '狂犬疫苗', affectsPlan: true },
+  { value: 'lepto', label: '钩端螺旋体', affectsPlan: true },
+  { value: 'other', label: '其他（非核心）', affectsPlan: false },
+]
+
+const kindOptions = ref<{ value: string; label: string; affectsPlan?: boolean }[]>([
+  ...FALLBACK_KIND_OPTIONS,
+])
 const catalogProducts = ref<{ name: string; manufacturer: string; kinds: string[] }[]>([])
 
 async function loadVaccineCatalog() {
@@ -377,7 +396,11 @@ async function loadVaccineCatalog() {
     const res: any = await dogApi.vaccineCatalog()
     if (res?.code !== 0 || !res?.data) return
     presetNames.value = Array.isArray(res.data.presets) ? res.data.presets : []
-    kindOptions.value = Array.isArray(res.data.kinds) ? res.data.kinds : []
+    // 只在下发的内容非空时才覆盖本地兜底 —— 后端万一返回空数组，
+    // 也不能把顾客选归类的路堵死
+    if (Array.isArray(res.data.kinds) && res.data.kinds.length > 0) {
+      kindOptions.value = res.data.kinds
+    }
     catalogProducts.value = Array.isArray(res.data.products) ? res.data.products : []
   } catch {
     // 目录是加分项：拉不到就退回"点标签 + 自己选归类"，不挡主流程

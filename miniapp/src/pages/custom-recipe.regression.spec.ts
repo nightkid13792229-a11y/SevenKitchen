@@ -745,16 +745,16 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
     expect(submit).toContain('feeAmount')
   })
 
-  it('提交前就说明支付时限，但不再重复一块"下一步：支付"', () => {
+  it('提交按钮下面不再写支付时限；也不重复一块"下一步：支付"', () => {
     /**
-     * 2026-10-04 老板要求：删掉 pay-next-info 整块。
-     * 底部固定栏已经有支付按钮和金额，"提交后请去成功页付款"这句话是重复的。
-     * 支付时限（paymentHint）留着 —— 它讲的是"多久不付会被取消"，不是重复信息。
+     * 2026-10-04 老板要求：删掉 pay-next-info 整块（底部固定栏已有金额与按钮）。
+     * 2026-10-05 老板又要求：连「请在 30 分钟内完成支付，超时订单会自动取消」
+     * 这句也删掉 —— 提交按钮下面保持干净，时限由成功页/待付款提醒去讲。
      */
     expect(submit).not.toContain('pay-next-info')
     expect(submit).not.toContain('提交后请在提交成功页')
-    expect(submit).toContain('buildPaymentTimeoutHint')
-    expect(submit).toContain('paymentHint')
+    expect(submit).not.toContain('paymentHint')
+    expect(submit).not.toContain('完成支付，超时订单会自动取消')
   })
 
   it('支付时限来自后端（公开配置），前端不写死分钟数', () => {
@@ -1485,23 +1485,30 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(code).not.toContain('还是想给它定个目标')
   })
 
-  it('② 选「维持」→ 计划入口置灰；选减重/增重 → 带着方向进计划页', () => {
-    const enabled = code.match(/const planEntryEnabled = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(enabled).not.toBe('')
-    expect(enabled).toContain("weightGoalChoice.value === 'LOSS'")
-    expect(enabled).toContain("weightGoalChoice.value === 'GAIN'")
-    // 有计划时入口照旧可用（点进去是改目标）
-    expect(enabled).toContain('if (hasOpenPlan.value) return true;')
+  it('② 选「维持」不显示计划入口；选减重/增重 → 带着方向进计划页', () => {
+    /**
+     * 2026-10-05 老板改口径：维持时**不显示**这个按钮（原来是个点不了的灰按钮），
+     * 也不写"选维持就不需要制定增减重计划了"那句解释。
+     */
+    expect(template).toContain('v-if="showPlanEntryButton"')
+    expect(code).not.toContain('planEntryHintText')
+    expect(code).not.toContain('选「维持」就不需要制定增减重计划了')
+    expect(code).not.toContain('plan-entry-btn--disabled')
+
+    const shown = code.match(/const showPlanEntryButton = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(shown).not.toBe('')
+    expect(shown).toContain("weightGoalChoice.value === 'LOSS'")
+    expect(shown).toContain("weightGoalChoice.value === 'GAIN'")
+    // 有计划时入口照旧在（点进去是改目标）
+    expect(shown).toContain('if (hasOpenPlan.value) return true;')
 
     const open = code.match(/function openWeightGoalPlan\(\)[\s\S]*?\n\}/)?.[0] || ''
-    expect(open).toContain('if (!planEntryEnabled.value) return;')
+    expect(open).toContain('if (!showPlanEntryButton.value) return;')
     expect(open).toContain('goToWeightGoalPlan(weightGoalChoice.value)')
 
-    // 灰按钮下面必须说明为什么点不了
-    expect(template).toContain('planEntryHintText')
-    const hint = code.match(/const planEntryHintText = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(hint).toContain('选「维持」就不需要制定增减重计划了。')
-    expect(hint).toContain('先在上面选一个方向')
+    // 文案居中：没计划时它是 <view>，默认左对齐会把文案甩到最左边
+    const style = code.match(/\.plan-entry-btn \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(style).toContain('text-align: center;')
   })
 
   it('② 体况与方向打架时挡住：偏胖不给选增重、偏瘦不给选减重', () => {
@@ -1570,8 +1577,9 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(style).toContain('height: 60rpx')
     expect(style).toContain('border-radius: 999rpx')
     expect(style).not.toContain('height: 72rpx')
-    // 不被 flex 拉满整行
-    expect(scan).toMatch(/\.allergy-scan__head \{[^}]*align-items: flex-start/)
+    // 不被 flex 拉满整行；同一行右侧跟"一键清除所有过敏原"
+    expect(scan).toMatch(/\.allergy-scan__head \{[^}]*align-items: center/)
+    expect(scan).toContain('一键清除所有过敏原')
   })
 })
 
@@ -1595,7 +1603,7 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
      */
     const section = template.slice(
       template.indexOf('<text class="title-text">体重管理</text>'),
-      template.indexOf('<text class="title-text">过敏信息（可选）</text>'),
+      template.indexOf('<text class="title-text">过敏信息</text>'),
     )
     expect(section).toContain('bcsAdviceText')
     expect(section.indexOf('advice-line')).toBeLessThan(section.indexOf('goal-ask'))
@@ -1611,7 +1619,7 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
   it('① 没有选定狗狗时，四个板块与提交按钮都不展示', () => {
     const sections = [
       '<text class="title-text">体重管理</text>',
-      '<text class="title-text">过敏信息（可选）</text>',
+      '<text class="title-text">过敏信息</text>',
       '<text class="title-text">饮食偏好（可选）</text>',
       '<text class="title-text">备注（可选）</text>',
     ]
@@ -1640,8 +1648,9 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(planPage).toContain("options?.direction")
   })
 
-  it('② 第二步标题带「（可选）」', () => {
-    expect(template).toMatch(/title-text">过敏信息（可选）<\/text>/)
+  it('② 第二步标题就是「过敏信息」（老板后来要求去掉「（可选）」）', () => {
+    expect(template).toMatch(/title-text">过敏信息<\/text>/)
+    expect(template).not.toContain('过敏信息（可选）')
   })
 
   it('③ 先问「小家伙是否对部分食物过敏？」，答没有就跳过整块录入', () => {
@@ -1662,10 +1671,10 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(code).toContain('请先回答：小家伙是否对部分食物过敏')
   })
 
-  it('③ 答"没有"不抹掉档案里的过敏：说明里要写明仍会避开哪些', () => {
-    const note = code.match(/const noFoodAllergyNote = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(note).toContain('formData.value.allergies')
-    expect(note).toContain('仍会避开')
+  it('③ 答"没有"不抹掉档案里的过敏；也不再多写一句说明', () => {
+    // 2026-10-05 老板：答"没有"下面那句说明删掉，不再多话
+    expect(code).not.toContain('noFoodAllergyNote')
+    expect(template).not.toContain('不再新增过敏信息')
     // 档案里有过敏时默认答"有"（让家长再答一遍是多余的）
     expect(code).toContain('if (formData.value.allergies.length > 0) {')
     expect(code).toContain('hasFoodAllergy.value = true;')
@@ -1673,9 +1682,16 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(code).toContain('hasFoodAllergy.value = null;')
   })
 
-  it('④ 已上传报告同时报"份数 / 张数"，并说明多页合并规则', () => {
+  it('④ 已上传报告给"小预览窗口"，删除要弹窗确认', () => {
     expect(template).toContain('{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张')
-    expect(template).toContain('同一份报告的多页照片会合并成一份')
+    // 预览窗口：报告原件的缩略图，点了看大图
+    expect(template).toContain('allergy-reports__thumb')
+    expect(template).toContain('@tap="previewAllergyReport(report)"')
+    // 删除走弹窗确认，并写明"过敏信息不受影响"（后端语义就是保留过敏记录）
+    const remove = code.match(/function removeAllergyReport\([\s\S]*?\n\}/)?.[0] || ''
+    expect(remove).toContain('uni.showModal')
+    expect(remove).toContain('已经记下的过敏信息不受影响')
+    expect(remove).toContain('dogApi.allergyReports.remove')
     expect(template).toContain('allergyReportPageText(report)')
 
     const count = code.match(/const allergyReportPageCount = computed\([\s\S]*?\n\);/)?.[0] || ''
@@ -1697,19 +1713,19 @@ describe('定制页 · 2026-10-05 第四批（3 条）', () => {
   const code = stripComments(page)
   const template = code.slice(0, code.indexOf('<script setup'))
 
-  it('① 没选狗狗时四个板块收起，但给一句"先选狗狗"的引导', () => {
+  it('① 没选狗狗时四个板块收起（不要额外的说明文案）', () => {
     // 四个板块 + 提交按钮都要 v-if="hasSelectedDog"
     expect(template.match(/v-if="hasSelectedDog"/g)?.length || 0).toBeGreaterThanOrEqual(5)
-    // 多只狗的家长不会被留在"只有一张 Banner"的空页面上
-    expect(template).toContain('v-if="!hasSelectedDog && dogOptions.length > 0"')
-    expect(template).toContain('先选一下要给哪只狗狗定制')
-    expect(template).toContain('点上面的头像可以切换')
+    // 2026-10-05 老板：不要那块"先选一下要给哪只狗狗定制"的说明 ——
+    // Banner 上的选择器本身就是明确的引导
+    expect(template).not.toContain('先选一下要给哪只狗狗定制')
+    expect(code).not.toContain('pick-dog-hint')
   })
 
   it('② 体况评分与建议在狗狗一选定时就给出', () => {
     const section = template.slice(
       template.indexOf('<text class="title-text">体重管理</text>'),
-      template.indexOf('<text class="title-text">过敏信息（可选）</text>'),
+      template.indexOf('<text class="title-text">过敏信息</text>'),
     )
     expect(section).toContain('<view v-if="bcsAdviceText" class="advice-line">')
     // 建议排在三个方向按钮之前
@@ -1726,10 +1742,10 @@ describe('定制页 · 2026-10-05 第四批（3 条）', () => {
     expect(code).not.toContain('还是想给它定个目标')
     expect(code).not.toContain('plan-manual')
 
-    // 维持 → 灰；减重/增重 → 带方向进计划页
-    const enabled = code.match(/const planEntryEnabled = computed\([\s\S]*?\n\}\);/)?.[0] || ''
-    expect(enabled).toContain("weightGoalChoice.value === 'LOSS'")
-    expect(enabled).toContain("weightGoalChoice.value === 'GAIN'")
+    // 维持 → 不显示；减重/增重 → 显示并带方向进计划页
+    const shown = code.match(/const showPlanEntryButton = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(shown).toContain("weightGoalChoice.value === 'LOSS'")
+    expect(shown).toContain("weightGoalChoice.value === 'GAIN'")
     const open = code.match(/function openWeightGoalPlan\(\)[\s\S]*?\n\}/)?.[0] || ''
     expect(open).toContain('goToWeightGoalPlan(weightGoalChoice.value)')
   })

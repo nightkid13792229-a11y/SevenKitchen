@@ -109,3 +109,56 @@ describe('定制食谱 · 过敏录入', () => {
     expect(source).toContain('formData.value.allergies.push(value)')
   })
 })
+
+/**
+ * 2026-10-05 老板第五批：确认 / 取消 两个按钮的文案 + 一键清除过敏原。
+ */
+describe('过敏报告 · 按钮文案与一键清除', () => {
+  const block = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
+      'utf-8',
+    )
+  const page = () =>
+    readFileSync(resolve(process.cwd(), 'src/pages/custom-recipe/index.vue'), 'utf-8')
+
+  it('候选卡片两个按钮改成「确认」「取消」', () => {
+    const source = block()
+    // 断言"老文案不在了"必须去掉注释再断言（注释里会写明改之前叫什么）
+    const live = source
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+    expect(source).toContain('>确认</text>')
+    expect(source).toContain('@tap="discard">取消</text>')
+    expect(live).not.toContain('加入这一单')
+    expect(live).not.toContain('>都不是<')
+  })
+
+  it('上传按钮右侧有「一键清除所有过敏原」，点了要弹窗确认', () => {
+    const source = block()
+
+    expect(source).toContain('一键清除所有过敏原')
+    // 与上传按钮同一行（head 里）
+    const head = source.slice(source.indexOf('allergy-scan__head'), source.indexOf('allergy-scan__candidates'))
+    expect(head).toContain('一键清除所有过敏原')
+    // 没有过敏原时不显示（点了也没意义）
+    expect(source).toContain('const showClearAll = computed')
+    expect(source).toContain('v-if="showClearAll"')
+    // 不可撤销的批量动作：先问一句
+    expect(source).toContain('清除所有过敏原？')
+    expect(source).toContain("emit('clearAll')")
+  })
+
+  it('清除的是这一单：由父页面清空，档案不动', () => {
+    const source = page()
+
+    expect(source).toContain('@clear-all="clearAllAllergies"')
+    expect(source).toContain(':has-allergens="formData.allergies.length > 0"')
+    const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(clear).toContain('formData.value.allergies = []')
+    // 不该去调删除档案里过敏记录的接口
+    expect(clear).not.toContain('remove')
+  })
+})

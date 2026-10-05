@@ -220,16 +220,6 @@
       </view>
     </view>
 
-    <!-- 有档案但还没选狗狗时的一句引导（2026-10-05 第三批第 1 条的配套）。
-         四个板块收起之后，多只狗的家长进来会只看到一张 Banner ——
-         得有人告诉他"点上面的头像就能选"，以及"选完表单才出来"。 -->
-    <view v-if="!hasSelectedDog && dogOptions.length > 0" class="section pick-dog-hint">
-      <text class="pick-dog-hint__title">先选一下要给哪只狗狗定制</text>
-      <text class="pick-dog-hint__desc">
-        点上面的头像可以切换；选好之后，体重管理、过敏信息这些就会出来。
-      </text>
-    </view>
-
     <!-- 第一步：体重管理（2026-10-05 老板要求：标题由"定制目标"改为"体重管理"，
          并删掉标题下方重复的"体重管理"四个字） -->
     <view v-if="hasSelectedDog" class="section">
@@ -281,30 +271,30 @@
             </text>
           </view>
 
-          <!-- ③ 计划入口：选"维持"时置灰不可点（老板要求） -->
+          <!-- ③ 计划入口：**只有选了减重/增重才出现**（2026-10-05 老板第三批要求）。
+               选"维持"时不显示这个按钮 —— 没有目标就没有计划可定，
+               与其摆一个点不了的灰按钮，不如不占版面；也不再写那句解释。 -->
           <view
+            v-if="showPlanEntryButton"
             class="plan-entry-btn"
-            :class="{ 'plan-entry-btn--disabled': !planEntryEnabled }"
             @tap="openWeightGoalPlan()"
           >{{ planEntryButtonText }}</view>
-          <text v-if="planEntryHintText" class="plan-entry-hint">{{ planEntryHintText }}</text>
         </template>
       </view>
     </view>
 
-    <!-- 第二步：过敏信息（可选）
+    <!-- 第二步：过敏信息
          这一块原来嵌在「需要健康管理」勾选里，现在常驻显示：
          过敏是定制食谱的硬信息（喂错可能出事），不该等顾客先勾一个框才出现。
          疾病史不再在定制页录入 —— 健康管理页才是它的入口。
 
-         2026-10-05 老板要求：
-           · 标题加「（可选）」
-           · 先问一句「小家伙是否对部分食物过敏？」—— 不过敏的狗狗家长直接跳过，
-             不必面对一整块用不上的录入界面 -->
+         2026-10-05 老板要求：先问一句「小家伙是否对部分食物过敏？」——
+         不过敏的狗狗家长直接跳过，不必面对一整块用不上的录入界面。
+         （标题上的「（可选）」后来按老板要求去掉了；答"没有"下面也不再多写说明。） -->
     <view v-if="hasSelectedDog" class="section">
       <view class="section-title">
         <text class="step-number">2</text>
-        <text class="title-text">过敏信息（可选）</text>
+        <text class="title-text">过敏信息</text>
       </view>
 
       <view class="health-item">
@@ -376,41 +366,49 @@
             v-if="formData.dogId"
             :key="formData.dogId"
             :dog-id="formData.dogId"
+            :has-allergens="formData.allergies.length > 0"
             @scanned="onAllergensScanned"
+            @clear-all="clearAllAllergies"
           />
 
-          <!-- 已传过的检测报告：家长随时翻得出来（原件不再"读完就丢"）。
-               2026-10-05 老板反馈"传了两份只显示一份"：一次选的多张照片
-               是**同一份报告的多页**，存成一份、多张附件 —— 所以这里把
-               份数与张数都写出来，不然家长会以为另一张丢了。 -->
+          <!-- 已传过的检测报告：原件不再"读完就丢"，这里给**小预览窗口**
+               （2026-10-05 老板要求：上传之后在上传按钮下方能看到报告照片）。
+               一次选的多张照片是同一份报告的多页 → 存成一份、多张附件，
+               所以份数与张数都写出来，不然家长会以为另一张丢了。
+               点图片看大图；删除要弹窗确认（删的是报告原件，
+               已经记下的过敏信息不受影响 —— 后端也是这个语义）。 -->
           <view v-if="allergyReports.length > 0" class="allergy-reports">
             <text class="allergy-reports__title">
               已上传的检测报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
             </text>
-            <text class="allergy-reports__hint">同一份报告的多页照片会合并成一份，点「查看」可以翻页</text>
             <view
               v-for="report in allergyReports"
               :key="report.id"
               class="allergy-reports__item"
-              @tap="previewAllergyReport(report)"
             >
-              <view class="allergy-reports__main">
-                <text class="allergy-reports__name">
-                  {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
-                </text>
-                <text class="allergy-reports__meta">
-                  {{ allergyReportPageText(report) }}
-                </text>
+              <view class="allergy-reports__thumbs">
+                <image
+                  v-for="url in report.attachments"
+                  :key="url"
+                  class="allergy-reports__thumb"
+                  :src="url"
+                  mode="aspectFill"
+                  @tap="previewAllergyReport(report)"
+                />
               </view>
-              <text class="allergy-reports__action">查看</text>
+              <view class="allergy-reports__row">
+                <view class="allergy-reports__main">
+                  <text class="allergy-reports__name">
+                    {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+                  </text>
+                  <text class="allergy-reports__meta">{{ allergyReportPageText(report) }}</text>
+                </view>
+                <text class="allergy-reports__remove" @tap.stop="removeAllergyReport(report)">删除</text>
+              </view>
             </view>
           </view>
         </template>
 
-        <!-- 答"没有过敏"：说清这一单会怎么走，免得家长以为档案里的记录也没了 -->
-        <text v-else-if="hasFoodAllergy === false" class="goal-ask__note">
-          {{ noFoodAllergyNote }}
-        </text>
       </view>
     </view>
 
@@ -519,7 +517,6 @@
       >
         {{ submitting ? '提交中…' : submitButtonText }}
       </button>
-      <text v-if="paymentHint" class="submit-note">{{ paymentHint }}</text>
     </view>
   </view>
 </template>
@@ -535,7 +532,6 @@ import {
   runCustomRecipePayment,
 } from '@/utils/custom-recipe-payment';
 import {
-  buildPaymentTimeoutHint,
   formatAmount,
   formatRemainingMinutes,
   resolvePaymentDeadlineAt,
@@ -640,27 +636,22 @@ function chooseWeightGoal(value: WeightGoalChoice) {
   syncGoalWithPlan();
 }
 
-/** 有计划时按钮是「查看体重管理计划」（点进去改目标），没有计划才要方向 */
-const planEntryEnabled = computed(() => {
+/**
+ * 计划入口什么时候出现：**选了减重/增重**，或本来就有进行中的计划
+ * （那时按钮是「查看体重管理计划」）。
+ *
+ * 选"维持"时不显示（2026-10-05 老板要求）：没有目标就没有计划可定，
+ * 摆一个点不了的灰按钮 + 一句解释都是多余的版面。
+ * 还没选方向时也不显示 —— 三个按钮就在上面，先选一个。
+ */
+const showPlanEntryButton = computed(() => {
   if (hasOpenPlan.value) return true;
   return weightGoalChoice.value === 'LOSS' || weightGoalChoice.value === 'GAIN';
 });
 
-/** 计划入口为什么点不了，写在按钮下面（灰按钮不解释等于坏按钮） */
-const planEntryHintText = computed(() => {
-  if (hasOpenPlan.value) return '';
-  if (weightGoalChoice.value === 'MAINTAIN') {
-    return '选「维持」就不需要制定增减重计划了。';
-  }
-  if (weightGoalChoice.value === null) {
-    return '先在上面选一个方向（减重 / 维持 / 增重）。';
-  }
-  return '';
-});
-
-/** 计划入口：选了减重/增重就把方向带进计划页；维持或没选时不做任何事 */
+/** 计划入口：选了减重/增重就把方向带进计划页；有计划则进改目标那一版 */
 function openWeightGoalPlan() {
-  if (!planEntryEnabled.value) return;
+  if (!showPlanEntryButton.value) return;
   if (hasOpenPlan.value) {
     goToWeightGoalPlan();
     return;
@@ -692,21 +683,6 @@ function answerFoodAllergy(hasAllergy: boolean) {
 }
 
 /**
- * 答"没有过敏"时的那句话。
- *
- * 必须把"仍会避开的那些"说清楚：答"没有"只是**这一单不再新增**，
- * 档案里已经记着的（以及从档案带出来预填的）仍会被食谱避开。
- * 不说的话，家长会以为答一句"没有"就把以前查出来的过敏清掉了。
- */
-const noFoodAllergyNote = computed(() => {
-  const list = formData.value.allergies.filter(Boolean);
-  if (list.length === 0) {
-    return '好的，这一单不填过敏信息；它按常规食材来。';
-  }
-  return `好的，这一单不再新增过敏信息；下面这些仍会避开：${list.join('、')}。`;
-});
-
-/**
  * 已上传报告的"张数"。
  *
  * 一次选的多张照片属于**同一份报告的多页**（存成一份、多张附件），
@@ -719,6 +695,47 @@ const allergyReportPageCount = computed(() =>
     0,
   ),
 );
+
+/**
+ * 一键清除这一单的过敏原（2026-10-05 老板要求）。
+ *
+ * 清的是**这一单**：档案里的过敏记录一条都不动
+ * （后端写档案是"只增不删"，这里也不会去调删除接口）。
+ * 弹窗确认在组件那边（那是不可撤销的批量动作）。
+ */
+function clearAllAllergies() {
+  formData.value.allergies = [];
+  uni.showToast({ title: '已清除这一单的过敏原', icon: 'none' });
+}
+
+/**
+ * 删除一份检测报告（2026-10-05 老板要求：预览窗口可以删，但要弹窗确认）。
+ *
+ * 弹窗里必须写清"过敏信息不受影响"：后端删报告**不会**连带删过敏记录
+ * （依据没了，结论仍然成立），家长最怕的就是"删了照片，过敏也没了"。
+ */
+function removeAllergyReport(report: Record<string, any>) {
+  const dogId = formData.value.dogId;
+  if (!dogId) return;
+  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+
+  uni.showModal({
+    title: '删除这份检测报告？',
+    content: `报告原件（${pages} 张照片）会一起删掉。已经记下的过敏信息不受影响。`,
+    confirmText: '删除',
+    confirmColor: '#a8622a',
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        await dogApi.allergyReports.remove(dogId, report.id);
+        allergyReports.value = allergyReports.value.filter((item) => item.id !== report.id);
+        uni.showToast({ title: '已删除', icon: 'none' });
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '删除失败，请重试', icon: 'none' });
+      }
+    },
+  });
+}
 
 function allergyReportPageText(report: Record<string, any>): string {
   const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
@@ -1199,18 +1216,6 @@ const preferencePrefillHint = computed(() => {
  * "点下去就是付 300"。改成「下一步：支付 ¥300」，把"提交"和"付款"分成两步说清。
  */
 const submitButtonText = '确认定制';
-
-/**
- * 支付时限提示。
- *
- * 金额与分钟数都来自后台配置（GET /custom-recipe-config）；
- * 配置里没有支付超时（0 = 不自动关单）时返回空串，页面不显示时限。
- */
-const paymentHint = computed(() =>
-  buildPaymentTimeoutHint({
-    paymentTimeoutMinutes: recipeConfig.value?.paymentTimeoutMinutes ?? 0,
-  }),
-);
 
 // ==================== 待付款单提醒 ====================
 
@@ -2380,6 +2385,9 @@ const getActivityLabel = (level: string) => {
   margin-top: 20rpx;
   height: 80rpx;
   line-height: 80rpx;
+  /* 有进行中的计划时它是 <button>、没计划时是 <view> ——
+     view 默认左对齐，文案会贴到最左边（老板截图反馈），所以这里统一居中 */
+  text-align: center;
   font-size: 27rpx;
   font-weight: 600;
   color: #f6efe0;
@@ -2389,15 +2397,6 @@ const getActivityLabel = (level: string) => {
 
 .plan-entry-btn::after {
   border: none;
-}
-
-/* 体况理想时的置灰态（老板 2026-10-05 要求）：
-   不给点，但**留着**——顾客看得见"这里本来有个入口"，
-   想坚持就走下面的两个文字入口，而不是以为功能坏了 */
-.plan-entry-btn--disabled {
-  text-align: center;
-  color: rgba(246, 239, 224, 0.55);
-  background: linear-gradient(135deg, #6b7a71 0%, #5c6a62 100%);
 }
 
 /* 体况与方向打架时被挡掉的那一项：看着就是"不可选"，
@@ -2415,35 +2414,6 @@ const getActivityLabel = (level: string) => {
   font-size: 22rpx;
   line-height: 1.5;
   color: #a8622a;
-}
-
-/* 计划入口点不了的原因（灰按钮不解释等于坏按钮） */
-.plan-entry-hint {
-  display: block;
-  margin-top: 12rpx;
-  text-align: center;
-  font-size: 22rpx;
-  color: var(--sk-ink-3, #968f6d);
-}
-
-/* ===== 还没选狗狗时的引导（四个板块收起之后不能只剩一张 Banner） ===== */
-.pick-dog-hint {
-  padding: 26rpx 28rpx;
-}
-
-.pick-dog-hint__title {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--sk-ink, #26261f);
-}
-
-.pick-dog-hint__desc {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: var(--sk-ink-2, #6b6653);
 }
 
 /* ===== 体重管理那一问（2026-10-05 老板要求先问一句） ===== */
@@ -2664,6 +2634,38 @@ const getActivityLabel = (level: string) => {
   color: #a09a7d;
 }
 
+/* 报告的小预览窗口（2026-10-05 老板要求）：点开看大图，右侧可删（弹窗确认） */
+.allergy-reports__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.allergy-reports__thumb {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  background: #f2f1ec;
+  border: 1rpx solid #e3e6d4;
+}
+
+.allergy-reports__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
+.allergy-reports__remove {
+  flex: 0 0 auto;
+  padding: 6rpx 18rpx;
+  font-size: 22rpx;
+  color: #a8622a;
+  border: 1rpx solid rgba(168, 98, 42, 0.45);
+  border-radius: 999rpx;
+}
+
 .allergy-reports__main {
   min-width: 0;
 }
@@ -2676,11 +2678,13 @@ const getActivityLabel = (level: string) => {
 }
 
 .allergy-reports__item {
+  /* 上下两段：上面是原件缩略图，下面是日期/结论数与删除
+     （左右分栏的话两张缩略图就把文字挤没了） */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12rpx;
-  padding: 16rpx 18rpx;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 14rpx;
+  padding: 18rpx;
   border-radius: 14rpx;
   background: #faf8f4;
 }
@@ -2703,6 +2707,8 @@ const getActivityLabel = (level: string) => {
 }
 
 .allergen-quick-add {
+  /* 与上面"是否有过敏"那个带边框的选择器拉开距离（老板反馈挨得太近） */
+  margin-top: 24rpx;
   margin-bottom: 16rpx;
 }
 .allergen-quick-tag {
@@ -2857,16 +2863,6 @@ const getActivityLabel = (level: string) => {
   color: #cfd4c8;
   background: #d8dccf;
   border-color: #d8dccf;
-}
-
-/* 时限说明放在按钮下方：顾客读完"下一步要付钱"立刻知道还剩多久 */
-.submit-note {
-  display: block;
-  margin-top: 12rpx;
-  text-align: center;
-  font-size: 23rpx;
-  line-height: 1.5;
-  color: var(--sk-ink-3, #968f6d);
 }
 
 /* ===== 体重管理计划横幅（阶段 D1）===== */

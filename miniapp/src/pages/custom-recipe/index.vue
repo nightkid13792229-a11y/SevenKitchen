@@ -79,8 +79,13 @@
     <!-- 身份与档案状态。
          狗狗选择器已经并入上面的 Banner，这里只剩下"这一单能不能开始"的几件事。
          未登录 / 正在读取 / 没有档案这三种状态卡必须都留着（且互斥），
-         它们各自对应完全不同的下一步动作。 -->
-    <view class="section">
+         它们各自对应完全不同的下一步动作。
+
+         2026-10-05 老板指出：狗狗 Banner 与「1 体重管理」之间有一片白块。
+         根因就是这张卡**常驻**渲染 —— 在"已登录 + 有档案 + 门槛已确认 + 没有计划"
+         这个最常见的正常状态下，它下面五个分支一条都不成立，
+         只剩内边距与白底，看上去就是一条空白。所以整张卡改成按内容出现。 -->
+    <view v-if="showStatusSection" class="section">
       <!-- 体重管理计划（阶段 D1）：进行中就带出目标与当前能量。
            计划才是顾客当下真正在执行的方案，定制时必须看得见 ——
            否则他定的减重计划在定制页完全没有体现，等于白定。 -->
@@ -230,13 +235,43 @@
            而两个值都会交给营养师。
 
            2026-10-05 老板要求：**只保留最上方的提醒**（体况结论），
-           下面那组"你的目标 / 每天需要约 X kcal"整块删掉。 -->
+           下面那组"你的目标 / 每天需要约 X kcal"整块删掉。
+
+           2026-10-05 老板又要求：先问一句「需要给它做体重管理吗？」，
+           答"需要"才展开建议与计划入口。原来一进来就摆一个
+           「去制定体重管理计划」按钮 —— 多数家长只是想定制一单鲜食，
+           会被这个按钮拦住以为必须先做计划。 -->
       <view class="goal-group">
-        <view v-if="bcsAdviceText" class="advice-line">
-          <text class="advice-line__text">{{ bcsAdviceText }}</text>
+        <!-- 已经有进行中的计划时不再问：顾客本来就在管理体重，
+             再问一遍等于否定他自己定过的东西（方向也仍以计划为准）。 -->
+        <view v-if="!hasOpenPlan" class="goal-ask">
+          <text class="goal-ask__question">需要给它做体重管理吗？</text>
+          <view class="goal-ask__options">
+            <text
+              class="goal-ask__option"
+              :class="{ 'goal-ask__option--on': wantsWeightManagement === true }"
+              @tap="answerWeightManagement(true)"
+            >需要</text>
+            <text
+              class="goal-ask__option"
+              :class="{ 'goal-ask__option--on': wantsWeightManagement === false }"
+              @tap="answerWeightManagement(false)"
+            >不需要</text>
+          </view>
         </view>
 
-        <button class="plan-entry-btn" @tap="goToWeightGoalPlan">{{ planEntryButtonText }}</button>
+        <template v-if="showWeightPlanEntry">
+          <view v-if="bcsAdviceText" class="advice-line">
+            <text class="advice-line__text">{{ bcsAdviceText }}</text>
+          </view>
+
+          <button class="plan-entry-btn" @tap="goToWeightGoalPlan">{{ planEntryButtonText }}</button>
+        </template>
+
+        <!-- 答"不需要"：这一单按维持给，说明白免得家长以为系统还会自己改方向 -->
+        <text v-else-if="wantsWeightManagement === false" class="goal-ask__note">
+          {{ declineWeightManagementNote }}
+        </text>
       </view>
     </view>
 
@@ -254,12 +289,6 @@
         <!-- "这些是从档案带出来的"：不说明的话，顾客会以为是上次在这页填的 -->
         <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
 
-        <view class="health-header">
-          <!-- 2026-10-05 老板要求：删掉"它不能吃的东西"这个重复标题
-               （板块标题已经是"过敏信息"），只留手动添加入口 -->
-          <text class="add-btn" @tap="addAllergen">+ 添加</text>
-        </view>
-
         <!-- 常见过敏原：点一下选中、再点一下取消（2026-10-04）。
              原先只能"加"，加错了得跑到下面的列表里找那条点「删除」，
              同一个标签要管两处。现在标签自己就是开关。
@@ -276,6 +305,14 @@
               @tap="toggleAllergenByName(name)"
             >{{ name }}</view>
           </view>
+        </view>
+
+        <!-- 手动添加入口（2026-10-05 老板要求挪到这里）：
+             原先它在最上面一行，标签还没出现就先看到「+ 添加」，
+             顺序变成"先手输、再快选"；实际动线是先看快选里有没有，
+             没有才需要手打。所以按钮夹在快选标签与手动清单之间。 -->
+        <view class="allergen-add-row">
+          <text class="add-btn" @tap="addAllergen">+ 添加</text>
         </view>
 
         <!-- 下方只列**手动录入**的过敏原（快选里没有的那些）。
@@ -380,15 +417,18 @@
         maxlength="500"
       />
 
-      <!-- 附件（可选）：检测报告、化验单的照片 -->
+      <!-- 附件（可选）：检测报告、化验单的照片。
+           2026-10-05 老板要求：这个入口**改小**，并与张数说明并排 ——
+           原先它是一行独立的金色文字、下面再跟一行"每次最多 9 张"，
+           在一张表单里显得比提交还显眼。 -->
       <view class="attachment-section">
         <view class="attachment-header">
+          <text class="attachment-hint">每次最多 {{ maxAttachmentCount }} 张</text>
           <text v-if="canAddAttachment" class="attachment-add" @tap="pickAttachment">
             {{ attachmentUploading ? '上传中…' : '上传资料（可选）' }}
           </text>
           <text v-else class="attachment-limit">已传满 {{ maxAttachmentCount }} 张</text>
         </view>
-        <text class="attachment-hint">每次最多 {{ maxAttachmentCount }} 张</text>
         <view v-if="formData.attachmentUrls.length > 0" class="attachment-list">
           <view
             v-for="(url, index) in formData.attachmentUrls"
@@ -486,6 +526,46 @@ const planStatusLabel = computed(() =>
 );
 
 /**
+ * 第一步先问的那一句：需要给它做体重管理吗？（2026-10-05 老板要求）
+ *
+ * 三态：null = 还没答（按钮不可提交）、true = 需要、false = 不需要。
+ * 原先这里直接摆一个「去制定体重管理计划」按钮，多数家长只想定制一单鲜食，
+ * 会被这个按钮拦住以为必须先做计划 —— 所以先把问题问出来。
+ */
+const wantsWeightManagement = ref<boolean | null>(null);
+
+/** 答题。答"不需要"时方向按维持给（老板 2026-10-05 选定） */
+function answerWeightManagement(needed: boolean) {
+  wantsWeightManagement.value = needed;
+  syncGoalWithPlan();
+}
+
+/**
+ * 已有进行中的计划时不再问这一句（顾客本来就在管理体重），
+ * 计划入口与建议直接展开，方向仍以计划为准。
+ */
+const showWeightPlanEntry = computed(
+  () => hasOpenPlan.value || wantsWeightManagement.value === true,
+);
+
+/**
+ * 答"不需要"时的那句话。
+ *
+ * 体况偏胖/偏瘦时加一句"想…随时可以回来制定计划"：这一单按维持给是家长的
+ * 选择，但我们不建议把体况结论藏起来 —— 家长以后想起来还能找到入口。
+ */
+const declineWeightManagementNote = computed(() => {
+  const bcs = Number(selectedDog.value?.bcsScore);
+  if (Number.isFinite(bcs) && bcs >= 6) {
+    return '好的，这一单按它平时的用量给。以后想减重，随时可以回来制定体重管理计划。';
+  }
+  if (Number.isFinite(bcs) && bcs > 0 && bcs <= 3) {
+    return '好的，这一单按它平时的用量给。以后想增重，随时可以回来制定体重管理计划。';
+  }
+  return '好的，这一单按它平时的用量给。';
+});
+
+/**
  * 定制方向**由系统定，顾客不能选**（老板 2026-10-04 拍板）。
  *
  * 为什么把顾客那三个单选删掉：同一只狗的方向可以在这里被选成"增重"，
@@ -503,6 +583,12 @@ const BCS_GAIN_THRESHOLD = 3;
 const BCS_MAINTAIN_GOAL = 'MAINTAIN';
 
 function resolveTargetGoal(): string {
+  // 家长明确答了"不需要体重管理"→ 这一单按维持给（老板 2026-10-05 选定）。
+  // 有计划时以计划为准：顾客本来就在执行那个计划，这一问也就不会问。
+  if (!hasOpenPlan.value && wantsWeightManagement.value === false) {
+    return BCS_MAINTAIN_GOAL;
+  }
+
   const plan = selectedPlan.value;
   if (plan) {
     if (plan.status === 'ACTIVE') {
@@ -885,8 +971,27 @@ const confirmGate = async () => {
 const canSubmit = computed(() => {
   if (!formData.value.dogId || !formData.value.targetGoal) return false;
   if (gateBlocked.value) return false;
+  // 体重管理那一问必须答（有计划时不用问，等价于已答）
+  if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) return false;
   return true;
 });
+
+/**
+ * 「状态区」这一整张卡要不要出现（2026-10-05 老板指出的白块）。
+ *
+ * 这张卡原先常驻渲染，可它下面五个分支（计划横幅 / 门槛卡 / 未登录 / 读取中 / 无档案）
+ * 在"已登录 + 有档案 + 门槛已确认 + 没有计划"这个最常见的正常状态下**一条都不成立**，
+ * 于是只剩内边距与白底 —— 就是 Banner 与「1 体重管理」之间那片白。
+ * 现在按内容出现，没内容就不占版面。
+ */
+const showStatusSection = computed(
+  () =>
+    Boolean(selectedPlan.value) ||
+    gateBlocked.value ||
+    needLogin.value ||
+    dogsLoading.value ||
+    dogOptions.value.length === 0,
+);
 
 /**
  * 体况评分 → 建议。
@@ -1591,6 +1696,9 @@ const submitOrder = async () => {
       title = '请先登录';
     } else if (gateBlocked.value) {
       title = '请先确认上面的体况评分、活动量与每日餐数';
+    } else if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) {
+      // 第一步那一问没答：按钮灰着要说清差哪一步
+      title = '请先回答：是否需要体重管理';
     }
 
     uni.showToast({ title, icon: 'none' });
@@ -2104,6 +2212,52 @@ const getActivityLabel = (level: string) => {
   border: none;
 }
 
+/* ===== 体重管理那一问（2026-10-05 老板要求先问一句） ===== */
+.goal-ask {
+  padding: 20rpx 22rpx;
+  border-radius: 16rpx;
+  background: var(--sk-primary-tint, #eef3ea);
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+}
+
+.goal-ask__question {
+  display: block;
+  font-size: 27rpx;
+  color: var(--sk-ink, #26261f);
+}
+
+.goal-ask__options {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 16rpx;
+}
+
+.goal-ask__option {
+  flex: 1;
+  padding: 14rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--sk-ink-2, #6b6653);
+  background: #ffffff;
+  border: 1rpx solid var(--sk-line, #e3e6d4);
+  border-radius: 999rpx;
+}
+
+/* 选中态：与过敏快选同一套口径 —— 只靠高亮，不加勾 */
+.goal-ask__option--on {
+  color: #ffffff;
+  background: var(--sk-primary, #1e3a2f);
+  border-color: var(--sk-primary, #1e3a2f);
+}
+
+.goal-ask__note {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--sk-ink-2, #6b6653);
+}
+
 /* ===== 体况建议 ===== */
 .advice-line {
   margin-bottom: 16rpx;
@@ -2149,9 +2303,15 @@ const getActivityLabel = (level: string) => {
 }
 
 
+/* 上传资料入口（2026-10-05 老板要求改小）：
+   与「+ 添加」同一档小圆角按钮，跟张数说明并排，不再独占一行 */
 .attachment-add {
-  font-size: 25rpx;
-  color: #b08d4f;
+  flex: 0 0 auto;
+  padding: 6rpx 18rpx;
+  font-size: 23rpx;
+  color: var(--sk-gold, #b08d4f);
+  border: 1rpx solid rgba(176, 141, 79, 0.6);
+  border-radius: 999rpx;
 }
 
 /* 传满时的占位文案：比让按钮消失更好，顾客知道"是满了"而不是"坏了" */
@@ -2162,8 +2322,8 @@ const getActivityLabel = (level: string) => {
 }
 
 .attachment-hint {
-  display: block;
-  margin-top: 12rpx;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 23rpx;
   line-height: 1.6;
   color: var(--sk-ink-3, #968f6d);
@@ -2218,19 +2378,6 @@ const getActivityLabel = (level: string) => {
 
 .health-item:last-child {
   margin-bottom: 0;
-}
-
-.health-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16rpx;
-}
-
-.health-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--sk-ink, #26261f);
 }
 
 .add-btn {
@@ -2292,6 +2439,12 @@ const getActivityLabel = (level: string) => {
   flex: none;
   font-size: 24rpx;
   color: #8a6b3f;
+}
+
+/* 手动添加入口：夹在快选标签与手动清单之间（2026-10-05 老板要求挪位） */
+.allergen-add-row {
+  display: flex;
+  margin-bottom: 16rpx;
 }
 
 .allergen-quick-add {

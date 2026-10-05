@@ -1420,3 +1420,110 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(submit.slice(0, submit.indexOf('uni.redirectTo'))).not.toContain('requestPayment')
   })
 })
+
+/**
+ * 2026-10-05 第二批（老板看截图提的 6 条）。
+ *
+ * 这一批都是"页面上看着不对"的问题，所以断言尽量落在**真实标记与顺序**上，
+ * 而不是某句话在不在源码里 —— 顺序错了（按钮跑回顶部）也算没改对。
+ */
+describe('定制页 · 2026-10-05 第二批（6 条）', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  const code = stripComments(page)
+  const template = code.slice(0, code.indexOf('<script setup'))
+
+  it('① Banner 与「1 体重管理」之间不再有空白卡：状态区按内容出现', () => {
+    /**
+     * 根因：那张卡原先常驻渲染，而它下面五个分支（计划横幅 / 门槛卡 / 未登录 /
+     * 读取中 / 无档案）在"已登录 + 有档案 + 门槛已确认 + 没有计划"这个最常见的
+     * 正常状态下一条都不成立，于是只剩内边距与白底 —— 就是老板看到的那片白。
+     */
+    expect(template).toContain('v-if="showStatusSection"')
+    expect(code).toContain('const showStatusSection = computed(')
+
+    const section = code
+      .match(/const showStatusSection = computed\([\s\S]*?\n\);/)?.[0]
+      ?.replace(/\s+/g, ' ')
+    expect(section).toBeTruthy()
+    // 五类内容一个都不能漏，否则对应的状态卡会永远不显示
+    for (const condition of [
+      'selectedPlan.value',
+      'gateBlocked.value',
+      'needLogin.value',
+      'dogsLoading.value',
+      'dogOptions.value.length === 0',
+    ]) {
+      expect(section).toContain(condition)
+    }
+  })
+
+  it('② 第一步先问「需要给它做体重管理吗？」，答需要才展开计划入口', () => {
+    expect(template).toContain('需要给它做体重管理吗？')
+    expect(template).toContain('@tap="answerWeightManagement(true)"')
+    expect(template).toContain('@tap="answerWeightManagement(false)"')
+    // 问句在前，建议与入口在 v-if 里面
+    expect(template.indexOf('goal-ask')).toBeLessThan(template.indexOf('plan-entry-btn'))
+    expect(template).toContain('v-if="showWeightPlanEntry"')
+
+    // 有计划时不再问（计划本身就是答案），入口照样展开
+    const entry = code.match(/const showWeightPlanEntry = computed\([\s\S]*?\n\);/)?.[0] || ''
+    expect(entry).toContain('hasOpenPlan.value')
+    expect(entry).toContain('wantsWeightManagement.value === true')
+
+    // 未作答不能提交（灰按钮的原因要说清）
+    expect(code).toContain('const wantsWeightManagement = ref<boolean | null>(null)')
+    expect(code).toContain('请先回答：是否需要体重管理')
+  })
+
+  it('② 答「不需要」→ 这一单按维持给（老板选定），计划仍优先', () => {
+    const resolve = code.match(/function resolveTargetGoal\(\): string \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(resolve).not.toBe('')
+    // 没计划 + 答"不需要" → 维持；有计划时计划优先（所以要先判 hasOpenPlan）
+    expect(resolve).toContain('!hasOpenPlan.value && wantsWeightManagement.value === false')
+    expect(resolve.indexOf('wantsWeightManagement.value === false')).toBeLessThan(
+      resolve.indexOf('const plan = selectedPlan.value'),
+    )
+    expect(resolve).toContain('return BCS_MAINTAIN_GOAL;')
+    // 答完要重算方向（否则还是按体况算出来的减重/增重）
+    const answer = code.match(/function answerWeightManagement[\s\S]*?\n\}/)?.[0] || ''
+    expect(answer).toContain('syncGoalWithPlan()')
+  })
+
+  it('③ 「+ 添加」夹在快选标签与手动清单之间', () => {
+    const quickStart = template.indexOf('allergen-quick-add')
+    const addRow = template.indexOf('allergen-add-row')
+    const customList = template.indexOf('customAllergens.length > 0')
+
+    expect(quickStart).toBeGreaterThan(-1)
+    expect(addRow).toBeGreaterThan(quickStart)
+    expect(customList).toBeGreaterThan(addRow)
+    // 顶部那行空标题栏（health-header）已经没有内容，整块删掉
+    expect(template).not.toContain('health-header')
+  })
+
+  it('⑥ 「上传资料」改小，并与张数说明并排', () => {
+    const header = template.slice(
+      template.indexOf('attachment-header'),
+      template.indexOf('attachment-list'),
+    )
+    // 张数说明与入口在同一个 flex 行里
+    expect(header).toContain('attachment-hint')
+    expect(header).toContain('attachment-add')
+    expect(header).not.toContain('attachment-hint"></text>')
+    // 小圆角按钮（不再是独占一行的金色文字）
+    const style = code.match(/\.attachment-add \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(style).toContain('padding: 6rpx 18rpx')
+    expect(style).toContain('border-radius: 999rpx')
+    expect(style).toContain('font-size: 23rpx')
+  })
+
+  it('⑥ 过敏检测报告入口也一并改小（原来比「确认定制」还显眼）', () => {
+    const scan = read('src/components/custom-recipe/AllergyScanBlock.vue')
+    const style = scan.match(/\.allergy-scan__button \{[\s\S]*?\n\}/)?.[0] || ''
+    expect(style).toContain('height: 60rpx')
+    expect(style).toContain('border-radius: 999rpx')
+    expect(style).not.toContain('height: 72rpx')
+    // 不被 flex 拉满整行
+    expect(scan).toMatch(/\.allergy-scan__head \{[^}]*align-items: flex-start/)
+  })
+})

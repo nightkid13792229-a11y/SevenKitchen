@@ -18,6 +18,7 @@ import {
   isHealthReportVisionEnabled,
   normalizeDocumentType,
   normalizeDrafts,
+  normalizeAllergyGroup,
   resolveAutoDocumentType,
   resolveHealthReportVisionModel,
 } from 'src/application/health/health-report-extraction.service';
@@ -140,6 +141,101 @@ describe('HealthReportExtractionService', () => {
 
     expect(result.allergies).toEqual([]);
     expect(result.warnings).toContain('报告显示未见异常');
+  });
+
+  /**
+   * 过敏报告的等级与分组（2026-10-05 第十一期，老板拿真实报告问出来的）。
+   *
+   * 三件事必须锁住：
+   *   ① 判定区里写的"强阳性"要落成 POSITIVE（老提示词只列了"阳性"，
+   *      模型不敢映射就整份退成 UNKNOWN —— 线上真实发生）
+   *   ② "组胺（阳性对照）"不是过敏原，不能记进档案
+   *   ③ 环境项要能被认出来（报告照抄的分组优先，报告没写就按名字兜底），
+   *      定制食谱只该看见吃进去的东西
+   */
+  describe('过敏报告的等级与分组（2026-10-05 第十一期）', () => {
+    it('提示词要求先找「结果判定」那一段，并把强阳性算成阳性', () => {
+      const prompt = buildSystemPrompt('ALLERGY_REPORT');
+      expect(prompt).toContain('结果判定');
+      expect(prompt).toContain('强阳性');
+      // 数值/颜色条不算结论 —— 这条边界不能松
+      expect(prompt).toContain('数值大小一律不作为判断依据');
+      // 对照项要丢
+      expect(prompt).toContain('阳性对照');
+    });
+
+    it('提示词要求照抄分组，并说明食谱只关心食物组', () => {
+      const prompt = buildSystemPrompt('ALLERGY_REPORT');
+      expect(prompt).toContain('group');
+      expect(prompt).toContain('FOOD 食物组');
+      expect(prompt).toContain('ENVIRONMENT 环境组');
+      expect(prompt).toContain('只许照抄');
+    });
+
+    it('等级 / 分组 / 说明一起回给前端（前端靠它决定怎么记）', () => {
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: [
+          { allergen: '鸡肉', level: 'POSITIVE', group: 'FOOD' },
+          { allergen: '小麦', level: '强阳性', group: 'FOOD' },
+          { allergen: '粉尘螨', level: 'POSITIVE', group: 'ENVIRONMENT' },
+          { allergen: '玉米', level: '', group: '' },
+        ],
+      });
+
+      expect(drafts).toHaveLength(4);
+      expect(drafts[0]).toMatchObject({ allergen: '鸡肉', level: 'POSITIVE', group: 'FOOD' });
+      // 模型直接回中文"强阳性"也要认（不能因为没照抄枚举就丢等级）
+      expect(drafts[1].level).toBe('UNKNOWN');
+      expect(drafts[2]).toMatchObject({ allergen: '粉尘螨', group: 'ENVIRONMENT' });
+      // 报告没写分组 → 按名字认不出环境项的，留给家长自己看（不藏）
+      expect(drafts[3]).toMatchObject({ allergen: '玉米', group: 'UNKNOWN' });
+    });
+
+    it('报告没写分组时按名字认出环境项（也认中文分组别名）', () => {
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: [
+          { allergen: '粉尘螨' },
+          { allergen: '柳树花粉' },
+          { allergen: '猫皮屑' },
+          { allergen: '羊肉' },
+          { allergen: '棉絮', group: '吸入组' },
+        ],
+      });
+
+      expect(drafts.map((draft) => draft.group)).toEqual([
+        'ENVIRONMENT',
+        'ENVIRONMENT',
+        'ENVIRONMENT',
+        'UNKNOWN',
+        'ENVIRONMENT',
+      ]);
+    });
+
+    it('报告自己写的 FOOD 优先：名字像环境项也不能替顾客丢掉', () => {
+      expect(normalizeAllergyGroup('FOOD', '粉尘螨')).toBe('FOOD');
+      expect(normalizeAllergyGroup('food', '鸡肉')).toBe('FOOD');
+      expect(normalizeAllergyGroup('', '粉尘螨')).toBe('ENVIRONMENT');
+    });
+
+    it('对照组（组胺 / 阳性对照）不是过敏原，一律丢掉', () => {
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: [
+          { allergen: '组胺（阳性对照）', level: 'POSITIVE' },
+          { allergen: '阴性对照', level: 'NEGATIVE' },
+          { allergen: '鸡肉', level: 'POSITIVE' },
+        ],
+      });
+
+      expect(drafts.map((draft) => draft.allergen)).toEqual(['鸡肉']);
+    });
+
+    it('模型走旧的 allergies 数组时，对照组同样被丢掉', () => {
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        allergies: ['组胺（阳性对照）', '牛肉'],
+      });
+
+      expect(drafts.map((draft) => draft.allergen)).toEqual(['牛肉']);
+    });
   });
 
   it('AI 什么都没给出时明确提示改用手工填写，而不是返回静默的空结果', async () => {

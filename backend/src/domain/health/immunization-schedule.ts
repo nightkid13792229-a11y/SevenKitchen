@@ -1188,9 +1188,56 @@ export function buildVaccinePlan(
   const noRecordAtAll = input.records.length === 0;
   const noEvidence = !seeds.some((seed) => Boolean(findMatchingRecord(seed, parsed)));
 
+  /*
+   * 记录怎么对上步骤：**按针数分**，不是按"窗口里有没有"（2026-10-05 改）。
+   *
+   * ── 为什么必须改 ─────────────────────────────────────────────
+   *
+   * 老板实测截图：18 周打了一针卫佳捌（含钩端），系统却认为
+   * **一针钩端都没打过** —— 因为钩端的窗口是"8~12 周"和"12~16 周"，
+   * 18 周掉在两个窗口之外，一条都没算上，于是让他再打两针。
+   *
+   * 真相是：那针里的钩端就是**第 1 针**，只需要 2~4 周后补第 2 针。
+   *
+   * 老办法判的是"你有没有在**对的时间**打"，可系列苗真正要数的是
+   * **打了几针**（钩端首免 2 针、核心首免 4 针）。所以：
+   *
+   *   把每一类的记录按时间排好，第 1 条记录 → 第 1 步，第 2 条 → 第 2 步……
+   *   一条记录只能顶一步（同一条记录顶两步 = 一针算两次）；
+   *   组合苗可以同时顶**不同类**的各一步（卫佳捌 = 核心那步 + 钩端那步）。
+   *
+   * 窗口仍然有用 —— 它决定"这一步该在什么时候做、现在该不该提醒"，
+   * 只是不再参与"算不算完成"的判定。打得太早/太晚由 detectConflicts 单独提示。
+   */
+  const recordsByKind = new Map<VaccineKind, { record: VaccineRecordLike; date: Date }[]>();
+  for (const item of parsed) {
+    for (const kind of item.kinds) {
+      // 顶不上的记录不进这个队列（卫佳细、犬二联顶不上核心首免）
+      if (!recordCoversStep(item.record.vaccineName, kind)) continue;
+      const list = recordsByKind.get(kind) || [];
+      list.push({ record: item.record, date: item.date });
+      recordsByKind.set(kind, list);
+    }
+  }
+  for (const list of recordsByKind.values()) {
+    list.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  // 每一类里，第 N 步吃第 N 条记录
+  const assignedByKey = new Map<string, { record: VaccineRecordLike; date: Date }>();
+  const consumedByKind = new Map<VaccineKind, number>();
+  for (const seed of seeds) {
+    const list = recordsByKind.get(seed.kind) || [];
+    const used = consumedByKind.get(seed.kind) || 0;
+    if (used < list.length) {
+      assignedByKey.set(seed.key, list[used]);
+      consumedByKind.set(seed.kind, used + 1);
+    }
+  }
+
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {
-      const matched = findMatchingRecord(seed, parsed);
+      const matched = assignedByKey.get(seed.key) ?? null;
       // 顾客说"不做"的那一步不再报逾期，尊重他的选择
       const status = resolveStatus(
         seed,

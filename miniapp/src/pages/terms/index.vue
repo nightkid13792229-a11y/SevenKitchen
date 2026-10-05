@@ -2,8 +2,8 @@
   <view class="container">
     <view class="content">
       <view class="title">用户协议</view>
-      <view class="update-time">更新日期：2026年5月21日</view>
-      <view class="update-time">生效日期：2026年5月21日</view>
+      <view class="update-time">更新日期：2026年10月5日</view>
+      <view class="update-time">生效日期：2026年10月5日</view>
 
       <view class="section">
         <text class="section-title">引言</text>
@@ -94,7 +94,24 @@
       </view>
 
       <view class="section">
-        <text class="section-title">六、知识产权</text>
+        <text class="section-title">六、宠物健康与饮食信息</text>
+        <text class="section-content"
+          >1.
+          您在使用食谱定制、健康管理等功能时填写的宠物过敏、饮食偏好、疾病史等信息，会用于食谱设计、健康档案留存与推荐过滤
+          —— 例如在推荐与食谱设计中避开您填写的过敏原，并按您填写的健康与饮食信息计算用量。</text
+        >
+        <text class="section-content"
+          >2.
+          上述信息由您自愿提供，请您尽量如实、准确填写；信息有误可能影响食谱与用量的准确性。您可以随时在爱犬档案中修改或删除这些信息。</text
+        >
+        <text class="section-content"
+          >3.
+          我们收集、使用和保护这些信息的详细说明，请见《隐私政策》。</text
+        >
+      </view>
+
+      <view class="section">
+        <text class="section-title">七、知识产权</text>
         <text class="section-content"
           >1.
           本服务中的所有内容，包括但不限于文字、图片、音频、视频、软件、程序等，均为"赛文的食堂"或其许可方所有。</text
@@ -105,7 +122,7 @@
       </view>
 
       <view class="section">
-        <text class="section-title">七、免责声明</text>
+        <text class="section-title">八、免责声明</text>
         <text class="section-content"
           >1. 因不可抗力或非我们原因导致的服务中断，我们不承担责任。</text
         >
@@ -116,14 +133,14 @@
       </view>
 
       <view class="section">
-        <text class="section-title">八、协议修改</text>
+        <text class="section-title">九、协议修改</text>
         <text class="section-content"
           >我们有权随时修改本协议，修改后的协议将在小程序内公布。您继续使用本服务即视为您接受修改后的协议。</text
         >
       </view>
 
       <view class="section">
-        <text class="section-title">九、联系我们</text>
+        <text class="section-title">十、联系我们</text>
         <text class="section-content"
           >如您对本协议有任何疑问，请通过以下方式联系我们：</text
         >

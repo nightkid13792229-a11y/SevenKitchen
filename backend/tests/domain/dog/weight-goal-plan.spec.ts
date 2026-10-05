@@ -620,3 +620,65 @@ describe('体重管理计划 · 可调力度档位', () => {
     expect(currentLevel.key).toBe('STANDARD');
   });
 });
+
+/**
+ * 顾客坚持要的方向（2026-10-05 老板要求）。
+ *
+ * 背景：体况在理想区间（4-5）时系统本来不给建议，定制页的
+ * 「去制定体重管理计划」按钮点进去只有一句"不需要增减重计划"。
+ * 老板要求给坚持的家长一条路，但**只在系统本来没有建议时才听顾客的**。
+ */
+describe('体重管理计划 · 顾客坚持的方向', () => {
+  const base = {
+    currentWeightKg: 7,
+    bcsScore: 5,
+    maintenanceKcal: 480,
+  };
+
+  it('体况理想 + 顾客坚持 → 按他说的方向给，并写明"系统原本建议维持"', () => {
+    const loss = resolveSuggestedPlan({ ...base, forcedDirection: WeightGoalDirection.LOSS });
+    const gain = resolveSuggestedPlan({ ...base, forcedDirection: WeightGoalDirection.GAIN });
+
+    expect(loss?.direction).toBe(WeightGoalDirection.LOSS);
+    expect(gain?.direction).toBe(WeightGoalDirection.GAIN);
+    expect(loss?.notes.join('')).toContain('原本建议维持');
+    expect(loss?.notes.join('')).toContain('按你要求');
+  });
+
+  it('体况理想 + 顾客没坚持 → 仍旧不给建议（老行为不变）', () => {
+    expect(resolveSuggestedPlan(base)).toBeNull();
+    expect(resolveSuggestedPlan({ ...base, forcedDirection: null })).toBeNull();
+  });
+
+  it('体况不理想时顾客改不了方向：偏胖不能建增重计划', () => {
+    const fat = resolveSuggestedPlan({
+      currentWeightKg: 9,
+      bcsScore: 7,
+      maintenanceKcal: 480,
+      forcedDirection: WeightGoalDirection.GAIN,
+    });
+    const thin = resolveSuggestedPlan({
+      currentWeightKg: 5,
+      bcsScore: 3,
+      maintenanceKcal: 480,
+      forcedDirection: WeightGoalDirection.LOSS,
+    });
+
+    expect(fat?.direction).toBe(WeightGoalDirection.LOSS);
+    expect(thin?.direction).toBe(WeightGoalDirection.GAIN);
+    // 没有"顾客坚持"这回事，就不该出现那句说明
+    expect(fat?.notes.join('')).not.toContain('按你要求');
+  });
+
+  it('顾客坚持的方向同样受安全边界约束（能量仍在安全区间内）', () => {
+    const gain = resolveSuggestedPlan({ ...base, forcedDirection: WeightGoalDirection.GAIN });
+    const loss = resolveSuggestedPlan({ ...base, forcedDirection: WeightGoalDirection.LOSS });
+
+    expect(gain!.startKcal).toBeGreaterThanOrEqual(base.maintenanceKcal);
+    expect(gain!.ceilingKcal).toBeLessThanOrEqual(
+      Math.round(base.maintenanceKcal * 1.4) + 1,
+    );
+    expect(loss!.startKcal).toBeLessThanOrEqual(base.maintenanceKcal);
+    expect(loss!.floorKcal).toBeGreaterThan(0);
+  });
+});

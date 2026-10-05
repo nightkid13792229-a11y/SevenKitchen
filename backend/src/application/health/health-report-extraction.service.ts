@@ -272,6 +272,30 @@ export function resolveHealthReportVisionModel(
 const MAX_KEYWORDS = 30;
 const MAX_KEYWORD_LENGTH = 40;
 
+/**
+ * 过敏报告的条数上限（2026-10-05 第十二期）。
+ *
+ * 老代码跟普通关键词共用 MAX_KEYWORDS=30，而一份真实过敏报告
+ * （食物 + 环境一起）常常 50~100 项 —— 老板实测那份两页报告就被砍掉了 20 多项，
+ * 其中包括报告标了"强阳性"的花生、海带。上限按真实报告的规模给足。
+ */
+const MAX_ALLERGY_DRAFTS = 120;
+
+/**
+ * 截断时的排序依据：**越严重越靠前**。
+ *
+ * 真到了必须砍的时候（模型抽风返回几百条），先丢的应该是"没写结论"的那些，
+ * 绝不能是报告明确标了阳性/强阳性的。
+ */
+const ALLERGY_LEVEL_SEVERITY = [
+  'STRONG_POSITIVE',
+  'POSITIVE',
+  'WEAK_POSITIVE',
+  'SUSPECTED',
+  'NEGATIVE',
+  'UNKNOWN',
+];
+
 function normalizeKeyword(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -486,10 +510,12 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  这类报告常常在数值表格之外单独有一段判定区，逐条写着"阴性 / 阳性 / 弱阳性 / 强阳性"。',
     '  **每一条的 level 以那一段为准**；表格里只有数值（如 1.2 kU/L）或颜色条、色块**不算**写了结论，',
     '  判定区没提到的项目，level 填 UNKNOWN。数值大小一律不作为判断依据。',
-    '· level **照抄报告上写的结论**，只能从这五个里选：',
-    '  POSITIVE 阳性（报告写"阳性""强阳性""++""+++""＋"都算阳性）/',
+    '· level **照抄报告上写的结论**，只能从这六个里选：',
+    '  STRONG_POSITIVE 强阳性（报告写"强阳性""+++""++++"）/ POSITIVE 阳性（写"阳性""++"）/',
     '  WEAK_POSITIVE 弱阳性（写"弱阳性""±""+-"）/ SUSPECTED 疑似或可疑 /',
     '  NEGATIVE 阴性（写"阴性""－""-"）/ UNKNOWN 报告没写或看不清。',
+    '  **强阳性与阳性必须分开**（2026-10-05 老板要求）：报告把它们分成两档，',
+    '  家长最需要一眼看到的就是"强阳性"那几条。',
     '· **阴性的项目不要放进 drafts** —— 它们恰恰说明不过敏，放进去只会挡住真正要注意的那几项。',
     '  （整份报告都是阴性时才按上面那条返回空数组 + warnings。）',
     '· group 照抄报告上的分组，只能从这四个里选：',
@@ -762,6 +788,14 @@ export function normalizeDrafts(
   // 模型没给就填 UNKNOWN —— **不猜**。猜错的代价是
   // "把弱阳性当成确诊"（少给顾客几个食谱）或反过来（漏掉一条真过敏），
   // 两个方向都不该由系统替顾客决定。
+  //
+  // ── 2026-10-05 第十二期：**按严重程度排序后再截断** ────────────
+  // 老板实测：一份两页的报告，食物 + 环境共 50 多项，老代码 `slice(0, 30)`
+  // 从尾巴上砍掉 20 多项 —— 而模型是按表格顺序输出的，**被砍掉的正好是
+  // 最后那几项，也就是报告标了「阳性 / 强阳性」的花生、海带**。
+  // 一份过敏报告最不能丢的就是最严重的那几条，所以：
+  //   ① 上限抬高到 MAX_ALLERGY_DRAFTS（真实报告 50~100 项都放得下）
+  //   ② 真要截断时，先按严重程度排序，让"弱阳性/没写"那些先被砍
   const fromDrafts = raw
     .map((item: any) => ({
       allergen: normalizeDraftText(item?.allergen, 40),
@@ -774,7 +808,12 @@ export function normalizeDrafts(
     // 对照项（组胺/阳性对照/阴性对照）不是过敏原：丢掉，
     // 否则它会被当成一条真过敏记进档案，从此被严格避开
     .filter((draft) => draft.allergen && !isControlAllergenName(draft.allergen))
-    .slice(0, MAX_KEYWORDS);
+    .sort(
+      (a, b) =>
+        ALLERGY_LEVEL_SEVERITY.indexOf(a.level) -
+        ALLERGY_LEVEL_SEVERITY.indexOf(b.level),
+    )
+    .slice(0, MAX_ALLERGY_DRAFTS);
 
   if (fromDrafts.length > 0) {
     return fromDrafts;
@@ -790,20 +829,50 @@ export function normalizeDrafts(
     }));
 }
 
-/** 报告结论等级：只认报告上写的那五种，其余一律 UNKNOWN（不猜） */
+/**
+ * 报告结论等级的中文/符号写法（2026-10-05 第十二期）。
+ *
+ * 提示词要求回英文枚举，但模型常常**照抄报告上的中文**（"强阳性""弱阳性"）。
+ * 老代码只认英文，于是这些等级被当成"没写"（UNKNOWN），
+ * 后端按 UNKNOWN 落成"可疑" —— 报告标了强阳性的那条就没被当成确诊。
+ * 这里把报告上常见的写法都认下来；**认不出来仍然是 UNKNOWN，不猜**。
+ */
+const ALLERGY_LEVEL_ALIASES: Record<string, string> = {
+  STRONG_POSITIVE: 'STRONG_POSITIVE',
+  强阳性: 'STRONG_POSITIVE',
+  '+++': 'STRONG_POSITIVE',
+  '++++': 'STRONG_POSITIVE',
+  POSITIVE: 'POSITIVE',
+  阳性: 'POSITIVE',
+  '++': 'POSITIVE',
+  '＋＋': 'POSITIVE',
+  '＋': 'POSITIVE',
+  WEAK_POSITIVE: 'WEAK_POSITIVE',
+  弱阳性: 'WEAK_POSITIVE',
+  '±': 'WEAK_POSITIVE',
+  '+-': 'WEAK_POSITIVE',
+  SUSPECTED: 'SUSPECTED',
+  疑似: 'SUSPECTED',
+  可疑: 'SUSPECTED',
+  NEGATIVE: 'NEGATIVE',
+  阴性: 'NEGATIVE',
+  '-': 'NEGATIVE',
+  '－': 'NEGATIVE',
+};
+
+/** 报告结论等级：只认报告上写的（含强阳性与中文写法），其余一律 UNKNOWN（不猜） */
 export function normalizeAllergyLevel(
   value: unknown,
-): 'POSITIVE' | 'WEAK_POSITIVE' | 'SUSPECTED' | 'NEGATIVE' | 'UNKNOWN' {
-  const key = String(value ?? '').trim().toUpperCase();
-  if (
-    key === 'POSITIVE' ||
-    key === 'WEAK_POSITIVE' ||
-    key === 'SUSPECTED' ||
-    key === 'NEGATIVE'
-  ) {
-    return key;
-  }
-  return 'UNKNOWN';
+): 'STRONG_POSITIVE' | 'POSITIVE' | 'WEAK_POSITIVE' | 'SUSPECTED' | 'NEGATIVE' | 'UNKNOWN' {
+  const raw = String(value ?? '').trim();
+  const mapped = ALLERGY_LEVEL_ALIASES[raw] ?? ALLERGY_LEVEL_ALIASES[raw.toUpperCase()];
+  return (mapped ?? 'UNKNOWN') as
+    | 'STRONG_POSITIVE'
+    | 'POSITIVE'
+    | 'WEAK_POSITIVE'
+    | 'SUSPECTED'
+    | 'NEGATIVE'
+    | 'UNKNOWN';
 }
 
 /**

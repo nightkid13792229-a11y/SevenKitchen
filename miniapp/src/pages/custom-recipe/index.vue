@@ -265,7 +265,24 @@
             <text class="advice-line__text">{{ bcsAdviceText }}</text>
           </view>
 
-          <button class="plan-entry-btn" @tap="goToWeightGoalPlan">{{ planEntryButtonText }}</button>
+          <!-- 体况在理想区间时**按钮直接置灰**（老板 2026-10-05 要求）。
+               原先按钮照旧可点，点进去只看到一句"当前体况属于理想区间，
+               不需要增减重计划" —— 白跑一趟。想坚持的家长走下面两个文字入口，
+               它们是唯一能越过系统建议的通道（后端也只在"系统本来没建议"时才听）。 -->
+          <button
+            v-if="!isIdealBcs"
+            class="plan-entry-btn"
+            @tap="goToWeightGoalPlan()"
+          >{{ planEntryButtonText }}</button>
+          <view v-else class="plan-entry-btn plan-entry-btn--disabled">
+            去制定体重管理计划
+          </view>
+
+          <view v-if="showManualPlanLinks" class="plan-manual">
+            <text class="plan-manual__hint">还是想给它定个目标？</text>
+            <text class="plan-manual__link" @tap="goToWeightGoalPlan('LOSS')">我还是想减重</text>
+            <text class="plan-manual__link" @tap="goToWeightGoalPlan('GAIN')">我还是想增重</text>
+          </view>
         </template>
 
         <!-- 答"不需要"：这一单按维持给，说明白免得家长以为系统还会自己改方向 -->
@@ -275,86 +292,125 @@
       </view>
     </view>
 
-    <!-- 第二步：过敏信息
+    <!-- 第二步：过敏信息（可选）
          这一块原来嵌在「需要健康管理」勾选里，现在常驻显示：
          过敏是定制食谱的硬信息（喂错可能出事），不该等顾客先勾一个框才出现。
-         疾病史不再在定制页录入 —— 健康管理页才是它的入口。 -->
+         疾病史不再在定制页录入 —— 健康管理页才是它的入口。
+
+         2026-10-05 老板要求：
+           · 标题加「（可选）」
+           · 先问一句「小家伙是否对部分食物过敏？」—— 不过敏的狗狗家长直接跳过，
+             不必面对一整块用不上的录入界面 -->
     <view class="section">
       <view class="section-title">
         <text class="step-number">2</text>
-        <text class="title-text">过敏信息</text>
+        <text class="title-text">过敏信息（可选）</text>
       </view>
 
       <view class="health-item">
-        <!-- "这些是从档案带出来的"：不说明的话，顾客会以为是上次在这页填的 -->
-        <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
+        <view class="goal-ask">
+          <text class="goal-ask__question">小家伙是否对部分食物过敏？</text>
+          <view class="goal-ask__options">
+            <text
+              class="goal-ask__option"
+              :class="{ 'goal-ask__option--on': hasFoodAllergy === true }"
+              @tap="answerFoodAllergy(true)"
+            >有过敏</text>
+            <text
+              class="goal-ask__option"
+              :class="{ 'goal-ask__option--on': hasFoodAllergy === false }"
+              @tap="answerFoodAllergy(false)"
+            >没有过敏</text>
+          </view>
+        </view>
 
-        <!-- 常见过敏原：点一下选中、再点一下取消（2026-10-04）。
-             原先只能"加"，加错了得跑到下面的列表里找那条点「删除」，
-             同一个标签要管两处。现在标签自己就是开关。
+        <template v-if="hasFoodAllergy === true">
+          <!-- "这些是从档案带出来的"：不说明的话，顾客会以为是上次在这页填的 -->
+          <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
 
-             2026-10-05 老板要求：选中态**不加 ✓**，靠高亮表示；
-             并且选中的不再在下方重复列一遍 —— 标签自己就是状态的唯一展示。 -->
-        <view class="allergen-quick-add">
-          <view class="tag-list">
+          <!-- 常见过敏原：点一下选中、再点一下取消（2026-10-04）。
+               原先只能"加"，加错了得跑到下面的列表里找那条点「删除」，
+               同一个标签要管两处。现在标签自己就是开关。
+
+               2026-10-05 老板要求：选中态**不加 ✓**，靠高亮表示；
+               并且选中的不再在下方重复列一遍 —— 标签自己就是状态的唯一展示。 -->
+          <view class="allergen-quick-add">
+            <view class="tag-list">
+              <view
+                v-for="name in commonAllergens"
+                :key="name"
+                class="tag-item allergen-quick-tag"
+                :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
+                @tap="toggleAllergenByName(name)"
+              >{{ name }}</view>
+            </view>
+          </view>
+
+          <!-- 手动添加入口（2026-10-05 老板要求挪到这里）：
+               原先它在最上面一行，标签还没出现就先看到「+ 添加」，
+               顺序变成"先手输、再快选"；实际动线是先看快选里有没有，
+               没有才需要手打。所以按钮夹在快选标签与手动清单之间。 -->
+          <view class="allergen-add-row">
+            <text class="add-btn" @tap="addAllergen">+ 添加</text>
+          </view>
+
+          <!-- 下方只列**手动录入**的过敏原（快选里没有的那些）。
+               它们没有对应的标签可以点掉，必须留一个能看到、能删的地方；
+               快选项不在这里重复出现。 -->
+          <view v-if="customAllergens.length > 0" class="tag-list">
             <view
-              v-for="name in commonAllergens"
-              :key="name"
-              class="tag-item allergen-quick-tag"
-              :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
-              @tap="toggleAllergenByName(name)"
-            >{{ name }}</view>
+              v-for="(allergen, index) in customAllergens"
+              :key="allergen"
+              class="tag-item editable"
+            >
+              <text>{{allergen}}</text>
+              <text class="remove-btn" @tap.stop="removeCustomAllergen(allergen)">删除</text>
+            </view>
           </view>
-        </view>
 
-        <!-- 手动添加入口（2026-10-05 老板要求挪到这里）：
-             原先它在最上面一行，标签还没出现就先看到「+ 添加」，
-             顺序变成"先手输、再快选"；实际动线是先看快选里有没有，
-             没有才需要手打。所以按钮夹在快选标签与手动清单之间。 -->
-        <view class="allergen-add-row">
-          <text class="add-btn" @tap="addAllergen">+ 添加</text>
-        </view>
+          <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
+               老板："将过敏源的记录放到定制食谱流程中。"
+               :key 绑狗 ID：换狗时必须整个重挂载，否则"上一只狗扫描出来的
+               候选过敏原"会留在新狗的单子上等着被确认。 -->
+          <AllergyScanBlock
+            v-if="formData.dogId"
+            :key="formData.dogId"
+            :dog-id="formData.dogId"
+            @scanned="onAllergensScanned"
+          />
 
-        <!-- 下方只列**手动录入**的过敏原（快选里没有的那些）。
-             它们没有对应的标签可以点掉，必须留一个能看到、能删的地方；
-             快选项不在这里重复出现。 -->
-        <view v-if="customAllergens.length > 0" class="tag-list">
-          <view
-            v-for="(allergen, index) in customAllergens"
-            :key="allergen"
-            class="tag-item editable"
-          >
-            <text>{{allergen}}</text>
-            <text class="remove-btn" @tap.stop="removeCustomAllergen(allergen)">删除</text>
-          </view>
-        </view>
-
-        <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
-             老板："将过敏源的记录放到定制食谱流程中。"
-             :key 绑狗 ID：换狗时必须整个重挂载，否则"上一只狗扫描出来的
-             候选过敏原"会留在新狗的单子上等着被确认。 -->
-        <AllergyScanBlock
-          v-if="formData.dogId"
-          :key="formData.dogId"
-          :dog-id="formData.dogId"
-          @scanned="onAllergensScanned"
-        />
-
-        <!-- 已传过的检测报告：家长随时翻得出来（原件不再"读完就丢"） -->
-        <view v-if="allergyReports.length > 0" class="allergy-reports">
-          <text class="allergy-reports__title">已上传的检测报告（{{ allergyReports.length }} 份）</text>
-          <view
-            v-for="report in allergyReports"
-            :key="report.id"
-            class="allergy-reports__item"
-            @tap="previewAllergyReport(report)"
-          >
-            <text class="allergy-reports__name">
-              {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+          <!-- 已传过的检测报告：家长随时翻得出来（原件不再"读完就丢"）。
+               2026-10-05 老板反馈"传了两份只显示一份"：一次选的多张照片
+               是**同一份报告的多页**，存成一份、多张附件 —— 所以这里把
+               份数与张数都写出来，不然家长会以为另一张丢了。 -->
+          <view v-if="allergyReports.length > 0" class="allergy-reports">
+            <text class="allergy-reports__title">
+              已上传的检测报告（{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张）
             </text>
-            <text class="allergy-reports__action">查看</text>
+            <text class="allergy-reports__hint">同一份报告的多页照片会合并成一份，点「查看」可以翻页</text>
+            <view
+              v-for="report in allergyReports"
+              :key="report.id"
+              class="allergy-reports__item"
+              @tap="previewAllergyReport(report)"
+            >
+              <view class="allergy-reports__main">
+                <text class="allergy-reports__name">
+                  {{ report.testDate || '未填日期' }} · {{ reportTestMethodLabel(report.testMethod) }}
+                </text>
+                <text class="allergy-reports__meta">
+                  {{ allergyReportPageText(report) }}
+                </text>
+              </view>
+              <text class="allergy-reports__action">查看</text>
+            </view>
           </view>
-        </view>
+        </template>
+
+        <!-- 答"没有过敏"：说清这一单会怎么走，免得家长以为档案里的记录也没了 -->
+        <text v-else-if="hasFoodAllergy === false" class="goal-ask__note">
+          {{ noFoodAllergyNote }}
+        </text>
       </view>
     </view>
 
@@ -541,6 +597,57 @@ function answerWeightManagement(needed: boolean) {
 }
 
 /**
+ * 第二步先问的那一句：小家伙是否对部分食物过敏？（2026-10-05 老板要求）
+ *
+ * 三态：null = 还没答（按钮不可提交）、true = 有过敏、false = 没有过敏。
+ * 对食物不过敏的狗狗（多数）家长答一句"没有"就能跳过整块录入界面 ——
+ * 原来一进来就是快选标签 + 手输 + 上传报告，看着像"必须填"。
+ */
+const hasFoodAllergy = ref<boolean | null>(null);
+
+/** 答题。答"有"展开录入界面；答"没有"只留一句说明 */
+function answerFoodAllergy(hasAllergy: boolean) {
+  hasFoodAllergy.value = hasAllergy;
+}
+
+/**
+ * 答"没有过敏"时的那句话。
+ *
+ * 必须把"仍会避开的那些"说清楚：答"没有"只是**这一单不再新增**，
+ * 档案里已经记着的（以及从档案带出来预填的）仍会被食谱避开。
+ * 不说的话，家长会以为答一句"没有"就把以前查出来的过敏清掉了。
+ */
+const noFoodAllergyNote = computed(() => {
+  const list = formData.value.allergies.filter(Boolean);
+  if (list.length === 0) {
+    return '好的，这一单不填过敏信息；它按常规食材来。';
+  }
+  return `好的，这一单不再新增过敏信息；下面这些仍会避开：${list.join('、')}。`;
+});
+
+/**
+ * 已上传报告的"张数"。
+ *
+ * 一次选的多张照片属于**同一份报告的多页**（存成一份、多张附件），
+ * 所以只报份数会让家长以为另一张丢了（老板 2026-10-05 的反馈）。
+ */
+const allergyReportPageCount = computed(() =>
+  allergyReports.value.reduce(
+    (total, report) =>
+      total + (Array.isArray(report.attachments) ? report.attachments.length : 0),
+    0,
+  ),
+);
+
+function allergyReportPageText(report: Record<string, any>): string {
+  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+  const results = Number(report.resultCount || 0);
+  const parts = [`${pages} 张照片`];
+  if (results > 0) parts.push(`${results} 项结论`);
+  return parts.join(' · ');
+}
+
+/**
  * 已有进行中的计划时不再问这一句（顾客本来就在管理体重），
  * 计划入口与建议直接展开，方向仍以计划为准。
  */
@@ -691,6 +798,29 @@ const planEntryButtonText = computed(() =>
 );
 
 /**
+ * 体况是不是落在理想区间（4-5）。
+ *
+ * 后端 resolveSuggestedPlan 在 BCS 4-5 时**不给**任何增减重建议
+ * （FEDIAF：犬应维持 BCS 4-5），定制页那个按钮点进去只会看到
+ * "当前体况属于理想区间，不需要增减重计划"。
+ * 老板 2026-10-05 要求：这种情况按钮直接置灰，不再让顾客白跑一趟。
+ */
+const isIdealBcs = computed(() => {
+  const bcs = Number(selectedDog.value?.bcsScore);
+  if (!Number.isFinite(bcs) || bcs <= 0) return false;
+  return bcs > BCS_GAIN_THRESHOLD && bcs < BCS_LOSS_THRESHOLD;
+});
+
+/**
+ * 「我还是想减重 / 增重」这两个文字入口什么时候出现。
+ *
+ * 只在"体况理想 + 没有进行中的计划"时给：
+ * 有计划时按钮本身就是「查看体重管理计划」（点进去是改目标），
+ * 不需要再来一条绕开系统建议的路。
+ */
+const showManualPlanLinks = computed(() => isIdealBcs.value && !hasOpenPlan.value);
+
+/**
  * 体重管理计划页（已存在，参数名就是它 onLoad 里读的 dogId）。
  *
  * mode 必须跟着"有没有计划"走：
@@ -699,8 +829,12 @@ const planEntryButtonText = computed(() =>
  * 为什么不一律用 create：有计划的狗再进 create，后端 createPlan 会直接抛
  * 「这只狗狗已经有一个进行中的计划了」，顾客点了按钮只看到一句报错。
  * 读计划失败时按"没有计划"处理，与 resolveTargetGoal 的兜底保持一致。
+ *
+ * `direction`（2026-10-05 老板要求）：体况理想时系统本来不建议增减重，
+ * 顾客点「我还是想减重 / 我还是想增重」才会带上它 —— 计划页据此向后端要
+ * 一份"按顾客坚持的方向"算的建议，而不是撞上"不需要计划"那句空态。
  */
-const goToWeightGoalPlan = () => {
+const goToWeightGoalPlan = (direction?: 'LOSS' | 'GAIN') => {
   const dogId = formData.value.dogId;
   if (!dogId) {
     uni.showToast({ title: '请先选择要定制的狗狗', icon: 'none' });
@@ -709,6 +843,9 @@ const goToWeightGoalPlan = () => {
   const query = [`dogId=${encodeURIComponent(dogId)}`];
   if (hasOpenPlan.value) {
     query.push('mode=adjust');
+  }
+  if (direction) {
+    query.push(`direction=${direction}`);
   }
   uni.navigateTo({
     url: `/pages/weight-goal-plan/index?${query.join('&')}`,
@@ -971,8 +1108,10 @@ const confirmGate = async () => {
 const canSubmit = computed(() => {
   if (!formData.value.dogId || !formData.value.targetGoal) return false;
   if (gateBlocked.value) return false;
-  // 体重管理那一问必须答（有计划时不用问，等价于已答）
+  // 第一步那一问必须答（有计划时不用问，等价于已答）
   if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) return false;
+  // 第二步那一问必须答：答"没有"才能跳过录入界面，所以不能默认成没答
+  if (hasFoodAllergy.value === null) return false;
   return true;
 });
 
@@ -1358,6 +1497,9 @@ const loadDogArchiveInfo = async (dogId: string) => {
 
   // ① 先清空上一只狗带出来的一切（含扫描出来的候选过敏原所在的报告列表）
   formData.value.allergies = [];
+  // "是否对食物过敏"这一问也要跟着换狗重置：上一只狗答过的答案
+  // 不能替新狗作答（答"没有"会把新狗的录入界面藏起来）
+  hasFoodAllergy.value = null;
   // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
   formData.value.preferredIngredients = [];
   formData.value.dislikedIngredients = [];
@@ -1405,6 +1547,11 @@ const loadDogArchiveInfo = async (dogId: string) => {
     formData.value.allergies = Array.isArray(data.allergies)
       ? [...data.allergies]
       : [];
+    // 档案里已经有过敏记录 → 这一问默认答"有过敏"（本来就是事实，
+    // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
+    if (formData.value.allergies.length > 0) {
+      hasFoodAllergy.value = true;
+    }
     // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
     syncGoalWithPlan();
     // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
@@ -1699,6 +1846,8 @@ const submitOrder = async () => {
     } else if (!showWeightPlanEntry.value && wantsWeightManagement.value === null) {
       // 第一步那一问没答：按钮灰着要说清差哪一步
       title = '请先回答：是否需要体重管理';
+    } else if (hasFoodAllergy.value === null) {
+      title = '请先回答：小家伙是否对部分食物过敏';
     }
 
     uni.showToast({ title, icon: 'none' });
@@ -2212,6 +2361,35 @@ const getActivityLabel = (level: string) => {
   border: none;
 }
 
+/* 体况理想时的置灰态（老板 2026-10-05 要求）：
+   不给点，但**留着**——顾客看得见"这里本来有个入口"，
+   想坚持就走下面的两个文字入口，而不是以为功能坏了 */
+.plan-entry-btn--disabled {
+  text-align: center;
+  color: rgba(246, 239, 224, 0.55);
+  background: linear-gradient(135deg, #6b7a71 0%, #5c6a62 100%);
+}
+
+/* 「我还是想减重 / 我还是想增重」：绕开系统建议的通道，做成一行的文字链 */
+.plan-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 16rpx;
+}
+
+.plan-manual__hint {
+  font-size: 23rpx;
+  color: var(--sk-ink-3, #968f6d);
+}
+
+.plan-manual__link {
+  font-size: 24rpx;
+  color: var(--sk-gold, #b08d4f);
+  border-bottom: 1rpx solid rgba(176, 141, 79, 0.5);
+}
+
 /* ===== 体重管理那一问（2026-10-05 老板要求先问一句） ===== */
 .goal-ask {
   padding: 20rpx 22rpx;
@@ -2417,6 +2595,27 @@ const getActivityLabel = (level: string) => {
 .allergy-reports__title {
   display: block;
   font-size: 24rpx;
+  color: #8a7a63;
+}
+
+/* "多页照片合并成一份"的说明：老板反馈"传了两份只显示一份"，
+   把规则写出来，家长才不会以为另一张丢了 */
+.allergy-reports__hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #a09a7d;
+}
+
+.allergy-reports__main {
+  min-width: 0;
+}
+
+.allergy-reports__meta {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
   color: #8a7a63;
 }
 

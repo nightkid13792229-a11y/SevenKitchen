@@ -294,6 +294,13 @@ import {
 
 const dogId = ref('')
 const mode = ref<'create' | 'adjust'>('create')
+/**
+ * 顾客坚持要的方向（2026-10-05 老板要求）。
+ *
+ * 只在体况理想、系统本来不给建议时才用得上 —— 定制页的
+ * 「我还是想减重 / 我还是想增重」会把它带进来。
+ */
+const requestedDirection = ref<'LOSS' | 'GAIN' | ''>('')
 const loading = ref(false)
 const submitting = ref(false)
 
@@ -398,6 +405,9 @@ const emptyReason = ref('当前体况属于理想区间，不需要增减重计�
 onLoad(async (options: any) => {
   dogId.value = options?.dogId || ''
   mode.value = options?.mode === 'adjust' ? 'adjust' : 'create'
+  // 顾客坚持的方向：只认 LOSS / GAIN，别的当没传（不猜）
+  const direction = String(options?.direction || '').toUpperCase()
+  requestedDirection.value = direction === 'LOSS' || direction === 'GAIN' ? direction : ''
   if (!dogId.value) {
     uni.showToast({ title: '缺少狗狗信息', icon: 'none' })
     return
@@ -417,7 +427,10 @@ onLoad(async (options: any) => {
 })
 
 async function loadSuggestion() {
-  const res = await weightGoalPlanApi.suggestion(dogId.value)
+  const res = await weightGoalPlanApi.suggestion(
+    dogId.value,
+    requestedDirection.value || undefined,
+  )
   if (res.code !== 0) {
     uni.showToast({ title: res.message || '读取失败', icon: 'none' })
     return

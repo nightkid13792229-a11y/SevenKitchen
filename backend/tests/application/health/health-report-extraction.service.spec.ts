@@ -223,13 +223,79 @@ describe('HealthReportExtractionService', () => {
         ],
       });
 
+      const byName = Object.fromEntries(
+        drafts.map((draft) => [draft.allergen, draft]),
+      );
       expect(drafts).toHaveLength(4);
-      expect(drafts[0]).toMatchObject({ allergen: '鸡肉', level: 'POSITIVE', group: 'FOOD' });
+      expect(byName['鸡肉']).toMatchObject({ level: 'POSITIVE', group: 'FOOD' });
       // 模型直接回中文"强阳性"也要认（不能因为没照抄枚举就丢等级）
-      expect(drafts[1].level).toBe('UNKNOWN');
-      expect(drafts[2]).toMatchObject({ allergen: '粉尘螨', group: 'ENVIRONMENT' });
+      expect(byName['小麦'].level).toBe('STRONG_POSITIVE');
+      expect(byName['粉尘螨']).toMatchObject({ group: 'ENVIRONMENT' });
       // 报告没写分组 → 按名字认不出环境项的，留给家长自己看（不藏）
-      expect(drafts[3]).toMatchObject({ allergen: '玉米', group: 'UNKNOWN' });
+      expect(byName['玉米']).toMatchObject({ group: 'UNKNOWN' });
+    });
+
+    it('报告上的中文/符号写法都认（认不出来才是 UNKNOWN）', () => {
+      const levels = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: [
+          { allergen: '花生', level: '强阳性' },
+          { allergen: '海带', level: '+++' },
+          { allergen: '鸡蛋', level: '阳性' },
+          { allergen: '小麦', level: '弱阳性' },
+          { allergen: '大米', level: '±' },
+          { allergen: '牛肉', level: '可疑' },
+          { allergen: '牛奶', level: '阴性' },
+          { allergen: '鸭肉', level: '不知道' },
+        ],
+      }).map((draft) => `${draft.allergen}:${draft.level}`);
+
+      expect(levels).toEqual([
+        '花生:STRONG_POSITIVE',
+        '海带:STRONG_POSITIVE',
+        '鸡蛋:POSITIVE',
+        '小麦:WEAK_POSITIVE',
+        '大米:WEAK_POSITIVE',
+        '牛肉:SUSPECTED',
+        '牛奶:NEGATIVE',
+        '鸭肉:UNKNOWN',
+      ]);
+    });
+
+    it('截断时先砍"没写结论"的：报告标了阳性/强阳性的必须留住', () => {
+      /**
+       * 老板实测（2026-10-05）：一份两页报告 50 多项，老代码 `slice(0, 30)`
+       * 从尾巴上砍掉 20 多项，而被砍掉的正好是模型最后输出的、
+       * 报告标了「阳性 / 强阳性」的花生与海带 —— 最不能丢的偏偏先丢。
+       */
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: [
+          ...Array.from({ length: 60 }, (_, index) => ({
+            allergen: `没写结论${index}`,
+            level: '',
+            group: 'FOOD',
+          })),
+          { allergen: '花生', level: '强阳性', group: 'FOOD' },
+          { allergen: '海带', level: '阳性', group: 'FOOD' },
+        ],
+      });
+
+      expect(drafts).toHaveLength(62);
+      expect(drafts.slice(0, 2).map((draft) => draft.allergen)).toEqual([
+        '花生',
+        '海带',
+      ]);
+    });
+
+    it('条数上限放宽到 120（真实报告 50~100 项都放得下）', () => {
+      const drafts = normalizeDrafts('ALLERGY_REPORT', {
+        drafts: Array.from({ length: 130 }, (_, index) => ({
+          allergen: `项目${index}`,
+          level: 'WEAK_POSITIVE',
+          group: 'FOOD',
+        })),
+      });
+
+      expect(drafts).toHaveLength(120);
     });
 
     it('报告没写分组时按名字认出环境项（也认中文分组别名）', () => {

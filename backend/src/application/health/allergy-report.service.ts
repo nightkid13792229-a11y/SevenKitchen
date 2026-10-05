@@ -36,6 +36,7 @@ import { AllergenVocabularyService } from './allergen-vocabulary.service';
 
 /** 报告结论的等级，照抄报告原文的语义，不做医学判断 */
 export type AllergyResultLevel =
+  | 'STRONG_POSITIVE'
   | 'POSITIVE'
   | 'WEAK_POSITIVE'
   | 'SUSPECTED'
@@ -66,6 +67,7 @@ const TEST_METHODS = new Set([
 ]);
 
 const LEVELS = new Set([
+  'STRONG_POSITIVE',
   'POSITIVE',
   'WEAK_POSITIVE',
   'SUSPECTED',
@@ -78,16 +80,21 @@ const LEVELS = new Set([
  *
  * 这是本次改造里**唯一一处把报告结论翻译成系统判断**的地方，
  * 规则保守且可解释：
- *   · 明确阳性   → 确诊（会被食谱彻底避开）
+ *   · 明确阳性 / **强阳性** → 确诊（会被食谱彻底避开）
  *   · 弱阳性/疑似 → 可疑（保留但重罚并标注）
  *   · 阴性       → **不生成过敏记录**（阴性本来就不该记成"过敏"）
  *   · 没写等级   → 可疑（不知道就当可疑，宁可多避）
+ *
+ * 2026-10-05：强阳性与阳性在可信度上是同一档（都是确诊），
+ * 分开只是为了给家长看清楚哪几条最要紧。
  */
 export function mapLevelToCertainty(
   level: string | null | undefined,
 ): 'CONFIRMED' | 'SUSPECTED' {
   const key = String(level || '').toUpperCase();
-  return key === 'POSITIVE' ? 'CONFIRMED' : 'SUSPECTED';
+  return key === 'POSITIVE' || key === 'STRONG_POSITIVE'
+    ? 'CONFIRMED'
+    : 'SUSPECTED';
 }
 
 /** 阴性结论不该被记成"过敏" —— 它恰恰说明不过敏 */

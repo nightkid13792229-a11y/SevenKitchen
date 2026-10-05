@@ -1264,3 +1264,91 @@ describe('单联苗顶不上 + 多联苗别重复（老板四问的收尾）', (
     expect(product!.brand).toBe('勃林格')
   })
 })
+
+/**
+ * 记录怎么对上步骤：**按针数**，不是"窗口里有没有"（2026-10-05 改）。
+ *
+ * 起因是老板看着截图问："这个系统的疫苗推荐流程我还没有看明白。"
+ * 截图里 18 周打了卫佳捌（含钩端），系统却认为**一针钩端都没打过**，
+ * 让他再打两针 —— 因为 18 周掉在钩端那两个窗口（8~12、12~16 周）之外。
+ *
+ * 老办法判的是"有没有在**对的时间**打"，而系列苗真正要数的是**打了几针**。
+ */
+describe('按针数分配记录（老板截图引出的改法）', () => {
+  function rec2(id: string, name: string, date: string): VaccineRecordLike {
+    return { id, vaccineName: name, vaccinationDate: date, nextDueDate: null };
+  }
+
+  const scenario = () =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: [
+        rec2('r1', '卫佳伍', '2026-02-16'),
+        rec2('r2', '卫佳伍', '2026-03-16'),
+        rec2('r3', '卫佳伍', '2026-04-13'),
+        // 18 周那一针是卫佳捌（核心 + 钩端）—— 它会掉在钩端窗口之外
+        rec2('r4', '卫佳捌', '2026-05-11'),
+      ],
+      today: new Date('2026-06-01T00:00:00'),
+    })
+
+  it('🔴 窗口外的记录照样算数 —— 18 周那针卫佳捌里的钩端就是第 1 针', () => {
+    const plan = scenario()
+
+    const lepto = plan.steps.filter((step) => step.kind === 'lepto')
+    const first = lepto.find((step) => step.key === 'lepto-primary-1')
+    expect(first).toBeDefined()
+    // 以前这里是 OVERDUE（18 周掉在 8~12、12~16 两个窗口之外，一条没算上）
+    expect(first!.status).toBe('DONE')
+    expect(first!.matchedRecordDate).toBe('2026-05-11')
+
+    // 只需要再补**第 2 针**，不是两针都重来
+    const second = lepto.find((step) => step.key === 'lepto-primary-2')
+    expect(second!.status).toBe('OVERDUE')
+  })
+
+  it('一条记录只能顶一步 —— 一针不能算两次', () => {
+    const plan = scenario()
+    const leptoDone = plan.steps.filter(
+      (step) => step.kind === 'lepto' && step.status === 'DONE',
+    )
+    // 只打了 1 针钩端，就只能有 1 步是 DONE
+    expect(leptoDone.length).toBe(1)
+  })
+
+  it('组合苗可以同时顶**不同类**的各一步（卫佳捌 = 核心那步 + 钩端那步）', () => {
+    const plan = scenario()
+
+    const coreFourth = plan.steps.find((step) => step.key === 'core-puppy-4')
+    const leptoFirst = plan.steps.find((step) => step.key === 'lepto-primary-1')
+
+    expect(coreFourth!.matchedRecordDate).toBe('2026-05-11')
+    expect(leptoFirst!.matchedRecordDate).toBe('2026-05-11')
+  })
+
+  it('下一步给的是"补钩端第 2 针"，并且只推钩端单苗', () => {
+    const plan = scenario()
+
+    expect(plan.nextStep).toBeDefined()
+    expect(plan.nextStep!.key).toBe('lepto-primary-2')
+    // 刚打过核心，这一步不该再推多联苗
+    expect(plan.nextStep!.commonProducts).toContain('宠必威乐必妥')
+    expect(plan.nextStep!.commonProducts).not.toContain('卫佳捌')
+  })
+
+  it('打得太早的记录仍会被单独提示（窗口没白留）', () => {
+    // 窗口不再参与"算不算完成"，但"打太早"这件事还是要在冲突里说
+    const birthday = '2026-01-05'
+    const tooEarly = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday,
+      // 2 周龄就打核心苗 —— 早于 4 周龄红线
+      records: [rec2('r1', '卫佳伍', '2026-01-19')],
+      today: new Date('2026-06-01T00:00:00'),
+    })
+
+    expect(tooEarly.conflicts.length).toBeGreaterThan(0)
+    expect(tooEarly.conflicts.some((item) => item.reason.includes('4 周龄之前'))).toBe(true)
+  })
+})

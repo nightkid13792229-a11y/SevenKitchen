@@ -73,7 +73,11 @@ describe('疫苗管理', () => {
     const source = readComponent()
 
     // 老板："承认认不出这只疫苗，转为让用户手动填写。"
-    expect(source).toContain('这支苗系统没认出来')
+    expect(source).toContain('这支苗没匹配到')
+    // 但**必须先把产品库和 AI 都试过**才算认不出
+    expect(source).toContain('产品库和 AI 都没认出它')
+    // 认不出时展开分类选择器
+    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
     // 认不出来时才要求选 —— 否则这一条存不下去
     expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
   })
@@ -103,19 +107,20 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('presetNames')
   })
 
-  it('输入疫苗名称后**自动判归类**，不用顾客手选（2026-10-05）', () => {
+  it('名称写完点「确认」才匹配产品与分类（2026-10-05 老板的规格）', () => {
     const source = readComponent()
 
-    // 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
-    // 分类逻辑只有后端一份，所以打字停顿一下问后端。
+    // 老板："顾客手动的输入产品名称。**点击确认之后**，再来完成 AI 的匹配。
+    // 包括产品匹配和分类匹配。"
+    // 不边打字边判 —— 一来一回问后端会卡手，而且顾客往往写到一半就被判错。
+    expect(source).toContain('function confirmVaccineName')
+    expect(source).toContain('@tap="confirmVaccineName(index)"')
     expect(source).toContain('dogApi.classifyVaccineName')
-    expect(source).toContain('function scheduleClassify')
-    expect(source).toContain('CLASSIFY_DELAY_MS')
-    // 名字一变就重新判（顾客之前手点的作废 —— 名字都换了）
-    expect(source).toContain('draft.kindsManual = false')
-    expect(source).toContain('scheduleClassify(index)')
-    // 顾客自己点过归类就不再覆盖他
-    expect(source).toContain('if (draft.kindsManual) return')
+    expect(source).not.toContain('scheduleClassify')
+    expect(source).not.toContain('CLASSIFY_DELAY_MS')
+    // 匹配期间要有反馈
+    expect(source).toContain('matchingIndex')
+    expect(source).toContain('匹配中…')
   })
 
   it('扫描出来的记录缺东西时**必须说出来**，不许静默跳过', () => {

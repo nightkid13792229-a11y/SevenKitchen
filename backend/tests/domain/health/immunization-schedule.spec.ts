@@ -1,6 +1,9 @@
 import { buildVaccineCatalog } from '../../../src/domain/health/vaccine-catalog';
 import {
   ALL_VACCINE_KINDS,
+  VACCINE_KIND_CYCLE_NOTES,
+  VACCINE_KIND_LABELS,
+  VACCINE_KINDS,
   CORE_ADULT_BOOSTER,
   addWeeks,
   CORE_PUPPY_SERIES,
@@ -16,6 +19,7 @@ import {
   weeksBetween,
   type VaccineRecordLike,
 } from '../../../src/domain/health/immunization-schedule';
+import { VACCINE_PRODUCTS } from '../../../src/domain/health/vaccine-products';
 
 /**
  * 疫苗计划（2026-10-01，第四期）。
@@ -501,7 +505,9 @@ describe('疫苗计划', () => {
     it('🔴 商标符号 ® 也认得出 —— 老板记录里就是「宠必威® 幼犬保」', () => {
       // 实测翻车：本子上印「宠必威® 幼犬保」，库里存「宠必威幼犬保」，
       // 中间一个 ® 就让 includes 匹配不上，三条记录全判不出来。
-      expect(classifyVaccineKinds('宠必威® 幼犬保')).toEqual(['core']);
+      // 幼犬保是「早期核心疫苗」，单独一类 —— 它 4 周龄起 1 针，
+      // 跟普通核心苗（6~8 周起 4 针 + 三年一次）周期完全不同
+      expect(classifyVaccineKinds('宠必威® 幼犬保')).toEqual(['core_early']);
       expect(classifyVaccineKinds('宠必威®锐必威')).toEqual(['rabies']);
       expect(classifyVaccineKinds('卫佳®伍')).toEqual(['core']);
       expect(classifyVaccineKinds('卫佳®捌').sort()).toEqual(['core', 'lepto']);
@@ -859,10 +865,12 @@ describe('疫苗计划', () => {
  * 产品库进口国产都能选，但只有进口能进"常见的有…"那一行。
  */
 describe('疫苗目录（名称库 + 归类闭集）', () => {
-  it('归类闭集就是四类，other 不参与计划', () => {
+  it('分类闭集是五类（按接种周期分），other 不参与计划', () => {
     const catalog = buildVaccineCatalog();
 
+    // 五类 —— 分类是**按接种周期/窗口**分的，不是按联数
     expect(catalog.kinds.map((k) => k.value)).toEqual([
+      'core_early',
       'core',
       'rabies',
       'lepto',
@@ -913,5 +921,81 @@ describe('疫苗目录（名称库 + 归类闭集）', () => {
         expect(allowed.has(kind)).toBe(true)
       }
     }
+  })
+})
+
+/**
+ * 产品库 / 分类 / 周期的三项审计（2026-10-05 老板要求）。
+ *
+ * 老板原话：
+ *   "第一要确认产品库是否完整。第二要确认每一个产品是否有明确的分类。
+ *    第三一个要确认每一个分类是否有明确的接种周期或者是接种窗口。"
+ *
+ * 这三条任何一条破了，都会表现成同一个症状：某个疫苗"排不进计划"。
+ * 所以钉成测试，改坏了立刻知道。
+ */
+describe('产品库 / 分类 / 周期 三项审计', () => {
+  it('① 产品库非空，且进口国产都在', () => {
+    const imported = VACCINE_PRODUCTS.filter((p) => p.recommendable !== false)
+    const domestic = VACCINE_PRODUCTS.filter((p) => p.recommendable === false)
+
+    // 进口要够撑起"常见的有…"那一行（每类最多 3 个）
+    expect(imported.length).toBeGreaterThanOrEqual(10)
+    // 国产苗在本地医院更常见，产品库里必须有得选
+    expect(domestic.length).toBeGreaterThanOrEqual(20)
+  })
+
+  it('② 每一个产品都有明确分类，而且分类都在闭集里', () => {
+    const allowed = new Set<string>(VACCINE_KINDS)
+
+    for (const product of VACCINE_PRODUCTS) {
+      expect({ name: product.name, kinds: product.kinds }).toEqual({
+        name: product.name,
+        kinds: expect.any(Array),
+      })
+      expect(product.kinds.length).toBeGreaterThan(0)
+      for (const kind of product.kinds) {
+        expect(`${product.name}:${kind}`).toBe(
+          allowed.has(kind) ? `${product.name}:${kind}` : `${product.name}:非法分类`,
+        )
+      }
+    }
+  })
+
+  it('③ 每一个分类都有明确的接种周期说明 —— 读不出周期就不该存在', () => {
+    for (const kind of VACCINE_KINDS) {
+      const note = VACCINE_KIND_CYCLE_NOTES[kind]
+      expect(`${kind}:${Boolean(note && note.length > 8)}`).toBe(`${kind}:true`)
+      expect(VACCINE_KIND_LABELS[kind]).toBeTruthy()
+    }
+  })
+
+  it('🔴 早期核心疫苗（4 周龄起）必须是**单独一类**，不能混进核心苗', () => {
+    // 老板特意点出来的："还有一些特殊的产品，比如在 4 周龄就可以开始注射的
+    // 早期疫苗，举例，宠必威的幼犬保。这些特殊的疫苗，我们也需要进行单独的分类，
+    // 不然的话，没有办法确认它们的接种周期，进而就没有办法在计划中排期。"
+    const early = VACCINE_PRODUCTS.find((p) => p.name === '宠必威幼犬保')
+    expect(early).toBeDefined()
+    expect(early!.kinds).toEqual(['core_early'])
+    expect(early!.minWeeks).toBe(4)
+
+    // 普通核心苗不能被误判成早期苗
+    expect(VACCINE_PRODUCTS.find((p) => p.name === '卫佳伍')!.kinds).toEqual(['core'])
+  })
+
+  it('早期核心疫苗的窗口在 4 周龄 —— 不是核心苗那套 6~8 周', () => {
+    const birthday = new Date('2026-01-05T00:00:00');
+    const all = buildImmunizationSchedule(birthday, { kinds: ALL_VACCINE_KINDS })
+
+    const early = all.filter((item) => item.kind === 'core_early')
+    expect(early.length).toBe(1) // 只排 1 针，不按周期重复
+
+    // 4 周龄 = 出生 + 28 天
+    const expected = new Date(birthday.getTime() + 28 * 86400000)
+    expect(early[0].windowStart.getTime()).toBe(expected.getTime())
+
+    // 而且它**不能**顶替核心苗首免：core 的那几针照旧从 6 周起
+    const core = all.filter((item) => item.kind === 'core')
+    expect(core.length).toBeGreaterThan(0)
   })
 })

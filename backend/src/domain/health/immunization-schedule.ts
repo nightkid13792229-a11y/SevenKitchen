@@ -41,7 +41,32 @@ import {
  * 现在细分有了依据 —— 每种疫苗的复种间隔来自**它自己的说明书**，
  * 见下面 `NON_CORE_SCHEDULES`。
  */
-export type VaccineKind = 'core' | 'rabies' | 'lepto' | 'other';
+export type VaccineKind = 'core_early' | 'core' | 'rabies' | 'lepto' | 'other';
+
+/**
+ * ⚠️ 这个类型不是"疫苗名字的分类"，是**接种周期/窗口的分类**（2026-10-05 老板定的）。
+ *
+ * 老板原话：
+ *   "分类不需要犬二联、犬四联、犬六联这种类型的分类，也就是产品名称这个字段。
+ *    只需要匹配到它是属于哪一种疫苗？……这里的这个分类，严格来讲是指
+ *    接种周期或者接种窗口的分类。……所以这里的分类只是为了知道录入的这个
+ *    疫苗产品，它如何参与到疫苗接种计划的。"
+ *
+ * 所以命名一律按**周期**来，不按联数：
+ *   core_early  早期核心疫苗 —— **4 周龄起 1 针**（抢跑一针，之后仍走首免系列）
+ *   core        核心疫苗     —— 幼犬 6~8 周起至 ≥16 周（4 针）+ 26 周补强 + **每 3 年**
+ *   rabies      狂犬疫苗     —— 12 周起，**每年**
+ *   lepto       钩端螺旋体   —— 8 周起 2 针，**每年**
+ *   other       其他         —— 我们没有接种程序（犬窝咳、冠状病毒、驱虫药…），只记录
+ *
+ * ⚠️ `core_early` 是老板 2026-10-05 特意点出来的：
+ *   "还有一些特殊的产品，比如说犬瘟细小两种疫苗，接种周期比较早的，
+ *    在 4 周龄就可以开始注射的早期疫苗，举例，宠必威的幼犬保。
+ *    这些特殊的疫苗，我们也需要进行单独的分类，不然的话，没有办法确认它们的
+ *    接种周期，进而就没有办法确认，在疫苗提醒或者疫苗计划中，到底要怎么为它进行排期。"
+ *   在此之前它被混在 `core` 里 —— 于是系统拿"6~8 周起"的窗口去套一支 4 周龄的苗，
+ *   根本排不了期。
+ */
 
 /**
  * 顾客能选的归类（**闭集**，2026-10-05）。
@@ -57,6 +82,7 @@ export type VaccineKind = 'core' | 'rabies' | 'lepto' | 'other';
  * 如实记下来，但**不参与计划** —— 不会让任何一针"算完成"。
  */
 export const VACCINE_KINDS: readonly VaccineKind[] = [
+  'core_early',
   'core',
   'rabies',
   'lepto',
@@ -268,6 +294,44 @@ export const CORE_ADULT_BOOSTER = {
  *   `basis` 必须写清是哪支产品的说明书，顾客和复鞫的人都要能查到。
  */
 export const NON_CORE_SCHEDULES = {
+  /**
+   * 早期核心疫苗（2026-10-05 新增，老板特意点出来的那一类）。
+   *
+   * 为什么必须单独一类：它跟普通核心苗**周期完全不一样** ——
+   * 普通核心苗 6~8 周起、连打 4 针；这一支 **4 周龄就能打**，
+   * 1 针，之后**仍然要**从 6~8 周开始走正常首免（它不是首免的替代）。
+   *
+   * 依据：WSAVA 2024 Table 1（p12）——
+   *   "Canine parvovirus-2 (recombinant) + canine distemper virus (MLV):
+   *    Administer a single dose **from 4 weeks of age** before commencing
+   *    routine primary vaccinations"
+   * 产品说明书：宠必威幼犬保「建议 4~6 周龄基础接种」。
+   *
+   * 混在 core 里的后果（改之前就是这样）：系统拿"6~8 周起"去套一支
+   * 4 周龄的苗，窗口对不上 —— **这一针根本排不进计划**。
+   */
+  core_early: {
+    label: '早期核心疫苗',
+    /** 认哪些写法：明确的病名组合，或我们核过成分的商品名 */
+    namePattern: /幼犬保|早期苗|抢跑/i,
+    startWeeksMin: 4,
+    /** 只打 1 针 */
+    doses: 1,
+    intervalWeeksMin: 0,
+    intervalWeeksMax: 2,
+    /**
+     * ⚠️ 0 = **不按周期重复**。
+     *
+     * 它不是"每年一次"也不是"每 3 年一次"——它是首免前的一针抢跑，
+     * 打完就交棒给正常首免（core 那一类）。
+     * 所以 maxRepeats 也是 0：只出现一次，不排后续。
+     */
+    repeatYears: 0,
+    maxRepeats: 0,
+    basis:
+      'WSAVA 2024 Table 1：CPV 重组 + CDV 弱毒苗可在 4 周龄起接种 1 针，' +
+      '之后仍要从 6~8 周开始走常规首免；产品说明书（宠必威幼犬保）建议 4~6 周龄基础接种',
+  },
   lepto: {
     label: '钩端螺旋体',
     /**
@@ -384,7 +448,11 @@ export function classifyVaccineKinds(name: string): VaccineKind[] {
 
   // 核心苗的常见写法：联数（"四联""八联"）与病名。
   // 少了这一步，"六联"会掉成"未归类"—— 那是把好好的记录挡在计划外面。
-  if (CORE_NAME_PATTERN.test(text)) {
+  //
+  // ⚠️ 但**早期核心疫苗不算 core**（2026-10-05）：它是 4 周龄那一针抢跑，
+  //    周期跟核心苗完全不同（1 针交棒，不是 4 针 + 三年一次）。
+  //    已经在 core_early 里的，不许再补一个 core。
+  if (CORE_NAME_PATTERN.test(text) && !kinds.has('core_early')) {
     kinds.add('core');
   }
 
@@ -655,10 +723,29 @@ export function buildImmunizationSchedule(
  * 避免前端各写一份、迟早对不上。
  */
 export const VACCINE_KIND_LABELS: Record<VaccineKind, string> = {
+  core_early: '早期核心疫苗',
   core: '核心疫苗',
   rabies: '狂犬疫苗',
   lepto: '钩端螺旋体',
-  other: '其他（非核心）',
+  other: '其他',
+};
+
+/**
+ * 分类 → 接种周期/窗口（2026-10-05）。
+ *
+ * 老板："第三一个要确认每一个分类是否有明确的接种周期或者是接种窗口。"
+ * 这就是那张表 —— **每一类在这里必须能读出"怎么排期"**，
+ * 读不出来就说明这一类不该存在。
+ *
+ * 说明文字给顾客看，所以用大白话；具体窗口由各自的 SCHEDULE 常量算。
+ */
+export const VACCINE_KIND_CYCLE_NOTES: Record<VaccineKind, string> = {
+  core_early:
+    '4 周龄起可以打一针「抢跑」的早期苗；打完仍然要从 6~8 周开始走正常首免。',
+  core: '幼犬 6~8 周起、每 2~4 周一次，最后一针不早于 16 周龄；26 周龄再补一针；之后每 3 年一次。',
+  rabies: '12 周龄起首针，之后每年一次（国内强制免疫）。',
+  lepto: '8 周龄起首免 2 针、间隔 2~4 周，之后每年一次。',
+  other: '我们没有这一类的接种程序，只如实记录，不参与提醒。',
 };
 
 /**
@@ -721,7 +808,13 @@ function buildNonCoreSeeds(
     cursor = addWeeks(cursor, config.intervalWeeksMax);
   }
 
-  // 之后按这一类的复种间隔重复（钩端螺旋体：每年 1 次）
+  // 之后按这一类的复种间隔重复（钩端螺旋体：每年 1 次）。
+  // repeatYears = 0 表示**这一类不按周期重复**（早期核心疫苗就是这样：
+  // 它是首免前的一针抢跑，打完交棒给 core，不该再排后续）。
+  if (config.repeatYears <= 0 || config.maxRepeats <= 0) {
+    return seeds;
+  }
+
   let repeat = addYears(cursor, config.repeatYears);
   for (let index = 0; index < config.maxRepeats; index += 1) {
     seeds.push({

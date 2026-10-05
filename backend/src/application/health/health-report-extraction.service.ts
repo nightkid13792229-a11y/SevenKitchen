@@ -56,6 +56,7 @@ export type HealthReportConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 import {
   VACCINE_KIND_LABELS,
   VACCINE_KINDS,
+  type VaccineKind,
 } from '../../domain/health/immunization-schedule';
 
 export type HealthDocumentType =
@@ -837,6 +838,73 @@ export class HealthReportExtractionService {
     private readonly ocrProvider: HealthReportOcrProvider,
     private readonly agentProviderConfigService: AgentProviderConfigService,
   ) {}
+
+  /**
+   * 按名字**认这支苗是什么**（2026-10-05）。
+   *
+   * 分工：**AI 负责认写法，产品表负责定类别**。
+   * 查表查不到的（错别字「卫加伍」、只写品牌「英特威」、口语写法）走这里，
+   * 让 AI 认出它指的是哪支苗，再由我们那张审过的表定类别 —— 分类永远只有一份。
+   *
+   * ⚠️ 只在查表失败时调用（罕见），所以这点延迟和成本可以接受。
+   *    AI 也认不出就返回空数组，界面会如实说"没认出来"并让顾客手动填。
+   */
+  async classifyVaccineNameByName(name: string): Promise<VaccineKind[]> {
+    const text = String(name || '').trim();
+    if (!text) {
+      return [];
+    }
+
+    try {
+      const config =
+        await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig({
+          purpose: HEALTH_REPORT_EXTRACTION_PURPOSE,
+          fallbackToDefault: true,
+        });
+
+      const parsed = await callDeepSeekJson({
+        baseUrl: config.baseUrl,
+        model: config.model,
+        extraBody: EXTRACTION_NO_THINKING,
+        apiKey: config.apiKey,
+        // 认苗要快 —— 顾客正等着录这一条
+        requestTimeoutMs: 8000,
+        temperature: 0,
+        systemPrompt: [
+          '你是宠物疫苗助手。用户会给你一个疫苗本上的写法（可能是商品名、联数、俗称，',
+          '也可能有错别字或多余符号），请判断它指的是哪一类犬用疫苗。',
+          '',
+          '只能从这四类里选（闭集）：',
+          '· core   核心疫苗：犬瘟热 / 犬细小 / 犬腺病毒 / 犬副流感，以及各类联苗',
+          '· rabies 狂犬疫苗',
+          '· lepto  钩端螺旋体（含钩端的联苗要同时给 core 和 lepto）',
+          '· other  以上都不是（非核心苗、驱虫药、保健品、看不懂的写法）',
+          '',
+          '规则：',
+          '1. 联苗可以同时占好几类（例如「卫佳捌」= ["core","lepto"]）。',
+          '2. **拿不准就填 ["other"]** —— 绝对不许猜成 core。',
+          '   猜成 core 会让系统以为核心疫苗的某一针已经打完、从此不再提醒家长，',
+          '   比标成 other 严重得多。',
+          '3. 看完就回 JSON，不要解释。',
+          '',
+          '输出：{ "kinds": ["core"] }',
+        ].join('\n'),
+        userPayload: { vaccineName: text },
+      });
+
+      return normalizeKinds(
+        (parsed as Record<string, unknown>)?.kinds,
+      ) as VaccineKind[];
+    } catch (error) {
+      // 认不出来不影响顾客：返回空数组，界面会让他自己填
+      this.logger.warn(
+        `按名字认疫苗失败（${text}）：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
+  }
 
   async extractFromReport(input: {
     imageUrl: string;

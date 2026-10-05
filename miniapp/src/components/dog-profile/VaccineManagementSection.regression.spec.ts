@@ -53,16 +53,39 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
-  it('归类是**必填项**，顾客必须明确指定（2026-10-05）', () => {
+  it('分类是**系统判的、只读显示**，不是让顾客选（2026-10-05 老板定）', () => {
     const source = readComponent()
 
-    // 老板："允许用户自行填写疫苗产品名称，但是类型还是必填项。"
-    // 没有归类这一条就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
-    expect(source).toContain('field-label">归类（必填）<')
-    expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
-    expect(source).toContain('function toggleKind')
-    // 归类随记录一起提交
+    // 老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
+    // 分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
+    // 显示出来而已，不要交给用户自己来选择。"
+    expect(source).toContain('field-label">分类<')
+    expect(source).toContain('vaccine-kind__tag')
+    // 默认**不展开**选项；只有认不出来、或顾客自己点"修改"才展开
+    expect(source).toContain('const kindPickerOpen = reactive')
+    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
+    expect(source).toContain('function openKindPicker')
+    // 分类随记录一起提交（判定的结果要落到库里）
     expect(source).toContain('kinds: draft.kinds,')
+  })
+
+  it('系统认不出来时**如实承认**，并让顾客手动填（2026-10-05）', () => {
+    const source = readComponent()
+
+    // 老板："承认认不出这只疫苗，转为让用户手动填写。"
+    expect(source).toContain('这支苗系统没认出来')
+    // 认不出来时才要求选 —— 否则这一条存不下去
+    expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
+  })
+
+  it('顾客可以自己改分类（他的记录，他做主）', () => {
+    const source = readComponent()
+
+    // 老板："用户可以判断，可以把疫苗记录进行手动更改。
+    // 用户自己的疫苗记录、疫苗计划，我们去改什么呢？"
+    expect(source).toContain('vaccine-kind__edit')
+    expect(source).toContain('function toggleKind')
+    expect(source).toContain('draft.kindsManual = true')
   })
 
   it('录入只留两条路：选产品库 / 手填（2026-10-05 简化）', () => {

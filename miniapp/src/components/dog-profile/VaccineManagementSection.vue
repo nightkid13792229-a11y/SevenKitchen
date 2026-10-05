@@ -146,32 +146,58 @@
              顾客也会想改，去掉就没法纠正了。所以两个都留：
              上面照旧能改名字，下面把"系统把它归成了哪一类"如实告诉他 ——
              归类直接决定它算哪一步、多久打一次，顾客看得见才敢改。 -->
-        <!-- 归类：**必填**（2026-10-05 老板："允许用户自行填写疫苗产品名称，
-             但是类型还是必填项"）。点标签或选产品都会自动带出来，
-             只有手填才需要自己点一下。 -->
+        <!-- 分类：**系统判的，不是顾客选的**（2026-10-05 老板定）。
+
+             老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
+             分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
+             显示出来而已，不要交给用户自己来选择。"
+
+             所以默认只有一行**只读**的判定结果。两种例外：
+               · 系统**认不出来** → 如实说"没认出来"，这时才展开让顾客填
+                 （老板："承认认不出这只疫苗，转为让用户手动填写。"）
+               · 顾客**自己想改** → 点那行结果就展开
+                 （老板："用户可以判断，可以把疫苗记录进行手动更改。
+                   用户自己的疫苗记录、疫苗计划，我们去改什么呢？"）
+             营养师/后台不改顾客的记录。 -->
         <view class="field-group">
-          <text class="field-label">归类（必填）</text>
-          <view class="vaccine-name-tags">
+          <text class="field-label">分类</text>
+
+          <!-- 判定结果：只读一行，可点开改 -->
+          <view
+            v-if="draftOf(record, index).kinds.length > 0 && !kindPickerOpen[index]"
+            class="vaccine-kind"
+            @tap="openKindPicker(index)"
+          >
             <text
-              v-for="option in kindOptions"
-              :key="option.value"
-              class="vaccine-name-tag"
-              :class="{ 'vaccine-name-tag--active': draftOf(record, index).kinds.includes(option.value) }"
-              @tap="toggleKind(index, option.value)"
-            >{{ option.label }}</text>
+              v-for="kind in draftOf(record, index).kinds"
+              :key="kind"
+              class="vaccine-kind__tag"
+            >{{ kindLabel(kind) }}</text>
+            <text class="vaccine-kind__edit">修改</text>
           </view>
-          <text v-if="draftOf(record, index).kindsManual" class="field-hint">
-            你自己指定的。改疫苗名称会重新自动判一次。
-          </text>
-          <text v-else-if="draftOf(record, index).kinds.length > 0" class="field-hint">
-            系统按疫苗名称自动判的，可以点上面的标签改。
-          </text>
-          <text v-else class="field-hint">
-            这个名字系统认不出来，请点上面选一个 —— 归类决定这一针算哪一步。
-          </text>
-          <text class="field-hint">
-            「其他（非核心）」只记录、不影响提醒。
-          </text>
+
+          <!-- 认不出来：如实说，并让顾客填 -->
+          <template v-else>
+            <view v-if="draftOf(record, index).kinds.length === 0" class="vaccine-kind__unknown">
+              <text class="vaccine-kind__unknown-title">这支苗系统没认出来</text>
+              <text class="vaccine-kind__unknown-desc">
+                照本子上的写法再核一遍；确实没有的话，下面选一个 ——
+                分类决定这一针算哪一步、隔多久再打。
+              </text>
+            </view>
+            <view class="vaccine-name-tags">
+              <text
+                v-for="option in kindOptions"
+                :key="option.value"
+                class="vaccine-name-tag"
+                :class="{ 'vaccine-name-tag--active': draftOf(record, index).kinds.includes(option.value) }"
+                @tap="toggleKind(index, option.value)"
+              >{{ option.label }}</text>
+            </view>
+            <text class="field-hint">
+              「其他（非核心）」只记录、不影响提醒。
+            </text>
+          </template>
         </view>
 
         <view class="field-group">
@@ -479,8 +505,11 @@ async function runClassify(index: number) {
     if (draftOf(record, index).vaccineName.trim() !== name) return
     if (draft.kindsManual) return
     draft.kinds = Array.isArray(res.data.kinds) ? res.data.kinds.map(String) : []
+    // 判出来了就收起选择器（顾客不用做我们的活）；
+    // 判不出来就展开，让他自己填
+    kindPickerOpen[index] = draft.kinds.length === 0
     // 判出来了（或仍判不出来）都要重排一次自动保存 ——
-    // 归类是必填，判出来之前存不了
+    // 分类是必填，判出来之前存不了
     scheduleAutoSave(record, index, { immediate: true })
   } catch {
     // 判定失败就留着让顾客自己选，不挡流程
@@ -498,6 +527,23 @@ function applyCatalogProduct(index: number, value: string | number) {
   // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
   draft.kindsManual = false
   scheduleAutoSave(record, index, { immediate: true })
+}
+
+/**
+ * 分类选择器是否展开（2026-10-05）。
+ *
+ * 默认收起 —— 分类是系统判的，不给顾客摆一排选项让他做我们的活。
+ * 两种情况展开：① 系统没认出来（必须让顾客填，否则这条存不了）
+ *              ② 顾客自己点了"修改"（他的记录，他想改就改）
+ */
+const kindPickerOpen = reactive<Record<number, boolean>>({})
+
+function openKindPicker(index: number) {
+  kindPickerOpen[index] = true
+}
+
+function kindLabel(kind: string): string {
+  return kindOptions.value.find((item) => item.value === kind)?.label || kind
 }
 
 function productIndex(name: string): number {
@@ -521,6 +567,7 @@ function toggleKind(index: number, kind: string) {
     : [...draft.kinds, kind]
   // 顾客自己点过就不再用自动判定覆盖他
   draft.kindsManual = true
+  kindPickerOpen[index] = false
   scheduleAutoSave(record, index, { immediate: true })
 }
 
@@ -635,6 +682,8 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   // 名字变了 → 重新自动判一次归类（顾客之前手点的作废：名字都换了）
   if (field === 'vaccineName') {
     draft.kindsManual = false
+    draft.kinds = []
+    kindPickerOpen[index] = false
     scheduleClassify(index)
   }
 
@@ -1354,6 +1403,38 @@ async function doRemove(record: VaccineRecord) {
 
 .vaccine-card__delete--disabled {
   opacity: 0.5;
+}
+
+/* 认不出来时的说明（2026-10-05）：不装懂，把话说清楚再让顾客填 */
+.vaccine-kind__unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-bottom: 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #fdf8ec;
+  border-left: 6rpx solid #d8c98a;
+}
+
+.vaccine-kind__unknown-title {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #7a6a2f;
+}
+
+.vaccine-kind__unknown-desc {
+  font-size: 22rpx;
+  line-height: 1.55;
+  color: #6b6653;
+}
+
+/* 判定结果右侧的"修改"：不抢眼，但找得到 */
+.vaccine-kind__edit {
+  align-self: center;
+  margin-left: 6rpx;
+  font-size: 22rpx;
+  color: #8a968a;
 }
 
 /* 归类标签（2026-10-05） */

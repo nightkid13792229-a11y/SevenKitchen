@@ -4,6 +4,7 @@
  */
 
 import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
+import { HealthReportExtractionService } from '../../application/health/health-report-extraction.service';
 import {
   VACCINE_KIND_LABELS,
   classifyVaccineKinds,
@@ -87,6 +88,7 @@ export class HealthRecordsController {
     @Inject(ALLERGY_RECORD_REPOSITORY)
     private readonly allergyRecordRepo: PrismaAllergyRecordRepository,
     private readonly healthService: HealthService,
+    private readonly healthReportExtractionService: HealthReportExtractionService,
   ) {}
 
   // ==================== Vaccine Records ====================
@@ -202,15 +204,39 @@ export class HealthRecordsController {
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Classify a vaccine name into kinds' })
   @ApiSecurity('X-Customer-Id')
-  classifyVaccineName(@Query('name') name: string) {
-    const kinds = classifyVaccineKinds(String(name || ''));
+  async classifyVaccineName(@Query('name') name: string) {
+    const text = String(name || '').trim();
+
+    /*
+     * 三级判定（2026-10-05 定的分工）：
+     *
+     *   ① 查表 —— **产品表定类别**。确定、瞬间、可追溯。
+     *      「卫佳伍」「宠必威® 幼犬保」「犬四联」都在这步出来。
+     *   ② 问 AI —— 查不到才走这里。**AI 只负责认写法**
+     *      （错别字「卫加伍」、只写品牌「英特威」、口语），
+     *      认出来之后再回表定类别 —— 分类永远只有一份。
+     *   ③ 都认不出 —— 如实返回空数组。界面会说"没认出来"，
+     *      让顾客手动填。**绝不猜。**
+     */
+    let kinds = classifyVaccineKinds(text);
+    let via: 'table' | 'ai' | 'unknown' = 'table';
+
+    if (kinds.length === 0 && text) {
+      kinds = await this.healthReportExtractionService.classifyVaccineNameByName(text);
+      via = kinds.length > 0 ? 'ai' : 'unknown';
+    } else if (kinds.length === 0) {
+      via = 'unknown';
+    }
+
     return {
       code: 0,
       message: 'success',
       data: {
-        name: String(name || ''),
+        name: text,
         kinds,
         kindLabels: kinds.map((kind) => VACCINE_KIND_LABELS[kind] || kind),
+        /** 判定走的是哪一步 —— 界面要如实告诉顾客"这是我们判的"还是"没认出来" */
+        via,
       },
     };
   }

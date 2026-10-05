@@ -30,6 +30,11 @@
           建议时间：{{ plan.nextStep.windowStart }} ~ {{ plan.nextStep.windowEnd }}
         </text>
         <text class="next-step__reminder">{{ plan.nextStep.reminder }}</text>
+        <!-- 错开接种的提醒（2026-10-05）：紧跟在提醒语下面 ——
+             家长最容易犯的错就是"两针一起去打"。 -->
+        <view v-if="plan.nextStep.spacingNote" class="spacing-note">
+          <text class="spacing-note__text">{{ plan.nextStep.spacingNote }}</text>
+        </view>
         <text
           v-if="(plan.nextStep.commonProducts || []).length > 0"
           class="next-step__products"
@@ -102,6 +107,9 @@
             <text v-if="step.matchedRecordDate" class="step__matched">
               已记录：{{ step.matchedRecordDate }}
             </text>
+            <text v-if="step.spacingNote" class="step__spacing">
+              {{ step.spacingNote }}
+            </text>
             <text
               v-if="(step.commonProducts || []).length > 0"
               class="step__products"
@@ -173,6 +181,13 @@ interface PlanStep {
    *    而且"打哪个商品"已经挨着诊疗，不是我们该拍板的。
    */
   commonProducts?: string[]
+  /**
+   * 「这一针别和别的针同一天打」（2026-10-05 老板的规则二）。
+   *
+   * 不同分类的疫苗不可以同一天接种，前后错开 2~3 天。
+   * 空字符串 = 这段时间没有别的针要打。
+   */
+  spacingNote?: string
 }
 
 interface PlanConflict {
@@ -480,6 +495,33 @@ watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
   font-size: 24rpx;
   line-height: 1.6;
   color: #6b6653;
+}
+
+/*
+ * 「别同一天打」的提醒（2026-10-05）。
+ * 用浅琥珀底 + 左边一道色条 —— 比正文显眼，但不是报错的红。
+ * 这属于"容易做错但不紧急"的提示。
+ */
+.spacing-note {
+  margin-top: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 12rpx;
+  background: #fdf8ec;
+  border-left: 6rpx solid #d8c98a;
+}
+
+.spacing-note__text {
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #7a6a2f;
+}
+
+.step__spacing {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #7a6a2f;
 }
 
 /* 常见产品（2026-10-04）：比"依据"显眼一点，比正文轻一点 */

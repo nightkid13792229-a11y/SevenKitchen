@@ -199,6 +199,14 @@ export interface HealthReportExtractionResult {
     testMethod: string;
     testDate: string;
     institution: string;
+    /**
+     * 这一张图上有没有「结果判定 / 结论」那一段（2026-10-05 第十一期）。
+     *
+     * 多页报告常常只在最后一页写判定，前面几页只有数值与颜色条，
+     * 而模型照颜色条会把"弱阳性"猜成"阳性"。前端合并多页结果时
+     * 要靠这个标记决定**哪一页的等级是报告写的**。
+     */
+    hasVerdict: boolean;
   } | null;
 }
 
@@ -490,6 +498,10 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  有的报告写作"吸入组""接触组"）/ OTHER 报告上另有分组名 / UNKNOWN 报告没写分组。',
     '  **只许照抄**：报告上写了分组列或分组小节就照抄，没写就填 UNKNOWN，不要自己分类。',
     '· **"组胺""阳性对照""阴性对照"这类对照项不是过敏原，一律不要放进 drafts。**',
+    '· hasVerdict 只答一件事：**这一张图上有没有**「结果判定 / 结论 / 判读」那一段。',
+    '  有 → true；没有 → false。**没有判定区时，所有 level 一律填 UNKNOWN** ——',
+    '  多页报告常常只在最后一页写判定，前面几页只有数值和颜色条；',
+    '  颜色条不是报告写的结论，照它猜会把"弱阳性"当成"阳性"（2026-10-05 生产实测踩到）。',
     '· testMethod 照抄报告上写的检测方式，只能从这五个里选：',
     '  SERUM 血清或 IgE 检测 / INTRADERMAL 皮内试验 / ELIMINATION 排除性饮食试验 /',
     '  OTHER 其它 / UNKNOWN 没写或看不清。不要根据常识猜。',
@@ -503,6 +515,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '    { "allergen": "小麦", "level": "WEAK_POSITIVE", "group": "FOOD", "notes": "报告标注为弱阳性" },',
     '    { "allergen": "粉尘螨", "level": "POSITIVE", "group": "ENVIRONMENT", "notes": "" }',
     '  ],',
+    '  "hasVerdict": true,',
     '  "testMethod": "SERUM",',
     '  "testDate": "2026-03-12",',
     '  "institution": "",',
@@ -1267,6 +1280,15 @@ export class HealthReportExtractionService {
                 (parsed as Record<string, unknown>).institution,
                 120,
               ),
+              /**
+               * 这张图上有没有「结果判定 / 结论」那一段（2026-10-05 第十一期）。
+               *
+               * 为什么必须回传：多页报告常常只在最后一页写判定。前端把多页的
+               * 结果合起来时，得知道**哪一页的等级是报告写的、哪一页是模型猜的**
+               * —— 生产实测：前面几页只有颜色条，模型照颜色猜成"阳性"，
+               * 而真正的判定页写的是"弱阳性"，两份打架时必须以判定页为准。
+               */
+              hasVerdict: (parsed as Record<string, unknown>).hasVerdict === true,
             }
           : null,
     };

@@ -107,6 +107,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       status: record.status as any,
       attachments: record.attachments,
       kinds: record.kinds,
+      components: record.components ?? [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

@@ -50,6 +50,17 @@ export class VaccineRecordResponseDto {
   @Expose()
   kinds!: string[];
 
+  /**
+   * 这一针含哪些病种（2026-10-06）—— **顾客看的是这个**，不是上面的类别。
+   *
+   * 老板："记录上给顾客显示病种，而不显示核心疫苗这种分类。"
+   * 顾客勾选、界面显示的也都是病种；类别只在后台用来排期。
+   */
+  components!: string[];
+
+  /** 病种的中文名（犬瘟热 / 犬细小病毒 / 犬腺病毒 …） */
+  componentLabels!: string[];
+
   /** 归类的中文名，直接给界面用（顺序与 kinds 一致） */
   @Expose()
   kindLabels!: string[];

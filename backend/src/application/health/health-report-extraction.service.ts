@@ -720,6 +720,11 @@ export function normalizeDrafts(
              * AI 在这条路上只负责一件事：把本子上的名字照抄准确。
              */
             kinds: classifyVaccineKinds(vaccineName),
+            /**
+             * 这支苗含哪些病种（2026-10-06）—— 界面拿它回填"病种"，
+             * 顾客看到的、以后改的也都是病种。
+             */
+            components: matchedProduct ? [...matchedProduct.components] : [],
             vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
             nextDueDate: normalizeDraftDate(item?.nextDueDate),
             notes: normalizeDraftText(item?.notes, 200),

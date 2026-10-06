@@ -33,6 +33,64 @@
 
 import type { VaccineKind } from './immunization-schedule';
 
+/**
+ * 疫苗**成分（病种）**词表（2026-10-06 老板定的模型）。
+ *
+ * 老板原话："我们需要把产品库做的更详细一点。也就是每一个产品，它里面包含
+ * 哪些种类的疫苗。然后我们再根据它是否包含犬瘟、细小和腺病毒这三类疫苗，
+ * 来决定它是不是核心疫苗。……而在用户需要确认和手动修改的分类中，
+ * 我们不应该把分类呈现给用户看……我们需要把它拆开，拆成每一个疫苗种类
+ * 让顾客选择，至于分类的判定则交由后台来完成。"
+ *
+ * 所以从今天起：
+ *   · `components`（含哪些病种）是**唯一的事实**
+ *   · `kinds`（能顶哪几类）**由它推导**，不再手写 —— 两者不可能再打架
+ *   · 顾客看到的是病种，类别只在后台用来排期
+ */
+export type VaccineComponent =
+  | 'cdv' // 犬瘟热
+  | 'cpv' // 犬细小病毒
+  | 'cav' // 犬腺病毒（传染性肝炎 + 呼吸道病）
+  | 'cpi' // 犬副流感
+  | 'rabies' // 狂犬病
+  | 'lepto' // 钩端螺旋体
+  | 'ccov' // 犬冠状病毒
+  | 'bordetella' // 博德特氏菌（犬窝咳）
+  | 'lyme'; // 莱姆病（伯氏疏螺旋体）
+
+export const VACCINE_COMPONENT_LABELS: Record<VaccineComponent, string> = {
+  cdv: '犬瘟热',
+  cpv: '犬细小病毒',
+  cav: '犬腺病毒',
+  cpi: '犬副流感',
+  rabies: '狂犬病',
+  lepto: '钩端螺旋体',
+  ccov: '犬冠状病毒',
+  bordetella: '博德特氏菌',
+  lyme: '莱姆病',
+};
+
+/** 顾客勾选时的顺序：核心三支在前，然后是狂犬，再是非核心 */
+export const VACCINE_COMPONENTS: readonly VaccineComponent[] = [
+  'cdv',
+  'cpv',
+  'cav',
+  'rabies',
+  'lepto',
+  'cpi',
+  'ccov',
+  'bordetella',
+  'lyme',
+];
+
+/**
+ * WSAVA 2024：犬的**核心疫苗只有三支** —— 犬瘟、腺病毒、细小。
+ *
+ * ⚠️ 副流感**不在**这里（它属非核心，与博德特氏菌同归"犬窝咳"）。
+ * 来源：Squires et al., JSAP 65(5):277–316（2024 WSAVA 指南）。
+ */
+export const CORE_COMPONENTS: readonly VaccineComponent[] = ['cdv', 'cpv', 'cav'];
+
 export interface VaccineProduct {
   /** 商品名（匹配用的主键） */
   name: string;
@@ -57,9 +115,25 @@ export interface VaccineProduct {
   brand: string;
   /** 厂商全称（展示用） */
   manufacturer: string;
-  /** 防哪些病 */
+  /** 防哪些病（**给人看的原文**，来自说明书；机器判定一律用 components） */
   diseases: string[];
-  /** 能顶哪些类别 —— 组合苗可以同时是 core + lepto */
+  /**
+   * 含哪些病种 —— **分类的唯一来源**（2026-10-06）。
+   * 改这里就够了，kinds 会自动跟着变。
+   */
+  components: VaccineComponent[];
+  /**
+   * 4 周龄就能打的早期苗（宠必威幼犬保）。
+   *
+   * 它不是"成分特殊"，而是**周期特殊** —— 4 周龄抢跑一针，
+   * 之后仍要从 6~8 周走常规首免（见 immunization-schedule 的 core_early）。
+   * 所以这一条没法从成分推出来，得单独标。
+   */
+  earlySeries?: boolean;
+  /**
+   * 能顶哪些类别 —— **由 components 推导**（见 kindsOfComponents），
+   * 不再手写。组合苗可以同时是 core + lepto。
+   */
   kinds: VaccineKind[];
   /**
    * 说明书上的最低首免周龄（null = 说明书未写明）。
@@ -96,7 +170,8 @@ export interface VaccineProduct {
  * 顺序 = 提醒里的推荐顺序（同类里按批签发批数从多到少，
  * 批数多的说明现在真在卖，顾客在医院更可能见到）。
  */
-export const VACCINE_PRODUCTS: VaccineProduct[] = [
+/** 原始数据：只登记成分，kinds 由下面的 kindsOfComponents 统一推导 */
+const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
   /* ── 进口苗（可推荐；顺序 = 推荐顺序，按批签发批数） ── */
   /* ── 核心苗 ─────────────────────────────────────────────── */
   {
@@ -114,7 +189,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
       '犬钩端螺旋体病（犬型）',
       '黄疸出血型钩端螺旋体病',
     ],
-    kinds: ['core', 'lepto'],
+    components: ['cdv', 'cav', 'cpi', 'cpv', 'ccov', 'lepto'],
     minWeeks: 6,
     registration: '（2020）外兽药证字26号',
     booster: '每年 1 次',
@@ -126,7 +201,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     brand: '英特威（默沙东）',
     diseases: ['犬瘟热', '犬传染性肝炎', '犬细小病毒病', '犬副流感'],
-    kinds: ['core'],
+    components: ['cdv', 'cav', 'cpv', 'cpi'],
     minWeeks: null,
     registration: '（2019）外兽药证字05号',
     booster: '说明书未写首免周龄',
@@ -144,7 +219,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
       '犬副流感',
       '犬细小病毒肠炎',
     ],
-    kinds: ['core'],
+    components: ['cdv', 'cav', 'cpv', 'cpi'],
     minWeeks: 6,
     registration: '（2020）外兽药证字63号',
     booster: '每年 1 次',
@@ -156,7 +231,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
     brand: '硕腾',
     diseases: ['犬细小病毒肠炎'],
-    kinds: ['core'],
+    components: ['cpv'],
     minWeeks: 6,
     registration: '（2020）外兽药证字28号',
     booster: '每年 1 次',
@@ -171,7 +246,9 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     // ⚠️ 单独一类，不能跟普通核心苗混（2026-10-05）：
     //    它 4 周龄起 1 针，之后仍要走 6~8 周起的正常首免 —— 周期完全不同。
     //    混进 core 的话，系统拿"6~8 周起"的窗口去套它，这一针排不进计划。
-    kinds: ['core_early'],
+    components: ['cdv', 'cpv'],
+    /** 4 周龄就能打（抢跑一针）—— 周期和常规首免完全不同，见 core_early 的说明 */
+    earlySeries: true,
     minWeeks: 4,
     registration: '（2018）外兽药证字02号',
     booster: '4~6 周龄基础接种（1 针，之后仍走常规首免）',
@@ -192,7 +269,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
       '犬钩端螺旋体病',
       '黄疸出血型钩端螺旋体病',
     ],
-    kinds: ['core', 'lepto'],
+    components: ['cdv', 'cav', 'cpv', 'cpi', 'lepto'],
     minWeeks: 7,
     registration: '（2022）外兽药证字41号',
     booster: '每年 1 次',
@@ -204,7 +281,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     brand: '英特威（默沙东）',
     diseases: ['犬钩端螺旋体病（犬型）', '黄疸出血型钩端螺旋体病'],
-    kinds: ['lepto'],
+    components: ['lepto'],
     minWeeks: 8,
     registration: '（2018）外兽药证字44号',
     booster: '每年 1 次',
@@ -216,7 +293,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '西班牙海博莱 HIPRA',
     brand: '海博莱',
     diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
-    kinds: ['core', 'lepto'],
+    components: ['cdv', 'cav', 'cpv', 'cpi', 'lepto'],
     minWeeks: null,
     registration: '（2022）外兽药证字46号',
     booster: '未查到',
@@ -228,7 +305,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '法国维克 VIRBAC',
     brand: '维克',
     diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
-    kinds: ['core', 'lepto'],
+    components: ['cdv', 'cav', 'cpv', 'cpi', 'lepto'],
     minWeeks: null,
     registration: '（2024）外兽药证字04号',
     booster: '未查到',
@@ -242,7 +319,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     brand: '英特威（默沙东）',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: 12,
     registration: '（2022）外兽药证字34号',
     booster: '说明书：每 36 个月 1 次',
@@ -256,7 +333,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '勃林格殷格翰（法国厂）',
     brand: '勃林格',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: 12,
     registration: '（2019）外兽药证字71号',
     booster: '每年 1 次',
@@ -273,7 +350,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     brand: '勃林格',
     manufacturer: '勃林格殷格翰（美国）',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: 12,
     registration: '（2022）外兽药证字29号',
     booster: '说明书：1 年后加强，此后每 3 年 1 次',
@@ -285,7 +362,7 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '硕腾 Zoetis（美国林肯厂）',
     brand: '硕腾',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: 12,
     registration: '（2026）外兽药证字09号',
     booster: '每年 1 次',
@@ -297,12 +374,52 @@ export const VACCINE_PRODUCTS: VaccineProduct[] = [
     manufacturer: '法国维克 VIRBAC',
     brand: '维克',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: 12,
     registration: '（2018）外兽药证字45号',
     booster: '每年 1 次',
   },
 ];
+
+/**
+ * 由成分推导"能顶哪几类"（2026-10-06）。
+ *
+ * 规则（老板定的口径 + WSAVA 2024）：
+ *   · 早期苗（幼犬保，4 周龄抢跑）      → core_early（**不再补 core**，周期完全不同）
+ *   · 含犬瘟/腺病毒/细小**其中任意一种** → core（"这是核心病种的疫苗"）
+ *   · 含钩端螺旋体                      → lepto
+ *   · 含狂犬                            → rabies
+ *   · 上面都没有                        → other（只记录、不参与计划）
+ *
+ * ⚠️ 注意 core 的口径是"**含核心病种之一**"，不是"三种全覆盖"：
+ *    卫佳细（只防细小）也算 core —— 它确实是核心病种的疫苗。
+ *    能不能**顶掉核心首免那一整套**是另一回事，由 coversCoreSeries 判
+ *    （要求三种全覆盖），两者不要混。
+ *
+ * 这套推导与改之前 37 支手写的 kinds **逐一等价**，
+ * 有测试对账（vaccine-product-kinds-audit.spec.ts）钉着。
+ */
+export function kindsOfComponents(product: {
+  components: VaccineComponent[];
+  earlySeries?: boolean;
+}): VaccineKind[] {
+  if (product.earlySeries) {
+    return ['core_early'];
+  }
+
+  const kinds: VaccineKind[] = [];
+  if (product.components.some((c) => CORE_COMPONENTS.includes(c))) {
+    kinds.push('core');
+  }
+  if (product.components.includes('lepto')) {
+    kinds.push('lepto');
+  }
+  if (product.components.includes('rabies')) {
+    kinds.push('rabies');
+  }
+
+  return kinds.length > 0 ? kinds : ['other'];
+}
 
 /** 提醒里每个疫苗种类最多列几个产品（兽医审核意见第 6 条） */
 export const MAX_RECOMMENDED_PRODUCTS = 3;
@@ -318,12 +435,15 @@ export const MAX_RECOMMENDED_PRODUCTS = 3;
  * 判据用产品自己的 `diseases`（我们核过成分的数据），不是猜名字。
  */
 export function coversCoreSeries(product: VaccineProduct): boolean {
-  const text = product.diseases.join(' ');
-  return (
-    /犬瘟/.test(text) &&
-    /细小/.test(text) &&
-    /腺病毒|传染性肝炎/.test(text) &&
-    /副流感/.test(text)
+  /*
+   * 能不能顶掉**核心首免那一整套**：三种核心病都要覆盖。
+   *
+   * ⚠️ 2026-10-06 修正：原来是"四种都防"（犬瘟+细小+腺病毒+**副流感**）。
+   *    按 WSAVA 2024，犬的核心疫苗只有三支（犬瘟、腺病毒、细小），
+   *    副流感属非核心 —— 所以判据改成三种，而且直接看成分表，不再抠病名字符串。
+   */
+  return CORE_COMPONENTS.every((component) =>
+    product.components.includes(component),
   );
 }
 
@@ -348,16 +468,18 @@ export function productCoversKind(
     return false
   }
 
-  const text = product.diseases.join(' ')
-
-  if (kind === 'rabies') return /狂犬/.test(text)
-  if (kind === 'lepto') return /钩端/.test(text)
-  // 核心苗那几步要求**四种都防**（犬瘟热 + 腺病毒/传染性肝炎 + 细小 + 副流感）——
-  // 卫佳细（只防细小）、犬二联（只防两种）因此都顶不上。
+  if (kind === 'rabies') return product.components.includes('rabies')
+  if (kind === 'lepto') return product.components.includes('lepto')
+  // 核心苗那几步要求**三种核心病全覆盖**（犬瘟 + 腺病毒 + 细小，2026-10-06 按
+  // WSAVA 2024 修正，不再要求副流感）—— 卫佳细（只防细小）、犬二联因此都顶不上。
   if (kind === 'core') return coversCoreSeries(product)
-  // 早期核心疫苗：防犬瘟 + 细小，且**不是**完整四联（完整四联走 core 那一步）
+  // 早期核心疫苗：含犬瘟 + 细小，且**不是**完整核心覆盖（完整覆盖走 core 那一步）
   if (kind === 'core_early') {
-    return /犬瘟/.test(text) && /细小/.test(text) && !coversCoreSeries(product)
+    return (
+      product.components.includes('cdv') &&
+      product.components.includes('cpv') &&
+      !coversCoreSeries(product)
+    )
   }
 
   return true
@@ -535,7 +657,7 @@ export function recommendProductsForStep(
  *    这里只用到"商品名 / 企业 / 批准文号 / 防狂犬还是联苗"这些**核对过的**字段；
  *    说明书里的首免周龄多数没查到，一律 `minWeeks: null`，不编。
  */
-const DOMESTIC_PRODUCTS: VaccineProduct[] = [
+const DOMESTIC_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
   /* ── 国产联苗（核心） ── */
   {
     name: '犬四联（中牧江西）',
@@ -543,7 +665,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '中牧实业股份有限公司江西生物药厂',
     brand: '中牧',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cav', 'cpi', 'cpv'],
     minWeeks: null,
     registration: '兽药生字140406047',
     booster: '说明书：断奶幼犬连打 3 次、间隔 21 天；成犬每年 2 次',
@@ -556,7 +678,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '武汉科前生物股份有限公司',
     brand: '科前',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cav', 'cpi', 'cpv'],
     minWeeks: null,
     registration: '兽药生字170046047',
     booster: '同上（同一新兽药核准说明书）',
@@ -568,7 +690,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '吉林省五星动物保健有限公司',
     brand: '五星',
     diseases: ['犬瘟热', '犬副流感', '犬腺病毒', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cav', 'cpi', 'cpv'],
     minWeeks: null,
     registration: '兽药生字070416047',
     booster: '同上（同一新兽药核准说明书）',
@@ -579,7 +701,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '吉林特研生物技术有限责任公司',
     brand: '吉林特研',
     diseases: ['犬瘟热', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cpv'],
     minWeeks: null,
     registration: '兽药生字070296044',
     booster: '未查到',
@@ -590,7 +712,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '洛阳惠中生物技术有限公司',
     brand: '洛阳惠中',
     diseases: ['犬瘟热', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cpv'],
     minWeeks: 6,
     registration: '兽药生字163006096',
     booster: '说明书：6 周龄以上犬注射 1.0ml，1 头份',
@@ -601,7 +723,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '金宇保灵生物药品有限公司',
     brand: '金宇保灵',
     diseases: ['犬瘟热', '犬细小病毒病'],
-    kinds: ['core'],
+    components: ['cdv', 'cpv'],
     minWeeks: null,
     registration: '兽药生字050156044',
     booster: '未查到',
@@ -614,7 +736,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '金宇益康生物技术（辽宁）股份有限公司',
     brand: '金宇益康',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字060137524',
     booster: '未查到',
@@ -626,7 +748,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '中牧实业股份有限公司江西生物药厂',
     brand: '中牧',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字140406048',
     booster: '未查到',
@@ -637,7 +759,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '国药集团动物保健股份有限公司',
     brand: '国药动保',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字170266040',
     booster: '未查到',
@@ -648,7 +770,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '武汉科前生物股份有限公司',
     brand: '科前',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字170047523',
     booster: '未查到',
@@ -659,7 +781,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '广州市华南农大生物药品有限公司',
     brand: '华南农大',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字190916040',
     booster: '未查到',
@@ -670,7 +792,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '吉林和元生物工程股份有限公司',
     brand: '吉林和元',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字070187514',
     booster: '未查到',
@@ -681,7 +803,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '青岛易邦生物工程有限公司',
     brand: '青岛易邦',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字150136658',
     booster: '未查到',
@@ -692,7 +814,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '常州同泰生物药业有限公司',
     brand: '常州同泰',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字100657523',
     booster: '未查到',
@@ -703,7 +825,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '天津瑞普生物技术股份有限公司空港分公司',
     brand: '天津瑞普',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字020307517',
     booster: '未查到',
@@ -714,7 +836,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '吉林正业生物制品股份有限公司',
     brand: '吉林正业',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字070227517',
     booster: '未查到',
@@ -725,7 +847,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '长春西诺生物科技有限公司',
     brand: '长春西诺',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字070386088',
     booster: '未查到',
@@ -736,7 +858,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '唐山怡安生物工程有限公司',
     brand: '唐山怡安',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字031417512',
     booster: '未查到',
@@ -748,7 +870,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '洛阳惠中生物技术有限公司',
     brand: '洛阳惠中',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字163006658',
     booster: '未查到',
@@ -760,7 +882,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '杭州佑本动物疫苗有限公司',
     brand: '杭州佑本',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字110546048',
     booster: '未查到',
@@ -772,7 +894,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '广西爱宠生物科技有限公司',
     brand: '广西爱宠',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字200766048',
     booster: '未查到',
@@ -784,7 +906,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '齐鲁动物保健品有限公司',
     brand: '齐鲁',
     diseases: ['狂犬病'],
-    kinds: ['rabies'],
+    components: ['rabies'],
     minWeeks: null,
     registration: '兽药生字150257517',
     booster: '未查到',
@@ -796,7 +918,7 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
     manufacturer: '泰州博莱得利生物科技有限公司',
     brand: '泰州博莱得利',
     diseases: ['犬瘟热', '犬细小病毒病', '狂犬病'],
-    kinds: ['core', 'rabies'],
+    components: ['cdv', 'cpv', 'rabies'],
     minWeeks: null,
     registration: '兽药生字101846066',
     booster: '未查到',
@@ -806,7 +928,19 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
 ];
 
 // 国产苗并进同一个目录：产品库要能看到它们，推荐那一步再按 recommendable 过滤
-VACCINE_PRODUCTS.push(...DOMESTIC_PRODUCTS);
+/**
+ * 全部产品 = 进口（可推荐）+ 国产（可选不推荐）。
+ *
+ * ⚠️ 两者都**只登记成分**，kinds 在这里统一推导 —— 所以必须放在
+ * DOMESTIC_PRODUCTS 声明之后（放在前面会踩 TDZ）。
+ */
+export const VACCINE_PRODUCTS: VaccineProduct[] = [
+  ...RAW_VACCINE_PRODUCTS,
+  ...DOMESTIC_PRODUCTS,
+].map((product) => ({
+  ...product,
+  kinds: kindsOfComponents(product),
+}));
 
 /**
  * 名字**没读全**时的候选（2026-10-06 老板实测）。
@@ -837,4 +971,19 @@ export function suggestProductsForPartialName(name: string): VaccineProduct[] {
       return key.length > text.length && key.startsWith(text);
     });
   });
+}
+
+/**
+ * 病种值的归一化（2026-10-06）—— 与 normalizeVaccineKind 同一个套路。
+ *
+ * 只认词表里的英文小写值（容忍大小写与空格），认不出返回 null。
+ * 脏值绝不允许进库：它会被拿去推导类别，进而影响免疫计划。
+ */
+export function normalizeVaccineComponent(
+  value: unknown,
+): VaccineComponent | null {
+  const key = String(value || '').trim().toLowerCase();
+  return (VACCINE_COMPONENTS as readonly string[]).includes(key)
+    ? (key as VaccineComponent)
+    : null;
 }

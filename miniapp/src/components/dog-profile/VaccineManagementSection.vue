@@ -250,45 +250,42 @@
           >{{ confirmResults[index].text }}</text>
         </view>
 
-        <!-- 归类（2026-10-05）。
-             老板问："记录卡片的标题已经体现出疫苗的名称了，那我们在疫苗卡片中
-             还有必要保留疫苗名称这个字段吗？我们可以直接把疫苗名称这个字段
-             换成识别出的疫苗类型吗？"
-             —— "显示类型"这个方向对，但**输入框不能去掉**：识别会认错、
-             顾客也会想改，去掉就没法纠正了。所以两个都留：
-             上面照旧能改名字，下面把"系统把它归成了哪一类"如实告诉他 ——
-             归类直接决定它算哪一步、多久打一次，顾客看得见才敢改。 -->
-        <!-- 分类：**系统判的，不是顾客选的**（2026-10-05 老板定）。
+        <!-- 这一针**含哪些病种**（2026-10-06 老板定的模型）。
+             原来是"分类"（核心疫苗/狂犬疫苗/钩端螺旋体/其他）—— 老板否掉了：
+               "在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看，
+                因为很多用户他并不清楚核心疫苗是什么意思？
+                我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
+                至于分类的判定则交由后台来完成。"
+             所以给顾客看、让他勾的，都是**病种**（犬瘟热/细小/腺病毒/狂犬…），
+             类别由后端按病种推导，只用来排期。
 
-             老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
-             分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
-             显示出来而已，不要交给用户自己来选择。"
-
-             所以默认只有一行**只读**的判定结果。两种例外：
-               · 系统**认不出来** → 如实说"没认出来"，这时才展开让顾客填
-                 （老板："承认认不出这只疫苗，转为让用户手动填写。"）
-               · 顾客**自己想改** → 点那行结果就展开
-                 （老板："用户可以判断，可以把疫苗记录进行手动更改。
-                   用户自己的疫苗记录、疫苗计划，我们去改什么呢？"）
-             营养师/后台不改顾客的记录。 -->
+             默认仍然只有一行**只读**结果 —— 从产品库选的、识别出来的，
+             病种都已经带好了，不用顾客操心。两种情况才展开：
+               · 认不出来（没勾过病种）→ 请他照疫苗本勾
+               · 顾客自己想改 → 点那行就展开 -->
         <view class="field-group">
-          <text class="field-label">分类</text>
+          <text class="field-label">含哪些病种</text>
 
-          <!-- 判定结果：只读一行，可点开改 -->
+          <!-- 判定结果：只读一行，点它可以改 -->
           <view
-            v-if="draftOf(record, index).kinds.length > 0 && !kindPickerOpen[index]"
+            v-if="hasComponentSelection(record, index) && !kindPickerOpen[index]"
             class="vaccine-kind"
             @tap="openKindPicker(index)"
           >
             <text
-              v-for="kind in draftOf(record, index).kinds"
-              :key="kind"
+              v-for="component in draftOf(record, index).components"
+              :key="component"
               class="vaccine-kind__tag"
-            >{{ kindLabel(kind) }}</text>
+            >{{ componentLabel(component) }}</text>
+            <!-- 勾不上任何病种时（驱虫药、看不懂的本子）走这条 -->
+            <text
+              v-if="draftOf(record, index).components.length === 0"
+              class="vaccine-kind__tag"
+            >都不是 / 不确定</text>
             <text class="vaccine-kind__edit">修改</text>
           </view>
 
-          <!-- 认不出来：如实说，并让顾客填 -->
+          <!-- 还没勾：说清楚要做什么，并让顾客照本子勾 -->
           <template v-else>
             <view v-if="matchingIndex === index" class="vaccine-kind__unknown">
               <text class="vaccine-kind__unknown-title">正在匹配产品…</text>
@@ -296,28 +293,29 @@
                 先从产品库里找，找不到再让 AI 认一次写法。
               </text>
             </view>
-            <view
-              v-else-if="draftOf(record, index).kinds.length === 0"
-              class="vaccine-kind__unknown"
-            >
-              <text class="vaccine-kind__unknown-title">这支苗没匹配到</text>
+            <view v-else class="vaccine-kind__unknown">
+              <text class="vaccine-kind__unknown-title">这一针含哪些病种？</text>
               <text class="vaccine-kind__unknown-desc">
-                产品库和 AI 都没认出它。照本子上的写法再核一遍，
-                或者下面手动选一个分类 —— 分类决定这一针算哪一步、隔多久再打。
+                照疫苗本上的成分表勾（组合苗请把含的都点上）。
+                勾不上就选「都不是 / 不确定」—— 那只记录、不影响提醒。
               </text>
             </view>
             <view class="vaccine-name-tags">
               <text
-                v-for="option in kindOptions"
+                v-for="option in componentOptions"
                 :key="option.value"
                 class="vaccine-name-tag"
-                :class="{ 'vaccine-name-tag--active': draftOf(record, index).kinds.includes(option.value) }"
-                @tap="toggleKind(index, option.value)"
+                :class="{ 'vaccine-name-tag--active': draftOf(record, index).components.includes(option.value) }"
+                @tap="toggleComponent(index, option.value)"
               >{{ option.label }}</text>
+              <text
+                class="vaccine-name-tag"
+                :class="{ 'vaccine-name-tag--active': isNoneOfThem(record, index) }"
+                @tap="toggleNoneOfThem(index)"
+              >都不是 / 不确定</text>
             </view>
             <text class="field-hint">
-              可多选 —— 组合苗请把含的几类都点上（例如卫佳捌 = 核心疫苗 + 钩端螺旋体）。
-              点一下选中，再点一下取消。「其他（非核心）」只记录、不影响提醒。
+              可多选 —— 点一下选中，再点一下取消。分类由我们按病种判定，你不用管。
             </text>
             <text class="vaccine-kind__done" @tap="closeKindPicker(index)">选好了</text>
           </template>
@@ -438,8 +436,15 @@ interface VaccineRecord {
    * 分类逻辑在后端 domain 层，前端只显示，不重写一套。
    */
   kinds?: string[]
-  /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"） */
+  /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"）—— 内部用，不给顾客看 */
   kindLabels?: string[]
+  /**
+   * 这一针含哪些病种（2026-10-06）—— **顾客看的就是它**。
+   * 类别（kinds）由病种推导，只用来排期。
+   */
+  components: string[]
+  /** 病种的中文名（犬瘟热 / 犬细小病毒 / 犬腺病毒 …） */
+  componentLabels?: string[]
   /**
    * 名字**没读全**时的候选产品（2026-10-06 老板要求"认不准就诚实说"）。
    *
@@ -464,6 +469,11 @@ interface VaccineDraft {
    * 核心苗的某一针标记成已完成，我们从此不再提醒）。
    */
   kinds: string[]
+  /**
+   * 这一针含哪些病种（2026-10-06）—— 顾客勾的、产品库带的都写在这里。
+   * 类别由后端按它推导。
+   */
+  components: string[]
   /**
    * 归类是**顾客自己点的**（不是系统判的）。
    *
@@ -585,17 +595,22 @@ defineExpose({
  *
  * 这四类是**闭集**，极少变；后端下发优先，拿不到就用这份。
  */
-const FALLBACK_KIND_OPTIONS = [
-  { value: 'core', label: '核心疫苗', affectsPlan: true },
-  { value: 'rabies', label: '狂犬疫苗', affectsPlan: true },
-  { value: 'lepto', label: '钩端螺旋体', affectsPlan: true },
-  { value: 'other', label: '其他（非核心）', affectsPlan: false },
+const FALLBACK_COMPONENT_OPTIONS = [
+  { value: 'cdv', label: '犬瘟热' },
+  { value: 'cpv', label: '犬细小病毒' },
+  { value: 'cav', label: '犬腺病毒' },
+  { value: 'rabies', label: '狂犬病' },
+  { value: 'lepto', label: '钩端螺旋体' },
 ]
-
-const kindOptions = ref<{ value: string; label: string; affectsPlan?: boolean }[]>([
-  ...FALLBACK_KIND_OPTIONS,
+const componentOptions = ref<{ value: string; label: string }[]>([
+  ...FALLBACK_COMPONENT_OPTIONS,
 ])
-const catalogProducts = ref<{ name: string; manufacturer: string; kinds: string[] }[]>([])
+const catalogProducts = ref<{
+  name: string
+  manufacturer: string
+  kinds: string[]
+  components: string[]
+}[]>([])
 
 async function loadVaccineCatalog() {
   try {
@@ -603,8 +618,8 @@ async function loadVaccineCatalog() {
     if (res?.code !== 0 || !res?.data) return
     // 只在下发的内容非空时才覆盖本地兜底 —— 后端万一返回空数组，
     // 也不能把顾客选归类的路堵死
-    if (Array.isArray(res.data.kinds) && res.data.kinds.length > 0) {
-      kindOptions.value = res.data.kinds
+    if (Array.isArray(res.data.components) && res.data.components.length > 0) {
+      componentOptions.value = res.data.components
     }
     catalogProducts.value = Array.isArray(res.data.products) ? res.data.products : []
   } catch {
@@ -696,24 +711,33 @@ async function confirmVaccineName(index: number) {
     const canonicalName = String(res.data.productName || '')
     const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(name)
 
+    // 后端认出来的病种回填到界面（顾客看到的是病种）
+    if (Array.isArray(res.data.components)) {
+      const components = res.data.components.map(String)
+      if (components.length > 0) {
+        draft.components = components
+      }
+    }
+
     if (draft.kinds.length === 0) {
       setConfirmResult(
         index,
         false,
-        '产品库和 AI 都没认出这支苗。照本子上的写法再核一遍，或者在下面手动选一个分类。',
+        '产品库和 AI 都没认出这支苗。照本子上的写法再核一遍，或者在下面手动勾一下病种。',
       )
     } else {
       if (canonicalName) {
-        // 名字跟着分类一起对齐，界面上那一行才显示得出"系统认为这是哪一支"
+        // 名字跟着一起对齐，界面上那一行才显示得出"系统认为这是哪一支"
         draft.vaccineName = canonicalName
       }
-      const labels = draft.kinds.map((kind) => kindLabel(kind)).join(' + ')
+      // 结果行里说的是**病种**（顾客看得懂的东西），不是内部类别
+      const labels = draft.components.map((component) => componentLabel(component)).join(' + ')
       setConfirmResult(
         index,
         true,
         matched
-          ? `已确认：${matched.name} · 归为「${labels}」`
-          : `已确认：${name} · 归为「${labels}」`,
+          ? `已确认：${matched.name}${labels ? ` · 含「${labels}」` : ''}`
+          : `已确认：${name}${labels ? ` · 含「${labels}」` : ''}`,
       )
     }
     scheduleAutoSave(record, index, { immediate: true })
@@ -749,12 +773,16 @@ function applyCatalogProduct(index: number, value: string | number) {
   if (!record || !product) return
   const draft = draftOf(record, index)
   draft.vaccineName = product.name
+  // 病种由产品库带出来（2026-10-06）；类别由后端按病种推导
+  draft.components = Array.isArray(product.components) ? [...product.components] : []
   draft.kinds = [...product.kinds]
   // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
   setConfirmResult(
     index,
     true,
-    `已选择：${product.name} · 归为「${product.kinds.map((kind) => kindLabel(kind)).join(' + ')}」`,
+    `已选择：${product.name} · 含「${(product.components || [])
+      .map((component) => componentLabel(component))
+      .join(' + ')}」`,
   )
   // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
   draft.kindsManual = false
@@ -774,8 +802,63 @@ function openKindPicker(index: number) {
   kindPickerOpen[index] = true
 }
 
-function kindLabel(kind: string): string {
-  return kindOptions.value.find((item) => item.value === kind)?.label || kind
+function componentLabel(component: string): string {
+  return componentOptions.value.find((item) => item.value === component)?.label || component
+}
+
+/** 已经勾过病种（或者明确选了"都不是"）—— 决定那一行是显示结果还是展开选择器 */
+function hasComponentSelection(record: VaccineRecord, index: number): boolean {
+  const draft = draftOf(record, index)
+  return draft.components.length > 0 || draft.kinds.includes('other')
+}
+
+/** 明确选了"都不是 / 不确定" */
+function isNoneOfThem(record: VaccineRecord, index: number): boolean {
+  const draft = draftOf(record, index)
+  return draft.components.length === 0 && draft.kinds.includes('other')
+}
+
+/**
+ * 勾/取消一个**病种**（2026-10-06 老板定的模型）。
+ *
+ * 顾客勾的是病种，类别由后端推导 —— 所以这里只动 components，
+ * kinds 留给后端算（本地那份只用于"能不能存"的判断）。
+ * 点"都不是"时会把病种清空、标一个 other，见 toggleNoneOfThem。
+ */
+function toggleComponent(index: number, component: string) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+
+  draft.components = draft.components.includes(component)
+    ? draft.components.filter((item) => item !== component)
+    : [...draft.components, component]
+
+  // 勾了真病种就不再是"都不是"
+  if (draft.components.length > 0) {
+    draft.kinds = draft.kinds.filter((kind) => kind !== 'other')
+  }
+  draft.kindsManual = true
+  // client 侧先把 kinds 清空：真正的类别由后端按病种推导后回填
+  scheduleAutoSave(record, index, { immediate: true })
+}
+
+/**
+ * 「都不是 / 不确定」—— 驱虫药、看不懂的本子这类。
+ *
+ * 勾不上任何病种时给一条出路：记下来，但**不参与计划**
+ * （对应 kinds 里的 other）。不然顾客会被"必须勾一个病种"卡住。
+ */
+function toggleNoneOfThem(index: number) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+  const already = draft.components.length === 0 && draft.kinds.includes('other')
+
+  draft.components = []
+  draft.kinds = already ? [] : ['other']
+  draft.kindsManual = true
+  scheduleAutoSave(record, index, { immediate: true })
 }
 
 /**
@@ -1000,6 +1083,9 @@ function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
     // 记录自己存的归类；老记录是空的，由界面提示顾客补选。
     // 已保存的记录一律算"人工指定过" —— 别因为我们自动判一次就改掉库里存的。
     kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
+    // 病种（2026-10-06）：顾客看的就是它。老记录可能是空的，
+    // 界面会按名字/产品库补一次（后端映射时已经兜过）。
+    components: Array.isArray(record.components) ? record.components.map(String) : [],
     kindsManual: Array.isArray(record.kinds) && record.kinds.length > 0,
   }
 }
@@ -1079,7 +1165,11 @@ function autoSaveBlockReason(record: VaccineRecord, index: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
   // 归类必填（2026-10-05 老板：手填时"类型还是必填项"）。
   // 没有归类这一条记录就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
-  if (draft.kinds.length === 0) return '还差归类，选一个自动保存'
+  // 病种必填（2026-10-06）：勾不上就选「都不是 / 不确定」。
+  // 没有病种这一条就不该参与计划 —— 认不出来当核心苗是以前最坏的那个 bug。
+  if (draft.components.length === 0 && !draft.kinds.includes('other')) {
+    return '还差病种，勾一个（或选"都不是"）自动保存'
+  }
   return ''
 }
 
@@ -1364,6 +1454,10 @@ async function loadRecords(dogId = props.dogId) {
         kindLabels: Array.isArray(item?.kindLabels)
           ? item.kindLabels.map(String)
           : [],
+        components: Array.isArray(item?.components) ? item.components.map(String) : [],
+        componentLabels: Array.isArray(item?.componentLabels)
+          ? item.componentLabels.map(String)
+          : [],
       }))
 
     /*
@@ -1434,6 +1528,7 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       // AI 判的归类（2026-10-05）。后端已经过了一遍闭集校验：
       // 认不出来的会是空数组，界面会请顾客自己选一下 —— 不让它悄悄变成核心苗。
       kinds: Array.isArray(draft.kinds) ? draft.kinds.map(String) : [],
+      components: Array.isArray(draft.components) ? draft.components.map(String) : [],
       // AI 判的也算"已指定"，但标成自动 —— 顾客仍可改
       kindsManual: false,
       // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
@@ -1577,7 +1672,12 @@ function buildPayload(
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,
     notes: draft.notes.trim() || null,
-    // 归类（2026-10-05）：显式带上。空数组 = 顾客还没选 —— 界面会挡住不让存
+    /*
+     * 病种（2026-10-06）：顾客勾的就是它，**类别由后端按病种推导**。
+     * 两个都带上：kinds 只在"都不是/不确定"时用到（那时病种是空的，
+     * 后端会退回按 kinds 记成 other）。
+     */
+    components: draft.components,
     kinds: draft.kinds,
     // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
     // 手工填写时是空数组，明确传空数组才算"这条没有原件"。

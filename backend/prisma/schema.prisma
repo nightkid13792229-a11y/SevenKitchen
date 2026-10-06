@@ -1445,6 +1445,19 @@ model VaccineRecord {
   ///
   /// 空数组 = 老记录（这一列是后加的），读时按名字兼容推导一次。
   kinds           String[]      @default([]) @map("kinds")
+  /// 这一针**含哪些病种**（2026-10-06）。
+  ///
+  /// 取值 cdv / cpv / cav / cpi / rabies / lepto / ccov / bordetella / lyme，可多值。
+  ///
+  /// 为什么要有这一列：老板定了新模型 ——
+  ///   "我们需要把产品库做的更详细一点……每一个产品，它里面包含哪些种类的疫苗。
+  ///    然后我们再根据它是否包含犬瘟、细小和腺病毒这三类疫苗，来决定它是不是核心疫苗。
+  ///    ……而在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看……
+  ///    我们需要把它拆开，拆成每一个疫苗种类让顾客选择。"
+  ///
+  /// 所以：**病种是顾客看得见、也勾得动的东西**（记录上显示的就是它），
+  /// 类别（kinds）由病种推导出来给计划用，不再给顾客看、也不手写。
+  components      String[]      @default([]) @map("components")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)

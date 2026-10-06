@@ -53,34 +53,30 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
-  it('分类是**系统判的、只读显示**，不是让顾客选（2026-10-05 老板定）', () => {
+  it('顾客勾的是**病种**，分类由后台判定（2026-10-06 老板改）', () => {
     const source = readComponent()
 
-    // 老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
-    // 分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
-    // 显示出来而已，不要交给用户自己来选择。"
-    expect(source).toContain('field-label">分类<')
-    expect(source).toContain('vaccine-kind__tag')
-    // 默认**不展开**选项；只有认不出来、或顾客自己点"修改"才展开
-    expect(source).toContain('const kindPickerOpen = reactive')
-    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
-    expect(source).toContain('function openKindPicker')
-    // 分类随记录一起提交（判定的结果要落到库里）
-    expect(source).toContain('kinds: draft.kinds,')
+    // 老板："在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看……
+    // 我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
+    // 至于分类的判定则交由后台来完成。"
+    expect(source).toContain('含哪些病种')
+    expect(source).toContain('componentOptions')
+    expect(source).toContain('toggleComponent(index, option.value)')
+    // 界面上不许再出现"核心疫苗/钩端螺旋体"这种内部类别让顾客选
+    expect(source).not.toContain("label: '核心疫苗'")
   })
 
-  it('系统认不出来时**如实承认**，并让顾客手动填（2026-10-05）', () => {
+
+  it('系统认不出来时**如实承认**，并让顾客照本子勾病种（2026-10-06 改）', () => {
     const source = readComponent()
 
-    // 老板："承认认不出这只疫苗，转为让用户手动填写。"
-    expect(source).toContain('这支苗没匹配到')
-    // 但**必须先把产品库和 AI 都试过**才算认不出
-    expect(source).toContain('产品库和 AI 都没认出它')
-    // 认不出时展开分类选择器
-    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
-    // 认不出来时才要求选 —— 否则这一条存不下去
-    expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
+    expect(source).toContain('这一针含哪些病种？')
+    expect(source).toContain('照疫苗本上的成分表勾')
+    // 勾不上任何病种时要有出路（驱虫药这种本来就不是疫苗）
+    expect(source).toContain('都不是 / 不确定')
+    expect(source).toContain('function toggleNoneOfThem(index: number)')
   })
+
 
   it('顾客可以自己改分类（他的记录，他做主）', () => {
     const source = readComponent()
@@ -269,17 +265,14 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('还没有疫苗记录')
   })
 
-  it('名称与归类的知识都不硬编码在前端', () => {
+  it('病种词表也由后端下发（前端只留一份小兜底）', () => {
     const source = readComponent()
 
-    // 硬编码的 commonVaccineNames 已退休，预设标签也下线了。
-    // 现在前端只做两件事：把名字发给后端判、把结果显示出来。
-    expect(source).not.toContain('commonVaccineNames')
-    expect(source).not.toContain('presetNames')
-    // 产品库与归类选项仍由后端下发（拉不到时归类有本地兜底）
-    expect(source).toContain('dogApi.vaccineCatalog()')
-    expect(source).toContain('FALLBACK_KIND_OPTIONS')
+    // 词表跟着接口走：后端改了前端不用改
+    expect(source).toContain('componentOptions.value = res.data.components')
+    expect(source).toContain('FALLBACK_COMPONENT_OPTIONS')
   })
+
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {
     const source = readComponent()
@@ -437,12 +430,11 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
   it('多选要能用：点一下不收起选择器，另给一个「选好了」', () => {
     const source = readComponent()
 
-    // 收起就没法再点第二类了
+    // 收起就没法再点第二个病了
     expect(source).toContain('function closeKindPicker(index: number)')
     expect(source).toContain("class=\"vaccine-kind__done\" @tap=\"closeKindPicker(index)\"")
-    // 提示里得写明可多选，并给出组合苗的例子（不然没人知道能多选）
+    // 提示里得写明可多选（组合苗要勾好几个病种）
     expect(source).toContain('可多选')
-    expect(source).toContain('卫佳捌 = 核心疫苗 + 钩端螺旋体')
   })
 
   it('组合苗的多分类仍然成立（从产品库选时自动带出）', () => {

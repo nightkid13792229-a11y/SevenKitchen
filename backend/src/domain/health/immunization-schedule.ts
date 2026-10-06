@@ -1496,3 +1496,9 @@ export function buildVaccinePlan(
  * 卡点取消 —— 免疫程序表正式对顾客开放，不再是"内部先看"的状态。
  * 留着一个随时能把功能关掉的开关，反而会让线上状态变得说不清。
  */
+
+/**
+ * 由成分推导类别 —— 实现在 vaccine-products（成分表在那里），
+ * 这里转出去，省得调用方为了一个函数引两个模块（2026-10-06）。
+ */
+export { kindsOfComponents } from './vaccine-products';

@@ -5,6 +5,7 @@
 
 import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
 import {
+  VACCINE_COMPONENT_LABELS,
   findProductByText,
   suggestProductsForPartialName,
 } from '../../domain/health/vaccine-products';
@@ -248,6 +249,14 @@ export class HealthRecordsController {
          * 认不出来就是空串 —— 界面照旧显示顾客写的那串字，绝不硬塞。
          */
         productName: findProductByText(text)?.name || '',
+        /**
+         * 这支苗含哪些病种（2026-10-06）—— 界面拿它回填"病种"勾选。
+         * 认不出来就是空数组，界面请顾客照疫苗本自己勾。
+         */
+        components: findProductByText(text)?.components || [],
+        componentLabels: (findProductByText(text)?.components || []).map(
+          (component) => VACCINE_COMPONENT_LABELS[component] || component,
+        ),
         /**
          * 名字没读全时的候选（2026-10-06）。
          * 「卫佳」→ 卫佳伍 / 卫佳捌 / 卫佳细 —— 界面如实告诉顾客

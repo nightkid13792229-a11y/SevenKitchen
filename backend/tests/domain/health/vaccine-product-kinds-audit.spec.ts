@@ -1,5 +1,9 @@
 import { buildImmunizationSchedule } from '../../../src/domain/health/immunization-schedule';
-import { VACCINE_PRODUCTS } from '../../../src/domain/health/vaccine-products';
+import {
+  VACCINE_COMPONENT_LABELS,
+  VACCINE_PRODUCTS,
+  coversCoreSeries,
+} from '../../../src/domain/health/vaccine-products';
 
 /**
  * 产品表自洽审计（2026-10-06 老板提问后加）。
@@ -113,5 +117,88 @@ describe('顾客可见文案 · 不出现 Markdown 记号（2026-10-06）', () =
     }
 
     expect(bad).toEqual([]);
+  });
+});
+
+/**
+ * 推导出来的分类必须与改之前**手写的**逐一等价（2026-10-06）。
+ *
+ * 这是这次模型改造的安全绳：`components` 取代了手写的 `kinds`，
+ * 万一某支苗的成分登记漏了一种病，分类就会悄悄变 ——
+ * 那会直接影响"这一针算不算完成某一步"。所以把改之前的 37 支值抄在这里对账。
+ */
+describe('分类推导 · 与改造前手写值逐一等价（2026-10-06）', () => {
+  /** 改之前手写的 kinds（来自 git 历史里的产品表） */
+  const EXPECTED: Record<string, string[]> = {
+    卫佳捌: ['core', 'lepto'],
+    宠必威优免康: ['core'],
+    卫佳伍: ['core'],
+    卫佳细: ['core'],
+    宠必威幼犬保: ['core_early'],
+    优乐康: ['core', 'lepto'],
+    宠必威乐必妥: ['lepto'],
+    海博莱犬四联加钩端: ['core', 'lepto'],
+    维克犬四联加钩端: ['core', 'lepto'],
+    宠必威锐必威: ['rabies'],
+    瑞贝康: ['rabies'],
+    瑞比克: ['rabies'],
+    迪安适: ['rabies'],
+    维克狂犬: ['rabies'],
+    '犬四联（中牧江西）': ['core'],
+    科旺福: ['core'],
+    宠安士佳: ['core'],
+    犬特威: ['core'],
+    汪幼保: ['core'],
+    金倍安: ['core'],
+    汪倍护: ['core', 'rabies'],
+  };
+
+  it('🔴 逐支对账：推导值 == 手写值', () => {
+    const diffs: string[] = [];
+
+    for (const product of VACCINE_PRODUCTS) {
+      const expected = EXPECTED[product.name];
+      // 表里没列的都是清一色狂犬苗
+      const want = expected ?? ['rabies'];
+      const got = product.kinds;
+      if (JSON.stringify(got) !== JSON.stringify(want)) {
+        diffs.push(`${product.name}: 推导=${JSON.stringify(got)} 手写=${JSON.stringify(want)}`);
+      }
+    }
+
+    expect(diffs).toEqual([]);
+  });
+
+  it('每支苗都登记了成分（不许有空数组）', () => {
+    const empty = VACCINE_PRODUCTS.filter((p) => p.components.length === 0).map((p) => p.name);
+    expect(empty).toEqual([]);
+  });
+
+  it('成分都在词表里（不许出现没定义过的病种）', () => {
+    const bad: string[] = [];
+    for (const product of VACCINE_PRODUCTS) {
+      for (const component of product.components) {
+        if (!(component in VACCINE_COMPONENT_LABELS)) {
+          bad.push(`${product.name}: ${component}`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('只有幼犬保是早期苗（4 周龄抢跑那一支）', () => {
+    const early = VACCINE_PRODUCTS.filter((p) => p.earlySeries).map((p) => p.name);
+    expect(early).toEqual(['宠必威幼犬保']);
+  });
+
+  it('「能不能顶核心首免」按三种核心病判（不再要求副流感）', () => {
+    const byName = (n: string) => VACCINE_PRODUCTS.find((p) => p.name === n)!;
+
+    // 犬瘟+腺病毒+细小 三种全覆盖 → 顶得上
+    expect(coversCoreSeries(byName('卫佳伍'))).toBe(true);
+    expect(coversCoreSeries(byName('犬四联（中牧江西）'))).toBe(true);
+    // 只防细小 / 只防两种 → 顶不上
+    expect(coversCoreSeries(byName('卫佳细'))).toBe(false);
+    expect(coversCoreSeries(byName('犬特威'))).toBe(false);
   });
 });

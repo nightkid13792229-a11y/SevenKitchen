@@ -20,10 +20,17 @@ import {
 import {
   VACCINE_KIND_LABELS,
   classifyVaccineKinds,
+  kindsOfComponents,
   normalizeVaccineKind,
   resolveRecordKinds,
   type VaccineKind,
 } from '../../domain/health/immunization-schedule';
+import {
+  VACCINE_COMPONENT_LABELS,
+  findProductByText,
+  normalizeVaccineComponent,
+  type VaccineComponent,
+} from '../../domain/health/vaccine-products';
 import {
   CheckupRecordResponseDto,
   CheckupRecordListResponseDto,
@@ -159,6 +166,12 @@ export class HealthService {
   ): Promise<VaccineRecordResponseDto> {
     await this.verifyDogOwnership(dto.dogId, customerId);
 
+    // 病种是主数据，类别由它推导（2026-10-06）
+    const components = this.resolveComponents(
+      (dto as { components?: unknown }).components,
+      dto.vaccineName,
+    );
+
     const record = await this.vaccineRecordRepo.create({
       dogId: dto.dogId,
       vaccineName: dto.vaccineName,
@@ -167,7 +180,12 @@ export class HealthService {
       notes: dto.notes ?? null,
       status: dto.status || 'COMPLETED',
       attachments: dto.attachments ?? [],
-      kinds: this.resolveKinds(dto.kinds, dto.vaccineName),
+      components,
+      kinds: this.resolveKinds(
+        (dto as { components?: unknown }).components,
+        dto.kinds,
+        dto.vaccineName,
+      ),
     });
 
     return this.mapVaccineRecordToDto(record);
@@ -213,6 +231,8 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
+    const dtoComponents = (dto as { components?: unknown }).components;
+
     /**
      * ⚠️ 2026-10-06 老板报的 bug："不管点哪一个分类，都改不动，还是原来的这个分类。"
      *
@@ -236,12 +256,24 @@ export class HealthService {
       // 所以 null 要照写；只有"整个字段没传"才表示别动它
       notes: dto.notes === undefined ? undefined : (dto.notes ?? null),
       status: dto.status ?? undefined,
-      // 归类：顾客手动改过就以他为准（闭集校验在 resolveKinds 里）。
-      // 不传 = 别动它，不重判 —— 免得改个备注把人家自己选的分类冲掉。
-      kinds:
-        dto.kinds === undefined
+      // 病种/类别：顾客手动改过就以他为准（闭集校验在 resolve* 里）。
+      // 不传 = 别动它，不重判 —— 免得改个备注把人家自己选的冲掉。
+      // 传了病种就由它重新推导类别（两处必须一起更新，否则会打架）。
+      components:
+        dtoComponents === undefined
           ? undefined
-          : this.resolveKinds(dto.kinds, dto.vaccineName ?? record.vaccineName),
+          : this.resolveComponents(
+              dtoComponents,
+              dto.vaccineName ?? record.vaccineName,
+            ),
+      kinds:
+        dtoComponents === undefined && dto.kinds === undefined
+          ? undefined
+          : this.resolveKinds(
+              dtoComponents,
+              dto.kinds,
+              dto.vaccineName ?? record.vaccineName,
+            ),
       // 只有顾客明确传了 attachments 才动它 —— 不传就保持原样，
       // 免得改个备注顺手把原件清空
       attachments: dto.attachments ?? undefined,
@@ -634,9 +666,69 @@ export class HealthService {
    * 第 ③ 条是这次的关键：以前推不出来默认当核心苗，一针驱虫药
    * 「拜宠清」也能把核心苗的某一针标记成已完成，我们从此不再提醒。
    */
-  private resolveKinds(explicit: unknown, vaccineName: string): string[] {
+  /**
+   * 这一针**含哪些病种**（2026-10-06 老板定的新模型）。
+   *
+   * 优先级：
+   *   ① 调用方显式传的（顾客勾的）—— 过滤掉词表以外的值，去重；
+   *   ② 没传就按名字查产品库（库里有就是它的成分）；
+   *   ③ 都得不到 → 空数组（未登记成分），**绝不猜**。
+   */
+  private resolveComponents(
+    explicit: unknown,
+    vaccineName: string,
+  ): VaccineComponent[] {
     const given = Array.isArray(explicit)
       ? explicit
+          .map((item) => normalizeVaccineComponent(item))
+          .filter((item): item is VaccineComponent => item !== null)
+      : [];
+
+    if (given.length > 0) {
+      return Array.from(new Set(given));
+    }
+
+    return findProductByText(vaccineName)
+      ? [...(findProductByText(vaccineName) as { components: VaccineComponent[] })
+          .components]
+      : [];
+  }
+
+  /**
+   * 类别**由成分推导**（2026-10-06）。
+   *
+   * 顾客勾的是病种，类别是后台的事 —— 老板原话：
+   * "至于分类的判定则交由后台来完成。"
+   *
+   * 成分是空的时候（老记录 / 库里没有又没勾）退回按名字的字面规则，
+   * 这是**历史兼容路径**，不是主路径。
+   */
+  private resolveKinds(
+    explicitComponents: unknown,
+    explicitKinds: unknown,
+    vaccineName: string,
+  ): string[] {
+    const product = findProductByText(vaccineName);
+
+    /*
+     * ① 调用方**显式勾了病种** → 类别由病种推导（新模型的主路径）。
+     *
+     *    这里必须判"是不是显式传的"，而不是"推导出来有没有值" ——
+     *    否则老客户端只传 kinds 的时候会被名字推出来的成分盖掉。
+     */
+    if (Array.isArray(explicitComponents)) {
+      const components = this.resolveComponents(explicitComponents, vaccineName);
+      if (components.length > 0) {
+        return kindsOfComponents({
+          components,
+          earlySeries: product?.earlySeries,
+        });
+      }
+    }
+
+    // ② 老客户端只给了类别 → 以他为准（历史兼容；新界面已经不发这个了）
+    const given = Array.isArray(explicitKinds)
+      ? explicitKinds
           .map((item) => normalizeVaccineKind(item))
           .filter((item): item is VaccineKind => item !== null)
       : [];
@@ -647,11 +739,32 @@ export class HealthService {
       return Array.from(new Set(given));
     }
 
+    // ③ 都没给 → 按名字查产品库（查得到就用它的成分推），查不到退回字面规则
+    if (product && product.components.length > 0) {
+      return kindsOfComponents({
+        components: product.components,
+        earlySeries: product.earlySeries,
+      });
+    }
+
     return classifyVaccineKinds(vaccineName);
   }
 
   private mapVaccineRecordToDto(record: any): VaccineRecordResponseDto {
     const resolvedKinds = resolveRecordKinds(record);
+    /*
+     * 病种：优先用记录自己存的（顾客勾的 / 从产品库带出来的）；
+     * 老记录没存过（这一列是后加的）就按名字查一次产品库 —— 兼容路径。
+     */
+    const stored = Array.isArray(record.components)
+      ? record.components
+          .map((item: unknown) => normalizeVaccineComponent(item))
+          .filter((item: string | null): item is VaccineComponent => item !== null)
+      : [];
+    const resolvedComponents: VaccineComponent[] =
+      stored.length > 0
+        ? Array.from(new Set(stored))
+        : this.resolveComponents(undefined, record.vaccineName);
     return plainToInstance(VaccineRecordResponseDto, {
       id: record.id,
       dogId: record.dogId,
@@ -667,6 +780,11 @@ export class HealthService {
       kinds: resolvedKinds,
       kindLabels: resolvedKinds.map(
         (kind) => VACCINE_KIND_LABELS[kind] || kind,
+      ),
+      // 病种（2026-10-06）：顾客看的是这个，不是类别
+      components: resolvedComponents,
+      componentLabels: resolvedComponents.map(
+        (component) => VACCINE_COMPONENT_LABELS[component] || component,
       ),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

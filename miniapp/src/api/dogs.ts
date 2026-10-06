@@ -110,6 +110,16 @@ type VaccineRecordCreatePayload = {
   status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
   /** 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图 URL */
   attachments?: string[]
+  /**
+   * 这一针**含哪些病种**（2026-10-06）—— 顾客勾的就是它。
+   * 类别（kinds）由后端按病种推导，前端不判。
+   */
+  components?: string[]
+  /**
+   * 类别（core/rabies/lepto/other）。新界面只在「都不是 / 不确定」时才用到它
+   * （那时病种是空的，后端按它记成 other：只记录、不影响提醒）。
+   */
+  kinds?: string[]
 }
 
 const healthRecordCrud = <

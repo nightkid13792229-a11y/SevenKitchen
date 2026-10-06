@@ -58,4 +58,16 @@ export class CreateVaccineDto {
   @IsArray()
   @IsString({ each: true })
   kinds?: string[];
+
+  /**
+   * 这一针**含哪些病种**（2026-10-06）。
+   *
+   * 取值 cdv/cpv/cav/cpi/rabies/lepto/ccov/bordetella/lyme（闭集，服务端会过滤）。
+   * 顾客勾的就是它；类别（kinds）由服务端按病种推导，不再让顾客操心。
+   * 不传时服务端按名字查产品库补上。
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  components?: string[];
 }

@@ -54,8 +54,7 @@ export type HealthReportConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
  * 老板第 5 条：识别之后**不需要逐条确认**，让顾客确认一次就能自动录入表单。
  */
 import {
-  VACCINE_KIND_LABELS,
-  VACCINE_KINDS,
+  classifyVaccineKinds,
   type VaccineKind,
 } from '../../domain/health/immunization-schedule';
 import {
@@ -86,33 +85,11 @@ export const HEALTH_DOCUMENT_TYPES: readonly HealthDocumentType[] = [
 ];
 
 /**
- * 把 AI 给的归类过一遍闭集（2026-10-05）。
+ * ⚠️ 原来这里有个 normalizeKinds()，用来把 AI 回的归类过一遍闭集。
  *
- * 只认 core / rabies / lepto / other 四个英文小写值（也容忍大写、空格、
- * 以及模型偶尔回的中文标签 —— 认得出就转，认不出就丢）。
- * 返回空数组时，调用方（或界面）会让顾客自己指定 —— **绝不猜**。
+ * 2026-10-06 老板拍板：**AI 不再参与归类**，分类一律由我们的产品表判定
+ * （见下面 VACCINE_BOOK 草稿映射里的注释）。没有调用方了，删掉。
  */
-export function normalizeKinds(value: unknown): string[] {
-  const raw = Array.isArray(value) ? value : value ? [value] : [];
-  const out: string[] = [];
-
-  for (const item of raw) {
-    const key = String(item ?? '').trim().toLowerCase();
-    const mapped =
-      VACCINE_KINDS.includes(key as any)
-        ? key
-        : // 中文说法也认一下 —— 模型有时会直接回中文
-          Object.entries(VACCINE_KIND_LABELS).find(
-            ([, label]) => label === String(item ?? '').trim(),
-          )?.[0] || '';
-
-    if (mapped && !out.includes(mapped)) {
-      out.push(mapped);
-    }
-  }
-
-  return out;
-}
 
 export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest {
   const key = String(value || '').trim().toUpperCase();
@@ -359,32 +336,20 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译。',
     '· nextDueDate 只有本子上明确写了才填，没写就留空。',
     '',
-    '★ 归类（kinds 字段）—— 2026-10-05 老板拍板：**由你来判**。',
+    '★ 归类（kinds 字段）—— **不用你管**（2026-10-06 老板拍板）。',
     '',
-    '为什么交给你判：本子上的写法五花八门（「宠必威® 幼犬保」「卫佳 5」「犬八联」…），',
-    '靠字面匹配我们的产品库必然对不上（多音字、空格、® 这类符号），',
-    '而写一套模糊匹配是无底洞。你看得懂这些写法指的是什么，所以这一步交给你。',
+    '分类由我们自己的产品表判定 —— 那是兽医审过的唯一一份定义，',
+    '不由模型来判断（模型判错过：「宠必威® 幼犬保」被当成普通核心疫苗，',
+    '而它是 4 周龄抢跑的早期核心疫苗，接种周期完全不同）。',
     '',
-    '但你**只能在下面四类里选**（闭集，不许自创）：',
-    '· core   —— 核心疫苗：犬瘟热 / 犬细小 / 犬腺病毒 / 犬副流感，以及各类联苗',
-    '            （二联、四联、六联、八联、卫佳伍、卫佳捌、宠必威优免康、优乐康…）',
-    '· rabies —— 狂犬疫苗（狂犬、瑞比克、宠必威锐必威、犬康、犬力康…）',
-    '· lepto  —— 钩端螺旋体（钩端、乐必妥，以及明确含钩端的联苗）',
-    '· other  —— 上面三类都不是的非核心苗：犬窝咳、冠状病毒、莱姆病 等',
-    '',
-    '判定规则（按顺序）：',
-    '1. 先看这是不是**联苗**：联苗能同时占好几类 —— 「卫佳捌」既是 core 又含 lepto，',
-    '   所以它的 kinds 是 ["core","lepto"]；「汪倍护」（二联+狂犬）是 ["core","rabies"]。',
-    '2. 单独一支狂犬苗只填 ["rabies"]。',
-    '3. **认不出来就填 ["other"]** —— 这一条最重要。',
-    '   宁可标成"其他（非核心）"，也**绝对不许**猜成 core：',
-    '   标成 core 会让系统认为核心疫苗的某一针已经打完，从此不再提醒家长 ——',
-    '   比标错严重得多。（例如驱虫药「拜宠清」根本不是疫苗，应该 ["other"]。）',
+    '所以这一步你只要做一件事：**把本子上的名字照抄准确**。',
+    '名字抄对了，分类自然是对的；抄错一个字才是真的麻烦。',
+    '不要输出 kinds 字段。',
     '',
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
-    '    { "vaccineName": "犬四联", "kinds": ["core"], "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
+    '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
     '  ],',
     '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
@@ -699,21 +664,41 @@ export function normalizeDrafts(
   const raw = Array.isArray(parsed.drafts) ? parsed.drafts : [];
 
   if (documentType === 'VACCINE_BOOK') {
-    return raw
-      .map((item: any) => ({
-        vaccineName: normalizeDraftText(item?.vaccineName, 100),
-        // AI 判的归类（2026-10-05）：**过一遍闭集校验**。
-        // 模型可能不照做（编个别的词、或者给个中文），认不出来的直接丢掉 ——
-        // 宁可这条记录暂时"未归类"、界面提示顾客选一下，
-        // 也不能让一个非法值悄悄影响免疫计划。
-        kinds: normalizeKinds(item?.kinds),
-        vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
-        nextDueDate: normalizeDraftDate(item?.nextDueDate),
-        notes: normalizeDraftText(item?.notes, 200),
-      }))
-      // 没有疫苗名的记录没有意义，丢掉
-      .filter((draft) => draft.vaccineName)
-      .slice(0, 20);
+    return (
+      raw
+        .map((item: any) => {
+          const vaccineName = normalizeDraftText(item?.vaccineName, 100);
+          return {
+            vaccineName,
+            /**
+             * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
+             *
+             * 老板原话："AI 只负责认产品，分类永远由兽医审过的表定义。"
+             *
+             * 原来这一步信的是 AI 回的那个归类字段（再用闭集校验一遍），
+             * 而疫苗本那段提示词当时确实写着"归类由你来判"。后果实测到了：
+             * 「宠必威® 幼犬保」被 AI 判成 core（核心疫苗），而它其实是
+             * core_early（早期核心疫苗，4 周龄那一针抢跑，接种周期完全不同）。
+             * 分类直接决定"这一针算哪一步、隔多久再打"，判错就把免疫计划带偏。
+             *
+             * classifyVaccineKinds 是**唯一**一份分类定义：
+             *   ① 先查已审核的产品目录（按真实成分算，组合苗能同时占好几类）
+             *   ② 目录里没有的，才退回按病名/联数判（狂犬、钩端、犬瘟细小…）
+             *   ③ 都认不出来 → **空数组**，界面老实说"没匹配到"并请顾客自己选
+             * —— 绝不猜成核心苗（猜错会让系统以为那一针打完了，从此不再提醒）。
+             *
+             * AI 在这条路上只负责一件事：把本子上的名字照抄准确。
+             */
+            kinds: classifyVaccineKinds(vaccineName),
+            vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
+            nextDueDate: normalizeDraftDate(item?.nextDueDate),
+            notes: normalizeDraftText(item?.notes, 200),
+          };
+        })
+        // 没有疫苗名的记录没有意义，丢掉
+        .filter((draft) => draft.vaccineName)
+        .slice(0, 20)
+    );
   }
 
   if (documentType === 'CHECKUP_REPORT') {

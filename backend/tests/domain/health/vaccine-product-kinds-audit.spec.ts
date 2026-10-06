@@ -1,3 +1,4 @@
+import { buildImmunizationSchedule } from '../../../src/domain/health/immunization-schedule';
 import { VACCINE_PRODUCTS } from '../../../src/domain/health/vaccine-products';
 
 /**
@@ -86,5 +87,31 @@ describe('产品表审计 · kinds 与 diseases 必须自洽（2026-10-06）', (
 
   it('产品表规模没被误删（37 支：14 进口可推荐 + 23 国产可选）', () => {
     expect(VACCINE_PRODUCTS.length).toBe(37);
+  });
+});
+
+/**
+ * 顾客看得见的文案里不许出现 Markdown 记号（2026-10-06）。
+ *
+ * 小程序不认 Markdown —— 依据里写 `**强烈建议**` 会原样显示成星号。
+ * 我自己在钩端的依据里就犯过一次，所以加这条守住：
+ * basis / label 这些直接渲染给顾客的字符串里不能有 ** 或 __。
+ */
+describe('顾客可见文案 · 不出现 Markdown 记号（2026-10-06）', () => {
+  it('程序表里每一步的 label 与 basis 都不含 ** 或 __', () => {
+    const bad: string[] = [];
+
+    for (const item of buildImmunizationSchedule(new Date('2026-02-01'), {
+      kinds: ['core', 'core_early', 'rabies', 'lepto'],
+    })) {
+      if (item.label.includes('**') || item.label.includes('__')) {
+        bad.push(`label: ${item.label}`);
+      }
+      if (item.basis.includes('**') || item.basis.includes('__')) {
+        bad.push(`basis: ${item.basis}`);
+      }
+    }
+
+    expect(bad).toEqual([]);
   });
 });

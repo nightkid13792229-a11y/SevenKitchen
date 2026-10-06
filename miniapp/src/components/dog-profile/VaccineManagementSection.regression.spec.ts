@@ -412,14 +412,37 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
     expect(source).not.toContain('records.value = (Array.isArray(list) ? list : [])')
   })
 
-  it('🔴 点分类是"换成这个"，不是"再加一个"', () => {
+  /**
+   * 分类标签：**多选**（2026-10-06 第二轮定稿）。
+   *
+   * 中间走过一段弯路，这里把结论钉死：
+   *   · 老板第一次说"点哪个都改不动"—— 真正的原因是**后端更新记录时漏写了
+   *     kinds**（已修）。我当时代价最小地改成了单选，顺手把组合苗的
+   *     多选能力也改没了。
+   *   · 老板第二次把洞看出来了："卫佳捌这种多分类的产品……手动是没办法
+   *     多选标签的，对吗？" —— 对。少勾一类的后果很实际：
+   *     免疫计划会以为钩端那一步还没打。
+   * 所以恢复多选；"改不动"的观感不会回来，因为后端现在真的存得进去。
+   */
+  it('🔴 手动分类是**多选**（组合苗要能同时勾上好几类）', () => {
     const source = readComponent()
 
-    // 原来 toggleKind 是多选开关：点另一个分类只是又加了一个，
-    // 旧那个一直在 —— 老板点来点去发现"还是原来的这个分类"。
-    expect(source).toContain('draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]')
-    // 不能再是"filter + 追加"那套多选写法
-    expect(source).not.toContain('draft.kinds.filter((item) => item !== kind)')
+    expect(source).toContain('draft.kinds.includes(kind)')
+    expect(source).toContain('? draft.kinds.filter((item) => item !== kind)')
+    expect(source).toContain(': [...draft.kinds, kind]')
+    // 不能再退回"选一个"（那会吃掉组合苗的第二类）
+    expect(source).not.toContain('draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]')
+  })
+
+  it('多选要能用：点一下不收起选择器，另给一个「选好了」', () => {
+    const source = readComponent()
+
+    // 收起就没法再点第二类了
+    expect(source).toContain('function closeKindPicker(index: number)')
+    expect(source).toContain("class=\"vaccine-kind__done\" @tap=\"closeKindPicker(index)\"")
+    // 提示里得写明可多选，并给出组合苗的例子（不然没人知道能多选）
+    expect(source).toContain('可多选')
+    expect(source).toContain('卫佳捌 = 核心疫苗 + 钩端螺旋体')
   })
 
   it('组合苗的多分类仍然成立（从产品库选时自动带出）', () => {

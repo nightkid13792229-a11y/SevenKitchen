@@ -277,8 +277,10 @@
               >{{ option.label }}</text>
             </view>
             <text class="field-hint">
-              「其他（非核心）」只记录、不影响提醒。
+              可多选 —— 组合苗请把含的几类都点上（例如卫佳捌 = 核心疫苗 + 钩端螺旋体）。
+              点一下选中，再点一下取消。「其他（非核心）」只记录、不影响提醒。
             </text>
+            <text class="vaccine-kind__done" @tap="closeKindPicker(index)">选好了</text>
           </template>
         </view>
 
@@ -781,26 +783,43 @@ function showManualNameInput(index: number): boolean {
 }
 
 /**
- * 顾客手动指定分类（2026-10-06 改成"选一个"）。
+ * 顾客手动指定分类 —— **多选开关**（2026-10-06 第二轮）。
  *
- * ⚠️ 原来是**多选开关**：点另一个分类是"加一个"，不是"换过去"。
- *    老板点来点去发现"还是原来的这个分类"—— 因为旧那个一直在，
- *    只是旁边多了一个。这是我自己没想清楚的交互。
+ * 中间走过一段弯路，记在这里免得再走回去：
  *
- * 现在点哪个就是哪个（单选）。组合苗的多分类仍然成立 ——
- * 那是**从产品库选产品**时按真实成分自动带出来的（卫佳捌 = 核心 + 钩端），
- * 不需要顾客手动拼。
+ *   老板第一次说"不管点哪一个分类，都改不动，还是原来的这个分类"，
+ *   真正的原因是**后端更新记录时漏写了 kinds**（已修）。我当时代价最小地
+ *   把手动选择改成了单选，顺手把组合苗的多选能力也改没了。
+ *
+ *   老板第二次就把这个洞看出来了："卫佳捌这种多分类的产品……
+ *   手动是没有办法多选标签的，对吗？" —— 对。
+ *   少勾一类的后果很实际：免疫计划会以为钩端那一步还没打。
+ *
+ * 所以恢复多选。上次那个"改不动"的观感不会回来 —— 后端现在真的存得进去，
+ * 点一下标签立刻高亮、也立刻落库。为了让"多选"这件事本身看得懂：
+ *   · 标签下面写明"可多选"，并举卫佳捌这个例子；
+ *   · 点一下不再自动收起选择器（不然多选根本没法操作），
+ *     旁边给一个「选好了」手动收起。
  */
 function toggleKind(index: number, kind: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  // 再点一次已选中的那个 = 取消（留空会走"请选一个"的提示）
-  draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]
+
+  // 点已选中的 = 取消这一类；点没选中的 = 加上这一类（组合苗可以同时好几类）
+  draft.kinds = draft.kinds.includes(kind)
+    ? draft.kinds.filter((item) => item !== kind)
+    : [...draft.kinds, kind]
+
   // 顾客自己点过就不再用自动判定覆盖他
   draft.kindsManual = true
-  kindPickerOpen[index] = false
+  // ⚠️ 这里**不收起**选择器：收起就没法再点第二类了
   scheduleAutoSave(record, index, { immediate: true })
+}
+
+/** 「选好了」—— 手动收起分类选择器（多选模式下的出口） */
+function closeKindPicker(index: number) {
+  kindPickerOpen[index] = false
 }
 
 /**
@@ -1830,6 +1849,18 @@ async function doRemove(record: VaccineRecord) {
 
 .vaccine-confirm-result--warn {
   color: #b26a2f;
+}
+
+/* 「选好了」—— 多选模式下收起分类选择器的出口（2026-10-06） */
+.vaccine-kind__done {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 10rpx 24rpx;
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  background: #eef2e6;
+  border-radius: 999rpx;
 }
 
 /* 认不出来时的说明（2026-10-05）：不装懂，把话说清楚再让顾客填 */

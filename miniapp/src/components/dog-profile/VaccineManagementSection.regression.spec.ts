@@ -386,3 +386,45 @@ describe('疫苗本原图留档', () => {
     expect(api).toContain('attachments?: string[]')
   })
 })
+
+/**
+ * 老板 2026-10-06 实测报的两个问题。
+ */
+describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 整表重载不许冲掉还没保存的本地记录', () => {
+    const source = readComponent()
+
+    // 根因：saveScannedRecords 逐条存，而每存一条 saveRecord 都会 loadRecords()
+    // 整表重载 —— 重载原来是"拿服务器返回的直接替换"，
+    // 于是同一批里还没保存的那几条（id 还是空的）当场被冲掉。
+    // 表现就是老板看到的：识别 3 条，只进去 1 条。
+    expect(source).toContain('const unsavedLocal = records.value.filter((record) => !record.id)')
+    expect(source).toContain('records.value = [...fromServer, ...unsavedLocal]')
+    // 不能再用"直接替换"的写法
+    expect(source).not.toContain('records.value = (Array.isArray(list) ? list : [])')
+  })
+
+  it('🔴 点分类是"换成这个"，不是"再加一个"', () => {
+    const source = readComponent()
+
+    // 原来 toggleKind 是多选开关：点另一个分类只是又加了一个，
+    // 旧那个一直在 —— 老板点来点去发现"还是原来的这个分类"。
+    expect(source).toContain('draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]')
+    // 不能再是"filter + 追加"那套多选写法
+    expect(source).not.toContain('draft.kinds.filter((item) => item !== kind)')
+  })
+
+  it('组合苗的多分类仍然成立（从产品库选时自动带出）', () => {
+    const source = readComponent()
+
+    // 单选只针对"顾客手动指定"这一条路；
+    // 选产品时分类按真实成分带出来（卫佳捌 = 核心 + 钩端），不能被单选逻辑吃掉
+    expect(source).toContain('draft.kinds = [...product.kinds]')
+  })
+})

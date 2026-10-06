@@ -594,14 +594,23 @@ function productPickerLabel(name: string): string {
     : '从产品库选择（进口 / 国产都有）'
 }
 
-/** 归类是多选：组合苗本来就同时属于好几类（卫佳捌 = 核心 + 钩端） */
+/**
+ * 顾客手动指定分类（2026-10-06 改成"选一个"）。
+ *
+ * ⚠️ 原来是**多选开关**：点另一个分类是"加一个"，不是"换过去"。
+ *    老板点来点去发现"还是原来的这个分类"—— 因为旧那个一直在，
+ *    只是旁边多了一个。这是我自己没想清楚的交互。
+ *
+ * 现在点哪个就是哪个（单选）。组合苗的多分类仍然成立 ——
+ * 那是**从产品库选产品**时按真实成分自动带出来的（卫佳捌 = 核心 + 钩端），
+ * 不需要顾客手动拼。
+ */
 function toggleKind(index: number, kind: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
-  draft.kinds = draft.kinds.includes(kind)
-    ? draft.kinds.filter((item) => item !== kind)
-    : [...draft.kinds, kind]
+  // 再点一次已选中的那个 = 取消（留空会走"请选一个"的提示）
+  draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]
   // 顾客自己点过就不再用自动判定覆盖他
   draft.kindsManual = true
   kindPickerOpen[index] = false
@@ -1020,7 +1029,7 @@ async function loadRecords(dogId = props.dogId) {
     }
 
     const list = res?.data?.records
-    records.value = (Array.isArray(list) ? list : [])
+    const fromServer: VaccineRecord[] = (Array.isArray(list) ? list : [])
       .map((item: any) => ({
         id: String(item?.id || ''),
         vaccineName: String(item?.vaccineName || ''),
@@ -1033,6 +1042,21 @@ async function loadRecords(dogId = props.dogId) {
           ? item.kindLabels.map(String)
           : [],
       }))
+
+    /*
+     * ⚠️ **保住还没保存的本地记录**（2026-10-06 修的）。
+     *
+     * 这一句是"识别 3 条只存进去 1 条"的根因：
+     * `saveScannedRecords` 逐条存，而每存一条 `saveRecord` 都会走到这里
+     * 整表重载 —— 重载原来是**拿服务器返回的列表直接替换**，
+     * 于是同一批里还没保存的那几条（id 还是空的）当场被冲掉，
+     * 后面的循环再也找不到它们，只能跳过。
+     *
+     * 服务器上有的以服务器为准；本地还没保存的原样留着。
+     */
+    const unsavedLocal = records.value.filter((record) => !record.id)
+
+    records.value = [...fromServer, ...unsavedLocal]
       // 最近接种的排在最前：接口按写入顺序返回，那个顺序对顾客没有意义
       .sort((a: VaccineRecord, b: VaccineRecord) =>
         b.vaccinationDate.localeCompare(a.vaccinationDate))

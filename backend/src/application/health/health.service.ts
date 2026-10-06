@@ -213,14 +213,35 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId);
 
+    /**
+     * ⚠️ 2026-10-06 老板报的 bug："不管点哪一个分类，都改不动，还是原来的这个分类。"
+     *
+     * 根因就在下面这个 data 里 —— 原来的字段清单**漏了 kinds**：
+     * 前端点分类 → 自动保存 PATCH → 服务端把 kinds 丢掉 → 回读还是旧值
+     * → 界面看起来"点了没反应"。字段在 DTO 里明明有（update-vaccine.dto.ts），
+     * 只是这一处没往仓储写。创建那条路一直是好的，所以只有"改"会失灵。
+     *
+     * 顺带修了同一段里的 nextDueDate：原来是 `dto.nextDueDate ? ... : null`，
+     * 而前端只在有值时才带这个字段 —— 于是"改个备注"会把已存的
+     * 下次接种日期悄悄清成 null。undefined 必须表示"别动它"，
+     * 和上面 vaccineName / status 保持同一种写法。
+     */
     const updated = await this.vaccineRecordRepo.update(id, {
       vaccineName: dto.vaccineName ?? undefined,
       vaccinationDate: dto.vaccinationDate
         ? new Date(dto.vaccinationDate)
         : undefined,
-      nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
-      notes: dto.notes ?? null,
+      nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : undefined,
+      // notes 前端**每次都带**（空的时候传 null，用来清空备注），
+      // 所以 null 要照写；只有"整个字段没传"才表示别动它
+      notes: dto.notes === undefined ? undefined : (dto.notes ?? null),
       status: dto.status ?? undefined,
+      // 归类：顾客手动改过就以他为准（闭集校验在 resolveKinds 里）。
+      // 不传 = 别动它，不重判 —— 免得改个备注把人家自己选的分类冲掉。
+      kinds:
+        dto.kinds === undefined
+          ? undefined
+          : this.resolveKinds(dto.kinds, dto.vaccineName ?? record.vaccineName),
       // 只有顾客明确传了 attachments 才动它 —— 不传就保持原样，
       // 免得改个备注顺手把原件清空
       attachments: dto.attachments ?? undefined,
@@ -621,7 +642,9 @@ export class HealthService {
       : [];
 
     if (given.length > 0) {
-      return given;
+      // 去重：调用方传大小写混写（"RABIES" + "rabies"）是常事，
+      // 归一化之后会变成同一个值 —— 不去重界面上会出现两个一模一样的标签
+      return Array.from(new Set(given));
     }
 
     return classifyVaccineKinds(vaccineName);

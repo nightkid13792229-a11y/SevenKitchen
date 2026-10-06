@@ -61,6 +61,7 @@ import {
   buildProductMatchReference,
   kindsOfProductName,
 } from '../../domain/health/vaccine-catalog';
+import { findProductByText } from '../../domain/health/vaccine-products';
 
 export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
@@ -668,8 +669,20 @@ export function normalizeDrafts(
       raw
         .map((item: any) => {
           const vaccineName = normalizeDraftText(item?.vaccineName, 100);
+          /**
+           * 库里认得出的话，把**规范名**一起带上（2026-10-06）。
+           *
+           * 老板实测：瓶签写「卫佳® Vanguard® Plus 5/CV-L」，
+           * 库里叫「卫佳捌」（别名 vanguard plus 5-cvl）。
+           * 分类早就认对了（core + lepto，正是卫佳捌的成分），
+           * 但界面上那一行显示的还是瓶签原文，顾客看不出系统认为这是哪一支。
+           * 这里把规范名一并下发，界面就有了"命名"的依据。
+           * 认不出来的给空串 —— 界面照旧显示顾客写的那串字，绝不硬塞。
+           */
+          const matchedProduct = findProductByText(vaccineName);
           return {
             vaccineName,
+            productName: matchedProduct ? matchedProduct.name : '',
             /**
              * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
              *

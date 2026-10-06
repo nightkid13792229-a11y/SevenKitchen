@@ -4,6 +4,7 @@
  */
 
 import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
+import { findProductByText } from '../../domain/health/vaccine-products';
 import { HealthReportExtractionService } from '../../application/health/health-report-extraction.service';
 import {
   VACCINE_KIND_LABELS,
@@ -234,6 +235,16 @@ export class HealthRecordsController {
       message: 'success',
       data: {
         name: text,
+        /**
+         * 库里认得出的话，给出**规范产品名**（2026-10-06）。
+         *
+         * 老板实测：瓶签写「卫佳® Vanguard® Plus 5/CV-L」，库里叫「卫佳捌」。
+         * 分类早就认对了（core + lepto = 卫佳捌的成分），但界面那一行
+         * 显示的还是瓶签原文，顾客看不出系统认为这是哪一支，
+         * 手填框也会跟着冒出来。这里把规范名一并给出。
+         * 认不出来就是空串 —— 界面照旧显示顾客写的那串字，绝不硬塞。
+         */
+        productName: findProductByText(text)?.name || '',
         kinds,
         kindLabels: kinds.map((kind) => VACCINE_KIND_LABELS[kind] || kind),
         /** 判定走的是哪一步 —— 界面要如实告诉顾客"这是我们判的"还是"没认出来" */

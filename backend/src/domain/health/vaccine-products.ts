@@ -423,6 +423,31 @@ export function findProductsInName(name: string): VaccineProduct[] {
 }
 
 /**
+ * 从一段自由文本里认出**具体是哪一支产品**（2026-10-06）。
+ *
+ * 为什么需要：疫苗瓶签/本子上写的往往不是库里的规范名 ——
+ * 老板实测的那张瓶签写的是「卫佳® Vanguard® Plus 5/CV-L」，
+ * 库里叫「卫佳捌」（别名 vanguard plus 5-cvl）。
+ * 分类本来就已经认对了（走的也是这套匹配），但界面上那一行还显示瓶签原文，
+ * 顾客看不出"系统认为这是哪一支"，手填框也会跟着冒出来。
+ *
+ * 匹配规则与 findProductsInName 完全一致（名称或别名**被包含**），
+ * 命中多支时取**最具体的那个**（规范化后名字最长的）——
+ * 这样带 CV-L 的瓶签不会掉到「卫佳伍」上（两者都含 vanguard plus 5）。
+ */
+export function findProductByText(name: string): VaccineProduct | null {
+  const matches = findProductsInName(name);
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return [...matches].sort(
+    (a, b) =>
+      normalizeProductText(b.name).length - normalizeProductText(a.name).length,
+  )[0];
+}
+
+/**
  * 某一步可以推荐哪些产品。
  *
  * 两条过滤：

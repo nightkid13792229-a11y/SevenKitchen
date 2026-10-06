@@ -1,5 +1,6 @@
 import { classifyVaccineKinds } from '../../../src/domain/health/immunization-schedule';
 import { normalizeDrafts } from '../../../src/application/health/health-report-extraction.service';
+import { findProductByText } from '../../../src/domain/health/vaccine-products';
 
 /**
  * 疫苗本的归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
@@ -130,5 +131,63 @@ describe('疫苗本 · 提示词不再让 AI 判分类（2026-10-06）', () => {
     // 同一个名字，产品表说了算
     expect(classifyVaccineKinds('宠必威® 幼犬保')).toEqual(['core_early']);
     expect(classifyVaccineKinds('拜宠清')).toEqual([]);
+  });
+});
+
+/**
+ * 认到"具体是哪一支"（2026-10-06 老板实测）。
+ *
+ * 老板发来一张截图：瓶签写「卫佳® Vanguard® Plus 5/CV-L」，
+ * 问"为什么没有把图中的这一个疫苗判定为卫佳伍呢？"
+ *
+ * 查下来：**它就不是卫佳伍**。
+ *   · 卫佳捌 = Vanguard Plus 5/CV-L（含冠状病毒 + 钩端螺旋体，八联），别名 vanguard plus 5-cvl
+ *   · 卫佳伍 = Vanguard Plus 5（不带 CV-L），分类只有 core
+ * 分类给出的 core + lepto 正说明后端认的是**卫佳捌** —— 判对了。
+ * 缺的只是"把规范名显示出来"，所以加了 productName。
+ */
+describe('疫苗本 · 认出具体是哪一支产品（2026-10-06）', () => {
+  const BOTTLE = '卫佳® Vanguard® Plus 5/CV-L';
+
+  it('🔴 带 CV-L 的瓶签归「卫佳捌」，不能掉到「卫佳伍」上', () => {
+    const product = findProductByText(BOTTLE);
+
+    expect(product).toBeTruthy();
+    expect(product?.name).toBe('卫佳捌');
+    expect(product?.name).not.toBe('卫佳伍');
+  });
+
+  it('不带 CV-L 的才归「卫佳伍」', () => {
+    expect(findProductByText('Vanguard Plus 5')?.name).toBe('卫佳伍');
+    expect(findProductByText('卫佳伍')?.name).toBe('卫佳伍');
+  });
+
+  it('这一支的成分确实含钩端螺旋体（所以分类是 core + lepto）', () => {
+    const product = findProductByText(BOTTLE);
+
+    expect(product?.kinds).toContain('core');
+    expect(product?.kinds).toContain('lepto');
+  });
+
+  it('识别草稿里带上规范名，认不出来就是空串（绝不硬塞）', () => {
+    const recognized = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [{ vaccineName: BOTTLE, vaccinationDate: '2026-07-18' }],
+    });
+    expect(recognized[0].vaccineName).toBe(BOTTLE); // 原文照旧留着
+    expect(recognized[0].productName).toBe('卫佳捌'); // 规范名另给一个字段
+
+    const unknown = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [{ vaccineName: '某某某牌疫苗', vaccinationDate: '2026-07-18' }],
+    });
+    expect(unknown[0].productName).toBe('');
+  });
+
+  it('分类与规范名出自同一份匹配（不会一个认卫佳捌、一个认卫佳伍）', () => {
+    const drafts = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [{ vaccineName: BOTTLE, vaccinationDate: '2026-07-18' }],
+    });
+
+    expect(drafts[0].productName).toBe('卫佳捌');
+    expect(drafts[0].kinds).toEqual(findProductByText(BOTTLE)?.kinds);
   });
 });

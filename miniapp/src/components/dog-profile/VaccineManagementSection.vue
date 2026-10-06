@@ -632,7 +632,17 @@ async function confirmVaccineName(index: number) {
     // 没匹配上就**如实承认**并展开，让他自己填
     kindPickerOpen[index] = draft.kinds.length === 0
 
-    const matched = findCatalogProduct(name)
+    /*
+     * 规范产品名以后端为准（2026-10-06）。
+     *
+     * 后端那套匹配能认出瓶签写法（「卫佳® Vanguard® Plus 5/CV-L」→ 卫佳捌），
+     * 前端这份只做"名字一模一样"的比对，认不出这种。所以：
+     *   · 后端给了规范名 → 直接采用（连名字一起改过来，和分类对齐）；
+     *   · 没给 → 退回前端这份，至少能显示"已确认：xxx"。
+     */
+    const canonicalName = String(res.data.productName || '')
+    const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(name)
+
     if (draft.kinds.length === 0) {
       setConfirmResult(
         index,
@@ -640,6 +650,10 @@ async function confirmVaccineName(index: number) {
         '产品库和 AI 都没认出这支苗。照本子上的写法再核一遍，或者在下面手动选一个分类。',
       )
     } else {
+      if (canonicalName) {
+        // 名字跟着分类一起对齐，界面上那一行才显示得出"系统认为这是哪一支"
+        draft.vaccineName = canonicalName
+      }
       const labels = draft.kinds.map((kind) => kindLabel(kind)).join(' + ')
       setConfirmResult(
         index,
@@ -1265,7 +1279,16 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
     records.value.push({
       id: '',
       __localId: `vaccine-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      vaccineName: String(draft.vaccineName || ''),
+      /*
+       * 名字优先用**后端认出来的规范产品名**（2026-10-06 老板实测）。
+       *
+       * 瓶签上写的是「卫佳® Vanguard® Plus 5/CV-L」，库里叫「卫佳捌」
+       * （别名 vanguard plus 5-cvl）。分类早就是按卫佳捌的成分算的
+       * （核心 + 钩端），名字却还是瓶签原文 —— 顾客看到的是一个
+       * "系统好像没认出来"的名字，手填框也会跟着冒出来。
+       * 认不出来时后端给空串，这里就照旧用顾客本子上那串字。
+       */
+      vaccineName: String(draft.productName || draft.vaccineName || ''),
       vaccinationDate: String(draft.vaccinationDate || ''),
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),

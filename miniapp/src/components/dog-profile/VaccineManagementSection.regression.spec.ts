@@ -618,3 +618,40 @@ describe('接种记录 · 空记录不显示 + 做成一个板块（2026-10-06�
     expect(source).toContain('records-card__desc')
   })
 })
+
+/**
+ * 认出来的产品要用库里的规范名（2026-10-06 老板实测）。
+ *
+ * 瓶签「卫佳® Vanguard® Plus 5/CV-L」在库里叫「卫佳捌」。
+ * 后端那套匹配能认出这种写法（名称或别名被包含），前端这份只做
+ * "名字一模一样"的比对，认不出 —— 所以规范名一律以后端下发的为准。
+ */
+describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 识别结果填表时优先用 productName', () => {
+    const source = readComponent()
+
+    expect(source).toContain("vaccineName: String(draft.productName || draft.vaccineName || ''),")
+  })
+
+  it('🔴 点「确认」时也用后端给的规范名，并把名字对齐', () => {
+    const source = readComponent()
+
+    expect(source).toContain("const canonicalName = String(res.data.productName || '')")
+    expect(source).toContain('draft.vaccineName = canonicalName')
+    // 后端没给才退回前端这份比对
+    expect(source).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
+  })
+
+  it('认不出来时绝不硬塞名字（照旧显示顾客写的那串字）', () => {
+    const source = readComponent()
+
+    // draft.productName 为空串时回退到原文
+    expect(source).toContain("|| draft.vaccineName || ''")
+  })
+})

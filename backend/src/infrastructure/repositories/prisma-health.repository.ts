@@ -44,6 +44,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         status: data.status as any,
         attachments: data.attachments,
         kinds: data.kinds,
+        components: data.components,
       },
     });
     return this.mapToDomain(record);
@@ -65,6 +66,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         status: data.status as any,
         attachments: data.attachments,
         kinds: data.kinds,
+        components: data.components,
       },
     });
     return this.mapToDomain(record);

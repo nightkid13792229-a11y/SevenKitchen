@@ -1750,3 +1750,26 @@ describe('定制页 · 2026-10-05 第四批（3 条）', () => {
     expect(open).toContain('goToWeightGoalPlan(weightGoalChoice.value)')
   })
 })
+
+/**
+ * 2026-10-05 第五批补丁：报告缩略图没出现（老板实测反馈）。
+ *
+ * 根因在服务端：识别侧新增了 STRONG_POSITIVE，而报告接口的 DTO 白名单没跟上，
+ * 带强阳性的报告**保存时被 400 挡下** —— 报告没存成，缩略图自然一直没有。
+ * 这里锁前端这一侧的两件事：失败要说话、有历史报告时不能把界面藏起来。
+ */
+describe('定制页 · 报告缩略图相关（第五批补丁）', () => {
+  const page = read(`${PAGE_DIR}/index.vue`)
+  const block = read('src/components/custom-recipe/AllergyScanBlock.vue')
+
+  it('报告保存失败不再静默：要提示家长"原件没存下来"', () => {
+    expect(block).not.toContain('// 报告存不下不影响这一单 —— 名字照样加进过敏信息\n    } catch {')
+    expect(block).toContain('报告原件没存下来，过敏信息已记上')
+  })
+
+  it('有历史报告时默认答"有过敏"，别把预览一起藏起来', () => {
+    expect(page).toContain('allergyReports.value.length > 0 && hasFoodAllergy.value === null')
+    // 只在未作答时兜底，不覆盖家长自己选过的答案
+    expect(page).toContain('hasFoodAllergy.value = true;')
+  })
+})

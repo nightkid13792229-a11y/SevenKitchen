@@ -80,9 +80,13 @@ type AllergyRecordCreatePayload = {
  * 过敏检测报告（2026-10-04，第二期）。
  *
  * level 照抄报告原文的语义：
- *   POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 / SUSPECTED 疑似 /
- *   NEGATIVE 阴性 / UNKNOWN 报告没写
- * 系统不做医学判断 —— 阳性记成"确诊"，其余记成"可疑"，阴性**不记成过敏**。
+ *   STRONG_POSITIVE 强阳性 / POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 /
+ *   SUSPECTED 疑似 / NEGATIVE 阴性 / UNKNOWN 报告没写
+ * 系统不做医学判断 —— 阳性与强阳性记成"确诊"，其余记成"可疑"，
+ * 阴性**不记成过敏**。
+ *
+ * ⚠️ 服务端 DTO 用 @IsIn 校验这张表：加新等级时两边必须同时改
+ * （2026-10-05 踩过：识别侧加了强阳性、DTO 没跟上，报告保存被 400 挡下）。
  */
 export type AllergyReportPayload = {
   testDate?: string | null

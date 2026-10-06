@@ -28,7 +28,10 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { AllergyReportService } from '../../application/health/allergy-report.service';
+import {
+  AllergyReportService,
+  ALLERGY_RESULT_LEVELS,
+} from '../../application/health/allergy-report.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -47,14 +50,18 @@ export class AllergyReportResultDto {
 
   /**
    * 结论等级，**照抄报告原文的语义**：
-   * POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 / SUSPECTED 疑似 /
-   * NEGATIVE 阴性 / UNKNOWN 报告没写。
+   * STRONG_POSITIVE 强阳性 / POSITIVE 阳性 / WEAK_POSITIVE 弱阳性 /
+   * SUSPECTED 疑似 / NEGATIVE 阴性 / UNKNOWN 报告没写。
    *
-   * 系统不做医学判断 —— 只把"阳性"翻译成"确诊"、
+   * 系统不做医学判断 —— 只把"阳性/强阳性"翻译成"确诊"、
    * 其余翻译成"可疑"，阴性干脆不记成过敏。
+   *
+   * ⚠️ 这里的取值表**必须与服务端那份同一个来源**（ALLERGY_RESULT_LEVELS）：
+   * 2026-10-05 真实事故 —— 识别侧新增了 STRONG_POSITIVE，这张表没跟上，
+   * 于是带强阳性的报告在保存时被 400 挡下（DN 报告没存成，页面也就看不到原件）。
    */
   @IsOptional()
-  @IsIn(['POSITIVE', 'WEAK_POSITIVE', 'SUSPECTED', 'NEGATIVE', 'UNKNOWN'])
+  @IsIn(ALLERGY_RESULT_LEVELS)
   level?: string;
 
   @IsOptional()

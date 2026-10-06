@@ -1786,6 +1786,17 @@ async function loadAllergyReports(dogId: string) {
     const res: any = await dogApi.allergyReports.list(dogId);
     if (res?.code !== 0) return;
     allergyReports.value = Array.isArray(res?.data?.reports) ? res.data.reports : [];
+    /**
+     * 档案里有历史报告 → 这一问默认答"有过敏"。
+     *
+     * 为什么：答"没有过敏"会把整块录入界面（含已上传报告的预览）收起来。
+     * 一只狗要是报告都传过了、却因为"档案里没有过敏记录"（例如报告全是阴性、
+     * 或下单还没提交）落在未作答状态，家长就再也看不到自己传过的原件了。
+     * 只在"还没作答"时兜底，不覆盖家长已经明确选过的答案。
+     */
+    if (allergyReports.value.length > 0 && hasFoodAllergy.value === null) {
+      hasFoodAllergy.value = true;
+    }
   } catch {
     // 报告读不到不能挡住下单 —— 过敏信息与其余步骤都还能用
     allergyReports.value = [];

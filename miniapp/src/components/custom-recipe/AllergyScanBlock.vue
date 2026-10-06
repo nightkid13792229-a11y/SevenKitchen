@@ -361,8 +361,17 @@ async function confirm() {
           ? `报告另有环境类过敏原 ${skipped.value.length} 项（${skippedNames.value}），与食谱无关，未记入过敏信息。`
           : null,
       })
-    } catch {
-      // 报告存不下不影响这一单 —— 名字照样加进过敏信息
+    } catch (error: any) {
+      /**
+       * 报告没存下不影响这一单（名字照样加进过敏信息），但**必须说出来**：
+       * 2026-10-05 真实事故 —— 服务端等级白名单没跟上，报告保存被 400 挡下，
+       * 家长只看到"缩略图一直没出现"，无从判断是没传成功还是页面坏了。
+       */
+      uni.showToast({
+        title: error?.message || '报告原件没存下来，过敏信息已记上',
+        icon: 'none',
+        duration: 3000,
+      })
     }
   }
 

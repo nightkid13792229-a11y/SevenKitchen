@@ -1276,15 +1276,67 @@ export function buildVaccinePlan(
     list.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
-  // 每一类里，第 N 步吃第 N 条记录
+  /*
+   * 哪一条记录完成了哪一步 —— **先按窗口认领，再按顺序补位**（2026-10-06 修）。
+   *
+   * ⚠️ 原来只有"每一类里第 N 步吃第 N 条记录"这一条（纯按顺序派），
+   *    **完全不看日期**。老板实测撞出来的怪现象都是它造成的：
+   *      · 2026-07-18 打的卫佳捌（含钩端），被判成完成了
+   *        「钩端螺旋体 每年 1 次（第 1 次）」—— 而那一针的窗口是 2024 年；
+   *      · 同年 5~9 月那个真正对应的「每年 1 次（第 3 次）」反而显示"已逾期"；
+   *      · 2026-07-25 刚打的狂犬，被判成完成了「狂犬疫苗 首针」（2023 年的窗口），
+   *        而真正对应的「第 4 次」显示"已逾期"。
+   *
+   * 为什么不能只按窗口：幼犬首免那种**有限针次**，临床上"第 N 针就是第 N 剂"——
+   * 顾客可能拖到两岁才补打，按窗口就一条都对不上、计划全废。
+   * 所以两步走：
+   *   ① **窗口认领**：日期落在某一步窗口内的记录，先完成那一步
+   *      （这对"每年一次"这种开放式系列是唯一正确的口径）
+   *   ② **顺序补位**：剩下的记录，按顺序填给还没被认领的步骤
+   *      （保住"第 N 针 = 第 N 剂"的老口径）
+   */
   const assignedByKey = new Map<string, { record: VaccineRecordLike; date: Date }>();
-  const consumedByKind = new Map<VaccineKind, number>();
+  /*
+   * "这条记录在这一类里用过了" —— **按类分别记，不能全局记**。
+   *
+   * 卫佳捌这种组合苗要能**同时**顶核心那一步和钩端那一步（不同类各算一次）；
+   * 但同一类里一条记录只能顶一步（一针不能算两次）。
+   */
+  const usedByKind = new Map<VaccineKind, Set<string>>();
+  const usedIn = (kind: VaccineKind) =>
+    usedByKind.get(kind) || new Set<string>();
+  const markUsed = (kind: VaccineKind, id: string) => {
+    const set = usedByKind.get(kind) || new Set<string>();
+    set.add(id);
+    usedByKind.set(kind, set);
+  };
+
+  const availableFor = (kind: VaccineKind) =>
+    (recordsByKind.get(kind) || []).filter(
+      (item) => !usedIn(kind).has(item.record.id),
+    );
+
+  // ① 窗口认领
   for (const seed of seeds) {
-    const list = recordsByKind.get(seed.kind) || [];
-    const used = consumedByKind.get(seed.kind) || 0;
-    if (used < list.length) {
-      assignedByKey.set(seed.key, list[used]);
-      consumedByKind.set(seed.kind, used + 1);
+    if (assignedByKey.has(seed.key)) continue;
+    const hit = availableFor(seed.kind).find(
+      (item) =>
+        item.date.getTime() >= seed.windowStart.getTime() &&
+        item.date.getTime() <= seed.windowEnd.getTime(),
+    );
+    if (hit) {
+      assignedByKey.set(seed.key, hit);
+      markUsed(seed.kind, hit.record.id);
+    }
+  }
+
+  // ② 顺序补位（剩下的记录，按日期从早到晚填给还没认领的步骤）
+  for (const seed of seeds) {
+    if (assignedByKey.has(seed.key)) continue;
+    const next = availableFor(seed.kind)[0];
+    if (next) {
+      assignedByKey.set(seed.key, next);
+      markUsed(seed.kind, next.record.id);
     }
   }
 

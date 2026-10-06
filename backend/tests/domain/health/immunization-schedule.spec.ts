@@ -1372,3 +1372,82 @@ describe('按针数分配记录（老板截图引出的改法）', () => {
     expect(tooEarly.conflicts.some((item) => item.reason.includes('4 周龄之前'))).toBe(true)
   })
 })
+
+/**
+ * 匹配必须"先看窗口、再看顺序"（2026-10-06 老板实测撞出来的）。
+ *
+ * 用赛文（生日 2023-02-16）的**真实数据**：
+ *   2024-08-18 卫佳捌（含钩端）   2025-08-18 卫佳捌   2026-07-18 卫佳捌
+ *   2025-08-28 瑞比克（狂犬）     2026-07-25 狂犬
+ *
+ * 改之前是**纯按顺序派**（每一类里第 N 步吃第 N 条记录，完全不看日期），
+ * 于是出现一串怪现象：2026 年打的针被判成完成了 2024 年的那一步、
+ * 而 2026 年那一步反过来显示"已逾期"；刚打的狂犬被算成 2023 年的首针。
+ */
+describe('按窗口匹配（2026-10-06 老板实测）', () => {
+  const plan = () =>
+    buildVaccinePlan({
+      dogId: 'dog-seven',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+        { id: 'r3', vaccineName: '瑞比克', vaccinationDate: '2025-08-28', nextDueDate: null },
+        { id: 'r4', vaccineName: '卫佳捌', vaccinationDate: '2026-07-18', nextDueDate: null },
+        { id: 'r5', vaccineName: '狂犬', vaccinationDate: '2026-07-25', nextDueDate: null },
+      ],
+      today: new Date('2026-10-06'),
+    });
+
+  it('🔴 钩端"每年 1 次"按年份各归各位，不再张冠李戴', () => {
+    const steps = plan().steps.filter((step) => step.kind === 'lepto');
+    const byLabel = new Map(steps.map((step) => [step.label, step]));
+
+    // 每一年那一针，落到**它当年**的那一步上
+    expect(byLabel.get('钩端螺旋体 每年 1 次（第 1 次）')?.matchedRecordDate).toBe('2024-08-18');
+    expect(byLabel.get('钩端螺旋体 每年 1 次（第 2 次）')?.matchedRecordDate).toBe('2025-08-18');
+    expect(byLabel.get('钩端螺旋体 每年 1 次（第 3 次）')?.matchedRecordDate).toBe('2026-07-18');
+  })
+
+  it('🔴 2023 年那两针初免不该被 2024/2025 的记录"顶掉"后还留在计划里', () => {
+    const steps = plan().steps;
+
+    // 2023 年的窗口过期太久，按"只留对现在有意义"的规则应当已经不在计划里；
+    // 关键是：**不许**出现"2026 年的针完成了 2023 年那一步"这种错配
+    for (const step of steps.filter((s) => s.kind === 'lepto' && s.matchedRecordDate)) {
+      expect(step.windowEnd >= '2023-12-31').toBe(true);
+    }
+  })
+
+  it('🔴 2026-07-25 刚打的狂犬，落到"第 4 次"上（不再算成 2023 年的首针）', () => {
+    const steps = plan().steps;
+    const fourth = steps.find((step) => step.key === 'rabies-4');
+
+    expect(fourth).toBeDefined();
+    expect(fourth!.status).toBe('DONE');
+    expect(fourth!.matchedRecordDate).toBe('2026-07-25');
+  })
+
+  it('🔴 2026-07-18 那一针卫佳捌完成的是"成年加强 第 1 次"（窗口正好从那一天开）', () => {
+    const adult = plan().steps.find((step) => step.key === 'core-adult-1');
+
+    expect(adult).toBeDefined();
+    expect(adult!.status).toBe('DONE');
+    expect(adult!.matchedRecordDate).toBe('2026-07-18');
+  })
+
+  it('窗口外的记录照样算数（早先那条口径不能丢）', () => {
+    // 18 周龄打的一针卫佳捌，钩端两个初免窗口都过了 —— 仍算第 1 针
+    const early = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: [
+        { id: 'a', vaccineName: '卫佳捌', vaccinationDate: '2026-05-11', nextDueDate: null },
+      ],
+      today: new Date('2026-08-01'),
+    })
+    const first = early.steps.find((step) => step.key === 'lepto-primary-1')
+    expect(first!.status).toBe('DONE')
+    expect(first!.matchedRecordDate).toBe('2026-05-11')
+  })
+})

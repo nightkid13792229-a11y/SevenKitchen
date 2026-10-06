@@ -83,7 +83,7 @@
 
           <!-- ②-B 接种计划：按接种窗口期由近到远 -->
           <view class="plan-steps">
-            <text class="plan-steps__title">接种计划（按接种窗口期由近到远）</text>
+            <text class="plan-steps__title">接种计划</text>
 
             <view
               v-for="step in orderedSteps"
@@ -96,7 +96,10 @@
                 <text class="step__kind">{{ step.kindLabel }}</text>
               </view>
               <text class="step__label">{{ step.label }}</text>
-              <view class="kv">
+              <!-- 已完成的不显示接种窗口期（2026-10-06 老板："已完成的疫苗为什么
+                   还要显示接种窗口期呢？"）—— 那扇窗早就过了，留着只是噪音。
+                   已完成看的是"什么时候打的"，在下面那一行。 -->
+              <view v-if="step.status !== 'DONE'" class="kv">
                 <text class="kv__label">接种窗口期</text>
                 <text class="kv__value">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
               </view>
@@ -115,9 +118,12 @@
                 <text class="kv__value">{{ step.basis }}</text>
               </view>
 
-              <view class="step-actions">
+              <!-- 已完成的步骤不再给动作按钮（2026-10-06 老板："已完成状态的疫苗，
+                   为什么还是会给出这两个按钮呢？"）——
+                   那一针已经打完了，没什么可记、也没什么可忽略的。 -->
+              <view v-if="step.status !== 'DONE'" class="step-actions">
                 <text class="step-actions__primary" @tap.stop="recordStep(step)">
-                  记录疫苗接种信息
+                  记录接种信息
                 </text>
                 <text class="step-actions__ghost" @tap.stop="ignoreStep(step)">忽略</text>
               </view>
@@ -392,12 +398,52 @@ function toggleExpanded() {
  * 步骤本身还留在列表里）。老板要的是"从计划里去掉"，所以在展示层过滤掉；
  * 库里那条决定留着，所以随时能恢复（见 restoreIgnored）。
  */
-const orderedSteps = computed(() =>
-  plan.value.steps
-    .filter((step) => plan.value.decisions[step.key] !== 'SKIP')
+const orderedSteps = computed(() => {
+  const visible = plan.value.steps.filter(
+    (step) => plan.value.decisions[step.key] !== 'SKIP',
+  )
+
+  /*
+   * 同一类里，前面还有没做完的，就**不显示后面那些**（2026-10-06 老板提问）。
+   *
+   * 老板："狂犬疫苗第 4 次显示已逾期，但为什么待安排的狂犬疫苗却显示是第 5 次呢？
+   * 如果第 4 次已经逾期了，那不是第 4 次就是应该是待安排的吗？"
+   * —— 对。年度系列会一年生成一步，第 4 次没做完就不该把第 5 次摆出来，
+   * 那会让人以为可以直接跳到明年那一针。
+   */
+  const ordered = visible
     .slice()
-    .sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart))),
-)
+    .sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart)))
+
+  const blocked = new Set<string>()
+  const seenPending = new Set<string>()
+  for (const step of ordered) {
+    if (seenPending.has(step.kind)) {
+      blocked.add(step.key)
+      continue
+    }
+    if (step.status !== 'DONE') {
+      seenPending.add(step.kind)
+    }
+  }
+
+  /*
+   * 排序（2026-10-06 老板："最早的已经完成的疫苗记录反而排在最上面"）。
+   *
+   * 原来是纯按窗口期从早到晚 —— 而**已完成**的窗口都在过去，于是一堆历史
+   * 记录占着最上面。计划是"接下来怎么打"，所以：**未完成的在前、已完成沉底**，
+   * 各自内部仍按窗口期由近到远。
+   */
+  const pendingRank = (step: PlanStep) => (step.status === 'DONE' ? 1 : 0)
+
+  return ordered
+    .filter((step) => !blocked.has(step.key))
+    .sort(
+      (a, b) =>
+        pendingRank(a) - pendingRank(b) ||
+        String(a.windowStart).localeCompare(String(b.windowStart)),
+    )
+})
 
 /** 被忽略了几项 —— 给"恢复"那条路用 */
 const ignoredCount = computed(

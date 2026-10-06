@@ -40,8 +40,11 @@ describe('疫苗计划 · 界面', () => {
   it('第 16 条（2026-10-06 改版）：每一步两个按钮 —— 记录疫苗接种信息 / 忽略', () => {
     const section = readSection()
 
-    expect(section).toContain('记录疫苗接种信息')
+    // 文案 2026-10-06 简化：老板说"可以简化为记录接种信息"
+    expect(section).toContain('记录接种信息')
     expect(section).toContain('>忽略<')
+    // 已完成的步骤不给按钮（否则"已经打完了还给记录/忽略"很奇怪）
+    expect(section).toContain("v-if=\"step.status !== 'DONE'\" class=\"step-actions\"")
     expect(section).toContain('@tap.stop="recordStep(step)"')
     expect(section).toContain('@tap.stop="ignoreStep(step)"')
     // 老的三个按钮彻底下线
@@ -442,5 +445,53 @@ describe('疫苗计划 · 记录一变就重算（2026-10-06 实测修复）', (
     )
     expect(handler).toContain('loadVaccineDot()')
     expect(handler).toContain('vaccinePlanRef.value?.reload?.()')
+  })
+})
+
+/**
+ * 接种计划的显示口径（2026-10-06 老板实测七问）。
+ */
+describe('接种计划 · 显示口径（2026-10-06）', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('标题不再带"（按接种窗口期由近到远）"', () => {
+    const source = readSection()
+
+    expect(source).toContain('<text class="plan-steps__title">接种计划</text>')
+    expect(source).not.toContain('由近到远）</text>')
+  })
+
+  it('🔴 已完成的步骤不显示接种窗口期（那扇窗早过了）', () => {
+    const source = readSection()
+
+    expect(source).toContain("v-if=\"step.status !== 'DONE'\" class=\"kv\"")
+  })
+
+  it('🔴 已完成的步骤不给动作按钮', () => {
+    const source = readSection()
+
+    expect(source).toContain("v-if=\"step.status !== 'DONE'\" class=\"step-actions\"")
+  })
+
+  it('🔴 已完成的沉底，未完成的在前（各自仍按窗口期由近到远）', () => {
+    const source = readSection()
+
+    expect(source).toContain('const pendingRank = (step: PlanStep) => (step.status === \'DONE\' ? 1 : 0)')
+    expect(source).toContain('pendingRank(a) - pendingRank(b)')
+  })
+
+  /**
+   * 老板："狂犬疫苗第 4 次显示已逾期，但为什么待安排的狂犬疫苗却显示是第 5 次呢？
+   * 如果第 4 次已经逾期了，那不是第 4 次就是应该是待安排的吗？"
+   */
+  it('🔴 同一类里前面没做完，就不显示后面那些（不许跳步）', () => {
+    const source = readSection()
+
+    expect(source).toContain('const seenPending = new Set<string>()')
+    expect(source).toContain('blocked.add(step.key)')
   })
 })

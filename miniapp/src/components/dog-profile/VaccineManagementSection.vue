@@ -143,16 +143,21 @@
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
 
-          <!-- ⚠️ 2026-10-06 老板报的 bug："AI 识别之后给出的疫苗信息卡中，
-               疫苗名称并未正确加载出来，而是把疫苗的名称显示在产品库里没有
-               而需要填写的那个输入框中。"
+          <!-- 疫苗名称那一行（2026-10-06 两轮修完）。
 
-               原因：产品库下发的规范名是「宠必威幼犬保」（没有 ® 和空格），
-               而识别出来的是「宠必威® 幼犬保」—— 这一行原来用 `===` 比对，
-               比不中就往回退成"从产品库选择"这句占位提示，
-               名字只能孤零零待在下面的输入框里。
-               现在比对前先归一化（与后端 normalizeProductText 同一套规则），
-               库里认得出就显示库里的规范名，认不出就原样显示顾客写的那串字。 -->
+               第一轮：老板说"AI 识别的名称没正确加载出来，名字跑到下面的
+               输入框里去了"。根因是产品库的规范名「宠必威幼犬保」和识别出来的
+               「宠必威® 幼犬保」用 `===` 比不中 —— 现在比对前先归一化
+               （与后端 normalizeProductText 同一套规则），并且以后端认出来的
+               规范名为准。
+
+               第二轮：老板说"未识别的输入框出现时，它上方还有一个产品名的
+               选择器，**二者都是一样的名字**，用户会疑惑"。对 —— 那就让两个
+               控件各司其职、同一个名字只出现一次：
+                 · 库里认得出 → 这一行显示**库里的规范名**（唯一一处，
+                                而且不会出现下面的手填框）
+                 · 认不出     → 这一行只说"去库里挑一支"（一个动作），
+                                名字本身在下面的手填框里，只出现一次 -->
           <picker
             v-if="catalogProducts.length > 0"
             mode="selector"
@@ -163,9 +168,9 @@
           >
             <view
               class="field-picker"
-              :class="{ 'field-picker--placeholder': !nameFieldText(draftOf(record, index).vaccineName) }"
+              :class="{ 'field-picker--placeholder': !isNameRecognized(draftOf(record, index).vaccineName) }"
             >
-              {{ nameFieldText(draftOf(record, index).vaccineName) || '从产品库选择（进口 / 国产都有）' }}
+              {{ nameFieldLabel(draftOf(record, index).vaccineName, index) }}
             </view>
           </picker>
 
@@ -743,15 +748,31 @@ function findCatalogProduct(name: string) {
 }
 
 /**
- * 名称那一行显示什么。
+ * 这个名字在产品库里认不认得出（归一化之后比）。
  *
- * 库里有 → 显示**库里的规范名**（和产品选择器上写的一致，顾客知道自己选中的是哪个）；
- * 库里没有 → **原样显示顾客写的名字**（AI 认出来的、手打的），绝不显示成空。
+ * 认得出 = 这一行显示规范名、并且**不出现**手填输入框。
  */
-function nameFieldText(name: string): string {
+function isNameRecognized(name: string): boolean {
+  return findCatalogProduct(name) !== null
+}
+
+/**
+ * 名称那一行显示什么（2026-10-06 第二轮）。
+ *
+ * ⚠️ 老板报的交互问题："未识别的疫苗产品输入框出现的时候，对用户而言是否会
+ *    感到疑惑？因为它的上方还有一个产品名的选择器，**二者都是一样的名字**。"
+ *
+ * 所以两个控件各司其职，同一个名字**只出现一次**：
+ *   · 库里认得出 → 这一行显示**库里的规范名**（唯一一处，也没有手填框）
+ *   · 认不出     → 这一行只说"去库里挑一支"（读起来是一个**动作**，
+ *                  不是"这就是名字"），名字本身在下面的手填框里
+ */
+function nameFieldLabel(name: string, index: number): string {
   const matched = findCatalogProduct(name)
   if (matched) return matched.name
-  return String(name || '').trim()
+  return showManualNameInput(index)
+    ? '＋ 从产品库选一支'
+    : '从产品库选择（进口 / 国产都有）'
 }
 
 function productIndex(name: string): number {

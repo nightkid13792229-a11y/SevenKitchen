@@ -478,17 +478,34 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
     expect(source).toContain(".replace(/[®™©]/g, '')")
     expect(source).toContain('function findCatalogProduct(')
     // 名称那一行必须走归一化比对，不能退回"一模一样才认"
-    expect(source).toContain('function nameFieldText(')
+    expect(source).toContain('function isNameRecognized(')
+    expect(source).toContain('function nameFieldLabel(')
     expect(source).not.toContain('catalogProducts.value.some((item) => item.name === name)')
   })
 
-  it('名称行显示的是名字本身，不是占位提示', () => {
+  /**
+   * 老板 2026-10-06 第二轮："未识别的疫苗产品输入框出现的时候，对用户而言
+   * 是否会感到疑惑？因为它的上方还有一个产品名的选择器，**二者都是一样的名字**。"
+   *
+   * 对 —— 所以同一个名字只允许出现一次：认得出就只在这一行显示规范名
+   * （同时不出现手填框）；认不出就把这一行降级成"去库里挑一支"这个**动作**，
+   * 名字本身留给下面的手填框。
+   */
+  it('🔴 认得出：这一行显示库里的规范名', () => {
     const source = readComponent()
 
-    // 有名字时显示名字；只有连名字都没有时才显示引导语
-    expect(source).toContain(
-      "{{ nameFieldText(draftOf(record, index).vaccineName) || '从产品库选择（进口 / 国产都有）' }}",
-    )
+    expect(source).toContain('function nameFieldLabel(')
+    expect(source).toContain('if (matched) return matched.name')
+  })
+
+  it('🔴 认不出：这一行只写"去库里挑一支"，不再把同一个名字显示两遍', () => {
+    const source = readComponent()
+
+    expect(source).toContain("'＋ 从产品库选一支'")
+    // 名字本身只在手填框里出现（:value 绑的是 draft.vaccineName）
+    expect(source).toContain(':value="draftOf(record, index).vaccineName"')
+    // 旧的"名称行直接显示原文"的写法（会和输入框重复）已经下线
+    expect(source).not.toContain("return String(name || '').trim()")
   })
 
   it('🔴 手填输入框只在产品库里没有这只苗时才出现', () => {

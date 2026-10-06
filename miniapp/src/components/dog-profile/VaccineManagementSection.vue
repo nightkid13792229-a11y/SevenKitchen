@@ -30,7 +30,12 @@
       <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
 
-    <view v-if="loading" class="health-section__empty">
+    <!-- 占位只在**手上一条记录都还没有**时出现。
+         原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
+         （点分类、点"确认"、改日期）都会整表重载，于是已经显示出来的记录
+         先被擦掉、再长回来。老板看到的就是"屏幕闪烁了一下"。
+         刷新是后台动作，不该动已经显示出来的东西。 -->
+    <view v-if="loading && records.length === 0" class="health-section__empty">
       <text class="health-section__empty-title">疫苗记录加载中</text>
     </view>
 
@@ -113,6 +118,16 @@
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
 
+          <!-- ⚠️ 2026-10-06 老板报的 bug："AI 识别之后给出的疫苗信息卡中，
+               疫苗名称并未正确加载出来，而是把疫苗的名称显示在产品库里没有
+               而需要填写的那个输入框中。"
+
+               原因：产品库下发的规范名是「宠必威幼犬保」（没有 ® 和空格），
+               而识别出来的是「宠必威® 幼犬保」—— 这一行原来用 `===` 比对，
+               比不中就往回退成"从产品库选择"这句占位提示，
+               名字只能孤零零待在下面的输入框里。
+               现在比对前先归一化（与后端 normalizeProductText 同一套规则），
+               库里认得出就显示库里的规范名，认不出就原样显示顾客写的那串字。 -->
           <picker
             v-if="catalogProducts.length > 0"
             mode="selector"
@@ -121,21 +136,33 @@
             :value="productIndex(draftOf(record, index).vaccineName)"
             @change="applyCatalogProduct(index, $event.detail.value)"
           >
-            <view class="field-picker">
-              {{ productPickerLabel(draftOf(record, index).vaccineName) }}
+            <view
+              class="field-picker"
+              :class="{ 'field-picker--placeholder': !nameFieldText(draftOf(record, index).vaccineName) }"
+            >
+              {{ nameFieldText(draftOf(record, index).vaccineName) || '从产品库选择（进口 / 国产都有）' }}
             </view>
           </picker>
 
-          <text class="field-hint">产品库里没有？直接在下面写名字，写完整点。</text>
-          <input
-            class="field-input"
-            type="text"
-            placeholder="例如：犬四联"
-            :value="draftOf(record, index).vaccineName"
-            :focus="focusIndex === index"
-            @input="updateDraft(index, 'vaccineName', $event.detail.value)"
-            @blur="clearFocus(index)"
-          />
+          <!-- 手填入口**只在库里没有这只苗时**才出现（2026-10-06 老板的规格：
+               "如果 AI 识别的疫苗名称没有在产品库中，才显示这个输入框吧？"）。
+
+               库里有这只苗时，换名字的正路是上面那个选择器 —— 手打一串名字
+               会绕开产品库，厂商、批准文号、归类全都带不出来。
+               正在打字的那一行（focusIndex）不抽走，否则顾客打到一半
+               名字刚好命中产品库，输入框会当场消失。 -->
+          <template v-if="showManualNameInput(index)">
+            <text class="field-hint">产品库里没有？直接在下面写名字，写完整点。</text>
+            <input
+              class="field-input"
+              type="text"
+              placeholder="例如：犬四联"
+              :value="draftOf(record, index).vaccineName"
+              :focus="focusIndex === index"
+              @input="updateDraft(index, 'vaccineName', $event.detail.value)"
+              @blur="clearFocus(index)"
+            />
+          </template>
           <!-- 「确认」之后才开始匹配产品与分类（2026-10-05 老板的规格）。
                不在打字过程中判 —— 一来一回问后端会卡手，
                而且顾客往往写到一半就被判了个错的。 -->
@@ -144,6 +171,19 @@
             :class="{ 'vaccine-confirm--busy': matchingIndex === index }"
             @tap="confirmVaccineName(index)"
           >{{ matchingIndex === index ? '匹配中…' : '确认' }}</text>
+
+          <!-- 确认的结果**留在卡片上**（2026-10-06 老板："点击下方的确认按钮，
+               也没有任何反应，只是屏幕闪烁了一下"）。
+               原来只有一闪而过的 toast：命中产品库时分类本来就已经是对的，
+               画面上什么都没变，看起来就像按钮坏了。
+               现在无论成功失败都留一行字在这里，一眼能看到刚才发生了什么。 -->
+          <text
+            v-if="confirmResults[index]"
+            class="vaccine-confirm-result"
+            :class="confirmResults[index].ok
+              ? 'vaccine-confirm-result--ok'
+              : 'vaccine-confirm-result--warn'"
+          >{{ confirmResults[index].text }}</text>
         </view>
 
         <!-- 归类（2026-10-05）。
@@ -514,6 +554,28 @@ async function loadVaccineCatalog() {
  */
 const matchingIndex = ref(-1)
 
+/**
+ * 「确认」之后留在卡片上的那行结果（2026-10-06）。
+ *
+ * 老板："我点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+ * 原因是这个按钮原来只弹一个一闪而过的 toast，而且命中产品库时
+ * 分类本来就已经是对的、画面上没有任何变化 —— 看起来就像按钮坏了。
+ * 现在把结果写进卡片，留着不走：顾客按了就有东西可看。
+ */
+const confirmResults = reactive<
+  Record<number, { ok: boolean; text: string }>
+>({})
+
+function setConfirmResult(index: number, ok: boolean, text: string) {
+  confirmResults[index] = { ok, text }
+}
+
+function clearConfirmResult(index: number) {
+  if (confirmResults[index]) {
+    delete confirmResults[index]
+  }
+}
+
 async function confirmVaccineName(index: number) {
   const record = records.value[index]
   if (!record) return
@@ -521,17 +583,19 @@ async function confirmVaccineName(index: number) {
   const name = draft.vaccineName.trim()
 
   if (!name) {
-    uni.showToast({ title: '请先填写疫苗名称', icon: 'none' })
+    // 不再只用一闪而过的 toast —— 结果留在卡片上，顾客回头还看得到
+    setConfirmResult(index, false, '还没写疫苗名称。先在上面写清楚，再点确认。')
     return
   }
 
   matchingIndex.value = index
+  clearConfirmResult(index)
   try {
     const res: any = await dogApi.classifyVaccineName(name)
     // 等回来时名字可能又变了 —— 只认当前这个名字的结果
     if (draftOf(record, index).vaccineName.trim() !== name) return
     if (res?.code !== 0 || !res?.data) {
-      uni.showToast({ title: '匹配失败，请重试', icon: 'none' })
+      setConfirmResult(index, false, '匹配失败，请再点一次确认。')
       return
     }
 
@@ -540,12 +604,27 @@ async function confirmVaccineName(index: number) {
     // 匹配上了就收起选择器（顾客不用做我们的活）；
     // 没匹配上就**如实承认**并展开，让他自己填
     kindPickerOpen[index] = draft.kinds.length === 0
+
+    const matched = findCatalogProduct(name)
     if (draft.kinds.length === 0) {
-      uni.showToast({ title: '没匹配到，请手动选一个分类', icon: 'none' })
+      setConfirmResult(
+        index,
+        false,
+        '产品库和 AI 都没认出这支苗。照本子上的写法再核一遍，或者在下面手动选一个分类。',
+      )
+    } else {
+      const labels = draft.kinds.map((kind) => kindLabel(kind)).join(' + ')
+      setConfirmResult(
+        index,
+        true,
+        matched
+          ? `已确认：${matched.name} · 归为「${labels}」`
+          : `已确认：${name} · 归为「${labels}」`,
+      )
     }
     scheduleAutoSave(record, index, { immediate: true })
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '匹配失败，请重试', icon: 'none' })
+    setConfirmResult(index, false, error?.message || '匹配失败，请再点一次确认。')
   } finally {
     if (matchingIndex.value === index) {
       matchingIndex.value = -1
@@ -561,6 +640,12 @@ function applyCatalogProduct(index: number, value: string | number) {
   const draft = draftOf(record, index)
   draft.vaccineName = product.name
   draft.kinds = [...product.kinds]
+  // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
+  setConfirmResult(
+    index,
+    true,
+    `已选择：${product.name} · 归为「${product.kinds.map((kind) => kindLabel(kind)).join(' + ')}」`,
+  )
   // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
   draft.kindsManual = false
   scheduleAutoSave(record, index, { immediate: true })
@@ -583,15 +668,75 @@ function kindLabel(kind: string): string {
   return kindOptions.value.find((item) => item.value === kind)?.label || kind
 }
 
+/**
+ * 产品名归一化 —— 规则与后端 `normalizeProductText` **逐条一致**。
+ *
+ * ⚠️ 2026-10-06 老板报的 bug 就出在这里：产品库下发的规范名是
+ * 「宠必威幼犬保」，而疫苗本识别出来的是「宠必威® 幼犬保」。
+ * 前端原来拿 `===` 比，比不中 → 名称那一行退回显示"从产品库选择"，
+ * 识别出来的名字只能留在下面的手填输入框里 ——
+ * 老板看到的就是"疫苗名称并未正确加载出来"。
+ *
+ * 后端判定归类时本来就会去掉 ® / 空格 / 分隔符（所以分类一直是对的），
+ * 前端显示也得用同一套规则，否则"库里有这只苗"这件事两边说法不一致。
+ * 后端改了这里也要跟着改 —— 两边不一致会直接表现为"名字显示不出来"。
+ */
+function normalizeProductName(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[®™©]/g, '')
+    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '')
+}
+
+/** 在目录里找这个名字对应的产品（归一化之后比），找不到回 null */
+function findCatalogProduct(name: string) {
+  const key = normalizeProductName(name)
+  if (!key) return null
+  return (
+    catalogProducts.value.find((item) => normalizeProductName(item.name) === key) ||
+    null
+  )
+}
+
+/**
+ * 名称那一行显示什么。
+ *
+ * 库里有 → 显示**库里的规范名**（和产品选择器上写的一致，顾客知道自己选中的是哪个）；
+ * 库里没有 → **原样显示顾客写的名字**（AI 认出来的、手打的），绝不显示成空。
+ */
+function nameFieldText(name: string): string {
+  const matched = findCatalogProduct(name)
+  if (matched) return matched.name
+  return String(name || '').trim()
+}
+
 function productIndex(name: string): number {
-  const found = catalogProducts.value.findIndex((item) => item.name === name)
+  const key = normalizeProductName(name)
+  if (!key) return 0
+  const found = catalogProducts.value.findIndex(
+    (item) => normalizeProductName(item.name) === key,
+  )
   return found >= 0 ? found : 0
 }
 
-function productPickerLabel(name: string): string {
-  return name && catalogProducts.value.some((item) => item.name === name)
-    ? name
-    : '从产品库选择（进口 / 国产都有）'
+/**
+ * 手填输入框要不要出现（2026-10-06 老板的规格）。
+ *
+ * 只有**产品库里没有这只苗**时才给手填入口：
+ *   · 名字还空着 → 要出现，否则顾客没法开始写；
+ *   · 正在这一行打字 → 要留着，否则打到一半刚好命中产品库，
+ *     输入框当场消失（手会停在半空）；
+ *   · 库里有 → 不出现，换名字走上面的产品选择器 ——
+ *     那才是"选产品"的正路，手打会绕开产品库、丢掉厂商与归类。
+ */
+function showManualNameInput(index: number): boolean {
+  const record = records.value[index]
+  if (!record) return true
+  const name = draftOf(record, index).vaccineName.trim()
+  if (!name) return true
+  if (focusIndex.value === index) return true
+  return findCatalogProduct(name) === null
 }
 
 /**
@@ -731,6 +876,8 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     draft.kindsManual = false
     draft.kinds = []
     kindPickerOpen[index] = false
+    // "已确认：xxx"那行也跟着撤掉 —— 名字都换了，再留着就是在说假话
+    clearConfirmResult(index)
   }
 
   // 实时保存（2026-10-03 老板定：底部保存键下线）。
@@ -1071,6 +1218,10 @@ async function loadRecords(dogId = props.dogId) {
   } catch (error: any) {
     records.value = []
     ensureDrafts()
+    // 拉失败也要通知一声（2026-10-06）：否则计划板块还停在上一次的结果上。
+    // 具体场景：把记录删空之后这一拉失败，计划和提醒会一直挂着旧的，
+    // 顾客以为"删了也没用"。
+    notifyRecordsChanged()
     uni.showToast({ title: error?.message || '加载疫苗记录失败', icon: 'none' })
   } finally {
     loading.value = false
@@ -1522,6 +1673,28 @@ async function doRemove(record: VaccineRecord) {
   opacity: 0.6;
 }
 
+/*
+ * 「确认」之后留在卡片上的结果（2026-10-06）。
+ *
+ * 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+ * 原来只有一闪而过的 toast；命中产品库时分类本来就已经是对的，
+ * 画面上什么都没变，看起来就像按钮坏了。这行字留着不走。
+ */
+.vaccine-confirm-result {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.vaccine-confirm-result--ok {
+  color: #3d6b4a;
+}
+
+.vaccine-confirm-result--warn {
+  color: #b26a2f;
+}
+
 /* 认不出来时的说明（2026-10-05）：不装懂，把话说清楚再让顾客填 */
 .vaccine-kind__unknown {
   display: flex;
@@ -1661,6 +1834,11 @@ async function doRemove(record: VaccineRecord) {
   background: #fbfcf7;
   border: 1rpx solid #e3e6d4;
   border-radius: 20rpx;
+}
+
+/* 还没选到任何东西时才用浅色 —— 有名字的时候要看起来是"填好了" */
+.field-picker--placeholder {
+  color: #9aa39a;
 }
 
 .field-textarea {

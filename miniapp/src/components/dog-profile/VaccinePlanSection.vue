@@ -224,6 +224,13 @@ const STATUS_LABELS: Record<PlanStep['status'], string> = {
 }
 
 const loaded = ref(false)
+/**
+ * 上一次加载的是哪条狗（2026-10-06）。
+ *
+ * 用来区分"同一条狗刷新"和"换了一条狗"：前者不要抹掉 loaded（会闪一下），
+ * 后者必须抹掉（否则新狗会顶着上一条狗的计划）。
+ */
+const loadedDogId = ref('')
 const loadError = ref('')
 const unavailable = ref<{ message: string } | null>(null)
 
@@ -359,7 +366,18 @@ async function load() {
     return
   }
 
-  loaded.value = false
+  /*
+   * ⚠️ 刷新时**不要**先把 loaded 抹掉（2026-10-06）。
+   *
+   * `sectionHidden` 是靠 `loaded && noRecordAtAll` 算出来的 ——
+   * 刷新一开始 loaded=false，整块会先消失、数据回来再出现，闪一下。
+   * 但**换狗**时必须重置：否则会拿上一条狗的计划顶上几秒，
+   * 那比闪一下更糟（顾客以为新狗已经有计划了）。
+   */
+  if (loadedDogId.value !== props.dogId) {
+    loaded.value = false
+  }
+  loadedDogId.value = props.dogId
   loadError.value = ''
   unavailable.value = null
 
@@ -426,6 +444,22 @@ async function decide(stepKey: string, decision: string) {
 
 // 换狗 or 记录变了都要重新算 —— 计划的每一步都依赖"有没有对上号的记录"
 watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
+
+/**
+ * 让页面**直接调这里**重算计划（2026-10-06）。
+ *
+ * ⚠️ 原来只靠上面那条 watch（页面把记录变化折成 data-version 传下来）。
+ * 用微信官方自动化驱动模拟器实测，删光记录之后：
+ *   · 书签红点**灭掉了** → 说明"记录变了"确实通知到了页面；
+ *   · 计划板块**原地不动**，还挂着删掉的那条记录算出来的计划。
+ * 也就是通知到了页面，却没让这个组件重算 —— 老板看到的
+ * "删空了还显示计划和提醒，切走再切回才空"就是这个。
+ *
+ * 页面调组件方法这条路在本项目里是**已经验证过的**（疫苗板块的
+ * countUnsaveableDrafts / startScan / addRecord 都靠它），所以加这一条。
+ * watch 保留：换狗时它仍然管用，两条路不冲突（同一次加载幂等）。
+ */
+defineExpose({ reload: () => load() })
 </script>
 
 <style scoped lang="scss">

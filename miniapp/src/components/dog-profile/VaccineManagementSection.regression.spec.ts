@@ -428,3 +428,73 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
     expect(source).toContain('draft.kinds = [...product.kinds]')
   })
 })
+
+/**
+ * 老板 2026-10-06 实测报的另外三个问题（问题2/4/5）。
+ */
+describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 第二批）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 问题4 的根因：产品库下发的规范名是「宠必威幼犬保」（没有 ®），
+   * 而疫苗本识别出来的是「宠必威® 幼犬保」。原来用 `===` 比，比不中 →
+   * 名称那一行退回显示"从产品库选择"占位提示，
+   * 识别出来的名字只能留在下面的手填输入框里。
+   */
+  it('🔴 产品名比对前先归一化，® 和空格不影响认不认得出', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function normalizeProductName(')
+    // 与后端 normalizeProductText 同一套规则，缺一不可
+    expect(source).toContain(".replace(/[®™©]/g, '')")
+    expect(source).toContain('function findCatalogProduct(')
+    // 名称那一行必须走归一化比对，不能退回"一模一样才认"
+    expect(source).toContain('function nameFieldText(')
+    expect(source).not.toContain('catalogProducts.value.some((item) => item.name === name)')
+  })
+
+  it('名称行显示的是名字本身，不是占位提示', () => {
+    const source = readComponent()
+
+    // 有名字时显示名字；只有连名字都没有时才显示引导语
+    expect(source).toContain(
+      "{{ nameFieldText(draftOf(record, index).vaccineName) || '从产品库选择（进口 / 国产都有）' }}",
+    )
+  })
+
+  it('🔴 手填输入框只在产品库里没有这只苗时才出现', () => {
+    const source = readComponent()
+
+    // 老板的规格："如果 AI 识别的疫苗名称没有在产品库中，
+    // 才显示这个输入框吧？"
+    expect(source).toContain('function showManualNameInput(')
+    expect(source).toContain('<template v-if="showManualNameInput(index)">')
+    // 正打字的那一行不能把输入框抽走（打到一半刚好命中产品库会当场消失）
+    expect(source).toContain('if (focusIndex.value === index) return true')
+  })
+
+  it('🔴 确认的结果留在卡片上，不再是"闪一下就没"', () => {
+    const source = readComponent()
+
+    // 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+    expect(source).toContain('const confirmResults = reactive<')
+    expect(source).toContain("class=\"vaccine-confirm-result\"")
+    expect(source).toContain('setConfirmResult(')
+    // 成功和认不出两种结果都要说清楚
+    expect(source).toContain('已确认：')
+    expect(source).toContain('产品库和 AI 都没认出这支苗')
+  })
+
+  it('🔴 后台刷新不许把已经显示出来的记录先擦掉（"屏幕闪烁"的来源）', () => {
+    const source = readComponent()
+
+    // 每次自动保存（点分类、点确认、改日期）都会整表重载，
+    // 而占位原来是 `v-if="loading"` —— 整个列表先消失再长回来。
+    expect(source).toContain('v-if="loading && records.length === 0"')
+    expect(source).not.toContain('<view v-if="loading" class="health-section__empty">')
+  })
+})

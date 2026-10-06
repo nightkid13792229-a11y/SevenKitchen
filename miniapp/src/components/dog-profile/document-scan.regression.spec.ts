@@ -390,3 +390,52 @@ describe('动物名提醒与化验数据', () => {
     expect(utils).toContain("'含化验数据'")
   })
 })
+
+/**
+ * 上传的照片全部显示预览（2026-10-06 老板）。
+ *
+ * 原话："在疫苗的 AI 识别内容表单中。把上传的所有的照片的预览图全部显示出来。"
+ */
+describe('拍照录入 · 上传的照片全部显示预览（2026-10-06）', () => {
+  function readScan() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+  }
+
+  it('🔴 只传一张也要显示预览（原来卡在"多于一张才显示"）', () => {
+    const source = readScan()
+
+    // 原来这一排是 `v-if="pageOutcomes.length > 1"` ——
+    // 只传 1 张时整个不出现，顾客看不到自己刚拍的那张，
+    // 也就没法和识别出来的字对照。
+    expect(source).toContain('v-if="pageOutcomes.length > 0"')
+    expect(source).not.toContain('<view v-if="pageOutcomes.length > 1" class="pages">')
+  })
+
+  it('每一张上传的图都有记录（成功 / 没读到 / 失败都算）', () => {
+    const source = readScan()
+
+    // pageResults 在成功、空、失败三条路上都 push，
+    // 所以"全部显示"是真的全部，不是只有识别成功的那些
+    expect(source).toContain("status: 'ok'")
+    expect(source).toContain("status: 'empty'")
+    expect(source).toContain("status: 'failed'")
+    expect(source).toContain('pageOutcomes.value = pageResults')
+  })
+
+  it('只有一张时给一个大一点的预览 —— 那是唯一能对照的原图', () => {
+    const source = readScan()
+
+    expect(source).toContain('pages__item--single')
+    expect(source).toContain("{{ pageOutcomes.length > 1 ? '这几张的结果' : '上传的照片' }}")
+  })
+
+  it('点缩略图能放大看原图', () => {
+    const source = readScan()
+
+    expect(source).toContain('@tap="previewPage(page.path)"')
+    expect(source).toContain('uni.previewImage({')
+  })
+})

@@ -215,7 +215,8 @@ describe('疫苗计划 · 接线', () => {
       'utf-8',
     )
 
-    expect(page).toContain('<VaccinePlanSection :dog-id="dogId" :data-version="vaccineDataVersion" />')
+    expect(page).toContain('ref="vaccinePlanRef"')
+    expect(page).toContain(':data-version="vaccineDataVersion"')
     // 记录一变就重算计划（2026-10-05）—— 否则顾客原地录完几条，
     // 计划还停在"没有记录"的状态、整块不显示
     expect(page).toContain('@records-changed="onVaccineRecordsChanged"')
@@ -276,5 +277,104 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).toContain('commonProducts')
     expect(section).not.toContain('coversCoreSeries')
     expect(section).not.toContain('VACCINE_PRODUCTS')
+  })
+})
+
+/**
+ * 计划和提醒要**跟着记录实时变**（2026-10-06 老板报的问题 1 和 6）。
+ *
+ * 原话：
+ *   1. "如果我把疫苗记录全部删空，依然还会显示疫苗的提醒和计划。
+ *       只有在切换到其他的标签，再切回疫苗标签的时候，显示内容才会为空。"
+ *   6. "这次在录入疫苗接种记录之后，疫苗的计划和提醒板块又没有显示出来。"
+ *
+ * 两条是同一个机理的两面：板块停在上一次加载的结果上。
+ * 一个该出现却没出现，一个该消失却没消失。
+ */
+describe('疫苗计划 · 跟着记录实时刷新（2026-10-06）', () => {
+  it('同一条狗刷新时不许先抹掉 loaded —— 那会让整块先消失再出现', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    // sectionHidden = planHidden || (loaded && noRecordAtAll)
+    // 刷新一开始就 loaded=false 的话，块会闪一下；
+    // 而换狗时**必须**重置，否则新狗顶着上一条狗的计划。
+    expect(section).toContain('const loadedDogId = ref(')
+    expect(section).toContain('if (loadedDogId.value !== props.dogId) {')
+    expect(section).not.toContain('  loaded.value = false\n  loadError.value = \'\'')
+  })
+
+  it('拉记录失败也要通知计划板块（否则删空后拉失败会一直挂着旧的）', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    // catch 里原来只 showToast，不通知 —— 计划那边毫无察觉
+    const loadAt = section.indexOf('async function loadRecords')
+    const catchBlock = section.slice(
+      section.indexOf('} catch (error: any) {', loadAt),
+      section.indexOf('} finally {', loadAt),
+    )
+    expect(catchBlock).toContain('notifyRecordsChanged()')
+    expect(catchBlock).toContain('加载疫苗记录失败')
+  })
+
+  it('"一条记录都没有"由后端按记录条数算，前端只负责照做', () => {
+    const backend = readFileSync(
+      resolve(process.cwd(), '../backend/src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    )
+
+    // 后端口径：records.length === 0 —— 删空之后它必须是 true，
+    // 计划板块才会整块藏掉。前端不重算这个判断。
+    expect(backend).toContain('const noRecordAtAll = input.records.length === 0;')
+  })
+})
+
+/**
+ * 记录变了要**直接调组件方法**重算（2026-10-06 实测出来的）。
+ *
+ * 光靠 `:data-version` 传下去实测不生效：用微信官方自动化驱动模拟器
+ * 删光记录之后，书签红点灭掉了（说明通知到了页面），
+ * 计划板块却原地挂着删掉那条记录算出来的计划 ——
+ * 正是老板报的"删空了还显示计划和提醒，切走再切回才空"。
+ */
+describe('疫苗计划 · 记录一变就重算（2026-10-06 实测修复）', () => {
+  function readPage() {
+    return readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+  }
+
+  it('🔴 页面拿到计划板块的 ref，并在记录变化时直接调 reload', () => {
+    const page = readPage()
+
+    expect(page).toContain('const vaccinePlanRef = ref<{ reload?: () => void } | null>(null)')
+    expect(page).toContain('ref="vaccinePlanRef"')
+    expect(page).toContain('vaccinePlanRef.value?.reload?.()')
+  })
+
+  it('reload 由组件 defineExpose 暴露出来', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(section).toContain('defineExpose({ reload: () => load() })')
+  })
+
+  it('reload 必须排在"红点也跟着更新"同一条链上（两件事一起发生）', () => {
+    const page = readPage()
+
+    const handler = page.slice(
+      page.indexOf('function onVaccineRecordsChanged()'),
+      page.indexOf('}', page.indexOf('vaccinePlanRef.value?.reload?.()')),
+    )
+    expect(handler).toContain('loadVaccineDot()')
+    expect(handler).toContain('vaccinePlanRef.value?.reload?.()')
   })
 })

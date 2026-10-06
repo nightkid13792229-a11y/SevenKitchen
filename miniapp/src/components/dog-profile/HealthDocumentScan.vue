@@ -49,14 +49,26 @@
       <!-- 逐张状态（2026-10-03 老板问"能搞清楚是哪一张没被识别吗"）：
            一眼看到每张的结果 —— ✓ 已读出（标出读成什么）、✗ 没读到内容、！失败了。
            点缩略图可以放大看原图。 -->
-      <view v-if="pageOutcomes.length > 1" class="pages">
-        <text class="pages__title">这几张的结果</text>
+      <!-- 上传的照片全部显示出来（2026-10-06 老板："把上传的所有的照片的预览图
+           全部显示出来"）。
+
+           原来这里卡了 `length > 1` —— 只传 1 张时这一排**整个不出现**，
+           顾客看不到自己刚拍的那张，也就没法和识别出来的字对照。
+           现在只要传了图就显示，一张都不少（识别成功/没读到/失败都会列出来，
+           点缩略图能放大看原图）。 -->
+      <view v-if="pageOutcomes.length > 0" class="pages">
+        <text class="pages__title">
+          {{ pageOutcomes.length > 1 ? '这几张的结果' : '上传的照片' }}
+        </text>
         <view class="pages__row">
           <view
             v-for="page in pageOutcomes"
             :key="page.index"
             class="pages__item"
-            :class="`pages__item--${page.status}`"
+            :class="[
+              `pages__item--${page.status}`,
+              pageOutcomes.length === 1 ? 'pages__item--single' : '',
+            ]"
             @tap="previewPage(page.path)"
           >
             <image class="pages__thumb" :src="page.path" mode="aspectFill" />
@@ -944,6 +956,17 @@ function discard() {
   height: 134rpx;
   border-radius: 10rpx;
   background: #eef1e8;
+}
+
+/* 只传了一张时给它一个大一点的预览：那是顾客唯一能对照的原图，
+   150rpx 的缩略图看不清本子上的字。 */
+.pages__item--single {
+  width: 320rpx;
+}
+
+.pages__item--single .pages__thumb {
+  width: 304rpx;
+  height: 304rpx;
 }
 
 .pages__index {

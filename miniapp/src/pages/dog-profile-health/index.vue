@@ -147,6 +147,7 @@
             ref="vaccinePlanRef"
             :dog-id="dogId"
             :data-version="vaccineDataVersion"
+            @record-step="onPlanRecordStep"
           />
           <VaccineManagementSection
             ref="vaccineSectionRef"
@@ -273,6 +274,17 @@ function onVaccineRecordsChanged() {
    * 就是这个。改成直接调组件方法，和疫苗板块那几个入口同一个机制。
    */
   vaccinePlanRef.value?.reload?.()
+}
+
+/**
+ * 计划里某一步点了「记录疫苗接种信息」（2026-10-06）。
+ *
+ * 直接开一条新增记录，并**把这一步的分类一起带过去** ——
+ * 顾客是在"狂犬疫苗 第 3 次"那一行点的，新增出来的记录本来就该归到狂犬疫苗。
+ * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
+ */
+function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
+  vaccineSectionRef.value?.addRecord?.({ kinds: payload.kinds })
 }
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
@@ -1078,7 +1090,8 @@ const recordsSectionRef = ref<{
 } | null>(null)
 const vaccineSectionRef = ref<{
   startScan?: () => void
-  addRecord?: () => void
+  /** 加一条空白记录；prefill 用于从计划某一步点进来时带上那一步的分类 */
+  addRecord?: (prefill?: { kinds?: string[] }) => void
   /** 有几条填不完、存不了的疫苗草稿（切标签前拦一下用） */
   countUnsaveableDrafts?: () => number
 } | null>(null)

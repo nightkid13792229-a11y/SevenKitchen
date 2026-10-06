@@ -253,8 +253,10 @@ describe('疫苗管理', () => {
     // 老板："在记录板块中有一个新增疫苗记录的按钮，在最下方还有一个新增记录的
     // 按钮呢？不是重复了吗？"
     expect(source).not.toContain('新增疫苗记录')
-    // addRecord 仍由底部按钮通过 ref 调起
-    expect(source).toContain('function addRecord()')
+    // addRecord 仍由底部按钮通过 ref 调起；2026-10-06 起还接受一个预填参数
+    // （从接种计划的某一步点「记录疫苗接种信息」进来时，带上那一步的分类）
+    expect(source).toContain('function addRecord(prefill?: { kinds?: string[] })')
+    expect(source).toContain('kinds: Array.isArray(prefill?.kinds) ? [...prefill.kinds] : [],')
   })
 
   it('空态只说一次「档案里还没有接种记录」', () => {

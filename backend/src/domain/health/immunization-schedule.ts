@@ -113,6 +113,13 @@ export interface VaccinePlanStep {
   /** 稳定标识，用于存顾客的决定 */
   key: string;
   kind: VaccineKind;
+  /**
+   * 种类的中文名（狂犬疫苗 / 核心疫苗 / 早期核心疫苗 / 钩端螺旋体 / 其他）。
+   *
+   * 2026-10-06 老板要求计划里每一步要显示"疫苗种类" —— 由后端下发，
+   * 前端不再自己维护一份映射（这个项目吃过两次"两边各有一套"的亏）。
+   */
+  kindLabel: string;
   label: string;
   /** 时间窗（ISO 日期 YYYY-MM-DD）；开区间时另一侧为空 */
   windowStart: string;
@@ -1248,6 +1255,7 @@ export function buildVaccinePlan(
       return {
         key: seed.key,
         kind: seed.kind,
+        kindLabel: VACCINE_KIND_LABELS[seed.kind] || seed.kind,
         label: seed.label,
         windowStart: toDateText(seed.windowStart),
         windowEnd: toDateText(seed.windowEnd),
@@ -1437,15 +1445,8 @@ export function buildVaccinePlan(
 }
 
 /**
- * 顾客可见的疫苗建议是否开放。
- *
- * **默认关闭**（老板定的边界：未经专业审核的兽医内容不得对顾客开放）。
- * 免疫程序表目前由研发依据 WSAVA 2024 与国内法规起草，**尚未经兽医审核**，
- * 所以线上默认只给营养师/管理端看。
- * 审核完成后设置环境变量 `VACCINE_PLAN=customer` 即可对顾客开放。
+ * ⚠️ 这里原来有个 isVaccinePlanCustomerEnabled()（读环境变量 VACCINE_PLAN
+ * 决定顾客侧开不开）。2026-10-06 老板定：**按审核通过的标准部署**，
+ * 卡点取消 —— 免疫程序表正式对顾客开放，不再是"内部先看"的状态。
+ * 留着一个随时能把功能关掉的开关，反而会让线上状态变得说不清。
  */
-export function isVaccinePlanCustomerEnabled(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return String(env.VACCINE_PLAN ?? '').trim().toLowerCase() === 'customer';
-}

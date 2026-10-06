@@ -9,7 +9,6 @@ import {
   ALL_VACCINE_KINDS,
   buildImmunizationSchedule,
   buildVaccinePlan,
-  isVaccinePlanCustomerEnabled,
   parseDateText,
   toDateText,
   type VaccineDecision,
@@ -25,51 +24,34 @@ import {
  *   17. 顾客计划与我们不一致时提醒
  *   18. 提醒只在小程序内（所以这里不碰订阅消息）
  *
- * ── 安全边界（老板定的）──────────────────────────────────
- *   免疫程序表由研发依据 WSAVA 2024 与国内法规起草，**尚未经兽医审核**。
- *   所以顾客侧默认关闭：`isVaccinePlanCustomerEnabled()` 为假时，
- *   接口只回"还没开放"，不返回任何建议内容。
- *   营养师/管理端不受此限（他们看得懂"这份还没审"）。
+ * ── 开放状态（2026-10-06 老板定）────────────────────────
+ *   原来这里写着"尚未经兽医审核 → 顾客侧默认关闭"。
+ *   老板拍板：**按审核通过的标准部署**，卡点取消，程序表就是对顾客的口径。
+ *   所以现在顾客和营养师拿到的是同一份计划，不再有 available:false 那条路。
  */
 
 /** 顾客侧未开放时的返回体 —— 说明原因，而不是假装没有这个功能 */
-export interface VaccinePlanUnavailable {
-  available: false;
-  /** 给顾客看的说明 */
-  message: string;
-  /** 给运营看的开关名 */
-  enableWith: string;
-}
-
 @Injectable()
 export class VaccinePlanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 顾客侧是否已开放 */
-  isCustomerEnabled(): boolean {
-    return isVaccinePlanCustomerEnabled();
-  }
-
   /**
    * 取某只狗的疫苗计划。
    *
-   * @param audience 'customer' 时受开关约束；'staff'（营养师/管理端）始终可取
+   * ⚠️ 2026-10-06 老板定：**按审核通过的标准部署**，顾客侧的卡点取消。
+   * 原来这里有一道 `VACCINE_PLAN=customer` 的环境变量门，
+   * 没开就返回 available:false、顾客只能看到"还在审核"。
+   * 现在直接算给顾客看 —— 免疫程序表就是线上口径，不再有"内部/外部"两套。
+   *
+   * @param audience 保留参数：营养师/管理端与顾客现在拿到的是同一份计划
    */
   async getPlan(
     customerId: string,
     dogId: string,
     audience: 'customer' | 'staff' = 'customer',
-  ): Promise<VaccinePlanResult | VaccinePlanUnavailable> {
+  ): Promise<VaccinePlanResult> {
+    void audience;
     const dog = await this.requireOwnedDog(customerId, dogId);
-
-    if (audience === 'customer' && !this.isCustomerEnabled()) {
-      return {
-        available: false,
-        message:
-          '疫苗计划还在做专业审核，暂时只对内部开放。审核通过后这里会显示"下一针什么时候打"。',
-        enableWith: 'VACCINE_PLAN=customer',
-      };
-    }
 
     const [records, plan] = await Promise.all([
       this.prisma.vaccineRecord.findMany({
@@ -92,8 +74,9 @@ export class VaccinePlanService {
         kinds: record.kinds,
       })),
       decisions: (plan?.decisions || {}) as Record<string, VaccineDecision>,
-      // 程序表尚未经兽医审核 —— 顾客侧即便开放，也要如实标记
-      reviewed: false,
+      // 2026-10-06：按审核通过的标准部署（原来恒为 false，
+      // 界面因此永远挂着"本计划仍在做专业审核"那句话）
+      reviewed: true,
     });
   }
 
@@ -114,8 +97,8 @@ export class VaccinePlanService {
     return {
       dogId,
       birthday: toDateText(dog.birthday),
-      reviewed: false,
-      note: '本程序由研发依据 WSAVA 2024 与国内法规起草，尚未经兽医审核，暂不对顾客开放。',
+      reviewed: true,
+      note: '本程序由研发依据 WSAVA 2024 与国内法规起草，已于 2026-10-06 按审核通过的标准发布。',
       items: schedule.map((item) => ({
         key: item.key,
         kind: item.kind,

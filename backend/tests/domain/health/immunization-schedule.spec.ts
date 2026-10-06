@@ -13,7 +13,6 @@ import {
   classifyVaccineName,
   classifyVaccineKinds,
   detectConflicts,
-  isVaccinePlanCustomerEnabled,
   parseDateText,
   recordCoversStep,
   toDateText,
@@ -368,17 +367,9 @@ describe('疫苗计划', () => {
       expect(plan.nextStep).toBeNull();
     })
 
-    it('顾客侧默认关闭（未经专业审核不得开放）', () => {
-      expect(isVaccinePlanCustomerEnabled({} as NodeJS.ProcessEnv)).toBe(false);
-      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: '' } as any)).toBe(false);
-      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'off' } as any)).toBe(false);
-    })
-
-    it('审核完成后才可打开', () => {
-      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'customer' } as any)).toBe(true);
-      expect(isVaccinePlanCustomerEnabled({ VACCINE_PLAN: 'CUSTOMER' } as any)).toBe(true);
-    })
-
+    // 2026-10-06：那个 VACCINE_PLAN 环境变量开关已经取消 ——
+    // 老板定"按审核通过的标准部署"，程序表就是对顾客的口径，
+    // 不再有"内部先看"的状态（留个随时能关的开关会让线上状态说不清）。
     it('计划自带 reviewed 标记，未审核时可以据此不给顾客看', () => {
       const unreviewed = buildVaccinePlan({
         dogId: 'dog-1',

@@ -30,6 +30,20 @@
       <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
 
+    <!-- 接种记录单独成一个板块（2026-10-06 老板）：
+         "将用户手动录入或者是 AI 识别的疫苗接种记录，也放到一个板块中，
+          就像接种计划或者是疫苗提醒这样来为其在视觉上归类。"
+         内嵌到健康管理页时，上面那块标题（疫苗管理）是不显示的，
+         记录卡就直接裸在页面上、和计划板块分不出层次 —— 所以这里补一个
+         小标题。独立成页时不重复加（那边本来就有页级标题了）。 -->
+    <view v-if="embedded" class="health-section__header records-header">
+      <view class="health-section__heading">
+        <text class="health-section__title">接种记录</text>
+        <text class="health-section__desc">每次接种记一条：手动填，或者拍疫苗本。</text>
+      </view>
+      <text class="health-section__count">{{ records.length }} 条</text>
+    </view>
+
     <!-- 占位只在**手上一条记录都还没有**时出现。
          原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
          （点分类、点"确认"、改日期）都会整表重载，于是已经显示出来的记录
@@ -1340,7 +1354,14 @@ async function saveScannedRecords() {
  *
  * 两件事都必须在 DOM 更新之后做，所以放在 nextTick 里。
  */
-function addRecord() {
+/**
+ * 新增一条空白记录。
+ *
+ * @param prefill 预填（2026-10-06）：从接种计划的某一步点「记录疫苗接种信息」
+ *   进来时，把那一步的分类带上 —— 顾客点的就是"狂犬疫苗 第 3 次"，
+ *   这条记录本来就该归到狂犬疫苗，让他再选一次既白费事又容易选错。
+ */
+function addRecord(prefill?: { kinds?: string[] }) {
   const draft: VaccineRecord = {
     id: '',
     vaccineName: '',
@@ -1348,7 +1369,8 @@ function addRecord() {
     nextDueDate: '',
     notes: '',
     status: 'COMPLETED',
-    kinds: [],
+    kinds: Array.isArray(prefill?.kinds) ? [...prefill.kinds] : [],
+    // 计划带来的分类是"系统给的"，不是顾客手点的 —— 名字一改就该重判
     kindsManual: false,
   }
 
@@ -1555,6 +1577,12 @@ async function doRemove(record: VaccineRecord) {
 
 <style scoped lang="scss">
 @import '../../styles/health-section.scss';
+
+/* 接种记录的小标题（2026-10-06）：和上面"接种计划"那块形成同样的视觉分组 */
+.records-header {
+  margin-top: 8rpx;
+  margin-bottom: 4rpx;
+}
 
 .vaccine-due-banner {
   margin-top: 18rpx;

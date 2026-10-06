@@ -28,14 +28,42 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('step.basis')
   })
 
-  it('第 16 条：每一步都能让顾客自己选（按建议 / 推迟 / 不做）', () => {
+  /**
+   * 第 16 条原样是"给顾客三个按钮自己选（按建议/推迟/不做）"。
+   *
+   * 2026-10-06 老板实测："目前这 3 个按钮，我选中之后没有任何反应。"
+   * （后端是好的 —— 生产实测 PUT 200 落库成功，只是界面只变了个很不明显的
+   * 样式，列表里那几项连一句说明都没有。）老板的方案是重构成两个按钮：
+   *   「记录疫苗接种信息」→ 直接走新增记录流程
+   *   「忽略」→ 弹窗确认后把这一步从计划里去掉
+   */
+  it('第 16 条（2026-10-06 改版）：每一步两个按钮 —— 记录疫苗接种信息 / 忽略', () => {
     const section = readSection()
 
-    expect(section).toContain("value: 'ACCEPT', label: '按建议'")
-    expect(section).toContain("value: 'DEFER', label: '推迟'")
-    expect(section).toContain("value: 'SKIP', label: '不做'")
-    // 点同一个选项两次 = 取消决定，回到"按建议"
-    expect(section).toContain('const isCancel = current === decision')
+    expect(section).toContain('记录疫苗接种信息')
+    expect(section).toContain('>忽略<')
+    expect(section).toContain('@tap.stop="recordStep(step)"')
+    expect(section).toContain('@tap.stop="ignoreStep(step)"')
+    // 老的三个按钮彻底下线
+    expect(section).not.toContain("label: '按建议'")
+    expect(section).not.toContain("label: '推迟'")
+    expect(section).not.toContain('DECISION_OPTIONS')
+  })
+
+  it('「记录疫苗接种信息」把这一步的分类一起带过去（不让顾客再选一次）', () => {
+    const section = readSection()
+
+    expect(section).toContain("emit('record-step', { kinds: [step.kind], stepLabel: step.label })")
+  })
+
+  it('「忽略」先弹窗确认，再落一个 SKIP 决定；并且给得回来', () => {
+    const section = readSection()
+
+    expect(section).toContain('uni.showModal({')
+    expect(section).toContain("void decide(step.key, 'SKIP')")
+    // 忽略不是"删了就找不回来"
+    expect(section).toContain('已忽略 {{ ignoredCount }} 项 · 点这里恢复')
+    expect(section).toContain('function restoreIgnored()')
   })
 
   it('第 17 条：不一致的地方单独成块提醒，且说明"只是提醒"', () => {
@@ -57,8 +85,8 @@ describe('疫苗计划 · 界面', () => {
   it('措辞是建议不是命令（老板要求不做诊断、不替顾客拍板）', () => {
     const section = readSection()
 
-    expect(section).toContain('建议时间')
-    expect(section).toContain('请以执业兽医的意见为准')
+    expect(section).toContain('接种窗口期')
+    expect(section).toContain('依据')
     expect(section).not.toContain('必须接种')
     expect(section).not.toContain('立刻去打')
   })
@@ -75,37 +103,46 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('v-if="!sectionHidden"')
   })
 
-  it('完整计划收成一行，点开才铺开（2026-10-04）', () => {
+  it('整个板块默认收起，收起时只有"下一针的分类 + 接种窗口期"（2026-10-06 改版）', () => {
     const section = readSection()
 
-    // 顾客来这一页是看"下一针什么时候打"，不是来读免疫程序表的。
-    // 一屏直接铺 9 项，把上面那行"下一步"淹掉了。
-    expect(section).toContain('planListExpanded')
-    expect(section).toContain('@tap="planListExpanded = !planListExpanded"')
-    expect(section).toContain('planListHint')
+    // 老板："合并后的板块默认收起，在收起页面中只展示下一针要打的疫苗分类
+    // 和接种窗口期。"
+    expect(section).toContain('const expanded = ref(false)')
+    expect(section).toContain('@tap="toggleExpanded"')
+    expect(section).toContain('plan-card__kind')
+    expect(section).toContain('plan-card__window')
+    // 老的两层折叠（下一步卡 + 计划列表各自收起）已经合并掉
+    expect(section).not.toContain('planListExpanded')
   })
 
   it('但"记录与建议不一致"不折叠 —— 藏起来等于没说', () => {
     const section = readSection()
 
     // conflicts 必须在折叠之外
-    const expandAt = section.indexOf('<template v-if="planListExpanded">')
+    const expandAt = section.indexOf('<template v-if="expanded">')
     const conflictsAt = section.indexOf('plan.conflicts')
     expect(expandAt).toBeGreaterThan(-1)
     expect(conflictsAt).toBeGreaterThan(-1)
-    expect(conflictsAt).toBeLessThan(expandAt)
+    expect(conflictsAt).toBeGreaterThan(expandAt)
   })
 
-  it('一条都对不上号时不报"已完成 N 项"（那是假进度）', () => {
+  it('收起那一行只报"下一针是什么、什么时候打"，不报假进度', () => {
     const section = readSection()
 
-    expect(section).toContain('if (noEvidence.value) {')
+    // 原来收起那行会写"已完成 N 项" —— 一条都对不上号时那是假进度。
+    // 现在收起行只有分类 + 窗口期（老板 2026-10-06 指定的两项）。
+    expect(section).not.toContain('已完成 ${done}')
+    expect(section).not.toContain('planListHint')
+    expect(section).toContain('plan-card__eyebrow')
   })
 
-  it('结尾有"仍在专业审核"的说明', () => {
+  it('🔴 底部那句"仍在做专业审核"已经删掉（2026-10-06 老板）', () => {
     const section = readSection()
 
-    expect(section).toContain('本计划仍在做专业审核')
+    // 老板："这句话删除掉…我们现在就按审核通过的标准部署。"
+    expect(section).not.toContain('仍在做专业审核')
+    expect(section).not.toContain('plan-note')
   })
 })
 
@@ -249,24 +286,53 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     )
   }
 
-  it('「别同一天打」的提醒显示在「下一步」卡片里', () => {
+  it('「别同一天打」的提醒跟在"下一针说明"里', () => {
     const section = readSection()
 
-    // 老板："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
+    // 老板 2026-10-05："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
     // 比如狂犬疫苗、核心疫苗和钩端螺旋体要分开打。"
+    // 2026-10-06 改版后，这一段归到"下一针的进一步说明"里
+    // （家长最容易犯的错就是两针一起去打，所以它跟着下一针走）。
     expect(section).toContain('spacingNote')
     expect(section).toContain('spacing-note__text')
-    // 紧跟提醒语，因为家长最容易犯的错就是"两针一起去打"
-    const reminderAt = section.indexOf('next-step__reminder')
+    const nextDetailAt = section.indexOf('class="next-detail"')
     const spacingAt = section.indexOf('spacing-note__text')
-    expect(spacingAt).toBeGreaterThan(reminderAt)
+    expect(nextDetailAt).toBeGreaterThan(-1)
+    expect(spacingAt).toBeGreaterThan(nextDetailAt)
   })
 
-  it('展开的完整计划里每一项也带这条提醒', () => {
+  it('计划列表每一步按老板 2026-10-06 的字段清单显示，不多不少', () => {
     const section = readSection()
 
-    expect(section).toContain('step__spacing')
-    expect(section).toContain('{{ step.spacingNote }}')
+    // 状态 / 疫苗种类 / 接种窗口期 / 接种时间 / 推荐疫苗 / 依据
+    expect(section).toContain('statusLabel(step.status)')
+    expect(section).toContain('step.kindLabel')
+    expect(section).toContain('step.windowStart')
+    expect(section).toContain('step.matchedRecordDate')
+    expect(section).toContain('stepProducts(step)')
+    expect(section).toContain('step.basis')
+  })
+
+  it('已记录/已接种的步骤不再推荐产品', () => {
+    const section = readSection()
+
+    // 老板："推荐疫苗（如果已记录或者已接种，就不需要推荐了。）"
+    expect(section).toContain('if (step.matchedRecordId) return []')
+  })
+
+  it('接种计划按接种窗口期由近到远排序', () => {
+    const section = readSection()
+
+    // 老板："接种计划按照接种窗口期时间顺序，由近到远往下排序。"
+    expect(section).toContain('orderedSteps')
+    expect(section).toContain('.sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart)))')
+  })
+
+  it('被忽略的步骤从计划里去掉（展示层过滤，库里那条决定留着好恢复）', () => {
+    const section = readSection()
+
+    expect(section).toContain("plan.value.decisions[step.key] !== 'SKIP'")
+    expect(section).toContain('ignoredCount')
   })
 
   it('同品牌优先的结果直接用后端的（前端不自己排）', () => {

@@ -173,12 +173,28 @@
           </picker>
 
           <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
-          <text
-            v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'"
-            class="field-hint field-hint--unknown"
-          >
-            产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」判定分类。
-          </text>
+          <template v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'">
+            <text class="field-hint field-hint--unknown">
+              产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」判定分类。
+            </text>
+            <!-- 认不准就诚实说（2026-10-06 老板）：
+                 "并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
+                  并没有识别出8这个字。如果不能完全有把握的识别出来，
+                  能不能诚实的告诉用户呢？" -->
+            <template v-if="(record.nameSuggestions || []).length > 0">
+              <text class="field-hint field-hint--unknown">
+                这行字可能没读全 —— 对照瓶子看看是不是下面这几支？点一下就用它：
+              </text>
+              <view class="vaccine-name-tags">
+                <text
+                  v-for="suggestion in record.nameSuggestions || []"
+                  :key="`suggest-${suggestion}`"
+                  class="vaccine-name-tag"
+                  @tap="applySuggestedProduct(index, suggestion)"
+                >{{ suggestion }}</text>
+              </view>
+            </template>
+          </template>
 
           <!-- 手填入口：名字还空着、或者库里没有时出现。
                库里有这只苗时换名字走上面的选择器 —— 手打会绕开产品库，
@@ -424,6 +440,14 @@ interface VaccineRecord {
   kinds?: string[]
   /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"） */
   kindLabels?: string[]
+  /**
+   * 名字**没读全**时的候选产品（2026-10-06 老板要求"认不准就诚实说"）。
+   *
+   * 识别出「卫佳」而漏了「捌」时，后端会把「卫佳伍 / 卫佳捌 / 卫佳细」
+   * 一起给下来 —— 界面如实告诉顾客"这行字可能没读全，请看瓶子核对"，
+   * 点一下就用那支（名字和分类一起带对）。
+   */
+  nameSuggestions?: string[]
 }
 
 interface VaccineDraft {
@@ -665,6 +689,10 @@ async function confirmVaccineName(index: number) {
      *   · 后端给了规范名 → 直接采用（连名字一起改过来，和分类对齐）；
      *   · 没给 → 退回前端这份，至少能显示"已确认：xxx"。
      */
+    // 顺带刷新"没读全"的候选（认出来了就是空数组）
+    if (Array.isArray(res.data.nameSuggestions)) {
+      record.nameSuggestions = res.data.nameSuggestions.map(String)
+    }
     const canonicalName = String(res.data.productName || '')
     const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(name)
 
@@ -696,6 +724,22 @@ async function confirmVaccineName(index: number) {
       matchingIndex.value = -1
     }
   }
+}
+
+/**
+ * 点"没读全"的候选 → 等同于从产品库里选了那一支。
+ *
+ * 老板 2026-10-06："如果不能完全有把握的识别出来，能不能诚实的告诉用户呢？"
+ * 告诉他之后还得让他一键改对 —— 不然知道了还得自己去找产品库。
+ */
+function applySuggestedProduct(index: number, name: string) {
+  const at = catalogProducts.value.findIndex((item) => item.name === name)
+  if (at >= 0) {
+    applyCatalogProduct(index, at)
+  }
+  // 用掉了就不再提示
+  const record = records.value[index]
+  if (record) record.nameSuggestions = []
 }
 
 /** 从产品库选 → 名字、归类一起带出来（厂商/批准文号后端有，界面只显示名） */
@@ -1380,6 +1424,9 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
        * 认不出来时后端给空串，这里就照旧用顾客本子上那串字。
        */
       vaccineName: String(draft.productName || draft.vaccineName || ''),
+      nameSuggestions: Array.isArray(draft.nameSuggestions)
+        ? draft.nameSuggestions.map(String)
+        : [],
       vaccinationDate: String(draft.vaccinationDate || ''),
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),

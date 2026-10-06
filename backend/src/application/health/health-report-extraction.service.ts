@@ -61,7 +61,10 @@ import {
   buildProductMatchReference,
   kindsOfProductName,
 } from '../../domain/health/vaccine-catalog';
-import { findProductByText } from '../../domain/health/vaccine-products';
+import {
+  findProductByText,
+  suggestProductsForPartialName,
+} from '../../domain/health/vaccine-products';
 
 export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
@@ -683,6 +686,20 @@ export function normalizeDrafts(
           return {
             vaccineName,
             productName: matchedProduct ? matchedProduct.name : '',
+            /**
+             * 名字**没读全**时的候选（2026-10-06 老板要求"认不准就诚实说"）。
+             *
+             * 老板："并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
+             * 并没有识别出8这个字。如果不能完全有把握的识别出来，
+             * 能不能诚实的告诉用户呢？"
+             * 认全了就给空数组（没什么要提醒的）；只读到前半截时，
+             * 把"可能是这几支"如实交给界面，由顾客对着瓶子核对。
+             */
+            nameSuggestions: matchedProduct
+              ? []
+              : suggestProductsForPartialName(vaccineName)
+                  .slice(0, 4)
+                  .map((product) => product.name),
             /**
              * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
              *

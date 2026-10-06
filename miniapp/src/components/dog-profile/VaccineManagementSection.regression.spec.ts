@@ -768,3 +768,45 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
     expect(activeAt).toBeGreaterThan(baseAt)
   })
 })
+
+/**
+ * 名字没读全要诚实说（2026-10-06 老板）。
+ */
+describe('疫苗名称 · 没读全时如实告知并一键改对（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 识别草稿把候选带进来', () => {
+    const source = readComponent()
+
+    expect(source).toContain('nameSuggestions: Array.isArray(draft.nameSuggestions)')
+    expect(source).toContain('nameSuggestions?: string[]')
+  })
+
+  it('🔴 认出没把握时，明说"这行字可能没读全"并列出候选', () => {
+    const source = readComponent()
+
+    // 老板："如果不能完全有把握的识别出来，能不能诚实的告诉用户呢？"
+    expect(source).toContain('这行字可能没读全')
+    expect(source).toContain('(record.nameSuggestions || []).length > 0')
+    expect(source).toContain('@tap="applySuggestedProduct(index, suggestion)"')
+  })
+
+  it('点候选 = 用那一支（名字和分类一起带对），用过就不再提示', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function applySuggestedProduct(index: number, name: string)')
+    expect(source).toContain('applyCatalogProduct(index, at)')
+    expect(source).toContain('if (record) record.nameSuggestions = []')
+  })
+
+  it('点「确认」时也刷新候选（认出来了就清空）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('if (Array.isArray(res.data.nameSuggestions))')
+    expect(source).toContain('record.nameSuggestions = res.data.nameSuggestions.map(String)')
+  })
+})

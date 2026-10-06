@@ -788,8 +788,23 @@ export const VACCINE_KIND_CYCLE_NOTES: Record<VaccineKind, string> = {
  * 必须有这一步：产品目录只收进口苗，顾客写"六联""犬热"是常态；
  * 少了它这些记录会掉成"未归类"，被挡在计划外面。
  */
+/**
+ * 自由文本里能看出"这是核心苗"的写法（2026-10-06 按 WSAVA 2024 修正）。
+ *
+ * ⚠️ **副流感已经从这条里删掉了**。老板指出并核实过：
+ *    WSAVA 2024 的口径是 —— 犬的核心疫苗只有三支：
+ *    **犬瘟病毒、腺病毒、细小病毒**；**副流感属于非核心**
+ *    （与博德特氏菌一起归在"犬窝咳"那一类，按生活方式逐只评估）。
+ *    来源：WSAVA 2024 guidelines（Squires et al., JSAP 65(5):277–316），
+ *    见 RSPCA 知识库对该指南的转述。
+ *
+ *    以前把副流感算核心，会让一支"副流感单苗"顶掉核心苗的某一针 ——
+ *    和当年把驱虫药当核心苗是同一类错误（我们从此不再提醒那一针）。
+ *
+ * "联数"（二联…九联）仍然算核心：联苗按惯例都覆盖那三种核心病。
+ */
 const CORE_NAME_PATTERN =
-  /犬瘟|细小|腺病毒|副流感|传染性肝炎|distemper|parvo|adenovirus|[二三四五六七八九]联/i;
+  /犬瘟|细小|腺病毒|传染性肝炎|distemper|parvo|adenovirus|[二三四五六七八九]联/i;
 
 /**
  * 非核心、而且我们**没有**接种程序的（2026-10-05）。
@@ -799,7 +814,7 @@ const CORE_NAME_PATTERN =
  * 记下来是对的，影响计划是不对的。
  */
 const OTHER_NAME_PATTERN =
-  /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|bordetella|kennel\s*cough/i;
+  /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|副流感|parainfluenza|bordetella|kennel\s*cough/i;
 
 /** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
 export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];

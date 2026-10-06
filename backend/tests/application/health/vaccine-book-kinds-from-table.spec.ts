@@ -1,6 +1,9 @@
 import { classifyVaccineKinds } from '../../../src/domain/health/immunization-schedule';
 import { normalizeDrafts } from '../../../src/application/health/health-report-extraction.service';
-import { findProductByText } from '../../../src/domain/health/vaccine-products';
+import {
+  findProductByText,
+  suggestProductsForPartialName,
+} from '../../../src/domain/health/vaccine-products';
 
 /**
  * 疫苗本的归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
@@ -189,5 +192,88 @@ describe('疫苗本 · 认出具体是哪一支产品（2026-10-06）', () => {
 
     expect(drafts[0].productName).toBe('卫佳捌');
     expect(drafts[0].kinds).toEqual(findProductByText(BOTTLE)?.kinds);
+  });
+});
+
+/**
+ * 副流感不是核心疫苗（2026-10-06 老板指出并核实）。
+ *
+ * WSAVA 2024 的口径：犬的核心疫苗只有三支 —— 犬瘟病毒、腺病毒、细小病毒；
+ * **副流感属于非核心**（和博德特氏菌一起归在"犬窝咳"那一类，按生活方式评估）。
+ * 来源：WSAVA 2024 guidelines（Squires et al., JSAP 65(5):277–316），
+ * 见 RSPCA 知识库对该指南的转述。
+ *
+ * 以前把副流感算核心的后果很实际：一支"副流感单苗"能顶掉核心苗的某一针，
+ * 我们从此不再提醒那一针 —— 和当年把驱虫药当核心苗是同一类错误。
+ */
+describe('分类口径 · 副流感改回非核心（2026-10-06）', () => {
+  it('🔴 副流感不再算核心疫苗', () => {
+    const kinds = classifyVaccineKinds('犬副流感');
+
+    expect(kinds).not.toContain('core');
+    expect(kinds).toContain('other');
+  });
+
+  it('犬窝咳 / 副流感 / 博德特 都归"其他（非核心）"，不影响计划', () => {
+    for (const name of ['犬窝咳', '副流感单苗', '博德特氏菌苗']) {
+      expect(classifyVaccineKinds(name)).toContain('other');
+    }
+  });
+
+  it('但联苗仍然算核心（联苗按惯例覆盖那三种核心病）', () => {
+    for (const name of ['犬四联', '犬八联', '卫佳伍', '六联']) {
+      expect(classifyVaccineKinds(name)).toContain('core');
+    }
+  });
+
+  it('犬瘟 / 细小 / 腺病毒 单拎出来仍然算核心', () => {
+    for (const name of ['犬瘟热', '细小病毒', '犬腺病毒']) {
+      expect(classifyVaccineKinds(name)).toContain('core');
+    }
+  });
+});
+
+/**
+ * 名字没读全要诚实说（2026-10-06 老板实测）。
+ *
+ * 老板："并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
+ * 并没有识别出8这个字。如果不能完全有把握的识别出来，能不能诚实的
+ * 告诉用户呢？"
+ */
+describe('识别 · 名字没读全时给候选（2026-10-06）', () => {
+  it('🔴 只读到「卫佳」→ 给出卫佳系列的三支', () => {
+    const names = suggestProductsForPartialName('卫佳').map((p) => p.name);
+
+    expect(names).toContain('卫佳伍');
+    expect(names).toContain('卫佳捌');
+    expect(names).toContain('卫佳细');
+  });
+
+  it('读全了就不给候选（没什么要提醒的）', () => {
+    expect(suggestProductsForPartialName('卫佳捌')).toEqual([]);
+  });
+
+  it('英文名读了一半也给候选', () => {
+    const names = suggestProductsForPartialName('Vanguard').map((p) => p.name);
+    expect(names.length).toBeGreaterThan(0);
+  });
+
+  it('太短的前缀不给（一两个字会命中一大堆，反而误导）', () => {
+    expect(suggestProductsForPartialName('卫')).toEqual([]);
+    expect(suggestProductsForPartialName('')).toEqual([]);
+  });
+
+  it('草稿里带上候选；认全了就是空数组', () => {
+    const partial = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [{ vaccineName: '卫佳', vaccinationDate: '2026-07-18' }],
+    });
+    expect(partial[0].productName).toBe('');
+    expect(partial[0].nameSuggestions).toContain('卫佳捌');
+
+    const full = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [{ vaccineName: '卫佳捌', vaccinationDate: '2026-07-18' }],
+    });
+    expect(full[0].productName).toBe('卫佳捌');
+    expect(full[0].nameSuggestions).toEqual([]);
   });
 });

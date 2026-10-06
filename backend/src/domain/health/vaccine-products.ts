@@ -807,3 +807,34 @@ const DOMESTIC_PRODUCTS: VaccineProduct[] = [
 
 // 国产苗并进同一个目录：产品库要能看到它们，推荐那一步再按 recommendable 过滤
 VACCINE_PRODUCTS.push(...DOMESTIC_PRODUCTS);
+
+/**
+ * 名字**没读全**时的候选（2026-10-06 老板实测）。
+ *
+ * 老板："我试了几次相同的疫苗本上传之后，并不完全保证能识别出卫佳8，
+ * 有可能它还是识别出卫佳，并没有识别出8这个字。如果不能完全有把握的
+ * 识别出来，能不能诚实的告诉用户呢？"
+ *
+ * 所以这里做一件事：当读到的那串字**是某几支产品名字的前半截**时，
+ * 把它们列出来交给界面 —— 界面会如实说"这行字没读全，可能是这几支，
+ * 请核对瓶子上的名字"，而不是硬认一个或者闷声说"没认出来"。
+ *
+ * 只做前缀判断，不做模糊猜测：宁可少给候选，也不能给错方向
+ * （"卫佳" → 卫佳伍/卫佳捌/卫佳细；"卫" 太短，不给）。
+ */
+export function suggestProductsForPartialName(name: string): VaccineProduct[] {
+  const text = normalizeProductText(name);
+  // 太短的前缀（一两个字）会命中一大堆，反而误导
+  if (text.length < 2) {
+    return [];
+  }
+
+  return VACCINE_PRODUCTS.filter((product) => {
+    const candidates = [product.name, ...(product.aliases || [])];
+    return candidates.some((candidate) => {
+      const key = normalizeProductText(candidate);
+      // 候选名比读到的更长，而且**以读到的这串字开头** = 后半截没读出来
+      return key.length > text.length && key.startsWith(text);
+    });
+  });
+}

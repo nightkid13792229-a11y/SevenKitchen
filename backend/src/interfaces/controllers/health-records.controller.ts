@@ -4,7 +4,10 @@
  */
 
 import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
-import { findProductByText } from '../../domain/health/vaccine-products';
+import {
+  findProductByText,
+  suggestProductsForPartialName,
+} from '../../domain/health/vaccine-products';
 import { HealthReportExtractionService } from '../../application/health/health-report-extraction.service';
 import {
   VACCINE_KIND_LABELS,
@@ -245,6 +248,16 @@ export class HealthRecordsController {
          * 认不出来就是空串 —— 界面照旧显示顾客写的那串字，绝不硬塞。
          */
         productName: findProductByText(text)?.name || '',
+        /**
+         * 名字没读全时的候选（2026-10-06）。
+         * 「卫佳」→ 卫佳伍 / 卫佳捌 / 卫佳细 —— 界面如实告诉顾客
+         * "这行字没读全，请核对瓶子上的名字"，而不是闷声说"没认出来"。
+         */
+        nameSuggestions: findProductByText(text)
+          ? []
+          : suggestProductsForPartialName(text)
+              .slice(0, 4)
+              .map((product) => product.name),
         kinds,
         kindLabels: kinds.map((kind) => VACCINE_KIND_LABELS[kind] || kind),
         /** 判定走的是哪一步 —— 界面要如实告诉顾客"这是我们判的"还是"没认出来" */

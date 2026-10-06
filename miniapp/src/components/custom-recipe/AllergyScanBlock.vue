@@ -164,6 +164,41 @@ const skippedNames = computed(() =>
 
 const isPicked = (name: string) => picked.value.includes(name)
 
+/**
+ * 丢掉**被别的页推翻**的"整份都没有"式提醒（2026-10-05 老板实测）。
+ *
+ * 老板上传的是两页报告：判读区在第 2 页，第 1 页只有数值表格 ——
+ * 第 1 页的模型忠实地说了一句"这张报告没有单独的结果判定或结论段落"，
+ * 而这句话在**合并后的报告层面是错的**，家长看到就以为系统没读到判定区，
+ * 甚至怀疑等级是瞎猜的。
+ *
+ * 口径（三类都按同一逻辑处理）：
+ *   · 任何一页有判定区 / 任何一项读到等级 → 丢掉"没有判定区/等级"的提醒
+ *   · 任何一页读到了日期              → 丢掉"没写日期"的提醒
+ *   · 任何一页读到了检测方式            → 丢掉"没写检测方法"的提醒
+ * 其余提醒（某一处被遮挡、某一行看不清）照旧保留 —— 那些是**局部**的，
+ * 不会被别的页推翻。
+ */
+function filterPageWarnings(
+  warnings: string[],
+  pages: ScannedAllergenPage[],
+  resolved: { hasDate: boolean; hasMethod: boolean },
+): string[] {
+  const unique = Array.from(
+    new Set(warnings.map((item) => String(item || '').trim()).filter(Boolean)),
+  )
+  const hasVerdict =
+    pages.some((page) => page.hasVerdict) ||
+    pages.some((page) => page.items.some((item) => item.level !== 'UNKNOWN'))
+
+  return unique.filter((warning) => {
+    if (hasVerdict && /判定|判读|结论|等级/.test(warning)) return false
+    if (resolved.hasDate && /日期|采样/.test(warning)) return false
+    if (resolved.hasMethod && /检测方法|检测方式/.test(warning)) return false
+    return true
+  })
+}
+
 function normalizeMethod(value: unknown): typeof method.value {
   const text = String(value || '').toUpperCase()
   return (['SERUM', 'INTRADERMAL', 'ELIMINATION', 'OTHER'] as const).includes(text as any)
@@ -285,7 +320,10 @@ async function pickReport() {
     method.value = detectedMethod
     ocrText.value = texts.join('\n\n').slice(0, 20000)
     candidates.value = mergeAllergyCandidates(pages)
-    warnings.value = Array.from(new Set(collectedWarnings.filter(Boolean)))
+    warnings.value = filterPageWarnings(collectedWarnings, pages, {
+      hasDate: Boolean(detectedDate),
+      hasMethod: detectedMethod !== 'UNKNOWN',
+    })
     // 读到的食物过敏原**默认全部记上**（老板 2026-10-05 选定）：
     // 原先一个都不勾，家长看到「加入这一单（0）」是灰的，以为识别坏了
     picked.value = foodCandidates.value.map((item) => item.name)

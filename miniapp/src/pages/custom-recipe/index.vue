@@ -318,16 +318,18 @@
           <!-- "这些是从档案带出来的"：不说明的话，顾客会以为是上次在这页填的 -->
           <text v-if="healthPrefillHint" class="health-prefill-hint">{{ healthPrefillHint }}</text>
 
-          <!-- 常见过敏原：点一下选中、再点一下取消（2026-10-04）。
-               原先只能"加"，加错了得跑到下面的列表里找那条点「删除」，
-               同一个标签要管两处。现在标签自己就是开关。
-
-               2026-10-05 老板要求：选中态**不加 ✓**，靠高亮表示；
-               并且选中的不再在下方重复列一遍 —— 标签自己就是状态的唯一展示。 -->
+          <!-- 过敏原标签：**一块、一种样式**（2026-10-05 老板要求合并）。
+               改前是两块两色 —— 上面浅绿的常见过敏原快选、下面金色的
+               "手动/AI 识别"清单（还各带个「删除」），既乱又费版面。
+               现在合成一条标签流：常见过敏原在前，档案带出/报告识别/手输的
+               接在后面，**同一套配色、同一套交互**：
+                 · 未选 = 浅底，点了选中
+                 · 已选 = 深底，再点一下取消（等于原来那条「删除」）
+               选中态不加 ✓，靠高亮表示（老板 2026-10-05 的口径）。 -->
           <view class="allergen-quick-add">
             <view class="tag-list">
               <view
-                v-for="name in commonAllergens"
+                v-for="name in allergenChips"
                 :key="name"
                 class="tag-item allergen-quick-tag"
                 :class="{ 'allergen-quick-tag--added': isAllergenAdded(name) }"
@@ -336,26 +338,18 @@
             </view>
           </view>
 
-          <!-- 手动添加入口（2026-10-05 老板要求挪到这里）：
-               原先它在最上面一行，标签还没出现就先看到「+ 添加」，
-               顺序变成"先手输、再快选"；实际动线是先看快选里有没有，
-               没有才需要手打。所以按钮夹在快选标签与手动清单之间。 -->
+          <!-- 手动添加入口：紧跟在这条标签流后面（列表里没有的才需要手打） -->
           <view class="allergen-add-row">
             <text class="add-btn" @tap="addAllergen">+ 添加</text>
           </view>
 
-          <!-- 下方只列**手动录入**的过敏原（快选里没有的那些）。
-               它们没有对应的标签可以点掉，必须留一个能看到、能删的地方；
-               快选项不在这里重复出现。 -->
-          <view v-if="customAllergens.length > 0" class="tag-list">
-            <view
-              v-for="(allergen, index) in customAllergens"
-              :key="allergen"
-              class="tag-item editable"
-            >
-              <text>{{allergen}}</text>
-              <text class="remove-btn" @tap.stop="removeCustomAllergen(allergen)">删除</text>
-            </view>
+          <!-- 一键清除之后给一条"撤销"：老板问"清除了还想恢复怎么办" ——
+               清除只是把这一单的选择清掉，撤销就是把它们放回去 -->
+          <view v-if="clearedAllergiesBackup" class="allergy-cleared">
+            <text class="allergy-cleared__text">
+              已清除这一单的过敏原（{{ clearedAllergiesBackup.length }} 项）
+            </text>
+            <text class="allergy-cleared__undo" @tap="undoClearAllergies">撤销</text>
           </view>
 
           <!-- 拍检测报告自动读（2026-10-04 从健康管理搬来）。
@@ -387,14 +381,25 @@
               class="allergy-reports__item"
             >
               <view class="allergy-reports__thumbs">
-                <image
+                <!-- 每张照片右上角一个叉，**只删这一张**（2026-10-05 老板要求）：
+                     原来是整份一起删的按钮，而"一份报告"常常就是家长眼里的
+                     "两张报告照片"，一删全没。 -->
+                <view
                   v-for="url in report.attachments"
                   :key="url"
-                  class="allergy-reports__thumb"
-                  :src="url"
-                  mode="aspectFill"
-                  @tap="previewAllergyReport(report)"
-                />
+                  class="allergy-reports__thumb-wrap"
+                >
+                  <image
+                    class="allergy-reports__thumb"
+                    :src="url"
+                    mode="aspectFill"
+                    @tap="previewAllergyReport(report)"
+                  />
+                  <text
+                    class="allergy-reports__thumb-remove"
+                    @tap.stop="removeReportImage(report, url)"
+                  >×</text>
+                </view>
               </view>
               <view class="allergy-reports__row">
                 <view class="allergy-reports__main">
@@ -403,7 +408,6 @@
                   </text>
                   <text class="allergy-reports__meta">{{ allergyReportPageText(report) }}</text>
                 </view>
-                <text class="allergy-reports__remove" @tap.stop="removeAllergyReport(report)">删除</text>
               </view>
             </view>
           </view>
@@ -677,6 +681,14 @@ const hasSelectedDog = computed(() => Boolean(formData.value.dogId));
  */
 const hasFoodAllergy = ref<boolean | null>(null);
 
+/**
+ * "一键清除"之前的那一份过敏原（撤销用）。
+ *
+ * 非空时页面上会出现一条「已清除 N 项 · 撤销」。
+ * 换狗或重新读档案时清空 —— 那份备份属于上一只狗/上一版档案。
+ */
+const clearedAllergiesBackup = ref<string[] | null>(null);
+
 /** 答题。答"有"展开录入界面；答"没有"只留一句说明 */
 function answerFoodAllergy(hasAllergy: boolean) {
   hasFoodAllergy.value = hasAllergy;
@@ -704,31 +716,55 @@ const allergyReportPageCount = computed(() =>
  * 弹窗确认在组件那边（那是不可撤销的批量动作）。
  */
 function clearAllAllergies() {
+  // 清之前先留一份：清错了能一键撤销（老板问"清除了还想恢复怎么办"）
+  clearedAllergiesBackup.value = [...formData.value.allergies];
   formData.value.allergies = [];
-  uni.showToast({ title: '已清除这一单的过敏原', icon: 'none' });
+  uni.showToast({ title: '已清除，可点「撤销」恢复', icon: 'none' });
+}
+
+/** 撤销"一键清除"：把清掉的那一份放回去 */
+function undoClearAllergies() {
+  if (!clearedAllergiesBackup.value) return;
+  formData.value.allergies = [...clearedAllergiesBackup.value];
+  clearedAllergiesBackup.value = null;
+  uni.showToast({ title: '已恢复', icon: 'none' });
 }
 
 /**
- * 删除一份检测报告（2026-10-05 老板要求：预览窗口可以删，但要弹窗确认）。
+ * 删除报告里**某一张**照片（2026-10-05 老板要求）。
  *
- * 弹窗里必须写清"过敏信息不受影响"：后端删报告**不会**连带删过敏记录
- * （依据没了，结论仍然成立），家长最怕的就是"删了照片，过敏也没了"。
+ * 两种情形：
+ *   · 这份报告还有别的照片 → 只把这一张从附件里去掉（PUT 更新附件，
+ *     结论与过敏记录一个字都不动）
+ *   · 这是最后一张 → 整份报告一起删掉（没有原件的报告没有留存意义），
+ *     删报告**不会**连带删过敏记录（后端语义：依据没了，结论仍成立）
+ * 两种都要弹窗确认，并把"过敏信息不受影响"写清楚。
  */
-function removeAllergyReport(report: Record<string, any>) {
+function removeReportImage(report: Record<string, any>, url: string) {
   const dogId = formData.value.dogId;
   if (!dogId) return;
-  const pages = Array.isArray(report.attachments) ? report.attachments.length : 0;
+
+  const images = (Array.isArray(report.attachments) ? report.attachments : []).filter(Boolean);
+  const isLastImage = images.length <= 1;
 
   uni.showModal({
-    title: '删除这份检测报告？',
-    content: `报告原件（${pages} 张照片）会一起删掉。已经记下的过敏信息不受影响。`,
+    title: isLastImage ? '删除这张照片？' : '删除这张照片？',
+    content: isLastImage
+      ? '这是这份报告的最后一张原件，删除后整份报告记录也会一并移除。已经记下的过敏信息不受影响。'
+      : `这张照片会从报告原件里移除（还剩 ${images.length - 1} 张）。已经记下的过敏信息不受影响。`,
     confirmText: '删除',
     confirmColor: '#a8622a',
     success: async (res) => {
       if (!res.confirm) return;
       try {
-        await dogApi.allergyReports.remove(dogId, report.id);
-        allergyReports.value = allergyReports.value.filter((item) => item.id !== report.id);
+        if (isLastImage) {
+          await dogApi.allergyReports.remove(dogId, report.id);
+        } else {
+          await dogApi.allergyReports.update(dogId, report.id, {
+            attachments: images.filter((item: string) => item !== url),
+          });
+        }
+        await loadAllergyReports(dogId);
         uni.showToast({ title: '已删除', icon: 'none' });
       } catch (error: any) {
         uni.showToast({ title: error?.message || '删除失败，请重试', icon: 'none' });
@@ -1535,6 +1571,8 @@ const loadDogArchiveInfo = async (dogId: string) => {
   // "是否对食物过敏"这一问也要跟着换狗重置：上一只狗答过的答案
   // 不能替新狗作答（答"没有"会把新狗的录入界面藏起来）
   hasFoodAllergy.value = null;
+  // 撤销用的备份也属于上一只狗
+  clearedAllergiesBackup.value = null;
   // 口味同理：它也会写进新狗的单子，留着上一只狗的口味没有意义
   formData.value.preferredIngredients = [];
   formData.value.dislikedIngredients = [];
@@ -1751,23 +1789,23 @@ const isAllergenAdded = (name: string) =>
   formData.value.allergies.includes(String(name || '').trim());
 
 /**
- * 下方列表只列**手动录入**的过敏原（快选标签里没有的那些）。
+ * 过敏原标签流 = 常见过敏原 + 这一单里其余已选（档案带出 / 报告识别 / 手输）。
  *
- * 2026-10-05 老板要求：快选选中的不在下方重复展示（标签自己就是状态）。
- * 但手动录入的（特别是 AI 从报告里读出来的）没有标签可点，
- * 必须留一个能看到、能删的地方，否则加错了没法撤销。
+ * 2026-10-05 老板要求把原来"两块两色"（浅绿快选 + 金色手输清单）合成一块：
+ *   · 常见过敏原在前（位置稳定，选中时标签不会跳来跳去）
+ *   · 其余已选的接在后面（它们本来就不在清单里，只有被选中时才会出现）
+ *   · 全部走同一套 toggle：点一下选中、再点一下取消
  */
-const customAllergens = computed(() =>
-  formData.value.allergies.filter(
-    (item) => !commonAllergens.value.includes(String(item || '').trim()),
-  ),
-);
-
-/** 删掉一条手动录入的过敏原（按值删，位置由 customAllergens 决定） */
-const removeCustomAllergen = (allergen: string) => {
-  const index = formData.value.allergies.indexOf(allergen);
-  if (index >= 0) formData.value.allergies.splice(index, 1);
-};
+const allergenChips = computed(() => {
+  const common = commonAllergens.value.map((item) => String(item || '').trim());
+  const extras: string[] = [];
+  for (const item of formData.value.allergies) {
+    const value = String(item || '').trim();
+    if (!value || common.includes(value) || extras.includes(value)) continue;
+    extras.push(value);
+  }
+  return [...common, ...extras];
+});
 
 /**
  * 过敏原检测报告（2026-10-04 从健康管理搬来）。
@@ -2668,13 +2706,25 @@ const getActivityLabel = (level: string) => {
   margin-top: 12rpx;
 }
 
-.allergy-reports__remove {
-  flex: 0 0 auto;
-  padding: 6rpx 18rpx;
-  font-size: 22rpx;
-  color: #a8622a;
-  border: 1rpx solid rgba(168, 98, 42, 0.45);
-  border-radius: 999rpx;
+/* 缩略图右上角的叉：只删这一张 */
+.allergy-reports__thumb-wrap {
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+}
+
+.allergy-reports__thumb-remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 36rpx;
+  text-align: center;
+  font-size: 30rpx;
+  color: #ffffff;
+  background: rgba(38, 38, 31, 0.72);
+  border-radius: 50%;
 }
 
 .allergy-reports__main {
@@ -2711,7 +2761,26 @@ const getActivityLabel = (level: string) => {
   color: #8a6b3f;
 }
 
-/* 手动添加入口：夹在快选标签与手动清单之间（2026-10-05 老板要求挪位） */
+/* 「已清除 N 项 · 撤销」：一键清除之后的反悔入口 */
+.allergy-cleared {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.allergy-cleared__text {
+  font-size: 23rpx;
+  color: var(--sk-ink-3, #968f6d);
+}
+
+.allergy-cleared__undo {
+  font-size: 24rpx;
+  color: var(--sk-primary, #1e3a2f);
+  border-bottom: 1rpx solid var(--sk-primary, #1e3a2f);
+}
+
+/* 手动添加入口：紧跟合并后的标签流（2026-10-05 起只有一条标签流） */
 .allergen-add-row {
   display: flex;
   margin-bottom: 16rpx;

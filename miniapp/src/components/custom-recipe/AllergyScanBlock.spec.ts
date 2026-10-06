@@ -162,3 +162,82 @@ describe('过敏报告 · 按钮文案与一键清除', () => {
     expect(clear).not.toContain('remove')
   })
 })
+
+/**
+ * 2026-10-05 第六批（老板实测反馈）。
+ */
+describe('过敏报告 · 第六批（提醒合并 / 单张删除 / 标签合并 / 撤销）', () => {
+  const block = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/custom-recipe/AllergyScanBlock.vue'),
+      'utf-8',
+    )
+  const page = () =>
+    readFileSync(resolve(process.cwd(), 'src/pages/custom-recipe/index.vue'), 'utf-8')
+
+  it('多页里只要有一页带判定区，"这页没有判定区"的提醒就不显示', () => {
+    /**
+     * 老板上传两页报告：判读区在第 2 页，第 1 页只有数值表格。
+     * 第 1 页的提醒在合并后的报告层面是错的，会让家长以为系统没读到判定区。
+     */
+    const source = block()
+
+    expect(source).toContain('filterPageWarnings(collectedWarnings, pages, {')
+    const filter = source.match(/function filterPageWarnings\([\s\S]*?\n\}/)?.[0] || ''
+    expect(filter).toContain('page.hasVerdict')
+    // 有一条真读到等级也算"有判定"
+    expect(filter).toContain("item.level !== 'UNKNOWN'")
+    // 日期与检测方法同理：别页读到了就不再提示"这份没写"
+    expect(filter).toContain('resolved.hasDate')
+    expect(filter).toContain('resolved.hasMethod')
+    // 局部提醒（某处遮挡 / 某行看不清）不受影响
+    expect(filter).toContain('return true')
+  })
+
+  it('一键清除之后能给"撤销"（老板问：清除了还想恢复怎么办）', () => {
+    const source = page()
+
+    expect(source).toContain('const clearedAllergiesBackup = ref<string[] | null>(null)')
+    const clear = source.match(/function clearAllAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
+    // 清之前先备份
+    expect(clear).toContain('clearedAllergiesBackup.value = [...formData.value.allergies]')
+    const undo = source.match(/function undoClearAllergies\(\)[\s\S]*?\n\}/)?.[0] || ''
+    expect(undo).toContain('formData.value.allergies = [...clearedAllergiesBackup.value]')
+    // 界面上要有撤销入口
+    expect(source).toContain('clearedAllergiesBackup.length }} 项')
+    expect(source).toContain('@tap="undoClearAllergies"')
+    // 换狗时备份要清掉（那是上一只狗的）
+    expect(source).toContain('clearedAllergiesBackup.value = null')
+  })
+
+  it('每张缩略图右上角一个叉，只删那一张（最后一张才整份删）', () => {
+    const source = page()
+
+    const remove = source.match(/function removeReportImage\([\s\S]*?\n\}/)?.[0] || ''
+    expect(remove).toContain('const isLastImage = images.length <= 1')
+    // 还有别的照片：只更新附件（结论与过敏记录都不动）
+    expect(remove).toContain('dogApi.allergyReports.update')
+    expect(remove).toContain('attachments: images.filter')
+    // 最后一张：整份删（后端语义：过敏记录保留）
+    expect(remove).toContain('dogApi.allergyReports.remove')
+    // 删完要刷新列表（缩略图立刻同步）
+    expect(remove).toContain('await loadAllergyReports(dogId)')
+  })
+
+  it('过敏原标签合并成一块：常见 + 其余已选，同一套配色与 toggle', () => {
+    const source = page()
+
+    const chips = source.match(/const allergenChips = computed\([\s\S]*?\n\}\);/)?.[0] || ''
+    expect(chips).toContain('commonAllergens.value')
+    expect(chips).toContain('formData.value.allergies')
+    // 常见在前、其余接在后面（位置稳定，选中时标签不跳）
+    expect(chips).toContain('return [...common, ...extras]')
+    // 两块两色的痕迹都清掉（只看过敏信息这一段：饮食偏好那边仍用同一套标签样式）
+    expect(source).not.toContain('removeCustomAllergen')
+    const allergySection = source.slice(
+      source.indexOf('<text class="title-text">过敏信息</text>'),
+      source.indexOf('<text class="title-text">饮食偏好（可选）</text>'),
+    )
+    expect(allergySection).not.toContain('tag-item editable')
+  })
+})

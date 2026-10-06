@@ -1386,11 +1386,13 @@ describe('定制页 · 第二轮精简（2026-10-05）', () => {
     expect(template).toContain('过敏信息')
   })
 
-  it('过敏快速选择：选中不加勾、也不在下方重复列一遍', () => {
+  it('过敏标签流：选中不加勾；只有一块（2026-10-05 合并后）', () => {
     expect(code).not.toContain("isAllergenAdded(name) ? ' ✓' : ''")
-    expect(code).toContain('const customAllergens = computed(')
-    expect(template).toContain('customAllergens')
+    // 2026-10-05 老板要求把"快选 + 手输/识别清单"两块合成一条标签流
+    expect(code).toContain('const allergenChips = computed(')
+    expect(template).toContain('v-for="name in allergenChips"')
     expect(template).not.toContain('v-for="(allergen, index) in formData.allergies"')
+    expect(template).not.toContain('removeCustomAllergen')
     expect(code).not.toContain('暂无过敏信息')
   })
 
@@ -1543,14 +1545,12 @@ describe('定制页 · 2026-10-05 第二批（6 条）', () => {
     expect(resolve).toContain("return '';")
   })
 
-  it('③ 「+ 添加」夹在快选标签与手动清单之间', () => {
-    const quickStart = template.indexOf('allergen-quick-add')
+  it('③ 「+ 添加」跟在过敏原标签流后面', () => {
+    const chips = template.indexOf('allergen-quick-add')
     const addRow = template.indexOf('allergen-add-row')
-    const customList = template.indexOf('customAllergens.length > 0')
 
-    expect(quickStart).toBeGreaterThan(-1)
-    expect(addRow).toBeGreaterThan(quickStart)
-    expect(customList).toBeGreaterThan(addRow)
+    expect(chips).toBeGreaterThan(-1)
+    expect(addRow).toBeGreaterThan(chips)
     // 顶部那行空标题栏（health-header）已经没有内容，整块删掉
     expect(template).not.toContain('health-header')
   })
@@ -1682,15 +1682,23 @@ describe('定制页 · 2026-10-05 第三批（4 条）', () => {
     expect(code).toContain('hasFoodAllergy.value = null;')
   })
 
-  it('④ 已上传报告给"小预览窗口"，删除要弹窗确认', () => {
+  it('④ 已上传报告给"小预览窗口"；每张右上角一个叉，只删这一张', () => {
     expect(template).toContain('{{ allergyReports.length }} 份 / {{ allergyReportPageCount }} 张')
     // 预览窗口：报告原件的缩略图，点了看大图
     expect(template).toContain('allergy-reports__thumb')
     expect(template).toContain('@tap="previewAllergyReport(report)"')
-    // 删除走弹窗确认，并写明"过敏信息不受影响"（后端语义就是保留过敏记录）
-    const remove = code.match(/function removeAllergyReport\([\s\S]*?\n\}/)?.[0] || ''
+    // 2026-10-05 老板：不要"整份一起删"的按钮，改成每张缩略图右上角的叉
+    expect(template).toContain('allergy-reports__thumb-remove')
+    expect(template).toContain('@tap.stop="removeReportImage(report, url)"')
+    expect(template).not.toContain('removeAllergyReport')
+    expect(code).not.toContain('function removeAllergyReport')
+
+    // 两种情形都要弹窗确认，并写明"过敏信息不受影响"
+    const remove = code.match(/function removeReportImage\([\s\S]*?\n\}/)?.[0] || ''
     expect(remove).toContain('uni.showModal')
     expect(remove).toContain('已经记下的过敏信息不受影响')
+    // 还有别的照片 → 只更新附件；最后一张 → 整份删掉
+    expect(remove).toContain('dogApi.allergyReports.update')
     expect(remove).toContain('dogApi.allergyReports.remove')
     expect(template).toContain('allergyReportPageText(report)')
 

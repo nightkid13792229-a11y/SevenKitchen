@@ -103,12 +103,17 @@
               @tap="selectHealthTab(tab.key)"
             >
               <text class="health-tabs__label">{{ tab.label }}</text>
-              <!-- 疫苗书签挂角标（2026-10-04）：让顾客在**没点进疫苗书签之前**
-                   就知道有针要打了。点进去才看得到的提醒，等于没提醒。 -->
-              <text
-                v-if="tab.key === 'vaccine' && vaccineBadgeText"
-                class="health-tabs__badge"
-              >{{ vaccineBadgeText }}</text>
+              <!-- 疫苗书签的红点（2026-10-06 老板改：不要再显示带文案的角标）。
+                   原来挂的是「有 N 针该打了」那样一句话。改成红点有三个理由：
+                     · 书签只有四分之一屏宽，塞一句话会把四个书签挤得高矮不一；
+                     · 到底几针、哪几针、什么时候打，点进去的计划板块说得比这里清楚；
+                     · 红点只回答一个问题：**有针该打了，进去看看**。
+                   位置仍在书签上，所以顾客**没点进去之前**就看得到 ——
+                   点进去才看得到的提醒，等于没提醒（这一条没变）。 -->
+              <view
+                v-if="tab.key === 'vaccine' && vaccineHasDue"
+                class="health-tabs__dot"
+              />
             </view>
           </view>
 
@@ -138,7 +143,12 @@
           <!-- 疫苗计划（2026-10-01，第四期）：记录是"打过什么"，
                计划是"接下来怎么打"，计划放上面先看到。 -->
           <!-- data-version：记录一变就重算计划（2026-10-05） -->
-          <VaccinePlanSection :dog-id="dogId" :data-version="vaccineDataVersion" />
+          <VaccinePlanSection
+            ref="vaccinePlanRef"
+            :dog-id="dogId"
+            :data-version="vaccineDataVersion"
+            @record-step="onPlanRecordStep"
+          />
           <VaccineManagementSection
             ref="vaccineSectionRef"
             external-save
@@ -229,14 +239,18 @@ interface DogProfileSummary {
 
 const dogId = ref('')
 /**
- * 疫苗书签上的角标文字，空串 = 不显示（2026-10-04）。
+ * 疫苗书签上有没有红点（2026-10-06 老板：角标改成红点，不要文案）。
+ *
+ * 只回答"有没有针该打了"这一件事；几句、哪几句、什么时候打，
+ * 交给点进去之后的计划板块说 —— 书签只有四分之一屏宽，
+ * 塞一句话会把四个书签挤得高矮不一。
  *
  * 为什么由**页面**去拉，而不是让 VaccinePlanSection 报上来：
- * 那个组件只在"疫苗"书签被选中时才挂载 —— 而角标的全部意义恰恰是
+ * 那个组件只在"疫苗"书签被选中时才挂载 —— 而红点的全部意义恰恰是
  * 在顾客**还没点进疫苗书签**时告诉他"有针要打了"。
  * 点进去才看得到的提醒，等于没提醒。
  */
-const vaccineBadgeText = ref('')
+const vaccineHasDue = ref(false)
 
 /**
  * 疫苗数据版本号（2026-10-05）。
@@ -250,7 +264,27 @@ const vaccineDataVersion = ref(0)
 
 function onVaccineRecordsChanged() {
   vaccineDataVersion.value += 1
-  loadVaccineBadge()
+  loadVaccineDot()
+  /*
+   * 直接让计划板块重算（2026-10-06）。
+   *
+   * ⚠️ 光靠 `:data-version` 传下去**实测不生效**：用微信官方自动化驱动
+   * 模拟器删光记录，书签红点灭掉了（说明这个函数跑了），计划板块却
+   * 原地挂着旧计划 —— 老板报的"删空了还显示计划和提醒，切走再切回才空"
+   * 就是这个。改成直接调组件方法，和疫苗板块那几个入口同一个机制。
+   */
+  vaccinePlanRef.value?.reload?.()
+}
+
+/**
+ * 计划里某一步点了「记录疫苗接种信息」（2026-10-06）。
+ *
+ * 直接开一条新增记录，并**把这一步的分类一起带过去** ——
+ * 顾客是在"狂犬疫苗 第 3 次"那一行点的，新增出来的记录本来就该归到狂犬疫苗。
+ * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
+ */
+function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
+  vaccineSectionRef.value?.addRecord?.({ kinds: payload.kinds })
 }
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
@@ -409,7 +443,7 @@ function switchHealthTab(key: HealthTabKey) {
 
   // 切标签时顺手刷新角标：顾客刚在别处补了接种记录，数字要跟着变。
   // 不 await，切标签不能等网络。
-  loadVaccineBadge()
+  loadVaccineDot()
 }
 
 
@@ -707,9 +741,9 @@ function resetHealthForm() {
   }
 }
 
-async function loadVaccineBadge(requestedDogId = dogId.value) {
+async function loadVaccineDot(requestedDogId = dogId.value) {
   if (!requestedDogId) {
-    vaccineBadgeText.value = ''
+    vaccineHasDue.value = false
     return
   }
 
@@ -718,7 +752,7 @@ async function loadVaccineBadge(requestedDogId = dogId.value) {
     // 计划没开 / 拉失败 → 不显示角标。角标是加分项，
     // 拉不到就安静地不出现，不在书签上挂个"加载失败"。
     if (res?.code !== 0 || !res?.data || res.data.available === false) {
-      vaccineBadgeText.value = ''
+      vaccineHasDue.value = false
       return
     }
 
@@ -740,13 +774,13 @@ async function loadVaccineBadge(requestedDogId = dogId.value) {
      * 那里说就够了，不必在书签上再喊一遍。
      */
     if (res.data.noRecordAtAll === true) {
-      vaccineBadgeText.value = ''
+      vaccineHasDue.value = false
       return
     }
 
-    vaccineBadgeText.value = dueCount > 0 ? `有 ${dueCount} 针该打了` : ''
+    vaccineHasDue.value = dueCount > 0
   } catch {
-    vaccineBadgeText.value = ''
+    vaccineHasDue.value = false
   }
 }
 
@@ -776,7 +810,7 @@ async function loadDogProfile(requestedDogId: string) {
     dogId.value = requestedDogId
     populateForm(res.data.profile)
     // 档案换了，角标要跟着换狗；不 await —— 角标晚几十毫秒出现不影响什么
-    loadVaccineBadge(requestedDogId)
+    loadVaccineDot(requestedDogId)
   } catch (error: any) {
     if (shouldDiscardDogHealthProfileResponse({
       requestedDogId,
@@ -786,7 +820,7 @@ async function loadDogProfile(requestedDogId: string) {
     }
 
     dogId.value = ''
-    vaccineBadgeText.value = ''
+    vaccineHasDue.value = false
     loadError.value = error?.message || '加载狗狗档案失败，请稍后重试。'
   } finally {
     if (!shouldDiscardDogHealthProfileResponse({
@@ -1056,10 +1090,18 @@ const recordsSectionRef = ref<{
 } | null>(null)
 const vaccineSectionRef = ref<{
   startScan?: () => void
-  addRecord?: () => void
+  /** 加一条空白记录；prefill 用于从计划某一步点进来时带上那一步的分类 */
+  addRecord?: (prefill?: { kinds?: string[] }) => void
   /** 有几条填不完、存不了的疫苗草稿（切标签前拦一下用） */
   countUnsaveableDrafts?: () => number
 } | null>(null)
+/**
+ * 疫苗计划板块（2026-10-06）。
+ *
+ * 记录一变就**直接调它的 reload**，而不是只把 data-version 传下去 ——
+ * 实测那条路不生效（详见 onVaccineRecordsChanged 的注释）。
+ */
+const vaccinePlanRef = ref<{ reload?: () => void } | null>(null)
 const weightSectionRef = ref<{
   saveRecord?: () => Promise<void>
   focusInput?: () => void
@@ -1482,6 +1524,8 @@ function goToDogCreate() {
 .health-tabs__item {
   flex: 1 1 0;
   min-width: 0;
+  /* 红点挂在右上角（绝对定位），所以要一个定位上下文 */
+  position: relative;
   padding: 16rpx 0 18rpx;
   /* 2026-10-04 起书签里除了文字还要放角标，所以是纵向 flex。
      color 留在这一层 —— 主题色是按 .health-tabs__item--active 给的，
@@ -1504,17 +1548,20 @@ function goToDogCreate() {
 }
 
 /*
- * 书签上的角标（2026-10-04）：疫苗有针要打时出现。
- * 用主题紫的实心小药丸，不闪不动 —— 这是家庭工具，不是待办清单。
+ * 书签上的红点（2026-10-06 老板：不要带文案的角标，红点即可）。
+ *
+ * 绝对定位挂在书签右上角 —— 它不占布局，所以有没有红点，
+ * 四个书签的高度都一样，不会因为它亮起来就把整排顶歪。
+ * 红色实心、不闪不动：这是家庭工具，不是待办清单。
  */
-.health-tabs__badge {
-  font-size: 19rpx;
-  line-height: 1;
-  padding: 6rpx 12rpx;
-  border-radius: 999rpx;
-  color: #ffffff;
-  background: #6b5b9b;
-  white-space: nowrap;
+.health-tabs__dot {
+  position: absolute;
+  top: 10rpx;
+  right: 18rpx;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #d9534f;
 }
 
 .health-tabs__item:last-child {

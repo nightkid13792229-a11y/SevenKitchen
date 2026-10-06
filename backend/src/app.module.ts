@@ -327,6 +327,20 @@ validatePrismaConfig();
     OrdersController,
     AddressesController,
     AuthController,
+    /**
+     * ⚠️ 路由顺序：StaffDogHealthController 必须排在 AdminController 之前。
+     *
+     * AdminController 的 `GET api/v1/admin/dogs/:id`（看某只狗的详情）是**通配**的，
+     * Express 按注册顺序匹配 —— 谁先注册谁先拿到请求。
+     * 而本控制器有 `GET api/v1/admin/dogs/health-updates`（最近改过健康记录的狗，
+     * 食谱设计器打开时用它弹"顾客改了健康信息、请营养师复核"的提醒）。
+     * 一旦 AdminController 排在前面，health-updates 会被当成一个狗 ID，
+     * 详情接口查不到这只"狗"，返回 code 404「Dog not found」——
+     * 前端把它当业务错误弹红条，食谱设计器一进去就报 "Dog not found"（2026-10-06 定位）。
+     *
+     * 同理：以后往 `api/v1/admin/dogs/<字面量>` 加新接口，都要排在这里。
+     */
+    StaffDogHealthController,
     AdminController,
     AdminFinanceController,
     ShippingController,
@@ -347,7 +361,6 @@ validatePrismaConfig();
     AllergyReportController,
     AllergyTrialController,
     HealthAnalysisController,
-    StaffDogHealthController,
     HealthUploadController,
     GlobalConfigController,
     PublicGlobalConfigController,

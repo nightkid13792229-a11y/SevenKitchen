@@ -30,28 +30,62 @@
       <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
 
-    <view v-if="loading" class="health-section__empty">
-      <text class="health-section__empty-title">疫苗记录加载中</text>
-    </view>
+    <!-- ══ 接种记录板块（2026-10-06 老板第二次改）══════════════════════════
+         这次一起解决两件事：
+
+         ① **没有任何记录时，这一块不该出现**。
+            老板："如果没有任何记录的话，它也会显示出来。"
+            原来标题行（"接种记录 · N 条"）常显，0 条时就成了一个空壳标题
+            悬在那儿。现在标题只在**真有记录**时才出。
+
+         ② **太简陋**。原来是"一个标题 + 几张各自漂浮的小卡"，
+            和上面「接种计划」那张完整的卡不是一套语言。现在整块收进一张卡：
+            表头一行（标题 + 条数），下面是一条条**用分隔线排开的行**
+            （不是孤立的卡片），一眼能看出"这是一个列表"。
+           独立成页时也照样成立（那边本来还有一层页级标题）。 -->
+    <view class="health-card records-card">
+      <view v-if="records.length > 0" class="records-card__head">
+        <text class="records-card__title">接种记录</text>
+        <text class="records-card__count">{{ records.length }} 条</text>
+      </view>
+      <text v-if="records.length > 0" class="records-card__desc">
+        最近接种的排在前面。点一条可以改，右边可以删。
+      </text>
+      <view v-if="scanNotice" class="records-card__notice">
+        <text class="records-card__notice-text">{{ scanNotice }}</text>
+        <text class="records-card__notice-close" @tap="scanNotice = ''">知道了</text>
+      </view>
+
+    <!-- 占位只在**手上一条记录都还没有**时出现。
+         原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
+         （点分类、点"确认"、改日期）都会整表重载，于是已经显示出来的记录
+         先被擦掉、再长回来。老板看到的就是"屏幕闪烁了一下"。
+         刷新是后台动作，不该动已经显示出来的东西。 -->
+
+      <view v-if="loading && records.length === 0" class="records-card__empty">
+        <text class="records-card__empty-text">疫苗记录加载中</text>
+      </view>
 
     <!-- 空态（2026-10-04 老板提问后改）。
          原来这里只有干巴巴一句"还没有记录"，而上面的疫苗计划板块还会单独弹一张
          "档案里还没有接种记录"—— **同一件事说了两遍**。
          现在合成一处：计划板块在零记录时整块不渲染，这句话由这里说。
          位置也更对：它就长在记录列表该在的地方。 -->
-    <view v-else-if="records.length === 0" class="health-section__empty">
-      <!-- 只有一句。
-           2026-10-03 老板就定过："没有记录就写没有记录即可，不用下面那行小字"；
-           2026-10-04 又问"为什么会提醒了一次……在下方又进行了一次提醒呢"——
-           所以不是加话，而是**把重复的那处删掉、只留这里一句**。
-           该做什么，底部那个常驻的「新增记录」已经写着了。 -->
-      <text class="health-section__empty-title">档案里还没有接种记录</text>
-    </view>
+      <view v-else-if="records.length === 0" class="records-card__empty">
+        <!-- 只有一句。
+             2026-10-03 老板就定过："没有记录就写没有记录即可，不用下面那行小字"；
+             2026-10-04 又问"为什么会提醒了一次……在下方又进行了一次提醒呢"——
+             所以不是加话，而是**把重复的那处删掉、只留这里一句**。
+             该做什么，底部那个常驻的「新增记录」已经写着了。 -->
+        <text class="records-card__empty-title">档案里还没有接种记录</text>
+      </view>
+
+      <view class="records-list">
 
     <view
       v-for="(record, index) in records"
       :key="record.id || `draft-${index}`"
-      class="vaccine-card health-card"
+      class="vaccine-card"
       :class="{ [`vaccine-card--focus-${index}`]: true }"
     >
       <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
@@ -113,78 +147,149 @@
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
 
+          <!-- 疫苗名称那一行（2026-10-06 三轮修完）。三种状态各司其职：
+
+               · 还没写   → 给产品库选择器（**新建记录的主入口**）+ 手填框
+               · 库里有   → 这一行就是**库里的规范名**，点它可以换一支；
+                            不再出现手填框（名字只出现一次）
+               · 库里没有 → **不给产品库选择器**（老板 2026-10-06：
+                            "对于宠派纯这类产品库中没有的产品……也不让用户可以
+                             点击从产品库中挑选产品的弹窗呢？因为这没有意义嘛"），
+                            改成一句说明 + 手填框，名字只出现一次
+
+               前两轮走过的弯路记在这里：第一轮"名称行显示占位、名字只在输入框"
+               → 老板说名称没加载出来；第二轮"名称行显示原文" → 和输入框重复。
+               根因都是**两个控件在做同一件事**，现在按上面三种状态分开。 -->
           <picker
-            v-if="catalogProducts.length > 0"
+            v-if="catalogProducts.length > 0 && nameFieldMode(draftOf(record, index).vaccineName) !== 'unknown'"
             mode="selector"
             :range="catalogProducts"
             range-key="name"
             :value="productIndex(draftOf(record, index).vaccineName)"
             @change="applyCatalogProduct(index, $event.detail.value)"
           >
-            <view class="field-picker">
-              {{ productPickerLabel(draftOf(record, index).vaccineName) }}
+            <view
+              class="field-picker"
+              :class="{ 'field-picker--placeholder': !isNameRecognized(draftOf(record, index).vaccineName) }"
+            >
+              {{ nameFieldLabel(draftOf(record, index).vaccineName, index) }}
             </view>
           </picker>
 
-          <text class="field-hint">产品库里没有？直接在下面写名字，写完整点。</text>
-          <input
-            class="field-input"
-            type="text"
-            placeholder="例如：犬四联"
-            :value="draftOf(record, index).vaccineName"
-            :focus="focusIndex === index"
-            @input="updateDraft(index, 'vaccineName', $event.detail.value)"
-            @blur="clearFocus(index)"
-          />
-          <!-- 「确认」之后才开始匹配产品与分类（2026-10-05 老板的规格）。
-               不在打字过程中判 —— 一来一回问后端会卡手，
-               而且顾客往往写到一半就被判了个错的。 -->
+          <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
+          <template v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'">
+            <text class="field-hint field-hint--unknown">
+              产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」判定分类。
+            </text>
+            <!-- 认不准就诚实说（2026-10-06 老板）：
+                 "并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
+                  并没有识别出8这个字。如果不能完全有把握的识别出来，
+                  能不能诚实的告诉用户呢？" -->
+            <template v-if="(record.nameSuggestions || []).length > 0">
+              <text class="field-hint field-hint--unknown">
+                这行字可能没读全 —— 对照疫苗本上的写法核一下，是不是下面这几支？点一下就用它：
+              </text>
+              <view class="vaccine-name-tags">
+                <text
+                  v-for="suggestion in record.nameSuggestions || []"
+                  :key="`suggest-${suggestion}`"
+                  class="vaccine-name-tag"
+                  @tap="applySuggestedProduct(index, suggestion)"
+                >{{ suggestion }}</text>
+              </view>
+            </template>
+          </template>
+
+          <!-- 手填入口：名字还空着、或者库里没有时出现。
+               库里有这只苗时换名字走上面的选择器 —— 手打会绕开产品库，
+               厂商、批准文号、归类全都带不出来。
+               正在打字的那一行（focusIndex）不抽走，否则顾客打到一半
+               名字刚好命中产品库，输入框会当场消失。 -->
+          <template v-if="showManualNameInput(index)">
+            <text
+              v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'empty'"
+              class="field-hint"
+            >产品库里没有？也可以直接在下面写名字，写完整点。</text>
+            <input
+              class="field-input"
+              type="text"
+              placeholder="例如：犬四联"
+              :value="draftOf(record, index).vaccineName"
+              :focus="focusIndex === index"
+              @input="updateDraft(index, 'vaccineName', $event.detail.value)"
+              @blur="clearFocus(index)"
+            />
+          </template>
+
+          <!-- 「确认」只在**还需要判一次**的时候出现（2026-10-06 老板提问：
+               "是需要点点击确认按钮才会归类吗？还是说不需要点其实已经归类了？"）。
+
+               答案是：**分类早就有了**（从产品库选、或者识别带出来的都已经落库），
+               卡片上「分类」那一行就是结果。所以库里认得出、分类也已经有的记录
+               不再摆一个按钮让人以为"必须点一下"。
+               只有这两种情况才需要确认：
+                 · 分类还是空的（名字是手打的，系统还没判过）
+                 · 名字库里没有（让后端再认一次，认出来还能把名字规范过来） -->
           <text
+            v-if="showConfirmButton(index)"
             class="vaccine-confirm"
             :class="{ 'vaccine-confirm--busy': matchingIndex === index }"
             @tap="confirmVaccineName(index)"
           >{{ matchingIndex === index ? '匹配中…' : '确认' }}</text>
+          <text v-else-if="draftOf(record, index).kinds.length > 0" class="field-hint">
+            分类已按产品库自动判定，不用再确认。
+          </text>
+
+          <!-- 确认的结果**留在卡片上**（2026-10-06 老板："点击下方的确认按钮，
+               也没有任何反应，只是屏幕闪烁了一下"）。
+               原来只有一闪而过的 toast：命中产品库时分类本来就已经是对的，
+               画面上什么都没变，看起来就像按钮坏了。
+               现在无论成功失败都留一行字在这里，一眼能看到刚才发生了什么。 -->
+          <text
+            v-if="confirmResults[index]"
+            class="vaccine-confirm-result"
+            :class="confirmResults[index].ok
+              ? 'vaccine-confirm-result--ok'
+              : 'vaccine-confirm-result--warn'"
+          >{{ confirmResults[index].text }}</text>
         </view>
 
-        <!-- 归类（2026-10-05）。
-             老板问："记录卡片的标题已经体现出疫苗的名称了，那我们在疫苗卡片中
-             还有必要保留疫苗名称这个字段吗？我们可以直接把疫苗名称这个字段
-             换成识别出的疫苗类型吗？"
-             —— "显示类型"这个方向对，但**输入框不能去掉**：识别会认错、
-             顾客也会想改，去掉就没法纠正了。所以两个都留：
-             上面照旧能改名字，下面把"系统把它归成了哪一类"如实告诉他 ——
-             归类直接决定它算哪一步、多久打一次，顾客看得见才敢改。 -->
-        <!-- 分类：**系统判的，不是顾客选的**（2026-10-05 老板定）。
+        <!-- 这一针**含哪些病种**（2026-10-06 老板定的模型）。
+             原来是"分类"（核心疫苗/狂犬疫苗/钩端螺旋体/其他）—— 老板否掉了：
+               "在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看，
+                因为很多用户他并不清楚核心疫苗是什么意思？
+                我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
+                至于分类的判定则交由后台来完成。"
+             所以给顾客看、让他勾的，都是**病种**（犬瘟热/细小/腺病毒/狂犬…），
+             类别由后端按病种推导，只用来排期。
 
-             老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
-             分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
-             显示出来而已，不要交给用户自己来选择。"
-
-             所以默认只有一行**只读**的判定结果。两种例外：
-               · 系统**认不出来** → 如实说"没认出来"，这时才展开让顾客填
-                 （老板："承认认不出这只疫苗，转为让用户手动填写。"）
-               · 顾客**自己想改** → 点那行结果就展开
-                 （老板："用户可以判断，可以把疫苗记录进行手动更改。
-                   用户自己的疫苗记录、疫苗计划，我们去改什么呢？"）
-             营养师/后台不改顾客的记录。 -->
+             默认仍然只有一行**只读**结果 —— 从产品库选的、识别出来的，
+             病种都已经带好了，不用顾客操心。两种情况才展开：
+               · 认不出来（没勾过病种）→ 请他照疫苗本勾
+               · 顾客自己想改 → 点那行就展开 -->
         <view class="field-group">
-          <text class="field-label">分类</text>
+          <text class="field-label">含哪些病种</text>
 
-          <!-- 判定结果：只读一行，可点开改 -->
+          <!-- 判定结果：只读一行，点它可以改 -->
           <view
-            v-if="draftOf(record, index).kinds.length > 0 && !kindPickerOpen[index]"
+            v-if="hasComponentSelection(record, index) && !kindPickerOpen[index]"
             class="vaccine-kind"
             @tap="openKindPicker(index)"
           >
             <text
-              v-for="kind in draftOf(record, index).kinds"
-              :key="kind"
+              v-for="component in draftOf(record, index).components"
+              :key="component"
               class="vaccine-kind__tag"
-            >{{ kindLabel(kind) }}</text>
+            >{{ componentLabel(component) }}</text>
+            <!-- 勾不上任何病种时（驱虫药、看不懂的本子）走这条 -->
+            <text
+              v-if="draftOf(record, index).components.length === 0"
+              class="vaccine-kind__tag"
+            >都不是 / 不确定</text>
             <text class="vaccine-kind__edit">修改</text>
           </view>
 
-          <!-- 认不出来：如实说，并让顾客填 -->
+          <!-- 还没勾：说清楚要做什么，并让顾客照本子勾 -->
           <template v-else>
             <view v-if="matchingIndex === index" class="vaccine-kind__unknown">
               <text class="vaccine-kind__unknown-title">正在匹配产品…</text>
@@ -192,28 +297,31 @@
                 先从产品库里找，找不到再让 AI 认一次写法。
               </text>
             </view>
-            <view
-              v-else-if="draftOf(record, index).kinds.length === 0"
-              class="vaccine-kind__unknown"
-            >
-              <text class="vaccine-kind__unknown-title">这支苗没匹配到</text>
+            <view v-else class="vaccine-kind__unknown">
+              <text class="vaccine-kind__unknown-title">这一针含哪些病种？</text>
               <text class="vaccine-kind__unknown-desc">
-                产品库和 AI 都没认出它。照本子上的写法再核一遍，
-                或者下面手动选一个分类 —— 分类决定这一针算哪一步、隔多久再打。
+                照疫苗本上的成分表勾（组合苗请把含的都点上）。
+                勾不上就选「都不是 / 不确定」—— 那只记录、不影响提醒。
               </text>
             </view>
             <view class="vaccine-name-tags">
               <text
-                v-for="option in kindOptions"
+                v-for="option in componentOptions"
                 :key="option.value"
                 class="vaccine-name-tag"
-                :class="{ 'vaccine-name-tag--active': draftOf(record, index).kinds.includes(option.value) }"
-                @tap="toggleKind(index, option.value)"
+                :class="{ 'vaccine-name-tag--active': draftOf(record, index).components.includes(option.value) }"
+                @tap="toggleComponent(index, option.value)"
               >{{ option.label }}</text>
+              <text
+                class="vaccine-name-tag"
+                :class="{ 'vaccine-name-tag--active': isNoneOfThem(record, index) }"
+                @tap="toggleNoneOfThem(index)"
+              >都不是 / 不确定</text>
             </view>
             <text class="field-hint">
-              「其他（非核心）」只记录、不影响提醒。
+              可多选 —— 点一下选中，再点一下取消。分类由我们按病种判定，你不用管。
             </text>
+            <text class="vaccine-kind__done" @tap="closeKindPicker(index)">选好了</text>
           </template>
         </view>
 
@@ -287,6 +395,8 @@
           </text>
         </view>
       </view>
+      </view>
+      </view>
     </view>
 
     <!-- 板块内那个新增按钮已下线（2026-10-04 老板提问后改）。
@@ -330,8 +440,23 @@ interface VaccineRecord {
    * 分类逻辑在后端 domain 层，前端只显示，不重写一套。
    */
   kinds?: string[]
-  /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"） */
+  /** 归类的中文名（"核心疫苗""狂犬疫苗""钩端螺旋体"）—— 内部用，不给顾客看 */
   kindLabels?: string[]
+  /**
+   * 这一针含哪些病种（2026-10-06）—— **顾客看的就是它**。
+   * 类别（kinds）由病种推导，只用来排期。
+   */
+  components: string[]
+  /** 病种的中文名（犬瘟热 / 犬细小病毒 / 犬腺病毒 …） */
+  componentLabels?: string[]
+  /**
+   * 名字**没读全**时的候选产品（2026-10-06 老板要求"认不准就诚实说"）。
+   *
+   * 识别出「卫佳」而漏了「捌」时，后端会把「卫佳伍 / 卫佳捌 / 卫佳细」
+   * 一起给下来 —— 界面如实告诉顾客"这行字可能没读全，请看瓶子核对"，
+   * 点一下就用那支（名字和分类一起带对）。
+   */
+  nameSuggestions?: string[]
 }
 
 interface VaccineDraft {
@@ -348,6 +473,11 @@ interface VaccineDraft {
    * 核心苗的某一针标记成已完成，我们从此不再提醒）。
    */
   kinds: string[]
+  /**
+   * 这一针含哪些病种（2026-10-06）—— 顾客勾的、产品库带的都写在这里。
+   * 类别由后端按它推导。
+   */
+  components: string[]
   /**
    * 归类是**顾客自己点的**（不是系统判的）。
    *
@@ -469,17 +599,22 @@ defineExpose({
  *
  * 这四类是**闭集**，极少变；后端下发优先，拿不到就用这份。
  */
-const FALLBACK_KIND_OPTIONS = [
-  { value: 'core', label: '核心疫苗', affectsPlan: true },
-  { value: 'rabies', label: '狂犬疫苗', affectsPlan: true },
-  { value: 'lepto', label: '钩端螺旋体', affectsPlan: true },
-  { value: 'other', label: '其他（非核心）', affectsPlan: false },
+const FALLBACK_COMPONENT_OPTIONS = [
+  { value: 'cdv', label: '犬瘟热' },
+  { value: 'cpv', label: '犬细小病毒' },
+  { value: 'cav', label: '犬腺病毒' },
+  { value: 'rabies', label: '狂犬病' },
+  { value: 'lepto', label: '钩端螺旋体' },
 ]
-
-const kindOptions = ref<{ value: string; label: string; affectsPlan?: boolean }[]>([
-  ...FALLBACK_KIND_OPTIONS,
+const componentOptions = ref<{ value: string; label: string }[]>([
+  ...FALLBACK_COMPONENT_OPTIONS,
 ])
-const catalogProducts = ref<{ name: string; manufacturer: string; kinds: string[] }[]>([])
+const catalogProducts = ref<{
+  name: string
+  manufacturer: string
+  kinds: string[]
+  components: string[]
+}[]>([])
 
 async function loadVaccineCatalog() {
   try {
@@ -487,8 +622,8 @@ async function loadVaccineCatalog() {
     if (res?.code !== 0 || !res?.data) return
     // 只在下发的内容非空时才覆盖本地兜底 —— 后端万一返回空数组，
     // 也不能把顾客选归类的路堵死
-    if (Array.isArray(res.data.kinds) && res.data.kinds.length > 0) {
-      kindOptions.value = res.data.kinds
+    if (Array.isArray(res.data.components) && res.data.components.length > 0) {
+      componentOptions.value = res.data.components
     }
     catalogProducts.value = Array.isArray(res.data.products) ? res.data.products : []
   } catch {
@@ -514,6 +649,28 @@ async function loadVaccineCatalog() {
  */
 const matchingIndex = ref(-1)
 
+/**
+ * 「确认」之后留在卡片上的那行结果（2026-10-06）。
+ *
+ * 老板："我点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+ * 原因是这个按钮原来只弹一个一闪而过的 toast，而且命中产品库时
+ * 分类本来就已经是对的、画面上没有任何变化 —— 看起来就像按钮坏了。
+ * 现在把结果写进卡片，留着不走：顾客按了就有东西可看。
+ */
+const confirmResults = reactive<
+  Record<number, { ok: boolean; text: string }>
+>({})
+
+function setConfirmResult(index: number, ok: boolean, text: string) {
+  confirmResults[index] = { ok, text }
+}
+
+function clearConfirmResult(index: number) {
+  if (confirmResults[index]) {
+    delete confirmResults[index]
+  }
+}
+
 async function confirmVaccineName(index: number) {
   const record = records.value[index]
   if (!record) return
@@ -521,17 +678,19 @@ async function confirmVaccineName(index: number) {
   const name = draft.vaccineName.trim()
 
   if (!name) {
-    uni.showToast({ title: '请先填写疫苗名称', icon: 'none' })
+    // 不再只用一闪而过的 toast —— 结果留在卡片上，顾客回头还看得到
+    setConfirmResult(index, false, '还没写疫苗名称。先在上面写清楚，再点确认。')
     return
   }
 
   matchingIndex.value = index
+  clearConfirmResult(index)
   try {
     const res: any = await dogApi.classifyVaccineName(name)
     // 等回来时名字可能又变了 —— 只认当前这个名字的结果
     if (draftOf(record, index).vaccineName.trim() !== name) return
     if (res?.code !== 0 || !res?.data) {
-      uni.showToast({ title: '匹配失败，请重试', icon: 'none' })
+      setConfirmResult(index, false, '匹配失败，请再点一次确认。')
       return
     }
 
@@ -540,17 +699,75 @@ async function confirmVaccineName(index: number) {
     // 匹配上了就收起选择器（顾客不用做我们的活）；
     // 没匹配上就**如实承认**并展开，让他自己填
     kindPickerOpen[index] = draft.kinds.length === 0
+
+    /*
+     * 规范产品名以后端为准（2026-10-06）。
+     *
+     * 后端那套匹配能认出瓶签写法（「卫佳® Vanguard® Plus 5/CV-L」→ 卫佳捌），
+     * 前端这份只做"名字一模一样"的比对，认不出这种。所以：
+     *   · 后端给了规范名 → 直接采用（连名字一起改过来，和分类对齐）；
+     *   · 没给 → 退回前端这份，至少能显示"已确认：xxx"。
+     */
+    // 顺带刷新"没读全"的候选（认出来了就是空数组）
+    if (Array.isArray(res.data.nameSuggestions)) {
+      record.nameSuggestions = res.data.nameSuggestions.map(String)
+    }
+    const canonicalName = String(res.data.productName || '')
+    const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(name)
+
+    // 后端认出来的病种回填到界面（顾客看到的是病种）
+    if (Array.isArray(res.data.components)) {
+      const components = res.data.components.map(String)
+      if (components.length > 0) {
+        draft.components = components
+      }
+    }
+
     if (draft.kinds.length === 0) {
-      uni.showToast({ title: '没匹配到，请手动选一个分类', icon: 'none' })
+      setConfirmResult(
+        index,
+        false,
+        '产品库和 AI 都没认出这支苗。照本子上的写法再核一遍，或者在下面手动勾一下病种。',
+      )
+    } else {
+      if (canonicalName) {
+        // 名字跟着一起对齐，界面上那一行才显示得出"系统认为这是哪一支"
+        draft.vaccineName = canonicalName
+      }
+      // 结果行里说的是**病种**（顾客看得懂的东西），不是内部类别
+      const labels = draft.components.map((component) => componentLabel(component)).join(' + ')
+      setConfirmResult(
+        index,
+        true,
+        matched
+          ? `已确认：${matched.name}${labels ? ` · 含「${labels}」` : ''}`
+          : `已确认：${name}${labels ? ` · 含「${labels}」` : ''}`,
+      )
     }
     scheduleAutoSave(record, index, { immediate: true })
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '匹配失败，请重试', icon: 'none' })
+    setConfirmResult(index, false, error?.message || '匹配失败，请再点一次确认。')
   } finally {
     if (matchingIndex.value === index) {
       matchingIndex.value = -1
     }
   }
+}
+
+/**
+ * 点"没读全"的候选 → 等同于从产品库里选了那一支。
+ *
+ * 老板 2026-10-06："如果不能完全有把握的识别出来，能不能诚实的告诉用户呢？"
+ * 告诉他之后还得让他一键改对 —— 不然知道了还得自己去找产品库。
+ */
+function applySuggestedProduct(index: number, name: string) {
+  const at = catalogProducts.value.findIndex((item) => item.name === name)
+  if (at >= 0) {
+    applyCatalogProduct(index, at)
+  }
+  // 用掉了就不再提示
+  const record = records.value[index]
+  if (record) record.nameSuggestions = []
 }
 
 /** 从产品库选 → 名字、归类一起带出来（厂商/批准文号后端有，界面只显示名） */
@@ -560,7 +777,17 @@ function applyCatalogProduct(index: number, value: string | number) {
   if (!record || !product) return
   const draft = draftOf(record, index)
   draft.vaccineName = product.name
+  // 病种由产品库带出来（2026-10-06）；类别由后端按病种推导
+  draft.components = Array.isArray(product.components) ? [...product.components] : []
   draft.kinds = [...product.kinds]
+  // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
+  setConfirmResult(
+    index,
+    true,
+    `已选择：${product.name} · 含「${(product.components || [])
+      .map((component) => componentLabel(component))
+      .join(' + ')}」`,
+  )
   // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
   draft.kindsManual = false
   scheduleAutoSave(record, index, { immediate: true })
@@ -579,33 +806,223 @@ function openKindPicker(index: number) {
   kindPickerOpen[index] = true
 }
 
-function kindLabel(kind: string): string {
-  return kindOptions.value.find((item) => item.value === kind)?.label || kind
+function componentLabel(component: string): string {
+  return componentOptions.value.find((item) => item.value === component)?.label || component
 }
 
-function productIndex(name: string): number {
-  const found = catalogProducts.value.findIndex((item) => item.name === name)
-  return found >= 0 ? found : 0
+/** 已经勾过病种（或者明确选了"都不是"）—— 决定那一行是显示结果还是展开选择器 */
+function hasComponentSelection(record: VaccineRecord, index: number): boolean {
+  const draft = draftOf(record, index)
+  return draft.components.length > 0 || draft.kinds.includes('other')
 }
 
-function productPickerLabel(name: string): string {
-  return name && catalogProducts.value.some((item) => item.name === name)
-    ? name
+/** 明确选了"都不是 / 不确定" */
+function isNoneOfThem(record: VaccineRecord, index: number): boolean {
+  const draft = draftOf(record, index)
+  return draft.components.length === 0 && draft.kinds.includes('other')
+}
+
+/**
+ * 勾/取消一个**病种**（2026-10-06 老板定的模型）。
+ *
+ * 顾客勾的是病种，类别由后端推导 —— 所以这里只动 components，
+ * kinds 留给后端算（本地那份只用于"能不能存"的判断）。
+ * 点"都不是"时会把病种清空、标一个 other，见 toggleNoneOfThem。
+ */
+function toggleComponent(index: number, component: string) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+
+  draft.components = draft.components.includes(component)
+    ? draft.components.filter((item) => item !== component)
+    : [...draft.components, component]
+
+  // 勾了真病种就不再是"都不是"
+  if (draft.components.length > 0) {
+    draft.kinds = draft.kinds.filter((kind) => kind !== 'other')
+  }
+  draft.kindsManual = true
+  // client 侧先把 kinds 清空：真正的类别由后端按病种推导后回填
+  scheduleAutoSave(record, index, { immediate: true })
+}
+
+/**
+ * 「都不是 / 不确定」—— 驱虫药、看不懂的本子这类。
+ *
+ * 勾不上任何病种时给一条出路：记下来，但**不参与计划**
+ * （对应 kinds 里的 other）。不然顾客会被"必须勾一个病种"卡住。
+ */
+function toggleNoneOfThem(index: number) {
+  const record = records.value[index]
+  if (!record) return
+  const draft = draftOf(record, index)
+  const already = draft.components.length === 0 && draft.kinds.includes('other')
+
+  draft.components = []
+  draft.kinds = already ? [] : ['other']
+  draft.kindsManual = true
+  scheduleAutoSave(record, index, { immediate: true })
+}
+
+/**
+ * 产品名归一化 —— 规则与后端 `normalizeProductText` **逐条一致**。
+ *
+ * ⚠️ 2026-10-06 老板报的 bug 就出在这里：产品库下发的规范名是
+ * 「宠必威幼犬保」，而疫苗本识别出来的是「宠必威® 幼犬保」。
+ * 前端原来拿 `===` 比，比不中 → 名称那一行退回显示"从产品库选择"，
+ * 识别出来的名字只能留在下面的手填输入框里 ——
+ * 老板看到的就是"疫苗名称并未正确加载出来"。
+ *
+ * 后端判定归类时本来就会去掉 ® / 空格 / 分隔符（所以分类一直是对的），
+ * 前端显示也得用同一套规则，否则"库里有这只苗"这件事两边说法不一致。
+ * 后端改了这里也要跟着改 —— 两边不一致会直接表现为"名字显示不出来"。
+ */
+function normalizeProductName(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[®™©]/g, '')
+    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '')
+}
+
+/** 在目录里找这个名字对应的产品（归一化之后比），找不到回 null */
+function findCatalogProduct(name: string) {
+  const key = normalizeProductName(name)
+  if (!key) return null
+  return (
+    catalogProducts.value.find((item) => normalizeProductName(item.name) === key) ||
+    null
+  )
+}
+
+/**
+ * 这个名字在产品库里认不认得出（归一化之后比）。
+ *
+ * 认得出 = 这一行显示规范名、并且**不出现**手填输入框。
+ */
+function isNameRecognized(name: string): boolean {
+  return findCatalogProduct(name) !== null
+}
+
+/**
+ * 名称字段现在处于哪种状态（2026-10-06 第三轮）。
+ *
+ *   empty      —— 还没写名字：给产品库选择器（新建记录的主入口）+ 手填框
+ *   recognized —— 库里有这一支：只显示库里的规范名，不出现手填框
+ *   unknown    —— 库里没有：**不给产品库选择器**（老板："这没有意义嘛"），
+ *                 改成一句说明 + 手填框
+ */
+function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown' {
+  if (!String(name || '').trim()) return 'empty'
+  return isNameRecognized(name) ? 'recognized' : 'unknown'
+}
+
+/**
+ * 「确认」按钮要不要出现（2026-10-06 老板提问后加）。
+ *
+ * 老板问："是需要点点击确认按钮才会归类吗？还是说不需要点其实已经归类了？"
+ * 答案是**早就归类了** —— 从产品库选、或识别带出来的分类都已经落库，
+ * 卡片上「分类」那一行就是结果。所以别再摆一个按钮让人以为"必须点一下"。
+ *
+ * 只有这两种情况还需要确认：
+ *   · 分类还是空的（名字是手打的，系统还没判过）
+ *   · 名字库里没有（让后端再认一次；认出来还能把名字规范过来）
+ */
+function showConfirmButton(index: number): boolean {
+  const record = records.value[index]
+  if (!record) return false
+  const draft = draftOf(record, index)
+  if (!draft.vaccineName.trim()) return false
+  if (draft.kinds.length === 0) return true
+  return nameFieldMode(draft.vaccineName) === 'unknown'
+}
+
+/**
+ * 名称那一行显示什么（2026-10-06 第二轮）。
+ *
+ * ⚠️ 老板报的交互问题："未识别的疫苗产品输入框出现的时候，对用户而言是否会
+ *    感到疑惑？因为它的上方还有一个产品名的选择器，**二者都是一样的名字**。"
+ *
+ * 所以两个控件各司其职，同一个名字**只出现一次**：
+ *   · 库里认得出 → 这一行显示**库里的规范名**（唯一一处，也没有手填框）
+ *   · 认不出     → 这一行只说"去库里挑一支"（读起来是一个**动作**，
+ *                  不是"这就是名字"），名字本身在下面的手填框里
+ */
+function nameFieldLabel(name: string, index: number): string {
+  const matched = findCatalogProduct(name)
+  if (matched) return matched.name
+  return showManualNameInput(index)
+    ? '＋ 从产品库选一支'
     : '从产品库选择（进口 / 国产都有）'
 }
 
-/** 归类是多选：组合苗本来就同时属于好几类（卫佳捌 = 核心 + 钩端） */
+function productIndex(name: string): number {
+  const key = normalizeProductName(name)
+  if (!key) return 0
+  const found = catalogProducts.value.findIndex(
+    (item) => normalizeProductName(item.name) === key,
+  )
+  return found >= 0 ? found : 0
+}
+
+/**
+ * 手填输入框要不要出现（2026-10-06 老板的规格）。
+ *
+ * 只有**产品库里没有这只苗**时才给手填入口：
+ *   · 名字还空着 → 要出现，否则顾客没法开始写；
+ *   · 正在这一行打字 → 要留着，否则打到一半刚好命中产品库，
+ *     输入框当场消失（手会停在半空）；
+ *   · 库里有 → 不出现，换名字走上面的产品选择器 ——
+ *     那才是"选产品"的正路，手打会绕开产品库、丢掉厂商与归类。
+ */
+function showManualNameInput(index: number): boolean {
+  const record = records.value[index]
+  if (!record) return true
+  const name = draftOf(record, index).vaccineName.trim()
+  if (!name) return true
+  if (focusIndex.value === index) return true
+  return findCatalogProduct(name) === null
+}
+
+/**
+ * 顾客手动指定分类 —— **多选开关**（2026-10-06 第二轮）。
+ *
+ * 中间走过一段弯路，记在这里免得再走回去：
+ *
+ *   老板第一次说"不管点哪一个分类，都改不动，还是原来的这个分类"，
+ *   真正的原因是**后端更新记录时漏写了 kinds**（已修）。我当时代价最小地
+ *   把手动选择改成了单选，顺手把组合苗的多选能力也改没了。
+ *
+ *   老板第二次就把这个洞看出来了："卫佳捌这种多分类的产品……
+ *   手动是没有办法多选标签的，对吗？" —— 对。
+ *   少勾一类的后果很实际：免疫计划会以为钩端那一步还没打。
+ *
+ * 所以恢复多选。上次那个"改不动"的观感不会回来 —— 后端现在真的存得进去，
+ * 点一下标签立刻高亮、也立刻落库。为了让"多选"这件事本身看得懂：
+ *   · 标签下面写明"可多选"，并举卫佳捌这个例子；
+ *   · 点一下不再自动收起选择器（不然多选根本没法操作），
+ *     旁边给一个「选好了」手动收起。
+ */
 function toggleKind(index: number, kind: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
+
+  // 点已选中的 = 取消这一类；点没选中的 = 加上这一类（组合苗可以同时好几类）
   draft.kinds = draft.kinds.includes(kind)
     ? draft.kinds.filter((item) => item !== kind)
     : [...draft.kinds, kind]
+
   // 顾客自己点过就不再用自动判定覆盖他
   draft.kindsManual = true
-  kindPickerOpen[index] = false
+  // ⚠️ 这里**不收起**选择器：收起就没法再点第二类了
   scheduleAutoSave(record, index, { immediate: true })
+}
+
+/** 「选好了」—— 手动收起分类选择器（多选模式下的出口） */
+function closeKindPicker(index: number) {
+  kindPickerOpen[index] = false
 }
 
 /**
@@ -670,6 +1087,9 @@ function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
     // 记录自己存的归类；老记录是空的，由界面提示顾客补选。
     // 已保存的记录一律算"人工指定过" —— 别因为我们自动判一次就改掉库里存的。
     kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
+    // 病种（2026-10-06）：顾客看的就是它。老记录可能是空的，
+    // 界面会按名字/产品库补一次（后端映射时已经兜过）。
+    components: Array.isArray(record.components) ? record.components.map(String) : [],
     kindsManual: Array.isArray(record.kinds) && record.kinds.length > 0,
   }
 }
@@ -722,6 +1142,8 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     draft.kindsManual = false
     draft.kinds = []
     kindPickerOpen[index] = false
+    // "已确认：xxx"那行也跟着撤掉 —— 名字都换了，再留着就是在说假话
+    clearConfirmResult(index)
   }
 
   // 实时保存（2026-10-03 老板定：底部保存键下线）。
@@ -747,7 +1169,11 @@ function autoSaveBlockReason(record: VaccineRecord, index: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
   // 归类必填（2026-10-05 老板：手填时"类型还是必填项"）。
   // 没有归类这一条记录就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
-  if (draft.kinds.length === 0) return '还差归类，选一个自动保存'
+  // 病种必填（2026-10-06）：勾不上就选「都不是 / 不确定」。
+  // 没有病种这一条就不该参与计划 —— 认不出来当核心苗是以前最坏的那个 bug。
+  if (draft.components.length === 0 && !draft.kinds.includes('other')) {
+    return '还差病种，勾一个（或选"都不是"）自动保存'
+  }
   return ''
 }
 
@@ -1020,7 +1446,7 @@ async function loadRecords(dogId = props.dogId) {
     }
 
     const list = res?.data?.records
-    records.value = (Array.isArray(list) ? list : [])
+    const fromServer: VaccineRecord[] = (Array.isArray(list) ? list : [])
       .map((item: any) => ({
         id: String(item?.id || ''),
         vaccineName: String(item?.vaccineName || ''),
@@ -1032,7 +1458,26 @@ async function loadRecords(dogId = props.dogId) {
         kindLabels: Array.isArray(item?.kindLabels)
           ? item.kindLabels.map(String)
           : [],
+        components: Array.isArray(item?.components) ? item.components.map(String) : [],
+        componentLabels: Array.isArray(item?.componentLabels)
+          ? item.componentLabels.map(String)
+          : [],
       }))
+
+    /*
+     * ⚠️ **保住还没保存的本地记录**（2026-10-06 修的）。
+     *
+     * 这一句是"识别 3 条只存进去 1 条"的根因：
+     * `saveScannedRecords` 逐条存，而每存一条 `saveRecord` 都会走到这里
+     * 整表重载 —— 重载原来是**拿服务器返回的列表直接替换**，
+     * 于是同一批里还没保存的那几条（id 还是空的）当场被冲掉，
+     * 后面的循环再也找不到它们，只能跳过。
+     *
+     * 服务器上有的以服务器为准；本地还没保存的原样留着。
+     */
+    const unsavedLocal = records.value.filter((record) => !record.id)
+
+    records.value = [...fromServer, ...unsavedLocal]
       // 最近接种的排在最前：接口按写入顺序返回，那个顺序对顾客没有意义
       .sort((a: VaccineRecord, b: VaccineRecord) =>
         b.vaccinationDate.localeCompare(a.vaccinationDate))
@@ -1047,6 +1492,10 @@ async function loadRecords(dogId = props.dogId) {
   } catch (error: any) {
     records.value = []
     ensureDrafts()
+    // 拉失败也要通知一声（2026-10-06）：否则计划板块还停在上一次的结果上。
+    // 具体场景：把记录删空之后这一拉失败，计划和提醒会一直挂着旧的，
+    // 顾客以为"删了也没用"。
+    notifyRecordsChanged()
     uni.showToast({ title: error?.message || '加载疫苗记录失败', icon: 'none' })
   } finally {
     loading.value = false
@@ -1058,12 +1507,61 @@ async function loadRecords(dogId = props.dogId) {
  *
  * 只填表、不保存 —— 顾客核对后自己按保存。
  */
+/**
+ * 这条是不是**已经记过了**（同一天、同一支苗）。
+ *
+ * 2026-10-06 老板问："如果我疫苗本上多贴了一个最新接种的疫苗的标签，
+ * 但是我拍照拍的还是整本疫苗本，那 AI 会把这单独的一个新增的接种记录
+ * 识别出来，而不会重复记录吗？"
+ *
+ * 查下来**当时是会的**：AI 把整本读出来（这是对的），但保存那一步
+ * 一条不落地全存 —— 已经记过的会被再存一遍。
+ * 所以这里加去重：同一天 + 同一支苗（名字归一化后相等）就算记过了。
+ *
+ * 只跟**已保存的记录**（有 id 的）比：本地还没保存的草稿不算数，
+ * 否则同一批里刚识别出来的会被自己挡掉。
+ */
+function isAlreadyRecorded(name: string, date: string): boolean {
+  const day = String(date || '').trim()
+  const key = normalizeProductName(name)
+  if (!day || !key) return false
+
+  return records.value.some((record) => {
+    if (!record.id) return false
+    if (String(record.vaccinationDate || '').slice(0, 10) !== day) return false
+    const existing = normalizeProductName(record.vaccineName || '')
+    return existing.length > 0 && existing === key
+  })
+}
+
 function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
+  let skipped = 0
+
   for (const draft of payload.drafts) {
+    // 已经记过的跳过（整本重拍时不会重复记）
+    const scannedName = String(draft.productName || draft.vaccineName || '')
+    const scannedDate = String(draft.vaccinationDate || '').slice(0, 10)
+    if (isAlreadyRecorded(scannedName, scannedDate)) {
+      skipped += 1
+      continue
+    }
+
     records.value.push({
       id: '',
       __localId: `vaccine-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      vaccineName: String(draft.vaccineName || ''),
+      /*
+       * 名字优先用**后端认出来的规范产品名**（2026-10-06 老板实测）。
+       *
+       * 瓶签上写的是「卫佳® Vanguard® Plus 5/CV-L」，库里叫「卫佳捌」
+       * （别名 vanguard plus 5-cvl）。分类早就是按卫佳捌的成分算的
+       * （核心 + 钩端），名字却还是瓶签原文 —— 顾客看到的是一个
+       * "系统好像没认出来"的名字，手填框也会跟着冒出来。
+       * 认不出来时后端给空串，这里就照旧用顾客本子上那串字。
+       */
+      vaccineName: String(draft.productName || draft.vaccineName || ''),
+      nameSuggestions: Array.isArray(draft.nameSuggestions)
+        ? draft.nameSuggestions.map(String)
+        : [],
       vaccinationDate: String(draft.vaccinationDate || ''),
       nextDueDate: String(draft.nextDueDate || ''),
       notes: String(draft.notes || ''),
@@ -1071,6 +1569,7 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       // AI 判的归类（2026-10-05）。后端已经过了一遍闭集校验：
       // 认不出来的会是空数组，界面会请顾客自己选一下 —— 不让它悄悄变成核心苗。
       kinds: Array.isArray(draft.kinds) ? draft.kinds.map(String) : [],
+      components: Array.isArray(draft.components) ? draft.components.map(String) : [],
       // AI 判的也算"已指定"，但标成自动 —— 顾客仍可改
       kindsManual: false,
       // 2026-10-01 第九期：顾客拍的疫苗本原图跟着草稿一起过来，存进这条记录 ——
@@ -1093,7 +1592,22 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
    * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
    */
   const scanned = payload.drafts.length
-  uni.showToast({ title: `已识别 ${scanned} 条，正在保存…`, icon: 'none' })
+  /*
+   * 去重的结果**要说出来**（2026-10-06）：
+   * 不吭声地跳过，顾客会以为"怎么少了一条"；
+   * 一次都没跳过的正常情况就还是原来那句话，不啰嗦。
+   */
+  scanNotice.value =
+    skipped > 0
+      ? `这次识别出 ${scanned} 条，其中 ${skipped} 条已经记过（同一天、同一支苗），已跳过，只新增 ${scanned - skipped} 条。`
+      : ''
+  uni.showToast({
+    title:
+      skipped > 0
+        ? `识别 ${scanned} 条，跳过 ${skipped} 条已记过的`
+        : `已识别 ${scanned} 条，正在保存…`,
+    icon: 'none',
+  })
 
   // ⚠️ **必须重建草稿**：不重建的话 drafts 里没有这几条，
   // isDirty 取不到草稿、后面编辑也会写进一个临时对象里丢掉。
@@ -1165,7 +1679,14 @@ async function saveScannedRecords() {
  *
  * 两件事都必须在 DOM 更新之后做，所以放在 nextTick 里。
  */
-function addRecord() {
+/**
+ * 新增一条空白记录。
+ *
+ * @param prefill 预填（2026-10-06）：从接种计划的某一步点「记录疫苗接种信息」
+ *   进来时，把那一步的分类带上 —— 顾客点的就是"狂犬疫苗 第 3 次"，
+ *   这条记录本来就该归到狂犬疫苗，让他再选一次既白费事又容易选错。
+ */
+function addRecord(prefill?: { kinds?: string[] }) {
   const draft: VaccineRecord = {
     id: '',
     vaccineName: '',
@@ -1173,7 +1694,8 @@ function addRecord() {
     nextDueDate: '',
     notes: '',
     status: 'COMPLETED',
-    kinds: [],
+    kinds: Array.isArray(prefill?.kinds) ? [...prefill.kinds] : [],
+    // 计划带来的分类是"系统给的"，不是顾客手点的 —— 名字一改就该重判
     kindsManual: false,
   }
 
@@ -1206,7 +1728,12 @@ function buildPayload(
     vaccinationDate: draft.vaccinationDate,
     status: draft.status,
     notes: draft.notes.trim() || null,
-    // 归类（2026-10-05）：显式带上。空数组 = 顾客还没选 —— 界面会挡住不让存
+    /*
+     * 病种（2026-10-06）：顾客勾的就是它，**类别由后端按病种推导**。
+     * 两个都带上：kinds 只在"都不是/不确定"时用到（那时病种是空的，
+     * 后端会退回按 kinds 记成 other）。
+     */
+    components: draft.components,
     kinds: draft.kinds,
     // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
     // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
@@ -1268,6 +1795,24 @@ async function saveRecord(record: VaccineRecord, index: number) {
 
     // 新增时后端才给 id —— 拿到它，重排之后才能把展开状态跟回同一条
     const newId = String(res?.data?.id || savedId || '')
+
+    /*
+     * ⚠️ **必须先把 id 写回本地这一条，再重载**（2026-10-06 修）。
+     *
+     * 老板报的"上传的疫苗本上只有 3 次接种记录，确认之后却有 6 条"就是这个：
+     * 创建成功之后本地这条记录的 id 还是空的，紧接着 loadRecords() 里
+     *   `unsavedLocal = records.value.filter((record) => !record.id)`
+     * 把它当成"还没保存的草稿"原样留了下来 —— 于是**服务端刚建的那条
+     * 和本地这条幽灵同时显示**。识别 3 条就变成 3 真 + 3 幽灵 = 6 条。
+     * （数据库里其实一直是 3 条，是界面在重复显示。）
+     *
+     * 危险的不止是显示：这条幽灵仍然是"待保存"状态，
+     * 顾客后来只要碰它一下，就会真的再创建一条 —— 变成脏数据。
+     */
+    if (!record.id && newId) {
+      record.id = newId
+    }
+
     await loadRecords()
 
     if (newId) {
@@ -1290,6 +1835,14 @@ async function saveRecord(record: VaccineRecord, index: number) {
  * 自动保存不弹 toast（太吵、会盖住页面），改成卡片内一行字，
  * 下一次改动就清掉 —— 顾客要的只是"知道它存进去了"。
  */
+/**
+ * 上次扫描的"去重结果"提示（2026-10-06）。
+ *
+ * 整本重拍时，已经记过的会被跳过 —— 这件事必须说出来，
+ * 否则顾客看到"识别 4 条却只多了 1 条"会以为丢了。
+ */
+const scanNotice = ref('')
+
 const savedNotices = ref<Record<number, boolean>>({})
 const savedNoticeTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
@@ -1363,6 +1916,91 @@ async function doRemove(record: VaccineRecord) {
 <style scoped lang="scss">
 @import '../../styles/health-section.scss';
 
+/* ── 接种记录板块（2026-10-06 老板第二次改）──────────────────────────
+   原来这块是"一个漂浮的标题 + 几张各自独立的小卡"，跟上面「接种计划」
+   那张完整的卡不是一套语言。现在整块收进一张卡：
+   表头一行（标题 + 条数 + 一句说明），下面是用分隔线排开的记录行。 */
+.records-card {
+  margin-top: 20rpx;
+  padding: 24rpx 24rpx 10rpx;
+}
+
+.records-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.records-card__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.records-card__count {
+  flex-shrink: 0;
+  padding: 4rpx 16rpx;
+  font-size: 21rpx;
+  color: #4e6b52;
+  background: #eef2e6;
+  border-radius: 999rpx;
+}
+
+.records-card__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a968a;
+}
+
+/* 扫描去重的结果提示（2026-10-06）—— 不吭声跳过会被当成丢数据 */
+.records-card__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+}
+
+.records-card__notice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a6f3d;
+}
+
+.records-card__notice-close {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #6b6653;
+}
+
+.records-card__empty {
+  padding: 22rpx 0 24rpx;
+}
+
+.records-card__empty-title {
+  font-size: 26rpx;
+  color: #6b6653;
+}
+
+.records-card__empty-text {
+  font-size: 24rpx;
+  color: #8a968a;
+}
+
+.records-list {
+  margin-top: 8rpx;
+}
+
 .vaccine-due-banner {
   margin-top: 18rpx;
   padding: 18rpx 22rpx;
@@ -1377,12 +2015,16 @@ async function doRemove(record: VaccineRecord) {
   color: #8a6f3d;
 }
 
+/* 一条记录 = 板块里的一行。
+   原来它自带底色、边框、圆角和外边距（各自独立的卡），几张摞在一起看着散、
+   也看不出这是一个列表。现在只留一条分隔线，靠"行"来讲清楚它是一组。 */
 .vaccine-card {
-  margin-top: 20rpx;
-  padding: 22rpx;
-  border-radius: 22rpx;
-  background: #f7f9f1;
-  border: 1rpx solid #e3e6d4;
+  padding: 22rpx 0;
+  border-top: 1rpx solid #eef1e8;
+}
+
+.records-list .vaccine-card:first-child {
+  border-top: none;
 }
 
 .vaccine-card__header {
@@ -1496,6 +2138,46 @@ async function doRemove(record: VaccineRecord) {
 
 .vaccine-confirm--busy {
   opacity: 0.6;
+}
+
+/*
+ * 「确认」之后留在卡片上的结果（2026-10-06）。
+ *
+ * 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+ * 原来只有一闪而过的 toast；命中产品库时分类本来就已经是对的，
+ * 画面上什么都没变，看起来就像按钮坏了。这行字留着不走。
+ */
+.vaccine-confirm-result {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+/* 库里没有这支苗时的说明（2026-10-06）：比普通提示更醒目一点，
+   因为它要顶替原来那个"从产品库选一支"的入口 */
+.field-hint--unknown {
+  color: #8a6f3d;
+}
+
+.vaccine-confirm-result--ok {
+  color: #3d6b4a;
+}
+
+.vaccine-confirm-result--warn {
+  color: #b26a2f;
+}
+
+/* 「选好了」—— 多选模式下收起分类选择器的出口（2026-10-06） */
+.vaccine-kind__done {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 10rpx 24rpx;
+  font-size: 23rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+  background: #eef2e6;
+  border-radius: 999rpx;
 }
 
 /* 认不出来时的说明（2026-10-05）：不装懂，把话说清楚再让顾客填 */
@@ -1639,6 +2321,11 @@ async function doRemove(record: VaccineRecord) {
   border-radius: 20rpx;
 }
 
+/* 还没选到任何东西时才用浅色 —— 有名字的时候要看起来是"填好了" */
+.field-picker--placeholder {
+  color: #9aa39a;
+}
+
 .field-textarea {
   margin-top: 10rpx;
   width: 100%;
@@ -1666,12 +2353,6 @@ async function doRemove(record: VaccineRecord) {
   margin-top: 14rpx;
 }
 
-.vaccine-name-tag--active {
-  color: #ffffff;
-  background: var(--health-accent, #1e3a2f);
-  border-color: var(--health-accent, #1e3a2f);
-}
-
 .vaccine-name-tag {
   padding: 10rpx 22rpx;
   font-size: 23rpx;
@@ -1679,6 +2360,21 @@ async function doRemove(record: VaccineRecord) {
   background: #fbfcf7;
   border: 1rpx solid #e3e6d4;
   border-radius: 999rpx;
+}
+
+/*
+ * ⚠️ 选中态**必须写在基础态之后**（2026-10-06 老板实测报的 bug）。
+ *
+ * 原来这两条是反过来的：--active 写在前面、基础类写在后面。
+ * 两个选择器优先级一样（都是一个类），后写的赢 —— 于是基础类的
+ * 白底/深字把选中态的绿底/白字**整个盖掉**：点标签"没有反应"，
+ * 但状态一直是正确的（点「选好了」收起后就看得到刚点的那几类）。
+ * 样式顺序引起的问题，只有把顺序调回来才修得掉。
+ */
+.vaccine-name-tag--active {
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  border-color: var(--health-accent, #1e3a2f);
 }
 
 .vaccine-card__actions {

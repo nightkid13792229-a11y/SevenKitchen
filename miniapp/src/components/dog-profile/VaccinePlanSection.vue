@@ -22,49 +22,119 @@
            所以这句提醒交给**记录板块的空态**去说 —— 它就长在记录列表该在的地方，
            而且计划开关关掉时也照样说得到（那边不依赖计划接口）。 -->
       <template v-if="!noRecordAtAll">
-      <!-- ① 下一针：整个板块最重要的一行 -->
-      <view v-if="plan.nextStep" class="health-card next-step" :class="`next-step--${plan.nextStep.status}`">
-        <text class="next-step__eyebrow">下一步</text>
-        <text class="next-step__label">{{ plan.nextStep.label }}</text>
-        <text class="next-step__window">
-          建议时间：{{ plan.nextStep.windowStart }} ~ {{ plan.nextStep.windowEnd }}
-        </text>
-        <text class="next-step__reminder">{{ plan.nextStep.reminder }}</text>
-        <!-- 错开接种的提醒（2026-10-05）：紧跟在提醒语下面 ——
-             家长最容易犯的错就是"两针一起去打"。 -->
-        <view v-if="plan.nextStep.spacingNote" class="spacing-note">
-          <text class="spacing-note__text">{{ plan.nextStep.spacingNote }}</text>
+      <!-- ══ 2026-10-06 老板改版 ══════════════════════════════════════
+           · 「步骤提醒」和「接种计划」**合并成一个板块**，默认收起；
+           · 收起时只显示**下一针的疫苗分类 + 接种窗口期**；
+           · 展开后分两部分：
+               ① 下一针的进一步说明 —— 分类、窗口期、依据、推荐疫苗；
+               ② 接种计划 —— 按接种窗口期**由近到远**排序，
+                  每一步只显示：状态、疫苗种类、接种窗口期、接种时间、
+                  推荐疫苗（已记录/已接种就不再推荐）、依据；
+           · 每一步的三个按钮（按建议/推迟/不做）换成两个：
+               「记录疫苗接种信息」→ 直接走新增记录流程（并带上这一步的分类）
+               「忽略」→ 弹窗确认后，这一步从这只狗狗的计划里去点。 -->
+      <view class="health-card plan-card">
+        <!-- ① 头部：收起时**只剩这一行** -->
+        <view class="plan-card__head" @tap="toggleExpanded">
+          <view class="plan-card__summary">
+            <text class="plan-card__eyebrow">下一针</text>
+            <text class="plan-card__kind">
+              {{ nextStep ? nextStep.kindLabel : '当前没有待接种的针' }}
+            </text>
+            <text v-if="nextStep" class="plan-card__window">
+              接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}
+            </text>
+            <text v-else class="plan-card__window">
+              按现有记录，免疫程序里的项目都已完成
+            </text>
+          </view>
+          <text class="plan-card__toggle">{{ expanded ? '收起' : '展开' }}</text>
         </view>
-        <text
-          v-if="(plan.nextStep.commonProducts || []).length > 0"
-          class="next-step__products"
-        >
-          常见的有：{{ (plan.nextStep.commonProducts || []).join('、') }}
-        </text>
-        <text class="next-step__basis">依据：{{ plan.nextStep.basis }}</text>
 
-        <view class="decisions">
-          <text
-            v-for="option in DECISION_OPTIONS"
-            :key="option.value"
-            class="decisions__item"
-            :class="{ 'decisions__item--active': plan.decisions[plan.nextStep.key] === option.value }"
-            @tap="decide(plan.nextStep.key, option.value)"
-          >{{ option.label }}</text>
-        </view>
-        <text v-if="plan.decisions[plan.nextStep.key]" class="decisions__hint">
-          已记录你的选择：{{ decisionLabel(plan.decisions[plan.nextStep.key]) }}（随时可以改）
-        </text>
+        <template v-if="expanded">
+          <!-- ②-A 下一针的进一步说明。
+               老板："除了疫苗分类和接种窗口期，还需要展示依据和推荐的疫苗。
+                     该部分其他的信息不用展示。" -->
+          <view v-if="nextStep" class="next-detail">
+            <text class="next-detail__title">下一针说明</text>
+            <view class="kv">
+              <text class="kv__label">疫苗分类</text>
+              <text class="kv__value">{{ nextStep.kindLabel }}</text>
+            </view>
+            <view class="kv">
+              <text class="kv__label">接种窗口期</text>
+              <text class="kv__value">{{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}</text>
+            </view>
+            <view v-if="(nextStep.commonProducts || []).length > 0" class="kv">
+              <text class="kv__label">推荐疫苗</text>
+              <text class="kv__value">{{ (nextStep.commonProducts || []).join('、') }}</text>
+            </view>
+            <view class="kv">
+              <text class="kv__label">依据</text>
+              <text class="kv__value">{{ nextStep.basis }}</text>
+            </view>
+            <!-- 「这一针别和别的针同一天打」—— 老板 2026-10-05 亲口要的安全提醒（spacing-note__text）。
+                 2026-10-06 的字段清单里没有它，但它是"两针别同一天打"这条安全提醒，
+                 先留着；不要的话说一声，删一行的事。 -->
+            <text v-if="nextStep.spacingNote" class="spacing-note__text">
+              {{ nextStep.spacingNote }}
+            </text>
+          </view>
+
+          <!-- ②-B 接种计划：按接种窗口期由近到远 -->
+          <view class="plan-steps">
+            <text class="plan-steps__title">接种计划（按接种窗口期由近到远）</text>
+
+            <view
+              v-for="step in orderedSteps"
+              :key="step.key"
+              class="step"
+              :class="`step--${step.status}`"
+            >
+              <view class="step__head">
+                <text class="step__status">{{ statusLabel(step.status) }}</text>
+                <text class="step__kind">{{ step.kindLabel }}</text>
+              </view>
+              <text class="step__label">{{ step.label }}</text>
+              <view class="kv">
+                <text class="kv__label">接种窗口期</text>
+                <text class="kv__value">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
+              </view>
+              <!-- 接种时间 = 这条记录的时间；没打过就没有这一行 -->
+              <view v-if="step.matchedRecordDate" class="kv">
+                <text class="kv__label">接种时间</text>
+                <text class="kv__value">{{ step.matchedRecordDate }}</text>
+              </view>
+              <!-- 已经记录过/接种过的，不再推荐产品（老板 2026-10-06） -->
+              <view v-if="stepProducts(step).length > 0" class="kv">
+                <text class="kv__label">推荐疫苗</text>
+                <text class="kv__value">{{ stepProducts(step).join('、') }}</text>
+              </view>
+              <view class="kv">
+                <text class="kv__label">依据</text>
+                <text class="kv__value">{{ step.basis }}</text>
+              </view>
+
+              <view class="step-actions">
+                <text class="step-actions__primary" @tap.stop="recordStep(step)">
+                  记录疫苗接种信息
+                </text>
+                <text class="step-actions__ghost" @tap.stop="ignoreStep(step)">忽略</text>
+              </view>
+            </view>
+
+            <text v-if="orderedSteps.length === 0" class="plan-steps__empty">
+              计划里的项目都已完成或已忽略。
+            </text>
+            <!-- 忽略不是"删除得找不回来"：给一条回头的路 -->
+            <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
+              已忽略 {{ ignoredCount }} 项 · 点这里恢复
+            </text>
+          </view>
+        </template>
       </view>
 
-      <view v-else class="health-card next-step next-step--DONE">
-        <text class="next-step__label">当前没有待接种的针</text>
-        <text class="next-step__reminder">
-          按现有记录，免疫程序里的项目都已完成。有新的接种记录后这里会自动更新。
-        </text>
-      </view>
-
-      <!-- ② 不一致提醒：老板第 17 条 -->
+      <!-- ③ 不一致提醒：老板第 17 条。它本身就是提醒，不折进展开区 -->
       <view v-if="plan.conflicts.length > 0" class="health-card conflicts">
         <text class="conflicts__title">你的记录与建议不一致（{{ plan.conflicts.length }} 处）</text>
         <view v-for="item in plan.conflicts" :key="`${item.recordId}-${item.reason}`" class="conflict">
@@ -76,66 +146,6 @@
           这只是提醒，不是结论。以你手上兽医给出的方案为准。
         </text>
       </view>
-
-      <!-- ③ 完整计划：**一行标题，点开才铺开**（2026-10-04 老板定）。
-           顾客来这一页是看"下一针什么时候打"，不是来读免疫程序表的。
-           一屏里直接铺 9 项，反而把上面那行"下一步"淹掉了 ——
-           重点被自己的细节盖住。 -->
-      <view class="health-card plan-list">
-        <view class="plan-list__head" @tap="planListExpanded = !planListExpanded">
-          <view class="plan-list__copy">
-            <text class="health-section__title">接种计划</text>
-            <text class="plan-list__hint">{{ planListHint }}</text>
-          </view>
-          <text class="plan-list__toggle">
-            {{ planListExpanded ? '收起' : `展开 ${plan.steps.length} 项` }}
-          </text>
-        </view>
-
-        <template v-if="planListExpanded">
-          <view
-            v-for="step in plan.steps"
-            :key="step.key"
-            class="step"
-            :class="`step--${step.status}`"
-          >
-            <view class="step__head">
-              <text class="step__status">{{ statusLabel(step.status) }}</text>
-              <text class="step__label">{{ step.label }}</text>
-            </view>
-            <text class="step__window">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
-            <text v-if="step.matchedRecordDate" class="step__matched">
-              已记录：{{ step.matchedRecordDate }}
-            </text>
-            <text v-if="step.spacingNote" class="step__spacing">
-              {{ step.spacingNote }}
-            </text>
-            <text
-              v-if="(step.commonProducts || []).length > 0"
-              class="step__products"
-            >
-              常见的有：{{ (step.commonProducts || []).join('、') }}
-            </text>
-            <text class="step__basis">依据：{{ step.basis }}</text>
-
-            <view class="decisions decisions--compact">
-              <text
-                v-for="option in DECISION_OPTIONS"
-                :key="`${step.key}-${option.value}`"
-                class="decisions__item"
-                :class="{ 'decisions__item--active': plan.decisions[step.key] === option.value }"
-                @tap="decide(step.key, option.value)"
-              >{{ option.label }}</text>
-            </view>
-          </view>
-        </template>
-      </view>
-
-      <text class="plan-note">
-        {{ plan.reviewed
-          ? '本计划依据 WSAVA 2024 疫苗指南与国内规定起草，已经专业审核。是否接种、何时接种，请以执业兽医的意见为准。'
-          : '本计划仍在做专业审核，暂不对顾客开放。是否接种、何时接种，请以执业兽医的意见为准。' }}
-      </text>
       </template>
     </template>
 
@@ -162,7 +172,14 @@ import { dogApi } from '../../api/dogs'
  */
 interface PlanStep {
   key: string
-  kind: 'core' | 'rabies'
+  kind: string
+  /**
+   * 疫苗种类的中文名（狂犬疫苗 / 核心疫苗 / 早期核心疫苗 / 钩端螺旋体 / 其他）。
+   *
+   * 2026-10-06 由后端下发 —— 前端不再自己维护一份 kind→中文 的映射，
+   * 免得两边不一致（这个项目已经吃过两次这种亏）。
+   */
+  kindLabel: string
   label: string
   windowStart: string
   windowEnd: string
@@ -209,11 +226,31 @@ const props = defineProps<{
   dataVersion?: number
 }>()
 
-const DECISION_OPTIONS = [
-  { value: 'ACCEPT', label: '按建议' },
-  { value: 'DEFER', label: '推迟' },
-  { value: 'SKIP', label: '不做' },
-]
+/**
+ * 点某一步的「记录疫苗接种信息」时告诉页面：去开新增记录，并带上这一步的分类。
+ *
+ * 为什么交给页面：新增记录那块在另一个组件（VaccineManagementSection），
+ * 页面同时握着两边的 ref，由它牵线最直接 —— 计划这边不越权去动记录列表。
+ */
+const emit = defineEmits<{
+  (event: 'record-step', payload: { kinds: string[]; stepLabel: string }): void
+}>()
+
+/** 下一针（后端算好；忽略掉的步骤后端已经排除在 nextStep 之外） */
+const nextStep = computed(() => plan.value.nextStep)
+
+/**
+ * ⚠️ 这里原来放的是三个决定按钮（按建议 / 推迟 / 不做）的选项表。
+ *
+ * 2026-10-06 老板："目前这 3 个按钮，我选中之后没有任何反应，
+ * 不知道后端是怎么安排的。"（后端其实是好的 —— 生产实测 PUT 200 落库成功，
+ * 只是界面上只变了一个很不明显的样式，列表里那几项连一句说明都没有。）
+ *
+ * 老板的方案是重构：每一步只留两个按钮 ——
+ *   「记录疫苗接种信息」→ 直接走新增记录流程
+ *   「忽略」→ 弹窗确认后把这一步从这只狗狗的计划里去掉（存 SKIP）
+ * 两个按钮都是"做了就有看得见的结果"，不会再有"点了像没点"。
+ */
 
 const STATUS_LABELS: Record<PlanStep['status'], string> = {
   DONE: '已完成',
@@ -224,6 +261,13 @@ const STATUS_LABELS: Record<PlanStep['status'], string> = {
 }
 
 const loaded = ref(false)
+/**
+ * 上一次加载的是哪条狗（2026-10-06）。
+ *
+ * 用来区分"同一条狗刷新"和"换了一条狗"：前者不要抹掉 loaded（会闪一下），
+ * 后者必须抹掉（否则新狗会顶着上一条狗的计划）。
+ */
+const loadedDogId = ref('')
 const loadError = ref('')
 const unavailable = ref<{ message: string } | null>(null)
 
@@ -253,7 +297,7 @@ const plan = ref<{
    *
    * 后端一直在传这个字段，注释也写着"顾客侧即便开放，也要如实标记"，
    * 但界面**从来没有读过它** —— 于是卡片底部永远写着
-   * "本计划仍在做专业审核，暂不对顾客开放"，
+   * "……还在做专业审核、暂不对顾客开放"那句话，
    * 而线上开关是开着的：文案在说反话。
    *
    * 现在按它决定底部那句话。等兽医审完、后端把 reviewed 打开，
@@ -329,29 +373,83 @@ function statusLabel(status: PlanStep['status']) {
 }
 
 /**
- * 完整计划默认收起（2026-10-04）。
- * 冲突提醒不折叠 —— 那是"你的记录跟建议打架了"，是要紧事，藏在折叠里等于没说。
+ * 整个板块默认收起（2026-10-06 老板改版）。
+ *
+ * 收起时只有一行：**下一针是什么分类、什么时候打** —— 顾客来这一页
+ * 要的就是这一句。要看细节、要动手，再展开。
  */
-const planListExpanded = ref(false)
+const expanded = ref(false)
+
+function toggleExpanded() {
+  expanded.value = !expanded.value
+}
 
 /**
- * 收起那行写什么。
+ * 计划列表：按接种窗口期**由近到远**（老板 2026-10-06 的明确要求），
+ * 并且把顾客忽略掉的步骤去掉。
  *
- * 不写"按 WSAVA 2024 与国内法规推算"这种来源说明 —— 那句话在展开后的
- * 每一项下面都有（"依据：…"），收起来时更需要的是"进行到哪了"。
- * 一条记录都没有时不报"已完成 N 项"：那是假进度。
+ * 忽略 = 存一个 SKIP 决定（后端一直支持，只是原来只影响"下一步"的选择，
+ * 步骤本身还留在列表里）。老板要的是"从计划里去掉"，所以在展示层过滤掉；
+ * 库里那条决定留着，所以随时能恢复（见 restoreIgnored）。
  */
-const planListHint = computed(() => {
-  const total = plan.value.steps.length
-  if (noEvidence.value) {
-    return `共 ${total} 项，按免疫程序推算`
-  }
-  const done = plan.value.steps.filter((step) => step.status === 'DONE').length
-  return `已完成 ${done} / ${total} 项`
-})
+const orderedSteps = computed(() =>
+  plan.value.steps
+    .filter((step) => plan.value.decisions[step.key] !== 'SKIP')
+    .slice()
+    .sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart))),
+)
 
-function decisionLabel(value: string) {
-  return DECISION_OPTIONS.find((item) => item.value === value)?.label || value
+/** 被忽略了几项 —— 给"恢复"那条路用 */
+const ignoredCount = computed(
+  () => plan.value.steps.filter((step) => plan.value.decisions[step.key] === 'SKIP').length,
+)
+
+/**
+ * 这一步要不要推产品。
+ *
+ * 老板："推荐疫苗（如果已记录或者已接种，就不需要推荐了。）"
+ * 已经打过这一步的，再列一串产品只会让人以为"还得再打一次"。
+ */
+function stepProducts(step: PlanStep): string[] {
+  if (step.matchedRecordId) return []
+  return step.commonProducts || []
+}
+
+/**
+ * 点「记录疫苗接种信息」→ 直接走新增记录流程。
+ *
+ * 把这一步的分类一起带过去：顾客是在"狂犬疫苗 第 3 次"这一行点的，
+ * 新增出来的那条记录本来就该归到狂犬疫苗 —— 让他再选一次是白费事，
+ * 也容易选错（选错就把免疫计划带偏了）。
+ */
+function recordStep(step: PlanStep) {
+  emit('record-step', { kinds: [step.kind], stepLabel: step.label })
+}
+
+/** 点「忽略」→ 先确认，再从这只狗狗的计划里去掉这一步 */
+function ignoreStep(step: PlanStep) {
+  uni.showModal({
+    title: '忽略这一步？',
+    content: `忽略后「${step.label}」会从这只狗狗的接种计划里去掉，不再提醒。计划底部随时可以恢复。`,
+    confirmText: '忽略',
+    cancelText: '保留',
+    success: (result) => {
+      if (result.confirm) {
+        void decide(step.key, 'SKIP')
+      }
+    },
+  })
+}
+
+/** 把忽略掉的步骤恢复回来（清掉那些 SKIP 决定） */
+async function restoreIgnored() {
+  const ignored = plan.value.steps
+    .filter((step) => plan.value.decisions[step.key] === 'SKIP')
+    .map((step) => step.key)
+
+  for (const key of ignored) {
+    await decide(key, 'SKIP')
+  }
 }
 
 async function load() {
@@ -359,7 +457,18 @@ async function load() {
     return
   }
 
-  loaded.value = false
+  /*
+   * ⚠️ 刷新时**不要**先把 loaded 抹掉（2026-10-06）。
+   *
+   * `sectionHidden` 是靠 `loaded && noRecordAtAll` 算出来的 ——
+   * 刷新一开始 loaded=false，整块会先消失、数据回来再出现，闪一下。
+   * 但**换狗**时必须重置：否则会拿上一条狗的计划顶上几秒，
+   * 那比闪一下更糟（顾客以为新狗已经有计划了）。
+   */
+  if (loadedDogId.value !== props.dogId) {
+    loaded.value = false
+  }
+  loadedDogId.value = props.dogId
   loadError.value = ''
   unavailable.value = null
 
@@ -426,6 +535,22 @@ async function decide(stepKey: string, decision: string) {
 
 // 换狗 or 记录变了都要重新算 —— 计划的每一步都依赖"有没有对上号的记录"
 watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
+
+/**
+ * 让页面**直接调这里**重算计划（2026-10-06）。
+ *
+ * ⚠️ 原来只靠上面那条 watch（页面把记录变化折成 data-version 传下来）。
+ * 用微信官方自动化驱动模拟器实测，删光记录之后：
+ *   · 书签红点**灭掉了** → 说明"记录变了"确实通知到了页面；
+ *   · 计划板块**原地不动**，还挂着删掉的那条记录算出来的计划。
+ * 也就是通知到了页面，却没让这个组件重算 —— 老板看到的
+ * "删空了还显示计划和提醒，切走再切回才空"就是这个。
+ *
+ * 页面调组件方法这条路在本项目里是**已经验证过的**（疫苗板块的
+ * countUnsaveableDrafts / startScan / addRecord 都靠它），所以加这一条。
+ * watch 保留：换狗时它仍然管用，两条路不冲突（同一次加载幂等）。
+ */
+defineExpose({ reload: () => load() })
 </script>
 
 <style scoped lang="scss">
@@ -632,27 +757,41 @@ watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
   color: #8a968a;
 }
 
-/* 完整计划：收起时只占一行（2026-10-04） */
-.plan-list__head {
+/* ── 合并后的板块（2026-10-06）─────────────────────────────────────
+   收起时只占一行：下一针的分类 + 窗口期。 */
+.plan-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
 }
 
-.plan-list__copy {
+.plan-card__summary {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 6rpx;
   min-width: 0;
 }
 
-.plan-list__hint {
-  font-size: 23rpx;
+.plan-card__eyebrow {
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: #8a968a;
+}
+
+.plan-card__kind {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.plan-card__window {
+  font-size: 24rpx;
+  line-height: 1.5;
   color: #6b6653;
 }
 
-.plan-list__toggle {
+.plan-card__toggle {
   flex-shrink: 0;
   padding: 10rpx 20rpx;
   font-size: 23rpx;
@@ -660,6 +799,102 @@ watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
   color: #1e3a2f;
   background: #eef2e6;
   border-radius: 999rpx;
+}
+
+/* 「标签 + 值」一行 —— 两部分的字段都用它，读起来整齐 */
+.kv {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 10rpx;
+}
+
+.kv__label {
+  flex-shrink: 0;
+  width: 132rpx;
+  font-size: 23rpx;
+  line-height: 1.55;
+  color: #8a968a;
+}
+
+.kv__value {
+  flex: 1;
+  min-width: 0;
+  font-size: 23rpx;
+  line-height: 1.55;
+  color: #26261f;
+}
+
+/* ① 下一针的进一步说明 */
+.next-detail {
+  margin-top: 22rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid #eef1e8;
+}
+
+.next-detail__title,
+.plan-steps__title {
+  display: block;
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+/* ② 接种计划 */
+.plan-steps {
+  margin-top: 26rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid #eef1e8;
+}
+
+.plan-steps__empty {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 23rpx;
+  color: #8a968a;
+}
+
+/* 忽略不是不可逆的：给一条回来的路 */
+.plan-steps__restore {
+  display: block;
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  color: #6b6653;
+  text-decoration: underline;
+}
+
+/* 每一步的两个按钮（2026-10-06 老板改版：按建议/推迟/不做 三个按钮下线） */
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.step-actions__primary {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  text-align: center;
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  border-radius: 14rpx;
+}
+
+.step-actions__ghost {
+  flex-shrink: 0;
+  padding: 16rpx 26rpx;
+  font-size: 24rpx;
+  text-align: center;
+  color: #6b6653;
+  background: #f2f4ec;
+  border-radius: 14rpx;
+}
+
+.step__kind {
+  font-size: 21rpx;
+  font-weight: 600;
+  color: #4e6b52;
 }
 
 /* 计划列表 */
@@ -724,12 +959,10 @@ watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
   color: #a8b2a8;
 }
 
-.plan-note {
-  display: block;
-  margin-top: 20rpx;
-  padding: 0 8rpx;
-  font-size: 21rpx;
-  line-height: 1.6;
-  color: #8a968a;
-}
+/*
+ * ⚠️ 这里原来有一条页面底部的说明文案（"…还在做专业审核，暂不对顾客开放…"）。
+ * 2026-10-06 老板："这句话删除掉。同时看一下后端是否有什么卡点，也请取消，
+ * 我们现在就按审核通过的标准部署。" —— 前端这句和后端那个
+ * VACCINE_PLAN 开关一起取消了，样式也一并删干净。
+ */
 </style>

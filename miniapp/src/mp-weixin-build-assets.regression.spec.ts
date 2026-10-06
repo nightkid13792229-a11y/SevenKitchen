@@ -203,7 +203,20 @@ describe('mp-weixin build asset regressions', () => {
 
     expect(fixScript).toContain('removeCodeQualityNoDependencyFiles')
     expect(fixScript).toContain("'project.private.config.json'")
-    expect(fixScript).toContain("'App.wxml'")
+  })
+
+  /**
+   * 2026-10-06：App.wxml 从"无依赖可删"名单里拿回来了。
+   *
+   * 它确实是 uni-app 生成的空壳，扫描会提示无依赖 —— 但微信开发者工具
+   * **上传时要读它**：删掉之后 cli upload 直接
+   * ENOENT .../App.wxml（code 10），整个发布卡死，清编译缓存也没用。
+   * 表现是"构建成功、上传失败"，很容易误判成开发者工具抽风。
+   */
+  it('🔴 不许再删 App.wxml —— 删了上传直接报 ENOENT', () => {
+    const fixScript = readSource('scripts/fix-components-injection.js')
+
+    expect(fixScript).not.toContain("'App.wxml'")
   })
 
   it('removes source-only test files from the generated mini program project', () => {

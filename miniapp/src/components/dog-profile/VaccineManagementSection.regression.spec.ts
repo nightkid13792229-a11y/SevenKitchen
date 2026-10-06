@@ -53,34 +53,30 @@ describe('疫苗管理', () => {
     expect(source).toContain('function statusLabel')
   })
 
-  it('分类是**系统判的、只读显示**，不是让顾客选（2026-10-05 老板定）', () => {
+  it('顾客勾的是**病种**，分类由后台判定（2026-10-06 老板改）', () => {
     const source = readComponent()
 
-    // 老板："用户并不需要知道犬四联、犬六联等这些所谓的产品分类名称。
-    // 分类和判定是我们后台自己做的事情。最多我们把产品分类名称和判定
-    // 显示出来而已，不要交给用户自己来选择。"
-    expect(source).toContain('field-label">分类<')
-    expect(source).toContain('vaccine-kind__tag')
-    // 默认**不展开**选项；只有认不出来、或顾客自己点"修改"才展开
-    expect(source).toContain('const kindPickerOpen = reactive')
-    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
-    expect(source).toContain('function openKindPicker')
-    // 分类随记录一起提交（判定的结果要落到库里）
-    expect(source).toContain('kinds: draft.kinds,')
+    // 老板："在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看……
+    // 我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
+    // 至于分类的判定则交由后台来完成。"
+    expect(source).toContain('含哪些病种')
+    expect(source).toContain('componentOptions')
+    expect(source).toContain('toggleComponent(index, option.value)')
+    // 界面上不许再出现"核心疫苗/钩端螺旋体"这种内部类别让顾客选
+    expect(source).not.toContain("label: '核心疫苗'")
   })
 
-  it('系统认不出来时**如实承认**，并让顾客手动填（2026-10-05）', () => {
+
+  it('系统认不出来时**如实承认**，并让顾客照本子勾病种（2026-10-06 改）', () => {
     const source = readComponent()
 
-    // 老板："承认认不出这只疫苗，转为让用户手动填写。"
-    expect(source).toContain('这支苗没匹配到')
-    // 但**必须先把产品库和 AI 都试过**才算认不出
-    expect(source).toContain('产品库和 AI 都没认出它')
-    // 认不出时展开分类选择器
-    expect(source).toContain('kindPickerOpen[index] = draft.kinds.length === 0')
-    // 认不出来时才要求选 —— 否则这一条存不下去
-    expect(source).toContain("if (draft.kinds.length === 0) return '还差归类，选一个自动保存'")
+    expect(source).toContain('这一针含哪些病种？')
+    expect(source).toContain('照疫苗本上的成分表勾')
+    // 勾不上任何病种时要有出路（驱虫药这种本来就不是疫苗）
+    expect(source).toContain('都不是 / 不确定')
+    expect(source).toContain('function toggleNoneOfThem(index: number)')
   })
+
 
   it('顾客可以自己改分类（他的记录，他做主）', () => {
     const source = readComponent()
@@ -253,8 +249,10 @@ describe('疫苗管理', () => {
     // 老板："在记录板块中有一个新增疫苗记录的按钮，在最下方还有一个新增记录的
     // 按钮呢？不是重复了吗？"
     expect(source).not.toContain('新增疫苗记录')
-    // addRecord 仍由底部按钮通过 ref 调起
-    expect(source).toContain('function addRecord()')
+    // addRecord 仍由底部按钮通过 ref 调起；2026-10-06 起还接受一个预填参数
+    // （从接种计划的某一步点「记录疫苗接种信息」进来时，带上那一步的分类）
+    expect(source).toContain('function addRecord(prefill?: { kinds?: string[] })')
+    expect(source).toContain('kinds: Array.isArray(prefill?.kinds) ? [...prefill.kinds] : [],')
   })
 
   it('空态只说一次「档案里还没有接种记录」', () => {
@@ -267,17 +265,14 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('还没有疫苗记录')
   })
 
-  it('名称与归类的知识都不硬编码在前端', () => {
+  it('病种词表也由后端下发（前端只留一份小兜底）', () => {
     const source = readComponent()
 
-    // 硬编码的 commonVaccineNames 已退休，预设标签也下线了。
-    // 现在前端只做两件事：把名字发给后端判、把结果显示出来。
-    expect(source).not.toContain('commonVaccineNames')
-    expect(source).not.toContain('presetNames')
-    // 产品库与归类选项仍由后端下发（拉不到时归类有本地兜底）
-    expect(source).toContain('dogApi.vaccineCatalog()')
-    expect(source).toContain('FALLBACK_KIND_OPTIONS')
+    // 词表跟着接口走：后端改了前端不用改
+    expect(source).toContain('componentOptions.value = res.data.components')
+    expect(source).toContain('FALLBACK_COMPONENT_OPTIONS')
   })
+
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {
     const source = readComponent()
@@ -384,5 +379,484 @@ describe('疫苗本原图留档', () => {
     const api = readFileSync(resolve(process.cwd(), 'src/api/dogs.ts'), 'utf-8')
 
     expect(api).toContain('attachments?: string[]')
+  })
+})
+
+/**
+ * 老板 2026-10-06 实测报的两个问题。
+ */
+describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 整表重载不许冲掉还没保存的本地记录', () => {
+    const source = readComponent()
+
+    // 根因：saveScannedRecords 逐条存，而每存一条 saveRecord 都会 loadRecords()
+    // 整表重载 —— 重载原来是"拿服务器返回的直接替换"，
+    // 于是同一批里还没保存的那几条（id 还是空的）当场被冲掉。
+    // 表现就是老板看到的：识别 3 条，只进去 1 条。
+    expect(source).toContain('const unsavedLocal = records.value.filter((record) => !record.id)')
+    expect(source).toContain('records.value = [...fromServer, ...unsavedLocal]')
+    // 不能再用"直接替换"的写法
+    expect(source).not.toContain('records.value = (Array.isArray(list) ? list : [])')
+  })
+
+  /**
+   * 分类标签：**多选**（2026-10-06 第二轮定稿）。
+   *
+   * 中间走过一段弯路，这里把结论钉死：
+   *   · 老板第一次说"点哪个都改不动"—— 真正的原因是**后端更新记录时漏写了
+   *     kinds**（已修）。我当时代价最小地改成了单选，顺手把组合苗的
+   *     多选能力也改没了。
+   *   · 老板第二次把洞看出来了："卫佳捌这种多分类的产品……手动是没办法
+   *     多选标签的，对吗？" —— 对。少勾一类的后果很实际：
+   *     免疫计划会以为钩端那一步还没打。
+   * 所以恢复多选；"改不动"的观感不会回来，因为后端现在真的存得进去。
+   */
+  it('🔴 手动分类是**多选**（组合苗要能同时勾上好几类）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('draft.kinds.includes(kind)')
+    expect(source).toContain('? draft.kinds.filter((item) => item !== kind)')
+    expect(source).toContain(': [...draft.kinds, kind]')
+    // 不能再退回"选一个"（那会吃掉组合苗的第二类）
+    expect(source).not.toContain('draft.kinds = draft.kinds.length === 1 && draft.kinds[0] === kind ? [] : [kind]')
+  })
+
+  it('多选要能用：点一下不收起选择器，另给一个「选好了」', () => {
+    const source = readComponent()
+
+    // 收起就没法再点第二个病了
+    expect(source).toContain('function closeKindPicker(index: number)')
+    expect(source).toContain("class=\"vaccine-kind__done\" @tap=\"closeKindPicker(index)\"")
+    // 提示里得写明可多选（组合苗要勾好几个病种）
+    expect(source).toContain('可多选')
+  })
+
+  it('组合苗的多分类仍然成立（从产品库选时自动带出）', () => {
+    const source = readComponent()
+
+    // 单选只针对"顾客手动指定"这一条路；
+    // 选产品时分类按真实成分带出来（卫佳捌 = 核心 + 钩端），不能被单选逻辑吃掉
+    expect(source).toContain('draft.kinds = [...product.kinds]')
+  })
+})
+
+/**
+ * 老板 2026-10-06 实测报的另外三个问题（问题2/4/5）。
+ */
+describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 第二批）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 问题4 的根因：产品库下发的规范名是「宠必威幼犬保」（没有 ®），
+   * 而疫苗本识别出来的是「宠必威® 幼犬保」。原来用 `===` 比，比不中 →
+   * 名称那一行退回显示"从产品库选择"占位提示，
+   * 识别出来的名字只能留在下面的手填输入框里。
+   */
+  it('🔴 产品名比对前先归一化，® 和空格不影响认不认得出', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function normalizeProductName(')
+    // 与后端 normalizeProductText 同一套规则，缺一不可
+    expect(source).toContain(".replace(/[®™©]/g, '')")
+    expect(source).toContain('function findCatalogProduct(')
+    // 名称那一行必须走归一化比对，不能退回"一模一样才认"
+    expect(source).toContain('function isNameRecognized(')
+    expect(source).toContain('function nameFieldLabel(')
+    expect(source).not.toContain('catalogProducts.value.some((item) => item.name === name)')
+  })
+
+  /**
+   * 老板 2026-10-06 第二轮："未识别的疫苗产品输入框出现的时候，对用户而言
+   * 是否会感到疑惑？因为它的上方还有一个产品名的选择器，**二者都是一样的名字**。"
+   *
+   * 对 —— 所以同一个名字只允许出现一次：认得出就只在这一行显示规范名
+   * （同时不出现手填框）；认不出就把这一行降级成"去库里挑一支"这个**动作**，
+   * 名字本身留给下面的手填框。
+   */
+  it('🔴 认得出：这一行显示库里的规范名', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function nameFieldLabel(')
+    expect(source).toContain('if (matched) return matched.name')
+  })
+
+  it('🔴 认不出：这一行只写"去库里挑一支"，不再把同一个名字显示两遍', () => {
+    const source = readComponent()
+
+    expect(source).toContain("'＋ 从产品库选一支'")
+    // 名字本身只在手填框里出现（:value 绑的是 draft.vaccineName）
+    expect(source).toContain(':value="draftOf(record, index).vaccineName"')
+    // 旧的"名称行直接显示原文"的写法（会和输入框重复）已经下线
+    expect(source).not.toContain("return String(name || '').trim()")
+  })
+
+  it('🔴 手填输入框只在产品库里没有这只苗时才出现', () => {
+    const source = readComponent()
+
+    // 老板的规格："如果 AI 识别的疫苗名称没有在产品库中，
+    // 才显示这个输入框吧？"
+    expect(source).toContain('function showManualNameInput(')
+    expect(source).toContain('<template v-if="showManualNameInput(index)">')
+    // 正打字的那一行不能把输入框抽走（打到一半刚好命中产品库会当场消失）
+    expect(source).toContain('if (focusIndex.value === index) return true')
+  })
+
+  it('🔴 确认的结果留在卡片上，不再是"闪一下就没"', () => {
+    const source = readComponent()
+
+    // 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
+    expect(source).toContain('const confirmResults = reactive<')
+    expect(source).toContain("class=\"vaccine-confirm-result\"")
+    expect(source).toContain('setConfirmResult(')
+    // 成功和认不出两种结果都要说清楚
+    expect(source).toContain('已确认：')
+    expect(source).toContain('产品库和 AI 都没认出这支苗')
+  })
+
+  it('🔴 后台刷新不许把已经显示出来的记录先擦掉（"屏幕闪烁"的来源）', () => {
+    const source = readComponent()
+
+    // 每次自动保存（点分类、点确认、改日期）都会整表重载，
+    // 而占位原来是 `v-if="loading"` —— 整个列表先消失再长回来。
+    expect(source).toContain('v-if="loading && records.length === 0"')
+    expect(source).not.toContain('<view v-if="loading" class="health-section__empty">')
+  })
+})
+
+/**
+ * 老板 2026-10-06 第二次实测报的两个问题。
+ */
+describe('识别 3 条变 6 条 + 表单底部红字下线（2026-10-06 第三批）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 老板："明明上传的疫苗本上只有 3 次幼犬保的接种记录，为什么在确认之后的
+   * 疫苗标签下、接种计划下方的疫苗记录中间却有 6 条信息呢？"
+   *
+   * 数据库里一直是 3 条 —— 是界面在重复显示：创建成功之后本地那条记录的
+   * id 还是空的，紧接着 loadRecords() 把它当成"还没保存的草稿"留下来，
+   * 于是服务端那条和本地幽灵那条同时出现。3 真 + 3 幽灵 = 6 条。
+   */
+  it('🔴 创建成功后必须先把新 id 写回本地记录，再重载列表', () => {
+    const source = readComponent()
+
+    expect(source).toContain('if (!record.id && newId) {')
+    expect(source).toContain('record.id = newId')
+
+    // 顺序不能反：写回要排在 loadRecords() 之前，
+    // 否则 unsavedLocal 又会把这条已保存的记录当成草稿留下来
+    const saveAt = source.indexOf('async function saveRecord(')
+    const writeBackAt = source.indexOf('record.id = newId', saveAt)
+    const reloadAt = source.indexOf('await loadRecords()', saveAt)
+    expect(writeBackAt).toBeGreaterThan(-1)
+    expect(reloadAt).toBeGreaterThan(-1)
+    expect(writeBackAt).toBeLessThan(reloadAt)
+  })
+
+  it('列表重载仍然保留"真的还没保存"的草稿（别把上一轮的修复改回去）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('const unsavedLocal = records.value.filter((record) => !record.id)')
+    expect(source).toContain('records.value = [...fromServer, ...unsavedLocal]')
+  })
+})
+
+describe('识别结果表单 · 底部红字下线（2026-10-06）', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('底部那段汇总红字不再渲染', () => {
+    const source = readScan()
+
+    // 老板："既然在上传照片预览图下方已经有提醒了，
+    // 那么在识别后的表单最下方的红字提醒是否就可以不要了呢？"
+    expect(source).not.toContain('class="confirm__warnings"')
+    expect(source).not.toContain('confirm__warning"')
+    // 状态和样式一起清干净，别留死代码
+    expect(source).not.toContain('.confirm__warnings')
+    expect(source).not.toContain('const warnings = ref')
+  })
+
+  it('照片预览下方的逐张提示还在，而且照样按合并结果筛过', () => {
+    const source = readScan()
+
+    expect(source).toContain('class="pages__warnings"')
+    expect(source).toContain('filterWarningsAgainstRecord(page.warnings, merged[0])')
+  })
+})
+
+/**
+ * 接种记录板块（2026-10-06 老板第二次改）。
+ */
+describe('接种记录 · 空记录不显示 + 做成一个板块（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 没有任何记录时，标题行不出现（老板："它也会显示出来"）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('v-if="records.length > 0" class="records-card__head"')
+    // 守卫必须排在标题之前，否则标题又会常显
+    const cardAt = source.indexOf('health-card records-card')
+    const guardAt = source.indexOf('v-if="records.length > 0"', cardAt)
+    const headAt = source.indexOf('records-card__head', cardAt)
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(headAt).toBeGreaterThan(-1)
+    expect(guardAt).toBeLessThan(headAt)
+  })
+
+  it('但零记录时那句说明还在（否则这一页就没话可说了）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('档案里还没有接种记录')
+    expect(source).toContain('records-card__empty')
+  })
+
+  it('记录行不再各自成卡，而是板块里用分隔线排开的一组', () => {
+    const source = readComponent()
+
+    expect(source).toContain('class="health-card records-card"')
+    expect(source).toContain('<view class="records-list">')
+    // 行上不能再挂 health-card —— 那会给每一行套回白底 + 边框 + 阴影
+    expect(source).not.toContain('class="vaccine-card health-card"')
+    expect(source).toContain('.records-list .vaccine-card:first-child')
+  })
+
+  it('板块有表头（标题 + 条数 + 一句说明），和「接种计划」同一套语言', () => {
+    const source = readComponent()
+
+    expect(source).toContain('records-card__title')
+    expect(source).toContain('records-card__count')
+    expect(source).toContain('records-card__desc')
+  })
+})
+
+/**
+ * 认出来的产品要用库里的规范名（2026-10-06 老板实测）。
+ *
+ * 瓶签「卫佳® Vanguard® Plus 5/CV-L」在库里叫「卫佳捌」。
+ * 后端那套匹配能认出这种写法（名称或别名被包含），前端这份只做
+ * "名字一模一样"的比对，认不出 —— 所以规范名一律以后端下发的为准。
+ */
+describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 识别结果填表时优先用 productName', () => {
+    const source = readComponent()
+
+    expect(source).toContain("vaccineName: String(draft.productName || draft.vaccineName || ''),")
+  })
+
+  it('🔴 点「确认」时也用后端给的规范名，并把名字对齐', () => {
+    const source = readComponent()
+
+    expect(source).toContain("const canonicalName = String(res.data.productName || '')")
+    expect(source).toContain('draft.vaccineName = canonicalName')
+    // 后端没给才退回前端这份比对
+    expect(source).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
+  })
+
+  it('认不出来时绝不硬塞名字（照旧显示顾客写的那串字）', () => {
+    const source = readComponent()
+
+    // draft.productName 为空串时回退到原文
+    expect(source).toContain("|| draft.vaccineName || ''")
+  })
+})
+
+/**
+ * 名称字段的三种状态 + 选中态样式顺序（2026-10-06 第三轮）。
+ */
+describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('三种状态：还没写 / 库里有 / 库里没有', () => {
+    const source = readComponent()
+
+    expect(source).toContain(
+      "function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown'",
+    )
+    expect(source).toContain("if (!String(name || '').trim()) return 'empty'")
+    expect(source).toContain("return isNameRecognized(name) ? 'recognized' : 'unknown'")
+  })
+
+  it('🔴 库里没有的产品：不给"从产品库挑一支"的入口', () => {
+    const source = readComponent()
+
+    // 老板："对于宠派纯这类产品库中没有的产品……也不让用户可以点击
+    // 从产品库中挑选产品的弹窗呢？因为这没有意义嘛，对吧？"
+    expect(source).toContain(
+      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draftOf(record, index).vaccineName) !== 'unknown'\"",
+    )
+  })
+
+  it('库里没有时要说清楚，并且名字仍然能写', () => {
+    const source = readComponent()
+
+    expect(source).toContain('产品库里没有这支苗 —— 已按你写的名字记录')
+    expect(source).toContain("nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'")
+  })
+
+  /**
+   * 老板："我看在卫佳8的记录下，疫苗名称下面还需要点确认按钮，它才会弹
+   * 已确认卫佳8归为核心疫苗加钩端螺旋体的提醒。是需要点点击确认按钮才会
+   * 归类吗？还是说不需要点其实已经归类了？"
+   * —— 早就归类了。所以别再摆一个按钮让人以为"必须点一下"。
+   */
+  it('🔴 分类已经有了、名字也认得 → 不再显示「确认」按钮', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function showConfirmButton(index: number): boolean')
+    expect(source).toContain('if (draft.kinds.length === 0) return true')
+    expect(source).toContain("return nameFieldMode(draft.vaccineName) === 'unknown'")
+    expect(source).toContain('v-if="showConfirmButton(index)"')
+    // 取而代之说明一句
+    expect(source).toContain('分类已按产品库自动判定，不用再确认。')
+  })
+
+  /**
+   * 老板："我在分类中点击选项，没有反应。但是点击选好了之后。
+   * 依然会显示出刚刚已经点击的那几类。"
+   *
+   * 状态一直是对的（所以"选好了"之后看得到），看不见的是**高亮** ——
+   * 因为选中态的样式写在了基础态**前面**，两个选择器优先级一样，后写的赢，
+   * 基础类的白底深字把选中态整个盖掉了。样式顺序问题只能靠顺序修。
+   */
+  it('🔴 选中态样式必须写在基础态之后（否则高亮永远被盖掉）', () => {
+    const source = readComponent()
+
+    const baseAt = source.indexOf('.vaccine-name-tag {')
+    const activeAt = source.indexOf('.vaccine-name-tag--active {')
+    expect(baseAt).toBeGreaterThan(-1)
+    expect(activeAt).toBeGreaterThan(-1)
+    expect(activeAt).toBeGreaterThan(baseAt)
+  })
+})
+
+/**
+ * 名字没读全要诚实说（2026-10-06 老板）。
+ */
+describe('疫苗名称 · 没读全时如实告知并一键改对（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 识别草稿把候选带进来', () => {
+    const source = readComponent()
+
+    expect(source).toContain('nameSuggestions: Array.isArray(draft.nameSuggestions)')
+    expect(source).toContain('nameSuggestions?: string[]')
+  })
+
+  it('🔴 认出没把握时，明说"这行字可能没读全"并列出候选', () => {
+    const source = readComponent()
+
+    // 老板："如果不能完全有把握的识别出来，能不能诚实的告诉用户呢？"
+    expect(source).toContain('这行字可能没读全')
+    expect(source).toContain('(record.nameSuggestions || []).length > 0')
+    expect(source).toContain('@tap="applySuggestedProduct(index, suggestion)"')
+  })
+
+  it('点候选 = 用那一支（名字和分类一起带对），用过就不再提示', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function applySuggestedProduct(index: number, name: string)')
+    expect(source).toContain('applyCatalogProduct(index, at)')
+    expect(source).toContain('if (record) record.nameSuggestions = []')
+  })
+
+  it('点「确认」时也刷新候选（认出来了就清空）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('if (Array.isArray(res.data.nameSuggestions))')
+    expect(source).toContain('record.nameSuggestions = res.data.nameSuggestions.map(String)')
+  })
+})
+
+/**
+ * 整本重拍不重复记 + 识别弹层说清"匹配到哪一支"（2026-10-06 老板两问）。
+ */
+describe('扫描去重 + 匹配说明（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 老板："如果我疫苗本上多贴了一个最新接种的疫苗的标签，但是我拍照拍的还是
+   * 整本疫苗本，那 AI 会把这单独的一个新增的接种记录识别出来，
+   * 而不会重复记录吗？"
+   *
+   * 查下来**当时是会的** —— AI 把整本读出来（对的），但保存那一步一条不落地
+   * 全存，已经记过的会被再存一遍。
+   */
+  it('🔴 同一天、同一支苗已经记过的，扫描时跳过', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function isAlreadyRecorded(name: string, date: string): boolean')
+    // 只跟**已保存的**记录比（有 id 的），否则同批里刚识别的会挡掉自己
+    expect(source).toContain('if (!record.id) return false')
+    // 名字归一化后比（瓶签原文与规范名要能对上）
+    expect(source).toContain("normalizeProductName(record.vaccineName || '')")
+    expect(source).toContain('if (isAlreadyRecorded(scannedName, scannedDate)) {')
+  })
+
+  it('🔴 跳过了几条必须说出来（不吭声会被当成丢数据）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('const scanNotice = ref(')
+    expect(source).toContain('其中 ${skipped} 条已经记过')
+    expect(source).toContain('records-card__notice')
+  })
+
+  /**
+   * 老板："AI 识别的结果中，产品标签名称还是没有识别完整。但是我点击确认
+   * 按钮之后，发现记录中识别的是准确的匹配到了卫佳捌。这是什么问题呢？"
+   *
+   * 不是问题，是两步：弹层显示的是"本子上怎么写的"（原文），
+   * 落库用的是"我们认成了哪一支"（规范名）。但两者不一样时不解释一句，
+   * 顾客会以为是错的。
+   */
+  it('🔴 匹配到产品库时，识别弹层要补一行说明', () => {
+    const source = readScan()
+
+    expect(source).toContain("push('匹配产品库', matched)")
+    expect(source).toContain("if (matched && matched !== String(draft.vaccineName || '').trim())")
   })
 })

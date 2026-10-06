@@ -692,7 +692,7 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
  * 但提醒只有落在顾客**看得见的地方**才算数 —— 疫苗计划藏在疫苗书签里，
  * 顾客不点进去永远不知道有针要打。
  */
-describe('健康管理 · 疫苗书签角标（2026-10-04）', () => {
+describe('健康管理 · 疫苗书签红点（2026-10-04 角标 → 2026-10-06 红点）', () => {
   function readPage() {
     return readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
@@ -700,45 +700,66 @@ describe('健康管理 · 疫苗书签角标（2026-10-04）', () => {
     )
   }
 
-  it('有针要打时，书签上直接写出数量', () => {
+  it('有针要打时只亮一个红点，不再写数量文案', () => {
     const page = readPage()
 
-    expect(page).toContain('vaccineBadgeText')
-    expect(page).toContain('有 ${dueCount} 针该打了')
-    expect(page).toContain('.health-tabs__badge')
-    expect(page).toContain("tab.key === 'vaccine' && vaccineBadgeText")
+    // 2026-10-06 老板："疫苗标签处不再显示角标。疫苗如果有新的提醒，
+    // 就以红点的形式即可，不要用带文案的角标。"
+    expect(page).toContain('vaccineHasDue')
+    expect(page).toContain('.health-tabs__dot')
+    expect(page).toContain("tab.key === 'vaccine' && vaccineHasDue")
+    // 带文案的角标彻底下线：文案换成红点，不能两套并存
+    expect(page).not.toContain('.health-tabs__badge')
+    expect(page).not.toContain('vaccineBadgeText')
   })
 
-  it('角标由页面自己拉，不能等 VaccinePlanSection 报 —— 那个组件点进去才挂载', () => {
+  it('红点绝对定位 —— 它亮不亮，六个书签的高度都一样', () => {
     const page = readPage()
 
-    expect(page).toContain('async function loadVaccineBadge(')
+    // 原来是纵向 flex 里的一行文字，书签会因为它出现而变高，
+    // 六个书签高矮不一。改成绝对定位挂在右上角。
+    const dotBlock = page.slice(
+      page.indexOf('.health-tabs__dot {'),
+      page.indexOf('}', page.indexOf('.health-tabs__dot {')),
+    )
+    expect(dotBlock).toContain('position: absolute;')
+    const itemBlock = page.slice(
+      page.indexOf('.health-tabs__item {'),
+      page.indexOf('.health-tabs__label {'),
+    )
+    expect(itemBlock).toContain('position: relative;')
+  })
+
+  it('红点由页面自己拉，不能等 VaccinePlanSection 报 —— 那个组件点进去才挂载', () => {
+    const page = readPage()
+
+    expect(page).toContain('async function loadVaccineDot(')
     expect(page).toContain('await dogApi.vaccinePlan(requestedDogId)')
-    // 角标的全部意义就是"还没点进去时"提醒，所以必须挂在页面上
-    expect(page).toContain('loadVaccineBadge(requestedDogId)')
+    // 红点的全部意义就是"还没点进去时"提醒，所以必须挂在页面上
+    expect(page).toContain('loadVaccineDot(requestedDogId)')
   })
 
-  it('一条接种记录都没有时**不挂角标**（2026-10-04 老板提问后改）', () => {
+  it('一条接种记录都没有时不亮红点（2026-10-04 老板提问后改，2026-10-06 沿用）', () => {
     const page = readPage()
 
     // 原来显示"待补记录"。三处不对：
-    //   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于每个用户永远看到这个角标，
-    //      一个永远亮着的角标就不是信号了；
-    //   2. 它跟"有 N 针该打了"用同一套视觉，把真正的提醒一起贬值；
+    //   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于每个用户永远看到这个提醒，
+    //      一个永远亮着的点就不是信号了；
+    //   2. 它跟"有针要打"用同一套视觉，把真正的提醒一起贬值；
     //   3. 读起来像在说"你欠我们一条记录"。
     // 没有记录时计划板块本来就有一张说明卡把话讲清楚，那里说就够了。
     expect(page).toContain('noRecordAtAll === true')
     expect(page).not.toContain('待补记录')
     expect(page).toContain("if (res.data.noRecordAtAll === true) {")
-    expect(page).toContain("vaccineBadgeText.value = ''")
+    expect(page).toContain('vaccineHasDue.value = false')
   })
 
-  it('计划没开或拉失败时不挂角标（不在书签上写"加载失败"）', () => {
+  it('计划没开或拉失败时不亮红点（不在书签上写"加载失败"）', () => {
     const page = readPage()
 
     expect(page).toContain('res.data.available === false')
-    // 静默清空，不抛也不弹 toast
-    expect(page).toContain("vaccineBadgeText.value = ''")
+    // 静默灭掉，不抛也不弹 toast
+    expect(page).toContain('vaccineHasDue.value = false')
   })
 
   it('书签里的文字 vs 主题色：color 留在 .health-tabs__item 上', () => {

@@ -113,6 +113,13 @@ export interface VaccinePlanStep {
   /** 稳定标识，用于存顾客的决定 */
   key: string;
   kind: VaccineKind;
+  /**
+   * 种类的中文名（狂犬疫苗 / 核心疫苗 / 早期核心疫苗 / 钩端螺旋体 / 其他）。
+   *
+   * 2026-10-06 老板要求计划里每一步要显示"疫苗种类" —— 由后端下发，
+   * 前端不再自己维护一份映射（这个项目吃过两次"两边各有一套"的亏）。
+   */
+  kindLabel: string;
   label: string;
   /** 时间窗（ISO 日期 YYYY-MM-DD）；开区间时另一侧为空 */
   windowStart: string;
@@ -362,8 +369,10 @@ export const NON_CORE_SCHEDULES = {
     repeatYears: 1,
     maxRepeats: 12,
     basis:
-      '宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）说明书：' +
-      '幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次',
+      '中国大陆属钩端螺旋体常见地区；WSAVA 2024 对高风险地区（接触积水、' +
+      '牲畜或鼠类）强烈建议接种。宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）' +
+      '说明书：幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次。' +
+      '是否接种、何时接种，请以执业兽医的意见为准。',
   },
 } as const;
 
@@ -781,8 +790,23 @@ export const VACCINE_KIND_CYCLE_NOTES: Record<VaccineKind, string> = {
  * 必须有这一步：产品目录只收进口苗，顾客写"六联""犬热"是常态；
  * 少了它这些记录会掉成"未归类"，被挡在计划外面。
  */
+/**
+ * 自由文本里能看出"这是核心苗"的写法（2026-10-06 按 WSAVA 2024 修正）。
+ *
+ * ⚠️ **副流感已经从这条里删掉了**。老板指出并核实过：
+ *    WSAVA 2024 的口径是 —— 犬的核心疫苗只有三支：
+ *    **犬瘟病毒、腺病毒、细小病毒**；**副流感属于非核心**
+ *    （与博德特氏菌一起归在"犬窝咳"那一类，按生活方式逐只评估）。
+ *    来源：WSAVA 2024 guidelines（Squires et al., JSAP 65(5):277–316），
+ *    见 RSPCA 知识库对该指南的转述。
+ *
+ *    以前把副流感算核心，会让一支"副流感单苗"顶掉核心苗的某一针 ——
+ *    和当年把驱虫药当核心苗是同一类错误（我们从此不再提醒那一针）。
+ *
+ * "联数"（二联…九联）仍然算核心：联苗按惯例都覆盖那三种核心病。
+ */
 const CORE_NAME_PATTERN =
-  /犬瘟|细小|腺病毒|副流感|传染性肝炎|distemper|parvo|adenovirus|[二三四五六七八九]联/i;
+  /犬瘟|细小|腺病毒|传染性肝炎|distemper|parvo|adenovirus|[二三四五六七八九]联/i;
 
 /**
  * 非核心、而且我们**没有**接种程序的（2026-10-05）。
@@ -792,10 +816,31 @@ const CORE_NAME_PATTERN =
  * 记下来是对的，影响计划是不对的。
  */
 const OTHER_NAME_PATTERN =
-  /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|bordetella|kennel\s*cough/i;
+  /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|副流感|parainfluenza|bordetella|kennel\s*cough/i;
 
-/** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
-export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];
+/**
+ * 顾客侧默认排哪几类。
+ *
+ * ⚠️ 2026-10-06 老板定：**钩端螺旋体也进默认计划**。
+ *
+ * 老板原话："钩端螺旋体为什么是有记录才排呢？钩端螺旋体虽然不在核心疫苗内，
+ * 但是在中国大陆还是非常常见。好像也是，强烈建议将其纳入到接种疫苗类的吧。"
+ *
+ * 依据核对过：WSAVA 2024 对**高风险地区**是"强烈建议"
+ * （接触积水、牲畜或鼠类）；中国大陆多属常见地区，所以对顾客默认排出来、
+ * 让家长拿去和兽医讨论，比"等他自己录过才提醒"更有用。
+ *
+ * 仍然**只是建议**：这一步的措辞是"建议时间"+"依据"，不是命令；
+ * 打不打、什么时候打，以执业兽医的意见为准（老板一贯的口径）。
+ *
+ * 其余非核心苗（犬窝咳、冠状…）仍保持"有记录才加" ——
+ * 要不要开始打那一类，是家长和兽医的事，不是我们该主动推的。
+ */
+export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = [
+  'core',
+  'rabies',
+  'lepto',
+];
 
 /** 全部类别 —— 营养师看整套程序表时用 */
 export const ALL_VACCINE_KINDS: readonly VaccineKind[] = [
@@ -880,13 +925,21 @@ export function recordCoversStep(vaccineName: string, kind: VaccineKind): boolea
   if (kind === 'rabies') return /狂犬|rabies/.test(text);
   if (kind === 'lepto') return /钩端|lepto/i.test(text);
   if (kind === 'core') {
-    // 「四联」及以上，或者四种病名都写全了 —— 才算顶得上核心首免
+    /*
+     * 「四联」及以上，或者三种核心病名写全了 —— 才算顶得上核心首免。
+     *
+     * ⚠️ 2026-10-06 修正：这里原来要求**四种**病名（含副流感）。
+     *    但按 WSAVA 2024，犬的核心疫苗只有三支 —— **犬瘟、腺病毒、细小**；
+     *    副流感属非核心。所以"病名写全"的判据改成这三种。
+     *    （联数那条仍然保守地要求四联及以上：只写"犬三联"的手写记录
+     *      我们不知道它第三联是腺病毒还是副流感，宁可多提醒一次，
+     *      也不要把核心首免误判成已完成。）
+     */
     return (
       /[四五六七八九]联/.test(text) ||
       (/犬瘟|distemper/.test(text) &&
         /细小|parvo/.test(text) &&
-        /腺病毒|传染性肝炎/.test(text) &&
-        /副流感/.test(text))
+        /腺病毒|传染性肝炎/.test(text))
     );
   }
   if (kind === 'core_early') {
@@ -1248,6 +1301,7 @@ export function buildVaccinePlan(
       return {
         key: seed.key,
         kind: seed.kind,
+        kindLabel: VACCINE_KIND_LABELS[seed.kind] || seed.kind,
         label: seed.label,
         windowStart: toDateText(seed.windowStart),
         windowEnd: toDateText(seed.windowEnd),
@@ -1437,15 +1491,14 @@ export function buildVaccinePlan(
 }
 
 /**
- * 顾客可见的疫苗建议是否开放。
- *
- * **默认关闭**（老板定的边界：未经专业审核的兽医内容不得对顾客开放）。
- * 免疫程序表目前由研发依据 WSAVA 2024 与国内法规起草，**尚未经兽医审核**，
- * 所以线上默认只给营养师/管理端看。
- * 审核完成后设置环境变量 `VACCINE_PLAN=customer` 即可对顾客开放。
+ * ⚠️ 这里原来有个 isVaccinePlanCustomerEnabled()（读环境变量 VACCINE_PLAN
+ * 决定顾客侧开不开）。2026-10-06 老板定：**按审核通过的标准部署**，
+ * 卡点取消 —— 免疫程序表正式对顾客开放，不再是"内部先看"的状态。
+ * 留着一个随时能把功能关掉的开关，反而会让线上状态变得说不清。
  */
-export function isVaccinePlanCustomerEnabled(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return String(env.VACCINE_PLAN ?? '').trim().toLowerCase() === 'customer';
-}
+
+/**
+ * 由成分推导类别 —— 实现在 vaccine-products（成分表在那里），
+ * 这里转出去，省得调用方为了一个函数引两个模块（2026-10-06）。
+ */
+export { kindsOfComponents } from './vaccine-products';

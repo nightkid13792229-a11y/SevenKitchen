@@ -54,4 +54,16 @@ export class UpdateVaccineDto {
   @IsArray()
   @IsString({ each: true })
   kinds?: string[];
+
+  /**
+   * 这一针**含哪些病种**（2026-10-06）。
+   *
+   * 取值 cdv/cpv/cav/cpi/rabies/lepto/ccov/bordetella/lyme（闭集，服务端会过滤）。
+   * 顾客在界面上勾的就是这个 —— 类别由服务端按病种推导，不让他操心。
+   * 传了它，kinds 会跟着重算；两个都不传 = 都不动。
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  components?: string[];
 }

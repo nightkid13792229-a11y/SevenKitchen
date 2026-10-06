@@ -19,6 +19,8 @@ export interface VaccineRecord {
   /// 归成的疫苗类别（2026-10-05）：core / rabies / lepto / other，可多值。
   /// 空数组 = 老记录，读时按名字兼容推导。
   kinds: string[];
+  /** 这一针含哪些病种（2026-10-06）—— 类别由它推导 */
+  components: string[];
   createdAt: Date;
   updatedAt: Date;
 }

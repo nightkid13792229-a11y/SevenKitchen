@@ -29,7 +29,12 @@ import {
   classifyVaccineKinds,
   type VaccineKind,
 } from './immunization-schedule';
-import { VACCINE_PRODUCTS } from './vaccine-products';
+import {
+  CORE_COMPONENTS,
+  VACCINE_COMPONENTS,
+  VACCINE_COMPONENT_LABELS,
+  VACCINE_PRODUCTS,
+} from './vaccine-products';
 
 export interface VaccineCatalogPreset {
   /** 顾客看到的写法 */
@@ -113,6 +118,20 @@ export function buildVaccineCatalog() {
       affectsPlan: value !== 'other',
     })),
 
+    /**
+     * **病种词表**（2026-10-06 老板定的模型）—— 顾客勾的就是它。
+     *
+     * 老板："我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
+     * 至于分类的判定则交由后台来完成。"
+     * 所以界面上不再出现"核心疫苗"这种内部术语，只有病种。
+     */
+    components: VACCINE_COMPONENTS.map((value) => ({
+      value,
+      label: VACCINE_COMPONENT_LABELS[value],
+      /** 是不是 WSAVA 2024 那三支核心疫苗之一 —— 界面上给个视觉提示，不参与判定 */
+      isCore: (CORE_COMPONENTS as readonly string[]).includes(value),
+    })),
+
     presets,
 
     /**
@@ -123,6 +142,8 @@ export function buildVaccineCatalog() {
      *    但 2026-10-05 又补了一句"产品库里面允许用户自己选择国产品牌"。
      */
     products: VACCINE_PRODUCTS.map((product) => ({
+      /** 这支苗含哪些病种（2026-10-06）—— 选了它就把成分带出来 */
+      components: [...product.components],
       name: product.name,
       manufacturer: product.manufacturer,
       kinds: product.kinds,

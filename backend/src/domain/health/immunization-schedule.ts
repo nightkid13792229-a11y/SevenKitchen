@@ -1340,6 +1340,60 @@ export function buildVaccinePlan(
     }
   }
 
+  /*
+   * ══ 用**实际接种日**重排后续步骤的窗口（2026-10-06 老板指出）══════════
+   *
+   * 老板："如果接种窗口只跟生日有关，跟记录无关的话，假设 26 周后的核心疫苗的
+   * 加强针被拖到了一岁的时候打，那么 3 年后的成年期第一次加强针要算到什么时候呢？
+   * ……优先级更高的相关性，难道不是上一次的接种日期吗？"
+   *
+   * 对。原来所有窗口都只由生日推出，于是**实际接种日和理想日期一旦有偏差，
+   * 后面每一针的窗口就整体偏掉**。实测两个后果：
+   *   · 狂犬首针拖到一岁才打 → "第 2 次"显示离那一针只有 2 个月就到期
+   *     （提前 10 个月催人重复接种 —— 这是最危险的一条）；
+   *   · 26 周补强拖到一岁打 → 补强的窗口早过了，一直挂着"已逾期"，
+   *     而那一针被算成了幼犬第 4 针。
+   *
+   * 现在的口径：**某一步的窗口 = 上一次实际接种日 + 该步原本的间隔**。
+   * 实现上就是"把后面的步骤整体平移"——平移量 = 实际接种日 − 那一步原本的窗口起点。
+   * 没有记录时平移量为 0，退回按生日推算（没有记录就没有"实际"可言）。
+   */
+  const originalWindowStart = new Map<string, Date>();
+  const originalWindowEnd = new Map<string, Date>();
+  for (const seed of seeds) {
+    originalWindowStart.set(seed.key, seed.windowStart);
+    originalWindowEnd.set(seed.key, seed.windowEnd);
+  }
+
+  const seedsByKind = new Map<VaccineKind, StepSeed[]>();
+  for (const seed of seeds) {
+    const list = seedsByKind.get(seed.kind) || [];
+    list.push(seed);
+    seedsByKind.set(seed.kind, list);
+  }
+
+  for (const list of seedsByKind.values()) {
+    let shiftMs = 0;
+    for (const seed of list) {
+      // 先按上一步带过来的偏移平移这一步（第一步没有上一步）
+      if (shiftMs !== 0) {
+        seed.windowStart = new Date(
+          (originalWindowStart.get(seed.key) as Date).getTime() + shiftMs,
+        );
+        seed.windowEnd = new Date(
+          (originalWindowEnd.get(seed.key) as Date).getTime() + shiftMs,
+        );
+      }
+      // 这一步**真的打了** → 用它的实际日期给后面的步骤定锚点
+      const matched = assignedByKey.get(seed.key);
+      if (matched) {
+        shiftMs =
+          matched.date.getTime() -
+          (originalWindowStart.get(seed.key) as Date).getTime();
+      }
+    }
+  }
+
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {
       const matched = assignedByKey.get(seed.key) ?? null;

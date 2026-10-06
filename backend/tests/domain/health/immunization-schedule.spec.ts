@@ -1323,9 +1323,17 @@ describe('按针数分配记录（老板截图引出的改法）', () => {
     expect(first!.status).toBe('DONE')
     expect(first!.matchedRecordDate).toBe('2026-05-11')
 
-    // 只需要再补**第 2 针**，不是两针都重来
+    /*
+     * 只需要再补**第 2 针**，不是两针都重来。
+     *
+     * ⚠️ 2026-10-06 起这条的状态是 **UPCOMING**（原来是 OVERDUE）——
+     * 因为窗口改成**锚定实际接种日**：第 1 针实际打在 2026-05-11，
+     * 第 2 针的窗口就顺延成 [06-08, 07-06]（间隔仍是程序表的 4 周）。
+     * 而这一天的 today 是 2026-06-01 —— 还没到窗口，所以是"待安排"。
+     * 这正是要的效果：**不再拿"按生日起算"的旧窗口去说人家逾期**。
+     */
     const second = lepto.find((step) => step.key === 'lepto-primary-2')
-    expect(second!.status).toBe('OVERDUE')
+    expect(second!.status).toBe('UPCOMING')
   })
 
   it('一条记录只能顶一步 —— 一针不能算两次', () => {
@@ -1348,7 +1356,19 @@ describe('按针数分配记录（老板截图引出的改法）', () => {
   })
 
   it('下一步给的是"补钩端第 2 针"，并且只推钩端单苗', () => {
-    const plan = scenario()
+    // 第 2 针的窗口现在锚在实际那一针（2026-05-11）之后 4 周 ——
+    // 所以取一个落在窗口里的日期来看"下一针"是什么
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: [
+        rec2('r1', '卫佳伍', '2026-02-16'),
+        rec2('r2', '卫佳伍', '2026-03-16'),
+        rec2('r3', '卫佳伍', '2026-04-13'),
+        rec2('r4', '卫佳捌', '2026-05-11'),
+      ],
+      today: new Date('2026-06-15T00:00:00'),
+    })
 
     expect(plan.nextStep).toBeDefined()
     expect(plan.nextStep!.key).toBe('lepto-primary-2')
@@ -1450,4 +1470,74 @@ describe('按窗口匹配（2026-10-06 老板实测）', () => {
     expect(first!.status).toBe('DONE')
     expect(first!.matchedRecordDate).toBe('2026-05-11')
   })
+})
+
+/**
+ * 窗口锚定**实际接种日**（2026-10-06 老板指出）。
+ *
+ * 老板："如果接种窗口只跟生日有关，跟记录无关的话，假设 26 周后的核心疫苗的
+ * 加强针被拖到了一岁的时候打，那么 3 年后的成年期第一次加强针要算到什么时候呢？
+ * ……优先级更高的相关性，难道不是上一次的接种日期吗？"
+ *
+ * 对。原来所有窗口只由生日推出，实际接种日一旦有偏差，后面每一针整体偏掉。
+ */
+describe('窗口锚定实际接种日（2026-10-06）', () => {
+  const rec = (id: string, name: string, date: string) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate: null,
+  })
+
+  it('🔴 狂犬首针拖到一岁才打 → 第 2 次不再"两个月后就到期"', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'd',
+      birthday: '2026-01-05',
+      records: [rec('r', '狂犬', '2027-01-05')],
+      today: new Date('2027-06-01'),
+    })
+
+    const second = plan.steps.find((step) => step.key === 'rabies-2')
+    expect(second).toBeDefined()
+    // 改之前：窗口 2027-02-28~06-28（离那一针只有 2 个月）→ 提前 10 个月催人重打
+    // 现在：锚在 2027-01-05 + 1 年
+    expect(second!.windowStart >= '2027-11-01').toBe(true)
+    expect(second!.windowEnd >= '2028-02-01').toBe(true)
+    expect(second!.status).toBe('UPCOMING')
+  })
+
+  it('🔴 26 周补强拖到一岁才打 → 后面那一步跟着顺延，不再误报逾期', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'd',
+      birthday: '2026-01-05',
+      records: [
+        rec('a', '犬四联', '2026-03-02'),
+        rec('b', '犬四联', '2026-03-23'),
+        rec('c', '犬四联', '2026-04-20'),
+        rec('d', '犬四联', '2027-01-05'),
+      ],
+      today: new Date('2027-02-01'),
+    })
+
+    const booster = plan.steps.find((step) => step.key === 'core-26w')
+    expect(booster).toBeDefined()
+    // 改之前：窗口还是 2026-07-06~08-03（按生日算），一直挂"已逾期"
+    expect(booster!.windowStart >= '2027-01-01').toBe(true)
+    expect(booster!.status).not.toBe('OVERDUE')
+  })
+
+  it('没有记录时仍然按生日推算（没有"上一次"可言）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'd',
+      birthday: '2026-01-05',
+      records: [],
+      today: new Date('2026-06-01'),
+    })
+
+    const second = plan.steps.find((step) => step.key === 'rabies-2')
+    expect(second).toBeDefined()
+    // 生日 + 12 周 + 1 年（±窗口）
+    expect(second!.windowStart.slice(0, 4)).toBe('2027')
+  })
+
 })

@@ -525,9 +525,18 @@ describe('疫苗计划', () => {
       expect(classifyVaccineKinds('宠必威乐必妥')).toEqual(['lepto']);
     })
 
-    it('没打过钩端的狗，计划里不出现钩端 —— 非核心苗不默认推给每一只狗', () => {
-      // WSAVA 与已审核的 immune-001 都写着：非核心苗要按生活方式逐只评估，
-      // 不是默认全打。所以没记录就不出现，要不要开始是它和兽医的事。
+    /**
+     * ⚠️ 2026-10-06 老板改了口径，这条**反过来**了。
+     *
+     * 老板："钩端螺旋体为什么是有记录才排呢？钩端螺旋体虽然不在核心疫苗内，
+     * 但是在中国大陆还是非常常见。好像也是，强烈建议将其纳入到接种疫苗类的吧。"
+     *
+     * 核对：WSAVA 2024 对**高风险地区**（接触积水、牲畜或鼠类）是"强烈建议"；
+     * 中国大陆多属常见地区。所以默认排出来、让家长拿去和兽医讨论，
+     * 比"等他自己录过才提醒"更有用。
+     * 其余非核心苗（犬窝咳、冠状…）仍然"有记录才加"。
+     */
+    it('🔴 没打过钩端的狗，计划里也排钩端（2026-10-06 老板改：中国大陆常见）', () => {
       const plan = buildVaccinePlan({
         dogId: 'dog-1',
         birthday: dog(80),
@@ -535,7 +544,19 @@ describe('疫苗计划', () => {
         today: TODAY,
       })
 
-      expect(plan.steps.some((step) => step.kind === 'lepto')).toBe(false)
+      expect(plan.steps.some((step) => step.kind === 'lepto')).toBe(true)
+    })
+
+    it('但其余非核心苗仍然"有记录才加"（不默认推给每一只狗）', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'dog-1',
+        birthday: dog(80),
+        records: [],
+        today: TODAY,
+      })
+
+      // 幼犬保那条线（core_early）没记录就不出现
+      expect(plan.steps.some((step) => step.kind === 'core_early')).toBe(false)
     })
 
     it('已经在打钩端的狗，按**每年**提醒（不是核心苗那套三年）', () => {
@@ -589,10 +610,14 @@ describe('疫苗计划', () => {
       expect(kinds.has('lepto')).toBe(true)
     })
 
-    it('默认只排核心苗与狂犬（非核心苗要按记录加）', () => {
+    it('默认排核心苗、狂犬、钩端（2026-10-06 起钩端也在默认里）', () => {
       const standard = buildImmunizationSchedule(new Date(`${dog(80)}T00:00:00`))
       const kinds = new Set(standard.map((item) => item.kind))
-      expect(kinds.has('lepto')).toBe(false)
+      expect(kinds.has('core')).toBe(true)
+      expect(kinds.has('rabies')).toBe(true)
+      expect(kinds.has('lepto')).toBe(true)
+      // 幼犬保那条线仍要"有记录才加"
+      expect(kinds.has('core_early')).toBe(false)
     })
   })
 
@@ -1107,17 +1132,21 @@ describe('排期规则：同品牌优先 + 不同分类不同天', () => {
 
   it('对面那针还没到窗口时**不提醒** —— 否则每步都挂，人就不看了', () => {
     // 核心苗窗口横跨 6~18 周、狂犬从 12 周起，两边几乎永远重叠。
-    // 不加这道门槛的话，实测 5 步里 4 步都挂着"别和狂犬同一天打"。
+    // 不加门槛的话实测 5 步里 4 步都挂着"别和狂犬同一天打"。
+    //
+    // ⚠️ 2026-10-06：钩端进默认计划后，7 周龄的狗**钩端 8 周龄就开**（正好第 7 天），
+    // 所以那一步的提醒是应该出现的。这条测试回到它原本要守的东西：
+    // **狂犬（12 周）还早着呢，不许提它**。
     const plan = buildVaccinePlan({
       dogId: 'dog-1',
-      birthday: dog(7), // 7 周龄：狂犬窗口（12 周）还没开
+      birthday: dog(7), // 7 周龄：狂犬窗口（12 周）还没开，钩端（8 周）一周内就开
       records: [],
       today: TODAY,
     })
 
     const first = plan.steps.find((step) => step.kind === 'core')
     expect(first).toBeDefined()
-    expect(first!.spacingNote).toBe('')
+    expect(first!.spacingNote).not.toContain('狂犬')
   })
 
   it('同一类内部的针不互相提醒错开（本来就是同一套程序）', () => {

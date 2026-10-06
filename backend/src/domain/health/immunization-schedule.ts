@@ -369,8 +369,10 @@ export const NON_CORE_SCHEDULES = {
     repeatYears: 1,
     maxRepeats: 12,
     basis:
-      '宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）说明书：' +
-      '幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次',
+      '中国大陆属钩端螺旋体常见地区；WSAVA 2024 对高风险地区（接触积水、' +
+      '牲畜或鼠类）**强烈建议**接种。宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）' +
+      '说明书：幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次。' +
+      '是否接种、何时接种，请以执业兽医的意见为准。',
   },
 } as const;
 
@@ -816,8 +818,29 @@ const CORE_NAME_PATTERN =
 const OTHER_NAME_PATTERN =
   /犬窝咳|窝咳|冠状病毒|莱姆|博德特|支气管败血|副流感|parainfluenza|bordetella|kennel\s*cough/i;
 
-/** 顾客侧默认排哪几类（非核心苗要"有记录才加"，见 NON_CORE_SCHEDULES） */
-export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = ['core', 'rabies'];
+/**
+ * 顾客侧默认排哪几类。
+ *
+ * ⚠️ 2026-10-06 老板定：**钩端螺旋体也进默认计划**。
+ *
+ * 老板原话："钩端螺旋体为什么是有记录才排呢？钩端螺旋体虽然不在核心疫苗内，
+ * 但是在中国大陆还是非常常见。好像也是，强烈建议将其纳入到接种疫苗类的吧。"
+ *
+ * 依据核对过：WSAVA 2024 对**高风险地区**是"强烈建议"
+ * （接触积水、牲畜或鼠类）；中国大陆多属常见地区，所以对顾客默认排出来、
+ * 让家长拿去和兽医讨论，比"等他自己录过才提醒"更有用。
+ *
+ * 仍然**只是建议**：这一步的措辞是"建议时间"+"依据"，不是命令；
+ * 打不打、什么时候打，以执业兽医的意见为准（老板一贯的口径）。
+ *
+ * 其余非核心苗（犬窝咳、冠状…）仍保持"有记录才加" ——
+ * 要不要开始打那一类，是家长和兽医的事，不是我们该主动推的。
+ */
+export const DEFAULT_PLAN_KINDS: readonly VaccineKind[] = [
+  'core',
+  'rabies',
+  'lepto',
+];
 
 /** 全部类别 —— 营养师看整套程序表时用 */
 export const ALL_VACCINE_KINDS: readonly VaccineKind[] = [

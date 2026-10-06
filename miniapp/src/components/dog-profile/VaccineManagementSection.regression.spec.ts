@@ -569,3 +569,52 @@ describe('识别结果表单 · 底部红字下线（2026-10-06）', () => {
     expect(source).toContain('filterWarningsAgainstRecord(page.warnings, merged[0])')
   })
 })
+
+/**
+ * 接种记录板块（2026-10-06 老板第二次改）。
+ */
+describe('接种记录 · 空记录不显示 + 做成一个板块（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 没有任何记录时，标题行不出现（老板："它也会显示出来"）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('v-if="records.length > 0" class="records-card__head"')
+    // 守卫必须排在标题之前，否则标题又会常显
+    const cardAt = source.indexOf('health-card records-card')
+    const guardAt = source.indexOf('v-if="records.length > 0"', cardAt)
+    const headAt = source.indexOf('records-card__head', cardAt)
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(headAt).toBeGreaterThan(-1)
+    expect(guardAt).toBeLessThan(headAt)
+  })
+
+  it('但零记录时那句说明还在（否则这一页就没话可说了）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('档案里还没有接种记录')
+    expect(source).toContain('records-card__empty')
+  })
+
+  it('记录行不再各自成卡，而是板块里用分隔线排开的一组', () => {
+    const source = readComponent()
+
+    expect(source).toContain('class="health-card records-card"')
+    expect(source).toContain('<view class="records-list">')
+    // 行上不能再挂 health-card —— 那会给每一行套回白底 + 边框 + 阴影
+    expect(source).not.toContain('class="vaccine-card health-card"')
+    expect(source).toContain('.records-list .vaccine-card:first-child')
+  })
+
+  it('板块有表头（标题 + 条数 + 一句说明），和「接种计划」同一套语言', () => {
+    const source = readComponent()
+
+    expect(source).toContain('records-card__title')
+    expect(source).toContain('records-card__count')
+    expect(source).toContain('records-card__desc')
+  })
+})

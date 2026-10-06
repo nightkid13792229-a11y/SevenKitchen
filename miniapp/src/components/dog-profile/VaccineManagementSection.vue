@@ -30,47 +30,58 @@
       <text class="vaccine-due-text">{{ dueSummaryText }}</text>
     </view>
 
-    <!-- 接种记录单独成一个板块（2026-10-06 老板）：
-         "将用户手动录入或者是 AI 识别的疫苗接种记录，也放到一个板块中，
-          就像接种计划或者是疫苗提醒这样来为其在视觉上归类。"
-         内嵌到健康管理页时，上面那块标题（疫苗管理）是不显示的，
-         记录卡就直接裸在页面上、和计划板块分不出层次 —— 所以这里补一个
-         小标题。独立成页时不重复加（那边本来就有页级标题了）。 -->
-    <view v-if="embedded" class="health-section__header records-header">
-      <view class="health-section__heading">
-        <text class="health-section__title">接种记录</text>
-        <text class="health-section__desc">每次接种记一条：手动填，或者拍疫苗本。</text>
+    <!-- ══ 接种记录板块（2026-10-06 老板第二次改）══════════════════════════
+         这次一起解决两件事：
+
+         ① **没有任何记录时，这一块不该出现**。
+            老板："如果没有任何记录的话，它也会显示出来。"
+            原来标题行（"接种记录 · N 条"）常显，0 条时就成了一个空壳标题
+            悬在那儿。现在标题只在**真有记录**时才出。
+
+         ② **太简陋**。原来是"一个标题 + 几张各自漂浮的小卡"，
+            和上面「接种计划」那张完整的卡不是一套语言。现在整块收进一张卡：
+            表头一行（标题 + 条数），下面是一条条**用分隔线排开的行**
+            （不是孤立的卡片），一眼能看出"这是一个列表"。
+           独立成页时也照样成立（那边本来还有一层页级标题）。 -->
+    <view class="health-card records-card">
+      <view v-if="records.length > 0" class="records-card__head">
+        <text class="records-card__title">接种记录</text>
+        <text class="records-card__count">{{ records.length }} 条</text>
       </view>
-      <text class="health-section__count">{{ records.length }} 条</text>
-    </view>
+      <text v-if="records.length > 0" class="records-card__desc">
+        最近接种的排在前面。点一条可以改，右边可以删。
+      </text>
 
     <!-- 占位只在**手上一条记录都还没有**时出现。
          原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
          （点分类、点"确认"、改日期）都会整表重载，于是已经显示出来的记录
          先被擦掉、再长回来。老板看到的就是"屏幕闪烁了一下"。
          刷新是后台动作，不该动已经显示出来的东西。 -->
-    <view v-if="loading && records.length === 0" class="health-section__empty">
-      <text class="health-section__empty-title">疫苗记录加载中</text>
-    </view>
+
+      <view v-if="loading && records.length === 0" class="records-card__empty">
+        <text class="records-card__empty-text">疫苗记录加载中</text>
+      </view>
 
     <!-- 空态（2026-10-04 老板提问后改）。
          原来这里只有干巴巴一句"还没有记录"，而上面的疫苗计划板块还会单独弹一张
          "档案里还没有接种记录"—— **同一件事说了两遍**。
          现在合成一处：计划板块在零记录时整块不渲染，这句话由这里说。
          位置也更对：它就长在记录列表该在的地方。 -->
-    <view v-else-if="records.length === 0" class="health-section__empty">
-      <!-- 只有一句。
-           2026-10-03 老板就定过："没有记录就写没有记录即可，不用下面那行小字"；
-           2026-10-04 又问"为什么会提醒了一次……在下方又进行了一次提醒呢"——
-           所以不是加话，而是**把重复的那处删掉、只留这里一句**。
-           该做什么，底部那个常驻的「新增记录」已经写着了。 -->
-      <text class="health-section__empty-title">档案里还没有接种记录</text>
-    </view>
+      <view v-else-if="records.length === 0" class="records-card__empty">
+        <!-- 只有一句。
+             2026-10-03 老板就定过："没有记录就写没有记录即可，不用下面那行小字"；
+             2026-10-04 又问"为什么会提醒了一次……在下方又进行了一次提醒呢"——
+             所以不是加话，而是**把重复的那处删掉、只留这里一句**。
+             该做什么，底部那个常驻的「新增记录」已经写着了。 -->
+        <text class="records-card__empty-title">档案里还没有接种记录</text>
+      </view>
+
+      <view class="records-list">
 
     <view
       v-for="(record, index) in records"
       :key="record.id || `draft-${index}`"
-      class="vaccine-card health-card"
+      class="vaccine-card"
       :class="{ [`vaccine-card--focus-${index}`]: true }"
     >
       <view class="vaccine-card__header" @tap="toggleExpanded(record, index)">
@@ -340,6 +351,8 @@
             已保存
           </text>
         </view>
+      </view>
+      </view>
       </view>
     </view>
 
@@ -1578,10 +1591,61 @@ async function doRemove(record: VaccineRecord) {
 <style scoped lang="scss">
 @import '../../styles/health-section.scss';
 
-/* 接种记录的小标题（2026-10-06）：和上面"接种计划"那块形成同样的视觉分组 */
-.records-header {
+/* ── 接种记录板块（2026-10-06 老板第二次改）──────────────────────────
+   原来这块是"一个漂浮的标题 + 几张各自独立的小卡"，跟上面「接种计划」
+   那张完整的卡不是一套语言。现在整块收进一张卡：
+   表头一行（标题 + 条数 + 一句说明），下面是用分隔线排开的记录行。 */
+.records-card {
+  margin-top: 20rpx;
+  padding: 24rpx 24rpx 10rpx;
+}
+
+.records-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.records-card__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
+.records-card__count {
+  flex-shrink: 0;
+  padding: 4rpx 16rpx;
+  font-size: 21rpx;
+  color: #4e6b52;
+  background: #eef2e6;
+  border-radius: 999rpx;
+}
+
+.records-card__desc {
+  display: block;
   margin-top: 8rpx;
-  margin-bottom: 4rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a968a;
+}
+
+.records-card__empty {
+  padding: 22rpx 0 24rpx;
+}
+
+.records-card__empty-title {
+  font-size: 26rpx;
+  color: #6b6653;
+}
+
+.records-card__empty-text {
+  font-size: 24rpx;
+  color: #8a968a;
+}
+
+.records-list {
+  margin-top: 8rpx;
 }
 
 .vaccine-due-banner {
@@ -1598,12 +1662,16 @@ async function doRemove(record: VaccineRecord) {
   color: #8a6f3d;
 }
 
+/* 一条记录 = 板块里的一行。
+   原来它自带底色、边框、圆角和外边距（各自独立的卡），几张摞在一起看着散、
+   也看不出这是一个列表。现在只留一条分隔线，靠"行"来讲清楚它是一组。 */
 .vaccine-card {
-  margin-top: 20rpx;
-  padding: 22rpx;
-  border-radius: 22rpx;
-  background: #f7f9f1;
-  border: 1rpx solid #e3e6d4;
+  padding: 22rpx 0;
+  border-top: 1rpx solid #eef1e8;
+}
+
+.records-list .vaccine-card:first-child {
+  border-top: none;
 }
 
 .vaccine-card__header {

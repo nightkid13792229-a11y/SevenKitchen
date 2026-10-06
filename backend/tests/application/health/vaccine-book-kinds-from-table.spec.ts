@@ -1,4 +1,7 @@
-import { classifyVaccineKinds } from '../../../src/domain/health/immunization-schedule';
+import {
+  classifyVaccineKinds,
+  recordCoversStep,
+} from '../../../src/domain/health/immunization-schedule';
 import { normalizeDrafts } from '../../../src/application/health/health-report-extraction.service';
 import {
   findProductByText,
@@ -275,5 +278,30 @@ describe('识别 · 名字没读全时给候选（2026-10-06）', () => {
     });
     expect(full[0].productName).toBe('卫佳捌');
     expect(full[0].nameSuggestions).toEqual([]);
+  });
+});
+
+/**
+ * "能不能顶掉核心首免"的判据，也按三支核心病（2026-10-06）。
+ *
+ * 这里原来要求把**四种**病名写全（含副流感）。WSAVA 2024 里核心只有
+ * 犬瘟、腺病毒、细小三支，副流感属非核心 —— 所以"病名写全"的判据改三种。
+ */
+describe('核心覆盖 · 三种核心病写全即可（2026-10-06）', () => {
+  it('🔴 犬瘟 + 细小 + 腺病毒 = 顶得上核心首免（不再要求副流感）', () => {
+    expect(recordCoversStep('犬瘟热 细小病毒 腺病毒', 'core')).toBe(true);
+  });
+
+  it('🔴 只有犬瘟 + 细小 + 副流感（缺腺病毒）→ 顶不上核心首免', () => {
+    expect(recordCoversStep('犬瘟 细小 副流感', 'core')).toBe(false);
+  });
+
+  it('四联及以上仍然算（手写记录里第三/四联是什么我们不知道，宁可多提醒）', () => {
+    expect(recordCoversStep('犬四联', 'core')).toBe(true);
+    expect(recordCoversStep('犬八联', 'core')).toBe(true);
+  });
+
+  it('三联的手写记录顶不上 —— 多提醒一次比误判成已完成好', () => {
+    expect(recordCoversStep('犬三联', 'core')).toBe(false);
   });
 });

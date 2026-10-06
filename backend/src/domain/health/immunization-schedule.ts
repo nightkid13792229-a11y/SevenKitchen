@@ -902,13 +902,21 @@ export function recordCoversStep(vaccineName: string, kind: VaccineKind): boolea
   if (kind === 'rabies') return /狂犬|rabies/.test(text);
   if (kind === 'lepto') return /钩端|lepto/i.test(text);
   if (kind === 'core') {
-    // 「四联」及以上，或者四种病名都写全了 —— 才算顶得上核心首免
+    /*
+     * 「四联」及以上，或者三种核心病名写全了 —— 才算顶得上核心首免。
+     *
+     * ⚠️ 2026-10-06 修正：这里原来要求**四种**病名（含副流感）。
+     *    但按 WSAVA 2024，犬的核心疫苗只有三支 —— **犬瘟、腺病毒、细小**；
+     *    副流感属非核心。所以"病名写全"的判据改成这三种。
+     *    （联数那条仍然保守地要求四联及以上：只写"犬三联"的手写记录
+     *      我们不知道它第三联是腺病毒还是副流感，宁可多提醒一次，
+     *      也不要把核心首免误判成已完成。）
+     */
     return (
       /[四五六七八九]联/.test(text) ||
       (/犬瘟|distemper/.test(text) &&
         /细小|parvo/.test(text) &&
-        /腺病毒|传染性肝炎/.test(text) &&
-        /副流感/.test(text))
+        /腺病毒|传染性肝炎/.test(text))
     );
   }
   if (kind === 'core_early') {

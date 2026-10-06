@@ -183,7 +183,7 @@
                   能不能诚实的告诉用户呢？" -->
             <template v-if="(record.nameSuggestions || []).length > 0">
               <text class="field-hint field-hint--unknown">
-                这行字可能没读全 —— 对照瓶子看看是不是下面这几支？点一下就用它：
+                这行字可能没读全 —— 对照疫苗本上的写法核一下，是不是下面这几支？点一下就用它：
               </text>
               <view class="vaccine-name-tags">
                 <text

@@ -498,3 +498,72 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
     expect(source).not.toContain('<view v-if="loading" class="health-section__empty">')
   })
 })
+
+/**
+ * 老板 2026-10-06 第二次实测报的两个问题。
+ */
+describe('识别 3 条变 6 条 + 表单底部红字下线（2026-10-06 第三批）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 老板："明明上传的疫苗本上只有 3 次幼犬保的接种记录，为什么在确认之后的
+   * 疫苗标签下、接种计划下方的疫苗记录中间却有 6 条信息呢？"
+   *
+   * 数据库里一直是 3 条 —— 是界面在重复显示：创建成功之后本地那条记录的
+   * id 还是空的，紧接着 loadRecords() 把它当成"还没保存的草稿"留下来，
+   * 于是服务端那条和本地幽灵那条同时出现。3 真 + 3 幽灵 = 6 条。
+   */
+  it('🔴 创建成功后必须先把新 id 写回本地记录，再重载列表', () => {
+    const source = readComponent()
+
+    expect(source).toContain('if (!record.id && newId) {')
+    expect(source).toContain('record.id = newId')
+
+    // 顺序不能反：写回要排在 loadRecords() 之前，
+    // 否则 unsavedLocal 又会把这条已保存的记录当成草稿留下来
+    const saveAt = source.indexOf('async function saveRecord(')
+    const writeBackAt = source.indexOf('record.id = newId', saveAt)
+    const reloadAt = source.indexOf('await loadRecords()', saveAt)
+    expect(writeBackAt).toBeGreaterThan(-1)
+    expect(reloadAt).toBeGreaterThan(-1)
+    expect(writeBackAt).toBeLessThan(reloadAt)
+  })
+
+  it('列表重载仍然保留"真的还没保存"的草稿（别把上一轮的修复改回去）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('const unsavedLocal = records.value.filter((record) => !record.id)')
+    expect(source).toContain('records.value = [...fromServer, ...unsavedLocal]')
+  })
+})
+
+describe('识别结果表单 · 底部红字下线（2026-10-06）', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('底部那段汇总红字不再渲染', () => {
+    const source = readScan()
+
+    // 老板："既然在上传照片预览图下方已经有提醒了，
+    // 那么在识别后的表单最下方的红字提醒是否就可以不要了呢？"
+    expect(source).not.toContain('class="confirm__warnings"')
+    expect(source).not.toContain('confirm__warning"')
+    // 状态和样式一起清干净，别留死代码
+    expect(source).not.toContain('.confirm__warnings')
+    expect(source).not.toContain('const warnings = ref')
+  })
+
+  it('照片预览下方的逐张提示还在，而且照样按合并结果筛过', () => {
+    const source = readScan()
+
+    expect(source).toContain('class="pages__warnings"')
+    expect(source).toContain('filterWarningsAgainstRecord(page.warnings, merged[0])')
+  })
+})

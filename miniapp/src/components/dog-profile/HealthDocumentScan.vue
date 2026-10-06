@@ -110,9 +110,14 @@
         </template>
       </view>
 
-      <view v-if="warnings.length > 0" class="confirm__warnings">
-        <text v-for="warning in warnings" :key="warning" class="confirm__warning">· {{ warning }}</text>
-      </view>
+      <!-- 最下方那段红字提醒已下线（2026-10-06 老板）：
+           "既然在上传照片预览图下方已经有提醒了，那么在识别后的表单最下方的
+            红字提醒是否就可以不要了呢？"
+           确实重复了 —— 照片预览那一排下面已经逐张写着「第 N 张：…」，
+           而且同样**按合并结果筛过**（见 pageOutcomes 的 warnings），
+           家长一边看原图一边核那句话，比在这儿再看一遍更清楚。
+           唯一只在这里出现过的是一句"共 N 张没能识别"的汇总，
+           而每张缩略图上的 ✗ / ！和下面那句提示已经把它说完了。 -->
 
       <!-- 识别把握**一个字都不显示**（2026-10-02 先去掉"中/高"，2026-10-04 老板拍板
            连"低"的那句也不要）：模型自评分，顾客据此做不了任何事，
@@ -202,7 +207,6 @@ defineExpose({ startScan: pickAndScan })
 const isBusy = ref(false)
 const showConfirm = ref(false)
 const drafts = ref<Record<string, any>[]>([])
-const warnings = ref<string[]>([])
 /**
  * 模型自评的识别把握。
  *
@@ -486,8 +490,6 @@ async function scanAll(filePaths: string[]) {
    * 放到卡片底部会让人来回找"这是说哪一张"。只有单张上传时才回到底部。
    */
   const collectedWarnings: string[] = []
-  /** 只有一张图时没有缩略图可贴，这些提示要回到底部展示 */
-  const singlePageWarnings: string[] = []
   /** 一张都没读出来时报错要用：第一句能说清原因的话 */
   let firstReadableWarning = ''
   /**
@@ -596,9 +598,6 @@ async function scanAll(filePaths: string[]) {
           if (!firstReadableWarning && pageWarnings.length > 0) {
             firstReadableWarning = pageWarnings[0]
           }
-          if (filePaths.length === 1) {
-            singlePageWarnings.push(...pageWarnings)
-          }
         }
 
         const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
@@ -619,9 +618,6 @@ async function scanAll(filePaths: string[]) {
         })
         if (!firstReadableWarning) {
           firstReadableWarning = reason
-        }
-        if (filePaths.length === 1) {
-          singlePageWarnings.push(reason)
         }
       }
     }
@@ -697,12 +693,8 @@ async function scanAll(filePaths: string[]) {
       ...page,
       warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
     }))
-    // 合并之后再筛一遍：某一页"没读到"的提示，在另一页已经读到的情况下要撤掉
-    // （老板实测：CRP 数值在 CRP 报告单里，第 1 页的"结果值未填写"就不该再出现）
-    warnings.value = filterWarningsAgainstRecord(
-      [...collectedWarnings, ...singlePageWarnings],
-      merged[0],
-    )
+    // 逐张提示已经按合并结果筛过（上面的 pageOutcomes），
+    // 底部那段汇总红字 2026-10-06 下线，不再单独留一份
     confidence.value = worstConfidence
     resolvedDocumentType.value = resolvedType
     showConfirm.value = true
@@ -735,7 +727,6 @@ function accept() {
   })
   showConfirm.value = false
   drafts.value = []
-  warnings.value = []
   failureNotice.value = ''
   // 图片交给上层了（跟着记录一起保存），这里不再算"没用上"
   uploadedUrls.value = []
@@ -772,7 +763,6 @@ function dismissFailure() {
 function discard() {
   showConfirm.value = false
   drafts.value = []
-  warnings.value = []
   failureNotice.value = ''
 
   // 「重新上传」＝这一轮的结果都不要了：把传上去的图一起删掉，别留在 COS 里
@@ -1067,17 +1057,6 @@ function discard() {
   align-items: center;
   justify-content: flex-end;
   gap: 20rpx;
-}
-
-.confirm__warnings {
-  margin-top: 16rpx;
-}
-
-.confirm__warning {
-  display: block;
-  font-size: 21rpx;
-  line-height: 1.6;
-  color: #a5311f;
 }
 
 .confirm__actions {

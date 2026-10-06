@@ -1443,6 +1443,24 @@ async function saveRecord(record: VaccineRecord, index: number) {
 
     // 新增时后端才给 id —— 拿到它，重排之后才能把展开状态跟回同一条
     const newId = String(res?.data?.id || savedId || '')
+
+    /*
+     * ⚠️ **必须先把 id 写回本地这一条，再重载**（2026-10-06 修）。
+     *
+     * 老板报的"上传的疫苗本上只有 3 次接种记录，确认之后却有 6 条"就是这个：
+     * 创建成功之后本地这条记录的 id 还是空的，紧接着 loadRecords() 里
+     *   `unsavedLocal = records.value.filter((record) => !record.id)`
+     * 把它当成"还没保存的草稿"原样留了下来 —— 于是**服务端刚建的那条
+     * 和本地这条幽灵同时显示**。识别 3 条就变成 3 真 + 3 幽灵 = 6 条。
+     * （数据库里其实一直是 3 条，是界面在重复显示。）
+     *
+     * 危险的不止是显示：这条幽灵仍然是"待保存"状态，
+     * 顾客后来只要碰它一下，就会真的再创建一条 —— 变成脏数据。
+     */
+    if (!record.id && newId) {
+      record.id = newId
+    }
+
     await loadRecords()
 
     if (newId) {

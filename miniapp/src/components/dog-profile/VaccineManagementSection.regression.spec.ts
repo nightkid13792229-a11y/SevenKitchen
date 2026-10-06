@@ -802,3 +802,61 @@ describe('疫苗名称 · 没读全时如实告知并一键改对（2026-10-06�
     expect(source).toContain('record.nameSuggestions = res.data.nameSuggestions.map(String)')
   })
 })
+
+/**
+ * 整本重拍不重复记 + 识别弹层说清"匹配到哪一支"（2026-10-06 老板两问）。
+ */
+describe('扫描去重 + 匹配说明（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  /**
+   * 老板："如果我疫苗本上多贴了一个最新接种的疫苗的标签，但是我拍照拍的还是
+   * 整本疫苗本，那 AI 会把这单独的一个新增的接种记录识别出来，
+   * 而不会重复记录吗？"
+   *
+   * 查下来**当时是会的** —— AI 把整本读出来（对的），但保存那一步一条不落地
+   * 全存，已经记过的会被再存一遍。
+   */
+  it('🔴 同一天、同一支苗已经记过的，扫描时跳过', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function isAlreadyRecorded(name: string, date: string): boolean')
+    // 只跟**已保存的**记录比（有 id 的），否则同批里刚识别的会挡掉自己
+    expect(source).toContain('if (!record.id) return false')
+    // 名字归一化后比（瓶签原文与规范名要能对上）
+    expect(source).toContain("normalizeProductName(record.vaccineName || '')")
+    expect(source).toContain('if (isAlreadyRecorded(scannedName, scannedDate)) {')
+  })
+
+  it('🔴 跳过了几条必须说出来（不吭声会被当成丢数据）', () => {
+    const source = readComponent()
+
+    expect(source).toContain('const scanNotice = ref(')
+    expect(source).toContain('其中 ${skipped} 条已经记过')
+    expect(source).toContain('records-card__notice')
+  })
+
+  /**
+   * 老板："AI 识别的结果中，产品标签名称还是没有识别完整。但是我点击确认
+   * 按钮之后，发现记录中识别的是准确的匹配到了卫佳捌。这是什么问题呢？"
+   *
+   * 不是问题，是两步：弹层显示的是"本子上怎么写的"（原文），
+   * 落库用的是"我们认成了哪一支"（规范名）。但两者不一样时不解释一句，
+   * 顾客会以为是错的。
+   */
+  it('🔴 匹配到产品库时，识别弹层要补一行说明', () => {
+    const source = readScan()
+
+    expect(source).toContain("push('匹配产品库', matched)")
+    expect(source).toContain("if (matched && matched !== String(draft.vaccineName || '').trim())")
+  })
+})

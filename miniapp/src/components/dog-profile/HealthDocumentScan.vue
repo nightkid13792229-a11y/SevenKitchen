@@ -367,6 +367,20 @@ function describeDraft(
 
   if (documentType === 'VACCINE_BOOK') {
     push('疫苗', draft.vaccineName)
+    /*
+     * 匹配到产品库哪一支，要**如实说出来**（2026-10-06 老板提问）。
+     *
+     * 老板："AI 识别的结果中，产品标签名称还是没有识别完整。但是我点击确认
+     * 按钮之后，发现记录中识别的是准确的匹配到了卫佳捌。这是什么问题呢？"
+     *
+     * 不是问题，是**两步**：这一步显示的是"本子上怎么写的"（原文），
+     * 落库用的是"我们认成了哪一支"（规范名）。但两者不一样的时候
+     * 不解释一句，顾客会以为是错的 —— 所以匹配上了就补一行说明。
+     */
+    const matched = String(draft.productName || '').trim()
+    if (matched && matched !== String(draft.vaccineName || '').trim()) {
+      push('匹配产品库', matched)
+    }
     push('接种日期', draft.vaccinationDate)
     push('下次到期', draft.nextDueDate)
     push('补充说明', draft.notes)

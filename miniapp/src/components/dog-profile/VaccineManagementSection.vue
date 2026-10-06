@@ -51,6 +51,10 @@
       <text v-if="records.length > 0" class="records-card__desc">
         最近接种的排在前面。点一条可以改，右边可以删。
       </text>
+      <view v-if="scanNotice" class="records-card__notice">
+        <text class="records-card__notice-text">{{ scanNotice }}</text>
+        <text class="records-card__notice-close" @tap="scanNotice = ''">知道了</text>
+      </view>
 
     <!-- 占位只在**手上一条记录都还没有**时出现。
          原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
@@ -1503,8 +1507,45 @@ async function loadRecords(dogId = props.dogId) {
  *
  * 只填表、不保存 —— 顾客核对后自己按保存。
  */
+/**
+ * 这条是不是**已经记过了**（同一天、同一支苗）。
+ *
+ * 2026-10-06 老板问："如果我疫苗本上多贴了一个最新接种的疫苗的标签，
+ * 但是我拍照拍的还是整本疫苗本，那 AI 会把这单独的一个新增的接种记录
+ * 识别出来，而不会重复记录吗？"
+ *
+ * 查下来**当时是会的**：AI 把整本读出来（这是对的），但保存那一步
+ * 一条不落地全存 —— 已经记过的会被再存一遍。
+ * 所以这里加去重：同一天 + 同一支苗（名字归一化后相等）就算记过了。
+ *
+ * 只跟**已保存的记录**（有 id 的）比：本地还没保存的草稿不算数，
+ * 否则同一批里刚识别出来的会被自己挡掉。
+ */
+function isAlreadyRecorded(name: string, date: string): boolean {
+  const day = String(date || '').trim()
+  const key = normalizeProductName(name)
+  if (!day || !key) return false
+
+  return records.value.some((record) => {
+    if (!record.id) return false
+    if (String(record.vaccinationDate || '').slice(0, 10) !== day) return false
+    const existing = normalizeProductName(record.vaccineName || '')
+    return existing.length > 0 && existing === key
+  })
+}
+
 function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
+  let skipped = 0
+
   for (const draft of payload.drafts) {
+    // 已经记过的跳过（整本重拍时不会重复记）
+    const scannedName = String(draft.productName || draft.vaccineName || '')
+    const scannedDate = String(draft.vaccinationDate || '').slice(0, 10)
+    if (isAlreadyRecorded(scannedName, scannedDate)) {
+      skipped += 1
+      continue
+    }
+
     records.value.push({
       id: '',
       __localId: `vaccine-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1551,7 +1592,22 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
    * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
    */
   const scanned = payload.drafts.length
-  uni.showToast({ title: `已识别 ${scanned} 条，正在保存…`, icon: 'none' })
+  /*
+   * 去重的结果**要说出来**（2026-10-06）：
+   * 不吭声地跳过，顾客会以为"怎么少了一条"；
+   * 一次都没跳过的正常情况就还是原来那句话，不啰嗦。
+   */
+  scanNotice.value =
+    skipped > 0
+      ? `这次识别出 ${scanned} 条，其中 ${skipped} 条已经记过（同一天、同一支苗），已跳过，只新增 ${scanned - skipped} 条。`
+      : ''
+  uni.showToast({
+    title:
+      skipped > 0
+        ? `识别 ${scanned} 条，跳过 ${skipped} 条已记过的`
+        : `已识别 ${scanned} 条，正在保存…`,
+    icon: 'none',
+  })
 
   // ⚠️ **必须重建草稿**：不重建的话 drafts 里没有这几条，
   // isDirty 取不到草稿、后面编辑也会写进一个临时对象里丢掉。
@@ -1779,6 +1835,14 @@ async function saveRecord(record: VaccineRecord, index: number) {
  * 自动保存不弹 toast（太吵、会盖住页面），改成卡片内一行字，
  * 下一次改动就清掉 —— 顾客要的只是"知道它存进去了"。
  */
+/**
+ * 上次扫描的"去重结果"提示（2026-10-06）。
+ *
+ * 整本重拍时，已经记过的会被跳过 —— 这件事必须说出来，
+ * 否则顾客看到"识别 4 条却只多了 1 条"会以为丢了。
+ */
+const scanNotice = ref('')
+
 const savedNotices = ref<Record<number, boolean>>({})
 const savedNoticeTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
@@ -1889,6 +1953,34 @@ async function doRemove(record: VaccineRecord) {
   font-size: 22rpx;
   line-height: 1.5;
   color: #8a968a;
+}
+
+/* 扫描去重的结果提示（2026-10-06）—— 不吭声跳过会被当成丢数据 */
+.records-card__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f6efe0;
+  border: 1rpx solid #e6d7b8;
+}
+
+.records-card__notice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a6f3d;
+}
+
+.records-card__notice-close {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #6b6653;
 }
 
 .records-card__empty {

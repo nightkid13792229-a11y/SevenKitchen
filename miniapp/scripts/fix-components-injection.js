@@ -18,7 +18,15 @@ const STATIC_SOURCE_ROOTS = [
   path.join(__dirname, '../static'),
 ];
 const STATIC_ASSET_DIRECTORIES = ['tabbar'];
-const CODE_QUALITY_NO_DEPENDENCY_FILES = ['project.private.config.json', 'App.wxml'];
+/**
+ * ⚠️ App.wxml 曾经也在这份名单里，2026-10-06 拿掉了。
+ *
+ * 它是 uni-app 生成的空壳（内容就一行 view id=app），代码质量扫描确实会提示
+ * "无依赖" —— 但**微信开发者工具上传时要读它**：cli upload 直接报
+ * ENOENT .../App.wxml（code 10），整个上传卡死，清编译缓存也救不回来。
+ * 拿"一条扫描提示"换"根本传不上去"不划算，所以留着。
+ */
+const CODE_QUALITY_NO_DEPENDENCY_FILES = ['project.private.config.json'];
 const SUBPACKAGE_ONLY_HELPER_MODULES = [
   'api/orders.js',
   'utils/diy-sheet-format.js',

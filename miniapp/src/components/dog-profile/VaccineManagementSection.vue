@@ -143,23 +143,21 @@
         <view class="field-group">
           <text class="field-label">疫苗名称</text>
 
-          <!-- 疫苗名称那一行（2026-10-06 两轮修完）。
+          <!-- 疫苗名称那一行（2026-10-06 三轮修完）。三种状态各司其职：
 
-               第一轮：老板说"AI 识别的名称没正确加载出来，名字跑到下面的
-               输入框里去了"。根因是产品库的规范名「宠必威幼犬保」和识别出来的
-               「宠必威® 幼犬保」用 `===` 比不中 —— 现在比对前先归一化
-               （与后端 normalizeProductText 同一套规则），并且以后端认出来的
-               规范名为准。
+               · 还没写   → 给产品库选择器（**新建记录的主入口**）+ 手填框
+               · 库里有   → 这一行就是**库里的规范名**，点它可以换一支；
+                            不再出现手填框（名字只出现一次）
+               · 库里没有 → **不给产品库选择器**（老板 2026-10-06：
+                            "对于宠派纯这类产品库中没有的产品……也不让用户可以
+                             点击从产品库中挑选产品的弹窗呢？因为这没有意义嘛"），
+                            改成一句说明 + 手填框，名字只出现一次
 
-               第二轮：老板说"未识别的输入框出现时，它上方还有一个产品名的
-               选择器，**二者都是一样的名字**，用户会疑惑"。对 —— 那就让两个
-               控件各司其职、同一个名字只出现一次：
-                 · 库里认得出 → 这一行显示**库里的规范名**（唯一一处，
-                                而且不会出现下面的手填框）
-                 · 认不出     → 这一行只说"去库里挑一支"（一个动作），
-                                名字本身在下面的手填框里，只出现一次 -->
+               前两轮走过的弯路记在这里：第一轮"名称行显示占位、名字只在输入框"
+               → 老板说名称没加载出来；第二轮"名称行显示原文" → 和输入框重复。
+               根因都是**两个控件在做同一件事**，现在按上面三种状态分开。 -->
           <picker
-            v-if="catalogProducts.length > 0"
+            v-if="catalogProducts.length > 0 && nameFieldMode(draftOf(record, index).vaccineName) !== 'unknown'"
             mode="selector"
             :range="catalogProducts"
             range-key="name"
@@ -174,15 +172,24 @@
             </view>
           </picker>
 
-          <!-- 手填入口**只在库里没有这只苗时**才出现（2026-10-06 老板的规格：
-               "如果 AI 识别的疫苗名称没有在产品库中，才显示这个输入框吧？"）。
+          <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
+          <text
+            v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'"
+            class="field-hint field-hint--unknown"
+          >
+            产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」判定分类。
+          </text>
 
-               库里有这只苗时，换名字的正路是上面那个选择器 —— 手打一串名字
-               会绕开产品库，厂商、批准文号、归类全都带不出来。
+          <!-- 手填入口：名字还空着、或者库里没有时出现。
+               库里有这只苗时换名字走上面的选择器 —— 手打会绕开产品库，
+               厂商、批准文号、归类全都带不出来。
                正在打字的那一行（focusIndex）不抽走，否则顾客打到一半
                名字刚好命中产品库，输入框会当场消失。 -->
           <template v-if="showManualNameInput(index)">
-            <text class="field-hint">产品库里没有？直接在下面写名字，写完整点。</text>
+            <text
+              v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'empty'"
+              class="field-hint"
+            >产品库里没有？也可以直接在下面写名字，写完整点。</text>
             <input
               class="field-input"
               type="text"
@@ -193,14 +200,25 @@
               @blur="clearFocus(index)"
             />
           </template>
-          <!-- 「确认」之后才开始匹配产品与分类（2026-10-05 老板的规格）。
-               不在打字过程中判 —— 一来一回问后端会卡手，
-               而且顾客往往写到一半就被判了个错的。 -->
+
+          <!-- 「确认」只在**还需要判一次**的时候出现（2026-10-06 老板提问：
+               "是需要点点击确认按钮才会归类吗？还是说不需要点其实已经归类了？"）。
+
+               答案是：**分类早就有了**（从产品库选、或者识别带出来的都已经落库），
+               卡片上「分类」那一行就是结果。所以库里认得出、分类也已经有的记录
+               不再摆一个按钮让人以为"必须点一下"。
+               只有这两种情况才需要确认：
+                 · 分类还是空的（名字是手打的，系统还没判过）
+                 · 名字库里没有（让后端再认一次，认出来还能把名字规范过来） -->
           <text
+            v-if="showConfirmButton(index)"
             class="vaccine-confirm"
             :class="{ 'vaccine-confirm--busy': matchingIndex === index }"
             @tap="confirmVaccineName(index)"
           >{{ matchingIndex === index ? '匹配中…' : '确认' }}</text>
+          <text v-else-if="draftOf(record, index).kinds.length > 0" class="field-hint">
+            分类已按产品库自动判定，不用再确认。
+          </text>
 
           <!-- 确认的结果**留在卡片上**（2026-10-06 老板："点击下方的确认按钮，
                也没有任何反应，只是屏幕闪烁了一下"）。
@@ -754,6 +772,39 @@ function findCatalogProduct(name: string) {
  */
 function isNameRecognized(name: string): boolean {
   return findCatalogProduct(name) !== null
+}
+
+/**
+ * 名称字段现在处于哪种状态（2026-10-06 第三轮）。
+ *
+ *   empty      —— 还没写名字：给产品库选择器（新建记录的主入口）+ 手填框
+ *   recognized —— 库里有这一支：只显示库里的规范名，不出现手填框
+ *   unknown    —— 库里没有：**不给产品库选择器**（老板："这没有意义嘛"），
+ *                 改成一句说明 + 手填框
+ */
+function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown' {
+  if (!String(name || '').trim()) return 'empty'
+  return isNameRecognized(name) ? 'recognized' : 'unknown'
+}
+
+/**
+ * 「确认」按钮要不要出现（2026-10-06 老板提问后加）。
+ *
+ * 老板问："是需要点点击确认按钮才会归类吗？还是说不需要点其实已经归类了？"
+ * 答案是**早就归类了** —— 从产品库选、或识别带出来的分类都已经落库，
+ * 卡片上「分类」那一行就是结果。所以别再摆一个按钮让人以为"必须点一下"。
+ *
+ * 只有这两种情况还需要确认：
+ *   · 分类还是空的（名字是手打的，系统还没判过）
+ *   · 名字库里没有（让后端再认一次；认出来还能把名字规范过来）
+ */
+function showConfirmButton(index: number): boolean {
+  const record = records.value[index]
+  if (!record) return false
+  const draft = draftOf(record, index)
+  if (!draft.vaccineName.trim()) return false
+  if (draft.kinds.length === 0) return true
+  return nameFieldMode(draft.vaccineName) === 'unknown'
 }
 
 /**
@@ -1864,6 +1915,12 @@ async function doRemove(record: VaccineRecord) {
   line-height: 1.55;
 }
 
+/* 库里没有这支苗时的说明（2026-10-06）：比普通提示更醒目一点，
+   因为它要顶替原来那个"从产品库选一支"的入口 */
+.field-hint--unknown {
+  color: #8a6f3d;
+}
+
 .vaccine-confirm-result--ok {
   color: #3d6b4a;
 }
@@ -2057,12 +2114,6 @@ async function doRemove(record: VaccineRecord) {
   margin-top: 14rpx;
 }
 
-.vaccine-name-tag--active {
-  color: #ffffff;
-  background: var(--health-accent, #1e3a2f);
-  border-color: var(--health-accent, #1e3a2f);
-}
-
 .vaccine-name-tag {
   padding: 10rpx 22rpx;
   font-size: 23rpx;
@@ -2070,6 +2121,21 @@ async function doRemove(record: VaccineRecord) {
   background: #fbfcf7;
   border: 1rpx solid #e3e6d4;
   border-radius: 999rpx;
+}
+
+/*
+ * ⚠️ 选中态**必须写在基础态之后**（2026-10-06 老板实测报的 bug）。
+ *
+ * 原来这两条是反过来的：--active 写在前面、基础类写在后面。
+ * 两个选择器优先级一样（都是一个类），后写的赢 —— 于是基础类的
+ * 白底/深字把选中态的绿底/白字**整个盖掉**：点标签"没有反应"，
+ * 但状态一直是正确的（点「选好了」收起后就看得到刚点的那几类）。
+ * 样式顺序引起的问题，只有把顺序调回来才修得掉。
+ */
+.vaccine-name-tag--active {
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  border-color: var(--health-accent, #1e3a2f);
 }
 
 .vaccine-card__actions {

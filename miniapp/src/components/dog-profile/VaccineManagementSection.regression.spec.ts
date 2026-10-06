@@ -695,3 +695,76 @@ describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）',
     expect(source).toContain("|| draft.vaccineName || ''")
   })
 })
+
+/**
+ * 名称字段的三种状态 + 选中态样式顺序（2026-10-06 第三轮）。
+ */
+describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('三种状态：还没写 / 库里有 / 库里没有', () => {
+    const source = readComponent()
+
+    expect(source).toContain(
+      "function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown'",
+    )
+    expect(source).toContain("if (!String(name || '').trim()) return 'empty'")
+    expect(source).toContain("return isNameRecognized(name) ? 'recognized' : 'unknown'")
+  })
+
+  it('🔴 库里没有的产品：不给"从产品库挑一支"的入口', () => {
+    const source = readComponent()
+
+    // 老板："对于宠派纯这类产品库中没有的产品……也不让用户可以点击
+    // 从产品库中挑选产品的弹窗呢？因为这没有意义嘛，对吧？"
+    expect(source).toContain(
+      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draftOf(record, index).vaccineName) !== 'unknown'\"",
+    )
+  })
+
+  it('库里没有时要说清楚，并且名字仍然能写', () => {
+    const source = readComponent()
+
+    expect(source).toContain('产品库里没有这支苗 —— 已按你写的名字记录')
+    expect(source).toContain("nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'")
+  })
+
+  /**
+   * 老板："我看在卫佳8的记录下，疫苗名称下面还需要点确认按钮，它才会弹
+   * 已确认卫佳8归为核心疫苗加钩端螺旋体的提醒。是需要点点击确认按钮才会
+   * 归类吗？还是说不需要点其实已经归类了？"
+   * —— 早就归类了。所以别再摆一个按钮让人以为"必须点一下"。
+   */
+  it('🔴 分类已经有了、名字也认得 → 不再显示「确认」按钮', () => {
+    const source = readComponent()
+
+    expect(source).toContain('function showConfirmButton(index: number): boolean')
+    expect(source).toContain('if (draft.kinds.length === 0) return true')
+    expect(source).toContain("return nameFieldMode(draft.vaccineName) === 'unknown'")
+    expect(source).toContain('v-if="showConfirmButton(index)"')
+    // 取而代之说明一句
+    expect(source).toContain('分类已按产品库自动判定，不用再确认。')
+  })
+
+  /**
+   * 老板："我在分类中点击选项，没有反应。但是点击选好了之后。
+   * 依然会显示出刚刚已经点击的那几类。"
+   *
+   * 状态一直是对的（所以"选好了"之后看得到），看不见的是**高亮** ——
+   * 因为选中态的样式写在了基础态**前面**，两个选择器优先级一样，后写的赢，
+   * 基础类的白底深字把选中态整个盖掉了。样式顺序问题只能靠顺序修。
+   */
+  it('🔴 选中态样式必须写在基础态之后（否则高亮永远被盖掉）', () => {
+    const source = readComponent()
+
+    const baseAt = source.indexOf('.vaccine-name-tag {')
+    const activeAt = source.indexOf('.vaccine-name-tag--active {')
+    expect(baseAt).toBeGreaterThan(-1)
+    expect(activeAt).toBeGreaterThan(-1)
+    expect(activeAt).toBeGreaterThan(baseAt)
+  })
+})

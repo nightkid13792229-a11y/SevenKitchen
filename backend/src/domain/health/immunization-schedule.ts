@@ -2010,13 +2010,40 @@ export function buildVaccinePlan(
      */
     ;
 
-  /** 每一类里"最靠前的那一步还没完成的" —— 就是这一类的下一针 */
+  /*
+   * ══ 每一类里"最靠前的那一步还没完成的" —— 就是这一类的下一针 ═══════════
+   *
+   * ⚠️ 但要**跳过"这只狗开始打这一类之前就已经结束"的档位**（2026-10-07 修）。
+   *
+   * 实测老板的狗赛文：他的钩端/狂犬都是 2024 年才开始打的（卫佳捌里含钩端），
+   * 而程序表里钩端还有 2023 年那两针幼犬初免 —— 那两步没配上任何记录，
+   * 于是被当成了"这一类的下一针"，计划里冒出一条
+   * 「钩端螺旋体 第 1 针 · 已逾期（2023-04）」✗
+   * 家长根本不会回到一年半前去补那一针，真正该看的"每年一次"反而被挤掉了。
+   *
+   * 判据：这一步的窗口结束时间，比这一类**最早那条记录**还早一年以上
+   * —— 那就不可能再有记录配得上它（容差只有一年），不必再提醒。
+   * 这一类一条记录都没有时不做这种跳过（那种情况走"起针窗口挪到今天"那条路）。
+   */
+  const firstRecordMsByKind = new Map<VaccineKind, number>();
+  for (const [kind, list] of recordsByKind.entries()) {
+    const first = list[0];
+    if (first) firstRecordMsByKind.set(kind, first.date.getTime());
+  }
+
   const nextPendingKeyByKind = new Map<VaccineKind, string>();
   for (const step of allSteps) {
     if (step.status === 'DONE' || step.status === 'SKIPPED') continue;
-    if (!nextPendingKeyByKind.has(step.kind)) {
-      nextPendingKeyByKind.set(step.kind, step.key);
+    if (nextPendingKeyByKind.has(step.kind)) continue;
+
+    const firstRecordMs = firstRecordMsByKind.get(step.kind);
+    if (firstRecordMs !== undefined) {
+      const end = parseDateText(step.windowEnd);
+      if (end && end.getTime() < firstRecordMs - FALLBACK_TOLERANCE_MS) {
+        continue;
+      }
     }
+    nextPendingKeyByKind.set(step.kind, step.key);
   }
 
   const steps: VaccinePlanStep[] = allSteps.filter((step) => {

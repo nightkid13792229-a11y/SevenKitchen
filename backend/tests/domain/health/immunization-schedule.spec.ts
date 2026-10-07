@@ -2185,3 +2185,41 @@ describe('匹配顺序与成年加强锚点（2026-10-07）', () => {
     expect(adult!.windowStart).toBe(toDateText(oneYear))
   })
 })
+
+/**
+ * "这一类的下一针"不许是"这只狗开始打这一类之前就结束了的档位"
+ * （2026-10-07 老板审计第 5 块，赛文实测出来的）。
+ *
+ * 赛文的钩端/狂犬都是 2024 年才开始打的（卫佳捌里含钩端），
+ * 而程序表里钩端还留着 2023 年那两针幼犬初免 —— 那两步永远配不上记录，
+ * 却一度被当成"这一类的下一针"，计划里冒出「钩端第 1 针 · 已逾期（2023-04）」，
+ * 真正该看的"每年一次"反而被挤掉。
+ */
+describe('每一类的下一针 · 跳过"开始打之前就结束"的档位（2026-10-07）', () => {
+  const plan = () =>
+    buildVaccinePlan({
+      dogId: 'dog-seven',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+        { id: 'r3', vaccineName: '卫佳捌', vaccinationDate: '2026-07-18', nextDueDate: null },
+      ],
+      today: new Date('2026-10-08T00:00:00'),
+    })
+
+  it('钩端的"下一针"是下一次年度加强，不是 2023 年那两针幼犬初免', () => {
+    const pendingLepto = plan().steps.filter(
+      (step) => step.kind === 'lepto' && step.status !== 'DONE',
+    )
+
+    expect(pendingLepto.length).toBe(1)
+    expect(pendingLepto[0].key).toMatch(/^lepto-repeat-/)
+    expect(pendingLepto[0].statusLabel).toBe('待安排')
+  })
+
+  it('也不许出现"已逾期"的幼犬档位', () => {
+    const overdue = plan().steps.filter((step) => step.status === 'OVERDUE')
+    expect(overdue.length).toBe(0)
+  })
+})

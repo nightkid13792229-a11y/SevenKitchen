@@ -583,9 +583,21 @@ export function findProductByText(name: string): VaccineProduct | null {
 export function recommendProductsForStep(
   kind: VaccineKind,
   stepWeeks: number | null,
-  options: { preferredBrand?: string; allowCombo?: boolean } = {},
+  options: {
+    preferredBrand?: string;
+    /**
+     * 这一步**优先用这支产品**（2026-10-07 老板定的钩端保守口径）。
+     *
+     * 老板："钩端螺旋体的首免加强都采用相同的产品即可，包括隔太久重新开始免疫。"
+     * —— 这是我们自己更保守的做法（指南只要求"覆盖不减少"，没要求同产品）。
+     * 只有当这支产品**仍然顶得上这一步**时才会排到第一位；不适用时照常推荐别的。
+     */
+    preferredProduct?: string;
+    allowCombo?: boolean;
+  } = {},
 ): VaccineProduct[] {
   const preferredBrand = String(options.preferredBrand || '').trim();
+  const preferredProduct = String(options.preferredProduct || '').trim();
   // allowCombo 默认 true；只有"这一步不该顺带重复别的分类"时才传 false
   const allowCombo = options.allowCombo !== false;
 
@@ -627,13 +639,21 @@ export function recommendProductsForStep(
   // **同品牌优先**（老板规则一）：这只狗现在用什么牌子，续针就接着推那个牌子 ——
   // 同厂的免疫程序衔接得上，家长也不用记两套。
   // 同品牌内部仍按批签发批数排（批数多 = 现在真在卖）。
+  // ② **同一支产品优先**（比同品牌更严）：钩端这一类的保守口径
+  const exact = preferredProduct
+    ? eligible.filter((p) => p.name === preferredProduct)
+    : []
+  const rest = preferredProduct
+    ? eligible.filter((p) => p.name !== preferredProduct)
+    : eligible
+
   if (preferredBrand) {
-    const sameBrand = eligible.filter((p) => p.brand === preferredBrand)
-    const others = eligible.filter((p) => p.brand !== preferredBrand)
-    return [...sameBrand, ...others].slice(0, MAX_RECOMMENDED_PRODUCTS)
+    const sameBrand = rest.filter((p) => p.brand === preferredBrand)
+    const others = rest.filter((p) => p.brand !== preferredBrand)
+    return [...exact, ...sameBrand, ...others].slice(0, MAX_RECOMMENDED_PRODUCTS)
   }
 
-  return eligible.slice(0, MAX_RECOMMENDED_PRODUCTS)
+  return [...exact, ...rest].slice(0, MAX_RECOMMENDED_PRODUCTS)
 }
 
 /* ===========================================================================

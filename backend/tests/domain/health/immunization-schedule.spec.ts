@@ -2386,3 +2386,90 @@ describe('顾客的"推迟"要标出来（2026-10-07）', () => {
     expect(step!.statusLabel).not.toContain('你已推迟')
   })
 })
+
+/**
+ * 钩端：隔 18 个月以上要重新两针 + 尽量用同一支产品
+ * （2026-10-07 老板确认；依据 WSAVA 2024 FAQ p27）
+ *
+ * 指南原文：上一针钩端已经过去 18 个月或更久 → 基于谨慎原则，
+ * 需要重新开始整个系列（两针、间隔 2~4 周）。
+ *
+ * 老板另外定了一条**更保守**的产品口径：
+ * "钩端螺旋体的首免加强都采用相同的产品即可，包括隔太久重新开始免疫。"
+ */
+describe('钩端 · 隔太久要重新两针 + 同一支产品（2026-10-07）', () => {
+  const BIRTH = new Date('2022-01-05T00:00:00')
+  const at = (days: number) =>
+    toDateText(new Date(BIRTH.getTime() + days * 86400000))
+  const rec = (id: string, name: string, date: string) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate: null,
+  })
+  const planWith = (records: ReturnType<typeof rec>[], today = '2026-10-08') =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2022-01-05',
+      records,
+      today: new Date(`${today}T00:00:00`),
+    })
+  const pendingLepto = (records: ReturnType<typeof rec>[], today?: string) =>
+    planWith(records, today).steps.filter(
+      (step) => step.kind === 'lepto' && step.status !== 'DONE',
+    )
+
+  it('🔴 上一针钩端 2 年前 → 排"重新开始（第 1 针）"，并说明原因', () => {
+    // 2024-06-03 打过一次（卫佳捌里含钩端），今天 2026-10-08 → 隔了 29 个月
+    const pending = pendingLepto([rec('a', '卫佳捌', at(880))])
+
+    expect(pending.length).toBe(1)
+    expect(pending[0].label).toBe('钩端螺旋体 重新开始（第 1 针）')
+    expect(pending[0].basis).toContain('重新打两针')
+    // 文案里会说清"已经过去多少个月"（这里 29 个月）
+    expect(pending[0].basis).toMatch(/已经过去 \d+ 个月/)
+  })
+
+  it('打完"重新开始第 1 针"之后，第 2 针（间隔 2 周）才出现', () => {
+    // 第 1 针打在这一步的窗口里（2025-06-03 起），今天往后推一点
+    /*
+     * 第 1 针是在"隔了很久"之后打的（2024-06-03 → 2026-01-10，19 个月），
+     * 所以它已经吃掉了"重新开始（第 1 针）"的位置 —— 现在该排第 2 针。
+     * ⚠️ 判断必须能从**记录本身**推出来（不能只看"今天离上一针多久"），
+     *    否则打完第 1 针之后"隔了 18 个月"就不成立，第 2 针会凭空消失。
+     */
+    const pending = pendingLepto(
+      [rec('a', '卫佳捌', at(880)), rec('b', '宠必威乐必妥', at(1465))],
+      '2026-10-08',
+    )
+
+    expect(pending.length).toBe(1)
+    expect(pending[0].label).toBe('钩端螺旋体 重新开始（第 2 针）')
+    expect(pending[0].basis).toContain('第 2 针')
+  })
+
+  it('上一针钩端在半年前 → 照常"每年一次"，不许乱加针', () => {
+    const pending = pendingLepto([rec('a', '卫佳捌', at(1540))])
+
+    expect(pending.length).toBe(1)
+    expect(pending[0].label).toContain('每年 1 次')
+    expect(pending[0].label).not.toContain('重新开始')
+  })
+
+  it('🔴 钩端那一步优先推荐"上次用的那一支产品"', () => {
+    const pending = pendingLepto([rec('a', '卫佳捌', at(880))])
+
+    expect(pending[0].commonProducts[0]).toBe('卫佳捌')
+    expect(pending[0].basis).toContain('继续用同一支产品')
+  })
+
+  it('中间漏掉的那一年不再回头催（接种史走到哪，就从哪往后看）', () => {
+    // 2024-06 打过、2026-09 又打过（漏了 2025 那一年）
+    const pending = pendingLepto(
+      [rec('a', '卫佳捌', at(880)), rec('b', '卫佳捌', at(1710))],
+      '2026-10-08',
+    )
+
+    expect(pending.every((step) => !step.label.includes('第 3 次'))).toBe(true)
+  })
+})

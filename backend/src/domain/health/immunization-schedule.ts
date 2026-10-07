@@ -583,6 +583,18 @@ export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS);
 }
 
+export function addMonths(date: Date, months: number): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth() + months,
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+    date.getMilliseconds(),
+  );
+}
+
 export function addWeeks(date: Date, weeks: number): Date {
   return addDays(date, weeks * 7);
 }
@@ -1406,6 +1418,104 @@ export function buildVaccinePlan(
 
   const seeds = buildImmunizationSchedule(birthday, { kinds: planKinds });
 
+  /*
+   * ══ 钩端：隔了 18 个月以上，要**重新打两针**（2026-10-07 老板确认，WSAVA 2024 FAQ p27）═
+   *
+   * 指南原文（FAQ，p27）：
+   *   Q. 如果一只狗上一针钩端已经过去 18 个月或更久，需要重新开始整个系列
+   *      （两针、间隔 2~4 周）吗？
+   *   A. 支持这条的证据不多，但基于**谨慎原则**，答案是"是"。
+   *
+   * 改之前我们不管隔多久都只排一针「每年 1 次」—— 一只漏打两年的狗，
+   * 按指南应该打两针（间隔 2~4 周），我们只让它打一针 ✗。
+   *
+   * 做法：找到"最后一针钩端之后的那一次年度加强"，把它改成
+   * 「重新开始（第 1 针）」，并紧跟一步「重新开始（第 2 针）」（+2 周）。
+   * 因为"每一类只显示下一针"，顾客先看到第 1 针，打完才看到第 2 针 ✓。
+   *
+   * 注：一条记录都没有（接种史不明）时不用动 —— 首免本来就是两针 ✓。
+   */
+  const leptoDoses = parsed
+    .filter((item) => item.kinds.includes('lepto'))
+    .map((item) => item.date)
+    .sort((a, b) => a.getTime() - b.getTime());
+  const lastLeptoDose = leptoDoses[leptoDoses.length - 1];
+  const previousLeptoDose = leptoDoses[leptoDoses.length - 2];
+
+  /*
+   * ⚠️ 这里要判断**两种"重新开始"**（2026-10-07 补第二条）：
+   *
+   *   ① 上一针钩端已经过去 ≥18 个月 → 下一步排「重新开始（第 1 针）」，
+   *      后面跟一步「（第 2 针）」（+2 周）；
+   *   ② 上一针本身就是在"隔了很久"之后打的（它和再上一针相隔 ≥18 个月）
+   *      → 说明它已经吃掉了"重新开始（第 1 针）"这个位置，
+   *      所以**下一步要接着排「（第 2 针）」**（+2~4 周）。
+   *
+   * 为什么必须有 ②：判断是从最新那一针重算的 —— 打完第 1 针之后，
+   * "隔了 18 个月"就不成立了，第 2 针会凭空消失 ✗（实测）。
+   */
+  const lastDoseIsStale =
+    lastLeptoDose !== undefined &&
+    addMonths(lastLeptoDose, 18).getTime() <= today.getTime();
+  const lastDoseWasRestart =
+    lastLeptoDose !== undefined &&
+    previousLeptoDose !== undefined &&
+    addMonths(previousLeptoDose, 18).getTime() <= lastLeptoDose.getTime();
+
+  if (lastDoseWasRestart) {
+    // ② 接着排"重新开始（第 2 针）"：紧跟在最后那一针之后 2~4 周
+    const nextRepeat = seeds.find(
+      (seed) =>
+        seed.kind === 'lepto' &&
+        /^lepto-repeat-/.test(seed.key) &&
+        seed.windowStart.getTime() > lastLeptoDose.getTime(),
+    );
+    if (nextRepeat) {
+      nextRepeat.label = '钩端螺旋体 重新开始（第 2 针）';
+      nextRepeat.basis =
+        `WSAVA 2024 FAQ：上一针钩端是在隔了很久（` +
+        `${Math.round((lastLeptoDose.getTime() - previousLeptoDose.getTime()) / (30 * DAY_MS))} 个月）` +
+        '之后打的，属于"重新开始"的第 1 针 —— 这一步补第 2 针（间隔 2~4 周）。' +
+        `你上一次打钩端是 ${toDateText(lastLeptoDose)}。`;
+      nextRepeat.windowStart = addWeeks(lastLeptoDose, 2);
+      nextRepeat.windowEnd = addWeeks(lastLeptoDose, 4);
+    }
+  } else if (lastDoseIsStale) {
+    {
+      // 18 个月（按自然月算，不用 548 天这种近似）
+      const nextRepeat = seeds.find(
+        (seed) =>
+          seed.kind === 'lepto' &&
+          /^lepto-repeat-/.test(seed.key) &&
+          seed.windowStart.getTime() > lastLeptoDose.getTime(),
+      );
+      if (nextRepeat) {
+        const restartKey = `${nextRepeat.key}-restart`;
+        const firstLabel = '钩端螺旋体 重新开始（第 1 针）';
+        const secondLabel = '钩端螺旋体 重新开始（第 2 针）';
+        const restartBasis =
+          `WSAVA 2024 FAQ：上一针钩端已经过去 ` +
+          `${Math.max(18, Math.round((today.getTime() - lastLeptoDose.getTime()) / (30 * DAY_MS)))} 个月，` +
+          '基于谨慎原则建议**重新打两针**（间隔 2~4 周），之后恢复每年一次。' +
+          `你上一次打钩端是 ${toDateText(lastLeptoDose)}。`;
+
+        nextRepeat.label = firstLabel;
+        nextRepeat.basis = restartBasis;
+        nextRepeat.windowEnd = addWeeks(nextRepeat.windowStart, 2);
+
+        seeds.push({
+          key: restartKey,
+          kind: 'lepto',
+          label: secondLabel,
+          windowStart: addWeeks(nextRepeat.windowStart, 2),
+          windowEnd: addWeeks(nextRepeat.windowStart, 4),
+          basis: restartBasis,
+        });
+        seeds.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
+      }
+    }
+  }
+
   // ⚠️ 这两个**不是一回事**（2026-10-04 拆开）：
   //   · noRecordAtAll → 顾客一条都没录（决定界面说什么、藏什么）
   //   · noEvidence    → 一条都没对上号（只决定措辞软硬）
@@ -2106,20 +2216,48 @@ export function buildVaccinePlan(
     if (first) firstRecordMsByKind.set(kind, first.date.getTime());
   }
 
+  /*
+   * ⚠️ 2026-10-07 又补一条：**同一类里，"最后一次真正打过的那一步"之前的空档不算数**
+   *    （见下面 lastMatchedIndexByKind）。
+   *
+   * 实测（钩端重新开始那条规则没生效才发现）：一只狗 2024-06 才第一次打钩端
+   * （卫佳捌），它 2024 那一针被配到「每年 1 次（第 2 次）」上，
+   * 而更早的「每年 1 次（第 1 次）」（窗口 2023-04~07）因为"离 2024-06 那一针
+   * 还在一年的容差内"没被上一条规则跳过 —— 于是它被当成"这一类的下一针"，
+   * 计划里冒出一条 2023 年的"已逾期"✗。
+   *
+   * 道理很简单：**这一类的接种史走到哪儿了，提醒就从哪儿往后看** ——
+   * 在那之前的档位（不管是"开始打之前"还是"中间漏掉的某一年"）都不该再翻出来。
+   * 实测两种情形都踩过：
+   *   · 一只狗 2024-06 才第一次打钩端，计划里却冒出 2023 年的"每年 1 次（第 1 次）· 已逾期"；
+   *   · 一只狗漏了 2025 那一年、2026 补上了，计划反而回头催 2025 那一步。
+   */
+  const lastMatchedIndexByKind = new Map<VaccineKind, number>();
+  allSteps.forEach((step, index) => {
+    if (step.status !== 'DONE') return;
+    lastMatchedIndexByKind.set(step.kind, index);
+  });
+
   const nextPendingKeyByKind = new Map<VaccineKind, string>();
-  for (const step of allSteps) {
-    if (step.status === 'DONE' || step.status === 'SKIPPED') continue;
-    if (nextPendingKeyByKind.has(step.kind)) continue;
+  allSteps.forEach((step, index) => {
+    if (step.status === 'DONE' || step.status === 'SKIPPED') return;
+    if (nextPendingKeyByKind.has(step.kind)) return;
+
+    // 这一类"最后一次真正打过的那一步"之前的档位，不提
+    const lastMatchedIndex = lastMatchedIndexByKind.get(step.kind);
+    if (lastMatchedIndex !== undefined && index < lastMatchedIndex) {
+      return;
+    }
 
     const firstRecordMs = firstRecordMsByKind.get(step.kind);
     if (firstRecordMs !== undefined) {
       const end = parseDateText(step.windowEnd);
       if (end && end.getTime() < firstRecordMs - FALLBACK_TOLERANCE_MS) {
-        continue;
+        return;
       }
     }
     nextPendingKeyByKind.set(step.kind, step.key);
-  }
+  });
 
   const steps: VaccinePlanStep[] = allSteps.filter((step) => {
     if (step.status === 'DONE') {
@@ -2170,16 +2308,48 @@ export function buildVaccinePlan(
       .map((step) => step.kind),
   );
 
+  /*
+   * 这一类**上一次用的是哪一支产品**（2026-10-07 老板定的钩端保守口径）。
+   * 只给钩端用 —— 老板的原话是"钩端螺旋体的首免加强都采用相同的产品即可，
+   * 包括隔太久重新开始免疫"。
+   */
+  const lastProductByKind = new Map<VaccineKind, string>();
+  for (const item of [...parsed].sort((a, b) => a.date.getTime() - b.date.getTime())) {
+    for (const kind of item.kinds) {
+      if (!recordCoversStep(item.record.vaccineName, kind)) continue;
+      lastProductByKind.set(kind, item.record.vaccineName);
+    }
+  }
+
   for (const step of steps) {
     const blockedKind = [...recentlyDoneKinds].some(
       (kind) => kind !== step.kind && !pendingNowKinds.has(kind),
     );
 
-    step.commonProducts = recommendProductsForStep(
-      step.kind,
-      weeksBetween(birthday, parseDateText(step.windowStart) || birthday),
-      { preferredBrand, allowCombo: !blockedKind },
-    ).map((product) => product.name);
+    const stepWeeks = weeksBetween(birthday, parseDateText(step.windowStart) || birthday);
+    const previousProduct = lastProductByKind.get(step.kind);
+
+    step.commonProducts = recommendProductsForStep(step.kind, stepWeeks, {
+      preferredBrand,
+      // 钩端：优先继续用同一支产品（保守做法，老板 2026-10-07 定）
+      preferredProduct: step.kind === 'lepto' ? previousProduct : undefined,
+      allowCombo: !blockedKind,
+    }).map((product) => product.name);
+
+    /*
+     * 钩端这一类的"尽量用同一支产品"要说出来 —— 不然家长看到推荐里换了名字
+     * 会以为是系统随便推的。换产品时按老板的口径提示去和兽医确认。
+     */
+    if (step.kind === 'lepto' && previousProduct) {
+      const stillRecommended = step.commonProducts.includes(previousProduct);
+      step.basis +=
+        stillRecommended
+          ? `你上次打的是「${previousProduct}」，这一步建议继续用同一支产品` +
+            '（钩端这一类的针次我们采取更保守的做法）。'
+          : `你上次打的是「${previousProduct}」。这一步推荐的不是同一支产品` +
+            '（比如那支还含核心苗，而现在核心不该重复打）—— ' +
+            '钩端这一类我们建议尽量用同一支产品，换产品前请与兽医确认。';
+    }
   }
 
   /*

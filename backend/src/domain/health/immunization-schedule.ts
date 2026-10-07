@@ -1133,6 +1133,8 @@ export function detectConflicts(
   records: VaccineRecordLike[],
   seeds: StepSeed[],
   today: Date,
+  /** 狗狗生日：用来算"最低接种月龄"这条红线（2026-10-07 补） */
+  birthday?: Date,
 ): VaccinePlanConflict[] {
   const conflicts: VaccinePlanConflict[] = [];
   const parsed = records
@@ -1157,35 +1159,63 @@ export function detectConflicts(
   //
   // 真正的红线是 4 周（FAQ p29："Should I vaccinate puppies that are less than
   // 4 weeks of age? A. In general, no."），所以改用 4 周龄作判据。
-  const coreSeeds = seeds.filter((seed) => seed.kind === 'core');
-  const earliestCoreStart = coreSeeds.length
-    ? coreSeeds.reduce(
-        (min, seed) => earlierOf(min, seed.windowStart),
-        coreSeeds[0].windowStart,
-      )
-    : null;
+  /*
+   * ⚠️ 红线要**从生日直接推**（2026-10-07 修）。
+   *
+   * 原来是用"核心苗最早那个窗口起点 − 2 周"当红线，那在旧模型下等于
+   * 生日 + 6 周 − 2 周 = 4 周龄。但首免改成"按这只狗自己的第一针排"之后，
+   * 那个窗口起点变成了**它实际开始首免的时间** —— 于是一只 20 周才开始首免、
+   * 另有一条 5 周龄犬二联记录的狗，会被报成"这一针打在 4 周龄之前"✗（实测）。
+   *
+   * 现在直接用生日 + 4 周，跟这只狗从几周开始首免无关。
+   */
+  const minimumAgeLine = birthday
+    ? addWeeks(birthday, CORE_PUPPY_SERIES.earliestWeeks)
+    : (() => {
+        const coreSeeds = seeds.filter((seed) => seed.kind === 'core');
+        if (!coreSeeds.length) return null;
+        const earliestCoreStart = coreSeeds.reduce(
+          (min, seed) => earlierOf(min, seed.windowStart),
+          coreSeeds[0].windowStart,
+        );
+        return addWeeks(
+          earliestCoreStart,
+          CORE_PUPPY_SERIES.earliestWeeks - CORE_PUPPY_SERIES.startWeeksMin,
+        );
+      })();
 
-  if (earliestCoreStart) {
-    // earliestCoreStart = 出生 + 6 周；再往前 2 周就是 4 周龄
-    const minimumAgeLine = addWeeks(
-      earliestCoreStart,
-      CORE_PUPPY_SERIES.earliestWeeks - CORE_PUPPY_SERIES.startWeeksMin,
-    );
-
+  if (minimumAgeLine) {
     for (const item of parsed) {
       if (!item.kinds.includes('core')) continue;
-      if (item.date.getTime() < minimumAgeLine.getTime()) {
+      if (item.date.getTime() >= minimumAgeLine.getTime()) continue;
+
+      /*
+       * 比生日还早的日期单独说 —— 那不是"打得太早"，是**年份写错了**。
+       * 光说"打在 4 周龄之前"家长看不懂（他记得明明是最近打的）。
+       */
+      if (birthday && item.date.getTime() < birthday.getTime()) {
         conflicts.push({
           kind: 'core',
           recordId: item.record.id,
           recordDate: toDateText(item.date),
           vaccineName: item.record.vaccineName,
-          reason: '这一针打在 4 周龄之前',
-          suggestion:
-            '指南不建议给 4 周龄以下幼犬接种（母源抗体会中和疫苗，注射用活苗还可能有害）。' +
-            '建议把这次记录带给兽医看，由他判断这一针是否计数、后续怎么排。',
+          reason: `这一针的接种日期（${toDateText(item.date)}）比狗狗生日还早`,
+          suggestion: '请核对疫苗本上的日期（最常见的错法是把年份写错）。',
         });
+        continue;
       }
+
+      conflicts.push({
+        kind: 'core',
+        recordId: item.record.id,
+        recordDate: toDateText(item.date),
+        vaccineName: item.record.vaccineName,
+        reason: `这一针打在 ${CORE_PUPPY_SERIES.earliestWeeks} 周龄之前`,
+        suggestion:
+          `指南不建议给 ${CORE_PUPPY_SERIES.earliestWeeks} 周龄以下幼犬接种` +
+          '（母源抗体会中和疫苗，注射用活苗还可能有害）。' +
+          '建议把这次记录带给兽医看，由他判断这一针是否计数、后续怎么排。',
+      });
     }
   }
 
@@ -1196,7 +1226,13 @@ export function detectConflicts(
     const current = rabiesDoses[index];
     const monthsApart =
       (current.date.getTime() - previous.date.getTime()) / (30 * DAY_MS);
-    if (monthsApart < 10) {
+    /*
+     * ⚠️ 判据原来写的是 `< 10`（个月），但文案说的是"短于一年" ——
+     * 两处不一致：间隔 10~11 个月时既不提示、又确实短于一年（2026-10-07 修）。
+     * 现在对齐到**12 个月**，正好与"窗口从周年当天起算"同一口径：
+     * 窗口允许的最早时间就是 12 个月，早于它的都该提示。
+     */
+    if (monthsApart < 12) {
       conflicts.push({
         kind: 'rabies',
         recordId: current.record.id,
@@ -1227,6 +1263,11 @@ export function detectConflicts(
       return seedGap < bestGap ? seed : best;
     }, candidates[0]);
 
+    /*
+     * 180 天这个宽度是**故意放宽**的（2026-10-07 补记依据）：
+     * 各家医院给"下次接种时间"的习惯不一样，差一两个月很常见，
+     * 拿窄阈值去提示只会天天误报。超过半年才说明"在按另一套程序走"。
+     */
     const gapDays =
       Math.abs(nearest.windowStart.getTime() - nextDue.getTime()) / DAY_MS;
     if (gapDays > 180) {
@@ -2216,7 +2257,7 @@ export function buildVaccinePlan(
         reason: '接种日期不能晚于今天',
         suggestion: '请核对疫苗本上的日期（最常见的错法是把年份写错）',
       })),
-      ...detectConflicts(input.records, seeds, today),
+      ...detectConflicts(input.records, seeds, today, birthday),
     ],
     nextStep,
     summary,

@@ -2263,3 +2263,88 @@ describe('顶部"下一针"按时间取（2026-10-07）', () => {
     expect(plan.nextStep!.windowStart < '2028').toBe(true)
   })
 })
+
+/**
+ * 冲突提示（老板第 17 条）· 2026-10-07 审计第 7 块修的两条
+ *
+ * ① "4 周龄之前"这条红线原来是用"核心苗最早那个窗口 − 2 周"推的。
+ *    首免改成"按这只狗自己的第一针排"之后那个窗口会漂，红线跟着漂 ——
+ *    实测一只 20 周才开始首免、另有一条 5 周龄犬二联记录的狗，
+ *    被报成"这一针打在 4 周龄之前"✗。现在直接用生日 + 4 周。
+ * ② 狂犬间隔的判据写的是 `< 10` 个月，文案却是"短于一年" ——
+ *    间隔 10~11 个月时既不提示、又确实短于一年。现在对齐到 12 个月，
+ *    与"窗口从周年当天起算"同一口径。
+ */
+describe('冲突提示 · 红线与口径（2026-10-07）', () => {
+  const BIRTH = new Date('2026-01-05T00:00:00')
+  const atWeek = (weeks: number) =>
+    toDateText(new Date(BIRTH.getTime() + weeks * 7 * 86400000))
+  const rec = (id: string, name: string, date: string, nextDueDate: string | null = null) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate,
+  })
+  const planWith = (records: ReturnType<typeof rec>[], today = '2026-10-08') =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records,
+      today: new Date(`${today}T00:00:00`),
+    })
+
+  it('4 周龄之前打的核心苗要提示；正好 4 周、5 周都不提示', () => {
+    expect(
+      planWith([rec('a', '卫佳伍', atWeek(3))]).conflicts.some((c) =>
+        c.reason.includes('4 周龄之前'),
+      ),
+    ).toBe(true)
+    expect(planWith([rec('a', '卫佳伍', atWeek(4))]).conflicts.length).toBe(0)
+    expect(planWith([rec('a', '卫佳伍', atWeek(5))]).conflicts.length).toBe(0)
+  })
+
+  it('🔴 晚开始首免的狗，那条 5 周龄的记录不许被误报成"打在 4 周龄之前"', () => {
+    const plan = planWith(
+      [rec('a', '犬二联', atWeek(5)), rec('b', '卫佳伍', atWeek(20))],
+      '2027-06-01',
+    )
+
+    expect(plan.conflicts.some((c) => c.reason.includes('4 周龄之前'))).toBe(false)
+  })
+
+  it('🔴 接种日比生日还早 → 说"比生日还早"，不说"打在 4 周龄之前"', () => {
+    const plan = planWith([rec('a', '卫佳伍', '2025-11-01')])
+    const conflict = plan.conflicts.find((c) => c.recordId === 'a')
+
+    expect(conflict).toBeDefined()
+    expect(conflict!.reason).toContain('比狗狗生日还早')
+    expect(conflict!.suggestion).toContain('年份')
+  })
+
+  it('🔴 狂犬间隔 11 个月就要提示（判据与"短于一年"的文案对齐）', () => {
+    const plan = planWith(
+      [rec('a', '狂犬', atWeek(12)), rec('b', '狂犬', atWeek(12 + 48))],
+      '2028-06-01',
+    )
+
+    expect(plan.conflicts.some((c) => c.reason.includes('短于一年'))).toBe(true)
+  })
+
+  it('不同类别的疫苗窗口重叠时，每一步都提示"不要同一天打"', () => {
+    // 15 周龄、三类都到了该打的时候
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: [],
+      today: new Date('2026-04-20T00:00:00'),
+    })
+    const pending = plan.steps.filter((step) => step.status === 'DUE')
+    expect(pending.length).toBeGreaterThan(1)
+    for (const step of pending) {
+      expect(step.spacingNote).toContain('不要同一天打')
+      expect(step.spacingNote).toContain('2~3 天')
+      // 这是我们自己的建议，不许假借指南
+      expect(step.spacingNote).not.toContain('指南')
+    }
+  })
+})

@@ -1557,3 +1557,98 @@ describe('窗口锚定实际接种日（2026-10-06）', () => {
   })
 
 })
+
+/**
+ * 首免针数按「第一次打核心苗时多大」裁（WSAVA 2024，老板 2026-10-06 指出）。
+ *
+ * 老板原话："对于大于 16 周的幼犬，接种一针核心疫苗，并在 26 周后再补打一次
+ * 加强针即可……如果这只狗狗大于 26 周才开始首免程序的话，那它实际上只需要
+ * 打一针核心疫苗即可。这个逻辑不知道有没有在现有的提醒或者是计划算法中实现。"
+ *
+ * 答案是**没实现**：一只 40 周龄才开始首免的狗，计划要求它补打 4 针幼犬首免
+ * （全挂"已逾期"）—— 那是给 6~8 周龄开始的幼犬排的。
+ */
+describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
+  const TODAY3 = new Date('2026-10-06T00:00:00')
+
+  /** 生日 = 今天往前推 N 周 */
+  const bornWeeksAgo = (weeks: number) =>
+    toDateText(new Date(TODAY3.getTime() - weeks * 7 * 24 * 60 * 60 * 1000))
+
+  const puppySteps = (birthday: string, records: VaccineRecordLike[] = []) =>
+    buildVaccinePlan({ dogId: 'dog-1', birthday, records, today: TODAY3 }).steps.filter(
+      (step) => /^core-puppy-/.test(step.key),
+    )
+
+  it('🔴 20 周龄才开始首免 → 只打一针（原来要求补 3 针，全挂已逾期）', () => {
+    const steps = puppySteps(bornWeeksAgo(20))
+
+    expect(steps.length).toBe(1)
+    expect(steps[0].label).toContain('一针')
+    // 未满 26 周龄 → 26 周补强仍然要排
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(20),
+      records: [],
+      today: TODAY3,
+    })
+    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+  })
+
+  it('🔴 40 周龄才开始首免 → 一针就够，26 周补强也不用补', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(40),
+      records: [],
+      today: TODAY3,
+    })
+
+    const steps = plan.steps.filter((step) => /^core-puppy-/.test(step.key))
+    expect(steps.length).toBe(1)
+    expect(steps[0].label).toContain('一针')
+    // 26 周龄以后才开始的那一针同时顶掉了 6 月龄补强
+    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeUndefined()
+  })
+
+  it('8 周龄就开始首免的幼犬照旧 —— 该 4 针还是 4 针（别把规则用过头）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(8),
+      records: [],
+      today: TODAY3,
+    })
+
+    expect(plan.steps.filter((step) => /^core-puppy-/.test(step.key)).length).toBeGreaterThan(1)
+    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+  })
+
+  it('看的是**开始首免时**多大，不是狗狗现在多大', () => {
+    /*
+     * 这只狗 8 周龄就打上了第一针核心苗，现在 60 周龄 ——
+     * 不能因为"现在很大了"就把它的首免程序裁成一针，
+     * 那样会把已经打完的那几针从档案里抹掉。
+     */
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(60),
+      records: [
+        {
+          id: 'r1',
+          vaccineName: '卫佳伍',
+          vaccinationDate: bornWeeksAgo(52),
+          nextDueDate: null,
+        },
+        {
+          id: 'r2',
+          vaccineName: '卫佳伍',
+          vaccinationDate: bornWeeksAgo(48),
+          nextDueDate: null,
+        },
+      ],
+      today: TODAY3,
+    })
+
+    expect(plan.steps.filter((step) => /^core-puppy-/.test(step.key)).length).toBeGreaterThan(1)
+    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+  })
+})

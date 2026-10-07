@@ -336,8 +336,13 @@ describe('疫苗计划', () => {
     })
 
     it('记录里的"下次到期日"与建议对不上时会提示', () => {
-      // 2026-10-01 的 200 周龄狗，核心加强窗口在 2026-06 附近；
-      // 填一个 8 年后的到期日，明显在按另一套程序走。
+      // 2026-10-01 的 200 周龄狗，核心加强窗口在 2026-02 附近；
+      // 填一个明显不在任何窗口附近的到期日，说明在按另一套程序走。
+      //
+      // ⚠️ 2026-10-07：原来填的是 2034-09-01。成年加强改成"锚在上一针 + 3 年"
+      // 之后，这一类的窗口整体前移了约 3 个月，2034-09-01 离最近那个窗口
+      // 只有 175 天（阈值 180）—— 夹具恰好躲过了提示，机制本身没坏。
+      // 换成一个离任何窗口都远的日期（离最近窗口 312 天）。
       /*
        * ⚠️ 2026-10-06：这条记录原来落在"200 周龄"（成年才开始首免）——
        * 那种犬按 WSAVA 只需要一针，幼犬首免那一串步骤会被裁掉，
@@ -351,7 +356,7 @@ describe('疫苗计划', () => {
       const plan = buildVaccinePlan({
         dogId: 'dog-1',
         birthday,
-        records: [record('v1', '六联', firstDose, '2034-09-01')],
+        records: [record('v1', '六联', firstDose, '2034-01-01')],
         today: TODAY,
       });
 
@@ -1982,5 +1987,55 @@ describe('窗口口径 · 周年起算与 26 周地板（2026-10-07）', () => {
     const booster = plan.steps.find((step) => step.key === 'core-26w')
     expect(booster).toBeDefined()
     expect(booster!.windowStart >= atWeek(26)).toBe(true)
+  })
+})
+
+/**
+ * 匹配的顺序与成年加强的锚点（老板 2026-10-07 审计第 3 块定）。
+ *
+ * ① 顺序不许倒挂：一只狗 6/8/10 周各打一针（6~8 周起、每 2~4 周一次，合规），
+ *    改之前第 2 针被算成 10 周那针、第 3 针被算成 8 周那针 —— 后打的顶了前面的。
+ * ② 成年加强 = **上一次实际接种 + 3 年**（不是"程序档位 + 3 年"）。
+ *    老板问的那个例子：8/12/16 周三针按时打完、第 5 针拖到 1 岁（2027-01-04）才打，
+ *    按档位算会落到 2030-01-30，按"上一针 + 3 年"就是 2030-01-04 正对周年。
+ */
+describe('匹配顺序与成年加强锚点（2026-10-07）', () => {
+  const BIRTH = new Date('2026-01-05T00:00:00')
+  const atWeek = (weeks: number) =>
+    toDateText(new Date(BIRTH.getTime() + weeks * 7 * 86400000))
+  const planAt = (weeks: number[], today: string) =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: weeks.map((week, index) => ({
+        id: `r${index}`,
+        vaccineName: '卫佳伍',
+        vaccinationDate: atWeek(week),
+        nextDueDate: null,
+      })),
+      today: new Date(`${today}T00:00:00`),
+    })
+
+  it('🔴 6/8/10 周三针：第 1/2/3 针对上 6/8/10 周，顺序不倒挂', () => {
+    const plan = planAt([6, 8, 10], '2026-09-01')
+    const puppy = plan.steps.filter((step) => /^core-puppy-/.test(step.key))
+    const matched = puppy
+      .filter((step) => step.matchedRecordDate)
+      .map((step) => step.matchedRecordDate as string)
+
+    expect(matched).toEqual([atWeek(6), atWeek(8), atWeek(10)])
+    // 三条都用上了（不许因为顺序约束把一条真实打过的针扔掉）
+    expect(matched.length).toBe(3)
+  })
+
+  it('🔴 成年加强 第 1 次 = 上一次实际接种 + 3 年', () => {
+    // 8/12/16 周按时三针 + 第 5 针拖到 1 岁（atWeek(52)）
+    const plan = planAt([8, 12, 16, 52], '2030-02-01')
+    const adult = plan.steps.find((step) => step.key === 'core-adult-1')
+    const oneYear = new Date(`${atWeek(52)}T00:00:00`)
+    oneYear.setFullYear(oneYear.getFullYear() + 3)
+
+    expect(adult).toBeDefined()
+    expect(adult!.windowStart).toBe(toDateText(oneYear))
   })
 })

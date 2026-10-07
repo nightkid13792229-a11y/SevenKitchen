@@ -161,6 +161,46 @@ export class HealthService {
   // ==================== Vaccine Records ====================
 
   /**
+   * 同一天、同一支苗不许记两遍（2026-10-07 老板审计第 3 块定）。
+   *
+   * 起因：接口层原来**没有任何查重** —— 重复提交（顾客连点两下、扫疫苗本时
+   * 网络慢又重试一次）会真的存成两条。实测见过一次库里出现两份一模一样的
+   * 接种记录，计划跟着算出一串重复命中的步骤。
+   *
+   * 界面上的去重只在"扫疫苗本"那一条路上做（isAlreadyRecorded），
+   * 手动录入、后台录入、AI 确认后的保存都不经过它 —— 所以这道关放在服务端。
+   *
+   * 判据是"同一天 + 同一支苗（按名字去掉首尾空格比）"。同一天打两支不同的苗
+   * 不受影响；不同天的同一支苗也不受影响。
+   */
+  private async assertNotDuplicated(
+    dogId: string,
+    vaccineName: string,
+    vaccinationDate: string,
+  ) {
+    const name = String(vaccineName || '').trim();
+    const day = String(vaccinationDate || '').slice(0, 10);
+    if (!name || !day) return;
+
+    const existing = await this.vaccineRecordRepo.findByDogId(dogId);
+    const duplicated = existing.find(
+      (item) =>
+        String(item.vaccineName || '').trim() === name &&
+        this.toDayText(item.vaccinationDate) === day,
+    );
+    if (duplicated) {
+      throw new BadRequestException('这一针已经记过了（同一天、同一支苗）');
+    }
+  }
+
+  /** 日期 → YYYY-MM-DD（按本地时区，与界面显示一致） */
+  private toDayText(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  /**
    * 接种日期不能晚于今天（2026-10-07 老板审计时定）。
    *
    * 为什么必须拦在入口：计划算法是"有记录就算这一针打过了"，
@@ -189,6 +229,7 @@ export class HealthService {
   ): Promise<VaccineRecordResponseDto> {
     await this.verifyDogOwnership(dto.dogId, customerId);
     this.assertVaccinationDateNotFuture(dto.vaccinationDate);
+    await this.assertNotDuplicated(dto.dogId, dto.vaccineName, dto.vaccinationDate);
 
     // 病种是主数据，类别由它推导（2026-10-06）
     const components = this.resolveComponents(

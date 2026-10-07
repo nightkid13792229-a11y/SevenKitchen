@@ -722,7 +722,13 @@ export function buildImmunizationSchedule(
       kind: 'core',
       label:
         index === 0 ? '成年加强 第 1 次' : `成年加强 第 ${index + 1} 次`,
-      windowStart: addDays(booster, -30),
+      /*
+       * 窗口从**目标日当天**开始（2026-10-07 老板审计时定，原来是 −30 天）。
+       *
+       * 与狂犬对齐：每年一次的那类从周年当天起算，3 年一次的也从周年当天起算。
+       * 早于 3 年就打是"比指南更频"，不该由我们把窗口提前一个月去邀请。
+       */
+      windowStart: booster,
       windowEnd: addDays(booster, 90),
       basis: CORE_ADULT_BOOSTER.basis,
     });
@@ -1511,65 +1517,133 @@ export function buildVaccinePlan(
    */
   const assignedByKey = new Map<string, { record: VaccineRecordLike; date: Date }>();
   /*
-   * "这条记录在这一类里用过了" —— **按类分别记，不能全局记**。
+   * ⚠️ "这条记录在这一类里用过了" 的账本已经被新算法取代（2026-10-07）。
    *
-   * 卫佳捌这种组合苗要能**同时**顶核心那一步和钩端那一步（不同类各算一次）；
-   * 但同一类里一条记录只能顶一步（一针不能算两次）。
+   * 新算法按记录排队、每条记录只找一次步骤，所以"一针不能算两次"
+   * **由构造保证**（原来靠 usedByKind 这个 Set 兜着）。
+   * 需要恢复旧写法时记得把这个账本一起恢复。
    */
-  const usedByKind = new Map<VaccineKind, Set<string>>();
-  const usedIn = (kind: VaccineKind) =>
-    usedByKind.get(kind) || new Set<string>();
-  const markUsed = (kind: VaccineKind, id: string) => {
-    const set = usedByKind.get(kind) || new Set<string>();
-    set.add(id);
-    usedByKind.set(kind, set);
-  };
+  /**
+   * 一条记录算不算"时间上说得过去"地完成了这一步。
+   *
+   * 允许的偏差：窗口起点的前一年 ~ 窗口终点的后一年。
+   * 覆盖面够用（拖打半年、一年都算数），又能挡住"差好几年"的乱配 ——
+   * 不加这个门槛时，一条 2026 年的记录会去"完成"2023 年的那一步。
+   */
+  const FALLBACK_TOLERANCE_MS = 365 * 24 * 60 * 60 * 1000;
+  const fits = (seed: StepSeed, date: Date) =>
+    date.getTime() >= seed.windowStart.getTime() - FALLBACK_TOLERANCE_MS &&
+    date.getTime() <= seed.windowEnd.getTime() + FALLBACK_TOLERANCE_MS;
 
-  const availableFor = (kind: VaccineKind) =>
-    (recordsByKind.get(kind) || []).filter(
-      (item) => !usedIn(kind).has(item.record.id),
-    );
-
+  /**
+   * 记录怎么对上步骤（2026-10-07 审计第 3 块重写）。
+   *
+   * ── 口径：一类之内，把记录和步骤**按时间配成一对一的顺序匹配** ──────────
+   *
+   * "第 N 针 = 第 N 剂"（老板最初那条），外加两个约束：
+   *   ① **顺序不许倒挂**：后打的针不能顶前面的步骤、先打的针不能顶后面的步骤；
+   *   ② **时间上要说得过去**：离那一步的窗口超过一年就不配（宁可不配）。
+   * 在满足 ①② 的所有配法里，选"**配上的条数最多**"的那一种
+   * （一条真实打过的针不该被白白扔掉），同样多时优先"**刚好落在窗口里的**"
+   * （那是最硬的证据：日期正对着那一步）。
+   *
+   * ── 为什么不用原来的"窗口认领 + 顺序补位"两趟走法 ────────────────────
+   *
+   * 老板审计时实测出来的倒挂：一只狗 6/8/10 周各打一针（合规打法），
+   * 第 2 针被算成 10 周那针、第 3 针被算成 8 周那针。
+   * 两趟走法各管一段 —— 窗口认领说"这一步只挑自己窗口里最早的"，
+   * 顺序补位又说"剩下的按顺序填"，谁也没保证合起来是顺序的。
+   *
+   * 也不能简单改成"每条记录填给最早说得通的那一步"：那样赛文那条
+   * 2026-07-18 的成年加强针会被 2025-08-18 那条记录抢走（它在一年容差内）。
+   * 所以这里用一个小型动态规划（步骤和记录都不多，代价可以忽略）：
+   * 目标 1 = 配上的条数最多；目标 2 = 落在窗口里的条数最多。
+   */
   const runMatching = () => {
     assignedByKey.clear();
-    usedByKind.clear();
 
-    // ① 窗口认领
-    for (const seed of seeds) {
-      if (assignedByKey.has(seed.key)) continue;
-      const hit = availableFor(seed.kind).find(
-        (item) =>
-          item.date.getTime() >= seed.windowStart.getTime() &&
-          item.date.getTime() <= seed.windowEnd.getTime(),
-      );
-      if (hit) {
-        assignedByKey.set(seed.key, hit);
-        markUsed(seed.kind, hit.record.id);
-      }
-    }
+    for (const [kind, list] of recordsByKind.entries()) {
+      const steps = seeds.filter((seed) => seed.kind === kind);
+      if (steps.length === 0 || list.length === 0) continue;
 
-    /*
-     * ② 顺序补位（剩下的记录，按日期从早到晚填给还没认领的步骤）。
-     *
-     * ⚠️ 但补位**必须时间上说得过去**（2026-10-06 补的门槛）：
-     *    不加门槛时，一条 2026 年的记录会去"完成"2023 年的那一步 ——
-     *    因为前面的步骤把中间那些记录都认领走了，补位只好拿最边上的顶上。
-     *    这样的匹配没有任何意义，还会把免疫计划讲成一个荒唐的故事。
-     *
-     * 允许的偏差：窗口起点的前一年 ~ 窗口终点的后一年。
-     * 覆盖面够用（拖打半年、一年都算数），又能挡住"差好几年"的乱配。
-     */
-    const FALLBACK_TOLERANCE_MS = 365 * 24 * 60 * 60 * 1000;
-    for (const seed of seeds) {
-      if (assignedByKey.has(seed.key)) continue;
-      const next = availableFor(seed.kind).find(
-        (item) =>
-          item.date.getTime() >= seed.windowStart.getTime() - FALLBACK_TOLERANCE_MS &&
-          item.date.getTime() <= seed.windowEnd.getTime() + FALLBACK_TOLERANCE_MS,
-      );
-      if (next) {
-        assignedByKey.set(seed.key, next);
-        markUsed(seed.kind, next.record.id);
+      const recordCount = list.length;
+      const stepCount = steps.length;
+      /** 这条记录是不是正好落在那一步的窗口里（最硬的证据） */
+      const inWindow = (j: number, i: number) =>
+        list[i].date.getTime() >= steps[j].windowStart.getTime() &&
+        list[i].date.getTime() <= steps[j].windowEnd.getTime();
+
+      type Score = [number, number];
+      const better = (a: Score, b: Score) =>
+        a[0] !== b[0] ? a[0] > b[0] : a[1] > b[1];
+
+      const memo = new Map<string, Score>();
+      /** 从第 j 步、第 i 条记录往后，最好能拿到什么分数 */
+      const best = (j: number, i: number): Score => {
+        if (j >= stepCount || i >= recordCount) return [0, 0];
+        const memoKey = `${j}:${i}`;
+        const cached = memo.get(memoKey);
+        if (cached) return cached;
+
+        const candidates: Score[] = [];
+        if (fits(steps[j], list[i].date)) {
+          const rest = best(j + 1, i + 1);
+          candidates.push([1 + rest[0], (inWindow(j, i) ? 1 : 0) + rest[1]]);
+        }
+        candidates.push(best(j, i + 1)); // 这条记录不往这一步配
+        candidates.push(best(j + 1, i)); // 这一步先空着
+
+        let result = candidates[0];
+        for (const candidate of candidates.slice(1)) {
+          if (better(candidate, result)) result = candidate;
+        }
+
+        memo.set(memoKey, result);
+        return result;
+      };
+
+      best(0, 0);
+
+      // 按同一套优先级回放：能配就配 → 否则这条记录不配 → 否则这一步空着
+      let j = 0;
+      let i = 0;
+      while (j < stepCount && i < recordCount) {
+        /*
+         * ⚠️ 同分时的优先级决定"第 N 剂"落在哪一步，顺序是：
+         *    能配就配 > 这条记录不配 > 这一步空着。
+         * 反过来（同分优先跳过这一步）会把一条本可以顶第 1 针的记录
+         * 推到第 2 针上 —— 实测踩过：18 周龄那针卫佳捌的钩端从"第 1 针"
+         * 变成了没配上。
+         */
+        const canTake = fits(steps[j], list[i].date);
+        const takeScore: Score | null = canTake
+          ? (() => {
+              const rest = best(j + 1, i + 1);
+              return [1 + rest[0], (inWindow(j, i) ? 1 : 0) + rest[1]] as Score;
+            })()
+          : null;
+        const skipRecord = best(j, i + 1);
+        const skipStep = best(j + 1, i);
+
+        const options: { action: 'take' | 'skipRecord' | 'skipStep'; score: Score }[] = [];
+        if (takeScore) options.push({ action: 'take', score: takeScore });
+        options.push({ action: 'skipRecord', score: skipRecord });
+        options.push({ action: 'skipStep', score: skipStep });
+
+        let winner = options[0];
+        for (const option of options.slice(1)) {
+          if (better(option.score, winner.score)) winner = option;
+        }
+
+        if (winner.action === 'take') {
+          assignedByKey.set(steps[j].key, list[i]);
+          j += 1;
+          i += 1;
+        } else if (winner.action === 'skipRecord') {
+          i += 1;
+        } else {
+          j += 1;
+        }
       }
     }
   };
@@ -1611,6 +1685,17 @@ export function buildVaccinePlan(
   const reanchorWindows = () => {
   for (const list of seedsByKind.values()) {
     let shiftMs = 0;
+    /*
+     * 这一类里**最近一次实际打过**的日期（2026-10-07 老板审计第 3 块）。
+     *
+     * 成年加强要严格按"上一次实际接种 + 3 年"算 —— 而不是按程序表里的档位。
+     * 实测差别（老板问的那个例子）：一只狗 8/12/16 周龄按时打完首免、
+     * 第 5 针拖到 1 岁（2027-01-04）才打：
+     *   · 按档位平移 → 成年加强落在 2030-01-30（那一针 + 3 年 + 8 周 − 30 天）；
+     *   · 按"上一针 + 3 年" → 2030-01-04，正对周年。
+     * 老板要的是后者。
+     */
+    let lastDoseMs: number | null = null;
     for (const seed of list) {
       // 先按上一步带过来的偏移平移这一步（第一步没有上一步）
       if (shiftMs !== 0) {
@@ -1661,10 +1746,42 @@ export function buildVaccinePlan(
        *    所以平移量一定有界，不会把整条线带飞。
        */
       const matched = assignedByKey.get(seed.key);
+      // ⚠️ 先记下"处理这一步**之前**最近一次实际接种" —— 成年加强要锚在它上面。
+      //    不能用这一步自己的接种日（那会变成"拿这一针给自己定 3 年后"）。
+      const previousDoseMs = lastDoseMs;
       if (matched) {
         shiftMs =
           matched.date.getTime() -
           (originalWindowStart.get(seed.key) as Date).getTime();
+        lastDoseMs = matched.date.getTime();
+      }
+
+      /*
+       * 成年加强：直接锚在"上一次实际接种 + 3 年"上（2026-10-07 老板定）。
+       *
+       * 第 1 次 = 上一次实际接种（可能是 26 周补强那一针、也可能更晚）+ 3 年；
+       * 之后每一次 = 上一次加强（打了就按实际那天）+ 3 年。
+       * 一针都没打过时退回程序表（没有"上一次"可言）。
+       *
+       * 老板问过的差别（8/12/16 周三针 + 第 5 针拖到 1 岁才打）：
+       *   · 按程序档位平移 → 成年加强落在 2030-01-30；
+       *   · 按"上一针 + 3 年" → 2030-01-04，正对周年。要的是后者。
+       */
+      if (
+        seed.kind === 'core' &&
+        /^core-adult-/.test(seed.key) &&
+        previousDoseMs !== null
+      ) {
+        const originalStart = (originalWindowStart.get(seed.key) as Date).getTime();
+        const originalEnd = (originalWindowEnd.get(seed.key) as Date).getTime();
+        const start = addYears(new Date(previousDoseMs), CORE_ADULT_BOOSTER.repeatYears);
+        seed.windowStart = start;
+        seed.windowEnd = new Date(start.getTime() + (originalEnd - originalStart));
+        // 后面的兄弟步骤跟着这一步走；若这一步自己没打，锚点就交给平移链
+        shiftMs = start.getTime() - originalStart;
+        if (!matched) {
+          lastDoseMs = null;
+        }
       }
     }
   }

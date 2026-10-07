@@ -65,6 +65,8 @@ describe('疫苗记录 · 报告原件留档', () => {
         createdAt: new Date('2026-10-01T00:00:00.000Z'),
         updatedAt: new Date('2026-10-01T00:00:00.000Z'),
       }),
+      // 查重会先按 dogId 取这只狗已有的记录（2026-10-07 加的）；默认"一条都没有"
+      findByDogId: jest.fn().mockResolvedValue([]),
       ...overrides,
     };
 

@@ -52,6 +52,8 @@ describe('疫苗记录 · 接种日期不能晚于今天（2026-10-07 老板审�
         return Promise.resolve(merged);
       }),
       findById: jest.fn().mockResolvedValue({ ...baseRecord }),
+      // 查重会先按 dogId 取这只狗已有的记录；默认"一条都没有"
+      findByDogId: jest.fn().mockResolvedValue([]),
     };
     const dogRepo = {
       findById: jest
@@ -105,6 +107,60 @@ describe('疫苗记录 · 接种日期不能晚于今天（2026-10-07 老板审�
       } as any),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(vaccineRepo.update).not.toHaveBeenCalled();
+  })
+
+  it('🔴 同一天、同一支苗重复提交 → 拒掉，不重复入库', async () => {
+    const { service, vaccineRepo } = createService();
+    vaccineRepo.findByDogId.mockResolvedValue([
+      {
+        id: 'old-1',
+        dogId: DOG_ID,
+        vaccineName: '狂犬疫苗',
+        vaccinationDate: new Date(`${dateText(0)}T00:00:00`),
+        nextDueDate: null,
+        notes: null,
+        status: 'COMPLETED',
+        attachments: [],
+        kinds: ['rabies'],
+        components: ['rabies'],
+      },
+    ] as any);
+
+    await expect(
+      service.createVaccineRecord(CUSTOMER_ID, {
+        dogId: DOG_ID,
+        vaccineName: '狂犬疫苗',
+        vaccinationDate: dateText(0),
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(vaccineRepo.create).not.toHaveBeenCalled();
+  })
+
+  it('同一天打两支不同的苗 → 正常保存（查重不能误伤）', async () => {
+    const { service, vaccineRepo } = createService();
+    vaccineRepo.findByDogId.mockResolvedValue([
+      {
+        id: 'old-1',
+        dogId: DOG_ID,
+        vaccineName: '卫佳伍',
+        vaccinationDate: new Date(`${dateText(0)}T00:00:00`),
+        nextDueDate: null,
+        notes: null,
+        status: 'COMPLETED',
+        attachments: [],
+        kinds: ['core'],
+        components: ['cdv'],
+      },
+    ] as any);
+
+    await expect(
+      service.createVaccineRecord(CUSTOMER_ID, {
+        dogId: DOG_ID,
+        vaccineName: '狂犬疫苗',
+        vaccinationDate: dateText(0),
+      } as any),
+    ).resolves.toBeDefined();
+    expect(vaccineRepo.create).toHaveBeenCalled();
   })
 
   it('修改：只改备注、不带日期 → 不受影响', async () => {

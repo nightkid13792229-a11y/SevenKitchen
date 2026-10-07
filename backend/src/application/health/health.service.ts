@@ -160,11 +160,37 @@ export class HealthService {
 
   // ==================== Vaccine Records ====================
 
+  /**
+   * 接种日期不能晚于今天（2026-10-07 老板审计时定）。
+   *
+   * 为什么必须拦在入口：计划算法是"有记录就算这一针打过了"，
+   * 一条日期填到未来的记录会把"还没打的针"直接标成已完成、提醒随之消失。
+   * 实测：把接种日填成 2026-12-01（当天 2026-06-01），
+   * 「狂犬疫苗 首针」就变成已完成，第 2 次被推到 2027-11。
+   * 常见来源是手写年份写错、拍疫苗本时 OCR 把年份读错。
+   *
+   * 早于狗狗生日的日期**不在这里拦**（生日本身可能是估的），
+   * 交给计划里的"请核对"提示和窗口夹取兜底。
+   */
+  private assertVaccinationDateNotFuture(dateText?: string | null) {
+    if (!dateText) return;
+    const date = new Date(dateText);
+    if (Number.isNaN(date.getTime())) return; // 格式问题由 DTO 校验负责
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    if (date.getTime() > endOfToday.getTime()) {
+      throw new BadRequestException(
+        '接种日期不能晚于今天 —— 还没打的针，请等打完再记录',
+      );
+    }
+  }
+
   async createVaccineRecord(
     customerId: string,
     dto: CreateVaccineDto & { dogId: string },
   ): Promise<VaccineRecordResponseDto> {
     await this.verifyDogOwnership(dto.dogId, customerId);
+    this.assertVaccinationDateNotFuture(dto.vaccinationDate);
 
     // 病种是主数据，类别由它推导（2026-10-06）
     const components = this.resolveComponents(
@@ -230,6 +256,7 @@ export class HealthService {
     }
 
     await this.verifyDogOwnership(record.dogId, customerId);
+    this.assertVaccinationDateNotFuture(dto.vaccinationDate);
 
     const dtoComponents = (dto as { components?: unknown }).components;
 

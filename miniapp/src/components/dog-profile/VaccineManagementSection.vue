@@ -327,9 +327,14 @@
 
         <view class="field-group">
           <text class="field-label">接种日期</text>
+          <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
+               接种日填成未来会把"还没打的针"算成已打过、提醒消失。
+               后端也会拒（此处只是别让顾客白填一遍）。
+               扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
           <picker
             mode="date"
             :value="draftOf(record, index).vaccinationDate"
+            :end="getTodayDateString()"
             @change="updateDraft(index, 'vaccinationDate', $event.detail.value)"
           >
             <view class="field-picker">

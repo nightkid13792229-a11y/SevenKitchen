@@ -1866,3 +1866,58 @@ describe('提醒口气按类判断', () => {
     expect(lepto.some((step) => step.noEvidence === false)).toBe(true)
   })
 })
+
+/**
+ * 日期说不通的记录（老板 2026-10-07 审计时定）。
+ *
+ * 实测踩到的两个坑：接种日填成未来 → 把"还没打的针"标成已完成；
+ * 接种日填得比生日还早 → 后面几针的窗口被拖到出生之前。
+ */
+describe('接种日期的合理性', () => {
+  const rec = (id: string, name: string, date: string) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate: null,
+  })
+  const planWith = (records: ReturnType<typeof rec>[], today = '2026-06-01') =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records,
+      today: new Date(`${today}T00:00:00`),
+    })
+
+  it('🔴 接种日在未来的记录不参与计划，并留一条"请核对"', () => {
+    const plan = planWith([rec('r1', '狂犬', '2026-12-01')])
+
+    // 改之前：这一针把「狂犬疫苗 首针」标成已完成，提醒直接消失
+    const first = plan.steps.find((step) => step.key === 'rabies-1')
+    expect(first?.status).not.toBe('DONE')
+    expect(first?.matchedRecordId).toBeNull()
+
+    const conflict = plan.conflicts.find((item) => item.recordId === 'r1')
+    expect(conflict).toBeDefined()
+    expect(conflict!.reason).toContain('今天之后')
+  })
+
+  it('当天的接种日算合法（不能把今天也拦掉）', () => {
+    const plan = planWith([rec('r1', '狂犬', '2026-06-01')])
+
+    expect(plan.conflicts.some((item) => item.recordId === 'r1')).toBe(false)
+    expect(plan.steps.find((step) => step.key === 'rabies-1')?.status).toBe('DONE')
+  })
+
+  it('🔴 接种日早于生日：仍然算剂量，但窗口不许落在出生之前', () => {
+    const plan = planWith([rec('r1', '卫佳伍', '2025-11-01')])
+
+    // 仍然算第 1 针（生日可能是估的，不能把真实打过的那一针抹掉）
+    expect(plan.steps.find((step) => step.key === 'core-puppy-1')?.status).toBe('DONE')
+    // 但后面的窗口不能被拖到 2026-01-05 之前
+    const after = plan.steps.filter((step) => /^core-puppy-/.test(step.key)).slice(1)
+    expect(after.length).toBeGreaterThan(0)
+    for (const step of after) {
+      expect(step.windowStart >= '2026-01-05').toBe(true)
+    }
+  })
+})

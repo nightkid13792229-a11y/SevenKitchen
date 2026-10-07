@@ -1221,7 +1221,29 @@ export function buildVaccinePlan(
     };
   }
 
+  /*
+   * ══ 日期说得通的记录才参与匹配（2026-10-07 老板审计时定）════════════
+   *
+   * 实测踩到的两个坑 —— 数据写错，但系统原来全都照单全收：
+   *   · 接种日填成未来（手写年份写错、OCR 把年份读错）：一条 2026-12-01 的记录
+   *     把「狂犬疫苗 首针」直接标成已完成 —— 一针还没打，提醒就没了；
+   *   · 接种日填得比狗狗生日还早（年份写错；或者生日本来就是估的）：
+   *     「幼犬首免 第 1 针」算完成，后面几针的窗口被整体拖到**出生之前**。
+   *
+   * 现在的口径：
+   *   · 未来日期的记录**不参与计划**，并在计划里留一条"请核对"（不是悄悄忽略）；
+   *   · 早于生日的记录**仍然算剂量** —— 生日本身可能是估的，直接丢掉会把
+   *     真实打过的那一针抹掉；但窗口不许被拖到出生之前（见下面夹取那一段）。
+   */
+  const todayMs = today.getTime();
+  const futureDatedRecords = input.records.filter((record) => {
+    const date = parseDateText(record.vaccinationDate);
+    return Boolean(date) && (date as Date).getTime() > todayMs;
+  });
+  const futureDatedIds = new Set(futureDatedRecords.map((record) => record.id));
+
   const parsed = input.records
+    .filter((record) => !futureDatedIds.has(record.id))
     .map((record) => ({
       record,
       kinds: resolveRecordKinds(record),
@@ -1579,12 +1601,22 @@ export function buildVaccinePlan(
     for (const seed of list) {
       // 先按上一步带过来的偏移平移这一步（第一步没有上一步）
       if (shiftMs !== 0) {
-        seed.windowStart = new Date(
-          (originalWindowStart.get(seed.key) as Date).getTime() + shiftMs,
-        );
-        seed.windowEnd = new Date(
-          (originalWindowEnd.get(seed.key) as Date).getTime() + shiftMs,
-        );
+        const originalStart = (originalWindowStart.get(seed.key) as Date).getTime();
+        const originalEnd = (originalWindowEnd.get(seed.key) as Date).getTime();
+        let start = originalStart + shiftMs;
+        /*
+         * 窗口不许被拖到**狗狗出生之前**（2026-10-07 老板审计时定）。
+         *
+         * 会走到这里是因为有个别记录的日期早于生日（年份写错，或生日是估的）。
+         * 那种记录仍然算剂量，但不该让"幼犬首免 第 2 针"的窗口落在一只狗
+         * 出生之前 —— 实测见过 2025-11-29 这种窗口，一眼就是错的。
+         * 夹取时**保持窗口宽度不变**，只把它整体挪到出生那天之后。
+         */
+        if (start < birthday.getTime()) {
+          start = birthday.getTime();
+        }
+        seed.windowStart = new Date(start);
+        seed.windowEnd = new Date(start + (originalEnd - originalStart));
       }
       /*
        * 这一步**真的打了** → 用它的实际日期给后面的步骤定锚点。
@@ -1832,7 +1864,24 @@ export function buildVaccinePlan(
     birthday: toDateText(birthday),
     ageWeeks: weeksBetween(birthday, today),
     steps,
-    conflicts: detectConflicts(input.records, seeds, today),
+    /*
+     * 「这一针的日期是未来」也当成一条"记录与建议不一致"报给顾客看。
+     *
+     * 不报的话，顾客只会觉得"我记了一针，怎么计划里当没这回事" ——
+     * 说清楚"还没发生的针不能算打过、请核对日期"，他才好去改。
+     */
+    conflicts: [
+      ...futureDatedRecords.map((record) => ({
+        kind: (resolveRecordKinds(record)[0] ?? 'other') as VaccineKind,
+        recordId: record.id,
+        recordDate: String(record.vaccinationDate).slice(0, 10),
+        vaccineName: record.vaccineName,
+        reason: '这一针的接种日期在今天之后 —— 还没发生的针不能算打过',
+        suggestion:
+          '请核对疫苗本上的日期（最常见的错法是把年份写错）；改对之前，这一针不参与接种计划',
+      })),
+      ...detectConflicts(input.records, seeds, today),
+    ],
     nextStep,
     summary,
     decisions,

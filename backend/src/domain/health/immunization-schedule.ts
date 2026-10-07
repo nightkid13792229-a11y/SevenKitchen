@@ -752,8 +752,14 @@ export function buildImmunizationSchedule(
       // 首针**不往前放宽**（2026-10-04 修）：
       // 之前所有年接种窗口统一 -30 天，把首针窗口拉到了 12周−30天 ≈ 7.7 周龄，
       // 于是"8 周龄打狂犬"也会被判成已完成 —— 而 12 周是说明书上的最低月龄，
-      // 往下放宽没有任何依据。后续每年的针保留 -30 天（提前一个月打是常规做法）。
-      windowStart: index === 0 ? rabies : addDays(rabies, -30),
+      // 往下放宽没有任何依据。
+      //
+      // ⚠️ 每年的针也**不再提前 30 天**（2026-10-07 老板审计时定）：
+      // 窗口的起点就是"上一次的周年当天"。理由是口径必须自洽 ——
+      // 一边把窗口提前一个月邀请顾客来打，一边又在他真打了之后提示
+      // "狂犬间隔不足一年，与国内年免口径不符"，等于自己打自己。
+      // 顺延之后也一样：上一针打在几号，下一次的窗口就从明年那一号开始。
+      windowStart: rabies,
       windowEnd: addDays(rabies, 90),
       basis: RABIES_SCHEDULE.basis,
     });
@@ -907,7 +913,14 @@ function buildNonCoreSeeds(
       key: `${kind}-repeat-${index + 1}`,
       kind,
       label: `${config.label} 每年 1 次（第 ${index + 1} 次）`,
-      windowStart: addDays(repeat, -windowTailDays),
+      /*
+       * 每年一次的窗口：起点就是**上一次的周年当天**（2026-10-07 老板审计时定）。
+       *
+       * 原来是提前 30 天（windowTailDays）—— 那会一边提前一个月邀请顾客来打，
+       * 一边在他真打了之后提示"间隔不足一年，与国内年免口径不符"，
+       * 两个口径自己打自己。狂犬那边同一时间也改成了周年起算。
+       */
+      windowStart: repeat,
       windowEnd: addDays(repeat, 90),
       basis: config.basis,
     });
@@ -1614,6 +1627,22 @@ export function buildVaccinePlan(
          */
         if (start < birthday.getTime()) {
           start = birthday.getTime();
+        }
+        /*
+         * 26 周补强的窗口**不许早于 26 周龄**（2026-10-07 老板审计时定）。
+         *
+         * 指令表里这一针的定义就是"26 周龄或更大"（WSAVA 2024）。
+         * 但整条线会跟着实际接种日平移 —— 一只 6/8/10 周就打完了三针的狗，
+         * 平移到 26 周那一步会变成 **21~25 周龄**，狗狗才 21 周大就被催
+         * "该补强了"，早于指南的下限。所以这里给它钉一个地板：
+         * 可以往后顺延（缓打没问题），不能往前越过 26 周龄。
+         */
+        if (seed.key === 'core-26w') {
+          const floor =
+            birthday.getTime() + CORE_PUPPY_SERIES.boosterWeeks * 7 * DAY_MS;
+          if (start < floor) {
+            start = floor;
+          }
         }
         seed.windowStart = new Date(start);
         seed.windowEnd = new Date(start + (originalEnd - originalStart));

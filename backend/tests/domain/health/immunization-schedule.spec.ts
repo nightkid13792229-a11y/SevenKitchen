@@ -1921,3 +1921,66 @@ describe('接种日期的合理性', () => {
     }
   })
 })
+
+/**
+ * 窗口口径（老板 2026-10-07 审计第 3 块）。
+ *
+ * 老板问了两件事：
+ *   ① 狂犬"每年一次"，窗口该从哪一天开始？—— 定的是**上一针的周年当天**
+ *      （原来是提前 30 天。那样一边提前一个月邀请、一边在真打了之后提示
+ *      "间隔不足一年"，等于自己打自己）。
+ *   ② 26 周补强的窗口被顺延拉到 26 周龄之前（实测 21~25 周龄）——
+ *      指南写的是"26 周龄或更大"，所以要钉一个地板。
+ */
+describe('窗口口径 · 周年起算与 26 周地板（2026-10-07）', () => {
+  const rec = (id: string, name: string, date: string) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate: null,
+  })
+  const BIRTH = new Date('2026-01-05T00:00:00')
+  const atWeek = (weeks: number) =>
+    toDateText(new Date(BIRTH.getTime() + weeks * 7 * 86400000))
+  const plusOneYear = (dateText: string) => {
+    const date = new Date(`${dateText}T00:00:00`)
+    date.setFullYear(date.getFullYear() + 1)
+    return toDateText(date)
+  }
+  const planWith = (records: ReturnType<typeof rec>[], today = '2028-06-01') =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records,
+      today: new Date(`${today}T00:00:00`),
+    })
+
+  it('没有记录时：狂犬第 2 次的窗口就从"首针 + 1 年"当天开始', () => {
+    const plan = planWith([])
+
+    const second = plan.steps.find((step) => step.key === 'rabies-2')
+    expect(second).toBeDefined()
+    expect(second!.windowStart).toBe(plusOneYear(atWeek(12)))
+  })
+
+  it('🔴 首针打了之后：第 2 次的窗口 = 那一针 + 1 年（不再提前 30 天）', () => {
+    const first = atWeek(12)
+    const plan = planWith([rec('r1', '狂犬', first)], plusOneYear(first))
+
+    const second = plan.steps.find((step) => step.key === 'rabies-2')
+    expect(second).toBeDefined()
+    expect(second!.windowStart).toBe(plusOneYear(first))
+  })
+
+  it('🔴 26 周补强的窗口不许早于 26 周龄（打早了的狗也一样）', () => {
+    // 6/8/10 周各一针（合规但偏早）—— 改之前这一针的窗口会被顺延成 21~25 周龄
+    const plan = planWith(
+      [rec('a', '卫佳伍', atWeek(6)), rec('b', '卫佳伍', atWeek(8)), rec('c', '卫佳伍', atWeek(10))],
+      '2026-09-01',
+    )
+
+    const booster = plan.steps.find((step) => step.key === 'core-26w')
+    expect(booster).toBeDefined()
+    expect(booster!.windowStart >= atWeek(26)).toBe(true)
+  })
+})

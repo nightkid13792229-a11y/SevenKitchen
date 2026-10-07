@@ -134,6 +134,13 @@ export interface VaccinePlanStep {
    * 规则只写一处，小程序/医生分享页/以后的提醒都直接用这个字段。
    */
   statusLabel: string;
+  /**
+   * 顾客点过"推迟"（2026-10-07 老板定：**保留这一步，但标一句"你已推迟"**）。
+   *
+   * 推迟不是"不做" —— 该打还是要打，只是顾客想晚点安排。
+   * 所以状态、窗口都不动，只在说法上标一句，免得系统看起来像没听见。
+   */
+  deferred: boolean;
   /** 窗口内命中的记录（有的话） */
   matchedRecordId: string | null;
   matchedRecordDate: string | null;
@@ -1122,6 +1129,24 @@ function resolveStatusLabel(
 }
 
 /**
+ * 顾客点过"推迟"时，在说法后面标一句（2026-10-07 老板定）。
+ *
+ * 推迟 ≠ 不做：该打还是要打，只是顾客想晚点安排。所以状态和窗口都不动，
+ * 只把"你已推迟"标出来 —— 免得界面看起来像没听见他的操作。
+ * 已完成/不做的步骤不加（已经结束了，不需要再标）。
+ */
+function withDeferNote(
+  text: string,
+  status: VaccineStepStatus,
+  deferred: boolean,
+): string {
+  if (!deferred || status === 'DONE' || status === 'SKIPPED') {
+    return text;
+  }
+  return `${text}（你已推迟）`;
+}
+
+/**
  * 找出"顾客记录与建议不一致"的地方。
  *
  * 老板第 17 条要的就是这个。这里只报**能确定的偏差**，不猜测：
@@ -2012,14 +2037,23 @@ export function buildVaccinePlan(
         windowStart: toDateText(seed.windowStart),
         windowEnd: toDateText(seed.windowEnd),
         status,
-        statusLabel: resolveStatusLabel(status, !kindHasEvidence, recordlessStartKeys.has(seed.key)),
+        statusLabel: withDeferNote(
+          resolveStatusLabel(status, !kindHasEvidence, recordlessStartKeys.has(seed.key)),
+          status,
+          decisions[seed.key] === 'DEFER',
+        ),
+        deferred: decisions[seed.key] === 'DEFER',
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(
+        reminder: withDeferNote(
+          buildReminder(
+            status,
+            seed.label,
+            !kindHasEvidence && !recordlessStartKeys.has(seed.key),
+          ),
           status,
-          seed.label,
-          !kindHasEvidence && !recordlessStartKeys.has(seed.key),
+          decisions[seed.key] === 'DEFER',
         ),
         // "这一类的起针"是事实、不是指责 —— 不用"还没记录"的软口气
         noEvidence: !kindHasEvidence && !recordlessStartKeys.has(seed.key),

@@ -2348,3 +2348,41 @@ describe('冲突提示 · 红线与口径（2026-10-07）', () => {
     }
   })
 })
+
+/**
+ * 顾客点"推迟"（2026-10-07 老板定：保留这一步，但标一句"你已推迟"）。
+ *
+ * 推迟 ≠ 不做：该打还是要打，只是顾客想晚点安排。所以状态和窗口都不动，
+ * 只在说法上标一句 —— 免得界面看起来像没听见他的操作。
+ */
+describe('顾客的"推迟"要标出来（2026-10-07）', () => {
+  const planWithDecision = (decision: 'DEFER' | 'ACCEPT') =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+      ],
+      decisions: { 'core-adult-1': decision },
+      today: new Date('2029-06-01T00:00:00'),
+    })
+
+  it('点过推迟的那一步：状态和窗口照旧，但多一句"你已推迟"', () => {
+    const step = planWithDecision('DEFER').steps.find((item) => item.key === 'core-adult-1')
+
+    expect(step).toBeDefined()
+    expect(step!.deferred).toBe(true)
+    expect(step!.statusLabel).toContain('你已推迟')
+    expect(step!.reminder).toContain('你已推迟')
+    // 位置不变：它还是"核心疫苗这一类的下一针"
+    expect(step!.status).not.toBe('SKIPPED')
+  })
+
+  it('没点推迟的不加这句', () => {
+    const step = planWithDecision('ACCEPT').steps.find((item) => item.key === 'core-adult-1')
+
+    expect(step!.deferred).toBe(false)
+    expect(step!.statusLabel).not.toContain('你已推迟')
+  })
+})

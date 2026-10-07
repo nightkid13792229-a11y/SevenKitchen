@@ -251,6 +251,8 @@ describe('疫苗计划 · 零记录时不显示计划（2026-10-04 老板定）'
      * 现在优先用后端下发的**每一步所属类别**有没有记录，老后端不带
      * 这个字段时才退回整只狗判断。
      */
+    // 2026-10-07：后端下发的 statusLabel 优先（口径在后端一处维护）
+    expect(section).toContain('if (step.statusLabel)')
     expect(section).toContain("typeof step.noEvidence === 'boolean'")
     expect(section).toContain("if (kindNoEvidence && (step.status === 'OVERDUE' || step.status === 'DUE'))")
     expect(section).not.toContain("if (noEvidence.value && (status === 'OVERDUE'")

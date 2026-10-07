@@ -251,9 +251,18 @@ describe('疫苗计划', () => {
         today: TODAY,
       });
 
+      /*
+       * ⚠️ 2026-10-07 老板改的显示口径：**"不做"的那一步不再显示给顾客**
+       *    （"如果顾客点过某一针疫苗不打……我们就不显示这个窗口期了，
+       *      只需要告诉顾客接下来建议怎么接种"）。
+       *
+       * 所以现在断言两件事：① 那一步不在可见列表里；
+       * ② 这一类的"下一针"顺位往后挪（该类的下一个未完成步骤顶上）。
+       */
       const after = planWith.steps.find((step) => step.key === target.key);
-      expect(after!.status).toBe('SKIPPED');
-      expect(planWith.summary.skipped).toBeGreaterThan(0);
+      expect(after).toBeUndefined();
+      // 决定照样记着（顾客能看出哪些是自己改过的）
+      expect(planWith.decisions[target.key]).toBe('SKIP');
     })
 
     it('决定原样带在结果里（顾客能看出哪些是自己改过的）', () => {
@@ -628,10 +637,16 @@ describe('疫苗计划', () => {
       expect(lepto.length).toBeGreaterThan(0)
 
       // 每年一次 → 相邻两步的间隔约一年；核心苗那套是三年，这里必须区分开
-      const repeats = lepto.filter((step) => step.key.includes('-repeat-'))
-      expect(repeats.length).toBeGreaterThan(1)
-      const firstRepeat = new Date(`${repeats[0].windowStart}T00:00:00`)
-      const secondRepeat = new Date(`${repeats[1].windowStart}T00:00:00`)
+      // 现在每一类只显示"下一针"：第 1 针已完成（历史留着），未完成的只有第 2 针
+      const pendingLepto = lepto.filter((step) => step.status !== 'DONE')
+      expect(pendingLepto.length).toBe(1)
+      expect(pendingLepto[0].key).toBe('lepto-primary-2')
+      // 间隔要从**程序表**上看（它才是完整的那一串）
+      const schedule = buildImmunizationSchedule(new Date(`${birthday}T00:00:00`), {
+        kinds: ['lepto'],
+      }).filter((item) => item.key.includes('-repeat-'))
+      const firstRepeat = new Date(schedule[0].windowStart)
+      const secondRepeat = new Date(schedule[1].windowStart)
       const yearsApart =
         (secondRepeat.getTime() - firstRepeat.getTime()) / (365 * 86400000)
       expect(yearsApart).toBeGreaterThan(0.9)
@@ -1323,10 +1338,20 @@ describe('单联苗顶不上 + 多联苗别重复（老板四问的收尾）', (
      * 所以用 26 周龄的狗来测这一步已经不成立了 ——
      * 20 周龄落在 16~26 之间，26 周补强仍然要排，这条测试的本意（推多联苗）不变。
      */
+    /*
+     * ⚠️ 2026-10-07 老板改成"每一类只显示下一针"之后，
+     * 26 周补强要等首免那几针做完才会成为"核心疫苗这一类的下一针"。
+     * 所以这里先把三针首免打上（8/12/16 周龄 —— 16 周龄那一针是完成针）。
+     */
+    const birthday = dogAt(20)
     const plan = buildVaccinePlan({
       dogId: 'dog-1',
-      birthday: dogAt(20),
-      records: [],
+      birthday,
+      records: [
+        { id: 'p1', vaccineName: '卫佳伍', vaccinationDate: toDateText(addWeeks(parseDateText(birthday)!, 8)), nextDueDate: null },
+        { id: 'p2', vaccineName: '卫佳伍', vaccinationDate: toDateText(addWeeks(parseDateText(birthday)!, 12)), nextDueDate: null },
+        { id: 'p3', vaccineName: '卫佳伍', vaccinationDate: toDateText(addWeeks(parseDateText(birthday)!, 16)), nextDueDate: null },
+      ],
       today: TODAY2,
     })
 
@@ -1613,11 +1638,18 @@ describe('窗口锚定实际接种日（2026-10-06）', () => {
       today: new Date('2027-02-01'),
     })
 
-    const booster = plan.steps.find((step) => step.key === 'core-26w')
-    expect(booster).toBeDefined()
-    // 改之前：窗口还是 2026-07-06~08-03（按生日算），一直挂"已逾期"
-    expect(booster!.windowStart >= '2027-01-01').toBe(true)
-    expect(booster!.status).not.toBe('OVERDUE')
+    /*
+     * ⚠️ 2026-10-07 起换成更准的口径：**任何一针落在 ≥26 周龄的核心苗，
+     * 本身就是那一针补强**（指南："26 周龄或稍后再补一针"）——
+     * 所以这一岁才打的那一针直接顶掉补强，那一步不再单独出现。
+     * 而它后面那一步（成年加强）改成锚在"上一次实际接种 + 3 年"上。
+     */
+    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeUndefined()
+
+    const adult = plan.steps.find((step) => step.key === 'core-adult-1')
+    expect(adult).toBeDefined()
+    // 2027-01-05 那一针 + 3 年 = 2030-01-05
+    expect(adult!.windowStart).toBe('2030-01-05')
   })
 
   it('没有记录时仍然按生日推算（没有"上一次"可言）', () => {
@@ -1628,10 +1660,13 @@ describe('窗口锚定实际接种日（2026-10-06）', () => {
       today: new Date('2026-06-01'),
     })
 
-    const second = plan.steps.find((step) => step.key === 'rabies-2')
-    expect(second).toBeDefined()
-    // 生日 + 12 周 + 1 年（±窗口）
-    expect(second!.windowStart.slice(0, 4)).toBe('2027')
+    /*
+     * ⚠️ 2026-10-07 起每一类只显示"下一针"，所以没有记录时看到的就是首针
+     * —— 正好用它验证"按生日推算"：窗口起点＝生日 + 12 周，宽 90 天。
+     */
+    const first = plan.steps.find((step) => step.key === 'rabies-1')
+    expect(first).toBeDefined()
+    expect(first!.windowStart).toBe(toDateText(addWeeks(new Date('2026-01-05T00:00:00'), 12)))
   })
 
 })
@@ -1663,14 +1698,24 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
 
     expect(steps.length).toBe(1)
     expect(steps[0].label).toContain('一针')
-    // 未满 26 周龄 → 26 周补强仍然要排
-    const plan = buildVaccinePlan({
+    /*
+     * ⚠️ 2026-10-07 起每一类只显示"下一针"，26 周补强要等那一针打完才露面。
+     *    补上那一针，验证补强还在（老板特意确认过：完成针和补强是两件事）。
+     */
+    const withDose = buildVaccinePlan({
       dogId: 'dog-1',
       birthday: bornWeeksAgo(20),
-      records: [],
+      records: [
+        {
+          id: 'r1',
+          vaccineName: '卫佳伍',
+          vaccinationDate: toDateText(TODAY3),
+          nextDueDate: null,
+        },
+      ],
       today: TODAY3,
     })
-    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+    expect(withDose.steps.find((step) => step.key === 'core-26w')).toBeDefined()
   })
 
   it('🔴 40 周龄才开始首免 → 一针就够，26 周补强也不用补', () => {
@@ -1696,8 +1741,18 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
       today: TODAY3,
     })
 
-    expect(plan.steps.filter((step) => /^core-puppy-/.test(step.key)).length).toBeGreaterThan(1)
-    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+    /*
+     * ⚠️ 现在计划里每一类只显示"下一针"（第 1 针），所以"是不是 4 针"
+     *    要看**程序表**：程序表还是 4 针，没有被裁成一针。
+     */
+    const schedule = buildImmunizationSchedule(parseDateText(bornWeeksAgo(8))!, {
+      kinds: ['core'],
+    }).filter((item) => /^core-puppy-/.test(item.key))
+    expect(schedule.length).toBeGreaterThan(1)
+
+    const pending = plan.steps.filter((step) => /^core-puppy-/.test(step.key))
+    expect(pending.length).toBe(1)
+    expect(pending[0].key).toBe('core-puppy-1')
   })
 
   it('看的是**开始首免时**多大，不是狗狗现在多大', () => {
@@ -1726,8 +1781,13 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
       today: TODAY3,
     })
 
-    expect(plan.steps.filter((step) => /^core-puppy-/.test(step.key)).length).toBeGreaterThan(1)
-    expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+    /*
+     * 打过 8/12 周两针 → 首免程序还要继续走，所以这一类的下一针是"第 3 针"，
+     * 而不是被裁成一针、也不是直接跳到 26 周补强。
+     * （每一类只显示"下一针"之后，这条要从"下一针是哪一步"来看。）
+     */
+    const pending = plan.steps.filter((step) => step.status !== 'DONE')
+    expect(pending.some((step) => step.key === 'core-puppy-3')).toBe(true)
   })
 
   /*
@@ -1911,10 +1971,17 @@ describe('提醒口气按类判断', () => {
 
     const lepto = plan.steps.filter((step) => step.kind === 'lepto')
     expect(lepto.length).toBeGreaterThan(0)
+    /*
+     * ⚠️ 2026-10-07 改的：**这一类一针都没打过**时，它的"起针"显示成「该打了」
+     *    （窗口从今天开始），不说"还没有这一针的记录" —— 对一只从没打过钩端的狗，
+     *    "现在该打第一针"才是事实。软口气留给"有这一类记录、但没对上号"的情况
+     *    （另有测试覆盖）。
+     */
     for (const step of lepto) {
-      expect(step.noEvidence).toBe(true)
-      if (step.status === 'DUE' || step.status === 'OVERDUE') {
-        expect(step.reminder).toContain('还没有这一针的记录')
+      expect(step.noEvidence).toBe(false)
+      if (step.status === 'DUE') {
+        expect(step.statusLabel).toBe('该打了')
+        expect(step.reminder).toContain('现在正是接种时间')
       }
     }
 
@@ -2026,12 +2093,14 @@ describe('窗口口径 · 周年起算与 26 周地板（2026-10-07）', () => {
       today: new Date(`${today}T00:00:00`),
     })
 
-  it('没有记录时：狂犬第 2 次的窗口就从"首针 + 1 年"当天开始', () => {
-    const plan = planWith([])
+  it('打了首针之后：狂犬第 2 次的窗口就从"那一针 + 1 年"当天开始', () => {
+    // ⚠️ 现在每一类只显示"下一针"，所以要先把首针打上，第 2 次才会出现
+    const first = atWeek(12)
+    const plan = planWith([rec('r1', '狂犬', first)], plusOneYear(first))
 
     const second = plan.steps.find((step) => step.key === 'rabies-2')
     expect(second).toBeDefined()
-    expect(second!.windowStart).toBe(plusOneYear(atWeek(12)))
+    expect(second!.windowStart).toBe(plusOneYear(first))
   })
 
   it('🔴 首针打了之后：第 2 次的窗口 = 那一针 + 1 年（不再提前 30 天）', () => {
@@ -2045,8 +2114,19 @@ describe('窗口口径 · 周年起算与 26 周地板（2026-10-07）', () => {
 
   it('🔴 26 周补强的窗口不许早于 26 周龄（打早了的狗也一样）', () => {
     // 6/8/10 周各一针（合规但偏早）—— 改之前这一针的窗口会被顺延成 21~25 周龄
+    /*
+     * 6/8/10 周各一针（合规但偏早）+ 16 周龄那一针（完成针）。
+     * 整条线按"实际接种日"往前挪时，26 周补强会被顺延成 24~28 周龄 ——
+     * 地板必须把它钉回 26 周龄。
+     * ⚠️ 现在每一类只显示"下一针"，所以前四针要都打上，补强才会露面。
+     */
     const plan = planWith(
-      [rec('a', '卫佳伍', atWeek(6)), rec('b', '卫佳伍', atWeek(8)), rec('c', '卫佳伍', atWeek(10))],
+      [
+        rec('a', '卫佳伍', atWeek(6)),
+        rec('b', '卫佳伍', atWeek(8)),
+        rec('c', '卫佳伍', atWeek(10)),
+        rec('d', '卫佳伍', atWeek(16)),
+      ],
       '2026-09-01',
     )
 

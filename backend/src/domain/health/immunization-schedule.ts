@@ -125,6 +125,15 @@ export interface VaccinePlanStep {
   windowStart: string;
   windowEnd: string;
   status: VaccineStepStatus;
+  /**
+   * 状态的**中文说法**，由后端下发（2026-10-07，老板审计第 5 块）。
+   *
+   * 为什么放后端：这句话的口径跟"每一类只显示下一针"绑在一起 ——
+   * 窗口过去的那一针，作为"这一类下一针"时叫「该补了」，
+   * 而不是「已逾期」；而"没有证据"时又要软成「还没记录」。
+   * 规则只写一处，小程序/医生分享页/以后的提醒都直接用这个字段。
+   */
+  statusLabel: string;
   /** 窗口内命中的记录（有的话） */
   matchedRecordId: string | null;
   matchedRecordDate: string | null;
@@ -1014,11 +1023,19 @@ function resolveStatus(
   decision: VaccineDecision | undefined,
   today: Date,
 ): VaccineStepStatus {
-  if (decision === 'SKIP') {
-    return 'SKIPPED';
-  }
+  /*
+   * ⚠️ 顺序很讲究（2026-10-07 老板审计第 5 块确认）：
+   * **"真的打了"优先于"点过不做"**。
+   *
+   * 原来 SKIP 排在最前面，于是出现过这种别扭结果：顾客先点了"不做"，
+   * 后来其实带狗去打了那一针（记录确实顶上了这一步），
+   * 计划里却仍然写着「不做」。打了针是事实，不做只是当时的意图 —— 事实优先。
+   */
   if (matched) {
     return 'DONE';
+  }
+  if (decision === 'SKIP') {
+    return 'SKIPPED';
   }
   if (today.getTime() < seed.windowStart.getTime()) {
     return 'UPCOMING';
@@ -1071,6 +1088,36 @@ function buildReminder(
       return `${label}：已完成`;
     default:
       return `${label}：已选择不做`;
+  }
+}
+
+/**
+ * 状态的中文说法（2026-10-07 老板审计第 5 块定）。
+ *
+ *   · 已完成 / 待安排 / 该打了 —— 好理解，不解释
+ *   · **窗口过去的**：作为"这一类的下一针"显示时叫「**该补了**」，
+ *     不再叫「已逾期」—— 老板的原话是"已经逾期的，我们不显示出来，
+ *     也不告诉用户就可以了……我们只需要告诉用户接下来该打什么"。
+ *     但那一针本身还是要出现（每一类都得有"下一步"），只是口气改成"该补上"。
+ *   · 没有证据时（这一类一条记录都没有、也不是"起针"）→ 「还没记录」，
+ *     那是给"家长明明打过、只是没记"用的，不指责。
+ */
+function resolveStatusLabel(
+  status: VaccineStepStatus,
+  noEvidence: boolean,
+  isKindStart: boolean,
+): string {
+  switch (status) {
+    case 'DONE':
+      return '已完成';
+    case 'SKIPPED':
+      return '不做';
+    case 'UPCOMING':
+      return '待安排';
+    case 'DUE':
+      return isKindStart || !noEvidence ? '该打了' : '还没记录';
+    default:
+      return noEvidence ? '还没记录' : '该补了';
   }
 }
 
@@ -1414,9 +1461,10 @@ export function buildVaccinePlan(
       'WSAVA 2024：6~8 周龄起，每 2~4 周一次，直到有一针落在 ' +
       `${CORE_PUPPY_SERIES.finishWeeksMin} 周龄或更大`;
 
+    const newPuppySeeds: StepSeed[] = [];
     for (let index = 0; index < doseCount; index += 1) {
       const planned = addWeeks(startDate, index * spacingWeeks);
-      seeds.push({
+      newPuppySeeds.push({
         key: `core-puppy-${index + 1}`,
         kind: 'core',
         label:
@@ -1444,23 +1492,6 @@ export function buildVaccinePlan(
     }
 
     /*
-     * 26 周补强还要不要排？
-     *   · 已经打过核心苗的：看**第一针**是不是打在 26 周龄之后
-     *     （"大于 26 周才开始首免的狗，一针就够" —— 老板 2026-10-06 定的）；
-     *   · 一针都还没打的：看**现在多大** —— 一只 2 岁、档案空白的狗现在才
-     *     开始首免，那一针同样顶掉了补强（老板拍板的"永远显示成已逾期"那条）。
-     * ⚠️ 这两者不能用同一个数：一只 15 周龄开始首免、现在 30 周龄的狗，
-     *    26 周补强是**要补的**，不能因为"现在 30 周了"就把它删掉。
-     */
-    const covers26wBooster = firstCoreDose
-      ? seriesStartWeeks >= CORE_PUPPY_SERIES.boosterWeeks
-      : dogAgeWeeks >= CORE_PUPPY_SERIES.boosterWeeks;
-    if (covers26wBooster) {
-      const index = seeds.findIndex((seed) => seed.key === 'core-26w');
-      if (index >= 0) seeds.splice(index, 1);
-    }
-
-    /*
      * 一针都没打过时，第一针就是"现在该打"那一步 —— 不能被"还没记录"的
      * 软口气盖住（那是给"家长明明打过、只是没记"的情况用的）。
      * 见下面 buildReminder 的调用处。
@@ -1469,8 +1500,19 @@ export function buildVaccinePlan(
       urgentFirstDoseKey = 'core-puppy-1';
     }
 
-    // 后面的逻辑（匹配、平移、显示）都假定 seeds 按窗口起点有序
-    seeds.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
+    /*
+     * ⚠️ 这里**不能按窗口起点重排**（2026-10-07 踩过）。
+     *
+     * 一只 10 岁、档案空白的狗：它的成年加强窗口按程序表算是在 2020~2026 年
+     * （早就过去了），而"首免那一针"的窗口是**今天** —— 按窗口排的话，
+     * 「成年加强 第 1 次」会排到「首免（一针）」前面，
+     * "这一类的下一针"就选错成了成年加强 ✗。
+     *
+     * 正确的顺序是**程序顺序**：首免那几针 → 26 周补强 → 成年加强。
+     * 基础程序表本来就是按这个顺序（窗口都是按生日推的），
+     * 所以把新的首免针插回最前面就行。
+     */
+    seeds.unshift(...newPuppySeeds);
   } else if (firstCoreDose) {
     /*
      * 按时（≤8 周龄）开始的狗：沿用固定的四针程序表；
@@ -1511,6 +1553,30 @@ export function buildVaccinePlan(
         }
       }
     }
+  }
+
+  /*
+   * ══ 26 周补强要不要排？—— 只要有一针核心苗打在 ≥26 周龄，就算补过了 ══
+   *
+   * 指南说的是"26 周龄或稍后再补一针"（Revaccination at or after 26 weeks）。
+   * 所以任何一针落在 ≥26 周龄的核心苗，同时就是那一针补强 —— 没有"必须在
+   * 26~30 周那个窗口里打"这回事。
+   *
+   * 实测踩过的两种情况（老板审计时那个例子就是第一种）：
+   *   · 8/12/16 周打完、第 5 针拖到 1 岁才打 → 原来会留一步
+   *     「首免后补强（26 周龄）· 该补了（窗口 2026-07）」✗ 其实那一针已经补过了；
+   *   · 一针都没打过、现在 2 岁的狗 → 现在开始打的那一针同样顶掉补强
+   *     （老板 2026-10-06 定的"大于 26 周才开始首免，一针就够"）；
+   *   · 反过来：15 周龄开始首免、现在 30 周龄的狗，**补强还是要补** ——
+   *     因为它一针都还没落在 ≥26 周龄。
+   */
+  const covers26wBooster =
+    coreDoseDates.some(
+      (date) => weeksBetween(birthday, date) >= CORE_PUPPY_SERIES.boosterWeeks,
+    ) || (!firstCoreDose && dogAgeWeeks >= CORE_PUPPY_SERIES.boosterWeeks);
+  if (covers26wBooster) {
+    const index = seeds.findIndex((seed) => seed.key === 'core-26w');
+    if (index >= 0) seeds.splice(index, 1);
   }
 
   /**
@@ -1858,8 +1924,33 @@ export function buildVaccinePlan(
   runMatching();
   reanchorWindows();
 
-  const steps: VaccinePlanStep[] = seeds
-    .map((seed) => {
+  /**
+   * 哪几类的"起针"要显示成"**现在该打**"（2026-10-07 老板审计第 5 块定）。
+   *
+   * 判据：这一类**一针都没打过**（队列是空的），而且它的起针窗口**已经过去**。
+   * 这种时候显示"该补了（窗口 2024 年 3~6 月）"既别扭也没有意义 ——
+   * 家长看到的就是"现在开始打第一针"。所以把窗口挪到今天，
+   * 状态自然变成"该打了"，措辞也不再用"还没记录"那种软口气。
+   *
+   * 窗口宽度保持不变（狂犬 90 天还是 90 天）。
+   */
+  const firstSeedKeyByKind = new Map<VaccineKind, string>();
+  for (const seed of seeds) {
+    if (!firstSeedKeyByKind.has(seed.kind)) firstSeedKeyByKind.set(seed.kind, seed.key);
+  }
+  const recordlessStartKeys = new Set<string>();
+  for (const [kind, key] of firstSeedKeyByKind.entries()) {
+    if ((recordsByKind.get(kind) || []).length > 0) continue;
+    recordlessStartKeys.add(key);
+    const seed = seeds.find((item) => item.key === key);
+    if (seed && seed.windowEnd.getTime() < today.getTime()) {
+      const width = seed.windowEnd.getTime() - seed.windowStart.getTime();
+      seed.windowStart = today;
+      seed.windowEnd = new Date(today.getTime() + width);
+    }
+  }
+
+  const allSteps: VaccinePlanStep[] = seeds.map((seed) => {
       const matched = assignedByKey.get(seed.key) ?? null;
       // 顾客说"不做"的那一步不再报逾期，尊重他的选择
       const status = resolveStatus(
@@ -1880,16 +1971,17 @@ export function buildVaccinePlan(
         windowStart: toDateText(seed.windowStart),
         windowEnd: toDateText(seed.windowEnd),
         status,
+        statusLabel: resolveStatusLabel(status, !kindHasEvidence, recordlessStartKeys.has(seed.key)),
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-          reminder: buildReminder(
+        reminder: buildReminder(
           status,
           seed.label,
-          !kindHasEvidence && seed.key !== urgentFirstDoseKey,
+          !kindHasEvidence && !recordlessStartKeys.has(seed.key),
         ),
-        // 一针都没打过时，"该打这一针"是事实、不是指责 —— 不用"还没记录"的软口气
-        noEvidence: !kindHasEvidence && seed.key !== urgentFirstDoseKey,
+        // "这一类的起针"是事实、不是指责 —— 不用"还没记录"的软口气
+        noEvidence: !kindHasEvidence && !recordlessStartKeys.has(seed.key),
         // 这一步大概在几周龄 → 决定哪些产品顶得上（最低首免周龄不能晚于它）
         // 先占位：推荐产品要等**所有步骤的状态都出来**才能算
         // （见下面"多联苗该不该推"那一段），间距提醒同理。
@@ -1897,36 +1989,45 @@ export function buildVaccinePlan(
         spacingNote: '',
       };
     })
-    // 只留下"对现在还有意义"的步骤。
-    //
-    // 不加这一步，一只 10 岁的老狗会看到"幼犬首免 第 1 针：已逾期"这种
-    // 毫无意义的提示 —— 那是十年前的窗口，不是现在要做的事。
-    //
-    // 规则：
-    //   · DONE              → 保留，那是这只狗的历史
-    //   · DUE / OVERDUE     → 只在窗口刚过去一年内保留（过期太久的不算"该做"）
-    //   · UPCOMING          → 只保留 18 个月内会到期的（否则一次列出十几年后的安排）
-    //   · SKIPPED           → 按它原本该在的时间段处理
-    .filter((step) => {
-      const start = parseDateText(step.windowStart);
-      const end = parseDateText(step.windowEnd);
-      if (!start || !end) {
-        return false;
-      }
+    /*
+     * ══ 每一类只留"下一针"（2026-10-07 老板审计第 5 块定）════════════════
+     *
+     * 老板原话："所有类型的疫苗，我们只给顾客看到下一针待接种的疫苗就可以了。
+     * 比如核心疫苗下一针该怎么打？或者狂犬疫苗下一针该怎么打？
+     * 钩端螺旋体下一针该怎么打？……而不是用一个时间来框住需要显示的待接种的计划。"
+     *
+     * 所以：
+     *   · **已完成** → 保留（那是这只狗的历史，老板要留着）
+     *   · **不做**   → 不显示（顾客已经决定了，不再拿窗口去烦他）
+     *   · 其余未完成的 → **每一类只留最靠前的那一步**（"这一类的下一针"），
+     *     别的都不显示 —— 这就是"不许跳步"，现在由后端筛好再下发，
+     *     小程序、医生分享页、以后的提醒都不用各自再实现一遍。
+     *
+     * 顺带**去掉了两个时间框**（原来"过期一年以上不显示"、"18 个月以后不显示"）：
+     * 一个类别最多出一条，程序表再长也不会刷屏，那两个框只会误伤 ——
+     * 比如"下一针在 3 年后"的成年加强，或者一只漏打三年、下一针早就过期的狗
+     * （后者原来会让整个狂犬疫苗从计划里消失，那是很危险的）。
+     */
+    ;
 
-      if (step.status === 'DONE') {
-        return true;
-      }
+  /** 每一类里"最靠前的那一步还没完成的" —— 就是这一类的下一针 */
+  const nextPendingKeyByKind = new Map<VaccineKind, string>();
+  for (const step of allSteps) {
+    if (step.status === 'DONE' || step.status === 'SKIPPED') continue;
+    if (!nextPendingKeyByKind.has(step.kind)) {
+      nextPendingKeyByKind.set(step.kind, step.key);
+    }
+  }
 
-
-      const recentEnough = end.getTime() >= addDays(today, -365).getTime();
-      if (step.status === 'DUE' || step.status === 'OVERDUE') {
-        return recentEnough;
-      }
-
-      // UPCOMING / SKIPPED：看它是不是在近期将来
-      return start.getTime() <= addDays(today, 540).getTime() && recentEnough;
-    });
+  const steps: VaccinePlanStep[] = allSteps.filter((step) => {
+    if (step.status === 'DONE') {
+      return true;
+    }
+    if (step.status === 'SKIPPED') {
+      return false;
+    }
+    return nextPendingKeyByKind.get(step.kind) === step.key;
+  });
 
   /*
    * 多联苗该不该推（2026-10-05 老板第 4 问）。

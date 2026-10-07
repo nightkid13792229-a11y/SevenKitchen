@@ -190,6 +190,14 @@ interface PlanStep {
   windowStart: string
   windowEnd: string
   status: 'DONE' | 'DUE' | 'UPCOMING' | 'OVERDUE' | 'SKIPPED'
+  /**
+   * 状态的中文说法，**后端下发**（2026-10-07 老板审计第 5 块）。
+   *
+   * 口径跟"每一类只显示下一针"绑在一起：窗口过去的那一针，作为
+   * "这一类的下一针"时叫「该补了」而不是「已逾期」；没有证据时软成「还没记录」。
+   * 老后端不带这个字段时，退回下面 statusLabel() 里那套映射。
+   */
+  statusLabel?: string
   matchedRecordId: string | null
   matchedRecordDate: string | null
   /**
@@ -382,6 +390,10 @@ const noEvidence = computed(() => {
  *    这一类一针记录都没有 → 这一类一律说"还没记录"。
  */
 function statusLabel(step: PlanStep) {
+  // 后端下发的口径优先（它才知道"这一针是不是这一类的下一针"）
+  if (step.statusLabel) {
+    return step.statusLabel
+  }
   const kindNoEvidence =
     typeof step.noEvidence === 'boolean' ? step.noEvidence : noEvidence.value
   if (kindNoEvidence && (step.status === 'OVERDUE' || step.status === 'DUE')) {

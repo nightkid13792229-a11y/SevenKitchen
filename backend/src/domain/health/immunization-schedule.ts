@@ -1323,30 +1323,46 @@ export function buildVaccinePlan(
    * 只是不再参与"算不算完成"的判定。打得太早/太晚由 detectConflicts 单独提示。
    */
   /*
-   * ══ 首免针数按"第一次打核心苗时多大"裁（WSAVA 2024）═══════════════════
+   * ══ 首免按"这只狗自己的第一针"排（2026-10-07 老板定的相对模型）════════
    *
-   * 老板 2026-10-06 指出："WSAVA 疫苗接种指南中，有说过，对于大于 16 周的幼犬，
-   * 接种一针核心疫苗，并在 26 周后再补打一次加强针即可。……如果这只狗狗大于
-   * 26 周才开始首免程序的话，那它实际上只需要打一针核心疫苗即可。"
+   * 老板审计时问的："如果是 15 周才开始进入幼犬首免流程的话，那是不是我们
+   * 也不用死守固定死的幼犬首免的 8~12、12~14、14~16 这个固定流程呢？
+   * ……对于用户而言，这是他狗狗的第一针呀。"
    *
-   * 对，而且原来**完全没实现**：一个 40 周龄才开始首免的狗，计划会要求它补打
-   * 4 针幼犬首免（全挂已逾期）+ 26 周补强 —— 那是给"6~8 周龄开始"的幼犬排的，
-   * 对一只成年犬毫无意义。
+   * 对。指南的原话是"6~8 周龄起，**每 2~4 周一次，直到 16 周龄或更大**"——
+   * 它约束的是**间隔**和**结束条件**（有一针落在 ≥16 周龄），
+   * 从没规定"必须凑够几针"，也没规定"必须打在固定的那几个档位"。
    *
-   * 依据（同一份指南）：
-   *   · 幼犬首免要打到 ≥16 周龄，是因为**母源抗体会干扰**，不是"必须凑够几针"；
-   *   · 16 周龄以后才开始 → 母源抗体已经消退，**一针就是完成针**
-   *     （≥16 周龄那一针本来就是全程序里最重要的那一针）；
-   *   · 26 周龄以后才开始 → 那一针同时顶掉了 6 月龄补强，**不需要再补**
-   *     （指南：26 周龄或更大、接种史不明的犬，一针核心疫苗即可提供足够保护）。
+   * 所以现在：
+   *   · 起点 = 这只狗实际打第一针的那天；还没打过 → 就是现在
+   *     （没到 6 周龄的，从 6~8 周龄起）；
+   *   · 从起点起每 2~4 周排一针，**直到有一针落在 ≥16 周龄**；
+   *   · **针次从它自己的第一针开始数** —— 15 周才打的第一针就叫"第 1 针"；
+   *   · 起点本身已 ≥16 周龄 → 一针就是完成针；
+   *     起点已 ≥26 周龄 → 连 26 周补强都不用补。
+   *
+   * 这一条同时替掉了原来三处补丁（"≥16 周才首免就裁成一针"、"完成针裁剪"、
+   * 以及审计时发现的"不许催比开始接种还早的档位"）。
+   * 只有**6~8 周龄按时开始**的狗继续用固定的四针程序表（那套已经审核过，不动）。
    */
-  const firstCoreDate = parsed
-    .filter((item) => item.kinds.includes('core') || item.kinds.includes('core_early'))
+  const coreDoseDates = parsed
+    .filter(
+      (item) =>
+        item.kinds.includes('core') &&
+        recordCoversStep(item.record.vaccineName, 'core'),
+    )
     .map((item) => item.date)
-    .sort((a, b) => a.getTime() - b.getTime())[0];
-  const coreStartAgeWeeks = firstCoreDate
-    ? weeksBetween(birthday, firstCoreDate)
-    : weeksBetween(birthday, today);
+    .sort((a, b) => a.getTime() - b.getTime());
+  const firstCoreDose = coreDoseDates[0];
+  const latestCoreDose = coreDoseDates[coreDoseDates.length - 1];
+  const dogAgeWeeks = weeksBetween(birthday, today);
+
+  /** 这只狗实际开始首免的周龄（还没打过 → 现在，或 6 周龄起） */
+  const seriesStartWeeks = firstCoreDose
+    ? weeksBetween(birthday, firstCoreDose)
+    : dogAgeWeeks >= CORE_PUPPY_SERIES.finishWeeksMin
+      ? CORE_PUPPY_SERIES.finishWeeksMin
+      : Math.max(dogAgeWeeks, CORE_PUPPY_SERIES.startWeeksMin);
 
   /**
    * 被裁出来的那一针（「首免（一针）」）的 key —— 见下面 filter 里的例外规则。
@@ -1354,118 +1370,135 @@ export function buildVaccinePlan(
    */
   let collapsedCoreKey: string | null = null;
 
-  if (coreStartAgeWeeks >= 16) {
-    const puppyKeys = seeds
-      .filter((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key))
-      .map((seed) => seed.key);
-    // 只留最后一针（≥16 周龄那一针就是完成针）
-    const keepKey = puppyKeys[puppyKeys.length - 1];
-    collapsedCoreKey = keepKey ?? null;
-
+  if (seriesStartWeeks > CORE_PUPPY_SERIES.startWeeksMax) {
+    // ── 相对模型：丢掉固定档位，按这只狗自己的起点重排 ──
     for (let index = seeds.length - 1; index >= 0; index -= 1) {
       const seed = seeds[index];
-      if (seed.kind !== 'core') continue;
-      const isPuppy = /^core-puppy-/.test(seed.key);
-      if (isPuppy && seed.key !== keepKey) {
-        seeds.splice(index, 1);
-      } else if (seed.key === 'core-26w' && coreStartAgeWeeks >= 26) {
-        // 26 周龄以后才开始 → 那一针已经顶掉了 6 月龄补强
+      if (seed.kind === 'core' && /^core-puppy-/.test(seed.key)) {
         seeds.splice(index, 1);
       }
     }
 
-    const kept = seeds.find((seed) => seed.key === keepKey);
-    if (kept) {
-      kept.label = '核心疫苗 首免（一针）';
-      kept.basis =
-        `WSAVA 2024：${Math.round(coreStartAgeWeeks)} 周龄才开始首免的犬，` +
-        '母源抗体已经消退，**一针核心疫苗即可**（不需要再按 2~4 周连打）' +
-        (coreStartAgeWeeks >= 26
-          ? '；26 周龄以后才开始的那一针同时顶掉了 6 月龄补强，也不需要再补。'
-          : '；仍建议在 26 周龄前后补一针。');
+    // 还差几针：从起点起每 2~4 周一次，直到有一针落在 ≥16 周龄
+    const doseCount =
+      seriesStartWeeks >= CORE_PUPPY_SERIES.finishWeeksMin
+        ? 1
+        : Math.ceil(
+            (CORE_PUPPY_SERIES.finishWeeksMin - seriesStartWeeks) /
+              CORE_PUPPY_SERIES.intervalWeeksMax,
+          ) + 1;
+    const spacingWeeks =
+      doseCount <= 1
+        ? 0
+        : Math.max(
+            CORE_PUPPY_SERIES.intervalWeeksMin,
+            Math.ceil(
+              (CORE_PUPPY_SERIES.finishWeeksMin - seriesStartWeeks) /
+                (doseCount - 1),
+            ),
+          );
+    const startDate = firstCoreDose ?? addWeeks(birthday, seriesStartWeeks);
+    const ruleText =
+      'WSAVA 2024：6~8 周龄起，每 2~4 周一次，直到有一针落在 ' +
+      `${CORE_PUPPY_SERIES.finishWeeksMin} 周龄或更大`;
+
+    for (let index = 0; index < doseCount; index += 1) {
+      const planned = addWeeks(startDate, index * spacingWeeks);
+      seeds.push({
+        key: `core-puppy-${index + 1}`,
+        kind: 'core',
+        label:
+          doseCount === 1
+            ? '核心疫苗 首免（一针）'
+            : `幼犬首免 第 ${index + 1} 针`,
+        windowStart: planned,
+        windowEnd: addWeeks(planned, 2),
+        basis:
+          doseCount === 1
+            ? `${ruleText}。这只狗 ${Math.round(seriesStartWeeks)} 周龄才开始首免，` +
+              '母源抗体已经消退，**一针核心疫苗即可**（不需要再按 2~4 周连打）' +
+              (seriesStartWeeks >= CORE_PUPPY_SERIES.boosterWeeks
+                ? '；26 周龄以后才开始的那一针同时顶掉了 6 月龄补强，也不需要再补。'
+                : '；仍建议在 26 周龄前后补一针。')
+            : `${ruleText}。这只狗 ${Math.round(seriesStartWeeks)} 周龄才开始首免，` +
+              '所以从**它自己的第一针**起算，还要再打 ' +
+              `${doseCount} 针（针次按它自己的第一针编号，不是按固定月龄档位）。`,
+      });
     }
-  }
 
-  /*
-   * ══ 有一针核心苗打在 ≥16 周龄 → 首免到此完成（2026-10-07 老板确认）════
-   *
-   * 指南口径：幼犬首免"每 2~4 周一次，直到 16 周龄或更大"——
-   * **落在 ≥16 周龄的那一针就是完成针**（此时母源抗体已消退）。
-   * 所以一只 8/12/16 周龄各打一针的狗，首免是**完成**的，不该再催第 4 针。
-   *
-   * 改之前是什么样（老板审计时实测出来的）：
-   *   · 8/12/16 周龄 → 说还差「幼犬首免 第 4 针 · 已逾期」；
-   *   · 8/12/17 周龄 → 同上；
-   *   · 8/12/18 周龄 → 同上（更冤：18 周龄本来正落在第 4 针窗口里，
-   *     却被"第 3 针"的窗口抢走了 —— 前两针把窗口往后推，正好盖到 18 周）；
-   *   · 8/12/14 周龄 → 说差第 4 针，**这个是对的**（14 周太早，不能算完成针）。
-   * 也就是说：**最标准的那种打法反而被多催一针**。
-   *
-   * 现在的做法：只要有一条"真的能顶核心苗"的记录落在 ≥16 周龄，
-   * 就把**排在它之后**的幼犬首免步骤去掉（那些步骤存在的唯一目的，
-   * 就是保证有一针落在 ≥16 周龄 —— 既然已经有了，它们就没意义了）。
-   *
-   * ⚠️ 两点不能碰：
-   *   · **26 周补强照排**（老板特意确认过）—— 它是"首免完成后再补一针"，
-   *     不是首免的一部分。只有"第一次打核心苗就已 ≥26 周龄"那种狗
-   *     （上面那段裁针规则）才不需要补。
-   *   · 起始月龄 <16 周的狗才走这条；≥16 周才开始的那条路已经裁过了。
-   */
-  const finisherDose = parsed
-    .filter(
-      (item) =>
-        item.kinds.includes('core') &&
-        recordCoversStep(item.record.vaccineName, 'core') &&
-        weeksBetween(birthday, item.date) >= CORE_PUPPY_SERIES.finishWeeksMin,
-    )
-    .map((item) => item.date)
-    .sort((a, b) => a.getTime() - b.getTime())[0];
-
-  if (finisherDose && coreStartAgeWeeks < CORE_PUPPY_SERIES.finishWeeksMin) {
     /*
-     * 首免要排几步？—— **按实际打了几针核心苗**，不是死排 4 步。
-     *
-     * 完成针一旦存在（一针落在 ≥16 周龄），首免就算完成；那还剩几步，
-     * 取决于这只狗真的打了几针：
-     *   · 8/12/16 周龄 三针 → 排 3 步（原来会催第 4 针 ✗）
-     *   · 8/12/17、8/12/18 周龄 三针 → 同样 3 步
-     *   · 6/10/14/18 周龄 **四针**（程序表原本就是为这种打法排的）→ 仍然 4 步 ✓
-     *   · 8/12/14 周龄（最后一针太早，没有完成针）→ 不裁，照样要求补一针 ✓
-     *
-     * ⚠️ 别写成"只要有一针 ≥16 周龄就把最后一针删掉"：那样 6/10/14/18 这种
-     *    标准四针打法的第 4 针会被删掉，18 周龄那一针变成"没有步骤可顶"。
-     *    （实测踩过：组合苗那两条测试立刻红了。）
+     * 26 周补强还要不要排？
+     *   · 已经打过核心苗的：看**第一针**是不是打在 26 周龄之后
+     *     （"大于 26 周才开始首免的狗，一针就够" —— 老板 2026-10-06 定的）；
+     *   · 一针都还没打的：看**现在多大** —— 一只 2 岁、档案空白的狗现在才
+     *     开始首免，那一针同样顶掉了补强（老板拍板的"永远显示成已逾期"那条）。
+     * ⚠️ 这两者不能用同一个数：一只 15 周龄开始首免、现在 30 周龄的狗，
+     *    26 周补强是**要补的**，不能因为"现在 30 周了"就把它删掉。
      */
-    const coreDoseCount = parsed.filter(
-      (item) =>
-        item.kinds.includes('core') &&
-        recordCoversStep(item.record.vaccineName, 'core'),
-    ).length;
-
-    let trimmed = false;
-    for (let index = seeds.length - 1; index >= 0; index -= 1) {
-      const seed = seeds[index];
-      if (seed.kind !== 'core' || !/^core-puppy-/.test(seed.key)) continue;
-      const puppyLeft = seeds.filter(
-        (item) => item.kind === 'core' && /^core-puppy-/.test(item.key),
-      ).length;
-      if (puppyLeft <= coreDoseCount) break;
-      seeds.splice(index, 1);
-      trimmed = true;
+    const covers26wBooster = firstCoreDose
+      ? seriesStartWeeks >= CORE_PUPPY_SERIES.boosterWeeks
+      : dogAgeWeeks >= CORE_PUPPY_SERIES.boosterWeeks;
+    if (covers26wBooster) {
+      const index = seeds.findIndex((seed) => seed.key === 'core-26w');
+      if (index >= 0) seeds.splice(index, 1);
     }
 
-    // 裁过就要把"为什么没有第 4 针"说清楚，否则家长会以为漏排了
-    if (trimmed) {
-      const lastPuppy = [...seeds]
-        .reverse()
-        .find((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key));
-      if (lastPuppy) {
-        lastPuppy.basis +=
-          `；已经有一针打在 ≥${CORE_PUPPY_SERIES.finishWeeksMin} 周龄，` +
-          '按 WSAVA 2024 这一针就是完成针，首免到此为止（不必再补第 4 针）。';
+    if (doseCount === 1) {
+      collapsedCoreKey = 'core-puppy-1';
+    }
+
+    // 后面的逻辑（匹配、平移、显示）都假定 seeds 按窗口起点有序
+    seeds.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
+  } else if (firstCoreDose) {
+    /*
+     * 按时（≤8 周龄）开始的狗：沿用固定的四针程序表；
+     * 但一旦"有一针落在 ≥16 周龄"，首免就算完成，后面那几针不必再排 ——
+     * 留几步按**实际打了几针**算：
+     *   · 8/12/16 周龄 三针 → 排 3 步（原来会催第 4 针 ✗）
+     *   · 6/10/14/18 周龄 四针 → 仍然 4 步 ✓（程序表本来就是为它排的）
+     *   · 8/12/14 周龄（最后一针太早）→ 不裁，照样要求补一针 ✓
+     *
+     * ⚠️ 别写成"只要有一针 ≥16 周龄就把最后一针删掉"：那样标准四针打法的
+     *    第 4 针会被删掉，18 周龄那一针变成"没有步骤可顶"。（实测踩过。）
+     */
+    const finisherDose = coreDoseDates.find(
+      (date) => weeksBetween(birthday, date) >= CORE_PUPPY_SERIES.finishWeeksMin,
+    );
+    if (finisherDose) {
+      let trimmed = false;
+      for (let index = seeds.length - 1; index >= 0; index -= 1) {
+        const seed = seeds[index];
+        if (seed.kind !== 'core' || !/^core-puppy-/.test(seed.key)) continue;
+        const puppyLeft = seeds.filter(
+          (item) => item.kind === 'core' && /^core-puppy-/.test(item.key),
+        ).length;
+        if (puppyLeft <= coreDoseDates.length) break;
+        seeds.splice(index, 1);
+        trimmed = true;
+      }
+
+      // 裁过就要把"为什么没有第 4 针"说清楚，否则家长会以为漏排了
+      if (trimmed) {
+        const lastPuppy = [...seeds]
+          .reverse()
+          .find((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key));
+        if (lastPuppy) {
+          lastPuppy.basis +=
+            `；已经有一针打在 ≥${CORE_PUPPY_SERIES.finishWeeksMin} 周龄，` +
+            '按 WSAVA 2024 这一针就是完成针，首免到此为止（不必再补第 4 针）。';
+        }
       }
     }
   }
+
+  /**
+   * 最近一次实际打过的核心苗 —— 不论它有没有"配上"某一步。
+   *
+   * 成年加强按老板 2026-10-07 定的口径算：**上一次实际接种 + 3 年**。
+   * 一只每年都打的狗（比如赛文），"上一次"必须是最后那一针；
+   * 只认"配上了步骤的那一针"会把锚点停在最早那针上，算出偏早的日期。
+   */
+  const latestCoreDoseMs = latestCoreDose ? latestCoreDose.getTime() : null;
 
   const recordsByKind = new Map<VaccineKind, { record: VaccineRecordLike; date: Date }[]>();
   for (const item of parsed) {
@@ -1767,14 +1800,24 @@ export function buildVaccinePlan(
        *   · 按程序档位平移 → 成年加强落在 2030-01-30；
        *   · 按"上一针 + 3 年" → 2030-01-04，正对周年。要的是后者。
        */
+      /*
+       * 第 1 次加强的锚点用**这只狗最后打过的核心苗**（latestCoreDoseMs），
+       * 不用"配上了步骤的那一针" —— 一只每年都打的狗，中间几针可能
+       * 配不上任何步骤（接种比建议更频），但"上一次实际接种"就是最后那针。
+       * 第 2 次起按老规矩：上一次加强打了就按实际那天，没打就跟着窗口链走。
+       */
+      const adultAnchorMs =
+        seed.key === 'core-adult-1' && latestCoreDoseMs !== null
+          ? latestCoreDoseMs
+          : previousDoseMs;
       if (
         seed.kind === 'core' &&
         /^core-adult-/.test(seed.key) &&
-        previousDoseMs !== null
+        adultAnchorMs !== null
       ) {
         const originalStart = (originalWindowStart.get(seed.key) as Date).getTime();
         const originalEnd = (originalWindowEnd.get(seed.key) as Date).getTime();
-        const start = addYears(new Date(previousDoseMs), CORE_ADULT_BOOSTER.repeatYears);
+        const start = addYears(new Date(adultAnchorMs), CORE_ADULT_BOOSTER.repeatYears);
         seed.windowStart = start;
         seed.windowEnd = new Date(start.getTime() + (originalEnd - originalStart));
         // 后面的兄弟步骤跟着这一步走；若这一步自己没打，锚点就交给平移链

@@ -172,8 +172,11 @@ describe('疫苗计划', () => {
       expect(puppySteps[0].status).toBe('OVERDUE');
       expect(plan.steps.every((step) => !step.label.includes('幼犬'))).toBe(true);
 
-      // 十年前的窗口仍然不是"现在该做的事"：早期那几针一条都不许出现
-      for (const key of ['core-puppy-1', 'core-puppy-2', 'core-puppy-3', 'core-26w']) {
+      // 十年前的窗口仍然不是"现在该做的事"：幼犬首免那一串一条都不许出现。
+      // ⚠️ 2026-10-07 起"一针"用的是 core-puppy-1（针次按这只狗自己的第一针编号），
+      //    所以这里改成断言"没有第 2/3/4 针、没有 26 周补强、没有幼犬首免字样"。
+      expect(plan.steps.every((step) => !step.label.includes('幼犬首免'))).toBe(true);
+      for (const key of ['core-puppy-2', 'core-puppy-3', 'core-puppy-4', 'core-26w']) {
         expect(plan.steps.find((step) => step.key === key)).toBeUndefined();
       }
     })
@@ -1488,12 +1491,40 @@ describe('按窗口匹配（2026-10-06 老板实测）', () => {
     expect(fourth!.matchedRecordDate).toBe('2026-07-25');
   })
 
-  it('🔴 2026-07-18 那一针卫佳捌完成的是"成年加强 第 1 次"（窗口正好从那一天开）', () => {
-    const adult = plan().steps.find((step) => step.key === 'core-adult-1');
+  it('🔴 这只狗的首免就是"一针"（78 周龄才开始），且核心苗不再被误报逾期', () => {
+    const steps = plan().steps;
+
+    // 2026-10-07 起改成"按这只狗自己的第一针"排：它的第一针就是 2024-08-18，
+    // 一针即完成首免（≥16 周龄才开始），标成「核心疫苗 首免（一针）」。
+    const first = steps.find((step) => step.key === 'core-puppy-1');
+    expect(first).toBeDefined();
+    expect(first!.label).toContain('一针');
+    expect(first!.status).toBe('DONE');
+    expect(first!.matchedRecordDate).toBe('2024-08-18');
+
+    // 关键：不许再拿"按生日算的旧窗口"去报核心苗逾期
+    const corePending = steps.filter(
+      (step) => step.kind === 'core' && step.status !== 'DONE',
+    );
+    expect(corePending.every((step) => step.status !== 'OVERDUE')).toBe(true);
+  })
+
+  it('🔴 成年加强的下一次 = 最后那一针 + 3 年（老板 2026-10-07 定的口径）', () => {
+    // 这只狗最后一针核心苗是 2026-07-18 → 下一次加强就该是 2029-07-18
+    const later = buildVaccinePlan({
+      dogId: 'dog-seven',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+        { id: 'r4', vaccineName: '卫佳捌', vaccinationDate: '2026-07-18', nextDueDate: null },
+      ],
+      today: new Date('2029-06-01'),
+    });
+    const adult = later.steps.find((step) => step.key === 'core-adult-1');
 
     expect(adult).toBeDefined();
-    expect(adult!.status).toBe('DONE');
-    expect(adult!.matchedRecordDate).toBe('2026-07-18');
+    expect(adult!.windowStart).toBe('2029-07-18');
   })
 
   it('窗口外的记录照样算数（早先那条口径不能丢）', () => {
@@ -1720,9 +1751,10 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
     expect(shot!.status).toBe('OVERDUE')
   })
 
-  it('打过核心苗的狗不许被翻旧账 —— 别把成年犬的首免再翻出来', () => {
-    // 这只狗 80 周龄才打上第一针核心苗，现在 158 周龄：档案里有核心记录，
-    // 「首免（一针）」早就被那一针顶掉了，不该再冒出来报逾期。
+  it('打过核心苗的狗不许被翻旧账 —— 显示成"已完成"，不是"已逾期"', () => {
+    // 这只狗 80 周龄才打上第一针核心苗，现在 158 周龄。
+    // 2026-10-07 起：这一针就是它的"首免（一针）"，该显示成**已完成**
+    // （老写法用的是 18~22 周龄那个固定档位，配不上、于是什么都不显示）。
     const plan = buildVaccinePlan({
       dogId: 'dog-1',
       birthday: bornWeeksAgo(158),
@@ -1737,7 +1769,15 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
       today: TODAY3,
     })
 
-    expect(plan.steps.some((step) => step.label.includes('一针'))).toBe(false)
+    const shot = plan.steps.find((step) => step.label.includes('一针'))
+    expect(shot).toBeDefined()
+    expect(shot!.status).toBe('DONE')
+    // 而且不许有"补打首免"这种逾期项冒出来
+    expect(
+      plan.steps
+        .filter((step) => step.kind === 'core')
+        .every((step) => step.status !== 'OVERDUE'),
+    ).toBe(true)
   })
 })
 

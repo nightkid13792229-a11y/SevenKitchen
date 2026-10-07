@@ -255,6 +255,8 @@ const props = defineProps<{
  */
 const emit = defineEmits<{
   (event: 'record-step', payload: { kinds: string[]; stepLabel: string }): void
+  /** 把"每一类的下一针"报给页面 —— 顶部那条到期提醒用它（2026-10-07 老板定） */
+  (event: 'pending-changed', pending: PlanPending[]): void
 }>()
 
 /** 下一针（后端算好；忽略掉的步骤后端已经排除在 nextStep 之外） */
@@ -279,6 +281,23 @@ const STATUS_LABELS: Record<PlanStep['status'], string> = {
   UPCOMING: '待安排',
   OVERDUE: '已逾期',
   SKIPPED: '不做',
+}
+
+/**
+ * 把"每一类的下一针"报给页面（2026-10-07 老板拍板）。
+ *
+ * 背景：顶部那条"到期提醒"原来只看每条记录上**人工填的**「下次到期日」——
+ * 顾客不填就没有提醒，填错了还会误导。老板定的是"**系统按程序自动算、
+ * 与接种计划保持一致**"。计划在这一块里算，所以由它把结果报上去，
+ * 记录板块那条提醒条就用这份数据，而不是各自去猜。
+ */
+interface PlanPending {
+  key: string
+  label: string
+  kindLabel: string
+  status: 'DUE' | 'OVERDUE' | 'UPCOMING'
+  statusLabel: string
+  windowStart: string
 }
 
 const loaded = ref(false)
@@ -566,6 +585,20 @@ async function load() {
       noEvidence: res.data.noEvidence === true,
     }
     loaded.value = true
+    // 把"每一类的下一针"报给页面 —— 顶部那条到期提醒要用它（2026-10-07）
+    emit(
+      'pending-changed',
+      (plan.value.steps || [])
+        .filter((step) => step.status !== 'DONE' && step.status !== 'SKIPPED')
+        .map((step) => ({
+          key: step.key,
+          label: step.label,
+          kindLabel: step.kindLabel,
+          status: step.status as PlanPending['status'],
+          statusLabel: step.statusLabel || '',
+          windowStart: step.windowStart,
+        })),
+    )
   } catch (error: any) {
     loadError.value = error?.message || '加载疫苗计划失败'
   }

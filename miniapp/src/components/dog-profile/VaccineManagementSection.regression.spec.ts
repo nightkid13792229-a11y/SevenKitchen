@@ -295,7 +295,9 @@ describe('疫苗管理', () => {
     expect(source).toContain('已过期')
     expect(source).toContain('30 天内到期')
     expect(source).toContain('daysUntil')
-    expect(source).toContain('还有 ${days} 天到期')
+    // 2026-10-07：这句明确标出是"疫苗本上写的"（与系统按程序算的那份分开）
+    expect(source).toContain('疫苗本上写的到期日')
+    expect(source).toContain('还有 ${days} 天')
   })
 
   it('删除前必须二次确认，避免误删接种史', () => {
@@ -906,5 +908,54 @@ describe('接种日期不能晚于今天（2026-10-07）', () => {
 
     // 只留一句"接种日期不能晚于今天"，后面那句"还没打的针请等打完再记录"去掉
     expect(source).not.toContain('接种日期不能晚于今天 ——')
+  })
+})
+
+/**
+ * 顶部"到期提醒"改成**系统按程序自动算**（2026-10-07 老板定）。
+ *
+ * 原来它只看每条记录上人工填的「下次到期日」：顾客不填就没有提醒，
+ * 填错了还会误导。现在优先用计划算出来的"每一类的下一针"，
+ * 人工填的那个仍然保留，但明确标成"疫苗本上写的"，两种日期不混着说。
+ */
+describe('到期提醒 · 用系统推算的那一份（2026-10-07）', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('提醒条优先用计划报上来的"下一针"', () => {
+    const source = readSection()
+
+    expect(source).toContain('planPending')
+    expect(source).toContain('按接种计划：')
+    // 计划没加载出来时仍然退回人工填的那份（不许空白）
+    expect(source).toContain('const overdue: string[] = []')
+  })
+
+  it('记录卡片上的到期日标明是"疫苗本上写的"（与系统推算的分开）', () => {
+    const source = readSection()
+
+    expect(source).toContain('疫苗本上写的到期日')
+  })
+
+  it('页面把计划报上来的数据转给记录板块', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('@pending-changed')
+    expect(page).toContain(':plan-pending="vaccinePlanPending"')
+  })
+
+  it('计划卡片会把"每一类的下一针"报上去', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(section).toContain("emit(\n      'pending-changed',")
   })
 })

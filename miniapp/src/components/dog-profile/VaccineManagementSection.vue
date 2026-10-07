@@ -495,6 +495,21 @@ interface VaccineDraft {
 const props = defineProps<{
   dogId: string
   /**
+   * 计划里"每一类的下一针"（由 VaccinePlanSection 通过页面转过来）。
+   *
+   * 2026-10-07 老板定：顶部那条"到期提醒"要**系统按程序自动算**，
+   * 不能只看每条记录上人工填的「下次到期日」—— 顾客不填就没提醒，
+   * 填错了还会误导。人工填的那个仍然保留，但标明是"疫苗本上写的"。
+   */
+  planPending?: {
+    key: string
+    label: string
+    kindLabel: string
+    status: string
+    statusLabel: string
+    windowStart: string
+  }[]
+  /**
    * 内嵌到健康管理页：隐藏每行的「保存」，改由底部那个自适应按钮统一保存。
    * （顾客不必在每一行里找保存键。）
    */
@@ -1363,15 +1378,20 @@ function dueHint(draft: VaccineDraft) {
     return ''
   }
 
+  /*
+   * ⚠️ 这里是**疫苗本上写的**到期日（人工/AI 抄下来的），不是系统推算的 ——
+   * 2026-10-07 老板定：两种日期不能混着说，所以这里明确标出"疫苗本上"。
+   * 系统按程序算出来的那一份在顶部提醒条和接种计划里。
+   */
   if (days < 0) {
-    return `已过期 ${Math.abs(days)} 天（到期日 ${draft.nextDueDate}）`
+    return `疫苗本上写的到期日 ${draft.nextDueDate}（已过期 ${Math.abs(days)} 天）`
   }
 
   if (days === 0) {
-    return `今天到期（${draft.nextDueDate}）`
+    return `疫苗本上写的到期日就是今天（${draft.nextDueDate}）`
   }
 
-  return `还有 ${days} 天到期（${draft.nextDueDate}）`
+  return `疫苗本上写的到期日 ${draft.nextDueDate}（还有 ${days} 天）`
 }
 
 function dueClass(draft: VaccineDraft) {
@@ -1387,6 +1407,28 @@ function dueClass(draft: VaccineDraft) {
  * 不做推送通知 —— 微信订阅消息需要顾客逐次授权，这里先给页面内的提醒。
  */
 const dueSummaryText = computed(() => {
+  /*
+   * 先看**计划算出来的**"每一类的下一针"（2026-10-07 老板定的口径）。
+   *
+   * 计划没加载出来时（或老后端不带这个数据），才退回"记录里人工填的
+   * 下次到期日"那套 —— 有数据就一定用系统算的。
+   */
+  const pending = props.planPending || []
+  if (pending.length > 0) {
+    const actionable = pending.filter(
+      (step) => step.status === 'DUE' || step.status === 'OVERDUE',
+    )
+    const nearest = [...pending].sort((a, b) =>
+      a.windowStart.localeCompare(b.windowStart),
+    )[0]
+    if (actionable.length > 0) {
+      return `按接种计划：${actionable.map((step) => step.label).join('、')} 该打了`
+    }
+    if (nearest) {
+      return `按接种计划：下一针是 ${nearest.label}（${nearest.windowStart} 起）`
+    }
+  }
+
   const overdue: string[] = []
   const upcoming: string[] = []
 

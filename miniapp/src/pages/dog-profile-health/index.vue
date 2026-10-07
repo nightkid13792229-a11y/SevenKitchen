@@ -148,6 +148,7 @@
             :dog-id="dogId"
             :data-version="vaccineDataVersion"
             @record-step="onPlanRecordStep"
+            @pending-changed="vaccinePlanPending = $event"
           />
           <VaccineManagementSection
             ref="vaccineSectionRef"
@@ -157,6 +158,7 @@
             :dog-id="dogId"
             @dirty-change="hasUnsavedSectionDraft = $event"
             @records-changed="onVaccineRecordsChanged"
+            :plan-pending="vaccinePlanPending"
           />
         </template>
 
@@ -1102,6 +1104,14 @@ const vaccineSectionRef = ref<{
  * 实测那条路不生效（详见 onVaccineRecordsChanged 的注释）。
  */
 const vaccinePlanRef = ref<{ reload?: () => void } | null>(null)
+
+/**
+ * 计划里"每一类的下一针"（由 VaccinePlanSection 报上来）——
+ * 顶部那条"到期提醒"用它，不再只看人工填的「下次到期日」（2026-10-07 老板定）。
+ */
+const vaccinePlanPending = ref<
+  { key: string; label: string; kindLabel: string; status: string; statusLabel: string; windowStart: string }[]
+>([])
 const weightSectionRef = ref<{
   saveRecord?: () => Promise<void>
   focusInput?: () => void

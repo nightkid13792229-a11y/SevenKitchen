@@ -1262,6 +1262,63 @@ export function buildVaccinePlan(
    * 窗口仍然有用 —— 它决定"这一步该在什么时候做、现在该不该提醒"，
    * 只是不再参与"算不算完成"的判定。打得太早/太晚由 detectConflicts 单独提示。
    */
+  /*
+   * ══ 首免针数按"第一次打核心苗时多大"裁（WSAVA 2024）═══════════════════
+   *
+   * 老板 2026-10-06 指出："WSAVA 疫苗接种指南中，有说过，对于大于 16 周的幼犬，
+   * 接种一针核心疫苗，并在 26 周后再补打一次加强针即可。……如果这只狗狗大于
+   * 26 周才开始首免程序的话，那它实际上只需要打一针核心疫苗即可。"
+   *
+   * 对，而且原来**完全没实现**：一个 40 周龄才开始首免的狗，计划会要求它补打
+   * 4 针幼犬首免（全挂已逾期）+ 26 周补强 —— 那是给"6~8 周龄开始"的幼犬排的，
+   * 对一只成年犬毫无意义。
+   *
+   * 依据（同一份指南）：
+   *   · 幼犬首免要打到 ≥16 周龄，是因为**母源抗体会干扰**，不是"必须凑够几针"；
+   *   · 16 周龄以后才开始 → 母源抗体已经消退，**一针就是完成针**
+   *     （≥16 周龄那一针本来就是全程序里最重要的那一针）；
+   *   · 26 周龄以后才开始 → 那一针同时顶掉了 6 月龄补强，**不需要再补**
+   *     （指南：26 周龄或更大、接种史不明的犬，一针核心疫苗即可提供足够保护）。
+   */
+  const firstCoreDate = parsed
+    .filter((item) => item.kinds.includes('core') || item.kinds.includes('core_early'))
+    .map((item) => item.date)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const coreStartAgeWeeks = firstCoreDate
+    ? weeksBetween(birthday, firstCoreDate)
+    : weeksBetween(birthday, today);
+
+  if (coreStartAgeWeeks >= 16) {
+    const puppyKeys = seeds
+      .filter((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key))
+      .map((seed) => seed.key);
+    // 只留最后一针（≥16 周龄那一针就是完成针）
+    const keepKey = puppyKeys[puppyKeys.length - 1];
+
+    for (let index = seeds.length - 1; index >= 0; index -= 1) {
+      const seed = seeds[index];
+      if (seed.kind !== 'core') continue;
+      const isPuppy = /^core-puppy-/.test(seed.key);
+      if (isPuppy && seed.key !== keepKey) {
+        seeds.splice(index, 1);
+      } else if (seed.key === 'core-26w' && coreStartAgeWeeks >= 26) {
+        // 26 周龄以后才开始 → 那一针已经顶掉了 6 月龄补强
+        seeds.splice(index, 1);
+      }
+    }
+
+    const kept = seeds.find((seed) => seed.key === keepKey);
+    if (kept) {
+      kept.label = '核心疫苗 首免（一针）';
+      kept.basis =
+        `WSAVA 2024：${Math.round(coreStartAgeWeeks)} 周龄才开始首免的犬，` +
+        '母源抗体已经消退，**一针核心疫苗即可**（不需要再按 2~4 周连打）' +
+        (coreStartAgeWeeks >= 26
+          ? '；26 周龄以后才开始的那一针同时顶掉了 6 月龄补强，也不需要再补。'
+          : '；仍建议在 26 周龄前后补一针。');
+    }
+  }
+
   const recordsByKind = new Map<VaccineKind, { record: VaccineRecordLike; date: Date }[]>();
   for (const item of parsed) {
     for (const kind of item.kinds) {
@@ -1316,29 +1373,51 @@ export function buildVaccinePlan(
       (item) => !usedIn(kind).has(item.record.id),
     );
 
-  // ① 窗口认领
-  for (const seed of seeds) {
-    if (assignedByKey.has(seed.key)) continue;
-    const hit = availableFor(seed.kind).find(
-      (item) =>
-        item.date.getTime() >= seed.windowStart.getTime() &&
-        item.date.getTime() <= seed.windowEnd.getTime(),
-    );
-    if (hit) {
-      assignedByKey.set(seed.key, hit);
-      markUsed(seed.kind, hit.record.id);
-    }
-  }
+  const runMatching = () => {
+    assignedByKey.clear();
+    usedByKind.clear();
 
-  // ② 顺序补位（剩下的记录，按日期从早到晚填给还没认领的步骤）
-  for (const seed of seeds) {
-    if (assignedByKey.has(seed.key)) continue;
-    const next = availableFor(seed.kind)[0];
-    if (next) {
-      assignedByKey.set(seed.key, next);
-      markUsed(seed.kind, next.record.id);
+    // ① 窗口认领
+    for (const seed of seeds) {
+      if (assignedByKey.has(seed.key)) continue;
+      const hit = availableFor(seed.kind).find(
+        (item) =>
+          item.date.getTime() >= seed.windowStart.getTime() &&
+          item.date.getTime() <= seed.windowEnd.getTime(),
+      );
+      if (hit) {
+        assignedByKey.set(seed.key, hit);
+        markUsed(seed.kind, hit.record.id);
+      }
     }
-  }
+
+    /*
+     * ② 顺序补位（剩下的记录，按日期从早到晚填给还没认领的步骤）。
+     *
+     * ⚠️ 但补位**必须时间上说得过去**（2026-10-06 补的门槛）：
+     *    不加门槛时，一条 2026 年的记录会去"完成"2023 年的那一步 ——
+     *    因为前面的步骤把中间那些记录都认领走了，补位只好拿最边上的顶上。
+     *    这样的匹配没有任何意义，还会把免疫计划讲成一个荒唐的故事。
+     *
+     * 允许的偏差：窗口起点的前一年 ~ 窗口终点的后一年。
+     * 覆盖面够用（拖打半年、一年都算数），又能挡住"差好几年"的乱配。
+     */
+    const FALLBACK_TOLERANCE_MS = 365 * 24 * 60 * 60 * 1000;
+    for (const seed of seeds) {
+      if (assignedByKey.has(seed.key)) continue;
+      const next = availableFor(seed.kind).find(
+        (item) =>
+          item.date.getTime() >= seed.windowStart.getTime() - FALLBACK_TOLERANCE_MS &&
+          item.date.getTime() <= seed.windowEnd.getTime() + FALLBACK_TOLERANCE_MS,
+      );
+      if (next) {
+        assignedByKey.set(seed.key, next);
+        markUsed(seed.kind, next.record.id);
+      }
+    }
+  };
+
+  runMatching();
 
   /*
    * ══ 用**实际接种日**重排后续步骤的窗口（2026-10-06 老板指出）══════════
@@ -1372,6 +1451,7 @@ export function buildVaccinePlan(
     seedsByKind.set(seed.kind, list);
   }
 
+  const reanchorWindows = () => {
   for (const list of seedsByKind.values()) {
     let shiftMs = 0;
     for (const seed of list) {
@@ -1384,7 +1464,19 @@ export function buildVaccinePlan(
           (originalWindowEnd.get(seed.key) as Date).getTime() + shiftMs,
         );
       }
-      // 这一步**真的打了** → 用它的实际日期给后面的步骤定锚点
+      /*
+       * 这一步**真的打了** → 用它的实际日期给后面的步骤定锚点。
+       *
+       * ⚠️ 只要是"认下来的"匹配就能定锚，**不管是窗口认领还是顺序补位**
+       *    （2026-10-06 修正过一次过度收紧）。原先只让窗口认领的定锚，
+       *    结果把最该顺延的两种情况挡在门外：
+       *      · 18 周龄那针卫佳捌里的钩端（落在钩端窗口之外，补位认的第 1 针）
+       *        → 第 2 针又拿生日窗口去说人家逾期；
+       *      · 狂犬首针拖到一岁才打（补位认的）→ 第 2 针还是"两个月后就到期"。
+       *    "补位匹配一定离谱"这个前提不成立：补位本身已经限定了
+       *    **离窗口不超过一年**（见上面的 FALLBACK_TOLERANCE_MS），
+       *    所以平移量一定有界，不会把整条线带飞。
+       */
       const matched = assignedByKey.get(seed.key);
       if (matched) {
         shiftMs =
@@ -1393,6 +1485,19 @@ export function buildVaccinePlan(
       }
     }
   }
+  };
+
+  /*
+   * 匹配 → 按实际接种日重排窗口 → **再匹配一次**（2026-10-06 老板要求）。
+   *
+   * 为什么要迭代：第一轮匹配用的是"按生日算"的窗口，而重排之后窗口会挪位置 ——
+   * 两边口径不一致时会出现"这一针被算给了很靠后的那一步"这种别扭结果。
+   * 用重排后的窗口再认一次，让**匹配和显示用同一套窗口**。
+   * 两轮足够收敛（第三轮不会再变），所以不再循环。
+   */
+  reanchorWindows();
+  runMatching();
+  reanchorWindows();
 
   const steps: VaccinePlanStep[] = seeds
     .map((seed) => {

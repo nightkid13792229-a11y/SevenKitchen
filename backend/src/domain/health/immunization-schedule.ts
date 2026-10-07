@@ -1365,10 +1365,10 @@ export function buildVaccinePlan(
       : Math.max(dogAgeWeeks, CORE_PUPPY_SERIES.startWeeksMin);
 
   /**
-   * 被裁出来的那一针（「首免（一针）」）的 key —— 见下面 filter 里的例外规则。
-   * 老板 2026-10-07 拍板："档案里一条记录都没有的狗，这一针永远显示成已逾期。"
+   * "一针都没打过"的狗的第一针 —— 它要显示成「该打了」，不要被软化成
+   * "还没记录"（老板 2026-10-07 改的口径：那一针显示成"现在就该打"）。
    */
-  let collapsedCoreKey: string | null = null;
+  let urgentFirstDoseKey: string | null = null;
 
   if (seriesStartWeeks > CORE_PUPPY_SERIES.startWeeksMax) {
     // ── 相对模型：丢掉固定档位，按这只狗自己的起点重排 ──
@@ -1397,7 +1397,19 @@ export function buildVaccinePlan(
                 (doseCount - 1),
             ),
           );
-    const startDate = firstCoreDose ?? addWeeks(birthday, seriesStartWeeks);
+    /*
+     * 一针都没打过、又已经 ≥16 周龄的狗：窗口**从今天开始**。
+     *
+     * 老板 2026-10-07 定的："显示成现在就该打"。
+     * 原来把窗口放在"它 16 周龄那一档"（历史日期）→ 显示成"已逾期" ——
+     * 对一只档案空白的狗，说"你逾期了"没意义也没有证据；
+     * 说"现在该打这一针"才是事实。
+     */
+    const startDate = firstCoreDose
+      ? firstCoreDose
+      : dogAgeWeeks >= CORE_PUPPY_SERIES.finishWeeksMin
+        ? today
+        : addWeeks(birthday, seriesStartWeeks);
     const ruleText =
       'WSAVA 2024：6~8 周龄起，每 2~4 周一次，直到有一针落在 ' +
       `${CORE_PUPPY_SERIES.finishWeeksMin} 周龄或更大`;
@@ -1413,8 +1425,8 @@ export function buildVaccinePlan(
             : `幼犬首免 第 ${index + 1} 针`,
         windowStart: planned,
         windowEnd: addWeeks(planned, 2),
-        basis:
-          doseCount === 1
+        basis: firstCoreDose
+          ? doseCount === 1
             ? `${ruleText}。这只狗 ${Math.round(seriesStartWeeks)} 周龄才开始首免，` +
               '母源抗体已经消退，**一针核心疫苗即可**（不需要再按 2~4 周连打）' +
               (seriesStartWeeks >= CORE_PUPPY_SERIES.boosterWeeks
@@ -1422,7 +1434,12 @@ export function buildVaccinePlan(
                 : '；仍建议在 26 周龄前后补一针。')
             : `${ruleText}。这只狗 ${Math.round(seriesStartWeeks)} 周龄才开始首免，` +
               '所以从**它自己的第一针**起算，还要再打 ' +
-              `${doseCount} 针（针次按它自己的第一针编号，不是按固定月龄档位）。`,
+              `${doseCount} 针（针次按它自己的第一针编号，不是按固定月龄档位）。`
+          : doseCount === 1
+            ? 'WSAVA 2024：26 周龄或更大、接种史不明的犬，**一针核心疫苗即可**提供足够保护' +
+              '（这一针同时顶掉了 6 月龄补强）。档案里还没有核心疫苗记录，建议尽快安排。'
+            : `${ruleText}。档案里还没有核心疫苗记录，从这一针起每 2~4 周一次，` +
+              '直到有一针落在 ≥16 周龄；针次从这一针开始编号。',
       });
     }
 
@@ -1443,8 +1460,13 @@ export function buildVaccinePlan(
       if (index >= 0) seeds.splice(index, 1);
     }
 
-    if (doseCount === 1) {
-      collapsedCoreKey = 'core-puppy-1';
+    /*
+     * 一针都没打过时，第一针就是"现在该打"那一步 —— 不能被"还没记录"的
+     * 软口气盖住（那是给"家长明明打过、只是没记"的情况用的）。
+     * 见下面 buildReminder 的调用处。
+     */
+    if (!firstCoreDose) {
+      urgentFirstDoseKey = 'core-puppy-1';
     }
 
     // 后面的逻辑（匹配、平移、显示）都假定 seeds 按窗口起点有序
@@ -1515,19 +1537,13 @@ export function buildVaccinePlan(
   }
 
   /*
-   * 这只狗**从来没有核心疫苗的接种记录**（一条都没有）—— 2026-10-07 老板拍板。
+   * ⚠️ 这里原来有个 `neverHadCoreRecord`，用来给"从没打过核心苗的狗"
+   * 把「首免（一针）」那一步**强行留在计划里**（怕它被"过期太久"的过滤器收掉）。
    *
-   * 为什么单独判一次：下面的步骤过滤器会把"过期一年以上、又没打过"的步骤收起来
-   * （那是给 10 岁老狗藏"幼犬首免第 1 针"用的，规则本身没错）。可"首免（一针）"
-   * 被一起收掉就出问题了 —— 实测老板的狗「面包」（2 岁多、档案空白）在计划里
-   * 看到狂犬、钩端都该打，**却一个字都没提核心疫苗**，而它恰恰最需要那一针。
-   *
-   * 判的是"有没有核心记录"而不是"有没有记录"：只记录过狂犬/钩端、
-   * 从没记录过核心苗的狗，同样需要这一针。
+   * 2026-10-07 老板改口径之后不需要了：那一针的窗口现在**从今天开始**
+   * （状态"该打了"），本来就不会被当成"过期太久"收起来。
+   * 留着那段逻辑反而多一条容易忘的分支，所以删掉。
    */
-  const neverHadCoreRecord =
-    (recordsByKind.get('core') || []).length === 0 &&
-    (recordsByKind.get('core_early') || []).length === 0;
 
   /*
    * 哪一条记录完成了哪一步 —— **先按窗口认领，再按顺序补位**（2026-10-06 修）。
@@ -1867,8 +1883,13 @@ export function buildVaccinePlan(
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(status, seed.label, !kindHasEvidence),
-        noEvidence: !kindHasEvidence,
+          reminder: buildReminder(
+          status,
+          seed.label,
+          !kindHasEvidence && seed.key !== urgentFirstDoseKey,
+        ),
+        // 一针都没打过时，"该打这一针"是事实、不是指责 —— 不用"还没记录"的软口气
+        noEvidence: !kindHasEvidence && seed.key !== urgentFirstDoseKey,
         // 这一步大概在几周龄 → 决定哪些产品顶得上（最低首免周龄不能晚于它）
         // 先占位：推荐产品要等**所有步骤的状态都出来**才能算
         // （见下面"多联苗该不该推"那一段），间距提醒同理。
@@ -1897,20 +1918,6 @@ export function buildVaccinePlan(
         return true;
       }
 
-      /*
-       * 从没打过核心苗的狗：「首免（一针）」**永远显示**，哪怕窗口过去很久。
-       *
-       * 只对"这一针从来没打过"生效（已完成的上面那条就放行了），
-       * 而且必须在"一条核心记录都没有"的前提下 —— 打过核心苗的狗不许被翻旧账。
-       */
-      if (
-        collapsedCoreKey &&
-        neverHadCoreRecord &&
-        step.key === collapsedCoreKey &&
-        step.status === 'OVERDUE'
-      ) {
-        return true;
-      }
 
       const recentEnough = end.getTime() >= addDays(today, -365).getTime();
       if (step.status === 'DUE' || step.status === 'OVERDUE') {

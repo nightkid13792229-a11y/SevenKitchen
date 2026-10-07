@@ -169,7 +169,7 @@ describe('疫苗计划', () => {
       const puppySteps = plan.steps.filter((step) => /^core-puppy-/.test(step.key));
       expect(puppySteps.length).toBe(1);
       expect(puppySteps[0].label).toContain('一针');
-      expect(puppySteps[0].status).toBe('OVERDUE');
+      expect(puppySteps[0].status).toBe('DUE');
       expect(plan.steps.every((step) => !step.label.includes('幼犬'))).toBe(true);
 
       // 十年前的窗口仍然不是"现在该做的事"：幼犬首免那一串一条都不许出现。
@@ -475,10 +475,25 @@ describe('疫苗计划', () => {
       )
       expect(actionable.length).toBeGreaterThan(0)
       for (const step of actionable) {
-        expect(step.reminder).toContain('档案里还没有这一针的记录')
         expect(step.reminder).not.toContain('已经过了建议时间')
         expect(step.reminder).not.toContain('尽快安排')
+        // 已经过期的那几项（狂犬第 3 次之类）仍然只说"还没记录"，不指责
+        if (step.status === 'OVERDUE') {
+          expect(step.reminder).toContain('档案里还没有这一针的记录')
+        }
       }
+
+      /*
+       * ⚠️ 2026-10-07 老板改的口径：**核心苗那一针要说"现在就该打"**。
+       *
+       * 一只 20 周龄、档案空白的狗，那一针的窗口就从今天开始（状态"该打了"）——
+       * 这时候说"档案里还没有这一针的记录"反而绕；"现在正是接种时间"才是事实。
+       */
+      const coreFirst = plan.steps.find(
+        (step) => step.kind === 'core' && step.status !== 'DONE',
+      )
+      expect(coreFirst?.status).toBe('DUE')
+      expect(coreFirst?.reminder).toContain('现在正是接种时间')
     })
 
     it('有记录时该说逾期还是要说 —— 口径只对"完全没记录"生效', () => {
@@ -801,9 +816,17 @@ describe('疫苗计划', () => {
       )
       expect(actionable.length).toBeGreaterThan(0)
       for (const step of actionable) {
-        expect(step.reminder).toContain('档案里还没有这一针的记录')
         expect(step.reminder).not.toContain('已经过了建议时间')
+        if (step.status === 'OVERDUE') {
+          expect(step.reminder).toContain('档案里还没有这一针的记录')
+        }
       }
+      // 核心苗那一针是"该打了"，说人话（老板 2026-10-07 定的）
+      const coreFirst = plan.steps.find(
+        (step) => step.kind === 'core' && step.status !== 'DONE',
+      )
+      expect(coreFirst?.status).toBe('DUE')
+      expect(coreFirst?.reminder).toContain('现在正是接种时间')
     })
 
     it('记录对得上号：两个都为假', () => {
@@ -1716,7 +1739,7 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
    * 那是给 10 岁老狗藏"幼犬首免第 1 针"用的，规则没错，但把这一针一起收掉，
    * 最该打的那一针反而消失了。
    */
-  it('🔴 2 岁多、档案空白的狗 → 核心那一针必须显示，而且是"已逾期"', () => {
+  it('🔴 2 岁多、档案空白的狗 → 核心那一针必须显示，而且是"现在该打"', () => {
     const plan = buildVaccinePlan({
       dogId: 'dog-1',
       birthday: bornWeeksAgo(158),
@@ -1726,9 +1749,11 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
 
     const shot = plan.steps.find((step) => step.label.includes('一针'))
     expect(shot).toBeDefined()
-    expect(shot!.status).toBe('OVERDUE')
-    // 它比狂犬、钩端都更该先补 —— 提醒也该先报这一条
-    expect(plan.nextStep?.label).toContain('一针')
+    // 2026-10-07 老板改的：不再说"已逾期"，说"现在就该打"
+    expect(shot!.status).toBe('DUE')
+    expect(shot!.reminder).toContain('现在正是接种时间')
+    // 窗口就从今天开始，不是历史日期
+    expect(shot!.windowStart >= toDateText(TODAY3)).toBe(true)
   })
 
   it('只记录过狂犬、从没记录过核心苗的狗，同样要显示（不然最重要的那针被藏了）', () => {
@@ -1748,7 +1773,8 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
 
     const shot = plan.steps.find((step) => step.label.includes('一针'))
     expect(shot).toBeDefined()
-    expect(shot!.status).toBe('OVERDUE')
+    // 从没记录过核心苗的狗，这一针一律"现在该打"（2026-10-07 老板定的口径）
+    expect(shot!.status).toBe('DUE')
   })
 
   it('打过核心苗的狗不许被翻旧账 —— 显示成"已完成"，不是"已逾期"', () => {

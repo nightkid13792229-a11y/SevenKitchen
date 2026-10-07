@@ -328,7 +328,7 @@
         <view class="field-group">
           <text class="field-label">接种日期</text>
           <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
-               接种日填成未来会把"还没打的针"算成已打过、提醒消失。
+               接种日填成未来会被算成已打过，提醒随之消失。
                后端也会拒（此处只是别让顾客白填一遍）。
                扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
           <picker
@@ -1172,6 +1172,18 @@ function autoSaveBlockReason(record: VaccineRecord, index: number): string {
   const draft = draftOf(record, index)
   if (!draft.vaccineName.trim()) return '还差疫苗名称，填完自动保存'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) return '还差接种日期，填完自动保存'
+  /*
+   * 接种日期不能晚于今天（2026-10-07 老板审计时定）。
+   *
+   * 为什么放在这里：**手填和 AI 识别两条路都走这个函数**。
+   * 日期选择器加了 :end 只能管住手点的那种；AI 把年份读错（2024 → 2042）
+   * 时不走选择器，必须在保存前统一拦一道 —— 否则那一针会被当成
+   * "已经打过"，本来该提醒的步骤直接消失。
+   *
+   * 拦下来时**不去撞后端**：卡片上挂着这句话，顾客一眼知道是哪一行要改。
+   * 日期早于狗狗生日**不在这里拦**（生日本身可能是估的）。
+   */
+  if (draft.vaccinationDate > getTodayDateString()) return '接种日期不能晚于今天'
   // 归类必填（2026-10-05 老板：手填时"类型还是必填项"）。
   // 没有归类这一条记录就不该进计划 —— 认不出来当核心苗是以前最坏的那个 bug。
   // 病种必填（2026-10-06）：勾不上就选「都不是 / 不确定」。
@@ -1828,7 +1840,17 @@ async function saveRecord(record: VaccineRecord, index: number) {
       }
     }
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
+    const message = String(error?.message || '保存失败，请重试')
+    /*
+     * 后端拒绝的原因要**留在卡片上**（2026-10-07 老板要求）。
+     *
+     * 只弹 2 秒的 toast 不够：一次识别出好几条、逐条自动保存时，
+     * 顾客根本不知道是哪一行出的问题，而那行卡片看起来还跟"存好了"一样。
+     * 挂成卡片内的提示（跟"还差病种"同一种），他才知道该改哪一条。
+     * 下一次改动会重新走保存，存成功了这行字自动消失。
+     */
+    autoSaveNotices.value = { ...autoSaveNotices.value, [index]: message }
+    uni.showToast({ title: message, icon: 'none' })
   } finally {
     savingIndex.value = -1
   }

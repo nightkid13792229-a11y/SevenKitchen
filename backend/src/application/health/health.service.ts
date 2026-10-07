@@ -179,9 +179,7 @@ export class HealthService {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
     if (date.getTime() > endOfToday.getTime()) {
-      throw new BadRequestException(
-        '接种日期不能晚于今天 —— 还没打的针，请等打完再记录',
-      );
+      throw new BadRequestException('接种日期不能晚于今天');
     }
   }
 

@@ -1876,9 +1876,8 @@ export function buildVaccinePlan(
         recordId: record.id,
         recordDate: String(record.vaccinationDate).slice(0, 10),
         vaccineName: record.vaccineName,
-        reason: '这一针的接种日期在今天之后 —— 还没发生的针不能算打过',
-        suggestion:
-          '请核对疫苗本上的日期（最常见的错法是把年份写错）；改对之前，这一针不参与接种计划',
+        reason: '接种日期不能晚于今天',
+        suggestion: '请核对疫苗本上的日期（最常见的错法是把年份写错）',
       })),
       ...detectConflicts(input.records, seeds, today),
     ],

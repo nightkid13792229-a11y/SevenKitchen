@@ -1898,7 +1898,7 @@ describe('接种日期的合理性', () => {
 
     const conflict = plan.conflicts.find((item) => item.recordId === 'r1')
     expect(conflict).toBeDefined()
-    expect(conflict!.reason).toContain('今天之后')
+    expect(conflict!.reason).toBe('接种日期不能晚于今天')
   })
 
   it('当天的接种日算合法（不能把今天也拦掉）', () => {

@@ -860,3 +860,51 @@ describe('扫描去重 + 匹配说明（2026-10-06）', () => {
     expect(source).toContain("if (matched && matched !== String(draft.vaccineName || '').trim())")
   })
 })
+
+/**
+ * 接种日期不能晚于今天（2026-10-07 老板审计时定）。
+ *
+ * 为什么必须拦：计划算法是"有记录就算这一针打过了"。一条日期填到未来的
+ * 记录会把"还没打的针"标成已完成、提醒随之消失。实测（当天 2026-06-01）：
+ * 接种日填成 2026-12-01，「狂犬疫苗 首针」就变成已完成。
+ *
+ * 手填那条路已经用日期选择器的 :end 挡住（选不到未来）；
+ * 但 **AI 识别出来的日期不走选择器** —— 疫苗本上的年份读错（2024 → 2042）
+ * 时必须在保存前统一拦一道，而且要把话说在**卡片上**，
+ * 不能只弹 2 秒 toast（一次识别好几条时顾客不知道是哪一行）。
+ */
+describe('接种日期不能晚于今天（2026-10-07）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('自动保存前统一拦：晚于今天的日期不保存，并在卡片上说清楚', () => {
+    const source = readComponent()
+
+    // 手填和 AI 识别两条路都走 autoSaveBlockReason
+    expect(source).toContain('function autoSaveBlockReason')
+    expect(source).toContain("if (draft.vaccinationDate > getTodayDateString()) return '接种日期不能晚于今天'")
+  })
+
+  it('手填：日期选择器不让选未来', () => {
+    const source = readComponent()
+
+    expect(source).toContain(':end="getTodayDateString()"')
+  })
+
+  it('🔴 后端拒绝的原因也留在卡片上，不是只弹一下', () => {
+    const source = readComponent()
+
+    // catch 里必须往 autoSaveNotices 写一条，否则顾客不知道哪一行没存上
+    expect(source).toContain('autoSaveNotices.value = { ...autoSaveNotices.value, [index]: message }')
+  })
+
+  it('提示文案要短 —— 老板 2026-10-07："太啰嗦了"', () => {
+    const source = readComponent()
+
+    // 只留一句"接种日期不能晚于今天"，后面那句"还没打的针请等打完再记录"去掉
+    expect(source).not.toContain('接种日期不能晚于今天 ——')
+  })
+})

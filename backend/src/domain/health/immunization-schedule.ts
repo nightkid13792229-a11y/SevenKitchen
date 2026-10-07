@@ -133,6 +133,14 @@ export interface VaccinePlanStep {
   /** 提醒文案（小程序内展示，不用订阅消息） */
   reminder: string;
   /**
+   * 这一步所属的**那一类**，有没有任何一条对得上的记录（2026-10-07）。
+   *
+   * 决定口气软硬：false（这一类一针记录都没有）→ 说"档案里还没有这一针的记录"，
+   * 不说"已逾期"。原来是整只狗一把尺，导致"只记过狂犬的狗"钩端那两针
+   * 被说成已逾期 —— 老板审计时要求改成按类判断。
+   */
+  noEvidence: boolean;
+  /**
    * 这一步常见的产品（兽医审核意见第 6 条：每个种类最多 3 个）。
    *
    * ⚠️ 措辞是「**常见的有**」，不是「建议打」。
@@ -618,9 +626,15 @@ export function buildImmunizationSchedule(
   /**
    * 这次要排哪几类。
    *
-   * 默认只排 core + rabies（标准程序）。非核心苗由调用方按
-   * "这只狗有没有这类苗的记录"决定要不要加进来 —— 见 NON_CORE_SCHEDULES
-   * 上面那段注释：非核心苗不默认推给每一只狗。
+   * 默认 = `DEFAULT_PLAN_KINDS` = **核心 + 狂犬 + 钩端螺旋体**。
+   *
+   * ⚠️ 这里原来写的是"默认只排 core + rabies"，2026-10-07 老板审计时
+   *    发现说明和行为不一致（钩端确实默认排）。**行为是有意为之**：
+   *    老板当时的原话是大陆很常见、"强烈建议将其纳入"，
+   *    所以钩端默认排给每只狗、让家长拿去和兽医讨论 —— 见
+   *    `DEFAULT_PLAN_KINDS` 上面那段注释。其余非核心苗（犬窝咳、冠状…）
+   *    仍然是"这只狗有记录才加"。
+   *
    * 营养师看整套程序表时把 `ALL_VACCINE_KINDS` 传进来。
    */
   options: { kinds?: readonly VaccineKind[] } = {},
@@ -1012,6 +1026,11 @@ function resolveStatus(
  * ⚠️ 2026-10-04 改：这个参数原来叫 `noRecordAtAll`，但传进来的是
  * "没有一条匹配上" —— 跟字段名说的"一条记录都没有"是两回事。
  * 见 `noRecordAtAll` / `noEvidence` 两个字段的注释。
+ *
+ * ⚠️ 2026-10-07 又改一次（老板审计时发现）：**判断按类，不按整只狗**。
+ *    改之前是整只狗一把尺：一只只记过狂犬的狗，钩端两针会说"已逾期"；
+ *    而一只什么记录都没有的狗，同样两针却说"还没记录" —— 同一件事两种口气。
+ *    现在：**这一类一针记录都没有 → 这一类一律说"还没记录"**。
  */
 function buildReminder(
   status: VaccineStepStatus,
@@ -1326,6 +1345,87 @@ export function buildVaccinePlan(
     }
   }
 
+  /*
+   * ══ 有一针核心苗打在 ≥16 周龄 → 首免到此完成（2026-10-07 老板确认）════
+   *
+   * 指南口径：幼犬首免"每 2~4 周一次，直到 16 周龄或更大"——
+   * **落在 ≥16 周龄的那一针就是完成针**（此时母源抗体已消退）。
+   * 所以一只 8/12/16 周龄各打一针的狗，首免是**完成**的，不该再催第 4 针。
+   *
+   * 改之前是什么样（老板审计时实测出来的）：
+   *   · 8/12/16 周龄 → 说还差「幼犬首免 第 4 针 · 已逾期」；
+   *   · 8/12/17 周龄 → 同上；
+   *   · 8/12/18 周龄 → 同上（更冤：18 周龄本来正落在第 4 针窗口里，
+   *     却被"第 3 针"的窗口抢走了 —— 前两针把窗口往后推，正好盖到 18 周）；
+   *   · 8/12/14 周龄 → 说差第 4 针，**这个是对的**（14 周太早，不能算完成针）。
+   * 也就是说：**最标准的那种打法反而被多催一针**。
+   *
+   * 现在的做法：只要有一条"真的能顶核心苗"的记录落在 ≥16 周龄，
+   * 就把**排在它之后**的幼犬首免步骤去掉（那些步骤存在的唯一目的，
+   * 就是保证有一针落在 ≥16 周龄 —— 既然已经有了，它们就没意义了）。
+   *
+   * ⚠️ 两点不能碰：
+   *   · **26 周补强照排**（老板特意确认过）—— 它是"首免完成后再补一针"，
+   *     不是首免的一部分。只有"第一次打核心苗就已 ≥26 周龄"那种狗
+   *     （上面那段裁针规则）才不需要补。
+   *   · 起始月龄 <16 周的狗才走这条；≥16 周才开始的那条路已经裁过了。
+   */
+  const finisherDose = parsed
+    .filter(
+      (item) =>
+        item.kinds.includes('core') &&
+        recordCoversStep(item.record.vaccineName, 'core') &&
+        weeksBetween(birthday, item.date) >= CORE_PUPPY_SERIES.finishWeeksMin,
+    )
+    .map((item) => item.date)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+
+  if (finisherDose && coreStartAgeWeeks < CORE_PUPPY_SERIES.finishWeeksMin) {
+    /*
+     * 首免要排几步？—— **按实际打了几针核心苗**，不是死排 4 步。
+     *
+     * 完成针一旦存在（一针落在 ≥16 周龄），首免就算完成；那还剩几步，
+     * 取决于这只狗真的打了几针：
+     *   · 8/12/16 周龄 三针 → 排 3 步（原来会催第 4 针 ✗）
+     *   · 8/12/17、8/12/18 周龄 三针 → 同样 3 步
+     *   · 6/10/14/18 周龄 **四针**（程序表原本就是为这种打法排的）→ 仍然 4 步 ✓
+     *   · 8/12/14 周龄（最后一针太早，没有完成针）→ 不裁，照样要求补一针 ✓
+     *
+     * ⚠️ 别写成"只要有一针 ≥16 周龄就把最后一针删掉"：那样 6/10/14/18 这种
+     *    标准四针打法的第 4 针会被删掉，18 周龄那一针变成"没有步骤可顶"。
+     *    （实测踩过：组合苗那两条测试立刻红了。）
+     */
+    const coreDoseCount = parsed.filter(
+      (item) =>
+        item.kinds.includes('core') &&
+        recordCoversStep(item.record.vaccineName, 'core'),
+    ).length;
+
+    let trimmed = false;
+    for (let index = seeds.length - 1; index >= 0; index -= 1) {
+      const seed = seeds[index];
+      if (seed.kind !== 'core' || !/^core-puppy-/.test(seed.key)) continue;
+      const puppyLeft = seeds.filter(
+        (item) => item.kind === 'core' && /^core-puppy-/.test(item.key),
+      ).length;
+      if (puppyLeft <= coreDoseCount) break;
+      seeds.splice(index, 1);
+      trimmed = true;
+    }
+
+    // 裁过就要把"为什么没有第 4 针"说清楚，否则家长会以为漏排了
+    if (trimmed) {
+      const lastPuppy = [...seeds]
+        .reverse()
+        .find((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key));
+      if (lastPuppy) {
+        lastPuppy.basis +=
+          `；已经有一针打在 ≥${CORE_PUPPY_SERIES.finishWeeksMin} 周龄，` +
+          '按 WSAVA 2024 这一针就是完成针，首免到此为止（不必再补第 4 针）。';
+      }
+    }
+  }
+
   const recordsByKind = new Map<VaccineKind, { record: VaccineRecordLike; date: Date }[]>();
   for (const item of parsed) {
     for (const kind of item.kinds) {
@@ -1531,6 +1631,10 @@ export function buildVaccinePlan(
         decisions[seed.key],
         today,
       );
+      // 口气软硬看**这一类**有没有对得上的记录，不看整只狗（2026-10-07 老板定）
+      const kindHasEvidence = seeds.some(
+        (item) => item.kind === seed.kind && assignedByKey.has(item.key),
+      );
       return {
         key: seed.key,
         kind: seed.kind,
@@ -1542,7 +1646,8 @@ export function buildVaccinePlan(
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
-        reminder: buildReminder(status, seed.label, noEvidence),
+        reminder: buildReminder(status, seed.label, !kindHasEvidence),
+        noEvidence: !kindHasEvidence,
         // 这一步大概在几周龄 → 决定哪些产品顶得上（最低首免周龄不能晚于它）
         // 先占位：推荐产品要等**所有步骤的状态都出来**才能算
         // （见下面"多联苗该不该推"那一段），间距提醒同理。

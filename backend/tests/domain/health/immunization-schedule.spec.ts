@@ -1735,3 +1735,134 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
     expect(plan.steps.some((step) => step.label.includes('一针'))).toBe(false)
   })
 })
+
+/**
+ * ≥16 周龄那一针 = 完成针（老板 2026-10-07 审计时确认）。
+ *
+ * 指南口径："每 2~4 周一次，直到 16 周龄或更大" —— 落在 ≥16 周龄的那一针
+ * 就是完成针。所以一只 8/12/16 周龄各打一针的狗，首免**已经完成**。
+ *
+ * 改之前：四种打法里前三种（16/17/18 周龄收尾）全部被催「第 4 针 · 已逾期」，
+ * 而 8/12/18 那种更冤 —— 18 周龄本来正落在第 4 针窗口里，却被"第 3 针"抢走
+ * （前两针把窗口往后推，正好盖到 18 周）。也就是说**最标准的打法反而被多催一针**。
+ */
+describe('≥16 周龄那一针即完成针', () => {
+  const TODAY4 = new Date('2026-08-01T00:00:00')
+  const BIRTH = new Date('2026-01-05T00:00:00')
+  const atWeek = (weeks: number) =>
+    toDateText(new Date(BIRTH.getTime() + weeks * 7 * 86400000))
+  const planAt = (weeks: number[]) =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2026-01-05',
+      records: weeks.map((week, index) => ({
+        id: `r${index}`,
+        vaccineName: '卫佳伍',
+        vaccinationDate: atWeek(week),
+        nextDueDate: null,
+      })),
+      today: TODAY4,
+    })
+  const puppySteps = (weeks: number[]) =>
+    planAt(weeks).steps.filter((step) => /^core-puppy-/.test(step.key))
+
+  it('🔴 8/12/16 周龄 → 首免算完成，不再催第 4 针', () => {
+    const steps = puppySteps([8, 12, 16])
+
+    expect(steps.length).toBe(3)
+    expect(steps.every((step) => step.status === 'DONE')).toBe(true)
+    // 26 周补强照排（老板特意确认：完成针和 26 周补强是两件事）
+    const booster = planAt([8, 12, 16]).steps.find((step) => step.key === 'core-26w')
+    expect(booster).toBeDefined()
+  })
+
+  it('🔴 8/12/17 与 8/12/18 周龄同样算完成', () => {
+    for (const weeks of [
+      [8, 12, 17],
+      [8, 12, 18],
+    ]) {
+      const steps = puppySteps(weeks)
+      expect(steps.length).toBe(3)
+      expect(steps.every((step) => step.status === 'DONE')).toBe(true)
+    }
+  })
+
+  it('8/12/14 周龄（最后一针太早）→ 仍然要求补一针', () => {
+    const steps = puppySteps([8, 12, 14])
+
+    expect(steps.length).toBe(4)
+    const last = steps.find((step) => step.key === 'core-puppy-4')
+    expect(last).toBeDefined()
+    expect(['DUE', 'OVERDUE']).toContain(last!.status)
+  })
+
+  it('6/10/14/18 周龄那种**标准四针**打法不许被裁（程序表本来就为它排的）', () => {
+    // ⚠️ 第一版改法写成"只要有一针 ≥16 周龄就把最后一针删掉"，
+    //    结果这种打法的第 4 针被删、18 周龄那一针没有步骤可顶 ——
+    //    组合苗那两条测试立刻红了。裁的判据必须是"实际打了几针"。
+    const steps = puppySteps([6, 10, 14, 18])
+
+    expect(steps.length).toBe(4)
+    expect(steps.every((step) => step.status === 'DONE')).toBe(true)
+  })
+
+  it('为什么没有第 4 针，要写在依据里（家长才不会以为漏排）', () => {
+    const steps = puppySteps([8, 12, 16])
+
+    expect(steps[steps.length - 1].basis).toContain('完成针')
+  })
+})
+
+/**
+ * 提醒口气**按类**判断（老板 2026-10-07 审计时定）。
+ *
+ * 原来是整只狗一把尺：一只只记过狂犬的狗，钩端那两针会说"已逾期"；
+ * 而一只什么记录都没有的狗，同样两针却说"还没记录" —— 同一件事两种口气。
+ * 现在：这一类一针记录都没有 → 这一类一律说"还没记录"。
+ */
+describe('提醒口气按类判断', () => {
+  const rec = (id: string, name: string, date: string) => ({
+    id,
+    vaccineName: name,
+    vaccinationDate: date,
+    nextDueDate: null,
+  })
+  const planWith = (records: ReturnType<typeof rec>[]) =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2025-01-05',
+      records,
+      today: new Date('2026-06-01T00:00:00'),
+    })
+
+  it('🔴 只记过狂犬的狗 → 钩端那几针说"还没有记录"，不再说"已逾期"', () => {
+    const plan = planWith([rec('r1', '狂犬', '2025-04-05')])
+
+    const lepto = plan.steps.filter((step) => step.kind === 'lepto')
+    expect(lepto.length).toBeGreaterThan(0)
+    for (const step of lepto) {
+      expect(step.noEvidence).toBe(true)
+      if (step.status === 'DUE' || step.status === 'OVERDUE') {
+        expect(step.reminder).toContain('还没有这一针的记录')
+      }
+    }
+
+    // 狂犬那一类有记录 → 口气正常（该说逾期就说逾期）
+    const rabies = plan.steps.filter((step) => step.kind === 'rabies')
+    expect(rabies.some((step) => step.noEvidence === false)).toBe(true)
+    const rabiesOverdue = rabies.find((step) => step.status === 'OVERDUE')
+    if (rabiesOverdue) {
+      expect(rabiesOverdue.reminder).toContain('已经过了建议时间')
+    }
+
+    // 整只狗级别的标记保持原样：这只狗并不是"一条记录都没有"
+    expect(plan.noEvidence).toBe(false)
+  })
+
+  it('这类苗打过一针 → 这一类立刻改用正常口气', () => {
+    const plan = planWith([rec('r1', '卫佳捌', '2025-04-05')])
+
+    const lepto = plan.steps.filter((step) => step.kind === 'lepto')
+    expect(lepto.some((step) => step.noEvidence === false)).toBe(true)
+  })
+})

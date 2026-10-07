@@ -2223,3 +2223,35 @@ describe('每一类的下一针 · 跳过"开始打之前就结束"的档位（2
     expect(overdue.length).toBe(0)
   })
 })
+
+/**
+ * 顶部"下一针"要取**时间上最近**的那一条（2026-10-07 老板审计第 5 块）。
+ *
+ * 修之前取的是"程序顺序里的第一条"：实测赛文的三条"待安排"是
+ * 成年加强（2029-07）、狂犬第 5 次（2027-07）、钩端每年第 4 次（2027-07），
+ * 程序顺序把 2029 年那条排最前，顶部就写成"下一针：成年加强 2029" ✗
+ */
+describe('顶部"下一针"按时间取（2026-10-07）', () => {
+  it('三条待安排里取最近的那一条，不是程序顺序的第一条', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-seven',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+        { id: 'r3', vaccineName: '瑞比克', vaccinationDate: '2025-08-28', nextDueDate: null },
+        { id: 'r4', vaccineName: '卫佳捌', vaccinationDate: '2026-07-18', nextDueDate: null },
+        { id: 'r5', vaccineName: '狂犬', vaccinationDate: '2026-07-25', nextDueDate: null },
+      ],
+      today: new Date('2026-10-08T00:00:00'),
+    })
+
+    expect(plan.nextStep).not.toBeNull()
+    const pending = plan.steps.filter(
+      (step) => step.status === 'UPCOMING' || step.status === 'DUE' || step.status === 'OVERDUE',
+    )
+    const earliest = [...pending].sort((a, b) => a.windowStart.localeCompare(b.windowStart))[0]
+    expect(plan.nextStep!.windowStart).toBe(earliest.windowStart)
+    expect(plan.nextStep!.windowStart < '2028').toBe(true)
+  })
+})

@@ -2176,12 +2176,25 @@ export function buildVaccinePlan(
     skipped: steps.filter((step) => step.status === 'SKIPPED').length,
   };
 
-  // 下一步：优先逾期，其次当前应做，最后是最近的将来
+  /*
+   * 下一步（疫苗板块顶部那一行）：优先"该补了"，其次"该打了"，最后"待安排"；
+   * **同一种状态里按窗口时间从近到远取第一条**。
+   *
+   * ⚠️ 2026-10-07 修：原来是 `steps.find(...)`，取的是**程序顺序**里的第一条。
+   *    那在"每一类只显示下一针"之后会出错 —— 实测赛文的三条"待安排"是
+   *    成年加强（2029-07）、狂犬第 5 次（2027-07）、钩端每年第 4 次（2027-07），
+   *    程序顺序把 2029 年那条排在最前面，顶部那一行就会写"下一针：成年加强 2029" ✗
+   *    明明最近的一针是 2027 年的。
+   */
+  const statusRank = (step: VaccinePlanStep) =>
+    step.status === 'OVERDUE' ? 0 : step.status === 'DUE' ? 1 : 2;
   const nextStep =
-    steps.find((step) => step.status === 'OVERDUE') ||
-    steps.find((step) => step.status === 'DUE') ||
-    steps.find((step) => step.status === 'UPCOMING') ||
-    null;
+    [...steps]
+      .filter((step) => step.status !== 'DONE' && step.status !== 'SKIPPED')
+      .sort(
+        (a, b) =>
+          statusRank(a) - statusRank(b) || a.windowStart.localeCompare(b.windowStart),
+      )[0] ?? null;
 
   return {
     dogId: input.dogId,

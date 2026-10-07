@@ -144,7 +144,19 @@ describe('疫苗计划', () => {
   })
 
   describe('成年犬', () => {
-    it('10 岁且无任何记录的老狗，不会被提示"幼犬首免已逾期"', () => {
+    it('10 岁且无任何记录的老狗：只看到"一针"，不会看到幼犬首免那一串', () => {
+      /*
+       * ⚠️ 2026-10-07 老板拍板改过口径。
+       *
+       * 原来这条要求"老狗一条核心提示都不许有"—— 初衷是别拿十年前那种
+       * "幼犬首免 第 1 针已逾期"去烦人。但一刀切成"什么都不提示"会走过头：
+       * 一只从没打过疫苗的成年犬（老板的狗「面包」实测）恰恰最需要补一针核心，
+       * 却被一起藏掉了。老板拍板：档案里没有核心记录的狗，这一针永远显示成已逾期。
+       *
+       * 不变的是：**十年前的窗口不是"现在该做的事"** —— 早期那几针仍然不许冒出来
+       * （见下面的 key 断言），显示出来的这一针也不再叫"幼犬首免"，而是
+       * 「核心疫苗 首免（一针）」（WSAVA 2024：成年才开始首免的犬一针即可）。
+       */
       const plan = buildVaccinePlan({
         dogId: 'dog-old',
         birthday: dog(520),
@@ -152,11 +164,18 @@ describe('疫苗计划', () => {
         today: TODAY,
       });
 
-      const puppyOverdue = plan.steps.filter(
-        (step) => step.key.startsWith('core-puppy-') && step.status === 'OVERDUE',
-      );
-      // 十年前的窗口不是"现在该做的事"
-      expect(puppyOverdue).toEqual([]);
+      // 幼犬首免那一串只剩「一针」，且是老狗说得通的说法
+      // （成年加强是另一条线，它自己按 3 年一次排，不算"幼犬首免"）
+      const puppySteps = plan.steps.filter((step) => /^core-puppy-/.test(step.key));
+      expect(puppySteps.length).toBe(1);
+      expect(puppySteps[0].label).toContain('一针');
+      expect(puppySteps[0].status).toBe('OVERDUE');
+      expect(plan.steps.every((step) => !step.label.includes('幼犬'))).toBe(true);
+
+      // 十年前的窗口仍然不是"现在该做的事"：早期那几针一条都不许出现
+      for (const key of ['core-puppy-1', 'core-puppy-2', 'core-puppy-3', 'core-26w']) {
+        expect(plan.steps.find((step) => step.key === key)).toBeUndefined();
+      }
     })
 
     it('年幼的狗不会一次列出十几年后的安排', () => {
@@ -1650,5 +1669,69 @@ describe('首免针数按开始年龄裁（WSAVA 2024）', () => {
 
     expect(plan.steps.filter((step) => /^core-puppy-/.test(step.key)).length).toBeGreaterThan(1)
     expect(plan.steps.find((step) => step.key === 'core-26w')).toBeDefined()
+  })
+
+  /*
+   * ══ 从没打过核心苗的狗，这一针永远显示（老板 2026-10-07 拍板）══════════
+   *
+   * 老板的狗「面包」（2 岁多、档案空白）实测：计划里狂犬、钩端都该打，
+   * **却一个字都没提核心疫苗** —— 因为「首免（一针）」的窗口是按 16 周龄算的，
+   * 两年前就过去了，而系统会把"过期一年以上还没打"的步骤收起来。
+   * 那是给 10 岁老狗藏"幼犬首免第 1 针"用的，规则没错，但把这一针一起收掉，
+   * 最该打的那一针反而消失了。
+   */
+  it('🔴 2 岁多、档案空白的狗 → 核心那一针必须显示，而且是"已逾期"', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(158),
+      records: [],
+      today: TODAY3,
+    })
+
+    const shot = plan.steps.find((step) => step.label.includes('一针'))
+    expect(shot).toBeDefined()
+    expect(shot!.status).toBe('OVERDUE')
+    // 它比狂犬、钩端都更该先补 —— 提醒也该先报这一条
+    expect(plan.nextStep?.label).toContain('一针')
+  })
+
+  it('只记录过狂犬、从没记录过核心苗的狗，同样要显示（不然最重要的那针被藏了）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(158),
+      records: [
+        {
+          id: 'r1',
+          vaccineName: '狂犬',
+          vaccinationDate: bornWeeksAgo(100),
+          nextDueDate: null,
+        },
+      ],
+      today: TODAY3,
+    })
+
+    const shot = plan.steps.find((step) => step.label.includes('一针'))
+    expect(shot).toBeDefined()
+    expect(shot!.status).toBe('OVERDUE')
+  })
+
+  it('打过核心苗的狗不许被翻旧账 —— 别把成年犬的首免再翻出来', () => {
+    // 这只狗 80 周龄才打上第一针核心苗，现在 158 周龄：档案里有核心记录，
+    // 「首免（一针）」早就被那一针顶掉了，不该再冒出来报逾期。
+    const plan = buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: bornWeeksAgo(158),
+      records: [
+        {
+          id: 'r1',
+          vaccineName: '卫佳伍',
+          vaccinationDate: bornWeeksAgo(78),
+          nextDueDate: null,
+        },
+      ],
+      today: TODAY3,
+    })
+
+    expect(plan.steps.some((step) => step.label.includes('一针'))).toBe(false)
   })
 })

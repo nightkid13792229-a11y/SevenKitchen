@@ -1288,12 +1288,19 @@ export function buildVaccinePlan(
     ? weeksBetween(birthday, firstCoreDate)
     : weeksBetween(birthday, today);
 
+  /**
+   * 被裁出来的那一针（「首免（一针）」）的 key —— 见下面 filter 里的例外规则。
+   * 老板 2026-10-07 拍板："档案里一条记录都没有的狗，这一针永远显示成已逾期。"
+   */
+  let collapsedCoreKey: string | null = null;
+
   if (coreStartAgeWeeks >= 16) {
     const puppyKeys = seeds
       .filter((seed) => seed.kind === 'core' && /^core-puppy-/.test(seed.key))
       .map((seed) => seed.key);
     // 只留最后一针（≥16 周龄那一针就是完成针）
     const keepKey = puppyKeys[puppyKeys.length - 1];
+    collapsedCoreKey = keepKey ?? null;
 
     for (let index = seeds.length - 1; index >= 0; index -= 1) {
       const seed = seeds[index];
@@ -1332,6 +1339,21 @@ export function buildVaccinePlan(
   for (const list of recordsByKind.values()) {
     list.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
+
+  /*
+   * 这只狗**从来没有核心疫苗的接种记录**（一条都没有）—— 2026-10-07 老板拍板。
+   *
+   * 为什么单独判一次：下面的步骤过滤器会把"过期一年以上、又没打过"的步骤收起来
+   * （那是给 10 岁老狗藏"幼犬首免第 1 针"用的，规则本身没错）。可"首免（一针）"
+   * 被一起收掉就出问题了 —— 实测老板的狗「面包」（2 岁多、档案空白）在计划里
+   * 看到狂犬、钩端都该打，**却一个字都没提核心疫苗**，而它恰恰最需要那一针。
+   *
+   * 判的是"有没有核心记录"而不是"有没有记录"：只记录过狂犬/钩端、
+   * 从没记录过核心苗的狗，同样需要这一针。
+   */
+  const neverHadCoreRecord =
+    (recordsByKind.get('core') || []).length === 0 &&
+    (recordsByKind.get('core_early') || []).length === 0;
 
   /*
    * 哪一条记录完成了哪一步 —— **先按窗口认领，再按顺序补位**（2026-10-06 修）。
@@ -1546,6 +1568,21 @@ export function buildVaccinePlan(
       }
 
       if (step.status === 'DONE') {
+        return true;
+      }
+
+      /*
+       * 从没打过核心苗的狗：「首免（一针）」**永远显示**，哪怕窗口过去很久。
+       *
+       * 只对"这一针从来没打过"生效（已完成的上面那条就放行了），
+       * 而且必须在"一条核心记录都没有"的前提下 —— 打过核心苗的狗不许被翻旧账。
+       */
+      if (
+        collapsedCoreKey &&
+        neverHadCoreRecord &&
+        step.key === collapsedCoreKey &&
+        step.status === 'OVERDUE'
+      ) {
         return true;
       }
 

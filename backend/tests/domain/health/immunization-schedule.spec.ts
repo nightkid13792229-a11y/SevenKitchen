@@ -1461,11 +1461,19 @@ describe('按针数分配记录（老板截图引出的改法）', () => {
       today: new Date('2026-06-15T00:00:00'),
     })
 
+    /*
+     * ⚠️ 2026-10-07：顶部"下一针"改成按**时间**取（同状态里窗口最早的先报），
+     *    所以这里挑出来的可能是同样该打的「狂犬首针」（它的窗口更早开始）。
+     *    这条测试真正要守的是**产品推荐**：刚打过核心苗，
+     *    钩端第 2 针不该再推多联苗（会重复打核心）。所以直接盯那一步。
+     */
+    const leptoSecond = plan.steps.find((step) => step.key === 'lepto-primary-2')
+    expect(leptoSecond).toBeDefined()
+    expect(leptoSecond!.commonProducts).toContain('宠必威乐必妥')
+    expect(leptoSecond!.commonProducts).not.toContain('卫佳捌')
+    // 顶部那一行仍然是"现在该做"的某一步
     expect(plan.nextStep).toBeDefined()
-    expect(plan.nextStep!.key).toBe('lepto-primary-2')
-    // 刚打过核心，这一步不该再推多联苗
-    expect(plan.nextStep!.commonProducts).toContain('宠必威乐必妥')
-    expect(plan.nextStep!.commonProducts).not.toContain('卫佳捌')
+    expect(['DUE', 'OVERDUE']).toContain(plan.nextStep!.status)
   })
 
   it('打得太早的记录仍会被单独提示（窗口没白留）', () => {

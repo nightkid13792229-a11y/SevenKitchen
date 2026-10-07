@@ -243,8 +243,17 @@ describe('疫苗计划 · 零记录时不显示计划（2026-10-04 老板定）'
     expect(section).toContain('const noRecordAtAll = computed')
     expect(section).toContain('plan.value.noEvidence')
     expect(section).toContain('plan.value.noRecordAtAll')
-    // 状态标签走 noEvidence
-    expect(section).toContain('if (noEvidence.value && (status === \'OVERDUE\' || status === \'DUE\'))')
+    /*
+     * 状态标签的口气（2026-10-07 老板审计后改成**按类**判断）。
+     *
+     * 原来是整只狗一把尺：只记过狂犬的狗，钩端那两针会说"已逾期"；
+     * 而什么记录都没有的狗同样两针却说"还没记录" —— 同一件事两种口气。
+     * 现在优先用后端下发的**每一步所属类别**有没有记录，老后端不带
+     * 这个字段时才退回整只狗判断。
+     */
+    expect(section).toContain("typeof step.noEvidence === 'boolean'")
+    expect(section).toContain("if (kindNoEvidence && (step.status === 'OVERDUE' || step.status === 'DUE'))")
+    expect(section).not.toContain("if (noEvidence.value && (status === 'OVERDUE'")
   })
 })
 
@@ -308,7 +317,8 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     const section = readSection()
 
     // 状态 / 疫苗种类 / 接种窗口期 / 接种时间 / 推荐疫苗 / 依据
-    expect(section).toContain('statusLabel(step.status)')
+    // （2026-10-07 起整个 step 传进去 —— 口气要按"这一类"判断）
+    expect(section).toContain('statusLabel(step)')
     expect(section).toContain('step.kindLabel')
     expect(section).toContain('step.windowStart')
     expect(section).toContain('step.matchedRecordDate')

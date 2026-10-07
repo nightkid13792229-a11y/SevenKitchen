@@ -92,7 +92,7 @@
               :class="`step--${step.status}`"
             >
               <view class="step__head">
-                <text class="step__status">{{ statusLabel(step.status) }}</text>
+                <text class="step__status">{{ statusLabel(step) }}</text>
                 <text class="step__kind">{{ step.kindLabel }}</text>
               </view>
               <text class="step__label">{{ step.label }}</text>
@@ -192,6 +192,13 @@ interface PlanStep {
   status: 'DONE' | 'DUE' | 'UPCOMING' | 'OVERDUE' | 'SKIPPED'
   matchedRecordId: string | null
   matchedRecordDate: string | null
+  /**
+   * **这一步所属的那一类**有没有任何一条对得上的记录（2026-10-07 后端新增）。
+   *
+   * 决定状态标签的口气：true → 说"还没记录"，不说"已逾期"。
+   * 老后端不带这个字段时，退回用整只狗的 noEvidence（见 statusLabel）。
+   */
+  noEvidence?: boolean
   basis: string
   reminder: string
   /**
@@ -362,20 +369,25 @@ const noEvidence = computed(() => {
 })
 
 /**
- * 状态标签（2026-10-04 老板定）。
+ * 状态标签（2026-10-04 老板定，2026-10-07 改成**按类**判断）。
  *
  * **没有任何证据**时不出现"已逾期" —— 我们没有任何证据说他没打，
  * 家长明明年年带狗去打、只是没在小程序里记，看到"已逾期"会以为系统算错了。
  * 改成"还没记录"，这是一个事实陈述，不是指责。
  *
- * 注意判据是 noEvidence 而不是 noRecordAtAll：只录了一条钩端螺旋体
- * （非核心苗）的人，也属于"一条都没对上号"，措辞一样要软。
+ * ⚠️ 2026-10-07 老板审计时发现判据太粗：原来是**整只狗**一把尺，
+ *    于是"只记过狂犬的狗"打开页面会看到钩端那两针写着"已逾期"，
+ *    而"什么记录都没有的狗"同样两针却写"还没记录" —— 同一件事两种口气。
+ *    现在按**类**判断（后端下发每步的 noEvidence）：
+ *    这一类一针记录都没有 → 这一类一律说"还没记录"。
  */
-function statusLabel(status: PlanStep['status']) {
-  if (noEvidence.value && (status === 'OVERDUE' || status === 'DUE')) {
+function statusLabel(step: PlanStep) {
+  const kindNoEvidence =
+    typeof step.noEvidence === 'boolean' ? step.noEvidence : noEvidence.value
+  if (kindNoEvidence && (step.status === 'OVERDUE' || step.status === 'DUE')) {
     return '还没记录'
   }
-  return STATUS_LABELS[status] || status
+  return STATUS_LABELS[step.status] || step.status
 }
 
 /**

@@ -36,7 +36,13 @@
 
     <!-- 识别结果：一次性确认，确认完就填表 -->
     <view v-if="showConfirm" class="confirm">
-      <text class="confirm__title">识别到以下内容，确认后自动填入表单</text>
+      <text class="confirm__title">
+        {{
+          isVaccineBook
+            ? '识别到以下内容 · 逐条确认后保存'
+            : '识别到以下内容，确认后填入表单'
+        }}
+      </text>
 
       <!-- 2026-10-02 老板："记到就诊记录 / 识别为病历 / 本次共 5 张图片合成 1 条 /
            5 张原图会一起存进这条记录 / 报告上的动物名 seven 这些内部信息就不要放了"。
@@ -99,7 +105,88 @@
         <text class="confirm__name-warning-text">{{ patientNameMismatch }}</text>
       </view>
 
-      <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
+      <!-- 疫苗本：**一条一行、逐条确认**（2026-10-08 老板定）─────────────────
+           老板："只有当用户一个记录一个记录的确认了之后，他才应该入库" +
+                 "不要一条一屏，要优化一屏多条的信息量和交互"。
+           → 一行就把要核对的三样给全（名字 · 日期 · 含哪些病种），
+             点一行就地改，右侧点「确认」；
+             系统拿不准的排最前面并标红（判据只用我们自己算得出来的信号）。 -->
+      <template v-if="isVaccineBook">
+        <view class="rows__head">
+          <text class="rows__hint">一条一条核对，确认过的才会存进档案</text>
+          <text class="rows__progress">已确认 {{ confirmedCount }} / 共 {{ drafts.length }} 条</text>
+        </view>
+
+        <view
+          v-for="index in rowOrder"
+          :key="`row-${index}`"
+          class="row"
+          :class="{ 'row--care': rowCare(index).care, 'row--confirmed': rowConfirmed[index] }"
+        >
+          <view class="row__main" @tap="toggleRowEdit(index)">
+            <text class="row__no">{{ index + 1 }}</text>
+            <view class="row__body">
+              <text class="row__name">{{ rowName(drafts[index]) }}</text>
+              <text class="row__meta">
+                {{ drafts[index].vaccinationDate || '日期没读出' }} · {{ rowComponentsText(drafts[index]) }}
+              </text>
+              <text v-if="rowCare(index).care" class="row__care">⚠️ {{ rowCare(index).reason }}</text>
+            </view>
+            <text
+              class="row__confirm"
+              :class="{ 'row__confirm--done': rowConfirmed[index] }"
+              @tap.stop="toggleRowConfirm(index)"
+            >{{ rowConfirmed[index] ? '✓ 已确认' : '确认' }}</text>
+          </view>
+
+          <view v-if="editingRow === index" class="row__edit">
+            <view class="row__field">
+              <text class="row__label">疫苗名</text>
+              <input
+                class="row__input"
+                :value="drafts[index].productName || drafts[index].vaccineName || ''"
+                placeholder="填或选这一支苗"
+                @input="onRowNameInput(index, $event)"
+              />
+            </view>
+            <view v-if="rowNameSuggestions(index).length > 0" class="row__chips">
+              <text class="row__chip-hint">从产品库选一支：</text>
+              <text
+                v-for="item in rowNameSuggestions(index)"
+                :key="item"
+                class="row__chip"
+                @tap="pickRowName(index, item)"
+              >{{ item }}</text>
+            </view>
+            <view class="row__field">
+              <text class="row__label">接种日期</text>
+              <picker
+                mode="date"
+                :value="drafts[index].vaccinationDate || ''"
+                @change="onRowDateChange(index, $event)"
+              >
+                <text class="row__input">{{ drafts[index].vaccinationDate || '点这里选' }}</text>
+              </picker>
+            </view>
+            <view class="row__field">
+              <text class="row__label">含哪些病种</text>
+              <view class="row__chips">
+                <text
+                  v-for="option in componentChoices"
+                  :key="option.value"
+                  class="row__chip"
+                  :class="{ 'row__chip--active': (drafts[index].components || []).includes(option.value) }"
+                  @tap="toggleRowComponent(index, option.value)"
+                >{{ option.label }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </template>
+
+      <!-- 其余四类文档：仍然是一屏预览 + 一次确认（那几类只合成一条记录） -->
+      <template v-if="!isVaccineBook">
+        <view v-for="(draft, index) in drafts" :key="`draft-${index}`" class="confirm__card">
         <template v-for="row in describeDraft(draft)" :key="row.label">
           <view class="confirm__row">
             <text class="confirm__label">{{ row.label }}</text>
@@ -108,7 +195,8 @@
             <text v-else class="confirm__value">{{ row.value }}</text>
           </view>
         </template>
-      </view>
+        </view>
+      </template>
 
       <!-- 最下方那段红字提醒已下线（2026-10-06 老板）：
            "既然在上传照片预览图下方已经有提醒了，那么在识别后的表单最下方的
@@ -125,7 +213,10 @@
 
       <view class="confirm__actions">
         <text class="confirm__discard" @tap="discard">重新上传</text>
-        <text class="confirm__accept" @tap="accept">确认，填入表单</text>
+        <text v-if="isVaccineBook" class="confirm__accept" @tap="acceptConfirmed">
+          保存我确认的 {{ confirmedCount }} 条
+        </text>
+        <text v-else class="confirm__accept" @tap="accept">确认</text>
       </view>
     </view>
   </view>
@@ -179,6 +270,12 @@ const props = withDefaults(defineProps<{
   /** 当前这只狗的名字：只用来提醒"报告上的动物名对不上"，不做拦截（2026-10-02） */
   dogName?: string
   /**
+   * 病种候选（2026-10-08）：疫苗本"逐条确认"时要在这一屏直接勾病种。
+   * 由疫苗板块传进来（它已经有后端下发的那一份），**前端不再复制一份**。
+   * 不传就用本地兜底（闭集，极少变）。
+   */
+  componentOptions?: { value: string; label: string }[]
+  /**
    * 顾客是从哪个入口点进来的（2026-10-02 老板定稿）。
    *
    * 传 AUTO 时**记录类型由它决定**：从「就诊」进 = 这一批合成一条就诊记录，
@@ -207,6 +304,180 @@ defineExpose({ startScan: pickAndScan })
 const isBusy = ref(false)
 const showConfirm = ref(false)
 const drafts = ref<Record<string, any>[]>([])
+
+/*
+ * ══ 疫苗本：**逐条确认**（2026-10-08 老板定）══════════════════════════════
+ *
+ * 老板："只有当用户一个记录一个记录的确认了之后，他才应该入库" +
+ *       "确认页的字段那肯定要能直接修改" + "不要一条一屏，要优化一屏多条"。
+ *
+ * 所以疫苗本这一路：
+ *   · 一条一行，每行自己点「确认」；
+ *   · **没确认的不入库**（可以确认几条先存几条 —— 老板选了这个）；
+ *   · 点一行就地改：疫苗名（产品库候选 + 手打）、接种日期、含哪些病种；
+ *   · 系统"拿不准"的那几条**排在最前面并标红** —— 判据只用**我们自己算得出来**的
+ *     可靠信号（名字没认出来 / 日期缺失或有涂改 / 病种空），
+ *     **不用模型自评的 confidence**（老板指出：模型会自信地读错，那个信号不可信）。
+ */
+const rowConfirmed = ref<boolean[]>([])
+const rowOrder = ref<number[]>([])
+const editingRow = ref(-1)
+
+const isVaccineBook = computed(
+  () => (resolvedDocumentType.value || props.documentType) === 'VACCINE_BOOK',
+)
+
+/** 病种候选：后端下发优先，拿不到用这几项兜底（与疫苗板块同一份闭集） */
+const FALLBACK_COMPONENT_CHOICES = [
+  { value: 'cdv', label: '犬瘟热' },
+  { value: 'cpv', label: '犬细小' },
+  { value: 'cav', label: '犬腺病毒' },
+  { value: 'cpi', label: '副流感' },
+  { value: 'lepto', label: '钩端螺旋体' },
+  { value: 'ccov', label: '冠状病毒' },
+  { value: 'rabies', label: '狂犬病' },
+]
+const componentChoices = computed(() =>
+  props.componentOptions && props.componentOptions.length > 0
+    ? props.componentOptions
+    : FALLBACK_COMPONENT_CHOICES,
+)
+
+const confirmedCount = computed(
+  () => rowConfirmed.value.filter(Boolean).length,
+)
+
+function rowName(draft: Record<string, any> | undefined): string {
+  const value = String(draft?.productName || draft?.vaccineName || '').trim()
+  return value || '（名字没认出来）'
+}
+
+function rowNameSuggestions(index: number): string[] {
+  const list = drafts.value[index]?.nameSuggestions
+  return Array.isArray(list) ? list.map(String).filter(Boolean) : []
+}
+
+/** 这一行有没有"系统拿不准"的地方（只用我们自己能算的信号） */
+function rowCare(index: number): { care: boolean; reason: string } {
+  const draft = drafts.value[index]
+  if (!draft) return { care: false, reason: '' }
+
+  if (!String(draft.productName || draft.vaccineName || '').trim()) {
+    return { care: true, reason: '名字没认出来，请核对或从产品库选一支' }
+  }
+  const date = String(draft.vaccinationDate || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { care: true, reason: '接种日期没读出来，请补上' }
+  }
+  if (String(draft.notes || '').includes('涂改')) {
+    return { care: true, reason: '日期有涂改，请核对' }
+  }
+  const components = Array.isArray(draft.components) ? draft.components : []
+  if (components.length === 0) {
+    return { care: true, reason: '没读出防哪些病，请勾一下' }
+  }
+  return { care: false, reason: '' }
+}
+
+/** 这一行缺什么就不能确认（缺了就不让它存进去） */
+function rowBlockReason(index: number): string {
+  const draft = drafts.value[index]
+  if (!draft) return '这一条读不出来'
+  if (!String(draft.productName || draft.vaccineName || '').trim()) {
+    return '还差疫苗名'
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(draft.vaccinationDate || '').trim())) {
+    return '还差接种日期'
+  }
+  const components = Array.isArray(draft.components) ? draft.components : []
+  if (components.length === 0) {
+    return '还差病种'
+  }
+  return ''
+}
+
+function rowComponentsText(draft: Record<string, any> | undefined): string {
+  const list = Array.isArray(draft?.components) ? draft.components : []
+  if (list.length === 0) return '病种未读出'
+  const labels = list.map(
+    (value: string) =>
+      componentChoices.value.find((item) => item.value === value)?.label || value,
+  )
+  return `含 ${labels.length} 种（${labels.join('·')}）`
+}
+
+function toggleRowConfirm(index: number) {
+  const reason = rowBlockReason(index)
+  if (reason && !rowConfirmed.value[index]) {
+    uni.showToast({ title: `${reason}，先点开这一条补一下`, icon: 'none' })
+    editingRow.value = index
+    return
+  }
+  const next = [...rowConfirmed.value]
+  next[index] = !next[index]
+  rowConfirmed.value = next
+}
+
+function toggleRowEdit(index: number) {
+  editingRow.value = editingRow.value === index ? -1 : index
+}
+
+function onRowNameInput(index: number, event: any) {
+  const value = String(event?.detail?.value || '')
+  const draft = drafts.value[index]
+  if (!draft) return
+  // 手打的名字优先：清掉"规范产品名"，让顾客写的字生效
+  draft.vaccineName = value
+  draft.productName = ''
+}
+
+function pickRowName(index: number, name: string) {
+  const draft = drafts.value[index]
+  if (!draft) return
+  draft.productName = name
+  draft.vaccineName = name
+  draft.nameSuggestions = []
+}
+
+function onRowDateChange(index: number, event: any) {
+  const draft = drafts.value[index]
+  if (!draft) return
+  draft.vaccinationDate = String(event?.detail?.value || '')
+  // 日期改过了，"涂改待核对"这句就不必再挂着
+  if (draft.notes) {
+    draft.notes = String(draft.notes).replace(/日期有涂改[，,]?请核对[。]?/g, '').trim()
+  }
+}
+
+function toggleRowComponent(index: number, value: string) {
+  const draft = drafts.value[index]
+  if (!draft) return
+  const list = Array.isArray(draft.components) ? [...draft.components] : []
+  const at = list.indexOf(value)
+  if (at >= 0) list.splice(at, 1)
+  else list.push(value)
+  draft.components = list
+}
+
+/** 只把**确认过**的那些交上去（没确认的不入库） */
+function acceptConfirmed() {
+  const picked = drafts.value.filter((_, index) => rowConfirmed.value[index])
+  if (picked.length === 0) {
+    uni.showToast({ title: '还没有确认任何一条', icon: 'none' })
+    return
+  }
+  emit('scanned', {
+    drafts: picked,
+    documentType: resolvedDocumentType.value || props.documentType,
+  })
+  showConfirm.value = false
+  drafts.value = []
+  rowConfirmed.value = []
+  rowOrder.value = []
+  editingRow.value = -1
+  failureNotice.value = ''
+  uploadedUrls.value = []
+}
 /**
  * 模型自评的识别把握。
  *
@@ -711,6 +982,23 @@ async function scanAll(filePaths: string[]) {
     // 底部那段汇总红字 2026-10-06 下线，不再单独留一份
     confidence.value = worstConfidence
     resolvedDocumentType.value = resolvedType
+
+    /*
+     * 逐条确认的初始状态（2026-10-08）：
+     *   · 全部"未确认" —— 没确认的不入库；
+     *   · 顺序**只在这里算一次**：系统拿不准的排前面（判据见 rowCare），
+     *     其余保持识别顺序。为什么不每次重算：顾客勾着勾着行会跳 ✗。
+     */
+    rowConfirmed.value = drafts.value.map(() => false)
+    rowOrder.value = drafts.value
+      .map((_, index) => index)
+      .sort((a, b) => {
+        const careA = rowCare(a).care ? 0 : 1
+        const careB = rowCare(b).care ? 0 : 1
+        return careA - careB || a - b
+      })
+    editingRow.value = -1
+
     showConfirm.value = true
   } catch (error: any) {
     // 一块看得见的提示，而不是一闪而过的 toast；
@@ -791,6 +1079,124 @@ function discard() {
 </script>
 
 <style scoped lang="scss">
+/* ── 疫苗本：逐条确认的行列表（2026-10-08）────────────────────────────
+   一行给全"要核对的三样"：名字 · 日期 · 含哪些病种；
+   点一行就地改，右侧点「确认」；系统拿不准的排最前面并标红。 */
+.rows__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 8rpx 0 12rpx;
+}
+.rows__hint {
+  font-size: 24rpx;
+  color: #7a7a7a;
+}
+.rows__progress {
+  font-size: 24rpx;
+  color: #0f7b49;
+  font-weight: 600;
+}
+.row {
+  border: 1rpx solid #e6e6e6;
+  border-radius: 12rpx;
+  margin-bottom: 12rpx;
+  background: #ffffff;
+  overflow: hidden;
+}
+.row--care {
+  border-color: #e6a23c;
+  background: #fffaf0;
+}
+.row--confirmed {
+  border-color: #0f7b49;
+}
+.row__main {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 20rpx;
+}
+.row__no {
+  width: 40rpx;
+  font-size: 24rpx;
+  color: #9a9a9a;
+}
+.row__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.row__name {
+  font-size: 30rpx;
+  color: #222222;
+  font-weight: 600;
+}
+.row__meta {
+  font-size: 24rpx;
+  color: #666666;
+  margin-top: 6rpx;
+}
+.row__care {
+  font-size: 24rpx;
+  color: #c0392b;
+  margin-top: 6rpx;
+}
+.row__confirm {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #0f7b49;
+  color: #0f7b49;
+  font-size: 26rpx;
+}
+.row__confirm--done {
+  background: #0f7b49;
+  color: #ffffff;
+}
+.row__edit {
+  border-top: 1rpx dashed #e6e6e6;
+  padding: 16rpx 20rpx 20rpx;
+}
+.row__field {
+  margin-bottom: 14rpx;
+}
+.row__label {
+  font-size: 24rpx;
+  color: #7a7a7a;
+}
+.row__input {
+  display: block;
+  margin-top: 6rpx;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid #e6e6e6;
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  color: #222222;
+  background: #fafafa;
+}
+.row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8rpx;
+}
+.row__chip-hint {
+  font-size: 24rpx;
+  color: #7a7a7a;
+  margin-right: 10rpx;
+}
+.row__chip {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #e6e6e6;
+  color: #555555;
+  font-size: 24rpx;
+  margin: 0 10rpx 10rpx 0;
+}
+.row__chip--active {
+  border-color: #0f7b49;
+  color: #0f7b49;
+  background: #eef8f2;
+}
+
 @import '../../styles/health-section.scss';
 
 .scan {

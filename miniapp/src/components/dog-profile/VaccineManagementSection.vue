@@ -23,6 +23,7 @@
       upload-type="vaccine"
       button-text="上传疫苗本图片"
       hint-text="一次能读出本子上的多条记录；也可以直接手填"
+      :component-options="componentOptions"
       @scanned="onVaccineBookScanned"
     />
 
@@ -1664,7 +1665,7 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
     title:
       skipped > 0
         ? `识别 ${scanned} 条，跳过 ${skipped} 条已记过的`
-        : `已识别 ${scanned} 条，正在保存…`,
+        : `已确认 ${scanned} 条，正在保存…`,
     icon: 'none',
   })
 

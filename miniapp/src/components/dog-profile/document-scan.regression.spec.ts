@@ -23,14 +23,25 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain("'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'")
   })
 
-  it('第 5 条：识别后只确认一次，且明确告诉顾客"确认后自动填入表单"', () => {
+  it('第 5 条：疫苗本**逐条确认后才入库**；其余四类仍是一次确认（2026-10-08 老板改）', () => {
     const scan = readScan()
 
-    expect(scan).toContain('识别到以下内容，确认后自动填入表单')
-    expect(scan).toContain('确认，填入表单')
-    // 只有一次确认，没有逐条勾选
+    /*
+     * ⚠️ 这条原来是"识别后只确认一次，没有逐条勾选"（老板 2026-09 的口径）。
+     * 2026-10-08 他改了：**"只有当用户一个记录一个记录的确认了之后，他才应该入库"**，
+     * 同时要求"不要一条一屏，要优化一屏多条的信息量和交互"。
+     */
+    // 疫苗本：逐条确认 + 只提交确认过的那几条
+    expect(scan).toContain('逐条确认后保存')
+    expect(scan).toContain('一条一条核对，确认过的才会存进档案')
+    expect(scan).toContain('@tap="acceptConfirmed"')
+    expect(scan).toContain('rowConfirmed')
+    expect(scan).toContain('保存我确认的')
+
+    // 其余四类（只合成一条记录）：仍然是一次确认，按钮精简成「确认」
+    expect(scan).toContain('识别到以下内容，确认后填入表单')
     expect(scan).toContain('@tap="accept"')
-    expect(scan).not.toContain('逐条确认')
+    expect(scan).not.toContain('确认，填入表单')
   })
 
   it('第 5 条：识别的结果只填表、不直接保存（顾客还能改、还能不存）', () => {
@@ -437,5 +448,92 @@ describe('拍照录入 · 上传的照片全部显示预览（2026-10-06）', ()
 
     expect(source).toContain('@tap="previewPage(page.path)"')
     expect(source).toContain('uni.previewImage({')
+  })
+})
+
+/**
+ * 疫苗本：逐条确认后才入库（2026-10-08 老板定）
+ *
+ * 老板的原话：
+ *   · "只有当用户一个记录一个记录的确认了之后，他才应该入库"
+ *   · "确认页的字段那肯定要能直接修改"
+ *   · "一条一屏的话，交互没有一屏多条操作成本低，我们需要着重的去优化
+ *      一屏多条的信息量和交互"
+ *
+ * 另外他点出一个前提问题："AI 模型也有可能无法精准的判断哪些是高风险的问题，
+ * 它也有可能乱说自己没把握的是哪几条" —— 所以：
+ *   · 判"拿不准"只用**我们自己算得出来**的信号（名字没认出来 / 日期缺失或涂改 /
+ *     病种空），**不用模型自评的 confidence**；
+ *   · 而且**每一条都要家长过一遍**（不是只问可疑的），可疑的只是排前面。
+ */
+describe('疫苗本 · 逐条确认后才入库（2026-10-08）', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('🔴 没确认的条目不提交（只 emit 确认过的那些）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('const picked = drafts.value.filter((_, index) => rowConfirmed.value[index])')
+    expect(scan).toContain("uni.showToast({ title: '还没有确认任何一条'")
+  })
+
+  it('🔴 判"拿不准"只用我们自己算得出来的信号，不许用模型自评', () => {
+    const scan = readScan()
+
+    // 三个可靠信号
+    expect(scan).toContain('名字没认出来，请核对或从产品库选一支')
+    expect(scan).toContain('接种日期没读出来，请补上')
+    expect(scan).toContain('日期有涂改，请核对')
+    expect(scan).toContain('没读出防哪些病，请勾一下')
+
+    // 模型自评的 confidence 不参与"要不要问"的判断
+    const careFn = scan.slice(scan.indexOf('function rowCare'), scan.indexOf('function rowBlockReason'))
+    expect(careFn).not.toContain('confidence')
+  })
+
+  it('🔴 缺东西的那条不让确认（点确认自动展开让它补）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('还差疫苗名')
+    expect(scan).toContain('还差接种日期')
+    expect(scan).toContain('还差病种')
+    expect(scan).toContain('先点开这一条补一下')
+  })
+
+  it('一屏多条：一行给全"要核对的三样"，可疑的排最前面', () => {
+    const scan = readScan()
+
+    // 一行里的三样
+    expect(scan).toContain('rowName(drafts[index])')
+    expect(scan).toContain('rowComponentsText(drafts[index])')
+    expect(scan).toContain('已确认 {{ confirmedCount }} / 共 {{ drafts.length }} 条')
+
+    // 顺序只在识别完成时算一次（勾着勾着行不许跳）
+    expect(scan).toContain('rowOrder.value = drafts.value')
+    expect(scan).toContain('const careA = rowCare(a).care ? 0 : 1')
+  })
+
+  it('就地能改三样：名字（产品库候选）/ 日期 / 病种', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('@input="onRowNameInput(index, $event)"')
+    expect(scan).toContain('@tap="pickRowName(index, item)"')
+    expect(scan).toContain('@change="onRowDateChange(index, $event)"')
+    expect(scan).toContain('@tap="toggleRowComponent(index, option.value)"')
+    // 病种候选由疫苗板块传进来（前端不复制一份闭集）
+    expect(scan).toContain('componentOptions?: { value: string; label: string }[]')
+  })
+
+  it('疫苗板块把病种候选传下去，并说明"已确认 N 条"', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(section).toContain(':component-options="componentOptions"')
+    expect(section).toContain('已确认 ${scanned} 条，正在保存…')
   })
 })

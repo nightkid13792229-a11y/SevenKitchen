@@ -556,7 +556,6 @@ export const dogApi = {
     allergies: string[]
     medicalConditions: string[]
     ocrText: string
-    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
     warnings: string[]
   }>({
     url: '/health/extract-report',

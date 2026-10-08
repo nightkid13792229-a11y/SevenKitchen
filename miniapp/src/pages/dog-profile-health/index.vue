@@ -1087,11 +1087,13 @@ const recordsSectionRef = ref<{
   openAddRecordChooser?: () => void
   /** 直接调起相册 + AI 识别（按当前标签那一类） */
   startScan?: () => void
+  startDocumentScan?: () => void
   /** 新建一条本类空白记录 */
   addRecord?: () => void
 } | null>(null)
 const vaccineSectionRef = ref<{
   startScan?: () => void
+  startDocumentScan?: () => void
   /** 加一条空白记录；prefill 用于从计划某一步点进来时带上那一步的分类 */
   addRecord?: (prefill?: { kinds?: string[] }) => void
   /** 有几条填不完、存不了的疫苗草稿（切标签前拦一下用） */
@@ -1158,9 +1160,14 @@ function onAddRecordTap() {
   }
 
   const isRecord = isRecordTab.value
+  /*
+   * 「选文档（PDF / Word）」（2026-10-08 老板定）：
+   * 就诊报告、体检报告、过敏报告常常是文档而不是照片 ——
+   * 微信只能从**聊天记录**里选文件，所以入口放在这里，并说明怎么用。
+   */
   const options = isRecord
-    ? ['上传图片，AI 识别', '手动填写']
-    : ['上传疫苗本图片，AI 识别', '手动加一条']
+    ? ['上传图片，AI 识别', '选 PDF / Word 文档', '手动填写']
+    : ['上传疫苗本图片，AI 识别', '选 PDF / Word 文档', '手动加一条']
 
   uni.showActionSheet({
     itemList: options,
@@ -1168,6 +1175,8 @@ function onAddRecordTap() {
       if (isRecord) {
         if (tapIndex === 0) {
           recordsSectionRef.value?.startScan?.()
+        } else if (tapIndex === 1) {
+          recordsSectionRef.value?.startDocumentScan?.()
         } else {
           recordsSectionRef.value?.addRecord?.()
         }
@@ -1179,6 +1188,8 @@ function onAddRecordTap() {
         // 直接调起图片识别或手动加一条。
         if (tapIndex === 0) {
           nextTick(() => vaccineSectionRef.value?.startScan?.())
+        } else if (tapIndex === 1) {
+          nextTick(() => vaccineSectionRef.value?.startDocumentScan?.())
         } else {
           vaccineSectionRef.value?.addRecord?.()
         }

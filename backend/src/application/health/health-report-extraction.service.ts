@@ -44,7 +44,6 @@ export interface HealthReportOcrProvider {
  */
 export const HEALTH_REPORT_EXTRACTION_PURPOSE = 'HEALTH_REPORT_EXTRACTION';
 
-export type HealthReportConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
 /**
  * 可以拍照识别的文档类型（2026-10-01，第六期）。
@@ -65,6 +64,28 @@ import {
   findProductByText,
   suggestProductsForPartialName,
 } from '../../domain/health/vaccine-products';
+
+/**
+ * 上传上来的到底是图片还是文档（2026-10-08）。
+ *
+ * 老板："就诊报告、体检报告、过敏检测报告，有可能是 PDF 或者是 Word 文档，
+ *        可能需要支持进入微信、选择文档上传。"
+ *
+ * 图片走"让模型直接看图"，文档走"先把文字抽出来、再交给模型" ——
+ * 两条路的字段结构完全一样（同一份提示词），所以下游什么都不用改。
+ */
+export type HealthDocumentFileKind = 'image' | 'pdf' | 'docx' | 'doc';
+
+export function resolveHealthDocumentFileKind(
+  url: string,
+  filename?: string,
+): HealthDocumentFileKind {
+  const text = `${filename || ''} ${url || ''}`.split('?')[0].toLowerCase();
+  if (/\.pdf$|\.pdf[^a-z0-9]/.test(text)) return 'pdf';
+  if (/\.docx$|\.docx[^a-z0-9]/.test(text)) return 'docx';
+  if (/\.doc$|\.doc[^a-z0-9]/.test(text)) return 'doc';
+  return 'image';
+}
 
 export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
@@ -167,7 +188,6 @@ export interface HealthReportExtractionResult {
   medicalConditions: string[];
   /** OCR 原文，便于顾客/客服核对识别是否可靠 */
   ocrText: string;
-  confidence: HealthReportConfidence;
   /** 需要顾客/客服留意的地方（例如"未能确认是否食物过敏"） */
   warnings: string[];
   /**
@@ -377,7 +397,6 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "drafts": [',
     '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
     '  ],',
-    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
     '}',
   ].join('\n'),
@@ -422,7 +441,6 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '      "labValues": "血常规\\nWBC 10.2 x 10^9/L\\nRBC 7.99 x 10^12/L",',
     '      "patientName": "面包", "recommendations": "半年后复查", "notes": "" }',
     '  ],',
-    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
     '}',
   ].join('\n'),
@@ -464,7 +482,6 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '      "labValues": "血常规\\nWBC 10.2 x 10^9/L\\nRBC 7.99 x 10^12/L",',
     '      "patientName": "面包", "notes": "" }',
     '  ],',
-    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
     '}',
   ].join('\n'),
@@ -537,7 +554,6 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "testDate": "2026-03-12",',
     '  "institution": "",',
     '  "medicalConditions": ["胰腺炎"],',
-    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": ["报告中未注明检测方法"]',
     '}',
   ].join('\n'),
@@ -615,7 +631,6 @@ function buildAutoSystemPrompt(): string {
     '{',
     '  "documentType": "CHECKUP_REPORT",',
     '  "drafts": [ …按该类型的字段结构填… ],',
-    '  "confidence": "HIGH" | "MEDIUM" | "LOW",',
     '  "warnings": []',
     '}',
   ].join('\n');
@@ -1044,12 +1059,6 @@ export function normalizeAllergyTestMethod(
   return 'UNKNOWN';
 }
 
-function normalizeConfidence(value: unknown): HealthReportConfidence {
-  return value === 'HIGH' || value === 'MEDIUM' || value === 'LOW'
-    ? value
-    : 'LOW';
-}
-
 function normalizeWarnings(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -1184,6 +1193,46 @@ export class HealthReportExtractionService {
     }
   }
 
+  /**
+   * 从 PDF / Word 里把文字抽出来（2026-10-08）。
+   *
+   * PDF 用 pdf-parse、Word(.docx) 用 mammoth —— 都是纯文本抽取，不做任何理解，
+   * 理解交给模型（与"OCR 认字 → 模型整理"那条路一个道理）。
+   *
+   * ⚠️ 实测：真实世界的 PDF（40 页指南）能抽出 25 万字 ✓；
+   *    但**某些生成器产出的 PDF 会报 "bad XRef entry"** ✗ ——
+   *    这种情况返回空，由调用方给顾客一句"请改用拍照上传"。
+   */
+  private async extractDocumentText(
+    url: string,
+    kind: 'pdf' | 'docx',
+  ): Promise<string> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`下载失败（HTTP ${response.status}）`);
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      if (kind === 'pdf') {
+        const pdfParse = (await import('pdf-parse')).default;
+        const result = await pdfParse(buffer);
+        return normalizeKeyword(String(result?.text || ''));
+      }
+
+      const mammoth = await import('mammoth');
+      const result = await mammoth.extractRawText({ buffer });
+      return normalizeKeyword(String(result?.value || ''));
+    } catch (error) {
+      this.logger.warn(
+        `文档抽文字失败（${kind}）：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return '';
+    }
+  }
+
   async extractFromReport(input: {
     imageUrl: string;
     originalFilename?: string;
@@ -1214,7 +1263,49 @@ export class HealthReportExtractionService {
     let parsed: Record<string, unknown> | null = null;
     let ocrText = '';
 
-    if (isHealthReportVisionEnabled()) {
+    /*
+     * ⓞ 先看这一个是图片还是**文档**（2026-10-08 老板要的 PDF / Word 上传）。
+     *
+     * 文档不能交给视觉模型（它不是图）——先把文字抽出来，再用**同一套提示词**
+     * 交给文本模型。抽不出文字的情况（扫描件、图片型 PDF）给一句能行动的话：
+     * 让顾客改用拍照上传，而不是丢一个技术错误给他。
+     */
+    const fileKind = resolveHealthDocumentFileKind(
+      input.imageUrl,
+      input.originalFilename,
+    );
+
+    if (fileKind === 'doc') {
+      throw new BadRequestException(
+        '老版 .doc 读不了，请另存为 PDF 或 .docx 再上传（也可以直接拍照）',
+      );
+    }
+
+    if (fileKind === 'pdf' || fileKind === 'docx') {
+      ocrText = await this.extractDocumentText(input.imageUrl, fileKind);
+      if (!ocrText) {
+        throw new BadRequestException(
+          '这份文档里读不到文字（可能是扫描件或图片型 PDF），请改用拍照上传',
+        );
+      }
+
+      parsed = await callDeepSeekJson({
+        baseUrl: config.baseUrl,
+        model: config.model,
+        extraBody: EXTRACTION_NO_THINKING,
+        apiKey: config.apiKey,
+        requestTimeoutMs: config.requestTimeoutMs,
+        systemPrompt: buildSystemPrompt(requestedDocumentType),
+        userPayload: {
+          task: 'extract_dog_health_document',
+          documentType: requestedDocumentType,
+          ocrText,
+        },
+        temperature: 0,
+      });
+    }
+
+    if (!parsed && isHealthReportVisionEnabled()) {
       const configuredModel =
         await this.agentProviderConfigService.getConfiguredPurposeModel(
           HEALTH_REPORT_EXTRACTION_PURPOSE,
@@ -1311,7 +1402,6 @@ export class HealthReportExtractionService {
         allergies: [],
         medicalConditions: [],
         ocrText: '',
-        confidence: 'LOW',
         warnings: [buildNotMedicalWarning(requestedDocumentType)],
       };
     }
@@ -1327,7 +1417,6 @@ export class HealthReportExtractionService {
         allergies: [],
         medicalConditions: [],
         ocrText: '',
-        confidence: normalizeConfidence(parsed.confidence),
         warnings: [
           '这是影像片（X 光/超声），AI 不解读片子上的内容；片子原件会一起存进档案',
           ...filterContradictoryWarnings(
@@ -1369,7 +1458,6 @@ export class HealthReportExtractionService {
       allergies,
       medicalConditions,
       ocrText,
-      confidence: normalizeConfidence(parsed.confidence),
       warnings,
       /**
        * 报告层面的信息（2026-10-04 第五期）。

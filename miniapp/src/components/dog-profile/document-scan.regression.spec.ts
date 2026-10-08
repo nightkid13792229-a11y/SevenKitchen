@@ -314,9 +314,16 @@ describe('混合资料不能互相吃掉', () => {
   it('按判定出来的类型分组收集，各组各自合并', () => {
     const scan = readScan()
 
-    expect(scan).toContain("const draftsByType = new Map<string, Record<string, any>[]>()")
-    expect(scan).toContain('draftsByType.set(imageType, bucket)')
+    /*
+     * 2026-10-08：分组与合并从"内联在 scanAll 里"抽成了
+     * collectDraftsByType() + mergePageDrafts() —— 因为"单独重传某一页"
+     * 必须用同一套逻辑重算。行为不变：按判定出来的类型分组，各组各自合并。
+     */
+    expect(scan).toContain('function collectDraftsByType()')
+    expect(scan).toContain('const bucket = map.get(page.type) || []')
+    expect(scan).toContain('function mergePageDrafts(pages:')
     expect(scan).toContain('for (const [type, list] of draftsByType.entries())')
+    expect(scan).toContain("const targetType = props.entryKind === 'checkup' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'")
   })
 
   it('每条草稿带着自己的类型，确认卡片按它渲染、父组件按它建记录', () => {
@@ -535,5 +542,104 @@ describe('疫苗本 · 逐条确认后才入库（2026-10-08）', () => {
 
     expect(section).toContain(':component-options="componentOptions"')
     expect(section).toContain('已确认 ${scanned} 条，正在保存…')
+  })
+})
+
+/**
+ * 老板 2026-10-08 要的四件事里，属于拍照/识别这一块的三件：
+ *   ① 单独重传某一页（以前界面写着"可以单独重传一次"，其实没这个功能）
+ *   ② 存完整批回执小结
+ *   ④ PDF / Word 文档上传（他："就诊报告、体检报告、过敏检测报告，
+ *      有可能是 PDF 或者是 Word 文档，可能需要支持进入微信、选择文档上传"）
+ */
+describe('单独重传某一页（2026-10-08）', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('🔴 每一张都能单独换一张（不再是句空话）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('@tap.stop="rescanPage(page.index - 1)"')
+    expect(scan).toContain('async function rescanPage(pageIndex: number)')
+    // 只选一张
+    expect(scan).toContain('function pickOneImage(): Promise<string>')
+  })
+
+  it('🔴 只替换这一页、并按新的页集合重新合并（不能叠加成两条）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('nextPages[pageIndex] = {')
+    expect(scan).toContain('pageDraftCache = nextPages')
+    expect(scan).toContain('renderMergedResult()')
+    // 换完之后把这一页原来那张图从 COS 删掉
+    expect(scan).toContain('void dropUploadedFile(oldUrl)')
+  })
+
+  it('🔴 换上来这张也读不出内容时，保留原来的结果（不能把顾客已有的弄丢）', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('mergePageDrafts(nextPages).merged.length === 0')
+    expect(scan).toContain('这一张还是没读出内容，原来的结果先留着')
+  })
+
+  it('提示语指向真正的按钮，不再承诺不存在的功能', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('就点它下面的「重传这一张」换一张')
+    expect(scan).not.toContain('单独重传一次，或直接手工补充')
+  })
+})
+
+describe('选文档上传（PDF / Word，2026-10-08）', () => {
+  const readScan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('走微信的「从聊天里选文件」，只收 PDF / docx', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('chooseMessageFile')
+    expect(scan).toContain("extension: ['pdf', 'docx']")
+    expect(scan).toContain('async function startDocumentScan()')
+    // 文档一次一份，不走多页累加
+    expect(scan).toContain('pageResultsCache = [')
+  })
+
+  it('英文环境/不支持时给一句能懂的话，而不是崩掉', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('当前环境不支持选文档，请在手机微信里打开')
+  })
+
+  it('文档没有缩略图，就显示文件名那一格', () => {
+    const scan = readScan()
+
+    expect(scan).toContain('pages__thumb--file')
+    expect(scan).toContain('fileName?: string')
+  })
+
+  it('疫苗板块与病历/检查板块都能调起它，页面菜单里有这一项', () => {
+    const vaccine = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+    const records = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(vaccine).toContain('startDocumentScan')
+    expect(records).toContain('function startDocumentScan()')
+    expect(page).toContain("'选 PDF / Word 文档'")
+    expect(page).toContain('startDocumentScan?.()')
   })
 })

@@ -1399,7 +1399,10 @@ function updateTextField(index: number, key: string, value: string) {
  * 不是"自动保存"。顾客填完还能改、还能不存。
  */
 /** 识别组件：空闲时不挂载（避免留白条），点「从相册选择」时再挂上并触发 */
-const scanRef = ref<{ startScan?: () => void } | null>(null)
+const scanRef = ref<{
+  startScan?: () => void
+  startDocumentScan?: () => void
+} | null>(null)
 const scanActive = ref(false)
 
 /**
@@ -1449,6 +1452,23 @@ function startScan() {
   }
 
   nextTick(() => scanRef.value?.startScan?.())
+}
+
+/**
+ * 「选文档（PDF / Word）」（2026-10-08 老板要的）。
+ *
+ * 就诊报告、体检报告、过敏报告常常是 PDF / Word 文档 ——
+ * 微信里只能从**聊天记录**选文件，所以入口这一层跟拍照并列。
+ */
+function startDocumentScan() {
+  scanActive.value = true
+
+  if (scanRef.value) {
+    scanRef.value.startDocumentScan?.()
+    return
+  }
+
+  nextTick(() => scanRef.value?.startDocumentScan?.())
 }
 
 function onScanned(payload: { drafts: Record<string, any>[]; documentType: string }) {
@@ -1831,6 +1851,7 @@ function recordMatchesSavingKey(record: Record<string, any>, index: number, savi
 defineExpose({
   openAddRecordChooser,
   startScan,
+  startDocumentScan,
   addRecord,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,

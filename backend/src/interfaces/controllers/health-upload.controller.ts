@@ -39,6 +39,9 @@ const ALLOWED_HEALTH_UPLOAD_MIME_TYPES = [
   'image/heic',
   'image/heif',
   'application/pdf',
+  // Word（2026-10-08）：只收新版 .docx；老版 .doc 读不了，
+  // 让顾客另存为 PDF 或 .docx（识别时会明确告诉他）
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
 const ALLOWED_HEALTH_UPLOAD_EXTENSIONS = [
@@ -50,6 +53,7 @@ const ALLOWED_HEALTH_UPLOAD_EXTENSIONS = [
   '.heic',
   '.heif',
   '.pdf',
+  '.docx',
 ];
 
 function hasAllowedHealthUploadType(file: Express.Multer.File) {

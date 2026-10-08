@@ -57,6 +57,21 @@
         <text class="records-card__notice-close" @tap="scanNotice = ''">知道了</text>
       </view>
 
+      <!-- 存完整批回执（2026-10-08 老板要的）：这一批进去几条、跳过几条、
+           还差几条、以及"下一次该打什么"（用计划算出来的那一针，不是人工填的日期）。 -->
+      <view v-if="scanReceipt" class="receipt">
+        <text class="receipt__title">
+          这批记好了：存了 {{ scanReceipt.saved }} 条{{ scanReceipt.skipped > 0 ? ` · 跳过 ${scanReceipt.skipped } 条已记过的` : '' }}
+        </text>
+        <text v-if="scanReceipt.needsFix.length > 0" class="receipt__warn">
+          有 {{ scanReceipt.needsFix.length }} 条还差信息没存上：{{ scanReceipt.needsFix.join('；') }}
+        </text>
+        <text v-if="scanReceipt.nextLabel" class="receipt__next">
+          按接种计划，下一次是 {{ scanReceipt.nextLabel }}
+        </text>
+        <text class="receipt__close" @tap="dismissScanReceipt">知道了</text>
+      </view>
+
     <!-- 占位只在**手上一条记录都还没有**时出现。
          原来只要 loading 为真就把整个列表换成这一句 —— 而每一次自动保存
          （点分类、点"确认"、改日期）都会整表重载，于是已经显示出来的记录
@@ -589,6 +604,8 @@ function isDirty(record: VaccineRecord, index: number) {
  */
 defineExpose({
   startScan: () => scanRef.value?.startScan?.(),
+  /** 「选文档（PDF / Word）」（2026-10-08 老板要的） */
+  startDocumentScan: () => scanRef.value?.startDocumentScan?.(),
   addRecord,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,
@@ -1652,6 +1669,8 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
    * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
    */
   const scanned = payload.drafts.length
+  // 回执要用（存完之后一起告诉顾客"跳过几条"）
+  lastScanSkipped.value = skipped
   /*
    * 去重的结果**要说出来**（2026-10-06）：
    * 不吭声地跳过，顾客会以为"怎么少了一条"；
@@ -1686,6 +1705,26 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
  * 2. **不能按下标循环**。`saveRecord` 存完会 `loadRecords()` 整表重载，
  *    排序也变了，下标全作废 —— 所以每次都按"名称 + 日期"重新找那一条。
  */
+/**
+ * 存完的**整批回执**（2026-10-08 老板要的"存完整批回执小结"）。
+ *
+ * 为什么要它：这一批是逐条存的 —— 存成功只在卡片上闪 2 秒「已保存」，
+ * 存不下只在卡片上挂一句话。家长**不知道"8 条里到底进去了几条"** ✗
+ * （实测他自己就会问："我刚才那 8 条都进去了吗？"）
+ */
+const lastScanSkipped = ref(0)
+
+const scanReceipt = ref<{
+  saved: number
+  skipped: number
+  needsFix: string[]
+  nextLabel: string
+} | null>(null)
+
+function dismissScanReceipt() {
+  scanReceipt.value = null
+}
+
 async function saveScannedRecords() {
   const pending = records.value
     .filter((record) => !record.id)
@@ -1723,6 +1762,23 @@ async function saveScannedRecords() {
     if (reason) stillUnsaveable[index] = reason
   })
   autoSaveNotices.value = stillUnsaveable
+
+  /*
+   * 整批回执：进去几条、跳过几条、还差几条、以及"下一次该打什么"。
+   * 「下一次」用的是计划算出来的那一针（不是人工填的到期日）。
+   */
+  const savedCount = pending.length - Object.keys(stillUnsaveable).length
+  const nextPending = (props.planPending || [])
+    .filter((step) => step.status === 'DUE' || step.status === 'OVERDUE' || step.status === 'UPCOMING')
+    .sort((a, b) => a.windowStart.localeCompare(b.windowStart))[0]
+
+  scanReceipt.value = {
+    saved: Math.max(0, savedCount),
+    skipped: lastScanSkipped.value,
+    needsFix: Object.values(stillUnsaveable),
+    nextLabel: nextPending ? `${nextPending.label}（${nextPending.windowStart} 起）` : '',
+  }
+  lastScanSkipped.value = 0
 }
 
 /**
@@ -2496,4 +2552,36 @@ async function doRemove(record: VaccineRecord) {
   opacity: 0.5;
 }
 
+
+/* 存完整批回执（2026-10-08） */
+.receipt {
+  margin: 12rpx 0;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background: #eef8f2;
+  border: 1rpx solid #0f7b49;
+  display: flex;
+  flex-direction: column;
+}
+.receipt__title {
+  font-size: 28rpx;
+  color: #0f7b49;
+  font-weight: 600;
+}
+.receipt__warn {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #c0392b;
+}
+.receipt__next {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #333333;
+}
+.receipt__close {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #0f7b49;
+  text-align: right;
+}
 </style>

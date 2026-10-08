@@ -32,7 +32,14 @@ describe('阶段性收尾 · 老板拍板的两条', () => {
     expect(scan).not.toContain('lowConfidenceHint')
     expect(scan).not.toContain('confirm__confidence')
     expect(scan).not.toContain('有几处没读准')
-    // 但采集本身留着，排查问题时要对照
-    expect(scan).toContain('const confidence = ref')
+    /*
+     * ⚠️ 2026-10-08 又往前一步：**连采集都不要了**。
+     * 老板："AI 模型也有可能无法精准的判断哪些是高风险的问题吧，
+     *        它也有可能乱说自己没把握的是哪几条吧？"
+     * → 这个自评分既不可信、界面又不显示，留着只会误导，所以
+     *   前端不再收、后端也不再问模型要（省 token）。
+     */
+    expect(scan).not.toContain('const confidence = ref')
+    expect(scan).not.toContain('CONFIDENCE_RANK')
   })
 })

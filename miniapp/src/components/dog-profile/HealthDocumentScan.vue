@@ -77,11 +77,19 @@
             ]"
             @tap="previewPage(page.path)"
           >
-            <image class="pages__thumb" :src="page.path" mode="aspectFill" />
+            <image v-if="page.path" class="pages__thumb" :src="page.path" mode="aspectFill" />
+            <view v-else class="pages__thumb pages__thumb--file">
+              <text class="pages__thumb-file">📄</text>
+            </view>
             <text class="pages__index">{{ page.index }}</text>
             <text class="pages__status">
               {{ page.status === 'ok' ? `✓ ${page.label}` : page.status === 'empty' ? '✗ 没读到内容' : '！没识别成功' }}
             </text>
+            <text
+              v-if="page.path"
+              class="pages__reupload"
+              @tap.stop="rescanPage(page.index - 1)"
+            >重传这一张</text>
           </view>
         </view>
         <!-- 每张自己的提示紧跟在这一排缩略图下面（老板 2026-10-04：
@@ -96,8 +104,8 @@
             @tap="previewPage(item.path)"
           >第 {{ item.index }} 张：{{ item.text }}</text>
         </view>
-        <text v-if="hasFailedPages" class="pages__hint">
-          带 ✗ / ！的那几张可以点开看看，单独重传一次，或直接手工补充。
+        <text class="pages__hint">
+          哪一张不清楚，就点它下面的「重传这一张」换一张 —— 其它几张的结果不受影响。
         </text>
       </view>
       <view v-if="patientNameMismatch" class="confirm__name-warning">
@@ -207,7 +215,10 @@
            唯一只在这里出现过的是一句"共 N 张没能识别"的汇总，
            而每张缩略图上的 ✗ / ！和下面那句提示已经把它说完了。 -->
 
-      <!-- 识别把握**一个字都不显示**（2026-10-02 先去掉"中/高"，2026-10-04 老板拍板
+      <!-- 识别把握**连字段都不要了**（2026-10-08）：老板指出"AI 也有可能乱说自己
+           没把握的是哪几条" —— 这个自评分既不可信、界面又不显示，让它别再返回，
+           省 token、也少一个会误导人的信号。
+           （历史：2026-10-02 先去掉"中/高"，2026-10-04 老板拍板
            连"低"的那句也不要）：模型自评分，顾客据此做不了任何事，
            只会让整份结果都不敢信。真正要提醒的地方已经**点名到具体行**了。 -->
 
@@ -299,11 +310,118 @@ const emit = defineEmits<{
  * 供上层外部触发（病历/检查板块把它并进了底部那个「新增记录」）。
  * 自带按钮隐藏时，就靠这个方法打开相机/相册。
  */
-defineExpose({ startScan: pickAndScan })
+defineExpose({ startScan: pickAndScan, startDocumentScan })
 
 const isBusy = ref(false)
 const showConfirm = ref(false)
 const drafts = ref<Record<string, any>[]>([])
+
+/*
+ * ══ 按"页"存识别结果（2026-10-08，为了"单独重传某一页"）══════════════════
+ *
+ * 老板："界面写着可以单独重传一次，可是没这个功能。"
+ * 重传一张之后必须把**这一页**的草稿换掉、再按新的页集合重新合并 ——
+ * 不能把新结果叠加上去（那样同一页的记录会翻倍）。
+ * 所以识别结果按页存两份：这一页的草稿（pageDraftCache）、
+ * 这一页的状态与提示（pageResultsCache）。
+ */
+type ScanPageResult = {
+  index: number
+  path: string
+  status: 'ok' | 'empty' | 'failed'
+  label: string
+  warnings: string[]
+  /** 文档（PDF / Word）没有缩略图，就显示文件名（2026-10-08） */
+  fileName?: string
+}
+let pageResultsCache: ScanPageResult[] = []
+let pageDraftCache: { type: string; drafts: Record<string, any>[] }[] = []
+
+/** 按"这张图被判成什么"把各页草稿分组（同一页的草稿共用它的附件地址） */
+function collectDraftsByType(): Map<string, Record<string, any>[]> {
+  const map = new Map<string, Record<string, any>[]>()
+  for (const page of pageDraftCache) {
+    if (!page || page.drafts.length === 0) continue
+    const bucket = map.get(page.type) || []
+    bucket.push(...page.drafts)
+    map.set(page.type, bucket)
+  }
+  return map
+}
+
+/** 把"按页的草稿"合并成"给顾客确认的那一份"（纯函数，重传一页时要拿候选集合先算一遍） */
+function mergePageDrafts(pages: { type: string; drafts: Record<string, any>[] }[]) {
+  const draftsByType = new Map<string, Record<string, any>[]>()
+  for (const page of pages) {
+    if (!page || page.drafts.length === 0) continue
+    const bucket = draftsByType.get(page.type) || []
+    bucket.push(...page.drafts)
+    draftsByType.set(page.type, bucket)
+  }
+
+  const resolvedType = resolveScannedDocumentType(
+    [...draftsByType.keys()],
+    props.documentType,
+  ) as DocumentType
+
+  let merged: Record<string, any>[] = []
+  let ignoredNote = ''
+
+  if (props.documentType === 'AUTO') {
+    // 就诊 / 体检入口：入口决定记录类型，这一批纸合成一条记录
+    const targetType = props.entryKind === 'checkup' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'
+    const groups = [...draftsByType.entries()].map(([type, list]) => ({ type, drafts: list }))
+    const single = buildSingleScannedRecord(groups, targetType)
+    if (single.draft) {
+      merged = [single.draft]
+    }
+    ignoredNote = single.ignored.length
+      ? `有 ${single.ignored.reduce((sum, item) => sum + item.count, 0)} 张看起来是` +
+        `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') ? '疫苗本' : ''}` +
+        `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') && single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '、' : ''}` +
+        `${single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '过敏原检测报告' : ''}` +
+        `，那些请到对应的板块上传`
+      : ''
+  } else {
+    // 疫苗 / 过敏入口：同类型的页合并成一条，**疫苗本不合并**
+    for (const [type, list] of draftsByType.entries()) {
+      const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
+      for (const draft of groupDrafts) {
+        merged.push({ ...draft, __documentType: type })
+      }
+    }
+  }
+
+  return { merged, resolvedType, ignoredNote }
+}
+
+/** 把合并结果摆到界面上（逐条确认的初始状态都在这里重置） */
+function renderMergedResult() {
+  const { merged, resolvedType, ignoredNote } = mergePageDrafts(pageDraftCache)
+
+  drafts.value = merged
+  ignoredPagesNote.value = ignoredNote
+  resolvedDocumentType.value = resolvedType
+  pageOutcomes.value = pageResultsCache.map((page) => ({
+    ...page,
+    warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
+  }))
+
+  /*
+   * 逐条确认的初始状态：全部"未确认"；顺序只在这里算一次 ——
+   * 系统拿不准的排前面（判据见 rowCare），其余保持识别顺序。
+   * 为什么不每次重算：顾客勾着勾着行会跳 ✗。
+   */
+  rowConfirmed.value = drafts.value.map(() => false)
+  rowOrder.value = drafts.value
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const careA = rowCare(a).care ? 0 : 1
+      const careB = rowCare(b).care ? 0 : 1
+      return careA - careB || a - b
+    })
+  editingRow.value = -1
+}
 
 /*
  * ══ 疫苗本：**逐条确认**（2026-10-08 老板定）══════════════════════════════
@@ -484,7 +602,6 @@ function acceptConfirmed() {
  * ⚠️ **一个字都不给顾客看**（2026-10-02 去掉"中/高"，2026-10-04 老板拍板连"低"也不要）。
  * 留着它只为排查问题时能对照，不参与任何界面逻辑。
  */
-const confidence = ref('LOW')
 /**
  * 后端最终判定的文档类型。
  *
@@ -719,19 +836,20 @@ function pickAndScan() {
   })
 }
 
-const CONFIDENCE_RANK: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 }
 
 /** 多张一起识别：逐张上传 + 识别，最后合并成一份待确认结果 */
 async function scanAll(filePaths: string[]) {
   isBusy.value = true
   showConfirm.value = false
-  confidence.value = ''
   scannedImageCount.value = 0
   requestedImageCount.value = filePaths.length
   failureNotice.value = ''
   uploadedUrls.value = []
   ignoredPagesNote.value = ''
   pageOutcomes.value = []
+  // 这一轮的按页缓存（重传一页时要在它上面替换）
+  pageResultsCache = []
+  pageDraftCache = []
 
   /**
    * 先把原图压成"识别用"的尺寸（2026-10-03）。
@@ -782,13 +900,7 @@ async function scanAll(filePaths: string[]) {
    * 每张记：第几张、本地缩略图（可点开看原图）、结果、判定类型、这页自己的提示。
    * 结果 = ok（读出内容）/ empty（读了但没内容）/ failed（这一步就失败了）。
    */
-  const pageResults: {
-    index: number
-    path: string
-    status: 'ok' | 'empty' | 'failed'
-    label: string
-    warnings: string[]
-  }[] = []
+  const pageResults = pageResultsCache
   /**
    * 按"这张图被判成什么"分组收草稿（2026-10-02 修的一个**数据丢失** bug）。
    *
@@ -799,8 +911,6 @@ async function scanAll(filePaths: string[]) {
    * 现在按类型分组、各组各自合并 → 化验单成一条体检记录，
    * 门诊病历成一条病历记录，谁也不吃掉谁。
    */
-  const draftsByType = new Map<string, Record<string, any>[]>()
-  let worstConfidence = 'HIGH'
   let failed = 0
 
   try {
@@ -844,14 +954,14 @@ async function scanAll(filePaths: string[]) {
           // 2026-10-01：把顾客拍的这张原图挂到"这张图识别出来的草稿"上。
           // 识别结果只是从报告上抄下来的字，报告原件才是凭证（顾客要回看、医生要看原件）。
           // 后端返回的 drafts 里 attachments 是空数组，图片地址只有这里知道。
-          const bucket = draftsByType.get(imageType) || []
-          bucket.push(
-            ...list.map((draft: Record<string, any>) => ({
+          // 2026-10-08：按**页**存（重传一页时要整页替换，不能叠加）
+          pageDraftCache[index] = {
+            type: imageType,
+            drafts: list.map((draft: Record<string, any>) => ({
               ...draft,
               attachments: [uploaded.url],
             })),
-          )
-          draftsByType.set(imageType, bucket)
+          }
           scannedImageCount.value += 1
           pageResults.push({
             index: index + 1,
@@ -862,6 +972,7 @@ async function scanAll(filePaths: string[]) {
           })
         } else {
           // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
+          pageDraftCache[index] = { type: imageType, drafts: [] }
           await dropUploadedFile(uploadedUrl)
           failed += 1
           pageResults.push({
@@ -885,12 +996,12 @@ async function scanAll(filePaths: string[]) {
           }
         }
 
-        const itemConfidence = String(res.data.confidence || 'LOW').toUpperCase()
-        if ((CONFIDENCE_RANK[itemConfidence] || 0) < (CONFIDENCE_RANK[worstConfidence] || 0)) {
-          worstConfidence = itemConfidence
-        }
       } catch (error: any) {
         // 多张里有一张失败不推翻其它的：先记下来，最后一起告诉顾客
+        pageDraftCache[index] = {
+          type: String(props.documentType || 'MEDICAL_RECORD').toUpperCase(),
+          drafts: [],
+        }
         await dropUploadedFile(uploadedUrl)
         failed += 1
         const reason = error?.message || '没能识别'
@@ -907,6 +1018,7 @@ async function scanAll(filePaths: string[]) {
       }
     }
 
+    const draftsByType = collectDraftsByType()
     const collectedCount = [...draftsByType.values()]
       .reduce((sum, list) => sum + list.length, 0)
     if (collectedCount === 0) {
@@ -925,79 +1037,13 @@ async function scanAll(filePaths: string[]) {
       )
     }
 
-    pageOutcomes.value = pageResults
-
-    // 类型按"多数页"定（只用于文案与兜底：真正的类型贴在每条草稿上）
-    const resolvedType = resolveScannedDocumentType(
-      [...draftsByType.keys()],
-      props.documentType,
-    ) as DocumentType
-
-    let merged: Record<string, any>[] = []
-
-    if (props.documentType === 'AUTO') {
-      // 就诊 / 体检入口（2026-10-02 老板定稿）：**入口决定记录类型**，
-      // 这一批纸合成一条记录 —— 化验页的数字进「化验数据」、影像页进「检查/附件」，
-      // 不再因为"化验单被判成体检类"而凭空多出一条体检记录。
-      const targetType = props.entryKind === 'checkup' ? 'CHECKUP_REPORT' : 'MEDICAL_RECORD'
-      const groups = [...draftsByType.entries()].map(([type, list]) => ({ type, drafts: list }))
-      const single = buildSingleScannedRecord(groups, targetType)
-
-      if (single.draft) {
-        merged = [single.draft]
-      }
-      ignoredPagesNote.value = single.ignored.length
-        ? `有 ${single.ignored.reduce((sum, item) => sum + item.count, 0)} 张看起来是` +
-          `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') ? '疫苗本' : ''}` +
-          `${single.ignored.some((item) => item.type === 'VACCINE_BOOK') && single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '、' : ''}` +
-          `${single.ignored.some((item) => item.type === 'ALLERGY_REPORT') ? '过敏原检测报告' : ''}` +
-          `，那些请到对应的板块上传`
-        : ''
-    } else {
-      // 疫苗 / 过敏入口：保持原样 ——
-      // 同类型的页合并成一条，**疫苗本不合并**（一张本子读出的是多条各自的接种记录）。
-      for (const [type, list] of draftsByType.entries()) {
-        const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
-        for (const draft of groupDrafts) {
-          merged.push({ ...draft, __documentType: type })
-        }
-      }
-      ignoredPagesNote.value = ''
-    }
-
-    drafts.value = merged
-    /**
-     * 逐张提示也按合并结果筛一遍。
-     *
-     * ⚠️ 这一步**必须在 `merged` 算出来之后**（2026-10-04 的线上事故）：
-     * 原来写在 `merged` 之前，小程序编译成 var 之后 `merged[0]` 读到的是 undefined，
-     * 直接抛 `Cannot read properties of undefined (reading '0')` ——
-     * 老板传完 7 张报告，看到的是一句英文报错。
-     */
-    pageOutcomes.value = pageResults.map(page => ({
-      ...page,
-      warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
-    }))
-    // 逐张提示已经按合并结果筛过（上面的 pageOutcomes），
-    // 底部那段汇总红字 2026-10-06 下线，不再单独留一份
-    confidence.value = worstConfidence
-    resolvedDocumentType.value = resolvedType
-
     /*
-     * 逐条确认的初始状态（2026-10-08）：
-     *   · 全部"未确认" —— 没确认的不入库；
-     *   · 顺序**只在这里算一次**：系统拿不准的排前面（判据见 rowCare），
-     *     其余保持识别顺序。为什么不每次重算：顾客勾着勾着行会跳 ✗。
+     * 合并 + 摆界面（2026-10-08 抽成函数）——
+     * "单独重传某一页"要用同一套合并逻辑重算，所以不能再内联在这里。
+     * ⚠️ 抽的时候保持行为完全一致：AUTO 入口合成一条、疫苗本不合并、
+     *    逐张提示按合并结果筛一遍（那一步必须在 merged 之后，2026-10-04 的线上事故）。
      */
-    rowConfirmed.value = drafts.value.map(() => false)
-    rowOrder.value = drafts.value
-      .map((_, index) => index)
-      .sort((a, b) => {
-        const careA = rowCare(a).care ? 0 : 1
-        const careB = rowCare(b).care ? 0 : 1
-        return careA - careB || a - b
-      })
-    editingRow.value = -1
+    renderMergedResult()
 
     showConfirm.value = true
   } catch (error: any) {
@@ -1032,6 +1078,228 @@ function accept() {
   failureNotice.value = ''
   // 图片交给上层了（跟着记录一起保存），这里不再算"没用上"
   uploadedUrls.value = []
+}
+
+/**
+ * 「选文档（PDF / Word）」（2026-10-08 老板定）。
+ *
+ * 老板："就诊报告、体检报告、过敏检测报告，有时是 PDF 或者 Word 文档，
+ *        需要支持进入微信、选择文档上传。"
+ *
+ * 微信只允许从**聊天记录**里选文件（`chooseMessageFile`）——
+ * 所以引导语要说清"先把文件发到微信里（发给文件传输助手也行），再从聊天里选"。
+ */
+function pickOneDocument(): Promise<{ path: string; name: string }> {
+  return new Promise((resolve) => {
+    const choose = (uni as unknown as { chooseMessageFile?: (options: any) => void })
+      .chooseMessageFile
+    if (typeof choose !== 'function') {
+      uni.showToast({ title: '当前环境不支持选文档，请在手机微信里打开', icon: 'none' })
+      resolve({ path: '', name: '' })
+      return
+    }
+    choose({
+      count: 1,
+      type: 'file',
+      extension: ['pdf', 'docx'],
+      success: (res: any) => {
+        const file = (res?.tempFiles || [])[0] || {}
+        resolve({ path: String(file.path || ''), name: String(file.name || '文档') })
+      },
+      fail: () => resolve({ path: '', name: '' }),
+    })
+  })
+}
+
+/** 选一份文档 → 上传 → 识别 → 进确认页（文档一次一份，不走多页累加） */
+async function startDocumentScan() {
+  if (isBusy.value) {
+    return
+  }
+
+  const picked = await pickOneDocument()
+  if (!picked.path) {
+    return
+  }
+
+  isBusy.value = true
+  showConfirm.value = false
+  uni.showLoading({ title: '识别文档中…', mask: true })
+  try {
+    const uploaded = await dogApi.uploadHealthAttachment(props.uploadType, picked.path)
+    if (!uploaded?.url) {
+      throw new Error('文件上传失败')
+    }
+    const url = String(uploaded.url)
+
+    const res: any = await dogApi.extractHealthReport({
+      imageUrl: url,
+      originalFilename: picked.name,
+      documentType: props.documentType,
+    })
+    if (res.code !== 0 || !res.data) {
+      throw new Error(res.message || '识别失败')
+    }
+
+    const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
+    if (list.length === 0) {
+      throw new Error('这份文档里没读到内容，可以试试拍照上传')
+    }
+
+    const type = String(res.data.documentType || '').toUpperCase()
+    const imageType = type && type !== 'AUTO' && type !== 'NOT_MEDICAL'
+      ? type
+      : String(props.documentType || 'MEDICAL_RECORD').toUpperCase()
+
+    pageResultsCache = [
+      {
+        index: 1,
+        path: '',
+        status: 'ok',
+        label: picked.name,
+        warnings: [],
+        fileName: picked.name,
+      },
+    ]
+    pageDraftCache = [
+      {
+        type: imageType,
+        drafts: list.map((draft: Record<string, any>) => ({
+          ...draft,
+          attachments: [url],
+        })),
+      },
+    ]
+    uploadedUrls.value = [url]
+    requestedImageCount.value = 1
+    scannedImageCount.value = 1
+    ignoredPagesNote.value = ''
+    failureNotice.value = ''
+
+    renderMergedResult()
+    showConfirm.value = true
+  } catch (error: any) {
+    failureNotice.value = resolveHealthScanErrorMessage(error?.message)
+  } finally {
+    isBusy.value = false
+    uni.hideLoading()
+  }
+}
+
+/** 只选一张图（重传某一页用） */
+function pickOneImage(): Promise<string> {
+  return new Promise((resolve) => {
+    uni.chooseImage({
+      count: 1,
+      sizeType: SCAN_IMAGE_SIZE_TYPE,
+      sourceType: ['album'],
+      success: (res: any) => resolve(String((res?.tempFilePaths || [])[0] || '')),
+      fail: () => resolve(''),
+    })
+  })
+}
+
+/**
+ * 「重传这一张」（2026-10-08 老板要求做的）。
+ *
+ * 界面一直写着"可以单独重传一次"，但那个功能**从来不存在** ✗ ——
+ * 7 张里第 3 张糊了，顾客只能整批丢掉重拍。
+ *
+ * 做法：重选一张 → 上传 + 识别 → **只替换这一页**的草稿 → 按新的页集合重新合并。
+ * ⚠️ 先拿"候选页集合"算一遍合并结果：如果换上来这张什么都没读出来，
+ *    就**保留原来的结果**（不能因为重传一次把顾客已经有的东西弄丢）。
+ */
+async function rescanPage(pageIndex: number) {
+  if (isBusy.value) {
+    return
+  }
+
+  const picked = await pickOneImage()
+  if (!picked) {
+    return
+  }
+
+  isBusy.value = true
+  uni.showLoading({ title: '重新识别这一张…', mask: true })
+  try {
+    let prepared = picked
+    try {
+      const list = await prepareScanImages([picked])
+      if (list.length > 0) prepared = list[0]
+    } catch {
+      // 压缩失败就用原图，别挡着顾客
+    }
+
+    const blurry = await findBlurryScanImages([prepared])
+    if (blurry.length > 0) {
+      const goOn = await confirmBlurryScanImages(blurry)
+      if (!goOn) {
+        return
+      }
+    }
+
+    const uploaded = await dogApi.uploadHealthAttachment(props.uploadType, prepared)
+    if (!uploaded?.url) {
+      throw new Error('图片上传失败')
+    }
+    const newUrl = String(uploaded.url)
+
+    const res: any = await dogApi.extractHealthReport({
+      imageUrl: newUrl,
+      documentType: props.documentType,
+    })
+    if (res.code !== 0 || !res.data) {
+      await dropUploadedFile(newUrl)
+      throw new Error(res.message || '识别失败')
+    }
+
+    const list = Array.isArray(res.data.drafts) ? res.data.drafts : []
+    const type = String(res.data.documentType || '').toUpperCase()
+    const imageType = type && type !== 'AUTO' && type !== 'NOT_MEDICAL'
+      ? type
+      : String(props.documentType || 'MEDICAL_RECORD').toUpperCase()
+
+    const nextPages = [...pageDraftCache]
+    nextPages[pageIndex] = {
+      type: imageType,
+      drafts: list.map((draft: Record<string, any>) => ({
+        ...draft,
+        attachments: [newUrl],
+      })),
+    }
+
+    // 候选集合先算一遍：换上来这张要是什么都没读到，就保留原来的结果
+    if (mergePageDrafts(nextPages).merged.length === 0) {
+      await dropUploadedFile(newUrl)
+      uni.showToast({ title: '这一张还是没读出内容，原来的结果先留着', icon: 'none' })
+      return
+    }
+
+    // 提交：换掉这一页，并把这一页原来那张图从 COS 删掉
+    const oldUrl = String(pageDraftCache[pageIndex]?.drafts?.[0]?.attachments?.[0] || '')
+    pageDraftCache = nextPages
+    pageResultsCache[pageIndex] = {
+      index: pageIndex + 1,
+      path: prepared,
+      status: list.length > 0 ? 'ok' : 'empty',
+      label: TYPE_LABELS[imageType as ExplicitDocumentType] || '资料',
+      warnings: (Array.isArray(res.data.warnings) ? res.data.warnings : [])
+        .map((item: unknown) => String(item || '').trim())
+        .filter(Boolean),
+    }
+    uploadedUrls.value.push(newUrl)
+    if (oldUrl) {
+      void dropUploadedFile(oldUrl)
+    }
+
+    renderMergedResult()
+    uni.showToast({ title: '这一张换好了', icon: 'none' })
+  } catch (error: any) {
+    uni.showToast({ title: resolveHealthScanErrorMessage(error?.message), icon: 'none' })
+  } finally {
+    isBusy.value = false
+    uni.hideLoading()
+  }
 }
 
 /**
@@ -1082,6 +1350,22 @@ function discard() {
 /* ── 疫苗本：逐条确认的行列表（2026-10-08）────────────────────────────
    一行给全"要核对的三样"：名字 · 日期 · 含哪些病种；
    点一行就地改，右侧点「确认」；系统拿不准的排最前面并标红。 */
+.pages__thumb--file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2f5f4;
+}
+.pages__thumb-file {
+  font-size: 44rpx;
+}
+.pages__reupload {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #0f7b49;
+  text-align: center;
+}
 .rows__head {
   display: flex;
   align-items: baseline;

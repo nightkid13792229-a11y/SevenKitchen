@@ -11,6 +11,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthReportExtractionService,
+  resolveHealthDocumentFileKind,
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
   buildSystemPrompt,
@@ -122,7 +123,8 @@ describe('HealthReportExtractionService', () => {
 
     expect(result.allergies).toEqual(['鸡肉', 'Chicken', '牛肉']);
     expect(result.medicalConditions).toEqual(['胰腺炎']);
-    expect(result.confidence).toBe('HIGH');
+    // 2026-10-08：不再要/不再返回 confidence（模型自评不可信，界面也不显示）
+    expect((result as unknown as Record<string, unknown>).confidence).toBeUndefined();
     expect(result.ocrText).toContain('过敏原检测报告');
   });
 
@@ -372,7 +374,8 @@ describe('HealthReportExtractionService', () => {
 
     expect(result.allergies).toEqual([]);
     expect(result.medicalConditions).toEqual([]);
-    expect(result.confidence).toBe('LOW');
+    // 模型多返回一个乱七八糟的 confidence 也不该影响我们（现在直接不认这个字段）
+    expect((result as unknown as Record<string, unknown>).confidence).toBeUndefined();
     // 字段类型不对 → 归一化为空 → 触发"请手工补充"兜底提示（而不是静默返回空结果）
     expect(result.warnings.join('')).toContain('手工补充');
   });
@@ -1105,4 +1108,85 @@ describe('识别 · 影像片', () => {
     expect(drafts[0].findings).toBe('');
     expect(drafts[0].labValues).toBe('');
   });
+/**
+ * PDF / Word 文档上传（2026-10-08 老板定）
+ *
+ * 老板："就诊报告、体检报告、过敏检测报告，有可能是 PDF 或者是 Word 文档，
+ *        可能需要支持进入微信、选择文档上传。"
+ *
+ * 文档不能交给视觉模型（它不是图）→ 先抽文字，再用**同一套提示词**交给文本模型。
+ * 抽不出文字（扫描件、图片型 PDF、某些生成器产出的怪 PDF）时，
+ * 要给一句**能行动**的话，而不是技术错误。
+ */
+describe('文档（PDF / Word）识别', () => {
+  const originalFetch = global.fetch
+  // 这一组自带一个服务实例（它是顶层 describe，拿不到上面那个 service）
+  let docService: HealthReportExtractionService
+
+  beforeEach(async () => {
+    process.env.HEALTH_REPORT_VISION = 'off'
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        HealthReportExtractionService,
+        { provide: HEALTH_REPORT_OCR_PROVIDER, useValue: { recognizeImage: jest.fn() } },
+        {
+          provide: AgentProviderConfigService,
+          useValue: {
+            getEnabledDeepSeekRuntimeConfig: jest.fn().mockResolvedValue({
+              provider: 'deepseek',
+              baseUrl: 'https://api.deepseek.com',
+              model: 'deepseek-v4-flash',
+              reviewModel: 'deepseek-v4-pro',
+              apiKey: 'test-key',
+              maxConcurrency: 1,
+              requestTimeoutMs: 5000,
+              retryCount: 0,
+            }),
+            getConfiguredPurposeModel: jest.fn().mockResolvedValue(null),
+          },
+        },
+      ],
+    }).compile()
+    docService = moduleRef.get(HealthReportExtractionService)
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('认得出上传的是图片还是文档', () => {
+    expect(resolveHealthDocumentFileKind('https://cdn/a/b.jpg')).toBe('image')
+    expect(resolveHealthDocumentFileKind('https://cdn/a/report.pdf')).toBe('pdf')
+    expect(
+      resolveHealthDocumentFileKind('https://cdn/x', '免疫记录.DOCX'),
+    ).toBe('docx')
+    expect(resolveHealthDocumentFileKind('https://cdn/x', 'old.doc')).toBe('doc')
+    // 带查询串也要认得出
+    expect(
+      resolveHealthDocumentFileKind('https://cdn/a/report.pdf?sign=abc'),
+    ).toBe('pdf')
+  })
+
+  it('文档里抽不出文字时，告诉顾客改用拍照上传（不说技术黑话）', async () => {
+    // 假 PDF：pdf-parse 解析不了 → 抽出的文字为空
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    }) as unknown as typeof fetch
+
+    await expect(
+      docService.extractFromReport({ imageUrl: 'https://cdn/broken.pdf' }),
+    ).rejects.toThrow(/拍照上传/)
+  })
+
+  it('老版 .doc 直接说清楚怎么办（不硬啃）', async () => {
+    await expect(
+      docService.extractFromReport({
+        imageUrl: 'https://cdn/x',
+        originalFilename: '病历.doc',
+      }),
+    ).rejects.toThrow(/另存为 PDF 或 \.docx/)
+  })
+})
 });
+

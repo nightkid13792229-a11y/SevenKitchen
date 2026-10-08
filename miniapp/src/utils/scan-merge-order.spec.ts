@@ -20,13 +20,23 @@ describe('识别合并 · 顺序不能错', () => {
 
   it('`merged` 只在赋值之后才能用', () => {
     const source = scan()
-    const declareIndex = source.indexOf('let merged: Record<string, any>[] = []')
+
+    /*
+     * 2026-10-08：合并那一段抽成了 mergePageDrafts()（"单独重传某一页"要复用），
+     * 所以这条守卫改成盯**新的写法**：先把合并结果解构出来，再碰 merged[0]。
+     * 要守的还是同一件事 —— 不许在 merged 拿到值之前用它（2026-10-04 的线上事故）。
+     */
+    const renderIndex = source.indexOf('function renderMergedResult()')
+    const declareIndex = source.indexOf(
+      'const { merged, resolvedType, ignoredNote } = mergePageDrafts(pageDraftCache)',
+    )
     const assignIndex = source.indexOf('drafts.value = merged')
 
-    expect(declareIndex).toBeGreaterThan(0)
+    expect(renderIndex).toBeGreaterThan(0)
+    expect(declareIndex).toBeGreaterThan(renderIndex)
     expect(assignIndex).toBeGreaterThan(declareIndex)
 
-    // 所有 `merged[0]` 都必须出现在 `drafts.value = merged` 之后
+    // 所有 `merged[0]` 都必须出现在"解构出 merged"之后
     let from = 0
     let checked = 0
     for (;;) {
@@ -36,7 +46,12 @@ describe('识别合并 · 顺序不能错', () => {
       checked += 1
       from = at + 1
     }
-    expect(checked).toBeGreaterThanOrEqual(2)
+    /*
+     * 抽取之后 `merged[0]` 只剩一处（逐张提示的过滤），另一处随
+     * "内联合并"一起搬进了 mergePageDrafts()（那里不碰 merged[0]）。
+     * 所以这里改盯"**每一处**都在 merged 可用之后"，而不是盯出现次数。
+     */
+    expect(checked).toBeGreaterThanOrEqual(1)
   })
 
   it('程序自己的报错不甩给家长（换成能行动的一句话）', () => {

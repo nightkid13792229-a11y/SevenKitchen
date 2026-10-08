@@ -959,3 +959,36 @@ describe('到期提醒 · 用系统推算的那一份（2026-10-07）', () => {
     expect(section).toContain("emit(\n      'pending-changed',")
   })
 })
+
+
+/**
+ * 存完整批回执（2026-10-08 老板要的）。
+ *
+ * 为什么要它：这一批是**逐条存**的 —— 存成功只在卡片上闪 2 秒「已保存」，
+ * 存不下只在卡片上挂一句话，家长**不知道"8 条里到底进去了几条"** ✗
+ * （他自己就问过："我刚才那 8 条都进去了吗？"）
+ */
+describe('存完整批回执（2026-10-08）', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('回执说清：存了几条、跳过几条、还差几条', () => {
+    const source = readSection()
+
+    expect(source).toContain('const scanReceipt = ref<{')
+    expect(source).toContain('这批记好了：存了 {{ scanReceipt.saved }} 条')
+    expect(source).toContain('还差信息没存上')
+    expect(source).toContain('dismissScanReceipt')
+  })
+
+  it('回执里的"下一次"用计划算出来的那一针（不是人工填的到期日）', () => {
+    const source = readSection()
+
+    expect(source).toContain('nextLabel')
+    expect(source).toContain('props.planPending')
+    expect(source).toContain('按接种计划，下一次是')
+  })
+})

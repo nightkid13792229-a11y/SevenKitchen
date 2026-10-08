@@ -129,6 +129,8 @@
     "cos-nodejs-sdk-v5": "^2.15.4",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "prisma": "^6.1.0",
     "reflect-metadata": "^0.2.2",

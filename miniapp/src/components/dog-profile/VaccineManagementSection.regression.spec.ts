@@ -240,7 +240,14 @@ describe('疫苗管理', () => {
     // （loadRecords 会按接种日期重排，新增的那条会从末尾挪到前面）
     expect(source).toContain('const relocated = records.value.findIndex((item) => item.id === newId)')
     expect(source).toContain('expandedIndex.value = relocated')
-    expect(source).toContain('function markSaved(index: number)')
+    /*
+     * 2026-10-08：保存状态改成"常驻 + 按 id 高亮"。
+     * 原来那行「已保存」闪 2 秒就没了，而且是按**下标**记的 ——
+     * 保存完整表会重排，那句字可能闪在别的卡片上 ✗。
+     */
+    expect(source).toContain('function markSaved(recordId: string)')
+    expect(source).toContain('saveStateLabel(record, index)')
+    expect(source).toContain('还没保存 · 填完自动保存')
   })
 
   it('板块内不再有「新增疫苗记录」按钮（底部那个已经在做同一件事）', () => {

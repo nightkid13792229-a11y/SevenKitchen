@@ -411,8 +411,12 @@
           <text v-else-if="autoSaveNotice(index)" class="vaccine-card__autosave">
             {{ autoSaveNotice(index) }}
           </text>
-          <text v-else-if="isJustSaved(index)" class="vaccine-card__autosave vaccine-card__autosave--quiet">
-            已保存
+          <text
+            v-else
+            class="vaccine-card__autosave vaccine-card__autosave--quiet"
+            :class="{ 'vaccine-card__autosave--just': isJustSaved(record.id) }"
+          >
+            {{ saveStateLabel(record, index) }}
           </text>
         </view>
       </view>
@@ -1167,11 +1171,13 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     draft[field] = value
   }
 
-  // 又改了 —— "已保存"那行小字先撤掉，免得它跟"保存中…"打架
-  if (savedNotices.value[index]) {
-    const next = { ...savedNotices.value }
-    delete next[index]
-    savedNotices.value = next
+  // 又改了 —— "刚刚保存 ✓"那个高亮先撤掉，免得它跟"保存中…"打架
+  // （常驻的「已保存」不动：它说的是"这条在库里"，跟这次编辑无关）
+  const editingId = String(record.id || '')
+  if (editingId && justSavedIds.value[editingId]) {
+    const next = { ...justSavedIds.value }
+    delete next[editingId]
+    justSavedIds.value = next
   }
 
   // 名字变了 → 重新自动判一次归类（顾客之前手点的作废：名字都换了）
@@ -1935,7 +1941,8 @@ async function saveRecord(record: VaccineRecord, index: number) {
       const relocated = records.value.findIndex((item) => item.id === newId)
       if (relocated >= 0) {
         expandedIndex.value = relocated
-        markSaved(relocated)
+        // 按**id**高亮（不是下标）：loadRecords 会重排，下标会认错卡片
+        markSaved(String(newId))
       }
     }
   } catch (error: any) {
@@ -1969,28 +1976,56 @@ async function saveRecord(record: VaccineRecord, index: number) {
  */
 const scanNotice = ref('')
 
-const savedNotices = ref<Record<number, boolean>>({})
-const savedNoticeTimers = new Map<number, ReturnType<typeof setTimeout>>()
+/*
+ * ══ 保存状态（2026-10-08 改）══════════════════════════════════════════════
+ *
+ * 老板 2026-10-05 踩过的坑："草稿卡片看起来跟已保存的一模一样，其实没入库" ——
+ * 家长以为存好了，删不掉也改不了，计划那边还认为"没有接种记录"。
+ *
+ * 之前的做法是**保存成功后闪 2 秒「已保存」**，两个毛病：
+ *   ① 2 秒之后什么都不显示 → 又分不清哪条真的进档案了；
+ *   ② 那行字按**下标**记，而保存完会整表重载、记录会重排 →
+ *      那句「已保存」可能闪在**别的卡片**上 ✗（同类的下标 bug 这个组件踩过好几次）。
+ *
+ * 现在改成分两层：
+ *   · **常驻**：有 id 就是「已保存」，没有就是「还没保存 · 填完自动保存」——
+ *     这件事本来就写在数据里，不需要额外状态，也不会消失；
+ *   · **刚刚保存**：按**记录 id** 记的一次高亮（2 秒），只为回答
+ *     "我刚改的那一下存上了吗"，重排也不会认错卡片。
+ */
+const justSavedIds = ref<Record<string, boolean>>({})
+const justSavedTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function markSaved(index: number) {
-  savedNotices.value = { ...savedNotices.value, [index]: true }
+function markSaved(recordId: string) {
+  const id = String(recordId || '')
+  if (!id) return
+  justSavedIds.value = { ...justSavedIds.value, [id]: true }
 
-  const pending = savedNoticeTimers.get(index)
+  const pending = justSavedTimers.get(id)
   if (pending) clearTimeout(pending)
-  savedNoticeTimers.set(
-    index,
+  justSavedTimers.set(
+    id,
     setTimeout(() => {
-      savedNoticeTimers.delete(index)
-      if (!savedNotices.value[index]) return
-      const next = { ...savedNotices.value }
-      delete next[index]
-      savedNotices.value = next
+      justSavedTimers.delete(id)
+      if (!justSavedIds.value[id]) return
+      const next = { ...justSavedIds.value }
+      delete next[id]
+      justSavedIds.value = next
     }, 2000),
   )
 }
 
-function isJustSaved(index: number): boolean {
-  return Boolean(savedNotices.value[index])
+function isJustSaved(recordId: string | undefined): boolean {
+  const id = String(recordId || '')
+  return Boolean(id) && Boolean(justSavedIds.value[id])
+}
+
+/** 这一条现在是什么保存状态（卡片上常驻显示） */
+function saveStateLabel(record: VaccineRecord, index: number): string {
+  if (record.id) {
+    return isJustSaved(record.id) ? '已保存 ✓' : '已保存'
+  }
+  return '还没保存 · 填完自动保存'
 }
 
 function removeRecord(record: VaccineRecord, index: number) {
@@ -2583,5 +2618,11 @@ async function doRemove(record: VaccineRecord) {
   font-size: 24rpx;
   color: #0f7b49;
   text-align: right;
+}
+
+/* 刚刚保存成功的高亮（2 秒，之后回到常驻的「已保存」）*/
+.vaccine-card__autosave--just {
+  color: #0f7b49;
+  font-weight: 600;
 }
 </style>

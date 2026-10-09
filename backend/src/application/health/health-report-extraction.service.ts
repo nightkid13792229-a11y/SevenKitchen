@@ -1679,9 +1679,30 @@ export class HealthReportExtractionService {
        * 「顾客最后采纳了谁」不用另发请求 —— 存下来的记录名就是答案，
        * 和这里的原文对一对就知道采纳没有（一致的行不留原文对，避免刷屏）。
        */
+      /*
+       * 日期复核的留档（2026-10-09 老板定"先上线观察"）：
+       * 「本子上没写注射日期」「只写到年月」「与我们不一致」各几行 ——
+       * 这三类直接影响"这一针算不算数"，观察期要能看见 ✓。
+       */
+      const dateFlags = {
+        missing: 0,
+        monthOnly: 0,
+        differs: 0,
+      };
+      for (const draft of input.drafts) {
+        const flag = draft?.productReview?.dateReview;
+        if (flag === 'missing') dateFlags.missing += 1;
+        else if (flag === 'monthOnly') dateFlags.monthOnly += 1;
+        else if (flag === 'differs') dateFlags.differs += 1;
+      }
+
       this.logger.log(
         `疫苗产品复核：核对 ${reviewed} 行，其中不一致 ${inconsistent} 行` +
           (mismatches.length > 0 ? `；${mismatches.join('；')}` : ''),
+      );
+      this.logger.log(
+        `疫苗日期复核：本子上没写注射日期 ${dateFlags.missing} 行` +
+          `｜只写到年月 ${dateFlags.monthOnly} 行｜与我们不一致 ${dateFlags.differs} 行`,
       );
     } catch (error) {
       // 复核失败绝不影响识别结果（顾客该看到的照旧看到）

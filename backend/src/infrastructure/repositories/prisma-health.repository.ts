@@ -45,6 +45,9 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         attachments: data.attachments,
         kinds: data.kinds,
         components: data.components,
+        // 2026-10-09 安全默认值：字段清单漏一个，写库就静默丢掉 ✗
+        // （这个仓储是**逐字段映射**的，不是整个 data 透传 —— 实测踩过一次）
+        productVerified: data.productVerified,
       },
     });
     return this.mapToDomain(record);
@@ -67,6 +70,8 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         attachments: data.attachments,
         kinds: data.kinds,
         components: data.components,
+        // 同上：逐字段映射，漏一个就静默丢掉
+        productVerified: data.productVerified,
       },
     });
     return this.mapToDomain(record);

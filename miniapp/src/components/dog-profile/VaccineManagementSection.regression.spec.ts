@@ -295,16 +295,21 @@ describe('疫苗管理', () => {
     expect(source).toContain('payload.nextDueDate = draft.nextDueDate')
   })
 
-  it('到期提醒只做页面内提示：未来 30 天内到期 + 已过期', () => {
+  it('顶部那条"到期提醒"已经下线（2026-10-09 老板定）', () => {
     const source = readComponent()
 
-    expect(source).toContain('dueSummaryText')
-    expect(source).toContain('已过期')
-    expect(source).toContain('30 天内到期')
-    expect(source).toContain('daysUntil')
-    // 2026-10-07：这句明确标出是"疫苗本上写的"（与系统按程序算的那份分开）
-    expect(source).toContain('疫苗本上写的到期日')
-    expect(source).toContain('还有 ${days} 天')
+    /*
+     * 老板："如果鱼骨图可以提供足够的信息，那么记录板块顶部的那条按接种计划的
+     *        这个提醒是不是也可以不要？" —— 可以不要：
+     *   计划卡片收起时那一行写着「下一针 / 分类 / 窗口期」，
+     *   展开后鱼头又写着"要打哪一类 + 常见的那几支"，
+     *   这条横幅是第三遍说同一件事（老板的口径：提示文案要精炼）。
+     */
+    expect(source).not.toContain('dueSummaryText')
+    expect(source).not.toContain('vaccine-due-banner')
+    expect(source).not.toContain('daysUntil')
+    // 卡片脸上也不再挂"还有 N 天到期"（2026-10-08 就去掉了）
+    expect(source).not.toContain('vaccine-card__due')
   })
 
   it('删除前必须二次确认，避免误删接种史', () => {
@@ -940,19 +945,13 @@ describe('到期提醒 · 用系统推算的那一份（2026-10-07）', () => {
       'utf-8',
     )
 
-  it('提醒条优先用计划报上来的"下一针"', () => {
+  it('提醒条下线之后，`planPending` 仍然喂给整批回执那句"下一次是 X"', () => {
     const source = readSection()
 
+    // 常驻横幅没了，但"存完那一次"的回执还在用它 —— 两件事，别一起删错
     expect(source).toContain('planPending')
-    expect(source).toContain('按接种计划：')
-    // 计划没加载出来时仍然退回人工填的那份（不许空白）
-    expect(source).toContain('const overdue: string[] = []')
-  })
-
-  it('记录卡片上的到期日标明是"疫苗本上写的"（与系统推算的分开）', () => {
-    const source = readSection()
-
-    expect(source).toContain('疫苗本上写的到期日')
+    expect(source).toContain('按接种计划，下一次是')
+    expect(source).not.toContain('按接种计划：')
   })
 
   it('页面把计划报上来的数据转给记录板块', () => {

@@ -5,6 +5,22 @@
  */
 
 /**
+ * 今天的日期（YYYY-MM-DD，**按本地时区**算）。
+ *
+ * ⚠️ 不能用 `new Date().toISOString().slice(0, 10)` —— 那是 UTC，
+ * 东八区凌晨 0~8 点会差一天（这个项目在临时脚本里踩过好几次）。
+ *
+ * 2026-10-09 从 VaccineManagementSection 提到这里：鱼骨图也要用它算"今天"，
+ * 两处各写一份迟早不一致。
+ */
+export function todayDateText(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/**
  * 格式化为完整日期时间（YYYY/MM/DD HH:mm）
  * 用于订单详情页
  */

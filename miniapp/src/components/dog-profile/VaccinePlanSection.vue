@@ -59,109 +59,148 @@
           <!-- ②-A 下一针的进一步说明。
                老板："除了疫苗分类和接种窗口期，还需要展示依据和推荐的疫苗。
                      该部分其他的信息不用展示。" -->
-          <view v-if="nextStep" class="next-detail">
-            <text class="next-detail__title">下一针说明</text>
-            <view class="kv">
-              <text class="kv__label">疫苗分类</text>
-              <text class="kv__value">{{ nextStep.kindLabel }}</text>
-            </view>
-            <view class="kv">
-              <text class="kv__label">接种窗口期</text>
-              <text class="kv__value">{{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}</text>
-            </view>
-            <view v-if="(nextStep.commonProducts || []).length > 0" class="kv">
-              <text class="kv__label">推荐疫苗</text>
-              <text class="kv__value">{{ (nextStep.commonProducts || []).join('、') }}</text>
-            </view>
-            <view class="kv">
-              <text class="kv__label">依据</text>
-              <view class="kv__value">
-                <text class="basis__summary">{{ basisSummaryOf(nextStep) }}</text>
-                <!-- 一段读不完的依据家长只会看第一句（老板 2026-10-08 审计第 6 块）：
-                     卡片上只留一句，想深究的（或给兽医看的）点开才是全文。 -->
-                <text
-                  v-if="hasMoreBasis(nextStep)"
-                  class="basis__more"
-                  @tap.stop="toggleBasis(nextStep.key)"
-                >{{ isBasisOpen(nextStep.key) ? '收起' : '为什么这么建议？' }}</text>
-                <text v-if="hasMoreBasis(nextStep) && isBasisOpen(nextStep.key)" class="basis__full">
-                  {{ nextStep.basis }}
-                </text>
-              </view>
-            </view>
-            <!-- 「这一针别和别的针同一天打」—— 老板 2026-10-05 亲口要的安全提醒（spacing-note__text）。
-                 2026-10-06 的字段清单里没有它，但它是"两针别同一天打"这条安全提醒，
-                 先留着；不要的话说一声，删一行的事。 -->
-            <text v-if="nextStep.spacingNote" class="spacing-note__text">
-              {{ nextStep.spacingNote }}
-            </text>
-          </view>
-
-          <!-- ②-B 接种计划：按接种窗口期由近到远 -->
-          <view class="plan-steps">
-            <text class="plan-steps__title">接种计划</text>
-
-            <view
-              v-for="step in orderedSteps"
-              :key="step.key"
-              class="step"
-              :class="`step--${step.status}`"
-            >
-              <view class="step__head">
-                <text class="step__status">{{ statusLabel(step) }}</text>
-                <text class="step__kind">{{ step.kindLabel }}</text>
-              </view>
-              <text class="step__label">{{ step.label }}</text>
-              <!-- 已完成的不显示接种窗口期（2026-10-06 老板："已完成的疫苗为什么
-                   还要显示接种窗口期呢？"）—— 那扇窗早就过了，留着只是噪音。
-                   已完成看的是"什么时候打的"，在下面那一行。 -->
-              <view v-if="step.status !== 'DONE'" class="kv">
-                <text class="kv__label">接种窗口期</text>
-                <text class="kv__value">{{ step.windowStart }} ~ {{ step.windowEnd }}</text>
-              </view>
-              <!-- 接种时间 = 这条记录的时间；没打过就没有这一行 -->
-              <view v-if="step.matchedRecordDate" class="kv">
-                <text class="kv__label">接种时间</text>
-                <text class="kv__value">{{ step.matchedRecordDate }}</text>
-              </view>
-              <!-- 已经记录过/接种过的，不再推荐产品（老板 2026-10-06） -->
-              <view v-if="stepProducts(step).length > 0" class="kv">
-                <text class="kv__label">推荐疫苗</text>
-                <text class="kv__value">{{ stepProducts(step).join('、') }}</text>
-              </view>
-              <view class="kv">
-                <text class="kv__label">依据</text>
-                <view class="kv__value">
-                  <text class="basis__summary">{{ basisSummaryOf(step) }}</text>
-                  <text
-                    v-if="hasMoreBasis(step)"
-                    class="basis__more"
-                    @tap.stop="toggleBasis(step.key)"
-                  >{{ isBasisOpen(step.key) ? '收起' : '为什么这么建议？' }}</text>
-                  <text v-if="hasMoreBasis(step) && isBasisOpen(step.key)" class="basis__full">
-                    {{ step.basis }}
+          <!-- 竖版鱼骨图（2026-10-09 老板定）。
+               背骨自上而下是**时间**（过去 → 今天 → 下一针）；
+               每一针一个节点，从背骨斜着长出一张分支卡片；
+               每一类**只放一条"下一针"**（与既有口径一致：不做的不显示、已完成的历史保留）；
+               "今天"是一条贯穿虚线，插在时间序列的正确位置。
+               布局计算在 utils/vaccine-fishbone.ts（纯函数、有单测）。 -->
+          <view class="fishbone">
+            <!-- 鱼头：今天 + 要打哪一类、窗口期、常见的那几支 -->
+            <view class="fishbone__head">
+              <text class="fishbone__today-label">
+                今天 · {{ todayText }}<template v-if="ageText">（{{ ageText }}）</template>
+              </text>
+              <template v-if="nextStep">
+                <view class="fishbone__head-row">
+                  <text class="fishbone__badge" :class="`fishbone__badge--${nextStep.status}`">
+                    {{ statusLabel(nextStep) }}
                   </text>
+                  <text class="fishbone__head-title">{{ nextStep.kindLabel }} · {{ nextStep.label }}</text>
                 </view>
-              </view>
-
-              <!-- 已完成的步骤不再给动作按钮（2026-10-06 老板："已完成状态的疫苗，
-                   为什么还是会给出这两个按钮呢？"）——
-                   那一针已经打完了，没什么可记、也没什么可忽略的。 -->
-              <view v-if="step.status !== 'DONE'" class="step-actions">
-                <text class="step-actions__primary" @tap.stop="recordStep(step)">
-                  记录接种信息
+                <text class="fishbone__head-line">
+                  接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}
                 </text>
-                <text class="step-actions__ghost" @tap.stop="ignoreStep(step)">忽略</text>
-              </view>
+                <text v-if="stepProducts(nextStep).length > 0" class="fishbone__head-line">
+                  常见的有：{{ stepProducts(nextStep).join(' / ') }}
+                </text>
+                <text v-if="nextStep.spacingNote" class="spacing-note__text">
+                  {{ nextStep.spacingNote }}
+                </text>
+              </template>
+              <text v-else class="fishbone__head-line">
+                按现有记录，免疫程序里的项目都已完成。
+              </text>
             </view>
 
-            <text v-if="orderedSteps.length === 0" class="plan-steps__empty">
-              计划里的项目都已完成或已忽略。
-            </text>
-            <!-- 忽略不是"删除得找不回来"：给一条回头的路 -->
-            <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
-              已忽略 {{ ignoredCount }} 项 · 点这里恢复
-            </text>
+            <!-- 背骨 + 分支 -->
+            <view class="fishbone__body">
+              <template v-for="(node, index) in fishboneNodes" :key="`${node.key}-${index}`">
+                <view v-if="node.yearLabel" class="fishbone__year">
+                  <text class="fishbone__year-text">{{ node.yearLabel }}</text>
+                </view>
+                <view v-if="index === todayIndex" class="fishbone__today-line">
+                  <text class="fishbone__today-text">今天</text>
+                  <view class="fishbone__today-dash" />
+                </view>
+
+                <view class="fishbone__row">
+                  <view class="fishbone__rail">
+                    <text v-if="node.showDate" class="fishbone__date">
+                      {{ shortDate(node.dateText) }}
+                    </text>
+                    <view
+                      class="fishbone__dot"
+                      :class="{ 'fishbone__dot--next': node.isNext }"
+                      :style="{
+                        borderColor: kindColor(node.step.kind),
+                        backgroundColor: node.isNext ? kindColor(node.step.kind) : 'transparent',
+                      }"
+                    />
+                  </view>
+
+                  <view
+                    class="fishbone__card"
+                    :class="{
+                      'fishbone__card--next': node.isNext,
+                      'fishbone__card--done': node.step.status === 'DONE',
+                    }"
+                  >
+                    <view class="fishbone__card-head">
+                      <text class="fishbone__card-kind" :style="{ color: kindColor(node.step.kind) }">
+                        {{ node.step.kindLabel }}
+                      </text>
+                      <text class="fishbone__badge" :class="`fishbone__badge--${node.step.status}`">
+                        {{ statusLabel(node.step) }}
+                      </text>
+                    </view>
+                    <text class="fishbone__card-label">{{ node.step.label }}</text>
+
+                    <!-- 已完成的不显示接种窗口期（2026-10-06 老板：
+                         "已完成的疫苗为什么还要显示接种窗口期呢？"）-->
+                    <view v-if="node.step.status !== 'DONE'" class="kv">
+                      <text class="kv__label">接种窗口期</text>
+                      <text class="kv__value">{{ node.step.windowStart }} ~ {{ node.step.windowEnd }}</text>
+                    </view>
+                    <view v-if="node.step.matchedRecordDate" class="kv">
+                      <text class="kv__label">接种时间</text>
+                      <text class="kv__value">{{ node.step.matchedRecordDate }}</text>
+                    </view>
+                    <!-- 已经记录过/接种过的，不再推荐产品（老板 2026-10-06） -->
+                    <view v-if="stepProducts(node.step).length > 0" class="kv">
+                      <text class="kv__label">常见的有</text>
+                      <text class="kv__value">{{ stepProducts(node.step).join('、') }}</text>
+                    </view>
+                    <view class="kv">
+                      <text class="kv__label">依据</text>
+                      <view class="kv__value">
+                        <text class="basis__summary">{{ basisSummaryOf(node.step) }}</text>
+                        <text
+                          v-if="hasMoreBasis(node.step)"
+                          class="basis__more"
+                          @tap.stop="toggleBasis(node.step.key)"
+                        >{{ isBasisOpen(node.step.key) ? '收起' : '为什么这么建议？' }}</text>
+                        <text
+                          v-if="hasMoreBasis(node.step) && isBasisOpen(node.step.key)"
+                          class="basis__full"
+                        >{{ node.step.basis }}</text>
+                      </view>
+                    </view>
+
+                    <!-- 已完成的步骤不给动作按钮（2026-10-06 老板："那一针已经打完了，
+                         没什么可记、也没什么可忽略的"）。未完成**每一条都给** ——
+                         计划里可能同时有 2~3 类待打，不能让顾客只能从鱼头那一针动手。 -->
+                    <view v-if="node.step.status !== 'DONE'" class="step-actions">
+                      <text class="step-actions__primary" @tap.stop="recordStep(node.step)">
+                        记录接种信息
+                      </text>
+                      <text class="step-actions__ghost" @tap.stop="ignoreStep(node.step)">忽略</text>
+                    </view>
+                  </view>
+                </view>
+              </template>
+
+              <!-- 全在历史里时，"今天"这条虚线落在最后 -->
+              <view v-if="todayIndex >= fishboneNodes.length" class="fishbone__today-line">
+                <text class="fishbone__today-text">今天</text>
+                <view class="fishbone__today-dash" />
+              </view>
+
+              <text v-if="fishboneNodes.length === 0" class="plan-steps__empty">
+                计划里的项目都已完成或已忽略。
+              </text>
+
+              <text
+                v-if="hiddenHistoryCount > 0"
+                class="fishbone__more-history"
+                @tap="showAllHistory = true"
+              >
+                展开全部历史（还有 {{ hiddenHistoryCount }} 条）
+              </text>
+              <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
+                已忽略 {{ ignoredCount }} 项 · 点这里恢复
+              </text>
+            </view>
           </view>
         </template>
       </view>
@@ -190,6 +229,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { todayDateText } from '../../utils/date'
+import {
+  DEFAULT_HISTORY_LIMIT,
+  buildFishboneRows,
+} from '../../utils/vaccine-fishbone'
 import { dogApi } from '../../api/dogs'
 
 /**
@@ -266,6 +310,14 @@ interface PlanConflict {
 
 const props = defineProps<{
   dogId: string
+  /**
+   * 狗狗生日（2026-10-09 鱼骨图要用）。
+   *
+   * 只用来算两件事：鱼头上那句「今天 · 2026-10-09（3 岁 7 个月）」、
+   * 以及年份分隔。**不参与任何计划判定** —— 判定全在后端。
+   * 不传也能用（只是不显示月龄）。
+   */
+  birthday?: string
   /**
    * 已保存记录变化时由页面递增（2026-10-05）。
    *
@@ -520,7 +572,82 @@ function toggleExpanded() {
  * 步骤本身还留在列表里）。老板要的是"从计划里去掉"，所以在展示层过滤掉；
  * 库里那条决定留着，所以随时能恢复（见 restoreIgnored）。
  */
-const orderedSteps = computed(() => {
+/**
+ * 鱼骨图的节点（2026-10-09）。
+ *
+ * 排序规则全在 utils/vaccine-fishbone.ts 里（纯函数）：历史按**实际接种日**、
+ * 待做的按窗口起点但不早于今天（逾期的"该补了"落在"今天"这一格）、
+ * 长历史默认折叠最近 3 条。
+ */
+const todayText = computed(() => todayDateText())
+
+const showAllHistory = ref(false)
+
+const fishboneLayout = computed(() =>
+  buildFishboneRows(visibleSteps.value, {
+    today: todayText.value,
+    historyLimit: showAllHistory.value ? 0 : DEFAULT_HISTORY_LIMIT,
+  }),
+)
+
+const fishboneNodes = computed(() => fishboneLayout.value.nodes)
+const todayIndex = computed(() => fishboneLayout.value.todayIndex)
+const hiddenHistoryCount = computed(() => fishboneLayout.value.hiddenHistoryCount)
+
+/** 日期只显示"月-日"（年份由分隔标签负责，背骨那一列要窄） */
+function shortDate(dateText: string): string {
+  return String(dateText || '').slice(5)
+}
+
+/**
+ * 「今天 · …（3 岁 7 个月）」里那段月龄。
+ *
+ * 生日没传、或者日期不合法时返回空 —— 宁可不显示，也不要显示错的月份。
+ */
+const ageText = computed(() => {
+  const birthday = String(props.birthday || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return ''
+  const today = todayText.value
+  const [by, bm, bd] = birthday.split('-').map(Number)
+  const [ty, tm, td] = today.split('-').map(Number)
+  if (!by || !bm || !ty || !tm) return ''
+
+  let months = (ty - by) * 12 + (tm - bm)
+  if (td < bd) months -= 1
+  if (months < 0) return ''
+
+  const years = Math.floor(months / 12)
+  const rest = months % 12
+  if (years <= 0) return `${Math.max(1, rest)} 个月`
+  return rest > 0 ? `${years} 岁 ${rest} 个月` : `${years} 岁`
+})
+
+/**
+ * 这一类用哪个颜色（只用于背骨圆点和分类名）。
+ *
+ * ⚠️ 与**状态色**分工不同：状态色（该打了/该补了/已完成）还是原来那套徽标色，
+ *    这里只回答"这是哪一类"。两套颜色不要混用。
+ */
+const KIND_COLORS: Record<string, string> = {
+  core: '#0f7b49',
+  core_early: '#e6a23c',
+  rabies: '#c0392b',
+  lepto: '#216d9b',
+  other: '#9a9a9a',
+}
+
+function kindColor(kind: string): string {
+  return KIND_COLORS[String(kind || '')] || KIND_COLORS.other
+}
+
+/**
+ * 计划里**要显示**的那些步骤：去掉顾客忽略的，以及"同一类前面还有没做完的"那些。
+ *
+ * 老板 2026-10-06："狂犬疫苗第 4 次显示已逾期，但为什么待安排的狂犬疫苗却显示是
+ * 第 5 次呢？" —— 第 4 次没做完就不该把第 5 次摆出来，那会让人以为可以跳到明年。
+ * （后端已经把"每一类只留一条下一针"，这里是第二道保险。）
+ */
+const visibleSteps = computed(() => {
   const visible = plan.value.steps.filter(
     (step) => plan.value.decisions[step.key] !== 'SKIP',
   )
@@ -550,21 +677,12 @@ const orderedSteps = computed(() => {
   }
 
   /*
-   * 排序（2026-10-06 老板："最早的已经完成的疫苗记录反而排在最上面"）。
-   *
-   * 原来是纯按窗口期从早到晚 —— 而**已完成**的窗口都在过去，于是一堆历史
-   * 记录占着最上面。计划是"接下来怎么打"，所以：**未完成的在前、已完成沉底**，
-   * 各自内部仍按窗口期由近到远。
+   * ⚠️ 这里**不再排序**（2026-10-09 改成鱼骨图）。
+   *    老列表的口径是"未完成在前、已完成沉底"，那是**列表**的读法；
+   *    鱼骨图的背骨本身就是时间轴，顺序由 utils/vaccine-fishbone.ts 按日期算，
+   *    这里只负责"哪些该出现"。
    */
-  const pendingRank = (step: PlanStep) => (step.status === 'DONE' ? 1 : 0)
-
-  return ordered
-    .filter((step) => !blocked.has(step.key))
-    .sort(
-      (a, b) =>
-        pendingRank(a) - pendingRank(b) ||
-        String(a.windowStart).localeCompare(String(b.windowStart)),
-    )
+  return ordered.filter((step) => !blocked.has(step.key))
 })
 
 /** 被忽略了几项 —— 给"恢复"那条路用 */
@@ -824,13 +942,6 @@ defineExpose({ reload: () => load() })
   color: #7a6a2f;
 }
 
-.step__spacing {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #7a6a2f;
-}
 
 /* 常见产品（2026-10-04）：比"依据"显眼一点，比正文轻一点 */
 .next-step__products {
@@ -841,13 +952,6 @@ defineExpose({ reload: () => load() })
   color: #4a5a4a;
 }
 
-.step__products {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #4a5a4a;
-}
 
 .next-step__basis {
   display: block;
@@ -1008,19 +1112,7 @@ defineExpose({ reload: () => load() })
 }
 
 /* ① 下一针的进一步说明 */
-.next-detail {
-  margin-top: 22rpx;
-  padding-top: 22rpx;
-  border-top: 1rpx solid #eef1e8;
-}
 
-.next-detail__title,
-.plan-steps__title {
-  display: block;
-  font-size: 25rpx;
-  font-weight: 700;
-  color: #1e3a2f;
-}
 
 /* ② 接种计划 */
 .plan-steps {
@@ -1074,11 +1166,6 @@ defineExpose({ reload: () => load() })
   border-radius: 14rpx;
 }
 
-.step__kind {
-  font-size: 21rpx;
-  font-weight: 600;
-  color: #4e6b52;
-}
 
 /* 计划列表 */
 .step {
@@ -1087,60 +1174,13 @@ defineExpose({ reload: () => load() })
   border-top: 1rpx solid #eef1e8;
 }
 
-.step__head {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
 
-.step__status {
-  flex-shrink: 0;
-  font-size: 20rpx;
-  line-height: 1;
-  padding: 8rpx 12rpx;
-  border-radius: 8rpx;
-  color: #ffffff;
-  background: #8a968a;
-}
 
-.step--DONE .step__status { background: #0f7b49; }
-.step--DUE .step__status { background: #0f7b49; }
-.step--OVERDUE .step__status { background: #c0392b; }
-.step--UPCOMING .step__status { background: #216d9b; }
-.step--SKIPPED .step__status { background: #a8b2a8; }
 
-.step__label {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #26261f;
-}
 
-.step--SKIPPED .step__label {
-  color: #8a968a;
-  text-decoration: line-through;
-}
 
-.step__window {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  color: #6b6653;
-}
 
-.step__matched {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 23rpx;
-  color: #0f7b49;
-}
 
-.step__basis {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 20rpx;
-  line-height: 1.5;
-  color: #a8b2a8;
-}
 
 /*
  * ⚠️ 这里原来有一条页面底部的说明文案（"…还在做专业审核，暂不对顾客开放…"）。
@@ -1177,5 +1217,196 @@ defineExpose({ reload: () => load() })
   font-size: 22rpx;
   color: #7a7a7a;
   line-height: 1.6;
+}
+
+/* ── 竖版鱼骨图（2026-10-09 老板定）────────────────────────────────────
+   背骨自上而下是时间；每一针一个节点，从背骨斜着长出一张分支卡片；
+   今天是一条贯穿虚线；下一针那一条高亮。布局算在 utils/vaccine-fishbone.ts。 */
+.fishbone {
+  margin-top: 12rpx;
+}
+
+/* 鱼头：今天 + 要打哪一类 */
+.fishbone__head {
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: #eef8f2;
+  border: 1rpx solid #0f7b49;
+  display: flex;
+  flex-direction: column;
+}
+.fishbone__today-label {
+  font-size: 22rpx;
+  color: #0f7b49;
+  font-weight: 600;
+}
+.fishbone__head-row {
+  display: flex;
+  align-items: center;
+  margin-top: 10rpx;
+}
+.fishbone__head-title {
+  flex: 1;
+  min-width: 0;
+  margin-left: 12rpx;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1f2d28;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fishbone__head-line {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #3d4a45;
+  line-height: 1.5;
+}
+
+/* 状态徽标（沿用原来的状态色，与类别色分工不同） */
+.fishbone__badge {
+  flex: none;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #ffffff;
+  background: #7a7a7a;
+}
+.fishbone__badge--DONE { background: #0f7b49; }
+.fishbone__badge--DUE { background: #0f7b49; }
+.fishbone__badge--OVERDUE { background: #c0392b; }
+.fishbone__badge--UPCOMING { background: #216d9b; }
+.fishbone__badge--SKIPPED { background: #9a9a9a; }
+
+/* 背骨：左侧固定宽度的轨道（日期 + 圆点 + 竖线） */
+.fishbone__body {
+  position: relative;
+  margin-top: 16rpx;
+}
+.fishbone__year {
+  padding: 10rpx 0 6rpx;
+}
+.fishbone__year-text {
+  font-size: 22rpx;
+  color: #9a9a9a;
+}
+.fishbone__row {
+  display: flex;
+  align-items: flex-start;
+}
+.fishbone__rail {
+  position: relative;
+  flex: none;
+  width: 96rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 14rpx;
+}
+/* 背骨那条竖线：绝对定位铺满整列，节点圆点压在上面 */
+.fishbone__rail::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2rpx;
+  background: #d8e3de;
+}
+.fishbone__date {
+  position: relative;
+  font-size: 20rpx;
+  color: #7a7a7a;
+  background: #ffffff;
+  padding: 0 4rpx;
+}
+.fishbone__dot {
+  position: relative;
+  margin-top: 8rpx;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  border: 3rpx solid #9a9a9a;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+.fishbone__dot--next {
+  width: 22rpx;
+  height: 22rpx;
+  border-width: 4rpx;
+  box-shadow: 0 0 0 4rpx #ffffff;
+}
+
+/* 分支卡片：从背骨"斜着长出来"（左侧一小段斜线做鱼骨感，文字一律横排） */
+.fishbone__card {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin: 0 0 16rpx 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  border: 1rpx solid #e8ecea;
+}
+.fishbone__card::before {
+  content: '';
+  position: absolute;
+  left: -18rpx;
+  top: 22rpx;
+  width: 22rpx;
+  height: 1rpx;
+  background: #d8e3de;
+  transform: rotate(-38deg);
+  transform-origin: left center;
+}
+.fishbone__card--done {
+  background: #fafbfa;
+}
+.fishbone__card--next {
+  border-color: #0f7b49;
+  box-shadow: 0 2rpx 10rpx rgba(15, 123, 73, 0.12);
+}
+.fishbone__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fishbone__card-kind {
+  font-size: 22rpx;
+  font-weight: 700;
+}
+.fishbone__card-label {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f2d28;
+}
+
+/* "今天"那条贯穿虚线 */
+.fishbone__today-line {
+  display: flex;
+  align-items: center;
+  margin: 6rpx 0;
+}
+.fishbone__today-text {
+  flex: none;
+  width: 96rpx;
+  text-align: center;
+  font-size: 20rpx;
+  color: #c0392b;
+  font-weight: 600;
+}
+.fishbone__today-dash {
+  flex: 1;
+  height: 0;
+  border-top: 2rpx dashed #e0b4ae;
+}
+
+.fishbone__more-history {
+  display: block;
+  margin: 6rpx 0 4rpx 96rpx;
+  font-size: 24rpx;
+  color: #0f7b49;
 }
 </style>

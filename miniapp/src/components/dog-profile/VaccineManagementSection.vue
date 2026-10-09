@@ -28,9 +28,11 @@
       @scanned="onVaccineBookScanned"
     />
 
-    <view v-if="dueSummaryText" class="vaccine-due-banner">
-      <text class="vaccine-due-text">{{ dueSummaryText }}</text>
-    </view>
+    <!-- 顶部那条"按接种计划…该打了"的横幅**已下线**（2026-10-09 老板定）。
+         理由：计划卡片收起时那一行本来就写着「下一针 / 分类 / 窗口期」，
+         展开后鱼头又写着"要打哪一类 + 常见的那几支" —— 三条说同一件事。
+         存完整批回执里那句「按接种计划，下一次是 X」保留：
+         那是存完那一次的一次性确认，跟常驻提醒不是一回事。 -->
 
     <!-- ══ 接种记录板块（2026-10-06 老板第二次改）══════════════════════════
          这次一起解决两件事：
@@ -1128,12 +1130,12 @@ watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true
 
 const today = getTodayDateString()
 
-function getTodayDateString() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
+/*
+ * 今天的日期（本地时区）。
+ * 2026-10-09 提到 utils/date.ts 共用 —— 鱼骨图也要算"今天"，
+ * 两处各写一份迟早不一致（顺带把那个 UTC 差一天的坑写进了注释）。
+ */
+const getTodayDateString = todayDateText
 
 function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
   const status = String(record.status || '')
@@ -1397,19 +1399,6 @@ function statusClass(draft: VaccineDraft) {
 }
 
 /** 距下次到期还有几天（负数 = 已过期） */
-function daysUntil(dateText: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
-    return null
-  }
-
-  const target = new Date(`${dateText}T00:00:00`)
-  const base = new Date(`${getTodayDateString()}T00:00:00`)
-  if (Number.isNaN(target.getTime())) {
-    return null
-  }
-
-  return Math.round((target.getTime() - base.getTime()) / 86400000)
-}
 
 /**
  * 疫苗本原件：**跨记录去重**，整本只展示一次（2026-10-08 老板定）。
@@ -1435,93 +1424,14 @@ function isImageAttachment(url: string): boolean {
   return /\.(jpe?g|png|webp|gif|heic|heif|bmp)(\?|$)/i.test(String(url || ''))
 }
 
-function dueHint(draft: VaccineDraft) {
-  if (!draft.nextDueDate) {
-    return ''
-  }
 
-  const days = daysUntil(draft.nextDueDate)
-  if (days === null) {
-    return ''
-  }
 
-  /*
-   * ⚠️ 这里是**疫苗本上写的**到期日（人工/AI 抄下来的），不是系统推算的 ——
-   * 2026-10-07 老板定：两种日期不能混着说，所以这里明确标出"疫苗本上"。
-   * 系统按程序算出来的那一份在顶部提醒条和接种计划里。
-   */
-  if (days < 0) {
-    return `疫苗本上写的到期日 ${draft.nextDueDate}（已过期 ${Math.abs(days)} 天）`
-  }
-
-  if (days === 0) {
-    return `疫苗本上写的到期日就是今天（${draft.nextDueDate}）`
-  }
-
-  return `疫苗本上写的到期日 ${draft.nextDueDate}（还有 ${days} 天）`
-}
-
-function dueClass(draft: VaccineDraft) {
-  const days = draft.nextDueDate ? daysUntil(draft.nextDueDate) : null
-  return {
-    'vaccine-card__due--soon': days !== null && days >= 0 && days <= 30,
-    'vaccine-card__due--overdue': days !== null && days < 0,
-  }
-}
-
-/**
- * 顶部提醒条：只统计"未来 30 天内到期"和"已经过期"的，
- * 不做推送通知 —— 微信订阅消息需要顾客逐次授权，这里先给页面内的提醒。
+/*
+ * ⚠️ 原来这里有个算顶部横幅文案的计算属性，2026-10-09 连横幅一起删掉了：
+ *    它先是用系统算的"下一针"，又退回人工填的「下次到期日」——
+ *    两种日期混在同一句话里，而鱼骨图已经把这件事说得更清楚。
  */
-const dueSummaryText = computed(() => {
-  /*
-   * 先看**计划算出来的**"每一类的下一针"（2026-10-07 老板定的口径）。
-   *
-   * 计划没加载出来时（或老后端不带这个数据），才退回"记录里人工填的
-   * 下次到期日"那套 —— 有数据就一定用系统算的。
-   */
-  const pending = props.planPending || []
-  if (pending.length > 0) {
-    const actionable = pending.filter(
-      (step) => step.status === 'DUE' || step.status === 'OVERDUE',
-    )
-    const nearest = [...pending].sort((a, b) =>
-      a.windowStart.localeCompare(b.windowStart),
-    )[0]
-    if (actionable.length > 0) {
-      return `按接种计划：${actionable.map((step) => step.label).join('、')} 该打了`
-    }
-    if (nearest) {
-      return `按接种计划：下一针是 ${nearest.label}（${nearest.windowStart} 起）`
-    }
-  }
 
-  const overdue: string[] = []
-  const upcoming: string[] = []
-
-  for (const record of records.value) {
-    const draft = toDraft(record)
-    if (!draft.nextDueDate) continue
-    const days = daysUntil(draft.nextDueDate)
-    if (days === null) continue
-
-    if (days < 0) {
-      overdue.push(draft.vaccineName || '未填疫苗名')
-    } else if (days <= 30) {
-      upcoming.push(draft.vaccineName || '未填疫苗名')
-    }
-  }
-
-  const parts: string[] = []
-  if (overdue.length > 0) {
-    parts.push(`${overdue.join('、')} 已过期`)
-  }
-  if (upcoming.length > 0) {
-    parts.push(`${upcoming.join('、')} 30 天内到期`)
-  }
-
-  return parts.join('；')
-})
 
 watch(
   () => props.dogId,
@@ -2236,19 +2146,7 @@ async function doRemove(record: VaccineRecord) {
   margin-top: 8rpx;
 }
 
-.vaccine-due-banner {
-  margin-top: 18rpx;
-  padding: 18rpx 22rpx;
-  border-radius: 18rpx;
-  background: #f6efe0;
-  border: 1rpx solid #e6d7b8;
-}
 
-.vaccine-due-text {
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: #8a6f3d;
-}
 
 /* 一条记录 = 板块里的一行。
    原来它自带底色、边框、圆角和外边距（各自独立的卡），几张摞在一起看着散、
@@ -2315,22 +2213,8 @@ async function doRemove(record: VaccineRecord) {
   color: #6b6653;
 }
 
-.vaccine-card__due {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  color: #6b6653;
-}
 
-.vaccine-card__due--soon {
-  color: #8a6f3d;
-  font-weight: 600;
-}
 
-.vaccine-card__due--overdue {
-  color: #8c4a3a;
-  font-weight: 600;
-}
 
 /* 卡片头部右侧：删除 + 展开（2026-10-04 从展开区挪上来的） */
 .vaccine-card__header-actions {

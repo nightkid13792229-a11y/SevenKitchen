@@ -44,9 +44,9 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('记录接种信息')
     expect(section).toContain('>忽略<')
     // 已完成的步骤不给按钮（否则"已经打完了还给记录/忽略"很奇怪）
-    expect(section).toContain("v-if=\"step.status !== 'DONE'\" class=\"step-actions\"")
-    expect(section).toContain('@tap.stop="recordStep(step)"')
-    expect(section).toContain('@tap.stop="ignoreStep(step)"')
+    expect(section).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(section).toContain('@tap.stop="recordStep(node.step)"')
+    expect(section).toContain('@tap.stop="ignoreStep(node.step)"')
     // 老的三个按钮彻底下线
     expect(section).not.toContain("label: '按建议'")
     expect(section).not.toContain("label: '推迟'")
@@ -309,10 +309,11 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     // （家长最容易犯的错就是两针一起去打，所以它跟着下一针走）。
     expect(section).toContain('spacingNote')
     expect(section).toContain('spacing-note__text')
-    const nextDetailAt = section.indexOf('class="next-detail"')
+    // 2026-10-09 改成鱼骨图后，它跟着**鱼头（今天/下一针）**走 —— 位置变了，口径没变
+    const headAt = section.indexOf('class="fishbone__head"')
     const spacingAt = section.indexOf('spacing-note__text')
-    expect(nextDetailAt).toBeGreaterThan(-1)
-    expect(spacingAt).toBeGreaterThan(nextDetailAt)
+    expect(headAt).toBeGreaterThan(-1)
+    expect(spacingAt).toBeGreaterThan(headAt)
   })
 
   it('计划列表每一步按老板 2026-10-06 的字段清单显示，不多不少', () => {
@@ -320,12 +321,12 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
 
     // 状态 / 疫苗种类 / 接种窗口期 / 接种时间 / 推荐疫苗 / 依据
     // （2026-10-07 起整个 step 传进去 —— 口气要按"这一类"判断）
-    expect(section).toContain('statusLabel(step)')
-    expect(section).toContain('step.kindLabel')
-    expect(section).toContain('step.windowStart')
-    expect(section).toContain('step.matchedRecordDate')
-    expect(section).toContain('stepProducts(step)')
-    expect(section).toContain('step.basis')
+    expect(section).toContain('statusLabel(node.step)')
+    expect(section).toContain('node.step.kindLabel')
+    expect(section).toContain('node.step.windowStart')
+    expect(section).toContain('node.step.matchedRecordDate')
+    expect(section).toContain('stepProducts(node.step)')
+    expect(section).toContain('node.step.basis')
   })
 
   it('已记录/已接种的步骤不再推荐产品', () => {
@@ -335,12 +336,16 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).toContain('if (step.matchedRecordId) return []')
   })
 
-  it('接种计划按接种窗口期由近到远排序', () => {
+  it('时间顺序交给鱼骨图布局算（2026-10-09 改版）', () => {
     const section = readSection()
 
-    // 老板："接种计划按照接种窗口期时间顺序，由近到远往下排序。"
-    expect(section).toContain('orderedSteps')
-    expect(section).toContain('.sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart)))')
+    /*
+     * 老板 2026-10-06 定的是"列表按窗口期由近到远"；2026-10-09 改成竖版鱼骨图之后，
+     * **背骨本身就是时间轴**（过去 → 今天 → 下一针），所以顺序不再在组件里排，
+     * 一律交给 utils/vaccine-fishbone.ts（纯函数，单测在 vaccine-fishbone.spec.ts）。
+     */
+    expect(section).toContain('buildFishboneRows(visibleSteps.value')
+    expect(section).toContain('fishboneNodes')
   })
 
   it('被忽略的步骤从计划里去掉（展示层过滤，库里那条决定留着好恢复）', () => {
@@ -471,30 +476,35 @@ describe('接种计划 · 显示口径（2026-10-06）', () => {
       'utf-8',
     )
 
-  it('标题不再带"（按接种窗口期由近到远）"', () => {
+  it('不再有"接种计划"小标题（收起态那一行已经写着"下一针"）', () => {
     const source = readSection()
 
-    expect(source).toContain('<text class="plan-steps__title">接种计划</text>')
+    expect(source).not.toContain('plan-steps__title')
     expect(source).not.toContain('由近到远）</text>')
   })
 
   it('🔴 已完成的步骤不显示接种窗口期（那扇窗早过了）', () => {
     const source = readSection()
 
-    expect(source).toContain("v-if=\"step.status !== 'DONE'\" class=\"kv\"")
+    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"kv\"")
   })
 
   it('🔴 已完成的步骤不给动作按钮', () => {
     const source = readSection()
 
-    expect(source).toContain("v-if=\"step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
   })
 
-  it('🔴 已完成的沉底，未完成的在前（各自仍按窗口期由近到远）', () => {
+  it('🔴 历史按**实际接种日**排在背骨上方，待做的落在今天及之后', () => {
     const source = readSection()
 
-    expect(source).toContain('const pendingRank = (step: PlanStep) => (step.status === \'DONE\' ? 1 : 0)')
-    expect(source).toContain('pendingRank(a) - pendingRank(b)')
+    /*
+     * 老列表的读法是"未完成在前、已完成沉底"（2026-10-06）；
+     * 鱼骨图的读法是**时间**：发生过的事在上面、今天在中间、下一针在下面。
+     * 顺序规则本身在 vaccine-fishbone.spec.ts 里逐条钉着，这里只确认组件用了它。
+     */
+    expect(source).not.toContain('const pendingRank = (step: PlanStep)')
+    expect(source).toContain('const fishboneLayout = computed(')
   })
 
   /**
@@ -530,5 +540,76 @@ describe('计划 · 「下一针」变了闪一下（2026-10-08）', () => {
     expect(source).toContain('function highlightNextStepIfChanged()')
     expect(source).toContain("if (lastNextStepKey.value && key && key !== lastNextStepKey.value)")
     expect(source).toContain('plan-card__head--flash')
+  })
+})
+
+/**
+ * 竖版鱼骨图（2026-10-09 老板定）
+ *
+ * 老板："我希望重构一下疫苗板块的提醒和计划的UI。我们能否将该板块设计成鱼骨图？"
+ * 后续确认：**竖着画**（时间自上而下）、每条骨上**历史 + 唯一一条下一针**；
+ * 并且"如果鱼骨图可以提供足够的信息，记录板块顶部那条提醒也可以不要"。
+ *
+ * 布局顺序/折叠/今天的位置由 utils/vaccine-fishbone.spec.ts 逐条钉着，
+ * 这里只守"这一屏该有的东西都在"。
+ */
+describe('接种计划 · 竖版鱼骨图（2026-10-09）', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('鱼骨图三件套：鱼头（今天）/ 背骨节点 / 今天那条虚线', () => {
+    const source = readSection()
+
+    expect(source).toContain('class="fishbone__head"')
+    expect(source).toContain('class="fishbone__rail"')
+    expect(source).toContain('class="fishbone__today-line"')
+    expect(source).toContain('{{ shortDate(node.dateText) }}')
+  })
+
+  it('鱼头给的是"哪一类 + 常见的那几支 + 窗口期"，并且不提费用', () => {
+    const source = readSection()
+
+    expect(source).toContain('{{ nextStep.kindLabel }} · {{ nextStep.label }}')
+    expect(source).toContain('常见的有：{{ stepProducts(nextStep).join(\' / \') }}')
+    expect(source).toContain('接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}')
+    // 不提供费用建议（老板 2026-10-09）
+    expect(source).not.toContain('价格')
+    expect(source).not.toContain('￥')
+    expect(source).not.toContain('元/针')
+  })
+
+  it('⚠️ 产品措辞是"常见的有"，不是"建议打"（2026-10-04 兽医审核口径）', () => {
+    const source = readSection()
+
+    expect(source).toContain('常见的有')
+    expect(source).not.toContain('建议接种的疫苗')
+    expect(source).not.toContain('推荐疫苗：')
+  })
+
+  it('类别色只用在圆点和分类名上，不抢状态色', () => {
+    const source = readSection()
+
+    expect(source).toContain('function kindColor(kind: string): string')
+    expect(source).toContain(':style="{ color: kindColor(node.step.kind) }"')
+    // 状态徽标仍然走原来的状态色
+    expect(source).toContain('fishbone__badge--DONE')
+    expect(source).toContain('fishbone__badge--OVERDUE')
+  })
+
+  it('长历史折叠成一行"展开全部历史"', () => {
+    const source = readSection()
+
+    expect(source).toContain('展开全部历史（还有 {{ hiddenHistoryCount }} 条）')
+    expect(source).toContain('historyLimit: showAllHistory.value ? 0 : DEFAULT_HISTORY_LIMIT')
+  })
+
+  it('每一类待打的针都能动手（不是只有鱼头那一针能记）', () => {
+    const source = readSection()
+
+    // 未完成的每一条都给按钮 —— 计划里可能同时有 2~3 类待打
+    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
   })
 })

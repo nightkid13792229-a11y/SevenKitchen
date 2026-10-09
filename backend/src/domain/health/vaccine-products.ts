@@ -197,7 +197,15 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
   },
   {
     name: '宠必威优免康',
-    aliases: ['intervet 四联'],
+    /*
+     * ⚠️ 短名别名必须有（2026-10-09 实测）：
+     * 疫苗本/贴纸上常常只写「优免康」，不带"宠必威"前缀；
+     * 而匹配规则是"输入里要包含库里的名字"，只写短名就查不到 ✗ ——
+     * 后果不只是显示难看：**计划那边靠名字反推"这一针顶哪一类"**，
+     * 查不到就等于这一针白打了（实测赛文那条 2023-08-09 的优免康记录
+     * 就这么被漏掉，核心疫苗仍然显示"该打了"）。
+     */
+    aliases: ['intervet 四联', '优免康'],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     brand: '英特威（默沙东）',
     diseases: ['犬瘟热', '犬传染性肝炎', '犬细小病毒病', '犬副流感'],
@@ -239,7 +247,8 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
   },
   {
     name: '宠必威幼犬保',
-    aliases: [],
+    // 短名别名，同上（贴纸上常只写「幼犬保」）
+    aliases: ['幼犬保'],
     manufacturer: '英特威 Intervet（荷兰，默沙东）',
     brand: '英特威（默沙东）',
     diseases: ['犬瘟热', '犬细小病毒病'],

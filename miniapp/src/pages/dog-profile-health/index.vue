@@ -146,6 +146,7 @@
           <VaccinePlanSection
             ref="vaccinePlanRef"
             :dog-id="dogId"
+            :birthday="form.birthday"
             :data-version="vaccineDataVersion"
             @record-step="onPlanRecordStep"
             @pending-changed="vaccinePlanPending = $event"

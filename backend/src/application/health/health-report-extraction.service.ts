@@ -194,6 +194,8 @@ export interface HealthReportExtractionResult {
   ocrText: string;
   /** 需要顾客/客服留意的地方（例如"未能确认是否食物过敏"） */
   warnings: string[];
+  /** 这本看起来是谁的（'cat' = 猫的疫苗本，空串 = 不是猫/判不出来） */
+  speciesHint?: string;
   /**
    * 报告层面的信息（2026-10-04 第五期，仅过敏报告有）。
    *
@@ -366,9 +368,17 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '',
     '★★ 最容易漏的三件事（2026-10-06 老板拿真本子逐条核对出来的，务必照做）：',
     '',
-    '1. **没有贴标签、只手写了疫苗名的行也要读**。',
-    '   本子上经常有一行只写了「狂犬」「犬瘟」这样的手写字、旁边没有贴纸 ——',
-    '   那同样是一条接种记录，必须读出来。不要只认贴纸。',
+    '1. **只认三种接种记录，别的一律不要输出**（2026-10-09 老板拍板）。',
+    '   ① 贴了**疫苗产品标签**（贴纸）的行 ✓',
+    '   ② **手写**的接种记录（手写的疫苗名 + 日期/医生签章）✓',
+    '   ③ **盖章**的接种记录 ✓',
+    '   ⚠️ **不要输出**下面这些 —— 它们不是接种记录 ✗：',
+    '     · 本子上印刷的说明文字、注意事项、疫苗介绍',
+    '     · 医生写的**建议 / 预约 / 备注**：例如「下次打乐必妥」「建议打锐必威」',
+    '       「测抗体」「年度加强」「观察 30 分钟」这类',
+    '   判断依据：这一行**有没有产品标签、有没有接种日期或签章**。',
+    '   老板实测：14 号本子上医生写了「乐必妥」「锐必威」但没有贴那两针的标签，',
+    '   那不是接种记录，被读成接种记录就是错的 ✗。',
     '',
     '2. **日期有涂改时，以改后的为准 —— 并且要主动说出来**。',
     '   手写日期写错再改很常见（例如把「8.18」划掉、在上面补写「8.20」）。',
@@ -378,12 +388,30 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '   都要在那一行的 notes 开头写一句「日期有涂改，请核对」——',
     '   顾客扫一眼就知道这一行需要他自己确认。看不清就不要猜。',
     '',
-    '3. **日期只看得清年月的，不要编一个日子**（2026-10-09 老板实测）。',
-    '   手写日期经常只写「2023.8」没有具体日 —— 这时候**不要自己补一个 09**。',
-    '   这种情况把 day 写成 01，并在 notes 里写「日子没看清，请核对」；',
-    '   顾客扫一眼就知道要自己去确认哪一行。（编出来的日子比空着更糟。）',
+    '3. **注射日期只能取"本子上明确写在那一行的接种日期"**（2026-10-09 老板实测）。',
+    '   ⚠️ 三个死规矩：',
+    '   · **绝对不要**拿生产日期、有效期、批号旁边的日期当注射日期 ✗',
+    '     （老板实测：02、04 号本子根本没填注射日期，模型却把生产日期填了进去 ✗）',
+    '   · 这一行**没写注射日期**，vaccinationDate 就输出**空字符串** ✗ 不要猜、',
+    '     也不要用别的行的日期顶上 ✓',
+    '   · 只写到年月的（例如「2023.8」）：day 写 01，并在 notes 里写',
+    '     「本子上只写到年月，请核对」✓（编出来的日子比留空更糟 ✗）',
     '',
-    '4. **品牌名要照抄，不要替换成相近的别的品牌**。',
+    '   另外：**整行被划掉 / 涂掉的，整条不要输出** ✗',
+    '   （老板实测：21 号本子最后一针狂犬被划掉了一个日期，模型多读出一条记录 ✗）',
+    '   同一支苗 + 同一个日期在同一页上出现多次的，**只输出一条** ✓',
+    '',
+    '4. **先判断这本是不是猫的**（2026-10-09 老板实测）。',
+    '   如果本子是**猫**的（出现「猫三联」「妙三多」「猫鼻气管炎」「杯状病毒」',
+    '   「泛白细胞减少症」这类字），那么：',
+    '   · **照抄猫苗的原名** ✓ —— 绝对不要把它换成你更熟悉的**狗用疫苗名** ✗',
+    '     （老板实测：猫三联「妙三多」被换成了狗苗「卫佳伍」，甚至编出库里没有的',
+    '     「卫佳玖」 ✗ —— 这是最严重的一类错）',
+    '   · 在最外层 JSON 里加一个 "speciesHint": "cat" ✓',
+    '   长名字（猫三联、四联这种）**逐字照抄，连顺序和株号一起**（例如',
+    '   「（708株+60株+64株）」不要写成「（708株+605株+645株）」✗）。',
+    '',
+    '5. **品牌名要照抄，不要替换成相近的别的品牌**。',
     '   兽药品牌里长得很像的很多，而且都是真实存在的牌子，特别容易串：',
     '     · 「**宠必威**」（硕腾/Zoetis 的犬苗系列）≠「**英特威**」（另一个品牌）',
     '     · 宠必威系列内部也有四个长得很像的名字：幼犬保 / 优免康 / 乐必妥 / 锐必威',
@@ -406,6 +434,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '  "drafts": [',
     '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
     '  ],',
+    '  "speciesHint": "dog 或 cat（这本是猫的就填 cat）",',
     '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
     '}',
   ].join('\n'),
@@ -842,8 +871,27 @@ export function applyProductReview(
      *     （例如贴纸是「宠必威锐必威」，它第二次读成了「宠必威锐必威」而不是我们抄的
      *      「英特威®优免康」→ 说明第一次读错了 ✓）
      */
+    /*
+     * ⚠️ 报警口径第三次收窄（2026-10-09 老板实测反馈）：
+     * **比"落到哪一支产品"，不比字面** ✓
+     *
+     * 老板实测：16 号照片我们读「卫佳®伍」是对的，复核读成
+     * 「卫佳®伍 VANGUARD® PLUS 5」—— 字面不一样，但**落到的是同一支产品** ✓，
+     * 按字面比就会假报一次 ✗。
+     *
+     * 现在只有这两种情况才算不一致 ✓：
+     *   ① 我们匹配到了某一支，而复核读到的字**指向另一支产品**；
+     *   ② 我们没匹配上，而复核读到的字**能落到产品库的某一支** ✓
+     *      （那说明第一次读漏了）
+     */
+    const readProduct = readKey
+      ? String(findProductByText(textOnBook)?.name || '').trim()
+      : '';
     let inconsistentNow =
-      readDiffers && (row?.sameAsOurs === false || Boolean(ourProduct));
+      row?.sameAsOurs === false &&
+      (ourProduct
+        ? Boolean(readProduct) && readProduct !== ourProduct
+        : Boolean(readProduct) && readKey !== ourTextKey);
 
     /*
      * 候选先过一遍库：模型编的名字丢掉、去重、排除我们自己认定的那一支，
@@ -895,6 +943,39 @@ export function applyProductReview(
   }
 
   return { reviewed, inconsistent };
+}
+
+/**
+ * 同一页里"同一支苗 + 同一个日期"只留一条（2026-10-09 老板实测）。
+ *
+ * 老板："21 号图片中，最后一针狂犬被识别成了两个狂犬，我猜测其中最后一个日期
+ * 是被涂抹掉的，但是也被识别出来了。但是疫苗的标签只有一张。"
+ * —— 一支标签只能对应一条接种记录 ✓，重复的那条会把"打了几针"算多 ✗。
+ *
+ * 只在**产品名与日期都非空且完全相同**时才去重 ✓（宁可漏去重，不可误删真记录 ✗）。
+ */
+export function dedupeDrafts(
+  drafts: Record<string, any>[],
+): { drafts: Record<string, any>[]; removed: number } {
+  const seen = new Set<string>();
+  const kept: Record<string, any>[] = [];
+  let removed = 0;
+  for (const draft of drafts) {
+    const name = normalizeProductText(String(draft?.vaccineName || ''));
+    const date = String(draft?.vaccinationDate || '').slice(0, 10);
+    if (!name || !date) {
+      kept.push(draft);
+      continue;
+    }
+    const key = `${name}|${date}`;
+    if (seen.has(key)) {
+      removed += 1;
+      continue;
+    }
+    seen.add(key);
+    kept.push(draft);
+  }
+  return { drafts: kept, removed };
 }
 
 export function normalizeDrafts(
@@ -1725,7 +1806,17 @@ export class HealthReportExtractionService {
     }
 
     const documentType = resolvedType;
-    const drafts = normalizeDrafts(documentType, parsedRecord);
+    /*
+     * 同一页里"同一支苗 + 同一个日期"只留一条（2026-10-09 老板实测）：
+     * 一支标签只能对应一条接种记录，重复那条会把"打了几针"算多 ✗。
+     */
+    const deduped = dedupeDrafts(normalizeDrafts(documentType, parsedRecord));
+    const drafts = deduped.drafts;
+    if (deduped.removed > 0) {
+      this.logger.log(
+        `疫苗本去重：去掉同一页里重复的 ${deduped.removed} 条（同产品同日期）`,
+      );
+    }
 
     /*
      * 疫苗本：让模型**再看一眼图**，核对"本子上写的"和"我们认定的产品"是否同一支
@@ -1768,6 +1859,20 @@ export class HealthReportExtractionService {
       medicalConditions,
       ocrText,
       warnings,
+      /**
+       * 这本看起来是谁的（2026-10-09 老板定）。
+       *
+       * 老板："猫的疫苗本可以给提醒" —— 我们只做狗 ✓，但如果本子是猫的，
+       * 模型很容易把猫苗**换成它更熟悉的狗苗名**（实测：猫三联「妙三多」
+       * 被读成狗苗「卫佳伍」，甚至编出库里没有的「卫佳玖」✗）。
+       * 所以让它自己先说一句"这本是猫的"，界面再提醒顾客确认 ✓
+       * 文案用老板给的那句：「看起来是猫的疫苗本，请您再确认一下。」
+       */
+      speciesHint:
+        documentType === 'VACCINE_BOOK' &&
+        String(parsedRecord?.speciesHint || '').trim().toLowerCase() === 'cat'
+          ? 'cat'
+          : '',
       /**
        * 报告层面的信息（2026-10-04 第五期）。
        *

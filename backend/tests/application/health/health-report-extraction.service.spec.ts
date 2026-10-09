@@ -12,6 +12,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthReportExtractionService,
   applyProductReview,
+  buildSystemPrompt,
+  dedupeDrafts,
   buildProductReviewPrompt,
   buildProductReviewRows,
   normalizeDrafts,
@@ -22,7 +24,6 @@ import {
   filterContradictoryWarnings,
   isHealthReportVisionEnabled,
   normalizeDocumentType,
-  normalizeDrafts,
   normalizeAllergyGroup,
   resolveAutoDocumentType,
   resolveHealthReportVisionModel,
@@ -216,7 +217,7 @@ describe('HealthReportExtractionService', () => {
       const withoutVerdict = await service.extractFromReport({
         imageUrl: 'https://cdn/x.jpg',
       });
-      expect(withoutVerdict.reportMeta.hasVerdict).toBe(false);
+      expect(withoutVerdict.reportMeta!.hasVerdict).toBe(false);
     });
 
     it('等级 / 分组 / 说明一起回给前端（前端靠它决定怎么记）', () => {
@@ -1439,5 +1440,93 @@ describe('疫苗本 · 复核误报收窄（同一段文字的更粗略读法）
 
     expect(result.inconsistent).toBe(1);
     expect(drafts[0].productReview.candidates).toEqual(['宠必威锐必威']);
+  });
+});
+
+/**
+ * 2026-10-09 老板拿 23 张真实疫苗本核对出来的三条改动
+ * （基线：产品名 74.8%、日期 75.7%、🔴 4 行"本子上没填注射日期我们却写了日期"）
+ */
+describe('疫苗本 · 老板实测后的三条收口', () => {
+  it('同一页"同一支苗 + 同一个日期"只留一条（21 号照片多读出一条狂犬）', () => {
+    const { drafts, removed } = dedupeDrafts([
+      { vaccineName: '狂犬病灭活疫苗（G52株）RABISIN 瑞贝康', vaccinationDate: '2025-07-09' },
+      { vaccineName: '狂犬病灭活疫苗（G52株）RABISIN 瑞贝康', vaccinationDate: '2025-07-09' },
+      { vaccineName: '狂犬病灭活疫苗（G52株）RABISIN 瑞贝康', vaccinationDate: '2025-09-21' },
+    ]);
+
+    expect(removed).toBe(1);
+    expect(drafts).toHaveLength(2);
+  });
+
+  it('日期或名字空的**不去重**（宁可漏去重，不可误删真记录）', () => {
+    const { drafts, removed } = dedupeDrafts([
+      { vaccineName: '卫佳伍', vaccinationDate: '' },
+      { vaccineName: '卫佳伍', vaccinationDate: '' },
+      { vaccineName: '', vaccinationDate: '2026-01-01' },
+      { vaccineName: '', vaccinationDate: '2026-01-01' },
+    ]);
+
+    expect(removed).toBe(0);
+    expect(drafts).toHaveLength(4);
+  });
+
+  it('复核报警比"落到哪一支产品"，不比字面（16 号照片那次假报）', () => {
+    // 我们读「卫佳伍」= 对的；复核读成「卫佳®伍 VANGUARD® PLUS 5」——
+    // 字面不同，但落到的是**同一支产品** → 不该报警 ✓
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '卫佳®伍', productName: '卫佳伍' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: '卫佳®伍 VANGUARD® PLUS 5',
+            sameAsOurs: false,
+            candidates: ['卫佳伍'],
+          },
+        ],
+      },
+      ['卫佳伍', '卫佳捌'],
+    );
+
+    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
+    expect(drafts[0].productReview.consistent).toBe(true);
+  });
+
+  it('复核读到的字指向**另一支产品**时仍然报警（那才是真读错了）', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '宠必威®优免康', productName: '宠必威优免康' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: '宠必威®锐必威',
+            sameAsOurs: false,
+            candidates: ['宠必威锐必威'],
+          },
+        ],
+      },
+      ['宠必威优免康', '宠必威锐必威'],
+    );
+
+    expect(result.inconsistent).toBe(1);
+  });
+
+  it('提示词里钉住了老板 2026-10-09 定的四条规矩', () => {
+    const prompt = buildSystemPrompt('VACCINE_BOOK', 'image');
+
+    expect(prompt).toContain('只认三种接种记录');
+    expect(prompt).toContain('不要输出');
+    expect(prompt).toContain('绝对不要**拿生产日期');
+    expect(prompt).toContain('没写注射日期');
+    expect(prompt).toContain('speciesHint');
   });
 });

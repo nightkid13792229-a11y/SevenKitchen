@@ -815,7 +815,10 @@ describe('同一牌子的其他几支 · 一键改对（2026-10-09）', () => {
     )
 
     expect(scanSource).toContain('/没看清|看不清|遮挡|反光|模糊/')
-    expect(backend).toContain('日期只看得清年月的，不要编一个日子')
+    // 2026-10-09 提示词改写（老板实测"生产日期被当成注射日期"）—— 断言跟着换代，
+    // 守的还是同一件事：**不许编日子、不许拿别的日期顶上** ✓
+    expect(backend).toContain('只写到年月的')
+    expect(backend).toContain('没写注射日期')
   })
 })
 
@@ -921,5 +924,39 @@ describe('识别结果 · 品牌对不上要提醒（2026-10-09）', () => {
 
     expect(source).toContain('drafts[index].brandCheck.conflict')
     expect(source).not.toContain('勃林格')
+  })
+})
+
+/**
+ * 猫的疫苗本提醒（2026-10-09 老板定）
+ *
+ * 老板："猫的疫苗本可以给提醒，但是你这个提示文案需要优化。
+ *        看起来是猫的疫苗本，请您再确认一下。"
+ *
+ * 为什么值得提醒：模型很容易把猫苗**换成它更熟悉的狗苗名** ✗ ——
+ * 实测 23 张真实疫苗本：猫三联「妙三多」被读成狗苗「卫佳伍」，
+ * 还编出库里根本没有的「卫佳玖」✗（产品名那 16 行错里，10 行是这一类）。
+ */
+describe('识别结果 · 猫的疫苗本提醒（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('用老板给的文案，且提醒但不拦截（记录照旧可保存）', () => {
+    const source = scan()
+
+    expect(source).toContain('看起来是猫的疫苗本，请您再确认一下。')
+    expect(source).toContain('我们目前只做狗的疫苗接种记录。')
+    expect(source).toContain("page.speciesHint === 'cat'")
+  })
+
+  it('标记来自后端识别结果（前端不自己判物种）', () => {
+    const source = scan()
+
+    expect(source).toContain('speciesHint: String((data as { speciesHint?: string }).speciesHint')
+    // 前端不自己判物种（不做"看到猫三联就当猫本"这种本地规则）✓
+    expect(source).not.toContain('function detectSpecies')
   })
 })

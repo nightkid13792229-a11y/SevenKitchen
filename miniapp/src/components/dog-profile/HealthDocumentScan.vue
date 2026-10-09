@@ -101,6 +101,12 @@
              "红字的提醒放在报告的缩略图下方更合理，更方便观看和对比"）。
              点这一行就能放大对应的那张原图 —— 一边看图一边核这句话。
              缩略图只有 150rpx 宽，把整句提示塞进格子里会挤成一团，所以放在这一排的正下方。 -->
+        <!-- 猫的疫苗本提醒（2026-10-09 老板定；用他给的文案 ✓，提醒但不拦截 ✓） -->
+        <view v-if="catBookNotice" class="pages__cat-notice">
+          <text class="pages__cat-notice-title">看起来是猫的疫苗本，请您再确认一下。</text>
+          <text class="pages__cat-notice-desc">我们目前只做狗的疫苗接种记录。</text>
+        </view>
+
         <view v-if="pageWarnings.length > 0" class="pages__warnings">
           <text
             v-for="item in pageWarnings"
@@ -421,6 +427,8 @@ type ScanPageResult = {
   index: number
   path: string
   status: 'ok' | 'empty' | 'failed'
+  /** 后端说这本看起来是猫的疫苗本（2026-10-09） */
+  speciesHint?: string
   label: string
   warnings: string[]
   /** 文档（PDF / Word）没有缩略图，就显示文件名（2026-10-08） */
@@ -494,6 +502,8 @@ function renderMergedResult() {
   drafts.value = merged
   ignoredPagesNote.value = ignoredNote
   resolvedDocumentType.value = resolvedType
+  // 只要有一页被认成"猫的疫苗本"，就提醒一句（老板给的文案 ✓）
+  catBookNotice.value = pageResultsCache.some((page) => page.speciesHint === 'cat')
   pageOutcomes.value = pageResultsCache.map((page) => ({
     ...page,
     warnings: filterWarningsAgainstRecord(page.warnings, merged[0]),
@@ -892,6 +902,16 @@ const failureNotice = ref('')
  * 失败或"重新上传"时把它们从 COS 删掉，别白占空间（老板专门问过这件事）。
  */
 const uploadedUrls = ref<string[]>([])
+/**
+ * 这一轮里有没有**看起来是猫的疫苗本**（2026-10-09 老板定）。
+ *
+ * 老板："猫的疫苗本可以给提醒，但是你这个提示文案需要优化。
+ *        看起来是猫的疫苗本，请您再确认一下。"
+ * —— 提醒但**不拦截** ✓（记录照旧可以保存，顾客自己定夺 ✓）。
+ * 为什么值得提醒：模型很容易把猫苗**换成它更熟悉的狗苗名** ✗
+ * （实测：猫三联「妙三多」被读成狗苗「卫佳伍」，还编出库里没有的「卫佳玖」✗）。
+ */
+const catBookNotice = ref(false)
 /** 顾客这次一共选了几张（含没识别成功的，用于如实说明"本次共 N 张"） */
 const requestedImageCount = ref(0)
 
@@ -1229,6 +1249,7 @@ async function scanAll(filePaths: string[]) {
             status: 'ok',
             label: TYPE_LABELS[imageType as ExplicitDocumentType] || '资料',
             warnings: [],
+      speciesHint: String((data as { speciesHint?: string }).speciesHint || ''),
           })
         } else {
           // 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间
@@ -2074,5 +2095,25 @@ function discard() {
   border-color: #c0392b;
   color: #c0392b;
   background: #fdeeed;
+}
+
+/* 猫的疫苗本提醒（2026-10-09） */
+.pages__cat-notice {
+  margin: 16rpx 0;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fdf3e4;
+  border: 1rpx solid #e6a23c;
+}
+.pages__cat-notice-title {
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #a15c00;
+}
+.pages__cat-notice-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #8a7654;
 }
 </style>

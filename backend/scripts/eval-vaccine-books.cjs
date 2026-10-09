@@ -264,6 +264,27 @@ async function mintToken() {
   }
 }
 
+/**
+ * 加载真实产品库（2026-10-09 老板选 A 之后补的指标）。
+ *
+ * 为什么要它：我们真正在意的是"**认成的是不是同一支产品**" ✓ ——
+ * 计划靠的是产品（成分→病种→哪一步）✓，不是字面 ✓。
+ * 实测例子：本子上「瑞贝康」被读成「…RABISIN 瑞比信」✗ 字面不一样，
+ * 但**产品认对了** ✓（瑞比信已登记成瑞贝康的别名 ✓）—— 这种不该算错 ✗。
+ *
+ * 脚本在服务器上跑时就在 backend 目录里，可以直接 import 编译产物用**同一份**匹配逻辑 ✓
+ * （用不到就跳过这一项，其余指标照跑 ✓）。
+ */
+async function loadLibrary() {
+  try {
+    const mod = await import('./dist/src/domain/health/vaccine-products.js');
+    return { findProductByText: mod.findProductByText };
+  } catch (error) {
+    console.log(`（跳过"产品认对没"这一项：加载产品库失败 ${String(error.message).slice(0, 60)}）\n`);
+    return null;
+  }
+}
+
 async function main() {
   if (!TOKEN && process.env.EVAL_MINT === '1') {
     TOKEN = await mintToken();
@@ -281,6 +302,7 @@ async function main() {
   }
 
   const labels = parseLabels(fs.readFileSync(labelsPath, 'utf8'));
+  const library = await loadLibrary();
   const photos = fs.existsSync(photosDir)
     ? fs.readdirSync(photosDir).filter((name) => /\.(jpe?g|png|webp|heic|heif)$/i.test(name))
     : [];
@@ -343,6 +365,7 @@ async function main() {
     nameExact: 0, nameLoose: 0, nameWrong: 0,
     dateExact: 0, dateMonthOnly: 0, dateInvented: 0, dateWrong: 0, dateAdded: 0,
     matchedLibrary: 0, unmatchedLibrary: 0,
+    productJudged: 0, productExact: 0, productWrong: 0,
     reviewAlarms: 0, brandAlarms: 0,
   };
   const details = [];
@@ -383,6 +406,16 @@ async function main() {
         else if (dateJudge.startsWith('⚠️ 编了日子')) summary.dateInvented += 1;
         else if (want.date) summary.dateWrong += 1;
         if (matched) summary.matchedLibrary += 1; else summary.unmatchedLibrary += 1;
+
+        // 产品认对没（标准答案的写法在我们库里对应哪一支 → 和我们入库的那支比）
+        if (library && want.name) {
+          const expected = String(library.findProductByText(want.name)?.name || '').trim();
+          if (expected) {
+            summary.productJudged += 1;
+            if (expected === matched) summary.productExact += 1;
+            else summary.productWrong += 1;
+          }
+        }
         if (reviewAlarm) summary.reviewAlarms += 1;
         if (brandAlarm) summary.brandAlarms += 1;
 
@@ -412,6 +445,10 @@ async function main() {
   console.log(`产品名：严格对 ${summary.nameExact}（${pct(summary.nameExact, summary.rows)}）｜ 部分对 ${summary.nameLoose} ｜ 错 ${summary.nameWrong}`);
   console.log(`日期：严格对 ${summary.dateExact}（${pct(summary.dateExact, summary.rows)}）｜ 只到年月 ${summary.dateMonthOnly} ｜ **编了日子 ${summary.dateInvented}** ｜ **多写了日期 ${summary.dateAdded}** ｜ 错 ${summary.dateWrong}`);
   console.log(`认出产品：落到产品库 ${summary.matchedLibrary}（${pct(summary.matchedLibrary, summary.rows)}）｜ 没匹配上 ${summary.unmatchedLibrary}`);
+  console.log(
+    `认得的产品：标准答案能对上库的 ${summary.productJudged} 行里，我们认对 ${summary.productExact}` +
+    `（${pct(summary.productExact, summary.productJudged)}）｜ 认错 ${summary.productWrong}`,
+  );
   console.log(`报警：复核 ${summary.reviewAlarms} 行 ｜ 品牌 ${summary.brandAlarms} 行`);
 
   const reportPath = path.join(DATA_DIR, 'last-report.json');

@@ -39,7 +39,8 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain('保存我确认的')
 
     // 其余四类（只合成一条记录）：仍然是一次确认，按钮精简成「确认」
-    expect(scan).toContain('识别到以下内容，确认后填入表单')
+    // （文案 2026-10-08 审计第 6 块改成"确认后就存进档案"——不在那儿填表单）
+    expect(scan).toContain('识别到以下内容，确认后就存进档案')
     expect(scan).toContain('@tap="accept"')
     expect(scan).not.toContain('确认，填入表单')
   })
@@ -483,8 +484,15 @@ describe('疫苗本 · 逐条确认后才入库（2026-10-08）', () => {
   it('🔴 没确认的条目不提交（只 emit 确认过的那些）', () => {
     const scan = readScan()
 
-    expect(scan).toContain('const picked = drafts.value.filter((_, index) => rowConfirmed.value[index])')
+    /*
+     * ⚠️ 2026-10-09 改成"收集 + 把没确认的留在页面上"：
+     * 老板实测踩到过 —— 识别 7 条、"拿不准"的 3 条排最前面，
+     * 他确认那 3 条就保存了，剩下 4 条被**静默丢掉** ✗
+     * （"其他的已经识别的接种记录去哪里了呢？"）。
+     */
+    expect(scan).toContain('const picked: Record<string, any>[] = []')
     expect(scan).toContain("uni.showToast({ title: '还没有确认任何一条'")
+    expect(scan).toContain('还有 ${remaining} 条没确认')
   })
 
   it('🔴 判"拿不准"只用我们自己算得出来的信号，不许用模型自评', () => {
@@ -699,5 +707,108 @@ describe('识别结果没确认就离开 · 要拦一下（2026-10-08）', () =>
 
     expect(vaccine).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
     expect(records).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
+  })
+})
+
+
+/**
+ * 老板 2026-10-09 实测报的三个问题（都在这一版里修）
+ */
+describe('识别结果 · 三个实测问题（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('🔴 没确认的那几条**留在页面上**，不再静默丢掉', () => {
+    const source = scan()
+
+    expect(source).toContain('const remaining = drafts.value.length - picked.length')
+    expect(source).toContain('remaining,')
+    // 留在页面上的那些，图片还得用，不能跟着一起清掉
+    expect(source).toContain('uploadedUrls.value = []')
+    expect(source).toContain('renderMergedResult()')
+  })
+
+  it('识别结果页给出风险提示（模型会编细节，无法根除）', () => {
+    const source = scan()
+
+    expect(source).toContain('机器读的，名字和日期可能有错 —— 请照疫苗本核一遍')
+  })
+
+  it('模型说"没看清/被遮挡"的行，也排到最前面让家长核', () => {
+    const source = scan()
+
+    expect(source).toContain('/没看清|看不清|遮挡|反光|模糊/')
+    expect(source).toContain('这行有一处没看清，请照本子核一下')
+  })
+
+  it('扫描入库后**不自动展开**卡片（老板要"一眼看到刚存进来的列表"）', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(section).toContain('let suppressExpandOnSave = false')
+    expect(section).toContain('if (!suppressExpandOnSave)')
+    expect(section).toContain('expandedIndex.value = -1')
+  })
+
+  it('回执里要说清"还有几条没确认、留着等你接着看"', () => {
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(section).toContain('还有 {{ scanReceipt.remaining }} 条识别结果没确认，留着等你接着看')
+    expect(section).toContain('lastScanRemaining')
+  })
+})
+
+/**
+ * 针对"认错成同一牌子的另一支苗"的一键改对（2026-10-09）
+ *
+ * 老板实测的原话：贴纸是「宠必威锐必威」，模型读成了「英特威优免康」✗
+ * —— 两支都是真实存在的产品，提示词里已经写明"照抄品牌名"，它照样会串。
+ * 所以除了风险提示，再给一条**一键改对**的路：
+ * 识别的名字命中产品库时，把**同一牌子的其他几支**摆在旁边。
+ */
+describe('同一牌子的其他几支 · 一键改对（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('确认页行内给出"同一个牌子的其他几支"', () => {
+    const source = scan()
+
+    expect(source).toContain('function rowSameBrandAlternatives(index: number): string[]')
+    expect(source).toContain('同一个牌子的其他几支：')
+    // 点一下就换成那一支
+    expect(source).toContain('@tap="pickRowName(index, item)"')
+  })
+
+  it('产品库由疫苗板块传下来（前端不复制一份）', () => {
+    const source = scan()
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('catalogProducts?: { name: string; brand?: string; manufacturer?: string }[]')
+    expect(section).toContain(':catalog-products="catalogProducts"')
+  })
+
+  it('模型说"日子没看清"的行也会被标出来（编出来的日子比空着更糟）', () => {
+    const scanSource = scan()
+    const backend = readFileSync(
+      resolve(process.cwd(), '../backend/src/application/health/health-report-extraction.service.ts'),
+      'utf-8',
+    )
+
+    expect(scanSource).toContain('/没看清|看不清|遮挡|反光|模糊/')
+    expect(backend).toContain('日期只看得清年月的，不要编一个日子')
   })
 })

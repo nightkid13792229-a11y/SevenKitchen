@@ -40,9 +40,15 @@
         {{
           isVaccineBook
             ? '识别到以下内容 · 逐条确认后保存'
-            : '识别到以下内容，确认后填入表单'
+            : '识别到以下内容，确认后就存进档案'
         }}
       </text>
+      <!-- 风险提示（2026-10-09 老板实测后定）：模型会**编细节** ——
+           实测同一张疫苗本，它把没遮挡的贴纸说成"被手指遮挡"、
+           把"2023 年 8 月"补成"2023-08-09"、把"宠必威锐必威"读成"英特威优免康"。
+           这类错无法根除，所以明确告诉家长：这是机器读的，要照本子核一遍。
+           一句话，不啰嗦（老板口径：提示文案要精炼）。 -->
+      <text class="confirm__risk">机器读的，名字和日期可能有错 —— 请照疫苗本核一遍</text>
 
       <!-- 2026-10-02 老板："记到就诊记录 / 识别为病历 / 本次共 5 张图片合成 1 条 /
            5 张原图会一起存进这条记录 / 报告上的动物名 seven 这些内部信息就不要放了"。
@@ -156,6 +162,15 @@
                 placeholder="填或选这一支苗"
                 @input="onRowNameInput(index, $event)"
               />
+            </view>
+            <view v-if="rowSameBrandAlternatives(index).length > 0" class="row__chips">
+              <text class="row__chip-hint">同一个牌子的其他几支：</text>
+              <text
+                v-for="item in rowSameBrandAlternatives(index)"
+                :key="`same-${item}`"
+                class="row__chip"
+                @tap="pickRowName(index, item)"
+              >{{ item }}</text>
             </view>
             <view v-if="rowNameSuggestions(index).length > 0" class="row__chips">
               <text class="row__chip-hint">从产品库选一支：</text>
@@ -286,6 +301,16 @@ const props = withDefaults(defineProps<{
    * 不传就用本地兜底（闭集，极少变）。
    */
   componentOptions?: { value: string; label: string }[]
+  /**
+   * 产品库（2026-10-09）。只用来干一件事：
+   * 当识别的名字命中了某一支产品时，把**同一牌子的其他几支**也摆在旁边，
+   * 家长对着贴纸一眼就能改对。
+   *
+   * 为什么需要它：实测这个错最典型 —— 贴纸写的是「宠必威锐必威」（狂犬苗），
+   * 模型读成了「英特威优免康」（联苗）✗，两支都是真实存在的产品，
+   * 提示词里已经明确写了"照抄品牌名"，它照样会串。所以给一条**一键改对**的路。
+   */
+  catalogProducts?: { name: string; brand?: string; manufacturer?: string }[]
   /**
    * 顾客是从哪个入口点进来的（2026-10-02 老板定稿）。
    *
@@ -506,6 +531,30 @@ function rowName(draft: Record<string, any> | undefined): string {
   return value || '（名字没认出来）'
 }
 
+/** 识别出的名字命中了产品库里的哪一支（命中不了返回空） */
+function rowMatchedProduct(index: number): { name: string; brand?: string; manufacturer?: string } | null {
+  const draft = drafts.value[index]
+  const current = String(draft?.productName || draft?.vaccineName || '').trim()
+  if (!current) return null
+  const list = props.catalogProducts || []
+  return (
+    list.find((item) => item.name === current) ||
+    null
+  )
+}
+
+/** 同一牌子的其他几支（一键换过去；识别串了牌子/产品时用） */
+function rowSameBrandAlternatives(index: number): string[] {
+  const matched = rowMatchedProduct(index)
+  const brand = String(matched?.brand || matched?.manufacturer || '').trim()
+  if (!matched || !brand) return []
+  return (props.catalogProducts || [])
+    .filter((item) => String(item.brand || item.manufacturer || '').trim() === brand)
+    .map((item) => item.name)
+    .filter((name) => name !== matched.name)
+    .slice(0, 6)
+}
+
 function rowNameSuggestions(index: number): string[] {
   const list = drafts.value[index]?.nameSuggestions
   return Array.isArray(list) ? list.map(String).filter(Boolean) : []
@@ -525,6 +574,10 @@ function rowCare(index: number): { care: boolean; reason: string } {
   }
   if (String(draft.notes || '').includes('涂改')) {
     return { care: true, reason: '日期有涂改，请核对' }
+  }
+  // 模型自己说"没看清/看不清"的（不管它编的是什么原因），也要家长核一遍
+  if (/没看清|看不清|遮挡|反光|模糊/.test(String(draft.notes || ''))) {
+    return { care: true, reason: '这行有一处没看清，请照本子核一下' }
   }
   const components = Array.isArray(draft.components) ? draft.components : []
   if (components.length === 0) {
@@ -613,17 +666,84 @@ function toggleRowComponent(index: number, value: string) {
   draft.components = list
 }
 
-/** 只把**确认过**的那些交上去（没确认的不入库） */
+/**
+ * 只把**确认过**的那些交上去（没确认的不入库）。
+ *
+ * ⚠️ 2026-10-09 修一个**会丢数据**的设计缺陷（老板实测出来的）：
+ *    他的疫苗本识别出 7 条，其中"病种没读出来"的 3 条被排在最前面（那是我们
+ *    特意做的"拿不准的排前面"），他确认了这 3 条就点了保存 ——
+ *    于是**剩下 4 条被静默丢掉了** ✗，回执只说"存了 3 条"，
+ *    他完全不知道另外 4 条去哪了（"其他的已经识别的接种记录去哪里了呢？"）。
+ *
+ * 现在：确认过的交上去，**没确认的留在这一页继续显示**（进度重置成"已确认 0 / 共 4 条"），
+ *    并且把"还剩几条没确认"告诉上层，回执里也说一句。
+ */
 function acceptConfirmed() {
-  const picked = drafts.value.filter((_, index) => rowConfirmed.value[index])
+  const picked: Record<string, any>[] = []
+  const keptPerPage: number[][] = []
+
+  drafts.value.forEach((draft, index) => {
+    if (rowConfirmed.value[index]) {
+      picked.push(draft)
+    }
+  })
+
   if (picked.length === 0) {
     uni.showToast({ title: '还没有确认任何一条', icon: 'none' })
     return
   }
+
+  /*
+   * 没确认的那些要**留在页面上**：按页把它们重新组装 ——
+   * 页里剩下的草稿为空，这一页就不再显示（它的原图已经跟着交上去的记录走了）。
+   */
+  pageDraftCache.forEach((page) => {
+    const keepIndexes: number[] = []
+    page.drafts.forEach((draft, pageIndex) => {
+      const globalIndex = drafts.value.indexOf(draft)
+      if (globalIndex >= 0 && !rowConfirmed.value[globalIndex]) {
+        keepIndexes.push(pageIndex)
+      }
+    })
+    keptPerPage.push(keepIndexes)
+  })
+
+  const nextPages: { type: string; drafts: Record<string, any>[] }[] = []
+  pageDraftCache.forEach((page, pageIndex) => {
+    const kept = page.drafts.filter((_, index) => keptPerPage[pageIndex].includes(index))
+    if (kept.length > 0) {
+      nextPages.push({ type: page.type, drafts: kept })
+    }
+  })
+
+  const remaining = drafts.value.length - picked.length
+
   emit('scanned', {
     drafts: picked,
     documentType: resolvedDocumentType.value || props.documentType,
+    // 上层（回执）要说清"还有几条没确认、留在识别结果里了"
+    remaining,
   })
+
+  // 交上去的那些，图片所有权跟着记录走了；留在页面上的那些还要用，不能删
+  uploadedUrls.value = []
+
+  if (remaining > 0) {
+    pageDraftCache = nextPages
+    pageResultsCache = pageResultsCache
+      .map((page, pageIndex) => ({ page, kept: keptPerPage[pageIndex]?.length || 0 }))
+      .filter((item) => item.kept > 0)
+      .map((item) => item.page)
+      .map((page, index) => ({ ...page, index: index + 1 }))
+    renderMergedResult()
+    syncLeaveGuard()
+    uni.showToast({
+      title: `已保存，还有 ${remaining} 条没确认`,
+      icon: 'none',
+    })
+    return
+  }
+
   showConfirm.value = false
   syncLeaveGuard()
   drafts.value = []
@@ -631,7 +751,6 @@ function acceptConfirmed() {
   rowOrder.value = []
   editingRow.value = -1
   failureNotice.value = ''
-  uploadedUrls.value = []
 }
 /**
  * 模型自评的识别把握。
@@ -1822,5 +1941,12 @@ function discard() {
   background: var(--health-accent, #1e3a2f);
   padding: 16rpx 30rpx;
   border-radius: 999rpx;
+}
+
+.confirm__risk {
+  display: block;
+  margin: 6rpx 0 14rpx;
+  font-size: 22rpx;
+  color: #7a7a7a;
 }
 </style>

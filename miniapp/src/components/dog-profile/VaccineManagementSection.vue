@@ -24,6 +24,7 @@
       button-text="上传疫苗本图片"
       hint-text="一次能读出本子上的多条记录；也可以直接手填"
       :component-options="componentOptions"
+      :catalog-products="catalogProducts"
       @scanned="onVaccineBookScanned"
     />
 
@@ -94,6 +95,9 @@
         </text>
         <text v-if="scanReceipt.needsFix.length > 0" class="receipt__warn">
           有 {{ scanReceipt.needsFix.length }} 条还差信息没存上：{{ scanReceipt.needsFix.join('；') }}
+        </text>
+        <text v-if="scanReceipt.remaining > 0" class="receipt__warn">
+          还有 {{ scanReceipt.remaining }} 条识别结果没确认，留着等你接着看
         </text>
         <text v-if="scanReceipt.nextLabel" class="receipt__next">
           按接种计划，下一次是 {{ scanReceipt.nextLabel }}
@@ -1714,8 +1718,9 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
    * 现在跟全站一致：**实时保存**。存完顾客照样能改、能删。
    */
   const scanned = payload.drafts.length
-  // 回执要用（存完之后一起告诉顾客"跳过几条"）
+  // 回执要用（存完之后一起告诉顾客"跳过几条""还剩几条没确认"）
   lastScanSkipped.value = skipped
+  lastScanRemaining.value = Number((payload as { remaining?: number }).remaining || 0)
   /*
    * 去重的结果**要说出来**（2026-10-06）：
    * 不吭声地跳过，顾客会以为"怎么少了一条"；
@@ -1758,19 +1763,45 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
  * （实测他自己就会问："我刚才那 8 条都进去了吗？"）
  */
 const lastScanSkipped = ref(0)
+/** 这一批里"没确认、留在识别结果页"的有几条（2026-10-09 补） */
+const lastScanRemaining = ref(0)
 
 const scanReceipt = ref<{
   saved: number
   skipped: number
   needsFix: string[]
   nextLabel: string
+  /** 还有几条识别结果没确认（留在识别结果页，2026-10-09） */
+  remaining: number
 } | null>(null)
 
 function dismissScanReceipt() {
   scanReceipt.value = null
 }
 
+/**
+ * 扫描这一批入库时，**不要自动展开**任何一张卡片（2026-10-09 老板定）。
+ *
+ * 老板："在识别结果被逐条确认之后，为什么会直接跳到狂犬这只记录的展开页面呢？
+ *        我的建议是直接跳到接种记录，所有的接种记录都处于非展开的状态，
+ *        可以让用户一眼看到刚刚保存到的接种记录列表。"
+ *
+ * 手动新增那条路仍然要展开（顾客接着就要填字段），所以用一个开关区分。
+ */
+let suppressExpandOnSave = false
+
 async function saveScannedRecords() {
+  suppressExpandOnSave = true
+  try {
+    await saveScannedRecordsInner()
+  } finally {
+    suppressExpandOnSave = false
+    // 全部收起，一眼看到刚存进来的列表
+    expandedIndex.value = -1
+  }
+}
+
+async function saveScannedRecordsInner() {
   const pending = records.value
     .filter((record) => !record.id)
     .map((record) => ({
@@ -1822,8 +1853,10 @@ async function saveScannedRecords() {
     skipped: lastScanSkipped.value,
     needsFix: Object.values(stillUnsaveable),
     nextLabel: nextPending ? `${nextPending.label}（${nextPending.windowStart} 起）` : '',
+    remaining: lastScanRemaining.value,
   }
   lastScanSkipped.value = 0
+  lastScanRemaining.value = 0
 }
 
 /**
@@ -1977,12 +2010,14 @@ async function saveRecord(record: VaccineRecord, index: number) {
     await loadRecords()
 
     if (newId) {
-      const relocated = records.value.findIndex((item) => item.id === newId)
-      if (relocated >= 0) {
-        expandedIndex.value = relocated
-        // 按**id**高亮（不是下标）：loadRecords 会重排，下标会认错卡片
-        markSaved(String(newId))
+      if (!suppressExpandOnSave) {
+        const relocated = records.value.findIndex((item) => item.id === newId)
+        if (relocated >= 0) {
+          expandedIndex.value = relocated
+        }
       }
+      // 按**id**高亮（不是下标）：loadRecords 会重排，下标会认错卡片
+      markSaved(String(newId))
     }
   } catch (error: any) {
     const message = String(error?.message || '保存失败，请重试')

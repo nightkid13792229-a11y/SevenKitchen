@@ -507,3 +507,27 @@ describe('接种计划 · 显示口径（2026-10-06）', () => {
     expect(source).toContain('blocked.add(step.key)')
   })
 })
+
+
+/**
+ * 「下一针」变了就轻轻闪一下（2026-10-08 老板审计第 4 块）
+ *
+ * 家长改完一条记录之后，计划会重算 —— 但界面上看不出来。
+ * 闪一下是为了回答"我刚才那下改动，让计划前进了吗"；
+ * 只在**真的换了**的时候闪，第一次加载不闪。
+ */
+describe('计划 · 「下一针」变了闪一下（2026-10-08）', () => {
+  const section = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('只在 key 真的变了、而且不是第一次加载时闪', () => {
+    const source = section()
+
+    expect(source).toContain('function highlightNextStepIfChanged()')
+    expect(source).toContain("if (lastNextStepKey.value && key && key !== lastNextStepKey.value)")
+    expect(source).toContain('plan-card__head--flash')
+  })
+})

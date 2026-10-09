@@ -52,6 +52,35 @@
       <text v-if="records.length > 0" class="records-card__desc">
         最近接种的排在前面。点一条可以改，右边可以删。
       </text>
+
+      <!-- 疫苗本原件：**整本只展示一次**（2026-10-08 老板定）。
+           老板："往往疫苗本就只有 1~2 张，上面有很多条疫苗标签和记录，
+                 我们是否只展示一次报告原件的缩略图就可以了吗？"
+           —— 对。一本本子被十几条记录共用，挂在每条上等于同一张图重复十几遍。 -->
+      <view v-if="bookAttachments.length > 0" class="book-attachments">
+        <text class="book-attachments__label">疫苗本原件 · {{ bookAttachments.length }} 张</text>
+        <view class="book-attachments__row">
+          <view
+            v-for="(item, attachmentIndex) in bookAttachments"
+            :key="`book-attachment-${attachmentIndex}`"
+            class="book-attachments__item"
+            @tap="previewAttachment(item)"
+          >
+            <image
+              v-if="isImageAttachment(item)"
+              class="book-attachments__thumb"
+              :src="item"
+              mode="aspectFill"
+            />
+            <text class="book-attachments__title">
+              {{ attachmentDisplay(item, attachmentIndex).title }}
+            </text>
+          </view>
+        </view>
+        <text class="book-attachments__hint">
+          换医院、出行要用时可以打开给对方看。
+        </text>
+      </view>
       <view v-if="scanNotice" class="records-card__notice">
         <text class="records-card__notice-text">{{ scanNotice }}</text>
         <text class="records-card__notice-close" @tap="scanNotice = ''">知道了</text>
@@ -115,9 +144,9 @@
           <text class="vaccine-card__detail">
             接种 {{ draftOf(record, index).vaccinationDate || '未填日期' }}
           </text>
-          <text v-if="dueHint(draftOf(record, index))" class="vaccine-card__due" :class="dueClass(draftOf(record, index))">
-            {{ dueHint(draftOf(record, index)) }}
-          </text>
+          <!-- 到期提示**不在卡片脸上显示**（2026-10-08 老板定）。
+               疫苗本上写的"下次时间"仍然在展开后能看能改，
+               但不必让每条记录都挂一句 —— 顶部那条提醒已经按接种计划算好了。 -->
         </view>
         <!-- 删除 + 展开（2026-10-04 老板提问后改）。
              原来"删除"藏在展开后的表单最底下 —— 老板的原话是
@@ -284,6 +313,23 @@
                · 认不出来（没勾过病种）→ 请他照疫苗本勾
                · 顾客自己想改 → 点那行就展开 -->
         <view class="field-group">
+          <text class="field-label">接种日期</text>
+          <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
+               接种日填成未来会被算成已打过，提醒随之消失。
+               后端也会拒（此处只是别让顾客白填一遍）。
+               扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
+          <picker
+            mode="date"
+            :value="draftOf(record, index).vaccinationDate"
+            :end="getTodayDateString()"
+            @change="updateDraft(index, 'vaccinationDate', $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ draftOf(record, index).vaccinationDate || '请选择接种日期' }}
+            </view>
+          </picker>
+        </view>
+        <view class="field-group">
           <text class="field-label">含哪些病种</text>
 
           <!-- 判定结果：只读一行，点它可以改 -->
@@ -341,23 +387,6 @@
           </template>
         </view>
 
-        <view class="field-group">
-          <text class="field-label">接种日期</text>
-          <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
-               接种日填成未来会被算成已打过，提醒随之消失。
-               后端也会拒（此处只是别让顾客白填一遍）。
-               扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
-          <picker
-            mode="date"
-            :value="draftOf(record, index).vaccinationDate"
-            :end="getTodayDateString()"
-            @change="updateDraft(index, 'vaccinationDate', $event.detail.value)"
-          >
-            <view class="field-picker">
-              {{ draftOf(record, index).vaccinationDate || '请选择接种日期' }}
-            </view>
-          </picker>
-        </view>
 
         <!-- 「下次接种」字段已删除（2026-10-05 老板："请把这个字段删掉"）。
              前一轮只是改了措辞、想说明白"核心疫苗和狂犬是自动算的"，
@@ -366,8 +395,9 @@
              等于把"该不该提醒"的责任推给他 —— 而且他多半不知道该填什么。
 
              ⚠️ 后端字段 nextDueDate **保留不动**（additive，老记录里可能存着值）：
-               · 记录卡片上若老数据有值，仍然显示"还有 N 天到期"；
-               · buildPayload 仍会把草稿里原有的值原样带上，不会被清掉。
+               · buildPayload 仍会把草稿里原有的值原样带上，不会被清掉；
+               · 但**卡片上不再显示它**（2026-10-08 老板："每条卡片不显示到期提示"）——
+                 顶部那条提醒是按接种计划算出来的，比人工填的这个日期权威。
              只是顾客端不再有输入口。 -->
         <view class="field-group">
           <text class="field-label">备注（可选）</text>
@@ -379,27 +409,10 @@
           />
         </view>
 
-        <!-- 报告原件（2026-10-01 第九期）：上传疫苗本留下的原图。
-             没有原件的记录（手工填写）不显示这一块，不留空位。 -->
-        <view v-if="attachmentList(record).length > 0" class="field-group">
-          <text class="field-label">报告原件</text>
-          <view class="vaccine-attachment-list">
-            <view
-              v-for="(attachment, attachmentIndex) in attachmentList(record)"
-              :key="`${record.id || index}-attachment-${attachmentIndex}`"
-              class="vaccine-attachment"
-              @tap="previewAttachment(attachment)"
-            >
-              <text class="vaccine-attachment__title">
-                {{ attachmentDisplay(attachment, attachmentIndex).title }}
-              </text>
-              <text class="vaccine-attachment__action">预览</text>
-            </view>
-          </view>
-          <text class="vaccine-attachment__hint">
-            这是当初上传的疫苗本原图，换医院、出行要用时可以打开给对方看。
-          </text>
-        </view>
+        <!-- 报告原件**不再挂在每条记录上**（2026-10-08 老板定）：
+             一本疫苗本就 1~2 张照片，上面却有十几条标签和记录 ——
+             每条都挂一次，等于同一张图在列表里重复十几遍。
+             现在挪到记录板块顶部**只展示一次**（见 records-card 里的原件缩略图）。 -->
 
         <view class="vaccine-card__actions">
           <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
@@ -1390,6 +1403,30 @@ function daysUntil(dateText: string) {
   }
 
   return Math.round((target.getTime() - base.getTime()) / 86400000)
+}
+
+/**
+ * 疫苗本原件：**跨记录去重**，整本只展示一次（2026-10-08 老板定）。
+ *
+ * 一条记录可能带好几张（多页本子），同一条本子的多页也会被多条记录共用 ——
+ * 所以按 URL 去重，顺序保持"最近接种在前"的记录顺序。
+ */
+const bookAttachments = computed(() => {
+  const seen = new Set<string>()
+  const list: string[] = []
+  for (const record of records.value) {
+    for (const url of attachmentList(record)) {
+      if (seen.has(url)) continue
+      seen.add(url)
+      list.push(url)
+    }
+  }
+  return list
+})
+
+/** 这一份原件能不能直接当缩略图显示（PDF 之类就只显示名字） */
+function isImageAttachment(url: string): boolean {
+  return /\.(jpe?g|png|webp|gif|heic|heif|bmp)(\?|$)/i.test(String(url || ''))
 }
 
 function dueHint(draft: VaccineDraft) {
@@ -2624,5 +2661,47 @@ async function doRemove(record: VaccineRecord) {
 .vaccine-card__autosave--just {
   color: #0f7b49;
   font-weight: 600;
+}
+
+/* 疫苗本原件：整本只展示一次（2026-10-08） */
+.book-attachments {
+  margin: 10rpx 0 16rpx;
+  padding: 16rpx;
+  border-radius: 12rpx;
+  background: #f7faf8;
+}
+.book-attachments__label {
+  font-size: 24rpx;
+  color: #0f7b49;
+  font-weight: 600;
+}
+.book-attachments__row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10rpx;
+}
+.book-attachments__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 16rpx 10rpx 0;
+}
+.book-attachments__thumb {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 10rpx;
+  background: #eef2f0;
+}
+.book-attachments__title {
+  max-width: 160rpx;
+  font-size: 22rpx;
+  color: #555555;
+  text-align: center;
+}
+.book-attachments__hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #7a7a7a;
 }
 </style>

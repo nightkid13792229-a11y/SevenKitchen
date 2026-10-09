@@ -35,7 +35,11 @@
                「忽略」→ 弹窗确认后，这一步从这只狗狗的计划里去点。 -->
       <view class="health-card plan-card">
         <!-- ① 头部：收起时**只剩这一行** -->
-        <view class="plan-card__head" @tap="toggleExpanded">
+        <view
+          class="plan-card__head"
+          :class="{ 'plan-card__head--flash': flashNextStep }"
+          @tap="toggleExpanded"
+        >
           <view class="plan-card__summary">
             <text class="plan-card__eyebrow">下一针</text>
             <text class="plan-card__kind">
@@ -301,6 +305,29 @@ interface PlanPending {
 }
 
 const loaded = ref(false)
+
+/*
+ * 「下一针」变了就轻轻闪一下（2026-10-08 老板审计第 4 块）。
+ *
+ * 家长改完一条记录（比如补上一个日期），计划会重算 —— 但界面上看不出来。
+ * 闪一下是为了回答"我刚才那下改动，让计划前进了吗"，
+ * 只在**这一针真的换了**的时候闪，第一次加载不闪（否则每次进页面都在闪）。
+ */
+const lastNextStepKey = ref('')
+const flashNextStep = ref(false)
+let flashTimer: ReturnType<typeof setTimeout> | null = null
+
+function highlightNextStepIfChanged() {
+  const key = String(nextStep.value?.key || '')
+  if (lastNextStepKey.value && key && key !== lastNextStepKey.value) {
+    flashNextStep.value = true
+    if (flashTimer) clearTimeout(flashTimer)
+    flashTimer = setTimeout(() => {
+      flashNextStep.value = false
+    }, 3000)
+  }
+  lastNextStepKey.value = key
+}
 /**
  * 上一次加载的是哪条狗（2026-10-06）。
  *
@@ -585,6 +612,7 @@ async function load() {
       noEvidence: res.data.noEvidence === true,
     }
     loaded.value = true
+    highlightNextStepIfChanged()
     // 把"每一类的下一针"报给页面 —— 顶部那条到期提醒要用它（2026-10-07）
     emit(
       'pending-changed',
@@ -1068,4 +1096,14 @@ defineExpose({ reload: () => load() })
  * 我们现在就按审核通过的标准部署。" —— 前端这句和后端那个
  * VACCINE_PLAN 开关一起取消了，样式也一并删干净。
  */
+
+/* 记录改了、计划跟着变了 —— 轻轻闪一下（2026-10-08） */
+.plan-card__head--flash {
+  animation: plan-flash 1.2s ease-in-out 2;
+}
+@keyframes plan-flash {
+  0% { background-color: transparent; }
+  50% { background-color: #eef8f2; }
+  100% { background-color: transparent; }
+}
 </style>

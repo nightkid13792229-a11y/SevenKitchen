@@ -355,12 +355,20 @@ describe('疫苗本原图留档', () => {
     expect(source).toContain('buildPayload(draft, record)')
   })
 
-  it('卡片上能看原图：有原件才显示「报告原件」，点开可预览', () => {
+  it('原件改成**整本只展示一次**（2026-10-08 老板定）', () => {
     const source = readComponent()
 
-    expect(source).toContain('v-if="attachmentList(record).length > 0"')
-    expect(source).toContain('报告原件')
-    expect(source).toContain('@tap="previewAttachment(attachment)"')
+    /*
+     * 老板："往往疫苗本就只有 1~2 张，上面有很多条疫苗标签和记录，
+     *        我们是否只展示一次报告原件的缩略图就可以了吗？"
+     * → 不再挂在每条记录上（一本本子被十几条记录共用，等于同一张图重复十几遍），
+     *   改成记录板块顶部去重后展示一次。
+     */
+    expect(source).toContain('const bookAttachments = computed(')
+    expect(source).toContain('疫苗本原件 · {{ bookAttachments.length }} 张')
+    expect(source).toContain('@tap="previewAttachment(item)"')
+    // 每条卡片上不再有那一块
+    expect(source).not.toContain('v-if="attachmentList(record).length > 0"')
     // 图片/PDF 的打开逻辑与病历卡片共用一份，不各写一套
     expect(source).toContain('previewHealthAttachment')
     expect(source).toContain('buildHealthAttachmentDisplayMeta')
@@ -997,5 +1005,36 @@ describe('存完整批回执（2026-10-08）', () => {
     expect(source).toContain('nextLabel')
     expect(source).toContain('props.planPending')
     expect(source).toContain('按接种计划，下一次是')
+  })
+})
+
+
+/**
+ * 记录卡片的信息取舍（2026-10-08 老板审计第 4 块）
+ */
+describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
+  const readComponent = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('卡片脸上不再显示到期提示（老板："每条卡片不显示到期提示"）', () => {
+    const source = readComponent()
+
+    expect(source).not.toContain('{{ dueHint(draftOf(record, index)) }}')
+    expect(source).toContain('到期提示**不在卡片脸上显示**')
+  })
+
+  it('展开后的字段顺序跟确认页一致：名字 → 日期 → 病种', () => {
+    const source = readComponent()
+
+    const name = source.indexOf('<text class="field-label">疫苗名称</text>')
+    const date = source.indexOf('<text class="field-label">接种日期</text>')
+    const components = source.indexOf('<text class="field-label">含哪些病种</text>')
+
+    expect(name).toBeGreaterThan(0)
+    expect(date).toBeGreaterThan(name)
+    expect(components).toBeGreaterThan(date)
   })
 })

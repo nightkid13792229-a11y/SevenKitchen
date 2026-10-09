@@ -1466,6 +1466,19 @@ export function buildVaccinePlan(
   const futureDatedIds = new Set(futureDatedRecords.map((record) => record.id));
 
   const parsed = input.records
+    /*
+     * ⚠️ **没核对过的记录不参与匹配**（2026-10-09 安全默认值）。
+     *
+     * 老板："疫苗接种是会影响狗狗安全的，如果我们就这么草率地上生产的话，合适吗？"
+     * —— 两个方向的后果不对称：
+     *   · 错算成"没打" → 多提醒一次 ✓
+     *   · 错算成"打了" → **狗真的漏打** ✗✗（狂犬还是法定强制免疫）
+     * 所以识别出来且我们有理由怀疑的那一针（品牌对不上 / 复核读到不一样的字 / 狂犬），
+     * 在顾客点「我已对照本子核对」之前**不算数** ✓：
+     * 照旧显示在记录列表里（带着原图 ✓），只是不算作"这一针打过了" ✓
+     * —— 计划该提醒的继续提醒 ✓，冲突卡里也写清了为什么（见 detectConflicts）。
+     */
+    .filter((record) => record.productVerified !== false)
     .filter((record) => !futureDatedIds.has(record.id))
     .map((record) => ({
       record,

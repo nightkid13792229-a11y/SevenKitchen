@@ -59,7 +59,7 @@ describe('鱼骨图 · 节点站位', () => {
     expect(layout.nodes[0].isNext).toBe(true)
   })
 
-  it('时间自上而下：历史在前，今天那一格在中间，下一针在后', () => {
+  it('自上而下：今天/要做的在最上，历史在下面且越新越靠上', () => {
     const layout = buildFishboneRows(
       [
         step({ key: 'next', status: 'UPCOMING', windowStart: '2027-07-25', windowEnd: '2027-10-23' }),
@@ -69,20 +69,25 @@ describe('鱼骨图 · 节点站位', () => {
       { today: TODAY },
     )
 
-    expect(layout.nodes.map((node) => node.key)).toEqual(['old', 'now', 'next'])
-    // "今天"这条虚线插在 old 之后（= 排在今天之前的有 1 条）
-    expect(layout.todayIndex).toBe(1)
+    // 现在该做的 → 将来的 → 历史（越新越靠上）
+    expect(layout.nodes.map((node) => node.key)).toEqual(['now', 'next', 'old'])
+    // "今天"这条虚线画在最上方
+    expect(layout.todayIndex).toBe(0)
     // 高亮的是"现在该做"的那条，不是三年后的
     expect(layout.nodes.find((node) => node.isNext)?.key).toBe('now')
   })
 
-  it('全部都是过去的历史时，今天那条虚线落在最后', () => {
+  it('全都是历史时，历史按"越新越靠上"排，今天那条线仍在最上方', () => {
     const layout = buildFishboneRows(
-      [step({ key: 'a', status: 'DONE', windowStart: '2024-08-18', matchedRecordDate: '2024-08-18' })],
+      [
+        step({ key: 'old', status: 'DONE', windowStart: '2024-08-18', matchedRecordDate: '2024-08-18' }),
+        step({ key: 'new', status: 'DONE', windowStart: '2026-07-25', matchedRecordDate: '2026-07-25' }),
+      ],
       { today: TODAY },
     )
 
-    expect(layout.todayIndex).toBe(layout.nodes.length)
+    expect(layout.nodes.map((node) => node.key)).toEqual(['new', 'old'])
+    expect(layout.todayIndex).toBe(0)
   })
 })
 
@@ -139,8 +144,9 @@ describe('鱼骨图 · 日期标注与年份分隔', () => {
       { today: TODAY },
     )
 
-    expect(layout.nodes[0].yearLabel).toBe('2024 年')
-    expect(layout.nodes[1].yearLabel).toBe('2025 年')
+    // 倒序：2025 在前
+    expect(layout.nodes[0].yearLabel).toBe('2025 年')
+    expect(layout.nodes[1].yearLabel).toBe('2024 年')
     // 同一年里不重复标
     const sameYear = buildFishboneRows(
       [
@@ -169,8 +175,8 @@ describe('鱼骨图 · 长历史折叠', () => {
 
     expect(layout.historyTotal).toBe(6)
     expect(layout.hiddenHistoryCount).toBe(3)
-    // 留下的是**最近**的三条
-    expect(layout.nodes.map((node) => node.key)).toEqual(['h3', 'h4', 'h5'])
+    // 留下的是**最近**的三条（倒序：最新在最上）
+    expect(layout.nodes.map((node) => node.key)).toEqual(['h5', 'h4', 'h3'])
   })
 
   it('展开全部历史（historyLimit: 0）时不再折叠', () => {

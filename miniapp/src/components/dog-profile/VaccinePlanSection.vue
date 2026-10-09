@@ -60,7 +60,7 @@
                老板："除了疫苗分类和接种窗口期，还需要展示依据和推荐的疫苗。
                      该部分其他的信息不用展示。" -->
           <!-- 竖版鱼骨图（2026-10-09 老板定）。
-               背骨自上而下是**时间**（过去 → 今天 → 下一针）；
+               背骨自上而下 = **由近到远**（今天该做的 → 将来的待安排 → 越翻越旧的历史）；
                每一针一个节点，从背骨斜着长出一张分支卡片；
                每一类**只放一条"下一针"**（与既有口径一致：不做的不显示、已完成的历史保留）；
                "今天"是一条贯穿虚线，插在时间序列的正确位置。
@@ -99,6 +99,7 @@
                 <view v-if="node.yearLabel" class="fishbone__year">
                   <text class="fishbone__year-text">{{ node.yearLabel }}</text>
                 </view>
+                <!-- "今天"这条虚线画在最上方（现在 → 越远越往下 → 越旧越往下） -->
                 <view v-if="index === todayIndex" class="fishbone__today-line">
                   <text class="fishbone__today-text">今天</text>
                   <view class="fishbone__today-dash" />
@@ -179,12 +180,6 @@
                   </view>
                 </view>
               </template>
-
-              <!-- 全在历史里时，"今天"这条虚线落在最后 -->
-              <view v-if="todayIndex >= fishboneNodes.length" class="fishbone__today-line">
-                <text class="fishbone__today-text">今天</text>
-                <view class="fishbone__today-dash" />
-              </view>
 
               <text v-if="fishboneNodes.length === 0" class="plan-steps__empty">
                 计划里的项目都已完成或已忽略。

@@ -9,10 +9,10 @@
  * 使用者：`components/dog-profile/VaccinePlanSection.vue`。
  *
  * ── 画法（老板 2026-10-09 定：竖着画）────────────────────────────────
- *   · 背骨 = 时间，自上而下（过去 → 今天 → 下一针）；
+ *   · 背骨 = 时间，**自上而下 = 由近到远**（今天 → 将来的待安排 → 越来越旧的历史）；
  *   · 每一针一个节点，从背骨斜着长出一张分支卡片；
  *   · 每一类**只放一条"下一针"**（与既有口径一致：不做的不显示、已完成的历史保留）；
- *   · "今天"是一条贯穿的虚线，插在时间序列的正确位置。
+ *   · "今天"是一条贯穿的虚线，画在最上方（"现在"的起点）。
  */
 
 export type FishboneStatus = 'DONE' | 'DUE' | 'UPCOMING' | 'OVERDUE' | 'SKIPPED'
@@ -113,17 +113,34 @@ export function buildFishboneRows<T extends FishboneStepLike>(
       isDone: step.status === 'DONE',
     }))
 
-  // 稳定排序：同一天时保持后端给的顺序（那一层已经考虑过程序顺序）
+  /*
+   * 顺序（2026-10-09 老板第二次定稿）：
+   *   · **要做的在上、做完的历史在下**；
+   *   · 要做的里面：今天这一格在最上，越远的将来越靠下（升序）；
+   *   · 历史里面：**越新越靠上**（降序）。
+   *
+   * 为什么改成这样：老板的原话是"日期接近的在上方，日期比较远的、过去的日期在下方"，
+   * 而且他 2026-10-06 就说过"最早的已经完成的疫苗记录反而排在最上面"——
+   * 老的升序时间轴（过去 → 今天 → 将来）等于把三年前的历史摆在第一屏。
+   * 现在第一屏是"今天该做什么"，历史往下翻，越翻越旧（与接种记录列表同一读法）。
+   *
+   * 同一天时保持后端给的顺序（那一层已经考虑过程序顺序）。
+   */
   decorated.sort((a, b) => {
-    if (a.sortDate !== b.sortDate) return a.sortDate < b.sortDate ? -1 : 1
+    if (a.isDone !== b.isDone) return a.isDone ? 1 : -1
+    if (a.sortDate !== b.sortDate) {
+      return a.isDone
+        ? b.sortDate.localeCompare(a.sortDate)
+        : a.sortDate.localeCompare(b.sortDate)
+    }
     return a.index - b.index
   })
 
   const historyTotal = decorated.filter((item) => item.isDone).length
 
   /*
-   * 历史折叠：只保留**最近** limit 条已完成（时间轴末尾的那几条），
-   * 更早的收起来。limit <= 0 或 Infinity 时全留。
+   * 历史折叠：只保留**最近** limit 条已完成。
+   * 现在是倒序排列，最近的就在历史段的最前面。
    */
   const keep = new Set<number>()
   if (limit > 0 && historyTotal > limit) {
@@ -131,7 +148,7 @@ export function buildFishboneRows<T extends FishboneStepLike>(
       .map((item, position) => ({ position, isDone: item.isDone }))
       .filter((item) => item.isDone)
       .map((item) => item.position)
-    for (const position of doneIndexes.slice(-limit)) {
+    for (const position of doneIndexes.slice(0, limit)) {
       keep.add(position)
     }
   }
@@ -143,10 +160,11 @@ export function buildFishboneRows<T extends FishboneStepLike>(
 
   const hiddenHistoryCount = decorated.length - visible.length
 
-  let todayIndex = visible.findIndex((item) => item.sortDate >= today)
-  if (todayIndex < 0) {
-    todayIndex = visible.length
-  }
+  /*
+   * "今天"这条虚线画在最上方 —— 它是"现在"的起点：
+   * 线下面第一段是今天及以后要做的，再往下是已经做完的历史。
+   */
+  const todayIndex = 0
 
   let previousDate = ''
   let previousYear = ''

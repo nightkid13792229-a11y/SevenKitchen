@@ -623,6 +623,8 @@ defineExpose({
   startScan: () => scanRef.value?.startScan?.(),
   /** 「选文档（PDF / Word）」（2026-10-08 老板要的） */
   startDocumentScan: () => scanRef.value?.startDocumentScan?.(),
+  /** 识别结果还没确认的有几条（离开页面要拦一下，2026-10-08） */
+  unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0,
   addRecord,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,

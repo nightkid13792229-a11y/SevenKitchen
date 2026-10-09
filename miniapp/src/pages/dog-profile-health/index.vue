@@ -414,6 +414,31 @@ function selectHealthTab(key: HealthTabKey) {
    * 但**没有提示就丢内容**本身就是个问题。）
    * 现在把话说清楚，让顾客自己决定留下还是放弃。
    */
+  /*
+   * 识别结果**还没逐条确认**时也要拦（2026-10-08）。
+   *
+   * ⚠️ 这是"逐条确认后才入库"带来的新情况：确认之前那几条只在内存里，
+   *    切标签会把板块整个销毁 —— 不拦就是静默丢 ✗
+   *    （以前识别完立刻自动保存，所以没有这个问题。）
+   */
+  const unconfirmed =
+    (vaccineSectionRef.value?.unconfirmedDraftCount?.() || 0) +
+    (recordsSectionRef.value?.unconfirmedDraftCount?.() || 0)
+  if (unconfirmed > 0) {
+    uni.showModal({
+      title: '识别结果还没确认',
+      content: `有 ${unconfirmed} 条识别出来的记录还没确认，现在切走就会丢掉。`,
+      confirmText: '留下',
+      cancelText: '切走',
+      success: ({ confirm }) => {
+        if (!confirm) {
+          switchHealthTab(key)
+        }
+      },
+    })
+    return
+  }
+
   const unsaveable = vaccineSectionRef.value?.countUnsaveableDrafts?.() || 0
   if (activeHealthTab.value === 'vaccine' && unsaveable > 0) {
     uni.showModal({

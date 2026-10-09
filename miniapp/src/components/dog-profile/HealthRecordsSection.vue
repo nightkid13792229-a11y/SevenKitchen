@@ -1402,6 +1402,7 @@ function updateTextField(index: number, key: string, value: string) {
 const scanRef = ref<{
   startScan?: () => void
   startDocumentScan?: () => void
+  unconfirmedDraftCount?: () => number
 } | null>(null)
 const scanActive = ref(false)
 
@@ -1852,6 +1853,8 @@ defineExpose({
   openAddRecordChooser,
   startScan,
   startDocumentScan,
+  /** 识别结果还没确认的有几条（离开页面要拦一下，2026-10-08） */
+  unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0,
   addRecord,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,

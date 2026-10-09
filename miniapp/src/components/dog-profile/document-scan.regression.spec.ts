@@ -643,3 +643,61 @@ describe('选文档上传（PDF / Word，2026-10-08）', () => {
     expect(page).toContain('startDocumentScan?.()')
   })
 })
+
+
+/**
+ * 异常路径：**识别结果还没确认就离开**（2026-10-08）
+ *
+ * ⚠️ 这是"逐条确认后才入库"带来的新情况 —— 确认之前那几条只在内存里，
+ * 切标签会把板块整个销毁，不拦就是**静默丢数据** ✗
+ * （以前识别完立刻自动保存，所以没有这个问题。）
+ */
+describe('识别结果没确认就离开 · 要拦一下（2026-10-08）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('组件能报出"还有几条没确认"', () => {
+    const source = scan()
+
+    expect(source).toContain('function unconfirmedDraftCount(): number')
+    expect(source).toContain('return showConfirm.value ? drafts.value.length : 0')
+  })
+
+  it('确认页开着时拦住"点返回"（微信的离开确认弹窗）', () => {
+    const source = scan()
+
+    expect(source).toContain('function syncLeaveGuard()')
+    expect(source).toContain('enableAlertBeforeUnload')
+    expect(source).toContain('识别结果还没确认，现在离开就丢掉啦')
+    // 拿不到这个能力时静默跳过
+    expect(source).toContain('api.enableAlertBeforeUnload?.({')
+  })
+
+  it('页面切标签时也要拦（这个守卫一定在，不依赖上面那个能力）', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(page).toContain('unconfirmedDraftCount?.()')
+    expect(page).toContain('识别结果还没确认')
+    expect(page).toContain('现在切走就会丢掉')
+  })
+
+  it('两个板块都把这件事透给页面', () => {
+    const vaccine = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+    const records = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthRecordsSection.vue'),
+      'utf-8',
+    )
+
+    expect(vaccine).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
+    expect(records).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
+  })
+})

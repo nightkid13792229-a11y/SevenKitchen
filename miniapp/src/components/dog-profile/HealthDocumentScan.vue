@@ -310,7 +310,43 @@ const emit = defineEmits<{
  * 供上层外部触发（病历/检查板块把它并进了底部那个「新增记录」）。
  * 自带按钮隐藏时，就靠这个方法打开相机/相册。
  */
-defineExpose({ startScan: pickAndScan, startDocumentScan })
+/**
+ * 还有几条识别结果**没确认**（2026-10-08）。
+ *
+ * 为什么需要它：改成"逐条确认后才入库"之后，识别结果在确认之前**只在内存里** ——
+ * 切标签会把这个板块整个销毁，那几条就静默没了 ✗
+ * （以前是识别完立刻自动保存，所以不会有这个问题）。
+ * 页面离开前拿这个数拦一下，跟"记录没填完"是同一个套路。
+ */
+function unconfirmedDraftCount(): number {
+  return showConfirm.value ? drafts.value.length : 0
+}
+
+/**
+ * 确认页开着的时候，拦住"点返回"这个动作（微信的离开确认弹窗）。
+ *
+ * ⚠️ 这个能力在部分端上不存在 —— 拿不到就静默跳过，
+ * 真正兜底的是页面里那个切标签的守卫（那个一定在）。
+ */
+function syncLeaveGuard() {
+  const api = uni as unknown as {
+    enableAlertBeforeUnload?: (options: { message: string }) => void
+    disableAlertBeforeUnload?: () => void
+  }
+  if (showConfirm.value && drafts.value.length > 0) {
+    api.enableAlertBeforeUnload?.({
+      message: '识别结果还没确认，现在离开就丢掉啦',
+    })
+    return
+  }
+  api.disableAlertBeforeUnload?.()
+}
+
+defineExpose({
+  startScan: pickAndScan,
+  startDocumentScan,
+  unconfirmedDraftCount,
+})
 
 const isBusy = ref(false)
 const showConfirm = ref(false)
@@ -589,6 +625,7 @@ function acceptConfirmed() {
     documentType: resolvedDocumentType.value || props.documentType,
   })
   showConfirm.value = false
+  syncLeaveGuard()
   drafts.value = []
   rowConfirmed.value = []
   rowOrder.value = []
@@ -1046,6 +1083,7 @@ async function scanAll(filePaths: string[]) {
     renderMergedResult()
 
     showConfirm.value = true
+    syncLeaveGuard()
   } catch (error: any) {
     // 一块看得见的提示，而不是一闪而过的 toast；
     // 基础设施类报错（腾讯云"服务未开通"之类）也不直接甩给顾客，换成能懂的话
@@ -1332,6 +1370,7 @@ function dismissFailure() {
 /** 「重新上传」：直接再开一次相册（原来文案叫"重新拍"，但走的是相册，2026-10-02 改） */
 function discard() {
   showConfirm.value = false
+  syncLeaveGuard()
   drafts.value = []
   failureNotice.value = ''
 

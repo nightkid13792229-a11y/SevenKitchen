@@ -48,7 +48,6 @@
            把"2023 年 8 月"补成"2023-08-09"、把"宠必威锐必威"读成"英特威优免康"。
            这类错无法根除，所以明确告诉家长：这是机器读的，要照本子核一遍。
            一句话，不啰嗦（老板口径：提示文案要精炼）。 -->
-      <text class="confirm__risk">机器读的，名字和日期可能有错 —— 请照疫苗本核一遍</text>
 
       <!-- 2026-10-02 老板："记到就诊记录 / 识别为病历 / 本次共 5 张图片合成 1 条 /
            5 张原图会一起存进这条记录 / 报告上的动物名 seven 这些内部信息就不要放了"。
@@ -110,9 +109,6 @@
             @tap="previewPage(item.path)"
           >第 {{ item.index }} 张：{{ item.text }}</text>
         </view>
-        <text class="pages__hint">
-          哪一张不清楚，就点它下面的「重传这一张」换一张 —— 其它几张的结果不受影响。
-        </text>
       </view>
       <view v-if="patientNameMismatch" class="confirm__name-warning">
         <text class="confirm__name-warning-title">⚠️ 名字对不上</text>
@@ -127,7 +123,9 @@
              系统拿不准的排最前面并标红（判据只用我们自己算得出来的信号）。 -->
       <template v-if="isVaccineBook">
         <view class="rows__head">
-          <text class="rows__hint">一条一条核对，确认过的才会存进档案</text>
+          <text class="rows__hint">
+            AI识别，为防止模型的幻觉，请您务必人工确认一次！
+          </text>
           <text class="rows__progress">已确认 {{ confirmedCount }} / 共 {{ drafts.length }} 条</text>
         </view>
 
@@ -153,7 +151,7 @@
             >{{ rowConfirmed[index] ? '✓ 已确认' : '确认' }}</text>
           </view>
 
-          <view v-if="editingRow === index" class="row__edit">
+          <view v-if="isRowOpen(index)" class="row__edit">
             <view class="row__field">
               <text class="row__label">疫苗名</text>
               <input
@@ -238,7 +236,12 @@
            只会让整份结果都不敢信。真正要提醒的地方已经**点名到具体行**了。 -->
 
       <view class="confirm__actions">
-        <text class="confirm__discard" @tap="discard">重新上传</text>
+        <!-- 这里原来有一个「重新上传」（整批丢掉重来）——
+             老板 2026-10-09 指出它和每一张下面的「重传这一张」功能重叠，已删除。
+             ⚠️ 但**选了文档（PDF/Word）时必须留着**：文档那一格没有「重传这一张」
+                （`v-if="page.path"`），删了它就没有退路了。
+             整批都失败的情况在失败面板里另有「重新上传」。 -->
+        <text v-if="hasDocumentPage" class="confirm__discard" @tap="discard">重新上传</text>
         <text v-if="isVaccineBook" class="confirm__accept" @tap="acceptConfirmed">
           保存我确认的 {{ confirmedCount }} 条
         </text>
@@ -481,7 +484,18 @@ function renderMergedResult() {
       const careB = rowCare(b).care ? 0 : 1
       return careA - careB || a - b
     })
-  editingRow.value = -1
+
+  /*
+   * 展开状态：**需要核的行默认展开**（老板 2026-10-09），其余收起。
+   * 这里每次都按当前草稿重算，所以重传一页之后也仍然对。
+   */
+  const nextOpen: Record<number, boolean> = {}
+  drafts.value.forEach((_, index) => {
+    if (rowCare(index).care) {
+      nextOpen[index] = true
+    }
+  })
+  openRows.value = nextOpen
 }
 
 /*
@@ -500,7 +514,19 @@ function renderMergedResult() {
  */
 const rowConfirmed = ref<boolean[]>([])
 const rowOrder = ref<number[]>([])
-const editingRow = ref(-1)
+/**
+ * 展开编辑中的行（2026-10-09 改成"多行可同时展开"）。
+ *
+ * 老板问："如果识别的信息有缺失或者没把握，会让用户先点确认、展开该条的窗口、
+ * 手动录入后再点一次确认，对吗？那为何不对此类的记录直接在识别结果审核的窗口中
+ * 直接展开呢？" —— 对，之前是"点一下才展开"，属于我漏了；
+ * 现在**需要核的行默认就是展开的**（多个也可以同时展开）。
+ */
+const openRows = ref<Record<number, boolean>>({})
+
+function isRowOpen(index: number): boolean {
+  return Boolean(openRows.value[index])
+}
 
 const isVaccineBook = computed(
   () => (resolvedDocumentType.value || props.documentType) === 'VACCINE_BOOK',
@@ -520,6 +546,11 @@ const componentChoices = computed(() =>
   props.componentOptions && props.componentOptions.length > 0
     ? props.componentOptions
     : FALLBACK_COMPONENT_CHOICES,
+)
+
+/** 这一批里有没有"文档"页（PDF / Word 没有缩略图，也就没有「重传这一张」） */
+const hasDocumentPage = computed(() =>
+  pageOutcomes.value.some((page) => !page.path),
 )
 
 const confirmedCount = computed(
@@ -616,8 +647,8 @@ function rowComponentsText(draft: Record<string, any> | undefined): string {
 function toggleRowConfirm(index: number) {
   const reason = rowBlockReason(index)
   if (reason && !rowConfirmed.value[index]) {
-    uni.showToast({ title: `${reason}，先点开这一条补一下`, icon: 'none' })
-    editingRow.value = index
+    uni.showToast({ title: `${reason}，先把它补上`, icon: 'none' })
+    openRows.value = { ...openRows.value, [index]: true }
     return
   }
   const next = [...rowConfirmed.value]
@@ -626,7 +657,10 @@ function toggleRowConfirm(index: number) {
 }
 
 function toggleRowEdit(index: number) {
-  editingRow.value = editingRow.value === index ? -1 : index
+  const next = { ...openRows.value }
+  if (next[index]) delete next[index]
+  else next[index] = true
+  openRows.value = next
 }
 
 function onRowNameInput(index: number, event: any) {
@@ -749,7 +783,7 @@ function acceptConfirmed() {
   drafts.value = []
   rowConfirmed.value = []
   rowOrder.value = []
-  editingRow.value = -1
+  openRows.value = {}
   failureNotice.value = ''
 }
 /**
@@ -1531,8 +1565,11 @@ function discard() {
   margin: 8rpx 0 12rpx;
 }
 .rows__hint {
+  flex: 1;
   font-size: 24rpx;
-  color: #7a7a7a;
+  color: #c0392b;
+  font-weight: 600;
+  line-height: 1.5;
 }
 .rows__progress {
   font-size: 24rpx;

@@ -33,7 +33,9 @@ describe('拍照录入 · 组件', () => {
      */
     // 疫苗本：逐条确认 + 只提交确认过的那几条
     expect(scan).toContain('逐条确认后保存')
-    expect(scan).toContain('一条一条核对，确认过的才会存进档案')
+    // 老板 2026-10-09：这句改成红色高亮的"务必人工确认"
+    expect(scan).toContain('AI识别，为防止模型的幻觉，请您务必人工确认一次！')
+    expect(scan).not.toContain('一条一条核对，确认过的才会存进档案')
     expect(scan).toContain('@tap="acceptConfirmed"')
     expect(scan).toContain('rowConfirmed')
     expect(scan).toContain('保存我确认的')
@@ -515,7 +517,7 @@ describe('疫苗本 · 逐条确认后才入库（2026-10-08）', () => {
     expect(scan).toContain('还差疫苗名')
     expect(scan).toContain('还差接种日期')
     expect(scan).toContain('还差病种')
-    expect(scan).toContain('先点开这一条补一下')
+    expect(scan).toContain('先把它补上')
   })
 
   it('一屏多条：一行给全"要核对的三样"，可疑的排最前面', () => {
@@ -593,10 +595,11 @@ describe('单独重传某一页（2026-10-08）', () => {
     expect(scan).toContain('这一张还是没读出内容，原来的结果先留着')
   })
 
-  it('提示语指向真正的按钮，不再承诺不存在的功能', () => {
+  it('按钮就在每一张下面，不需要再多一句说明（老板 2026-10-09 让删掉那句文案）', () => {
     const scan = readScan()
 
-    expect(scan).toContain('就点它下面的「重传这一张」换一张')
+    expect(scan).toContain('@tap.stop="rescanPage(page.index - 1)"')
+    expect(scan).not.toContain('就点它下面的「重传这一张」换一张')
     expect(scan).not.toContain('单独重传一次，或直接手工补充')
   })
 })
@@ -731,10 +734,13 @@ describe('识别结果 · 三个实测问题（2026-10-09）', () => {
     expect(source).toContain('renderMergedResult()')
   })
 
-  it('识别结果页给出风险提示（模型会编细节，无法根除）', () => {
+  it('给出红色高亮的人工确认提示（模型会编细节，无法根除）', () => {
     const source = scan()
 
-    expect(source).toContain('机器读的，名字和日期可能有错 —— 请照疫苗本核一遍')
+    expect(source).toContain('AI识别，为防止模型的幻觉，请您务必人工确认一次！')
+    // 红色高亮
+    expect(source).toContain('.rows__hint {')
+    expect(source).toContain('color: #c0392b;')
   })
 
   it('模型说"没看清/被遮挡"的行，也排到最前面让家长核', () => {
@@ -810,5 +816,38 @@ describe('同一牌子的其他几支 · 一键改对（2026-10-09）', () => {
 
     expect(scanSource).toContain('/没看清|看不清|遮挡|反光|模糊/')
     expect(backend).toContain('日期只看得清年月的，不要编一个日子')
+  })
+})
+
+
+/**
+ * 「重新上传」与「重传这一张」到底重不重复（老板 2026-10-09 让核的）
+ *
+ * 核对结果：
+ *   · 图片那一批 —— 重复。每一张下面都有「重传这一张」（只换那一张，别的结果不动），
+ *     底部那个"整批丢掉重来"就没有必要了 → **删掉**；
+ *   · 文档（PDF / Word）那一批 —— **不重复**：文档那格没有「重传这一张」，
+ *     删掉底部按钮就等于没有退路 → **留着**；
+ *   · 整批失败时 —— 失败面板里另有「重新上传」（那时没有别的出路）→ 留着。
+ */
+describe('「重新上传」只在该有的时候出现（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('结果页底部：图片批次不再有「重新上传」，文档批次保留', () => {
+    const source = scan()
+
+    expect(source).toContain('const hasDocumentPage = computed(')
+    expect(source).toContain("pageOutcomes.value.some((page) => !page.path)")
+    expect(source).toContain('<text v-if="hasDocumentPage" class="confirm__discard" @tap="discard">重新上传</text>')
+  })
+
+  it('失败面板里的「重新上传」保留（整批失败时唯一的出路）', () => {
+    const source = scan()
+
+    expect(source).toContain('<text class="confirm__discard" @tap="discard">重新上传</text>')
   })
 })

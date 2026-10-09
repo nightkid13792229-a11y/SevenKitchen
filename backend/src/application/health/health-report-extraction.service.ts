@@ -810,18 +810,41 @@ export function applyProductReview(
     if (!draft) continue;
 
     const textOnBook = normalizeDraftText(row?.textOnBook, 100);
-    const consistent = row?.sameAsOurs !== false;
     const ourProduct = String(draft.productName || '').trim();
 
+    /*
+     * ⚠️ "我们没匹配上"不等于"复核发现了问题"（2026-10-09 实测修正）。
+     *
+     * 上线实跑第一版：库里没有的国产苗（例如「宠派纯® 狂犬病灭活疫苗」）
+     * 每一行都会被标成"不一致"✗ —— 复核读到的字和我们抄的一模一样，
+     * 它只是因为我们没匹配上才回答 false ✓。
+     * 那种情况界面本来就有专门的提示（「产品库里没有这支苗」），
+     * 再来一条"可能认错了"就是**误报** ✗（狼来了）。
+     *
+     * 所以：只有下面两种情况才算"不一致"——
+     *   ① 我们**匹配到了某一支**，而复核说不是这一支；
+     *   ② 复核读到的字和我们抄下来的**不一样**（说明它看到了别的字）。
+     */
+    const ourTextKey = normalizeProductText(String(draft.vaccineName || ''));
+    const readKey = normalizeProductText(textOnBook);
+    const readDiffers = readKey.length > 0 && readKey !== ourTextKey;
+    const consistent = !(
+      row?.sameAsOurs === false &&
+      (Boolean(ourProduct) || readDiffers)
+    );
+
+    // 一致的就不留候选（界面也不显示；不存更干净）
     const candidates: string[] = [];
-    for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
+    if (!consistent) {
+      for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
       const key = normalizeProductText(String(raw || ''));
       const official = libraryByKey.get(key);
       if (!official) continue; // 库里没有的名字一律丢掉（不许编）
       if (official === ourProduct) continue; // 和我们认定的一样就不必当候选
-      if (candidates.includes(official)) continue;
-      candidates.push(official);
-      if (candidates.length >= 3) break;
+        if (candidates.includes(official)) continue;
+        candidates.push(official);
+        if (candidates.length >= 3) break;
+      }
     }
 
     draft.productReview = {

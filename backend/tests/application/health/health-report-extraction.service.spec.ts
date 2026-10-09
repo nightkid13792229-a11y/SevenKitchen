@@ -1258,7 +1258,7 @@ describe('疫苗本 · 产品名复核', () => {
   });
 
   it('🔴 库里没有的候选一律丢掉（模型编的名字不许进界面）', () => {
-    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
+    const drafts: Record<string, any>[] = [{ vaccineName: '英特威®优免康', productName: '' }];
 
     const result = applyProductReview(
       drafts,
@@ -1266,7 +1266,7 @@ describe('疫苗本 · 产品名复核', () => {
         rows: [
           {
             index: 0,
-            textOnBook: 'X',
+            textOnBook: '宠必威锐必威',
             sameAsOurs: false,
             candidates: ['不存在的苗', '宠必威优免康', '另一个编的'],
           },
@@ -1300,6 +1300,45 @@ describe('疫苗本 · 产品名复核', () => {
     );
 
     expect(drafts[0].productReview.candidates).toEqual(['卫佳伍', '瑞比克', '宠必威优免康']);
+  });
+
+  it('🔴 我们没匹配上、而且它读到的字和我们抄的一样 → 不算不一致（避免误报）', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '宠派纯® 狂犬病灭活疫苗', productName: '' },
+      { vaccineName: '狂犬', productName: '' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          { index: 0, textOnBook: '宠派纯® 狂犬病灭活疫苗', sameAsOurs: false, candidates: ['瑞比克'] },
+          { index: 1, textOnBook: '狂犬', sameAsOurs: false, candidates: ['瑞比克'] },
+        ],
+      },
+      ['瑞比克'],
+    );
+
+    expect(result).toEqual({ reviewed: 2, inconsistent: 0 });
+    expect(drafts[0].productReview.consistent).toBe(true);
+    expect(drafts[0].productReview.candidates).toEqual([]);
+  });
+
+  it('我们没匹配上，但它读到的字**不一样** → 算不一致（这可能是真读错了）', () => {
+    const drafts: Record<string, any>[] = [{ vaccineName: '英特威®优免康', productName: '' }];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          { index: 0, textOnBook: '宠必威锐必威', sameAsOurs: false, candidates: ['宠必威锐必威'] },
+        ],
+      },
+      ['宠必威锐必威'],
+    );
+
+    expect(result.inconsistent).toBe(1);
+    expect(drafts[0].productReview.candidates).toEqual(['宠必威锐必威']);
   });
 
   it('模型没给答案时不算"不一致"（不许凭空给家长报警）', () => {

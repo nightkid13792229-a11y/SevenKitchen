@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -66,4 +67,11 @@ export class UpdateVaccineDto {
   @IsArray()
   @IsString({ each: true })
   components?: string[];
+  /**
+   * 产品名有没有被人工核对过（2026-10-09 安全默认值）。
+   * 顾客在卡片上点「我已对照本子核对」→ PATCH 传 true → 这一针才算进计划 ✓。
+   */
+  @IsOptional()
+  @IsBoolean()
+  productVerified?: boolean;
 }

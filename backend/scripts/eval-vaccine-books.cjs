@@ -221,6 +221,18 @@ function judgeName(got, want) {
    */
   if (g && g.includes(w)) return '对（读全了）';
   if (g && w.includes(g)) return `部分对（读漏了：本子上「${want}」→ 我们「${got}」）`;
+  /*
+   * 词序不同不该判错（2026-10-09 老板第 1 条发现就是这类）：
+   * 本子上「狂犬病灭活疫苗(G52株) 瑞贝康」，模型读成
+   * 「瑞贝康 RABISIN 狂犬病灭活疫苗 (G52株)」—— 字都在 ✓，只是顺序换了 ✓。
+   * 认产品靠的是词都在不在（我们的匹配本来就是按名字包含来的 ✓），不是顺序 ✓。
+   */
+  const gChars = [...new Set(g.split(''))].sort().join('');
+  const wChars = [...new Set(w.split(''))].sort().join('');
+  if (gChars === wChars) return '对（只是词序不同）';
+  if (w && g && [...new Set(w.split(''))].every((ch) => g.includes(ch))) {
+    return '对（读全了）';
+  }
   return `错（本子上「${want}」→ 我们「${got || '空'}」）`;
 }
 
@@ -362,7 +374,7 @@ async function main() {
         const brandAlarm = draft.brandCheck && draft.brandCheck.conflict === true;
 
         summary.rows += 1;
-        if (nameJudge === '对' || nameJudge === '对（读全了）') summary.nameExact += 1;
+        if (nameJudge.startsWith('对')) summary.nameExact += 1;
         else if (nameJudge.startsWith('部分对')) summary.nameLoose += 1;
         else if (want.name) summary.nameWrong += 1;
         if (dateJudge.startsWith('🔴 多写了日期')) summary.dateAdded += 1;

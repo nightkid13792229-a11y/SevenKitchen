@@ -394,8 +394,12 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '     （老板实测：02、04 号本子根本没填注射日期，模型却把生产日期填了进去 ✗）',
     '   · 这一行**没写注射日期**，vaccinationDate 就输出**空字符串** ✗ 不要猜、',
     '     也不要用别的行的日期顶上 ✓',
-    '   · 只写到年月的（例如「2023.8」）：day 写 01，并在 notes 里写',
-    '     「本子上只写到年月，请核对」✓（编出来的日子比留空更糟 ✗）',
+    '   · 只写到年月的（例如「2023.8」「2023 年 8 月」）：',
+    '     ⚠️ date **只能写 `2023-08-01`**（day 一律 01），并在 notes 里写',
+    '     「本子上只写到年月，请核对」。',
+    '     ✗ **绝对不要**按"大概那天"写别的日子 —— 老板实测：本子上「2023.8」',
+    '     被写成 `2023-08-09`、本子上「2019.1」被写成 `2019-01-03` ✗',
+    '     编出来的日子会让接种计划的时间窗整体偏 ✗。',
     '',
     '   另外：**整行被划掉 / 涂掉的，整条不要输出** ✗',
     '   （老板实测：21 号本子最后一针狂犬被划掉了一个日期，模型多读出一条记录 ✗）',
@@ -408,6 +412,13 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '     （老板实测：猫三联「妙三多」被换成了狗苗「卫佳伍」，甚至编出库里没有的',
     '     「卫佳玖」 ✗ —— 这是最严重的一类错）',
     '   · 在最外层 JSON 里加一个 "speciesHint": "cat" ✓',
+    '   ⚠️ **卫佳系列只差一个字母，差一个就是另一支苗**：',
+    '     · 「卫佳伍 Vanguard Plus 5」= 五联',
+    '     · 「卫佳捌 Vanguard Plus 5/**CV-L**」= 八联（多一个 CV-L！）',
+    '     · 「卫佳细 Vanguard Plus **CPV**」= 细小单苗',
+    '     看到 **CV-L** 一定要读出来，漏了就会把八联当成五联 ✗',
+    '     （老板实测：卫佳捌被读成卫佳伍 ✗）。',
+    '',
     '   长名字（猫三联、四联这种）**逐字照抄，连顺序和株号一起**（例如',
     '   「（708株+60株+64株）」不要写成「（708株+605株+645株）」✗）。',
     '',
@@ -933,10 +944,44 @@ export function applyProductReview(
     const consistent = !inconsistentNow;
     const shownCandidates = consistent ? [] : candidates;
 
+    /*
+     * ⚠️ 日期这一步**只做降级、不做升级**（2026-10-09 老板实测后定的）。
+     *
+     * 为什么只降级：复核自己也读错过（实测 16/18 号照片）✗ ——
+     * 所以它**没有资格**给我们一个新日期 ✗；但它的回答可以让我们更保守 ✓：
+     *   · 它说"只写了年月"（`2023-08`）→ 我们若补了具体某天，**强制改回 01** ✓
+     *     （老板实测：本子上「2023.8」被写成 2023-08-09 ✗、「2019.1」被写成 2019-01-03 ✗）
+     *   · 它说"没写"（`没写`）→ 那我们读出来的日期就可疑 ✗ → **这一针先不算数** ✓
+     *     （走已有的安全默认值：顾客点「我已对照本子核对」才计入计划 ✓）
+     *   · 它给的完整日期和我们不一样 → 同样**先不算数** ✓（谁对谁错交给顾客看本子 ✓）
+     */
+    const dateOnBook = normalizeDraftText(row?.dateOnBook, 20);
+    let dateReview = '';
+    if (dateOnBook === '没写') {
+      dateReview = 'missing';
+      draft.productVerified = false;
+    } else if (/^\d{4}-\d{2}$/.test(dateOnBook)) {
+      const ours = String(draft.vaccinationDate || '').slice(0, 10);
+      if (ours && ours.slice(0, 7) === dateOnBook && ours.slice(8, 10) !== '01') {
+        draft.vaccinationDate = `${dateOnBook}-01`;
+        dateReview = 'monthOnly';
+        draft.notes = [String(draft.notes || '').trim(), '本子上只写到年月，请核对']
+          .filter(Boolean)
+          .join('；');
+      }
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnBook)) {
+      const ours = String(draft.vaccinationDate || '').slice(0, 10);
+      if (ours && ours !== dateOnBook) {
+        dateReview = 'differs';
+        draft.productVerified = false;
+      }
+    }
+
     draft.productReview = {
       textOnBook,
       consistent,
       candidates: shownCandidates,
+      ...(dateReview ? { dateReview } : {}),
     };
     reviewed += 1;
     if (!consistent) inconsistent += 1;
@@ -954,6 +999,40 @@ export function applyProductReview(
  *
  * 只在**产品名与日期都非空且完全相同**时才去重 ✓（宁可漏去重，不可误删真记录 ✗）。
  */
+/**
+ * 名字**读残了**的行不要输出（2026-10-09 老板实测）。
+ *
+ * 实测有一行只读出个「联」字 ✗ —— 这种名字既不可能入库、也会让顾客一脸问号 ✓。
+ * 判据：去掉符号后短于 2 个字，或者只是"联 / 苗 / 疫苗"这类残词 ✓。
+ * 丢掉的行会转成一句提示，顾客自己看得见少了哪一行 ✓（不静默丢弃 ✗）。
+ */
+const BROKEN_VACCINE_NAME_WORDS = new Set([
+  '联', '苗', '疫苗', '注射', '接种', '狂犬疫苗', '联苗',
+]);
+
+export function dropBrokenNameDrafts(
+  drafts: Record<string, any>[],
+  documentType?: HealthDocumentType,
+): { drafts: Record<string, any>[]; removed: number } {
+  // ⚠️ 只对**疫苗本**生效（2026-10-09 实测踩过：体检/过敏的草稿没有 vaccineName，
+  //    一起判"名字太短"会把它们全丢掉 ✗）
+  if (documentType && documentType !== 'VACCINE_BOOK') {
+    return { drafts, removed: 0 };
+  }
+  const kept: Record<string, any>[] = [];
+  let removed = 0;
+  for (const draft of drafts) {
+    const raw = String(draft?.vaccineName || '').trim();
+    const compact = normalizeProductText(raw);
+    if (compact.length < 2 || BROKEN_VACCINE_NAME_WORDS.has(raw)) {
+      removed += 1;
+      continue;
+    }
+    kept.push(draft);
+  }
+  return { drafts: kept, removed };
+}
+
 export function dedupeDrafts(
   drafts: Record<string, any>[],
 ): { drafts: Record<string, any>[]; removed: number } {
@@ -1811,11 +1890,17 @@ export class HealthReportExtractionService {
      * 一支标签只能对应一条接种记录，重复那条会把"打了几针"算多 ✗。
      */
     const deduped = dedupeDrafts(normalizeDrafts(documentType, parsedRecord));
-    const drafts = deduped.drafts;
+    const cleaned = dropBrokenNameDrafts(deduped.drafts, documentType);
+    const drafts = cleaned.drafts;
     if (deduped.removed > 0) {
       this.logger.log(
         `疫苗本去重：去掉同一页里重复的 ${deduped.removed} 条（同产品同日期）`,
       );
+    }
+    if (cleaned.removed > 0) {
+      // 不静默丢弃：告诉顾客"有一行没读清" ✓
+      parsedRecord.__brokenNameRows = cleaned.removed;
+      this.logger.log(`疫苗本：丢掉名字没读清的 ${cleaned.removed} 行`);
     }
 
     /*
@@ -1841,6 +1926,10 @@ export class HealthReportExtractionService {
       documentType === 'ALLERGY_REPORT'
         ? drafts.map((draft) => String(draft.allergen || '')).filter(Boolean)
         : normalizeKeywordList(parsedRecord.allergies);
+
+    if (Number(parsedRecord.__brokenNameRows || 0) > 0) {
+      warnings.push('有一行的疫苗名没看清（只读出半个名字），请照本子手工补上');
+    }
 
     if (drafts.length === 0 && warnings.length === 0) {
       // 明确告诉顾客"没识别到"，让他改用手工填写，而不是给一个空结果让人以为成功了。

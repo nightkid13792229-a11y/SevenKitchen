@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { checkBrandConsistency } from 'src/domain/health/vaccine-products';
+import { checkBrandConsistency, findProductByText } from 'src/domain/health/vaccine-products';
 
 /**
  * 品牌一致性检查（2026-10-09 老板定）。
@@ -36,5 +36,20 @@ describe('品牌一致性检查', () => {
 
   it('匹配不到的产品不报（没有基准可比）', () => {
     expect(checkBrandConsistency('宠派纯® 狂犬病灭活疫苗', '').conflict).toBe(false);
+  });
+});
+
+/**
+ * 别名补充（2026-10-09 老板让去官网核的）
+ *
+ * 勃林格中国官网：瑞贝康 = 狂犬病灭活疫苗（G52株），
+ * 【进口兽药注册证书号】（2019）外兽药证字71号 —— 与库里登记一致 ✓
+ * 页面引用的英文名是 Rabisin ✓（本子上写 RABISIN 的要能认出来）。
+ */
+describe('瑞贝康的英文名 rabisin', () => {
+  it('本子上写 RABISIN（各种大小写/带符号）都能认成瑞贝康', () => {
+    for (const text of ['RABISIN', 'Rabisin®', '狂犬病灭活疫苗（G52株）RABISIN 瑞贝康', 'rabisin']) {
+      expect(findProductByText(text)?.name).toBe('瑞贝康');
+    }
   });
 });

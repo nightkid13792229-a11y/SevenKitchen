@@ -14,13 +14,13 @@ import {
   applyProductReview,
   buildSystemPrompt,
   dedupeDrafts,
+  dropBrokenNameDrafts,
   buildProductReviewPrompt,
   buildProductReviewRows,
   normalizeDrafts,
   resolveHealthDocumentFileKind,
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
-  buildSystemPrompt,
   filterContradictoryWarnings,
   isHealthReportVisionEnabled,
   normalizeDocumentType,
@@ -1528,5 +1528,114 @@ describe('疫苗本 · 老板实测后的三条收口', () => {
     expect(prompt).toContain('绝对不要**拿生产日期');
     expect(prompt).toContain('没写注射日期');
     expect(prompt).toContain('speciesHint');
+  });
+});
+
+/**
+ * 名字读残的行不要输出（2026-10-09 老板实测："有一行只读出一个『联』字"）
+ */
+describe('疫苗本 · 名字没读清的行不落地', () => {
+  it('丢掉"联 / 苗 / 疫苗"这类残名', () => {
+    const { drafts, removed } = dropBrokenNameDrafts(
+      [
+        { vaccineName: '联', vaccinationDate: '2025-07-13' },
+        { vaccineName: '卫佳捌', vaccinationDate: '2025-07-20' },
+        { vaccineName: '', vaccinationDate: '2025-07-20' },
+      ],
+      'VACCINE_BOOK',
+    );
+
+    expect(removed).toBe(2);
+    expect(drafts.map((draft) => draft.vaccineName)).toEqual(['卫佳捌']);
+  });
+
+  it('体检/过敏这类没有疫苗名的草稿**不受影响**（2026-10-09 实测踩过的坑）', () => {
+    const { drafts, removed } = dropBrokenNameDrafts(
+      [{ notes: '血常规：正常' }, { allergen: '鸡肉' }],
+      'CHECKUP_REPORT',
+    );
+
+    expect(removed).toBe(0);
+    expect(drafts).toHaveLength(2);
+  });
+
+  it('丢掉的行要变成一句顾客看得见的提示（不静默丢弃）', () => {
+    const source = require('node:fs').readFileSync(
+      require('node:path').resolve(
+        __dirname,
+        '../../../src/application/health/health-report-extraction.service.ts',
+      ),
+      'utf-8',
+    );
+
+    expect(source).toContain('有一行的疫苗名没看清');
+  });
+});
+
+/**
+ * 日期只降级、不升级（2026-10-09 老板实测后定的）
+ *
+ * 老板实测：本子上「2023.8」被写成 2023-08-09 ✗、「2019.1」被写成 2019-01-03 ✗；
+ * 02/04 号本子**根本没填注射日期**，却被填进了生产日期 ✗（🔴 4 行）。
+ * 复核自己也读错过（16/18 号），所以它**没资格给我们新日期** ✗ ——
+ * 但它的回答可以让我们更保守 ✓。
+ */
+describe('疫苗本 · 日期只降级不升级', () => {
+  const reviewWith = (drafts: Record<string, any>[], row: Record<string, any>) => {
+    applyProductReview(
+      drafts,
+      { rows: [{ index: 0, textOnBook: drafts[0].vaccineName, sameAsOurs: true, candidates: [], ...row }] },
+      ['卫佳伍'],
+    );
+    return drafts[0];
+  };
+
+  it('复核说"只写了年月" → 强制改回 01 + 加一句说明', () => {
+    const draft = reviewWith(
+      [{ vaccineName: '卫佳伍', vaccinationDate: '2023-08-09', productName: '卫佳伍' }],
+      { dateOnBook: '2023-08' },
+    );
+
+    expect(draft.vaccinationDate).toBe('2023-08-01');
+    expect(draft.notes).toContain('本子上只写到年月');
+    expect(draft.productReview.dateReview).toBe('monthOnly');
+  });
+
+  it('复核说"没写" → 这一针先不算数（走安全默认值，等顾客核对）', () => {
+    const draft = reviewWith(
+      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-04-20', productName: '卫佳伍' }],
+      { dateOnBook: '没写' },
+    );
+
+    expect(draft.productVerified).toBe(false);
+    expect(draft.productReview.dateReview).toBe('missing');
+    // 日期本身**不改**（不改数据，只是不算数）✓
+    expect(draft.vaccinationDate).toBe('2025-04-20');
+  });
+
+  it('复核给的完整日期和我们不一样 → 也先不算数（不直接改日期）', () => {
+    const draft = reviewWith(
+      [{ vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', productName: '卫佳捌' }],
+      { dateOnBook: '2025-08-20' },
+    );
+
+    expect(draft.vaccinationDate).toBe('2025-08-18');
+    expect(draft.productVerified).toBe(false);
+    expect(draft.productReview.dateReview).toBe('differs');
+  });
+
+  it('日期一致、或复核没回答 → 什么都不动', () => {
+    const same = reviewWith(
+      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-08-18', productName: '卫佳伍' }],
+      { dateOnBook: '2025-08-18' },
+    );
+    expect(same.productVerified).toBeUndefined();
+    expect(same.productReview.dateReview).toBeUndefined();
+
+    const noAnswer = reviewWith(
+      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-08-18', productName: '卫佳伍' }],
+      {},
+    );
+    expect(noAnswer.productReview.dateReview).toBeUndefined();
   });
 });

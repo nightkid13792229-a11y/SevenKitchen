@@ -338,7 +338,11 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
   },
   {
     name: '瑞贝康',
-    aliases: [],
+    // 2026-10-09 老板让去官网核的：勃林格中国官网产品页写的就是
+    // 「瑞贝康（狂犬病灭活疫苗（G52株））」+【进口兽药注册证书号】（2019）外兽药证字71号
+    // —— 和我们库里登记的证号一字不差 ✓，页面引用的英文名就是 Rabisin ✓。
+    // 「瑞比信」官网没有这个写法 ✗（大概是旧译名或医院自己写的），先不加 ✓。
+    aliases: ['rabisin'],
     manufacturer: '勃林格殷格翰（法国厂）',
     brand: '勃林格',
     diseases: ['狂犬病'],

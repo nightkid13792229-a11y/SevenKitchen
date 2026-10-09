@@ -1079,3 +1079,33 @@ describe('安全默认值 · 待核对（2026-10-09）', () => {
     expect(source).toContain('productVerified: draft.productVerified !== false')
   })
 })
+
+/**
+ * 「待核对」按原因给不同的话（2026-10-09 老板实测）
+ *
+ * 老板："02 号和 04 号照片中，我发现模型可能会把疫苗的生产日期或者其他日期
+ *        识别成注射日期。并且 04 号照片中，还会识别出不存在的日期。"
+ * —— 这时候要说"日期可疑" ✓，而不是笼统说"可能把贴纸认成了另一支苗" ✗。
+ */
+describe('待核对 · 按原因说不同的话（2026-10-09）', () => {
+  const section = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('日期可疑（本子上没写 / 与复核不一致）时说日期', () => {
+    const source = section()
+
+    expect(source).toContain("dateReview === 'missing'")
+    expect(source).toContain('本子上好像没写注射日期')
+    expect(source).toContain("dateReview === 'differs'")
+    expect(source).toContain('日期我们和复核读得不一样')
+  })
+
+  it('其它原因照旧说名字（不把所有情况都说成日期）', () => {
+    const source = section()
+
+    expect(source).toContain('可能把贴纸认成了另一支苗')
+  })
+})

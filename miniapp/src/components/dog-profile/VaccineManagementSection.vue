@@ -428,8 +428,7 @@
         <view v-if="draftOf(record, index).productVerified === false" class="verify-block">
           <text class="verify-block__title">这一针先没算进接种计划</text>
           <text class="verify-block__desc">
-            它是识别出来的，我们不敢打包票（可能把贴纸认成了另一支苗）。
-            照疫苗本核对一下名字和日期，对得上就点下面 —— 点完它才算数。
+            {{ verifyReason(draftOf(record, index)) }}
           </text>
           <text class="verify-block__action" @tap.stop="confirmVerified(record, index)">
             我已对照本子核对
@@ -1743,6 +1742,22 @@ let suppressExpandOnSave = false
  * 那样系统会以为"狂犬打过了"、从此不再提醒 ✗。所以默认倒向安全：
  * **没核对过的先不算数** ✓，顾客核完点一下才算 ✓。
  */
+/**
+ * 「待核对」的原因（2026-10-09）：不同原因给不同的话 ——
+ * 日期可疑时说日期 ✓（老板实测：02/04 号本子根本没填注射日期，
+ * 模型却把生产日期填了进去 ✗），别的说名字 ✓。
+ */
+function verifyReason(draft: any): string {
+  const dateReview = draft?.productReview?.dateReview
+  if (dateReview === 'missing') {
+    return '这一针本子上好像没写注射日期（我们可能认成了别的日期）。照本子核一下，对得上就点下面 —— 点完它才算数。'
+  }
+  if (dateReview === 'differs') {
+    return '这一针的日期我们和复核读得不一样（可能本子上有涂改）。照本子核对后点下面 —— 点完它才算数。'
+  }
+  return '它是识别出来的，我们不敢打包票（可能把贴纸认成了另一支苗）。照疫苗本核对一下名字和日期，对得上就点下面 —— 点完它才算数。'
+}
+
 function confirmVerified(record: VaccineRecord, index: number) {
   const draft = draftOf(record, index)
   draft.productVerified = true

@@ -98,6 +98,25 @@ async function dropAttachment(url) {
   }).catch(() => {});
 }
 
+/**
+ * 把各种"年月写法"归一成 YYYY-MM。
+ *
+ * 为什么要有它（2026-10-09 老板问的）：各家表格软件对"2023年8月"的处理不一样，
+ * 填的人不该为了迁就脚本去改自己习惯的写法 ✓。
+ * 认这几种：2023-08 / 2023-8 / 2023/08 / 2023/8 / 2023年8月 / 2023.08
+ * ⚠️ 认不出"Excel 已经偷偷存成 2023-08-01"的情况 ✗ —— 那长得和"真是 8 月 1 号"一样，
+ *    脚本无法分辨（所以填表时别用 Excel，或者那一格加个单引号 ✓）。
+ */
+function normalizeMonthOnly(value) {
+  const text = String(value || '').trim();
+  const match =
+    text.match(/^(\d{4})[-/.年](\d{1,2})月?$/) || null;
+  if (!match) return '';
+  const month = String(Number(match[2])).padStart(2, '0');
+  if (Number(match[2]) < 1 || Number(match[2]) > 12) return '';
+  return `${match[1]}-${month}`;
+}
+
 /** 日期判定：严格 / 只到年月（本子上就只写了年月）/ 我们多编了日子 */
 function judgeDate(got, want) {
   const g = String(got || '').slice(0, 10);
@@ -106,9 +125,14 @@ function judgeDate(got, want) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(w)) {
     return g === w ? '对' : `错（本子上是 ${w}，我们读成 ${g || '空'}）`;
   }
-  if (/^\d{4}-\d{2}$/.test(w)) {
-    if (g.slice(0, 7) !== w) return `错（本子上只有 ${w}，我们读成 ${g || '空'}）`;
-    return g.slice(8, 10) === '01' ? '对（只到年月）' : `⚠️ 编了日子（本子上只写 ${w}，我们补成 ${g}）`;
+  const monthOnly = normalizeMonthOnly(w);
+  if (monthOnly) {
+    if (g.slice(0, 7) !== monthOnly) {
+      return `错（本子上只有 ${monthOnly}，我们读成 ${g || '空'}）`;
+    }
+    return g.slice(8, 10) === '01'
+      ? '对（只到年月）'
+      : `⚠️ 编了日子（本子上只写 ${monthOnly}，我们补成 ${g}）`;
   }
   return `没写清楚（${w}）`;
 }
@@ -129,8 +153,9 @@ function pairExpectedWithDrafts(expected, drafts) {
       const wantDate = String(want.date || '');
       const gotDate = String(draft.vaccinationDate || '').slice(0, 10);
       if (wantDate && gotDate) {
+        const wantMonth = wantDate.length === 10 ? '' : normalizeMonthOnly(wantDate);
         if (wantDate === gotDate) score += 4;
-        else if (wantDate.length === 7 && gotDate.slice(0, 7) === wantDate) score += 2;
+        else if (wantMonth && gotDate.slice(0, 7) === wantMonth) score += 2;
       }
       const wantName = normalizeName(want.name);
       const gotName = normalizeName(draft.vaccineName);

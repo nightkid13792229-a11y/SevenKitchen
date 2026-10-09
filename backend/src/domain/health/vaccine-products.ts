@@ -560,6 +560,100 @@ export function findProductsInName(name: string): VaccineProduct[] {
 }
 
 /**
+ * 品牌一致性检查（2026-10-09 老板定）。
+ *
+ * 为什么需要它：**"同一个模型再审一遍"抓不住"同一个模型看错字"** ✗ ——
+ * 实测（赛文那本真本子，连跑 3 遍）：两遍把贴纸「宠必威锐必威」读成
+ * 「英特威®瑞比克」✗，而复核说"一致"✗（两次错得一模一样，复核只是点头）。
+ *
+ * 但这两遍里有一条**纯代码就能发现**的矛盾 ✓：
+ *   文字里的品牌是「英特威」，而它匹配到的「瑞比克」是**勃林格**的 ✗。
+ * 我们库里本来就登记了每支苗的品牌 —— 拿来对一下就知道对不上 ✓
+ * （零成本、完全确定、可写测试 ✓）。
+ *
+ * 只在"文字里出现了**明确的品牌词**、而我们匹配到的产品**不属于**那个品牌"时报冲突 ✓。
+ * 文字里没有品牌词（本子上只写"狂犬""犬四联"这种）→ 不报 ✓（我们判不了 ✗ 也不该猜 ✗）。
+ */
+export interface BrandConsistencyResult {
+  conflict: boolean;
+  /** 文字里出现的那个品牌词（冲突时才有） */
+  textBrand: string;
+  /** 我们匹配到的产品所属品牌 */
+  productBrand: string;
+}
+
+/**
+ * 会被当成"品牌词"的候选（从产品库的 brand / manufacturer 里自动收集）。
+ *
+ * 排除地理与类别词：它们是描述不是品牌，拿来判冲突会误报 ✗
+ * （例如「西班牙海博莱」里的"西班牙"、"犬四联"里的"犬"）。
+ */
+const BRAND_TOKEN_STOPLIST = new Set([
+  '荷兰', '西班牙', '法国', '美国', '德国', '中国', '英国', '意大利', '国产', '进口',
+  '犬', '猫', '狗', '疫苗', '联苗', '单苗', '灭活', '活苗', '株', '型',
+]);
+
+function tokenizeBrandText(value: string): string[] {
+  return String(value || '')
+    .split(/[^0-9A-Za-z\u4e00-\u9fa5]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !BRAND_TOKEN_STOPLIST.has(token));
+}
+
+/** 每支产品的品牌词（含厂商名里的词），用于判断"文字里出现了哪个品牌" */
+function brandTokensOf(product: { brand?: string; manufacturer?: string }): string[] {
+  return Array.from(
+    new Set([
+      ...tokenizeBrandText(String(product.brand || '')),
+      ...tokenizeBrandText(String(product.manufacturer || '')),
+    ]),
+  );
+}
+
+/** 全库的品牌词（用于从文字里认出"这是哪家的牌子"） */
+function allBrandTokens(): Map<string, string[]> {
+  const byToken = new Map<string, string[]>();
+  for (const product of VACCINE_PRODUCTS) {
+    const brand = String(product.brand || '').trim();
+    if (!brand) continue;
+    for (const token of brandTokensOf(product)) {
+      const list = byToken.get(token) || [];
+      if (!list.includes(brand)) list.push(brand);
+      byToken.set(token, list);
+    }
+  }
+  return byToken;
+}
+
+export function checkBrandConsistency(
+  text: string,
+  productName: string,
+): BrandConsistencyResult {
+  const product = VACCINE_PRODUCTS.find((item) => item.name === productName);
+  if (!product) {
+    return { conflict: false, textBrand: '', productBrand: '' };
+  }
+
+  const productBrand = String(product.brand || '').trim();
+  const allowed = brandTokensOf(product);
+  const normalizedText = normalizeProductText(text);
+
+  for (const [token, brands] of allBrandTokens().entries()) {
+    // 文字里出现了这个品牌词吗（规范化后比对，® 空格这些不影响）
+    if (!normalizedText.includes(normalizeProductText(token))) continue;
+    // 就是我们自己这一家的词 → 不冲突
+    if (allowed.includes(token)) continue;
+    return {
+      conflict: true,
+      textBrand: token,
+      productBrand: productBrand || brands.join('/'),
+    };
+  }
+
+  return { conflict: false, textBrand: '', productBrand };
+}
+
+/**
  * 从一段自由文本里认出**具体是哪一支产品**（2026-10-06）。
  *
  * 为什么需要：疫苗瓶签/本子上写的往往不是库里的规范名 ——

@@ -14,6 +14,7 @@ import {
   applyProductReview,
   buildProductReviewPrompt,
   buildProductReviewRows,
+  normalizeDrafts,
   resolveHealthDocumentFileKind,
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
@@ -1363,3 +1364,21 @@ describe('疫苗本 · 产品名复核', () => {
 })
 });
 
+
+/**
+ * 品牌一致性检查接在识别结果上（2026-10-09）
+ */
+describe('疫苗本 · 品牌对不上的行会带标记', () => {
+  it('「英特威®瑞比克」这种矛盾会挂上 brandCheck.conflict', () => {
+    const drafts = normalizeDrafts('VACCINE_BOOK', {
+      drafts: [
+        { vaccineName: '英特威®瑞比克', vaccinationDate: '2024-08-25' },
+        { vaccineName: '卫佳®Vanguard® Plus 5/CV-L', vaccinationDate: '2025-08-18' },
+      ],
+    });
+
+    expect(drafts[0].brandCheck.conflict).toBe(true);
+    expect(drafts[0].brandCheck.textBrand).toBe('英特威');
+    expect(drafts[1].brandCheck.conflict).toBe(false);
+  });
+});

@@ -62,6 +62,7 @@ import {
 } from '../../domain/health/vaccine-catalog';
 import {
   VACCINE_PRODUCTS,
+  checkBrandConsistency,
   findProductByText,
   normalizeProductText,
   suggestProductsForPartialName,
@@ -884,6 +885,16 @@ export function normalizeDrafts(
           return {
             vaccineName,
             productName: matchedProduct ? matchedProduct.name : '',
+            /**
+             * 品牌一致性检查（2026-10-09 老板定）：
+             * 文字里出现的品牌词，和我们匹配到的产品所属品牌对不上 → 报冲突。
+             * 实测抓到过「英特威®瑞比克」（瑞比克是勃林格的）✗ ——
+             * 这一类错**同一个模型再审也抓不住**（两次错得一模一样），
+             * 但纯代码一眼就能看出来 ✓。
+             */
+            brandCheck: matchedProduct
+              ? checkBrandConsistency(vaccineName, matchedProduct.name)
+              : { conflict: false, textBrand: '', productBrand: '' },
             /**
              * 名字**没读全**时的候选（2026-10-06 老板要求"认不准就诚实说"）。
              *

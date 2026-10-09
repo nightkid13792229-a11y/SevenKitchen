@@ -163,6 +163,15 @@
             </view>
             <!-- 复核（2026-10-09）：模型重新看图后的意见。
                  只在"不一致"时出现 —— 正确的不打扰（避免狼来了）。 -->
+            <!-- 品牌对不上（2026-10-09 纯代码判定，零成本）：最容易被忽略的一类错 ——
+                 「英特威®瑞比克」实测就是这种，模型再审也抓不住，代码一眼看得出来。 -->
+            <view v-if="drafts[index].brandCheck && drafts[index].brandCheck.conflict" class="row__review">
+              <text class="row__review-title">
+                ⚠️ 品牌对不上：文字里写的是「{{ drafts[index].brandCheck.textBrand }}」，
+                而「{{ drafts[index].productName || drafts[index].vaccineName }}」是
+                {{ drafts[index].brandCheck.productBrand }}的 —— 可能读错了，请照本子核一下
+              </text>
+            </view>
             <view v-if="rowReviewCandidates(index).length > 0 || rowReviewText(index)" class="row__review">
               <text class="row__review-title">
                 复核：本子上写的是「{{ rowReviewText(index) || '看不清' }}」
@@ -655,6 +664,13 @@ function rowCare(index: number): { care: boolean; reason: string } {
    * 认为"本子上写的"和我们认定的不是同一支 —— 这是最该让家长核的一类，
    * 排最前面、默认展开。
    */
+  // 品牌和产品对不上（纯代码判定，2026-10-09）：文字里的牌子 ≠ 这支苗的厂家
+  if (draft.brandCheck && draft.brandCheck.conflict === true) {
+    return {
+      care: true,
+      reason: `文字里写的是「${draft.brandCheck.textBrand}」，而这支苗是${draft.brandCheck.productBrand}的，请核对`,
+    }
+  }
   if (draft.productReview && draft.productReview.consistent === false) {
     const read = String(draft.productReview.textOnBook || '').trim()
     return {

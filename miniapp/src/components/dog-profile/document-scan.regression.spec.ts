@@ -891,3 +891,35 @@ describe('识别结果 · 产品名复核意见（2026-10-09）', () => {
     expect(source).toContain('if (!review || review.consistent !== false) return null')
   })
 })
+
+/**
+ * 品牌一致性检查（2026-10-09 老板定）
+ *
+ * 为什么加它：实测"同一个模型再审一遍"抓不住"同一个模型看错字" ✗ ——
+ * 赛文那本连跑 3 遍，两遍把贴纸「宠必威锐必威」读成「英特威®瑞比克」✗，
+ * 复核还说"一致"✗（两次错得一模一样）。
+ * 但「瑞比克是勃林格的、文字里却写着英特威」这条矛盾，
+ * **纯代码一眼看得出来** ✓（我们库里登记了每支苗的品牌）。
+ */
+describe('识别结果 · 品牌对不上要提醒（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('品牌对不上的行：排最前面 + 默认展开 + 说清哪家对哪家', () => {
+    const source = scan()
+
+    expect(source).toContain('draft.brandCheck.conflict === true')
+    expect(source).toContain('而这支苗是${draft.brandCheck.productBrand}的，请核对')
+    expect(source).toContain('品牌对不上：文字里写的是')
+  })
+
+  it('判定在后端、界面只负责显示（前端不复制一份品牌表）', () => {
+    const source = scan()
+
+    expect(source).toContain('drafts[index].brandCheck.conflict')
+    expect(source).not.toContain('勃林格')
+  })
+})

@@ -64,6 +64,7 @@ import {
   VACCINE_PRODUCTS,
   checkBrandConsistency,
   findProductByText,
+  findProductsInName,
   normalizeProductText,
   suggestProductsForPartialName,
 } from '../../domain/health/vaccine-products';
@@ -829,29 +830,65 @@ export function applyProductReview(
     const ourTextKey = normalizeProductText(String(draft.vaccineName || ''));
     const readKey = normalizeProductText(textOnBook);
     const readDiffers = readKey.length > 0 && readKey !== ourTextKey;
-    const consistent = !(
-      row?.sameAsOurs === false &&
-      (Boolean(ourProduct) || readDiffers)
-    );
+    /*
+     * 判定口径（2026-10-09 第二次收窄，实测定的）：
+     * **只有"复核读到的字和我们抄的不一样"才算不一致** ✓。
+     *
+     * 为什么不再看 sameAsOurs：
+     *   · 我们没匹配上 + 它读到一样的字 → 那是"库里没有这支苗"，界面另有提示 ✗
+     *   · 我们匹配上了 + 它读到一样的字却"觉得不是" → 它不知道我们"最具体优先"的规则
+     *     （带 CV-L 就是卫佳捌），实测第 3 遍就因此误报了 3 行 ✗
+     *   · 而它读到**不一样**的字 → 这才是复核真正有价值的信息 ✓
+     *     （例如贴纸是「宠必威锐必威」，它第二次读成了「宠必威锐必威」而不是我们抄的
+     *      「英特威®优免康」→ 说明第一次读错了 ✓）
+     */
+    let inconsistentNow =
+      readDiffers && (row?.sameAsOurs === false || Boolean(ourProduct));
 
-    // 一致的就不留候选（界面也不显示；不存更干净）
+    /*
+     * 候选先过一遍库：模型编的名字丢掉、去重、排除我们自己认定的那一支，
+     * 最多留 3 个（后面判定与显示都用这份）。
+     */
     const candidates: string[] = [];
-    if (!consistent) {
-      for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
+    for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
       const key = normalizeProductText(String(raw || ''));
       const official = libraryByKey.get(key);
-      if (!official) continue; // 库里没有的名字一律丢掉（不许编）
+      if (!official) continue; // 库里没有的名字一律不许进界面
       if (official === ourProduct) continue; // 和我们认定的一样就不必当候选
-        if (candidates.includes(official)) continue;
-        candidates.push(official);
-        if (candidates.length >= 3) break;
+      if (candidates.includes(official)) continue;
+      candidates.push(official);
+      if (candidates.length >= 3) break;
+    }
+
+    /*
+     * ⚠️ 再收一层误报（2026-10-09 实测）：复核给的候选如果**全是"同一段文字的
+     * 另一种读法"**，那我们按"最具体"定的那一支仍然是对的 ✓。
+     *
+     * 实测第 3 遍：我们按名字把「卫佳®Vanguard® Plus 5/CV-L」定成**卫佳捌**
+     * （带 CV-L 就是捌，这是产品库的规则、也有测试钉着），
+     * 复核却给了"卫佳伍 / 卫佳细"并说不是同一支 ✗ —— 而这两支正是
+     * **同一段文字更粗略的读法**（库里卫佳伍的别名就是 vanguard plus 5）✗。
+     * 这种情况报错只会制造狼来了 ✓。
+     */
+    if (inconsistentNow && ourProduct && candidates.length > 0) {
+      const alternatives = new Set(
+        findProductsInName(String(draft.vaccineName || '')).map(
+          (product) => product.name,
+        ),
+      );
+      const meaningful = candidates.filter((name) => !alternatives.has(name));
+      if (meaningful.length === 0) {
+        inconsistentNow = false;
       }
     }
+
+    const consistent = !inconsistentNow;
+    const shownCandidates = consistent ? [] : candidates;
 
     draft.productReview = {
       textOnBook,
       consistent,
-      candidates,
+      candidates: shownCandidates,
     };
     reviewed += 1;
     if (!consistent) inconsistent += 1;

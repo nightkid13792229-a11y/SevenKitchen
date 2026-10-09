@@ -1282,7 +1282,7 @@ describe('疫苗本 · 产品名复核', () => {
 
   it('候选去重、也要排除掉我们自己认定的那一支，最多 3 个', () => {
     const drafts: Record<string, any>[] = [
-      { vaccineName: 'X', productName: '卫佳捌' },
+      { vaccineName: '英特威®优免康', productName: '卫佳捌' },
     ];
 
     applyProductReview(
@@ -1291,7 +1291,7 @@ describe('疫苗本 · 产品名复核', () => {
         rows: [
           {
             index: 0,
-            textOnBook: 'X',
+            textOnBook: '宠必威锐必威',
             sameAsOurs: false,
             candidates: ['卫佳捌', '卫佳伍', '卫佳伍', '瑞比克', '宠必威优免康', '优乐康'],
           },
@@ -1380,5 +1380,64 @@ describe('疫苗本 · 品牌对不上的行会带标记', () => {
     expect(drafts[0].brandCheck.conflict).toBe(true);
     expect(drafts[0].brandCheck.textBrand).toBe('英特威');
     expect(drafts[1].brandCheck.conflict).toBe(false);
+  });
+});
+
+/**
+ * 误报收窄第二层（2026-10-09 实测）
+ *
+ * 实测第 3 遍：我们按名字把「卫佳®Vanguard® Plus 5/CV-L」定成**卫佳捌**
+ * （带 CV-L 就是捌，产品库规则 + 有测试钉着），
+ * 复核却给了"卫佳伍 / 卫佳细"并说不是同一支 ✗ ——
+ * 而这两支正是**同一段文字更粗略的读法**（库里卫佳伍的别名就是 vanguard plus 5）。
+ * 这种情况报错只会制造狼来了 ✓。
+ */
+describe('疫苗本 · 复核误报收窄（同一段文字的更粗略读法）', () => {
+  it('候选全是这段文字的另一种读法 → 不报警（我们按"最具体"定的那支是对的）', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '卫佳®Vanguard® Plus 5/CV-L', productName: '卫佳捌' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: '卫佳®Vanguard® Plus 5/CV-L',
+            sameAsOurs: false,
+            candidates: ['卫佳伍', '卫佳细'],
+          },
+        ],
+      },
+      ['卫佳捌', '卫佳伍', '卫佳细'],
+    );
+
+    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
+    expect(drafts[0].productReview.candidates).toEqual([]);
+  });
+
+  it('候选里有"这段文字读不出来的另一支" → 仍然报警（那才是真读错了）', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '英特威®优免康', productName: '宠必威优免康' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: '宠必威锐必威',
+            sameAsOurs: false,
+            candidates: ['宠必威锐必威'],
+          },
+        ],
+      },
+      ['宠必威优免康', '宠必威锐必威'],
+    );
+
+    expect(result.inconsistent).toBe(1);
+    expect(drafts[0].productReview.candidates).toEqual(['宠必威锐必威']);
   });
 });

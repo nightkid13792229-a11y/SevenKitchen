@@ -113,7 +113,14 @@
          先被擦掉、再长回来。老板看到的就是"屏幕闪烁了一下"。
          刷新是后台动作，不该动已经显示出来的东西。 -->
 
-      <view v-if="loading && records.length === 0" class="records-card__empty">
+      <!-- 加载失败（2026-10-10）：常驻 + 能重试 —— 别让"没加载出来"看起来像"没有记录" ✗ -->
+      <view v-if="loadError && records.length === 0" class="records-card__empty">
+        <text class="records-card__empty-title">接种记录没加载出来</text>
+        <text class="records-card__empty-text">{{ loadError }}</text>
+        <text class="records-card__retry" @tap="loadRecords()">重新加载</text>
+      </view>
+
+      <view v-else-if="loading && records.length === 0" class="records-card__empty">
         <text class="records-card__empty-text">疫苗记录加载中</text>
       </view>
 
@@ -1122,6 +1129,14 @@ const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
 const drafts = reactive<Record<string, VaccineDraft>>({})
 const loading = ref(false)
+/**
+ * 记录**没加载出来**时留一句看得见的话（2026-10-10 老板报"计划下方没有任何记录"）。
+ *
+ * 原来失败只弹一句会自己消失的 toast ✗ —— 老板压根没看到 ✓，
+ * 界面上就只剩一张空卡（"计划下方什么都没有"）✗，看着像"本来就没有记录" ✓。
+ * 现在失败会常驻一行 + 一个「重新加载」✓，至少让人知道是**没加载出来**不是**没有** ✓。
+ */
+const loadError = ref('')
 const expandedIndex = ref(-1)
 const savingIndex = ref(-1)
 const deletingKey = ref('')
@@ -1491,6 +1506,7 @@ async function loadRecords(dogId = props.dogId) {
   }
 
   loading.value = true
+  loadError.value = ''
 
   try {
     const res: any = await dogApi.healthRecords.vaccine.list(dogId)
@@ -1544,6 +1560,11 @@ async function loadRecords(dogId = props.dogId) {
     notifyRecordsChanged()
   } catch (error: any) {
     records.value = []
+    /*
+     * 常驻一句失败说明（2026-10-10）：toast 会消失 ✗，顾客看不到就以为"没有记录" ✗。
+     * 文案要能行动：说清是"没加载出来"，并给一个能点的重试 ✓。
+     */
+    loadError.value = String(error?.message || '接种记录没加载出来')
     ensureDrafts()
     // 拉失败也要通知一声（2026-10-06）：否则计划板块还停在上一次的结果上。
     // 具体场景：把记录删空之后这一拉失败，计划和提醒会一直挂着旧的，
@@ -2731,6 +2752,17 @@ async function doRemove(record: VaccineRecord) {
   border-radius: 999rpx;
   background: #0f7b49;
   color: #ffffff;
+  font-size: 26rpx;
+}
+
+/* 记录加载失败（2026-10-10）：常驻提示 + 重试 */
+.records-card__retry {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 10rpx 26rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #0f7b49;
+  color: #0f7b49;
   font-size: 26rpx;
 }
 </style>

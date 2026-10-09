@@ -550,7 +550,9 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
 
     // 每次自动保存（点分类、点确认、改日期）都会整表重载，
     // 而占位原来是 `v-if="loading"` —— 整个列表先消失再长回来。
-    expect(source).toContain('v-if="loading && records.length === 0"')
+    // 2026-10-10：加载失败提示插到了骨架前面，这里跟着变成 v-else-if ——
+    // 守的还是同一件事：**后台刷新不许把已经显示出来的记录擦掉** ✓
+    expect(source).toContain('v-else-if="loading && records.length === 0"')
     expect(source).not.toContain('<view v-if="loading" class="health-section__empty">')
   })
 })
@@ -1107,5 +1109,38 @@ describe('待核对 · 按原因说不同的话（2026-10-09）', () => {
     const source = section()
 
     expect(source).toContain('可能把贴纸认成了另一支苗')
+  })
+})
+
+/**
+ * 记录"没加载出来"必须看得见（2026-10-10 老板报的）
+ *
+ * 老板截图："计划下方没有任何的记录。" —— 接口其实有 3 条 ✓，
+ * 而失败时只弹了一句会消失的 toast ✗，界面上就剩一张空卡 ✗，
+ * 看起来和"本来就没有记录"一模一样 ✗。
+ */
+describe('接种记录 · 加载失败要看得见（2026-10-10）', () => {
+  const section = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('失败时留一句常驻的话 + 一个能点的重试（不是一闪而过的 toast）', () => {
+    const source = section()
+
+    expect(source).toContain("const loadError = ref('')")
+    expect(source).toContain('接种记录没加载出来')
+    expect(source).toContain('@tap="loadRecords()"')
+    expect(source).toContain('loadError.value = String(error?.message')
+  })
+
+  it('失败提示排在"空态"前面（别让失败长得像没有记录）', () => {
+    const source = section()
+
+    const failIndex = source.indexOf('v-if="loadError && records.length === 0"')
+    const emptyIndex = source.indexOf('v-else-if="records.length === 0"')
+    expect(failIndex).toBeGreaterThan(0)
+    expect(emptyIndex).toBeGreaterThan(failIndex)
   })
 })

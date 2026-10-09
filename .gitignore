@@ -57,3 +57,6 @@ miniapp/verify-*.js
 # 新增原料半自动流程的工作产物（草稿/匹配中间文件不入库）
 .standard-ingredient-import/*.match.json
 .standard-ingredient-import/*.draft.json
+
+# 评测集（含真实疫苗本照片，绝不提交）
+.eval-data/

@@ -212,7 +212,15 @@ function judgeName(got, want) {
   const w = normalizeName(want);
   if (!w) return '没写答案';
   if (g === w) return '对';
-  if (g && (g.includes(w) || w.includes(g))) return `部分对（本子上「${want}」→ 我们「${got}」）`;
+  /*
+   * ⚠️ 三级判定（2026-10-09 实测校准）：
+   * 原来把"读得更全"也判成错 ✗ —— 例如本子上只写「卫佳®伍」，
+   * 模型读成「卫佳®伍 犬瘟热、腺病毒2型、副流感、细小病毒病四联活疫苗」，
+   * 那是**更忠实**（把标签上的全名也抄了）✓，不是错 ✗。
+   * 现在：读全了（包含答案）= 对 ✓；读漏了（被答案包含）= 部分对 ✓。
+   */
+  if (g && g.includes(w)) return '对（读全了）';
+  if (g && w.includes(g)) return `部分对（读漏了：本子上「${want}」→ 我们「${got}」）`;
   return `错（本子上「${want}」→ 我们「${got || '空'}」）`;
 }
 
@@ -354,7 +362,7 @@ async function main() {
         const brandAlarm = draft.brandCheck && draft.brandCheck.conflict === true;
 
         summary.rows += 1;
-        if (nameJudge === '对') summary.nameExact += 1;
+        if (nameJudge === '对' || nameJudge === '对（读全了）') summary.nameExact += 1;
         else if (nameJudge.startsWith('部分对')) summary.nameLoose += 1;
         else if (want.name) summary.nameWrong += 1;
         if (dateJudge.startsWith('🔴 多写了日期')) summary.dateAdded += 1;

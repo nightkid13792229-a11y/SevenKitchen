@@ -49,7 +49,14 @@ function parseLabels(text) {
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('文件名')) continue;
     const parts = trimmed.split(',').map((item) => item.trim().replace(/^"|"$/g, ''));
     if (parts.length < 3 || !parts[0]) continue;
-    rows.push({ file: parts[0], name: parts[1], date: parts[2] });
+    // `?` = 这一行看不清/说不清 → 跳过判定（不算错 ✓）
+    const skipName = parts[1] === '?' || parts[1] === '' || parts[1] === '-';
+    const skipDate = parts[2] === '?' || parts[2] === '' || parts[2] === '-';
+    rows.push({
+      file: parts[0],
+      name: skipName ? '' : parts[1],
+      date: skipDate ? '' : parts[2],
+    });
   }
   return rows;
 }
@@ -106,6 +113,46 @@ function judgeDate(got, want) {
   return `没写清楚（${w}）`;
 }
 
+/**
+ * 给每条答案配一行识别结果（顺序无关）。
+ *
+ * 打分：日期完全对上 +4 / 只到年月对上 +2；名字归一化相等 +3 / 一方包含另一方 +2。
+ * 贪心取最高分，取过的不再复用 ✓。
+ */
+function pairExpectedWithDrafts(expected, drafts) {
+  const pairing = new Map();
+  const used = new Set();
+  const scored = [];
+  expected.forEach((want, wantIndex) => {
+    drafts.forEach((draft, draftIndex) => {
+      let score = 0;
+      const wantDate = String(want.date || '');
+      const gotDate = String(draft.vaccinationDate || '').slice(0, 10);
+      if (wantDate && gotDate) {
+        if (wantDate === gotDate) score += 4;
+        else if (wantDate.length === 7 && gotDate.slice(0, 7) === wantDate) score += 2;
+      }
+      const wantName = normalizeName(want.name);
+      const gotName = normalizeName(draft.vaccineName);
+      if (wantName && gotName) {
+        if (wantName === gotName) score += 3;
+        else if (wantName.includes(gotName) || gotName.includes(wantName)) score += 2;
+      }
+      scored.push({ wantIndex, draftIndex, score });
+    });
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const doneWant = new Set();
+  for (const item of scored) {
+    if (item.score <= 0) continue;
+    if (doneWant.has(item.wantIndex) || used.has(item.draftIndex)) continue;
+    pairing.set(item.draftIndex, expected[item.wantIndex]);
+    doneWant.add(item.wantIndex);
+    used.add(item.draftIndex);
+  }
+  return pairing;
+}
+
 /** 名字判定：严格（归一化后相等）/ 宽松（一方包含另一方）/ 错 */
 function judgeName(got, want) {
   const g = normalizeName(got);
@@ -158,11 +205,18 @@ async function main() {
       url = await uploadPhoto(path.join(photosDir, file), file);
       const data = await extract(url, file);
       const drafts = Array.isArray(data.drafts) ? data.drafts : [];
+
+      /*
+       * ⚠️ 答案**不要求顺序一致**（2026-10-09 老板问"怎么填"之后改的）：
+       * 按"日期 + 名字"给每一条答案配一行识别结果 —— 填的人不必操心顺序 ✓
+       * （原来按下标死配，本子上写串了顺序就会全判成错 ✗）。
+       */
+      const pairing = pairExpectedWithDrafts(expected, drafts);
       summary.photos += 1;
       console.log(` 识别 ${drafts.length} 行${expected.length ? `（答案 ${expected.length} 条）` : '（⚠️ 这张没有标准答案）'}`);
 
       drafts.forEach((draft, index) => {
-        const want = expected[index] || {};
+        const want = pairing.get(index) || {};
         const nameJudge = judgeName(draft.vaccineName, want.name);
         const dateJudge = judgeDate(draft.vaccinationDate, want.date);
         const matched = String(draft.productName || '').trim();

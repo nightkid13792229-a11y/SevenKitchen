@@ -785,3 +785,47 @@ describe('健康管理 · 疫苗书签红点（2026-10-04 角标 → 2026-10-06 
     expect(labelBlock).not.toContain('color:')
   })
 })
+
+/**
+ * 狗狗名字过长会压到右侧信息上（老板 2026-10-09 报的 bug）
+ *
+ * 复现（浏览器里按同样的 CSS 量过）：名字右边界 332px、右侧信息左边界 169px ——
+ * 直接盖上去 ✗。根因不是"没写省略号"（写了），而是**两处约束缺失**：
+ *   ① 名字那一块在 flex 行里没有可收缩的约束（只写了 min-width: 0）；
+ *   ② 名字那一行是 align-items: flex-start —— 标题按**内容宽度**排，
+ *      不给上限就永远不会触发省略号。
+ */
+describe('狗狗名字过长不许压住右侧信息（2026-10-09）', () => {
+  const readPage = (file: string) =>
+    readFileSync(resolve(process.cwd(), file), 'utf-8')
+
+  it('健康管理页：名字块可收缩 + 标题有宽度上限', () => {
+    const page = readPage('src/pages/dog-profile-health/index.vue')
+    const block = page.slice(
+      page.indexOf('.hero-card__name-block {'),
+      page.indexOf('.hero-card__title {'),
+    )
+
+    expect(block).toContain('flex: 1;')
+    expect(block).toContain('min-width: 0;')
+    expect(block).toContain('overflow: hidden;')
+
+    const title = page.slice(
+      page.indexOf('.hero-card__title {'),
+      page.indexOf('.hero-card__title {') + 400,
+    )
+    expect(title).toContain('max-width: 100%;')
+    expect(title).toContain('text-overflow: ellipsis;')
+  })
+
+  it('定制食谱页有同一个头部，一起修（不然那边还会犯）', () => {
+    const page = readPage('src/pages/custom-recipe/index.vue')
+    const block = page.slice(
+      page.indexOf('.hero-card__name-block {'),
+      page.indexOf('.hero-card__title {'),
+    )
+
+    expect(block).toContain('flex: 1;')
+    expect(block).toContain('overflow: hidden;')
+  })
+})

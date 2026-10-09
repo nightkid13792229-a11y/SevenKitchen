@@ -1413,11 +1413,22 @@ function goToDogCreate() {
 }
 
 .hero-card__name-block {
+  /*
+   * ⚠️ 只写 min-width: 0 不够（2026-10-09 老板报的 bug：名字太长会压到右侧信息上）。
+   * 原因：这一块在 flex 行里没有"可收缩"的约束，它按**内容宽度**撑开 ✗，
+   * 于是里面的名字不会触发省略号，直接盖到右边的年龄/性别/品种/体重上。
+   * 三件事一起做才有效：flex: 1（占满可用宽度）+ min-width: 0（允许收缩）+ overflow: hidden。
+   */
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .hero-card__title {
   display: block;
+  /* 省略号真正生效的关键：这一行的 align-items 是 flex-start，
+     标题按内容宽度排 —— 不封顶就不会收缩（2026-10-09 修）*/
+  max-width: 100%;
   font-size: 42rpx;
   font-weight: 800;
   /* 名字过长时省略，不要把右边的信息挤没了 */

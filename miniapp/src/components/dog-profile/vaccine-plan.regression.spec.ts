@@ -400,7 +400,8 @@ describe('疫苗计划 · 跟着记录实时刷新（2026-10-06）', () => {
       section.indexOf('} finally {', loadAt),
     )
     expect(catchBlock).toContain('notifyRecordsChanged()')
-    expect(catchBlock).toContain('加载疫苗记录失败')
+    // 文案 2026-10-08 审计第 6 块改成"能行动的话"（原来只有"加载疫苗记录失败"）
+    expect(catchBlock).toContain('接种记录没加载出来，下拉刷新一下试试')
   })
 
   it('"一条记录都没有"由后端按记录条数算，前端只负责照做', () => {

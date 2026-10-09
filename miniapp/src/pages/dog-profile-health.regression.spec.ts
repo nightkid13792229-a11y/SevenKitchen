@@ -548,14 +548,14 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain('uni.showActionSheet({')
     // 2026-10-08 老板："就诊报告、体检报告、过敏检测报告，有可能是 PDF 或者是
     // Word 文档，可能需要支持进入微信、选择文档上传。" → 菜单里多一项
-    expect(page).toContain("['上传图片，AI 识别', '选 PDF / Word 文档', '手动填写']")
+    expect(page).toContain("['上传图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动填写']")
     // 2026-10-04 老板："它其实进入的是相册，所以文案上应该要改一下。
     // 我们不需要调起相机功能实拍，只需要上传图片即可。"
     // 查过 pickAndScan 用的就是 sourceType: ['album'] —— 确实只开相册，
     // 所以文案不能写"拍"。疫苗这条跟着就诊/体检统一成"上传…图片"。
     // （2026-10-08 又加了一行"选 PDF / Word 文档" —— 那是从微信聊天里选文件，
     //   仍然不调相机 ✓）
-    expect(page).toContain("['上传疫苗本图片，AI 识别', '选 PDF / Word 文档', '手动加一条']")
+    expect(page).toContain("['上传疫苗本图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动加一条']")
     expect(page).not.toContain('拍疫苗本')
     expect(page).not.toContain('拍照')
     // 过敏已不在这个页面

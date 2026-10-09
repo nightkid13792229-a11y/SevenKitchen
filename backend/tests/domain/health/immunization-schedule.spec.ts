@@ -2473,3 +2473,48 @@ describe('钩端 · 隔太久要重新两针 + 同一支产品（2026-10-07）',
     expect(pending.every((step) => !step.label.includes('第 3 次'))).toBe(true)
   })
 })
+
+/**
+ * 依据文案（2026-10-08 老板审计第 6 块）
+ *
+ * 老板指出：「幼犬首免应在 8 周龄后」这句不严谨 ——
+ * 早期犬瘟/细小苗 4 周龄就能打、常规核心疫苗 6 周龄起就能打，
+ * 这句话读起来像是"所有幼犬首免都从 8 周龄开始"✗。
+ * 8 周这个数字本身没错，它来自**钩端这一支苗**的说明书，
+ * 所以要**把范围写清楚**，并和核心/狂犬的起始月龄放在一起对照。
+ *
+ * 另外：卡片上只显示**一句话**（basisSummary），后面用「为什么这么建议？」展开全文。
+ */
+describe('依据文案 · 说明白"是谁的月龄"（2026-10-08）', () => {
+  const plan = buildVaccinePlan({
+    dogId: 'dog-1',
+    birthday: '2023-02-16',
+    records: [],
+    today: new Date('2026-10-08T00:00:00'),
+  })
+
+  it('钩端那一步的依据：明确说 8 周龄是"钩端这一类"的，并给出核心/狂犬的对照', () => {
+    const lepto = plan.steps.find((step) => step.kind === 'lepto')
+
+    expect(lepto).toBeDefined()
+    expect(lepto!.basis).toContain('钩端这一类')
+    expect(lepto!.basis).toContain('8 周龄起 2 针')
+    // 核心疫苗的对照（4 周龄抢跑苗 / 6~8 周龄起）
+    expect(lepto!.basis).toContain('4 周龄')
+    expect(lepto!.basis).toContain('6~8 周龄起')
+    // 狂犬也一起说清
+    expect(lepto!.basis).toContain('狂犬默认 12 周龄起')
+    // 不许再出现"幼犬首免应在 8 周龄后"这种会被套用到所有疫苗的写法
+    expect(lepto!.basis).not.toContain('幼犬首免应在 8 周龄后')
+  })
+
+  it('每一步都有一句话版的依据，而且不长', () => {
+    for (const step of plan.steps) {
+      expect(step.basisSummary.length).toBeGreaterThan(0)
+      expect(step.basisSummary.length).toBeLessThanOrEqual(82)
+    }
+    // 一句话版就是完整依据的第一句
+    const lepto = plan.steps.find((step) => step.kind === 'lepto')!
+    expect(lepto.basis.startsWith(lepto.basisSummary)).toBe(true)
+  })
+})

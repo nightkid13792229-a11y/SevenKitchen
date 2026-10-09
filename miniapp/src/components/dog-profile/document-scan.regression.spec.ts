@@ -639,7 +639,7 @@ describe('选文档上传（PDF / Word，2026-10-08）', () => {
 
     expect(vaccine).toContain('startDocumentScan')
     expect(records).toContain('function startDocumentScan()')
-    expect(page).toContain("'选 PDF / Word 文档'")
+    expect(page).toContain("'选 PDF / Word 文档（先发到微信里）'")
     expect(page).toContain('startDocumentScan?.()')
   })
 })

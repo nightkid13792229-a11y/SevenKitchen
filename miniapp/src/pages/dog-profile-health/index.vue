@@ -1191,8 +1191,8 @@ function onAddRecordTap() {
    * 微信只能从**聊天记录**里选文件，所以入口放在这里，并说明怎么用。
    */
   const options = isRecord
-    ? ['上传图片，AI 识别', '选 PDF / Word 文档', '手动填写']
-    : ['上传疫苗本图片，AI 识别', '选 PDF / Word 文档', '手动加一条']
+    ? ['上传图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动填写']
+    : ['上传疫苗本图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动加一条']
 
   uni.showActionSheet({
     itemList: options,

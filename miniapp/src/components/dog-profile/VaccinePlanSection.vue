@@ -75,7 +75,19 @@
             </view>
             <view class="kv">
               <text class="kv__label">依据</text>
-              <text class="kv__value">{{ nextStep.basis }}</text>
+              <view class="kv__value">
+                <text class="basis__summary">{{ basisSummaryOf(nextStep) }}</text>
+                <!-- 一段读不完的依据家长只会看第一句（老板 2026-10-08 审计第 6 块）：
+                     卡片上只留一句，想深究的（或给兽医看的）点开才是全文。 -->
+                <text
+                  v-if="hasMoreBasis(nextStep)"
+                  class="basis__more"
+                  @tap.stop="toggleBasis(nextStep.key)"
+                >{{ isBasisOpen(nextStep.key) ? '收起' : '为什么这么建议？' }}</text>
+                <text v-if="hasMoreBasis(nextStep) && isBasisOpen(nextStep.key)" class="basis__full">
+                  {{ nextStep.basis }}
+                </text>
+              </view>
             </view>
             <!-- 「这一针别和别的针同一天打」—— 老板 2026-10-05 亲口要的安全提醒（spacing-note__text）。
                  2026-10-06 的字段清单里没有它，但它是"两针别同一天打"这条安全提醒，
@@ -119,7 +131,17 @@
               </view>
               <view class="kv">
                 <text class="kv__label">依据</text>
-                <text class="kv__value">{{ step.basis }}</text>
+                <view class="kv__value">
+                  <text class="basis__summary">{{ basisSummaryOf(step) }}</text>
+                  <text
+                    v-if="hasMoreBasis(step)"
+                    class="basis__more"
+                    @tap.stop="toggleBasis(step.key)"
+                  >{{ isBasisOpen(step.key) ? '收起' : '为什么这么建议？' }}</text>
+                  <text v-if="hasMoreBasis(step) && isBasisOpen(step.key)" class="basis__full">
+                    {{ step.basis }}
+                  </text>
+                </view>
               </view>
 
               <!-- 已完成的步骤不再给动作按钮（2026-10-06 老板："已完成状态的疫苗，
@@ -160,7 +182,7 @@
     </template>
 
     <view v-else-if="loadError" class="health-card">
-      <text class="plan-locked__title">疫苗计划加载失败</text>
+      <text class="plan-locked__title">接种计划没加载出来，下拉刷新一下试试</text>
       <text class="plan-locked__desc">{{ loadError }}</text>
     </view>
   </view>
@@ -212,6 +234,8 @@ interface PlanStep {
    */
   noEvidence?: boolean
   basis: string
+  /** 一句话版依据（后端下发；老后端没有就退回全文） */
+  basisSummary?: string
   reminder: string
   /**
    * 这一步常见的产品（2026-10-04 兽医审核通过）。
@@ -305,6 +329,34 @@ interface PlanPending {
 }
 
 const loaded = ref(false)
+
+/*
+ * 依据的"一句话 + 展开全文"（2026-10-08 老板审计第 6 块）。
+ * 摘要由后端下发（每一步都有），拿不到就退回全文（老后端兼容）。
+ */
+const openedBasisKeys = ref<Record<string, boolean>>({})
+
+function basisSummaryOf(step: { key: string; basis: string; basisSummary?: string }): string {
+  return String(step?.basisSummary || step?.basis || '')
+}
+
+function hasMoreBasis(step: { basis: string; basisSummary?: string }): boolean {
+  const summary = String(step?.basisSummary || '')
+  return Boolean(summary) && String(step?.basis || '') !== summary
+}
+
+function isBasisOpen(key: string): boolean {
+  return Boolean(openedBasisKeys.value[String(key || '')])
+}
+
+function toggleBasis(key: string) {
+  const id = String(key || '')
+  if (!id) return
+  const next = { ...openedBasisKeys.value }
+  if (next[id]) delete next[id]
+  else next[id] = true
+  openedBasisKeys.value = next
+}
 
 /*
  * 「下一针」变了就轻轻闪一下（2026-10-08 老板审计第 4 块）。
@@ -1105,5 +1157,25 @@ defineExpose({ reload: () => load() })
   0% { background-color: transparent; }
   50% { background-color: #eef8f2; }
   100% { background-color: transparent; }
+}
+
+/* 依据：一句话 + 「为什么这么建议？」展开（2026-10-08） */
+.basis__summary {
+  display: block;
+  font-size: 24rpx;
+  color: #333333;
+}
+.basis__more {
+  display: inline-block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #0f7b49;
+}
+.basis__full {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #7a7a7a;
+  line-height: 1.6;
 }
 </style>

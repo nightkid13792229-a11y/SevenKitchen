@@ -135,6 +135,14 @@ export interface VaccinePlanStep {
    */
   statusLabel: string;
   /**
+   * **一句话版**的依据（2026-10-08）。
+   *
+   * 老板（审计第 6 块）："一段读不完的依据，家长只会看第一句" ——
+   * 卡片上就显示这一句，后面接「为什么这么建议？」点开才是完整那段。
+   * 取的是 basis 的第一句（各条 basis 都写成"先说做什么、再说为什么"）。
+   */
+  basisSummary: string;
+  /**
    * 顾客点过"推迟"（2026-10-07 老板定：**保留这一步，但标一句"你已推迟"**）。
    *
    * 推迟不是"不做" —— 该打还是要打，只是顾客想晚点安排。
@@ -392,10 +400,22 @@ export const NON_CORE_SCHEDULES = {
     /** 说明书：以后每年 1 次 */
     repeatYears: 1,
     maxRepeats: 12,
+    /*
+     * ⚠️ 原来的写法是「说明书：**幼犬首免**应在 8 周龄后」—— 老板 2026-10-08
+     * 指出这句话不严谨：读起来像是"所有幼犬首免都从 8 周龄开始" ✗，
+     * 而实际上早期犬瘟/细小苗**4 周龄**就能打、常规核心疫苗**6 周龄**起就能打。
+     *
+     * 8 周这个数字本身没错 —— 它来自**宠必威乐必妥（钩端单苗）**的说明书，
+     * 是**钩端这一类**的起始月龄。所以现在把范围写清楚，并把三类放在一起对照，
+     * 免得家长拿一句去套所有疫苗。
+     */
     basis:
+      '钩端这一类：8 周龄起 2 针（间隔 2~4 周），之后每年 1 次。' +
       '中国大陆属钩端螺旋体常见地区；WSAVA 2024 对高风险地区（接触积水、' +
-      '牲畜或鼠类）强烈建议接种。宠必威乐必妥（犬钩端螺旋体病二价灭活疫苗）' +
-      '说明书：幼犬首免应在 8 周龄后，间隔 2~4 周第二次，以后每年 1 次。' +
+      '牲畜或鼠类）强烈建议接种。' +
+      '8 周龄是「钩端这一类」的起始月龄（依宠必威乐必妥即钩端单苗的说明书）——' +
+      '核心疫苗不一样：最早 4 周龄有抢跑苗（犬瘟+细小），常规首免 6~8 周龄起；' +
+      '狂犬默认 12 周龄起，以所用疫苗说明书与当地规定为准。' +
       '是否接种、何时接种，请以执业兽医的意见为准。',
   },
 } as const;
@@ -1141,6 +1161,28 @@ function resolveStatusLabel(
 }
 
 /**
+ * 把完整依据收成**一句话**（2026-10-08）。
+ *
+ * 规则：取第一个句号之前的部分；如果这一句还是太长（>80 字），
+ * 退而取第一个分号之前 —— 总之卡片上那一行要能一眼看完。
+ */
+function summarizeBasis(basis: string): string {
+  const text = String(basis || '').trim();
+  if (!text) return '';
+
+  const firstSentence = text.split('。')[0];
+  const withPeriod = text.includes('。') ? `${firstSentence}。` : firstSentence;
+  if (withPeriod.length <= 80) {
+    return withPeriod;
+  }
+
+  const firstClause = text.split('；')[0];
+  return firstClause.length < withPeriod.length
+    ? `${firstClause}。`
+    : `${withPeriod.slice(0, 78)}…`;
+}
+
+/**
  * 顾客点过"推迟"时，在说法后面标一句（2026-10-07 老板定）。
  *
  * 推迟 ≠ 不做：该打还是要打，只是顾客想晚点安排。所以状态和窗口都不动，
@@ -1496,7 +1538,7 @@ export function buildVaccinePlan(
         const restartBasis =
           `WSAVA 2024 FAQ：上一针钩端已经过去 ` +
           `${Math.max(18, Math.round((today.getTime() - lastLeptoDose.getTime()) / (30 * DAY_MS)))} 个月，` +
-          '基于谨慎原则建议**重新打两针**（间隔 2~4 周），之后恢复每年一次。' +
+          '基于谨慎原则建议重新打两针（间隔 2~4 周），之后恢复每年一次。' +
           `你上一次打钩端是 ${toDateText(lastLeptoDose)}。`;
 
         nextRepeat.label = firstLabel;
@@ -2153,6 +2195,7 @@ export function buildVaccinePlan(
           decisions[seed.key] === 'DEFER',
         ),
         deferred: decisions[seed.key] === 'DEFER',
+        basisSummary: summarizeBasis(seed.basis),
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,

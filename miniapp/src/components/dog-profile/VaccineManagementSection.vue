@@ -224,7 +224,7 @@
           <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
           <template v-if="nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'">
             <text class="field-hint field-hint--unknown">
-              产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」判定分类。
+              产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」，我们按它的成分归类。
             </text>
             <!-- 认不准就诚实说（2026-10-06 老板）：
                  "并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
@@ -280,7 +280,7 @@
             class="vaccine-confirm"
             :class="{ 'vaccine-confirm--busy': matchingIndex === index }"
             @tap="confirmVaccineName(index)"
-          >{{ matchingIndex === index ? '匹配中…' : '确认' }}</text>
+          >{{ matchingIndex === index ? '正在查这是哪一支苗…' : '确认' }}</text>
           <text v-else-if="draftOf(record, index).kinds.length > 0" class="field-hint">
             分类已按产品库自动判定，不用再确认。
           </text>
@@ -381,7 +381,7 @@
               >都不是 / 不确定</text>
             </view>
             <text class="field-hint">
-              可多选 —— 点一下选中，再点一下取消。分类由我们按病种判定，你不用管。
+              可多选 —— 点一下选中，再点一下取消。我们按你勾的病种自动归到核心 / 狂犬 / 钩端那几类，你不用管。
             </text>
             <text class="vaccine-kind__done" @tap="closeKindPicker(index)">选好了</text>
           </template>
@@ -1564,7 +1564,7 @@ async function loadRecords(dogId = props.dogId) {
   try {
     const res: any = await dogApi.healthRecords.vaccine.list(dogId)
     if (res?.code !== 0) {
-      throw new Error(res?.message || '加载疫苗记录失败')
+      throw new Error(res?.message || '接种记录没加载出来，下拉刷新一下试试')
     }
 
     const list = res?.data?.records
@@ -1618,7 +1618,7 @@ async function loadRecords(dogId = props.dogId) {
     // 具体场景：把记录删空之后这一拉失败，计划和提醒会一直挂着旧的，
     // 顾客以为"删了也没用"。
     notifyRecordsChanged()
-    uni.showToast({ title: error?.message || '加载疫苗记录失败', icon: 'none' })
+    uni.showToast({ title: error?.message || '接种记录没加载出来，下拉刷新一下试试', icon: 'none' })
   } finally {
     loading.value = false
   }

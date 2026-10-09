@@ -5,8 +5,14 @@
  * 为什么要有它：老板问得对 —— "现在生产数据很少，再跑一周有意义吗？"
  * 没有意义。正确的做法是**自己造样本、主动量**，而不是等数据 ✗。
  *
+ * ⚠️ 后缀是 .cjs —— backend/package.json 是 "type": "module"，
+ *    用 .js 会被当成 ESM 从而 require 报错 ✗（2026-10-09 实测）。
+ *
  * 用法（在仓库根目录）：
- *   EVAL_JWT=<令牌> node backend/scripts/eval-vaccine-books.js [--dir <评测集目录>]
+ *   EVAL_JWT=<令牌> node backend/scripts/eval-vaccine-books.cjs [--dir <评测集目录>]
+ *   EVAL_JWT=<令牌> node backend/scripts/eval-vaccine-books.cjs --dump
+ *     → **只生成答案草稿**（把每张照片识别出来的行按 labels.csv 的格式打出来，
+ *        连"可疑的地方"一起标注），老板对着本子改一改就能用 ✓
  *
  * 评测集目录结构（默认 `.eval-data/vaccine-books/`，已在 .gitignore 里 ✓）：
  *   photos/*.jpg|png|webp|heic      真实疫苗本照片
@@ -27,9 +33,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const API_BASE = (process.env.EVAL_API_BASE || 'https://api.sevenkitchen.cloud/api/v1').replace(/\/+$/, '');
-const TOKEN = process.env.EVAL_JWT || '';
+let TOKEN = process.env.EVAL_JWT || '';
+
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const args = process.argv.slice(2);
+const DUMP_ONLY = args.includes('--dump');
 const dirIndex = args.indexOf('--dir');
 const DATA_DIR = dirIndex >= 0 && args[dirIndex + 1]
   ? path.resolve(args[dirIndex + 1])
@@ -39,7 +47,7 @@ const DATA_DIR = dirIndex >= 0 && args[dirIndex + 1]
 function normalizeName(value) {
   return String(value || '')
     .toLowerCase()
-    .replace(/[®™©·．.。,，、'"“”‘’()（）\-—_/\s]/g, '');
+    .replace(/[®™©@·．.。,，、'"“”‘’()（）\-—_/\s]/g, '');
 }
 
 function parseLabels(text) {
@@ -49,13 +57,28 @@ function parseLabels(text) {
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('文件名')) continue;
     const parts = trimmed.split(',').map((item) => item.trim().replace(/^"|"$/g, ''));
     if (parts.length < 3 || !parts[0]) continue;
+    /*
+     * 日期栏里老板会写批注（2026-10-09 实测），例如：
+     *   「2025-04-26（未填注射日期，这个日期是生产日期）」
+     *   「2025-08-20（18涂改成20）」
+     * → 先剥掉括号里的批注，剩下的才是答案 ✓
+     * → 批注里写了"未填/没有填"的：**本子上没有注射日期** ✓
+     *   这时候我们若输出任何日期 = 「多写了日期」✗（这正是最该量的那个数 ✓）
+     */
+    const rawDate = parts[2];
+    const note = (rawDate.match(/[（(]([^）)]*)[）)]/g) || []).join('');
+    const dateValue = rawDate.replace(/[（(][^）)]*[）)]/g, '').trim();
+    const dateMissing = /未填|没有填|没填|无注射日期|未写/.test(note);
+
     // `?` = 这一行看不清/说不清 → 跳过判定（不算错 ✓）
     const skipName = parts[1] === '?' || parts[1] === '' || parts[1] === '-';
-    const skipDate = parts[2] === '?' || parts[2] === '' || parts[2] === '-';
+    const skipDate = dateMissing || parts[2] === '?' || parts[2] === '-';
     rows.push({
       file: parts[0],
       name: skipName ? '' : parts[1],
-      date: skipDate ? '' : parts[2],
+      date: skipDate ? '' : dateValue,
+      // 本子上没写注射日期（批注说的）→ 我们输出任何日期都算"多写了"✗
+      expectsNoDate: dateMissing,
     });
   }
   return rows;
@@ -118,9 +141,14 @@ function normalizeMonthOnly(value) {
 }
 
 /** 日期判定：严格 / 只到年月（本子上就只写了年月）/ 我们多编了日子 */
-function judgeDate(got, want) {
+function judgeDate(got, want, expectsNoDate) {
   const g = String(got || '').slice(0, 10);
   const w = String(want || '').trim();
+  if (expectsNoDate) {
+    return g
+      ? `🔴 多写了日期（本子上没填注射日期，我们写了 ${g}）`
+      : '对（本子上本来就没填）';
+  }
   if (!w) return '没写答案';
   if (/^\d{4}-\d{2}-\d{2}$/.test(w)) {
     return g === w ? '对' : `错（本子上是 ${w}，我们读成 ${g || '空'}）`;
@@ -188,7 +216,38 @@ function judgeName(got, want) {
   return `错（本子上「${want}」→ 我们「${got || '空'}」）`;
 }
 
+/**
+ * 在服务器上跑的时候，令牌**由脚本自己现取**（2026-10-09）。
+ *
+ * 为什么：一开始用 shell 把令牌传进环境变量，结果转义把令牌弄坏了 ✗
+ * （报 "Cannot convert argument to a ByteString …" —— Authorization 头里混进了非 ASCII 字符）。
+ * 脚本本来就在 backend 目录里跑，直接 require 那两样东西最稳 ✓。
+ * 用 EVAL_MINT=1 打开这个模式。
+ * ⚠️ 后缀必须 .cjs（backend/package.json 是 "type": "module"，且 CJS 里没有顶层 await ✗）。
+ */
+async function mintToken() {
+  require('dotenv').config();
+  const jwt = require('jsonwebtoken');
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    // ownerId 是非空外键，不能写 not: null ✗（Prisma 直接报错）——随便取一只就行 ✓
+    const dog = await prisma.dog.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!dog?.ownerId) throw new Error('库里没有可用的狗（拿不到 ownerId）');
+    return jwt.sign(
+      { userId: dog.ownerId, customerId: dog.ownerId, role: 'CUSTOMER' },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' },
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function main() {
+  if (!TOKEN && process.env.EVAL_MINT === '1') {
+    TOKEN = await mintToken();
+  }
   if (!TOKEN) {
     console.error('缺少 EVAL_JWT（评测用的一次性令牌）。用法：EVAL_JWT=<令牌> node backend/scripts/eval-vaccine-books.js');
     process.exit(1);
@@ -213,10 +272,56 @@ async function main() {
     return;
   }
 
+  if (DUMP_ONLY) {
+    console.log('（草稿模式：只读不判分 —— 下面每一行都可以直接粘进 labels.csv ✓）\n');
+    let totalRows = 0;
+    const suspects = [];
+    for (const file of photos) {
+      let url = '';
+      try {
+        url = await uploadPhoto(path.join(photosDir, file), file);
+        const data = await extract(url, file);
+        const drafts = Array.isArray(data.drafts) ? data.drafts : [];
+        totalRows += drafts.length;
+        console.log(`# ── ${file} ──────────────────────────────`);
+        drafts.forEach((draft) => {
+          console.log(`${file},${String(draft.vaccineName || '').trim()},${String(draft.vaccinationDate || '').slice(0, 10)}`);
+          const flags = [];
+          if (draft.brandCheck?.conflict) {
+            flags.push(`🏷️ 品牌对不上：文字「${draft.brandCheck.textBrand}」 vs ${draft.brandCheck.productBrand}`);
+          }
+          if (draft.productReview?.consistent === false) {
+            flags.push(`⚠️ 复核读到「${draft.productReview.textOnBook}」`);
+          }
+          if (!String(draft.productName || '').trim()) flags.push('库里没有这支苗');
+          if (flags.length) console.log(`#    ↳ ${flags.join(' ｜ ')}`);
+          // 非狗的疫苗本：猫三联/杯状/泛白细胞减少 这些词只出现在猫苗上
+          if (/猫|杯状|泛白细胞减少|feline|FCV|FPV/i.test(String(draft.vaccineName || ''))) {
+            suspects.push(file);
+          }
+        });
+        console.log('');
+      } catch (error) {
+        console.log(`# ${file} 读取失败：${error.message}\n`);
+      } finally {
+        if (url) await dropAttachment(url);
+      }
+    }
+    const uniqueSuspects = Array.from(new Set(suspects));
+    console.log('──── 小结 ────');
+    console.log(`照片 ${photos.length} 张 ｜ 识别出 ${totalRows} 行`);
+    console.log(
+      uniqueSuspects.length
+        ? `⚠️ 看起来**不是狗**的疫苗本 ${uniqueSuspects.length} 张：${uniqueSuspects.join('、')}`
+        : '✓ 没看到猫/其他物种的疫苗本',
+    );
+    return;
+  }
+
   const summary = {
     photos: 0, rows: 0,
     nameExact: 0, nameLoose: 0, nameWrong: 0,
-    dateExact: 0, dateMonthOnly: 0, dateInvented: 0, dateWrong: 0,
+    dateExact: 0, dateMonthOnly: 0, dateInvented: 0, dateWrong: 0, dateAdded: 0,
     matchedLibrary: 0, unmatchedLibrary: 0,
     reviewAlarms: 0, brandAlarms: 0,
   };
@@ -243,7 +348,7 @@ async function main() {
       drafts.forEach((draft, index) => {
         const want = pairing.get(index) || {};
         const nameJudge = judgeName(draft.vaccineName, want.name);
-        const dateJudge = judgeDate(draft.vaccinationDate, want.date);
+        const dateJudge = judgeDate(draft.vaccinationDate, want.date, want.expectsNoDate);
         const matched = String(draft.productName || '').trim();
         const reviewAlarm = draft.productReview && draft.productReview.consistent === false;
         const brandAlarm = draft.brandCheck && draft.brandCheck.conflict === true;
@@ -252,7 +357,8 @@ async function main() {
         if (nameJudge === '对') summary.nameExact += 1;
         else if (nameJudge.startsWith('部分对')) summary.nameLoose += 1;
         else if (want.name) summary.nameWrong += 1;
-        if (dateJudge === '对') summary.dateExact += 1;
+        if (dateJudge.startsWith('🔴 多写了日期')) summary.dateAdded += 1;
+        else if (dateJudge === '对') summary.dateExact += 1;
         else if (dateJudge.startsWith('对（只到年月）')) summary.dateMonthOnly += 1;
         else if (dateJudge.startsWith('⚠️ 编了日子')) summary.dateInvented += 1;
         else if (want.date) summary.dateWrong += 1;
@@ -284,7 +390,7 @@ async function main() {
   console.log('──── 汇总 ────');
   console.log(`照片 ${summary.photos} 张 ｜ 行 ${summary.rows} 条`);
   console.log(`产品名：严格对 ${summary.nameExact}（${pct(summary.nameExact, summary.rows)}）｜ 部分对 ${summary.nameLoose} ｜ 错 ${summary.nameWrong}`);
-  console.log(`日期：严格对 ${summary.dateExact}（${pct(summary.dateExact, summary.rows)}）｜ 只到年月 ${summary.dateMonthOnly} ｜ **编了日子 ${summary.dateInvented}** ｜ 错 ${summary.dateWrong}`);
+  console.log(`日期：严格对 ${summary.dateExact}（${pct(summary.dateExact, summary.rows)}）｜ 只到年月 ${summary.dateMonthOnly} ｜ **编了日子 ${summary.dateInvented}** ｜ **多写了日期 ${summary.dateAdded}** ｜ 错 ${summary.dateWrong}`);
   console.log(`认出产品：落到产品库 ${summary.matchedLibrary}（${pct(summary.matchedLibrary, summary.rows)}）｜ 没匹配上 ${summary.unmatchedLibrary}`);
   console.log(`报警：复核 ${summary.reviewAlarms} 行 ｜ 品牌 ${summary.brandAlarms} 行`);
 

@@ -851,3 +851,43 @@ describe('「重新上传」只在该有的时候出现（2026-10-09）', () => 
     expect(source).toContain('<text class="confirm__discard" @tap="discard">重新上传</text>')
   })
 })
+
+/**
+ * 产品名"再看一眼图"的复核（2026-10-09 老板定）
+ *
+ * 老板："我们可以让模型没有触发条件的再审一遍原图，和代码的匹配结果，看有没有问题。
+ *        这样不是更保险吗？"
+ * —— 采纳（每次都审、不设触发条件），但问题必须是**封闭的**：
+ *    问"本子上那一行真正写的是什么"，不问"有没有问题"✗
+ *    （开放式问题会逼模型编 —— 实测它编过"贴纸被手指遮挡"）。
+ *
+ * 前端只负责一件事：**不一致的行**把复核意见摆出来 + 候选一键换。
+ */
+describe('识别结果 · 产品名复核意见（2026-10-09）', () => {
+  const scan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+
+  it('复核说不一致的行：排最前面 + 默认展开 + 说清"本子上写的是什么"', () => {
+    const source = scan()
+
+    expect(source).toContain('draft.productReview.consistent === false')
+    expect(source).toContain('本子上写的是「${read}」，和我们认定的不是同一支，请核对')
+  })
+
+  it('复核候选一键换（走的是同一套 pickRowName）', () => {
+    const source = scan()
+
+    expect(source).toContain('function rowReviewCandidates(index: number): string[]')
+    expect(source).toContain('复核建议这几支：')
+    expect(source).toContain('@tap="pickRowName(index, item)"')
+  })
+
+  it('一致的行不留任何痕迹（正确的不打扰，避免狼来了）', () => {
+    const source = scan()
+
+    expect(source).toContain('if (!review || review.consistent !== false) return null')
+  })
+})

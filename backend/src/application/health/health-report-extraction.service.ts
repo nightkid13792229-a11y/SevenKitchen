@@ -61,7 +61,9 @@ import {
   kindsOfProductName,
 } from '../../domain/health/vaccine-catalog';
 import {
+  VACCINE_PRODUCTS,
   findProductByText,
+  normalizeProductText,
   suggestProductsForPartialName,
 } from '../../domain/health/vaccine-products';
 
@@ -703,6 +705,137 @@ const CHECKUP_TYPES = new Set([
  *   · 日期一律走 normalizeDraftDate —— 认不出来就留空，宁可让顾客自己填
  *   · 未知字段一律丢弃 —— 每种类型只保留白名单里的键
  */
+/**
+ * ══ 产品名"再看一眼图"的复核（2026-10-09 老板定）══════════════════════════
+ *
+ * 背景：老板实测「宠必威锐必威」被读成「英特威优免康」✗ —— 两步都错：
+ * 第一步看错字，第二步拿着错字照样能匹配到一支**真实存在**的产品 ✓，
+ * 于是页面上显示一支体面的进口苗，家长根本看不出错 ✗
+ * （顾客确认能兜住"日期不对"这种明显的错，兜不住"看起来完全合理的错"）。
+ *
+ * 老板的方案："每次都让模型再审一遍原图和代码的匹配结果，看有没有问题。"
+ * —— 采纳，但**问题必须是封闭的**：
+ *   不问"有没有问题" ✗（开放式问题会逼模型编，实测它编过"贴纸被手指遮挡"✗），
+ *   而是问"**本子上那一行真正写的是什么**，和我们认定的这一支是不是同一支" ✓。
+ *
+ * ⚠️ 三条纪律：
+ *   ① 它**只给候选，绝不自动改写**产品名与分类（改写权在顾客那一下点击 ✓）；
+ *   ② 候选必须是**我们产品库里的名字**（编出来的名字一律丢掉 ✗）；
+ *   ③ 复核失败**绝不影响识别结果**（catch 住、只留日志 ✓）。
+ */
+export interface ProductReviewRow {
+  index: number;
+  /** 我们自己抄下来的写法 */
+  ourText: string;
+  /** 我们匹配到的规范名（空串 = 没匹配上） */
+  ourProduct: string;
+  date: string;
+}
+
+/** 哪些行需要复核：凡是抄到了疫苗名的行都要 */
+export function buildProductReviewRows(
+  drafts: Record<string, any>[],
+): ProductReviewRow[] {
+  return (drafts || [])
+    .map((draft, index) => ({
+      index,
+      ourText: String(draft?.vaccineName || '').trim(),
+      ourProduct: String(draft?.productName || '').trim(),
+      date: String(draft?.vaccinationDate || '').trim(),
+    }))
+    .filter((row) => row.ourText.length > 0);
+}
+
+/** 复核用的系统提示词（封闭问题，见上面的纪律） */
+export function buildProductReviewPrompt(productNames: string[]): string {
+  return [
+    '你是疫苗本核对员。用户会给你**同一张疫苗本的照片**，以及我们系统已经抄下来、',
+    '并和我们产品库匹配好的每一行。',
+    '',
+    '请**只做一件事**：核对每一行"本子上真正写的商品名"和"我们认定的产品"是不是同一支。',
+    '',
+    '规则：',
+    '1. 重新看图，**逐字照抄**本子上那一行的商品名（含品牌名）。',
+    '   ⚠️ 长得很像的品牌与产品特别容易串（宠必威 ≠ 英特威；幼犬保 / 优免康 / 乐必妥 / 锐必威',
+    '   是四个完全不同的产品），务必一个字一个字核。',
+    '2. 是同一支 → sameAsOurs 填 true，candidates 填空数组。',
+    '3. 不是同一支（或者我们压根没匹配上）→ sameAsOurs 填 false，',
+    '   并从下面的产品库里挑**最像的 3 支**（按像的程度排序）填进 candidates。',
+    '4. **产品库之外的名字一律不许编**；看不清就 sameAsOurs 填 false、',
+    '   textOnBook 写「看不清」。',
+    '5. 只输出 JSON，不要解释。',
+    '',
+    '产品库（只能从这里选候选）：',
+    productNames.join('、'),
+    '',
+    '输出结构：',
+    '{',
+    '  "rows": [',
+    '    { "index": 0, "textOnBook": "本子上写的那串字", "sameAsOurs": true, "candidates": [] },',
+    '    { "index": 1, "textOnBook": "…", "sameAsOurs": false, "candidates": ["产品库里的名字"] }',
+    '  ]',
+    '}',
+  ].join('\n');
+}
+
+/**
+ * 把复核结果贴回草稿：**一致的不打扰**，不一致的带上"它读到的字 + 候选"。
+ *
+ * 一致的也留一个标记（consistent: true），方便日志统计误报率。
+ */
+export function applyProductReview(
+  drafts: Record<string, any>[],
+  parsed: Record<string, unknown> | null,
+  productNames: string[],
+): { reviewed: number; inconsistent: number } {
+  const rows = Array.isArray((parsed as any)?.rows) ? (parsed as any).rows : [];
+  if (rows.length === 0) {
+    return { reviewed: 0, inconsistent: 0 };
+  }
+
+  // 候选必须是库里真有的名字（规范化后比对，免得 ® 空格这些差异把它挡掉）
+  const libraryByKey = new Map<string, string>();
+  for (const name of productNames) {
+    libraryByKey.set(normalizeProductText(name), name);
+  }
+
+  let reviewed = 0;
+  let inconsistent = 0;
+
+  for (const row of rows) {
+    const index = Number(row?.index);
+    if (!Number.isInteger(index) || index < 0 || index >= drafts.length) continue;
+
+    const draft = drafts[index];
+    if (!draft) continue;
+
+    const textOnBook = normalizeDraftText(row?.textOnBook, 100);
+    const consistent = row?.sameAsOurs !== false;
+    const ourProduct = String(draft.productName || '').trim();
+
+    const candidates: string[] = [];
+    for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
+      const key = normalizeProductText(String(raw || ''));
+      const official = libraryByKey.get(key);
+      if (!official) continue; // 库里没有的名字一律丢掉（不许编）
+      if (official === ourProduct) continue; // 和我们认定的一样就不必当候选
+      if (candidates.includes(official)) continue;
+      candidates.push(official);
+      if (candidates.length >= 3) break;
+    }
+
+    draft.productReview = {
+      textOnBook,
+      consistent,
+      candidates,
+    };
+    reviewed += 1;
+    if (!consistent) inconsistent += 1;
+  }
+
+  return { reviewed, inconsistent };
+}
+
 export function normalizeDrafts(
   documentType: HealthDocumentType,
   parsed: Record<string, unknown>,
@@ -1238,6 +1371,94 @@ export class HealthReportExtractionService {
     }
   }
 
+  /**
+   * 疫苗本"再看一眼图"的复核（2026-10-09 老板定，见文件上方 buildProductReviewRows 的说明）。
+   *
+   * 一次扫描只多**一次**调用（不是每行一次）：把这一页所有抄到名字的行一起交上去，
+   * 让它重新看图、逐行回答"本子上写的是什么、和我们认定的是不是同一支"。
+   *
+   * 只在**图片**这条路上做：文档（PDF/Word）我们手上只有抽出来的文字，
+   * 让它"再看一眼图"没有意义 ✗ —— 那种情况留空，前端照旧只显示原文与候选。
+   */
+  private async reviewProductMatches(input: {
+    imageUrl: string;
+    drafts: Record<string, any>[];
+    config: {
+      baseUrl: string;
+      model: string;
+      apiKey: string;
+      requestTimeoutMs: number;
+    };
+  }): Promise<void> {
+    const rows = buildProductReviewRows(input.drafts);
+    if (rows.length === 0) {
+      return;
+    }
+
+    const productNames = VACCINE_PRODUCTS.map((product) => product.name);
+    const model = resolveHealthReportVisionModel(
+      process.env,
+      input.config.model,
+    );
+
+    try {
+      const parsed = await callDeepSeekJson({
+        baseUrl: input.config.baseUrl,
+        model,
+        extraBody: EXTRACTION_NO_THINKING,
+        apiKey: input.config.apiKey,
+        requestTimeoutMs: input.config.requestTimeoutMs,
+        systemPrompt: buildProductReviewPrompt(productNames),
+        userContent: [
+          {
+            type: 'text',
+            text:
+              '这是同一张疫苗本。请按系统提示核对下面每一行，只输出 JSON。\n' +
+              JSON.stringify({ rows }, null, 2),
+          },
+          { type: 'image_url', image_url: { url: input.imageUrl } },
+        ],
+        temperature: 0,
+      });
+
+      const { reviewed, inconsistent } = applyProductReview(
+        input.drafts,
+        parsed,
+        productNames,
+      );
+
+      /*
+       * 留档（老板要的"记录数据"）：一致 / 不一致各几行。
+       * 有了它才能算**误报率** —— 上线一周后按数据决定要不要收窄成"触发条件"。
+       */
+      const mismatches = input.drafts
+        .filter((draft) => draft?.productReview && draft.productReview.consistent === false)
+        .map(
+          (draft) =>
+            `我们「${String(draft.productName || draft.vaccineName || '')}」` +
+            ` vs 复核读到「${draft.productReview.textOnBook || '看不清'}」` +
+            `（候选 ${(draft.productReview.candidates || []).join('/') || '无'}）`,
+        );
+
+      /*
+       * 留档（老板要的"记录数据"）：核对了几行、几行不一致，以及不一致的原文对。
+       * 「顾客最后采纳了谁」不用另发请求 —— 存下来的记录名就是答案，
+       * 和这里的原文对一对就知道采纳没有（一致的行不留原文对，避免刷屏）。
+       */
+      this.logger.log(
+        `疫苗产品复核：核对 ${reviewed} 行，其中不一致 ${inconsistent} 行` +
+          (mismatches.length > 0 ? `；${mismatches.join('；')}` : ''),
+      );
+    } catch (error) {
+      // 复核失败绝不影响识别结果（顾客该看到的照旧看到）
+      this.logger.warn(
+        `疫苗产品复核失败（不影响识别）：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   async extractFromReport(input: {
     imageUrl: string;
     originalFilename?: string;
@@ -1434,6 +1655,18 @@ export class HealthReportExtractionService {
 
     const documentType = resolvedType;
     const drafts = normalizeDrafts(documentType, parsedRecord);
+
+    /*
+     * 疫苗本：让模型**再看一眼图**，核对"本子上写的"和"我们认定的产品"是否同一支
+     * （2026-10-09 老板定；只给候选、绝不自动改写；失败不影响识别）。
+     */
+    if (fileKind === 'image' && drafts.length > 0) {
+      await this.reviewProductMatches({
+        imageUrl: input.imageUrl,
+        drafts,
+        config,
+      });
+    }
     const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
     // 与已提取内容矛盾的提示直接丢掉（见 filterContradictoryWarnings）
     const warnings = filterContradictoryWarnings(

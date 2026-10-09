@@ -530,7 +530,13 @@ export function resolvePreferredBrand(names: string[]): string {
  * ⚠️ 只抹**写法噪音**，不抹有含义的字。像"犬八联"这种各家含义不一样的
  *    叫法仍然不认 —— 那是靠人（或 AI）判的，不是靠字符串。
  */
-function normalizeProductText(value: string): string {
+/**
+ * 产品名的规范化（去 ® ™ ©、空格、大小写、全半角、连字符）。
+ *
+ * 2026-10-09 导出：疫苗本"再看一眼图"的复核也要用它校验候选 ——
+ * 不能让两处各写一份归一化（这个项目吃过两次这种亏）。
+ */
+export function normalizeProductText(value: string): string {
   return String(value || '')
     .toLowerCase()
     .replace(/[\s\u3000]+/g, '')

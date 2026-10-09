@@ -11,6 +11,9 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthReportExtractionService,
+  applyProductReview,
+  buildProductReviewPrompt,
+  buildProductReviewRows,
   resolveHealthDocumentFileKind,
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
@@ -632,9 +635,18 @@ describe('HealthReportExtractionService', () => {
 
     it('请求体里带的是 AUTO，提示词与响应解析各司其职', async () => {
       ocrProvider.recognizeImage.mockResolvedValue({ text: '疫苗本…' });
+      /*
+       * ⚠️ 只捕获**第一次**请求体（2026-10-09）：
+       * 疫苗本现在会多一次"再看一眼图"的复核调用，最后一次请求已经变成复核，
+       * 这条测试要守的是**识别那一次**的请求体（里面该带 AUTO）。
+       */
       let capturedBody = '';
+      let callIndex = 0;
       global.fetch = jest.fn().mockImplementation(async (_url, init) => {
-        capturedBody = String(init?.body || '');
+        callIndex += 1;
+        if (callIndex === 1) {
+          capturedBody = String(init?.body || '');
+        }
         return okJsonResponse({
           documentType: 'VACCINE_BOOK',
           drafts: [
@@ -1187,6 +1199,128 @@ describe('文档（PDF / Word）识别', () => {
       }),
     ).rejects.toThrow(/另存为 PDF 或 \.docx/)
   })
+})
+
+/**
+ * 疫苗本 · 产品名"再看一眼图"的复核（2026-10-09 老板定）
+ *
+ * 老板的方案："每次都让模型再审一遍原图和代码的匹配结果，看有没有问题。"
+ * 采纳，但问题必须**封闭**（问"本子上写的是什么"，不问"有没有问题"）——
+ * 开放式问题会逼模型编（实测它编过"贴纸被手指遮挡"）。
+ */
+describe('疫苗本 · 产品名复核', () => {
+  it('只复核抄到名字的行', () => {
+    const rows = buildProductReviewRows([
+      { vaccineName: '英特威®优免康', productName: '宠必威优免康', vaccinationDate: '2023-08-09' },
+      { vaccineName: '', productName: '', vaccinationDate: '2024-01-01' },
+      { vaccineName: '狂犬', productName: '', vaccinationDate: '2026-07-25' },
+    ]);
+
+    expect(rows.map((row) => row.index)).toEqual([0, 2]);
+    expect(rows[0].ourProduct).toBe('宠必威优免康');
+    expect(rows[1].ourProduct).toBe('');
+  });
+
+  it('提示词是封闭问题，并且只许从产品库里挑候选', () => {
+    const prompt = buildProductReviewPrompt(['宠必威优免康', '宠必威锐必威']);
+
+    expect(prompt).toContain('逐字照抄');
+    expect(prompt).toContain('sameAsOurs');
+    expect(prompt).toContain('产品库之外的名字一律不许编');
+    expect(prompt).toContain('宠必威锐必威');
+  });
+
+  it('不一致的行带上"它读到的字 + 候选"，一致的只留标记', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: '英特威®优免康', productName: '宠必威优免康' },
+      { vaccineName: '卫佳捌', productName: '卫佳捌' },
+    ];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          { index: 0, textOnBook: '宠必威锐必威', sameAsOurs: false, candidates: ['宠必威锐必威', '宠必威乐必妥'] },
+          { index: 1, textOnBook: '卫佳捌', sameAsOurs: true, candidates: [] },
+        ],
+      },
+      ['宠必威优免康', '宠必威锐必威', '宠必威乐必妥', '卫佳捌'],
+    );
+
+    expect(result).toEqual({ reviewed: 2, inconsistent: 1 });
+    expect(drafts[0].productReview).toEqual({
+      textOnBook: '宠必威锐必威',
+      consistent: false,
+      candidates: ['宠必威锐必威', '宠必威乐必妥'],
+    });
+    expect(drafts[1].productReview.consistent).toBe(true);
+    expect(drafts[1].productReview.candidates).toEqual([]);
+  });
+
+  it('🔴 库里没有的候选一律丢掉（模型编的名字不许进界面）', () => {
+    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
+
+    const result = applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: 'X',
+            sameAsOurs: false,
+            candidates: ['不存在的苗', '宠必威优免康', '另一个编的'],
+          },
+        ],
+      },
+      ['宠必威优免康'],
+    );
+
+    expect(result.inconsistent).toBe(1);
+    expect(drafts[0].productReview.candidates).toEqual(['宠必威优免康']);
+  });
+
+  it('候选去重、也要排除掉我们自己认定的那一支，最多 3 个', () => {
+    const drafts: Record<string, any>[] = [
+      { vaccineName: 'X', productName: '卫佳捌' },
+    ];
+
+    applyProductReview(
+      drafts,
+      {
+        rows: [
+          {
+            index: 0,
+            textOnBook: 'X',
+            sameAsOurs: false,
+            candidates: ['卫佳捌', '卫佳伍', '卫佳伍', '瑞比克', '宠必威优免康', '优乐康'],
+          },
+        ],
+      },
+      ['卫佳捌', '卫佳伍', '瑞比克', '宠必威优免康', '优乐康'],
+    );
+
+    expect(drafts[0].productReview.candidates).toEqual(['卫佳伍', '瑞比克', '宠必威优免康']);
+  });
+
+  it('模型没给答案时不算"不一致"（不许凭空给家长报警）', () => {
+    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
+
+    const result = applyProductReview(drafts, { rows: [{ index: 0 }] }, []);
+
+    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
+    expect(drafts[0].productReview.consistent).toBe(true);
+  });
+
+  it('复核结果为空/坏数据时什么都不做', () => {
+    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
+
+    expect(applyProductReview(drafts, null, [])).toEqual({ reviewed: 0, inconsistent: 0 });
+    expect(applyProductReview(drafts, { rows: 'nope' } as any, [])).toEqual({
+      reviewed: 0,
+      inconsistent: 0,
+    });
+    expect(drafts[0].productReview).toBeUndefined();
+  });
 })
 });
 

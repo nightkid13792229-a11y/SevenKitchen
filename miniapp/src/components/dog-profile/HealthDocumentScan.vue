@@ -161,6 +161,25 @@
                 @input="onRowNameInput(index, $event)"
               />
             </view>
+            <!-- 复核（2026-10-09）：模型重新看图后的意见。
+                 只在"不一致"时出现 —— 正确的不打扰（避免狼来了）。 -->
+            <view v-if="rowReviewCandidates(index).length > 0 || rowReviewText(index)" class="row__review">
+              <text class="row__review-title">
+                复核：本子上写的是「{{ rowReviewText(index) || '看不清' }}」
+                <template v-if="drafts[index].productName">
+                  ，和我们认定的「{{ drafts[index].productName }}」不是同一支
+                </template>
+              </text>
+              <view v-if="rowReviewCandidates(index).length > 0" class="row__chips">
+                <text class="row__chip-hint">复核建议这几支：</text>
+                <text
+                  v-for="item in rowReviewCandidates(index)"
+                  :key="`review-${item}`"
+                  class="row__chip row__chip--strong"
+                  @tap="pickRowName(index, item)"
+                >{{ item }}</text>
+              </view>
+            </view>
             <view v-if="rowSameBrandAlternatives(index).length > 0" class="row__chips">
               <text class="row__chip-hint">同一个牌子的其他几支：</text>
               <text
@@ -562,6 +581,27 @@ function rowName(draft: Record<string, any> | undefined): string {
   return value || '（名字没认出来）'
 }
 
+/**
+ * 复核（2026-10-09）：只有"不一致"的行才把它的意见摆出来。
+ * 一致的行不留任何痕迹 —— 正确的不打扰（避免家长被训练成"提示不看"）。
+ */
+function rowReview(index: number): { textOnBook: string; candidates: string[] } | null {
+  const review = drafts.value[index]?.productReview
+  if (!review || review.consistent !== false) return null
+  return {
+    textOnBook: String(review.textOnBook || '').trim(),
+    candidates: Array.isArray(review.candidates) ? review.candidates.map(String) : [],
+  }
+}
+
+function rowReviewText(index: number): string {
+  return rowReview(index)?.textOnBook || ''
+}
+
+function rowReviewCandidates(index: number): string[] {
+  return rowReview(index)?.candidates || []
+}
+
 /** 识别出的名字命中了产品库里的哪一支（命中不了返回空） */
 function rowMatchedProduct(index: number): { name: string; brand?: string; manufacturer?: string } | null {
   const draft = drafts.value[index]
@@ -609,6 +649,20 @@ function rowCare(index: number): { care: boolean; reason: string } {
   // 模型自己说"没看清/看不清"的（不管它编的是什么原因），也要家长核一遍
   if (/没看清|看不清|遮挡|反光|模糊/.test(String(draft.notes || ''))) {
     return { care: true, reason: '这行有一处没看清，请照本子核一下' }
+  }
+  /*
+   * **复核说不一致**（2026-10-09 老板定）：模型重新看图之后，
+   * 认为"本子上写的"和我们认定的不是同一支 —— 这是最该让家长核的一类，
+   * 排最前面、默认展开。
+   */
+  if (draft.productReview && draft.productReview.consistent === false) {
+    const read = String(draft.productReview.textOnBook || '').trim()
+    return {
+      care: true,
+      reason: read
+        ? `本子上写的是「${read}」，和我们认定的不是同一支，请核对`
+        : '这一行可能认错了，请照本子核一下',
+    }
   }
   const components = Array.isArray(draft.components) ? draft.components : []
   if (components.length === 0) {
@@ -1985,5 +2039,24 @@ function discard() {
   margin: 6rpx 0 14rpx;
   font-size: 22rpx;
   color: #7a7a7a;
+}
+
+/* 复核意见（2026-10-09）：只在"不一致"时出现 */
+.row__review {
+  margin: 4rpx 0 10rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 10rpx;
+  background: #fff6f5;
+  border: 1rpx solid #e8b4ae;
+}
+.row__review-title {
+  font-size: 24rpx;
+  color: #c0392b;
+  line-height: 1.5;
+}
+.row__chip--strong {
+  border-color: #c0392b;
+  color: #c0392b;
+  background: #fdeeed;
 }
 </style>

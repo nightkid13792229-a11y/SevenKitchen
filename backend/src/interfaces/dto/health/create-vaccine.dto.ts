@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -70,4 +71,14 @@ export class CreateVaccineDto {
   @IsArray()
   @IsString({ each: true })
   components?: string[];
+  /**
+   * 这一针的产品名**有没有被人工核对过**（2026-10-09 安全默认值）。
+   *
+   * 不传 = true（手工填写、老客户端都照旧算数 ✓）；
+   * 识别出来且我们有理由怀疑的（品牌对不上 / 复核读到不一样的字 / 狂犬）
+   * 由小程序显式传 false，等顾客点「我已对照本子核对」再传 true ✓。
+   */
+  @IsOptional()
+  @IsBoolean()
+  productVerified?: boolean;
 }

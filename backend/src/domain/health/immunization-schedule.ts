@@ -257,6 +257,17 @@ export interface VaccineRecordLike {
    * 那时按名字推一次（`resolveRecordKinds`），行为与以前一致。
    */
   kinds?: string[];
+  /**
+   * 这一针的产品名**有没有被人工核对过**（2026-10-09 安全默认值）。
+   *
+   * 缺省（undefined / true）= 算数（手工填写、老记录一律照旧 ✓）；
+   * **false = 不算进计划** ✓ —— 我们不拿"可能认错的记录"去推进免疫程序：
+   *   · 错算成"没打" → 多提醒一次 ✓
+   *   · 错算成"打了" → 狗真的漏打 ✗✗（狂犬还是法定强制免疫）
+   * 两个方向的后果不对称，所以默认倒向安全 ✓。
+   * 顾客在记录卡片上点一下「我已对照本子核对」，后端把它改成 true ✓。
+   */
+  productVerified?: boolean;
 }
 
 /* ===========================================================================
@@ -1217,6 +1228,12 @@ export function detectConflicts(
 ): VaccinePlanConflict[] {
   const conflicts: VaccinePlanConflict[] = [];
   const parsed = records
+    /*
+     * ⚠️ **没核对过的记录不参与匹配**（2026-10-09 安全默认值）：
+     * 它照旧显示在接种记录列表里（还带着原图 ✓），只是**不算作"这一针打过了"** ✓
+     * —— 计划该提醒的继续提醒 ✓，并在冲突卡里说清"这一针还没核对，先没算进计划" ✓。
+     */
+    .filter((record) => record.productVerified !== false)
     .map((record) => ({
       record,
       kinds: resolveRecordKinds(record),
@@ -1226,6 +1243,26 @@ export function detectConflicts(
       Boolean(item.date),
     )
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  /*
+   * ⓪ "这一针还没核对过，先没算进计划"（2026-10-09 安全默认值）。
+   *
+   * 为什么单独说：家长在记录列表里能看到这一针（还带原图 ✓），
+   * 但计划却还在提醒 —— 不解释清楚会以为是 bug ✗。
+   */
+  for (const item of records) {
+    if (item.productVerified !== false) continue;
+    conflicts.push({
+      kind: 'other',
+      recordId: item.id,
+      recordDate: toDateText(parseDateText(item.vaccinationDate) || new Date()),
+      vaccineName: item.vaccineName,
+      reason: '这一针还没核对过，暂时没算进接种计划',
+      suggestion:
+        '这条是识别出来的、我们不敢打包票（可能把贴纸认成了另一支苗）。' +
+        '照疫苗本核对一下，在记录上点「我已对照本子核对」，它就算数了。',
+    });
+  }
 
   // ① 早于最低月龄的核心疫苗（2026-10-04 调整判据）
   //

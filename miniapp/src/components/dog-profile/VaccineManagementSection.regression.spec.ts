@@ -1037,3 +1037,45 @@ describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
     expect(components).toBeGreaterThan(date)
   })
 })
+
+/**
+ * 安全默认值：没核对过的记录不算进计划（2026-10-09 老板定）
+ *
+ * 老板："疫苗接种是会影响狗狗安全的，如果我们就这么草率地上生产的话，合适吗？"
+ * —— 两个方向的后果不对称：
+ *   · 错算成"没打" → 多提醒一次 ✓
+ *   · 错算成"打了" → **狗真的漏打** ✗✗（狂犬还是法定强制免疫）
+ * 所以：识别出来且我们有理由怀疑的那一针（品牌对不上 / 复核读到不一样的字 / 狂犬），
+ * 在顾客点「我已对照本子核对」之前**不算数** ✓ —— 计划该提醒的继续提醒 ✓。
+ */
+describe('安全默认值 · 待核对（2026-10-09）', () => {
+  const readSection = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('识别出来的记录：三种可疑情况先标成"待核对"', () => {
+    const source = readSection()
+
+    expect(source).toContain('productVerified: !(')
+    expect(source).toContain('draft.brandCheck?.conflict === true')
+    expect(source).toContain("draft.productReview?.consistent === false")
+    expect(source).toContain(".includes('rabies')")
+  })
+
+  it('卡片上有「待核对」徽标 + 说明 + 一键核对', () => {
+    const source = readSection()
+
+    expect(source).toContain('class="vaccine-card__pending"')
+    expect(source).toContain('这一针先没算进接种计划')
+    expect(source).toContain('我已对照本子核对')
+    expect(source).toContain('function confirmVerified(record: VaccineRecord, index: number)')
+  })
+
+  it('提交时带上这个标记（创建与更新都要落）', () => {
+    const source = readSection()
+
+    expect(source).toContain('productVerified: draft.productVerified !== false')
+  })
+})

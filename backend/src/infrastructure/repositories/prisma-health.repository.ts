@@ -110,6 +110,8 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       attachments: record.attachments,
       kinds: record.kinds,
       components: record.components ?? [],
+      // 2026-10-09 安全默认值：迁移前的行读到 undefined 也算 true ✓
+      productVerified: (record as { productVerified?: boolean }).productVerified !== false,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

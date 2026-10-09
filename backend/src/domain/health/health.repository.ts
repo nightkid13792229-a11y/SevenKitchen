@@ -21,6 +21,14 @@ export interface VaccineRecord {
   kinds: string[];
   /** 这一针含哪些病种（2026-10-06）—— 类别由它推导 */
   components: string[];
+  /**
+   * 产品名有没有被人工核对过（2026-10-09 安全默认值）。
+   *
+   * true（默认）= 算数；false = **不算进计划**，直到顾客点「我已对照本子核对」。
+   * 理由见 prisma schema 里的注释：错算成"没打"只是多提醒一次，
+   * 错算成"打了"会让狗真的漏打 ✗✗。
+   */
+  productVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

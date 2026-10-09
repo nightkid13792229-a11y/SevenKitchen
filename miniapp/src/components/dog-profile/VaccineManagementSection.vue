@@ -146,6 +146,10 @@
             <text class="vaccine-card__status" :class="statusClass(draftOf(record, index))">
               {{ statusLabel(draftOf(record, index).status) }}
             </text>
+            <!-- 待核对（2026-10-09 安全默认值）：识别出来、但我们不敢打包票的那一针 -->
+            <text v-if="draftOf(record, index).productVerified === false" class="vaccine-card__pending">
+              待核对
+            </text>
           </view>
           <text class="vaccine-card__detail">
             接种 {{ draftOf(record, index).vaccinationDate || '未填日期' }}
@@ -420,6 +424,18 @@
              每条都挂一次，等于同一张图在列表里重复十几遍。
              现在挪到记录板块顶部**只展示一次**（见 records-card 里的原件缩略图）。 -->
 
+        <!-- 待核对说明 + 一键核对（2026-10-09 安全默认值） -->
+        <view v-if="draftOf(record, index).productVerified === false" class="verify-block">
+          <text class="verify-block__title">这一针先没算进接种计划</text>
+          <text class="verify-block__desc">
+            它是识别出来的，我们不敢打包票（可能把贴纸认成了另一支苗）。
+            照疫苗本核对一下名字和日期，对得上就点下面 —— 点完它才算数。
+          </text>
+          <text class="verify-block__action" @tap.stop="confirmVerified(record, index)">
+            我已对照本子核对
+          </text>
+        </view>
+
         <view class="vaccine-card__actions">
           <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
                正常时什么都不显示；只有"还差必填"和"保存中"要说话。
@@ -545,6 +561,8 @@ const props = defineProps<{
     label: string
     kindLabel: string
     status: string
+  /** 产品名有没有被人工核对过（2026-10-09 安全默认值）；缺省 = true */
+  productVerified?: boolean
     statusLabel: string
     windowStart: string
   }[]
@@ -1612,6 +1630,24 @@ function onVaccineBookScanned(payload: { drafts: Record<string, any>[] }) {
       // 疫苗本是接种凭证，出行/寄养/换医院都可能要看原件。
       // 一张本子上的多条接种记录共用同一张原图（照片就是那一页）。
       attachments: attachmentList(draft),
+      /*
+       * ⚠️ 安全默认值（2026-10-09 老板）：
+       * **我们有理由怀疑的那一针，先不算数** —— 顾客点「我已对照本子核对」之后才算 ✓。
+       *
+       * 老板："疫苗接种是会影响狗狗安全的，如果我们就这么草率地上生产的话，合适吗？"
+       * 两个方向的后果不对称：错算成"没打"只是多提醒一次 ✓；
+       * 错算成"打了"会让狗真的漏打 ✗✗（狂犬还是法定强制免疫）。
+       *
+       * 三种情况先不算数：
+       *   · 品牌对不上（文字写的是英特威，而这支苗是勃林格的）
+       *   · 复核读到不一样的字（说明第一次可能读错了）
+       *   · **狂犬**这一类 —— 法定强制免疫，最不该漏，一律先核对 ✓
+       */
+      productVerified: !(
+        draft.brandCheck?.conflict === true ||
+        draft.productReview?.consistent === false ||
+        (Array.isArray(draft.kinds) ? draft.kinds : []).includes('rabies')
+      ),
     } as any)
   }
   /*
@@ -1699,6 +1735,22 @@ function dismissScanReceipt() {
  * 手动新增那条路仍然要展开（顾客接着就要填字段），所以用一个开关区分。
  */
 let suppressExpandOnSave = false
+
+/**
+ * 「我已对照本子核对」—— 把这一针从"待核对"变成算数（2026-10-09 安全默认值）。
+ *
+ * 为什么要有这一步：识别可能把贴纸认成另一支真苗（实测：狂犬苗被读成联苗），
+ * 那样系统会以为"狂犬打过了"、从此不再提醒 ✗。所以默认倒向安全：
+ * **没核对过的先不算数** ✓，顾客核完点一下才算 ✓。
+ */
+function confirmVerified(record: VaccineRecord, index: number) {
+  const draft = draftOf(record, index)
+  draft.productVerified = true
+  // 已经是库里的记录 → 立刻存；还是草稿 → 跟着自动保存走
+  if (record.id) {
+    void saveRecord({ ...record, ...draft, productVerified: true } as VaccineRecord, index)
+  }
+}
 
 async function saveScannedRecords() {
   suppressExpandOnSave = true
@@ -1839,6 +1891,8 @@ function buildPayload(
      */
     components: draft.components,
     kinds: draft.kinds,
+    // 安全默认值（2026-10-09）：没核对过的先不算进计划 ✓
+    productVerified: draft.productVerified !== false,
     // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
     // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
     attachments: attachmentList(record),
@@ -2624,5 +2678,44 @@ async function doRemove(record: VaccineRecord) {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #7a7a7a;
+}
+
+/* 待核对（2026-10-09 安全默认值） */
+.vaccine-card__pending {
+  margin-left: 10rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #a15c00;
+  background: #fdf3e4;
+  border: 1rpx solid #e6a23c;
+}
+.verify-block {
+  margin-top: 14rpx;
+  padding: 16rpx;
+  border-radius: 12rpx;
+  background: #fdf6ea;
+  border: 1rpx solid #e6a23c;
+}
+.verify-block__title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #a15c00;
+}
+.verify-block__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7a6a4f;
+  line-height: 1.6;
+}
+.verify-block__action {
+  display: inline-block;
+  margin-top: 12rpx;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: #0f7b49;
+  color: #ffffff;
+  font-size: 26rpx;
 }
 </style>

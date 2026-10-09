@@ -251,6 +251,10 @@ export class HealthService {
         dto.kinds,
         dto.vaccineName,
       ),
+      // 安全默认值（2026-10-09）：识别出来且我们有理由怀疑的那一针，
+      // 小程序显式传 false —— 在顾客点「我已对照本子核对」之前不算进计划 ✓
+      productVerified:
+        (dto as { productVerified?: boolean }).productVerified ?? true,
     });
 
     return this.mapVaccineRecordToDto(record);
@@ -322,6 +326,11 @@ export class HealthService {
       // 所以 null 要照写；只有"整个字段没传"才表示别动它
       notes: dto.notes === undefined ? undefined : (dto.notes ?? null),
       status: dto.status ?? undefined,
+      // 没核对过的（识别出来且我们有理由怀疑的）显式落 false；不传就是 true ✓
+      productVerified:
+        (dto as { productVerified?: boolean }).productVerified === undefined
+          ? undefined
+          : (dto as { productVerified?: boolean }).productVerified,
       // 病种/类别：顾客手动改过就以他为准（闭集校验在 resolve* 里）。
       // 不传 = 别动它，不重判 —— 免得改个备注把人家自己选的冲掉。
       // 传了病种就由它重新推导类别（两处必须一起更新，否则会打架）。

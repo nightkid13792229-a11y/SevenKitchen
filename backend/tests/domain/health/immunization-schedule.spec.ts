@@ -2518,3 +2518,70 @@ describe('依据文案 · 说明白"是谁的月龄"（2026-10-08）', () => {
     expect(lepto.basis.startsWith(lepto.basisSummary)).toBe(true)
   })
 })
+
+/**
+ * 安全默认值：**没核对过的记录不算进计划**（2026-10-09 老板定）
+ *
+ * 老板："疫苗接种是会影响狗狗安全的，如果我们就这么草率地上生产的话，合适吗？"
+ * —— 对。两个方向的后果不对称：
+ *   · 错算成"没打" → 多提醒一次 ✓
+ *   · 错算成"打了" → **狗真的漏打** ✗✗（狂犬还是法定强制免疫）
+ * 所以：识别出来且我们有理由怀疑的那一针（品牌对不上 / 复核读到不一样的字 / 狂犬），
+ * 在顾客点「我已对照本子核对」之前，**不算数** —— 计划该提醒的继续提醒 ✓。
+ */
+describe('安全默认值 · 没核对过的记录不算数（2026-10-09）', () => {
+  const planWith = (records: Array<Record<string, unknown>>) =>
+    buildVaccinePlan({
+      dogId: 'dog-1',
+      birthday: '2023-02-16',
+      records: records as never,
+      today: new Date('2026-10-09T00:00:00'),
+    })
+
+  it('🔴 有一条未核对的狂犬记录时，狂犬那一针**继续提醒**', () => {
+    const plan = planWith([
+      {
+        id: 'r1',
+        vaccineName: '英特威®优免康',
+        vaccinationDate: '2023-08-09',
+        nextDueDate: null,
+        kinds: ['rabies'],
+        productVerified: false,
+      },
+    ]);
+
+    // 没有算作"已完成"
+    expect(plan.steps.some((step) => step.kind === 'rabies' && step.status === 'DONE')).toBe(false);
+    // 而且明确告诉顾客为什么
+    expect(plan.conflicts.some((item) => item.reason.includes('还没核对过'))).toBe(true);
+  })
+
+  it('点过「我已对照本子核对」（productVerified: true）之后才算数', () => {
+    const plan = planWith([
+      {
+        id: 'r1',
+        vaccineName: '狂犬',
+        vaccinationDate: '2026-07-25',
+        nextDueDate: null,
+        kinds: ['rabies'],
+        productVerified: true,
+      },
+    ]);
+
+    expect(plan.steps.some((step) => step.kind === 'rabies' && step.status === 'DONE')).toBe(true);
+  })
+
+  it('手工填写的老记录（字段缺省）照旧算数 —— 不能因为加了这个默认值把老数据废掉', () => {
+    const plan = planWith([
+      {
+        id: 'r1',
+        vaccineName: '卫佳捌',
+        vaccinationDate: '2024-08-18',
+        nextDueDate: null,
+        kinds: ['core', 'lepto'],
+      },
+    ]);
+
+    expect(plan.steps.some((step) => step.kind === 'core' && step.status === 'DONE')).toBe(true);
+  })
+})

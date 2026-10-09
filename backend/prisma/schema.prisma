@@ -1458,6 +1458,21 @@ model VaccineRecord {
   /// 所以：**病种是顾客看得见、也勾得动的东西**（记录上显示的就是它），
   /// 类别（kinds）由病种推导出来给计划用，不再给顾客看、也不手写。
   components      String[]      @default([]) @map("components")
+  /**
+   * 这一针的**产品名有没有被人工核对过**（2026-10-09 安全默认值）。
+   *
+   * 背景：AI 可能把贴纸认成**另一支真实存在**的苗（实测：狂犬苗「锐必威」
+   * 被读成联苗「优免康」✗）—— 那样系统会以为"狂犬打过了"，从此不再提醒 ✗。
+   * 疫苗这件事两个方向的后果不对称：
+   *   · 错算成"没打" → 多提醒一次 ✓ 最多烦一下
+   *   · 错算成"打了" → **狗漏打** ✗✗（狂犬还是法定强制免疫）
+   * 所以默认倒向安全：**没核对过的记录，不算进计划** ✓
+   *
+   * 默认 true（手工填写、老记录都算数 ✓）；
+   * 只有"识别出来且我们有理由怀疑"（品牌对不上 / 复核读到不一样的字 / 狂犬）
+   * 才落成 false，等顾客点一下「我已对照本子核对」再算数 ✓。
+   */
+  productVerified Boolean       @default(true) @map("product_verified")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)

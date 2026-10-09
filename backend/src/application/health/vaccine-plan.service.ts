@@ -72,6 +72,8 @@ export class VaccinePlanService {
         // 记录自己存的归类（顾客选的 / AI 判的）；老记录是空数组，
         // buildVaccinePlan 会退回按名字推一次。
         kinds: record.kinds,
+        // 没核对过的（识别出来且我们有理由怀疑的）不算进计划 —— 见 schema 里的说明
+        productVerified: record.productVerified,
       })),
       decisions: (plan?.decisions || {}) as Record<string, VaccineDecision>,
       // 2026-10-06：按审核通过的标准部署（原来恒为 false，

@@ -46,7 +46,7 @@
               {{ nextStep ? nextStep.kindLabel : '当前没有待接种的针' }}
             </text>
             <text v-if="nextStep" class="plan-card__window">
-              接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}
+              接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
             </text>
             <text v-else class="plan-card__window">
               按现有记录，免疫程序里的项目都已完成
@@ -79,7 +79,7 @@
                   <text class="fishbone__head-title">{{ nextStep.kindLabel }} · {{ nextStep.label }}</text>
                 </view>
                 <text class="fishbone__head-line">
-                  接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}
+                  接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
                 </text>
                 <text v-if="stepProducts(nextStep).length > 0" class="fishbone__head-line">
                   常见的有：{{ stepProducts(nextStep).join(' / ') }}
@@ -587,6 +587,11 @@ const fishboneLayout = computed(() =>
 
 const fishboneNodes = computed(() => fishboneLayout.value.nodes)
 const todayIndex = computed(() => fishboneLayout.value.todayIndex)
+/**
+ * 历史折叠的入口**不再需要**（2026-10-10 老板定）：鱼骨图里已经没有已完成的步骤 ✓，
+ * 所以这里恒为 0，那块"展开全部历史"自然不显示 ✓（留着这个 computed 只是因为
+ * 布局函数还会回它一个值，删掉反而要动布局的返回结构）。
+ */
 const hiddenHistoryCount = computed(() => fishboneLayout.value.hiddenHistoryCount)
 
 /** 日期只显示"月-日"（年份由分隔标签负责，背骨那一列要窄） */
@@ -677,8 +682,39 @@ const visibleSteps = computed(() => {
    *    鱼骨图的背骨本身就是时间轴，顺序由 utils/vaccine-fishbone.ts 按日期算，
    *    这里只负责"哪些该出现"。
    */
-  return ordered.filter((step) => !blocked.has(step.key))
+
+  /*
+   * ⚠️ **已经打过的一律不在这里出现**（2026-10-10 老板定）。
+   *
+   * 老板："疫苗接种计划这个板块目的是为了让用户知道接下来该打哪些疫苗、
+   *        该什么时候打。我怎么感觉鱼骨图也把过去的记录一并展示了呢？
+   *        这个难道不应该是鱼骨图下方的疫苗记录板块该做的事情吗？"
+   * —— 对。"计划"只回答"接下来打什么 ✓"，"打过什么"交给下方的接种记录板块 ✓。
+   * 计划本身也已经保证"每一类只出一针待办" ✓（见上面 blocked 那段），
+   * 所以这里把 DONE 滤掉之后，结果就是**每一类最多一条** ✓。
+   */
+  return ordered.filter(
+    (step) => !blocked.has(step.key) && step.status !== 'DONE',
+  )
 })
+
+/**
+ * 窗口**早就过去了**的话，在窗口后面补一句（2026-10-10 老板问的）。
+ *
+ * 老板："在计划的鱼头，为什么还会出现过去的时间窗口期呢？"
+ * —— 那一步是"首年程序里没记录"的欠账（例如 26 周龄补强，窗口 2023-08 ✓），
+ * 计划里保留它是**诚实**的 ✓，但只甩一个 2023 的日期会让人以为系统坏了 ✗。
+ * 所以补一句「（窗口已过，建议尽快补）」✓ —— 不改数据，只把话说全 ✓。
+ * 阈值取 90 天：还在窗口内、或刚过一点点，都不算"早就过去" ✓。
+ */
+function windowPassedSuffix(step: { windowEnd?: string } | null | undefined): string {
+  const end = String(step?.windowEnd || '').slice(0, 10)
+  if (!end) return ''
+  const endMs = Date.parse(`${end}T00:00:00`)
+  if (Number.isNaN(endMs)) return ''
+  const passedDays = Math.floor((Date.now() - endMs) / 86400000)
+  return passedDays > 90 ? '（窗口已过，建议尽快补）' : ''
+}
 
 /** 被忽略了几项 —— 给"恢复"那条路用 */
 const ignoredCount = computed(

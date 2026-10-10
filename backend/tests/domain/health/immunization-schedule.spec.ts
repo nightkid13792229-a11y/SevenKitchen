@@ -1520,12 +1520,14 @@ describe('按窗口匹配（2026-10-06 老板实测）', () => {
 
   it('🔴 钩端"每年 1 次"按年份各归各位，不再张冠李戴', () => {
     const steps = plan().steps.filter((step) => step.kind === 'lepto');
-    const byLabel = new Map(steps.map((step) => [step.label, step]));
+    // 2026-10-10：标签不再编号（老板定"狂犬/年度加强不编号"）→
+    // 按 **key** 找步骤（比按标签文字更结实 ✓），守的还是"每一年归到对应那一步" ✓
+    const byKey = new Map(steps.map((step) => [step.key, step]));
 
     // 每一年那一针，落到**它当年**的那一步上
-    expect(byLabel.get('钩端螺旋体 每年 1 次（第 1 次）')?.matchedRecordDate).toBe('2024-08-18');
-    expect(byLabel.get('钩端螺旋体 每年 1 次（第 2 次）')?.matchedRecordDate).toBe('2025-08-18');
-    expect(byLabel.get('钩端螺旋体 每年 1 次（第 3 次）')?.matchedRecordDate).toBe('2026-07-18');
+    expect(byKey.get('lepto-repeat-1')?.matchedRecordDate).toBe('2024-08-18');
+    expect(byKey.get('lepto-repeat-2')?.matchedRecordDate).toBe('2025-08-18');
+    expect(byKey.get('lepto-repeat-3')?.matchedRecordDate).toBe('2026-07-18');
   })
 
   it('🔴 2023 年那两针初免不该被 2024/2025 的记录"顶掉"后还留在计划里', () => {
@@ -2452,7 +2454,8 @@ describe('钩端 · 隔太久要重新两针 + 同一支产品（2026-10-07）',
     const pending = pendingLepto([rec('a', '卫佳捌', at(1540))])
 
     expect(pending.length).toBe(1)
-    expect(pending[0].label).toContain('每年 1 次')
+    // 2026-10-10 标签不再编号：「每年 1 次（第 N 次）」→「年度加强」✓（意图不变 ✓）
+    expect(pending[0].label).toContain('年度加强')
     expect(pending[0].label).not.toContain('重新开始')
   })
 

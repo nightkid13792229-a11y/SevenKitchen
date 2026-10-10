@@ -960,3 +960,50 @@ describe('识别结果 · 猫的疫苗本提醒（2026-10-09）', () => {
     expect(source).not.toContain('function detectSpecies')
   })
 })
+
+/**
+ * 计划只讲"接下来打什么"（2026-10-10 老板定）
+ *
+ * 老板："鱼骨图中，每一类疫苗只提醒接下来要打的那一针即可。"
+ * —— "打过什么"归下方的接种记录板块 ✓，计划里不再出现已完成的步骤 ✓。
+ */
+describe('疫苗计划 · 只提醒接下来要打的那一针（2026-10-10）', () => {
+  const plan = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('已完成的步骤不进鱼骨图；每一类最多一条', () => {
+    const source = plan()
+
+    expect(source).toContain("!blocked.has(step.key) && step.status !== 'DONE'")
+  })
+
+  it('计划只回答"接下来打什么"，历史交给记录板块（注释里写清了口径）', () => {
+    const source = plan()
+
+    expect(source).toContain('已经打过的一律不在这里出现')
+    expect(source).toContain('打过什么')
+  })
+})
+
+/**
+ * 窗口早就过去时要说明白（2026-10-10 老板问的）
+ *
+ * 老板："在计划的鱼头，为什么还会出现过去的时间窗口期呢？"
+ * —— 那是"首年程序没记录"的欠账（26 周龄补强，窗口 2023-08 ✓）。
+ * 保留它是诚实的 ✓，但只甩一个 2023 的日期会让人以为系统坏了 ✗。
+ */
+describe('疫苗计划 · 过期的窗口要标出来（2026-10-10）', () => {
+  it('窗口结束超过 90 天就补一句"窗口已过，建议尽快补"', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('function windowPassedSuffix')
+    expect(source).toContain('（窗口已过，建议尽快补）')
+    expect(source).toContain('passedDays > 90')
+  })
+})

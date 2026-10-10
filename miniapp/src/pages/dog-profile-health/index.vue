@@ -117,6 +117,12 @@
             </view>
           </view>
 
+          <!-- 子板块崩了不许静默变白（2026-10-10） -->
+          <view v-if="childSectionError" class="section-error">
+            <text class="section-error__title">这一块没加载出来</text>
+            <text class="section-error__detail">{{ childSectionError }}</text>
+          </view>
+
           <view class="health-panel__body">
         <HealthRecordsSection
           v-if="isRecordTab"
@@ -1148,6 +1154,23 @@ const weightSectionRef = ref<{
 /** 疫苗/体重板块自己的未保存状态（就诊/体检复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
 
+/**
+ * 子板块**崩了要看得见**（2026-10-10 老板报"计划下方没有任何记录"）。
+ *
+ * 背景：小程序里某个板块初始化抛错时，错误只进开发者工具的控制台 ✗ ——
+ * 顾客看到的是一块**空白** ✗，看起来和"本来就没有记录"一模一样 ✗
+ * （老板就是这么被绕进去的 ✓）。生产日志又只能看到"请求没发出去" ✗。
+ *
+ * 这里兜住子组件的错误并**显示在页面上** ✓：顾客/老板截个图，就能直接定位 ✗。
+ * 返回 false 表示"已处理"，不让它继续往上抛（否则整个页面都白 ✗）。
+ */
+const childSectionError = ref('')
+onErrorCaptured((error) => {
+  childSectionError.value =
+    String((error as Error)?.message || error || '未知错误').slice(0, 200)
+  return false
+})
+
 
 /**
  * 各板块的"新增块"开关（2026-10-03）。
@@ -1767,5 +1790,26 @@ function goToDogCreate() {
   color: #26261f;
   background: #fbfcf7;
   border: 1rpx solid rgba(30, 46, 36, 0.08);
+}
+
+/* 子板块崩了要看得见（2026-10-10） */
+.section-error {
+  margin: 16rpx 24rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fdeeed;
+  border: 1rpx solid #e8b4ae;
+}
+.section-error__title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #c0392b;
+}
+.section-error__detail {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #a05a52;
+  word-break: break-all;
 }
 </style>

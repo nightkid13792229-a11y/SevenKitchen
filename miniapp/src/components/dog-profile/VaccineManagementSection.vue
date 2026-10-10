@@ -48,6 +48,13 @@
             （不是孤立的卡片），一眼能看出"这是一个列表"。
            独立成页时也照样成立（那边本来还有一层页级标题）。 -->
     <view class="health-card records-card">
+      <!-- ⚠️ 临时诊断行（2026-10-10 加的，定位完就删）：
+           老板报"计划下方没有任何记录"，而生产日志显示这块**一次请求都没发过** ✗ ——
+           所以先确认它到底挂载没有 ✓。这行字出现 = 挂载了 ✓；没有 = 没挂载 ✗。 -->
+      <text class="records-card__diag">
+        [诊断] 记录板块已挂载 · {{ dogId ? dogId.slice(0, 8) : '（dogId 为空）' }} · {{ records.length }} 条
+      </text>
+
       <view v-if="records.length > 0" class="records-card__head">
         <text class="records-card__title">接种记录</text>
         <text class="records-card__count">{{ records.length }} 条</text>
@@ -2764,5 +2771,13 @@ async function doRemove(record: VaccineRecord) {
   border: 1rpx solid #0f7b49;
   color: #0f7b49;
   font-size: 26rpx;
+}
+
+/* 临时诊断行（2026-10-10，定位完删） */
+.records-card__diag {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  color: #9a9a9a;
 }
 </style>

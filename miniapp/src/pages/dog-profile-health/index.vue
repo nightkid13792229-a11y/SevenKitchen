@@ -183,11 +183,16 @@
         </view>
       </template>
 
+      <!-- ⚠️ 走到这里 = 有狗、但还没选出当前这只（2026-10-10 老板截图报的）。
+           原来这里写「先选择狗狗」+「创建狗狗档案」✗ —— 老板看到的是一条
+           已经加载了一半的页面（顶部资料还是骨架 ✓）却被告知"先选一只狗"✗，
+           像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
+           所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
-        <text class="section-card__title">先选择狗狗</text>
-        <text class="state-card__desc">选择一只狗狗后，即可维护就诊记录、体检报告、疫苗和体重。</text>
-        <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
+        <text class="section-card__title">正在读取狗狗档案</text>
+        <text class="state-card__desc">马上就好，请稍候。</text>
       </view>
+
     </view>
 
     <!-- 底部按钮按当前板块自适应（老板要求）：

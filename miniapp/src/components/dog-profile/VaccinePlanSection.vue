@@ -29,11 +29,11 @@
       <template>
       <!-- ══ 2026-10-06 老板改版 ══════════════════════════════════════
            · 「步骤提醒」和「接种计划」**合并成一个板块**，默认收起；
-           · 收起时只显示**下一针的疫苗分类 + 接种窗口期**；
+           · 收起时只显示**下一针的疫苗分类 + 建议接种时间**；
            · 展开后分两部分：
                ① 下一针的进一步说明 —— 分类、窗口期、依据、推荐疫苗；
-               ② 接种计划 —— 按接种窗口期**由近到远**排序，
-                  每一步只显示：状态、疫苗种类、接种窗口期、接种时间、
+               ② 接种计划 —— 按建议接种时间**由近到远**排序，
+                  每一步只显示：状态、疫苗种类、建议接种时间、接种时间、
                   推荐疫苗（已记录/已接种就不再推荐）、依据；
            · 每一步的三个按钮（按建议/推迟/不做）换成两个：
                「记录疫苗接种信息」→ 直接走新增记录流程（并带上这一步的分类）
@@ -51,7 +51,7 @@
               {{ nextStep ? nextStep.kindLabel : '当前没有待接种的针' }}
             </text>
             <text v-if="nextStep" class="plan-card__window">
-              接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
+              建议接种时间 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
             </text>
             <text v-else class="plan-card__window">
               按现有记录，免疫程序里的项目都已完成
@@ -62,7 +62,7 @@
 
         <template v-if="expanded">
           <!-- ②-A 下一针的进一步说明。
-               老板："除了疫苗分类和接种窗口期，还需要展示依据和推荐的疫苗。
+               老板："除了疫苗分类和建议接种时间，还需要展示依据和推荐的疫苗。
                      该部分其他的信息不用展示。" -->
           <!-- 竖版鱼骨图（2026-10-09 老板定）。
                背骨自上而下 = **由近到远**（今天该做的 → 将来的待安排 → 越翻越旧的历史）；
@@ -73,9 +73,11 @@
           <view class="fishbone">
             <!-- 鱼头：今天 + 要打哪一类、窗口期、常见的那几支 -->
             <view class="fishbone__head">
-              <text class="fishbone__today-label">
-                今天 · {{ todayText }}<template v-if="ageText">（{{ ageText }}）</template>
-              </text>
+              <!-- ⚠️ 原来这里写「今天 · 2026-10-11（1 个月）」✗ —— 老板 2026-10-11 提问：
+                   "今天这个字样会不会让用户误解成今天必须去打？"
+                   会 ✓ —— 它只是"当前参照点"，紧挨着计划就容易被读成接种日 ✗。
+                   改成只留月龄 ✓（月龄本来就有用：家长知道狗多大 ✓）。 -->
+              <text v-if="ageText" class="fishbone__today-label">{{ ageText }}</text>
               <template v-if="nextStep">
                 <view class="fishbone__head-row">
                   <text class="fishbone__badge" :class="`fishbone__badge--${nextStep.status}`">
@@ -83,15 +85,11 @@
                   </text>
                   <text class="fishbone__head-title">{{ nextStep.kindLabel }} · {{ nextStep.label }}</text>
                 </view>
-                <text class="fishbone__head-line">
-                  接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
-                </text>
-                <text v-if="stepProducts(nextStep).length > 0" class="fishbone__head-line">
-                  常见的有：{{ stepProducts(nextStep).join(' / ') }}
-                </text>
-                <text v-if="nextStep.spacingNote" class="spacing-note__text">
-                  {{ nextStep.spacingNote }}
-                </text>
+                <!-- ⚠️ 这里原来还把窗口期、常见产品、间隔提示又说了一遍 ✗ ——
+                     老板 2026-10-11："鱼头是核心疫苗·幼犬首免第一针，下面的第一步
+                     也是幼犬首免第一针，一模一样，这个重复怎么解决？"
+                     现在：鱼头只回答"**下一针是什么、什么状态**" ✓，
+                     具体的窗口/产品/依据交给下面**第一步那个节点**说一次 ✓。 -->
               </template>
               <text v-else class="fishbone__head-line">
                 按现有记录，免疫程序里的项目都已完成。
@@ -106,7 +104,7 @@
                 </view>
                 <!-- "今天"这条虚线画在最上方（现在 → 越远越往下 → 越旧越往下） -->
                 <view v-if="index === todayIndex" class="fishbone__today-line">
-                  <text class="fishbone__today-text">今天</text>
+                  <text class="fishbone__today-text">现在</text>
                   <view class="fishbone__today-dash" />
                 </view>
 
@@ -142,10 +140,10 @@
                     </view>
                     <text class="fishbone__card-label">{{ node.step.label }}</text>
 
-                    <!-- 已完成的不显示接种窗口期（2026-10-06 老板：
-                         "已完成的疫苗为什么还要显示接种窗口期呢？"）-->
+                    <!-- 已完成的不显示建议接种时间（2026-10-06 老板：
+                         "已完成的疫苗为什么还要显示建议接种时间呢？"）-->
                     <view v-if="node.step.status !== 'DONE'" class="kv">
-                      <text class="kv__label">接种窗口期</text>
+                      <text class="kv__label">建议接种时间</text>
                       <text class="kv__value">{{ node.step.windowStart }} ~ {{ node.step.windowEnd }}</text>
                     </view>
                     <view v-if="node.step.matchedRecordDate" class="kv">
@@ -358,7 +356,8 @@ const nextStep = computed(() => plan.value.nextStep)
 const STATUS_LABELS: Record<PlanStep['status'], string> = {
   DONE: '已完成',
   DUE: '该打了',
-  UPCOMING: '待安排',
+  // 老板 2026-10-11：「待安排」改成「待接种」更好懂 ✓
+  UPCOMING: '待接种',
   OVERDUE: '已逾期',
   SKIPPED: '不做',
 }
@@ -574,7 +573,7 @@ function toggleExpanded() {
 }
 
 /**
- * 计划列表：按接种窗口期**由近到远**（老板 2026-10-06 的明确要求），
+ * 计划列表：按建议接种时间**由近到远**（老板 2026-10-06 的明确要求），
  * 并且把顾客忽略掉的步骤去掉。
  *
  * 忽略 = 存一个 SKIP 决定（后端一直支持，只是原来只影响"下一步"的选择，

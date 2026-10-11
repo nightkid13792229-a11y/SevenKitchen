@@ -88,7 +88,8 @@ describe('疫苗计划 · 界面', () => {
   it('措辞是建议不是命令（老板要求不做诊断、不替顾客拍板）', () => {
     const section = readSection()
 
-    expect(section).toContain('接种窗口期')
+    // 2026-10-11 老板定：这个字段改叫「建议接种时间」✓ —— 比"窗口期"更像人话 ✓
+    expect(section).toContain('建议接种时间')
     expect(section).toContain('依据')
     expect(section).not.toContain('必须接种')
     expect(section).not.toContain('立刻去打')
@@ -520,16 +521,19 @@ describe('接种计划 · 竖版鱼骨图（2026-10-09）', () => {
     expect(source).toContain('{{ shortDate(node.dateText) }}')
   })
 
-  it('鱼头给的是"哪一类 + 常见的那几支 + 窗口期"，并且不提费用', () => {
-    const source = readSection()
+  it('鱼头只回答"下一针是什么 + 什么状态"，细节交给下面第一步（2026-10-11 老板去重）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+    const head = source.slice(source.indexOf('class="fishbone__head"'), source.indexOf('class="fishbone__body"'))
 
-    expect(source).toContain('{{ nextStep.kindLabel }} · {{ nextStep.label }}')
-    expect(source).toContain('常见的有：{{ stepProducts(nextStep).join(\' / \') }}')
-    expect(source).toContain('接种窗口期 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}')
-    // 不提供费用建议（老板 2026-10-09）
-    expect(source).not.toContain('价格')
-    expect(source).not.toContain('￥')
-    expect(source).not.toContain('元/针')
+    // 鱼头保留：状态角标 + 类别·步骤名
+    expect(head).toContain('statusLabel(nextStep)')
+    expect(head).toContain('nextStep.kindLabel')
+    // 鱼头不再重复窗口期与常见产品（它们在下面第一步的节点里 ✓）
+    expect(head.includes('建议接种时间 {{ nextStep.windowStart }}')).toBe(false)
+    expect(head.includes('常见的有：{{ stepProducts(nextStep)')).toBe(false)
   })
 
   it('⚠️ 产品措辞是"常见的有"，不是"建议打"（2026-10-04 兽医审核口径）', () => {

@@ -117,12 +117,8 @@
             </view>
           </view>
 
-          <!-- 子板块崩了不许静默变白（2026-10-10） -->
-          <view v-if="childSectionError" class="section-error">
-            <text class="section-error__title">这一块没加载出来</text>
-            <text class="section-error__detail">{{ childSectionError }}</text>
-          </view>
-
+          <!-- 子板块的错误浮层已撤（2026-10-11）：小程序 Vue 不支持 onErrorCaptured ✗，
+               改用各板块自己的 try/catch + 常驻失败提示 ✓ -->
           <view class="health-panel__body">
         <HealthRecordsSection
           v-if="isRecordTab"
@@ -720,7 +716,22 @@ async function loadDogs(preferredDogId = '') {
       return
     }
 
-    await selectDogByIndex(selection.selectedIndex)
+    /*
+     * ⚠️ 这一步单独包一层（2026-10-11 老板报的现场）：
+     * 生产日志里 `GET /dogs` **成功 200** ✓，但紧随其后的"读某只狗档案"请求
+     * **从来没发** ✗ —— 说明断在这一步 ✓。以前它出错会和"列表请求失败"
+     * 混成一个笼统的提示 ✗，现在分开说清 ✓，并且**立刻让页面说人话** ✓
+     * （不再让顾客对着"正在读取"发呆 ✗）。
+     */
+    try {
+      await selectDogByIndex(selection.selectedIndex)
+    } catch (selectionError: any) {
+      loadError.value = `选中狗狗时出错：${
+        String(selectionError?.message || selectionError).slice(0, 120)
+      }`
+      startupStuck.value = true
+      throw selectionError
+    }
   } catch (error: any) {
     if (preferredDogId) {
       latestRequestedDogId.value = preferredDogId
@@ -1233,24 +1244,15 @@ const weightSectionRef = ref<{
 /** 疫苗/体重板块自己的未保存状态（就诊/体检复用 hasUnsavedRecordDraft） */
 const hasUnsavedSectionDraft = ref(false)
 
-/**
- * 子板块**崩了要看得见**（2026-10-10 老板报"计划下方没有任何记录"）。
- *
- * 背景：小程序里某个板块初始化抛错时，错误只进开发者工具的控制台 ✗ ——
- * 顾客看到的是一块**空白** ✗，看起来和"本来就没有记录"一模一样 ✗
- * （老板就是这么被绕进去的 ✓）。生产日志又只能看到"请求没发出去" ✗。
- *
- * 这里兜住子组件的错误并**显示在页面上** ✓：顾客/老板截个图，就能直接定位 ✗。
- * 返回 false 表示"已处理"，不让它继续往上抛（否则整个页面都白 ✗）。
+/*
+ * ⚠️ 这里原来用 `onErrorCaptured` 兜子板块的错误 ✗ —— 2026-10-11 撤掉：
+ * 小程序的 Vue 运行时**不支持它** ✗，调用会抛错 ✓，
+ * 而 setup 中途抛错会把**后面声明的状态全部废掉** ✗（页面于是"半死不活"：
+ * 模板能渲染、但数据全是空的 → 看起来就是"一直停在正在读取"✗）。
+ * 分页级的错误改由各处自己的 try/catch 兜（见 loadDogs / loadDogProfile ✓），
+ * 记录板块自己的失败也已经有常驻提示 + 重试 ✓。
  */
 const childSectionError = ref('')
-onErrorCaptured((error) => {
-  childSectionError.value =
-    String((error as Error)?.message || error || '未知错误').slice(0, 200)
-  return false
-})
-
-
 /**
  * 各板块的"新增块"开关（2026-10-03）。
  *

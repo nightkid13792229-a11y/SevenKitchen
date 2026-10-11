@@ -830,8 +830,7 @@ export function buildImmunizationSchedule(
   }
   // 4~6 周龄、且 kinds 里没带 core_early 的狗：这里补上（老板 2026-10-11 定的提醒口径）
   if (wantsEarly && !kinds.includes('core_early')) {
-    const config = NON_CORE_SCHEDULES.core_early as NonCoreKind | undefined
-    if (config) seeds.push(...buildNonCoreSeeds(birthday, 'core_early', config))
+    seeds.push(...buildNonCoreSeeds(birthday, 'core_early', NON_CORE_SCHEDULES.core_early))
   }
 
   // ── 狂犬：首针 12 周龄起，之后每年一次 ──

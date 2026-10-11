@@ -564,3 +564,23 @@ describe('接种计划 · 竖版鱼骨图（2026-10-09）', () => {
     expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
   })
 })
+
+/**
+ * ⚠️ 钉死（2026-10-11）：**零记录时计划板块里还藏着一道 v-if** ✗
+ *
+ * 老板在 测27~测30（零记录、2~5 周龄）上看到"没有任何疫苗接种计划"✗。
+ * 外层 `sectionHidden` 改了 ✓，但模板里还有 `<template v-if="!noRecordAtAll">` ✗
+ * → 零记录时里面**一个节点都不渲染** ✗。
+ */
+describe('疫苗计划 · 零记录不许再藏第二道（2026-10-11）', () => {
+  it('模板里没有 v-if="!noRecordAtAll" 这种内层拦截', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+    const tpl = source.slice(source.indexOf('<template>'), source.indexOf('</template>'))
+
+    // 只看**属性**写法（注释里提到它没关系 ✓）
+    expect(tpl.includes('<template v-if="!noRecordAtAll"')).toBe(false)
+  })
+})

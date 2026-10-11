@@ -145,7 +145,12 @@
           <!-- 疫苗计划（2026-10-01，第四期）：记录是"打过什么"，
                计划是"接下来怎么打"，计划放上面先看到。 -->
           <!-- data-version：记录一变就重算计划（2026-10-05） -->
+          <!-- ⚠️ v-if="dogId"：这两个板块必须**拿到狗狗 id 之后**才挂载（2026-10-11 修）✗
+               之前它们先以空 dogId 挂载 ✓，而小程序里 props 不会随后续赋值重绑 ✗ →
+               记录板块永远不取数 ✓（老板看到"0 条"就是这个 ✓）；
+               计划板块则可能整块空白 ✓。 -->
           <VaccinePlanSection
+            v-if="dogId"
             ref="vaccinePlanRef"
             :dog-id="dogId"
             :birthday="form.birthday"
@@ -154,6 +159,7 @@
             @pending-changed="vaccinePlanPending = $event"
           />
           <VaccineManagementSection
+            v-if="dogId"
             ref="vaccineSectionRef"
             external-save
             embedded
@@ -185,7 +191,7 @@
            像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
            所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
-        <text class="page-version">版本 2026.10.11.3</text>
+        <text class="page-version">版本 2026.10.11.6</text>
         <template v-if="startupStuck">
           <text class="section-card__title">网络好像不太顺</text>
           <text class="page-version">[诊断] 加载中={{ isLoading ? 1 : 0 }} · 档案中={{ isProfileLoading ? 1 : 0 }} · 狗={{ dogs.length }} · dogId={{ dogId ? dogId.slice(0, 8) : '空' }} · 错={{ loadError || '无' }}</text>
@@ -219,7 +225,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue'
+// ⚠️ 2026-10-11 教训：这里曾经把 `watch` 弄丢过 ✗ —— 页面里用了 watch() 却没导入，
+// 于是 **setup 直接抛 ReferenceError** ✗：页面能渲染（模板还在 ✓），
+// 但**所有数据都是空的** ✗、onLoad 之后的请求一个都不发 ✗、
+// 连"超时兜底"也不会触发 ✗（老板看到的就是"一直停在正在读取狗狗档案"✗）。
+// 所以：这个页面的导入表要和使用情况**对齐** ✓，并有测试钉着 ✓。
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'

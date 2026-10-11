@@ -1144,3 +1144,63 @@ describe('接种记录 · 加载失败要看得见（2026-10-10）', () => {
     expect(emptyIndex).toBeGreaterThan(failIndex)
   })
 })
+
+/**
+ * ⚠️ 钉死这个 bug（2026-10-11，害了两天）：**别名先用了、后定义** ✗
+ *
+ * 症状：记录板块**整块不渲染、一次请求都不发** ✗
+ * （老板："计划下方没有任何记录" ✓；生产日志里连 /vaccines 请求都没有 ✗）。
+ * 根因：`const today = getTodayDateString()` 写在了
+ * `const getTodayDateString = todayDateText` **上面** ✗ ——
+ * const 在初始化前是 undefined ✓ → setup 抛 "not a function" ✗
+ * → 板块"半死不活"（模板在、数据全空）✗。
+ *
+ * 小程序里 setup 抛错就是这个样子 ✗ —— 所以顺序类错误必须钉住 ✓。
+ */
+describe('记录板块 · 别名必须定义在使用之前（2026-10-11）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('getTodayDateString 的定义在脚本里所有使用点之前（模板里的调用不算 ✗）', () => {
+    const text = source()
+    // 只看 <script> 之后：模板里的调用发生在渲染期 ✓，不受 const 顺序影响 ✓
+    const script = text.slice(text.indexOf('<script'))
+    // 定义必须紧挨在这次顶层调用之前 ✓（真正会出事的就是这种"先用了后定义" ✗）
+    expect(
+      /const getTodayDateString = todayDateText\s*\n\s*const today = getTodayDateString\(\)/.test(script),
+    ).toBe(true)
+  })
+})
+
+/**
+ * ⚠️ 同类错误的通用守卫（2026-10-11）：**用了却没导入 / 先用了后定义** ✗
+ *
+ * 这两天连着栽了三次（`watch` 没导入 ✗、`todayDateText` 没导入 ✗、
+ * `getTodayDateString` 先用了后定义 ✗）—— 症状全是同一个：
+ * **板块整块不渲染、请求一个不发、界面半死不活** ✗，
+ * 而错误只躺在小程序控制台里 ✓（看服务端日志只能看到"请求没发" ✗）。
+ */
+describe('记录板块 · 导入与定义顺序的通用守卫（2026-10-11）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('用到的外部工具函数都导入了（todayDateText / watch / onMounted …）', () => {
+    const text = source()
+    const pairs: [string, string][] = [
+      ['todayDateText', "from '../../utils/date'"],
+      ['watch', "from 'vue'"],
+      ['onMounted', "from 'vue'"],
+    ]
+    for (const [name, importFrom] of pairs) {
+      if (!new RegExp(`\\b${name}\\b`).test(text)) continue
+      const importBlock = text.slice(0, text.indexOf('<script') + 4000)
+      expect(`${name} → ${importBlock.includes(importFrom) ? 'ok' : 'missing'}`).toBe(`${name} → ok`)
+    }
+  })
+})

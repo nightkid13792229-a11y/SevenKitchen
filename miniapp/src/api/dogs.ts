@@ -102,7 +102,7 @@ export type AllergyReportPayload = {
   }>
 }
 
-type VaccineRecordCreatePayload = {
+export type VaccineRecordCreatePayload = {
   vaccineName: string
   vaccinationDate: string
   nextDueDate?: string | null

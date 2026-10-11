@@ -1071,7 +1071,51 @@ describe('健康管理 · 超时兜底必须真的挂上（2026-10-11）', () =>
   it('版本号用字面量印出来（ref 那次没渲染出来 ✗），卡住时印关键状态', () => {
     const source = page()
 
-    expect(source).toContain('版本 2026.10.11.3')
+    expect(source).toContain('版本 2026.10.11.6')
     expect(source).toContain('[诊断] 加载中=')
+  })
+})
+
+/**
+ * ⚠️ 钉死这个 bug（2026-10-11，害了两天）：**用了却没导入** ✗
+ *
+ * 症状：健康管理页**一直停在「正在读取狗狗档案」**✗ ——
+ * 页面能渲染（模板还在 ✓），但数据全空 ✗、请求一个不发 ✗、超时兜底也不触发 ✗。
+ * 根因：页面里用了 `watch(...)`，但改导入那一行时把 `watch` 弄丢了 ✗
+ * → setup 抛 `ReferenceError: watch is not defined` ✗
+ * （用微信开发者工具的自动化接口才读出这句原文 ✓ —— 小程序把错误吞在控制台里 ✗）。
+ *
+ * 这条测试守的是"**导入表与使用情况对齐**" ✓：用到的组合式 API 必须都导入 ✓。
+ */
+describe('健康管理页 · 组合式 API 必须都导入（2026-10-11）', () => {
+  const page = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+  it('页面里用到的 vue API 都要在导入表里', () => {
+    const source = page()
+    const importLine = source.slice(source.indexOf("from 'vue'") - 200, source.indexOf("from 'vue'"))
+
+    for (const api of ['computed', 'nextTick', 'reactive', 'ref', 'watch']) {
+      const used = new RegExp(`\\b${api}\\s*\\(`).test(source)
+      if (!used) continue
+      expect(importLine).toContain(api)
+    }
+  })
+
+  it('用到的 uni-app 生命周期也要都导入', () => {
+    const source = page()
+    const importLine = source.slice(
+      source.indexOf("from '@dcloudio/uni-app'") - 200,
+      source.indexOf("from '@dcloudio/uni-app'"),
+    )
+
+    for (const api of ['onLoad', 'onShow', 'onHide', 'onUnload']) {
+      const used = new RegExp(`\\b${api}\\s*\\(`).test(source)
+      if (!used) continue
+      expect(importLine).toContain(api)
+    }
   })
 })

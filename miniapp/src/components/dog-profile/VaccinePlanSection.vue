@@ -449,9 +449,18 @@ const planHidden = computed(() => unavailable.value !== null)
  * 记录板块那张空态卡之间留了一条 24rpx 的紫色空白。
  * 老板看出来了："疫苗板块为什么还是有紫色的空白区域呢？"
  */
-const sectionHidden = computed(
-  () => planHidden.value || (loaded.value && noRecordAtAll.value),
-)
+/*
+ * ⚠️ 2026-10-11 老板定的口径变了：**零记录也要显示计划**。
+ *
+ * 老板拿 3 周龄、一条记录都没有的测试狗问：
+ *   "为什么没有显示疫苗计划提醒，下一针应该接种的疫苗呢？"
+ * —— 对。计划板块回答的就是"接下来该打什么、什么时候" ✓，
+ * 它跟"有没有记录"本来就没关系 ✓（幼犬本来就该看到"6 周龄打第一针" ✓）。
+ * 当初藏掉它是怕"什么记录都没有的狗，页面顶着 5 个已逾期" ✗ ——
+ * 那个问题已经由 noEvidence 的**软措辞**解决了 ✓（说"还没记录"，不说"已逾期" ✓），
+ * 不需要再整块藏 ✗。
+ */
+const sectionHidden = computed(() => planHidden.value)
 const plan = ref<{
   nextStep: PlanStep | null
   steps: PlanStep[]

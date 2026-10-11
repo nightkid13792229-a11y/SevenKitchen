@@ -198,6 +198,7 @@ function main() {
   }
 }
 
-if (process.argv[1] && process.argv[1].includes('vaccine-test-cases')) {
+// ⚠️ 只有**直接运行这个文件**时才推演（被别的脚本 import 时不要跟着跑 ✗）
+if (process.argv[1] && /vaccine-test-cases\.ts$/.test(process.argv[1])) {
   main();
 }

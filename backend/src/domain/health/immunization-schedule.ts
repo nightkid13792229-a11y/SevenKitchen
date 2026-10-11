@@ -696,13 +696,34 @@ export function buildImmunizationSchedule(
    *
    * 营养师看整套程序表时把 `ALL_VACCINE_KINDS` 传进来。
    */
-  options: { kinds?: readonly VaccineKind[] } = {},
+  options: { kinds?: readonly VaccineKind[]; today?: Date } = {},
 ): ImmunizationScheduleItem[] {
   const kinds = options.kinds ?? DEFAULT_PLAN_KINDS;
+  // 早期苗的提醒要看**狗狗现在多大** ✓ —— 所以这里需要"今天"（默认现在 ✓）
+  const today = options.today ?? new Date();
   const seeds: StepSeed[] = [];
 
   const wantsCore = kinds.includes('core')
   const wantsRabies = kinds.includes('rabies')
+
+  /*
+   * 早期苗（犬瘟细小二联 / 宠必威幼犬保）的**年龄规矩**（2026-10-11 老板定）：
+   *
+   * 老板原话："在不同的年龄段，需要提醒的计划也不太一样：
+   *   小于 4 周的狗狗，我们并不进行提前苗的提醒，也就是犬瘟细小二联疫苗的提醒。
+   *   6 周龄以前，我们应该提醒的是核心四联疫苗，以此类推。"
+   *
+   * 所以：
+   *   · < 4 周  → **不提**早期苗 ✓（它还没到该打的年龄，提了只会让家长懵）
+   *   · 4~6 周 → **提**早期苗 ✓（这一针的窗口就在这儿）
+   *   · ≥ 6 周 → 不再提早期苗 ✗（过了窗口；此时该提醒的是首免系列与后面的针）
+   *   · 已经登记过早期苗的狗 → 由 kinds 带进来 ✓（要能匹配上那条记录 ✓）
+   */
+  const ageWeeks = Math.floor(
+    (today.getTime() - birthday.getTime()) / (7 * 24 * 60 * 60 * 1000),
+  )
+  const wantsEarly =
+    kinds.includes('core_early') || (ageWeeks >= 4 && ageWeeks < 6)
 
   // ── 幼犬首免：从 startWeeksMin 起，按最大间隔排，直到 finishWeeksMin ──
   if (wantsCore) {
@@ -801,9 +822,16 @@ export function buildImmunizationSchedule(
   // 所以间隔可以是每年，而不是核心苗的每 3 年。
   for (const kind of kinds) {
     if (kind === 'core' || kind === 'rabies') continue
+    // 早期苗按**年龄**开关（见上面 wantsEarly 的注释：<4 周不提、4~6 周才提、≥6 周不再提）
+    if (kind === 'core_early' && !wantsEarly) continue
     const config = NON_CORE_SCHEDULES[kind as NonCoreKind]
     if (!config) continue
     seeds.push(...buildNonCoreSeeds(birthday, kind, config))
+  }
+  // 4~6 周龄、且 kinds 里没带 core_early 的狗：这里补上（老板 2026-10-11 定的提醒口径）
+  if (wantsEarly && !kinds.includes('core_early')) {
+    const config = NON_CORE_SCHEDULES.core_early as NonCoreKind | undefined
+    if (config) seeds.push(...buildNonCoreSeeds(birthday, 'core_early', config))
   }
 
   // ── 狂犬：首针 12 周龄起，之后每年一次 ──
@@ -1515,7 +1543,7 @@ export function buildVaccinePlan(
     input.records.map((record) => record.vaccineName),
   );
 
-  const seeds = buildImmunizationSchedule(birthday, { kinds: planKinds });
+  const seeds = buildImmunizationSchedule(birthday, { kinds: planKinds, today });
 
   /*
    * ══ 钩端：隔了 18 个月以上，要**重新打两针**（2026-10-07 老板确认，WSAVA 2024 FAQ p27）═

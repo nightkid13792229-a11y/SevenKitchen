@@ -1007,3 +1007,34 @@ describe('疫苗计划 · 过期的窗口要标出来（2026-10-10）', () => {
     expect(source).toContain('passedDays > 90')
   })
 })
+
+/**
+ * 启动卡死要有底线（2026-10-11 老板报"一直停在正在读取狗狗档案"）
+ *
+ * 现场证据：那会儿服务端**一条日志都没有** ✗ —— 请求没发出去/没回来 ✓，
+ * 而页面会一直等 ✗。这类"静默卡死"最近出现三次 ✗，所以加统一底线：
+ * **等超过 10 秒就明说 + 给一个重试键** ✓。
+ */
+describe('健康管理 · 启动卡死的底线（2026-10-11）', () => {
+  const page = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+  it('10 秒没结果就显示"网络好像不太顺" + 重新加载', () => {
+    const source = page()
+
+    expect(source).toContain('const startupStuck = ref(false)')
+    expect(source).toContain('网络好像不太顺')
+    expect(source).toContain('@tap="retryStartup"')
+    expect(source).toContain('}, 10000)')
+  })
+
+  it('有结果（选中狗 / 确实没有狗）就撤掉看门狗，不许误报', () => {
+    const source = page()
+
+    expect(source).toContain('clearStartupWatchdog()')
+    expect(source).toContain('if (id || none)')
+  })
+})

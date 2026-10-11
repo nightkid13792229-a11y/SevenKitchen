@@ -189,8 +189,15 @@
            像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
            所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
-        <text class="section-card__title">正在读取狗狗档案</text>
-        <text class="state-card__desc">马上就好，请稍候。</text>
+        <template v-if="startupStuck">
+          <text class="section-card__title">网络好像不太顺</text>
+          <text class="state-card__desc">狗狗档案没能读出来（等了 10 秒还没回来）。检查一下网络，再点一次试试。</text>
+          <button class="state-card__button" @tap="retryStartup">重新加载</button>
+        </template>
+        <template v-else>
+          <text class="section-card__title">正在读取狗狗档案</text>
+          <text class="state-card__desc">马上就好，请稍候。</text>
+        </template>
       </view>
 
     </view>
@@ -304,8 +311,50 @@ const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
 const isLoading = ref(false)
 const isProfileLoading = ref(false)
+/**
+ * 启动**卡住了**（2026-10-11 老板报"一直停在正在读取狗狗档案"）。
+ *
+ * 现场证据：那一会儿服务端**一条日志都没有** ✗ —— 请求根本没发出去/没回来 ✓，
+ * 而页面会**一直等** ✗（微信的请求没有我们的超时兜底 ✓）。
+ * 这类"静默卡死"最近出现了三次 ✗（记录板块 ✗、加载失败 ✗、这次 ✗），
+ * 所以统一加一条底线：**等超过 10 秒就明说 + 给一个重试键** ✓。
+ */
+const startupStuck = ref(false)
+let startupWatchdog: ReturnType<typeof setTimeout> | null = null
+
+function clearStartupWatchdog() {
+  if (startupWatchdog) {
+    clearTimeout(startupWatchdog)
+    startupWatchdog = null
+  }
+}
+
+/** 重新起表：进入健康管理页、以及顾客点「重新加载」时都调它 ✓ */
+function armStartupWatchdog() {
+  clearStartupWatchdog()
+  startupStuck.value = false
+  startupWatchdog = setTimeout(() => {
+    // 10 秒还没选出狗、也不是"没有狗" → 就是卡住了 ✓
+    if (!dogId.value && !hasNoDogs.value) {
+      startupStuck.value = true
+    }
+  }, 10000)
+}
+
+async function retryStartup() {
+  armStartupWatchdog()
+  await loadDogs()
+}
 const isSaving = ref(false)
 const hasNoDogs = ref(false)
+
+// 有结果了就撤掉看门狗（成功、失败、没有狗都算"有结果" ✓）
+watch([dogId, hasNoDogs], ([id, none]) => {
+  if (id || none) {
+    clearStartupWatchdog()
+    startupStuck.value = false
+  }
+})
 const loadError = ref('')
 const latestRequestedDogId = ref('')
 /**

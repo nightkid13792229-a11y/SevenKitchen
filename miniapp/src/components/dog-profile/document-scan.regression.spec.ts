@@ -1038,3 +1038,40 @@ describe('健康管理 · 启动卡死的底线（2026-10-11）', () => {
     expect(source).toContain('if (id || none)')
   })
 })
+
+/**
+ * ⚠️ 钉死一类我犯过的错：**函数写了，却没人调用** ✗（2026-10-11）
+ *
+ * 老板截图：页面一直停在「正在读取狗狗档案」，我加的"10 秒超时"却没出现 ✗。
+ * 查下来：`armStartupWatchdog()` 定义得好好的 ✓，但那次替换**没命中 onMounted** ✗
+ * （而这个页面用的是 uni-app 的 onLoad / onShow ✗），于是看门狗从没起过表 ✗。
+ *
+ * 所以：超时兜底必须**挂在真实生命周期上** ✓，而且这条断言要盯住它 ✓。
+ */
+describe('健康管理 · 超时兜底必须真的挂上（2026-10-11）', () => {
+  const page = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+  it('看门狗在 onLoad / onShow 里起表，离开页面清掉', () => {
+    const source = page()
+
+    // onLoad 里必须起表（页面首次进入）
+    const onLoad = source.slice(source.indexOf('onLoad((options'), source.indexOf('onShow(() =>'))
+    expect(onLoad).toContain('armStartupWatchdog()')
+    // onShow 里也要（从别的页面回来）
+    const onShow = source.slice(source.indexOf('onShow(() =>'), source.indexOf('onHide(() =>'))
+    expect(onShow).toContain('armStartupWatchdog()')
+    // 离开页面清定时器
+    expect(source).toContain('clearStartupWatchdog()')
+  })
+
+  it('版本号用字面量印出来（ref 那次没渲染出来 ✗），卡住时印关键状态', () => {
+    const source = page()
+
+    expect(source).toContain('版本 2026.10.11.3')
+    expect(source).toContain('[诊断] 加载中=')
+  })
+})

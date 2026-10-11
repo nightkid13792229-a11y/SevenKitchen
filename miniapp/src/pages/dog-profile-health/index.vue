@@ -189,9 +189,10 @@
            像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
            所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
-        <text class="page-version">版本 {{ appVersion }}</text>
+        <text class="page-version">版本 2026.10.11.3</text>
         <template v-if="startupStuck">
           <text class="section-card__title">网络好像不太顺</text>
+          <text class="page-version">[诊断] 加载中={{ isLoading ? 1 : 0 }} · 档案中={{ isProfileLoading ? 1 : 0 }} · 狗={{ dogs.length }} · dogId={{ dogId ? dogId.slice(0, 8) : '空' }} · 错={{ loadError || '无' }}</text>
           <text class="state-card__desc">狗狗档案没能读出来（等了 10 秒还没回来）。检查一下网络，再点一次试试。</text>
           <button class="state-card__button" @tap="retryStartup">重新加载</button>
         </template>
@@ -320,8 +321,6 @@ const isLoading = ref(false)
  * 指到新版本** ✗、客户端还可能缓存旧包 ✗ —— 于是"到底跑的是哪一版"只能靠猜 ✗。
  * 印在页面上，一眼就能确认 ✓，定位完删 ✓。
  */
-const appVersion = ref('2026.10.11.2')
-
 const isProfileLoading = ref(false)
 /**
  * 启动**卡住了**（2026-10-11 老板报"一直停在正在读取狗狗档案"）。
@@ -660,6 +659,14 @@ onLoad((options: any) => {
   const from = Array.isArray(options?.from) ? options.from[0] : options?.from
   // 记住从哪进来的：底部按钮的文案与"兜底返回"都要跟着变（老板要求）
   entrySource.value = from === 'home' || from === 'overview' ? from : 'unknown'
+  /*
+   * ⚠️ 看门狗必须挂在这里（2026-10-11 补）。
+   * 上一版把它写在 onMounted 里 ✗ —— 而这个**页面**用的是 uni-app 的
+   * onLoad / onShow（`onMounted` 那次替换没命中，我也没断言 ✗），
+   * 结果看门狗**从来没起过表** ✗：页面卡死时既不报错、也不超时 ✓
+   * （老板截图里一直停在"正在读取狗狗档案"就是这个 ✗）。
+   */
+  armStartupWatchdog()
   void loadDogs(typeof value === 'string' ? value : '')
 })
 
@@ -669,6 +676,7 @@ onLoad((options: any) => {
  */
 onShow(() => {
   if (!dogs.value.length) {
+    armStartupWatchdog()
     void loadDogs()
   }
 })
@@ -677,6 +685,11 @@ onShow(() => {
 // 自动保存有 1.2 秒延迟，不 flush 的话"改完马上返回"会丢掉最后几个字。
 onHide(() => {
   flushActiveTabAutoSaves()
+})
+
+// 离开页面清掉看门狗的定时器
+onUnload(() => {
+  clearStartupWatchdog()
 })
 
 onUnload(() => {

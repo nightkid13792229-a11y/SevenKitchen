@@ -1196,12 +1196,18 @@ function resolveStatusLabel(
       return '已完成';
     case 'SKIPPED':
       return '不做';
-    case 'UPCOMING':
-      return '待安排';
-    case 'DUE':
-      return isKindStart || !noEvidence ? '该打了' : '还没记录';
+    /*
+     * ⚠️ 2026-10-11 老板定：**状态只留两种** —— 已完成 / 待接种 ✓
+     *
+     * 原来这里有六种（已完成 / 待安排 / 该打了 / 该补了 / 还没记录 / 不做）✗。
+     * 老板："需不需要这么多状态呢？精简成待接种、已完成 2 种够不够？"
+     * 够 ✓ —— "有多急""有没有证据"由**建议接种时间**那行字说 ✓
+     * （窗口过了会补一句"（窗口已过，建议尽快补）"✓），不需要角标层层分级 ✗。
+     * 保留参数签名（noEvidence / isKindStart）是因为**其它地方**还在用这套判断 ✓，
+     * 只是不再影响角标文案 ✓。
+     */
     default:
-      return noEvidence ? '还没记录' : '该补了';
+      return '待接种';
   }
 }
 

@@ -1990,7 +1990,10 @@ describe('提醒口气按类判断', () => {
     for (const step of lepto) {
       expect(step.noEvidence).toBe(false)
       if (step.status === 'DUE') {
-        expect(step.statusLabel).toBe('该打了')
+        // 2026-10-11 老板把状态精简成两种（已完成 / 待接种）✓ ——
+        // 原来这里守的是"起针该说'该打了'而不是'还没记录'"✓（别用责备口气 ✗）；
+        // 现在角标本身就是中性的「待接种」✓，这个意图被更强地满足了 ✓
+        expect(step.statusLabel).toBe('待接种')
         expect(step.reminder).toContain('现在正是接种时间')
       }
     }
@@ -2225,7 +2228,8 @@ describe('每一类的下一针 · 跳过"开始打之前就结束"的档位（2
 
     expect(pendingLepto.length).toBe(1)
     expect(pendingLepto[0].key).toMatch(/^lepto-repeat-/)
-    expect(pendingLepto[0].statusLabel).toBe('待安排')
+    // 同上：状态只剩两种 ✓（"有多急"由窗口文字说 ✓）
+    expect(pendingLepto[0].statusLabel).toBe('待接种')
   })
 
   it('也不许出现"已逾期"的幼犬档位', () => {

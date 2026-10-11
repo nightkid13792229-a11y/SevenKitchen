@@ -44,9 +44,9 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('记录接种信息')
     expect(section).toContain('>忽略<')
     // 已完成的步骤不给按钮（否则"已经打完了还给记录/忽略"很奇怪）
-    expect(section).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
-    expect(section).toContain('@tap.stop="recordStep(node.step)"')
-    expect(section).toContain('@tap.stop="ignoreStep(node.step)"')
+    expect(section).toContain("v-if=\"card.step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(section).toContain('@tap.stop="recordStep(card.step)"')
+    expect(section).toContain('@tap.stop="ignoreStep(card.step)"')
     // 老的三个按钮彻底下线
     expect(section).not.toContain("label: '按建议'")
     expect(section).not.toContain("label: '推迟'")
@@ -107,28 +107,20 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('v-if="!sectionHidden"')
   })
 
-  it('整个板块默认收起，收起时只有"下一针的分类 + 接种窗口期"（2026-10-06 改版）', () => {
-    const section = readSection()
+  it('每类一张简卡、各自展开；顺序按建议接种时间由近到远（2026-10-11 改版）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
 
-    // 老板："合并后的板块默认收起，在收起页面中只展示下一针要打的疫苗分类
-    // 和接种窗口期。"
-    expect(section).toContain('const expanded = ref(false)')
-    expect(section).toContain('@tap="toggleExpanded"')
-    expect(section).toContain('plan-card__kind')
-    expect(section).toContain('plan-card__window')
-    // 老的两层折叠（下一步卡 + 计划列表各自收起）已经合并掉
-    expect(section).not.toContain('planListExpanded')
-  })
-
-  it('但"记录与建议不一致"不折叠 —— 藏起来等于没说', () => {
-    const section = readSection()
-
-    // conflicts 必须在折叠之外
-    const expandAt = section.indexOf('<template v-if="expanded">')
-    const conflictsAt = section.indexOf('plan.conflicts')
-    expect(expandAt).toBeGreaterThan(-1)
-    expect(conflictsAt).toBeGreaterThan(-1)
-    expect(conflictsAt).toBeGreaterThan(expandAt)
+    // 不再有"整个板块收起/展开"✗，改成**每一类各自展开**✓
+    expect(source).toContain('const expandedKind = ref(')
+    expect(source).toContain('function toggleKind(')
+    // 简卡按窗口起点由近到远 ✓
+    expect(source).toContain(".sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))")
+    // 简卡上要有：类别 + 状态 + 建议接种时间 ✓
+    expect(source).toContain('kind-card__kind')
+    expect(source).toContain('建议接种时间 {{ card.step.windowStart }}')
   })
 
   it('收起那一行只报"下一针是什么、什么时候打"，不报假进度', () => {
@@ -168,7 +160,8 @@ describe('疫苗计划 · 一条接种记录都没有时（2026-10-02 顾客侧�
     // 现在这句话只在记录板块说（那里的空态文案是"档案里还没有接种记录"）。
     expect(section).not.toContain('档案里还没有接种记录')
     // 内容那一层挂 v-if="!noRecordAtAll"，根节点那一层挂 !sectionHidden
-    expect(section).toContain('v-if="!noRecordAtAll"')
+    // 2026-10-11 老板改口径：**零记录也要显示计划** ✓（撤掉了内层拦截 ✓）
+    expect(section.includes('<template v-if="!noRecordAtAll"')).toBe(false)
   })
 
   it('判定条件来自后端的 summary.done 与 matchedRecordId，不自己猜', () => {
@@ -261,8 +254,8 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     // （家长最容易犯的错就是两针一起去打，所以它跟着下一针走）。
     expect(section).toContain('spacingNote')
     expect(section).toContain('spacing-note__text')
-    // 2026-10-09 改成鱼骨图后，它跟着**鱼头（今天/下一针）**走 —— 位置变了，口径没变
-    const headAt = section.indexOf('class="fishbone__head"')
+    // 2026-10-11 改成"每类一张简卡"后，它跟着**那一类自己的展开内容**走 ✓ —— 位置变了，口径没变 ✓
+    const headAt = section.indexOf('class="kind-card__head"')
     const spacingAt = section.indexOf('spacing-note__text')
     expect(headAt).toBeGreaterThan(-1)
     expect(spacingAt).toBeGreaterThan(headAt)
@@ -273,12 +266,12 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
 
     // 状态 / 疫苗种类 / 接种窗口期 / 接种时间 / 推荐疫苗 / 依据
     // （2026-10-07 起整个 step 传进去 —— 口气要按"这一类"判断）
-    expect(section).toContain('statusLabel(node.step)')
-    expect(section).toContain('node.step.kindLabel')
-    expect(section).toContain('node.step.windowStart')
-    expect(section).toContain('node.step.matchedRecordDate')
-    expect(section).toContain('stepProducts(node.step)')
-    expect(section).toContain('node.step.basis')
+    expect(section).toContain('statusLabel(card.step)')
+    expect(section).toContain('card.step.kindLabel')
+    expect(section).toContain('card.step.windowStart')
+    expect(section).toContain('card.step.matchedRecordDate')
+    expect(section).toContain('stepProducts(card.step)')
+    expect(section).toContain('card.step.basis')
   })
 
   it('已记录/已接种的步骤不再推荐产品', () => {
@@ -438,13 +431,14 @@ describe('接种计划 · 显示口径（2026-10-06）', () => {
   it('🔴 已完成的步骤不显示接种窗口期（那扇窗早过了）', () => {
     const source = readSection()
 
-    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"kv\"")
+    // 2026-10-11 改版后，列表里**根本不列已完成的步骤** ✓（只有未完成的才出卡 ✓）
+    expect(source).toContain("visibleSteps.value\n    .filter((step) => step.status !== 'DONE')")
   })
 
   it('🔴 已完成的步骤不给动作按钮', () => {
     const source = readSection()
 
-    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(source).toContain("v-if=\"card.step.status !== 'DONE'\" class=\"step-actions\"")
   })
 
   it('🔴 历史按**实际接种日**排在背骨上方，待做的落在今天及之后', () => {
@@ -505,67 +499,39 @@ describe('计划 · 「下一针」变了闪一下（2026-10-08）', () => {
  * 布局顺序/折叠/今天的位置由 utils/vaccine-fishbone.spec.ts 逐条钉着，
  * 这里只守"这一屏该有的东西都在"。
  */
-describe('接种计划 · 竖版鱼骨图（2026-10-09）', () => {
-  const readSection = () =>
+describe('接种计划 · 每类一张简卡（2026-10-11 老板改版，取代鱼骨图）', () => {
+  const source = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
       'utf-8',
     )
 
-  it('鱼骨图三件套：鱼头（今天）/ 背骨节点 / 今天那条虚线', () => {
-    const source = readSection()
+  it('不再有鱼头/背骨；改成"类别 + 状态 + 建议接种时间"的简卡列表', () => {
+    const text = source()
+    const tpl = text.slice(text.indexOf('<template>'), text.indexOf('</template>'))
 
-    expect(source).toContain('class="fishbone__head"')
-    expect(source).toContain('class="fishbone__rail"')
-    expect(source).toContain('class="fishbone__today-line"')
-    expect(source).toContain('{{ shortDate(node.dateText) }}')
+    expect(tpl).not.toContain('fishbone__head')
+    expect(tpl).not.toContain('fishbone__rail')
+    expect(text).toContain('class="kind-card"')
+    expect(text).toContain('kind-card__badge')
+    expect(text).toContain('class="kind-card__toggle"')
   })
 
-  it('鱼头只回答"下一针是什么 + 什么状态"，细节交给下面第一步（2026-10-11 老板去重）', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
-      'utf-8',
-    )
-    const head = source.slice(source.indexOf('class="fishbone__head"'), source.indexOf('class="fishbone__body"'))
+  it('点简卡各自展开；展开后是这一针的细节与动作', () => {
+    const text = source()
 
-    // 鱼头保留：状态角标 + 类别·步骤名
-    expect(head).toContain('statusLabel(nextStep)')
-    expect(head).toContain('nextStep.kindLabel')
-    // 鱼头不再重复窗口期与常见产品（它们在下面第一步的节点里 ✓）
-    expect(head.includes('建议接种时间 {{ nextStep.windowStart }}')).toBe(false)
-    expect(head.includes('常见的有：{{ stepProducts(nextStep)')).toBe(false)
+    expect(text).toContain('@tap="toggleKind(card.kind)"')
+    expect(text).toContain('v-if="expandedKind === card.kind"')
+    expect(text).toContain('class="step-actions"')
   })
 
-  it('⚠️ 产品措辞是"常见的有"，不是"建议打"（2026-10-04 兽医审核口径）', () => {
-    const source = readSection()
+  it('展开内容里保留：哪一针 / 常见的有 / 依据 / 动作，以及安全提示', () => {
+    const text = source()
 
-    expect(source).toContain('常见的有')
-    expect(source).not.toContain('建议接种的疫苗')
-    expect(source).not.toContain('推荐疫苗：')
-  })
-
-  it('类别色只用在圆点和分类名上，不抢状态色', () => {
-    const source = readSection()
-
-    expect(source).toContain('function kindColor(kind: string): string')
-    expect(source).toContain(':style="{ color: kindColor(node.step.kind) }"')
-    // 状态徽标仍然走原来的状态色
-    expect(source).toContain('fishbone__badge--DONE')
-    expect(source).toContain('fishbone__badge--OVERDUE')
-  })
-
-  it('长历史折叠成一行"展开全部历史"', () => {
-    const source = readSection()
-
-    expect(source).toContain('展开全部历史（还有 {{ hiddenHistoryCount }} 条）')
-    expect(source).toContain('historyLimit: showAllHistory.value ? 0 : DEFAULT_HISTORY_LIMIT')
-  })
-
-  it('每一类待打的针都能动手（不是只有鱼头那一针能记）', () => {
-    const source = readSection()
-
-    // 未完成的每一条都给按钮 —— 计划里可能同时有 2~3 类待打
-    expect(source).toContain("v-if=\"node.step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(text).toContain('哪一针')
+    expect(text).toContain('常见的有')
+    expect(text).toContain('依据')
+    expect(text).toContain('plan.conflicts')
   })
 })
 

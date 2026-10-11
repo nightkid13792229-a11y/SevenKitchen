@@ -1,229 +1,96 @@
 <template>
-  <!-- 疫苗计划（2026-10-01，第四期）。
-       老板第 15–18 条：按免疫程序提醒还需要打哪些、什么时候打；
-       引导顾客自己决策；顾客计划与我们不一致时提醒；提醒只在小程序内。
+  <!--
+    疫苗接种计划（2026-10-11 老板第二次改版）
 
-       2026-10-04 老板定：**计划没开的时候整块不出现**。
-       原来会显示一张写着"待开放"的卡片 —— 顾客看到的是一个还不存在、
-       也没说什么时候会有的功能，只会以为是坏的。开了才出现，才讲得通。 -->
+    老板原话："既然我们之前决定接种计划提醒板块，只展示每一类疫苗的下一针就足够的话。
+    那我们能否这样设计？在收起状态下，我们也把所有疫苗分类的信息简卡全部展示出来，
+    在每一个信息简卡添加展开或者收起的按钮。展开后再展示详细的信息。
+    从上到下的排序，按照时间从近到远来排序。"
+
+    所以这里不再有"整个板块收起/展开"✗、也没有鱼骨图的鱼头/背骨 ✗ —— 就是
+    **一类一张简卡**（简卡上：类别 + 状态 + 建议接种时间 ✓），点简卡各自展开 ✓，
+    展开后是这一针的细节与动作 ✓。顺序按建议接种时间由近到远 ✓。
+  -->
   <view v-if="!sectionHidden" class="health-section vaccine-plan">
-    <template v-if="loaded">
-      <!-- 一条接种记录都没有时：**这一块整个不渲染**（2026-10-04 老板第二次提问后改）。
+    <view class="plan-head">
+      <text class="plan-head__title">疫苗接种计划</text>
+      <text class="plan-head__hint">每一类只提醒下一针；从近到远</text>
+    </view>
 
-           前一轮我在计划板块里放了一张"还没有接种记录"的说明卡，
-           结果下面记录板块的空态又写了一遍"还没有疫苗记录"——
-           老板："为什么会提醒了一次，没有接种记录。在下方又进行了一次
-           没有疫苗记录的提醒呢。" 同一件事说了两遍。
-           （另外，零记录时显示"下一步：狂犬疫苗 第 3 次 / 建议时间 2025-11-16"
-             也不成立：那个"第 3 次"是程序表里的序号，顾客会读成"我家狗打过两次"，
-             而我们一条记录都没有；窗口还是过去的。
-             计划是"接下来怎么打"，没有记录就没有"接下来"可言。）
-
-           所以这句提醒交给**记录板块的空态**去说 —— 它就长在记录列表该在的地方，
-           而且计划开关关掉时也照样说得到（那边不依赖计划接口）。 -->
-      <!-- ⚠️ 这里原来还有一道 `v-if="!noRecordAtAll"` ✗ —— 2026-10-11 撤掉：
-           外层 sectionHidden 已经管"要不要整块显示" ✓，
-           内层再来一道，等于零记录时**里面全都不渲染** ✗ ——
-           老板在测27~测30 上看到"没有任何计划"就是这个 ✓。
-           措辞的软硬仍由 noEvidence 管 ✓（说"还没记录"，不说"已逾期" ✓）。 -->
-      <template>
-      <!-- ══ 2026-10-06 老板改版 ══════════════════════════════════════
-           · 「步骤提醒」和「接种计划」**合并成一个板块**，默认收起；
-           · 收起时只显示**下一针的疫苗分类 + 建议接种时间**；
-           · 展开后分两部分：
-               ① 下一针的进一步说明 —— 分类、窗口期、依据、推荐疫苗；
-               ② 接种计划 —— 按建议接种时间**由近到远**排序，
-                  每一步只显示：状态、疫苗种类、建议接种时间、接种时间、
-                  推荐疫苗（已记录/已接种就不再推荐）、依据；
-           · 每一步的三个按钮（按建议/推迟/不做）换成两个：
-               「记录疫苗接种信息」→ 直接走新增记录流程（并带上这一步的分类）
-               「忽略」→ 弹窗确认后，这一步从这只狗狗的计划里去点。 -->
-      <view class="health-card plan-card">
-        <!-- ① 头部：收起时**只剩这一行** -->
-        <view
-          class="plan-card__head"
-          :class="{ 'plan-card__head--flash': flashNextStep }"
-          @tap="toggleExpanded"
-        >
-          <view class="plan-card__summary">
-            <text class="plan-card__eyebrow">下一针</text>
-            <text class="plan-card__kind">
-              {{ nextStep ? nextStep.kindLabel : '当前没有待接种的针' }}
-            </text>
-            <text v-if="nextStep" class="plan-card__window">
-              建议接种时间 {{ nextStep.windowStart }} ~ {{ nextStep.windowEnd }}{{ windowPassedSuffix(nextStep) }}
-            </text>
-            <text v-else class="plan-card__window">
-              按现有记录，免疫程序里的项目都已完成
-            </text>
-          </view>
-          <text class="plan-card__toggle">{{ expanded ? '收起' : '展开' }}</text>
+    <view v-for="card in kindCards" :key="card.kind" class="kind-card">
+      <view class="kind-card__head" @tap="toggleKind(card.kind)">
+        <view class="kind-card__line">
+          <text class="kind-card__kind">{{ card.step.kindLabel }}</text>
+          <text class="kind-card__badge" :class="`kind-card__badge--${card.step.status}`">
+            {{ statusLabel(card.step) }}
+          </text>
+          <text class="kind-card__toggle">{{ expandedKind === card.kind ? '收起' : '展开' }}</text>
         </view>
-
-        <template v-if="expanded">
-          <!-- ②-A 下一针的进一步说明。
-               老板："除了疫苗分类和建议接种时间，还需要展示依据和推荐的疫苗。
-                     该部分其他的信息不用展示。" -->
-          <!-- 竖版鱼骨图（2026-10-09 老板定）。
-               背骨自上而下 = **由近到远**（今天该做的 → 将来的待安排 → 越翻越旧的历史）；
-               每一针一个节点，从背骨斜着长出一张分支卡片；
-               每一类**只放一条"下一针"**（与既有口径一致：不做的不显示、已完成的历史保留）；
-               "今天"是一条贯穿虚线，插在时间序列的正确位置。
-               布局计算在 utils/vaccine-fishbone.ts（纯函数、有单测）。 -->
-          <view class="fishbone">
-            <!-- 鱼头：今天 + 要打哪一类、窗口期、常见的那几支 -->
-            <view class="fishbone__head">
-              <!-- ⚠️ 原来这里写「今天 · 2026-10-11（1 个月）」✗ —— 老板 2026-10-11 提问：
-                   "今天这个字样会不会让用户误解成今天必须去打？"
-                   会 ✓ —— 它只是"当前参照点"，紧挨着计划就容易被读成接种日 ✗。
-                   改成只留月龄 ✓（月龄本来就有用：家长知道狗多大 ✓）。 -->
-              <text v-if="ageText" class="fishbone__today-label">{{ ageText }}</text>
-              <template v-if="nextStep">
-                <view class="fishbone__head-row">
-                  <text class="fishbone__badge" :class="`fishbone__badge--${nextStep.status}`">
-                    {{ statusLabel(nextStep) }}
-                  </text>
-                  <text class="fishbone__head-title">{{ nextStep.kindLabel }} · {{ nextStep.label }}</text>
-                </view>
-                <!-- ⚠️ 这里原来还把窗口期、常见产品、间隔提示又说了一遍 ✗ ——
-                     老板 2026-10-11："鱼头是核心疫苗·幼犬首免第一针，下面的第一步
-                     也是幼犬首免第一针，一模一样，这个重复怎么解决？"
-                     现在：鱼头只回答"**下一针是什么、什么状态**" ✓，
-                     具体的窗口/产品/依据交给下面**第一步那个节点**说一次 ✓。 -->
-              </template>
-              <text v-else class="fishbone__head-line">
-                按现有记录，免疫程序里的项目都已完成。
-              </text>
-            </view>
-
-            <!-- 背骨 + 分支 -->
-            <view class="fishbone__body">
-              <template v-for="(node, index) in fishboneNodes" :key="`${node.key}-${index}`">
-                <view v-if="node.yearLabel" class="fishbone__year">
-                  <text class="fishbone__year-text">{{ node.yearLabel }}</text>
-                </view>
-                <!-- "今天"这条虚线画在最上方（现在 → 越远越往下 → 越旧越往下） -->
-                <view v-if="index === todayIndex" class="fishbone__today-line">
-                  <text class="fishbone__today-text">现在</text>
-                  <view class="fishbone__today-dash" />
-                </view>
-
-                <view class="fishbone__row">
-                  <view class="fishbone__rail">
-                    <text v-if="node.showDate" class="fishbone__date">
-                      {{ shortDate(node.dateText) }}
-                    </text>
-                    <view
-                      class="fishbone__dot"
-                      :class="{ 'fishbone__dot--next': node.isNext }"
-                      :style="{
-                        borderColor: kindColor(node.step.kind),
-                        backgroundColor: node.isNext ? kindColor(node.step.kind) : 'transparent',
-                      }"
-                    />
-                  </view>
-
-                  <view
-                    class="fishbone__card"
-                    :class="{
-                      'fishbone__card--next': node.isNext,
-                      'fishbone__card--done': node.step.status === 'DONE',
-                    }"
-                  >
-                    <view class="fishbone__card-head">
-                      <text class="fishbone__card-kind" :style="{ color: kindColor(node.step.kind) }">
-                        {{ node.step.kindLabel }}
-                      </text>
-                      <text class="fishbone__badge" :class="`fishbone__badge--${node.step.status}`">
-                        {{ statusLabel(node.step) }}
-                      </text>
-                    </view>
-                    <text class="fishbone__card-label">{{ node.step.label }}</text>
-
-                    <!-- 已完成的不显示建议接种时间（2026-10-06 老板：
-                         "已完成的疫苗为什么还要显示建议接种时间呢？"）-->
-                    <view v-if="node.step.status !== 'DONE'" class="kv">
-                      <text class="kv__label">建议接种时间</text>
-                      <text class="kv__value">{{ node.step.windowStart }} ~ {{ node.step.windowEnd }}</text>
-                    </view>
-                    <view v-if="node.step.matchedRecordDate" class="kv">
-                      <text class="kv__label">接种时间</text>
-                      <text class="kv__value">{{ node.step.matchedRecordDate }}</text>
-                    </view>
-                    <!-- 已经记录过/接种过的，不再推荐产品（老板 2026-10-06） -->
-                    <view v-if="stepProducts(node.step).length > 0" class="kv">
-                      <text class="kv__label">常见的有</text>
-                      <text class="kv__value">{{ stepProducts(node.step).join('、') }}</text>
-                    </view>
-                    <view class="kv">
-                      <text class="kv__label">依据</text>
-                      <view class="kv__value">
-                        <text class="basis__summary">{{ basisSummaryOf(node.step) }}</text>
-                        <text
-                          v-if="hasMoreBasis(node.step)"
-                          class="basis__more"
-                          @tap.stop="toggleBasis(node.step.key)"
-                        >{{ isBasisOpen(node.step.key) ? '收起' : '为什么这么建议？' }}</text>
-                        <text
-                          v-if="hasMoreBasis(node.step) && isBasisOpen(node.step.key)"
-                          class="basis__full"
-                        >{{ node.step.basis }}</text>
-                      </view>
-                    </view>
-
-                    <!-- 已完成的步骤不给动作按钮（2026-10-06 老板："那一针已经打完了，
-                         没什么可记、也没什么可忽略的"）。未完成**每一条都给** ——
-                         计划里可能同时有 2~3 类待打，不能让顾客只能从鱼头那一针动手。 -->
-                    <view v-if="node.step.status !== 'DONE'" class="step-actions">
-                      <text class="step-actions__primary" @tap.stop="recordStep(node.step)">
-                        记录接种信息
-                      </text>
-                      <text class="step-actions__ghost" @tap.stop="ignoreStep(node.step)">忽略</text>
-                    </view>
-                  </view>
-                </view>
-              </template>
-
-              <text v-if="fishboneNodes.length === 0" class="plan-steps__empty">
-                计划里的项目都已完成或已忽略。
-              </text>
-
-              <text
-                v-if="hiddenHistoryCount > 0"
-                class="fishbone__more-history"
-                @tap="showAllHistory = true"
-              >
-                展开全部历史（还有 {{ hiddenHistoryCount }} 条）
-              </text>
-              <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
-                已忽略 {{ ignoredCount }} 项 · 点这里恢复
-              </text>
-            </view>
-          </view>
-        </template>
-      </view>
-
-      <!-- ③ 不一致提醒：老板第 17 条。它本身就是提醒，不折进展开区 -->
-      <view v-if="plan.conflicts.length > 0" class="health-card conflicts">
-        <text class="conflicts__title">你的记录与建议不一致（{{ plan.conflicts.length }} 处）</text>
-        <view v-for="item in plan.conflicts" :key="`${item.recordId}-${item.reason}`" class="conflict">
-          <text class="conflict__head">{{ item.recordDate }} · {{ item.vaccineName }}</text>
-          <text class="conflict__reason">{{ item.reason }}</text>
-          <text class="conflict__suggestion">{{ item.suggestion }}</text>
-        </view>
-        <text class="conflicts__note">
-          这只是提醒，不是结论。以你手上兽医给出的方案为准。
+        <text class="kind-card__time">
+          建议接种时间 {{ card.step.windowStart }} ~ {{ card.step.windowEnd }}{{ windowPassedSuffix(card.step) }}
         </text>
       </view>
-      </template>
-    </template>
 
-    <view v-else-if="loadError" class="health-card">
-      <text class="plan-locked__title">接种计划没加载出来，下拉刷新一下试试</text>
-      <text class="plan-locked__desc">{{ loadError }}</text>
+      <view v-if="expandedKind === card.kind" class="kind-card__body">
+        <view class="kv">
+          <text class="kv__label">哪一针</text>
+          <text class="kv__value">{{ card.step.label }}</text>
+        </view>
+        <view v-if="card.step.matchedRecordDate" class="kv">
+          <text class="kv__label">接种时间</text>
+          <text class="kv__value">{{ card.step.matchedRecordDate }}</text>
+        </view>
+        <view v-if="stepProducts(card.step).length > 0" class="kv">
+          <text class="kv__label">常见的有</text>
+          <text class="kv__value">{{ stepProducts(card.step).join('、') }}</text>
+        </view>
+        <text v-if="card.step.spacingNote" class="spacing-note__text">
+          {{ card.step.spacingNote }}
+        </text>
+        <view class="kv">
+          <text class="kv__label">依据</text>
+          <view class="kv__value">
+            <text class="basis__summary">{{ basisSummaryOf(card.step) }}</text>
+            <text
+              v-if="hasMoreBasis(card.step)"
+              class="basis__more"
+              @tap.stop="toggleBasis(card.step.key)"
+            >{{ isBasisOpen(card.step.key) ? '收起' : '为什么这么建议？' }}</text>
+            <text
+              v-if="hasMoreBasis(card.step) && isBasisOpen(card.step.key)"
+              class="basis__full"
+            >{{ card.step.basis }}</text>
+          </view>
+        </view>
+
+        <view v-if="card.step.status !== 'DONE'" class="step-actions">
+          <text class="step-actions__primary" @tap.stop="recordStep(card.step)">记录接种信息</text>
+          <text class="step-actions__ghost" @tap.stop="ignoreStep(card.step)">忽略</text>
+        </view>
+      </view>
     </view>
+
+    <!-- 记录与建议不一致（重写模板时漏过一次 ✗，2026-10-11 补回）：
+         它承载"这一针还没核对过""间隔不足一年"这类**安全提示** ✓，不能丢 ✓。 -->
+    <view v-if="plan.conflicts.length > 0" class="health-card conflicts">
+      <text class="conflicts__title">你的记录与建议不一致（{{ plan.conflicts.length }} 处）</text>
+      <view v-for="item in plan.conflicts" :key="`${item.recordId}-${item.reason}`" class="conflict">
+        <text class="conflict__head">{{ item.recordDate }} · {{ item.vaccineName }}</text>
+        <text class="conflict__reason">{{ item.reason }}</text>
+        <text class="conflict__suggestion">{{ item.suggestion }}</text>
+      </view>
+      <text class="conflicts__note">这只是提醒，不是结论。以你手上兽医给出的方案为准。</text>
+    </view>
+
+    <text v-if="kindCards.length === 0" class="plan-steps__empty">
+      按现有记录，免疫程序里的项目都已完成（或都被你忽略了）。
+    </text>
+    <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
+      已忽略 {{ ignoredCount }} 项 · 点这里恢复
+    </text>
   </view>
 </template>
+
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
@@ -358,7 +225,7 @@ const STATUS_LABELS: Record<PlanStep['status'], string> = {
   DUE: '该打了',
   // 老板 2026-10-11：「待安排」改成「待接种」更好懂 ✓
   UPCOMING: '待接种',
-  OVERDUE: '已逾期',
+  OVERDUE: '待接种',
   SKIPPED: '不做',
 }
 
@@ -566,11 +433,24 @@ function statusLabel(step: PlanStep) {
  * 收起时只有一行：**下一针是什么分类、什么时候打** —— 顾客来这一页
  * 要的就是这一句。要看细节、要动手，再展开。
  */
-const expanded = ref(false)
+/** 哪一类正展开着（一次只展开一张 ✓ —— 展开多张会把页面拉很长 ✗）*/
+const expandedKind = ref('')
 
-function toggleExpanded() {
-  expanded.value = !expanded.value
+function toggleKind(kind: string) {
+  expandedKind.value = expandedKind.value === kind ? '' : kind
 }
+
+/**
+ * 每一类一张卡（2026-10-11 老板改版）：
+ * 取"未完成"的步骤（后端已经保证**每一类只出一条**✓），按建议接种时间**由近到远** ✓。
+ */
+const kindCards = computed(() =>
+  visibleSteps.value
+    .filter((step) => step.status !== 'DONE')
+    .slice()
+    .sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))
+    .map((step) => ({ kind: step.kind, step })),
+)
 
 /**
  * 计划列表：按建议接种时间**由近到远**（老板 2026-10-06 的明确要求），
@@ -1271,186 +1151,6 @@ defineExpose({ reload: () => load() })
 }
 
 /* 鱼头：今天 + 要打哪一类 */
-.fishbone__head {
-  padding: 20rpx;
-  border-radius: 16rpx;
-  background: #eef8f2;
-  border: 1rpx solid #0f7b49;
-  display: flex;
-  flex-direction: column;
-}
-.fishbone__today-label {
-  font-size: 22rpx;
-  color: #0f7b49;
-  font-weight: 600;
-}
-.fishbone__head-row {
-  display: flex;
-  align-items: center;
-  margin-top: 10rpx;
-}
-.fishbone__head-title {
-  flex: 1;
-  min-width: 0;
-  margin-left: 12rpx;
-  font-size: 32rpx;
-  font-weight: 800;
-  color: #1f2d28;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.fishbone__head-line {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #3d4a45;
-  line-height: 1.5;
-}
+/* 鱼骨图相关样式已随 2026-10-11 改版删除 ✓（纯函数 utils/vaccine-fishbone.ts 保留，仍有自己的单测 ✓） */
 
-/* 状态徽标（沿用原来的状态色，与类别色分工不同） */
-.fishbone__badge {
-  flex: none;
-  padding: 4rpx 14rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  color: #ffffff;
-  background: #7a7a7a;
-}
-.fishbone__badge--DONE { background: #0f7b49; }
-.fishbone__badge--DUE { background: #0f7b49; }
-.fishbone__badge--OVERDUE { background: #c0392b; }
-.fishbone__badge--UPCOMING { background: #216d9b; }
-.fishbone__badge--SKIPPED { background: #9a9a9a; }
-
-/* 背骨：左侧固定宽度的轨道（日期 + 圆点 + 竖线） */
-.fishbone__body {
-  position: relative;
-  margin-top: 16rpx;
-}
-.fishbone__year {
-  padding: 10rpx 0 6rpx;
-}
-.fishbone__year-text {
-  font-size: 22rpx;
-  color: #9a9a9a;
-}
-.fishbone__row {
-  display: flex;
-  align-items: flex-start;
-}
-.fishbone__rail {
-  position: relative;
-  flex: none;
-  width: 96rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 14rpx;
-}
-/* 背骨那条竖线：绝对定位铺满整列，节点圆点压在上面 */
-.fishbone__rail::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2rpx;
-  background: #d8e3de;
-}
-.fishbone__date {
-  position: relative;
-  font-size: 20rpx;
-  color: #7a7a7a;
-  background: #ffffff;
-  padding: 0 4rpx;
-}
-.fishbone__dot {
-  position: relative;
-  margin-top: 8rpx;
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  border: 3rpx solid #9a9a9a;
-  background: #ffffff;
-  box-sizing: border-box;
-}
-.fishbone__dot--next {
-  width: 22rpx;
-  height: 22rpx;
-  border-width: 4rpx;
-  box-shadow: 0 0 0 4rpx #ffffff;
-}
-
-/* 分支卡片：从背骨"斜着长出来"（左侧一小段斜线做鱼骨感，文字一律横排） */
-.fishbone__card {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  margin: 0 0 16rpx 16rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 14rpx;
-  background: #ffffff;
-  border: 1rpx solid #e8ecea;
-}
-.fishbone__card::before {
-  content: '';
-  position: absolute;
-  left: -18rpx;
-  top: 22rpx;
-  width: 22rpx;
-  height: 1rpx;
-  background: #d8e3de;
-  transform: rotate(-38deg);
-  transform-origin: left center;
-}
-.fishbone__card--done {
-  background: #fafbfa;
-}
-.fishbone__card--next {
-  border-color: #0f7b49;
-  box-shadow: 0 2rpx 10rpx rgba(15, 123, 73, 0.12);
-}
-.fishbone__card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.fishbone__card-kind {
-  font-size: 22rpx;
-  font-weight: 700;
-}
-.fishbone__card-label {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #1f2d28;
-}
-
-/* "今天"那条贯穿虚线 */
-.fishbone__today-line {
-  display: flex;
-  align-items: center;
-  margin: 6rpx 0;
-}
-.fishbone__today-text {
-  flex: none;
-  width: 96rpx;
-  text-align: center;
-  font-size: 20rpx;
-  color: #c0392b;
-  font-weight: 600;
-}
-.fishbone__today-dash {
-  flex: 1;
-  height: 0;
-  border-top: 2rpx dashed #e0b4ae;
-}
-
-.fishbone__more-history {
-  display: block;
-  margin: 6rpx 0 4rpx 96rpx;
-  font-size: 24rpx;
-  color: #0f7b49;
-}
 </style>

@@ -153,6 +153,110 @@ export const CASES: Case[] = [
       { weeks: 200, product: '卫佳伍', kinds: CORE },
     ],
   },
+
+  // ── 老板 2026-10-11 追加的 13 个边界案例（B1~B13）───────────────────────
+  {
+    no: 14, name: 'B1 · 12 周龄才打第一针核心', ageWeeks: 12,
+    note: '晚开针：首免系列整体后移',
+    records: [{ weeks: 11, product: '卫佳伍', kinds: CORE }],
+  },
+  {
+    no: 15, name: 'B2 · 20 周龄，核心只打 2 针就停', ageWeeks: 20,
+    note: '首免没收尾就停了',
+    records: [
+      { weeks: 6, product: '卫佳伍', kinds: CORE },
+      { weeks: 9, product: '卫佳伍', kinds: CORE },
+    ],
+  },
+  {
+    no: 16, name: 'B3 · 8 周龄就打了狂犬', ageWeeks: 8,
+    note: '低于 12 周龄打狂犬，该不该提示',
+    records: [{ weeks: 8, product: '宠必威锐必威', kinds: RABIES }],
+  },
+  {
+    no: 17, name: 'B4 · 狂犬两针只隔 6 个月', ageWeeks: 52,
+    note: '真正"间隔不足"的正例（对照案例 13 那条疑似误报）',
+    records: [
+      { weeks: 17, product: '宠必威锐必威', kinds: RABIES },
+      { weeks: 43, product: '宠必威锐必威', kinds: RABIES },
+    ],
+  },
+  {
+    no: 18, name: 'B5 · 同一天打核心 + 狂犬', ageWeeks: 18,
+    note: '联合接种（临床上很常见）',
+    records: [
+      { weeks: 6, product: '卫佳伍', kinds: CORE },
+      { weeks: 9, product: '卫佳捌', kinds: CORE_LEPTO },
+      { weeks: 12, product: '卫佳捌', kinds: CORE_LEPTO },
+      { weeks: 18, product: '卫佳伍', kinds: CORE },
+      { weeks: 18, product: '宠必威锐必威', kinds: RABIES },
+    ],
+  },
+  {
+    no: 19, name: 'B6 · 记录日期在未来', ageWeeks: 7,
+    note: '有一条日期填到了将来',
+    records: [
+      { weeks: 6, product: '卫佳伍', kinds: CORE },
+      { weeks: 20, product: '卫佳捌', kinds: CORE_LEPTO },
+    ],
+  },
+  {
+    no: 20, name: 'B7 · 记录日期早于生日', ageWeeks: 7,
+    note: '明显录错：日期在出生之前',
+    records: [{ weeks: -6, product: '卫佳伍', kinds: CORE }],
+  },
+  {
+    no: 21, name: 'B8 · 库里没有的国产苗', ageWeeks: 18,
+    note: '国产四联 ×3 + 西诺生物狂犬（都不在产品库）',
+    records: [
+      { weeks: 6, product: '犬四联（中牧江西）', kinds: CORE },
+      { weeks: 9, product: '犬四联（中牧江西）', kinds: CORE },
+      { weeks: 12, product: '犬四联（中牧江西）', kinds: CORE },
+      { weeks: 16, product: '西诺生物 狂犬病冻干灭活疫苗（CTN-1株）', kinds: RABIES },
+    ],
+  },
+  {
+    no: 22, name: 'B9 · 只写"狂犬"两个字的手写记录', ageWeeks: 18,
+    note: '不带品牌，靠名字归类',
+    records: [
+      { weeks: 6, product: '卫佳伍', kinds: CORE },
+      { weeks: 12, product: '卫佳捌', kinds: CORE_LEPTO },
+      { weeks: 16, product: '狂犬', kinds: RABIES },
+    ],
+  },
+  {
+    no: 23, name: 'B10 · 幼犬期单独打钩端 3 针', ageWeeks: 18,
+    note: '对照案例 8 暴露的"第 3 针被算成年度加强"',
+    records: [
+      { weeks: 8, product: '优乐康', kinds: LEPTO },
+      { weeks: 11, product: '优乐康', kinds: LEPTO },
+      { weeks: 14, product: '优乐康', kinds: LEPTO },
+    ],
+  },
+  {
+    no: 24, name: 'B11 · 4 岁只打狂犬、核心一次没打', ageWeeks: 208,
+    note: '成年狗长期缺核心',
+    records: [
+      { weeks: 52, product: '宠必威锐必威', kinds: RABIES },
+      { weeks: 104, product: '宠必威锐必威', kinds: RABIES },
+      { weeks: 156, product: '宠必威锐必威', kinds: RABIES },
+      { weeks: 208, product: '宠必威锐必威', kinds: RABIES },
+    ],
+  },
+  {
+    no: 25, name: 'B12 · 最后一针狂犬是 3 年前', ageWeeks: 208,
+    note: '狂犬逾期很久',
+    records: [
+      { weeks: 6, product: '卫佳伍', kinds: CORE },
+      { weeks: 12, product: '卫佳捌', kinds: CORE_LEPTO },
+      { weeks: 48, product: '宠必威锐必威', kinds: RABIES },
+    ],
+  },
+  {
+    no: 26, name: 'B13 · 生日没填的狗', ageWeeks: -1,
+    note: '生日为空（上线用户真实会出现）',
+    records: [{ weeks: 6, product: '卫佳伍', kinds: CORE }],
+  },
 ];
 
 function main() {

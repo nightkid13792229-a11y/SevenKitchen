@@ -189,6 +189,7 @@
            像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
            所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
+        <text class="page-version">版本 {{ appVersion }}</text>
         <template v-if="startupStuck">
           <text class="section-card__title">网络好像不太顺</text>
           <text class="state-card__desc">狗狗档案没能读出来（等了 10 秒还没回来）。检查一下网络，再点一次试试。</text>
@@ -310,6 +311,17 @@ function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
 const isLoading = ref(false)
+/**
+ * 页面上印一行版本号（2026-10-11，临时）。
+ *
+ * 老板："你是不是没有进行代码上传？我看到的页面没有发生任何变化？"
+ * —— 上传是成功的 ✓（CLI 每次都回 ✔ upload ✓，而且 02:14 截图里的
+ * 「正在读取狗狗档案」就是 10.10.6 才有的文案 ✓），但**微信的"体验版"要手动
+ * 指到新版本** ✗、客户端还可能缓存旧包 ✗ —— 于是"到底跑的是哪一版"只能靠猜 ✗。
+ * 印在页面上，一眼就能确认 ✓，定位完删 ✓。
+ */
+const appVersion = ref('2026.10.11.2')
+
 const isProfileLoading = ref(false)
 /**
  * 启动**卡住了**（2026-10-11 老板报"一直停在正在读取狗狗档案"）。
@@ -1865,5 +1877,13 @@ function goToDogCreate() {
   font-size: 24rpx;
   color: #a05a52;
   word-break: break-all;
+}
+
+/* 临时：页面上印版本号（验证上传链路，定位完删） */
+.page-version {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  color: #9a9a9a;
 }
 </style>

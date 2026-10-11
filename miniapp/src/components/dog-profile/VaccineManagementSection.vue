@@ -52,7 +52,7 @@
            老板报"计划下方没有任何记录"，而生产日志显示这块**一次请求都没发过** ✗ ——
            所以先确认它到底挂载没有 ✓。这行字出现 = 挂载了 ✓；没有 = 没挂载 ✗。 -->
       <text class="records-card__diag">
-        [诊断] 记录板块已挂载 · {{ dogId ? dogId.slice(0, 8) : '（dogId 为空）' }} · {{ records.length }} 条
+        [诊断 v2026.10.11.2] 记录板块已挂载 · {{ dogId ? dogId.slice(0, 8) : '（dogId 为空）' }} · {{ records.length }} 条
       </text>
 
       <view v-if="records.length > 0" class="records-card__head">

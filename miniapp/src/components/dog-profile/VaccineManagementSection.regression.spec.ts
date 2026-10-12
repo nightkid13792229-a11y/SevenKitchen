@@ -15,6 +15,12 @@ describe('疫苗管理', () => {
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  /** 一条记录的编辑卡（2026-10-12 第一步：模板搬去了这个文件 ✓）*/
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('接的是后端已有的疫苗接口，没有另造一套', () => {
     const source = readComponent()
@@ -33,54 +39,6 @@ describe('疫苗管理', () => {
     }
   })
 
-  it('「状态」不再让顾客选（2026-10-04 老板提问后改）', () => {
-    const source = readComponent()
-
-    // 老板："用户如果手动记录了疫苗信息的话，就意味着这一针已经打了呀，
-    // 为什么还会让用户选择接种状态呢？" —— 对。一条接种记录记的就是
-    // 已经发生的事，没有第二种可能。
-    // 另外查过后端：**没有任何逻辑读这个字段**，它此前纯粹是个显示标签。
-    expect(source).not.toContain('const STATUS_OPTIONS')
-    expect(source).not.toContain('statusPickList')
-    // 状态选择器没了（产品库那个 selector 是选疫苗名的，不是选状态）
-    expect(source).not.toContain('statusValueAt')
-    expect(source).not.toContain('statusIndex')
-
-    // 但老记录存着别的值时，卡片上要照旧显示出来，不能变空白
-    expect(source).toContain('const STATUS_LABELS')
-    expect(source).toContain("OVERDUE: '已逾期'")
-    expect(source).toContain("SCHEDULED: '已预约'")
-    expect(source).toContain('function statusLabel')
-  })
-
-  it('顾客勾的是**病种**，分类由后台判定（2026-10-06 老板改）', () => {
-    const source = readComponent()
-
-    // 老板："在用户需要确认和手动修改的分类中，我们不应该把分类呈现给用户看……
-    // 我们需要把它拆开，拆成每一个疫苗种类让顾客选择，
-    // 至于分类的判定则交由后台来完成。"
-    expect(source).toContain('含哪些病种')
-    expect(source).toContain('componentOptions')
-    expect(source).toContain('toggleComponent(index, option.value)')
-    // 界面上不许再出现"核心疫苗/钩端螺旋体"这种内部类别让顾客选
-    expect(source).not.toContain("label: '核心疫苗'")
-  })
-
-
-  it('系统认不出来时**如实承认**，并让顾客照本子勾病种（2026-10-06 改）', () => {
-    const source = readComponent()
-
-    // 2026-10-12 老板：那句说明 Banner 直接删掉 ✗，「可多选」挪进字段名括弧 ✓
-    expect(source).toContain('含哪些疫苗（可多选）')
-    expect(source.includes('这一针含哪些病种？')).toBe(false)
-    // 2026-10-12 老板：那段小字也删掉 ✗（"可多选"已进字段名 ✓）
-    expect(source.includes('照疫苗本上的成分表勾')).toBe(false)
-    // 勾不上任何病种时要有出路（驱虫药这种本来就不是疫苗）
-    expect(source).toContain('都不是 / 不确定')
-    expect(source).toContain('function toggleNoneOfThem(index: number)')
-  })
-
-
   it('顾客可以自己改分类（他的记录，他做主）', () => {
     const source = readComponent()
 
@@ -89,37 +47,6 @@ describe('疫苗管理', () => {
     expect(source).toContain('vaccine-kind__edit')
     expect(source).toContain('function toggleKind')
     expect(source).toContain('draft.kindsManual = true')
-  })
-
-  it('录入只留两条路：选产品库 / 手填（2026-10-05 简化）', () => {
-    const source = readComponent()
-
-    // 老板："为什么还会显示狂犬疫苗、犬二联这种疫苗名称的选择器？
-    // 这个疫苗名称字段，它的作用是什么呢？"
-    // 原来有三个控件做同一件事（12 个预设标签 + 产品库 + 输入框）。
-    // 现在两条，职责清楚：
-    expect(source).toContain('function applyCatalogProduct')
-    expect(source).toContain('catalogProducts')
-    expect(source).toContain("updateDraft(index, 'vaccineName', $event.detail.value)")
-    // 预设标签下线 —— 它们的唯一价值是"带着归类"，而现在打字也自动判
-    expect(source).not.toContain('applyNamePreset')
-    expect(source).not.toContain('presetNames')
-  })
-
-  it('名称写完点「确认」才匹配产品与分类（2026-10-05 老板的规格）', () => {
-    const source = readComponent()
-
-    // 老板："顾客手动的输入产品名称。**点击确认之后**，再来完成 AI 的匹配。
-    // 包括产品匹配和分类匹配。"
-    // 不边打字边判 —— 一来一回问后端会卡手，而且顾客往往写到一半就被判错。
-    expect(source).toContain('function confirmVaccineName')
-    expect(source).toContain('@tap="confirmVaccineName(index)"')
-    expect(source).toContain('dogApi.classifyVaccineName')
-    expect(source).not.toContain('scheduleClassify')
-    expect(source).not.toContain('CLASSIFY_DELAY_MS')
-    // 匹配期间要有反馈
-    expect(source).toContain('matchingIndex')
-    expect(source).toContain('匹配中…')
   })
 
   it('扫描出来的记录缺东西时**必须说出来**，不许静默跳过', () => {
@@ -183,7 +110,9 @@ describe('疫苗管理', () => {
     // 老板："在选择手动加一条之后，为什么没有定位到编辑窗口呢？"
     // 新记录追加在列表末尾，前面有几条时它落在屏幕外 —— 看着就像"没反应"。
     expect(source).toContain('scrollPageToSelector')
-    expect(source).toContain(':focus="focusIndex === index"')
+    // 2026-10-12 第一步：'正在打字的是哪一行'（focusIndex）仍由这里记着 ✓，
+    // 卡片拿它当 nameFocused ✓；真正落到 input 上的 :focus 在卡片里 ✓
+    expect(source).toContain(':name-focused="focusIndex === index"')
     // 2026-10-12 老板："不要定位到输入框中"✗ → 新增后只滚动，不落光标 ✓
     expect(source).toContain('focusIndex.value = -1')
     // 必须在 DOM 更新之后做
@@ -219,15 +148,19 @@ describe('疫苗管理', () => {
 
     // 老板："为什么不能像就诊记录一样，提供一个删除按钮和删除弹窗提醒呢？"
     // 弹窗一直都有（删除疫苗记录？/ 删除 / 保留），只是入口藏在展开后的表单最底下。
-    expect(source).toContain('vaccine-card__header-actions')
-    expect(source).toContain('@tap.stop="removeRecord(record, index)"')
+    // 2026-10-12 第一步：卡片模板搬去 VaccineRecordCard.vue 了 ✓ ——
+    // 但**这一条盯的是行为**（删除键在卡片脸上、不用先展开 ✓），
+    // 所以改成读卡片文件 ✓（判据一个字没放松 ✓）
+    const card = readCard()
+    expect(card).toContain('vaccine-card__header-actions')
+    expect(card).toContain("@tap.stop=\"emit('remove', index)\"")
 
     // 删除必须在头部那一块里，而不是展开区里
-    const headerAt = source.indexOf('vaccine-card__header-actions')
-    const bodyAt = source.indexOf('vaccine-card__body"')
+    const headerAt = card.indexOf('vaccine-card__header-actions')
+    const bodyAt = card.indexOf('vaccine-card__body"')
     expect(headerAt).toBeGreaterThan(-1)
     expect(bodyAt).toBeGreaterThan(headerAt)
-    const headerBlock = source.slice(source.lastIndexOf('<view class="vaccine-card__header"', headerAt), bodyAt)
+    const headerBlock = card.slice(card.lastIndexOf('<view class="vaccine-card__header"', headerAt), bodyAt)
     expect(headerBlock).toContain('vaccine-card__delete')
   })
 
@@ -283,7 +216,6 @@ describe('疫苗管理', () => {
     expect(source).toContain('componentOptions.value = res.data.components')
     expect(source).toContain('FALLBACK_COMPONENT_OPTIONS')
   })
-
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {
     const source = readComponent()
@@ -346,6 +278,11 @@ describe('疫苗本原图留档', () => {
   const readComponent = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
       'utf-8',
     )
 
@@ -417,6 +354,11 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('🔴 整表重载不许冲掉还没保存的本地记录', () => {
     const source = readComponent()
@@ -456,13 +398,17 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
   it('多选要能用：点一下不收起选择器，另给一个「选好了」', () => {
     const source = readComponent()
 
-    // 收起就没法再点第二个病了
-    expect(source).toContain('function closeKindPicker(index: number)')
+    // 2026-10-12 第一步：勾病种的界面搬去 VaccineRecordCard.vue 了 ✓ ——
+    // 这两条盯的是**顾客能多选**这件事 ✓，所以改读卡片 ✓（判据没放松 ✓）
+    const card = readCard()
+    expect(card).toContain('function closeKindPicker()')
     // 2026-10-12 老板：不要「选好了」按钮 ✗（点字段名那一行即可展开/收起 ✓）
-    // 只看**用法**（样式类名还留在 CSS 里，不算 ✗）
-    expect(source.includes('@tap="closeKindPicker(')).toBe(false)
+    // 只看**用法**（函数本身还留着，不算 ✗）
+    expect(card.includes('@tap="closeKindPicker(')).toBe(false)
     // 提示里得写明可多选（组合苗要勾好几个病种）
-    expect(source).toContain('可多选')
+    expect(card).toContain('可多选')
+    // 父组件这一侧留着的仍是那个"按类别多选"的遗留函数 ✓（记着"不能退回单选" ✓）
+    expect(source).toContain('function toggleKind')
   })
 
   it('组合苗的多分类仍然成立（从产品库选时自动带出）', () => {
@@ -470,7 +416,8 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
 
     // 单选只针对"顾客手动指定"这一条路；
     // 选产品时分类按真实成分带出来（卫佳捌 = 核心 + 钩端），不能被单选逻辑吃掉
-    expect(source).toContain('draft.kinds = [...product.kinds]')
+    // 2026-10-12 第一步：从产品库选那一行在卡片里 ✓
+    expect(readCard()).toContain('draft.value.kinds = [...product.kinds]')
   })
 })
 
@@ -483,6 +430,11 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   /**
    * 问题4 的根因：产品库下发的规范名是「宠必威幼犬保」（没有 ®），
@@ -491,11 +443,16 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
    * 识别出来的名字只能留在下面的手填输入框里。
    */
   it('🔴 产品名比对前先归一化，® 和空格不影响认不认得出', () => {
-    const source = readComponent()
+    // 2026-10-12 第一步：认产品库那一套搬去卡片了 ✓；这一份归一化
+    // 父组件也还留着一份 ✓（扫描去重要拿它比名字 ✓）—— 两处一起盯 ✓
+    const source = readCard()
+    const parent = readComponent()
 
-    expect(source).toContain('function normalizeProductName(')
-    // 与后端 normalizeProductText 同一套规则，缺一不可
-    expect(source).toContain(".replace(/[®™©]/g, '')")
+    for (const file of [source, parent]) {
+      expect(file).toContain('function normalizeProductName(')
+      // 与后端 normalizeProductText 同一套规则，缺一不可
+      expect(file).toContain(".replace(/[®™©]/g, '')")
+    }
     expect(source).toContain('function findCatalogProduct(')
     // 名称那一行必须走归一化比对，不能退回"一模一样才认"
     expect(source).toContain('function isNameRecognized(')
@@ -514,16 +471,18 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
   it('🔴 认得出：这一行显示库里的规范名', () => {
     const source = readComponent()
 
-    expect(source).toContain('function nameFieldLabel(')
-    expect(source).toContain('if (matched) return matched.name')
+    const card = readCard()
+    expect(card).toContain('function nameFieldLabel(')
+    expect(card).toContain('if (matched) return matched.name')
   })
 
   it('🔴 认不出：这一行只写"去库里挑一支"，不再把同一个名字显示两遍', () => {
     const source = readComponent()
 
-    expect(source).toContain("'＋ 从产品库选一支'")
+    const card = readCard()
+    expect(card).toContain("'＋ 从产品库选一支'")
     // 名字本身只在手填框里出现（:value 绑的是 draft.vaccineName）
-    expect(source).toContain(':value="draftOf(record, index).vaccineName"')
+    expect(card).toContain(':value="draft.vaccineName"')
     // 旧的"名称行直接显示原文"的写法（会和输入框重复）已经下线
     expect(source).not.toContain("return String(name || '').trim()")
   })
@@ -533,22 +492,24 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
 
     // 老板的规格："如果 AI 识别的疫苗名称没有在产品库中，
     // 才显示这个输入框吧？"
-    expect(source).toContain('function showManualNameInput(')
-    expect(source).toContain('<template v-if="showManualNameInput(index)">')
+    const card = readCard()
+    expect(card).toContain('function showManualNameInput(')
+    expect(card).toContain('<template v-if="showManualNameInput()">')
     // 正打字的那一行不能把输入框抽走（打到一半刚好命中产品库会当场消失）
-    expect(source).toContain('if (focusIndex.value === index) return true')
+    expect(card).toContain('if (props.nameFocused) return true')
   })
 
   it('🔴 确认的结果留在卡片上，不再是"闪一下就没"', () => {
     const source = readComponent()
 
     // 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
-    expect(source).toContain('const confirmResults = reactive<')
-    expect(source).toContain("class=\"vaccine-confirm-result\"")
-    expect(source).toContain('setConfirmResult(')
+    const card = readCard()
+    expect(card).toContain('const confirmResult = ref<')
+    expect(card).toContain("class=\"vaccine-confirm-result\"")
+    expect(card).toContain('setConfirmResult(')
     // 成功和认不出两种结果都要说清楚
-    expect(source).toContain('已确认：')
-    expect(source).toContain('产品库和 AI 都没认出这支苗')
+    expect(card).toContain('已确认：')
+    expect(card).toContain('产品库和 AI 都没认出这支苗')
   })
 
   it('🔴 后台刷新不许把已经显示出来的记录先擦掉（"屏幕闪烁"的来源）', () => {
@@ -570,6 +531,11 @@ describe('识别 3 条变 6 条 + 表单底部红字下线（2026-10-06 第三�
   const readComponent = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
       'utf-8',
     )
 
@@ -641,6 +607,11 @@ describe('接种记录 · 空记录不显示 + 做成一个板块（2026-10-06�
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('🔴 没有任何记录时，标题行不出现（老板："它也会显示出来"）', () => {
     const source = readComponent()
@@ -694,6 +665,11 @@ describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）',
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('🔴 识别结果填表时优先用 productName', () => {
     const source = readComponent()
@@ -704,10 +680,11 @@ describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）',
   it('🔴 点「确认」时也用后端给的规范名，并把名字对齐', () => {
     const source = readComponent()
 
-    expect(source).toContain("const canonicalName = String(res.data.productName || '')")
-    expect(source).toContain('draft.vaccineName = canonicalName')
+    const card = readCard()
+    expect(card).toContain("const canonicalName = String(res.data.productName || '')")
+    expect(card).toContain('draft.value.vaccineName = canonicalName')
     // 后端没给才退回前端这份比对
-    expect(source).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
+    expect(card).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
   })
 
   it('认不出来时绝不硬塞名字（照旧显示顾客写的那串字）', () => {
@@ -727,9 +704,14 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('三种状态：还没写 / 库里有 / 库里没有', () => {
-    const source = readComponent()
+    const source = readCard()
 
     expect(source).toContain(
       "function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown'",
@@ -739,20 +721,20 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
   })
 
   it('🔴 库里没有的产品：不给"从产品库挑一支"的入口', () => {
-    const source = readComponent()
+    const source = readCard()
 
     // 老板："对于宠派纯这类产品库中没有的产品……也不让用户可以点击
     // 从产品库中挑选产品的弹窗呢？因为这没有意义嘛，对吧？"
     expect(source).toContain(
-      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draftOf(record, index).vaccineName) !== 'unknown'\"",
+      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draft.vaccineName) !== 'unknown'\"",
     )
   })
 
   it('库里没有时要说清楚，并且名字仍然能写', () => {
-    const source = readComponent()
+    const source = readCard()
 
     expect(source).toContain('产品库里没有这支苗 —— 已按你写的名字记录')
-    expect(source).toContain("nameFieldMode(draftOf(record, index).vaccineName) === 'unknown'")
+    expect(source).toContain("nameFieldMode(draft.vaccineName) === 'unknown'")
   })
 
   /**
@@ -762,12 +744,12 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
    * —— 早就归类了。所以别再摆一个按钮让人以为"必须点一下"。
    */
   it('🔴 分类已经有了、名字也认得 → 不再显示「确认」按钮', () => {
-    const source = readComponent()
+    const source = readCard()
 
-    expect(source).toContain('function showConfirmButton(index: number): boolean')
-    expect(source).toContain('if (draft.kinds.length === 0) return true')
-    expect(source).toContain("return nameFieldMode(draft.vaccineName) === 'unknown'")
-    expect(source).toContain('v-if="showConfirmButton(index)"')
+    expect(source).toContain('function showConfirmButton(): boolean')
+    expect(source).toContain('if (draft.value.kinds.length === 0) return true')
+    expect(source).toContain("return nameFieldMode(draft.value.vaccineName) === 'unknown'")
+    expect(source).toContain('v-if="showConfirmButton()"')
     // 取而代之说明一句
     expect(source).toContain('分类已按产品库自动判定，不用再确认。')
   })
@@ -800,36 +782,46 @@ describe('疫苗名称 · 没读全时如实告知并一键改对（2026-10-06�
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('🔴 识别草稿把候选带进来', () => {
     const source = readComponent()
 
     expect(source).toContain('nameSuggestions: Array.isArray(draft.nameSuggestions)')
-    expect(source).toContain('nameSuggestions?: string[]')
+    // 草稿的形状两个文件共用一份（2026-10-12 抽卡片时提出来的 ✓）
+    const types = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
+    expect(types).toContain('nameSuggestions?: string[]')
   })
 
   it('🔴 认出没把握时，明说"这行字可能没读全"并列出候选', () => {
-    const source = readComponent()
+    const source = readCard()
 
     // 老板："如果不能完全有把握的识别出来，能不能诚实的告诉用户呢？"
     expect(source).toContain('这行字可能没读全')
     expect(source).toContain('(record.nameSuggestions || []).length > 0')
-    expect(source).toContain('@tap="applySuggestedProduct(index, suggestion)"')
+    expect(source).toContain('@tap="applySuggestedProduct(suggestion)"')
   })
 
   it('点候选 = 用那一支（名字和分类一起带对），用过就不再提示', () => {
-    const source = readComponent()
+    const source = readCard()
 
-    expect(source).toContain('function applySuggestedProduct(index: number, name: string)')
-    expect(source).toContain('applyCatalogProduct(index, at)')
-    expect(source).toContain('if (record) record.nameSuggestions = []')
+    expect(source).toContain('function applySuggestedProduct(name: string)')
+    expect(source).toContain('applyCatalogProduct(at)')
+    expect(source).toContain('props.record.nameSuggestions = []')
   })
 
   it('点「确认」时也刷新候选（认出来了就清空）', () => {
-    const source = readComponent()
+    const source = readCard()
 
     expect(source).toContain('if (Array.isArray(res.data.nameSuggestions))')
-    expect(source).toContain('record.nameSuggestions = res.data.nameSuggestions.map(String)')
+    expect(source).toContain('props.record.nameSuggestions = res.data.nameSuggestions.map(String)')
   })
 })
 
@@ -840,6 +832,11 @@ describe('扫描去重 + 匹配说明（2026-10-06）', () => {
   const readComponent = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
       'utf-8',
     )
   const readScan = () =>
@@ -909,6 +906,11 @@ describe('接种日期不能晚于今天（2026-10-07）', () => {
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('自动保存前统一拦：晚于今天的日期不保存，并在卡片上说清楚', () => {
     const source = readComponent()
@@ -919,7 +921,7 @@ describe('接种日期不能晚于今天（2026-10-07）', () => {
   })
 
   it('手填：日期选择器不让选未来', () => {
-    const source = readComponent()
+    const source = readCard()
 
     expect(source).toContain(':end="getTodayDateString()"')
   })
@@ -982,7 +984,6 @@ describe('到期提醒 · 用系统推算的那一份（2026-10-07）', () => {
   })
 })
 
-
 /**
  * 存完整批回执（2026-10-08 老板要的）。
  *
@@ -1015,7 +1016,6 @@ describe('存完整批回执（2026-10-08）', () => {
   })
 })
 
-
 /**
  * 记录卡片的信息取舍（2026-10-08 老板审计第 4 块）
  */
@@ -1025,16 +1025,21 @@ describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('卡片脸上不再显示到期提示（老板："每条卡片不显示到期提示"）', () => {
-    const source = readComponent()
+    const source = readCard()
 
-    expect(source).not.toContain('{{ dueHint(draftOf(record, index)) }}')
+    expect(source).not.toContain('{{ dueHint(draft) }}')
     expect(source).toContain('到期提示**不在卡片脸上显示**')
   })
 
   it('展开后的字段顺序跟确认页一致：名字 → 日期 → 病种', () => {
-    const source = readComponent()
+    const source = readCard()
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
     const date = source.indexOf('<text class="field-label">接种日期</text>')
@@ -1063,6 +1068,12 @@ describe('安全默认值 · 待核对（2026-10-09）', () => {
       resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
       'utf-8',
     )
+  /** 徽标与「一键核对」都在卡片上（2026-10-12 第一步 ✓）*/
+  const readCard = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
 
   it('识别出来的记录：三种可疑情况先标成"待核对"', () => {
     const source = readSection()
@@ -1074,12 +1085,12 @@ describe('安全默认值 · 待核对（2026-10-09）', () => {
   })
 
   it('卡片上有「待核对」徽标 + 说明 + 一键核对', () => {
-    const source = readSection()
+    const source = readCard()
 
     expect(source).toContain('class="vaccine-card__pending"')
     expect(source).toContain('这一针先没算进接种计划')
     expect(source).toContain('我已对照本子核对')
-    expect(source).toContain('function confirmVerified(record: VaccineRecord, index: number)')
+    expect(source).toContain('function confirmVerified()')
   })
 
   it('提交时带上这个标记（创建与更新都要落）', () => {
@@ -1097,9 +1108,10 @@ describe('安全默认值 · 待核对（2026-10-09）', () => {
  * —— 这时候要说"日期可疑" ✓，而不是笼统说"可能把贴纸认成了另一支苗" ✗。
  */
 describe('待核对 · 按原因说不同的话（2026-10-09）', () => {
+  // 2026-10-12 第一步：按原因说这些话的是**卡片** ✓
   const section = () =>
     readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
       'utf-8',
     )
 
@@ -1208,6 +1220,197 @@ describe('记录板块 · 导入与定义顺序的通用守卫（2026-10-11）',
       if (!new RegExp(`\\b${name}\\b`).test(text)) continue
       const importBlock = text.slice(0, text.indexOf('<script') + 4000)
       expect(`${name} → ${importBlock.includes(importFrom) ? 'ok' : 'missing'}`).toBe(`${name} → ok`)
+    }
+  })
+})
+
+/**
+ * 记录板块 ←→ 编辑卡 的**接线**（2026-10-12 第一步）。
+ *
+ * ── 为什么要专门守这条 ──────────────────────────────────────────────
+ *
+ * 第一步把"一条记录的编辑卡"抽成了 VaccineRecordCard.vue ✓，
+ * 两边的约定是 **props 往下、emits 往上** ✓。这类"跨文件接线"错起来
+ * 全都不会在构建期报错 ✗：
+ *   · 属性名写错（`:expanded` 写成 `:expand`）→ 卡片永远收着 ✓，看着像"点不开" ✗
+ *   · 事件名写错（`@name-blur` 写成 `@blur`）→ 输入框的焦点标记再也清不掉 ✓
+ *   · 父组件忘了接某个 emit → 卡片按钮点了没反应 ✓
+ * **真机才会发现** ✗，而且第一眼很像"数据没加载出来" ✓。
+ *
+ * 所以：把"父组件用到的"和"卡片声明的"对一遍 ✓，差集不为空就在本地红 ✓。
+ * 判据故意写得很宽（只比名字集合 ✓），因为它要挡的是**名字对不上**这一类 ✓。
+ */
+describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步）', () => {
+  const stripComments = (text: string) =>
+    text
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+
+  const readRaw = (name: string) =>
+    readFileSync(resolve(process.cwd(), `src/components/dog-profile/${name}`), 'utf-8')
+
+  const templateOf = (text: string) =>
+    text.slice(text.indexOf('<template>'), text.indexOf('</template>'))
+
+  const scriptOf = (text: string) =>
+    text.slice(text.indexOf('<script setup'), text.indexOf('</script>'))
+
+  /** kebab-case → camelCase（Vue 模板里两种写法都合法 ✓）*/
+  const camel = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+
+  /**
+   * Vue 自己吃掉的属性，不算卡片的 props ✓。
+   * `:key` / `:class` / `:style` / `ref` 这些由框架处理，卡片声明不到它们 ✓。
+   */
+  const VUE_BUILTIN_ATTRS = new Set([
+    'key',
+    'class',
+    'style',
+    'ref',
+    'is',
+    'slot',
+    'modelValue',
+  ])
+
+  /** 父组件写在 <VaccineRecordCard … /> 上的属性与事件 */
+  function usageInSection() {
+    const tpl = templateOf(readRaw('VaccineManagementSection.vue'))
+    const tag = tpl.slice(tpl.indexOf('<VaccineRecordCard'))
+    const end = tag.indexOf('/>')
+    const block = end >= 0 ? tag.slice(0, end) : tag
+
+    const props: string[] = []
+    const events: string[] = []
+    for (const hit of block.matchAll(/([:@])([a-zA-Z][\w-]*)\s*=/g)) {
+      const [, sigil, name] = hit
+      if (sigil === ':') {
+        if (!VUE_BUILTIN_ATTRS.has(name)) props.push(camel(name))
+      } else {
+        events.push(camel(name))
+      }
+    }
+    return { props, events, block }
+  }
+
+  /** 卡片声明了哪些 props（defineProps 里的一级字段 ✓）*/
+  function declaredProps(): string[] {
+    const script = scriptOf(readRaw('VaccineRecordCard.vue'))
+    const start = script.indexOf('defineProps<{')
+    expect(start, '卡片里找不到 defineProps<{').toBeGreaterThan(-1)
+    // 括号配平，取出 defineProps 的泛型块
+    let depth = 0
+    let end = -1
+    for (let i = script.indexOf('{', start); i < script.length; i += 1) {
+      if (script[i] === '{') depth += 1
+      else if (script[i] === '}') {
+        depth -= 1
+        if (depth === 0) {
+          end = i
+          break
+        }
+      }
+    }
+    expect(end, 'defineProps 的泛型块没配平').toBeGreaterThan(-1)
+    const body = script.slice(start, end)
+    // 只认"行首缩进 + 名字 + ?/:" —— 那才是 props 本身，
+    // 对象类型里的字段（kinds / components …）缩进更深 ✓ 不会误判 ✓
+    const found: string[] = []
+    for (const line of body.split('\n')) {
+      const m = line.match(/^ {4}([a-zA-Z][\w]*)\??\s*:/)
+      if (m) found.push(m[1])
+    }
+    return found
+  }
+
+  /** 卡片声明了哪些 emit */
+  function declaredEmits(): string[] {
+    const script = scriptOf(readRaw('VaccineRecordCard.vue'))
+    const found: string[] = []
+    for (const hit of script.matchAll(/\(event:\s*'([\w-]+)'/g)) {
+      found.push(camel(hit[1]))
+    }
+    return found
+  }
+
+  it('卡片确实声明了一批 props / emits（防止解析写错导致这条空转）', () => {
+    // 接口是老板点名要求的四个 + 一堆显示状态 ✓
+    for (const name of ['record', 'index', 'draft', 'expanded']) {
+      expect(declaredProps()).toContain(name)
+    }
+    for (const name of ['update', 'remove', 'toggle', 'save', 'nameBlur']) {
+      expect(declaredEmits()).toContain(name)
+    }
+  })
+
+  it('🔴 父组件用了的属性和事件，卡片都声明了（名字对不上就在本地红）', () => {
+    const { props, events } = usageInSection()
+    const known = new Set(declaredProps())
+    const knownEvents = new Set(declaredEmits())
+
+    // 自检：真的从模板里读到了东西（否则下面的差集必然为空 ✓ 等于白测 ✗）
+    expect(props.length).toBeGreaterThanOrEqual(10)
+    expect(events.length).toBeGreaterThanOrEqual(5)
+
+    const propProblems = props.filter((name) => !known.has(name))
+    const eventProblems = events.filter((name) => !knownEvents.has(name))
+
+    expect({ propProblems, eventProblems }).toEqual({ propProblems: [], eventProblems: [] })
+  })
+
+  it('🔴 接口那四个 emit 父组件一个都没漏接（漏了就是"点了没反应"）', () => {
+    const { events } = usageInSection()
+
+    for (const name of ['update', 'remove', 'toggle', 'save']) {
+      expect(events).toContain(name)
+    }
+  })
+
+  it('🔴 展开由父组件说了算：卡片拿的是 :expanded，不是让自己的下标', () => {
+    const { props, block } = usageInSection()
+
+    // 一次只展开一条 ✓ —— 这是**列表级**的状态 ✓，留在这里 ✓
+    expect(props).toContain('expanded')
+    expect(block).toContain(':expanded="expandedIndex === index"')
+    // 列表容器（不是卡片）仍然负责一条条排出来
+    expect(templateOf(readRaw('VaccineManagementSection.vue'))).toContain(
+      'v-for="(record, index) in records"',
+    )
+  })
+
+  it('草稿仍然由父组件持有（校验与自动保存要看得见顾客在打什么字）', () => {
+    const { props, block } = usageInSection()
+
+    expect(props).toContain('draft')
+    expect(block).toContain(':draft="draftOf(record, index)"')
+    // 父组件这边还得有那份草稿仓库与三个列表级的能力
+    const section = readRaw('VaccineManagementSection.vue')
+    for (const anchor of ['const drafts = reactive', 'function draftOf(', 'function updateDraft(']) {
+      expect(section).toContain(anchor)
+    }
+  })
+
+  it('接口约定的四个事件各自接到了列表级的实现上', () => {
+    const { block } = usageInSection()
+
+    // 每一条都要落到真的会干活的函数上 ✓（不是接了个空壳 ✓）
+    for (const handler of [
+      '@update="updateDraft"',
+      '@toggle="toggleExpandedByIndex"',
+      '@save="saveRecordByIndex"',
+      '@remove="removeRecordByIndex"',
+      '@name-blur="clearFocus"',
+    ]) {
+      expect(block).toContain(handler)
+    }
+    // 这些实现就在父组件里 ✓
+    const section = stripComments(readRaw('VaccineManagementSection.vue'))
+    for (const fn of [
+      'function toggleExpandedByIndex(',
+      'function saveRecordByIndex(',
+      'function removeRecordByIndex(',
+      'function clearFocus(',
+    ]) {
+      expect(section).toContain(fn)
     }
   })
 })

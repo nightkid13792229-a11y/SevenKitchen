@@ -79,6 +79,38 @@ cd miniapp && npm run build:mp-weixin
    所以：**联调期间不要跑 `npm run build`**；要自检只跑 `npx tsc --noEmit`（不产出、不删东西）。
    万一手滑弄死了：**按启动规则重启** `cd backend && npm run start:dev:miniapp` 即可恢复。
 
+## 开发者工具自动化（2026-10-12 实测打通 ✓；用之前先读这一节）
+
+开发者工具**自带**一套自动化接口 ✓，能让 AI 自己去模拟器里点、读页面、截图 ✓ ——
+路径：`/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide`
+（工具清单与用法见 `wechatide --help`；随工具附带的 SKILL.md 在
+`.../Resources/app.asar.unpacked/wechatide-skill/skills/automator/SKILL.md` ✓）。
+
+```bash
+W=/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide
+"$W" -c codex check_wechatide_status --skill-version 0.3.9   # 先看登录态
+"$W" -c codex automation_runtime_info --project <项目绝对路径> --action currentPage
+"$W" -c codex automation_evaluate --project <项目绝对路径> --fn-source 'function(){ return wx.getStorageInfoSync().keys }'
+```
+
+### ⚠️ 三条必须知道的（都是这次踩出来的 ✗）
+
+1. **第一次调用会弹一个授权窗**（"codex 申请使用 MCP，是否允许？"）——
+   需要**人点一次「允许」** ✓，之后本节工具才可用 ✓。
+   授权状态：`polling_task_result --task-id <auth_...>` ✓。
+2. **绝对不要用 `pkill -f wechatide` 之类的宽匹配去"清理"** ✗✗ ——
+   开发者工具自己的渲染进程命令行里就带 `wechatide` 字样 ✓，
+   一刀下去**把它的界面打死** ✓（窗口变成一片白 ✓）。
+   这次我这么干过一次 ✓，只好整个退出重开才恢复 ✓。
+   要停挂住的调用：**只 kill 自己起的那个 PID** ✓（`job_kill` ✓），别按名字杀 ✗。
+3. **模拟器连的是本机后端** ✓（`platform = devtools` ✓，本机地址 `127.0.0.1:3011` ✓），
+   而**本机库没有那 50 只测试狗** ✗（只有 11 只普通狗、且没有疫苗产品表 ✗）。
+   所以"在模拟器里验疫苗记录"这条路的**前提**是：
+   · 要么先把小程序里"手动指定服务器地址"（storage 键 `api_base_url`）指到**线上** ✓
+   · 要么在本机补测试档案 ✓
+   · 而且**模拟器里必须先登录** ✗ —— 自动化跑不了真实微信登录 ✓，
+     这一步需要人点一次「立即登录」✓（登录态不在 storage 里，是 `wx.login` 换的 ✓）。
+
 ## 必读文档
 
 | 优先级 | 文档 | 用途 |

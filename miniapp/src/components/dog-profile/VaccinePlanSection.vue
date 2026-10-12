@@ -140,8 +140,11 @@
     </view>
 
     <view v-if="loadError" class="health-card">
-      <text class="plan-locked__title">接种计划没加载出来，下拉刷新一下试试</text>
-      <text class="plan-locked__desc">{{ loadError }}</text>
+      <!-- 老板 2026-10-12："提示语是让我下拉刷新，但实际上小程序里好像并不支持这个功能吧。"
+           —— 对 ✗：小程序页面没有下拉刷新 ✓，说了等于让顾客白试 ✓。
+           现在只陈述事实 + 给一个真能用的动作 ✓（切走再回来会重新加载 ✓）。 -->
+      <text class="plan-locked__title">接种计划没加载出来</text>
+      <text class="plan-locked__desc">{{ loadError }}（切到别的书签再回来，会重新加载）</text>
     </view>
   </view>
 </template>
@@ -789,7 +792,11 @@ const visibleSteps = computed(() => {
 function isWindowPassed(step: { windowEnd?: string } | null | undefined): boolean {
   const end = String(step?.windowEnd || '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return false
-  return end < getTodayDateString()
+  // ⚠️ 用**这个组件里真有**的日期函数 ✗→✓
+  // （2026-10-12：我在这里写了 getTodayDateString() ✗ —— 那是**记录板块**里的别名 ✓，
+  //   计划板块没有它 ✗ → 渲染时抛 "getTodayDateString is not defined" ✗ →
+  //   计划永远停在"正在读取"✗，而这个错误只躺在控制台里 ✓，界面上完全看不出来 ✗。）
+  return end < todayDateText()
 }
 
 function windowPassedSuffix(step: { windowEnd?: string } | null | undefined): string {
@@ -878,6 +885,21 @@ let loadingDogId = ''
 const planCache = new Map<string, { at: number; data: any }>()
 const PLAN_CACHE_TTL_MS = 20 * 1000
 
+/** 把后端下发的计划装进本地状态 ✓（正常请求与缓存命中共用同一段装配 ✓）*/
+function applyPlanResponse(data: any) {
+  plan.value = {
+    // 后端已经把 commonProducts 放在每一步里了，整条透传
+    nextStep: data.nextStep || null,
+    steps: Array.isArray(data.steps) ? data.steps : [],
+    conflicts: Array.isArray(data.conflicts) ? data.conflicts : [],
+    decisions: data.decisions || {},
+    summary: data.summary || {},
+    reviewed: data.reviewed === true,
+    noRecordAtAll: data.noRecordAtAll === true,
+    noEvidence: data.noEvidence === true,
+  }
+}
+
 async function load() {
   if (!props.dogId) {
     return
@@ -943,7 +965,14 @@ async function load() {
         })),
     )
   } catch (error: any) {
-    loadError.value = error?.message || '加载疫苗计划失败'
+    /*
+     * ⚠️ 2026-10-12 老板截图：卡片上出现了「applyPlanResponse is not defined」✗ ——
+     * 把技术报错原文甩给顾客 ✗，而且那句话对他毫无意义 ✓。
+     * 现在：界面只说人话 ✓，技术原文打到控制台 ✓（我们排查用 ✓）。
+     */
+    loadError.value = '请稍后重试'
+    // eslint-disable-next-line no-console
+    console.error('[疫苗计划] 加载失败：', error?.message || error)
   } finally {
     // 无论成败都要放开守卫 ✓，否则这只狗再也不会重新加载 ✗
     if (loadingDogId === props.dogId) {

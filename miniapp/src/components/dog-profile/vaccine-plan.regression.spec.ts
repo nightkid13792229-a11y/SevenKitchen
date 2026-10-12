@@ -621,7 +621,7 @@ describe('计划卡 · 窗口已过的显示口径（2026-10-12）', () => {
   it('判断口径是"结束日 < 今天"，不再是"超过 90 天"', () => {
     const text = source()
 
-    expect(text).toContain('return end < getTodayDateString()')
+    expect(text).toContain('return end < todayDateText()')
   })
 })
 
@@ -700,5 +700,57 @@ describe('计划卡 · 同一只狗的并发请求要被兜住（2026-10-12）',
 
   it('成功的响应会写进缓存', () => {
     expect(source()).toContain('planCache.set(props.dogId, { at: Date.now(), data: res.data })')
+  })
+})
+
+/**
+ * ⚠️ 两条硬教训（2026-10-12 老板截图）
+ *
+ * ① 卡片上出现「applyPlanResponse is not defined」✗ ——
+ *    我把函数**用上了却忘了定义** ✗（替换锚点没匹配，静默失败 ✓），
+ *    构建居然还过了 ✗ → 只有真机上才炸出来 ✓。
+ * ② 那句话是**技术报错原文** ✗，甩给顾客毫无意义 ✓。
+ */
+describe('计划卡 · 加载失败只说人话 + 用到的函数必须有定义（2026-10-12）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('applyPlanResponse 有定义（不是只被调用过）', () => {
+    const text = source()
+
+    expect(text).toContain('function applyPlanResponse(')
+    expect(text).toContain('applyPlanResponse(res.data)')
+  })
+
+  it('加载失败时界面不出现 error.message 原文', () => {
+    const text = source()
+
+    expect(text).toContain("loadError.value = '请稍后重试'")
+    expect(text.includes('loadError.value = error?.message')).toBe(false)
+  })
+})
+
+/**
+ * ⚠️ 计划板块里不许出现"记录板块才有的函数"（2026-10-12 真机定位）
+ *
+ * 我在 isWindowPassed 里写了 getTodayDateString() ✗ ——
+ * 那是**记录板块**里的别名 ✓，计划板块没有它 ✗ →
+ * 渲染抛错 ✗ → 计划永远停在"正在读取接种计划…"✗，
+ * 而错误只躺在控制台里 ✓（界面上完全看不出来 ✗）。
+ * 定位方式：在小程序里钩住 wx.request + console.error ✓（这次就是靠它抓到的 ✓）。
+ */
+describe('计划卡 · 不许引用记录板块的函数（2026-10-12）', () => {
+  it('日期比较用本组件里的 todayDateText()', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('return end < todayDateText()')
+    // 只看**调用写法**（注释里引用了错误写法 ✓ 不算 ✗）
+    expect(source.includes('return end < getTodayDateString')).toBe(false)
   })
 })

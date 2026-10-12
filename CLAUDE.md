@@ -28,6 +28,35 @@
 5. **如果预览、构建或用户明确要求的预览目录同步失败，必须明确告知失败原因**，不能让用户自己猜测是不是没编译、目录不对、同步没完成或输出没更新
 6. **凡是小程序本地开发默认 API 地址，都以** `http://127.0.0.1:3011/api/v1` **为准**，除非用户明确要求切换
 
+## 生产部署授权（老板 2026-10-12 定）
+
+**老板原话**："本会话后续所有的修改都可以直接部署到生产端，小程序不用，
+因为小程序需要审核，所以小程序只需要进行代码上传即可。"
+
+1. **后端接口 与 admin-web：改完可以直接部署到生产**，不必每次单独征求同意
+   （但仍要**先自检**：后端 `npm test`、构建通过；admin-web 构建通过）
+2. **小程序（miniapp/）：绝对不要部署/发布到正式版** —— 走审核，会很麻烦。
+   只做**代码上传到体验版**，让老板在微信里看。
+3. **部署顺序：先把改动合并到 `main`、推到 `origin/main`，再部署**。
+   原因：部署脚本是"从 `origin/main` 构建"的，分支上的提交不会被带上：
+   - 后端：`bash backend/scripts/remote_deploy_v2.sh`（本地按 `origin/main` 打包 dist 再上传；
+     生产机也会 `git reset --hard` 到 `origin/main`）
+   - admin-web：`bash deploy-admin-web.sh`
+4. **每次部署/上传后必须向老板报告结果**（部署了哪个提交、或体验版版本号）
+
+### 小程序上传体验版（固定动作）
+
+```bash
+cd miniapp && npm run build:mp-weixin
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli upload \
+  --project "$(pwd)" --version "<版本号>" --desc "<这次改了什么>" --lang zh
+```
+
+- 上传前**先确认没有自动化会话开着**（开着会上传静默失败）
+- 版本号必须比上一次大，用当天日期格式（如 `2026.10.12.4`）
+- 看到 `✔ upload` 才算成功
+- AppID `wx92924e25093f8f18`；项目根 `miniapp/`，构建产物在 `dist/build/mp-weixin/`
+
 ## 本地后端协作硬规则
 
 1. **启动小程序联调后端前先检查本地后端是否已可用**：`cd backend && npm run start:check:miniapp`

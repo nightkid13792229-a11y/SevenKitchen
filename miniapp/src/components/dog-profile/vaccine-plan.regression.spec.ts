@@ -398,7 +398,8 @@ describe('疫苗计划 · 记录一变就重算（2026-10-06 实测修复）', (
       'utf-8',
     )
 
-    expect(section).toContain('defineExpose({ reload: () => load() })')
+    // 2026-10-12：这一行现在多暴露了一个 collapseAll ✓（点记录接种信息后收起卡片 ✓）
+    expect(section).toContain('reload: () => load()')
   })
 
   it('reload 必须排在"红点也跟着更新"同一条链上（两件事一起发生）', () => {

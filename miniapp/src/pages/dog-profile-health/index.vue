@@ -315,6 +315,11 @@ function onVaccineRecordsChanged() {
  * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
  */
 function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
+  /*
+   * ① 先收起计划卡 ✓ —— 录入草稿是在**下方记录板块**里开的 ✓，
+   *    卡片张张展开时那块被顶到屏幕外 ✗，看着就像"没点上"✗。
+   */
+  vaccinePlanRef.value?.collapseAll?.()
   // ⚠️ 2026-10-12 老板："不要提示，能不能做到在该条任务计划下展开录入窗口？"
   // —— 录入窗口已经挪进**计划卡内部**了 ✓（VaccinePlanSection 的 inline-editor ✓），
   //    这里不再代它开草稿 ✗（否则会同时冒出两条 ✗）。

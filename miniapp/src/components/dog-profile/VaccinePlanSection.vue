@@ -520,6 +520,19 @@ function toggleKind(kind: string) {
 }
 
 /**
+ * 收起所有卡片 ✓（2026-10-12）。
+ *
+ * 为什么需要它：家长在计划卡里点「记录接种信息」之后 ✓，
+ * 录入草稿是在**下方的记录板块**里开的 ✓ —— 而计划卡张张展开时
+ * 那块被顶到屏幕外 ✗，看起来就像"没点上"✗。
+ * 把卡片收起 ✓，录入窗口自然就上到眼前 ✓（不依赖页面滚动 ✓，
+ * 实测小程序里 pageScrollTo 到元素这条路不稳 ✗）。
+ */
+function collapseAll() {
+  expandedKind.value = ''
+}
+
+/**
  * 卡片的「记录接种信息」✓：把这一类的分类带过去 ✓，
  * 交给**现成的记录录入模块**开一条草稿 ✓
  * （那里才有产品库、病种勾选、名字自动认分类 ✓ ——
@@ -1125,7 +1138,8 @@ watch(() => props.dogId, load, { immediate: true })
  * countUnsaveableDrafts / startScan / addRecord 都靠它），所以加这一条。
  * watch 保留：换狗时它仍然管用，两条路不冲突（同一次加载幂等）。
  */
-defineExpose({ reload: () => load() })
+defineExpose({
+  collapseAll, reload: () => load() })
 </script>
 
 <style scoped lang="scss">

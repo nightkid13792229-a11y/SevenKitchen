@@ -674,3 +674,31 @@ describe('计划卡 · 请求不打转（2026-10-12）', () => {
     expect(text).toContain('loadingDogId = props.dogId')
   })
 })
+
+/**
+ * ⚠️ 计划请求不许"同一秒发一串"（老板 2026-10-12 实测）
+ *
+ * 证据：生产日志里 15:42:24 这一秒内**一次来了 5 条**计划请求 ✗
+ * （每条都 200 ✓，返回约 1979 字节 ✓）——
+ * 说明页面里同时活着好几个计划板块实例 ✓，单实例的"在飞守卫"挡不住它们 ✗。
+ * 修法：模块级**短缓存**（按狗 20 秒 ✓），第二个及以后的实例直接用缓存 ✓。
+ */
+describe('计划卡 · 同一只狗的并发请求要被兜住（2026-10-12）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('有按狗的短缓存，且命中时直接套用响应（不再发请求）', () => {
+    const text = source()
+
+    expect(text).toContain('const planCache = new Map')
+    expect(text).toContain('PLAN_CACHE_TTL_MS')
+    expect(text).toContain('applyPlanResponse(cached.data)')
+  })
+
+  it('成功的响应会写进缓存', () => {
+    expect(source()).toContain('planCache.set(props.dogId, { at: Date.now(), data: res.data })')
+  })
+})

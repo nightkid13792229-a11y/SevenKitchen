@@ -122,7 +122,7 @@
       我们只如实说"暂时没有需要提醒的针"✓，由家长去记录板块核对 ✓）。
     -->
     <text v-else-if="loaded && kindCards.length === 0" class="plan-steps__empty">
-      暂时没有需要提醒的针。如果和你的疫苗本对不上，请到下方接种记录核对一下。
+      暂无待接种提醒。
     </text>
     <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
       已忽略 {{ ignoredCount }} 项 · 点这里恢复
@@ -864,6 +864,20 @@ async function restoreIgnored() {
  */
 let loadingDogId = ''
 
+/**
+ * 最近一次**成功**的计划响应（按狗狗缓存 ✓，带很短的保鲜期 ✓）。
+ *
+ * 为什么需要它 ✗→✓：生产日志显示计划请求是**同一秒内一次发 5 条** ✗ ——
+ * 说明页面里同时活着好几个计划板块实例 ✓（每个实例都会自己发一次 ✓），
+ * 单实例里的"在飞守卫"挡不住它们 ✗。
+ * 这里把响应按狗缓存 20 秒 ✓：第二个及以后的实例直接用缓存 ✓，
+ * 不再重复请求 ✓，界面也不会再停在"正在读取"✓。
+ * （20 秒是刻意的短保鲜期 ✓：家长刚记完一针要立刻看到计划变化 ✓，
+ *   所以不能长 ✓；而同一屏渲染出来的那几条并发请求会被它吃干净 ✓。）
+ */
+const planCache = new Map<string, { at: number; data: any }>()
+const PLAN_CACHE_TTL_MS = 20 * 1000
+
 async function load() {
   if (!props.dogId) {
     return
@@ -890,6 +904,14 @@ async function load() {
   loadError.value = ''
   unavailable.value = null
 
+  // 短缓存命中 → 直接用 ✓（同一屏里的并发实例全靠它兜住 ✓）
+  const cached = planCache.get(props.dogId)
+  if (cached && Date.now() - cached.at < PLAN_CACHE_TTL_MS) {
+    applyPlanResponse(cached.data)
+    loadingDogId = ''
+    return
+  }
+
   try {
     const res: any = await dogApi.vaccinePlan(props.dogId)
     if (res.code !== 0 || !res.data) {
@@ -902,17 +924,8 @@ async function load() {
       return
     }
 
-    plan.value = {
-      // 后端已经把 commonProducts 放在每一步里了，整条透传
-      nextStep: res.data.nextStep || null,
-      steps: Array.isArray(res.data.steps) ? res.data.steps : [],
-      conflicts: Array.isArray(res.data.conflicts) ? res.data.conflicts : [],
-      decisions: res.data.decisions || {},
-      summary: res.data.summary || {},
-      reviewed: res.data.reviewed === true,
-      noRecordAtAll: res.data.noRecordAtAll === true,
-      noEvidence: res.data.noEvidence === true,
-    }
+    applyPlanResponse(res.data)
+    planCache.set(props.dogId, { at: Date.now(), data: res.data })
     loaded.value = true
     highlightNextStepIfChanged()
     // 把"每一类的下一针"报给页面 —— 顶部那条到期提醒要用它（2026-10-07）

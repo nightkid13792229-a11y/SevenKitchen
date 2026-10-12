@@ -765,18 +765,20 @@ export function recommendProductsForStep(
     if (kind === 'core' && !coversCoreSeries(product)) {
       return false
     }
+    if (stepWeeks === null || product.minWeeks === null) {
+      return true
+    }
     /*
      * 产品覆盖的每一类，都要各自满足起始周龄 ✓
      * （多联苗不能靠"核心那部分够龄"就把钩端一起带进去 ✗）
+     * ⚠️ 必须放在上面那个 null 判断**之后** ✗ —— 2026-10-12 部署时
+     *    就因为这个顺序被 nest build 拦下过 ✓（服务没受影响 ✓）。
      */
     for (const covered of product.kinds) {
-      const startWeeks = KIND_START_WEEKS[covered];
+      const startWeeks = KIND_START_WEEKS[covered]
       if (startWeeks !== undefined && stepWeeks < startWeeks) {
-        return false;
+        return false
       }
-    }
-    if (stepWeeks === null || product.minWeeks === null) {
-      return true
     }
     return product.minWeeks <= stepWeeks
   })

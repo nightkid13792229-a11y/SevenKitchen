@@ -854,10 +854,26 @@ async function restoreIgnored() {
   }
 }
 
+/**
+ * 正在为哪只狗加载计划（2026-10-12）。
+ *
+ * 为什么要有它 ✗→✓：老板实测计划板块一直"正在读取"✗，
+ * 生产日志里同一个请求每 1~2 秒重发一次 ✓。原因之一是**重复触发**：
+ * 每次重发都会把 loaded 置回 false ✓，于是界面永远落不了定 ✗。
+ * 现在：同一条狗的请求在飞的时候，后来的触发直接跳过 ✓。
+ */
+let loadingDogId = ''
+
 async function load() {
   if (!props.dogId) {
     return
   }
+
+  // 同一条狗、上一次还没回来 → 不重复发 ✗（换狗不受影响 ✓）
+  if (loadingDogId === props.dogId) {
+    return
+  }
+  loadingDogId = props.dogId
 
   /*
    * ⚠️ 刷新时**不要**先把 loaded 抹掉（2026-10-06）。
@@ -915,6 +931,11 @@ async function load() {
     )
   } catch (error: any) {
     loadError.value = error?.message || '加载疫苗计划失败'
+  } finally {
+    // 无论成败都要放开守卫 ✓，否则这只狗再也不会重新加载 ✗
+    if (loadingDogId === props.dogId) {
+      loadingDogId = ''
+    }
   }
 }
 
@@ -951,7 +972,14 @@ async function decide(stepKey: string, decision: string) {
 }
 
 // 换狗 or 记录变了都要重新算 —— 计划的每一步都依赖"有没有对上号的记录"
-watch(() => [props.dogId, props.dataVersion], load, { immediate: true })
+/*
+ * ⚠️⚠️ 2026-10-12：这里原来 watch 的是一个**数组** `[props.dogId, props.dataVersion]` ✗。
+ * 老板实测：计划板块一直停在"正在读取接种计划…"✗ ——
+ * 生产日志显示计划请求**每 1~2 秒重发一次**（每次都 200 ✓，但界面永远没落定 ✗）。
+ * 现在：只监听**狗狗本身** ✓，并且**同一条狗正在加载时不重复发** ✓
+ * （见 load() 里的 loadingDogId 守卫 ✓）—— 不管是谁在反复触发，都不会再打转 ✓。
+ */
+watch(() => props.dogId, load, { immediate: true })
 
 /**
  * 让页面**直接调这里**重算计划（2026-10-06）。

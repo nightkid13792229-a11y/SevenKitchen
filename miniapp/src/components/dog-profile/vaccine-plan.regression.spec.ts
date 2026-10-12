@@ -643,3 +643,34 @@ describe('计划卡 · 不许在数据到达前说"都已完成"（2026-10-12）
     expect(source).toContain('v-else-if="loaded && kindCards.length === 0"')
   })
 })
+
+/**
+ * ⚠️ 计划请求不许打转（老板 2026-10-12 实测）
+ *
+ * 症状：计划板块一直停在"正在读取接种计划…"✗
+ * 证据：生产日志里同一个请求**每 1~2 秒重发一次**（每次 200 ✓）。
+ * 原因：重复触发 + 每次触发都把 loaded 置回 false ✗ → 永远落不了定 ✗。
+ * 修法：只监听狗狗本身 ✓ + 同一条狗在飞的时候不重复发 ✓。
+ */
+describe('计划卡 · 请求不打转（2026-10-12）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('只监听 props.dogId（不再监听数组 ✗）', () => {
+    const text = source()
+
+    expect(text).toContain('watch(() => props.dogId, load, { immediate: true })')
+    // 只看**代码**写法（注释里引用了旧写法 ✓ 不算 ✗）
+    expect(text.includes('watch(() => [props.dogId')).toBe(false)
+  })
+
+  it('同一条狗正在加载时不重复发请求', () => {
+    const text = source()
+
+    expect(text).toContain('if (loadingDogId === props.dogId)')
+    expect(text).toContain('loadingDogId = props.dogId')
+  })
+})

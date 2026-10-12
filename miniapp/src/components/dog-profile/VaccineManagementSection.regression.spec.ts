@@ -101,7 +101,13 @@ describe('疫苗管理', () => {
     expect(source).not.toContain("updateDraft(index, 'nextDueDate'")
     // 但后端字段保留：老记录里的值仍要显示、也要原样带回去，别清掉
     expect(source).toContain('nextDueDate')
-    expect(source).toContain('if (draft.nextDueDate) {')
+    // 2026-10-12：载荷的拼装规则提到共用文件了 ✓（第三步的新建卡也用同一套 ✓）——
+    // 所以这条判据跟着挪 ✓，判据本身一个字没放松 ✓
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
+    expect(shared).toContain('if (draft.nextDueDate) {')
   })
 
   it('新增一条之后滚到它、并把光标落进疫苗名称（2026-10-05）', () => {
@@ -227,8 +233,12 @@ describe('疫苗管理', () => {
   it('下次到期日留空时不把空字符串传给后端（日期字段会被拒）', () => {
     const source = readComponent()
 
-    expect(source).toContain('if (draft.nextDueDate) {')
-    expect(source).toContain('payload.nextDueDate = draft.nextDueDate')
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
+    expect(shared).toContain('if (draft.nextDueDate) {')
+    expect(shared).toContain('payload.nextDueDate = draft.nextDueDate')
   })
 
   it('顶部那条"到期提醒"已经下线（2026-10-09 老板定）', () => {
@@ -296,7 +306,14 @@ describe('疫苗本原图留档', () => {
   it('保存时把原图一起提交给后端', () => {
     const source = readComponent()
 
-    expect(source).toContain('attachments: attachmentList(record)')
+    // 2026-10-12：字段拼装在共用文件里 ✓；"附件是**记录级**的"这条规矩留在板块 ✓
+    // （附件来自 record ✓，不是草稿 ✓）
+    expect(source).toContain('attachmentList(record)')
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
+    expect(shared).toContain('attachments,')
     // 保存那条路要把记录本身传进 buildPayload，否则拿不到附件
     expect(source).toContain('buildPayload(draft, record)')
   })
@@ -1104,7 +1121,11 @@ describe('安全默认值 · 待核对（2026-10-09）', () => {
   it('提交时带上这个标记（创建与更新都要落）', () => {
     const source = readSection()
 
-    expect(source).toContain('productVerified: draft.productVerified !== false')
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
+    expect(shared).toContain('productVerified: draft.productVerified !== false')
   })
 })
 

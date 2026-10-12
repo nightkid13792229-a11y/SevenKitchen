@@ -378,8 +378,19 @@ const props = withDefaults(
      * 父组件就只能等一个异步的 emit ✗ —— 那不是"行为完全不变" ✓。
      */
     draft: VaccineDraft
-    /** 展开着没有（父组件记着，因为一次只展开一条 ✓）*/
-    expanded: boolean
+    /**
+     * 展开着没有。
+     *
+     * 列表里由父组件按行算 ✓（一次只展开一条 ✓）；
+     * 计划卡下面那张新建卡**总是展开的** ✓。
+     *
+     * ⚠️ 默认值必须是 **true** ✗→✓（2026-10-12 老板截图：卡片的输入框整块不见 ✓，
+     *    只剩卡片脸 ✓）：这个 prop 是 `type: Boolean` ✓，而小程序里
+     *    **布尔 prop 拿不到值时会被强制成 false** ✗ —— 于是"总是展开"的那张卡
+     *    反而永远收着 ✓，输入框一个都不显示 ✓。列表那边一直显式传 ✓，
+     *    所以只有新卡中招 ✓。
+     */
+    expanded?: boolean
     /** 产品库（后端下发；拉不到就是空数组，卡片照旧能用 ✓）*/
     catalogProducts?: {
       name: string
@@ -421,6 +432,8 @@ const props = withDefaults(
     saveStateText: '',
     nameFocused: false,
     autofocus: false,
+    // 不传 = 展开 ✓（见上面 expanded 的说明 ✓）
+    expanded: true,
   },
 )
 

@@ -104,6 +104,41 @@
           <text class="step-actions__primary" @tap.stop="recordCard(card)">记录接种信息</text>
           <text class="step-actions__ghost" @tap.stop="ignoreCard(card)">忽略</text>
         </view>
+
+        <!--
+          「新建卡」（2026-10-12 第三步）：就在**这张计划卡下面**展开录入窗口。
+
+          ⚠️ 老板 2026-10-12 连着否掉/退回两次，这里把两次的教训都写下来：
+            ① 我一度在这张卡里塞了个「精简录入窗」（只有名字+日期）—— 被否掉：
+               信息不够、不能从产品库选、分类会按"点的是哪张卡"算错。
+            ② 后来改成"收到下方记录板块去开"—— 老板截图退回：
+               "它并未在核心疫苗这个窗口下方弹出，依然还是在接种记录板块的顶部弹出"。
+          ⇒ 所以：**卡必须是同一张完整录入卡**（VaccineRecordCard），
+            而且**必须画在这里**（计划卡内部），不是画到别的板块去。
+
+          ⚠️ 数据与保存仍归**记录板块**（草稿只有一份）；这里只负责"画在哪"。
+        -->
+        <view v-if="inline && inline.open" class="plan-inline-editor">
+          <text class="plan-inline-editor__title">记录这一针</text>
+          <VaccineRecordCard
+            :key="inline.cardKey"
+            :record="inline.record"
+            :index="-1"
+            :draft="inline.draft"
+            :catalog-products="inline.catalogProducts"
+            :component-options="inline.componentOptions"
+            :saving="inline.saving"
+            :name-focused="inline.focused"
+            :autofocus="false"
+            :auto-save-text="''"
+            :just-saved="false"
+            :save-state-text="''"
+            @update="(idx: number, field: any, value: string) => emit('inline-update', idx, field, value)"
+            @save="emit('inline-save')"
+            @name-blur="emit('inline-blur')"
+          />
+          <text class="plan-inline-editor__cancel" @tap.stop="emit('inline-close')">取消</text>
+        </view>
       </view>
     </view>
 
@@ -164,6 +199,8 @@ import { todayDateText } from '../../utils/date'
 // 可 load() 取计划数据正需要它 ✓ → 计划直接报错 ✓（老板截图："接种计划没加载出来"✓）。
 // 删东西之前必须先确认"这个导入还有没有别的用处" ✗。
 import { dogApi } from '../../api/dogs'
+// 计划卡下面那张「新建卡」用的就是**记录模块的同一张卡**（2026-10-12 第三步）
+import VaccineRecordCard from './VaccineRecordCard'
 import {
   DEFAULT_HISTORY_LIMIT,
   buildFishboneRows,
@@ -258,6 +295,24 @@ const props = defineProps<{
    * 于是停在"还没有记录"的状态、整块不显示。
    */
   dataVersion?: number
+  /**
+   * 计划卡下面那张「新建卡」的内容（2026-10-12 第三步）。
+   *
+   * 为什么由**记录板块**持有、这里只负责画：
+   * 卡片的草稿、产品库、病种词表、保存与校验，全都归记录板块（一份）；
+   * 计划这边只决定「画在哪」——就在这张计划卡下面。
+   * 存两份草稿迟早对不上，这个项目已经吃过一次同样的亏。
+   */
+  inline?: {
+    open: boolean
+    cardKey: string
+    record: any
+    draft: any
+    saving: boolean
+    focused: boolean
+    catalogProducts: any[]
+    componentOptions: { value: string; label: string }[]
+  } | null
 }>()
 
 /**
@@ -270,6 +325,11 @@ const emit = defineEmits<{
   (event: 'record-step', payload: { kinds: string[]; stepLabel: string }): void
   /** 把"每一类的下一针"报给页面 —— 顶部那条到期提醒用它（2026-10-07 老板定） */
   (event: 'pending-changed', pending: PlanPending[]): void
+  /** 「新建卡」上的动作：转给**记录板块**执行（草稿与保存都归它）*/
+  (event: 'inline-update', index: number, field: string, value: string): void
+  (event: 'inline-save'): void
+  (event: 'inline-close'): void
+  (event: 'inline-blur'): void
 }>()
 
 /** 下一针（后端算好；忽略掉的步骤后端已经排除在 nextStep 之外） */
@@ -1430,6 +1490,35 @@ defineExpose({
 }
 
 /* 每一步的两个按钮（2026-10-06 老板改版：按建议/推迟/不做 三个按钮下线） */
+/* ── 计划卡内部的「新建卡」外框（2026-10-12 第三步）──────────────────
+   老板要的：点「记录接种信息」→ 就在**这张计划卡下面**展开录入窗口 ✓。
+   所以它长在这里 ✓（不是长到下面记录板块的顶部去 ✗）。
+   ⚠️ 小程序组件的 wxss 不允许标签选择器 ✓，只用类名 ✓。 */
+.plan-inline-editor {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx 8rpx;
+  border-radius: 16rpx;
+  background: #f7faf8;
+  border: 1rpx solid #dfe9e2;
+}
+
+.plan-inline-editor__title {
+  display: block;
+  margin-bottom: 4rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1e3a2f;
+}
+
+.plan-inline-editor__cancel {
+  display: block;
+  margin-top: 10rpx;
+  padding: 12rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #6b6653;
+}
+
 .step-actions {
   display: flex;
   align-items: center;

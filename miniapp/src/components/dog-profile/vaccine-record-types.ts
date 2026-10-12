@@ -131,3 +131,75 @@ export function findCatalogProduct<Product extends { name: string }>(
   if (!key) return null
   return products.find((item) => normalizeProductName(item.name) === key) || null
 }
+
+/* ══ 草稿与提交载荷（2026-10-12 第三步：从记录板块提出来，两个板块共用 ✓）══
+ *
+ * ⚠️ 为什么提出来 ✗：第三步要把录入卡画在**计划块**里 ✓，而它也需要
+ * "从记录造草稿"和"把草稿变成提交载荷"这两件事 ✓。
+ * 抄一份迟早对不上 ✗（这个项目已经因为"同一套规则两份"吃过一次亏 ✓：
+ * 分类算错、名字显示不出来 ✓）。所以只有这一份 ✓。
+ */
+
+/** 状态显示名（**只用于显示** —— 顾客端已经不选状态了 ✓，老记录的值要照旧显示 ✓）*/
+export const STATUS_LABELS: Record<string, string> = {
+  COMPLETED: '已接种',
+  SCHEDULED: '已预约',
+  OVERDUE: '已逾期',
+}
+
+/** 从一条记录造出它的编辑草稿（**规则与原来逐条一致** ✓）*/
+export function toVaccineDraft(record: Partial<VaccineRecord>): VaccineDraft {
+  const status = String(record.status || '')
+  return {
+    vaccineName: String(record.vaccineName || ''),
+    vaccinationDate: String(record.vaccinationDate || '').slice(0, 10),
+    nextDueDate: String(record.nextDueDate || '').slice(0, 10),
+    notes: String(record.notes || ''),
+    // 认的是"显示名表"（含退休的 OVERDUE），不是"可选项表" ——
+    // 老记录是 OVERDUE 就原样带着，别因为选项里没有了就悄悄改成已接种。
+    status: (STATUS_LABELS[status] ? status : 'COMPLETED') as VaccineDraft['status'],
+    kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
+    components: Array.isArray(record.components) ? record.components.map(String) : [],
+    kindsManual: Array.isArray(record.kinds) && record.kinds.length > 0,
+  }
+}
+
+/** 提交给后端的载荷（字段与原来逐条一致 ✓）*/
+export interface VaccineRecordPayload {
+  vaccineName: string
+  vaccinationDate: string
+  status: string
+  notes: string | null
+  components: string[]
+  kinds: string[]
+  productVerified: boolean
+  attachments: string[]
+  nextDueDate?: string
+}
+
+export function buildVaccinePayload(
+  draft: VaccineDraft,
+  attachments: string[] = [],
+): VaccineRecordPayload {
+  const payload: VaccineRecordPayload = {
+    vaccineName: draft.vaccineName.trim(),
+    vaccinationDate: draft.vaccinationDate,
+    status: draft.status,
+    notes: draft.notes.trim() || null,
+    /*
+     * 病种（2026-10-06）：顾客勾的就是它，**类别由后端按病种推导** ✓。
+     * 两个都带上：kinds 只在"都不是/不确定"时用到 ✓。
+     */
+    components: draft.components,
+    kinds: draft.kinds,
+    // 安全默认值（2026-10-09）：没核对过的先不算进计划 ✓
+    productVerified: draft.productVerified !== false,
+    // 报告原件：手工填写时是空数组 ✓（明确传空数组才算"这条没有原件" ✓）
+    attachments,
+  }
+  // 空到期日不能传空字符串（后端按日期校验），直接不带这个字段 ✓
+  if (draft.nextDueDate) {
+    payload.nextDueDate = draft.nextDueDate
+  }
+  return payload
+}

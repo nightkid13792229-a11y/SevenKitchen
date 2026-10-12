@@ -52,7 +52,8 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
       'record: VaccineRecord',
       'index: number',
       'draft: VaccineDraft',
-      'expanded: boolean',
+      // 2026-10-12：改成可选 + 默认 true（见下面那条守卫）
+      'expanded?: boolean',
     ]) {
       expect(source).toContain(prop)
     }
@@ -60,6 +61,19 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(source).toContain("(event: 'remove', index: number): void")
     expect(source).toContain("(event: 'toggle', index: number): void")
     expect(source).toContain("(event: 'save', index: number): void")
+  })
+
+  it('🔴 expanded 必须有默认值 true（布尔 prop 没默认值会被强制成 false）', () => {
+    const source = readCard()
+
+    /*
+     * 2026-10-12 老板截图报的：计划卡下面那张新建卡的**输入框整块不见**，
+     * 只剩卡片脸。根因就是这条 —— `expanded` 是 `type: Boolean`，
+     * 小程序里**拿不到值时会强制成 false**，于是"总是展开"的那张卡永远收着。
+     * 列表那张一直显式传，所以只有新卡中招。
+     */
+    expect(source).toContain('expanded?: boolean')
+    expect(source).toContain('expanded: true,')
   })
 
   it('🔴 展开与收起由 props.expanded 决定，不再自己数下标', () => {

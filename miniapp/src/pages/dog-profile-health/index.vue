@@ -155,9 +155,14 @@
             :dog-id="dogId"
             :birthday="form.birthday"
             :data-version="vaccineDataVersion"
+            :inline="vaccineInlineCard"
             @record-step="onPlanRecordStep"
             @record-saved="onPlanRecordSaved"
             @pending-changed="vaccinePlanPending = $event"
+            @inline-update="onInlineUpdate"
+            @inline-save="onInlineSave"
+            @inline-close="onInlineClose"
+            @inline-blur="onInlineBlur"
           />
           <VaccineManagementSection
             v-if="dogId"
@@ -314,6 +319,37 @@ function onVaccineRecordsChanged() {
  * 顾客是在"狂犬疫苗 第 3 次"那一行点的，新增出来的记录本来就该归到狂犬疫苗。
  * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
  */
+/**
+ * 计划卡下面那张「新建卡」的接线（2026-10-12 第三步）。
+ *
+ * 为什么由页面牵线：卡要**画在计划板块里**（老板要求：就在计划卡下面），
+ * 而它的草稿、产品库、保存全在**记录板块**（一份，不能存两份）。
+ * 页面同时握着两边的 ref，由它转一手最直接，两个板块互不越权。
+ */
+const vaccineInlineCard = computed(() =>
+  (vaccineSectionRef.value as any)?.inlineCard ?? null,
+)
+
+/** 卡上改了草稿 → 转给记录板块（它才是草稿的主人）*/
+function onInlineUpdate(index: number, field: string, value: string) {
+  void index
+  vaccineSectionRef.value?.updateInlineDraft?.(field as never, value)
+}
+
+/** 卡上点了保存 → 交给记录板块（同一套接口与校验）*/
+function onInlineSave() {
+  void vaccineSectionRef.value?.saveInlineDraft?.()
+  // 存成功后计划要重算：靠 records-changed 那条既有通路（记录板块保存后会喊）✓
+}
+
+function onInlineClose() {
+  vaccineSectionRef.value?.closeInlineCreate?.()
+}
+
+function onInlineBlur() {
+  vaccineSectionRef.value?.clearInlineFocus?.()
+}
+
 function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
   /*
    * ① 先收起计划卡 ✓ —— 收起后它只占一行 ✓，

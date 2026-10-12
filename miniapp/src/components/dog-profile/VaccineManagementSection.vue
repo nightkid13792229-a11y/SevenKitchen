@@ -48,38 +48,6 @@
             （不是孤立的卡片），一眼能看出"这是一个列表"。
            独立成页时也照样成立（那边本来还有一层页级标题）。 -->
     <view class="health-card records-card">
-      <!-- ══ 计划卡里点「记录接种信息」开出来的**新建卡**（2026-10-12 第三步）══
-           老板要的效果："在该条任务计划下展开录入窗口" ✓。
-
-           ⚠️ 为什么放在**记录板块的最上面**就等于"在计划卡下面" ✓：
-           这两个板块在页面里是**紧挨着的** ✓（计划在上、记录在下 ✓，中间没别的东西 ✓），
-           而点的时候计划卡会**收起**成一行 ✓ —— 于是这张卡正好落在它下面 ✓，
-           手指点的位置下面就出现录入窗口 ✓（不依赖滚动 ✓，实测滚动那条路不稳 ✓）。
-
-           ⚠️ 行为与列表里那条**完全一致** ✓：同一个 VaccineRecordCard ✓、
-           同一套草稿与保存 ✓（产品库 / 病种 / 名字认分类 全都在 ✓）。
-           老板否掉的是"另写一个精简录入窗" ✗ —— 这里没有另写 ✓。 -->
-      <view v-if="inlineOpen && inlineDraftState" class="inline-create">
-        <text class="inline-create__title">记录这一针</text>
-        <VaccineRecordCard
-          :record="inlineCardRecord"
-          :index="-1"
-          :draft="inlineDraftState"
-          :expanded="true"
-          :catalog-products="catalogProducts"
-          :component-options="componentOptions"
-          :saving="inlineSaving"
-          :auto-save-text="''"
-          :just-saved="false"
-          :save-state-text="''"
-          :name-focused="inlineFocus"
-          :autofocus="false"
-          @update="(_i: number, field: any, value: string) => updateInlineDraft(field, value)"
-          @save="saveInlineDraft()"
-          @name-blur="inlineFocus = false"
-        />
-        <text class="inline-create__cancel" @tap="closeInlineCreate()">取消</text>
-      </view>
 
       <view v-if="records.length > 0" class="records-card__head">
         <text class="records-card__title">接种记录</text>
@@ -234,7 +202,10 @@ import HealthDocumentScan from './HealthDocumentScan.vue'
 import VaccineRecordCard from './VaccineRecordCard.vue'
 // 记录 / 草稿的形状两个文件共用一份（复制一份迟早对不上 ✗）
 import {
+  STATUS_LABELS,
+  buildVaccinePayload,
   normalizeProductName,
+  toVaccineDraft,
   type VaccineDraft,
   type VaccineRecord,
 } from './vaccine-record-types'
@@ -378,6 +349,8 @@ const inlineRecord = ref<VaccineRecord | null>(null)
 /** 这一张卡的草稿（响应式 ✓ —— 卡片读的就是它 ✓）*/
 const inlineDraftState = ref<VaccineDraft | null>(null)
 const inlineOpen = ref(false)
+/** 每开一张新卡换一次（强制卡片重建 ✓，不带上一次的临时状态 ✗）*/
+const inlineKey = ref(0)
 /** 这一张卡正在存（卡片上显示"保存中…" ✓）*/
 const inlineSaving = ref(false)
 /** 卡片的"注意力在名称框"标记（与列表里那张卡同一套规矩 ✓）*/
@@ -415,6 +388,7 @@ function openInlineCreate(prefill: { kinds?: string[] } = {}) {
     kindsManual: false,
   } as VaccineRecord
 
+  inlineKey.value += 1
   inlineRecord.value = record
   inlineDraftState.value = toDraft(record)
   // ⚠️ 老板 2026-10-12："不要定位到输入框中" ✗ → 不自动聚焦 ✓
@@ -539,10 +513,18 @@ defineExpose({
    */
   inlineCard: computed(() => ({
     open: inlineOpen.value,
+    /*
+     * ⚠️ cardKey：每次开新卡换一个 key ✓ —— 强制组件重建 ✓，
+     *    否则上一张卡里"正在匹配/确认结果"这类卡片内部状态会**留到下一张** ✗。
+     */
+    cardKey: inlineKey.value,
     record: inlineCardRecord.value,
     draft: inlineDraftState.value,
     saving: inlineSaving.value,
     focused: inlineFocus.value,
+    // 产品库与病种词表归这儿 ✓（卡片要它们才能选产品、勾病种 ✓）
+    catalogProducts: catalogProducts.value,
+    componentOptions: componentOptions.value,
   })),
 })
 
@@ -638,18 +620,6 @@ function toggleKind(index: number, kind: string) {
 }
 
 
-/**
- * 状态取值（**选项已下线，只留显示**，2026-10-04 老板提问后改）。
- *
- * 顾客端不再让用户选状态 —— 一条接种记录记的就是"已经打过"，
- * 没有第二种可能。这里保留常量只为一件事：老记录里可能存着别的值，
- * 卡片上要照旧显示，不能变成空白。
- */
-const STATUS_LABELS: Record<string, string> = {
-  COMPLETED: '已接种',
-  SCHEDULED: '已预约',
-  OVERDUE: '已逾期',
-}
 
 const scanRef = ref<{ startScan?: () => void } | null>(null)
 const records = ref<VaccineRecord[]>([])
@@ -701,24 +671,9 @@ watch(hasPendingDraft, (value) => emit('dirty-change', value), { immediate: true
 const getTodayDateString = todayDateText
 const today = getTodayDateString()
 
+/** 造一条草稿（规则在共用文件里 ✓ —— 第三步的新建卡也要用同一套 ✓）*/
 function toDraft(record: Partial<VaccineRecord>): VaccineDraft {
-  const status = String(record.status || '')
-  return {
-    vaccineName: String(record.vaccineName || ''),
-    vaccinationDate: String(record.vaccinationDate || '').slice(0, 10),
-    nextDueDate: String(record.nextDueDate || '').slice(0, 10),
-    notes: String(record.notes || ''),
-    // 认的是"显示名表"（含退休的 OVERDUE），不是"可选项表" ——
-    // 老记录是 OVERDUE 就原样带着，别因为选项里没有了就悄悄改成已接种。
-    status: (STATUS_LABELS[status] ? status : 'COMPLETED') as VaccineDraft['status'],
-    // 记录自己存的归类；老记录是空的，由界面提示顾客补选。
-    // 已保存的记录一律算"人工指定过" —— 别因为我们自动判一次就改掉库里存的。
-    kinds: Array.isArray(record.kinds) ? record.kinds.map(String) : [],
-    // 病种（2026-10-06）：顾客看的就是它。老记录可能是空的，
-    // 界面会按名字/产品库补一次（后端映射时已经兜过）。
-    components: Array.isArray(record.components) ? record.components.map(String) : [],
-    kindsManual: Array.isArray(record.kinds) && record.kinds.length > 0,
-  }
+  return toVaccineDraft(record)
 }
 
 function draftKey(record: VaccineRecord, index: number) {
@@ -1422,35 +1377,12 @@ function scrollToRecordCard(index: number) {
   scrollPageToSelector(`.vaccine-card--focus-${index}`, 260)
 }
 
-function buildPayload(
-  draft: VaccineDraft,
-  record?: VaccineRecord,
-): VaccineRecordCreatePayload {
-  const payload: VaccineRecordCreatePayload = {
-    vaccineName: draft.vaccineName.trim(),
-    vaccinationDate: draft.vaccinationDate,
-    status: draft.status,
-    notes: draft.notes.trim() || null,
-    /*
-     * 病种（2026-10-06）：顾客勾的就是它，**类别由后端按病种推导**。
-     * 两个都带上：kinds 只在"都不是/不确定"时用到（那时病种是空的，
-     * 后端会退回按 kinds 记成 other）。
-     */
-    components: draft.components,
-    kinds: draft.kinds,
-    // 安全默认值（2026-10-09）：没核对过的先不算进计划 ✓
-    productVerified: draft.productVerified !== false,
-    // 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图跟着记录一起存；
-    // 手工填写时是空数组，明确传空数组才算"这条没有原件"。
-    attachments: attachmentList(record),
-  }
-
-  // 空到期日不能传空字符串（后端按日期校验），直接不带这个字段
-  if (draft.nextDueDate) {
-    payload.nextDueDate = draft.nextDueDate
-  }
-
-  return payload
+/**
+ * 提交载荷（字段规则在共用文件里 ✓）——
+ * 这里只负责把"这条记录的附件"补上 ✓（附件是记录级的东西 ✓）。
+ */
+function buildPayload(draft: VaccineDraft, record?: VaccineRecord): VaccineRecordCreatePayload {
+  return buildVaccinePayload(draft, attachmentList(record)) as VaccineRecordCreatePayload
 }
 
 /**
@@ -1671,34 +1603,7 @@ async function doRemove(record: VaccineRecord) {
   padding: 24rpx 24rpx 10rpx;
 }
 
-/* ── 计划卡下面那张"新建卡"的外框（2026-10-12 第三步）──────────────
-   它落在这张记录卡的最上面 ✓ —— 点的时候计划卡已收起成一行 ✓，
-   于是录入窗口正好出现在手指点的地方下面 ✓。
-   ⚠️ 小程序组件的 wxss 不允许标签选择器 ✓，所以只用类名 ✓。 */
-.inline-create {
-  margin: 4rpx 0 18rpx;
-  padding: 18rpx 20rpx 10rpx;
-  border-radius: 16rpx;
-  background: #f7f4ff;
-  border: 1rpx solid #e4e0f2;
-}
 
-.inline-create__title {
-  display: block;
-  margin-bottom: 6rpx;
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #4a3f6b;
-}
-
-.inline-create__cancel {
-  display: block;
-  margin-top: 14rpx;
-  padding: 12rpx 0;
-  text-align: center;
-  font-size: 24rpx;
-  color: #6b6653;
-}
 
 .records-card__head {
   display: flex;

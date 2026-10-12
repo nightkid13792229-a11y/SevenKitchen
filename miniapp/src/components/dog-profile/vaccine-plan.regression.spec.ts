@@ -756,3 +756,23 @@ describe('计划卡 · 不许引用记录板块的函数（2026-10-12）', () =>
     expect(source.includes('return end < getTodayDateString')).toBe(false)
   })
 })
+
+/**
+ * ⚠️ dogApi 导入不许再被误删（2026-10-12）
+ *
+ * 撤回"精简录入窗"时我把 `import { dogApi }` 一起删掉了 ✗ ——
+ * 可 load() 取计划数据正需要它 ✓ → 计划直接报错 ✓
+ * （老板截图："接种计划没加载出来 请稍后重试"✓），
+ * 而构建与测试全过 ✗、只有真机才炸 ✗。
+ */
+describe('计划卡 · dogApi 导入必须在（2026-10-12）', () => {
+  it('用了 dogApi，就必须有它的导入', () => {
+    const text = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(text).toContain('dogApi.vaccinePlan(')
+    expect(text).toContain("import { dogApi } from '../../api/dogs'")
+  })
+})

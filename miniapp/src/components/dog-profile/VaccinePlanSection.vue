@@ -160,6 +160,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { todayDateText } from '../../utils/date'
+// ⚠️ 2026-10-12：撤回"精简录入窗"时我把这一行**一起删掉了** ✗ ——
+// 可 load() 取计划数据正需要它 ✓ → 计划直接报错 ✓（老板截图："接种计划没加载出来"✓）。
+// 删东西之前必须先确认"这个导入还有没有别的用处" ✗。
+import { dogApi } from '../../api/dogs'
 import {
   DEFAULT_HISTORY_LIMIT,
   buildFishboneRows,

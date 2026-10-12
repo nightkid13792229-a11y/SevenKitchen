@@ -585,7 +585,12 @@ describe('计划卡 · 拆开成两类，但互相提示可以选联苗（老板
 
     expect(text).toContain('也可以选含这两类的联苗')
     expect(text).toContain('请错开 2~3 天')
-    // 必须有共同产品、且时间相近才提示 ✓（差太远时提示"可以一起打"是废话 ✗）
-    expect(text).toContain('SIBLING_WINDOW_DAYS')
+    // ⚠️ 条件必须是**窗口真的重叠** ✓（老板 2026-10-12 修正 ✗）：
+    //    原来按"窗口起点相差 ≤45 天"✗ —— 核心 10-12 起、钩端 11-22 起相差 41 天 ✗
+    //    也会提示"可以一起打"✗，可这两针根本没有共同的合适日期 ✗。
+    expect(text).toContain('overlapOf(card, {')
+    expect(text.includes('SIBLING_WINDOW_DAYS')).toBe(false)
+    // 交集那几天要写出来 ✓
+    expect(text).toContain('两针都合适的日期')
   })
 })

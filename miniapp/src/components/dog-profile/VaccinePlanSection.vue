@@ -26,7 +26,8 @@
         <!-- 老板 2026-10-12 的新方案：拆开成两张卡 ✓，但互相提示可以选联苗 ✓ -->
         <text v-if="card.comboProducts.length > 0" class="merge-note">
           也可以选含这两类的联苗（{{ card.comboProducts.join('、') }}）—— 一针同时覆盖，
-          那一类就不用再单独打了；如果分开打两种苗，请错开 2~3 天。
+          那一类就不用再单独打了<template v-if="card.comboWindow">（两针都合适的日期：{{ card.comboWindow.start }} ~ {{ card.comboWindow.end }}）</template>；
+          如果分开打两种苗，请错开 2~3 天。
         </text>
 
         <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
@@ -511,14 +512,22 @@ interface PlanCard {
   comboProducts: string[]
 }
 
-/** 两张卡的窗口算不算"差不多同时"（相差 45 天内就算 ✓）*/
-const SIBLING_WINDOW_DAYS = 45
-
-function daysBetween(a: string, b: string): number {
-  const left = new Date(`${a}T00:00:00Z`).getTime()
-  const right = new Date(`${b}T00:00:00Z`).getTime()
-  if (Number.isNaN(left) || Number.isNaN(right)) return Number.MAX_SAFE_INTEGER
-  return Math.abs(left - right) / 86400000
+/**
+ * 两类窗口的**重合区间**（没有重合就返回空串 ✓）。
+ *
+ * 老板 2026-10-12 修正："不应该把它们窗口期小于 45 天作为给出提示的条件。
+ * 我们是否将它们窗口期有重合的时候，才给出提示作为条件是否更合理呢？
+ * 不然的话……如果核心疫苗被推迟太长时间，或者被提前太长时间，就不太好了。"
+ * —— 对 ✓✓。原来我用"窗口起点相差 ≤45 天"✗，会出错：
+ *    核心 10-12 起、钩端 11-22 起，相差 41 天 ✗（小于 45 ✓）→ 会提示"可以一起打"✗，
+ *    可这两针**根本没有共同的合适日期** ✗。
+ * 现在：**只有两类的建议接种时间真的重叠** ✓，才提示可以合并 ✓，
+ * 并且把那几天直接写出来 ✓（"两针都合适的日期：11-22 ~ 12-06" ✓）。
+ */
+function overlapOf(a: { windowStart: string; windowEnd: string }, b: { windowStart: string; windowEnd: string }) {
+  const start = a.windowStart > b.windowStart ? a.windowStart : b.windowStart
+  const end = a.windowEnd < b.windowEnd ? a.windowEnd : b.windowEnd
+  return start <= end ? { start, end } : null
 }
 
 const kindCards = computed<PlanCard[]>(() => {
@@ -543,19 +552,28 @@ const kindCards = computed<PlanCard[]>(() => {
        *   ① 有共同推荐的产品 ✓（例：核心与钩端都有卫佳捌 ✓）
        *   ② 两类的时间差不多 ✓（相差 45 天内 ✓）—— 差太远时提示"可以一起打"是废话 ✗
        */
-      const siblings = visibleSteps.value.filter(
-        (other) =>
-          other.status !== 'DONE' &&
-          other.kind !== card.key &&
-          daysBetween(other.windowStart, card.windowStart) <= SIBLING_WINDOW_DAYS,
-      )
+      const siblings = visibleSteps.value.filter((other) => {
+        if (other.status === 'DONE' || other.kind === card.key) return false
+        // **窗口要真的重叠** ✓（老板 2026-10-12 修正 ✗：原来按"相差 ≤45 天"✗）
+        return overlapOf(card, {
+          windowStart: String(other.windowStart || ''),
+          windowEnd: String(other.windowEnd || ''),
+        }) !== null
+      })
       const combo: string[] = []
+      let overlap: { start: string; end: string } | null = null
       for (const other of siblings) {
         for (const name of stepProducts(other)) {
           if (card.products.includes(name) && !combo.includes(name)) combo.push(name)
         }
+        if (combo.length > 0 && !overlap) {
+          overlap = overlapOf(card, {
+            windowStart: String(other.windowStart || ''),
+            windowEnd: String(other.windowEnd || ''),
+          })
+        }
       }
-      return { ...card, comboProducts: combo }
+      return { ...card, comboProducts: combo, comboWindow: overlap }
     })
 })
 

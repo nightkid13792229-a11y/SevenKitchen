@@ -48,6 +48,39 @@
             （不是孤立的卡片），一眼能看出"这是一个列表"。
            独立成页时也照样成立（那边本来还有一层页级标题）。 -->
     <view class="health-card records-card">
+      <!-- ══ 计划卡里点「记录接种信息」开出来的**新建卡**（2026-10-12 第三步）══
+           老板要的效果："在该条任务计划下展开录入窗口" ✓。
+
+           ⚠️ 为什么放在**记录板块的最上面**就等于"在计划卡下面" ✓：
+           这两个板块在页面里是**紧挨着的** ✓（计划在上、记录在下 ✓，中间没别的东西 ✓），
+           而点的时候计划卡会**收起**成一行 ✓ —— 于是这张卡正好落在它下面 ✓，
+           手指点的位置下面就出现录入窗口 ✓（不依赖滚动 ✓，实测滚动那条路不稳 ✓）。
+
+           ⚠️ 行为与列表里那条**完全一致** ✓：同一个 VaccineRecordCard ✓、
+           同一套草稿与保存 ✓（产品库 / 病种 / 名字认分类 全都在 ✓）。
+           老板否掉的是"另写一个精简录入窗" ✗ —— 这里没有另写 ✓。 -->
+      <view v-if="inlineOpen && inlineDraftState" class="inline-create">
+        <text class="inline-create__title">记录这一针</text>
+        <VaccineRecordCard
+          :record="inlineCardRecord"
+          :index="-1"
+          :draft="inlineDraftState"
+          :expanded="true"
+          :catalog-products="catalogProducts"
+          :component-options="componentOptions"
+          :saving="inlineSaving"
+          :auto-save-text="''"
+          :just-saved="false"
+          :save-state-text="''"
+          :name-focused="inlineFocus"
+          :autofocus="false"
+          @update="(_i: number, field: any, value: string) => updateInlineDraft(field, value)"
+          @save="saveInlineDraft()"
+          @name-blur="inlineFocus = false"
+        />
+        <text class="inline-create__cancel" @tap="closeInlineCreate()">取消</text>
+      </view>
+
       <view v-if="records.length > 0" class="records-card__head">
         <text class="records-card__title">接种记录</text>
         <text class="records-card__count">{{ records.length }} 条</text>
@@ -319,6 +352,141 @@ function isDirty(record: VaccineRecord, index: number) {
   )
 }
 
+/* ── 计划卡下面那张"新建卡"（2026-10-12 第三步）──────────────────────
+ *
+ * 老板要的效果（原话）：
+ *   "不要提示，能不能做到在该条任务计划下展开录入窗口？
+ *    保存后关闭并提示可在疫苗接种记录板块中查看。"
+ *
+ * 为什么要做：2026-10-12 我一度在计划卡里塞了个"精简录入窗" ✗ ——
+ * 信息不够、不能从产品库选、名字也不去产品库认分类 ✗，老板当场否掉 ✓。
+ * 撤掉之后**替代方案一直没接上** ✗ —— 于是点「记录接种信息」只收起卡片、
+ * 什么都不开 ✓（那个按钮等于死的 ✓）。这里把它接上 ✓：
+ *
+ *   点「记录接种信息」→ **就在这张计划卡下面**开出**现成的完整录入卡** ✓
+ *   （复用 VaccineRecordCard.vue ✓，产品库 / 病种 / 名字认分类 全都在 ✓）
+ *   → 保存 → 收起 + 提示「已保存，可在下方接种记录中查看」✓ → 刷新计划 ✓
+ *
+ * ⚠️ 草稿**只存一份** ✓：卡片由计划板块画 ✓，但数据与保存都归这儿 ✓
+ *   （存两份迟早对不上 ✗ —— 这个项目已经吃过一次同样的亏 ✓）。
+ * ⚠️ 草稿必须是**响应式引用** ✓（顾客打字时卡片要跟着更新 ✓）——
+ *   第一版我写成了"每次调用现算一个临时对象" ✗，那样打字界面不会更新 ✓。
+ */
+
+/** 这一张卡要保存的"记录"本体（**没有 id** = 还没保存过的新记录 ✓，卡片自己认这条 ✓）*/
+const inlineRecord = ref<VaccineRecord | null>(null)
+/** 这一张卡的草稿（响应式 ✓ —— 卡片读的就是它 ✓）*/
+const inlineDraftState = ref<VaccineDraft | null>(null)
+const inlineOpen = ref(false)
+/** 这一张卡正在存（卡片上显示"保存中…" ✓）*/
+const inlineSaving = ref(false)
+/** 卡片的"注意力在名称框"标记（与列表里那张卡同一套规矩 ✓）*/
+const inlineFocus = ref(false)
+
+function emptyInlineRecord(): VaccineRecord {
+  return {
+    id: '',
+    vaccineName: '',
+    vaccinationDate: '',
+    nextDueDate: '',
+    notes: '',
+    status: 'COMPLETED',
+    components: [],
+  }
+}
+
+/** 卡片要保存的那条记录（没有 id，所以卡片会显示「保存」键 ✓）*/
+const inlineCardRecord = computed<VaccineRecord>(
+  () => inlineRecord.value || emptyInlineRecord(),
+)
+
+/** 开一张新的录入卡（预填这一类的分类 ✓）*/
+function openInlineCreate(prefill: { kinds?: string[] } = {}) {
+  /*
+   * ⚠️ 这里**不能**引用 `today` ✗ —— 它在下面才声明 ✓（setup 期间取到 undefined ✗，
+   *    正是 2026-10-11 那次"板块整块不渲染"的同一个坑 ✓）。
+   *    用 getTodayDateString() ✓（别名在上面 ✓）。
+   */
+  const record: VaccineRecord = {
+    ...emptyInlineRecord(),
+    vaccinationDate: getTodayDateString(),
+    kinds: Array.isArray(prefill?.kinds) ? [...prefill.kinds] : [],
+    // 计划带来的分类是"系统给的"，不是顾客手点的 —— 名字一改就该重判 ✓
+    kindsManual: false,
+  } as VaccineRecord
+
+  inlineRecord.value = record
+  inlineDraftState.value = toDraft(record)
+  // ⚠️ 老板 2026-10-12："不要定位到输入框中" ✗ → 不自动聚焦 ✓
+  inlineFocus.value = false
+  inlineOpen.value = true
+}
+
+function closeInlineCreate() {
+  inlineOpen.value = false
+  inlineRecord.value = null
+  inlineDraftState.value = null
+  inlineFocus.value = false
+}
+
+function updateInlineDraft(field: keyof VaccineDraft, value: string) {
+  const draft = inlineDraftState.value
+  if (!draft) return
+  draft[field] = value
+
+  /*
+   * ⚠️ 与列表里那张卡**同一套规矩** ✓（名字变了 → 之前判出来的归类作废 ✓）——
+   * 否则"改了名字但旧分类还留着" ✗，那一针会被算进错的类别 ✓。
+   */
+  if (field === 'vaccineName') {
+    draft.kindsManual = false
+    draft.kinds = []
+  }
+}
+
+/**
+ * 保存这一张新建卡 ✓。
+ *
+ * 走的是**同一套接口与校验** ✓（和列表里新增一条完全一致 ✓）——
+ * 老板点名过：分类必须按**产品名**算 ✓（卫佳捌要同时算上核心与钩端 ✓）。
+ */
+async function saveInlineDraft() {
+  const record = inlineRecord.value
+  const draft = inlineDraftState.value
+  if (!record || !draft) return
+
+  if (!draft.vaccineName.trim()) {
+    uni.showToast({ title: '请填写疫苗名称', icon: 'none' })
+    return
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.vaccinationDate)) {
+    uni.showToast({ title: '请选择接种日期', icon: 'none' })
+    return
+  }
+  if (isBusy.value) return
+
+  inlineSaving.value = true
+  try {
+    const payload = buildPayload(draft, record)
+    const res: any = await dogApi.healthRecords.vaccine.create(props.dogId, payload)
+    if (res?.code !== 0) {
+      throw new Error(res?.message || '保存失败')
+    }
+
+    // 收起卡片 ✓（老板要的：保存后关闭 ✓）
+    closeInlineCreate()
+    uni.showToast({ title: '已保存，可在下方接种记录中查看', icon: 'none' })
+    // 刷新记录列表 ✓（顾客要在下方看到它 ✓）
+    await loadRecords()
+    // 计划也要跟着重算 ✓（这一针不该再提醒了 ✓）
+    notifyRecordsChanged()
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
+  } finally {
+    inlineSaving.value = false
+  }
+}
+
 /**
  * 对外的两个入口（2026-10-02 引导流程要用）：
  *   · startScan   → 直接调起"拍疫苗本"（AI 读出多条接种记录）
@@ -344,6 +512,38 @@ defineExpose({
   countUnsaveableDrafts: () =>
     records.value.filter((record, index) => !record.id && autoSaveBlockReason(record, index))
       .length,
+  /**
+   * ── 计划卡下面那张"新建卡"的接口（2026-10-12 第三步）──────────────
+   *
+   * ⚠️ 为什么由**这里**持有、而不是让计划板块自己存一份 ✗：
+   * 录入卡要的东西（产品库、病种词表、草稿、保存、校验 ✓）全都在这儿 ✓；
+   * 计划板块那份只是**把卡画在计划卡下面** ✓（位置在它那儿 ✓）。
+   * 存两份草稿迟早对不上 ✗（这个项目已经吃过一次同样的亏 ✓）。
+   */
+  /** 开一张新的录入卡（预填这一类的分类 ✓）；已经在开就换成新的那一类 ✓ */
+  openInlineCreate: (prefill: { kinds?: string[] } = {}) => openInlineCreate(prefill),
+  /** 关掉录入卡（取消 / 保存成功后收起 ✓）*/
+  closeInlineCreate: () => closeInlineCreate(),
+  /** 计划板块把卡上的动作转给这里 ✓ */
+  updateInlineDraft: (field: keyof VaccineDraft, value: string) =>
+    updateInlineDraft(field, value),
+  saveInlineDraft: () => saveInlineDraft(),
+  clearInlineFocus: () => {
+    inlineFocus.value = false
+  },
+  /**
+   * 卡片要读的那一包（计划板块照着把卡画出来 ✓）。
+   *
+   * 用 computed ✓ 让计划板块能跟着更新 ✓；
+   * 草稿本身是**同一个响应式对象** ✓（不是每算一次新建一个 ✗）。
+   */
+  inlineCard: computed(() => ({
+    open: inlineOpen.value,
+    record: inlineCardRecord.value,
+    draft: inlineDraftState.value,
+    saving: inlineSaving.value,
+    focused: inlineFocus.value,
+  })),
 })
 
 /* ── 疫苗目录（2026-10-05）────────────────────────────────────────────
@@ -1469,6 +1669,35 @@ async function doRemove(record: VaccineRecord) {
 .records-card {
   margin-top: 20rpx;
   padding: 24rpx 24rpx 10rpx;
+}
+
+/* ── 计划卡下面那张"新建卡"的外框（2026-10-12 第三步）──────────────
+   它落在这张记录卡的最上面 ✓ —— 点的时候计划卡已收起成一行 ✓，
+   于是录入窗口正好出现在手指点的地方下面 ✓。
+   ⚠️ 小程序组件的 wxss 不允许标签选择器 ✓，所以只用类名 ✓。 */
+.inline-create {
+  margin: 4rpx 0 18rpx;
+  padding: 18rpx 20rpx 10rpx;
+  border-radius: 16rpx;
+  background: #f7f4ff;
+  border: 1rpx solid #e4e0f2;
+}
+
+.inline-create__title {
+  display: block;
+  margin-bottom: 6rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #4a3f6b;
+}
+
+.inline-create__cancel {
+  display: block;
+  margin-top: 14rpx;
+  padding: 12rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #6b6653;
 }
 
 .records-card__head {

@@ -1281,23 +1281,39 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   ])
 
   /** 父组件写在 <VaccineRecordCard … /> 上的属性与事件 */
-  function usageInSection() {
+  /**
+   * 模板里**所有**用到 `<VaccineRecordCard>` 的地方 ✓。
+   *
+   * ⚠️ 第一版只取了**第一个** ✗ —— 2026-10-12 加第三张卡（计划卡下面那张新建卡 ✓）
+   *    的时候，它排在了列表那张**前面** ✓，于是一整组断言全都在检查新卡 ✗、
+   *    列表那张反而没人看了 ✓（"看着还在跑，其实看错了对象" ✗）。
+   *    现在把每一处都收进来 ✓：每一处都要对得上 ✓，接口约定的四个事件
+   *    **至少有一处**接上（列表那张 ✓）。
+   */
+  function usagesInSection() {
     const tpl = templateOf(readRaw('VaccineManagementSection.vue'))
-    const tag = tpl.slice(tpl.indexOf('<VaccineRecordCard'))
-    const end = tag.indexOf('/>')
-    const block = end >= 0 ? tag.slice(0, end) : tag
+    const blocks: string[] = []
+    const openRe = /<VaccineRecordCard/g
+    let m: RegExpExecArray | null
+    while ((m = openRe.exec(tpl)) !== null) {
+      const rest = tpl.slice(m.index)
+      const end = rest.indexOf('/>')
+      blocks.push(end >= 0 ? rest.slice(0, end) : rest)
+    }
 
     const props: string[] = []
     const events: string[] = []
-    for (const hit of block.matchAll(/([:@])([a-zA-Z][\w-]*)\s*=/g)) {
-      const [, sigil, name] = hit
-      if (sigil === ':') {
-        if (!VUE_BUILTIN_ATTRS.has(name)) props.push(camel(name))
-      } else {
-        events.push(camel(name))
+    for (const block of blocks) {
+      for (const hit of block.matchAll(/([:@])([a-zA-Z][\w-]*)\s*=/g)) {
+        const [, sigil, name] = hit
+        if (sigil === ':') {
+          if (!VUE_BUILTIN_ATTRS.has(name)) props.push(camel(name))
+        } else {
+          events.push(camel(name))
+        }
       }
     }
-    return { props, events, block }
+    return { props, events, blocks, block: blocks[0] || '' }
   }
 
   /** 卡片声明了哪些 props（defineProps 里的一级字段 ✓）*/
@@ -1351,7 +1367,7 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   })
 
   it('🔴 父组件用了的属性和事件，卡片都声明了（名字对不上就在本地红）', () => {
-    const { props, events } = usageInSection()
+    const { props, events } = usagesInSection()
     const known = new Set(declaredProps())
     const knownEvents = new Set(declaredEmits())
 
@@ -1366,7 +1382,7 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   })
 
   it('🔴 接口那四个 emit 父组件一个都没漏接（漏了就是"点了没反应"）', () => {
-    const { events } = usageInSection()
+    const { events } = usagesInSection()
 
     for (const name of ['update', 'remove', 'toggle', 'save']) {
       expect(events).toContain(name)
@@ -1374,11 +1390,12 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   })
 
   it('🔴 展开由父组件说了算：卡片拿的是 :expanded，不是让自己的下标', () => {
-    const { props, block } = usageInSection()
+    const { props, blocks } = usagesInSection()
 
     // 一次只展开一条 ✓ —— 这是**列表级**的状态 ✓，留在这里 ✓
     expect(props).toContain('expanded')
-    expect(block).toContain(':expanded="expandedIndex === index"')
+    // 列表那一处：展开状态由父组件按行算 ✓（新增卡那一处是恒 true ✓，各是各的 ✓）
+    expect(blocks.some((b) => b.includes(':expanded="expandedIndex === index"'))).toBe(true)
     // 列表容器（不是卡片）仍然负责一条条排出来
     expect(templateOf(readRaw('VaccineManagementSection.vue'))).toContain(
       'v-for="(record, index) in records"',
@@ -1386,10 +1403,10 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   })
 
   it('草稿仍然由父组件持有（校验与自动保存要看得见顾客在打什么字）', () => {
-    const { props, block } = usageInSection()
+    const { props, blocks } = usagesInSection()
 
     expect(props).toContain('draft')
-    expect(block).toContain(':draft="draftOf(record, index)"')
+    expect(blocks.some((b) => b.includes(':draft="draftOf(record, index)"'))).toBe(true)
     // 父组件这边还得有那份草稿仓库与三个列表级的能力
     const section = readRaw('VaccineManagementSection.vue')
     for (const anchor of ['const drafts = reactive', 'function draftOf(', 'function updateDraft(']) {
@@ -1398,9 +1415,13 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
   })
 
   it('接口约定的四个事件各自接到了列表级的实现上', () => {
-    const { block } = usageInSection()
+    const { blocks } = usagesInSection()
 
     // 每一条都要落到真的会干活的函数上 ✓（不是接了个空壳 ✓）
+    /*
+     * ⚠️ 这五条是**列表那一处**的接法 ✓（新增卡那处接的是另一套 ✓）——
+     *    所以判据是"**有一处**这么接" ✓，不是"每一处都这么接" ✗。
+     */
     for (const handler of [
       '@update="updateDraft"',
       '@toggle="toggleExpandedByIndex"',
@@ -1408,7 +1429,7 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
       '@remove="removeRecordByIndex"',
       '@name-blur="clearFocus"',
     ]) {
-      expect(block).toContain(handler)
+      expect(blocks.some((b) => b.includes(handler))).toBe(true)
     }
     // 这些实现就在父组件里 ✓
     const section = stripComments(readRaw('VaccineManagementSection.vue'))

@@ -63,6 +63,12 @@ cd miniapp && npm run build:mp-weixin
 2. **需要启动小程序联调用本地后端时，统一使用** `cd backend && npm run start:dev:miniapp`
 3. **如果本地后端已经健康运行，必须优先复用，而不是再启动第二个**
 4. **如果当前线程需要切换到另一份 worktree 的后端代码，必须先停止旧进程，再在目标 worktree 重新执行** `cd backend && npm run start:dev`
+5. ⚠️ **`npm run build` 会把 `dist/` 整个删掉重建**（`nest-cli.json` 里 `deleteOutDir: true`），
+   而 `start:dev` / `start:dev:miniapp` 是**从 `dist/src/main` 起的** ——
+   于是"跑一次 build"会把正在跑的本机联调后端**弄死**（报
+   `Cannot find module '.../backend/dist/src/main'`，且 watch 也救不回来）。
+   所以：**联调期间不要跑 `npm run build`**；要自检只跑 `npx tsc --noEmit`（不产出、不删东西）。
+   万一手滑弄死了：**按启动规则重启** `cd backend && npm run start:dev:miniapp` 即可恢复。
 
 ## 必读文档
 

@@ -8,13 +8,15 @@
 
     <view v-for="card in kindCards" :key="card.key" class="kind-card">
       <view class="kind-card__head" @tap="toggleKind(card.key)">
-        <view class="kind-card__line">
-          <text class="kind-card__kind">{{ card.title }}</text>
+        <!-- 老板 2026-10-12：状态角标放到卡片**左上角** ✓
+             （原来跟在标题后面 ✗ → 标题被挤到换行、「待接种」也断成两行 ✗）-->
+        <view class="kind-card__top">
           <text class="kind-card__badge" :class="`kind-card__badge--${card.steps[0].status}`">
             {{ statusLabel(card.steps[0]) }}
           </text>
           <text class="kind-card__toggle">{{ expandedKind === card.key ? '收起' : '展开' }}</text>
         </view>
+        <text class="kind-card__kind">{{ card.title }}</text>
         <text class="kind-card__time">
           建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}{{ windowPassedSuffix(card.steps[0]) }}
         </text>
@@ -25,9 +27,15 @@
           这两类可以打一针联苗（{{ card.comboProducts.join('、') }}）一次覆盖；也可以分成两针打，间隔 2~3 天。
         </text>
 
+        <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
+             —— 是我上一版把字段名换成了各自疫苗的名字 ✗（而且类别名太长 ✗，
+                在窄窄的字段名列里折成四行 ✗）。
+             现在：字段名固定「免疫流程」✓，疫苗类别放到**右边**的值里 ✓。 -->
         <view v-for="step in card.steps" :key="step.key" class="kv">
-          <text class="kv__label">{{ card.steps.length > 1 ? step.kindLabel : '免疫流程' }}</text>
-          <text class="kv__value">{{ step.label }}</text>
+          <text class="kv__label">免疫流程</text>
+          <text class="kv__value">
+            <template v-if="card.steps.length > 1">{{ step.kindLabel }} · </template>{{ step.label }}
+          </text>
         </view>
         <view v-if="card.steps[0].matchedRecordDate" class="kv">
           <text class="kv__label">接种时间</text>
@@ -40,7 +48,12 @@
         <view class="kv">
           <text class="kv__label">依据</text>
           <view class="kv__value">
-            <text class="basis__summary">{{ basisSummaryOf(card.steps[0]) }}</text>
+            <!-- 合并卡：两类各自的依据都要说 ✓（只显示第一类的话，另一类看着没来由 ✗）-->
+            <text
+              v-for="step in card.steps"
+              :key="`basis-${step.key}`"
+              class="basis__summary"
+            >{{ basisSummaryOf(step) }}</text>
             <text
               v-if="hasMoreBasis(card.steps[0])"
               class="basis__more"
@@ -1211,6 +1224,7 @@ defineExpose({ reload: () => load() })
 /* 依据：一句话 + 「为什么这么建议？」展开（2026-10-08） */
 .basis__summary {
   display: block;
+  display: block;
   font-size: 24rpx;
   color: #333333;
 }
@@ -1312,7 +1326,7 @@ defineExpose({ reload: () => load() })
   color: #14352a;
 }
 .kind-card__badge {
-  padding: 3rpx 14rpx;
+  padding: 4rpx 16rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
   color: #0f7b49;
@@ -1372,8 +1386,8 @@ defineExpose({ reload: () => load() })
   border-radius: 0 6rpx 6rpx 0;
   background: #0f7b49;
 }
-.kind-card__line { display: flex; align-items: center; gap: 12rpx; }
-.kind-card__kind { font-size: 31rpx; font-weight: 600; color: #14352a; }
+.kind-card__top { display: flex; align-items: center; margin-bottom: 10rpx; }
+.kind-card__kind { display: block; font-size: 31rpx; font-weight: 600; color: #14352a; line-height: 1.4; }
 .kind-card__badge {
   padding: 3rpx 14rpx;
   border-radius: 999rpx;

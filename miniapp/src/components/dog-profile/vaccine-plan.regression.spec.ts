@@ -594,3 +594,33 @@ describe('计划卡 · 拆开成两类，但互相提示可以选联苗（老板
     expect(text).toContain('两针都合适的日期')
   })
 })
+
+/**
+ * 窗口已过：改说「尽快补种」，不再把过去的日期当计划摆着（老板 2026-10-12 第 1、2 问）
+ *
+ * 老板："并没有『窗口已过，建议尽快补』的提示"✗
+ *      "我记得我们之前说过，疫苗计划中不应该有过去时间窗口的计划。"
+ * —— 原来那句话只在**窗口结束超过 90 天**时才出现 ✗（测49 的核心窗口
+ *    2026-09-13 结束，到 10-12 才 29 天 ✗ → 什么都没说 ✓，
+ *    而卡片上摆着一个已经过去的日期区间 ✗）。
+ */
+describe('计划卡 · 窗口已过的显示口径（2026-10-12）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('窗口一过就说「尽快补种」，并把原窗口放进括号', () => {
+    const text = source()
+
+    expect(text).toContain('function isWindowPassed(')
+    expect(text).toContain('建议接种时间：尽快补种（原窗口')
+  })
+
+  it('判断口径是"结束日 < 今天"，不再是"超过 90 天"', () => {
+    const text = source()
+
+    expect(text).toContain('return end < getTodayDateString()')
+  })
+})

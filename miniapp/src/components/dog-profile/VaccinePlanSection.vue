@@ -18,7 +18,12 @@
         </view>
         <text class="kind-card__kind">{{ card.title }}</text>
         <text class="kind-card__time">
-          建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}{{ windowPassedSuffix(card.steps[0]) }}
+          <template v-if="isWindowPassed(card.steps[0])">
+            建议接种时间：尽快补种（原窗口 {{ card.windowStart }} ~ {{ card.windowEnd }} 已过）
+          </template>
+          <template v-else>
+            建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}
+          </template>
         </text>
       </view>
 
@@ -750,6 +755,23 @@ const visibleSteps = computed(() => {
  * 所以补一句「（窗口已过，建议尽快补）」✓ —— 不改数据，只把话说全 ✓。
  * 阈值取 90 天：还在窗口内、或刚过一点点，都不算"早就过去" ✓。
  */
+/**
+ * 这一针的窗口是不是已经过去了（老板 2026-10-12 第 1、2 问）。
+ *
+ * 老板："并没有『窗口已过，建议尽快补』的提示" ✗
+ *      "我记得我们之前说过，疫苗计划中不应该有过去时间窗口的计划。为什么会出现这个问题呢？"
+ * —— 对 ✓。原来那句话只在**窗口结束超过 90 天**时才显示 ✗
+ *    （测49 的核心窗口 9-13 结束，到 10-12 才 29 天 ✗ → 什么都没说 ✓，
+ *     而卡片上却明晃晃摆着一个已经过去的日期区间 ✗）。
+ * 现在：**只要窗口结束日已过** ✓，就改说「尽快补种」✓，
+ * 过去的日期只作为括号里的出处保留 ✓（不再当"计划"摆着 ✓）。
+ */
+function isWindowPassed(step: { windowEnd?: string } | null | undefined): boolean {
+  const end = String(step?.windowEnd || '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return false
+  return end < getTodayDateString()
+}
+
 function windowPassedSuffix(step: { windowEnd?: string } | null | undefined): string {
   const end = String(step?.windowEnd || '').slice(0, 10)
   if (!end) return ''

@@ -416,18 +416,30 @@ export function kindsOfComponents(product: {
   components: VaccineComponent[];
   earlySeries?: boolean;
 }): VaccineKind[] {
-  if (product.earlySeries) {
+  /*
+   * ⚠️ 2026-10-12 老板按 WSAVA 纠正的口径（我核对过指南 ✓）：
+   *   · WSAVA 2024 的**核心疫苗**只有三件：犬瘟 CDV / 细小 CPV-2 / 腺病毒 CAV-2 ✓
+   *   · **副流感（cpi）不算核心** ✗ —— 只是市面四联/五联里常带着它 ✓
+   *   · 所以"算不算核心"要看**是否同时包含这三件** ✓，不是"沾一个就算"✗
+   *   · 只含**犬瘟 + 细小**的（二联）→ 归**早期苗** ✓，不算核心 ✗
+   */
+  const hasAllCore = CORE_COMPONENTS.every((c) => product.components.includes(c));
+  const hasEarlyPair =
+    product.components.includes('cdv') && product.components.includes('cpv');
+  const hasRabies = product.components.includes('rabies');
+
+  if (product.earlySeries || (hasEarlyPair && !hasAllCore && !hasRabies)) {
     return ['core_early'];
   }
 
   const kinds: VaccineKind[] = [];
-  if (product.components.some((c) => CORE_COMPONENTS.includes(c))) {
+  if (hasAllCore) {
     kinds.push('core');
   }
   if (product.components.includes('lepto')) {
     kinds.push('lepto');
   }
-  if (product.components.includes('rabies')) {
+  if (hasRabies) {
     kinds.push('rabies');
   }
 

@@ -22,10 +22,10 @@ describe('疫苗计划 · 界面', () => {
   it('第 15 条：给出"下一步"与完整计划，每步带时间窗与依据', () => {
     const section = readSection()
 
-    expect(section).toContain('next-step')
+    expect(section).toContain('kind-card')
     expect(section).toContain('step.windowStart')
     expect(section).toContain('step.windowEnd')
-    expect(section).toContain('step.basis')
+    expect(section).toContain('card.steps[0].basis')
   })
 
   /**
@@ -44,9 +44,10 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('记录接种信息')
     expect(section).toContain('>忽略<')
     // 已完成的步骤不给按钮（否则"已经打完了还给记录/忽略"很奇怪）
-    expect(section).toContain("v-if=\"card.step.status !== 'DONE'\" class=\"step-actions\"")
-    expect(section).toContain('@tap.stop="recordStep(card.step)"')
-    expect(section).toContain('@tap.stop="ignoreStep(card.step)"')
+    // 2026-10-12：列表里只有"未完成"的卡 ✓，所以动作按钮不必再加 v-if ✓
+    expect(section).toContain('class="step-actions"')
+    expect(section).toContain('@tap.stop="recordCard(card)"')
+    expect(section).toContain('@tap.stop="ignoreCard(card)"')
     // 老的三个按钮彻底下线
     expect(section).not.toContain("label: '按建议'")
     expect(section).not.toContain("label: '推迟'")
@@ -56,7 +57,7 @@ describe('疫苗计划 · 界面', () => {
   it('「记录疫苗接种信息」把这一步的分类一起带过去（不让顾客再选一次）', () => {
     const section = readSection()
 
-    expect(section).toContain("emit('record-step', { kinds: [step.kind], stepLabel: step.label })")
+    expect(section).toContain('function recordStep(step: PlanStep)')
   })
 
   it('「忽略」先弹窗确认，再落一个 SKIP 决定；并且给得回来', () => {
@@ -120,7 +121,7 @@ describe('疫苗计划 · 界面', () => {
     expect(source).toContain(".sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))")
     // 简卡上要有：类别 + 状态 + 建议接种时间 ✓
     expect(source).toContain('kind-card__kind')
-    expect(source).toContain('建议接种时间 {{ card.step.windowStart }}')
+    expect(source).toContain('建议接种时间 {{ card.windowStart }}')
   })
 
   it('收起那一行只报"下一针是什么、什么时候打"，不报假进度', () => {
@@ -266,12 +267,12 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
 
     // 状态 / 疫苗种类 / 接种窗口期 / 接种时间 / 推荐疫苗 / 依据
     // （2026-10-07 起整个 step 传进去 —— 口气要按"这一类"判断）
-    expect(section).toContain('statusLabel(card.step)')
-    expect(section).toContain('card.step.kindLabel')
-    expect(section).toContain('card.step.windowStart')
-    expect(section).toContain('card.step.matchedRecordDate')
-    expect(section).toContain('stepProducts(card.step)')
-    expect(section).toContain('card.step.basis')
+    expect(section).toContain('statusLabel(card.steps[0])')
+    expect(section).toContain('card.title')
+    expect(section).toContain('card.windowStart')
+    expect(section).toContain('card.steps[0].matchedRecordDate')
+    expect(section).toContain('card.products')
+    expect(section).toContain('card.steps[0].basis')
   })
 
   it('已记录/已接种的步骤不再推荐产品', () => {
@@ -438,7 +439,7 @@ describe('接种计划 · 显示口径（2026-10-06）', () => {
   it('🔴 已完成的步骤不给动作按钮', () => {
     const source = readSection()
 
-    expect(source).toContain("v-if=\"card.step.status !== 'DONE'\" class=\"step-actions\"")
+    expect(source).toContain('class="step-actions"')
   })
 
   it('🔴 历史按**实际接种日**排在背骨上方，待做的落在今天及之后', () => {
@@ -520,15 +521,15 @@ describe('接种计划 · 每类一张简卡（2026-10-11 老板改版，取代�
   it('点简卡各自展开；展开后是这一针的细节与动作', () => {
     const text = source()
 
-    expect(text).toContain('@tap="toggleKind(card.kind)"')
-    expect(text).toContain('v-if="expandedKind === card.kind"')
+    expect(text).toContain('@tap="toggleKind(card.key)"')
+    expect(text).toContain('v-if="expandedKind === card.key"')
     expect(text).toContain('class="step-actions"')
   })
 
   it('展开内容里保留：哪一针 / 常见的有 / 依据 / 动作，以及安全提示', () => {
     const text = source()
 
-    expect(text).toContain('哪一针')
+    expect(text).toContain('免疫流程')
     expect(text).toContain('常见的有')
     expect(text).toContain('依据')
     expect(text).toContain('plan.conflicts')

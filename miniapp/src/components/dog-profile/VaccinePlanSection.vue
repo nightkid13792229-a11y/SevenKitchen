@@ -1,16 +1,4 @@
 <template>
-  <!--
-    疫苗接种计划（2026-10-11 老板第二次改版）
-
-    老板原话："既然我们之前决定接种计划提醒板块，只展示每一类疫苗的下一针就足够的话。
-    那我们能否这样设计？在收起状态下，我们也把所有疫苗分类的信息简卡全部展示出来，
-    在每一个信息简卡添加展开或者收起的按钮。展开后再展示详细的信息。
-    从上到下的排序，按照时间从近到远来排序。"
-
-    所以这里不再有"整个板块收起/展开"✗、也没有鱼骨图的鱼头/背骨 ✗ —— 就是
-    **一类一张简卡**（简卡上：类别 + 状态 + 建议接种时间 ✓），点简卡各自展开 ✓，
-    展开后是这一针的细节与动作 ✓。顺序按建议接种时间由近到远 ✓。
-  -->
   <view v-if="!sectionHidden" class="health-section vaccine-plan">
     <view class="plan-head">
       <view class="plan-head__bar" />
@@ -18,62 +6,72 @@
       <text class="plan-head__hint">每一类只提醒下一针；从近到远</text>
     </view>
 
-    <view v-for="card in kindCards" :key="card.kind" class="kind-card">
-      <view class="kind-card__head" @tap="toggleKind(card.kind)">
+    <view v-for="card in kindCards" :key="card.key" class="kind-card">
+      <view class="kind-card__head" @tap="toggleKind(card.key)">
         <view class="kind-card__line">
-          <text class="kind-card__kind">{{ card.step.kindLabel }}</text>
-          <text class="kind-card__badge" :class="`kind-card__badge--${card.step.status}`">
-            {{ statusLabel(card.step) }}
+          <text class="kind-card__kind">{{ card.title }}</text>
+          <text class="kind-card__badge" :class="`kind-card__badge--${card.steps[0].status}`">
+            {{ statusLabel(card.steps[0]) }}
           </text>
-          <text class="kind-card__toggle">{{ expandedKind === card.kind ? '收起' : '展开' }}</text>
+          <text class="kind-card__toggle">{{ expandedKind === card.key ? '收起' : '展开' }}</text>
         </view>
         <text class="kind-card__time">
-          建议接种时间 {{ card.step.windowStart }} ~ {{ card.step.windowEnd }}{{ windowPassedSuffix(card.step) }}
+          建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}{{ windowPassedSuffix(card.steps[0]) }}
         </text>
       </view>
 
-      <view v-if="expandedKind === card.kind" class="kind-card__body">
-        <view class="kv">
-          <!-- 老板 2026-10-12：「哪一针」→「免疫流程」✓ -->
-          <text class="kv__label">免疫流程</text>
-          <text class="kv__value">{{ card.step.label }}</text>
-        </view>
-        <view v-if="card.step.matchedRecordDate" class="kv">
-          <text class="kv__label">接种时间</text>
-          <text class="kv__value">{{ card.step.matchedRecordDate }}</text>
-        </view>
-        <view v-if="stepProducts(card.step).length > 0" class="kv">
-          <text class="kv__label">常见的有</text>
-          <text class="kv__value">{{ stepProducts(card.step).join('、') }}</text>
-        </view>
-        <text v-if="card.step.spacingNote" class="spacing-note__text">
-          {{ card.step.spacingNote }}
+      <view v-if="expandedKind === card.key" class="kind-card__body">
+        <text v-if="card.comboProducts.length > 0" class="merge-note">
+          这两类可以打一针联苗（{{ card.comboProducts.join('、') }}）一次覆盖；也可以分成两针打，间隔 2~3 天。
         </text>
+
+        <view v-for="step in card.steps" :key="step.key" class="kv">
+          <text class="kv__label">{{ card.steps.length > 1 ? step.kindLabel : '免疫流程' }}</text>
+          <text class="kv__value">{{ step.label }}</text>
+        </view>
+        <view v-if="card.steps[0].matchedRecordDate" class="kv">
+          <text class="kv__label">接种时间</text>
+          <text class="kv__value">{{ card.steps[0].matchedRecordDate }}</text>
+        </view>
+        <view v-if="card.products.length > 0" class="kv">
+          <text class="kv__label">常见的有</text>
+          <text class="kv__value">{{ card.products.join('、') }}</text>
+        </view>
         <view class="kv">
           <text class="kv__label">依据</text>
           <view class="kv__value">
-            <text class="basis__summary">{{ basisSummaryOf(card.step) }}</text>
+            <text class="basis__summary">{{ basisSummaryOf(card.steps[0]) }}</text>
             <text
-              v-if="hasMoreBasis(card.step)"
+              v-if="hasMoreBasis(card.steps[0])"
               class="basis__more"
-              @tap.stop="toggleBasis(card.step.key)"
-            >{{ isBasisOpen(card.step.key) ? '收起' : '为什么这么建议？' }}</text>
+              @tap.stop="toggleBasis(card.steps[0].key)"
+            >{{ isBasisOpen(card.steps[0].key) ? '收起' : '为什么这么建议？' }}</text>
             <text
-              v-if="hasMoreBasis(card.step) && isBasisOpen(card.step.key)"
+              v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
               class="basis__full"
-            >{{ card.step.basis }}</text>
+            >{{ card.steps[0].basis }}</text>
           </view>
         </view>
 
-        <view v-if="card.step.status !== 'DONE'" class="step-actions">
-          <text class="step-actions__primary" @tap.stop="recordStep(card.step)">记录接种信息</text>
-          <text class="step-actions__ghost" @tap.stop="ignoreStep(card.step)">忽略</text>
+        <text v-if="card.steps[0].spacingNote" class="spacing-note__text">
+          {{ card.steps[0].spacingNote }}
+        </text>
+
+        <view class="step-actions">
+          <text class="step-actions__primary" @tap.stop="recordCard(card)">记录接种信息</text>
+          <text class="step-actions__ghost" @tap.stop="ignoreCard(card)">忽略</text>
         </view>
       </view>
     </view>
 
-    <!-- 记录与建议不一致（重写模板时漏过一次 ✗，2026-10-11 补回）：
-         它承载"这一针还没核对过""间隔不足一年"这类**安全提示** ✓，不能丢 ✓。 -->
+    <text v-if="kindCards.length === 0" class="plan-steps__empty">
+      按现有记录，免疫程序里的项目都已完成（或都被你忽略了）。
+    </text>
+    <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
+      已忽略 {{ ignoredCount }} 项 · 点这里恢复
+    </text>
+
+    <!-- 记录与建议不一致：承载"这一针还没核对过""间隔不足一年"这类**安全提示** ✓ -->
     <view v-if="plan.conflicts.length > 0" class="health-card conflicts">
       <text class="conflicts__title">你的记录与建议不一致（{{ plan.conflicts.length }} 处）</text>
       <view v-for="item in plan.conflicts" :key="`${item.recordId}-${item.reason}`" class="conflict">
@@ -84,12 +82,10 @@
       <text class="conflicts__note">这只是提醒，不是结论。以你手上兽医给出的方案为准。</text>
     </view>
 
-    <text v-if="kindCards.length === 0" class="plan-steps__empty">
-      按现有记录，免疫程序里的项目都已完成（或都被你忽略了）。
-    </text>
-    <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
-      已忽略 {{ ignoredCount }} 项 · 点这里恢复
-    </text>
+    <view v-if="loadError" class="health-card">
+      <text class="plan-locked__title">接种计划没加载出来，下拉刷新一下试试</text>
+      <text class="plan-locked__desc">{{ loadError }}</text>
+    </view>
   </view>
 </template>
 
@@ -223,9 +219,12 @@ const nextStep = computed(() => plan.value.nextStep)
  */
 
 const STATUS_LABELS: Record<PlanStep['status'], string> = {
+  /*
+   * 老板 2026-10-11：状态只留**两种** ✓（原来六个 ✗）——
+   * "有多急"由**建议接种时间**那行字说 ✓（窗口过了会补一句"（窗口已过，建议尽快补）"✓）
+   */
   DONE: '已完成',
-  DUE: '该打了',
-  // 老板 2026-10-11：「待安排」改成「待接种」更好懂 ✓
+  DUE: '待接种',
   UPCOMING: '待接种',
   OVERDUE: '待接种',
   SKIPPED: '不做',
@@ -443,16 +442,100 @@ function toggleKind(kind: string) {
 }
 
 /**
- * 每一类一张卡（2026-10-11 老板改版）：
- * 取"未完成"的步骤（后端已经保证**每一类只出一条**✓），按建议接种时间**由近到远** ✓。
+ * 计划卡（2026-10-12 老板选的合并方案）
+ *
+ * 老板第 3 问："在 8 周龄后的第二、三、四针核心疫苗的首免程序里，
+ * 到底单独提醒核心疫苗和钩端螺旋体，还是合并提醒呢？单独提醒的话，
+ * 用户端可能会有困惑 —— 为什么核心疫苗里提醒我打卫佳捌，
+ * 钩端螺旋体还要提醒我打一次卫佳捌，而且时间都一致。"
+ * —— 合并 ✓（他选了这个方案 ✓）。
+ *
+ * 规则：
+ *   · 取"未完成"的步骤（后端已保证**每一类只出一条**✓），按窗口起点由近到远 ✓
+ *   · **窗口有重叠的两类合成一张卡** ✓，重叠区间取**交集** ✓（两针都该打的那些天 ✓）
+ *   · 合并卡的产品：**两边都推荐的那支（联苗）排最前** ✓，其余补齐 ✓（最多 3 支 ✓）
+ *   · 只有真的存在"一支覆盖两类"的产品时，才说"可以一针一起打"✓（否则那句话是错的 ✗）
  */
-const kindCards = computed(() =>
-  visibleSteps.value
+interface PlanCard {
+  key: string
+  kinds: string[]
+  title: string
+  steps: PlanStep[]
+  windowStart: string
+  windowEnd: string
+  products: string[]
+  comboProducts: string[]
+}
+
+const kindCards = computed<PlanCard[]>(() => {
+  const pending = visibleSteps.value
     .filter((step) => step.status !== 'DONE')
     .slice()
     .sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))
-    .map((step) => ({ kind: step.kind, step })),
-)
+
+  const cards: PlanCard[] = []
+  for (const step of pending) {
+    const start = String(step.windowStart || '')
+    const end = String(step.windowEnd || '')
+    const target = cards.find((card) => {
+      const overlapStart = start > card.windowStart ? start : card.windowStart
+      const overlapEnd = end < card.windowEnd ? end : card.windowEnd
+      return overlapStart <= overlapEnd
+    })
+
+    if (!target) {
+      cards.push({
+        key: step.kind,
+        kinds: [step.kind],
+        title: step.kindLabel,
+        steps: [step],
+        windowStart: start,
+        windowEnd: end,
+        products: stepProducts(step),
+        comboProducts: [],
+      })
+      continue
+    }
+
+    target.windowStart = start > target.windowStart ? start : target.windowStart
+    target.windowEnd = end < target.windowEnd ? end : target.windowEnd
+    target.kinds.push(step.kind)
+    target.steps.push(step)
+    target.title = target.steps.map((item) => item.kindLabel).join(' + ')
+    const mine = stepProducts(step)
+    const combo = target.products.filter((name) => mine.includes(name))
+    target.comboProducts = combo
+    target.products = [...combo, ...[...target.products, ...mine].filter((n) => !combo.includes(n))]
+      .filter((name, index, all) => all.indexOf(name) === index)
+      .slice(0, 3)
+  }
+  return cards
+})
+
+/** 合并卡的「记录接种信息」：把**所有**合并进来的分类一起带过去 ✓ */
+function recordCard(card: PlanCard) {
+  emit('record-step', {
+    kinds: card.kinds,
+    stepLabel: card.steps.map((step) => step.label).join(' / '),
+  })
+}
+
+/** 合并卡的「忽略」：这一类一类地忽略 ✓（每一类各自存一条决定 ✓）*/
+function ignoreCard(card: PlanCard) {
+  const labels = card.steps.map((step) => step.label).join('、')
+  uni.showModal({
+    title: card.kinds.length > 1 ? '忽略这几步？' : '忽略这一步？',
+    content: `忽略后「${labels}」会从这只狗狗的接种计划里去掉，不再提醒。计划底部随时可以恢复。`,
+    confirmText: '忽略',
+    cancelText: '保留',
+    success: (result) => {
+      if (!result.confirm) return
+      for (const step of card.steps) {
+        void decide(step.key, 'SKIP')
+      }
+    },
+  })
+}
 
 /**
  * 计划列表：按建议接种时间**由近到远**（老板 2026-10-06 的明确要求），
@@ -1256,5 +1339,62 @@ defineExpose({ reload: () => load() })
   padding: 6rpx 24rpx 22rpx;
   border-top: 1rpx solid #eef4f0;
   background: #fbfdfc;
+}
+
+/* ══ 每类一张简卡（2026-10-11 改版；2026-10-12 加合并说明）══
+   ⚠️ 上一版这些样式跟鱼骨图样式一起被删掉过 ✗（页面变成一堆裸文字 ✓）——
+      这次连注释留着，别再顺手删掉 ✓。 */
+.vaccine-plan {
+  margin: 20rpx 0 0;
+  padding: 24rpx 22rpx 18rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(180deg, #f2faf5 0%, #ffffff 46%);
+  border: 1rpx solid #d5e9dd;
+}
+.plan-head { display: flex; align-items: center; gap: 12rpx; padding: 0 2rpx 4rpx; }
+.plan-head__bar { width: 8rpx; height: 30rpx; border-radius: 4rpx; background: #0f7b49; }
+.plan-head__title { font-size: 32rpx; font-weight: 700; color: #12503a; }
+.plan-head__hint { margin-left: auto; font-size: 22rpx; color: #7d9a8a; }
+.kind-card {
+  margin-top: 16rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  border: 1rpx solid #e2efe7;
+  box-shadow: 0 2rpx 10rpx rgba(15, 123, 73, 0.06);
+  overflow: hidden;
+}
+.kind-card__head { position: relative; padding: 22rpx 24rpx 22rpx 28rpx; }
+.kind-card__head::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 20rpx; bottom: 20rpx;
+  width: 8rpx;
+  border-radius: 0 6rpx 6rpx 0;
+  background: #0f7b49;
+}
+.kind-card__line { display: flex; align-items: center; gap: 12rpx; }
+.kind-card__kind { font-size: 31rpx; font-weight: 600; color: #14352a; }
+.kind-card__badge {
+  padding: 3rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #0f7b49;
+  background: #e7f5ec;
+  border: 1rpx solid #c9e7d5;
+}
+.kind-card__badge--DONE { color: #6b7a70; background: #f0f3f1; border-color: #e0e6e2; }
+.kind-card__toggle { margin-left: auto; font-size: 24rpx; color: #0f7b49; }
+.kind-card__time { display: block; margin-top: 10rpx; font-size: 25rpx; color: #5c6b62; }
+.kind-card__body { padding: 6rpx 24rpx 22rpx; border-top: 1rpx solid #eef4f0; background: #fbfdfc; }
+.merge-note {
+  display: block;
+  margin: 10rpx 0 16rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #12603f;
+  background: #eef9f2;
+  border: 1rpx solid #d2ecdc;
 }
 </style>

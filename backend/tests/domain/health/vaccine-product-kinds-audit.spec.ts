@@ -28,6 +28,9 @@ describe('产品表审计 · kinds 与 diseases 必须自洽（2026-10-06）', (
       kinds: p.kinds,
       coversDistemper: /犬瘟/.test(diseases),
       coversParvo: /细小/.test(diseases),
+      // ⚠️ 腺病毒在有的说明书里写作「犬传染性肝炎」✓（同一个 CAV）——
+      //    宠必威优免康就是这么写的 ✓，只匹配"腺病毒"会把它误判成不覆盖 ✗
+      coversAdeno: /腺病毒|传染性肝炎/.test(diseases),
       coversLepto: /钩端/.test(diseases),
       coversRabies: /狂犬/.test(diseases),
     };
@@ -49,44 +52,50 @@ describe('产品表审计 · kinds 与 diseases 必须自洽（2026-10-06）', (
     expect(bad).toEqual([]);
   });
 
-  it('标了 core 的，成分里必须至少覆盖犬瘟或细小之一', () => {
-    // 口径说明：核心疫苗 = 覆盖 WSAVA 核心病种（犬瘟热 / 犬细小 / 犬腺病毒 /
-    // 犬副流感）**其中至少一种**。不是"必须四种全占" ——
-    // 单联苗（卫佳细，只有细小）也是核心病种的疫苗，算 core 是对的；
-    // 但**单联/二联苗顶不上核心首免那一整套**，那条限制在
-    // recordCoversStep / productCoversSeries 里单独管，与这里的分级无关。
+  it('标了 core 的，必须同时覆盖犬瘟 + 细小 + 腺病毒（WSAVA 核心三件）', () => {
+    /*
+     * 2026-10-12 老板按 WSAVA 纠正：核心只有犬瘟 CDV / 细小 CPV-2 / 腺病毒 CAV-2 ✓，
+     * 副流感不算 ✗。所以"标了 core 就必须三件齐"✓ ——
+     * 沾一个就算 core ✗ 是旧口径（会把细小单苗、二联苗也算进核心 ✗）。
+     */
     const bad = rows
       .filter(
         (r) =>
           r.kinds.includes('core') &&
-          !r.kinds.includes('core_early') &&
-          !(r.coversDistemper || r.coversParvo),
+          !(r.coversDistemper && r.coversParvo && r.coversAdeno),
       )
       .map((r) => `${r.name} kinds=${r.kinds.join('+')}`);
 
     expect(bad).toEqual([]);
   });
 
-  it('没标 core 的，成分里也不该同时覆盖犬瘟和细小', () => {
+  it('没标 core 的：要么是早期苗（二联），要么不碰核心那三件', () => {
+    // 只含犬瘟+细小的（二联）→ 早期苗 ✓；含狂犬的联苗（如汪倍护）→ 只算狂犬 ✓
     const bad = rows
       .filter(
         (r) =>
           !r.kinds.includes('core') &&
-          !r.kinds.includes('core_early') &&
+          r.kinds.includes('core_early') === false &&
           r.coversDistemper &&
-          r.coversParvo,
+          r.coversParvo &&
+          r.coversAdeno,
       )
       .map((r) => `${r.name} kinds=${r.kinds.join('+')}`);
 
     expect(bad).toEqual([]);
   });
 
-  it('卫佳细：细小单联苗，标 core 是有意的（覆盖核心病种之一）', () => {
+  it('卫佳细：细小单联苗 → 归「其他」✓（2026-10-12 按 WSAVA 改）', () => {
     const weijiaxi = rows.find((r) => r.name === '卫佳细');
 
-    expect(weijiaxi).toBeTruthy();
-    expect(weijiaxi?.coversParvo).toBe(true);
-    expect(weijiaxi?.kinds).toContain('core');
+    /*
+     * 老板 2026-10-12："我们在匹配的时候，也不应该去检查它包不包含副流感，
+     * 而是这个产品是否包含犬瘟、细小和腺病毒。"
+     * —— 单有细小 ✗ 顶不上核心（核心要犬瘟+细小+腺病毒三件齐 ✓），
+     *    也不够"二联"（还差犬瘟 ✗）→ 归 other ✓，不进核心匹配 ✓。
+     *    （产品库里仍然可选 ✓，只是不参与核心那一步的推荐与匹配 ✓。）
+     */
+    expect(weijiaxi?.kinds).toEqual(['other']);
   });
 
   it('产品表规模没被误删（37 支：14 进口可推荐 + 23 国产可选）', () => {
@@ -133,7 +142,7 @@ describe('分类推导 · 与改造前手写值逐一等价（2026-10-06）', ()
     卫佳捌: ['core', 'lepto'],
     宠必威优免康: ['core'],
     卫佳伍: ['core'],
-    卫佳细: ['core'],
+    卫佳细: ['other'],
     宠必威幼犬保: ['core_early'],
     优乐康: ['core', 'lepto'],
     宠必威乐必妥: ['lepto'],
@@ -147,10 +156,10 @@ describe('分类推导 · 与改造前手写值逐一等价（2026-10-06）', ()
     '犬四联（中牧江西）': ['core'],
     科旺福: ['core'],
     宠安士佳: ['core'],
-    犬特威: ['core'],
-    汪幼保: ['core'],
-    金倍安: ['core'],
-    汪倍护: ['core', 'rabies'],
+    犬特威: ['core_early'],
+    汪幼保: ['core_early'],
+    金倍安: ['core_early'],
+    汪倍护: ['rabies'],
   };
 
   it('🔴 逐支对账：推导值 == 手写值', () => {

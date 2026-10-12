@@ -113,8 +113,16 @@
         · 加载成功且确实没有待办 → 才说"都已完成"✓
     -->
     <text v-if="!loaded && !loadError" class="plan-steps__empty">正在读取接种计划…</text>
+    <!--
+      老板 2026-10-12："理论上来说，不可能会存在免疫程序已完成的这种状态吧。
+      一只狗狗的免疫程序终身都需要进行吧？"
+      —— 对 ✓：核心每 3 年一次加强、狂犬与钩端每年一次 ✓，
+      免疫本来就是**终身**的事 ✓，不存在"全部完成"这个状态 ✗。
+      所以这里不再下这种结论 ✓（真出现空列表时，那是数据显示异常 ✓，
+      我们只如实说"暂时没有需要提醒的针"✓，由家长去记录板块核对 ✓）。
+    -->
     <text v-else-if="loaded && kindCards.length === 0" class="plan-steps__empty">
-      按现有记录，免疫程序里的项目都已完成（或都被你忽略了）。
+      暂时没有需要提醒的针。如果和你的疫苗本对不上，请到下方接种记录核对一下。
     </text>
     <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">
       已忽略 {{ ignoredCount }} 项 · 点这里恢复

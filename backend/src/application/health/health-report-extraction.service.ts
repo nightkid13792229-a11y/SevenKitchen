@@ -1,3 +1,23 @@
+/*
+ * `pdf-parse` 没有自带类型声明，我们在 `src/types/document-parsers.d.ts` 里
+ * 自己声明了最小的类型（2026-10-08 加的）。
+ *
+ * ⚠️ 为什么这里要显式引用一下 ✗：**ts-node 默认不读 tsconfig 的 include/files**
+ * （它只从入口文件顺着 import 爬 ✓）。那份 `.d.ts` 谁都没 import 过 ✗，
+ * 于是 ts-node 爬不到它 ✓ → 启动自检直接抛 TS7016 ✗：
+ *
+ *   error TS7016: Could not find a declaration file for module 'pdf-parse'
+ *
+ * 后果是 `npm run start:check:miniapp` / `npm run start:dev:miniapp`
+ * **一条命令都起不来** ✗，而整包 `npx tsc --noEmit` 反而没这个问题 ✓
+ * （它按 tsconfig 全量加载，能看到那份声明 ✓）—— 所以这类问题很能骗人 ✗。
+ *
+ * 这里用引用而不是改 tsconfig ✗：tsconfig 里一加 `files`/`include`，
+ * 就会**顶掉默认的"全项目收集"** ✓ → `tsc` 能看到的文件从 304 个测试文件
+ * 掉到个位数 ✓、那 340 条历史类型报错也一起"消失" ✗ ——
+ * 看着变绿了，其实是不再检查了 ✗（比原来的问题更坏 ✓）。
+ */
+/// <reference path="../../types/document-parsers.d.ts" />
 /**
  * 健康报告识别（AI）
  *

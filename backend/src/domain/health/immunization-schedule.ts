@@ -1917,6 +1917,36 @@ export function buildVaccinePlan(
    */
   const latestCoreDoseMs = latestCoreDose ? latestCoreDose.getTime() : null;
 
+  /*
+   * 钩端的**实际最后一针**（2026-10-12 老板第 3 问）。
+   *
+   * 老板："最后一针钩端螺旋体，我看是打的乐必妥，2026 年 8 月 23 号。
+   * 那么为什么下一针钩端螺旋体的计划窗口期是从 2027 年 9 月 20 号开始？
+   * 不应该是从 2027 年 8 月 23 号开始吗？"
+   * —— 对 ✗。钩端的年度加强原来只会跟着上面那条"平移链"走 ✗，
+   *    而平移链是按**排期表的计划日期**推的 ✓ → 晚了近一个月 ✗。
+   * 核心的成年加强早就有一条**专门的锚定规则** ✓（所以它是对的 ✓），
+   * 钩端这条是照着它补的 ✓。
+   */
+  const leptoDoseItems = [...parsed]
+    .filter((item) => item.kinds.includes('lepto') && recordCoversStep(item.record.vaccineName, 'lepto'))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+  const latestLeptoDoseMs = leptoDoseItems[0] ? leptoDoseItems[0].date.getTime() : null;
+  /*
+   * 什么时候**不许**碰钩端的年度档位（两个条件满足任一个都不许 ✗）：
+   *   ① 最后一针距今 ≥18 个月 ✓ → 那是"重新开始两针"的场子 ✓
+   *   ② 最近两针之间隔了 ≥18 个月 ✓ → 说明**最后一针本身就是"重新开始第 1 针"** ✓，
+   *      现在该补的是"第 2 针"（+2~4 周）✓，不是年度加强 ✗
+   *      （漏了 ② 的时候，那条"打完重新开始第 1 针之后要出现第 2 针"的测试当场变红 ✗）。
+   */
+  const leptoAnnualIsNormal =
+    latestLeptoDoseMs !== null &&
+    addMonths(new Date(latestLeptoDoseMs), 18).getTime() > today.getTime() &&
+    !(
+      leptoDoseItems[1] &&
+      addMonths(leptoDoseItems[1].date, 18).getTime() <= leptoDoseItems[0].date.getTime()
+    );
+
   const recordsByKind = new Map<VaccineKind, { record: VaccineRecordLike; date: Date }[]>();
   for (const item of parsed) {
     for (const kind of item.kinds) {
@@ -2232,6 +2262,46 @@ export function buildVaccinePlan(
         seed.windowStart = start;
         seed.windowEnd = new Date(start.getTime() + (originalEnd - originalStart));
         // 后面的兄弟步骤跟着这一步走；若这一步自己没打，锚点就交给平移链
+        shiftMs = start.getTime() - originalStart;
+        if (!matched) {
+          lastDoseMs = null;
+        }
+      }
+
+      /*
+       * 钩端年度加强：锚在"**实际最后一针** + N 年"上（2026-10-12 老板第 3 问）。
+       *
+       * 和上面核心成年加强是同一个道理 ✓：
+       *   · 这一针没打过（matched 为空）→ 窗口 = 实际最后一针 + N 年 ✓
+       *   · 这一针自己打了 → 用它的实际日期当锚点 ✓（交给匹配 ✓）
+       *   · 距今 ≥18 个月属于"重新开始两针" ✓ → 一个字都不碰 ✗
+       *     （那段已经把这几个档位重新排好了 ✓）
+       *
+       * ⚠️ 必须在**平移链算完之后**改（所以放在这里 ✓）——
+       *    前三次我改在种子层/排期层 ✗，都被这一层覆盖掉了 ✗，
+       *    表现出来就是"代码改了、窗口没变" ✓。
+       */
+      if (
+        seed.kind === 'lepto' &&
+        /^lepto-repeat-/.test(seed.key) &&
+        latestLeptoDoseMs !== null &&
+        leptoAnnualIsNormal &&
+        /*
+         * 只改**还没打的那一格** ✓（matched 为空 ✓）。
+         * 为什么：一只打过好几年年度加强的狗，历史那几格是**用来对号入座**的 ✓ ——
+         * 挪了它们，那几年的记录就再也对不上那几步了 ✗
+         * （测试当场逮住 ✗："钩端每年 1 次按年份各归各位"✓）。
+         */
+        !matched &&
+        // 已经被"重新开始两针"占用的档位，一个字都不动 ✓
+        !seed.label.includes('重新开始')
+      ) {
+        const originalStart = (originalWindowStart.get(seed.key) as Date).getTime();
+        const originalEnd = (originalWindowEnd.get(seed.key) as Date).getTime();
+        const doseIndex = Number(/^lepto-repeat-(\d+)$/.exec(seed.key)?.[1] || '1');
+        const start = addYears(new Date(latestLeptoDoseMs), doseIndex);
+        seed.windowStart = start;
+        seed.windowEnd = new Date(start.getTime() + (originalEnd - originalStart));
         shiftMs = start.getTime() - originalStart;
         if (!matched) {
           lastDoseMs = null;

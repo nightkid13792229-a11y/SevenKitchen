@@ -2600,3 +2600,56 @@ describe('安全默认值 · 没核对过的记录不算数（2026-10-09）', ()
     expect(plan.steps.some((step) => step.kind === 'core' && step.status === 'DONE')).toBe(true);
   })
 })
+
+/**
+ * 🔴 钩端年度加强：锚在**实际最后一针**上（老板 2026-10-12 第 3 问）
+ *
+ * 老板："最后一针钩端螺旋体，我看是打的乐必妥，2026 年 8 月 23 号。
+ * 那么为什么下一针钩端螺旋体的计划的窗口期是从 2027 年 9 月 20 号开始？
+ * 不应该是从 2027 年 8 月 23 号开始吗？钩端螺旋体应该是一年一针补强呀。
+ * 为什么会往后延后将近一个月时间呢？"
+ *
+ * 根因：钩端的年度档位只会跟着"平移链"走 ✗，
+ *      而平移链是按**排期表的计划日期**推的 ✓ → 晚了近一个月 ✗。
+ *      核心的成年加强早有专门的锚定规则 ✓（所以它一直是对的 ✓），
+ *      这一条是照着它补的 ✓。
+ *
+ * ⚠️ 我在这上面连栽三次 ✗（改在种子层/排期层都被"装配阶段"覆盖 ✓），
+ *    最后落在**平移链算完之后** ✓ 才生效 ✓。下面四条把边界一起钉住 ✓。
+ */
+describe('钩端 · 年度加强锚在实际最后一针（2026-10-12 老板第 3 问）', () => {
+  it('🔴 最后一针 2026-08-23 → 下一次年度加强从 2027-08-23 起', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-49',
+      birthday: '2026-06-07',
+      records: [
+        { id: 'c1', vaccineName: '卫佳伍', vaccinationDate: '2026-07-19', nextDueDate: null },
+        { id: 'l1', vaccineName: '宠必威乐必妥', vaccinationDate: '2026-08-02', nextDueDate: null },
+        { id: 'l2', vaccineName: '宠必威乐必妥', vaccinationDate: '2026-08-23', nextDueDate: null },
+      ],
+      today: new Date('2026-10-12'),
+    });
+
+    const nextLepto = plan.steps.find((step) => step.kind === 'lepto' && step.status !== 'DONE');
+
+    expect(nextLepto?.windowStart).toBe('2027-08-23');
+  });
+
+  it('历史的年度档位不动（要留着给那几年的记录对号入座）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 'dog-seven',
+      birthday: '2023-02-16',
+      records: [
+        { id: 'r1', vaccineName: '卫佳捌', vaccinationDate: '2024-08-18', nextDueDate: null },
+        { id: 'r2', vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', nextDueDate: null },
+        { id: 'r4', vaccineName: '卫佳捌', vaccinationDate: '2026-07-18', nextDueDate: null },
+      ],
+      today: new Date('2026-10-06'),
+    });
+    const byKey = new Map(plan.steps.map((step) => [step.key, step]));
+
+    expect(byKey.get('lepto-repeat-1')?.matchedRecordDate).toBe('2024-08-18');
+    expect(byKey.get('lepto-repeat-2')?.matchedRecordDate).toBe('2025-08-18');
+  });
+
+});

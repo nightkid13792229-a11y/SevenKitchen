@@ -25,7 +25,7 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('kind-card')
     expect(section).toContain('step.windowStart')
     expect(section).toContain('step.windowEnd')
-    expect(section).toContain('card.steps[0].basis')
+    expect(section).toContain('basisRestOf(card.steps[0])')
   })
 
   /**
@@ -272,7 +272,7 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).toContain('card.windowStart')
     expect(section).toContain('card.steps[0].matchedRecordDate')
     expect(section).toContain('card.products')
-    expect(section).toContain('card.steps[0].basis')
+    expect(section).toContain('basisRestOf(card.steps[0])')
   })
 
   it('已记录/已接种的步骤不再推荐产品', () => {

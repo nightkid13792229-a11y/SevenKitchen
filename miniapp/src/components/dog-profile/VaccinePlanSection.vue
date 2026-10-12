@@ -53,21 +53,32 @@
         <view class="kv">
           <text class="kv__label">依据</text>
           <view class="kv__value">
-            <!-- 合并卡：两类各自的依据都要说 ✓（只显示第一类的话，另一类看着没来由 ✗）-->
-            <text
-              v-for="step in card.steps"
-              :key="`basis-${step.key}`"
-              class="basis__summary"
-            >{{ basisSummaryOf(step) }}</text>
-            <text
-              v-if="hasMoreBasis(card.steps[0])"
-              class="basis__more"
-              @tap.stop="toggleBasis(card.steps[0].key)"
-            >{{ isBasisOpen(card.steps[0].key) ? '收起' : '为什么这么建议？' }}</text>
+            <!--
+              老板 2026-10-12 第 3 问："为什么这个建议板块能否直接做到依据说明文案的最后，
+              而不是另起一行单独展开？并且展开之后会先重复依据的文案，这个能否也修改一下？"
+              → 两处都改了 ✓：
+                ① 「为什么这么建议？」紧跟在依据文字**末尾** ✓（不再另起一行 ✗）
+                ② 展开后只显示**剩下的部分** ✓（`basisRestOf` 把开头那句已经显示过的去掉 ✓，
+                   不再重复一遍 ✗）
+              合并卡：两类各自的依据都显示 ✓（多行 ✓），按钮跟在最后一行末尾 ✓。
+            -->
+            <view class="basis__row">
+              <text
+                v-for="step in card.steps"
+                :key="`basis-${step.key}`"
+                class="basis__summary"
+                :class="{ 'basis__summary--block': card.steps.length > 1 }"
+              >{{ basisSummaryOf(step) }}</text>
+              <text
+                v-if="hasMoreBasis(card.steps[0])"
+                class="basis__more"
+                @tap.stop="toggleBasis(card.steps[0].key)"
+              >{{ isBasisOpen(card.steps[0].key) ? '收起' : '为什么这么建议？' }}</text>
+            </view>
             <text
               v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
               class="basis__full"
-            >{{ card.steps[0].basis }}</text>
+            >{{ basisRestOf(card.steps[0]) }}</text>
           </view>
         </view>
 
@@ -275,6 +286,18 @@ const openedBasisKeys = ref<Record<string, boolean>>({})
 
 function basisSummaryOf(step: { key: string; basis: string; basisSummary?: string }): string {
   return String(step?.basisSummary || step?.basis || '')
+}
+
+/**
+ * 展开后要显示的**剩下那段**（老板 2026-10-12 第 3 问）。
+ *
+ * 完整依据的开头就是界面上已经显示的那句"一句话依据" ✓ ——
+ * 直接整段显示会**先说一遍同样的话** ✗。这里把那句去掉再显示 ✓。
+ */
+function basisRestOf(step: { basis: string; basisSummary?: string }): string {
+  const summary = basisSummaryOf(step as never)
+  const full = String(step.basis || '')
+  return full.startsWith(summary) ? full.slice(summary.length) : full
 }
 
 function hasMoreBasis(step: { basis: string; basisSummary?: string }): boolean {
@@ -1238,11 +1261,17 @@ defineExpose({ reload: () => load() })
 }
 
 /* 依据：一句话 + 「为什么这么建议？」展开（2026-10-08） */
-.basis__summary {
+.basis__row {
   display: block;
+}
+.basis__summary {
+  display: inline;
   display: block;
   font-size: 24rpx;
   color: #333333;
+}
+.basis__summary--block {
+  display: block;
 }
 .basis__more {
   display: inline-block;

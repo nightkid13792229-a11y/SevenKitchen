@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { buildVaccineCatalog } from '../../../src/domain/health/vaccine-catalog';
 import {
   ALL_VACCINE_KINDS,
@@ -2500,19 +2502,25 @@ describe('依据文案 · 说明白"是谁的月龄"（2026-10-08）', () => {
     today: new Date('2026-10-08T00:00:00'),
   })
 
-  it('钩端那一步的依据：明确说 8 周龄是"钩端这一类"的，并给出核心/狂犬的对照', () => {
-    const lepto = plan.steps.find((step) => step.kind === 'lepto')
+  it('钩端那一步的依据：只说钩端自己，不再夹带核心/狂犬的对照（老板 2026-10-12 第 2 问）', () => {
+    /*
+     * 老板 2026-10-12："钩端螺旋体的『为什么建议』这个板块的文案，
+     * 为什么还有核心疫苗和狂犬苗的相关说明呢？"
+     * —— 那段对照是 2026-10-08 加的 ✗（当时为了说清"8 周龄是谁的月龄"✓），
+     *    但它长在钩端这张卡上 ✗，家长会以为是这一针的要求 ✗。
+     * 现在：从钩端的依据里删掉 ✓，只说钩端自己 ✓。
+     * （直接读源码里的那段文案 ✓ —— 比构造 plan 再去 find 更稳 ✓）
+     */
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    )
+    const lepto = source.slice(source.indexOf('钩端这一类：8 周龄起 2 针'))
+    const paragraph = lepto.slice(0, lepto.indexOf('是否接种、何时接种'))
 
-    expect(lepto).toBeDefined()
-    expect(lepto!.basis).toContain('钩端这一类')
-    expect(lepto!.basis).toContain('8 周龄起 2 针')
-    // 核心疫苗的对照（4 周龄抢跑苗 / 6~8 周龄起）
-    expect(lepto!.basis).toContain('4 周龄')
-    expect(lepto!.basis).toContain('6~8 周龄起')
-    // 狂犬也一起说清
-    expect(lepto!.basis).toContain('狂犬默认 12 周龄起')
-    // 不许再出现"幼犬首免应在 8 周龄后"这种会被套用到所有疫苗的写法
-    expect(lepto!.basis).not.toContain('幼犬首免应在 8 周龄后')
+    expect(paragraph).toContain('钩端的首免要打满 2 针')
+    expect(paragraph).not.toContain('核心疫苗不一样')
+    expect(paragraph).not.toContain('狂犬默认')
   })
 
   it('每一步都有一句话版的依据，而且不长', () => {

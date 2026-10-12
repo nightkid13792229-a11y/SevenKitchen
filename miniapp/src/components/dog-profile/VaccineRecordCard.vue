@@ -228,7 +228,7 @@ class="vaccine-card"
 
       <!-- 判定结果：只读一行，点它可以改 -->
       <view
-        v-if="hasComponentSelection(record, index) && !kindPickerOpen[index]"
+        v-if="hasComponentSelection() && !kindPickerOpen.value"
         class="vaccine-kind"
         @tap="openKindPicker()"
       >
@@ -265,7 +265,7 @@ class="vaccine-card"
           >{{ option.label }}</text>
           <text
             class="vaccine-name-tag"
-            :class="{ 'vaccine-name-tag--active': isNoneOfThem(record, index) }"
+            :class="{ 'vaccine-name-tag--active': isNoneOfThem() }"
             @tap="toggleNoneOfThem()"
           >都不是 / 不确定</text>
         </view>

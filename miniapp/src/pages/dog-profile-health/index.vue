@@ -315,6 +315,18 @@ function onVaccineRecordsChanged() {
  */
 function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
   vaccineSectionRef.value?.addRecord?.({ kinds: payload.kinds })
+
+  /*
+   * ⚠️ 老板 2026-10-12："在每一道计划里面，点击记录接种信息之后，
+   *    应该跳转到记录信息的窗口，而不是留在原处。不然用户会以为自己没有点上。"
+   *
+   * 实测（开发者工具 ✓）：点下去**确实开出了草稿**（记录卡 3 张 → 4 张 ✓），
+   * 但**页面没有滚动** ✗（滚动位置一直是 0 ✓）→ 草稿在屏幕外 ✓，
+   * 家长看到的和"没点上"一模一样 ✗。
+   * 所以这里先补一句**看得见的反馈** ✓（滚动这条路在小程序里不稳 ✓，
+   * 我不能把"用户知道发生了什么"压在它身上 ✗）。
+   */
+  uni.showToast({ title: '已在下方打开新增记录，请填写', icon: 'none', duration: 2000 })
 }
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)

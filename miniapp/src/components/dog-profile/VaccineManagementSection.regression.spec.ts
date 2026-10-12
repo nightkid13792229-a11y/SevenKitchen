@@ -70,8 +70,11 @@ describe('疫苗管理', () => {
   it('系统认不出来时**如实承认**，并让顾客照本子勾病种（2026-10-06 改）', () => {
     const source = readComponent()
 
-    expect(source).toContain('这一针含哪些病种？')
-    expect(source).toContain('照疫苗本上的成分表勾')
+    // 2026-10-12 老板：那句说明 Banner 直接删掉 ✗，「可多选」挪进字段名括弧 ✓
+    expect(source).toContain('含哪些疫苗（可多选）')
+    expect(source.includes('这一针含哪些病种？')).toBe(false)
+    // 2026-10-12 老板：那段小字也删掉 ✗（"可多选"已进字段名 ✓）
+    expect(source.includes('照疫苗本上的成分表勾')).toBe(false)
     // 勾不上任何病种时要有出路（驱虫药这种本来就不是疫苗）
     expect(source).toContain('都不是 / 不确定')
     expect(source).toContain('function toggleNoneOfThem(index: number)')
@@ -181,7 +184,8 @@ describe('疫苗管理', () => {
     // 新记录追加在列表末尾，前面有几条时它落在屏幕外 —— 看着就像"没反应"。
     expect(source).toContain('scrollPageToSelector')
     expect(source).toContain(':focus="focusIndex === index"')
-    expect(source).toContain('focusIndex.value = target')
+    // 2026-10-12 老板："不要定位到输入框中"✗ → 新增后只滚动，不落光标 ✓
+    expect(source).toContain('focusIndex.value = -1')
     // 必须在 DOM 更新之后做
     expect(source).toContain('nextTick(() => {')
   })
@@ -454,7 +458,9 @@ describe('识别多条只存了一条 + 分类改不动（2026-10-06）', () => 
 
     // 收起就没法再点第二个病了
     expect(source).toContain('function closeKindPicker(index: number)')
-    expect(source).toContain("class=\"vaccine-kind__done\" @tap=\"closeKindPicker(index)\"")
+    // 2026-10-12 老板：不要「选好了」按钮 ✗（点字段名那一行即可展开/收起 ✓）
+    // 只看**用法**（样式类名还留在 CSS 里，不算 ✗）
+    expect(source.includes('@tap="closeKindPicker(')).toBe(false)
     // 提示里得写明可多选（组合苗要勾好几个病种）
     expect(source).toContain('可多选')
   })
@@ -1032,7 +1038,8 @@ describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
     const date = source.indexOf('<text class="field-label">接种日期</text>')
-    const components = source.indexOf('<text class="field-label">含哪些病种</text>')
+    // 2026-10-12 文案改了 ✓：含哪些病种 → 含哪些疫苗（可多选）
+    const components = source.indexOf('<text class="field-label">含哪些疫苗（可多选）</text>')
 
     expect(name).toBeGreaterThan(0)
     expect(date).toBeGreaterThan(name)

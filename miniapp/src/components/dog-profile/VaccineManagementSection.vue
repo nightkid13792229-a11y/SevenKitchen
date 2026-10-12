@@ -347,7 +347,9 @@
           </picker>
         </view>
         <view class="field-group">
-          <text class="field-label">含哪些病种</text>
+          <!-- 老板 2026-10-12："含哪些病种的文案可否改成含哪些疫苗？
+               并且……『可多选』移到含哪些病种文案板块，以括弧中的注释形式存在。" -->
+          <text class="field-label">含哪些疫苗（可多选）</text>
 
           <!-- 判定结果：只读一行，点它可以改 -->
           <view
@@ -376,13 +378,8 @@
                 先从产品库里找，找不到再让 AI 认一次写法。
               </text>
             </view>
-            <view v-else class="vaccine-kind__unknown">
-              <text class="vaccine-kind__unknown-title">这一针含哪些病种？</text>
-              <text class="vaccine-kind__unknown-desc">
-                照疫苗本上的成分表勾（组合苗请把含的都点上）。
-                勾不上就选「都不是 / 不确定」—— 那只记录、不影响提醒。
-              </text>
-            </view>
+            <!-- 说明 Banner 已按老板 2026-10-12 的要求删除 ✗
+                 （"这一针含哪些病种的相关说明 Banner 直接删除"）-->
             <view class="vaccine-name-tags">
               <text
                 v-for="option in componentOptions"
@@ -397,10 +394,8 @@
                 @tap="toggleNoneOfThem(index)"
               >都不是 / 不确定</text>
             </view>
-            <text class="field-hint">
-              可多选 —— 点一下选中，再点一下取消。我们按你勾的病种自动归到核心 / 狂犬 / 钩端那几类，你不用管。
-            </text>
-            <text class="vaccine-kind__done" @tap="closeKindPicker(index)">选好了</text>
+            <!-- 「可多选」已挪到字段名括弧里 ✓；"选好了"按钮也按老板要求删掉 ✗
+                 （点字段名那一行即可展开/收起 ✓）-->
           </template>
         </view>
 
@@ -443,9 +438,19 @@
         </view>
 
         <view class="vaccine-card__actions">
-          <!-- 2026-10-03：手动保存按钮下线（底部保存键也一起下线了），改实时保存。
-               正常时什么都不显示；只有"还差必填"和"保存中"要说话。
-               2026-10-04：删除按钮已挪到卡片头部，这里只剩保存状态。 -->
+          <!--
+            2026-10-03：手动保存按钮下线，改实时保存 ✓。
+            ⚠️ 2026-10-12 老板把**新记录**改回手动保存 ✓：
+               "输入界面也不要自动保存，应该改成手动保存。"
+            → 还没保存过的新记录（id 为空 ✓）显示一个「保存」按钮 ✓；
+              已存在的记录照旧实时保存 ✓（改旧记录的体验不该变差 ✓）。
+          -->
+          <text
+            v-if="!record.id"
+            class="vaccine-card__save"
+            :class="{ 'vaccine-card__save--busy': savingIndex === index }"
+            @tap.stop="saveRecord(record, index)"
+          >{{ savingIndex === index ? '保存中…' : '保存' }}</text>
           <text v-if="savingIndex === index" class="vaccine-card__autosave vaccine-card__autosave--quiet">
             保存中…
           </text>
@@ -1300,6 +1305,24 @@ function scheduleAutoSave(
   index: number,
   options: { immediate?: boolean } = {},
 ) {
+  /*
+   * ⚠️ 老板 2026-10-12："输入界面也不要自动保存，应该改成手动保存。
+   *    保存后想再看该记录的时候，只能在接种记录板块中查看。"
+   *
+   * 所以**还没保存过的新记录**（id 为空 ✓）不再自动落库 ✗ ——
+   * 原来一边打字一边就存进服务器了 ✗，顾客都没点过保存，
+   * 记录却已经出现在列表里 ✓（老板就是这么发现的 ✗）。
+   * 现在：新记录只在本地，卡片上给一个「保存」✓；已存在的记录照旧自动保存 ✓
+   * （改一条旧记录的体验不该变差 ✓）。
+   */
+  if (!record.id) {
+    autoSaveNotices.value = {
+      ...autoSaveNotices.value,
+      [index]: '填完点「保存」才会记下来',
+    }
+    return
+  }
+
   const pending = autoSaveTimers.get(index)
   if (pending) {
     clearTimeout(pending)
@@ -1904,9 +1927,14 @@ function addRecord(prefill?: { kinds?: string[] }) {
   ensureDrafts()
   const target = records.value.length - 1
   expandedIndex.value = target
-  focusIndex.value = target
+  /*
+   * ⚠️ 老板 2026-10-12："点击记录接种信息之后，光标会默认移动到……
+   *    输入产品名字的输入框中，并且弹出键盘。我希望……不要定位到输入框中。"
+   * → 这里**不再自动聚焦** ✗（focusIndex 保持 -1 ✓），只把它展开并滚到眼前 ✓。
+   */
+  focusIndex.value = -1
 
-  // 等这一屏渲染出来再滚、再落光标；拿不到元素就静默跳过，不挡主流程
+  // 等这一屏渲染出来再滚；拿不到元素就静默跳过，不挡主流程
   nextTick(() => {
     scrollToRecordCard(target)
   })
@@ -2602,6 +2630,18 @@ async function doRemove(record: VaccineRecord) {
   margin-top: 26rpx;
 }
 
+.vaccine-card__save {
+  display: inline-block;
+  padding: 10rpx 40rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+  background: #7c6bd6;
+}
+.vaccine-card__save--busy {
+  opacity: 0.6;
+}
 .vaccine-card__autosave {
   align-self: center;
   margin-left: auto;

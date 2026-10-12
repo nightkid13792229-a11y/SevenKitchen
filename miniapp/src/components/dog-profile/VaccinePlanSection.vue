@@ -118,13 +118,32 @@
 
           ⚠️ 数据与保存仍归**记录板块**（草稿只有一份）；这里只负责"画在哪"。
         -->
+        <!--
+          ⚠️⚠️ 两个坑都在这儿（老板连着两次截图报的"输入项不全"）：
+            ① `expanded` 这个布尔 prop **不能写模板字面量** `:expanded="true"` ✗ ——
+               小程序编译器会把**字面量 true 的属性整个丢掉**（编译后的属性表里没有它），
+               卡片收不到值 → 布尔被强制成 false → **输入区整块不渲染**。
+               必须绑**数据**（inline.expanded）。
+            ② 卡片里 `expanded` 原来是 `type: Boolean` 且没有默认值 —— 同一个坑。
+               已改成 `default: true`。
+        -->
         <view v-if="inline && inline.open" class="plan-inline-editor">
           <text class="plan-inline-editor__title">记录这一针</text>
+          <!--
+            ⚠️ 卡片**外面**再包一层做条件：不要把 v-if 写在组件上 ✗ ——
+            在 v-for 里给组件加 v-if 时，小程序编译器会把 `wx:if` 和属性表
+            `u-p` **共用同一个数据键**（都是 card.P），结果属性表整个传不进去 ✗
+            （实测：渲染出来的 <vaccine-record-card> 一个属性都没有 ✓，
+              卡片拿不到 record/draft → 输入区不渲染 ✗）。
+          -->
+          <view v-if="inline.open">
           <VaccineRecordCard
             :key="inline.cardKey"
             :record="inline.record"
             :index="-1"
             :draft="inline.draft"
+            :toggle-label="inline.toggleLabel"
+            :collapse-flag="inline.collapseFlag"
             :catalog-products="inline.catalogProducts"
             :component-options="inline.componentOptions"
             :saving="inline.saving"
@@ -137,6 +156,7 @@
             @save="emit('inline-save')"
             @name-blur="emit('inline-blur')"
           />
+          </view>
           <text class="plan-inline-editor__cancel" @tap.stop="emit('inline-close')">取消</text>
         </view>
       </view>
@@ -310,6 +330,9 @@ const props = defineProps<{
     draft: any
     saving: boolean
     focused: boolean
+    /** 开关文案：'收起' = 展开着；'展开' = 收着（字符串，别用布尔）*/
+    toggleLabel: string
+    collapseFlag: string
     catalogProducts: any[]
     componentOptions: { value: string; label: string }[]
   } | null

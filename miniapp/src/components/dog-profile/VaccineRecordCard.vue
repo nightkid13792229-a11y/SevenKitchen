@@ -57,12 +57,12 @@ class="vaccine-card"
         @tap.stop="emit('remove', index)"
       >删除</text>
       <text class="vaccine-card__toggle" @tap.stop="emit('toggle', index)">
-        {{ expanded ? '收起' : '展开' }}
+        {{ toggleLabel }}
       </text>
     </view>
   </view>
 
-  <view v-if="expanded" class="vaccine-card__body">
+  <view class="vaccine-card__body" :class="{ 'vaccine-card__body--hidden': collapseFlag }">
     <!-- 疫苗名称（2026-10-05 改成"先选、选不到再写"）。
          老板："怎么保障用户填写正确的、可以被识别并归类的产品名称？"
          三条路，越靠前越不会错：
@@ -378,19 +378,6 @@ const props = withDefaults(
      * 父组件就只能等一个异步的 emit ✗ —— 那不是"行为完全不变" ✓。
      */
     draft: VaccineDraft
-    /**
-     * 展开着没有。
-     *
-     * 列表里由父组件按行算 ✓（一次只展开一条 ✓）；
-     * 计划卡下面那张新建卡**总是展开的** ✓。
-     *
-     * ⚠️ 默认值必须是 **true** ✗→✓（2026-10-12 老板截图：卡片的输入框整块不见 ✓，
-     *    只剩卡片脸 ✓）：这个 prop 是 `type: Boolean` ✓，而小程序里
-     *    **布尔 prop 拿不到值时会被强制成 false** ✗ —— 于是"总是展开"的那张卡
-     *    反而永远收着 ✓，输入框一个都不显示 ✓。列表那边一直显式传 ✓，
-     *    所以只有新卡中招 ✓。
-     */
-    expanded?: boolean
     /** 产品库（后端下发；拉不到就是空数组，卡片照旧能用 ✓）*/
     catalogProducts?: {
       name: string
@@ -404,6 +391,25 @@ const props = withDefaults(
     matchingBusy?: boolean
     /** 正在存这一条（父组件在存，卡片只显示 ✓）*/
     saving?: boolean
+    /**
+     * 卡片右上角那个开关的文案 ✓ —— 也用它决定**身子要不要画** ✓。
+     *
+     * ⚠️ 为什么不另设一个布尔 prop ✗（2026-10-12 花了很多时间才认清）：
+     *    这条 props 通道上**布尔值不可靠** ✓ —— `false` 会被当成"没传"丢掉 ✓、
+     *    `type: Boolean` 收不到值又被强制成 false ✓，两个方向都会让
+     *    "本该展开"的卡片收起来 ✗（老板三次截图报的"输入项不全"全是它 ✓）。
+     *    最后用**字符串**才稳定 ✓：`'展开'`（收着）/ `'收起'`（展开着）✓。
+     */
+    toggleLabel?: string
+    /**
+     * **收起标记**（2026-10-12）：传字符串 `'yes'` = 收起，其余（含不传）= 展开 ✓。
+     *
+     * ⚠️ 为什么不用布尔 ✗：这条 props 通道在小程序里对布尔不可靠 ——
+     * `false` 被当成"没传"丢掉 ✓、`type: Boolean` 收不到值又被强制成 false ✓，
+     * 两个方向都会让"本该展开"的卡片收着 ✗（老板三次截图报的输入项不全就是它 ✓）。
+     * 所以：**身子永远画出来** ✓，收起时用 class **藏**起来 ✓（见下面样式 ✓）。
+     */
+    collapseFlag?: string
     /** 父组件挂在卡片上的一句话（"还差病种" / 后端拒绝的原因 ✓）*/
     autoSaveText?: string
     /** 刚刚保存成功（2 秒高亮 ✓，按 id 记，重排也不会认错卡片 ✓）*/
@@ -432,8 +438,9 @@ const props = withDefaults(
     saveStateText: '',
     nameFocused: false,
     autofocus: false,
-    // 不传 = 展开 ✓（见上面 expanded 的说明 ✓）
-    expanded: true,
+    // 不传 = 展开着 ✓（见上面 toggleLabel 的说明 ✓）
+    toggleLabel: '收起',
+    // 不传 = 展开 ✓（见上面 collapsible 的说明 ✓）
   },
 )
 
@@ -979,7 +986,21 @@ color: #b08d4f;
 }
 
 .vaccine-card__body {
-margin-top: 22rpx;
+  margin-top: 22rpx;
+}
+
+/*
+ * 收起态：**用样式藏**，不用 v-if 决定"画不画"。
+ *
+ * ⚠️ 为什么（2026-10-12 老板连着三次截图报「输入项不全」，根因就在这）：
+ * 这张卡原来按"传进来的展开标记"决定要不要画身子 ✗，而那条 props 通道
+ * 在小程序里对**布尔**不可靠 —— `false` 会被当成"没传"丢掉、
+ * `type: Boolean` 收不到值又被强制成 false，两个方向都会让
+ * "本该展开"的卡片收着 ✗。改成"身子永远画出来 + 收起时才藏" ✓，
+ * 就不再依赖那条通道了 ✓。
+ */
+.vaccine-card__body--hidden {
+  display: none;
 }
 
 /* 待核对（2026-10-09 安全默认值） */

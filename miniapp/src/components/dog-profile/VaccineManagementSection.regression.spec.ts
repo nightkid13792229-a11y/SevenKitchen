@@ -1379,7 +1379,7 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
 
   it('卡片确实声明了一批 props / emits（防止解析写错导致这条空转）', () => {
     // 接口是老板点名要求的四个 + 一堆显示状态 ✓
-    for (const name of ['record', 'index', 'draft', 'expanded']) {
+    for (const name of ['record', 'index', 'draft', 'toggleLabel']) {
       expect(declaredProps()).toContain(name)
     }
     for (const name of ['update', 'remove', 'toggle', 'save', 'nameBlur']) {
@@ -1414,9 +1414,20 @@ describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步�
     const { props, blocks } = usagesInSection()
 
     // 一次只展开一条 ✓ —— 这是**列表级**的状态 ✓，留在这里 ✓
-    expect(props).toContain('expanded')
-    // 列表那一处：展开状态由父组件按行算 ✓（新增卡那一处是恒 true ✓，各是各的 ✓）
-    expect(blocks.some((b) => b.includes(':expanded="expandedIndex === index"'))).toBe(true)
+    expect(props).toContain('toggleLabel')
+    /*
+     * 列表那一处：**收起的判定**由父组件按行算 ✓ ——
+     * ⚠️ 传的是字符串 `'collapse'`，不是布尔 ✗（这条通道上 false 会被当成"没传"丢掉，
+     *    老板两次截图报的"输入项不全"就是它）。不传 = 展开。
+     */
+    /*
+     * ⚠️ 传的是**字符串文案**（'收起' / '展开'），不是布尔 ✗ ——
+     * 这条 props 通道上布尔不可靠（false 被当成"没传"丢掉、Boolean 又强制成 false），
+     * 老板三次截图报的"输入项不全"根因就是这个。
+     */
+    expect(
+      blocks.some((b) => b.includes(':toggle-label="expandedIndex === index ? \'收起\' : \'展开\'"')),
+    ).toBe(true)
     // 列表容器（不是卡片）仍然负责一条条排出来
     expect(templateOf(readRaw('VaccineManagementSection.vue'))).toContain(
       'v-for="(record, index) in records"',

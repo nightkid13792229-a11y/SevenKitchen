@@ -52,8 +52,8 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
       'record: VaccineRecord',
       'index: number',
       'draft: VaccineDraft',
-      // 2026-10-12：改成可选 + 默认 true（见下面那条守卫）
-      'expanded?: boolean',
+      // 2026-10-12：改成"默认展开、按需收起"（见下面那条守卫）
+      'toggleLabel?: string',
     ]) {
       expect(source).toContain(prop)
     }
@@ -63,17 +63,25 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(source).toContain("(event: 'save', index: number): void")
   })
 
-  it('🔴 expanded 必须有默认值 true（布尔 prop 没默认值会被强制成 false）', () => {
+  it('🔴 收起必须"按需"：默认展开，只有明确传 collapse 才收', () => {
     const source = readCard()
 
     /*
-     * 2026-10-12 老板截图报的：计划卡下面那张新建卡的**输入框整块不见**，
-     * 只剩卡片脸。根因就是这条 —— `expanded` 是 `type: Boolean`，
-     * 小程序里**拿不到值时会强制成 false**，于是"总是展开"的那张卡永远收着。
-     * 列表那张一直显式传，所以只有新卡中招。
+     * 2026-10-12 老板连着两次截图报「输入项不全」/「窗口很简陋」，
+     * 根因都是**布尔 prop 传不进去**：
+     *   · `expanded` 是 `type: Boolean` 且没默认值 → 小程序里强制成 false ✗
+     *   · 想用 `:expanded="false"` 纠正 → 一样被当成"没传"丢掉 ✗
+     * ⇒ 反过来设计：默认展开（不传值），只有"要收起"的那一处传**字符串** 'collapse' ✗→✓
      */
-    expect(source).toContain('expanded?: boolean')
-    expect(source).toContain('expanded: true,')
+    expect(source).toContain('collapseFlag?: string')
+    /*
+     * ⚠️ 身子**永远画出来**，收起时用 class **藏** —— 不再用 v-if 决定"画不画" ✗。
+     * 这条 props 通道对布尔不可靠（false 被丢、Boolean 又强制成 false），
+     * 用 v-if 时"本该展开"的卡片会收着（老板三次截图报的输入项不全）。
+     */
+    expect(source).toContain('<view class="vaccine-card__body"')
+    expect(source).toContain("'vaccine-card__body--hidden': collapseFlag")
+    expect(source).toContain('.vaccine-card__body--hidden {')
   })
 
   it('🔴 展开与收起由 props.expanded 决定，不再自己数下标', () => {
@@ -81,8 +89,8 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
 
     // 抽卡片之前是 `expandedIndex === index` —— 那是**列表级**的状态 ✓，
     // 留在父组件 ✓；卡片只认"我这条展开着没有" ✓
-    expect(source).toContain("{{ expanded ? '收起' : '展开' }}")
-    expect(source).toContain('v-if="expanded" class="vaccine-card__body"')
+    expect(source).toContain('{{ toggleLabel }}')
+    expect(source).toContain("'vaccine-card__body--hidden': collapseFlag")
     expect(source).not.toContain('expandedIndex')
   })
 })

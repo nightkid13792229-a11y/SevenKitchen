@@ -158,7 +158,8 @@
       :record="record"
       :index="index"
       :draft="draftOf(record, index)"
-      :expanded="expandedIndex === index"
+      :toggle-label="expandedIndex === index ? '收起' : '展开'"
+      :collapse-flag="expandedIndex === index ? '' : 'yes'"
       :catalog-products="catalogProducts"
       :component-options="componentOptions"
       :saving="savingIndex === index"
@@ -522,6 +523,14 @@ defineExpose({
     draft: inlineDraftState.value,
     saving: inlineSaving.value,
     focused: inlineFocus.value,
+    /*
+     * 计划卡下面这张卡**永远展开** ✓（它就是"正在录入"的样子 ✓）。
+     * ⚠️ 走数据通道（和 record/draft 同一包 ✓），且必须是**字符串** ✗→✓：
+     * 这条 props 通道上布尔不可靠（false 被丢、Boolean 又强制成 false），
+     * 老板三次截图报的"输入项不全"根因就是这个。
+     */
+    toggleLabel: '收起',
+    collapseFlag: '',
     // 产品库与病种词表归这儿 ✓（卡片要它们才能选产品、勾病种 ✓）
     catalogProducts: catalogProducts.value,
     componentOptions: componentOptions.value,

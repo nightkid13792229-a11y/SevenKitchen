@@ -14,6 +14,8 @@ describe('推荐产品 · 多联苗的每个成分都要够龄', () => {
     const names = recommendProductsForStep('core', 6).map((p) => p.name);
 
     expect(names).not.toContain('卫佳捌');
+    // ⚠️ 海博莱那支的 minWeeks 是 null ✓ —— 曾经因此绕过检查 ✗，这里一起钉住 ✓
+    expect(names).not.toContain('海博莱犬四联加钩端');
     expect(names.length).toBeGreaterThan(0);
   });
 

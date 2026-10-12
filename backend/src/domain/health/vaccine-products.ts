@@ -765,20 +765,28 @@ export function recommendProductsForStep(
     if (kind === 'core' && !coversCoreSeries(product)) {
       return false
     }
-    if (stepWeeks === null || product.minWeeks === null) {
+    if (stepWeeks === null) {
       return true
     }
     /*
      * 产品覆盖的每一类，都要各自满足起始周龄 ✓
      * （多联苗不能靠"核心那部分够龄"就把钩端一起带进去 ✗）
-     * ⚠️ 必须放在上面那个 null 判断**之后** ✗ —— 2026-10-12 部署时
-     *    就因为这个顺序被 nest build 拦下过 ✓（服务没受影响 ✓）。
+     *
+     * ⚠️ 2026-10-12 两次教训，顺序很要命 ✗：
+     *   ① 第一次放在 `stepWeeks === null` 之前 → TS18047 被 nest build 拦下 ✓
+     *   ② 第二次放在 `product.minWeeks === null` 之后 →
+     *      **海博莱犬四联加钩端**（minWeeks 是 null）被提前放行了 ✗，
+     *      于是 6 周龄那一针又在推含钩端的苗 ✗（老板的问题只解决了一半 ✗）。
+     *   现在：先查"每一类够不够龄"✓，再查产品自己的 minWeeks ✓。
      */
     for (const covered of product.kinds) {
       const startWeeks = KIND_START_WEEKS[covered]
       if (startWeeks !== undefined && stepWeeks < startWeeks) {
         return false
       }
+    }
+    if (product.minWeeks === null) {
+      return true
     }
     return product.minWeeks <= stepWeeks
   })

@@ -87,3 +87,47 @@ export interface VaccineDraft {
    */
   productVerified?: boolean
 }
+
+/* ══ 产品名归一化（2026-10-12 第一步收尾：从两个文件里提出来 ✗→✓）══════════
+ *
+ * ⚠️ 为什么必须只有一份 ✗：抽卡片那天这个函数被复制到了
+ * 记录板块和编辑卡两边 ✓（各 1 份 ✓），当时留了一句"改了这里要改两处"✓。
+ * 但那句话是靠人记住的 ✗ —— 而它一旦不一致，症状是
+ * **一边认得出这支苗、另一边认不出** ✓：
+ *   · 卡片认不出 → 冒出"＋ 从产品库选一支"和一个手填框 ✗
+ *   · 板块认不出 → 疫苗本重拍时**同一支苗会被重复记一遍** ✗
+ * （2026-10-06 老板报的"疫苗名称并未正确加载出来"就是这套规则对不上 ✗）
+ *
+ * 所以从今往后**只有这一份** ✓：谁要改，改这里 ✓。
+ */
+
+/**
+ * 产品名归一化 —— 规则与后端 `normalizeProductText` **逐条一致**。
+ *
+ * ⚠️ 2026-10-06 老板报的 bug 就出在这里：产品库下发的规范名是
+ * 「宠必威幼犬保」，而疫苗本识别出来的是「宠必威® 幼犬保」。
+ * 前端原来拿 `===` 比，比不中 → 名称那一行退回显示"从产品库选择"，
+ * 识别出来的名字只能留在下面的手填输入框里 ——
+ * 老板看到的就是"疫苗名称并未正确加载出来"。
+ *
+ * 后端判定归类时本来就会去掉 ® / 空格 / 分隔符（所以分类一直是对的），
+ * 前端显示也得用同一套规则，否则"库里有这只苗"这件事两边说法不一致。
+ * **后端改了这里也要跟着改** —— 两边不一致会直接表现为"名字显示不出来"。
+ */
+export function normalizeProductName(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[®™©]/g, '')
+    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '')
+}
+
+/** 在目录里找这个名字对应的产品（归一化之后比），找不到回 null */
+export function findCatalogProduct<Product extends { name: string }>(
+  products: readonly Product[],
+  name: string,
+): Product | null {
+  const key = normalizeProductName(name)
+  if (!key) return null
+  return products.find((item) => normalizeProductName(item.name) === key) || null
+}

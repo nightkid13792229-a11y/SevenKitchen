@@ -181,11 +181,20 @@ describe('编辑卡 · 名称写完点「确认」才匹配产品与分类（202
 describe('编辑卡 · 名称那一行（2026-10-06 第二批）', () => {
   it('🔴 产品名比对前先归一化，® 和空格不影响认不认得出', () => {
     const source = readCard()
+    // 2026-10-12：这套规则**只有一份**了 ✓（原来卡片和板块各抄了一份 ✗）——
+    // 抽到 vaccine-record-types.ts ✓，两边都用它 ✓
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
 
-    expect(source).toContain('function normalizeProductName(')
+    expect(shared).toContain('export function normalizeProductName(')
     // 与后端 normalizeProductText 同一套规则，缺一不可
-    expect(source).toContain(".replace(/[®™©]/g, '')")
-    expect(source).toContain('function findCatalogProduct(')
+    expect(shared).toContain(".replace(/[®™©]/g, '')")
+    expect(shared).toContain('export function findCatalogProduct<')
+    // 卡片必须**真的在用它**（不是又抄一份 ✗）
+    expect(source).toContain('findCatalogProduct(')
+    expect(source).not.toContain('function normalizeProductName(')
     // 名称那一行必须走归一化比对，不能退回"一模一样才认"
     expect(source).toContain('function isNameRecognized(')
     expect(source).toContain('function nameFieldLabel(')
@@ -240,7 +249,7 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
     expect(source).toContain("const canonicalName = String(res.data.productName || '')")
     expect(source).toContain('draft.value.vaccineName = canonicalName')
     // 后端没给才退回前端这份比对
-    expect(source).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
+    expect(source).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(props.catalogProducts, name)')
   })
 
   it('三种状态：还没写 / 库里有 / 库里没有', () => {

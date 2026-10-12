@@ -348,7 +348,12 @@ class="vaccine-card"
 import { computed, ref } from 'vue'
 import { todayDateText } from '../../utils/date'
 import { dogApi } from '../../api/dogs'
-import type { VaccineDraft, VaccineRecord } from './vaccine-record-types'
+import {
+  findCatalogProduct,
+  normalizeProductName,
+  type VaccineDraft,
+  type VaccineRecord,
+} from './vaccine-record-types'
 
 /*
  * ── 接口约定（2026-10-12 第一步：先定义清楚再搬 ✓）────────────────────
@@ -544,33 +549,6 @@ function isNoneOfThem(): boolean {
   return draft.value.components.length === 0 && draft.value.kinds.includes('other')
 }
 
-/**
- * 产品名归一化 —— 规则与后端 `normalizeProductText` **逐条一致**。
- *
- * ⚠️ 2026-10-06 老板报的 bug 就出在这里：产品库下发的规范名是
- * 「宠必威幼犬保」，而疫苗本识别出来的是「宠必威® 幼犬保」。
- * 前端原来拿 `===` 比，比不中 → 名称那一行退回显示"从产品库选择"，
- * 识别出来的名字只能留在下面的手填输入框里 ——
- * 老板看到的就是"疫苗名称并未正确加载出来"。
- *
- * 后端判定归类时本来就会去掉 ® / 空格 / 分隔符（所以分类一直是对的），
- * 前端显示也得用同一套规则，否则"库里有这只苗"这件事两边说法不一致。
- * 后端改了这里也要跟着改 —— 两边不一致会直接表现为"名字显示不出来"。
- */
-function normalizeProductName(value: string): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[\s\u3000]+/g, '')
-    .replace(/[®™©]/g, '')
-    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '')
-}
-
-/** 在目录里找这个名字对应的产品（归一化之后比），找不到回 null */
-function findCatalogProduct(name: string) {
-  const key = normalizeProductName(name)
-  if (!key) return null
-  return props.catalogProducts.find((item) => normalizeProductName(item.name) === key) || null
-}
 
 /**
  * 这个名字在产品库里认不认得出（归一化之后比）。
@@ -578,7 +556,7 @@ function findCatalogProduct(name: string) {
  * 认得出 = 这一行显示规范名、并且**不出现**手填输入框。
  */
 function isNameRecognized(name: string): boolean {
-  return findCatalogProduct(name) !== null
+  return findCatalogProduct(props.catalogProducts, name) !== null
 }
 
 /**
@@ -623,7 +601,7 @@ function showConfirmButton(): boolean {
  *                  不是"这就是名字"），名字本身在下面的手填框里
  */
 function nameFieldLabel(name: string): string {
-  const matched = findCatalogProduct(name)
+  const matched = findCatalogProduct(props.catalogProducts, name)
   if (matched) return matched.name
   return showManualNameInput() ? '＋ 从产品库选一支' : '从产品库选择（进口 / 国产都有）'
 }
@@ -651,7 +629,7 @@ function showManualNameInput(): boolean {
   const name = draft.value.vaccineName.trim()
   if (!name) return true
   if (props.nameFocused) return true
-  return findCatalogProduct(name) === null
+  return findCatalogProduct(props.catalogProducts, name) === null
 }
 
 function setConfirmResult(ok: boolean, text: string) {
@@ -722,7 +700,7 @@ async function confirmVaccineName() {
       props.record.nameSuggestions = res.data.nameSuggestions.map(String)
     }
     const canonicalName = String(res.data.productName || '')
-    const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(name)
+    const matched = canonicalName ? { name: canonicalName } : findCatalogProduct(props.catalogProducts, name)
 
     // 后端认出来的病种回填到界面（顾客看到的是病种）
     if (Array.isArray(res.data.components)) {

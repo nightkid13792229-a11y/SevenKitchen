@@ -447,13 +447,21 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
     // 父组件也还留着一份 ✓（扫描去重要拿它比名字 ✓）—— 两处一起盯 ✓
     const source = readCard()
     const parent = readComponent()
+    // 2026-10-12：这套规则**只有一份**了 ✓（原来两边各一份 ✗）
+    const shared = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/vaccine-record-types.ts'),
+      'utf-8',
+    )
 
+    expect(shared).toContain('export function normalizeProductName(')
+    // 与后端 normalizeProductText 同一套规则，缺一不可
+    expect(shared).toContain(".replace(/[®™©]/g, '')")
+    // 两个文件都必须**真的在用它**、不许再各抄一份 ✗
     for (const file of [source, parent]) {
-      expect(file).toContain('function normalizeProductName(')
-      // 与后端 normalizeProductText 同一套规则，缺一不可
-      expect(file).toContain(".replace(/[®™©]/g, '')")
+      expect(file).toContain('normalizeProductName')
+      expect(file).not.toContain('function normalizeProductName(')
     }
-    expect(source).toContain('function findCatalogProduct(')
+    expect(source).toContain('findCatalogProduct(')
     // 名称那一行必须走归一化比对，不能退回"一模一样才认"
     expect(source).toContain('function isNameRecognized(')
     expect(source).toContain('function nameFieldLabel(')
@@ -684,7 +692,7 @@ describe('疫苗名称 · 用后端认出来的规范产品名（2026-10-06）',
     expect(card).toContain("const canonicalName = String(res.data.productName || '')")
     expect(card).toContain('draft.value.vaccineName = canonicalName')
     // 后端没给才退回前端这份比对
-    expect(card).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(name)')
+    expect(card).toContain('canonicalName ? { name: canonicalName } : findCatalogProduct(props.catalogProducts, name)')
   })
 
   it('认不出来时绝不硬塞名字（照旧显示顾客写的那串字）', () => {

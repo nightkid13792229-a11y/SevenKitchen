@@ -163,6 +163,57 @@ function collectTemplateLocals(template: string): Set<string> {
 }
 
 /**
+ * 收集"在**参数或变量**位置上绑定过的名字" ✓ —— 局部变量、函数参数、
+ * 解构出来的字段、`for (const x of …)`、`catch (e)` 都算 ✓。
+ *
+ * ⚠️ 为什么需要它 ✗（2026-10-12 抽卡片时撞上的误报 ✓）：
+ * 守卫的第 ② 条（`名字.`）会把**局部变量的属性访问**也算成"用了没定义的名字" ✗ ——
+ * 例如 `list.find((item) => …)` 里的 `list` 就是这一行的参数 ✓，照样报 ✗。
+ * 真正要拦的是 `dogApi.vaccinePlan(` ✗（`dogApi` 是 import 来的 ✓，
+ * 从来不会出现在这里 ✓），所以这个豁免**不会放过它** ✓。
+ *
+ * 判据故意取宽 ✓（宁可多豁免、不要误报 ✓）：误报的守卫会被人当成噪音关掉 ✗，
+ * 那比没有守卫更糟 ✗。所以这里只认"明显是绑定的位置" ✓。
+ */
+function collectBoundNames(text: string): Set<string> {
+  const bound = new Set<string>()
+  const add = (raw: string) => {
+    const name = raw.trim().replace(/^\.\.\./, '').split(':')[0].trim()
+    if (/^[A-Za-z_$][\w$]*$/.test(name)) bound.add(name)
+  }
+
+  // const / let / var NAME = …
+  for (const m of text.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[:=]/g)) {
+    add(m[1])
+  }
+  // const { a, b } = … / 参数解构 { a, b }
+  for (const m of text.matchAll(/\{([^{}]*)\}\s*=/g)) {
+    for (const piece of m[1].split(',')) add(piece)
+  }
+  // 函数参数：(a, b) => … / function f(a, b) { … } / (a, b): 返回类型 { … }
+  // ⚠️ 第三条不能漏 ✗ —— TS 函数可以带返回类型标注 ✓，
+  //    原来只写到 `\)\s*\{` ✗，`(products: …, name: …): Product | null {` 就抓不到 ✗
+  //    （这正是这次误报的根因 ✓）。
+  for (const m of text.matchAll(/\(([^()]*)\)\s*(?:=>|(?::[^{;=]*)?\{)/g)) {
+    for (const piece of m[1].split(',')) add(piece)
+  }
+  // for (const x of …) / catch (e) / .map((x) => …) 已由上面覆盖 ✓
+  // for…of / for…in 的绑定
+  for (const m of text.matchAll(/for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
+    add(m[1])
+  }
+  // catch (e)
+  for (const m of text.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) {
+    add(m[1])
+  }
+  // .then((x) => …) 这类箭头函数单参数（无括号）
+  for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\s*=>/g)) {
+    add(m[1])
+  }
+  return bound
+}
+
+/**
  * 把一段文本里"用到了一个名字、但这个名字在本文件里找不到"的地方抠出来。
  *
  * 两类都要查 ✓（这是吃过教训的 ✗）：
@@ -172,12 +223,32 @@ function collectTemplateLocals(template: string): Set<string> {
  * ⚠️ 只查 ① 是不够的 ✗：我第一版只查了 ①，然后**故意删掉 `dogApi` 的导入**去试，
  *    守卫居然**过了** ✗ —— 因为 `dogApi` 后面跟的是 `.` 而不是 `(` ✓。
  *    一个拦不住真实错误的守卫，比没有守卫更糟 ✗（会让人以为有保护 ✓）。
+ *
+ * ⚠️⚠️ 2026-10-12 修一处**误报**（抽卡片收尾时撞上的 ✗）：
+ *    ② 原来对**所有** `名字.` 一视同仁 ✓，于是**局部变量**的属性访问
+ *    也被算成"用了没定义的名字" ✗ —— 例如共用函数里
+ *    `list.find((item) => …)` 里的 `list` 是个参数 ✓，照样报 ✗。
+ *    ① 那边其实已经豁免了局部名 ✓（`record` 里那个 `locals.has` ✓），
+ *    ② 这边漏了同一道豁免 ✗ —— 两边口径不一致 ✓。
+ *    现在补上：**在函数参数/变量位置上绑定过的名字，不算"没定义"** ✓
+ *    （`boundNames` ✓）。真正要拦的 `dogApi.vaccinePlan(` ✗ 一点不受影响 ✓ ——
+ *    `dogApi` 是 import 进来的 ✓，从来不在绑定集合里 ✓。
  */
-function collectCalled(text: string, defined: Set<string>, locals: Set<string>): Map<string, number> {
+function collectCalled(
+  text: string,
+  defined: Set<string>,
+  locals: Set<string>,
+  boundNames: Set<string>,
+): Map<string, number> {
   const called = new Map<string, number>()
 
-  const record = (name: string, index: number) => {
+  const record = (name: string, index: number, form: 'call' | 'access') => {
     if (BUILTINS.has(name) || defined.has(name) || locals.has(name)) return
+    /*
+     * ② 点号访问这一路：**局部绑定过的名字**直接放行 ✓ ——
+     * 它已经"有定义"了（就在这一行上面绑的 ✓），只是不在顶层 defined 里 ✓。
+     */
+    if (form === 'access' && boundNames.has(name)) return
     const before = text.slice(Math.max(0, index - 1), index)
     if (before === '.' || before === "'" || before === '"' || before === '`') return
     called.set(name, (called.get(name) || 0) + 1)
@@ -185,11 +256,11 @@ function collectCalled(text: string, defined: Set<string>, locals: Set<string>):
 
   // ① 直接调用：名字(
   for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
-    record(m[1], m.index)
+    record(m[1], m.index, 'call')
   }
   // ② 点号访问：名字.
   for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\./g)) {
-    record(m[1], m.index)
+    record(m[1], m.index, 'access')
   }
   return called
 }
@@ -234,7 +305,7 @@ describe('提交前守卫 · 不许"调用了却没有定义"（2026-10-12 老�
        * 而模板那一类错（`recordCard` 漏定义 ✗）已经有
        * template-bindings.regression.spec.ts 专门盯着 ✓（它今天确实逮住过 ✓）。
        */
-      const inScript = collectCalled(code, defined, locals)
+      const inScript = collectCalled(code, defined, locals, collectBoundNames(code))
 
       for (const [name, count] of inScript) {
         problems.push(

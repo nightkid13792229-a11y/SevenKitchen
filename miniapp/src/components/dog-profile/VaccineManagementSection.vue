@@ -200,7 +200,11 @@ import HealthDocumentScan from './HealthDocumentScan.vue'
 // 一条记录的**编辑卡**（2026-10-12 第一步：从本文件抽成独立组件）
 import VaccineRecordCard from './VaccineRecordCard.vue'
 // 记录 / 草稿的形状两个文件共用一份（复制一份迟早对不上 ✗）
-import type { VaccineDraft, VaccineRecord } from './vaccine-record-types'
+import {
+  normalizeProductName,
+  type VaccineDraft,
+  type VaccineRecord,
+} from './vaccine-record-types'
 
 
 const props = defineProps<{
@@ -391,33 +395,6 @@ async function loadVaccineCatalog() {
   }
 }
 
-/**
- * 产品名归一化 —— 规则与后端 `normalizeProductText` **逐条一致**。
- *
- * ⚠️ 2026-10-06 老板报的 bug 就出在这里：产品库下发的规范名是
- * 「宠必威幼犬保」，而疫苗本识别出来的是「宠必威® 幼犬保」。
- * 前端原来拿 `===` 比，比不中 → 名称那一行退回显示"从产品库选择"，
- * 识别出来的名字只能留在下面的手填输入框里 ——
- * 老板看到的就是"疫苗名称并未正确加载出来"。
- *
- * 后端判定归类时本来就会去掉 ® / 空格 / 分隔符（所以分类一直是对的），
- * 前端显示也得用同一套规则，否则"库里有这只苗"这件事两边说法不一致。
- * 后端改了这里也要跟着改 —— 两边不一致会直接表现为"名字显示不出来"。
- *
- * ⚠️ 2026-10-12 第一步（抽卡片）之后：这段在 VaccineRecordCard.vue 里
- * **也有一份** ✓（卡片要拿它认产品库 ✓）。两份必须保持一致 ✓ ——
- * 上面那句"后端改了这里也要跟着改"现在要**改两个地方** ✗。
- * 先留两份是因为这一趟只搬家、不改结构 ✗；真正会咬人的不一致只有一种：
- * 一边认得出、另一边认不出 → 手填框和名称行打架 ✗。
- * 所以哪次动了这里，另一份一起动 ✓（这里只剩"扫描去重"在用 ✓）。
- */
-function normalizeProductName(value: string): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[\s\u3000]+/g, '')
-    .replace(/[®™©]/g, '')
-    .replace(/[·・\-_/\\、,，.。．()（）【】\[\]]/g, '')
-}
 
 
 /**

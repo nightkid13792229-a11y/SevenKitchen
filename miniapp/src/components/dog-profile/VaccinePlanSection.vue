@@ -13,6 +13,7 @@
   -->
   <view v-if="!sectionHidden" class="health-section vaccine-plan">
     <view class="plan-head">
+      <view class="plan-head__bar" />
       <text class="plan-head__title">疫苗接种计划</text>
       <text class="plan-head__hint">每一类只提醒下一针；从近到远</text>
     </view>
@@ -1153,4 +1154,106 @@ defineExpose({ reload: () => load() })
 /* 鱼头：今天 + 要打哪一类 */
 /* 鱼骨图相关样式已随 2026-10-11 改版删除 ✓（纯函数 utils/vaccine-fishbone.ts 保留，仍有自己的单测 ✓） */
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   疫苗接种计划 · 视觉（2026-10-12 老板："UI 太简陋了"）
+
+   口径：**计划 = 绿色系** ✓、**记录 = 紫色系** ✓（那个板块在另一个文件里）
+   —— 两个板块放在同一页，颜色就是最省事的区分 ✓。
+   ⚠️ 上一版我把卡片样式跟鱼骨图样式一起删掉了 ✗，所以页面上是一堆裸文字 ✓
+      （老板截图看出来的 ✓）—— 这次连注释一起留下，别再被顺手删掉 ✓。
+   ══════════════════════════════════════════════════════════════════════ */
+.vaccine-plan {
+  margin: 20rpx 0 0;
+  padding: 24rpx 22rpx 18rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(180deg, #f2faf5 0%, #ffffff 46%);
+  border: 1rpx solid #d5e9dd;
+}
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 0 2rpx 4rpx;
+}
+.plan-head__bar {
+  width: 8rpx;
+  height: 30rpx;
+  border-radius: 4rpx;
+  background: #0f7b49;
+}
+.plan-head__title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #12503a;
+}
+.plan-head__hint {
+  margin-left: auto;
+  font-size: 22rpx;
+  color: #7d9a8a;
+}
+
+.kind-card {
+  margin-top: 16rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  border: 1rpx solid #e2efe7;
+  box-shadow: 0 2rpx 10rpx rgba(15, 123, 73, 0.06);
+  overflow: hidden;
+}
+.kind-card__head {
+  position: relative;
+  padding: 22rpx 24rpx 22rpx 28rpx;
+}
+/* 左边那道绿色竖条：一眼看出"这是计划里的哪一类" ✓ */
+.kind-card__head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20rpx;
+  bottom: 20rpx;
+  width: 8rpx;
+  border-radius: 0 6rpx 6rpx 0;
+  background: #0f7b49;
+}
+.kind-card__line {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.kind-card__kind {
+  font-size: 31rpx;
+  font-weight: 600;
+  color: #14352a;
+}
+.kind-card__badge {
+  padding: 3rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #0f7b49;
+  background: #e7f5ec;
+  border: 1rpx solid #c9e7d5;
+}
+.kind-card__badge--DONE {
+  color: #6b7a70;
+  background: #f0f3f1;
+  border-color: #e0e6e2;
+}
+.kind-card__toggle {
+  margin-left: auto;
+  font-size: 24rpx;
+  color: #0f7b49;
+}
+.kind-card__time {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 25rpx;
+  color: #5c6b62;
+}
+.kind-card__body {
+  padding: 6rpx 24rpx 22rpx;
+  border-top: 1rpx solid #eef4f0;
+  background: #fbfdfc;
+}
 </style>

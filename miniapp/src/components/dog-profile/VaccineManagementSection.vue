@@ -2774,4 +2774,33 @@ async function doRemove(record: VaccineRecord) {
   color: #0f7b49;
   font-size: 26rpx;
 }
+
+/* ── 接种记录板块：**紫色系**（2026-10-12 老板："两个板块要能一眼区分"）──
+   计划板块是绿系 ✓（在 VaccinePlanSection.vue 里），这里用紫系 ✓ ——
+   同一页上两种颜色，家长一眼就知道"上面是接下来要打的、下面是我打过的" ✓。 */
+.records-card {
+  border-radius: 18rpx;
+  border: 1rpx solid #e4e0f2;
+  background: linear-gradient(180deg, #f8f6ff 0%, #ffffff 40%);
+}
+.records-card__head {
+  padding-bottom: 12rpx;
+  border-bottom: 1rpx solid #f0eefb;
+}
+.records-card__title {
+  color: #4a3f6b;
+}
+.records-card__title::before {
+  content: '';
+  display: inline-block;
+  width: 8rpx;
+  height: 26rpx;
+  margin-right: 12rpx;
+  border-radius: 4rpx;
+  background: #7c6bd6;
+  vertical-align: -3rpx;
+}
+.records-card__count {
+  color: #7c6bd6;
+}
 </style>

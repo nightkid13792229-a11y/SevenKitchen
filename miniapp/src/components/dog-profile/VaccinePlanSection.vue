@@ -33,16 +33,21 @@
              现在：字段名固定「免疫流程」✓，疫苗类别放到**右边**的值里 ✓。 -->
         <view v-for="step in card.steps" :key="step.key" class="kv">
           <text class="kv__label">免疫流程</text>
-          <text class="kv__value">
-            <template v-if="card.steps.length > 1">{{ step.kindLabel }} · </template>{{ step.label }}
-          </text>
+          <view class="kv__value">
+            <text>
+              <template v-if="card.steps.length > 1">{{ step.kindLabel }} · </template>{{ step.label }}
+            </text>
+            <text v-if="card.steps.length > 1" class="kv__sub">
+              建议接种时间 {{ step.windowStart }} ~ {{ step.windowEnd }}
+            </text>
+          </view>
         </view>
         <view v-if="card.steps[0].matchedRecordDate" class="kv">
           <text class="kv__label">接种时间</text>
           <text class="kv__value">{{ card.steps[0].matchedRecordDate }}</text>
         </view>
         <view v-if="card.products.length > 0" class="kv">
-          <text class="kv__label">常见的有</text>
+          <text class="kv__label">常见疫苗</text>
           <text class="kv__value">{{ card.products.join('、') }}</text>
         </view>
         <view class="kv">
@@ -490,10 +495,22 @@ const kindCards = computed<PlanCard[]>(() => {
   for (const step of pending) {
     const start = String(step.windowStart || '')
     const end = String(step.windowEnd || '')
+    /*
+     * 能不能并进这张卡：**必须"有一支苗同时覆盖这几类"** ✓（老板 2026-10-12 第 1 条）
+     *
+     * 老板："我们合并核心疫苗和钩端螺旋体，是因为在同一个产品中覆盖这两类。
+     *        你说的三类合并依据是什么呢？为什么要合并三类疫苗呢？
+     *        只是因为狗狗没有注射，它们在同一个窗口期，我们就合并吗？不是这样的。"
+     * —— 对 ✗。上一版我只按"窗口有交集"就合并 ✗（于是零记录的老狗
+     *    三项被并成一张卡 ✗ —— 现实里根本没有一支苗同时覆盖核心+钩端+狂犬 ✗）。
+     * 现在两个条件都要满足 ✓：窗口有交集 ✓ **且** 两边推荐里有共同的那支（联苗 ✓）。
+     */
+    const mine = stepProducts(step)
     const target = cards.find((card) => {
       const overlapStart = start > card.windowStart ? start : card.windowStart
       const overlapEnd = end < card.windowEnd ? end : card.windowEnd
-      return overlapStart <= overlapEnd
+      if (overlapStart > overlapEnd) return false
+      return card.products.some((name) => mine.includes(name))
     })
 
     if (!target) {
@@ -515,7 +532,6 @@ const kindCards = computed<PlanCard[]>(() => {
     target.kinds.push(step.kind)
     target.steps.push(step)
     target.title = target.steps.map((item) => item.kindLabel).join(' + ')
-    const mine = stepProducts(step)
     const combo = target.products.filter((name) => mine.includes(name))
     target.comboProducts = combo
     target.products = [...combo, ...[...target.products, ...mine].filter((n) => !combo.includes(n))]
@@ -1400,6 +1416,12 @@ defineExpose({ reload: () => load() })
 .kind-card__toggle { margin-left: auto; font-size: 24rpx; color: #0f7b49; }
 .kind-card__time { display: block; margin-top: 10rpx; font-size: 25rpx; color: #5c6b62; }
 .kind-card__body { padding: 6rpx 24rpx 22rpx; border-top: 1rpx solid #eef4f0; background: #fbfdfc; }
+.kv__sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 23rpx;
+  color: #8a9a92;
+}
 .merge-note {
   display: block;
   margin: 10rpx 0 16rpx;

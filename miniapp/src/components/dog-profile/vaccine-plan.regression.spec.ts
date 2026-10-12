@@ -555,3 +555,37 @@ describe('疫苗计划 · 零记录不许再藏第二道（2026-10-11）', () =>
     expect(tpl.includes('<template v-if="!noRecordAtAll"')).toBe(false)
   })
 })
+
+/**
+ * ⚠️ 合并的唯一理由：**有一支苗同时覆盖这几类**（老板 2026-10-12 第 1 条）
+ *
+ * 老板："我们合并核心疫苗和钩端螺旋体，是因为在同一个产品中覆盖这两类。
+ *        你说的三类合并依据是什么呢？为什么要合并三类疫苗呢？
+ *        只是因为狗狗没有注射，它们在同一个窗口期，我们就合并吗？不是这样的。"
+ * —— 上一版只按"窗口有交集"就合并 ✗（零记录的老狗三项被并成一张卡 ✗，
+ *    而现实里没有一支苗同时覆盖核心+钩端+狂犬 ✗）。
+ */
+describe('计划卡 · 合并的条件（2026-10-12）', () => {
+  const source = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+  it('窗口有交集 **且** 两边有共同推荐的产品，才合并', () => {
+    const text = source()
+
+    expect(text).toContain('.some((name) => mine.includes(name))')
+    expect(text).toContain('if (overlapStart > overlapEnd) return false')
+  })
+
+  it('合并卡里每一步都写清自己的建议接种时间（交集窗口可能比某一步晚 ✗）', () => {
+    const text = source()
+
+    expect(text).toContain('建议接种时间 {{ step.windowStart }} ~ {{ step.windowEnd }}')
+  })
+
+  it('字段名是「常见疫苗」（老板 2026-10-12 改的文案）', () => {
+    expect(source()).toContain('常见疫苗')
+  })
+})

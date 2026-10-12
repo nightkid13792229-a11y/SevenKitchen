@@ -23,8 +23,10 @@
       </view>
 
       <view v-if="expandedKind === card.key" class="kind-card__body">
+        <!-- 老板 2026-10-12 的新方案：拆开成两张卡 ✓，但互相提示可以选联苗 ✓ -->
         <text v-if="card.comboProducts.length > 0" class="merge-note">
-          这两类可以打一针联苗（{{ card.comboProducts.join('、') }}）一次覆盖；也可以分成两针打，间隔 2~3 天。
+          也可以选含这两类的联苗（{{ card.comboProducts.join('、') }}）—— 一针同时覆盖，
+          那一类就不用再单独打了；如果分开打两种苗，请错开 2~3 天。
         </text>
 
         <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
@@ -483,19 +485,20 @@ function toggleKind(kind: string) {
 }
 
 /**
- * 计划卡（2026-10-12 老板选的合并方案）
+ * 计划卡（2026-10-12 老板最终定的方案：**拆开，但互相提示**）
  *
- * 老板第 3 问："在 8 周龄后的第二、三、四针核心疫苗的首免程序里，
- * 到底单独提醒核心疫苗和钩端螺旋体，还是合并提醒呢？单独提醒的话，
- * 用户端可能会有困惑 —— 为什么核心疫苗里提醒我打卫佳捌，
- * 钩端螺旋体还要提醒我打一次卫佳捌，而且时间都一致。"
- * —— 合并 ✓（他选了这个方案 ✓）。
+ * 走过的弯路 ✗：先按"窗口重合就合并"✗ → 老板指出两个问题：
+ *   ① "我们合并核心疫苗和钩端螺旋体，是因为在同一个产品中覆盖这两类。
+ *      你说的三类合并依据是什么呢？"（→ 改成"必须有共同产品才合并"✓）
+ *   ② "但是合并的话，就意味着我们给用户推荐的常用疫苗，不能再用四联核心疫苗了，
+ *      因为它就不符合核心疫苗加钩端螺旋体的合并属性了。"
+ *      —— 对 ✓：合并卡上只能推"两边都有的那支（联苗）"✗，
+ *      纯核心的四联苗（卫佳伍 / 优免康）就不好出现了 ✗。
  *
- * 规则：
- *   · 取"未完成"的步骤（后端已保证**每一类只出一条**✓），按窗口起点由近到远 ✓
- *   · **窗口有重叠的两类合成一张卡** ✓，重叠区间取**交集** ✓（两针都该打的那些天 ✓）
- *   · 合并卡的产品：**两边都推荐的那支（联苗）排最前** ✓，其余补齐 ✓（最多 3 支 ✓）
- *   · 只有真的存在"一支覆盖两类"的产品时，才说"可以一针一起打"✓（否则那句话是错的 ✗）
+ * 最终方案（老板提的 ✓）：**一类一张卡拆开** ✓，
+ * 但两张卡**互相告诉对方**："也可以打含两类的联苗，一针覆盖" ✓。
+ * 好处：纯核心苗与联苗**都在推荐里** ✓（用户自己选 ✓），
+ *      而且**后端不用改** ✓（后端本来就是按类下发的 ✓）。
  */
 interface PlanCard {
   key: string
@@ -508,63 +511,55 @@ interface PlanCard {
   comboProducts: string[]
 }
 
+/** 两张卡的窗口算不算"差不多同时"（相差 45 天内就算 ✓）*/
+const SIBLING_WINDOW_DAYS = 45
+
+function daysBetween(a: string, b: string): number {
+  const left = new Date(`${a}T00:00:00Z`).getTime()
+  const right = new Date(`${b}T00:00:00Z`).getTime()
+  if (Number.isNaN(left) || Number.isNaN(right)) return Number.MAX_SAFE_INTEGER
+  return Math.abs(left - right) / 86400000
+}
+
 const kindCards = computed<PlanCard[]>(() => {
-  const pending = visibleSteps.value
+  return visibleSteps.value
     .filter((step) => step.status !== 'DONE')
     .slice()
     .sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))
-
-  const cards: PlanCard[] = []
-  for (const step of pending) {
-    const start = String(step.windowStart || '')
-    const end = String(step.windowEnd || '')
-    /*
-     * 能不能并进这张卡：**必须"有一支苗同时覆盖这几类"** ✓（老板 2026-10-12 第 1 条）
-     *
-     * 老板："我们合并核心疫苗和钩端螺旋体，是因为在同一个产品中覆盖这两类。
-     *        你说的三类合并依据是什么呢？为什么要合并三类疫苗呢？
-     *        只是因为狗狗没有注射，它们在同一个窗口期，我们就合并吗？不是这样的。"
-     * —— 对 ✗。上一版我只按"窗口有交集"就合并 ✗（于是零记录的老狗
-     *    三项被并成一张卡 ✗ —— 现实里根本没有一支苗同时覆盖核心+钩端+狂犬 ✗）。
-     * 现在两个条件都要满足 ✓：窗口有交集 ✓ **且** 两边推荐里有共同的那支（联苗 ✓）。
-     */
-    const mine = stepProducts(step)
-    const target = cards.find((card) => {
-      const overlapStart = start > card.windowStart ? start : card.windowStart
-      const overlapEnd = end < card.windowEnd ? end : card.windowEnd
-      if (overlapStart > overlapEnd) return false
-      return card.products.some((name) => mine.includes(name))
+    .map((step) => ({
+      key: step.kind,
+      kinds: [step.kind],
+      title: step.kindLabel,
+      steps: [step],
+      windowStart: String(step.windowStart || ''),
+      windowEnd: String(step.windowEnd || ''),
+      products: stepProducts(step),
+      comboProducts: [] as string[],
+    }))
+    .map((card) => {
+      /*
+       * 这一张卡和**别的类**之间有没有"一支苗覆盖两类"的可能 ✓（老板要的那句提示 ✓）。
+       * 两个条件都要满足 ✓：
+       *   ① 有共同推荐的产品 ✓（例：核心与钩端都有卫佳捌 ✓）
+       *   ② 两类的时间差不多 ✓（相差 45 天内 ✓）—— 差太远时提示"可以一起打"是废话 ✗
+       */
+      const siblings = visibleSteps.value.filter(
+        (other) =>
+          other.status !== 'DONE' &&
+          other.kind !== card.key &&
+          daysBetween(other.windowStart, card.windowStart) <= SIBLING_WINDOW_DAYS,
+      )
+      const combo: string[] = []
+      for (const other of siblings) {
+        for (const name of stepProducts(other)) {
+          if (card.products.includes(name) && !combo.includes(name)) combo.push(name)
+        }
+      }
+      return { ...card, comboProducts: combo }
     })
-
-    if (!target) {
-      cards.push({
-        key: step.kind,
-        kinds: [step.kind],
-        title: step.kindLabel,
-        steps: [step],
-        windowStart: start,
-        windowEnd: end,
-        products: stepProducts(step),
-        comboProducts: [],
-      })
-      continue
-    }
-
-    target.windowStart = start > target.windowStart ? start : target.windowStart
-    target.windowEnd = end < target.windowEnd ? end : target.windowEnd
-    target.kinds.push(step.kind)
-    target.steps.push(step)
-    target.title = target.steps.map((item) => item.kindLabel).join(' + ')
-    const combo = target.products.filter((name) => mine.includes(name))
-    target.comboProducts = combo
-    target.products = [...combo, ...[...target.products, ...mine].filter((n) => !combo.includes(n))]
-      .filter((name, index, all) => all.indexOf(name) === index)
-      .slice(0, 3)
-  }
-  return cards
 })
 
-/** 合并卡的「记录接种信息」：把**所有**合并进来的分类一起带过去 ✓ */
+/** 卡片的「记录接种信息」：把这一类的分类带过去 ✓ */
 function recordCard(card: PlanCard) {
   emit('record-step', {
     kinds: card.kinds,

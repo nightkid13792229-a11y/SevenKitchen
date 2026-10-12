@@ -565,27 +565,27 @@ describe('疫苗计划 · 零记录不许再藏第二道（2026-10-11）', () =>
  * —— 上一版只按"窗口有交集"就合并 ✗（零记录的老狗三项被并成一张卡 ✗，
  *    而现实里没有一支苗同时覆盖核心+钩端+狂犬 ✗）。
  */
-describe('计划卡 · 合并的条件（2026-10-12）', () => {
+describe('计划卡 · 拆开成两类，但互相提示可以选联苗（老板 2026-10-12 最终方案）', () => {
   const source = () =>
     readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
       'utf-8',
     )
 
-  it('窗口有交集 **且** 两边有共同推荐的产品，才合并', () => {
+  it('一类一张卡（不再合并成一张 ✗）', () => {
     const text = source()
 
-    expect(text).toContain('.some((name) => mine.includes(name))')
-    expect(text).toContain('if (overlapStart > overlapEnd) return false')
+    expect(text).toContain('key: step.kind,')
+
+    expect(text.includes("target.title = target.steps.map")).toBe(false)
   })
 
-  it('合并卡里每一步都写清自己的建议接种时间（交集窗口可能比某一步晚 ✗）', () => {
+  it('两张卡互相提示：可以选含两类的联苗，也可以分开打', () => {
     const text = source()
 
-    expect(text).toContain('建议接种时间 {{ step.windowStart }} ~ {{ step.windowEnd }}')
-  })
-
-  it('字段名是「常见疫苗」（老板 2026-10-12 改的文案）', () => {
-    expect(source()).toContain('常见疫苗')
+    expect(text).toContain('也可以选含这两类的联苗')
+    expect(text).toContain('请错开 2~3 天')
+    // 必须有共同产品、且时间相近才提示 ✓（差太远时提示"可以一起打"是废话 ✗）
+    expect(text).toContain('SIBLING_WINDOW_DAYS')
   })
 })

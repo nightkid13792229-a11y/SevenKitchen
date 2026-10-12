@@ -106,7 +106,8 @@ describe('疫苗记录 · 改分类能存进去', () => {
     // 这条的疫苗名是「幼犬保」，按名字判会得到早期核心疫苗；
     // 顾客手改之后必须以他为准 —— 否则他会觉得"又变回去了"
     expect(result.kinds).toEqual(['core']);
-    expect(result.kindLabels).toEqual(['核心疫苗']);
+    // 2026-10-12 老板改的文案：核心疫苗 → 带括号的全称 ✓
+    expect(result.kindLabels).toEqual(['核心疫苗（犬瘟、细小、腺病毒）']);
   });
 
   it('顾客自己选的分类压在名字判定之上（名字不改也能改分类）', async () => {

@@ -46,7 +46,8 @@ describe('疫苗计划 · 界面', () => {
     // 已完成的步骤不给按钮（否则"已经打完了还给记录/忽略"很奇怪）
     // 2026-10-12：列表里只有"未完成"的卡 ✓，所以动作按钮不必再加 v-if ✓
     expect(section).toContain('class="step-actions"')
-    expect(section).toContain('@tap.stop="recordCard(card)"')
+    // 2026-10-12 老板：点了要**在这张卡下面**展开录入窗口 ✓（不再直接开草稿 ✗）
+    expect(section).toContain('@tap.stop="openEditor(card)"')
     expect(section).toContain('@tap.stop="ignoreCard(card)"')
     // 老的三个按钮彻底下线
     expect(section).not.toContain("label: '按建议'")

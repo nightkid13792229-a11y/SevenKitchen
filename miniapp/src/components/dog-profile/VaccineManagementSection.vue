@@ -664,6 +664,8 @@ defineExpose({
   /** 识别结果还没确认的有几条（离开页面要拦一下，2026-10-08） */
   unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0,
   addRecord,
+  /** 计划卡里刚保存了一针 → 让页面喊我重新取数 ✓（2026-10-12）*/
+  reload: loadRecords,
   /** 切标签/离开页面时把等待中的自动保存立刻执行（2026-10-03） */
   flushAutoSaves,
   /**

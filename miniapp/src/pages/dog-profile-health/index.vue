@@ -156,6 +156,7 @@
             :birthday="form.birthday"
             :data-version="vaccineDataVersion"
             @record-step="onPlanRecordStep"
+            @record-saved="onPlanRecordSaved"
             @pending-changed="vaccinePlanPending = $event"
           />
           <VaccineManagementSection
@@ -314,19 +315,16 @@ function onVaccineRecordsChanged() {
  * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
  */
 function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
-  vaccineSectionRef.value?.addRecord?.({ kinds: payload.kinds })
+  // ⚠️ 2026-10-12 老板："不要提示，能不能做到在该条任务计划下展开录入窗口？"
+  // —— 录入窗口已经挪进**计划卡内部**了 ✓（VaccinePlanSection 的 inline-editor ✓），
+  //    这里不再代它开草稿 ✗（否则会同时冒出两条 ✗）。
+  //    保留这个处理函数是为了兼容"以后还想从计划带分类去记录板块"的情况 ✓。
+  void payload
+}
 
-  /*
-   * ⚠️ 老板 2026-10-12："在每一道计划里面，点击记录接种信息之后，
-   *    应该跳转到记录信息的窗口，而不是留在原处。不然用户会以为自己没有点上。"
-   *
-   * 实测（开发者工具 ✓）：点下去**确实开出了草稿**（记录卡 3 张 → 4 张 ✓），
-   * 但**页面没有滚动** ✗（滚动位置一直是 0 ✓）→ 草稿在屏幕外 ✓，
-   * 家长看到的和"没点上"一模一样 ✗。
-   * 所以这里先补一句**看得见的反馈** ✓（滚动这条路在小程序里不稳 ✓，
-   * 我不能把"用户知道发生了什么"压在它身上 ✗）。
-   */
-  uni.showToast({ title: '已在下方打开新增记录，请填写', icon: 'none', duration: 2000 })
+/** 计划卡里保存成功 → 让记录板块重新取数 ✓（用户要能在下方看到它 ✓）*/
+function onPlanRecordSaved() {
+  vaccineSectionRef.value?.reload?.()
 }
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)

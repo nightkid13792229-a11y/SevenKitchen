@@ -94,9 +94,49 @@
           {{ card.steps[0].spacingNote }}
         </text>
 
-        <view class="step-actions">
-          <text class="step-actions__primary" @tap.stop="recordCard(card)">记录接种信息</text>
+        <!-- 动作：① 展开**这张卡自己的录入窗口** ✓ ② 忽略 ✓ -->
+        <view v-if="editorKind !== card.key" class="step-actions">
+          <text class="step-actions__primary" @tap.stop="openEditor(card)">记录接种信息</text>
           <text class="step-actions__ghost" @tap.stop="ignoreCard(card)">忽略</text>
+        </view>
+
+        <!--
+          ⚠️ 录入窗口**就在这条计划下面** ✓（老板 2026-10-12）：
+          "能不能做到在该条任务计划下展开录入窗口？保存后关闭并提示可在疫苗接种记录板块中查看。"
+          —— 原来点了只在**下方记录板块**里默默开一条草稿 ✗（实测：草稿确实开了 ✓，
+             但页面不滚动 ✗ → 家长看着像没点上 ✗）。
+          现在：就在卡片里填 ✓，保存后自动收起 ✓，并提示去下方记录板块查看 ✓。
+        -->
+        <view v-if="editorKind === card.key" class="inline-editor">
+          <view class="inline-editor__row">
+            <text class="inline-editor__label">疫苗名称</text>
+            <input
+              class="inline-editor__input"
+              :value="editorName"
+              placeholder="例如：卫佳伍"
+              :focus="false"
+              @input="editorName = $event.detail.value"
+            />
+          </view>
+          <view class="inline-editor__row">
+            <text class="inline-editor__label">接种日期</text>
+            <picker
+              mode="date"
+              :value="editorDate"
+              :end="todayDateText()"
+              @change="editorDate = $event.detail.value"
+            >
+              <view class="inline-editor__picker">{{ editorDate || '请选择接种日期' }}</view>
+            </picker>
+          </view>
+          <view class="inline-editor__actions">
+            <text
+              class="step-actions__primary"
+              :class="{ 'step-actions__primary--busy': editorSaving }"
+              @tap.stop="saveInlineRecord(card)"
+            >{{ editorSaving ? '保存中…' : '保存' }}</text>
+            <text class="step-actions__ghost" @tap.stop="closeEditor">取消</text>
+          </view>
         </view>
       </view>
     </view>
@@ -260,6 +300,8 @@ const emit = defineEmits<{
   (event: 'record-step', payload: { kinds: string[]; stepLabel: string }): void
   /** 把"每一类的下一针"报给页面 —— 顶部那条到期提醒用它（2026-10-07 老板定） */
   (event: 'pending-changed', pending: PlanPending[]): void
+  /** 卡内录入保存成功 → 页面去刷新记录板块（2026-10-12）*/
+  (event: 'record-saved'): void
 }>()
 
 /** 下一针（后端算好；忽略掉的步骤后端已经排除在 nextStep 之外） */
@@ -605,12 +647,81 @@ const kindCards = computed<PlanCard[]>(() => {
     })
 })
 
-/** 卡片的「记录接种信息」：把这一类的分类带过去 ✓ */
-function recordCard(card: PlanCard) {
-  emit('record-step', {
-    kinds: card.kinds,
-    stepLabel: card.steps.map((step) => step.label).join(' / '),
-  })
+/*
+ * ── 卡内录入（老板 2026-10-12）────────────────────────────────────────
+ *
+ * 老板："不要提示，能不能做到在该条任务计划下展开录入窗口？
+ *        保存后关闭并提示可在疫苗接种记录板块中查看。"
+ *
+ * 所以：点击 → **就在这张卡下面**展开录入 ✓（疫苗名 + 日期 ✓，
+ * 类别按这张卡带过去 ✓，不用顾客再选一次 ✓）；
+ * 保存 → 调同一套记录接口 ✓ → 收起 ✓ → 提示去下方记录板块查看 ✓。
+ */
+const editorKind = ref('')
+const editorName = ref('')
+const editorDate = ref('')
+const editorSaving = ref(false)
+
+/** 这一类的默认成分（后端按成分推导类别 ✓，缺了它记录进不了计划 ✗）*/
+const KIND_COMPONENTS: Record<string, string[]> = {
+  core_early: ['cdv', 'cpv'],
+  core: ['cdv', 'cpv', 'cav'],
+  lepto: ['lepto'],
+  rabies: ['rabies'],
+}
+
+function openEditor(card: PlanCard) {
+  editorKind.value = card.key
+  editorName.value = ''
+  editorDate.value = todayDateText()
+  expandedKind.value = card.key
+}
+
+function closeEditor() {
+  editorKind.value = ''
+  editorName.value = ''
+  editorSaving.value = false
+}
+
+/** 保存这一针 ✓（成功后收起 + 让页面刷新计划与记录 ✓）*/
+async function saveInlineRecord(card: PlanCard) {
+  if (editorSaving.value) return
+  const name = editorName.value.trim()
+  if (!name) {
+    uni.showToast({ title: '请填写疫苗名称', icon: 'none' })
+    return
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(editorDate.value)) {
+    uni.showToast({ title: '请选择接种日期', icon: 'none' })
+    return
+  }
+
+  editorSaving.value = true
+  try {
+    const components = card.kinds.flatMap((kind) => KIND_COMPONENTS[kind] || [])
+    const res: any = await dogApi.healthRecords.vaccine.create(props.dogId, {
+      vaccineName: name,
+      vaccinationDate: editorDate.value,
+      status: 'COMPLETED',
+      notes: null,
+      components,
+      kinds: card.kinds,
+      productVerified: true,
+    } as never)
+    if (res && res.code !== 0) {
+      throw new Error(res.message || '保存失败')
+    }
+    closeEditor()
+    uni.showToast({ title: '已保存，可在下方接种记录中查看', icon: 'none', duration: 2200 })
+    await load()
+    emit('record-saved')
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error('[疫苗计划] 保存记录失败：', error?.message || error)
+    uni.showToast({ title: '保存失败，请稍后重试', icon: 'none' })
+  } finally {
+    editorSaving.value = false
+  }
 }
 
 /** 合并卡的「忽略」：这一类一类地忽略 ✓（每一类各自存一条决定 ✓）*/
@@ -1575,6 +1686,42 @@ defineExpose({ reload: () => load() })
   margin-top: 4rpx;
   font-size: 23rpx;
   color: #8a9a92;
+}
+.inline-editor {
+  margin-top: 16rpx;
+  padding: 18rpx 18rpx 16rpx;
+  border-radius: 12rpx;
+  background: #f4f8f5;
+  border: 1rpx solid #d9e9df;
+}
+.inline-editor__row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14rpx;
+}
+.inline-editor__label {
+  width: 150rpx;
+  font-size: 26rpx;
+  color: #4c6558;
+}
+.inline-editor__input,
+.inline-editor__picker {
+  flex: 1;
+  padding: 12rpx 16rpx;
+  border-radius: 10rpx;
+  background: #ffffff;
+  border: 1rpx solid #dfe9e3;
+  font-size: 27rpx;
+  color: #17332a;
+}
+.inline-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 4rpx;
+}
+.step-actions__primary--busy {
+  opacity: 0.6;
 }
 .merge-note {
   display: block;

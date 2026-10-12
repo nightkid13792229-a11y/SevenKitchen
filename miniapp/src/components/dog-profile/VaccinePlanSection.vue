@@ -101,7 +101,19 @@
       </view>
     </view>
 
-    <text v-if="kindCards.length === 0" class="plan-steps__empty">
+    <!--
+      ⚠️⚠️ 这里必须在**确认加载成功之后**才能说"都已完成" ✗（2026-10-12 老板截图为证）。
+      原来只判断 kindCards 是否为空 ✗ —— 数据**还没到**时它也是空的 ✓，
+      于是页面顶着「按现有记录，免疫程序里的项目都已完成」✗，
+      而接口明明返回了 3 条待办 ✗（老板："怎么会在计划里面显示，
+      所有的免疫程序都已经完成了呢？"）。
+      现在三分支：
+        · 还没加载出来 → 说"正在读取"（不替系统下结论 ✓）
+        · 加载失败 → 由下面的 loadError 卡说话 ✓
+        · 加载成功且确实没有待办 → 才说"都已完成"✓
+    -->
+    <text v-if="!loaded && !loadError" class="plan-steps__empty">正在读取接种计划…</text>
+    <text v-else-if="loaded && kindCards.length === 0" class="plan-steps__empty">
       按现有记录，免疫程序里的项目都已完成（或都被你忽略了）。
     </text>
     <text v-if="ignoredCount > 0" class="plan-steps__restore" @tap="restoreIgnored">

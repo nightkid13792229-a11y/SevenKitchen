@@ -624,3 +624,22 @@ describe('计划卡 · 窗口已过的显示口径（2026-10-12）', () => {
     expect(text).toContain('return end < getTodayDateString()')
   })
 })
+
+/**
+ * ⚠️ 「都已完成」必须**加载成功之后**才能说（老板 2026-10-12 截图）
+ *
+ * 老板："怎么会在计划里面显示，所有的免疫程序都已经完成了呢？"
+ * —— 接口明明返回 3 条待办 ✗。原因是空态判断只看了 kindCards 是否为空 ✗，
+ *    而**数据还没到**时它也是空的 ✓ → 页面就先替系统下了结论 ✗。
+ */
+describe('计划卡 · 不许在数据到达前说"都已完成"（2026-10-12）', () => {
+  it('加载中 → 说"正在读取"；只有 loaded 且确实为空才说"都已完成"', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('正在读取接种计划')
+    expect(source).toContain('v-else-if="loaded && kindCards.length === 0"')
+  })
+})

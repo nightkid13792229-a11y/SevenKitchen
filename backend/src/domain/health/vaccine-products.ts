@@ -693,6 +693,28 @@ export function findProductByText(name: string): VaccineProduct | null {
  * 说明书没写周龄的（minWeeks 为 null）**不排除** —— 我们没查到不等于不能用，
  * 只是不拿周龄当筛选条件。
  */
+/**
+ * 每一类疫苗的**起始周龄**（2026-10-12 老板第 2 问）。
+ *
+ * 老板："疫苗计划中第一针核心疫苗，常见疫苗推荐里面，为什么会有卫佳捌呢？
+ *        卫佳捌含有钩端螺旋体，在第一针来打卫佳捌的话，钩端螺旋体是不是
+ *        起不到什么作用呢？"
+ * —— 对 ✓。6 周龄打的那一针，核心部分有效 ✓，但**钩端部分没意义** ✗
+ *   （钩端首免要 8 周龄才起 ✓，我们自己的排期就是这么定的 ✓）。
+ * 原来的过滤只看"产品的最低周龄 ≤ 这一步的周龄"✗ —— 而卫佳捌的 minWeeks
+ * 是按**核心**那部分算的（6 周 ✓），于是它被推到了 6 周龄的首免第 1 针里 ✗。
+ *
+ * 现在改成：**产品覆盖的每一类，都要各自满足它自己的起始周龄** ✓。
+ * ⚠️ 这几个数字必须与 immunization-schedule.ts 里的排期保持一致 ✓
+ * （有测试钉着 ✓ —— 那两处不一致过一次就够受了 ✗）。
+ */
+const KIND_START_WEEKS: Record<string, number> = {
+  core_early: 4,
+  core: 6,
+  lepto: 8,
+  rabies: 12,
+};
+
 export function recommendProductsForStep(
   kind: VaccineKind,
   stepWeeks: number | null,
@@ -742,6 +764,16 @@ export function recommendProductsForStep(
     // 核心苗那几步必须**真的顶得上**：细小单苗不能拿来顶常规首免
     if (kind === 'core' && !coversCoreSeries(product)) {
       return false
+    }
+    /*
+     * 产品覆盖的每一类，都要各自满足起始周龄 ✓
+     * （多联苗不能靠"核心那部分够龄"就把钩端一起带进去 ✗）
+     */
+    for (const covered of product.kinds) {
+      const startWeeks = KIND_START_WEEKS[covered];
+      if (startWeeks !== undefined && stepWeeks < startWeeks) {
+        return false;
+      }
     }
     if (stepWeeks === null || product.minWeeks === null) {
       return true

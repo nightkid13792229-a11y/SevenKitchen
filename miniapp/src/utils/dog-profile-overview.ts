@@ -165,13 +165,37 @@ export function calculateDogAgeText(birthday?: string, now = new Date()) {
     return ''
   }
 
-  const months = Math.max(0, Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 30)))
+  /*
+   * 老板 2026-10-12 定的口径：
+   *   · 不足 1 个月 → 显示**周龄** ✓（"0 个月"对一只 2 周龄的小狗太没信息 ✗）
+   *   · 不足 1 年   → 显示**月龄** ✓
+   *   · 足 1 年     → 显示「**几年几月**」✓
+   *
+   * ⚠️ 用**日历年月**算，不用"30 天一个月"✗ ——
+   *    后者会把 3 岁 7 个月算成 3 岁 8 个月 ✓（差一个月的错，家长一眼看得出）。
+   */
+  const days = Math.max(0, Math.floor((now.getTime() - birth.getTime()) / 86400000))
+  if (days < 30) {
+    const weeks = Math.max(0, Math.floor(days / 7))
+    return `${weeks}周`
+  }
+
+  let months =
+    (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
+  if (now.getDate() < birth.getDate()) {
+    months -= 1
+  }
+  months = Math.max(0, months)
+
   if (months < 12) {
     return `${months}个月`
   }
 
-  return `${Math.floor(months / 12)}岁`
+  const years = Math.floor(months / 12)
+  const restMonths = months % 12
+  return restMonths === 0 ? `${years}岁` : `${years}岁${restMonths}个月`
 }
+
 
 function formatWeight(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {

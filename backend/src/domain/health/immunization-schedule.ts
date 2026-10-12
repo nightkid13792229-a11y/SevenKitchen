@@ -878,7 +878,14 @@ export function buildImmunizationSchedule(
  */
 export const VACCINE_KIND_LABELS: Record<VaccineKind, string> = {
   core_early: '早期核心疫苗',
-  core: '核心疫苗',
+  /*
+   * 老板 2026-10-12："核心疫苗的文案可以改为核心疫苗（包含犬瘟、细小、腺病毒）吗？"
+   * —— 改 ✓（家长最关心的就是"这一针防什么" ✓）。
+   * ⚠️ 核心这一类实际含**四种**（犬瘟 / 细小 / 腺病毒 / 副流感 ✓），
+   *    老板点名的文案里只写了三种 ✓ —— 先按他的原话 ✓，
+   *    要不要把"副流感"也补进去，等他定 ✓。
+   */
+  core: '核心疫苗（犬瘟、细小、腺病毒）',
   rabies: '狂犬疫苗',
   lepto: '钩端螺旋体',
   other: '其他',

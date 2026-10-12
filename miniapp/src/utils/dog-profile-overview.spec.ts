@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calculateDogAgeText,
   buildDogOverviewBasicFacts,
   buildDogOverviewEnergySection,
   buildDogOverviewFeedingFacts,
@@ -296,5 +297,31 @@ describe('dog-profile-overview', () => {
       '较多零食',
     ])
     expect(JSON.stringify(getFeedingImpactExplanation('treat'))).not.toContain('适中零食')
+  })
+})
+
+/**
+ * 年龄口径（2026-10-12 老板定）
+ *
+ * 老板："年龄为什么会显示成 0 个月呢？我希望实现的是，
+ *        不足月的情况下显示周龄，不足年的情况下显示月龄，足年的情况下显示几年几月。"
+ */
+describe('年龄文案 · 周 / 月 / 几年几月', () => {
+  it('不足 1 个月显示周龄（不再出现"0个月"）', () => {
+    const now = new Date('2026-10-12T00:00:00')
+    expect(calculateDogAgeText('2026-09-27', now)).toBe('2周')
+    expect(calculateDogAgeText('2026-09-20', now)).toBe('3周')
+  })
+
+  it('不足 1 年显示月龄', () => {
+    const now = new Date('2026-10-12T00:00:00')
+    expect(calculateDogAgeText('2026-08-16', now)).toBe('1个月')
+    expect(calculateDogAgeText('2026-04-12', now)).toBe('6个月')
+  })
+
+  it('足 1 年显示几年几月（按日历年月算，不是 30 天一个月）', () => {
+    const now = new Date('2026-10-12T00:00:00')
+    expect(calculateDogAgeText('2022-10-16', now)).toBe('3岁11个月')
+    expect(calculateDogAgeText('2025-10-12', now)).toBe('1岁')
   })
 })

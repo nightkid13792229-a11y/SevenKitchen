@@ -29,7 +29,9 @@ describe('Banner 基本信息', () => {
     )
 
     expect(facts).toEqual([
-      { label: '年龄', value: '3岁' },
+      // 2026-10-12 老板定的口径：足年要显示「几年几月」✓
+      // （生日 2023-05-01、now 2026-10-01 → 3 岁 5 个月 ✓）；不足一个月显示周龄 ✓
+      { label: '年龄', value: '3岁5个月' },
       { label: '性别', value: '弟弟' },
       { label: '品种', value: '柯基' },
       { label: '体重', value: '12.5kg' },

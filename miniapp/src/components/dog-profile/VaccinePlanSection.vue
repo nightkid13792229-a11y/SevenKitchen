@@ -34,7 +34,8 @@
 
       <view v-if="expandedKind === card.kind" class="kind-card__body">
         <view class="kv">
-          <text class="kv__label">哪一针</text>
+          <!-- 老板 2026-10-12：「哪一针」→「免疫流程」✓ -->
+          <text class="kv__label">免疫流程</text>
           <text class="kv__value">{{ card.step.label }}</text>
         </view>
         <view v-if="card.step.matchedRecordDate" class="kv">

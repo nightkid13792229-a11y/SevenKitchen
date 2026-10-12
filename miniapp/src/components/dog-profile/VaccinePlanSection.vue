@@ -94,52 +94,19 @@
           {{ card.steps[0].spacingNote }}
         </text>
 
-        <!-- 动作：① 展开**这张卡自己的录入窗口** ✓ ② 忽略 ✓ -->
-        <view v-if="editorKind !== card.key" class="step-actions">
-          <text class="step-actions__primary" @tap.stop="openEditor(card)">记录接种信息</text>
-          <text class="step-actions__ghost" @tap.stop="ignoreCard(card)">忽略</text>
-        </view>
-
         <!--
-          ⚠️ 录入窗口**就在这条计划下面** ✓（老板 2026-10-12）：
-          "能不能做到在该条任务计划下展开录入窗口？保存后关闭并提示可在疫苗接种记录板块中查看。"
-          —— 原来点了只在**下方记录板块**里默默开一条草稿 ✗（实测：草稿确实开了 ✓，
-             但页面不滚动 ✗ → 家长看着像没点上 ✗）。
-          现在：就在卡片里填 ✓，保存后自动收起 ✓，并提示去下方记录板块查看 ✓。
+          动作：① 去**现成的记录录入模块**记录这一针 ✓ ② 忽略 ✓
+          ⚠️ 2026-10-12 老板指正 ✗：我一度在这里塞了一个"精简录入窗"✗ ——
+             信息不够 ✓、不能从产品库选 ✓、名字也不会去产品库认分类 ✗，
+             等于绕开了真正的那套录入 ✓。已撤掉 ✓，回到用现成的完整模块 ✓。
         -->
-        <view v-if="editorKind === card.key" class="inline-editor">
-          <view class="inline-editor__row">
-            <text class="inline-editor__label">疫苗名称</text>
-            <input
-              class="inline-editor__input"
-              :value="editorName"
-              placeholder="例如：卫佳伍"
-              :focus="false"
-              @input="editorName = $event.detail.value"
-            />
-          </view>
-          <view class="inline-editor__row">
-            <text class="inline-editor__label">接种日期</text>
-            <picker
-              mode="date"
-              :value="editorDate"
-              :end="todayDateText()"
-              @change="editorDate = $event.detail.value"
-            >
-              <view class="inline-editor__picker">{{ editorDate || '请选择接种日期' }}</view>
-            </picker>
-          </view>
-          <view class="inline-editor__actions">
-            <text
-              class="step-actions__primary"
-              :class="{ 'step-actions__primary--busy': editorSaving }"
-              @tap.stop="saveInlineRecord(card)"
-            >{{ editorSaving ? '保存中…' : '保存' }}</text>
-            <text class="step-actions__ghost" @tap.stop="closeEditor">取消</text>
-          </view>
+        <view class="step-actions">
+          <text class="step-actions__primary" @tap.stop="recordCard(card)">记录接种信息</text>
+          <text class="step-actions__ghost" @tap.stop="ignoreCard(card)">忽略</text>
         </view>
       </view>
     </view>
+
 
     <!--
       ⚠️⚠️ 这里必须在**确认加载成功之后**才能说"都已完成" ✗（2026-10-12 老板截图为证）。
@@ -197,7 +164,6 @@ import {
   DEFAULT_HISTORY_LIMIT,
   buildFishboneRows,
 } from '../../utils/vaccine-fishbone'
-import { dogApi } from '../../api/dogs'
 
 /**
  * 疫苗计划板块。
@@ -300,8 +266,6 @@ const emit = defineEmits<{
   (event: 'record-step', payload: { kinds: string[]; stepLabel: string }): void
   /** 把"每一类的下一针"报给页面 —— 顶部那条到期提醒用它（2026-10-07 老板定） */
   (event: 'pending-changed', pending: PlanPending[]): void
-  /** 卡内录入保存成功 → 页面去刷新记录板块（2026-10-12）*/
-  (event: 'record-saved'): void
 }>()
 
 /** 下一针（后端算好；忽略掉的步骤后端已经排除在 nextStep 之外） */
@@ -553,6 +517,19 @@ const expandedKind = ref('')
 
 function toggleKind(kind: string) {
   expandedKind.value = expandedKind.value === kind ? '' : kind
+}
+
+/**
+ * 卡片的「记录接种信息」✓：把这一类的分类带过去 ✓，
+ * 交给**现成的记录录入模块**开一条草稿 ✓
+ * （那里才有产品库、病种勾选、名字自动认分类 ✓ ——
+ *   我那个"精简录入窗"已被老板否掉 ✗，撤掉了 ✓）。
+ */
+function recordCard(card: PlanCard) {
+  emit('record-step', {
+    kinds: card.kinds,
+    stepLabel: card.steps.map((step) => step.label).join(' / '),
+  })
 }
 
 /**
@@ -1686,42 +1663,6 @@ defineExpose({ reload: () => load() })
   margin-top: 4rpx;
   font-size: 23rpx;
   color: #8a9a92;
-}
-.inline-editor {
-  margin-top: 16rpx;
-  padding: 18rpx 18rpx 16rpx;
-  border-radius: 12rpx;
-  background: #f4f8f5;
-  border: 1rpx solid #d9e9df;
-}
-.inline-editor__row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 14rpx;
-}
-.inline-editor__label {
-  width: 150rpx;
-  font-size: 26rpx;
-  color: #4c6558;
-}
-.inline-editor__input,
-.inline-editor__picker {
-  flex: 1;
-  padding: 12rpx 16rpx;
-  border-radius: 10rpx;
-  background: #ffffff;
-  border: 1rpx solid #dfe9e3;
-  font-size: 27rpx;
-  color: #17332a;
-}
-.inline-editor__actions {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin-top: 4rpx;
-}
-.step-actions__primary--busy {
-  opacity: 0.6;
 }
 .merge-note {
   display: block;

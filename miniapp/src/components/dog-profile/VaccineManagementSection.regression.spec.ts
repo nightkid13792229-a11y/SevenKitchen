@@ -675,12 +675,25 @@ describe('接种记录 · 空记录不显示 + 做成一个板块（2026-10-06�
     expect(source).toContain('.records-list .vaccine-card:first-child')
   })
 
-  it('板块有表头（标题 + 条数 + 一句说明），和「接种计划」同一套语言', () => {
+  it('板块有表头（标题 + 条数），和「接种计划」同一套语言', () => {
     const source = readComponent()
 
     expect(source).toContain('records-card__title')
     expect(source).toContain('records-card__count')
-    expect(source).toContain('records-card__desc')
+
+    /*
+     * ⚠️ 老板 2026-10-13 第 4 条：表头里那句"最近接种的排在前面……"是
+     * **内部操作说明**，已删 —— 连同它的样式和标题下那根分隔线一起，
+     * 免得留一根孤零零的横线（老板当天就发现了）。
+     */
+    // 只看**页面真的会渲染出来的**那部分：模板里去掉 HTML 注释
+    const template = source
+      .slice(source.indexOf('<template>'), source.indexOf('</template>'))
+      .replace(/<!--[\s\S]*?-->/g, '')
+    expect(template).not.toContain('最近接种的排在前面')
+    // 样式和那根残留的横线也一并清掉了
+    expect(source).not.toContain('records-card__desc')
+    expect(source).not.toContain('border-bottom: 1rpx solid #f0eefb')
   })
 })
 

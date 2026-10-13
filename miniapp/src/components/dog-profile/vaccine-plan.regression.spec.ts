@@ -247,20 +247,21 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     )
   }
 
-  it('「别同一天打」的提醒跟在"下一针说明"里', () => {
+  it('「别同一天打」那段提示**已按老板要求删掉**（2026-10-13）', () => {
     const section = readSection()
 
-    // 老板 2026-10-05："不同分类的疫苗不可以在同一天接种，尽量避开 2~3 天。
-    // 比如狂犬疫苗、核心疫苗和钩端螺旋体要分开打。"
-    // 2026-10-06 改版后，这一段归到"下一针的进一步说明"里
-    // （家长最容易犯的错就是两针一起去打，所以它跟着下一针走）。
-    expect(section).toContain('spacingNote')
-    expect(section).toContain('spacing-note__text')
-    // 2026-10-11 改成"每类一张简卡"后，它跟着**那一类自己的展开内容**走 ✓ —— 位置变了，口径没变 ✓
-    const headAt = section.indexOf('class="kind-card__head"')
-    const spacingAt = section.indexOf('spacing-note__text')
-    expect(headAt).toBeGreaterThan(-1)
-    expect(spacingAt).toBeGreaterThan(headAt)
+    /*
+     * 老板 2026-10-13 第 2 条："不再提示，相同时间窗口期，不同类的疫苗不同天打，
+     * 前后错开 2~3 天的这段文案。"
+     *
+     * 两处都删干净了：
+     *   · 卡片上那条 spacingNote 的展示
+     *   · 联苗提示结尾的"如果分开打两种苗，请错开 2~3 天"
+     * 展示用的样式也跟着删（不留孤儿样式 —— 老板当天就从页面上看出
+     * "说明字段没删干净"，就是这类残留）。
+     */
+    expect(section).not.toContain('spacing-note__text')
+    expect(section).not.toContain('错开 2~3 天')
   })
 
   it('计划列表每一步按老板 2026-10-06 的字段清单显示，不多不少', () => {

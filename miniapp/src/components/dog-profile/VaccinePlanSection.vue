@@ -1310,20 +1310,6 @@ defineExpose({
  * 用浅琥珀底 + 左边一道色条 —— 比正文显眼，但不是报错的红。
  * 这属于"容易做错但不紧急"的提示。
  */
-.spacing-note {
-  margin-top: 14rpx;
-  padding: 14rpx 18rpx;
-  border-radius: 12rpx;
-  background: #fdf8ec;
-  border-left: 6rpx solid #d8c98a;
-}
-
-.spacing-note__text {
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: #7a6a2f;
-}
-
 
 /* 常见产品（2026-10-04）：比"依据"显眼一点，比正文轻一点 */
 .next-step__products {
@@ -1530,14 +1516,6 @@ defineExpose({
   border-radius: 16rpx;
   background: #f7faf8;
   border: 1rpx solid #dfe9e2;
-}
-
-.plan-inline-editor__title {
-  display: block;
-  margin-bottom: 4rpx;
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #1e3a2f;
 }
 
 .step-actions {

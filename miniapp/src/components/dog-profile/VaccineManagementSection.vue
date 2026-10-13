@@ -1670,14 +1670,6 @@ async function doRemove(record: VaccineRecord) {
   border-radius: 999rpx;
 }
 
-.records-card__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: #8a968a;
-}
-
 /* 扫描去重的结果提示（2026-10-06）—— 不吭声跳过会被当成丢数据 */
 .records-card__notice {
   display: flex;
@@ -2274,9 +2266,14 @@ async function doRemove(record: VaccineRecord) {
   border: 1rpx solid #e4e0f2;
   background: linear-gradient(180deg, #f8f6ff 0%, #ffffff 40%);
 }
+/*
+ * ⚠️ 这里原来有一条 `border-bottom` 横线 —— 它是用来把"标题 + 那行小字"
+ * 和下面的列表分开的。小字已按老板要求删除（2026-10-13 第 4 条），
+ * 这条线就**只剩一根孤零零的横线**了，老板看得没错。
+ * 只留下间距（padding-bottom），线去掉。
+ */
 .records-card__head {
   padding-bottom: 12rpx;
-  border-bottom: 1rpx solid #f0eefb;
 }
 .records-card__title {
   color: #4a3f6b;

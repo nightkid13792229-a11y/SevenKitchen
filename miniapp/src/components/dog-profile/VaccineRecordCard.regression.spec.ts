@@ -95,14 +95,29 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(source).toContain('manualNameMode.value = false')
   })
 
-  it('🔴 第 7 条：成分由产品库定的，不给「修改」（顾客改不了已核过的成分）', () => {
+  it('🔴 第 7 条：只有「主动从产品库挑的」才锁成分，识别出来的要留纠错口子', () => {
     const source = readCard()
 
-    expect(source).toContain('const componentsFromCatalog = computed(')
-    expect(source).toContain('<text v-if="!componentsFromCatalog" class="vaccine-kind__edit">修改</text>')
+    /*
+     * 老板 2026-10-13 的两句话合起来才是完整规则：
+     *   · "从产品库选的 → 固定只读"
+     *   · "识别出来的都允许改，需要给用户一个纠错的机会"
+     *
+     * ⇒ 判据必须是"**这一次是不是主动挑的**"，
+     *   **不能**是"名字能不能在产品库里认出来" —— 那样识别命中的也会被锁死，
+     *   顾客就没有纠错的机会了。
+     */
+    expect(source).toContain('const componentsLocked = ref(false)')
+    expect(source).toContain('<text v-if="!componentsLocked" class="vaccine-kind__edit">修改</text>')
     expect(source).toContain('class="vaccine-kind__locked"')
-    // 判据是"名字能在产品库里认出来"
-    expect(source).toContain('findCatalogProduct(props.catalogProducts, draft.value.vaccineName.trim()) !== null')
+
+    // 主动挑的 → 锁；点「手动输入」→ 解锁
+    expect(source).toContain('componentsLocked.value = true')
+    expect(source).toContain('componentsLocked.value = false')
+
+    // ⚠️ 判据**不能**回到"按名字认"那版（识别出来就改不了了）
+    expect(source).not.toContain('const componentsFromCatalog = computed(')
+    expect(source).not.toContain('componentsFromCatalog')
   })
 
   it('🔴 收起必须"按需"：默认展开，只有明确传 collapse 才收', () => {

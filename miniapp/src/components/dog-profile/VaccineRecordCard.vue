@@ -254,7 +254,7 @@ class="vaccine-card"
         <!-- 成分是产品库定的（名字认得出来）就不给「修改」——
              那支苗含什么是数据库里核过的，顾客改了会和产品库对不上，
              免疫计划的推算也跟着错（老板 2026-10-13 第 7 条）。 -->
-        <text v-if="!componentsFromCatalog" class="vaccine-kind__edit">修改</text>
+        <text v-if="!componentsLocked" class="vaccine-kind__edit">修改</text>
         <text v-else class="vaccine-kind__locked">成分由产品库确定</text>
       </view>
 
@@ -660,6 +660,8 @@ function showManualInputLink(): boolean {
 /** 点「手动输入」：打开手输模式（不清空名字，顾客可能只想改个错字）*/
 function enterManualNameMode(): void {
   manualNameMode.value = true
+  // 他要自己弄了 → 成分也交还给他改（不再是"产品库挑的那支"了）
+  componentsLocked.value = false
 }
 
 function productIndex(name: string): number {
@@ -682,19 +684,22 @@ function productIndex(name: string): number {
  *     那才是"选产品"的正路，手打会绕开产品库、丢掉厂商与归类。
  */
 /**
- * 这一针的成分是**产品库定下来的**吗（老板 2026-10-13 第 7 条）。
+ * 这次的成分**锁住**吗（老板 2026-10-13 第 7 条 + 当天补充）。
  *
- * 判据：名字能在产品库里认出来 ✓ —— 那这支苗的成分就是数据库里核过的 ✓，
- * 不该再让顾客改（改了会让"这支苗含什么"和产品库对不上 ✓，
- * 免疫计划的推算也跟着错 ✓）。
+ * 老板两段话合起来才是完整规则 ✓：
+ *   · "从产品库选的 → 固定只读" ✓（第 7 条）
+ *   · "识别出来的都允许改，需要给用户一个纠错的机会" ✓（补充）
  *
- * ⚠️ 为什么用"名字能否认出"而不是另存一个标记 ✗：
- *    标记存不进后端 ✓（那是纯界面状态 ✓），保存一次就丢了 ✓，
- *    而"名字"是**持久**的 ✓ —— 每次打开都算得出来 ✓。
+ * ⇒ 判据是"**这一次是不是顾客主动从产品库挑的**" ✓，
+ *   而不是"名字能不能在产品库里认出来" ✗：
+ *   · 主动挑的   → 成分是数据库核过的 ✓ → 锁住 ✓
+ *   · 识别出来的 → **不锁** ✓（名字可能正好命中产品库 ✓，
+ *                  但识别本来就可能读错 ✓，一定要留纠错的口子 ✓）
+ *
+ * ⚠️ 这是纯界面状态 ✓，不落后端 ✓ —— 保存后重开卡片就回到"可改" ✓，
+ *    正合老板"给用户纠错机会"的意思 ✓。
  */
-const componentsFromCatalog = computed(
-  () => findCatalogProduct(props.catalogProducts, draft.value.vaccineName.trim()) !== null,
-)
+const componentsLocked = ref(false)
 
 function showManualNameInput(): boolean {
   const name = draft.value.vaccineName.trim()
@@ -874,6 +879,8 @@ function applyCatalogProduct(value: string | number) {
   draft.value.kinds = [...product.kinds]
   // 从产品库选了，就退出手输模式（两者不该同时摆着）
   manualNameMode.value = false
+  // 主动从产品库挑的 → 成分锁住（老板第 7 条的规则）
+  componentsLocked.value = true
   // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
   setConfirmResult(
     true,

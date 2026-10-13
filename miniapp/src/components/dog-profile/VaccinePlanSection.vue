@@ -31,8 +31,7 @@
         <!-- 老板 2026-10-12 的新方案：拆开成两张卡 ✓，但互相提示可以选联苗 ✓ -->
         <text v-if="card.comboProducts.length > 0" class="merge-note">
           也可以选含这两类的联苗（{{ card.comboProducts.join('、') }}）—— 一针同时覆盖，
-          那一类就不用再单独打了<template v-if="card.comboWindow">（两针都合适的日期：{{ card.comboWindow.start }} ~ {{ card.comboWindow.end }}）</template>；
-          如果分开打两种苗，请错开 2~3 天。
+          那一类就不用再单独打了<template v-if="card.comboWindow">（两针都合适的日期：{{ card.comboWindow.start }} ~ {{ card.comboWindow.end }}）</template>。
         </text>
 
         <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
@@ -282,8 +281,13 @@ interface PlanStep {
   /**
    * 「这一针别和别的针同一天打」（2026-10-05 老板的规则二）。
    *
-   * 不同分类的疫苗不可以同一天接种，前后错开 2~3 天。
+   * 不同分类的疫苗不可以同一天接种，前后要隔开两三天。
    * 空字符串 = 这段时间没有别的针要打。
+   *
+   * （这句话的**用户可见版本**已按老板要求全部删除，见下面那行说明。）
+   *
+   * ⚠️ 2026-10-13：老板要求**不再提示这段文案** —— 卡片里那行展示已删除。
+   *    字段与后端计算都保留（别处可能还要用），只是不再画在计划卡上。
    */
   spacingNote?: string
 }

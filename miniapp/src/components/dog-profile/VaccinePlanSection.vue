@@ -2,8 +2,10 @@
   <view v-if="!sectionHidden" class="health-section vaccine-plan">
     <view class="plan-head">
       <view class="plan-head__bar" />
-      <text class="plan-head__title">疫苗接种计划</text>
-      <text class="plan-head__hint">每一类只提醒下一针；从近到远</text>
+      <text class="plan-head__title">接种计划</text>
+      <!-- 右边那行小字（"每一类只提醒下一针；从近到远"）
+           已按老板 2026-10-13 要求**删除** —— 那是内部说明，
+           不该出现在顾客页面上（和接种记录板块那行小字同一个道理）。 -->
     </view>
 
     <view v-for="card in kindCards" :key="card.key" class="kind-card">
@@ -1650,12 +1652,6 @@ defineExpose({
   font-weight: 700;
   color: #12503a;
 }
-.plan-head__hint {
-  margin-left: auto;
-  font-size: 22rpx;
-  color: #7d9a8a;
-}
-
 .kind-card {
   margin-top: 16rpx;
   border-radius: 14rpx;
@@ -1731,8 +1727,6 @@ defineExpose({
 }
 .plan-head { display: flex; align-items: center; gap: 12rpx; padding: 0 2rpx 4rpx; }
 .plan-head__bar { width: 8rpx; height: 30rpx; border-radius: 4rpx; background: #0f7b49; }
-.plan-head__title { font-size: 32rpx; font-weight: 700; color: #12503a; }
-.plan-head__hint { margin-left: auto; font-size: 22rpx; color: #7d9a8a; }
 .kind-card {
   margin-top: 16rpx;
   border-radius: 14rpx;

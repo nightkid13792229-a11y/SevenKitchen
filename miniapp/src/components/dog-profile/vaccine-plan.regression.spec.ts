@@ -264,6 +264,25 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).not.toContain('错开 2~3 天')
   })
 
+  it('🔴 板块叫「接种计划」，右边那行小字已删（老板 2026-10-13）', () => {
+    const section = readSection()
+
+    // 标题（和下面的「接种记录」对称）
+    expect(section).toContain('<text class="plan-head__title">接种计划</text>')
+    expect(section).not.toContain('>疫苗接种计划<')
+
+    /*
+     * 右边那行小字（"每一类只提醒下一针；从近到远"）是**内部说明**，
+     * 老板要求删除 —— 文案和样式一起删（上一轮就是漏了样式，
+     * 页面上留了一根孤零零的横线，老板一眼看出来了）。
+     */
+    const template = section
+      .slice(section.indexOf('<template>'), section.indexOf('</template>'))
+      .replace(/<!--[\s\S]*?-->/g, '')
+    expect(template).not.toContain('每一类只提醒下一针')
+    expect(section).not.toContain('plan-head__hint')
+  })
+
   it('计划列表每一步按老板 2026-10-06 的字段清单显示，不多不少', () => {
     const section = readSection()
 

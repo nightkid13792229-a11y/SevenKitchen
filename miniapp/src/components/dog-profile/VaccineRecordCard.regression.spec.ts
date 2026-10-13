@@ -63,6 +63,48 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(source).toContain("(event: 'save', index: number): void")
   })
 
+  it('🔴 选产品时「先报名字、再设归类」——顺序反了会清掉刚设好的归类', () => {
+    const source = readCard()
+
+    /*
+     * 老板 2026-10-13 第 6 条问的："选择了产品库中的某一个产品之后，
+     * 疫苗名称字段下方会出现一个确认按钮……为什么会出现一个确认按钮呢？"
+     *
+     * 根因是**顺序**：报名字变更会让父组件把"之前判出来的归类"作废（正确行为），
+     * 而产品的归类是数据库里核过的、确定的 —— 必须放在作废**之后**设。
+     * 反过来写：刚设好的归类立刻被自己清掉 → 界面以为"还没归类" → 冒出「确认」。
+     */
+    const body = source.slice(source.indexOf('function applyCatalogProduct'))
+    const nameAt = body.indexOf("updateField('vaccineName'")
+    const kindsAt = body.indexOf("draft.value.kinds = [...product.kinds]")
+
+    expect(nameAt).toBeGreaterThan(-1)
+    expect(kindsAt).toBeGreaterThan(-1)
+    expect(nameAt).toBeLessThan(kindsAt)
+  })
+
+  it('🔴 第 5 条：库里有这支苗时，给一个「手动输入」的入口（文案就叫手动输入）', () => {
+    const source = readCard()
+
+    expect(source).toContain('>手动输入</text>')
+    expect(source).toContain('function showManualInputLink(): boolean')
+    expect(source).toContain('function enterManualNameMode(): void')
+    // 手输模式打开后，手填框必须真的出来
+    expect(source).toContain('if (manualNameMode.value) return true')
+    // 从产品库选了就退出（两者不该同时摆着）
+    expect(source).toContain('manualNameMode.value = false')
+  })
+
+  it('🔴 第 7 条：成分由产品库定的，不给「修改」（顾客改不了已核过的成分）', () => {
+    const source = readCard()
+
+    expect(source).toContain('const componentsFromCatalog = computed(')
+    expect(source).toContain('<text v-if="!componentsFromCatalog" class="vaccine-kind__edit">修改</text>')
+    expect(source).toContain('class="vaccine-kind__locked"')
+    // 判据是"名字能在产品库里认出来"
+    expect(source).toContain('findCatalogProduct(props.catalogProducts, draft.value.vaccineName.trim()) !== null')
+  })
+
   it('🔴 收起必须"按需"：默认展开，只有明确传 collapse 才收', () => {
     const source = readCard()
 

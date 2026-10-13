@@ -1269,6 +1269,45 @@ describe('记录板块 · 导入与定义顺序的通用守卫（2026-10-11）',
  * 所以：把"父组件用到的"和"卡片声明的"对一遍 ✓，差集不为空就在本地红 ✓。
  * 判据故意写得很宽（只比名字集合 ✓），因为它要挡的是**名字对不上**这一类 ✓。
  */
+/**
+ * 「从产品库选一支」之后，**刚设好的归类不许被自己清掉**（2026-10-13 老板问出来的）。
+ *
+ * 老板原话："在选择了产品库中的某一个产品之后，疫苗名称字段下方会出现一个确认按钮。
+ *            这里为什么会出现一个确认按钮呢？"
+ * —— 因为选产品的流程是"① 先设归类 → ② 再报名字变更"，
+ *    而"名字变更"原来**无条件**把归类清空 ✗ → 界面以为"还没归类" → 冒出「确认」✗。
+ */
+describe('选产品之后归类不许被清掉（2026-10-13 老板第 6 条）', () => {
+  const section = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('名字**真的变了**才把归类作废（两处都要）', () => {
+    const source = section()
+
+    // 列表那张卡的路径
+    expect(source).toContain("if (field === 'vaccineName' && changed) {")
+    // 计划卡下面那张新建卡的路径
+    expect(source).toContain('if (field === \'vaccineName\' && changed) {')
+    // 无条件清空那版必须已经不在
+    expect(source).not.toContain(`if (field === 'vaccineName') {
+    draft.kindsManual = false
+    draft.kinds = []`)
+  })
+
+  it('保存路径两处一致：同一个载荷构造 + 同一个接口', () => {
+    const source = section()
+
+    // 两处都用 buildPayload（它再委托给共用的 buildVaccinePayload）
+    expect((source.match(/buildPayload\(draft, record\)/g) || []).length).toBeGreaterThanOrEqual(2)
+    // 校验也一致：名字 + 日期
+    expect((source.match(/请填写疫苗名称/g) || []).length).toBeGreaterThanOrEqual(2)
+    expect((source.match(/请选择接种日期/g) || []).length).toBeGreaterThanOrEqual(2)
+  })
+})
+
 describe('记录板块 ↔ 编辑卡 · 接线对得上（2026-10-12 第一步）', () => {
   const stripComments = (text: string) =>
     text

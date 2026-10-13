@@ -163,6 +163,8 @@
             @inline-save="onInlineSave"
             @inline-close="onInlineClose"
             @inline-blur="onInlineBlur"
+            @inline-toggle="onInlineClose"
+            @inline-remove="onInlineClose"
           />
           <VaccineManagementSection
             v-if="dogId"

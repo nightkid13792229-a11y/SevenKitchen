@@ -113,6 +113,15 @@ class="vaccine-card"
         </view>
       </picker>
 
+      <!-- 库里有这支苗时的手输入口（老板 2026-10-13 第 5 条）：
+           选错了、而产品库里又没有他要的那支 —— 点这里改回手输。
+           文案用「手动输入」（老板点名要这四个字）。 -->
+      <text
+        v-if="showManualInputLink()"
+        class="vaccine-manual-link"
+        @tap="enterManualNameMode()"
+      >手动输入</text>
+
       <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
       <template v-if="nameFieldMode(draft.vaccineName) === 'unknown'">
         <text class="field-hint field-hint--unknown">
@@ -242,7 +251,11 @@ class="vaccine-card"
           v-if="draft.components.length === 0"
           class="vaccine-kind__tag"
         >都不是 / 不确定</text>
-        <text class="vaccine-kind__edit">修改</text>
+        <!-- 成分是产品库定的（名字认得出来）就不给「修改」——
+             那支苗含什么是数据库里核过的，顾客改了会和产品库对不上，
+             免疫计划的推算也跟着错（老板 2026-10-13 第 7 条）。 -->
+        <text v-if="!componentsFromCatalog" class="vaccine-kind__edit">修改</text>
+        <text v-else class="vaccine-kind__locked">成分由产品库确定</text>
       </view>
 
       <!-- 还没勾：说清楚要做什么，并让顾客照本子勾 -->
@@ -489,6 +502,14 @@ const matchingHere = ref(false)
  *              ② 顾客自己点了"修改"（他的记录，他想改就改）
  */
 const kindPickerOpen = ref(false)
+/**
+ * 顾客**主动改成手输**名字了（老板 2026-10-13 第 5 条）。
+ *
+ * 场景：从产品库选了一支，发现选错了，而产品库里又没有他要的那支 ——
+ * 这时候得有个入口让他改回手输。点了「手动输入」就打开它。
+ * 从产品库重新选一支会自动退出（见 applyCatalogProduct）。
+ */
+const manualNameMode = ref(false)
 
 /*
  * 今天的日期（本地时区）。
@@ -626,6 +647,21 @@ function nameFieldLabel(name: string): string {
   return showManualNameInput() ? '＋ 从产品库选一支' : '从产品库选择（进口 / 国产都有）'
 }
 
+/**
+ * 要不要显示「手动输入」入口（老板 2026-10-13 第 5 条）。
+ *
+ * 只在"**认得出这支苗**"时显示 —— 也就是手填框正收着的时候；
+ * 手填框已经摆出来时不用再给这个链接（否则又是两个控件做同一件事）。
+ */
+function showManualInputLink(): boolean {
+  return !showManualNameInput()
+}
+
+/** 点「手动输入」：打开手输模式（不清空名字，顾客可能只想改个错字）*/
+function enterManualNameMode(): void {
+  manualNameMode.value = true
+}
+
 function productIndex(name: string): number {
   const key = normalizeProductName(name)
   if (!key) return 0
@@ -645,6 +681,21 @@ function productIndex(name: string): number {
  *   · 库里有 → 不出现，换名字走上面的产品选择器 ——
  *     那才是"选产品"的正路，手打会绕开产品库、丢掉厂商与归类。
  */
+/**
+ * 这一针的成分是**产品库定下来的**吗（老板 2026-10-13 第 7 条）。
+ *
+ * 判据：名字能在产品库里认出来 ✓ —— 那这支苗的成分就是数据库里核过的 ✓，
+ * 不该再让顾客改（改了会让"这支苗含什么"和产品库对不上 ✓，
+ * 免疫计划的推算也跟着错 ✓）。
+ *
+ * ⚠️ 为什么用"名字能否认出"而不是另存一个标记 ✗：
+ *    标记存不进后端 ✓（那是纯界面状态 ✓），保存一次就丢了 ✓，
+ *    而"名字"是**持久**的 ✓ —— 每次打开都算得出来 ✓。
+ */
+const componentsFromCatalog = computed(
+  () => findCatalogProduct(props.catalogProducts, draft.value.vaccineName.trim()) !== null,
+)
+
 function showManualNameInput(): boolean {
   const name = draft.value.vaccineName.trim()
 
@@ -658,6 +709,8 @@ function showManualNameInput(): boolean {
    * 手填框是最后一道兜底 ✓，**任何情况下都不该没有** ✓。
    */
   if (props.catalogProducts.length === 0) return true
+  // 顾客自己点了「手动输入」——按他说的办 ✓（第 5 条）
+  if (manualNameMode.value) return true
   if (!name) return true
   if (props.nameFocused) return true
   return findCatalogProduct(props.catalogProducts, name) === null
@@ -803,10 +856,24 @@ function applySuggestedProduct(name: string) {
 function applyCatalogProduct(value: string | number) {
   const product = props.catalogProducts[Number(value)]
   if (!product) return
+  /*
+   * ⚠️⚠️ 顺序要紧（2026-10-13 修，正是老板问的第 6 条）：
+   * **先把名字报上去、再设归类** ✓。
+   *
+   * 报名字变更会让父组件把"之前判出来的归类"作废 ✓（那是正确行为 ✓）——
+   * 而产品的归类是**数据库里核过的、确定的** ✓，
+   * 所以必须放在"作废"**之后**设 ✓。
+   * 反过来写的话：刚设好的归类立刻被自己清掉 ✗ →
+   * 界面以为"还没归类" ✗ → 名称下面就**冒出一个「确认」按钮** ✗。
+   */
+  updateField('vaccineName', product.name)
+
   draft.value.vaccineName = product.name
   // 病种由产品库带出来（2026-10-06）；类别由后端按病种推导
   draft.value.components = Array.isArray(product.components) ? [...product.components] : []
   draft.value.kinds = [...product.kinds]
+  // 从产品库选了，就退出手输模式（两者不该同时摆着）
+  manualNameMode.value = false
   // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
   setConfirmResult(
     true,
@@ -816,7 +883,6 @@ function applyCatalogProduct(value: string | number) {
   )
   // 产品的归类是**确定**的（数据库里核过成分），不需要再问后端
   draft.value.kindsManual = false
-  updateField('vaccineName', product.name)
 }
 
 /**
@@ -1012,6 +1078,22 @@ color: #b08d4f;
  */
 .vaccine-card__body--hidden {
   display: none;
+}
+
+/* 「手动输入」（第 5 条）—— 库里有这支苗时的改手输入口 */
+.vaccine-manual-link {
+  display: inline-block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #4a7c59;
+  text-decoration: underline;
+}
+
+/* 成分由产品库确定时的说明（第 7 条） */
+.vaccine-kind__locked {
+  margin-left: 12rpx;
+  font-size: 22rpx;
+  color: #9a948a;
 }
 
 /* 待核对（2026-10-09 安全默认值） */

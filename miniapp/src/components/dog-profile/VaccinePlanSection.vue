@@ -81,7 +81,7 @@
                 v-if="hasMoreBasis(card.steps[0])"
                 class="basis__more"
                 @tap.stop="toggleBasis(card.steps[0].key)"
-              >{{ isBasisOpen(card.steps[0].key) ? '收起' : '为什么这么建议？' }}</text>
+              >{{ isBasisOpen(card.steps[0].key) ? '收起' : '更多' }}</text>
             </view>
             <text
               v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
@@ -90,9 +90,6 @@
           </view>
         </view>
 
-        <text v-if="card.steps[0].spacingNote" class="spacing-note__text">
-          {{ card.steps[0].spacingNote }}
-        </text>
 
         <!--
           动作：① 去**现成的记录录入模块**记录这一针 ✓ ② 忽略 ✓
@@ -128,7 +125,6 @@
                已改成 `default: true`。
         -->
         <view v-if="inline && inline.open" class="plan-inline-editor">
-          <text class="plan-inline-editor__title">记录这一针</text>
           <!--
             ⚠️ 卡片**外面**再包一层做条件：不要把 v-if 写在组件上 ✗ ——
             在 v-for 里给组件加 v-if 时，小程序编译器会把 `wx:if` 和属性表
@@ -155,6 +151,8 @@
             @update="(idx: number, field: any, value: string) => emit('inline-update', idx, field, value)"
             @save="emit('inline-save')"
             @name-blur="emit('inline-blur')"
+            @toggle="emit('inline-toggle')"
+            @remove="emit('inline-remove')"
           />
           </view>
           <text class="plan-inline-editor__cancel" @tap.stop="emit('inline-close')">取消</text>
@@ -352,6 +350,10 @@ const emit = defineEmits<{
   (event: 'inline-update', index: number, field: string, value: string): void
   (event: 'inline-save'): void
   (event: 'inline-close'): void
+  /** 卡片上的「收起」（这张卡永远展开，收起 = 关掉它）*/
+  (event: 'inline-toggle'): void
+  /** 卡片上的「删除」（草稿还没存过，就是丢掉它）*/
+  (event: 'inline-remove'): void
   (event: 'inline-blur'): void
 }>()
 

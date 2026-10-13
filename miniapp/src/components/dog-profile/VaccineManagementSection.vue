@@ -407,13 +407,22 @@ function closeInlineCreate() {
 function updateInlineDraft(field: keyof VaccineDraft, value: string) {
   const draft = inlineDraftState.value
   if (!draft) return
-  draft[field] = value
 
   /*
-   * ⚠️ 与列表里那张卡**同一套规矩** ✓（名字变了 → 之前判出来的归类作废 ✓）——
-   * 否则"改了名字但旧分类还留着" ✗，那一针会被算进错的类别 ✓。
+   * ⚠️⚠️ 名字**真的变了**才把归类作废（2026-10-13 老板问出来的 bug）。
+   *
+   * 原来是无条件清 ✗。而从产品库选一支的流程是：
+   *   ① 先设好这支苗的归类（`draft.kinds = [...product.kinds]`）
+   *   ② 再把名字报上来（`updateField('vaccineName', …)`）→ 走到这里 → **刚设好的归类被清空** ✗
+   * 后果就是老板看到的：选完产品，名称下面**冒出一个「确认」按钮** ✓ ——
+   * 因为系统以为"还没归类" ✓（其实是它自己刚清掉的 ✓）。
+   *
+   * 现在比一下：**值没变就不动归类** ✓。
    */
-  if (field === 'vaccineName') {
+  const changed = draft[field] !== value
+  draft[field] = value
+
+  if (field === 'vaccineName' && changed) {
     draft.kindsManual = false
     draft.kinds = []
   }
@@ -713,6 +722,8 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
+  // 名字有没有**真的**变（见下面关于归类的说明 ✓）
+  const changed = draft[field] !== value
   // status 是受限联合类型（下拉框保证取值合法），其余字段都是普通字符串
   if (field === 'status') {
     draft.status = value as VaccineDraft['status']
@@ -729,9 +740,14 @@ function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
     justSavedIds.value = next
   }
 
-  // 名字变了 → 重新自动判一次归类（顾客之前手点的作废：名字都换了）
-  // 名字改了 → 之前的匹配结果作废，等顾客点「确认」重新匹配
-  if (field === 'vaccineName') {
+  /*
+   * 名字**真的变了** → 重新自动判一次归类（顾客之前手点的作废：名字都换了）。
+   *
+   * ⚠️⚠️ 必须比一下再清（2026-10-13 修）：从产品库选一支的流程是
+   * "先设归类 → 再报名字变更" ✓，原来无条件清 ✗ —— 于是**刚设好的归类被自己清掉** ✗，
+   * 界面上表现为"选完产品又冒出「确认」按钮" ✓（老板问的第 6 条 ✓）。
+   */
+  if (field === 'vaccineName' && changed) {
     draft.kindsManual = false
     draft.kinds = []
     /*

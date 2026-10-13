@@ -183,12 +183,12 @@ class="vaccine-card"
            画面上什么都没变，看起来就像按钮坏了。
            现在无论成功失败都留一行字在这里，一眼能看到刚才发生了什么。 -->
       <text
-        v-if="confirmResults[index]"
+        v-if="confirmResult"
         class="vaccine-confirm-result"
-        :class="confirmResults[index].ok
+        :class="confirmResult.ok
           ? 'vaccine-confirm-result--ok'
           : 'vaccine-confirm-result--warn'"
-      >{{ confirmResults[index].text }}</text>
+      >{{ confirmResult.text }}</text>
     </view>
 
     <!-- 这一针**含哪些病种**（2026-10-06 老板定的模型）。
@@ -647,6 +647,17 @@ function productIndex(name: string): number {
  */
 function showManualNameInput(): boolean {
   const name = draft.value.vaccineName.trim()
+
+  /*
+   * ⚠️ 产品库**没加载出来**时，必须给手填框（2026-10-13 老板截图报的：
+   *    "疫苗名称"那一行只有一个字段名、**什么都没有** ✗，点不动也填不了 ✗）。
+   *
+   * 根因：名称那一行原来是"产品库选择器"和"手填框"二选一 ✓ ——
+   * 而选择器的条件是"产品库有内容" ✗。网络慢 / 接口失败时产品库是空的 ✓，
+   * 于是**两个都不出现** ✗，那一行就成了死行 ✓。
+   * 手填框是最后一道兜底 ✓，**任何情况下都不该没有** ✓。
+   */
+  if (props.catalogProducts.length === 0) return true
   if (!name) return true
   if (props.nameFocused) return true
   return findCatalogProduct(props.catalogProducts, name) === null

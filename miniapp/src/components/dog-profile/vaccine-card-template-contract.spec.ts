@@ -113,6 +113,30 @@ describe('编辑卡 · 模板调用的函数必须真的有（2026-10-12 搬家�
     expect(template).not.toContain('isNoneOfThem(record')
   })
 
+  it('🔴 模板不许引用**别的组件**的变量名（搬家时最容易漏的一类）', () => {
+    /*
+     * 2026-10-13 抓到的真实遗留 bug：
+     * 卡片模板里还写着 `confirmResults[index]` —— 那是**记录板块**的变量名
+     * （卡片自己的叫 `confirmResult`）。多传一个下标不报错、页面也照常跑，
+     * 只是「确认结果」那行字**永远不显示**。
+     * 这类错的表现是"某个功能悄悄失效"，最难靠肉眼发现。
+     *
+     * ⚠️ 只查**模板**：脚本里的注释会提到这些名字（解释"为什么不放在那儿"），
+     *    查全文件会把注释也算进去，变成误报。
+     */
+    const PARENT_ONLY = [
+      'confirmResults',
+      'autoSaveNotices',
+      'justSavedIds',
+      'expandedIndex',
+      'savingIndex',
+      'matchingIndex',
+      'kindPickerOpen[',
+    ]
+    const wrong = PARENT_ONLY.filter((name) => template.includes(name))
+    expect(wrong).toEqual([])
+  })
+
   it('kindPickerOpen 是卡片自己的布尔 ref，模板里按 ref 的规矩读', () => {
     expect(script).toContain('const kindPickerOpen = ref(false)')
     // ⚠️ 模板里 ref **不会自动解包** ✓ —— 写 `!kindPickerOpen` 永远是 false ✗

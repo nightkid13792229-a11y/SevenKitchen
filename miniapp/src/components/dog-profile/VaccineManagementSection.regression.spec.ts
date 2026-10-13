@@ -479,9 +479,8 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
       expect(file).not.toContain('function normalizeProductName(')
     }
     expect(source).toContain('findCatalogProduct(')
-    // 名称那一行必须走归一化比对，不能退回"一模一样才认"
+    // 名称认不认得出，必须走归一化比对，不能退回"一模一样才认"
     expect(source).toContain('function isNameRecognized(')
-    expect(source).toContain('function nameFieldLabel(')
     expect(source).not.toContain('catalogProducts.value.some((item) => item.name === name)')
   })
 
@@ -493,35 +492,41 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
    * （同时不出现手填框）；认不出就把这一行降级成"去库里挑一支"这个**动作**，
    * 名字本身留给下面的手填框。
    */
-  it('🔴 认得出：这一行显示库里的规范名', () => {
+  it('🔴 认得出：框里显示库里的**规范名**', () => {
     const source = readComponent()
 
     const card = readCard()
-    expect(card).toContain('function nameFieldLabel(')
-    expect(card).toContain('if (matched) return matched.name')
+    /*
+     * 老板 2026-10-13 第 1、3 条之后名称就是一个输入框 ——
+     * "显示规范名"发生在**选产品**那一刻（把库里的名字写进草稿）。
+     */
+    expect(card).toContain('draft.value.vaccineName = product.name')
+    expect(card).toContain(':value="draft.vaccineName"')
+    void source
   })
 
-  it('🔴 认不出：这一行只写"去库里挑一支"，不再把同一个名字显示两遍', () => {
+  it('🔴 认不出：不给「从产品库选」入口（库里根本没有他要的那支）', () => {
     const source = readComponent()
 
     const card = readCard()
-    expect(card).toContain("'＋ 从产品库选一支'")
-    // 名字本身只在手填框里出现（:value 绑的是 draft.vaccineName）
+    // 老板 2026-10-06 定的，别被后来的改动带跑
+    expect(card).toContain(
+      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draft.vaccineName) !== 'unknown'\"",
+    )
+    // 名字只出现一次：就是输入框自己的值
     expect(card).toContain(':value="draft.vaccineName"')
     // 旧的"名称行直接显示原文"的写法（会和输入框重复）已经下线
     expect(source).not.toContain("return String(name || '').trim()")
   })
 
-  it('🔴 手填输入框只在产品库里没有这只苗时才出现', () => {
+  it('🔴 名称输入框**始终**在（老板 2026-10-13 第 1 条后不再按状态切换）', () => {
     const source = readComponent()
 
-    // 老板的规格："如果 AI 识别的疫苗名称没有在产品库中，
-    // 才显示这个输入框吧？"
     const card = readCard()
-    expect(card).toContain('function showManualNameInput(')
-    expect(card).toContain('<template v-if="showManualNameInput()">')
-    // 正打字的那一行不能把输入框抽走（打到一半刚好命中产品库会当场消失）
-    expect(card).toContain('if (props.nameFocused) return true')
+    expect(card).toContain('class="field-input field-name__input"')
+    // 那套"什么时候显示手填框"的判定已经不需要了
+    expect(card).not.toContain('function showManualNameInput(')
+    void source
   })
 
   it('🔴 确认的结果留在卡片上，不再是"闪一下就没"', () => {
@@ -758,7 +763,7 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
   it('库里没有时要说清楚，并且名字仍然能写', () => {
     const source = readCard()
 
-    expect(source).toContain('产品库里没有这支苗 —— 已按你写的名字记录')
+    expect(source).toContain('产品库里没有这支苗。')
     expect(source).toContain("nameFieldMode(draft.vaccineName) === 'unknown'")
   })
 
@@ -776,7 +781,8 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
     expect(source).toContain("return nameFieldMode(draft.value.vaccineName) === 'unknown'")
     expect(source).toContain('v-if="showConfirmButton()"')
     // 取而代之说明一句
-    expect(source).toContain('分类已按产品库自动判定，不用再确认。')
+    // ⚠️ 老板 2026-10-13 第 2 条：这句内部说明已删
+    expect(source).not.toContain('分类已按产品库自动判定')
   })
 
   /**

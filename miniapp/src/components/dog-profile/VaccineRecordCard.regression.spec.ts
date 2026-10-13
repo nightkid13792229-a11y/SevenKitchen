@@ -83,16 +83,27 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(nameAt).toBeLessThan(kindsAt)
   })
 
-  it('🔴 第 5 条：库里有这支苗时，给一个「手动输入」的入口（文案就叫手动输入）', () => {
+  it('🔴 名称字段永远只有**一个**输入框（老板 2026-10-13 第 1、3 条）', () => {
     const source = readCard()
 
-    expect(source).toContain('>手动输入</text>')
-    expect(source).toContain('function showManualInputLink(): boolean')
-    expect(source).toContain('function enterManualNameMode(): void')
-    // 手输模式打开后，手填框必须真的出来
-    expect(source).toContain('if (manualNameMode.value) return true')
-    // 从产品库选了就退出（两者不该同时摆着）
-    expect(source).toContain('manualNameMode.value = false')
+    /*
+     * 老板连着两次点这个问题：
+     *   · "疫苗名称字段和手动录入产品名称两个字段，是否不能同时出现呢？"
+     *   · "是否可以将手动输入的按钮，放到疫苗名称字段的输入框中？"
+     *
+     * 做法：**把三者合成一个** —— 框里直接打字就是手动输入，
+     * "从产品库选"是框里的一个入口。于是名称这个位置永远只有一个控件，
+     * 也不再需要单独的「手动输入」按钮。
+     */
+    expect(source).toContain('class="field-name"')
+    expect(source).toContain('class="field-input field-name__input"')
+    expect(source).toContain('class="field-name__pick"')
+
+    // 那套"选择器 + 手动输入链接 + 手填框"的三件套必须已经不在
+    expect(source).not.toContain('vaccine-manual-link')
+    expect(source).not.toContain('function showManualInputLink(')
+    expect(source).not.toContain('function enterManualNameMode(')
+    expect(source).not.toContain('manualNameMode')
   })
 
   it('🔴 第 7 条：只有「主动从产品库挑的」才锁成分，识别出来的要留纠错口子', () => {
@@ -109,7 +120,12 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
      */
     expect(source).toContain('const componentsLocked = ref(false)')
     expect(source).toContain('<text v-if="!componentsLocked" class="vaccine-kind__edit">修改</text>')
-    expect(source).toContain('class="vaccine-kind__locked"')
+    /*
+     * ⚠️ 锁住时**什么说明都不写**（老板 2026-10-13 第 2 条：
+     * "不要把一些内部提醒文案也打到页面上"）—— 只是不出现「修改」而已。
+     */
+    expect(source).not.toContain('vaccine-kind__locked')
+    expect(source).not.toContain('成分由产品库确定')
 
     // 主动挑的 → 锁；点「手动输入」→ 解锁
     expect(source).toContain('componentsLocked.value = true')
@@ -274,38 +290,106 @@ describe('编辑卡 · 名称那一行（2026-10-06 第二批）', () => {
     // 卡片必须**真的在用它**（不是又抄一份 ✗）
     expect(source).toContain('findCatalogProduct(')
     expect(source).not.toContain('function normalizeProductName(')
-    // 名称那一行必须走归一化比对，不能退回"一模一样才认"
+    // 名称认不认得出，必须走归一化比对，不能退回"一模一样才认"
     expect(source).toContain('function isNameRecognized(')
-    expect(source).toContain('function nameFieldLabel(')
     expect(source).not.toContain('catalogProducts.value.some((item) => item.name === name)')
   })
 
-  it('🔴 认得出：这一行显示库里的规范名', () => {
+  it('🔴 认得出：框里显示的是库里的**规范名**', () => {
     const source = readCard()
 
-    expect(source).toContain('function nameFieldLabel(')
-    expect(source).toContain('if (matched) return matched.name')
+    /*
+     * 老板 2026-10-13 第 1、3 条之后，名称就是一个输入框 ——
+     * "显示规范名"这件事发生在**选产品**那一刻：把库里的名字写进草稿。
+     */
+    expect(source).toContain('draft.value.vaccineName = product.name')
+    // 输入框绑的就是它
+    expect(source).toContain(':value="draft.vaccineName"')
   })
 
-  it('🔴 认不出：这一行只写"去库里挑一支"，不再把同一个名字显示两遍', () => {
+  it('🔴 认不出：不给「从产品库选」入口（库里根本没有他要的那支）', () => {
     const source = readCard()
 
-    expect(source).toContain("'＋ 从产品库选一支'")
-    // 名字本身只在手填框里出现（:value 绑的是 draft.vaccineName）
+    // 老板 2026-10-06 定的，别被后来的改动带跑
+    expect(source).toContain(
+      "v-if=\"catalogProducts.length > 0 && nameFieldMode(draft.vaccineName) !== 'unknown'\"",
+    )
+    // 名字只出现一次：就是输入框自己的值
     expect(source).toContain(':value="draft.vaccineName"')
     // 旧的"名称行直接显示原文"的写法（会和输入框重复）已经下线
     expect(source).not.toContain("return String(name || '').trim()")
   })
 
-  it('🔴 手填输入框只在产品库里没有这只苗时才出现', () => {
+  it('🔴 页面文案全部是**顾客视角**，不出现"系统内部怎么运作"的说明', () => {
     const source = readCard()
 
-    // 老板的规格："如果 AI 识别的疫苗名称没有在产品库中，
-    // 才显示这个输入框吧？"
-    expect(source).toContain('function showManualNameInput(')
-    expect(source).toContain('<template v-if="showManualNameInput()">')
-    // 正打字的那一行不能把输入框抽走（打到一半刚好命中产品库会当场消失）
-    expect(source).toContain('if (props.nameFocused) return true')
+    /*
+     * 老板 2026-10-13 第 2 条原话：
+     *   "我们现在改的是小程序前端的页面，并且这个页面是给所有用户使用的……
+     *    但是我发现你总是喜欢把一些内部提醒文案也打到页面上。"
+     *
+     * ⚠️ 只看**模板里去掉注释之后**的文字 ✓ ——
+     *    源码注释里写"系统会……"是给开发看的 ✓，不算打到页面上 ✓
+     *    （第一版守卫没排除注释，误报了三条 ✗）。
+     */
+    const template = source.slice(source.indexOf('<template>'), source.indexOf('</template>'))
+    const visible = template.replace(/<!--[\s\S]*?-->/g, '')
+
+    const INTERNAL = [
+      '分类已按产品库自动判定',
+      '成分由产品库确定',
+      '不用再确认',
+      '系统会',
+      '后端会',
+      '我们按它的成分归类',
+    ]
+    const leaked = INTERNAL.filter((text) => visible.includes(text))
+    expect(leaked).toEqual([])
+  })
+
+  it('🔴 配方说明紧跟名称字段，且**不重复产品名**（老板第 3 条）', () => {
+    const source = readCard()
+
+    // 说明里只说成分，不再写"已选择：某某产品"
+    expect(source).not.toContain('已选择：')
+    expect(source).toContain('`含「${(product.components || [])')
+
+    // 位置：紧跟在名称字段那一块后面（在"接种日期"之前）
+    const nameAt = source.indexOf('class="field-name"')
+    const recipeAt = source.indexOf('field-hint--recipe')
+    const dateAt = source.indexOf('>接种日期<')
+    expect(nameAt).toBeGreaterThan(-1)
+    expect(recipeAt).toBeGreaterThan(nameAt)
+    expect(dateAt).toBeGreaterThan(recipeAt)
+  })
+
+  it('🔴 「保存」和「取消」在**同一行**（老板第 4 条）', () => {
+    const source = readCard()
+
+    // 两个按钮都在动作条这个 flex 容器里
+    const actionsAt = source.indexOf('class="vaccine-card__actions"')
+    const saveAt = source.indexOf('class="vaccine-card__save"')
+    const cancelAt = source.indexOf('class="vaccine-card__cancel"')
+    expect(actionsAt).toBeGreaterThan(-1)
+    expect(saveAt).toBeGreaterThan(actionsAt)
+    expect(cancelAt).toBeGreaterThan(saveAt)
+
+    // ⚠️ 它原来画在卡片**外面**（计划板块里），那样排不到一行
+    expect(source).toContain("'vaccine-card__save--busy': saving")
+    expect(source).toContain('{{ cancelLabel }}')
+  })
+
+  it('🔴 名称输入框**始终**在（不再按状态显示/隐藏）', () => {
+    const source = readCard()
+
+    /*
+     * 老板 2026-10-13 第 1 条："疫苗名称字段和手动录入产品名称两个字段，
+     * 是否不能同时出现呢？" —— 根子就是"按状态显示/隐藏"这套切换逻辑。
+     * 现在框**始终**在 ✓，认得出来只是在框里显示规范名 ✓。
+     */
+    expect(source).toContain('class="field-input field-name__input"')
+    // 那套"什么时候显示手填框"的判定已经不需要了
+    expect(source).not.toContain('function showManualNameInput(')
   })
 
   it('🔴 确认的结果留在卡片上，不再是"闪一下就没"', () => {
@@ -354,7 +438,7 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
   it('库里没有时要说清楚，并且名字仍然能写', () => {
     const source = readCard()
 
-    expect(source).toContain('产品库里没有这支苗 —— 已按你写的名字记录')
+    expect(source).toContain('产品库里没有这支苗。')
     expect(source).toContain("nameFieldMode(draft.vaccineName) === 'unknown'")
   })
 
@@ -372,7 +456,8 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
     expect(source).toContain("return nameFieldMode(draft.value.vaccineName) === 'unknown'")
     expect(source).toContain('v-if="showConfirmButton()"')
     // 取而代之说明一句
-    expect(source).toContain('分类已按产品库自动判定，不用再确认。')
+    // ⚠️ 老板 2026-10-13 第 2 条：这句内部说明已删（不要再打回页面）
+    expect(source).not.toContain('分类已按产品库自动判定')
   })
 
   /**

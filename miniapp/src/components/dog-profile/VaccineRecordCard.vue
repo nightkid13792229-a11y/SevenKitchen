@@ -97,36 +97,50 @@ class="vaccine-card"
            前两轮走过的弯路记在这里：第一轮"名称行显示占位、名字只在输入框"
            → 老板说名称没加载出来；第二轮"名称行显示原文" → 和输入框重复。
            根因都是**两个控件在做同一件事**，现在按上面三种状态分开。 -->
-      <picker
-        v-if="catalogProducts.length > 0 && nameFieldMode(draft.vaccineName) !== 'unknown'"
-        mode="selector"
-        :range="catalogProducts"
-        range-key="name"
-        :value="productIndex(draft.vaccineName)"
-        @change="applyCatalogProduct($event.detail.value)"
-      >
-        <view
-          class="field-picker"
-          :class="{ 'field-picker--placeholder': !isNameRecognized(draft.vaccineName) }"
+      <!-- 名称字段：**一个输入框，永远只有一个**（老板 2026-10-13 第 1、3 条）。
+
+           ⚠️ 走过的弯路都记在这儿：
+             · 第一轮：名称行 + 手填框**两个控件做同一件事** → 顾客看到两个"名字"✗。
+             · 第二轮：库里有苗时只给选择器、手填框收起 → 想手输时**没有入口** ✗，
+               只好再加一个"手动输入"链接 ✗ → 又变成"选择器 + 链接 + 手填框"三个 ✗。
+           ⇒ 现在合成一个：**在框里直接打字就是手动输入** ✓，
+             "从产品库选"做成框里的一个入口 ✓ ——
+             名称这个位置永远只有一个控件 ✓，也不再需要单独的「手动输入」按钮 ✓。 -->
+      <view class="field-name">
+        <input
+          class="field-input field-name__input"
+          type="text"
+          placeholder="例如：犬四联"
+          :value="draft.vaccineName"
+          :focus="autofocus"
+          @input="updateField('vaccineName', $event.detail.value)"
+          @blur="notifyNameBlur()"
+        />
+        <picker
+          v-if="catalogProducts.length > 0 && nameFieldMode(draft.vaccineName) !== 'unknown'"
+          mode="selector"
+          :range="catalogProducts"
+          range-key="name"
+          :value="productIndex(draft.vaccineName)"
+          @change="applyCatalogProduct($event.detail.value)"
         >
-          {{ nameFieldLabel(draft.vaccineName) }}
-        </view>
-      </picker>
+          <!-- 认不出这支苗时**不给**这个入口（老板 2026-10-06 定的：
+               "对于宠派纯这类产品库中没有的产品……也不让用户可以点击从产品库中
+                挑选产品的弹窗呢？因为这没有意义嘛"）——
+               库里根本没有他要的那支，让他去挑是白搭 ✓。
+               想改选库里别的苗：清空框里的名字，这个入口就回来了 ✓。 -->
+          <view class="field-name__pick">从产品库选</view>
+        </picker>
+      </view>
 
-      <!-- 库里有这支苗时的手输入口（老板 2026-10-13 第 5 条）：
-           选错了、而产品库里又没有他要的那支 —— 点这里改回手输。
-           文案用「手动输入」（老板点名要这四个字）。 -->
-      <text
-        v-if="showManualInputLink()"
-        class="vaccine-manual-link"
-        @tap="enterManualNameMode()"
-      >手动输入</text>
+      <!-- 配方说明：**紧跟名称字段**（老板 2026-10-13 第 3 条）。
+           只说成分，**不再重复产品名** —— 名字上面那个框里已经有了。 -->
+      <text v-if="confirmResult" class="field-hint field-hint--recipe">{{ confirmResult.text }}</text>
 
-      <!-- 库里没有这支苗：说明白，并且不再给"从产品库挑一支"的入口 -->
+      <!-- 库里没有这支苗：只**陈述事实**（老板 2026-10-13 第 2 条：
+           不要把"系统内部怎么归类"这类话打到顾客脸上）。 -->
       <template v-if="nameFieldMode(draft.vaccineName) === 'unknown'">
-        <text class="field-hint field-hint--unknown">
-          产品库里没有这支苗 —— 已按你写的名字记录，点下面的「确认」，我们按它的成分归类。
-        </text>
+        <text class="field-hint field-hint--unknown">产品库里没有这支苗。</text>
         <!-- 认不准就诚实说（2026-10-06 老板）：
              "并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
               并没有识别出8这个字。如果不能完全有把握的识别出来，
@@ -146,27 +160,6 @@ class="vaccine-card"
         </template>
       </template>
 
-      <!-- 手填入口：名字还空着、或者库里没有时出现。
-           库里有这只苗时换名字走上面的选择器 —— 手打会绕开产品库，
-           厂商、批准文号、归类全都带不出来。
-           正在打字的那一行（nameFocused）不抽走，否则顾客打到一半
-           名字刚好命中产品库，输入框会当场消失。 -->
-      <template v-if="showManualNameInput()">
-        <text
-          v-if="nameFieldMode(draft.vaccineName) === 'empty'"
-          class="field-hint"
-        >产品库里没有？也可以直接在下面写名字，写完整点。</text>
-        <input
-          class="field-input"
-          type="text"
-          placeholder="例如：犬四联"
-          :value="draft.vaccineName"
-          :focus="autofocus"
-          @input="updateField('vaccineName', $event.detail.value)"
-          @blur="notifyNameBlur()"
-        />
-      </template>
-
       <!-- 「确认」只在**还需要判一次**的时候出现（2026-10-06 老板提问：
            "是需要点点击确认按钮才会归类吗？还是说不需要点其实已经归类了？"）。
 
@@ -182,9 +175,6 @@ class="vaccine-card"
         :class="{ 'vaccine-confirm--busy': matchingBusy }"
         @tap="confirmVaccineName()"
       >{{ matchingBusy ? '正在查这是哪一支苗…' : '确认' }}</text>
-      <text v-else-if="draft.kinds.length > 0" class="field-hint">
-        分类已按产品库自动判定，不用再确认。
-      </text>
 
       <!-- 确认的结果**留在卡片上**（2026-10-06 老板："点击下方的确认按钮，
            也没有任何反应，只是屏幕闪烁了一下"）。
@@ -255,7 +245,6 @@ class="vaccine-card"
              那支苗含什么是数据库里核过的，顾客改了会和产品库对不上，
              免疫计划的推算也跟着错（老板 2026-10-13 第 7 条）。 -->
         <text v-if="!componentsLocked" class="vaccine-kind__edit">修改</text>
-        <text v-else class="vaccine-kind__locked">成分由产品库确定</text>
       </view>
 
       <!-- 还没勾：说清楚要做什么，并让顾客照本子勾 -->
@@ -339,6 +328,14 @@ class="vaccine-card"
         :class="{ 'vaccine-card__save--busy': saving }"
         @tap.stop="emit('save', index)"
       >{{ saving ? '保存中…' : '保存' }}</text>
+      <!-- 「取消」和「保存」**同一行**（老板 2026-10-13 第 4 条）。
+           它原来画在卡片外面（计划板块里）✗ —— 跟保存排不到一行 ✓，
+           所以挪进卡片的动作条 ✓（这个容器本来就是 flex ✓）。 -->
+      <text
+        v-if="cancelLabel"
+        class="vaccine-card__cancel"
+        @tap.stop="emit('cancel', index)"
+      >{{ cancelLabel }}</text>
       <text v-if="saving" class="vaccine-card__autosave vaccine-card__autosave--quiet">
         保存中…
       </text>
@@ -415,6 +412,16 @@ const props = withDefaults(
      */
     toggleLabel?: string
     /**
+     * 「取消」按钮的文案（老板 2026-10-13 第 4 条：和「保存」**同一行**）。
+     *
+     * 有值才显示这个按钮 ✓ —— 计划卡下面那张新建卡要它 ✓（那里必须能退出 ✓）；
+     * 列表里那张卡不需要 ✗（点卡片头就能收起 ✓）。
+     *
+     * ⚠️ 又用字符串而不是布尔 ✗：这条 props 通道对布尔不可靠 ✓
+     *    （false 被当成"没传"丢掉 ✓、Boolean 收不到值又强制成 false ✓）。
+     */
+    cancelLabel?: string
+    /**
      * **收起标记**（2026-10-12）：传字符串 `'yes'` = 收起，其余（含不传）= 展开 ✓。
      *
      * ⚠️ 为什么不用布尔 ✗：这条 props 通道在小程序里对布尔不可靠 ——
@@ -453,6 +460,8 @@ const props = withDefaults(
     autofocus: false,
     // 不传 = 展开着 ✓（见上面 toggleLabel 的说明 ✓）
     toggleLabel: '收起',
+    // 不传 = 不显示取消按钮 ✓
+    cancelLabel: '',
     // 不传 = 展开 ✓（见上面 collapsible 的说明 ✓）
   },
 )
@@ -475,6 +484,8 @@ const emit = defineEmits<{
    *    原来那条路是直接调 `scheduleAutoSave(immediate)` ✓，行为不变 ✓。
    */
   (event: 'save', index: number): void
+  /** 点「取消」：退出这张新建卡（老板 2026-10-13 第 4 条，和保存同一行）*/
+  (event: 'cancel', index: number): void
   /** 名称框失焦 → 父组件把"注意力在这一行"的标记清掉 ✓ */
   (event: 'name-blur', index: number): void
 }>()
@@ -502,14 +513,6 @@ const matchingHere = ref(false)
  *              ② 顾客自己点了"修改"（他的记录，他想改就改）
  */
 const kindPickerOpen = ref(false)
-/**
- * 顾客**主动改成手输**名字了（老板 2026-10-13 第 5 条）。
- *
- * 场景：从产品库选了一支，发现选错了，而产品库里又没有他要的那支 ——
- * 这时候得有个入口让他改回手输。点了「手动输入」就打开它。
- * 从产品库重新选一支会自动退出（见 applyCatalogProduct）。
- */
-const manualNameMode = ref(false)
 
 /*
  * 今天的日期（本地时区）。
@@ -630,39 +633,13 @@ function showConfirmButton(): boolean {
   return nameFieldMode(draft.value.vaccineName) === 'unknown'
 }
 
-/**
- * 名称那一行显示什么（2026-10-06 第二轮）。
- *
- * ⚠️ 老板报的交互问题："未识别的疫苗产品输入框出现的时候，对用户而言是否会
- *    感到疑惑？因为它的上方还有一个产品名的选择器，**二者都是一样的名字**。"
- *
- * 所以两个控件各司其职，同一个名字**只出现一次**：
- *   · 库里认得出 → 这一行显示**库里的规范名**（唯一一处，也没有手填框）
- *   · 认不出     → 这一行只说"去库里挑一支"（读起来是一个**动作**，
- *                  不是"这就是名字"），名字本身在下面的手填框里
+/*
+ * 这里原来还有三个函数，2026-10-13 老板第 1、3 条之后**都不需要了**：
+ *   · nameFieldLabel()        —— 名称行显示什么（现在就是输入框自己的值）
+ *   · showManualInputLink()   —— 要不要给「手动输入」链接
+ *   · enterManualNameMode()   —— 点它进手输模式
+ * 因为这三点合成了一件事：**框里直接打字就是手动输入**，不再需要单独的入口。
  */
-function nameFieldLabel(name: string): string {
-  const matched = findCatalogProduct(props.catalogProducts, name)
-  if (matched) return matched.name
-  return showManualNameInput() ? '＋ 从产品库选一支' : '从产品库选择（进口 / 国产都有）'
-}
-
-/**
- * 要不要显示「手动输入」入口（老板 2026-10-13 第 5 条）。
- *
- * 只在"**认得出这支苗**"时显示 —— 也就是手填框正收着的时候；
- * 手填框已经摆出来时不用再给这个链接（否则又是两个控件做同一件事）。
- */
-function showManualInputLink(): boolean {
-  return !showManualNameInput()
-}
-
-/** 点「手动输入」：打开手输模式（不清空名字，顾客可能只想改个错字）*/
-function enterManualNameMode(): void {
-  manualNameMode.value = true
-  // 他要自己弄了 → 成分也交还给他改（不再是"产品库挑的那支"了）
-  componentsLocked.value = false
-}
 
 function productIndex(name: string): number {
   const key = normalizeProductName(name)
@@ -674,15 +651,6 @@ function productIndex(name: string): number {
 }
 
 /**
- * 手填输入框要不要出现（2026-10-06 老板的规格）。
- *
- * 只有**产品库里没有这只苗**时才给手填入口：
- *   · 名字还空着 → 要出现，否则顾客没法开始写；
- *   · 正在这一行打字 → 要留着，否则打到一半刚好命中产品库，
- *     输入框当场消失（手会停在半空）；
- *   · 库里有 → 不出现，换名字走上面的产品选择器 ——
- *     那才是"选产品"的正路，手打会绕开产品库、丢掉厂商与归类。
- */
 /**
  * 这次的成分**锁住**吗（老板 2026-10-13 第 7 条 + 当天补充）。
  *
@@ -701,26 +669,6 @@ function productIndex(name: string): number {
  */
 const componentsLocked = ref(false)
 
-function showManualNameInput(): boolean {
-  const name = draft.value.vaccineName.trim()
-
-  /*
-   * ⚠️ 产品库**没加载出来**时，必须给手填框（2026-10-13 老板截图报的：
-   *    "疫苗名称"那一行只有一个字段名、**什么都没有** ✗，点不动也填不了 ✗）。
-   *
-   * 根因：名称那一行原来是"产品库选择器"和"手填框"二选一 ✓ ——
-   * 而选择器的条件是"产品库有内容" ✗。网络慢 / 接口失败时产品库是空的 ✓，
-   * 于是**两个都不出现** ✗，那一行就成了死行 ✓。
-   * 手填框是最后一道兜底 ✓，**任何情况下都不该没有** ✓。
-   */
-  if (props.catalogProducts.length === 0) return true
-  // 顾客自己点了「手动输入」——按他说的办 ✓（第 5 条）
-  if (manualNameMode.value) return true
-  if (!name) return true
-  if (props.nameFocused) return true
-  return findCatalogProduct(props.catalogProducts, name) === null
-}
-
 function setConfirmResult(ok: boolean, text: string) {
   confirmResult.value = { ok, text }
 }
@@ -731,6 +679,14 @@ function clearConfirmResult() {
 
 /** 改草稿里的某个字段 → 往外报（父组件同步它那份 + 排自动保存 ✓）*/
 function updateField(field: keyof VaccineDraft, value: string) {
+  /*
+   * 顾客**自己在框里改了名字** → 成分交还给他改（老板 2026-10-13：
+   * "识别出来的都允许改，需要给用户一个纠错的机会"）。
+   *
+   * ⚠️ 「从产品库选一支」也走这里（applyCatalogProduct 先报名字、再设归类）✓，
+   *    但它紧接着会把 componentsLocked 设回 true ✓ —— 顺序在那边保证 ✓。
+   */
+  if (field === 'vaccineName') componentsLocked.value = false
   emit('update', props.index, field, value)
 }
 
@@ -877,14 +833,18 @@ function applyCatalogProduct(value: string | number) {
   // 病种由产品库带出来（2026-10-06）；类别由后端按病种推导
   draft.value.components = Array.isArray(product.components) ? [...product.components] : []
   draft.value.kinds = [...product.kinds]
-  // 从产品库选了，就退出手输模式（两者不该同时摆着）
-  manualNameMode.value = false
   // 主动从产品库挑的 → 成分锁住（老板第 7 条的规则）
   componentsLocked.value = true
-  // 产品库里选的：归类是确定的，直接在卡片上说明白（和点「确认」同样的交代）
+  /*
+   * 配方说明（老板 2026-10-13 第 3 条）。
+   *
+   * ⚠️ **不再重复产品名** ✗ —— 老板原话："疫苗名称从产品库选择卫佳伍后，
+   *    下方卫佳伍的配方说明中又会出现已选择卫佳伍的文案" ✓。
+   *    名字上面那个框里已经有了 ✓，这里只说**这支苗含什么** ✓。
+   */
   setConfirmResult(
     true,
-    `已选择：${product.name} · 含「${(product.components || [])
+    `含「${(product.components || [])
       .map((component) => componentLabel(component))
       .join(' + ')}」`,
   )
@@ -1087,22 +1047,6 @@ color: #b08d4f;
   display: none;
 }
 
-/* 「手动输入」（第 5 条）—— 库里有这支苗时的改手输入口 */
-.vaccine-manual-link {
-  display: inline-block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: #4a7c59;
-  text-decoration: underline;
-}
-
-/* 成分由产品库确定时的说明（第 7 条） */
-.vaccine-kind__locked {
-  margin-left: 12rpx;
-  font-size: 22rpx;
-  color: #9a948a;
-}
-
 /* 待核对（2026-10-09 安全默认值） */
 .vaccine-card__pending {
 margin-left: 10rpx;
@@ -1129,6 +1073,16 @@ font-size: 26rpx;
 font-weight: 600;
 color: #ffffff;
 background: #7c6bd6;
+}
+
+/* 「取消」：和保存同一行，但**不抢眼**（次要动作，2026-10-13 第 4 条）*/
+.vaccine-card__cancel {
+display: inline-block;
+padding: 10rpx 32rpx;
+border-radius: 999rpx;
+font-size: 26rpx;
+color: #6b6653;
+background: #f2f0e9;
 }
 .vaccine-card__save--busy {
 opacity: 0.6;
@@ -1261,6 +1215,34 @@ display: block;
 font-size: 24rpx;
 font-weight: 600;
 color: #6b6653;
+}
+
+/* 名称字段：输入框 + 「从产品库选」入口，**同一行**（老板 2026-10-13 第 1、3 条）*/
+.field-name {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.field-name__input {
+  flex: 1;
+}
+
+/* 「从产品库选」：框内的次要入口，不抢输入框的位置 */
+.field-name__pick {
+  flex-shrink: 0;
+  padding: 14rpx 20rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: #4a7c59;
+  background: #eef3ee;
+}
+
+/* 配方说明：紧跟名称字段（第 3 条），说的是成分，不重复产品名 */
+.field-hint--recipe {
+  display: block;
+  margin-top: 10rpx;
+  color: #4a7c59;
 }
 
 .field-input {

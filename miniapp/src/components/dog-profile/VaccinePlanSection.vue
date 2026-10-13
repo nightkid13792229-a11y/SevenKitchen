@@ -142,6 +142,7 @@
             :catalog-products="inline.catalogProducts"
             :component-options="inline.componentOptions"
             :saving="inline.saving"
+            cancel-label="取消"
             :name-focused="inline.focused"
             :autofocus="false"
             :auto-save-text="''"
@@ -152,9 +153,9 @@
             @name-blur="emit('inline-blur')"
             @toggle="emit('inline-toggle')"
             @remove="emit('inline-remove')"
+            @cancel="emit('inline-close')"
           />
           </view>
-          <text class="plan-inline-editor__cancel" @tap.stop="emit('inline-close')">取消</text>
         </view>
       </view>
     </view>
@@ -1537,15 +1538,6 @@ defineExpose({
   font-size: 24rpx;
   font-weight: 600;
   color: #1e3a2f;
-}
-
-.plan-inline-editor__cancel {
-  display: block;
-  margin-top: 10rpx;
-  padding: 12rpx 0;
-  text-align: center;
-  font-size: 24rpx;
-  color: #6b6653;
 }
 
 .step-actions {

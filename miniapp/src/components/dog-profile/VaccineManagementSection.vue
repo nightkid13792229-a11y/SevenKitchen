@@ -53,9 +53,10 @@
         <text class="records-card__title">接种记录</text>
         <text class="records-card__count">{{ records.length }} 条</text>
       </view>
-      <text v-if="records.length > 0" class="records-card__desc">
-        最近接种的排在前面。点一条可以改，右边可以删。
-      </text>
+      <!-- 标题下面那行小字（"最近接种的排在前面。点一条可以改，右边可以删。"）
+           已按老板 2026-10-13 第 4 条**删除** ✗ ——
+           那是给内部看的操作说明，不该出现在顾客页面上 ✓。
+           卡片右边的「删除」和点一下展开，本身已经说明怎么用了 ✓。 -->
 
       <!-- 疫苗本原件：**整本只展示一次**（2026-10-08 老板定）。
            老板："往往疫苗本就只有 1~2 张，上面有很多条疫苗标签和记录，
@@ -457,13 +458,22 @@ async function saveInlineDraft() {
       throw new Error(res?.message || '保存失败')
     }
 
-    // 收起卡片 ✓（老板要的：保存后关闭 ✓）
+    /*
+     * ⚠️ 老板 2026-10-13 第 3 条："点击保存后，过了 2~3 秒才保存成功，
+     *    这是为什么呢？为什么这么慢？"
+     *
+     * 原因：这里原来**串行等三个网络往返** ✗ ——
+     *   ① 存这一针 → ② 重新拉记录列表 → ③ 通知计划重算（页面再拉一次计划）
+     * 手机网络下每个往返几百毫秒 ✓，加起来就是两三秒 ✓。
+     * 可顾客**只需要等①**：数据存进去了就该给反馈 ✓，
+     * ②③ 是"把界面刷新成最新"，慢一点没关系 ✓。
+     *
+     * ⇒ 现在只等① ✓，②③ 放后台跑 ✓（不 await ✓）。
+     */
     closeInlineCreate()
     uni.showToast({ title: '已保存，可在下方接种记录中查看', icon: 'none' })
-    // 刷新记录列表 ✓（顾客要在下方看到它 ✓）
-    await loadRecords()
-    // 计划也要跟着重算 ✓（这一针不该再提醒了 ✓）
-    notifyRecordsChanged()
+    // 刷新列表 → 完了再通知计划重算（顺序不能反：通知要看列表的签名 ✓）
+    void loadRecords().then(() => notifyRecordsChanged())
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存失败，请重试', icon: 'none' })
   } finally {
@@ -1475,9 +1485,17 @@ async function saveRecord(record: VaccineRecord, index: number) {
       record.id = newId
     }
 
-    await loadRecords()
-
-    if (newId) {
+    /*
+     * ⚠️ 老板 2026-10-13 第 3 条（"保存为什么这么慢"）的同一个道理 ✓：
+     * 这里原来 `await loadRecords()` 才收工 ✗ —— 顾客要等"存 + 重新拉列表"
+     * 两个网络往返 ✓。数据已经存进去了 ✓，刷新列表是"把界面变成最新" ✓，
+     * 慢一点没关系 ✓。
+     *
+     * 但"重新定位展开哪一张"要用刷新后的列表 ✓，所以把它挪进 .then ✓ ——
+     * 该等的东西照等 ✓，只是不再挡住"保存已经完成"这件事 ✓。
+     */
+    void loadRecords().then(() => {
+      if (!newId) return
       if (!suppressExpandOnSave) {
         const relocated = records.value.findIndex((item) => item.id === newId)
         if (relocated >= 0) {
@@ -1486,7 +1504,7 @@ async function saveRecord(record: VaccineRecord, index: number) {
       }
       // 按**id**高亮（不是下标）：loadRecords 会重排，下标会认错卡片
       markSaved(String(newId))
-    }
+    })
   } catch (error: any) {
     const message = String(error?.message || '保存失败，请重试')
     /*

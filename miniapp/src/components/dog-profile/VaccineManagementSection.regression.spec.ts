@@ -535,7 +535,9 @@ describe('识别结果表单 + 疫苗名称回填 + 刷新不闪（2026-10-06 �
     // 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
     const card = readCard()
     expect(card).toContain('const confirmResult = ref<')
-    expect(card).toContain("class=\"vaccine-confirm-result\"")
+    // 结果只显示**一处**（老板 2026-10-13：配方说明展现了两次）
+    expect(card).toContain('field-hint--recipe')
+    expect((card.match(/\{\{ confirmResult\.text \}\}/g) || []).length).toBe(1)
     expect(card).toContain('setConfirmResult(')
     // 成功和认不出两种结果都要说清楚
     expect(card).toContain('已确认：')

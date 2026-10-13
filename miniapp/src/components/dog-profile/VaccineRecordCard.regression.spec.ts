@@ -379,6 +379,55 @@ describe('编辑卡 · 名称那一行（2026-10-06 第二批）', () => {
     expect(source).toContain('{{ cancelLabel }}')
   })
 
+  it('🔴 配方说明**只显示一次**（老板第 1 条：展现了两次）', () => {
+    const source = readCard()
+
+    /*
+     * 老板 2026-10-13："疫苗的配方说明展现了两次。"
+     * 根因：新加了一份"紧跟名称字段"的说明，但**旧的显示块没删**
+     * （它在「确认」按钮附近，类名 vaccine-confirm-result）。
+     */
+    const shown = (source.match(/\{\{ confirmResult\.text \}\}/g) || []).length
+    expect(shown).toBe(1)
+
+    // 旧那块已经下线（只看模板：脚本注释里会提到它为什么被删）
+    const template = source.slice(source.indexOf('<template>'), source.indexOf('</template>'))
+    expect(template).not.toContain('vaccine-confirm-result')
+  })
+
+  it('🔴 从产品库选的：整个「含哪些疫苗」字段不显示（老板第 2 条）', () => {
+    const source = readCard()
+
+    /*
+     * 老板："如果是从产品库中选择，为什么还有含有哪些疫苗这个字段呢？
+     *       相当于疫苗的配方展现了三次。"
+     * 产品库成分是核过的、也改不了 —— 名称下面那行说明已经讲清楚了。
+     * 手输 / 识别出来的照旧显示（要能勾、能纠错）。
+     */
+    expect(source).toContain('<view v-if="!componentsLocked" class="field-group">')
+    expect(source).toContain('<text class="field-label">含哪些疫苗（可多选）</text>')
+  })
+
+  it('🔴 保存只等"存"这一步，刷新放后台（老板第 3 条：为什么这么慢）', () => {
+    const source = readCard()
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+    /*
+     * 老板："点击保存后，过了 2~3 秒才保存成功，这是为什么呢？为什么这么慢？"
+     * 原因：串行等三个网络往返（存 → 拉列表 → 通知计划重算）。
+     * 顾客只需要等"存"这一步。
+     */
+    expect(section).toContain('void loadRecords().then(() => notifyRecordsChanged())')
+    // 老的"await loadRecords() 才收工"必须已经不在保存路径上
+    expect(section).not.toContain(`await loadRecords()
+
+    if (newId) {`)
+    void source
+  })
+
   it('🔴 名称输入框**始终**在（不再按状态显示/隐藏）', () => {
     const source = readCard()
 
@@ -397,7 +446,13 @@ describe('编辑卡 · 名称那一行（2026-10-06 第二批）', () => {
 
     // 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
     expect(source).toContain('const confirmResult = ref<')
-    expect(source).toContain('class="vaccine-confirm-result"')
+    /*
+     * ⚠️ 老板 2026-10-13："疫苗的配方说明展现了两次" ——
+     * 结果那行字现在**只在名称字段下面显示一处**（类名也换成 field-hint--recipe）✓。
+     * 位置变了，"留在卡片上、不再闪一下就没"这条**要求没变** ✓。
+     */
+    expect(source).toContain('field-hint--recipe')
+    expect((source.match(/\{\{ confirmResult\.text \}\}/g) || []).length).toBe(1)
     expect(source).toContain('setConfirmResult(')
     // 成功和认不出两种结果都要说清楚
     expect(source).toContain('已确认：')

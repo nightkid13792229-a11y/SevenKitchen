@@ -176,18 +176,10 @@ class="vaccine-card"
         @tap="confirmVaccineName()"
       >{{ matchingBusy ? '正在查这是哪一支苗…' : '确认' }}</text>
 
-      <!-- 确认的结果**留在卡片上**（2026-10-06 老板："点击下方的确认按钮，
-           也没有任何反应，只是屏幕闪烁了一下"）。
-           原来只有一闪而过的 toast：命中产品库时分类本来就已经是对的，
-           画面上什么都没变，看起来就像按钮坏了。
-           现在无论成功失败都留一行字在这里，一眼能看到刚才发生了什么。 -->
-      <text
-        v-if="confirmResult"
-        class="vaccine-confirm-result"
-        :class="confirmResult.ok
-          ? 'vaccine-confirm-result--ok'
-          : 'vaccine-confirm-result--warn'"
-      >{{ confirmResult.text }}</text>
+      <!-- ⚠️ 结果那行字**只在名称字段下面显示一处**（老板 2026-10-13：
+           "疫苗的配方说明展现了两次"）——
+           这里原来还有一份旧的显示块，和名称下面那份重复，已删除。
+           留一份就够：点「确认」的结果也显示在名称下面，位置统一。 -->
     </view>
 
     <!-- 这一针**含哪些病种**（2026-10-06 老板定的模型）。
@@ -220,7 +212,14 @@ class="vaccine-card"
         </view>
       </picker>
     </view>
-    <view class="field-group">
+    <!-- 「含哪些疫苗」整块（老板 2026-10-13 第 2 条）。
+         ⚠️ **从产品库选的就不显示这一块**：老板原话
+            "如果是从产品库中选择，为什么还有含有哪些疫苗这个字段呢？
+             相当于疫苗的配方展现了三次。"
+         产品库里成分是核过的、顾客也改不了（locked），
+         名称下面那行配方说明已经说清楚了 —— 再摆一排只读标签就是重复。
+         手输 / 识别出来的**照旧显示**（要能勾、能纠错）。 -->
+    <view v-if="!componentsLocked" class="field-group">
       <!-- 老板 2026-10-12："含哪些病种的文案可否改成含哪些疫苗？
            并且……『可多选』移到含哪些病种文案板块，以括弧中的注释形式存在。" -->
       <text class="field-label">含哪些疫苗（可多选）</text>
@@ -1122,26 +1121,10 @@ opacity: 0.6;
 }
 
 /*
- * 「确认」之后留在卡片上的结果（2026-10-06）。
- *
- * 老板："点击下方的确认按钮，也没有任何反应，只是屏幕闪烁了一下。"
- * 原来只有一闪而过的 toast；命中产品库时分类本来就已经是对的，
- * 画面上什么都没变，看起来就像按钮坏了。这行字留着不走。
+ * ⚠️ 这里原来有 `.vaccine-confirm-result` 三条样式（「确认」结果那行字）。
+ * 2026-10-13 老板："疫苗的配方说明展现了两次" —— 那行字现在**只在名称
+ * 字段下面显示一处**（类名 `field-hint--recipe`），旧样式已随之删除。
  */
-.vaccine-confirm-result {
-display: block;
-margin-top: 12rpx;
-font-size: 24rpx;
-line-height: 1.55;
-}
-
-.vaccine-confirm-result--ok {
-color: #3d6b4a;
-}
-
-.vaccine-confirm-result--warn {
-color: #b26a2f;
-}
 
 /* 归类标签（2026-10-05） */
 .vaccine-kind {

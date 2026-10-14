@@ -78,14 +78,16 @@
               <thead>
                 <tr>
                   <th class="col-ingredient">原料</th>
-                  <th class="col-number">用量</th>
+                  <th class="col-number">用量 / 浓度</th>
                   <th class="col-number">重量占比</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="row in report.ingredientRows" :key="row.ingredientName">
                   <td class="col-ingredient">{{ row.ingredientName }}</td>
-                  <td class="col-number">{{ row.amountLabel }}</td>
+                  <!-- 2026-10-14 改版：食材只给重量占比、补剂只给浓度（与小程序详情页同口径），
+                       不再混用同一列「用量」—— 食材的克与补剂的粒/片无法比较。 -->
+                  <td class="col-number">{{ row.concentrationLabel }}</td>
                   <td class="col-number">{{ row.weightPercentLabel }}</td>
                 </tr>
               </tbody>
@@ -360,8 +362,26 @@ const nutrientSectionList = computed(() => report.value.nutrientSections)
 
 const totalWeight = computed(() => {
   const items = draft.value?.items ?? []
-  return items.reduce((sum, item) => sum + Number(item.weightG ?? 0), 0)
+  // 2026-10-14：排除按非克单位计量（粒 / 片 / 平勺）的补剂 —— 它们存的是数量而非克重，
+  // 与食材克数相加没有意义。与编辑器里的 includedTotalWeightG 保持同一口径。
+  return items
+    .filter((item) => !isNonGramMeasuredSupplement(item))
+    .reduce((sum, item) => sum + Number(item.weightG ?? 0), 0)
 })
+
+/** 是否为"按非克单位计量"的补剂（粒 / 片 / 平勺 等） */
+function isNonGramMeasuredSupplement(item: any): boolean {
+  const type = String(item?.ingredient?.type || item?.ingredientType || '').trim().toUpperCase()
+  if (type !== 'SUPPLEMENT') return false
+  const props = (item?.ingredient?.properties ?? null) as Record<string, unknown> | null
+  const unit = String(
+    item?.ingredient?.unitDisplayLabel ||
+      props?.['display_unit'] ||
+      props?.['servingUnitLabel'] ||
+      '',
+  ).trim().toLowerCase()
+  return unit !== '' && unit !== 'g' && unit !== '克' && unit !== 'ml' && unit !== '毫升'
+}
 
 function formatWeight(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(2)} kg`

@@ -340,10 +340,18 @@ function syncReferenceDog() {
   referenceDogId.value = draft.value?.series?.referenceDogId ?? null
 }
 
-/** 计入评估的原料总重（与评估、重量百分比一致） */
+/**
+ * 计入评估的原料总重（与评估、重量百分比一致）。
+ *
+ * 2026-10-14：改为排除"按非克单位计量"的补剂（粒 / 片 / 平勺 等）。
+ * 它们的 weightG 存的是粒数/片数，不是克重，与食材的克数相加没有意义 ——
+ * 实测一道菜里 9.7 粒鱼油胶囊会让总重凭空多出 9.7，而它实际只有几克。
+ * 按克计量的补剂（如碳酸钙粉、营养酵母粉）仍然计入。
+ */
 const includedTotalWeightG = computed(() =>
   items.value
     .filter((item) => item.includeInAssessment !== false)
+    .filter((item) => !isNonGramMeasured(item))
     .reduce((sum, item) => sum + Number(item.weightG ?? 0), 0)
 )
 
@@ -603,14 +611,46 @@ function isSupplementItem(item: DesignerItem): boolean {
 }
 
 /** 明细行单位：食材统一为克；补剂按其规格单位显示（如 粒/片/胶囊/毫升），无规格时兜底克 */
+function readIngredientUnit(source: any): string {
+  // 2026-10-14：与导出报告 publishReport.ts 的 readIngredientDisplayUnit 对齐。
+  // 原实现只读 unitDisplayLabel / properties.display_unit / purchaseUnit 三处，
+  // 比报告少读 properties.servingUnitLabel、properties.amountUnitLabel、
+  // properties.purchaseUnit、displayUnit、unit —— 导致同一份补剂
+  // 在编辑页显示成「g」、在导出报告里显示成「粒」。
+  const props = (source?.properties ?? null) as Record<string, unknown> | null
+  const pick = (...vals: unknown[]) =>
+    vals.map((v) => String(v ?? '').trim()).find((v) => v.length > 0) || ''
+  return pick(
+    source?.unitDisplayLabel,
+    source?.displayUnit,
+    source?.display_unit,
+    props?.['unitDisplayLabel'],
+    props?.['displayUnit'],
+    props?.['display_unit'],
+    props?.['servingUnitLabel'],
+    source?.purchaseUnit,
+    props?.['purchaseUnit'],
+    source?.unit,
+    props?.['amountUnitLabel'],
+  )
+}
+
 function itemUnitLabel(item: DesignerItem): string {
   if (!isSupplementItem(item)) return 'g'
-  const display = String(item.ingredient?.unitDisplayLabel || '').trim()
-  const propsUnit = String(
-    (item.ingredient?.properties as Record<string, unknown> | null)?.['display_unit'] ?? ''
-  ).trim()
-  const purchase = String(item.ingredient?.purchaseUnit || '').trim()
-  return display || propsUnit || purchase || 'g'
+  return readIngredientUnit(item.ingredient) || 'g'
+}
+
+/**
+ * 该原料是否按"非克单位"计量（如 粒 / 片 / 平勺）。
+ *
+ * 2026-10-14 新增：用于把这类补剂排除出「总重」。
+ * 原因：weightG 对它们存的是"粒数/片数"而不是克重，直接与食材的克数相加没有意义
+ * （实测一道菜里 9.7 粒鱼油胶囊会让总重凭空多出 9.7）。
+ */
+function isNonGramMeasured(item: DesignerItem): boolean {
+  if (!isSupplementItem(item)) return false
+  const unit = readIngredientUnit(item.ingredient).toLowerCase()
+  return unit !== '' && unit !== 'g' && unit !== '克' && unit !== 'ml' && unit !== '毫升'
 }
 
 /** 当前配方已使用的标准原料 ID（仅食材类），用于与「最近吃过的食材」对比提醒 */
@@ -958,6 +998,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
   box-sizing: border-box;
+  /* 本页五栏合计约 1500px，由 .editor-body 自己横向滚动；
+     这里只保证自己不被父级 flex 压窄。 */
+  min-width: 0;
+  flex-shrink: 0;
 }
 .editor-header {
   display: flex;
@@ -1020,7 +1064,13 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   min-height: 0;
-  overflow: hidden;
+  /* 2026-10-14 修正：原为 overflow: hidden。
+     五栏固定宽度合计约 1500px（原料库 250 + 配方明细 ≥320 + 仪表盘 300 + 营养评估 330 + 爱犬指导 300），
+     在窄于该宽度的窗口里，hidden 会把右侧三栏（仪表盘 / 营养评估 / 爱犬指导）整个裁掉，
+     且没有任何滚动入口 —— 看起来就像"内容没加载出来"，实际是被裁切。
+     改为横向可滚动：窄窗口下用户能滚到右侧各栏，宽窗口下不出现滚动条，布局不变。 */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .pane {
   display: flex;
@@ -1039,6 +1089,9 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 320px;
   border-right: 1px solid #e4e7ed;
+  /* 不参与压缩：否则窗口变窄时这一栏会被挤到只剩几十像素，
+     原料名（.item-main）连同用量输入框一起被压没（实测名字列只剩 24px）。 */
+  flex-shrink: 0;
 }
 .pane-dashboard {
   width: 300px;
@@ -1097,6 +1150,13 @@ onBeforeUnmount(() => {
   padding: 6px 8px;
   margin-bottom: 5px;
   background: #fff;
+  /* 2026-10-14：允许换行。
+     本栏最窄 320px，而行内固定宽度控件合计约 240px
+     （拖动 16 + 类型标签 34 + 用量 80 + 占比 46 + 开关/删除 64），
+     若强制单行，唯一可压缩的 .item-main（原料名 + 营养档案名）会被挤到 24px，
+     名字与档案名全部显示成省略号。改为换行后：名字独占一行，控件落到下一行。
+     宽窗口下（本栏被 flex:1 撑开）行为与原来一致。 */
+  flex-wrap: wrap;
 }
 .item-row:hover {
   border-color: #c6e2ff;
@@ -1131,7 +1191,8 @@ onBeforeUnmount(() => {
   background: #fdf6ec;
 }
 .item-main {
-  flex: 1;
+  /* 占满整行，迫使用量/占比/开关等控件换到下一行（见 .item-row 的 flex-wrap 说明） */
+  flex: 1 1 100%;
   min-width: 0;
 }
 .item-name {

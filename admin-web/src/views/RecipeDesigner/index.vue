@@ -419,15 +419,17 @@ async function createSeries() {
     ElMessage.warning('请填写系列名称')
     return
   }
-  if (!createForm.referenceDogId) {
-    ElMessage.warning('请选择参考爱犬（必选）')
-    return
-  }
+  // 参考爱犬为可选项（2026-10-14 修正）。
+  //
+  // 背景：产品线系列是面向所有用户的，不绑定某只具体的狗，因此这里不能强制必选。
+  // 后端 CreateRecipeSeriesDto.referenceDogId 本就是 @IsOptional()，不传即 null；
+  // 此前前端多加了一道必选校验，与输入框提示「可选：选择一位客户的爱犬」自相矛盾，
+  // 且挡住「无犬设计」这条路。
   creating.value = true
   try {
     const card = await recipeDesignerApi.createSeries({
       name,
-      referenceDogId: createForm.referenceDogId,
+      referenceDogId: createForm.referenceDogId || undefined,
       scenario: createForm.scenario
     })
     ElMessage.success('系列创建成功')

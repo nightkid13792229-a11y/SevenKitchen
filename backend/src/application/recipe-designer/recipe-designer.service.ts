@@ -1224,9 +1224,16 @@ function buildManualSupplementNutritionProfile(
     fieldDisplayUnits: {},
   } as any;
 
-  for (const macroKey of Object.keys(profile.macros)) {
-    profile.macros[macroKey as keyof typeof profile.macros] = 0;
-  }
+  // 2026-10-14 修正：此处原本无条件把 macros 的 9 项全部写成 0，已移除。
+  //
+  // 为什么必须去掉：补剂只按成分标签录入，标签上没有的项应当留空（null = 数据缺失）。
+  // 写成 0 会被营养评估解读为"该补剂确定不含这一项" —— 因为补剂走
+  // missingValueAsZeroForSupplements 分支，null 会被当作 0 计入合计。
+  // 实测后果：一个只标了 DHA 的藻油档案，会被算成"不含蛋白质、碳水、水分"，
+  // 凭空给整道食谱制造假的营养缺口。
+  //
+  // createEmptyNutritionProfile() 本就把各项初始化为 null，与老库（如 NOW 碳酸钙粉）
+  // 的存档格式一致，沿用初始值即可。
 
   for (const entry of entries) {
     const tab = profile[entry.tabKey] as Record<string, number | null>;

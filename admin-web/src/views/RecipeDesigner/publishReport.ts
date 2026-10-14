@@ -31,7 +31,16 @@ const NUTRIENT_SECTIONS: NutrientSection[] = [
 
 export interface PublishIngredientReportRow {
   ingredientName: string
-  amountLabel: string
+  /**
+   * 补剂的"浓度值"，口径与小程序食谱详情页「营养补充剂」列表一致：
+   *   每kg食材添加{targetValue}{unit}{label}，多项用「、」连接。
+   * 食材行为 '-'。
+   *
+   * 2026-10-14 改版：原字段名 amountLabel 改为此名。
+   * 原因：食材的"用量"是克、补剂的"用量"是粒/片，混在同一列里没法比；
+   * 参照小程序的做法拆开口径 —— 食材只给重量占比，补剂只给浓度。
+   */
+  concentrationLabel: string
   weightPercentLabel: string
 }
 
@@ -105,12 +114,44 @@ function buildIngredientRows(
     const supplement = isSupplementItem(draftItem) || isSupplementItem(item)
     return {
       ingredientName: getIngredientReportName(draftItem, item, supplement),
-      amountLabel: getIngredientAmountLabel(draftItem, item),
+      // 补剂给浓度、食材给 '-'；两边都不再显示"用量"
+      concentrationLabel: supplement
+        ? getSupplementConcentrationLabel(draftItem, item)
+        : '-',
       weightPercentLabel: supplement
         ? '-'
         : formatPercent(readNumber(item.ratioPercent ?? draftItem.ratioPercent), 1),
     }
   })
+}
+
+/**
+ * 补剂浓度文案，与小程序 `formatSupplementTargets` 保持同一口径：
+ *   每kg食材添加{targetValue}{unit}{label}
+ *
+ * 优先读 supplementTargets（可多项、带单位与中文名）；
+ * 老数据只有 nutrientTargetKey/Value 时退化为单项文案。
+ */
+function getSupplementConcentrationLabel(draftItem: any, assessedItem: any): string {
+  const targets = draftItem?.supplementTargets ?? assessedItem?.supplementTargets
+  if (Array.isArray(targets) && targets.length > 0) {
+    const parts = targets
+      .map((t: any) => {
+        const value = readNumber(t?.targetValue ?? t?.targetValuePerKg)
+        const unit = cleanText(t?.unit)
+        const label = cleanText(t?.label)
+        if (value === null || !label) return ''
+        return `每kg食材添加${formatCompactNumber(value)}${unit}${label}`
+      })
+      .filter(Boolean)
+    if (parts.length > 0) return parts.join('、')
+  }
+  const key = cleanText(draftItem?.nutrientTargetKey ?? assessedItem?.nutrientTargetKey)
+  const value = readNumber(draftItem?.nutrientTargetValue ?? assessedItem?.nutrientTargetValue)
+  if (key && value !== null) {
+    return `每kg食材添加${formatCompactNumber(value)}${key}`
+  }
+  return '-'
 }
 
 function buildMacroRows(assessment: any): PublishMacroReportRow[] {

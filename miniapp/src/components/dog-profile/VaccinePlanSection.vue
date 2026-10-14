@@ -9,7 +9,29 @@
     </view>
 
     <template v-for="(card, cardIndex) in kindCards" :key="card.key">
-    <view class="kind-card">
+    <!-- ══ 合并接种：**分组框的顶部说明**（老板 2026-10-14 选定方案 B）══════
+         老板原话："我选方案B，但是需要把合并窗口顶部和底部的说明进行合并，
+                   放在顶部，文案改为：……同时包含以下两类疫苗，
+                   建议在'共同窗口期'期间完成接种。"
+
+         ── 为什么不再用"中间一条提示"──────────────────────────────
+         老板："用户很难通过中间这个板块联想到核心疫苗和钩端螺旋体这两个板块
+                之间有什么关系。" —— 对：中间那条在视觉上自成一格，
+         和上下两张卡是**并列**关系，不是**关联**关系。
+         ⇒ 改成用**一个框把两张卡圈起来**：说明只在框顶一行，
+           框底不再有任何东西。"关系"靠"同框"表达 ✓。
+
+         ⚠️ 小程序模板没法跨 v-for 迭代真的套一个容器 ✗，
+            所以框是**三段拼**的（见样式里的 combo-group__head /
+            kind-card--combo-first / kind-card--combo-second）✓。 -->
+    <view v-if="card.comboRole === 'first'" class="combo-group__head">
+      <text class="combo-group__products">{{ card.combo!.products.join('、') }}</text>
+      <text class="combo-group__desc">
+        同时包含以下两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
+        {{ card.combo!.windowEnd }}）期间完成接种。
+      </text>
+    </view>
+    <view class="kind-card" :class="comboCardClass(card)">
       <view class="kind-card__head" @tap="toggleKind(card.key)">
         <!-- 老板 2026-10-12：状态角标放到卡片**左上角** ✓
              （原来跟在标题后面 ✗ → 标题被挤到换行、「待接种」也断成两行 ✗）-->
@@ -95,7 +117,6 @@
           </view>
         </view>
 
-
         <!--
           动作：① 去**现成的记录录入模块**记录这一针 ✓ ② 忽略 ✓
           ⚠️ 2026-10-12 老板指正 ✗：我一度在这里塞了一个"精简录入窗"✗ ——
@@ -166,65 +187,7 @@
       </view>
     </view>
 
-    <!-- ══ 合并接种的提示：夹在**两张卡中间** ══════════════════════════════
-         老板 2026-10-14："在核心疫苗和钩端螺旋体两个计划的中间来做提醒。"
-
-         ⚠️ 只在"这一张卡的下一张就是它的合并对象"时插 ✓ ——
-            否则两张卡各插一次，又会变成说两遍 ✗。
-            产品库里唯一的多联苗组合就是「核心 + 钩端」✓，
-            而卡片按 PLAN_CARD_KIND_ORDER 固定顺序（核心→钩端→狂犬）✓，
-            所以这一对**永远相邻** ✓，提示条的位置也就稳定了 ✓。 -->
-    <view
-      v-if="comboNoteAfter(card, cardIndex)"
-      class="combo-note"
-    >
-      <text class="combo-note__title">这两针可以合并成一次打</text>
-
-      <!-- ⚠️ 用**示意图**说清"哪两针重叠"（老板 2026-10-14 第 1 条）。
-           老板原话："提醒文案确实能看到，但是用户理解起来还是非常的困难。
-                     这两针是哪俩针嘛。能不能……做成示意图，而不要纯文字叙述呢？"
-           —— 纯文字要顾客自己在脑子里对齐两个日期区间 ✗；
-              画成两条时间条、把重叠那段标出来 ✓，一眼就懂 ✓。 -->
-      <view class="combo-chart">
-        <view
-          v-for="row in comboChartRows(card)"
-          :key="row.key"
-          class="combo-chart__row"
-        >
-          <text class="combo-chart__label">{{ row.label }}</text>
-          <view class="combo-chart__track">
-            <view
-              class="combo-chart__bar"
-              :class="{ 'combo-chart__bar--overlap': row.isOverlap }"
-              :style="`left:${row.left}%;width:${row.width}%`"
-            />
-          </view>
-        </view>
-        <view class="combo-chart__legend">
-          <text class="combo-chart__legend-item">■ 各自的建议时间</text>
-          <text class="combo-chart__legend-item combo-chart__legend-item--overlap">
-            ■ 重叠的 {{ overlapDays(card) }} 天
-          </text>
-        </view>
-      </view>
-
-      <text class="combo-note__desc">
-        选一支同时防这两类的疫苗（比如{{ card.combo!.products[0] }}），
-        打一次就够 —— 两类都不用再单独打。
-      </text>
-      <text class="combo-note__window">
-        两边都合适的日子：{{ card.combo!.windowStart }} ~ {{ card.combo!.windowEnd }}
-      </text>
-      <text class="combo-note__more" @tap.stop="toggleComboNote(card.key)">
-        {{ comboNoteOpen[card.key] ? '收起' : '需要注意什么？' }}
-      </text>
-      <text v-if="comboNoteOpen[card.key]" class="combo-note__detail">
-        不同疫苗不能混在同一支针筒里 —— 联苗是厂家已经配好的一支。
-        是否选联苗、选哪一支，请和执业兽医确认。
-      </text>
-    </view>
     </template>
-
 
     <!--
       ⚠️⚠️ 这里必须在**确认加载成功之后**才能说"都已完成" ✗（2026-10-12 老板截图为证）。
@@ -273,7 +236,6 @@
     </view>
   </view>
 </template>
-
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
@@ -735,6 +697,14 @@ interface PlanCard {
   products: string[]
   /** 固定展示位次（后端下发；越早该打的越靠上）*/
   order: number
+  /**
+   * 在"合并框"里的位置（老板 2026-10-14 选定方案 B）。
+   *
+   *   'first'  —— 合并框的第一张卡（框顶那行说明挂在它前面）
+   *   'second' —— 合并框的第二张卡（底边收口）
+   *   null     —— 不参与合并，照旧单独一张卡
+   */
+  comboRole: 'first' | 'second' | null
   /** 能与哪一类合并接种（后端算好的，含重合窗口与联苗名）*/
   combo: {
     withKind: string
@@ -853,8 +823,37 @@ const kindCards = computed<PlanCard[]>(() => {
       products: stepProducts(step),
       combo: (step as never as { combo?: PlanCard['combo'] }).combo ?? null,
       order: Number((step as never as { order?: number }).order ?? 0),
+      comboRole: null as PlanCard['comboRole'],
     }))
+    .map((card, index, list) => {
+      /*
+       * 算出每张卡在"合并框"里的位置（老板 2026-10-14 方案 B）。
+       *
+       * ⚠️ 只在**下一张恰好是它的合并对象**时把两张标成一组 ✓ ——
+       *    产品库里唯一的多联苗组合是「核心 + 钩端」✓，而卡片按固定顺序排 ✓，
+       *    所以这一对永远相邻 ✓（"核心+狂犬""钩端+狂犬"都没有产品 ✓，
+       *    不存在被夹开的情况 ✓）。
+       */
+      const next = list[index + 1]
+      const role: PlanCard['comboRole'] =
+        card.combo && next && card.combo.withKind === next.key ? 'first' : null
+      return { ...card, comboRole: role }
+    })
+    .map((card, index, list) => {
+      // 上一张是"框顶"的话，这一张就是"框底"（收口）
+      const prev = list[index - 1]
+      const isSecond = Boolean(prev && prev.comboRole === 'first')
+      return isSecond ? { ...card, comboRole: 'second' as const } : card
+    })
 })
+
+/** 卡片要挂的"合并框"样式类（框顶/框底各自对接，三段拼成一个连续的框）*/
+function comboCardClass(card: PlanCard): Record<string, boolean> {
+  return {
+    'kind-card--combo-first': card.comboRole === 'first',
+    'kind-card--combo-second': card.comboRole === 'second',
+  }
+}
 
 /*
  * ── 卡内录入（老板 2026-10-12）────────────────────────────────────────
@@ -1445,7 +1444,6 @@ defineExpose({
   color: #4a5a4a;
 }
 
-
 .next-step__basis {
   display: block;
   margin-top: 10rpx;
@@ -1606,7 +1604,6 @@ defineExpose({
 
 /* ① 下一针的进一步说明 */
 
-
 /* ② 接种计划 */
 .plan-steps {
   margin-top: 26rpx;
@@ -1671,21 +1668,12 @@ defineExpose({
   border-radius: 14rpx;
 }
 
-
 /* 计划列表 */
 .step {
   margin-top: 22rpx;
   padding-top: 22rpx;
   border-top: 1rpx solid #eef1e8;
 }
-
-
-
-
-
-
-
-
 
 /*
  * ⚠️ 这里原来有一条页面底部的说明文案（"…还在做专业审核，暂不对顾客开放…"）。
@@ -1741,7 +1729,6 @@ defineExpose({
 /* 鱼头：今天 + 要打哪一类 */
 /* 鱼骨图相关样式已随 2026-10-11 改版删除 ✓（纯函数 utils/vaccine-fishbone.ts 保留，仍有自己的单测 ✓） */
 
-
 /* ══════════════════════════════════════════════════════════════════════
    疫苗接种计划 · 视觉（2026-10-12 老板："UI 太简陋了"）
 
@@ -1782,6 +1769,57 @@ defineExpose({
   border: 1rpx solid #e2efe7;
   box-shadow: 0 2rpx 10rpx rgba(15, 123, 73, 0.06);
   overflow: hidden;
+}
+
+/* ══ 合并接种：分组框（老板 2026-10-14 选定方案 B）════════════════════════
+   用**一个框**把"能一起打的两针"圈起来 —— 关系靠"同框"表达，
+   不再靠在两张卡中间插一段解释（那样它自成一格，顾客不会往两边联想）。
+
+   ⚠️ 小程序模板没法跨 v-for 迭代真的套一个容器，
+      所以框是**三段拼**的，边框与圆角逐段对接：
+        ① .combo-group__head       框顶（说明）+ 上圆角
+        ② .kind-card--combo-first  第一张卡：去掉上边框与圆角
+        ③ .kind-card--combo-second 第二张卡：去掉上边框，收下圆角
+      三段同色、边框连续，看起来就是**一个框**。 */
+.combo-group__head {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx 14rpx;
+  border: 2rpx solid #b9dbc8;
+  border-bottom: none;
+  border-radius: 16rpx 16rpx 0 0;
+  background: #f7fcf9;
+}
+
+/* 产品名：顾客真正要去认的那一行，给足分量（老板要"放在顶部"的那段）*/
+.combo-group__products {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 1.55;
+  color: #17603f;
+}
+
+/* 说明：紧跟在产品名下面（老板的文案，一字未改）*/
+.combo-group__desc {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: #3f5a4a;
+}
+
+.kind-card--combo-first {
+  margin-top: 0;
+  border-color: #b9dbc8;
+  border-top: none;
+  border-radius: 0;
+}
+
+.kind-card--combo-second {
+  margin-top: 0;
+  border-color: #b9dbc8;
+  border-top: none;
+  border-radius: 0 0 16rpx 16rpx;
 }
 .kind-card__head {
   position: relative;
@@ -1886,122 +1924,6 @@ defineExpose({
   margin-top: 4rpx;
   font-size: 23rpx;
   color: #8a9a92;
-}
-/* ══ 合并接种的提示条：夹在两张计划卡**中间**（老板 2026-10-14）══════════
-   设计意图：一眼看出"就是这两张在说同一件事"，不用来回对照两张卡。
-
-   ⚠️ 视觉上必须和卡片**区分开** ✓ —— 它是**提示**，不是"第三件要做的事" ✗：
-     · 卡片是实线 + 白底 + 阴影（"待办"的观感）
-     · 这条用**虚线** + 浅色底 + 左侧竖条（"说明"的观感）
-   卡片有边框、它也有边框，但虚线一眼就能分出来。 */
-.combo-note {
-  display: block;
-  margin: 10rpx 0;
-  padding: 18rpx 20rpx;
-  border: 2rpx dashed #c7dccd;
-  border-radius: 14rpx;
-  background: #f4faf6;
-}
-
-/* ── 合并接种的示意图（老板 2026-10-14 第 1 条）────────────────────────
-   两条时间条 + 一条重叠条，画在同一条时间轴上（百分比对齐）。 */
-.combo-chart {
-  margin-top: 12rpx;
-}
-
-.combo-chart__row {
-  display: flex;
-  align-items: center;
-  margin-top: 8rpx;
-}
-
-.combo-chart__label {
-  flex-shrink: 0;
-  width: 150rpx;
-  font-size: 22rpx;
-  color: #4a6b57;
-}
-
-.combo-chart__track {
-  position: relative;
-  flex: 1;
-  height: 22rpx;
-  border-radius: 6rpx;
-  background: #e8f0ea;
-}
-
-.combo-chart__bar {
-  position: absolute;
-  top: 0;
-  height: 22rpx;
-  border-radius: 6rpx;
-  background: #7fb08f;
-}
-
-/* 重叠那一条用**实色**压住，一眼看到"就是这一段" */
-.combo-chart__bar--overlap {
-  background: #2f7d52;
-}
-
-.combo-chart__legend {
-  margin-top: 10rpx;
-  padding-left: 150rpx;
-}
-
-.combo-chart__legend-item {
-  margin-right: 16rpx;
-  font-size: 20rpx;
-  color: #7d9a8a;
-}
-
-.combo-chart__legend-item--overlap {
-  color: #2f7d52;
-  font-weight: 600;
-}
-
-.combo-note__title {
-  display: block;
-  font-size: 27rpx;
-  font-weight: 700;
-  color: #17603f;
-}
-
-.combo-note__desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.65;
-  color: #3f5a4a;
-}
-
-/* 两边都合适的日期：给一点强调（这是顾客真正要用的信息）*/
-.combo-note__window {
-  display: block;
-  margin-top: 10rpx;
-  padding: 8rpx 14rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #17603f;
-  background: #e3f1e8;
-}
-
-.combo-note__more {
-  display: inline-block;
-  margin-top: 12rpx;
-  font-size: 23rpx;
-  color: #4a7c59;
-  text-decoration: underline;
-}
-
-.combo-note__detail {
-  display: block;
-  margin-top: 10rpx;
-  padding-top: 10rpx;
-  border-top: 1rpx solid #dbe9df;
-  font-size: 23rpx;
-  line-height: 1.65;
-  color: #6b7d70;
 }
 
 .merge-note {

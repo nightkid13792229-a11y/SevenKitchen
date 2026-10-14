@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>接种计划 · 合并接种方案对比</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #eceee9;
+    color: #1e3a2f;
+    padding: 24px 16px 60px;
+  }
+  h1 { font-size: 19px; margin-bottom: 6px; }
+  .sub { font-size: 13px; color: #6b7d70; margin-bottom: 22px; line-height: 1.6; }
+
+  .cols { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .col { width: 330px; }
+  .col__head { margin-bottom: 10px; }
+  .col__title { font-size: 15px; font-weight: 700; }
+  .col__tag {
+    display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .tag--pick { background: #d9f0e2; color: #17603f; }
+  .tag--alt { background: #eee9d9; color: #7a6a2f; }
+  .tag--now { background: #f0eef2; color: #6b6b6b; }
+  .col__desc { font-size: 12px; color: #6b7d70; line-height: 1.6; margin-bottom: 12px; }
+
+  /* ── 小程序画布 ───────────────────────────── */
+  .screen {
+    background: #f4f6f2; border-radius: 14px; padding: 12px;
+    border: 1px solid #e2e6df;
+  }
+  .section {
+    background: linear-gradient(180deg, #f2faf5 0%, #ffffff 46%);
+    border: 1px solid #d5e9dd; border-radius: 12px; padding: 12px;
+  }
+  .section__head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .section__bar { width: 4px; height: 15px; border-radius: 2px; background: #0f7b49; }
+  .section__title { font-size: 15px; font-weight: 700; color: #12503a; }
+
+  .card {
+    background: #fff; border: 1px solid #e2efe7; border-radius: 10px;
+    padding: 12px; box-shadow: 0 1px 5px rgba(15,123,73,.06);
+  }
+  .card + .card { margin-top: 9px; }
+  .card__top { display: flex; align-items: center; justify-content: space-between; }
+  .badge {
+    padding: 2px 9px; border-radius: 999px; font-size: 11px;
+    background: #e6f4ec; color: #2f7d52;
+  }
+  .toggle { font-size: 12px; color: #4a7c59; }
+  .card__name { margin-top: 7px; font-size: 15px; font-weight: 600; }
+  .card__time { margin-top: 4px; font-size: 12.5px; color: #5c6f63; }
+
+  /* ── 方案 A：一张卡装两针 ─────────────────── */
+  .merge-card {
+    background: #fff; border: 1px solid #cfe6d8; border-radius: 12px;
+    padding: 13px; box-shadow: 0 2px 8px rgba(15,123,73,.07);
+  }
+  .merge-card__head { display: flex; align-items: center; justify-content: space-between; }
+  .merge-card__title { font-size: 15px; font-weight: 700; color: #12503a; }
+  .pair { margin-top: 11px; }
+  .pair__row { display: flex; align-items: baseline; gap: 8px; }
+  .pair__dot { width: 7px; height: 7px; border-radius: 50%; background: #7fb08f; flex-shrink: 0; }
+  .pair__name { font-size: 13.5px; font-weight: 600; }
+  .pair__time { font-size: 12px; color: #5c6f63; }
+  .pair + .pair { margin-top: 9px; }
+  /* 画在同一条时间轴上 —— 重叠一眼可见 */
+  .axis { margin-top: 13px; }
+  .axis__row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .axis__label { width: 62px; font-size: 11px; color: #4a6b57; flex-shrink: 0; }
+  .axis__track { position: relative; flex: 1; height: 11px; border-radius: 4px; background: #e8f0ea; }
+  .axis__bar { position: absolute; top: 0; height: 11px; border-radius: 4px; background: #8dbf9e; }
+  .axis__bar--over { background: #2f7d52; }
+  .axis__cap { margin-top: 7px; padding: 7px 10px; border-radius: 7px; background: #e3f1e8;
+    font-size: 12.5px; font-weight: 600; color: #17603f; }
+
+  /* ── 方案 B：分组框 ───────────────────────── */
+  .group {
+    border: 2px solid #b9dbc8; border-radius: 13px; padding: 11px;
+    background: #f7fcf9;
+  }
+  .group__head {
+    display: block; margin-bottom: 10px; padding-bottom: 9px;
+    border-bottom: 1px dashed #cfe3d7;
+  }
+  .group__products {
+    display: block; font-size: 13.5px; font-weight: 700; color: #17603f;
+    line-height: 1.55;
+  }
+  .group__title {
+    display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400;
+    color: #3f5a4a; line-height: 1.6;
+  }
+  .group .card { box-shadow: none; border-color: #dcece2; }
+  .group__foot {
+    margin-top: 9px; padding-top: 9px; border-top: 1px dashed #cfe3d7;
+    font-size: 12.5px; color: #2f7d52; font-weight: 600;
+  }
+
+  /* ── 方案 C（现状）：中间一张提示条 ───────── */
+  .note {
+    margin: 9px 0; padding: 11px; border: 2px dashed #c7dccd;
+    border-radius: 11px; background: #f4faf6;
+  }
+  .note__title { font-size: 13.5px; font-weight: 700; color: #17603f; }
+  .note__desc { margin-top: 6px; font-size: 11.5px; line-height: 1.6; color: #3f5a4a; }
+
+  .legend { margin-top: 9px; font-size: 11px; color: #8a968a; }
+</style>
+</head>
+<body>
+  <h1>接种计划 · 合并接种提示：三种方案对比</h1>
+  <p class="sub">
+    场景用的就是测27 的真实数据：核心疫苗 11-08 ~ 12-06、钩端螺旋体 11-22 ~ 12-20，两段有 15 天重叠。
+  </p>
+
+  <div class="cols">
+
+    <!-- ══════════ 方案 A ══════════ -->
+    <div class="col">
+      <div class="col__head">
+        <span class="col__title">方案 A · 一张卡装两针</span>
+        <span class="col__tag tag--pick">推荐</span>
+      </div>
+      <p class="col__desc">
+        把"能一起打的两针"合到<b>同一张卡</b>里。用户根本不需要去联想——
+        它们本来就是同一件事。文字压到最少（只有日期那一句）。
+      </p>
+      <div class="screen">
+        <div class="section">
+          <div class="section__head">
+            <div class="section__bar"></div>
+            <div class="section__title">接种计划</div>
+          </div>
+
+          <div class="merge-card">
+            <div class="merge-card__head">
+              <span class="merge-card__title">核心疫苗 + 钩端螺旋体</span>
+              <span class="badge">待接种</span>
+            </div>
+
+            <div class="pair" style="margin-top:11px">
+              <div class="pair__row">
+                <span class="pair__dot"></span>
+                <span class="pair__name">核心疫苗</span>
+                <span class="pair__time">11-08 ~ 12-06</span>
+              </div>
+            </div>
+            <div class="pair">
+              <div class="pair__row">
+                <span class="pair__dot"></span>
+                <span class="pair__name">钩端螺旋体</span>
+                <span class="pair__time">11-22 ~ 12-20</span>
+              </div>
+            </div>
+
+            <div class="axis">
+              <div class="axis__row">
+                <span class="axis__label">核心疫苗</span>
+                <div class="axis__track"><div class="axis__bar" style="left:0%;width:66%"></div></div>
+              </div>
+              <div class="axis__row">
+                <span class="axis__label">钩端螺旋体</span>
+                <div class="axis__track"><div class="axis__bar" style="left:33%;width:67%"></div></div>
+              </div>
+              <div class="axis__row">
+                <span class="axis__label">重叠</span>
+                <div class="axis__track"><div class="axis__bar axis__bar--over" style="left:33%;width:33%"></div></div>
+              </div>
+              <div class="axis__cap">11-22 ~ 12-06 这 15 天，两针可以一起打</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:9px">
+            <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="card__name">狂犬疫苗</div>
+            <div class="card__time">建议接种时间 2026-12-20 ~ 2027-03-20</div>
+          </div>
+          <div class="legend">其余类别照旧各占一张卡。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 方案 B ══════════ -->
+    <div class="col">
+      <div class="col__head">
+        <span class="col__title">方案 B · 分组框</span>
+        <span class="col__tag tag--alt">备选</span>
+      </div>
+      <p class="col__desc">
+        两张卡不合并（各自还能展开看依据），但<b>用一个框把它们圈在一起</b>。<br />
+        <b>说明全部收到框顶一行</b>（产品名 + 建议 + 共同窗口期），框底不再有东西。
+      </p>
+      <div class="screen">
+        <div class="section">
+          <div class="section__head">
+            <div class="section__bar"></div>
+            <div class="section__title">接种计划</div>
+          </div>
+
+          <div class="group">
+            <div class="group__head">
+              <span class="group__products">卫佳捌、优乐康、海博莱犬四联加钩端</span>
+              <span class="group__title">同时包含以下两类疫苗，建议在共同窗口期（2026-11-22 ~ 2026-12-06）期间完成接种。</span>
+            </div>
+
+            <div class="card">
+              <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="card__name">核心疫苗（犬瘟、细小、腺病毒）</div>
+              <div class="card__time">建议接种时间 2026-11-08 ~ 2026-12-06</div>
+            </div>
+
+            <div class="card">
+              <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="card__name">钩端螺旋体</div>
+              <div class="card__time">建议接种时间 2026-11-22 ~ 2026-12-20</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:9px">
+            <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="card__name">狂犬疫苗</div>
+            <div class="card__time">建议接种时间 2026-12-20 ~ 2027-03-20</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ 方案 C（现状） ══════════ -->
+    <div class="col">
+      <div class="col__head">
+        <span class="col__title">方案 C · 中间一张提示条</span>
+        <span class="col__tag tag--now">现状</span>
+      </div>
+      <p class="col__desc">
+        就是现在这一版。问题：它在视觉上是<b>第三个独立的块</b> ——
+        用户不会自然地把"上卡 + 中条 + 下卡"读成一个整体。
+      </p>
+      <div class="screen">
+        <div class="section">
+          <div class="section__head">
+            <div class="section__bar"></div>
+            <div class="section__title">接种计划</div>
+          </div>
+
+          <div class="card">
+            <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="card__name">核心疫苗（犬瘟、细小、腺病毒）</div>
+            <div class="card__time">建议接种时间 2026-11-08 ~ 2026-12-06</div>
+          </div>
+
+          <div class="note">
+            <div class="note__title">这两针可以合并成一次打</div>
+            <div class="note__desc">
+              核心疫苗和钩端螺旋体的建议接种时间有 15 天是重叠的 ——
+              选一支同时防这两类的疫苗（比如卫佳捌）……
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="card__name">钩端螺旋体</div>
+            <div class="card__time">建议接种时间 2026-11-22 ~ 2026-12-20</div>
+          </div>
+
+          <div class="card">
+            <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="card__name">狂犬疫苗</div>
+            <div class="card__time">建议接种时间 2026-12-20 ~ 2027-03-20</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2 style="font-size:15px;margin:34px 0 8px">其他情况怎么办（三种方案都一样）</h2>
+  <div class="cols" style="gap:16px">
+    <div class="col" style="width:340px">
+      <div class="card">
+        <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+        <div class="card__name">核心疫苗（犬瘟、细小、腺病毒）</div>
+        <div class="card__time">建议接种时间 2026-11-08 ~ 2026-12-06</div>
+      </div>
+      <div class="card">
+        <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+        <div class="card__name">钩端螺旋体</div>
+        <div class="card__time">建议接种时间 2026-12-30 ~ 2027-01-27</div>
+      </div>
+      <p class="col__desc" style="margin-top:10px">
+        <b>窗口不重叠</b> → 就是两张独立的卡，什么都不多说。
+      </p>
+    </div>
+    <div class="col" style="width:340px">
+      <div class="card">
+        <div class="card__top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+        <div class="card__name">钩端螺旋体</div>
+        <div class="card__time">建议接种时间 2026-11-22 ~ 2026-12-20</div>
+      </div>
+      <p class="col__desc" style="margin-top:10px">
+        <b>只有一类要打</b> → 一张卡，什么都不多说。
+      </p>
+    </div>
+    <div class="col" style="width:340px">
+      <p class="col__desc">
+        <b>两类以上要打、但都不能合并</b>（核心 / 狂犬）→ 各占一张卡，照旧。
+        <br /><br />
+        也就是说：<b>只有"真的能一起打"时才合并</b>，
+        其余情况页面和现在完全一样 —— 不会因为这次改动而变复杂。
+      </p>
+    </div>
+  </div>
+</body>
+</html>

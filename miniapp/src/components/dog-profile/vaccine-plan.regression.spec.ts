@@ -298,6 +298,31 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).not.toContain('plan-head__hint')
   })
 
+  it('🔴 合并接种用**分组框**：说明只在框顶一行，框底不许再有东西', () => {
+    const text = readSection()
+
+    /*
+     * 老板 2026-10-14 选定方案 B：
+     * "把合并窗口顶部和底部的说明进行合并，放在顶部，文案改为：
+     *  ……同时包含以下两类疫苗，建议在'共同窗口期'期间完成接种。"
+     *
+     * 判据：
+     *   · 框顶有"产品名 + 说明"两段
+     *   · 产品名用顿号隔开（老板点名）
+     *   · **框底不再有说明**（原来那句"一起打的日子：…"已挪到框顶）
+     */
+    expect(text).toContain('combo-group__head')
+    expect(text).toContain("card.combo!.products.join('、')")
+    expect(text).toContain('同时包含以下两类疫苗，建议在共同窗口期（')
+    // 框底不许再有说明
+    expect(text.includes('一起打的日子')).toBe(false)
+    expect(text.includes('combo-group__foot')).toBe(false)
+    // 框是"三段拼"的：框顶 + 两张卡各自收边
+    expect(text).toContain('comboCardClass(card)')
+    expect(text).toContain("'kind-card--combo-first'")
+    expect(text).toContain("'kind-card--combo-second'")
+  })
+
   it('计划列表每一步按老板 2026-10-06 的字段清单显示，不多不少', () => {
     const section = readSection()
 
@@ -621,12 +646,17 @@ describe('计划卡 · 拆开成两类，但互相提示可以选联苗（老板
     const text = source()
 
     /*
-     * ⚠️ 提示条已挪到**两张卡中间**（老板 2026-10-14）——
-     * 不再在各自的卡里各说一遍（角度还不同，顾客要来回对照才能拼出意思）。
-     * 新文案是顾客视角的："这两针可以合并成一次打"。
+     * ⚠️ 现在是**方案 B：分组框**（老板 2026-10-14 选定）——
+     * 用一个框把"能一起打的两针"圈起来，说明只放在**框顶一行**。
+     *
+     * 走过的两版都不对，记在这儿：
+     *   ① 各自卡里各说一遍 → 角度还不同，顾客要来回对照才拼得出意思
+     *   ② 两张卡中间插一条 → 它在视觉上自成一格，顾客不会往两边联想
+     *      （老板："用户很难通过中间这个板块联想到……这两个板块之间有什么关系"）
      */
-    expect(text).toContain('这两针可以合并成一次打')
-    expect(text).toContain('comboNoteAfter(card, cardIndex)')
+    expect(text).toContain('combo-group__head')
+    expect(text).toContain('combo-group__products')
+    expect(text).toContain("card.comboRole === 'first'")
     /*
      * ⚠️ 老板 2026-10-13：**不要再提"错开 2~3 天"** ——
      * 联苗提示里那半句、以及卡片上那条 spacingNote 展示，两处都已删。

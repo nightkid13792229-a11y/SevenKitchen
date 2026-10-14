@@ -288,7 +288,7 @@
                 filterable
                 remote
                 clearable
-                placeholder="搜索客户（昵称 / 手机号）"
+                placeholder="搜索客户（昵称 / 手机号 / 狗狗名字）"
                 :remote-method="searchCustomers"
                 :loading="customerLoading"
                 style="width: 100%"
@@ -326,6 +326,14 @@
               </el-select>
               <div style="margin-top: 8px; color: #909399; font-size: 12px">
                 这条食谱将来要能追溯到"给谁做的"。不填无法保存为私密定制。
+              </div>
+              <!-- 选到"名下没有狗档案"的账号（例如账号合并后剩下的空壳）时给一句明确的出路，
+                   否则员工只会看到狗下拉框是空的、不知道卡在哪 -->
+              <div
+                v-if="form.customerOwnerId && !dogLoading && dogOptions.length === 0"
+                style="margin-top: 4px; color: #e6a23c; font-size: 12px"
+              >
+                这位客户名下还没有狗狗档案：请换一位客户，或先到「档案管理」给狗狗建档。
               </div>
             </el-form-item>
           </template>
@@ -1172,6 +1180,12 @@ import {
 import { validateElementForm } from '@/utils/elementFormValidation';
 import { buildRecipeSubmitData } from '@/utils/recipeFormPayload';
 import {
+  customerOptionLabel,
+  mergeCustomerOptions,
+  shouldSearchDogs,
+  type CustomerOption,
+} from '@/utils/recipeCustomerSearch';
+import {
   RecipeStatus,
   RecipeSeriesBusinessStatus,
   NutritionStandard,
@@ -1865,28 +1879,41 @@ const isPrivateCustom = computed(
   () => form.status === RecipeStatus.PRIVATE_CUSTOM,
 );
 
-interface CustomerOption {
-  id: string;
-  nickname?: string | null;
-  phone?: string | null;
-}
 const customerOptions = ref<CustomerOption[]>([]);
 const customerLoading = ref(false);
 const dogOptions = ref<Array<{ id: string; name: string }>>([]);
 const dogLoading = ref(false);
 
-const customerLabel = (customer: CustomerOption) =>
-  [customer.nickname || '未命名客户', customer.phone].filter(Boolean).join(' · ');
+const customerLabel = (customer: CustomerOption) => customerOptionLabel(customer);
 
+/**
+ * 按关键词找客户（2026-10-15 修老板报的"搜不到客户"）。
+ *
+ * 原来只查客户表（昵称 / 手机号），于是员工按**狗名**（烟花）搜永远搜不到 ——
+ * 而业务上记住的往往就是狗名。现在同时用 /admin/dogs?search= 按狗名搜，
+ * 把狗主人并进候选，并在选项上标出命中的狗名（两位客户同名的狗不会选错）。
+ * 见 utils/recipeCustomerSearch.ts 里的实况记录与回归测试。
+ */
 const searchCustomers = async (keyword: string) => {
+  const trimmed = (keyword || '').trim();
   customerLoading.value = true;
   try {
-    const res: any = await userApi.list({
-      role: UserRole.CUSTOMER,
-      keyword: keyword || undefined,
-      pageSize: 20,
-    });
-    customerOptions.value = res?.data ?? [];
+    const [userRes, dogRes] = await Promise.all([
+      userApi.list({
+        role: UserRole.CUSTOMER,
+        keyword: trimmed || undefined,
+        pageSize: 20,
+      }),
+      shouldSearchDogs(trimmed)
+        ? dogApi
+            .list({ search: trimmed, pageSize: 20 })
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    customerOptions.value = mergeCustomerOptions(
+      (userRes as any)?.data ?? [],
+      (dogRes as any)?.data ?? []
+    );
   } catch {
     customerOptions.value = [];
   } finally {
@@ -1902,10 +1929,23 @@ const loadDogsOfCustomer = async (ownerId: string) => {
   dogLoading.value = true;
   try {
     const res: any = await dogApi.list({ ownerId, pageSize: 100 });
-    dogOptions.value = (res?.data ?? []).map((dog: any) => ({
+    const dogs = res?.data ?? [];
+    dogOptions.value = dogs.map((dog: any) => ({
       id: dog.id,
       name: dog.name,
     }));
+    // 顺手把主人的真实昵称/手机号补进下拉框：
+    // 打开已有的私密定制食谱时，客户框原本只能显示「当前客户（后 6 位 id）」。
+    const first = dogs[0];
+    if (first) {
+      const option = customerOptions.value.find((c) => c.id === ownerId);
+      if (option) {
+        if (!option.nickname || option.nickname.startsWith('当前客户')) {
+          option.nickname = first.ownerNickname || option.nickname;
+        }
+        option.phone = option.phone || first.ownerPhone || null;
+      }
+    }
   } catch {
     dogOptions.value = [];
   } finally {
@@ -1923,11 +1963,12 @@ const handleCustomerChange = (ownerId: string) => {
 const initialiseCustomerContext = async () => {
   if (!isPrivateCustom.value || !form.customerOwnerId) return;
 
-  // 客户下拉先铺上"当前客户"占位（继续输入可搜索换成真实昵称）
+  // 客户下拉先铺上"当前客户"占位（继续输入可搜索换成真实昵称）；
+  // 真实昵称/手机号随后由 loadDogsOfCustomer 从狗狗列表里补上。
   if (!customerOptions.value.some((c) => c.id === form.customerOwnerId)) {
     const id = form.customerOwnerId;
     customerOptions.value = [
-      { id, nickname: `当前客户（${id.slice(-6)}）` },
+      { id, nickname: `当前客户（${id.slice(-6)}）`, matchedDogNames: [] },
       ...customerOptions.value,
     ];
   }

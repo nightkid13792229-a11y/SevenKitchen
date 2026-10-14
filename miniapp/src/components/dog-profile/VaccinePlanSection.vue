@@ -1808,19 +1808,7 @@ defineExpose({
   color: #3f5a4a;
 }
 
-.kind-card--combo-first {
-  margin-top: 0;
-  border-color: #b9dbc8;
-  border-top: none;
-  border-radius: 0;
-}
 
-.kind-card--combo-second {
-  margin-top: 0;
-  border-color: #b9dbc8;
-  border-top: none;
-  border-radius: 0 0 16rpx 16rpx;
-}
 .kind-card__head {
   position: relative;
   padding: 22rpx 24rpx 22rpx 28rpx;
@@ -1936,5 +1924,30 @@ defineExpose({
   color: #12603f;
   background: #eef9f2;
   border: 1rpx solid #d2ecdc;
+}
+
+/*
+ * ⚠️⚠️ 选择器必须写成 `.kind-card.kind-card--combo-*`（两个类）✗→✓。
+ *
+ * 只写一个类时**被 .kind-card 覆盖了** —— 两者权重相同（都是"两个类"：
+ * 一个自己的类 + scoped 的 data-v 属性），而 `.kind-card` 在样式表里
+ * **定义得更靠后**，于是"去掉上边框、去掉圆角"全都没生效 ✗：
+ * 界面上仍然是**三个独立的圆角块**，框根本没连起来 ✗
+ * （老板 2026-10-14 一眼看出来的就是这个问题）。
+ *
+ * 现在用两个类把权重顶上去 ✓，并且这段也挪到样式表末尾 ✓（双保险）。
+ */
+.kind-card.kind-card--combo-first {
+  margin-top: 0;
+  border-color: #b9dbc8;
+  border-top: none;
+  border-radius: 0;
+}
+
+.kind-card.kind-card--combo-second {
+  margin-top: 0;
+  border-color: #b9dbc8;
+  border-top: none;
+  border-radius: 0 0 16rpx 16rpx;
 }
 </style>

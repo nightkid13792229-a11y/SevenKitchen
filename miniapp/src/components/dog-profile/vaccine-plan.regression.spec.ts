@@ -298,6 +298,31 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).not.toContain('plan-head__hint')
   })
 
+  it('🔴 合并框的样式必须**压得住 .kind-card**（否则框根本连不起来）', () => {
+    const text = readSection()
+
+    /*
+     * ⚠️⚠️ 2026-10-14 踩过的坑，值得单独钉一条：
+     *
+     * 只写 `.kind-card--combo-first`（一个类）时，它和 `.kind-card` **权重相同**，
+     * 而 `.kind-card` 在样式表里定义得**更靠后** → "去掉上边框、去掉圆角"全部失效 ✗
+     * → 界面上仍是**三个独立的圆角块**，框没连起来 ✗
+     * （我在模拟器里截图确认过：框顶一行、两张卡各自一个完整的圆角框。）
+     *
+     * ⇒ 必须写成两个类把权重顶上去 ✓；这段也放在样式表末尾 ✓（双保险）。
+     */
+    expect(text).toContain('.kind-card.kind-card--combo-first')
+    expect(text).toContain('.kind-card.kind-card--combo-second')
+    // 单类写法会再次被覆盖
+    expect(/\n\.kind-card--combo-first \{/.test(text)).toBe(false)
+
+    // 框顶要"开口"：不留底边框、圆角只在上方
+    expect(text).toContain('border-bottom: none;')
+    expect(text).toContain('border-radius: 16rpx 16rpx 0 0;')
+    // 第一张卡去掉上边框与圆角、第二张卡收下圆角
+    expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
+  })
+
   it('🔴 合并接种用**分组框**：说明只在框顶一行，框底不许再有东西', () => {
     const text = readSection()
 

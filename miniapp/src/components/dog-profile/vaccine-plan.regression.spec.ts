@@ -477,10 +477,64 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     // 关键：带上两类
     expect(text).toContain('kinds: [card.kind, card.combo.withKind]');
     /*
-     * ⚠️ 还要先展开卡片 —— 录入窗口画在 kind-card__body 里，
-     *    而 body 只在卡片展开时才渲染。不展开的话点了没反应 ✗。
+     * ⚠️ 2026-10-15 改了这里（老板报的 bug）：**不再展开那张卡** ✗→✓。
+     *
+     * 原来写的是 `expandedKind.value = card.key` ✗ —— 那是"窗口画在卡里"
+     * 那个年代的补丁；可它带来一个更糟的后果：
+     * 说明块挂在**框底那张卡**（钩端）下面，它的按钮拿到的 card 就是那张卡，
+     * 于是窗口被画进钩端螺旋体那一块里 ✗（老板原话："它并不会在提示板块下方
+     * 展开输入窗口，而是会在钩端螺旋体窗口下面展开输入页面"✗）。
+     * 现在按钮**只写锚点**（画在提示板块下面 ✓），卡片一张都不动 ✓。
      */
-    expect(text).toContain('expandedKind.value = card.key');
+    expect(text).toContain("inlineHost.value = { where: 'combo', key: card.key }");
+    /*
+     * ⚠️ 只看**这个函数体内**有没有动展开状态 —— 文件里另有一处
+     *    `expandedKind.value = card.key`（那是更早那版"精简录入窗"的
+     *    残留代码，已不在任何模板路径上 ✓），别把它误伤成这条判据 ✗。
+     */
+    const comboFn = text.slice(text.indexOf('function recordCombo('));
+    expect(comboFn.slice(0, comboFn.indexOf('\n}')).includes('expandedKind')).toBe(false);
+  })
+
+  it('🔴 合并窗口的录入窗口要开在**提示板块下面**（老板 2026-10-15 报的 bug）', () => {
+    const text = readSection()
+
+    /*
+     * 老板原话："点击记录接种信息这个按钮的时候，它并不会在提示板块下方
+     *          展开输入窗口，而是会在钩端螺旋体窗口下面展开输入页面。"
+     *
+     * 根因：录入窗口只画在 `kind-card__body` 里 ✗，画在哪张卡由 `expandedKind`
+     *      决定 ✓；而说明块挂在**框底那张卡**（钩端螺旋体）下面 ✓，
+     *      它的按钮拿到的 card 就是那张卡 ✓ → 旧代码把钩端的卡展开 ✗ →
+     *      窗口跟着画进钩端那一块里去了 ✗。
+     *
+     * ⇒ 判据三条（缺任何一条，窗口都可能跑回钩端那张卡里 ✗）：
+     *   ① 提示板块的按钮**之后**才是录入窗口（"下方展开" ✓）
+     *   ② 窗口的条件里带**锚点**（不是"哪张卡展开着就画哪张"✗）
+     *   ③ 两处画的是**同一张卡**（props 一字不差 —— 改一处忘另一处，
+     *      又会出"输入项不全"那个老毛病 ✗）
+     */
+    const comboBtnAt = text.indexOf('@tap.stop="recordCombo(card)"')
+    const footAt = text.indexOf("card.comboRole === 'second'")
+    const comboHostAt = text.indexOf('inlineInCombo(card)')
+    expect(comboBtnAt).toBeGreaterThan(-1)
+    // ① 窗口在按钮下面（同一个说明块里、按钮之后）
+    expect(comboHostAt).toBeGreaterThan(comboBtnAt)
+    // …而且这个说明块就是"框底那张卡"下面那块（不是画到别处去了）
+    expect(footAt).toBeGreaterThan(-1)
+    expect(comboHostAt).toBeGreaterThan(footAt)
+
+    // ② 锚点：卡内那处也要认锚点，不然合并窗口一点，窗口又会跑到某张卡里 ✗
+    expect(text).toContain('inlineInCard(card)')
+    expect(text).toContain("where: 'card', key: card.key")
+
+    // ③ 两处必须一模一样（同一张 VaccineRecordCard、同一套 props 与事件）
+    const blocks = text.match(/<VaccineRecordCard[\s\S]*?\/>/g) || []
+    expect(blocks).toHaveLength(2)
+    const props = blocks.map((block) =>
+      [...block.matchAll(/(?:^|\s)([:@]?[a-zA-Z-]+)="/g)].map((match) => match[1]).sort(),
+    )
+    expect(props[1]).toEqual(props[0])
   })
 
   it('🔴 产品名后面**一律**补"等产品"，不看有没有截断（老板 2026-10-14）', () => {

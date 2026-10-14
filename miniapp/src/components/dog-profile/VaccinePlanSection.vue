@@ -159,7 +159,13 @@
             ② 卡片里 `expanded` 原来是 `type: Boolean` 且没有默认值 —— 同一个坑。
                已改成 `default: true`。
         -->
-        <view v-if="inline && inline.open" class="plan-inline-editor">
+        <!--
+          ⚠️ 条件里那个 `inlineInCard(card)` 是**锚点**（老板 2026-10-15 报的 bug）：
+            卡片的按钮点下去 → 窗口归这张卡 ✓；
+            合并窗口（提示板块）的按钮点下去 → 窗口归说明块 ✓（不要再画进钩端那张卡 ✗）。
+            窗口长什么样、绑哪些数据，两处**必须一模一样** ✓（同一张 VaccineRecordCard ✓）。
+        -->
+        <view v-if="inline && inline.open && inlineInCard(card)" class="plan-inline-editor">
           <!--
             ⚠️ 卡片**外面**再包一层做条件：不要把 v-if 写在组件上 ✗ ——
             在 v-for 里给组件加 v-if 时，小程序编译器会把 `wx:if` 和属性表
@@ -238,6 +244,53 @@
       <view class="step-actions">
         <text class="step-actions__primary" @tap.stop="recordCombo(card)">记录接种信息</text>
         <text class="step-actions__ghost" @tap.stop="ignoreCombo(card)">忽略</text>
+      </view>
+
+      <!--
+        ══ 合并窗口的录入窗口：就画在**这个提示板块下面** ══════════════════
+        （老板 2026-10-15 报的 bug ✗→✓）
+
+        老板原话："点击记录接种信息这个按钮的时候，它并不会在提示板块下方
+                 展开输入窗口，而是会在钩端螺旋体窗口下面展开输入页面。"
+
+        原因：录入窗口原来只画在 `kind-card__body` 里 ✗，而画在哪张卡
+              由 `expandedKind` 决定 ✓；说明块挂在**框底那张卡**（钩端）下面 ✓，
+              它的按钮拿到的 card 就是那张卡 ✓ → 旧代码 `expandedKind = card.key`
+              把钩端的卡展开 ✗ → 窗口跟着画进钩端那一块里去了 ✗。
+        现在：按钮只写锚点（`inlineHost = { where: 'combo' }` ✓），
+              窗口归**这个说明块** ✓ —— 手指点哪儿、窗口就在哪儿下面长出来 ✓。
+
+        ⚠️ 下面这一坨和卡片里那处**必须完全一样**（同一张 VaccineRecordCard、
+          同一套 props 与事件 ✓）—— 改一处就要改另一处 ✗。
+          之所以只能写两遍：小程序模板没法把一段节点复用到两个不同的父节点里 ✗。
+      -->
+      <view v-if="inline && inline.open && inlineInCombo(card)" class="plan-inline-editor">
+        <!-- 同卡片里那处：条件包在**组件外面**（v-if 直接写在组件上会丢属性表 ✗）-->
+        <view v-if="inline.open">
+        <VaccineRecordCard
+          :key="inline.cardKey"
+          :record="inline.record"
+          :index="-1"
+          :draft="inline.draft"
+          :toggle-label="inline.toggleLabel"
+          :collapse-flag="inline.collapseFlag"
+          :catalog-products="inline.catalogProducts"
+          :component-options="inline.componentOptions"
+          :saving="inline.saving"
+          cancel-label="取消"
+          :name-focused="inline.focused"
+          :autofocus="false"
+          :auto-save-text="''"
+          :just-saved="false"
+          :save-state-text="''"
+          @update="(idx: number, field: any, value: string) => emit('inline-update', idx, field, value)"
+          @save="emit('inline-save')"
+          @name-blur="emit('inline-blur')"
+          @toggle="emit('inline-toggle')"
+          @remove="emit('inline-remove')"
+          @cancel="emit('inline-close')"
+        />
+        </view>
       </view>
     </view>
 
@@ -715,12 +768,50 @@ function collapseAll() {
 }
 
 /**
+ * 录入窗口这一张卡该画在**哪儿**（老板 2026-10-15 报的 bug）。
+ *
+ * ── 为什么必须有这个锚点 ✗→✓ ─────────────────────────────────────
+ * 录入窗口（VaccineRecordCard）在模板里画在**卡片内部** ✓，
+ * 而"哪张卡里画得出来"取决于 `expandedKind` ✓ —— 于是原来只要
+ * **换一下展开的那张卡**，窗口就跟着跑到别的卡里去了 ✗。
+ *
+ * 合并说明块（`combo-group__foot`）挂在**框底那张卡**（钩端螺旋体）下面 ✓，
+ * 而它自己的两个按钮拿到的 `card` 就是那张卡 ✓ ——
+ * 旧代码 `expandedKind.value = card.key` 于是**把钩端的卡展开** ✗、
+ * 窗口也跟着画进钩端那张卡里 ✗：
+ * 顾客点的是"提示板块"上的按钮 ✓，窗口却开在钩端螺旋体那一块下面 ✗
+ * （老板原话："它并不会在提示板块下方展开输入窗口，而是会在钩端螺旋体
+ *   窗口下面展开输入页面"✗）。
+ *
+ * ⇒ 现在按钮**只改锚点、不改展开状态** ✓：
+ *   `where: 'card'`  → 画在那张计划卡里（卡片的按钮，行为不变 ✓）
+ *   `where: 'combo'` → 画在合并说明块（提示板块）**下面** ✓
+ * `key` 是这张卡的类别（`card.key`）✓ —— 一次只可能有一个窗口 ✓。
+ *
+ * ⚠️ 锚点只是"画在哪儿"，草稿与保存仍然只有记录板块那一份 ✓
+ *    （见 VaccineManagementSection.inlineCard ✓）。
+ */
+const inlineHost = ref<{ where: 'card' | 'combo'; key: string }>({ where: 'card', key: '' })
+
+/** 这张卡的**卡内**要不要画录入窗口（卡片的「记录接种信息」走这条 ✓）*/
+function inlineInCard(card: PlanCard): boolean {
+  return inlineHost.value.where === 'card' && inlineHost.value.key === card.key
+}
+
+/** 合并说明块（提示板块）下面要不要画录入窗口（合并窗口的按钮走这条 ✓）*/
+function inlineInCombo(card: PlanCard): boolean {
+  return inlineHost.value.where === 'combo' && inlineHost.value.key === card.key
+}
+
+/**
  * 卡片的「记录接种信息」✓：把这一类的分类带过去 ✓，
  * 交给**现成的记录录入模块**开一条草稿 ✓
  * （那里才有产品库、病种勾选、名字自动认分类 ✓ ——
  *   我那个"精简录入窗"已被老板否掉 ✗，撤掉了 ✓）。
  */
 function recordCard(card: PlanCard) {
+  // 窗口就画在**这张卡里面** ✓（点哪张卡、窗口就归哪张卡 ✓ —— 见 inlineHost）
+  inlineHost.value = { where: 'card', key: card.key }
   emit('record-step', {
     kinds: card.kinds,
     stepLabel: card.steps.map((step) => step.label).join(' / '),
@@ -730,18 +821,16 @@ function recordCard(card: PlanCard) {
 /**
  * 合并窗口里的「记录这一针」（老板 2026-10-14 第三问）。
  *
- * 和 `recordCard` 只差一处，但这一处是关键：
- * **把两类都带上** ✓（`card.kind` + `card.combo.withKind`）——
- * 顾客是从"这两类一起打"这句话点进来的，预填就该是两类 ✓。
- *
- * ⚠️ 还要**先把这张卡展开** ✗→✓：
- *    录入窗口画在 `kind-card__body` 里，而 body 只在卡片展开时才渲染
- *    （`v-if="expandedKind === card.key"`）。不展开的话，
- *    点了按钮什么也看不见 ✗。
+ * 和 `recordCard` 差两处：
+ *   ① **把两类都带上** ✓（`card.kind` + `card.combo.withKind`）——
+ *      顾客是从"这两类一起打"这句话点进来的，预填就该是两类 ✓。
+ *   ② 窗口画在**提示板块下面** ✓（锚点写 `'combo'` ✓），
+ *      **不再展开那张卡** ✗→✓（见 inlineHost 那段：展开就等于把窗口
+ *      画进钩端螺旋体那一块里去了 ✗，而且卡片一展一收上面的内容还会跳 ✗）。
  */
 function recordCombo(card: PlanCard) {
   if (!card.combo) return
-  expandedKind.value = card.key
+  inlineHost.value = { where: 'combo', key: card.key }
   emit('record-step', {
     kinds: [card.kind, card.combo.withKind],
     stepLabel: card.steps.map((step) => step.label).join(' / '),

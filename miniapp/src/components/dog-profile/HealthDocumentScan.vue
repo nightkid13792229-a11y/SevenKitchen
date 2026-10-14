@@ -214,17 +214,7 @@
               >{{ item }}</text>
             </view>
             <view class="row__field">
-              <text class="row__label">接种日期</text>
-              <picker
-                mode="date"
-                :value="drafts[index].vaccinationDate || ''"
-                @change="onRowDateChange(index, $event)"
-              >
-                <text class="row__input">{{ drafts[index].vaccinationDate || '点这里选' }}</text>
-              </picker>
-            </view>
-            <view class="row__field">
-              <text class="row__label">含哪些病种</text>
+              <text class="row__label">含哪些疫苗</text>
               <view class="row__chips">
                 <text
                   v-for="option in componentChoices"
@@ -234,6 +224,16 @@
                   @tap="toggleRowComponent(index, option.value)"
                 >{{ option.label }}</text>
               </view>
+            </view>
+            <view class="row__field">
+              <text class="row__label">接种日期</text>
+              <picker
+                mode="date"
+                :value="drafts[index].vaccinationDate || ''"
+                @change="onRowDateChange(index, $event)"
+              >
+                <text class="row__input">{{ drafts[index].vaccinationDate || '点这里选' }}</text>
+              </picker>
             </view>
           </view>
         </view>

@@ -1118,4 +1118,49 @@ describe('健康管理页 · 组合式 API 必须都导入（2026-10-11）', () 
       expect(importLine).toContain(api)
     }
   })
+
+/**
+ * 「确认页」与「录入卡」的字段顺序必须一致（老板 2026-10-14）。
+ *
+ * 老板问："确认页是什么意思？是不是疫苗记录板块中的信息编辑，或者是手动新增记录页面？
+ *          如果是的话，请改成一致。"
+ * —— 确认页是**扫疫苗本之后的识别结果确认界面**（HealthDocumentScan.vue），
+ *    不是那两个。不过顺序确实该一致 ✓：
+ *      录入卡：名字 → 含哪些疫苗 → 接种日期
+ *      确认页：疫苗名 → 含哪些疫苗 → 接种日期
+ */
+})
+
+describe('确认页 ↔ 录入卡 · 字段顺序一致（老板 2026-10-14）', () => {
+  it('🔴 确认页与录入卡的字段顺序一致：名字 → 含哪些疫苗 → 接种日期', () => {
+    const scan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    );
+    const card = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    );
+  
+    const positions = (source: string, nameLabel: string) => {
+      const name = source.indexOf(nameLabel);
+      const comp = source.indexOf('>含哪些疫苗');
+      const date = source.indexOf('>接种日期<');
+      expect(name).toBeGreaterThan(-1);
+      expect(comp).toBeGreaterThan(-1);
+      expect(date).toBeGreaterThan(-1);
+      return { name, comp, date };
+    };
+  
+    const inCard = positions(card, '>疫苗名称<');
+    expect(inCard.comp).toBeGreaterThan(inCard.name);
+    expect(inCard.date).toBeGreaterThan(inCard.comp);
+  
+    const inScan = positions(scan, '>疫苗名<');
+    expect(inScan.comp).toBeGreaterThan(inScan.name);
+    expect(inScan.date).toBeGreaterThan(inScan.comp);
+  
+    // 确认页也不该再留着旧标签
+    expect(scan.includes('>含哪些病种<')).toBe(false);
+  });
 })

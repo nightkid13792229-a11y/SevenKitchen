@@ -173,6 +173,7 @@
       @toggle="toggleExpandedByIndex"
       @save="saveRecordByIndex"
       @remove="removeRecordByIndex"
+      @touch="touchDraft"
       @name-blur="clearFocus"
     />
 
@@ -435,6 +436,43 @@ function updateInlineDraft(field: keyof VaccineDraft, value: string) {
  * 走的是**同一套接口与校验** ✓（和列表里新增一条完全一致 ✓）——
  * 老板点名过：分类必须按**产品名**算 ✓（卫佳捌要同时算上核心与钩端 ✓）。
  */
+/**
+ * 保存前**替顾客归类一次**（老板 2026-10-14 第 2.2 条）。
+ *
+ * 老板："手动输入疫苗产品名称的时候，为什么还是有确认按钮呢？
+ *        这个确认按钮和板块中的保存按钮是重复的呀？之前说过这个问题吧？"
+ * —— 对，重复。原来"归类"要顾客单独点一次「确认」，
+ *    现在并进保存：名字还没归类过就先问一次后端，顾客只点一次「保存」。
+ *
+ * ⚠️ 只在**真的缺归类**时才发请求（已有 kind 的直接跳过）——
+ *    不给每次保存都加一个网络往返（老板刚抱怨过保存慢）。
+ * ⚠️ 归类失败**不拦保存**：让后端在保存时按它自己的口径判，
+ *    免得因为一次查询失败就把顾客挡在门外。
+ */
+async function ensureClassified(draft: VaccineDraft): Promise<void> {
+  if (draft.kinds.length > 0) return
+  const name = String(draft.vaccineName || '').trim()
+  if (!name) return
+
+  try {
+    const res: any = await dogApi.classifyVaccineName(name)
+    if (res?.code !== 0 || !res?.data) return
+    const data = res.data
+    if (Array.isArray(data.kinds) && data.kinds.length > 0) {
+      draft.kinds = data.kinds.map(String)
+    }
+    if (Array.isArray(data.components) && data.components.length > 0) {
+      draft.components = data.components.map(String)
+    }
+    // 后端认出规范名就跟上（"卫佳8" → "卫佳捌"）
+    if (data.productName) {
+      draft.vaccineName = String(data.productName)
+    }
+  } catch {
+    // 静默：归类是"锦上添花"，失败也让它照原样存，后端会把关
+  }
+}
+
 async function saveInlineDraft() {
   const record = inlineRecord.value
   const draft = inlineDraftState.value
@@ -452,6 +490,8 @@ async function saveInlineDraft() {
 
   inlineSaving.value = true
   try {
+    // 先替顾客归类（「确认」按钮去掉之后由保存顶上，老板 2026-10-14 第 2.2 条）
+    await ensureClassified(draft)
     const payload = buildPayload(draft, record)
     const res: any = await dogApi.healthRecords.vaccine.create(props.dogId, payload)
     if (res?.code !== 0) {
@@ -728,12 +768,36 @@ function draftOf(record: VaccineRecord, index: number): VaccineDraft {
   return drafts[draftKey(record, index)] || toDraft(record)
 }
 
+/**
+ * 卡片说"草稿改了，排一次保存"（老板 2026-10-14）。
+ *
+ * ⚠️ 为什么单独开一条通道，而不是复用 `updateDraft` 传个占位值 ✗：
+ * 勾选毒株改的是**数组**（`components`）✓，而 `updateDraft` 那条路是
+ * "把某个字段设成传进来的值" ✓ —— 拿它传占位值会把数组写成空字符串 ✗
+ * （勾选当场失效、再点还抛 `components.map is not a function` ✗）。
+ * ⇒ 通知（touch）与赋值（update）分开 ✓。
+ */
+function touchDraft(index: number) {
+  const record = records.value[index]
+  if (!record) return
+  scheduleAutoSave(record, index)
+}
+
 function updateDraft(index: number, field: keyof VaccineDraft, value: string) {
   const record = records.value[index]
   if (!record) return
   const draft = draftOf(record, index)
   // 名字有没有**真的**变（见下面关于归类的说明 ✓）
   const changed = draft[field] !== value
+  /*
+   * ⚠️ 这道保护是 2026-10-14 补的：`components` / `kinds` 是**数组** ✓，
+   * 不该从这条"赋值"通道进来 ✗（勾选毒株那条路已经改成 `touch` 通知了 ✓）。
+   * 万一日后又有人图省事拿 `updateDraft` 传数组字段，
+   * 这里直接拦下 —— 免得再出现"勾了没反应、再点就抛错" ✗。
+   */
+  if (field === 'components' || field === 'kinds') {
+    return
+  }
   // status 是受限联合类型（下拉框保证取值合法），其余字段都是普通字符串
   if (field === 'status') {
     draft.status = value as VaccineDraft['status']
@@ -1455,6 +1519,8 @@ async function saveRecord(record: VaccineRecord, index: number) {
   savingIndex.value = index
 
   try {
+    // 先替顾客归类（「确认」按钮去掉之后由保存顶上，老板 2026-10-14 第 2.2 条）
+    await ensureClassified(draft)
     const payload = buildPayload(draft, record)
     const savedId = String(record.id || '')
     const res: any = record.id

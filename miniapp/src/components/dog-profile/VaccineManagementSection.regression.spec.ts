@@ -778,7 +778,7 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
   it('库里没有时要说清楚，并且名字仍然能写', () => {
     const source = readCard()
 
-    expect(source).toContain('产品库里没有这支苗。')
+    expect(source).toContain('产品库里匹配不到这支疫苗，请手动选择疫苗的毒株（可多选）。')
     expect(source).toContain("nameFieldMode(draft.vaccineName) === 'unknown'")
   })
 
@@ -794,7 +794,8 @@ describe('疫苗名称 · 三种状态各司其职（2026-10-06）', () => {
     expect(source).toContain('function showConfirmButton(): boolean')
     expect(source).toContain('if (draft.value.kinds.length === 0) return true')
     expect(source).toContain("return nameFieldMode(draft.value.vaccineName) === 'unknown'")
-    expect(source).toContain('v-if="showConfirmButton()"')
+    // 老板 2026-10-14 第 2.2 条：按钮去掉了，归类并进「保存」
+    expect(source.includes('v-if="showConfirmButton()"')).toBe(false)
     // 取而代之说明一句
     // ⚠️ 老板 2026-10-13 第 2 条：这句内部说明已删
     expect(source).not.toContain('分类已按产品库自动判定')
@@ -1084,17 +1085,21 @@ describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
     expect(source).toContain('到期提示**不在卡片脸上显示**')
   })
 
-  it('展开后的字段顺序跟确认页一致：名字 → 日期 → 病种', () => {
+  it('展开后的字段顺序：名字 → 毒株 → 日期（老板 2026-10-14 定的）', () => {
     const source = readCard()
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
-    const date = source.indexOf('<text class="field-label">接种日期</text>')
-    // 2026-10-12 文案改了 ✓：含哪些病种 → 含哪些疫苗（可多选）
     const components = source.indexOf('<text class="field-label">含哪些疫苗（可多选）</text>')
+    const date = source.indexOf('<text class="field-label">接种日期</text>')
 
     expect(name).toBeGreaterThan(0)
-    expect(date).toBeGreaterThan(name)
-    expect(components).toBeGreaterThan(date)
+    /*
+     * ⚠️ 顺序按老板 2026-10-14 第 2.4 条改成 名字 → 毒株 → 日期
+     * （原来是"名字 → 日期 → 毒株"，当时的口径是"跟确认页的字段顺序一致"）。
+     * 老板现在要毒株紧跟名字：名字决定这支苗是什么，紧接着就说清它含什么。
+     */
+    expect(components).toBeGreaterThan(name)
+    expect(date).toBeGreaterThan(components)
   })
 })
 
@@ -1298,6 +1303,72 @@ describe('记录板块 · 导入与定义顺序的通用守卫（2026-10-11）',
  * —— 因为选产品的流程是"① 先设归类 → ② 再报名字变更"，
  *    而"名字变更"原来**无条件**把归类清空 ✗ → 界面以为"还没归类" → 冒出「确认」✗。
  */
+/**
+ * 老板 2026-10-14 的四条（都踩过）：
+ *   · 勾毒株"点不动" → 根因是拿 `updateDraft` 传占位值，把数组写成了字符串
+ *   · 删掉产品名后配方说明还留着
+ *   · 「确认」按钮和「保存」重复 → 归类并进保存
+ *   · 库外提示的位置与文案
+ */
+describe('录入交互（老板 2026-10-14）', () => {
+  const section = () =>
+    readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      'utf-8',
+    )
+
+  it('🔴 勾毒株不能再借 updateDraft 传占位值（会把数组写成字符串）', () => {
+    const source = section()
+
+    /*
+     * 根因（老板截图为证：`g.value.components.map is not a function`）：
+     * 勾选毒株后为了"让父组件排一次保存"，报了 `updateField('components', '')`，
+     * 而 updateDraft 会老老实实 `draft['components'] = ''` —— 数组当场变字符串：
+     *   · 勾了没反应（看着像点不动）
+     *   · 再点一下就在字符串上调 .filter → 抛错
+     * ⇒ 通知（touch）与赋值（update）必须分开。
+     */
+    expect(source).toContain('function touchDraft(')
+    // 兜底：数组型字段不许从赋值通道进来
+    expect(source).toContain("if (field === 'components' || field === 'kinds') {")
+  })
+
+  it('🔴 名字一变，上一个产品的配方说明就要作废（删掉名字后不许还留着）', () => {
+    const card = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
+    // 名字真的变了 → 清掉配方说明
+    expect(card).toContain('if (draft.value.vaccineName !== value) clearConfirmResult()')
+  })
+
+  it('🔴 「确认」按钮去掉了，归类并进「保存」', () => {
+    const source = section()
+    const card = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
+
+    // 卡片里不许再有那个按钮
+    expect(card.includes('v-if="showConfirmButton()"')).toBe(false)
+    // 两条保存路径都要在提交前归类
+    expect((source.match(/await ensureClassified\(draft\)/g) || []).length).toBe(2)
+    // 而且只在真的缺归类时才发请求（别给每次保存都加一个往返）
+    expect(source).toContain('if (draft.kinds.length > 0) return')
+  })
+
+  it('🔴 库外提示在**毒株那一块**，不在名称下面', () => {
+    const card = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
+      'utf-8',
+    )
+    expect(card).toContain('产品库里匹配不到这支疫苗，请手动选择疫苗的毒株（可多选）。')
+    expect(card).toContain('v-if="needsManualComponents()"')
+    // 旧那句已下线
+    expect(card.includes('>产品库里没有这支苗。<')).toBe(false)
+  })
+})
+
 describe('选产品之后归类不许被清掉（2026-10-13 老板第 6 条）', () => {
   const section = () =>
     readFileSync(

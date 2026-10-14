@@ -263,7 +263,17 @@ describe('编辑卡 · 名称写完点「确认」才匹配产品与分类（202
     // 包括产品匹配和分类匹配。"
     // 不边打字边判 —— 一来一回问后端会卡手，而且顾客往往写到一半就被判错。
     expect(source).toContain('function confirmVaccineName')
-    expect(source).toContain('@tap="confirmVaccineName()"')
+    /*
+
+     * ⚠️ 「确认」按钮已去掉（老板 2026-10-14 第 2.2 条）——
+
+     * 它和板块里的「保存」重复。归类改由**保存那一刻**顶上：
+
+     * 父组件在提交前若发现还没归类，就替顾客问一次后端（ensureClassified）。
+
+     */
+
+    expect(source).toContain('function confirmVaccineName(')
     expect(source).toContain('dogApi.classifyVaccineName')
     expect(source).not.toContain('scheduleClassify')
     expect(source).not.toContain('CLASSIFY_DELAY_MS')
@@ -493,7 +503,12 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
   it('库里没有时要说清楚，并且名字仍然能写', () => {
     const source = readCard()
 
-    expect(source).toContain('产品库里没有这支苗。')
+    /*
+     * ⚠️ 老板 2026-10-14 第 2.3 条：这句提示从**名称下面**挪到**毒株那一块**了 ✓
+     * （顾客真正要动手的地方）；文案也改成点名"请手动选择疫苗的毒株"。
+     */
+    expect(source).toContain('产品库里匹配不到这支疫苗，请手动选择疫苗的毒株（可多选）。')
+    expect(source).toContain('needsManualComponents()')
     expect(source).toContain("nameFieldMode(draft.vaccineName) === 'unknown'")
   })
 
@@ -506,10 +521,13 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
   it('🔴 分类已经有了、名字也认得 → 不再显示「确认」按钮', () => {
     const source = readCard()
 
+    // ⚠️ 老板 2026-10-14 第 2.2 条：按钮**整个去掉**了（和「保存」重复），
+    // 归类挪到保存那一刻（见父组件的 ensureClassified）。
+    // 函数体保留给"识别回填后重认一次"那条路，但**不许再接回模板**。
     expect(source).toContain('function showConfirmButton(): boolean')
     expect(source).toContain('if (draft.value.kinds.length === 0) return true')
     expect(source).toContain("return nameFieldMode(draft.value.vaccineName) === 'unknown'")
-    expect(source).toContain('v-if="showConfirmButton()"')
+    expect(source.includes('v-if="showConfirmButton()"')).toBe(false)
     // 取而代之说明一句
     // ⚠️ 老板 2026-10-13 第 2 条：这句内部说明已删（不要再打回页面）
     expect(source).not.toContain('分类已按产品库自动判定')
@@ -555,17 +573,24 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
     expect(types).toContain('nameSuggestions?: string[]')
   })
 
-  it('展开后的字段顺序跟确认页一致：名字 → 日期 → 病种', () => {
+  it('展开后的字段顺序：名字 → 毒株 → 日期（老板 2026-10-14 定的）', () => {
     const source = readCard()
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
-    const date = source.indexOf('<text class="field-label">接种日期</text>')
-    // 2026-10-12 文案改了 ✓：含哪些病种 → 含哪些疫苗（可多选）
     const components = source.indexOf('<text class="field-label">含哪些疫苗（可多选）</text>')
+    const date = source.indexOf('<text class="field-label">接种日期</text>')
 
     expect(name).toBeGreaterThan(0)
-    expect(date).toBeGreaterThan(name)
-    expect(components).toBeGreaterThan(date)
+    /*
+     * ⚠️ 顺序变了（老板 2026-10-14 第 2.4 条）：
+     * "将疫苗毒株的多选框选择器，放到疫苗名称字段的下方，和日期选择之前。"
+     *
+     * 原来是"名字 → 日期 → 毒株"（当时的口径是"跟确认页的字段顺序一致"）——
+     * 老板现在要毒株紧跟名字 ✓：名字决定了这支苗是什么，紧接着就该
+     * 说清它含什么 ✓，日期反而可以往后放 ✓。
+     */
+    expect(components).toBeGreaterThan(name)
+    expect(date).toBeGreaterThan(components)
   })
 })
 

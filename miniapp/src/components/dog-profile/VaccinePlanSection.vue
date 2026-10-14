@@ -179,11 +179,38 @@
       class="combo-note"
     >
       <text class="combo-note__title">这两针可以合并成一次打</text>
+
+      <!-- ⚠️ 用**示意图**说清"哪两针重叠"（老板 2026-10-14 第 1 条）。
+           老板原话："提醒文案确实能看到，但是用户理解起来还是非常的困难。
+                     这两针是哪俩针嘛。能不能……做成示意图，而不要纯文字叙述呢？"
+           —— 纯文字要顾客自己在脑子里对齐两个日期区间 ✗；
+              画成两条时间条、把重叠那段标出来 ✓，一眼就懂 ✓。 -->
+      <view class="combo-chart">
+        <view
+          v-for="row in comboChartRows(card)"
+          :key="row.key"
+          class="combo-chart__row"
+        >
+          <text class="combo-chart__label">{{ row.label }}</text>
+          <view class="combo-chart__track">
+            <view
+              class="combo-chart__bar"
+              :class="{ 'combo-chart__bar--overlap': row.isOverlap }"
+              :style="`left:${row.left}%;width:${row.width}%`"
+            />
+          </view>
+        </view>
+        <view class="combo-chart__legend">
+          <text class="combo-chart__legend-item">■ 各自的建议时间</text>
+          <text class="combo-chart__legend-item combo-chart__legend-item--overlap">
+            ■ 重叠的 {{ overlapDays(card) }} 天
+          </text>
+        </view>
+      </view>
+
       <text class="combo-note__desc">
-        {{ card.title }}和{{ comboNoteAfter(card, cardIndex)!.title }}的建议接种时间有
-        {{ overlapDays(card) }} 天是重叠的。选一支同时防这两类的疫苗（比如{{
-          card.combo!.products[0]
-        }}），打一次就够 —— 两类都不用再单独打。
+        选一支同时防这两类的疫苗（比如{{ card.combo!.products[0] }}），
+        打一次就够 —— 两类都不用再单独打。
       </text>
       <text class="combo-note__window">
         两边都合适的日子：{{ card.combo!.windowStart }} ~ {{ card.combo!.windowEnd }}
@@ -740,6 +767,59 @@ function comboNoteAfter(card: PlanCard, index: number): PlanCard | null {
   if (!card.combo) return null
   const next = kindCards.value[index + 1]
   return next && next.key === card.combo.withKind ? next : null
+}
+
+/**
+ * 把"两类各自的窗口 + 重叠段"算成三条时间条（老板 2026-10-14 第 1 条）。
+ *
+ * 每条给 left/width 的**百分比**，由模板用 inline style 画 ——
+ * 这样顾客一眼就能看出"哪两针、重叠在哪一段" ✓，不用自己在脑子里对齐日期 ✗。
+ *
+ * ⚠️ 百分比必须按**同一个时间轴**算（两类的 min 起点 ~ max 终点）✓，
+ *    各算各的会把两条画成一样长 ✗，重叠也就看不出来了 ✗。
+ */
+function comboChartRows(card: PlanCard): Array<{
+  key: string
+  label: string
+  left: number
+  width: number
+  isOverlap: boolean
+}> {
+  const next = card.combo ? kindCards.value.find((item) => item.key === card.combo!.withKind) : null
+  if (!card.combo || !next) return []
+
+  const toTime = (text: string) => new Date(`${text}T00:00:00`).getTime()
+  const day = 86400000
+  const starts = [toTime(card.windowStart), toTime(next.windowStart)].filter((n) => !Number.isNaN(n))
+  const ends = [toTime(card.windowEnd), toTime(next.windowEnd)].filter((n) => !Number.isNaN(n))
+  if (starts.length === 0 || ends.length === 0) return []
+
+  const min = Math.min(...starts)
+  const max = Math.max(...ends)
+  const span = max - min
+  if (span <= 0) return []
+
+  const bar = (start: string, end: string) => {
+    const from = ((toTime(start) - min) / span) * 100
+    const to = ((toTime(end) - min) / span) * 100
+    return { left: Math.max(0, from), width: Math.max(6, to - from) }
+  }
+
+  return [
+    { key: 'a', label: shortKindName(card.title), ...bar(card.windowStart, card.windowEnd), isOverlap: false },
+    { key: 'b', label: shortKindName(next.title), ...bar(next.windowStart, next.windowEnd), isOverlap: false },
+    {
+      key: 'overlap',
+      label: '重叠',
+      ...bar(card.combo.windowStart, card.combo.windowEnd),
+      isOverlap: true,
+    },
+  ]
+}
+
+/** 示意图的标签要**短**：把"核心疫苗（犬瘟、细小、腺病毒）"里的括号说明去掉 */
+function shortKindName(title: string): string {
+  return String(title || '').split('（')[0] || String(title || '')
 }
 
 /** 重合了几天（提示条上那句"有 N 天是重叠的"）*/
@@ -1821,6 +1901,62 @@ defineExpose({
   border: 2rpx dashed #c7dccd;
   border-radius: 14rpx;
   background: #f4faf6;
+}
+
+/* ── 合并接种的示意图（老板 2026-10-14 第 1 条）────────────────────────
+   两条时间条 + 一条重叠条，画在同一条时间轴上（百分比对齐）。 */
+.combo-chart {
+  margin-top: 12rpx;
+}
+
+.combo-chart__row {
+  display: flex;
+  align-items: center;
+  margin-top: 8rpx;
+}
+
+.combo-chart__label {
+  flex-shrink: 0;
+  width: 150rpx;
+  font-size: 22rpx;
+  color: #4a6b57;
+}
+
+.combo-chart__track {
+  position: relative;
+  flex: 1;
+  height: 22rpx;
+  border-radius: 6rpx;
+  background: #e8f0ea;
+}
+
+.combo-chart__bar {
+  position: absolute;
+  top: 0;
+  height: 22rpx;
+  border-radius: 6rpx;
+  background: #7fb08f;
+}
+
+/* 重叠那一条用**实色**压住，一眼看到"就是这一段" */
+.combo-chart__bar--overlap {
+  background: #2f7d52;
+}
+
+.combo-chart__legend {
+  margin-top: 10rpx;
+  padding-left: 150rpx;
+}
+
+.combo-chart__legend-item {
+  margin-right: 16rpx;
+  font-size: 20rpx;
+  color: #7d9a8a;
+}
+
+.combo-chart__legend-item--overlap {
+  color: #2f7d52;
+  font-weight: 600;
 }
 
 .combo-note__title {

@@ -140,7 +140,8 @@ class="vaccine-card"
       <!-- 库里没有这支苗：只**陈述事实**（老板 2026-10-13 第 2 条：
            不要把"系统内部怎么归类"这类话打到顾客脸上）。 -->
       <template v-if="nameFieldMode(draft.vaccineName) === 'unknown'">
-        <text class="field-hint field-hint--unknown">产品库里没有这支苗。</text>
+        <!-- "产品库里没有这支苗"这句已按老板 2026-10-14 挪到**毒株那一块**去说 ✓
+             （顾客真正要动手的地方）—— 摆在这儿只会让人在名称下面找不着北 ✗。 -->
         <!-- 认不准就诚实说（2026-10-06 老板）：
              "并不完全保证能识别出卫佳8，有可能它还是识别出卫佳，
               并没有识别出8这个字。如果不能完全有把握的识别出来，
@@ -169,12 +170,12 @@ class="vaccine-card"
            只有这两种情况才需要确认：
              · 分类还是空的（名字是手打的，系统还没判过）
              · 名字库里没有（让后端再认一次，认出来还能把名字规范过来） -->
-      <text
-        v-if="showConfirmButton()"
-        class="vaccine-confirm"
-        :class="{ 'vaccine-confirm--busy': matchingBusy }"
-        @tap="confirmVaccineName()"
-      >{{ matchingBusy ? '正在查这是哪一支苗…' : '确认' }}</text>
+      <!-- 「确认」按钮**已去掉**（老板 2026-10-14 第 2.2 条）。
+           老板原话："手动输入疫苗产品名称的时候，为什么还是有确认按钮呢？
+                     这个确认按钮和板块中的保存按钮是重复的呀？之前说过这个问题吧？"
+           —— 对，重复 ✓。现在归类的时机挪到**保存那一刻**：
+           名字没归类过就直接存的话，保存流程会先替顾客问一次后端（见
+           父组件的 ensureClassified ✓），顾客只要点一次「保存」✓。 -->
 
       <!-- ⚠️ 结果那行字**只在名称字段下面显示一处**（老板 2026-10-13：
            "疫苗的配方说明展现了两次"）——
@@ -195,23 +196,6 @@ class="vaccine-card"
          病种都已经带好了，不用顾客操心。两种情况才展开：
            · 认不出来（没勾过病种）→ 请他照疫苗本勾
            · 顾客自己想改 → 点那行就展开 -->
-    <view class="field-group">
-      <text class="field-label">接种日期</text>
-      <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
-           接种日填成未来会被算成已打过，提醒随之消失。
-           后端也会拒（此处只是别让顾客白填一遍）。
-           扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
-      <picker
-        mode="date"
-        :value="draft.vaccinationDate"
-        :end="getTodayDateString()"
-        @change="updateField('vaccinationDate', $event.detail.value)"
-      >
-        <view class="field-picker">
-          {{ draft.vaccinationDate || '请选择接种日期' }}
-        </view>
-      </picker>
-    </view>
     <!-- 「含哪些疫苗」整块（老板 2026-10-13 第 2 条）。
          ⚠️ **从产品库选的就不显示这一块**：老板原话
             "如果是从产品库中选择，为什么还有含有哪些疫苗这个字段呢？
@@ -223,6 +207,13 @@ class="vaccine-card"
       <!-- 老板 2026-10-12："含哪些病种的文案可否改成含哪些疫苗？
            并且……『可多选』移到含哪些病种文案板块，以括弧中的注释形式存在。" -->
       <text class="field-label">含哪些疫苗（可多选）</text>
+      <!-- 库外提示**放在这儿**（老板 2026-10-14 第 2.3 条）：
+           顾客真正要动手的地方就是这里 —— 他要从下面把毒株勾出来 ✓。
+           摆在名称下面只会让人在错的地方找办法 ✗。 -->
+      <text
+        v-if="needsManualComponents()"
+        class="field-hint field-hint--unknown"
+      >产品库里匹配不到这支疫苗，请手动选择疫苗的毒株（可多选）。</text>
 
       <!-- 判定结果：只读一行，点它可以改 -->
       <view
@@ -287,6 +278,23 @@ class="vaccine-card"
            · 但**卡片上不再显示它**（2026-10-08 老板："每条卡片不显示到期提示"）——
              顶部那条提醒是按接种计划算出来的，比人工填的这个日期权威。
          只是顾客端不再有输入口。 -->
+    <view class="field-group">
+      <text class="field-label">接种日期</text>
+      <!-- :end 直接不让选未来（2026-10-07 老板审计时定）：
+           接种日填成未来会被算成已打过，提醒随之消失。
+           后端也会拒（此处只是别让顾客白填一遍）。
+           扫疫苗本识别出来的日期不受这里限制，保存时后端会把关。 -->
+      <picker
+        mode="date"
+        :value="draft.vaccinationDate"
+        :end="getTodayDateString()"
+        @change="updateField('vaccinationDate', $event.detail.value)"
+      >
+        <view class="field-picker">
+          {{ draft.vaccinationDate || '请选择接种日期' }}
+        </view>
+      </picker>
+    </view>
     <view class="field-group">
       <text class="field-label">备注（可选）</text>
       <textarea
@@ -485,6 +493,18 @@ const emit = defineEmits<{
   (event: 'save', index: number): void
   /** 点「取消」：退出这张新建卡（老板 2026-10-13 第 4 条，和保存同一行）*/
   (event: 'cancel', index: number): void
+  /**
+   * 「草稿我改好了，请排一次保存」——**只通知，不带字段值**（老板 2026-10-14）。
+   *
+   * ⚠️⚠️ 原来勾选毒株是用 `updateField('components', '')` 通知父组件的 ✗ ——
+   * 父组件那条路会老老实实 `draft['components'] = ''` ✓，
+   * 于是**刚勾好的数组当场被写成空字符串** ✗：
+   *   · 界面上勾了没反应（看着像"点不动" ✗）
+   *   · 再点一下就在字符串上调 `.filter` → 抛
+   *     `components.map is not a function` ✗（老板截图为证）
+   * ⇒ 通知与赋值必须**分开** ✓。
+   */
+  (event: 'touch', index: number): void
   /** 名称框失焦 → 父组件把"注意力在这一行"的标记清掉 ✓ */
   (event: 'name-blur', index: number): void
 }>()
@@ -626,6 +646,22 @@ function nameFieldMode(name: string): 'empty' | 'recognized' | 'unknown' {
  *   · 分类还是空的（名字是手打的，系统还没判过）
  *   · 名字库里没有（让后端再认一次；认出来还能把名字规范过来）
  */
+/**
+ * 要不要在毒株那一块提示"请手动选择毒株"（老板 2026-10-14 第 2.3 条）。
+ *
+ * 判据：这支苗**产品库里匹配不到**（含"产品库压根没加载出来"的情况）——
+ * 那时顾客只能自己照疫苗本勾毒株 ✓。
+ */
+function needsManualComponents(): boolean {
+  if (props.catalogProducts.length === 0) return true
+  return nameFieldMode(draft.value.vaccineName) === 'unknown'
+}
+
+/*
+ * ⚠️ 这个判定**模板里已经不用了**（老板 2026-10-14 去掉了「确认」按钮）——
+ * 保留函数体是为了 `confirmVaccineName` 那条路（识别回填后仍可能重认一次）。
+ * 别再把它接回模板 ✗：那又变成"确认"和"保存"两个按钮干同一件事 ✗。
+ */
 function showConfirmButton(): boolean {
   if (!draft.value.vaccineName.trim()) return false
   if (draft.value.kinds.length === 0) return true
@@ -685,7 +721,17 @@ function updateField(field: keyof VaccineDraft, value: string) {
    * ⚠️ 「从产品库选一支」也走这里（applyCatalogProduct 先报名字、再设归类）✓，
    *    但它紧接着会把 componentsLocked 设回 true ✓ —— 顺序在那边保证 ✓。
    */
-  if (field === 'vaccineName') componentsLocked.value = false
+  if (field === 'vaccineName') {
+    componentsLocked.value = false
+    /*
+     * 名字变了 → **上一个产品的配方说明就作废**（老板 2026-10-14 第 2.1 条）。
+     *
+     * 老板原话："从产品库中选择某一个疫苗产品，然后删除，回到手动输入的时候，
+     *            下方该产品的配方还是会进行提示。"
+     * 那行字说的是"这支苗含什么"，名字都换/清空了，它就不该还在 ✓。
+     */
+    if (draft.value.vaccineName !== value) clearConfirmResult()
+  }
   emit('update', props.index, field, value)
 }
 
@@ -869,10 +915,11 @@ function toggleComponent(component: string) {
   }
   draft.value.kindsManual = true
   /*
-   * ⚠️ 报的是 `components` 这个**字段名** ✓（值只是个占位 ✓）。
-   * 报 `vaccineName` 会让父组件把刚勾好的归类清掉 ✗（见 confirmVaccineName 的说明 ✓）。
+   * 只通知父组件"草稿改了，排一次保存" ✓ ——
+   * ⚠️ 再也不借 `components` 字段传空值 ✗（那会把它污染成字符串，
+   *    勾选当场失效、再点还抛错 —— 老板 2026-10-14 截图报的就是这个 ✓）。
    */
-  updateField('components', '')
+  emit('touch', props.index)
 }
 
 /**

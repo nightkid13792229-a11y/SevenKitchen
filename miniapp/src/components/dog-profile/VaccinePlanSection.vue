@@ -181,7 +181,12 @@
             所以框是**三段拼**的（见样式里的 combo-group__foot /
             kind-card--combo-first / kind-card--combo-second）✓。 -->
     <view v-if="card.comboRole === 'second'" class="combo-group__foot">
-      <text class="combo-group__products">{{ card.combo!.products.join('、') }}</text>
+      <!-- 产品名后面按需补"等疫苗"（老板 2026-10-14）。
+           ⚠️ 只有**后端确实截断了**才加 —— 列全了还写"等"，
+              会让人以为还有别的 ✗。 -->
+      <text class="combo-group__products"
+        >{{ card.combo!.products.join('、') }}{{ card.combo!.hasMore ? '等疫苗' : '' }}</text
+      >
       <text class="combo-group__desc">
         同时包含以上两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
         {{ card.combo!.windowEnd }}）期间完成接种。
@@ -710,7 +715,10 @@ interface PlanCard {
   combo: {
     withKind: string
     withLabel: string
+    /** 能一支顶两类的产品名（后端**只列前面几个**，见 hasMore）*/
     products: string[]
+    /** 还有没有没列出来的同类产品（后端列表有上限）*/
+    hasMore: boolean
     windowStart: string
     windowEnd: string
   } | null

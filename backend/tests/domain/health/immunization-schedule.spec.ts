@@ -2850,6 +2850,26 @@ describe('合并接种提醒 · 可选产品要列全（老板 2026-10-14）', (
     expect(shown.map((p) => p.name)).toContain('维克犬四联加钩端');
   });
 
+  it('🔴 提醒里最多列 3 个，**截断了要标 hasMore**（老板 2026-10-14）', () => {
+    /*
+     * 老板："也没有必要全部写出来，我的意思是，如果有 3 条的约束的话，
+     *        那文案可以在产品名后面加一个'等疫苗'。"
+     *
+     * 所以：· 列表**只列 3 个**（别排一长串）
+     *       · 但**截断了必须让界面知道** —— 否则顾客以为"系统只认这几支" ✗
+     *       · 恰好没截断时 hasMore=false（加"等"反而让人以为还有 ✗）
+     */
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    );
+    // 截断 + 标记
+    expect(source).toContain('allProducts.slice(0, MAX_RECOMMENDED_PRODUCTS)');
+    expect(source).toContain('hasMore: allProducts.length > shown.length');
+    // 类型上也得有这一位，否则界面读不到
+    expect(source).toContain('hasMore: boolean;');
+  });
+
   it('🔴 "每类推荐"那个列表仍然限制 3 个（别把两件事一起改了）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/domain/health/vaccine-products.ts'),

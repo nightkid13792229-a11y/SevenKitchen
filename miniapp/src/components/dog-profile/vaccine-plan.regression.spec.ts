@@ -377,6 +377,21 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 产品名截断时要补"等疫苗"，没截断就不补（老板 2026-10-14）', () => {
+    const text = readSection()
+
+    /*
+     * 老板："也没有必要全部写出来，我的意思是，如果有 3 条的约束的话，
+     *        那文案可以在产品名后面加一个'等疫苗'。"
+     *
+     * ⚠️ 加不加由**后端的 hasMore** 决定，不是无脑加：
+     *    列全了还写"等"，会让人以为还有别的 ✗。
+     */
+    expect(text).toContain("card.combo!.hasMore ? '等疫苗' : ''");
+    // 类型上要有这一位，否则读不到
+    expect(text).toContain('hasMore: boolean');
+  })
+
   it('🔴 说明块不许写 width（写了右边框会被裁到屏幕外）', () => {
     const text = readSection()
 

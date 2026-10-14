@@ -2,6 +2,7 @@ import {
   findProductsInName,
   productCoversKind,
   findComboProducts,
+  MAX_RECOMMENDED_PRODUCTS,
   recommendProductsForStep,
   resolvePreferredBrand,
 } from './vaccine-products';
@@ -147,8 +148,16 @@ export interface VaccineComboOption {
   withKind: VaccineKind;
   /** 那一类的中文名（直接下发，前端不再自己映射）*/
   withLabel: string;
-  /** 能一支顶两类的产品名 */
+  /** 能一支顶两类的产品名（**只列前面几个**，见 hasMore）*/
   products: string[];
+  /**
+   * 还有没有没列出来的同类产品。
+   *
+   * 列表有上限（兽医审核意见第 6 条：别排一长串）—— 截断了界面就要在
+   * 产品名后面加"等疫苗"，否则顾客会以为"系统只认这几支" ✗；
+   * **恰好没截断时不加**（加"等"反而让人以为还有别的 ✗）。
+   */
+  hasMore: boolean;
   /** 两边都合适的日期区间（就是两窗口的交集）*/
   windowStart: string;
   windowEnd: string;
@@ -2697,15 +2706,25 @@ export function buildVaccinePlan(
 
       const overlapDate = parseDateText(overlapStart);
       const weeksAtOverlap = overlapDate ? weeksBetween(birthday, overlapDate) : null;
-      const products = findComboProducts(step.kind, other.kind, weeksAtOverlap).map(
-        (product) => product.name,
-      );
-      if (products.length === 0) continue;
+      /*
+       * 产品名**只列前面几个**（兽医审核意见第 6 条：别排一长串），
+       * 但截断了要让顾客知道还有别的 —— 否则他会以为"系统只认这几支" ✗。
+       *
+       * 老板 2026-10-14："也没有必要全部写出来，我的意思是，如果有 3 条的
+       * 约束的话，那文案可以在产品名后面加一个'等疫苗'。"
+       * ⇒ 后端只回答"**有没有被截掉的**"（`hasMore`），
+       *    具体加不加"等疫苗"由界面按文案习惯决定 ✓
+       *    （恰好没截断时就不加 —— 加"等"反而会让人以为还有 ✗）。
+       */
+      const allProducts = findComboProducts(step.kind, other.kind, weeksAtOverlap);
+      const shown = allProducts.slice(0, MAX_RECOMMENDED_PRODUCTS).map((p) => p.name);
+      if (shown.length === 0) continue;
 
       step.combo = {
         withKind: other.kind,
         withLabel: other.kindLabel,
-        products,
+        products: shown,
+        hasMore: allProducts.length > shown.length,
         windowStart: overlapStart,
         windowEnd: overlapEnd,
       };

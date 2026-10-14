@@ -83,16 +83,31 @@
                 class="basis__summary"
                 :class="{ 'basis__summary--block': card.steps.length > 1 }"
               >{{ basisSummaryOf(step) }}</text>
+              <!--
+                ⚠️ 「更多 / 收起」的位置（老板 2026-10-14 第 4 条）。
+                原来只有一个按钮、固定在短句后面 —— 展开之后它**夹在了段落中间** ✗：
+                    依据  犬瘟、细小、腺病毒为必须接种的核心疫苗。
+                          收起                    ← 夹在这儿
+                          首次免疫从 6~8 周龄起，间隔 2~4 周…
+                ⇒ 现在分两处放，各自都在**它该在的位置**：
+                    · 收起状态 → 「更多」跟在短句后面 ✓（这时末尾就是短句）
+                    · 展开状态 → 「收起」跟在**整段末尾** ✓
+              -->
               <text
-                v-if="hasMoreBasis(card.steps[0])"
+                v-if="hasMoreBasis(card.steps[0]) && !isBasisOpen(card.steps[0].key)"
                 class="basis__more"
                 @tap.stop="toggleBasis(card.steps[0].key)"
-              >{{ isBasisOpen(card.steps[0].key) ? '收起' : '更多' }}</text>
+              >更多</text>
             </view>
             <text
               v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
               class="basis__full"
             >{{ basisRestOf(card.steps[0]) }}</text>
+            <text
+              v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
+              class="basis__more basis__more--end"
+              @tap.stop="toggleBasis(card.steps[0].key)"
+            >收起</text>
           </view>
         </view>
 
@@ -1751,6 +1766,12 @@ defineExpose({
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #0f7b49;
+}
+
+/* 展开后的「收起」：跟在整段末尾（不再是段落中间）*/
+.basis__more--end {
+  display: block;
+  margin-top: 4rpx;
 }
 .basis__full {
   display: block;

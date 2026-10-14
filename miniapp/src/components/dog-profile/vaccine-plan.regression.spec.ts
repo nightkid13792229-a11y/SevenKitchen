@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { stripComments } from '../../architecture/source-text'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -88,7 +89,13 @@ describe('疫苗计划 · 界面', () => {
   })
 
   it('措辞是建议不是命令（老板要求不做诊断、不替顾客拍板）', () => {
-    const section = readSection()
+    /*
+     * ⚠️ 必须**先剥注释**（2026-10-14 第四次踩这个坑）：
+     *    上面讲「更多/收起」位置的那段注释里，为了说明问题**引用了老板的截图**，
+     *    里面正好有"为必须接种的核心疫苗" —— 于是这条断言被**注释**触发了 ✗。
+     *    注释是给维护者看的，不是顾客看到的界面文案 ✗。
+     */
+    const section = stripComments(readSection())
 
     // 2026-10-11 老板定：这个字段改叫「建议接种时间」✓ —— 比"窗口期"更像人话 ✓
     expect(section).toContain('建议接种时间')
@@ -375,6 +382,28 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain('border-radius: 16rpx 16rpx 0 0;')
     // 第一张卡去掉上边框与圆角、第二张卡收下圆角
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
+  })
+
+  it('🔴 「收起」跟在**整段末尾**，不许夹在段落中间（老板 2026-10-14）', () => {
+    const text = readSection()
+
+    /*
+     * 老板截图里是这样（他看出来的问题）：
+     *     依据  犬瘟、细小、腺病毒为必须接种的核心疫苗。
+     *           收起                      ← 夹在段落中间 ✗
+     *           首次免疫从 6~8 周龄起，间隔 2~4 周…
+     *
+     * ⇒ 分两处放，各自都在它该在的位置：
+     *     · 收起状态 → 「更多」跟在短句后面（这时末尾就是短句）
+     *     · 展开状态 → 「收起」跟在**整段末尾**
+     */
+    // 「更多」只在收起时出现
+    expect(text).toContain("hasMoreBasis(card.steps[0]) && !isBasisOpen(card.steps[0].key)");
+    // 「收起」在展开内容**之后**（不是之前）
+    const fullAt = text.indexOf('class="basis__full"');
+    const endAt = text.indexOf('basis__more--end');
+    expect(fullAt).toBeGreaterThan(-1);
+    expect(endAt).toBeGreaterThan(fullAt);
   })
 
   it('🔴 合并窗口要有**自己的录入入口**，且预填两类（老板 2026-10-14 第三问）', () => {

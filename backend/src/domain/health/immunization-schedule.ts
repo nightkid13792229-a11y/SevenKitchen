@@ -148,16 +148,14 @@ export interface VaccineComboOption {
   withKind: VaccineKind;
   /** 那一类的中文名（直接下发，前端不再自己映射）*/
   withLabel: string;
-  /** 能一支顶两类的产品名（**只列前面几个**，见 hasMore）*/
-  products: string[];
   /**
-   * 还有没有没列出来的同类产品。
+   * 能一支顶两类的产品名 —— **只列前面几个**（兽医审核意见第 6 条：
+   * 别排一长串），界面上**一律**在末尾补"等产品" ✓。
    *
-   * 列表有上限（兽医审核意见第 6 条：别排一长串）—— 截断了界面就要在
-   * 产品名后面加"等疫苗"，否则顾客会以为"系统只认这几支" ✗；
-   * **恰好没截断时不加**（加"等"反而让人以为还有别的 ✗）。
+   * ⚠️ 所以这个列表**永远是"举例"**，不表示"全库就这几支" ——
+   *    顾客要拿它对照自己医院实际有的那支，剩下的自己找 ✓。
    */
-  hasMore: boolean;
+  products: string[];
   /** 两边都合适的日期区间（就是两窗口的交集）*/
   windowStart: string;
   windowEnd: string;
@@ -2708,23 +2706,23 @@ export function buildVaccinePlan(
       const weeksAtOverlap = overlapDate ? weeksBetween(birthday, overlapDate) : null;
       /*
        * 产品名**只列前面几个**（兽医审核意见第 6 条：别排一长串），
-       * 但截断了要让顾客知道还有别的 —— 否则他会以为"系统只认这几支" ✗。
+       * 界面上**一律**在末尾补"等产品" ——
+       * 也就是说这个列表永远只是"举例"，**收没收全都不重要** ✓。
        *
-       * 老板 2026-10-14："也没有必要全部写出来，我的意思是，如果有 3 条的
-       * 约束的话，那文案可以在产品名后面加一个'等疫苗'。"
-       * ⇒ 后端只回答"**有没有被截掉的**"（`hasMore`），
-       *    具体加不加"等疫苗"由界面按文案习惯决定 ✓
-       *    （恰好没截断时就不加 —— 加"等"反而会让人以为还有 ✗）。
+       * 老板 2026-10-14 第二版："如果符合条件的恰好 3 只，也需要加等疫苗
+       * 这个文案，因为我们**不能假设产品库中的产品是完整的**。"
+       * ⇒ 所以后端**不需要**回答"有没有被截掉"（原来那个 hasMore 已删）——
+       *    既然一律当举例看，加不加就不取决于我们库里还有没有 ✓。
        */
-      const allProducts = findComboProducts(step.kind, other.kind, weeksAtOverlap);
-      const shown = allProducts.slice(0, MAX_RECOMMENDED_PRODUCTS).map((p) => p.name);
+      const shown = findComboProducts(step.kind, other.kind, weeksAtOverlap)
+        .slice(0, MAX_RECOMMENDED_PRODUCTS)
+        .map((product) => product.name);
       if (shown.length === 0) continue;
 
       step.combo = {
         withKind: other.kind,
         withLabel: other.kindLabel,
         products: shown,
-        hasMore: allProducts.length > shown.length,
         windowStart: overlapStart,
         windowEnd: overlapEnd,
       };

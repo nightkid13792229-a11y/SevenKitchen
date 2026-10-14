@@ -61,7 +61,7 @@
           <text class="kv__value">{{ card.steps[0].matchedRecordDate }}</text>
         </view>
         <view v-if="card.products.length > 0" class="kv">
-          <text class="kv__label">常见疫苗</text>
+          <text class="kv__label">常见产品</text>
           <text class="kv__value">{{ card.products.join('、') }}</text>
         </view>
         <view class="kv">
@@ -181,11 +181,13 @@
             所以框是**三段拼**的（见样式里的 combo-group__foot /
             kind-card--combo-first / kind-card--combo-second）✓。 -->
     <view v-if="card.comboRole === 'second'" class="combo-group__foot">
-      <!-- 产品名后面按需补"等疫苗"（老板 2026-10-14）。
-           ⚠️ 只有**后端确实截断了**才加 —— 列全了还写"等"，
-              会让人以为还有别的 ✗。 -->
+      <!-- 产品名后面**一律**补"等产品"（老板 2026-10-14 第二版）。
+           ⚠️ 不再看"有没有截断" —— 老板的理由：
+              "如果符合条件的恰好 3 只，也需要加，因为我们**不能假设产品库
+               中的产品是完整的**。" ✓
+           也就是说：这里的列表永远只是"举例"，产品库收没收全不重要 ✓。 -->
       <text class="combo-group__products"
-        >{{ card.combo!.products.join('、') }}{{ card.combo!.hasMore ? '等疫苗' : '' }}</text
+        >{{ card.combo!.products.join('、') }}等产品</text
       >
       <text class="combo-group__desc">
         同时包含以上两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
@@ -715,10 +717,8 @@ interface PlanCard {
   combo: {
     withKind: string
     withLabel: string
-    /** 能一支顶两类的产品名（后端**只列前面几个**，见 hasMore）*/
+    /** 能一支顶两类的产品名（后端**只列前面几个**，一律当"举例"看）*/
     products: string[]
-    /** 还有没有没列出来的同类产品（后端列表有上限）*/
-    hasMore: boolean
     windowStart: string
     windowEnd: string
   } | null

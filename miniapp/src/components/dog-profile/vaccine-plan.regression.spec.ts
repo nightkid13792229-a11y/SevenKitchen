@@ -377,19 +377,29 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
-  it('🔴 产品名截断时要补"等疫苗"，没截断就不补（老板 2026-10-14）', () => {
+  it('🔴 产品名后面**一律**补"等产品"，不看有没有截断（老板 2026-10-14）', () => {
     const text = readSection()
 
     /*
-     * 老板："也没有必要全部写出来，我的意思是，如果有 3 条的约束的话，
-     *        那文案可以在产品名后面加一个'等疫苗'。"
+     * 老板两轮的意思：
+     *   ① "如果有 3 条的约束的话，那文案可以在产品名后面加一个'等疫苗'"
+     *   ② "如果符合条件的恰好 3 只，也需要加，因为我们**不能假设
+     *      产品库中的产品是完整的**"
      *
-     * ⚠️ 加不加由**后端的 hasMore** 决定，不是无脑加：
-     *    列全了还写"等"，会让人以为还有别的 ✗。
+     * ⇒ 所以是**无条件**加 ✓，不再看"后端有没有截断"
+     *   （曾经按 hasMore 判断过，老板否了 —— 那等于假设我们库里是全集 ✗）。
      */
-    expect(text).toContain("card.combo!.hasMore ? '等疫苗' : ''");
-    // 类型上要有这一位，否则读不到
-    expect(text).toContain('hasMore: boolean');
+    expect(text).toContain('}}等产品</text');
+    // ⚠️ 只查 combo 相关的 hasMore —— 组件里另有 hasMoreBasis（依据文字能不能展开），
+    //    那是另一件事，别误伤。
+    expect(text.includes('combo!.hasMore')).toBe(false);
+    expect(text.includes('hasMore: boolean')).toBe(false);
+  })
+
+  it('🔴 "常见疫苗"已改叫"常见产品"（老板 2026-10-14）', () => {
+    const text = readSection()
+    expect(text).toContain('>常见产品<')
+    expect(text.includes('>常见疫苗<')).toBe(false)
   })
 
   it('🔴 说明块不许写 width（写了右边框会被裁到屏幕外）', () => {

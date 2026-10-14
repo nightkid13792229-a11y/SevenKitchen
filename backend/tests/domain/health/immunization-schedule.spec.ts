@@ -1,3 +1,4 @@
+import { stripComments } from '../../helpers/source-text';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildVaccineCatalog } from '../../../src/domain/health/vaccine-catalog';
@@ -2850,24 +2851,30 @@ describe('合并接种提醒 · 可选产品要列全（老板 2026-10-14）', (
     expect(shown.map((p) => p.name)).toContain('维克犬四联加钩端');
   });
 
-  it('🔴 提醒里最多列 3 个，**截断了要标 hasMore**（老板 2026-10-14）', () => {
+  it('🔴 提醒里只列 3 个，且**不回答"还有没有别家"**（老板 2026-10-14）', () => {
     /*
-     * 老板："也没有必要全部写出来，我的意思是，如果有 3 条的约束的话，
-     *        那文案可以在产品名后面加一个'等疫苗'。"
+     * 老板两轮的意思合起来是：
+     *   ① "也没有必要全部写出来，……如果有 3 条的约束的话，
+     *      那文案可以在产品名后面加一个'等疫苗'。"
+     *   ② "如果符合条件的恰好 3 只，也需要加等疫苗这个文案，
+     *      因为我们**不能假设产品库中的产品是完整的**。"
      *
-     * 所以：· 列表**只列 3 个**（别排一长串）
-     *       · 但**截断了必须让界面知道** —— 否则顾客以为"系统只认这几支" ✗
-     *       · 恰好没截断时 hasMore=false（加"等"反而让人以为还有 ✗）
+     * ⇒ 结论：**只列 3 个**（别排一长串），界面上**一律**补"等产品" ✓。
+     *    既然一律当举例看，后端就**不需要**再回答"有没有被截掉"——
+     *    那个 hasMore 已经删掉了（留着就是死字段）。
      */
     const source = readFileSync(
       resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
       'utf-8',
     );
-    // 截断 + 标记
-    expect(source).toContain('allProducts.slice(0, MAX_RECOMMENDED_PRODUCTS)');
-    expect(source).toContain('hasMore: allProducts.length > shown.length');
-    // 类型上也得有这一位，否则界面读不到
-    expect(source).toContain('hasMore: boolean;');
+    // 仍然只列 3 个
+    expect(source).toContain('slice(0, MAX_RECOMMENDED_PRODUCTS)');
+    /*
+     * 但不再有"有没有更多"这个字段（一律当举例）。
+     * ⚠️ 必须**先剥注释** —— 上面那条注释正好在讲"hasMore 已经删掉了"，
+     *    不剥就会把说明文字当成真代码（第一次就是这么误报的）。
+     */
+    expect(stripComments(source).includes('hasMore')).toBe(false);
   });
 
   it('🔴 "每类推荐"那个列表仍然限制 3 个（别把两件事一起改了）', () => {

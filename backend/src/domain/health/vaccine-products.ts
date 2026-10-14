@@ -720,7 +720,7 @@ export function findProductByText(name: string): VaccineProduct | null {
  * ⚠️ 这几个数字必须与 immunization-schedule.ts 里的排期保持一致 ✓
  * （有测试钉着 ✓ —— 那两处不一致过一次就够受了 ✗）。
  */
-const KIND_START_WEEKS: Record<string, number> = {
+export const KIND_START_WEEKS: Record<string, number> = {
   core_early: 4,
   core: 6,
   lepto: 8,
@@ -821,6 +821,54 @@ export function recommendProductsForStep(
   }
 
   return [...exact, ...rest].slice(0, MAX_RECOMMENDED_PRODUCTS)
+}
+
+/**
+ * 「这两类能不能用**一支联苗**一起打」—— 用在重合窗口上的查询（老板 2026-10-14）。
+ *
+ * 老板原话："现在核心疫苗和钩端螺旋体接种窗口期有部分是重合的……
+ *            并且在各自的计划展开之后，并未做合并接种的相关提醒呢？"
+ *
+ * ── 为什么不能复用 `recommendProductsForStep` 的结果取交集 ──────────
+ *
+ * 原来前端就是那么做的（"两张卡的推荐产品有没有交集"）✗ —— 在测27 这种
+ * 典型情形下会**漏报**：
+ *   · 核心第 1 针在 6 周龄，**故意不推**卫佳捌（钩端要 8 周龄才起效）✓
+ *   · 钩端第 1 针推卫佳捌 ✓
+ *   · 两张卡的推荐列表于是没有交集 ✗ → 不提示合并 ✗
+ * 可是等到**两窗口重合的那段**（8~10 周龄），卫佳捌两边的成分都够龄了 ✓，
+ * 完全可以用一针覆盖两类 ✓。
+ *
+ * ⇒ 正确判据是：**在重合窗口那一段的周龄上，有没有一支苗同时覆盖这两类、
+ *   并且覆盖的每一类都各自够龄**。本函数就是干这个的。
+ *
+ * @param kindA 其中一类
+ * @param kindB 另一类
+ * @param weeksAtOverlap 重合窗口**起点**对应的周龄
+ */
+export function findComboProducts(
+  kindA: VaccineKind,
+  kindB: VaccineKind,
+  weeksAtOverlap: number | null,
+): VaccineProduct[] {
+  if (kindA === kindB) return []
+
+  return VACCINE_PRODUCTS.filter((product) => {
+    // 不推荐的（国产）不参与 —— 与 recommendProductsForStep 同一口径
+    if (product.recommendable === false) return false
+    // 必须**同时**覆盖这两类，才算"一支顶两类"
+    if (!product.kinds.includes(kindA) || !product.kinds.includes(kindB)) return false
+    // 多联苗不能靠"核心那部分够龄"把另一类一起带进去
+    for (const covered of product.kinds) {
+      const startWeeks = KIND_START_WEEKS[covered]
+      if (startWeeks !== undefined && weeksAtOverlap !== null && weeksAtOverlap < startWeeks) {
+        return false
+      }
+    }
+    if (product.minWeeks === null || weeksAtOverlap === null) return true
+    return product.minWeeks <= weeksAtOverlap
+    // 与推荐列表同一个上限：卡片上不至于排一长串名字
+  }).slice(0, MAX_RECOMMENDED_PRODUCTS)
 }
 
 /* ===========================================================================

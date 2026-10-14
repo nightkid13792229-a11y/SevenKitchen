@@ -24,6 +24,7 @@ import {
 } from '../../../src/domain/health/immunization-schedule';
 import {
   VACCINE_PRODUCTS,
+  findComboProducts,
   findProductsInName,
 } from '../../../src/domain/health/vaccine-products';
 
@@ -447,6 +448,92 @@ describe('疫苗计划', () => {
       expect(RABIES_SCHEDULE.basis).toContain('WSAVA');
     })
   })
+
+  describe('两类窗口重合时的联苗提示（老板 2026-10-14）', () => {
+    /*
+     * 老板："现在核心疫苗和钩端螺旋体接种窗口期有部分是重合的……
+     *        并且在各自的计划展开之后，并未做合并接种的相关提醒呢？"
+     *
+     * 根因：原来前端算的是"两张卡各自的**推荐列表**有没有交集" ✗ ——
+     * 核心第 1 针在 6 周龄**故意不推**含钩端的苗（钩端要 8 周龄才起效），
+     * 于是两张卡没有交集 ✗，可等到两窗口重合那段，卫佳捌其实两边都够龄了 ✓。
+     * 现在判据改成"**重合窗口的周龄上，有没有一支苗同时覆盖两类且都够龄**" ✓。
+     */
+    it('2 周龄的幼犬：核心与钩端窗口重合 → 给出联苗与共同合适的日期', () => {
+      const plan = buildVaccinePlan({
+        dogId: 'd1',
+        birthday: dog(2),
+        records: [],
+        today: TODAY,
+      });
+
+      const core = plan.steps.find((step) => step.kind === 'core')!;
+      const lepto = plan.steps.find((step) => step.kind === 'lepto')!;
+
+      // 两边都要给出"可以合并"的提示
+      expect(core.combo).not.toBeNull();
+      expect(lepto.combo).not.toBeNull();
+      expect(core.combo!.withKind).toBe('lepto');
+      expect(lepto.combo!.withKind).toBe('core');
+
+      // 联苗里必须有卫佳捌（核心 + 钩端的那支）
+      expect(core.combo!.products).toContain('卫佳捌');
+
+      // 给出的日期区间 = 两个窗口的**交集**
+      expect(core.combo!.windowStart).toBe(
+        core.windowStart > lepto.windowStart ? core.windowStart : lepto.windowStart,
+      );
+      expect(core.combo!.windowEnd).toBe(
+        core.windowEnd < lepto.windowEnd ? core.windowEnd : lepto.windowEnd,
+      );
+      // 交集必须是真的（起 ≤ 止）
+      expect(core.combo!.windowStart <= core.combo!.windowEnd).toBe(true);
+    });
+
+    it('🔴 联苗产品必须**两类都覆盖、且都够龄**（否则会把 6 周龄的针带偏）', () => {
+      /*
+       * 老板 2026-10-12 问过："第一针核心疫苗……为什么会有卫佳捌呢？
+       * 卫佳捌含有钩端螺旋体，在第一针来打卫佳捌的话，钩端螺旋体是不是
+       * 起不到什么作用呢？" —— 6 周龄打卫佳捌，钩端那部分没意义。
+       *
+       * ⇒ 联苗查询也必须守住这条：**按重合窗口的周龄**查，够龄的才算数。
+       *   （这条是真正能抓住"忘了判够龄"的守卫，
+       *     比"断言某个不重叠场景为 null"结实得多 —— 后者会因为
+       *     "本来就没有核心+狂犬的联苗"而巧合通过 ✗。）
+       */
+      const atEightWeeks = findComboProducts('core', 'lepto', 8).map((p) => p.name);
+      const atSixWeeks = findComboProducts('core', 'lepto', 6).map((p) => p.name);
+
+      // 8 周龄：钩端够龄了 → 卫佳捌可以一针顶两类
+      expect(atEightWeeks).toContain('卫佳捌');
+      // 6 周龄：钩端还没到 8 周龄 → 不许把它算成联苗
+      expect(atSixWeeks).not.toContain('卫佳捌');
+
+      // 只覆盖一类的产品不算联苗（核心单苗不能被当成"核心+钩端"）
+      expect(atEightWeeks).not.toContain('卫佳伍');
+      // 没有"核心+狂犬"这种联苗（狂犬一律单打）
+      expect(findComboProducts('rabies', 'core', 20).map((p) => p.name)).toEqual([]);
+    });
+
+    it('🔴 窗口不重叠就**不许**写 combo（哪怕产品能覆盖这两类）', () => {
+      /*
+       * ⚠️ 为什么用**源码断言**而不是端到端：
+       * 用真实数据很难造出"产品能覆盖两类、但两个窗口不重叠"的病例
+       * （核心与钩端的窗口在该重叠的时候总是重叠），
+       * 于是端到端断言会因为"本来就没这种产品"而**巧合通过** ✗ ——
+       * 我实测过：把重叠判定注释掉，端到端那条依然全绿 ✗。
+       * 所以这里直接盯住那段判定本身。
+       */
+      const source = readFileSync(
+        resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+        'utf-8',
+      );
+      expect(source).toContain('if (overlapStart > overlapEnd) continue;');
+      // 交集必须是从"两个窗口的起点取大、终点取小"来的
+      expect(source).toContain('step.windowStart > other.windowStart ? step.windowStart : other.windowStart');
+      expect(source).toContain('step.windowEnd < other.windowEnd ? step.windowEnd : other.windowEnd');
+    });
+  });
 
   describe('文案拆分（老板 2026-10-13 定的"卡片 / 更多"结构）', () => {
     /*

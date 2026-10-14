@@ -31,9 +31,14 @@
 
       <view v-if="expandedKind === card.key" class="kind-card__body">
         <!-- 老板 2026-10-12 的新方案：拆开成两张卡 ✓，但互相提示可以选联苗 ✓ -->
-        <text v-if="card.comboProducts.length > 0" class="merge-note">
-          也可以选含这两类的联苗（{{ card.comboProducts.join('、') }}）—— 一针同时覆盖，
-          那一类就不用再单独打了<template v-if="card.comboWindow">（两针都合适的日期：{{ card.comboWindow.start }} ~ {{ card.comboWindow.end }}）</template>。
+        <!-- 联苗提示（老板 2026-10-14）。
+             ⚠️ 判据在后端：**重合那段窗口里有没有一支苗同时够龄顶两类** ✓。
+             原来前端算的是"两张卡各自的推荐列表有没有交集" ✗ —— 会漏报：
+             核心第 1 针在 6 周龄故意不推含钩端的苗，于是两边没交集，
+             可等到 8 周龄两窗口重合时，那支联苗其实两边都够龄了。 -->
+        <text v-if="card.combo" class="merge-note">
+          也可以选含这两类的联苗（{{ card.combo.products.join('、') }}）—— 一针同时覆盖，
+          {{ card.combo.withLabel }}那一类就不用再单独打了（两针都合适的日期：{{ card.combo.windowStart }} ~ {{ card.combo.windowEnd }}）。
         </text>
 
         <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
@@ -665,7 +670,14 @@ interface PlanCard {
   windowStart: string
   windowEnd: string
   products: string[]
-  comboProducts: string[]
+  /** 能与哪一类合并接种（后端算好的，含重合窗口与联苗名）*/
+  combo: {
+    withKind: string
+    withLabel: string
+    products: string[]
+    windowStart: string
+    windowEnd: string
+  } | null
 }
 
 /**
@@ -680,12 +692,6 @@ interface PlanCard {
  * 现在：**只有两类的建议接种时间真的重叠** ✓，才提示可以合并 ✓，
  * 并且把那几天直接写出来 ✓（"两针都合适的日期：11-22 ~ 12-06" ✓）。
  */
-function overlapOf(a: { windowStart: string; windowEnd: string }, b: { windowStart: string; windowEnd: string }) {
-  const start = a.windowStart > b.windowStart ? a.windowStart : b.windowStart
-  const end = a.windowEnd < b.windowEnd ? a.windowEnd : b.windowEnd
-  return start <= end ? { start, end } : null
-}
-
 const kindCards = computed<PlanCard[]>(() => {
   return visibleSteps.value
     .filter((step) => step.status !== 'DONE')
@@ -699,38 +705,8 @@ const kindCards = computed<PlanCard[]>(() => {
       windowStart: String(step.windowStart || ''),
       windowEnd: String(step.windowEnd || ''),
       products: stepProducts(step),
-      comboProducts: [] as string[],
+      combo: (step as never as { combo?: PlanCard['combo'] }).combo ?? null,
     }))
-    .map((card) => {
-      /*
-       * 这一张卡和**别的类**之间有没有"一支苗覆盖两类"的可能 ✓（老板要的那句提示 ✓）。
-       * 两个条件都要满足 ✓：
-       *   ① 有共同推荐的产品 ✓（例：核心与钩端都有卫佳捌 ✓）
-       *   ② 两类的时间差不多 ✓（相差 45 天内 ✓）—— 差太远时提示"可以一起打"是废话 ✗
-       */
-      const siblings = visibleSteps.value.filter((other) => {
-        if (other.status === 'DONE' || other.kind === card.key) return false
-        // **窗口要真的重叠** ✓（老板 2026-10-12 修正 ✗：原来按"相差 ≤45 天"✗）
-        return overlapOf(card, {
-          windowStart: String(other.windowStart || ''),
-          windowEnd: String(other.windowEnd || ''),
-        }) !== null
-      })
-      const combo: string[] = []
-      let overlap: { start: string; end: string } | null = null
-      for (const other of siblings) {
-        for (const name of stepProducts(other)) {
-          if (card.products.includes(name) && !combo.includes(name)) combo.push(name)
-        }
-        if (combo.length > 0 && !overlap) {
-          overlap = overlapOf(card, {
-            windowStart: String(other.windowStart || ''),
-            windowEnd: String(other.windowEnd || ''),
-          })
-        }
-      }
-      return { ...card, comboProducts: combo, comboWindow: overlap }
-    })
 })
 
 /*

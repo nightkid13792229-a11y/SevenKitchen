@@ -1,6 +1,7 @@
 import {
   findProductsInName,
   productCoversKind,
+  findComboProducts,
   recommendProductsForStep,
   resolvePreferredBrand,
 } from './vaccine-products';
@@ -109,6 +110,23 @@ export type VaccineStepStatus =
 
 export type VaccineDecision = 'ACCEPT' | 'DEFER' | 'SKIP';
 
+/**
+ * 「可以和另一类合并」的说明（老板 2026-10-14）。
+ *
+ * 只在**窗口真的重叠**、且重合那段里有一支同时够龄的联苗时才有值。
+ */
+export interface VaccineComboOption {
+  /** 可以和哪一类合并 */
+  withKind: VaccineKind;
+  /** 那一类的中文名（直接下发，前端不再自己映射）*/
+  withLabel: string;
+  /** 能一支顶两类的产品名 */
+  products: string[];
+  /** 两边都合适的日期区间（就是两窗口的交集）*/
+  windowStart: string;
+  windowEnd: string;
+}
+
 export interface VaccinePlanStep {
   /** 稳定标识，用于存顾客的决定 */
   key: string;
@@ -156,6 +174,20 @@ export interface VaccinePlanStep {
   basis: string;
   /** 提醒文案（小程序内展示，不用订阅消息） */
   reminder: string;
+  /**
+   * 这一针**可以和另一类合并**接种吗（老板 2026-10-14）。
+   *
+   * 老板："现在核心疫苗和钩端螺旋体接种窗口期有部分是重合的……
+   *        这里为什么是分开显示的计划？并且在各自的计划展开之后，
+   *        并未做合并接种的相关提醒呢？"
+   *
+   * 窗口真重叠、且**在重合那段里有一支联苗同时够龄**时才有值 ——
+   * 前端拿它渲染那句"也可以选含这两类的联苗（卫佳捌）……（两针都合适的日期：X ~ Y）"。
+   *
+   * ⚠️ 判定放在**后端**：它要用产品库的 `kinds` 与"每一类的起始周龄"表 ✓，
+   *    那套规则只有一份 ✓（前端再抄一份迟早对不上 ✗）。
+   */
+  combo: VaccineComboOption | null;
   /**
    * 这一步所属的**那一类**，有没有任何一条对得上的记录（2026-10-07）。
    *
@@ -2471,6 +2503,8 @@ export function buildVaccinePlan(
         ),
         deferred: decisions[seed.key] === 'DEFER',
         basisSummary: seed.basisHead || summarizeBasis(seed.basis),
+        // 占位：联苗候选要等**所有步骤**都出来才能算（要看两个窗口的交集）
+        combo: null,
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,
@@ -2586,6 +2620,47 @@ export function buildVaccinePlan(
     }
     return nextPendingKeyByKind.get(step.kind) === step.key;
   });
+
+  /*
+   * ══ 两类的窗口重合时：能不能用**一支联苗**一起打（老板 2026-10-14）══════
+   *
+   * 老板："现在核心疫苗和钩端螺旋体接种窗口期有部分是重合的……
+   *        并且在各自的计划展开之后，并未做合并接种的相关提醒呢？"
+   *
+   * 判据：**在重合那段窗口的周龄上**，有没有一支苗同时覆盖这两类、
+   *       并且覆盖的每一类都各自够龄 ✓。
+   * （不是"两边各自的推荐列表有没有交集" ✗ —— 那会漏报：
+   *   核心第 1 针在 6 周龄故意不推含钩端的苗，于是两张卡没有交集，
+   *   可等到 8 周龄两窗口重合时，那支联苗其实两边都够龄了。）
+   */
+  const comboEligible = steps.filter((step) => step.status !== 'DONE');
+  for (const step of comboEligible) {
+    for (const other of comboEligible) {
+      if (other.kind === step.kind) continue;
+      const overlapStart =
+        step.windowStart > other.windowStart ? step.windowStart : other.windowStart;
+      const overlapEnd = step.windowEnd < other.windowEnd ? step.windowEnd : other.windowEnd;
+      // 两边都有窗口、而且真的重叠，才谈得上"一起打"
+      if (!step.windowStart || !step.windowEnd || !overlapStart || !overlapEnd) continue;
+      if (overlapStart > overlapEnd) continue;
+
+      const overlapDate = parseDateText(overlapStart);
+      const weeksAtOverlap = overlapDate ? weeksBetween(birthday, overlapDate) : null;
+      const products = findComboProducts(step.kind, other.kind, weeksAtOverlap).map(
+        (product) => product.name,
+      );
+      if (products.length === 0) continue;
+
+      step.combo = {
+        withKind: other.kind,
+        withLabel: other.kindLabel,
+        products,
+        windowStart: overlapStart,
+        windowEnd: overlapEnd,
+      };
+      break;
+    }
+  }
 
   /*
    * 多联苗该不该推（2026-10-05 老板第 4 问）。

@@ -377,6 +377,32 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 合并窗口要有**自己的录入入口**，且预填两类（老板 2026-10-14 第三问）', () => {
+    const text = readSection()
+
+    /*
+     * 老板："我们现在不是已经把窗口期重复的核心疫苗及钩端螺旋体两个板块
+     *        合并成一个板块来进行提示吗？那么用户在这种情况下，想要录入
+     *        卫佳捌这种跨疫苗类型的产品的时候，应该从哪个入口进呢？"
+     *
+     * 实情：从上面哪张卡进都能正确记（后端按病种推导分类）——
+     * 但顾客看到"这两类可以一起打"，本能就想**在这里**记录，
+     * 这里没按钮就得自己想到"退回上面某一张卡" ✗，认知上断了 ✗。
+     *
+     * 两条判据缺一不可：
+     *   ① 说明下面有入口           ② 预填的是**两类**（不是当前这一类）
+     */
+    expect(text).toContain('combo-group__record')
+    expect(text).toContain('@tap.stop="recordCombo(card)"');
+    // 关键：带上两类
+    expect(text).toContain('kinds: [card.kind, card.combo.withKind]');
+    /*
+     * ⚠️ 还要先展开卡片 —— 录入窗口画在 kind-card__body 里，
+     *    而 body 只在卡片展开时才渲染。不展开的话点了没反应 ✗。
+     */
+    expect(text).toContain('expandedKind.value = card.key');
+  })
+
   it('🔴 产品名后面**一律**补"等产品"，不看有没有截断（老板 2026-10-14）', () => {
     const text = readSection()
 

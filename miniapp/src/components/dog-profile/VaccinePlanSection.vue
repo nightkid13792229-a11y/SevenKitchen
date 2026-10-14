@@ -193,6 +193,17 @@
         同时包含以上两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
         {{ card.combo!.windowEnd }}）期间完成接种。
       </text>
+      <!--
+        ⚠️ 老板 2026-10-14 第三问："用户在这种情况下，想要录入卫佳捌这种
+           跨疫苗类型的产品的时候，应该从哪个入口进呢？"
+
+        实情：从上面哪张卡进**都能正确记**（后端按病种推导分类，
+        实测从核心卡录卫佳捌 → 记到 core + lepto ✓）。
+        可顾客看到"这两类可以一起打"，本能就想**在这里**记录 ——
+        这里没按钮的话，他得自己想到"退回上面某一张卡" ✗，认知上就断了 ✗。
+        ⇒ 所以在说明下面给一个入口 ✓。
+      -->
+      <text class="combo-group__record" @tap.stop="recordCombo(card)">记录这一针</text>
     </view>
 
     </template>
@@ -675,6 +686,27 @@ function collapseAll() {
 function recordCard(card: PlanCard) {
   emit('record-step', {
     kinds: card.kinds,
+    stepLabel: card.steps.map((step) => step.label).join(' / '),
+  })
+}
+
+/**
+ * 合并窗口里的「记录这一针」（老板 2026-10-14 第三问）。
+ *
+ * 和 `recordCard` 只差一处，但这一处是关键：
+ * **把两类都带上** ✓（`card.kind` + `card.combo.withKind`）——
+ * 顾客是从"这两类一起打"这句话点进来的，预填就该是两类 ✓。
+ *
+ * ⚠️ 还要**先把这张卡展开** ✗→✓：
+ *    录入窗口画在 `kind-card__body` 里，而 body 只在卡片展开时才渲染
+ *    （`v-if="expandedKind === card.key"`）。不展开的话，
+ *    点了按钮什么也看不见 ✗。
+ */
+function recordCombo(card: PlanCard) {
+  if (!card.combo) return
+  expandedKind.value = card.key
+  emit('record-step', {
+    kinds: [card.kind, card.combo.withKind],
     stepLabel: card.steps.map((step) => step.label).join(' / '),
   })
 }
@@ -2008,6 +2040,20 @@ defineExpose({
   /* 窗口的左右两条边（三段拼里的中间段 / 收口段）*/
   border-left: 4rpx solid #7fb08f;
   border-right: 4rpx solid #7fb08f;
+}
+
+/* 合并窗口里的"记录这一针"：和卡片里的主按钮同款，
+   因为**动作确实是同一个**（只是预填了两类）——样式不同反而让人以为是两回事 ✗。 */
+.combo-group__record {
+  display: block;
+  margin-top: 14rpx;
+  padding: 16rpx 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  text-align: center;
+  color: #ffffff;
+  background: var(--health-accent, #1e3a2f);
+  border-radius: 14rpx;
 }
 
 /* 第一行：窗口的**顶部**（上边框 + 上圆角），下边留给分隔线 */

@@ -384,6 +384,22 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 合并窗口的「忽略」要一次忽略**两类**（老板 2026-10-14）', () => {
+    const text = readSection()
+
+    /*
+     * 顾客是在"这两类可以一起打"的提示上点的忽略 ——
+     * 只关掉其中一类的话，另一类还会留着提醒，与他的本意不符 ✗。
+     */
+    expect(text).toContain('function ignoreCombo(')
+    // 两类都收进来：合并对象那张卡 + 当前这张卡
+    expect(text).toContain('...(first?.steps || []), ...card.steps');
+    // 两个入口共用同一套确认与执行（措辞不能各写一套）
+    expect(text).toContain('function ignoreSteps(');
+    expect(text).toContain('ignoreSteps(card.steps, card.kinds.length > 1)');
+    expect(text).toContain('ignoreSteps(steps, true)');
+  })
+
   it('🔴 依据里的 `**` 要渲染成真加粗，不许把星号打给顾客看（老板 2026-10-14）', () => {
     const text = readSection()
 
@@ -443,8 +459,21 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
      * 两条判据缺一不可：
      *   ① 说明下面有入口           ② 预填的是**两类**（不是当前这一类）
      */
-    expect(text).toContain('combo-group__record')
-    expect(text).toContain('@tap.stop="recordCombo(card)"');
+    /*
+     * ⚠️ 文案和样式都和卡片里那两个按钮**完全一致**（老板 2026-10-14 追加要求：
+     *    "能不能将合并窗口的提醒记录按钮文案改成和钩端螺旋体和核心疫苗板块一样的
+     *     文案？并且也增加忽略的按钮和相关的功能。"
+     *    —— 动作本来就是同一件事，只是这里预填了两类）；
+     *    所以它复用 `step-actions` 那套类，不再有自己的样式 ✗。
+     */
+    /*
+     * ⚠️ 断言要**绑到按钮本身** —— 卡片里也有"记录接种信息 / 忽略"，
+     *    只查 `>记录接种信息<` 的话，合并窗口写错了也照样通过 ✗（第一次就这么漏的）。
+     */
+    expect(text).toContain('@tap.stop="recordCombo(card)">记录接种信息</text>');
+    expect(text).toContain('@tap.stop="ignoreCombo(card)">忽略</text>');
+    // 上一版那个自造样式已撤掉
+    expect(text.includes('combo-group__record')).toBe(false);
     // 关键：带上两类
     expect(text).toContain('kinds: [card.kind, card.combo.withKind]');
     /*

@@ -233,7 +233,12 @@
         这里没按钮的话，他得自己想到"退回上面某一张卡" ✗，认知上就断了 ✗。
         ⇒ 所以在说明下面给一个入口 ✓。
       -->
-      <text class="combo-group__record" @tap.stop="recordCombo(card)">记录这一针</text>
+      <!-- 动作**和卡片里那两个按钮完全一致**（老板 2026-10-14）：
+           文案一样、样式一样 —— 动作本来就是同一件事，只是这里预填了两类 ✓。 -->
+      <view class="step-actions">
+        <text class="step-actions__primary" @tap.stop="recordCombo(card)">记录接种信息</text>
+        <text class="step-actions__ghost" @tap.stop="ignoreCombo(card)">忽略</text>
+      </view>
     </view>
 
     </template>
@@ -1006,20 +1011,46 @@ async function saveInlineRecord(card: PlanCard) {
 }
 
 /** 合并卡的「忽略」：这一类一类地忽略 ✓（每一类各自存一条决定 ✓）*/
-function ignoreCard(card: PlanCard) {
-  const labels = card.steps.map((step) => step.label).join('、')
+/**
+ * 把若干步**一起忽略**（弹一次确认）。
+ *
+ * 抽出来是因为现在有两个入口：单张卡的「忽略」、以及合并窗口的「忽略」——
+ * 后者要一次忽略**两类**（顾客是从"这两类一起打"那里点的 ✓），
+ * 两边的措辞和行为必须一致 ✓。
+ */
+function ignoreSteps(steps: PlanCard['steps'], multiple: boolean) {
+  if (steps.length === 0) return
+  const labels = steps.map((step) => step.label).join('、')
   uni.showModal({
-    title: card.kinds.length > 1 ? '忽略这几步？' : '忽略这一步？',
+    title: multiple ? '忽略这几步？' : '忽略这一步？',
     content: `忽略后「${labels}」会从这只狗狗的接种计划里去掉，不再提醒。计划底部随时可以恢复。`,
     confirmText: '忽略',
     cancelText: '保留',
     success: (result) => {
       if (!result.confirm) return
-      for (const step of card.steps) {
+      for (const step of steps) {
         void decide(step.key, 'SKIP')
       }
     },
   })
+}
+
+function ignoreCard(card: PlanCard) {
+  ignoreSteps(card.steps, card.kinds.length > 1)
+}
+
+/**
+ * 合并窗口的「忽略」：一次忽略**两类**的步骤（老板 2026-10-14 要求补上）。
+ *
+ * 为什么是两类而不是"只忽略这一张卡"：
+ * 顾客是在"这两类可以一起打"的提示上点的忽略 ——
+ * 只关掉其中一类的话，另一类还会留着提醒，与他的本意不符 ✗。
+ */
+function ignoreCombo(card: PlanCard) {
+  if (!card.combo) return
+  const first = kindCards.value.find((item) => item.key === card.combo!.withKind)
+  const steps = [...(first?.steps || []), ...card.steps]
+  ignoreSteps(steps, true)
 }
 
 /**
@@ -2084,20 +2115,6 @@ defineExpose({
   /* 窗口的左右两条边（三段拼里的中间段 / 收口段）*/
   border-left: 4rpx solid #7fb08f;
   border-right: 4rpx solid #7fb08f;
-}
-
-/* 合并窗口里的"记录这一针"：和卡片里的主按钮同款，
-   因为**动作确实是同一个**（只是预填了两类）——样式不同反而让人以为是两回事 ✗。 */
-.combo-group__record {
-  display: block;
-  margin-top: 14rpx;
-  padding: 16rpx 0;
-  font-size: 24rpx;
-  font-weight: 600;
-  text-align: center;
-  color: #ffffff;
-  background: var(--health-accent, #1e3a2f);
-  border-radius: 14rpx;
 }
 
 /* 第一行：窗口的**顶部**（上边框 + 上圆角），下边留给分隔线 */

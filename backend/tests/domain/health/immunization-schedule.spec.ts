@@ -2821,3 +2821,45 @@ describe('钩端 · 「多长时间没打要重启」有权威数值（老板 20
     expect(source).toContain('**重启阈值**');
   });
 });
+
+/**
+ * 老板 2026-10-14："你提到维克也有类似产品，但为什么在提醒中却没有加上维克呢？"
+ *
+ * 原因：合并提醒原来跟"每类推荐列表"共用 `MAX_RECOMMENDED_PRODUCTS = 3`，
+ * 而同时覆盖「核心 + 钩端」的苗有 **4 支**（卫佳捌 / 优乐康 / 海博莱 / 维克），
+ * 排第 4 的**维克被截掉**了 ✗。
+ *
+ * 两个列表性质不同，不该共用一个上限：
+ *   · "常见的有…"（举例）→ 3 个够
+ *   · "这两类可以一起打、可选这些" → **要列全**（顾客要对照医院实际有的那支）
+ */
+describe('合并接种提醒 · 可选产品要列全（老板 2026-10-14）', () => {
+  it('🔴 同时覆盖核心+钩端的产品，一个都不许漏', () => {
+    const all = VACCINE_PRODUCTS.filter(
+      (p) => p.recommendable !== false && p.kinds.includes('core') && p.kinds.includes('lepto'),
+    );
+    const shown = findComboProducts('core', 'lepto', 8);
+
+    // 库里确实不止 3 支 —— 这正是原来会漏的原因
+    expect(all.length).toBeGreaterThan(3);
+    // 该出现的必须都在
+    for (const product of all) {
+      expect(shown.map((p) => p.name)).toContain(product.name);
+    }
+    // 维克必须在（老板点名的这一支）
+    expect(shown.map((p) => p.name)).toContain('维克犬四联加钩端');
+  });
+
+  it('🔴 "每类推荐"那个列表仍然限制 3 个（别把两件事一起改了）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/vaccine-products.ts'),
+      'utf-8',
+    );
+    // 举例性质的列表还留着上限
+    expect(source).toContain('slice(0, MAX_RECOMMENDED_PRODUCTS)');
+    // 而合并提醒那个函数里不许再有 slice
+    const combo = source.slice(source.indexOf('export function findComboProducts'));
+    const body = combo.slice(0, combo.indexOf(String.fromCharCode(10) + '}'));
+    expect(body.includes('.slice(')).toBe(false);
+  });
+});

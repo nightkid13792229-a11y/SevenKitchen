@@ -1784,12 +1784,15 @@ defineExpose({
 .combo-group__head {
   margin-top: 16rpx;
   padding: 16rpx 18rpx 14rpx;
-  /* 明显的绿边（老板 2026-10-14：原来那条太淡，肉眼看不出是一个窗口）*/
-  border: 2rpx solid #7fb08f;
+  /* 明显的绿边（老板 2026-10-14：原来那条太淡，肉眼看不出是一个窗口）
+     ⚠️ 粗细用 4rpx：2rpx 在手机上细得几乎看不见，那就还是"没封口" ✗ */
+  border: 4rpx solid #7fb08f;
   border-bottom: none;
   border-radius: 16rpx 16rpx 0 0;
   /* 头部比内容深一档 —— 读起来像"这个窗口的标题区" */
   background: #dcefe4;
+  /* 和下面第一行**贴死**（窗口内部不该有缝）*/
+  margin-bottom: 0;
 }
 
 /* 产品名：顾客真正要去认的那一行，给足分量（老板要"放在顶部"的那段）*/
@@ -1947,26 +1950,51 @@ defineExpose({
  */
 .kind-card.kind-card--combo-first,
 .kind-card.kind-card--combo-second {
-  /* 不再是"卡片" */
-  margin-top: 0;
+  /*
+   * ⚠️⚠️ 这里必须用**负 margin 抵消父容器的 gap** ✗→✓。
+   *
+   * 踩坑记录（老板 2026-10-14："这3个部分的边框进行封口"）：
+   * 头部与两行之间**一直有一条白缝**，窗口左右两条边在那里断开 ✗。
+   * 我先后试过 `margin-top: 0`、`margin: 0 !important`、给头部 `margin-bottom: 0`
+   * —— **全都没用** ✗，因为那条缝根本不是 margin：
+   *
+   *     `.health-section { display: flex; flex-direction: column; gap: 24rpx; }`
+   *
+   * 头部和两张卡都是它的**子元素**，被 **gap: 24rpx** 撑开 ✗。
+   * gap 不是 margin，归零 margin 动不了它 ✓。
+   *
+   * ⇒ 只能把 gap **拉回来**：`margin-top: -24rpx`。
+   * ⚠️ 这个数字**必须和 .health-section 的 gap 保持一致** ——
+   *    哪天 gap 改了，这里也要跟着改（有条测试钉着这个 24rpx）。
+   */
+  margin-top: -24rpx !important;
+  margin-bottom: 0;
   border-radius: 0;
-  background: transparent;
   box-shadow: none;
   border-top: none;
   border-bottom: none;
+  /*
+   * ⚠️⚠️ 绿底必须**显式写出来** ✗→✓。
+   *
+   * 我第一版写的是 `background: transparent`（想"露出窗口的绿底"）——
+   * 可**窗口的绿底根本没画在任何元素上** ✗：透明的结果是露出
+   * 板块自己的白底（`.health-section` 的渐变），看起来还是两张白卡 ✗
+   * （老板说的"没封口"就包含这一条）。
+   */
+  background: #e9f5ee;
   /* 窗口的左右两条边（三段拼里的中间段 / 收口段）*/
-  border-left: 2rpx solid #7fb08f;
-  border-right: 2rpx solid #7fb08f;
+  border-left: 4rpx solid #7fb08f;
+  border-right: 4rpx solid #7fb08f;
 }
 
-/* 两行之间的分隔线 */
+/* 两行之间的分隔线（窗口**内部**的层次，不是两个独立块）*/
 .kind-card.kind-card--combo-first {
-  border-bottom: 1rpx solid #c3e2d0;
+  border-bottom: 2rpx solid #c3e2d0;
 }
 
 /* 第二行收口：下边框 + 下圆角 */
 .kind-card.kind-card--combo-second {
-  border-bottom: 2rpx solid #7fb08f;
+  border-bottom: 4rpx solid #7fb08f;
   border-radius: 0 0 16rpx 16rpx;
 }
 

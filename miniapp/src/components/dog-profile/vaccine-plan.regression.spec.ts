@@ -298,6 +298,30 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).not.toContain('plan-head__hint')
   })
 
+  it('🔴 窗口要"封口"：负 margin 必须抵消父容器的 gap（两者要一致）', () => {
+    const text = readSection()
+    // `.health-section` 的共享样式（gap 定义在这儿）
+    const shell = readFileSync(resolve(process.cwd(), 'src/styles/health-section.scss'), 'utf-8');
+
+    /*
+     * ⚠️⚠️ 2026-10-14 花了很久才找到的根因，值得钉死：
+     *
+     * 头部与两行之间**一直有一条白缝**，窗口左右两条边在那里断开 ✗。
+     * 试过 `margin-top: 0`、`margin: 0 !important`、给头部 `margin-bottom: 0`
+     * —— 全都没用 ✗，因为那条缝**不是 margin**：
+     *
+     *     `.health-section { display:flex; flex-direction:column; gap:24rpx }`
+     *
+     * 头部和两张卡都是它的子元素，被 **gap** 撑开 —— gap 不是 margin ✗。
+     * ⇒ 只能用**负 margin 把 gap 拉回来** ✓。
+     *
+     * 判据：两边的数值必须一致。哪天有人改了 gap 而忘了这里，窗口就又裂开。
+     */
+    expect(text).toContain('margin-top: -24rpx !important;');
+    // 父容器的 gap 也得是 24rpx（改了一处必须改另一处）
+    expect(shell).toContain('gap: 24rpx;');
+  })
+
   it('🔴 合并窗口必须与狂犬卡**一眼分得开**（老板 2026-10-14 第二轮）', () => {
     const text = readSection()
 
@@ -315,10 +339,10 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
      *   ③ 组内两行**不再是白卡**：去白底、去阴影、去圆角
      *   ④ 窗口里展开的内容也跟着绿底（否则会露出一块白）
      */
-    expect(text).toContain('border: 2rpx solid #7fb08f;')
+    expect(text).toContain('border: 4rpx solid #7fb08f;')
     expect(text).toContain('background: #dcefe4;')
     // 组内两行不是卡片
-    expect(text).toContain('background: transparent;')
+    expect(text).toContain('background: #e9f5ee;')
     expect(text).toContain('box-shadow: none;')
     // 展开内容跟着绿底
     expect(text).toContain('.kind-card.kind-card--combo-first .kind-card__body,')

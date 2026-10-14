@@ -317,7 +317,10 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
      *
      * 判据：两边的数值必须一致。哪天有人改了 gap 而忘了这里，窗口就又裂开。
      */
-    expect(text).toContain('margin-top: -24rpx !important;');
+    // 两处都要抵消：第二张卡（接第一张卡）、说明块（接第二张卡）
+    expect((text.match(/margin-top: -24rpx !important;/g) || []).length).toBeGreaterThanOrEqual(2);
+    // 第一张卡上面是别的卡，间距该留着，不许也抵消
+    expect(text).toContain('margin-top: 0 !important;');
     // 父容器的 gap 也得是 24rpx（改了一处必须改另一处）
     expect(shell).toContain('gap: 24rpx;');
   })
@@ -374,26 +377,50 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
-  it('🔴 合并接种用**分组框**：说明只在框顶一行，框底不许再有东西', () => {
+  it('🔴 说明块不许写 width（写了右边框会被裁到屏幕外）', () => {
     const text = readSection()
 
     /*
-     * 老板 2026-10-14 选定方案 B：
-     * "把合并窗口顶部和底部的说明进行合并，放在顶部，文案改为：
-     *  ……同时包含以下两类疫苗，建议在'共同窗口期'期间完成接种。"
-     *
-     * 判据：
-     *   · 框顶有"产品名 + 说明"两段
-     *   · 产品名用顿号隔开（老板点名）
-     *   · **框底不再有说明**（原来那句"一起打的日子：…"已挪到框顶）
+     * 2026-10-14 踩过：给说明块加 `width: 100%` +
+     * `box-sizing: border-box`，实测**右边框跑到屏幕外**（扫像素确认）。
+     * 去掉 width 后，父容器是 flex column、align-items 默认 stretch，
+     * 它会像卡片一样自动撑满 ✓。
      */
-    expect(text).toContain('combo-group__head')
-    expect(text).toContain("card.combo!.products.join('、')")
-    expect(text).toContain('同时包含以下两类疫苗，建议在共同窗口期（')
-    // 框底不许再有说明
-    expect(text.includes('一起打的日子')).toBe(false)
-    expect(text.includes('combo-group__foot')).toBe(false)
-    // 框是"三段拼"的：框顶 + 两张卡各自收边
+    const foot = text.slice(text.indexOf('.combo-group__foot {'));
+    // ⚠️ 先剥掉注释 —— 注释里正好在讲"曾经写过 width"，
+    //    不剥就会把说明文字当成真代码（第一次就是这么误报的）。
+    const raw = foot.slice(0, foot.indexOf('}'));
+    const body = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(body.includes('width:')).toBe(false);
+    // 三段拼的边框方向：上边开口、下边收口
+    expect(body).toContain('border-top: none;');
+    expect(body).toContain('border-radius: 0 0 16rpx 16rpx;');
+  })
+
+  it('🔴 合并窗口：说明在**最下方**，且说"以上两类"', () => {
+    const text = readSection()
+
+    /*
+     * 老板 2026-10-14 第二轮：
+     * "将合并窗口顶部的提醒板块改到窗口的最下方。同时将文案中的
+     *  包含以下两类疫苗中的以下改为以上。"
+     *
+     * 位置与措辞是**配套**的：移到下方之后，"以上两类疫苗"正好指上面那两张卡 ——
+     * 这时候还说"以下"就指空了。
+     *
+     * 走过的三版都不对，记在这儿：
+     *   ① 各自卡里各说一遍 → 角度不同，顾客要来回对照才拼得出意思
+     *   ② 两张卡中间插一条 → 视觉上自成一格，顾客不会往两边联想
+     *   ③ 放在窗口顶部 → 老板要移到最下方
+     */
+    expect(text).toContain('combo-group__foot')
+    expect(text).toContain('combo-group__products')
+    expect(text).toContain("card.comboRole === 'second'")
+    expect(text).toContain('同时包含以上两类疫苗，建议在共同窗口期（')
+    // 位置与措辞必须配套
+    expect(text.includes('同时包含以下两类疫苗')).toBe(false)
+    expect(text.includes('class="combo-group__head"')).toBe(false)
+    // 框是三段拼的：第一行收上口、第二行做中间段、说明块在下边收口
     expect(text).toContain('comboCardClass(card)')
     expect(text).toContain("'kind-card--combo-first'")
     expect(text).toContain("'kind-card--combo-second'")

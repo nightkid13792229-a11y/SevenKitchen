@@ -9,28 +9,6 @@
     </view>
 
     <template v-for="(card, cardIndex) in kindCards" :key="card.key">
-    <!-- ══ 合并接种：**分组框的顶部说明**（老板 2026-10-14 选定方案 B）══════
-         老板原话："我选方案B，但是需要把合并窗口顶部和底部的说明进行合并，
-                   放在顶部，文案改为：……同时包含以下两类疫苗，
-                   建议在'共同窗口期'期间完成接种。"
-
-         ── 为什么不再用"中间一条提示"──────────────────────────────
-         老板："用户很难通过中间这个板块联想到核心疫苗和钩端螺旋体这两个板块
-                之间有什么关系。" —— 对：中间那条在视觉上自成一格，
-         和上下两张卡是**并列**关系，不是**关联**关系。
-         ⇒ 改成用**一个框把两张卡圈起来**：说明只在框顶一行，
-           框底不再有任何东西。"关系"靠"同框"表达 ✓。
-
-         ⚠️ 小程序模板没法跨 v-for 迭代真的套一个容器 ✗，
-            所以框是**三段拼**的（见样式里的 combo-group__head /
-            kind-card--combo-first / kind-card--combo-second）✓。 -->
-    <view v-if="card.comboRole === 'first'" class="combo-group__head">
-      <text class="combo-group__products">{{ card.combo!.products.join('、') }}</text>
-      <text class="combo-group__desc">
-        同时包含以下两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
-        {{ card.combo!.windowEnd }}）期间完成接种。
-      </text>
-    </view>
     <view class="kind-card" :class="comboCardClass(card)">
       <view class="kind-card__head" @tap="toggleKind(card.key)">
         <!-- 老板 2026-10-12：状态角标放到卡片**左上角** ✓
@@ -45,7 +23,8 @@
         <text class="kind-card__time">
           <template v-if="isWindowPassed(card.steps[0])">
             建议接种时间：尽快补种（原窗口 {{ card.windowStart }} ~ {{ card.windowEnd }} 已过）
-          </template>
+
+    </template>
           <template v-else>
             建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}
           </template>
@@ -185,6 +164,28 @@
           </view>
         </view>
       </view>
+    </view>
+          <!-- ══ 合并接种：**窗口底部的说明**（老板 2026-10-14 选定方案 B）══════
+         老板原话："我选方案B，但是需要把合并窗口顶部和底部的说明进行合并，
+                   放在顶部，文案改为：……同时包含以上两类疫苗，
+                   建议在'共同窗口期'期间完成接种。"
+
+         ── 为什么不再用"中间一条提示"──────────────────────────────
+         老板："用户很难通过中间这个板块联想到核心疫苗和钩端螺旋体这两个板块
+                之间有什么关系。" —— 对：中间那条在视觉上自成一格，
+         和上下两张卡是**并列**关系，不是**关联**关系。
+         ⇒ 改成用**一个框把两张卡圈起来**：说明只在框顶一行，
+           框底不再有任何东西。"关系"靠"同框"表达 ✓。
+
+         ⚠️ 小程序模板没法跨 v-for 迭代真的套一个容器 ✗，
+            所以框是**三段拼**的（见样式里的 combo-group__foot /
+            kind-card--combo-first / kind-card--combo-second）✓。 -->
+    <view v-if="card.comboRole === 'second'" class="combo-group__foot">
+      <text class="combo-group__products">{{ card.combo!.products.join('、') }}</text>
+      <text class="combo-group__desc">
+        同时包含以上两类疫苗，建议在共同窗口期（{{ card.combo!.windowStart }} ~
+        {{ card.combo!.windowEnd }}）期间完成接种。
+      </text>
     </view>
 
     </template>
@@ -1781,18 +1782,32 @@ defineExpose({
         ② .kind-card--combo-first  第一张卡：去掉上边框与圆角
         ③ .kind-card--combo-second 第二张卡：去掉上边框，收下圆角
       三段同色、边框连续，看起来就是**一个框**。 */
-.combo-group__head {
+/* 说明块现在在窗口**最下方**（老板 2026-10-14 第二轮要求）——
+   圆角与边框方向跟着反过来：上边开口、下边收口。 */
+.combo-group__foot {
+  /*
+   * ⚠️⚠️ **不要**给这里写 `width`（踩过）。
+   *
+   * 实测（扫截图像素）：说明块**只有左边框、右边框被裁在屏幕外** ✗。
+   * 原因是加过 `width: 100%` —— 宽度按容器的 100% 算，**再加上**左右
+   * padding 与边框，整块就比容器宽 ✗（`box-sizing: border-box` 也没压住）。
+   *
+   * 正确做法：**什么都不写** —— 父容器是 flex column、
+   * `align-items` 默认 stretch，说明块会像卡片一样自动撑满 ✓。
+   */
   margin-top: 16rpx;
   padding: 16rpx 18rpx 14rpx;
-  /* 明显的绿边（老板 2026-10-14：原来那条太淡，肉眼看不出是一个窗口）
-     ⚠️ 粗细用 4rpx：2rpx 在手机上细得几乎看不见，那就还是"没封口" ✗ */
+  /* 明显的绿边（2rpx 在手机上细得几乎看不见，那就还是"没封口" ✗）*/
   border: 4rpx solid #7fb08f;
-  border-bottom: none;
-  border-radius: 16rpx 16rpx 0 0;
-  /* 头部比内容深一档 —— 读起来像"这个窗口的标题区" */
+  /* 上边开口：和它上面那张卡接上 */
+  border-top: none;
+  border-radius: 0 0 16rpx 16rpx;
+  /* 比上面两行深一档 —— 读起来像"这个窗口的说明区" */
   background: #dcefe4;
-  /* 和下面第一行**贴死**（窗口内部不该有缝）*/
-  margin-bottom: 0;
+  /* ⚠️ 它上面是第二张卡，被父容器 gap 撑开 —— 必须用负 margin 拉回来，
+     否则窗口又在这里裂开（2026-10-14 踩过一次）。数值要和
+     `.health-section` 的 gap 保持一致（有测试钉着）。 */
+  margin-top: -24rpx !important;
 }
 
 /* 产品名：顾客真正要去认的那一行，给足分量（老板要"放在顶部"的那段）*/
@@ -1987,15 +2002,18 @@ defineExpose({
   border-right: 4rpx solid #7fb08f;
 }
 
-/* 两行之间的分隔线（窗口**内部**的层次，不是两个独立块）*/
+/* 第一行：窗口的**顶部**（上边框 + 上圆角），下边留给分隔线 */
 .kind-card.kind-card--combo-first {
-  border-bottom: 2rpx solid #c3e2d0;
+  border-top: 4rpx solid #7fb08f;
+  border-radius: 16rpx 16rpx 0 0;
+  /* ⚠️ 它上面是**别的卡**（之间有 gap 是对的），所以这里不抵消 ✓ */
+  margin-top: 0 !important;
 }
 
-/* 第二行收口：下边框 + 下圆角 */
+/* 第二行：窗口的**中间段** —— 下边是分隔线（说明块接在它下面），不收口 */
 .kind-card.kind-card--combo-second {
-  border-bottom: 4rpx solid #7fb08f;
-  border-radius: 0 0 16rpx 16rpx;
+  border-bottom: 2rpx solid #c3e2d0;
+  border-radius: 0;
 }
 
 /*

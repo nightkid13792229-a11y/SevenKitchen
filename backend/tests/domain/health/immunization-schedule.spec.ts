@@ -9,6 +9,7 @@ import {
   CORE_ADULT_BOOSTER,
   addWeeks,
   CORE_PUPPY_SERIES,
+  NON_CORE_SCHEDULES,
   RABIES_SCHEDULE,
   buildImmunizationSchedule,
   buildVaccinePlan,
@@ -440,9 +441,37 @@ describe('疫苗计划', () => {
     it('免疫程序的三个来源都能追溯到具体依据', () => {
       expect(CORE_PUPPY_SERIES.basis).toContain('WSAVA');
       expect(CORE_ADULT_BOOSTER.basis).toContain('WSAVA');
-      expect(RABIES_SCHEDULE.basis).toContain('国内');
+      // 狂犬的出处是**法规**（老板 2026-10-13 定的文案：强制免疫来自《动物防疫法》）
+      expect(RABIES_SCHEDULE.basis).toContain('《动物防疫法》');
+      // 首针月龄标 WSAVA（国内规定与指南一致）
+      expect(RABIES_SCHEDULE.basis).toContain('WSAVA');
     })
   })
+
+  describe('文案拆分（老板 2026-10-13 定的"卡片 / 更多"结构）', () => {
+    /*
+     * 老板 2026-10-13 把三类的依据文案逐字给定，并分成两段：
+     *   卡片上显示什么（basisHead）+ 点「更多」展开什么（剩下的）。
+     *
+     * ⚠️ 前端是靠"完整文案去掉卡片那段"来算展开内容的：
+     *      full.startsWith(summary) ? full.slice(summary.length) : full
+     *    所以 **basisHead 必须正好是 basis 的开头** ——
+     *    对不上时会退化成显示整段，卡片那句就在展开区里重复一遍。
+     *    （踩过：狂犬那句加了法规出处后 head 忘了同步。）
+     */
+    const seeds: Array<[string, { basisHead?: string; basis: string }]> = [
+      ['核心疫苗', CORE_PUPPY_SERIES as never],
+      ['狂犬疫苗', RABIES_SCHEDULE as never],
+      ['钩端螺旋体', (NON_CORE_SCHEDULES as never as Record<string, never>)['lepto']],
+    ];
+
+    it.each(seeds)('%s：卡片那段必须是完整文案的开头（否则展开会重复）', (_name, seed) => {
+      expect(seed.basisHead).toBeTruthy();
+      expect(seed.basis.startsWith(seed.basisHead!)).toBe(true);
+      // 而且"更多"那部分必须真的有内容（不然「更多」按钮是空的）
+      expect(seed.basis.length).toBeGreaterThan(seed.basisHead!.length);
+    });
+  });
 
   describe('detectConflicts 纯函数', () => {
     it('没有记录就没有冲突', () => {
@@ -664,8 +693,13 @@ describe('疫苗计划', () => {
       })
 
       for (const step of plan.steps.filter((item) => item.kind === 'lepto')) {
-        // 顾客和复鞫的人都要能查到这句话是从哪来的
-        expect(step.basis).toContain('说明书')
+        /*
+         * 顾客和审核的人都要能查到这句话是从哪来的。
+         * ⚠️ 老板 2026-10-13 定的新文案把出处标成 **WSAVA 2024**（原样保留）——
+         * WSAVA 2024 表 1 与产品说明书都是"8 周龄起"，两者不矛盾，
+         * 标哪个都准确。
+         */
+        expect(step.basis).toContain('WSAVA')
       }
     })
 
@@ -947,9 +981,13 @@ describe('疫苗计划', () => {
       for (const item of schedule) {
         expect(item.basis.length).toBeGreaterThan(10);
       }
-      // 狂犬的依据要如实说明"以说明书与当地规定为准"，不能写成指南要求
+      /*
+       * 狂犬的依据必须写明出处（老板 2026-10-13 定的文案）：
+       * "强制免疫"标法规、"12 周龄"标 WSAVA —— 不能只写结论不给出处。
+       */
       const rabies = schedule.find((item) => item.kind === 'rabies')!;
-      expect(rabies.basis).toContain('说明书');
+      expect(rabies.basis).toContain('《动物防疫法》');
+      expect(rabies.basis).toContain('WSAVA');
     })
   })
 })
@@ -2515,12 +2553,17 @@ describe('依据文案 · 说明白"是谁的月龄"（2026-10-08）', () => {
       resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
       'utf-8',
     )
-    const lepto = source.slice(source.indexOf('钩端这一类：8 周龄起 2 针'))
+    // 定位到钩端那段文案（老板 2026-10-13 给的新版）
+    const lepto = source.slice(source.indexOf('幼犬 8 周龄后可以完成首次免疫'))
     const paragraph = lepto.slice(0, lepto.indexOf('是否接种、何时接种'))
 
-    expect(paragraph).toContain('钩端的首免要打满 2 针')
+    // 说的是钩端自己这一针
+    expect(paragraph).toContain('首次免疫共两针')
+    expect(paragraph).toContain('每年接种一次')
+    // ⚠️ 判据没变：不许夹带核心疫苗 / 狂犬的对照
     expect(paragraph).not.toContain('核心疫苗不一样')
     expect(paragraph).not.toContain('狂犬默认')
+    expect(paragraph).not.toContain('核心疫苗（')
   })
 
   it('每一步都有一句话版的依据，而且不长', () => {

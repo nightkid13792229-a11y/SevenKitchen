@@ -189,6 +189,7 @@
 </template>
 
 <script setup lang="ts">
+import { VACCINE_COMPONENT_FALLBACK } from './vaccine-fields'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { scrollPageToSelector } from '../../utils/page-scroll'
 // ⚠️ 2026-10-11：这个导入漏过一次 ✗ —— 别名 getTodayDateString 用了它 ✓，
@@ -613,16 +614,14 @@ defineExpose({
  *
  * 这四类是**闭集**，极少变；后端下发优先，拿不到就用这份。
  */
-const FALLBACK_COMPONENT_OPTIONS = [
-  { value: 'cdv', label: '犬瘟热' },
-  { value: 'cpv', label: '犬细小病毒' },
-  { value: 'cav', label: '犬腺病毒' },
-  { value: 'rabies', label: '狂犬病' },
-  { value: 'lepto', label: '钩端螺旋体' },
-]
-const componentOptions = ref<{ value: string; label: string }[]>([
-  ...FALLBACK_COMPONENT_OPTIONS,
-])
+
+/*
+ * 毒株词表：初值用**共享兜底**，接口回来后被下发的那份覆盖（老板 2026-10-14）。
+ * ⚠️ 别在这儿再写一份列表 ✗ —— 原来就是这么漂成两份、还互相矛盾的。
+ */
+const componentOptions = ref<{ value: string; label: string }[]>(
+  VACCINE_COMPONENT_FALLBACK.map((item) => ({ ...item })),
+)
 const catalogProducts = ref<{
   name: string
   manufacturer: string

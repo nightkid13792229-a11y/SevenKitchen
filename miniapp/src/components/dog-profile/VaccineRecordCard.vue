@@ -362,6 +362,7 @@ class="vaccine-card"
 </template>
 
 <script setup lang="ts">
+import { componentLabelOf, VACCINE_FIELD_LABELS } from './vaccine-fields'
 import { computed, ref } from 'vue'
 import { todayDateText } from '../../utils/date'
 import { dogApi } from '../../api/dogs'
@@ -599,7 +600,8 @@ function closeKindPicker() {
 }
 
 function componentLabel(component: string): string {
-  return props.componentOptions.find((item) => item.value === component)?.label || component
+  // 值→中文名**只有一份实现**（老板 2026-10-14 抽出的共享字段层）
+  return componentLabelOf(props.componentOptions, component)
 }
 
 /** 已经勾过病种（或者明确选了"都不是"）—— 决定那一行是显示结果还是展开选择器 */

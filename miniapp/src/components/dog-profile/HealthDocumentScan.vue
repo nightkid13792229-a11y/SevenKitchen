@@ -287,6 +287,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+// 疫苗录入的**共享字段层**（毒株词表 + "值→中文名"）—— 三个界面共用一份
+// （老板 2026-10-14：原来两处各写一份，已经漂成"犬细小"和"犬细小病毒"两个名字）
+import { componentLabelOf, componentOptionsOf } from './vaccine-fields'
 import { dogApi } from '../../api/dogs'
 import LabValuesView from './LabValuesView.vue'
 import {
@@ -571,20 +574,14 @@ const isVaccineBook = computed(
 )
 
 /** 病种候选：后端下发优先，拿不到用这几项兜底（与疫苗板块同一份闭集） */
-const FALLBACK_COMPONENT_CHOICES = [
-  { value: 'cdv', label: '犬瘟热' },
-  { value: 'cpv', label: '犬细小' },
-  { value: 'cav', label: '犬腺病毒' },
-  { value: 'cpi', label: '副流感' },
-  { value: 'lepto', label: '钩端螺旋体' },
-  { value: 'ccov', label: '冠状病毒' },
-  { value: 'rabies', label: '狂犬病' },
-]
-const componentChoices = computed(() =>
-  props.componentOptions && props.componentOptions.length > 0
-    ? props.componentOptions
-    : FALLBACK_COMPONENT_CHOICES,
-)
+/**
+ * 毒株词表 —— 优先用接口下发的那份，空则退到**共享兜底**（老板 2026-10-14）。
+ *
+ * ⚠️ 原来这里自带一份 7 项的兜底，和录入卡那份 5 项的**互相矛盾** ✗：
+ *    同一个毒株在两处显示成不同的名字（`犬细小` vs `犬细小病毒`）✗。
+ *    现在两份合成 `vaccine-fields.ts` 里的一份、且与后端逐字对齐 ✓。
+ */
+const componentChoices = computed(() => componentOptionsOf(props.componentOptions))
 
 /** 这一批里有没有"文档"页（PDF / Word 没有缩略图，也就没有「重传这一张」） */
 const hasDocumentPage = computed(() =>
@@ -719,7 +716,7 @@ function rowComponentsText(draft: Record<string, any> | undefined): string {
   if (list.length === 0) return '病种未读出'
   const labels = list.map(
     (value: string) =>
-      componentChoices.value.find((item) => item.value === value)?.label || value,
+      componentLabelOf(componentChoices.value, value),
   )
   return `含 ${labels.length} 种（${labels.join('·')}）`
 }

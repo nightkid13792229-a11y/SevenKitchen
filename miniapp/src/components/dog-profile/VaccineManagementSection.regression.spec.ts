@@ -215,12 +215,19 @@ describe('疫苗管理', () => {
     expect(source).not.toContain('还没有疫苗记录')
   })
 
-  it('病种词表也由后端下发（前端只留一份小兜底）', () => {
+  it('病种词表由后端下发，前端只留**共享的一份**兜底', () => {
     const source = readComponent()
 
     // 词表跟着接口走：后端改了前端不用改
     expect(source).toContain('componentOptions.value = res.data.components')
-    expect(source).toContain('FALLBACK_COMPONENT_OPTIONS')
+    /*
+     * ⚠️ 兜底那份现在住在 `vaccine-fields.ts`（老板 2026-10-14 抽的共享字段层）——
+     * 原来录入板块和确认页**各写一份**，已经漂成
+     * `犬细小病毒` / `犬细小` 两个名字 ✗。
+     * 这里改盯"用的是共享那份"，而不是"文件里有没有那个常量名"。
+     */
+    expect(source).toContain('VACCINE_COMPONENT_FALLBACK')
+    expect(source.includes('FALLBACK_COMPONENT_OPTIONS')).toBe(false)
   })
 
   it('保存前校验疫苗名与接种日期，空值不静默丢弃', () => {

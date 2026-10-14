@@ -206,7 +206,10 @@ class="vaccine-card"
     <view v-if="!componentsLocked" class="field-group">
       <!-- 老板 2026-10-12："含哪些病种的文案可否改成含哪些疫苗？
            并且……『可多选』移到含哪些病种文案板块，以括弧中的注释形式存在。" -->
-      <text class="field-label">含哪些疫苗（可多选）</text>
+      <!-- 点这一行 = 展开 / 收起毒株多选（老板 2026-10-12 定的出口）——
+           当时把「选好了」按钮去掉、改成"点字段名即可"，但**实现漏了** ✗，
+           于是勾完第一个就再也收不起来、也没法接着勾 ✗（老板 2026-10-14 报的）。 -->
+      <text class="field-label" @tap="toggleKindPicker()">含哪些疫苗（可多选）</text>
       <!-- 库外提示**放在这儿**（老板 2026-10-14 第 2.3 条）：
            顾客真正要动手的地方就是这里 —— 他要从下面把毒株勾出来 ✓。
            摆在名称下面只会让人在错的地方找办法 ✗。 -->
@@ -217,7 +220,7 @@ class="vaccine-card"
 
       <!-- 判定结果：只读一行，点它可以改 -->
       <view
-        v-if="hasComponentSelection() && !kindPickerOpen.value"
+        v-if="hasComponentSelection() && !kindPickerOpen"
         class="vaccine-kind"
         @tap="openKindPicker()"
       >
@@ -532,7 +535,19 @@ const matchingHere = ref(false)
  * 两种情况展开：① 系统没认出来（必须让顾客填，否则这条存不了）
  *              ② 顾客自己点了"修改"（他的记录，他想改就改）
  */
-const kindPickerOpen = ref(false)
+/*
+ * 毒株多选**默认是展开的**（老板 2026-10-14 报的 bug）。
+ *
+ * ⚠️ 原来初值是 `false`，而模板里"已勾选且选择器关着 → 显示只读行"这个分支
+ *    只判断了这两个条件 —— 于是顾客**勾中第一个毒株的瞬间**就切成了只读行 ✗：
+ *    界面上只剩他刚勾的那一个、旁边冒出「修改」，没法接着勾第二个 ✗。
+ *    老板原话："含哪些疫苗这个字段不可以多选，点选其中任何一个毒株之后，
+ *              就只会显示这一个毒株，并且显示修改的按钮。"
+ *
+ * ⇒ 默认展开 ✓：顾客可以一路勾下去；
+ *   想收起就看已勾的那几个 → **点字段名那一行** ✓（见 toggleKindPicker）。
+ */
+const kindPickerOpen = ref(true)
 
 /*
  * 今天的日期（本地时区）。
@@ -585,6 +600,22 @@ function statusClass(draftValue: VaccineDraft) {
 
 function openKindPicker() {
   kindPickerOpen.value = true
+}
+
+/**
+ * 点字段名那一行 → 展开 / 收起毒株多选（老板 2026-10-12 定的出口）。
+ *
+ * ⚠️ 2026-10-14 补上实现：当时只把「选好了」按钮去掉、写了句"点字段名即可"，
+ *    但**模板里根本没绑这个动作** ✗ —— 结果顾客勾完第一个就收不起来，
+ *    也没法接着勾第二个 ✗（老板报的两个问题之一）。
+ */
+function toggleKindPicker() {
+  if (!hasComponentSelection()) {
+    // 一个都没勾：这一行点了就保持展开，别让他点进一个空状态
+    kindPickerOpen.value = true
+    return
+  }
+  kindPickerOpen.value = !kindPickerOpen.value
 }
 
 /**

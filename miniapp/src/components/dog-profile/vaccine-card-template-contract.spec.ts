@@ -137,11 +137,23 @@ describe('编辑卡 · 模板调用的函数必须真的有（2026-10-12 搬家�
     expect(wrong).toEqual([])
   })
 
-  it('kindPickerOpen 是卡片自己的布尔 ref，模板里按 ref 的规矩读', () => {
-    expect(script).toContain('const kindPickerOpen = ref(false)')
-    // ⚠️ 模板里 ref **不会自动解包** ✓ —— 写 `!kindPickerOpen` 永远是 false ✗
-    //    （第一版我差点这么写 ✓，那样病种选择器会永远展开不了 ✗）
-    expect(template).toContain('!kindPickerOpen.value')
-    expect(template).not.toMatch(/!\s*kindPickerOpen\s*&&/)
+  it('kindPickerOpen 是卡片自己的布尔 ref，模板里**按解包后的值**读', () => {
+    expect(script).toContain('const kindPickerOpen = ref(true)')
+    /*
+     * ⚠️⚠️ 这条断言原来写反了，而且**把 bug 锁死了** ✗（2026-10-14 修正）。
+     *
+     * 原来的注释说"模板里 ref **不会自动解包**，要写 .value" —— **这是错的** ✗：
+     * Vue 3 `<script setup>` 的模板里，ref **会自动解包** ✓，
+     * 所以 `kindPickerOpen.value` 取到的是 `undefined` ✗，
+     * `!undefined` **恒为真** ✗ → 那个分支永远成立 ✗。
+     *
+     * 后果正是老板 2026-10-14 报的："修改的按钮并没有办法点击"
+     * —— 点它确实把 kindPickerOpen 设成了 true，可条件读的是 undefined，
+     *    恒真，界面**毫无变化** ✗，看着就像点不动 ✗。
+     *
+     * ⇒ 模板里一律写 ref 名 ✓，不写 `.value` ✓。
+     */
+    expect(template).toContain('!kindPickerOpen')
+    expect(template).not.toContain('kindPickerOpen.value')
   })
 })

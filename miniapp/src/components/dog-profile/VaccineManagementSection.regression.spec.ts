@@ -1096,7 +1096,7 @@ describe('记录卡片 · 少挂重复信息（2026-10-08）', () => {
     const source = readCard()
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
-    const components = source.indexOf('<text class="field-label">含哪些疫苗（可多选）</text>')
+    const components = source.indexOf('含哪些疫苗（可多选）')
     const date = source.indexOf('<text class="field-label">接种日期</text>')
 
     expect(name).toBeGreaterThan(0)

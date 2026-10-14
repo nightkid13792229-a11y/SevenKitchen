@@ -39,7 +39,7 @@ describe('编辑卡 · 抽出来之后仍然只做"这一张卡"的事', () => {
     expect(source).toContain('const confirmResult = ref<{ ok: boolean; text: string } | null>(null)')
     expect(source).toContain('function setConfirmResult(')
     expect(source).toContain('function clearConfirmResult(')
-    expect(source).toContain('const kindPickerOpen = ref(false)')
+    expect(source).toContain('const kindPickerOpen = ref(true)')
     // 这一张卡的匹配请求在飞（父组件不再需要知道是哪一行在匹配）
     expect(source).toContain('const matchingHere = ref(false)')
   })
@@ -415,7 +415,7 @@ describe('编辑卡 · 名称那一行（2026-10-06 第二批）', () => {
      * 手输 / 识别出来的照旧显示（要能勾、能纠错）。
      */
     expect(source).toContain('<view v-if="!componentsLocked" class="field-group">')
-    expect(source).toContain('<text class="field-label">含哪些疫苗（可多选）</text>')
+    expect(source).toContain('含哪些疫苗（可多选）')
   })
 
   it('🔴 保存只等"存"这一步，刷新放后台（老板第 3 条：为什么这么慢）', () => {
@@ -577,7 +577,7 @@ describe('编辑卡 · 规范产品名 / 三种状态（2026-10-06）', () => {
     const source = readCard()
 
     const name = source.indexOf('<text class="field-label">疫苗名称</text>')
-    const components = source.indexOf('<text class="field-label">含哪些疫苗（可多选）</text>')
+    const components = source.indexOf('含哪些疫苗（可多选）')
     const date = source.indexOf('<text class="field-label">接种日期</text>')
 
     expect(name).toBeGreaterThan(0)

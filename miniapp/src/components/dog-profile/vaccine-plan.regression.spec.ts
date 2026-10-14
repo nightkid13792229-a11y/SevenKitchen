@@ -298,6 +298,33 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(section).not.toContain('plan-head__hint')
   })
 
+  it('🔴 合并窗口必须与狂犬卡**一眼分得开**（老板 2026-10-14 第二轮）', () => {
+    const text = readSection()
+
+    /*
+     * 老板："视觉上很难将提醒、核心疫苗和钩端螺旋体这三个板块视作同一个窗口，
+     *        也并未与狂犬疫苗计划板块有明显的视觉上的区别。
+     *        我觉得你这块要么是有 bug，要么就是在视觉 UI 这个层面上太保守了。"
+     *
+     * 根因：组内的卡和外面那张狂犬卡**用了同一套样式**
+     *      （白底 + 淡边 + 圆角 + 阴影）→ 当然看着一模一样 ✗。
+     *
+     * ⇒ 现在的判据（缺一条就会退回"看不出是一组"）：
+     *   ① 窗口有**明显的绿边**（不是淡淡的分组线）
+     *   ② 头部底色**比内容深一档**，读起来像标题区
+     *   ③ 组内两行**不再是白卡**：去白底、去阴影、去圆角
+     *   ④ 窗口里展开的内容也跟着绿底（否则会露出一块白）
+     */
+    expect(text).toContain('border: 2rpx solid #7fb08f;')
+    expect(text).toContain('background: #dcefe4;')
+    // 组内两行不是卡片
+    expect(text).toContain('background: transparent;')
+    expect(text).toContain('box-shadow: none;')
+    // 展开内容跟着绿底
+    expect(text).toContain('.kind-card.kind-card--combo-first .kind-card__body,')
+    expect(text).toContain('background: #e9f5ee;')
+  })
+
   it('🔴 合并框的样式必须**压得住 .kind-card**（否则框根本连不起来）', () => {
     const text = readSection()
 

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>合并窗口 · 视觉对比（保守版 vs 有明显容器感）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #eceee9; color: #1e3a2f; padding: 22px 16px 50px;
+  }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #6b7d70; margin-bottom: 20px; line-height: 1.6; }
+  .cols { display: flex; flex-direction: column; gap: 26px; align-items: stretch; max-width: 360px; }
+  .col { width: 100%; }
+  .col__title { font-size: 14.5px; font-weight: 700; margin-bottom: 3px; }
+  .col__tag { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; }
+  .t-bad { background: #f6e3e3; color: #a33; }
+  .t-good { background: #d9f0e2; color: #17603f; }
+  .col__desc { font-size: 12px; color: #6b7d70; line-height: 1.6; margin: 6px 0 12px; }
+
+  .screen { background: #f4f6f2; border-radius: 14px; padding: 12px; border: 1px solid #e2e6df; }
+  .section {
+    background: linear-gradient(180deg,#f2faf5 0%,#fff 46%);
+    border: 1px solid #d5e9dd; border-radius: 12px; padding: 12px;
+  }
+  .section__head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .section__bar { width: 4px; height: 15px; border-radius: 2px; background: #0f7b49; }
+  .section__title { font-size: 15px; font-weight: 700; color: #12503a; }
+
+  /* 单张卡（狂犬用它 —— 独立的一条待办）*/
+  .solo {
+    background: #fff; border: 1px solid #e2efe7; border-radius: 10px;
+    padding: 12px; box-shadow: 0 1px 5px rgba(15,123,73,.06); margin-top: 10px;
+  }
+  .row-top { display: flex; align-items: center; justify-content: space-between; }
+  .badge { padding: 2px 9px; border-radius: 999px; font-size: 11px; background: #e6f4ec; color: #2f7d52; }
+  .toggle { font-size: 12px; color: #4a7c59; }
+  .name { margin-top: 7px; font-size: 15px; font-weight: 600; }
+  .time { margin-top: 4px; font-size: 12.5px; color: #5c6f63; }
+
+  /* ══════════ 保守版（现状）══════════ */
+  .box-old {
+    border: 2px solid #b9dbc8; border-radius: 12px; background: #f7fcf9;
+    padding: 11px 11px 0;
+  }
+  .box-old__head { padding-bottom: 10px; }
+  .box-old__p { font-size: 13px; font-weight: 700; color: #17603f; line-height: 1.5; }
+  .box-old__d { margin-top: 3px; font-size: 12px; color: #3f5a4a; line-height: 1.6; }
+  /* 组内还是"白卡"—— 于是和外面那张长得一样 */
+  .in-old {
+    background: #fff; border: 1px solid #e2efe7; border-radius: 10px;
+    padding: 11px; margin-bottom: 10px; box-shadow: 0 1px 5px rgba(15,123,73,.06);
+  }
+
+  /* ══════════ 有容器感（新）══════════ */
+  .box-new {
+    /* 明显的底 + 明显的边 —— 一眼就是"一个窗口" */
+    border: 2px solid #7fb08f; border-radius: 16px; background: #e9f5ee;
+    overflow: hidden;
+  }
+  .box-new__head {
+    padding: 13px 14px 12px;
+    background: #dcefe4;              /* 头部再深一档，和内容区分开 */
+    border-bottom: 2px solid #c3e2d0;
+  }
+  .box-new__p { font-size: 13.5px; font-weight: 700; color: #0f5138; line-height: 1.5; }
+  .box-new__d { margin-top: 3px; font-size: 12px; color: #2f5a45; line-height: 1.6; }
+  /* 组内的两针：**不再是白卡**，而是这个窗口里的两行 */
+  .in-new { padding: 12px 14px; }
+  .in-new + .in-new { border-top: 1px solid #c3e2d0; }
+  .in-new .name { margin-top: 6px; font-size: 14.5px; font-weight: 600; color: #123f2c; }
+  .in-new .time { margin-top: 3px; font-size: 12px; color: #46695a; }
+  /* 组内行的"待接种"角标换个底色，避免和白卡混同 */
+  .in-new .badge { background: #cbe8d8; color: #17603f; }
+
+  .cap { margin-top: 10px; font-size: 11.5px; line-height: 1.65; color: #6b7d70; }
+  .cap b { color: #1e3a2f; }
+</style>
+</head>
+<body>
+  <h1>合并窗口 · 视觉对比</h1>
+  <p class="sub">
+    同一份真实数据（核心疫苗 11-08 ~ 12-06、钩端螺旋体 11-22 ~ 12-20、狂犬 12-20 ~ 03-20）。<br />
+    差别只在**视觉层次**：左边是现在线上的样子，右边是把"一个窗口"做出来。
+  </p>
+
+  <div class="cols">
+
+    <!-- ══════ 保守版 ══════ -->
+    <div class="col">
+      <div class="col__title">现在这一版<span class="col__tag t-bad">看不出是一组</span></div>
+      <p class="col__desc">
+        组内还是**白卡 + 淡边 + 圆角**，和外面那张狂犬卡长得一模一样 ——
+        只有一条 2px 的浅边在连，肉眼分不出"框内框外"。
+      </p>
+      <div class="screen">
+        <div class="section">
+          <div class="section__head">
+            <div class="section__bar"></div>
+            <div class="section__title">接种计划</div>
+          </div>
+
+          <div class="box-old">
+            <div class="box-old__head">
+              <div class="box-old__p">卫佳捌、优乐康、海博莱犬四联加钩端</div>
+              <div class="box-old__d">同时包含以下两类疫苗，建议在共同窗口期（2026-11-22 ~ 2026-12-06）期间完成接种。</div>
+            </div>
+            <div class="in-old">
+              <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="name">核心疫苗（犬瘟、细小、腺病毒）</div>
+              <div class="time">建议接种时间 2026-11-08 ~ 2026-12-06</div>
+            </div>
+            <div class="in-old">
+              <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="name">钩端螺旋体</div>
+              <div class="time">建议接种时间 2026-11-22 ~ 2026-12-20</div>
+            </div>
+          </div>
+
+          <div class="solo">
+            <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="name">狂犬疫苗</div>
+            <div class="time">建议接种时间 2026-12-20 ~ 2027-03-20</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 有容器感 ══════ -->
+    <div class="col">
+      <div class="col__title">把"一个窗口"做出来<span class="col__tag t-good">建议</span></div>
+      <p class="col__desc">
+        三处改动：<b>① 绿底 + 明显的绿边</b>；<b>② 组内两针不再是白卡</b>，
+        变成这个窗口里的两行；<b>③ 狂犬卡保持白卡</b> —— 于是"成组"和"单条"一眼分得开。
+      </p>
+      <div class="screen">
+        <div class="section">
+          <div class="section__head">
+            <div class="section__bar"></div>
+            <div class="section__title">接种计划</div>
+          </div>
+
+          <div class="box-new">
+            <div class="box-new__head">
+              <div class="box-new__p">卫佳捌、优乐康、海博莱犬四联加钩端</div>
+              <div class="box-new__d">同时包含以下两类疫苗，建议在共同窗口期（2026-11-22 ~ 2026-12-06）期间完成接种。</div>
+            </div>
+            <div class="in-new">
+              <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="name">核心疫苗（犬瘟、细小、腺病毒）</div>
+              <div class="time">建议接种时间 2026-11-08 ~ 2026-12-06</div>
+            </div>
+            <div class="in-new">
+              <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+              <div class="name">钩端螺旋体</div>
+              <div class="time">建议接种时间 2026-11-22 ~ 2026-12-20</div>
+            </div>
+          </div>
+
+          <div class="solo">
+            <div class="row-top"><span class="badge">待接种</span><span class="toggle">展开</span></div>
+            <div class="name">狂犬疫苗</div>
+            <div class="time">建议接种时间 2026-12-20 ~ 2027-03-20</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="cap">
+        <b>为什么这样就能看出来：</b><br />
+        · 组内是<b>绿底上的两行</b>，不再是两张白卡 —— 它们不可能被看成"两条独立的待办"<br />
+        · 整个窗口有<b>明显的绿边 + 深一档的头部</b>，像一个容器<br />
+        · 狂犬卡仍是<b>白底淡边</b>，和窗口形成对比 —— "成组"与"单条"一眼分得开
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1784,10 +1784,12 @@ defineExpose({
 .combo-group__head {
   margin-top: 16rpx;
   padding: 16rpx 18rpx 14rpx;
-  border: 2rpx solid #b9dbc8;
+  /* 明显的绿边（老板 2026-10-14：原来那条太淡，肉眼看不出是一个窗口）*/
+  border: 2rpx solid #7fb08f;
   border-bottom: none;
   border-radius: 16rpx 16rpx 0 0;
-  background: #f7fcf9;
+  /* 头部比内容深一档 —— 读起来像"这个窗口的标题区" */
+  background: #dcefe4;
 }
 
 /* 产品名：顾客真正要去认的那一行，给足分量（老板要"放在顶部"的那段）*/
@@ -1929,25 +1931,52 @@ defineExpose({
 /*
  * ⚠️⚠️ 选择器必须写成 `.kind-card.kind-card--combo-*`（两个类）✗→✓。
  *
- * 只写一个类时**被 .kind-card 覆盖了** —— 两者权重相同（都是"两个类"：
- * 一个自己的类 + scoped 的 data-v 属性），而 `.kind-card` 在样式表里
- * **定义得更靠后**，于是"去掉上边框、去掉圆角"全都没生效 ✗：
- * 界面上仍然是**三个独立的圆角块**，框根本没连起来 ✗
+ * 只写一个类时**被 .kind-card 覆盖了** —— 两者权重相同（都是"一个自己的类
+ * + scoped 的 data-v 属性"），而 `.kind-card` 在样式表里定义得更靠后 ✗：
+ * 界面上仍是白卡 + 淡边，只有一条浅边在连，肉眼看不出是一个窗口 ✗
  * （老板 2026-10-14 一眼看出来的就是这个问题）。
  *
- * 现在用两个类把权重顶上去 ✓，并且这段也挪到样式表末尾 ✓（双保险）。
+ * ── 老板的第二轮意见（"要么有 bug，要么太保守"）之后又改了三处 ────────
+ * 原来组内的卡和外面那张狂犬卡**用了同一套样式**（白底 + 淡边 + 圆角 + 阴影）✗，
+ * 那它们当然看着一模一样。现在：
+ *   ① 组内**不再是"卡片"**，而是这个窗口里的**两行** ——
+ *      去白底、去阴影、去圆角，只留左右边框（露出窗口的绿底）
+ *   ② 边框用**明显的绿** #7fb08f（不是原来那条淡淡的 #b9dbc8）
+ *   ③ 两行之间用一条分隔线（窗口内部的层次，不是两个独立块）
+ *   ④ 狂犬卡照旧是白卡 ✓ —— 于是"成组"和"单条"一眼分得开
  */
-.kind-card.kind-card--combo-first {
+.kind-card.kind-card--combo-first,
+.kind-card.kind-card--combo-second {
+  /* 不再是"卡片" */
   margin-top: 0;
-  border-color: #b9dbc8;
-  border-top: none;
   border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-top: none;
+  border-bottom: none;
+  /* 窗口的左右两条边（三段拼里的中间段 / 收口段）*/
+  border-left: 2rpx solid #7fb08f;
+  border-right: 2rpx solid #7fb08f;
 }
 
+/* 两行之间的分隔线 */
+.kind-card.kind-card--combo-first {
+  border-bottom: 1rpx solid #c3e2d0;
+}
+
+/* 第二行收口：下边框 + 下圆角 */
 .kind-card.kind-card--combo-second {
-  margin-top: 0;
-  border-color: #b9dbc8;
-  border-top: none;
+  border-bottom: 2rpx solid #7fb08f;
   border-radius: 0 0 16rpx 16rpx;
+}
+
+/*
+ * 展开后的内容也跟着走绿底 —— 否则会在窗口里露出一块白 ✗。
+ * （卡片组件本身是共用的，这里只覆盖"在窗口里"的那两张。）
+ */
+.kind-card.kind-card--combo-first .kind-card__body,
+.kind-card.kind-card--combo-second .kind-card__body {
+  background: #e9f5ee;
+  border-top-color: #c3e2d0;
 }
 </style>

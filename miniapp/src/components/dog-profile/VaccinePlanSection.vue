@@ -77,12 +77,23 @@
               合并卡：两类各自的依据都显示 ✓（多行 ✓），按钮跟在最后一行末尾 ✓。
             -->
             <view class="basis__row">
+              <!--
+                ⚠️ 依据是**后端写的**，里面用 `**` 标出最关键的那句
+                （如"一针核心疫苗即可"）。小程序的 <text> 不认 markdown，
+                直接插值会把星号**原样显示**给顾客 ✗
+                （老板 2026-10-14 截图里看出来的）。
+                ⇒ 用 parseBold 切成几段、嵌套 <text> 渲染，关键的真的加粗 ✓。
+              -->
               <text
                 v-for="step in card.steps"
                 :key="`basis-${step.key}`"
                 class="basis__summary"
                 :class="{ 'basis__summary--block': card.steps.length > 1 }"
-              >{{ basisSummaryOf(step) }}</text>
+              ><text
+                  v-for="(seg, segIndex) in parseBold(basisSummaryOf(step))"
+                  :key="`s-${segIndex}`"
+                  :class="{ 'rich-bold': seg.bold }"
+                >{{ seg.text }}</text></text>
               <!--
                 ⚠️ 「更多 / 收起」的位置（老板 2026-10-14 第 4 条）。
                 原来只有一个按钮、固定在短句后面 —— 展开之后它**夹在了段落中间** ✗：
@@ -102,7 +113,11 @@
             <text
               v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
               class="basis__full"
-            >{{ basisRestOf(card.steps[0]) }}</text>
+            ><text
+                v-for="(seg, segIndex) in parseBold(basisRestOf(card.steps[0]))"
+                :key="`f-${segIndex}`"
+                :class="{ 'rich-bold': seg.bold }"
+              >{{ seg.text }}</text></text>
             <text
               v-if="hasMoreBasis(card.steps[0]) && isBasisOpen(card.steps[0].key)"
               class="basis__more basis__more--end"
@@ -278,6 +293,8 @@ import { todayDateText } from '../../utils/date'
 // 可 load() 取计划数据正需要它 ✓ → 计划直接报错 ✓（老板截图："接种计划没加载出来"✓）。
 // 删东西之前必须先确认"这个导入还有没有别的用处" ✗。
 import { dogApi } from '../../api/dogs'
+// 依据文案里 `**...**` 的解析（老板 2026-10-14 选方案 B：关键那句真的加粗）
+import { parseBold } from './rich-text'
 // 计划卡下面那张「新建卡」用的就是**记录模块的同一张卡**（2026-10-12 第三步）
 import VaccineRecordCard from './VaccineRecordCard'
 import {
@@ -1773,6 +1790,12 @@ defineExpose({
   display: block;
   margin-top: 4rpx;
 }
+/* `**...**` 里那一句 —— 真的加粗（老板 2026-10-14 选方案 B）*/
+.rich-bold {
+  font-weight: 700;
+  color: #1e3a2f;
+}
+
 .basis__full {
   display: block;
   margin-top: 8rpx;

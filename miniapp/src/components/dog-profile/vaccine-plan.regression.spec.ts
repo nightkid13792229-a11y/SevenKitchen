@@ -384,6 +384,28 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 依据里的 `**` 要渲染成真加粗，不许把星号打给顾客看（老板 2026-10-14）', () => {
+    const text = readSection()
+
+    /*
+     * 老板截图里看到的：
+     *     依据  …接种史不明的犬，**一针核心疫苗即可**提供足够保护
+     *                          ↑ 星号直接显示出来了
+     *
+     * 依据是**后端写的**，里面的 `**` 是"这里要突出"的标记；
+     * 小程序的 <text> 不认 markdown，直接插值就会把星号原样显示 ✗。
+     * ⇒ 老板选方案 B：**关键那句真的加粗** ✓（不是把星号删掉）。
+     *
+     * 判据：短句和展开段**都**要过 parseBold，且不许再出现裸插值。
+     */
+    expect(text).toContain('parseBold(basisSummaryOf(step))');
+    expect(text).toContain('parseBold(basisRestOf(card.steps[0]))');
+    expect(text).toContain("'rich-bold': seg.bold");
+    // 裸插值（会把 `**` 原样打出来）不许再有
+    expect(text.includes('>{{ basisSummaryOf(step) }}<')).toBe(false);
+    expect(text.includes('>{{ basisRestOf(card.steps[0]) }}<')).toBe(false);
+  })
+
   it('🔴 「收起」跟在**整段末尾**，不许夹在段落中间（老板 2026-10-14）', () => {
     const text = readSection()
 

@@ -84,6 +84,33 @@ export type VaccineKind = 'core_early' | 'core' | 'rabies' | 'lepto' | 'other';
  * `other` = 我们没有接种程序的非核心苗（犬窝咳、冠状病毒、莱姆病…）：
  * 如实记下来，但**不参与计划** —— 不会让任何一针"算完成"。
  */
+/**
+ * 计划卡片**由上至下的固定顺序**（老板 2026-10-14 定）。
+ *
+ * 老板："接种计划板块，它的顺序由上至下始终都是核心疫苗、钩端螺旋体和狂犬疫苗。"
+ *
+ * ── 为什么要固定，而不是按时间排 ──────────────────────────────
+ *
+ * 原来按 `windowStart` 排 ✗ —— 顺序会随每只狗的情况变：
+ *   · 幼犬 2 周龄：  核心 → 钩端 → 狂犬
+ *   · 幼犬 10 周龄： **钩端 → 核心** → 狂犬（钩端窗口先到）
+ *   · 只打过核心的成年犬：钩端 → 狂犬 → **核心**（核心下一次在 3 年后）
+ * 于是"把合并接种的提示放在核心与钩端两张卡中间"就没法稳定实现 ✗。
+ *
+ * ⚠️ 按免疫学的自然顺序固定下来（越早该打的越靠上）：
+ *   core_early（4 周龄抢跑那针）→ core（6 周）→ lepto（8 周）→ rabies（12 周）→ other
+ *
+ * ⚠️ 这与 `VACCINE_KINDS` **不是一回事** ✗（那个是类别全集、用于校验与遍历，
+ *    顺序是 core_early/core/rabies/lepto/other）—— 别合并成一个 ✗。
+ */
+export const PLAN_CARD_KIND_ORDER: readonly VaccineKind[] = [
+  'core_early',
+  'core',
+  'lepto',
+  'rabies',
+  'other',
+];
+
 export const VACCINE_KINDS: readonly VaccineKind[] = [
   'core_early',
   'core',
@@ -188,6 +215,14 @@ export interface VaccinePlanStep {
    *    那套规则只有一份 ✓（前端再抄一份迟早对不上 ✗）。
    */
   combo: VaccineComboOption | null;
+  /**
+   * 在计划板块里**由上至下的位次**（老板 2026-10-14）。
+   *
+   * 前端按它排序（不再按时间排 ✗）—— 这样"核心与钩端永远相邻"✓，
+   * 合并接种的提示才能稳定地插在两张卡中间 ✓。
+   * 下发而不是前端自己排：顺序是一条规则，只该有一处 ✓。
+   */
+  order: number;
   /**
    * 这一步所属的**那一类**，有没有任何一条对得上的记录（2026-10-07）。
    *
@@ -2505,6 +2540,8 @@ export function buildVaccinePlan(
         basisSummary: seed.basisHead || summarizeBasis(seed.basis),
         // 占位：联苗候选要等**所有步骤**都出来才能算（要看两个窗口的交集）
         combo: null,
+        // 固定的展示位次（老板 2026-10-14）：越早该打的越靠上
+        order: PLAN_CARD_KIND_ORDER.indexOf(seed.kind),
         matchedRecordId: matched?.record.id ?? null,
         matchedRecordDate: matched ? toDateText(matched.date) : null,
         basis: seed.basis,

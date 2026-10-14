@@ -109,7 +109,7 @@ describe('疫苗计划 · 界面', () => {
     expect(section).toContain('v-if="!sectionHidden"')
   })
 
-  it('每类一张简卡、各自展开；顺序按建议接种时间由近到远（2026-10-11 改版）', () => {
+  it('每类一张简卡、各自展开；顺序**固定**为核心→钩端→狂犬（老板 2026-10-14）', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
       'utf-8',
@@ -118,8 +118,23 @@ describe('疫苗计划 · 界面', () => {
     // 不再有"整个板块收起/展开"✗，改成**每一类各自展开**✓
     expect(source).toContain('const expandedKind = ref(')
     expect(source).toContain('function toggleKind(')
-    // 简卡按窗口起点由近到远 ✓
-    expect(source).toContain(".sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))")
+    /*
+     * ⚠️ 顺序改成**固定**（老板 2026-10-14）：核心 6 周 → 钩端 8 周 → 狂犬 12 周。
+     *
+     * 原来按 `windowStart` 排 ✗，顺序会随狗的情况变：
+     *   幼犬 10 周龄 → 钩端排到核心前面；只打过核心的成年犬 → 核心排到最后。
+     * 于是"把合并接种的提示放在核心与钩端两张卡中间"没法稳定实现 ✗。
+     * 位次由后端下发（`order`），顺序这条规则只有一处 ✓。
+     */
+    expect(source).toContain('.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))')
+    /*
+     * ⚠️ 别顺手把另一处按时间的排序也删了 ✗ ——
+     * `visibleSteps` 里那次排序是**中间计算**（决定"同一类里前面还有没做完的，
+     * 后面那些就先不显示"），它**必须按时间先后**处理 ✓。
+     * 只有 kindCards 的**展示顺序**改成固定 ✓。（我第一版断言写成
+     * "全文不许出现 localeCompare"，把这一处也误伤了 ✗。）
+     */
+    expect(source).toContain('.sort((a, b) => String(a.windowStart).localeCompare(String(b.windowStart)))')
     // 简卡上要有：类别 + 状态 + 建议接种时间 ✓
     expect(source).toContain('kind-card__kind')
     expect(source).toContain('建议接种时间 {{ card.windowStart }}')
@@ -605,7 +620,13 @@ describe('计划卡 · 拆开成两类，但互相提示可以选联苗（老板
   it('两张卡互相提示：可以选含两类的联苗，也可以分开打', () => {
     const text = source()
 
-    expect(text).toContain('也可以选含这两类的联苗')
+    /*
+     * ⚠️ 提示条已挪到**两张卡中间**（老板 2026-10-14）——
+     * 不再在各自的卡里各说一遍（角度还不同，顾客要来回对照才能拼出意思）。
+     * 新文案是顾客视角的："这两针可以合并成一次打"。
+     */
+    expect(text).toContain('这两针可以合并成一次打')
+    expect(text).toContain('comboNoteAfter(card, cardIndex)')
     /*
      * ⚠️ 老板 2026-10-13：**不要再提"错开 2~3 天"** ——
      * 联苗提示里那半句、以及卡片上那条 spacingNote 展示，两处都已删。

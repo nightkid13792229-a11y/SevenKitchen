@@ -8,7 +8,8 @@
            不该出现在顾客页面上（和接种记录板块那行小字同一个道理）。 -->
     </view>
 
-    <view v-for="card in kindCards" :key="card.key" class="kind-card">
+    <template v-for="(card, cardIndex) in kindCards" :key="card.key">
+    <view class="kind-card">
       <view class="kind-card__head" @tap="toggleKind(card.key)">
         <!-- 老板 2026-10-12：状态角标放到卡片**左上角** ✓
              （原来跟在标题后面 ✗ → 标题被挤到换行、「待接种」也断成两行 ✗）-->
@@ -36,10 +37,8 @@
              原来前端算的是"两张卡各自的推荐列表有没有交集" ✗ —— 会漏报：
              核心第 1 针在 6 周龄故意不推含钩端的苗，于是两边没交集，
              可等到 8 周龄两窗口重合时，那支联苗其实两边都够龄了。 -->
-        <text v-if="card.combo" class="merge-note">
-          也可以选含这两类的联苗（{{ card.combo.products.join('、') }}）—— 一针同时覆盖，
-          {{ card.combo.withLabel }}那一类就不用再单独打了（两针都合适的日期：{{ card.combo.windowStart }} ~ {{ card.combo.windowEnd }}）。
-        </text>
+        <!-- 合并接种的提示**已经挪到两张卡中间**了（老板 2026-10-14）——
+             不再在各自的卡里各说一遍（角度还不同，顾客要来回对照才能拼出意思）。 -->
 
         <!-- 老板 2026-10-12："合并后左侧的『免疫流程』字段为什么不见了？"
              —— 是我上一版把字段名换成了各自疫苗的名字 ✗（而且类别名太长 ✗，
@@ -166,6 +165,38 @@
         </view>
       </view>
     </view>
+
+    <!-- ══ 合并接种的提示：夹在**两张卡中间** ══════════════════════════════
+         老板 2026-10-14："在核心疫苗和钩端螺旋体两个计划的中间来做提醒。"
+
+         ⚠️ 只在"这一张卡的下一张就是它的合并对象"时插 ✓ ——
+            否则两张卡各插一次，又会变成说两遍 ✗。
+            产品库里唯一的多联苗组合就是「核心 + 钩端」✓，
+            而卡片按 PLAN_CARD_KIND_ORDER 固定顺序（核心→钩端→狂犬）✓，
+            所以这一对**永远相邻** ✓，提示条的位置也就稳定了 ✓。 -->
+    <view
+      v-if="comboNoteAfter(card, cardIndex)"
+      class="combo-note"
+    >
+      <text class="combo-note__title">这两针可以合并成一次打</text>
+      <text class="combo-note__desc">
+        {{ card.title }}和{{ comboNoteAfter(card, cardIndex)!.title }}的建议接种时间有
+        {{ overlapDays(card) }} 天是重叠的。选一支同时防这两类的疫苗（比如{{
+          card.combo!.products[0]
+        }}），打一次就够 —— 两类都不用再单独打。
+      </text>
+      <text class="combo-note__window">
+        两边都合适的日子：{{ card.combo!.windowStart }} ~ {{ card.combo!.windowEnd }}
+      </text>
+      <text class="combo-note__more" @tap.stop="toggleComboNote(card.key)">
+        {{ comboNoteOpen[card.key] ? '收起' : '需要注意什么？' }}
+      </text>
+      <text v-if="comboNoteOpen[card.key]" class="combo-note__detail">
+        不同疫苗不能混在同一支针筒里 —— 联苗是厂家已经配好的一支。
+        是否选联苗、选哪一支，请和执业兽医确认。
+      </text>
+    </view>
+    </template>
 
 
     <!--
@@ -615,6 +646,11 @@ function statusLabel(step: PlanStep) {
  */
 /** 哪一类正展开着（一次只展开一张 ✓ —— 展开多张会把页面拉很长 ✗）*/
 const expandedKind = ref('')
+/** 「需要注意什么？」展开了哪一条合并提示（按卡片 key 记）*/
+const comboNoteOpen = ref<Record<string, boolean>>({})
+function toggleComboNote(key: string): void {
+  comboNoteOpen.value = { ...comboNoteOpen.value, [key]: !comboNoteOpen.value[key] }
+}
 
 function toggleKind(kind: string) {
   expandedKind.value = expandedKind.value === kind ? '' : kind
@@ -670,6 +706,8 @@ interface PlanCard {
   windowStart: string
   windowEnd: string
   products: string[]
+  /** 固定展示位次（后端下发；越早该打的越靠上）*/
+  order: number
   /** 能与哪一类合并接种（后端算好的，含重合窗口与联苗名）*/
   combo: {
     withKind: string
@@ -692,11 +730,39 @@ interface PlanCard {
  * 现在：**只有两类的建议接种时间真的重叠** ✓，才提示可以合并 ✓，
  * 并且把那几天直接写出来 ✓（"两针都合适的日期：11-22 ~ 12-06" ✓）。
  */
+/**
+ * 这张卡后面要不要放"合并接种"的提示条（老板 2026-10-14）。
+ *
+ * ⚠️ 只在**这一张卡的下一张就是它的合并对象**时返回那张卡 ✓ ——
+ * 否则两张卡（核心、钩端）各插一次，又变成说两遍 ✗。
+ */
+function comboNoteAfter(card: PlanCard, index: number): PlanCard | null {
+  if (!card.combo) return null
+  const next = kindCards.value[index + 1]
+  return next && next.key === card.combo.withKind ? next : null
+}
+
+/** 重合了几天（提示条上那句"有 N 天是重叠的"）*/
+function overlapDays(card: PlanCard): number {
+  if (!card.combo) return 0
+  const start = new Date(`${card.combo.windowStart}T00:00:00`).getTime()
+  const end = new Date(`${card.combo.windowEnd}T00:00:00`).getTime()
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0
+  return Math.max(0, Math.round((end - start) / 86400000) + 1)
+}
+
 const kindCards = computed<PlanCard[]>(() => {
   return visibleSteps.value
     .filter((step) => step.status !== 'DONE')
     .slice()
-    .sort((a, b) => String(a.windowStart || '').localeCompare(String(b.windowStart || '')))
+    /*
+     * 固定顺序（老板 2026-10-14）：按后端下发的 `order` 排 ✓ ——
+     * 越早该打的越靠上（核心 6 周 → 钩端 8 周 → 狂犬 12 周）✓。
+     * ⚠️ 原来按 `windowStart` 排 ✗：10 周龄的幼犬会变成"钩端→核心"✗、
+     *    只打过核心的成年犬会变成"钩端→狂犬→核心"✗ ——
+     *    于是"把合并提示放在核心与钩端中间"就没法稳定实现 ✗。
+     */
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((step) => ({
       key: step.kind,
       kinds: [step.kind],
@@ -706,6 +772,7 @@ const kindCards = computed<PlanCard[]>(() => {
       windowEnd: String(step.windowEnd || ''),
       products: stepProducts(step),
       combo: (step as never as { combo?: PlanCard['combo'] }).combo ?? null,
+      order: Number((step as never as { order?: number }).order ?? 0),
     }))
 })
 
@@ -1740,6 +1807,67 @@ defineExpose({
   font-size: 23rpx;
   color: #8a9a92;
 }
+/* ══ 合并接种的提示条：夹在两张计划卡**中间**（老板 2026-10-14）══════════
+   设计意图：一眼看出"就是这两张在说同一件事"，不用来回对照两张卡。
+
+   ⚠️ 视觉上必须和卡片**区分开** ✓ —— 它是**提示**，不是"第三件要做的事" ✗：
+     · 卡片是实线 + 白底 + 阴影（"待办"的观感）
+     · 这条用**虚线** + 浅色底 + 左侧竖条（"说明"的观感）
+   卡片有边框、它也有边框，但虚线一眼就能分出来。 */
+.combo-note {
+  display: block;
+  margin: 10rpx 0;
+  padding: 18rpx 20rpx;
+  border: 2rpx dashed #c7dccd;
+  border-radius: 14rpx;
+  background: #f4faf6;
+}
+
+.combo-note__title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #17603f;
+}
+
+.combo-note__desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.65;
+  color: #3f5a4a;
+}
+
+/* 两边都合适的日期：给一点强调（这是顾客真正要用的信息）*/
+.combo-note__window {
+  display: block;
+  margin-top: 10rpx;
+  padding: 8rpx 14rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #17603f;
+  background: #e3f1e8;
+}
+
+.combo-note__more {
+  display: inline-block;
+  margin-top: 12rpx;
+  font-size: 23rpx;
+  color: #4a7c59;
+  text-decoration: underline;
+}
+
+.combo-note__detail {
+  display: block;
+  margin-top: 10rpx;
+  padding-top: 10rpx;
+  border-top: 1rpx solid #dbe9df;
+  font-size: 23rpx;
+  line-height: 1.65;
+  color: #6b7d70;
+}
+
 .merge-note {
   display: block;
   margin: 10rpx 0 16rpx;

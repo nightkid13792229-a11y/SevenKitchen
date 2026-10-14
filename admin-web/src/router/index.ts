@@ -1,5 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
+import { ElMessage } from "element-plus";
+import {
+  CHUNK_RELOAD_STORAGE_KEY,
+  recoverFromStalePageFile,
+} from "@/utils/chunkLoadRecovery";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -366,6 +371,30 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+/**
+ * 「页面文件已过期」自愈（2026-10-15 老板报的"点生命阶段进不去配方编辑器"）。
+ *
+ * 后台是单页应用，每个页面都是按需下载的独立 JS 文件、文件名带内容指纹；
+ * 部署会清空服务器目录并上传新指纹，于是**部署前就打开的标签页**一点尚未加载过的页面
+ * （例如从"食谱设计"点进配方编辑器）就会去要一个已被删掉的文件 → 404 →
+ * 页面切换被静默中止，看起来就是"点了没反应"。
+ *
+ * 这里识别出这类错误后，带着用户原本要去的地址整体刷新一次，让他点的那一页照常打开。
+ * 判定与冷却逻辑见 utils/chunkLoadRecovery.ts（配套回归测试在 __tests__/）。
+ */
+router.onError((error, to) => {
+  recoverFromStalePageFile(error, to?.fullPath || window.location.pathname, {
+    readLastReloadAt: () =>
+      Number(window.sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) || 0),
+    writeLastReloadAt: (at) =>
+      window.sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, String(at)),
+    now: () => Date.now(),
+    reload: (target) => window.location.assign(target),
+    notify: (level, message) =>
+      level === "error" ? ElMessage.error(message) : ElMessage.info(message),
+  });
 });
 
 // Navigation guard for authentication

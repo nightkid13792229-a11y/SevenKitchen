@@ -301,7 +301,20 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     aliases: ['hipra 四联', '海博莱四联'],
     manufacturer: '西班牙海博莱 HIPRA',
     brand: '海博莱',
-    diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
+    /*
+     * 钩端按**血清型**分开写（老板 2026-10-14 要求，与卫佳捌/宠必威乐必妥同口径）——
+     * 官方注册通用名里就是"犬钩端螺旋体病（犬型、黄疸出血型）"，是**二价**的，
+     * 只写"钩端螺旋体病"会看不出它防的是哪两型。
+     */
+    diseases: [
+      '犬瘟热',
+      '犬腺病毒病',
+      '犬细小病毒病',
+      '犬副流感',
+
+      '犬钩端螺旋体病（犬型）',
+      '黄疸出血型钩端螺旋体病',
+    ],
     components: ['cdv', 'cav', 'cpv', 'cpi', 'lepto'],
     minWeeks: null,
     registration: '（2022）外兽药证字46号',
@@ -313,7 +326,20 @@ const RAW_VACCINE_PRODUCTS: Omit<VaccineProduct, 'kinds'>[] = [
     aliases: ['virbac 四联'],
     manufacturer: '法国维克 VIRBAC',
     brand: '维克',
-    diseases: ['犬瘟热', '犬腺病毒病', '犬细小病毒病', '犬副流感', '钩端螺旋体病'],
+    /*
+     * 钩端按**血清型**分开写（老板 2026-10-14 要求，与卫佳捌/宠必威乐必妥同口径）——
+     * 官方注册通用名里就是"犬钩端螺旋体病（犬型、黄疸出血型）"，是**二价**的，
+     * 只写"钩端螺旋体病"会看不出它防的是哪两型。
+     */
+    diseases: [
+      '犬瘟热',
+      '犬腺病毒病',
+      '犬细小病毒病',
+      '犬副流感',
+
+      '犬钩端螺旋体病（犬型）',
+      '黄疸出血型钩端螺旋体病',
+    ],
     components: ['cdv', 'cav', 'cpv', 'cpi', 'lepto'],
     minWeeks: null,
     registration: '（2024）外兽药证字04号',

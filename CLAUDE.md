@@ -111,6 +111,34 @@ W=/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide
    · 而且**模拟器里必须先登录** ✗ —— 自动化跑不了真实微信登录 ✓，
      这一步需要人点一次「立即登录」✓（登录态不在 storage 里，是 `wx.login` 换的 ✓）。
 
+### ⚠️ 自查一律**复用现有项目**，不要新建临时工程（老板 2026-10-14 提出）
+
+老板："为什么每一次的修改，你都会打开一个微信开发者工具的预览窗口呢？"
+
+原因：为了连本地后端自查，我每次新建一个临时工程（`/tmp/mp-xxx`）→
+开发者工具就为它**多开一个项目窗口** ✗，每次都弹出来打扰老板 ✗。
+
+**正确做法（全程只用一个窗口）**：
+
+```bash
+cd miniapp
+# ① 构建"连本地后端"的那份（输出在 dist/dev/mp-weixin）
+npx uni -p mp-weixin
+# ② 把它放到**老板项目指向的位置**（老板的项目 miniprogramRoot = dist/build/mp-weixin/）
+rm -rf dist/build/mp-weixin && cp -R dist/dev/mp-weixin dist/build/mp-weixin
+# ③ 直接用老板已经打开的那个项目自查（不改 project.config.json、不新开窗口）
+#    需要时先打开它：cli open --project "$(pwd)"
+# ④ 自查完，重新生成**生产**构建覆盖掉（否则会把 dev 版传上去 ✗）
+npm run build:mp-weixin
+# ⑤ 再上传体验版
+cli upload --project "$(pwd)" --version "<版本号>" --desc "<改了什么>" --lang zh
+```
+
+⚠️ 第 ④ 步**不能省**：③ 之后 `dist/build/mp-weixin` 里是 dev 版（连本地后端），
+直接上传的话，体验版会指向 `127.0.0.1` ✗（老板手机上必然打不开 ✗）。
+
+⚠️ 用完把 `/tmp/mp-*` 之类的临时工程清掉 ✓（别留在磁盘上、也别留在开发者工具的最近项目里）。
+
 ## 必读文档
 
 | 优先级 | 文档 | 用途 |

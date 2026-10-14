@@ -37,12 +37,16 @@
           <view class="report-table ingredient-table compact-report-table">
             <view class="table-row table-head">
               <text class="table-cell ingredient-name-cell">原料</text>
-              <text class="table-cell amount-cell">用量</text>
+              <text class="table-cell amount-cell">用量 / 浓度</text>
               <text class="table-cell percent-cell">重量占比</text>
             </view>
             <view v-for="row in ingredientRows" :key="row.ingredientName" class="table-row">
               <text class="table-cell ingredient-name-cell">{{ row.ingredientName }}</text>
-              <text class="table-cell amount-cell">{{ row.amountLabel }}</text>
+              <!-- 2026-10-14 改版：食材只给重量占比、补剂只给浓度（每kg食材添加…），
+                   不再把食材的克与补剂的粒/片混在同一列「用量」里。
+                   concentrationLabel 是新字段；已发布食谱的报告是快照、仍是旧的
+                   amountLabel，这里做兜底，避免历史食谱该列显示空白。 -->
+              <text class="table-cell amount-cell">{{ row.concentrationLabel ?? row.amountLabel }}</text>
               <text class="table-cell percent-cell">{{ row.weightPercentLabel }}</text>
             </view>
           </view>

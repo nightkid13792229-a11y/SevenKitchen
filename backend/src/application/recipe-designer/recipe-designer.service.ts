@@ -6357,15 +6357,65 @@ export class RecipeDesignerService {
             '未命名原料',
           Boolean(isSupplement),
         ),
-        amountLabel: this.formatPublishedReportAmount(
-          assessedItem.weightG,
-          isSupplement ? this.resolvePublishedSupplementUnit(draftItem) : 'g',
-        ),
+        // 2026-10-14 改版：食材只给重量占比、补剂只给浓度，不再混用同一列「用量」。
+        // 原因：食材是克、补剂是粒/片，同一列里没法比较。
+        // 小程序食谱详情页本来就是这个口径（见 miniapp formatSupplementTargets）。
+        concentrationLabel: isSupplement
+          ? this.formatPublishedSupplementConcentration(draftItem)
+          : '-',
         weightPercentLabel: isSupplement
           ? '-'
           : this.formatPublishedReportPercent(assessedItem.ratioPercent),
       };
     });
+  }
+
+  /**
+   * 补剂浓度文案：每kg食材添加{值}{单位}{名称}，多项用「、」连接。
+   *
+   * 与小程序 `formatSupplementTargets` 同一口径。
+   * 优先读 supplementTargets（可多项）；老数据只有 nutrientTargetKey/Value 时退化为单项。
+   */
+  private formatPublishedSupplementConcentration(
+    item: DesignRecipeItemWithFood | undefined,
+  ): string {
+    const raw = (item as { supplementTargets?: unknown } | undefined)
+      ?.supplementTargets;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const parts = raw
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return '';
+          const target = entry as Record<string, unknown>;
+          // 存量数据里字段名是 targetValue，早期类型定义写的是 targetValuePerKg，两者都认
+          const value = this.readFiniteNumber(
+            target.targetValue ?? target.targetValuePerKg,
+          );
+          const unit = String(target.unit ?? '').trim();
+          const label = String(target.label ?? '').trim();
+          if (value === null || !label) return '';
+          return `每kg食材添加${value}${unit}${label}`;
+        })
+        .filter((text) => text.length > 0);
+      if (parts.length > 0) return parts.join('、');
+    }
+
+    const key = String(
+      (item as { nutrientTargetKey?: unknown } | undefined)?.nutrientTargetKey ??
+        '',
+    ).trim();
+    const value = this.readFiniteNumber(
+      (item as { nutrientTargetValue?: unknown } | undefined)
+        ?.nutrientTargetValue,
+    );
+    if (key && value !== null) {
+      return `每kg食材添加${value}${key}`;
+    }
+    return '-';
+  }
+
+  private readFiniteNumber(value: unknown): number | null {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
   }
 
   private formatPublishedIngredientReportName(

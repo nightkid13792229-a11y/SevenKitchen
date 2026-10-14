@@ -117,34 +117,36 @@
                     </span>
                   </div>
                 </div>
-                <div class="weight-editor">
-                  <el-input-number
-                    :model-value="element.weightG"
-                    :min="0"
-                    :precision="2"
-                    :controls="false"
-                    size="small"
-                    class="weight-input"
-                    @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
-                  />
-                  <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
-                </div>
-                <div class="item-ratio-column">
-                  <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
-                </div>
-                <div class="item-action-stack">
-                  <el-switch
-                    :model-value="element.includeInAssessment !== false"
-                    size="small"
-                    @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
-                  />
-                  <el-button
-                    size="small"
-                    text
-                    type="danger"
-                    :icon="Delete"
-                    @click="handleRemoveItem(element)"
-                  />
+                <div class="item-controls">
+                  <div class="weight-editor">
+                    <el-input-number
+                      :model-value="element.weightG"
+                      :min="0"
+                      :precision="2"
+                      :controls="false"
+                      size="small"
+                      class="weight-input"
+                      @update:model-value="(value: number | undefined) => onWeightChange(element, value)"
+                    />
+                    <span class="weight-unit">{{ itemUnitLabel(element) }}</span>
+                  </div>
+                  <div class="item-ratio-column">
+                    <span v-if="shouldShowWeightRatio(element)" class="item-ratio">{{ weightRatioLabel(element) }}</span>
+                  </div>
+                  <div class="item-action-stack">
+                    <el-switch
+                      :model-value="element.includeInAssessment !== false"
+                      size="small"
+                      @change="(value: string | number | boolean) => onToggleInclude(element, Boolean(value))"
+                    />
+                    <el-button
+                      size="small"
+                      text
+                      type="danger"
+                      :icon="Delete"
+                      @click="handleRemoveItem(element)"
+                    />
+                  </div>
                 </div>
               </div>
             </template>
@@ -1150,12 +1152,14 @@ onBeforeUnmount(() => {
   padding: 6px 8px;
   margin-bottom: 5px;
   background: #fff;
-  /* 2026-10-14：允许换行。
-     本栏最窄 320px，而行内固定宽度控件合计约 240px
-     （拖动 16 + 类型标签 34 + 用量 80 + 占比 46 + 开关/删除 64），
-     若强制单行，唯一可压缩的 .item-main（原料名 + 营养档案名）会被挤到 24px，
-     名字与档案名全部显示成省略号。改为换行后：名字独占一行，控件落到下一行。
-     宽窗口下（本栏被 flex:1 撑开）行为与原来一致。 */
+  /* 2026-10-15 老板报的"用量/占比/开关/删除被换到原料名下一行"。
+     2026-10-14 那次改动把 .item-main 写成 flex-basis: 100%，注释里说"宽窗口下与原来一致"，
+     但 basis 100% 意味着原料名那一格**永远独占整行**，控件必然被挤到第二行，与窗口多宽无关
+     （实测 1100 / 1280 / 1426 / 1600 宽的窗口全部换行）。
+     现在恢复一行布局：名字与用量/占比/开关/删除同排；
+     只有本栏真的窄到放不下（< 约 420px）时才换行，且换行时整组控件一起落到第二行
+     （.item-controls 作为一整块，避免出现"名字+用量一行、占比+删除另一行"的碎行）。
+     实测窗口 ≥ 1700px（五栏都能完整显示）时，名字列宽度与 2026-10-14 之前完全一致。 */
   flex-wrap: wrap;
 }
 .item-row:hover {
@@ -1191,8 +1195,11 @@ onBeforeUnmount(() => {
   background: #fdf6ec;
 }
 .item-main {
-  /* 占满整行，迫使用量/占比/开关等控件换到下一行（见 .item-row 的 flex-wrap 说明） */
-  flex: 1 1 100%;
+  /* 见 .item-row 说明：这里只声明"原料名至少留 ~140px"的基准宽度，
+     宽度够就与右侧控件同排（原来的一行布局），不够才整组控件换行。
+     ⚠️ 不要写回 flex: 1 1 100%（那会让任何宽度下都强制换行），
+     也不要写 flex: 1（基准 0 会让名字在窄窗口被压到几十像素、只剩省略号）。 */
+  flex: 1 1 140px;
   min-width: 0;
 }
 .item-name {
@@ -1216,6 +1223,15 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 用量 + 占比 + 开关/删除：作为一个整体参与换行，
+   本栏够宽时整组贴在原料名右侧（原来的一行布局），
+   窄到放不下时整组一起落到下一行，不会散成两行。 */
+.item-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
 }
 /* 用量编辑 */
 .weight-editor {

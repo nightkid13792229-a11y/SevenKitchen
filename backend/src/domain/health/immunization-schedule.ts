@@ -933,15 +933,43 @@ export function buildImmunizationSchedule(
   let cursor = firstStart;
   // 先排到 16 周龄之前的那几针
   while (cursor.getTime() < finish.getTime() && doseIndex < 8) {
-    const windowEnd = laterOf(
-      earlierOf(addWeeks(cursor, CORE_PUPPY_SERIES.intervalWeeksMax), finish),
-      cursor,
-    );
+    /*
+     * ══ 窗口 = [理想日 − 最小间隔, 理想日]（老板 2026-10-15 定，方案 B：严格 2~4 周）══
+     *
+     * 老板："为什么这个窗口期的起始点是在 4 周后呢？核心疫苗的首免周期，
+     *        请先确认一下是不是 2~4 周。那它的下一针间隔的起始点都在 4 周后，
+     *        那是不是很容易错过这个窗口期呢？"
+     *
+     * 核实：WSAVA 正文两处都写"**每 2 至 4 周**接种一次，直至 16 周龄或以上" ✓
+     *   （表 1 那栏写"每 3 至 4 周"，但同一栏的意见里又说"制造商建议间隔 2 至 4 周"，
+     *     所以 **2~4 周是主流口径** ✓）
+     *
+     * 改之前：`cursor` 本身就等于"上一针 + 4 周"（最大间隔），窗口再 `+4 周`
+     *   → 下一针的**起点落在 4 周后** ✗，家长第 2~4 周想打会被判"还没到" ✗，
+     *     与指南"2 周后就可以"不符 ✗。
+     *
+     * 改之后：**理想日不动**（仍是 6/10/14…，所以**针数不变** ✓），
+     *   但窗口起点往前挪到"理想日 − 2 周" ✓ —— 于是每一针的窗口
+     *   正好落在"**上一针 + 2~4 周**"这个指南允许的区间里 ✓。
+     *
+     * 第 1 针是特例：它不是"等上一针"，而是指南的"**6~8 周开始**" ✓，
+     *   所以窗口就是 [6 周, 8 周] ✓。
+     */
+    const windowStart =
+      doseIndex === 0
+        ? cursor
+        : addWeeks(cursor, -CORE_PUPPY_SERIES.intervalWeeksMin);
+    const windowEnd =
+      doseIndex === 0
+        ? // 第 1 针：指南写的是"**6~8 周龄**开始"，所以窗口就是 [6 周, 8 周] ✓
+          //（不是 cursor + 最大间隔 —— 那是 10 周，比指南宽 2 周 ✗）
+          addWeeks(birthday, CORE_PUPPY_SERIES.startWeeksMax)
+        : cursor;
     seeds.push({
       key: `core-puppy-${doseIndex + 1}`,
       kind: 'core',
       label: `幼犬首免 第 ${doseIndex + 1} 针`,
-      windowStart: cursor,
+      windowStart,
       windowEnd,
       basis: CORE_PUPPY_SERIES.basis,
     });
@@ -965,8 +993,9 @@ export function buildImmunizationSchedule(
     key: `core-puppy-${doseIndex + 1}`,
     kind: 'core',
     label: `幼犬首免 第 ${doseIndex + 1} 针`,
-    windowStart: finalStart,
-    windowEnd: addWeeks(finalStart, CORE_PUPPY_SERIES.intervalWeeksMax),
+    // 同上一段：窗口 = [理想日 − 2 周, 理想日]
+    windowStart: addWeeks(finalStart, -CORE_PUPPY_SERIES.intervalWeeksMin),
+    windowEnd: finalStart,
     /*
      * ⚠️ 末针**不再单独写一套依据**（老板 2026-10-13）。
      *
@@ -979,10 +1008,10 @@ export function buildImmunizationSchedule(
   });
   doseIndex += 1;
 
-  // 第一针的窗口其实从 6 到 8 周都行，把它放宽（上面用的是最紧的排法）
-  if (seeds.length > 0) {
-    seeds[0].windowEnd = laterOf(seeds[0].windowEnd, firstEnd);
-  }
+  /*
+   * 原来这里有一段"把第一针窗口放宽到 8 周"的处理 —— 现在不需要了 ✓：
+   * 新写法里第 1 针的窗口直接就是 [6 周, 8 周]（指南的"6~8 周开始"）✓。
+   */
 
   // ── 26 周龄以上的补强（WSAVA 2024 推荐，不是"可选"）──────────
   //
@@ -1197,6 +1226,21 @@ function buildNonCoreSeeds(
   // 首免几针
   let cursor = addWeeks(birthday, config.startWeeksMin);
   for (let index = 0; index < config.doses; index += 1) {
+    /*
+     * ══ 窗口与核心首免同一口径（老板 2026-10-15 定，方案 B：严格 2~4 周）══
+     *
+     * 第 1 针不是"等上一针"，而是指南说的"**初始剂量通常从 8 周龄开始**" ✓，
+     *   所以窗口给一整档：[8 周, 8 周 + 最大间隔]（钩端就是 8~12 周）✓。
+     * 第 2 针起是"上一针之后"，窗口必须落在**指南允许的 2~4 周**里 ✓：
+     *   理想日（= 上一针 + 4 周）往前挪 2 周当起点 → 正好 [上一针+2, 上一针+4] ✓。
+     *
+     * 改之前第 2 针的起点也落在"上一针 + 4 周"✗，与指南的"2 至 4 周后给予
+     * 第二剂"不符 ✗（WSAVA 表 1 钩端那一栏的原文）。
+     */
+    const windowStart =
+      index === 0 ? cursor : addWeeks(cursor, -config.intervalWeeksMin);
+    const windowEnd =
+      index === 0 ? addWeeks(cursor, config.intervalWeeksMax) : cursor;
     seeds.push({
       key: `${kind}-primary-${index + 1}`,
       kind,
@@ -1204,8 +1248,8 @@ function buildNonCoreSeeds(
         config.doses > 1
           ? `${config.label} 第 ${index + 1} 针`
           : config.label,
-      windowStart: cursor,
-      windowEnd: addWeeks(cursor, config.intervalWeeksMax),
+      windowStart,
+      windowEnd,
       basis: config.basis,
     });
     cursor = addWeeks(cursor, config.intervalWeeksMax);

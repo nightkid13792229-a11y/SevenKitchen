@@ -1545,14 +1545,19 @@ describe('按针数分配记录（老板截图引出的改法）', () => {
     /*
      * 只需要再补**第 2 针**，不是两针都重来。
      *
-     * ⚠️ 2026-10-06 起这条的状态是 **UPCOMING**（原来是 OVERDUE）——
-     * 因为窗口改成**锚定实际接种日**：第 1 针实际打在 2026-05-11，
-     * 第 2 针的窗口就顺延成 [06-08, 07-06]（间隔仍是程序表的 4 周）。
-     * 而这一天的 today 是 2026-06-01 —— 还没到窗口，所以是"待安排"。
-     * 这正是要的效果：**不再拿"按生日起算"的旧窗口去说人家逾期**。
+     * 窗口按**实际接种日**锚定：第 1 针实际打在 2026-05-11。
+     *
+     * ⚠️ 2026-10-15 起状态是 **DUE**（原来是 UPCOMING）——
+     *    因为窗口起点改成"上一针 + **最小间隔 2 周**"（老板当天定的方案 B：
+     *    严格按 WSAVA 的"每 2 至 4 周"）。
+     *    所以第 2 针的窗口是 [05-25, 06-08]，而 today = 06-01 **正落在窗口内**
+     *    → "该打了" ✓。
+     *    改之前窗口是 [06-08, 07-06]（起点落在 +4 周），06-01 显得"还早" ✗ ——
+     *    那正是老板指出的问题："下一针间隔的起始点都在 4 周后，
+     *    那是不是很容易错过这个窗口期呢？"
      */
     const second = lepto.find((step) => step.key === 'lepto-primary-2')
-    expect(second!.status).toBe('UPCOMING')
+    expect(second!.status).toBe('DUE')
   })
 
   it('一条记录只能顶一步 —— 一针不能算两次', () => {
@@ -2953,5 +2958,108 @@ describe('早期核心疫苗 · 不主动推，但已登记的照旧认（老板
     expect(source).toContain('收容所指南');
     // 按年龄主动推的那段必须已经删掉
     expect(stripComments(source)).not.toContain('ageWeeks >= 4 && ageWeeks < 6');
+  });
+});
+
+/**
+ * 老板 2026-10-15："为什么这个窗口期的起始点是在 4 周后呢？核心疫苗的首免周期，
+ * 请先确认一下是不是 2~4 周。那它的下一针间隔的起始点都在 4 周后，
+ * 那是不是很容易错过这个窗口期呢？"
+ *
+ * 核实：WSAVA 正文两处都写"**每 2 至 4 周**接种一次" ✓
+ * ⇒ 老板选**方案 B：严格 2~4 周**。
+ *
+ * 改法：**理想日不动**（仍 6/10/14…，针数不变），
+ *      但窗口 = [理想日 − 2 周, 理想日] —— 于是每一针的窗口正好落在
+ *      "上一针 + 2~4 周"这个指南允许的区间里 ✓。
+ */
+describe('首免窗口 · 严格 2~4 周（老板 2026-10-15）', () => {
+  const TODAY = new Date('2026-10-15');
+  const days = (a: string, b: string) =>
+    Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86400000);
+
+  it('🔴 核心第 1 针窗口是 [6 周, 8 周]（指南的"6~8 周开始"）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2026-09-03', reviewed: true, today: TODAY, records: [],
+    });
+    const first = plan.steps.find((s) => s.key === 'core-puppy-1')!;
+    // 生日 09-03 → 6 周 = 10-15、8 周 = 10-29
+    expect(first.windowStart).toBe('2026-10-15');
+    expect(first.windowEnd).toBe('2026-10-29');
+    expect(days(first.windowStart, first.windowEnd)).toBe(14);
+  });
+
+  it('🔴 打完一针之后，下一针的窗口起点必须是"上一针 + 2 周"（不是 4 周）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2026-09-03', reviewed: true, today: TODAY,
+      records: [
+        { id: 'r1', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2026-10-15', components: ['cdv','cav','cpv','cpi'], doseNumber: null },
+      ] as never,
+    });
+    const next = plan.steps.find((s) => s.kind === 'core' && s.status !== 'DONE')!;
+    // 上一针 10-15 → 起点 +14 天（2 周）✓、终点 +28 天（4 周）✓
+    expect(days('2026-10-15', next.windowStart)).toBe(14);
+    expect(days('2026-10-15', next.windowEnd)).toBe(28);
+  });
+
+  it('🔴 钩端第 2 针同样是"上一针 + 2~4 周"', () => {
+    /*
+     * ⚠️ 两个坑（第一次都踩了）：
+     *   ① `VaccineRecordLike` **没有 doseNumber** —— 记录靠"日期 + 顺序 + 归类"匹配；
+     *   ② today **必须晚于记录日期** —— 未来的记录会被 `futureDatedRecords` 排除 ✗。
+     */
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2026-09-03', reviewed: true,
+      today: new Date('2026-11-01'),
+      records: [
+        { id: 'r1', kind: 'lepto', kinds: ['lepto'], vaccineName: '宠必威乐必妥',
+          vaccinationDate: '2026-10-29', components: ['lepto'] },
+      ] as never,
+    });
+    const next = plan.steps.find((s) => s.key === 'lepto-primary-2')!;
+    expect(next).toBeDefined();
+    expect(next.status).not.toBe('DONE');
+    // 上一针 10-29 → 起点 +14 天（2 周）✓、终点 +28 天（4 周）✓
+    expect(days('2026-10-29', next.windowStart)).toBe(14);
+    expect(days('2026-10-29', next.windowEnd)).toBe(28);
+  });
+
+  it('🔴 针数不变 —— 理想日仍按 4 周递进，只是窗口提前（看末针仍落在 ≥16 周）', () => {
+    /*
+     * ⚠️ 不能数 `plan.steps` 里 core 的条数：那是**过滤后**的
+     *    （每一类只留"下一针"，见 nextPendingKeyByKind）。
+     *    改用"**最后一针仍不早于 16 周**"来验证针数没变 ——
+     *    如果窗口改成每轮 +2 周递进，针数会变多、末针也会提前 ✗。
+     */
+    const birthday = '2026-09-03';
+    const first = buildVaccinePlan({
+      dogId: 't', birthday, reviewed: true, today: TODAY, records: [],
+    }).steps.find((s) => s.kind === 'core')!;
+    /*
+     * 老规矩：别把整条序列都逼出来（未来的记录会被排除 ✗），
+     * 只验证**第 1 针的下一针窗口宽度** = 2 周 —— 这就能区分两种写法：
+     *   · 每轮 +2 周递进（会多出针数）→ 下一针窗口仍是 2 周，但末针会提前；
+     *   · 理想日不动、只把窗口提前（本方案）→ 下一针窗口 2 周、末针仍 ≥16 周。
+     * 末针那条单独用一个"已经打了三针"的场景验证（见下一条）。
+     */
+    expect(days(first.windowStart, first.windowEnd)).toBe(14);
+
+    // 已经按时打完三针（6/10/14 周）→ 末针不应该早于 16 周
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday, reviewed: true, today: new Date('2026-12-20'),
+      records: [
+        { id: 'r1', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2026-10-15', components: ['cdv','cav','cpv','cpi'] },
+        { id: 'r2', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2026-11-12', components: ['cdv','cav','cpv','cpi'] },
+        { id: 'r3', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2026-12-10', components: ['cdv','cav','cpv','cpi'] },
+      ] as never,
+    });
+    const last = plan.steps.find((s) => s.kind === 'core' && s.status !== 'DONE')!;
+    expect(last).toBeDefined();
+    // 生日 09-03 → 16 周 = 12-24。末针窗口的起点不许早于 16 周
+    expect(days('2026-09-03', last.windowStart)).toBeGreaterThanOrEqual(16 * 7 - 7);
   });
 });

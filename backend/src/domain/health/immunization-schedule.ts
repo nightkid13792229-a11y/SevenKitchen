@@ -176,6 +176,15 @@ export interface VaccinePlanStep {
   /** 时间窗（ISO 日期 YYYY-MM-DD）；开区间时另一侧为空 */
   windowStart: string;
   windowEnd: string;
+  /**
+   * 这一步的窗口**原来**是哪一段 —— 只在"起针窗口过了、被挪到今天"时有值
+   * （老板 2026-10-15 报的 bug）。
+   *
+   * 前端用它判断"是不是真逾期了"并显示"（原窗口 … 已过）"✓ ——
+   * 不能拿挪完的 `windowStart/windowEnd` 去判，那会判成"没过期" ✗。
+   */
+  missedWindowStart?: string;
+  missedWindowEnd?: string;
   status: VaccineStepStatus;
   /**
    * 状态的**中文说法**，由后端下发（2026-10-07，老板审计第 5 块）。
@@ -2613,11 +2622,29 @@ export function buildVaccinePlan(
     if (!firstSeedKeyByKind.has(seed.kind)) firstSeedKeyByKind.set(seed.kind, seed.key);
   }
   const recordlessStartKeys = new Set<string>();
+  /*
+   * 挪到今天的那些步骤，**原来**的窗口留一份（老板 2026-10-15 报的 bug）。
+   *
+   * 前端那句话是"尽快补种（**原窗口** X ~ Y 已过）"，用的却是挪完之后的
+   * `windowStart/windowEnd` ✗ —— 于是 33 号档案显示成
+   * "原窗口 2026-10-15 ~ 2026-10-29 已过"，而那是**未来** ✗，自相矛盾；
+   * 而且前端的 `isWindowPassed` 判据是 `windowEnd < today` ✗，
+   * 挪完之后 `windowEnd` 变成未来 → **连"尽快补种"都不显示了** ✗✗ ——
+   * 系统明明知道它逾期（所以才挪），界面却一个字不提 ✗。
+   *
+   * ⇒ 挪之前先把原窗口存下来 ✓，随步骤一起返回 ✓，前端用它判"已过"并显示 ✓。
+   */
+  const missedWindowByKey = new Map<string, { start: Date; end: Date }>();
   for (const [kind, key] of firstSeedKeyByKind.entries()) {
     if ((recordsByKind.get(kind) || []).length > 0) continue;
     recordlessStartKeys.add(key);
     const seed = seeds.find((item) => item.key === key);
     if (seed && seed.windowEnd.getTime() < today.getTime()) {
+      // ⚠️ 顺序不能反：先存原窗口，再覆盖 ✗→✓
+      missedWindowByKey.set(seed.key, {
+        start: new Date(seed.windowStart.getTime()),
+        end: new Date(seed.windowEnd.getTime()),
+      });
       const width = seed.windowEnd.getTime() - seed.windowStart.getTime();
       seed.windowStart = today;
       seed.windowEnd = new Date(today.getTime() + width);
@@ -2644,6 +2671,13 @@ export function buildVaccinePlan(
         label: seed.label,
         windowStart: toDateText(seed.windowStart),
         windowEnd: toDateText(seed.windowEnd),
+        // 只有真被挪过的步骤才带这两个字段 ✓（没挪过就是 undefined ✓）
+        ...(missedWindowByKey.has(seed.key)
+          ? {
+              missedWindowStart: toDateText(missedWindowByKey.get(seed.key)!.start),
+              missedWindowEnd: toDateText(missedWindowByKey.get(seed.key)!.end),
+            }
+          : {}),
         status,
         statusLabel: withDeferNote(
           resolveStatusLabel(status, !kindHasEvidence, recordlessStartKeys.has(seed.key)),

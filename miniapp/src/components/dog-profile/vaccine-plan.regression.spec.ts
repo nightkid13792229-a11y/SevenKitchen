@@ -384,6 +384,28 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 逾期提示要用后端带回的「原窗口」，不能拿挪后的窗口充数（老板 2026-10-15）', () => {
+    const text = readSection()
+
+    /*
+     * 老板："33 号窗口，卡片上并没有写尽快补种相关的内容。"
+     *
+     * 根因：起针窗口过了会被后端**挪到今天**，挪完 windowEnd 落在未来 ✗，
+     * 于是 isWindowPassed 判成"没过期" ✗、界面一个字不提 ✗；
+     * 而那句"原窗口 … 已过"用的也是挪后的窗口 → 说"原窗口 <未来> 已过" ✗。
+     */
+    // ① 判据优先看 missedWindowEnd
+    const fn = text.slice(text.indexOf('function isWindowPassed'), text.indexOf('function windowPassedSuffix'));
+    expect(fn).toContain('missedWindowEnd');
+    expect(fn).toContain('missedWindowEnd || ');
+    // ② 模板里的"原窗口"要用 passedWindowStart/End
+    expect(text).toContain('{{ passedWindowStart(card) }}');
+    expect(text).toContain('{{ passedWindowEnd(card) }}');
+    // ③ 取值优先 missedWindow*，没有才退回当前窗口
+    expect(text).toContain('step?.missedWindowStart || card.windowStart');
+    expect(text).toContain('step?.missedWindowEnd || card.windowEnd');
+  })
+
   it('🔴 步骤名称显示在**角标右边**，且早期苗不重复显示（老板 2026-10-15）', () => {
     const text = readSection()
 
@@ -744,8 +766,7 @@ describe('疫苗计划 · 跟着记录实时刷新（2026-10-06）', () => {
  * 记录变了要**直接调组件方法**重算（2026-10-06 实测出来的）。
  *
  * 光靠 `:data-version` 传下去实测不生效：用微信官方自动化驱动模拟器
- * 删光记录之后，书签红点灭掉了（说明通知到了页面），
- * 计划板块却原地挂着删掉那条记录算出来的计划 ——
+ * 删光记录之后，计划板块**原地不动**，还挂着删掉那条记录算出来的计划 ——
  * 正是老板报的"删空了还显示计划和提醒，切走再切回才空"。
  */
 describe('疫苗计划 · 记录一变就重算（2026-10-06 实测修复）', () => {
@@ -774,15 +795,19 @@ describe('疫苗计划 · 记录一变就重算（2026-10-06 实测修复）', (
     expect(section).toContain('reload: () => load()')
   })
 
-  it('reload 必须排在"红点也跟着更新"同一条链上（两件事一起发生）', () => {
+  it('reload 必须挂在"记录变化"那条通知链上（不能只在换狗时重算）', () => {
     const page = readPage()
 
     const handler = page.slice(
       page.indexOf('function onVaccineRecordsChanged()'),
       page.indexOf('}', page.indexOf('vaccinePlanRef.value?.reload?.()')),
     )
-    expect(handler).toContain('loadVaccineDot()')
     expect(handler).toContain('vaccinePlanRef.value?.reload?.()')
+    /*
+     * 2026-10-15：书签红点下线，这条链上原来一起跑的 `loadVaccineDot()` 随之删掉 ✓
+     * —— 计划重算这条**必须留着**（红点走了不等于提醒不用更新 ✓）。
+     */
+    expect(handler).not.toContain('loadVaccineDot')
   })
 })
 

@@ -690,13 +690,21 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
 })
 
 /**
- * 疫苗书签角标（2026-10-04）。
+ * 疫苗书签红点**整套下线**（2026-10-15 老板定）。
  *
- * 老板定：提醒保持"时间窗口"不细化到某一天；A 层做到疫苗种类提醒。
- * 但提醒只有落在顾客**看得见的地方**才算数 —— 疫苗计划藏在疫苗书签里，
- * 顾客不点进去永远不知道有针要打。
+ * 老板原话："我们先删除红点及其相关功能的代码吧，我们不再需要红点显示的这个功能。"
+ *
+ * 走过的三步（都在这组测试里留着记录 ✓）：
+ *   · 2026-10-04：书签上挂带文案的角标「有 N 针该打了」（后来还挂过"待补记录"）；
+ *   · 2026-10-06：老板嫌文案挤，改成右上角一个红点；
+ *   · 2026-10-15：**红点也不要了** —— 所以现在书签上不该有任何角标/红点，
+ *     页面也不该再为它拉一次疫苗计划接口。
+ *
+ * ⚠️ 这组测试是**反向断言**（not.toContain）—— 它挡的是"红点又悄悄长回来"。
+ *    提醒本身没有消失：疫苗该不该打、下一针是什么，都在疫苗书签里的
+ *    计划板块说清楚（`VaccinePlanSection`，那部分一个字没动 ✓）。
  */
-describe('健康管理 · 疫苗书签红点（2026-10-04 角标 → 2026-10-06 红点）', () => {
+describe('健康管理 · 疫苗书签不带任何角标/红点（2026-10-15 红点下线）', () => {
   function readPage() {
     return readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
@@ -704,73 +712,56 @@ describe('健康管理 · 疫苗书签红点（2026-10-04 角标 → 2026-10-06 
     )
   }
 
-  it('有针要打时只亮一个红点，不再写数量文案', () => {
+  it('页面里不再有红点：模板、样式、状态、取数四样都不留', () => {
     const page = readPage()
 
-    // 2026-10-06 老板："疫苗标签处不再显示角标。疫苗如果有新的提醒，
-    // 就以红点的形式即可，不要用带文案的角标。"
-    expect(page).toContain('vaccineHasDue')
-    expect(page).toContain('.health-tabs__dot')
-    expect(page).toContain("tab.key === 'vaccine' && vaccineHasDue")
-    // 带文案的角标彻底下线：文案换成红点，不能两套并存
-    expect(page).not.toContain('.health-tabs__badge')
-    expect(page).not.toContain('vaccineBadgeText')
-  })
-
-  it('红点绝对定位 —— 它亮不亮，六个书签的高度都一样', () => {
-    const page = readPage()
-
-    // 原来是纵向 flex 里的一行文字，书签会因为它出现而变高，
-    // 六个书签高矮不一。改成绝对定位挂在右上角。
-    const dotBlock = page.slice(
-      page.indexOf('.health-tabs__dot {'),
-      page.indexOf('}', page.indexOf('.health-tabs__dot {')),
-    )
-    expect(dotBlock).toContain('position: absolute;')
+    // ① 模板：不再有那个圆点节点
+    expect(page).not.toContain('health-tabs__dot')
+    expect(page).not.toContain("tab.key === 'vaccine' && vaccineHasDue")
+    // ② 状态：页面不再持有"有没有针该打"这个开关
+    expect(page).not.toContain('vaccineHasDue')
+    // ③ 取数：页面不再为红点单独调一次疫苗计划
+    expect(page).not.toContain('loadVaccineDot')
+    // ④ 样式：定位上下文是当年为红点加的，跟着一起撤
     const itemBlock = page.slice(
       page.indexOf('.health-tabs__item {'),
       page.indexOf('.health-tabs__label {'),
     )
-    expect(itemBlock).toContain('position: relative;')
-  })
-
-  it('红点由页面自己拉，不能等 VaccinePlanSection 报 —— 那个组件点进去才挂载', () => {
-    const page = readPage()
-
-    expect(page).toContain('async function loadVaccineDot(')
-    expect(page).toContain('await dogApi.vaccinePlan(requestedDogId)')
-    // 红点的全部意义就是"还没点进去时"提醒，所以必须挂在页面上
-    expect(page).toContain('loadVaccineDot(requestedDogId)')
-  })
-
-  it('一条接种记录都没有时不亮红点（2026-10-04 老板提问后改，2026-10-06 沿用）', () => {
-    const page = readPage()
-
-    // 原来显示"待补记录"。三处不对：
-    //   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于每个用户永远看到这个提醒，
-    //      一个永远亮着的点就不是信号了；
-    //   2. 它跟"有针要打"用同一套视觉，把真正的提醒一起贬值；
-    //   3. 读起来像在说"你欠我们一条记录"。
-    // 没有记录时计划板块本来就有一张说明卡把话讲清楚，那里说就够了。
-    expect(page).toContain('noRecordAtAll === true')
+    expect(itemBlock).not.toContain('position: relative;')
+    // 带文案的角标更不许回来（2026-10-04 那版）
+    expect(page).not.toContain('.health-tabs__badge')
+    expect(page).not.toContain('vaccineBadgeText')
     expect(page).not.toContain('待补记录')
-    expect(page).toContain("if (res.data.noRecordAtAll === true) {")
-    expect(page).toContain('vaccineHasDue.value = false')
   })
 
-  it('计划没开或拉失败时不亮红点（不在书签上写"加载失败"）', () => {
+  it('红点的取数与判断逻辑整段删干净，不留死代码', () => {
     const page = readPage()
 
-    expect(page).toContain('res.data.available === false')
-    // 静默灭掉，不抛也不弹 toast
-    expect(page).toContain('vaccineHasDue.value = false')
+    // 原来那 4 道关卡（没记录 / 计划没开 / 没生日 / 有没有 DUE）随之作废
+    expect(page).not.toContain('async function loadVaccineDot(')
+    expect(page).not.toContain('noRecordAtAll === true')
+    expect(page).not.toContain('res.data.available === false')
+    expect(page).not.toContain("step?.status === 'DUE'")
+  })
+
+  it('疫苗计划接口在别处照旧使用（只删红点，不删提醒本身）', () => {
+    const page = readPage()
+    const section = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+      'utf-8',
+    )
+
+    // 计划板块仍然要拉计划、仍然挂在疫苗书签下
+    expect(section).toContain('dogApi.vaccinePlan(')
+    expect(page).toContain('<VaccinePlanSection')
+    // 记录一变仍然要重算计划（红点走了，这条通路不能跟着走）
+    expect(page).toContain('vaccinePlanRef.value?.reload?.()')
   })
 
   it('书签里的文字 vs 主题色：color 留在 .health-tabs__item 上', () => {
     const page = readPage()
 
-    // 书签从 <text> 变成纵向 flex 的 <view>（要放角标），
-    // 但是主题色是按 .health-tabs__item--active 给的 ——
+    // 主题色是按 .health-tabs__item--active 给的 ——
     // 文字元素自己写 color 会把主题色盖掉，四套主题色就全废了。
     expect(page).toContain('.health-tabs__label {')
     const itemBlock = page.slice(

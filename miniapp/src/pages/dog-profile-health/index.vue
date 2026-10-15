@@ -103,17 +103,6 @@
               @tap="selectHealthTab(tab.key)"
             >
               <text class="health-tabs__label">{{ tab.label }}</text>
-              <!-- 疫苗书签的红点（2026-10-06 老板改：不要再显示带文案的角标）。
-                   原来挂的是「有 N 针该打了」那样一句话。改成红点有三个理由：
-                     · 书签只有四分之一屏宽，塞一句话会把四个书签挤得高矮不一；
-                     · 到底几针、哪几针、什么时候打，点进去的计划板块说得比这里清楚；
-                     · 红点只回答一个问题：**有针该打了，进去看看**。
-                   位置仍在书签上，所以顾客**没点进去之前**就看得到 ——
-                   点进去才看得到的提醒，等于没提醒（这一条没变）。 -->
-              <view
-                v-if="tab.key === 'vaccine' && vaccineHasDue"
-                class="health-tabs__dot"
-              />
             </view>
           </view>
 
@@ -277,39 +266,23 @@ interface DogProfileSummary {
 
 const dogId = ref('')
 /**
- * 疫苗书签上有没有红点（2026-10-06 老板：角标改成红点，不要文案）。
- *
- * 只回答"有没有针该打了"这一件事；几句、哪几句、什么时候打，
- * 交给点进去之后的计划板块说 —— 书签只有四分之一屏宽，
- * 塞一句话会把四个书签挤得高矮不一。
- *
- * 为什么由**页面**去拉，而不是让 VaccinePlanSection 报上来：
- * 那个组件只在"疫苗"书签被选中时才挂载 —— 而红点的全部意义恰恰是
- * 在顾客**还没点进疫苗书签**时告诉他"有针要打了"。
- * 点进去才看得到的提醒，等于没提醒。
- */
-const vaccineHasDue = ref(false)
-
-/**
  * 疫苗数据版本号（2026-10-05）。
  *
  * 记录一保存/删除就 +1，计划板块 watch 它重新加载。
  * 以前计划只在"换狗"时加载，顾客原地录完几条，计划那边毫无察觉 ——
  * 老板看到的"录了 3 条却没有提醒/计划"就是这个。
- * 角标同理（"有 N 针该打了"也要跟着变）。
  */
 const vaccineDataVersion = ref(0)
 
 function onVaccineRecordsChanged() {
   vaccineDataVersion.value += 1
-  loadVaccineDot()
   /*
    * 直接让计划板块重算（2026-10-06）。
    *
    * ⚠️ 光靠 `:data-version` 传下去**实测不生效**：用微信官方自动化驱动
-   * 模拟器删光记录，书签红点灭掉了（说明这个函数跑了），计划板块却
-   * 原地挂着旧计划 —— 老板报的"删空了还显示计划和提醒，切走再切回才空"
-   * 就是这个。改成直接调组件方法，和疫苗板块那几个入口同一个机制。
+   * 模拟器删光记录，计划板块却原地挂着旧计划 ——
+   * 老板报的"删空了还显示计划和提醒，切走再切回才空"就是这个。
+   * 改成直接调组件方法，和疫苗板块那几个入口同一个机制。
    */
   vaccinePlanRef.value?.reload?.()
 }
@@ -602,10 +575,6 @@ function switchHealthTab(key: HealthTabKey) {
   // 否则新板块明明没改动，底部按钮却亮着
   hasUnsavedSectionDraft.value = false
   hasUnsavedRecordDraft.value = false
-
-  // 切标签时顺手刷新角标：顾客刚在别处补了接种记录，数字要跟着变。
-  // 不 await，切标签不能等网络。
-  loadVaccineDot()
 }
 
 
@@ -932,49 +901,6 @@ function resetHealthForm() {
   }
 }
 
-async function loadVaccineDot(requestedDogId = dogId.value) {
-  if (!requestedDogId) {
-    vaccineHasDue.value = false
-    return
-  }
-
-  try {
-    const res: any = await dogApi.vaccinePlan(requestedDogId)
-    // 计划没开 / 拉失败 → 不显示角标。角标是加分项，
-    // 拉不到就安静地不出现，不在书签上挂个"加载失败"。
-    if (res?.code !== 0 || !res?.data || res.data.available === false) {
-      vaccineHasDue.value = false
-      return
-    }
-
-    const steps = Array.isArray(res.data.steps) ? res.data.steps : []
-    const dueCount = steps.filter(
-      (step: any) => step?.status === 'DUE' || step?.status === 'OVERDUE',
-    ).length
-
-    /*
-     * 一条接种记录都没有 → **不挂角标**（2026-10-04 老板提问后改）。
-     *
-     * 原来这里会挂一个角标，提示"资料还没补"。三处不对：
-     *   1. 生产 4575 只狗疫苗记录是 0 条 —— 等于**每个用户永远看到这个角标**，
-     *      一个永远亮着的角标就不是信号了；
-     *   2. 它跟"有 N 针该打了"用同一套视觉，把真正的提醒也一起贬值了；
-     *   3. 读起来像在说"你欠我们一条记录"。
-     *
-     * 没有记录时，计划板块本来就会显示一张说明卡把话讲清楚 ——
-     * 那里说就够了，不必在书签上再喊一遍。
-     */
-    if (res.data.noRecordAtAll === true) {
-      vaccineHasDue.value = false
-      return
-    }
-
-    vaccineHasDue.value = dueCount > 0
-  } catch {
-    vaccineHasDue.value = false
-  }
-}
-
 async function loadDogProfile(requestedDogId: string) {
   if (!requestedDogId) {
     return
@@ -1000,8 +926,6 @@ async function loadDogProfile(requestedDogId: string) {
 
     dogId.value = requestedDogId
     populateForm(res.data.profile)
-    // 档案换了，角标要跟着换狗；不 await —— 角标晚几十毫秒出现不影响什么
-    loadVaccineDot(requestedDogId)
   } catch (error: any) {
     if (shouldDiscardDogHealthProfileResponse({
       requestedDogId,
@@ -1011,7 +935,6 @@ async function loadDogProfile(requestedDogId: string) {
     }
 
     dogId.value = ''
-    vaccineHasDue.value = false
     loadError.value = error?.message || '加载狗狗档案失败，请稍后重试。'
   } finally {
     if (!shouldDiscardDogHealthProfileResponse({
@@ -1753,10 +1676,8 @@ function goToDogCreate() {
 .health-tabs__item {
   flex: 1 1 0;
   min-width: 0;
-  /* 红点挂在右上角（绝对定位），所以要一个定位上下文 */
-  position: relative;
   padding: 16rpx 0 18rpx;
-  /* 2026-10-04 起书签里除了文字还要放角标，所以是纵向 flex。
+  /* 书签里是纵向 flex。
      color 留在这一层 —— 主题色是按 .health-tabs__item--active 给的，
      文字的子元素自己设 color 会把它盖掉。 */
   display: flex;
@@ -1774,23 +1695,6 @@ function goToDogCreate() {
 .health-tabs__label {
   font-size: 24rpx;
   text-align: center;
-}
-
-/*
- * 书签上的红点（2026-10-06 老板：不要带文案的角标，红点即可）。
- *
- * 绝对定位挂在书签右上角 —— 它不占布局，所以有没有红点，
- * 四个书签的高度都一样，不会因为它亮起来就把整排顶歪。
- * 红色实心、不闪不动：这是家庭工具，不是待办清单。
- */
-.health-tabs__dot {
-  position: absolute;
-  top: 10rpx;
-  right: 18rpx;
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 50%;
-  background: #d9534f;
 }
 
 .health-tabs__item:last-child {

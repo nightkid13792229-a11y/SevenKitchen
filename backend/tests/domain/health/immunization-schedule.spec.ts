@@ -3268,3 +3268,53 @@ describe('步骤名称 · 不带类别前缀，显示在卡片的角标右边（
     expect(labels.has('核心疫苗 首免（一针）')).toBe(false);
   });
 });
+
+/**
+ * 老板 2026-10-15："33 号窗口，卡片上并没有写尽快补种相关的内容。"
+ *
+ * 根因：一针都没打过、且起针窗口已经过去时，后端会把窗口**挪到今天**
+ * （让家长看到"从现在开始打第一针"）。挪完之后 `windowEnd` 落在**未来** ✗：
+ *   · 前端的 `isWindowPassed`（判据 `windowEnd < today`）判成"没过期" ✗
+ *   · 界面于是**一个字都不提逾期** ✗，只写着"建议接种时间 2026-10-15 ~ 2026-10-29"
+ *   · 而它括弧里那句"原窗口 … 已过"用的也是挪后的窗口 → 说"原窗口 <未来> 已过" ✗
+ *
+ * 修法：挪窗口时把**原来那段**存进 `missedWindowStart/missedWindowEnd` 一起返回 ✓。
+ */
+describe('起针窗口被挪到今天时，要带回"原窗口"（老板 2026-10-15）', () => {
+  const TODAY = new Date('2026-10-15');
+  const planFor = (birthday: string) =>
+    buildVaccinePlan({ dogId: 't', birthday, reviewed: true, today: TODAY, records: [] });
+
+  it('🔴 起针窗口已过 → 窗口挪到今天，同时带回原窗口', () => {
+    // 生日 2026-08-16（今天 8.6 周龄）：首针原窗口 09-27 ~ 10-11，已经过了
+    const step = planFor('2026-08-16').steps.find((s) => s.key === 'core-puppy-1')!;
+    const x = step as unknown as { missedWindowStart?: string; missedWindowEnd?: string };
+    // 显示的是"今天起"的新窗口
+    expect(step.windowStart).toBe('2026-10-15');
+    // 原窗口也要在（前端靠它说"（原窗口 … 已过）"）
+    expect(x.missedWindowStart).toBe('2026-09-27');
+    expect(x.missedWindowEnd).toBe('2026-10-11');
+  });
+
+  it('🔴 窗口**还开着**的狗 → 不挪、也不带原窗口（别画蛇添足）', () => {
+    // 生日 2026-08-23（今天 7.5 周龄）：首针窗口 10-04 ~ 10-18，还开着
+    const step = planFor('2026-08-23').steps.find((s) => s.key === 'core-puppy-1')!;
+    const x = step as unknown as { missedWindowStart?: string; missedWindowEnd?: string };
+    expect(step.windowStart).toBe('2026-10-04');
+    expect(x.missedWindowStart).toBeUndefined();
+    expect(x.missedWindowEnd).toBeUndefined();
+  });
+
+  it('🔴 挪窗口时**先存后覆盖**（顺序反了就等于没存）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    );
+    const idx = source.indexOf('missedWindowByKey.set(seed.key');
+    const cover = source.indexOf('seed.windowStart = today;');
+    expect(idx).toBeGreaterThan(0);
+    expect(cover).toBeGreaterThan(0);
+    // 存的语句必须在覆盖**之前**
+    expect(idx).toBeLessThan(cover);
+  });
+});

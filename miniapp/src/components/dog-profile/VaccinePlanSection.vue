@@ -27,10 +27,12 @@
         </view>
         <text class="kind-card__kind">{{ card.title }}</text>
         <text class="kind-card__time">
+          <!-- 「原窗口」要用后端带回来的 missedWindow*（老板 2026-10-15 报的 bug）。
+               窗口被"挪到今天"之后，card.windowStart/windowEnd 是**未来** ✗ ——
+               拿它说"已过"就自相矛盾了 ✗（33 号档案就是这么错的）。 -->
           <template v-if="isWindowPassed(card.steps[0])">
-            建议接种时间：尽快补种（原窗口 {{ card.windowStart }} ~ {{ card.windowEnd }} 已过）
-
-    </template>
+            建议接种时间：尽快补种（原窗口 {{ passedWindowStart(card) }} ~ {{ passedWindowEnd(card) }} 已过）
+          </template>
           <template v-else>
             建议接种时间 {{ card.windowStart }} ~ {{ card.windowEnd }}
           </template>
@@ -1323,7 +1325,21 @@ const visibleSteps = computed(() => {
  * 现在：**只要窗口结束日已过** ✓，就改说「尽快补种」✓，
  * 过去的日期只作为括号里的出处保留 ✓（不再当"计划"摆着 ✓）。
  */
-function isWindowPassed(step: { windowEnd?: string } | null | undefined): boolean {
+function isWindowPassed(
+  step: { windowEnd?: string; missedWindowEnd?: string } | null | undefined,
+): boolean {
+  /*
+   * ⚠️ 优先看后端给的 **missedWindowEnd**（老板 2026-10-15 报的 bug）。
+   *
+   * 背景：一针都没打过、且起针窗口已经过去时，后端会把窗口**挪到今天**
+   * （让家长看到"从现在开始打第一针"）。挪完之后 `windowEnd` 落在**未来** ✗，
+   * 于是这里判成"没过期" ✗ —— 33 号档案就是这样：系统明明知道它逾期了，
+   * 卡片上却一个字都不提 ✗，只写着"建议接种时间 2026-10-15 ~ 2026-10-29"。
+   *
+   * ⇒ 后端现在会把**原来那段窗口**一起带回来 ✓，有它就以它为准 ✓。
+   */
+  const missed = String(step?.missedWindowEnd || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(missed)) return true
   const end = String(step?.windowEnd || '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return false
   // ⚠️ 用**这个组件里真有**的日期函数 ✗→✓
@@ -1331,6 +1347,23 @@ function isWindowPassed(step: { windowEnd?: string } | null | undefined): boolea
   //   计划板块没有它 ✗ → 渲染时抛 "getTodayDateString is not defined" ✗ →
   //   计划永远停在"正在读取"✗，而这个错误只躺在控制台里 ✓，界面上完全看不出来 ✗。）
   return end < todayDateText()
+}
+
+/**
+ * "原窗口"的起止（老板 2026-10-15 报的 bug）。
+ *
+ * 窗口被挪到今天之后，`card.windowStart/windowEnd` 是**未来** ✗ ——
+ * 拿它说"已过"自相矛盾 ✗。所以优先用后端带回来的 `missedWindow*` ✓；
+ * 真没有（历史上的旧数据 / 别的原因）才退回当前窗口 ✓，不至于显示空白。
+ */
+function passedWindowStart(card: PlanCard): string {
+  const step = card.steps[0] as { missedWindowStart?: string } | undefined
+  return String(step?.missedWindowStart || card.windowStart || '')
+}
+
+function passedWindowEnd(card: PlanCard): string {
+  const step = card.steps[0] as { missedWindowEnd?: string } | undefined
+  return String(step?.missedWindowEnd || card.windowEnd || '')
 }
 
 function windowPassedSuffix(step: { windowEnd?: string } | null | undefined): string {
@@ -1561,10 +1594,8 @@ watch(() => props.dogId, load, { immediate: true })
  * 让页面**直接调这里**重算计划（2026-10-06）。
  *
  * ⚠️ 原来只靠上面那条 watch（页面把记录变化折成 data-version 传下来）。
- * 用微信官方自动化驱动模拟器实测，删光记录之后：
- *   · 书签红点**灭掉了** → 说明"记录变了"确实通知到了页面；
- *   · 计划板块**原地不动**，还挂着删掉的那条记录算出来的计划。
- * 也就是通知到了页面，却没让这个组件重算 —— 老板看到的
+ * 用微信官方自动化驱动模拟器实测，删光记录之后计划板块**原地不动**，
+ * 还挂着删掉的那条记录算出来的计划 —— 老板看到的
  * "删空了还显示计划和提醒，切走再切回才空"就是这个。
  *
  * 页面调组件方法这条路在本项目里是**已经验证过的**（疫苗板块的

@@ -2890,3 +2890,68 @@ describe('合并接种提醒 · 可选产品要列全（老板 2026-10-14）', (
     expect(body.includes('.slice(')).toBe(false);
   });
 });
+
+/**
+ * 老板 2026-10-14："我们是否可以在自己的疫苗计划板块中，不对早期核心疫苗
+ * 进行推荐呢？我的理解，抢跑苗……主要是用于繁殖环境比较糟糕的犬舍，
+ * 尤其像我国繁殖环境比较混乱的这种现状。"
+ *
+ * **这个理解有 WSAVA 原文支持**：
+ *   · 表 1「宠物犬（非收容所）」核心疫苗一栏："**不早于 6 周龄开始**"
+ *   · "从 4 周龄开始"出现在**收容所指南**里
+ * ⇒ 4 周抢跑是收容所/犬舍方案；我们服务家庭宠物，不该照收容所标准推。
+ *
+ * 改法：**不再按年龄主动推**（原来 4~6 周会推），
+ *      但**已经登记过的照旧认**（kinds 会带上它，见 buildVaccinePlan 的 planKinds）。
+ */
+describe('早期核心疫苗 · 不主动推，但已登记的照旧认（老板 2026-10-14）', () => {
+  const planFor = (ageWeeks: number, withEarlyRecord: boolean) => {
+    const today = new Date('2026-10-14');
+    const b = new Date(today.getTime() - ageWeeks * 7 * 86400000);
+    const birthday = `${b.getFullYear()}-${String(b.getMonth() + 1).padStart(2, '0')}-${String(b.getDate()).padStart(2, '0')}`;
+    const records = withEarlyRecord
+      ? [
+          {
+            id: 'r1',
+            kind: 'core_early',
+            kinds: ['core_early'],
+            vaccineName: '宠必威幼犬保',
+            vaccinationDate: '2026-10-07',
+            components: ['cdv', 'cpv'],
+            doseNumber: null,
+          },
+        ]
+      : [];
+    return buildVaccinePlan({
+      dogId: 't',
+      birthday,
+      reviewed: true,
+      today,
+      records: records as never,
+    });
+  };
+
+  it('🔴 任何年龄段、没登记过的狗，计划里都不出现早期苗', () => {
+    // 尤其 4~5 周龄 —— 原来就是这两个年龄段会主动推出来
+    for (const age of [2, 3, 4, 5, 6, 8, 12, 20]) {
+      const plan = planFor(age, false);
+      expect(plan.steps.some((step) => step.kind === 'core_early')).toBe(false);
+    }
+  });
+
+  it('🔴 已经登记过早期苗的狗：照旧认得（这一步要出现）', () => {
+    const plan = planFor(5, true);
+    expect(plan.steps.some((step) => step.kind === 'core_early')).toBe(true);
+  });
+
+  it('🔴 依据要写清楚"宠物犬 vs 收容所"这个区分（免得以后又照收容所标准推）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    );
+    expect(source).toContain('宠物犬（非收容所）');
+    expect(source).toContain('收容所指南');
+    // 按年龄主动推的那段必须已经删掉
+    expect(stripComments(source)).not.toContain('ageWeeks >= 4 && ageWeeks < 6');
+  });
+});

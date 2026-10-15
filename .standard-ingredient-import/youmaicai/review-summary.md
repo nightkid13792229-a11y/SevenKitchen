@@ -121,7 +121,69 @@
 
 ---
 
-## 七、复现方式
+## 七、上线后暴露的问题：缺「膳食纤维」导致整片营养评估失效
+
+**现象**（老板 2026-10-16 报）：把油麦菜加进食谱后，右侧「营养评估」整片变「缺数据」，
+但「关键比例仪表」「宏量构成」仍正常。
+
+**根因**：配方的能量用**犬用 Atwater 公式**计算，该公式强制要求 5 个字段：
+
+```
+水分 · 粗蛋白 · 粗脂肪 · 灰分 · 膳食纤维
+```
+
+`admin-web/src/utils/recipeDesigner/dogAtwaterEnergy.ts`：
+
+```ts
+const DOG_ATWATER_REQUIRED_FIELDS = ['moisture','crudeProtein','crudeFat','ash','fiber'];
+// 任一缺失 → energyKcalPer100g = null
+```
+
+而 CFCT 第六版第一册**没有检测油麦菜的膳食纤维**（书中该列为「—」），
+方案 ② 又把膳食纤维留在空缺里 → 油麦菜能量 = null
+→ **整份食谱能量 = null** → 所有「每1000千卡 / 每兆焦」口径的指标全部 `MISSING_DATA`。
+
+`assessment.ts` 的 `getEntryStatus()`：指标有上下限但算不出值 → 返回 `MISSING_DATA`（界面显示「缺数据」）。
+
+**为什么是"一片"而不是"一项"**：缺的是*能量本身*，而绝大多数指标以能量为分母，
+所以一项数据缺口会让整块面板塌掉。
+
+**排查手段**（可复用）：把 `GET /recipe-designer/drafts/<id>/assessment-inputs` 的返回存下来，
+用 `admin-web` 的 vitest 跑同款 `assessRecipeDraft()` + `auditDogAtwaterProfile()`，
+逐原料打印缺失字段。实测结论：
+
+```
+✅ 鸭胸/鸭心/鸭胗/鸭肝/鸡蛋/青花鱼/燕麦米/南瓜/胡萝卜/小麦胚芽油/食用盐 …（能量均可算）
+❌ 油麦菜  缺失=[膳食纤维]
+（5 个补剂也返回 null，但补剂走 missingValueAsZero 分支，不拖垮合计）
+```
+
+**修复**：给油麦菜补 `macros.fiber = 1.7 g/100g`，取自同种莴苣 USDA FDC 169990
+（`Fiber, total dietary`，field catalog 中 `macros.fiber` 的对应项就是 USDA 1079），
+与氨基酸字段同一处理方式：借用 + 在 `meta.sourceForms['macros.fiber']` 标注来源。
+档案仍为 `VERIFIED`（更新接口不改状态）。
+
+**复验**（对着生产实时数据跑同款评估函数）：
+
+| | 修复前 | 修复后 |
+|---|---|---|
+| 缺数据条目 | **76** | **0** |
+| 粗蛋白（每1000千卡） | null | 85.63 ✅达标 |
+| 状态统计 | COMPLIANT 41 / MISSING_DATA 76 / INFO 18 | COMPLIANT 116 / INFO 18 / DEFICIENT 1 |
+
+剩下 1 项 DEFICIENT 是这份食谱真实的营养结论（磷 每兆焦 0.277 vs 下限 0.28），不是数据缺失。
+
+### ⚠️ 两个遗留问题（未处理）
+
+1. **苋菜同样缺膳食纤维**（主档案 `data_source=USDA`，状态还是 `PENDING`）。
+   全库扫描：`type='FOOD'` 且主档案 `macros.fiber IS NULL` 的只有 **油麦菜（已修）和苋菜**。
+   苋菜目前**未被任何配方引用**（`design_recipe_item` 命中 0），所以还没爆，但一旦有人用它就会复现同样问题。
+2. **失败模式太差**：一个食材缺一个字段，整块面板变「缺数据」，而界面**不告诉你是哪个食材缺哪个字段**，
+   只能靠人观察「加了什么之后变的」。建议在评估结果里带上缺失字段的原料清单，直接显示出来。
+
+---
+
+## 八、复现方式
 
 ```bash
 # 生成草稿（只读本地营养库）
@@ -138,6 +200,21 @@ node -r ts-node/register -r tsconfig-paths/register \
   ../skills/adding-standard-ingredients/scripts/apply-production-ingredient.ts \
   --draft ../.standard-ingredient-import/youmaicai/youmaicai.draft.json \
   --credentials-env .env.ingredient-agent.local [--confirm]
+
+# 转「已验证」
+node -r ts-node/register -r tsconfig-paths/register \
+  ../.standard-ingredient-import/youmaicai/verify-nutrition-food.ts \
+  --id <nutritionFoodId> [--confirm]
+
+# 补膳食纤维（见第七节）
+node -r ts-node/register -r tsconfig-paths/register \
+  ../.standard-ingredient-import/youmaicai/fix-fiber.ts \
+  --id <nutritionFoodId> [--confirm]
+
+# 只读拉取正式接口数据（排查用）
+node -r ts-node/register -r tsconfig-paths/register \
+  ../.standard-ingredient-import/youmaicai/prod-api-get.ts \
+  --path /recipe-designer/drafts/<draftId>/assessment-inputs --out /tmp/assessment-inputs.json
 ```
 
 原始 OCR 产物（gitignore，未入库）：`backend/reports/cfct-v1-p23-p125.jsonl`、`cfct-v1-p126-p387.jsonl`

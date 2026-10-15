@@ -647,5 +647,98 @@ API 层职责：
 
 
 ============================================================
+# 4.6 疫苗板块（2026-10-15 重构后）
+============================================================
+
+前置说明（**破坏性改动**）：
+    - 疫苗板块**尚未在正式版上线**，本次按需求重做数据模型与接口，不做兼容期。
+    - 已删字段：`VaccineRecord.nextDueDate`、`VaccineRecord.status`（两列已从库里删除）。
+    - 已删接口参数：计划接口的 `audience`（营养师与顾客拿的是同一份计划）。
+    - 已删表：`dog_vaccine_plan`（JSON 决定）→ 换成 `vaccine_decision`（一行一条决定）。
+    - 新增表：`antibody_test_record`（抗体检测）。
+    - 前端**不做任何计划推算**：窗口、状态、排序、"下一针"全部由后端算好下发；
+      任何写操作成功后重新拉一次计划接口整屏重绘。
+
+------------------------------------------------------------
+>>> 【接种计划】GET /dogs/{dog_id}/vaccine-plan
+------------------------------------------------------------
+    - 描述：这只狗"接下来该做什么" + 完整免疫计划（页面只渲染，不计算）
+    - 认证：需要（AuthGuard + X-Customer-Id）
+
+    返回：
+      {
+        dogId, birthday, ageWeeks,
+        next: Step | null,            // 下一针；没有任何待办时为 null
+        plan: Step[],                 // 已按时间从近到远排好，只含必打 + 强烈建议
+        ignored: { count, items: [{ key, kindLabel, label, reason }] },
+        rhythm: string,               // "之后：狂犬与钩端每年一次，核心每 3 年一次"
+        pendingReview: number,        // 有几条记录待核对
+        conflicts: any[],
+        noRecordAtAll: boolean
+      }
+
+    Step:
+      {
+        key,                          // core-puppy-1
+        kind,                         // core / rabies / lepto
+        kindLabel,                    // 核心疫苗（犬瘟、细小、腺病毒）
+        label,                        // 第 1 针 / 每年一次 / 加强（每 3 年）/ 补一针
+        layer: 'MUST' | 'SUGGEST',    // 必打 / 强烈建议（可选疫苗不进计划）
+        windowStart, windowEnd,       // 建议接种窗口
+        missedWindowStart?, missedWindowEnd?,   // 窗口被"挪到今天"时的原窗口
+        status: 'DONE'|'DUE'|'UPCOMING'|'OVERDUE',
+        statusLabel,                  // 已完成 / 待接种 / 尽快补种
+        basis?,                       // 依据（展开时给顾客看）
+        titerable: boolean,           // 能不能被抗体检测替代（只有核心为 true）
+        products: string[],           // "常见的有…"（每类最多 3 支；国产苗不出现）
+        combo?: { withKind, withLabel, windowStart, windowEnd, products, hint }
+                                      // 联苗列表**不截断**（覆盖两类的都要列全）
+      }
+
+------------------------------------------------------------
+>>> 【查看这只狗的所有决定】GET /dogs/{dog_id}/vaccine-plan/decisions
+------------------------------------------------------------
+    - 返回：{ dogId, decisions: { [stepKey]: { decision, reason, updatedAt } } }
+    - 页面平时用不到（计划接口里的 `ignored` 就够），留给"已忽略的 N 项"详情页
+
+------------------------------------------------------------
+>>> 【忽略 / 恢复某一步】PUT / DELETE /dogs/{dog_id}/vaccine-plan/decisions/{step_key}
+------------------------------------------------------------
+    - 描述：家长对某一步的决定。PUT 存决定，DELETE 撤销（恢复）
+    - body：{ decision: 'ACCEPT' | 'DEFER' | 'SKIP', reason?: 'NOT_NOW' | 'STOPPED' }
+    - 校验：stepKey 必须是**这只狗实际计划里的步骤**（不是默认计划表）
+    - 说明：reason 只作记录（`NOT_NOW` 这次先不打 / `STOPPED` 不再接种了），两个取值当前行为一致
+
+------------------------------------------------------------
+>>> 【接种记录】GET / POST / PUT / DELETE /dogs/{dog_id}/vaccines[/{id}]
+------------------------------------------------------------
+    - 入参：vaccineName、vaccinationDate、components?（含哪些病种）、attachments?、productVerified?、notes?
+    - **不再接受** `kinds`（类别由后端按病种或名字推导）、**不再接受** `nextDueDate` / `status`
+    - 返回：id, dogId, vaccineName, vaccinationDate, notes, attachments,
+            components, componentLabels, kinds, kindLabels, productVerified
+
+------------------------------------------------------------
+>>> 【抗体检测】GET / POST / PUT / DELETE /dogs/{dog_id}/antibody-tests[/{id}]
+------------------------------------------------------------
+    - 入参：testedAt、targets:('CORE'|'RABIES')[]、result:'PASS'|'FAIL'|'UNKNOWN'、
+            value?、unit?、nextReviewAt?、attachments?、notes?
+    - 与计划的关系：**只有 targets 含 CORE 且 result=PASS** 时，核心疫苗当前那一针
+      标为"已被抗体检测替代"，下一次评估 = nextReviewAt；RABIES 只记录（出行证明用），不影响计划
+    - 我们不设"合格阈值"：报告没给结论时用 UNKNOWN，界面写"请让兽医判读"
+
+------------------------------------------------------------
+>>> 【产品目录】GET /dogs/vaccines/catalog
+------------------------------------------------------------
+    - 返回：kinds、components（含 isCore）、products（只含对外字段：name/components/manufacturer/recommendable）、
+            字段标签与顺序
+    - 匹配（同品牌优先、别名）**只在后端做**，所以不下发 brand / aliases
+
+------------------------------------------------------------
+>>> 【按名字归类】GET /dogs/vaccines/classify?name=xxx
+------------------------------------------------------------
+    - 描述：家长手填一个疫苗名（"六联"），返回归类结果与候选产品
+    - 路径与行为不变
+
+============================================================
 # End of Document
 ============================================================

@@ -160,24 +160,13 @@ describe('模板绑定的完整性（2026-10-04 老板报的"点了没反应"）
     expect(problems).toEqual([])
   })
 
-  it('疫苗板块那三个附件函数必须在（就是这次被误删的那三个）', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
-      'utf-8',
-    )
-
-    // 模板里用了、脚本里却没了 → 一渲染卡片就抛
-    // TypeError: t.attachmentList is not a function，整个组件重渲染失败。
-    for (const fn of ['attachmentList', 'attachmentDisplay', 'previewAttachment']) {
-      expect(source).toContain(`function ${fn}`)
-    }
-    // 它们依赖的三个 import 也要在
-    for (const imported of [
-      'normalizeHealthAttachmentList',
-      'buildHealthAttachmentDisplayMeta',
-      'previewHealthAttachment',
-    ]) {
-      expect(source).toContain(imported)
-    }
-  })
+  /*
+   * 「疫苗板块那三个附件函数必须在」那一条随旧板块一起删除（2026-10-15）。
+   *
+   * 它钉的是 `VaccineManagementSection.vue` 里 attachmentList / attachmentDisplay /
+   * previewAttachment 三个函数（2026-10-04 那次误删的现场）。那个板块已在疫苗
+   * 重构里整块删掉，附件渲染搬进了 `components/vaccine/RecordList.vue`。
+   * 这条守卫本身仍然有效：上面那条"模板里调用的每个函数，script 里都有定义"
+   * 会继续盯住包括新组件在内的所有 .vue 文件。
+   */
 })

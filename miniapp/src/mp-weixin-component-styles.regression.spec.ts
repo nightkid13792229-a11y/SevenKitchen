@@ -76,15 +76,22 @@ describe('自定义组件的 wxss 选择器限制', () => {
 
   it('健康管理相关组件的 wxss 不再有违规选择器（回归）', () => {
     const healthComponents = [
-      'HealthRecordsSection',
-      'VaccineManagementSection',
-      'WeightManagementSection',
-      'StickyActionBar',
+      ['dog-profile', 'HealthRecordsSection'],
+      ['dog-profile', 'WeightManagementSection'],
+      ['dog-profile', 'StickyActionBar'],
+      // 疫苗板块 2026-10-15 重构后住在 components/vaccine/
+      ['vaccine', 'VaccineTab'],
+      ['vaccine', 'NextCard'],
+      ['vaccine', 'PlanTimeline'],
+      ['vaccine', 'RecordList'],
+      ['vaccine', 'RecordEditor'],
+      ['vaccine', 'ScanConfirm'],
+      ['vaccine', 'IgnoreSheet'],
     ]
 
     const problems: string[] = []
-    for (const name of healthComponents) {
-      const file = resolve(COMPONENTS_DIR, 'dog-profile', `${name}.wxss`)
+    for (const [dir, name] of healthComponents) {
+      const file = resolve(COMPONENTS_DIR, dir, `${name}.wxss`)
       if (!existsSync(file)) {
         continue
       }

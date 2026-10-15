@@ -8,8 +8,6 @@
   "src/components/dog-profile/DogAvatarCropper.vue → UniApp()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/components/dog-profile/DogAvatarCropper.vue → firstTouch()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/components/dog-profile/DogAvatarCropper.vue → secondTouch()（脚本里调用了 2 次，但文件里找不到定义）",
-  "src/components/dog-profile/VaccineManagementSection.vue → i()（脚本里调用了 1 次，但文件里找不到定义）",
-  "src/components/dog-profile/VaccineManagementSection.vue → want()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/config/share.config.ts → home()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/config/share.config.ts → img()（脚本里调用了 3 次，但文件里找不到定义）",
   "src/config/share.config.ts → recipe()（脚本里调用了 2 次，但文件里找不到定义）",
@@ -293,7 +291,6 @@
   "src/utils/user-profile.ts → avatarUrl()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/user-profile.ts → baseUrl()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/user-profile.ts → uploadRes()（脚本里调用了 6 次，但文件里找不到定义）",
-  "src/utils/vaccine-fishbone.ts → options()（脚本里调用了 3 次，但文件里找不到定义）",
   "src/utils/wechat-confirm-receipt.ts → order()（脚本里调用了 3 次，但文件里找不到定义）",
   "src/utils/wechat-payment.ts → payment()（脚本里调用了 2 次，但文件里找不到定义）"
 ]

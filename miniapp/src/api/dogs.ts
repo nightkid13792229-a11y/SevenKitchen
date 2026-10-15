@@ -102,26 +102,6 @@ export type AllergyReportPayload = {
   }>
 }
 
-export type VaccineRecordCreatePayload = {
-  vaccineName: string
-  vaccinationDate: string
-  nextDueDate?: string | null
-  notes?: string | null
-  status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE'
-  /** 报告原件（2026-10-01 第九期）：拍疫苗本留下的原图 URL */
-  attachments?: string[]
-  /**
-   * 这一针**含哪些病种**（2026-10-06）—— 顾客勾的就是它。
-   * 类别（kinds）由后端按病种推导，前端不判。
-   */
-  components?: string[]
-  /**
-   * 类别（core/rabies/lepto/other）。新界面只在「都不是 / 不确定」时才用到它
-   * （那时病种是空的，后端按它记成 other：只记录、不影响提醒）。
-   */
-  kinds?: string[]
-}
-
 const healthRecordCrud = <
   TCreatePayload,
   TUpdatePayload = Partial<TCreatePayload>,
@@ -209,33 +189,10 @@ export const dogApi = {
   /**
    * 疫苗计划（2026-10-01，第四期）。
    *
-   * 按免疫程序算出"还需要打哪些、什么时候打"。老板第 16 条要求
-   * **引导顾客自己决策**，所以有 decisions 接口存顾客的选择。
-   *
-   * ⚠️ 顾客侧默认关闭（后端 VACCINE_PLAN=customer 才开）：
-   *    免疫程序尚未经兽医审核。接口会返回 available: false 说明原因。
+   * ⚠️ 2026-10-15 疫苗板块整体重构：这一块（计划 / 决定 / 目录 / 归类 /
+   *    接种记录 CRUD）**全部搬去 `src/api/vaccines.ts`** ✓，
+   *    这里不再留一份 —— 两处各写一份迟早对不上（老代码吃过这个亏）。
    */
-  vaccinePlan: (dogId: string, audience: 'customer' | 'staff' = 'customer') =>
-    request({
-      url: `/dogs/${dogId}/vaccine-plan?audience=${audience}`,
-      method: 'GET',
-      suppressErrorToast: true,
-    }),
-  /** 完整免疫程序表（营养师/管理端审核用，不对顾客开放） */
-  vaccineSchedule: (dogId: string) =>
-    request({ url: `/dogs/${dogId}/vaccine-plan/schedule`, method: 'GET' }),
-  /** 顾客对某一步的决定：ACCEPT 按建议 / DEFER 推迟 / SKIP 不做 */
-  setVaccineDecision: (dogId: string, stepKey: string, decision: string) =>
-    request({
-      url: `/dogs/${dogId}/vaccine-plan/decisions/${encodeURIComponent(stepKey)}`,
-      method: 'PUT',
-      data: { decision },
-    }),
-  clearVaccineDecision: (dogId: string, stepKey: string) =>
-    request({
-      url: `/dogs/${dogId}/vaccine-plan/decisions/${encodeURIComponent(stepKey)}`,
-      method: 'DELETE',
-    }),
   /**
    * 结构化饮食偏好（2026-10-01，第五期）。
    *
@@ -288,40 +245,12 @@ export const dogApi = {
     medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
     checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),
     allergy: healthRecordCrud<AllergyRecordCreatePayload>('allergies'),
-    // 疫苗记录（2026-09-27 加入「健康管理」板块）：
-    // 后端 /dogs/:dogId/vaccines 早就有了，但顾客端一直没有入口 ——
-    // 生产 4544 只狗里疫苗记录为 0 条。
-    vaccine: healthRecordCrud<VaccineRecordCreatePayload>('vaccines'),
+    // 疫苗记录已搬去 `src/api/vaccines.ts`（2026-10-15 疫苗板块重构）
   },
   /**
-   * 疫苗名称库 + 归类闭集（2026-10-05）。
-   *
-   * 界面靠它渲染：归类必选项（四类）、一点即选的名字（每个带已知归类）、
-   * 产品库（含国产 —— 可选但不可推荐）。
-   *
-   * 为什么不写在前端：分类与产品是后端的 domain 知识，
-   * 前端复制一份迟早对不上。
+   * ⚠️ 疫苗名称库 / 归类 / 计划 / 决定都不在这里了 ——
+   *    见 `src/api/vaccines.ts`（2026-10-15 拆出去的唯一一份）。
    */
-  /**
-   * ⚠️ 路径是 `vaccines/catalog`（**两段**），别改成一段的 `vaccine-catalog` ——
-   * 那会被 DogsController 的 `@Get(':id')` 当成 dogId 吃掉（踩过一次）。
-   */
-  vaccineCatalog: () =>
-    request({ url: '/dogs/vaccines/catalog', method: 'GET', suppressErrorToast: true }),
-
-  /**
-   * 边打字边判归类（2026-10-05）。
-   *
-   * 老板："在输入疫苗名称之后，为什么归类还是需要手动选择呢？"
-   * 分类逻辑只有后端一份，所以输入停顿一下来问一次。
-   * 返回空数组 = 认不出来，界面要求顾客自己指定 —— 不猜。
-   */
-  classifyVaccineName: (name: string) =>
-    request({
-      url: `/dogs/vaccines/classify?name=${encodeURIComponent(name)}`,
-      method: 'GET',
-      suppressErrorToast: true,
-    }),
   /**
    * 过敏原排查计划（2026-10-04，过敏重构第三期）。
    *

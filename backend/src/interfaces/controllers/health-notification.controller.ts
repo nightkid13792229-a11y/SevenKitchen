@@ -133,7 +133,6 @@ export class HealthNotificationController {
     //     page: `pages/health-management/vaccines/detail?id=${vaccine.id}`,
     //     data: {
     //       thing1: { value: vaccine.vaccineName },
-    //       date2: { value: vaccine.nextDueDate },
     //       thing3: { value: '请及时接种' },
     //     },
     //   })

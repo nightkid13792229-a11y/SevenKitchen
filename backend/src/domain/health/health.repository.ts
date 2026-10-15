@@ -11,9 +11,7 @@ export interface VaccineRecord {
   dogId: string;
   vaccineName: string;
   vaccinationDate: Date;
-  nextDueDate: Date | null;
   notes: string | null;
-  status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
   /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组
   attachments: string[];
   /// 归成的疫苗类别（2026-10-05）：core / rabies / lepto / other，可多值。
@@ -46,7 +44,6 @@ export interface VaccineRecordRepository {
     >,
   ): Promise<VaccineRecord>;
   delete(id: string): Promise<void>;
-  findUpcoming(dogId: string, days: number): Promise<VaccineRecord[]>;
 }
 
 // Checkup Record

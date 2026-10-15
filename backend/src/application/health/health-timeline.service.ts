@@ -97,7 +97,7 @@ export interface HealthVisitSummaryResponse {
     attachmentCount: number
   }[]
   vaccines: {
-    latest: { id: string; name: string; date: string; nextDueDate: string | null }[]
+    latest: { id: string; name: string; date: string }[]
     /** 已逾期或 60 天内到期 */
     upcoming: { id: string; name: string; nextDueDate: string; overdue: boolean }[]
   }
@@ -183,18 +183,21 @@ export class HealthTimelineService {
         title: `过敏：${record.allergen}`,
         detail: record.notes || '',
       })),
-      ...vaccines.map((record) => {
-        const due = record.nextDueDate ? toDateText(record.nextDueDate) : null
-        const flag = due ? resolveVaccineFlag(due) : undefined
-        return {
-          id: record.id,
-          type: 'vaccine' as const,
-          date: toDateText(record.vaccinationDate),
-          title: `接种 ${record.vaccineName}`,
-          detail: due ? `下次到期 ${due}` : record.notes || '',
-          ...(flag ? { flag } : {}),
-        }
-      }),
+      ...vaccines.map((record) => ({
+        /*
+         * 2026-10-15：疫苗事件**不再带 overdue / due-soon 角标**。
+         *
+         * 那个角标原来是按记录上人工填的"下次到期日"算的 ——
+         * 那个字段已经随迁移删掉了（老板："下次到期日整个不用"）。
+         * 疫苗的"下一次"只由免疫计划接口回答（需求 R15：提醒只在疫苗页），
+         * 时间线只呈现**发生过的事实**。
+         */
+        id: record.id,
+        type: 'vaccine' as const,
+        date: toDateText(record.vaccinationDate),
+        title: `接种 ${record.vaccineName}`,
+        detail: record.notes || '',
+      })),
       ...weights.map((record) => ({
         id: record.id,
         type: 'weight' as const,
@@ -365,23 +368,10 @@ export class HealthTimelineService {
           id: record.id,
           name: record.vaccineName,
           date: toDateText(record.vaccinationDate),
-          nextDueDate: record.nextDueDate
-            ? toDateText(record.nextDueDate)
-            : null,
         })),
-        upcoming: vaccines
-          .filter((record) => record.nextDueDate)
-          .map((record) => {
-            const due = toDateText(record.nextDueDate)
-            return {
-              id: record.id,
-              name: record.vaccineName,
-              nextDueDate: due,
-              overdue: isOverdue(due),
-            }
-          })
-          .filter((item) => item.overdue || isDueSoon(item.nextDueDate))
-          .sort((a, b) => (a.nextDueDate < b.nextDueDate ? -1 : 1)),
+        // 「即将到期」整块撤掉：它原来是按人工填的到期日算的，
+        // 现在这个字段不用了；疫苗的"下一次"只由免疫计划回答。
+        upcoming: [],
       },
       weight: {
         current: dog.currentWeightKg,
@@ -493,18 +483,6 @@ export function isOverdue(dateText: string, today = new Date()): boolean {
 export function isDueSoon(dateText: string, today = new Date()): boolean {
   const days = daysFromToday(dateText, today)
   return !Number.isNaN(days) && days >= 0 && days <= VACCINE_DUE_SOON_DAYS
-}
-
-function resolveVaccineFlag(
-  dateText: string,
-): 'overdue' | 'due-soon' | undefined {
-  if (isOverdue(dateText)) {
-    return 'overdue'
-  }
-  if (isDueSoon(dateText)) {
-    return 'due-soon'
-  }
-  return undefined
 }
 
 const CHECKUP_TYPE_LABELS: Record<string, string> = {

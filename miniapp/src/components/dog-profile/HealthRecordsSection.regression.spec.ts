@@ -250,10 +250,6 @@ describe('病历/检查表单 · 精简版', () => {
 
   it('空态只有一句「还没有 XX 记录」，按标签取，且不再跟小字（2026-10-03 老板提的）', () => {
     const source = readSection()
-    const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
-      'utf-8',
-    )
     const weight = readFileSync(
       resolve(process.cwd(), 'src/components/dog-profile/WeightManagementSection.vue'),
       'utf-8',
@@ -264,7 +260,14 @@ describe('病历/检查表单 · 精简版', () => {
     expect(source).not.toContain('getHealthVisitEmptyDescription')
     // 空态里不再有第二行小字
     expect(source).not.toContain('health-section__empty-desc')
-    expect(vaccine).not.toContain('health-section__empty-desc')
+    // 疫苗板块（2026-10-15 起是 components/vaccine/*）走的是自己那套卡片，
+    // 空态只有一句「还没有接种记录」，不再跟一行小字
+    const vaccineList = readFileSync(
+      resolve(process.cwd(), 'src/components/vaccine/RecordList.vue'),
+      'utf-8',
+    )
+    expect(vaccineList).toContain('还没有接种记录')
+    expect(vaccineList).not.toContain('health-section__empty-desc')
     // 体重板块补上"还没有体重记录"（原来空着）
     expect(weight).toContain('还没有体重记录')
   })

@@ -19,7 +19,6 @@ describe('实时保存 · 契约', () => {
 
   const page = () => read('src/pages/dog-profile-health/index.vue')
   const records = () => read('src/components/dog-profile/HealthRecordsSection.vue')
-  const vaccine = () => read('src/components/dog-profile/VaccineManagementSection.vue')
   const weight = () => read('src/components/dog-profile/WeightManagementSection.vue')
 
   it('底部保存按钮已删除，只剩「记一条」', () => {
@@ -44,10 +43,16 @@ describe('实时保存 · 契约', () => {
       source.indexOf('function selectHealthTab(') + 400,
     )
     expect(tabSwitch).toContain('flushActiveTabAutoSaves()')
-    // 三个板块都要能被 flush
+    /*
+     * 两个还带"延迟自动保存"的板块都要能被 flush。
+     *
+     * ⚠️ 疫苗板块 2026-10-15 起**不在这条路上**：新版录入器（components/vaccine/
+     *    RecordEditor.vue）没有延迟自动保存 —— 一条记录由家长点「保存」才落库，
+     *    所以没有"等 1.2 秒"这回事。它那边改由切标签守卫拦（见下面那条）。
+     */
     expect(source).toContain('recordsSectionRef.value?.flushAutoSaves?.()')
-    expect(source).toContain('vaccineSectionRef.value?.flushAutoSaves?.()')
     expect(source).toContain('weightSectionRef.value?.flushAutoSaves?.()')
+    expect(source).not.toContain('vaccineSectionRef.value?.flushAutoSaves?.()')
   })
 
   it('就诊/体检：改动 1.2 秒后落库，点「完成」/收起卡片立刻落库', () => {
@@ -98,15 +103,32 @@ describe('实时保存 · 契约', () => {
     expect(scanned).toContain('scheduleAutoSave(record, index, { immediate: true })')
   })
 
-  it('疫苗：只有"疫苗名 + 接种日期"齐了才存，缺什么写什么', () => {
-    const source = vaccine()
+  /*
+   * ⚠️ 「疫苗：只有疫苗名 + 接种日期齐了才存」那一条**改成反向断言**（2026-10-15）。
+   *
+   * 它原来是**钉住一个坏行为**：录入卡改成"边填边自动保存"，于是缺信息时要在
+   * 卡片上写"还差疫苗名称，填完自动保存"。老板 2026-10-15 定稿的新版反过来了：
+   *   · 录入器只有**两个必填（名称 + 日期）**，由家长点「保存」；
+   *   · 缺必填时**不派发保存**，在卡片上写清还差什么；
+   *   · 名称归不了类时**不硬存**（需求 R6）。
+   * 所以现在要盯的是"不自动保存、缺什么说什么"，而不是自动保存的提示文案。
+   */
+  it('疫苗：保存是家长点的那一下（没有延迟自动保存），缺什么就说什么', () => {
+    const source = read(
+      'src/components/vaccine/RecordEditor.vue',
+    )
 
-    expect(source).toContain('function autoSaveBlockReason(')
-    expect(source).toContain("return '还差疫苗名称，填完自动保存'")
-    expect(source).toContain("return '还差接种日期，填完自动保存'")
-    // 手动保存按钮下线
-    expect(source).not.toContain('>保存</button>')
-    expect(source).toContain('vaccine-card__autosave')
+    // 没有"1.2 秒后自动落库"这套东西
+    expect(source).not.toContain('AUTO_SAVE_DELAY_MS')
+    expect(source).not.toContain('function scheduleAutoSave(')
+    // 缺必填 → 只写提示，不派发保存
+    expect(source).toContain("errorText.value = '写一下打了什么疫苗，比如\"六联\"'")
+    expect(source).toContain("errorText.value = isRecordMode.value ? '选一下接种日期' : '选一下检测日期'")
+    expect(source).toContain('日期不能填将来的日子')
+    // 认不出、又没勾病种 → 不保存并说明原因（需求 R6）
+    expect(source).toContain('先勾一下"含哪些疫苗"，它才会进免疫计划；确实不知道就问一下医生。')
+    // 保存键就是那一个
+    expect(source).toContain("{{ saving ? '保存中…' : '保存' }}")
   })
 
   it('删除附件要先确认（老板：不然很容易误删）', () => {

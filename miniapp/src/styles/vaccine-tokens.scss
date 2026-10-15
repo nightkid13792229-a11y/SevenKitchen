@@ -1,0 +1,136 @@
+/* ============================================================================
+ * 疫苗板块 · 设计 token（2026-10-15 重构）
+ *
+ * 硬约束第 4 条：**视觉 token 一处分定义**（类别色、状态色、字号、间距），
+ * 不要写死散值。这个文件就是那"一处"。
+ *
+ * 怎么用（照 `styles/health-section.scss` 的老规矩）：
+ *   每个组件的 `<style scoped lang="scss">` 里
+ *
+ *     @import '../../styles/vaccine-tokens.scss';
+ *
+ *   —— 微信小程序的组件有样式隔离，走全局 app.wxss 不保险；
+ *   编译进各自的 wxss 才是确定的。
+ *
+ * ⚠️ 这里**只有变量与 mixin，没有一条选择器规则** ——
+ *    所以被 8 个组件各 @import 一次也不会重复产出样式。
+ *
+ * 颜色取自原型 `docs/prototypes/2026-10-15-vaccine-tab-prototype.html`：
+ *   类别色：核心 #0f7b49 / 狂犬 #9a5a2c / 钩端 #0d6e7a
+ *   状态色：待接种 #0f7b49 / 尽快补种 #b4453a / 已完成 #6b7a70 / 待核对 #a15c00
+ * ========================================================================= */
+
+/* ── 类别色（计划行左边那根色条）──────────────────────────────────────── */
+$vk-core: #0f7b49;
+$vk-rabies: #9a5a2c;
+$vk-lepto: #0d6e7a;
+$vk-plain: #8a968a;
+
+/* ── 状态色（角标：底色 + 字色）───────────────────────────────────────── */
+$vk-due-bg: #e7f5ec;
+$vk-due-fg: #0f7b49;
+$vk-over-bg: #fbeceb;
+$vk-over-fg: #b4453a;
+$vk-done-bg: #f0f3f1;
+$vk-done-fg: #6b7a70;
+$vk-plain-bg: #f2f4f2;
+$vk-plain-fg: #7d8a80;
+/* 待核对（识别出来的字还没对照本子确认）*/
+$vk-check-bg: #fdf3e4;
+$vk-check-fg: #a15c00;
+
+/* ── 层级标识（必打 / 强烈建议）───────────────────────────────────────── */
+$vk-must-bg: #e7f0ea;
+$vk-must-fg: #12503a;
+$vk-suggest-bg: #e6f1f3;
+$vk-suggest-fg: #0d6e7a;
+
+/* ── 版面色 ──────────────────────────────────────────────────────────── */
+$vk-brand: #0f7b49;
+$vk-brand-deep: #0d5f3c;
+/* "下一针"三种底：幼犬在打的亮绿 / 逾期补种的警示红 / 半年内没事的深绿 */
+$vk-next-from: #12784b;
+$vk-next-to: #0d5f3c;
+$vk-next-warn-from: #a8402f;
+$vk-next-warn-to: #8c3226;
+$vk-next-calm-from: #2f6f5a;
+$vk-next-calm-to: #26584a;
+$vk-record-accent: #7c6bd6;
+$vk-record-title: #4a3f6b;
+$vk-record-border: #e4e0f2;
+$vk-record-bg-from: #f8f6ff;
+$vk-record-bg-to: #ffffff;
+
+/* ── 中性色 ──────────────────────────────────────────────────────────── */
+$vk-text: #1e3a2f;
+$vk-text-strong: #12503a;
+$vk-text-muted: #6b7a66;
+$vk-text-faint: #8a968a;
+$vk-text-body: #4a5a4a;      /* 次级正文（"查看疫苗本原件"那种）*/
+$vk-line: #f0f4ef;
+$vk-line-soft: #f0edf8;      /* 记录区那种淡紫分隔线 */
+$vk-card-bg: #ffffff;
+$vk-card-border: #e3ece6;
+$vk-page-bg: #f3f5f1;
+$vk-field-border: #dfe4dc;
+$vk-danger: #b4453a;
+$vk-warning: #a15c00;
+$vk-white: #ffffff;
+$vk-placeholder: #b3bdb2;    /* 空字段的"点这里选" */
+$vk-radio-border: #c8d2c8;
+$vk-ghost-bg: #f2f4ec;       /* 次按钮（取消 / 删掉）*/
+$vk-ghost-fg: #4a5a4a;
+$vk-care-border: #f0dfb8;    /* "待核对"那一行的浅黄边 */
+$vk-care-bg: #fffdf7;
+
+/* ── 字号（rpx；原型是 372px 宽，这里按 2 倍换算）──────────────────────── */
+$vk-font-hero: 33rpx;      /* 下一针那句话 16.5px */
+$vk-font-title: 27rpx;     /* 计划行标题 13.5px */
+$vk-font-body: 26rpx;      /* 正文 13px */
+$vk-font-sub: 23rpx;       /* 小字 11.5px */
+$vk-font-badge: 21rpx;     /* 角标 10.5px */
+
+/* ── 间距 / 圆角 ─────────────────────────────────────────────────────── */
+$vk-gap-block: 16rpx;      /* 块与块 8px */
+$vk-gap-row: 14rpx;        /* 行内 7px */
+$vk-card-radius: 28rpx;    /* 14px */
+$vk-chip-radius: 999rpx;
+$vk-bar-width: 6rpx;       /* 类别色条 3px */
+$vk-bar-height: 24rpx;
+
+/* ── mixin：状态角标（四种状态 + 待核对，一套口径）────────────────────── */
+@mixin vk-badge($bg, $fg) {
+  display: inline-block;
+  padding: 4rpx 16rpx;
+  border-radius: $vk-chip-radius;
+  font-size: $vk-font-badge;
+  font-weight: 700;
+  white-space: nowrap;
+  background: $bg;
+  color: $fg;
+}
+
+/* ── mixin：主按钮 / 次按钮 ──────────────────────────────────────────── */
+@mixin vk-button-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72rpx;
+  border-radius: 20rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+  background: $vk-brand;
+  color: #ffffff;
+}
+
+@mixin vk-button-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72rpx;
+  border-radius: 20rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+  background: #f2f4ec;
+  color: #4a5a4a;
+}

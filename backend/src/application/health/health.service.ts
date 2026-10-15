@@ -19,18 +19,23 @@ import {
 } from '../../interfaces/dto/health/vaccine-response.dto';
 import {
   VACCINE_KIND_LABELS,
-  classifyVaccineKinds,
-  kindsOfComponents,
-  normalizeVaccineKind,
-  resolveRecordKinds,
   type VaccineKind,
-} from '../../domain/health/immunization-schedule';
+} from '../../domain/health/vaccine/schedule-table';
 import {
   VACCINE_COMPONENT_LABELS,
+  classifyRecordKinds,
+  classifyVaccineKinds,
   findProductByText,
+  kindsOfComponents,
   normalizeVaccineComponent,
   type VaccineComponent,
-} from '../../domain/health/vaccine-products';
+} from '../../domain/health/vaccine/products';
+import {
+  AntibodyTestResponseDto,
+  AntibodyTestListResponseDto,
+} from '../../interfaces/dto/health/antibody-test-response.dto';
+import { CreateAntibodyTestDto } from '../../interfaces/dto/health/create-antibody-test.dto';
+import { UpdateAntibodyTestDto } from '../../interfaces/dto/health/update-antibody-test.dto';
 import {
   CheckupRecordResponseDto,
   CheckupRecordListResponseDto,
@@ -213,13 +218,18 @@ export class HealthService {
    * 交给计划里的"请核对"提示和窗口夹取兜底。
    */
   private assertVaccinationDateNotFuture(dateText?: string | null) {
+    this.assertDateNotFuture(dateText, '接种日期不能晚于今天');
+  }
+
+  /** 同上，消息由调用方给（抗体检测用的是"检测日期"） */
+  private assertDateNotFuture(dateText: string | null | undefined, message: string) {
     if (!dateText) return;
     const date = new Date(dateText);
     if (Number.isNaN(date.getTime())) return; // 格式问题由 DTO 校验负责
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
     if (date.getTime() > endOfToday.getTime()) {
-      throw new BadRequestException('接种日期不能晚于今天');
+      throw new BadRequestException(message);
     }
   }
 
@@ -241,16 +251,12 @@ export class HealthService {
       dogId: dto.dogId,
       vaccineName: dto.vaccineName,
       vaccinationDate: new Date(dto.vaccinationDate),
-      nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : null,
       notes: dto.notes ?? null,
-      status: dto.status || 'COMPLETED',
       attachments: dto.attachments ?? [],
       components,
-      kinds: this.resolveKinds(
-        (dto as { components?: unknown }).components,
-        dto.kinds,
-        dto.vaccineName,
-      ),
+      // 类别**一律由后端算**：有成分由成分推，没有则按名字字面判；
+      // 两条都判不出 → 不保存（需求 R6：不允许"存了但不影响计划"的记录）
+      kinds: this.requireKinds(components, dto.vaccineName),
       // 安全默认值（2026-10-09）：识别出来且我们有理由怀疑的那一针，
       // 小程序显式传 false —— 在顾客点「我已对照本子核对」之前不算进计划 ✓
       productVerified:
@@ -311,21 +317,21 @@ export class HealthService {
      * → 界面看起来"点了没反应"。字段在 DTO 里明明有（update-vaccine.dto.ts），
      * 只是这一处没往仓储写。创建那条路一直是好的，所以只有"改"会失灵。
      *
-     * 顺带修了同一段里的 nextDueDate：原来是 `dto.nextDueDate ? ... : null`，
-     * 而前端只在有值时才带这个字段 —— 于是"改个备注"会把已存的
-     * 下次接种日期悄悄清成 null。undefined 必须表示"别动它"，
-     * 和上面 vaccineName / status 保持同一种写法。
+     * 注意 undefined 与 null 的区别：undefined = "别动它"，null = "清空"。
      */
     const updated = await this.vaccineRecordRepo.update(id, {
       vaccineName: dto.vaccineName ?? undefined,
       vaccinationDate: dto.vaccinationDate
         ? new Date(dto.vaccinationDate)
         : undefined,
-      nextDueDate: dto.nextDueDate ? new Date(dto.nextDueDate) : undefined,
-      // notes 前端**每次都带**（空的时候传 null，用来清空备注），
-      // 所以 null 要照写；只有"整个字段没传"才表示别动它
-      notes: dto.notes === undefined ? undefined : (dto.notes ?? null),
-      status: dto.status ?? undefined,
+      // notes 前端**每次都带**（空的时候传 null 或空串，用来清空备注），
+      // 所以 null / '' 都要照写；只有"整个字段没传"才表示别动它
+      notes:
+        dto.notes === undefined
+          ? undefined
+          : String(dto.notes || '').trim() === ''
+            ? null
+            : dto.notes,
       // 没核对过的（识别出来且我们有理由怀疑的）显式落 false；不传就是 true ✓
       productVerified:
         (dto as { productVerified?: boolean }).productVerified === undefined
@@ -334,21 +340,9 @@ export class HealthService {
       // 病种/类别：顾客手动改过就以他为准（闭集校验在 resolve* 里）。
       // 不传 = 别动它，不重判 —— 免得改个备注把人家自己选的冲掉。
       // 传了病种就由它重新推导类别（两处必须一起更新，否则会打架）。
-      components:
-        dtoComponents === undefined
-          ? undefined
-          : this.resolveComponents(
-              dtoComponents,
-              dto.vaccineName ?? record.vaccineName,
-            ),
-      kinds:
-        dtoComponents === undefined && dto.kinds === undefined
-          ? undefined
-          : this.resolveKinds(
-              dtoComponents,
-              dto.kinds,
-              dto.vaccineName ?? record.vaccineName,
-            ),
+      components: this.resolveUpdatedComponents(record, dto, dtoComponents),
+      // 类别不接受入参（DTO 里也没有这个字段了）：改了病种或名字就重推一次
+      kinds: this.resolveUpdatedKinds(record, dto, dtoComponents),
       // 只有顾客明确传了 attachments 才动它 —— 不传就保持原样，
       // 免得改个备注顺手把原件清空
       attachments: dto.attachments ?? undefined,
@@ -379,12 +373,214 @@ export class HealthService {
   ): Promise<VaccineRecordListResponseDto> {
     await this.verifyDogOwnership(dogId, customerId);
 
-    const records = await this.vaccineRecordRepo.findUpcoming(dogId, days);
+    void days;
+    // 2026-10-15：原来按记录上人工填的"下次到期日"查即将到期 —— 那个字段
+    // 整个不用了（老板 2026-10-15 定）。疫苗的"下一次"只由免疫计划回答，
+    // 而本接口是订阅消息的预留口（不做推送），所以这里如实返回空。
+    void this.vaccineRecordRepo;
+    return { total: 0, records: [] };
+  }
+
+  // ==================== Antibody Tests（2026-10-15 新增，需求 R9）====================
+
+  /** 抗体检测 · 检了什么 → 中文名（界面上显示的就是它） */
+  private static readonly ANTIBODY_TARGET_LABELS: Record<string, string> = {
+    CORE: '核心三项',
+    RABIES: '狂犬',
+  };
+
+  /** 抗体检测 · 结论 → 中文名。**我们不设阈值**：合格与否以报告/兽医判定为准 */
+  private static readonly ANTIBODY_RESULT_LABELS: Record<string, string> = {
+    PASS: '合格',
+    FAIL: '不合格',
+    UNKNOWN: '请让兽医判读',
+  };
+
+  /** 目标闭集（CORE / RABIES），脏值不许进库 —— 它会决定"这一针能不能不打" */
+  private resolveAntibodyTargets(explicit: unknown): string[] {
+    const given = Array.isArray(explicit) ? explicit : [];
+    const normalized = given
+      .map((item) => String(item || '').trim().toUpperCase())
+      .filter((item) => Object.keys(HealthService.ANTIBODY_TARGET_LABELS).includes(item));
+    return Array.from(new Set(normalized));
+  }
+
+  /**
+   * 下次评估时间：**合格 = 检测日 + 3 年**（技术方案 1.2）。
+   *
+   * 不合格 / 未判读留空 —— 那两种情况下一针照常按计划打，没有"下次评估"这一说。
+   * 调用方显式传了就以他为准（兽医可能给别的复查节奏）。
+   */
+  private computeAntibodyNextReviewAt(
+    result: string,
+    testedAt: string,
+    explicit?: string,
+  ): Date | null {
+    if (explicit) {
+      const date = new Date(explicit);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    if (result !== 'PASS') return null;
+    const base = new Date(testedAt);
+    if (Number.isNaN(base.getTime())) return null;
+    const next = new Date(base.getTime());
+    next.setFullYear(next.getFullYear() + 3);
+    return next;
+  }
+
+  async createAntibodyTest(
+    customerId: string,
+    dto: CreateAntibodyTestDto & { dogId: string },
+  ): Promise<AntibodyTestResponseDto> {
+    await this.verifyDogOwnership(dto.dogId, customerId);
+    this.assertDateNotFuture(dto.testedAt, '检测日期不能晚于今天');
+
+    const result = String(dto.result || 'UNKNOWN').trim().toUpperCase();
+    const record = await this.prisma.antibodyTestRecord.create({
+      data: {
+        dogId: dto.dogId,
+        testedAt: new Date(dto.testedAt),
+        targets: this.resolveAntibodyTargets(dto.targets),
+        result: result as 'PASS' | 'FAIL' | 'UNKNOWN',
+        value: dto.value ?? null,
+        unit: dto.unit ?? null,
+        nextReviewAt: this.computeAntibodyNextReviewAt(
+          result,
+          dto.testedAt,
+          dto.nextReviewAt,
+        ),
+        notes: dto.notes ?? null,
+        attachments: dto.attachments ?? [],
+      },
+    });
+
+    return this.mapAntibodyTestToDto(record);
+  }
+
+  async getAntibodyTests(
+    dogId: string,
+    customerId: string,
+  ): Promise<AntibodyTestListResponseDto> {
+    await this.verifyDogOwnership(dogId, customerId);
+
+    const records = await this.prisma.antibodyTestRecord.findMany({
+      where: { dogId },
+      orderBy: { testedAt: 'desc' },
+    });
 
     return {
       total: records.length,
-      records: records.map((r) => this.mapVaccineRecordToDto(r)),
+      records: records.map((record) => this.mapAntibodyTestToDto(record)),
     };
+  }
+
+  async getAntibodyTest(
+    id: string,
+    customerId: string,
+  ): Promise<AntibodyTestResponseDto> {
+    const record = await this.prisma.antibodyTestRecord.findUnique({ where: { id } });
+    if (!record) {
+      throw new NotFoundException('Antibody test record not found');
+    }
+    await this.verifyDogOwnership(record.dogId, customerId);
+    return this.mapAntibodyTestToDto(record);
+  }
+
+  async updateAntibodyTest(
+    id: string,
+    customerId: string,
+    dto: UpdateAntibodyTestDto,
+  ): Promise<AntibodyTestResponseDto> {
+    const record = await this.prisma.antibodyTestRecord.findUnique({ where: { id } });
+    if (!record) {
+      throw new NotFoundException('Antibody test record not found');
+    }
+    await this.verifyDogOwnership(record.dogId, customerId);
+    this.assertDateNotFuture(dto.testedAt, '检测日期不能晚于今天');
+
+    /**
+     * ⚠️ `undefined` = 别动它（与疫苗记录的改法一致）。
+     *
+     * 下次评估时间：结果或检测日一变就**重算**（合格才有），
+     * 除非调用方显式给了 `nextReviewAt`。
+     */
+    const testedAtText =
+      dto.testedAt ??
+      `${record.testedAt.getFullYear()}-${String(record.testedAt.getMonth() + 1).padStart(2, '0')}-${String(record.testedAt.getDate()).padStart(2, '0')}`;
+    const result = String(dto.result ?? record.result).trim().toUpperCase();
+    const nextReviewAt =
+      dto.nextReviewAt !== undefined
+        ? this.computeAntibodyNextReviewAt(result, testedAtText, dto.nextReviewAt)
+        : dto.result !== undefined || dto.testedAt !== undefined
+          ? this.computeAntibodyNextReviewAt(result, testedAtText)
+          : undefined;
+
+    const updated = await this.prisma.antibodyTestRecord.update({
+      where: { id },
+      data: {
+        testedAt: dto.testedAt ? new Date(dto.testedAt) : undefined,
+        targets:
+          dto.targets === undefined
+            ? undefined
+            : this.resolveAntibodyTargets(dto.targets),
+        result: dto.result === undefined ? undefined : (result as 'PASS' | 'FAIL' | 'UNKNOWN'),
+        value: dto.value === undefined ? undefined : (dto.value ?? null),
+        unit: dto.unit === undefined ? undefined : (dto.unit ?? null),
+        nextReviewAt,
+        notes: dto.notes === undefined ? undefined : (dto.notes ?? null),
+        attachments: dto.attachments ?? undefined,
+      },
+    });
+
+    return this.mapAntibodyTestToDto(updated);
+  }
+
+  async deleteAntibodyTest(id: string, customerId: string): Promise<void> {
+    const record = await this.prisma.antibodyTestRecord.findUnique({ where: { id } });
+    if (!record) {
+      throw new NotFoundException('Antibody test record not found');
+    }
+    await this.verifyDogOwnership(record.dogId, customerId);
+
+    // 与疫苗记录同一套：原件属于"疫苗本"，但这一条记录自己的附件要跟着走
+    await this.purgeRecordAttachments(record.attachments);
+
+    await this.prisma.antibodyTestRecord.delete({ where: { id } });
+  }
+
+  private mapAntibodyTestToDto(record: {
+    id: string;
+    dogId: string;
+    testedAt: Date;
+    targets: string[];
+    result: string;
+    value: string | null;
+    unit: string | null;
+    nextReviewAt: Date | null;
+    notes: string | null;
+    attachments: string[];
+    createdAt: Date;
+    updatedAt: Date;
+  }): AntibodyTestResponseDto {
+    return plainToInstance(AntibodyTestResponseDto, {
+      id: record.id,
+      dogId: record.dogId,
+      testedAt: record.testedAt,
+      targets: record.targets ?? [],
+      targetLabels: (record.targets ?? []).map(
+        (target) => HealthService.ANTIBODY_TARGET_LABELS[target] || target,
+      ),
+      result: record.result,
+      resultLabel:
+        HealthService.ANTIBODY_RESULT_LABELS[record.result] || record.result,
+      value: record.value,
+      unit: record.unit,
+      nextReviewAt: record.nextReviewAt,
+      notes: record.notes,
+      attachments: record.attachments ?? [],
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    });
   }
 
   // ==================== Checkup Records ====================
@@ -558,7 +754,6 @@ export class HealthService {
       exams: dto.exams ?? null,
       vitals: dto.vitals ?? null,
       medications: dto.medications ?? undefined,
-      status: dto.status ?? undefined,
       followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : null,
       veterinarian: dto.veterinarian ?? null,
       notes: dto.notes ?? null,
@@ -770,63 +965,104 @@ export class HealthService {
   }
 
   /**
-   * 类别**由成分推导**（2026-10-06）。
+   * 类别**一律由后端算**（技术方案 1.1.2 的写入规则）。
    *
-   * 顾客勾的是病种，类别是后台的事 —— 老板原话：
-   * "至于分类的判定则交由后台来完成。"
+   * 需求第六节：**每条记录保存时必须归类**，且必须落到会被排期的三类之一；
+   * 归不了类就不保存（不允许"存了但不影响计划"的记录）。
    *
-   * 成分是空的时候（老记录 / 库里没有又没勾）退回按名字的字面规则，
-   * 这是**历史兼容路径**，不是主路径。
+   *   ① `components` 非空（查到了产品，或家长勾了病种）→ 由病种推导类别（唯一事实）
+   *   ② `components` 为空、但名字能按字面判类别（"狂犬""六联"）→ 用字面规则
+   *   ③ 两条都不成立 → **抛 400**，并告诉家长该怎么办（勾"含哪些疫苗"）
    */
-  private resolveKinds(
-    explicitComponents: unknown,
-    explicitKinds: unknown,
+  private requireKinds(
+    components: VaccineComponent[],
     vaccineName: string,
   ): string[] {
-    const product = findProductByText(vaccineName);
+    if (components.length > 0) {
+      /*
+       * ⚠️ 这里**不传 `earlySeries`**：那个标记是"这支产品是 4 周龄抢跑苗"
+       *    的产品级事实，只在**按产品库推导**时才该说话。
+       *    调用方勾了病种就说明他在描述这一针含什么 —— 由病种自己推导
+       *    （犬瘟 + 细小两支 = 早期苗，规则本来就在 `kindsOfComponents` 里）。
+       *
+       *    传了会出事：一支狂犬单苗只要名字里带着"幼犬保"三个字，
+       *    勾什么病种都会被压成 core_early（实测）。
+       */
+      return kindsOfComponents({ components });
+    }
 
+    const byName = classifyVaccineKinds(vaccineName);
+    if (byName.length > 0) {
+      return byName;
+    }
+
+    throw new BadRequestException(
+      '这支疫苗认不出类别，没法算进接种计划。' +
+        '请照疫苗本勾一下它「含哪些疫苗」（例如犬瘟、细小、腺病毒），或者换一个本子上写着的名字。',
+    );
+  }
+
+  /**
+   * 改动时重算类别。
+   *
+   * 只有"改了病种"或"改了名字"才重算 —— 只改备注不该把人家自己勾的冲掉。
+   * 重算规则与新建时一致（`requireKinds`）；名字改成认不出的那种，同样不保存。
+   */
+  private resolveUpdatedKinds(
+    record: { vaccineName: string; components?: unknown; kinds?: unknown },
+    dto: UpdateVaccineDto,
+    dtoComponents: unknown,
+  ): string[] | undefined {
+    if (dtoComponents === undefined && dto.vaccineName === undefined) {
+      return undefined;
+    }
+
+    const name = dto.vaccineName ?? record.vaccineName;
     /*
-     * ① 调用方**显式勾了病种** → 类别由病种推导（新模型的主路径）。
-     *
-     *    这里必须判"是不是显式传的"，而不是"推导出来有没有值" ——
-     *    否则老客户端只传 kinds 的时候会被名字推出来的成分盖掉。
+     * 改名字时**成分也要跟着新名字重算**（新名字查得到产品就用它的成分，
+     * 查不到就按名字字面判）—— 否则旧成分会把新名字的归类压回去：
+     * 把「宠必威幼犬保」改成「狂犬疫苗」，类别却还是 core_early（实测）。
      */
-    if (Array.isArray(explicitComponents)) {
-      const components = this.resolveComponents(explicitComponents, vaccineName);
-      if (components.length > 0) {
-        return kindsOfComponents({
-          components,
-          earlySeries: product?.earlySeries,
-        });
-      }
-    }
+    const components =
+      dtoComponents === undefined
+        ? this.resolveComponents(undefined, name)
+        : this.resolveComponents(dtoComponents, name);
 
-    // ② 老客户端只给了类别 → 以他为准（历史兼容；新界面已经不发这个了）
-    const given = Array.isArray(explicitKinds)
-      ? explicitKinds
-          .map((item) => normalizeVaccineKind(item))
-          .filter((item): item is VaccineKind => item !== null)
+    return this.requireKinds(components, name);
+  }
+
+  /**
+   * 改动时重算病种：与 `resolveUpdatedKinds` 一处口径（两者必须一起动，
+   * 否则"类别按新名字、成分还是旧的"会在读时又把类别算回去）。
+   */
+  private resolveUpdatedComponents(
+    record: { vaccineName: string; components?: unknown },
+    dto: UpdateVaccineDto,
+    dtoComponents: unknown,
+  ): VaccineComponent[] | undefined {
+    if (dtoComponents === undefined && dto.vaccineName === undefined) {
+      return undefined;
+    }
+    const name = dto.vaccineName ?? record.vaccineName;
+    return dtoComponents === undefined
+      ? this.resolveComponents(undefined, name)
+      : this.resolveComponents(dtoComponents, name);
+  }
+
+  /** 记录里存着的病种（老记录可能是空数组） */
+  private storedComponents(explicit: unknown): VaccineComponent[] {
+    const stored = Array.isArray(explicit)
+      ? explicit
+          .map((item) => normalizeVaccineComponent(item))
+          .filter((item): item is VaccineComponent => item !== null)
       : [];
-
-    if (given.length > 0) {
-      // 去重：调用方传大小写混写（"RABIES" + "rabies"）是常事，
-      // 归一化之后会变成同一个值 —— 不去重界面上会出现两个一模一样的标签
-      return Array.from(new Set(given));
-    }
-
-    // ③ 都没给 → 按名字查产品库（查得到就用它的成分推），查不到退回字面规则
-    if (product && product.components.length > 0) {
-      return kindsOfComponents({
-        components: product.components,
-        earlySeries: product.earlySeries,
-      });
-    }
-
-    return classifyVaccineKinds(vaccineName);
+    return Array.from(new Set(stored));
   }
 
   private mapVaccineRecordToDto(record: any): VaccineRecordResponseDto {
-    const resolvedKinds = resolveRecordKinds(record);
+    // 读时规则（技术方案 1.1.2）：成分是空的、而这个名字现在产品库认得出
+    // → 按产品库重算一次（产品库变强，老记录跟着变准）
+    const resolvedKinds = classifyRecordKinds(record);
     /*
      * 病种：优先用记录自己存的（顾客勾的 / 从产品库带出来的）；
      * 老记录没存过（这一列是后加的）就按名字查一次产品库 —— 兼容路径。
@@ -845,9 +1081,7 @@ export class HealthService {
       dogId: record.dogId,
       vaccineName: record.vaccineName,
       vaccinationDate: record.vaccinationDate,
-      nextDueDate: record.nextDueDate,
       notes: record.notes,
-      status: record.status,
       attachments: record.attachments ?? [],
       // 归类结果（2026-10-05）：界面要显示"这条算哪一类"。
       // 优先用**记录自己存的**（顾客选的 / AI 判的）；老记录没存过才按名字推。

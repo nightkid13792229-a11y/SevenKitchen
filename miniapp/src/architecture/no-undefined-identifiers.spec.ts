@@ -30,8 +30,6 @@ const KNOWN_FALSE_POSITIVE_LIST = [
   "src/components/dog-profile/DogAvatarCropper.vue → UniApp()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/components/dog-profile/DogAvatarCropper.vue → firstTouch()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/components/dog-profile/DogAvatarCropper.vue → secondTouch()（脚本里调用了 2 次，但文件里找不到定义）",
-  "src/components/dog-profile/VaccineManagementSection.vue → i()（脚本里调用了 1 次，但文件里找不到定义）",
-  "src/components/dog-profile/VaccineManagementSection.vue → want()（脚本里调用了 2 次，但文件里找不到定义）",
   "src/pages/dog-profile-health/index.vue → dog()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/health-hero.ts → options()（脚本里调用了 1 次，但文件里找不到定义）",
   "src/utils/health-hero.ts → value()（脚本里调用了 1 次，但文件里找不到定义）",
@@ -347,7 +345,7 @@ describe('提交前守卫 · 不许"调用了却没有定义"（2026-10-12 老�
      *
      * 为什么 ✗：基线是按"文件 + 名字 + 次数"记的 ✓ ——
      * 同一个文件**再犯同样的错**会被基线放过 ✗
-     * （我实测过：把 VaccinePlanSection 的 dogApi 导入再删一次 ✓，
+     * （我实测过：把某个板块的 dogApi 导入再删一次 ✓，
      *   它和基线里那条一模一样 ✗ → 守卫又放行了 ✗）。
      * 疫苗板块是我这两天在改的地方 ✓，也是出事最多的地方 ✓ ——
      * 它必须**干净** ✓，不能靠基线兜着 ✓。

@@ -3,17 +3,15 @@
  * Handles vaccine, checkup, medical record, and allergy related endpoints
  */
 
-import { buildVaccineCatalog } from '../../domain/health/vaccine-catalog';
 import {
   VACCINE_COMPONENT_LABELS,
+  buildVaccineCatalog,
+  classifyVaccineKinds,
   findProductByText,
   suggestProductsForPartialName,
-} from '../../domain/health/vaccine-products';
+} from '../../domain/health/vaccine/products';
+import { VACCINE_KIND_LABELS } from '../../domain/health/vaccine/schedule-table';
 import { HealthReportExtractionService } from '../../application/health/health-report-extraction.service';
-import {
-  VACCINE_KIND_LABELS,
-  classifyVaccineKinds,
-} from '../../domain/health/immunization-schedule';
 import {
   Controller,
   Post,
@@ -75,6 +73,12 @@ import {
   AllergyRecordResponseDto,
   AllergyRecordListResponseDto,
 } from '../dto/health/allergy-response.dto';
+import { CreateAntibodyTestDto } from '../dto/health/create-antibody-test.dto';
+import { UpdateAntibodyTestDto } from '../dto/health/update-antibody-test.dto';
+import {
+  AntibodyTestResponseDto,
+  AntibodyTestListResponseDto,
+} from '../dto/health/antibody-test-response.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -389,6 +393,145 @@ export class HealthRecordsController {
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<null>> {
     await this.healthService.deleteVaccineRecord(id, user.customerId);
+    return ApiResponseDto.success(null);
+  }
+
+  // ==================== Antibody Tests（2026-10-15 新增，需求 R9）====================
+
+  /**
+   * 抗体检测记录（需求 R9）。
+   *
+   * 它和接种记录在**同一个列表**里显示，所以单独一组接口、
+   * 路径与 `:dogId/vaccines` 并列（`:dogId/antibody-tests`）。
+   *
+   * ⚠️ 只有 `targets` 含 `CORE` 且合格时才影响免疫计划；`RABIES` 只记录
+   *    （出行 / 出入境证明的用途，国内狂犬法定每年，法规优先）。
+   */
+  @Post(':dogId/antibody-tests')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create an antibody test record for a dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiBody({ type: CreateAntibodyTestDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Antibody test record created successfully',
+    type: AntibodyTestResponseDto,
+  })
+  async createAntibodyTest(
+    @Param('dogId') dogId: string,
+    @Body() dto: CreateAntibodyTestDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AntibodyTestResponseDto>> {
+    const record = await this.healthService.createAntibodyTest(user.customerId, {
+      ...dto,
+      dogId,
+    });
+    return ApiResponseDto.success(record);
+  }
+
+  @Get(':dogId/antibody-tests')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get antibody test records for a dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Antibody test records retrieved successfully',
+    type: AntibodyTestListResponseDto,
+  })
+  async getAntibodyTests(
+    @Param('dogId') dogId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AntibodyTestListResponseDto>> {
+    const records = await this.healthService.getAntibodyTests(dogId, user.customerId);
+    return ApiResponseDto.success(records);
+  }
+
+  @Get(':dogId/antibody-tests/:id')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get a specific antibody test record' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiParam({ name: 'id', description: 'Antibody test record ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Antibody test record retrieved successfully',
+    type: AntibodyTestResponseDto,
+  })
+  async getAntibodyTest(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AntibodyTestResponseDto>> {
+    const record = await this.healthService.getAntibodyTest(id, user.customerId);
+    return ApiResponseDto.success(record);
+  }
+
+  @Put(':dogId/antibody-tests/:id')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Update an antibody test record' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiParam({ name: 'id', description: 'Antibody test record ID' })
+  @ApiBody({ type: UpdateAntibodyTestDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Antibody test record updated successfully',
+    type: AntibodyTestResponseDto,
+  })
+  async updateAntibodyTest(
+    @Param('id') id: string,
+    @Body() dto: UpdateAntibodyTestDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<AntibodyTestResponseDto>> {
+    const record = await this.healthService.updateAntibodyTest(
+      id,
+      user.customerId,
+      dto,
+    );
+    return ApiResponseDto.success(record);
+  }
+
+  @Delete(':dogId/antibody-tests/:id')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Delete an antibody test record' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiParam({ name: 'id', description: 'Antibody test record ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Antibody test record deleted successfully',
+  })
+  async deleteAntibodyTest(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<null>> {
+    await this.healthService.deleteAntibodyTest(id, user.customerId);
     return ApiResponseDto.success(null);
   }
 

@@ -271,15 +271,23 @@ describe('拍照录入 · 接线', () => {
     expect(acceptBlock).toContain('uploadedUrls.value = []')
   })
 
-  it('疫苗本挂在「疫苗」板块', () => {
+  it('疫苗本挂在「疫苗」板块（2026-10-15 起挂在 VaccineTab 下）', () => {
     const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
+      'utf-8',
+    )
+    const next = readFileSync(
+      resolve(process.cwd(), 'src/components/vaccine/NextCard.vue'),
       'utf-8',
     )
 
     expect(vaccine).toContain('<HealthDocumentScan')
     expect(vaccine).toContain('document-type="VACCINE_BOOK"')
-    expect(vaccine).toContain('拍疫苗本')
+    // 疫苗侧把它**当识别服务用**：确认页是疫苗自己的 ScanConfirm（只有名称 + 日期两列）
+    expect(vaccine).toContain('defer-confirm')
+    expect(vaccine).toContain("import ScanConfirm from './ScanConfirm.vue'")
+    // 入口文案在「下一针」卡上（原型 A 屏那两个按钮）
+    expect(next).toContain('拍疫苗本')
   })
 
   it('过敏报告那条路搬去了定制食谱，仍然走同一个识别接口', () => {
@@ -544,14 +552,15 @@ describe('疫苗本 · 逐条确认后才入库（2026-10-08）', () => {
     expect(scan).toContain('componentOptions?: { value: string; label: string }[]')
   })
 
-  it('疫苗板块把病种候选传下去，并说明"已确认 N 条"', () => {
+  it('疫苗侧把病种候选交给录入器（前端不复制一份闭集）', () => {
     const section = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
 
+    // 词表来自接口，兜底只有 domain/vaccine/catalog.ts 那一份
     expect(section).toContain(':component-options="componentOptions"')
-    expect(section).toContain('已确认 ${scanned} 条，正在保存…')
+    expect(section).toContain('readComponentOptions(catalog.value)')
   })
 })
 
@@ -636,7 +645,7 @@ describe('选文档上传（PDF / Word，2026-10-08）', () => {
 
   it('疫苗板块与病历/检查板块都能调起它，页面菜单里有这一项', () => {
     const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
     const records = readFileSync(
@@ -700,7 +709,7 @@ describe('识别结果没确认就离开 · 要拦一下（2026-10-08）', () =>
 
   it('两个板块都把这件事透给页面', () => {
     const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
     const records = readFileSync(
@@ -708,7 +717,11 @@ describe('识别结果没确认就离开 · 要拦一下（2026-10-08）', () =>
       'utf-8',
     )
 
-    expect(vaccine).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
+    /*
+     * 2026-10-15 起疫苗侧的那一份在 VaccineTab 自己手上 ——
+     * 识别结果交给它自己的确认页（ScanConfirm），数就是那几个待确认的行。
+     */
+    expect(vaccine).toContain('unconfirmedDraftCount: () => scanRows.value.length')
     expect(records).toContain('unconfirmedDraftCount: () => scanRef.value?.unconfirmedDraftCount?.() ?? 0')
   })
 })
@@ -750,25 +763,20 @@ describe('识别结果 · 三个实测问题（2026-10-09）', () => {
     expect(source).toContain('这行有一处没看清，请照本子核一下')
   })
 
-  it('扫描入库后**不自动展开**卡片（老板要"一眼看到刚存进来的列表"）', () => {
+  /*
+   * 「扫描入库后不自动展开卡片」那一条随旧记录板块一起删除（2026-10-15）——
+   * 它钉的是 VaccineManagementSection 里 expandedIndex 这个实现细节，
+   * 那个板块已经不在新版里了。新版的行为由下面这条盯：
+   * **存进去的那几条不重复存，剩下的留在页面上**（不静默丢数据）。
+   */
+  it('保存识别结果时：存进去的不重复存，没存上的留在这一页', () => {
     const section = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
 
-    expect(section).toContain('let suppressExpandOnSave = false')
-    expect(section).toContain('if (!suppressExpandOnSave)')
-    expect(section).toContain('expandedIndex.value = -1')
-  })
-
-  it('回执里要说清"还有几条没确认、留着等你接着看"', () => {
-    const section = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
-      'utf-8',
-    )
-
-    expect(section).toContain('还有 {{ scanReceipt.remaining }} 条识别结果没确认，留着等你接着看')
-    expect(section).toContain('lastScanRemaining')
+    expect(section).toContain('scanRows.value = rows.slice(saved)')
+    expect(section).toContain('saved += 1')
   })
 })
 
@@ -799,12 +807,14 @@ describe('同一牌子的其他几支 · 一键改对（2026-10-09）', () => {
   it('产品库由疫苗板块传下来（前端不复制一份）', () => {
     const source = scan()
     const section = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
 
     expect(source).toContain('catalogProducts?: { name: string; brand?: string; manufacturer?: string }[]')
-    expect(section).toContain(':catalog-products="catalogProducts"')
+    // 疫苗侧只用**对外字段**那一份（接口下发），识别服务与录入器共用同一个来源
+    expect(section).toContain('readCatalogProducts(catalog.value)')
+    expect(section).toContain(':products="catalogProducts"')
   })
 
   it('模型说"日子没看清"的行也会被标出来（编出来的日子比空着更糟）', () => {
@@ -961,52 +971,20 @@ describe('识别结果 · 猫的疫苗本提醒（2026-10-09）', () => {
   })
 })
 
-/**
- * 计划只讲"接下来打什么"（2026-10-10 老板定）
+/*
+ * ══ 这两组（2026-10-10）随**鱼骨图**一起删除（2026-10-15）══════════════
  *
- * 老板："鱼骨图中，每一类疫苗只提醒接下来要打的那一针即可。"
- * —— "打过什么"归下方的接种记录板块 ✓，计划里不再出现已完成的步骤 ✓。
- */
-describe('疫苗计划 · 只提醒接下来要打的那一针（2026-10-10）', () => {
-  const plan = () =>
-    readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
-      'utf-8',
-    )
-
-  it('已完成的步骤不进鱼骨图；每一类最多一条', () => {
-    const source = plan()
-
-    expect(source).toContain("!blocked.has(step.key) && step.status !== 'DONE'")
-  })
-
-  it('计划只回答"接下来打什么"，历史交给记录板块（注释里写清了口径）', () => {
-    const source = plan()
-
-    expect(source).toContain('已经打过的一律不在这里出现')
-    expect(source).toContain('打过什么')
-  })
-})
-
-/**
- * 窗口早就过去时要说明白（2026-10-10 老板问的）
+ *   · 「已完成的步骤不进鱼骨图；每一类最多一条」
+ *   · 「窗口结束超过 90 天就补一句'窗口已过，建议尽快补'」
  *
- * 老板："在计划的鱼头，为什么还会出现过去的时间窗口期呢？"
- * —— 那是"首年程序没记录"的欠账（26 周龄补强，窗口 2023-08 ✓）。
- * 保留它是诚实的 ✓，但只甩一个 2023 的日期会让人以为系统坏了 ✗。
+ * 原因：鱼骨图（`utils/vaccine-fishbone.ts` + `VaccinePlanSection.vue`）是**死的**——
+ * 需求 2026-10-15 定稿后，计划一律由后端算好、页面只渲染，
+ * "每一类最多一条 DONE 过滤"和"窗口已过补一句"这类**前端推算**整体作废
+ * （那正是"两套口径"的来源）。新版里：
+ *   · 计划行按后端顺序画（`PlanTimeline.vue`）；
+ *   · 逾期与否由后端的 `status` 决定，文案由 `domain/vaccine/status.ts` 一处给。
+ * 对应的新断言在 `src/domain/vaccine/status.spec.ts`（逐条对着原型 A–K 十一屏）。
  */
-describe('疫苗计划 · 过期的窗口要标出来（2026-10-10）', () => {
-  it('窗口结束超过 90 天就补一句"窗口已过，建议尽快补"', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
-      'utf-8',
-    )
-
-    expect(source).toContain('function windowPassedSuffix')
-    expect(source).toContain('（窗口已过，建议尽快补）')
-    expect(source).toContain('passedDays > 90')
-  })
-})
 
 /**
  * 启动卡死要有底线（2026-10-11 老板报"一直停在正在读取狗狗档案"）
@@ -1131,36 +1109,46 @@ describe('健康管理页 · 组合式 API 必须都导入（2026-10-11）', () 
  */
 })
 
-describe('确认页 ↔ 录入卡 · 字段顺序一致（老板 2026-10-14）', () => {
-  it('🔴 确认页与录入卡的字段顺序一致：名字 → 含哪些疫苗 → 接种日期', () => {
-    const scan = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
-      'utf-8',
-    );
-    const card = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineRecordCard.vue'),
-      'utf-8',
-    );
-  
-    const positions = (source: string, nameLabel: string) => {
-      const name = source.indexOf(nameLabel);
-      const comp = source.indexOf('>含哪些疫苗');
-      const date = source.indexOf('>接种日期<');
-      expect(name).toBeGreaterThan(-1);
-      expect(comp).toBeGreaterThan(-1);
-      expect(date).toBeGreaterThan(-1);
-      return { name, comp, date };
-    };
-  
-    const inCard = positions(card, '>疫苗名称<');
-    expect(inCard.comp).toBeGreaterThan(inCard.name);
-    expect(inCard.date).toBeGreaterThan(inCard.comp);
-  
-    const inScan = positions(scan, '>疫苗名<');
-    expect(inScan.comp).toBeGreaterThan(inScan.name);
-    expect(inScan.date).toBeGreaterThan(inScan.comp);
-  
-    // 确认页也不该再留着旧标签
-    expect(scan.includes('>含哪些病种<')).toBe(false);
+describe('识别确认页 ↔ 录入器 · 字段口径一致（老板 2026-10-14 的诉求，2026-10-15 重构后）', () => {
+  /*
+   * 老板 2026-10-14 问："确认页是什么意思？是不是疫苗记录板块中的信息编辑，
+   * 或者是手动新增记录页面？如果是的话，请改成一致。"
+   *
+   * 2026-10-15 重构把口径收得更死了：
+   *   · 识别确认页（`ScanConfirm.vue`）**只有两列：名称 + 日期**（需求 R12）；
+   *   · 录入器（`RecordEditor.vue`）**只有两个必填：名称 + 日期**（需求 R6）。
+   * 两边的名称都走同一个产品/病种词表（`domain/vaccine/catalog.ts`），
+   * 谁都不许自己再写一份。
+   */
+  const scan = readFileSync(
+    resolve(process.cwd(), 'src/components/vaccine/ScanConfirm.vue'),
+    'utf-8',
+  );
+  const editor = readFileSync(
+    resolve(process.cwd(), 'src/components/vaccine/RecordEditor.vue'),
+    'utf-8',
+  );
+
+  it('🔴 确认页只有名称 + 日期两列（品牌、批号、下次到期日一律不要）', () => {
+    const template = scan
+      .slice(scan.indexOf('<template>'), scan.indexOf('</template>'))
+      // 注释里写着“不要这些字段”，那不算界面上有它们
+      .replace(/<!--[\s\S]*?-->/g, '');
+    expect(template).toContain('疫苗名称');
+    expect(template).toContain('mode="date"');
+    // 两列之外的字段不再出现在确认页的**界面**上
+    expect(template.includes('品牌')).toBe(false);
+    expect(template.includes('批号')).toBe(false);
+    expect(template.includes('下次到期')).toBe(false);
+  });
+
+  it('🔴 录入器与确认页共用同一份名称/病种口径（不各写一份）', () => {
+    for (const source of [scan, editor]) {
+      // 病种词表只有 domain/vaccine/catalog.ts 那一份
+      expect(source.includes("value: 'cdv'")).toBe(false);
+    }
+    expect(editor).toContain("from '../../domain/vaccine/catalog'");
+    // 名称栏都能"从产品库选"（原型 D 屏那一行）
+    expect(editor).toContain('从产品库选');
   });
 })

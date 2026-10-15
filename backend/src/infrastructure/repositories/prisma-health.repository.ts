@@ -39,9 +39,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         dogId: data.dogId,
         vaccineName: data.vaccineName,
         vaccinationDate: data.vaccinationDate,
-        nextDueDate: data.nextDueDate,
         notes: data.notes,
-        status: data.status as any,
         attachments: data.attachments,
         kinds: data.kinds,
         components: data.components,
@@ -64,9 +62,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       data: {
         vaccineName: data.vaccineName,
         vaccinationDate: data.vaccinationDate,
-        nextDueDate: data.nextDueDate,
         notes: data.notes,
-        status: data.status as any,
         attachments: data.attachments,
         kinds: data.kinds,
         components: data.components,
@@ -83,24 +79,6 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
     });
   }
 
-  async findUpcoming(dogId: string, days: number): Promise<VaccineRecord[]> {
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
-
-    const records = await this.prisma.vaccineRecord.findMany({
-      where: {
-        dogId,
-        nextDueDate: {
-          gte: today,
-          lte: futureDate,
-        },
-      },
-      orderBy: { nextDueDate: 'asc' },
-    });
-    return records.map((r) => this.mapToDomain(r));
-  }
-
   private mapToDomain(
     record: Prisma.VaccineRecordGetPayload<{}>,
   ): VaccineRecord {
@@ -109,9 +87,7 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       dogId: record.dogId,
       vaccineName: record.vaccineName,
       vaccinationDate: record.vaccinationDate,
-      nextDueDate: record.nextDueDate,
       notes: record.notes,
-      status: record.status as any,
       attachments: record.attachments,
       kinds: record.kinds,
       components: record.components ?? [],
@@ -251,7 +227,6 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         exams: data.exams,
         vitals: data.vitals,
         medications: data.medications,
-        status: data.status as any,
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
         notes: data.notes,
@@ -278,7 +253,6 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         exams: data.exams,
         vitals: data.vitals,
         medications: data.medications,
-        status: data.status as any,
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
         notes: data.notes,
@@ -304,11 +278,11 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
       chiefComplaint: record.chiefComplaint,
       diagnosis: record.diagnosis,
       labValues: record.labValues,
+      status: record.status as any,
       treatment: record.treatment,
       exams: record.exams,
       vitals: record.vitals,
       medications: record.medications,
-      status: record.status as any,
       followUpDate: record.followUpDate,
       veterinarian: record.veterinarian,
       notes: record.notes,

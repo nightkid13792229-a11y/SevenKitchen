@@ -1,12 +1,9 @@
-import {
-  classifyVaccineKinds,
-  recordCoversStep,
-} from '../../../src/domain/health/immunization-schedule';
 import { normalizeDrafts } from '../../../src/application/health/health-report-extraction.service';
 import {
+  classifyVaccineKinds,
   findProductByText,
   suggestProductsForPartialName,
-} from '../../../src/domain/health/vaccine-products';
+} from '../../../src/domain/health/vaccine/products';
 
 /**
  * 疫苗本的归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
@@ -85,15 +82,31 @@ describe('疫苗本 · 归类一律查产品表（2026-10-06）', () => {
     expect(drafts[0].kinds).toEqual([]);
   });
 
-  it('草稿字段本身照旧（名字/日期/备注一个不少）', () => {
+  it('草稿字段只剩名称 + 日期 + 备注（nextDueDate 不再产出）', () => {
     const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('犬四联'));
 
     expect(drafts[0]).toMatchObject({
       vaccineName: '犬四联',
       vaccinationDate: '2026-05-10',
-      nextDueDate: '',
       notes: '',
     });
+    expect(drafts[0].nextDueDate).toBeUndefined();
+  });
+
+  it('「待核对」的三条判据（技术方案 3.3）：狂犬一律要核对', () => {
+    const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('狂犬疫苗'));
+    expect(drafts[0].productVerified).toBe(false);
+  });
+
+  it('「待核对」的三条判据：名称归类不出来要请顾客勾病种', () => {
+    const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('拜宠清'));
+    expect(drafts[0].kinds).toEqual([]);
+    expect(drafts[0].productVerified).toBe(false);
+  });
+
+  it('普通苗、日期正常 → 直接算数（productVerified = true）', () => {
+    const drafts = normalizeDrafts('VACCINE_BOOK', bookWith('犬六联'));
+    expect(drafts[0].productVerified).toBe(true);
   });
 });
 
@@ -127,7 +140,7 @@ describe('疫苗本 · 提示词不再让 AI 判分类（2026-10-06）', () => {
   it('草稿映射里用的是产品表那条函数，不是 AI 给的字段', () => {
     const source = readService();
 
-    expect(source).toContain('kinds: classifyVaccineKinds(vaccineName)');
+    expect(source).toContain('const kinds = classifyVaccineKinds(vaccineName);');
     expect(source).not.toContain('normalizeKinds(item?.kinds)');
     // 那个只服务于"信 AI 判定"的闭集校验函数已经删掉
     expect(source).not.toContain('export function normalizeKinds');
@@ -287,22 +300,33 @@ describe('识别 · 名字没读全时给候选（2026-10-06）', () => {
  * 这里原来要求把**四种**病名写全（含副流感）。WSAVA 2024 里核心只有
  * 犬瘟、腺病毒、细小三支，副流感属非核心 —— 所以"病名写全"的判据改三种。
  */
-describe('核心覆盖 · 三种核心病写全即可（2026-10-06）', () => {
-  it('🔴 犬瘟 + 细小 + 腺病毒 = 顶得上核心首免（不再要求副流感）', () => {
-    expect(recordCoversStep('犬瘟热 细小病毒 腺病毒', 'core')).toBe(true);
+/**
+ * 「这一针顶不顶得上核心首免」在新模型里由**成分**回答（2026-10-15）。
+ *
+ * ── 为什么删掉了原来的四条（逐条裁决）────────────────────────────
+ * 原来这组用例测的是 `recordCoversStep(name, 'core')` —— 一个**按名字反推**
+ * 的覆盖判据（要求名字里写全犬瘟 + 腺病毒 + 细小）。新模型把这个判据
+ * 整个换成了"**病种 → 类别**"（技术方案 1.1.2）：
+ *   · 产品库认得出 → 按它真实的成分算（卫佳细只防细小 → 不是核心类）
+ *   · 认不出 → 按名字字面判（"六联"这类叫法算核心，需求第六节明确允许）
+ *   · 两条都判不出 → 不算数
+ * 所以"名字里没写全三种病就不给算"这条**已经不是本系统的规则**了 ——
+ * 继续留着那些断言只会钉住一个不存在的函数。
+ *
+ * 新规则下真正要守的两件事，见下面两条。
+ */
+describe('核心覆盖 · 由成分回答（2026-10-15）', () => {
+  it('产品库里认得出、成分不全的（卫佳细 = 只防细小）→ 不算核心类', () => {
+    expect(classifyVaccineKinds('卫佳细')).toEqual(['other']);
   });
 
-  it('🔴 只有犬瘟 + 细小 + 副流感（缺腺病毒）→ 顶不上核心首免', () => {
-    expect(recordCoversStep('犬瘟 细小 副流感', 'core')).toBe(false);
+  it('手写叫法按字面归类：六联/四联算核心，需求第六节允许这么记', () => {
+    expect(classifyVaccineKinds('犬六联')).toContain('core');
+    expect(classifyVaccineKinds('犬四联')).toContain('core');
   });
 
-  it('四联及以上仍然算（手写记录里第三/四联是什么我们不知道，宁可多提醒）', () => {
-    expect(recordCoversStep('犬四联', 'core')).toBe(true);
-    expect(recordCoversStep('犬八联', 'core')).toBe(true);
-  });
-
-  it('三联的手写记录顶不上 —— 多提醒一次比误判成已完成好', () => {
-    expect(recordCoversStep('犬三联', 'core')).toBe(false);
+  it('病种勾全三种核心病 → 由成分推成核心类', () => {
+    expect(classifyVaccineKinds('卫佳伍')).toContain('core');
   });
 });
 

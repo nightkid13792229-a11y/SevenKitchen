@@ -208,7 +208,9 @@
         <div v-for="item in overview?.vaccines?.latest || []" :key="item.id" class="record-row">
           <span class="record-row__date">{{ item.date }}</span>
           <span class="record-row__main">{{ item.name }}</span>
-          <span v-if="item.nextDueDate" class="record-row__flag">下次 {{ item.nextDueDate }}</span>
+          <!-- 2026-10-16：原来这里读记录上人工填的"下次到期日"（nextDueDate）。
+               那个字段整个不用了（老板 2026-10-15 定：疫苗的下一次由免疫计划算），
+               所以这个标记一并撤掉，免得读一个已经不存在的字段。 -->
         </div>
       </div>
 

@@ -463,7 +463,8 @@ model Dog {
   allergyReports       AllergyReport[]
   allergyTrials        AllergyTrial[]
   healthShareTokens    DogHealthShareToken[]
-  vaccinePlan          DogVaccinePlan?
+  vaccineDecisions     VaccineDecision[]
+  antibodyTests        AntibodyTestRecord[]
   dietPreferences      DogDietPreference[]
   dietPreferenceChanges DogDietPreferenceChange[]
   checkupRecords       CheckupRecord[]
@@ -1329,17 +1330,64 @@ model DogHealthShareToken {
 ///
 /// 与 VaccineRecord 的关系：那张表记的是"真的打了什么"，
 /// 这张表记的是"打算怎么打"。两者不一致时由 immunization-schedule 报冲突。
-model DogVaccinePlan {
+/// 家长对某一步的决定（忽略 / 推迟 / 接受）—— 一条决定一行。
+///
+/// 2026-10-15 从 `dog_vaccine_plan.decisions`（一个 JSON blob）换成一张表：
+/// JSON 没法查、没法审计、每次加字段都要兼容；一张表让"已忽略几项"变成一句 count。
+model VaccineDecision {
   id        String   @id @default(uuid()) @map("id")
-  dogId     String   @unique @map("dog_id")
-  /// 每一步的决定：{ "core-puppy-1": "ACCEPT", "rabies-2": "SKIP" }
-  decisions Json     @default("{}") @map("decisions")
+  dogId     String   @map("dog_id")
+  /// 步骤标识，如 core-puppy-1 / rabies-2
+  stepKey   String   @map("step_key")
+  /// ACCEPT / DEFER / SKIP
+  decision  String   @map("decision")
+  /// 忽略的原因：NOT_NOW（这次先不打）/ STOPPED（不再接种了）；可空
+  reason    String?  @map("reason")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   dog       Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
+  @@unique([dogId, stepKey])
   @@index([dogId])
-  @@map("dog_vaccine_plan")
+  @@map("vaccine_decision")
+}
+
+/// 抗体检测记录（2026-10-15 新增）。
+///
+/// 它不参与"接种记录"的判读，但要和接种记录一起展示，所以单独一张表
+/// （与 checkup_record / vaccine_record 同一种做法）。
+///
+/// 只有 targets 含 CORE 且结果合格时，才会影响免疫计划（替代核心疫苗的加强）；
+/// RABIES 只作记录（用途是出行 / 出入境证明），不影响计划。
+model AntibodyTestRecord {
+  id           String              @id @default(uuid()) @map("id")
+  dogId        String              @map("dog_id")
+  /// 检测日期
+  testedAt     DateTime            @map("tested_at") @db.Date
+  /// 检了什么：CORE / RABIES，可多值
+  targets      String[]            @default([]) @map("targets")
+  result       AntibodyTestResult  @default(UNKNOWN) @map("result")
+  /// 报告上的原始数值与单位（可空，不强求）
+  value        String?             @map("value")
+  unit         String?             @map("unit")
+  /// 下次评估时间（合格时算：检测日 + 3 年）
+  nextReviewAt DateTime?           @map("next_review_at") @db.Date
+  notes        String?             @map("notes")
+  attachments  String[]            @default([]) @map("attachments")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  dog          Dog                 @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@index([dogId, testedAt])
+  @@map("antibody_test_record")
+}
+
+/// 抗体检测结论。报告没给结论时用 UNKNOWN —— 界面写"请让兽医判读"，我们不设阈值。
+enum AntibodyTestResult {
+  PASS
+  FAIL
+  UNKNOWN
 }
 
 /// 结构化的饮食偏好（2026-10-01，第五期）。
@@ -1425,9 +1473,7 @@ model VaccineRecord {
   dogId           String        @map("dog_id")
   vaccineName     String        @map("vaccine_name")
   vaccinationDate DateTime      @map("vaccination_date") @db.Date
-  nextDueDate     DateTime?     @map("next_due_date") @db.Date
   notes           String?       @map("notes")
-  status          VaccineStatus @default(COMPLETED) @map("status")
   /// 报告原件（2026-10-01 新增）。
   /// 拍疫苗本识别出来的记录，把顾客拍的原图一并留档 ——
   /// 疫苗本是接种凭证，出行、寄养、换医院都可能要看原件，
@@ -1479,7 +1525,6 @@ model VaccineRecord {
 
   @@index([dogId])
   @@index([dogId, vaccinationDate])
-  @@index([nextDueDate])
   @@map("vaccine_record")
 }
 
@@ -2646,11 +2691,7 @@ enum GrowthCurveType {
   VERY_SLOW
 }
 
-enum VaccineStatus {
-  COMPLETED
-  SCHEDULED
-  OVERDUE
-}
+
 
 enum MedicalStatus {
   /// 待确认：信息来自顾客自述（如定制食谱时填写），系统不替顾客/兽医下判断。

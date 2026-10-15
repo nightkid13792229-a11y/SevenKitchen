@@ -140,44 +140,31 @@ describe('HealthTimelineService', () => {
       expect(result.events.map((event) => event.id)).toEqual(['m1', 'c1', 'w1'])
     })
 
-    it('疫苗逾期与即将到期会被标出来', async () => {
-      const future = new Date(Date.now() + 30 * 86400000)
+    /**
+     * ⚠️ 2026-10-15 改（原来的用例叫"疫苗逾期与即将到期会被标出来"）。
+     *
+     * 那个 flag 原来是按记录上人工填的 `nextDueDate` 算的 ——
+     * 字段已经随迁移删掉了（老板 2026-10-15："疫苗本上写的下次到期日整个不用"）。
+     * 疫苗的"下一次"只由**免疫计划接口**回答，时间线只呈现**发生过的事实**，
+     * 所以疫苗事件不再带 overdue / due-soon 角标（需求 R15：提醒只在疫苗页）。
+     */
+    it('疫苗事件只呈现事实：带日期与名称，不再自己标"逾期 / 即将到期"', async () => {
       const past = new Date(Date.now() - 30 * 86400000)
-      const far = new Date(Date.now() + 300 * 86400000)
 
       const prisma = createPrisma()
       prisma.vaccineRecord.findMany = jest.fn().mockResolvedValue([
-        {
-          id: 'v-overdue',
-          vaccineName: '狂犬',
-          vaccinationDate: past,
-          nextDueDate: past,
-          notes: '',
-        },
-        {
-          id: 'v-soon',
-          vaccineName: '六联',
-          vaccinationDate: past,
-          nextDueDate: future,
-          notes: '',
-        },
-        {
-          id: 'v-far',
-          vaccineName: '六联',
-          vaccinationDate: past,
-          nextDueDate: far,
-          notes: '',
-        },
+        { id: 'v1', vaccineName: '狂犬', vaccinationDate: past, notes: '' },
+        { id: 'v2', vaccineName: '六联', vaccinationDate: past, notes: '左后腿' },
       ])
 
       const service = new HealthTimelineService(prisma)
       const result = await service.getTimeline(CUSTOMER_ID, DOG_ID)
 
-      const flagOf = (id: string) =>
-        result.events.find((event) => event.id === id)?.flag
-      expect(flagOf('v-overdue')).toBe('overdue')
-      expect(flagOf('v-soon')).toBe('due-soon')
-      expect(flagOf('v-far')).toBeUndefined()
+      const vaccines = result.events.filter((event) => event.type === 'vaccine')
+      expect(vaccines).toHaveLength(2)
+      expect(vaccines[0].title).toBe('接种 狂犬')
+      expect(vaccines[1].detail).toBe('左后腿')
+      expect(vaccines.every((event) => event.flag === undefined)).toBe(true)
     })
 
     it('一条记录都没有时返回空列表而不是报错', async () => {
@@ -336,12 +323,17 @@ describe('HealthTimelineService', () => {
       expect(summary.recentCheckups[0].attachmentCount).toBe(1)
     })
 
-    it('逾期疫苗进 upcoming 并标记 overdue', async () => {
+    /**
+     * ⚠️ 2026-10-15 改（原来的用例叫"逾期疫苗进 upcoming 并标记 overdue"）。
+     * 那一块是按人工填的 `nextDueDate` 算的，字段已删 —— 现在恒为空数组，
+     * 疫苗的"下一次"由免疫计划接口回答。
+     */
+    it('upcoming 恒为空：下次到期日字段已删，疫苗的下一次归免疫计划管', async () => {
       const service = new HealthTimelineService(buildSummaryPrisma())
       const summary = await service.getVisitSummary(CUSTOMER_ID, DOG_ID)
 
-      expect(summary.vaccines.upcoming).toHaveLength(1)
-      expect(summary.vaccines.upcoming[0].overdue).toBe(true)
+      expect(summary.vaccines.upcoming).toEqual([])
+      expect(summary.vaccines.latest.length).toBeGreaterThan(0)
     })
 
     it('体重给出最近变化量', async () => {

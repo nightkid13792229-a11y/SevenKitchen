@@ -1934,8 +1934,6 @@ export class CustomRecipeService implements ICustomRecipeRepository {
         id: v.id,
         vaccineName: v.vaccineName,
         vaccinationDate: v.vaccinationDate,
-        nextDueDate: v.nextDueDate,
-        status: v.status,
       })),
       currentWeightKg: dog?.currentWeightKg ?? null,
       bcsScore: dog?.bcsScore ?? null,

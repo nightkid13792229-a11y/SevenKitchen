@@ -1,9 +1,9 @@
-import { buildImmunizationSchedule } from '../../../src/domain/health/immunization-schedule';
 import {
   VACCINE_COMPONENT_LABELS,
   VACCINE_PRODUCTS,
   coversCoreSeries,
-} from '../../../src/domain/health/vaccine-products';
+} from '../../../src/domain/health/vaccine/products';
+import { SCHEDULE_STEPS } from '../../../src/domain/health/vaccine/schedule-table';
 
 /**
  * 产品表自洽审计（2026-10-06 老板提问后加）。
@@ -114,9 +114,9 @@ describe('顾客可见文案 · 不出现 Markdown 记号（2026-10-06）', () =
   it('程序表里每一步的 label 与 basis 都不含 ** 或 __', () => {
     const bad: string[] = [];
 
-    for (const item of buildImmunizationSchedule(new Date('2026-02-01'), {
-      kinds: ['core', 'core_early', 'rabies', 'lepto'],
-    })) {
+    // 2026-10-15：来源从 buildImmunizationSchedule 换成程序表本身
+    // （那一份已经随 3075 行旧文件一起删掉了，表还在）
+    for (const item of SCHEDULE_STEPS) {
       if (item.label.includes('**') || item.label.includes('__')) {
         bad.push(`label: ${item.label}`);
       }

@@ -1,4 +1,4 @@
-import { recommendProductsForStep } from 'src/domain/health/vaccine-products';
+import { recommendProductsForStep } from 'src/domain/health/vaccine/products';
 
 
 /**

@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>疫苗页原型（2026-10-15）· 下一针 + 免疫计划</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #eceee9; color: #1e3a2f; padding: 24px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 21px; margin-bottom: 6px; }
+  h2 { font-size: 16px; margin: 34px 0 4px; }
+  h2 span { font-size: 12.5px; font-weight: 400; color: #6b7a66; margin-left: 8px; }
+  .sub { font-size: 12.5px; color: #5f7166; line-height: 1.75; max-width: 1220px; }
+  .sub b { color: #1e3a2f; }
+
+  table.ask { margin: 14px 0 8px; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+  table.ask th, table.ask td { border: 1px solid #dfe4dc; padding: 7px 10px; text-align: left; vertical-align: top; }
+  table.ask th { background: #f5f8f3; font-weight: 600; white-space: nowrap; }
+  .ask .rec { color: #0f7b49; font-weight: 700; }
+
+  .row { display: flex; gap: 22px; align-items: flex-start; margin-top: 12px; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col--wide { width: auto; flex: 1 1 auto; }
+  .col__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .col__name { font-size: 15px; font-weight: 700; }
+  .col__tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #d9f0e2; color: #17603f; }
+  .col__tag--alt { background: #e7eaf0; color: #4a5568; }
+  .col__desc { font-size: 12px; color: #5f7166; line-height: 1.65; margin-bottom: 10px; min-height: 58px; }
+  .col__note { font-size: 12px; color: #8a968a; margin-top: 8px; line-height: 1.6; }
+  .col__note b { color: #b4453a; }
+
+  /* 手机 */
+  .phone {
+    width: 372px; min-height: 780px; background: #f3f5f1; border: 1px solid #dfe4dc;
+    border-radius: 20px; padding: 0 10px; position: relative;
+    box-shadow: 0 6px 24px rgba(30,58,47,.06);
+  }
+  .phone--fold::after {
+    content: ""; position: absolute; left: -1px; right: -1px; top: 722px;
+    border-top: 1.5px dashed #c9a227; z-index: 4; pointer-events: none;
+  }
+  .screen { background: #f3f5f1; padding: 10px 0 14px; }
+  .navbar {
+    height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 12px;
+    background: #f3f5f1; border-bottom: 1px solid #e6ebe3; border-radius: 20px 20px 0 0; margin: 0 -10px;
+  }
+  .navbar__back { font-size: 17px; color: #4a5a4a; line-height: 1; }
+  .navbar__t { font-size: 14px; font-weight: 600; }
+  .navbar__cap { margin-left: auto; font-size: 11px; color: #9aa79c; border: 1px solid #d5dbd2; border-radius: 999px; padding: 2px 9px; }
+  .chrome { margin: 8px 0 8px; }
+  .entry {
+    background: linear-gradient(135deg,#12784b,#0d5f3c); border-radius: 12px; color: #fff;
+    padding: 10px 12px; display: flex; align-items: center; font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  }
+  .entry i { font-style: normal; font-size: 11px; font-weight: 400; opacity: .82; margin-left: 8px; }
+  .entry span { margin-left: auto; opacity: .85; }
+  .tabs { display: flex; background: #fff; border: 1px solid #e8ede2; border-radius: 12px; overflow: hidden; }
+  .tabs span { flex: 1; text-align: center; font-size: 12.5px; color: #7d8a80; padding: 9px 0; }
+  .tabs .on { color: #12503a; font-weight: 700; background: #eef6f1; box-shadow: inset 0 -2px 0 #0f7b49; }
+
+  .hero { background: #fff; border: 1px solid #e8ede2; border-radius: 14px; padding: 11px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .hero__avatar { width: 46px; height: 46px; border-radius: 50%; flex: 0 0 46px; background: linear-gradient(140deg,#cfe3d3,#a9c9b3); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #4a6b57; font-weight: 700; }
+  .hero__name { font-size: 16px; font-weight: 700; }
+  .hero__facts { margin-left: auto; display: flex; gap: 14px; }
+  .hero__fact { text-align: right; }
+  .hero__fact b { display: block; font-size: 13px; }
+  .hero__fact i { font-style: normal; font-size: 10.5px; color: #8a968a; }
+
+  /* 下一针 */
+  .next { background: linear-gradient(135deg,#12784b,#0d5f3c); border-radius: 14px; padding: 12px; color: #fff; margin-bottom: 8px; box-shadow: 0 4px 14px rgba(15,123,73,.16); }
+  .next--warn { background: linear-gradient(135deg,#a8402f,#8c3226); box-shadow: 0 4px 14px rgba(168,64,47,.18); }
+  .next--calm { background: linear-gradient(135deg,#2f6f5a,#26584a); box-shadow: none; }
+  .next__eyebrow { font-size: 11px; opacity: .85; letter-spacing: .5px; display: flex; align-items: center; }
+  .next__eyebrow span { margin-left: auto; font-weight: 600; }
+  .next__what { font-size: 16.5px; font-weight: 700; margin: 4px 0 4px; }
+  .next__when { font-size: 12.5px; line-height: 1.55; }
+  .next__more { font-size: 11.5px; opacity: .85; margin-top: 4px; line-height: 1.5; }
+  .next__acts { display: flex; gap: 8px; margin-top: 11px; }
+  .next__btn { flex: 1; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; }
+  .next__btn--solid { background: #fff; color: #0d5f3c; }
+  .next__btn--ghost { border: 1px solid rgba(255,255,255,.55); }
+
+  /* 板块标题 */
+  .sec__head { display: flex; align-items: center; gap: 7px; margin: 0 2px 8px; }
+  .sec__bar { width: 4px; height: 15px; border-radius: 2px; background: #0f7b49; }
+  .sec__bar--rec { background: #7c6bd6; }
+  .sec__title { font-size: 14.5px; font-weight: 700; color: #12503a; }
+  .sec__title--rec { color: #4a3f6b; }
+  .sec__meta { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+
+  /* 免疫计划（时间线） */
+  .tl { background: #fff; border: 1px solid #e3ece6; border-radius: 14px; padding: 2px 12px; }
+  .tl__row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px solid #f0f4ef; }
+  .tl__row:first-child { border-top: none; }
+  .tl__row--now { position: relative; }
+  .tl__row--now::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #0f7b49; }
+  .tl__row--far .tl__title { color: #6b7a70; font-weight: 600; }
+  .tl__row--far .tl__when { color: #9aa79c; }
+  .tl__when { flex: 0 0 84px; font-size: 11.5px; color: #4a5a4a; font-weight: 600; line-height: 1.4; padding-top: 1px; }
+  .tl__when small { display: block; font-weight: 400; color: #9aa79c; font-size: 10.5px; }
+  .tl__body { flex: 1; min-width: 0; }
+  .tl__title { font-size: 13.5px; font-weight: 700; line-height: 1.35; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tl__sub { font-size: 11.5px; color: #6b7a66; margin-top: 3px; line-height: 1.5; }
+  .tl__sub--over { color: #b4453a; }
+  .bar { display: inline-block; width: 3px; height: 12px; border-radius: 2px; }
+  .bar--core { background: #0f7b49; } .bar--rabies { background: #9a5a2c; } .bar--lepto { background: #0d6e7a; }
+  .lv { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e7f0ea; color: #12503a; }
+  .lv--suggest { background: #e6f1f3; color: #0d6e7a; }
+  .badge { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .b-due { background: #e7f5ec; color: #0f7b49; }
+  .b-over { background: #fbeceb; color: #b4453a; }
+  .b-done { background: #f0f3f1; color: #6b7a70; }
+  .b-check { background: #fdf3e4; color: #a15c00; }
+  .rhythm { font-size: 11.5px; color: #8a968a; padding: 7px 0 3px; border-top: 1px solid #f0f4ef; line-height: 1.55; }
+
+  /* 记录 */
+  .rec-card { background: linear-gradient(180deg,#f8f6ff,#fff); border: 1px solid #e4e0f2; border-radius: 14px; padding: 12px; }
+  .rec-empty { font-size: 12.5px; color: #8a968a; padding: 6px 2px 2px; }
+  .rec-row { display: flex; align-items: center; gap: 9px; padding: 9px 2px; border-top: 1px solid #f0edf8; }
+  .rec-row:first-child { border-top: none; }
+  .rec-row__name { font-size: 13px; font-weight: 600; }
+  .rec-row__date { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+  .rec-more { text-align: center; font-size: 12px; color: #7c6bd6; font-weight: 600; padding-top: 9px; }
+  .book { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px dashed #d9e0d0; border-radius: 12px; padding: 11px 12px; margin-top: 8px; }
+  .book__t { font-size: 12.5px; color: #4a5a4a; font-weight: 600; }
+  .book__n { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+
+  /* 底部常驻 */
+  .sticky { position: absolute; left: 18px; right: 18px; bottom: 14px; display: flex; gap: 8px; z-index: 6; }
+  /* 有固定底栏的页面，内容底部留出空间，别被压住 */
+  .phone:has(.sticky) .screen { padding-bottom: 76px; }
+  .sticky__btn { flex: 1; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .sticky__btn--p { background: #0f7b49; color: #fff; }
+  .sticky__btn--g { background: #eef2ec; color: #4a5a4a; }
+
+  /* 通用卡片 */
+  .card { background: #fff; border: 1px solid #e3ece6; border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+  .card__t { font-size: 13.5px; font-weight: 700; color: #12503a; margin-bottom: 8px; }
+  .fld { margin-bottom: 11px; }
+  .fld__l { font-size: 11.5px; color: #8a968a; margin-bottom: 5px; }
+  .fld__i { border: 1px solid #dfe4dc; border-radius: 9px; padding: 9px 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; background: #fff; }
+  .fld__i--empty { color: #b3bdb2; }
+  .fld__i span { margin-left: auto; font-size: 11.5px; color: #0f7b49; font-weight: 600; }
+  .hint { font-size: 11.5px; color: #6b7a66; line-height: 1.55; }
+  .hint--ok { color: #0f7b49; }
+  .hint--warn { color: #a15c00; }
+  .acts2 { display: flex; gap: 8px; margin-top: 12px; }
+  .act { flex: 1; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; }
+  .act--p { background: #0f7b49; color: #fff; }
+  .act--g { background: #f2f4ec; color: #6b6653; }
+  .act--o { border: 1px solid #0f7b49; color: #0f7b49; }
+
+  /* 识别结果行 */
+  .scan-row { border: 1px solid #e3ece6; border-radius: 12px; padding: 10px; margin-bottom: 8px; }
+  .scan-row--care { border-color: #f0dfb8; background: #fffdf7; }
+  .scan-row__t { display: flex; align-items: center; gap: 8px; }
+  .scan-row__n { font-size: 13.5px; font-weight: 700; }
+  .scan-row__d { font-size: 12.5px; color: #4a5a4a; margin-top: 3px; }
+  .scan-row__why { font-size: 11px; color: #a15c00; margin-top: 5px; line-height: 1.5; }
+
+  /* 说明区 */
+  .mask { position: absolute; inset: 0; background: rgba(30,58,47,.35); border-radius: 20px; z-index: 7; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 20px 20px; padding: 16px 16px 18px; z-index: 8; }
+  .sheet__t { font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #1e3a2f; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid #f0f4ef; }
+  .opt:first-of-type { border-top: none; }
+  .opt__d { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #c8d2c8; flex: 0 0 18px; }
+  .opt__d--on { border-color: #0f7b49; background: #0f7b49; box-shadow: inset 0 0 0 4px #fff; }
+  .opt__n { font-size: 13.5px; font-weight: 600; }
+  .opt__h { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+  .notes { margin-top: 26px; background: #fff; border: 1px solid #dfe4dc; border-radius: 14px; padding: 16px 18px; max-width: 1220px; }
+  .notes h3 { font-size: 14px; margin: 0 0 8px; }
+  .notes p, .notes li { font-size: 12.5px; line-height: 1.75; color: #40504a; }
+  .notes ul { margin: 6px 0 10px 18px; }
+  .k { color: #0f7b49; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>疫苗页原型 · 「下一针 + 免疫计划」</h1>
+<p class="sub">
+  按需求文档 R1–R15 画。每屏都是真机 372×780，<b>黄虚线是一屏边界</b>（已扣掉顶部标题栏与底部常驻栏）。<br />
+  页面自带的「健康记录」入口、四个书签都照原样画着；底下那两个绿色按钮在真机上是<b>固定在屏幕底部的常驻栏</b>（这里为了让后面的内容露出来，画在整屏最下面）。<br />
+  <b>日期全部按免疫程序规格算出来的真值</b>，不是随手编的（6 周幼犬参考日 2026-10-15、生日 2026-08-30）。
+</p>
+
+<table class="ask">
+  <tr>
+    <th>这一版要你看的是</th>
+    <th>为什么</th>
+  </tr>
+  <tr>
+    <td>① 「<b>下一针 + 免疫计划</b>」这个结构对不对</td>
+    <td>需求文档 R2 / R3：第一句话永远是"下一针"，下面按时间从近到远</td>
+  </tr>
+  <tr>
+    <td>② <b>远期计划</b>怎么弱化（12 个月内逐条 / 每类下一次 / 之后的节奏一句话）</td>
+    <td>R3 + 7.3：不排 20 年，但三年后的也要看得见</td>
+  </tr>
+  <tr>
+    <td>③ <b>录入最短路径</b>够不够短（只写"六联"+ 日期）</td>
+    <td>R6：名称 + 日期即可，系统来归类</td>
+  </tr>
+  <tr>
+    <td>④ <b>「按兽医建议不再接种」</b>那一屏的第一句话该写什么</td>
+    <td>R5：E 类是这次新补的，"下一针"这句话在这里不成立</td>
+  </tr>
+  <tr>
+    <td>⑤ <b>两个层级标识</b>够不够：<span class="lv">必打</span> 与 <span class="lv lv--suggest">强烈建议</span></td>
+    <td>R4：现在每个待办项都带标识（之前只有钩端带，反而让人以为没标的就是不重要）</td>
+  </tr>
+</table>
+
+<!-- ══════════════ 第一组：三种狗狗的首屏 ══════════════ -->
+<h2>一、三种狗狗的首屏<span>同一套结构，装得下完全不同的三只狗</span></h2>
+
+<div class="row">
+
+  <!-- A 6 周幼犬 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">A · 6 周幼犬，没打过</span><span class="col__tag">最高频</span></div>
+    <p class="col__desc">节奏最密的一只狗：接下来 4 个月有 5 件事。第一句话告诉他先做哪件。</p>
+    <div class="phone phone--fold">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">测31</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>6 周</b><i>年龄</i></div><div class="hero__fact"><b>2.1kg</b><i>体重</i></div></div>
+        </div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="next">
+          <div class="next__eyebrow">下一针<span>查看详情 ›</span></div>
+          <div class="next__what">核心疫苗 · 第 1 针</div>
+          <div class="next__when">建议接种时间 10/11 ~ 10/25</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+            <div class="next__btn next__btn--solid">记录这一针</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">按时间</div></div>
+        <div class="tl">
+          <div class="tl__row tl__row--now">
+            <div class="tl__when">10/11 ~ 10/25<small>现在</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 第 1 针 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">10/25 ~ 11/08</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 第 2 针 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">10/25 ~ 11/22</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--lepto"></span>钩端螺旋体 · 第 1 针 <span class="lv lv--suggest">强烈建议</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">11/22 ~ 12/06</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 第 3 针 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">11/22 ~ 12/22</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 首针 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">12/20 ~ 01/03</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 第 4 针 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row tl__row--far">
+            <div class="tl__when">2027/02/28<small>~ 03/28</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 26 周补强 <span class="lv">必打</span></div></div>
+          </div>
+          <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+        </div>
+
+        <div class="sec__head" style="margin-top:12px"><div class="sec__bar sec__bar--rec"></div><div class="sec__title sec__title--rec">接种记录</div></div>
+        <div class="rec-card"><div class="rec-empty">还没有接种记录</div></div>
+
+        <div class="sticky">
+          <div class="sticky__btn sticky__btn--p">拍疫苗本</div>
+          <div class="sticky__btn sticky__btn--g">记一条</div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">窗口旁的"现在"是唯一的强调；其余项按时间排，没到期就不吵。"之后"那一行替代了把 20 年逐条列出来。</p>
+  </div>
+
+  <!-- B 6 岁零记录 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">B · 6 岁，一条记录都没有</span><span class="col__tag col__tag--alt">关键验证</span></div>
+    <p class="col__desc">这一屏是本次重构的试金石：<b>绝不能出现"打第一针"</b>。系统按"已满 26 周"给成年犬口径。</p>
+    <div class="phone phone--fold">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">大黄</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>6 岁</b><i>年龄</i></div><div class="hero__fact"><b>14kg</b><i>体重</i></div></div>
+        </div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="next next--warn">
+          <div class="next__eyebrow">下一针<span>查看详情 ›</span></div>
+          <div class="next__what">核心疫苗 · 补一针</div>
+          <div class="next__when">建议尽快安排</div>
+          <div class="next__more">已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+            <div class="next__btn next__btn--solid">记录这一针</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">按时间</div></div>
+        <div class="tl">
+          <div class="tl__row tl__row--now">
+            <div class="tl__when">尽快<small>现在</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 补一针 <span class="lv">必打</span></div><div class="tl__sub">补一针即可</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">尽快</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 首针 <span class="lv">必打</span></div><div class="tl__sub">法定每年接种，尽快安排第一针</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">现在起<small>2 针</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--lepto"></span>钩端螺旋体 · 第 1 针 <span class="lv lv--suggest">强烈建议</span></div><div class="tl__sub">间隔 2~4 周打第 2 针</div></div>
+          </div>
+          <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+        </div>
+
+        <div class="sec__head" style="margin-top:12px"><div class="sec__bar sec__bar--rec"></div><div class="sec__title sec__title--rec">接种记录</div></div>
+        <div class="rec-card"><div class="rec-empty">还没有接种记录</div></div>
+        <div class="sticky"><div class="sticky__btn sticky__btn--p">拍疫苗本</div><div class="sticky__btn sticky__btn--g">记一条</div></div>
+      </div>
+    </div>
+    <p class="col__note">三件都能在同一趟就诊里办完（<b>两针一起打</b>的提示放在"准备去打针"那里，不占首屏）。<br />"没有记录"≠"没打过"：措辞说的是"没有记录就按没打过安排"，不是"你从没打过"。</p>
+  </div>
+
+  <!-- C 3 岁成犬记录齐全 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">C · 3 岁，记录齐全</span><span class="col__tag col__tag--alt">常态</span></div>
+    <p class="col__desc">这只狗半年内没有急事，但家长依然要看到"下一次是什么、后面还有什么"。</p>
+    <div class="phone phone--fold">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">豆豆</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>3 岁</b><i>年龄</i></div><div class="hero__fact"><b>8.5kg</b><i>体重</i></div></div>
+        </div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="next next--calm">
+          <div class="next__eyebrow">下一针<span>查看详情 ›</span></div>
+          <div class="next__what">狂犬疫苗 · 年度加强</div>
+          <div class="next__when">建议接种时间 2026/11/20 ~ 12/20</div>
+          <div class="next__more">还有：核心疫苗加强 2027/01/15 · 钩端年度加强 2027/03/10</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+            <div class="next__btn next__btn--solid">记录这一针</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">按时间</div></div>
+        <div class="tl">
+          <div class="tl__row tl__row--now">
+            <div class="tl__when">2026/11/20<small>~ 12/20</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 年度加强 <span class="lv">必打</span></div><div class="tl__sub">上一次 2025/11/20</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2027/01/15<small>~ 04/15</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 加强（每 3 年） <span class="lv">必打</span></div><div class="tl__sub">上一次 2024/01/15 · 可以先做抗体检测</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2027/03/10<small>~ 04/09</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--lepto"></span>钩端螺旋体 · 年度加强 <span class="lv lv--suggest">强烈建议</span></div><div class="tl__sub">上一次 2026/03/10</div></div>
+          </div>
+          <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+        </div>
+
+        <div class="sec__head" style="margin-top:12px"><div class="sec__bar sec__bar--rec"></div><div class="sec__title sec__title--rec">接种记录</div><div class="sec__meta">6 条</div></div>
+        <div class="rec-card">
+          <div class="rec-row"><span class="rec-row__name">狂犬疫苗</span><span class="rec-row__date">2025/11/20</span></div>
+          <div class="rec-row"><span class="rec-row__name">卫佳伍（核心 + 副流感）</span><span class="rec-row__date">2024/01/15</span></div>
+          <div class="rec-more">查看全部 6 条</div>
+        </div>
+        <div class="book"><div class="book__t">查看疫苗本原件</div><div class="book__n">2 张</div></div>
+        <div class="sticky"><div class="sticky__btn sticky__btn--p">拍疫苗本</div><div class="sticky__btn sticky__btn--g">记一条</div></div>
+      </div>
+    </div>
+    <p class="col__note">半年内没事，但第一句话照样是"下一针"——不是"现在不用做什么"。远期的两条照写日期，只是视觉更轻。</p>
+  </div>
+</div>
+
+<!-- ══════════════ 第二组：录入三态 ══════════════ -->
+<h2>二、录入的三种样子<span>手动记一条 / 拍疫苗本识别 / 抗体检测录进去之后</span></h2>
+<div class="row">
+
+  <!-- D 手动记一条 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">D · 记一条（最短路径）</span></div>
+    <p class="col__desc">家长手里只有商家一句微信："六联两针、狂犬一针，大概 8 月和 9 月"。两个格子就能记完。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">记一条接种记录</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="screen" style="padding-top:14px">
+
+        <div class="card">
+          <div class="card__t">打了什么疫苗</div>
+          <div class="fld">
+            <div class="fld__i">六联 <span>从产品库选</span></div>
+          </div>
+          <div class="hint">含 犬瘟、细小、腺病毒</div>
+        </div>
+
+        <div class="card">
+          <div class="card__t">什么时候打的</div>
+          <div class="fld"><div class="fld__i">2026-08-16</div></div>
+        </div>
+
+
+        <div class="acts2">
+          <div class="act act--g">取消</div>
+          <div class="act act--p">保存</div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">只有两个必填：<b>名称 + 日期</b>。品牌、批号、备注都不问。<br />录入时只问两个必填，不打扰家长。</p>
+  </div>
+
+  <!-- E 拍疫苗本 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">E · 拍疫苗本 → 逐条确认</span></div>
+    <p class="col__desc">识别只取两个信息：<b>名称 + 日期</b>。没有品牌、批号、下次到期日。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">识别结果</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="screen" style="padding-top:14px">
+
+        <div class="hint" style="margin-bottom:10px">读出 3 条，请逐条确认。点任意一条可以改名称、日期，或者删掉；没确认的不会保存。</div>
+
+        <div class="scan-row">
+          <div class="scan-row__t"><div class="scan-row__n">六联</div></div>
+          <div class="scan-row__d">2026-08-16</div>
+        </div>
+        <div class="scan-row">
+          <div class="scan-row__t"><div class="scan-row__n">六联</div></div>
+          <div class="scan-row__d">2026-09-06</div>
+        </div>
+        <div class="scan-row scan-row--care">
+          <div class="scan-row__t"><div class="scan-row__n">狂犬疫苗</div><div class="badge b-check" style="margin-left:auto">待核对</div></div>
+          <div class="scan-row__d">2026-10-01</div>
+          <div class="scan-row__why">这一针的字有点糊，请对照本子确认一下</div>
+          <div class="acts2"><div class="act act--o">我已对照本子核对</div></div>
+        </div>
+
+        <div class="acts2">
+          <div class="act act--g">全部不要</div>
+          <div class="act act--p">确认并保存</div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">"待核对"的两条规则：<b>不算进计划</b> + <b>给一个能走出去的动作</b>。狂犬之所以从严，是因为错认成"打过了"会让狗漏打。</p>
+  </div>
+
+  <!-- F 抗体检测之后 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">F · 录了抗体检测之后</span></div>
+    <p class="col__desc">同一只狗（豆豆），核心加强到期了。做了抗体检测、结果合格 —— 这一针不用打。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">豆豆</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>3 岁</b><i>年龄</i></div><div class="hero__fact"><b>8.5kg</b><i>体重</i></div></div>
+        </div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="next next--calm">
+          <div class="next__eyebrow">下一针<span>查看详情 ›</span></div>
+          <div class="next__what">狂犬疫苗 · 年度加强</div>
+          <div class="next__when">建议接种时间 2026/11/20 ~ 12/20</div>
+          <div class="next__more">核心疫苗这次不用打了：抗体检测合格（2026/10/15）</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+            <div class="next__btn next__btn--solid">记录这一针</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">按时间</div></div>
+        <div class="tl">
+          <div class="tl__row tl__row--now">
+            <div class="tl__when">2026/11/20<small>~ 12/20</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 年度加强 <span class="lv">必打</span></div><div class="tl__sub">上一次 2025/11/20</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2027/03/10<small>~ 04/09</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--lepto"></span>钩端螺旋体 · 年度加强 <span class="lv lv--suggest">强烈建议</span></div><div class="tl__sub">仍按每年一次</div></div>
+          </div>
+          <div class="tl__row tl__row--far">
+            <div class="tl__when">2029/10/15<small>下次评估</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 评估</div><div class="tl__sub">这次不用打：抗体检测合格（2026/10/15）</div></div>
+          </div>
+          <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年评估一次</div>
+        </div>
+
+        <div class="sec__head" style="margin-top:12px"><div class="sec__bar sec__bar--rec"></div><div class="sec__title sec__title--rec">接种记录</div><div class="sec__meta">7 条</div></div>
+        <div class="rec-card">
+          <div class="rec-row"><span class="rec-row__name">抗体检测 · 核心三项（合格）</span><span class="rec-row__date">2026/10/15</span></div>
+          <div class="rec-row"><span class="rec-row__name">狂犬疫苗</span><span class="rec-row__date">2025/11/20</span></div>
+          <div class="rec-more">查看全部 7 条</div>
+        </div>
+        <div class="sticky"><div class="sticky__btn sticky__btn--p">拍疫苗本</div><div class="sticky__btn sticky__btn--g">记一条</div></div>
+      </div>
+    </div>
+    <p class="col__note">抗体检测不是"多一个功能"，而是让"不用打"这句话<b>有据可依</b>：核心那条从"该打了"变成"下次评估 2029 年"。狂犬与钩端不受影响。</p>
+  </div>
+</div>
+
+<!-- ══════════════ 第三组：展开 + 两针一起打 ══════════════ -->
+<h2>三、点开一项 / 两针一起打怎么录<span>点开看到什么；一起打的录入入口放在提示里</span></h2>
+<div class="row">
+
+  <!-- G 展开 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">G · 点开"下一针"</span></div>
+    <p class="col__desc">平时不占地方，家长要做决定时才给足信息：依据、常见产品、抗体检测、忽略。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="screen" style="padding-top:14px">
+        <div class="card">
+          <div class="scan-row__t"><div class="scan-row__n">核心疫苗 · 加强（每 3 年）</div><div class="badge b-due" style="margin-left:auto">待接种</div></div>
+          <div class="scan-row__d">建议接种时间 2027/01/15 ~ 04/15</div>
+
+          <div class="fld" style="margin-top:12px"><div class="fld__l">免疫流程</div><div class="hint">上次 2024/01/15，之后每 3 年一次</div></div>
+          <div class="fld"><div class="fld__l">常见产品</div><div class="hint">卫佳伍、宠必威优免康、英特威 等产品</div></div>
+          <div class="fld"><div class="fld__l">依据</div><div class="hint">犬瘟、细小、腺病毒为必须接种的核心疫苗，成年后每 3 年加强一次。<span style="color:#0f7b49;font-weight:600">更多</span></div></div>
+
+          <div class="acts2" style="margin-top:12px">
+            <div class="act act--p">记录这一针</div>
+            <div class="act act--o">先做抗体检测</div>
+          </div>
+          <div class="acts2" style="margin-top:8px">
+            <div class="act act--g">这个先不打（忽略）</div>
+          </div>
+        </div>
+
+        <div class="card" style="background:#f7fbf8;border-color:#7fb08f">
+          <div class="hint" style="color:#12503a;font-weight:700;font-size:13px">这一针可以和钩端螺旋体一起打</div>
+          <div class="hint" style="margin-top:4px">接种窗口 2027/01/15 ~ 04/09</div>
+          <div class="fld" style="margin-top:10px;margin-bottom:6px"><div class="fld__l">常见产品</div>
+            <div class="hint">卫佳捌 · 维克犬四联加钩端</div></div>
+          <div class="acts2" style="margin-top:8px"><div class="act act--p">记录这一针</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">"两针一起打"只在准备行动时出现（这里），平时不占首屏。抗体检测做成<b>并列的一条路</b>，而不是藏在设置里。</p>
+  </div>
+
+  <!-- N 合并记账 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">H · 记录这一针</span><span class="col__tag">一条搞定</span></div>
+    <p class="col__desc">点"记录这一针"进来的页面。选一支同时含两类的苗，一次记完。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">记录这一针</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="screen" style="padding-top:14px">
+
+        <div class="card">
+          <div class="card__t">打了什么疫苗</div>
+          <div class="fld"><div class="fld__i">卫佳捌 <span>从产品库选</span></div></div>
+          <div class="hint">含 犬瘟、细小、腺病毒、钩端螺旋体</div>
+        </div>
+
+        <div class="card">
+          <div class="card__t">什么时候打的</div>
+          <div class="fld"><div class="fld__i">2027-01-20</div></div>
+        </div>
+
+        <div class="acts2">
+          <div class="act act--g">取消</div>
+          <div class="act act--p">保存</div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">家长不需要判断"该记在核心那边还是钩端那边" —— 记的是这一针，归类由系统按成分算。<br />真的打了两支单独的苗，就用底部的「记一条」记两次。</p>
+  </div>
+
+</div>
+
+<h2>四、两个边界<span>逾期怎么写；"不打了"怎么表达</span></h2>
+<div class="row">
+
+  <!-- H 狂犬过期 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">I · 狂犬过期两年</span></div>
+    <p class="col__desc">逾期怎么写：说清"原建议时间已过"，不用"已逾期"这种吓人的词。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">豆豆</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>3 岁</b><i>年龄</i></div><div class="hero__fact"><b>8.5kg</b><i>体重</i></div></div>
+        </div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="next next--warn">
+          <div class="next__eyebrow">下一针</div>
+          <div class="next__what">狂犬疫苗 · 年度加强</div>
+          <div class="next__when">建议尽快补种（原建议时间 2025/08/01 ~ 08/31，已过）</div>
+          <div class="next__more">狂犬是法定每年接种，漏了要尽快补上</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+            <div class="next__btn next__btn--solid">记录这一针</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">按时间</div></div>
+        <div class="tl">
+          <div class="tl__row tl__row--now">
+            <div class="tl__when">尽快<small>已过</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 年度加强 <span class="lv">必打</span></div><div class="tl__sub tl__sub--over">原建议时间 2025/08 已过</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2027/01/15<small>~ 04/15</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 加强（每 3 年） <span class="lv">必打</span></div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2027/03/10<small>~ 04/09</small></div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--lepto"></span>钩端螺旋体 · 年度加强 <span class="lv lv--suggest">强烈建议</span></div></div>
+          </div>
+          <div class="rhythm">之后：狂犬与钩端每年一次，核心疫苗每 3 年一次</div>
+        </div>
+        <div class="sticky"><div class="sticky__btn sticky__btn--p">拍疫苗本</div><div class="sticky__btn sticky__btn--g">记一条</div></div>
+      </div>
+    </div>
+    <p class="col__note">逾期用红色实底卡（与"没事"的深绿、幼犬的亮绿区分开），并把<b>原建议时间</b>写出来 —— 家长才知道晚了多久。</p>
+  </div>
+
+  <!-- I 忽略时选原因 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">J · 点「忽略」之后</span><span class="col__tag">替代"不再接种"</span></div>
+    <p class="col__desc">不做独立的"不再接种"开关。忽略时问一句原因 —— 两个选项，行为一样，只是把话说明白。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="screen" style="padding-top:14px">
+        <div class="card">
+          <div class="scan-row__t"><div class="scan-row__n">狂犬疫苗 · 年度加强</div><div class="badge b-due" style="margin-left:auto">待接种</div></div>
+          <div class="scan-row__d">建议接种时间 2026/11/20 ~ 12/20</div>
+          <div class="acts2" style="margin-top:12px">
+            <div class="act act--p">记录这一针</div>
+            <div class="act act--g">忽略</div>
+          </div>
+        </div>
+      </div>
+      <div class="mask"></div>
+      <div class="sheet">
+        <div class="sheet__t">这一针怎么办？</div>
+        <div class="opt"><div class="opt__d"></div><div class="opt__n">这次先不打</div><div class="opt__h">之后还会提醒</div></div>
+        <div class="opt"><div class="opt__d opt__d--on"></div><div class="opt__n">不再接种了</div><div class="opt__h">按兽医建议或我决定停止</div></div>
+        <div class="acts2" style="margin-top:14px">
+          <div class="act act--g">取消</div>
+          <div class="act act--p">确定</div>
+        </div>
+      </div>
+    </div>
+    <p class="col__note">两个选项**当前行为一样**（都是不再提醒这一针），区别只是记录下"为什么" —— 这样"已忽略"那一行才说得清。</p>
+  </div>
+
+  <!-- J 忽略之后 -->
+  <div class="col">
+    <div class="col__head"><span class="col__name">K · 把该做的都设成不做之后</span></div>
+    <p class="col__desc">一只 12 岁的狗：三项都忽略掉，页面就安静了，但记录还在。</p>
+    <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录<i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">老黑</div></div>
+          <div class="hero__facts"><div class="hero__fact"><b>12 岁</b><i>年龄</i></div><div class="hero__fact"><b>22kg</b><i>体重</i></div></div>
+        </div>
+
+        <div class="next next--calm">
+          <div class="next__eyebrow">下一针<span>查看详情 ›</span></div>
+          <div class="next__what">暂无需要接种的项目</div>
+          <div class="next__when">有 3 项已设为不做：核心疫苗加强、狂犬年度加强、钩端年度加强</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--ghost">查看已忽略的 3 项</div>
+          </div>
+        </div>
+
+        <div class="sec__head"><div class="sec__bar"></div><div class="sec__title">免疫计划</div><div class="sec__meta">共 2 项</div></div>
+        <div class="tl">
+          <div class="tl__row">
+            <div class="tl__when">2025/06/02</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--rabies"></span>狂犬疫苗 · 年度加强</div><div class="tl__sub">已完成</div></div>
+          </div>
+          <div class="tl__row">
+            <div class="tl__when">2024/04/18</div>
+            <div class="tl__body"><div class="tl__title"><span class="bar bar--core"></span>核心疫苗 · 加强（每 3 年）</div><div class="tl__sub">已完成</div></div>
+          </div>
+          <div class="rhythm">已设为不做的项目，可以在上面那一行点开</div>
+        </div>
+
+        <div class="sec__head" style="margin-top:12px"><div class="sec__bar sec__bar--rec"></div><div class="sec__title sec__title--rec">接种记录</div><div class="sec__meta">14 条</div></div>
+        <div class="rec-card">
+          <div class="rec-row"><span class="rec-row__name">狂犬疫苗</span><span class="rec-row__date">2025/06/02</span></div>
+          <div class="rec-row"><span class="rec-row__name">卫佳伍</span><span class="rec-row__date">2024/04/18</span></div>
+          <div class="rec-more">查看全部 14 条</div>
+        </div>
+        <div class="sticky"><div class="sticky__btn sticky__btn--p">拍疫苗本</div><div class="sticky__btn sticky__btn--g">记一条</div></div>
+      </div>
+    </div>
+    <p class="col__note">这是全页面唯一<b>不写"下一针"</b>的情况 —— 所有项目都被家长设为不做之后。恢复入口就写在他眼皮底下那行。</p>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>这一版和需求文档的对应</h3>
+  <ul>
+    <li><span class="k">R1</span> 没有首访分流：A/B/C 三只狗进同一套结构，各自算得对（B 那只 6 岁的狗永远不会看到"第一针"）</li>
+    <li><span class="k">R2</span> 第一句话永远是"下一针：哪一类 · 什么时候"—— 四屏都是这个句式，包括"半年内没事"的 C</li>
+    <li><span class="k">R3</span> 免疫计划按时间从近到远，含 2027/2029 的远期项；最下面一行给"之后的节奏"，不排 20 年</li>
+    <li><span class="k">R4</span> 页面只有两层：必打（无标记=不能漏）与强烈建议（钩端带青色小标）</li>
+    <li><span class="k">R5</span> E 类（I 屏）能表达"不再接种"并停止催促</li>
+    <li><span class="k">R6</span> 录入只要"名称 + 日期"两个必填（D 屏）</li>
+    <li><span class="k">R7</span> 可信度两档：可确认 / 待核对（E 屏的狂犬）</li>
+    <li><span class="k">R9</span> 抗体检测能替代核心加强（F 屏），狂犬与钩端不受影响</li>
+    <li><span class="k">R11</span> "两针一起打"只在准备行动时出现（G 屏底部）</li>
+    <li><span class="k">R15</span> 逾期写"建议尽快补种（原建议时间 X，已过）"，不用"逾期"两个字（H 屏）</li>
+  </ul>
+  <h3 style="margin-top:14px">我知道还没画、但也在本次范围内的</h3>
+  <p>记录的"改与删"、重复录入提示、加载失败的常驻重试、疫苗本原件预览、多只狗切换 —— 这些行为在需求文档里有条目（R8/R13/R10），它们不是这一版要看的东西，等结构定了再补进来。</p>
+</div>
+
+</body>
+</html>

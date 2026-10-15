@@ -19,17 +19,7 @@ export class VaccineRecordResponseDto {
   vaccinationDate!: string;
 
   @Expose()
-  @Transform(({ value }) => {
-    // 使用上海时区转换，避免UTC导致的日期偏移
-    return value ? TimezoneUtil.toShanghaiDateString(value) : null;
-  })
-  nextDueDate!: string | null;
-
-  @Expose()
   notes!: string | null;
-
-  @Expose()
-  status!: string;
 
   /// 报告原件（2026-10-01 新增）：拍疫苗本识别时存下的原图 URL 数组。
   /// 老记录与手工填写的记录是空数组。

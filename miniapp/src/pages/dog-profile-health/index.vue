@@ -129,42 +129,19 @@
           @dirty-change="hasUnsavedRecordDraft = $event"
         />
 
-        <!-- 疫苗管理（2026-09-27 新增）：后端接口早就有，顾客端一直没有入口 -->
+        <!-- 疫苗（2026-10-15 板块整体重构）：整块交给 VaccineTab
+             （下一针 → 免疫计划 → 接种记录 → 录入器/识别确认都在它里面）。
+             旧的三个巨型疫苗组件已删除 ——
+             模块未上线、没有灰度这回事，新旧并存只会留下两套口径。
+             交互与契约见 docs/plans/2026-10-15-vaccine-module-tech-design.md -->
         <template v-else-if="activeHealthTab === 'vaccine'">
-          <!-- 疫苗计划（2026-10-01，第四期）：记录是"打过什么"，
-               计划是"接下来怎么打"，计划放上面先看到。 -->
-          <!-- data-version：记录一变就重算计划（2026-10-05） -->
-          <!-- ⚠️ v-if="dogId"：这两个板块必须**拿到狗狗 id 之后**才挂载（2026-10-11 修）✗
-               之前它们先以空 dogId 挂载 ✓，而小程序里 props 不会随后续赋值重绑 ✗ →
-               记录板块永远不取数 ✓（老板看到"0 条"就是这个 ✓）；
-               计划板块则可能整块空白 ✓。 -->
-          <VaccinePlanSection
-            v-if="dogId"
-            ref="vaccinePlanRef"
-            :dog-id="dogId"
-            :birthday="form.birthday"
-            :data-version="vaccineDataVersion"
-            :inline="vaccineInlineCard"
-            @record-step="onPlanRecordStep"
-            @record-saved="onPlanRecordSaved"
-            @pending-changed="vaccinePlanPending = $event"
-            @inline-update="onInlineUpdate"
-            @inline-save="onInlineSave"
-            @inline-close="onInlineClose"
-            @inline-blur="onInlineBlur"
-            @inline-toggle="onInlineClose"
-            @inline-remove="onInlineClose"
-          />
-          <VaccineManagementSection
+          <!-- ⚠️ v-if="dogId"：必须**拿到狗狗 id 之后**才挂载（2026-10-11 修）✗
+               小程序里 props 不会随后续赋值重绑 → 板块永远不取数（老板看到"0 条"就是这个）✓ -->
+          <VaccineTab
             v-if="dogId"
             ref="vaccineSectionRef"
-            external-save
-            embedded
-            hide-scan-trigger
             :dog-id="dogId"
-            @dirty-change="hasUnsavedSectionDraft = $event"
-            @records-changed="onVaccineRecordsChanged"
-            :plan-pending="vaccinePlanPending"
+            :dog-name="form.name"
           />
         </template>
 
@@ -230,8 +207,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
-import VaccineManagementSection from '../../components/dog-profile/VaccineManagementSection.vue'
-import VaccinePlanSection from '../../components/dog-profile/VaccinePlanSection.vue'
+import VaccineTab from '../../components/vaccine/VaccineTab.vue'
 import WeightManagementSection from '../../components/dog-profile/WeightManagementSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -265,86 +241,7 @@ interface DogProfileSummary {
 }
 
 const dogId = ref('')
-/**
- * 疫苗数据版本号（2026-10-05）。
- *
- * 记录一保存/删除就 +1，计划板块 watch 它重新加载。
- * 以前计划只在"换狗"时加载，顾客原地录完几条，计划那边毫无察觉 ——
- * 老板看到的"录了 3 条却没有提醒/计划"就是这个。
- */
-const vaccineDataVersion = ref(0)
 
-function onVaccineRecordsChanged() {
-  vaccineDataVersion.value += 1
-  /*
-   * 直接让计划板块重算（2026-10-06）。
-   *
-   * ⚠️ 光靠 `:data-version` 传下去**实测不生效**：用微信官方自动化驱动
-   * 模拟器删光记录，计划板块却原地挂着旧计划 ——
-   * 老板报的"删空了还显示计划和提醒，切走再切回才空"就是这个。
-   * 改成直接调组件方法，和疫苗板块那几个入口同一个机制。
-   */
-  vaccinePlanRef.value?.reload?.()
-}
-
-/**
- * 计划里某一步点了「记录疫苗接种信息」（2026-10-06）。
- *
- * 直接开一条新增记录，并**把这一步的分类一起带过去** ——
- * 顾客是在"狂犬疫苗 第 3 次"那一行点的，新增出来的记录本来就该归到狂犬疫苗。
- * 让他再选一次分类既白费事、又容易选错（选错就把免疫计划带偏了）。
- */
-/**
- * 计划卡下面那张「新建卡」的接线（2026-10-12 第三步）。
- *
- * 为什么由页面牵线：卡要**画在计划板块里**（老板要求：就在计划卡下面），
- * 而它的草稿、产品库、保存全在**记录板块**（一份，不能存两份）。
- * 页面同时握着两边的 ref，由它转一手最直接，两个板块互不越权。
- */
-const vaccineInlineCard = computed(() =>
-  (vaccineSectionRef.value as any)?.inlineCard ?? null,
-)
-
-/** 卡上改了草稿 → 转给记录板块（它才是草稿的主人）*/
-function onInlineUpdate(index: number, field: string, value: string) {
-  void index
-  vaccineSectionRef.value?.updateInlineDraft?.(field as never, value)
-}
-
-/** 卡上点了保存 → 交给记录板块（同一套接口与校验）*/
-function onInlineSave() {
-  void vaccineSectionRef.value?.saveInlineDraft?.()
-  // 存成功后计划要重算：靠 records-changed 那条既有通路（记录板块保存后会喊）✓
-}
-
-function onInlineClose() {
-  vaccineSectionRef.value?.closeInlineCreate?.()
-}
-
-function onInlineBlur() {
-  vaccineSectionRef.value?.clearInlineFocus?.()
-}
-
-function onPlanRecordStep(payload: { kinds: string[]; stepLabel: string }) {
-  /*
-   * 就一件事：在**这张计划卡里面**开出录入窗口。
-   *
-   * ⚠️⚠️ 2026-10-12 老板截图报的"交互很奇怪"，根因就在这里 ——
-   *    我原来先调了 `collapseAll()`（那是老做法：录入窗口开在下方的记录板块里，
-   *    计划卡张张展开会把那块顶到屏幕外）。可是**第三步把窗口挪进计划卡内部**之后，
-   *    这条"先收起"就变成了自相矛盾：卡片一收起，画在它里面的录入窗口**跟着一起没了** ✗，
-   *    于是老板看到的是"点一下先把计划关掉，再展开才出现一个窗口" ✓（很别扭 ✓）。
-   *
-   * ⇒ 现在**不收起** ✓：窗口就在手指点的地方下面展开 ✓，
-   *   也不需要滚动 ✓（它本来就在视野里 ✓）。
-   */
-  vaccineSectionRef.value?.openInlineCreate?.({ kinds: payload.kinds })
-}
-
-/** 计划卡里保存成功 → 让记录板块重新取数 ✓（用户要能在下方看到它 ✓）*/
-function onPlanRecordSaved() {
-  vaccineSectionRef.value?.reload?.()
-}
 const dogs = ref<DogProfileSummary[]>([])
 const selectedDogIndex = ref(-1)
 const isLoading = ref(false)
@@ -547,11 +444,17 @@ function selectHealthTab(key: HealthTabKey) {
     return
   }
 
+  /*
+   * 疫苗录入器还开着（有内容没保存）也要拦（2026-10-15 重构后仍是这一条）。
+   *
+   * 新版录入器没有"延迟自动保存"：一条记录由家长点保存才落库，
+   * 所以切标签前必须问一句，不能让填了一半的内容静默消失。
+   */
   const unsaveable = vaccineSectionRef.value?.countUnsaveableDrafts?.() || 0
   if (activeHealthTab.value === 'vaccine' && unsaveable > 0) {
     uni.showModal({
-      title: '还有记录没填完',
-      content: `有 ${unsaveable} 条疫苗记录还差必填项，没保存。现在切走就会丢掉。`,
+      title: '还有记录没保存',
+      content: `有 ${unsaveable} 条疫苗记录填了还没保存，现在切走就会丢掉。`,
       confirmText: '留下',
       cancelText: '切走',
       success: ({ confirm }) => {
@@ -1203,29 +1106,24 @@ const recordsSectionRef = ref<{
   /** 新建一条本类空白记录 */
   addRecord?: () => void
 } | null>(null)
+/**
+ * 疫苗板块（2026-10-15 重构）。
+ *
+ * 页面只认这四个入口，其余（计划、记录、录入器、识别确认、忽略）全在板块内部：
+ *   · `startScan` / `startDocumentScan` —— 底部「新增记录」调起的识别通道
+ *   · `addRecord`                        —— 记一条
+ *   · `countUnsaveableDrafts` / `unconfirmedDraftCount` —— 切书签前拦一下
+ * 板块的写操作成功后自己**重新拉一次计划接口**整屏重绘（技术方案 3.4），
+ * 页面不再牵着它重算。
+ */
 const vaccineSectionRef = ref<{
   startScan?: () => void
   startDocumentScan?: () => void
-  /** 加一条空白记录；prefill 用于从计划某一步点进来时带上那一步的分类 */
-  addRecord?: (prefill?: { kinds?: string[] }) => void
-  /** 有几条填不完、存不了的疫苗草稿（切标签前拦一下用） */
+  addRecord?: () => void
   countUnsaveableDrafts?: () => number
+  unconfirmedDraftCount?: () => number
 } | null>(null)
-/**
- * 疫苗计划板块（2026-10-06）。
- *
- * 记录一变就**直接调它的 reload**，而不是只把 data-version 传下去 ——
- * 实测那条路不生效（详见 onVaccineRecordsChanged 的注释）。
- */
-const vaccinePlanRef = ref<{ reload?: () => void } | null>(null)
 
-/**
- * 计划里"每一类的下一针"（由 VaccinePlanSection 报上来）——
- * 顶部那条"到期提醒"用它，不再只看人工填的「下次到期日」（2026-10-07 老板定）。
- */
-const vaccinePlanPending = ref<
-  { key: string; label: string; kindLabel: string; status: string; statusLabel: string; windowStart: string }[]
->([])
 const weightSectionRef = ref<{
   saveRecord?: () => Promise<void>
   focusInput?: () => void
@@ -1358,14 +1256,14 @@ const stickySecondaryText = computed(() => {
  *
  * 触发点：切标签、页面隐藏/卸载。自动保存本身有 1.2 秒延迟，
  * 这些边界必须立刻落库，否则"改完马上切走"会丢掉最后几个字。
+ *
+ * ⚠️ 2026-10-15 疫苗板块重构后**不在这条路上**：新版录入器没有延迟自动保存
+ *    （保存是家长点的那一下），所以这里的 flush 交给两个还带自动保存的板块；
+ *    录入器开着没保存的情况由 `selectHealthTab` 的守卫拦（它有更准的提示）。
  */
 function flushActiveTabAutoSaves() {
   if (isRecordTab.value) {
     recordsSectionRef.value?.flushAutoSaves?.()
-    return
-  }
-  if (activeHealthTab.value === 'vaccine') {
-    vaccineSectionRef.value?.flushAutoSaves?.()
     return
   }
   if (activeHealthTab.value === 'weight') {

@@ -73,21 +73,15 @@ export const HEALTH_REPORT_EXTRACTION_PURPOSE = 'HEALTH_REPORT_EXTRACTION';
  * 老板第 5 条：识别之后**不需要逐条确认**，让顾客确认一次就能自动录入表单。
  */
 import {
-  classifyVaccineKinds,
-  type VaccineKind,
-} from '../../domain/health/immunization-schedule';
-import {
-  buildProductMatchReference,
-  kindsOfProductName,
-} from '../../domain/health/vaccine-catalog';
-import {
   VACCINE_PRODUCTS,
-  checkBrandConsistency,
+  buildProductMatchReference,
+  classifyVaccineKinds,
   findProductByText,
-  findProductsInName,
+  kindsOfProductName,
   normalizeProductText,
   suggestProductsForPartialName,
-} from '../../domain/health/vaccine-products';
+} from '../../domain/health/vaccine/products';
+import type { VaccineKind } from '../../domain/health/vaccine/schedule-table';
 
 /**
  * 上传上来的到底是图片还是文档（2026-10-08）。
@@ -384,7 +378,8 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '本类型的额外规则：',
     '· 一本疫苗本通常有**多条**接种记录，全部读出来，按接种日期从早到晚排序。',
     '· vaccineName 照抄本子上的写法（如「犬四联」「狂犬」「卫佳伍」），不要翻译。',
-    '· nextDueDate 只有本子上明确写了才填，没写就留空。',
+    '· 只要两个信息：**疫苗名称 + 接种日期**。品牌 / 批号 / 有效期 / 下次到期日',
+    '  **一律不要输出**（2026-10-15 老板定：这些字段我们不用，本子上印着也不用抄）。',
     '',
     '★★ 最容易漏的三件事（2026-10-06 老板拿真本子逐条核对出来的，务必照做）：',
     '',
@@ -442,13 +437,13 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '   长名字（猫三联、四联这种）**逐字照抄，连顺序和株号一起**（例如',
     '   「（708株+60株+64株）」不要写成「（708株+605株+645株）」✗）。',
     '',
-    '5. **品牌名要照抄，不要替换成相近的别的品牌**。',
-    '   兽药品牌里长得很像的很多，而且都是真实存在的牌子，特别容易串：',
+    '5. **产品名要逐字照抄，不要替换成相近的别的产品**。',
+    '   兽药里长得很像的名字很多，而且都是真实存在的产品，特别容易串：',
     '     · 「**宠必威**」（硕腾/Zoetis 的犬苗系列）≠「**英特威**」（另一个品牌）',
     '     · 宠必威系列内部也有四个长得很像的名字：幼犬保 / 优免康 / 乐必妥 / 锐必威',
     '       （锐必威是狂犬苗，优免康是联苗，**完全不是一回事**）',
-    '   **逐字照抄贴纸上的品牌名与产品名**，不要用你更熟悉的那个名字代替。',
-    '   批号、有效期同样照抄 —— B 和 8 容易看混，看仔细后一个字一个字核一遍。',
+    '   **逐字照抄贴纸上的产品名**，不要用你更熟悉的那个名字代替。',
+    '   ⚠️ 品牌名**不用单独输出**，但它是产品名的一部分，照抄不要漏、也不要改。',
     '',
     '★ 归类（kinds 字段）—— **不用你管**（2026-10-06 老板拍板）。',
     '',
@@ -463,7 +458,7 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '输出 JSON 结构：',
     '{',
     '  "drafts": [',
-    '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "nextDueDate": "2026-03-10", "notes": "" }',
+    '    { "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "notes": "" }',
     '  ],',
     '  "speciesHint": "dog 或 cat（这本是猫的就填 cat）",',
     '  "warnings": ["第三行日期被印章遮挡，未能确认"]',
@@ -768,246 +763,57 @@ const CHECKUP_TYPES = new Set([
  *   · 未知字段一律丢弃 —— 每种类型只保留白名单里的键
  */
 /**
- * ══ 产品名"再看一眼图"的复核（2026-10-09 老板定）══════════════════════════
- *
- * 背景：老板实测「宠必威锐必威」被读成「英特威优免康」✗ —— 两步都错：
- * 第一步看错字，第二步拿着错字照样能匹配到一支**真实存在**的产品 ✓，
- * 于是页面上显示一支体面的进口苗，家长根本看不出错 ✗
- * （顾客确认能兜住"日期不对"这种明显的错，兜不住"看起来完全合理的错"）。
- *
- * 老板的方案："每次都让模型再审一遍原图和代码的匹配结果，看有没有问题。"
- * —— 采纳，但**问题必须是封闭的**：
- *   不问"有没有问题" ✗（开放式问题会逼模型编，实测它编过"贴纸被手指遮挡"✗），
- *   而是问"**本子上那一行真正写的是什么**，和我们认定的这一支是不是同一支" ✓。
- *
- * ⚠️ 三条纪律：
- *   ① 它**只给候选，绝不自动改写**产品名与分类（改写权在顾客那一下点击 ✓）；
- *   ② 候选必须是**我们产品库里的名字**（编出来的名字一律丢掉 ✗）；
- *   ③ 复核失败**绝不影响识别结果**（catch 住、只留日志 ✓）。
- */
-export interface ProductReviewRow {
-  index: number;
-  /** 我们自己抄下来的写法 */
-  ourText: string;
-  /** 我们匹配到的规范名（空串 = 没匹配上） */
-  ourProduct: string;
-  date: string;
-}
-
-/** 哪些行需要复核：凡是抄到了疫苗名的行都要 */
-export function buildProductReviewRows(
-  drafts: Record<string, any>[],
-): ProductReviewRow[] {
-  return (drafts || [])
-    .map((draft, index) => ({
-      index,
-      ourText: String(draft?.vaccineName || '').trim(),
-      ourProduct: String(draft?.productName || '').trim(),
-      date: String(draft?.vaccinationDate || '').trim(),
-    }))
-    .filter((row) => row.ourText.length > 0);
-}
-
-/** 复核用的系统提示词（封闭问题，见上面的纪律） */
-export function buildProductReviewPrompt(productNames: string[]): string {
-  return [
-    '你是疫苗本核对员。用户会给你**同一张疫苗本的照片**，以及我们系统已经抄下来、',
-    '并和我们产品库匹配好的每一行。',
-    '',
-    '请**只做一件事**：核对每一行"本子上真正写的商品名"和"我们认定的产品"是不是同一支。',
-    '',
-    '规则：',
-    '1. 重新看图，**逐字照抄**本子上那一行的商品名（含品牌名）。',
-    '   ⚠️ 长得很像的品牌与产品特别容易串（宠必威 ≠ 英特威；幼犬保 / 优免康 / 乐必妥 / 锐必威',
-    '   是四个完全不同的产品），务必一个字一个字核。',
-    '2. 是同一支 → sameAsOurs 填 true，candidates 填空数组。',
-    '3. 不是同一支（或者我们压根没匹配上）→ sameAsOurs 填 false，',
-    '   并从下面的产品库里挑**最像的 3 支**（按像的程度排序）填进 candidates。',
-    '4. **产品库之外的名字一律不许编**；看不清就 sameAsOurs 填 false、',
-    '   textOnBook 写「看不清」。',
-    '5. 只输出 JSON，不要解释。',
-    '',
-    '产品库（只能从这里选候选）：',
-    productNames.join('、'),
-    '',
-    '输出结构：',
-    '{',
-    '  "rows": [',
-    '    { "index": 0, "textOnBook": "本子上写的那串字", "sameAsOurs": true, "candidates": [] },',
-    '    { "index": 1, "textOnBook": "…", "sameAsOurs": false, "candidates": ["产品库里的名字"] }',
-    '  ]',
-    '}',
-  ].join('\n');
-}
 
 /**
- * 把复核结果贴回草稿：**一致的不打扰**，不一致的带上"它读到的字 + 候选"。
+ * 这一条要不要**待核对**（技术方案 3.3，2026-10-15 收敛成三条纯代码判据）。
  *
- * 一致的也留一个标记（consistent: true），方便日志统计误报率。
+ * 背景：疫苗接种影响狗狗安全，两个方向的后果不对称 ——
+ *   · 错算成"没打" → 多提醒一次 ✓
+ *   · 错算成"打了" → **狗真的漏打** ✗✗（狂犬还是法定强制免疫）
+ * 所以默认倒向安全：下面三种情况一律落 `productVerified: false`
+ * （记录照旧显示在列表里，只是**不算进计划**，顾客点一下「我已对照本子核对」才算数）。
+ *
+ *   ① **狂犬一律要核对** —— 错认成"打过了"会让狗漏掉法定强制免疫
+ *   ② **名称归类不出来** —— 界面要请顾客勾"含哪些疫苗"，勾完才算数
+ *   ③ **日期可疑** —— 没读到日期、或读到的是**未来**的日期
+ *
+ * ⚠️ 原来的两条判据随字段一起删掉了（技术方案 3.3）：
+ *    · "品牌对不上"（品牌不再抽取，`checkBrandConsistency` 已删）
+ *    · "复核读到不一样的字"（整个"再看一眼图"的复核链路已删）
  */
-export function applyProductReview(
-  drafts: Record<string, any>[],
-  parsed: Record<string, unknown> | null,
-  productNames: string[],
-): { reviewed: number; inconsistent: number } {
-  const rows = Array.isArray((parsed as any)?.rows) ? (parsed as any).rows : [];
-  if (rows.length === 0) {
-    return { reviewed: 0, inconsistent: 0 };
+export function resolveVaccineVerification(input: {
+  vaccineName: string;
+  kinds: string[];
+  vaccinationDate: string;
+}): { productVerified: boolean } {
+  const kinds = Array.isArray(input.kinds) ? input.kinds : [];
+
+  // ① 狂犬一律要核对
+  if (kinds.includes('rabies')) {
+    return { productVerified: false };
   }
 
-  // 候选必须是库里真有的名字（规范化后比对，免得 ® 空格这些差异把它挡掉）
-  const libraryByKey = new Map<string, string>();
-  for (const name of productNames) {
-    libraryByKey.set(normalizeProductText(name), name);
+  // ② 名称归类不出来 → 请顾客勾"含哪些疫苗"
+  if (kinds.length === 0) {
+    return { productVerified: false };
   }
 
-  let reviewed = 0;
-  let inconsistent = 0;
-
-  for (const row of rows) {
-    const index = Number(row?.index);
-    if (!Number.isInteger(index) || index < 0 || index >= drafts.length) continue;
-
-    const draft = drafts[index];
-    if (!draft) continue;
-
-    const textOnBook = normalizeDraftText(row?.textOnBook, 100);
-    const ourProduct = String(draft.productName || '').trim();
-
-    /*
-     * ⚠️ "我们没匹配上"不等于"复核发现了问题"（2026-10-09 实测修正）。
-     *
-     * 上线实跑第一版：库里没有的国产苗（例如「宠派纯® 狂犬病灭活疫苗」）
-     * 每一行都会被标成"不一致"✗ —— 复核读到的字和我们抄的一模一样，
-     * 它只是因为我们没匹配上才回答 false ✓。
-     * 那种情况界面本来就有专门的提示（「产品库里没有这支苗」），
-     * 再来一条"可能认错了"就是**误报** ✗（狼来了）。
-     *
-     * 所以：只有下面两种情况才算"不一致"——
-     *   ① 我们**匹配到了某一支**，而复核说不是这一支；
-     *   ② 复核读到的字和我们抄下来的**不一样**（说明它看到了别的字）。
-     */
-    const ourTextKey = normalizeProductText(String(draft.vaccineName || ''));
-    const readKey = normalizeProductText(textOnBook);
-    const readDiffers = readKey.length > 0 && readKey !== ourTextKey;
-    /*
-     * 判定口径（2026-10-09 第二次收窄，实测定的）：
-     * **只有"复核读到的字和我们抄的不一样"才算不一致** ✓。
-     *
-     * 为什么不再看 sameAsOurs：
-     *   · 我们没匹配上 + 它读到一样的字 → 那是"库里没有这支苗"，界面另有提示 ✗
-     *   · 我们匹配上了 + 它读到一样的字却"觉得不是" → 它不知道我们"最具体优先"的规则
-     *     （带 CV-L 就是卫佳捌），实测第 3 遍就因此误报了 3 行 ✗
-     *   · 而它读到**不一样**的字 → 这才是复核真正有价值的信息 ✓
-     *     （例如贴纸是「宠必威锐必威」，它第二次读成了「宠必威锐必威」而不是我们抄的
-     *      「英特威®优免康」→ 说明第一次读错了 ✓）
-     */
-    /*
-     * ⚠️ 报警口径第三次收窄（2026-10-09 老板实测反馈）：
-     * **比"落到哪一支产品"，不比字面** ✓
-     *
-     * 老板实测：16 号照片我们读「卫佳®伍」是对的，复核读成
-     * 「卫佳®伍 VANGUARD® PLUS 5」—— 字面不一样，但**落到的是同一支产品** ✓，
-     * 按字面比就会假报一次 ✗。
-     *
-     * 现在只有这两种情况才算不一致 ✓：
-     *   ① 我们匹配到了某一支，而复核读到的字**指向另一支产品**；
-     *   ② 我们没匹配上，而复核读到的字**能落到产品库的某一支** ✓
-     *      （那说明第一次读漏了）
-     */
-    const readProduct = readKey
-      ? String(findProductByText(textOnBook)?.name || '').trim()
-      : '';
-    let inconsistentNow =
-      row?.sameAsOurs === false &&
-      (ourProduct
-        ? Boolean(readProduct) && readProduct !== ourProduct
-        : Boolean(readProduct) && readKey !== ourTextKey);
-
-    /*
-     * 候选先过一遍库：模型编的名字丢掉、去重、排除我们自己认定的那一支，
-     * 最多留 3 个（后面判定与显示都用这份）。
-     */
-    const candidates: string[] = [];
-    for (const raw of Array.isArray(row?.candidates) ? row.candidates : []) {
-      const key = normalizeProductText(String(raw || ''));
-      const official = libraryByKey.get(key);
-      if (!official) continue; // 库里没有的名字一律不许进界面
-      if (official === ourProduct) continue; // 和我们认定的一样就不必当候选
-      if (candidates.includes(official)) continue;
-      candidates.push(official);
-      if (candidates.length >= 3) break;
-    }
-
-    /*
-     * ⚠️ 再收一层误报（2026-10-09 实测）：复核给的候选如果**全是"同一段文字的
-     * 另一种读法"**，那我们按"最具体"定的那一支仍然是对的 ✓。
-     *
-     * 实测第 3 遍：我们按名字把「卫佳®Vanguard® Plus 5/CV-L」定成**卫佳捌**
-     * （带 CV-L 就是捌，这是产品库的规则、也有测试钉着），
-     * 复核却给了"卫佳伍 / 卫佳细"并说不是同一支 ✗ —— 而这两支正是
-     * **同一段文字更粗略的读法**（库里卫佳伍的别名就是 vanguard plus 5）✗。
-     * 这种情况报错只会制造狼来了 ✓。
-     */
-    if (inconsistentNow && ourProduct && candidates.length > 0) {
-      const alternatives = new Set(
-        findProductsInName(String(draft.vaccineName || '')).map(
-          (product) => product.name,
-        ),
-      );
-      const meaningful = candidates.filter((name) => !alternatives.has(name));
-      if (meaningful.length === 0) {
-        inconsistentNow = false;
-      }
-    }
-
-    const consistent = !inconsistentNow;
-    const shownCandidates = consistent ? [] : candidates;
-
-    /*
-     * ⚠️ 日期这一步**只做降级、不做升级**（2026-10-09 老板实测后定的）。
-     *
-     * 为什么只降级：复核自己也读错过（实测 16/18 号照片）✗ ——
-     * 所以它**没有资格**给我们一个新日期 ✗；但它的回答可以让我们更保守 ✓：
-     *   · 它说"只写了年月"（`2023-08`）→ 我们若补了具体某天，**强制改回 01** ✓
-     *     （老板实测：本子上「2023.8」被写成 2023-08-09 ✗、「2019.1」被写成 2019-01-03 ✗）
-     *   · 它说"没写"（`没写`）→ 那我们读出来的日期就可疑 ✗ → **这一针先不算数** ✓
-     *     （走已有的安全默认值：顾客点「我已对照本子核对」才计入计划 ✓）
-     *   · 它给的完整日期和我们不一样 → 同样**先不算数** ✓（谁对谁错交给顾客看本子 ✓）
-     */
-    const dateOnBook = normalizeDraftText(row?.dateOnBook, 20);
-    let dateReview = '';
-    if (dateOnBook === '没写') {
-      dateReview = 'missing';
-      draft.productVerified = false;
-    } else if (/^\d{4}-\d{2}$/.test(dateOnBook)) {
-      const ours = String(draft.vaccinationDate || '').slice(0, 10);
-      if (ours && ours.slice(0, 7) === dateOnBook && ours.slice(8, 10) !== '01') {
-        draft.vaccinationDate = `${dateOnBook}-01`;
-        dateReview = 'monthOnly';
-        draft.notes = [String(draft.notes || '').trim(), '本子上只写到年月，请核对']
-          .filter(Boolean)
-          .join('；');
-      }
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnBook)) {
-      const ours = String(draft.vaccinationDate || '').slice(0, 10);
-      if (ours && ours !== dateOnBook) {
-        dateReview = 'differs';
-        draft.productVerified = false;
-      }
-    }
-
-    draft.productReview = {
-      textOnBook,
-      consistent,
-      candidates: shownCandidates,
-      ...(dateReview ? { dateReview } : {}),
-    };
-    reviewed += 1;
-    if (!consistent) inconsistent += 1;
+  // ③ 日期可疑：没读到 / 读到了但落在未来
+  const dateText = String(input.vaccinationDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    return { productVerified: false };
+  }
+  const date = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return { productVerified: false };
+  }
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  if (date.getTime() > endOfToday.getTime()) {
+    return { productVerified: false };
   }
 
-  return { reviewed, inconsistent };
+  return { productVerified: true };
 }
 
 /**
@@ -1102,19 +908,27 @@ export function normalizeDrafts(
            * 认不出来的给空串 —— 界面照旧显示顾客写的那串字，绝不硬塞。
            */
           const matchedProduct = findProductByText(vaccineName);
+          /**
+           * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
+           *
+           * 老板原话："AI 只负责认产品，分类永远由兽医审过的表定义。"
+           *
+           * 分类直接决定"这一针算哪一步、隔多久再打"，判错就把免疫计划带偏
+           * （实测：「宠必威® 幼犬保」被判成 core，而它是 core_early）。
+           *
+           * `classifyVaccineKinds` 是**唯一**一份分类定义：
+           *   ① 先查已审核的产品目录（按真实成分算，组合苗能同时占好几类）
+           *   ② 目录里没有的，才退回按病名/联数判（狂犬、钩端、犬瘟细小…）
+           *   ③ 都认不出来 → **空数组**，界面老实说"没匹配到"并请顾客自己选
+           * —— 绝不猜成核心苗（猜错会让系统以为那一针打完了，从此不再提醒）。
+           *
+           * AI 在这条路上只负责一件事：把本子上的名字照抄准确。
+           */
+          const kinds = classifyVaccineKinds(vaccineName);
           return {
             vaccineName,
             productName: matchedProduct ? matchedProduct.name : '',
-            /**
-             * 品牌一致性检查（2026-10-09 老板定）：
-             * 文字里出现的品牌词，和我们匹配到的产品所属品牌对不上 → 报冲突。
-             * 实测抓到过「英特威®瑞比克」（瑞比克是勃林格的）✗ ——
-             * 这一类错**同一个模型再审也抓不住**（两次错得一模一样），
-             * 但纯代码一眼就能看出来 ✓。
-             */
-            brandCheck: matchedProduct
-              ? checkBrandConsistency(vaccineName, matchedProduct.name)
-              : { conflict: false, textBrand: '', productBrand: '' },
+            kinds,
             /**
              * 名字**没读全**时的候选（2026-10-06 老板要求"认不准就诚实说"）。
              *
@@ -1130,33 +944,19 @@ export function normalizeDrafts(
                   .slice(0, 4)
                   .map((product) => product.name),
             /**
-             * 归类**一律查我们自己的产品表**（2026-10-06 老板拍板）。
-             *
-             * 老板原话："AI 只负责认产品，分类永远由兽医审过的表定义。"
-             *
-             * 原来这一步信的是 AI 回的那个归类字段（再用闭集校验一遍），
-             * 而疫苗本那段提示词当时确实写着"归类由你来判"。后果实测到了：
-             * 「宠必威® 幼犬保」被 AI 判成 core（核心疫苗），而它其实是
-             * core_early（早期核心疫苗，4 周龄那一针抢跑，接种周期完全不同）。
-             * 分类直接决定"这一针算哪一步、隔多久再打"，判错就把免疫计划带偏。
-             *
-             * classifyVaccineKinds 是**唯一**一份分类定义：
-             *   ① 先查已审核的产品目录（按真实成分算，组合苗能同时占好几类）
-             *   ② 目录里没有的，才退回按病名/联数判（狂犬、钩端、犬瘟细小…）
-             *   ③ 都认不出来 → **空数组**，界面老实说"没匹配到"并请顾客自己选
-             * —— 绝不猜成核心苗（猜错会让系统以为那一针打完了，从此不再提醒）。
-             *
-             * AI 在这条路上只负责一件事：把本子上的名字照抄准确。
-             */
-            kinds: classifyVaccineKinds(vaccineName),
-            /**
              * 这支苗含哪些病种（2026-10-06）—— 界面拿它回填"病种"，
              * 顾客看到的、以后改的也都是病种。
              */
             components: matchedProduct ? [...matchedProduct.components] : [],
             vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
-            nextDueDate: normalizeDraftDate(item?.nextDueDate),
+            // ⚠️ `nextDueDate` 整个不用了（老板 2026-10-15 定）：不识别、不显示、
+            // 不提交、不参与计划、不报冲突 —— 所以这里也不再有这个字段。
             notes: normalizeDraftText(item?.notes, 200),
+            ...resolveVaccineVerification({
+              vaccineName,
+              kinds,
+              vaccinationDate: normalizeDraftDate(item?.vaccinationDate),
+            }),
           };
         })
         // 没有疫苗名的记录没有意义，丢掉
@@ -1625,114 +1425,6 @@ export class HealthReportExtractionService {
     }
   }
 
-  /**
-   * 疫苗本"再看一眼图"的复核（2026-10-09 老板定，见文件上方 buildProductReviewRows 的说明）。
-   *
-   * 一次扫描只多**一次**调用（不是每行一次）：把这一页所有抄到名字的行一起交上去，
-   * 让它重新看图、逐行回答"本子上写的是什么、和我们认定的是不是同一支"。
-   *
-   * 只在**图片**这条路上做：文档（PDF/Word）我们手上只有抽出来的文字，
-   * 让它"再看一眼图"没有意义 ✗ —— 那种情况留空，前端照旧只显示原文与候选。
-   */
-  private async reviewProductMatches(input: {
-    imageUrl: string;
-    drafts: Record<string, any>[];
-    config: {
-      baseUrl: string;
-      model: string;
-      apiKey: string;
-      requestTimeoutMs: number;
-    };
-  }): Promise<void> {
-    const rows = buildProductReviewRows(input.drafts);
-    if (rows.length === 0) {
-      return;
-    }
-
-    const productNames = VACCINE_PRODUCTS.map((product) => product.name);
-    const model = resolveHealthReportVisionModel(
-      process.env,
-      input.config.model,
-    );
-
-    try {
-      const parsed = await callDeepSeekJson({
-        baseUrl: input.config.baseUrl,
-        model,
-        extraBody: EXTRACTION_NO_THINKING,
-        apiKey: input.config.apiKey,
-        requestTimeoutMs: input.config.requestTimeoutMs,
-        systemPrompt: buildProductReviewPrompt(productNames),
-        userContent: [
-          {
-            type: 'text',
-            text:
-              '这是同一张疫苗本。请按系统提示核对下面每一行，只输出 JSON。\n' +
-              JSON.stringify({ rows }, null, 2),
-          },
-          { type: 'image_url', image_url: { url: input.imageUrl } },
-        ],
-        temperature: 0,
-      });
-
-      const { reviewed, inconsistent } = applyProductReview(
-        input.drafts,
-        parsed,
-        productNames,
-      );
-
-      /*
-       * 留档（老板要的"记录数据"）：一致 / 不一致各几行。
-       * 有了它才能算**误报率** —— 上线一周后按数据决定要不要收窄成"触发条件"。
-       */
-      const mismatches = input.drafts
-        .filter((draft) => draft?.productReview && draft.productReview.consistent === false)
-        .map(
-          (draft) =>
-            `我们「${String(draft.productName || draft.vaccineName || '')}」` +
-            ` vs 复核读到「${draft.productReview.textOnBook || '看不清'}」` +
-            `（候选 ${(draft.productReview.candidates || []).join('/') || '无'}）`,
-        );
-
-      /*
-       * 留档（老板要的"记录数据"）：核对了几行、几行不一致，以及不一致的原文对。
-       * 「顾客最后采纳了谁」不用另发请求 —— 存下来的记录名就是答案，
-       * 和这里的原文对一对就知道采纳没有（一致的行不留原文对，避免刷屏）。
-       */
-      /*
-       * 日期复核的留档（2026-10-09 老板定"先上线观察"）：
-       * 「本子上没写注射日期」「只写到年月」「与我们不一致」各几行 ——
-       * 这三类直接影响"这一针算不算数"，观察期要能看见 ✓。
-       */
-      const dateFlags = {
-        missing: 0,
-        monthOnly: 0,
-        differs: 0,
-      };
-      for (const draft of input.drafts) {
-        const flag = draft?.productReview?.dateReview;
-        if (flag === 'missing') dateFlags.missing += 1;
-        else if (flag === 'monthOnly') dateFlags.monthOnly += 1;
-        else if (flag === 'differs') dateFlags.differs += 1;
-      }
-
-      this.logger.log(
-        `疫苗产品复核：核对 ${reviewed} 行，其中不一致 ${inconsistent} 行` +
-          (mismatches.length > 0 ? `；${mismatches.join('；')}` : ''),
-      );
-      this.logger.log(
-        `疫苗日期复核：本子上没写注射日期 ${dateFlags.missing} 行` +
-          `｜只写到年月 ${dateFlags.monthOnly} 行｜与我们不一致 ${dateFlags.differs} 行`,
-      );
-    } catch (error) {
-      // 复核失败绝不影响识别结果（顾客该看到的照旧看到）
-      this.logger.warn(
-        `疫苗产品复核失败（不影响识别）：${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  }
 
   async extractFromReport(input: {
     imageUrl: string;
@@ -1948,16 +1640,12 @@ export class HealthReportExtractionService {
     }
 
     /*
-     * 疫苗本：让模型**再看一眼图**，核对"本子上写的"和"我们认定的产品"是否同一支
-     * （2026-10-09 老板定；只给候选、绝不自动改写；失败不影响识别）。
+     * ⚠️ 原来这里还有一次"让模型再看一眼图、核对产品名"的复核调用（2026-10-09）。
+     *    2026-10-15 连同品牌 / 批号 / 下次到期日一起删掉了 —— 技术方案 3.3：
+     *    「待核对」的判据收敛成三条（狂犬一律要核对 / 名称认不出 / 日期可疑），
+     *    不再靠"品牌对不上"和"复核读到不一样的字"这两条（那两条随字段一起没了）。
+     *    现在的 `productVerified` 由 `resolveVaccineVerification` 纯代码判定。
      */
-    if (fileKind === 'image' && drafts.length > 0) {
-      await this.reviewProductMatches({
-        imageUrl: input.imageUrl,
-        drafts,
-        config,
-      });
-    }
     const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
     // 与已提取内容矛盾的提示直接丢掉（见 filterContradictoryWarnings）
     const warnings = filterContradictoryWarnings(

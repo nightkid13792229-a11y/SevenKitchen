@@ -47,8 +47,9 @@ describe('AI 录入扩展', () => {
   })
 
   describe('疫苗本（一次读出多条）', () => {
-    it('按表单字段产出多条草稿', () => {
+    it('按表单字段产出多条草稿（只有名称 + 日期两列）', () => {
       const drafts = normalizeDrafts('VACCINE_BOOK', {
+        // 模型就算多回了 nextDueDate 也会被丢掉（2026-10-15：这个字段整个不用了）
         drafts: [
           { vaccineName: '犬四联', vaccinationDate: '2025-03-10', nextDueDate: '2026-03-10', notes: '' },
           { vaccineName: '狂犬', vaccinationDate: '2025/06/01', nextDueDate: '', notes: '左后腿' },
@@ -59,8 +60,9 @@ describe('AI 录入扩展', () => {
       expect(drafts[0]).toMatchObject({
         vaccineName: '犬四联',
         vaccinationDate: '2025-03-10',
-        nextDueDate: '2026-03-10',
       })
+      expect(drafts[0].nextDueDate).toBeUndefined()
+      expect(drafts[0].brandCheck).toBeUndefined()
       expect(drafts[1].vaccinationDate).toBe('2025-06-01')
     })
 

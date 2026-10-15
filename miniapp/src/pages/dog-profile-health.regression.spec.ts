@@ -250,18 +250,20 @@ describe('dog profile health page regressions', () => {
     expect(page).not.toContain('allergyReports.list')
   })
 
-  it('疫苗管理作为独立卡片挂在「健康管理」页里', () => {
+  it('疫苗板块挂在「健康管理」页的疫苗书签下（2026-10-15 整块换成 VaccineTab）', () => {
     const page = readFileSync(
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
 
-    expect(page).toContain("import VaccineManagementSection from")
-    // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染；
-    // 并且改成 external-save（保存按钮由底部自适应按钮统一承担）
+    expect(page).toContain("import VaccineTab from '../../components/vaccine/VaccineTab.vue'")
+    // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染
     expect(page).toContain('v-else-if="activeHealthTab === \'vaccine\'"')
     expect(page).toContain('ref="vaccineSectionRef"')
-    expect(page).toContain('external-save')
+    // 旧的三个巨型组件整体删除（模块未上线，不做新旧并存）
+    expect(page).not.toContain('VaccineManagementSection')
+    expect(page).not.toContain('VaccinePlanSection')
+    expect(page).not.toContain('VaccineRecordCard')
     // 文案要如实列出这一页能维护什么
     expect(page).toContain('就诊记录、体检报告、疫苗和体重')
   })
@@ -392,7 +394,9 @@ describe('dog-profile-health · 底部按钮与书签', () => {
     expect(page).not.toContain("computed(() => '保存')")
     expect(page).toContain('flushActiveTabAutoSaves')
     expect(page).toContain('recordsSectionRef.value?.flushAutoSaves?.()')
-    expect(page).toContain('vaccineSectionRef.value?.flushAutoSaves?.()')
+    // 疫苗板块 2026-10-15 起没有延迟自动保存（保存是家长点的那一下）——
+    // 它那边由切标签守卫拦（见下一条断言）
+    expect(page).toContain('vaccineSectionRef.value?.countUnsaveableDrafts?.()')
     expect(page).toContain('weightSectionRef.value?.flushAutoSaves?.()')
     expect(page).toContain('onHide(')
     expect(page).toContain('onUnload(')
@@ -427,8 +431,11 @@ describe('dog-profile-health · 底部按钮与书签', () => {
 
     // 病例 / 过敏
     expect(read('HealthRecordsSection')).toContain('v-if="!embedded" class="health-section__header"')
-    // 疫苗
-    expect(read('VaccineManagementSection')).toContain('v-if="!embedded" class="health-section__header"')
+    // 疫苗（2026-10-15 起是 components/vaccine/VaccineTab.vue）：
+    // 书签已经写着「疫苗」，板块里不再顶一个同名标题 —— 它干脆不画板块头
+    expect(
+      readFileSync(resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'), 'utf-8'),
+    ).not.toContain('health-section__header')
     // 体重（首卡那行标题与说明）
     expect(read('WeightManagementSection')).toContain('<template v-if="!embedded">')
     // 饮食：两列清单的数量去掉，"爱吃的 / 不吃的"名字保留（否则两列分不清）
@@ -671,7 +678,7 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
 
   it('体重板块的新增部分仍挂在 showAddEntry 上（疫苗与过敏都已不在）', () => {
     const vaccine = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccineManagementSection.vue'),
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
     const weight = readFileSync(
@@ -679,11 +686,10 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
       'utf-8',
     )
 
-    // 疫苗板块：板块内的新增按钮已下线（老板说重复），
-    // 「拍疫苗本」的触发行本来就常隐（AI 走底部「新增记录」）。
+    // 疫苗板块：板块内的新增按钮一直没长回来，识别服务的自带按钮也常隐
+    //（AI 走底部「新增记录」，录入走「下一针」卡与底部「记一条」）。
     expect(vaccine).not.toContain('health-section__action')
-    // 「拍疫苗本」触发行仍常隐（AI 走底部「新增记录」）
-    expect(vaccine).toContain('hideScanTrigger?: boolean')
+    expect(vaccine).toContain('hide-trigger')
     // 体重板块不变：它的输入块仍由这个开关控制
     expect(weight).toContain('<view v-if="showAddEntry" class="input-card">')
   })
@@ -702,7 +708,7 @@ describe('dog-profile-health · 新增入口（2026-10-03 起：AI 走底部、�
  *
  * ⚠️ 这组测试是**反向断言**（not.toContain）—— 它挡的是"红点又悄悄长回来"。
  *    提醒本身没有消失：疫苗该不该打、下一针是什么，都在疫苗书签里的
- *    计划板块说清楚（`VaccinePlanSection`，那部分一个字没动 ✓）。
+ *    疫苗板块说清楚（2026-10-15 起是 `components/vaccine/VaccineTab.vue`）。
  */
 describe('健康管理 · 疫苗书签不带任何角标/红点（2026-10-15 红点下线）', () => {
   function readPage() {
@@ -746,16 +752,20 @@ describe('健康管理 · 疫苗书签不带任何角标/红点（2026-10-15 红
 
   it('疫苗计划接口在别处照旧使用（只删红点，不删提醒本身）', () => {
     const page = readPage()
-    const section = readFileSync(
-      resolve(process.cwd(), 'src/components/dog-profile/VaccinePlanSection.vue'),
+    const tab = readFileSync(
+      resolve(process.cwd(), 'src/components/vaccine/VaccineTab.vue'),
       'utf-8',
     )
 
-    // 计划板块仍然要拉计划、仍然挂在疫苗书签下
-    expect(section).toContain('dogApi.vaccinePlan(')
-    expect(page).toContain('<VaccinePlanSection')
-    // 记录一变仍然要重算计划（红点走了，这条通路不能跟着走）
-    expect(page).toContain('vaccinePlanRef.value?.reload?.()')
+    /*
+     * 2026-10-15 整块重构：拉计划这件事搬进了 `VaccineTab`（接口封装在
+     * `api/vaccines.ts`），页面不再牵着它重算。
+     * 「记录一变就重算计划」这条通路仍在，只是换了个做法 ——
+     * 任何写操作成功后由板块自己 `refreshAfterWrite()` 重新拉一次（技术方案 3.4）。
+     */
+    expect(tab).toContain('vaccineApi.plan(dogId)')
+    expect(page).toContain('<VaccineTab')
+    expect(tab).toContain('await refreshAfterWrite()')
   })
 
   it('书签里的文字 vs 主题色：color 留在 .health-tabs__item 上', () => {

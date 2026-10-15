@@ -5,19 +5,41 @@
  *   1. 识别失败要抛错，让前端降级为手工填写（A2）—— 不能返回一个空结果让人以为成功
  *   2. 报告里写"阴性/无过敏"时不得编造过敏原
  *   3. 结果只是候选，服务本身**绝不写库**（写库必须经顾客确认，见决策 5/9）
+ *
+ * ── 2026-10-15 逐条裁决：删掉了哪些用例、为什么（疫苗板块重构）──────────
+ *
+ * 需求与技术的两条硬口径：**AI 只取"疫苗名称 + 接种日期"**（需求 R12）；
+ * "待核对"的判据收敛成三条纯代码判据（技术方案 3.3）。据此删掉：
+ *
+ *   · 「疫苗本 · 产品名复核」整组 9 条 —— 那组锁的是"让模型再看一眼图核对
+ *     产品名"的第二次调用（`buildProductReviewRows` / `buildProductReviewPrompt`
+ *     / `applyProductReview`）。这一整套随"品牌对不上""复核读到不一样的字"
+ *     两条判据一起删了：新判据是代码判的（狂犬 / 名称归不了类 / 日期可疑），
+ *     不再有第二次模型调用。
+ *   · 「疫苗本 · 品牌对不上的行会带标记」1 条 —— `brandCheck` 字段随品牌一起删
+ *     （品牌不再抽取）。
+ *   · 「疫苗本 · 复核误报收窄」2 条 —— 同上，复核链路已删。
+ *   · 「疫苗本 · 老板实测后的三条收口」里的 2 条"复核报警比落到哪一支产品"
+ *     —— 同上；同一组里"同苗同日期只留一条（去重）"那两条**保留**，
+ *     去重与复核无关，仍然要守。
+ *   · 「疫苗本 · 日期只降级不升级」整组 4 条 —— 那组靠复核回传的 `dateOnBook`
+ *     降级日期；复核删掉之后没有这个输入了。仍然要守的"日期可疑 → 先不算数"
+ *     改由 `resolveVaccineVerification` 覆盖（见 vaccine-book-kinds-from-table.spec.ts）。
+ *   · AUTO 里"疫苗本现在会多一次复核调用"那一条 —— 那一次调用没有了。
+ *
+ * 保留的：过敏报告、体检、病历、AUTO 类型判断、视觉直读、模型配置、
+ * 疫苗本"名字没读清不落地"与去重 —— 都与本次重构无关。
  */
 
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthReportExtractionService,
-  applyProductReview,
   buildSystemPrompt,
   dedupeDrafts,
   dropBrokenNameDrafts,
-  buildProductReviewPrompt,
-  buildProductReviewRows,
   normalizeDrafts,
+  resolveVaccineVerification,
   resolveHealthDocumentFileKind,
   HEALTH_REPORT_OCR_PROVIDER,
   buildNotMedicalWarning,
@@ -1209,240 +1231,6 @@ describe('文档（PDF / Word）识别', () => {
  * 老板的方案："每次都让模型再审一遍原图和代码的匹配结果，看有没有问题。"
  * 采纳，但问题必须**封闭**（问"本子上写的是什么"，不问"有没有问题"）——
  * 开放式问题会逼模型编（实测它编过"贴纸被手指遮挡"）。
- */
-describe('疫苗本 · 产品名复核', () => {
-  it('只复核抄到名字的行', () => {
-    const rows = buildProductReviewRows([
-      { vaccineName: '英特威®优免康', productName: '宠必威优免康', vaccinationDate: '2023-08-09' },
-      { vaccineName: '', productName: '', vaccinationDate: '2024-01-01' },
-      { vaccineName: '狂犬', productName: '', vaccinationDate: '2026-07-25' },
-    ]);
-
-    expect(rows.map((row) => row.index)).toEqual([0, 2]);
-    expect(rows[0].ourProduct).toBe('宠必威优免康');
-    expect(rows[1].ourProduct).toBe('');
-  });
-
-  it('提示词是封闭问题，并且只许从产品库里挑候选', () => {
-    const prompt = buildProductReviewPrompt(['宠必威优免康', '宠必威锐必威']);
-
-    expect(prompt).toContain('逐字照抄');
-    expect(prompt).toContain('sameAsOurs');
-    expect(prompt).toContain('产品库之外的名字一律不许编');
-    expect(prompt).toContain('宠必威锐必威');
-  });
-
-  it('不一致的行带上"它读到的字 + 候选"，一致的只留标记', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '英特威®优免康', productName: '宠必威优免康' },
-      { vaccineName: '卫佳捌', productName: '卫佳捌' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          { index: 0, textOnBook: '宠必威锐必威', sameAsOurs: false, candidates: ['宠必威锐必威', '宠必威乐必妥'] },
-          { index: 1, textOnBook: '卫佳捌', sameAsOurs: true, candidates: [] },
-        ],
-      },
-      ['宠必威优免康', '宠必威锐必威', '宠必威乐必妥', '卫佳捌'],
-    );
-
-    expect(result).toEqual({ reviewed: 2, inconsistent: 1 });
-    expect(drafts[0].productReview).toEqual({
-      textOnBook: '宠必威锐必威',
-      consistent: false,
-      candidates: ['宠必威锐必威', '宠必威乐必妥'],
-    });
-    expect(drafts[1].productReview.consistent).toBe(true);
-    expect(drafts[1].productReview.candidates).toEqual([]);
-  });
-
-  it('🔴 库里没有的候选一律丢掉（模型编的名字不许进界面）', () => {
-    const drafts: Record<string, any>[] = [{ vaccineName: '英特威®优免康', productName: '' }];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '宠必威锐必威',
-            sameAsOurs: false,
-            candidates: ['不存在的苗', '宠必威优免康', '另一个编的'],
-          },
-        ],
-      },
-      ['宠必威优免康'],
-    );
-
-    expect(result.inconsistent).toBe(1);
-    expect(drafts[0].productReview.candidates).toEqual(['宠必威优免康']);
-  });
-
-  it('候选去重、也要排除掉我们自己认定的那一支，最多 3 个', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '英特威®优免康', productName: '卫佳捌' },
-    ];
-
-    applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '宠必威锐必威',
-            sameAsOurs: false,
-            candidates: ['卫佳捌', '卫佳伍', '卫佳伍', '瑞比克', '宠必威优免康', '优乐康'],
-          },
-        ],
-      },
-      ['卫佳捌', '卫佳伍', '瑞比克', '宠必威优免康', '优乐康'],
-    );
-
-    expect(drafts[0].productReview.candidates).toEqual(['卫佳伍', '瑞比克', '宠必威优免康']);
-  });
-
-  it('🔴 我们没匹配上、而且它读到的字和我们抄的一样 → 不算不一致（避免误报）', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '宠派纯® 狂犬病灭活疫苗', productName: '' },
-      { vaccineName: '狂犬', productName: '' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          { index: 0, textOnBook: '宠派纯® 狂犬病灭活疫苗', sameAsOurs: false, candidates: ['瑞比克'] },
-          { index: 1, textOnBook: '狂犬', sameAsOurs: false, candidates: ['瑞比克'] },
-        ],
-      },
-      ['瑞比克'],
-    );
-
-    expect(result).toEqual({ reviewed: 2, inconsistent: 0 });
-    expect(drafts[0].productReview.consistent).toBe(true);
-    expect(drafts[0].productReview.candidates).toEqual([]);
-  });
-
-  it('我们没匹配上，但它读到的字**不一样** → 算不一致（这可能是真读错了）', () => {
-    const drafts: Record<string, any>[] = [{ vaccineName: '英特威®优免康', productName: '' }];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          { index: 0, textOnBook: '宠必威锐必威', sameAsOurs: false, candidates: ['宠必威锐必威'] },
-        ],
-      },
-      ['宠必威锐必威'],
-    );
-
-    expect(result.inconsistent).toBe(1);
-    expect(drafts[0].productReview.candidates).toEqual(['宠必威锐必威']);
-  });
-
-  it('模型没给答案时不算"不一致"（不许凭空给家长报警）', () => {
-    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
-
-    const result = applyProductReview(drafts, { rows: [{ index: 0 }] }, []);
-
-    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
-    expect(drafts[0].productReview.consistent).toBe(true);
-  });
-
-  it('复核结果为空/坏数据时什么都不做', () => {
-    const drafts: Record<string, any>[] = [{ vaccineName: 'X', productName: '' }];
-
-    expect(applyProductReview(drafts, null, [])).toEqual({ reviewed: 0, inconsistent: 0 });
-    expect(applyProductReview(drafts, { rows: 'nope' } as any, [])).toEqual({
-      reviewed: 0,
-      inconsistent: 0,
-    });
-    expect(drafts[0].productReview).toBeUndefined();
-  });
-})
-});
-
-
-/**
- * 品牌一致性检查接在识别结果上（2026-10-09）
- */
-describe('疫苗本 · 品牌对不上的行会带标记', () => {
-  it('「英特威®瑞比克」这种矛盾会挂上 brandCheck.conflict', () => {
-    const drafts = normalizeDrafts('VACCINE_BOOK', {
-      drafts: [
-        { vaccineName: '英特威®瑞比克', vaccinationDate: '2024-08-25' },
-        { vaccineName: '卫佳®Vanguard® Plus 5/CV-L', vaccinationDate: '2025-08-18' },
-      ],
-    });
-
-    expect(drafts[0].brandCheck.conflict).toBe(true);
-    expect(drafts[0].brandCheck.textBrand).toBe('英特威');
-    expect(drafts[1].brandCheck.conflict).toBe(false);
-  });
-});
-
-/**
- * 误报收窄第二层（2026-10-09 实测）
- *
- * 实测第 3 遍：我们按名字把「卫佳®Vanguard® Plus 5/CV-L」定成**卫佳捌**
- * （带 CV-L 就是捌，产品库规则 + 有测试钉着），
- * 复核却给了"卫佳伍 / 卫佳细"并说不是同一支 ✗ ——
- * 而这两支正是**同一段文字更粗略的读法**（库里卫佳伍的别名就是 vanguard plus 5）。
- * 这种情况报错只会制造狼来了 ✓。
- */
-describe('疫苗本 · 复核误报收窄（同一段文字的更粗略读法）', () => {
-  it('候选全是这段文字的另一种读法 → 不报警（我们按"最具体"定的那支是对的）', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '卫佳®Vanguard® Plus 5/CV-L', productName: '卫佳捌' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '卫佳®Vanguard® Plus 5/CV-L',
-            sameAsOurs: false,
-            candidates: ['卫佳伍', '卫佳细'],
-          },
-        ],
-      },
-      ['卫佳捌', '卫佳伍', '卫佳细'],
-    );
-
-    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
-    expect(drafts[0].productReview.candidates).toEqual([]);
-  });
-
-  it('候选里有"这段文字读不出来的另一支" → 仍然报警（那才是真读错了）', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '英特威®优免康', productName: '宠必威优免康' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '宠必威锐必威',
-            sameAsOurs: false,
-            candidates: ['宠必威锐必威'],
-          },
-        ],
-      },
-      ['宠必威优免康', '宠必威锐必威'],
-    );
-
-    expect(result.inconsistent).toBe(1);
-    expect(drafts[0].productReview.candidates).toEqual(['宠必威锐必威']);
-  });
-});
-
 /**
  * 2026-10-09 老板拿 23 张真实疫苗本核对出来的三条改动
  * （基线：产品名 74.8%、日期 75.7%、🔴 4 行"本子上没填注射日期我们却写了日期"）
@@ -1469,55 +1257,6 @@ describe('疫苗本 · 老板实测后的三条收口', () => {
 
     expect(removed).toBe(0);
     expect(drafts).toHaveLength(4);
-  });
-
-  it('复核报警比"落到哪一支产品"，不比字面（16 号照片那次假报）', () => {
-    // 我们读「卫佳伍」= 对的；复核读成「卫佳®伍 VANGUARD® PLUS 5」——
-    // 字面不同，但落到的是**同一支产品** → 不该报警 ✓
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '卫佳®伍', productName: '卫佳伍' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '卫佳®伍 VANGUARD® PLUS 5',
-            sameAsOurs: false,
-            candidates: ['卫佳伍'],
-          },
-        ],
-      },
-      ['卫佳伍', '卫佳捌'],
-    );
-
-    expect(result).toEqual({ reviewed: 1, inconsistent: 0 });
-    expect(drafts[0].productReview.consistent).toBe(true);
-  });
-
-  it('复核读到的字指向**另一支产品**时仍然报警（那才是真读错了）', () => {
-    const drafts: Record<string, any>[] = [
-      { vaccineName: '宠必威®优免康', productName: '宠必威优免康' },
-    ];
-
-    const result = applyProductReview(
-      drafts,
-      {
-        rows: [
-          {
-            index: 0,
-            textOnBook: '宠必威®锐必威',
-            sameAsOurs: false,
-            candidates: ['宠必威锐必威'],
-          },
-        ],
-      },
-      ['宠必威优免康', '宠必威锐必威'],
-    );
-
-    expect(result.inconsistent).toBe(1);
   });
 
   it('提示词里钉住了老板 2026-10-09 定的四条规矩', () => {
@@ -1572,70 +1311,85 @@ describe('疫苗本 · 名字没读清的行不落地', () => {
   });
 });
 
+})
+
 /**
- * 日期只降级、不升级（2026-10-09 老板实测后定的）
+ * 疫苗本 · 只取两个信息（需求 R12 / 技术方案 3.3，2026-10-15）
  *
- * 老板实测：本子上「2023.8」被写成 2023-08-09 ✗、「2019.1」被写成 2019-01-03 ✗；
- * 02/04 号本子**根本没填注射日期**，却被填进了生产日期 ✗（🔴 4 行）。
- * 复核自己也读错过（16/18 号），所以它**没资格给我们新日期** ✗ ——
- * 但它的回答可以让我们更保守 ✓。
+ * 老板："AI 识别只要两个信息：打了哪些疫苗、什么时候打的。
+ *        品牌、批号、下次到期日这些一律不要。"
  */
-describe('疫苗本 · 日期只降级不升级', () => {
-  const reviewWith = (drafts: Record<string, any>[], row: Record<string, any>) => {
-    applyProductReview(
-      drafts,
-      { rows: [{ index: 0, textOnBook: drafts[0].vaccineName, sameAsOurs: true, candidates: [], ...row }] },
-      ['卫佳伍'],
-    );
-    return drafts[0];
-  };
-
-  it('复核说"只写了年月" → 强制改回 01 + 加一句说明', () => {
-    const draft = reviewWith(
-      [{ vaccineName: '卫佳伍', vaccinationDate: '2023-08-09', productName: '卫佳伍' }],
-      { dateOnBook: '2023-08' },
+describe('疫苗本 · 只取「名称 + 日期」（2026-10-15）', () => {
+  const readSource = () =>
+    require('node:fs').readFileSync(
+      require('node:path').resolve(
+        __dirname,
+        '../../../src/application/health/health-report-extraction.service.ts',
+      ),
+      'utf-8',
     );
 
-    expect(draft.vaccinationDate).toBe('2023-08-01');
-    expect(draft.notes).toContain('本子上只写到年月');
-    expect(draft.productReview.dateReview).toBe('monthOnly');
+  it('提示词里不再要求抽品牌 / 批号 / 下次到期日', () => {
+    const source = readSource();
+    // JSON 结构里不许再有这个键，提示词里也不许再要求填它
+    expect(source).not.toContain('"nextDueDate"');
+    expect(source).not.toContain('nextDueDate 只有本子上明确写了才填');
+    expect(source).not.toContain('批号、有效期同样照抄');
+    expect(source).not.toContain('品牌名要照抄');
+    // 名称照旧要逐字照抄（换名字是错得最狠的一类）
+    expect(source).toContain('产品名要逐字照抄');
   });
 
-  it('复核说"没写" → 这一针先不算数（走安全默认值，等顾客核对）', () => {
-    const draft = reviewWith(
-      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-04-20', productName: '卫佳伍' }],
-      { dateOnBook: '没写' },
+  it('输出结构里只剩 vaccineName + vaccinationDate + notes', () => {
+    const source = readSource();
+    expect(source).toContain(
+      '{ "vaccineName": "犬四联", "vaccinationDate": "2025-03-10", "notes": "" }',
     );
-
-    expect(draft.productVerified).toBe(false);
-    expect(draft.productReview.dateReview).toBe('missing');
-    // 日期本身**不改**（不改数据，只是不算数）✓
-    expect(draft.vaccinationDate).toBe('2025-04-20');
   });
 
-  it('复核给的完整日期和我们不一样 → 也先不算数（不直接改日期）', () => {
-    const draft = reviewWith(
-      [{ vaccineName: '卫佳捌', vaccinationDate: '2025-08-18', productName: '卫佳捌' }],
-      { dateOnBook: '2025-08-20' },
-    );
+  it('「待核对」三条判据：狂犬 / 名称归不了类 / 日期可疑', () => {
+    const today = new Date();
+    const past = `${today.getFullYear() - 1}-01-01`;
+    const future = `${today.getFullYear() + 1}-01-01`;
 
-    expect(draft.vaccinationDate).toBe('2025-08-18');
-    expect(draft.productVerified).toBe(false);
-    expect(draft.productReview.dateReview).toBe('differs');
-  });
+    expect(
+      resolveVaccineVerification({
+        vaccineName: '狂犬疫苗',
+        kinds: ['rabies'],
+        vaccinationDate: past,
+      }).productVerified,
+    ).toBe(false);
 
-  it('日期一致、或复核没回答 → 什么都不动', () => {
-    const same = reviewWith(
-      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-08-18', productName: '卫佳伍' }],
-      { dateOnBook: '2025-08-18' },
-    );
-    expect(same.productVerified).toBeUndefined();
-    expect(same.productReview.dateReview).toBeUndefined();
+    expect(
+      resolveVaccineVerification({
+        vaccineName: '认不出的名字',
+        kinds: [],
+        vaccinationDate: past,
+      }).productVerified,
+    ).toBe(false);
 
-    const noAnswer = reviewWith(
-      [{ vaccineName: '卫佳伍', vaccinationDate: '2025-08-18', productName: '卫佳伍' }],
-      {},
-    );
-    expect(noAnswer.productReview.dateReview).toBeUndefined();
+    expect(
+      resolveVaccineVerification({
+        vaccineName: '犬六联',
+        kinds: ['core'],
+        vaccinationDate: '',
+      }).productVerified,
+    ).toBe(false);
+
+    expect(
+      resolveVaccineVerification({
+        vaccineName: '犬六联',
+        kinds: ['core'],
+        vaccinationDate: future,
+      }).productVerified,
+    ).toBe(false);
+
+    expect(
+      resolveVaccineVerification({
+        vaccineName: '犬六联',
+        kinds: ['core'],
+        vaccinationDate: past,
+      }).productVerified,
+    ).toBe(true);
   });
 });

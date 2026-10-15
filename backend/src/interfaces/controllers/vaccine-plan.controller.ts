@@ -5,7 +5,6 @@ import {
   Get,
   Param,
   Put,
-  Query,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -15,7 +14,6 @@ import {
   ApiOperation,
   ApiResponse,
   ApiParam,
-  ApiQuery,
   ApiBody,
   ApiSecurity,
   ApiHeader,
@@ -26,14 +24,16 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 
 /**
- * 疫苗计划（2026-10-01，第四期）。
+ * 疫苗计划（2026-10-15 重做）。
  *
- * 老板第 15–18 条：按免疫程序提醒还缺哪些、什么时候打；首选 WSAVA 指南、
- * 结合国内法规；**引导顾客自己决策**；顾客计划与我们不一致时提醒；
- * 提醒只在小程序内（不碰订阅消息）。
+ * 主接口一次给全：`next`（下一针）+ `plan`（完整安排，后端已排好序）+
+ * `ignored`（已忽略的 N 项，**真实值**）+ `rhythm`（之后那一句话）+
+ * `pendingReview` + `conflicts`。前端只渲染，不做任何计算。
  *
- * ⚠️ 顾客侧默认关闭（`VACCINE_PLAN=customer` 才开）：
- *    免疫程序表尚未经兽医审核，老板定了"未经专业审核的兽医内容不得对顾客开放"。
+ * ⚠️ 本次删掉的两样：
+ *   · `audience` 查询参数 —— 营养师与顾客拿的是同一份（后端里本来就是 `void audience`）
+ *   · `GET :dogId/vaccine-plan/schedule` —— 那是"给营养师看整套程序表"的旧口，
+ *     可选疫苗已经不进计划（需求第四节），整套程序表不再有对外的意义
  */
 @ApiTags('Vaccine Plan')
 @Controller('api/v1/dogs')
@@ -43,9 +43,7 @@ export class VaccinePlanController {
 
   @Get(':dogId/vaccine-plan')
   @UseGuards(AuthGuard)
-  @ApiOperation({
-    summary: 'Get the vaccine plan of a dog (customer view, gated by VACCINE_PLAN)',
-  })
+  @ApiOperation({ summary: 'Get the vaccine plan of a dog (next + full plan)' })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
     name: 'X-Customer-Id',
@@ -53,31 +51,18 @@ export class VaccinePlanController {
     required: true,
   })
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
-  @ApiQuery({
-    name: 'audience',
-    required: false,
-    enum: ['customer', 'staff'],
-    description: 'staff 用于营养师/管理端，不受顾客侧开关限制',
-  })
   @ApiResponse({ status: 200, description: 'Plan retrieved successfully' })
   async getPlan(
     @Param('dogId') dogId: string,
-    @Query('audience') audience: string | undefined,
     @CurrentUser() user: RequestUser,
   ) {
-    const data = await this.vaccinePlanService.getPlan(
-      user.customerId,
-      dogId,
-      audience === 'staff' ? 'staff' : 'customer',
-    );
+    const data = await this.vaccinePlanService.getPlan(user.customerId, dogId);
     return ApiResponseDto.success(data);
   }
 
-  @Get(':dogId/vaccine-plan/schedule')
+  @Get(':dogId/vaccine-plan/decisions')
   @UseGuards(AuthGuard)
-  @ApiOperation({
-    summary: 'Get the full immunization schedule of a dog (for staff review)',
-  })
+  @ApiOperation({ summary: 'List the owner decisions of a dog' })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
     name: 'X-Customer-Id',
@@ -85,12 +70,14 @@ export class VaccinePlanController {
     required: true,
   })
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
-  @ApiResponse({ status: 200, description: 'Schedule retrieved successfully' })
-  async getSchedule(
+  async listDecisions(
     @Param('dogId') dogId: string,
     @CurrentUser() user: RequestUser,
   ) {
-    const data = await this.vaccinePlanService.getSchedule(user.customerId, dogId);
+    const data = await this.vaccinePlanService.listDecisions(
+      user.customerId,
+      dogId,
+    );
     return ApiResponseDto.success(data);
   }
 
@@ -104,7 +91,10 @@ export class VaccinePlanController {
     required: true,
   })
   @ApiParam({ name: 'dogId', description: 'Dog ID' })
-  @ApiParam({ name: 'stepKey', description: 'Schedule step key, e.g. core-puppy-1' })
+  @ApiParam({
+    name: 'stepKey',
+    description: 'Schedule step key, e.g. core-puppy-1',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -114,6 +104,11 @@ export class VaccinePlanController {
           enum: ['ACCEPT', 'DEFER', 'SKIP'],
           description: '按建议 / 推迟 / 不做',
         },
+        reason: {
+          type: 'string',
+          enum: ['NOT_NOW', 'STOPPED'],
+          description: '忽略的原因：这次先不打 / 不再接种了（可空）',
+        },
       },
     },
   })
@@ -121,7 +116,7 @@ export class VaccinePlanController {
   async setDecision(
     @Param('dogId') dogId: string,
     @Param('stepKey') stepKey: string,
-    @Body() body: { decision?: string },
+    @Body() body: { decision?: string; reason?: string },
     @CurrentUser() user: RequestUser,
   ) {
     const data = await this.vaccinePlanService.setDecision(
@@ -129,6 +124,7 @@ export class VaccinePlanController {
       dogId,
       stepKey,
       String(body?.decision || ''),
+      body?.reason ?? null,
     );
     return ApiResponseDto.success(data);
   }

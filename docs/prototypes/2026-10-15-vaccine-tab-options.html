@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>疫苗标签页 · 首屏三方案对比（2026-10-15）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #eceee9; color: #1e3a2f; padding: 24px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 20px; margin-bottom: 6px; }
+  .sub { font-size: 12.5px; color: #5f7166; line-height: 1.7; max-width: 1180px; }
+  .sub b { color: #1e3a2f; }
+
+  /* ── 三个待拍板问题的对照表 ─────────────────────────── */
+  .ask { margin: 16px 0 22px; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+  .ask th, .ask td { border: 1px solid #dfe4dc; padding: 7px 10px; text-align: left; vertical-align: top; }
+  .ask th { background: #f5f8f3; font-weight: 600; white-space: nowrap; }
+  .ask .rec { color: #0f7b49; font-weight: 700; }
+
+  /* ── 三列 ───────────────────────────────────────────── */
+  .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: nowrap; }
+  .col { width: 372px; flex: 0 0 372px; }
+  .col__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .col__name { font-size: 15px; font-weight: 700; }
+  .col__tag {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  }
+  .t-rec { background: #d9f0e2; color: #17603f; }
+  .t-alt { background: #e7eaf0; color: #4a5568; }
+  .t-long { background: #f6e3e3; color: #a33; }
+  .col__desc { font-size: 12px; color: #5f7166; line-height: 1.65; margin-bottom: 10px; min-height: 52px; }
+  .col__tall { font-size: 12px; color: #8a968a; margin-top: 8px; line-height: 1.6; }
+
+  /* ── 手机屏 ─────────────────────────────────────────── */
+  .phone {
+    width: 372px; background: #f3f5f1; border: 1px solid #dfe4dc;
+    border-radius: 20px; padding: 0 10px 0; position: relative;
+    box-shadow: 0 6px 24px rgba(30,58,47,.06);
+  }
+  .screen { background: #f3f5f1; padding: 10px 0 14px; }
+
+  /* 顶部标题栏（真机上有，占 44px） */
+  .navbar {
+    height: 44px; display: flex; align-items: center; gap: 6px;
+    padding: 0 12px; background: #f3f5f1; border-bottom: 1px solid #e6ebe3;
+    border-radius: 20px 20px 0 0; margin: 0 -10px;
+  }
+  .navbar__back { font-size: 17px; color: #4a5a4a; line-height: 1; }
+  .navbar__t { font-size: 14px; font-weight: 600; color: #1e3a2f; }
+  .navbar__cap {
+    margin-left: auto; font-size: 11px; color: #9aa79c; border: 1px solid #d5dbd2;
+    border-radius: 999px; padding: 2px 9px;
+  }
+
+  /* 页面自有的一块：健康记录入口 + 四个书签（真机上就在疫苗内容上方） */
+  .chrome { margin: 0 0 10px; }
+  .entry {
+    background: linear-gradient(135deg,#12784b,#0d5f3c); border-radius: 12px;
+    color: #fff; padding: 10px 12px; display: flex; align-items: center;
+    font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  }
+  .entry span { margin-left: auto; font-weight: 400; opacity: .85; }
+  .entry i { font-style: normal; font-size: 11px; font-weight: 400; opacity: .82; margin-left: 8px; }
+  .tabs { display: flex; background: #fff; border: 1px solid #e8ede2; border-radius: 12px; overflow: hidden; }
+  .tabs span { flex: 1; text-align: center; font-size: 12.5px; color: #7d8a80; padding: 9px 0; }
+  .tabs .on { color: #12503a; font-weight: 700; background: #eef6f1; box-shadow: inset 0 -2px 0 #0f7b49; }
+
+  /* 「一屏」参考线：真机 780px（含标题栏） */
+  .phone--fold::after {
+    content: ""; position: absolute; left: -1px; right: -1px; top: 722px;
+    border-top: 1.5px dashed #c9a227; z-index: 4; pointer-events: none;
+  }
+  .legend {
+    display: inline-block; width: 26px; height: 0; vertical-align: middle;
+    border-top: 2px dashed #c9a227; margin-right: 4px;
+  }
+  .foldtag {
+    position: absolute; right: 8px; top: 704px; z-index: 5;
+    background: #fdf6dd; color: #8a6a12; border: 1px solid #e8d79a;
+    font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  }
+
+  /* 狗狗摘要（复用现状，不动） */
+  .hero {
+    background: #fff; border: 1px solid #e8ede2; border-radius: 14px;
+    padding: 12px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+  }
+  .hero__avatar {
+    width: 46px; height: 46px; border-radius: 50%; flex: 0 0 46px;
+    background: linear-gradient(140deg,#cfe3d3,#a9c9b3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #4a6b57; font-weight: 700;
+  }
+  .hero__name { font-size: 16px; font-weight: 700; color: #1e3a2f; }
+  .hero__facts { margin-left: auto; display: flex; gap: 14px; }
+  .hero__fact { text-align: right; }
+  .hero__fact b { display: block; font-size: 13px; color: #1e3a2f; }
+  .hero__fact i { font-style: normal; font-size: 10.5px; color: #8a968a; }
+
+  /* 板块骨架 */
+  .sec { margin-bottom: 10px; }
+  .sec__head { display: flex; align-items: center; gap: 7px; margin: 0 2px 8px; }
+  .sec__bar { width: 4px; height: 15px; border-radius: 2px; }
+  .bar-plan { background: #0f7b49; }
+  .bar-rec { background: #7c6bd6; }
+  .sec__title { font-size: 14.5px; font-weight: 700; }
+  .title-plan { color: #12503a; }
+  .title-rec { color: #4a3f6b; }
+  .sec__meta { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+
+  /* ① 接下来卡（新增） */
+  .next {
+    background: linear-gradient(135deg,#12784b,#0d5f3c); border-radius: 14px;
+    padding: 13px 13px 12px; color: #fff; margin-bottom: 10px;
+    box-shadow: 0 4px 14px rgba(15,123,73,.16);
+  }
+  .next__eyebrow { display: flex; align-items: center; font-size: 11px; opacity: .85; letter-spacing: .5px; }
+  .next__count { margin-left: auto; font-weight: 600; opacity: .95; }
+  .next__what { font-size: 16.5px; font-weight: 700; margin: 3px 0 4px; }
+  .next__when { font-size: 12.5px; line-height: 1.5; opacity: .95; }
+  .next__more { font-size: 11.5px; opacity: .82; margin-top: 3px; }
+  .next__acts { display: flex; gap: 8px; margin-top: 11px; }
+  .next__btn {
+    flex: 1; height: 34px; border-radius: 9px; display: flex;
+    align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600;
+  }
+  .next__btn--solid { background: #fff; color: #0d5f3c; }
+  .next__btn--ghost { border: 1px solid rgba(255,255,255,.55); color: #fff; }
+
+  /* ② 计划卡（折叠态一行） */
+  .plan-card {
+    background: #fff; border: 1px solid #e3ece6; border-radius: 12px;
+    padding: 11px 12px; margin-bottom: 8px; position: relative; overflow: hidden;
+  }
+  .plan-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  }
+  .pc-core::before { background: #0f7b49; }
+  .pc-lepto::before { background: #0d6e7a; }
+  .pc-rabies::before { background: #9a5a2c; }
+  .pc__top { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .b-due { background: #e7f5ec; color: #0f7b49; }
+  .b-over { background: #fbeceb; color: #b4453a; }
+  .b-done { background: #f0f3f1; color: #6b7a70; }
+  .b-check { background: #fdf3e4; color: #a15c00; }
+  .pc__dose { font-size: 12.5px; font-weight: 600; color: #2f5d4a; }
+  .pc__toggle { margin-left: auto; font-size: 11.5px; color: #7d8a80; }
+  .pc__kind { font-size: 14px; font-weight: 700; color: #1e3a2f; margin-top: 6px; }
+  .pc__when { font-size: 11.5px; color: #6b7a66; margin-top: 3px; }
+  .pc__when--over { color: #b4453a; }
+
+  /* 合并窗口（成组容器：一张框、两条行） */
+  .combo { border: 1px solid #7fb08f; border-radius: 12px; overflow: hidden; margin-bottom: 8px; }
+  .combo__head { background: #dcefe4; padding: 8px 11px; }
+  .combo__title { font-size: 12px; font-weight: 700; color: #12503a; }
+  .combo__desc { font-size: 11px; color: #2f5d4a; margin-top: 3px; line-height: 1.5; }
+  .combo__row { background: #e9f5ee; padding: 10px 12px; border-top: 1px solid #cfe4d6; }
+  .combo__row .pc__kind { margin-top: 5px; }
+  .combo__row .pc__when { color: #2f5d4a; }
+
+  /* 展开态（依据收起 / 铺开） */
+  .kv { display: flex; gap: 10px; margin-top: 9px; font-size: 11.5px; }
+  .kv__k { flex: 0 0 58px; color: #8a968a; }
+  .kv__v { flex: 1; color: #333; line-height: 1.6; }
+  .basis { font-size: 11.5px; color: #4d5a4d; line-height: 1.6; }
+  .basis b { color: #1e3a2f; }
+  .more { color: #0f7b49; font-weight: 600; }
+  .acts { display: flex; gap: 8px; margin-top: 11px; }
+  .act {
+    flex: 1; height: 32px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 600;
+  }
+  .act--primary { background: #0f7b49; color: #fff; }
+  .act--ghost { background: #f2f4ec; color: #6b6653; }
+
+  /* ③ 记录区 */
+  .rec-card { background: linear-gradient(180deg,#f8f6ff,#fff); border: 1px solid #e4e0f2; border-radius: 14px; padding: 12px; }
+  .rec-card__head { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+  .rec-card__title { font-size: 13.5px; font-weight: 700; color: #4a3f6b; }
+  .rec-card__count { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #7c6bd6; background: #f0edfb; border-radius: 999px; padding: 2px 8px; }
+  .rec-empty { font-size: 12.5px; color: #8a968a; padding: 10px 2px 4px; }
+  .rec-row { display: flex; align-items: center; gap: 9px; padding: 10px 2px; border-top: 1px solid #f0edf8; }
+  .rec-row:first-of-type { border-top: none; }
+  .rec-row__dot { width: 7px; height: 7px; border-radius: 50%; background: #7c6bd6; flex: 0 0 7px; }
+  .rec-row__name { font-size: 13px; font-weight: 600; color: #1e3a2f; }
+  .rec-row__date { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+  .rec-more { text-align: center; font-size: 12px; color: #7c6bd6; font-weight: 600; padding-top: 10px; }
+
+  /* 子标签（方案 C） */
+  .seg { display: flex; background: #eceee9; border-radius: 11px; padding: 3px; margin-bottom: 10px; }
+  .seg__item { flex: 1; text-align: center; font-size: 12.5px; font-weight: 600; color: #6b7a66; padding: 7px 0; border-radius: 9px; }
+  .seg__item--on { background: #fff; color: #12503a; box-shadow: 0 1px 3px rgba(30,58,47,.08); }
+
+  /* 原件入口 */
+  .book {
+    display: flex; align-items: center; gap: 8px; background: #fff;
+    border: 1px dashed #d9e0d0; border-radius: 12px; padding: 11px 12px; margin-top: 8px;
+  }
+  .book__t { font-size: 12.5px; color: #4a5a4a; font-weight: 600; }
+  .book__n { margin-left: auto; font-size: 11.5px; color: #8a968a; }
+
+  /* 屏高参考线 */
+  .fold { position: relative; }
+  .fold__line {
+    position: absolute; left: -10px; right: -10px; height: 0;
+    border-top: 1px dashed #c9a227; z-index: 3;
+  }
+  .fold__label {
+    position: absolute; right: 2px; top: -9px; background: #fdf6dd; color: #8a6a12;
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+    border: 1px solid #e8d79a;
+  }
+
+  /* 结论区 */
+  .verdict {
+    margin-top: 26px; background: #fff; border: 1px solid #dfe4dc; border-radius: 14px;
+    padding: 16px 18px; max-width: 1180px;
+  }
+  .verdict h2 { font-size: 15px; margin-bottom: 8px; }
+  .verdict p, .verdict li { font-size: 12.5px; line-height: 1.75; color: #40504a; }
+  .verdict ul { margin: 6px 0 10px 18px; }
+  .verdict .hl { color: #0f7b49; font-weight: 700; }
+  .variant { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>疫苗标签页 · 首屏三方案对比</h1>
+<p class="sub">
+  同一份真实数据（<b>测33 · 零记录 8.6 周龄</b>：核心疫苗窗口已过要补种、钩端同时进窗口、狂犬还没到），
+  只换<b>首屏怎么摆</b>。三列都按真机 372×780 画。<br />
+  <b><span class="legend"></span>黄虚线 = 「一屏」的边界</b>：已经扣掉顶部标题栏 44px、底部常驻「新增记录」58px；
+  页面自带的「健康记录」入口与四个书签（就诊 / 体检 / 疫苗 / 体重）也照原样画在里面了 ——
+  它们本来就占着位置。越过这条线，家长就得滑动才能看到。
+</p>
+
+<table class="ask">
+  <tr>
+    <th>要拍板的事</th>
+    <th>方案 A · 先给结论</th>
+    <th>方案 B · 就是现在这样</th>
+    <th>方案 C · 计划 / 记录分两层</th>
+  </tr>
+  <tr>
+    <td>① 首屏第一块给什么</td>
+    <td class="rec">一句话「接下来」+ 两个动作</td>
+    <td>直接铺计划卡（现状）</td>
+    <td class="rec">一句话「接下来」+ 两个动作</td>
+  </tr>
+  <tr>
+    <td>② 记录区放哪</td>
+    <td class="rec">计划下面，默认最近几条</td>
+    <td>计划下面，整块铺开</td>
+    <td>收进「记录」子标签，点一下才看</td>
+  </tr>
+  <tr>
+    <td>③ 「依据」默认</td>
+    <td class="rec">只留一句 +「更多」</td>
+    <td>点开就整段铺开</td>
+    <td class="rec">只留一句 +「更多」</td>
+  </tr>
+  <tr>
+    <td>首屏能放下什么（按上面画的实际量过）</td>
+    <td class="rec">结论 + 计划（合并框）+ 记录标题，<b>压线刚好</b></td>
+    <td>计划 3 张 + 记录，还余约 170px；<b>但没有一句结论</b></td>
+    <td>结论 + 计划，差 20px 压线外（子标签占了 46px）</td>
+  </tr>
+  <tr>
+    <td>「先打哪个」要不要自己算</td>
+    <td class="rec">不用，第一块就写着</td>
+    <td>要自己比三张卡的状态和日期</td>
+    <td class="rec">不用</td>
+  </tr>
+</table>
+
+<div class="row">
+
+  <!-- ══════════ 方案 A ══════════ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">方案 A · 先给结论</span>
+      <span class="col__tag t-rec">推荐</span>
+    </div>
+    <p class="col__desc">
+      家长一进来先看到一句人话：「接下来打什么、大概什么时候」，下面才是计划与记录。
+      想深入了解的，点「展开」或「更多」自己往下走。
+    </p>
+
+    <div class="phone phone--fold">
+    <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+      <div class="hero">
+        <div class="hero__avatar">头像</div>
+        <div>
+          <div class="hero__name">测33</div>
+        </div>
+        <div class="hero__facts">
+          <div class="hero__fact"><b>8 周</b><i>月龄</i></div>
+          <div class="hero__fact"><b>3.6kg</b><i>体重</i></div>
+        </div>
+      </div>
+
+      <!-- ① 接下来 -->
+      <div class="next">
+        <div class="next__eyebrow">接下来<span class="next__count">共 3 项待办</span></div>
+        <div class="next__what">核心疫苗 · 首免 第 1 针</div>
+        <div class="next__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+        <div class="next__more">另有 1 针也在窗口内：钩端螺旋体</div>
+        <div class="next__acts">
+          <div class="next__btn next__btn--solid">记录这一针</div>
+          <div class="next__btn next__btn--ghost">拍疫苗本</div>
+        </div>
+      </div>
+
+      <!-- ② 计划：结论卡本身就是这一段的开头，不再重复一个「接种计划」标题 -->
+      <div class="sec">
+
+        <!-- 合并窗口：一张框、两条行 -->
+        <div class="combo">
+          <div class="combo__head">
+            <div class="combo__title">核心疫苗 + 钩端螺旋体</div>
+            <div class="combo__desc">这两针可以一起打，共同窗口 10/15 ~ 10/29</div>
+          </div>
+          <div class="combo__row">
+            <div class="pc__top">
+              <span class="badge b-over">尽快补种</span>
+              <span class="pc__dose">首免 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+            <div class="pc__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+          </div>
+          <div class="combo__row">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首次免疫 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">钩端螺旋体</div>
+            <div class="pc__when">建议接种时间 10/11 ~ 11/08</div>
+          </div>
+        </div>
+
+        <div class="plan-card pc-rabies">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">狂犬疫苗</div>
+          <div class="pc__when">建议接种时间 11/08 ~ 12/08</div>
+        </div>
+      </div>
+
+      <!-- ③ 记录 -->
+      <div class="sec">
+        <div class="sec__head">
+          <div class="sec__bar bar-rec"></div>
+          <div class="sec__title title-rec">接种记录</div>
+        </div>
+        <div class="rec-card">
+          <div class="rec-empty">档案里还没有接种记录</div>
+        </div>
+        <div class="book">
+          <div class="book__t">查看疫苗本原件</div>
+          <div class="book__n">还没有上传</div>
+        </div>
+      </div>
+
+    </div></div>
+    <p class="col__tall">折叠态每张卡只有两行：状态 + 步骤名 / 类别 + 建议时间。</p>
+  </div>
+
+  <!-- ══════════ 方案 B ══════════ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">方案 B · 就是现在这样</span>
+      <span class="col__tag t-long">不推荐</span>
+    </div>
+    <p class="col__desc">
+      一进来直接铺计划卡；三张卡各自独立，「先打哪个、急不急」要家长自己对比状态与日期。
+      下面单独画了「点开一张卡之后」的对比 —— 那是现状最费屏的地方。
+    </p>
+
+    <div class="phone phone--fold">
+    <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+      <div class="hero">
+        <div class="hero__avatar">头像</div>
+        <div><div class="hero__name">测33</div></div>
+        <div class="hero__facts">
+          <div class="hero__fact"><b>8 周</b><i>月龄</i></div>
+          <div class="hero__fact"><b>3.6kg</b><i>体重</i></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec__head">
+          <div class="sec__bar bar-plan"></div>
+          <div class="sec__title title-plan">接种计划</div>
+        </div>
+
+        <div class="plan-card pc-core">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首免 第 1 针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+          <div class="pc__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+        </div>
+
+        <div class="plan-card pc-lepto">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首次免疫 第 1 针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">钩端螺旋体</div>
+          <div class="pc__when">建议接种时间 10/11 ~ 11/08</div>
+        </div>
+
+        <div class="plan-card pc-rabies">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">狂犬疫苗</div>
+          <div class="pc__when">建议接种时间 11/08 ~ 12/08</div>
+        </div>
+
+      </div>
+
+      <div class="sec">
+        <div class="sec__head">
+          <div class="sec__bar bar-rec"></div>
+          <div class="sec__title title-rec">接种记录</div>
+        </div>
+        <div class="rec-card"><div class="rec-empty">档案里还没有接种记录</div></div>
+      </div>
+
+    </div></div>
+    <p class="col__tall">三张卡都看得到，但「核心已经过了窗口、钩端正好、狂犬还早」这件事得家长自己比；哪两针能一起打也看不出来。</p>
+  </div>
+
+  <!-- ══════════ 方案 C ══════════ -->
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">方案 C · 计划 / 记录分两层</span>
+      <span class="col__tag t-alt">备选</span>
+    </div>
+    <p class="col__desc">
+      首屏只有「接下来」+ 计划；记录收进第二个子标签，顶部显示条数。
+      首屏最短，但家长想看「上次打的是什么」要多点一下。
+    </p>
+
+    <div class="phone phone--fold">
+    <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+      <div class="hero">
+        <div class="hero__avatar">头像</div>
+        <div><div class="hero__name">测33</div></div>
+        <div class="hero__facts">
+          <div class="hero__fact"><b>8 周</b><i>月龄</i></div>
+          <div class="hero__fact"><b>3.6kg</b><i>体重</i></div>
+        </div>
+      </div>
+
+      <div class="next">
+        <div class="next__eyebrow">接下来<span class="next__count">共 3 项待办</span></div>
+        <div class="next__what">核心疫苗 · 首免 第 1 针</div>
+        <div class="next__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+        <div class="next__acts">
+          <div class="next__btn next__btn--solid">记录这一针</div>
+          <div class="next__btn next__btn--ghost">拍疫苗本</div>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg__item seg__item--on">接种计划 · 3</div>
+        <div class="seg__item">接种记录 · 0</div>
+      </div>
+
+      <div class="combo">
+        <div class="combo__head">
+          <div class="combo__title">核心疫苗 + 钩端螺旋体</div>
+          <div class="combo__desc">这两针可以一起打，共同窗口 10/15 ~ 10/29</div>
+        </div>
+        <div class="combo__row">
+          <div class="pc__top">
+            <span class="badge b-over">尽快补种</span>
+            <span class="pc__dose">首免 第 1 针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+          <div class="pc__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+        </div>
+        <div class="combo__row">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首次免疫 第 1 针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">钩端螺旋体</div>
+          <div class="pc__when">建议接种时间 10/11 ~ 11/08</div>
+        </div>
+      </div>
+
+      <div class="plan-card pc-rabies">
+        <div class="pc__top">
+          <span class="badge b-due">待接种</span>
+          <span class="pc__dose">首针</span>
+          <span class="pc__toggle">展开</span>
+        </div>
+        <div class="pc__kind">狂犬疫苗</div>
+        <div class="pc__when">建议接种时间 11/08 ~ 12/08</div>
+      </div>
+
+      <div class="book">
+        <div class="book__t">查看疫苗本原件</div>
+        <div class="book__n">还没有上传</div>
+      </div>
+
+    </div></div>
+    <p class="col__tall">记录为空时子标签写着「接种记录 · 0」，家长一眼知道还没录。</p>
+  </div>
+
+</div>
+
+<!-- ══════════ 另一种情况：窗口还开着 ══════════ -->
+<!-- ══════════ 点开一张卡之后 ══════════ -->
+<div class="divider">点开一张卡之后<span>—— 「专业信息一条没删，只是往后放」，也是现状最费屏的地方</span></div>
+<div class="row">
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">方案 A · 展开核心疫苗</span>
+      <span class="col__tag t-rec">按需展开</span>
+    </div>
+    <div class="phone phone--fold">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="combo">
+          <div class="combo__head">
+            <div class="combo__title">核心疫苗 + 钩端螺旋体</div>
+            <div class="combo__desc">这两针可以一起打，共同窗口 10/15 ~ 10/29</div>
+          </div>
+          <div class="combo__row">
+            <div class="pc__top">
+              <span class="badge b-over">尽快补种</span>
+              <span class="pc__dose">首免 第 1 针</span>
+              <span class="pc__toggle">收起</span>
+            </div>
+            <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+            <div class="pc__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+            <div class="kv"><div class="kv__k">免疫流程</div><div class="kv__v">首免 第 1 针 · 建议接种时间 9/27 ~ 10/11</div></div>
+            <div class="kv"><div class="kv__k">常见产品</div><div class="kv__v">卫佳伍、宠必威优免康、英特威</div></div>
+            <div class="kv">
+              <div class="kv__k">依据</div>
+              <div class="kv__v basis">犬瘟、细小、腺病毒为必须接种的核心疫苗。<span class="more">更多</span></div>
+            </div>
+            <div class="acts">
+              <div class="act act--primary act--solo">记录这一针</div>
+              <div class="act act--ghost act--solo">忽略</div>
+            </div>
+          </div>
+          <div class="combo__row">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首次免疫 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">钩端螺旋体</div>
+            <div class="pc__when">建议接种时间 10/11 ~ 11/08</div>
+          </div>
+        </div>
+
+        <div class="plan-card pc-rabies">
+          <div class="pc__top">
+            <span class="badge b-due">待接种</span>
+            <span class="pc__dose">首针</span>
+            <span class="pc__toggle">展开</span>
+          </div>
+          <div class="pc__kind">狂犬疫苗</div>
+          <div class="pc__when">建议接种时间 11/08 ~ 12/08</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec__head">
+            <div class="sec__bar bar-rec"></div>
+            <div class="sec__title title-rec">接种记录</div>
+          </div>
+          <div class="rec-card"><div class="rec-empty">档案里还没有接种记录</div></div>
+        </div>
+
+      </div>
+    </div>
+    <p class="col__tall">依据默认一句 + 「更多」；点「更多」才铺开整段。整屏仍装得下旁边的卡与记录。</p>
+  </div>
+
+  <div class="col">
+    <div class="col__head">
+      <span class="col__name">方案 B · 展开核心疫苗（现状）</span>
+      <span class="col__tag t-long">一屏只剩一张卡</span>
+    </div>
+    <div class="phone phone--fold">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen">
+
+        <div class="sec">
+          <div class="sec__head">
+            <div class="sec__bar bar-plan"></div>
+            <div class="sec__title title-plan">接种计划</div>
+          </div>
+
+          <div class="plan-card pc-core">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首免 第 1 针</span>
+              <span class="pc__toggle">收起</span>
+            </div>
+            <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+            <div class="pc__when">建议尽快补种（原窗口 9/27 ~ 10/11 已过）</div>
+            <div class="kv"><div class="kv__k">免疫流程</div><div class="kv__v">首免 第 1 针 · 建议接种时间 9/27 ~ 10/11</div></div>
+            <div class="kv"><div class="kv__k">常见产品</div><div class="kv__v">卫佳伍、宠必威优免康、英特威等产品</div></div>
+            <div class="kv">
+              <div class="kv__k">依据</div>
+              <div class="kv__v basis">
+                犬瘟、细小、腺病毒为必须接种的核心疫苗。首次免疫从 6~8 周龄起，间隔 2~4 周，<b>最后一针不早于 16 周龄</b>。WSAVA 2024 建议幼犬在完成基础免疫前避免进入高风险的公共场所。<span class="more">收起</span>
+              </div>
+            </div>
+            <div class="acts">
+              <div class="act act--primary">记录接种信息</div>
+              <div class="act act--ghost act--solo">忽略</div>
+            </div>
+          </div>
+
+          <div class="plan-card pc-lepto">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首次免疫 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">钩端螺旋体</div>
+            <div class="pc__when">建议接种时间 10/11 ~ 11/08</div>
+          </div>
+
+          <div class="plan-card pc-rabies">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">狂犬疫苗</div>
+            <div class="pc__when">建议接种时间 11/08 ~ 12/08</div>
+          </div>
+
+        </div>
+
+        <div class="sec">
+          <div class="sec__head">
+            <div class="sec__bar bar-rec"></div>
+            <div class="sec__title title-rec">接种记录</div>
+          </div>
+          <div class="rec-card"><div class="rec-empty">档案里还没有接种记录</div></div>
+        </div>
+
+      </div>
+    </div>
+    <p class="col__tall">狂犬卡被顶到一屏外；哪两针能一起打（合并窗口）也看不出来。</p>
+  </div>
+
+  <div class="col col--wide">
+    <h2>我推荐方案 A，理由三条 + 一句代价</h2>
+    <ul>
+      <li><span class="hl">第一块就是结论。</span>家长想知道的是「现在该做什么」，不是我们的免疫程序表长什么样。</li>
+      <li><span class="hl">专业信息一条没删。</span>免疫流程、常见产品、依据原文都还在，点「展开 / 更多」就能看到 —— 想核对的家长找得到，不想看的家长不被挡路。</li>
+      <li><span class="hl">同框的两针一眼看得出是一组。</span>合并窗口继续用你 10-14 选的成组框，不靠文字解释。</li>
+    </ul>
+    <p>
+      <b>代价要说清楚</b>：那一句结论自己要占约 120px。为了把它塞进一屏，方案 A 顺手做两件事 ——
+      ① 去掉重复的「接种计划」小标题（结论卡本身就是这一段的开头，计数挪到卡片右上角）；
+      ② 核心 + 钩端合成一组（省下一张卡的外壳与间距）。
+      这样量下来，计划最后一行在第 711px、记录标题在第 721px，刚好压在一屏线（722px）上。
+    </p>
+    <p><b>如果你选 C</b>：我担心「上次打的是什么」被藏起来 —— 带狗去医院时家长常要当场翻记录，多一次点击在现场会很烦。</p>
+    <p><b>如果你选 B</b>：那就是维持现状。它确实更省地方（还有 170px 余量），但「一眼看出下一步」做不到，也就解决不了你提的第一个问题。</p>
+    <p style="margin-top:10px"><b>三个方案都保留的东西</b>：合并窗口的成组框（10-14 你选的方案 B）、固定顺序（核心 → 钩端 → 狂犬）、状态角标、忽略与恢复、疫苗本原件入口。</p>
+  </div>
+
+</div>
+
+<div class="verdict">
+  <h2>同一套结构，换一种情况看：6 周龄、刚建档、窗口还开着（方案 A）</h2>
+  <p>
+    上面那只狗是「窗口已过、要补种」，语气偏急。这里放另一种更常见的情况 ——
+    家长刚接回一只 6 周的幼犬、什么都没打过，<b>还没有任何「逾期」字样</b>，
+    只有一条明确的下一步。
+  </p>
+
+  <div class="row variant" style="gap:24px">
+    <div class="col">
+      <div class="phone">
+      <div class="navbar"><span class="navbar__back">‹</span><span class="navbar__t">健康管理</span><span class="navbar__cap">··· ⊙</span></div>
+      <div class="chrome">
+        <div class="entry">健康记录 <i>就诊、体检、疫苗、体重都在这里</i><span>›</span></div>
+        <div class="tabs"><span>就诊</span><span>体检</span><span class="on">疫苗</span><span>体重</span></div>
+      </div>
+      <div class="screen" style="padding-bottom:0">
+
+        <div class="hero">
+          <div class="hero__avatar">头像</div>
+          <div><div class="hero__name">测31</div></div>
+          <div class="hero__facts">
+            <div class="hero__fact"><b>6 周</b><i>月龄</i></div>
+            <div class="hero__fact"><b>2.1kg</b><i>体重</i></div>
+          </div>
+        </div>
+
+        <div class="next">
+          <div class="next__eyebrow">接下来<span class="next__count">共 3 项待办</span></div>
+          <div class="next__what">核心疫苗 · 幼犬首免 第 1 针</div>
+          <div class="next__when">建议接种时间 10/11 ~ 10/25</div>
+          <div class="next__more">之后每 2~4 周打一针，一共 4 针；狂犬疫苗 12 周龄起</div>
+          <div class="next__acts">
+            <div class="next__btn next__btn--solid">记录这一针</div>
+            <div class="next__btn next__btn--ghost">拍疫苗本</div>
+          </div>
+        </div>
+
+        <div class="sec">
+
+          <div class="plan-card pc-core">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">幼犬首免 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">核心疫苗（犬瘟、细小、腺病毒）</div>
+            <div class="pc__when">建议接种时间 10/11 ~ 10/25</div>
+          </div>
+
+          <div class="plan-card pc-lepto">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首次免疫 第 1 针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">钩端螺旋体</div>
+            <div class="pc__when">建议接种时间 10/25 ~ 11/22</div>
+          </div>
+
+          <div class="plan-card pc-rabies">
+            <div class="pc__top">
+              <span class="badge b-due">待接种</span>
+              <span class="pc__dose">首针</span>
+              <span class="pc__toggle">展开</span>
+            </div>
+            <div class="pc__kind">狂犬疫苗</div>
+            <div class="pc__when">建议接种时间 11/22 ~ 12/22</div>
+          </div>
+        </div>
+
+      </div></div>
+      <p class="col__tall">零记录的家长也需要一个「什么时候做什么」的明确说法，而不是一张空白页。</p>
+    </div>
+
+    <div class="col" style="flex:1 1 auto; width:auto; max-width:760px">
+      <h2 style="font-size:14px;margin:6px 0 8px">这一屏解决的是「新家长进来是懵的」</h2>
+      <ul>
+        <li>第一块直接告诉他：<b>先打核心疫苗，10/11 ~ 10/25 之间</b>，以及后面还有几针。</li>
+        <li>「拍疫苗本」放在这里 —— 手里有本子的家长不用先去找入口。</li>
+        <li>三张卡都是「待接种」，没有一句吓人的话；没记录就写没记录。</li>
+      </ul>
+      <p>
+        这一条正是你选的「首要照顾刚建档、还没有记录的新家长」：<b>零记录也要有明确说法</b>，
+        但不能靠「已逾期」这种吓人的措辞 —— 那是给真过了窗口的狗用的。
+      </p>
+      <p style="margin-top:8px;color:#8a968a">
+        注：这里的三张卡没有合并框 —— 6 周龄时钩端与狂犬都还没进窗口，不该硬凑成一组。
+        合并框只在两针窗口真的重叠时出现。
+      </p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

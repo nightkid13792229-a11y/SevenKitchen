@@ -289,7 +289,9 @@
 import { computed, ref } from 'vue'
 // 疫苗录入的**共享字段层**（毒株词表 + "值→中文名"）—— 三个界面共用一份
 // （老板 2026-10-14：原来两处各写一份，已经漂成"犬细小"和"犬细小病毒"两个名字）
-import { componentLabelOf, componentOptionsOf } from './vaccine-fields'
+// 病种词表（2026-10-15 疫苗板块重构）：共享字段层搬去 `domain/vaccine/catalog.ts`，
+// 只有那一份 —— 组件与疫苗板块用的是同一个兜底。
+import { componentLabelOf, componentOptionsOf } from '../../domain/vaccine/catalog'
 import { dogApi } from '../../api/dogs'
 import LabValuesView from './LabValuesView.vue'
 import {
@@ -360,11 +362,25 @@ const props = withDefaults(defineProps<{
    * 却凭空多出一条体检记录（老板实测提的）。
    */
   entryKind?: 'medical' | 'checkup'
+  /**
+   * 识别完**直接交出草稿**，不走组件内置的那张确认页（2026-10-15）。
+   *
+   * 为什么需要它：疫苗本这一路现在有**自己的**确认页（`ScanConfirm`）——
+   * 需求 R12 定死"识别结果只显示两列：名称 + 日期"，而组件内置那张
+   * （病种、产品候选、逐张状态）是给另外三类记录用的。
+   * 所以疫苗侧把本组件**当识别服务用**：拍图 → 识别 → 立刻拿到草稿 →
+   * 由 `ScanConfirm` 逐条确认。
+   *
+   * ⚠️ 缺省 false = 老行为（内置逐条确认），病历 / 体检 / 过敏三类**一个字没变**。
+   * ⚠️ 只在 documentType 判成疫苗本时生效。
+   */
+  deferConfirm?: boolean
 }>(), {
   buttonText: '上传图片',
   hintText: '上传报告或疫苗本的照片，自动填表；也可以直接手填',
   hideTrigger: false,
   entryKind: 'medical',
+  deferConfirm: false,
 })
 
 const emit = defineEmits<{
@@ -579,7 +595,7 @@ const isVaccineBook = computed(
  *
  * ⚠️ 原来这里自带一份 7 项的兜底，和录入卡那份 5 项的**互相矛盾** ✗：
  *    同一个毒株在两处显示成不同的名字（`犬细小` vs `犬细小病毒`）✗。
- *    现在两份合成 `vaccine-fields.ts` 里的一份、且与后端逐字对齐 ✓。
+ *    现在两份合成 `domain/vaccine/catalog.ts` 里的一份、且与后端逐字对齐 ✓。
  */
 const componentChoices = computed(() => componentOptionsOf(props.componentOptions))
 
@@ -1321,10 +1337,7 @@ async function scanAll(filePaths: string[]) {
      * ⚠️ 抽的时候保持行为完全一致：AUTO 入口合成一条、疫苗本不合并、
      *    逐张提示按合并结果筛一遍（那一步必须在 merged 之后，2026-10-04 的线上事故）。
      */
-    renderMergedResult()
-
-    showConfirm.value = true
-    syncLeaveGuard()
+    finishScan()
   } catch (error: any) {
     // 一块看得见的提示，而不是一闪而过的 toast；
     // 基础设施类报错（腾讯云"服务未开通"之类）也不直接甩给顾客，换成能懂的话
@@ -1357,6 +1370,24 @@ function accept() {
   failureNotice.value = ''
   // 图片交给上层了（跟着记录一起保存），这里不再算"没用上"
   uploadedUrls.value = []
+}
+
+/**
+ * 识别完之后的收尾：摆界面 + 决定走不走组件内置的确认页。
+ *
+ * ⚠️ `deferConfirm`（2026-10-15，疫苗板块重构）：
+ *    疫苗本这一路现在由**疫苗侧自己的**确认页（`ScanConfirm`，只有名称 + 日期两列）
+ *    逐条确认，所以这里把草稿直接交出去，组件只当"识别服务"用。
+ *    另外三类记录（病历 / 体检 / 过敏）不传这个 prop → 老行为一个字没变。
+ */
+function finishScan() {
+  renderMergedResult()
+  if (props.deferConfirm && isVaccineBook.value) {
+    accept()
+    return
+  }
+  showConfirm.value = true
+  syncLeaveGuard()
 }
 
 /**
@@ -1456,7 +1487,7 @@ async function startDocumentScan() {
     failureNotice.value = ''
 
     renderMergedResult()
-    showConfirm.value = true
+    finishScan()
   } catch (error: any) {
     failureNotice.value = resolveHealthScanErrorMessage(error?.message)
   } finally {

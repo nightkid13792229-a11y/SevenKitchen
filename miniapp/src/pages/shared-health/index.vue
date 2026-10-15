@@ -74,17 +74,11 @@
 
         <view v-if="summary.vaccines" class="section">
           <text class="section__title">疫苗</text>
-          <view
-            v-for="item in summary.vaccines.upcoming"
-            :key="`up-${item.id}`"
-            class="notice"
-            :class="{ 'notice--danger': item.overdue }"
-          >
-            {{ item.name }} · {{ item.overdue ? '已逾期' : '即将到期' }} {{ item.nextDueDate }}
-          </view>
+          <!-- 2026-10-16：原来这里按记录上人工填的"下次到期日"显示「即将到期」。
+               那个字段整个不用了（疫苗的下一次由免疫计划算），后端也不再返回 upcoming。 -->
           <view v-if="summary.vaccines.latest.length === 0" class="section__empty">没有疫苗记录</view>
           <view v-for="item in summary.vaccines.latest" :key="item.id" class="row">
-            <text class="row__head">{{ item.date }}<template v-if="item.nextDueDate"> · 下次 {{ item.nextDueDate }}</template></text>
+            <text class="row__head">{{ item.date }}</text>
             <text class="row__title">{{ item.name }}</text>
           </view>
         </view>

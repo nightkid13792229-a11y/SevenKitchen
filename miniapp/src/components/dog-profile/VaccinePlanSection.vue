@@ -2095,13 +2095,27 @@ defineExpose({
 }
 /*
  * 步骤名称（角标右边的那个，老板 2026-10-15）。
- * ⚠️ 它**不**抢右边 —— 用 `margin-right: auto` 把「展开」推到最右，
- *    名称自己紧跟在角标后面 ✓；长名称会自己换行，不会挤掉「展开」✓。
+ *
+ * ⚠️ 2026-10-15 老板看第一版后："和待接种的角标隔得太近了，能重新优化一下
+ *    排版吗？"
+ *    原因：`.kind-card__top` 是 flex 但**没有 gap** ✗，名称贴着角标的
+ *    右内边距，视觉上像连在一起 ✗。
+ *
+ * 这一行是"**状态 + 这是第几针**"两个信息，要让它们**一眼分得开** ✓：
+ *   · `margin-left: 14rpx` —— 和角标拉开一段 ✓
+ *   · 字重 600、颜色比标题浅一档但比原来的灰绿深 —— 像个小标题，
+ *     但不抢下面那行真正的标题 ✓
+ *   · 一个字距（中文小字加一点更好读）✓
+ *   · `margin-right: auto` 仍然保留 —— 把「展开」推到最右 ✓；
+ *     长名称会自己换行，不会挤掉「展开」✓
  */
 .kind-card__dose {
+  margin-left: 14rpx;
   margin-right: auto;
-  font-size: 24rpx;
-  color: #4a6b5c;
+  font-size: 26rpx;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+  color: #2f5d4a;
 }
 .kind-card__toggle {
   margin-left: auto;

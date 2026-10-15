@@ -82,10 +82,19 @@
 | 采购规格 | 份 / 500g / 3.98 元 |
 | 营养档案 ID | `0291dff2-74f0-4a12-866e-1ed64fcbfc59` |
 | 营养档案名 | 油麦菜（生） |
-| 档案状态 | PENDING（待验证） |
+| 档案状态 | **VERIFIED（已验证）**，2026-10-16 由老板审核通过后转入 |
 | dataSource / externalId | CFCT / 045334 |
 | 映射 ID | `6f005797-2f96-4ff4-baca-b8eaad5f53a1`（主档案，出肉率 1） |
 | 生产库 FOOD 食材数 | 118 → **119** |
+
+### 审核与转「已验证」
+
+1. 老板 2026-10-16 在后台核对原料与营养档案，回复「没问题」。
+2. 调用 `PATCH /api/v1/nutrition-foods/0291dff2-.../verify` 转入 `VERIFIED`
+   （`verifiedBy=admin-user-001`，`verifiedAt=2026-10-15T19:08:34.760Z`）。
+3. 直连生产库复核：`status = VERIFIED` ✓
+
+复现：`node -r ts-node/register -r tsconfig-paths/register ../.standard-ingredient-import/youmaicai/verify-nutrition-food.ts --id <档案ID> [--confirm]`
 
 写入前已备份生产库：`/opt/sevenkitchen/backups/standard-ingredient-import/pre-youmaicai-standard-ingredient-20261016-025717.dump`
 （86 MB，sha256 `34e6e4de5165f16456360620c25db1e21b3d3ea16e61652be1ce72a19f2cf4c3`，114 个表数据条目）

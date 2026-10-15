@@ -1092,8 +1092,17 @@ export function buildImmunizationSchedule(
       // 一边把窗口提前一个月邀请顾客来打，一边又在他真打了之后提示
       // "狂犬间隔不足一年，与国内年免口径不符"，等于自己打自己。
       // 顺延之后也一样：上一针打在几号，下一次的窗口就从明年那一号开始。
+      //
+      // ══ 年度加强的宽限期从 90 天缩到 **30 天**（老板 2026-10-15）════════
+      //
+      // 理由与钩端不同：**狂犬是国内法规要求"每年一次"的强制免疫**，
+      // 不是"建议"。给 90 天宽限等于在纵容不合规 ——
+      // 而且狂犬还牵涉**办证、出行、伤人认定**，晚打的实际麻烦比医学风险更大。
+      //
+      // ⚠️ **首针仍是 90 天**：老板本次只点名了"年度加强"，
+      //    首针要不要一起缩，另行确认（见 README 的待办）。
       windowStart: rabies,
-      windowEnd: addDays(rabies, 90),
+      windowEnd: addDays(rabies, index === 0 ? 90 : 30),
       basis: RABIES_SCHEDULE.basis,
     });
     rabies = addYears(rabies, RABIES_SCHEDULE.repeatYears);
@@ -1275,9 +1284,22 @@ function buildNonCoreSeeds(
        * 原来是提前 30 天（windowTailDays）—— 那会一边提前一个月邀请顾客来打，
        * 一边在他真打了之后提示"间隔不足一年，与国内年免口径不符"，
        * 两个口径自己打自己。狂犬那边同一时间也改成了周年起算。
+       *
+       * ══ 宽限期从 90 天缩到 **30 天**（老板 2026-10-15）══════════════════
+       *
+       * 老板："同理，年度或者三年加强的核心疫苗，钩端螺旋体或者是狂犬疫苗，
+       *        它的窗口期是不是也太长了呢？需要缩短吗？"
+       *
+       * **钩端这一类的宽限必须最短** —— 它的保护期是三类里最短的：
+       *   · WSAVA p21：免疫力"**长达 15 个月**"（Grosenbaugh & Pardo, 2018）
+       *   · WSAVA FAQ：攻毒试验证明保护"**至少可持续 12 至 14 个月**"，
+       *     总体"被认为**少于 18 个月**"
+       * 而原来 12 个月 + **90 天** = **15 个月** ✗ —— 正好贴到血清学上限，
+       * 还越过了攻毒试验证明的 14 个月 ✗。
+       * 缩到 30 天 → 最晚 **13 个月** ✓，仍在攻毒试验证明的 14 个月之内 ✓。
        */
       windowStart: repeat,
-      windowEnd: addDays(repeat, 90),
+      windowEnd: addDays(repeat, 30),
       basis: config.basis,
     });
     repeat = addYears(repeat, config.repeatYears);

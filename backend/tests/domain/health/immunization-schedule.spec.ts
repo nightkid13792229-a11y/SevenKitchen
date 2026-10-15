@@ -3063,3 +3063,85 @@ describe('首免窗口 · 严格 2~4 周（老板 2026-10-15）', () => {
     expect(days('2026-09-03', last.windowStart)).toBeGreaterThanOrEqual(16 * 7 - 7);
   });
 });
+
+/**
+ * 老板 2026-10-15："同理，年度或者三年加强的核心疫苗，钩端螺旋体或者是狂犬疫苗，
+ * 它的窗口期是不是也太长了呢？需要缩短吗？"
+ *
+ * 核实后的结论（三类的 DOI 不一样，所以处理也不一样）：
+ *   · **钩端**：保护期最短 —— 攻毒试验只证明 12~14 个月、血清学"长达 15 个月"、
+ *     总体"少于 18 个月"。原来 12 个月 + 90 天 = **15 个月** ✗ 正好贴上限 ✗
+ *     ⇒ 缩到 **30 天**（最晚 13 个月，仍在攻毒证明的 14 个月内 ✓）
+ *   · **狂犬**：国内法规要求"每年一次"，是**硬要求**不是建议 ⇒ 同样缩到 **30 天**
+ *   · **核心**：DOI"至少 3 至 4 年"，3 年 + 90 天 = 3.25 年**仍在保护期内** ✓
+ *     ⇒ **保持 90 天** ✓
+ */
+describe('加强针窗口 · 钩端/狂犬 30 天，核心 90 天（老板 2026-10-15）', () => {
+  const days = (a: string, b: string) =>
+    Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86400000);
+
+  it('🔴 钩端年度加强：窗口 30 天（不是 90）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2025-06-01', reviewed: true, today: new Date('2026-10-15'),
+      records: [
+        // 首免两针都要打完，年度加强才会排出来
+        { id: 'r1', kind: 'lepto', kinds: ['lepto'], vaccineName: '宠必威乐必妥',
+          vaccinationDate: '2025-07-27', components: ['lepto'] },
+        { id: 'r2', kind: 'lepto', kinds: ['lepto'], vaccineName: '宠必威乐必妥',
+          vaccinationDate: '2025-10-01', components: ['lepto'] },
+      ] as never,
+    });
+    const repeat = plan.steps.find(
+      (s) => s.kind === 'lepto' && s.label.includes('年度加强'),
+    )!;
+    expect(repeat).toBeDefined();
+    expect(days(repeat.windowStart, repeat.windowEnd)).toBe(30);
+  });
+
+  it('🔴 狂犬年度加强：窗口 30 天；首针仍是 90 天', () => {
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2025-06-01', reviewed: true, today: new Date('2026-10-15'),
+      records: [
+        { id: 'r1', kind: 'rabies', kinds: ['rabies'], vaccineName: '瑞比克',
+          vaccinationDate: '2025-10-15', components: ['rabies'] },
+      ] as never,
+    });
+    const yearly = plan.steps.find((s) => s.kind === 'rabies' && s.label.includes('年度加强'))!;
+    expect(yearly).toBeDefined();
+    expect(days(yearly.windowStart, yearly.windowEnd)).toBe(30);
+    // 首针那条（如果还在列表里）保持 90 天 —— 老板本次只点名"年度加强"
+    const first = plan.steps.find((s) => s.kind === 'rabies' && s.label.includes('首针'));
+    if (first) expect(days(first.windowStart, first.windowEnd)).toBe(90);
+  });
+
+  it('🔴 核心成年加强：保持 90 天（DOI 有 3~4 年，不必缩）', () => {
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2025-06-01', reviewed: true, today: new Date('2026-10-15'),
+      records: [
+        { id: 'r1', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2025-08-01', components: ['cdv','cav','cpv','cpi'] },
+        { id: 'r2', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2025-09-01', components: ['cdv','cav','cpv','cpi'] },
+        { id: 'r3', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2025-10-01', components: ['cdv','cav','cpv','cpi'] },
+        { id: 'r4', kind: 'core', kinds: ['core'], vaccineName: '卫佳伍',
+          vaccinationDate: '2026-02-01', components: ['cdv','cav','cpv','cpi'] },
+      ] as never,
+    });
+    const adult = plan.steps.find((s) => s.key === 'core-adult-1')!;
+    expect(adult).toBeDefined();
+    expect(days(adult.windowStart, adult.windowEnd)).toBe(90);
+  });
+
+  it('🔴 依据要写清楚"宽限期不能吃掉保护期"（免得以后又随手放大）', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    );
+    // 钩端那段必须点名 DOI 数字，作为"为什么是 30 天"的依据
+    expect(source).toContain('长达 15 个月');
+    expect(source).toContain('至少可持续 12 至 14 个月');
+    // 狂犬那段必须点名"法规要求每年一次"
+    expect(source).toContain('狂犬是国内法规要求');
+  });
+});

@@ -3,8 +3,13 @@ import {
   getProfileEffectiveWeightG,
   readProfileFieldAmount,
 } from './nutritionProfileReader';
-import { calculateDogAtwaterEnergyPer100g } from './dogAtwaterEnergy';
+import {
+  calculateDogAtwaterEnergyPer100g,
+  DOG_ATWATER_FIELD_LABELS,
+  DOG_ATWATER_FIELD_PATHS,
+} from './dogAtwaterEnergy';
 import type {
+  AssessmentDataGap,
   AssessmentEntry,
   AssessmentEntryStatus,
   AssessmentNutrientContributor,
@@ -71,6 +76,8 @@ export interface DesignRecipeAssessmentResult {
   macroMetrics: Record<AssessedMacroMetricKey, AssessedMacroMetric>;
   groupedEntries: GroupedAssessmentEntry[];
   entries: AssessmentEntry[];
+  /** 哪个原料缺了哪个必填字段（见 AssessmentDataGap 注释） */
+  dataGaps: AssessmentDataGap[];
   overallStatus: AssessmentOverallStatus;
   summary: DesignRecipeAssessmentSummary;
   rawSummary: DesignRecipeAssessmentSummary;
@@ -231,10 +238,44 @@ export function assessRecipeDraft(
     ),
     groupedEntries,
     entries,
+    dataGaps: collectAssessmentDataGaps(input.items),
     overallStatus: getOverallStatus(groupedEntries),
     summary,
     rawSummary,
   };
+}
+
+/**
+ * 收集「哪个原料缺哪个必填字段」。
+ *
+ * 只列出会**卡住犬用 Atwater 能量计算**的缺口（水分/粗蛋白/粗脂肪/灰分/膳食纤维），
+ * 因为这类缺口的影响是全局的：能量算不出 → 所有按能量口径的指标一起变「缺数据」，
+ * 而界面上原本只显示一片「缺数据」，无从定位。
+ *
+ * 补剂走的是另一条分支（missingValueAsZero），不参与能量公式，故不计入。
+ */
+function collectAssessmentDataGaps(
+  items: DesignRecipeAssessmentItemInput[],
+): AssessmentDataGap[] {
+  const gaps: AssessmentDataGap[] = [];
+
+  for (const item of items) {
+    if (getItemEffectiveWeightG(item) <= 0) continue;
+    if (isSupplementIngredient(item)) continue;
+
+    const audit = calculateDogAtwaterEnergyPer100g(item.nutritionProfile);
+    for (const field of audit.missingFields) {
+      gaps.push({
+        itemId: item.id,
+        itemName: item.name,
+        fieldPath: DOG_ATWATER_FIELD_PATHS[field],
+        fieldLabel: DOG_ATWATER_FIELD_LABELS[field],
+        blocksEnergy: true,
+      });
+    }
+  }
+
+  return gaps;
 }
 
 function applyArginineProteinMinimumAdjustment(

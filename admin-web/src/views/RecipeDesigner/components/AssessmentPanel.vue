@@ -13,6 +13,24 @@
         <span class="legend-item"><i class="legend-swatch legend-over"></i>超出量</span>
         <span class="legend-item"><i class="legend-swatch legend-gap"></i>缺口</span>
       </div>
+      <div v-if="hasEnergyGap" class="data-gap-notice">
+        <div class="data-gap-head">
+          <span class="data-gap-icon">!</span>
+          <span class="data-gap-title">
+            {{ energyBlockingGapLines.length }} 个原料缺少能量计算必填字段
+          </span>
+        </div>
+        <div class="data-gap-desc">
+          配方能量算不出来，所以所有「每1000千卡 / 每兆焦」口径的指标都显示「缺数据」。
+          补齐下面这些字段就会自动恢复：
+        </div>
+        <ul class="data-gap-list">
+          <li v-for="line in energyBlockingGapLines" :key="line.itemName">
+            <b>{{ line.itemName }}</b> 缺「{{ line.fieldsText }}」
+          </li>
+        </ul>
+        <div class="data-gap-hint">补齐位置：原料管理 → 找到该原料 → 补营养档案数据</div>
+      </div>
       <div ref="entryListRef" class="entry-list" @scroll.passive="rememberEntryListScroll">
         <div v-for="group in displayGroups" :key="group.key" class="entry-group">
           <div class="group-head" @click="toggleGroup(group.key)">
@@ -302,6 +320,34 @@ const BASIS_LABELS: Record<string, string> = {
 
 /** 已由「关键比例仪表盘」单独展示，评估面板不再重复列出的比例项 */
 const RATIO_KEYS_HIDDEN = ['calciumPhosphorusRatio', 'omega6Omega3Ratio']
+
+/**
+ * 把「哪个原料缺哪个必填字段」整理成人话。
+ *
+ * 背景：能量用犬用 Atwater 公式算，强制要求 水分/粗蛋白/粗脂肪/灰分/膳食纤维。
+ * 任一食材缺任一项 → 该食材能量算不出 → 整份食谱能量为 null →
+ * 所有「每1000千卡 / 每兆焦」口径的指标一起变「缺数据」。
+ * 不点名的话，用户只会看到满屏「缺数据」，不知道去补哪个原料。
+ */
+const energyBlockingGapLines = computed(() => {
+  const gaps = props.assessment?.dataGaps ?? []
+  const blocking = gaps.filter((gap) => gap.blocksEnergy)
+  if (blocking.length === 0) return []
+
+  const byItem = new Map<string, { itemName: string; fields: string[] }>()
+  for (const gap of blocking) {
+    const entry = byItem.get(gap.itemId) ?? { itemName: gap.itemName, fields: [] }
+    if (!entry.fields.includes(gap.fieldLabel)) entry.fields.push(gap.fieldLabel)
+    byItem.set(gap.itemId, entry)
+  }
+
+  return [...byItem.values()].map((entry) => ({
+    itemName: entry.itemName,
+    fieldsText: entry.fields.join('、')
+  }))
+})
+
+const hasEnergyGap = computed(() => energyBlockingGapLines.value.length > 0)
 
 const visibleGroupedEntries = computed<GroupedAssessmentEntry[]>(() => {
   const grouped = (props.assessment?.groupedEntries ?? []) as GroupedAssessmentEntry[]
@@ -1145,6 +1191,54 @@ function openDetail(row: DisplayRow) {
   font-size: 11px;
   color: #909399;
   border-bottom: 1px solid #f0f2f5;
+}
+/* 数据缺口提示：哪个原料缺哪个必填字段 */
+.data-gap-notice {
+  margin: 8px 10px 4px;
+  padding: 8px 10px;
+  border: 1px solid #f5c2c0;
+  border-left: 3px solid #e6a23c;
+  border-radius: 4px;
+  background: #fdf6ec;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7a5a1e;
+}
+.data-gap-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #b88230;
+}
+.data-gap-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e6a23c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.data-gap-desc {
+  margin-top: 4px;
+  color: #8a6d3b;
+}
+.data-gap-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.data-gap-list li {
+  color: #7a5a1e;
+}
+.data-gap-hint {
+  margin-top: 4px;
+  color: #a08a63;
+  font-size: 11px;
 }
 .legend-item {
   display: inline-flex;

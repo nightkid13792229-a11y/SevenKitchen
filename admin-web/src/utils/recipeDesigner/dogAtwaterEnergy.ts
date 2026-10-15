@@ -23,12 +23,21 @@ const DOG_ATWATER_REQUIRED_FIELDS = [
   'fiber',
 ] as const satisfies readonly DogAtwaterEnergyField[];
 
-const DOG_ATWATER_FIELD_PATHS = {
+export const DOG_ATWATER_FIELD_PATHS = {
   moisture: 'macros.moisture',
   crudeProtein: 'macros.crudeProtein',
   crudeFat: 'macros.crudeFat',
   ash: 'macros.ash',
   fiber: 'macros.fiber',
+} as const satisfies Record<DogAtwaterEnergyField, string>;
+
+/** 字段中文名，用于把「哪个原料缺哪个字段」直接说给用户听 */
+export const DOG_ATWATER_FIELD_LABELS = {
+  moisture: '水分',
+  crudeProtein: '粗蛋白',
+  crudeFat: '粗脂肪',
+  ash: '灰分',
+  fiber: '膳食纤维',
 } as const satisfies Record<DogAtwaterEnergyField, string>;
 
 const NFE_NEGATIVE_TOLERANCE_G_PER_100G = 2;

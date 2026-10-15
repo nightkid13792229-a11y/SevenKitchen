@@ -68,6 +68,8 @@ export interface PlanStepDto {
   status: 'DONE' | 'DUE' | 'UPCOMING' | 'OVERDUE';
   /** 待接种 / 已完成 / 尽快补种 */
   statusLabel: string;
+  /** 卡片上那行**短话**（原型 B/F/I 卡上那句）；与 `basis` 分工见程序表 */
+  hint?: string;
   /** 这一步为什么在这个时间 */
   basis?: string;
   /** 这一项能不能用抗体检测替代 */
@@ -196,6 +198,7 @@ export function toStepDto(
       : {}),
     status: step.status,
     statusLabel: step.statusLabel,
+    hint: step.hint,
     basis: step.basis,
     titerable: step.titerable,
     products,

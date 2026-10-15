@@ -16,9 +16,9 @@
     <template v-if="next">
       <text class="vk-next__what">{{ stepTitle(next) }}</text>
       <text class="vk-next__when">{{ stepWhenText(next) }}</text>
-      <text v-if="hint" class="vk-next__hint">{{ hint }}</text>
+      <text v-if="hint && !expanded" class="vk-next__hint">{{ hint }}</text>
       <view class="vk-next__acts">
-        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">拍疫苗本</text>
+        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">上传疫苗本</text>
         <text class="vk-next__btn vk-next__btn--solid" @tap="onRecord">记录这一针</text>
       </view>
     </template>
@@ -27,20 +27,20 @@
       <text class="vk-next__what">暂无需要接种的项目</text>
       <text class="vk-next__when">{{ idleText }}</text>
       <view class="vk-next__acts">
-        <text v-if="ignoredCount > 0" class="vk-next__btn vk-next__btn--solid" @tap="toggleIgnored">
-          {{ ignoredOpen ? '收起已忽略的项' : `查看已忽略的 ${ignoredCount} 项` }}
-        </text>
-        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">拍疫苗本</text>
+        <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">上传疫苗本</text>
       </view>
     </template>
 
+    <!-- 已忽略的项：**只要有就必须能看见**（否则一旦还有别的待办，
+         被忽略的那几项就永远看不到、也恢复不了）。原型 K 是 ghost 按钮。 -->
+    <view v-if="ignoredCount > 0" class="vk-next__ignored-toggle">
+      <text class="vk-next__btn vk-next__btn--ghost" @tap="toggleIgnored">
+        {{ ignoredOpen ? '收起已忽略的项' : `查看已忽略的 ${ignoredCount} 项` }}
+      </text>
+    </view>
+
     <!-- ── 详情（点开才出现）────────────────────────────────────────── -->
     <view v-if="next && expanded" class="vk-next__detail">
-      <view class="vk-next__field">
-        <text class="vk-next__field-label">免疫流程</text>
-        <text class="vk-next__field-text">{{ flowText }}</text>
-      </view>
-
       <view v-if="productText" class="vk-next__field">
         <text class="vk-next__field-label">常见产品</text>
         <text class="vk-next__field-text">{{ productText }}</text>
@@ -67,7 +67,7 @@
         <text v-if="comboProductText" class="vk-next__combo-label">常见产品</text>
         <text v-if="comboProductText" class="vk-next__combo-text">{{ comboProductText }}</text>
         <view class="vk-next__detail-acts">
-          <text class="vk-next__act vk-next__act--primary" @tap="onRecord">记录这一针</text>
+          <text class="vk-next__act vk-next__act--primary" @tap="onRecordCombo">记录这一针</text>
         </view>
       </view>
 
@@ -118,6 +118,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'record', step: VaccineStep | null): void
   (event: 'scan'): void
+  /** 组合那一针：带上 combo 的常见产品去预填（不是主按钮那一支） */
+  (event: 'record-combo', products: string[]): void
   (event: 'antibody', step: VaccineStep | null): void
   (event: 'ignore', step: VaccineStep): void
   (event: 'restore', key: string): void
@@ -136,17 +138,25 @@ const tone = computed(() => {
 })
 
 /**
- * 卡片上那行小字。
+ * 卡片上那行小字：只把计划里**已经排好的**接下来两项念出来，不做任何推算。
  *
- * 后端给了依据就写依据（例如"已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次"、
- * "狂犬是法定每年接种，漏了要尽快补上"）；
- * 没给就写"还有：…"——只把计划里**已经排好的**接下来两项念出来，不做任何推算。
+ * ⚠️ 2026-10-16 改：原来这里优先写后端的 `basis`（依据原文）——
+ *    那是「查看详情」里给人看的**整段依据**，放在卡片上当小字既太长、
+ *    又和展开后的「依据」一字不差地重复。收起状态只用这一句"还有：…"。
  */
 const hint = computed(() => {
   const step = props.next
   if (!step) return ''
-  const basis = String(step.basis || '').trim()
-  if (basis) return basis
+  /*
+   * 优先级：**后端的 `hint`**（一句话）> 自己拼的"还有：…"。
+   *
+   * ⚠️ 这里**不能**用 `basis`：那是"查看详情"里给人读的整段依据，
+   *    带指南引注、100 多字，放在卡片上当小字会变成一堵墙
+   *    （2026-10-16 实测：成年补一针那条 basis 有 128 个字）。
+   *    短的给首屏、长的给详情，两个字段分工见后端程序表。
+   */
+  const hint = String(step.hint || '').trim()
+  if (hint) return hint
   const later = (props.laterSteps || []).slice(0, 2)
   if (later.length === 0) return ''
   const parts = later.map((item) => `${item.kindLabel}${item.label} ${formatFullDate(item.windowStart)}`)
@@ -159,25 +169,13 @@ const idleText = computed(() => {
     const names = items.map((item) => `${item.kindLabel}${item.label}`).join('、')
     return `有 ${props.ignoredCount || items.length} 项已设为不做：${names}`
   }
-  return '按现在这份记录，暂时没有需要接种的项目'
-})
-
-const flowText = computed(() => {
-  const step = props.next
-  if (!step) return ''
-  const start = formatFullDate(step.windowStart)
-  const end = formatFullDate(step.windowEnd)
-  const window = end ? `${start} ~ ${end}` : start
-  const status = String(step.statusLabel || '').trim()
-  return status ? `接种窗口 ${window} · ${status}` : `接种窗口 ${window}`
+  return '按现在这份记录，暂无需要接种的项目'
 })
 
 const productText = computed(() => {
   const products = props.next?.products || []
   return products.length > 0 ? `${products.join('、')} 等产品` : ''
 })
-
-const basisText = computed(() => String(props.next?.basis || '').trim())
 
 const comboWindowText = computed(() => {
   const combo = props.next?.combo
@@ -189,6 +187,8 @@ const comboWindowText = computed(() => {
 
 const comboProductText = computed(() => (props.next?.combo?.products || []).join(' · '))
 
+const basisText = computed(() => String(props.next?.basis || '').trim())
+
 const laterText = computed(() => {
   const later = (props.laterSteps || []).slice(0, 2)
   if (later.length === 0) return ''
@@ -198,6 +198,10 @@ const laterText = computed(() => {
 
 function reasonLabel(reason: string) {
   return ignoreReasonLabel(reason)
+}
+
+function onRecordCombo() {
+  emit('record-combo', (props.next?.combo?.products || []).slice())
 }
 
 function toggleDetail() {
@@ -400,6 +404,10 @@ function onRestore(key: string) {
   font-size: $vk-font-sub;
   opacity: 0.88;
   line-height: 1.5;
+}
+
+.vk-next__ignored-toggle {
+  margin-top: 18rpx;
 }
 
 .vk-next__ignored {

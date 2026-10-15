@@ -591,3 +591,24 @@ describe('字面归类 · 看不准的联苗不判核心（2026-10-16 收紧）'
     expect(classifyVaccineKinds('六联')).toContain('core');
   });
 });
+
+describe('程序表 · 短话（hint）与依据（basis）分工', () => {
+  it('每一行都有 hint，而且 hint 是"一句话"（首屏小字，不许塞长文）', () => {
+    for (const step of SCHEDULE_STEPS) {
+      expect(step.hint).toBeTruthy();
+      expect(step.hint.length).toBeLessThanOrEqual(40);
+      // 不许把依据原文抄进 hint（那就又变成一堵墙了）
+      expect(step.hint).not.toBe(step.basis);
+    }
+  });
+
+  it('需要引经据典的那几类，basis 明显比 hint 长（长的留给"查看详情"）', () => {
+    const withCitation = SCHEDULE_STEPS.filter((step) =>
+      /WSAVA|动物防疫法/.test(step.basis),
+    );
+    expect(withCitation.length).toBeGreaterThan(0);
+    for (const step of withCitation) {
+      expect(step.basis.length).toBeGreaterThan(step.hint.length);
+    }
+  });
+});

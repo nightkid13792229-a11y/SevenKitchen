@@ -33,12 +33,12 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf-8
 describe('疫苗 · 病种词表（兜底必须与后端逐项一致）', () => {
   it('🔴 共享兜底必须与**后端权威定义**逐项一致（含顺序与文案）', () => {
     /*
-     * 权威定义在后端的 `vaccine-products.ts`（`VACCINE_COMPONENTS` +
+     * 权威定义在后端的 `domain/health/vaccine/products.ts`（`VACCINE_COMPONENTS` +
      * `VACCINE_COMPONENT_LABELS`），随 `/dogs/vaccines/catalog` 下发 ——
      * 界面平时用的就是它。共享兜底只在"接口失败"时顶上，
      * **所以它必须和后端逐字一致**，否则接口一挂、界面就会显示成另一个名字。
      */
-    const backend = read('../backend/src/domain/health/vaccine-products.ts');
+    const backend = read('../backend/src/domain/health/vaccine/products.ts');
 
     const orderMatch = /export const VACCINE_COMPONENTS[^=]*=\s*\[([\s\S]*?)\]/.exec(backend);
     const labelsMatch = /export const VACCINE_COMPONENT_LABELS[^=]*=\s*\{([\s\S]*?)\}/.exec(backend);

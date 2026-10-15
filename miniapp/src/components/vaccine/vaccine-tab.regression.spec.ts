@@ -121,9 +121,31 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
     expect(card).toContain('function toggleDetail()')
   })
 
-  it('详情里有：免疫流程 / 常见产品 / 依据 / 抗体检测入口 / 忽略 / 两针一起打', () => {
+  it('卡片第三行用**短话 hint**，不许拿长依据 basis 当小字（会长成一堵墙）', () => {
+    const hint = card.slice(card.indexOf('const hint = computed'), card.indexOf('const idleText'))
+    expect(hint).toContain('step.hint')
+    expect(hint).toContain('还有：')
+    // basis 是"查看详情"里的整段依据（实测 128 字），不进首屏小字
+    expect(hint).not.toContain('step.basis')
+    // 展开时这一行不显示（短话与长依据说的是同一件事，别叠着看）
+    expect(card).toContain('v-if="hint && !expanded"')
+  })
+
+  it('展开里的「依据」是长文 basis（与第三行的短话分工明确）', () => {
     const detail = card.slice(card.indexOf('vk-next__detail'))
-    expect(detail).toContain('免疫流程')
+    expect(detail).toContain('vk-next__field-label">依据')
+    expect(card).toContain("const basisText = computed(() => String(props.next?.basis || '').trim())")
+  })
+
+  it('详情里有：常见产品 / 依据 / 抗体检测入口 / 忽略 / 两针一起打', () => {
+    const detail = card.slice(card.indexOf('vk-next__detail'))
+    /*
+     * ⚠️ 2026-10-16 去掉「免疫流程」那一格：它当时显示的其实是"接种窗口 + 状态"，
+     *    和卡片第二行一字不差地重复；后端也没下发"免疫流程"这句话，
+     *    前端不该自己编。这一格将来要回来，得先让后端给字段。
+     */
+    expect(detail).not.toContain('免疫流程')
+    expect(detail).toContain('record-combo')
     expect(detail).toContain('常见产品')
     expect(detail).toContain('依据')
     expect(detail).toContain('@tap="onAntibody"')
@@ -146,9 +168,11 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
     expect(card).toContain('恢复')
   })
 
-  it('两种入口按钮：拍疫苗本 / 记录这一针', () => {
+  it('两种入口按钮：上传疫苗本 / 记录这一针', () => {
     const template = templateOf(card)
-    expect(template).toContain('拍疫苗本')
+    // "上传"不写"拍"：识别只开相册、不调相机（老板 2026-10-04 定）
+    expect(template).toContain('上传疫苗本')
+    expect(template).not.toContain('拍疫苗本')
     expect(template).toContain('记录这一针')
   })
 })
@@ -156,7 +180,7 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
 describe('疫苗 · 免疫计划（PlanTimeline，原型 A/B/C/F/I/K）', () => {
   const timeline = read('PlanTimeline.vue')
 
-  it('每行 = 日期窗口 + 类别色条 + `类别 · 步骤名` + 层级标识 + 状态角标', () => {
+  it('每行 = 日期窗口 + 类别色条 + `类别 · 步骤名` + 层级标识（只给待办行）', () => {
     expect(timeline).toContain('vk-plan__when')
     expect(timeline).toContain('vk-plan__kind')
     expect(timeline).toContain('kindTone(step.kind)')
@@ -164,8 +188,19 @@ describe('疫苗 · 免疫计划（PlanTimeline，原型 A/B/C/F/I/K）', () => 
     // 两个层级标识走 status.ts（唯一一份），组件只套 token
     expect(timeline).toContain('stepLayerLabel')
     expect(timeline).toContain('layerLabel(step.layer)')
-    expect(timeline).toContain('statusLabel(step)')
-    expect(timeline).toContain('statusTone(step)')
+    // 已完成的行不挂"必打"（原型 K/F 里那两行就没有）
+    expect(timeline).toContain("v-if=\"step.status !== 'DONE'\"")
+    /*
+     * 行内**不挂状态角标**：左边那一列已经在说"现在 / 尽快 / 已完成"，
+     * 再挂角标会让已完成的行说两遍（原型时间线行本来也没有角标）。
+     */
+    expect(timeline).not.toContain('vk-plan__badge')
+    expect(timeline).not.toContain('statusLabel(step)')
+  })
+
+  it('还没到时间的那几行弱化（原型 `.tl__row--far`）', () => {
+    expect(timeline).toContain('vk-plan__row--far')
+    expect(timeline).toContain("step.status === 'UPCOMING'")
   })
 
   it('🔴 按后端给的顺序画，不重排；"现在"那一行由后端的 nextKey 决定', () => {
@@ -224,7 +259,7 @@ describe('疫苗 · 唯一录入器（RecordEditor，原型 D/H）', () => {
   it('归不了类时引导勾"含哪些疫苗"；确实不知道就不硬存（R6）', () => {
     expect(editor).toContain('含哪些疫苗')
     expect(editor).toContain('function toggleComponent(')
-    expect(editor).toContain('先勾一下"含哪些疫苗"，它才会进免疫计划；确实不知道就问一下医生。')
+    expect(editor).toContain('这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。')
   })
 
   it('日期不能填未来（R13）', () => {

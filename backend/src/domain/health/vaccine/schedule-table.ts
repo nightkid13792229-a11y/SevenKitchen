@@ -127,6 +127,14 @@ export const CORE_SCHEDULE = {
    * protect most dogs" —— 一只 6 岁的狗**永远不会**被要求"从第一针开始"。
    */
   catchUpLabel: '补一针',
+  /**
+   * 卡片上那行小字（2026-10-16 从「依据」里拆出来）。
+   *
+   * 为什么单列一个字段：`basis` 是**给人查看详情时读的整段依据**（带指南引注、
+   * 100 多字），放在卡片上当小字会变成一堵墙；而家长在首屏最需要的就是**一句话**。
+   * 两个字段各就各位，也不再有"同一句话说两遍"。
+   */
+  hint: '幼犬从 6~8 周龄开始，每 2~4 周打一针，一直接种到满 16 周龄。',
   basis:
     '犬瘟、细小、腺病毒为必须接种的核心疫苗。' +
     '首次免疫从 6~8 周龄起，间隔 2~4 周接种一次，一直接种到满 16 周龄（WSAVA 2024）。' +
@@ -143,7 +151,12 @@ export const CORE_SCHEDULE = {
   adultBasis:
     'WSAVA 2024：成年加强三年一次或更少频次；' +
     '16 周龄后的补强在 26 周龄（取代了旧的「12~16 月龄第一次加强」）',
+  /** 26 周补强那行小字（原型没有这一屏，与成年口径保持一致） */
+  booster26Hint: '26 周龄这一针是首免程序的收尾；之后每 3 年加强一次。',
+  /** 成年加强那行小字 */
+  adultHint: '之后每 3 年接种一次。',
   /** 成年犬缺记录、只补一针的依据（需求 5.3 的界面口径） */
+  catchUpHint: '已经满 26 周，补一针核心疫苗即可；之后每 3 年接种一次。',
   catchUpBasis:
     '这只狗狗已经满 26 周，按成年犬的常规安排补一针核心疫苗即可（WSAVA 2024：' +
     '16 周龄以上的犬只免疫史不明时，一针 MLV 或重组疫苗即可保护大多数犬只）；' +
@@ -161,6 +174,7 @@ export const RABIES_SCHEDULE = {
   graceDays: 30,
   /** 每年一次 → 覆盖 20 年 = 20 格 */
   maxDoses: 20,
+  hint: '狂犬是法定每年接种，漏了要尽快补上。',
   basis:
     '狂犬属强制免疫（《动物防疫法》），每年接种一次。' +
     '首次免疫程序须大于 12 周龄（WSAVA 2024），' +
@@ -190,7 +204,9 @@ export const LEPTO_SCHEDULE = {
     '中国属钩端螺旋体流行地区。特别是高风险地区（接触积水、牲畜或鼠类）强烈建议接种。' +
     '首次免疫后，如果距离上次接种已经超过 18 个月，建议重启首次免疫程序（2 针，间隔 2~4 周）。' +
     '是否接种、何时接种，请以执业兽医的意见为准。',
+  hint: '首次两针，间隔 2~4 周；之后每年一次。',
   /** 重启的依据（WSAVA 2024 问答；指南自认证据稀疏，所以保留"预防性原则"这个定性说法） */
+  restartHint: '距离上一针已经超过 18 个月，需要重新打两针。',
   restartBasis:
     'WSAVA 2024 问答：上一针钩端螺旋体疫苗距今 18 个月或更久时，' +
     '虽然支持的证据很少，但基于预防性原则，需要重新开始接种程序（2 针，间隔 2~4 周）。' +
@@ -202,6 +218,7 @@ export const CORE_EARLY_SCHEDULE = {
   /** 4 周龄起单针（常规首免系列之前） */
   startWeeks: 4,
   windowWeeks: 2,
+  hint: '4 周龄抢跑的那一针；之后仍要从 6~8 周开始走常规首免。',
   basis:
     'WSAVA 2024 Table 1：CPV 重组 + CDV 弱毒苗可在 4 周龄起接种 1 针，' +
     '之后仍要从 6~8 周开始走常规首免；产品说明书（宠必威幼犬保）建议 4~6 周龄基础接种',
@@ -245,7 +262,9 @@ export interface ScheduleStepSpec {
   graceDays?: number;
   /** 能不能被抗体检测替代（需求 R9 / 附录 A 的 R9 依据） */
   titerable: boolean;
-  /** 展开给家长看的依据文案 */
+  /** 卡片上那行**短话**（一句话说清这一针是怎么回事） */
+  hint: string;
+  /** 展开给家长看的**依据**（带指南引注的整段，比 hint 长得多） */
   basis: string;
   /**
    * 会不会进**默认计划**。
@@ -277,6 +296,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: CORE_SCHEDULE.startWeeks,
     windowWeeks: CORE_SCHEDULE.firstWindowWeeks,
     titerable: true,
+    hint: CORE_SCHEDULE.hint,
     basis: CORE_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -290,6 +310,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     minIntervalWeeks: CORE_SCHEDULE.intervalWeeksMin,
     maxIntervalWeeks: CORE_SCHEDULE.intervalWeeksMax,
     titerable: true,
+    hint: CORE_SCHEDULE.hint,
     basis: CORE_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -303,6 +324,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     minIntervalWeeks: CORE_SCHEDULE.intervalWeeksMin,
     maxIntervalWeeks: CORE_SCHEDULE.intervalWeeksMax,
     titerable: true,
+    hint: CORE_SCHEDULE.hint,
     basis: CORE_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -317,6 +339,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: CORE_SCHEDULE.booster26Weeks,
     windowWeeks: CORE_SCHEDULE.booster26WindowWeeks,
     titerable: true,
+    hint: CORE_SCHEDULE.booster26Hint,
     basis: CORE_SCHEDULE.booster26Basis,
     inDefaultPlan: true,
   },
@@ -331,6 +354,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     intervalYears: CORE_SCHEDULE.adultIntervalYears,
     graceDays: CORE_SCHEDULE.adultGraceDays,
     titerable: true,
+    hint: CORE_SCHEDULE.adultHint,
     basis: CORE_SCHEDULE.adultBasis,
     inDefaultPlan: true,
   },
@@ -344,6 +368,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     intervalYears: CORE_SCHEDULE.adultIntervalYears,
     graceDays: CORE_SCHEDULE.adultGraceDays,
     titerable: true,
+    hint: CORE_SCHEDULE.catchUpHint,
     basis: CORE_SCHEDULE.catchUpBasis,
     inDefaultPlan: true,
   },
@@ -358,6 +383,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: RABIES_SCHEDULE.firstDoseWeeks,
     windowDays: RABIES_SCHEDULE.firstWindowDays,
     titerable: false,
+    hint: RABIES_SCHEDULE.hint,
     basis: RABIES_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -372,6 +398,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     intervalYears: RABIES_SCHEDULE.intervalYears,
     graceDays: RABIES_SCHEDULE.graceDays,
     titerable: false,
+    hint: RABIES_SCHEDULE.hint,
     basis: RABIES_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -386,6 +413,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: LEPTO_SCHEDULE.startWeeks,
     windowWeeks: LEPTO_SCHEDULE.firstWindowWeeks,
     titerable: false,
+    hint: LEPTO_SCHEDULE.hint,
     basis: LEPTO_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -399,6 +427,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     minIntervalWeeks: LEPTO_SCHEDULE.intervalWeeksMin,
     maxIntervalWeeks: LEPTO_SCHEDULE.intervalWeeksMax,
     titerable: false,
+    hint: LEPTO_SCHEDULE.hint,
     basis: LEPTO_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -412,6 +441,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     intervalYears: LEPTO_SCHEDULE.intervalYears,
     graceDays: LEPTO_SCHEDULE.graceDays,
     titerable: false,
+    hint: LEPTO_SCHEDULE.hint,
     basis: LEPTO_SCHEDULE.basis,
     inDefaultPlan: true,
   },
@@ -427,6 +457,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: 0,
     windowWeeks: LEPTO_SCHEDULE.restartFirstWindowWeeks,
     titerable: false,
+    hint: LEPTO_SCHEDULE.restartHint,
     basis: LEPTO_SCHEDULE.restartBasis,
     inDefaultPlan: true,
   },
@@ -440,6 +471,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     minIntervalWeeks: LEPTO_SCHEDULE.intervalWeeksMin,
     maxIntervalWeeks: LEPTO_SCHEDULE.intervalWeeksMax,
     titerable: false,
+    hint: LEPTO_SCHEDULE.restartHint,
     basis: LEPTO_SCHEDULE.restartBasis,
     inDefaultPlan: true,
   },
@@ -454,6 +486,7 @@ export const SCHEDULE_STEPS: readonly ScheduleStepSpec[] = [
     ageWeeks: CORE_EARLY_SCHEDULE.startWeeks,
     windowWeeks: CORE_EARLY_SCHEDULE.windowWeeks,
     titerable: false,
+    hint: CORE_EARLY_SCHEDULE.hint,
     basis: CORE_EARLY_SCHEDULE.basis,
     // ⚠️ 不进默认计划 —— 只有记录里带 core_early 时才认（需求第四节）
     inDefaultPlan: false,

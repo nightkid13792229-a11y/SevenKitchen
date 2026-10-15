@@ -8,6 +8,15 @@
       <view class="vk-records__bar" />
       <text class="vk-records__title">接种记录</text>
       <text v-if="entries.length > 0" class="vk-records__meta">{{ entries.length }} 条</text>
+      <!-- 抗体检测：能记，但不主动提示（需求 R14 / 老板 2026-10-15 定）——
+           所以它是一条**轻链接**，不是常驻的大按钮。真正需要它的场景
+           （核心疫苗该不该打）在「下一针」的展开里有明确入口。 -->
+      <text class="vk-records__link" @tap="onAddTest">记抗体检测</text>
+    </view>
+
+    <!-- 待核对（需求 R7）：不催、不弹窗，只在记录区顶部一行 -->
+    <view v-if="pendingReviewCount > 0" class="vk-records__notice">
+      <text class="vk-records__notice-text">有 {{ pendingReviewCount }} 条记录待你对照本子核对（点那一条就能核对）</text>
     </view>
 
     <view class="vk-records__card">
@@ -36,11 +45,6 @@
       </view>
     </view>
 
-    <!-- 抗体检测的入口常驻在记录区（与「下一针」详情里那条路是同一个录入器） -->
-    <view class="vk-records__add" @tap="onAddTest">
-      <text class="vk-records__add-text">记一次抗体检测</text>
-    </view>
-
     <!-- 疫苗本原件：整本只展示一次（R10） -->
     <view v-if="bookUrls.length > 0" class="vk-records__book" @tap="onPreviewBook">
       <text class="vk-records__book-title">查看疫苗本原件</text>
@@ -62,10 +66,13 @@ const props = withDefaults(defineProps<{
   records?: VaccineRecord[]
   tests?: AntibodyTest[]
   loading?: boolean
+  /** 有几条记录待核对（后端算好下发；0 = 不显示那一行） */
+  pendingReviewCount?: number
 }>(), {
   records: () => [],
   tests: () => [],
   loading: false,
+  pendingReviewCount: 0,
 })
 
 const emit = defineEmits<{
@@ -132,13 +139,19 @@ const bookUrls = computed(() => {
   return urls
 })
 
+/**
+ * 这一行叫什么。
+ *
+ * 括号里是**这一针含哪些病种**（需求 6.1：病种是顾客看得见的东西）。
+ * 不再截断加"…"—— 病种本来就只有 2~4 个，截断之后"卫佳伍（犬瘟热、犬细小病毒…）"
+ * 反而看不出到底防了什么。
+ */
 function entryTitle(entry: VaccineTimelineEntry): string {
   if (entry.type === 'test') return antibodyEntryTitle(entry.test)
   const record = entry.record
-  const labels = (record.componentLabels || []).slice(0, 3)
+  const labels = record.componentLabels || []
   if (labels.length === 0) return record.vaccineName
-  const tail = (record.componentLabels || []).length > labels.length ? '…' : ''
-  return `${record.vaccineName}（${labels.join('、')}${tail}）`
+  return `${record.vaccineName}（${labels.join('、')}）`
 }
 
 /** 这一行的补充说明（备注 / 抗体检测的下次评估） */
@@ -185,6 +198,25 @@ function onPreviewBook() {
 
 <style scoped lang="scss">
 @import '../../styles/vaccine-tokens.scss';
+
+.vk-records__link {
+  margin-left: 16rpx;
+  font-size: $vk-font-sub;
+  color: $vk-brand;
+}
+
+.vk-records__notice {
+  background: $vk-check-bg;
+  border-radius: 20rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 14rpx;
+}
+
+.vk-records__notice-text {
+  font-size: $vk-font-sub;
+  color: $vk-check-fg;
+  line-height: 1.5;
+}
 
 .vk-records__head {
   display: flex;

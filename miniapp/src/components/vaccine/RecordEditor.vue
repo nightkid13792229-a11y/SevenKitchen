@@ -11,7 +11,7 @@
   <view v-if="visible" class="vk-editor">
     <view class="vk-editor__card">
       <view class="vk-editor__head">
-        <text class="vk-editor__title">{{ title }}</text>
+        <text class="vk-editor__title">{{ isRecordMode ? (heading || title) : title }}</text>
         <text class="vk-editor__close" @tap="onCancel">关闭</text>
       </view>
 
@@ -57,7 +57,7 @@
           <!-- 归不了类 → 勾"含哪些疫苗"（顾客看到的是病种，不是内部类别） -->
           <view v-if="showComponents" class="vk-editor__components">
             <text class="vk-editor__label">含哪些疫苗</text>
-            <text class="vk-editor__hint">这个名字认不出含什么疫苗。勾一下含哪些，它才会进免疫计划；确实不知道就问一下医生。</text>
+            <text class="vk-editor__hint">这个名字看不出含什么疫苗。勾一下它含哪些；确实不知道就问一下医生。</text>
             <view class="vk-editor__chips">
               <text
                 v-for="option in componentChoices"
@@ -161,6 +161,12 @@ import { todayDateText } from '../../utils/date'
 
 const props = withDefaults(defineProps<{
   visible: boolean
+  /**
+   * 卡片标题。两种入口两个标题（原型 D 是"记一条接种记录"、H 是"记录这一针"）：
+   * 从下面「记一条」进来是**新建一条记录**；从计划/下一针的「记录这一针」进来是
+   * **补上刚打的这一针**，说的是同一件事的两面。
+   */
+  heading?: string
   /** `record` = 疫苗记录（名称 + 日期）；`antibody` = 抗体检测（日期 + 项目 + 结果） */
   mode?: 'record' | 'antibody'
   /** 编辑既有接种记录时传进来（新增传 null） */
@@ -369,7 +375,7 @@ function onSave() {
    * 如实告诉他这条没法算进计划，并给两条出路：勾病种，或者问医生。
    */
   if (showComponents.value && components.value.length === 0) {
-    errorText.value = '先勾一下"含哪些疫苗"，它才会进免疫计划；确实不知道就问一下医生。'
+    errorText.value = '这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。'
     return
   }
 

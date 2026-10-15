@@ -195,6 +195,8 @@ export interface MaterializedStep {
   movedToToday: boolean;
   /** 会不会出现在默认计划里（早期核心疫苗 = false） */
   inDefaultPlan: boolean;
+  /** 卡片上那行短话（与 basis 分工：短的给首屏，长的给"查看详情"） */
+  hint: string;
   basis: string;
   titerable: boolean;
 }
@@ -358,6 +360,8 @@ interface StepDraft {
   windowKind: ScheduleWindowKind;
   windowStart: Date;
   windowEnd: Date;
+  /** 卡片上那行短话 */
+  hint: string;
   basis: string;
   titerable: boolean;
   inDefaultPlan: boolean;
@@ -442,6 +446,7 @@ function adultStep(anchor: Date, index: number): StepDraft {
     windowKind: 'GRACE',
     windowStart: start,
     windowEnd: addDays(start, CORE_SCHEDULE.adultGraceDays),
+    hint: CORE_SCHEDULE.adultHint,
     basis: CORE_SCHEDULE.adultBasis,
     titerable: true,
     inDefaultPlan: true,
@@ -500,7 +505,8 @@ function buildCoreSteps(
       windowKind: isFirst ? 'AGE' : 'FLEX',
       windowStart,
       windowEnd,
-      basis: CORE_SCHEDULE.basis,
+      hint: CORE_SCHEDULE.hint,
+    basis: CORE_SCHEDULE.basis,
       titerable: true,
       inDefaultPlan: true,
     };
@@ -540,7 +546,8 @@ function buildCoreSteps(
       key: 'core-catchup',
       label: CORE_SCHEDULE.catchUpLabel,
       series: 'BOOSTER',
-      basis: CORE_SCHEDULE.catchUpBasis,
+      hint: CORE_SCHEDULE.catchUpHint,
+    basis: CORE_SCHEDULE.catchUpBasis,
       // ⚠️ 用**原窗口**，不是"已经挪到今天之后"的那个窗口：
       //    首免第 1 针自己可能已经被 `moveToTodayIfMissed` 挪过一次
       missedWindowStart: target.missedWindowStart ?? target.windowStart,
@@ -577,7 +584,8 @@ function buildCoreSteps(
         windowKind: 'AGE',
         windowStart: boosterStart,
         windowEnd: boosterEnd,
-        basis: CORE_SCHEDULE.booster26Basis,
+        hint: CORE_SCHEDULE.booster26Hint,
+    basis: CORE_SCHEDULE.booster26Basis,
         titerable: true,
         inDefaultPlan: true,
       };
@@ -606,6 +614,7 @@ function buildCoreSteps(
     windowKind: 'AGE',
     windowStart: boosterStart,
     windowEnd: boosterEnd,
+    hint: CORE_SCHEDULE.booster26Hint,
     basis: CORE_SCHEDULE.booster26Basis,
     titerable: true,
     inDefaultPlan: true,
@@ -652,6 +661,7 @@ function buildRabiesSteps(
     windowKind: 'AGE',
     windowStart: firstStart,
     windowEnd: firstEnd,
+    hint: RABIES_SCHEDULE.hint,
     basis: RABIES_SCHEDULE.basis,
     titerable: false,
     inDefaultPlan: true,
@@ -677,7 +687,8 @@ function buildRabiesSteps(
       windowKind: 'GRACE',
       windowStart: start,
       windowEnd: end,
-      basis: RABIES_SCHEDULE.basis,
+      hint: RABIES_SCHEDULE.hint,
+    basis: RABIES_SCHEDULE.basis,
       titerable: false,
       inDefaultPlan: true,
     });
@@ -712,7 +723,8 @@ function annualChain(anchor: Date, claimer: Claimer): StepDraft[] {
       windowKind: 'GRACE',
       windowStart: start,
       windowEnd: end,
-      basis: LEPTO_SCHEDULE.basis,
+      hint: LEPTO_SCHEDULE.hint,
+    basis: LEPTO_SCHEDULE.basis,
       titerable: false,
       inDefaultPlan: true,
     });
@@ -747,6 +759,7 @@ function buildLeptoSteps(
     windowKind: 'AGE',
     windowStart: firstStart,
     windowEnd: firstEnd,
+    hint: LEPTO_SCHEDULE.hint,
     basis: LEPTO_SCHEDULE.basis,
     titerable: false,
     inDefaultPlan: true,
@@ -774,6 +787,7 @@ function buildLeptoSteps(
     windowKind: 'FLEX',
     windowStart: secondStart,
     windowEnd: secondEnd,
+    hint: LEPTO_SCHEDULE.hint,
     basis: LEPTO_SCHEDULE.basis,
     titerable: false,
     inDefaultPlan: true,
@@ -847,7 +861,8 @@ function buildLeptoSteps(
       windowKind: 'AGE',
       windowStart: today,
       windowEnd: addWeeks(today, LEPTO_SCHEDULE.restartFirstWindowWeeks),
-      basis: LEPTO_SCHEDULE.restartBasis,
+      hint: LEPTO_SCHEDULE.restartHint,
+    basis: LEPTO_SCHEDULE.restartBasis,
       titerable: false,
       inDefaultPlan: true,
     };
@@ -865,7 +880,8 @@ function buildLeptoSteps(
         restartOne.windowStart,
         LEPTO_SCHEDULE.intervalWeeksMax,
       ),
-      basis: LEPTO_SCHEDULE.restartBasis,
+      hint: LEPTO_SCHEDULE.restartHint,
+    basis: LEPTO_SCHEDULE.restartBasis,
       titerable: false,
       inDefaultPlan: true,
     };
@@ -883,6 +899,7 @@ function buildLeptoSteps(
     windowKind: 'FLEX',
     windowStart: addWeeks(lastDose, LEPTO_SCHEDULE.intervalWeeksMin),
     windowEnd: addWeeks(lastDose, LEPTO_SCHEDULE.intervalWeeksMax),
+    hint: LEPTO_SCHEDULE.restartHint,
     basis: LEPTO_SCHEDULE.restartBasis,
     titerable: false,
     inDefaultPlan: true,
@@ -915,7 +932,8 @@ function buildCoreEarlySteps(
         birthday,
         CORE_EARLY_SCHEDULE.startWeeks + CORE_EARLY_SCHEDULE.windowWeeks,
       ),
-      basis: CORE_EARLY_SCHEDULE.basis,
+      hint: CORE_EARLY_SCHEDULE.hint,
+    basis: CORE_EARLY_SCHEDULE.basis,
       titerable: false,
       inDefaultPlan: false,
     },
@@ -962,6 +980,7 @@ export function materializeSteps(input: MaterializeInput): MaterializedStep[] {
         : {}),
       movedToToday: Boolean(draft.missedWindowStart),
       inDefaultPlan: draft.inDefaultPlan,
+      hint: draft.hint,
       basis: draft.basis,
       titerable: draft.titerable,
     }))

@@ -126,7 +126,7 @@ describe('实时保存 · 契约', () => {
     expect(source).toContain("errorText.value = isRecordMode.value ? '选一下接种日期' : '选一下检测日期'")
     expect(source).toContain('日期不能填将来的日子')
     // 认不出、又没勾病种 → 不保存并说明原因（需求 R6）
-    expect(source).toContain('先勾一下"含哪些疫苗"，它才会进免疫计划；确实不知道就问一下医生。')
+    expect(source).toContain('这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。')
     // 保存键就是那一个
     expect(source).toContain("{{ saving ? '保存中…' : '保存' }}")
   })

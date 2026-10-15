@@ -9,7 +9,9 @@
     <view class="vk-plan__head">
       <view class="vk-plan__bar" />
       <text class="vk-plan__title">免疫计划</text>
-      <text class="vk-plan__meta">按时间</text>
+      <!-- 老板 2026-10-15 第 3 条：统计**放在免疫计划这个板块**里（下一针那块不报数）。
+           数的是"这一块列了几项"—— 原型 K 里两行都已完成，那里也写「共 2 项」。 -->
+      <text v-if="plan.length > 0" class="vk-plan__meta">共 {{ plan.length }} 项</text>
     </view>
 
     <view class="vk-plan__card">
@@ -17,7 +19,10 @@
         v-for="step in plan"
         :key="step.key"
         class="vk-plan__row"
-        :class="{ 'vk-plan__row--now': step.key === nextKey }"
+        :class="{
+          'vk-plan__row--now': step.key === nextKey,
+          'vk-plan__row--far': step.status === 'UPCOMING',
+        }"
       >
         <view class="vk-plan__when">
           <text class="vk-plan__when-main">{{ windowText(step).main }}</text>
@@ -28,14 +33,13 @@
           <view class="vk-plan__line">
             <view class="vk-plan__kind" :class="`vk-plan__kind--${kindTone(step.kind)}`" />
             <text class="vk-plan__step">{{ stepTitle(step) }}</text>
+            <!-- 层级标识只挂在**还要打的行**上：已完成的行再写"必打"没有意义，
+                 原型 K/F 里那两行也没有标识。 -->
             <text
+              v-if="step.status !== 'DONE'"
               class="vk-plan__layer"
               :class="{ 'vk-plan__layer--suggest': step.layer === 'SUGGEST' }"
             >{{ layerLabel(step.layer) }}</text>
-            <text
-              class="vk-plan__badge"
-              :class="`vk-plan__badge--${statusTone(step)}`"
-            >{{ statusLabel(step) }}</text>
           </view>
           <text
             v-if="rowNote(step).text"
@@ -45,7 +49,7 @@
         </view>
       </view>
 
-      <text v-if="plan.length === 0" class="vk-plan__empty">暂时没有需要安排的接种项目</text>
+      <text v-if="plan.length === 0" class="vk-plan__empty">暂无需要接种的项目</text>
 
       <view v-if="rhythm" class="vk-plan__rhythm">
         <text>{{ rhythm }}</text>
@@ -61,8 +65,6 @@ import {
   stepKindTone,
   stepLayerLabel,
   stepRowNote,
-  stepStatusLabel,
-  stepStatusTone,
   stepTitle,
   stepWindowText,
 } from '../../domain/vaccine/status'
@@ -98,13 +100,6 @@ function layerLabel(layer: VaccineLayer) {
   return stepLayerLabel(layer)
 }
 
-function statusLabel(step: VaccineStep) {
-  return stepStatusLabel(step)
-}
-
-function statusTone(step: VaccineStep) {
-  return stepStatusTone(step)
-}
 </script>
 
 <style scoped lang="scss">
@@ -141,6 +136,18 @@ function statusTone(step: VaccineStep) {
   border: 1px solid $vk-card-border;
   border-radius: $vk-card-radius;
   padding: 4rpx 24rpx 8rpx;
+}
+
+/* 还没到时间的那几行弱化（原型 `.tl__row--far`：标题与日期都用更浅的灰）——
+   "现在"那一行才是重点，远期的不该和它一样抢眼 */
+.vk-plan__row--far .vk-plan__step {
+  color: $vk-text-muted;
+  font-weight: 600;
+}
+
+.vk-plan__row--far .vk-plan__when-main,
+.vk-plan__row--far .vk-plan__when-sub {
+  color: $vk-text-faint;
 }
 
 .vk-plan__row {
@@ -236,24 +243,9 @@ function statusTone(step: VaccineStep) {
   color: $vk-suggest-fg;
 }
 
-.vk-plan__badge {
-  @include vk-badge($vk-plain-bg, $vk-plain-fg);
-}
 
-.vk-plan__badge--due {
-  background: $vk-due-bg;
-  color: $vk-due-fg;
-}
 
-.vk-plan__badge--over {
-  background: $vk-over-bg;
-  color: $vk-over-fg;
-}
 
-.vk-plan__badge--done {
-  background: $vk-done-bg;
-  color: $vk-done-fg;
-}
 
 .vk-plan__note {
   display: block;

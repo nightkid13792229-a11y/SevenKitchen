@@ -20,17 +20,13 @@
     </view>
 
     <template v-else>
-      <!-- 待核对（R7）：核对通过才算数 —— 说清后果，并告诉他去哪核对 -->
-      <view v-if="pendingReviewCount > 0" class="vk-notice">
-        <text class="vk-notice__text">有 {{ pendingReviewCount }} 条记录还没核对，核对通过才算数。在下面的接种记录里点那一条就能核对。</text>
-      </view>
-
       <NextCard
         :next="nextStep"
         :later-steps="laterSteps"
         :ignored-items="ignoredItems"
         :ignored-count="ignoredCount"
         @record="onRecordStep"
+        @record-combo="onRecordCombo"
         @scan="startScan"
         @antibody="onAntibody"
         @ignore="onIgnore"
@@ -38,9 +34,11 @@
       />
 
       <!-- 唯一录入器：三个入口共用它（底部记一条 / 记录这一针 / 识别后的补录） -->
+      <view v-if="editorVisible" id="vk-anchor-editor">
       <RecordEditor
         v-if="editorVisible"
         :visible="editorVisible"
+        :heading="editorHeading"
         :mode="editorMode"
         :record="editorRecord"
         :test="editorTest"
@@ -54,10 +52,12 @@
         @remove="onRemoveFromEditor"
         @cancel="closeEditor"
       />
+      </view>
 
       <!-- 识别结果逐条确认（只有名称 + 日期两列，需求 R12） -->
       <ScanConfirm
         v-if="scanRows.length > 0"
+        id="vk-anchor-scan"
         :drafts="scanRows"
         :saving="saving"
         @save="onScanSave"
@@ -70,6 +70,7 @@
         :records="records"
         :tests="tests"
         :loading="loading"
+        :pending-review-count="pendingReviewCount"
         @edit-record="onEditRecord"
         @edit-test="onEditTest"
         @verify-record="onVerifyRecord"
@@ -103,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import NextCard from './NextCard.vue'
 import PlanTimeline from './PlanTimeline.vue'
 import RecordList from './RecordList.vue'
@@ -232,6 +233,8 @@ const editorRecord = ref<VaccineRecord | null>(null)
 const editorTest = ref<AntibodyTest | null>(null)
 const editorPresetName = ref('')
 const editorPresetComponents = ref<string[]>([])
+/** 录入卡标题：新建一条 = 记一条接种记录；补记某一针 = 记录这一针（原型 D / H） */
+const editorHeading = ref('记一条接种记录')
 
 /** 底部「记一条」：一条空白记录 */
 function addRecord() {
@@ -240,6 +243,7 @@ function addRecord() {
   editorTest.value = null
   editorPresetName.value = ''
   editorPresetComponents.value = []
+  editorHeading.value = '记一条接种记录'
   editorVisible.value = true
 }
 
@@ -255,6 +259,23 @@ function onRecordStep(step: VaccineStep | null) {
   editorTest.value = null
   editorPresetName.value = (step?.products || [])[0] || ''
   editorPresetComponents.value = []
+  editorHeading.value = '记录这一针'
+  editorVisible.value = true
+}
+
+/**
+ * 组合那一针（「这一针可以和钩端螺旋体一起打」下面那个按钮）。
+ *
+ * ⚠️ 预填的必须是**组合产品**（同时含两类的联苗），不能沿用主按钮那一支 ——
+ * 否则点"两针一起打"记下来的还是只有核心那一针，家长以为钩端也记上了。
+ */
+function onRecordCombo(products: string[]) {
+  editorMode.value = 'record'
+  editorRecord.value = null
+  editorTest.value = null
+  editorPresetName.value = (products || [])[0] || ''
+  editorPresetComponents.value = []
+  editorHeading.value = '记录这一针'
   editorVisible.value = true
 }
 
@@ -281,6 +302,39 @@ function onEditTest(test: AntibodyTest) {
   editorRecord.value = null
   editorVisible.value = true
 }
+
+/**
+ * 内联卡片打开后**滚到它那里**。
+ *
+ * 为什么要这一步：录入卡不是弹窗，是插在页面里的一个块。家长在页面底部点
+ * 「记一条」（或拍完疫苗本回到页面），卡片出现在**上方**，屏幕上什么都不会变 ——
+ * 看起来就像"点了没反应"。
+ */
+function scrollToAnchor(id: string) {
+  nextTick(() => {
+    const query = uni.createSelectorQuery()
+    query.select(`#${id}`).boundingClientRect()
+    query.selectViewport().scrollOffset()
+    query.exec((res) => {
+      const rect = res && res[0]
+      const viewport = res && res[1]
+      if (!rect || !viewport) return
+      const top = Math.max(0, rect.top + viewport.scrollTop - 16)
+      uni.pageScrollTo({ scrollTop: top, duration: 200 })
+    })
+  })
+}
+
+watch(editorVisible, (open) => {
+  if (open) scrollToAnchor('vk-anchor-editor')
+})
+
+watch(
+  () => scanRows.value.length,
+  (count) => {
+    if (count > 0) scrollToAnchor('vk-anchor-scan')
+  },
+)
 
 function closeEditor() {
   editorVisible.value = false
@@ -350,7 +404,7 @@ async function onVerifyRecord(record: VaccineRecord) {
   if (!props.dogId || !record?.id) return
   const confirmed = await confirmModal({
     title: '这条记录还没核对',
-    content: '对照疫苗本确认名称和日期没问题，这条记录才算数。',
+    content: '对着疫苗本看一眼名称和日期，没问题就确认一下 —— 读错了会影响后面的提醒。',
     // ⚠️ 小程序的 showModal 按钮**最多 4 个字**，超了弹窗既不显示也不报错
     confirmText: '核对无误',
   })

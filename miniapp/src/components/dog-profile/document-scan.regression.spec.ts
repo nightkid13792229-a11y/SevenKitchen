@@ -287,7 +287,7 @@ describe('拍照录入 · 接线', () => {
     expect(vaccine).toContain('defer-confirm')
     expect(vaccine).toContain("import ScanConfirm from './ScanConfirm.vue'")
     // 入口文案在「下一针」卡上（原型 A 屏那两个按钮）
-    expect(next).toContain('拍疫苗本')
+    expect(next).toContain('上传疫苗本')
   })
 
   it('过敏报告那条路搬去了定制食谱，仍然走同一个识别接口', () => {

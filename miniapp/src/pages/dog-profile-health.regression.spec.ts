@@ -565,6 +565,13 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     expect(page).toContain("['上传疫苗本图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动加一条']")
     expect(page).not.toContain('拍疫苗本')
     expect(page).not.toContain('拍照')
+    /*
+     * 2026-10-16：疫苗页底部改成两个**明面**按钮 —— `[上传疫苗本] [记一条]`，
+     * 不再弹选择面板（老板 2026-10-03 就要去掉这层弹窗）。
+     * 文案是"上传"不是"拍"：识别只开相册、不调相机（上面 2026-10-04 那条）。
+     */
+    expect(page).toContain("'上传疫苗本'")
+    expect(page).toContain("return '记一条'")
     // 过敏已不在这个页面
     expect(page).not.toContain("['拍检测报告，AI 识别', '手动点选 / 手输']")
     // 选完才把对应板块的录入块打开；标签页本身仍是"看结果 + 改已有"

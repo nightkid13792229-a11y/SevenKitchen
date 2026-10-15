@@ -193,7 +193,9 @@
       :primary-text="stickySecondaryText"
       :primary-theme="stickyAddTheme"
       :primary-disabled="isSecondaryActionDisabled"
+      :secondary-text="stickyLeftText"
       @primary="onStickySecondary"
+      @secondary="onStickyLeft"
     />
   </view>
 </template>
@@ -1171,6 +1173,12 @@ function resetAddEntryFlags() {
  * 体重没有 AI 识别这条路，就直接落光标，不弹选择。
  */
 function onAddRecordTap() {
+  // 疫苗页两个按钮都是明面上的（上传疫苗本 / 记一条）→ 不弹选择面板
+  if (activeHealthTab.value === 'vaccine') {
+    onVaccineAddTap()
+    return
+  }
+
   if (activeHealthTab.value === 'weight') {
     weightAddEntryVisible.value = true
     nextTick(() => weightSectionRef.value?.focusInput?.())
@@ -1201,17 +1209,7 @@ function onAddRecordTap() {
         return
       }
 
-      if (activeHealthTab.value === 'vaccine') {
-        // 不再打开板块内的新增按钮（那个按钮已下线）——
-        // 直接调起图片识别或手动加一条。
-        if (tapIndex === 0) {
-          nextTick(() => vaccineSectionRef.value?.startScan?.())
-        } else if (tapIndex === 1) {
-          nextTick(() => vaccineSectionRef.value?.startDocumentScan?.())
-        } else {
-          vaccineSectionRef.value?.addRecord?.()
-        }
-      }
+      /* 疫苗页走不到这里：它在 onAddRecordTap 开头就短路了（底部两个明面按钮） */
     },
   })
 }
@@ -1239,14 +1237,57 @@ const stickyAddTheme = computed<'visit' | 'checkup' | 'vaccine' | 'weight'>(() =
   return 'visit'
 })
 
-/** 底部固定栏主按钮的文案：选了狗就是「新增记录」，没选狗就是返回。 */
+/**
+ * 底部固定栏主按钮的文案。
+ *
+ * · 没选狗 → 返回
+ * · **疫苗页 → 「记一条」**（老板 2026-10-15 原型：底部就两个固定按钮
+ *   `[上传疫苗本] [记一条]`；点「记一条」直接开录入卡，不再弹"你要记什么"）
+ * · 其余板块 → 「新增记录」
+ */
 const stickySecondaryText = computed(() => {
   if (!selectedDog.value) {
     return HEALTH_ENTRY_LABELS[entrySource.value]
   }
+  if (activeHealthTab.value === 'vaccine') {
+    return '记一条'
+  }
 
   return '新增记录'
 })
+
+/**
+ * 底部固定栏**左侧**按钮的文案。
+ *
+ * 只有疫苗页有：`上传疫苗本`（把识别通道摆在明面上，不用先点开一个面板再选）。
+ * ⚠️ 文字用"上传"不用"拍"：识别走的是 `sourceType: ['album']`，**只开相册、不调相机**
+ *    （老板 2026-10-04："它其实进入的是相册，所以文案上应该要改一下"）。
+ *    原型那一版按钮文案我写的是"拍…"，画错了，以本条为准。
+ * 其它板块返回空串 → 那个按钮不渲染（布局自动变成整宽主按钮）。
+ */
+const stickyLeftText = computed(() => {
+  if (!selectedDog.value) return ''
+  return activeHealthTab.value === 'vaccine' ? '上传疫苗本' : ''
+})
+
+/** 左侧按钮：疫苗页 = 上传疫苗本（AI 识别）；其余板块没有这个按钮 */
+function onStickyLeft() {
+  if (activeHealthTab.value === 'vaccine') {
+    vaccineSectionRef.value?.startScan?.()
+  }
+}
+
+/**
+ * 疫苗页的「记一条」= 直接开录入卡（技术方案 3.x / 原型 D 屏）。
+ *
+ * ⚠️ 2026-10-16：不再走下面那个 `uni.showActionSheet` —— 老板 2026-10-03 就说过
+ *    "能否把点击之后的弹窗去掉，让它自动识别当前处在哪个标签页下"；
+ *    疫苗页现在有两个明面上的按钮（上传疫苗本 / 记一条），标签已经说清意图，
+ *    再弹一层选择只会让人多点一次。
+ */
+function onVaccineAddTap() {
+  vaccineSectionRef.value?.addRecord?.()
+}
 
 /**
  * 底部左侧按钮：病历/检查板块 → 打开"新增记录"选择（手动填写 / 上传图片）；其它板块 → 返回。
@@ -1280,6 +1321,8 @@ function onStickySecondary() {
 
   goBack()
 }
+
+/* 疫苗页的底部主按钮见 onVaccineAddTap（直接开录入卡） */
 
 function goBack() {
   if (isHealthRecordSaving.value) {

@@ -1099,10 +1099,14 @@ export function buildImmunizationSchedule(
       // 不是"建议"。给 90 天宽限等于在纵容不合规 ——
       // 而且狂犬还牵涉**办证、出行、伤人认定**，晚打的实际麻烦比医学风险更大。
       //
-      // ⚠️ **首针仍是 90 天**：老板本次只点名了"年度加强"，
-      //    首针要不要一起缩，另行确认（见 README 的待办）。
+      // **首针也缩到 30 天**（老板 2026-10-15 确认）：
+      // 幼犬在打上狂犬之前**没有任何狂犬保护**，而狂犬又是**法定强制**免疫 ——
+      // 首针的宽限没有理由比年度加强更宽 ✗（原来 90 天会拖到 25 周龄 ✗）。
+      //
+      // 起点仍是"12 周龄"（说明书上的最低月龄，不往前放宽）✓，
+      // 于是首针窗口 = 12 周 ~ 16 周左右 ✓。
       windowStart: rabies,
-      windowEnd: addDays(rabies, index === 0 ? 90 : 30),
+      windowEnd: addDays(rabies, 30),
       basis: RABIES_SCHEDULE.basis,
     });
     rabies = addYears(rabies, RABIES_SCHEDULE.repeatYears);

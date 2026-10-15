@@ -1804,12 +1804,21 @@ describe('窗口锚定实际接种日（2026-10-06）', () => {
     })
 
     /*
-     * ⚠️ 2026-10-07 起每一类只显示"下一针"，所以没有记录时看到的就是首针
-     * —— 正好用它验证"按生日推算"：窗口起点＝生日 + 12 周，宽 90 天。
+     * ⚠️ 2026-10-07 起每一类只显示"下一针"，所以没有记录时看到的就是首针。
+     *
+     * ⚠️ 2026-10-15：狂犬首针的宽限从 90 天缩到 **30 天**（老板定的），
+     *    于是这条的期望变了 —— 生日 2026-01-05 的狗，首针窗口本来是
+     *    [03-30, 06-28]（90 天），06-01 还在窗口内；
+     *    缩成 30 天后是 [03-30, 04-29]，**06-01 已经逾期** →
+     *    窗口被"尽快补种"逻辑顺延到 today ✓ 状态为 OVERDUE ✓。
+     *    这正是缩窗口要的效果：逾期就如实说，不再用宽限期把它盖住。
      */
     const first = plan.steps.find((step) => step.key === 'rabies-1')
     expect(first).toBeDefined()
-    expect(first!.windowStart).toBe(toDateText(addWeeks(new Date('2026-01-05T00:00:00'), 12)))
+    expect(first!.windowStart).toBe('2026-06-01')
+    // 顺延之后窗口就是 [今天, 今天+30 天]，所以状态是"该打了"（不是"逾期"）——
+    // 界面上会写"尽快补种（原窗口 … 已过）"。
+    expect(first!.status).toBe('DUE')
   })
 
 })
@@ -3098,7 +3107,7 @@ describe('加强针窗口 · 钩端/狂犬 30 天，核心 90 天（老板 2026-
     expect(days(repeat.windowStart, repeat.windowEnd)).toBe(30);
   });
 
-  it('🔴 狂犬年度加强：窗口 30 天；首针仍是 90 天', () => {
+  it('🔴 狂犬：首针与年度加强**都是 30 天**（老板 2026-10-15 确认首针一起缩）', () => {
     const plan = buildVaccinePlan({
       dogId: 't', birthday: '2025-06-01', reviewed: true, today: new Date('2026-10-15'),
       records: [
@@ -3109,9 +3118,43 @@ describe('加强针窗口 · 钩端/狂犬 30 天，核心 90 天（老板 2026-
     const yearly = plan.steps.find((s) => s.kind === 'rabies' && s.label.includes('年度加强'))!;
     expect(yearly).toBeDefined();
     expect(days(yearly.windowStart, yearly.windowEnd)).toBe(30);
-    // 首针那条（如果还在列表里）保持 90 天 —— 老板本次只点名"年度加强"
-    const first = plan.steps.find((s) => s.kind === 'rabies' && s.label.includes('首针'));
-    if (first) expect(days(first.windowStart, first.windowEnd)).toBe(90);
+
+    // 首针同样是 30 天（幼犬在打上狂犬之前没有任何保护，宽限没理由更宽）
+    const puppy = buildVaccinePlan({
+      dogId: 't', birthday: '2026-08-01', reviewed: true, today: new Date('2026-10-15'), records: [],
+    });
+    const first = puppy.steps.find((s) => s.kind === 'rabies')!;
+    expect(first).toBeDefined();
+    expect(days(first.windowStart, first.windowEnd)).toBe(30);
+  });
+
+  it('🔴 26 周补强：窗口 4 周（指南说"26 周**或之后**"，没有上限）', () => {
+    /*
+     * 老板 2026-10-15 追问："核心疫苗 26 周后的那针加强，它的窗口期是多久？
+     * 需不需要缩？"
+     *
+     * 查证：WSAVA p14 的原话是 "Revaccination **at or after** 26 weeks of age
+     * (rather than waiting until 12 to 16 months of age) is advised" ——
+     * **明确给了"或之后"**，没有上限 ✓；AAHA 2022 的口径同样是
+     * "Consider revaccinating at **6 months of age** rather than waiting until
+     * 12-16 months"（6 月龄 ≈ 26 周，同样只有下限）。
+     *
+     * 所以 4 周的窗口**完全在指南内** ✓，而且这一针的性质是"兜底"：
+     * 狗前面已经打过 3~4 针（大概率已有保护），不是首免那种易感期。
+     * ⇒ **保持 4 周**，不缩。
+     */
+    const plan = buildVaccinePlan({
+      dogId: 't', birthday: '2026-08-01', reviewed: true, today: new Date('2026-10-15'), records: [],
+    });
+    // 这一类只显示"下一针"，所以直接按 key 找 26 周那一档的原始定义
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/domain/health/immunization-schedule.ts'),
+      'utf-8',
+    );
+    // 26 周补强的窗口 = [26 周, 26 周 + 4 周]
+    expect(source).toContain("windowStart: booster26w,");
+    expect(source).toContain('windowEnd: addWeeks(booster26w, 4),');
+    expect(plan.steps.length).toBeGreaterThan(0);
   });
 
   it('🔴 核心成年加强：保持 90 天（DOI 有 3~4 年，不必缩）', () => {

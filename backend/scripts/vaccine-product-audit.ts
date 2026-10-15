@@ -2,7 +2,7 @@
  * 产品库分类体检（老板 2026-10-12 第 2 问）
  * 用法：cd backend && npx ts-node -T scripts/vaccine-product-audit.ts
  */
-import { VACCINE_PRODUCTS, kindsOfComponents } from '../src/domain/health/vaccine-products';
+import { VACCINE_PRODUCTS, kindsOfComponents } from '../src/domain/health/vaccine/products';
 
 const KIND_CN: Record<string, string> = {
   core_early: '早期核心',

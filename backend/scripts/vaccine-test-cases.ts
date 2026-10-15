@@ -18,7 +18,7 @@
  *      钩端单独那支         → 优乐康（lepto）
  */
 
-import { buildVaccinePlan } from '../src/domain/health/immunization-schedule';
+import { buildPlanView } from '../src/domain/health/vaccine/engine';
 
 const REF_TODAY = '2026-10-11';
 
@@ -271,12 +271,11 @@ function main() {
       productVerified: true,
     }));
 
-    const plan = buildVaccinePlan({
+    const plan = buildPlanView({
       dogId: `case-${item.no}`,
       birthday,
       records,
       today: new Date(`${REF_TODAY}T00:00:00`),
-      reviewed: true,
     });
 
     console.log('─'.repeat(78));
@@ -286,13 +285,13 @@ function main() {
     if (records.length === 0) console.log('    （空）');
     for (const r of records) console.log(`    · ${r.vaccinationDate} ${r.vaccineName}`);
     console.log('  计划（鱼骨图只显示未完成的）：');
-    const pending = plan.steps.filter((s) => s.status !== 'DONE');
-    const done = plan.steps.filter((s) => s.status === 'DONE');
+    const pending = plan.plan.filter((s) => s.status !== 'DONE');
+    const done = plan.plan.filter((s) => s.status === 'DONE');
     for (const s of pending) {
       console.log(`    ▸ ${s.status.padEnd(9)} ${s.statusLabel}｜${s.label}｜窗口 ${s.windowStart} ~ ${s.windowEnd}`);
     }
     for (const s of done) {
-      console.log(`    ✓ ${s.statusLabel}｜${s.label}${s.matchedRecordDate ? `（命中 ${s.matchedRecordDate}）` : ''}`);
+      console.log(`    ✓ ${s.statusLabel}｜${s.label}`);
     }
     if (plan.conflicts.length > 0) {
       console.log('  冲突/提醒：');

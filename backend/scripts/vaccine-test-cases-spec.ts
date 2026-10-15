@@ -4,7 +4,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { CASES } from './vaccine-test-cases';
-import { findProductByText } from '../src/domain/health/vaccine-products';
+import { findProductByText } from '../src/domain/health/vaccine/products';
 
 const REF = '2026-10-11';
 const minus = (w: number) =>

@@ -17,6 +17,12 @@
           <text class="kind-card__badge" :class="`kind-card__badge--${card.steps[0].status}`">
             {{ statusLabel(card.steps[0]) }}
           </text>
+          <!-- 步骤名称放在**角标右边**（老板 2026-10-15）。
+               一开始想放标题右侧，但核心疫苗的标题太长（「核心疫苗（犬瘟、细小、
+               腺病毒）」），右边放不下 ✗ —— 改放在这一行 ✓。
+               ⚠️ 早期核心疫苗这一类**不显示**：卡片标题就叫「早期核心疫苗」，
+                  右边再写一遍是重复 ✗（老板定的）。 -->
+          <text v-if="doseName(card)" class="kind-card__dose">{{ doseName(card) }}</text>
           <text class="kind-card__toggle">{{ expandedKind === card.key ? '收起' : '展开' }}</text>
         </view>
         <text class="kind-card__kind">{{ card.title }}</text>
@@ -1124,6 +1130,22 @@ function ignoreSteps(steps: PlanCard['steps'], multiple: boolean) {
   })
 }
 
+/**
+ * 角标右边显示的**步骤名称**（老板 2026-10-15）。
+ *
+ * 直接复用后端的 `step.label` ✓ —— 名称在后端**同源生成**，
+ * 前端不自己拼、也不截字符串（截字符串太脆，改个名字就错位 ✗）。
+ *
+ * ⚠️ 早期核心疫苗**不显示**：卡片标题就叫「早期核心疫苗」，
+ *    右边再写一遍就是重复 ✗（老板定的）。
+ */
+function doseName(card: PlanCard): string {
+  const step = card.steps[0]
+  if (!step) return ''
+  if (step.kind === 'core_early') return ''
+  return step.label
+}
+
 function ignoreCard(card: PlanCard) {
   ignoreSteps(card.steps, card.kinds.length > 1)
 }
@@ -2070,6 +2092,16 @@ defineExpose({
   color: #6b7a70;
   background: #f0f3f1;
   border-color: #e0e6e2;
+}
+/*
+ * 步骤名称（角标右边的那个，老板 2026-10-15）。
+ * ⚠️ 它**不**抢右边 —— 用 `margin-right: auto` 把「展开」推到最右，
+ *    名称自己紧跟在角标后面 ✓；长名称会自己换行，不会挤掉「展开」✓。
+ */
+.kind-card__dose {
+  margin-right: auto;
+  font-size: 24rpx;
+  color: #4a6b5c;
 }
 .kind-card__toggle {
   margin-left: auto;

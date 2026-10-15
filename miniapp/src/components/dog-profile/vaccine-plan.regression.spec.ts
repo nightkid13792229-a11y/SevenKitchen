@@ -384,6 +384,30 @@ describe('疫苗计划 · 新增的两条排期规则', () => {
     expect(text).toContain("border-radius: 0 0 16rpx 16rpx;")
   })
 
+  it('🔴 步骤名称显示在**角标右边**，且早期苗不重复显示（老板 2026-10-15）', () => {
+    const text = readSection()
+
+    /*
+     * 老板："可以把名称写在计划窗口的角标右侧吗？也就是计划标题的上方那一行。"
+     * （一开始想放标题右侧，但核心疫苗的标题太长放不下 ✗）
+     */
+    // 名称必须落在 kind-card__top 这一行里、且在角标之后
+    const top = text.slice(text.indexOf('kind-card__top'), text.indexOf('kind-card__kind'));
+    expect(top).toContain('kind-card__badge');
+    expect(top).toContain('kind-card__dose');
+
+    // 直接复用后端的 label，不在前端拼、也不截字符串（截字符串太脆 ✗）
+    expect(text).toContain('function doseName(card: PlanCard): string {');
+    expect(text).toContain('return step.label');
+
+    // 早期核心疫苗：卡片标题就叫「早期核心疫苗」，右侧再写一遍是重复 ✗
+    expect(text).toContain("if (step.kind === 'core_early') return ''");
+
+    // 样式：名称跟在角标后面（margin-right:auto 把「展开」推到最右）
+    expect(text).toContain('.kind-card__dose {');
+    expect(text).toContain('margin-right: auto');
+  })
+
   it('🔴 合并窗口的「忽略」要一次忽略**两类**（老板 2026-10-14）', () => {
     const text = readSection()
 

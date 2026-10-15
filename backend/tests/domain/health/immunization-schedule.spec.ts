@@ -1,4 +1,4 @@
-import { stripComments } from '../../helpers/source-text';
+import { DEFAULT_PLAN_KINDS, stripComments } from '../../helpers/source-text';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildVaccineCatalog } from '../../../src/domain/health/vaccine-catalog';
@@ -160,7 +160,7 @@ describe('疫苗计划', () => {
        *
        * 不变的是：**十年前的窗口不是"现在该做的事"** —— 早期那几针仍然不许冒出来
        * （见下面的 key 断言），显示出来的这一针也不再叫"幼犬首免"，而是
-       * 「核心疫苗 首免（一针）」（WSAVA 2024：成年才开始首免的犬一针即可）。
+       * 「首免（一针）」（WSAVA 2024：成年才开始首免的犬一针即可）。
        */
       const plan = buildVaccinePlan({
         dogId: 'dog-old',
@@ -1686,7 +1686,7 @@ describe('按窗口匹配（2026-10-06 老板实测）', () => {
     const steps = plan().steps;
 
     // 2026-10-07 起改成"按这只狗自己的第一针"排：它的第一针就是 2024-08-18，
-    // 一针即完成首免（≥16 周龄才开始），标成「核心疫苗 首免（一针）」。
+    // 一针即完成首免（≥16 周龄才开始），标成「首免（一针）」。
     const first = steps.find((step) => step.key === 'core-puppy-1');
     expect(first).toBeDefined();
     expect(first!.label).toContain('一针');
@@ -2184,7 +2184,7 @@ describe('接种日期的合理性', () => {
   it('🔴 接种日在未来的记录不参与计划，并留一条"请核对"', () => {
     const plan = planWith([rec('r1', '狂犬', '2026-12-01')])
 
-    // 改之前：这一针把「狂犬疫苗 首针」标成已完成，提醒直接消失
+    // 改之前：这一针把「首针」标成已完成，提醒直接消失
     const first = plan.steps.find((step) => step.key === 'rabies-1')
     expect(first?.status).not.toBe('DONE')
     expect(first?.matchedRecordId).toBeNull()
@@ -2572,7 +2572,7 @@ describe('钩端 · 隔太久要重新两针 + 同一支产品（2026-10-07）',
     const pending = pendingLepto([rec('a', '卫佳捌', at(880))])
 
     expect(pending.length).toBe(1)
-    expect(pending[0].label).toBe('钩端螺旋体 重新开始（第 1 针）')
+    expect(pending[0].label).toBe('重启免疫 第 1 针')
     expect(pending[0].basis).toContain('重新打两针')
     // 文案里会说清"已经过去多少个月"（这里 29 个月）
     expect(pending[0].basis).toMatch(/已经过去 \d+ 个月/)
@@ -2592,7 +2592,7 @@ describe('钩端 · 隔太久要重新两针 + 同一支产品（2026-10-07）',
     )
 
     expect(pending.length).toBe(1)
-    expect(pending[0].label).toBe('钩端螺旋体 重新开始（第 2 针）')
+    expect(pending[0].label).toBe('重启免疫 第 2 针')
     expect(pending[0].basis).toContain('第 2 针')
   })
 
@@ -3186,5 +3186,85 @@ describe('加强针窗口 · 钩端/狂犬 30 天，核心 90 天（老板 2026-
     expect(source).toContain('至少可持续 12 至 14 个月');
     // 狂犬那段必须点名"法规要求每年一次"
     expect(source).toContain('狂犬是国内法规要求');
+  });
+});
+
+/**
+ * 老板 2026-10-15 定的**步骤名称**规则 —— 这一组断言把清单钉住。
+ *
+ * 背景：这些名称会显示在计划卡片的**角标右边**（不是标题右边 ——
+ * 核心疫苗的标题太长放不下）。所以名称里**一律不带类别前缀**：
+ * 卡片标题已经写着"钩端螺旋体"了，右边再写一遍是重复 ✗。
+ *
+ * ⚠️ 狂犬那条的另一半原因见代码注释：原来写"第 2 次 / 第 3 次"，
+ *    结果一只狗真实的第一针狂犬正好落在"第 2 次"的窗口里，
+ *    第一针被贴上"第 2 次"的标签，**看起来就像少打了一针** ✗。
+ */
+describe('步骤名称 · 不带类别前缀，显示在卡片的角标右边（老板 2026-10-15）', () => {
+  const allLabels = () => {
+    const set = new Set<string>();
+    for (const it of buildImmunizationSchedule(new Date('2026-01-05T00:00:00'), {
+      kinds: DEFAULT_PLAN_KINDS, today: new Date('2026-01-05T00:00:00'),
+    })) {
+      const step = it as unknown as { kind: string; label: string };
+      set.add(step.label);
+    }
+    // 成年犬那条（"首免（一针）"）只有 buildVaccinePlan 会生成
+    const adult = buildVaccinePlan({
+      dogId: 't', birthday: '2024-01-05', reviewed: true, today: new Date('2026-10-15'), records: [],
+    });
+    for (const st of adult.steps) set.add(st.label);
+    // 重启两针（隔 18 个月以上）
+    const restart = buildVaccinePlan({
+      dogId: 't', birthday: '2022-04-01', reviewed: true, today: new Date('2026-10-15'),
+      records: [{ id: 'r1', kind: 'lepto', kinds: ['lepto'], vaccineName: '宠必威乐必妥',
+        vaccinationDate: '2024-08-01', components: ['lepto'] }] as never,
+    });
+    for (const st of restart.steps) set.add(st.label);
+    return set;
+  };
+
+  it('🔴 名称里不许出现类别名（"钩端螺旋体"/"狂犬疫苗"/"核心疫苗"）', () => {
+    for (const label of allLabels()) {
+      expect(label).not.toContain('钩端螺旋体');
+      expect(label).not.toContain('狂犬疫苗');
+      // ⚠️ 早期苗那一条例外：它的名称本身就是"早期核心疫苗"（卡片标题也是它，
+      //    所以前端对**这一类**不显示右侧名称 —— 见前端守卫）
+      if (label !== '早期核心疫苗') expect(label).not.toContain('核心疫苗');
+    }
+  });
+
+  it('🔴 钩端：首次免疫 第 N 针 / 年度加强 第 N 次 / 重启免疫 第 N 针', () => {
+    const labels = allLabels();
+    expect(labels.has('首次免疫 第 1 针')).toBe(true);
+    expect(labels.has('首次免疫 第 2 针')).toBe(true);
+    expect(labels.has('年度加强 第 1 次')).toBe(true);
+    expect(labels.has('年度加强 第 2 次')).toBe(true);
+    expect(labels.has('重启免疫 第 1 针')).toBe(true);
+  });
+
+  it('🔴 狂犬：只有「首针」和「年度加强」（不加次数）', () => {
+    const labels = allLabels();
+    expect(labels.has('首针')).toBe(true);
+    expect(labels.has('年度加强')).toBe(true);
+    // 不加"第 N 次"—— 老板 2026-10-15 明确选了这一档
+    for (const l of labels) {
+      if (l.startsWith('年度加强 第')) {
+        // 带次数的只能是钩端那条，不能来自狂犬 —— 这里只确认数量口径没被改乱
+        expect(l).toMatch(/^年度加强 第 \d+ 次$/);
+      }
+    }
+  });
+
+  it('🔴 核心：幼犬首免 第 N 针 / 首免（一针）/ 幼犬首次免疫补强（26 周龄后）', () => {
+    const labels = allLabels();
+    expect(labels.has('幼犬首免 第 1 针')).toBe(true);
+    expect(labels.has('幼犬首免 第 4 针')).toBe(true);
+    expect(labels.has('首免（一针）')).toBe(true);
+    expect(labels.has('幼犬首次免疫补强（26 周龄后）')).toBe(true);
+    expect(labels.has('成年加强 第 1 次')).toBe(true);
+    // 老文案不许回来
+    expect(labels.has('首免后补强（26 周龄）')).toBe(false);
+    expect(labels.has('核心疫苗 首免（一针）')).toBe(false);
   });
 });

@@ -511,6 +511,11 @@ export const NON_CORE_SCHEDULES = {
     intervalWeeksMax: 4,
     /** 说明书：共 2 针 */
     doses: 2,
+    /**
+     * 多针时名称怎么写（老板 2026-10-15）。
+     * 显示在卡片的角标右边，**不带类别前缀** —— 标题已经说明是"钩端螺旋体"了 ✓。
+     */
+    primaryName: '首次免疫',
     /** 说明书：以后每年 1 次 */
     repeatYears: 1,
     // 每年一次 → 覆盖 20 年 = **20 格** ✓（老板 2026-10-12：统一 20 年 ✓）
@@ -1021,7 +1026,7 @@ export function buildImmunizationSchedule(
   seeds.push({
     key: 'core-26w',
     kind: 'core',
-    label: '首免后补强（26 周龄）',
+    label: '幼犬首次免疫补强（26 周龄后）',
     windowStart: booster26w,
     windowEnd: addWeeks(booster26w, 4),
     basis:
@@ -1081,7 +1086,9 @@ export function buildImmunizationSchedule(
        * 标签 ✗，看起来就像少打了一针 ✗（老板就是这么读出来的）。
        * 现在：首针就叫首针 ✓，之后一律「年度加强」✓，不跟"第几次"较劲 ✓。
        */
-      label: index === 0 ? '狂犬疫苗 首针' : '狂犬疫苗 年度加强',
+      // 老板 2026-10-15：名称里**不要出现"狂犬疫苗"** —— 它本来就显示在
+      // "狂犬疫苗"那张卡片里，标题已经说明了类别，再写一遍是重复 ✗。
+      label: index === 0 ? '首针' : '年度加强',
       // 首针**不往前放宽**（2026-10-04 修）：
       // 之前所有年接种窗口统一 -30 天，把首针窗口拉到了 12周−30天 ≈ 7.7 周龄，
       // 于是"8 周龄打狂犬"也会被判成已完成 —— 而 12 周是说明书上的最低月龄，
@@ -1257,9 +1264,14 @@ function buildNonCoreSeeds(
     seeds.push({
       key: `${kind}-primary-${index + 1}`,
       kind,
+      /*
+       * ⚠️ 名称里**不带类别前缀**（老板 2026-10-15）——
+       * 它显示在"钩端螺旋体"那张卡片的角标右边，标题已经说明类别了 ✓。
+       * 多针的写成"首次免疫 第 N 针"（钩端），单针的用 config.label（早期苗）。
+       */
       label:
         config.doses > 1
-          ? `${config.label} 第 ${index + 1} 针`
+          ? `${'primaryName' in config ? config.primaryName : '首次免疫'} 第 ${index + 1} 针`
           : config.label,
       windowStart,
       windowEnd,
@@ -1281,7 +1293,8 @@ function buildNonCoreSeeds(
       key: `${kind}-repeat-${index + 1}`,
       kind,
       // 同上：周期复种的档位不编号（2026-10-10 老板定）✓
-      label: `${config.label} 年度加强`,
+      // "年度加强 第 N 次"（老板 2026-10-15）—— 去掉类别前缀 + 补上第几次
+      label: `年度加强 第 ${index + 1} 次`,
       /*
        * 每年一次的窗口：起点就是**上一次的周年当天**（2026-10-07 老板审计时定）。
        *
@@ -1886,7 +1899,7 @@ export function buildVaccinePlan(
         seed.windowStart.getTime() > lastLeptoDose.getTime(),
     );
     if (nextRepeat) {
-      nextRepeat.label = '钩端螺旋体 重新开始（第 2 针）';
+      nextRepeat.label = '重启免疫 第 2 针';
       nextRepeat.basis =
         `WSAVA 2024 FAQ：上一针钩端是在隔了很久（` +
         `${Math.round((lastLeptoDose.getTime() - previousLeptoDose.getTime()) / (30 * DAY_MS))} 个月）` +
@@ -1906,8 +1919,8 @@ export function buildVaccinePlan(
       );
       if (nextRepeat) {
         const restartKey = `${nextRepeat.key}-restart`;
-        const firstLabel = '钩端螺旋体 重新开始（第 1 针）';
-        const secondLabel = '钩端螺旋体 重新开始（第 2 针）';
+        const firstLabel = '重启免疫 第 1 针';
+        const secondLabel = '重启免疫 第 2 针';
         const restartBasis =
           `WSAVA 2024 FAQ：上一针钩端已经过去 ` +
           `${Math.max(18, Math.round((today.getTime() - lastLeptoDose.getTime()) / (30 * DAY_MS)))} 个月，` +
@@ -2060,7 +2073,7 @@ export function buildVaccinePlan(
         kind: 'core',
         label:
           doseCount === 1
-            ? '核心疫苗 首免（一针）'
+            ? '首免（一针）'
             : `幼犬首免 第 ${index + 1} 针`,
         windowStart: planned,
         windowEnd: addWeeks(planned, 2),

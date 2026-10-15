@@ -181,9 +181,71 @@ const DOG_ATWATER_REQUIRED_FIELDS = ['moisture','crudeProtein','crudeFat','ash',
 2. **失败模式太差**：一个食材缺一个字段，整块面板变「缺数据」，而界面**不告诉你是哪个食材缺哪个字段**，
    只能靠人观察「加了什么之后变的」。建议在评估结果里带上缺失字段的原料清单，直接显示出来。
 
+> 上面两条已于 2026-10-16 处理，见第九、十节。
+
 ---
 
-## 八、复现方式
+## 九、苋菜的同一毛病（2026-10-16 已修）
+
+全库扫描：主档案缺犬用 Atwater 必填字段的 `FOOD` 食材，**只剩苋菜一个**
+（水分 91.69 / 蛋白 2.46 / 脂肪 0.33 / 灰分 1.5 齐全，**独缺膳食纤维**）。
+
+来源排查（本地营养库）：
+
+| 记录 | 名称 | 膳食纤维 |
+|---|---|---|
+| USDA:168385 | Amaranth leaves, raw | **无此营养素** |
+| CNF:1984 | Amaranth leaves, fresh | **无此营养素**（与上条同源数据） |
+| USDA:169202 / 168492、CNF:1985 | Amaranth leaves, cooked | **无此营养素** |
+
+即本地营养库对苋菜叶**完全没有**膳食纤维数据。
+
+改用《中国食物成分表 标准版 第六版 第一册》**p72（PDF p96）食物编码 045319「苋菜（绿，鲜）」**：
+不溶性膳食纤维 **2.2 g/100g**（已对着书页原图核对）。
+
+该书使用说明明确：「在蔬菜和谷类等食物中，由于可溶性部分较少，
+**不溶性膳食纤维与总膳食纤维的含量数据差别不大**」，故以此作为 `macros.fiber`。
+
+- 写入方式：`patch-nutrition-field.ts --patch amaranth-fiber.patch.json --confirm`
+- 来源与理由写入 `meta.sourceForms['macros.fiber']` 与 `meta.conversionNotes['macros.fiber']`
+- 档案状态仍为 `PENDING`（苋菜整体尚未经过治理复核，本次只补必填字段）
+
+**修完全库复扫：0 个食材缺能量必填字段。**
+
+---
+
+## 十、评估面板点名缺口（2026-10-16 已上线）
+
+原来一个食材缺一个必填字段，整片面板变「缺数据」却不说是谁。现在评估结果直接带上缺口清单。
+
+**改动**（admin-web，提交 `5795b045`）：
+
+| 文件 | 改了什么 |
+|---|---|
+| `utils/recipeDesigner/assessmentTypes.ts` | 新增 `AssessmentDataGap` 类型 |
+| `utils/recipeDesigner/dogAtwaterEnergy.ts` | 导出 `DOG_ATWATER_FIELD_PATHS` 与字段中文名 |
+| `utils/recipeDesigner/assessment.ts` | 结果新增 `dataGaps`：逐原料列出缺失的 Atwater 必填字段 |
+| `views/RecipeDesigner/components/AssessmentPanel.vue` | 评估列表上方新增缺口提示条 |
+| `__tests__/assessmentDataGaps.spec.ts` | 新增 6 条测试 |
+
+**提示条内容**：
+
+> ⚠️ **N 个原料缺少能量计算必填字段**
+> 配方能量算不出来，所以所有「每1000千卡 / 每兆焦」口径的指标都显示「缺数据」。补齐下面这些字段就会自动恢复：
+> · **油麦菜** 缺「膳食纤维」
+> 补齐位置：原料管理 → 找到该原料 → 补营养档案数据
+
+补剂不计入（走 `missingValueAsZero` 分支，不影响能量合计）；用量为 0 的原料也不计入。
+
+**自检**：`vue-tsc --noEmit` 通过；vitest 114 项通过；`npm run build` 通过。
+**部署**：`bash deploy-admin-web.sh`，产物 `Editor-CBk2EZjT.js` 已确认含新文案。
+**线上复核**（浏览器打开该配方）：面板五大类全部达标，无「缺数据」，提示条不出现（符合预期——库里已无缺口）。
+
+⚠️ 提示条**正向路径**目前无法在线上实拍：全库已无缺口，触发不出。逻辑由 6 条单元测试锁定。
+
+---
+
+## 十一、复现方式
 
 ```bash
 # 生成草稿（只读本地营养库）
@@ -206,10 +268,10 @@ node -r ts-node/register -r tsconfig-paths/register \
   ../.standard-ingredient-import/youmaicai/verify-nutrition-food.ts \
   --id <nutritionFoodId> [--confirm]
 
-# 补膳食纤维（见第七节）
+# 给营养档案补必填字段（见第七、九节）
 node -r ts-node/register -r tsconfig-paths/register \
-  ../.standard-ingredient-import/youmaicai/fix-fiber.ts \
-  --id <nutritionFoodId> [--confirm]
+  ../.standard-ingredient-import/youmaicai/patch-nutrition-field.ts \
+  --patch ../.standard-ingredient-import/youmaicai/amaranth-fiber.patch.json [--confirm]
 
 # 只读拉取正式接口数据（排查用）
 node -r ts-node/register -r tsconfig-paths/register \

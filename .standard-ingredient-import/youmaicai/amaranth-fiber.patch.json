@@ -1,0 +1,26 @@
+{
+  "nutritionFoodId": "74850030-15d6-46a7-98a5-f093f2d3beef",
+  "notesAppend": "【2026-10-16 补】膳食纤维 2.2 g/100g 取自《中国食物成分表 标准版 第六版 第一册》p72 苋菜（绿，鲜）食物编码 045319 的「不溶性膳食纤维」；该字段是犬用 Atwater 能量计算的必填项，缺失会导致整份食谱能量与所有「每1000千卡」口径指标无法计算。",
+  "fields": [
+    {
+      "path": "macros.fiber",
+      "value": 2.2,
+      "source": {
+        "basisType": "PER_100_G",
+        "originalUnit": "G",
+        "canonicalUnit": "g",
+        "originalValue": 2.2,
+        "canonicalValue": 2.2,
+        "sourceNutrientName": "不溶性膳食纤维（Dietary fiber）",
+        "sourceTitle": "中国食物成分表 标准版 第六版 第一册",
+        "sourceFoodCode": "045319",
+        "sourceFoodName": "苋菜（绿，鲜）",
+        "sourcePage": "p72（PDF p96）",
+        "supplementalSource": true,
+        "supplementalFrom": "CFCT 第六版第一册 p72 045319 苋菜（绿，鲜）",
+        "supplementalReason": "本地 USDA/CNF 的苋菜档案均未收录膳食纤维；犬用 Atwater 能量计算强制要求该字段。"
+      },
+      "conversionNote": "USDA FDC 168385（Amaranth leaves, raw）与 CNF 1984（Amaranth leaves, fresh）均未收录膳食纤维，本地营养库无此值。改用《中国食物成分表》第六版第一册 p72 苋菜（绿，鲜）045319 的「不溶性膳食纤维」2.2 g/100g。该书使用说明明确：蔬菜、谷类等食物可溶性纤维占比很小，不溶性膳食纤维与总膳食纤维数值差别不大，故以此作为膳食纤维值。"
+    }
+  ]
+}

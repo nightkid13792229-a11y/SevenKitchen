@@ -147,6 +147,20 @@ describe('动作解析器', () => {
       expect(cancel?.disabledReason).toContain('已经开始设计');
     });
 
+    it('★ 按钮文案本身就说清会不会退款（措辞是业务口径，不该由前端判断）', () => {
+      const unpaid = find(
+        resolveCustomerActions(ctx({ status: CustomRecipeStatus.PENDING_PAYMENT })),
+        CUSTOM_RECIPE_ACTIONS.CANCEL_SELF,
+      );
+      const paid = find(
+        resolveCustomerActions(ctx({ status: CustomRecipeStatus.PAID })),
+        CUSTOM_RECIPE_ACTIONS.CANCEL_SELF,
+      );
+
+      expect(unpaid?.label).toBe('取消订单');
+      expect(paid?.label).toBe('取消并退款');
+    });
+
     it('未付款时取消不算退款，已付款时取消要讲清全额退款（二次确认文案不同）', () => {
       const unpaid = find(
         resolveCustomerActions(ctx({ status: CustomRecipeStatus.PENDING_PAYMENT })),

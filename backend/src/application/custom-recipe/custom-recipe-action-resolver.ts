@@ -167,7 +167,14 @@ export function resolveCustomerActions(
     const unpaid = ctx.status === CustomRecipeStatus.PENDING_PAYMENT;
     actions.push({
       code: CUSTOM_RECIPE_ACTIONS.CANCEL_SELF,
-      label: '取消订单',
+      /**
+       * 已付款的单按钮上就写「取消并退款」。
+       *
+       * 小程序原来在页面里写 `status === 'PENDING_PAYMENT' ? '取消订单' : '取消并退款'` ——
+       * 那是前端在判断业务。2026-10-16 把它挪到这里：**措辞本身是业务口径**，
+       * 而且"会不会退款"后端最清楚（万一将来改成部分退款，前端不用动）。
+       */
+      label: unpaid ? '取消订单' : '取消并退款',
       enabled: true,
       confirmText: unpaid
         ? '取消后这张定制单就没了，要重新下单才能再约。确定取消吗？'

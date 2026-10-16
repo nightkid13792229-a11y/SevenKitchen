@@ -19,8 +19,12 @@ HOURS="${1:-24}"
 
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$HOST" "journalctl -u sevenkitchen-backend --since '$HOURS hours ago' --no-pager 2>/dev/null | grep '\[Extraction\]'" > /tmp/scan-lines.txt || true
 
-TOTAL=$(grep -c '\[Extraction\]' /tmp/scan-lines.txt 2>/dev/null || echo 0)
-EMPTY=$(grep -c '\[Extraction\]\[EMPTY\]' /tmp/scan-lines.txt 2>/dev/null || echo 0)
+# ⚠️ `grep -c` 没匹配时**会打印 0 但退出码是 1** —— 用 `|| true` 而不是 `|| echo 0`，
+#    否则变量会变成两行（"0\n0"），下面的大小比较直接报 integer expression expected ✗
+TOTAL=$(grep -c '\[Extraction\]' /tmp/scan-lines.txt 2>/dev/null || true)
+EMPTY=$(grep -c '\[Extraction\]\[EMPTY\]' /tmp/scan-lines.txt 2>/dev/null || true)
+TOTAL=${TOTAL:-0}
+EMPTY=${EMPTY:-0}
 
 echo "──────── 识别情况（最近 ${HOURS} 小时）────────"
 echo "总共识别：${TOTAL} 次 ｜ 一张都没读出来：${EMPTY} 次"

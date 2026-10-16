@@ -21,6 +21,8 @@ dist/
 # Logs
 *.log
 backend/reports/
+# 运维脚本的备份产物（可能含真实档案数据，绝不入库）
+backend/scripts/backup/
 
 # Prisma
 prisma/dev.db

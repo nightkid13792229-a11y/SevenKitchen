@@ -49,6 +49,17 @@ export interface GlobalConfig {
   diySheetHeaderBgImageUrl: string | null;
   ingredientPriceAutoApproveThreshold?: number;
   equipmentRecommendations?: EquipmentRecommendations | null;
+  /**
+   * 疫苗板块应急开关（2026-10-16 B4）。
+   *
+   * 单例配置表里多出来的三个字段与定价无关，但**故意的**：
+   * 开关必须挂在一个"后台已经能改"的地方，而不是另起一套机制
+   * （见 GlobalConfigService.getVaccineFeatureFlag 的说明）。
+   */
+  vaccineFeatureEnabled?: boolean;
+  vaccineFeatureNotice?: string | null;
+  /** 健康报告识别的全局每日上限（B5）；0 = 不限量 */
+  healthExtractionDailyLimit?: number;
 }
 
 // 设备推荐相关接口

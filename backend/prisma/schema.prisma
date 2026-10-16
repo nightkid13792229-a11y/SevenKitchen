@@ -1596,6 +1596,29 @@ model MedicalRecord {
   @@map("medical_record")
 }
 
+/// 健康报告识别的每日用量（2026-10-16 上线前风险控制 B5）。
+///
+/// 为什么单独一张表：识别每张都要调模型（2~3 秒、真花钱），被刷就是纯亏。
+/// 上限的计数必须**重启不丢 + 并发不穿透** —— 内存计数两个都不满足 ✗，
+/// 而本项目 REDIS_URL 默认没配（.env 里是注释掉的 ✗），所以落在库里 ✓。
+///
+/// 主键就是（日期, 用途）→ 一行 = 一天的计数；靠
+/// `create`（当天第一次）/ `updateMany`（`used_count < 上限` 才 +1）两条
+/// 单语句原子操作计数，不存在"先读后写"的竞态 ✓（见 health-extraction-quota.service.ts）。
+model HealthExtractionDailyUsage {
+  /// 北京时间的那一天（Asia/Shanghai；为什么不用服务器本地时区见 quota service）
+  usageDate DateTime @map("usage_date") @db.Date
+  /// 用途。目前只有 HEALTH_EXTRACTION（健康报告识别）
+  scope     String   @map("scope") @db.VarChar(40)
+  /// 已经用掉几次
+  usedCount Int      @default(0) @map("used_count")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([usageDate, scope])
+  @@map("health_extraction_daily_usage")
+}
+
 /// ===== 过敏原词表（2026-10-04 新增，过敏重构第一期）=====
 ///
 /// 为什么需要这张表：
@@ -1941,6 +1964,23 @@ model GlobalConfig {
   ingredientPriceAutoApproveThreshold Decimal? @default(0.08) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
   homeHeaderBgImageUrl                String?  @map("home_header_bg_image_url")
   diySheetHeaderBgImageUrl            String?  @map("diy_sheet_header_bg_image_url")
+
+  /// 疫苗板块应急开关（2026-10-16 上线前风险控制 B4）。
+  ///
+  /// 上线后万一发现接种建议算错了，后台改一下就能立刻关掉整个疫苗板块，
+  /// 不必改代码 → 发版 → 等审核（那要几小时到一天 ✗）。
+  ///
+  /// 默认 **true**：这个开关是"应急关停"用的，不是"灰度放量"用的 ——
+  /// 这一列一加上去，线上行为必须一个字都不变，
+  /// 否则部署那一刻就等于把功能关了（老板没让关的东西不能自己关 ✗）。
+  /// 注意：小程序在**拉不到开关**时一律按"关"处理（宁可少一个功能，
+  /// 也不要给错建议 ✓）—— 那条兜底在小程序侧，不在这里。
+  vaccineFeatureEnabled               Boolean  @default(true) @map("vaccine_feature_enabled")
+  /// 关掉疫苗板块时给顾客看的一句话（可空：空 = 不解释，板块直接不出现）
+  vaccineFeatureNotice                String?  @map("vaccine_feature_notice") @db.VarChar(200)
+  /// 健康报告识别（疫苗本 / 体检 / 病历 / 过敏报告）的**全局每日上限**（B5）。
+  /// 0 = 不限量。判断发生在调模型**之前**：超了直接拒绝，一分钱不花 ✓。
+  healthExtractionDailyLimit           Int      @default(500) @map("health_extraction_daily_limit")
 
   @@map("global_config")
 }

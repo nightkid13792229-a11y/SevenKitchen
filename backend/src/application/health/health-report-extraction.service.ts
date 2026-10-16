@@ -39,7 +39,14 @@
 
 import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
-import { callDeepSeekJson } from '../recipe-designer/deepseek-chat';
+import {
+  callDeepSeekJson,
+  DeepSeekChatUsage,
+} from '../recipe-designer/deepseek-chat';
+import {
+  HealthExtractionDailyUsage,
+  HealthExtractionQuotaService,
+} from './health-extraction-quota.service';
 
 /** OCR 能力来源。绑定到与补剂包装识别同一个腾讯云实现（它就是一次通用文字识别）。 */
 export const HEALTH_REPORT_OCR_PROVIDER = Symbol(
@@ -1699,6 +1706,42 @@ export function filterContradictoryWarnings(
   );
 }
 
+/**
+ * 一次识别的"钱花在哪了"（2026-10-16 B5）。
+ *
+ * 由 `extractFromReport` 那个壳建好、一路传给内层，内层在真正调模型的地方
+ * 填三个数：走到哪一步（phase）、用的哪个模型（model）、调了几次（modelCalls），
+ * 再由 `onUsage` 把 token 累加进来。壳最后把整份 trace 写进那行成本日志 ✓
+ */
+export interface HealthExtractionTrace {
+  /** document（PDF/Word 抽字）/ vision（看图）/ ocr（回退认字）/ resolve（整理结果） */
+  phase: string;
+  /** 这一调实际用的模型名 —— 成本按模型算，必须记准 */
+  model: string;
+  /** 一共尝试调了几次模型（视觉失败换模型重试会 > 1） */
+  modelCalls: number;
+  promptTokens: number;
+  completionTokens: number;
+  /**
+   * 这一次占到的额度快照（limit / used / 北京时间的那一天）。
+   * 上限判断在 `extractFromReportInternal` 里做（必须先过完"不花钱"的检查），
+   * 结果就顺手记在这儿，外层写日志时直接取 ✓
+   */
+  quota?: HealthExtractionDailyUsage | null;
+}
+
+/** 累加一次模型调用的 token 用量（不改变任何识别行为） */
+export function accumulateExtractionUsage(
+  trace: HealthExtractionTrace,
+  usage: DeepSeekChatUsage,
+): void {
+  trace.promptTokens += Math.max(0, Math.floor(Number(usage.promptTokens) || 0));
+  trace.completionTokens += Math.max(
+    0,
+    Math.floor(Number(usage.completionTokens) || 0),
+  );
+}
+
 @Injectable()
 export class HealthReportExtractionService {
   private readonly logger = new Logger(HealthReportExtractionService.name);
@@ -1707,6 +1750,13 @@ export class HealthReportExtractionService {
     @Inject(HEALTH_REPORT_OCR_PROVIDER)
     private readonly ocrProvider: HealthReportOcrProvider,
     private readonly agentProviderConfigService: AgentProviderConfigService,
+    /**
+     * 每日上限 + 计数（2026-10-16 B5）。
+     *
+     * ⚠️ 它是**唯一**允许卡住识别的东西，而且必须卡在调模型之前
+     * （见 extractFromReport 的注释与测试「超限后不再调模型」）。
+     */
+    private readonly healthExtractionQuota: HealthExtractionQuotaService,
   ) {}
 
   /**
@@ -1824,6 +1874,20 @@ export class HealthReportExtractionService {
   }
 
 
+  /**
+   * 识别一份报告 —— **对外唯一入口**（2026-10-16 收口，B5）。
+   *
+   * 这个薄壳只做两件事，都必须在**同一个地方**做，不能散到各条识别路径上：
+   *
+   *   ① **每日上限**：先占一次额度，超了直接抛错（中文 429）——
+   *      判断发生在调模型之前，所以"拒绝"是真的不花钱 ✓
+   *   ② **一条成本日志**：哪一类文档 / 耗时多少 / 成没成功 / 用了哪个模型 /
+   *      token 用量（见 `logExtractionCost`）——
+   *      老板问"一次多少钱"、上线后看用量趋势，都从这一行来 ✓
+   *
+   * 真正的识别在 `extractFromReportInternal`（本次只改了名字，逻辑一个字没动）。
+   * 这样"以后谁再加第五条识别路径，上限与成本日志都自动带上" ✓
+   */
   async extractFromReport(input: {
     imageUrl: string;
     originalFilename?: string;
@@ -1833,6 +1897,74 @@ export class HealthReportExtractionService {
      */
     documentType?: string;
   }): Promise<HealthReportExtractionResult> {
+    const startedAt = Date.now();
+    const requestedDocumentType = normalizeDocumentType(input.documentType);
+    const trace: HealthExtractionTrace = {
+      phase: '',
+      model: '',
+      modelCalls: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+    };
+    try {
+      const result = await this.extractFromReportInternal(input, trace);
+
+      this.logExtractionCost({
+        ok: true,
+        documentType: result.documentType,
+        requestedDocumentType,
+        drafts: result.drafts.length,
+        warnings: result.warnings,
+        imageUrl: input.imageUrl,
+        trace,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return result;
+    } catch (error) {
+      /**
+       * ⚠️ 失败也要记一条（2026-10-16）。
+       *
+       * 以前失败什么都不留：老板报"上传疫苗本识别失败"，日志里一片空白，
+       * 只能靠猜 ✗。现在成功/失败都是一行，且失败一行带 reason（**只带原因，
+       * 不带识别出来的内容** —— 疫苗名、日期都是用户数据 ✗）。
+       *
+       * 被上限拒绝（429）也走这里：那一天会看到 ok=0 reason=今天的识别次数已经用完…
+       * 一眼就能分辨"是额度用完了"还是"模型/图的问题" ✓
+       */
+      /**
+       * 被上限拒绝时，把"用满了多少"从异常上捡回来（quota service 挂在异常上）——
+       * 那一行才会写着 limit=500 used=500，一眼看出"确实是用完了"而不是"算错了" ✓
+       */
+      if (!trace.quota && (error as { quota?: HealthExtractionDailyUsage })?.quota) {
+        trace.quota = (error as { quota?: HealthExtractionDailyUsage }).quota;
+      }
+
+      this.logExtractionCost({
+        ok: false,
+        documentType:
+          requestedDocumentType === 'AUTO' ? 'AUTO' : requestedDocumentType,
+        requestedDocumentType,
+        drafts: 0,
+        warnings: [],
+        imageUrl: input.imageUrl,
+        trace,
+        durationMs: Date.now() - startedAt,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+
+      throw error;
+    }
+  }
+
+  private async extractFromReportInternal(
+    input: {
+      imageUrl: string;
+      originalFilename?: string;
+      documentType?: string;
+    },
+    trace: HealthExtractionTrace,
+  ): Promise<HealthReportExtractionResult> {
     const requestedDocumentType = normalizeDocumentType(input.documentType);
     if (!input.imageUrl) {
       throw new BadRequestException('请先上传报告图片');
@@ -1872,7 +2004,27 @@ export class HealthReportExtractionService {
       );
     }
 
+    /**
+     * ⚠️⚠️ 每日上限的**判定点**（2026-10-16 B5）—— 这是整个文件里最关键的一行。
+     *
+     * 位置是精心挑的：在它**上面**全是"不花钱"的检查
+     * （缺图片地址、老版 .doc —— 这两类连模型都不用调，所以不该占额度）；
+     * 在它**下面**就是第一次调模型了。
+     *
+     * 所以从这一行往下，每一条路都已经"买过票"：
+     * 超限的请求在这里被拦住，**一个 token 都不花** ✓（测试钉着这条）。
+     *
+     * 一个已知的、故意接受的偏差：PDF/DOCX 抽不出文字时（顾客传了扫描件）
+     * 会白占一次额度 —— 那种情况确实没调模型。宁可多算一次，也不要漏算
+     * （漏算 = 没拦住 = 白花钱 ✗）；而 PDF 抽不出字是少数情况，且当天额度
+     * 用完了第二天自然恢复 ✓
+     */
+    trace.quota = await this.healthExtractionQuota.assertWithinDailyLimit();
+
     if (fileKind === 'pdf' || fileKind === 'docx') {
+      trace.phase = 'document';
+      trace.model = config.model;
+      trace.modelCalls += 1;
       ocrText = await this.extractDocumentText(input.imageUrl, fileKind);
       if (!ocrText) {
         throw new BadRequestException(
@@ -1893,6 +2045,7 @@ export class HealthReportExtractionService {
           ocrText,
         },
         temperature: 0,
+        onUsage: (usage) => accumulateExtractionUsage(trace, usage),
       });
     }
 
@@ -1917,6 +2070,9 @@ export class HealthReportExtractionService {
 
       for (const model of candidateModels) {
         try {
+          trace.phase = 'vision';
+          trace.model = model;
+          trace.modelCalls += 1;
           parsed = await callDeepSeekJson({
             baseUrl: config.baseUrl,
             model,
@@ -1932,6 +2088,7 @@ export class HealthReportExtractionService {
               { type: 'image_url', image_url: { url: input.imageUrl } },
             ],
             temperature: 0,
+            onUsage: (usage) => accumulateExtractionUsage(trace, usage),
           });
           break;
         } catch (error) {
@@ -1948,6 +2105,9 @@ export class HealthReportExtractionService {
 
     // ② 回退路径：OCR 认字 → 文本模型整理（与改造前完全一致）
     if (!parsed) {
+      trace.phase = 'ocr';
+      trace.model = config.model;
+      trace.modelCalls += 1;
       const ocrResult = await this.ocrProvider.recognizeImage({
         imageUrl: input.imageUrl,
         originalFilename: input.originalFilename,
@@ -1970,9 +2130,14 @@ export class HealthReportExtractionService {
           ocrText,
         },
         temperature: 0,
+        onUsage: (usage) => accumulateExtractionUsage(trace, usage),
       });
     }
 
+    /**
+     * ⚠️ 这里**不改 phase**：它记的是"模型是在哪条路上被调用的"
+     * （document / vision / ocr）—— 成本排查要看的是那个，不是"在整理结果"。
+     */
     const parsedRecord = parsed as Record<string, unknown>;
 
     /**
@@ -2151,31 +2316,16 @@ export class HealthReportExtractionService {
     }
 
     /**
-     * 把这次识别的**结果概览**打一行日志（2026-10-16 加）。
+     * ⚠️ 这行日志（`[Extraction] …`）**2026-10-16 搬到 `logExtractionCost` 里了**，
+     * 由 `extractFromReport` 那个壳在成功/失败两条路上都打一行。
      *
-     * 起因：老板两次上传疫苗本都提示"没有识别到内容"，但生产日志里什么都看不到 ——
-     * 成功的请求 Nest 不记录，于是我只能靠猜。这一行把"读出了几条、模型判成什么类型、
-     * 给了什么提醒、看的是哪张图"记全，下次直接看日志就知道卡在哪。
+     * 为什么搬家：
+     *   · 原来只有成功才有一行，"识别失败"在日志里一片空白（老板报过这个问题）✗；
+     *   · 耗时、模型、token 这些成本信息只有外层知道（内层已经在跑了）；
+     *   · 一行 = 一次尝试，`backend/scripts/scan-failure-report.sh` 的统计口径不变 ✓
      *
-     * ⚠️ 只记数量和类型，不记识别出来的内容（疫苗名、日期属于用户数据）。
+     * 有意保留的语义（不要改）：`[Extraction][EMPTY]` = 调了模型但一条都没读出来。
      */
-    /**
-     * ⚠️ 2026-10-16 清单 E4：**"什么都没读出来"要自己跳出来**。
-     *
-     * 原来成功和失败都是同一级别的 log —— 家长报"识别失败"时，我们要在成百上千行里翻 ✗。
-     * 现在一条都没读出来就记 `warn`，并带上固定的 `[Extraction][EMPTY]` 标记：
-     *   · `journalctl -u sevenkitchen-backend -p warning` 直接能看到
-     *   · `bash backend/scripts/scan-failure-report.sh` 会把它汇总成一张看得懂的表
-     */
-    const logLine =
-      `[Extraction] type=${documentType} drafts=${drafts.length} ` +
-      `warnings=${warnings.length} image=${String(input.imageUrl).slice(0, 120)}` +
-      (warnings.length > 0 ? ` firstWarning=${String(warnings[0]).slice(0, 80)}` : '');
-    if (drafts.length === 0) {
-      this.logger.warn(`[Extraction][EMPTY] ${logLine}`);
-    } else {
-      this.logger.log(logLine);
-    }
 
     return {
       documentType,
@@ -2230,5 +2380,83 @@ export class HealthReportExtractionService {
             }
           : null,
     };
+  }
+
+  /**
+   * 一次识别的**成本日志**（2026-10-16 B5）。
+   *
+   * 成功、失败、被上限拒绝 —— 三条路都各留一行，字段固定：
+   *
+   *   `[Extraction] ok=1 type=VACCINE_BOOK drafts=2 warnings=0 ms=2841
+   *    calls=1 phase=vision model=deepseek-flash in=1523 out=210 limit=500 used=137 image=...`
+   *
+   * 累积起来就能算成本：
+   *   · 次数 = 行数（`grep -c '\[Extraction\]'`）
+   *   · 单次耗时 = ms（模型 + OCR + 排队都在里面）
+   *   · 单次成本 = in/out 两个 token 数 × 该 model 的单价
+   *   · 当天用量 = limit / used（一眼看出离上限还有多远）
+   *
+   * ⚠️ **只记"是什么类、多少钱、成没成功"，绝不记识别出来的内容** ——
+   *    疫苗名、日期、狗狗名字都是用户数据，不进日志 ✗
+   *    （image= 保留的是报告文件的 COS 地址，排查"哪张图出的问题"要用；
+   *      它本来就已经在旧日志里，且是 120 字截断 ✓）
+   */
+  private logExtractionCost(entry: {
+    ok: boolean;
+    documentType: string;
+    requestedDocumentType: string;
+    drafts: number;
+    warnings: string[];
+    imageUrl: string;
+    trace: HealthExtractionTrace;
+    durationMs: number;
+    reason?: string;
+  }): void {
+    const { trace } = entry;
+    const quota = trace.quota ?? null;
+    /**
+     * ⚠️ 字段顺序是**有约束的**：`type=` 必须紧跟标记（`[Extraction]`
+     * / `[Extraction][EMPTY]` / `[Extraction][FAIL]`）——
+     * `backend/scripts/scan-failure-report.sh` 里那两条 sed 就是按这个位置抓的 ✗
+     * 别为了"看起来顺眼"把 type 挪到后面去。
+     */
+    const fields = [
+      `type=${entry.documentType}`,
+      `drafts=${entry.drafts}`,
+      `warnings=${entry.warnings.length}`,
+      `ok=${entry.ok ? 1 : 0}`,
+      `requested=${entry.requestedDocumentType}`,
+      `ms=${entry.durationMs}`,
+      `calls=${trace.modelCalls}`,
+      `phase=${trace.phase || '-'}`,
+      `model=${trace.model || '-'}`,
+      `in=${trace.promptTokens}`,
+      `out=${trace.completionTokens}`,
+      `limit=${quota ? quota.limit : '-'}`,
+      `used=${quota ? quota.used : '-'}`,
+      `image=${String(entry.imageUrl).slice(0, 120)}`,
+    ];
+
+    if (!entry.ok) {
+      // 失败要能一眼看见（`journalctl -p warning` / scan-failure-report.sh）
+      fields.push(`reason=${String(entry.reason || '').slice(0, 120)}`);
+      this.logger.warn(`[Extraction][FAIL] ${fields.join(' ')}`);
+      return;
+    }
+
+    if (entry.warnings.length > 0) {
+      fields.push(`firstWarning=${String(entry.warnings[0]).slice(0, 80)}`);
+    }
+
+    const line = fields.join(' ');
+    if (entry.drafts === 0) {
+      /**
+       * ⚠️ `[Extraction][EMPTY]` 这个标记不能改：它 = "模型调了、一条都没读出来"，
+       * `backend/scripts/scan-failure-report.sh` 按它统计失败率 ✓
+       */
+      this.logger.warn(`[Extraction][EMPTY] ${line}`);
+    } else {
+      this.logger.log(`[Extraction] ${line}`);
+    }
   }
 }

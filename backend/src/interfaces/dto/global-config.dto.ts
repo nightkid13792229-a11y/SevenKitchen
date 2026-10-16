@@ -3,7 +3,15 @@
  * Data transfer objects for global configuration management
  */
 
-import { IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class UpdateGlobalConfigDto {
   @IsOptional()
@@ -85,4 +93,28 @@ export class UpdateGlobalConfigDto {
 
   @IsOptional()
   equipmentRecommendations?: any;
+
+  /**
+   * 疫苗板块应急开关（2026-10-16 B4）。
+   *
+   * 关掉它的命令（admin-web 的「全局配置」页也在改同一张表）：
+   *   curl -X PUT .../api/v1/admin/global-config \
+   *     -d '{"vaccineFeatureEnabled": false, "vaccineFeatureNotice": "疫苗功能维护中，稍后开放"}'
+   */
+  @IsOptional()
+  @IsBoolean()
+  vaccineFeatureEnabled?: boolean;
+
+  /** 关掉疫苗板块时给顾客看的一句话（可空） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  vaccineFeatureNotice?: string | null;
+
+  /** 识别每日上限（B5）；0 = 不限量 */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100000)
+  healthExtractionDailyLimit?: number;
 }

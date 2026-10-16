@@ -1,0 +1,14 @@
+[Unit]
+Description=Run SevenKitchen scan failure summary daily
+
+[Timer]
+# 每天早上 8:10 —— 挑这个时间的理由：
+#   · 避开整点/凌晨那批系统任务（logrotate 00:00、certbot、health-cleanup 03:07）
+#   · 家长传疫苗本基本在白天，8 点跑等于"把昨天一整天看一遍"
+#   · 万一机器 8 点没开机/重启过，Persistent=true 会在开机后补跑一次 ✓
+OnCalendar=*-*-* 08:10:00
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

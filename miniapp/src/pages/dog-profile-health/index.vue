@@ -95,8 +95,11 @@
 
         <view class="health-panel" :class="`health-theme--${activeHealthTab}`">
           <view class="health-tabs">
+            <!-- ⚠️ 书签列表走 `visibleHealthTabs`，不再直接循环 `HEALTH_TABS`
+                 （2026-10-16 上线前风险控制 B4）：
+                 疫苗开关关掉时，「疫苗」这一个书签**根本不出现**，其余照常 ✓ -->
             <view
-              v-for="tab in HEALTH_TABS"
+              v-for="tab in visibleHealthTabs"
               :key="tab.key"
               class="health-tabs__item"
               :class="{ 'health-tabs__item--active': activeHealthTab === tab.key }"
@@ -133,8 +136,16 @@
              （下一针 → 免疫计划 → 接种记录 → 录入器/识别确认都在它里面）。
              旧的三个巨型疫苗组件已删除 ——
              模块未上线、没有灰度这回事，新旧并存只会留下两套口径。
-             交互与契约见 docs/plans/2026-10-15-vaccine-module-tech-design.md -->
-        <template v-else-if="activeHealthTab === 'vaccine'">
+             交互与契约见 docs/plans/2026-10-15-vaccine-module-tech-design.md
+
+             ⚠️ 2026-10-16（B4）：挂载条件换成 `shouldMountVaccineSection(...)`
+             （= 开关必须是开 + 当前书签是疫苗）。规则本身在 utils/vaccine-feature.ts，
+             有单元测试钉着 —— "关掉时一个疫苗请求都不发"就是靠它保证的：
+             计划 / 接种记录 / 抗体三个请求都在 VaccineTab 的挂载钩子里发，
+             不挂载就一个都出不去 ✓
+             书签层已经把它过滤掉了，这里是**第二道**：
+             就算哪天有人从别处把当前书签设成 'vaccine'，请求也不会漏出去 ✓ -->
+        <template v-else-if="shouldMountVaccineSection(activeHealthTab, vaccineFeature)">
           <!-- ⚠️ v-if="dogId"：必须**拿到狗狗 id 之后**才挂载（2026-10-11 修）✗
                小程序里 props 不会随后续赋值重绑 → 板块永远不取数（老板看到"0 条"就是这个）✓ -->
           <VaccineTab
@@ -234,6 +245,13 @@ import {
 } from '../../utils/health-records'
 import { navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { scrollPageToSelector } from '../../utils/page-scroll'
+import {
+  VACCINE_FEATURE_FAILSAFE,
+  fetchVaccineFeatureFlag,
+  resolveVisibleHealthTabs,
+  shouldMountVaccineSection,
+  type VaccineFeatureFlag,
+} from '../../utils/vaccine-feature'
 
 interface DogProfileSummary {
   id: string
@@ -354,14 +372,6 @@ const HEALTH_TABS: { key: HealthTabKey; label: string }[] = [
 /** 走 HealthRecordsSection 的板块：只有就诊与体检 */
 const RECORD_TAB_KEYS: string[] = ['medical', 'checkup']
 
-/**
- * 从哪个入口进来的。
- *
- * 首页和爱犬概览页都有健康管理入口，底部按钮不能一律写「返回概览」——
- * 从首页进来的顾客看到「返回概览」是说不通的（老板指出）。
- * 有页面栈时 navigateBack 本来就会回到入口页；这里的来源只用于
- * **按钮文案**，以及页面被 redirect 掉、栈里没有上一页时的兜底返回。
- */
 type HealthEntrySource = 'home' | 'overview' | 'unknown'
 const entrySource = ref<HealthEntrySource>('unknown')
 
@@ -372,6 +382,98 @@ const HEALTH_ENTRY_LABELS: Record<HealthEntrySource, string> = {
 }
 
 const activeHealthTab = ref<HealthTabKey>('medical')
+
+/**
+ * 疫苗板块的远程开关（2026-10-16 上线前风险控制 B4）。
+ *
+ * 初值就是 **关**（fail-safe）：页面第一帧渲染时还没问到后端，
+ * 这时候绝不把疫苗书签摆出来 —— 万一后端答的是"关"，书签就不会闪一下再消失 ✓
+ * （为什么要这个方向、两个默认值为什么相反，见 utils/vaccine-feature.ts 的文件头。）
+ *
+ * 问到 `enabled: true` 之后书签才出现；问不到（断网 / 500 / 超时）就一直是关：
+ * 家长少一个书签，但**绝不会看到可能算错的接种建议** ✓
+ */
+const vaccineFeature = ref<VaccineFeatureFlag>({ ...VACCINE_FEATURE_FAILSAFE })
+
+/** 最近一次问开关的时间（onShow 那个节流用的；先占位再发请求，避免连问两次） */
+let vaccineFeatureFetchedAt = 0
+/** onShow 至少隔这么久才再问一次（老板关掉开关后，顾客切走再回来就能知道） */
+const VACCINE_FEATURE_REFRESH_MS = 60 * 1000
+
+/**
+ * 真正渲染出来的书签。
+ *
+ * 开关关掉时**只去掉「疫苗」**：其余书签一个不少、顺序不变 ✓
+ * 模板里 `v-for` 用的就是它（不再直接循环 HEALTH_TABS）。
+ */
+const visibleHealthTabs = computed(() =>
+  resolveVisibleHealthTabs(HEALTH_TABS, vaccineFeature.value),
+)
+
+/**
+ * 问一次开关。**不抛错**（失败 = 按关处理，见 util），所以调用点不用 try/catch。
+ *
+ * 问的时机有两处：
+ *   · onLoad（`force = true`）：和拉狗狗列表同时开始 ——
+ *     书签栏要等档案回来才渲染，所以"开关没问到就不显示疫苗"不会拖慢首屏，
+ *     也不会先亮出来再灭掉 ✓
+ *   · onShow（节流 60 秒）：万一老板在顾客正用着的时候把开关关掉，
+ *     顾客切走再回来就会知道（并从上一条 watch 优雅退回第一个书签）✓
+ *
+ * ⚠️ 每一次"问不到"都按关处理，**哪怕上一次问到的结果是开** ——
+ *    断网那一刻正是最不该继续给接种建议的时候 ✓
+ */
+async function loadVaccineFeatureFlag(force = false) {
+  const now = Date.now()
+  if (!force && now - vaccineFeatureFetchedAt < VACCINE_FEATURE_REFRESH_MS) {
+    return
+  }
+  // 先占位：onLoad 之后紧跟着的 onShow 不会再问第二遍
+  vaccineFeatureFetchedAt = now
+
+  const flag = await fetchVaccineFeatureFlag()
+  vaccineFeature.value = flag
+
+  if (!flag.enabled && flag.notice) {
+    console.warn('[VaccineFeature] 疫苗板块已被远程关闭：', flag.notice)
+  }
+}
+
+/**
+ * 开关被关掉时：此刻正停在疫苗书签上 → **优雅退回第一个书签**。
+ *
+ * 老板的要求是"不能白屏、不能报错"，所以这里：
+ *   · 直接切走（走 switchHealthTab，不走 selectHealthTab）——
+ *     开关是**外部**动作，不能被"还有没保存的疫苗记录"那种确认框挡住 ✗，
+ *     否则开关就关不干净；
+ *   · 落点是当前可见的第一个书签（开关关掉后不可能是疫苗）→ 一定有内容可渲染 ✓
+ */
+watch(
+  () => vaccineFeature.value.enabled,
+  (enabled) => {
+    if (enabled || activeHealthTab.value !== 'vaccine') {
+      return
+    }
+
+    const fallback = visibleHealthTabs.value[0]
+    switchHealthTab(fallback ? fallback.key : 'medical')
+
+    const notice = vaccineFeature.value.notice
+    if (notice) {
+      // 说清"不是你的问题"：板块被我们临时关了
+      uni.showToast({ title: notice, icon: 'none', duration: 2500 })
+    }
+  },
+)
+
+/**
+ * 从哪个入口进来的。
+ *
+ * 首页和爱犬概览页都有健康管理入口，底部按钮不能一律写「返回概览」——
+ * 从首页进来的顾客看到「返回概览」是说不通的（老板指出）。
+ * 有页面栈时 navigateBack 本来就会回到入口页；这里的来源只用于
+ * **按钮文案**，以及页面被 redirect 掉、栈里没有上一页时的兜底返回。
+ */
 
 /** 当前书签是否是「记录类」（就诊 / 体检）—— 这两个共用同一个组件 */
 const isRecordTab = computed(() => RECORD_TAB_KEYS.includes(activeHealthTab.value))
@@ -603,6 +705,13 @@ onLoad((options: any) => {
    */
   armStartupWatchdog()
   void loadDogs(typeof value === 'string' ? value : '')
+
+  /*
+   * 疫苗开关（2026-10-16 B4）：和狗狗列表**同时**开始问，不等它 ——
+   * 书签栏要等档案回来才渲染，所以这两件事互不拖累 ✓
+   * （未登录也要能问：这个接口是公开只读的。）
+   */
+  void loadVaccineFeatureFlag(true)
 })
 
 /**
@@ -610,6 +719,12 @@ onLoad((options: any) => {
  * 「还没有狗狗档案」的空态会一直留着，用户看不到刚建好的狗。
  */
 onShow(() => {
+  /**
+   * 开关再过一遍（2026-10-16 B4）：老板可能刚刚把疫苗板块关掉。
+   * 它自己带 60 秒节流（onLoad 刚问过就不会再问一遍），所以放在最前面不影响下面那段。
+   */
+  void loadVaccineFeatureFlag()
+
   /**
    * ⚠️ 2026-10-16 修（E6 端到端跑出来的 bug）：
    *

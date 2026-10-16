@@ -1,0 +1,18 @@
+[Unit]
+Description=SevenKitchen daily vaccine-book scan failure summary
+Documentation=file:///opt/sevenkitchen/SevenKitchen/backend/scripts/scan-failure-report-daily.sh
+Documentation=file:///opt/sevenkitchen/SevenKitchen/docs/plans/2026-10-17-vaccine-ops-runbook.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sevenkitchen/SevenKitchen/backend
+ExecStart=/bin/bash scripts/scan-failure-report-daily.sh
+# 落盘目录与保留天数（改完 systemctl daemon-reload，不用改脚本）
+Environment=SCAN_FAILURE_HOURS=24
+Environment=SCAN_FAILURE_KEEP_DAYS=30
+Environment=SCAN_FAILURE_LOG_DIR=/var/log/sevenkitchen
+Environment=SCAN_FAILURE_SERVICE=sevenkitchen-backend
+# 识别失败时脚本退出码为 1 —— 保留这个非零退出，systemctl --failed 才看得见
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sevenkitchen-scan-failure

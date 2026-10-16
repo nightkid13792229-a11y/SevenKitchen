@@ -277,7 +277,13 @@ describe('dog profile health page regressions', () => {
 
     expect(page).toContain("import VaccineTab from '../../components/vaccine/VaccineTab.vue'")
     // 2026-09-30：改为书签切换 —— 只有切到「疫苗」时才渲染
-    expect(page).toContain('v-else-if="activeHealthTab === \'vaccine\'"')
+    // 2026-10-16（B4 应急开关）：条件换成 shouldMountVaccineSection(...) ——
+    // 它 = 「当前书签是疫苗」**且**「远程开关是开」；开关关掉时连挂载都不发生，
+    // 于是 VaccineTab 里那三个请求（计划/记录/抗体）一个都不会发 ✓
+    // 规则本身在 src/utils/vaccine-feature.ts，单元测试见 vaccine-feature.spec.ts
+    expect(page).toContain(
+      'v-else-if="shouldMountVaccineSection(activeHealthTab, vaccineFeature)"',
+    )
     expect(page).toContain('ref="vaccineSectionRef"')
     // 旧的三个巨型组件整体删除（模块未上线，不做新旧并存）
     expect(page).not.toContain('VaccineManagementSection')
@@ -344,7 +350,10 @@ describe('dog-profile-health · 板块书签', () => {
     // 就诊与体检共用一个组件
     expect(page).toContain('v-if="isRecordTab"')
     // 疫苗 / 体重管理各挂各的书签（就诊、体检走 isRecordTab 那支）
-    expect(page).toContain("v-else-if=\"activeHealthTab === 'vaccine'\"")
+    // 疫苗那条 2026-10-16（B4）多了一道开关判断，见上面的说明
+    expect(page).toContain(
+      'v-else-if="shouldMountVaccineSection(activeHealthTab, vaccineFeature)"',
+    )
     expect(page).toContain("v-else-if=\"activeHealthTab === 'weight'\"")
     // 饮食偏好标签已下线（老板 2026-10-02）
     expect(page).not.toContain("activeHealthTab === 'diet'")

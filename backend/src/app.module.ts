@@ -246,6 +246,7 @@ import {
   HealthReportExtractionService,
   HEALTH_REPORT_OCR_PROVIDER,
 } from './application/health/health-report-extraction.service';
+import { HealthExtractionQuotaService } from './application/health/health-extraction-quota.service';
 import {
   FEDIAF_TARGET_PROVIDER,
   PrismaFediafTargetProvider,
@@ -799,6 +800,10 @@ validatePrismaConfig();
       provide: HEALTH_REPORT_OCR_PROVIDER,
       useClass: TencentCloudSupplementLabelOcrProvider,
     },
+    // 识别的每日上限 + 计数（2026-10-16 B5）。
+    // 它读 global_config.health_extraction_daily_limit（后台可改、即时生效），
+    // 把用量写进 health_extraction_daily_usage。
+    HealthExtractionQuotaService,
     AgentProviderConfigService,
     TrustedNutritionWebSearchService,
     NutritionGovernanceService,

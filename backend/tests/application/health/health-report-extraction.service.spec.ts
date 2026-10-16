@@ -51,6 +51,7 @@ import {
   resolveHealthReportVisionModel,
 } from 'src/application/health/health-report-extraction.service';
 import { AgentProviderConfigService } from 'src/application/nutrition-governance/agent-provider-config.service';
+import { HealthExtractionQuotaService } from 'src/application/health/health-extraction-quota.service';
 
 const okJsonResponse = (payload: Record<string, unknown>) => ({
   ok: true,
@@ -94,6 +95,24 @@ describe('HealthReportExtractionService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HealthReportExtractionService,
+        /**
+         * 每日上限（2026-10-16 B5）：这组用例测的是识别本身，
+         * 所以给一个"永远还有额度"的替身。上限怎么拦、拦在哪一步，
+         * 由 tests/application/health/health-extraction-quota.spec.ts 专门盯 ✓
+         */
+        {
+          provide: HealthExtractionQuotaService,
+          useValue: {
+            assertWithinDailyLimit: jest.fn().mockResolvedValue({
+              limit: 500,
+              used: 1,
+              dateKey: '2026-10-16',
+            }),
+            getTodayUsage: jest
+              .fn()
+              .mockResolvedValue({ limit: 500, used: 1, dateKey: '2026-10-16' }),
+          },
+        },
         { provide: HEALTH_REPORT_OCR_PROVIDER, useValue: ocrProvider },
         { provide: AgentProviderConfigService, useValue: agentConfig },
       ],
@@ -838,6 +857,24 @@ describe('HealthReportExtractionService · 视觉直读', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HealthReportExtractionService,
+        /**
+         * 每日上限（2026-10-16 B5）：这组用例测的是识别本身，
+         * 所以给一个"永远还有额度"的替身。上限怎么拦、拦在哪一步，
+         * 由 tests/application/health/health-extraction-quota.spec.ts 专门盯 ✓
+         */
+        {
+          provide: HealthExtractionQuotaService,
+          useValue: {
+            assertWithinDailyLimit: jest.fn().mockResolvedValue({
+              limit: 500,
+              used: 1,
+              dateKey: '2026-10-16',
+            }),
+            getTodayUsage: jest
+              .fn()
+              .mockResolvedValue({ limit: 500, used: 1, dateKey: '2026-10-16' }),
+          },
+        },
         { provide: HEALTH_REPORT_OCR_PROVIDER, useValue: ocrProvider },
         { provide: AgentProviderConfigService, useValue: agentConfig },
       ],
@@ -1164,6 +1201,24 @@ describe('文档（PDF / Word）识别', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         HealthReportExtractionService,
+        /**
+         * 每日上限（2026-10-16 B5）：这组用例测的是识别本身，
+         * 所以给一个"永远还有额度"的替身。上限怎么拦、拦在哪一步，
+         * 由 tests/application/health/health-extraction-quota.spec.ts 专门盯 ✓
+         */
+        {
+          provide: HealthExtractionQuotaService,
+          useValue: {
+            assertWithinDailyLimit: jest.fn().mockResolvedValue({
+              limit: 500,
+              used: 1,
+              dateKey: '2026-10-16',
+            }),
+            getTodayUsage: jest
+              .fn()
+              .mockResolvedValue({ limit: 500, used: 1, dateKey: '2026-10-16' }),
+          },
+        },
         { provide: HEALTH_REPORT_OCR_PROVIDER, useValue: { recognizeImage: jest.fn() } },
         {
           provide: AgentProviderConfigService,

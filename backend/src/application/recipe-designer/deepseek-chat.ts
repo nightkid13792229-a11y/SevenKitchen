@@ -29,6 +29,23 @@ export interface DeepSeekChatOptions {
    * （实测：9.9s / 出 2000 tokens / 最终 content 为空；关掉后 2.8s / 190 tokens / 正常返回）。
    */
   extraBody?: Record<string, unknown>;
+  /**
+   * 这一调的 token 用量回调（2026-10-16 成本统计用）。
+   *
+   * 为什么要有：识别（疫苗本/体检/病历/过敏报告）每次都要调模型，
+   * 但"一次多少钱"此前没人算得出来。用量在响应体里、解析时被丢掉了，
+   * 这里把它交回给调用方记账（识别侧写进 `[Extraction]` 那行日志）。
+   *
+   * 不传它 = 行为与以前**一个字都不差** ✓（其它调用方不用改）。
+   * ⚠️ 自动重试会调两次，所以这个回调也可能被调两次 —— 那正是成本要算的 ✓。
+   */
+  onUsage?: (usage: DeepSeekChatUsage) => void;
+}
+
+/** 一次模型调用的 token 用量 */
+export interface DeepSeekChatUsage {
+  promptTokens: number;
+  completionTokens: number;
 }
 
 /**
@@ -99,10 +116,37 @@ async function callDeepSeekJsonOnce(
       );
       throw new BadRequestException('AI 生成失败');
     }
+    reportDeepSeekUsage(options, responseBody);
     return parseDeepSeekJsonOutput(responseBody);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * 把这一调的 token 用量交回给调用方（2026-10-16）。
+ * 没传 `onUsage`、或响应里没有 usage 字段 → 什么都不做。
+ */
+function reportDeepSeekUsage(
+  options: DeepSeekChatOptions,
+  responseBody: unknown,
+): void {
+  if (!options.onUsage) {
+    return;
+  }
+
+  const usage = (responseBody as { usage?: Record<string, unknown> } | null)
+    ?.usage;
+  if (!usage) {
+    return;
+  }
+
+  const promptTokens = Number(usage.prompt_tokens);
+  const completionTokens = Number(usage.completion_tokens);
+  options.onUsage({
+    promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+    completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+  });
 }
 
 export function parseDeepSeekJsonOutput(

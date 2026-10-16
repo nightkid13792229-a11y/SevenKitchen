@@ -284,6 +284,28 @@ describe('疫苗 · 定位到录入卡（老板 2026-10-16："有弹窗时定位
   })
 });
 
+describe('疫苗 · 同一张照片显示一次（老板 2026-10-16 发现的 bug）', () => {
+  const list = read('RecordList.vue')
+  const tab = read('VaccineTab.vue')
+
+  it('🔴 一次识别读出多条时，同一张图只展示一次（不能显示 3 遍）', () => {
+    /*
+     * 生产实测：一次识别读出 3 条记录，那张疫苗本照片挂在**这 3 条上**（设计如此），
+     * 按记录逐条列就显示 3 遍 ✗。现在按图片地址去重。
+     */
+    expect(list).toContain('const seen = new Map<string')
+    expect(list).toContain('existing.ownerIds.push(String(owner.id))')
+    expect(list).toContain('continue')
+  })
+
+  it('🔴 但删除要从**所有挂着它的记录**上一起删（否则刷新又出现）', () => {
+    expect(list).toContain('ownerIds: [...item.ownerIds]')
+    expect(tab).toContain('for (const ownerId of ownerIds)')
+    expect(tab).toContain("const rest = (record.attachments || []).filter((url) => url !== payload.url)")
+    expect(tab).toContain("const rest = (test.attachments || []).filter((url) => url !== payload.url)")
+  })
+});
+
 describe('疫苗 · 附件区与首行横线（老板 2026-10-16）', () => {
   const list = read('RecordList.vue')
   const timeline = read('PlanTimeline.vue')

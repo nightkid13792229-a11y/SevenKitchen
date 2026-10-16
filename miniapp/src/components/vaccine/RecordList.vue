@@ -122,7 +122,7 @@ const emit = defineEmits<{
   (event: 'verify-record', record: VaccineRecord): void
   (event: 'preview', urls: string[]): void
   /** 删掉某一条记录 / 检测上的某一张附件 */
-  (event: 'remove-attachment', payload: { kind: 'record' | 'test'; ownerId: string; url: string }): void
+  (event: 'remove-attachment', payload: { kind: 'record' | 'test'; ownerIds: string[]; url: string }): void
 }>()
 
 /** 没展开时只给最近几条（原型 C 屏：两行 + 查看全部 6 条） */
@@ -178,15 +178,34 @@ const attachmentGroups = computed(() => {
     label: string,
     list: { id: string; attachments?: string[]; createdAt?: string }[],
   ) => {
-    const items: { url: string; uploadedAt: string; ownerId: string }[] = []
+    const items: { url: string; uploadedAt: string; ownerIds: string[] }[] = []
+    /**
+     * ⚠️ **同一张照片只展示一次**（2026-10-16 老板发现的 bug）。
+     *
+     * 一次识别读出 3 条记录时，那张疫苗本照片会挂在**这 3 条记录上**（设计如此：
+     * 每条记录都带着它的来源原件）。按记录逐条列，同一张图就会显示 3 遍 ✗。
+     * 家长看到的应该是"这本子有 1 页照片"，不是"3 张一模一样的照片"。
+     *
+     * 但**删除要连坐**：既然它挂在 3 条记录上，删的时候得从 3 条上一起删掉 ——
+     * 所以这里记下所有 owner，而不是只留一个。
+     */
+    const seen = new Map<string, { url: string; uploadedAt: string; ownerIds: string[] }>()
     for (const owner of list || []) {
-      for (const url of owner?.attachments || []) {
+      for (const raw of owner?.attachments || []) {
+        const url = String(raw || '')
         if (!url) continue
-        items.push({
-          url: String(url),
+        const existing = seen.get(url)
+        if (existing) {
+          existing.ownerIds.push(String(owner.id))
+          continue
+        }
+        const item = {
+          url,
           uploadedAt: owner.createdAt ? formatDateTime(String(owner.createdAt)) : '',
-          ownerId: String(owner.id),
-        })
+          ownerIds: [String(owner.id)],
+        }
+        seen.set(url, item)
+        items.push(item)
       }
     }
     return { kind, label, items }
@@ -213,8 +232,12 @@ function previewOne(url: string) {
   uni.previewImage({ urls, current: url })
 }
 
-function onRemoveAttachment(kind: 'record' | 'test', item: { url: string; ownerId: string }) {
-  emit('remove-attachment', { kind, ownerId: item.ownerId, url: item.url })
+function onRemoveAttachment(
+  kind: 'record' | 'test',
+  item: { url: string; ownerIds: string[] },
+) {
+  // 一张图可能挂在好几条记录上 → 一起交给上层，一次全删掉（否则删完刷新它又出现）
+  emit('remove-attachment', { kind, ownerIds: [...item.ownerIds], url: item.url })
 }
 
 /**

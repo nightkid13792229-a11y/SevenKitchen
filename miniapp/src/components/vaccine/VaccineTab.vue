@@ -825,10 +825,13 @@ async function onRestore(key: string) {
  */
 async function onRemoveAttachment(payload: {
   kind: 'record' | 'test'
-  ownerId: string
+  /** 这张图挂在哪几条上（一次识别出多条时，同一张图会挂在每一条上） */
+  ownerIds: string[]
   url: string
 }) {
   if (!props.dogId || saving.value || !payload?.url) return
+  const ownerIds = (payload.ownerIds || []).filter(Boolean)
+  if (ownerIds.length === 0) return
   const confirmed = await confirmModal({
     title: '删掉这张照片？',
     content: '只删照片，记录本身还在。',
@@ -838,18 +841,23 @@ async function onRemoveAttachment(payload: {
 
   saving.value = true
   try {
-    if (payload.kind === 'test') {
-      const test = tests.value.find((item) => item.id === payload.ownerId)
-      const rest = (test?.attachments || []).filter((url) => url !== payload.url)
-      await vaccineApi.antibodyTests.update(props.dogId, payload.ownerId, {
-        attachments: rest,
-      })
-    } else {
-      const record = records.value.find((item) => item.id === payload.ownerId)
-      const rest = (record?.attachments || []).filter((url) => url !== payload.url)
-      await vaccineApi.records.update(props.dogId, payload.ownerId, {
-        attachments: rest,
-      })
+    /*
+     * ⚠️ 一张图可能挂在**好几条**记录上（一次识别读出多条时就是如此）——
+     * 所以这里要**逐条**把它摘掉，不能只摘第一条：只摘一条的话，
+     * 其余记录还挂着它，刷新之后这张图又出现了 ✗。
+     */
+    for (const ownerId of ownerIds) {
+      if (payload.kind === 'test') {
+        const test = tests.value.find((item) => item.id === ownerId)
+        if (!test) continue
+        const rest = (test.attachments || []).filter((url) => url !== payload.url)
+        await vaccineApi.antibodyTests.update(props.dogId, ownerId, { attachments: rest })
+      } else {
+        const record = records.value.find((item) => item.id === ownerId)
+        if (!record) continue
+        const rest = (record.attachments || []).filter((url) => url !== payload.url)
+        await vaccineApi.records.update(props.dogId, ownerId, { attachments: rest })
+      }
     }
     // 云上的文件顺手删掉（删不掉也不拦着 —— 记录上的引用已经去掉了）
     const key = extractHealthAttachmentKey(payload.url)

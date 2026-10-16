@@ -112,6 +112,10 @@
           <el-icon><Setting /></el-icon>
           <span>食谱定制设置</span>
         </el-menu-item>
+        <el-menu-item index="/platform-options">
+          <el-icon><Collection /></el-icon>
+          <span>选项字典</span>
+        </el-menu-item>
         <el-menu-item index="/analytics/dog-profile">
           <el-icon><DataBoard /></el-icon>
           <span>狗档案转化分析</span>
@@ -296,7 +300,8 @@ import {
   FirstAidKit,
   Dish,
   TrendCharts,
-  Lock
+  Lock,
+  Collection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

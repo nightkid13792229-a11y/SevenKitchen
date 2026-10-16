@@ -43,6 +43,22 @@ import { AdminGuard, StaffGuard } from '../guards/role.guard';
 export class AdminPlatformOptionsController {
   constructor(private readonly platformOptions: PlatformOptionsService) {}
 
+  @Get()
+  @ApiOperation({
+    summary: 'List all option sets with metadata (for the maintenance page)',
+  })
+  async listSets() {
+    const sets = await this.platformOptions.listAllSetsForAdmin();
+    return ApiResponseDto.success({
+      sets,
+      /**
+       * 色彩档位也由后端给 —— 免得前端自己写一份档位清单，
+       * 那正是这次重构要消灭的东西（前端硬编码业务清单）。
+       */
+      tones: this.platformOptions.listTones(),
+    });
+  }
+
   @Get(':setCode')
   @ApiOperation({ summary: 'List one option set for maintenance (incl. disabled)' })
   async listSet(@Param('setCode') setCode: string) {

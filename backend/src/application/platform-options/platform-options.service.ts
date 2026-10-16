@@ -82,6 +82,58 @@ export class PlatformOptionsService implements OnModuleInit {
     return all.get(code) ?? [];
   }
 
+  /**
+   * 后台维护页用：列出**全部选项集**的元信息与条目数。
+   *
+   * 为什么要有它：维护页左边是"选哪个选项集"，右边是"改里面的项"。
+   * 如果不给这个接口，前端就只能自己写一份选项集清单 ——
+   * 那正是这次重构要消灭的东西（前端硬编码业务清单）。
+   */
+  async listAllSetsForAdmin(): Promise<
+    Array<{
+      code: string;
+      name: string;
+      description: string | null;
+      sourceType: string;
+      /** DATA 类可增删；ENUM 类只能改展示 —— 前端据此决定按钮是否可用 */
+      canAddOrRemove: boolean;
+      itemCount: number;
+      enabledCount: number;
+    }>
+  > {
+    const counts = await this.prisma.platformOptionItem.groupBy({
+      by: ['setId'],
+      _count: { _all: true },
+    });
+    const enabledCounts = await this.prisma.platformOptionItem.groupBy({
+      by: ['setId'],
+      where: { enabled: true },
+      _count: { _all: true },
+    });
+
+    const totalBySet = new Map(
+      counts.map((row) => [row.setId, row._count._all]),
+    );
+    const enabledBySet = new Map(
+      enabledCounts.map((row) => [row.setId, row._count._all]),
+    );
+
+    return OPTION_SET_DEFINITIONS.map((definition) => ({
+      code: definition.code,
+      name: definition.name,
+      description: definition.description ?? null,
+      sourceType: definition.sourceType,
+      canAddOrRemove: definition.sourceType === 'DATA',
+      itemCount: totalBySet.get(definition.code) ?? 0,
+      enabledCount: enabledBySet.get(definition.code) ?? 0,
+    }));
+  }
+
+  /** 可用的色彩档位 —— 同样下发给前端，免得它自己写一份 */
+  listTones(): readonly string[] {
+    return OPTION_TONES;
+  }
+
   /** 后台维护页用：连停用的项一起给（顾客侧只拿启用的） */
   async listSetForAdmin(
     code: string,

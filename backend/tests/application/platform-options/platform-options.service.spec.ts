@@ -114,6 +114,25 @@ function createFakePrisma() {
               row.code === where.setId_code.code,
           ) ?? null,
       ),
+      groupBy: jest.fn(
+        async (args: {
+          by: string[];
+          where?: { enabled?: boolean };
+        }) => {
+          queryCount += 1;
+          const rows = args?.where?.enabled
+            ? items.filter((row) => row.enabled === args.where!.enabled)
+            : items;
+          const buckets = new Map<string, number>();
+          for (const row of rows) {
+            buckets.set(row.setId, (buckets.get(row.setId) ?? 0) + 1);
+          }
+          return [...buckets.entries()].map(([setId, count]) => ({
+            setId,
+            _count: { _all: count },
+          }));
+        },
+      ),
       count: jest.fn(async (args: { where?: { setId?: string } }) => {
         queryCount += 1;
         if (!args?.where?.setId) return items.length;
@@ -317,6 +336,50 @@ describe('PlatformOptionsService', () => {
         '已交付',
       );
       expect(await service.labelOf(CUSTOM_RECIPE_STATUS_SET, 'NOPE')).toBeNull();
+    });
+  });
+
+  describe('后台维护页用的「全部选项集」接口', () => {
+    it('列出全部登记集，并标出哪些可增删、各有几项', async () => {
+      await service.syncEnumBackedSets();
+      await service.seedDataSetsIfEmpty();
+
+      const sets = await service.listAllSetsForAdmin();
+
+      expect(sets).toHaveLength(OPTION_SET_DEFINITIONS.length);
+
+      const status = sets.find((row) => row.code === CUSTOM_RECIPE_STATUS_SET)!;
+      expect(status.sourceType).toBe('ENUM');
+      // ENUM 类不能增删 —— 前端据此把「新增/删除」按钮置灰
+      expect(status.canAddOrRemove).toBe(false);
+      expect(status.itemCount).toBe(5);
+
+      const aftersale = sets.find(
+        (row) => row.code === 'custom_recipe_aftersale_type',
+      )!;
+      expect(aftersale.sourceType).toBe('DATA');
+      expect(aftersale.canAddOrRemove).toBe(true);
+      expect(aftersale.itemCount).toBe(3);
+    });
+
+    it('停用的项计入 itemCount 但不计入 enabledCount', async () => {
+      await service.syncEnumBackedSets();
+      await service.updateItem(CUSTOM_RECIPE_STATUS_SET, 'PAID', {
+        enabled: false,
+      });
+
+      const status = (await service.listAllSetsForAdmin()).find(
+        (row) => row.code === CUSTOM_RECIPE_STATUS_SET,
+      )!;
+      expect(status.itemCount).toBe(5);
+      expect(status.enabledCount).toBe(4);
+    });
+
+    it('色彩档位由后端给出（前端不自己写一份）', () => {
+      const tones = service.listTones();
+      expect(tones).toContain('warning');
+      expect(tones).toContain('success');
+      expect(tones.length).toBeGreaterThan(0);
     });
   });
 

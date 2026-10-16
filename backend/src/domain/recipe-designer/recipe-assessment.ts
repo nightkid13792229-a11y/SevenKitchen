@@ -3,7 +3,12 @@ import {
   getProfileEffectiveWeightG,
   readProfileFieldAmount,
 } from './nutrition-profile-reader';
-import { calculateDogAtwaterEnergyPer100g } from './dog-atwater-energy';
+import {
+  DOG_ATWATER_FIELD_LABELS,
+  DOG_ATWATER_FIELD_PATHS,
+  calculateDogAtwaterEnergyPer100g,
+  type DogAtwaterEnergyField,
+} from './dog-atwater-energy';
 import type {
   AssessmentEntry,
   AssessmentEntryStatus,
@@ -58,6 +63,57 @@ export interface GroupedAssessmentEntry extends AssessmentEntry {
   detailCount: number;
 }
 
+/**
+ * 「哪个原料缺哪个字段」。
+ *
+ * 为什么不复用通用的"缺数据"标记：那个只说"这项缺数据"，
+ * 而用户需要的是"**给鸡胸肉补上粗脂肪**"这种能照着做的指令。
+ */
+export interface AssessmentDataGap {
+  itemId: string;
+  itemName: string;
+  fieldPath: string;
+  fieldLabel: string;
+  /** 这个缺口卡住了能量计算（目前只收集这类） */
+  blocksEnergy: boolean;
+}
+
+/**
+ * 收集「哪个原料缺哪个必填字段」。
+ *
+ * 2026-10-16（批次 5.3）：从后台那份副本移植过来，**逻辑逐字照搬** ——
+ * 两边算出来的缺口必须一模一样，否则同一个食谱在后台与小程序里
+ * 会显示不同的"缺什么"。
+ * 移植完之后后台那份副本就能删了。
+ *
+ * 两条跳过规则：
+ *   · 用量为 0 的原料不算缺口（没加的东西，缺字段不影响结果）
+ *   · 营养补充剂不算（它们不走犬用 Atwater 那条路）
+ */
+function collectAssessmentDataGaps(
+  items: DesignRecipeAssessmentItemInput[],
+): AssessmentDataGap[] {
+  const gaps: AssessmentDataGap[] = [];
+
+  for (const item of items) {
+    if (getItemEffectiveWeightG(item) <= 0) continue;
+    if (isSupplementIngredient(item)) continue;
+
+    const audit = calculateDogAtwaterEnergyPer100g(item.nutritionProfile);
+    for (const field of audit.missingFields as DogAtwaterEnergyField[]) {
+      gaps.push({
+        itemId: item.id,
+        itemName: item.name,
+        fieldPath: DOG_ATWATER_FIELD_PATHS[field],
+        fieldLabel: DOG_ATWATER_FIELD_LABELS[field],
+        blocksEnergy: true,
+      });
+    }
+  }
+
+  return gaps;
+}
+
 export interface DesignRecipeAssessmentResult {
   scenario: FediafDogScenarioCode;
   totalWeightG: number;
@@ -71,6 +127,14 @@ export interface DesignRecipeAssessmentResult {
   macroMetrics: Record<AssessedMacroMetricKey, AssessedMacroMetric>;
   groupedEntries: GroupedAssessmentEntry[];
   entries: AssessmentEntry[];
+  /**
+   * 哪个原料缺了哪个必填字段（2026-10-16 批次 5.3 从后台移植过来）。
+   *
+   * 只列会**卡住犬用 Atwater 能量计算**的缺口（水分/粗蛋白/粗脂肪/灰分/膳食纤维），
+   * 因为这类缺口的影响是全局的：能量算不出 → 所有按能量口径的指标一起变「缺数据」，
+   * 而用户看到一片「缺数据」却不知道**该去补哪个原料的哪个字段**。
+   */
+  dataGaps: AssessmentDataGap[];
   overallStatus: AssessmentOverallStatus;
   summary: DesignRecipeAssessmentSummary;
   rawSummary: DesignRecipeAssessmentSummary;
@@ -231,6 +295,7 @@ export function assessRecipeDraft(
     ),
     groupedEntries,
     entries,
+    dataGaps: collectAssessmentDataGaps(input.items),
     overallStatus: getOverallStatus(groupedEntries),
     summary,
     rawSummary,

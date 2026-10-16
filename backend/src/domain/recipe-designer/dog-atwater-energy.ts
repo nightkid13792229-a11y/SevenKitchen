@@ -23,12 +23,27 @@ const DOG_ATWATER_REQUIRED_FIELDS = [
   'fiber',
 ] as const satisfies readonly DogAtwaterEnergyField[];
 
-const DOG_ATWATER_FIELD_PATHS = {
+/**
+ * 各字段在营养档案里的路径。
+ *
+ * 2026-10-16（批次 5.3）改成导出：`dataGaps`（"哪个原料缺哪个字段"）
+ * 需要它把缺口说成人话。此前后台那边自己有一份副本。
+ */
+export const DOG_ATWATER_FIELD_PATHS = {
   moisture: 'macros.moisture',
   crudeProtein: 'macros.crudeProtein',
   crudeFat: 'macros.crudeFat',
   ash: 'macros.ash',
   fiber: 'macros.fiber',
+} as const satisfies Record<DogAtwaterEnergyField, string>;
+
+/** 字段中文名，用于把「哪个原料缺哪个字段」直接说给用户听 */
+export const DOG_ATWATER_FIELD_LABELS = {
+  moisture: '水分',
+  crudeProtein: '粗蛋白',
+  crudeFat: '粗脂肪',
+  ash: '灰分',
+  fiber: '膳食纤维',
 } as const satisfies Record<DogAtwaterEnergyField, string>;
 
 const NFE_NEGATIVE_TOLERANCE_G_PER_100G = 2;

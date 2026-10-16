@@ -50,9 +50,18 @@ const emit = defineEmits<{
  * `NOT_NOW` 之后还会提醒；`STOPPED` 是按兽医建议或家长自己决定停止。
  * 后端收的是同一个 `decision: 'SKIP'`，只把 `reason` 分开记。
  */
+/**
+ * 两个原因**强度不同**，界面上要把这个区别说出来（老板 2026-10-16 拍板）。
+ *
+ * 原来两行小字只说了"是什么心情"（之后还会提醒 / 兽医建议停），
+ * 可家长真正需要知道的是**选哪个会连带停掉一整类** ——
+ * 不然他点「不再接种了」会以为只是"这次不点"，结果整个类别都从计划里消失 ✗。
+ *
+ * 行为本身**不动**（跳过这一针 / 停掉这一类各有各的用处，见需求文档决策记录）。
+ */
 const REASON_OPTIONS: { value: 'NOT_NOW' | 'STOPPED'; label: string; hint: string }[] = [
-  { value: 'NOT_NOW', label: '这次先不打', hint: '之后还会提醒' },
-  { value: 'STOPPED', label: '不再接种了', hint: '兽医建议停，或我自己决定停' },
+  { value: 'NOT_NOW', label: '这次先不打', hint: '只跳过这一针，以后该打还会提醒' },
+  { value: 'STOPPED', label: '不再接种了', hint: '这一类都不再提醒（随时可以恢复）' },
 ]
 
 const DEFAULT_REASON: 'NOT_NOW' | 'STOPPED' = 'NOT_NOW'

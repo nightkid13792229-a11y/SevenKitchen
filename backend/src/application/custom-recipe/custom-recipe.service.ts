@@ -692,132 +692,26 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
-   * 把一道**已经设计好**的定制食谱交付到订单（2026-10-04，口径 4）。
+   * ⚠️ 这里原来有一个 `deliverExistingRecipe`（2026-10-16 批次 5.7 删除）。
    *
-   * 为什么需要它：后台原来只有一个交付入口 —— 在订单页手工填一张表单
-   * （名称/营养/食材/步骤），而设计器里其实已经算好了全部内容，
-   * 两处字段结构还不一样，员工只能**手工重抄一遍**，抄错就得重来。
+   * 它只改订单（写 recipeId + 改状态），**不留交付记录、不留内容快照**，
+   * 而且**绕过状态机**。批次 2.1 起，交付一律走
+   * `CustomRecipeDeliveryService.deliver()` —— 那一条会生成快照、
+   * 建版本记录、走状态机、算喂食量、设自动完成闹钟。
    *
-   * 现在设计器发布时会把订单号挂在食谱上（recipe-designer.service 的
-   * createPrivateRecipeSnapshot），后台订单页点一下就能交付。
+   * ## 为什么现在才删
    *
-   * 口径 4：允许**重新交付** —— 已交付的单可以换一道食谱，覆盖挂接关系并再次通知顾客。
+   * 它**已经没有任何生产代码在调**（只有测试还在调），
+   * 而它的允许清单停在 `[已付款, 制作中, 已交付]` —— **少了「已完成」**，
+   * 报错文案还是"该订单已取消，不能交付"（对一张已完成的单是句错话）。
+   *
+   * 死代码本身不危险，**但一条过期的规则留在那里就是个陷阱**：
+   * 哪天有人想"复用一下"，就会把售后改稿后重新交付的流程挡死，
+   * 而且得到的是一句驴唇不对马嘴的错误提示。
+   *
+   * 它原来的 8 条测试（归属校验、一食谱一单、待付款/已取消不能交付）
+   * 在交付服务的测试里都有等价覆盖，所以一并删除不会丢保护。
    */
-  async deliverExistingRecipe(
-    orderIdOrId: string,
-    recipeIdOrBizId: string,
-  ): Promise<{
-    orderId: string;
-    recipeBizId: string;
-    recipeName: string;
-    redelivered: boolean;
-  }> {
-    const ref = await this.resolveOrderRef(orderIdOrId);
-
-    const order = await this.prisma.customRecipeOrder.findUnique({
-      where: { id: ref.id },
-      select: {
-        id: true,
-        orderId: true,
-        customerId: true,
-        dogId: true,
-        status: true,
-        recipeId: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`定制订单不存在: ${orderIdOrId}`);
-    }
-
-    const deliverable: CustomRecipeStatus[] = [
-      CustomRecipeStatus.PAID,
-      CustomRecipeStatus.IN_PROGRESS,
-      CustomRecipeStatus.DELIVERED,
-    ];
-
-    if (!deliverable.includes(order.status as CustomRecipeStatus)) {
-      throw new BadRequestException(
-        order.status === CustomRecipeStatus.PENDING_PAYMENT
-          ? '该订单还没确认收款，不能交付'
-          : '该订单已取消，不能交付',
-      );
-    }
-
-    // 业务编号（CR…）与主键都认：后台有的地方传业务号、有的传主键
-    const recipe = await this.prisma.recipe.findFirst({
-      where: { OR: [{ recipeId: recipeIdOrBizId }, { id: recipeIdOrBizId }] },
-      select: {
-        id: true,
-        recipeId: true,
-        name: true,
-        isCustomRecipe: true,
-        customerOwnerId: true,
-        customerDogId: true,
-      },
-    });
-
-    if (!recipe) {
-      throw new NotFoundException('食谱不存在');
-    }
-
-    /**
-     * 只能交付「这位顾客 + 这只狗」的私密定制食谱。
-     *
-     * 少了这一步，员工在下拉里选错一条，就会把别人家狗的定制食谱交付出去；
-     * 而这条隐私边界正是 2026-09-28 专门修过的（定制食谱必须是 PRIVATE_CUSTOM）。
-     */
-    if (
-      !recipe.isCustomRecipe ||
-      recipe.customerOwnerId !== order.customerId ||
-      recipe.customerDogId !== order.dogId
-    ) {
-      throw new BadRequestException(
-        '这道食谱不属于该订单的顾客 / 狗狗，不能交付到这张定制单',
-      );
-    }
-
-    const redelivered = order.status === CustomRecipeStatus.DELIVERED;
-
-    /**
-     * 一道定制食谱只能挂在**一张**定制单上（`custom_recipe_order.recipe_id` 是唯一约束）。
-     *
-     * 为什么必须在这里拦：回头客第二次给同一只狗定制时，候选列表里会包含
-     * 上一单已经交付过的那道食谱。员工点下去，数据库会直接抛唯一约束错误 ——
-     * 表现成 500 加一句看不懂的话。这里提前给出能照着做的说明。
-     *
-     * 业务上也不该复用：每一单定制费对应它自己产出的那道食谱，
-     * ¥150 抵扣额度是绑在那道食谱上的（复用等于两次定制共用一份产出）。
-     */
-    const occupied = await this.prisma.customRecipeOrder.findFirst({
-      where: { recipeId: recipe.id, id: { not: order.id } },
-      select: { orderId: true },
-    });
-
-    if (occupied) {
-      throw new BadRequestException(
-        `这道食谱已经交付给另一张定制单（${occupied.orderId}），` +
-          '一道定制食谱只能对应一张定制单。请在设计器里另存一版再交付，' +
-          '或直接到那张单上做「重新交付」',
-      );
-    }
-
-    await this.prisma.customRecipeOrder.update({
-      where: { id: order.id },
-      data: {
-        recipeId: recipe.id,
-        status: CustomRecipeStatus.DELIVERED,
-        deliveredAt: new Date(),
-      },
-    });
-
-    return {
-      orderId: order.orderId,
-      recipeBizId: recipe.recipeId,
-      recipeName: recipe.name,
-      redelivered,
-    };
-  }
 
   // ==================== 支付相关 ====================
 

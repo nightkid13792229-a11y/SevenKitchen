@@ -222,212 +222,25 @@ describe('CustomRecipeService · 自动排期与名额抢占', () => {
   });
 });
 
-describe('CustomRecipeService · 一键交付已设计好的食谱', () => {
-  let service: CustomRecipeService;
-
-  const orderFindFirst = jest.fn();
-  const orderFindUnique = jest.fn();
-  const orderUpdate = jest.fn();
-  const recipeFindFirst = jest.fn();
-  const recipeFindMany = jest.fn();
-
-  const mockPrismaService = {
-    customRecipeOrder: {
-      findFirst: orderFindFirst,
-      findUnique: orderFindUnique,
-      update: orderUpdate,
-    },
-    recipe: {
-      findFirst: recipeFindFirst,
-      findMany: recipeFindMany,
-    },
-  } as any;
-
-  const baseOrder = {
-    id: 'cr-uuid-1',
-    orderId: 'CR202610040001',
-    customerId: 'user-1',
-    dogId: 'dog-1',
-    status: 'PAID',
-    recipeId: null,
-  };
-
-  const baseRecipe = {
-    id: 'recipe-pk-1',
-    recipeId: 'CR1759000000000',
-    name: '专属鲜食',
-    isCustomRecipe: true,
-    customerOwnerId: 'user-1',
-    customerDogId: 'dog-1',
-  };
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CustomRecipeService,
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: TencentCosService, useValue: {} },
-        { provide: CustomRecipeConfigService, useValue: { getConfig: jest.fn() } },
-      ],
-    }).compile();
-
-    service = module.get(CustomRecipeService);
-    jest.clearAllMocks();
-
-    /**
-     * findFirst 会被两处用到，靠 where 的形状区分：
-     *   · resolveOrderRef：按业务编号/主键查订单
-     *   · 交付前的占用检查：按 recipeId 查"这道食谱是不是已经被别的单占了"
-     */
-    orderFindFirst.mockImplementation(async ({ where }: any) => {
-      if (where?.recipeId !== undefined) return null;
-      return { id: baseOrder.id, orderId: baseOrder.orderId };
-    });
-    orderFindUnique.mockResolvedValue({ ...baseOrder });
-    orderUpdate.mockResolvedValue({});
-    recipeFindFirst.mockResolvedValue({ ...baseRecipe });
-  });
-
-  it('把设计器做好的食谱交付到订单：订单挂上食谱并转已交付', async () => {
-    const result = await service.deliverExistingRecipe(
-      'CR202610040001',
-      'CR1759000000000',
-    );
-
-    expect(orderUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'cr-uuid-1' },
-        data: expect.objectContaining({
-          recipeId: 'recipe-pk-1',
-          status: 'DELIVERED',
-        }),
-      }),
-    );
-    expect(result.recipeBizId).toBe('CR1759000000000');
-    expect(result.redelivered).toBe(false);
-  });
-
-  it('主键和业务编号都能用来指定食谱', async () => {
-    await service.deliverExistingRecipe('CR202610040001', 'recipe-pk-1');
-
-    expect(recipeFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { OR: [{ recipeId: 'recipe-pk-1' }, { id: 'recipe-pk-1' }] },
-      }),
-    );
-  });
-
-  it('⚠️ 不能交付别人家狗的食谱（这条隐私边界 2026-09-28 专门修过）', async () => {
-    recipeFindFirst.mockResolvedValue({
-      ...baseRecipe,
-      customerDogId: 'dog-OTHER',
-    });
-
-    await expect(
-      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
-    ).rejects.toThrow('不属于该订单的顾客 / 狗狗');
-    expect(orderUpdate).not.toHaveBeenCalled();
-  });
-
-  it('不能交付非定制食谱（防止把公开食谱挂到定制单上）', async () => {
-    recipeFindFirst.mockResolvedValue({ ...baseRecipe, isCustomRecipe: false });
-
-    await expect(
-      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
-    ).rejects.toThrow('不属于该订单的顾客 / 狗狗');
-    expect(orderUpdate).not.toHaveBeenCalled();
-  });
-
-  it('待付款的订单不能交付（还没收到钱）', async () => {
-    orderFindUnique.mockResolvedValue({
-      ...baseOrder,
-      status: 'PENDING_PAYMENT',
-    });
-
-    await expect(
-      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
-    ).rejects.toThrow('还没确认收款');
-    expect(orderUpdate).not.toHaveBeenCalled();
-  });
-
-  it('已取消的订单不能交付', async () => {
-    orderFindUnique.mockResolvedValue({ ...baseOrder, status: 'CANCELLED' });
-
-    await expect(
-      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
-    ).rejects.toThrow('已取消');
-    expect(orderUpdate).not.toHaveBeenCalled();
-  });
-
-  it('口径 4：已交付的订单可以重新交付，并且标明是重交', async () => {    orderFindUnique.mockResolvedValue({
-      ...baseOrder,
-      status: 'DELIVERED',
-      recipeId: 'recipe-pk-OLD',
-    });
-
-    const result = await service.deliverExistingRecipe(
-      'CR202610040001',
-      'CR1759000000000',
-    );
-
-    expect(result.redelivered).toBe(true);
-    expect(orderUpdate).toHaveBeenCalled();
-  });
-
-  it('⚠️ 同一道食谱不能交付给第二张单（回头客场景），给出能照做的提示', async () => {
-    // 这道食谱已经挂在另一张定制单上（custom_recipe_order.recipe_id 是唯一约束）
-    orderFindFirst.mockImplementation(async ({ where }: any) => {
-      if (where?.recipeId !== undefined) {
-        return { orderId: 'CR202609010001' };
-      }
-      return { id: baseOrder.id, orderId: baseOrder.orderId };
-    });
-
-    await expect(
-      service.deliverExistingRecipe('CR202610040001', 'CR1759000000000'),
-    ).rejects.toThrow(/已经交付给另一张定制单/);
-
-    // 关键：不能真的去写库，否则数据库会抛唯一约束错误（表现成 500）
-    expect(orderUpdate).not.toHaveBeenCalled();
-  });
-
-  it('候选列表只给"这位顾客 + 这只狗"的定制食谱，并标出当前已挂的那道', async () => {
-    orderFindUnique.mockResolvedValue({
-      ...baseOrder,
-      recipeId: 'recipe-pk-1',
-    });
-    recipeFindMany.mockResolvedValue([
-      {
-        id: 'recipe-pk-1',
-        recipeId: 'CR1759000000000',
-        name: '专属鲜食',
-        version: 1,
-        updatedAt: new Date('2026-10-04'),
-      },
-      {
-        id: 'recipe-pk-2',
-        recipeId: 'CR1759000000001',
-        name: '专属鲜食 v2',
-        version: 2,
-        updatedAt: new Date('2026-10-03'),
-      },
-    ]);
-
-    const list = await service.listDeliverableRecipes('CR202610040001');
-
-    expect(recipeFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          isCustomRecipe: true,
-          customerOwnerId: 'user-1',
-          customerDogId: 'dog-1',
-        },
-      }),
-    );
-    expect(list[0].linkedToThisOrder).toBe(true);
-    expect(list[1].linkedToThisOrder).toBe(false);
-  });
-});
+/**
+ * ⚠️ 这里原来有一组「一键交付已设计好的食谱」的测试（8 条，2026-10-16 批次 5.7 删除）。
+ *
+ * 它们测的是 `CustomRecipeService.deliverExistingRecipe` —— 那个方法
+ * **已经没有任何生产代码在调**（批次 2.1 起交付一律走交付服务），
+ * 所以方法连同这组测试一起删了。
+ *
+ * ## 那 8 条守的东西没有丢
+ *
+ * 它们守的是：食谱必须属于该顾客+该狗、非定制食谱不能挂到定制单、
+ * 一道食谱只能挂一张单、待付款/已取消不能交付、已交付可以重新交付。
+ * 这些在 `custom-recipe-delivery.service.spec.ts` 里**都有等价覆盖**：
+ *   · 「不属于该订单的顾客」
+ *   · 「非定制食谱」
+ *   · 「已经交付给另一张定制单」
+ *   · 「待付款不能交付，并说明原因」
+ *   · 「已取消不能交付」
+ * 删之前逐条核对过。
+ */
 
 describe('CustomRecipeService · 附件归属校验', () => {
   let service: CustomRecipeService;

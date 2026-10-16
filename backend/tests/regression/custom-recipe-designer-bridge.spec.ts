@@ -130,18 +130,42 @@ describe('定制订单 → 设计器 / AI 通路', () => {
     );
     expect(controller).toContain('orders/:orderId/recipe-candidates');
     expect(controller).toContain('orders/:orderId/deliver-recipe');
-    expect(controller).toContain('deliverExistingRecipe');
+    /**
+     * 交付走**交付服务**（批次 2.1 起）。
+     *
+     * ⚠️ 这里原来断言的是 `deliverExistingRecipe` —— 那个方法
+     * 只改订单、不留快照、绕过状态机，2026-10-16 批次 5.7 已删除。
+     * 断言跟着搬到**活着的那条路径**上，否则这条守卫就变成
+     * "守着一个不存在的东西"。
+     */
+    expect(controller).toContain('deliveryService.deliver(');
   });
 
-  it('一键交付会校验"这道食谱属于该顾客与该狗"（隐私边界不能被绕过）', () => {
-    const service = backend(
-      'src/application/custom-recipe/custom-recipe.service.ts',
+  it('交付会校验"这道食谱属于该顾客与该狗"（隐私边界不能被绕过）', () => {
+    /**
+     * ⚠️ 这条守卫的**对象换过一次**（2026-10-16 批次 5.7）：
+     *
+     * 原来盯的是 `CustomRecipeService.deliverExistingRecipe`。
+     * 那个方法只改订单、不留内容快照、而且**绕过状态机**，
+     * 批次 2.1 起交付一律走 `CustomRecipeDeliveryService.deliver()`，
+     * 旧方法已经没有任何生产代码在调 —— 所以删了。
+     *
+     * 但**这条守卫要守的东西一点没变**：把别人家狗的食谱交付出去，
+     * 是 2026-09-28 专门修过的隐私边界。所以断言搬到活着的路径上。
+     */
+    const delivery = backend(
+      'src/application/custom-recipe/custom-recipe-delivery.service.ts',
     );
 
-    expect(service).toContain('async deliverExistingRecipe');
-    expect(service).toContain('recipe.customerOwnerId !== order.customerId');
-    expect(service).toContain('recipe.customerDogId !== order.dogId');
-    // 口径 4：已交付的单可以重新交付，并如实告诉调用方这是重交
-    expect(service).toContain('redelivered');
+    expect(delivery).toContain('recipe.customerOwnerId !== order.customerId');
+    expect(delivery).toContain('recipe.customerDogId !== order.dogId');
+    // 非定制食谱也不能挂到定制单上
+    expect(delivery).toContain('recipe.isCustomRecipe');
+    /**
+     * 口径 4：已交付/已完成的单可以**重新交付**（售后改稿后就要走这条）——
+     * 这条在交付服务里由状态机保证，不是靠一个 `redelivered` 变量。
+     */
+    const state = backend('src/domain/custom-recipe/custom-recipe.state.ts');
+    expect(state).toContain('COMPLETED');
   });
 });

@@ -31,7 +31,6 @@
       <template v-else>
       <NextCard
         :next="nextStep"
-        :later-steps="laterSteps"
         :ignored-items="ignoredItems"
         :ignored-count="ignoredCount"
         @record="onRecordStep"
@@ -169,15 +168,6 @@ const ignoredCount = computed(() => planData.value?.ignored?.count || 0)
 const pendingReviewCount = computed(() => planData.value?.pendingReview || 0)
 const catalogProducts = computed(() => readCatalogProducts(catalog.value))
 const componentOptions = computed(() => readComponentOptions(catalog.value))
-
-/** 排在"下一针"之后的项（只用来写"还有：…"，不做任何推算） */
-const laterSteps = computed(() => {
-  const key = nextKey.value
-  const list = planSteps.value
-  if (!key) return list
-  const at = list.findIndex((item) => item.key === key)
-  return at >= 0 ? list.slice(at + 1) : list
-})
 
 /* ══ 取数 ═════════════════════════════════════════════════════════════════
  *
@@ -604,6 +594,10 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: $vk-gap-block;
+  /* 与上面那排书签之间留一点呼吸（老板 2026-10-16：
+     "下一针的窗口与 4 个标签中间能否留点空？这样排版更好看一点"）。
+     书签下沿是紧贴内容区的，不留这一下，"下一针"那张卡会像粘在标签上。 */
+  padding-top: 18rpx;
 }
 
 .vk-state {

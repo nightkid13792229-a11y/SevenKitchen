@@ -17,7 +17,9 @@
       <text class="vk-next__what">{{ stepTitle(next) }}</text>
       <text class="vk-next__when">{{ stepWhenText(next) }}</text>
       <text v-if="hint && !expanded" class="vk-next__hint">{{ hint }}</text>
-      <view class="vk-next__acts">
+      <!-- 收起时才给这一排：展开后详情里自己有「记录这一针」，
+           两边同时出现就是**同一张卡上两个一模一样的按钮**（老板 2026-10-16 第 2 条） -->
+      <view v-if="!expanded" class="vk-next__acts">
         <text class="vk-next__btn vk-next__btn--ghost" @tap="onScan">上传疫苗本</text>
         <text class="vk-next__btn vk-next__btn--solid" @tap="onRecord">记录这一针</text>
       </view>
@@ -57,6 +59,7 @@
       </view>
       <view class="vk-next__detail-acts">
         <text class="vk-next__act vk-next__act--ghost" @tap="onIgnore">这个先不打（忽略）</text>
+        <text class="vk-next__act vk-next__act--ghost" @tap="onScan">上传疫苗本</text>
       </view>
 
       <!-- 两针一起打：提示本身就是录入入口（需求 R11 / 原型 G 屏） -->
@@ -71,10 +74,9 @@
         </view>
       </view>
 
-      <!-- 后面还有：只列接下来两项（远期的不逐条堆在首屏） -->
-      <view v-if="laterText" class="vk-next__later">
-        <text>{{ laterText }}</text>
-      </view>
+      <!-- 2026-10-16 删掉了原来那一块"接下来还有两项"的说明：
+           正下方就是完整的免疫计划，同一批项目再说一遍纯属重复
+           （老板："最下方……这个板块意义是什么呢？我们下方不是已经列出了免疫计划吗"）。 -->
     </view>
 
     <!-- ── 已忽略的项（能一键恢复，需求 R5）────────────────────────── -->
@@ -103,14 +105,11 @@ import {
 const props = withDefaults(defineProps<{
   /** 下一针；没有任何待办时是 null */
   next?: VaccineStep | null
-  /** 计划里排在下一针之后的项（只用来写"还有：…"一行，不做任何推算） */
-  laterSteps?: VaccineStep[]
   /** 已设为不做的项（E 类：不再接种） */
   ignoredItems?: VaccineIgnoredStep[]
   ignoredCount?: number
 }>(), {
   next: null,
-  laterSteps: () => [],
   ignoredItems: () => [],
   ignoredCount: 0,
 })
@@ -142,25 +141,20 @@ const tone = computed(() => {
  *
  * ⚠️ 2026-10-16 改：原来这里优先写后端的 `basis`（依据原文）——
  *    那是「查看详情」里给人看的**整段依据**，放在卡片上当小字既太长、
- *    又和展开后的「依据」一字不差地重复。收起状态只用这一句"还有：…"。
+ *    又和展开后的「依据」一字不差地重复。收起状态就只留这一句短话。
  */
 const hint = computed(() => {
   const step = props.next
   if (!step) return ''
   /*
-   * 优先级：**后端的 `hint`**（一句话）> 自己拼的"还有：…"。
+   * 就用**后端给的 `hint`**（程序表里逐行写好的那一句话）。
    *
    * ⚠️ 这里**不能**用 `basis`：那是"查看详情"里给人读的整段依据，
    *    带指南引注、100 多字，放在卡片上当小字会变成一堵墙
    *    （2026-10-16 实测：成年补一针那条 basis 有 128 个字）。
    *    短的给首屏、长的给详情，两个字段分工见后端程序表。
    */
-  const hint = String(step.hint || '').trim()
-  if (hint) return hint
-  const later = (props.laterSteps || []).slice(0, 2)
-  if (later.length === 0) return ''
-  const parts = later.map((item) => `${item.kindLabel}${item.label} ${formatFullDate(item.windowStart)}`)
-  return `还有：${parts.join(' · ')}`
+  return String(step.hint || '').trim()
 })
 
 const idleText = computed(() => {
@@ -190,13 +184,6 @@ const comboWindowText = computed(() => {
 const comboProductText = computed(() => (props.next?.combo?.products || []).join(' · '))
 
 const basisText = computed(() => String(props.next?.basis || '').trim())
-
-const laterText = computed(() => {
-  const later = (props.laterSteps || []).slice(0, 2)
-  if (later.length === 0) return ''
-  const parts = later.map((item) => `${item.kindLabel}${item.label} ${formatFullDate(item.windowStart)}`)
-  return `后面还有：${parts.join(' · ')}`
-})
 
 function reasonLabel(reason: string) {
   return ignoreReasonLabel(reason)

@@ -671,3 +671,22 @@ describe('引擎 · 抗体检测替代那一针（原型 F）', () => {
     expect(view.rhythm).toContain('评估');
   });
 });
+
+describe('引擎 · 抗体检测那条路的年龄下限（需求 R9：20 周龄之前不做）', () => {
+  it('2 周龄的幼犬 → 卡片上**不该出现**「先做抗体检测」', () => {
+    const view = build(dog(2));
+    expect(view.next).not.toBeNull();
+    expect(view.next!.titerable).toBe(false);
+  });
+
+  it('6 周龄、20 周龄这两个边界也照这条判', () => {
+    expect(build(dog(6)).next!.titerable).toBe(false);
+    // 20 周龄已经可以测（判据是"这一步窗口开始时满 20 周"）
+    expect(build(dog(30)).next!.titerable).toBe(true);
+  });
+
+  it('成年犬照样能给这条路（不要一刀切关掉）', () => {
+    const view = build(dog(200));
+    expect(view.next!.titerable).toBe(true);
+  });
+});

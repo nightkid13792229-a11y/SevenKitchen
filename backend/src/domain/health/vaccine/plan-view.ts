@@ -176,6 +176,14 @@ export function selectPlanSteps(steps: MatchedStep[]): MatchedStep[] {
  * ② 一步 → 下发形状
  * =========================================================================== */
 
+/**
+ * 抗体检测的最小周龄（需求 R9：20 周龄之前不做）。
+ *
+ * 为什么是 20 周：幼犬的母源抗体会干扰检测结果，20 周龄前测出来的
+ * "合格/不合格"都不能作为免打一针的依据（WSAVA 2024 也是这个口径）。
+ */
+const MIN_TITER_AGE_WEEKS = 20;
+
 export function toStepDto(
   step: MatchedStep,
   options: {
@@ -213,7 +221,16 @@ export function toStepDto(
     hint: step.hint,
     ...(step.titer ? { titer: step.titer } : {}),
     basis: step.basis,
-    titerable: step.titerable,
+    /**
+     * 能不能用抗体检测替代（需求 R9：**20 周龄之前不做**）。
+     *
+     * ⚠️ 2026-10-16 修（老板："一只两周龄的狗狗做抗体检测是否不合理呢？"）：
+     *    这里原来直接透传程序表的 `titerable`（核心疫苗都是 true），
+     *    于是一只 2 周龄的幼犬，卡片上也会出现「先做抗体检测」——
+     *    可它的母源抗体还在，测了也说明不了任何事，指南也不建议 20 周龄前测。
+     *    所以按**这一步窗口开始时狗的周龄**再判一道：不满 20 周就不给这条路。
+     */
+    titerable: step.titerable && options.weeksAtStep >= MIN_TITER_AGE_WEEKS,
     products,
     combo: null,
   };

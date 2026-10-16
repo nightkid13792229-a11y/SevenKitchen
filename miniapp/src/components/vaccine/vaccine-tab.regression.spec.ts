@@ -131,7 +131,8 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
   it('卡片第三行用**短话 hint**，不许拿长依据 basis 当小字（会长成一堵墙）', () => {
     const hint = card.slice(card.indexOf('const hint = computed'), card.indexOf('const idleText'))
     expect(hint).toContain('step.hint')
-    expect(hint).toContain('还有：')
+    // 已经没有"自己拼一句话"的退路了：每个真步骤后端都给 hint
+    expect(hint).not.toContain('laterSteps')
     // basis 是"查看详情"里的整段依据（实测 128 字），不进首屏小字
     expect(hint).not.toContain('step.basis')
     // 展开时这一行不显示（短话与长依据说的是同一件事，别叠着看）
@@ -231,6 +232,29 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     products: [],
     ...extra,
   }) as VaccineStep
+
+describe('疫苗 · 「下一针」卡的展开态（老板 2026-10-16 第 2、3 条）', () => {
+  const card = read('NextCard.vue')
+
+  it('🔴 展开后不许出现两个「记录这一针」——收起态那一排要藏起来', () => {
+    expect(card).toContain('v-if="!expanded" class="vk-next__acts"')
+    // 展开后详情里自己有「记录这一针」，收起态那一排再出现就是同一张卡两个一样的键
+    const acts = card.slice(card.indexOf('v-if="!expanded"'), card.indexOf('vk-next__detail'))
+    expect(acts).toContain('记录这一针')
+  })
+
+  it('收起态那排藏起来之后，「上传疫苗本」在展开态仍然够得着', () => {
+    const detail = card.slice(card.indexOf('vk-next__detail'))
+    expect(detail).toContain('@tap="onScan"')
+  })
+
+  it('🔴 展开里不再复述"接下来还有哪几项"—— 正下方就是完整的免疫计划', () => {
+    expect(card).not.toContain('还有：')
+    expect(card).not.toContain('后面还有')
+    expect(card).not.toContain('laterSteps')
+    expect(card).not.toContain('laterText')
+  })
+});
 
 describe('疫苗 · 计划行的排版（老板 2026-10-16："标题长的排版非常混乱"）', () => {
   it('短名进计划行，长名留给卡片；"第 N 针"这种序号不进计划行', () => {

@@ -99,35 +99,6 @@
         </view>
       </view>
 
-      <!--
-        要买多少：整块由**后端算好**（批次 2.2）。
-        算不出来时后端给空清单，这里如实说"暂时算不出"，
-        而不是显示一堆 0 让顾客以为不用买。
-      -->
-      <view class="section">
-        <view class="section-title">要买多少</view>
-        <template v-if="content.shopping.lines.length">
-          <view
-            v-for="(line, index) in content.shopping.lines"
-            :key="index"
-            class="shopping-row"
-          >
-            <text class="shopping-name">{{ line.name }}</text>
-            <view class="shopping-amount">
-              <text class="shopping-buy">{{ line.purchaseG }} 克</text>
-              <text class="shopping-net">净用 {{ line.netG }} 克</text>
-            </view>
-          </view>
-          <view class="shopping-total">
-            <text>合计约 {{ content.shopping.totalPurchaseG }} 克</text>
-            <text class="shopping-loss">
-              （已按 {{ lossPercent }}% 损耗留余量）
-            </text>
-          </view>
-        </template>
-        <text v-else class="section-note">暂时算不出要买多少，请联系客服</text>
-      </view>
-
       <!-- 营养达标情况 -->
       <view v-if="content.nutrition.standard || content.nutrition.energyDensityKcalPerKg" class="section">
         <view class="section-title">营养</view>
@@ -144,19 +115,19 @@
         </text>
       </view>
 
-      <!-- 制作步骤 -->
-      <view v-if="content.steps.length" class="section">
-        <view class="section-title">怎么做</view>
-        <view v-for="(step, index) in content.steps" :key="index" class="step-row">
-          <text class="step-index">{{ index + 1 }}</text>
-          <text class="step-text">{{ step }}</text>
-        </view>
-      </view>
+      <!--
+        去第 2 页「采购与制作」（2026-10-16 批次 2.6）。
 
-      <view v-if="content.storage" class="section">
-        <view class="section-title">怎么存</view>
-        <text class="section-note">{{ content.storage }}</text>
-      </view>
+        为什么拆成两页：这两件事的**使用时机不一样** ——
+        「每天喂多少」是天天要看的，「要买什么、怎么做」是采购和做饭那一次才看。
+        混在一页里，天天要看的那个每次都得划过一大段采购清单。
+      -->
+      <button class="goto-shopping" @tap="goShopping">
+        <text class="goto-title">去买食材 / 看做法</text>
+        <text class="goto-sub">
+          要买什么、买多少、怎么做、怎么存
+        </text>
+      </button>
 
       <view class="footer-note">
         <text>这份内容在交付时已存档，之后调整配方不会改变你现在看到的版本。</text>
@@ -171,7 +142,12 @@ import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { fetchDelivery, type OrderDelivery } from '@/api/custom-recipe';
 
 /**
- * 交付内容页（2026-10-16，批次 2.4）
+ * 交付内容 · 第 1 页「专属食谱」（2026-10-16，批次 2.4；2.6 拆页）
+ *
+ * 这一页只放**天天要看**的东西：每天喂多少、食材配比、补充剂、营养结论。
+ * 采购量与制作步骤挪到第 2 页（`delivery-shopping.vue`）——
+ * 那两件事是采购和做饭那一次才看的。
+
  *
  * ## 页面里**没有任何计算**
  *
@@ -261,6 +237,13 @@ const load = async () => {
 };
 
 const goBack = () => uni.navigateBack();
+
+/** 去第 2 页「采购与制作」。带上 orderId，那一页自己再取一次内容 */
+const goShopping = () => {
+  uni.navigateTo({
+    url: `/pages/custom-recipe/delivery-shopping?orderId=${encodeURIComponent(orderId.value)}`,
+  });
+};
 
 onLoad((options) => {
   orderId.value = options?.orderId ? decodeURIComponent(options.orderId) : '';
@@ -496,6 +479,29 @@ onPullDownRefresh(async () => {
   font-size: 26rpx;
   line-height: 1.6;
   color: #f4ecd8;
+}
+
+.goto-shopping {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8rpx;
+  margin: 24rpx 0;
+  padding: 32rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #c9a227, #a8861d);
+  text-align: left;
+}
+
+.goto-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #16261f;
+}
+
+.goto-sub {
+  font-size: 24rpx;
+  color: rgba(22, 38, 31, 0.75);
 }
 
 .footer-note {

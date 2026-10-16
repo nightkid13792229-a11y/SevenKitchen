@@ -18,6 +18,16 @@ import { resolve } from 'node:path';
  */
 
 const PAGE = 'src/pages/custom-recipe/delivery.vue';
+/**
+ * 第 2 页「采购与制作」（2026-10-16 批次 2.6 拆出来的）。
+ *
+ * 拆页的**理由**：采购量与制作步骤是"采购和做饭那一次"才看的，
+ * 而喂食量是天天要看的。混在一页里，天天要看的那个每次都得划过一大段采购清单。
+ *
+ * ⚠️ 但"不许自己算"这条要求**在两页上都成立**，所以下面有些断言
+ * 要同时看两页 —— 拆页不能把守卫拆没了。
+ */
+const SHOPPING_PAGE = 'src/pages/custom-recipe/delivery-shopping.vue';
 
 function read(relativePath: string): string {
   return readFileSync(
@@ -36,6 +46,7 @@ function stripComments(source: string): string {
 
 describe('交付内容页 · 只渲染不计算', () => {
   const source = stripComments(read(PAGE));
+  const shoppingSource = stripComments(read(SHOPPING_PAGE));
 
   it('★ 页面里没有把业务数值再算一遍', () => {
     /**
@@ -104,21 +115,95 @@ describe('交付内容页 · 只渲染不计算', () => {
     expect(hits('content.shopping.totalPurchaseG')).toBe(false);
   });
 
-  it('★ 喂食量、采购量、营养值都直接来自快照', () => {
+  it('★ 喂食量、采购量、营养值都直接来自快照（两页合起来看）', () => {
     // 直接绑到快照字段上，中间不经过任何加工
     expect(source).toContain('content.feeding.dailyIntakeG');
     expect(source).toContain('content.feeding.perMealG');
-    expect(source).toContain('content.shopping.lines');
-    expect(source).toContain('line.purchaseG');
     expect(source).toContain('content.nutrition.energyDensityKcalPerKg');
+    // 采购与制作那一块搬到了第 2 页
+    expect(shoppingSource).toContain('content.shopping.lines');
+    expect(shoppingSource).toContain('line.purchaseG');
+    expect(shoppingSource).toContain('content.shopping.totalNetG');
   });
 
   it('算不出来时如实说"暂时算不出"，而不是显示一堆 0', () => {
     // 0 会让顾客以为"不用买""不用喂"
-    expect(source).toContain('暂时算不出要买多少');
+    expect(shoppingSource).toContain('暂时算不出要买多少');
     expect(source).toContain('暂时算不出喂食量');
     // 靠"有没有内容"分支，而不是靠数值真假
-    expect(source).toContain('content.shopping.lines.length');
+    expect(shoppingSource).toContain('content.shopping.lines.length');
+  });
+
+  it('★ 第 2 页也同样"只渲染不算"（拆页不能把守卫拆没了）', () => {
+    /**
+     * 采购页比第 1 页更容易违规 —— 这里全是加法：
+     * "合计多少克""这批做几天 × 每天多少克"。
+     * 所以对它的要求与第 1 页一样严。
+     */
+    expect(shoppingSource).toContain('content.shopping.totalPurchaseG');
+
+    /**
+     * ⚠️ **第一版这条守卫写窄了。**
+     *
+     * 我原来只盯"两个字段相减"（`purchaseG - netG`），
+     * 然后故意注入 `lines.reduce((a, l) => a + l.purchaseG, 0)` 验证 ——
+     * **守卫没红**。而对数组求和恰恰是这一页最容易犯的错
+     * （后端已经给了 `totalPurchaseG`，再自己加一遍就是第二套口径）。
+     *
+     * 现在覆盖三种真实形态，同时**放过字符串拼接**
+     * （`item.perKgG + ' g'` 是显示，不是计算）。
+     */
+    const SNAPSHOT_NUMBERS = [
+      'purchaseG',
+      'totalPurchaseG',
+      'totalNetG',
+      'netG',
+      'dailyIntakeG',
+      'perMealG',
+      'cycleDays',
+    ].join('|');
+
+    /**
+     * ① 对明细求和（reduce / map+sum）
+     *
+     * ⚠️ **第二版这里又写窄了一次**：原来用 `reduce\\([^)]*` ，
+     * 而真实写法是 `reduce((a, l) => a + l.purchaseG, 0)` ——
+     * `[^)]*` 在参数列表的 `(a, l` 之后的第一个 `)` 就断了，够不到字段名。
+     * 注入验证时守卫仍然没红，才发现。
+     *
+     * 改成限定长度的通配（`[\s\S]{0,200}?`），能跨过括号。
+     */
+    expect(shoppingSource).not.toMatch(
+      new RegExp(`reduce\\([\\s\\S]{0,200}?\\b(?:${SNAPSHOT_NUMBERS})\\b`),
+    );
+
+    // ② 两个快照字段互相运算
+    expect(shoppingSource).not.toMatch(
+      new RegExp(
+        `\\b(?:${SNAPSHOT_NUMBERS})\\b\\s*[-+*/]\\s*(?:[A-Za-z_$][\\w$]*\\.)?(?:${SNAPSHOT_NUMBERS})\\b`,
+      ),
+    );
+
+    // ③ 用 Number() 把快照字段再包一层（lossRate 除外 —— 那是展示换算）
+    expect(shoppingSource).not.toMatch(
+      new RegExp(
+        `Number\\(\\s*(?:[A-Za-z_$][\\w$]*\\.)?(?:purchaseG|netG|totalNetG|totalPurchaseG|dailyIntakeG|perMealG|cycleDays)\\b`,
+      ),
+    );
+
+    // ④ 字符串拼接要放过：perKgG + ' g' 是显示
+    expect(shoppingSource).toContain("perKgG + ' g'");
+  });
+
+  it('★ 两页之间能互相跳转（拆了页不等于要顾客自己找路）', () => {
+    expect(source).toContain('delivery-shopping');
+    expect(shoppingSource).toContain('pages/custom-recipe/delivery');
+    /**
+     * 回第 1 页用 `redirectTo` 而不是 `navigateTo` ——
+     * 后者会叠成"列表 → 食谱 → 采购 → 食谱"三层，
+     * 顾客连按返回要按好几次才回得到订单。
+     */
+    expect(shoppingSource).toContain('redirectTo');
   });
 
   it('补充剂与食材分开渲染（顾客采购时是两件事）', () => {
@@ -138,3 +223,18 @@ describe('交付内容页 · 只渲染不计算', () => {
     expect(page).toContain('你已经确认过了');
   });
 });
+
+  it('★ 第 2 页在 pages.json 里注册过（漏了会白屏）', () => {
+    const pagesJson = read('src/pages.json');
+    expect(pagesJson).toContain('pages/custom-recipe/delivery-shopping');
+    /**
+     * 而且必须在**主包的 pages 数组**里 —— 我第一次插入时插到了
+     * `subPackages` 里，JSON 依然合法、构建也不报错，但页面根本不存在。
+     */
+    const parsed = JSON.parse(pagesJson) as {
+      pages: Array<{ path: string }>;
+    };
+    expect(parsed.pages.map((p) => p.path)).toContain(
+      'pages/custom-recipe/delivery-shopping',
+    );
+  });

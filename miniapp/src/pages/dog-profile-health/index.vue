@@ -1185,20 +1185,21 @@ function onAddRecordTap() {
     return
   }
 
-  const isRecord = isRecordTab.value
   /*
    * 「选文档（PDF / Word）」（2026-10-08 老板定）：
    * 就诊报告、体检报告、过敏报告常常是文档而不是照片 ——
    * 微信只能从**聊天记录**里选文件，所以入口放在这里，并说明怎么用。
+   *
+   * ⚠️ 2026-10-16：这里**只剩就诊/体检**了。疫苗页在函数开头就短路
+   *    （底部两个明面按钮，不弹面板），而且老板明确"PDF/Word 疫苗本不用恢复"，
+   *    所以那个分支连同它的选项数组一并删掉。
    */
-  const options = isRecord
-    ? ['上传图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动填写']
-    : ['上传疫苗本图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动加一条']
+  const options = ['上传图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动填写']
 
   uni.showActionSheet({
     itemList: options,
     success: ({ tapIndex }) => {
-      if (isRecord) {
+      {
         if (tapIndex === 0) {
           recordsSectionRef.value?.startScan?.()
         } else if (tapIndex === 1) {

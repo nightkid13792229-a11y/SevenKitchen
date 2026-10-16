@@ -8,10 +8,10 @@
       <view class="vk-records__bar" />
       <text class="vk-records__title">接种记录</text>
       <text v-if="entries.length > 0" class="vk-records__meta">{{ entries.length }} 条</text>
-      <!-- 抗体检测：能记，但不主动提示（需求 R14 / 老板 2026-10-15 定）——
-           所以它是一条**轻链接**，不是常驻的大按钮。真正需要它的场景
-           （核心疫苗该不该打）在「下一针」的展开里有明确入口。 -->
-      <text class="vk-records__link" @tap="onAddTest">记抗体检测</text>
+      <!-- 2026-10-16 撤掉了记录区那条抗体检测的常驻入口：
+           它等于每次打开都在招呼家长"要不要测一个"，与"不主动提示"冲突（需求 R9）。
+           现在只从**家长主动打开的**「记一条」里进（卡里有类型切换），
+           以及核心疫苗该不该打那一处（「下一针」展开里的「先做抗体检测」）。 -->
     </view>
 
     <!-- 待核对（需求 R7）：不催、不弹窗，只在记录区顶部一行 -->
@@ -82,7 +82,6 @@ const emit = defineEmits<{
   (event: 'edit-record', record: VaccineRecord): void
   (event: 'edit-test', test: AntibodyTest): void
   (event: 'verify-record', record: VaccineRecord): void
-  (event: 'add-test'): void
   (event: 'preview', urls: string[]): void
 }>()
 
@@ -190,10 +189,6 @@ function onEntryTap(entry: VaccineTimelineEntry) {
   emit('edit-record', entry.record)
 }
 
-function onAddTest() {
-  emit('add-test')
-}
-
 function onPreviewBook() {
   emit('preview', bookUrls.value)
 }
@@ -202,11 +197,6 @@ function onPreviewBook() {
 <style scoped lang="scss">
 @import '../../styles/vaccine-tokens.scss';
 
-.vk-records__link {
-  margin-left: 16rpx;
-  font-size: $vk-font-sub;
-  color: $vk-brand;
-}
 
 .vk-records__notice {
   background: $vk-check-bg;

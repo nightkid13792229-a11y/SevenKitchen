@@ -15,6 +15,22 @@
         <text class="vk-editor__close" @tap="onCancel">关闭</text>
       </view>
 
+      <!-- 记的是哪一种（只在**新建**时给；改已有记录时类型不能变）。
+           抗体检测的入口就放在这里：家长是主动点「记一条」进来的，
+           页面上**不摆**任何招呼他去做抗体检测的入口（需求 R9：能记录、不主动提示）。 -->
+      <view v-if="canSwitchType" class="vk-editor__types">
+        <text
+          class="vk-editor__type"
+          :class="{ 'vk-editor__type--on': isRecordMode }"
+          @tap="onSwitchType('record')"
+        >疫苗记录</text>
+        <text
+          class="vk-editor__type"
+          :class="{ 'vk-editor__type--on': !isRecordMode }"
+          @tap="onSwitchType('antibody')"
+        >抗体检测</text>
+      </view>
+
       <!-- ① 疫苗记录：名称 + 日期 -->
       <template v-if="isRecordMode">
         <view class="vk-editor__block">
@@ -204,6 +220,8 @@ const emit = defineEmits<{
   (event: 'save-test', payload: AntibodyTestPayload, testId: string): void
   (event: 'remove', id: string): void
   (event: 'cancel'): void
+  /** 切换记的是哪一种（疫苗记录 / 抗体检测） */
+  (event: 'switch-mode', mode: 'record' | 'antibody'): void
 }>()
 
 const name = ref('')
@@ -226,6 +244,14 @@ const title = computed(() => {
 const maxDate = computed(() => todayDateText())
 
 const canRemove = computed(() => Boolean(props.record?.id || props.test?.id))
+
+/** 只有"新建"时能切换记的是哪一种（改已有记录时类型是定死的） */
+const canSwitchType = computed(() => !canRemove.value)
+
+function onSwitchType(mode: 'record' | 'antibody') {
+  if (mode === props.mode) return
+  emit('switch-mode', mode)
+}
 const componentChoices = computed(() => componentOptionsOf(props.componentOptions))
 const targetOptions = computed(() => ANTIBODY_TARGET_OPTIONS)
 const resultOptions = computed(() => ANTIBODY_RESULT_OPTIONS)
@@ -430,6 +456,28 @@ function onCancel() {
   margin-left: auto;
   font-size: $vk-font-sub;
   color: $vk-text-faint;
+}
+
+.vk-editor__types {
+  display: flex;
+  gap: 10rpx;
+  margin-bottom: 18rpx;
+}
+
+.vk-editor__type {
+  flex: 1;
+  text-align: center;
+  line-height: 64rpx;
+  border-radius: 18rpx;
+  background: $vk-ghost-bg;
+  color: $vk-text-muted;
+  font-size: $vk-font-body;
+}
+
+.vk-editor__type--on {
+  background: $vk-due-bg;
+  color: $vk-brand;
+  font-weight: 600;
 }
 
 .vk-editor__block {

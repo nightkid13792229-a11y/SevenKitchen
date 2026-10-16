@@ -213,6 +213,33 @@ describe('疫苗 · 忽略弹层（原型 J）', () => {
   })
 });
 
+describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主动提示）', () => {
+  const list = read('RecordList.vue')
+  const editor = read('RecordEditor.vue')
+  const card = read('NextCard.vue')
+
+  it('🔴 记录区**不许**摆"记抗体检测"这种常驻招呼 —— 那等于劝人去做检测', () => {
+    expect(list).not.toContain('记抗体检测')
+    expect(list).not.toContain('add-test')
+  })
+
+  it('入口在「记一条」里面（家长主动打开的），靠一个类型切换进出', () => {
+    expect(editor).toContain('vk-editor__types')
+    expect(editor).toContain('onSwitchType')
+    expect(editor).toContain("emit('switch-mode', mode)")
+  })
+
+  it('只有"新建"时能切类型；改已有记录时不能（类型是定死的）', () => {
+    expect(editor).toContain('const canSwitchType = computed(() => !canRemove.value)')
+    expect(editor).toContain('v-if="canSwitchType"')
+  })
+
+  it('需要它的那一处仍然明说：「下一针」展开里的「先做抗体检测」（核心那一针能省掉）', () => {
+    expect(card).toContain('先做抗体检测')
+    expect(card).toContain('v-if="next.titerable"')
+  })
+});
+
 describe('疫苗 · 录入卡', () => {
   const editor = read('RecordEditor.vue')
 

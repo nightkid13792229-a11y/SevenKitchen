@@ -59,6 +59,7 @@
         @save-record="onSaveRecord"
         @save-test="onSaveTest"
         @remove="onRemoveFromEditor"
+        @switch-mode="onSwitchEditorMode"
         @cancel="closeEditor"
       />
       </view>
@@ -83,7 +84,6 @@
         @edit-record="onEditRecord"
         @edit-test="onEditTest"
         @verify-record="onVerifyRecord"
-        @add-test="onAntibody(null)"
         @preview="previewAttachments"
       />
       </template>
@@ -352,6 +352,24 @@ watch(
     if (count > 0) scrollToAnchor('vk-anchor-scan')
   },
 )
+
+/**
+ * 在录入卡里切换"记疫苗记录 / 记抗体检测"。
+ *
+ * 抗体检测的入口就在这儿 —— 家长是主动点「记一条」进来的，
+ * 页面上不摆招呼他去做抗体检测的入口（需求 R9：能记录、不主动提示）。
+ */
+function onSwitchEditorMode(mode: 'record' | 'antibody') {
+  editorMode.value = mode
+  editorRecord.value = null
+  editorTest.value = null
+  if (mode === 'antibody') {
+    editorPresetName.value = ''
+    editorPresetComponents.value = []
+    return
+  }
+  editorHeading.value = '记一条接种记录'
+}
 
 function closeEditor() {
   editorVisible.value = false

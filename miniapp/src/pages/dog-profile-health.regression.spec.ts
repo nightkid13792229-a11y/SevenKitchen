@@ -562,7 +562,11 @@ describe('dog-profile-health · 新增记录直接路由', () => {
     // 所以文案不能写"拍"。疫苗这条跟着就诊/体检统一成"上传…图片"。
     // （2026-10-08 又加了一行"选 PDF / Word 文档" —— 那是从微信聊天里选文件，
     //   仍然不调相机 ✓）
-    expect(page).toContain("['上传疫苗本图片，AI 识别', '选 PDF / Word 文档（先发到微信里）', '手动加一条']")
+    /*
+     * ⚠️ 2026-10-16：疫苗页不再进这个选择面板（底部两个明面按钮），
+     *    而且老板明确"PDF / Word 疫苗本不用恢复" —— 所以这里只剩就诊/体检那一条。
+     */
+    expect(page).not.toContain('上传疫苗本图片')
     expect(page).not.toContain('拍疫苗本')
     expect(page).not.toContain('拍照')
     /*

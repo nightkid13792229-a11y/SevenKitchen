@@ -15,64 +15,38 @@
  * 需要网络的部分留在各页面里。
  */
 
-/** 订单状态文案：以后台口径为准，后端新增枚举时必须同步补在这里 */
-export const CUSTOM_RECIPE_STATUS_TEXT: Record<string, string> = {
-  PENDING_PAYMENT: '待付款',
-  PAID: '已付款',
-  IN_PROGRESS: '制作中',
-  DELIVERED: '已交付',
-  // 自动关单与顾客自助取消都会产生这个状态。
-  // 此前漏了这一档，列表直接把 "CANCELLED" 显示给顾客。
-  CANCELLED: '已取消',
-};
-
-/** 状态对应的样式档位（class），与上面的文案表一一对应，避免有文案没样式 */
-export const CUSTOM_RECIPE_STATUS_CLASS: Record<string, string> = {
-  PENDING_PAYMENT: 'pending',
-  PAID: 'paid',
-  IN_PROGRESS: 'progress',
-  DELIVERED: 'delivered',
-  CANCELLED: 'cancelled',
-};
-
 /**
- * 未知状态的兜底文案。
+ * ⚠️ **状态与目标的文案不在这里了**（2026-10-16 批次 5.1 搬走）。
  *
- * 刻意**不返回原始枚举值**：后端哪天再新增一个状态，顾客看到的应该是一句含糊但
- * 看得懂的中文，而不是 "REFUND_PENDING" 这种英文常量。
+ * 这里原有三份本地表：`CUSTOM_RECIPE_STATUS_TEXT` / `_CLASS` /
+ * `CUSTOM_RECIPE_GOAL_TEXT`。它们当初解决了"三个页面各抄一份"的问题，
+ * 但**没解决"后端加枚举时前端要跟上"** —— 而这件事 2026-10-16 又发生了一次：
+ * 后端加 `COMPLETED`（已完成）时这三份表都没跟上，
+ * 顾客点完「确认收到」再回订单列表，**看到的是英文 `COMPLETED`**。
+ *
+ * 与 2026-10-04 加「已取消」时漏了两处半是同一个毛病：
+ * **只要中文还有第二份拷贝，就一定会再漏一次。**
+ *
+ * 现在状态与目标的中文只存在于后端的**选项字典**里，
+ * 页面一律用 `utils/option-set.ts` 来取。
+ *
+ * 这个文件只剩"与文案无关的东西"：金额/日期格式化、退款进展文案、
+ * 支付时限推算。那些是**纯格式化**，不含枚举映射。
  */
-const STATUS_FALLBACK_TEXT = '状态待确认';
-
-function normalizeKey(value: unknown): string {
-  return String(value ?? '').trim().toUpperCase();
-}
-
-/** 订单状态 → 中文文案（永不返回英文枚举） */
-export function customRecipeStatusText(status: unknown): string {
-  return CUSTOM_RECIPE_STATUS_TEXT[normalizeKey(status)] || STATUS_FALLBACK_TEXT;
-}
-
-/** 订单状态 → 样式档位；未知状态返回空串（用默认样式） */
-export function customRecipeStatusClass(status: unknown): string {
-  return CUSTOM_RECIPE_STATUS_CLASS[normalizeKey(status)] || '';
-}
-
-/** 定制目标文案（与后台同一份口径） */
-export const CUSTOM_RECIPE_GOAL_TEXT: Record<string, string> = {
-  MAINTAIN: '维持体重',
-  GAIN_WEIGHT: '增重',
-  LOSE_WEIGHT: '减重',
-  HEALTH_SUPPORT: '健康管理',
-};
-
-export function customRecipeGoalText(goal: unknown, fallback = '—'): string {
-  return CUSTOM_RECIPE_GOAL_TEXT[normalizeKey(goal)] || fallback;
-}
 
 /**
- * 金额展示：整数不带小数，非整数保留两位。
- * 取不到值时返回 '0'（与三个页面原来的行为一致，避免出现 "¥" 后面空着）。
+ * 把状态码统一成大写、去掉空格。
+ *
+ * 原来它在被删掉的那一段里（状态文案表旁边），但退款文案也在用 ——
+ * 它是**纯格式化**，与"文案有没有第二份拷贝"无关，所以留下。
+ * （删表时差点把它一起删掉，是架构守卫报出来的。）
  */
+function normalizeKey(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase();
+}
+
 export function formatAmount(value: unknown): string {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return '0';

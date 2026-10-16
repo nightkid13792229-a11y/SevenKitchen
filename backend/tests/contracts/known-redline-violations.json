@@ -36,31 +36,22 @@
   },
   "gd02_status_maps": {
     "title": "前端把小写状态码映射成中文",
-    "why": "同一个状态码在三个端各写一份中文，加一个枚举要改六处 —— 2026-10-04 加「已取消」时漏了两处半，顾客看到英文枚举。批次 1.3 做成选项字典后由后端下发。",
-    "clearAt": "批次 5（批次 1.3 备好字典，批次 5 改前端）",
-    "maxTotal": 15,
-    "files": {
-      "miniapp/src/utils/custom-recipe-order.ts": 10,
-      "admin-web/src/constants/customRecipeOrder.ts": 5
-    },
+    "why": "三个端原来各有一份「状态码 → 中文」的表。2026-10-16 批次 5.1 全部改成从后端「选项字典」取，本地那三份已删除。",
+    "clearAt": "✅ 已于 2026-10-16（批次 5.1）清零",
+    "maxTotal": 0,
+    "files": {},
     "notes": {
-      "miniapp/src/utils/custom-recipe-order.ts": "10 = 5 条状态文案 + 5 条状态样式档位（CUSTOM_RECIPE_STATUS_TEXT / _CLASS）",
-      "admin-web/src/constants/customRecipeOrder.ts": "5 条状态元数据（text + tagType）"
+      "_cleared": "✅ **已清零**。清理位置：\n  · miniapp：`utils/custom-recipe-order.ts` 的三份表已删，页面改用 `utils/option-set.ts`\n  · admin-web：`constants/customRecipeOrder.ts` 的那份已删，页面改用 `composables/useOptionSet.ts`\n顾客可见的界面在字典查不到时兜成「状态待确认」；后台如实显示原始码（自己人看到原始码才知道后端加了新枚举）。"
     }
   },
   "gd02_goal_maps": {
     "title": "前端把小写定制目标映射成中文",
-    "why": "定制目标（减重/维持/增重/健康管理）在四处各写一份中文。批次 1.3 之后由选项字典下发。",
-    "clearAt": "批次 5",
-    "maxTotal": 16,
-    "files": {
-      "miniapp/src/utils/custom-recipe-order.ts": 4,
-      "admin-web/src/views/CustomRecipes/OrderDetail.vue": 4,
-      "admin-web/src/views/CustomRecipes/OrderList.vue": 4,
-      "admin-web/src/views/RecipeDesigner/components/DogInsightPanel.vue": 4
-    },
+    "why": "后台曾有三份写死的目标中文 map（订单列表 / 订单详情 / 设计器侧栏）共 12 处，小程序一份。\"三个地方保持一致\"靠的是注释里的约定而不是机制。2026-10-16 批次 5.1 全部改成从选项字典取。",
+    "clearAt": "✅ 已于 2026-10-16（批次 5.1）清零",
+    "maxTotal": 0,
+    "files": {},
     "notes": {
-      "admin-web/src/views/RecipeDesigner/components/DogInsightPanel.vue": "设计器右侧的「爱犬洞察」面板会展示该狗的定制单需求，因此也带着一份目标文案"
+      "_cleared": "✅ **已清零**。清理位置：`OrderList.vue` / `OrderDetail.vue` / `DogInsightPanel.vue` / `miniapp/utils/custom-recipe-order.ts` 全部改成 `useOptionSet(CUSTOM_RECIPE_GOAL_SET)`。"
     }
   },
   "gd03_business_arithmetic": {

@@ -109,10 +109,14 @@ import { request } from '@/utils/api';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
-  customRecipeStatusText,
   formatAmount,
   formatDate,
 } from '@/utils/custom-recipe-order';
+import {
+  CUSTOM_RECIPE_STATUS_SET,
+  useOptionSet,
+} from '@/utils/option-set';
+
 import CustomerServiceInlineButton from '@/components/CustomerServiceInlineButton.vue';
 
 interface CustomRecipeOrderDetail {
@@ -136,6 +140,15 @@ const orderId = ref('');
 const loading = ref(true);
 const orderInfo = ref<CustomRecipeOrderDetail>({});
 
+/**
+ * 状态文案来自选项字典（2026-10-16 批次 5.1）。
+ * 本地那份表在后端加「已完成」时没跟上，顾客会看到英文 `COMPLETED`。
+ */
+const {
+  ensure: ensureStatusOptions,
+  labelOf: statusLabel,
+} = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
+
 // 提交页带过来的金额，作为详情接口返回前的兜底展示
 const initialAmount = ref<number | null>(null);
 const initialCreditAmount = ref<number | null>(null);
@@ -149,6 +162,8 @@ const initialCreditAmount = ref<number | null>(null);
 const paymentTimeoutMinutes = ref(0);
 
 onLoad((options: any) => {
+  // 状态中文来自选项字典（与订单详情并行加载，不阻塞）
+  ensureStatusOptions();
   orderId.value = options.orderId || '';
   if (options.amount !== undefined && options.amount !== '') {
     const parsed = Number(options.amount);
@@ -223,7 +238,10 @@ const deliveryDateText = computed(() =>
 
 /** 状态文案走公共模块：这里原来单独抄了一份，后端加 CANCELLED 时就没跟上 */
 const statusText = computed(() =>
-  orderInfo.value.status ? customRecipeStatusText(orderInfo.value.status) : '',
+  // 查不到就兜成中文，绝不把英文枚举漏给顾客
+  orderInfo.value.status
+    ? statusLabel(orderInfo.value.status) || '状态待确认'
+    : '',
 );
 
 /** 支付时限：有截止时间用截止时间，没有就用配置估算，都没有则不显示 */

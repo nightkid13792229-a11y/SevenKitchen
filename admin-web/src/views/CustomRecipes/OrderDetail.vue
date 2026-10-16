@@ -631,6 +631,7 @@ import {
   isCustomRecipeRefundSucceeded,
 } from '@/constants/customRecipeOrder';
 import {
+  CUSTOM_RECIPE_GOAL_SET,
   CUSTOM_RECIPE_STATUS_SET,
   useOptionSet,
 } from '@/composables/useOptionSet';
@@ -938,8 +939,9 @@ const recipeFormRules: FormRules = {
 
 // 生命周期
 onMounted(() => {
-  // 状态中文来自选项字典（与订单详情并行加载，不阻塞）
+  // 状态与目标的中文都来自选项字典（与订单详情并行加载，不阻塞）
   ensureStatusOptions();
+  ensureGoalOptions();
   loadOrderDetail();
   loadIngredientOptions();
 });
@@ -1265,14 +1267,18 @@ const getActivityLevelText = (level?: string) => {
   return level ? map[level] || level : '-';
 };
 
+/**
+ * 定制目标的中文来自**选项字典**（2026-10-16 批次 5.1）。
+ * 后台这边查不到时**如实显示原始码** —— 自己人看到原始码才知道"后端加了新目标"，
+ * 与顾客端要兜成中文不一样。
+ */
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
+  CUSTOM_RECIPE_GOAL_SET,
+);
+
 const getGoalText = (goal?: string) => {
-  const map: Record<string, string> = {
-    MAINTAIN: '维持体重',
-    GAIN_WEIGHT: '增重',
-    LOSE_WEIGHT: '减重',
-    HEALTH_SUPPORT: '健康管理',
-  };
-  return goal ? map[goal] || goal : '-';
+  if (!goal) return '-';
+  return goalLabel(goal) || goal;
 };
 </script>
 

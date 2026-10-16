@@ -329,6 +329,10 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
+import {
+  CUSTOM_RECIPE_GOAL_SET,
+  useOptionSet,
+} from '@/composables/useOptionSet'
 import { dogApi } from '@/api/dogs'
 import {
   ActivityLevelLabels,
@@ -366,16 +370,21 @@ const emit = defineEmits<{
 const loading = ref(false)
 const insight = ref<DogDesignInsight | null>(null)
 
-/** 顾客体重目标的中文文案（与顾客端、后台订单页保持一致） */
-const GOAL_LABELS: Record<string, string> = {
-  LOSE_WEIGHT: '减重',
-  MAINTAIN: '维持',
-  GAIN_WEIGHT: '增重',
-  HEALTH_SUPPORT: '健康管理',
-}
+/**
+ * 顾客体重目标的中文文案来自**选项字典**（2026-10-16 批次 5.1）。
+ *
+ * 此前这里是三份写死 map 中的一份（另两份在订单列表与订单详情），
+ * 共 12 处 —— "与顾客端、后台订单页保持一致" 靠的是**注释里的约定**，
+ * 而不是机制。后端加一个目标时，改一处漏两处是必然的。
+ */
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
+  CUSTOM_RECIPE_GOAL_SET,
+)
 
 function goalText(goal: string) {
-  return GOAL_LABELS[goal] || goal
+  if (!goal) return ''
+  // 后台查不到时如实显示原始码（看到原始码才知道后端加了新目标）
+  return goalLabel(goal) || goal
 }
 const editingNotes = ref(false)
 const savingNotes = ref(false)
@@ -688,6 +697,9 @@ async function saveNotes() {
     savingNotes.value = false
   }
 }
+
+// 目标中文来自选项字典（不阻塞面板加载）
+ensureGoalOptions()
 
 watch(
   () => props.dogId,

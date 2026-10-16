@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPaymentTimeoutHint,
-  customRecipeGoalText,
-  customRecipeStatusClass,
-  customRecipeStatusText,
   describeCustomRecipeRefund,
   estimateDeliveryDate,
   formatAmount,
@@ -16,61 +13,28 @@ import {
 /**
  * 定制订单展示口径的单元测试。
  *
- * 这些函数被提交成功页 / 订单列表 / 订单详情三处共用，任何一处口径漂移都会
- * 直接变成顾客看到的错话，所以在这里逐条钉死。
+ * ## ⚠️ 状态与目标的文案测试搬走了，不是删了
+ *
+ * 这里原有三组用例（状态文案 / 目标文案 / 样式档位），钉的是
+ * 「五个状态都有中文，含此前漏掉的已取消」这类意图。
+ *
+ * **那些意图完全有效，而且比原来更要紧了** —— 只是它们现在属于：
+ *
+ *   ① **后端**：`backend/tests/application/platform-options/platform-options.service.spec.ts`
+ *      断言所有枚举值都被补进选项字典、缺标签会 warn。服务启动时自动同步，
+ *      所以"后端加枚举、前端没跟上"这件事在机制上被堵住了。
+ *   ② **`utils/option-set.ts`**：前端只保证"去后端取"，
+ *      以及"查不到时兜成中文，绝不把英文枚举漏给顾客"。
+ *
+ * 为什么搬走而不是在前端再守一遍：本地那三份表**恰恰是漏掉 `COMPLETED`
+ * 的那三份** —— 顾客点完「确认收到」再回列表，看到的是英文 `COMPLETED`。
+ * 在前端再守一遍等于把同一个毛病留着。
+ *
+ * 这个文件剩下的是**纯格式化**（金额 / 日期 / 退款进展 / 支付时限），
+ * 它们不含枚举映射，留在前端是对的。
  */
 
-describe('custom recipe order status text', () => {
-  it('五个状态都有中文，含此前漏掉的已取消', () => {
-    expect(customRecipeStatusText('PENDING_PAYMENT')).toBe('待付款');
-    expect(customRecipeStatusText('PAID')).toBe('已付款');
-    expect(customRecipeStatusText('IN_PROGRESS')).toBe('制作中');
-    expect(customRecipeStatusText('DELIVERED')).toBe('已交付');
-    expect(customRecipeStatusText('CANCELLED')).toBe('已取消');
-  });
 
-  it('PAID 与后台口径一致，不再替后端承诺"等待制作"', () => {
-    expect(customRecipeStatusText('PAID')).toBe('已付款');
-    expect(customRecipeStatusText('PAID')).not.toContain('等待制作');
-  });
-
-  it('未知状态兜底成中文，绝不漏英文枚举名', () => {
-    expect(customRecipeStatusText('SOME_NEW_STATUS')).toBe('状态待确认');
-    expect(customRecipeStatusText(undefined)).toBe('状态待确认');
-    expect(customRecipeStatusText(null)).toBe('状态待确认');
-  });
-
-  it('大小写与空白不影响匹配', () => {
-    expect(customRecipeStatusText(' cancelled ')).toBe('已取消');
-  });
-
-  it('每个有文案的状态都有对应样式档位', () => {
-    for (const status of [
-      'PENDING_PAYMENT',
-      'PAID',
-      'IN_PROGRESS',
-      'DELIVERED',
-      'CANCELLED',
-    ]) {
-      expect(customRecipeStatusClass(status)).not.toBe('');
-    }
-    expect(customRecipeStatusClass('CANCELLED')).toBe('cancelled');
-  });
-});
-
-describe('custom recipe goal text', () => {
-  it('目标枚举都有中文', () => {
-    expect(customRecipeGoalText('LOSE_WEIGHT')).toBe('减重');
-    expect(customRecipeGoalText('MAINTAIN')).toBe('维持体重');
-    expect(customRecipeGoalText('GAIN_WEIGHT')).toBe('增重');
-    expect(customRecipeGoalText('HEALTH_SUPPORT')).toBe('健康管理');
-  });
-
-  it('未知目标走兜底（详情页是「—」，列表页用调用方给的值）', () => {
-    expect(customRecipeGoalText('WHATEVER')).toBe('—');
-    expect(customRecipeGoalText('WHATEVER', '')).toBe('');
-  });
-});
 
 describe('custom recipe formatting', () => {
   it('金额整数不带小数、非整数保留两位', () => {

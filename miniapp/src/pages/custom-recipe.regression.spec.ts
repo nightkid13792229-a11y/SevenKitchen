@@ -52,6 +52,18 @@ describe('custom recipe customer flow', () => {
     const orders = read(`${PAGE_DIR}/orders.vue`)
     const detail = read(`${PAGE_DIR}/order-detail.vue`)
     const success = read(`${PAGE_DIR}/success.vue`)
+    /**
+     * 剥掉注释再断言 —— **断言的是代码，不是注释**。
+     *
+     * 本项目在"注释骗过断言"上被坑过 4 次；这次是我在
+     * `custom-recipe-order.ts` 的说明注释里提到了 `CUSTOM_RECIPE_STATUS_TEXT`
+     * （解释"这个名字搬走了"），被守卫当成了"那张表还在"。
+     */
+    const stripComments = (source: string) =>
+      source
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1')
 
     for (const source of [submit, orders, detail, success]) {
       expect(source).toContain("from '@/utils/api'")
@@ -968,34 +980,60 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
   const orders = read(`${PAGE_DIR}/orders.vue`)
   const detail = read(`${PAGE_DIR}/order-detail.vue`)
 
-  it('状态/目标/日期金额文案只有一份，三个页面共用', () => {
+  it('★ 状态与目标的中文来自**选项字典**，三个页面共用后端那一份', () => {
+    /**
+     * 2026-10-16（批次 5.1）把口径又推了一步：
+     *
+     * 原先三个页面共用的是 `utils/custom-recipe-order.ts` 里那三份**本地**表 ——
+     * 它们解决了"页面各抄一份"，但**没解决后端加枚举时前端要跟上**。
+     * 而这件事真的又发生了一次：后端加 `COMPLETED` 时那三份表都没跟上，
+     * 顾客点完「确认收到」再回列表，**看到的是英文 `COMPLETED`**。
+     *
+     * 现在中文只存在于后端的选项字典里。
+     * 这条守卫因此比原来更强：**不只是"只有一份"，而是"那一份在后端"**。
+     */
     for (const file of ['success.vue', 'orders.vue', 'order-detail.vue']) {
       const source = read(`${PAGE_DIR}/${file}`)
-      expect(source).toContain("from '@/utils/custom-recipe-order'")
-      // 不许再各抄一份状态表（漏掉 CANCELLED 的根因）
+      expect(source).toContain("from '@/utils/option-set'")
+      expect(source).toContain('useOptionSet')
+      // 不许再各抄一份状态表（漏掉 CANCELLED / COMPLETED 的根因）
       expect(source).not.toContain("PENDING_PAYMENT: '待付款'")
       expect(source).not.toContain('const GOAL_TEXT')
     }
-    expect(shared).toContain('export const CUSTOM_RECIPE_STATUS_TEXT')
-    expect(shared).toContain('export const CUSTOM_RECIPE_GOAL_TEXT')
+    // 本地那三份表本身也不该还在
+    const sharedCode = stripComments(shared)
+    expect(sharedCode).not.toContain('CUSTOM_RECIPE_STATUS_TEXT')
+    expect(sharedCode).not.toContain('CUSTOM_RECIPE_GOAL_TEXT')
   })
 
-  it('「已取消」在列表与详情都有文案，且与后台口径一致', () => {
-    expect(shared).toContain("CANCELLED: '已取消'")
-    expect(orders).toContain('customRecipeStatusText')
-    expect(detail).toContain('customRecipeStatusText')
-    // PAID 以后台口径为准：「已付款」，不再替后端承诺"等待制作"
-    expect(shared).toContain("PAID: '已付款'")
-    expect(shared).not.toContain('等待制作')
+  it('★ 顾客可见的状态文案查不到时兜成中文（绝不漏英文枚举）', () => {
+    /**
+     * 后端字典六档齐全（含「已完成」），正常查得到。
+     * 这条守的是**兜底**：字典没取到（网络问题）或后端加了新枚举时，
+     * 顾客看到的必须是中文，不能是 `COMPLETED` 这种。
+     */
+    for (const file of ['orders.vue', 'success.vue', 'order-detail.vue']) {
+      expect(read(`${PAGE_DIR}/${file}`)).toContain("|| '状态待确认'")
+    }
   })
 
-  it('未知状态兜底成中文，绝不漏英文枚举给顾客', () => {
-    expect(shared).toContain('状态待确认')
-    expect(orders).not.toMatch(/textMap\[status\] \|\| status/)
+  it('★ 查不到时返回空串而不是原始码（兜底的决定权留给页面）', () => {
+    /**
+     * `labelOf` 刻意不返回原始码 —— 因为"查不到"有两种场景：
+     * 顾客可见的界面要兜成中文，后台/日志显示原始码反而有助于排查。
+     * 如果它自己回了原始码，第一种场景就没救了。
+     */
+    const optionSet = read('src/utils/option-set.ts')
+    expect(optionSet).toContain("|| ''")
+    expect(optionSet).not.toMatch(/\|\|\s*key\b/)
   })
 
-  it('列表的「已取消」有对应样式档位', () => {
-    expect(shared).toContain("CANCELLED: 'cancelled'")
+  it('★ 色调档位 → 样式类的映射只有一处（纯呈现，不含业务）', () => {
+    // 后端的 tone 是语义档位，前端只做档位→类名映射
+    const optionSet = read('src/utils/option-set.ts')
+    expect(optionSet).toContain('toneToStatusClass')
+    expect(orders).toContain('toneToStatusClass')
+    // 样式类仍然定义在页面里
     expect(orders).toContain('.status-badge.cancelled')
   })
 

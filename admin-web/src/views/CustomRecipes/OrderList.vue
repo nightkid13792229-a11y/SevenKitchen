@@ -264,6 +264,7 @@ import type {
 } from '@/api/customRecipe';
 import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole';
 import {
+  CUSTOM_RECIPE_GOAL_SET,
   CUSTOM_RECIPE_STATUS_SET,
   useOptionSet,
 } from '@/composables/useOptionSet';
@@ -330,8 +331,9 @@ const currentOrderId = ref('');
 
 // 生命周期
 onMounted(() => {
-  // 状态中文来自选项字典：与订单列表并行加载，不阻塞列表
+  // 状态与目标的中文都来自选项字典：与订单列表并行加载，不阻塞列表
   ensureStatusOptions();
+  ensureGoalOptions();
   loadOrders();
   loadStatistics();
 });
@@ -443,14 +445,20 @@ const formatDateTime = (date: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+/**
+ * 定制目标的中文来自**选项字典**（2026-10-16 批次 5.1）。
+ *
+ * 此前是这里写死的一份 map，详情页与设计器侧栏各还有一份 ——
+ * 三份共 12 处。后端加目标时改一处漏两处是必然的。
+ */
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
+  CUSTOM_RECIPE_GOAL_SET,
+);
+
 const getGoalText = (goal: string) => {
-  const map: Record<string, string> = {
-    MAINTAIN: '维持体重',
-    GAIN_WEIGHT: '增重',
-    LOSE_WEIGHT: '减重',
-    HEALTH_SUPPORT: '健康管理',
-  };
-  return map[goal] || goal;
+  if (!goal) return '';
+  // 查不到时如实显示原始码 —— 后台是给自己人看的，看到原始码才知道"后端加了新目标"
+  return goalLabel(goal) || goal;
 };
 </script>
 

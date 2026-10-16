@@ -116,12 +116,16 @@ import {
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
-  customRecipeGoalText,
-  customRecipeStatusClass,
-  customRecipeStatusText,
   describeCustomRecipeRefund,
   formatDate,
 } from '@/utils/custom-recipe-order';
+import {
+  CUSTOM_RECIPE_GOAL_SET,
+  CUSTOM_RECIPE_STATUS_SET,
+  toneToStatusClass,
+  useOptionSet,
+} from '@/utils/option-set';
+
 
 interface CustomRecipeOrderItem {
   orderId: string;
@@ -160,6 +164,9 @@ const needLogin = ref(false);
 const paymentTimeoutMinutes = ref(0);
 
 onLoad(() => {
+  // 状态与目标的中文都来自选项字典（批次 5.1）
+  ensureStatusOptions();
+  ensureGoalOptions();
   void loadOrders();
   void loadPaymentTimeoutConfig();
 });
@@ -337,11 +344,40 @@ const createOrder = () => {
  * 这些函数原先在本页、success.vue、order-detail.vue 各有一份拷贝，
  * 后端新增 CANCELLED 时三份里漏了两份 —— 列表把英文枚举名直接显示给顾客。
  */
-const getStatusClass = (status?: string | null) => customRecipeStatusClass(status);
+/**
+ * 状态与目标的文案**来自选项字典**（2026-10-16 批次 5.1）。
+ *
+ * 此前是本地那份 `CUSTOM_RECIPE_STATUS_TEXT` / `_CLASS` / `GOAL_TEXT` ——
+ * 后端加「已完成」时它没跟上，顾客点完「确认收到」再回列表，
+ * 看到的是英文 `COMPLETED`。
+ *
+ * ⚠️ 解构出来用：模板里只有顶层 ref 会自动解包，
+ * 而项目守卫明令模板里不许写 `.value`。
+ */
+const {
+  ensure: ensureStatusOptions,
+  labelOf: statusLabel,
+  toneOf: statusTone,
+} = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
+const {
+  ensure: ensureGoalOptions,
+  labelOf: goalLabel,
+} = useOptionSet(CUSTOM_RECIPE_GOAL_SET);
 
-const getStatusText = (status?: string | null) => customRecipeStatusText(status);
+const getStatusClass = (status?: string | null) =>
+  toneToStatusClass(statusTone(status));
 
-const getGoalText = (goal?: string | null) => customRecipeGoalText(goal, '');
+/**
+ * 顾客可见的状态文案。
+ *
+ * 字典里查不到时兜成「状态待确认」，**绝不把英文枚举漏给顾客** ——
+ * 这是 2026-10-04 老板亲自报过的问题（列表里出现 `CANCELLED`）。
+ */
+const getStatusText = (status?: string | null) =>
+  statusLabel(status) || '状态待确认';
+
+// 目标取不到时给空串（列表里不显示），与原来的 fallback 一致
+const getGoalText = (goal?: string | null) => goalLabel(goal);
 
 /** 退款进度文案；没有退款状态时返回空串（不显示这一行） */
 const refundTextOf = (order: CustomRecipeOrderItem): string =>

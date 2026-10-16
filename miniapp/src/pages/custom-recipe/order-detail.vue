@@ -270,12 +270,16 @@ import {
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
-  customRecipeGoalText,
-  customRecipeStatusText,
   describeCustomRecipeRefund,
   formatAmount,
   formatDate,
 } from '@/utils/custom-recipe-order';
+import {
+  CUSTOM_RECIPE_GOAL_SET,
+  CUSTOM_RECIPE_STATUS_SET,
+  useOptionSet,
+} from '@/utils/option-set';
+
 
 interface CustomRecipeOrderDetail {
   orderId?: string;
@@ -316,6 +320,9 @@ const needLogin = ref(false);
 const paymentTimeoutMinutes = ref(0);
 
 onLoad((options: any) => {
+  // 目标中文来自选项字典（状态那份早就在 onMounted 里加载了）
+  ensureGoalOptions();
+  ensureStatusOptions();
   orderId.value = options.orderId || '';
   void loadOrderDetail();
   void loadPaymentTimeoutConfig();
@@ -439,7 +446,7 @@ const goToLogin = () => {
 const statusText = computed(
   () =>
     order.value.renderable?.status?.label ||
-    customRecipeStatusText(order.value.status),
+    statusLabel(order.value.status) || '状态待确认',
 );
 
 /** 后端下发的"给顾客的一句话"；老后端没有就不显示 */
@@ -577,9 +584,29 @@ const cancelAction = computed(() => {
   };
 });
 
-const goalText = computed(() =>
-  customRecipeGoalText(order.value.targetGoal, '—'),
+/**
+ * 目标文案来自选项字典（批次 5.1）—— 与状态同一套理由：
+ * 本地那份表在后端加枚举时跟不上。
+ * 取不到时给「—」，与原来的 fallback 一致。
+ */
+const { ensure: ensureGoalOptions, labelOf: goalLabel } = useOptionSet(
+  CUSTOM_RECIPE_GOAL_SET,
 );
+
+/**
+ * 状态中文：**优先用后端渲染契约里的**（`renderable.status.label`），
+ * 没有（老后端）才退回选项字典；字典也查不到就兜成中文 ——
+ * **绝不把英文枚举漏给顾客**。
+ */
+const {
+  ensure: ensureStatusOptions,
+  labelOf: statusLabel,
+} = useOptionSet(CUSTOM_RECIPE_STATUS_SET);
+const goalText = computed(() => {
+  const goal = order.value.targetGoal;
+  if (!goal) return '—';
+  return goalLabel(goal) || '—';
+});
 
 /** 退款进度：识别不出来就整块不显示（退款不能靠猜） */
 const refund = computed(() => describeCustomRecipeRefund(order.value));

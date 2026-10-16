@@ -157,7 +157,18 @@ function expectNoNewViolations(
   const currentFiles = Object.keys(current).sort();
   const baseFiles = Object.keys(base.files).sort();
 
-  expect(base.maxTotal).toBeGreaterThan(0);
+  /**
+   * 基线可以为 0 —— 那表示**这一组已经清干净了**（2026-10-16 批次 5.1
+   * 的"状态码→中文"与"定制目标→中文"两组就是这样）。
+   *
+   * 但这不等于可以随便清零来绕过：
+   *   · 若 `maxTotal = 0` 而 `total > 0`，下面 `total <= maxTotal` 会红；
+   *   · 所以"清零"只有在**真的没有违规**时才成立。
+   * 原来的 `toBeGreaterThan(0)` 是想防"清零绕过"，但它同时
+   * **让守卫无法表达"已经清完了"** —— 于是清完之后基线还得留着假数字，
+   * 反而说不清现状。
+   */
+  expect(base.maxTotal).toBeGreaterThanOrEqual(0);
   expect(total).toBeLessThanOrEqual(base.maxTotal);
 
   const newFiles = currentFiles.filter((file) => !baseFiles.includes(file));
@@ -333,8 +344,17 @@ describe('食谱定制 · 四条红线守卫', () => {
         const entry = baseline[key];
         expect(entry?.why).toBeTruthy();
         expect(entry?.clearAt).toBeTruthy();
-        expect(entry?.maxTotal).toBeGreaterThan(0);
-        expect(Object.keys(entry?.files ?? {}).length).toBeGreaterThan(0);
+        expect(entry?.maxTotal).toBeGreaterThanOrEqual(0);
+        /**
+         * `files` 为空**只允许在 `maxTotal` 也为 0 时**出现 ——
+         * 即"这一组已经清干净"。有违规却把 files 清空是说不通的。
+         */
+        const fileCount = Object.keys(entry?.files ?? {}).length;
+        if (fileCount === 0) {
+          expect(entry?.maxTotal).toBe(0);
+        } else {
+          expect(fileCount).toBeGreaterThan(0);
+        }
       }
     });
   });

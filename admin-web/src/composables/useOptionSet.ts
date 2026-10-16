@@ -108,6 +108,15 @@ export function useOptionSet(setCode: string) {
 /** 定制订单状态（与后端枚举同名） */
 export const CUSTOM_RECIPE_STATUS_SET = 'custom_recipe_status'
 
+/**
+ * 定制目标（减重 / 维持 / 增重 / 健康管理）。
+ *
+ * 后台此前有三份写死的中文 map（订单列表 / 订单详情 / 设计器侧栏），
+ * 共 12 处 —— "三个地方保持一致"靠的是注释里的约定，而不是机制。
+ * 后端加一个目标时，改一处漏两处是必然的。
+ */
+export const CUSTOM_RECIPE_GOAL_SET = 'custom_recipe_goal'
+
 /** 只有一个用途：让测试能清掉缓存 */
 export function __clearOptionSetCache() {
   cache.clear()

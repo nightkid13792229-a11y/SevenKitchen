@@ -113,12 +113,40 @@ describe('定制订单 · 取消退款与通知守卫', () => {
     const detailPage = miniapp('src/pages/custom-recipe/order-detail.vue');
     const indexPage = miniapp('src/pages/custom-recipe/index.vue');
 
-    // 取消入口
-    expect(detailPage).toContain('canSelfCancel');
-    expect(detailPage).toContain('取消并退款');
-    expect(detailPage).toContain('/cancel');
-    // 只有待付款/已付款能取消
-    expect(detailPage).toContain("status === 'PENDING_PAYMENT' || status === 'PAID'");
+    /**
+     * 取消入口。
+     *
+     * 2026-10-16（批次 2.3 / 2.8）有两处变化，守卫跟着挪但**意图不变**：
+     *
+     * ① 取消接口地址从页面挪到了 API 层（`src/api/custom-recipe.ts`）；
+     * ② 「取消并退款」这个措辞从**页面**挪到了**后端动作解析器** ——
+     *    措辞本身是业务口径，且"会不会退款"后端最清楚。
+     *    所以现在断言：后端下发这个文案 + 页面照它渲染。
+     */
+    const apiLayer = miniapp('src/api/custom-recipe.ts');
+    expect(apiLayer).toContain('/cancel');
+
+    expect(detailPage).toContain('cancelAction');
+    expect(detailPage).toContain('cancelOrderRequest');
+
+    // 后端动作解析器必须给出「取消并退款」这个文案
+    const resolver = backend(
+      'src/application/custom-recipe/custom-recipe-action-resolver.ts',
+    );
+    expect(resolver).toContain('取消并退款');
+    // 且区分待付款 / 已付款两种措辞
+    expect(resolver).toContain("unpaid ? '取消订单' : '取消并退款'");
+
+    /**
+     * 只有待付款/已付款能取消 —— 这条现在由**后端**判定
+     * （`SELF_CANCELLABLE`），页面不再自己写状态判断。
+     */
+    const stateResolver = backend(
+      'src/application/custom-recipe/custom-recipe-action-resolver.ts',
+    );
+    expect(stateResolver).toContain('SELF_CANCELLABLE');
+    expect(stateResolver).toContain('CustomRecipeStatus.PAID');
+    expect(stateResolver).toContain('CustomRecipeStatus.PENDING_PAYMENT');
 
     /**
      * 订阅授权要在**两个时刻**各申请一次：

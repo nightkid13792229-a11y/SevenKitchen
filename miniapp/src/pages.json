@@ -258,6 +258,12 @@
       }
     },
     {
+      "path": "pages/custom-recipe/aftersale",
+      "style": {
+        "navigationBarTitleText": "售后与问题反馈"
+      }
+    },
+    {
       "path": "pages/custom-recipe/delivery",
       "style": {
         "navigationBarTitleText": "我的专属食谱",

@@ -365,6 +365,110 @@ export async function confirmReceipt(orderId: string): Promise<{
   };
 }
 
+/** 售后单（后端算好的可渲染形态） */
+export interface AftersaleItem {
+  id: string;
+  type: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  description: string;
+  photos: string[];
+  createdAt: string;
+  resolvedAt?: string | null;
+  handleNote?: string | null;
+  rejectReason?: string | null;
+  /** 能不能撤回 —— 后端算好，前端不判断 */
+  canCancel: boolean;
+  progress: {
+    current: string;
+    timeline: Array<{
+      code: string;
+      label: string;
+      done: boolean;
+      active?: boolean;
+      at?: string | null;
+      note?: string | null;
+    }>;
+  };
+}
+
+/** 售后类型选项（来自选项字典） */
+export interface AftersaleTypeOption {
+  code: string;
+  label: string;
+  description?: string | null;
+  icon?: string | null;
+}
+
+/** 取这张单的售后记录 */
+export async function fetchAftersales(orderId: string): Promise<AftersaleItem[]> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/aftersale`,
+    method: 'GET',
+  });
+  if (res?.code === 0 && res.data) {
+    return Array.isArray(res.data.items) ? res.data.items : [];
+  }
+  return [];
+}
+
+/**
+ * 取售后类型选项。
+ *
+ * 类型**不写死在前端** —— 老板想加一类"要发票"或改个说法，
+ * 后台改一次就行（这是选项字典的用处）。
+ */
+export async function fetchAftersaleTypes(): Promise<AftersaleTypeOption[]> {
+  const res: any = await request({
+    url: '/options?sets=custom_recipe_aftersale_type',
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+  const items = res?.data?.sets?.custom_recipe_aftersale_type;
+  return Array.isArray(items) ? items : [];
+}
+
+/**
+ * 提交售后。
+ *
+ * ⚠️ **不吞错误**：超窗口、重复提、说明为空都要把后端的原因如实带回来 ——
+ * 这些原因本身就是给顾客看的（"已超过售后受理期（交付后 30 天内）"）。
+ */
+export async function submitAftersale(input: {
+  orderId: string;
+  type: string;
+  description: string;
+  photos?: string[];
+}): Promise<{ ok: boolean; message?: string; typeLabel?: string }> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(input.orderId)}/aftersale`,
+    method: 'POST',
+    data: {
+      type: input.type,
+      description: input.description,
+      photos: input.photos ?? [],
+    },
+  });
+  if (res?.code === 0) {
+    return { ok: true, typeLabel: res.data?.typeLabel };
+  }
+  return { ok: false, message: res?.message };
+}
+
+/** 撤回售后（只在还没人受理时允许） */
+export async function cancelAftersale(
+  aftersaleId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const res: any = await request({
+    url: `/custom-recipe/aftersale/${encodeURIComponent(aftersaleId)}/cancel`,
+    method: 'POST',
+  });
+  if (res?.code === 0) return { ok: true };
+  return { ok: false, message: res?.message };
+}
+
 /**
  * 从动作清单里取某一个动作。
  *

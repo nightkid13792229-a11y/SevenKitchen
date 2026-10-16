@@ -188,6 +188,32 @@
         <button class="recipe-btn ghost" @tap="viewDelivery">查看完整内容</button>
       </view>
 
+      <!--
+        「有问题」入口（批次 2.5）。
+        按钮文案与"能不能点"由后端下发；不能点时把原因说出来。
+      -->
+      <view class="section" v-if="aftersaleAction || aftersaleCount > 0">
+        <view class="section-title">售后与问题反馈</view>
+        <text class="section-note">
+          {{ aftersaleCount > 0
+            ? `你有 ${aftersaleCount} 条反馈，处理进展在里面`
+            : '食材买不到、吃了不适应、想改一版 —— 都可以在这里说' }}
+        </text>
+        <button
+          class="recipe-btn"
+          :disabled="aftersaleAction ? !aftersaleAction.enabled : false"
+          @tap="viewAftersale"
+        >
+          {{ aftersaleCount > 0 ? '查看处理进展' : (aftersaleAction?.label || '有问题') }}
+        </button>
+        <text
+          v-if="aftersaleAction && !aftersaleAction.enabled && aftersaleAction.disabledReason"
+          class="action-disabled-reason"
+        >
+          {{ aftersaleAction.disabledReason }}
+        </text>
+      </view>
+
       <view class="action-bar">
         <button
           v-if="order.status === 'PENDING_PAYMENT'"
@@ -235,6 +261,7 @@ import { getToken } from '@/utils/api';
 import {
   cancelOrder as cancelOrderRequest,
   confirmReceipt as confirmReceiptRequest,
+  fetchAftersales,
   fetchOrderDetail,
   fetchPublicConfig,
   findAction,
@@ -339,6 +366,19 @@ const loadOrderDetail = async () => {
     const detail = await fetchOrderDetail(orderId.value);
     if (detail) {
       order.value = detail as typeof order.value;
+    }
+
+    /**
+     * 已有的售后条数（只用于文案"你有 N 条反馈"）。
+     *
+     * 失败**不影响主流程** —— 订单详情本身已经拿到了，
+     * 少一句话总比整页报错好。所以单独 try 一次。
+     */
+    try {
+      const aftersales = await fetchAftersales(orderId.value);
+      aftersaleCount.value = aftersales.length;
+    } catch {
+      aftersaleCount.value = 0;
     } else {
       loadFailed.value = true;
     }
@@ -480,6 +520,23 @@ const handleConfirmReceipt = async () => {
   } finally {
     confirming.value = false;
   }
+};
+
+/**
+ * 「有问题」这个动作与已有的售后条数（批次 2.5）。
+ *
+ * 条数只是给文案用（"你有 N 条反馈"）——
+ * **能不能提新的、窗口过没过，一律以后端下发为准。**
+ */
+const aftersaleAction = computed(() =>
+  findAction(order.value.renderable, 'APPLY_AFTERSALE'),
+);
+const aftersaleCount = ref(0);
+
+const viewAftersale = () => {
+  uni.navigateTo({
+    url: `/pages/custom-recipe/aftersale?orderId=${encodeURIComponent(orderId.value)}`,
+  });
 };
 
 /** 打开交付内容页 */

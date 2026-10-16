@@ -611,6 +611,74 @@ export class AdminCustomRecipeController {
     );
   }
 
+  // ---------- 排期日历（批次 4.2）----------
+
+  /**
+   * 按星期的排期规则。
+   *
+   * 表里没配时返回**全开的默认值**（不落库）——
+   * 不替老板决定"周日休息"：默认值是一种主张，他哪天想周日接单
+   * 却发现约不上、又不知道为什么，那才是麻烦。
+   */
+  @Get('weekday-rules')
+  @ApiOperation({ summary: 'Get weekday scheduling rules' })
+  async getWeekdayRules() {
+    const rows = await this.customRecipeService.getWeekdayRules();
+    return ApiResponseDto.success({
+      items: rows,
+      /** 提醒前端：这些是默认值、还没保存过 */
+      isDefault: rows.every((row) => row.isDefault),
+    });
+  }
+
+  /** 保存按星期的排期规则（管理员） */
+  @Put('weekday-rules')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Save weekday scheduling rules' })
+  async saveWeekdayRules(
+    @Body()
+    body: {
+      items: Array<{
+        weekday: number;
+        isOpen: boolean;
+        capacity?: number | null;
+        deliveryCapacity?: number | null;
+        note?: string | null;
+      }>;
+    },
+  ) {
+    const result = await this.customRecipeService.saveWeekdayRules(
+      body?.items ?? [],
+    );
+    return ApiResponseDto.success(result);
+  }
+
+  /**
+   * 一段时间里每一天的真实状态。
+   *
+   * **可约与否、为什么不能约，都由后端算好**（三层优先级 +
+   * 接单/交付两套容量），后台日历页与小程序排期页共用，
+   * 两边都不再自己判断。
+   */
+  @Get('calendar')
+  @ApiOperation({ summary: 'Get resolved calendar for a date range' })
+  async getCalendar(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) {
+      throw new BadRequestException('from / to 格式应为 YYYY-MM-DD');
+    }
+
+    const days = await this.customRecipeService.resolveCalendarRange(
+      new Date(`${from}T00:00:00+08:00`),
+      new Date(`${to}T00:00:00+08:00`),
+    );
+
+    return ApiResponseDto.success({ days });
+  }
+
   /**
    * Get schedule (admin)
    */

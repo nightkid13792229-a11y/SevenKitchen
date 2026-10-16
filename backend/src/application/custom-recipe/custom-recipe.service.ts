@@ -25,6 +25,12 @@ import {
   timestampFieldFor,
 } from '../../domain/custom-recipe/custom-recipe.state';
 import {
+  defaultWeekdayRules,
+  resolveDay,
+  type ResolvedDay,
+  type WeekdayRule,
+} from '../../domain/custom-recipe/custom-recipe.calendar';
+import {
   CustomRecipeStatus,
   TargetGoal,
   CustomAttachmentType,
@@ -1354,6 +1360,195 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   }
 
   /**
+   * 按星期的排期规则（批次 4.2）。
+   *
+   * 一次取全部七条，调用方在内存里查 —— 否则算一个月的日历时
+   * 要查 30 次库。
+   *
+   * 取不到（表还没配）时返回**空表**，由领域层退回"按全局配置全周开放"。
+   * 这里**不替老板决定"周日休息"** —— 默认值是一种主张，
+   * 他哪天想周日接单却发现约不上、又不知道为什么，那才是麻烦。
+   */
+  private async resolveWeekdayRules(): Promise<Map<number, WeekdayRule>> {
+    try {
+      const rows = await this.prisma.customRecipeWeekdayRule.findMany();
+      const map = new Map<number, WeekdayRule>();
+      for (const row of rows) {
+        map.set(row.weekday, {
+          weekday: row.weekday,
+          isOpen: row.isOpen,
+          capacity: row.capacity,
+          deliveryCapacity: row.deliveryCapacity,
+          note: row.note,
+        });
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
+  }
+
+  /**
+   * 算某一天的真实状态（批次 4.2）。
+   *
+   * 三层优先级：具体某天 > 按星期规则 > 全局配置。
+   * 判定本身在领域层（`resolveDay`），这里只负责取数。
+   */
+  async resolveDayStatus(
+    date: Date,
+    options?: {
+      weekdayRules?: Map<number, WeekdayRule>;
+      defaultCapacity?: number;
+      defaultDeliveryCapacity?: number;
+    },
+  ): Promise<ResolvedDay> {
+    const [config, rules] = await Promise.all([
+      this.configService.getConfig(),
+      options?.weekdayRules
+        ? Promise.resolve(options.weekdayRules)
+        : this.resolveWeekdayRules(),
+    ]);
+
+    const override = await this.prisma.customRecipeSchedule.findUnique({
+      where: { date },
+    });
+
+    return resolveDay({
+      date,
+      override: override
+        ? {
+            isAvailable: override.isAvailable,
+            capacity: override.capacity,
+            bookedCount: override.bookedCount,
+            deliveryCapacity: override.deliveryCapacity,
+            deliveryCount: override.deliveryCount,
+            isPublicHoliday: override.isPublicHoliday,
+          }
+        : null,
+      weekdayRule: rules.get(date.getDay()) ?? null,
+      defaultCapacity:
+        options?.defaultCapacity ?? (Number(config.dailyCapacity) || 4),
+      defaultDeliveryCapacity:
+        options?.defaultDeliveryCapacity ??
+        (Number(config.dailyDeliveryCapacity) || 4),
+    });
+  }
+
+  /**
+   * 取按星期的排期规则（后台用）。
+   *
+   * 库里没配时**返回默认值并标 `isDefault`** —— 不落库，
+   * 免得仅仅因为后台打开了一次页面，就替老板"决定"了七天规则。
+   */
+  async getWeekdayRules(): Promise<
+    Array<WeekdayRule & { isDefault: boolean }>
+  > {
+    const [config, rules] = await Promise.all([
+      this.configService.getConfig(),
+      this.resolveWeekdayRules(),
+    ]);
+
+    const defaultCapacity = Number(config.dailyCapacity) || 4;
+    const defaultDeliveryCapacity = Number(config.dailyDeliveryCapacity) || 4;
+
+    if (rules.size === 0) {
+      return defaultWeekdayRules(defaultCapacity, defaultDeliveryCapacity).map(
+        (rule) => ({ ...rule, isDefault: true }),
+      );
+    }
+
+    return Array.from({ length: 7 }, (_, weekday) => {
+      const rule = rules.get(weekday);
+      return rule
+        ? { ...rule, isDefault: false }
+        : {
+            weekday,
+            isOpen: true,
+            capacity: defaultCapacity,
+            deliveryCapacity: defaultDeliveryCapacity,
+            note: null,
+            isDefault: true,
+          };
+    });
+  }
+
+  /** 保存按星期的排期规则（整体覆盖七条） */
+  async saveWeekdayRules(
+    items: Array<{
+      weekday: number;
+      isOpen: boolean;
+      capacity?: number | null;
+      deliveryCapacity?: number | null;
+      note?: string | null;
+    }>,
+  ): Promise<{ saved: number }> {
+    const valid = (items ?? []).filter(
+      (item) =>
+        Number.isInteger(item.weekday) &&
+        item.weekday >= 0 &&
+        item.weekday <= 6,
+    );
+
+    if (valid.length === 0) {
+      throw new BadRequestException('至少要有一条规则');
+    }
+
+    for (const item of valid) {
+      if (
+        item.capacity !== null &&
+        item.capacity !== undefined &&
+        (!Number.isInteger(item.capacity) ||
+          item.capacity < 1 ||
+          item.capacity > 200)
+      ) {
+        throw new BadRequestException(
+          `周${item.weekday}的接单上限必须是 1~200 的整数`,
+        );
+      }
+      if (
+        item.deliveryCapacity !== null &&
+        item.deliveryCapacity !== undefined &&
+        (!Number.isInteger(item.deliveryCapacity) ||
+          item.deliveryCapacity < 1 ||
+          item.deliveryCapacity > 200)
+      ) {
+        throw new BadRequestException(
+          `周${item.weekday}的交付上限必须是 1~200 的整数`,
+        );
+      }
+    }
+
+    /**
+     * 逐条 upsert，**不删没传的**。
+     *
+     * 后台页总是传满七条，但万一将来有别的调用方只传改过的那几条，
+     * 删掉其余的会把没动的规则弄丢 —— upsert 更安全。
+     */
+    await this.prisma.$transaction(
+      valid.map((item) =>
+        this.prisma.customRecipeWeekdayRule.upsert({
+          where: { weekday: item.weekday },
+          update: {
+            isOpen: item.isOpen,
+            capacity: item.capacity ?? null,
+            deliveryCapacity: item.deliveryCapacity ?? null,
+            note: item.note ?? null,
+          },
+          create: {
+            weekday: item.weekday,
+            isOpen: item.isOpen,
+            capacity: item.capacity ?? null,
+            deliveryCapacity: item.deliveryCapacity ?? null,
+            note: item.note ?? null,
+          },
+        }),
+      ),
+    );
+
+    return { saved: valid.length };
+  }
+
+  /**
    * 每日接单上限来自后台配置（原为写死的 4）
    */
   private async resolveDailyCapacity(): Promise<number> {
@@ -1598,11 +1793,71 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       return !holiday;
     }
 
-    return (
-      !schedule.isPublicHoliday &&
-      schedule.isAvailable &&
-      schedule.bookedCount < schedule.capacity
+    /**
+     * 2026-10-16（批次 4.2）：改走 `resolveDayStatus` —— 三层优先级
+     * （具体某天 > 按星期规则 > 全局配置）与**接单/交付两套容量**
+     * 都收在领域层，这里只问"开不开"。
+     *
+     * 上面已经处理过"没有这一天的记录"的分支（会落一条默认行），
+     * 所以走到这里 schedule 一定存在；但 `resolveDayStatus` 会重新读一次，
+     * 多一次查询换"判定只有一处"，这个交换是划算的 ——
+     * 日历的错一旦出现就是"某一天悄悄约不上"，排查成本远高于一次查询。
+     */
+    const day = await this.resolveDayStatus(date);
+    return day.isOpen;
+  }
+
+  /**
+   * 取一段时间的排期，带上**按星期规则算出来的**可约状态。
+   *
+   * 供后台日历页与小程序排期页共用 —— 两边都不再自己判断
+   * "这天为什么不能约"，原因由后端给。
+   */
+  async resolveCalendarRange(
+    dateFrom: Date,
+    dateTo: Date,
+  ): Promise<ResolvedDay[]> {
+    const [config, rules] = await Promise.all([
+      this.configService.getConfig(),
+      this.resolveWeekdayRules(),
+    ]);
+
+    const defaultCapacity = Number(config.dailyCapacity) || 4;
+    const defaultDeliveryCapacity = Number(config.dailyDeliveryCapacity) || 4;
+
+    const overrides = await this.prisma.customRecipeSchedule.findMany({
+      where: { date: { gte: dateFrom, lte: dateTo } },
+    });
+    const byDate = new Map(
+      overrides.map((row) => [row.date.getTime(), row]),
     );
+
+    const days: ResolvedDay[] = [];
+    const cursor = new Date(dateFrom);
+    while (cursor <= dateTo) {
+      const row = byDate.get(cursor.getTime());
+      days.push(
+        resolveDay({
+          date: new Date(cursor),
+          override: row
+            ? {
+                isAvailable: row.isAvailable,
+                capacity: row.capacity,
+                bookedCount: row.bookedCount,
+                deliveryCapacity: row.deliveryCapacity,
+                deliveryCount: row.deliveryCount,
+                isPublicHoliday: row.isPublicHoliday,
+              }
+            : null,
+          weekdayRule: rules.get(cursor.getDay()) ?? null,
+          defaultCapacity,
+          defaultDeliveryCapacity,
+        }),
+      );
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
   }
 
   /**

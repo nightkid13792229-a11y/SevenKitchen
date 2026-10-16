@@ -70,14 +70,12 @@
   },
   "gd04_duplicate_assessment": {
     "title": "前端重复实现了营养合规评估引擎",
-    "why": "admin-web 那份是后端 domain/recipe-designer/recipe-assessment.ts 的**逐字拷贝**（diff 仅 95 行，90 个对比用例输出逐字节相同）。批次 5 删副本、改调后端。",
-    "clearAt": "批次 5.3",
-    "maxTotal": 1,
-    "files": {
-      "admin-web/src/utils/recipeDesigner/assessment.ts": 1
-    },
+    "why": "admin-web 那份是后端 domain/recipe-designer/recipe-assessment.ts 的**逐字拷贝**（1779 行 vs 1738 行）。2026-10-16 批次 5.3 删掉副本、后台改调后端 `POST /recipe-designer/assess-items`。",
+    "clearAt": "✅ 已于 2026-10-16（批次 5.3）清零",
+    "maxTotal": 0,
+    "files": {},
     "notes": {
-      "_general": "⚠️ 删除**前**必须先把后端缺的 dataGaps 补上，否则「哪个原料缺哪个字段」的提示会静默消失。详见技术方案 5.2.2。"
+      "_cleared": "✅ **已清零**。步骤：\n  ① 后端补 `dataGaps`（原本只有后台那份有），否则「哪个原料缺哪个字段」会静默消失；\n  ② **证明两份等价**：跨端对比测试把两份实现跑在同一组输入上逐字段比，\n     结果完全一致（这条对比测试随副本一起删掉了，它的使命就是证明这件事）；\n  ③ 新接口收**当前编辑内容**（不是草稿 id）—— 编辑器算的是屏幕上还没保存的东西；\n  ④ 后台改成 **400ms 防抖**调后端，并**保留上一次结果**：\n     原注释写明本地计算是为了\"避免每次编辑都请求服务器评估（卡顿根因之一）\"，\n     所以这次是正面解决那个矛盾，而不是把卡顿带回来；\n  ⑤ 删副本 + 把它的测试**搬到后端**（引擎行为只有后端一份了）。\n搬测试时**一条断言都没改**就跑通了 —— 这是\"移植是逐字照搬\"的旁证。"
     }
   }
 }

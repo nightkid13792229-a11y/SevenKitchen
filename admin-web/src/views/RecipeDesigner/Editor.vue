@@ -156,6 +156,12 @@
 
       <!-- 中右：关键比例仪表盘 -->
       <div class="pane pane-dashboard">
+        <!--
+          「评估中」的细条（批次 5.3）：评估改成后端算之后，
+          结果会比按键晚一点点到。不给提示的话，用户会以为数字没变。
+          ⚠️ 刻意**不隐藏旧结果** —— 每敲一个字面板闪一下比稍微延迟更难受。
+        -->
+        <div v-if="assessing" class="assessing-bar" />
         <GaugePanel :assessment="assessment" />
         <MacroCompositionPanel :assessment="assessment" />
       </div>
@@ -213,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowLeft, CircleCheckFilled, Delete, EditPen, Loading, Rank, RefreshLeft, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
@@ -236,7 +242,7 @@ import GaugePanel from './components/GaugePanel.vue'
 import MacroCompositionPanel from './components/MacroCompositionPanel.vue'
 import DogInsightPanel from './components/DogInsightPanel.vue'
 import AiDesignSuggestionPanel from './components/AiDesignSuggestionPanel.vue'
-import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessment'
+import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import { preparationBasisMismatchHint } from '@/utils/preparationBasis'
 
 /** 兜底烹饪方式选项（后端未提供时使用） */
@@ -302,7 +308,18 @@ async function confirmRename() {
   }
 }
 
-const { loadInputs, refreshInputs, loadingInputs: assessmentLoading, inputsError, compute } = useRecipeDesignerAssessment()
+const {
+  loadInputs,
+  refreshInputs,
+  loadingInputs: assessmentLoading,
+  inputsError,
+  assessment,
+  assessing,
+  assessError,
+  schedule: scheduleAssessment,
+  compute: computeAssessment,
+  dispose: disposeAssessment
+} = useRecipeDesignerAssessment()
 const {
   saveStatus,
   willAutoRetry,
@@ -314,12 +331,45 @@ const {
   cancelItemOps
 } = useDesignerSaveQueue()
 
-const assessment = computed<DesignRecipeAssessmentResult | null>(() => {
-  if (!draft.value || !draft.value.fediafDogScenario) return null
-  // 依赖评估输入加载状态：首次进入时目标值异步到达，加载完成后需重算
-  void assessmentLoading.value
-  void inputsError.value
-  return compute(draft.value.fediafDogScenario, draft.value.id, items.value)
+/**
+ * 营养评估（2026-10-16 批次 5.3 改成**后端算**）
+ *
+ * 此前是一个**同步 computed**：每次 items 变就当场算一遍。
+ * 现在改成防抖请求后端（见 `useRecipeDesignerAssessment` 的文件头：
+ * 400ms 防抖 + 保留上次结果 + 只认最后一次响应）。
+ *
+ * ⚠️ 监听的是 `items` 的**引用**而不是深度 —— 这个页面里 items
+ * 每次都是整体替换（`items.value = next`），所以引用变化就够了。
+ * 真去做深度监听反而会在批量操作时触发很多次。
+ */
+watch(
+  () => [draft.value?.id, draft.value?.fediafDogScenario, items.value] as const,
+  ([draftId, scenario]) => {
+    if (!draftId || !scenario) return
+    scheduleAssessment(scenario, draftId, items.value)
+  }
+)
+
+/**
+ * 评估输入加载完成后再算一次。
+ *
+ * 首次进入编辑器时营养档案是异步到达的 —— 不补这一下，
+ * 第一次评估会拿着空档案去算，面板整片显示"缺数据"，
+ * 要等用户碰一下原料才恢复。
+ */
+watch(assessmentLoading, (loading) => {
+  if (loading) return
+  if (!draft.value?.fediafDogScenario) return
+  void computeAssessment(
+    draft.value.fediafDogScenario,
+    draft.value.id,
+    items.value
+  )
+})
+
+/** 离开页面时清掉待执行的防抖任务（免得对着已销毁的组件写状态） */
+onBeforeUnmount(() => {
+  disposeAssessment()
 })
 
 // ---------- 营养评估面板的滚动位置 ----------
@@ -333,6 +383,17 @@ async function refreshInputsKeepingScroll() {
   if (!draft.value) return
   assessmentPanelRef.value?.preserveScrollOnNextAssessmentUpdate()
   await refreshInputs(draft.value.id)
+  /**
+   * 刷新完立刻重算 —— 新原料的营养档案刚到，
+   * 不补这一下面板要等下一次编辑才更新。
+   */
+  if (draft.value.fediafDogScenario) {
+    void computeAssessment(
+      draft.value.fediafDogScenario,
+      draft.value.id,
+      items.value
+    )
+  }
 }
 
 const referenceDogId = ref<string | null>(null)
@@ -1111,6 +1172,18 @@ onBeforeUnmount(() => {
   width: 300px;
   flex-shrink: 0;
 }
+.assessing-bar {
+  height: 2px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, transparent, var(--el-color-primary), transparent);
+  animation: assessing-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes assessing-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
 .assessment-pane {
   flex: 1;
   min-height: 0;

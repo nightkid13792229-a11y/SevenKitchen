@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessment'
+import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessmentTypes'
 
 const props = defineProps<{
   assessment: DesignRecipeAssessmentResult | null

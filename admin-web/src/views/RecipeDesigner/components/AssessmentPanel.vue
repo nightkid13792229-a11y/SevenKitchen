@@ -240,7 +240,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search } from '@element-plus/icons-vue'
-import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessment'
+import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessmentTypes'
 import type { AssessmentNutrientContributor } from '@/utils/recipeDesigner/assessmentTypes'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import { buildAssessmentBar } from '@/utils/recipeDesigner/assessmentBar'

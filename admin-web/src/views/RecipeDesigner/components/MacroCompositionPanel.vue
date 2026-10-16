@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessment'
+import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 
 const props = defineProps<{
   assessment: DesignRecipeAssessmentResult | null

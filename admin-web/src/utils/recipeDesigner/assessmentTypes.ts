@@ -118,3 +118,81 @@ export interface AssessmentDataGap {
    */
   blocksEnergy: boolean;
 }
+
+// ============================================================================
+// 评估结果的类型（2026-10-16 批次 5.3 从 assessment.ts 搬过来）
+//
+// 为什么搬：后台那份**逻辑**副本删掉了（改成调后端），
+// 但类型还得留着给面板用 —— 类型不是"计算"，不需要有权威版本一说。
+// ============================================================================
+
+export interface DesignRecipeAssessmentInput {
+  scenario: FediafDogScenarioCode;
+  items: DesignRecipeAssessmentItemInput[];
+  targets: FediafAssessmentTarget[];
+}
+
+export interface DesignRecipeAssessmentResultItem {
+  id: string;
+  name: string;
+  weightG: number;
+  ratioPercent: number;
+}
+
+export interface AssessedNutrientValue {
+  total: number | null;
+  per1000Kcal: number | null;
+  missingAsZero?: boolean;
+}
+
+export interface AssessedMacroMetric extends AssessedNutrientValue {
+  dryMatterPercent: number | null;
+}
+
+export type AssessedMacroMetricKey =
+  | 'crudeProtein'
+  | 'crudeFat'
+  | 'carbohydrate'
+  | 'fiber'
+  | 'ash'
+  | 'moisture'
+  | 'energyDensity';
+
+export interface DesignRecipeAssessmentSummary {
+  compliant: number;
+  deficient: number;
+  excess: number;
+  missingData: number;
+}
+
+export interface GroupedAssessmentEntry extends AssessmentEntry {
+  details: AssessmentEntry[];
+  detailCount: number;
+}
+
+export interface DesignRecipeAssessmentResult {
+  scenario: FediafDogScenarioCode;
+  totalWeightG: number;
+  totalEnergyKcal: number | null;
+  dryMatterG: number | null;
+  dryMatterEnergyKcalPer100g: number | null;
+  energyDensityKcalPerKg: number | null;
+  normalizedToKg: false;
+  items: DesignRecipeAssessmentResultItem[];
+  nutrients: Record<string, AssessedNutrientValue>;
+  macroMetrics: Record<AssessedMacroMetricKey, AssessedMacroMetric>;
+  groupedEntries: GroupedAssessmentEntry[];
+  /**
+   * 逐条明细。
+   *
+   * ⚠️ **可选** —— 后端给客户端的形态里**没有它**（每次编辑都传太大）。
+   * 后台那几个面板只用 `dataGaps` / `groupedEntries` / `macroMetrics`，
+   * 用不到这一项。谁将来真要用，得让它走"保存后再评估"那条路。
+   */
+  entries?: AssessmentEntry[];
+  /** 哪个原料缺了哪个必填字段（见 AssessmentDataGap 注释） */
+  dataGaps: AssessmentDataGap[];
+  overallStatus: AssessmentOverallStatus;
+  summary: DesignRecipeAssessmentSummary;
+  rawSummary: DesignRecipeAssessmentSummary;
+}

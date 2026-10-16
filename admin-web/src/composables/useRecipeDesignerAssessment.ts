@@ -1,14 +1,27 @@
 /**
- * 本地即时营养评估
- * 基于后端移植的纯函数 assessRecipeDraft，在浏览器内即时计算，
- * 避免每次编辑都请求服务器评估（小程序端卡顿根因之一）。
+ * 营养评估（2026-10-16 批次 5.3 改成**后端算**）
+ *
+ * ## 改了什么
+ *
+ * 此前这里调的是后台自己那份**评估引擎副本**（1779 行），
+ * 与后端权威实现逐字重复。现在改成把**当前编辑内容**发给后端算。
+ *
+ * ## ⚠️ 这次正面解决了一个矛盾
+ *
+ * 原来的注释写着：本地计算是为了
+ * 「避免每次编辑都请求服务器评估（**小程序端卡顿根因之一**）」。
+ *
+ * 也就是说：**每秒都请求后端确实会卡**。所以这次不是简单换掉，而是：
+ *   · **防抖 400ms** —— 连续敲键盘时只在停下来之后请求一次；
+ *   · **保留上一次结果** —— 请求进行中不把面板清空，
+ *     否则每敲一个字右侧就闪一下、滚动位置还会被顶回顶部
+ *     （这个坑原来就有，注释里写着）；
+ *   · **失败也不清空** —— 网络抖一下不该让面板变成"评估引擎准备中"。
+ *
+ * 这样既满足"计算在后端"，又不会把卡顿带回来。
  */
-import { shallowRef } from 'vue'
-import { assessRecipeDraft } from '@/utils/recipeDesigner/assessment'
-import type {
-  DesignRecipeAssessmentInput,
-  DesignRecipeAssessmentResult
-} from '@/utils/recipeDesigner/assessment'
+import { ref, shallowRef } from 'vue'
+import type { DesignRecipeAssessmentResult } from '@/utils/recipeDesigner/assessmentTypes'
 import type { NutritionProfile } from '@/utils/recipeDesigner/nutritionProfileTypes'
 import { recipeDesignerApi } from '@/api/recipeDesigner'
 import type {
@@ -26,10 +39,16 @@ export interface LocalAssessmentEngineItem {
   nutritionProfile: NutritionProfile | null
 }
 
-/** 按草稿缓存评估输入（targets + 服务端归一化后的营养档案），避免重复请求 */
+/**
+ * 按草稿缓存评估输入（服务端归一化后的营养档案），避免重复请求。
+ *
+ * ⚠️ **不再缓存 targets** —— 目标值现在由后端按 scenario 自己取，
+ * 客户端不需要（也就不会缓存一份可能过期的）。
+ */
 const inputsCache = new Map<string, DraftAssessmentInputs>()
 
-const targetsCache = new Map<string, AssessmentTarget[]>()
+/** 防抖定时器：连续编辑时只在停下来之后请求一次 */
+const DEBOUNCE_MS = 400
 
 /**
  * 缓存的评估输入是否仍然对得上当前草稿。
@@ -74,7 +93,6 @@ export function useRecipeDesignerAssessment() {
   ): Promise<void> {
     const cached = inputsCache.get(draftId)
     if (isCachedInputsUsable(cached, scenario, items)) {
-      targetsCache.set(draftId, cached.targets)
       return
     }
     loadingInputs.value = true
@@ -82,7 +100,6 @@ export function useRecipeDesignerAssessment() {
     try {
       const inputs = await recipeDesignerApi.getAssessmentInputs(draftId)
       inputsCache.set(draftId, inputs)
-      targetsCache.set(draftId, inputs.targets)
     } catch (error: any) {
       inputsError.value = error?.message || '评估数据加载失败'
     } finally {
@@ -105,7 +122,6 @@ export function useRecipeDesignerAssessment() {
     try {
       const inputs = await recipeDesignerApi.getAssessmentInputs(draftId)
       inputsCache.set(draftId, inputs)
-      targetsCache.set(draftId, inputs.targets)
     } catch (error: any) {
       inputsError.value = error?.message || '评估数据加载失败'
     } finally {
@@ -115,11 +131,6 @@ export function useRecipeDesignerAssessment() {
 
   function clearInputs(draftId: string) {
     inputsCache.delete(draftId)
-    targetsCache.delete(draftId)
-  }
-
-  function getTargets(draftId: string): AssessmentTarget[] {
-    return targetsCache.get(draftId) ?? []
   }
 
   function buildEngineItems(draftId: string, items: DesignerItem[]): LocalAssessmentEngineItem[] {
@@ -149,23 +160,101 @@ export function useRecipeDesignerAssessment() {
       }))
   }
 
-  function compute(
+  /**
+   * 最近一次成功的评估结果。
+   *
+   * ⚠️ 用 `ref` 而不是 `computed` —— 结果是异步来的，
+   * 而且**请求进行中要保留上一次的值**（见文件头：清空会让面板闪、
+   * 还会把滚动位置顶回顶部）。
+   */
+  const assessment = ref<DesignRecipeAssessmentResult | null>(null)
+  const assessing = ref(false)
+  const assessError = ref<string | null>(null)
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * 请求序号：只认最后一次。
+   *
+   * 防抖之后仍可能有两个请求在飞（先发的慢、后发的快），
+   * 不做这个校验就会**用旧结果覆盖新结果** —— 用户改完了，
+   * 面板上却是改之前那几个数字，而且不会自己恢复。
+   */
+  let requestSeq = 0
+
+  /**
+   * 触发一次评估（防抖）。
+   *
+   * 连续编辑时只在停下来 400ms 后请求一次 —— 这是"计算交给后端"
+   * 与"编辑时不卡"之间的平衡点。
+   */
+  function schedule(
     scenario: FediafDogScenario,
     draftId: string,
     items: DesignerItem[]
-  ): DesignRecipeAssessmentResult | null {
-    const targets = targetsCache.get(draftId)
-    if (!targets || targets.length === 0) return null
-    try {
-      const input: DesignRecipeAssessmentInput = {
-        scenario,
-        items: buildEngineItems(draftId, items) as DesignRecipeAssessmentInput['items'],
-        targets
-      }
-      return assessRecipeDraft(input)
-    } catch {
-      return null
+  ): void {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      void runAssess(scenario, draftId, items)
+    }, DEBOUNCE_MS)
+  }
+
+  /** 立即评估一次（不等防抖）—— 进出编辑器、刷新输入后用 */
+  async function compute(
+    scenario: FediafDogScenario,
+    draftId: string,
+    items: DesignerItem[]
+  ): Promise<void> {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    await runAssess(scenario, draftId, items)
+  }
+
+  async function runAssess(
+    scenario: FediafDogScenario,
+    draftId: string,
+    items: DesignerItem[]
+  ): Promise<void> {
+    const engineItems = buildEngineItems(draftId, items).filter(
+      (item) => item.weightG > 0
+    )
+
+    /**
+     * 没有有效原料时不请求 —— 后端也会拒（"配方里还没有原料"），
+     * 这里先拦一道省一次往返。结果置空让面板显示"还没有原料"。
+     */
+    if (engineItems.length === 0) {
+      assessment.value = null
+      assessError.value = null
+      return
     }
+
+    const seq = ++requestSeq
+    assessing.value = true
+    assessError.value = null
+    try {
+      const result = await recipeDesignerApi.assessItems({
+        scenario: String(scenario),
+        items: engineItems
+      })
+      // 只认最后一次：慢响应回来晚了就丢掉，别覆盖新结果
+      if (seq !== requestSeq) return
+      assessment.value = result as unknown as DesignRecipeAssessmentResult
+    } catch (error: any) {
+      if (seq !== requestSeq) return
+      /**
+       * ⚠️ **失败不清空上一次结果** —— 网络抖一下不该让整个面板
+       * 变成"评估引擎准备中"。只在确实还没有任何结果时才显示错误。
+       */
+      assessError.value = error?.message || '营养评估失败'
+    } finally {
+      if (seq === requestSeq) assessing.value = false
+    }
+  }
+
+  /** 离开编辑器时清掉待执行的防抖任务（免得对着已销毁的组件写状态） */
+  function dispose(): void {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = null
+    requestSeq += 1
   }
 
   return {
@@ -174,7 +263,11 @@ export function useRecipeDesignerAssessment() {
     loadInputs,
     refreshInputs,
     clearInputs,
-    getTargets,
-    compute
+    assessment,
+    assessing,
+    assessError,
+    schedule,
+    compute,
+    dispose
   }
 }

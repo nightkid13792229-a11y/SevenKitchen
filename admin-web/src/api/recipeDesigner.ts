@@ -136,6 +136,27 @@ export const recipeDesignerApi = {
       `/recipe-designer/series/${seriesId}/stages/${lifeStage}/copy-ingredients`,
       data,
     ),
+  /**
+   * 按**当前编辑内容**评估（2026-10-16 批次 5.3）。
+   *
+   * 与 `assessDraft(draftId)` 的区别：那个按草稿 id 从库里读，
+   * 这个把**屏幕上还没保存的 items** 发过去 ——
+   * 编辑器算的就是这一份，用前者会评估"上一次保存的版本"。
+   *
+   * 目标值（FEDIAF 标准）由后端按 scenario 取，客户端不用传。
+   */
+  assessItems: (payload: {
+    scenario: string
+    items: Array<{
+      id: string
+      name: string
+      ingredientType?: string | null
+      weightG: number
+      nutritionProfile?: unknown
+    }>
+  }): Promise<Record<string, unknown>> =>
+    api.post('/recipe-designer/assess-items', payload),
+
   assessDraft: (draftId: string): Promise<unknown> =>
     api.post(`/recipe-designer/drafts/${draftId}/assess`),
   publishDraft: (draftId: string, data?: PublishDesignRecipePayload): Promise<unknown> =>

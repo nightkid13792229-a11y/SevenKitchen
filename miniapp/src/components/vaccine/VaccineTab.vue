@@ -70,6 +70,7 @@
         :saving="saving"
         @save="onScanSave"
         @discard="onScanDiscard"
+        @add-manual="onAddManualRecord"
       />
 
     <!-- 识别服务（四类记录共用）。疫苗侧只取结果里的**名称 + 日期**；
@@ -510,6 +511,20 @@ async function onScanSave(rows: VaccineScanRow[]) {
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * 识别结果页里"补一条（识别漏掉的）"。
+ *
+ * 走**唯一录入器**而不是在结果页硬填一个名字：录入器里有产品库、有"含哪些疫苗"
+ * 可勾 —— 手写的名字一旦认不出类别，在后端会被拦下来（记录必须能影响计划，需求 R6），
+ * 只有录入器能当场把病种勾上，不至于卡住。
+ *
+ * ⚠️ 不关掉识别结果：补完这一条，那几条待确认的还在原地等着。
+ */
+function onAddManualRecord() {
+  addRecord()
+  editorHeading.value = '补一条接种记录'
 }
 
 function onScanDiscard() {

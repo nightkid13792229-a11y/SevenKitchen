@@ -235,6 +235,30 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     ...extra,
   }) as VaccineStep
 
+describe('疫苗 · 识别结果页（老板 2026-10-16 的三个问题）', () => {
+  const scan = read('ScanConfirm.vue')
+
+  it('哪些要核对：四种情形写在页面上，不是只在代码里', () => {
+    expect(scan).toContain('名字没读出来、是狂犬、产品库里没有这个名字、日期可疑')
+  })
+
+  it('🔴 名称与日期必须**看起来就能改**（有框 + 明写「改」）', () => {
+    expect(scan).toContain('vk-scan__field')
+    expect(scan).toContain('vk-scan__edit')
+    expect(scan).toContain('>改<')
+  })
+
+  it('识别漏掉的那条，能在这一页直接补（走同一个录入器）', () => {
+    expect(scan).toContain('＋ 补一条（识别漏掉的）')
+    expect(scan).toContain("emit('add-manual')")
+    const tab = read('VaccineTab.vue')
+    expect(tab).toContain('@add-manual="onAddManualRecord"')
+    // 用的是唯一录入器，不是在这页硬填名字（手写名字认不出类别时会被后端拦）
+    expect(tab).toContain('function onAddManualRecord()')
+    expect(tab).toContain('addRecord()')
+  })
+});
+
 describe('疫苗 · 计划项展开详情（老板 2026-10-16 第 2 条）', () => {
   const timeline = read('PlanTimeline.vue')
 

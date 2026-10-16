@@ -9,7 +9,9 @@
       <text class="vk-scan__count">{{ rows.length }} 条</text>
     </view>
     <text class="vk-scan__hint">读出 {{ rows.length }} 条，请逐条确认。点任意一条可以改名称、日期，或者删掉。</text>
-    <text v-if="hasCareRow" class="vk-scan__hint">「待核对」的那几条会先记下来，但暂时不参与提醒 —— 对照本子核对之后就算进去。</text>
+    <!-- "哪几条需要核对、为什么"要说在明面上（老板 2026-10-16 问的正是这个）——
+         判据在 domain/vaccine/catalog.ts 的 scanRowReview，这里只是把同一套话讲给家长。 -->
+    <text v-if="hasCareRow" class="vk-scan__hint">带「待核对」的是我们没十足把握的四种：名字没读出来、是狂犬、产品库里没有这个名字、日期可疑。它们会先记下来，但暂时不参与提醒 —— 对照本子看一眼、点一下核对，就算进去了。</text>
 
     <view
       v-for="(row, index) in rows"
@@ -18,20 +20,31 @@
       :class="{ 'vk-scan__row--care': isCare(row) }"
     >
       <view class="vk-scan__line">
-        <input
-          class="vk-scan__name"
-          :value="row.name"
-          placeholder="疫苗名称"
-          placeholder-class="vk-scan__ph"
-          @input="onNameInput(index, $event)"
-        />
+        <!-- ⚠️ 2026-10-16 老板："名字可以修改是可以修改，但用户可能并不知道
+             当前 UI 下名字是可以修改的。" —— 原来它是个**没有边框的输入框**，
+             看着和静态文字一模一样。现在按录入卡的写法给它一个框（有框 = 能改），
+             右侧再明写一个「改」。 -->
+        <view class="vk-scan__field">
+          <input
+            class="vk-scan__name"
+            :value="row.name"
+            placeholder="疫苗名称"
+            placeholder-class="vk-scan__ph"
+            @input="onNameInput(index, $event)"
+          />
+          <text class="vk-scan__edit">改</text>
+        </view>
         <text v-if="isCare(row)" class="vk-scan__badge">待核对</text>
         <text class="vk-scan__del" @tap="removeRow(index)">删掉</text>
       </view>
 
       <picker mode="date" :value="row.date" @change="onDateChange(index, $event)">
-        <view class="vk-scan__date">
-          <text :class="{ 'vk-scan__date--empty': !row.date }">{{ row.date || '点这里选日期' }}</text>
+        <view class="vk-scan__field vk-scan__field--date">
+          <text
+            class="vk-scan__date"
+            :class="{ 'vk-scan__date--empty': !row.date }"
+          >{{ row.date || '点这里选日期' }}</text>
+          <text class="vk-scan__edit">改</text>
         </view>
       </picker>
 
@@ -41,6 +54,13 @@
           <text class="vk-scan__act" @tap="verifyRow(index)">我已对照本子核对</text>
         </view>
       </template>
+    </view>
+
+    <!-- 识别漏掉的那条，家长可以在这一页直接补上（老板 2026-10-16 问）——
+         走的是**同一个录入器**：那里有产品库、有"含哪些疫苗"可勾，
+         比在这一页硬填一个名字更不容易卡住。 -->
+    <view class="vk-scan__add" @tap="onAddManual">
+      <text class="vk-scan__add-text">＋ 补一条（识别漏掉的）</text>
     </view>
 
     <view class="vk-scan__footer">
@@ -73,6 +93,8 @@ const hasCareRow = computed(() => (props.drafts || []).some((row) => isCare(row)
 const emit = defineEmits<{
   (event: 'save', rows: VaccineScanRow[]): void
   (event: 'discard'): void
+  /** 识别漏掉的那条，家长自己补 —— 交给唯一录入器 */
+  (event: 'add-manual'): void
 }>()
 
 /**
@@ -117,6 +139,10 @@ function verifyRow(index: number) {
 
 function removeRow(index: number) {
   rows.value.splice(index, 1)
+}
+
+function onAddManual() {
+  emit('add-manual')
 }
 
 function onDiscard() {
@@ -196,6 +222,44 @@ function onSave() {
   display: flex;
   align-items: center;
   gap: 12rpx;
+}
+
+/* 有框 = 能改（与录入卡同一种视觉语言） */
+.vk-scan__field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  border: 1px solid $vk-field-border;
+  border-radius: 14rpx;
+  background: $vk-white;
+  padding: 8rpx 14rpx;
+}
+
+.vk-scan__field--date {
+  margin-top: 8rpx;
+}
+
+/* 只给名称那一格：明写"改"，免得家长以为它只是标题 */
+.vk-scan__edit {
+  flex-shrink: 0;
+  font-size: 21rpx;
+  color: $vk-brand;
+}
+
+.vk-scan__add {
+  margin: 12rpx 0 4rpx;
+  text-align: center;
+  line-height: 72rpx;
+  border: 1px dashed $vk-field-border;
+  border-radius: 16rpx;
+  color: $vk-brand;
+  font-size: $vk-font-body;
+}
+
+.vk-scan__add-text {
+  font-size: $vk-font-body;
 }
 
 .vk-scan__name {

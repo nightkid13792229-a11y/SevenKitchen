@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { stripComments } from '../architecture/source-text'
+
+describe('健康管理页 · 带 dogId 进来不能被顶掉（E6 端到端跑出来的 bug）', () => {
+  const page = stripComments(
+    readFileSync(resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'), 'utf-8'),
+  )
+
+  it('🔴 onShow 里"正在加载"时不许再发一次不带 dogId 的请求', () => {
+    /*
+     * uni-app 的生命周期是 onLoad → onShow，紧挨着执行：
+     * onLoad 带 dogId 的请求还在飞 → onShow 看到列表空 → 又拉一次不带 dogId 的
+     * → 后到的把选中项定到第 0 只 ✗（实测传测48 显示测49）。
+     */
+    const at = page.indexOf('onShow(() => {')
+    expect(at).toBeGreaterThan(0)
+    const body = page.slice(at, at + 700)
+    expect(body).toContain('if (isLoading.value) return')
+  })
+});
 
 describe('dog profile health page regressions', () => {
   function functionSource(source: string, startMarker: string, endMarker: string) {

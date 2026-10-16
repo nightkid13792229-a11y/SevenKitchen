@@ -539,6 +539,35 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(result);
   }
 
+  /**
+   * 按**当前编辑内容**评估（2026-10-16 批次 5.3）。
+   *
+   * 与 `POST drafts/:id/assess` 的区别：那个按草稿 id 从库里读，
+   * 这个收**客户端当前的 items** —— 后台编辑器算的是屏幕上还没保存的内容。
+   *
+   * 目标值（FEDIAF 标准）由后端按 scenario 取，客户端不用传。
+   */
+  @Post('assess-items')
+  @ApiOperation({ summary: 'Assess the given items (unsaved editor content)' })
+  async assessItems(
+    @Body()
+    body: {
+      scenario: string;
+      items: Array<{
+        id: string;
+        name: string;
+        ingredientType?: string | null;
+        weightG: number;
+        nutritionProfile?: unknown;
+      }>;
+    },
+  ) {
+    const result = await this.recipeDesignerService.assessItems(
+      body ?? { scenario: '', items: [] },
+    );
+    return ApiResponseDto.success(result);
+  }
+
   @Get('drafts/:id/assessment-inputs')
   @ApiOperation({
     summary: 'Return local assessment inputs (targets + item profiles) for a design draft',

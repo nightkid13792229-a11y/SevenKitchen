@@ -45,6 +45,7 @@ import {
 import { buildFoodWeightRatioMap } from '../../domain/recipe/food-ratio-normalization';
 import {
   assessRecipeDraft,
+  type AssessmentDataGap,
   type DesignRecipeAssessmentResult,
 } from '../../domain/recipe-designer/recipe-assessment';
 import { inferSupplementTargetsByRemoval } from '../../domain/recipe-designer/supplement-target-inference';
@@ -4821,6 +4822,64 @@ export class RecipeDesignerService {
       });
       return deleted;
     });
+  }
+
+  /**
+   * 按**当前编辑内容**评估（2026-10-16 批次 5.3）。
+   *
+   * ## 为什么需要单独一个接口
+   *
+   * 现有的 `assessDraft(id)` 是**按草稿 id 从库里读**的 ——
+   * 而后台编辑器算的是**屏幕上还没保存的内容**。
+   * 直接用它，评估的会是"上一次保存的版本"，不是用户看到的那份。
+   *
+   * ## 目标值由后端按场景取
+   *
+   * 客户端不用传 `targets` —— 那是 FEDIAF 标准表里的东西，
+   * 客户端不该知道、也省得它缓存一份可能过期的。
+   */
+  async assessItems(input: {
+    scenario: string;
+    items: Array<{
+      id: string;
+      name: string;
+      ingredientType?: string | null;
+      weightG: number;
+      nutritionProfile?: unknown;
+    }>;
+  }): Promise<
+    ClientDesignRecipeAssessmentResult & { dataGaps: AssessmentDataGap[] }
+  > {
+    const scenario = String(input.scenario || '').trim();
+    if (!scenario) {
+      throw new BadRequestException('缺少 fediafDogScenario');
+    }
+    if (!Array.isArray(input.items) || input.items.length === 0) {
+      /**
+       * 空配方不给评估 —— 返回一堆"缺数据"没有意义，页面上也会变成一片红。
+       * 客户端据此显示"还没有原料"。
+       */
+      throw new BadRequestException('配方里还没有原料，暂时无法评估');
+    }
+
+    const targets = await this.targetProvider.getTargets(scenario as never);
+
+    const result = assessRecipeDraft({
+      scenario: scenario as never,
+      items: input.items as never,
+      targets,
+    } as never);
+
+    /**
+     * 走 `toClientAssessmentResult`：它会**删掉 `entries`**（逐条明细）。
+     *
+     * 后台那几个面板只用 `dataGaps` / `groupedEntries` / `macroMetrics`，
+     * 而 `entries` 是最大的一块 —— 每次编辑都传一遍不值得。
+     *
+     * ⚠️ 但 `dataGaps` 必须留下：它是「哪个原料缺哪个字段」，
+     * 丢了用户就只看到一片"缺数据"、不知道该补什么。
+     */
+    return this.toClientAssessmentResult(result) as never;
   }
 
   async assessDraft(

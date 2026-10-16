@@ -358,4 +358,83 @@ describe('食谱定制 · 四条红线守卫', () => {
       }
     });
   });
+
+  /**
+   * 跨端接口对账（2026-10-16 真事故）
+   *
+   * ## 事故经过
+   *
+   * 删评估引擎副本那一轮，我把后台改成调 `POST /recipe-designer/assess-items`，
+   * **但后端的那个接口根本没提交上去** —— 我在另一个工作区里写的，
+   * 后来一条 `git checkout -- backend/` 把它丢弃了。
+   *
+   * 结果：后台部署上线了，接口 404，营养评估整块不可用。
+   * **前后端各自的测试全绿** —— 因为它们各测各的，
+   * 没有任何一条断言在问"前端调的那个地址，后端真的有吗"。
+   *
+   * ## 这条守卫做什么
+   *
+   * 把后台 API 层里写死的接口路径抠出来，逐个到后端源码里找 ——
+   * 找不到就红。
+   *
+   * 只覆盖 `/recipe-designer/` 这一段（事故现场），
+   * 不贪多：路径可能带参数、可能拼在别处，铺太宽会误报到没人看。
+   */
+  describe('跨端接口对账', () => {
+    it('后台调的 recipe-designer 接口，后端都真的有', () => {
+      const apiSource = stripComments(
+        readFileSync(
+          resolve(REPO_ROOT, 'admin-web/src/api/recipeDesigner.ts'),
+          'utf8',
+        ),
+      );
+
+      /**
+       * 抠出 api.get('/recipe-designer/xxx') / api.post(...) 里的路径。
+       *
+       * ⚠️ **只收"整条都是静态"的路径**（不含 `${...}`、不以 `/` 结尾）。
+       *
+       * 带变量的那些（`` `/recipe-designer/series/${id}` ``）抠出来只有
+       * `/recipe-designer/series/`，拿去比对必然对不上 ——
+       * 第一版就是这么误报了 4 条。
+       * **守卫宁可窄一点，也不要误报到没人看**（这条原则在本项目里已经用过几次）。
+       *
+       * 而漏掉 `assess-items` 那种**整条静态**的接口，恰恰就是本次事故的形态，
+       * 所以这个覆盖范围够用。
+       */
+      const paths = new Set<string>();
+      for (const m of apiSource.matchAll(
+        /api\.(?:get|post|put|patch|delete)\(\s*[`'"](\/recipe-designer\/[A-Za-z0-9_\-/]*)/g,
+      )) {
+        const path = m[1];
+        if (path.endsWith('/')) continue;
+        if (path.includes('$')) continue;
+        paths.add(path);
+      }
+
+      expect(paths.size).toBeGreaterThan(0);
+
+      const backendSources = [
+        'backend/src/interfaces/controllers/recipe-designer.controller.ts',
+      ]
+        .map((rel) => stripComments(readFileSync(resolve(REPO_ROOT, rel), 'utf8')))
+        .join('\n');
+
+      /**
+       * 后端路由写成 `@Post('assess-items')` 或 `@Get('drafts/:id/assess')`，
+       * 前缀 `api/v1/recipe-designer` 在 @Controller 上。
+       * 所以只比对**去掉前缀后的那一段**。
+       */
+      const missing: string[] = [];
+      for (const full of paths) {
+        const tail = full.replace('/recipe-designer/', '');
+        // 形如 drafts/:id/assess → 后端写的是 @Post('drafts/:id/assess')
+        if (!backendSources.includes(`'${tail}'`) && !backendSources.includes(`"${tail}"`)) {
+          missing.push(full);
+        }
+      }
+
+      expect(missing).toEqual([]);
+    });
+  });
 });

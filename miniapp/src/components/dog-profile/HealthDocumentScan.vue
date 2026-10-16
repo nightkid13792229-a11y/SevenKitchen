@@ -1231,15 +1231,7 @@ async function scanAll(filePaths: string[]) {
 
   isBusy.value = true
   try {
-    /**
-     * 准备阶段（原来在 try 外面）：
-     *   ① 把原图压到"识别用"的尺寸；
-     *   ② 太糊的图先问一句要不要继续。
-     * 这两步也会失败（相册拿到的临时文件读不出来、canvas 不可用…），
-     * 放进 try 才能保证 `isBusy` 被复位、并且给用户一句能看懂的话。
-     */
-    {
-
+    for (let index = 0; index < filePaths.length; index += 1) {
       uni.showLoading({
         title: filePaths.length > 1
           ? `识别中 ${index + 1}/${filePaths.length}…`
@@ -1294,7 +1286,7 @@ async function scanAll(filePaths: string[]) {
             status: 'ok',
             label: TYPE_LABELS[imageType as ExplicitDocumentType] || '资料',
             warnings: [],
-      speciesHint: String((data as { speciesHint?: string }).speciesHint || ''),
+            speciesHint: String((res.data as { speciesHint?: string }).speciesHint || ''),
           })
         } else {
           /**

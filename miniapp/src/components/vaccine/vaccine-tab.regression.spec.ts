@@ -78,10 +78,12 @@ describe('疫苗 · 板块编排（VaccineTab）', () => {
       '<NextCard',
       '<RecordEditor',
       '<ScanConfirm',
+      // 识别组件的提示块（"没识别到内容"）要离点击的地方近 ——
+      // 2026-10-16 老板截图里它落在接种记录下面，太远了，挪到计划之前
+      '<HealthDocumentScan',
       '<PlanTimeline',
       '<RecordList',
       '<IgnoreSheet',
-      '<HealthDocumentScan',
     ]
     let last = -1
     for (const tag of order) {

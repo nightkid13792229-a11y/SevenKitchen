@@ -968,7 +968,12 @@ describe('识别结果 · 猫的疫苗本提醒（2026-10-09）', () => {
   it('标记来自后端识别结果（前端不自己判物种）', () => {
     const source = scan()
 
-    expect(source).toContain('speciesHint: String((data as { speciesHint?: string }).speciesHint')
+    /*
+     * ⚠️ 2026-10-16：这里原来钉的是 `(data as …)` —— 而 `data` 在那个作用域里**根本不存在**
+     *    （应该是 `res.data`）。守卫把一处真崩溃当成了正确写法，所以它一直是绿的 ✗。
+     *    这类"名字不存在"的错现在由 architecture/no-undefined-names.spec.ts 统一拦。
+     */
+    expect(source).toContain('speciesHint: String((res.data as { speciesHint?: string }).speciesHint')
     // 前端不自己判物种（不做"看到猫三联就当猫本"这种本地规则）✓
     expect(source).not.toContain('function detectSpecies')
   })

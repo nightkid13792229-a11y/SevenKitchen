@@ -72,6 +72,20 @@
         @discard="onScanDiscard"
       />
 
+    <!-- 识别服务（四类记录共用）。疫苗侧只取结果里的**名称 + 日期**；
+         `defer-confirm`：确认这一步由上面的 ScanConfirm 承担。 -->
+    <HealthDocumentScan
+      ref="scanRef"
+      v-if="dogId"
+      :dog-id="dogId"
+      :dog-name="dogName"
+      document-type="VACCINE_BOOK"
+      upload-type="vaccine"
+      hide-trigger
+      defer-confirm
+      @scanned="onScanned"
+    />
+
       <PlanTimeline :plan="planSteps" :rhythm="rhythm" :next-key="nextKey" />
 
       <RecordList
@@ -96,19 +110,6 @@
       @cancel="ignoreStep = null"
     />
 
-    <!-- 识别服务（四类记录共用）。疫苗侧只取结果里的**名称 + 日期**；
-         `defer-confirm`：确认这一步由上面的 ScanConfirm 承担。 -->
-    <HealthDocumentScan
-      ref="scanRef"
-      v-if="dogId"
-      :dog-id="dogId"
-      :dog-name="dogName"
-      document-type="VACCINE_BOOK"
-      upload-type="vaccine"
-      hide-trigger
-      defer-confirm
-      @scanned="onScanned"
-    />
   </view>
 </template>
 

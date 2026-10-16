@@ -177,6 +177,27 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
   })
 })
 
+describe('疫苗 · 接种记录能改能删（老板 2026-10-16 问）', () => {
+  const list = read('RecordList.vue')
+
+  it('每一行都有可见的「编辑」入口（原型只画了名字+日期，家长不知道能点）', () => {
+    expect(list).toContain('vk-records__edit')
+    expect(list).toContain('编辑')
+  })
+
+  it('点一行 → 进编辑；待核对的先给核对动作；抗体检测行也能改', () => {
+    expect(list).toContain("emit('edit-record', entry.record)")
+    expect(list).toContain("emit('edit-test', entry.test)")
+    expect(list).toContain("emit('verify-record', entry.record)")
+  })
+
+  it('编辑入口把"这是哪一条"带进去，删除按钮由"有没有 id"决定（新增时不出现）', () => {
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('const canRemove = computed(() => Boolean(props.record?.id || props.test?.id))')
+    expect(editor).toContain("v-if=\"canRemove\"")
+  })
+});
+
 describe('疫苗 · 免疫计划（PlanTimeline，原型 A/B/C/F/I/K）', () => {
   const timeline = read('PlanTimeline.vue')
 

@@ -35,6 +35,9 @@
         </view>
         <text v-if="isPending(entry)" class="vk-records__check">待核对</text>
         <text class="vk-records__date">{{ formatFullDate(entry.date) }}</text>
+        <!-- 点一行能改、能删 —— 得让人**看得出**这里能点（原型只画了名字+日期，
+             家长不知道可以点，会以为记录只能看不能改） -->
+        <text class="vk-records__edit">编辑</text>
       </view>
 
       <view v-if="entries.length > visibleEntries.length" class="vk-records__more" @tap="toggleExpanded">
@@ -286,6 +289,13 @@ function onPreviewBook() {
 
 .vk-records__check {
   @include vk-badge($vk-check-bg, $vk-check-fg);
+}
+
+.vk-records__edit {
+  flex-shrink: 0;
+  font-size: $vk-font-sub;
+  color: $vk-brand;
+  padding-left: 6rpx;
 }
 
 .vk-records__date {

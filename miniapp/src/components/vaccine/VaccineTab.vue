@@ -293,6 +293,7 @@ function onEditRecord(record: VaccineRecord) {
   editorMode.value = 'record'
   editorRecord.value = record
   editorTest.value = null
+  editorHeading.value = '修改这条记录'
   editorVisible.value = true
 }
 
@@ -300,6 +301,7 @@ function onEditTest(test: AntibodyTest) {
   editorMode.value = 'antibody'
   editorTest.value = test
   editorRecord.value = null
+  editorHeading.value = '修改这次抗体检测'
   editorVisible.value = true
 }
 

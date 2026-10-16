@@ -152,11 +152,31 @@ describe('疫苗 · 下一针那行"什么时候"（原型四句话）', () => {
 });
 
 describe('疫苗 · 计划行下面那行小字', () => {
-  it('有依据就写依据（C 屏"上一次 2025/11/20"这类是后端给的）', () => {
-    expect(stepRowNote(step({ basis: '上一次 2025/11/20' }))).toEqual({
-      text: '上一次 2025/11/20',
-      overdue: false,
-    });
+  /*
+   * ⚠️ 2026-10-16 修（老板截图："免疫计划中的依据说明文案需要默认展开吗？太占版面了吧"）：
+   *    这里原来把后端的 `basis` 当小字写出来 —— 那是整段依据（120 多字、带指南引注），
+   *    于是计划里**每一行**都糊着一大段，五行计划占了两屏，记录区被挤到看不见。
+   *    现在计划行只报状态，依据留给「下一针」卡片。
+   */
+  it('🔴 计划行**不许**把依据（basis）抄成小字 —— 那是整段长文', () => {
+    const long = 'WSAVA 2024：' + '犬瘟、细小、腺病毒为必须接种的核心疫苗。'.repeat(6);
+    expect(stepRowNote(step({ basis: long })).text).toBe('');
+    expect(stepRowNote(step({ basis: '上一次 2025/11/20' })).text).toBe('');
+  });
+
+  it('计划行的小字一律很短（两行以内，别把版面吃光）', () => {
+    const cases = [
+      step({ basis: 'WSAVA 2024：'.padEnd(120, '苗') }),
+      step({ status: 'DONE', basis: 'WSAVA 2024：'.padEnd(120, '苗') }),
+      step({
+        status: 'OVERDUE',
+        missedWindowStart: '2025-08-01',
+        missedWindowEnd: '2025-08-31',
+      }),
+    ];
+    for (const item of cases) {
+      expect(stepRowNote(item).text.length).toBeLessThanOrEqual(24);
+    }
   });
 
   it('逾期时补一句"原建议时间 X 已过"，并且整行标红（I 屏）', () => {
@@ -171,7 +191,7 @@ describe('疫苗 · 计划行下面那行小字', () => {
     ).toEqual({ text: '原建议时间 2025/08 已过', overdue: true });
   });
 
-  it('已完成且没有依据 → 写"已完成"（K 屏）', () => {
+  it('已完成 → 写"已完成"（K 屏）', () => {
     expect(stepRowNote(step({ status: 'DONE' }))).toEqual({ text: '已完成', overdue: false });
   });
 

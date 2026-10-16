@@ -182,18 +182,23 @@ export function stepWhenText(step: VaccineStep): string {
 /**
  * 计划行标题下面那行小字。
  *
- * 优先用后端给的依据（例如"上一次 2025/11/20"、"这次不用打：抗体检测合格（2026/10/15）"）；
- * 逾期项由这里补一句"原建议时间 X 已过"（原型 I 屏的原话）。
+ * ⚠️ 2026-10-16 修（老板截图："免疫计划中的依据说明文案需要默认展开吗？太占版面了吧"）：
+ *    这里原来优先写后端的 `basis` —— 那是**整段依据**（实测 120 多字、带指南引注），
+ *    结果计划里每一行都糊着一大段，五行计划占了整整两屏，记录区被挤到看不见。
+ *
+ *    改法：计划行**只说这一行的状态**，不复述依据。
+ *      · 已完成   → `已完成`
+ *      · 逾期     → `原建议时间 X 已过`（原型 I 的原话）
+ *      · 其余     → 不写（左边已经写了"现在/尽快"、右边有"必打/强烈建议"）
+ *    依据与那句短话留给「下一针」卡片 —— 家长是在那里读"为什么"的。
  */
 export function stepRowNote(step: VaccineStep): { text: string; overdue: boolean } {
-  const basis = String(step?.basis || '').trim()
   if (step.status === 'OVERDUE' && step.missedWindowStart) {
-    const original = basis
-      ? `${basis} · 原建议时间 ${formatYearMonth(step.missedWindowStart)} 已过`
-      : `原建议时间 ${formatYearMonth(step.missedWindowStart)} 已过`
-    return { text: original, overdue: true }
+    return {
+      text: `原建议时间 ${formatYearMonth(step.missedWindowStart)} 已过`,
+      overdue: true,
+    }
   }
-  if (basis) return { text: basis, overdue: false }
   if (step.status === 'DONE') return { text: '已完成', overdue: false }
   return { text: '', overdue: false }
 }

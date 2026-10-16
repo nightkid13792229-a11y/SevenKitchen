@@ -394,12 +394,13 @@ const paymentHintOf = (order: CustomRecipeOrderItem): string =>
     paymentTimeoutMinutes: paymentTimeoutMinutes.value,
   });
 
+/**
+ * 可抵扣余额（2026-10-16 批次 5.2）。
+ *
+ * **直接取后端给的值，不在前端相减** —— 理由见订单详情页同名字段的注释。
+ */
 function creditRemainingOf(order: CustomRecipeOrderItem): number {
-  if (order.creditRemaining !== undefined) return Number(order.creditRemaining);
-  return Math.max(
-    0,
-    Number(order.creditAmount || 0) - Number(order.creditUsed || 0),
-  );
+  return Number(order.creditRemaining ?? 0);
 }
 </script>
 

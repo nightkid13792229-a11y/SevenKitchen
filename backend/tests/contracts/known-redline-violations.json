@@ -56,16 +56,12 @@
   },
   "gd03_business_arithmetic": {
     "title": "前端把后端已经给的值再算一遍（抵扣余额兜底）",
-    "why": "老板要求「所有计算交给后端，前端只渲染」。后端 my-orders 与 orders/:orderId 两个接口都已返回 creditRemaining，前端仍留了兜底相减。",
-    "clearAt": "批次 5",
-    "maxTotal": 2,
-    "files": {
-      "miniapp/src/pages/custom-recipe/order-detail.vue": 1,
-      "miniapp/src/pages/custom-recipe/orders.vue": 1
-    },
+    "why": "老板要求「所有计算交给后端，前端只渲染」。小程序订单详情与列表各留了一段 `creditRemaining ?? (creditAmount - creditUsed)` 兜底 —— 而后端两个接口本来就都返回这个值，所以那是**死代码**。留着它的代价是：余额算法一变，前端那份相减会**悄悄算错**，而且没人会想起来还有第二处。",
+    "clearAt": "✅ 已于 2026-10-16（批次 5.2）清零",
+    "maxTotal": 0,
+    "files": {},
     "notes": {
-      "_general": "⚠️ 2026-10-16 核实更正两件事：① 这三处**不是**「后端没给、前端自己算」，而是**后端已给、前端还留兜底**（`order.creditRemaining !== undefined ? 用它 : 自己相减`），性质是冗余而非「真在算」，严重度比原先记录的低；② 此前勘察报告说「列表接口不返回 creditRemaining」是**错的** —— 实测 custom-recipe.controller.ts 的 my-orders（:123）与 orders/:orderId（:245）两个接口都返回。",
-      "_knownGap": "❗已知抓不到的第三处：`miniapp/src/pages/custom-recipe/success.vue` 写成了三元表达式（`x ?? (a !== undefined ? Number(a) - Number(b) : fallback)`），没有 `Math.max` 包着，本守卫的正则匹配不到。**宁可少抓这一处，也不要放宽正则去误伤一片**（放宽后连 CSS 类名 `.credit` 都会被算成违规）。批次 5 手工清 `creditRemaining` 兜底时，三处必须一起清。"
+      "_cleared": "✅ **已清零**。两处都改成直接取后端值（`Number(order.creditRemaining ?? 0)`）。\n当时守卫还记过一个抓不到的第三处（`success.vue`），2026-10-16 复核确认：那个页面只用 `creditAmount`/`creditUsed` 显示\"实付多少\"，**本来就没有相减**，所以不需要改 —— 守卫当时\"宁可少抓一处也不放宽正则\"的判断是对的。"
     }
   },
   "gd04_duplicate_assessment": {

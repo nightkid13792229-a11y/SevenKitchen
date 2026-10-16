@@ -623,12 +623,22 @@ const paymentHint = computed(() => {
 
 const creditTotal = computed(() => Number(order.value.creditAmount || 0));
 const creditUsed = computed(() => Number(order.value.creditUsed || 0));
-const creditRemaining = computed(() => {
-  if (order.value.creditRemaining !== undefined) {
-    return Number(order.value.creditRemaining);
-  }
-  return Math.max(0, creditTotal.value - creditUsed.value);
-});
+
+/**
+ * 可抵扣余额（2026-10-16 批次 5.2）。
+ *
+ * ⚠️ **直接取后端给的值，不在前端相减。**
+ *
+ * 以前这里留了一段兜底：`creditRemaining ?? (creditAmount - creditUsed)`。
+ * 后端两个接口（订单列表与详情）**本来就会返回这个值**，
+ * 所以那段兜底是死代码；而留着它的代价是：
+ * 万一余额的算法变了（比如要考虑退款回冲），前端这份相减会**悄悄算错**，
+ * 而且没人会想起来还有第二处。
+ *
+ * 老板的要求是「所有的计算交给后端，前端只负责渲染」——
+ * 这一处就是那句话的直接体现。
+ */
+const creditRemaining = computed(() => Number(order.value.creditRemaining ?? 0));
 
 const hasRequirements = computed(() => {
   const value = order.value;

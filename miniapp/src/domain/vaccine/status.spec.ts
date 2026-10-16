@@ -240,3 +240,35 @@ describe('疫苗 · 日期写法（只切字符串，不按本地时区重算）
     expect(formatFullDate('')).toBe('');
   });
 });
+
+describe('疫苗 · 抗体检测替代那一行（原型 F）', () => {
+  const covered = step({
+    key: 'core-adult-1',
+    label: '评估',
+    status: 'DONE',
+    windowStart: '2029-10-15',
+    windowEnd: '2029-10-15',
+    hint: '这次不用打：抗体检测合格（2026-10-15）',
+    titer: { testedAt: '2026-10-15', nextReviewAt: '2029-10-15' },
+  });
+
+  it('左边那一列写"下次评估"，不写"已完成"（时间是评估时间，不是打针时间）', () => {
+    expect(stepWindowText(covered)).toEqual({ main: '2029/10/15', sub: '下次评估' });
+  });
+
+  it('行内小字写"这次不用打：抗体检测合格（…）"', () => {
+    expect(stepRowNote(covered)).toEqual({
+      text: '这次不用打：抗体检测合格（2026/10/15）',
+      overdue: false,
+    });
+  });
+
+  it('这张卡是它的时候，"什么时候"写成下次评估', () => {
+    expect(stepWhenText(covered)).toBe('建议下次评估 2029/10/15');
+  });
+
+  it('🔴 短话必须是后端换过的那句，不能还是"幼犬从 6~8 周开始…"', () => {
+    expect(covered.hint).toContain('抗体检测合格');
+    expect(covered.hint).not.toContain('6~8 周');
+  });
+});

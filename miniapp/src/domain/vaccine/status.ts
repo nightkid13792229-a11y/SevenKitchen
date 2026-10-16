@@ -124,6 +124,10 @@ export function formatYearMonth(value: string | null | undefined): string {
  *   · 已完成（DONE）       → `2025/06/02` + `已完成`
  */
 export function stepWindowText(step: VaccineStep): { main: string; sub: string } {
+  // 被抗体检测替代的那一行：时间是**下次评估**，不是"已完成"（原型 F）
+  if (step.titer) {
+    return { main: formatFullDate(step.titer.nextReviewAt), sub: '下次评估' }
+  }
   if (step.status === 'OVERDUE') {
     return {
       main: '尽快',
@@ -157,6 +161,9 @@ export function stepWindowText(step: VaccineStep): { main: string; sub: string }
  * ⚠️ 窗口是后端算的，这里只是"怎么写出来"；"现在在不在窗口里"由 `status` 决定。
  */
 export function stepWhenText(step: VaccineStep): string {
+  if (step.titer) {
+    return `建议下次评估 ${formatFullDate(step.titer.nextReviewAt)}`
+  }
   if (step.status === 'OVERDUE') {
     if (step.missedWindowStart) {
       const start = formatFullDate(step.missedWindowStart)
@@ -193,6 +200,13 @@ export function stepWhenText(step: VaccineStep): string {
  *    依据与那句短话留给「下一针」卡片 —— 家长是在那里读"为什么"的。
  */
 export function stepRowNote(step: VaccineStep): { text: string; overdue: boolean } {
+  // 抗体检测替代（原型 F 那一行的原话）
+  if (step.titer) {
+    return {
+      text: `这次不用打：抗体检测合格（${formatFullDate(step.titer.testedAt)}）`,
+      overdue: false,
+    }
+  }
   if (step.status === 'OVERDUE' && step.missedWindowStart) {
     return {
       text: `原建议时间 ${formatYearMonth(step.missedWindowStart)} 已过`,

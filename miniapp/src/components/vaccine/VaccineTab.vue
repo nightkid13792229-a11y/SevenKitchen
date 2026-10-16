@@ -9,17 +9,26 @@
   <view class="vaccine-tab">
     <!-- 加载失败 ≠ 没有记录（需求 R13）：给一块看得见的提示 + 一个重试键 -->
     <view v-if="loadError" class="vk-state">
-      <text class="vk-state__title">免疫安排没加载出来</text>
+      <text class="vk-state__title">免疫计划没加载出来</text>
       <text class="vk-state__desc">{{ loadError }}</text>
       <text class="vk-state__btn" @tap="reload">重新加载</text>
     </view>
 
     <view v-else-if="loading && !planData" class="vk-state">
-      <text class="vk-state__title">正在读取免疫安排…</text>
+      <text class="vk-state__title">正在读取免疫计划…</text>
       <text class="vk-state__desc">马上就好。</text>
     </view>
 
     <template v-else>
+      <!-- 档案里没有生日 → 后端算不出计划（返回空）。这时**不能**说"都打完了"，
+           那是假话：真实原因是缺一个必要的输入。 -->
+      <view v-if="planData && !planData.birthday" class="vk-state">
+        <text class="vk-state__title">档案里还缺一个生日</text>
+        <text class="vk-state__desc">免疫计划是按生日算的 —— 填上生日，这里就知道该什么时候打了。</text>
+        <text class="vk-state__btn" @tap="goFillBirthday">去填生日</text>
+      </view>
+
+      <template v-else>
       <NextCard
         :next="nextStep"
         :later-steps="laterSteps"
@@ -77,6 +86,7 @@
         @add-test="onAntibody(null)"
         @preview="previewAttachments"
       />
+      </template>
     </template>
 
     <!-- 忽略时问一句原因（这次先不打 / 不再接种了）-->
@@ -206,6 +216,11 @@ async function loadAll() {
   } finally {
     loading.value = false
   }
+}
+
+/** 缺生日时，把家长送到档案编辑页（就这一条路） */
+function goFillBirthday() {
+  uni.navigateTo({ url: `/pages/dog-create/index?dogId=${props.dogId}` })
 }
 
 function reload() {
@@ -415,6 +430,7 @@ async function onVerifyRecord(record: VaccineRecord) {
   saving.value = true
   try {
     await vaccineApi.records.update(props.dogId, record.id, { productVerified: true })
+    uni.showToast({ title: '已核对', icon: 'success' })
     await refreshAfterWrite()
   } catch (error: any) {
     uni.showToast({ title: error?.message || '没核对成功，再试一次', icon: 'none' })
@@ -427,7 +443,6 @@ async function onVerifyRecord(record: VaccineRecord) {
 
 const scanRef = ref<{
   startScan?: () => void
-  startDocumentScan?: () => void
   unconfirmedDraftCount?: () => number
 } | null>(null)
 
@@ -435,10 +450,6 @@ const scanRows = ref<VaccineScanRow[]>([])
 
 function startScan() {
   scanRef.value?.startScan?.()
-}
-
-function startDocumentScan() {
-  scanRef.value?.startDocumentScan?.()
 }
 
 /**
@@ -566,7 +577,6 @@ function confirmModal(options: { title: string; content?: string; confirmText?: 
 defineExpose({
   reload,
   startScan,
-  startDocumentScan,
   /** 底部「记一条」→ 打开录入器 */
   addRecord,
   /** 录入器开着（有内容还没保存）→ 切书签前拦一下 */

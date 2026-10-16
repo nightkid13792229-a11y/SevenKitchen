@@ -657,8 +657,11 @@ describe('选文档上传（PDF / Word，2026-10-08）', () => {
       'utf-8',
     )
 
-    expect(vaccine).toContain('startDocumentScan')
+    // 就诊/体检/过敏三类仍然可以从底部选"PDF / Word 文档"
     expect(records).toContain('function startDocumentScan()')
+    // 疫苗侧没有这条路（原型只有两个明面按钮，且疫苗本是纸质小本）——
+    // 见 vaccine-tab.regression.spec.ts 里的说明
+    expect(vaccine).not.toContain('startDocumentScan')
     expect(page).toContain("'选 PDF / Word 文档（先发到微信里）'")
     expect(page).toContain('startDocumentScan?.()')
   })

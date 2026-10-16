@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -55,7 +55,24 @@ const REASON_OPTIONS: { value: 'NOT_NOW' | 'STOPPED'; label: string; hint: strin
   { value: 'STOPPED', label: '不再接种了', hint: '按兽医建议或我决定停止' },
 ]
 
-const reason = ref<'NOT_NOW' | 'STOPPED'>('NOT_NOW')
+const DEFAULT_REASON: 'NOT_NOW' | 'STOPPED' = 'NOT_NOW'
+
+const reason = ref<'NOT_NOW' | 'STOPPED'>(DEFAULT_REASON)
+
+/**
+ * 每次**打开时复位**。
+ *
+ * ⚠️ 不复位的话：上次给狂犬选了"不再接种了"，这次给核心那一针打开弹层，
+ *    选项还停在"不再接种了" —— 家长只想"这次先不打"，一按确定就记成了长期停打。
+ *    默认值取"这次先不打"（影响最小、随时还会再提醒）；原型 J 画的是选中
+ *    "不再接种了"，那只是**画了一个状态**，不是默认值。
+ */
+watch(
+  () => props.visible,
+  (open) => {
+    if (open) reason.value = DEFAULT_REASON
+  },
+)
 
 function pick(value: 'NOT_NOW' | 'STOPPED') {
   reason.value = value

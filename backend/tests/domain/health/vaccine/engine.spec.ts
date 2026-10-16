@@ -636,3 +636,38 @@ describe('引擎 · 「不再接种了」是长期决定（需求 R5 验收：�
     expect(rabiesPending(later)[0].key).not.toBe(nextRabies.key);
   });
 });
+
+describe('引擎 · 抗体检测替代那一针（原型 F）', () => {
+  it('替代后：短话换成"这次不用打…"，并带上 titer（时间含义变成下次评估）', () => {
+    const birthday = dog(60); // 60 周龄
+    const coreRecord = record('c1', '卫佳伍', addWeeks(birthday, 30));
+    const view = buildPlanView({
+      dogId: 'dog-1',
+      birthday: toDateText(birthday),
+      records: [coreRecord],
+      antibodyTests: [
+        {
+          id: 't1',
+          testedAt: '2026-10-15',
+          targets: ['CORE'],
+          result: 'PASS',
+          // ⚠️ 用项目的 toDateText（本地时区），别用 toISOString().slice(0,10)
+          //    —— 东八区会整体差一天（这个项目踩过）
+          nextReviewAt: toDateText(addYears(new Date('2026-10-15T00:00:00'), 3)),
+        },
+      ],
+      today: TODAY,
+    });
+
+    const covered = view.plan.find((step) => step.key.includes('core'));
+    expect(covered).toBeDefined();
+    // ⚠️ 这条最容易漏：换了 basis 忘了换 hint，界面上就会继续写"幼犬从 6~8 周开始…"
+    expect(covered!.hint).toContain('抗体检测合格');
+    expect(covered!.hint).not.toContain('6~8 周');
+    expect(covered!.titer).toBeDefined();
+    expect(covered!.titer!.testedAt).toBe('2026-10-15');
+    expect(covered!.titer!.nextReviewAt).toBe('2029-10-15');
+    // 节奏那一句也要跟着说"评估"
+    expect(view.rhythm).toContain('评估');
+  });
+});

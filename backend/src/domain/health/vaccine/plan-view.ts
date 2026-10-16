@@ -70,6 +70,14 @@ export interface PlanStepDto {
   statusLabel: string;
   /** 卡片上那行**短话**（原型 B/F/I 卡上那句）；与 `basis` 分工见程序表 */
   hint?: string;
+  /**
+   * 这一针是被**抗体检测替代**的（原型 F）：
+   * 时间含义变成"下次评估"，行上写"这次不用打：抗体检测合格（X）"。
+   */
+  titer?: {
+    testedAt: string;
+    nextReviewAt: string;
+  };
   /** 这一步为什么在这个时间 */
   basis?: string;
   /** 这一项能不能用抗体检测替代 */
@@ -199,6 +207,7 @@ export function toStepDto(
     status: step.status,
     statusLabel: step.statusLabel,
     hint: step.hint,
+    ...(step.titer ? { titer: step.titer } : {}),
     basis: step.basis,
     titerable: step.titerable,
     products,

@@ -208,6 +208,11 @@ export interface MatchedStep extends MaterializedStep {
   statusLabel: string;
   matchedRecordId: string | null;
   matchedRecordDate: Date | null;
+  /** 这一针被抗体检测替代了（原型 F）—— 时间含义变成"下次评估" */
+  titer?: {
+    testedAt: string;
+    nextReviewAt: string;
+  };
   /** 顾客点过"不做"（`VaccineDecision.decision === 'SKIP'`） */
   skipped: boolean;
 }
@@ -1238,6 +1243,15 @@ export function buildPlanView(input: BuildPlanViewInput): VaccinePlanView {
           status: 'DONE' as StepStatus,
           statusLabel: '已完成',
           label: '评估',
+          // ⚠️ hint 必须一起换掉：它是卡片/计划行上那行短字，
+          //    不换的话，一只核心已被抗体检测替代的狗，界面上还会写着
+          //    "幼犬从 6~8 周龄开始…"（2026-10-16 自查发现）
+          hint: `这次不用打：抗体检测合格（${toDateText(titerCover.testedAt)}）`,
+          // 前端据此把这一行画成"2029/10/15 · 下次评估"，而不是普通已完成（原型 F）
+          titer: {
+            testedAt: toDateText(titerCover.testedAt),
+            nextReviewAt: toDateText(titerCover.nextReviewAt),
+          },
           basis:
             `已用抗体检测替代：${toDateText(titerCover.testedAt)} 的抗体检测结果为合格，` +
             `核心疫苗这一针不用打；下次评估 ${toDateText(titerCover.nextReviewAt)}。` +

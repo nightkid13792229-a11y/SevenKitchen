@@ -5,7 +5,9 @@
        ⚠️ 前端**不排计划、不算状态**：顺序、窗口、状态、"现在"是哪一条
           全部是后端算好下发的（技术方案 2.2 / 3.4）。这里只按数组顺序画。
        ⚠️ 底部"之后的节奏"一行替代了把 20 年逐条列出来（需求 7.3）。 -->
-  <view class="vk-plan">
+  <!-- 没有一行可排时**整块不出现**：答案已经在上面那张「下一针」卡里了，
+       再立一个空板块只会把同一句话又说一遍、还多占一屏 -->
+  <view v-if="plan.length > 0" class="vk-plan">
     <view class="vk-plan__head">
       <view class="vk-plan__bar" />
       <text class="vk-plan__title">免疫计划</text>
@@ -48,8 +50,6 @@
           >{{ rowNote(step).text }}</text>
         </view>
       </view>
-
-      <text v-if="plan.length === 0" class="vk-plan__empty">暂无需要接种的项目</text>
 
       <view v-if="rhythm" class="vk-plan__rhythm">
         <text>{{ rhythm }}</text>

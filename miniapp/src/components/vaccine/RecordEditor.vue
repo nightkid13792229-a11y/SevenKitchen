@@ -72,7 +72,7 @@
 
         <view class="vk-editor__block">
           <text class="vk-editor__label">什么时候打的</text>
-          <picker mode="date" :value="date" @change="onDateChange">
+          <picker mode="date" :value="date" :end="maxDate" @change="onDateChange">
             <view class="vk-editor__field">
               <text :class="{ 'vk-editor__date--empty': !date }">{{ date || '点这里选日期' }}</text>
             </view>
@@ -84,7 +84,7 @@
       <template v-else>
         <view class="vk-editor__block">
           <text class="vk-editor__label">什么时候检的</text>
-          <picker mode="date" :value="date" @change="onDateChange">
+          <picker mode="date" :value="date" :end="maxDate" @change="onDateChange">
             <view class="vk-editor__field">
               <text :class="{ 'vk-editor__date--empty': !date }">{{ date || '点这里选日期' }}</text>
             </view>
@@ -222,6 +222,9 @@ const title = computed(() => {
   if (props.record) return '改一条接种记录'
   return '记一条接种记录'
 })
+/** 日期上限 = 今天：打过的针不可能发生在未来（需求 R13） */
+const maxDate = computed(() => todayDateText())
+
 const canRemove = computed(() => Boolean(props.record?.id || props.test?.id))
 const componentChoices = computed(() => componentOptionsOf(props.componentOptions))
 const targetOptions = computed(() => ANTIBODY_TARGET_OPTIONS)

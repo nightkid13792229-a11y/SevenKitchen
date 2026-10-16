@@ -8,7 +8,8 @@
       <text class="vk-scan__title">识别结果</text>
       <text class="vk-scan__count">{{ rows.length }} 条</text>
     </view>
-    <text class="vk-scan__hint">读出 {{ rows.length }} 条，请逐条确认。点任意一条可以改名称、日期，或者删掉；没确认的不会保存。</text>
+    <text class="vk-scan__hint">读出 {{ rows.length }} 条，请逐条确认。点任意一条可以改名称、日期，或者删掉。</text>
+    <text v-if="hasCareRow" class="vk-scan__hint">「待核对」的那几条会先记下来，但暂时不参与提醒 —— 对照本子核对之后就算进去。</text>
 
     <view
       v-for="(row, index) in rows"
@@ -54,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { VaccineScanRow } from '../../domain/vaccine/types'
 
 const props = withDefaults(defineProps<{
@@ -65,6 +66,9 @@ const props = withDefaults(defineProps<{
 }>(), {
   saving: false,
 })
+
+/** 有没有"待核对"的行（决定要不要说那句"暂时不参与提醒"） */
+const hasCareRow = computed(() => (props.drafts || []).some((row) => isCare(row)))
 
 const emit = defineEmits<{
   (event: 'save', rows: VaccineScanRow[]): void

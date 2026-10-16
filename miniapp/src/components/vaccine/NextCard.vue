@@ -169,7 +169,9 @@ const idleText = computed(() => {
     const names = items.map((item) => `${item.kindLabel}${item.label}`).join('、')
     return `有 ${props.ignoredCount || items.length} 项已设为不做：${names}`
   }
-  return '按现在这份记录，暂无需要接种的项目'
+  // ⚠️ 不能重复上面那行"暂无需要接种的项目"（原来是同一句话写两遍）。
+  //    这里说"接下来会怎样"，才是家长真正想知道的。
+  return '该打的都打完了。以后该打的时候，这里会告诉你。'
 })
 
 const productText = computed(() => {

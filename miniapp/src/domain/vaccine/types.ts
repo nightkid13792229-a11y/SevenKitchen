@@ -74,6 +74,11 @@ export interface VaccineStep {
   /** 依据文案（展开时给家长看） */
   /** 卡片上那行**短话**（后端按程序表逐行下发；原型 B/F/I 卡上那句） */
   hint?: string
+  /** 这一针被抗体检测替代了（原型 F）：时间含义变成"下次评估" */
+  titer?: {
+    testedAt: string
+    nextReviewAt: string
+  }
   /** 展开时的**依据**（带指南引注的整段，比 hint 长得多） */
   basis?: string
   /** 这一项能不能用抗体检测替代（核心 = true；狂犬/钩端 = false） */

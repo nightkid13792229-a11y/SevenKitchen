@@ -92,10 +92,15 @@ describe('疫苗 · 板块编排（VaccineTab）', () => {
 
   it('给页面（底部常驻栏 / 切书签守卫）的入口齐全', () => {
     const exposed = tab.slice(tab.indexOf('defineExpose({'))
+    /*
+     * ⚠️ 2026-10-16：`startDocumentScan`（PDF / Word 识别）从疫苗侧**撤掉**了。
+     *    原型底栏只有两个明面按钮（上传疫苗本 / 记一条），疫苗本本身就是纸质小本；
+     *    就诊/体检/过敏那三类的文档入口不受影响（仍在它们自己的底部通道里）。
+     *    要恢复的话，得先给它一个家长看得见的入口，别再挂一个走不到的接口。
+     */
     for (const name of [
       'reload',
       'startScan',
-      'startDocumentScan',
       'addRecord',
       'countUnsaveableDrafts',
       'unconfirmedDraftCount',
@@ -176,6 +181,46 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
     expect(template).toContain('记录这一针')
   })
 })
+
+describe('疫苗 · 边界与状态（老板 2026-10-16："这种小问题还有很多"）', () => {
+  const tab = read('VaccineTab.vue')
+
+  it('档案里没有生日 → 说"还缺一个生日"，**不能**说"该打的都打完了"', () => {
+    expect(tab).toContain('档案里还缺一个生日')
+    expect(tab).toContain("planData && !planData.birthday")
+    expect(tab).toContain("url: `/pages/dog-create/index?dogId=${props.dogId}`")
+  })
+
+  it('加载/失败态里的叫法与板块一致，都叫"免疫计划"（不叫"免疫安排"）', () => {
+    expect(tab).not.toContain('免疫安排')
+  })
+
+  it('核对成功也要回一句（原来只有失败才提示）', () => {
+    expect(tab).toContain("uni.showToast({ title: '已核对'")
+  })
+});
+
+describe('疫苗 · 忽略弹层（原型 J）', () => {
+  const sheet = read('IgnoreSheet.vue')
+
+  it('每次打开都复位成"这次先不打"（否则上次选过"不再接种了"，这次一按确定就记错原因）', () => {
+    expect(sheet).toContain('DEFAULT_REASON')
+    expect(sheet).toContain('if (open) reason.value = DEFAULT_REASON')
+  })
+
+  it('默认值取影响最小的那个（原型 J 画的是"不再接种了"选中，那只是画了一个状态）', () => {
+    expect(sheet).toContain("const DEFAULT_REASON: 'NOT_NOW' | 'STOPPED' = 'NOT_NOW'")
+  })
+});
+
+describe('疫苗 · 录入卡', () => {
+  const editor = read('RecordEditor.vue')
+
+  it('日期不能选未来（后端会拒，但别让家长白填一遍）', () => {
+    expect(editor).toContain(':end="maxDate"')
+    expect(editor).toContain('const maxDate = computed(() => todayDateText())')
+  })
+});
 
 describe('疫苗 · 接种记录能改能删（老板 2026-10-16 问）', () => {
   const list = read('RecordList.vue')

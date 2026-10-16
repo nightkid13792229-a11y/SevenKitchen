@@ -184,6 +184,26 @@ function collectBoundNames(text: string): Set<string> {
   for (const m of text.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[:=]/g)) {
     add(m[1])
   }
+  /**
+   * ★ 数组解构：`const [a, b] = …`（2026-10-16 补）
+   *
+   * 之前不认识这一种，于是 `const [summary, detailRes] = await Promise.all([…])`
+   * 里的 `summary` 被当成"调用了却没定义"。
+   *
+   * 为什么以前没暴露：这个位置原先叫 `res`，而 `res` 在文件别处
+   * 也被 `const res = …` 声明过，于是"蒙混过关"了 ——
+   * **换个变量名就露馅，说明守卫本身有洞，不是代码有问题**。
+   *
+   * 支持 `[a, b]`、`[a = 1, b]`、`[, b]`（跳过第一位）这几种写法。
+   * 只取顶层、不递归 —— 嵌套解构在本项目里没出现过，
+   * 真出现了再补，宁可漏报也不要写一个看不懂的正则。
+   */
+  for (const m of text.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s*\[([^\[\]]*)\]\s*[:=]/g)) {
+    for (const piece of m[1].split(',')) {
+      // 支持默认值 `a = 1`
+      add(piece.split('=')[0])
+    }
+  }
   // const { a, b } = … / 参数解构 { a, b }
   for (const m of text.matchAll(/\{([^{}]*)\}\s*=/g)) {
     for (const piece of m[1].split(',')) add(piece)

@@ -104,6 +104,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import {
+  fetchMyOrders,
+} from '@/api/custom-recipe';
 import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import {
@@ -207,18 +210,13 @@ const loadOrders = async () => {
   loading.value = true;
   loadFailed.value = false;
   try {
-    // 统一走 request()：只认全站统一的 {code,message,data} 结构。
+    // API 层已经判过全站统一的 {code,message,data}：非 0 返回 null。
     // 原来按 HTTP 风格的 2xx 判断成功，而后端约定的成功码是 0，列表因此永远为空。
-    const res: any = await request({
-      url: '/custom-recipe/my-orders',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    });
+    const data = await fetchMyOrders();
 
-    if (res.code === 0 && res.data) {
+    if (data) {
       needLogin.value = false;
-      orders.value = Array.isArray(res.data.orders) ? res.data.orders : [];
+      orders.value = Array.isArray(data.orders) ? data.orders : [];
     } else {
       loadFailed.value = true;
     }

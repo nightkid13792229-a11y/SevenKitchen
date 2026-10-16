@@ -101,6 +101,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import {
+  fetchOrderDetail,
+} from '@/api/custom-recipe';
 import { onLoad } from '@dcloudio/uni-app';
 import { request } from '@/utils/api';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
@@ -196,13 +199,9 @@ const loadOrderDetail = async () => {
   }
 
   try {
-    const res: any = await request({
-      url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}`,
-      method: 'GET',
-      quiet: true,
-    });
-    if (res.code === 0 && res.data) {
-      orderInfo.value = res.data || {};
+    const detail = await fetchOrderDetail(orderId.value);
+    if (detail) {
+      orderInfo.value = detail;
     }
   } catch (error) {
     // 详情失败不影响主流程：订单已提交成功，页面用提交时带回的数据兜底

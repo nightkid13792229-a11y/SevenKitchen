@@ -357,11 +357,20 @@ describe('custom recipe page · 档案带出与目标口径', () => {
 
   it('选中狗狗后从档案带出过敏与口味偏好', () => {
     expect(page).toContain('loadDogArchiveInfo')
-    expect(page).toContain('/custom-recipe/dogs/${dogId}/health-summary')
+    /**
+     * 2026-10-16（批次 2.8）：接口地址挪到了 API 层，页面改调 `fetchDogHealthSummary`。
+     * 守卫的**意图没变**（后端这个汇总接口要被真正调用、且字段要带进表单），
+     * 所以断言分两半：地址在 API 层，字段绑定在页面。
+     */
+    const api = read('src/api/custom-recipe.ts')
+    // 地址里带 URL 编码（dogId 是 UUID，但统一编码更稳）
+    expect(api).toContain('/custom-recipe/dogs/${encodeURIComponent(dogId)}/health-summary')
+    expect(page).toContain('fetchDogHealthSummary')
+
     // 后端这个汇总接口前端此前**从未调用过**
-    expect(page).toContain('formData.value.allergies = Array.isArray(data.allergies)')
-    expect(page).toContain('formData.value.preferredIngredients = splitFoodText(data.preferredFoods)')
-    expect(page).toContain('formData.value.dislikedIngredients = splitFoodText(data.pickyFoods)')
+    expect(page).toContain('formData.value.allergies = Array.isArray(summary.allergies)')
+    expect(page).toContain('formData.value.preferredIngredients = splitFoodText(summary.preferredFoods)')
+    expect(page).toContain('formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods)')
     // 读不到档案不能挡住下单
     expect(page).toContain('healthSummary.value = null')
     /**
@@ -758,15 +767,45 @@ describe('custom recipe payment copy · 下一步付款与时限', () => {
   })
 
   it('支付时限来自后端（公开配置），前端不写死分钟数', () => {
+    /**
+     * 2026-10-16（批次 2.8）：定制相关的请求**抽到了 API 层**，
+     * 所以"配置从哪个地址取"这句话从页面挪到了 `src/api/custom-recipe.ts`。
+     *
+     * 守卫的**意图没变**：时限必须来自后端。所以断言分两半 ——
+     * 地址在 API 层（且只有一处），页面只管用值。
+     */
+    const api = read('src/api/custom-recipe.ts')
+    expect(api).toContain("url: '/custom-recipe-config'")
+    expect(api).toContain('paymentTimeoutMinutes')
+
     const pages = ['index.vue', 'success.vue', 'orders.vue', 'order-detail.vue']
     for (const file of pages) {
       const source = read(`${PAGE_DIR}/${file}`)
       expect(source).toContain('paymentTimeoutMinutes')
-      expect(source).toContain("url: '/custom-recipe-config'")
       // 不许把 30 分钟这类数值抄进页面
       expect(source).not.toContain('30 分钟')
       expect(source).not.toContain('paymentTimeoutMinutes = 30')
     }
+  })
+
+  it('★ 定制页面里不再有内联请求（地址只在 API 层出现一次）', () => {
+    /**
+     * 这是批次 2.8 抽 API 层要保证的事：同一个接口的地址**只能有一处**。
+     * 否则改路径要全局搜字符串，漏一处就是线上某个页面白屏。
+     */
+    for (const file of [
+      'order-detail.vue',
+      'index.vue',
+      'success.vue',
+      'orders.vue',
+    ]) {
+      const source = read(`${PAGE_DIR}/${file}`)
+      expect(source).not.toContain("url: '/custom-recipe/")
+      expect(source).not.toContain('url: `/custom-recipe/')
+    }
+    // 而 API 层里它是有的
+    const api = read('src/api/custom-recipe.ts')
+    expect(api).toContain('/custom-recipe/orders/')
   })
 
   it('三个"能看到待付款单"的页面都告知时限；订单对象优先用 paymentDeadlineAt', () => {
@@ -841,7 +880,14 @@ describe('custom recipe pending payment reminder · 待付款提醒', () => {
   const submit = read(`${PAGE_DIR}/index.vue`)
 
   it('进页面就查有没有待付款的单', () => {
-    expect(submit).toContain("url: '/custom-recipe/my-orders'")
+    /**
+     * 2026-10-16（批次 2.8）：接口地址挪到 API 层，页面改调 `fetchMyOrders`。
+     * 意图不变：**进页面必须查一次待付款单**，且查询条件是"待付款"。
+     */
+    const api = read('src/api/custom-recipe.ts')
+    expect(api).toContain("url: '/custom-recipe/my-orders'")
+
+    expect(submit).toContain('fetchMyOrders')
     expect(submit).toContain("status: 'PENDING_PAYMENT'")
     expect(submit).toContain('loadPendingOrder')
     expect(submit).toContain('pendingOrder')
@@ -973,8 +1019,20 @@ describe('custom recipe cancelled & refund · 已取消与退款', () => {
   })
 
   it('自助取消时当场告知退款结果，退款失败不能只提示"已发起"', () => {
-    // 取消接口的响应里就带 refundStatus，不能等顾客几天后自己翻订单
-    expect(detail).toContain('res?.data?.refundStatus')
+    /**
+     * 取消接口的响应里就带 refundStatus，不能等顾客几天后自己翻订单。
+     *
+     * 2026-10-16（批次 2.8）：这段取数逻辑挪到了 API 层 —— 所以断言分两半：
+     * **API 层必须把 refundStatus 带回来**（漏了它，页面就拿不到退款结果），
+     * **页面必须用这个结果给出具体提示**。
+     *
+     * （我搬代码时确实漏过一次：`cancelOrder` 第一版只回了 `ok`，
+     *   把退款状态丢了 —— 是这条守卫逼出来的。）
+     */
+    const api = read('src/api/custom-recipe.ts')
+    expect(api).toContain('refundStatus')
+
+    expect(detail).toContain('result.refundStatus')
     expect(detail).toContain('已取消，但退款未成功，请联系客服')
   })
 })

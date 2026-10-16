@@ -527,6 +527,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import {
+  fetchMyOrders,
+  fetchDogHealthSummary,
+  submitOrder,
+} from '@/api/custom-recipe';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { getToken, request } from '@/utils/api';
 import { dogApi } from '@/api/dogs';
@@ -1296,16 +1301,19 @@ const loadPendingOrder = async () => {
   await ensureRecipeConfig();
 
   try {
-    const res: any = await request({
-      url: '/custom-recipe/my-orders',
-      method: 'GET',
-      data: { status: 'PENDING_PAYMENT', page: 1, pageSize: 1 },
-      quiet: true,
-      suppressErrorToast: true,
+    const data = await fetchMyOrders({
+      status: 'PENDING_PAYMENT',
+      page: 1,
+      pageSize: 1,
     });
 
-    const first = Array.isArray(res?.data?.orders) ? res.data.orders[0] : null;
-    if (res?.code !== 0 || !first?.orderId) {
+    /**
+     * ⚠️ 2026-10-16：抽 API 层时这里漏改了 —— `fetchMyOrders` 已经把 code 判过、
+     * 直接返回 `data`，不再有 `res.code`。是**架构守卫**（用了却没声明的名字）
+     * 把它抓出来的：真机上这一行会直接崩。
+     */
+    const first = Array.isArray(data?.orders) ? data.orders[0] : null;
+    if (!first?.orderId) {
       pendingOrder.value = null;
       return;
     }
@@ -1583,18 +1591,13 @@ const loadDogArchiveInfo = async (dogId: string) => {
   try {
     /** 同时取狗狗详情：它带回 calcResult（每日热量与克数），
      *  列表接口里没有这两个数，而"选了目标要给具体数字"需要它们。 */
-    const [res, detailRes] = await Promise.all([
-      request({
-        url: `/custom-recipe/dogs/${dogId}/health-summary`,
-        method: 'GET',
-        quiet: true,
-        suppressErrorToast: true,
-      }) as any,
+    const [summary, detailRes] = await Promise.all([
+      fetchDogHealthSummary(dogId),
       dogApi.detail(dogId).catch(() => null) as any,
     ]);
 
-    if (res?.code !== 0 || !res.data) {
-      throw new Error(res?.message || '读取档案失败');
+    if (!summary) {
+      throw new Error('读取档案失败');
     }
 
     // ② 慢响应保护：等待期间顾客又换了狗，这份档案就不再是当前这只的，
@@ -1614,11 +1617,15 @@ const loadDogArchiveInfo = async (dogId: string) => {
       };
     }
 
-    const data = res.data;
-    healthSummary.value = data;
+    /**
+     * ⚠️ 2026-10-16：抽 API 层时这里漏改了 —— `fetchDogHealthSummary`
+     * 已经把 code 判过、直接返回 data（取不到时是 null，上面已经拦过）。
+     * 是**架构守卫**抓出来的：真机上 `res` 不存在会直接崩。
+     */
+    healthSummary.value = summary;
 
-    formData.value.allergies = Array.isArray(data.allergies)
-      ? [...data.allergies]
+    formData.value.allergies = Array.isArray(summary.allergies)
+      ? [...summary.allergies]
       : [];
     // 档案里已经有过敏记录 → 这一问默认答"有过敏"（本来就是事实，
     // 让家长再答一遍反而是多一道题）；档案里没有就保持未答，等他选
@@ -1628,8 +1635,8 @@ const loadDogArchiveInfo = async (dogId: string) => {
     // 过敏可能刚从档案带出来，方向要跟着它算的体况对齐一次
     syncGoalWithPlan();
     // 口味偏好：档案里的两个字段（2026-09-27 才在「健康管理」页有了入口）
-    formData.value.preferredIngredients = splitFoodText(data.preferredFoods);
-    formData.value.dislikedIngredients = splitFoodText(data.pickyFoods);
+    formData.value.preferredIngredients = splitFoodText(summary.preferredFoods);
+    formData.value.dislikedIngredients = splitFoodText(summary.pickyFoods);
   } catch (error) {
     // 读不到档案不能挡住定制：保持上面清空后的空状态，让顾客自己填
     console.warn('[CustomRecipe] 读取档案信息失败:', error);
@@ -1984,23 +1991,19 @@ const submitOrder = async () => {
 
     // 统一走 request()：只有 code === 0 才会 resolve，
     // 非 0 会 reject 并带上服务端 message，不会再出现"下单成功却提示网络错误"。
-    const res: any = await request({
-      url: '/custom-recipe/orders',
-      method: 'POST',
-      data: submitData,
-    });
+    const created = await submitOrder(submitData);
 
     uni.hideLoading();
 
-    const orderId = res?.data?.orderId;
+    const orderId = created?.orderId;
     if (!orderId) {
       throw new Error('服务端未返回订单号');
     }
 
     const query = [
       `orderId=${encodeURIComponent(orderId)}`,
-      `amount=${encodeURIComponent(String(res.data.amount ?? ''))}`,
-      `creditAmount=${encodeURIComponent(String(res.data.creditAmount ?? ''))}`,
+      `amount=${encodeURIComponent(String(created.amount ?? ''))}`,
+      `creditAmount=${encodeURIComponent(String(created.creditAmount ?? ''))}`,
     ];
     /**
      * 用 redirectTo 而不是 navigateTo（2026-10-04）。

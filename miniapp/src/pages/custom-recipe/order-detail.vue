@@ -17,11 +17,45 @@
     </view>
 
     <template v-else>
-      <view class="status-card">
+      <view class="status-card" :class="`status-card--${statusTone}`">
         <text class="status-text">{{ statusText }}</text>
         <text class="status-order-id">订单号 {{ order.orderId }}</text>
         <!-- 待付款时限：直接决定这单会不会被自动取消 -->
         <text v-if="paymentHint" class="status-deadline">{{ paymentHint }}</text>
+        <!--
+          后端下发的「给顾客的一句话」。
+          比状态名多一层"所以呢" —— 顾客看到"制作中"仍然不知道要等多久。
+        -->
+        <text v-if="statusHint" class="status-hint">{{ statusHint }}</text>
+      </view>
+
+      <!--
+        进度时间轴（2026-10-16）：
+        节点集合与文案**由后端下发**，后台加一个内部环节时小程序不用发版。
+        老后端不返回 progress 时整块不显示，页面照常可用。
+      -->
+      <view v-if="progressSteps.length" class="section progress-section">
+        <view class="section-title">进度</view>
+        <view class="progress-list">
+          <view
+            v-for="(step, index) in progressSteps"
+            :key="step.code"
+            class="progress-item"
+            :class="{
+              'progress-item--done': step.done,
+              'progress-item--active': step.active,
+            }"
+          >
+            <view class="progress-marker">
+              <text class="progress-dot">{{ step.done ? '✓' : '' }}</text>
+              <view v-if="index < progressSteps.length - 1" class="progress-line" />
+            </view>
+            <view class="progress-body">
+              <text class="progress-label">{{ step.label }}</text>
+              <text v-if="step.note" class="progress-note">{{ step.note }}</text>
+            </view>
+          </view>
+        </view>
       </view>
 
       <!-- 退款进度：顾客自助取消后钱去哪了，不能让他自己去猜 -->
@@ -126,17 +160,30 @@
         >
           立即付款
         </button>
-        <!-- 自助取消（决策 12）：还没开始制作就能取消；
-             已付款的会**全额原路退回微信**，不需要等客服。 -->
+        <!--
+          自助取消（决策 12）：还没开始制作就能取消；
+          已付款的会**全额原路退回微信**，不需要等客服。
+
+          2026-10-16：按钮文案与"能不能点"改由**后端下发**（`renderable.actions`）。
+          此前这里是 `order.status === 'PENDING_PAYMENT' ? '取消订单' : '取消并退款'` ——
+          前端在判断业务。老后端不返回 renderable 时回退到原来的判断。
+        -->
         <button
-          v-if="canSelfCancel"
+          v-if="cancelAction"
           class="btn secondary"
           :loading="cancelling"
-          :disabled="cancelling || paying"
+          :disabled="cancelling || paying || !cancelAction.enabled"
           @tap="cancelOrder"
         >
-          {{ order.status === 'PENDING_PAYMENT' ? '取消订单' : '取消并退款' }}
+          {{ cancelAction.label }}
         </button>
+        <!-- 不能点时把原因说出来：一个点不动又不说话的按钮，顾客只会以为系统坏了 -->
+        <text
+          v-if="cancelAction && !cancelAction.enabled && cancelAction.disabledReason"
+          class="action-disabled-reason"
+        >
+          {{ cancelAction.disabledReason }}
+        </text>
         <button class="btn secondary" @tap="goOrders">返回定制订单</button>
       </view>
     </template>
@@ -146,7 +193,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { getToken, request } from '@/utils/api';
+import { getToken } from '@/utils/api';
+import {
+  cancelOrder as cancelOrderRequest,
+  fetchOrderDetail,
+  fetchPublicConfig,
+  findAction,
+  toneToClass,
+} from '@/api/custom-recipe';
 import { runCustomRecipePayment } from '@/utils/custom-recipe-payment';
 import {
   buildPaymentTimeoutHint,
@@ -213,15 +267,13 @@ onPullDownRefresh(() => {
  */
 const loadPaymentTimeoutConfig = async () => {
   try {
-    const res: any = await request({
-      url: '/custom-recipe-config',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    });
-    if (res?.code === 0 && res.data) {
-      paymentTimeoutMinutes.value = Number(res.data.paymentTimeoutMinutes) || 0;
-    }
+    /**
+     * 这里对失败是**容忍的**：只影响"还有多久支付"的文案。
+     * 注意与 `fetchPublicConfig` 的区别 —— 那个用于展示**定制费**，
+     * 失败必须报错（显示错价格比报错糟得多）；这个只是少一句话。
+     */
+    const config = await fetchPublicConfig();
+    paymentTimeoutMinutes.value = Number(config.paymentTimeoutMinutes) || 0;
   } catch (error) {
     console.warn('[CustomRecipe] 读取支付超时配置失败:', error);
   }
@@ -245,14 +297,9 @@ const loadOrderDetail = async () => {
   loadFailed.value = false;
   needLogin.value = false;
   try {
-    const res: any = await request({
-      url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}`,
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    });
-    if (res.code === 0 && res.data) {
-      order.value = res.data;
+    const detail = await fetchOrderDetail(orderId.value);
+    if (detail) {
+      order.value = detail as typeof order.value;
     } else {
       loadFailed.value = true;
     }
@@ -291,8 +338,59 @@ const goToLogin = () => {
   });
 };
 
-/** 状态文案走公共模块（原来这里单独抄了一份，缺 CANCELLED 就降级成"定制订单"） */
-const statusText = computed(() => customRecipeStatusText(order.value.status));
+/**
+ * 状态文案（2026-10-16 起优先用**后端下发的**）。
+ *
+ * 后端从渲染契约里给 `renderable.status.label`，那份中文来自「选项字典」，
+ * 运营在后台改一次三个端一起变。本地那份映射表只作为**老后端的兜底**，
+ * 等全量上线后（批次 5）就可以删掉了。
+ *
+ * 注意这里没有"取不到就用默认值"的逻辑 —— 后端没给是**正常的**（老版本），
+ * 所以老老实实退回本地表，而不是编一个。
+ */
+const statusText = computed(
+  () =>
+    order.value.renderable?.status?.label ||
+    customRecipeStatusText(order.value.status),
+);
+
+/** 后端下发的"给顾客的一句话"；老后端没有就不显示 */
+const statusHint = computed(
+  () => order.value.renderable?.status?.customerHint || '',
+);
+
+/** 色彩档位（后端给语义档位，前端只做档位 → class 的映射） */
+const statusTone = computed(() => toneToClass(order.value.renderable?.status?.tone));
+
+/**
+ * 进度时间轴。
+ *
+ * **后端没给就整块不显示** —— 不在这里编一条时间轴出来
+ * （编出来的会和真实进度不一致，比不显示更糟）。
+ */
+const progressSteps = computed(() => order.value.renderable?.progress?.timeline || []);
+
+/**
+ * 「取消订单」这个动作。
+ *
+ * 后端算好了能不能点、为什么不能点、点了要确认什么。
+ * 老后端不返回 renderable 时，回退到原来的本地判断。
+ */
+const cancelAction = computed(() => {
+  const fromBackend = findAction(order.value.renderable, 'CANCEL_SELF');
+  if (fromBackend) return fromBackend;
+
+  // ---- 老后端兜底：把原来的判断原样搬过来，行为不变 ----
+  if (!canSelfCancel.value) return undefined;
+  return {
+    code: 'CANCEL_SELF',
+    label:
+      order.value.status === 'PENDING_PAYMENT' ? '取消订单' : '取消并退款',
+    enabled: true,
+    confirmText: null,
+    danger: true,
+  };
+});
 
 const goalText = computed(() =>
   customRecipeGoalText(order.value.targetGoal, '—'),
@@ -426,11 +524,14 @@ const cancelOrder = async () => {
   uni.showLoading({ title: paid ? '退款中...' : '取消中...' });
 
   try {
-    const res: any = await request({
-      url: `/custom-recipe/orders/${encodeURIComponent(orderId.value)}/cancel`,
-      method: 'POST',
-      data: { reason: '顾客取消定制订单' },
-    });
+    const result = await cancelOrderRequest(orderId.value);
+    /**
+     * API 层已经判过 code：失败时把后端的原因带回来。
+     * 这里**不自己编原因** —— 后端说"已经开始设计了"，就照它说。
+     */
+    if (!result.ok) {
+      throw new Error(result.message || '取消失败');
+    }
 
     uni.hideLoading();
 
@@ -442,7 +543,7 @@ const cancelOrder = async () => {
      * 一直到他自己去翻订单才发现 —— 那可能是几天后了。
      */
     const refundOutcome = describeCustomRecipeRefund({
-      refundStatus: res?.data?.refundStatus ?? null,
+      refundStatus: result.refundStatus ?? null,
     });
 
     if (refundOutcome?.tone === 'failed') {
@@ -479,6 +580,117 @@ const goOrders = () => {
 </script>
 
 <style scoped>
+
+/* ===== 2026-10-16 渲染契约新增的样式 ===== */
+
+/*
+ * 后端下发的「给顾客的一句话」。
+ * 比状态名淡一点：它是解释，不是标题。
+ */
+.status-hint {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/*
+ * 色彩档位 → 左侧一道色条。
+ * 刻意不做整卡变色：状态卡是深绿底，整卡换色会跟全站配色打架。
+ */
+.status-card--warning { border-left: 8rpx solid #e6a23c; }
+.status-card--info { border-left: 8rpx solid #7aa7d8; }
+.status-card--progress { border-left: 8rpx solid #6fb3a0; }
+.status-card--success { border-left: 8rpx solid #7bc48a; }
+.status-card--danger { border-left: 8rpx solid #e08b8b; }
+.status-card--neutral { border-left: 8rpx solid rgba(216, 188, 133, 0.5); }
+
+.progress-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-item {
+  display: flex;
+  gap: 16rpx;
+  min-height: 84rpx;
+}
+
+.progress-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 36rpx;
+  flex-shrink: 0;
+}
+
+.progress-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32rpx;
+  height: 32rpx;
+  font-size: 20rpx;
+  line-height: 1;
+  color: #fff;
+  background: rgba(216, 188, 133, 0.28);
+  border-radius: 50%;
+}
+
+.progress-item--done .progress-dot {
+  background: #6fb3a0;
+}
+
+.progress-item--active .progress-dot {
+  background: #d8bc85;
+  box-shadow: 0 0 0 6rpx rgba(216, 188, 133, 0.22);
+}
+
+.progress-line {
+  flex: 1;
+  width: 2rpx;
+  margin: 6rpx 0;
+  background: rgba(216, 188, 133, 0.22);
+}
+
+.progress-item--done .progress-line {
+  background: rgba(111, 179, 160, 0.5);
+}
+
+.progress-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  padding-bottom: 20rpx;
+}
+
+.progress-label {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.progress-item--done .progress-label,
+.progress-item--active .progress-label {
+  color: #f4ecd8;
+  font-weight: 600;
+}
+
+.progress-note {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 按钮不能点时的原因 —— 必须看得见，否则顾客以为系统坏了 */
+.action-disabled-reason {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .detail-page {
   min-height: 100vh;
   padding: 24rpx 24rpx 200rpx;

@@ -144,10 +144,48 @@
         </view>
       </view>
 
-      <view class="section" v-if="order.recipeId">
-        <view class="section-title">定制食谱</view>
+      <!--
+        交付卡片（2026-10-16 批次 2.4）
+        后端只给"第几版、什么时候交的、包含哪几样"，**不含内容本体** ——
+        点进去才拉那几十 KB 的快照。这样订单页每次打开都不会被拖慢。
+      -->
+      <view class="section delivery-card" v-if="delivery">
+        <view class="delivery-head">
+          <text class="section-title">你的专属食谱</text>
+          <text v-if="delivery.version > 1" class="delivery-version">
+            第 {{ delivery.version }} 版
+          </text>
+        </view>
         <text class="recipe-name">{{ order.recipeName || '已交付的定制食谱' }}</text>
-        <button class="recipe-btn" @tap="viewRecipe">查看定制食谱</button>
+        <view class="delivery-items">
+          <text
+            v-for="code in delivery.itemCodes"
+            :key="code"
+            class="delivery-item"
+          >
+            {{ deliveryItemLabel(code) }}
+          </text>
+        </view>
+        <text class="delivery-time">交付于 {{ formatDeliveryTime(delivery.deliveredAt) }}</text>
+
+        <!-- 确认收到：文案与"能不能点"都由后端下发 -->
+        <button
+          v-if="confirmAction"
+          class="recipe-btn"
+          :loading="confirming"
+          :disabled="confirming || !confirmAction.enabled"
+          @tap="handleConfirmReceipt"
+        >
+          {{ confirmAction.label }}
+        </button>
+        <text
+          v-if="confirmAction && !confirmAction.enabled && confirmAction.disabledReason"
+          class="action-disabled-reason"
+        >
+          {{ confirmAction.disabledReason }}
+        </text>
+
+        <button class="recipe-btn ghost" @tap="viewDelivery">查看完整内容</button>
       </view>
 
       <view class="action-bar">
@@ -196,6 +234,7 @@ import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
 import { getToken } from '@/utils/api';
 import {
   cancelOrder as cancelOrderRequest,
+  confirmReceipt as confirmReceiptRequest,
   fetchOrderDetail,
   fetchPublicConfig,
   findAction,
@@ -369,6 +408,86 @@ const statusTone = computed(() => toneToClass(order.value.renderable?.status?.to
  * （编出来的会和真实进度不一致，比不显示更糟）。
  */
 const progressSteps = computed(() => order.value.renderable?.progress?.timeline || []);
+
+/**
+ * 交付摘要（来自订单详情，不含内容本体）。
+ *
+ * 与 `renderable` 里的动作配套：后端说"有交付"时才显示这张卡。
+ */
+const delivery = computed(() => order.value.delivery ?? null);
+
+/** 「确认收到」这个动作 —— 文案与可用性全部由后端下发 */
+const confirmAction = computed(() =>
+  findAction(order.value.renderable, 'CONFIRM_RECEIPT'),
+);
+
+/** 交付物码 → 中文。码是后端定的，这里只做展示名 */
+const DELIVERY_ITEM_LABELS: Record<string, string> = {
+  RECIPE: '专属食谱',
+  SHOPPING_SOP: '采购与制作单',
+  NUTRITION_REPORT: '营养评估报告',
+};
+const deliveryItemLabel = (code: string) =>
+  DELIVERY_ITEM_LABELS[code] || code;
+
+const formatDeliveryTime = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+const confirming = ref(false);
+
+/**
+ * 顾客确认收到。
+ *
+ * 幂等由后端保证，所以**不需要在前端挡重复点击** ——
+ * 挡了反而会出现"点了没反应"的困惑。这里只在请求进行中禁一下按钮。
+ */
+const handleConfirmReceipt = async () => {
+  if (confirming.value) return;
+
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '确认收到？',
+      content:
+        '确认后这单就完成了。如果食谱有问题，之后还可以在售后期内申请调整。',
+      confirmText: '确认收到',
+      cancelText: '再看看',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+
+  confirming.value = true;
+  try {
+    const result = await confirmReceiptRequest(orderId.value);
+    if (!result.ok) {
+      throw new Error(result.message || '确认失败，请重试');
+    }
+    uni.showToast({
+      title: result.alreadyConfirmed ? '你已经确认过了' : '已确认收到',
+      icon: 'none',
+    });
+    // 重新拉一次详情：状态、动作、进度都由后端算，前端不自己改
+    await loadOrderDetail();
+  } catch (error) {
+    uni.showToast({
+      title: (error as Error)?.message || '确认失败，请重试',
+      icon: 'none',
+    });
+  } finally {
+    confirming.value = false;
+  }
+};
+
+/** 打开交付内容页 */
+const viewDelivery = () => {
+  uni.navigateTo({
+    url: `/pages/custom-recipe/delivery?orderId=${encodeURIComponent(orderId.value)}`,
+  });
+};
 
 /**
  * 「取消订单」这个动作。
@@ -580,6 +699,55 @@ const goOrders = () => {
 </script>
 
 <style scoped>
+
+/* ===== 交付卡片（2026-10-16 批次 2.4）===== */
+.delivery-card {
+  border: 1rpx solid rgba(216, 188, 133, 0.4);
+}
+
+.delivery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delivery-version {
+  padding: 4rpx 14rpx;
+  font-size: 22rpx;
+  color: #1e3a2f;
+  background: rgba(216, 188, 133, 0.9);
+  border-radius: 100rpx;
+}
+
+.delivery-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin: 16rpx 0 8rpx;
+}
+
+.delivery-item {
+  padding: 8rpx 18rpx;
+  font-size: 24rpx;
+  color: #f4ecd8;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 100rpx;
+}
+
+.delivery-time {
+  display: block;
+  margin-bottom: 20rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.recipe-btn.ghost {
+  margin-top: 16rpx;
+  color: #f4ecd8;
+  background: transparent;
+  border: 1rpx solid rgba(216, 188, 133, 0.5);
+}
+
 
 /* ===== 2026-10-16 渲染契约新增的样式 ===== */
 

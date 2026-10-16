@@ -87,7 +87,74 @@ export interface CustomRecipeOrderDetail {
   createdAt?: string | null;
   paymentConfirmedAt?: string | null;
   deliveredAt?: string | null;
+  /** 交付摘要（批次 2.4）；未交付时为 null */
+  delivery?: DeliverySummary | null;
   [key: string]: unknown;
+}
+
+/** 交付内容快照（后端算好、结构固定，前端照着渲染） */
+export interface DeliveryContent {
+  schemaVersion: number;
+  recipe: {
+    recipeId: string;
+    name: string;
+    coverImageUrl?: string | null;
+    items: Array<{
+      name: string;
+      preparation?: string | null;
+      ratioPercent?: number | null;
+      weightG?: number | null;
+      isSupplement?: boolean;
+    }>;
+  };
+  feeding: {
+    dailyIntakeG: number | null;
+    mealsPerDay: number | null;
+    perMealG: number | null;
+    cycleDays: number | null;
+  };
+  nutrition: {
+    standard: string | null;
+    energyDensityKcalPerKg: number | null;
+    plainConclusion?: string | null;
+  };
+  shopping: {
+    lines: Array<{ name: string; netG: number; purchaseG: number }>;
+    totalNetG: number;
+    totalPurchaseG: number;
+    lossRate: number;
+  };
+  supplements: Array<{
+    name: string;
+    totalG: number | null;
+    perKgG?: number | null;
+    brand?: string | null;
+    timing?: string | null;
+  }>;
+  steps: string[];
+  storage?: string | null;
+  generatedAt: string;
+}
+
+/** 一次交付 */
+export interface OrderDelivery {
+  id: string;
+  version: number;
+  deliveredAt: string;
+  confirmedAt?: string | null;
+  itemCodes: string[];
+  content: DeliveryContent;
+  autoCompleteAt?: string | null;
+}
+
+/** 订单详情里的交付摘要（不含快照本体） */
+export interface DeliverySummary {
+  id: string;
+  version: number;
+  deliveredAt: string;
+  confirmedAt?: string | null;
+  itemCodes: string[];
+  autoCompleteAt?: string | null;
 }
 
 /** 定制设置里顾客需要知道的几个（公开子集） */
@@ -236,6 +303,66 @@ export async function submitOrder(
     throw new Error(res?.message || '下单失败，请重试');
   }
   return res.data;
+}
+
+/**
+ * 取当前交付内容。
+ *
+ * 还没交付时后端回 404，这里返回 null ——
+ * 页面据此显示"还没交付"，而不是报错（"还没交"是正常状态，不是故障）。
+ *
+ * `version` 用于回看历史版本（重新交付之后）。
+ */
+export async function fetchDelivery(
+  orderId: string,
+  version?: number,
+): Promise<OrderDelivery | null> {
+  try {
+    const res: any = await request({
+      url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/delivery${
+        version ? `?version=${version}` : ''
+      }`,
+      method: 'GET',
+    });
+    if (res?.code === 0 && res.data) return res.data as OrderDelivery;
+    return null;
+  } catch (error) {
+    /**
+     * 404（还没交付）与网络错误在这里都返回 null，由页面区分：
+     * 页面已经知道订单状态，未交付时本来就不该去请求。
+     * 真要区分得靠更细的错误码，而目前没必要 —— 两种情况页面表现一致。
+     */
+    console.warn('[CustomRecipe] 读取交付内容失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 顾客确认收到。
+ *
+ * 幂等由后端保证：重复点不会报错，也**不会刷新确认时间**。
+ * 返回 `alreadyConfirmed` 让页面能说"你已经确认过了"。
+ */
+export async function confirmReceipt(orderId: string): Promise<{
+  ok: boolean;
+  alreadyConfirmed: boolean;
+  message?: string;
+}> {
+  const res: any = await request({
+    url: `/custom-recipe/orders/${encodeURIComponent(orderId)}/confirm-receipt`,
+    method: 'POST',
+  });
+  if (res?.code === 0) {
+    return {
+      ok: true,
+      alreadyConfirmed: Boolean(res.data?.alreadyConfirmed),
+    };
+  }
+  return {
+    ok: false,
+    alreadyConfirmed: false,
+    message: res?.message,
+  };
 }
 
 /**

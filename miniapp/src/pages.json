@@ -256,6 +256,13 @@
         "navigationBarTitleText": "定制订单详情",
         "enablePullDownRefresh": true
       }
+    },
+    {
+      "path": "pages/custom-recipe/delivery",
+      "style": {
+        "navigationBarTitleText": "我的专属食谱",
+        "enablePullDownRefresh": true
+      }
     }
   ],
   "subPackages": [

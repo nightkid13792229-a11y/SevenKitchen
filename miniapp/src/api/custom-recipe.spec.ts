@@ -15,6 +15,8 @@ vi.mock('../utils/api', async () => {
 
 import {
   cancelOrder,
+  confirmReceipt,
+  fetchDelivery,
   fetchOrderDetail,
   fetchPublicConfig,
   findAction,
@@ -202,6 +204,82 @@ describe('定制食谱 API 层', () => {
 
       expect(result.ok).toBe(false)
       expect(result.message).toContain('已经开始设计')
+    })
+  })
+
+  describe('fetchDelivery', () => {
+    it('成功时返回交付内容', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: { id: 'd1', version: 1, itemCodes: ['RECIPE'] },
+      } as never)
+
+      const delivery = await fetchDelivery('CR1')
+
+      expect(delivery?.version).toBe(1)
+    })
+
+    it('★ 还没交付（404）时返回 null 而不是抛错 —— 那是正常状态，不是故障', async () => {
+      mockedRequest.mockRejectedValue(new Error('404') as never)
+
+      expect(await fetchDelivery('CR1')).toBeNull()
+    })
+
+    it('带 version 参数时拼进查询串（回看历史版本）', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1', 2)
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe('/custom-recipe/orders/CR1/delivery?version=2')
+    })
+
+    it('不带 version 时没有查询串', async () => {
+      mockedRequest.mockResolvedValue({ code: 0, data: {} } as never)
+
+      await fetchDelivery('CR1')
+
+      const arg = mockedRequest.mock.calls[0][0] as { url: string }
+      expect(arg.url).toBe('/custom-recipe/orders/CR1/delivery')
+    })
+  })
+
+  describe('confirmReceipt', () => {
+    it('首次确认：alreadyConfirmed=false', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: { confirmed: true, alreadyConfirmed: false },
+      } as never)
+
+      expect(await confirmReceipt('CR1')).toEqual({
+        ok: true,
+        alreadyConfirmed: false,
+      })
+    })
+
+    it('★ 重复确认也算成功，但如实告诉页面"已经确认过了"', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 0,
+        data: { confirmed: true, alreadyConfirmed: true },
+      } as never)
+
+      const result = await confirmReceipt('CR1')
+
+      // 不报错、不刷新时间 —— 幂等由后端保证
+      expect(result.ok).toBe(true)
+      expect(result.alreadyConfirmed).toBe(true)
+    })
+
+    it('被后端拒绝时把原因带回来', async () => {
+      mockedRequest.mockResolvedValue({
+        code: 400,
+        message: '这张订单还没有交付记录，无法确认收到',
+      } as never)
+
+      const result = await confirmReceipt('CR1')
+
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain('还没有交付记录')
     })
   })
 

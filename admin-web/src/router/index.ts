@@ -347,6 +347,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "定制食谱订单" },
       },
       {
+        path: "custom-recipes/schedule",
+        name: "CustomRecipeSchedule",
+        component: () => import("@/views/CustomRecipes/ScheduleCalendar.vue"),
+        meta: { title: "排期日历" },
+      },
+      {
         path: "custom-recipes/aftersales",
         name: "CustomRecipeAftersales",
         component: () => import("@/views/CustomRecipes/AftersaleList.vue"),

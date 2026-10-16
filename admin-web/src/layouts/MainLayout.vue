@@ -108,6 +108,14 @@
           <el-icon><EditPen /></el-icon>
           <span>定制食谱订单</span>
         </el-menu-item>
+        <el-menu-item index="/custom-recipes/schedule">
+
+          <el-icon><Calendar /></el-icon>
+
+          <span>排期日历</span>
+
+        </el-menu-item>
+
         <el-menu-item index="/custom-recipes/aftersales">
 
           <el-icon><Bell /></el-icon>
@@ -310,7 +318,8 @@ import {
   TrendCharts,
   Lock,
   Collection,
-  Bell
+  Bell,
+  Calendar
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

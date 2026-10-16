@@ -177,6 +177,39 @@ export interface CustomRecipeConfig {
   updatedAt?: string
 }
 
+// ===== 排期日历（2026-10-16 批次 4.2）=====
+
+/** 按星期的排期规则 */
+export interface WeekdayRule {
+  /** 0 = 周日 … 6 = 周六 */
+  weekday: number;
+  isOpen: boolean;
+  /** 留空表示用全局配置 */
+  capacity?: number | null;
+  deliveryCapacity?: number | null;
+  note?: string | null;
+  /** 是否是"还没配过、后端给的默认值" */
+  isDefault?: boolean;
+}
+
+/** 某一天算好的状态（可约与否、为什么不能约，都由后端给） */
+export interface ResolvedDay {
+  date: string;
+  isOpen: boolean;
+  capacity: number;
+  bookedCount: number;
+  remaining: number;
+  deliveryCapacity: number;
+  deliveryCount: number;
+  deliveryRemaining: number;
+  isPublicHoliday: boolean;
+  /** 这一天的设置是哪一层决定的：具体某天 / 按星期 / 全局 */
+  source: 'override' | 'weekday' | 'default';
+  /** 不能约的原因，人能看懂 */
+  closedReason?: string | null;
+  note?: string | null;
+}
+
 // ===== 售后处理（2026-10-16 批次 3.1）=====
 
 /** 后台待办里的一条售后 */
@@ -304,6 +337,39 @@ export const customRecipeApi = {
     };
     return data?.sets?.custom_recipe_delivery_item ?? [];
   },
+
+  // ---------- 排期日历（批次 4.2）----------
+
+  /** 按星期的规则（没配过时后端回默认值并标 isDefault） */
+  getWeekdayRules: (): Promise<{ items: WeekdayRule[]; isDefault: boolean }> =>
+    api.get('/admin/custom-recipe/weekday-rules'),
+
+  saveWeekdayRules: (
+    items: Array<{
+      weekday: number;
+      isOpen: boolean;
+      capacity?: number | null;
+      deliveryCapacity?: number | null;
+      note?: string | null;
+    }>,
+  ) => api.put('/admin/custom-recipe/weekday-rules', { items }),
+
+  /**
+   * 某段日子里每一天的真实状态。
+   * **可约与否与原因都由后端算**（三层优先级 + 接单/交付两套容量）。
+   */
+  getCalendar: (from: string, to: string): Promise<{ days: ResolvedDay[] }> =>
+    api.get('/admin/custom-recipe/calendar', { params: { from, to } }),
+
+  /** 批量设置某段日子的排期（沿用既有接口） */
+  batchSetSchedule: (payload: {
+    dateFrom: string;
+    dateTo: string;
+    capacity?: number;
+    isAvailable?: boolean;
+    includeWeekends?: boolean;
+    skipPublicHolidays?: boolean;
+  }) => api.post('/admin/custom-recipe/schedule/batch-set', payload),
 
   // ---------- 售后（批次 3.1）----------
 

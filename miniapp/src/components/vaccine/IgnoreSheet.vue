@@ -52,7 +52,7 @@ const emit = defineEmits<{
  */
 const REASON_OPTIONS: { value: 'NOT_NOW' | 'STOPPED'; label: string; hint: string }[] = [
   { value: 'NOT_NOW', label: '这次先不打', hint: '之后还会提醒' },
-  { value: 'STOPPED', label: '不再接种了', hint: '按兽医建议或我决定停止' },
+  { value: 'STOPPED', label: '不再接种了', hint: '兽医建议停，或我自己决定停' },
 ]
 
 const DEFAULT_REASON: 'NOT_NOW' | 'STOPPED' = 'NOT_NOW'

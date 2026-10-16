@@ -162,13 +162,13 @@ describe('疫苗 · 识别结果哪几行要核对', () => {
 
     const review = scanRowReview({ name: '狂犬疫苗', date: '2026-10-01' }, products, today);
     expect(review.needsReview).toBe(true);
-    expect(review.reason).toBe('狂犬这一针请对照本子核对一下');
+    expect(review.reason).toBe('狂犬这一针请对照疫苗本核对一下');
   });
 
   it('② 名称在产品库里认不出 → 要核对', () => {
     const review = scanRowReview({ name: '某种没见过的苗', date: '2026-10-01' }, products, today);
     expect(review.needsReview).toBe(true);
-    expect(review.reason).toBe('产品库里没找到这个名字，请对照本子核对');
+    expect(review.reason).toBe('常见疫苗里没找到这个名字，请对照疫苗本核对');
   });
 
   it('③ 日期可疑（没读出来 / 不是日期 / 落在未来）→ 要核对', () => {
@@ -179,7 +179,7 @@ describe('疫苗 · 识别结果哪几行要核对', () => {
 
     const review = scanRowReview({ name: '卫佳捌', date: '2027-01-01' }, products, today);
     expect(review.needsReview).toBe(true);
-    expect(review.reason).toBe('日期看着不对，请对照本子核对');
+    expect(review.reason).toBe('日期看着不对，请对照疫苗本核对');
   });
 
   it('三条都不成立才不用核对（正常的识别结果不该反复打扰家长）', () => {
@@ -191,6 +191,6 @@ describe('疫苗 · 识别结果哪几行要核对', () => {
   it('名字整段没读出来 → 要核对，并说清缺什么', () => {
     const review = scanRowReview({ name: '', date: '2026-10-01' }, products, today);
     expect(review.needsReview).toBe(true);
-    expect(review.reason).toBe('没读出疫苗名称，请对照本子填一下');
+    expect(review.reason).toBe('没读出疫苗名称，请对照疫苗本填一下');
   });
 });

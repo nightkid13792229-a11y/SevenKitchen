@@ -165,10 +165,8 @@
            像是档案丢了。真实情况只是**这只狗的资料还在读** ✓。
            所以这里改成加载态：老实话少一句，别吓人 ✓。 -->
       <view v-else class="section-card">
-        <text class="page-version">版本 2026.10.11.6</text>
         <template v-if="startupStuck">
           <text class="section-card__title">网络好像不太顺</text>
-          <text class="page-version">[诊断] 加载中={{ isLoading ? 1 : 0 }} · 档案中={{ isProfileLoading ? 1 : 0 }} · 狗={{ dogs.length }} · dogId={{ dogId ? dogId.slice(0, 8) : '空' }} · 错={{ loadError || '无' }}</text>
           <text class="state-card__desc">狗狗档案没能读出来（等了 10 秒还没回来）。检查一下网络，再点一次试试。</text>
           <button class="state-card__button" @tap="retryStartup">重新加载</button>
         </template>
@@ -1111,16 +1109,22 @@ const recordsSectionRef = ref<{
 /**
  * 疫苗板块（2026-10-15 重构）。
  *
- * 页面只认这四个入口，其余（计划、记录、录入器、识别确认、忽略）全在板块内部：
- *   · `startScan` / `startDocumentScan` —— 底部「新增记录」调起的识别通道
- *   · `addRecord`                        —— 记一条
+ * 页面只认这几个入口，其余（计划、记录、录入器、识别确认、忽略）全在板块内部：
+ *   · `startScan`       —— 底部「上传疫苗本」选到"疫苗本"调起的识别通道
+ *   · `addAntibodyTest` —— 同一条通道选到"抗体检测报告"：**先识别**，识别出来再开抗体录入卡
+ *   · `addRecord`       —— 记一条
  *   · `countUnsaveableDrafts` / `unconfirmedDraftCount` —— 切书签前拦一下
  * 板块的写操作成功后自己**重新拉一次计划接口**整屏重绘（技术方案 3.4），
  * 页面不再牵着它重算。
+ *
+ * ⚠️ 2026-10-16（自检 V41）：这里原来声明的 `startDocumentScan` **疫苗侧根本没有**
+ *    （板块没 expose 它，页面也没人调）✗，而**真正在用的 `addAntibodyTest` 却漏了** ✗
+ *    —— 声明要么跟着实际走，要么就是在骗下一个人。以 `VaccineTab` 的 `defineExpose` 为准。
  */
 const vaccineSectionRef = ref<{
   startScan?: () => void
-  startDocumentScan?: () => void
+  /** 底部「上传疫苗本」选到"抗体检测报告"时 → 开抗体录入卡 */
+  addAntibodyTest?: () => void
   addRecord?: () => void
   countUnsaveableDrafts?: () => number
   unconfirmedDraftCount?: () => number
@@ -1268,18 +1272,35 @@ const stickySecondaryText = computed(() => {
  */
 const stickyLeftText = computed(() => {
   if (!selectedDog.value) return ''
-  // 老板 2026-10-16 第 3 条：抗体检测的入口与"上传疫苗本"**合成一个按钮**
+  /*
+   * 老板 2026-10-16 第 3 条：抗体检测的入口与"上传疫苗本"**合成一个按钮**。
+   *
+   * ⚠️ 2026-10-16（自检 V32）文案从「上传疫苗本 / 报告」缩成「上传疫苗本」：
+   *    按钮是 `white-space: nowrap` + `flex: .92`（见 StickyActionBar），
+   *    7 个中文字加斜杠在窄屏上会压字 ✗。选短的那个而不是「上传本子 / 报告」，
+   *    是因为「疫苗本」才是本模块统一的叫法（"本子"正是要收敛掉的叫法）；
+   *    抗体检测报告那条路**没有丢** —— 点开的选择单里第二项就是它 ✓。
+   */
+  /**
+   * 老板 2026-10-16："抗体检测……应该与上传疫苗本结合一下，做到一个按钮中。"
+   *
+   * ⚠️ 自检 V32 曾把它缩成「上传疫苗本」（担心窄屏压字），**已回退**：
+   *    老板 17:29 那张截图里「上传疫苗本 / 报告」渲染正常 —— 有证据；
+   *    缩短之后"报告"这条路在按钮上就看不见了，与他"合成一个按钮"的意图相悖。
+   *    窄屏风险留在观感层面（低），信息丢失是实打实的（中）。
+   */
   return activeHealthTab.value === 'vaccine' ? '上传疫苗本 / 报告' : ''
 })
 
 /**
- * 左侧按钮：疫苗页 = 上传疫苗本 / 报告；其余板块没有这个按钮。
+ * 左侧按钮：疫苗页 = 上传疫苗本；其余板块没有这个按钮。
  *
  * 两种东西都要能传，所以点一下先问是哪种（老板 2026-10-16 第 3 条：
  * "抗体检测……应该与上传疫苗本结合一下，做到一个按钮中"）：
  *   · 疫苗本 → 传照片走 AI 识别，逐条确认（原来的路）
  *   · 抗体检测报告 → 传照片走 AI 识别，识别出来自动铺进抗体录入卡（家长可改）
  * 这两件事本来就是同一类动作（把纸质凭证收进来），合成一个入口更省地方。
+ * （按钮文案只写"疫苗本"：一个字都不多占，两类文档由下面这张选择单说清。）
  */
 function onStickyLeft() {
   if (activeHealthTab.value !== 'vaccine') return
@@ -1822,13 +1843,5 @@ function goToDogCreate() {
   font-size: 24rpx;
   color: #a05a52;
   word-break: break-all;
-}
-
-/* 临时：页面上印版本号（验证上传链路，定位完删） */
-.page-version {
-  display: block;
-  margin-bottom: 8rpx;
-  font-size: 22rpx;
-  color: #9a9a9a;
 }
 </style>

@@ -126,7 +126,12 @@ describe('实时保存 · 契约', () => {
     expect(source).toContain("errorText.value = isRecordMode.value ? '选一下接种日期' : '选一下检测日期'")
     expect(source).toContain('日期不能填将来的日子')
     // 认不出、又没勾病种 → 不保存并说明原因（需求 R6）
-    expect(source).toContain('这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。')
+    /*
+     * ⚠️ 2026-10-16 自检 V24：原来钉的那句"这个名字看不出含什么疫苗，先勾一下它含哪些；
+     *    确实不知道就问一下医生。"是**提示与报错一字不差**地说两遍，而且"医生"应为兽医。
+     *    现在提示留在勾选块里（改成兽医），报错只说缺什么、下一步做什么。
+     */
+    expect(source).toContain("errorText.value = '先勾一下它含哪些疫苗，再保存。'")
     // 保存键就是那一个
     expect(source).toContain("{{ saving ? '保存中…' : '保存' }}")
   })

@@ -119,8 +119,10 @@ export interface VaccinePlanResponse {
   pendingReview: number
   /** 冲突提示（保留字段，界面按条数展示） */
   conflicts: VaccineConflict[]
-  /** 一条记录都没有（"我们还没有你的记录"，不是"你什么都没打"） */
-  noRecordAtAll: boolean
+  /*
+   * ⚠️ 2026-10-16 自检 V39：这里原来还有一个 `noRecordAtAll`
+   *    （后端算了、前端从不读 —— 记录区那条空态是记录列表自己说的），已删。
+   */
 }
 
 /**
@@ -184,7 +186,7 @@ export interface VaccineRecordPayload {
 /** 抗体检测的项目（狂犬能记录、不影响计划、不主动提示） */
 export type AntibodyTarget = 'CORE' | 'RABIES'
 
-/** 结果：合格 / 不合格 / 报告没给结论（界面写"请让兽医判读"） */
+/** 结果：合格 / 不合格 / 报告没给结论（界面写「未判读」） */
 export type AntibodyResult = 'PASS' | 'FAIL' | 'UNKNOWN'
 
 /** 一条抗体检测记录 */

@@ -17,6 +17,9 @@
     </view>
 
     <view class="vk-plan__card">
+      <!-- ⚠️ 2026-10-16 自检 V29：点开详情的动作挂在**整行**上，不是只挂在右边标题那一块。
+           原来 @tap 在 `.vk-plan__body` 上 —— 左边那列日期（占了三分之一宽度）
+           点了没反应；家长想展开往往先去点日期，于是以为"这一项打不开"✗。 -->
       <view
         v-for="step in plan"
         :key="step.key"
@@ -25,13 +28,14 @@
           'vk-plan__row--now': step.key === nextKey,
           'vk-plan__row--far': step.status === 'UPCOMING',
         }"
+        @tap="toggleRow(step.key)"
       >
         <view class="vk-plan__when">
           <text class="vk-plan__when-main">{{ windowText(step).main }}</text>
           <text v-if="windowText(step).sub" class="vk-plan__when-sub">{{ windowText(step).sub }}</text>
         </view>
 
-        <view class="vk-plan__body" @tap="toggleRow(step.key)">
+        <view class="vk-plan__body">
           <view class="vk-plan__line">
             <view class="vk-plan__kind" :class="`vk-plan__kind--${kindTone(step.kind)}`" />
             <text class="vk-plan__step">{{ planTitle(step) }}</text>
@@ -157,7 +161,7 @@ function layerLabel(layer: VaccineLayer) {
 }
 
 .vk-plan__title {
-  font-size: 28rpx;
+  font-size: $vk-font-section;
   font-weight: 700;
   color: $vk-text-strong;
 }
@@ -207,7 +211,7 @@ function layerLabel(layer: VaccineLayer) {
 
 .vk-plan__field-label {
   display: block;
-  font-size: 21rpx;
+  font-size: $vk-font-badge;
   color: $vk-text-faint;
 }
 
@@ -255,7 +259,7 @@ function layerLabel(layer: VaccineLayer) {
 .vk-plan__when-sub {
   display: block;
   font-weight: 400;
-  font-size: 21rpx;
+  font-size: $vk-font-badge;
   color: $vk-text-faint;
 }
 
@@ -301,20 +305,17 @@ function layerLabel(layer: VaccineLayer) {
   line-height: 1.35;
 }
 
+/* 层级标识（必打 / 强烈建议）：字号就用角标那一档（mixin 里已给），
+   这里只把内边距收紧一点，让它跟标题同一行 */
 .vk-plan__layer {
   @include vk-badge($vk-must-bg, $vk-must-fg);
   padding: 2rpx 12rpx;
-  font-size: 20rpx;
 }
 
 .vk-plan__layer--suggest {
   background: $vk-suggest-bg;
   color: $vk-suggest-fg;
 }
-
-
-
-
 
 .vk-plan__note {
   display: block;
@@ -326,13 +327,6 @@ function layerLabel(layer: VaccineLayer) {
 
 .vk-plan__note--over {
   color: $vk-danger;
-}
-
-.vk-plan__empty {
-  display: block;
-  font-size: 25rpx;
-  color: $vk-text-faint;
-  padding: 20rpx 4rpx;
 }
 
 .vk-plan__rhythm {

@@ -58,7 +58,7 @@
         <text v-if="next.titerable" class="vk-next__act" @tap="onAntibody">先做抗体检测</text>
       </view>
       <view class="vk-next__detail-acts">
-        <text class="vk-next__act vk-next__act--ghost" @tap="onIgnore">这个先不打（忽略）</text>
+        <text class="vk-next__act vk-next__act--ghost" @tap="onIgnore">忽略这一针</text>
       </view>
 
       <!-- 两针一起打：提示本身就是录入入口（需求 R11 / 原型 G 屏） -->
@@ -104,7 +104,7 @@ import {
 const props = withDefaults(defineProps<{
   /** 下一针；没有任何待办时是 null */
   next?: VaccineStep | null
-  /** 已设为不做的项（E 类：不再接种） */
+  /** 已忽略的项（E 类：不再接种） */
   ignoredItems?: VaccineIgnoredStep[]
   ignoredCount?: number
 }>(), {
@@ -157,13 +157,20 @@ const hint = computed(() => {
 
 const idleText = computed(() => {
   const items = props.ignoredItems || []
+  /*
+   * 叫法统一成「已忽略」（2026-10-16 自检 V16）：同一件事原来在这张卡上有三个说法
+   * （已忽略的 N 项 / 已设为不做 / 这个先不打），家长得自己猜是不是同一件事。
+   */
   if (items.length > 0) {
     const names = items.map((item) => `${item.kindLabel}${item.label}`).join('、')
-    return `有 ${props.ignoredCount || items.length} 项已设为不做：${names}`
+    return `有 ${props.ignoredCount || items.length} 项已忽略：${names}`
   }
-  // ⚠️ 不能重复上面那行"暂无需要接种的项目"（原来是同一句话写两遍）。
-  //    这里说"接下来会怎样"，才是家长真正想知道的。
-  return '该打的都打完了。以后该打的时候，这里会告诉你。'
+  /*
+   * ⚠️ 2026-10-16 自检 V12：原来写"该打的都打完了。以后该打的时候，这里会告诉你。"
+   *    —— 那是替狗狗下结论（我们并不知道它打完没打完，只知道手上没有记录）；
+   *    现在照实说：按现有记录没有要补的针，打过的都在下面的记录里。
+   */
+  return '按现有记录没有要补的针，打过的都在下面的记录里。'
 })
 
 const productText = computed(() => {

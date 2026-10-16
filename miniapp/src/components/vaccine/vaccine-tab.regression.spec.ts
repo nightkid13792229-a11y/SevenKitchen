@@ -195,6 +195,21 @@ describe('疫苗 · 下一针（NextCard，原型 A/B/C/F/I/K/G）', () => {
     expect(template).not.toContain('上传疫苗本')
     expect(template).not.toContain('onScan')
   })
+
+  it('🔴 同一件事只叫「已忽略」；没有待办时照实说（自检 V12/V16）', () => {
+    /*
+     * ⚠️ 2026-10-16 自检 V16：同一件事在这张卡上原来有三个叫法 ——
+     *    "已忽略的 N 项" / "已设为不做" / "这个先不打"，家长得自己猜是不是同一件事。
+     * ⚠️ 自检 V12：没有待办时原来写"该打的都打完了。以后该打的时候，这里会告诉你。"
+     *    —— 那是替狗狗下结论：我们只知道手上没有要补的记录，并不知道它打完没打完。
+     */
+    expect(card).not.toContain('已设为不做')
+    expect(card).not.toContain('这个先不打')
+    expect(card).not.toContain('该打的都打完了')
+    expect(card).toContain('项已忽略')
+    expect(card).toContain('忽略这一针')
+    expect(card).toContain('按现有记录没有要补的针，打过的都在下面的记录里')
+  })
 })
 
 describe('疫苗 · 边界与状态（老板 2026-10-16："这种小问题还有很多"）', () => {
@@ -356,7 +371,11 @@ describe('疫苗 · 多条识别结果里"是哪一条错了"（老板 2026-10-1
   it('"去补全"走录入器（那里能勾"含哪些疫苗"），补完把那一条从列表里拿掉', () => {
     expect(tab).toContain('function onScanFixRow(row: VaccineScanRow, index: number)')
     expect(tab).toContain("editorHeading.value = '补全这一条'")
-    expect(tab).toContain('scanRows.value = scanRows.value.filter((_, at) => at !== editorFixIndex.value)')
+    /*
+     * ⚠️ 2026-10-16 自检 V6 修：原来按**行号**删，行号会因家长中途删/加行而错位，
+     *    补完存好拿掉的可能是另一条 ✗。现在按行的唯一标识（key）删。
+     */
+    expect(tab).toContain('scanRows.value = scanRows.value.filter((row) => row.key !== editorFixKey.value)')
   })
 
   it('补全时把识别到的名称与日期一起带过去（不让家长重打一遍）', () => {
@@ -370,8 +389,16 @@ describe('疫苗 · 多条识别结果里"是哪一条错了"（老板 2026-10-1
 describe('疫苗 · 识别结果页（老板 2026-10-16 的三个问题）', () => {
   const scan = read('ScanConfirm.vue')
 
-  it('哪些要核对：四种情形写在页面上，不是只在代码里', () => {
-    expect(scan).toContain('名字没读出来、是狂犬、产品库里没有这个名字、日期可疑')
+  it('哪些要核对：四种情形写在页面上，不是只在代码里；狂犬单拎一句', () => {
+    /*
+     * ⚠️ 2026-10-16 自检 V20：这句原来钉的是"名字没读出来、是狂犬、产品库里没有这个名字、
+     *    日期可疑"——把狂犬混在"我们没十足把握的"里说，等于说我们只是"可能读错"。
+     *    狂犬不是没把握、是必须核（漏了/错了会漏打一针必须打的），所以现在分两句说：
+     *    前三种说"没十足把握"，狂犬单拎一句说"必须核"。
+     *    顺带按 V14 的方向把"产品库"（内部叫法）说成"常见疫苗"。
+     */
+    expect(scan).toContain('名字没读出来、名字不在常见疫苗里、日期看着可疑的')
+    expect(scan).toContain('狂犬这一针不是没把握，是必须核')
   })
 
   it('🔴 名称与日期必须**看起来就能改**：给它们输入框（有框 = 能改）', () => {
@@ -438,6 +465,11 @@ describe('疫苗 · 不作数的记录要说清为什么（老板 2026-10-16："
   it('点那一条先讲清"为什么、该怎么办"，再进编辑', () => {
     expect(list).toContain('conflict.suggestion')
     expect(list).toContain("confirmText: '去修改'")
+    /*
+     * ⚠️ 2026-10-16 自检 V11：弹窗标题原来兜底写"这一条暂时不作数"（内部说法，
+     *    而且它只是"先不排进计划"，不是"这条记录不存在"）。现在兜底说"这条记录需要改一下"。
+     */
+    expect(list).toContain('这条记录需要改一下')
   })
 
   it('录入卡的抗体提示写明两个时间条件（20 周龄 / 最后一针后 4 周）', () => {
@@ -503,7 +535,14 @@ describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主
       resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
       'utf-8',
     )
-    expect(page).toContain('上传疫苗本 / 报告')
+    // 2026-10-16（自检 V32）：底部左键文案从「上传疫苗本 / 报告」缩成「上传疫苗本」
+    // —— 按钮是 nowrap + flex .92，7 个中文字加斜杠在窄屏上会压字。
+    /*
+     * ⚠️ 自检 V32 曾把它缩成「上传疫苗本」（担心窄屏压字），**已回退**：
+     *    老板 17:29 的截图里「上传疫苗本 / 报告」渲染正常（有证据），
+     *    而缩短后"报告"这条路在按钮上就看不见了 —— 与他"合成一个按钮"的意图相悖。
+     */
+    expect(page).toContain("'上传疫苗本 / 报告'")
     expect(page).toContain("'疫苗本（传照片识别）'")
     // 2026-10-16：抗体检测报告也走 AI 识别（不再是"传张照片、手填"）
     expect(page).toContain("'抗体检测报告（传报告识别）'")
@@ -543,10 +582,26 @@ describe('疫苗 · 接种记录能改能删（老板 2026-10-16 问）', () => 
     expect(list).toContain('编辑')
   })
 
-  it('点一行 → 进编辑；待核对的先给核对动作；抗体检测行也能改', () => {
+  it('点一行 → 进编辑；待核对且没有冲突的先给核对动作；抗体检测行也能改', () => {
     expect(list).toContain("emit('edit-record', entry.record)")
     expect(list).toContain("emit('edit-test', entry.test)")
     expect(list).toContain("emit('verify-record', entry.record)")
+  })
+
+  it('🔴 既待核对、又有冲突的那一条：「去修改」之后真的去编辑，不再落到核对流程（自检 V5）', () => {
+    /*
+     * ⚠️ 2026-10-16 自检 V5：有冲突时弹的框确认键写的是「去修改」，但代码原来继续
+     *    往下走 `isPending` 那一支（去核对）—— 那条记录永远改不了，按钮名与动作不符。
+     *    冲突说明这条记录本身有问题，核对通过也没意义，所以**先去改**。
+     */
+    const body = list.slice(list.indexOf('async function onEntryTap'), list.indexOf('function onPreviewBook'))
+    const conflictBranch = body.slice(0, body.indexOf('if (isPending(entry)'))
+    expect(conflictBranch).toContain("emit('edit-record', entry.record)")
+    expect(conflictBranch).toContain("emit('edit-test', entry.test)")
+    // 走完编辑这一支就 return，不许再落到下面的核对 / 抗体行分支
+    expect(conflictBranch).toContain('return')
+    // 核对那一支仍然在，只是排在冲突之后（没有冲突的待核对行照样能核对）
+    expect(body).toContain("emit('verify-record', entry.record)")
   })
 
   it('编辑入口把"这是哪一条"带进去，删除按钮由"有没有 id"决定（新增时不出现）', () => {
@@ -604,10 +659,14 @@ describe('疫苗 · 记录列表（RecordList，原型 C/F/K）', () => {
     expect(list).toContain('antibodyEntryTitle(entry.test)')
   })
 
-  it('最近几条 + 查看全部；疫苗本原件只出现一处（R10）', () => {
+  it('最近几条 + 查看全部；疫苗本只出现一处（R10）', () => {
     expect(list).toContain('RECENT_COUNT')
     expect(list).toContain('查看全部')
-    expect(list).toContain('查看疫苗本原件')
+    /*
+     * ⚠️ 2026-10-16 自检 V17：这句原来钉的是"查看疫苗本原件"——同一个东西在这页有
+     *    "本子""疫苗本原件"好几个叫法。统一成「疫苗本」（原名件照片仍整本只展示一处）。
+     */
+    expect(list).toContain('查看疫苗本')
     expect(list).toContain('@tap="onPreviewBook"')
   })
 
@@ -620,11 +679,13 @@ describe('疫苗 · 记录列表（RecordList，原型 C/F/K）', () => {
 describe('疫苗 · 唯一录入器（RecordEditor，原型 D/H）', () => {
   const editor = read('RecordEditor.vue')
 
-  it('名称 + 日期两个必填；名称栏带「从产品库选」', () => {
+  it('名称 + 日期两个必填；名称栏带「从常见疫苗选」', () => {
     const template = templateOf(editor)
     expect(template).toContain('打了什么疫苗')
     expect(template).toContain('什么时候打的')
-    expect(template).toContain('从产品库选')
+    // ⚠️ 2026-10-16 自检 V14：这句原来叫「从产品库选」——
+    //    "产品库"是我们的说法，家长面前统一说「常见疫苗」。
+    expect(template).toContain('从常见疫苗选')
     expect(template).toContain('mode="date"')
   })
 
@@ -639,7 +700,13 @@ describe('疫苗 · 唯一录入器（RecordEditor，原型 D/H）', () => {
   it('归不了类时引导勾"含哪些疫苗"；确实不知道就不硬存（R6）', () => {
     expect(editor).toContain('含哪些疫苗')
     expect(editor).toContain('function toggleComponent(')
-    expect(editor).toContain('这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。')
+    /*
+     * ⚠️ 2026-10-16 自检 V24：这条原来钉的是**提示与报错一字不差的那一句** ——
+     *    同一张卡上把同一句话说两遍 ✗，而且"问一下医生"应说**兽医**。
+     *    现在：提示留在勾选块里（说清为什么），报错只说缺什么、下一步做什么。
+     */
+    expect(editor).toContain('这个名字看不出含什么疫苗。勾一下它含哪些；确实不知道就问一下兽医。')
+    expect(editor).toContain("errorText.value = '先勾一下它含哪些疫苗，再保存。'")
   })
 
   it('日期不能填未来（R13）', () => {
@@ -657,7 +724,7 @@ describe('疫苗 · 唯一录入器（RecordEditor，原型 D/H）', () => {
   })
 })
 
-describe('疫苗 · 识别结果逐条确认（ScanConfirm，原型 E）', () => {
+describe('疫苗 · 识别结果逐条核对（ScanConfirm，原型 E）', () => {
   const scan = read('ScanConfirm.vue')
 
   it('只有名称 + 日期两列，可改可删（R12）', () => {
@@ -666,27 +733,51 @@ describe('疫苗 · 识别结果逐条确认（ScanConfirm，原型 E）', () =>
     expect(template).toContain('@change="onDateChange(index, $event)"')
     // 2026-10-16 起走确认弹窗（防误触），不再直接删
     expect(template).toContain('@tap="onRemoveRow(index)"')
-    // 缺名称或日期的那几条不静默丢，也不交上去
-    expect(scan).toContain('还没有填好名称和日期')
   })
 
-  it('"待核对"的行给核对动作，并说清它的后果', () => {
+  it('🔴 缺名称或日期的那几条：不交上去，而且**留在页面上**（自检 V4）', () => {
+    /*
+     * ⚠️ 2026-10-16 自检 V4：这句原来钉的是"还没有填好名称和日期"。当时注释写着
+     *    "缺的那几条留在页面上"，代码却是 `rows.value = ready` —— 把它们**从页面上删掉**，
+     *    提示还说"先留着" ✗（家长填漏一行：既没保存、也从界面上消失，只能重新识别一次）。
+     *    现在只把填全的交上去，缺的原地不动，提示照实说"没有保存"。
+     */
+    expect(scan).not.toContain('rows.value = ready')
+    expect(scan).toContain('还没填全，没有保存')
+    // 缺的那几条的 key 要记下来：父组件回写识别结果时不能被抹掉
+    expect(scan).toContain('keptKeys')
+  })
+
+  it('🔴 一条都填不全时说清缺哪条、缺什么、下一步（自检 V22）', () => {
+    // 原来只有一句"还没有填好名称和日期"：没说缺哪条、也没说下一步
+    expect(scan).not.toContain('还没有填好名称和日期')
+    expect(scan).toContain('function missingHint(')
+    expect(scan).toContain('补齐再保存')
+  })
+
+  it('"待核对"的行给核对动作，并说清该做什么', () => {
     expect(scan).toContain('待核对')
     expect(scan).toContain('@tap="verifyRow(index)"')
     /*
      * ⚠️ 2026-10-16 修：这里原来钉的是"没确认的不会保存" —— 与事实相反：
      *    待核对的行**会先存下来**（只是不参与计划）。当时那条守卫能过，
      *    是因为**注释里**还留着那句话 ✗（这个文件现在也统一先剥注释了）。
-     *    真正要守的是"说清后果"，不是那句话本身。
+     *
+     * ⚠️ 2026-10-16 自检 V9/V18：这句原来钉的是"暂时不参与提醒" —— 那是**系统话**
+     *    （家长不关心我们的提醒怎么算）。现在只说该做什么：对着疫苗本核一下。
      */
     expect(scan).not.toContain('没确认的不会保存')
-    expect(scan).toContain('暂时不参与提醒')
+    expect(scan).not.toContain('暂时不参与提醒')
+    expect(scan).toContain('请对着疫苗本核一下')
   })
 
-  it('底部两个键：全部不要 / 确认并保存', () => {
+  it('底部两个键：全部不要 / 核对好了，保存（自检 V19：全页统一用「核对」）', () => {
     const template = templateOf(scan)
     expect(template).toContain('全部不要')
-    expect(template).toContain('确认并保存')
+    // 原来是"确认并保存"：同一件事在这页上有"核对""确认"两个叫法，统一成「核对」
+    expect(template).toContain('核对好了，保存')
+    // 日期显示成 2026/11/20，跟记录区、免疫计划一个写法（自检 V30）
+    expect(template).toContain('formatFullDate(row.date)')
   })
 })
 

@@ -55,6 +55,20 @@ export class VaccineRecordResponseDto {
   @Expose()
   kindLabels!: string[];
 
+  /**
+   * 这条记录的产品名**有没有被人工核对过**（2026-10-09 安全默认值）。
+   *
+   * 说明都在 `prisma/schema.prisma` 的 `productVerified` 列上：
+   * 默认 true（手工填写、老记录都算数）；只有"识别出来且我们有理由怀疑"的
+   * 那一针才落 false，等顾客点一下「我已对照本子核对」再算数。
+   *
+   * **必须下发**（2026-10-16 补）：小程序靠它判断"待核对" ——
+   * 少了这个字段，角标不出现、点那一条也不会去核对，
+   * 而页面上还写着"点那一条就能核对"，整条路是死的 ✗。
+   */
+  @Expose()
+  productVerified!: boolean;
+
   @Expose()
   createdAt!: string;
 

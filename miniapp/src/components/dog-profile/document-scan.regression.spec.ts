@@ -23,7 +23,12 @@ describe('拍照录入 · 组件', () => {
   it('第 4 条：支持四类文档', () => {
     const scan = readScan()
 
-    expect(scan).toContain("'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'")
+    /*
+     * ⚠️ 2026-10-16 自检 V42：这个闭集原来漏了第五类 `ANTIBODY_REPORT`（抗体检测报告），
+     *    于是传进来类型对不上、标签表也查不到（会显示成"资料"）。
+     */
+    expect(scan).toContain("'ANTIBODY_REPORT'")
+    expect(scan).toContain("ANTIBODY_REPORT: '抗体检测报告'")
   })
 
   it('第 5 条：疫苗本**逐条确认后才入库**；其余四类仍是一次确认（2026-10-08 老板改）', () => {
@@ -1088,12 +1093,13 @@ describe('健康管理 · 超时兜底必须真的挂上（2026-10-11）', () =>
     expect(source).toContain('clearStartupWatchdog()')
   })
 
-  it('版本号用字面量印出来（ref 那次没渲染出来 ✗），卡住时印关键状态', () => {
-    const source = page()
-
-    expect(source).toContain('版本 2026.10.11.6')
-    expect(source).toContain('[诊断] 加载中=')
-  })
+  /*
+   * 2026-10-16（自检 V43）：原来这里还钉着两条**调试残留** ——
+   * 页面上印的「版本 2026.10.11.6」和「[诊断] 加载中=… …」。
+   * 它们是 2026-10-11 排查"页面一直停在正在读取"时临时加的，定位完就该删。
+   * 那两行（连 `.page-version` 样式）已经删掉，这条断言随之作废 —— 别再加回来：
+   * 它们与疫苗板块无关，而且会把"网络不顺"那一屏变成一堵内部状态墙。
+   */
 })
 
 /**
@@ -1190,7 +1196,7 @@ describe('识别确认页 ↔ 录入器 · 字段口径一致（老板 2026-10-1
       expect(source.includes("value: 'cdv'")).toBe(false);
     }
     expect(editor).toContain("from '../../domain/vaccine/catalog'");
-    // 名称栏都能"从产品库选"（原型 D 屏那一行）
-    expect(editor).toContain('从产品库选');
+    // 名称栏都能"从常见疫苗选"（原型 D 屏那一行；2026-10-16 自检 V14 统一叫法）
+    expect(editor).toContain('从常见疫苗选');
   });
 })

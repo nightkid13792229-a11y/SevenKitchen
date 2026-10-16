@@ -28,11 +28,11 @@
               placeholder-class="vk-editor__ph"
               @input="onNameInput"
             />
-            <text class="vk-editor__pick" @tap="togglePicker">从产品库选</text>
+            <text class="vk-editor__pick" @tap="togglePicker">从常见疫苗选</text>
           </view>
           <text v-if="productHint" class="vk-editor__hint">含 {{ productHint }}</text>
 
-          <!-- 产品库（点「从产品库选」展开；只列对外字段，匹配与归类在后端） -->
+          <!-- 常见疫苗（点「从常见疫苗选」展开；只列对外字段，匹配与归类在后端） -->
           <view v-if="pickerOpen" class="vk-editor__picker">
             <input
               class="vk-editor__search"
@@ -51,14 +51,14 @@
                 <text class="vk-editor__option-name">{{ product.name }}</text>
                 <text class="vk-editor__option-sub">{{ productComponentsText(product) }}</text>
               </view>
-              <text v-if="productList.length === 0" class="vk-editor__empty">产品库里没搜到，直接手写名字也行</text>
+              <text v-if="productList.length === 0" class="vk-editor__empty">常见疫苗里没搜到，直接手写名字也行</text>
             </scroll-view>
           </view>
 
           <!-- 归不了类 → 勾"含哪些疫苗"（顾客看到的是病种，不是内部类别） -->
           <view v-if="showComponents" class="vk-editor__components">
             <text class="vk-editor__label">含哪些疫苗</text>
-            <text class="vk-editor__hint">这个名字看不出含什么疫苗。勾一下它含哪些；确实不知道就问一下医生。</text>
+            <text class="vk-editor__hint">这个名字看不出含什么疫苗。勾一下它含哪些；确实不知道就问一下兽医。</text>
             <view class="vk-editor__chips">
               <text
                 v-for="option in componentChoices"
@@ -89,6 +89,9 @@
              所以这句提示必须在这儿。 -->
         <text v-if="preset" class="vk-editor__hint vk-editor__hint--block">
           下面这些是照报告填好的，请核对一下；哪里不对直接改。
+          <template v-if="pendingPages > 0">
+            （这份报告还有 {{ pendingPages }} 页，存好这条会接着来）
+          </template>
         </text>
         <view class="vk-editor__block">
           <text class="vk-editor__label">什么时候检的</text>
@@ -142,7 +145,10 @@
         </view>
 
         <view class="vk-editor__block">
-          <text class="vk-editor__label">报告结果</text>
+          <!-- ⚠️ 2026-10-16 自检 H2：「报告结果」→「报告写的是」。
+               这一栏问的是"报告上写了什么"，不是"我们判成什么"—— 三个选项都是照抄报告。
+               （选项文案本身在 domain/vaccine/catalog.ts 的词表里，不在这次改动范围。） -->
+          <text class="vk-editor__label">报告写的是</text>
           <view class="vk-editor__options">
             <view
               v-for="option in resultOptions"
@@ -211,7 +217,7 @@ const props = withDefaults(defineProps<{
   record?: VaccineRecord | null
   /** 编辑既有抗体检测时传进来 */
   test?: AntibodyTest | null
-  /** 产品库（接口下发的对外字段） */
+  /** 常见疫苗（接口下发的对外字段） */
   products?: VaccineCatalogProduct[]
   /** 病种词表（接口下发优先，兜底在 domain 里） */
   componentOptions?: VaccineComponentOption[]
@@ -237,6 +243,8 @@ const props = withDefaults(defineProps<{
     value: string
     unit: string
     attachments: string[]
+    /** 这份报告还有几页没录（0 = 没有了）；由上层按识别到的页数给 */
+    pendingPages?: number
   } | null
   /** 正在保存 */
   saving?: boolean
@@ -272,10 +280,16 @@ const errorText = ref('')
  *
  * 一次抗体检测对应**一份报告**，报告上写的是哪一项就是哪一项：
  * 核心三项与狂犬是两张不同的报告（送检项目不同、出报告的机构也可能不同）。
- * 多选还会让计划那边说不清 —— 只有核心那一项会影响接种安排。
+ * 多选还会让计划那边说不清 —— 只有核心那一项会影响免疫计划（V18 统一叫法）。
  */
 const target = ref<AntibodyTarget>('CORE')
-const result = ref<AntibodyResult>('PASS')
+/**
+ * 报告结果**不预选「合格」**（2026-10-16 自检 V1）。
+ *
+ * 一张空白卡（手填）落在 `UNKNOWN`（报告没写结论）：合格 / 不合格是**照抄报告**，
+ * 读不到就留空让家长自己定 —— 我们不设阈值、不替兽医判读（需求 R14）。
+ */
+const result = ref<AntibodyResult>('UNKNOWN')
 
 const isRecordMode = computed(() => props.mode !== 'antibody')
 const title = computed(() => {
@@ -365,12 +379,22 @@ async function pickReportPhoto() {
   }
 }
 
+/*
+ * 结果那一栏下面这两句（2026-10-16 自检 V10 / V18）：
+ *   · 「改由抗体检测替代…先不作数」是**站在我们的角度**说话 ✗ ——
+ *     家长要的是"这份报告算不算数、该问谁"，不是"我们怎么算"。
+ *     现在只说该做什么：结果以兽医判读为准，两种日期的报告可能用不上。
+ *   · 「接种安排」统一叫「**免疫计划**」（与板块标题同一个词，V18）。
+ */
+/** 这份报告还有几页没录（自检 V7：多页报告要逐页录，别让家长自己想起来） */
+const pendingPages = computed(() => Number(props.preset?.pendingPages || 0))
+
 const antibodyHint = computed(() => {
   if (target.value === 'CORE') {
-    return '核心疫苗合格时，这一针改由抗体检测替代（结果以兽医判读为准）。20 周龄之前、或打完上一针不满 4 周的报告，先不作数。'
+    return '结果以兽医判读为准。20 周龄之前做的、或打完上一针不满 4 周的报告，可能用不上，问一下兽医。'
   }
   if (target.value === 'RABIES') {
-    return '狂犬的抗体检测只作记录（出行 / 出入境常用），不影响接种安排。'
+    return '狂犬的抗体检测只作记录（出行 / 出入境常用），不影响免疫计划。'
   }
   return ''
 })
@@ -407,8 +431,21 @@ watch(
         test && Array.isArray(test.targets) && test.targets.length > 0
           ? test.targets[0]
           : (preset?.target || 'CORE')
-      result.value = test && test.result ? test.result : (preset?.result || 'PASS')
-      result.value = (test?.result || 'PASS') as AntibodyResult
+      /*
+       * 🔴 2026-10-16 自检 V1：这里原来**连着两行**给结果赋值 ——
+       *
+       *     result.value = test && test.result ? test.result : (preset?.result || 'PASS')
+       *     result.value = (test?.result || 'PASS') as AntibodyResult   ← 把上一行抹掉
+       *
+       * 第二行对任何一条新记录都取不到 `test`，于是**无条件写回「合格」**：
+       * 报告写"不合格"、或者根本没给结论，卡片上都预选「合格」✗ ——
+       * 家长看到"照报告填好的，请核对一下"，一保存就把错结论记下来，
+       * 后端的"不设阈值"那道防线等于没有。
+       *
+       * 现在只有**一条**来源：改既有记录 → 用它自己的结果；照报告预填 → 用识别到的那份；
+       * 两者都没有（手填空白卡）→ `UNKNOWN`（报告没写结论），由家长自己选。
+       */
+      result.value = test?.result || preset?.result || 'UNKNOWN'
       return
     }
     const record = props.record
@@ -508,10 +545,13 @@ function onSave() {
   }
   /*
    * 认不出、又没勾病种 → **不硬存**（需求 R6）。
-   * 如实告诉他这条没法算进计划，并给两条出路：勾病种，或者问医生。
+   *
+   * ⚠️ 2026-10-16 自检 V24：原来这里把上面那条提示**一字不差又写了一遍** ——
+   *    同一张卡上"提示 + 报错"说同一句话 ✗；而且"问一下医生"应是**兽医**。
+   *    现在报错只说缺什么、下一步做什么，解释留在提示里（提示里已改成兽医）。
    */
   if (showComponents.value && components.value.length === 0) {
-    errorText.value = '这个名字看不出含什么疫苗，先勾一下它含哪些；确实不知道就问一下医生。'
+    errorText.value = '先勾一下它含哪些疫苗，再保存。'
     return
   }
 
@@ -554,7 +594,7 @@ function onCancel() {
 }
 
 .vk-editor__title {
-  font-size: 30rpx;
+  font-size: $vk-font-card-title;
   font-weight: 700;
   color: $vk-text-strong;
 }
@@ -569,7 +609,8 @@ function onCancel() {
   display: flex;
   flex-wrap: wrap;
   gap: 14rpx;
-  margin-top: 6rpx;
+  /* 缩略图上面留出一行：右上角那个「×」是压在格子外面的，留窄了会被裁掉、点不着 */
+  margin-top: 16rpx;
 }
 
 .vk-editor__photo {
@@ -585,19 +626,26 @@ function onCancel() {
   background: $vk-page-bg;
 }
 
-/* × 压在右上角，点着方便又不挡图 */
+/*
+ * 缩略图右上角那个「×」。
+ *
+ * ⚠️ 2026-10-16 自检 V28：原来是 40rpx（20px）—— 低于最小可点尺寸，
+ *    手指点偏一点就落到图片上、变成全屏预览（想删反而打开了图）。
+ *    现在 56rpx（28px），加上下面 `.vk-editor__photos` 给它留的那一行空白，
+ *    整个圆都是可点区，压在图片角上的部分也还在图外面一点。
+ */
 .vk-editor__photo-del {
   position: absolute;
   top: -10rpx;
   right: -10rpx;
-  width: 40rpx;
-  height: 40rpx;
-  line-height: 36rpx;
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 52rpx;
   text-align: center;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
   color: $vk-white;
-  font-size: 26rpx;
+  font-size: 32rpx;
 }
 
 .vk-editor__photo-add {
@@ -617,28 +665,6 @@ function onCancel() {
   line-height: 1;
 }
 
-.vk-editor__types {
-  display: flex;
-  gap: 10rpx;
-  margin-bottom: 18rpx;
-}
-
-.vk-editor__type {
-  flex: 1;
-  text-align: center;
-  line-height: 64rpx;
-  border-radius: 18rpx;
-  background: $vk-ghost-bg;
-  color: $vk-text-muted;
-  font-size: $vk-font-body;
-}
-
-.vk-editor__type--on {
-  background: $vk-due-bg;
-  color: $vk-brand;
-  font-weight: 600;
-}
-
 .vk-editor__block {
   margin-bottom: 22rpx;
 }
@@ -654,7 +680,7 @@ function onCancel() {
   border: 1px solid $vk-field-border;
   border-radius: 18rpx;
   padding: 18rpx;
-  font-size: 26rpx;
+  font-size: $vk-font-body;
   color: $vk-text;
   display: flex;
   align-items: center;
@@ -666,7 +692,7 @@ function onCancel() {
 .vk-editor__input {
   flex: 1;
   min-width: 0;
-  font-size: 26rpx;
+  font-size: $vk-font-body;
   color: $vk-text;
 }
 
@@ -708,7 +734,7 @@ function onCancel() {
 .vk-editor__search {
   border-bottom: 1px solid $vk-line;
   padding: 10rpx 6rpx;
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   color: $vk-text;
 }
 
@@ -722,13 +748,13 @@ function onCancel() {
 }
 
 .vk-editor__option-name {
-  font-size: 25rpx;
+  font-size: $vk-font-body;
   color: $vk-text;
 }
 
 .vk-editor__option-sub {
   display: block;
-  font-size: 21rpx;
+  font-size: $vk-font-badge;
   color: $vk-text-faint;
   margin-top: 4rpx;
 }
@@ -812,7 +838,7 @@ function onCancel() {
   line-height: 76rpx;
   height: 76rpx;
   border-radius: 20rpx;
-  font-size: 26rpx;
+  font-size: $vk-font-body;
   font-weight: 600;
 }
 

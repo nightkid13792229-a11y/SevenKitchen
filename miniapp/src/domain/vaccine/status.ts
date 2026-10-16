@@ -11,6 +11,11 @@
  *
  * ⚠️ 前端不做任何计划推算：本文件里没有"今天要不要打"这类判断，
  *    只有"这个状态该怎么写"和"这个日期该怎么排"。
+ *
+ * ⚠️ 公开面 = **组件真正会用到的那些**（2026-10-16 自检 V38）：
+ *    只在本文件内部用的表与工具（颜色名类型、`STEP_STATUS_META`、`dateParts`、
+ *    `formatShortDate`、`formatYearMonth`、`IGNORE_REASON_LABELS`、抗体那两个名字表）
+ *    不再挂 `export` —— 挂着会让人以为"外面还有人用，动不得"。
  */
 
 import type {
@@ -24,13 +29,13 @@ import type {
 } from './types'
 
 /** 状态角标的颜色名（对应 vaccine-tokens.scss 里的状态色） */
-export type VaccineStatusTone = 'due' | 'over' | 'done' | 'plain'
+type VaccineStatusTone = 'due' | 'over' | 'done' | 'plain'
 
 /** 层级的颜色名 */
-export type VaccineLayerTone = 'must' | 'suggest'
+type VaccineLayerTone = 'must' | 'suggest'
 
 /** 类别色条的颜色名 */
-export type VaccineKindTone = 'core' | 'rabies' | 'lepto' | 'plain'
+type VaccineKindTone = 'core' | 'rabies' | 'lepto' | 'plain'
 
 /**
  * 四种状态 → 角标文案 + 颜色名。
@@ -38,7 +43,7 @@ export type VaccineKindTone = 'core' | 'rabies' | 'lepto' | 'plain'
  * 文案只在**后端没给 `statusLabel`** 时兜底（后端给了就以它为准 ——
  * 状态是后端算的，它能说出更准的话，例如"已用抗体检测替代"）。
  */
-export const STEP_STATUS_META: Record<
+const STEP_STATUS_META: Record<
   VaccineStepStatus,
   { label: string; tone: VaccineStatusTone }
 > = {
@@ -112,6 +117,13 @@ export function stepKindTone(kind: VaccineKind): VaccineKindTone {
  *    后端下发的是"这一针该在哪天打"这个**日历日**，
  *    用 Date 解析再按本地时区打印，东八区凌晨会整体差一天（这个项目踩过）。
  */
+/*
+ * ⚠️ 2026-10-16 自检 V38：`dateParts` / `formatShortDate` / `formatYearMonth`
+ *    只在本文件内部用（`formatFullDate` 与下面那几段文案），
+ *    但原来都挂着 `export` —— 全仓没有一处 import（`grep -rn` 过 src 全目录，含 `.spec.ts`）。
+ *    公开面只留组件真正要用的那几个。
+ */
+
 export function dateParts(value: string | null | undefined): { y: string; m: string; d: string } {
   const text = String(value || '').slice(0, 10)
   const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
@@ -126,13 +138,13 @@ export function formatFullDate(value: string | null | undefined): string {
 }
 
 /** 11/20（同一年内的窗口，写得短一点） */
-export function formatShortDate(value: string | null | undefined): string {
+function formatShortDate(value: string | null | undefined): string {
   const { m, d } = dateParts(value)
   return m ? `${m}/${d}` : ''
 }
 
 /** 2026/11（逾期项写"原建议时间"时只写到月，跟原型一致） */
-export function formatYearMonth(value: string | null | undefined): string {
+function formatYearMonth(value: string | null | undefined): string {
   const { y, m } = dateParts(value)
   return y ? `${y}/${m}` : ''
 }
@@ -223,10 +235,16 @@ export function stepWhenText(step: VaccineStep): string {
  *    依据与那句短话留给「下一针」卡片 —— 家长是在那里读"为什么"的。
  */
 export function stepRowNote(step: VaccineStep): { text: string; overdue: boolean } {
-  // 抗体检测替代（原型 F 那一行的原话）
+  /*
+   * 抗体检测替代（原型 F 那一行）。
+   *
+   * ⚠️ 2026-10-16 自检 V26：原来写"这次不用打：抗体检测合格（…）" ——
+   *    这两个字读起来像**我们下的结论**。报告上写什么就是什么，所以补上"报告上写着"：
+   *    家长一眼能看出这是**照抄报告**、不是我们判的（结果本身以兽医判读为准）。
+   */
   if (step.titer) {
     return {
-      text: `这次不用打：抗体检测合格（${formatFullDate(step.titer.testedAt)}）`,
+      text: `这次不用打：报告上写着抗体检测合格（${formatFullDate(step.titer.testedAt)}）`,
       overdue: false,
     }
   }
@@ -251,7 +269,7 @@ export function stepTitle(step: VaccineStep): string {
 /* ══ 忽略（"不做"）的原因 ═════════════════════════════════════════════════ */
 
 /** 两个选项行为一致，区别只是把"为什么"记下来（需求 R5） */
-export const IGNORE_REASON_LABELS: Record<string, string> = {
+const IGNORE_REASON_LABELS: Record<string, string> = {
   NOT_NOW: '这次先不打',
   STOPPED: '不再接种了',
 }
@@ -263,32 +281,37 @@ export function ignoreReasonLabel(reason: string | null | undefined): string {
 
 /* ══ 抗体检测（记录区那一行 + 录入器）══════════════════════════════════════ */
 
-export const ANTIBODY_TARGET_LABELS: Record<AntibodyTarget, string> = {
+/*
+ * ⚠️ 2026-10-16 自检 V38：这里原来的 `ANTIBODY_TARGET_LABELS` / `ANTIBODY_RESULT_LABELS`
+ *    两个表 + `antibodyTargetLabel` / `antibodyResultLabel` 两个函数都是 `export` 的，
+ *    但**全仓没有一处 import**（`grep -rn` 过 src 全目录，含 `.spec.ts`）——
+ *    四个名字只服务于 `antibodyEntryTitle` 一件事。现在收进它一处：
+ *    公开面只剩 `antibodyEntryTitle`（`RecordList` 用的就是它）。
+ */
+const ANTIBODY_TARGET_NAMES: Record<AntibodyTarget, string> = {
   CORE: '核心三项',
   RABIES: '狂犬',
 }
 
 /**
- * 报告没给结论时写"请让兽医判读"—— 我们不设阈值、不替家长拍板（需求 R14）。
+ * 三个结果都是**照抄报告**，不是我们判的（需求 R14：不设阈值、不替家长拍板）。
+ *
+ * ⚠️ 2026-10-16 自检 V26：`UNKNOWN` 原来写"请让兽医判读" ——
+ *    那是**给家长的下一步**，不是"这一条现在是什么"。记录区那一行要答的是
+ *    "报告上写了什么"，所以写「未判读」（报告没给结论）。
  */
-export const ANTIBODY_RESULT_LABELS: Record<AntibodyResult, string> = {
+const ANTIBODY_RESULT_NAMES: Record<AntibodyResult, string> = {
   PASS: '合格',
   FAIL: '不合格',
-  UNKNOWN: '请让兽医判读',
-}
-
-export function antibodyTargetLabel(target: AntibodyTarget): string {
-  return ANTIBODY_TARGET_LABELS[target] || String(target)
-}
-
-export function antibodyResultLabel(result: AntibodyResult): string {
-  return ANTIBODY_RESULT_LABELS[result] || ''
+  UNKNOWN: '未判读',
 }
 
 /** 记录区那一行的名字：`抗体检测 · 核心三项（合格）`（原型 F 屏的原话） */
 export function antibodyEntryTitle(test: AntibodyTest): string {
-  const targets = (test?.targets || []).map((item) => antibodyTargetLabel(item)).join('、')
-  const result = antibodyResultLabel(test?.result)
+  const targets = (test?.targets || [])
+    .map((item) => ANTIBODY_TARGET_NAMES[item] || String(item))
+    .join('、')
+  const result = ANTIBODY_RESULT_NAMES[test?.result] || ''
   const head = targets ? `抗体检测 · ${targets}` : '抗体检测'
   return result ? `${head}（${result}）` : head
 }

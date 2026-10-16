@@ -166,10 +166,6 @@ const props = withDefaults(defineProps<{
   dogName: '',
 })
 
-const emit = defineEmits<{
-  (event: 'records-changed'): void
-}>()
-
 const loading = ref(false)
 const saving = ref(false)
 const loadError = ref('')
@@ -223,7 +219,9 @@ async function loadAll() {
     tests.value = testList || []
     catalog.value = catalogResponse ? catalogResponse.data : null
   } catch (error: any) {
-    loadError.value = error?.message || '网络不太顺，点一下重新加载'
+    // 自检 V15：后端原话可能是英文/JSON，不进界面（只进控制台）
+    console.error('[VaccineTab] 免疫计划加载失败：', error?.message || error)
+    loadError.value = '网络不太顺，点一下重新加载'
   } finally {
     loading.value = false
   }
@@ -248,7 +246,6 @@ watch(() => props.dogId, () => {
 /** 任何写操作成功之后都走它：重新拉一次，整屏重绘（技术方案 3.4） */
 async function refreshAfterWrite() {
   await loadAll()
-  emit('records-changed')
 }
 
 /* ══ 录入器 ═══════════════════════════════════════════════════════════════ */
@@ -262,18 +259,19 @@ const editorPresetComponents = ref<string[]>([])
 /** 预填日期（"补全这一条"用） */
 const editorDate = ref('')
 /**
- * 正在补全的是识别结果里的第几条（-1 = 不是补全）。
+ * 正在补全的是识别结果里的**哪一条**（空串 = 不是补全）。
  *
- * 补全并存好之后，要把那一条从识别结果里**拿掉** —— 它已经作为一条真正的记录进去了，
- * 继续留在待确认列表里会让家长以为还没存。
+ * 存的是行的唯一标识 `key`，不是行号 —— 行号会因为家长中途删/加行而错位（见 V6）。
+ * 补全并存好之后，把那一条从识别结果里**拿掉**：它已经作为一条真正的记录进去了，
+ * 继续留着会让家长以为还没存。
  */
-const editorFixIndex = ref(-1)
+const editorFixKey = ref('')
 /** 录入卡标题：新建一条 = 记一条接种记录；补记某一针 = 记录这一针（原型 D / H） */
 const editorHeading = ref('记一条接种记录')
 
 /** 底部「记一条」：一条空白记录 */
 function addRecord() {
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   editorMode.value = 'record'
   editorRecord.value = null
@@ -288,8 +286,19 @@ function addRecord() {
   scrollToAnchor('vk-anchor-editor')
 }
 
-/** 底部「上传疫苗本 / 报告」→ 抗体检测报告：**先识别**，识别出来再开卡预填 */
+const antibodyScanRef = ref<{
+  startScan?: () => void
+  dismissFailure?: () => void
+} | null>(null)
+
+/**
+ * 底部「上传疫苗本 / 报告」→ 抗体检测报告：**先识别**，识别出来再开卡预填。
+ *
+ * ⚠️ 自检 V33：这一页挂了**两个识别实例**（疫苗本 / 抗体报告），各自记着自己的
+ * "没识别到内容"。开其中一个之前，先把另一个的提示收掉 —— 否则两块提示会同时挂在那。
+ */
 function addAntibodyTest() {
+  scanRef.value?.dismissFailure?.()
   antibodyScanRef.value?.startScan?.()
 }
 
@@ -311,15 +320,24 @@ function onAntibodyScanned(payload: {
    * 那是**替他下结论** —— 他没测过也会被"填"出一个结论。
    */
   if (list.length === 0) return
+  /**
+   * ⚠️ 2026-10-16 修（自检 V7）：一份报告可能有好几页（核心一页、狂犬一页），
+   * 识别回来是多条。原来只取 `list[0]`，**其余静默丢弃** ✗。
+   * 现在：第一条先录，剩下的排队；存好一条自动接上下一条。
+   */
+  antibodyQueue.value = list.slice(1)
   const draft = list[0]
   const targets = Array.isArray(draft.targets) ? draft.targets.map(String) : []
   onAntibodyPreset({
+    pendingPages: antibodyQueue.value.length,
     testedAt: String(draft.testedAt || ''),
     target: targets[0] === 'RABIES' ? 'RABIES' : 'CORE',
-    result:
-      draft.result === 'FAIL' || draft.result === 'UNKNOWN'
-        ? draft.result
-        : 'PASS',
+    /**
+     * ⚠️ 2026-10-16 修（自检 V2）：原来读不到结论时默认 `'PASS'`（合格）——
+     * 那等于**我们替兽医判了合格**，违反"不设阈值、不替兽医判读"。
+     * 现在只有明确读到 PASS 才是 PASS，其余（含读不到）一律 `UNKNOWN`（报告没写结论）。
+     */
+    result: draft.result === 'PASS' || draft.result === 'FAIL' ? draft.result : 'UNKNOWN',
     value: String(draft.value || ''),
     unit: String(draft.unit || ''),
     attachments: Array.isArray(draft.attachments) ? draft.attachments.map(String) : [],
@@ -334,7 +352,7 @@ function onAntibodyScanned(payload: {
  * 选一支同时含两类的苗，两个类别同时完成（需求 R11）。日期默认为今天。
  */
 function onRecordStep(step: VaccineStep | null) {
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   editorMode.value = 'record'
   editorRecord.value = null
@@ -362,6 +380,9 @@ function onRecordCombo(products: string[]) {
 }
 
 /** 抗体录入卡的预填（识别结果铺进来的那一份） */
+/** 这份报告剩下还没录的几页（见 V7） */
+const antibodyQueue = ref<Record<string, unknown>[]>([])
+
 const antibodyPreset = ref<{
   testedAt: string
   target: 'CORE' | 'RABIES'
@@ -369,9 +390,30 @@ const antibodyPreset = ref<{
   value: string
   unit: string
   attachments: string[]
+  /** 这份报告还有几页没录（0 = 没有了） */
+  pendingPages?: number
 } | null>(null)
 
 /** 把识别结果铺到抗体录入卡（家长随后可以逐项改） */
+/** 存完一条抗体检测后，如果这份报告还有页没录，自动接上下一条 */
+function openNextAntibodyInQueue() {
+  const next = antibodyQueue.value[0]
+  if (!next) return false
+  antibodyQueue.value = antibodyQueue.value.slice(1)
+  const targets = Array.isArray(next.targets) ? next.targets.map(String) : []
+  onAntibodyPreset({
+    pendingPages: antibodyQueue.value.length,
+    testedAt: String(next.testedAt || ''),
+    target: targets[0] === 'RABIES' ? 'RABIES' : 'CORE',
+    result:
+      next.result === 'PASS' || next.result === 'FAIL' ? next.result : 'UNKNOWN',
+    value: String(next.value || ''),
+    unit: String(next.unit || ''),
+    attachments: Array.isArray(next.attachments) ? next.attachments.map(String) : [],
+  })
+  return true
+}
+
 function onAntibodyPreset(preset: {
   testedAt: string
   target: 'CORE' | 'RABIES'
@@ -383,7 +425,7 @@ function onAntibodyPreset(preset: {
   editorMode.value = 'antibody'
   editorRecord.value = null
   editorTest.value = null
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   antibodyPreset.value = preset
   editorHeading.value = ''
@@ -392,7 +434,7 @@ function onAntibodyPreset(preset: {
 
 /** 「先做抗体检测」：同一个录入器的抗体模式 */
 function onAntibody(_step: VaccineStep | null) {
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   editorMode.value = 'antibody'
   editorRecord.value = null
@@ -406,7 +448,7 @@ function onEditRecord(record: VaccineRecord) {
   editorMode.value = 'record'
   editorRecord.value = record
   editorTest.value = null
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   editorHeading.value = '修改这条记录'
   editorVisible.value = true
@@ -417,10 +459,11 @@ function onEditRecord(record: VaccineRecord) {
 
 function onEditTest(test: AntibodyTest) {
   antibodyPreset.value = null
+  antibodyQueue.value = []
   editorMode.value = 'antibody'
   editorTest.value = test
   editorRecord.value = null
-  editorFixIndex.value = -1
+  editorFixKey.value = ''
   editorDate.value = ''
   editorHeading.value = '修改这次抗体检测'
   editorVisible.value = true
@@ -492,9 +535,14 @@ async function onSaveRecord(payload: VaccineRecordPayload, recordId: string) {
      * 这一条是"补全识别结果里的某一条" → 把它从待确认列表里拿掉。
      * 它已经作为一条真正的记录进去了；留着会让家长以为还没存。
      */
-    if (editorFixIndex.value >= 0) {
-      scanRows.value = scanRows.value.filter((_, at) => at !== editorFixIndex.value)
-      editorFixIndex.value = -1
+    /**
+     * ⚠️ 2026-10-16 修（自检 V6）：原来按**行号**删，而行号会因为家长在下面
+     * 删掉/新增某一行而错位 —— 补完存好，被拿掉的可能是**另一条** ✗。
+     * 现在按行的**唯一标识**（`key`）删，怎么动都不会认错。
+     */
+    if (editorFixKey.value) {
+      scanRows.value = scanRows.value.filter((row) => row.key !== editorFixKey.value)
+      editorFixKey.value = ''
     }
     closeEditor()
     uni.showToast({ title: '已保存', icon: 'success' })
@@ -513,8 +561,13 @@ async function onSaveTest(payload: AntibodyTestPayload, testId: string) {
     if (testId) await vaccineApi.antibodyTests.update(props.dogId, testId, payload)
     else await vaccineApi.antibodyTests.create(props.dogId, payload)
     closeEditor()
-    uni.showToast({ title: '已保存', icon: 'success' })
     await refreshAfterWrite()
+    // 这份报告还有页没录 → 直接接上下一条（别让家长自己想起来）
+    if (!testId && openNextAntibodyInQueue()) {
+      uni.showToast({ title: '已保存，接着录下一页', icon: 'none' })
+      return
+    }
+    uni.showToast({ title: '已保存', icon: 'success' })
   } catch (error: any) {
     uni.showToast({ title: error?.message || '没保存成功，再试一次', icon: 'none' })
   } finally {
@@ -572,18 +625,17 @@ async function onVerifyRecord(record: VaccineRecord) {
 
 /* ══ 识别疫苗本 ═══════════════════════════════════════════════════════════ */
 
-const antibodyScanRef = ref<{
-  startScan?: () => void
-} | null>(null)
-
 const scanRef = ref<{
   startScan?: () => void
+  dismissFailure?: () => void
   unconfirmedDraftCount?: () => number
 } | null>(null)
 
 const scanRows = ref<VaccineScanRow[]>([])
 
 function startScan() {
+  // 对称处理：开疫苗本识别前，先收掉抗体报告那边的失败提示（自检 V33）
+  antibodyScanRef.value?.dismissFailure?.()
   scanRef.value?.startScan?.()
 }
 
@@ -628,7 +680,7 @@ function onScanned(payload: { drafts: Record<string, any>[]; documentType?: stri
  *   · 提示改成"存了几条、还剩几条要处理"，而不是一句笼统的报错；
  *   · 只要还有要处理的，这一页就不关 —— 家长能立刻看到是哪一条。
  */
-async function onScanSave(rows: VaccineScanRow[]) {
+async function onScanSave(rows: VaccineScanRow[], kept: VaccineScanRow[] = []) {
   if (!props.dogId || saving.value) return
   saving.value = true
   const failedRows: VaccineScanRow[] = []
@@ -655,8 +707,18 @@ async function onScanSave(rows: VaccineScanRow[]) {
     }
 
     if (failedRows.length === 0) {
-      scanRows.value = []
-      uni.showToast({ title: `已保存 ${saved} 条`, icon: 'success' })
+      /**
+       * ⚠️ 自检 V4 的最后一米：不能一律清空。
+       * 识别结果页里可能有"没填全、没交上来"的几条（`kept`）——
+       * 清空会让卡片卸载，那几条跟着消失 ✗。有 kept 就留着它们，卡片继续在。
+       */
+      scanRows.value = kept
+      uni.showToast({
+        title: kept.length > 0
+          ? `已保存 ${saved} 条，还有 ${kept.length} 条没填全`
+          : `已保存 ${saved} 条`,
+        icon: kept.length > 0 ? 'none' : 'success',
+      })
     } else {
       // 只留下要处理的那几条（已存进去的不再重复出现）
       scanRows.value = failedRows
@@ -689,7 +751,7 @@ function onScanFixRow(row: VaccineScanRow, index: number) {
   editorPresetComponents.value = []
   editorDate.value = String(row.date || '')
   editorHeading.value = '补全这一条'
-  editorFixIndex.value = index
+  editorFixKey.value = String(row.key || '')
   editorVisible.value = true
   scrollToAnchor('vk-anchor-editor')
 }

@@ -1,17 +1,22 @@
 <template>
-  <!-- 识别结果 · 逐条确认（需求 R12 / 原型 E 屏）。
+  <!-- 识别结果 · 逐条核对（需求 R12 / 原型 E 屏）。
        ⚠️ 只有**两列**：名称 + 日期。品牌、批号、下次到期日一律不要。
-       ⚠️ "待核对"的行**不算进计划**（后端按 productVerified=false 处理），
-          并给一个能走出去的动作：「我已对照本子核对」。没确认的不会保存。 -->
+       ⚠️ "待核对"的行也会先记下来（后端按 productVerified=false 处理，先不排进免疫计划），
+          并给一个能走出去的动作：「我已对照疫苗本核对」。
+       ⚠️ 名称或日期缺一个的那几条**不保存、也不从页面上消失**（2026-10-16 自检 V4）：
+          家长补完还能再点一次「核对好了，保存」。 -->
   <view v-if="rows.length > 0" class="vk-scan">
     <view class="vk-scan__head">
       <text class="vk-scan__title">识别结果</text>
       <text class="vk-scan__count">{{ rows.length }} 条</text>
     </view>
-    <text class="vk-scan__hint">读出 {{ rows.length }} 条，请逐条确认。点任意一条可以改名称、日期，或者删掉。</text>
+    <!-- 条数只在上面那一处说（2026-10-16 自检 V21：原来"3 条"和"读出 3 条"紧挨着说两遍） -->
+    <text class="vk-scan__hint">请逐条核对。点任意一条可以改名称、日期，或者删掉。</text>
     <!-- "哪几条需要核对、为什么"要说在明面上（老板 2026-10-16 问的正是这个）——
          判据在 domain/vaccine/catalog.ts 的 scanRowReview，这里只是把同一套话讲给家长。 -->
-    <text v-if="hasCareRow" class="vk-scan__hint">带「待核对」的是我们没十足把握的四种：名字没读出来、是狂犬、产品库里没有这个名字、日期可疑。它们会先记下来，但暂时不参与提醒 —— 对照本子看一眼、点一下核对，就算进去了。</text>
+    <!-- 2026-10-16 自检 V9/V20：只说该做什么（不再解释"记下来但暂时不参与提醒"这类系统话）；
+         而且狂犬不是"没把握"、是"必须核"，单拎一句说。 -->
+    <text v-if="hasCareRow" class="vk-scan__hint">带「待核对」的几条，请对着疫苗本核一下：名字没读出来、名字不在常见疫苗里、日期看着可疑的，是我们没十足把握的。狂犬这一针不是没把握，是必须核 —— 不管读得多准，都请对着疫苗本看一眼。</text>
 
     <view
       v-for="(row, index) in rows"
@@ -42,17 +47,19 @@
 
       <picker mode="date" :value="row.date" @change="onDateChange(index, $event)">
         <view class="vk-scan__field vk-scan__field--date">
+          <!-- 显示成 `2026/11/20`，跟记录区、免疫计划一个写法（2026-10-16 自检 V30；
+               交给 picker 的 `row.date` 仍然是 `2026-11-20`，只是显示换一种） -->
           <text
             class="vk-scan__date"
             :class="{ 'vk-scan__date--empty': !row.date }"
-          >{{ row.date || '点这里选日期' }}</text>
+          >{{ formatFullDate(row.date) || '点这里选日期' }}</text>
         </view>
       </picker>
 
       <template v-if="isCare(row)">
         <text class="vk-scan__why">{{ row.reason }}</text>
         <view class="vk-scan__acts">
-          <text class="vk-scan__act" @tap="verifyRow(index)">我已对照本子核对</text>
+          <text class="vk-scan__act" @tap="verifyRow(index)">我已对照疫苗本核对</text>
         </view>
       </template>
 
@@ -80,7 +87,7 @@
         class="vk-scan__btn vk-scan__btn--primary"
         :class="{ 'vk-scan__btn--disabled': saving }"
         @tap="onSave"
-      >{{ saving ? '正在保存…' : '确认并保存' }}</text>
+      >{{ saving ? '正在保存…' : '核对好了，保存' }}</text>
     </view>
   </view>
 </template>
@@ -88,6 +95,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { VaccineScanRow } from '../../domain/vaccine/types'
+import { formatFullDate } from '../../domain/vaccine/status'
 
 const props = withDefaults(defineProps<{
   /** 识别出来的行（名称 + 日期；`needsReview` 决定要不要核对） */
@@ -98,11 +106,12 @@ const props = withDefaults(defineProps<{
   saving: false,
 })
 
-/** 有没有"待核对"的行（决定要不要说那句"暂时不参与提醒"） */
+/** 有没有"待核对"的行（决定要不要说那句"请对着疫苗本核一下"） */
 const hasCareRow = computed(() => (props.drafts || []).some((row) => isCare(row)))
 
 const emit = defineEmits<{
-  (event: 'save', rows: VaccineScanRow[]): void
+  /** 第二个参数：没填全、留在页面上的那几条（父组件要接住，别让卡片卸载） */
+  (event: 'save', rows: VaccineScanRow[], kept?: VaccineScanRow[]): void
   (event: 'discard'): void
   /** 识别漏掉的那条，家长自己补 —— 交给唯一录入器 */
   (event: 'add-manual'): void
@@ -119,15 +128,38 @@ const emit = defineEmits<{
  */
 const rows = ref<VaccineScanRow[]>([])
 
+/**
+ * 上一次保存时**没填全、因此没交上去**的那几行（按 `key` 记）。
+ *
+ * ⚠️ 2026-10-16 自检 V4：这几行只活在本组件里 —— 父组件那批识别结果里**没有**它们
+ *    （我们没把没填全的交上去）。所以父组件回写 props 时不能被顺手抹掉，
+ *    否则家长刚填了一半的名称/日期会凭空消失，只能重新识别一次 ✗。
+ *    交上去的那些仍以 props 为准（存成功的行父组件不会再发下来，页面就该少一行）。
+ */
+const keptKeys = ref<string[]>([])
+
 watch(
   () => props.drafts,
   (next) => {
-    rows.value = (next || []).map((row) => ({ ...row }))
+    /*
+     * 父组件给的这一批：整批换新（存成功的行就是这样从页面上消失的）。
+     *
+     * 唯一的例外是"没填全、没交上去"的那几条（keptKeys）：父组件手上那一份是**旧的**
+     * —— 它从来没收到过家长在这一页上改的 name / date，所以那几条以本地这一份为准。
+     * 其余的行（含"没存上的"：父组件会把原因挂回来）一律以 props 为准。
+     */
+    const kept = rows.value.filter((row) => keptKeys.value.indexOf(row.key) >= 0)
+    const keptOnPage = kept.map((row) => row.key)
+    const incoming = (next || [])
+      .filter((row) => keptOnPage.indexOf(row.key) < 0)
+      .map((row) => ({ ...row }))
+    /* 留在页面上的那几条接在这批**后面**：正好是还需要处理的那几条 */
+    rows.value = [...incoming, ...kept.map((row) => ({ ...row }))]
   },
   { immediate: true, deep: true },
 )
 
-/** 这一行还要不要核对（已经点过"我已对照本子核对"的就不再挡） */
+/** 这一行还要不要核对（已经点过"我已对照疫苗本核对"的就不再挡） */
 function isCare(row: VaccineScanRow): boolean {
   return Boolean(row.needsReview) && !row.verified
 }
@@ -190,23 +222,86 @@ function onDiscard() {
   emit('discard')
 }
 
+/** 这一行还缺什么（空串 = 名称和日期都齐了，可以交上去） */
+function missingOf(row: VaccineScanRow): string {
+  const hasName = Boolean(String(row.name || '').trim())
+  const hasDate = Boolean(String(row.date || '').trim())
+  if (hasName && hasDate) return ''
+  if (!hasName && !hasDate) return '名称和日期'
+  return hasName ? '接种日期' : '疫苗名称'
+}
+
+/** 说给家长听：是**哪一条**还没填全（有名字就用名字，否则说第几条） */
+function rowRef(row: VaccineScanRow): string {
+  const name = String(row.name || '').trim()
+  if (name) return `「${name}」`
+  const at = rows.value.indexOf(row)
+  return at >= 0 ? `第 ${at + 1} 条` : '有一条'
+}
+
+/**
+ * 一条都没填全时的那句提示：缺哪几条、缺什么、下一步。
+ *
+ * ⚠️ 2026-10-16 自检 V22：原来是"还没有填好名称和日期" —— 没说缺哪条、也没说下一步，
+ *    家长只能自己一行一行猜。
+ */
+function missingHint(list: VaccineScanRow[]): string {
+  if (list.length === 1) return `${rowRef(list[0])}还缺${missingOf(list[0])}，补齐再保存`
+  const kinds = list.map((row) => missingOf(row))
+  const same = kinds.every((kind) => kind === kinds[0])
+  return `还有 ${list.length} 条缺${same ? kinds[0] : '名称或日期'}，补齐再保存`
+}
+
 function onSave() {
   if (props.saving) return
   /*
    * 名称 + 日期都齐了才交上去（跟录入器同一套必填要求）。
-   * 缺的那几条**留在页面上**，不静默丢 —— 家长补完还能再点一次保存。
+   *
+   * ⚠️ 2026-10-16 自检 V4：缺的那几条**留在页面上** —— 原来这里写 `rows.value = ready`，
+   *    等于把它们从页面上删掉：家长填漏一行，那行**既没保存、也从界面上消失**，
+   *    只能重新识别一次 ✗。现在只把填全的交上去，缺的原地不动（见 keptKeys）；
+   *    提示也照实说"没有保存"，不写"先留着"这种含糊话。
    */
-  const ready = rows.value.filter((row) => String(row.name || '').trim() && String(row.date || '').trim())
+  const ready: VaccineScanRow[] = []
+  const notReady: VaccineScanRow[] = []
+  for (const row of rows.value) {
+    if (missingOf(row)) notReady.push(row)
+    else ready.push(row)
+  }
+
+  /*
+   * 没填全的这几条留在页面上（V4）：把 key 记下来，父组件回写识别结果时不抹掉它们，
+   * 也不拿它手上那份旧的覆盖（见上面的 watch）。顺手清掉它上一轮"没存上"的红色提示 ——
+   * 现在最要紧的是"还没填全"，两个提示叠在一行上反而说不清。
+   */
+  for (const row of notReady) {
+    row.error = ''
+  }
+  keptKeys.value = notReady.map((row) => row.key)
+
   if (ready.length === 0) {
-    uni.showToast({ title: '还没有填好名称和日期', icon: 'none' })
+    // 一条都交不上去：说清缺哪几条、缺什么、下一步（自检 V22）
+    uni.showToast({ title: missingHint(notReady), icon: 'none' })
     return
   }
-  if (ready.length < rows.value.length) {
-    const remaining = rows.value.length - ready.length
-    rows.value = ready
-    uni.showToast({ title: `还有 ${remaining} 条缺名称或日期，先留着`, icon: 'none' })
+
+  if (notReady.length > 0) {
+    uni.showToast({ title: `这 ${notReady.length} 条还没填全，没有保存`, icon: 'none' })
   }
-  emit('save', ready.map((row) => ({ ...row })))
+
+  /*
+   * ⚠️ 把"留在页面上的那几条"一并交给父组件（自检 V4 最后一米）。
+   *
+   * 只 emit 填全的那几条是不够的：父组件在"全部存成功"那一支会把识别结果清空
+   * （`scanRows.value = []`），本组件是 `v-if="scanRows.length > 0"` 挂着的 →
+   * 卡片一卸载，留在本地的那几条**又没了** ✗。
+   * 所以在这里把 kept 一起交出去，父组件用它接住。
+   */
+  emit(
+    'save',
+    ready.map((row) => ({ ...row })),
+    notReady.map((row) => ({ ...row })),
+  )
 }
 </script>
 

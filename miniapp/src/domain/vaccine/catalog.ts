@@ -240,16 +240,16 @@ export function scanRowReview(
 ): { needsReview: boolean; reason: string } {
   const name = String(row?.name || '').trim()
   if (!name) {
-    return { needsReview: true, reason: '没读出疫苗名称，请对照本子填一下' }
+    return { needsReview: true, reason: '没读出疫苗名称，请对照疫苗本填一下' }
   }
   if (isRabiesName(name, products)) {
-    return { needsReview: true, reason: '狂犬这一针请对照本子核对一下' }
+    return { needsReview: true, reason: '狂犬这一针请对照疫苗本核对一下' }
   }
   if (!findCatalogProduct(products, name)) {
-    return { needsReview: true, reason: '产品库里没找到这个名字，请对照本子核对' }
+    return { needsReview: true, reason: '常见疫苗里没找到这个名字，请对照疫苗本核对' }
   }
   if (isSuspiciousDate(row?.date, today)) {
-    return { needsReview: true, reason: '日期看着不对，请对照本子核对' }
+    return { needsReview: true, reason: '日期看着不对，请对照疫苗本核对' }
   }
   return { needsReview: false, reason: '' }
 }
@@ -262,7 +262,13 @@ export const ANTIBODY_TARGET_OPTIONS: { value: AntibodyTarget; label: string }[]
 ]
 
 export const ANTIBODY_RESULT_OPTIONS: { value: AntibodyResult; label: string }[] = [
-  { value: 'PASS', label: '合格' },
-  { value: 'FAIL', label: '不合格' },
-  { value: 'UNKNOWN', label: '报告没给结论（请让兽医判读）' },
+  /*
+   * H2（自检清单）：三个选项都是**照抄报告**的说法 ——
+   * 我们不判"合格/不合格"，只记"报告上写的是什么"。
+   * 尤其第三项：报告没写结论时，界面上就是「没写结论」（与记录区的"未判读"口径一致，
+   * 不再把"请让兽医判读"塞进一个状态位里）。
+   */
+  { value: 'PASS', label: '报告写的是：合格' },
+  { value: 'FAIL', label: '报告写的是：不合格' },
+  { value: 'UNKNOWN', label: '报告没写结论' },
 ]

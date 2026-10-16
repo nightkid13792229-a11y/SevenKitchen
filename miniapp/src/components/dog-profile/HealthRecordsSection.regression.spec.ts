@@ -261,12 +261,15 @@ describe('病历/检查表单 · 精简版', () => {
     // 空态里不再有第二行小字
     expect(source).not.toContain('health-section__empty-desc')
     // 疫苗板块（2026-10-15 起是 components/vaccine/*）走的是自己那套卡片，
-    // 空态只有一句「还没有接种记录」，不再跟一行小字
+    // 空态只有一句「我们还没有你的接种记录」，不再跟一行小字
+    // ⚠️ 2026-10-16 自检 V23：原来是"还没有接种记录" —— 读起来像给狗狗下结论
+    //    （"你什么都没打"）；改说"我们还没有你的…"，并补一句下一步（记一条 / 上传疫苗本）。
+    //    仍然只有**一句**（一个 <text>），没有第二行小字。
     const vaccineList = readFileSync(
       resolve(process.cwd(), 'src/components/vaccine/RecordList.vue'),
       'utf-8',
     )
-    expect(vaccineList).toContain('还没有接种记录')
+    expect(vaccineList).toContain('我们还没有你的接种记录')
     expect(vaccineList).not.toContain('health-section__empty-desc')
     // 体重板块补上"还没有体重记录"（原来空着）
     expect(weight).toContain('还没有体重记录')

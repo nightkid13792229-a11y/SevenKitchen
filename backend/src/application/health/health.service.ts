@@ -1095,6 +1095,11 @@ export class HealthService {
       componentLabels: resolvedComponents.map(
         (component) => VACCINE_COMPONENT_LABELS[component] || component,
       ),
+      // 核对状态（2026-10-16 补）：小程序靠它判断"待核对"（角标 + 点那一条去核对）。
+      // 老记录这一列是后加的、迁移过来可能读到 undefined —— 按现有约定
+      // **不是 false 就算 true**（与 prisma-health.repository.ts 同一口径），
+      // 别写成 Boolean(...)：那会把 undefined 变成 false，老记录全成"待核对"。
+      productVerified: record.productVerified !== false,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });

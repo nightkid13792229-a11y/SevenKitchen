@@ -2,7 +2,7 @@
   <!-- ══ 接种记录 + 抗体检测（合并成一个列表，需求 R10 / 原型 C、F、K 屏）══════
        ⚠️ 两类记录在顾客眼里是同一件事："我给这只狗做过什么"。
           所以一个列表、按日期倒序；来源不同才在名字里说清（抗体检测 · …）。
-       ⚠️ 疫苗本原件**整本只展示一次**（R10）：一条虚线行，点开能预览。 -->
+       ⚠️ 疫苗本（原件照片）**整本只展示一次**（R10）：一条虚线行，点开能预览。 -->
   <view class="vk-records">
     <view class="vk-records__head">
       <view class="vk-records__bar" />
@@ -16,12 +16,15 @@
 
     <!-- 待核对（需求 R7）：不催、不弹窗，只在记录区顶部一行 -->
     <view v-if="pendingReviewCount > 0" class="vk-records__notice">
-      <text class="vk-records__notice-text">有 {{ pendingReviewCount }} 条记录待你对照本子核对（点那一条就能核对）</text>
+      <text class="vk-records__notice-text">有 {{ pendingReviewCount }} 条记录待你对照疫苗本核对（点那一条就能核对）</text>
     </view>
 
     <view class="vk-records__card">
       <text v-if="loading && entries.length === 0" class="vk-records__empty">正在读取…</text>
-      <text v-else-if="entries.length === 0" class="vk-records__empty">还没有接种记录</text>
+      <!-- 空态：一句话 + 一条能走下去的路（2026-10-16 自检 V23）——
+           原来只有"还没有接种记录"，读起来像给狗狗下结论（"你什么都没打"），
+           而且没说下一步该干什么。 -->
+      <text v-else-if="entries.length === 0" class="vk-records__empty">我们还没有你的接种记录 —— 点下面的「记一条」，或者用「上传疫苗本」把照片传上来，我们帮你读出来。</text>
 
       <view
         v-for="entry in visibleEntries"
@@ -32,7 +35,7 @@
         <view class="vk-records__body">
           <text class="vk-records__name">{{ entryTitle(entry) }}</text>
           <text v-if="entryNote(entry)" class="vk-records__note">{{ entryNote(entry) }}</text>
-          <!-- 这一条为什么不作数（后端算好的，以前只在后端算、界面不显示） -->
+          <!-- 这一条为什么要改（后端算好的，以前只在后端算、界面不显示） -->
           <text v-if="conflictOf(entry)" class="vk-records__warn">
             {{ conflictOf(entry)!.reason }}
           </text>
@@ -52,9 +55,10 @@
       </view>
     </view>
 
-    <!-- 疫苗本原件：整本只展示一次（R10） -->
+    <!-- 疫苗本：整本只展示一次（R10）。叫法统一成"疫苗本"（2026-10-16 自检 V17：
+         "本子""疫苗本原件"好几个叫法指的是同一个东西） -->
     <view v-if="bookUrls.length > 0" class="vk-records__book" @tap="onPreviewBook">
-      <text class="vk-records__book-title">查看疫苗本原件</text>
+      <text class="vk-records__book-title">查看疫苗本</text>
       <text class="vk-records__book-count">{{ bookUrls.length }} 张</text>
     </view>
   </view>
@@ -76,7 +80,7 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   /** 有几条记录待核对（后端算好下发；0 = 不显示那一行） */
   pendingReviewCount?: number
-  /** 后端算好的"为什么不作数"（按记录 id 对号入座） */
+  /** 后端算好的"为什么要改"（按记录 id 对号入座） */
   conflicts?: VaccineConflict[]
 }>(), {
   records: () => [],
@@ -133,7 +137,7 @@ const visibleEntries = computed(() => (
   expanded.value ? entries.value : entries.value.slice(0, RECENT_COUNT)
 ))
 
-/** 疫苗本原件（所有记录 + 抗体检测上的附件，整本只展示一次） */
+/** 疫苗本（原件照片：所有记录 + 抗体检测上的附件，整本只展示一次） */
 const bookUrls = computed(() => {
   const urls: string[] = []
   for (const record of props.records || []) {
@@ -174,7 +178,7 @@ function entryNote(entry: VaccineTimelineEntry): string {
 }
 
 /**
- * 这一条对应的"为什么不作数"。
+ * 这一条对应的"为什么要改"。
  *
  * 后端把冲突挂在记录的 id 上（`recordId`）；行里的 id 带了 `record-` / `test-` 前缀，
  * 所以两边都试一下。
@@ -186,7 +190,7 @@ function conflictOf(entry: VaccineTimelineEntry): VaccineConflict | null {
   return list.find((item) => String(item.recordId || '') === rawId) || null
 }
 
-/** 待核对（R7）：识别出来还没对照本子确认的那几条 */
+/** 待核对（R7）：识别出来还没对照疫苗本确认的那几条 */
 function isPending(entry: VaccineTimelineEntry): boolean {
   return entry.type === 'record' && entry.record.productVerified === false
 }
@@ -196,7 +200,8 @@ function toggleExpanded() {
 }
 
 /**
- * 点一行：待核对的**先给核对动作**（那是唯一的出路），其余进编辑。
+ * 点一行：有冲突的**先去改**（冲突说明这条记录本身有问题，核对了也没意义），
+ * 待核对且没有冲突的给核对动作，其余进编辑。
  */
 async function onEntryTap(entry: VaccineTimelineEntry) {
   // 有冲突的行：先把"为什么、该怎么办"讲清楚 —— 这是他现在最需要知道的
@@ -204,7 +209,7 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
   if (conflict) {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
-        title: String(conflict.reason || '这一条暂时不作数'),
+        title: String(conflict.reason || '这条记录需要改一下'),
         content: String(conflict.suggestion || ''),
         confirmText: '去修改',
         cancelText: '知道了',
@@ -213,6 +218,17 @@ async function onEntryTap(entry: VaccineTimelineEntry) {
       })
     })
     if (!confirmed) return
+    /*
+     * ⚠️ 2026-10-16 自检 V5：确认键写的是「去修改」，原来这里却**继续往下走核对流程**
+     *    （`isPending` 那一支），于是"既待核对、又有冲突"的那一条永远到不了编辑 ✗。
+     *    现在有冲突 → 直接进编辑；核对留给"待核对、但没有冲突"的那些行。
+     */
+    if (entry.type === 'test') {
+      emit('edit-test', entry.test)
+      return
+    }
+    emit('edit-record', entry.record)
+    return
   }
 
   if (isPending(entry) && entry.type === 'record') {

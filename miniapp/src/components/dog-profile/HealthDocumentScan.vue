@@ -318,7 +318,14 @@ import {
  *   · 任何一步失败都降级为手工填写，绝不挡住顾客。
  *   · 只把 OCR 读到的内容搬进表单，不做任何医学判断。
  */
-type ExplicitDocumentType = 'ALLERGY_REPORT' | 'CHECKUP_REPORT' | 'VACCINE_BOOK' | 'MEDICAL_RECORD'
+type ExplicitDocumentType =
+  | 'ALLERGY_REPORT'
+  | 'CHECKUP_REPORT'
+  | 'VACCINE_BOOK'
+  | 'MEDICAL_RECORD'
+  // 2026-10-16 自检 V42：抗体检测报告是第五类（后端已支持），
+  // 这里漏了它 → 传进来类型对不上、下面的标签表也查不到（会显示成"资料"）
+  | 'ANTIBODY_REPORT'
 /**
  * `AUTO`（2026-10-01）：由后端判断这是哪一类文档。
  * 病历/检查板块两个入口合并成一个"从相册选择"就是靠它 ——
@@ -427,6 +434,13 @@ defineExpose({
   startScan: pickAndScan,
   startDocumentScan,
   unconfirmedDraftCount,
+  /**
+   * 收掉"没识别到内容"那块提示。
+   *
+   * 疫苗板块挂了两个识别实例（疫苗本 / 抗体报告），各自记着自己的失败提示 ——
+   * 开其中一个之前先收掉另一个的，免得两块同时挂在那（自检 V33）。
+   */
+  dismissFailure,
 })
 
 const isBusy = ref(false)
@@ -940,6 +954,7 @@ const TYPE_LABELS: Record<ExplicitDocumentType, string> = {
   CHECKUP_REPORT: '体检报告',
   VACCINE_BOOK: '疫苗本',
   ALLERGY_REPORT: '过敏原检测报告',
+  ANTIBODY_REPORT: '抗体检测报告',
 }
 
 /** 有没有没识别成功的张（决定要不要多写一句引导） */
@@ -1233,8 +1248,6 @@ async function scanAll(filePaths: string[]) {
    * 门诊病历成一条病历记录，谁也不吃掉谁。
    */
   let failed = 0
-  /** 这次没读出来的图（保留下来以便排查，见上面那处说明） */
-  const keepForDiagnosis: { index: number; url: string }[] = []
 
   isBusy.value = true
   try {
@@ -1297,15 +1310,15 @@ async function scanAll(filePaths: string[]) {
           })
         } else {
           /**
-           * 这张啥也没读出来。
+           * 这张啥也没读出来 → 传上去的图没用了，立刻删掉，别占 COS 空间。
            *
-           * ⚠️ 2026-10-16：**暂时不再立刻删掉这张图** —— 老板两次上传都提示
-           *    "没有识别到内容"，可图一删我就没法复现、没法看是哪张、
-           *    也没法判断是照片的问题还是识别的问题。先留着（后端日志里也有它的地址），
-           *    排查完再恢复"没用的图立刻删"。
+           * ⚠️ 2026-10-16 有一段**临时**改成"先留着这张图"（排查老板那两次"没识别到内容"）。
+           *    排查结束（根因是循环头被改坏 + 抗体结论判错，都已修），
+           *    这里恢复成"立刻删" —— 后端的 `[Extraction]` 日志里仍留着这次识别的概览，
+           *    以后要查有据可依。
            */
           pageDraftCache[index] = { type: imageType, drafts: [] }
-          keepForDiagnosis.push({ index: index + 1, url: uploadedUrl })
+          await dropUploadedFile(uploadedUrl)
           failed += 1
           pageResults.push({
             index: index + 1,

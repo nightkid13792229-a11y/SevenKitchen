@@ -78,6 +78,11 @@ function scriptOf(source: string, file: string): string {
 }
 
 describe('架构守卫 · 用了却没声明的名字（2026-10-16 真事故）', () => {
+  /*
+   * ⚠️ 这条要**全库跑一遍 TypeScript 编译器**，本来就慢（几秒）。
+   * 默认 5 秒超时在机器忙的时候会假红（2026-10-16 实测被这个坑了一次）——
+   * 所以显式给足时间：它慢是因为干得实在，不是因为卡住了。
+   */
   it('🔴 每个 .vue / .ts 里都不许出现"找不到这个名字"', () => {
     const workdir = mkdtempSync(join(tmpdir(), 'dsh-scope-'))
     const files = collectFiles(SRC_ROOT)
@@ -125,5 +130,5 @@ describe('架构守卫 · 用了却没声明的名字（2026-10-16 真事故）'
       offenders,
       `这些地方用了作用域里不存在的名字（真机上会直接崩）：\n${offenders.join('\n')}`,
     ).toEqual([])
-  })
+  }, 60000)
 })

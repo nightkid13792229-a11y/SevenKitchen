@@ -1204,15 +1204,18 @@ function () {
     }
   }
 
-  // ③-2 记录：用例① 有名字兜底；用例②（识别写的）只认 id
-  if (KEEP || writtenIds.length === 0) return
+  // ③-2 记录：只有**单独跑用例①**时才有"名字+日期"兜底；
+  //      跑 scan（识别写进去的）只认 id —— 名字是 AI 给的，猜不得 ✓
+  if (writtenIds.length === 0) return
+  if (KEEP && !CASES.includes('scan')) return
   try {
     const dogs = await evaluate(dogListFn)
     const shown = String((await elementTextSafe('.hero-card__title')) || '').trim()
     const dog = dogs.find((d) => d.name === shown) || (dogId ? { id: dogId } : null)
     if (dog) {
       console.error('   正在尽力清场（删掉这次写进去的记录）…')
-      cleanedUp = await cleanup(before.recordIds, CASES.includes('record') ? undefined : null)
+      const onlyRecordCase = CASES.length === 1 && CASES[0] === 'record'
+      cleanedUp = await cleanup(before.recordIds, onlyRecordCase ? undefined : null)
     }
   } catch (err) {
     console.error(`   清场也失败了：${err?.message || err}`)

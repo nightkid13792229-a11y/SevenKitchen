@@ -240,7 +240,43 @@ ls -la /opt/sevenkitchen/SevenKitchen/backend/scripts/backup/
 
 ---
 
-## 三、相关文件
+## 三、上线后怎么再跑一遍端到端（E6，3 个用例）
+
+脚本：`miniapp/scripts/e6-vaccine-plan-e2e.mjs`（微信开发者工具 + 模拟器，连**生产**后端；
+只碰「测XX」测试档案，跑完自己删干净并断言复原）。
+
+```bash
+# 前置：开发者工具开着、已登录（自动化跑不了微信登录，要人点一次）
+node miniapp/scripts/e6-vaccine-plan-e2e.mjs --case all --dry-run   # 先只看不写
+node miniapp/scripts/e6-vaccine-plan-e2e.mjs --case all             # 三个用例都跑
+node miniapp/scripts/e6-vaccine-plan-e2e.mjs --case scan            # 只跑"上传疫苗本→确认→保存"
+node miniapp/scripts/e6-vaccine-plan-e2e.mjs --case ignore          # 只跑"忽略→恢复"
+```
+
+| 用例 | 断言 | 会不会写生产 |
+|---|---|---|
+| `record` | 记录 +1、计划跟着变 → 删掉 → **逐字段复原** | 写 1 条，跑完删掉 |
+| `scan` | 识别结果页出现、记录 **+N**、**没有新上传** → 删掉 → 复原 | 写 N 条，跑完删掉 |
+| `ignore` | 那一项进"已忽略"、下一针换人 → 恢复 → 复原 | 写 1 条决定，跑完撤回 |
+
+### ⚠️「疫苗」书签不见了 → 先查这个接口
+
+`GET /api/v1/health/vaccine-feature` —— 小程序渲染书签前先问它一句；
+**拉不到就按"关"处理**（fail-safe，`miniapp/src/utils/vaccine-feature.ts`），
+「疫苗」书签会**整个消失**（其余书签正常，也不报错）。
+
+```bash
+curl -s https://api.sevenkitchen.cloud/api/v1/health/vaccine-feature
+# 正常：{"code":0,"data":{"enabled":true}}
+# 2026-10-17 实测是 404 —— 那份接口代码当时还没提交、没部署 ✗（部署后即恢复）
+```
+
+急着跑端到端时可以在脚本里加 `--mock-feature-on`（只把小程序里那一个取开关的函数换成
+"开着"，网络请求不动）；但它**只是测试替身**，家长那边仍然是看不到的 ✗。
+
+---
+
+## 四、相关文件
 
 | 文件 | 是什么 |
 |---|---|
@@ -249,4 +285,4 @@ ls -la /opt/sevenkitchen/SevenKitchen/backend/scripts/backup/
 | `backend/scripts/systemd/sevenkitchen-scan-failure.{service,timer}` | systemd 单元（仓库里的版本，装到 `/etc/systemd/system/`） |
 | `backend/scripts/cleanup-vaccine-test-dogs.js` | 清测试档案（默认 dry-run，`--apply` 才删） |
 | `docs/plans/2026-10-16-vaccine-recognition-baseline.md` | 识别基线（"0 次失败"这个结论的出处） |
-| `docs/plans/2026-10-16-e6-vaccine-e2e-automation.md` | 端到端自动化（E6）怎么跑、连的是生产这件事的来龙去脉 |
+| `docs/plans/2026-10-16-e6-vaccine-e2e-automation.md` | 端到端自动化（E6）怎么跑、连的是生产这件事的来龙去脉（含 2026-10-17 新增的两个用例） |

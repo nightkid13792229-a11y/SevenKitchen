@@ -106,6 +106,28 @@
         </view>
 
         <view class="vk-editor__block">
+          <text class="vk-editor__label">数值（选填）</text>
+          <view class="vk-editor__field">
+            <input
+              class="vk-editor__input"
+              :value="valueText"
+              placeholder="报告上写的数值，例：1:80"
+              placeholder-class="vk-editor__ph"
+              @input="onValueInput"
+            />
+          </view>
+          <view class="vk-editor__field vk-editor__field--tight">
+            <input
+              class="vk-editor__input"
+              :value="unitText"
+              placeholder="单位，例：滴度 / IU/ml"
+              placeholder-class="vk-editor__ph"
+              @input="onUnitInput"
+            />
+          </view>
+        </view>
+
+        <view class="vk-editor__block">
           <text class="vk-editor__label">报告照片</text>
           <view class="vk-editor__field" @tap="pickReportPhoto">
             <text :class="{ 'vk-editor__date--empty': reportPhotos.length === 0 }">
@@ -200,6 +222,18 @@ const props = withDefaults(defineProps<{
   presetName?: string
   /** 预填日期（"补全这一条"时把识别到的日期带过来；空 = 用今天） */
   presetDate?: string
+  /**
+   * 抗体检测的**预填**（AI 识别报告之后铺进来的那一份）—— 家长照样能逐项改。
+   * 传 null 就是空白卡（手填）。
+   */
+  preset?: {
+    testedAt: string
+    target: 'CORE' | 'RABIES'
+    result: 'PASS' | 'FAIL' | 'UNKNOWN'
+    value: string
+    unit: string
+    attachments: string[]
+  } | null
   /** 正在保存 */
   saving?: boolean
 }>(), {
@@ -211,6 +245,7 @@ const props = withDefaults(defineProps<{
   presetComponents: () => [],
   presetName: '',
   presetDate: '',
+  preset: null,
   saving: false,
 })
 
@@ -274,8 +309,18 @@ const showComponents = computed(() => {
 })
 
 /** 报告照片（选填）：抗体检测记录和疫苗本一样要能留原件（需求 R9） */
+const valueText = ref('')
+const unitText = ref('')
 const reportPhotos = ref<string[]>([])
 const uploadingPhoto = ref(false)
+
+function onValueInput(event: any) {
+  valueText.value = String(event?.detail?.value || '')
+}
+
+function onUnitInput(event: any) {
+  unitText.value = String(event?.detail?.value || '')
+}
 
 async function pickReportPhoto() {
   if (reportPhotos.value.length > 0) {
@@ -323,7 +368,16 @@ const antibodyHint = computed(() => {
 
 /** 每次打开都按传进来的记录重铺一遍（切换编辑对象时不能留上一条的残留） */
 watch(
-  () => [props.visible, props.record, props.test, props.mode, props.presetName, props.presetDate] as const,
+  () =>
+    [
+      props.visible,
+      props.record,
+      props.test,
+      props.mode,
+      props.presetName,
+      props.presetDate,
+      props.preset,
+    ] as const,
   () => {
     if (!props.visible) return
     errorText.value = ''
@@ -331,13 +385,22 @@ watch(
     keyword.value = ''
     if (props.mode === 'antibody') {
       const test = props.test
-      date.value = String(test?.testedAt || '').slice(0, 10) || todayDateText()
+      const preset = props.preset
+      date.value =
+        String(test?.testedAt || '').slice(0, 10) ||
+        String(preset?.testedAt || '').slice(0, 10) ||
+        todayDateText()
       reportPhotos.value =
-        test && Array.isArray(test.attachments) ? test.attachments.map(String) : []
+        test && Array.isArray(test.attachments)
+          ? test.attachments.map(String)
+          : (preset?.attachments || []).map(String)
+      valueText.value = String(test?.value || preset?.value || '')
+      unitText.value = String(test?.unit || preset?.unit || '')
       target.value =
         test && Array.isArray(test.targets) && test.targets.length > 0
           ? test.targets[0]
-          : 'CORE'
+          : (preset?.target || 'CORE')
+      result.value = test && test.result ? test.result : (preset?.result || 'PASS')
       result.value = (test?.result || 'PASS') as AntibodyResult
       return
     }
@@ -425,6 +488,8 @@ function onSave() {
       testedAt: date.value,
       targets: [target.value],
       result: result.value,
+      ...(valueText.value.trim() ? { value: valueText.value.trim() } : {}),
+      ...(unitText.value.trim() ? { unit: unitText.value.trim() } : {}),
       ...(reportPhotos.value.length > 0 ? { attachments: [...reportPhotos.value] } : {}),
     }
     emit('save-test', payload, String(props.test?.id || ''))

@@ -109,7 +109,22 @@ export type HealthDocumentType =
   | 'ALLERGY_REPORT' // 过敏原检测报告（此前已开放）
   | 'CHECKUP_REPORT' // 体检报告
   | 'VACCINE_BOOK' // 疫苗本（一次可能读出多条）
-  | 'MEDICAL_RECORD'; // 病历
+  | 'MEDICAL_RECORD' // 病历
+  | 'ANTIBODY_REPORT'; // 犬抗体检测报告（2026-10-19 第五类，只有一条）
+
+/**
+ * 抗体检测报告里"检的是哪一项"（2026-10-19，第五类）。
+ *
+ * 与 `AntibodyTestRecord.targets` 的取值一致：CORE = 核心三项
+ * （犬瘟 / 细小 / 腺病毒，报告上也写作"犬瘟细小腺病毒抗体"）；
+ * RABIES = 狂犬抗体。
+ *
+ * ⚠️ 一份报告**只取一项**（见 ANTIBODY_TARGET_* 的注释）。
+ */
+export type AntibodyTarget = 'CORE' | 'RABIES';
+
+/** 抗体检测的结论。**只照抄报告写的**，报告没写结论就是 UNKNOWN（见 resolveAntibodyResult）。 */
+export type AntibodyResult = 'PASS' | 'FAIL' | 'UNKNOWN';
 
 /**
  * 自动判断（2026-10-01）：「拍病历 / 拍体检报告」两个入口合并成一个「从相册选择」，
@@ -125,6 +140,9 @@ export const HEALTH_DOCUMENT_TYPES: readonly HealthDocumentType[] = [
   'CHECKUP_REPORT',
   'VACCINE_BOOK',
   'MEDICAL_RECORD',
+  // 2026-10-19：抗体检测报告（老板要"上传报告 → AI 自动填表"）。
+  // 加在这里 = 白名单认得它 + AUTO 提示词里会自动带上它那一套字段结构。
+  'ANTIBODY_REPORT',
 ];
 
 /**
@@ -140,6 +158,9 @@ export function normalizeDocumentType(value: unknown): HealthDocumentTypeRequest
   return (HEALTH_DOCUMENT_TYPES as readonly string[]).includes(key)
     ? (key as HealthDocumentType)
     : // 缺省沿用旧行为：此前只有过敏报告一条路
+      // ⚠️ 2026-10-19 加抗体检测报告时**这条兜底一个字都没动** ——
+      //    请求里传了不认识的值（或干脆不传）仍然落到 ALLERGY_REPORT，
+      //    与线上跑了很久的行为完全一致。
       'ALLERGY_REPORT';
 }
 
@@ -177,6 +198,11 @@ export function buildNotMedicalWarning(
 
   if (requested === 'ALLERGY_REPORT') {
     return '这张看起来不是过敏原检测报告（比如证件、人脸或其它照片），换一张报告的照片试试';
+  }
+
+  // 2026-10-19：抗体检测入口（模型在这条路上明说"这不是抗体检测报告"时用这句）
+  if (requested === 'ANTIBODY_REPORT') {
+    return '这张看起来不是抗体检测报告（比如证件、人脸或其它照片），换一张报告的照片试试';
   }
 
   return '这张看起来不是宠物的病历或检查报告（比如证件、人脸、风景照），换一张再试';
@@ -550,6 +576,68 @@ const TYPE_PROMPT_BODIES: Record<HealthDocumentType, string> = {
     '}',
   ].join('\n'),
 
+  /**
+   * ANTIBODY_REPORT：犬抗体检测报告（2026-10-19 加，第五类）。
+   *
+   * 老板要的是"上传报告 → AI 自动填表"（这个板块此前只有手填）。
+   * 这张纸要抄的东西很少：**检测日期 / 检的是哪一项 / 结果 / 原始数值与单位**。
+   * 三条口径都是老板定的，不得自行放宽：
+   *   ① **一份报告只测一项** —— 一张纸上两项都印着时，取与狂犬无关的那一项（CORE 优先），
+   *      并让家长知道另一项要单独再传一次；
+   *   ② **我们不设阈值** —— 报告没写结论就填 UNKNOWN，
+   *      **绝不按数值大小自己判"合格"**（判错的后果是家长以为狗有保护力、实际没有，
+   *      这与"疫苗记录宁可多提醒一次"的安全方向正好相反）；
+   *   ③ 数值只做**照抄**（1:80、0.5 IU/ml 这类），系统不换算、不分档、不解读。
+   */
+  ANTIBODY_REPORT: [
+    '本类型的额外规则：这是一张**犬抗体检测报告**（报告上常见的叫法：抗体检测 / 抗体滴度 /',
+    '  免疫抗体检测 / 犬瘟细小腺病毒抗体 / 狂犬抗体滴度）。',
+    '★ 只抄**四样**东西：**检测日期、检的是哪一项、结果、原始数值与单位** ——',
+    '  报告上其它内容（医院名、主人名、动物名、批号、医生签字）一律不要抄。',
+    '',
+    '· 检的是哪一项（targets，**只能有一项**）：',
+    '  报告上写「犬瘟 / 细小 / 腺病毒 / 犬瘟热 / CDV / CPV / CAV」这类 → ["CORE"]；',
+    '  报告上写「狂犬 / 狂犬病 / 狂犬抗体 / rabies / RABV」 → ["RABIES"]。',
+    '  ⚠️ **一份报告通常只测一项，那就只输出一项**。',
+    '  如果这一张纸上**两项都有**（例如上面一栏核心三项、下面一栏狂犬）：',
+    '  **取与狂犬无关的那一项**（也就是 ["CORE"]），',
+    '  并在 warnings 里写一句「这张报告上核心抗体与狂犬抗体都有，先按核心那一项录入，',
+    '  狂犬那一项请单独再传一次」。',
+    '',
+    '· result **照抄报告上写的结论**，只能从这三个里选：',
+    '  PASS = 报告写"有保护力 / 合格 / 阳性 / 达到标准 / 达标"；',
+    '  FAIL = 报告写"无保护力 / 不合格 / 阴性 / 未达标"；',
+    '  UNKNOWN = 报告没写结论。',
+    '  ⚠️ **报告只给了数值、没有写结论时，一律填 UNKNOWN** ——',
+    '  **绝对不许自己按数值判"合格 / 不合格"**：我们**不设阈值**，合格与否以报告或兽医的',
+    '  判定为准 ✗。例如这张纸上只有「犬瘟抗体 1:80」这一行字，就填 result: "UNKNOWN"、',
+    '  value: "1:80" ✓（只给数值不给结论的报告很常见，照这个填）。',
+    '',
+    '· value 照抄报告上的**原始数值**（例如 "1:80"、"0.5"、"S3"），一个字符都不要改：',
+    '  **不要换算、不要四舍五入、不要按数值分档、不要加你自己的解释**；报告没写数值就留空。',
+    '· unit 只放**单位本身**（例如 "滴度"、"IU/ml"）；数值里已经带着单位的',
+    '  （例如 "0.5 IU/ml"）就照抄在 value 里，unit 可以留空。',
+    '· testedAt 填**检测日期**（采样日期），只写 YYYY-MM-DD；看不清或没写就留**空字符串**，',
+    '  **不要编、也不要拿报告上的其它日期顶上**。',
+    '· notes 只写报告上有、家长真的需要知道的补充（例如"建议 3 个月后复查"）；没有就留空。',
+    '· **看不清才说**：数值或结论被手指、印章、反光挡住、真读不出来时，',
+    '  在 warnings 里**点名说清是哪一项**（例如"狂犬抗体那一行的数值被印章压住"）；',
+    '  ⚠️ 报告**本来就没写结论**的，留空填 UNKNOWN 就行，**不要写"未显示""未读到"**',
+    '  （见上面严格规则第 7 条）。',
+    '· ⚠️ 这张纸**明显不是抗体检测报告**（身份证、人脸、风景、狗粮包装、疫苗本、',
+    '  别的化验单等）→ documentType 填 "NOT_MEDICAL"，drafts 留空数组，',
+    '  并在 warnings 里说清这张是什么（例如"这是一张疫苗本内页，不是抗体检测报告"）。',
+    '',
+    '输出 JSON 结构（**只有一条**，一份报告一项）：',
+    '{',
+    '  "drafts": [',
+    '    { "testedAt": "2026-03-12", "targets": ["CORE"], "result": "UNKNOWN",',
+    '      "value": "1:80", "unit": "滴度", "notes": "" }',
+    '  ],',
+    '  "warnings": []',
+    '}',
+  ].join('\n'),
+
   // ALLERGY_REPORT：沿用此前那套（线上已在跑），只把输出扩成 drafts 形状
   ALLERGY_REPORT: [
     '本类型的额外规则：',
@@ -633,6 +721,9 @@ const TYPE_PROMPT_INTROS: Record<HealthDocumentType, string> = {
     '你是一名宠物助理，负责把「狗狗病历 / 就诊记录」的识别文字整理成一条就诊记录。',
   ALLERGY_REPORT:
     '你是一名宠物营养助理，负责把「狗狗过敏原检测报告」的识别文字整理成结构化信息。',
+  // 2026-10-19：抗体检测报告（一份报告一项，只有一条记录）
+  ANTIBODY_REPORT:
+    '你是一名宠物助理，负责把「狗狗抗体检测报告 / 抗体滴度报告」的识别文字整理成一条抗体检测记录。',
 };
 
 /**
@@ -652,6 +743,9 @@ const TYPE_PROMPT_IMAGE_INTROS: Record<HealthDocumentType, string> = {
     '你是一名宠物助理。用户会给你一张「狗狗病历 / 就诊记录」的照片，请自己看图读出内容，整理成一条就诊记录。',
   ALLERGY_REPORT:
     '你是一名宠物营养助理。用户会给你一张「狗狗过敏原检测报告」的照片，请自己看图读出内容，整理成结构化信息。',
+  // 2026-10-19：抗体检测报告 —— 让模型自己看图，字段结构与文本版共用同一份常量
+  ANTIBODY_REPORT:
+    '你是一名宠物助理。用户会给你一张「狗狗抗体检测报告 / 抗体滴度报告」的照片，请自己看图读出内容，整理成一条抗体检测记录。',
 };
 
 /**
@@ -669,11 +763,19 @@ function buildAutoSystemPrompt(): string {
   return [
     '你是一名宠物助理，负责识别主人拍摄的狗狗健康文档照片。',
     '',
-    '第一步：自动判断这份文档属于下面五类中的哪一类，documentType 只能填这五个英文值之一：',
+    '第一步：自动判断这份文档属于下面几类中的哪一类，documentType 只能填下面列出的英文值之一：',
     '· MEDICAL_RECORD —— 病历 / 就诊记录 / 处方笺',
     '· CHECKUP_REPORT —— 体检报告 / 化验单',
     '· VACCINE_BOOK —— 疫苗本 / 免疫记录',
     '· ALLERGY_REPORT —— 过敏原检测报告',
+    // 2026-10-19：第五类（照 VACCINE_BOOK 那条的写法加）。
+    // ⚠️ 抗体报告最容易被认成疫苗本或普通化验单，所以这里点名两者的区别：
+    //    疫苗本记的是"哪天打了什么苗"，抗体报告记的是"测出来有没有抗体"。
+    '· ANTIBODY_REPORT —— 犬抗体检测报告 / 抗体滴度：纸上写着"抗体检测""抗体滴度"',
+    '  "免疫抗体检测""犬瘟细小腺病毒抗体""狂犬抗体"这类字样。**它不是疫苗本**：',
+    '  疫苗本记的是"哪天打了什么苗"（有疫苗标签/接种日期/签章），',
+    '  抗体报告记的是"测出来有没有抗体"（有数值或合格/不合格的判定）；',
+    '  也不是普通化验单（化验单查的是血常规、生化这些指标）。',
     '· IMAGING —— 影像资料：X 光片、B 超/超声图像、CT 等**只有图像、没有可抄文字**的检查片；',
     '  这类**属于**宠物医疗资料（不要判成 NOT_MEDICAL）：照抄片子上的检查日期，',
     '  检查部位/项目写进 notes（例如"骨盆正位""脊柱侧位"），**不要解读影像内容、不要写诊断**。',
@@ -683,7 +785,8 @@ function buildAutoSystemPrompt(): string {
     '判断不了、或者看起来不是宠物的医疗资料，一律填 NOT_MEDICAL，drafts 留空数组。',
     '',
     '第二步：按判断出的类型输出 drafts —— 字段名必须与该类型下面给出的结构完全一致。',
-    '疫苗本一次读出多条接种记录就输出多条，其余类型只输出一条。',
+    '疫苗本一次读出多条接种记录就输出多条，其余类型只输出一条；',
+    '抗体检测报告**永远只输出一条**（一份报告一项，两项都测时按它那一套规则取 CORE）。',
     '',
     ...COMMON_RULES,
     '',
@@ -886,6 +989,156 @@ export function dedupeDrafts(
   return { drafts: kept, removed };
 }
 
+/**
+ * 抗体检测报告 · "检的是哪一项"（2026-10-19，第五类）。
+ *
+ * ⚠️ **单选**：一份报告只测一项（核心抗体与狂犬抗体通常是两张分开的报告／两次检测）。
+ *
+ * 认法分两步（与过敏等级那套同一个道理：模型不一定照我们的枚举回话）：
+ *   ① 直接回 CORE / RABIES → 认；
+ *   ② 回中文或缩写（"犬瘟细小腺病毒""狂犬抗体"）→ 按关键词认；
+ *   ③ 都认不出来 → **空数组**（界面留空由家长自己选，不猜）。
+ *
+ * 一张纸上**两项都出现**时（实测会有报告把核心三项与狂犬印在同一页）：
+ * **取与狂犬无关的那一项（CORE 优先）** —— 老板定的口径 ——
+ * 并把 ambiguous 交给调用方补一句提示：一次只录一项，另一项请单独再传一次。
+ */
+const ANTIBODY_TARGET_ALIASES: Record<string, AntibodyTarget> = {
+  CORE: 'CORE',
+  核心: 'CORE',
+  核心抗体: 'CORE',
+  犬瘟: 'CORE',
+  犬瘟热: 'CORE',
+  细小: 'CORE',
+  犬细小: 'CORE',
+  腺病毒: 'CORE',
+  犬瘟细小腺病毒: 'CORE',
+  CDV: 'CORE',
+  CPV: 'CORE',
+  CAV: 'CORE',
+  RABIES: 'RABIES',
+  狂犬: 'RABIES',
+  狂犬病: 'RABIES',
+  狂犬抗体: 'RABIES',
+  狂犬病毒: 'RABIES',
+  RABV: 'RABIES',
+  RV: 'RABIES',
+};
+
+/** 长句里认关键词（模型常把整行项目名抄进来，例如"犬瘟抗体滴度"） */
+const ANTIBODY_CORE_PATTERN = /犬瘟|细小|腺病毒|核心|CDV|CPV|CAV/i;
+const ANTIBODY_RABIES_PATTERN = /狂犬|RABIES|RABV/i;
+
+export function resolveAntibodyTargets(value: unknown): {
+  targets: AntibodyTarget[];
+  /** 一张纸上核心与狂犬都有 → 已按 CORE 优先收敛，调用方要补一句提示 */
+  ambiguous: boolean;
+} {
+  const items = (Array.isArray(value) ? value : [value]).filter(
+    (item) => String(item ?? '').trim().length > 0,
+  );
+
+  let sawCore = false;
+  let sawRabies = false;
+
+  for (const item of items) {
+    const text = String(item ?? '').trim();
+    const exact = ANTIBODY_TARGET_ALIASES[text.toUpperCase()];
+    if (exact === 'CORE') {
+      sawCore = true;
+      continue;
+    }
+    if (exact === 'RABIES') {
+      sawRabies = true;
+      continue;
+    }
+
+    // 一行里也可能同时出现两项（"犬瘟细小腺病毒 / 狂犬"）：两个标记都记下来，
+    // 下面统一按"CORE 优先"收敛，并让家长知道另一项要单独再传一次。
+    if (ANTIBODY_CORE_PATTERN.test(text)) sawCore = true;
+    if (ANTIBODY_RABIES_PATTERN.test(text)) sawRabies = true;
+  }
+
+  // ⚠️ 这两个 return 的顺序**就是口径**：CORE 优先（"取与狂犬无关的那一项"）
+  if (sawCore) return { targets: ['CORE'], ambiguous: sawRabies };
+  if (sawRabies) return { targets: ['RABIES'], ambiguous: false };
+  return { targets: [], ambiguous: false };
+}
+
+/**
+ * 模型把"检的是哪一项"放在哪个字段名里都认（2026-10-19）。
+ *
+ * 提示词要求放在 `drafts[0].targets`，但这一项本来就是**单选**，
+ * 模型很可能顺手写成单数 `target`；认不出字段名就整条丢数据，
+ * 代价比多认几个别名大得多（与过敏那条"模型走旧形状也要接住"同一个道理）。
+ */
+function readAntibodyTargetsFrom(item: any): unknown {
+  if (!item || typeof item !== 'object') return undefined;
+  return (
+    item.targets ?? item.target ?? item.testItem ?? item.testItems ?? undefined
+  );
+}
+
+/**
+ * 从整个模型回复里取"检的是哪一项"的原始写法（drafts[0] 优先，最外层 targets 兜底）。
+ *
+ * `normalizeDrafts` 与"两项都有"那句提示共用这一个入口 ——
+ * 两处各判一次的话，迟早会出现"草稿取了 CORE、提示却没补"或者反过来。
+ */
+export function readAntibodyTargetsSource(parsed: Record<string, unknown>): unknown {
+  const drafts = Array.isArray(parsed?.drafts) ? parsed.drafts : [];
+  const fromDraft = readAntibodyTargetsFrom(drafts[0]);
+  if (
+    fromDraft !== undefined &&
+    fromDraft !== null &&
+    String(fromDraft).trim() !== ''
+  ) {
+    return fromDraft;
+  }
+  return readAntibodyTargetsFrom(parsed);
+}
+
+/**
+ * 抗体检测报告的结论（2026-10-19，第五类）。
+ *
+ * ⚠️ **只认报告上写的字，绝不按数值判**（老板定的：我们不设阈值）——
+ * 报告只有数值（"1:80"）时这里必须落到 UNKNOWN，合格与否交给报告或兽医。
+ * 提示词要求回 PASS / FAIL / UNKNOWN，但模型常常照抄报告上的中文，所以中英文都认。
+ */
+const ANTIBODY_RESULT_ALIASES: Record<string, AntibodyResult> = {
+  PASS: 'PASS',
+  POSITIVE: 'PASS',
+  阳性: 'PASS',
+  合格: 'PASS',
+  达标: 'PASS',
+  达到标准: 'PASS',
+  有保护力: 'PASS',
+  有抗体: 'PASS',
+  FAIL: 'FAIL',
+  NEGATIVE: 'FAIL',
+  阴性: 'FAIL',
+  不合格: 'FAIL',
+  未达标: 'FAIL',
+  无保护力: 'FAIL',
+  无抗体: 'FAIL',
+};
+
+export function resolveAntibodyResult(value: unknown): AntibodyResult {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'UNKNOWN';
+
+  const exact = ANTIBODY_RESULT_ALIASES[raw.toUpperCase()];
+  if (exact) return exact;
+
+  // 长句（"抗体合格，有保护力"）按关键词认。
+  // ⚠️ **先判不合格**："不合格"里含"合格"，顺序反了会把不合格读成合格 ——
+  //    这是这个模块里最危险的一类错（家长会以为狗有保护力）。
+  if (/不合格|未达标|没达标|无保护力|无抗体|阴性/.test(raw)) return 'FAIL';
+  if (/合格|达标|有保护力|有抗体|阳性/.test(raw)) return 'PASS';
+
+  return 'UNKNOWN';
+}
+
 export function normalizeDrafts(
   documentType: HealthDocumentType,
   parsed: Record<string, unknown>,
@@ -1027,6 +1280,29 @@ export function normalizeDrafts(
           draft.vitals ||
           draft.medications.length > 0,
       )
+      .slice(0, 1);
+  }
+
+  // ANTIBODY_REPORT（2026-10-19，第五类）：**一份报告只有一条**，字段就按抗体记录那张表。
+  //
+  // 出口这一层的两条硬口径：
+  //   · targets **只留一项** —— 两项都有时按 CORE 优先收敛（提示由 extractFromReport 补）
+  //   · result **只认报告写的结论** —— 这里唯一不看的就是 value：
+  //     报告只有数值时绝不允许被"顺推"成 PASS（我们不设阈值，老板定的）
+  if (documentType === 'ANTIBODY_REPORT') {
+    return raw
+      .map((item: any) => ({
+        testedAt: normalizeDraftDate(item?.testedAt),
+        targets: resolveAntibodyTargets(readAntibodyTargetsFrom(item)).targets,
+        result: resolveAntibodyResult(item?.result),
+        // 数值与单位照抄（1:80 / 0.5 IU/ml 这类），系统不换算、不分档
+        value: normalizeDraftText(item?.value, 40),
+        unit: normalizeDraftText(item?.unit, 20),
+        notes: normalizeDraftText(item?.notes, 200),
+      }))
+      // 认内容、不认空壳：日期 / 检测项目 / 原始数值 任一有值才算一条
+      // （三个都没有 → 这一页没读出东西，交给"未识别到可用内容"那句）
+      .filter((draft) => draft.testedAt || draft.targets.length > 0 || draft.value)
       .slice(0, 1);
   }
 
@@ -1272,7 +1548,10 @@ function normalizeWarnings(value: unknown): string[] {
 const CONTRADICTION_RULES: { match: RegExp; hasValue: (draft: any) => boolean }[] = [
   {
     match: /(化验|数值|指标|结果值|检验)/,
-    hasValue: (draft) => Boolean(String(draft?.labValues || '').trim()),
+    // `value` 是抗体检测报告的原始数值（2026-10-19）：抄到了就不该再说"数值没读到"
+    hasValue: (draft) =>
+      Boolean(String(draft?.labValues || '').trim()) ||
+      Boolean(String(draft?.value || '').trim()),
   },
   {
     match: /(动物名|宠物名|狗名|名字|昵称)/,
@@ -1280,9 +1559,16 @@ const CONTRADICTION_RULES: { match: RegExp; hasValue: (draft: any) => boolean }[
   },
   {
     match: /(日期|时间)/,
+    // `testedAt` 是抗体检测报告的检测日期（2026-10-19），一并算作"日期已经抄到了"
     hasValue: (draft) =>
       Boolean(
-        String(draft?.visitDate || draft?.checkupDate || draft?.vaccinationDate || '').trim(),
+        String(
+          draft?.visitDate ||
+            draft?.checkupDate ||
+            draft?.vaccinationDate ||
+            draft?.testedAt ||
+            '',
+        ).trim(),
       ),
   },
 ];
@@ -1580,11 +1866,24 @@ export class HealthReportExtractionService {
     /**
      * AUTO 时必须**先**从响应里解析出真实类型，再据此归一化 drafts ——
      * 字段结构是按类型定的，顺序反了就会用错白名单把字段全丢掉。
+     *
+     * ── 2026-10-19：抗体检测报告这条路**也认**模型回的 NOT_MEDICAL ──────────
+     * 为什么只对它放开：抗体检测入口是"上传一张报告 → 自动填一条记录"，
+     * 家长很可能拿错图（传成疫苗本内页、别的化验单）。这时按老规矩
+     * （显式指定类型时忽略模型回的 documentType）会走成"未识别到可用内容，
+     * 请换一张更清晰的图片"—— 照片其实很清楚，只是不是抗体报告，
+     * 这句话会让人反复重拍。其余四类一个字没动，行为与线上完全一致。
      */
+    const modelSaysNotMedical =
+      String(parsedRecord.documentType || '').trim().toUpperCase() ===
+      'NOT_MEDICAL';
+
     const resolvedType =
       requestedDocumentType === 'AUTO'
         ? resolveAutoDocumentType(parsedRecord.documentType)
-        : requestedDocumentType;
+        : requestedDocumentType === 'ANTIBODY_REPORT' && modelSaysNotMedical
+          ? 'NOT_MEDICAL'
+          : requestedDocumentType;
 
     // 模型明说"这不是宠物医疗资料"：一条草稿都不产出，
     // 只回一句准确的话（原来会硬塞成病历再报"未识别到内容"，让顾客以为是照片不清楚）
@@ -1646,7 +1945,11 @@ export class HealthReportExtractionService {
      *    不再靠"品牌对不上"和"复核读到不一样的字"这两条（那两条随字段一起没了）。
      *    现在的 `productVerified` 由 `resolveVaccineVerification` 纯代码判定。
      */
-    const medicalConditions = normalizeKeywordList(parsedRecord.medicalConditions);
+    // 抗体检测报告没有"既往病症"这一栏（对外契约里就是空数组，理由同下面的 allergies）
+    const medicalConditions =
+      documentType === 'ANTIBODY_REPORT'
+        ? []
+        : normalizeKeywordList(parsedRecord.medicalConditions);
     // 与已提取内容矛盾的提示直接丢掉（见 filterContradictoryWarnings）
     const warnings = filterContradictoryWarnings(
       normalizeWarnings(parsedRecord.warnings),
@@ -1657,10 +1960,38 @@ export class HealthReportExtractionService {
     const allergies =
       documentType === 'ALLERGY_REPORT'
         ? drafts.map((draft) => String(draft.allergen || '')).filter(Boolean)
-        : normalizeKeywordList(parsedRecord.allergies);
+        : // 抗体检测报告的对外契约里这两栏**就是空数组**（它没有过敏原/病史这两栏）：
+          // 模型串字段回来也不放进契约，免得前端拿到意料之外的内容
+          documentType === 'ANTIBODY_REPORT'
+          ? []
+          : normalizeKeywordList(parsedRecord.allergies);
 
     if (Number(parsedRecord.__brokenNameRows || 0) > 0) {
       warnings.push('有一行的疫苗名没看清（只读出半个名字），请照本子手工补上');
+    }
+
+    /*
+     * 抗体检测报告：一张纸上核心与狂犬**两项都有**时补一句提示（2026-10-19）。
+     *
+     * 提示词已经让模型自己说这句话了；这里是**出口的兜底** ——
+     * 提示词不等于保证，而"这张纸测了两项、我们只录了一项"是家长必须知道的事
+     * （否则他会以为狂犬抗体也一起录好了）。模型已经说过的就不重复。
+     */
+    if (documentType === 'ANTIBODY_REPORT') {
+      const { ambiguous } = resolveAntibodyTargets(
+        readAntibodyTargetsSource(parsedRecord),
+      );
+      const alreadySaid = warnings.some(
+        // ⚠️ 只提"狂犬"不算说过（那可能是一句"狂犬那一行看不清"的提示）：
+        //    必须同时提到核心/两项/单独再传，才算真的说了"这张纸测了两项"
+        (warning) =>
+          warning.includes('狂犬') && /核心|两项|单独|再传|另一项/.test(warning),
+      );
+      if (ambiguous && !alreadySaid) {
+        warnings.push(
+          '这张报告上核心抗体与狂犬抗体都有，先按核心那一项录入，狂犬那一项请单独再传一次',
+        );
+      }
     }
 
     if (drafts.length === 0 && warnings.length === 0) {

@@ -55,6 +55,7 @@
         :preset-components="editorPresetComponents"
         :saving="saving"
         :preset-date="editorDate"
+        :preset="antibodyPreset"
         @save-record="onSaveRecord"
         @save-test="onSaveTest"
         @remove="onRemoveFromEditor"
@@ -86,6 +87,21 @@
       hide-trigger
       defer-confirm
       @scanned="onScanned"
+    />
+
+    <!-- 抗体检测报告：同一个识别服务、另一类文档（老板 2026-10-16：
+         "抗体检测也需要接入 AI 识别，上传报告后自动录入表单，用户也可以手动纠正"）。
+         识别出来直接开录入卡预填，家长照样能改（录入卡就是唯一录入器）。 -->
+    <HealthDocumentScan
+      ref="antibodyScanRef"
+      v-if="dogId"
+      :dog-id="dogId"
+      :dog-name="dogName"
+      document-type="ANTIBODY_REPORT"
+      upload-type="vaccine"
+      hide-trigger
+      defer-confirm
+      @scanned="onAntibodyScanned"
     />
 
       <PlanTimeline :plan="planSteps" :rhythm="rhythm" :next-key="nextKey" />
@@ -272,9 +288,42 @@ function addRecord() {
   scrollToAnchor('vk-anchor-editor')
 }
 
-/** 底部「上传疫苗本 / 报告」→ 抗体检测报告：开抗体录入卡，并滚到它那里 */
+/** 底部「上传疫苗本 / 报告」→ 抗体检测报告：**先识别**，识别出来再开卡预填 */
 function addAntibodyTest() {
-  onAntibody(null)
+  antibodyScanRef.value?.startScan?.()
+}
+
+/**
+ * 抗体检测报告识别回来了 → 开录入卡，把识别到的填进去，家长照样能改。
+ *
+ * 识别不出来的情况由识别组件自己提示（"没识别到内容"那块）；
+ * 这里只负责把结果铺到表单上。
+ */
+function onAntibodyScanned(payload: {
+  drafts?: Record<string, unknown>[]
+}) {
+  const list = payload?.drafts || []
+  /**
+   * 什么都没读出来时**不开卡**。
+   *
+   * 识别组件在那种情况下已经给了"没识别到内容"的提示（路径：草稿为空 → 抛错 → 提示块），
+   * 这里再开一张卡就等于给家长一张默认填好的表（项目=核心、结果=合格），
+   * 那是**替他下结论** —— 他没测过也会被"填"出一个结论。
+   */
+  if (list.length === 0) return
+  const draft = list[0]
+  const targets = Array.isArray(draft.targets) ? draft.targets.map(String) : []
+  onAntibodyPreset({
+    testedAt: String(draft.testedAt || ''),
+    target: targets[0] === 'RABIES' ? 'RABIES' : 'CORE',
+    result:
+      draft.result === 'FAIL' || draft.result === 'UNKNOWN'
+        ? draft.result
+        : 'PASS',
+    value: String(draft.value || ''),
+    unit: String(draft.unit || ''),
+    attachments: Array.isArray(draft.attachments) ? draft.attachments.map(String) : [],
+  })
   scrollToAnchor('vk-anchor-editor')
 }
 
@@ -312,6 +361,35 @@ function onRecordCombo(products: string[]) {
   editorVisible.value = true
 }
 
+/** 抗体录入卡的预填（识别结果铺进来的那一份） */
+const antibodyPreset = ref<{
+  testedAt: string
+  target: 'CORE' | 'RABIES'
+  result: 'PASS' | 'FAIL' | 'UNKNOWN'
+  value: string
+  unit: string
+  attachments: string[]
+} | null>(null)
+
+/** 把识别结果铺到抗体录入卡（家长随后可以逐项改） */
+function onAntibodyPreset(preset: {
+  testedAt: string
+  target: 'CORE' | 'RABIES'
+  result: 'PASS' | 'FAIL' | 'UNKNOWN'
+  value: string
+  unit: string
+  attachments: string[]
+}) {
+  editorMode.value = 'antibody'
+  editorRecord.value = null
+  editorTest.value = null
+  editorFixIndex.value = -1
+  editorDate.value = ''
+  antibodyPreset.value = preset
+  editorHeading.value = ''
+  editorVisible.value = true
+}
+
 /** 「先做抗体检测」：同一个录入器的抗体模式 */
 function onAntibody(_step: VaccineStep | null) {
   editorFixIndex.value = -1
@@ -328,16 +406,26 @@ function onEditRecord(record: VaccineRecord) {
   editorMode.value = 'record'
   editorRecord.value = record
   editorTest.value = null
+  editorFixIndex.value = -1
+  editorDate.value = ''
   editorHeading.value = '修改这条记录'
   editorVisible.value = true
+  // 老板 2026-10-16 第 1 条：点记录区的「编辑」也要**定位到弹出窗口**
+  //（录入卡是内联的，不滚过去就等于"点了没反应"）
+  scrollToAnchor('vk-anchor-editor')
 }
 
 function onEditTest(test: AntibodyTest) {
+  antibodyPreset.value = null
   editorMode.value = 'antibody'
   editorTest.value = test
   editorRecord.value = null
+  editorFixIndex.value = -1
+  editorDate.value = ''
   editorHeading.value = '修改这次抗体检测'
   editorVisible.value = true
+  // 同上：抗体检测那一行点开也要定位过去
+  scrollToAnchor('vk-anchor-editor')
 }
 
 /**
@@ -468,6 +556,10 @@ async function onVerifyRecord(record: VaccineRecord) {
 }
 
 /* ══ 识别疫苗本 ═══════════════════════════════════════════════════════════ */
+
+const antibodyScanRef = ref<{
+  startScan?: () => void
+} | null>(null)
 
 const scanRef = ref<{
   startScan?: () => void

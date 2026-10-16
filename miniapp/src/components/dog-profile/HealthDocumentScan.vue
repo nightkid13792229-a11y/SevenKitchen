@@ -504,7 +504,14 @@ function mergePageDrafts(pages: { type: string; drafts: Record<string, any>[] }[
   } else {
     // 疫苗 / 过敏入口：同类型的页合并成一条，**疫苗本不合并**
     for (const [type, list] of draftsByType.entries()) {
-      const groupDrafts = type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)
+      /**
+       * 疫苗本与抗体检测报告都**不合并**：前者一张纸读出多条记录，
+       * 后者带着 `targets` 这类数组字段 —— 按字段碾平会把它们弄丢。
+       */
+      const groupDrafts =
+        type === 'VACCINE_BOOK' || type === 'ANTIBODY_REPORT'
+          ? list
+          : mergeScannedReportDrafts(list)
       for (const draft of groupDrafts) {
         merged.push({ ...draft, __documentType: type })
       }
@@ -1421,7 +1428,13 @@ function accept() {
  */
 function finishScan() {
   renderMergedResult()
-  if (props.deferConfirm && isVaccineBook.value) {
+  /**
+   * `deferConfirm` = 这个实例只当"识别服务"用，识别结果交给上层自己的界面去确认。
+   *
+   * ⚠️ 2026-10-16：原来只对疫苗本（VACCINE_BOOK）生效；抗体检测报告（ANTIBODY_REPORT）
+   *    也走疫苗侧自己的录入卡，所以这里不再限定类型（这个 prop 只有疫苗板块在用）。
+   */
+  if (props.deferConfirm) {
     accept()
     return
   }

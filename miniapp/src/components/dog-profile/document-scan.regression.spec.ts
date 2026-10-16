@@ -127,7 +127,11 @@ describe('拍照录入 · 组件', () => {
     expect(scan).toContain('mergeScannedReportDrafts')
     expect(scan).toContain('draftsByType')
     // 疫苗本一张本子读出多条接种记录，合并会把几针并成一针
-    expect(scan).toContain("type === 'VACCINE_BOOK' ? list : mergeScannedReportDrafts(list)")
+    /*
+     * ⚠️ 2026-10-16：抗体检测报告（ANTIBODY_REPORT）也走"不合并"这条路 ——
+     *    它带着 targets 这类数组字段，按字段碾平会丢。
+     */
+    expect(scan).toContain("type === 'VACCINE_BOOK' || type === 'ANTIBODY_REPORT'")
     // 类型按"多数页"定只用于文案，真正的类型贴在每条草稿上
     expect(scan).toContain('resolveScannedDocumentType')
     expect(scan).toContain('__documentType: type')

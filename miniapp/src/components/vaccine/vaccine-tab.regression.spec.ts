@@ -210,6 +210,13 @@ describe('疫苗 · 边界与状态（老板 2026-10-16："这种小问题还有
     expect(tab).not.toContain('免疫安排')
   })
 
+  it('🔴 点记录区的「编辑」要定位到录入卡（老板 2026-10-16 第 1 条）', () => {
+    for (const fn of ['function onEditRecord', 'function onEditTest']) {
+      const body = tab.slice(tab.indexOf(fn), tab.indexOf(fn) + 700)
+      expect(body, `${fn} 里没有滚动定位`).toContain("scrollToAnchor('vk-anchor-editor')")
+    }
+  })
+
   it('核对成功也要回一句（原来只有失败才提示）', () => {
     expect(tab).toContain("uni.showToast({ title: '已核对'")
   })
@@ -244,6 +251,52 @@ const step = (extra: Partial<VaccineStep>): VaccineStep =>
     products: [],
     ...extra,
   }) as VaccineStep
+
+describe('疫苗 · 抗体检测接入 AI 识别（老板 2026-10-16 第 2 条）', () => {
+  const tab = read('VaccineTab.vue')
+  const scan = read('ScanConfirm.vue')
+
+  it('底部那个按钮选"抗体检测报告"时，走的是**识别**（不是空白卡）', () => {
+    expect(tab).toContain('document-type="ANTIBODY_REPORT"')
+    expect(tab).toContain('ref="antibodyScanRef"')
+    const body = tab.slice(tab.indexOf('function addAntibodyTest'), tab.indexOf('function addAntibodyTest') + 300)
+    expect(body).toContain('antibodyScanRef.value?.startScan?.()')
+  })
+
+  it('🔴 什么也没读出来时**不开卡**（否则会替家长给出"合格"的结论）', () => {
+    const body = tab.slice(
+      tab.indexOf('function onAntibodyScanned'),
+      tab.indexOf('function onAntibodyScanned') + 600,
+    )
+    expect(body).toContain('if (list.length === 0) return')
+  })
+
+  it('识别结果铺进录入卡，家长照样能逐项改（唯一录入器）', () => {
+    expect(tab).toContain('function onAntibodyScanned')
+    expect(tab).toContain('onAntibodyPreset({')
+    expect(tab).toContain(':preset="antibodyPreset"')
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('preset?:')
+    expect(editor).toContain('props.preset')
+  })
+
+  it('识别组件对"抗体报告"也只当识别服务用：不弹它自己的确认页、不合并草稿', () => {
+    const docScan = readFileSync(
+      resolve(process.cwd(), 'src/components/dog-profile/HealthDocumentScan.vue'),
+      'utf-8',
+    )
+    expect(docScan).toContain('ANTIBODY_REPORT')
+    // deferConfirm 不再只认疫苗本
+    expect(docScan).toContain('if (props.deferConfirm) {')
+  })
+
+  it('报告上的数值与单位也留得住（识别出来就预填，选填）', () => {
+    const editor = read('RecordEditor.vue')
+    expect(editor).toContain('数值（选填）')
+    expect(editor).toContain('valueText')
+    expect(editor).toContain('unitText')
+  })
+});
 
 describe('疫苗 · 多条识别结果里"是哪一条错了"（老板 2026-10-16）', () => {
   const scan = read('ScanConfirm.vue')
@@ -415,7 +468,8 @@ describe('疫苗 · 抗体检测的入口位置（需求 R9：能记录、不主
     )
     expect(page).toContain('上传疫苗本 / 报告')
     expect(page).toContain("'疫苗本（传照片识别）'")
-    expect(page).toContain("'抗体检测报告（传报告照片）'")
+    // 2026-10-16：抗体检测报告也走 AI 识别（不再是"传张照片、手填"）
+    expect(page).toContain("'抗体检测报告（传报告识别）'")
     expect(page).toContain('vaccineSectionRef.value?.addAntibodyTest?.()')
   })
 
